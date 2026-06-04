@@ -1,0 +1,169 @@
+# name: Your game name here!
+sha1: 323d80aa4ecdf20d00e3782f6c144ac6aed88114
+options:
+  basename: SCES_516.07
+  target_path: extracted/eu/SCES_516.07.rom
+  elf_path: going-decompiled/build/eu/SCES_516.07.elf
+  base_path: ../../..
+  platform: ps2
+  compiler: EEGCC
+
+  gp_value: 0x001AF070
+  # ld_gp_expression:
+
+  asm_path: going-decompiled/asm/eu
+  src_path: going-decompiled/src/eu
+  build_path: going-decompiled/build/eu
+
+  ld_script_path: going-decompiled/linker_scripts/SCES_516.07.ld
+  ld_dependencies: True
+  ld_wildcard_sections: True
+  ld_bss_contains_common: True
+
+  create_asm_dependencies: True
+
+  find_file_boundaries: False
+
+  o_as_suffix: True
+
+  symbol_addrs_path:
+    - going-decompiled/symbol_addrs/eu/symbol_addrs.txt
+  reloc_addrs_path:
+    - going-decompiled/symbol_addrs/eu/reloc_addrs.txt
+
+  # undefined_funcs_auto_path: undefined_funcs_auto.txt
+  # undefined_syms_auto_path: undefined_syms_auto.txt
+
+  extensions_path: tools/splat_ext
+
+  string_encoding: ASCII
+  data_string_encoding: ASCII
+  rodata_string_guesser_level: 2
+  data_string_guesser_level: 2
+
+  named_regs_for_c_funcs: False
+
+  section_order:
+    - .vutext
+    - .text
+    - .data
+    - .rodata
+    - .bss
+
+  auto_link_sections:
+    - .bss
+    - .data
+
+segments:
+  - name: cod
+    type: code
+    start: 0x000000
+    vram: 0x00100080
+    bss_size: 0x6B400
+    subalign: null
+    subsegments:
+      - [0x000000, textbin, cod/000000] # .vutext
+      - [0x015180, asm, cod/015180] # core.text
+      - [0x033B80, data, cod/033B80] # core.data
+      - [0x03A200, rodata, cod/03A200] # core.rdata
+      - { type: bss, vram: 0x0013C100, name: cod/0013C100 } # core.bss
+
+  - name: core.lit
+    type: code
+    start: 0x0A7480
+    vram: 0x001A7500
+    bss_size: 0x0
+    subalign: null
+    subsegments:
+      - [0x0A7480, data, core.lit/0A7480] # core.lit
+
+  - name: lit
+    type: code
+    start: 0x0A7C80
+    vram: 0x001A7D00
+    bss_size: 0x0
+    subalign: null
+    subsegments:
+      - [0x0A7C80, data, lit/0A7C80] # .lit
+
+  - name: bss
+    type: code
+    start: 0x0B1300
+    vram: 0x001B1380
+    bss_size: 0x87900
+    subalign: null
+    subsegments:
+      - { type: bss, vram: 0x001B1380, name: bss/001B1380 } # .bss
+
+  - name: data
+    type: code
+    start: 0x138C00
+    vram: 0x00238C80
+    bss_size: 0x0
+    subalign: null
+    subsegments:
+      - [0x138C00, data, data/138C00] # .data
+
+  - name: lvl.vtbl
+    type: code
+    start: 0x16E580
+    vram: 0x0026E600
+    bss_size: 0x0
+    subalign: null
+    subsegments:
+      - [0x16E580, rodata, lvl.vtbl/16E580] # lvl.vtbl
+
+  - name: lvl.camvtbl
+    type: code
+    start: 0x16E600
+    vram: 0x0026E680
+    bss_size: 0x0
+    subalign: null
+    subsegments:
+      - [0x16E600, rodata, lvl.camvtbl/16E600] # lvl.camvtbl
+
+  - name: lvl.sndvtbl
+    type: code
+    start: 0x16E680
+    vram: 0x0026E700
+    bss_size: 0x0
+    subalign: null
+    subsegments:
+      - [0x16E680, rodata, lvl.sndvtbl/16E680] # lvl.sndvtbl
+
+  - name: text
+    type: code
+    start: 0x16E700
+    vram: 0x0026E780
+    bss_size: 0x0
+    subalign: null
+    subsegments:
+      - [0x16E700, asm, text/16E700] # .text
+
+  - name: legal.data
+    type: code
+    start: 0x255000
+    vram: 0x01800000
+    bss_size: 0x0
+    subalign: null
+    subsegments:
+      - [0x255000, data, legal.data/255000] # legal.data
+
+  - name: mc1.data
+    type: code
+    start: 0x25AD80
+    vram: 0x01805D80
+    bss_size: 0x0
+    subalign: null
+    subsegments:
+      - [0x25AD80, data, mc1.data/25AD80] # mc1.data
+
+  - name: mc1.data_2
+    type: code
+    start: 0x27FE80
+    vram: 0x0182AE80
+    bss_size: 0x0
+    subalign: null
+    subsegments:
+      - [0x27FE80, data, mc1.data_2/27FE80] # mc1.data
+  - [0x2A70A9]

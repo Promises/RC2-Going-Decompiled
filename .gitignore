@@ -1,0 +1,42 @@
+# ---- Game data and anything derived from it (NEVER commit) ----
+source-isos/
+extracted/
+*.iso
+*.rom
+SCUS_972.68
+SCES_516.07
+# splat output, regenerated from YOUR copy of the game by scripts/configure.py
+going-decompiled/asm/
+going-decompiled/assets/
+
+# ---- Proprietary toolchain and SDK (fetched by scripts/fetch_*.sh) ----
+going-decompiled/include/rtl/
+tools/ee/cc/
+tools/ee/cc-*/
+tools/ee/sdk-lib/
+
+# ---- Build output ----
+going-decompiled/build/
+going-decompiled/obj/
+*.o
+*.elf
+*.map
+*.d
+.splache/
+**/.splache/
+undefined_funcs_auto.txt
+undefined_syms_auto.txt
+report.json
+
+# ---- Local scratch (every hidden dir under tools/ee is scratch) ----
+tools/ee/.*/
+tools/ee/*.core
+core
+
+# ---- Environments / OS ----
+.venv-decomp/
+.venv/
+__pycache__/
+*.pyc
+node_modules/
+.DS_Store
