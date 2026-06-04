@@ -1,0 +1,6 @@
+
+memcmp = 0x00115340; // libc.a (verbatim, 96B-verified)
+memcpy = 0x001153D4; // libc.a (verbatim, 96B-verified)
+memset = 0x00115484; // libc.a (verbatim, 96B-verified)
+rename = 0x0011D3A0; // libc.a (verbatim, 28B-verified)
+s_isnan = 0x001313C8; // libc.a (verbatim, 56B-verified)
