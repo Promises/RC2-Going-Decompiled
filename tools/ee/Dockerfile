@@ -8,8 +8,12 @@
 # segment thunks. A full x86 machine (qemu-system via colima) is required.
 FROM debian:bookworm-slim
 
+# binutils (host) for objcopy; binutils-mips-linux-gnu = modern GNU as/ld that
+# understands splat/spimdisasm output and the R5900 (-march=r5900). The period
+# ee-gcc is used ONLY to compile C; assembling/linking uses these.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates curl binutils \
+ && apt-get install -y --no-install-recommends \
+      ca-certificates curl binutils binutils-mips-linux-gnu make \
  && rm -rf /var/lib/apt/lists/*
 
 # wibo: i386 Win32 PE loader (runs natively on x86_64).
