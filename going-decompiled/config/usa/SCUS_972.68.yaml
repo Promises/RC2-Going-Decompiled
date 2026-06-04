@@ -14,6 +14,11 @@ options:
   asm_path: going-decompiled/asm/usa
   src_path: going-decompiled/src/usa
   build_path: going-decompiled/build/usa
+  asset_path: going-decompiled/build/usa/assets
+  cache_path: going-decompiled/build/usa/.splache
+  generated_asm_macros_directory: going-decompiled/build/usa/include
+  undefined_funcs_auto_path: going-decompiled/build/usa/undefined_funcs_auto.txt
+  undefined_syms_auto_path: going-decompiled/build/usa/undefined_syms_auto.txt
 
   ld_script_path: going-decompiled/linker_scripts/SCUS_972.68.ld
   ld_dependencies: True

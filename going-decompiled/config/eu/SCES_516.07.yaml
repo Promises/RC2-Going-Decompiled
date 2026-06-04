@@ -14,6 +14,11 @@ options:
   asm_path: going-decompiled/asm/eu
   src_path: going-decompiled/src/eu
   build_path: going-decompiled/build/eu
+  asset_path: going-decompiled/build/eu/assets
+  cache_path: going-decompiled/build/eu/.splache
+  generated_asm_macros_directory: going-decompiled/build/eu/include
+  undefined_funcs_auto_path: going-decompiled/build/eu/undefined_funcs_auto.txt
+  undefined_syms_auto_path: going-decompiled/build/eu/undefined_syms_auto.txt
 
   ld_script_path: going-decompiled/linker_scripts/SCES_516.07.ld
   ld_dependencies: True
