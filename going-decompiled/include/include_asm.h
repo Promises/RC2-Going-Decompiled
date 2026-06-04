@@ -1,7 +1,7 @@
 #ifndef INCLUDE_ASM_H
 #define INCLUDE_ASM_H
 
-#if !defined(M2CTX) && !defined(PERMUTER) && !defined(SKIP_ASM)
+#if !defined(M2CTX) && !defined(PERMUTER)
 
 #ifndef INCLUDE_ASM
 #define INCLUDE_ASM(FOLDER, NAME) \
@@ -22,7 +22,12 @@
         ".section .text" \
     )
 #endif
+
+#if INCLUDE_ASM_USE_MACRO_INC
+__asm__(".include \"include/macro.inc\"\n");
+#else
 __asm__(".include \"include/labels.inc\"\n");
+#endif
 
 #else
 
@@ -33,6 +38,6 @@ __asm__(".include \"include/labels.inc\"\n");
 #define INCLUDE_RODATA(FOLDER, NAME)
 #endif
 
-#endif /* !defined(M2CTX) && !defined(PERMUTER) && !defined(SKIP_ASM) */
+#endif /* !defined(M2CTX) && !defined(PERMUTER) */
 
 #endif /* INCLUDE_ASM_H */
