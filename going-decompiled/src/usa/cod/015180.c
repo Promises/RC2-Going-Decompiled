@@ -1,8 +1,15 @@
 #include "common.h"
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115200);
+extern s32 D_00133E74;
+extern s32 D_0013A308;
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115210);
+s32 func_00115200(void) {
+    return D_00133E74;
+}
+
+s32 *func_00115210(void) {
+    return &D_0013A308;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115220);
 
