@@ -40,7 +40,13 @@ done
 echo "   assembled $n objects"
 
 echo "== [$REGION] linking with $LD =="
-mips-linux-gnu-ld -EL -T "$LD" -Map "$BUILD/$BASENAME.map" -o "$ELF" 2> "$BUILD/ld.log" \
+SYMS="$BUILD/undefined_syms_auto.txt"
+# Blanket-define every D_<hex> symbol to its absolute address (spimdisasm names
+# auto-symbols by address). Resolves references it didn't emit labels for.
+ALLSYMS="$BUILD/all_addr_syms.ld"
+grep -rhoE '(D_|func_)[0-9A-Fa-f]{4,}' "$ASM" | sort -u | sed -E 's/^(D_|func_)([0-9A-Fa-f]+)$/\1\2 = 0x\2;/' > "$ALLSYMS"
+echo "   defined $(wc -l < "$ALLSYMS") address symbols"
+mips-linux-gnu-ld -EL --allow-multiple-definition -T "$LD" -T "$SYMS" -T "$ALLSYMS" -Map "$BUILD/$BASENAME.map" -o "$ELF" 2> "$BUILD/ld.log" \
   || { echo "LD errors (first 20):"; head -20 "$BUILD/ld.log"; }
 
 if [ -f "$ELF" ]; then
