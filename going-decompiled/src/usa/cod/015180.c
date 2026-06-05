@@ -962,7 +962,16 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127B40);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127B88);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127C68);
+extern s32 *D_00141B28;
+extern s32 *D_00141B2C;
+extern s32 *D_00141B30;
+
+void func_00127C68(u32 arg0) {
+    s32 *p = (s32 *)(arg0 | 0x20000000);
+    if (D_00141B28) *D_00141B28 = p[0];
+    if (D_00141B2C) *D_00141B2C = p[1];
+    if (D_00141B30) *D_00141B30 = *(s32 *)((char *)p + 0x90);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127CC0);
 
