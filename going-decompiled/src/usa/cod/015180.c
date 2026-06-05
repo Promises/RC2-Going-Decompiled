@@ -452,9 +452,30 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BAA0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BAC4);
 
+/* func_0011BAC8(arg0): initialise the global list head D_0013CA40 — store arg0
+ * at +0x0, clear the count at +0x4, point both head (+0x8) and tail (+0xC) links
+ * at the inline first slot (+0x10); return &D_0013CA40. ~98.5% — ee-gcc's
+ * scheduler always orders the three stores 0x8,0xc,0x4 regardless of source
+ * order, but the original is 0x8,0x4,0xc. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BAC8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BAF0);
+/**
+ * Advance the write cursor of the ring buffer at arg0. Bumps the entry count
+ * (+0x4) and the cursor (+0xC) by one; when the cursor reaches the end of the
+ * inline storage (base + capacity(+0x0) + 0x10) it wraps back to the start of
+ * that storage (base + 0x10).
+ */
+void func_0011BAF0(s32 *arg0) {
+    s32 cursor;
+    s32 end;
+    arg0[1] = arg0[1] + 1;
+    cursor = arg0[3] + 1;
+    end = arg0[0] + 0x10;
+    arg0[3] = cursor;
+    if (cursor == (s32)arg0 + end) {
+        arg0[3] = (s32)arg0 + 0x10;
+    }
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BB38);
 
@@ -1099,7 +1120,28 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001287A8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128898);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001288C0);
+extern s32 D_00137E80;
+extern u8 D_00143640[];
+
+/**
+ * Reset the 16-entry table at D_00143640 (each entry is 0x330 bytes): zero the
+ * first three words of every entry across the 0x3300-byte span, set the
+ * initialised flag D_00137E80 to 1, and return 1.
+ */
+s32 func_001288C0(void) {
+    s32 *entry;
+    s32 *end;
+    D_00137E80 = 1;
+    entry = (s32 *)D_00143640;
+    end = (s32 *)(D_00143640 + 0x3300);
+    do {
+        entry[0] = 0;
+        entry[1] = 0;
+        entry[2] = 0;
+        entry = (s32 *)((u8 *)entry + 0x330);
+    } while ((s32)entry < (s32)end);
+    return 1;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128900);
 
