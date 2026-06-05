@@ -107,3 +107,30 @@ DebugMalloc              = 0x0028bcf8; // CONFIRMED role: 16-byte-aligned bump a
 // 0x0011d620 sceSifCallRpc(clientData, rpc#, mode, sb, sbsize, rb, rbsize, ...): the primitive every snd_ RPC wrapper calls. mode&1=async, mode&2=no-flush. UNCONFIRMED.
 // 0x0011d810 sceSifCheckStatRpc(clientData): returns 1 if RPC in flight (busy). 989snd busy-waits on it. UNCONFIRMED.
 // IOP-side 989snd module hosts RPC servers 0x123456 (command) & 0x123457 (bank load); not in this EE image. UNCONFIRMED.
+
+// --- GUI SUBSYSTEM (Track-B single concept; in-binary, NOT an overlay). The boot ELF embeds three
+//     gui/*.cpp __FILE__ strings, referenced ONLY by the 4 direct callers of AssertFail @0x115e38.
+//     gui/behaviors.cpp @0x1ad890, gui/memoryManagement.cpp @0x1ada78, gui/mathUtil.cpp @0x1ae758.
+//     The GUI code forms a large contiguous cluster ~0x336000..0x350000; its allocator GuiPoolAlloc
+//     is called by 37+ widget/screen constructors in that range. Renamed in Ghidra + tagged by file. ---
+//
+// gui/memoryManagement.cpp - fixed-block free-list pool. Pool header layout (6 words):
+//   [0]=base [1]=end/limit [2]=nodeSize [3]=bumpOffset [4]=liveCount [5]=freeListHead.
+GuiPoolInit              = 0x00337c60; // CONFIRMED (assert line 37 expr "allocation_size>=sizeof(FreeNode)"). Inits pool header asserts nodeSize>=4 stores base/end/nodeSize zeros counters.
+GuiPoolAlloc             = 0x00337ce8; // CONFIRMED (assert line 83; code). Allocs one node pop free-list head if set else bump-allocate asserting offset+nodeSize<=end. Returns node ptr.
+GuiPlacementNew          = 0x00337c50; // CONFIRMED: placement operator new(size,ptr) returns ptr unchanged. GUI uses new(GuiPoolAlloc(pool)) Foo everywhere. Lives in memoryManagement.cpp unit.
+//
+// gui/behaviors.cpp
+GuiComputeBlendWeights   = 0x003366a8; // CONFIRMED (assert line 61 file string; code). Null-checks out ptr then writes 4 floats {t, t*0.5, 1-t, (1-t)*0.5}. NOTE assert expr arg is not a readable string in this build.
+//
+// gui/mathUtil.cpp
+GuiHermiteInterp         = 0x0034fbc0; // CONFIRMED (assert line 36 expr "t>=0.0f && t<= 1.0f"). Cubic/Hermite blend of param t over 4 control values asserts t in [0,1].
+//
+// GUI manager / instance (source file UNCONFIRMED - top-level gui file, no __FILE__ here)
+g_guiInstance            = 0x001a8d04; // CONFIRMED: singleton GUI manager ptr. Sole writer GuiManagerCreate read by 90+ GUI funcs. Ghidra kept as DAT (its validator rejects non-Hungarian global names).
+GuiManagerCreate         = 0x0029db80; // CONFIRMED: allocates the 0x3fb20-byte GUI instance runs GuiSystemInit installs 2 callback ptrs and stores result to g_guiInstance. Sole writer of 0x1a8d04.
+GuiSystemInit            = 0x0034f308; // CONFIRMED behaviour: GUI master ctor. Zeros state array sets up the pool via GuiPoolInit(nodeSize 0x10 total 0x8700) then constructs 30+ widget/screen objects at fixed instance offsets.
+//
+// GUI widget/element constructors (source files UNCONFIRMED - gui widget files, no __FILE__)
+GuiElementInit           = 0x00336fe8; // PARTIAL: base init for one GUI element. CONFIRMED allocs two 0x10 pool sub-records sets default scale (1,1,1) clears state. Name-string binding NOT visible in decomp (UNCONFIRMED).
+GuiScreenWithPlanetNameInit = 0x003493e0; // PARTIAL: a GUI screen ctor. CONFIRMED allocs from pool sets ARGB colors+positions builds 7 named children ("title","help","planet name","anIcon","QSelBack","aText") binds 7 input slots. Planet-select identity UNCONFIRMED.

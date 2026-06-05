@@ -62,3 +62,15 @@ snd_CheckLoadInProgress = 0x00133580; // CONFIRMED role - tests/waits bank-load-
 snd_PrintError = 0x00115D48; // CONFIRMED - 989snd error/log printer (printf varargs)
 AssertFail = 0x00115E38; // CONFIRMED - assert formatter (file,line,expr)
 DebugMalloc = 0x0028BCF8; // CONFIRMED role - 16-byte-aligned bump allocator
+
+// === Track-B GUI subsystem (in-binary cluster ~0x336000..0x350000 - gui/*.cpp via AssertFail attribution). ===
+GuiPoolInit = 0x00337C60; // CONFIRMED (memoryManagement.cpp assert line 37) - fixed-block free-list pool header init
+GuiPoolAlloc = 0x00337CE8; // CONFIRMED - pop free-list head else bump-allocate one node - 37+ widget ctors call it
+GuiPlacementNew = 0x00337C50; // CONFIRMED - placement operator new(size,ptr) returns ptr
+GuiComputeBlendWeights = 0x003366A8; // CONFIRMED (behaviors.cpp) - writes 4 floats t, t*0.5, 1-t, (1-t)*0.5
+GuiHermiteInterp = 0x0034FBC0; // CONFIRMED (mathUtil.cpp assert line 36) - cubic Hermite blend of t over 4 controls
+g_guiInstance = 0x001A8D04; // CONFIRMED - singleton GUI manager pointer - sole writer GuiManagerCreate, 90+ readers
+GuiManagerCreate = 0x0029DB80; // CONFIRMED - allocs 0x3FB20-byte instance, runs GuiSystemInit, stores g_guiInstance
+GuiSystemInit = 0x0034F308; // CONFIRMED behaviour - GUI master ctor - sets up pool then builds 30+ widget objects
+GuiElementInit = 0x00336FE8; // PARTIAL - base GUI element init (two 0x10 pool sub-records, default scale)
+GuiScreenWithPlanetNameInit = 0x003493E0; // PARTIAL - a GUI screen ctor (7 named children) - planet-select id UNCONFIRMED
