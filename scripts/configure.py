@@ -54,7 +54,9 @@ def split_region(region: str, use_cache: bool) -> None:
     cfg = CONFIGS[region]
     ensure_inputs(region)
     print(f"[configure] splitting {region}: {cfg.relative_to(ROOT)}")
-    cmd = [sys.executable, "-m", "splat", "split", str(cfg)]
+    # Pass the config path RELATIVE to ROOT so splat's base_path stays relative,
+    # keeping generated INCLUDE_ASM paths portable (not machine-absolute).
+    cmd = [sys.executable, "-m", "splat", "split", str(cfg.relative_to(ROOT))]
     if use_cache:
         cmd.append("--use-cache")  # only re-split segments whose config changed
     res = subprocess.run(cmd, cwd=ROOT)

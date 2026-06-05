@@ -68,7 +68,7 @@ segments:
     subalign: null
     subsegments:
       - [0x000000, textbin, cod/000000] # .vutext
-      - [0x015180, asm, cod/015180] # core.text
+      - [0x015180, c, cod/015180] # core.text
       - [0x033B00, data, cod/033B00] # core.data
       - [0x03A180, rodata, cod/03A180] # core.rdata
       - { type: bss, vram: 0x0013C080, name: cod/0013C080 } # core.bss
