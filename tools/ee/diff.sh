@@ -7,7 +7,7 @@
 #
 # Prints the function's match percentage. For the interactive red/green TUI:
 #   tools/objdiff-cli-macos-arm64 diff -1 tools/ee/.diff/target.o \
-#       -2 tools/ee/.diff/base.o <func> -c mips_instr_category=r5900 -c mips_abi=eabi32
+#       -2 tools/ee/.diff/base.o <func> -c mips.instrCategory=r5900 -c mips.abi=eabi32
 #
 # Requires the colima `ee-x86` VM + `ee-build` image (see CLAUDE.md).
 set -euo pipefail
@@ -39,5 +39,5 @@ docker --context colima-ee-x86 run --rm -v "$ROOT":/work ee-build sh -c "
 "
 
 "$OBJDIFF" diff -1 "$W/target.o" -2 "$W/base.o" "$FUNC" -o - --format json-pretty \
-  -c mips_instr_category=r5900 -c mips_abi=eabi32 \
+  -c mips.instrCategory=r5900 -c mips.abi=eabi32 \
   | python3 -c "import sys,json; d=json.load(sys.stdin); s=[x for x in d['left']['sections'] if x['name']=='.text'][0]; pct=s.get('match_percent',0); print(f'$FUNC: {pct:.2f}% match' + (' ✅ MATCH' if pct==100 else ''))"
