@@ -22,6 +22,7 @@ set -e
 REGION="$1"; UNIT_S="$2"; OUT_O="$3"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 VU0FIX="$ROOT/tools/ee/vu0_fixup.sed"
+MOVEFIX="$ROOT/tools/ee/move_fixup.sed"   # cc1 `move` pseudo -> `daddu` (0x2d) for EE
 ASMSRC="$ROOT/going-decompiled/asm/$REGION/nonmatchings"
 MACINC="$ROOT/going-decompiled/build/$REGION/include/macro.inc"
 
@@ -39,5 +40,8 @@ cp "$MACINC" "$FIXROOT/include/macro.inc"
 
 # Assemble with CWD at the mirror so source-relative `.include`s resolve there.
 cd "$FIXROOT"
-mips-linux-gnu-as -march=r5900 -mabi=eabi -no-pad-sections -EL -G0 -I. \
-  -o "$OUT_O" "$UNIT_S"
+# Apply the cc1 `move`->`daddu` fixup to the (cc1-emitted) unit asm before
+# assembling. The .include'd original asm is read from the mirror by `as` and is
+# untouched (it has explicit `daddu`, never the `move` pseudo).
+sed -E -f "$MOVEFIX" "$UNIT_S" \
+  | mips-linux-gnu-as -march=r5900 -mabi=eabi -no-pad-sections -EL -G0 -I. -o "$OUT_O" -
