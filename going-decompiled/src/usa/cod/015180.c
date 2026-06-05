@@ -476,11 +476,20 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C7E8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C820);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C880);
+void func_0011C880(s32 *arg0, s32 *arg1) {
+    s32 *base = (s32 *)arg1[7];
+    base[arg0[4]] = arg0[5];
+}
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C8A0);
+void func_0011C8A0(s32 *arg0, s32 *arg1) {
+    arg1[2] = arg0[4];
+}
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C8B0);
+extern s32 D_0013D080[];
+
+s32 func_0011C8B0(s32 arg0) {
+    return D_0013D080[arg0];
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C8C8);
 
