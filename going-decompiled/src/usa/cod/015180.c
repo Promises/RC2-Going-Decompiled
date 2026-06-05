@@ -798,6 +798,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001232EC);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001232F0);
 
+/* func_00123400: decompose the IEEE-754 single-precision float at src[0] into a
+ * classification record at out (out[1]=sign, out[0]=class {0=sNaN,1=qNaN,
+ * 2=zero/subnormal,3=normal,4=inf}, out[3]=mantissa, out[2]=unbiased exponent),
+ * returning the class. Behaviour fully understood (~68%) but pervasive register
+ * allocation differs from the original; left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00123400);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00123490);
@@ -924,7 +929,16 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126ED0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126ED8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126F00);
+/**
+ * Zero `count` bytes starting at `dst` (a simple byte-wise memset to 0).
+ */
+void func_00126F00(u8 *dst, s32 count) {
+    s32 i;
+    for (i = count - 1; i != -1; i--) {
+        *dst = 0;
+        dst++;
+    }
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126F38);
 
@@ -1112,7 +1126,17 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012C090);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012C230);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012C380);
+extern s32 D_00137F10[];
+
+/**
+ * Issue an IPU command: write `cmd` to the IPU_CMD hardware register
+ * (0x10002000), then look up D_00137F10[cmd >> 28] (indexed by the command's
+ * top nibble = the IPU opcode) and cache it in arg0->field_0x818.
+ */
+void func_0012C380(s32 *arg0, u32 cmd) {
+    *(volatile u32 *)0x10002000 = cmd;
+    *(s32 *)((u8 *)arg0 + 0x818) = D_00137F10[cmd >> 28];
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012C3B0);
 
@@ -1252,8 +1276,18 @@ s32 func_0012FA18(s32 *arg0) {
     return 1;
 }
 
+/* func_0012FA70(arg0, index, arg2, arg3): in the entry table at arg0->field_0x40
+ * (8-byte stride records), write arg3 into record[index]+0x10, return the old
+ * value of record[index]+0xC and overwrite it with arg2. ~74%; the original
+ * keeps the table base live and computes both member addresses before storing,
+ * a scheduling shape ee-gcc won't reproduce here. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012FA70);
 
+/* func_0012FA98(arg0, arg1): if arg0 and its table arg0->field_0x40 are non-null,
+ * fetch the destructor at table[*arg1*2 + 3] and, if set, call
+ * dtor(arg0, arg1, table[*arg1*2 + 4]); return its result or 0. ~92% — only
+ * register allocation (result in a3 vs a2) and a beqz/beqzl delay-slot choice
+ * differ. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012FA98);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012FAE8);
@@ -1385,6 +1419,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001316C8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131730);
 
+/* func_00131760: packed-BCD byte -> binary, n - (n>>4)*6 masked to a byte
+ * (e.g. 0x59 -> 59). Decompiles to ~87%; the only diff is the multiply form:
+ * the original emits 2-operand `mult $0,rs,rt` + `mflo`, but ee-gcc lowers `*`
+ * to the 3-operand R5900 `mult rd,rs,rt`. That is a compiler-flag/codegen
+ * choice, not expressible in source, so it stays INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131760);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131780);
