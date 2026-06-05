@@ -28,18 +28,45 @@ ROM=$BUILD/$BASENAME.rom
 
 ASFLAGS="-march=r5900 -mabi=eabi -no-pad-sections -EL -G0 -I $INC -I $ASM -I $BUILD"
 VU0FIX="$(dirname "$0")/vu0_fixup.sed"   # spimdisasm VU0 macro op -> GNU-as syntax
+SRC=going-decompiled/src/$REGION
+WIBO=/usr/local/bin/wibo
+G=tools/ee/cc/lib/gcc-lib/ee/2.95.2
+INCC="-Igoing-decompiled/include -Igoing-decompiled/include/rtl/ee -Igoing-decompiled/include/rtl/common"
+CPPDEF="-D__GNUC__=2 -D__GNUC_MINOR__=9 -D__mips__ -D__mips=3 -D__R5900 -D__LANGUAGE_C -D_LANGUAGE_C -D__EE__ -DINCLUDE_ASM_USE_MACRO_INC=1"
 
-echo "== [$REGION] assembling $(find $ASM -name '*.s' | wc -l) asm files =="
+# 1) Assemble plain data/code .s files. EXCLUDE per-function nonmatchings/ and
+#    matchings/ — those belong to a `c` unit and are pulled in by compiling its
+#    src .c (INCLUDE_ASM), not assembled standalone (they lack macro.inc context).
+echo "== [$REGION] assembling section .s files =="
 n=0
-for s in $(find $ASM -name '*.s'); do
-  # object path must match what the ld script references: $BUILD/<full .s path>.o
+for s in $(find $ASM -name '*.s' -not -path '*/nonmatchings/*' -not -path '*/matchings/*'); do
   o="$BUILD/${s%.s}.o"
   mkdir -p "$(dirname "$o")"
-  # Apply the VU0 fixup (no-op on non-VU0 asm) then assemble from stdin.
-  sed -f "$VU0FIX" "$s" | mips-linux-gnu-as $ASFLAGS -o "$o" - 2> "$o.log" || { echo "AS FAIL $s:"; tail -5 "$o.log"; exit 1; }
+  # VU0 fixup + rewrite splat's absolute asset .incbin paths to repo-relative
+  # (splat absolutizes them; CWD is the repo root /work in the container).
+  sed -f "$VU0FIX" "$s" | sed 's|"/[^"]*/going-decompiled/|"going-decompiled/|g' \
+    | mips-linux-gnu-as $ASFLAGS -o "$o" - 2> "$o.log" || { echo "AS FAIL $s:"; tail -5 "$o.log"; exit 1; }
   n=$((n+1))
 done
-echo "   assembled $n objects"
+echo "   assembled $n section objects"
+
+# 2) Compile each `c` unit (src/<region>/**/*.c) into the object the .ld expects:
+#    $BUILD/<full src path>.o. cc1 -> .s (with INCLUDE_ASM .include lines) ->
+#    asm_unit.sh assembles it through the VU0-fixed mirror.
+if [ -d "$SRC" ]; then
+  echo "== [$REGION] compiling src/ c units =="
+  m=0
+  for c in $(find "$SRC" -name '*.c'); do
+    o="$BUILD/${c%.c}.o"
+    mkdir -p "$(dirname "$o")"
+    "$WIBO" "$G/cpp.exe" $CPPDEF $INCC "$c" "$BUILD/_unit.i"
+    "$WIBO" "$G/cc1.exe" -quiet -O2 -G0 "$BUILD/_unit.i" -o "$BUILD/_unit.s"
+    sh tools/ee/asm_unit.sh "$REGION" "/work/$BUILD/_unit.s" "/work/$o"
+    mips-linux-gnu-strip "$o" -N dummy-symbol-name 2>/dev/null || true
+    m=$((m+1))
+  done
+  echo "   compiled $m c units"
+fi
 
 echo "== [$REGION] linking with $LD =="
 SYMS="$BUILD/undefined_syms_auto.txt"
