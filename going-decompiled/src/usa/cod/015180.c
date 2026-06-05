@@ -532,8 +532,17 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C8D8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011CB58);
 
+/* func_0011CB90(index, key, value): store a (key,value) pair into one of two
+ * parallel 8-byte-stride tables selected by the sign of index (D_0013CF6C for
+ * index >= 0, D_0013CF64 for index < 0); key at slot+0x0, value at slot+0x4.
+ * ~77% — the original hoists index*8 into the bgez delay slot and orders the
+ * two stores value-then-key, a scheduling shape ee-gcc won't reproduce here.
+ * Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011CB90);
 
+/* func_0011CBC0(index): clear the key word (slot+0x0) of the entry at index in
+ * the sign-selected table pair (same addressing as func_0011CB90). ~77% — same
+ * branch-delay scheduling mismatch as func_0011CB90. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011CBC0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011CBE8);
