@@ -37,7 +37,7 @@ cat > "$W/target.s" <<EOF
 EOF
 
 docker --context colima-ee-x86 run --rm -v "$ROOT":/work ee-build sh -c "
-  set -e; cd /work; WIBO=/usr/local/bin/wibo; G=tools/ee/cc/lib/gcc-lib/ee/2.95.2
+  set -e; cd /work; WIBO=/usr/local/bin/wibo; G=tools/ee/cc/lib/gcc-lib/ee/2.9-ee-991111
   mips-linux-gnu-as $ASF -o $W/target.o $W/target.s
   \$WIBO \$G/cpp.exe $CPPDEF $INC $CFILE $W/base.i
   \$WIBO \$G/cc1.exe -quiet -O2 -G0 $W/base.i -o $W/base.s

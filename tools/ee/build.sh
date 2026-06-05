@@ -30,7 +30,7 @@ ASFLAGS="-march=r5900 -mabi=eabi -no-pad-sections -EL -G0 -I $INC -I $ASM -I $BU
 VU0FIX="$(dirname "$0")/vu0_fixup.sed"   # spimdisasm VU0 macro op -> GNU-as syntax
 SRC=going-decompiled/src/$REGION
 WIBO=/usr/local/bin/wibo
-G=tools/ee/cc/lib/gcc-lib/ee/2.95.2
+G=tools/ee/cc/lib/gcc-lib/ee/2.9-ee-991111
 INCC="-Igoing-decompiled/include -Igoing-decompiled/include/rtl/ee -Igoing-decompiled/include/rtl/common"
 CPPDEF="-D__GNUC__=2 -D__GNUC_MINOR__=9 -D__mips__ -D__mips=3 -D__R5900 -D__LANGUAGE_C -D_LANGUAGE_C -D__EE__ -DINCLUDE_ASM_USE_MACRO_INC=1"
 

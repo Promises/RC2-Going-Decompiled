@@ -12,7 +12,7 @@
 set -e
 cd "$(dirname "$0")/../.."          # repo root inside container (/work)
 W=/usr/local/bin/wibo
-G=tools/ee/cc/lib/gcc-lib/ee/2.95.2
+G=tools/ee/cc/lib/gcc-lib/ee/2.9-ee-991111
 AS=tools/ee/cc/ee/bin/as.exe
 INC=going-decompiled/include
 CFILE="${1:-tools/ee/probe/test.c}"; shift 2>/dev/null || true
