@@ -519,7 +519,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011CF74);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011CF78);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D118);
+extern void func_0011CB58(void);
+extern s32 D_001346A0;
+
+void func_0011D118(void) {
+    func_0011CB58();
+    D_001346A0 = 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D140);
 
@@ -691,15 +697,23 @@ void func_001203C0(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001203C8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00120420);
+extern s32 (*D_00135D38)(void);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00120448);
+s32 func_00120420(void) {
+    return D_00135D38();
+}
+
+s32 func_00120448(void) {
+    return D_00135D38() + 8;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00120470);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00120498);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00120500);
+s32 func_00120500(void) {
+    return D_00135D38() + 4;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00120528);
 
