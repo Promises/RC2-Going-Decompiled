@@ -51,9 +51,28 @@ echo "   defined $(wc -l < "$ALLSYMS") address symbols"
 mips-linux-gnu-ld -EL --allow-multiple-definition -T "$LD" -T "$SYMS" -T "$ALLSYMS" -Map "$BUILD/$BASENAME.map" -o "$ELF" 2> "$BUILD/ld.log" \
   || { echo "LD errors (first 20):"; head -20 "$BUILD/ld.log"; }
 
-if [ -f "$ELF" ]; then
+# Second link for .rom flattening: identical, but with a linker script whose
+# load addresses equal the virtual addresses (LMA == VMA). splat's script packs
+# sections by LMA via `AT(<seg>_ROM_START)`/`__romPos`, which drops the bss/gap
+# zeros and does NOT match the original rom layout. Stripping the `AT(...)`
+# clauses makes ld default LMA = VMA, so objcopy -O binary produces the
+# VMA-contiguous, zero-gap-filled image the original .rom actually is.
+LDLMA="$BUILD/$BASENAME.lma.ld"
+ELFLMA="$BUILD/$BASENAME.lma.elf"
+sed -E 's/ AT\([A-Za-z0-9_]+\)//g' "$LD" > "$LDLMA"
+mips-linux-gnu-ld -EL --allow-multiple-definition -T "$LDLMA" -T "$SYMS" -T "$ALLSYMS" -o "$ELFLMA" 2> "$BUILD/ld.lma.log" \
+  || { echo "LD(LMA) errors (first 20):"; head -20 "$BUILD/ld.lma.log"; }
+
+if [ -f "$ELFLMA" ]; then
   echo "== [$REGION] ELF built; flattening + diff =="
-  mips-linux-gnu-objcopy -O binary "$ELF" "$ROM" 2>/dev/null || true
+  # The original .rom is a VMA-CONTIGUOUS image of the loadable sections: every
+  # PROGBITS section sits at (VMA - base), and the gaps (NOBITS/bss ranges and
+  # the huge jump up to the 0x1800000 segment) are zero-filled. Reconstructing
+  # the original ELF this way is byte-identical to extracted/$REGION/$BASENAME.rom
+  # (proven). objcopy -O binary lays out by LMA and zero-fills inter-section
+  # gaps, so we just need LMA == VMA. The relinked ELF above used the LMA==VMA
+  # script ($LDLMA), so a plain objcopy reproduces the original layout model.
+  mips-linux-gnu-objcopy -O binary "$ELFLMA" "$ROM" 2>/dev/null || true
   echo -n "orig  "; sha1sum "$ORIG" | awk '{print $1, '$(stat -c%s "$ORIG" 2>/dev/null || echo "?")'}'
   echo -n "built "; sha1sum "$ROM"  2>/dev/null | awk '{print $1}'
   if cmp -s "$ORIG" "$ROM"; then echo "MATCH: byte-identical .rom"; else
