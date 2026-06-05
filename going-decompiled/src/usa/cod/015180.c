@@ -572,6 +572,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", rename);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D450);
 
+/* func_0011D590(arg0): link the element arg0->field_0x34 into its manager's
+ * (elem->field_0x40) active list — patching the tail's back-link (+0x3C) or the
+ * head (+0xC) — then copy a block of transform/state fields from arg0 into the
+ * element, and kick processing via func_0011B8D8() when the manager's count
+ * (+0x0) is non-negative and busy flag (+0x4) is clear. ~86%: behaviour fully
+ * recovered, but ee-gcc won't reproduce the original's branch-likely with an
+ * annulled speculative load on the head/tail test. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D590);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D620);
@@ -1459,7 +1466,14 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012FEC0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130020);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130088);
+/**
+ * Clear arg0->field_0x848 and (re)initialise subsystem 1 via func_0012B198(1).
+ * The call is a tail call.
+ */
+void func_00130088(s32 *arg0) {
+    *(s32 *)((u8 *)arg0 + 0x848) = 0;
+    func_0012B198(1);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130098);
 
@@ -1467,7 +1481,16 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130118);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130178);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130240);
+extern s32 func_0011C820(s32 *table, s32 arg);
+extern s32 D_0013BDE8;
+
+/**
+ * Thin wrapper that dispatches arg0 through func_0011C820 against the global
+ * table D_0013BDE8. Tail call.
+ */
+s32 func_00130240(s32 arg0) {
+    return func_0011C820(&D_0013BDE8, arg0);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130250);
 
