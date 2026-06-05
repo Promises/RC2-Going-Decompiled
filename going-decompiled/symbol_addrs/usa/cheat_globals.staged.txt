@@ -76,3 +76,34 @@ CommitProgressCheckpoint = 0x0029C1D0; // CONFIRMED: stages a checkpoint - recor
 // 0x00127888 mc READ primitive (fd,dst,len): pulls saved image into g_saveImageGlobal/Area. UNCONFIRMED.
 // 0x001279A0 mc WRITE primitive (fd,src,len): writes live progress block (&0x1a79f8,0xd804) + images. UNCONFIRMED.
 // 0x00127668 mc close, 0x00127508 mc open/create (inferred from SaveLoadStateMachine usage). UNCONFIRMED.
+
+// --- 989snd sound subsystem (Track-B single concept; 989snd.c EE-side stubs of the 989 Studios
+//     audio library; block 0x131de8..0x133160). All EE<->IOP comms go over two SIF RPC channels:
+//     command channel 0x1a7040 (RPC server 0x123456) and bank-load channel 0x1a7140 (server 0x123457).
+//     RPC numbers per call below. Names with snd_ prefix that match a binary error string are the REAL
+//     989 Studios API names (CONFIRMED). snd_ names without a literal string are descriptive (role
+//     confirmed, exact public symbol UNCONFIRMED). ---
+snd_BankLoadByLoc        = 0x00132318; // CONFIRMED (own strings "snd_BankLoadByLoc: CD BUSY!/Load already in progress!", "RPC call has failed inside snd_BankLoadByLoc"). Sync bank load by CD loc; sceSifCallRpc rpc#3 on chan 0x1a7140.
+snd_BankLoadFromIOP      = 0x001326d8; // CONFIRMED (own strings "snd_BankLoadFromIOP: ...", "RPC call has failed inside snd_BankLoadFromIOP"). Sync load of IOP-resident bank; rpc#0x59 on chan 0x1a7140.
+snd_BankLoadFromEE_CB    = 0x001325e8; // CONFIRMED (own string "snd_BankLoadFromEE_CB: Load already in progress!"). Async bank load w/ completion callback; rpc#0x57 on chan 0x1a7140.
+snd_Init                 = 0x00131de8; // UNCONFIRMED name (role CONFIRMED): EE-side 989snd init. Binds SIF RPC servers 0x123456 & 0x123457, sets up double-buffered command ring. __FILE__ 989snd.c lines 0xb1/0xc6.
+snd_BankLoadAsync        = 0x00132498; // UNCONFIRMED name (role CONFIRMED): async bank/cmd load w/ callback; rpc#3 on chan 0x1a7140. Sibling of snd_BankLoadByLoc. NOTE: snd_BankLoadFromEE strings exist but are UNREFERENCED -> that API stripped/inlined in this build.
+snd_ServiceRpcCompletion = 0x00132220; // CONFIRMED role: polls command-channel RPC for completion, clears in-flight descriptor. Refs "Sif says RPC isn't busy, but no IOP returns!".
+snd_SendCommandSync      = 0x00132c48; // CONFIRMED role: BLOCKING sceSifCallRpc on chan 0x1a7040, rpc# = command opcode (param); result 0x1a7080. Returns IOP reply word.
+snd_QueueCommandToRing   = 0x00132df0; // CONFIRMED role: appends a sound command into the active double-buffered command ring; ring-full warns; immediate-send fast path.
+snd_FlushCommandRing     = 0x00133108; // CONFIRMED role: BLOCKING sceSifCallRpc chan 0x1a7040 rpc#0x4d sends the filled ring buffer, then swaps the double buffer.
+snd_Pump                 = 0x00132028; // CONFIRMED role: main service pump - drains completed ring (fires per-entry callbacks), services async RPC completion, flushes ring. Returns 1 if RPC in flight.
+snd_SetupDmaTransfer     = 0x001322b8; // UNCONFIRMED name (role CONFIRMED): arms SIF result descriptor (DAT_001a7480/7484) before a command-channel RPC.
+snd_CommitRingEntry      = 0x001330d0; // CONFIRMED role: bumps active ring entry count then runs snd_Pump once.
+snd_CheckLoadInProgress  = 0x00133580; // CONFIRMED role: tests/waits on bank-load-in-progress flag DAT_001a7100 (poll if param==1).
+
+// --- 989snd / engine infra helpers ---
+snd_PrintError           = 0x00115d48; // CONFIRMED: 989snd EE-side error/log printer (printf-style varargs). Guarded by silent flag DAT_001a74f8. All 989snd.c error literals route here.
+AssertFail               = 0x00115e38; // CONFIRMED: assert formatter (file,line,expr) using fmt @0x13a370 "assertion \"%s\" failed: file \"%s\", line %d". Basis of assert-based file attribution.
+DebugMalloc              = 0x0028bcf8; // CONFIRMED role: 16-byte-aligned bump allocator (size). Debug builds wrap as (size,flags,__FILE__,__LINE__) - wrapper presence UNCONFIRMED here.
+
+// --- SIF RPC primitives (SCE SDK libsifrpc; breadcrumbs only, names UNCONFIRMED) ---
+// 0x0011d450 sceSifBindRpc(clientData, serverId, mode): binds EE->IOP RPC, used by snd_Init for 0x123456/0x123457. UNCONFIRMED.
+// 0x0011d620 sceSifCallRpc(clientData, rpc#, mode, sb, sbsize, rb, rbsize, ...): the primitive every snd_ RPC wrapper calls. mode&1=async, mode&2=no-flush. UNCONFIRMED.
+// 0x0011d810 sceSifCheckStatRpc(clientData): returns 1 if RPC in flight (busy). 989snd busy-waits on it. UNCONFIRMED.
+// IOP-side 989snd module hosts RPC servers 0x123456 (command) & 0x123457 (bank load); not in this EE image. UNCONFIRMED.

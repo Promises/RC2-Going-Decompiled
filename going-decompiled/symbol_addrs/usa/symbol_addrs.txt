@@ -4,3 +4,61 @@ memcpy = 0x001153D4; // libc.a (verbatim, 96B-verified)
 memset = 0x00115484; // libc.a (verbatim, 96B-verified)
 rename = 0x0011D3A0; // libc.a (verbatim, 28B-verified)
 s_isnan = 0x001313C8; // libc.a (verbatim, 56B-verified)
+
+// === Track-B PlayerStats globals (persistent save block @0x1A7A00). CONFIRMED via cheat CRC B3A71D10 + code trace. ===
+g_boltCount = 0x001A7A00; // u32 currency, add path CollectBolts, spend path VendorPurchaseStateMachine
+g_raritanium = 0x001A7A04; // u32
+g_miscExtras = 0x001A7A12; // u8
+g_nanotech = 0x001A7A14; // u32 (persistent save copy, distinct from live g_health)
+g_equippedArmor = 0x001A7A20; // u8
+g_crystals = 0x001A7A22; // u16
+g_moonstones = 0x001A7A24; // u32
+
+// === Track-B health/vitals globals (live in-level). ===
+g_health = 0x0018C2EC; // s32 current health / nanotech cubes. CONFIRMED
+g_maxHealth = 0x001A7A08; // heal-clamp ceiling + HUD bar max. CONFIRMED
+g_air = 0x0018C2E0; // underwater air. UNCONFIRMED (cheat only, no code xref)
+g_giantClankHealth = 0x0018B694; // Giant Clank HUD bar source. CONFIRMED read, decrementer UNCONFIRMED
+
+// === Track-B save/progress globals. CONFIRMED. ===
+g_playerProgress = 0x001A79F8; // base of persistent save block (size 0xD804)
+g_saveImageGlobal = 0x001A2BA8; // RAM buffer, serialized GLOBAL save image (<=0x2800)
+g_saveImageArea = 0x001A53A8; // RAM buffer, serialized PER-AREA save image (<=0x1000)
+g_saveSectionTableGlobal = 0x002560B8; // global section-descriptor table (stride 0x10)
+g_saveSectionTableArea = 0x002562E8; // per-area section-descriptor table
+
+// === Track-B bolt/economy functions. ===
+CollectBolts = 0x00302B08; // CONFIRMED - bolt-pickup handler (denomination switch -> g_boltCount)
+VendorPurchaseStateMachine = 0x002F97A8; // CONFIRMED - vendor buy, bolt SPEND path
+RestorePlayerProgressState = 0x002DF7A0; // UNCONFIRMED - in-RAM new-area/post-load state rebuild
+
+// === Track-B health functions. ===
+UpdateNanotechOrb = 0x003144C8; // CONFIRMED - nanotech-orb heal state machine (clamp to g_maxHealth)
+RevivePlayerMinHealth = 0x002E7E70; // CONFIRMED - respawn clamp g_health>=1
+LoadLevelAndInitHealth = 0x0026EDE8; // CONFIRMED - level loader, inits g_health=1
+
+// === Track-B save/load functions. CONFIRMED. ===
+SerializeSaveSections = 0x0029BD88; // SAVE serializer (descriptor walk -> image w/ {tag,len})
+DeserializeSaveSections = 0x0029BF58; // LOAD deserializer (inverse, memcmp-verifies)
+CalcSaveSectionsSize = 0x0029BC68; // serialized byte size of a descriptor table
+BuildSaveImage = 0x0029BB90; // builds in-RAM save image from live globals
+SaveLoadStateMachine = 0x00299CF0; // per-frame memcard save/load driver
+CommitProgressCheckpoint = 0x0029C1D0; // stages checkpoint, arms a write
+
+// === Track-B 989snd sound subsystem (block 0x131DE8..0x133160). ===
+snd_BankLoadByLoc = 0x00132318; // CONFIRMED (own strings) - sync bank load by CD loc, rpc#3
+snd_BankLoadFromIOP = 0x001326D8; // CONFIRMED (own strings) - sync IOP-bank load, rpc#0x59
+snd_BankLoadFromEE_CB = 0x001325E8; // CONFIRMED (own string) - async load w/ callback, rpc#0x57
+snd_Init = 0x00131DE8; // role CONFIRMED (name UNCONFIRMED) - EE-side 989snd init, binds RPC 0x123456/0x123457
+snd_BankLoadAsync = 0x00132498; // role CONFIRMED (name UNCONFIRMED) - async bank/cmd load, rpc#3
+snd_ServiceRpcCompletion = 0x00132220; // CONFIRMED role - polls cmd-channel RPC completion
+snd_SendCommandSync = 0x00132C48; // CONFIRMED role - blocking sceSifCallRpc, chan 0x1A7040
+snd_QueueCommandToRing = 0x00132DF0; // CONFIRMED role - append cmd to double-buffered ring
+snd_FlushCommandRing = 0x00133108; // CONFIRMED role - blocking send ring, rpc#0x4D, swap buffer
+snd_Pump = 0x00132028; // CONFIRMED role - main service pump
+snd_SetupDmaTransfer = 0x001322B8; // role CONFIRMED (name UNCONFIRMED) - arms SIF result descriptor
+snd_CommitRingEntry = 0x001330D0; // CONFIRMED role - bump ring entry count + snd_Pump
+snd_CheckLoadInProgress = 0x00133580; // CONFIRMED role - tests/waits bank-load-in-progress flag
+snd_PrintError = 0x00115D48; // CONFIRMED - 989snd error/log printer (printf varargs)
+AssertFail = 0x00115E38; // CONFIRMED - assert formatter (file,line,expr)
+DebugMalloc = 0x0028BCF8; // CONFIRMED role - 16-byte-aligned bump allocator
