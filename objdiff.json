@@ -1,0 +1,30 @@
+{
+  "$schema": "https://raw.githubusercontent.com/encounter/objdiff/main/config.schema.json",
+  "min_version": "2.0.0",
+  "build_target": false,
+  "build_base": false,
+  "watch_patterns": [
+    "going-decompiled/src/**/*.c",
+    "going-decompiled/asm/**/*.s",
+    "going-decompiled/config/**/*.yaml"
+  ],
+  "options": {
+    "mips.instrCategory": "r5900",
+    "mips.abi": "eabi32"
+  },
+  "progress_categories": [
+    { "id": "cod", "name": "core.text" },
+    { "id": "text", "name": ".text" }
+  ],
+  "units": [
+    {
+      "name": "usa/cod/015180",
+      "target_path": "going-decompiled/build/usa/expected/cod/015180.o",
+      "base_path": "going-decompiled/build/usa/obj/cod/015180.o",
+      "metadata": {
+        "source_path": "going-decompiled/src/usa/cod/015180.c",
+        "progress_categories": ["cod"]
+      }
+    }
+  ]
+}
