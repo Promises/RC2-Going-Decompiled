@@ -1,0 +1,78 @@
+// Staged PlayerStats globals + bolt writer/reader functions (USA v2.00, CRC B3A71D10).
+// Single-concept run: bolts / PlayerStats. Manager applies at next coordination point.
+// Naming: Ghidra Hungarian convention (g_dw=u32, g_w=u16, g_b=u8).
+
+// --- PlayerStats struct @ 0x001A7A00 (currencies/resources) ---
+g_dwBoltCount    = 0x001A7A00; // CONFIRMED via cheat 0x1A7A00 + pickup-add (CollectBolts) & vendor-subtract (VendorPurchaseStateMachine)
+g_dwRaritanium   = 0x001A7A04; // PlayerStats.raritanium @ +4. CONFIRMED via cheat 0x1A7A04
+g_bMiscExtras    = 0x001A7A12; // PlayerStats.miscExtras (u8) @ +0x12. CONFIRMED via cheat 0x1A7A12
+g_dwNanotech     = 0x001A7A14; // PlayerStats.nanotech (u32) @ +0x14. CONFIRMED via cheat 0x1A7A14
+g_bEquippedArmor = 0x001A7A20; // PlayerStats.equippedArmor (u8) @ +0x20. CONFIRMED via cheat 0x1A7A20
+g_wCrystals      = 0x001A7A22; // PlayerStats.crystals (u16) @ +0x22. CONFIRMED via cheat 0x1A7A22
+g_dwMoonstones   = 0x001A7A24; // PlayerStats.moonstones (u32) @ +0x24. CONFIRMED via cheat 0x1A7A24
+
+// --- Bolt writer functions ---
+CollectBolts               = 0x00302B08; // CONFIRMED: bolt-pickup handler; +0xAA denomination switch adds 1/5/20/50/100/500/1000 to g_dwBoltCount
+VendorPurchaseStateMachine = 0x002F97A8; // CONFIRMED: vendor buy confirm; subtracts price from g_dwBoltCount (bolt SPEND path)
+RestorePlayerProgressState = 0x002DF7A0; // UNCONFIRMED: snapshots+restores PlayerStats around a progress-state rebuild (load/new-area). Does NOT add/spend bolts.
+
+// --- Health / vitals system (live in-level values, distinct from persistent PlayerStats) ---
+// Clean names per task convention; Ghidra stores Hungarian aliases (g_n*) due to its name validator.
+g_health           = 0x0018C2EC; // CONFIRMED via cheat 0x18C2EC + usage: current health / nanotech cube count (s32). Note: distinct from g_dwNanotech@0x1A7A14 (persistent save copy).
+g_maxHealth        = 0x001A7A08; // CONFIRMED: heal-clamp ceiling in UpdateNanotechOrb & HUD bar max in FUN_0034DBE0. (==4 when DAT_0018C0D4==1)
+g_air              = 0x0018C2E0; // UNCONFIRMED: underwater air/oxygen (cheat 0x18C2E0). No direct xrefs found in analyzed code; type assumed s32.
+g_giantClankHealth = 0x0018B694; // CONFIRMED via cheat 0x18B694 + FUN_0028EB10 passes &it to HUD health-bar creator in Giant Clank mode (DAT_0018C0D4==2). Decrementer UNCONFIRMED.
+
+// --- Health writer functions ---
+UpdateNanotechOrb     = 0x003144C8; // CONFIRMED HEAL/PICKUP: nanotech-orb state machine; g_health = min(g_health + amount, g_maxHealth) on collect (armor heals x4, g_bMiscExtras gives bonus).
+RevivePlayerMinHealth = 0x002E7E70; // CONFIRMED RESPAWN/CLAMP: if (g_health < 1) g_health = 1; on return-to-game (called from state dispatcher FUN_002B5B38). Raises only, never damages.
+LoadLevelAndInitHealth = 0x0026EDE8; // CONFIRMED INIT: level/boot loader; sets g_health = 1 during setup (starting nanotech cube). Also runs the in-level frame loop.
+
+// --- Health reader functions (breadcrumbs only, not renamed) ---
+// 0x0034DBE0 HUD update (reads g_health -> health-bar widget value + g_maxHealth -> bar max). UNCONFIRMED overall.
+// 0x002B58F8 / 0x002B5A88 death gates: (g_health == 0) -> reject/cancel queued state transition. UNCONFIRMED overall.
+// 0x002B5B38 state dispatcher: bails while (g_health == 0); calls RevivePlayerMinHealth on state-6 resume. UNCONFIRMED overall.
+// 0x00301D50 thrown-wrench projectile: (g_health != 0) gate on homing/return. UNCONFIRMED overall.
+// 0x00320A20 moby behavior state-machine (NOT in Ghidra's function list; exists in splat as func_00320A20, 0x6BC): reads g_health as a death gate, spawns FX (func_002E6B30). NOT damage.
+
+// --- DAMAGE-PATH investigation (Track-B, single concept: how player takes damage) ---
+// CONFIRMED struct fact: g_health lives at playerStruct(0x00189E20) + 0x24CC.
+//   All g_health writes use base+0x24CC addressing; the static base 0x189E20 resolves to 0x18C2EC.
+// CONFIRMED via exhaustive asm scan of usa .text + cod overlay (grep "0x24CC" store ops):
+//   the ONLY 3 stores to g_health are:
+//     0x0026F24C (LoadLevelAndInitHealth, init=1), 0x002E7E8C (RevivePlayerMinHealth, clamp>=1),
+//     0x00315164 (UpdateNanotechOrb, heal=min(hp+amt,max)).  => NO health-subtract-on-hit writer exists in main .text.
+// RULED OUT the prior agent's hypothesis: FUN_002E6BD8 @0x002E6BD8 is a particle/FX-spawn helper
+//   (same family as FUN_002E6B30 @0x002E6B30: alloc effect slot at base+0x28 + index*0x20, set owner).
+//   It is called purely to spawn hit/impact visual effects; it never touches g_health. NOT the damage path.
+// CONCLUSION (honest): the player-damage writer (enemy attack / hazard / fall losing a nanotech cube,
+//   driving g_health toward 0 for the death gate) is NOT present in this Ghidra program / split .text.
+//   It almost certainly lives in a not-yet-split HERO/LEVEL overlay (DVP/VU overlays are TODO per CLAUDE.md).
+//   Re-investigate once hero-overlay code is imported; search there for a store to mobyBase+0x24CC (or to 0x18C2EC).
+
+// --- SAVE / GAME-PROGRESS SYSTEM (Track-B, single concept: persistent block + read/write code) ---
+// The persistent progress block is one contiguous region written/read to the memory card as a UNIT.
+// CONFIRMED bounds: base 0x001A79F8, size 0xD804 (spans 0x1A79F8 .. 0x1B51FC). The named PlayerStats
+//   currencies (0x1A7A00) sit at +0x08 inside it; skill/cheat/inventory flag arrays are within it too.
+//   The platinum-bolt flags (0x19B278) are saved as a SEPARATE descriptor section (below this base).
+g_playerProgress         = 0x001A79F8; // CONFIRMED: base of persistent save block (size 0xD804). Labelled in Ghidra.
+g_saveImageGlobal        = 0x001A2BA8; // CONFIRMED: RAM work buffer for the serialized GLOBAL save image (<=0x2800).
+g_saveImageArea          = 0x001A53A8; // CONFIRMED: RAM work buffer for the serialized PER-AREA save image (<=0x1000).
+g_saveSectionTableGlobal = 0x002560B8; // CONFIRMED: section-descriptor table (stride 0x10: {srcPtr,len,tag,_}, term srcPtr==0) for global sections.
+g_saveSectionTableArea   = 0x002562E8; // CONFIRMED: section-descriptor table for the 0x1C per-area instances.
+
+// --- Save/load functions (renamed in Ghidra) ---
+SerializeSaveSections    = 0x0029BD88; // CONFIRMED: SAVE serializer. Walks a descriptor table, copies each live section into an image with {tag,len} headers + {-1,0} terminator. tag==6000 => zero-fill.
+DeserializeSaveSections  = 0x0029BF58; // CONFIRMED: LOAD deserializer (inverse of above). Copies saved sections back into the live globals by tag; verifies via FUN_00115340 (memcmp); returns mismatch count.
+CalcSaveSectionsSize     = 0x0029BC68; // CONFIRMED: returns serialized byte size of a descriptor table (8 + sum(len+0xb & ~3) + 8). Sizes the memcard buffers.
+BuildSaveImage           = 0x0029BB90; // CONFIRMED: builds in-RAM save image from live globals: global section (0x2560B8) + 0x1C per-area sections (0x2562E8).
+SaveLoadStateMachine     = 0x00299CF0; // CONFIRMED: per-frame memcard save/load driver. Enumerate/probe/open/read/write; reads file into g_saveImageGlobal/Area then DeserializeSaveSections, or writes &g_playerProgress (0xD804) via FUN_001279a0. Result codes in DAT_0013954C.
+CommitProgressCheckpoint = 0x0029C1D0; // CONFIRMED: stages a checkpoint - records bolts/miscExtras/area into &DAT_00139410[0x1c] then rebuilds the save images via SerializeSaveSections; arms a write (DAT_00139544=0xf).
+// RestorePlayerProgressState (0x2DF7A0) refined: it is the in-RAM new-area/post-load STATE REBUILD
+//   (snapshots+restores PlayerStats around rebuilding weapon/skill/cheat/inventory tables), NOT memcard
+//   I/O. It calls BuildSaveImage (0x2DFE0C) to refresh the save image afterwards. Name still UNCONFIRMED.
+
+// --- Memcard I/O primitives (breadcrumbs only, NOT renamed) ---
+// 0x00127888 mc READ primitive (fd,dst,len): pulls saved image into g_saveImageGlobal/Area. UNCONFIRMED.
+// 0x001279A0 mc WRITE primitive (fd,src,len): writes live progress block (&0x1a79f8,0xd804) + images. UNCONFIRMED.
+// 0x00127668 mc close, 0x00127508 mc open/create (inferred from SaveLoadStateMachine usage). UNCONFIRMED.
