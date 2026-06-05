@@ -721,9 +721,13 @@ s32 func_00120500(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00120528);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00120800);
+s16 func_00120800(s16 *arg0) {
+    return arg0[3];
+}
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00120808);
+s16 func_00120808(s16 *arg0) {
+    return arg0[2];
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00120810);
 
@@ -878,7 +882,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001256D8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001257D0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00125960);
+extern s32 D_00137E00;
+
+s32 *func_00125960(void) {
+    return &D_00137E00;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012596C);
 
@@ -1066,7 +1074,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012B0D8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012B138);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012B198);
+void func_0012B198(s32 arg0) {
+    u32 *reg = (u32 *)0x10002010;
+    *reg = (*reg & 0xFF7FFFFF) | (arg0 << 23);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012B1C0);
 
@@ -1140,7 +1151,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012D768);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012D808);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012DA98);
+void func_0012DA98(s32 *arg0) {
+    if (arg0[2] != 2) {
+        arg0[0x2B] = arg0[0x46];
+        arg0[2] = 2;
+    }
+    arg0[0x208] = 1;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012DAC0);
 
