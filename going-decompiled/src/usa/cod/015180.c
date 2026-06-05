@@ -604,6 +604,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011DD48);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011DD98);
 
+/* func_0011DDC8: tail-call forward of the global handle D_00134734 to
+ * func_0011AC40 (the original is a frameless `j func_0011AC40`). ee-gcc 2.9 does
+ * not apply sibling-call optimisation for this shape — it emits a full jal with
+ * a stack frame — so it can't match from C. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011DDC8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011DDD8);
@@ -901,9 +905,50 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001234C0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001234F0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00123530);
+/**
+ * Decode a little-endian base-128 varint from src into *out, 7 bits per byte
+ * with bit 7 as the continuation flag. Returns the pointer just past the last
+ * byte consumed.
+ */
+u8 *func_00123530(u8 *src, s32 *out) {
+    s32 shift = 0;
+    s32 value;
+    u8 b;
+    b = *src;
+    src++;
+    value = b & 0x7F;
+    while (b & 0x80) {
+        b = *src;
+        src++;
+        shift += 7;
+        value |= (b & 0x7F) << shift;
+    }
+    *out = value;
+    return src;
+}
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00123578);
+/**
+ * Decode a signed (sign-extended) little-endian base-128 varint from src into
+ * *out: 7 bits per byte, bit 7 continues. After the last byte, if fewer than 32
+ * bits were consumed and the value's sign bit (0x40 of the final byte) is set,
+ * the high bits are filled with ones. Returns the pointer past the last byte.
+ */
+u8 *func_00123578(u8 *src, s32 *out) {
+    u32 shift = 0;
+    s32 value = 0;
+    u8 b;
+    do {
+        b = *src;
+        src++;
+        value |= (b & 0x7F) << shift;
+        shift += 7;
+    } while (b & 0x80);
+    if (shift < 0x20 && (b & 0x40)) {
+        value |= -1 << shift;
+    }
+    *out = value;
+    return src;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001235C8);
 
@@ -1162,6 +1207,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128D58);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128DB0);
 
+/* func_00128E18(index): lazily refresh the two-word state cache D_00137E88 from
+ * table entry `index` (stride 0x330 in D_00143640; object pointer at +0xC).
+ * Returns 0 when obj[0x7C] is 0 or the cache already holds the (obj[0x7C],
+ * (obj+0x80)[0x7C]) pair; otherwise updates the cache and returns 1. Behaviour
+ * recovered, but the original spills obj/next to a stack frame and ee-gcc keeps
+ * them in registers here, giving a different instruction shape. Left as
+ * INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128E18);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128E98);
