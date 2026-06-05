@@ -64,7 +64,10 @@ segments:
     type: code
     start: 0x000000
     vram: 0x00100080
-    bss_size: 0x6B400
+    # No parent bss_size: group rom span (0x0..0xA7480) maps linearly to vram
+    # (0x100080..0x1A7500), so core.bss infers exactly 0x6B400
+    # (0x13C100..0x1A7500). bss_size here double-counts it.
+    bss_size: 0x0
     subalign: null
     subsegments:
       - [0x000000, textbin, cod/000000] # .vutext
@@ -95,7 +98,9 @@ segments:
     type: code
     start: 0x0B1300
     vram: 0x001B1380
-    bss_size: 0x87900
+    # No parent bss_size: group rom span (0xB1300..0x138C00 = 0x87900) maps to
+    # vram 0x1B1380..0x238C80, so .bss infers exactly 0x87900 (ends at .data).
+    bss_size: 0x0
     subalign: null
     subsegments:
       - { type: bss, vram: 0x001B1380, name: bss/001B1380 } # .bss
