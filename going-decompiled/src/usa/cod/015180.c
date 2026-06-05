@@ -534,6 +534,11 @@ void func_0011D1E8(s32 *arg0) {
     arg0[4] &= 0xFFFFFFFE;
 }
 
+/* func_0011D208: allocate the next slot of a circular pool described by arg0
+ * (arg0[5]=slot base, arg0[6]=slot count, arg0[9]=counter). index = counter %
+ * count; stores counter+1 back; returns &slot[index] (0x40-byte slots). ~59% —
+ * blocked by div register allocation and the `break 0,7` div-check trap that
+ * GNU as encodes differently from the original (`break 7`). Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D208);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D238);
@@ -550,6 +555,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D590);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D620);
 
+/* func_0011D810: validity predicate for the handle in arg0 — returns 1 iff
+ * arg0[0] points to a live object, arg0[1] matches obj[6] (the +0x18 id/gen),
+ * and obj[4] (+0x10) bit 0 is set; else 0. ~65% — ee-gcc collapses the final
+ * if/else into `andi v0,v0,1` and inverts the id-check branch (beql) instead of
+ * the original two-exit branch shape. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D810);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D850);
@@ -612,7 +622,20 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011EFE8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011EFF0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F000);
+/**
+ * Copy nbytes>>2 words (32-bit) from src to dst and return 0. nbytes is rounded
+ * down to a whole number of words; a zero word-count copies nothing.
+ */
+s32 func_0011F000(s32 *dst, s32 *src, u32 nbytes) {
+    u32 words = nbytes >> 2;
+    u32 i;
+    for (i = 0; i < words; i++) {
+        *dst = *src;
+        src++;
+        dst++;
+    }
+    return 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F038);
 
@@ -634,7 +657,20 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F628);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F640);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F688);
+/**
+ * Copy nbytes>>2 words (32-bit) from src to dst and return 0. Identical body to
+ * func_0011F000 (a duplicated word-copy helper).
+ */
+s32 func_0011F688(s32 *dst, s32 *src, u32 nbytes) {
+    u32 words = nbytes >> 2;
+    u32 i;
+    for (i = 0; i < words; i++) {
+        *dst = *src;
+        src++;
+        dst++;
+    }
+    return 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F6C0);
 
@@ -654,7 +690,20 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F868);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F878);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F888);
+/**
+ * Copy nbytes>>2 words (32-bit) from src to dst and return 0. Identical body to
+ * func_0011F000 (a duplicated word-copy helper).
+ */
+s32 func_0011F888(s32 *dst, s32 *src, u32 nbytes) {
+    u32 words = nbytes >> 2;
+    u32 i;
+    for (i = 0; i < words; i++) {
+        *dst = *src;
+        src++;
+        dst++;
+    }
+    return 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F8C0);
 
@@ -674,7 +723,20 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011FA50);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011FA60);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011FA70);
+/**
+ * Copy nbytes>>2 words (32-bit) from src to dst and return 0. Identical body to
+ * func_0011F000 (a duplicated word-copy helper).
+ */
+s32 func_0011FA70(s32 *dst, s32 *src, u32 nbytes) {
+    u32 words = nbytes >> 2;
+    u32 i;
+    for (i = 0; i < words; i++) {
+        *dst = *src;
+        src++;
+        dst++;
+    }
+    return 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011FAA8);
 
@@ -1451,6 +1513,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001316C0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001316C8);
 
+/* func_00131730: binary byte (0..99) -> packed BCD, n + (n/10)*6 masked to a
+ * byte (inverse of func_00131760), e.g. 59 -> 0x59. 99.55% — the ONLY
+ * difference is the div-by-zero trap: GNU as encodes ee-gcc's check as
+ * `break 7` but the original is `break 0, 7` (different code field). This is an
+ * assembler-encoding mismatch (like the move->daddu one), not a source issue.
+ * Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131730);
 
 /* func_00131760: packed-BCD byte -> binary, n - (n>>4)*6 masked to a byte
@@ -1604,6 +1672,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133988);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001339B0);
 
+/* func_001339F0: copy `count` bytes from src to dst via indexed access
+ * (dst[i]=src[i]); non-positive count copies nothing. ~88% — the original fills
+ * the loop's `bnez` delay slot with the `sb` store while ee-gcc emits the store
+ * before the branch and nops the slot (a scheduling choice). Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001339F0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133A28);
