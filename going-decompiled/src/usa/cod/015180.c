@@ -927,7 +927,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126E60);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126ED0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126ED8);
+/**
+ * Normalise a handle/id: if its top nibble (bits 31..28) equals 7, clear the
+ * upper nibble and set bit 31 instead (i.e. remap tag 0x7 to 0x8). Otherwise
+ * return arg0 unchanged.
+ */
+u32 func_00126ED8(u32 arg0) {
+    if ((arg0 >> 28) == 7) {
+        arg0 &= 0x0FFFFFFF;
+        arg0 |= 0x80000000;
+    }
+    return arg0;
+}
 
 /**
  * Zero `count` bytes starting at `dst` (a simple byte-wise memset to 0).
@@ -940,7 +951,18 @@ void func_00126F00(u8 *dst, s32 count) {
     }
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126F38);
+extern s32 D_00137E30[];
+
+/**
+ * Bounds-checked lookup into the 10-entry table D_00137E30. Returns
+ * D_00137E30[arg0] for arg0 in [0,9], or 0 if arg0 is out of range.
+ */
+s32 func_00126F38(u32 arg0) {
+    if (arg0 < 0xA) {
+        return D_00137E30[arg0];
+    }
+    return 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126F60);
 
@@ -1229,7 +1251,19 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012E9D0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012EA18);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012EA70);
+/**
+ * Advance a ring-buffer read/write cursor. arg0 is a buffer descriptor:
+ *   arg0[2]  = current offset, arg0[9] = end offset, arg0[10] = span.
+ * Adds (arg1 >> 3) entries to the current offset and wraps it back by the span
+ * if it reaches/passes the end. Returns the new offset.
+ */
+s32 func_0012EA70(s32 *arg0, s32 arg1) {
+    u32 pos = arg0[2] + (arg1 >> 3);
+    if (pos >= (u32)arg0[9]) {
+        pos -= arg0[10];
+    }
+    return pos;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012EA9C);
 
@@ -1506,6 +1540,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001330D0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133108);
 
+/* func_00133220: sets the global flag D_001A74C4 to 1 and returns 1. The store
+ * is gp-relative (%gp_rel(D_001A74C4)($28)) in the original because the symbol
+ * lives in small-data; without small-data/$gp symbol setup ee-gcc emits a
+ * lui/%hi+%lo pair instead, so it can't match yet. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133220);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133230);
@@ -1558,6 +1596,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133928);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133960);
 
+/* func_00133988: scale arg0 by 1524/741, i.e. (arg0 * 0x5F4) / 0x2E5. ~82%; the
+ * only diff is that ee-gcc fills the `jr ra` delay slot with the `mflo`, while
+ * the original keeps `mflo` before the return and leaves a nop in the slot — a
+ * scheduling choice not expressible in source. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133988);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001339B0);
