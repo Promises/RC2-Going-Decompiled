@@ -1552,16 +1552,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130118);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130178);
 
-extern s32 func_0011C820(s32 *table, s32 arg);
-extern s32 D_0013BDE8;
-
-/**
- * Thin wrapper that dispatches arg0 through func_0011C820 against the global
- * table D_0013BDE8. Tail call.
- */
-s32 func_00130240(s32 arg0) {
-    return func_0011C820(&D_0013BDE8, arg0);
-}
+/* func_00130240(arg0): dispatch arg0 through func_0011C820 against the global
+ * table D_0013BDE8 — the original is a frameless tail call (`j func_0011C820`).
+ * ee-gcc 2.9 does not sibling-call-optimise this, so it emits jal + a stack
+ * frame and cannot match from C. Left as INCLUDE_ASM. */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130240);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130250);
 
@@ -1587,6 +1582,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130890);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001309C0);
 
+/* func_00130A50/A60/A70/A80(arg0): frameless tail-call thunks forwarding arg0 to
+ * func_00130288 with table D_0013BE58 / D_0013BE88 / D_0013BEA0 / D_0013BED8
+ * respectively (original `j func_00130288`). ee-gcc 2.9 won't sibling-call them
+ * (emits jal + frame), so they can't match from C. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130A50);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130A60);
@@ -1597,6 +1596,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130A80);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130A8C);
 
+/* func_00130AA0(arg0): frameless tail call to func_00130C68 with the sub-object
+ * at arg0->field_0x40 + 0x4C (original `j func_00130C68`). ee-gcc 2.9 won't
+ * sibling-call it (emits jal + frame). Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130AA0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130AAC);
