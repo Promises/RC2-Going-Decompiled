@@ -3,10 +3,17 @@
 extern s32 D_00133E74;
 extern s32 D_0013A308;
 
+/**
+ * Accessor: return the global pointer/handle D_00133E74 (the base of the
+ * subsystem context block this unit operates on).
+ */
 s32 func_00115200(void) {
     return D_00133E74;
 }
 
+/**
+ * Accessor: return the address of the global D_0013A308.
+ */
 s32 *func_00115210(void) {
     return &D_0013A308;
 }
@@ -59,10 +66,19 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00116300);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00116360);
 
+/**
+ * Seed the random-number generator: store arg0 as the RNG state word at
+ * D_00133E74 + 0x58 (the seed consumed by func_001163B0).
+ */
 void func_001163A0(s32 arg0) {
     *(s32 *)(D_00133E74 + 0x58) = arg0;
 }
 
+/**
+ * Linear-congruential RNG. Advances the 32-bit state at D_00133E74 + 0x58 with
+ * the classic glibc constants (state = state*0x41C64E6D + 0x3039) and returns
+ * the new state masked to 31 bits (non-negative).
+ */
 s32 func_001163B0(void) {
     s32 *p = (s32 *)(D_00133E74 + 0x58);
     s32 v = *p * 0x41C64E6D + 0x3039;
@@ -390,6 +406,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B090);
 
 extern s32 D_00134688;
 
+/**
+ * Reset the global counter/flag D_00134688 to 0.
+ */
 void func_0011B0A0(void) {
     D_00134688 = 0;
 }
@@ -511,17 +530,30 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C7E8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C820);
 
+/**
+ * Callback that writes a record's value (arg0[5]) into the array at arg1[7]
+ * (arg1->field_0x1C), indexed by the record's key/index arg0[4]:
+ * ((s32*)arg1[7])[arg0[4]] = arg0[5].
+ */
 void func_0011C880(s32 *arg0, s32 *arg1) {
     s32 *base = (s32 *)arg1[7];
     base[arg0[4]] = arg0[5];
 }
 
+/**
+ * Callback that copies the index/key field arg0[4] into arg1[2]
+ * (arg1->field_0x8).
+ */
 void func_0011C8A0(s32 *arg0, s32 *arg1) {
     arg1[2] = arg0[4];
 }
 
 extern s32 D_0013D080[];
 
+/**
+ * Lookup into the global table D_0013D080: return D_0013D080[arg0]
+ * (no bounds checking).
+ */
 s32 func_0011C8B0(s32 arg0) {
     return D_0013D080[arg0];
 }
@@ -562,6 +594,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011CF78);
 extern void func_0011CB58(void);
 extern s32 D_001346A0;
 
+/**
+ * Reset helper: run the subsystem reset routine func_0011CB58(), then clear the
+ * global state word D_001346A0 to 0.
+ */
 void func_0011D118(void) {
     func_0011CB58();
     D_001346A0 = 0;
@@ -569,6 +605,10 @@ void func_0011D118(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D140);
 
+/**
+ * Reset object arg0: clear its field_0x18 (arg0[6]) and clear bit 0 of the flag
+ * word field_0x10 (arg0[4]) — i.e. mark it inactive/idle.
+ */
 void func_0011D1E8(s32 *arg0) {
     arg0[6] = 0;
     arg0[4] &= 0xFFFFFFFE;
@@ -803,12 +843,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00120354);
 
 extern void (*D_00135D34)(void);
 
+/**
+ * Invoke the installed callback held in the global function pointer D_00135D34.
+ */
 void func_00120368(void) {
     D_00135D34();
 }
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00120390);
 
+/**
+ * No-op stub (empty body; present as a registered/overridable hook).
+ */
 void func_001203C0(void) {
 }
 
@@ -816,10 +862,17 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001203C8);
 
 extern s32 (*D_00135D38)(void);
 
+/**
+ * Return the value produced by the installed callback D_00135D38 (a base
+ * value/pointer queried by the +4 / +8 variants below).
+ */
 s32 func_00120420(void) {
     return D_00135D38();
 }
 
+/**
+ * Return D_00135D38() + 8 (the base value from the callback, offset by 8 bytes).
+ */
 s32 func_00120448(void) {
     return D_00135D38() + 8;
 }
@@ -828,16 +881,25 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00120470);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00120498);
 
+/**
+ * Return D_00135D38() + 4 (the base value from the callback, offset by 4 bytes).
+ */
 s32 func_00120500(void) {
     return D_00135D38() + 4;
 }
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00120528);
 
+/**
+ * Accessor: return the s16 at arg0 + 0x6 (arg0[3]).
+ */
 s16 func_00120800(s16 *arg0) {
     return arg0[3];
 }
 
+/**
+ * Accessor: return the s16 at arg0 + 0x4 (arg0[2]).
+ */
 s16 func_00120808(s16 *arg0) {
     return arg0[2];
 }
@@ -852,6 +914,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00120AB8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00120B38);
 
+/**
+ * No-op stub (empty body; present as a registered/overridable hook).
+ */
 void func_00120BC8(void) {
 }
 
@@ -1043,6 +1108,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001257D0);
 
 extern s32 D_00137E00;
 
+/**
+ * Accessor: return the address of the global D_00137E00.
+ */
 s32 *func_00125960(void) {
     return &D_00137E00;
 }
@@ -1156,6 +1224,12 @@ extern s32 *D_00141B28;
 extern s32 *D_00141B2C;
 extern s32 *D_00141B30;
 
+/**
+ * Read fields from the structure at physical address arg0 (accessed through the
+ * uncached mirror, arg0 | 0x20000000) and publish them through three optional
+ * global out-pointers: p[0] -> *D_00141B28, p[1] -> *D_00141B2C, and the word at
+ * p+0x90 -> *D_00141B30. Each store is skipped if its out-pointer is null.
+ */
 void func_00127C68(u32 arg0) {
     s32 *p = (s32 *)(arg0 | 0x20000000);
     if (D_00141B28) *D_00141B28 = p[0];
@@ -1301,6 +1375,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012B0D8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012B138);
 
+/**
+ * Set bit 23 of the hardware register at 0x10002010 (IPU_CTRL) to the low bit of
+ * arg0, preserving all other bits (read-modify-write with mask 0xFF7FFFFF).
+ */
 void func_0012B198(s32 arg0) {
     u32 *reg = (u32 *)0x10002010;
     *reg = (*reg & 0xFF7FFFFF) | (arg0 << 23);
@@ -1388,6 +1466,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012D768);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012D808);
 
+/**
+ * State transition on object arg0: if its state field_0x8 (arg0[2]) is not
+ * already 2, copy field_0x118 (arg0[0x46]) into field_0xAC (arg0[0x2B]) and set
+ * the state to 2. Always sets the dirty/request flag field_0x820 (arg0[0x208])
+ * to 1.
+ */
 void func_0012DA98(s32 *arg0) {
     if (arg0[2] != 2) {
         arg0[0x2B] = arg0[0x46];
@@ -1420,6 +1504,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012E608);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012E890);
 
+/**
+ * Extract the top arg1 bits of the 64-bit value at *arg0: returns
+ * (s32)(*arg0 >> (64 - arg1)) — i.e. the most-significant arg1 bits, right
+ * aligned. (Bitstream/MSB-first reader helper.)
+ */
 s32 func_0012E8C8(u64 *arg0, s32 arg1) {
     u64 val = *arg0;
     return (s32)(val >> (0x40 - arg1));
@@ -1465,6 +1554,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012F690);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012F738);
 
+/**
+ * Stub predicate that always returns 1 (a registered callback whose default
+ * answer is "true"/success).
+ */
 s32 func_0012F940(void) {
     return 1;
 }
@@ -1473,6 +1566,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012F948);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012F998);
 
+/**
+ * Predicate: follow arg0->field_0x40 (arg0[0x10]) to a sub-object and return 1
+ * if that object's field_0x4 (base[1]) is zero, else 0.
+ */
 s32 func_0012F9B8(s32 *arg0) {
     s32 *base = (s32 *)arg0[0x10];
     return base[1] == 0;
@@ -1480,6 +1577,12 @@ s32 func_0012F9B8(s32 *arg0) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012F9C8);
 
+/**
+ * Follow arg0->field_0x40 (arg0[0x10]) to a sub-object, then for each of six
+ * child pointers stored at base offsets 0x1B8,0x1C8,0x1D8 and 0x1BC,0x1CC,0x1DC
+ * (base[0x6E,0x72,0x76,0x6F,0x73,0x77]), clear that child's field_0x28
+ * (child[0xA]) to 0 when the pointer is non-null. Returns 1.
+ */
 s32 func_0012FA18(s32 *arg0) {
     s32 *base = (s32 *)arg0[0x10];
     s32 *p;
@@ -1510,6 +1613,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012FAE8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012FB10);
 
+/**
+ * Initialise a cursor/range descriptor arg0: store the start (arg1) and limit
+ * (arg2) at field_0x0/field_0x4, and seed both the current (field_0x8) and
+ * saved (field_0xC) positions to the start.
+ */
 void func_0012FB48(s32 *arg0, s32 arg1, s32 arg2) {
     arg0[0] = arg1;
     arg0[1] = arg2;
@@ -1517,10 +1625,18 @@ void func_0012FB48(s32 *arg0, s32 arg1, s32 arg2) {
     arg0[3] = arg1;
 }
 
+/**
+ * Save the current position: copy field_0x8 (arg0[2]) into the saved slot
+ * field_0xC (arg0[3]).
+ */
 void func_0012FB60(s32 *arg0) {
     arg0[3] = arg0[2];
 }
 
+/**
+ * Restore the saved position: copy field_0xC (arg0[3]) back into the current
+ * slot field_0x8 (arg0[2]).
+ */
 void func_0012FB70(s32 *arg0) {
     arg0[2] = arg0[3];
 }
@@ -1562,6 +1678,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130250);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130288);
 
+/**
+ * Store a width/height (or x/y) pair into descriptor arg0: arg1 -> field_0x4,
+ * arg2 -> field_0x8, plus their >>4 (divided-by-16, e.g. pixels->blocks)
+ * counterparts into field_0xC and field_0x10. Returns 1.
+ */
 s32 func_001302E0(s32 *arg0, s32 arg1, s32 arg2) {
     arg0[1] = arg1;
     arg0[2] = arg2;
@@ -1634,6 +1755,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131540);
 extern void func_00131540(void);
 extern s8 D_00138158[];
 
+/**
+ * Lazily initialise the global block D_00138158 (calling func_00131540() the
+ * first time, detected by its leading byte being 0), then return 1 if byte 4 of
+ * the block equals 0x54 ('T'), else 0 — a region/territory check.
+ */
 s32 func_001315E0(void) {
     if (D_00138158[0] == 0) {
         func_00131540();
