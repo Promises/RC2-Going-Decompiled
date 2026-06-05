@@ -19,13 +19,19 @@ INC="-Igoing-decompiled/include -Igoing-decompiled/include/rtl/ee -Igoing-decomp
 ASF="-march=r5900 -mabi=eabi -no-pad-sections -EL -G0 -Igoing-decompiled/build/$REGION/include"
 CPPDEF="-D__GNUC__=2 -D__GNUC_MINOR__=9 -D__mips__ -D__mips=3 -D__R5900 -D__LANGUAGE_C -D_LANGUAGE_C -D__EE__ -DINCLUDE_ASM_USE_MACRO_INC=1"
 
+# Pre-filter the original asm so VU0 (COP2) macro-mode instructions assemble
+# with GNU as: spimdisasm emits the Q/ACC special registers as bare tokens,
+# GNU as wants them `$`-prefixed (byte-identical encoding). No-op otherwise.
+sed -f "$(dirname "$0")/vu0_fixup.sed" \
+  "going-decompiled/asm/$REGION/nonmatchings/$UNIT/$FUNC.s" > "$W/$FUNC.s"
+
 # target wrapper: assemble the ORIGINAL function asm (.set noreorder/noat, as INCLUDE_ASM does)
 cat > "$W/target.s" <<EOF
 .include "macro.inc"
 .section .text, "ax"
 .set noat
 .set noreorder
-.include "going-decompiled/asm/$REGION/nonmatchings/$UNIT/$FUNC.s"
+.include "$W/$FUNC.s"
 .set reorder
 .set at
 EOF

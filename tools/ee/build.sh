@@ -27,6 +27,7 @@ ELF=$BUILD/$BASENAME.elf
 ROM=$BUILD/$BASENAME.rom
 
 ASFLAGS="-march=r5900 -mabi=eabi -no-pad-sections -EL -G0 -I $INC -I $ASM -I $BUILD"
+VU0FIX="$(dirname "$0")/vu0_fixup.sed"   # spimdisasm VU0 macro op -> GNU-as syntax
 
 echo "== [$REGION] assembling $(find $ASM -name '*.s' | wc -l) asm files =="
 n=0
@@ -34,7 +35,8 @@ for s in $(find $ASM -name '*.s'); do
   # object path must match what the ld script references: $BUILD/<full .s path>.o
   o="$BUILD/${s%.s}.o"
   mkdir -p "$(dirname "$o")"
-  mips-linux-gnu-as $ASFLAGS -o "$o" "$s" 2> "$o.log" || { echo "AS FAIL $s:"; tail -5 "$o.log"; exit 1; }
+  # Apply the VU0 fixup (no-op on non-VU0 asm) then assemble from stdin.
+  sed -f "$VU0FIX" "$s" | mips-linux-gnu-as $ASFLAGS -o "$o" - 2> "$o.log" || { echo "AS FAIL $s:"; tail -5 "$o.log"; exit 1; }
   n=$((n+1))
 done
 echo "   assembled $n objects"
