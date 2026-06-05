@@ -485,7 +485,17 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BE20);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BEDC);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BEE0);
+/**
+ * Spin until the busy bit (0x8000) of the status register at 0x1000F130 clears,
+ * then write the low byte of `value` to the command register at 0x1000F180.
+ * Returns `value`.
+ */
+s32 func_0011BEE0(s32 value) {
+    while (*(volatile u32 *)0x1000F130 & 0x8000) {
+    }
+    *(volatile u8 *)0x1000F180 = value;
+    return value;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BF18);
 
