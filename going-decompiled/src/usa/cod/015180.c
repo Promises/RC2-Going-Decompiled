@@ -1183,7 +1183,17 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012F9B8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012F9C8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012FA18);
+s32 func_0012FA18(s32 *arg0) {
+    s32 *base = (s32 *)arg0[0x10];
+    s32 *p;
+    p = (s32 *)base[0x6E]; if (p) p[0xA] = 0;
+    p = (s32 *)base[0x72]; if (p) p[0xA] = 0;
+    p = (s32 *)base[0x76]; if (p) p[0xA] = 0;
+    p = (s32 *)base[0x6F]; if (p) p[0xA] = 0;
+    p = (s32 *)base[0x73]; if (p) p[0xA] = 0;
+    p = (s32 *)base[0x77]; if (p) p[0xA] = 0;
+    return 1;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012FA70);
 
@@ -1229,7 +1239,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130250);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130288);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001302E0);
+s32 func_001302E0(s32 *arg0, s32 arg1, s32 arg2) {
+    arg0[1] = arg1;
+    arg0[2] = arg2;
+    arg0[3] = arg1 >> 4;
+    arg0[4] = arg2 >> 4;
+    return 1;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130300);
 
