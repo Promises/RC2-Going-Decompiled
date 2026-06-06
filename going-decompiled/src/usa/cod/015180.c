@@ -52,6 +52,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115DA8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115E28);
 
+/* func_00115E68: tail-calls func_001175F0(arg0, 0, 0xA) and returns its result
+ * sign-extended from 32 to 64 bits. Not matched: the original saves $31 with a
+ * 128-bit `sq` (not the `sd` ee-gcc emits here at -O2 -G0) and carries an extra
+ * dsll32/dsra32 sign-extend that cc1 elides for an s32-returning callee. Both
+ * are codegen/ABI forms this compiler won't reproduce. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115E68);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115E90);
@@ -459,7 +464,16 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B9C0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B9C8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B9F8);
+extern void func_0011B050(s32 count, s32 *value);
+
+/**
+ * Push the single 32-bit value arg0 through func_0011B050 with count 4
+ * (the value is passed by address in a local).
+ */
+void func_0011B9F8(s32 arg0) {
+    s32 value = arg0;
+    func_0011B050(4, &value);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BA20);
 
@@ -467,7 +481,14 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BA58);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BA90);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BAA0);
+/**
+ * Push the single 32-bit value arg0 through func_0011B050 with count 0x10
+ * (the value is passed by address in a local).
+ */
+void func_0011BAA0(s32 arg0) {
+    s32 value = arg0;
+    func_0011B050(0x10, &value);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BAC4);
 
@@ -699,7 +720,16 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011EAC8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011EB00);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ED08);
+extern void func_0011EB00(s32 arg0, s32 arg1, s32 arg2, void *outbuf);
+
+/**
+ * Forward (arg0, arg1, arg2) to func_0011EB00, supplying a 16-byte scratch
+ * buffer on the stack as its fourth (output) argument.
+ */
+void func_0011ED08(s32 arg0, s32 arg1, s32 arg2) {
+    u8 buf[16];
+    func_0011EB00(arg0, arg1, arg2, buf);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ED28);
 
@@ -1744,7 +1774,17 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001313C4);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", s_isnan);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131400);
+extern s32 func_00123028(s64 a, s64 b);
+
+/**
+ * Pass the 64-bit value at arg0 + 0x8 as both arguments to func_00123028,
+ * discard its result, and return 0.
+ */
+s32 func_00131400(s64 *arg0) {
+    s64 v = arg0[1];
+    func_00123028(v, v);
+    return 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131424);
 
@@ -1888,13 +1928,45 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133340);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001333C0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133400);
+extern void func_00132DF0(s32 sel, s32 count, void *data, s32 arg3, s32 arg4);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133430);
+/**
+ * Invoke func_00132DF0 with selector 0x2E, count 4, arg0 passed by address in a
+ * stack local, and zero for the two trailing arguments.
+ */
+void func_00133400(s32 arg0) {
+    s32 value = arg0;
+    func_00132DF0(0x2E, 4, &value, 0, 0);
+}
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133460);
+/**
+ * Invoke func_00132DF0 with selector 0x32, count 4, arg0 passed by address in a
+ * stack local, and arg1/arg2 forwarded as the two trailing arguments.
+ */
+void func_00133430(s32 arg0, s32 arg1, s32 arg2) {
+    s32 value = arg0;
+    func_00132DF0(0x32, 4, &value, arg1, arg2);
+}
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133490);
+/**
+ * Invoke func_00132DF0 with selector 0x4F, count 4, arg0 passed by address in a
+ * stack local, and arg1/arg2 forwarded as the two trailing arguments.
+ */
+void func_00133460(s32 arg0, s32 arg1, s32 arg2) {
+    s32 value = arg0;
+    func_00132DF0(0x4F, 4, &value, arg1, arg2);
+}
+
+extern void func_00132C48(s32 arg0, s32 arg1, void *arg2);
+
+/**
+ * Invoke func_00132C48 with selector 0x36 and count 4, passing arg0 by address
+ * in a stack local as the third (data) argument.
+ */
+void func_00133490(s32 arg0) {
+    s32 value = arg0;
+    func_00132C48(0x36, 4, &value);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001334B8);
 
@@ -1918,6 +1990,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133818);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133848);
 
+/* func_00133890: calls func_00132C48(0x3D, 0, 0) and returns. Not matched: the
+ * original keeps a stack frame and uses jal+jr, but ee-gcc sibling-call-
+ * optimises this single-call void wrapper into `j func_00132C48`. This cc1 has
+ * no flag to suppress the tail-call here. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133890);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001338B8);
@@ -1926,6 +2002,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001338F0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133928);
 
+/* func_00133960: calls func_00132C48(0x5B, 0, 0) and returns. Not matched: same
+ * sibling-call-optimisation blocker as func_00133890 — ee-gcc emits
+ * `j func_00132C48` instead of the original's framed jal+jr. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133960);
 
 /* func_00133988: scale arg0 by 1524/741, i.e. (arg0 * 0x5F4) / 0x2E5. ~82%; the
@@ -1944,6 +2023,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001339F0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133A28);
 
+/* func_00133A78: calls func_00133A28(0x3E9, 0xB, &D_0014B540) and returns. Not
+ * matched: same sibling-call-optimisation blocker as func_00133890 — ee-gcc
+ * tail-calls into func_00133A28 rather than keeping the original's stack frame.
+ * Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133A78);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133AA0);
