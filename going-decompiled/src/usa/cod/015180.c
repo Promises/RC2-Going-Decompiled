@@ -462,9 +462,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B978);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B9C0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B9C8);
-
 extern void func_0011B050(s32 count, s32 *value);
+
+/**
+ * Pack arg0 and the signed-byte form of arg1 into a stack record and push it
+ * through func_0011B050 with count 3.
+ */
+void func_0011B9C8(s32 arg0, s32 arg1) {
+    s32 args[2];
+    args[0] = arg0;
+    args[1] = (s8)arg1;
+    func_0011B050(3, args);
+}
 
 /**
  * Push the single 32-bit value arg0 through func_0011B050 with count 4
@@ -1942,6 +1951,13 @@ void func_00132888(s32 arg0, s32 arg1) {
     func_00132DF0(9, 8, args, 0, 0);
 }
 
+/* func_001328C0: builds a 0x1C-byte record for func_00132DF0 (selector 0x60) —
+ * word 0 = arg0, then either a 24-byte copy of *arg1 or a -1 sentinel. Not
+ * matched: the 24-byte payload sits at a *misaligned* offset 4 and the source
+ * is itself unaligned, so the original copies it with unaligned
+ * ldl/ldr/sdl/sdr. Reproducing that requires a packed (alignment-1) struct copy
+ * that ee-gcc 2.9 won't emit from natural C — an aligned struct lands the
+ * payload at offset 8 with aligned ld/sd instead. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001328C0);
 
 /**
