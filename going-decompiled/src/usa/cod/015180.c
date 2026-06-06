@@ -682,7 +682,19 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D9C0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011DD48);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011DD98);
+extern void func_0011DD48(void);
+extern void func_0011AC60(s32 handle);
+extern s32 D_00134734;
+
+/**
+ * Run the func_0011DD48 teardown step, then forward the global handle
+ * D_00134734 to func_0011AC60. Always returns 0.
+ */
+s32 func_0011DD98(void) {
+    func_0011DD48();
+    func_0011AC60(D_00134734);
+    return 0;
+}
 
 /* func_0011DDC8: tail-call forward of the global handle D_00134734 to
  * func_0011AC40 (the original is a frameless `j func_0011AC40`). ee-gcc 2.9 does
@@ -1919,7 +1931,16 @@ void func_00132858(s32 arg0) {
     func_00132DF0(6, 4, &value, 0, 0);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00132888);
+/**
+ * Invoke func_00132DF0 with selector 9, count 8, and a stack record holding
+ * arg0 and arg1; the two trailing arguments are zero.
+ */
+void func_00132888(s32 arg0, s32 arg1) {
+    s32 args[2];
+    args[0] = arg0;
+    args[1] = arg1;
+    func_00132DF0(9, 8, args, 0, 0);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001328C0);
 
