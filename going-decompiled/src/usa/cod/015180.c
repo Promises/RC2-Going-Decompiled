@@ -998,7 +998,27 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00123130);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001231C8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00123268);
+extern void func_00122630(void *args);
+
+/**
+ * Pack three 32-bit arguments and one 64-bit argument into a stack record
+ * (the 64-bit field is 8-byte aligned at offset 0x10) and pass it to
+ * func_00122630.
+ */
+void func_00123268(s32 arg0, s32 arg1, s32 arg2, s64 arg3) {
+    struct {
+        s32 a;
+        s32 b;
+        s32 c;
+        s32 pad;
+        s64 d;
+    } args;
+    args.a = arg0;
+    args.b = arg1;
+    args.c = arg2;
+    args.d = arg3;
+    func_00122630(&args);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00123298);
 
@@ -1015,7 +1035,19 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00123400);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00123490);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001234C0);
+extern void func_001232F0(void *args);
+
+/**
+ * Pack four 32-bit arguments into a stack record and hand it to func_001232F0.
+ */
+void func_001234C0(s32 arg0, s32 arg1, s32 arg2, s32 arg3) {
+    s32 args[4];
+    args[0] = arg0;
+    args[1] = arg1;
+    args[2] = arg2;
+    args[3] = arg3;
+    func_001232F0(args);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001234F0);
 
@@ -1876,13 +1908,29 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001326D8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00132818);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00132858);
+extern void func_00132DF0(s32 sel, s32 count, void *data, s32 arg3, s32 arg4);
+
+/**
+ * Invoke func_00132DF0 with selector 6, count 4, arg0 passed by address in a
+ * stack local, and zero for the two trailing arguments.
+ */
+void func_00132858(s32 arg0) {
+    s32 value = arg0;
+    func_00132DF0(6, 4, &value, 0, 0);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00132888);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001328C0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00132938);
+/**
+ * Invoke func_00132DF0 with selector 0xB, count 4, arg0 passed by address in a
+ * stack local, and zero for the two trailing arguments.
+ */
+void func_00132938(s32 arg0) {
+    s32 value = arg0;
+    func_00132DF0(0xB, 4, &value, 0, 0);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00132968);
 
@@ -1927,8 +1975,6 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133300);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133340);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001333C0);
-
-extern void func_00132DF0(s32 sel, s32 count, void *data, s32 arg3, s32 arg4);
 
 /**
  * Invoke func_00132DF0 with selector 0x2E, count 4, arg0 passed by address in a
