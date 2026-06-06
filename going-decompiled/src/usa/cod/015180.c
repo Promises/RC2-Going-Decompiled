@@ -928,9 +928,34 @@ s32 func_00120448(void) {
     return D_00135D38() + 8;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00120470);
+extern s32 func_00120498(void);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00120498);
+/**
+ * Install func_00120498 as the active callback D_00135D38 and invoke it once
+ * (priming its lazily-initialised state).
+ */
+void func_00120470(void) {
+    D_00135D38 = func_00120498;
+    D_00135D38();
+}
+
+extern s32 D_00141800;
+extern u8 D_001417F0[16];
+extern u8 D_00141808;
+
+/**
+ * Lazily initialise and return the 16-byte singleton at D_001417F0. On first
+ * call (guarded by the flag D_00141800) the block is zeroed and its field at
+ * offset 4 is pointed at D_00141808. Always returns the block's address.
+ */
+s32 func_00120498(void) {
+    if (!D_00141800) {
+        D_00141800 = 1;
+        memset(D_001417F0, 0, 0x10);
+        *(u8 **)(D_001417F0 + 4) = &D_00141808;
+    }
+    return (s32)D_001417F0;
+}
 
 /**
  * Return D_00135D38() + 4 (the base value from the callback, offset by 4 bytes).
