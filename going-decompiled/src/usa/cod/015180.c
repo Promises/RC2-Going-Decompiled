@@ -40,6 +40,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001158F4);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115AC0);
 
+/* func_00115C90: clears D_00133E78, calls func_0011B270(arg1); on failure
+ * (-1) writes the resulting D_00133E78 error code back through arg0. Logic
+ * matches but NOT byte-exact: the original saves $16/$17/$31 with 128-bit `sq`
+ * while this cc1 emits `sd` for callee-saves. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115C90);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115CF0);
@@ -458,11 +462,17 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B8D8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B970);
 
+extern void func_0011B050(s32 count, s32 *value);
+
+/* func_0011B978(arg0, arg1, arg2): pack a four-word command record (low 16 bits
+ * of arg0, arg1, arg2, and the uncached-mirror address of D_0013CA10 ORed with
+ * 0x20000000) and push it through func_0011B050 with count 1. Instructions are
+ * essentially identical but NOT byte-exact: the original schedules the prologue
+ * `sd $31` and `move a1,sp` after the record stores, an ordering ee-gcc won't
+ * reproduce from source. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B978);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B9C0);
-
-extern void func_0011B050(s32 count, s32 *value);
 
 /**
  * Pack arg0 and the signed-byte form of arg1 into a stack record and push it
@@ -615,9 +625,24 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011CBC0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011CBE8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011CD20);
+extern s32 func_0011CBE8(s32 arg0, s32 arg1, s32 arg2, s32 arg3, s32 arg4,
+                         s32 arg5, s32 arg6);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011CD60);
+/**
+ * Thin wrapper around func_0011CBE8 that forces its second argument (the mode
+ * flag) to 0 and shifts the caller's arg1..arg5 into arg2..arg6.
+ */
+s32 func_0011CD20(s32 arg0, s32 arg1, s32 arg2, s32 arg3, s32 arg4, s32 arg5) {
+    return func_0011CBE8(arg0, 0, arg1, arg2, arg3, arg4, arg5);
+}
+
+/**
+ * Thin wrapper around func_0011CBE8 that forces its second argument (the mode
+ * flag) to 1 and shifts the caller's arg1..arg5 into arg2..arg6.
+ */
+s32 func_0011CD60(s32 arg0, s32 arg1, s32 arg2, s32 arg3, s32 arg4, s32 arg5) {
+    return func_0011CBE8(arg0, 1, arg1, arg2, arg3, arg4, arg5);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011CDA0);
 
@@ -927,7 +952,20 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011FAB8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011FB8C);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011FC48);
+extern s32 D_001417EC;
+extern void func_0011FB98(void);
+
+/**
+ * One-shot initialiser: the first time it is called (guard word D_001417EC is
+ * still zero) it sets the guard and tail-calls func_0011FB98 to do the real
+ * setup; subsequent calls do nothing.
+ */
+void func_0011FC48(void) {
+    if (D_001417EC == 0) {
+        D_001417EC = 1;
+        func_0011FB98();
+    }
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011FC68);
 
@@ -942,7 +980,19 @@ void func_00120368(void) {
     D_00135D34();
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00120390);
+extern s32 func_00115544(const char *a, const char *b);
+
+/**
+ * Compare the two strings arg0 and arg1 with func_00115544 (strcmp); return
+ * arg2 when they are equal, otherwise 0.
+ */
+s32 func_00120390(const char *arg0, const char *arg1, s32 arg2) {
+    s32 result = arg2;
+    if (func_00115544(arg0, arg1) != 0) {
+        result = 0;
+    }
+    return result;
+}
 
 /**
  * No-op stub (empty body; present as a registered/overridable hook).
@@ -1685,9 +1735,29 @@ s32 func_0012E8C8(u64 *arg0, s32 arg1) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012E8E8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012E980);
+extern void func_0012E8E8(u64 *arg0, s32 arg1);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012E9D0);
+/**
+ * Read arg1 bits from the bitstream at arg0 (func_0012E8C8(arg0, arg1)) and
+ * then advance the stream by arg1 bits (func_0012E8E8(arg0, arg1)), returning
+ * the value that was read.
+ */
+s32 func_0012E980(u64 *arg0, s32 arg1) {
+    s32 value = func_0012E8C8(arg0, arg1);
+    func_0012E8E8(arg0, arg1);
+    return value;
+}
+
+/**
+ * Read a single bit from the bitstream at arg0 (func_0012E8C8(arg0, 1)) and
+ * then advance the stream by one bit (func_0012E8E8(arg0, 1)), returning the
+ * bit that was read.
+ */
+s32 func_0012E9D0(u64 *arg0) {
+    s32 bit = func_0012E8C8(arg0, 1);
+    func_0012E8E8(arg0, 1);
+    return bit;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012EA18);
 
@@ -1744,7 +1814,27 @@ s32 func_0012F9B8(s32 *arg0) {
     return base[1] == 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012F9C8);
+extern void func_00130178(s32 *arg0);
+extern void func_00130088(s32 *arg0);
+
+/**
+ * Reset the sub-object held at arg0->field_0x40: clear its leading three words
+ * and arg0->field_0x8, clear field_0xAC, mark field_0x80 invalid (-1), run the
+ * teardown helper func_00130178 on it, clear field_0x118, then hand off to
+ * func_00130088 to finish (re)initialising it.
+ */
+void func_0012F9C8(s32 *arg0) {
+    s32 *base = (s32 *)arg0[0x10];
+    base[0] = 0;
+    base[1] = 0;
+    base[2] = 0;
+    arg0[2] = 0;
+    base[0x2B] = 0;
+    base[0x20] = -1;
+    func_00130178(base);
+    base[0x46] = 0;
+    func_00130088(base);
+}
 
 /**
  * Follow arg0->field_0x40 (arg0[0x10]) to a sub-object, then for each of six
@@ -2004,7 +2094,20 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131850);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131908);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001319B0);
+extern void func_00131850(u8 *arg0);
+
+/**
+ * Advance the counter byte at arg0+0x3: increment it, and when it wraps to
+ * 0x18 reset it to 0 and run func_00131850(arg0) to roll over to the next unit.
+ */
+void func_001319B0(u8 *arg0) {
+    s32 next = arg0[3] + 1;
+    arg0[3] = next;
+    if ((next & 0xFF) == 0x18) {
+        arg0[3] = 0;
+        func_00131850(arg0);
+    }
+}
 
 extern void func_00131908(u8 *arg0);
 
