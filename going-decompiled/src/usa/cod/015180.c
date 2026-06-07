@@ -723,7 +723,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011DE08);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E010);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E0A0);
+extern s32 D_0013472C;
+extern u8 D_001400A8[4];
+
+/**
+ * Reset the subsystem state guarded by D_0013472C: clear the flag word to 0 and
+ * zero the 4-byte descriptor at D_001400A8. Always returns 0.
+ */
+s32 func_0011E0A0(void) {
+    D_0013472C = 0;
+    memset(D_001400A8, 0, 4);
+    return 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E0D8);
 
@@ -743,7 +754,19 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E938);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011EA38);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011EAC8);
+extern s32 D_00134748;
+extern u8 D_00140528[4];
+
+/**
+ * Reset the subsystem state guarded by D_00134748: set the flag word to -1
+ * (uninitialised sentinel) and zero the 4-byte descriptor at D_00140528.
+ * Always returns 0.
+ */
+s32 func_0011EAC8(void) {
+    D_00134748 = -1;
+    memset(D_00140528, 0, 4);
+    return 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011EB00);
 
@@ -762,7 +785,19 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ED28);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ED60);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011EEA0);
+extern s32 func_0011B030(s32 arg0);
+
+/**
+ * Query controller/pad state bit 0x40000 (via func_0011B030(4)); if set, run the
+ * func_0011B0A0 handler and return 1, otherwise return 0.
+ */
+s32 func_0011EEA0(void) {
+    if (func_0011B030(4) & 0x40000) {
+        func_0011B0A0();
+        return 1;
+    }
+    return 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011EED8);
 
@@ -1316,7 +1351,20 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127500);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127508);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127630);
+extern s32 func_00127508(s32 arg0, s32 arg1, s32 arg2, s32 arg3);
+extern s32 D_00137E68;
+
+/**
+ * Allocate/acquire via func_00127508(arg0, arg1, arg2, 0x40). On failure (NULL
+ * result) record error code 0xB in D_00137E68. Returns the func_00127508 result.
+ */
+s32 func_00127630(s32 arg0, s32 arg1, s32 arg2) {
+    s32 result = func_00127508(arg0, arg1, arg2, 0x40);
+    if (result == 0) {
+        D_00137E68 = 0xB;
+    }
+    return result;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127668);
 
@@ -1616,6 +1664,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012E538);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012E608);
 
+/* func_0012E890(arg0, arg1, arg2, arg3): initialise the record at arg0 (limit
+ * arg1 at field_0x8/0xC, end arg2+arg3 at field_0x24, span arg3 at field_0x28,
+ * start arg2 at field_0x20; zero field_0x0..0x4, 0x10, 0x18..0x1C) then
+ * tail-call func_0012E8E8(arg0, 0, arg2, arg3). ~75% — ee-gcc schedules the
+ * field stores differently around the sibling call (the original interleaves
+ * the start-store into the tail-call delay slot), a codegen shape not
+ * expressible in source. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012E890);
 
 /**
@@ -1788,7 +1843,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130178);
  * frame and cannot match from C. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130240);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130250);
+extern void func_00115DA8(void *buf);
+extern void func_00130288(s32 arg0, void *buf);
+
+/**
+ * Build a temporary 256-byte descriptor on the stack via func_00115DA8, then
+ * dispatch it for arg0 through func_00130288(arg0, buf).
+ */
+void func_00130250(s32 arg0) {
+    u8 buf[256];
+    func_00115DA8(buf);
+    func_00130288(arg0, buf);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130288);
 
@@ -1916,7 +1982,21 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131730);
  * choice, not expressible in source, so it stays INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131760);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131780);
+extern u8 func_00131760(u8 packed);
+
+/**
+ * Convert the packed-BCD time fields of the record at arg0 to binary in place:
+ * apply func_00131760 to the bytes at offsets 7,6,5,3,2,1 (skipping offset 4),
+ * each replaced by its decoded value.
+ */
+void func_00131780(u8 *arg0) {
+    arg0[7] = func_00131760(arg0[7]);
+    arg0[6] = func_00131760(arg0[6]);
+    arg0[5] = func_00131760(arg0[5]);
+    arg0[3] = func_00131760(arg0[3]);
+    arg0[2] = func_00131760(arg0[2]);
+    arg0[1] = func_00131760(arg0[1]);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001317E8);
 
@@ -1926,7 +2006,21 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131908);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001319B0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001319E0);
+extern void func_00131908(u8 *arg0);
+
+/**
+ * Tick down the cooldown byte at arg0+0x3: if non-zero, just decrement it;
+ * otherwise reload it to 0x17 and run func_00131908(arg0) to advance state.
+ */
+void func_001319E0(u8 *arg0) {
+    u8 timer = arg0[3];
+    if (timer != 0) {
+        arg0[3] = timer - 1;
+    } else {
+        arg0[3] = 0x17;
+        func_00131908(arg0);
+    }
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131A08);
 
@@ -2002,7 +2096,17 @@ void func_00132938(s32 arg0) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00132968);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001329B0);
+/**
+ * Invoke func_00132DF0 with selector 0x4E, count 0xC, and a stack record holding
+ * arg0, arg1 and arg2; the two trailing arguments are zero.
+ */
+void func_001329B0(s32 arg0, s32 arg1, s32 arg2) {
+    s32 args[3];
+    args[0] = arg0;
+    args[1] = arg1;
+    args[2] = arg2;
+    func_00132DF0(0x4E, 0xC, args, 0, 0);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001329F0);
 
@@ -2010,11 +2114,32 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00132A58);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00132AA0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00132AF8);
+/**
+ * Invoke func_00132DF0 with selector 0x16, count 4, arg0 passed by address in a
+ * stack local, and zero for the two trailing arguments.
+ */
+void func_00132AF8(s32 arg0) {
+    s32 value = arg0;
+    func_00132DF0(0x16, 4, &value, 0, 0);
+}
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00132B28);
+/**
+ * Invoke func_00132DF0 with selector 0x17, count 4, arg0 passed by address in a
+ * stack local, and zero for the two trailing arguments.
+ */
+void func_00132B28(s32 arg0) {
+    s32 value = arg0;
+    func_00132DF0(0x17, 4, &value, 0, 0);
+}
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00132B58);
+/**
+ * Invoke func_00132DF0 with selector 0x19, count 4, arg0 passed by address in a
+ * stack local, and arg1/arg2 forwarded as the two trailing arguments.
+ */
+void func_00132B58(s32 arg0, s32 arg1, s32 arg2) {
+    s32 value = arg0;
+    func_00132DF0(0x19, 4, &value, arg1, arg2);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00132B88);
 
@@ -2094,9 +2219,29 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001336C0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133700);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133750);
+/**
+ * Invoke func_00132DF0 with selector 0x51, count 8, and a stack record holding
+ * arg0 and arg1; the two trailing arguments are zero.
+ */
+void func_00133750(s32 arg0, s32 arg1) {
+    s32 args[2];
+    args[0] = arg0;
+    args[1] = arg1;
+    func_00132DF0(0x51, 8, args, 0, 0);
+}
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133788);
+/**
+ * Invoke func_00132DF0 with selector 0x10, count 0x10 (16 bytes), and a stack
+ * record of four words (arg0..arg3); the two trailing arguments are zero.
+ */
+void func_00133788(s32 arg0, s32 arg1, s32 arg2, s32 arg3) {
+    s32 args[4];
+    args[0] = arg0;
+    args[1] = arg1;
+    args[2] = arg2;
+    args[3] = arg3;
+    func_00132DF0(0x10, 0x10, args, 0, 0);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001337C8);
 
@@ -2112,7 +2257,19 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133890);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001338B8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001338F0);
+/**
+ * Invoke func_00132C48 with selector 0x3E and count 0x14 (20 bytes), passing a
+ * stack record of five words (arg0..arg4) as the data argument.
+ */
+void func_001338F0(s32 arg0, s32 arg1, s32 arg2, s32 arg3, s32 arg4) {
+    s32 args[5];
+    args[0] = arg0;
+    args[1] = arg1;
+    args[2] = arg2;
+    args[3] = arg3;
+    args[4] = arg4;
+    func_00132C48(0x3E, 0x14, args);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133928);
 
