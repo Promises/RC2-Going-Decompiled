@@ -41,7 +41,7 @@ docker --context colima-ee-x86 run --rm -v "$ROOT":/work ee-build sh -c "
   mips-linux-gnu-as $ASF -o $W/target.o $W/target.s
   \$WIBO \$G/cpp.exe $CPPDEF $INC $CFILE $W/base.i
   \$WIBO \$G/cc1.exe -quiet -O2 -G0 $W/base.i -o $W/base.s
-  sed -E -f tools/ee/move_fixup.sed $W/base.s | mips-linux-gnu-as $ASF -o $W/base.o -
+  sh tools/ee/asm_unit.sh $REGION /work/$W/base.s /work/$W/base.o
 "
 
 "$OBJDIFF" diff -1 "$W/target.o" -2 "$W/base.o" "$FUNC" -o - --format json-pretty \
