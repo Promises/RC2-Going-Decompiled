@@ -484,6 +484,12 @@ void func_0011B9F8(s32 arg0) {
     func_0011B050(4, &value);
 }
 
+/* func_0011BA20 / func_0011BA58: pack arg0, arg1 and the low 16 bits of arg2
+ * into a stack record and push it through func_0011B050 (count -5 / -6). Not
+ * matched: the original moves arg1 out of $5 into a temp before reusing $5 for
+ * the record address, so it stores arg1 via the temp. ee-gcc instead stores
+ * arg1 directly from $5 before clobbering it — a register-allocation/scheduling
+ * order this cc1 won't reproduce from C. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BA20);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BA58);
