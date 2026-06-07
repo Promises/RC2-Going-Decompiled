@@ -134,3 +134,38 @@ GuiSystemInit            = 0x0034f308; // CONFIRMED behaviour: GUI master ctor. 
 // GUI widget/element constructors (source files UNCONFIRMED - gui widget files, no __FILE__)
 GuiElementInit           = 0x00336fe8; // PARTIAL: base init for one GUI element. CONFIRMED allocs two 0x10 pool sub-records sets default scale (1,1,1) clears state. Name-string binding NOT visible in decomp (UNCONFIRMED).
 GuiScreenWithPlanetNameInit = 0x003493e0; // PARTIAL: a GUI screen ctor. CONFIRMED allocs from pool sets ARGB colors+positions builds 7 named children ("title","help","planet name","anIcon","QSelBack","aText") binds 7 input slots. Planet-select identity UNCONFIRMED.
+
+// --- MAP / MINIMAP SUBSYSTEM (Track-B single concept; in-binary, NOT an overlay). Attributed to
+//     map.cpp via __FILE__ "map.cpp" @0x1a95b8 passed to DebugMalloc in MapInit (lines 0x2f3/0x304/
+//     0x30b/0x314). Per-level init from LoadLevelAndInitHealth. Functions are a tight cluster
+//     0x295778..0x298xxx. NTSC vs PAL map-size tables selected by DAT_001a7b05 (0x14ca34 / 0x14cb14).
+//     State globals live in core.bss around 0x1c4f20..0x1c5160. Renamed in Ghidra (globals use the
+//     g_n/g_p Hungarian aliases the Ghidra validator forces; clean names mirrored here). ---
+//
+// Map state globals
+g_mapCurrentLevel  = 0x001C5150; // CONFIRMED: current map level id (clamped 0..0x1b). Set by MapSetCurrentLevel read across the map system. Ghidra g_nMapCurrentLevel.
+g_mapTextureHandle = 0x001C5158; // CONFIRMED: GS texture handle for the uploaded map image (-1 none). Set in MapInit via FUN_002efbb0. Ghidra g_nMapTextureHandle.
+g_mapTextureWidth  = 0x001C5160; // CONFIRMED: width in texels of the uploaded map texture (levelMapSize lt 7). Set in MapInit. Ghidra g_nMapTextureWidth.
+g_mapAvailable     = 0x001C4F44; // CONFIRMED: flag a map is available/uploaded for current level. Written by MapUpdateLevelAvailability and MapBeginUpload. Ghidra g_nMapAvailable.
+g_mapHasData       = 0x001C4F48; // CONFIRMED: flag this level has map data loaded gates MapBuildBitmap. Ghidra g_nMapHasData.
+g_mapActiveSlot    = 0x001C5154; // CONFIRMED: active map cache slot index (0..4, -2 while uploading) indexes the zoom/pan arrays. Ghidra g_nMapActiveSlot.
+g_mapBlipList      = 0x001C4F40; // CONFIRMED: ptr to map blips/icons list (0x28-byte records) drawn by MapDraw 0 when none. Ghidra g_pMapBlipList.
+g_mapBitmapBuffer  = 0x001C4F28; // CONFIRMED: ptr to 0x1000-byte 1bpp discovered-area bitmap (8 rows of 0x200) alloc in MapInit line 0x30b filled by MapBuildBitmap. Ghidra g_pMapBitmapBuffer.
+g_mapVertexData    = 0x001C4F20; // CONFIRMED: ptr to map outline vertex data copied from level asset in MapInit line 0x2f3. Ghidra g_pMapVertexData.
+g_mapRevealedFlags = 0x0013965F; // CONFIRMED: per-level "map revealed/discovered" bitmap (byte array). MapIsLevelRevealed(level) tests bit level here. Ghidra g_abMapRevealedFlags.
+//
+// Map functions (renamed in Ghidra)
+MapInit                      = 0x002957C0; // CONFIRMED via map.cpp __FILE__. Per-level map init builds interp tables uploads map texture allocs buffers builds circular mask. Called from LoadLevelAndInitHealth.
+MapSetCurrentLevel           = 0x00296500; // CONFIRMED: stores level into g_mapCurrentLevel then runs MapUpdateLevelAvailability.
+MapUpdateLevelAvailability   = 0x00296520; // CONFIRMED: clamps g_mapCurrentLevel to 0x1b sets g_mapAvailable from MapDataExistsForLevel.
+MapIsLevelRevealed           = 0x00295778; // CONFIRMED: returns the per-level discovered bit from g_mapRevealedFlags.
+MapDataExistsForLevel        = 0x00296120; // CONFIRMED: tests level map-size tables 0x14ca34 (NTSC) / 0x14cb14 (PAL via DAT_001a7b05) gt 0.
+MapFindCacheSlot             = 0x002960D8; // CONFIRMED: scans the 5-entry map texture cache (slot id array at 0x1c51bc) returns slot index or -1.
+MapEvictCacheSlot            = 0x00296330; // CONFIRMED: picks a cache slot to evict (LRU-ish by level-order distance) marks it free.
+MapGetLevelOrderIndex        = 0x002962C0; // CONFIRMED: maps a level id to its index in the level-order table PTR_DAT_001aa510.
+MapFindNearestAvailableLevel = 0x00296168; // CONFIRMED: searches adjacent levels in the order table for the nearest one that has a map.
+MapBeginUpload               = 0x00295D70; // CONFIRMED: per-frame DMA upload of the map texture to GS (FUN_002efca8/FUN_002efd28) sets g_mapAvailable.
+MapUpdate                    = 0x002965B0; // CONFIRMED: per-frame zoom/pan update for g_mapActiveSlot (zoom 0x1c4fd4 panY 0x1c5028 panX 0x1c507c) clamps to bounds posts event 0x13 on close.
+MapBuildBitmap               = 0x00298060; // CONFIRMED: dispatches to MapBuildBitmapFrom4bpp or a packed path to fill g_mapBitmapBuffer (discovered-area mask).
+MapBuildBitmapFrom4bpp       = 0x00297D30; // CONFIRMED: rasterizes a 1bpp discovered-area bitmap from a 4bpp source (256x256 cells).
+MapDraw                      = 0x00296810; // CONFIRMED: draws the map quad (tex 0xe999+slot) then blips/icons from g_mapBlipList with overlap-avoidance + labels then the player marker (tex 0xe99a). Uses GS DMA builder DAT_001b2228.
