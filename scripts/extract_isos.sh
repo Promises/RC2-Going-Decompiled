@@ -2,8 +2,15 @@
 # Extract the boot executables from both source ISOs and produce the flat
 # ".rom" images that splat consumes. Idempotent; safe to re-run.
 #
-#   USA: Ratchet & Clank - Going Commando (USA) (v2.00)  -> SCUS_972.68
-#   EU : Ratchet & Clank 2 (Europe, Australia)           -> SCES_516.07
+#   usa      : Ratchet & Clank - Going Commando (USA) (v2.00)  -> SCUS_972.68  (PRIMARY)
+#   eu       : Ratchet & Clank 2 (Europe, Australia)           -> SCES_516.07  (region validator)
+#   usa_v101 : Ratchet & Clank - Going Commando (USA) (v1.01)  -> SCUS_972.68  (version reference)
+#
+# v1.01 shares the same boot name/serial as v2.00 (only the disc content/CRC
+# differs); it extracts to a separate extracted/usa_v101/ dir.
+#
+# Optional CLI args limit which regions to extract (default: all):
+#   scripts/extract_isos.sh usa_v101
 #
 # Requires: macOS hdiutil (ISO9660 mount) + llvm-objcopy (brew install llvm).
 set -euo pipefail
@@ -12,14 +19,17 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ISO_DIR="$ROOT/source-isos"
 OBJCOPY="${OBJCOPY:-/opt/homebrew/opt/llvm/bin/llvm-objcopy}"
 
-declare -a REGIONS=(usa eu)
+declare -a REGIONS=(usa eu usa_v101)
+[ "$#" -gt 0 ] && REGIONS=("$@")
 declare -A ISO=(
   [usa]="Ratchet & Clank - Going Commando (USA) (v2.00).iso"
   [eu]="Ratchet & Clank 2 (Europe, Australia) (En,Fr,De,Es,It).iso"
+  [usa_v101]="Ratchet & Clank - Going Commando (USA) (v1.01).iso"
 )
 declare -A BOOT=(
   [usa]="SCUS_972.68"
   [eu]="SCES_516.07"
+  [usa_v101]="SCUS_972.68"
 )
 
 command -v "$OBJCOPY" >/dev/null 2>&1 || { echo "ERROR: objcopy not found at $OBJCOPY (brew install llvm)"; exit 1; }
