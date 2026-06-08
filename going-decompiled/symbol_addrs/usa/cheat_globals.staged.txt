@@ -244,3 +244,42 @@ g_cheatFlags      = 0x001A7A48; // CONFIRMED via UpdateCheatMenuInput (toggles p
 g_skillPointFlags = 0x001A7A68; // CONFIRMED gating read in UpdateCheatMenuInput/DrawCheatMenu (skill-point-complete flags; one per skill point). Cheat unlock requires N skill points. Also read by EvaluateProgressCondition-adjacent menu code.
 UpdateCheatMenuInput = 0x002D0510; // CONFIRMED - in-game Cheats menu input handler. WRITER of g_cheatFlags (toggle on confirm) gated by g_skillPointFlags + skill-point count FUN_002b1da8. EU anchor.
 DrawCheatMenu        = 0x002D0750; // CONFIRMED - Cheats menu renderer reads g_cheatFlags ON/OFF + g_skillPointFlags lock state. Pairs with UpdateCheatMenuInput.
+
+// --- GADGETRON VENDOR / WEAPON-ARMOR SHOP UI (Track-B cluster; the bolt-SPEND path).
+//     Anchored on g_dwBoltCount (cheat 0x1A7A00). EnterVendorMenu opens the shop, builds the
+//     item list, and the purchase state machine subtracts bolts on confirm. Renamed + plate-commented
+//     in Ghidra. Strong EU anchors (all read/write the cheat-confirmed bolt counter). ---
+//
+// Vendor functions
+EnterVendorMenu        = 0x002F8FF8; // CONFIRMED - opens the Gadgetron vendor shop UI. Sets g_nVendorMode, builds buyable list, spawns 3D item model, resets cursor/state, sets g_nGameState=5. EU anchor.
+UpdateVendorMenuInput  = 0x002FA240; // CONFIRMED - vendor shop input handler. Cursor up/down + select/cancel. Reads g_dwBoltCount + GetVendorItemPrice for affordability before VendorPurchaseStateMachine. EU anchor.
+DrawVendorItemDetail   = 0x002FB718; // CONFIRMED - renders selected-item detail panel (name/price/owned). Reads g_dwBoltCount to colour price red when unaffordable. EU anchor.
+GetVendorItemPrice     = 0x002F7390; // CONFIRMED - returns bolt price of the selected vendor item (unit price or weapon upgrade cost via FUN_00289298). Read by input handler, detail draw, and the spend state machine.
+BuildVendorItemList    = 0x002F7488; // CONFIRMED - rebuilds g_vendorItemList (stride 0x18, count g_nVendorItemCount) from inventory + per-weapon availability/upgrade state. Called on enter and after each purchase.
+ExitVendorMenu         = 0x002FA028; // CONFIRMED - closes the vendor UI, restores camera/HUD, re-equips g_bEquippedArmor in armor mode. Bound to cancel button.
+SetVendorCaption       = 0x002F9768; // CONFIRMED - formats and shows the vendor caption/help line and resets its timer.
+RefreshVendorSelection = 0x002FC008; // CONFIRMED - re-syncs vendor screen on cursor move or after purchase (caption, 3D preview model, description glyphs).
+//
+// Vendor UI state globals
+g_nVendorCursorIndex   = 0x0021F240; // CONFIRMED - vendor cursor (index into g_vendorItemList). Reset to count/2 on enter.
+g_nVendorPurchaseState = 0x0021F244; // CONFIRMED - vendor purchase sub-state (0 browse, 1 enter-confirm, 2 adjust-qty, 4 confirm). Bolt subtract happens in state 4.
+g_nVendorMode          = 0x0021F210; // CONFIRMED - vendor screen mode (0 weapons/items, 1 ammo/quick-buy, 2, 3 armor). Selects list-build + renderer.
+g_nVendorItemCount     = 0x0021F900; // CONFIRMED - number of entries in g_vendorItemList. Bounds cursor navigation.
+g_vendorItemList       = 0x0021F300; // CONFIRMED - buyable-item array (stride 0x18 per entry). Built by BuildVendorItemList.
+g_nVendorBuyQuantity   = 0x001B21C8; // CONFIRMED - ammo purchase quantity (bolts/unitPrice clamped to stock). Total cost = unitPrice * this.
+
+// --- TOP-LEVEL GAME/SCREEN STATE MACHINE (Track-B cluster; reads g_nHealth as a death gate).
+//     g_nGameState is the central game-mode ID switched each frame by UpdateGameState. Confirmed by
+//     dispatcher case 5 -> EnterVendorMenu and case 6 -> RevivePlayerMinHealth. Many already-named
+//     systems (PlayCinematic, EnterVendorMenu, LoadLevelAndInitHealth) are writers of g_nGameState. ---
+//
+// Game-state functions
+RequestGameStateChange = 0x002B58F8; // CONFIRMED - requests a transition to a game/screen state. Returns negative reject codes (-1 dead via g_nHealth gate, -2 busy, -3 active). Optionally pushes current state. Many callers across the binary - strong EU anchor.
+PopGameState           = 0x002B5A88; // CONFIRMED - pops the transition stack into g_nGameStatePending to return to the previous screen. g_nHealth death gate. Companion to RequestGameStateChange.
+UpdateGameState        = 0x002B5B38; // CONFIRMED - per-frame state-machine dispatcher. Runs current-state action then pending-state enter-action and commits g_nGameState. Confirms the state ID map. EU anchor.
+IsGameStatePending     = 0x002B58E0; // CONFIRMED - returns true if g_nGameStatePending equals the queried state id.
+//
+// Game-state globals
+g_nGameState        = 0x001A8BB0; // CONFIRMED - current top-level game/screen state ID (5 vendor, 6 respawn, ...). Written by LoadLevelAndInitHealth, PlayCinematic, EnterVendorMenu and the dispatcher.
+g_nGameStatePending = 0x001A8BB8; // CONFIRMED - pending transition target (-2 means none). Set by RequestGameStateChange/PopGameState, consumed and committed by UpdateGameState.
+g_nGameStatePrev    = 0x001A8BB4; // CONFIRMED - previous game state, snapshotted each frame by UpdateGameState to detect specific transitions.
