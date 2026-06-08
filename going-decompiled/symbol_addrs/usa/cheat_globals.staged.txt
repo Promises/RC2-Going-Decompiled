@@ -169,3 +169,43 @@ MapUpdate                    = 0x002965B0; // CONFIRMED: per-frame zoom/pan upda
 MapBuildBitmap               = 0x00298060; // CONFIRMED: dispatches to MapBuildBitmapFrom4bpp or a packed path to fill g_mapBitmapBuffer (discovered-area mask).
 MapBuildBitmapFrom4bpp       = 0x00297D30; // CONFIRMED: rasterizes a 1bpp discovered-area bitmap from a 4bpp source (256x256 cells).
 MapDraw                      = 0x00296810; // CONFIRMED: draws the map quad (tex 0xe999+slot) then blips/icons from g_mapBlipList with overlap-avoidance + labels then the player marker (tex 0xe99a). Uses GS DMA builder DAT_001b2228.
+//
+// --- libmc memory-card client + save-game file system (USA v2.00) ---
+//     System chosen from in-binary string + xref evidence: the save-path templates
+//     "/BA****-*****RATCHET", "/************RATCHET/icon.sys|static.ico|save%d.bin"
+//     (0x1a7938..0x1a79d8) and region dir prefixes BASCUS-97199 / BESCES-50916 / BISCPS-15037
+//     (0x1a9a00..0x1a9a40), plus the libmc init/version strings at 0x13b760..0x13b7a0.
+//     The whole EE-side libmc client lives contiguously at 0x127348..0x12824b and is the
+//     only referencer of g_mcInitialized / g_mcMutexSema / g_mcPendingCmd. Renamed in Ghidra.
+//     (Ghidra forces Hungarian g_n/g_p aliases on globals via create_label - clean names here.)
+//
+// libmc client globals (core)
+g_mcPendingCmd  = 0x00137E68; // CONFIRMED - in-flight libmc RPC command number (0 idle). Set by each Mc* wrapper before sceSifCallRpc cleared by McSync.
+g_mcMutexSema   = 0x00137E6C; // CONFIRMED - semaphore serialising libmc RPC calls. Created in McInit waited/signalled around every Mc* call.
+g_mcInitialized = 0x00141B24; // CONFIRMED - libmc-ready flag set by McInit. Every Mc* wrapper returns -100 if zero.
+g_mcRpcClient   = 0x00141B00; // CONFIRMED - SIF RPC client handle for the libmc server (sceSifBindRpc target id 0x80000400).
+g_mcRpcResult   = 0x001430C0; // CONFIRMED - IOP-side result code DMA'd back for the last libmc call read out by McSync.
+//
+// libmc client functions (renamed in Ghidra)
+McInit            = 0x00127348; // CONFIRMED - binds libmc SIF RPC creates g_mcMutexSema checks mcserv/mcman irx version sets g_mcInitialized.
+McSync            = 0x00127B88; // CONFIRMED - polls RPC completion writes back cmd+result clears g_mcPendingCmd signals g_mcMutexSema. sceMcSync.
+McGetInfo         = 0x00127CC0; // CONFIRMED - RPC cmd 1 (port slot wantType wantFree wantFormat). Card probe. sceMcGetInfo.
+McOpen            = 0x00127508; // CONFIRMED - RPC cmd 2 (port slot path openMode). sceMcOpen.
+McClose           = 0x00127668; // CONFIRMED - RPC cmd 3 (fd). sceMcClose.
+McSeek            = 0x00127720; // CONFIRMED - RPC cmd 4 (fd offset whence). sceMcSeek.
+McRead            = 0x00127888; // CONFIRMED - RPC cmd 5 (fd dstBuf len). sceMcRead. Pulls save image into 0x1a2ba8/0x1a53a8.
+McWrite           = 0x001279A0; // CONFIRMED - RPC cmd 6 (fd srcBuf len). sceMcWrite. Writes live progress block + save images.
+McGetDir          = 0x00127E48; // CONFIRMED - RPC cmd 0xd (port slot path mode maxent dirBuf). sceMcGetDir lists the RATCHET save dir.
+McMkDir           = 0x00128068; // CONFIRMED - RPC cmd 0xf (port slot path). sceMcMkdir creates the RATCHET save dir.
+McBeginCreateFile = 0x00127630; // CONFIRMED - thin wrapper over McOpen that tags g_mcPendingCmd as 0xb for the create-file sync path.
+McChdir           = 0x00127F98; // UNCONFIRMED - RPC cmd 0x10 (port slot) probe in SaveLoadStateMachine case 3. Maps to sceMcChdir by cmd number only.
+McGetEntSpace     = 0x00128180; // UNCONFIRMED - RPC cmd 0x11 (port slot) probe in SaveLoadStateMachine case 5. Maps to sceMcGetEntSpace by cmd number only.
+McDelayMillis     = 0x00127B40; // CONFIRMED - SetAlarm+SleepThread busy-wait helper used by McSync while spinning for completion.
+InitMemCardLib    = 0x0029BC38; // CONFIRMED - game-level libmc bring-up calls McInit logs "could not init memcard lib" (0x1a9a60) on failure.
+//
+// save-game path builder + templates
+BuildSaveGamePaths    = 0x00299998; // CONFIRMED - derives per-region save dir name from boot title id and patches it into all save path templates.
+g_saveDirTemplate     = 0x001A7938; // CONFIRMED - "/BA****-*****RATCHET" dir-name template patched in place by BuildSaveGamePaths.
+g_saveFileFmt         = 0x001A79D8; // CONFIRMED - "/<dir>/save%d.bin" printf template for the per-slot save file.
+g_saveIconSysPath     = 0x001A7968; // CONFIRMED - "/<dir>/icon.sys" save icon descriptor path.
+g_saveStaticIcoPath   = 0x001A7988; // CONFIRMED - "/<dir>/static.ico" save icon model path.
