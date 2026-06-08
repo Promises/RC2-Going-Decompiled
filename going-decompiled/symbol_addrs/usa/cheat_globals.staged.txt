@@ -209,3 +209,38 @@ g_saveDirTemplate     = 0x001A7938; // CONFIRMED - "/BA****-*****RATCHET" dir-na
 g_saveFileFmt         = 0x001A79D8; // CONFIRMED - "/<dir>/save%d.bin" printf template for the per-slot save file.
 g_saveIconSysPath     = 0x001A7968; // CONFIRMED - "/<dir>/icon.sys" save icon descriptor path.
 g_saveStaticIcoPath   = 0x001A7988; // CONFIRMED - "/<dir>/static.ico" save icon model path.
+
+// --- CINEMATICS / BONUS-MOVIE UNLOCK SYSTEM (Track-B single concept; in-binary, NOT an overlay).
+//     Anchored on the cheat-pnach "Unlock All Cinematics" globals 0x139768..0x139784 (8 words = 256 bits).
+//     PlayCinematic / PlayBonusMovie are the two WRITERS that set an unlock bit then stream the reel;
+//     the planet-select screen (FUN_002d7ba0) and EvaluateProgressCondition read the bitfield.
+//     Renamed in Ghidra + plate-commented. Globals labelled in Ghidra (Hungarian aliasing not forced here). ---
+//
+// Cinematics/bonus unlock globals
+g_cinematicUnlockedFlags = 0x00139768; // CONFIRMED - cinematics-watched/unlocked bitfield (256 bits, id<0xb1). Bit set by PlayCinematic/PlayBonusMovie. Read by planet-select FUN_002d7ba0 + EvaluateProgressCondition case 9. Cheat "Unlock All Cinematics" writes 0x139768..0x139784.
+g_bonusUnlockFlags       = 0x00139780; // CONFIRMED - bonus-content unlock flag words (making-of/credits/sketchbook/commercials). Bits set by OnCinematicComplete for reel ids 0xab(bit24)/0xad(bit25)/0xaf@0x139784(bit28). Read by level-transition FUN_002ed260.
+g_weaponUpgradeLevel     = 0x00139A34; // CONFIRMED - per-weapon upgrade-level array (stride 0x10, index<=0x71). EvaluateProgressCondition case4 have(level!=0) / case5 upgraded(level>=2). NOTE distinct field from the 0x13988C "weapon XP" array in cheat_globals.md (same per-weapon struct region, different offset).
+//
+// Cinematics functions (renamed + plate-commented in Ghidra)
+PlayCinematic             = 0x002EC640; // CONFIRMED - sets g_cinematicUnlockedFlags bit id (id<0xb1) then streams+plays the cinematic reel. Primary unlock writer. EU anchor.
+PlayBonusMovie            = 0x002ECC48; // CONFIRMED - secondary unlock writer (same bit-set) for bonus/credits reels via table 0x14b544/8/c + GS texture transfer. Returns presented bool.
+PlayBonusReelWithGameLoop = 0x002ECAC8; // CONFIRMED - PlayCinematic(id) then runs the in-game frame loop (SaveLoadStateMachine etc) until state DAT_001a8bb0 leaves 2. Used post bonus-unlock reels.
+OnCinematicComplete       = 0x002ED018; // CONFIRMED - writer of g_bonusUnlockFlags 0x139780/0x139784 + counters 0x139810/4/8. Dispatches on finished reel id DAT_001abf30 (0xa9/0xab/0xad/0xaf), chains next reel.
+MapCinematicIdToIndex     = 0x002EFE68; // CONFIRMED - remaps a cinematic id to a packed asset-table index (skips reserved ranges via table 0x1ad0b0). Used by PlayCinematic/PlayBonusMovie.
+
+// --- PROGRESS-CONDITION / LEVEL-OBJECTIVE SYSTEM (Track-B; reads many cheat-pnach globals -> strong EU anchors).
+//     The per-level objective/help table PTR_DAT_00258b20[level] is walked each frame; each entry's condition is
+//     scored by a generic evaluator that reads platinum bolts / cinematics / weapon-upgrade flags. ---
+EvaluateProgressCondition = 0x0029E808; // CONFIRMED - generic unlock-condition evaluator. case8 reads platinum-bolt flags 0x19B278, case9 cinematics 0x139768, case4/5 weapon-upgrade 0x139A34, case10 map. HIGH-VALUE EU anchor (4 cheat globals).
+UpdateLevelObjectiveStates = 0x0029E668; // CONFIRMED - walks current-level objective table PTR_DAT_00258b20[g_nMapCurrentLevel] (stride 0x14 shorts) scoring each via EvaluateProgressCondition store state 0/1/2 at +0x12.
+GatherActiveObjectives     = 0x0029E960; // CONFIRMED - collects the active (state!=0) objective ids/labels from the same table for the on-screen objectives list.
+
+// --- PLATINUM-BOLT COLLECTED FLAGS (cheat-pnach 0x19B278[40]) ---
+g_platinumBoltFlags = 0x0019B278; // CONFIRMED via CountPlatinumBolts + EvaluateProgressCondition case8. Per-platinum-bolt collected flags (40 total). Cheat "All Platinum Bolts" writes here.
+CountPlatinumBolts  = 0x002B1C90; // CONFIRMED reader - counts set flags in g_platinumBoltFlags[group*4..+3] (+ 4 extra at 0x19b2e0 for group 2) clamped to [0,0x28]=40. EU anchor.
+
+// --- CHEAT-ACTIVATION FLAGS + skill-point gating (cheat-pnach 0x1A7A48 / 0x1A7A68) ---
+g_cheatFlags      = 0x001A7A48; // CONFIRMED via UpdateCheatMenuInput (toggles per-entry) + DrawCheatMenu (renders ON/OFF). Cheat-activation flags (big-head/mirrored/tux/...). Cheat menu entry table at 0x1abd50 (stride 4 +2=flagIdx +3=skillReq).
+g_skillPointFlags = 0x001A7A68; // CONFIRMED gating read in UpdateCheatMenuInput/DrawCheatMenu (skill-point-complete flags; one per skill point). Cheat unlock requires N skill points. Also read by EvaluateProgressCondition-adjacent menu code.
+UpdateCheatMenuInput = 0x002D0510; // CONFIRMED - in-game Cheats menu input handler. WRITER of g_cheatFlags (toggle on confirm) gated by g_skillPointFlags + skill-point count FUN_002b1da8. EU anchor.
+DrawCheatMenu        = 0x002D0750; // CONFIRMED - Cheats menu renderer reads g_cheatFlags ON/OFF + g_skillPointFlags lock state. Pairs with UpdateCheatMenuInput.
