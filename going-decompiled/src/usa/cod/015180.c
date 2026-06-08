@@ -956,7 +956,23 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F5E0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F628);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F640);
+extern s32 D_00134DB8;
+extern s32 D_00134DBC;
+
+/**
+ * Create the paired handles D_00134DB8 / D_00134DBC from two identical
+ * descriptors (each with fields 1 and 2 set to 1) via func_0011AC20.
+ */
+void func_0011F640(void) {
+    s32 desc1[8];
+    s32 desc2[8];
+    desc1[1] = 1;
+    desc1[2] = 1;
+    desc2[1] = 1;
+    desc2[2] = 1;
+    D_00134DB8 = func_0011AC20(desc1);
+    D_00134DBC = func_0011AC20(desc2);
+}
 
 /**
  * Copy nbytes>>2 words (32-bit) from src to dst and return 0. Identical body to
@@ -2729,6 +2745,13 @@ void func_00132938(s32 arg0) {
     func_00132DF0(0xB, 4, &value, 0, 0);
 }
 
+/* func_00132968: wrapper that builds a 2-word record {arg0, arg1} and calls
+ * func_00132DF0(0xD, 8, record, 0, 0). The function body is byte-identical to a
+ * `func_00132DF0(0xD,8,args,0,0)` source (verified via objdump), but splat
+ * mis-split this symbol: it starts 0x10 bytes early on the previous function's
+ * trailing epilogue (`addiu sp,0x10; nop; addiu sp,0x10; nop`) before the real
+ * body at the inner `func_132978` label, so the unit target carries 4 extra
+ * leading words the C can't reproduce. Needs a re-split. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00132968);
 
 /**
@@ -2743,8 +2766,18 @@ void func_001329B0(s32 arg0, s32 arg1, s32 arg2) {
     func_00132DF0(0x4E, 0xC, args, 0, 0);
 }
 
+/* func_001329F0: wrapper building a 6-word record {arg0..arg5} and calling
+ * func_00132DF0(0x11, 0x18, record, arg6, arg7). Body is byte-identical to that
+ * source (verified via objdump), but splat mis-split the symbol: it starts on
+ * the previous function's trailing epilogue fragments (`addiu sp,0x20/0x30; nop`)
+ * before the real body at `func_132A10`. Needs a re-split. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001329F0);
 
+/* func_00132A58: wrapper calling func_00132DF0(0x15, 4, &arg0, 0, 0). Body is
+ * byte-identical to that source (verified via objdump), but splat mis-split the
+ * symbol: it begins on the previous function's trailing epilogue fragment
+ * (three `addiu sp,0x10; nop` pairs) before the real body at `func_132A70`, so
+ * the unit target has extra leading words. Needs a re-split. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00132A58);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00132AA0);
@@ -2857,6 +2890,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133688);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001336C0);
 
+/* func_00133700: wrapper building a 5-word record {arg0..arg4} and calling
+ * func_00132DF0(0x50, 0x14, record, 0, 0). Body is byte-identical to that source
+ * (verified via objdump), but splat mis-split the symbol: it starts 0x20 bytes
+ * early on the previous function's trailing epilogue (`addiu sp,0x20; nop` x2)
+ * before the real body at `func_133710`. Needs a re-split. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133700);
 
 /**
