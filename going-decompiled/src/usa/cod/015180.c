@@ -853,6 +853,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F058);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F120);
 
+/* func_0011F130: dispatch on func_0011B080() (EE syscall 0x7F, current context):
+ * if it equals 0x02000000 call func_0011F170, else call func_0011B090. The
+ * original keeps one frame and uses jal for both arms (converging at a shared
+ * epilogue), but ee-gcc sibling-call-optimises the func_0011F170 arm into a
+ * tail `j` and hoists the $ra restore into the bne delay slot — a codegen-shape
+ * mismatch not expressible in source. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F130);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F170);
@@ -1117,9 +1123,52 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00122760);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00122800);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00122A40);
+/* Decomposed IEEE-754 double produced by func_00122760: a class tag, sign,
+ * unbiased exponent and the explicit mantissa. */
+typedef struct {
+    s32 fpClass;   /* 0x00: classification tag (3 = normal; zero/subnormal/inf-nan tags not all traced) */
+    s32 sign;      /* 0x04: sign bit */
+    s32 exponent;  /* 0x08: unbiased exponent */
+    s32 pad;       /* 0x0C */
+    s64 mantissa;  /* 0x10: explicit mantissa */
+} FpParts;
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00122A98);
+extern void func_00122760(s64 *value, FpParts *out);
+extern FpParts *func_00122800(FpParts *a, FpParts *b, FpParts *out);
+extern s64 func_00122630(FpParts *parts);
+
+/**
+ * Software double-precision binary op: decompose both operands into their
+ * IEEE-754 parts (func_00122760), combine them with func_00122800 into a result
+ * descriptor, then recompose that into a packed double via func_00122630.
+ */
+s64 func_00122A40(s64 a, s64 b) {
+    s64 va = a;
+    s64 vb = b;
+    FpParts pa;
+    FpParts pb;
+    FpParts result;
+    func_00122760(&va, &pa);
+    func_00122760(&vb, &pb);
+    return func_00122630(func_00122800(&pa, &pb, &result));
+}
+
+/**
+ * Software double-precision subtraction: decompose both operands, flip the sign
+ * of the second, then add (func_00122800) and recompose (func_00122630), i.e.
+ * compute a + (-b).
+ */
+s64 func_00122A98(s64 a, s64 b) {
+    s64 va = a;
+    s64 vb = b;
+    FpParts pa;
+    FpParts pb;
+    FpParts result;
+    func_00122760(&va, &pa);
+    func_00122760(&vb, &pb);
+    pb.sign ^= 1;
+    return func_00122630(func_00122800(&pa, &pb, &result));
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00122B00);
 
@@ -1127,7 +1176,22 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00122DA8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00122F10);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00123028);
+extern s32 func_00122F10(FpParts *a, FpParts *b);
+
+/**
+ * Compare two doubles by IEEE-754 class: decompose each operand with
+ * func_00122760, then combine the two classifications via func_00122F10 and
+ * return its result.
+ */
+s32 func_00123028(s64 a, s64 b) {
+    s64 va = a;
+    s64 vb = b;
+    FpParts pa;
+    FpParts pb;
+    func_00122760(&va, &pa);
+    func_00122760(&vb, &pb);
+    return func_00122F10(&pa, &pb);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00123078);
 
@@ -1135,29 +1199,41 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00123130);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001231C8);
 
-extern void func_00122630(void *args);
-
 /**
- * Pack three 32-bit arguments and one 64-bit argument into a stack record
- * (the 64-bit field is 8-byte aligned at offset 0x10) and pass it to
- * func_00122630.
+ * Build an FpParts descriptor from explicit class/sign/exponent and a 64-bit
+ * mantissa (8-byte aligned at offset 0x10) and recompose it into a double via
+ * func_00122630, discarding the result.
  */
-void func_00123268(s32 arg0, s32 arg1, s32 arg2, s64 arg3) {
-    struct {
-        s32 a;
-        s32 b;
-        s32 c;
-        s32 pad;
-        s64 d;
-    } args;
-    args.a = arg0;
-    args.b = arg1;
-    args.c = arg2;
-    args.d = arg3;
-    func_00122630(&args);
+void func_00123268(s32 fpClass, s32 sign, s32 exponent, s64 mantissa) {
+    FpParts parts;
+    parts.fpClass = fpClass;
+    parts.sign = sign;
+    parts.exponent = exponent;
+    parts.mantissa = mantissa;
+    func_00122630(&parts);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00123298);
+extern void func_001234C0(s32 fpClass, s32 sign, s32 exponent, s32 mantissa);
+
+/**
+ * Round a double towards a 30-bit significand: decompose the operand, take the
+ * top 30 bits of its 64-bit mantissa, OR in a sticky bit if any of the low 30
+ * bits are set, and forward the class/sign/exponent plus that rounded mantissa
+ * to func_001234C0.
+ */
+void func_00123298(s64 a) {
+    s64 va = a;
+    FpParts parts;
+    s32 high;
+    s32 rounded;
+    func_00122760(&va, &parts);
+    high = (s32)(parts.mantissa >> 30);
+    rounded = high | 1;
+    if ((parts.mantissa & 0x3FFFFFFF) == 0) {
+        rounded = high;
+    }
+    func_001234C0(parts.fpClass, parts.sign, parts.exponent, rounded);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001232EC);
 
@@ -1598,6 +1674,10 @@ void func_0012B198(s32 arg0) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012B1C0);
 
+/* func_0012B3C0(arg0): thin wrapper that calls func_0012C508(arg0, 3) and
+ * returns. The original keeps a real frame + jal (no sibling-call), but ee-gcc
+ * sibling-call-optimizes the tail call to `j func_0012C508`; that codegen-shape
+ * mismatch isn't expressible in clean source. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012B3C0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012B3E0);
@@ -2013,8 +2093,6 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001310C0);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001313C4);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", s_isnan);
-
-extern s32 func_00123028(s64 a, s64 b);
 
 /**
  * Pass the 64-bit value at arg0 + 0x8 as both arguments to func_00123028,
