@@ -283,3 +283,28 @@ IsGameStatePending     = 0x002B58E0; // CONFIRMED - returns true if g_nGameState
 g_nGameState        = 0x001A8BB0; // CONFIRMED - current top-level game/screen state ID (5 vendor, 6 respawn, ...). Written by LoadLevelAndInitHealth, PlayCinematic, EnterVendorMenu and the dispatcher.
 g_nGameStatePending = 0x001A8BB8; // CONFIRMED - pending transition target (-2 means none). Set by RequestGameStateChange/PopGameState, consumed and committed by UpdateGameState.
 g_nGameStatePrev    = 0x001A8BB4; // CONFIRMED - previous game state, snapshotted each frame by UpdateGameState to detect specific transitions.
+
+// --- WEAPON / INVENTORY SYSTEM (Track-B cluster; the backing store the Gadgetron vendor reads.
+//     Anchored on cheat-pnach inventory have-flags (0x1a7b00), 'Infinite Ammo' (0x139688 slots) and
+//     'Have Weapon Upgraded' (0x139868 slots). BuildVendorItemList + GiveInventoryItem are the
+//     readers/writers; these are strong EU anchors via the exact cheat addresses. ---
+//
+// Weapon/inventory functions
+GiveInventoryItem        = 0x00288D30; // CONFIRMED - grants a weapon/gadget/item. Sets g_inventoryOwned[id]=1 (cheat 0x1a7b00 have-flags) + g_inventoryNewFlag[id], seeds g_weaponAmmo from ammoStartGrant, adds to inventory order. WRITER of inventory have-flags. EU anchor.
+GetWeaponUpgradeLevel    = 0x00288988; // CONFIRMED - returns current upgrade level by walking g_weaponTable next/prev links. Read by BuildVendorItemList and the vendor upgrade-cost path.
+SetWeaponUpgradeSlot     = 0x00288A20; // CONFIRMED - retargets g_itemEquippedSlot[id] (0x139568) to the variant slot for a requested level. The apply-upgrade primitive.
+UpgradeWeaponToMax       = 0x002891D8; // CONFIRMED - bumps a weapon to its max variant via SetWeaponUpgradeSlot, clears g_weaponXp[id].
+GetWeaponStatsAtLevel    = 0x00289298; // CONFIRMED - copies a weapon's 0xe0-stride stat block at a given upgrade level into an out buffer (used by vendor preview/cost).
+IsVendorUpgradesUnlocked = 0x00289780; // CONFIRMED - returns g_bMiscExtras(0x1a7a12) nonzero, read here as the vendor/upgrade-buy gate (note 0x1a7a12 is multi-role, also a nanotech healing bonus).
+AddItemToInventoryOrder  = 0x00288E10; // CONFIRMED - inserts an owned item into g_inventoryOrder (0x1a7b70) with the owned bit. Helper of GiveInventoryItem.
+IsItemUnlockedAtProgress = 0x002890F0; // CONFIRMED - whether an item may appear in the vendor at current story progress (table at 0x240340, id 9 always allowed once upgrades unlocked).
+FindWeaponSlotByName     = 0x00288ED8; // CONFIRMED - linear-scans inventory for a weaponTable nameStringId(+0x3c) match, returns its exists/handle(+0x00).
+//
+// Weapon/inventory globals
+g_weaponTable        = 0x00239B20; // CONFIRMED - per-weapon-VARIANT def/state table, stride 0xe0, indexed by g_itemEquippedSlot[id]. Fields (Track-B, width from reader) - +0x00 u32 exists, +0x04 u8 upgradeLevel, +0x14 u32 boltPrice, +0x3c u16 nameStringId, +0x4a s16 nextVariantSlot, +0x4c s16 prevVariantSlot, +0x6c u32 upgradeCountGate, +0x88 s16 sellsAmmoFlag, +0x8e u16 ammoCapacity, +0x92 u16 ammoStartGrant. Populated at level/boot load.
+g_itemEquippedSlot   = 0x00139568; // CONFIRMED - byte[0x38] itemId -> active g_weaponTable variant slot. Boot value identity then remapped by SetWeaponUpgradeSlot. Every weaponTable access is g_weaponTable[g_itemEquippedSlot[id]*0xe0].
+g_weaponAmmo         = 0x00139688; // CONFIRMED - s32[0x38] current ammo per item. cheat-pnach 'Infinite Ammo' writes individual slots (0x1396ac=id9 etc). Clamped to weaponTable ammoCapacity. EU anchor.
+g_weaponXp = 0x00139868; // CONFIRMED - s32[0x38] per-weapon XP/upgrade-progress accumulator (NOT ammo cap - real ammo cap is g_weaponTable+0x8e). cheat-pnach 'Have Weapon Upgraded' writes individual slots (0x13988c=id9 etc). EU anchor.
+g_inventoryOwned     = 0x001A7B00; // CONFIRMED - u8[0x38] per-item have-flag. cheat-pnach inventory have-flags base (md notes 0x1a7b02 as a slot within). Written by GiveInventoryItem. EU anchor.
+g_inventoryNewFlag   = 0x001A7B38; // CONFIRMED - u8[0x38] newly-acquired flag per item, set with g_inventoryOwned by GiveInventoryItem (likely HUD NEW badge).
+g_inventoryOrder     = 0x001A7B70; // CONFIRMED - byte[~0x20] inventory display order. low6=itemId, bit0x40=owned, 0xff terminator. Built by AddItemToInventoryOrder, walked by BuildVendorItemList.
