@@ -520,8 +520,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BAC4);
 /* func_0011BAC8(arg0): initialise the global list head D_0013CA40 — store arg0
  * at +0x0, clear the count at +0x4, point both head (+0x8) and tail (+0xC) links
  * at the inline first slot (+0x10); return &D_0013CA40. ~98.5% — ee-gcc's
- * scheduler always orders the three stores 0x8,0xc,0x4 regardless of source
- * order, but the original is 0x8,0x4,0xc. Left as INCLUDE_ASM. */
+ * scheduler always batches the two identical head/tail stores together
+ * (0xc,0x8) and sinks the count=0 store into the jr delay slot, but the original
+ * interleaves them as 0x8,0x4,0xc. Source-order-independent scheduler quirk.
+ * Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BAC8);
 
 /**
@@ -677,9 +679,11 @@ void func_0011D1E8(s32 *arg0) {
 
 /* func_0011D208: allocate the next slot of a circular pool described by arg0
  * (arg0[5]=slot base, arg0[6]=slot count, arg0[9]=counter). index = counter %
- * count; stores counter+1 back; returns &slot[index] (0x40-byte slots). ~59% —
- * blocked by div register allocation and the `break 0,7` div-check trap that
- * GNU as encodes differently from the original (`break 7`). Left as INCLUDE_ASM. */
+ * count; stores counter+1 back; returns &slot[index] (0x40-byte slots). The C
+ * body `arg0[5] + ((arg0[9] % arg0[6]) << 6)` reproduces every instruction, but
+ * the div-by-zero trap is `break 0,7` in the original and GNU as encodes
+ * ee-gcc's `break 7` in the upper code field instead — an assembler-encoding
+ * mismatch (2 words), not a source issue. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D208);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D238);
@@ -712,19 +716,60 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D810);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D850);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D868);
+extern s32 func_0011AC20(s32 *desc);
+extern s32 D_00134738;
+extern s32 D_0013473C;
+
+/**
+ * Lazily create the two paired handles D_00134738 / D_0013473C (sentinel -1 =
+ * uninitialised on the first): build a small descriptor on the stack (fields 1
+ * and 2 set, field 5 cleared), then create both handles from it via
+ * func_0011AC20. A no-op once D_00134738 exists.
+ */
+void func_0011D868(void) {
+    if (D_00134738 == -1) {
+        s32 desc[8];
+        desc[5] = 0;
+        desc[2] = 1;
+        desc[1] = 1;
+        D_00134738 = func_0011AC20(desc);
+        D_0013473C = func_0011AC20(desc);
+    }
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D8C8);
 
+/* func_0011D950: look up slot `idx` in the fixed 0x20-entry table D_0013FE80
+ * (0x10-byte stride). After the lazy-init (func_0011D868) and acquiring the
+ * table lock (func_0011AC60(D_00134738)), release the lock (func_0011AC40) and
+ * return the slot address when idx (unsigned) is in range, else 0. Body
+ * `func_0011D868(); func_0011AC60(D_00134738); if (idx >= 0x20) {
+ * func_0011AC40(D_00134738); return 0; } slot = &D_0013FE80[idx*0x10];
+ * func_0011AC40(D_00134738); return slot;` reaches 99.6% — every instruction
+ * lines up except the sltiu range-check lands in $2 here while the original
+ * allocates it to $3 (keeping $2 for the table base). A one-register
+ * allocation choice this cc1 won't reproduce. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D950);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D9C0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011DD48);
-
-extern void func_0011DD48(void);
 extern void func_0011AC60(s32 handle);
 extern s32 D_00134734;
+
+/**
+ * Lazily create the singleton handle D_00134734 (sentinel -1 = uninitialised):
+ * build a small descriptor on the stack (fields 1 and 2 set, field 5 cleared),
+ * hand it to func_0011AC20 and cache the resulting handle. A no-op once created.
+ */
+void func_0011DD48(void) {
+    if (D_00134734 == -1) {
+        s32 desc[8];
+        desc[5] = 0;
+        desc[2] = 1;
+        desc[1] = 1;
+        D_00134734 = func_0011AC20(desc);
+    }
+}
 
 /**
  * Run the func_0011DD48 teardown step, then forward the global handle
@@ -1006,7 +1051,17 @@ s32 func_00120390(const char *arg0, const char *arg1, s32 arg2) {
 void func_001203C0(void) {
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001203C8);
+extern s32 func_00115F28(s32 size);
+
+s32 *func_001203C8(void) {
+    s32 *p = (s32 *)func_00115F28(0x18);
+    if (p == 0) {
+        func_00120368();
+    }
+    memset(p, 0, 0x18);
+    p[1] = (s32)(p + 4);
+    return p;
+}
 
 extern s32 (*D_00135D38)(void);
 
@@ -1335,9 +1390,55 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001244B8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00124540);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00124568);
+extern void func_0011A9A0(s32 id, void *handler, s32 obj);
+extern void func_0011AC30(s32 obj);
+extern void func_00124540(void);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001245D0);
+/**
+ * Register interrupt handler `id` (low 16 bits): build a small descriptor on the
+ * stack (mode=1), create the handler object via func_0011AC20, bind the
+ * func_00124540 trampoline to it with func_0011A9A0, then enable
+ * (func_0011AC60) and commit (func_0011AC30) it.
+ */
+void func_00124568(s32 id) {
+    s32 desc[8];
+    s32 obj;
+    s32 channel = id & 0xFFFF;
+    desc[1] = 1;
+    desc[2] = 0;
+    desc[5] = 0;
+    obj = func_0011AC20(desc);
+    func_0011A9A0(channel, func_00124540, obj);
+    func_0011AC60(obj);
+    func_0011AC30(obj);
+}
+
+extern s32 func_00124B88(s32 arg0);
+extern s32 func_0011F5E0(void);
+extern void func_0011F628(void);
+extern s32 D_00141840;
+
+/**
+ * Install `handler` as the active interrupt handler in the global D_00141840.
+ * Aborts (returning 0) if func_00124B88(1) reports the slot is busy. Otherwise,
+ * with interrupts disabled (func_0011F5E0), swaps in the new handler, restores
+ * the prior interrupt-enable state (func_0011F628 when they were on) and returns
+ * the handler it replaced.
+ */
+s32 func_001245D0(s32 handler) {
+    s32 old;
+    s32 wasEnabled;
+    if (func_00124B88(1) != 0) {
+        return 0;
+    }
+    wasEnabled = func_0011F5E0();
+    old = D_00141840;
+    D_00141840 = handler;
+    if (wasEnabled != 0) {
+        func_0011F628();
+    }
+    return old;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00124630);
 
@@ -1726,7 +1827,24 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012C878);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012C9C8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012CA48);
+extern s32 func_0012C788(s32 *arg0, s32 arg1);
+extern s32 func_0012C878(s32 *arg0, s32 arg1);
+extern s32 func_0012CFA0(s32 *arg0);
+
+/**
+ * Run channel 5's transfer on arg0, recording its handle at arg0->field_0x1B4.
+ * If channel 1 is ready (func_0012C878(arg0, 1) is non-zero) kick it off again,
+ * fire channel 7 via func_0012C788 and flush through func_0012CFA0. Returns 0.
+ */
+s32 func_0012CA48(s32 *arg0) {
+    arg0[0x6D] = func_0012C878(arg0, 5);
+    if (func_0012C878(arg0, 1) != 0) {
+        func_0012C878(arg0, 1);
+        func_0012C788(arg0, 7);
+        func_0012CFA0(arg0);
+    }
+    return 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012CAB0);
 
@@ -1736,7 +1854,17 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012CC88);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012CDB0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012CFA0);
+/**
+ * Drain object arg0: while channel 1 still reports work
+ * (func_0012C878(arg0, 1) is non-zero), keep servicing channel 8 via
+ * func_0012C788(arg0, 8). The trailing channel-1 poll (0 on exit) is left in
+ * the return register; callers ignore it.
+ */
+s32 func_0012CFA0(s32 *arg0) {
+    while (func_0012C878(arg0, 1) != 0) {
+        func_0012C788(arg0, 8);
+    }
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012CFE8);
 
@@ -1865,7 +1993,19 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012EE28);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012EF20);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012F070);
+/**
+ * Skip one tagged record in the bitstream arg0: consume the 0x38-bit and 0x28-
+ * bit header fields, then keep consuming 0x18-bit entries while the following
+ * marker bit (func_0012E8C8(arg0, 1)) reads 1. Always returns 1.
+ */
+s32 func_0012F070(u64 *arg0) {
+    func_0012E980(arg0, 0x38);
+    func_0012E980(arg0, 0x28);
+    while (func_0012E8C8(arg0, 1) == 1) {
+        func_0012E980(arg0, 0x18);
+    }
+    return 1;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012F0E0);
 
@@ -1943,11 +2083,19 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012FA70);
 
 /* func_0012FA98(arg0, arg1): if arg0 and its table arg0->field_0x40 are non-null,
  * fetch the destructor at table[*arg1*2 + 3] and, if set, call
- * dtor(arg0, arg1, table[*arg1*2 + 4]); return its result or 0. ~92% — only
- * register allocation (result in a3 vs a2) and a beqz/beqzl delay-slot choice
- * differ. Left as INCLUDE_ASM. */
+ * dtor(arg0, arg1, table[*arg1*2 + 4]); return its result or 0. The natural body
+ * reaches 92% — but the original keeps `ret` in $7 (a3) where ee-gcc allocates
+ * a2, and emits a plain `beqz` on the callback test where ee-gcc picks the
+ * branch-likely `beqzl` (annulling its delay slot). Both are scheduling/reg-
+ * alloc forms this cc1 won't reproduce. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012FA98);
 
+/* func_0012FAE8(arg0): place the index 1 in a stack local and tail into
+ * func_0012FA98(arg0, &index) to run entry #1's destructor; returns its result.
+ * The body `s32 i = 1; return func_0012FA98(arg0, &i);` reproduces every
+ * instruction (99.56%) but the original reserves a 0x30 stack frame where
+ * ee-gcc only needs 0x20 — a frame-size-only constant mismatch (4 words) this
+ * cc1 won't reproduce. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012FAE8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012FB10);
@@ -1986,10 +2134,27 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012FBF0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012FD60);
 
+/* func_0012FE78: dispatch on the state word (offset 0x174) of arg0's sub-object
+ * (arg0->field_0x40) — when it equals 3 hand off to func_0012FD60, otherwise to
+ * func_0012FEC0; returns the chosen handler's result. Body
+ * `if (((s32*)arg0[0x10])[0x5D] != 3) return func_0012FEC0(arg0); return
+ * func_0012FD60(arg0);` reaches 97% — every instruction matches but the original
+ * parks arg0 in $7 (a3) and the state in $2, while ee-gcc allocates a1/a0; a
+ * register-allocation form this cc1 won't reproduce. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012FE78);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012FEC0);
 
+/* func_00130020: commit the pending range on arg0's sub-object
+ * (arg0->field_0x40): if both obj->field_0x4 and obj->field_0x8 are set, flush
+ * it via func_00130098, record the produced length
+ * (obj->field_0x118 - obj->field_0xAC) in arg0->field_0x8 and return 1;
+ * otherwise leave arg0 untouched and return 0. Body with `s32 ret=0; if (obj[1]
+ * && obj[2]) { func_00130098(obj); arg0[2]=obj[0x46]-obj[0x2B]; ret=1; } return
+ * ret;` reaches 95.7% — the only remaining diff is the subtraction's operand
+ * load order: the original loads field_0x118 before field_0xAC, but ee-gcc
+ * evaluates `a-b` right-to-left (loads 0xAC first). A fixed evaluation-order
+ * choice this cc1 won't reverse. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130020);
 
 /**
@@ -2003,6 +2168,14 @@ void func_00130088(s32 *arg0) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130098);
 
+/* func_00130118: initialise subsystem 1 (func_0012B198(1)), then program the
+ * four hardware DMA/GIF register pointers into arg0
+ * (field_0x590=0x70000000, 0x594=0x70001800, 0x6D0=0x70001B00, 0x6D4=0x70003300)
+ * and clear the busy flag at field_0x810. Body matches 90% — but the original
+ * parks the use-once 0x70000000 in the callee-saved $17 (and so reserves a 0x30
+ * frame saving $16/$17), whereas ee-gcc at -O2 keeps it in a caller-saved temp
+ * and only saves $16 (0x20 frame). A register-allocation form this cc1 won't
+ * reproduce. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130118);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130178);
@@ -2026,7 +2199,28 @@ void func_00130250(s32 arg0) {
     func_00130288(arg0, buf);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130288);
+extern s32 func_0012FA98(s32 *obj, s32 *req);
+extern void func_00130240(void *buf);
+
+/**
+ * Route the message `buf` for object `arg0`: when arg0 is live and has both a
+ * registered sub-object (field_0x858) and a non-null field_0xC, deliver it to
+ * that sub-object via func_0012FA98 (request = {0, buf}); otherwise fall back to
+ * the default handler func_00130240.
+ */
+void func_00130288(s32 arg0, void *buf) {
+    s32 *self = (s32 *)arg0;
+    s32 *obj;
+    s32 req[2];
+    obj = (s32 *)self[0x216];
+    if (obj != 0 && self != 0 && self[3] != 0) {
+        req[1] = (s32)buf;
+        req[0] = 0;
+        func_0012FA98(obj, req);
+    } else {
+        func_00130240(buf);
+    }
+}
 
 /**
  * Store a width/height (or x/y) pair into descriptor arg0: arg1 -> field_0x4,
@@ -2166,7 +2360,21 @@ void func_00131780(u8 *arg0) {
     arg0[1] = func_00131760(arg0[1]);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001317E8);
+extern u8 func_00131730(u8 binary);
+
+/**
+ * Convert the binary time fields of the record at arg0 to packed BCD in place
+ * (the inverse of func_00131780): apply func_00131730 to the bytes at offsets
+ * 7,6,5,3,2,1 (skipping offset 4), each replaced by its encoded value.
+ */
+void func_001317E8(u8 *arg0) {
+    arg0[7] = func_00131730(arg0[7]);
+    arg0[6] = func_00131730(arg0[6]);
+    arg0[5] = func_00131730(arg0[5]);
+    arg0[3] = func_00131730(arg0[3]);
+    arg0[2] = func_00131730(arg0[2]);
+    arg0[1] = func_00131730(arg0[1]);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131850);
 
