@@ -566,7 +566,18 @@ s32 func_0011BEE0(s32 value) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BF18);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BFC8);
+/**
+ * Send byte `ch` to the output port via func_0011BEE0, translating a bare LF
+ * ('\n', 0x0A) into a CR ('\r', 0x0D) followed by the LF.
+ */
+void func_0011BFC8(s32 ch) {
+    if (ch == '\n') {
+        func_0011BEE0('\r');
+        func_0011BEE0('\n');
+    } else {
+        func_0011BEE0(ch);
+    }
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C000);
 
@@ -1988,7 +1999,21 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012DD60);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012DF18);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012E088);
+/**
+ * Program and start the DMA channel at 0x1000B000 for a chain/normal transfer:
+ * with interrupts disabled, set MADR (0x1000B010) to the 28-bit address `madr`
+ * tagged with bit31, QWC (0x1000B020) to `size >> 4` quadwords, then CHCR
+ * (0x1000B000) to 0x100 to kick it. Restore interrupts only if they had been on.
+ */
+void func_0012E088(u32 madr, s32 size) {
+    s32 wasEnabled = func_0011F5E0();
+    *(volatile u32 *)0x1000B010 = (madr & 0x0FFFFFFF) | 0x80000000;
+    *(volatile u32 *)0x1000B020 = size >> 4;
+    *(volatile u32 *)0x1000B000 = 0x100;
+    if (wasEnabled) {
+        func_0011F628();
+    }
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012E10C);
 
@@ -2089,7 +2114,27 @@ s32 func_0012F070(u64 *arg0) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012F0E0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012F690);
+extern void func_00130E88(void);
+
+/**
+ * Abort both DMA channels (0x1000B000 and 0x1000B400): with interrupts disabled,
+ * set then clear the DMA enable bit while clearing each channel's CHCR.STR
+ * (0x100) bit, restore interrupts if they had been on, zero the channels' QWC
+ * (0x1000B020 / 0x1000B420), then re-init the GIF path via func_00130E88.
+ */
+void func_0012F690(void) {
+    s32 wasEnabled = func_0011F5E0();
+    *(volatile u32 *)0x1000F590 = *(volatile u32 *)0x1000F520 | 0x10000;
+    *(volatile u32 *)0x1000B000 &= 0xFFFFFEFF;
+    *(volatile u32 *)0x1000B400 &= 0xFFFFFEFF;
+    *(volatile u32 *)0x1000F590 = *(volatile u32 *)0x1000F520 & 0xFFFEFFFF;
+    if (wasEnabled) {
+        func_0011F628();
+    }
+    *(volatile u32 *)0x1000B020 = 0;
+    *(volatile u32 *)0x1000B420 = 0;
+    func_00130E88();
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012F738);
 
@@ -2246,6 +2291,14 @@ void func_00130088(s32 *arg0) {
     func_0012B198(1);
 }
 
+/* func_00130098(obj): advance/finalise a pending transfer and clear the
+ * in-progress flag (field_0x120). If a request is queued (field_0x120 != 0)
+ * dispatch via func_00130288(obj, &D_0013BDC8); else by mode field_0x174 finish
+ * via func_0012DC50(obj, field_0x1BC, field_0x118 - 1) (mode 3) or
+ * func_0012DD60(obj, field_0x1CC, field_0x1DC). ~85% — the original tests the
+ * mode with a plain `bne` and hoists `count-1` into its delay slot, but ee-gcc
+ * picks the branch-likely `bnel` and fills the slot with the next load. A
+ * branch-form/scheduling shape this cc1 won't reproduce. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130098);
 
 /* func_00130118: initialise subsystem 1 (func_0012B198(1)), then program the
@@ -2258,7 +2311,35 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130098);
  * reproduce. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130118);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130178);
+extern s32 func_00130DB8(s32 mode, s32 arg1);
+
+/**
+ * Hard-reset the DMA/GIF path attached to `obj`: flag the context busy
+ * (field_0x818 = 1, field_0x1B0 = 0), then with interrupts disabled stop both
+ * DMA channels (0x1000B000/0x1000B400) and their VIF (0x1000D400), zero each
+ * channel's QWC (0x1000B020/0x1000B420/0x1000D420), reset the GIF mode register
+ * (0x10002010 = 0x40000000) and finish by waiting on GIF idle via
+ * func_00130DB8(0). Interrupts are restored only if they had been on.
+ */
+void func_00130178(s32 *obj) {
+    s32 wasEnabled;
+    *(s32 *)((u8 *)obj + 0x818) = 1;
+    *(s32 *)((u8 *)obj + 0x1B0) = 0;
+    wasEnabled = func_0011F5E0();
+    *(volatile u32 *)0x1000F590 = *(volatile u32 *)0x1000F520 | 0x10000;
+    *(volatile u32 *)0x1000B000 = 0;
+    *(volatile u32 *)0x1000B400 = 0;
+    *(volatile u32 *)0x1000D400 = 0;
+    *(volatile u32 *)0x1000F590 = *(volatile u32 *)0x1000F520 & 0xFFFEFFFF;
+    if (wasEnabled) {
+        func_0011F628();
+    }
+    *(volatile u32 *)0x1000B020 = 0;
+    *(volatile u32 *)0x1000B420 = 0;
+    *(volatile u32 *)0x1000D420 = 0;
+    *(volatile u32 *)0x10002010 = 0x40000000;
+    func_00130DB8(0, 0);
+}
 
 /* func_00130240(arg0): dispatch arg0 through func_0011C820 against the global
  * table D_0013BDE8 — the original is a frameless tail call (`j func_0011C820`).
@@ -2321,11 +2402,36 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130428);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001306D0);
 
+/* func_001307B0(obj, cmd, madr): restart the GIF/PATH3 DMA pipeline — tear down
+ * sub-object 2 (func_0012FA98), flush (func_0012C3B0) and reset the GIF mode
+ * register (0x10002000=0); then with interrupts disabled program channel
+ * 0x1000B400 (MADR 0x1000B410 = madr & 0x0FFFFFFF, QWC 0x1000B420 = 4, CHCR
+ * 0x1000B400 = 0x101), restoring interrupts if on; finally issue IPU command
+ * `cmd` (func_0012C380), flush again and tear down sub-object 3. 99.82% — every
+ * instruction matches except the frame size: the original reserves a 0x60 frame
+ * (saves parked at +0x20..+0x50) where ee-gcc only needs 0x50. A frame-size-only
+ * constant mismatch this cc1 won't reproduce. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001307B0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130890);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001309C0);
+/**
+ * Query a batch of channel/register states via func_0012C878(obj, selector):
+ * prime selector 3, and only if selector 1 is set, sample selector 8 three
+ * times (caching the last into obj+0x144). Then cache selector 0xE into
+ * obj+0x148, pulse selector 1, and cache selector 0xE again into obj+0x14C.
+ */
+void func_001309C0(s32 *obj) {
+    func_0012C878(obj, 3);
+    if (func_0012C878(obj, 1) != 0) {
+        func_0012C878(obj, 8);
+        func_0012C878(obj, 8);
+        *(s32 *)((u8 *)obj + 0x144) = func_0012C878(obj, 8);
+    }
+    *(s32 *)((u8 *)obj + 0x148) = func_0012C878(obj, 0xE);
+    func_0012C878(obj, 1);
+    *(s32 *)((u8 *)obj + 0x14C) = func_0012C878(obj, 0xE);
+}
 
 /* func_00130A50/A60/A70/A80(arg0): frameless tail-call thunks forwarding arg0 to
  * func_00130288 with table D_0013BE58 / D_0013BE88 / D_0013BEA0 / D_0013BED8
@@ -2348,17 +2454,70 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130AA0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130AAC);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130AB0);
+/**
+ * Kick a DMA transfer on the channel whose control word lives at 0x1000B000:
+ * with interrupts disabled, set the channel's enable bit (0x10000) in the DMA
+ * enable register (read 0x1000F520, write 0x1000F590), write `chcr` to the
+ * channel, then clear the enable bit again; restore interrupts on the way out.
+ */
+void func_00130AB0(s32 chcr) {
+    func_0011F5E0();
+    *(volatile u32 *)0x1000F590 = *(volatile u32 *)0x1000F520 | 0x10000;
+    *(volatile u32 *)0x1000B000 = chcr;
+    *(volatile u32 *)0x1000F590 = *(volatile u32 *)0x1000F520 & 0xFFFEFFFF;
+    func_0011F628();
+}
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130B18);
+/**
+ * Identical to func_00130AB0 but kicks the DMA channel whose control word lives
+ * at 0x1000B400 (channel +1): toggles the enable bit in the DMA enable register
+ * around the channel `chcr` write, with interrupts disabled.
+ */
+void func_00130B18(s32 chcr) {
+    func_0011F5E0();
+    *(volatile u32 *)0x1000F590 = *(volatile u32 *)0x1000F520 | 0x10000;
+    *(volatile u32 *)0x1000B400 = chcr;
+    *(volatile u32 *)0x1000F590 = *(volatile u32 *)0x1000F520 & 0xFFFEFFFF;
+    func_0011F628();
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130B80);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130C68);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130DB8);
+/**
+ * Poll the GIF/PATH status word at 0x10002010 by mode: mode 0 spins until the
+ * sign bit (transfer-active) clears and returns 0; mode 1 returns just that
+ * sign bit (1 if active); any other mode returns 0. (`arg1` is unused — present
+ * in the original signature so callers pass a second zeroed argument.)
+ */
+s32 func_00130DB8(s32 mode, s32 arg1) {
+    s32 result = 0;
+    switch (mode) {
+    case 0:
+        while (*(volatile s32 *)0x10002010 < 0) {
+        }
+        result = 0;
+        break;
+    case 1:
+        result = (u32)*(volatile u32 *)0x10002010 >> 31;
+        break;
+    }
+    return result;
+}
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130E20);
+/**
+ * Kick the DMA channel at 0x1000B400 (same sequence as func_00130B18):
+ * toggle the channel-enable bit in the DMA enable register around the `chcr`
+ * write, with interrupts disabled.
+ */
+void func_00130E20(s32 chcr) {
+    func_0011F5E0();
+    *(volatile u32 *)0x1000F590 = *(volatile u32 *)0x1000F520 | 0x10000;
+    *(volatile u32 *)0x1000B400 = chcr;
+    *(volatile u32 *)0x1000F590 = *(volatile u32 *)0x1000F520 & 0xFFFEFFFF;
+    func_0011F628();
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130E88);
 
@@ -2773,6 +2932,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001339B0);
  * before the branch and nops the slot (a scheduling choice). Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001339F0);
 
+/* func_00133A28(arg0, arg1, arg2): build a 4-byte descriptor {0x20,1,0,0} on the
+ * stack and pass it with (arg0,arg1,arg2) to func_001334B8, then run the trio
+ * func_00133230 / func_00132028 / func_00133580(0). ~54% — the original schedules
+ * the `sd $31` save early (before the descriptor stores) and tucks the 4th `sb`
+ * into the jal delay slot while keeping `move $7,$sp` outside it; ee-gcc groups
+ * the stores and does the opposite delay-slot fill. A scheduling-only shape this
+ * cc1 won't reproduce. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133A28);
 
 /* func_00133A78: calls func_00133A28(0x3E9, 0xB, &D_0014B540) and returns. Not
