@@ -610,6 +610,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C8C8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C8D8);
 
+/* func_0011CB58: subsystem reset — func_0011B658(5); func_0011A950(5,
+ * D_0013CF54); D_0013469C = 0. Body is structurally identical at 98.46%, but the
+ * original allocates $3 (v1) for every %hi address temporary while ee-gcc picks
+ * $2 (v0); a one-register global allocation offset this cc1 won't reproduce from
+ * source. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011CB58);
 
 /* func_0011CB90(index, key, value): store a (key,value) pair into one of two
@@ -814,7 +819,33 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E4E0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E740);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E828);
+extern s32 func_0011D620(void *a0, s32 a1, s32 a2, void *a3, s32 a4,
+                         void *a5, s32 a6, s32 a7, s32 a8);
+extern s32 D_00134744;
+extern s32 D_00140140;
+extern s32 D_001401C0;
+extern s32 D_00140180;
+
+/**
+ * Register a request with the D_00140180 service: bail out returning 0 if the
+ * service slot D_00134744 is inactive (negative); otherwise stash the request
+ * parameters (arg1, arg0, arg2) into the D_001401C0 descriptor and submit it via
+ * func_0011D620. Returns the resulting handle D_00140180 on success, 0 on
+ * failure.
+ */
+s32 func_0011E828(s32 arg0, s32 arg1, s32 arg2) {
+    if (D_00134744 < 0) {
+        return 0;
+    }
+    (&D_001401C0)[0] = arg1;
+    (&D_001401C0)[1] = arg0;
+    (&D_001401C0)[2] = arg2;
+    if (func_0011D620(&D_00140140, 4, 0, &D_001401C0, 0xC,
+                      &D_00140180, 4, 0, 0) >= 0) {
+        return D_00140180;
+    }
+    return 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E8A8);
 
@@ -966,7 +997,23 @@ s32 func_0011F888(s32 *dst, s32 *src, u32 nbytes) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F8C0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F8D0);
+extern void func_0011ACD0(s32 *out);
+extern void func_0011ACC0(s32 *in);
+
+/**
+ * Read a hardware register pair, force its mode field to 0x2000 (clearing the
+ * 0x...E000 bits), write it back, then re-read it; returns 1 if the resulting
+ * 3-bit field at bits 13..15 is zero, else 0.
+ */
+s32 func_0011F8D0(void) {
+    s32 regs[2];
+    func_0011ACD0(&regs[0]);
+    regs[1] = (regs[0] & 0xFFFF1FFF) | 0x2000;
+    func_0011ACC0(&regs[1]);
+    func_0011ACD0(&regs[1]);
+    func_0011ACC0(&regs[0]);
+    return (((u32)regs[1] >> 13) & 0x7) < 1;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F938);
 
@@ -1448,6 +1495,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00124780);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00124818);
 
+/* func_001248B0: if the callback D_00141844 is installed and the suppression
+ * flag D_001363A4 is clear, invoke the callback with the parameter D_00141848.
+ * The body compiles byte-exact, but this is a splat mis-split: the per-function
+ * .s (and the address-ordered unit listing) start the symbol 8 bytes early on a
+ * trailing `addiu $29,$29,0x40; nop` epilogue fragment of the previous function
+ * (func_001248F8 even references `func_001248B0 + 0x8` as the real entry). Can't
+ * be matched at the unit level without a re-split. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001248B0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001248F8);
@@ -1636,10 +1690,30 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128068);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128180);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128250);
+extern s32 D_00143108;
+extern s32 D_00143180;
+
+/**
+ * Initialise the D_00143180 subsystem by calling func_0011D620 with the config
+ * block at &D_00143108, mode 0x80000963, two 0x400-sized buffers both pointing
+ * at &D_00143180, and zeroed trailing arguments; returns the resulting handle
+ * stored in D_00143180.
+ */
+s32 func_00128250(void) {
+    func_0011D620(&D_00143108, 0x80000963, 0, &D_00143180, 0x400,
+                  &D_00143180, 0x400, 0, 0);
+    return D_00143180;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001282A8);
 
+/* func_00128440(arg0): open the D_00143180 subsystem in mode 0x80000904 with
+ * arg0 stored at (&D_00143180)[1], via func_0011D620; on failure log D_0013B868
+ * (func_00128898) and return 0, else return the handle D_00143180. ~70% — the
+ * original parks %hi(D_00143180) in callee-saved $16 and reuses it for the final
+ * `lw $2,%lo(D_00143180)($16)`, and selects a `bgez` over the `bgezl` ee-gcc
+ * emits for the early-return shape. A reg-alloc + branch-form mismatch this cc1
+ * won't reproduce. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128440);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001284B0);
@@ -1685,6 +1759,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128B28);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128C18);
 
+/* func_00128D58(index): acquire a resource via func_00128578(index); on success
+ * (non-negative handle) record it at entry+0x8 and set the active flag at
+ * entry+0x4 in the 0x330-stride D_00143640 table. ~87% — the original keeps two
+ * separate base registers for the same entry pointer ($5 and a copied $3) and
+ * stores result-then-flag; ee-gcc uses one base and reschedules the pair. A
+ * scheduling/reg-alloc shape this cc1 won't reproduce. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128D58);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128DB0);
@@ -2327,6 +2407,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131670);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001316C0);
 
+/* func_001316C8: controller/port status getter — on territory 'T'
+ * (func_001315E0()) return the cached byte D_00138156; else sample the pad
+ * (func_0011ACD0), return 0 if the 3-bit port field (bits 13..15) is zero, else
+ * read extended status (func_0011AF30) and return bit 4 of its low byte. Every
+ * instruction matches at 98.85% except the %hi temp register for D_00138156: the
+ * original reuses $2 (`lui $2; lbu $2,%lo($2)`) while ee-gcc splits the lui into
+ * $3. A reg-alloc form this cc1 won't reproduce. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001316C8);
 
 /* func_00131730: binary byte (0..99) -> packed BCD, n + (n/10)*6 masked to a
@@ -2602,6 +2689,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133580);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133640);
 
+/* func_00133688: getter — if the init flag D_001A748C is set, return the cached
+ * global D_001A7110, else call func_00125588(). Not matched: the flag is read
+ * with a gp-relative load `lw ...,%gp_rel(D_001A748C)($28)`, but with -G0 cc1
+ * places the global in normal data and emits an absolute lui/lw pair instead.
+ * gp_rel small-data access isn't expressible in source here. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133688);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001336C0);
