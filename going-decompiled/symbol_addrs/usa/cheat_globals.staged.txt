@@ -1,365 +1,43 @@
-// Staged PlayerStats globals + bolt writer/reader functions (USA v2.00, CRC B3A71D10).
-// Single-concept run: bolts / PlayerStats. Manager applies at next coordination point.
-// Naming: Ghidra Hungarian convention (g_dw=u32, g_w=u16, g_b=u8).
+// Track-B breadcrumb log (USA v2.00, CRC B3A71D10) — RETIRED as a symbol queue.
+//
+// All named symbols have been curated into symbol_addrs/usa/symbol_addrs.txt (the
+// authoritative file splat reads) under the clean g_<thing>/VerbNoun convention.
+// Per-function cumulative knowledge lives in Ghidra plate comments. This file no
+// longer stages assignments — it only keeps a few navigation breadcrumbs that have
+// NO symbol of their own yet: "this lives in an unsplit overlay" conclusions,
+// still-unidentified functions, and UNCONFIRMED globals with no in-binary writer.
+// (Full pre-prune history with the rich per-symbol notes is in git.)
 
-// --- PlayerStats struct @ 0x001A7A00 (currencies/resources) ---
-g_dwBoltCount    = 0x001A7A00; // CONFIRMED via cheat 0x1A7A00 + pickup-add (CollectBolts) & vendor-subtract (VendorPurchaseStateMachine)
-g_dwRaritanium   = 0x001A7A04; // PlayerStats.raritanium @ +4. CONFIRMED via cheat 0x1A7A04
-g_bMiscExtras    = 0x001A7A12; // PlayerStats.miscExtras (u8) @ +0x12. CONFIRMED via cheat 0x1A7A12
-g_dwNanotech     = 0x001A7A14; // PlayerStats.nanotech (u32) @ +0x14. CONFIRMED via cheat 0x1A7A14
-g_bEquippedArmor = 0x001A7A20; // PlayerStats.equippedArmor (u8) @ +0x20. CONFIRMED via cheat 0x1A7A20
-g_wCrystals      = 0x001A7A22; // PlayerStats.crystals (u16) @ +0x22. CONFIRMED via cheat 0x1A7A22
-g_dwMoonstones   = 0x001A7A24; // PlayerStats.moonstones (u32) @ +0x24. CONFIRMED via cheat 0x1A7A24
+// --- OVERLAY-ONLY conclusions (do NOT re-search the boot ELF for these) ---
+// PLAYER-DAMAGE writer: g_health lives at playerStruct(0x189E20)+0x24CC. An exhaustive
+//   asm scan of usa .text found only THREE stores to it — 0x26F24C (LoadLevelAndInitHealth
+//   init=1), 0x2E7E8C (RevivePlayerMinHealth clamp>=1), 0x315164 (UpdateNanotechOrb heal).
+//   There is NO health-subtract-on-hit writer in the boot ELF. The damage path (enemy
+//   attack / hazard / fall losing a nanotech cube) lives in a not-yet-split HERO/LEVEL
+//   overlay. Re-investigate once overlays are imported — search there for a store to
+//   mobyBase+0x24CC (or to 0x18C2EC). FUN_002E6BD8/FUN_002E6B30 are FX-spawn helpers, NOT damage.
+// SKILL-POINT-AWARD writer: no setter of g_skillPointFlags (0x1A7A68) exists in the split
+//   .text (all 9 xrefs are reads + RestorePlayerProgressState snapshot/restore). The award
+//   trigger (SETS a flag on challenge completion) is overlay-only — same as the damage writer.
+//   Re-investigate in overlays for a store to 0x1A7A68+index.
+// PLATINUM-BOLT setter: likewise overlay-only (CountPlatinumBolts reads 0x19B278; no in-ELF setter).
 
-// --- Bolt writer functions ---
-CollectBolts               = 0x00302B08; // CONFIRMED: bolt-pickup handler; +0xAA denomination switch adds 1/5/20/50/100/500/1000 to g_dwBoltCount
-VendorPurchaseStateMachine = 0x002F97A8; // CONFIRMED: vendor buy confirm; subtracts price from g_dwBoltCount (bolt SPEND path)
-RestorePlayerProgressState = 0x002DF7A0; // UNCONFIRMED: snapshots+restores PlayerStats around a progress-state rebuild (load/new-area). Does NOT add/spend bolts.
+// --- UNCONFIRMED globals (no in-binary writer / no xref — identity not fully traced) ---
+// g_air 0x18C2E0 — underwater air/oxygen (cheat 0x18C2E0). No direct xrefs in analyzed code.
+// g_bNanotechBonusHealEnabled 0x1A7A4E — read-only in UpdateNanotechOrb (3 sites); set
+//   externally (save deserialize or debug/cheat path). Sits in the 0x1A7A48 flag region,
+//   gap between 0x4C (mirrored) and 0x4F (massive-domes), NOT a pnach-listed cheat.
 
-// --- Health / vitals system (live in-level values, distinct from persistent PlayerStats) ---
-// Clean names per task convention; Ghidra stores Hungarian aliases (g_n*) due to its name validator.
-g_health           = 0x0018C2EC; // CONFIRMED via cheat 0x18C2EC + usage: current health / nanotech cube count (s32). Note: distinct from g_dwNanotech@0x1A7A14 (persistent save copy).
-g_maxHealth        = 0x001A7A08; // CONFIRMED: heal-clamp ceiling in UpdateNanotechOrb & HUD bar max in FUN_0034DBE0. (==4 when DAT_0018C0D4==1)
-g_air              = 0x0018C2E0; // UNCONFIRMED: underwater air/oxygen (cheat 0x18C2E0). No direct xrefs found in analyzed code; type assumed s32.
-g_giantClankHealth = 0x0018B694; // CONFIRMED via cheat 0x18B694 + FUN_0028EB10 passes &it to HUD health-bar creator in Giant Clank mode (DAT_0018C0D4==2). Decrementer UNCONFIRMED.
-
-// --- Health writer functions ---
-UpdateNanotechOrb     = 0x003144C8; // CONFIRMED HEAL/PICKUP: nanotech-orb state machine; g_health = min(g_health + amount, g_maxHealth) on collect (armor heals x4, g_bMiscExtras gives bonus).
-RevivePlayerMinHealth = 0x002E7E70; // CONFIRMED RESPAWN/CLAMP: if (g_health < 1) g_health = 1; on return-to-game (called from state dispatcher FUN_002B5B38). Raises only, never damages.
-LoadLevelAndInitHealth = 0x0026EDE8; // CONFIRMED INIT: level/boot loader; sets g_health = 1 during setup (starting nanotech cube). Also runs the in-level frame loop.
-
-// --- Health reader functions (breadcrumbs only, not renamed) ---
-// 0x0034DBE0 HUD update (reads g_health -> health-bar widget value + g_maxHealth -> bar max). UNCONFIRMED overall.
-// 0x002B58F8 / 0x002B5A88 death gates: (g_health == 0) -> reject/cancel queued state transition. UNCONFIRMED overall.
-// 0x002B5B38 state dispatcher: bails while (g_health == 0); calls RevivePlayerMinHealth on state-6 resume. UNCONFIRMED overall.
-// 0x00301D50 thrown-wrench projectile: (g_health != 0) gate on homing/return. UNCONFIRMED overall.
-// 0x00320A20 moby behavior state-machine (NOT in Ghidra's function list; exists in splat as func_00320A20, 0x6BC): reads g_health as a death gate, spawns FX (func_002E6B30). NOT damage.
-
-// --- DAMAGE-PATH investigation (Track-B, single concept: how player takes damage) ---
-// CONFIRMED struct fact: g_health lives at playerStruct(0x00189E20) + 0x24CC.
-//   All g_health writes use base+0x24CC addressing; the static base 0x189E20 resolves to 0x18C2EC.
-// CONFIRMED via exhaustive asm scan of usa .text + cod overlay (grep "0x24CC" store ops):
-//   the ONLY 3 stores to g_health are:
-//     0x0026F24C (LoadLevelAndInitHealth, init=1), 0x002E7E8C (RevivePlayerMinHealth, clamp>=1),
-//     0x00315164 (UpdateNanotechOrb, heal=min(hp+amt,max)).  => NO health-subtract-on-hit writer exists in main .text.
-// RULED OUT the prior agent's hypothesis: FUN_002E6BD8 @0x002E6BD8 is a particle/FX-spawn helper
-//   (same family as FUN_002E6B30 @0x002E6B30: alloc effect slot at base+0x28 + index*0x20, set owner).
-//   It is called purely to spawn hit/impact visual effects; it never touches g_health. NOT the damage path.
-// CONCLUSION (honest): the player-damage writer (enemy attack / hazard / fall losing a nanotech cube,
-//   driving g_health toward 0 for the death gate) is NOT present in this Ghidra program / split .text.
-//   It almost certainly lives in a not-yet-split HERO/LEVEL overlay (DVP/VU overlays are TODO per CLAUDE.md).
-//   Re-investigate once hero-overlay code is imported; search there for a store to mobyBase+0x24CC (or to 0x18C2EC).
-
-// --- SAVE / GAME-PROGRESS SYSTEM (Track-B, single concept: persistent block + read/write code) ---
-// The persistent progress block is one contiguous region written/read to the memory card as a UNIT.
-// CONFIRMED bounds: base 0x001A79F8, size 0xD804 (spans 0x1A79F8 .. 0x1B51FC). The named PlayerStats
-//   currencies (0x1A7A00) sit at +0x08 inside it; skill/cheat/inventory flag arrays are within it too.
-//   The platinum-bolt flags (0x19B278) are saved as a SEPARATE descriptor section (below this base).
-g_playerProgress         = 0x001A79F8; // CONFIRMED: base of persistent save block (size 0xD804). Labelled in Ghidra.
-g_saveImageGlobal        = 0x001A2BA8; // CONFIRMED: RAM work buffer for the serialized GLOBAL save image (<=0x2800).
-g_saveImageArea          = 0x001A53A8; // CONFIRMED: RAM work buffer for the serialized PER-AREA save image (<=0x1000).
-g_saveSectionTableGlobal = 0x002560B8; // CONFIRMED: section-descriptor table (stride 0x10: {srcPtr,len,tag,_}, term srcPtr==0) for global sections.
-g_saveSectionTableArea   = 0x002562E8; // CONFIRMED: section-descriptor table for the 0x1C per-area instances.
-
-// --- Save/load functions (renamed in Ghidra) ---
-SerializeSaveSections    = 0x0029BD88; // CONFIRMED: SAVE serializer. Walks a descriptor table, copies each live section into an image with {tag,len} headers + {-1,0} terminator. tag==6000 => zero-fill.
-DeserializeSaveSections  = 0x0029BF58; // CONFIRMED: LOAD deserializer (inverse of above). Copies saved sections back into the live globals by tag; verifies via FUN_00115340 (memcmp); returns mismatch count.
-CalcSaveSectionsSize     = 0x0029BC68; // CONFIRMED: returns serialized byte size of a descriptor table (8 + sum(len+0xb & ~3) + 8). Sizes the memcard buffers.
-BuildSaveImage           = 0x0029BB90; // CONFIRMED: builds in-RAM save image from live globals: global section (0x2560B8) + 0x1C per-area sections (0x2562E8).
-SaveLoadStateMachine     = 0x00299CF0; // CONFIRMED: per-frame memcard save/load driver. Enumerate/probe/open/read/write; reads file into g_saveImageGlobal/Area then DeserializeSaveSections, or writes &g_playerProgress (0xD804) via FUN_001279a0. Result codes in DAT_0013954C.
-CommitProgressCheckpoint = 0x0029C1D0; // CONFIRMED: stages a checkpoint - records bolts/miscExtras/area into &DAT_00139410[0x1c] then rebuilds the save images via SerializeSaveSections; arms a write (DAT_00139544=0xf).
-// RestorePlayerProgressState (0x2DF7A0) refined: it is the in-RAM new-area/post-load STATE REBUILD
-//   (snapshots+restores PlayerStats around rebuilding weapon/skill/cheat/inventory tables), NOT memcard
-//   I/O. It calls BuildSaveImage (0x2DFE0C) to refresh the save image afterwards. Name still UNCONFIRMED.
-
-// --- Memcard I/O primitives (breadcrumbs only, NOT renamed) ---
-// 0x00127888 mc READ primitive (fd,dst,len): pulls saved image into g_saveImageGlobal/Area. UNCONFIRMED.
-// 0x001279A0 mc WRITE primitive (fd,src,len): writes live progress block (&0x1a79f8,0xd804) + images. UNCONFIRMED.
-// 0x00127668 mc close, 0x00127508 mc open/create (inferred from SaveLoadStateMachine usage). UNCONFIRMED.
-
-// --- 989snd sound subsystem (Track-B single concept; 989snd.c EE-side stubs of the 989 Studios
-//     audio library; block 0x131de8..0x133160). All EE<->IOP comms go over two SIF RPC channels:
-//     command channel 0x1a7040 (RPC server 0x123456) and bank-load channel 0x1a7140 (server 0x123457).
-//     RPC numbers per call below. Names with snd_ prefix that match a binary error string are the REAL
-//     989 Studios API names (CONFIRMED). snd_ names without a literal string are descriptive (role
-//     confirmed, exact public symbol UNCONFIRMED). ---
-snd_BankLoadByLoc        = 0x00132318; // CONFIRMED (own strings "snd_BankLoadByLoc: CD BUSY!/Load already in progress!", "RPC call has failed inside snd_BankLoadByLoc"). Sync bank load by CD loc; sceSifCallRpc rpc#3 on chan 0x1a7140.
-snd_BankLoadFromIOP      = 0x001326d8; // CONFIRMED (own strings "snd_BankLoadFromIOP: ...", "RPC call has failed inside snd_BankLoadFromIOP"). Sync load of IOP-resident bank; rpc#0x59 on chan 0x1a7140.
-snd_BankLoadFromEE_CB    = 0x001325e8; // CONFIRMED (own string "snd_BankLoadFromEE_CB: Load already in progress!"). Async bank load w/ completion callback; rpc#0x57 on chan 0x1a7140.
-snd_Init                 = 0x00131de8; // UNCONFIRMED name (role CONFIRMED): EE-side 989snd init. Binds SIF RPC servers 0x123456 & 0x123457, sets up double-buffered command ring. __FILE__ 989snd.c lines 0xb1/0xc6.
-snd_BankLoadAsync        = 0x00132498; // UNCONFIRMED name (role CONFIRMED): async bank/cmd load w/ callback; rpc#3 on chan 0x1a7140. Sibling of snd_BankLoadByLoc. NOTE: snd_BankLoadFromEE strings exist but are UNREFERENCED -> that API stripped/inlined in this build.
-snd_ServiceRpcCompletion = 0x00132220; // CONFIRMED role: polls command-channel RPC for completion, clears in-flight descriptor. Refs "Sif says RPC isn't busy, but no IOP returns!".
-snd_SendCommandSync      = 0x00132c48; // CONFIRMED role: BLOCKING sceSifCallRpc on chan 0x1a7040, rpc# = command opcode (param); result 0x1a7080. Returns IOP reply word.
-snd_QueueCommandToRing   = 0x00132df0; // CONFIRMED role: appends a sound command into the active double-buffered command ring; ring-full warns; immediate-send fast path.
-snd_FlushCommandRing     = 0x00133108; // CONFIRMED role: BLOCKING sceSifCallRpc chan 0x1a7040 rpc#0x4d sends the filled ring buffer, then swaps the double buffer.
-snd_Pump                 = 0x00132028; // CONFIRMED role: main service pump - drains completed ring (fires per-entry callbacks), services async RPC completion, flushes ring. Returns 1 if RPC in flight.
-snd_SetupDmaTransfer     = 0x001322b8; // UNCONFIRMED name (role CONFIRMED): arms SIF result descriptor (DAT_001a7480/7484) before a command-channel RPC.
-snd_CommitRingEntry      = 0x001330d0; // CONFIRMED role: bumps active ring entry count then runs snd_Pump once.
-snd_CheckLoadInProgress  = 0x00133580; // CONFIRMED role: tests/waits on bank-load-in-progress flag DAT_001a7100 (poll if param==1).
-
-// --- 989snd / engine infra helpers ---
-snd_PrintError           = 0x00115d48; // CONFIRMED: 989snd EE-side error/log printer (printf-style varargs). Guarded by silent flag DAT_001a74f8. All 989snd.c error literals route here.
-AssertFail               = 0x00115e38; // CONFIRMED: assert formatter (file,line,expr) using fmt @0x13a370 "assertion \"%s\" failed: file \"%s\", line %d". Basis of assert-based file attribution.
-DebugMalloc              = 0x0028bcf8; // CONFIRMED role: 16-byte-aligned bump allocator (size). Debug builds wrap as (size,flags,__FILE__,__LINE__) - wrapper presence UNCONFIRMED here.
-
-// --- SIF RPC primitives (SCE SDK libsifrpc; breadcrumbs only, names UNCONFIRMED) ---
-// 0x0011d450 sceSifBindRpc(clientData, serverId, mode): binds EE->IOP RPC, used by snd_Init for 0x123456/0x123457. UNCONFIRMED.
-// 0x0011d620 sceSifCallRpc(clientData, rpc#, mode, sb, sbsize, rb, rbsize, ...): the primitive every snd_ RPC wrapper calls. mode&1=async, mode&2=no-flush. UNCONFIRMED.
-// 0x0011d810 sceSifCheckStatRpc(clientData): returns 1 if RPC in flight (busy). 989snd busy-waits on it. UNCONFIRMED.
-// IOP-side 989snd module hosts RPC servers 0x123456 (command) & 0x123457 (bank load); not in this EE image. UNCONFIRMED.
-
-// --- GUI SUBSYSTEM (Track-B single concept; in-binary, NOT an overlay). The boot ELF embeds three
-//     gui/*.cpp __FILE__ strings, referenced ONLY by the 4 direct callers of AssertFail @0x115e38.
-//     gui/behaviors.cpp @0x1ad890, gui/memoryManagement.cpp @0x1ada78, gui/mathUtil.cpp @0x1ae758.
-//     The GUI code forms a large contiguous cluster ~0x336000..0x350000; its allocator GuiPoolAlloc
-//     is called by 37+ widget/screen constructors in that range. Renamed in Ghidra + tagged by file. ---
-//
-// gui/memoryManagement.cpp - fixed-block free-list pool. Pool header layout (6 words):
-//   [0]=base [1]=end/limit [2]=nodeSize [3]=bumpOffset [4]=liveCount [5]=freeListHead.
-GuiPoolInit              = 0x00337c60; // CONFIRMED (assert line 37 expr "allocation_size>=sizeof(FreeNode)"). Inits pool header asserts nodeSize>=4 stores base/end/nodeSize zeros counters.
-GuiPoolAlloc             = 0x00337ce8; // CONFIRMED (assert line 83; code). Allocs one node pop free-list head if set else bump-allocate asserting offset+nodeSize<=end. Returns node ptr.
-GuiPlacementNew          = 0x00337c50; // CONFIRMED: placement operator new(size,ptr) returns ptr unchanged. GUI uses new(GuiPoolAlloc(pool)) Foo everywhere. Lives in memoryManagement.cpp unit.
-//
-// gui/behaviors.cpp
-GuiComputeBlendWeights   = 0x003366a8; // CONFIRMED (assert line 61 file string; code). Null-checks out ptr then writes 4 floats {t, t*0.5, 1-t, (1-t)*0.5}. NOTE assert expr arg is not a readable string in this build.
-//
-// gui/mathUtil.cpp
-GuiHermiteInterp         = 0x0034fbc0; // CONFIRMED (assert line 36 expr "t>=0.0f && t<= 1.0f"). Cubic/Hermite blend of param t over 4 control values asserts t in [0,1].
-//
-// GUI manager / instance (source file UNCONFIRMED - top-level gui file, no __FILE__ here)
-g_guiInstance            = 0x001a8d04; // CONFIRMED: singleton GUI manager ptr. Sole writer GuiManagerCreate read by 90+ GUI funcs. Ghidra kept as DAT (its validator rejects non-Hungarian global names).
-GuiManagerCreate         = 0x0029db80; // CONFIRMED: allocates the 0x3fb20-byte GUI instance runs GuiSystemInit installs 2 callback ptrs and stores result to g_guiInstance. Sole writer of 0x1a8d04.
-GuiSystemInit            = 0x0034f308; // CONFIRMED behaviour: GUI master ctor. Zeros state array sets up the pool via GuiPoolInit(nodeSize 0x10 total 0x8700) then constructs 30+ widget/screen objects at fixed instance offsets.
-//
-// GUI widget/element constructors (source files UNCONFIRMED - gui widget files, no __FILE__)
-GuiElementInit           = 0x00336fe8; // PARTIAL: base init for one GUI element. CONFIRMED allocs two 0x10 pool sub-records sets default scale (1,1,1) clears state. Name-string binding NOT visible in decomp (UNCONFIRMED).
-GuiScreenWithPlanetNameInit = 0x003493e0; // PARTIAL: a GUI screen ctor. CONFIRMED allocs from pool sets ARGB colors+positions builds 7 named children ("title","help","planet name","anIcon","QSelBack","aText") binds 7 input slots. Planet-select identity UNCONFIRMED.
-
-// --- MAP / MINIMAP SUBSYSTEM (Track-B single concept; in-binary, NOT an overlay). Attributed to
-//     map.cpp via __FILE__ "map.cpp" @0x1a95b8 passed to DebugMalloc in MapInit (lines 0x2f3/0x304/
-//     0x30b/0x314). Per-level init from LoadLevelAndInitHealth. Functions are a tight cluster
-//     0x295778..0x298xxx. NTSC vs PAL map-size tables selected by DAT_001a7b05 (0x14ca34 / 0x14cb14).
-//     State globals live in core.bss around 0x1c4f20..0x1c5160. Renamed in Ghidra (globals use the
-//     g_n/g_p Hungarian aliases the Ghidra validator forces; clean names mirrored here). ---
-//
-// Map state globals
-g_mapCurrentLevel  = 0x001C5150; // CONFIRMED: current map level id (clamped 0..0x1b). Set by MapSetCurrentLevel read across the map system. Ghidra g_nMapCurrentLevel.
-g_mapTextureHandle = 0x001C5158; // CONFIRMED: GS texture handle for the uploaded map image (-1 none). Set in MapInit via FUN_002efbb0. Ghidra g_nMapTextureHandle.
-g_mapTextureWidth  = 0x001C5160; // CONFIRMED: width in texels of the uploaded map texture (levelMapSize lt 7). Set in MapInit. Ghidra g_nMapTextureWidth.
-g_mapAvailable     = 0x001C4F44; // CONFIRMED: flag a map is available/uploaded for current level. Written by MapUpdateLevelAvailability and MapBeginUpload. Ghidra g_nMapAvailable.
-g_mapHasData       = 0x001C4F48; // CONFIRMED: flag this level has map data loaded gates MapBuildBitmap. Ghidra g_nMapHasData.
-g_mapActiveSlot    = 0x001C5154; // CONFIRMED: active map cache slot index (0..4, -2 while uploading) indexes the zoom/pan arrays. Ghidra g_nMapActiveSlot.
-g_mapBlipList      = 0x001C4F40; // CONFIRMED: ptr to map blips/icons list (0x28-byte records) drawn by MapDraw 0 when none. Ghidra g_pMapBlipList.
-g_mapBitmapBuffer  = 0x001C4F28; // CONFIRMED: ptr to 0x1000-byte 1bpp discovered-area bitmap (8 rows of 0x200) alloc in MapInit line 0x30b filled by MapBuildBitmap. Ghidra g_pMapBitmapBuffer.
-g_mapVertexData    = 0x001C4F20; // CONFIRMED: ptr to map outline vertex data copied from level asset in MapInit line 0x2f3. Ghidra g_pMapVertexData.
-g_mapRevealedFlags = 0x0013965F; // CONFIRMED: per-level "map revealed/discovered" bitmap (byte array). MapIsLevelRevealed(level) tests bit level here. Ghidra g_abMapRevealedFlags.
-//
-// Map functions (renamed in Ghidra)
-MapInit                      = 0x002957C0; // CONFIRMED via map.cpp __FILE__. Per-level map init builds interp tables uploads map texture allocs buffers builds circular mask. Called from LoadLevelAndInitHealth.
-MapSetCurrentLevel           = 0x00296500; // CONFIRMED: stores level into g_mapCurrentLevel then runs MapUpdateLevelAvailability.
-MapUpdateLevelAvailability   = 0x00296520; // CONFIRMED: clamps g_mapCurrentLevel to 0x1b sets g_mapAvailable from MapDataExistsForLevel.
-MapIsLevelRevealed           = 0x00295778; // CONFIRMED: returns the per-level discovered bit from g_mapRevealedFlags.
-MapDataExistsForLevel        = 0x00296120; // CONFIRMED: tests level map-size tables 0x14ca34 (NTSC) / 0x14cb14 (PAL via DAT_001a7b05) gt 0.
-MapFindCacheSlot             = 0x002960D8; // CONFIRMED: scans the 5-entry map texture cache (slot id array at 0x1c51bc) returns slot index or -1.
-MapEvictCacheSlot            = 0x00296330; // CONFIRMED: picks a cache slot to evict (LRU-ish by level-order distance) marks it free.
-MapGetLevelOrderIndex        = 0x002962C0; // CONFIRMED: maps a level id to its index in the level-order table PTR_DAT_001aa510.
-MapFindNearestAvailableLevel = 0x00296168; // CONFIRMED: searches adjacent levels in the order table for the nearest one that has a map.
-MapBeginUpload               = 0x00295D70; // CONFIRMED: per-frame DMA upload of the map texture to GS (FUN_002efca8/FUN_002efd28) sets g_mapAvailable.
-MapUpdate                    = 0x002965B0; // CONFIRMED: per-frame zoom/pan update for g_mapActiveSlot (zoom 0x1c4fd4 panY 0x1c5028 panX 0x1c507c) clamps to bounds posts event 0x13 on close.
-MapBuildBitmap               = 0x00298060; // CONFIRMED: dispatches to MapBuildBitmapFrom4bpp or a packed path to fill g_mapBitmapBuffer (discovered-area mask).
-MapBuildBitmapFrom4bpp       = 0x00297D30; // CONFIRMED: rasterizes a 1bpp discovered-area bitmap from a 4bpp source (256x256 cells).
-MapDraw                      = 0x00296810; // CONFIRMED: draws the map quad (tex 0xe999+slot) then blips/icons from g_mapBlipList with overlap-avoidance + labels then the player marker (tex 0xe99a). Uses GS DMA builder DAT_001b2228.
-//
-// --- libmc memory-card client + save-game file system (USA v2.00) ---
-//     System chosen from in-binary string + xref evidence: the save-path templates
-//     "/BA****-*****RATCHET", "/************RATCHET/icon.sys|static.ico|save%d.bin"
-//     (0x1a7938..0x1a79d8) and region dir prefixes BASCUS-97199 / BESCES-50916 / BISCPS-15037
-//     (0x1a9a00..0x1a9a40), plus the libmc init/version strings at 0x13b760..0x13b7a0.
-//     The whole EE-side libmc client lives contiguously at 0x127348..0x12824b and is the
-//     only referencer of g_mcInitialized / g_mcMutexSema / g_mcPendingCmd. Renamed in Ghidra.
-//     (Ghidra forces Hungarian g_n/g_p aliases on globals via create_label - clean names here.)
-//
-// libmc client globals (core)
-g_mcPendingCmd  = 0x00137E68; // CONFIRMED - in-flight libmc RPC command number (0 idle). Set by each Mc* wrapper before sceSifCallRpc cleared by McSync.
-g_mcMutexSema   = 0x00137E6C; // CONFIRMED - semaphore serialising libmc RPC calls. Created in McInit waited/signalled around every Mc* call.
-g_mcInitialized = 0x00141B24; // CONFIRMED - libmc-ready flag set by McInit. Every Mc* wrapper returns -100 if zero.
-g_mcRpcClient   = 0x00141B00; // CONFIRMED - SIF RPC client handle for the libmc server (sceSifBindRpc target id 0x80000400).
-g_mcRpcResult   = 0x001430C0; // CONFIRMED - IOP-side result code DMA'd back for the last libmc call read out by McSync.
-//
-// libmc client functions (renamed in Ghidra)
-McInit            = 0x00127348; // CONFIRMED - binds libmc SIF RPC creates g_mcMutexSema checks mcserv/mcman irx version sets g_mcInitialized.
-McSync            = 0x00127B88; // CONFIRMED - polls RPC completion writes back cmd+result clears g_mcPendingCmd signals g_mcMutexSema. sceMcSync.
-McGetInfo         = 0x00127CC0; // CONFIRMED - RPC cmd 1 (port slot wantType wantFree wantFormat). Card probe. sceMcGetInfo.
-McOpen            = 0x00127508; // CONFIRMED - RPC cmd 2 (port slot path openMode). sceMcOpen.
-McClose           = 0x00127668; // CONFIRMED - RPC cmd 3 (fd). sceMcClose.
-McSeek            = 0x00127720; // CONFIRMED - RPC cmd 4 (fd offset whence). sceMcSeek.
-McRead            = 0x00127888; // CONFIRMED - RPC cmd 5 (fd dstBuf len). sceMcRead. Pulls save image into 0x1a2ba8/0x1a53a8.
-McWrite           = 0x001279A0; // CONFIRMED - RPC cmd 6 (fd srcBuf len). sceMcWrite. Writes live progress block + save images.
-McGetDir          = 0x00127E48; // CONFIRMED - RPC cmd 0xd (port slot path mode maxent dirBuf). sceMcGetDir lists the RATCHET save dir.
-McMkDir           = 0x00128068; // CONFIRMED - RPC cmd 0xf (port slot path). sceMcMkdir creates the RATCHET save dir.
-McBeginCreateFile = 0x00127630; // CONFIRMED - thin wrapper over McOpen that tags g_mcPendingCmd as 0xb for the create-file sync path.
-McChdir           = 0x00127F98; // UNCONFIRMED - RPC cmd 0x10 (port slot) probe in SaveLoadStateMachine case 3. Maps to sceMcChdir by cmd number only.
-McGetEntSpace     = 0x00128180; // UNCONFIRMED - RPC cmd 0x11 (port slot) probe in SaveLoadStateMachine case 5. Maps to sceMcGetEntSpace by cmd number only.
-McDelayMillis     = 0x00127B40; // CONFIRMED - SetAlarm+SleepThread busy-wait helper used by McSync while spinning for completion.
-InitMemCardLib    = 0x0029BC38; // CONFIRMED - game-level libmc bring-up calls McInit logs "could not init memcard lib" (0x1a9a60) on failure.
-//
-// save-game path builder + templates
-BuildSaveGamePaths    = 0x00299998; // CONFIRMED - derives per-region save dir name from boot title id and patches it into all save path templates.
-g_saveDirTemplate     = 0x001A7938; // CONFIRMED - "/BA****-*****RATCHET" dir-name template patched in place by BuildSaveGamePaths.
-g_saveFileFmt         = 0x001A79D8; // CONFIRMED - "/<dir>/save%d.bin" printf template for the per-slot save file.
-g_saveIconSysPath     = 0x001A7968; // CONFIRMED - "/<dir>/icon.sys" save icon descriptor path.
-g_saveStaticIcoPath   = 0x001A7988; // CONFIRMED - "/<dir>/static.ico" save icon model path.
-
-// --- CINEMATICS / BONUS-MOVIE UNLOCK SYSTEM (Track-B single concept; in-binary, NOT an overlay).
-//     Anchored on the cheat-pnach "Unlock All Cinematics" globals 0x139768..0x139784 (8 words = 256 bits).
-//     PlayCinematic / PlayBonusMovie are the two WRITERS that set an unlock bit then stream the reel;
-//     the planet-select screen (FUN_002d7ba0) and EvaluateProgressCondition read the bitfield.
-//     Renamed in Ghidra + plate-commented. Globals labelled in Ghidra (Hungarian aliasing not forced here). ---
-//
-// Cinematics/bonus unlock globals
-g_cinematicUnlockedFlags = 0x00139768; // CONFIRMED - cinematics-watched/unlocked bitfield (256 bits, id<0xb1). Bit set by PlayCinematic/PlayBonusMovie. Read by planet-select FUN_002d7ba0 + EvaluateProgressCondition case 9. Cheat "Unlock All Cinematics" writes 0x139768..0x139784.
-g_bonusUnlockFlags       = 0x00139780; // CONFIRMED - bonus-content unlock flag words (making-of/credits/sketchbook/commercials). Bits set by OnCinematicComplete for reel ids 0xab(bit24)/0xad(bit25)/0xaf@0x139784(bit28). Read by level-transition FUN_002ed260.
-g_weaponUpgradeLevel     = 0x00139A34; // CONFIRMED - per-weapon upgrade-level array (stride 0x10, index<=0x71). EvaluateProgressCondition case4 have(level!=0) / case5 upgraded(level>=2). NOTE distinct field from the 0x13988C "weapon XP" array in cheat_globals.md (same per-weapon struct region, different offset).
-//
-// Cinematics functions (renamed + plate-commented in Ghidra)
-PlayCinematic             = 0x002EC640; // CONFIRMED - sets g_cinematicUnlockedFlags bit id (id<0xb1) then streams+plays the cinematic reel. Primary unlock writer. EU anchor.
-PlayBonusMovie            = 0x002ECC48; // CONFIRMED - secondary unlock writer (same bit-set) for bonus/credits reels via table 0x14b544/8/c + GS texture transfer. Returns presented bool.
-PlayBonusReelWithGameLoop = 0x002ECAC8; // CONFIRMED - PlayCinematic(id) then runs the in-game frame loop (SaveLoadStateMachine etc) until state DAT_001a8bb0 leaves 2. Used post bonus-unlock reels.
-OnCinematicComplete       = 0x002ED018; // CONFIRMED - writer of g_bonusUnlockFlags 0x139780/0x139784 + counters 0x139810/4/8. Dispatches on finished reel id DAT_001abf30 (0xa9/0xab/0xad/0xaf), chains next reel.
-MapCinematicIdToIndex     = 0x002EFE68; // CONFIRMED - remaps a cinematic id to a packed asset-table index (skips reserved ranges via table 0x1ad0b0). Used by PlayCinematic/PlayBonusMovie.
-
-// --- PROGRESS-CONDITION / LEVEL-OBJECTIVE SYSTEM (Track-B; reads many cheat-pnach globals -> strong EU anchors).
-//     The per-level objective/help table PTR_DAT_00258b20[level] is walked each frame; each entry's condition is
-//     scored by a generic evaluator that reads platinum bolts / cinematics / weapon-upgrade flags. ---
-EvaluateProgressCondition = 0x0029E808; // CONFIRMED - generic unlock-condition evaluator. case8 reads platinum-bolt flags 0x19B278, case9 cinematics 0x139768, case4/5 weapon-upgrade 0x139A34, case10 map. HIGH-VALUE EU anchor (4 cheat globals).
-UpdateLevelObjectiveStates = 0x0029E668; // CONFIRMED - walks current-level objective table PTR_DAT_00258b20[g_nMapCurrentLevel] (stride 0x14 shorts) scoring each via EvaluateProgressCondition store state 0/1/2 at +0x12.
-GatherActiveObjectives     = 0x0029E960; // CONFIRMED - collects the active (state!=0) objective ids/labels from the same table for the on-screen objectives list.
-
-// --- PLATINUM-BOLT COLLECTED FLAGS (cheat-pnach 0x19B278[40]) ---
-g_platinumBoltFlags = 0x0019B278; // CONFIRMED via CountPlatinumBolts + EvaluateProgressCondition case8. Per-platinum-bolt collected flags (40 total). Cheat "All Platinum Bolts" writes here.
-CountPlatinumBolts  = 0x002B1C90; // CONFIRMED reader - counts set flags in g_platinumBoltFlags[group*4..+3] (+ 4 extra at 0x19b2e0 for group 2) clamped to [0,0x28]=40. EU anchor.
-
-// --- CHEAT-ACTIVATION FLAGS + skill-point gating (cheat-pnach 0x1A7A48 / 0x1A7A68) ---
-g_cheatFlags      = 0x001A7A48; // CONFIRMED via UpdateCheatMenuInput (toggles per-entry) + DrawCheatMenu (renders ON/OFF). Cheat-activation flags (big-head/mirrored/tux/...). Cheat menu entry table at 0x1abd50 (stride 4 +2=flagIdx +3=skillReq).
-g_skillPointFlags = 0x001A7A68; // CONFIRMED gating read in UpdateCheatMenuInput/DrawCheatMenu (skill-point-complete flags; one per skill point). Cheat unlock requires N skill points. Also read by EvaluateProgressCondition-adjacent menu code.
-UpdateCheatMenuInput = 0x002D0510; // CONFIRMED - in-game Cheats menu input handler. WRITER of g_cheatFlags (toggle on confirm) gated by g_skillPointFlags + skill-point count FUN_002b1da8. EU anchor.
-DrawCheatMenu        = 0x002D0750; // CONFIRMED - Cheats menu renderer reads g_cheatFlags ON/OFF + g_skillPointFlags lock state. Pairs with UpdateCheatMenuInput.
-
-// --- GADGETRON VENDOR / WEAPON-ARMOR SHOP UI (Track-B cluster; the bolt-SPEND path).
-//     Anchored on g_dwBoltCount (cheat 0x1A7A00). EnterVendorMenu opens the shop, builds the
-//     item list, and the purchase state machine subtracts bolts on confirm. Renamed + plate-commented
-//     in Ghidra. Strong EU anchors (all read/write the cheat-confirmed bolt counter). ---
-//
-// Vendor functions
-EnterVendorMenu        = 0x002F8FF8; // CONFIRMED - opens the Gadgetron vendor shop UI. Sets g_nVendorMode, builds buyable list, spawns 3D item model, resets cursor/state, sets g_nGameState=5. EU anchor.
-UpdateVendorMenuInput  = 0x002FA240; // CONFIRMED - vendor shop input handler. Cursor up/down + select/cancel. Reads g_dwBoltCount + GetVendorItemPrice for affordability before VendorPurchaseStateMachine. EU anchor.
-DrawVendorItemDetail   = 0x002FB718; // CONFIRMED - renders selected-item detail panel (name/price/owned). Reads g_dwBoltCount to colour price red when unaffordable. EU anchor.
-GetVendorItemPrice     = 0x002F7390; // CONFIRMED - returns bolt price of the selected vendor item (unit price or weapon upgrade cost via FUN_00289298). Read by input handler, detail draw, and the spend state machine.
-BuildVendorItemList    = 0x002F7488; // CONFIRMED - rebuilds g_vendorItemList (stride 0x18, count g_nVendorItemCount) from inventory + per-weapon availability/upgrade state. Called on enter and after each purchase.
-ExitVendorMenu         = 0x002FA028; // CONFIRMED - closes the vendor UI, restores camera/HUD, re-equips g_bEquippedArmor in armor mode. Bound to cancel button.
-SetVendorCaption       = 0x002F9768; // CONFIRMED - formats and shows the vendor caption/help line and resets its timer.
-RefreshVendorSelection = 0x002FC008; // CONFIRMED - re-syncs vendor screen on cursor move or after purchase (caption, 3D preview model, description glyphs).
-//
-// Vendor UI state globals
-g_nVendorCursorIndex   = 0x0021F240; // CONFIRMED - vendor cursor (index into g_vendorItemList). Reset to count/2 on enter.
-g_nVendorPurchaseState = 0x0021F244; // CONFIRMED - vendor purchase sub-state (0 browse, 1 enter-confirm, 2 adjust-qty, 4 confirm). Bolt subtract happens in state 4.
-g_nVendorMode          = 0x0021F210; // CONFIRMED - vendor screen mode (0 weapons/items, 1 ammo/quick-buy, 2, 3 armor). Selects list-build + renderer.
-g_nVendorItemCount     = 0x0021F900; // CONFIRMED - number of entries in g_vendorItemList. Bounds cursor navigation.
-g_vendorItemList       = 0x0021F300; // CONFIRMED - buyable-item array (stride 0x18 per entry). Built by BuildVendorItemList.
-g_nVendorBuyQuantity   = 0x001B21C8; // CONFIRMED - ammo purchase quantity (bolts/unitPrice clamped to stock). Total cost = unitPrice * this.
-
-// --- TOP-LEVEL GAME/SCREEN STATE MACHINE (Track-B cluster; reads g_nHealth as a death gate).
-//     g_nGameState is the central game-mode ID switched each frame by UpdateGameState. Confirmed by
-//     dispatcher case 5 -> EnterVendorMenu and case 6 -> RevivePlayerMinHealth. Many already-named
-//     systems (PlayCinematic, EnterVendorMenu, LoadLevelAndInitHealth) are writers of g_nGameState. ---
-//
-// Game-state functions
-RequestGameStateChange = 0x002B58F8; // CONFIRMED - requests a transition to a game/screen state. Returns negative reject codes (-1 dead via g_nHealth gate, -2 busy, -3 active). Optionally pushes current state. Many callers across the binary - strong EU anchor.
-PopGameState           = 0x002B5A88; // CONFIRMED - pops the transition stack into g_nGameStatePending to return to the previous screen. g_nHealth death gate. Companion to RequestGameStateChange.
-UpdateGameState        = 0x002B5B38; // CONFIRMED - per-frame state-machine dispatcher. Runs current-state action then pending-state enter-action and commits g_nGameState. Confirms the state ID map. EU anchor.
-IsGameStatePending     = 0x002B58E0; // CONFIRMED - returns true if g_nGameStatePending equals the queried state id.
-//
-// Game-state globals
-g_nGameState        = 0x001A8BB0; // CONFIRMED - current top-level game/screen state ID (5 vendor, 6 respawn, ...). Written by LoadLevelAndInitHealth, PlayCinematic, EnterVendorMenu and the dispatcher.
-g_nGameStatePending = 0x001A8BB8; // CONFIRMED - pending transition target (-2 means none). Set by RequestGameStateChange/PopGameState, consumed and committed by UpdateGameState.
-g_nGameStatePrev    = 0x001A8BB4; // CONFIRMED - previous game state, snapshotted each frame by UpdateGameState to detect specific transitions.
-
-// --- WEAPON / INVENTORY SYSTEM (Track-B cluster; the backing store the Gadgetron vendor reads.
-//     Anchored on cheat-pnach inventory have-flags (0x1a7b00), 'Infinite Ammo' (0x139688 slots) and
-//     'Have Weapon Upgraded' (0x139868 slots). BuildVendorItemList + GiveInventoryItem are the
-//     readers/writers; these are strong EU anchors via the exact cheat addresses. ---
-//
-// Weapon/inventory functions
-GiveInventoryItem        = 0x00288D30; // CONFIRMED - grants a weapon/gadget/item. Sets g_inventoryOwned[id]=1 (cheat 0x1a7b00 have-flags) + g_inventoryNewFlag[id], seeds g_weaponAmmo from ammoStartGrant, adds to inventory order. WRITER of inventory have-flags. EU anchor.
-GetWeaponUpgradeLevel    = 0x00288988; // CONFIRMED - returns current upgrade level by walking g_weaponTable next/prev links. Read by BuildVendorItemList and the vendor upgrade-cost path.
-SetWeaponUpgradeSlot     = 0x00288A20; // CONFIRMED - retargets g_itemEquippedSlot[id] (0x139568) to the variant slot for a requested level. The apply-upgrade primitive.
-UpgradeWeaponToMax       = 0x002891D8; // CONFIRMED - bumps a weapon to its max variant via SetWeaponUpgradeSlot, clears g_weaponXp[id].
-GetWeaponStatsAtLevel    = 0x00289298; // CONFIRMED - copies a weapon's 0xe0-stride stat block at a given upgrade level into an out buffer (used by vendor preview/cost).
-IsVendorUpgradesUnlocked = 0x00289780; // CONFIRMED - returns g_bMiscExtras(0x1a7a12) nonzero, read here as the vendor/upgrade-buy gate (note 0x1a7a12 is multi-role, also a nanotech healing bonus).
-AddItemToInventoryOrder  = 0x00288E10; // CONFIRMED - inserts an owned item into g_inventoryOrder (0x1a7b70) with the owned bit. Helper of GiveInventoryItem.
-IsItemUnlockedAtProgress = 0x002890F0; // CONFIRMED - whether an item may appear in the vendor at current story progress (table at 0x240340, id 9 always allowed once upgrades unlocked).
-FindWeaponSlotByName     = 0x00288ED8; // CONFIRMED - linear-scans inventory for a weaponTable nameStringId(+0x3c) match, returns its exists/handle(+0x00).
-//
-// Weapon/inventory globals
-g_weaponTable        = 0x00239B20; // CONFIRMED - per-weapon-VARIANT def/state table, stride 0xe0, indexed by g_itemEquippedSlot[id]. Fields (Track-B, width from reader) - +0x00 u32 exists, +0x04 u8 upgradeLevel, +0x14 u32 boltPrice, +0x3c u16 nameStringId, +0x4a s16 nextVariantSlot, +0x4c s16 prevVariantSlot, +0x6c u32 upgradeCountGate, +0x88 s16 sellsAmmoFlag, +0x8e u16 ammoCapacity, +0x92 u16 ammoStartGrant. Populated at level/boot load.
-g_itemEquippedSlot   = 0x00139568; // CONFIRMED - byte[0x38] itemId -> active g_weaponTable variant slot. Boot value identity then remapped by SetWeaponUpgradeSlot. Every weaponTable access is g_weaponTable[g_itemEquippedSlot[id]*0xe0].
-g_weaponAmmo         = 0x00139688; // CONFIRMED - s32[0x38] current ammo per item. cheat-pnach 'Infinite Ammo' writes individual slots (0x1396ac=id9 etc). Clamped to weaponTable ammoCapacity. EU anchor.
-g_weaponXp = 0x00139868; // CONFIRMED - s32[0x38] per-weapon XP/upgrade-progress accumulator (NOT ammo cap - real ammo cap is g_weaponTable+0x8e). cheat-pnach 'Have Weapon Upgraded' writes individual slots (0x13988c=id9 etc). EU anchor.
-g_inventoryOwned     = 0x001A7B00; // CONFIRMED - u8[0x38] per-item have-flag. cheat-pnach inventory have-flags base (md notes 0x1a7b02 as a slot within). Written by GiveInventoryItem. EU anchor.
-g_inventoryNewFlag   = 0x001A7B38; // CONFIRMED - u8[0x38] newly-acquired flag per item, set with g_inventoryOwned by GiveInventoryItem (likely HUD NEW badge).
-g_inventoryOrder     = 0x001A7B70; // CONFIRMED - byte[~0x20] inventory display order. low6=itemId, bit0x40=owned, 0xff terminator. Built by AddItemToInventoryOrder, walked by BuildVendorItemList.
-
-// --- HUD COUNTERS + AMMO-DROP (Track-B cluster). On-screen bolt counter and weapon-wheel
-//     ammo text are direct readers of cheat-pnach globals g_boltCount (0x1A7A00) and
-//     g_weaponAmmo (0x139688) - strong EU anchors. PickLowAmmoWeaponForDrop is the
-//     enemy-death ammo-drop target selector reading the same ammo/ownership state. ---
-//
-// HUD bolt-counter (animated on-screen number)
-UpdateBoltCounterHud    = 0x0028AD38; // CONFIRMED - per-frame tick of the on-screen bolt counter. Rolls g_nBoltCounterDisplayed toward live g_boltCount and spawns +/- delta popups. Snaps via ResetBoltCounterHud when entering vendor (g_nGameState==5). Reads cheat-pnach g_boltCount 0x1A7A00 - EU anchor.
-ResetBoltCounterHud     = 0x0028ACB8; // CONFIRMED - snaps the bolt counter display to live g_boltCount with no animation and clears the popup array. Reads g_boltCount 0x1A7A00 - EU anchor.
-TickBoltCounterHud      = 0x0029D990; // CONFIRMED - guarded wrapper that calls UpdateBoltCounterHud only when the HUD render context (g_guiInstance 0x1a8d04) is present.
-FlushHudDisplayValue    = 0x0029D9E0; // CONFIRMED - flushes a HUD display value into the render object at g_guiInstance+0x376c8. Used to push g_nBoltCounterDisplayed to the renderer.
-g_nBoltCounterDisplayed = 0x001B18C8; // CONFIRMED - the displayed (animated) bolt count that rolls toward g_boltCount. Private to the bolt-counter HUD pair. Target value at +4 (0x1b18cc), delta accumulator at +8 (0x1b18d0).
-//
-// HUD weapon-select wheel (per-weapon ammo text "current/capacity")
-DrawWeaponSelectWheel   = 0x0028D110; // CONFIRMED - renders the weapon quick-select wheel and the ammo counter for the highlighted slot. Reads g_weaponAmmo[id] (0x139688) and weaponTable ammoCapacity (+0x8e), formats with g_szAmmoFraction. Red tint when ammo==0. Reads cheat-pnach g_weaponAmmo 0x139688 - EU anchor.
-g_szAmmoFraction        = 0x001A8E28; // CONFIRMED - the "%d/%d" format string used by DrawWeaponSelectWheel to draw current/capacity ammo.
-//
-// Enemy-death ammo-drop target selector
-PickLowAmmoWeaponForDrop = 0x002A76F8; // CONFIRMED - picks a random owned weapon below its ammo capacity so an ammo pickup can drop for it. Requires g_inventoryOwned[i] (0x1a7b00) AND weaponTable ammoCapacity (+0x8e) != 0 AND g_weaponAmmo[i] (0x139688) below capacity. Skips no-ammo gadget ids (0x1f wrench etc). Returns 1 or 2 (random drop count). Reads cheat-pnach g_weaponAmmo + g_inventoryOwned - EU anchors.
-//
-// NOTE the HUD render-context pointer at 0x1A8D04 is the already-named g_guiInstance
-//      (sole writer GuiManagerCreate 0x29DB80, store-site 0x29dc18) - not a new symbol.
-
-// --- SKILL POINTS MENU (Track-B, deepens the already-named g_skillPointFlags 0x1A7A68 system).
-//     The pause/Inventory "Skill Points" tab. Anchored on cheat-pnach g_skillPointFlags (0x1A7A68,
-//     "Have Skill Points Completed Codes", 30 entries). This pair is the READER/RENDERER of the
-//     flags - strong EU anchors via the exact cheat address. The actual AWARD writer (the in-game
-//     trigger that SETS a skill-point flag on challenge completion) is NOT in this Ghidra program -
-//     no setter of 0x1A7A68 exists in the split .text - it lives in a not-yet-split level/hero
-//     overlay, same situation as the player-damage writer. Re-investigate once overlays are imported
-//     (search there for a store to 0x1A7A68+index). Renamed + plate-commented in Ghidra. ---
-//
-CountSkillPointsCompleted = 0x002B1DA8; // CONFIRMED - counts set bytes in g_skillPointFlags (scans 0x20=32 entries) clamped to [0,30]. Returns earned-skill-point total. Reads cheat-pnach g_skillPointFlags 0x1A7A68 - EU anchor. Used by DrawSkillPointsMenu N/30 total and the Cheats menu gating.
-UpdateSkillPointsMenu     = 0x002D0B48; // CONFIRMED - input/cursor handler for the Skill Points menu tab. Up(pad 0x1000)/down(0x4000) move g_nSkillPointsMenuCursor over 30 entries (wrap). READS g_skillPointFlags[cursor] - if unset greys/locks the entry, if set loads the description string id from g_skillPointMetaTable+cursor*6+2. Reader of cheat-pnach 0x1A7A68 - EU anchor. Paired with DrawSkillPointsMenu.
-DrawSkillPointsMenu       = 0x002D0D08; // CONFIRMED - renderer for the Skill Points menu tab. Draws title (str 0x2ca6) + "N / 30" total (via CountSkillPointsCompleted). Lists a 5-entry window centred on the cursor, name id from g_skillPointMetaTable+idx*6, row coloured GREEN when g_skillPointFlags[idx] set. Reader of cheat-pnach 0x1A7A68 - EU anchor. Paired with UpdateSkillPointsMenu.
-//
-// Skill Points menu state + data
-g_nSkillPointsMenuCursor  = 0x001ABA3C; // CONFIRMED - selected skill-point index (0..29) in the Skill Points menu tab. Owned by UpdateSkillPointsMenu/DrawSkillPointsMenu. Mirrored into DAT_0025c0f0 each frame.
-g_skillPointMetaTable     = 0x0026CF18; // CONFIRMED - per-skill-point metadata table, 30 entries stride 6 - +0 u16 nameStringId, +2 u16 descStringId, +4 u16 hint/help id (0x0b46..0x0b5b range). Indexed by skill-point id. Terminator entry has nameStringId -1. Used by the Skill Points menu pair.
-
-// --- PAD / MENU INPUT STATE (Track-B, in-binary input layer, NOT an overlay). The global digital
-//     button state read by ~80 menu/UI handlers. Zero-inited by GuiManagerCreate (0x29DBB8) as one
-//     contiguous block 0x138320..0x138348, refreshed each frame by the pad-sampling code (stores via
-//     a base pointer so no direct xref to these addresses). NOT a cheat-pnach global, but a VERY
-//     strong EU anchor by virtue of being read by nearly every UI function (UpdateSkillPointsMenu,
-//     UpdateVendorMenuInput, the weapon wheel, every pause-menu tab). Bit layout recovered from the
-//     consistent menu-nav idiom (see Ghidra plate/EOL comments). ---
-g_padButtonsHeld    = 0x00138340; // CONFIRMED role - currently-HELD button mask (level). Same bit layout as g_padButtonsPressed. EU anchor. Exact non-dpad bit-to-button mapping UNCONFIRMED.
-g_padButtonsPressed = 0x00138344; // CONFIRMED role - buttons newly PRESSED this frame (edge-detected). Bits 0x40=confirm(X) 0x10=back/cancel 0x900=exit-group 0x1000=DpadUp 0x2000=DpadLeft 0x4000=DpadDown 0x8000=DpadRight 0xf000=dpad-group. Read by 80+ UI handlers. EU anchor. Exact non-dpad bit-to-button mapping UNCONFIRMED.
-//
-// NOTE the pause-menu list pair FUN_002D18B8 (input, cursor DAT_001ABA60) + FUN_002D1B20 (render,
-//   title str 0x2ca9, table 0x26183C stride 6) is structurally identical to the Skill Points menu
-//   pair (same 5-entry-window renderer, same "????" 0x2c56 placeholder). It is ANOTHER pause-menu
-//   tab but its identity (gadgets/help/secrets) is UNCONFIRMED - left un-renamed pending string-id
-//   resolution. Breadcrumb only.
+// --- Un-named functions worth a name later (breadcrumbs) ---
+// SIF RPC SDK primitives (libsifrpc; names by signature only, left UNCONFIRMED):
+//   0x1d450 sceSifBindRpc(client,serverId,mode) — snd_Init binds 0x123456/0x123457.
+//   0x1d620 sceSifCallRpc(client,rpc#,mode,sb,sbsize,rb,rbsize,...) — every snd_/Mc* RPC wrapper.
+//   0x1d810 sceSifCheckStatRpc(client) — returns 1 if RPC in flight (busy-wait target).
+//   (IOP-side 989snd hosts RPC servers 0x123456 command / 0x123457 bank-load — not in this EE image.)
+// Health readers not yet named: 0x34DBE0 (HUD health-bar update), 0x301D50 (thrown-wrench
+//   homing/return g_health!=0 gate), func_00320A20 (moby behavior state machine, reads g_health
+//   as a death gate — in splat as func_00320A20, NOT in Ghidra's function list).
+// Pause-menu list pair FUN_002D18B8 (input, cursor DAT_001ABA60) + FUN_002D1B20 (render, title
+//   str 0x2ca9, table 0x26183C stride 6): structurally identical to the Skill Points menu pair
+//   (same 5-entry-window renderer, "????" 0x2c56 placeholder) — ANOTHER pause-menu tab, identity
+//   (gadgets/help/secrets) UNCONFIRMED, left un-renamed pending string-id resolution.
