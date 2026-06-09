@@ -330,3 +330,36 @@ PickLowAmmoWeaponForDrop = 0x002A76F8; // CONFIRMED - picks a random owned weapo
 //
 // NOTE the HUD render-context pointer at 0x1A8D04 is the already-named g_guiInstance
 //      (sole writer GuiManagerCreate 0x29DB80, store-site 0x29dc18) - not a new symbol.
+
+// --- SKILL POINTS MENU (Track-B, deepens the already-named g_skillPointFlags 0x1A7A68 system).
+//     The pause/Inventory "Skill Points" tab. Anchored on cheat-pnach g_skillPointFlags (0x1A7A68,
+//     "Have Skill Points Completed Codes", 30 entries). This pair is the READER/RENDERER of the
+//     flags - strong EU anchors via the exact cheat address. The actual AWARD writer (the in-game
+//     trigger that SETS a skill-point flag on challenge completion) is NOT in this Ghidra program -
+//     no setter of 0x1A7A68 exists in the split .text - it lives in a not-yet-split level/hero
+//     overlay, same situation as the player-damage writer. Re-investigate once overlays are imported
+//     (search there for a store to 0x1A7A68+index). Renamed + plate-commented in Ghidra. ---
+//
+CountSkillPointsCompleted = 0x002B1DA8; // CONFIRMED - counts set bytes in g_skillPointFlags (scans 0x20=32 entries) clamped to [0,30]. Returns earned-skill-point total. Reads cheat-pnach g_skillPointFlags 0x1A7A68 - EU anchor. Used by DrawSkillPointsMenu N/30 total and the Cheats menu gating.
+UpdateSkillPointsMenu     = 0x002D0B48; // CONFIRMED - input/cursor handler for the Skill Points menu tab. Up(pad 0x1000)/down(0x4000) move g_nSkillPointsMenuCursor over 30 entries (wrap). READS g_skillPointFlags[cursor] - if unset greys/locks the entry, if set loads the description string id from g_skillPointMetaTable+cursor*6+2. Reader of cheat-pnach 0x1A7A68 - EU anchor. Paired with DrawSkillPointsMenu.
+DrawSkillPointsMenu       = 0x002D0D08; // CONFIRMED - renderer for the Skill Points menu tab. Draws title (str 0x2ca6) + "N / 30" total (via CountSkillPointsCompleted). Lists a 5-entry window centred on the cursor, name id from g_skillPointMetaTable+idx*6, row coloured GREEN when g_skillPointFlags[idx] set. Reader of cheat-pnach 0x1A7A68 - EU anchor. Paired with UpdateSkillPointsMenu.
+//
+// Skill Points menu state + data
+g_nSkillPointsMenuCursor  = 0x001ABA3C; // CONFIRMED - selected skill-point index (0..29) in the Skill Points menu tab. Owned by UpdateSkillPointsMenu/DrawSkillPointsMenu. Mirrored into DAT_0025c0f0 each frame.
+g_skillPointMetaTable     = 0x0026CF18; // CONFIRMED - per-skill-point metadata table, 30 entries stride 6 - +0 u16 nameStringId, +2 u16 descStringId, +4 u16 hint/help id (0x0b46..0x0b5b range). Indexed by skill-point id. Terminator entry has nameStringId -1. Used by the Skill Points menu pair.
+
+// --- PAD / MENU INPUT STATE (Track-B, in-binary input layer, NOT an overlay). The global digital
+//     button state read by ~80 menu/UI handlers. Zero-inited by GuiManagerCreate (0x29DBB8) as one
+//     contiguous block 0x138320..0x138348, refreshed each frame by the pad-sampling code (stores via
+//     a base pointer so no direct xref to these addresses). NOT a cheat-pnach global, but a VERY
+//     strong EU anchor by virtue of being read by nearly every UI function (UpdateSkillPointsMenu,
+//     UpdateVendorMenuInput, the weapon wheel, every pause-menu tab). Bit layout recovered from the
+//     consistent menu-nav idiom (see Ghidra plate/EOL comments). ---
+g_padButtonsHeld    = 0x00138340; // CONFIRMED role - currently-HELD button mask (level). Same bit layout as g_padButtonsPressed. EU anchor. Exact non-dpad bit-to-button mapping UNCONFIRMED.
+g_padButtonsPressed = 0x00138344; // CONFIRMED role - buttons newly PRESSED this frame (edge-detected). Bits 0x40=confirm(X) 0x10=back/cancel 0x900=exit-group 0x1000=DpadUp 0x2000=DpadLeft 0x4000=DpadDown 0x8000=DpadRight 0xf000=dpad-group. Read by 80+ UI handlers. EU anchor. Exact non-dpad bit-to-button mapping UNCONFIRMED.
+//
+// NOTE the pause-menu list pair FUN_002D18B8 (input, cursor DAT_001ABA60) + FUN_002D1B20 (render,
+//   title str 0x2ca9, table 0x26183C stride 6) is structurally identical to the Skill Points menu
+//   pair (same 5-entry-window renderer, same "????" 0x2c56 placeholder). It is ANOTHER pause-menu
+//   tab but its identity (gadgets/help/secrets) is UNCONFIRMED - left un-renamed pending string-id
+//   resolution. Breadcrumb only.

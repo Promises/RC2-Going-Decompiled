@@ -251,3 +251,14 @@ g_nBoltCounterDisplayed = 0x001B18C8; // CONFIRMED - displayed (animated) bolt c
 DrawWeaponSelectWheel = 0x0028D110; // CONFIRMED - renders the weapon quick-select wheel + ammo counter for the highlighted slot, reads g_weaponAmmo[id] 0x139688 and g_weaponTable ammoCapacity(+0x8e), formats with g_szAmmoFraction, red tint when ammo 0. EU anchor
 g_szAmmoFraction = 0x001A8E28; // CONFIRMED - the "%d/%d" format string used by DrawWeaponSelectWheel to draw current/capacity ammo
 PickLowAmmoWeaponForDrop = 0x002A76F8; // CONFIRMED - picks a random owned weapon below ammo capacity so an ammo pickup can drop for it, needs g_inventoryOwned[i] 0x1a7b00 AND g_weaponTable ammoCapacity(+0x8e) nonzero AND g_weaponAmmo[i] 0x139688 below capacity. Reads g_weaponAmmo + g_inventoryOwned. EU anchor
+
+// === Track-B Skill Points menu (reader/renderer of g_skillPointFlags 0x1A7A68; award writer is overlay-only). ===
+CountSkillPointsCompleted = 0x002B1DA8; // CONFIRMED - counts set bytes in g_skillPointFlags (scans 0x20 entries) clamped to [0,30], returns earned total. Reads g_skillPointFlags 0x1A7A68. EU anchor
+UpdateSkillPointsMenu = 0x002D0B48; // CONFIRMED - input/cursor handler for the Skill Points tab, up(pad 0x1000)/down(0x4000) move g_nSkillPointsMenuCursor over 30 entries, reads g_skillPointFlags[cursor] to grey locked rows. Reads g_skillPointFlags 0x1A7A68. EU anchor
+DrawSkillPointsMenu = 0x002D0D08; // CONFIRMED - renderer for the Skill Points tab, draws title + "N / 30" via CountSkillPointsCompleted, 5-entry window, green row when g_skillPointFlags[idx] set, name from g_skillPointMetaTable. Reads g_skillPointFlags 0x1A7A68. EU anchor
+g_nSkillPointsMenuCursor = 0x001ABA3C; // CONFIRMED - selected skill-point index (0..29) in the Skill Points tab, owned by UpdateSkillPointsMenu/DrawSkillPointsMenu
+g_skillPointMetaTable = 0x0026CF18; // CONFIRMED - per-skill-point metadata table, 30 entries stride 6 (+0 u16 nameStringId, +2 u16 descStringId, +4 u16 hintId), terminator nameStringId -1
+
+// === Track-B pad/menu input state (digital button masks read by ~80 UI handlers, strong structural EU anchors). ===
+g_padButtonsHeld = 0x00138340; // CONFIRMED role - currently-HELD digital button mask, zero-inited by GuiManagerCreate, same bit layout as g_padButtonsPressed. Exact non-dpad bit-to-button mapping UNCONFIRMED
+g_padButtonsPressed = 0x00138344; // CONFIRMED role - buttons newly PRESSED this frame (edge-detected), bits 0x40 confirm 0x10 back 0x900 exit 0x1000 dpadUp 0x2000 dpadLeft 0x4000 dpadDown 0x8000 dpadRight, read by 80+ UI handlers. Exact non-dpad bit-to-button mapping UNCONFIRMED
