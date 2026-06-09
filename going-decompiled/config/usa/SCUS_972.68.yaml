@@ -150,7 +150,17 @@ segments:
     bss_size: 0x0
     subalign: null
     subsegments:
-      - [0x16E980, asm, text/16E980] # .text
+      # PILOT C-UNIT (2026-06-09): carve a matchable `c` sub-range out of the
+      # otherwise-`asm` .text segment so its functions become objdiff-matchable.
+      # Boundaries are real, consecutive function starts (verified clean in the
+      # disassembly): 0x299020 (func start, fileoff 0x198FA0) and 0x2A0170
+      # (func start, fileoff 0x1A00F0). The carved unit text/198FA0 holds 153
+      # functions (15 already Track-B-named: save serializer, libmc bring-up,
+      # progress-condition evaluator, HUD/bolt-counter, GuiManagerCreate, …).
+      # fileoff -> vaddr is the constant +0x100080 delta (same as cod).
+      - [0x16E980, asm, text/16E980] # .text head (0x26EA00..0x29901F)
+      - [0x198FA0, c, text/198FA0]   # PILOT c-unit (0x299020..0x2A016F, 153 fns)
+      - [0x1A00F0, asm, text/1A00F0] # .text tail (0x2A0170..0x35307C)
 
   - name: legal.data
     type: code

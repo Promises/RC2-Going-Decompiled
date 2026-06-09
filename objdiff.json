@@ -25,6 +25,15 @@
         "source_path": "going-decompiled/src/usa/cod/015180.c",
         "progress_categories": ["cod"]
       }
+    },
+    {
+      "name": "usa/text/198FA0",
+      "target_path": "going-decompiled/build/usa/expected/text/198FA0.o",
+      "base_path": "going-decompiled/build/usa/obj/text/198FA0.o",
+      "metadata": {
+        "source_path": "going-decompiled/src/usa/text/198FA0.c",
+        "progress_categories": ["text"]
+      }
     }
   ]
 }

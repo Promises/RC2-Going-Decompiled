@@ -169,11 +169,15 @@ SECTIONS
         FILL(0x00000000);
         text_TEXT_START = .;
         going-decompiled/build/usa/going-decompiled/asm/usa/text/16E980.o(.text*);
+        going-decompiled/build/usa/going-decompiled/src/usa/text/198FA0.o(.text*);
+        going-decompiled/build/usa/going-decompiled/asm/usa/text/1A00F0.o(.text*);
         . = ALIGN(., 16);
         text_TEXT_END = .;
         text_TEXT_SIZE = ABSOLUTE(text_TEXT_END - text_TEXT_START);
         text_DATA_START = .;
         going-decompiled/build/usa/going-decompiled/asm/usa/text/16E980.o(.data*);
+        going-decompiled/build/usa/going-decompiled/src/usa/text/198FA0.o(.data*);
+        going-decompiled/build/usa/going-decompiled/asm/usa/text/1A00F0.o(.data*);
         . = ALIGN(., 16);
         text_DATA_END = .;
         text_DATA_SIZE = ABSOLUTE(text_DATA_END - text_DATA_START);
@@ -184,6 +188,8 @@ SECTIONS
         FILL(0x00000000);
         text_BSS_START = .;
         going-decompiled/build/usa/going-decompiled/asm/usa/text/16E980.o(.bss COMMON .scommon);
+        going-decompiled/build/usa/going-decompiled/src/usa/text/198FA0.o(.bss COMMON .scommon);
+        going-decompiled/build/usa/going-decompiled/asm/usa/text/1A00F0.o(.bss COMMON .scommon);
         . = ALIGN(., 16);
         text_BSS_END = .;
         text_BSS_SIZE = ABSOLUTE(text_BSS_END - text_BSS_START);
