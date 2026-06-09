@@ -14,10 +14,16 @@ s_isnan = 0x001313C8; // libc.a (verbatim, 56B-verified)
 // src/usa/cod/015180.c.)
 func_0011E740 = 0x0011E740; // type:func size:0x60
 func_0011E7A0 = 0x0011E7A0; // type:func
+func_00127218 = 0x00127218; // type:func size:0x8
+func_00127220 = 0x00127220; // type:func
 func_00128A48 = 0x00128A48; // type:func size:0x8
 func_00128A50 = 0x00128A50; // type:func
 func_0012EB28 = 0x0012EB28; // type:func size:0x8
 func_0012EB30 = 0x0012EB30; // type:func
+func_0012F948 = 0x0012F948; // type:func size:0x8
+func_0012F950 = 0x0012F950; // type:func
+func_00131620 = 0x00131620; // type:func size:0x8
+func_00131628 = 0x00131628; // type:func
 func_00132818 = 0x00132818; // type:func size:0x10
 func_00132828 = 0x00132828; // type:func
 func_00132968 = 0x00132968; // type:func size:0x10

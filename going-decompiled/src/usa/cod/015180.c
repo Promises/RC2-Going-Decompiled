@@ -1655,7 +1655,37 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126F60);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127040);
 
+/* func_00127218: 8 bytes of inter-function padding (a dead `sw $4,0($3); nop`)
+ * between func_00127040 and the real func_00127220 — a splat mis-split, pinned
+ * to size 0x8 in symbol_addrs so func_00127220 gets a clean .s. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127218);
+
+extern u32 func_00126ED8(u32 arg0);
+extern void func_00126E60(void *obj);
+
+struct Obj127220 {
+    /* 0x0 */  s32 flags;
+    u8 pad4[0x1C];
+    /* 0x20 */ s32 field20;
+    u8 pad24[0xC];
+    /* 0x30 */ u32 handle;
+};
+
+/**
+ * (Re)bind descriptor obj: register the resource arg1 (func_00126ED8 returns its
+ * handle), run the per-object setup func_00126E60(obj), then — unless obj already
+ * has no handle slot (0xFFFFFFFF) — store the new handle. Finally clear field20
+ * and reset the flags word to (flags & ~0xC) | 0x105.
+ */
+void func_00127220(struct Obj127220 *obj, u32 arg1) {
+    u32 handle = func_00126ED8(arg1);
+    func_00126E60(obj);
+    if (obj->handle != 0xFFFFFFFF) {
+        obj->handle = handle;
+    }
+    obj->field20 = 0;
+    obj->flags = (obj->flags & ~0xC) | 0x105;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127288);
 
@@ -2185,7 +2215,18 @@ s32 func_0012F940(void) {
     return 1;
 }
 
+/* func_0012F948: 8 bytes of inter-function padding (a dead `sll $6,$6,4; nop`)
+ * between func_0012F940 and the real func_0012F950 — a splat mis-split, pinned
+ * to size 0x8 in symbol_addrs so func_0012F950 gets a clean .s. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012F948);
+
+/* func_0012F950(obj, arg1, arg2): seed the display/DMA sub-object obj->field_0x40
+ * (set fB0=1, fD8=(arg1 & 0x0FFFFFFF) | 0x20000000, fE4=arg2, fDC=fE0=0) then run
+ * func_0012FBF0(obj). The body reproduces every field write, but ee-gcc sibling-
+ * call-optimises the trailing void call to `j func_0012FBF0` where the original
+ * keeps a stack frame (`sd $31`/`jal`) — the inverse-sibling-call form this cc1
+ * won't reproduce. Left as INCLUDE_ASM. */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012F950);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012F998);
 
@@ -2254,13 +2295,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012FA70);
  * alloc forms this cc1 won't reproduce. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012FA98);
 
-/* func_0012FAE8(arg0): place the index 1 in a stack local and tail into
- * func_0012FA98(arg0, &index) to run entry #1's destructor; returns its result.
- * The body `s32 i = 1; return func_0012FA98(arg0, &i);` reproduces every
- * instruction (99.56%) but the original reserves a 0x30 stack frame where
- * ee-gcc only needs 0x20 — a frame-size-only constant mismatch (4 words) this
- * cc1 won't reproduce. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012FAE8);
+extern s32 func_0012FA98(s32 *obj, s32 *req);
+
+/**
+ * Run entry #1's destructor on `obj`: build a request whose index word is 1 and
+ * dispatch it via func_0012FA98(obj, req). The request occupies a 0x20-byte
+ * stack buffer (only its first word, the entry index, is used here).
+ */
+s32 func_0012FAE8(s32 *obj) {
+    s32 req[8];
+    req[0] = 1;
+    return func_0012FA98(obj, req);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012FB10);
 
@@ -2597,7 +2643,26 @@ s32 func_001315E0(void) {
     return D_00138158[4] == 0x54;
 }
 
+/* func_00131620: 8 bytes of inter-function padding (a dead `sdr $3,0($7); nop`)
+ * between func_001315E0 and the real func_00131628 — a splat mis-split, pinned
+ * to size 0x8 in symbol_addrs so func_00131628 gets a clean .s. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131620);
+
+extern u8 D_00138152;
+
+/**
+ * Return a 2-bit status code. For the 'T' (0x54) territory variant
+ * (func_001315E0() true) this is the cached byte D_00138152; otherwise sample
+ * the pad/controller status word (func_0011ACD0) and return bits 1..2 of it.
+ */
+s32 func_00131628(void) {
+    u32 status;
+    if (func_001315E0()) {
+        return D_00138152;
+    }
+    func_0011ACD0((s32 *)&status);
+    return (status >> 1) & 3;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131668);
 
