@@ -828,7 +828,15 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E360);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E4E0);
 
+/* func_0011E740: 0x60 bytes of inter-function padding (`addiu sp,+0xN; nop`
+ * filler words) split off by symbol_addrs size:0x60; the real function begins at
+ * func_0011E7A0. Pure padding, no C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E740);
+
+/* func_0011E7A0: real function recovered from the splat mis-split above (init/
+ * retry loop around func_0011D450, writes D_00134744). Boundary now correct;
+ * body not yet decompiled. Left as INCLUDE_ASM. */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E7A0);
 
 extern s32 func_0011D620(void *a0, s32 a1, s32 a2, void *a3, s32 a4,
                          void *a5, s32 a6, s32 a7, s32 a8);
@@ -1780,7 +1788,14 @@ s32 func_001288C0(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128900);
 
+/* func_00128A48: 0x8 bytes of inter-function padding split off by symbol_addrs
+ * size:0x8; the real function begins at func_00128A50. Pure padding, no C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128A48);
+
+/* func_00128A50: real function recovered from the splat mis-split above (indexes
+ * the 0x330-stride table D_00143640, dispatches to func_00128D58/DB0/E98 + a
+ * memcpy). Boundary now correct; body not yet decompiled. Left as INCLUDE_ASM. */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128A50);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128B28);
 
@@ -2108,7 +2123,15 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012EA9C);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012EAA0);
 
+/* func_0012EB28: 0x8 bytes of inter-function padding split off by symbol_addrs
+ * size:0x8; the real function begins at func_0012EB30. Pure padding, no C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012EB28);
+
+/* func_0012EB30: real function recovered from the splat mis-split above (large
+ * 0x150-frame routine iterating a 0x18-stride record list and dispatching via an
+ * indirect call). Boundary now correct; body not yet decompiled. Left as
+ * INCLUDE_ASM. */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012EB30);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012EE28);
 
@@ -2703,9 +2726,17 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001325E0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001326D8);
 
+/* func_00132818: 0x10 bytes of inter-function padding split off by symbol_addrs
+ * size:0x10; the real wrapper begins at func_00132828. Pure padding, no C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00132818);
 
 extern void func_00132DF0(s32 sel, s32 count, void *data, s32 arg3, s32 arg4);
+
+/* func_00132828: calls func_00132DF0(8, 0, 0, 0, 0) and returns. Not matched:
+ * this single-call void wrapper with no stack payload is sibling-call-optimised
+ * by ee-gcc into `j func_00132DF0`, whereas the original keeps a frame and uses
+ * jal+jr. No cc1 flag suppresses the tail-call here. Left as INCLUDE_ASM. */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00132828);
 
 /**
  * Invoke func_00132DF0 with selector 6, count 4, arg0 passed by address in a
@@ -2745,14 +2776,23 @@ void func_00132938(s32 arg0) {
     func_00132DF0(0xB, 4, &value, 0, 0);
 }
 
-/* func_00132968: wrapper that builds a 2-word record {arg0, arg1} and calls
- * func_00132DF0(0xD, 8, record, 0, 0). The function body is byte-identical to a
- * `func_00132DF0(0xD,8,args,0,0)` source (verified via objdump), but splat
- * mis-split this symbol: it starts 0x10 bytes early on the previous function's
- * trailing epilogue (`addiu sp,0x10; nop; addiu sp,0x10; nop`) before the real
- * body at the inner `func_132978` label, so the unit target carries 4 extra
- * leading words the C can't reproduce. Needs a re-split. Left as INCLUDE_ASM. */
+/* func_00132968: 0x10 bytes of inter-function padding (`addiu sp,0x10; nop`
+ * pairs) that splat's auto-detection grouped as a standalone symbol. The real
+ * wrapper body begins at func_00132978; an explicit size:0x10 in symbol_addrs
+ * keeps this padding split off so the wrapper can match. Pure padding, no C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00132968);
+
+/**
+ * Invoke func_00132DF0 with selector 0xD, count 8, and a stack record holding
+ * arg0 and arg1; the two trailing arguments are zero. (Real start of the symbol
+ * splat previously mis-split as func_00132968 — see that note.)
+ */
+void func_00132978(s32 arg0, s32 arg1) {
+    s32 args[2];
+    args[0] = arg0;
+    args[1] = arg1;
+    func_00132DF0(0xD, 8, args, 0, 0);
+}
 
 /**
  * Invoke func_00132DF0 with selector 0x4E, count 0xC, and a stack record holding
@@ -2766,21 +2806,47 @@ void func_001329B0(s32 arg0, s32 arg1, s32 arg2) {
     func_00132DF0(0x4E, 0xC, args, 0, 0);
 }
 
-/* func_001329F0: wrapper building a 6-word record {arg0..arg5} and calling
- * func_00132DF0(0x11, 0x18, record, arg6, arg7). Body is byte-identical to that
- * source (verified via objdump), but splat mis-split the symbol: it starts on
- * the previous function's trailing epilogue fragments (`addiu sp,0x20/0x30; nop`)
- * before the real body at `func_132A10`. Needs a re-split. Left as INCLUDE_ASM. */
+/* func_001329F0: 0x20 bytes of inter-function padding split off by symbol_addrs
+ * size:0x20; the real wrapper begins at func_00132A10. Pure padding, no C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001329F0);
 
-/* func_00132A58: wrapper calling func_00132DF0(0x15, 4, &arg0, 0, 0). Body is
- * byte-identical to that source (verified via objdump), but splat mis-split the
- * symbol: it begins on the previous function's trailing epilogue fragment
- * (three `addiu sp,0x10; nop` pairs) before the real body at `func_132A70`, so
- * the unit target has extra leading words. Needs a re-split. Left as INCLUDE_ASM. */
+/**
+ * Invoke func_00132DF0 with selector 0x11, count 0x18, and a 6-word stack record
+ * holding arg0..arg5; arg6 and arg7 are forwarded as the two trailing arguments.
+ */
+void func_00132A10(s32 arg0, s32 arg1, s32 arg2, s32 arg3, s32 arg4, s32 arg5,
+                   s32 arg6, s32 arg7) {
+    s32 args[6];
+    args[0] = arg0;
+    args[1] = arg1;
+    args[2] = arg2;
+    args[3] = arg3;
+    args[4] = arg4;
+    args[5] = arg5;
+    func_00132DF0(0x11, 0x18, args, arg6, arg7);
+}
+
+/* func_00132A58: 0x18 bytes of inter-function padding split off by symbol_addrs
+ * size:0x18; the real wrapper begins at func_00132A70. Pure padding, no C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00132A58);
 
+/**
+ * Invoke func_00132DF0 with selector 0x15, count 4, arg0 passed by address in a
+ * stack local, and zero for the two trailing arguments.
+ */
+void func_00132A70(s32 arg0) {
+    s32 value = arg0;
+    func_00132DF0(0x15, 4, &value, 0, 0);
+}
+
+/* func_00132AA0: 0x28 bytes of inter-function padding split off by symbol_addrs
+ * size:0x28; the real wrapper begins at func_00132AC8. Pure padding, no C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00132AA0);
+
+/* func_00132AC8: calls func_00132DF0(0x18, 0, 0, 0, 0) and returns. Not matched:
+ * same sibling-call-optimisation blocker as func_00132828 — ee-gcc emits
+ * `j func_00132DF0` instead of the original's framed jal+jr. Left as INCLUDE_ASM. */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00132AC8);
 
 /**
  * Invoke func_00132DF0 with selector 0x16, count 4, arg0 passed by address in a
@@ -2809,7 +2875,25 @@ void func_00132B58(s32 arg0, s32 arg1, s32 arg2) {
     func_00132DF0(0x19, 4, &value, arg1, arg2);
 }
 
+/* func_00132B88: 0x38 bytes of inter-function padding split off by symbol_addrs
+ * size:0x38; the real wrapper begins at func_00132BC0. Pure padding, no C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00132B88);
+
+/**
+ * Invoke func_00132DF0 with selector 0x21, count 0x18, and a 6-word stack record
+ * holding arg0..arg5; arg6 and arg7 are forwarded as the two trailing arguments.
+ */
+void func_00132BC0(s32 arg0, s32 arg1, s32 arg2, s32 arg3, s32 arg4, s32 arg5,
+                   s32 arg6, s32 arg7) {
+    s32 args[6];
+    args[0] = arg0;
+    args[1] = arg1;
+    args[2] = arg2;
+    args[3] = arg3;
+    args[4] = arg4;
+    args[5] = arg5;
+    func_00132DF0(0x21, 0x18, args, arg6, arg7);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00132C08);
 
@@ -2831,11 +2915,38 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133230);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133250);
 
+/* func_00133300: 0x10 bytes of inter-function padding split off by symbol_addrs
+ * size:0x10; the real wrapper begins at func_00133310. Pure padding, no C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133300);
 
+/* func_00133310: calls func_00132DF0(0x34, 0, 0, 0, 0) and returns. Not matched:
+ * same sibling-call-optimisation blocker as func_00132828 — ee-gcc emits
+ * `j func_00132DF0` instead of the original's framed jal+jr. Left as INCLUDE_ASM. */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133310);
+
+/* func_00133340: 0x10 bytes of inter-function padding split off by symbol_addrs
+ * size:0x10; the real start begins at func_00133350. Pure padding, no C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133340);
 
+/* func_00133350: builds a record from a mix of register and stack arguments
+ * (16-bit fields packed via andi/sll/or, plus four words pulled from the
+ * caller's stack) for func_00132DF0 selector 0x2C count 0x20. The stack-argument
+ * loads (lw 0x30/0x38/0x40($sp), ld 0x48($sp)) come from an 8+ argument calling
+ * convention this cc1 won't reproduce from natural C. Left as INCLUDE_ASM. */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133350);
+
+/* func_001333C0: 0x10 bytes of inter-function padding split off by symbol_addrs
+ * size:0x10; the real wrapper begins at func_001333D0. Pure padding, no C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001333C0);
+
+/**
+ * Invoke func_00132DF0 with selector 0x2D, count 4, arg0 passed by address in a
+ * stack local, and zero for the two trailing arguments.
+ */
+void func_001333D0(s32 arg0) {
+    s32 value = arg0;
+    func_00132DF0(0x2D, 4, &value, 0, 0);
+}
 
 /**
  * Invoke func_00132DF0 with selector 0x2E, count 4, arg0 passed by address in a
@@ -2888,14 +2999,34 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133640);
  * gp_rel small-data access isn't expressible in source here. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133688);
 
+/* func_001336C0: 0x10 bytes of inter-function padding split off by symbol_addrs
+ * size:0x10; the real function begins at func_001336D0. Pure padding, no C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001336C0);
 
-/* func_00133700: wrapper building a 5-word record {arg0..arg4} and calling
- * func_00132DF0(0x50, 0x14, record, 0, 0). Body is byte-identical to that source
- * (verified via objdump), but splat mis-split the symbol: it starts 0x20 bytes
- * early on the previous function's trailing epilogue (`addiu sp,0x20; nop` x2)
- * before the real body at `func_133710`. Needs a re-split. Left as INCLUDE_ASM. */
+/* func_001336D0: cache-or-init accessor for the gp-relative globals
+ * D_001A748C/D_001A7490 (if the init flag is set, store arg0 and return the old
+ * value, else call func_001245D0). Not matched: the globals are read/written via
+ * %gp_rel(...)($28); with -G0 cc1 places them in normal data and emits absolute
+ * lui/lw pairs instead. gp_rel small-data access isn't expressible here. */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001336D0);
+
+/* func_00133700: 0x10 bytes of inter-function padding split off by symbol_addrs
+ * size:0x10; the real wrapper begins at func_00133710. Pure padding, no C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133700);
+
+/**
+ * Invoke func_00132DF0 with selector 0x50, count 0x14, and a 5-word stack record
+ * holding arg0..arg4; the two trailing arguments are zero.
+ */
+void func_00133710(s32 arg0, s32 arg1, s32 arg2, s32 arg3, s32 arg4) {
+    s32 args[5];
+    args[0] = arg0;
+    args[1] = arg1;
+    args[2] = arg2;
+    args[3] = arg3;
+    args[4] = arg4;
+    func_00132DF0(0x50, 0x14, args, 0, 0);
+}
 
 /**
  * Invoke func_00132DF0 with selector 0x51, count 8, and a stack record holding
@@ -2921,11 +3052,42 @@ void func_00133788(s32 arg0, s32 arg1, s32 arg2, s32 arg3) {
     func_00132DF0(0x10, 0x10, args, 0, 0);
 }
 
+/* func_001337C8: 0x28 bytes of inter-function padding split off by symbol_addrs
+ * size:0x28; the real wrapper begins at func_001337F0. Pure padding, no C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001337C8);
 
+/* func_001337F0: calls func_00132C48(0x4A, 0, 0) and returns. Not matched: same
+ * sibling-call-optimisation blocker as func_00133890 — this single-call void
+ * wrapper with no payload is turned into `j func_00132C48` by ee-gcc instead of
+ * the original's framed jal+jr. Left as INCLUDE_ASM. */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001337F0);
+
+/* func_00133818: 0x8 bytes of inter-function padding split off by symbol_addrs
+ * size:0x8; the real wrapper begins at func_00133820. Pure padding, no C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133818);
 
+/* func_00133820: calls func_00132C48(0x4B, 0, 0) and returns. Not matched: same
+ * sibling-call-optimisation blocker as func_00133890 (`j func_00132C48`). */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133820);
+
+/* func_00133848: 0x8 bytes of inter-function padding split off by symbol_addrs
+ * size:0x8; the real wrapper begins at func_00133850. Pure padding, no C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133848);
+
+/**
+ * Invoke func_00132C48 with selector 0x3B and count 0x18 (24 bytes), passing a
+ * 6-word stack record (arg0..arg5) as the data argument.
+ */
+void func_00133850(s32 arg0, s32 arg1, s32 arg2, s32 arg3, s32 arg4, s32 arg5) {
+    s32 args[6];
+    args[0] = arg0;
+    args[1] = arg1;
+    args[2] = arg2;
+    args[3] = arg3;
+    args[4] = arg4;
+    args[5] = arg5;
+    func_00132C48(0x3B, 0x18, args);
+}
 
 /* func_00133890: calls func_00132C48(0x3D, 0, 0) and returns. Not matched: the
  * original keeps a stack frame and uses jal+jr, but ee-gcc sibling-call-
@@ -2933,7 +3095,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133848);
  * no flag to suppress the tail-call here. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133890);
 
+/* func_001338B8: 0x10 bytes of inter-function padding split off by symbol_addrs
+ * size:0x10; the real wrapper begins at func_001338C8. Pure padding, no C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001338B8);
+
+/* func_001338C8: calls func_00132C48(0x3C, 0, 0) and returns. Not matched: same
+ * sibling-call-optimisation blocker as func_00133890 (`j func_00132C48`). */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001338C8);
 
 /**
  * Invoke func_00132C48 with selector 0x3E and count 0x14 (20 bytes), passing a
@@ -2949,7 +3117,20 @@ void func_001338F0(s32 arg0, s32 arg1, s32 arg2, s32 arg3, s32 arg4) {
     func_00132C48(0x3E, 0x14, args);
 }
 
+/* func_00133928: 0x8 bytes of inter-function padding split off by symbol_addrs
+ * size:0x8; the real wrapper begins at func_00133930. Pure padding, no C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133928);
+
+/**
+ * Invoke func_00132C48 with selector 0x5A and count 8, passing a 2-word stack
+ * record (arg0, arg1) as the data argument.
+ */
+void func_00133930(s32 arg0, s32 arg1) {
+    s32 args[2];
+    args[0] = arg0;
+    args[1] = arg1;
+    func_00132C48(0x5A, 8, args);
+}
 
 /* func_00133960: calls func_00132C48(0x5B, 0, 0) and returns. Not matched: same
  * sibling-call-optimisation blocker as func_00133890 — ee-gcc emits

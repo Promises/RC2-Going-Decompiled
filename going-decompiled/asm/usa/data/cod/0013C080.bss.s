@@ -329,10 +329,15 @@ nonmatching D_00141AD8, 0x28
 dlabel D_00141AD8
     /* 00141AD8 */ .space 0x28
 
-nonmatching D_00141B00, 0x28
+nonmatching g_mcRpcClient, 0x24
 
-dlabel D_00141B00
-    /* 00141B00 */ .space 0x28
+dlabel g_mcRpcClient
+    /* 00141B00 */ .space 0x24
+
+nonmatching g_mcInitialized, 0x4
+
+dlabel g_mcInitialized
+    /* 00141B24 */ .space 0x04
 
 nonmatching D_00141B28, 0x4
 
@@ -369,9 +374,9 @@ nonmatching D_00142000, 0x10C0
 dlabel D_00142000
     /* 00142000 */ .space 0x10C0
 
-nonmatching D_001430C0, 0x48
+nonmatching g_mcRpcResult, 0x48
 
-dlabel D_001430C0
+dlabel g_mcRpcResult
     /* 001430C0 */ .space 0x48
 
 nonmatching D_00143108, 0x28
@@ -454,10 +459,40 @@ nonmatching D_0014B540, 0x34AC0
 dlabel D_0014B540
     /* 0014B540 */ .space 0x34AC0
 
-nonmatching D_00180000, 0x27000
+nonmatching D_00180000, 0xB694
 
 dlabel D_00180000
-    /* 00180000 */ .space 0x27000
+    /* 00180000 */ .space 0xB694
+
+nonmatching g_giantClankHealth, 0xC4C
+
+dlabel g_giantClankHealth
+    /* 0018B694 */ .space 0xC4C
+
+nonmatching g_air, 0xC
+
+dlabel g_air
+    /* 0018C2E0 */ .space 0x0C
+
+nonmatching g_health, 0xEF8C
+
+dlabel g_health
+    /* 0018C2EC */ .space 0xEF8C
+
+nonmatching g_platinumBoltFlags, 0x7930
+
+dlabel g_platinumBoltFlags
+    /* 0019B278 */ .space 0x7930
+
+nonmatching g_saveImageGlobal, 0x2800
+
+dlabel g_saveImageGlobal
+    /* 001A2BA8 */ .space 0x2800
+
+nonmatching g_saveImageArea, 0x1C58
+
+dlabel g_saveImageArea
+    /* 001A53A8 */ .space 0x1C58
 
 nonmatching D_001A7000, 0xC
 
@@ -558,207 +593,3 @@ nonmatching D_001A7470, 0x10
 
 dlabel D_001A7470
     /* 001A7470 */ .space 0x10
-
-nonmatching D_001A7480, 0x4
-
-dlabel D_001A7480
-    /* 001A7480 */ .space 0x04
-
-nonmatching D_001A7484, 0x4
-
-dlabel D_001A7484
-    /* 001A7484 */ .space 0x04
-
-nonmatching D_001A7488, 0x4
-
-dlabel D_001A7488
-    /* 001A7488 */ .space 0x04
-
-nonmatching D_001A748C, 0x4
-
-dlabel D_001A748C
-    /* 001A748C */ .space 0x04
-
-nonmatching D_001A7490, 0x4
-
-dlabel D_001A7490
-    /* 001A7490 */ .space 0x04
-
-nonmatching D_001A7494, 0x4
-
-dlabel D_001A7494
-    /* 001A7494 */ .space 0x04
-
-nonmatching D_001A7498, 0x4
-
-dlabel D_001A7498
-    /* 001A7498 */ .space 0x04
-
-nonmatching D_001A749C, 0x4
-
-dlabel D_001A749C
-    /* 001A749C */ .space 0x04
-
-nonmatching D_001A74A0, 0x4
-
-dlabel D_001A74A0
-    /* 001A74A0 */ .space 0x04
-
-nonmatching D_001A74A4, 0x4
-
-dlabel D_001A74A4
-    /* 001A74A4 */ .space 0x04
-
-nonmatching D_001A74A8, 0x4
-
-dlabel D_001A74A8
-    /* 001A74A8 */ .space 0x04
-
-nonmatching D_001A74AC, 0x4
-
-dlabel D_001A74AC
-    /* 001A74AC */ .space 0x04
-
-nonmatching D_001A74B0, 0x4
-
-dlabel D_001A74B0
-    /* 001A74B0 */ .space 0x04
-
-nonmatching D_001A74B4, 0x4
-
-dlabel D_001A74B4
-    /* 001A74B4 */ .space 0x04
-
-nonmatching D_001A74B8, 0x4
-
-dlabel D_001A74B8
-    /* 001A74B8 */ .space 0x04
-
-nonmatching D_001A74BC, 0x4
-
-dlabel D_001A74BC
-    /* 001A74BC */ .space 0x04
-
-nonmatching D_001A74C0, 0x4
-
-dlabel D_001A74C0
-    /* 001A74C0 */ .space 0x04
-
-nonmatching D_001A74C4, 0x4
-
-dlabel D_001A74C4
-    /* 001A74C4 */ .space 0x04
-
-nonmatching D_001A74C8, 0x8
-
-dlabel D_001A74C8
-    /* 001A74C8 */ .space 0x08
-
-nonmatching D_001A74D0, 0x8
-
-dlabel D_001A74D0
-    /* 001A74D0 */ .space 0x08
-
-nonmatching D_001A74D8, 0x8
-
-dlabel D_001A74D8
-    /* 001A74D8 */ .space 0x08
-
-nonmatching D_001A74E0, 0x8
-
-dlabel D_001A74E0
-    /* 001A74E0 */ .space 0x08
-
-nonmatching D_001A74E8, 0x10
-
-dlabel D_001A74E8
-    /* 001A74E8 */ .space 0x10
-
-nonmatching D_001A74F8, 0x8
-
-dlabel D_001A74F8
-    /* 001A74F8 */ .space 0x08
-
-.align 3
-nonmatching D_001A7500, 0x28
-
-dlabel D_001A7500
-    /* 001A7500 */ .space 0x28
-
-.align 3
-nonmatching D_001A7528, 0x50
-
-dlabel D_001A7528
-    /* 001A7528 */ .space 0x50
-
-.align 3
-nonmatching D_001A7578, 0x88
-
-dlabel D_001A7578
-    /* 001A7578 */ .space 0x88
-
-.align 3
-nonmatching D_001A7600, 0x30
-
-dlabel D_001A7600
-    /* 001A7600 */ .space 0x30
-
-.align 3
-nonmatching D_001A7630, 0x20
-
-dlabel D_001A7630
-    /* 001A7630 */ .space 0x20
-
-.align 3
-nonmatching D_001A7650, 0xA8
-
-dlabel D_001A7650
-    /* 001A7650 */ .space 0xA8
-
-.align 3
-nonmatching D_001A76F8, 0x38
-
-dlabel D_001A76F8
-    /* 001A76F8 */ .space 0x38
-
-.align 3
-nonmatching D_001A7730, 0x30
-
-dlabel D_001A7730
-    /* 001A7730 */ .space 0x30
-
-.align 3
-nonmatching D_001A7760, 0x170
-
-dlabel D_001A7760
-    /* 001A7760 */ .space 0x170
-
-nonmatching D_001A78D0, 0x7720
-
-dlabel D_001A78D0
-    /* 001A78D0 */ .space 0x7720
-
-nonmatching D_001AEFF0, 0x21C50
-
-dlabel D_001AEFF0
-    /* 001AEFF0 */ .space 0x21C50
-
-nonmatching D_001D0C40, 0x233C9
-
-dlabel D_001D0C40
-    /* 001D0C40 */ .space 0x233C9
-
-nonmatching D_001F4009, 0x9FF7
-
-dlabel D_001F4009
-    /* 001F4009 */ .space 0x9FF7
-
-nonmatching D_001FE000, 0x2000
-
-dlabel D_001FE000
-    /* 001FE000 */ .space 0x2000
-
-nonmatching D_00200000, 0x12880
-
-dlabel D_00200000
-    /* 00200000 */ .space 0x12880

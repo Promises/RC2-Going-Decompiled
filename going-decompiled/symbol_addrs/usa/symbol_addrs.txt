@@ -5,6 +5,52 @@ memset = 0x00115484; // libc.a (verbatim, 96B-verified)
 rename = 0x0011D3A0; // libc.a (verbatim, 28B-verified)
 s_isnan = 0x001313C8; // libc.a (verbatim, 56B-verified)
 
+// === splat boundary fixes ===
+// splat auto-detection grouped inter-function padding (`addiu sp,+0xN; nop`
+// filler words) into the FOLLOWING symbol, so each real function carried extra
+// leading words and could not match. Each pair below: the padding-only symbol
+// pinned to an explicit size, plus a type:func at the real prologue so splat
+// emits a clean per-function .s. (The matching INCLUDE_ASM/C lives in
+// src/usa/cod/015180.c.)
+func_0011E740 = 0x0011E740; // type:func size:0x60
+func_0011E7A0 = 0x0011E7A0; // type:func
+func_00128A48 = 0x00128A48; // type:func size:0x8
+func_00128A50 = 0x00128A50; // type:func
+func_0012EB28 = 0x0012EB28; // type:func size:0x8
+func_0012EB30 = 0x0012EB30; // type:func
+func_00132818 = 0x00132818; // type:func size:0x10
+func_00132828 = 0x00132828; // type:func
+func_00132968 = 0x00132968; // type:func size:0x10
+func_00132978 = 0x00132978; // type:func
+func_001329F0 = 0x001329F0; // type:func size:0x20
+func_00132A10 = 0x00132A10; // type:func
+func_00132A58 = 0x00132A58; // type:func size:0x18
+func_00132A70 = 0x00132A70; // type:func
+func_00132AA0 = 0x00132AA0; // type:func size:0x28
+func_00132AC8 = 0x00132AC8; // type:func
+func_00132B88 = 0x00132B88; // type:func size:0x38
+func_00132BC0 = 0x00132BC0; // type:func
+func_00133300 = 0x00133300; // type:func size:0x10
+func_00133310 = 0x00133310; // type:func
+func_00133340 = 0x00133340; // type:func size:0x10
+func_00133350 = 0x00133350; // type:func
+func_001333C0 = 0x001333C0; // type:func size:0x10
+func_001333D0 = 0x001333D0; // type:func
+func_001336C0 = 0x001336C0; // type:func size:0x10
+func_001336D0 = 0x001336D0; // type:func
+func_00133700 = 0x00133700; // type:func size:0x10
+func_00133710 = 0x00133710; // type:func
+func_001337C8 = 0x001337C8; // type:func size:0x28
+func_001337F0 = 0x001337F0; // type:func
+func_00133818 = 0x00133818; // type:func size:0x8
+func_00133820 = 0x00133820; // type:func
+func_00133848 = 0x00133848; // type:func size:0x8
+func_00133850 = 0x00133850; // type:func
+func_001338B8 = 0x001338B8; // type:func size:0x10
+func_001338C8 = 0x001338C8; // type:func
+func_00133928 = 0x00133928; // type:func size:0x8
+func_00133930 = 0x00133930; // type:func
+
 // === Track-B PlayerStats globals (persistent save block @0x1A7A00). CONFIRMED via cheat CRC B3A71D10 + code trace. ===
 g_boltCount = 0x001A7A00; // u32 currency, add path CollectBolts, spend path VendorPurchaseStateMachine
 g_raritanium = 0x001A7A04; // u32
