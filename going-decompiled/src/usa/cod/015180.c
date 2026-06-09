@@ -36,6 +36,30 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115690);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001157AC);
 
+/* 0xCDCDCDCD inter-function-fill class (func_001158F4, func_0011F364,
+ * func_0011FB8C, func_00124414, func_00125D94, func_00126104, func_00126284,
+ * func_0012646C, func_0012672C, func_00126DBC, func_00130A8C). Each of these
+ * symbols begins with one or more leading 0xCDCDCDCD debug-fill words emitted
+ * between functions; spimdisasm folds the fill into the symbol's body.
+ *
+ * UNRECOVERABLE with the current splat/spimdisasm (1.41.0): unlike the
+ * `addiu sp,+0xN; nop` padding mis-splits (which were fixed via symbol_addrs
+ * boundary pins), these do NOT cleanly split:
+ *   - The fill is most often a SINGLE word (0x4). spimdisasm's function-end
+ *     detection only looks one symbol-pair (currentVram+8) ahead and its
+ *     userDeclaredSize end-check requires instructionOffset+8 == start+size,
+ *     which is unsatisfiable for a 4-byte function — so a lone CD word can
+ *     never terminate as its own function (pinning size:0x4 balloons the file).
+ *   - The real bodies are reached only by `j`/data-reference (e.g. the
+ *     func_00130A8C j-thunk to func_00130B80), never by `jal`, so `_findCalls`
+ *     never promotes them to function starts.
+ *   - Several bodies are handwritten VU0/GS code (func_0011F364 sq-context save,
+ *     func_00124414 cfc2/ctc2 GS sync) flagged as unimplemented instructions,
+ *     which spimdisasm emits as a symbol, not a function.
+ * Declaring the real-start symbol truncates the pad correctly but DROPS the body
+ * from the nonmatchings tree (a coverage hole), so the boundaries are left at
+ * the spimdisasm default (fill attached to the body). Re-evaluate if splat/
+ * spimdisasm gains lone-word-pad splitting. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001158F4);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115AC0);
