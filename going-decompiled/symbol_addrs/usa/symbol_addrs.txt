@@ -235,3 +235,13 @@ g_weaponXp = 0x00139868; // CONFIRMED - s32[0x38] per-weapon XP/upgrade-progress
 g_inventoryOwned = 0x001A7B00; // CONFIRMED - u8[0x38] per-item have-flag, cheat-pnach inventory have-flags base. Written by GiveInventoryItem. EU anchor
 g_inventoryNewFlag = 0x001A7B38; // CONFIRMED - u8[0x38] newly-acquired flag per item, set with g_inventoryOwned by GiveInventoryItem (HUD NEW badge)
 g_inventoryOrder = 0x001A7B70; // CONFIRMED - byte inventory display order (low6=itemId, bit0x40=owned, 0xff terminator). Built by AddItemToInventoryOrder, walked by BuildVendorItemList
+
+// === Track-B HUD counters + ammo-drop (direct readers of cheat-pnach globals, strong EU anchors). ===
+UpdateBoltCounterHud = 0x0028AD38; // CONFIRMED - per-frame tick of the on-screen bolt counter, rolls g_nBoltCounterDisplayed toward live g_boltCount and spawns +/- delta popups, snaps via ResetBoltCounterHud on vendor enter. Reads g_boltCount 0x1A7A00. EU anchor
+ResetBoltCounterHud = 0x0028ACB8; // CONFIRMED - snaps the bolt counter display to live g_boltCount with no animation and clears the popup array. Reads g_boltCount 0x1A7A00. EU anchor
+TickBoltCounterHud = 0x0029D990; // CONFIRMED - guarded wrapper calling UpdateBoltCounterHud only when the HUD render context (g_guiInstance 0x1a8d04) is present
+FlushHudDisplayValue = 0x0029D9E0; // CONFIRMED - flushes a HUD display value into the render object at g_guiInstance+0x376c8, used to push g_nBoltCounterDisplayed to the renderer
+g_nBoltCounterDisplayed = 0x001B18C8; // CONFIRMED - displayed (animated) bolt count rolling toward g_boltCount, private to the bolt-counter HUD (target at +4, delta accumulator at +8)
+DrawWeaponSelectWheel = 0x0028D110; // CONFIRMED - renders the weapon quick-select wheel + ammo counter for the highlighted slot, reads g_weaponAmmo[id] 0x139688 and g_weaponTable ammoCapacity(+0x8e), formats with g_szAmmoFraction, red tint when ammo 0. EU anchor
+g_szAmmoFraction = 0x001A8E28; // CONFIRMED - the "%d/%d" format string used by DrawWeaponSelectWheel to draw current/capacity ammo
+PickLowAmmoWeaponForDrop = 0x002A76F8; // CONFIRMED - picks a random owned weapon below ammo capacity so an ammo pickup can drop for it, needs g_inventoryOwned[i] 0x1a7b00 AND g_weaponTable ammoCapacity(+0x8e) nonzero AND g_weaponAmmo[i] 0x139688 below capacity. Reads g_weaponAmmo + g_inventoryOwned. EU anchor

@@ -308,3 +308,25 @@ g_weaponXp = 0x00139868; // CONFIRMED - s32[0x38] per-weapon XP/upgrade-progress
 g_inventoryOwned     = 0x001A7B00; // CONFIRMED - u8[0x38] per-item have-flag. cheat-pnach inventory have-flags base (md notes 0x1a7b02 as a slot within). Written by GiveInventoryItem. EU anchor.
 g_inventoryNewFlag   = 0x001A7B38; // CONFIRMED - u8[0x38] newly-acquired flag per item, set with g_inventoryOwned by GiveInventoryItem (likely HUD NEW badge).
 g_inventoryOrder     = 0x001A7B70; // CONFIRMED - byte[~0x20] inventory display order. low6=itemId, bit0x40=owned, 0xff terminator. Built by AddItemToInventoryOrder, walked by BuildVendorItemList.
+
+// --- HUD COUNTERS + AMMO-DROP (Track-B cluster). On-screen bolt counter and weapon-wheel
+//     ammo text are direct readers of cheat-pnach globals g_boltCount (0x1A7A00) and
+//     g_weaponAmmo (0x139688) - strong EU anchors. PickLowAmmoWeaponForDrop is the
+//     enemy-death ammo-drop target selector reading the same ammo/ownership state. ---
+//
+// HUD bolt-counter (animated on-screen number)
+UpdateBoltCounterHud    = 0x0028AD38; // CONFIRMED - per-frame tick of the on-screen bolt counter. Rolls g_nBoltCounterDisplayed toward live g_boltCount and spawns +/- delta popups. Snaps via ResetBoltCounterHud when entering vendor (g_nGameState==5). Reads cheat-pnach g_boltCount 0x1A7A00 - EU anchor.
+ResetBoltCounterHud     = 0x0028ACB8; // CONFIRMED - snaps the bolt counter display to live g_boltCount with no animation and clears the popup array. Reads g_boltCount 0x1A7A00 - EU anchor.
+TickBoltCounterHud      = 0x0029D990; // CONFIRMED - guarded wrapper that calls UpdateBoltCounterHud only when the HUD render context (g_guiInstance 0x1a8d04) is present.
+FlushHudDisplayValue    = 0x0029D9E0; // CONFIRMED - flushes a HUD display value into the render object at g_guiInstance+0x376c8. Used to push g_nBoltCounterDisplayed to the renderer.
+g_nBoltCounterDisplayed = 0x001B18C8; // CONFIRMED - the displayed (animated) bolt count that rolls toward g_boltCount. Private to the bolt-counter HUD pair. Target value at +4 (0x1b18cc), delta accumulator at +8 (0x1b18d0).
+//
+// HUD weapon-select wheel (per-weapon ammo text "current/capacity")
+DrawWeaponSelectWheel   = 0x0028D110; // CONFIRMED - renders the weapon quick-select wheel and the ammo counter for the highlighted slot. Reads g_weaponAmmo[id] (0x139688) and weaponTable ammoCapacity (+0x8e), formats with g_szAmmoFraction. Red tint when ammo==0. Reads cheat-pnach g_weaponAmmo 0x139688 - EU anchor.
+g_szAmmoFraction        = 0x001A8E28; // CONFIRMED - the "%d/%d" format string used by DrawWeaponSelectWheel to draw current/capacity ammo.
+//
+// Enemy-death ammo-drop target selector
+PickLowAmmoWeaponForDrop = 0x002A76F8; // CONFIRMED - picks a random owned weapon below its ammo capacity so an ammo pickup can drop for it. Requires g_inventoryOwned[i] (0x1a7b00) AND weaponTable ammoCapacity (+0x8e) != 0 AND g_weaponAmmo[i] (0x139688) below capacity. Skips no-ammo gadget ids (0x1f wrench etc). Returns 1 or 2 (random drop count). Reads cheat-pnach g_weaponAmmo + g_inventoryOwned - EU anchors.
+//
+// NOTE the HUD render-context pointer at 0x1A8D04 is the already-named g_guiInstance
+//      (sole writer GuiManagerCreate 0x29DB80, store-site 0x29dc18) - not a new symbol.
