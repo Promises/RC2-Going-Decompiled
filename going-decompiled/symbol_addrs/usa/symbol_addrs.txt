@@ -294,3 +294,19 @@ SetPopupVisible = 0x003492A8; // CONFIRMED - popup+0x4b8 visible (fade alpha 1.0
 SetPopupTitleText = 0x003492B8; // CONFIRMED - assigns 5 title/border text widgets from a string array (binds GUI font atlas +0x8710)
 UpdatePopupMenu = 0x00349728; // CONFIRMED - per-frame layout + D-pad nav (masks 0x1000/0x4000), skips disabled items, returns selIndex (popup+0x4ac)
 BuildPausePromptPopup = 0x002CBED0; // CONFIRMED - populates the pause/confirm popup (title textIds + items), disables the first 3 items when g_bPlayerMode==1, calls UpdatePopupMenu
+
+// === Track-B front-end / pause-menu screen manager (g_pCurrentMenuScreen drives the per-frame widget tick; ~0x2CB000-0x2DE000). ===
+MenuScreenDoAction = 0x002D67C0; // CONFIRMED - front-end/pause action dispatcher(opcode,arg,outFlag), opcode 9 writes g_currentLanguage (single writer, confirmed 1 of 23 xrefs), 6/8/10/0xb push/pop/swap current vs previous screen, 4/5/0xc/0xd RequestGameStateChange. Command-record wrappers 0x2d6ad8/0x2d6b00 read opcode at +2 arg at +4
+MenuScreenLoad = 0x002CB038; // CONFIRMED - loads a screen by g_lastMenuScreenId (switch), maps id to screen-instance struct + sets text-table/VRAM/map banks
+RequestMenuScreenChange = 0x002CAC28; // CONFIRMED - open/switch a front-end or pause screen, builds the pause prompt when g_nGameState==0, sets g_lastMenuScreenId, re-syncs the galactic map to g_playerProgress
+MenuScreenUpdate = 0x002CBAB8; // CONFIRMED - per-frame tick of g_pCurrentMenuScreen, iterates up to 14 widget objects (vtable +8 update / +0xc activate) handling focus change + teardown
+MenuScreenCommitTransition = 0x002CBA58; // CONFIRMED - commits a queued change, g_pCurrentMenuScreen = g_pNextMenuScreen, clears g_pNextMenuScreen, sets the 0x1F27C0 commit-state flag
+GalacticMapScreenTick = 0x002D7BA0; // CONFIRMED - per-frame update/render of the Galactic Map screen, MapUpdate + D-pad level nav, X launches the level, reads g_cinematicUnlockedFlags to play the unlock cinematic
+g_pCurrentMenuScreen = 0x001F27D4; // CONFIRMED - ptr to the active front-end/pause screen instance, read across the whole menu subsystem, written by MenuScreenLoad + MenuScreenCommitTransition
+g_pNextMenuScreen = 0x001F27D8; // CONFIRMED - ptr to the next/requested screen, copied into g_pCurrentMenuScreen by MenuScreenCommitTransition
+g_lastMenuScreenId = 0x001F27C8; // CONFIRMED - screen-id selector switched in MenuScreenLoad (2 GalacticMap, 8 SaveLoadList, ...), set by RequestMenuScreenChange
+g_menuTransitionMode = 0x001F27DC; // UNCONFIRMED enum - menu screen transition/exit mode set by MenuScreenDoAction push/pop/swap opcodes and 1/2 to signal screen-exit
+g_MenuScreen_GalacticMap = 0x0025A170; // CONFIRMED - Galactic Map screen instance (driven by GalacticMapScreenTick)
+g_MenuScreen_SaveLoadList = 0x00258FF8; // CONFIRMED - save/load list screen instance (id 8, installs list-scroller callbacks)
+g_MenuScreen_MapBackTarget = 0x0025A478; // UNCONFIRMED - screen the galactic map backs out to on triangle
+g_MenuScreen_Id10 = 0x0025A718; // UNCONFIRMED - screen id 10 instance, identity not yet traced
