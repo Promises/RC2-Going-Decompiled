@@ -52,6 +52,8 @@ CPPDEF="-D__GNUC__=2 -D__GNUC_MINOR__=9 -D__mips__ -D__mips=3 -D__R5900 -D__LANG
 GFLAG="-G0"
 case "$REGION/$UNIT" in
   usa/cod/0321A0) GFLAG="-G8";;
+  usa/text/183178) GFLAG="-G8";; # scale/round accessor sub-TU (D_1A7910..D_1A792C)
+  usa/text/188580) GFLAG="-G8";; # camera-aux sub-TU (D_1A8A60..D_1A8AE0)
 esac
 
 # Generate a PRISTINE all-INCLUDE_ASM unit C for the TARGET, straight from the

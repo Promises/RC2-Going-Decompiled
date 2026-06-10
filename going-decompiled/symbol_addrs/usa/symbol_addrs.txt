@@ -57,6 +57,17 @@ func_001338B8 = 0x001338B8; // type:func size:0x10
 func_001338C8 = 0x001338C8; // type:func
 func_00133928 = 0x00133928; // type:func size:0x8
 func_00133930 = 0x00133930; // type:func
+// text/183178 sub-TU head: 0x38 bytes of handwritten 8-byte stub-table entries
+// (paired addiu-sp/nop words, no prologue) that splat lumped into the first
+// accessor of the carve. Pin the table to its size and the real accessor
+// prologue after it.
+func_002831F8 = 0x002831F8; // type:func size:0x38
+func_00283230 = 0x00283230; // type:func
+// text/188580 sub-TU data anchors: give the two .bss objects the unit reads
+// their own symbols (otherwise spimdisasm attaches them to far-away preceding
+// named symbols with huge offsets, which forces raw-offset C).
+D_001B1750 = 0x001B1750; // size:0x10
+D_001BAC00 = 0x001BAC00; // size:0x90
 
 // === Track-B PlayerStats globals (persistent save block @0x1A7A00). CONFIRMED via cheat CRC B3A71D10 + code trace. ===
 g_boltCount = 0x001A7A00; // u32 currency, add path CollectBolts, spend path VendorPurchaseStateMachine

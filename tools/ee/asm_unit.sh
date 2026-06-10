@@ -63,6 +63,15 @@ cd "$FIXROOT"
 # the C overrides cc1's own size, which is how a cc1-small but
 # assembler-absolute original symbol is reproduced). Not applied at -G0,
 # where cc1 never relies on gp-relative `la`.
+#
+# Also reproduce the SN ee-as COP1 load-delay flush (proven by the original
+# bytes in text/183178): when a `.set noreorder` region begins directly after
+# a cop1 load macro (`l.s`/`lwc1`), the SN assembler conservatively pads the
+# load delay with a `nop` before entering the region (it can no longer reorder
+# inside it). GNU as treats r5900 cop1 loads as interlocked and emits nothing,
+# so we insert the nop ourselves. Not applied at -G0: no currently-matched
+# -G0 function has a cop1-load/noreorder boundary, and the -G0 units' matches
+# were proven WITHOUT the pad.
 # (cc1 is a Win32 PE - its .s lines end in CRLF, hence the \r-stripping.)
 if [ "$GFLAG" = "-G8" ]; then
   sed -E -f "$MOVEFIX" "$UNIT_S" | tr -d '\r' | awk '
@@ -74,6 +83,7 @@ if [ "$GFLAG" = "-G8" ]; then
       }
       next
     }
+    /^[ \t]*\.set[ \t]+noreorder/ { if (prevcop) print "\tnop" }
     /^\tla\t\$[0-9]+,[A-Za-z_][A-Za-z0-9_]*$/ {
       s=$0; sub(/^\tla\t/,"",s)
       split(s,p,","); r=p[1]; sym=p[2]
@@ -81,9 +91,10 @@ if [ "$GFLAG" = "-G8" ]; then
         printf "\taddiu\t%s,$gp,%%gp_rel(%s)\n", r, sym
       else
         printf "\tlui\t%s,%%hi(%s)\n\taddiu\t%s,%s,%%lo(%s)\n", r, sym, r, r, sym
+      prevcop=0
       next
     }
-    { print }
+    { print; prevcop = ($0 ~ /^\t(l\.s|lwc1)\t/) }
   ' "$UNIT_S" - \
     | mips-linux-gnu-as -march=r5900 -mabi=eabi -no-pad-sections -EL "$GFLAG" -I. -o "$OUT_O" -
 else

@@ -65,6 +65,8 @@ if [ -d "$SRC" ]; then
     GFLAG="-G0"
     case "$c" in
       */cod/0321A0.c) GFLAG="-G8";;
+      */usa/text/183178.c) GFLAG="-G8";; # scale/round accessor sub-TU
+      */usa/text/188580.c) GFLAG="-G8";; # camera-aux sub-TU
     esac
     "$WIBO" "$G/cpp.exe" $CPPDEF $INCC "$c" "$BUILD/_unit.i"
     "$WIBO" "$G/cc1.exe" -quiet -O2 $GFLAG "$BUILD/_unit.i" -o "$BUILD/_unit.s"

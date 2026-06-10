@@ -175,6 +175,10 @@ SECTIONS
         FILL(0x00000000);
         text_TEXT_START = .;
         going-decompiled/build/usa/going-decompiled/asm/usa/text/16E980.o(.text*);
+        going-decompiled/build/usa/going-decompiled/src/usa/text/183178.o(.text*);
+        going-decompiled/build/usa/going-decompiled/asm/usa/text/183348.o(.text*);
+        going-decompiled/build/usa/going-decompiled/src/usa/text/188580.o(.text*);
+        going-decompiled/build/usa/going-decompiled/asm/usa/text/188858.o(.text*);
         going-decompiled/build/usa/going-decompiled/src/usa/text/198FA0.o(.text*);
         going-decompiled/build/usa/going-decompiled/asm/usa/text/1A00F0.o(.text*);
         . = ALIGN(., 16);
@@ -182,6 +186,10 @@ SECTIONS
         text_TEXT_SIZE = ABSOLUTE(text_TEXT_END - text_TEXT_START);
         text_DATA_START = .;
         going-decompiled/build/usa/going-decompiled/asm/usa/text/16E980.o(.data*);
+        going-decompiled/build/usa/going-decompiled/src/usa/text/183178.o(.data*);
+        going-decompiled/build/usa/going-decompiled/asm/usa/text/183348.o(.data*);
+        going-decompiled/build/usa/going-decompiled/src/usa/text/188580.o(.data*);
+        going-decompiled/build/usa/going-decompiled/asm/usa/text/188858.o(.data*);
         going-decompiled/build/usa/going-decompiled/src/usa/text/198FA0.o(.data*);
         going-decompiled/build/usa/going-decompiled/asm/usa/text/1A00F0.o(.data*);
         . = ALIGN(., 16);
@@ -194,6 +202,10 @@ SECTIONS
         FILL(0x00000000);
         text_BSS_START = .;
         going-decompiled/build/usa/going-decompiled/asm/usa/text/16E980.o(.bss COMMON .scommon);
+        going-decompiled/build/usa/going-decompiled/src/usa/text/183178.o(.bss COMMON .scommon);
+        going-decompiled/build/usa/going-decompiled/asm/usa/text/183348.o(.bss COMMON .scommon);
+        going-decompiled/build/usa/going-decompiled/src/usa/text/188580.o(.bss COMMON .scommon);
+        going-decompiled/build/usa/going-decompiled/asm/usa/text/188858.o(.bss COMMON .scommon);
         going-decompiled/build/usa/going-decompiled/src/usa/text/198FA0.o(.bss COMMON .scommon);
         going-decompiled/build/usa/going-decompiled/asm/usa/text/1A00F0.o(.bss COMMON .scommon);
         . = ALIGN(., 16);

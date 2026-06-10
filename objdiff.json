@@ -57,6 +57,28 @@
       }
     },
     {
+      "name": "usa/text/183178",
+      "target_path": "going-decompiled/build/usa/expected/text/183178.o",
+      "base_path": "going-decompiled/build/usa/obj/text/183178.o",
+      "metadata": {
+        "source_path": "going-decompiled/src/usa/text/183178.c",
+        "progress_categories": [
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "usa/text/188580",
+      "target_path": "going-decompiled/build/usa/expected/text/188580.o",
+      "base_path": "going-decompiled/build/usa/obj/text/188580.o",
+      "metadata": {
+        "source_path": "going-decompiled/src/usa/text/188580.c",
+        "progress_categories": [
+          "text"
+        ]
+      }
+    },
+    {
       "name": "usa/text/198FA0",
       "target_path": "going-decompiled/build/usa/expected/text/198FA0.o",
       "base_path": "going-decompiled/build/usa/obj/text/198FA0.o",
