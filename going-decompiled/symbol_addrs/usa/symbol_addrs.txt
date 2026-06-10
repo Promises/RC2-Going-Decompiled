@@ -307,6 +307,31 @@ g_pNextMenuScreen = 0x001F27D8; // CONFIRMED - ptr to the next/requested screen,
 g_lastMenuScreenId = 0x001F27C8; // CONFIRMED - screen-id selector switched in MenuScreenLoad (2 GalacticMap, 8 SaveLoadList, ...), set by RequestMenuScreenChange
 g_menuTransitionMode = 0x001F27DC; // UNCONFIRMED enum - menu screen transition/exit mode set by MenuScreenDoAction push/pop/swap opcodes and 1/2 to signal screen-exit
 g_MenuScreen_GalacticMap = 0x0025A170; // CONFIRMED - Galactic Map screen instance (driven by GalacticMapScreenTick)
-g_MenuScreen_SaveLoadList = 0x00258FF8; // CONFIRMED - save/load list screen instance (id 8, installs list-scroller callbacks)
+g_MenuScreen_LevelSelectList = 0x00258FF8; // CONFIRMED - galactic-map level/planet-select list screen instance (id 8, 24 entries, confirm calls RequestLevelExit). Corrects an earlier SaveLoadList mislabel
 g_MenuScreen_MapBackTarget = 0x0025A478; // UNCONFIRMED - screen the galactic map backs out to on triangle
 g_MenuScreen_Id10 = 0x0025A718; // UNCONFIRMED - screen id 10 instance, identity not yet traced
+
+// === Track-B level-exit / transition + level-select list + save-prompt (USA, EU-propagatable by signature). ===
+RequestLevelExit = 0x002896D8; // CONFIRMED - (destination, commitSave) sets g_nLevelExitRequested=1 (the LoadLevelAndInitHealth 0x26EDE8 loop guard), stores destination, commits a checkpoint when commitSave nonzero. Not the only writer of the flag
+IsLevelExitRequested = 0x00289758; // CONFIRMED - returns g_nLevelExitRequested, the in-level loop runs until set
+g_nLevelExitRequested = 0x001A8B84; // CONFIRMED - u32 main in-level frame-loop exit flag (loop guard in LoadLevelAndInitHealth)
+g_nLevelExitDestination = 0x001B1600; // CONFIRMED - u32 next level/scene id to bring up after teardown
+MarkLevelAvailable = 0x002AE620; // CONFIRMED - (level) sets g_abLevelAvailableFlags[level] and appends the level to g_anAvailableLevelOrder (gated level lt 0x15 or ==0x18)
+g_abLevelAvailableFlags = 0x001A7BD0; // CONFIRMED - u8 per-level available flags (EvaluateProgressCondition case-1 base)
+g_anAvailableLevelOrder = 0x00139948; // CONFIRMED - int[0x1c] ordered available-level list, read by MapGetLevelOrderIndex / MapFindNearestAvailableLevel via PTR_DAT_001aa510 (=0x139948)
+LevelSelectListHandleInput = 0x002CC4C8; // CONFIRMED - galactic-map level-select list input, scroll + confirm calls RequestLevelExit(selectedIndex)
+LevelSelectListRender = 0x002CC600; // CONFIRMED - draws each enabled level-select entry (label+value localized)
+IsLevelListEntryEnabled = 0x002CC4A0; // CONFIRMED - level-select slot-index validity gate (idx lt 0x15 or idx==0x18)
+ListScrollerSelectNext = 0x002CA9F8; // CONFIRMED - advances a list scroller index to the next enabled slot (wraps)
+ListScrollerSelectPrev = 0x002CA9B8; // CONFIRMED - moves a list scroller index to the previous enabled slot (wraps)
+g_nLevelSelectListCount = 0x002109F0; // CONFIRMED - level-select scroller entry count (0x18)
+g_nLevelSelectListIndex = 0x002109F4; // CONFIRMED - level-select scroller current selected index
+g_pLevelSelectListEntries = 0x002109F8; // CONFIRMED - level-select scroller ptr to the entry table (0x258d50)
+g_levelSelectEntries = 0x00258D50; // CONFIRMED - level-select (labelStrId valueStrId) pair table, 24 entries
+SetSavePromptPending = 0x00289798; // CONFIRMED - g_nSavePromptPending = 1
+GetSavePromptPending = 0x002897A8; // CONFIRMED - returns g_nSavePromptPending
+ClearSavePromptPending = 0x00289790; // CONFIRMED - g_nSavePromptPending = 0 (called on level-exit-with-save)
+g_nSavePromptPending = 0x001A7B94; // CONFIRMED - u32 show-saving-prompt gate read by the save/load popup
+RenderSaveLoadStatusPopup = 0x00286378; // CONFIRMED mechanism - draws the save/load + memory-card system message popup (phase x g_nSaveLoadStatusCode), status enum UNCONFIRMED
+UpdateSaveTaskState = 0x002997C8; // CONFIRMED mechanism - drives the save flow off the MC task state, sets the status code + save-prompt flag, status enum UNCONFIRMED
+g_nSaveLoadStatusCode = 0x001A7420; // UNCONFIRMED enum - status code selecting the save/load popup body string
