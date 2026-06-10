@@ -2969,8 +2969,11 @@ void func_00132B58(s32 arg0, s32 arg1, s32 arg2) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00132B88);
 
 /**
- * Invoke func_00132DF0 with selector 0x21, count 0x18, and a 6-word stack record
- * holding arg0..arg5; arg6 and arg7 are forwarded as the two trailing arguments.
+ * func_00132BC0 is snd_SetVoiceVolumeRamp: the 989snd EE command-ring wrapper for
+ * cmd opcode 0x21 (set voice param / volume ramp). (Kept as func_ here because
+ * renaming a matched function would desync its frozen nonmatchings .s glabel.)
+ * Queues the command via snd_QueueCommandToRing (func_00132DF0) with count 0x18 and
+ * a 6-word stack record holding arg0..arg5; arg6/arg7 are the two trailing args.
  */
 void func_00132BC0(s32 arg0, s32 arg1, s32 arg2, s32 arg3, s32 arg4, s32 arg5,
                    s32 arg6, s32 arg7) {
@@ -3017,12 +3020,14 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133310);
  * size:0x10; the real start begins at func_00133350. Pure padding, no C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133340);
 
-/* func_00133350: builds a record from a mix of register and stack arguments
- * (16-bit fields packed via andi/sll/or, plus four words pulled from the
- * caller's stack) for func_00132DF0 selector 0x2C count 0x20. The stack-argument
- * loads (lw 0x30/0x38/0x40($sp), ld 0x48($sp)) come from an 8+ argument calling
- * convention this cc1 won't reproduce from natural C. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133350);
+/* snd_PlaySample: 989snd EE command-ring wrapper for cmd opcode 0x2C (start
+ * voice / play sample). Builds a record from a mix of register and stack
+ * arguments (16-bit fields packed via andi/sll/or, plus four words pulled from
+ * the caller's stack) for snd_QueueCommandToRing (func_00132DF0) count 0x20. The
+ * stack-argument loads (lw 0x30/0x38/0x40($sp), ld 0x48($sp)) come from an 8+
+ * argument calling convention this cc1 won't reproduce from natural C. Left as
+ * INCLUDE_ASM. */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", snd_PlaySample);
 
 /* func_001333C0: 0x10 bytes of inter-function padding split off by symbol_addrs
  * size:0x10; the real wrapper begins at func_001333D0. Pure padding, no C. */
@@ -3038,8 +3043,10 @@ void func_001333D0(s32 arg0) {
 }
 
 /**
- * Invoke func_00132DF0 with selector 0x2E, count 4, arg0 passed by address in a
- * stack local, and zero for the two trailing arguments.
+ * func_00133400 is snd_StopVoice: the 989snd EE command-ring wrapper for cmd opcode
+ * 0x2E (stop voice). (Kept as func_ here - renaming a matched function desyncs its
+ * frozen nonmatchings .s glabel.) Queues via snd_QueueCommandToRing (func_00132DF0)
+ * with count 4 and arg0 (the voice handle) passed by address in a stack local.
  */
 void func_00133400(s32 arg0) {
     s32 value = arg0;

@@ -459,15 +459,30 @@ nonmatching D_0014B540, 0x34AC0
 dlabel D_0014B540
     /* 0014B540 */ .space 0x34AC0
 
-nonmatching D_00180000, 0xB694
+nonmatching D_00180000, 0x86D4
 
 dlabel D_00180000
-    /* 00180000 */ .space 0xB694
+    /* 00180000 */ .space 0x86D4
 
-nonmatching g_giantClankHealth, 0xC4C
+nonmatching g_voiceHandleTable, 0x1928
+
+dlabel g_voiceHandleTable
+    /* 001886D4 */ .space 0x1928
+
+nonmatching g_nNanotechBonusHealTimer, 0x1698
+
+dlabel g_nNanotechBonusHealTimer
+    /* 00189FFC */ .space 0x1698
+
+nonmatching g_giantClankHealth, 0xA40
 
 dlabel g_giantClankHealth
-    /* 0018B694 */ .space 0xC4C
+    /* 0018B694 */ .space 0xA40
+
+nonmatching g_bPlayerMode, 0x20C
+
+dlabel g_bPlayerMode
+    /* 0018C0D4 */ .space 0x20C
 
 nonmatching g_air, 0xC
 
@@ -489,10 +504,30 @@ nonmatching g_saveImageGlobal, 0x2800
 dlabel g_saveImageGlobal
     /* 001A2BA8 */ .space 0x2800
 
-nonmatching g_saveImageArea, 0x1C58
+nonmatching g_saveImageArea, 0x1024
 
 dlabel g_saveImageArea
-    /* 001A53A8 */ .space 0x1C58
+    /* 001A53A8 */ .space 0x1024
+
+nonmatching g_pendingDialogVoiceId, 0x44
+
+dlabel g_pendingDialogVoiceId
+    /* 001A63CC */ .space 0x44
+
+nonmatching g_dialogVoiceActive, 0x4
+
+dlabel g_dialogVoiceActive
+    /* 001A6410 */ .space 0x04
+
+nonmatching g_dialogVoiceId, 0x6
+
+dlabel g_dialogVoiceId
+    /* 001A6414 */ .space 0x06
+
+nonmatching g_dialogVoicePhase, 0xBE6
+
+dlabel g_dialogVoicePhase
+    /* 001A641A */ .space 0xBE6
 
 nonmatching D_001A7000, 0xC
 
@@ -584,10 +619,15 @@ nonmatching D_001A7210, 0x78
 dlabel D_001A7210
     /* 001A7210 */ .space 0x78
 
-nonmatching D_001A7288, 0x1E8
+nonmatching D_001A7288, 0x198
 
 dlabel D_001A7288
-    /* 001A7288 */ .space 0x1E8
+    /* 001A7288 */ .space 0x198
+
+nonmatching g_nSaveLoadStatusCode, 0x50
+
+dlabel g_nSaveLoadStatusCode
+    /* 001A7420 */ .space 0x50
 
 nonmatching D_001A7470, 0x10
 
