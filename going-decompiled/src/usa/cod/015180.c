@@ -1592,7 +1592,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001253A4);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001253A8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00125588);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", QueryCdStatusOverRpc);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00125620);
 

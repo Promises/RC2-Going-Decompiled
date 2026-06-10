@@ -165,6 +165,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029CCB8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029CD18);
 
+/* func_0029CF08: empty jr-ra stub - installed by GuiManagerCreate as a default no-op GUI callback. */
 void func_0029CF08(void) {
 }
 
@@ -288,6 +289,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DAD0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DB10);
 
+/* func_0029DB50: empty jr-ra stub - installed by GuiManagerCreate as a default no-op GUI callback. */
 void func_0029DB50(void) {
 }
 
@@ -347,6 +349,6 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029ECE0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029FDF8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029FE08);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", SpawnMoby);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029FF00);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", InitMobyFromClass);
