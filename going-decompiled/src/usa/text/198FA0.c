@@ -1,5 +1,17 @@
 #include "common.h"
 
+/* One entry of a save-section descriptor table. The serialized layout each
+ * entry contributes is an 8-byte header followed by `len` payload bytes,
+ * padded up to a 4-byte boundary. The table is terminated by an entry whose
+ * srcPtr is NULL. (Stride 0x10; tag/_pad carry per-section metadata used by
+ * the (de)serializers, not by the size calculation.) */
+typedef struct SaveSection {
+    void *srcPtr;
+    s32   len;
+    s32   tag;
+    s32   _pad;
+} SaveSection;
+
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299020);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299040);
@@ -72,7 +84,23 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", BuildSaveImage)
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", InitMemCardLib);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", CalcSaveSectionsSize);
+/* CalcSaveSectionsSize(table): return the number of bytes the section table
+ * `table` serializes to. Layout is a leading 8-byte block, then for every
+ * non-terminator entry an 8-byte header plus its (4-byte-aligned) payload, then
+ * an 8-byte trailing terminator. Used to size the memory-card read/write
+ * buffers for the two global save-section tables. */
+s32 CalcSaveSectionsSize(SaveSection *table) {
+    s32 size = 8;
+    if (table->srcPtr != 0) {
+        do {
+            size += 8;
+            size += table->len;
+            table++;
+            size = (size + 3) & -4;
+        } while (table->srcPtr != 0);
+    }
+    return size + 8;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029BCA0);
 
@@ -98,8 +126,17 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029C500);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", PostGuiScreenEvent);
 
+/* func_0029C548(a,b): if g_guiInstance present, stores b then a into the pair
+ * at g_guiInstance+0x379F4/+0x379F0. Logic recovered (frameless, 97.8%), but the
+ * two same-base stores come out in the wrong order: ee-gcc's scheduler sorts the
+ * store pair by ascending offset while the original emits them descending. Not
+ * source-controllable -> store-scheduling wall, left as asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029C548);
 
+/* func_0029C570(): returns 1 if either of the pair at g_guiInstance+0x379F0/+4
+ * is non-zero (else 0). Logic recovered (99.4%), but the original short-circuit
+ * `a || b` was compiled with a branch-likely (beqzl, second load in the delay
+ * slot) which this cc1 build does not emit here -> branch-likely wall, left asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029C570);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029C5B0);
@@ -143,6 +180,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029CFE0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029D010);
 
+/* func_0029D040(a): `g_guiInstance ? func_00347B88(g_guiInstance+0x39620, a) : 0`.
+ * Representative of the large g_guiInstance forwarding-wrapper family in this unit
+ * (func_0029CF10..func_0029DB58). Logic recovered, but every member differs only
+ * in prologue scheduling: the original emits `addiu $sp` first then the %hi load,
+ * whereas this cc1 front-loads the %hi and slots the arg-shuffle/$ra-save into the
+ * branch delay differently. Systematic, not source-controllable -> left as asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029D040);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029D080);
