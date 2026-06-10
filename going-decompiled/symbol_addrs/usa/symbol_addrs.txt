@@ -13,7 +13,7 @@ s_isnan = 0x001313C8; // libc.a (verbatim, 56B-verified)
 // emits a clean per-function .s. (The matching INCLUDE_ASM/C lives in
 // src/usa/cod/015180.c.)
 func_0011E740 = 0x0011E740; // type:func size:0x60
-func_0011E7A0 = 0x0011E7A0; // type:func
+sceSifInitIopHeap = 0x0011E7A0; // type:func
 func_001253A8 = 0x001253A8; // type:func (real prologue - its sole same-unit jal caller CdStartRead moved into the cod/0321A0 sub-TU with the snd carve, so without this pin spimdisasm no longer auto-detects the start and the preceding 0xCDCDCDCD fill word func_001253A4 absorbs the body. Do NOT pin func_001253A4 itself or give either symbol an explicit byte-size attr - both demote the rest of the unit to a raw word dump. CAUTION - splat scrapes attr tokens out of comment prose too, never quote an attr literally in a comment. The lone fill word splits off correctly on its own once this start is pinned.)
 func_00127218 = 0x00127218; // type:func size:0x8
 func_00127220 = 0x00127220; // type:func
@@ -570,3 +570,97 @@ g_builtinMobyUpdateBindings = 0x0026E880; // CONFIRMED - classId/updateFn bindin
 g_proceduralAnimFrames = 0x001C54C0; // PARTIAL - runtime anim frame buffer used when seq idx is 0xFF - stride 0x800 per frame index
 g_proceduralAnimBounds = 0x001CD4C0; // UNCONFIRMED - vec4 per procedural frame index read by UpdateMobyBSphereAndGrid when seq idx 0xFF
 g_pHeroMoby = 0x0018C0B0; // PARTIAL - moby ptr inside the player struct (0x189E20 + 0x2290) - read by AllocVoiceHandleSlot and many gameplay readers, color source for cinematic cast, zeroed by InitCinematicMobyScene - hero/Ratchet identity strongly implied but the gameplay writer is overlay-side, UNCONFIRMED
+
+// === Track-B boot/init + IOP module loading + title front-end, and memory/heap arena layer (round 17, adversarially verified). ===
+BootSystemInit = 0x002914D8; // CONFIRMED - one-shot boot bring-up at top of LoadLevelAndInitHealth - hw resets, SetVideoMode, vblank ISR, IOP reboot with IOPRP255.IMG, RPC/cd re-init, volume-ID sector to BuildSaveGamePaths, LoadDiscToc, boot WAD decompress to 0x614000 + 10 IRX loads, controller/mc/sound/file-load init, RCNT1 start, cinematic queue reset - full order in plate comment
+LoadIrxModuleFromBuffer = 0x00291328; // CONFIRMED - (eeAddr, size, iopAddr) - sceSifSetDma EE to IOP, busy-wait sceSifDmaStat, then sceSifLoadModuleBuffer(iopAddr,0,0) - called 10x by BootSystemInit with boot-WAD pairs at 0x614018-0x61405C (the IRX set lives in the boot WAD)
+DebugPrintStub = 0x0026FEC8; // CONFIRMED - empty retail stub receiving debug strings (0x1A9060 Rebooted IOP, 0x1A9070 loaded irx modules) - compiled-out debug print
+InitControllers = 0x002B9468; // CONFIRMED - sceDbcInit then opens controller ports 0 and 1 - handles at 0x138314/0x138694 - g_padButtonsHeld/Pressed live inside the port-0 buffer block
+SetVideoMode = 0x002849B0; // CONFIRMED - ResetVif1AndGif then sceGsResetGraph - g_bProgressiveScan selects (0,0,0x50,1) DTV480p else interlaced mode 3 PAL when g_bPalMode set, 2 NTSC otherwise
+SetupGsDisplayBuffers = 0x0027BAA0; // CONFIRMED - CONFIRMED - sets up GS draw/display buffer layout by video mode - PAL branch uses draw 0x100000 / disp 0x1E0000 (0x200x0x1C0 dims, flag 4), progressive branch keeps 0x118000/0x1E8000 with the 0x280-wide (0x200,0x1a0,0x280,0x1c0, flag 0) setup, NTSC default otherwise
+InitScreenGeometry = 0x0027AF50; // PARTIAL - recomputes screen half-extents + scissor from display dims 0x1A65D0/D2 and seeds projection constants incl g_flCameraProjScale 0.62 - boundary with the camera system not fully traced
+KickVif0Chain = 0x002FCF00; // CONFIRMED - waits VIF0 channel idle, TADR=arg, CHCR 0x145 source-chain kick, waits completion - boot kicks the chain at 0x10E9E0 (VU0/VIF0 boot upload)
+AppendGsRegPacket = 0x002FD3F0; // CONFIRMED - appends cnt-tag + GIF A+D tag + (value64, regId) to the frame DMA chain at cursor 0x1B2228 - used for RGBAQ/ALPHA/FOGCOL writes by fades and frame setup
+InstallVif1DmacHandlers = 0x002FDBA8; // PARTIAL - once-guarded AddDmacHandler on cause 1 (VIF1 channel, handler 0x2FDCA8) and cause 15 (handler 0x2FDDA8), acks STAT 0x20000, enables DMAC int 1 - cause-15 semantic untraced
+InitFileLoadSystem = 0x002B77E8; // CONFIRMED - resets CD streaming state + g_cdReadMode trycount 0x20, then InstallFileLoadPump hooks PumpFileLoadCompletion onto the snd_Pump tick
+InitIopUploadRing = 0x002EFA20; // PARTIAL - binds the CUSTOM game IOP RPC sid 0x11 (client 0x1A7248, retry + sceSifCheckStatRpc), fno 2 fetches IOP buffer base/size into 0x1A7240/0x1A7244, clears the 0x40-entry table 0x215000 - serving IRX + payload identity (likely scene/dialog audio) untraced
+ResetIopUploadRing = 0x002EFB60; // PARTIAL - resets the upload cursor 0x1A7270 to the IOP buffer base and clears the 0x40-entry record table 0x215000 - called per scene load from LoadLevelAndInitHealth
+UploadDataToIopRing = 0x002EFBB0; // PARTIAL - bounds-checks then sceSifSetDma a 16-byte-quantised chunk from EE to the IOP cursor, records (iopAddr, sizeQw, tag) in slot table, advances cursor - returns slot index or -1 full -2 table-full
+ResetCinematicQueue = 0x002893E0; // CONFIRMED - initialises the 5-slot cinematic reel queue record - clears head/tail/count, 0xCD-fills the ring, busy=0, +0x40=1 - boot runs it on g_cinematicQueue as the last BootSystemInit step
+EnqueueCinematic = 0x002894C8; // CONFIRMED - pushes (reelId, typeFlag = reelId-0x20 lt 0x91) into the 5-slot ring, rejects when full or playback busy - boot pushes intro reel 0xB2, attract idle pushes a random reel
+DequeueCinematic = 0x00289428; // CONFIRMED - pops (id, type) from the ring tail +0x34, slots cleared to -1, clears busy when emptied - returns 0 on empty
+StartCinematicFromQueue = 0x00289610; // CONFIRMED - dequeues and requests cinematic playback - type 0 RequestGameStateChange(1,...) type 1 RequestGameStateChange(2,...) (game states 1/2 = the two cinematic-playback states), second arg 2 when chaining from state 1/2, rewinds on reject
+BuildAttractReelPlaylist = 0x0026EC58; // CONFIRMED - srand(product of sceCdReadClock RTC fields) then fills the out array with randomized attract reel ids - family 0xB9+perm(0..2) and alternating family 0xB3 or 0xB6 (order GetRandomInt(2)) - frontend menu state 3 idle 0x708 frames triggers PopGameState then enqueue of out[1]
+GetRandomInt = 0x002A8648; // CONFIRMED - rand right-shift 16 and 0x7FFF modulo n - trap(7) divide guard on n==0
+FillMemory32 = 0x00283410; // CONFIRMED - word-fill of length bytes with a 32-bit pattern (unrolled x2) - boot fills the 8x8 gray boot texture 0x1BAF80 with 0x80808080
+g_cinematicQueue = 0x001BACC0; // CONFIRMED - the pending-cinematic reel queue record - ring of 5 (id, typeFlag) pairs at +8, head +0x30 tail +0x34 count +0x38 stateWhenStarted +0x40 busy +0x44 - reset by BootSystemInit, fed by boot intro 0xB2 and the attract idle path
+g_vblankCount = 0x001A7208; // CONFIRMED - u64 vblank counter incremented by OnVblankInterrupt every vblank start
+g_hblankTicksAccum = 0x001A7200; // CONFIRMED - u64 master time base - RCNT1 (hblank-clocked, mode 0x82) accumulated by the frame loop in LoadLevelAndInitHealth - OnVblankInterrupt snapshots accum+live into 0x1A7210
+g_bPalMode = 0x001A7B98; // CONFIRMED - PAL flag - selects SetGsCrt mode 3 vs 2, 0x1C0-high framebuffers and the 1/11520 vs 1/9600 frame-time constant - cleared at boot in the USA build (EU writer is the region anchor)
+g_bProgressiveScan = 0x001A7BC0; // PARTIAL - CONFIRMED - progressive-scan (480p) mode flag - selects video mode 0x50 in BootSystemInit and the 0x118000/0x1E8000 0x280-wide buffer layout in SetupGsDisplayBuffers - writer at boot from pad-held combo (PARTIAL on the exact combo)
+ResetDebugHeap = 0x0028BCC8; // CONFIRMED - points the DebugMalloc bump pool at arena +0x7c base 0x1F54000 - cursor = base and end = base + 0x64000 - only caller is DebugMalloc lazy first-use init - no per-level reset exists
+ParseLoadedSegment = 0x00293138; // CONFIRMED - loaders.cpp - binds g_pLoadedSegment sections - DebugMallocs the HUD asset header copy with (size,0,loaders.cpp,0x305) proving the 4-arg debug signature live in retail - uploads hud bank 0/2/3/4 textures storing GS handles at header +0x94..+0xa4
+RelocateMobyClassChunk = 0x00293C80; // PARTIAL - in-place fixup of a loaded moby-class chunk - offsets below g_relocOffsetLimit 0x354000 become pointers - remaps 0xFF-terminated class byte strings through a remap table - tail helper FUN_00293b68 untraced
+LoadPlayerDisplayModel = 0x00292C70; // CONFIRMED - loads the armor-variant player display model into the 0x1F28000 buffer and binds g_mobyClassHeaders - callers ExitVendorMenu RefreshVendorSelection UpdateCheatMenuInput - rerun at level exit when g_loadedArmorVariant differs from g_bEquippedArmor
+LoadPlayerDisplayTextures = 0x00292928; // CONFIRMED - blocking-streams g_castModelToc record (texture chunk then model chunk) into g_pPlayerModelBuffer - GS-uploads each sub-texture building g_playerTexDescriptors - variant forced 6/8/7/5 by special skin flags 0x1a7a51/4a/53/52
+BindPlayerDisplayModel = 0x00292BD8; // CONFIRMED - copies g_playerTexDescriptors into the class tex register block 0x1c4d40 as 3-qword groups then RelocateMobyClassChunk on g_pPlayerModelBuffer with identity remap table 0x1a91d0
+LoadHeldItemDisplayModel = 0x00292CB8; // PARTIAL - streams g_castModelToc record 9+idx into the 0x1F20000 buffer and builds g_heldItemTexDescriptor - idx is the g_weaponTable +0x4 upgrade byte of g_itemEquippedSlot[10] - item-10 identity (wrench hypothesis) unverified
+LoadShipDisplayModel = 0x00292EA0; // PARTIAL - streams ship model chunk g_shipModelToc[bits 0-1 of g_shipCustomization] into the 0x1F0C000 buffer - installs g_shipTexDescriptor then FixupMobyClassHeader - run at level exit and ExitVendorMenu - ship/vehicle stand-in semantic inferred from loading-scene usage
+LoadShipDisplayTexture = 0x00292F68; // PARTIAL - streams g_shipTextureToc[bits 16-20 of g_shipCustomization] into the inactive frame-arena half as disposable staging - GS-uploads palette+image - builds g_shipTexDescriptor - paint-job semantic inferred
+ShowSplashImage = 0x0026EA00; // CONFIRMED - DecompressWads a still-image chunk to g_splashImageBuffer then draws it 65 frames with fade parameter 0x80 down to 0 - used by LoadLevelAndInitHealth for boot/menu stills - exact image identities untraced
+ResetFrameArenas = 0x002FD068; // CONFIRMED - resets the per-frame double buffer - half 0 = g_sceneDecompressBase region and half 1 = g_pSceneArenaBase - flip 0 - the low level-data region doubles as frame work buffers
+g_memoryArenaTable = 0x001BAE40; // CONFIRMED - 0x9c-byte memory-region table filled by SetupMemoryArenaTable - full field map in its plate comment - Ghidra alias g_dwMemoryArenaTable
+g_relocOffsetLimit = 0x001BAE48; // PARTIAL - arena +0x8 = 0x354000 - offset-vs-pointer threshold in RelocateMobyClassChunk - Ghidra alias g_nRelocOffsetLimit
+g_sceneDecompressBase = 0x001BAE4C; // CONFIRMED - arena +0xc = 0x354000 - base of decompressed scene/level working region - g_pSceneData = this + cursor - also frame-arena half 0 - 14 readers traced - Ghidra alias g_nSceneDecompressBase
+g_splashImageBuffer = 0x001BAE54; // PARTIAL - arena +0x14 = 2x sceneArenaCursor + 0x354000 - ShowSplashImage decompress target and base of the 0x20-stride frontend record pool reset by FUN_002f1df8 - Ghidra alias g_pSplashImageBuffer
+g_shipModelBufferBase = 0x001BAEB0; // PARTIAL - arena +0x70 = 0x1F0C000 - LoadShipDisplayModel load target - also read by InitLoadingSceneSystem - Ghidra alias g_nShipModelBufferBase
+g_heldItemModelBufferBase = 0x001BAEB4; // PARTIAL - arena +0x74 = 0x1F20000 - LoadHeldItemDisplayModel load target - Ghidra alias g_nHeldItemModelBufferBase
+g_playerModelBufferBase = 0x001BAEB8; // CONFIRMED - arena +0x78 = 0x1F28000 - armor-variant player display model buffer bound into g_mobyClassHeaders - mirrored to g_pPlayerModelBuffer at boot - Ghidra alias g_nPlayerModelBufferBase
+g_debugMallocPoolBase = 0x001BAEBC; // CONFIRMED - arena +0x7c = 0x1F54000 - DebugMalloc bump pool base - pool size 0x64000 set by ResetDebugHeap - Ghidra alias g_nDebugMallocPoolBase
+g_guiMemoryBase = 0x001BAEC0; // CONFIRMED - arena +0x80 = 0x1FB8000 - GuiManagerCreate places the 0x3FB20-byte GUI instance here - Ghidra alias g_nGuiMemoryBase
+g_debugMallocCursor = 0x001B1800; // CONFIRMED - DebugMalloc bump cursor - 0 until lazy ResetDebugHeap - advanced by 16-aligned sizes - writers only DebugMalloc and ResetDebugHeap so no per-level reset - Ghidra alias g_nDebugMallocCursor
+g_debugMallocEnd = 0x001B1804; // CONFIRMED - DebugMalloc pool end = base + 0x64000 - alloc returns 0 when request does not fit - Ghidra alias g_nDebugMallocEnd
+g_pHudAssetHeader = 0x001B1808; // PARTIAL - DebugMalloced copy of the segment HUD asset header made by ParseLoadedSegment - hud bank GS handles at +0x94/+0x9c/+0xa0/+0xa4 - field layout only partially mapped
+g_loadedArmorVariant = 0x001A7290; // CONFIRMED - armor variant of the loaded player display model - set by LoadPlayerDisplayModel - compared vs g_bEquippedArmor at level exit - reset -1 by boot and save-load - Ghidra alias g_nLoadedArmorVariant
+g_pPlayerModelBuffer = 0x001A7294; // CONFIRMED - live pointer to the player display model buffer - copy of arena +0x78 made by RebootIopAndInitEngine - load target and relocation base of the player model chain
+g_playerTexCount = 0x001A7298; // CONFIRMED - sub-texture count of the loaded player display model chunk - bounds descriptor fill and copy - Ghidra alias g_nPlayerTexCount
+g_playerTexDescriptors = 0x001A72A0; // CONFIRMED - u64 GS TEX0 descriptors per player display model sub-texture - copied to class tex block 0x1c4d40 by BindPlayerDisplayModel
+g_loadedHeldItemModelId = 0x001A72C0; // CONFIRMED - TOC index byte of the loaded held-item display model - compared vs g_weaponTable upgrade byte of g_itemEquippedSlot[10] at level exit - reset -1 by boot and save-load - Ghidra alias g_nLoadedHeldItemModelId
+g_heldItemTexDescriptor = 0x001A72C8; // CONFIRMED - u64 GS TEX0 of the held-item display texture built by LoadHeldItemDisplayModel
+g_loadedShipModelVariant = 0x00152C18; // PARTIAL - cache of bits 0-1 of g_shipCustomization for the loaded ship display model - mechanism fully traced - ship semantic inferred - Ghidra alias g_nLoadedShipModelVariant
+g_loadedShipTextureIndex = 0x00152C30; // PARTIAL - cache of bits 16-20 of g_shipCustomization for the loaded ship texture - Ghidra alias g_nLoadedShipTextureIndex
+g_shipTexDescriptor = 0x00152C38; // PARTIAL - u64 GS TEX0 of the ship display texture - built by LoadShipDisplayTexture - consumed by LoadShipDisplayModel and InitLoadingSceneSystem
+g_shipModelToc = 0x0014FE18; // PARTIAL - disc TOC pair table stride 8 + g_nSceneWadBaseLbn - ship display model variants 0..3
+g_shipTextureToc = 0x0014FE30; // PARTIAL - disc TOC pair table stride 8 + g_nSceneWadBaseLbn - ship texture/paint entries indexed by g_shipCustomization bits 16-20
+g_castModelWadBaseLbn = 0x00150444; // PARTIAL - disc TOC field - base LBA added to every g_castModelToc sector offset - Ghidra alias g_nCastModelWadBaseLbn
+g_castModelToc = 0x00150448; // PARTIAL - disc TOC records stride 0x10 with modelOfs/modelSize/texOfs/texSize - records 0..8 player armor variants and 9+ held-item upgrade levels
+g_shipCustomization = 0x001A7AF8; // PARTIAL - PlayerStats +0xf8 bitfield - bits 0-1 select ship display model and bits 16-20 the ship texture - heavily read by the vendor UI cluster 0x2f8bxx - bit mechanics CONFIRMED - ship/paint semantics inferred - Ghidra alias g_dwShipCustomization
+g_frameArenaBase = 0x001B2220; // PARTIAL - double-buffered per-frame arena base pair over the low level-data region - inactive half reused as texture staging - Ghidra alias g_pFrameArenaBase
+g_frameArenaFlip = 0x001B2234; // PARTIAL - flip index 0/1 selecting the active frame-arena half - reset by ResetFrameArenas - toggled by the per-frame pump - Ghidra alias g_nFrameArenaFlip
+_start = 0x00131AE8; // type:func
+main = 0x00131D98; // type:func
+InstallLoadedOverlay = 0x00131CB8; // type:func
+_InitSys = 0x0011F828; // type:func
+exit = 0x0011FA20; // type:func
+sceSifRebootIop = 0x0011EED8; // type:func
+sceSifResetIop = 0x0011ED60; // type:func
+sceSifInitRpc = 0x0011CF78; // type:func
+sceSifFreeSysMemory = 0x0011E8A8; // type:func
+sceSifBindRpc = 0x0011D450; // type:func
+sceSifCheckStatRpc = 0x0011D810; // type:func
+sceSifWriteBackDCache = 0x0011CEC8; // type:func
+Kprintf = 0x0011C820; // type:func
+sceCdInit = 0x00124E08; // type:func
+sceCdDiskReady = 0x001250E8; // type:func
+sceCdMmode = 0x001252E0; // type:func
+sceCdReadClock = 0x001256D8; // type:func
+sceGsResetGraph = 0x001257D0; // type:func
+sceDbcInit = 0x001282A8; // type:func
+sceDbcPortOpen = 0x00128900; // type:func
+OnVblankInterrupt = 0x001339B0; // type:func
+WaitVblankStartIntc = 0x0011B0B0; // type:func
+WaitVblankGetField = 0x001261F0; // type:func
+WaitGsPathsIdle = 0x001244B8; // type:func
+ResetDmacChannels = 0x00126F60; // type:func
+EnableDmacChannels = 0x0029DE88; // type:func
+KickGifImageUpload = 0x001265B0; // type:func

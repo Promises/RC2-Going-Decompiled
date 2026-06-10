@@ -446,7 +446,7 @@ void func_0011B0A0(void) {
     D_00134688 = 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B0B0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", WaitVblankStartIntc);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B140);
 
@@ -611,7 +611,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C1F8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C7E8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C820);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", Kprintf);
 
 /**
  * Callback that writes a record's value (arg0[5]) into the array at arg1[7]
@@ -688,11 +688,11 @@ s32 func_0011CD60(s32 arg0, s32 arg1, s32 arg2, s32 arg3, s32 arg4, s32 arg5) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011CDA0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011CEC8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceSifWriteBackDCache);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011CF74);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011CF78);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceSifInitRpc);
 
 extern void func_0011CB58(void);
 extern s32 D_001346A0;
@@ -734,7 +734,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D350);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", rename);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D450);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceSifBindRpc);
 
 /* func_0011D590(arg0): link the element arg0->field_0x34 into its manager's
  * (elem->field_0x40) active list — patching the tail's back-link (+0x3C) or the
@@ -747,12 +747,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D590);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D620);
 
-/* func_0011D810: validity predicate for the handle in arg0 — returns 1 iff
+/* sceSifCheckStatRpc: validity predicate for the handle in arg0 — returns 1 iff
  * arg0[0] points to a live object, arg0[1] matches obj[6] (the +0x18 id/gen),
  * and obj[4] (+0x10) bit 0 is set; else 0. ~65% — ee-gcc collapses the final
  * if/else into `andi v0,v0,1` and inverts the id-check branch (beql) instead of
  * the original two-exit branch shape. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D810);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceSifCheckStatRpc);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D850);
 
@@ -854,13 +854,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E4E0);
 
 /* func_0011E740: 0x60 bytes of inter-function padding (`addiu sp,+0xN; nop`
  * filler words) split off by symbol_addrs size:0x60; the real function begins at
- * func_0011E7A0. Pure padding, no C. */
+ * sceSifInitIopHeap. Pure padding, no C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E740);
 
-/* func_0011E7A0: real function recovered from the splat mis-split above (init/
- * retry loop around func_0011D450, writes D_00134744). Boundary now correct;
+/* sceSifInitIopHeap: real function recovered from the splat mis-split above (init/
+ * retry loop around sceSifBindRpc, writes D_00134744). Boundary now correct;
  * body not yet decompiled. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E7A0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceSifInitIopHeap);
 
 extern s32 func_0011D620(void *a0, s32 a1, s32 a2, void *a3, s32 a4,
                          void *a5, s32 a6, s32 a7, s32 a8);
@@ -890,7 +890,7 @@ s32 func_0011E828(s32 arg0, s32 arg1, s32 arg2) {
     return 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E8A8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceSifFreeSysMemory);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E920);
 
@@ -927,7 +927,7 @@ void func_0011ED08(s32 arg0, s32 arg1, s32 arg2) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ED28);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ED60);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceSifResetIop);
 
 extern s32 func_0011B030(s32 arg0);
 
@@ -943,7 +943,7 @@ s32 func_0011EEA0(void) {
     return 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011EED8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceSifRebootIop);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011EFE8);
 
@@ -1031,7 +1031,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F718);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F818);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F828);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", _InitSys);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F864);
 
@@ -1080,7 +1080,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F9E4);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011FA18);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011FA20);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", exit);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011FA48);
 
@@ -1497,7 +1497,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001242A0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00124414);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001244B8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", WaitGsPathsIdle);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00124540);
 
@@ -1582,11 +1582,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00124C28);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00124C98);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00124E08);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceCdInit);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001250E8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceCdDiskReady);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001252E0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceCdMmode);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001253A4);
 
@@ -1596,9 +1596,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", QueryCdStatusOve
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00125620);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001256D8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceCdReadClock);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001257D0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceGsResetGraph);
 
 extern s32 D_00137E00;
 
@@ -1627,13 +1627,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00125F20);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126104);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001261F0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", WaitVblankGetField);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126284);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012646C);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001265B0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", KickGifImageUpload);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012672C);
 
@@ -1680,7 +1680,7 @@ s32 func_00126F38(u32 arg0) {
     return 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126F60);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", ResetDmacChannels);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127040);
 
@@ -1799,7 +1799,7 @@ s32 func_00128250(void) {
     return D_00143180;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001282A8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceDbcInit);
 
 /* func_00128440(arg0): open the D_00143180 subsystem in mode 0x80000904 with
  * arg0 stored at (&D_00143180)[1], via func_0011D620; on failure log D_0013B868
@@ -1845,7 +1845,7 @@ s32 func_001288C0(void) {
     return 1;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128900);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceDbcPortOpen);
 
 /* func_00128A48: 0x8 bytes of inter-function padding split off by symbol_addrs
  * size:0x8; the real function begins at func_00128A50. Pure padding, no C. */
@@ -2455,8 +2455,8 @@ void func_00130178(s32 *obj) {
     func_00130DB8(0, 0);
 }
 
-/* func_00130240(arg0): dispatch arg0 through func_0011C820 against the global
- * table D_0013BDE8 — the original is a frameless tail call (`j func_0011C820`).
+/* func_00130240(arg0): dispatch arg0 through Kprintf against the global
+ * table D_0013BDE8 — the original is a frameless tail call (`j Kprintf`).
  * ee-gcc 2.9 does not sibling-call-optimise this, so it emits jal + a stack
  * frame and cannot match from C. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130240);
@@ -2794,15 +2794,15 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131A08);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131A98);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131AE8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", _start);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131CA8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131CB0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131CB8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", InstallLoadedOverlay);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131D98);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", main);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", snd_Pump);
 

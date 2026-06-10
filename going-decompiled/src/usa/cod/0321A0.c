@@ -30,7 +30,7 @@ extern s32 g_sndIopReady; /* nonzero when the IOP sound/loader driver is up */
 extern void *D_001A7490; /* snd_Pump tick callback (set by SetSndPumpCallback) */
 
 /* snd_ServiceRpcCompletion: polls the cmd-channel RPC result buffer
- * (D_001A7480/D_001A7484) after func_0011AEA0/func_0011D810, prints
+ * (D_001A7480/D_001A7484) after func_0011AEA0/sceSifCheckStatRpc, prints
  * D_0013BFA0 via snd_PrintError on stall. Best attempt 78% — ee-gcc lays the
  * early-return-1 branch out as `b`+`li` (or a branch-likely `bnel`) instead of
  * the original's `beqz` straight to the epilogue with the return value in the
@@ -577,10 +577,10 @@ s32 func_00133960(void) {
  * scheduling choice not expressible in source. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00133988);
 
-/* func_001339B0: bumps the 64-bit tick counter D_001A7208 and snapshots
+/* OnVblankInterrupt: bumps the 64-bit tick counter D_001A7208 and snapshots
  * D_001A7210 = D_001A7200 + T1_COUNT (0x10000800). Best attempt 75% (15/16
  * insns, volatile u64 scalars + `.extern ,16` overrides reproduce the
  * $at-macro store) — the one residue is the timer-address `ori`, which this
  * cc1 schedules after the D_001A7200 load while the original keeps it before.
  * A scheduling choice not expressible in source. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_001339B0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", OnVblankInterrupt);

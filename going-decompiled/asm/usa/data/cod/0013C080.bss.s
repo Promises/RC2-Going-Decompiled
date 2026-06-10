@@ -494,10 +494,30 @@ nonmatching g_globalSceneToc, 0x30
 dlabel g_globalSceneToc
     /* 0014F368 */ .space 0x30
 
-nonmatching g_loadingSceneWadToc, 0x11A0
+nonmatching g_loadingSceneWadToc, 0xA80
 
 dlabel g_loadingSceneWadToc
-    /* 0014F398 */ .space 0x11A0
+    /* 0014F398 */ .space 0xA80
+
+nonmatching g_shipModelToc, 0x18
+
+dlabel g_shipModelToc
+    /* 0014FE18 */ .space 0x18
+
+nonmatching g_shipTextureToc, 0x614
+
+dlabel g_shipTextureToc
+    /* 0014FE30 */ .space 0x614
+
+nonmatching g_castModelWadBaseLbn, 0x4
+
+dlabel g_castModelWadBaseLbn
+    /* 00150444 */ .space 0x04
+
+nonmatching g_castModelToc, 0xF0
+
+dlabel g_castModelToc
+    /* 00150448 */ .space 0xF0
 
 nonmatching g_levelTocDirectory, 0x2A0
 
@@ -514,10 +534,15 @@ nonmatching g_levelAssetToc, 0x1018
 dlabel g_levelAssetToc
     /* 00150838 */ .space 0x1018
 
-nonmatching g_levelDialogToc, 0x13D0
+nonmatching g_levelDialogToc, 0x13C8
 
 dlabel g_levelDialogToc
-    /* 00151850 */ .space 0x13D0
+    /* 00151850 */ .space 0x13C8
+
+nonmatching g_loadedShipModelVariant, 0x8
+
+dlabel g_loadedShipModelVariant
+    /* 00152C18 */ .space 0x08
 
 nonmatching g_exitSceneMode, 0xC
 
@@ -529,10 +554,20 @@ nonmatching g_scenePlayerFadedOut, 0x2
 dlabel g_scenePlayerFadedOut
     /* 00152C2C */ .space 0x02
 
-nonmatching g_loadingSceneVariant, 0x12
+nonmatching g_loadingSceneVariant, 0x2
 
 dlabel g_loadingSceneVariant
-    /* 00152C2E */ .space 0x12
+    /* 00152C2E */ .space 0x02
+
+nonmatching g_loadedShipTextureIndex, 0x8
+
+dlabel g_loadedShipTextureIndex
+    /* 00152C30 */ .space 0x08
+
+nonmatching g_shipTexDescriptor, 0x8
+
+dlabel g_shipTexDescriptor
+    /* 00152C38 */ .space 0x08
 
 nonmatching g_shipTakeoffSplineIndex, 0x24
 
@@ -769,14 +804,14 @@ nonmatching D_001A71C4, 0x3C
 dlabel D_001A71C4
     /* 001A71C4 */ .space 0x3C
 
-nonmatching D_001A7200, 0x8
+nonmatching g_hblankTicksAccum, 0x8
 
-dlabel D_001A7200
+dlabel g_hblankTicksAccum
     /* 001A7200 */ .space 0x08
 
-nonmatching D_001A7208, 0x8
+nonmatching g_vblankCount, 0x8
 
-dlabel D_001A7208
+dlabel g_vblankCount
     /* 001A7208 */ .space 0x08
 
 nonmatching D_001A7210, 0x70
@@ -799,10 +834,40 @@ nonmatching g_pLoadedSegment, 0x4
 dlabel g_pLoadedSegment
     /* 001A7288 */ .space 0x04
 
-nonmatching g_pStagedChunkB, 0x194
+nonmatching g_pStagedChunkB, 0x4
 
 dlabel g_pStagedChunkB
-    /* 001A728C */ .space 0x194
+    /* 001A728C */ .space 0x04
+
+nonmatching g_loadedArmorVariant, 0x4
+
+dlabel g_loadedArmorVariant
+    /* 001A7290 */ .space 0x04
+
+nonmatching g_pPlayerModelBuffer, 0x4
+
+dlabel g_pPlayerModelBuffer
+    /* 001A7294 */ .space 0x04
+
+nonmatching g_playerTexCount, 0x8
+
+dlabel g_playerTexCount
+    /* 001A7298 */ .space 0x08
+
+nonmatching g_playerTexDescriptors, 0x20
+
+dlabel g_playerTexDescriptors
+    /* 001A72A0 */ .space 0x20
+
+nonmatching g_loadedHeldItemModelId, 0x8
+
+dlabel g_loadedHeldItemModelId
+    /* 001A72C0 */ .space 0x08
+
+nonmatching g_heldItemTexDescriptor, 0x158
+
+dlabel g_heldItemTexDescriptor
+    /* 001A72C8 */ .space 0x158
 
 nonmatching g_nSaveLoadStatusCode, 0x10
 

@@ -311,7 +311,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DDB0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DDE8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DE88);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", EnableDmacChannels);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DF18);
 
