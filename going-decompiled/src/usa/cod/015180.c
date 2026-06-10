@@ -476,7 +476,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B5F0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", DisableDmac);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", EnableDmacIntr);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", EnableDmac);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B728);
 
@@ -1695,27 +1695,28 @@ extern u32 func_00126ED8(u32 arg0);
 extern void sceDmaSyncChan(void *obj);
 
 struct Obj127220 {
-    /* 0x0 */  s32 flags;
+    /* 0x0 */  s32 chcr;
     u8 pad4[0x1C];
-    /* 0x20 */ s32 field20;
+    /* 0x20 */ s32 qwc;
     u8 pad24[0xC];
-    /* 0x30 */ u32 handle;
+    /* 0x30 */ u32 tadr;
 };
 
 /**
- * (Re)bind descriptor obj: register the resource arg1 (func_00126ED8 returns its
- * handle), run the per-object setup sceDmaSyncChan(obj), then — unless obj already
- * has no handle slot (0xFFFFFFFF) — store the new handle. Finally clear field20
- * and reset the flags word to (flags & ~0xC) | 0x105.
+ * func_00127220 is sceDmaSend (chain mode) - kept func_ name, matched. obj is
+ * the sceDmaChan register block (chcr at +0, qwc at +0x20, tadr at +0x30).
+ * Converts the chain pointer via func_00126ED8 (DmaSprAddrToMadr), syncs the
+ * channel, stores TADR (unless the channel reports 0xFFFFFFFF), zeroes QWC and
+ * kicks with CHCR = (chcr & ~0xC) | 0x105 (chain mode, TTE, STR).
  */
 void func_00127220(struct Obj127220 *obj, u32 arg1) {
     u32 handle = func_00126ED8(arg1);
     sceDmaSyncChan(obj);
-    if (obj->handle != 0xFFFFFFFF) {
-        obj->handle = handle;
+    if (obj->tadr != 0xFFFFFFFF) {
+        obj->tadr = handle;
     }
-    obj->field20 = 0;
-    obj->flags = (obj->flags & ~0xC) | 0x105;
+    obj->qwc = 0;
+    obj->chcr = (obj->chcr & ~0xC) | 0x105;
 }
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127288);
