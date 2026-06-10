@@ -1159,6 +1159,11 @@ void func_001203C0(void) {
 
 extern s32 func_00115F28(s32 size);
 
+/**
+ * Allocate and zero-init a 0x18-byte record via func_00115F28 (OOM hook
+ * func_00120368 on failure); field [1] is set to point at the record's own
+ * tail (p+0x10), forming an empty self-referential list head. Returns the record.
+ */
 s32 *func_001203C8(void) {
     s32 *p = (s32 *)func_00115F28(0x18);
     if (p == 0) {
@@ -3082,29 +3087,29 @@ void func_00133490(s32 arg0) {
     func_00132C48(0x36, 4, &value);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001334B8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", CdStartRead);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133580);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133640);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", CdStopRead);
 
-/* func_00133688: getter — if the init flag D_001A748C is set, return the cached
+/* CdGetLoadStatus: getter — if the init flag D_001A748C is set, return the cached
  * global D_001A7110, else call func_00125588(). Not matched: the flag is read
  * with a gp-relative load `lw ...,%gp_rel(D_001A748C)($28)`, but with -G0 cc1
  * places the global in normal data and emits an absolute lui/lw pair instead.
  * gp_rel small-data access isn't expressible in source here. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133688);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", CdGetLoadStatus);
 
 /* func_001336C0: 0x10 bytes of inter-function padding split off by symbol_addrs
- * size:0x10; the real function begins at func_001336D0. Pure padding, no C. */
+ * size:0x10; the real function begins at SetSndPumpCallback. Pure padding, no C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001336C0);
 
-/* func_001336D0: cache-or-init accessor for the gp-relative globals
+/* SetSndPumpCallback: cache-or-init accessor for the gp-relative globals
  * D_001A748C/D_001A7490 (if the init flag is set, store arg0 and return the old
  * value, else call func_001245D0). Not matched: the globals are read/written via
  * %gp_rel(...)($28); with -G0 cc1 places them in normal data and emits absolute
  * lui/lw pairs instead. gp_rel small-data access isn't expressible here. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001336D0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", SetSndPumpCallback);
 
 /* func_00133700: 0x10 bytes of inter-function padding split off by symbol_addrs
  * size:0x10; the real wrapper begins at func_00133710. Pure padding, no C. */
@@ -3247,19 +3252,19 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001339B0);
  * before the branch and nops the slot (a scheduling choice). Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001339F0);
 
-/* func_00133A28(arg0, arg1, arg2): build a 4-byte descriptor {0x20,1,0,0} on the
- * stack and pass it with (arg0,arg1,arg2) to func_001334B8, then run the trio
+/* CdReadSync(arg0, arg1, arg2): build a 4-byte descriptor {0x20,1,0,0} on the
+ * stack and pass it with (arg0,arg1,arg2) to CdStartRead, then run the trio
  * func_00133230 / func_00132028 / func_00133580(0). ~54% — the original schedules
  * the `sd $31` save early (before the descriptor stores) and tucks the 4th `sb`
  * into the jal delay slot while keeping `move $7,$sp` outside it; ee-gcc groups
  * the stores and does the opposite delay-slot fill. A scheduling-only shape this
  * cc1 won't reproduce. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133A28);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", CdReadSync);
 
-/* func_00133A78: calls func_00133A28(0x3E9, 0xB, &D_0014B540) and returns. Not
+/* LoadDiscToc: calls CdReadSync(0x3E9, 0xB, &D_0014B540) and returns. Not
  * matched: same sibling-call-optimisation blocker as func_00133890 — ee-gcc
- * tail-calls into func_00133A28 rather than keeping the original's stack frame.
+ * tail-calls into CdReadSync rather than keeping the original's stack frame.
  * Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133A78);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", LoadDiscToc);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00133AA0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", LoadLevelToc);

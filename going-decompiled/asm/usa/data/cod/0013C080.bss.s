@@ -454,20 +454,85 @@ nonmatching D_0014B100, 0x440
 dlabel D_0014B100
     /* 0014B100 */ .space 0x440
 
-nonmatching D_0014B540, 0x34AC0
+nonmatching g_discToc, 0x32C
 
-dlabel D_0014B540
-    /* 0014B540 */ .space 0x34AC0
+dlabel g_discToc
+    /* 0014B540 */ .space 0x32C
 
-nonmatching D_00180000, 0x86D4
+nonmatching g_levelWadBaseLbn, 0x40
+
+dlabel g_levelWadBaseLbn
+    /* 0014B86C */ .space 0x40
+
+nonmatching g_globalWadBaseLbn, 0x1344
+
+dlabel g_globalWadBaseLbn
+    /* 0014B8AC */ .space 0x1344
+
+nonmatching g_textTableLbnOffset, 0x3948
+
+dlabel g_textTableLbnOffset
+    /* 0014CBF0 */ .space 0x3948
+
+nonmatching g_levelTocDirectory, 0x2A0
+
+dlabel g_levelTocDirectory
+    /* 00150538 */ .space 0x2A0
+
+nonmatching g_levelTocHeader, 0x60
+
+dlabel g_levelTocHeader
+    /* 001507D8 */ .space 0x60
+
+nonmatching g_levelAssetToc, 0x1018
+
+dlabel g_levelAssetToc
+    /* 00150838 */ .space 0x1018
+
+nonmatching g_levelDialogToc, 0x2E7B0
+
+dlabel g_levelDialogToc
+    /* 00151850 */ .space 0x2E7B0
+
+nonmatching D_00180000, 0x8660
 
 dlabel D_00180000
-    /* 00180000 */ .space 0x86D4
+    /* 00180000 */ .space 0x8660
 
-nonmatching g_voiceHandleTable, 0x1928
+nonmatching g_listenerPosHistory, 0x40
 
-dlabel g_voiceHandleTable
-    /* 001886D4 */ .space 0x1928
+dlabel g_listenerPosHistory
+    /* 00188660 */ .space 0x40
+
+nonmatching g_listenerPosHistoryIdx, 0x8
+
+dlabel g_listenerPosHistoryIdx
+    /* 001886A0 */ .space 0x08
+
+nonmatching g_sndChannelVolumes, 0x28
+
+dlabel g_sndChannelVolumes
+    /* 001886A8 */ .space 0x28
+
+nonmatching g_soundEmitterTable, 0x16D0
+
+dlabel g_soundEmitterTable
+    /* 001886D0 */ .space 0x16D0
+
+nonmatching g_listenerOcclusionProbes, 0x60
+
+dlabel g_listenerOcclusionProbes
+    /* 00189DA0 */ .space 0x60
+
+nonmatching g_soundBankHandles, 0xA0
+
+dlabel g_soundBankHandles
+    /* 00189E00 */ .space 0xA0
+
+nonmatching g_heroPos, 0x15C
+
+dlabel g_heroPos
+    /* 00189EA0 */ .space 0x15C
 
 nonmatching g_nNanotechBonusHealTimer, 0x1698
 
@@ -504,15 +569,55 @@ nonmatching g_saveImageGlobal, 0x2800
 dlabel g_saveImageGlobal
     /* 001A2BA8 */ .space 0x2800
 
-nonmatching g_saveImageArea, 0x1024
+nonmatching g_saveImageArea, 0x1004
 
 dlabel g_saveImageArea
-    /* 001A53A8 */ .space 0x1024
+    /* 001A53A8 */ .space 0x1004
 
-nonmatching g_pendingDialogVoiceId, 0x44
+nonmatching g_fileLoadState, 0x2
+
+dlabel g_fileLoadState
+    /* 001A63AC */ .space 0x02
+
+nonmatching g_bFileLoadAborted, 0x2
+
+dlabel g_bFileLoadAborted
+    /* 001A63AE */ .space 0x02
+
+nonmatching g_fileLoadLbn, 0x8
+
+dlabel g_fileLoadLbn
+    /* 001A63B0 */ .space 0x08
+
+nonmatching g_fileLoadSectorCount, 0x4
+
+dlabel g_fileLoadSectorCount
+    /* 001A63B8 */ .space 0x04
+
+nonmatching g_fileLoadDest, 0x4
+
+dlabel g_fileLoadDest
+    /* 001A63BC */ .space 0x04
+
+nonmatching g_fileLoadCallback, 0x4
+
+dlabel g_fileLoadCallback
+    /* 001A63C0 */ .space 0x04
+
+nonmatching g_fileLoadCallbackArg, 0x8
+
+dlabel g_fileLoadCallbackArg
+    /* 001A63C4 */ .space 0x08
+
+nonmatching g_pendingDialogVoiceId, 0x1C
 
 dlabel g_pendingDialogVoiceId
-    /* 001A63CC */ .space 0x44
+    /* 001A63CC */ .space 0x1C
+
+nonmatching g_cdReadMode, 0x28
+
+dlabel g_cdReadMode
+    /* 001A63E8 */ .space 0x28
 
 nonmatching g_dialogVoiceActive, 0x4
 
@@ -569,9 +674,9 @@ nonmatching D_001A7100, 0x10
 dlabel D_001A7100
     /* 001A7100 */ .space 0x10
 
-nonmatching D_001A7110, 0x2F
+nonmatching g_sndIopLoadStatus, 0x2F
 
-dlabel D_001A7110
+dlabel g_sndIopLoadStatus
     /* 001A7110 */ .space 0x2F
 
 nonmatching D_001A713F, 0x1
