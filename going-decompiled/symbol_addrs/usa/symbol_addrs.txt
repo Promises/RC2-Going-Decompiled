@@ -271,3 +271,26 @@ g_nNanotechBonusHealTimer = 0x00189FFC; // CONFIRMED written/read in UpdateNanot
 g_bNanotechBonusHealEnabled = 0x001A7A4E; // UNCONFIRMED source (behaviour CONFIRMED) - byte flag in the 0x1A7A48 region but NOT a pnach cheat, only READ in UpdateNanotechOrb (3 sites), arms g_nNanotechBonusHealTimer + enhanced heal FX, set externally (save deserialize or debug path)
 PostGuiScreenEvent = 0x0029C510; // CONFIRMED - if g_guiInstance exists, forwards a fixed GUI page/event id to the active screen object at g_guiInstance+0x37ED0 via GuiScreenSetEventAndReveal. eventId 0x168 used by the orb-heal path + level transition FUN_002CB560 (NOT a sound call, corrects an earlier UpdateNanotechOrb note)
 GuiScreenSetEventAndReveal = 0x0034BD40; // CONFIRMED structurally - stores eventId at screen+0x3F4, if pending flag screen+0x400 set clears it, sets dirty screen+0xC=1, activates 4 child widgets at +0x1D4/+0x25C/+0x2E4/+0x36C (0x88 stride). Flash/reveal of a GUI screen page on an event
+
+// === Track-B localization / text-table + subtitle system (EU anchors - string content + table layout vary per language). ===
+GetLocalizedString = 0x002899F8; // CONFIRMED - textId to char* via the active text table, ~100 callers (menus/HUD/vendor/map), backed by FindTextTableEntry. broad EU anchor reach
+FindTextTableEntry = 0x00289988; // CONFIRMED - linear-search g_pActiveTextTable (count g_activeTextTableCount, entry stride 0x10, id at +4), returns index or -1
+StreamTextTable = 0x002D8F70; // CONFIRMED - streams the per-language text table into g_pTextTableLoadBuf, relocates entry str ptrs, installs as active (saves prev into cmd+0x54/+0x38)
+RestorePrevTextTable = 0x002D8F00; // CONFIRMED - pop side, restores the text table saved by StreamTextTable
+UpdateSubtitleStateMachine = 0x00289BB8; // CONFIRMED - per-frame subtitle/dialog driver (state 0..8), voice-syncs via entry+8 (voice-clip index hypothesis UNCONFIRMED)
+BeginSubtitleDisplay = 0x00289A60; // CONFIRMED - builds the text sprite/box for the current subtitle entry, positions by string width, resets state
+g_pActiveTextTable = 0x001B17C0; // CONFIRMED - active localized text table base (0x10-byte entries +0 char* str +4 textId +8 voice param). EU anchor
+g_activeTextTableCount = 0x00254E24; // CONFIRMED - entry count of g_pActiveTextTable
+g_currentLanguage = 0x001A7BBC; // CONFIRMED - language index (u8), set by dialog/movie cmd opcode 9 (FUN_002d67c0), selects the per-language table slot. EU anchor
+g_pTextTableLoadBuf = 0x001F28D8; // CONFIRMED - streaming load buffer for the language text table (indexed by g_currentLanguage)
+g_subtitleEntryIndex = 0x00254E18; // CONFIRMED - index into g_pActiveTextTable of the subtitle being shown (-1 none)
+g_subtitleState = 0x00254DF8; // CONFIRMED - subtitle state-machine state (0..8)
+g_subtitleStateTimer = 0x00254DFC; // CONFIRMED - frame timer within the current subtitle phase
+g_pendingSubtitleId = 0x00254E1C; // CONFIRMED - pending textId to display as a subtitle (-1 none)
+SetPopupItemText = 0x00349378; // CONFIRMED - sets item count (popup+0x4b4) and fills item widgets (popup+0x218 stride 0x58) from textIds via GetLocalizedString
+SetPopupItemEnabled = 0x00349368; // CONFIRMED - popup+0x488+i*4 enabled flag (disabled items greyed + skipped by nav)
+SetPopupLayoutMode = 0x003492B0; // CONFIRMED - popup+0x4bc layout mode (0 item-list menu, 1 two-button prompt)
+SetPopupVisible = 0x003492A8; // CONFIRMED - popup+0x4b8 visible (fade alpha 1.0/0.0)
+SetPopupTitleText = 0x003492B8; // CONFIRMED - assigns 5 title/border text widgets from a string array (binds GUI font atlas +0x8710)
+UpdatePopupMenu = 0x00349728; // CONFIRMED - per-frame layout + D-pad nav (masks 0x1000/0x4000), skips disabled items, returns selIndex (popup+0x4ac)
+BuildPausePromptPopup = 0x002CBED0; // CONFIRMED - populates the pause/confirm popup (title textIds + items), disables the first 3 items when g_bPlayerMode==1, calls UpdatePopupMenu
