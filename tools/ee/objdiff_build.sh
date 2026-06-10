@@ -44,6 +44,16 @@ mkdir -p "$(dirname "$EXPECTED")" "$(dirname "$OBJ")" "$W"
 INC="-Igoing-decompiled/include -Igoing-decompiled/include/rtl/ee -Igoing-decompiled/include/rtl/common"
 CPPDEF="-D__GNUC__=2 -D__GNUC_MINOR__=9 -D__mips__ -D__mips=3 -D__R5900 -D__LANGUAGE_C -D_LANGUAGE_C -D__EE__ -DINCLUDE_ASM_USE_MACRO_INC=1"
 
+# Per-unit -G override (BASE compile only; the target is pure INCLUDE_ASM so
+# -G is irrelevant there). The cod/0321A0 989snd sub-TU is an original separate
+# TU built at nonzero -G: its sdata cluster (0x1A7480..0x1A74F8) is accessed
+# uniformly via %gp_rel, which only a nonzero -G reproduces. Everything else
+# stays at the proven -O2 -G0. Keep this list in sync with diff.sh.
+GFLAG="-G0"
+case "$REGION/$UNIT" in
+  usa/cod/0321A0) GFLAG="-G8";;
+esac
+
 # Generate a PRISTINE all-INCLUDE_ASM unit C for the TARGET, straight from the
 # asm tree — one INCLUDE_ASM per <func>.s, emitted in ASCENDING VRAM-ADDRESS order
 # (each .s carries its address in the first `/* off addr bytes */` comment). This
@@ -85,8 +95,8 @@ docker --context colima-ee-x86 run --rm -v "$ROOT":/work ee-build sh -c "
   \$WIBO \$G/cc1.exe -quiet -O2 -G0 $W/target.i -o $W/target.s
   sh tools/ee/asm_unit.sh $REGION /work/$W/target.s /work/$EXPECTED
   \$WIBO \$G/cpp.exe $CPPDEF $INC $BASECFILE $W/base.i
-  \$WIBO \$G/cc1.exe -quiet -O2 -G0 $W/base.i -o $W/base.s
-  sh tools/ee/asm_unit.sh $REGION /work/$W/base.s /work/$OBJ
+  \$WIBO \$G/cc1.exe -quiet -O2 $GFLAG $W/base.i -o $W/base.s
+  sh tools/ee/asm_unit.sh $REGION /work/$W/base.s /work/$OBJ $GFLAG
   mips-linux-gnu-nm $EXPECTED | awk '/\\.NON_MATCHING\$/{print \"-N\", \$3}' > $W/nmstrip.txt
   test -s $W/nmstrip.txt && mips-linux-gnu-strip $EXPECTED \$(cat $W/nmstrip.txt) || true
   mips-linux-gnu-strip $OBJ -N gcc2_compiled. -N __gnu_compiled_c -N dummy-symbol-name

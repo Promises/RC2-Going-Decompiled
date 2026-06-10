@@ -72,7 +72,20 @@ segments:
     subalign: null
     subsegments:
       - [0x000000, textbin, cod/000000] # .vutext
-      - [0x015180, c, cod/015180] # core.text
+      # SND SUB-TU CARVE (2026-06-10): the 989snd/CD-bridge cluster
+      # (vaddr 0x132220..0x1339EF, sdata 0x1A7480..0x1A74F8) is an original
+      # separate TU built at nonzero -G (its small-data access is uniformly
+      # %gp_rel), so it is carved out of cod/015180 into its own c unit
+      # cod/0321A0 compiled at -O2 -G8 (see tools/ee/objdiff_build.sh G
+      # override). Boundaries are real, consecutive function starts verified
+      # in the disassembly: 0x132220 (snd_ServiceRpcCompletion) and 0x1339F0
+      # (func_001339F0, first non-snd tail function). The tail c unit
+      # cod/033970 (0x1339F0..0x133B7F: func_001339F0, CdReadSync,
+      # LoadDiscToc, LoadLevelToc) stays at -G0. fileoff -> vaddr is the
+      # constant +0x100080 delta.
+      - [0x015180, c, cod/015180] # core.text head (0x115200..0x13221F)
+      - [0x0321A0, c, cod/0321A0] # snd sub-TU, built at -G8 (0x132220..0x1339EF)
+      - [0x033970, c, cod/033970] # core.text tail (0x1339F0..0x133B7F)
       - [0x033B00, data, cod/033B00] # core.data
       - [0x03A180, rodata, cod/03A180] # core.rdata
       - { type: bss, vram: 0x0013C080, name: cod/0013C080 } # core.bss

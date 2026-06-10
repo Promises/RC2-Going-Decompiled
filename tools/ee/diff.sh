@@ -19,6 +19,15 @@ INC="-Igoing-decompiled/include -Igoing-decompiled/include/rtl/ee -Igoing-decomp
 ASF="-march=r5900 -mabi=eabi -no-pad-sections -EL -G0 -Igoing-decompiled/build/$REGION/include"
 CPPDEF="-D__GNUC__=2 -D__GNUC_MINOR__=9 -D__mips__ -D__mips=3 -D__R5900 -D__LANGUAGE_C -D_LANGUAGE_C -D__EE__ -DINCLUDE_ASM_USE_MACRO_INC=1"
 
+# Per-unit -G override for the BASE compile - the cod/0321A0 989snd sub-TU was
+# originally built at nonzero -G (uniform %gp_rel small-data access), so its C
+# is compiled at -G8. Everything else stays -G0. Keep in sync with
+# objdiff_build.sh.
+GFLAG="-G0"
+case "$REGION/$UNIT" in
+  usa/cod/0321A0) GFLAG="-G8";;
+esac
+
 # Pre-filter the original asm so VU0 (COP2) macro-mode instructions assemble
 # with GNU as: spimdisasm emits the Q/ACC special registers as bare tokens,
 # GNU as wants them `$`-prefixed (byte-identical encoding). No-op otherwise.
@@ -40,8 +49,8 @@ docker --context colima-ee-x86 run --rm -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work; WIBO=/usr/local/bin/wibo; G=tools/ee/cc/lib/gcc-lib/ee/2.9-ee-991111
   mips-linux-gnu-as $ASF -o $W/target.o $W/target.s
   \$WIBO \$G/cpp.exe $CPPDEF $INC $CFILE $W/base.i
-  \$WIBO \$G/cc1.exe -quiet -O2 -G0 $W/base.i -o $W/base.s
-  sh tools/ee/asm_unit.sh $REGION /work/$W/base.s /work/$W/base.o
+  \$WIBO \$G/cc1.exe -quiet -O2 $GFLAG $W/base.i -o $W/base.s
+  sh tools/ee/asm_unit.sh $REGION /work/$W/base.s /work/$W/base.o $GFLAG
 "
 
 "$OBJDIFF" diff -1 "$W/target.o" -2 "$W/base.o" "$FUNC" -o - --format json-pretty \

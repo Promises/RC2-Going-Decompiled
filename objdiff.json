@@ -13,8 +13,14 @@
     "mips.abi": "eabi32"
   },
   "progress_categories": [
-    { "id": "cod", "name": "core.text" },
-    { "id": "text", "name": ".text" }
+    {
+      "id": "cod",
+      "name": "core.text"
+    },
+    {
+      "id": "text",
+      "name": ".text"
+    }
   ],
   "units": [
     {
@@ -23,7 +29,31 @@
       "base_path": "going-decompiled/build/usa/obj/cod/015180.o",
       "metadata": {
         "source_path": "going-decompiled/src/usa/cod/015180.c",
-        "progress_categories": ["cod"]
+        "progress_categories": [
+          "cod"
+        ]
+      }
+    },
+    {
+      "name": "usa/cod/0321A0",
+      "target_path": "going-decompiled/build/usa/expected/cod/0321A0.o",
+      "base_path": "going-decompiled/build/usa/obj/cod/0321A0.o",
+      "metadata": {
+        "source_path": "going-decompiled/src/usa/cod/0321A0.c",
+        "progress_categories": [
+          "cod"
+        ]
+      }
+    },
+    {
+      "name": "usa/cod/033970",
+      "target_path": "going-decompiled/build/usa/expected/cod/033970.o",
+      "base_path": "going-decompiled/build/usa/obj/cod/033970.o",
+      "metadata": {
+        "source_path": "going-decompiled/src/usa/cod/033970.c",
+        "progress_categories": [
+          "cod"
+        ]
       }
     },
     {
@@ -32,7 +62,9 @@
       "base_path": "going-decompiled/build/usa/obj/text/198FA0.o",
       "metadata": {
         "source_path": "going-decompiled/src/usa/text/198FA0.c",
-        "progress_categories": ["text"]
+        "progress_categories": [
+          "text"
+        ]
       }
     }
   ]
