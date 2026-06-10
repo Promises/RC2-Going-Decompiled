@@ -474,9 +474,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B588);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B5F0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B658);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", DisableDmac);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B6C0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", EnableDmacIntr);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B728);
 
@@ -645,7 +645,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C8C8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C8D8);
 
-/* func_0011CB58: subsystem reset — func_0011B658(5); func_0011A950(5,
+/* func_0011CB58: subsystem reset — DisableDmac(5); func_0011A950(5,
  * D_0013CF54); D_0013469C = 0. Body is structurally identical at 98.46%, but the
  * original allocates $3 (v1) for every %hi address temporary while ee-gcc picks
  * $2 (v0); a one-register global allocation offset this cc1 won't reproduce from
@@ -1615,7 +1615,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00125970);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00125A10);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00125A20);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", BuildGsDispEnv);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00125D94);
 
@@ -1623,7 +1623,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00125E54);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00125E58);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00125F20);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", BuildGsDrawEnvPacket);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126104);
 
@@ -1639,7 +1639,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012672C);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126DBC);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126E60);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceDmaSyncChan);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126ED0);
 
@@ -1648,6 +1648,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126ED0);
  * upper nibble and set bit 31 instead (i.e. remap tag 0x7 to 0x8). Otherwise
  * return arg0 unchanged.
  */
+/* func_00126ED8 is DmaSprAddrToMadr - SPR pointer to MADR conversion (kept func_ name - matched). */
 u32 func_00126ED8(u32 arg0) {
     if ((arg0 >> 28) == 7) {
         arg0 &= 0x0FFFFFFF;
@@ -1673,6 +1674,7 @@ extern s32 D_00137E30[];
  * Bounds-checked lookup into the 10-entry table D_00137E30. Returns
  * D_00137E30[arg0] for arg0 in [0,9], or 0 if arg0 is out of range.
  */
+/* func_00126F38 is sceDmaGetChan - libdma channel-struct lookup (kept func_ name - matched). */
 s32 func_00126F38(u32 arg0) {
     if (arg0 < 0xA) {
         return D_00137E30[arg0];
@@ -1690,7 +1692,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127040);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127218);
 
 extern u32 func_00126ED8(u32 arg0);
-extern void func_00126E60(void *obj);
+extern void sceDmaSyncChan(void *obj);
 
 struct Obj127220 {
     /* 0x0 */  s32 flags;
@@ -1702,13 +1704,13 @@ struct Obj127220 {
 
 /**
  * (Re)bind descriptor obj: register the resource arg1 (func_00126ED8 returns its
- * handle), run the per-object setup func_00126E60(obj), then — unless obj already
+ * handle), run the per-object setup sceDmaSyncChan(obj), then — unless obj already
  * has no handle slot (0xFFFFFFFF) — store the new handle. Finally clear field20
  * and reset the flags word to (flags & ~0xC) | 0x105.
  */
 void func_00127220(struct Obj127220 *obj, u32 arg1) {
     u32 handle = func_00126ED8(arg1);
-    func_00126E60(obj);
+    sceDmaSyncChan(obj);
     if (obj->handle != 0xFFFFFFFF) {
         obj->handle = handle;
     }

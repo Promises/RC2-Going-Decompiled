@@ -724,10 +724,35 @@ nonmatching g_dialogVoiceId, 0x6
 dlabel g_dialogVoiceId
     /* 001A6414 */ .space 0x06
 
-nonmatching g_dialogVoicePhase, 0xBE6
+nonmatching g_dialogVoicePhase, 0x66
 
 dlabel g_dialogVoicePhase
-    /* 001A641A */ .space 0xBE6
+    /* 001A641A */ .space 0x66
+
+nonmatching g_gsScreenContext, 0x180
+
+dlabel g_gsScreenContext
+    /* 001A6480 */ .space 0x180
+
+nonmatching g_screenBlitPacketA, 0x260
+
+dlabel g_screenBlitPacketA
+    /* 001A6600 */ .space 0x260
+
+nonmatching g_screenBlitPacketB, 0x4E0
+
+dlabel g_screenBlitPacketB
+    /* 001A6860 */ .space 0x4E0
+
+nonmatching g_screenClearPacketA, 0x150
+
+dlabel g_screenClearPacketA
+    /* 001A6D40 */ .space 0x150
+
+nonmatching g_screenClearPacketB, 0x170
+
+dlabel g_screenClearPacketB
+    /* 001A6E90 */ .space 0x170
 
 nonmatching D_001A7000, 0xC
 
@@ -864,15 +889,70 @@ nonmatching g_loadedHeldItemModelId, 0x8
 dlabel g_loadedHeldItemModelId
     /* 001A72C0 */ .space 0x08
 
-nonmatching g_heldItemTexDescriptor, 0x158
+nonmatching g_heldItemTexDescriptor, 0x8
 
 dlabel g_heldItemTexDescriptor
-    /* 001A72C8 */ .space 0x158
+    /* 001A72C8 */ .space 0x08
 
-nonmatching g_nSaveLoadStatusCode, 0x10
+nonmatching g_vramAllocCursor, 0x4
+
+dlabel g_vramAllocCursor
+    /* 001A72D0 */ .space 0x04
+
+nonmatching g_vramDynamicBase, 0x4
+
+dlabel g_vramDynamicBase
+    /* 001A72D4 */ .space 0x04
+
+nonmatching g_vramFrameBufA, 0x4
+
+dlabel g_vramFrameBufA
+    /* 001A72D8 */ .space 0x04
+
+nonmatching g_vramFrameBufB, 0x4
+
+dlabel g_vramFrameBufB
+    /* 001A72DC */ .space 0x04
+
+nonmatching g_vramZBuffer, 0x4
+
+dlabel g_vramZBuffer
+    /* 001A72E0 */ .space 0x04
+
+nonmatching g_vramTextureBase, 0x5C
+
+dlabel g_vramTextureBase
+    /* 001A72E4 */ .space 0x5C
+
+nonmatching g_screenWidth, 0x4
+
+dlabel g_screenWidth
+    /* 001A7340 */ .space 0x04
+
+nonmatching g_screenHeight, 0xC
+
+dlabel g_screenHeight
+    /* 001A7344 */ .space 0x0C
+
+nonmatching g_gsPixelOffsetX, 0x4
+
+dlabel g_gsPixelOffsetX
+    /* 001A7350 */ .space 0x04
+
+nonmatching g_gsPixelOffsetY, 0xCC
+
+dlabel g_gsPixelOffsetY
+    /* 001A7354 */ .space 0xCC
+
+nonmatching g_nSaveLoadStatusCode, 0xC
 
 dlabel g_nSaveLoadStatusCode
-    /* 001A7420 */ .space 0x10
+    /* 001A7420 */ .space 0x0C
+
+nonmatching g_gsScreenContextPtr, 0x4
+
+dlabel g_gsScreenContextPtr
+    /* 001A742C */ .space 0x04
 
 nonmatching g_rawReadStallTimer, 0x4
 
