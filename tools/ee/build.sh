@@ -60,16 +60,19 @@ if [ -d "$SRC" ]; then
     o="$BUILD/${c%.c}.o"
     mkdir -p "$(dirname "$o")"
     # Per-unit -G override - the cod/0321A0 989snd sub-TU was originally built
-    # at nonzero -G (uniform %gp_rel small-data). Keep in sync with
-    # objdiff_build.sh / diff.sh.
+    # at nonzero -G (uniform %gp_rel small-data). CC1EXTRA = per-unit cc1-only
+    # flags (NOT passed to the assembler; -fno-gcse for the later-cc1
+    # gameplay-text TUs). Keep in sync with objdiff_build.sh / diff.sh.
     GFLAG="-G0"
+    CC1EXTRA=""
     case "$c" in
       */cod/0321A0.c) GFLAG="-G8";;
       */usa/text/183178.c) GFLAG="-G8";; # scale/round accessor sub-TU
       */usa/text/188580.c) GFLAG="-G8";; # camera-aux sub-TU
+      */usa/text/1907F0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # level-init/screen-fade sub-TU
     esac
     "$WIBO" "$G/cpp.exe" $CPPDEF $INCC "$c" "$BUILD/_unit.i"
-    "$WIBO" "$G/cc1.exe" -quiet -O2 $GFLAG "$BUILD/_unit.i" -o "$BUILD/_unit.s"
+    "$WIBO" "$G/cc1.exe" -quiet -O2 $GFLAG $CC1EXTRA "$BUILD/_unit.i" -o "$BUILD/_unit.s"
     sh tools/ee/asm_unit.sh "$REGION" "/work/$BUILD/_unit.s" "/work/$o" "$GFLAG"
     mips-linux-gnu-strip "$o" -N dummy-symbol-name 2>/dev/null || true
     m=$((m+1))

@@ -63,6 +63,12 @@ func_00133930 = 0x00133930; // type:func
 // prologue after it.
 func_002831F8 = 0x002831F8; // type:func size:0x38
 func_00283230 = 0x00283230; // type:func
+// text/1907F0 sub-TU head: 8 bytes of inter-function padding (addiu-sp/nop
+// pair) that splat lumped into the unit's first real function. Pin the pad
+// to its size and the real prologue after it (same recovery as cod/015180's
+// 19 padding mis-splits).
+func_00290870 = 0x00290870; // type:func size:0x8
+func_00290878 = 0x00290878; // type:func
 // text/188580 sub-TU data anchors: give the two .bss objects the unit reads
 // their own symbols (otherwise spimdisasm attaches them to far-away preceding
 // named symbols with huge offsets, which forces raw-offset C).

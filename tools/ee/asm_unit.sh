@@ -72,6 +72,24 @@ cd "$FIXROOT"
 # so we insert the nop ourselves. Not applied at -G0: no currently-matched
 # -G0 function has a cop1-load/noreorder boundary, and the -G0 units' matches
 # were proven WITHOUT the pad.
+#
+# At -G8 also expand the `li.s` float-constant pseudo when its IEEE bits need
+# a 2-insn materialisation (low half nonzero). The SN ee-as always expands
+# `li.s $fN,<c>` inline as `lui $at,hi[; ori $at,$at,lo]; mtc1 $at,$fN`
+# (proven by the original bytes in text/1907F0 func_00290EF8); GNU as does
+# the same at -G0 (which is why the -G0 units never hit this) and for
+# lui-only constants at any -G, but with a nonzero -G it places an
+# ori-needing constant in a gp-relative `.lit4` pool instead. We pre-expand
+# exactly like the SN assembler so no `.lit4` is emitted. Not applied at -G0
+# (GNU as is already byte-identical there).
+#
+# And the inverse hazard of the COP1 flush above: when a `.set noreorder`
+# region begins directly after an `mfc1`, GNU as pads the cop1-move hazard
+# with a nop at the region boundary; the SN ee-as does not (the r5900
+# interlocks, proven by the original bytes in text/1907F0 func_00290EF8:
+# `mfc1 $a3,$f1` directly followed by `beqz $a3`). We hold the mfc1 and emit
+# it just inside the region, where GNU as adds no hazard padding. Not applied
+# at -G0 (no matched -G0 function has an mfc1/noreorder boundary).
 # (cc1 is a Win32 PE - its .s lines end in CRLF, hence the \r-stripping.)
 if [ "$GFLAG" = "-G8" ]; then
   sed -E -f "$MOVEFIX" "$UNIT_S" | tr -d '\r' | awk '
@@ -83,7 +101,41 @@ if [ "$GFLAG" = "-G8" ]; then
       }
       next
     }
-    /^[ \t]*\.set[ \t]+noreorder/ { if (prevcop) print "\tnop" }
+    function f32bits(v,    s, e, m) {
+      s = 0; if (v < 0) { s = 1; v = -v }
+      if (v == 0) return s * 2147483648
+      e = 0
+      while (v >= 2) { v /= 2; e++ }
+      while (v < 1)  { v *= 2; e-- }
+      m = int((v - 1) * 8388608 + 0.5)
+      if (m == 8388608) { m = 0; e++ }
+      return s * 2147483648 + (e + 127) * 8388608 + m
+    }
+    # flush a held mfc1 unless the next line opens a noreorder region (or is
+    # a comment-only line, which we let pass while still holding)
+    {
+      if (pend != "" && $0 !~ /^[ \t]*\.set[ \t]+noreorder/ && $0 !~ /^[ \t]*#/) {
+        print pend; pend = ""
+      }
+    }
+    /^\tmfc1\t/ { pend = $0; prevcop = 0; next }
+    /^\tli\.s\t\$f[0-9]+,/ {
+      s = $0; sub(/^\tli\.s\t/, "", s)
+      split(s, q, ","); r = q[1]; bits = f32bits(q[2] + 0)
+      hi = int(bits / 65536); lo = bits % 65536
+      if (lo != 0) {
+        printf "\tlui\t$1,0x%x\n\tori\t$1,$1,0x%x\n\tmtc1\t$1,%s\n", hi, lo, r
+        prevcop = 0
+        next
+      }
+      # lui-only constants: GNU as already expands these identically.
+    }
+    /^[ \t]*\.set[ \t]+noreorder/ {
+      if (prevcop) print "\tnop"
+      print
+      if (pend != "") { print pend; pend = "" }
+      next
+    }
     /^\tla\t\$[0-9]+,[A-Za-z_][A-Za-z0-9_]*$/ {
       s=$0; sub(/^\tla\t/,"",s)
       split(s,p,","); r=p[1]; sym=p[2]
@@ -95,6 +147,7 @@ if [ "$GFLAG" = "-G8" ]; then
       next
     }
     { print; prevcop = ($0 ~ /^\t(l\.s|lwc1)\t/) }
+    END { if (pend != "") print pend }
   ' "$UNIT_S" - \
     | mips-linux-gnu-as -march=r5900 -mabi=eabi -no-pad-sections -EL "$GFLAG" -I. -o "$OUT_O" -
 else

@@ -21,13 +21,18 @@ CPPDEF="-D__GNUC__=2 -D__GNUC_MINOR__=9 -D__mips__ -D__mips=3 -D__R5900 -D__LANG
 
 # Per-unit -G override for the BASE compile - the cod/0321A0 989snd sub-TU was
 # originally built at nonzero -G (uniform %gp_rel small-data access), so its C
-# is compiled at -G8. Everything else stays -G0. Keep in sync with
+# is compiled at -G8. Everything else stays -G0. CC1EXTRA holds additional
+# per-unit cc1-only flags (NOT passed to the assembler): the gameplay-text
+# TUs were built by a later SN cc1 without the load-PRE pass, which
+# -fno-gcse reproduces (proven byte-exact on text/1907F0). Keep in sync with
 # objdiff_build.sh.
 GFLAG="-G0"
+CC1EXTRA=""
 case "$REGION/$UNIT" in
   usa/cod/0321A0) GFLAG="-G8";;
   usa/text/183178) GFLAG="-G8";; # scale/round accessor sub-TU (D_1A7910..D_1A792C)
   usa/text/188580) GFLAG="-G8";; # camera-aux sub-TU (D_1A8A60..D_1A8AE0)
+  usa/text/1907F0) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # level-init/screen-fade sub-TU (D_1A9000..D_1A9020)
 esac
 
 # Pre-filter the original asm so VU0 (COP2) macro-mode instructions assemble
@@ -51,7 +56,7 @@ docker --context colima-ee-x86 run --rm -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work; WIBO=/usr/local/bin/wibo; G=tools/ee/cc/lib/gcc-lib/ee/2.9-ee-991111
   mips-linux-gnu-as $ASF -o $W/target.o $W/target.s
   \$WIBO \$G/cpp.exe $CPPDEF $INC $CFILE $W/base.i
-  \$WIBO \$G/cc1.exe -quiet -O2 $GFLAG $W/base.i -o $W/base.s
+  \$WIBO \$G/cc1.exe -quiet -O2 $GFLAG $CC1EXTRA $W/base.i -o $W/base.s
   sh tools/ee/asm_unit.sh $REGION /work/$W/base.s /work/$W/base.o $GFLAG
 "
 

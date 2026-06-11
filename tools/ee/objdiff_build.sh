@@ -48,12 +48,17 @@ CPPDEF="-D__GNUC__=2 -D__GNUC_MINOR__=9 -D__mips__ -D__mips=3 -D__R5900 -D__LANG
 # -G is irrelevant there). The cod/0321A0 989snd sub-TU is an original separate
 # TU built at nonzero -G: its sdata cluster (0x1A7480..0x1A74F8) is accessed
 # uniformly via %gp_rel, which only a nonzero -G reproduces. Everything else
-# stays at the proven -O2 -G0. Keep this list in sync with diff.sh.
+# stays at the proven -O2 -G0. CC1EXTRA holds additional per-unit cc1-only
+# flags (NOT passed to the assembler): the gameplay-text TUs were built by a
+# later SN cc1 without the load-PRE pass, which -fno-gcse reproduces (proven
+# byte-exact on text/1907F0). Keep this list in sync with diff.sh.
 GFLAG="-G0"
+CC1EXTRA=""
 case "$REGION/$UNIT" in
   usa/cod/0321A0) GFLAG="-G8";;
   usa/text/183178) GFLAG="-G8";; # scale/round accessor sub-TU (D_1A7910..D_1A792C)
   usa/text/188580) GFLAG="-G8";; # camera-aux sub-TU (D_1A8A60..D_1A8AE0)
+  usa/text/1907F0) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # level-init/screen-fade sub-TU (D_1A9000..D_1A9020)
 esac
 
 # Generate a PRISTINE all-INCLUDE_ASM unit C for the TARGET, straight from the
@@ -97,7 +102,7 @@ docker --context colima-ee-x86 run --rm -v "$ROOT":/work ee-build sh -c "
   \$WIBO \$G/cc1.exe -quiet -O2 -G0 $W/target.i -o $W/target.s
   sh tools/ee/asm_unit.sh $REGION /work/$W/target.s /work/$EXPECTED
   \$WIBO \$G/cpp.exe $CPPDEF $INC $BASECFILE $W/base.i
-  \$WIBO \$G/cc1.exe -quiet -O2 $GFLAG $W/base.i -o $W/base.s
+  \$WIBO \$G/cc1.exe -quiet -O2 $GFLAG $CC1EXTRA $W/base.i -o $W/base.s
   sh tools/ee/asm_unit.sh $REGION /work/$W/base.s /work/$OBJ $GFLAG
   mips-linux-gnu-nm $EXPECTED | awk '/\\.NON_MATCHING\$/{print \"-N\", \$3}' > $W/nmstrip.txt
   test -s $W/nmstrip.txt && mips-linux-gnu-strip $EXPECTED \$(cat $W/nmstrip.txt) || true
