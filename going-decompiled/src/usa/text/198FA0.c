@@ -307,6 +307,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DD40);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DD80);
 
+/* func_0029DD90: toSPR DMA-kick helper (writes SADR/QWC/MADR at 0x1000D400,
+ * CHCR 0x100) - called 4x from the sky piece stagers. Split off func_0029DD80
+ * (4 orphan unreachable words). */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DD90);
+
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DDB0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DDE8);
