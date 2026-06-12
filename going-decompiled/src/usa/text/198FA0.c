@@ -19,6 +19,20 @@
  *     `.extern sym,16` override: cc1 then emits the one-insn symbolic macro
  *     (so it schedules like one insn, matching the SN codegen) and GNU as
  *     expands it absolutely.
+ *
+ * PRECISE FORM OF THE "reload artifact" WALL (measured 2026-06-12 on the
+ * func_00299040 save-handler family): in the original, %gp_rel accesses to
+ * gp-range symbols appear ONLY in branch/jr delay slots, while every
+ * non-delay-slot access to the SAME symbol in the SAME function is the
+ * absolute lui/$at macro. The SN toolchain materialises the 1-insn %gp_rel
+ * form exactly when it fills a delay slot (a 2-insn macro cannot go there)
+ * and the absolute form everywhere else. GNU as picks ONE form per symbol,
+ * so every function whose original has a small-range global access in a
+ * delay slot plus a non-slot access is unmatchable (func_00299040/
+ * func_00299178/func_002991E8/func_00299238/func_002992B8/func_002992E8/
+ * func_00299348/func_002993D8/func_00299478/func_002994B0/func_00299568/
+ * func_002995E0/func_00299758/func_002997C8/func_002998D0/func_00299918/
+ * func_00299960).
  */
 
 /* Original cc1-small / assembler-absolute symbols (see header). */
@@ -27,6 +41,8 @@ __asm__(".extern g_bPalMode, 16");
 __asm__(".extern g_loadedArmorVariant, 16");
 __asm__(".extern g_loadedHeldItemModelId, 16");
 __asm__(".extern g_levelDialogToc, 16");
+__asm__(".extern g_nSaveLoadStatusCode, 16");
+__asm__(".extern D_1A8C64, 16");
 
 /* Singleton GUI-manager instance (0x3FB20-byte object allocated by
  * GuiManagerCreate; null until the GUI is up). Declared as a plain byte
@@ -39,6 +55,53 @@ extern volatile s32 g_loadedHeldItemModelId;  /* held-item model resident in the
 extern char g_levelDialogToc;                 /* level dialog/scene TOC block (byte-addressed here) */
 extern s32 D_1A790C;                          /* small-data flag cleared by func_0029C418 */
 extern s32 D_1A9A90;                          /* small-data GUI state, set to -1 by func_0029CA88 */
+
+/* Save/load status pair at 0x1A7420: [0] = popup status code (enum selecting
+ * the on-screen save/load message body), [1] = pending-action flag word. */
+extern s32 g_nSaveLoadStatusCode[2];
+extern s32 D_1A8C64;  /* GUI popup-busy gate (also read by the walled func_0029CCB8) */
+
+/* Save/load engine context at 0x1393E0 (memory-card state machine scratch).
+ * Field meanings recovered from the status writers below; declared as a struct
+ * so the field offsets read naturally. */
+typedef struct SaveLoadContext {
+    s32 unk0[2];        /* 0x000 */
+    s32 phase;          /* 0x008 - 2 while a card transaction is in flight */
+    s32 unkC;           /* 0x00C */
+    s32 busy;           /* 0x010 - transaction-active flag (= D_1393F0) */
+    s32 unk14;          /* 0x014 */
+    s16 slot;           /* 0x018 - active card slot (-1 = none) */
+    s16 unk1A;          /* 0x01A */
+    s32 unk1C[0x4A];    /* 0x01C */
+    s32 unk144;         /* 0x144 */
+    s32 unk148;         /* 0x148 */
+    s32 unk14C[3];      /* 0x14C */
+    s32 reqState;       /* 0x158 */
+    s32 mode;           /* 0x15C */
+    s32 unk160;         /* 0x160 */
+    s32 result;         /* 0x164 - libmc result (-1 = pending) */
+    s32 subResult;      /* 0x168 */
+    s32 unk16C;         /* 0x16C - formatted/secondary path flag */
+    s32 unk170[3];      /* 0x170 */
+    s32 dirty;          /* 0x17C - save-pending flag */
+} SaveLoadContext;
+extern SaveLoadContext D_1393E0;
+
+/* Alias view of D_1393E0.busy (0x1393F0): several status predicates read the
+ * flag through its own symbol (the original folded the field offset into the
+ * %hi/%lo pair, which splat splits as a distinct symbol). Declared >8 bytes so
+ * cc1 emits the absolute address pair itself (matching the original temp-reg
+ * choice) instead of the -G8 small-data form. */
+extern s32 D_1393F0[4];
+extern char D_1A9A60[];   /* "memory card library failed to initialise" debug string */
+extern s32 McInit(void);
+/* DebugPrintStub / func_0029CA98 declared value-returning: their callers below
+ * propagate $v0, and a void tail call would be sibling-call optimised into a
+ * plain `j` (the original uses jal + return). */
+extern s32 DebugPrintStub(char *msg);
+extern void func_0028E9A0(s32 arg);
+extern s32 func_0029CA98(void);
+extern s32 func_0033A8F0(void *widget, s32 arg);
 
 /* One entry of a save-section descriptor table. The serialized layout each
  * entry contributes is an 8-byte header followed by `len` payload bytes,
@@ -115,13 +178,32 @@ extern s32 func_0034D828(void *widget, s32 arg0, s32 arg1);
 extern s32 GuiScreenSetEventAndReveal(void *screen, s32 eventId);
 extern s32 func_0034F200(void *widget);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299020);
+/** Reset the save/load popup to status 3 (idle/none) and clear the context
+ *  transaction-active + save-pending flags. */
+void func_00299020(void) {
+    g_nSaveLoadStatusCode[0] = 3;
+    D_1393E0.dirty = 0;
+    D_1393E0.busy = 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299040);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299128);
+/** If no save/load action is pending (flag bit 0 clear), reset the popup
+ *  status to 3 (idle). */
+void func_00299128(void) {
+    /* `(flags ^ 1) & 1` is bit0==0; spelled this way to reproduce the
+     * original xori/andi evaluation order. */
+    if ((g_nSaveLoadStatusCode[1] ^ 1) & 1) {
+        g_nSaveLoadStatusCode[0] = 3;
+    }
+}
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299150);
+/** Mark the card transaction results as pending (-1) and show popup status 4. */
+void func_00299150(void) {
+    D_1393E0.result = -1;
+    g_nSaveLoadStatusCode[0] = 4;
+    D_1393E0.subResult = -1;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299178);
 
@@ -143,21 +225,56 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299478);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_002994B0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299528);
+/** If a card transaction finished selecting (mode 2) with no result yet,
+ *  force result 9 (cancelled) and show popup status 0xF. */
+void func_00299528(void) {
+    if (D_1393E0.mode == 2 && D_1393E0.result < 0) {
+        D_1393E0.result = 9;
+        D_1393E0.subResult = 0;
+        g_nSaveLoadStatusCode[0] = 0xF;
+    }
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299568);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_002995E0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299698);
+/** If no save/load confirmation is pending (flag bit 6 clear), reset the popup
+ *  status to 3 (idle). First of four identical per-call-site stubs. */
+void func_00299698(void) {
+    if (!(g_nSaveLoadStatusCode[1] & 0x40)) {
+        g_nSaveLoadStatusCode[0] = 3;
+    }
+}
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_002996C0);
+/** Identical twin of func_00299698 (separate call-site stub). */
+void func_002996C0(void) {
+    if (!(g_nSaveLoadStatusCode[1] & 0x40)) {
+        g_nSaveLoadStatusCode[0] = 3;
+    }
+}
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_002996E8);
+/** If a card transaction is active (D_1393F0, the context busy flag), reset
+ *  the popup status to 3 (idle). */
+void func_002996E8(void) {
+    if (D_1393F0[0] != 0) {
+        g_nSaveLoadStatusCode[0] = 3;
+    }
+}
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299708);
+/** Identical twin of func_00299698 (separate call-site stub). */
+void func_00299708(void) {
+    if (!(g_nSaveLoadStatusCode[1] & 0x40)) {
+        g_nSaveLoadStatusCode[0] = 3;
+    }
+}
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299730);
+/** Identical twin of func_00299698 (separate call-site stub). */
+void func_00299730(void) {
+    if (!(g_nSaveLoadStatusCode[1] & 0x40)) {
+        g_nSaveLoadStatusCode[0] = 3;
+    }
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299758);
 
@@ -169,9 +286,24 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299918);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299960);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299968);
+/* Latched event flag at g_pSkyShellSpinRates+0xAC (0x1B19BC): an unrelated
+ * bss word splat attributes to the spin-rate symbol; aliased via a gas
+ * symbol equate because no symbol exists at that address (a symbol_addrs pin
+ * + re-split would name it properly). */
+extern s32 g_savePromptLatch;
+__asm__("g_savePromptLatch = g_pSkyShellSpinRates+0xAC");
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299980);
+/** Consume the latched flag: read it, clear it, return whether it was set. */
+s32 func_00299968(void) {
+    s32 was = g_savePromptLatch;
+    g_savePromptLatch = 0;
+    return was != 0;
+}
+
+/** True when the save/load popup is showing status 2 (card-access prompt). */
+s32 func_00299980(void) {
+    return g_nSaveLoadStatusCode[0] == 2;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", BuildSaveGamePaths);
 
@@ -185,7 +317,15 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", SaveLoadStateMa
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", BuildSaveImage);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", InitMemCardLib);
+/** Game-level libmc bring-up: bind the memory-card RPC services (McInit) and
+ *  log the failure string (compiled-out DebugPrintStub) when it errors.
+ *  Falls off the end on success (the caller ignores the value; the fall-off
+ *  keeps the original from materialising a return value). */
+s32 InitMemCardLib(void) {
+    if (McInit() != 0) {
+        return DebugPrintStub(D_1A9A60);
+    }
+}
 
 /* CalcSaveSectionsSize(table): return the number of bytes the section table
  * `table` serializes to. Layout is a leading 8-byte block, then for every
@@ -827,13 +967,30 @@ s32 func_0029DB58(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", GuiManagerCreate);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DC70);
+/** If the GUI is up and the popup-busy gate (D_1A8C64) is clear, pause the
+ *  game world (func_0028E9A0(1)) and run the GUI pump (func_0029CA98),
+ *  propagating its result. */
+s32 func_0029DC70(void) {
+    if (g_guiInstance != 0) {
+        if (D_1A8C64 == 0) {
+            func_0028E9A0(1);
+            return func_0029CA98();
+        }
+    }
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DCB0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DD08);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DD40);
+/** Forward `arg` to the widget at g_guiInstance+0x3CEA0 (method func_0033A8F0);
+ *  0 when the GUI is down. */
+s32 func_0029DD40(s32 arg) {
+    if (g_guiInstance == 0) {
+        return 0;
+    }
+    return func_0033A8F0(g_guiInstance + 0x3CEA0, arg);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DD80);
 
@@ -862,22 +1019,76 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029E5F8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", UpdateLevelObjectiveStates);
 
+/* EvaluateProgressCondition(cond, arg): 12-case switch (0=always, 1=level
+ * available, 2=item owned, 3=item NEW, 4=objective active, 5=objective
+ * complete, 6=dialog state byte, 7=call arg as predicate fn, 8=platinum
+ * bolt, 9=cinematic bit, 10=map predicate on g_mapCurrentLevel). RE-PROBED
+ * under the unit recipe 2026-06-12: the jump table itself NOW REPRODUCES
+ * exactly (12 entries incl. explicit case 11, sltiu 0xC, original block
+ * order with case 9 before case 8) - the old "prologue scheduling" wall is
+ * gone. Best 95.06%; two residues: (a) case 9's bit test - the pinned cc1
+ * lowers `(w & (1 << (n & 0x1F))) != 0` to srav/andi-extract while the
+ * original (later SN cc1) keeps sllv/and/sltu, no source shape found;
+ * (b) the base object emits its jump table as a section-local .rodata label
+ * while the split target references named jtbl_0026CA70_text (objdiff reloc
+ * identity - needs splat rodata migration for the carved units). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", EvaluateProgressCondition);
 
+/* GatherActiveObjectives(outIds, outMask, outVals, wantValues): walks the
+ * 0x28-stride objective list (head pointer parked at the unnamed bss word
+ * g_pSkyShellSpinRates+0xC8 = 0x1B19D8), emits visible objective ids/values,
+ * sets completion bits in *outMask (bit 31 = all non-hidden complete),
+ * returns the count. RE-PROBED 2026-06-12, best 87.59% - structure and all
+ * field accesses line up; residues are later-cc1 traits: (a) register
+ * coloring swaps rec/state ($t1/$t0 vs our $t0/$t1, plus the lui-temp),
+ * (b) the original does NOT hoist the loop-invariant 0x31B9 constant (ours
+ * preloads it to a register; theirs rematerialises it in a beql delay slot),
+ * (c) the original copies the outIds cursor and reloads rec->state in the
+ * value-select block where ours CSEs. Left as asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", GatherActiveObjectives);
 
+/* func_0029EA90 (and EAC8/EB08/EB38 below): 0/1 predicates over globals
+ * (g_miscExtras + D_1397E0 bit 0x8000000 here). WALLED (probed 2026-06-12):
+ * the boolean tail `if (test) return 1; return 0;` is scc-converted by the
+ * pinned cc1 into `sltu $2,$0,$2` on EVERY source shape probed (if-chain,
+ * nested guards, v=1/v=0 flag variable), while the original (later SN cc1)
+ * emits the branch + per-path constant materialisation (`bnez; addiu $2,1 /
+ * daddu $2,0`). Same class: func_0029EC70. Predicates returning 0/1/2
+ * (func_0029EB68/func_0029EBF8) are NOT walled - scc cannot synthesise 2. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029EA90);
 
+/* 0/1 predicate (dialog flags D_1395C1/D_1A7B0D/D_1A7B14) - scc-tail wall,
+ * see func_0029EA90. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029EAC8);
 
+/* 0/1 predicate (D_1397C4 streaming state + D_1395D5 flag) - scc-tail wall,
+ * see func_0029EA90. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029EB08);
 
+/* 0/1 predicate (D_1A7BDD/D_1A7B10 dialog flags) - scc-tail wall, see
+ * func_0029EA90. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029EB38);
 
+/* func_0029EB68: cinematic skip-prompt arbiter (posts HUD message 0x1F/0x20
+ * into D_257502, returns 0/1/2 on the D_1395B8[0x1D] / cinematic word +0x5C
+ * pair). RE-PROBED 2026-06-12, best 76.57%: the original keeps both %hi
+ * halves live in registers and re-materialises the D_1395B8 base via addiu
+ * before each reload, while the pinned cc1 folds the +0x1D element address
+ * into the lui/lbu pair (pointer-local shapes scored worse). Left as asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029EB68);
 
+/* func_0029EBF8: dialog-skip arbiter twin of func_0029EB68 on the D_1A7BDD/
+ * D_1A7B10 byte pair (posts 0x28/0x29 into D_2579B2, returns 0/1/2). WALLED
+ * (probed 2026-06-12): the original (later SN cc1) copies the first byte to
+ * $a0 and re-narrows it with a redundant `andi 0xFF` at each re-test; the
+ * pinned cc1 tracks the lbu value range and deletes the narrowing on every
+ * shape probed (u8 locals, s32 locals + (u8) casts, a|b joint test). Best
+ * 52.77%. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029EBF8);
 
+/* 0/1 predicate over the cinematic-flag words +0x90/+0x98 - its final
+ * `if (bit) return 1; return 0;` block hits the scc-tail wall, see
+ * func_0029EA90. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029EC70);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029ECE0);

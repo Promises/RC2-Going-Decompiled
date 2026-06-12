@@ -541,14 +541,32 @@ void func_0011BAA0(s32 arg0) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BAC4);
 
-/* func_0011BAC8(arg0): initialise the global list head D_0013CA40 — store arg0
- * at +0x0, clear the count at +0x4, point both head (+0x8) and tail (+0xC) links
- * at the inline first slot (+0x10); return &D_0013CA40. ~98.5% — ee-gcc's
- * scheduler always batches the two identical head/tail stores together
- * (0xc,0x8) and sinks the count=0 store into the jr delay slot, but the original
- * interleaves them as 0x8,0x4,0xc. Source-order-independent scheduler quirk.
- * Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BAC8);
+/* Global list head initialised by func_0011BAC8: value word, entry count,
+ * head/tail links and the inline first slot they initially point at. */
+typedef struct ListHead0013CA40 {
+    s32 value;        /* 0x0 */
+    s32 count;        /* 0x4 */
+    void *head;       /* 0x8 */
+    void *tail;       /* 0xC */
+    s32 firstSlot[4]; /* 0x10 */
+} ListHead0013CA40;
+extern ListHead0013CA40 D_0013CA40;
+
+/**
+ * Initialise the global list head D_0013CA40: store `value`, clear the entry
+ * count, and point both head and tail links at the inline first slot (+0x10);
+ * returns &D_0013CA40. (The volatile stores pin the original head/count/tail
+ * store order, which the scheduler would otherwise batch — this is the
+ * volatile-pinning technique that cracked the old ~98.5% wall.)
+ */
+s32 *func_0011BAC8(s32 value) {
+    s32 *base = (s32 *)&D_0013CA40;
+    D_0013CA40.value = value;
+    *(volatile s32 *)(base + 2) = (s32)(base + 4);
+    *(volatile s32 *)(base + 1) = 0;
+    *(volatile s32 *)(base + 3) = (s32)(base + 4);
+    return base;
+}
 
 /**
  * Advance the write cursor of the ring buffer at arg0. Bumps the entry count
@@ -652,18 +670,43 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C8D8);
  * source. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011CB58);
 
-/* func_0011CB90(index, key, value): store a (key,value) pair into one of two
- * parallel 8-byte-stride tables selected by the sign of index (D_0013CF6C for
- * index >= 0, D_0013CF64 for index < 0); key at slot+0x0, value at slot+0x4.
- * ~77% — the original hoists index*8 into the bgez delay slot and orders the
- * two stores value-then-key, a scheduling shape ee-gcc won't reproduce here.
- * Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011CB90);
+extern char *D_0013CF64; /* 8-byte-stride (key,value) table for negative indices */
+extern char *D_0013CF6C; /* 8-byte-stride (key,value) table for indices >= 0 */
 
-/* func_0011CBC0(index): clear the key word (slot+0x0) of the entry at index in
- * the sign-selected table pair (same addressing as func_0011CB90). ~77% — same
- * branch-delay scheduling mismatch as func_0011CB90. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011CBC0);
+/**
+ * Store a (key,value) pair into the sign-selected table pair: entry `index`
+ * of D_0013CF6C for index >= 0, of D_0013CF64 for index < 0 (the negative
+ * index reaches backwards from that table's base); key at slot+0x0, value at
+ * slot+0x4. (Reusing `index` for the loaded table pointer keeps it in $a0
+ * like the original, the pre-computed `addr` rides the bgez delay slot, and
+ * the volatile stores pin the original value-then-key order.)
+ */
+void func_0011CB90(s32 index, s32 key, s32 value) {
+    s32 addr = index * 8;
+    if (index < 0) {
+        index = (s32)D_0013CF64;
+    } else {
+        index = (s32)D_0013CF6C;
+    }
+    addr += index;
+    ((volatile s32 *)addr)[1] = value;
+    ((volatile s32 *)addr)[0] = key;
+}
+
+/**
+ * Clear the key word (slot+0x0) of entry `index` in the sign-selected table
+ * pair (same addressing and register-reuse shape as func_0011CB90).
+ */
+void func_0011CBC0(s32 index) {
+    s32 addr = index * 8;
+    if (index < 0) {
+        index = (s32)D_0013CF64;
+    } else {
+        index = (s32)D_0013CF6C;
+    }
+    addr += index;
+    *(s32 *)addr = 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011CBE8);
 
@@ -2315,7 +2358,10 @@ s32 func_0012FA18(s32 *arg0) {
  * (8-byte stride records), write arg3 into record[index]+0x10, return the old
  * value of record[index]+0xC and overwrite it with arg2. ~74%; the original
  * keeps the table base live and computes both member addresses before storing,
- * a scheduling shape ee-gcc won't reproduce here. Left as INCLUDE_ASM. */
+ * a scheduling shape ee-gcc won't reproduce here. Re-probed 2026-06-12 with
+ * two separately-formed record pointers (base+idx*8 and (base+0xC)+idx*8) -
+ * still 74.44%, the address-formation schedule does not budge. Left as
+ * INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012FA70);
 
 /* func_0012FA98(arg0, arg1): if arg0 and its table arg0->field_0x40 are non-null,
@@ -2387,17 +2433,29 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012FE78);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012FEC0);
 
-/* func_00130020: commit the pending range on arg0's sub-object
- * (arg0->field_0x40): if both obj->field_0x4 and obj->field_0x8 are set, flush
- * it via func_00130098, record the produced length
- * (obj->field_0x118 - obj->field_0xAC) in arg0->field_0x8 and return 1;
- * otherwise leave arg0 untouched and return 0. Body with `s32 ret=0; if (obj[1]
- * && obj[2]) { func_00130098(obj); arg0[2]=obj[0x46]-obj[0x2B]; ret=1; } return
- * ret;` reaches 95.7% — the only remaining diff is the subtraction's operand
- * load order: the original loads field_0x118 before field_0xAC, but ee-gcc
- * evaluates `a-b` right-to-left (loads 0xAC first). A fixed evaluation-order
- * choice this cc1 won't reverse. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130020);
+extern void func_00130098(s32 *obj);
+
+/**
+ * Commit the pending range on arg0's sub-object (arg0->field_0x40): if both
+ * obj->field_0x4 and obj->field_0x8 are set, flush it via func_00130098,
+ * record the produced length (obj->field_0x118 - obj->field_0xAC) in
+ * arg0->field_0x8, clear obj->field_0x4 and return 1; otherwise return 0.
+ * (The explicit `end` temporary forces the original field_0x118-before-
+ * field_0xAC load order, which `a-b` alone evaluates the other way.)
+ */
+s32 func_00130020(s32 *arg0) {
+    s32 *obj = (s32 *)arg0[0x10];
+    s32 ret = 0;
+    if (obj[1] && obj[2]) {
+        s32 end;
+        func_00130098(obj);
+        end = obj[0x46];
+        arg0[2] = end - obj[0x2B];
+        ret = 1;
+        obj[1] = 0;
+    }
+    return ret;
+}
 
 /**
  * Clear arg0->field_0x848 and (re)initialise subsystem 1 via func_0012B198(1).

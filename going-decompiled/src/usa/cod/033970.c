@@ -12,8 +12,9 @@ extern s32 CdReadSync(s32 arg0, s32 arg1, void *arg2);
 /* func_001339F0: copy `count` bytes from src to dst via indexed access
  * (dst[i]=src[i]); non-positive count copies nothing. ~88% — the original fills
  * the loop's `bnez` delay slot with the `sb` store while ee-gcc emits the store
- * before the branch and nops the slot (a scheduling choice). Left as
- * INCLUDE_ASM. */
+ * before the branch and nops the slot (a scheduling choice). Re-probed
+ * 2026-06-12 with a do-while shape: worse (71.5%), the delay-slot store does
+ * not budge. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/033970", func_001339F0);
 
 /* CdReadSync(arg0, arg1, arg2): build a 4-byte descriptor {0x20,1,0,0} on the
