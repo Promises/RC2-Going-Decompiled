@@ -16,3 +16,12 @@ s/^([[:space:]]*)move[[:space:]]+(\$[A-Za-z0-9]+),[[:space:]]*(\$[A-Za-z0-9]+)/\
 # GNU as evaluates the shift expression, so the register numbers can be pasted
 # in textually.
 s/^([[:space:]]*)cvt\.w\.s[[:space:]]+\$f([0-9]+),[[:space:]]*\$f([0-9]+)/\1.word 0x46000024+(\3<<11)+(\2<<6) # cvt.w.s $f\2,$f\3/
+
+# Rewrite cc1's div-by-zero trap `break 7` to `break 0,7`. The SN ee-as
+# encoded cc1's `break 7` as 0x000001CD (code 7 in the LOW code field, which
+# GNU as spells `break 0,7`); GNU as puts a bare `break 7` in the HIGH field
+# (0x0007000D), which never occurs in the original binaries. Measured: every
+# compiler-emitted break in BOTH regions' disassembly is 0x000001CD (the only
+# other break anywhere is one handwritten `break 1023,1023`, asm-only). Only
+# affects div/mod-using functions, none of which could match before this fix.
+s/^([[:space:]]*)break[[:space:]]+7[[:space:]]*\r?$/\1break 0,7/

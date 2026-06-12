@@ -99,6 +99,28 @@
           "text"
         ]
       }
+    },
+    {
+      "name": "usa/text/1A8180",
+      "target_path": "going-decompiled/build/usa/expected/text/1A8180.o",
+      "base_path": "going-decompiled/build/usa/obj/text/1A8180.o",
+      "metadata": {
+        "source_path": "going-decompiled/src/usa/text/1A8180.c",
+        "progress_categories": [
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "usa/text/250080",
+      "target_path": "going-decompiled/build/usa/expected/text/250080.o",
+      "base_path": "going-decompiled/build/usa/obj/text/250080.o",
+      "metadata": {
+        "source_path": "going-decompiled/src/usa/text/250080.c",
+        "progress_categories": [
+          "text"
+        ]
+      }
     }
   ]
 }

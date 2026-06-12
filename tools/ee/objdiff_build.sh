@@ -60,6 +60,8 @@ case "$REGION/$UNIT" in
   usa/text/188580) GFLAG="-G8";; # camera-aux sub-TU (D_1A8A60..D_1A8AE0)
   usa/text/1907F0) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # level-init/screen-fade sub-TU (D_1A9000..D_1A9020)
   usa/text/198FA0) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # save/GUI-wrapper unit (g_guiInstance modeled cc1-small/assembler-absolute)
+  usa/text/1A8180) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # game-state cluster (carve pick #1; later-cc1 TU model: sized externs under -G8, no load-PRE)
+  usa/text/250080) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # segment-tail FMV/debug-stub unit (carve pick #2; same later-cc1 TU model)
 esac
 
 # Generate a PRISTINE all-INCLUDE_ASM unit C for the TARGET, straight from the
