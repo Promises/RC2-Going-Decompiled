@@ -37,7 +37,6 @@
 // Health readers not yet named: 0x34DBE0 (HUD health-bar update), 0x301D50 (thrown-wrench
 //   homing/return g_health!=0 gate), func_00320A20 (moby behavior state machine, reads g_health
 //   as a death gate — in splat as func_00320A20, NOT in Ghidra's function list).
-// Pause-menu list pair FUN_002D18B8 (input, cursor DAT_001ABA60) + FUN_002D1B20 (render, title
-//   str 0x2ca9, table 0x26183C stride 6): structurally identical to the Skill Points menu pair
-//   (same 5-entry-window renderer, "????" 0x2c56 placeholder) — ANOTHER pause-menu tab, identity
-//   (gadgets/help/secrets) UNCONFIRMED, left un-renamed pending string-id resolution.
+// Pause-menu list pair RESOLVED (round 20) - it is the Goodies Cinematics playback screen
+//   (CinematicsMenuTick 0x2D18B8 + DrawCinematicsMenu 0x2D1B20, 33-reel carousel over the
+//   6-byte-entry table at 0x261838) - promoted to symbol_addrs.
