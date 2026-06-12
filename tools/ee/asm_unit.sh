@@ -53,14 +53,16 @@ cd "$FIXROOT"
 # assembling. The .include'd original asm is read from the mirror by `as` and is
 # untouched (it has explicit `daddu`, never the `move` pseudo).
 #
-# At -G8 also fix the `la` pseudo. The SN ee-as expands `la $r,SYM` with
-# 32-bit adds (proven by the original bytes): `addiu $r,$gp,%gp_rel(SYM)` for
-# a small-data symbol, `lui $r,%hi(SYM); addiu $r,$r,%lo(SYM)` for an absolute
-# one. GNU as uses the 64-bit `daddiu` in both cases, so we expand the pseudo
-# ourselves, deciding smallness exactly like the assembler does - from the
-# `.extern SYM, SIZE` directives in the same unit .s (first directive wins,
-# matching observed GAS behaviour; a file-scope __asm__(".extern SYM, 16") in
-# the C overrides cc1's own size, which is how a cc1-small but
+# At -G8 also fix the `la` pseudo (bare `la $r,SYM` and the `la $r,SYM+OFF`
+# form cc1 emits for address-plus-constant, e.g. text/198FA0 func_0029C418).
+# The SN ee-as expands both with 32-bit adds (proven by the original bytes):
+# `addiu $r,$gp,%gp_rel(SYM)` for a small-data symbol, `lui $r,%hi(SYM);
+# addiu $r,$r,%lo(SYM)` for an absolute one. GNU as uses the 64-bit `daddiu`
+# in both cases, so we expand the pseudo ourselves, deciding smallness exactly
+# like the assembler does - from the `.extern SYM, SIZE` directives in the
+# same unit .s, keyed on the BASE symbol for the +OFF form (first directive
+# wins, matching observed GAS behaviour; a file-scope __asm__(".extern SYM,
+# 16") in the C overrides cc1's own size, which is how a cc1-small but
 # assembler-absolute original symbol is reproduced). Not applied at -G0,
 # where cc1 never relies on gp-relative `la`.
 #
@@ -136,10 +138,11 @@ if [ "$GFLAG" = "-G8" ]; then
       if (pend != "") { print pend; pend = "" }
       next
     }
-    /^\tla\t\$[0-9]+,[A-Za-z_][A-Za-z0-9_]*$/ {
+    /^\tla\t\$[0-9]+,[A-Za-z_][A-Za-z0-9_]*(\+[0-9]+)?$/ {
       s=$0; sub(/^\tla\t/,"",s)
       split(s,p,","); r=p[1]; sym=p[2]
-      if ((sym in sz) && sz[sym]<=8)
+      base=sym; sub(/\+[0-9]+$/,"",base)   # smallness is decided by the BASE symbol
+      if ((base in sz) && sz[base]<=8)
         printf "\taddiu\t%s,$gp,%%gp_rel(%s)\n", r, sym
       else
         printf "\tlui\t%s,%%hi(%s)\n\taddiu\t%s,%s,%%lo(%s)\n", r, sym, r, r, sym

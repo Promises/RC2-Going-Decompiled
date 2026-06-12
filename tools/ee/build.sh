@@ -70,6 +70,7 @@ if [ -d "$SRC" ]; then
       */usa/text/183178.c) GFLAG="-G8";; # scale/round accessor sub-TU
       */usa/text/188580.c) GFLAG="-G8";; # camera-aux sub-TU
       */usa/text/1907F0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # level-init/screen-fade sub-TU
+      */usa/text/198FA0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # save/GUI-wrapper unit
     esac
     "$WIBO" "$G/cpp.exe" $CPPDEF $INCC "$c" "$BUILD/_unit.i"
     "$WIBO" "$G/cc1.exe" -quiet -O2 $GFLAG $CC1EXTRA "$BUILD/_unit.i" -o "$BUILD/_unit.s"
