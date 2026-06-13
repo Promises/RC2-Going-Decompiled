@@ -584,10 +584,15 @@ nonmatching g_loadingScenesPlayed, 0x2D398
 dlabel g_loadingScenesPlayed
     /* 00152C68 */ .space 0x2D398
 
-nonmatching D_00180000, 0x8660
+nonmatching D_00180000, 0x8510
 
 dlabel D_00180000
-    /* 00180000 */ .space 0x8660
+    /* 00180000 */ .space 0x8510
+
+nonmatching g_bestiaryKillCounts, 0x150
+
+dlabel g_bestiaryKillCounts
+    /* 00188510 */ .space 0x150
 
 nonmatching g_listenerPosHistory, 0x40
 
