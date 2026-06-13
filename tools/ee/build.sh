@@ -73,6 +73,8 @@ if [ -d "$SRC" ]; then
       */usa/text/198FA0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # save/GUI-wrapper unit
       */usa/text/1A8180.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # game-state cluster sub-TU
       */usa/text/250080.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # segment-tail FMV/debug-stub sub-TU
+      */usa/text/16E980.c) GFLAG="-G8";; # 16E980 head camera/screen-FX unit (carve pick #6; plain -G8, original keeps the %hi CSE)
+      */usa/text/248B50.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # GUI sub-chunk 1 (carve pick #3a)
     esac
     "$WIBO" "$G/cpp.exe" $CPPDEF $INCC "$c" "$BUILD/_unit.i"
     "$WIBO" "$G/cc1.exe" -quiet -O2 $GFLAG $CC1EXTRA "$BUILD/_unit.i" -o "$BUILD/_unit.s"

@@ -206,7 +206,20 @@ segments:
       #     the pinned cc1 reserves 16 bytes per save (measured: 99.89% on
       #     D's func_003475F0 with ONLY the save offsets/frame size off) -
       #     zero matchable functions, so the carves were not kept.
-      - [0x16E980, asm, text/16E980] # .text head (0x26EA00..0x2831F7)
+      # RANKED-CARVE-PIPELINE PICK #6 (2026-06-13): the "16E980 head" -
+      #   text/16E980 (vaddr 0x26EA00..0x274127, ~88 fns): splash/attract boot
+      #   helpers, the camera system core (SwitchActiveCamera, UpdateCamera,
+      #   BeginCameraTransition, screen fades, camera shake), and the screen
+      #   sprite FX queue (DrawLensFlare, DrawScreenSpriteFxEntry,
+      #   AddScreenSpriteFx, DrawScreenSpriteFxQueue) + a 32-entry 8-byte stub
+      #   run at 0x26F718. Boundaries: 0x26EA00 is the segment head
+      #   (ShowSplashImage prologue); func_00273EA8 ends at 0x274120 (+1 pad
+      #   nop at 0x274124) and 0x274128 is func_00274128's real start. The one
+      #   absorbed mis-split inside (func_0026F820: 0x30 bytes of stub-table
+      #   words before the real prologue at 0x26F850) is pinned in
+      #   symbol_addrs.txt the proven way.
+      - [0x16E980, c, text/16E980]   # carve pick #6 (0x26EA00..0x274127)
+      - [0x1740A8, asm, text/1740A8] # .text head remainder (0x274128..0x2831F7)
       - [0x183178, c, text/183178]   # -G8 sub-TU (0x2831F8..0x2833C7, 12 fns)
       - [0x183348, asm, text/183348] # .text mid (0x2833C8..0x2885FF)
       - [0x188580, c, text/188580]   # -G8 sub-TU (0x288600..0x2888D7, 11 fns)
@@ -232,7 +245,26 @@ segments:
       #     (text/252C88) so the last c function isn't polluted with pad.
       - [0x1A00F0, asm, text/1A00F0] # .text tail head (0x2A0170..0x2A81FF)
       - [0x1A8180, c, text/1A8180]   # game-state cluster (0x2A8200..0x2B2267)
-      - [0x1B21E8, asm, text/1B21E8] # .text mid 4 (0x2B2268..0x3500FF)
+      # RANKED-CARVE-PIPELINE PICK #3a (2026-06-13): first GUI-block sub-chunk -
+      #   text/248B50 (vaddr 0x348BD0..0x34C007, 65 fns): GUI widget accessor
+      #   runs (0x34A1C8/0x34A658 flagged by the TU-cluster scan) + the popup
+      #   menu widget (SetPopupVisible/SetPopupLayoutMode/SetPopupTitleText/
+      #   UpdatePopupMenu, GuiScreenWithPlanetNameInit,
+      #   GuiScreenSetEventAndReveal). Boundaries are real, consecutive
+      #   function starts verified in the disassembly: func_00348628 ends at
+      #   0x348BC8 (+1 pad nop at 0x348BCC), 0x348BD0 is func_00348BD0's real
+      #   prologue; func_0034BDB0 ends exactly at 0x34C004 (jr/delay at
+      #   0x34C000/04, no pad) and 0x34C008 is the giant (~0x17A0-byte) switch
+      #   function func_0034C008's prologue, which stays in the tail asm
+      #   (switch functions are blocked by the jtbl reloc-identity gap).
+      #   Start deliberately at 0x348BD0, just past reverted scan candidate D
+      #   (0x345F00..0x348627, measured 0-yield: 8-byte-packed-save wall).
+      #   The in-range padding fragments (0x348D98/0x3492A0/0x349720/0x34A2C8/
+      #   0x34A6A8/0x34A798/0x34AA90/0x34B1E0) are already auto-split as their
+      #   own 4-byte pseudo-functions - no pins needed.
+      - [0x1B21E8, asm, text/1B21E8] # .text mid 4 (0x2B2268..0x348BCF)
+      - [0x248B50, c, text/248B50]   # GUI sub-chunk 1 (0x348BD0..0x34C007)
+      - [0x24BF88, asm, text/24BF88] # .text mid 5 (0x34C008..0x3500FF)
       - [0x250080, c, text/250080]   # segment-tail unit (0x350100..0x352D07)
       - [0x252C88, asm, text/252C88] # trailing nop pad (0x352D08..0x35307C)
 

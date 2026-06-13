@@ -36,6 +36,8 @@ case "$REGION/$UNIT" in
   usa/text/198FA0) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # save/GUI-wrapper unit (g_guiInstance modeled cc1-small/assembler-absolute)
   usa/text/1A8180) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # game-state cluster (carve pick #1; later-cc1 TU model: sized externs under -G8, no load-PRE)
   usa/text/250080) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # segment-tail FMV/debug-stub unit (carve pick #2; same later-cc1 TU model)
+  usa/text/16E980) GFLAG="-G8";; # 16E980 head: camera/screen-FX unit (carve pick #6). Plain -G8, NO -fno-gcse (original keeps the %hi CSE - load-PRE present)
+  usa/text/248B50) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # GUI sub-chunk 1 (carve pick #3a; later-cc1 TU model, sized externs under -G8)
 esac
 
 # Pre-filter the original asm so VU0 (COP2) macro-mode instructions assemble

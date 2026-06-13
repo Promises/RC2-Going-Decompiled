@@ -57,6 +57,17 @@
       }
     },
     {
+      "name": "usa/text/16E980",
+      "target_path": "going-decompiled/build/usa/expected/text/16E980.o",
+      "base_path": "going-decompiled/build/usa/obj/text/16E980.o",
+      "metadata": {
+        "source_path": "going-decompiled/src/usa/text/16E980.c",
+        "progress_categories": [
+          "text"
+        ]
+      }
+    },
+    {
       "name": "usa/text/183178",
       "target_path": "going-decompiled/build/usa/expected/text/183178.o",
       "base_path": "going-decompiled/build/usa/obj/text/183178.o",
@@ -106,6 +117,17 @@
       "base_path": "going-decompiled/build/usa/obj/text/1A8180.o",
       "metadata": {
         "source_path": "going-decompiled/src/usa/text/1A8180.c",
+        "progress_categories": [
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "usa/text/248B50",
+      "target_path": "going-decompiled/build/usa/expected/text/248B50.o",
+      "base_path": "going-decompiled/build/usa/obj/text/248B50.o",
+      "metadata": {
+        "source_path": "going-decompiled/src/usa/text/248B50.c",
         "progress_categories": [
           "text"
         ]

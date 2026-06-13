@@ -63,6 +63,28 @@ func_00133930 = 0x00133930; // type:func
 // prologue after it.
 func_002831F8 = 0x002831F8; // type:func size:0x38
 func_00283230 = 0x00283230; // type:func
+// text/16E980 carve (2026-06-13, pick #6): one absorbed mis-split - 0x30
+// bytes of handwritten 8-byte stub-table words (addiu-sp/nop pairs, one
+// sltu/nop pair, no prologue) that splat lumped into the function whose real
+// prologue is at 0x26F850. Pin the blob to its size and the real start.
+func_0026F820 = 0x0026F820; // type:func size:0x30
+func_0026F850 = 0x0026F850; // type:func
+// text/248B50 carve (2026-06-13, pick #3a): six absorbed mis-splits. Four are
+// the usual 8-byte inter-function padding pairs; two (0x34A2D8, 0x34BDA8) are
+// lone 4-byte store fragments with no return (handwritten tail fragments) plus
+// a pad nop. In each pair: blob pinned to its size, real prologue after it.
+func_0034A2D8 = 0x0034A2D8; // type:func size:0x8
+func_0034A2E0 = 0x0034A2E0; // type:func
+func_0034A6A8 = 0x0034A6A8; // type:func size:0x8
+func_0034A6B0 = 0x0034A6B0; // type:func
+func_0034A798 = 0x0034A798; // type:func size:0x8
+func_0034A7A0 = 0x0034A7A0; // type:func
+func_0034AA90 = 0x0034AA90; // type:func size:0x8
+func_0034AA98 = 0x0034AA98; // type:func
+func_0034B1E0 = 0x0034B1E0; // type:func size:0x8
+func_0034B1E8 = 0x0034B1E8; // type:func
+func_0034BDA8 = 0x0034BDA8; // type:func size:0x8
+func_0034BDB0 = 0x0034BDB0; // type:func
 // text/1907F0 sub-TU head: 8 bytes of inter-function padding (addiu-sp/nop
 // pair) that splat lumped into the unit's first real function. Pin the pad
 // to its size and the real prologue after it (same recovery as cod/015180's
@@ -74,6 +96,13 @@ func_00290878 = 0x00290878; // type:func
 // named symbols with huge offsets, which forces raw-offset C).
 D_001B1750 = 0x001B1750; // size:0x10
 D_001BAC00 = 0x001BAC00; // size:0x90
+// text/16E980 data anchor: the camera-system file-scope state block. Several
+// camera functions address it as base 0x1B5180 plus field offsets (+0x190
+// active-camera ptr = the separately-pinned g_activeCamera, +0x194 prev,
+// +0x268/+0x26C black-fade rate/target). Without this pin spimdisasm attaches
+// the base to the far-away filler symbol D_001B2354 (+0x2E2C), forcing
+// raw-offset C.
+g_cameraState = 0x001B5180;
 
 // === Track-B PlayerStats globals (persistent save block @0x1A7A00). CONFIRMED via cheat CRC B3A71D10 + code trace. ===
 g_boltCount = 0x001A7A00; // u32 currency, add path CollectBolts, spend path VendorPurchaseStateMachine
