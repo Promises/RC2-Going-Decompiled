@@ -154,6 +154,17 @@
           "cod"
         ]
       }
+    },
+    {
+      "name": "eu/cod/0321A0",
+      "target_path": "going-decompiled/build/eu/expected/cod/0321A0.o",
+      "base_path": "going-decompiled/build/eu/obj/cod/0321A0.o",
+      "metadata": {
+        "source_path": "going-decompiled/src/eu/cod/0321A0.c",
+        "progress_categories": [
+          "cod"
+        ]
+      }
     }
   ]
 }

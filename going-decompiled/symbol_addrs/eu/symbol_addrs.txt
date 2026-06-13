@@ -74,6 +74,40 @@ snd_CommitRingEntry = 0x00133130; // CONFIRMED role - bump ring entry count + sn
 snd_CheckLoadInProgress = 0x001335E0; // CONFIRMED role - tests/waits bank-load-in-progress flag (USA 0x133580)
 snd_PrintError = 0x00115D48; // CONFIRMED - 989snd error/log printer (printf varargs) - delta 0 (USA 0x115d48)
 AssertFail = 0x00115E38; // CONFIRMED - assert formatter (file,line,expr) - delta 0 (USA 0x115e38)
+// EU mirror of the USA pin - CdStartRead (the sole same-unit jal caller of func_001253A8) moved into the cod/0321A0 sub-TU with the snd carve, so without this pin spimdisasm no longer auto-detects the start and the preceding 0xCDCDCDCD fill word func_001253A4 absorbs the body. Do NOT pin func_001253A4 itself or give either symbol a byte-size attr. The lone fill word splits off on its own once this start is pinned. (splat scrapes attr tokens from comment prose - never quote an attr literally here.)
+func_001253A8 = 0x001253A8; // type:func
+// cod/0321A0 snd sub-TU inter-function padding pins (EU mirror of USA pins at +0x60). Each pad blob is pinned to its size so the real wrapper prologue after it splits clean.
+func_00132878 = 0x00132878; // type:func size:0x10
+func_001329C8 = 0x001329C8; // type:func size:0x10
+func_001329D8 = 0x001329D8; // type:func
+func_00132A50 = 0x00132A50; // type:func size:0x20
+func_00132A70 = 0x00132A70; // type:func
+func_00132AB8 = 0x00132AB8; // type:func size:0x18
+func_00132AD0 = 0x00132AD0; // type:func
+func_00132B00 = 0x00132B00; // type:func size:0x28
+func_00132B28 = 0x00132B28; // type:func
+func_00132BE8 = 0x00132BE8; // type:func size:0x38
+func_00132C20 = 0x00132C20; // type:func
+func_00133360 = 0x00133360; // type:func size:0x10
+func_00133370 = 0x00133370; // type:func
+func_001333A0 = 0x001333A0; // type:func size:0x10
+func_001333B0 = 0x001333B0; // type:func
+func_00133420 = 0x00133420; // type:func size:0x10
+func_00133430 = 0x00133430; // type:func
+func_00133720 = 0x00133720; // type:func size:0x10
+func_00133730 = 0x00133730; // type:func
+func_00133760 = 0x00133760; // type:func size:0x10
+func_00133770 = 0x00133770; // type:func
+func_00133828 = 0x00133828; // type:func size:0x28
+func_00133850 = 0x00133850; // type:func
+func_00133878 = 0x00133878; // type:func size:0x8
+func_00133880 = 0x00133880; // type:func
+func_001338A8 = 0x001338A8; // type:func size:0x8
+func_001338B0 = 0x001338B0; // type:func
+func_00133918 = 0x00133918; // type:func size:0x10
+func_00133928 = 0x00133928; // type:func
+func_00133988 = 0x00133988; // type:func size:0x8
+func_00133990 = 0x00133990; // type:func
 DebugMalloc = 0x0028BC80; // CONFIRMED role - 16-byte-aligned bump allocator (USA 0x28bcf8)
 
 // === Track-B save/progress globals (EU mirror, signature-verified). save-block area globals are +0x80. ===

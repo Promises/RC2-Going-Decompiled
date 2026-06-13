@@ -82,7 +82,18 @@ segments:
       # (not the USA 3-way snd/-G8 carve, whose boundaries sit in the diverged
       # zone) for a -G0 pilot. EU text is 0x80 longer than USA (core.data at
       # vram 0x133C00 vs USA 0x133B80).
-      - [0x015180, c, cod/015180] # core.text (EU mirror, -G0)
+      # SND SUB-TU CARVE (EU mirror, 2026-06-13): the 989snd/CD-bridge sub-TU is
+      # carved out of cod/015180 into its own c unit cod/0321A0 compiled at
+      # -O2 -G8 (mirrors the USA cod/0321A0 carve). EU boundaries SIGNATURE-
+      # matched (NOT a fixed +0x80): snd_ServiceRpcCompletion at EU vaddr
+      # 0x132280 (USA 0x132220, delta +0x60) -> fileoff 0x032200; the snd block
+      # ends at OnVblankInterrupt (EU 0x133A10/USA 0x1339B0) and the tail unit
+      # cod/033970 (func_001339F0 equiv at EU vaddr 0x133A50/USA 0x1339F0)
+      # begins -> fileoff 0x0339D0. The tail stays at -G0. fileoff -> vaddr is
+      # the constant +0x100080 delta.
+      - [0x015180, c, cod/015180] # core.text head (EU mirror, -G0)
+      - [0x032200, c, cod/0321A0] # snd sub-TU, built at -G8 (EU 0x132280..0x133A0F)
+      - [0x0339D0, c, cod/033970] # core.text tail (EU 0x133A50.., -G0)
       - [0x033B80, data, cod/033B80] # core.data
       - [0x03A200, rodata, cod/03A200] # core.rdata
       - { type: bss, vram: 0x0013C100, name: cod/0013C100 } # core.bss
