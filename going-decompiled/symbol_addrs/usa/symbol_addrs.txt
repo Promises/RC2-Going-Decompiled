@@ -89,6 +89,46 @@ func_0034BDB0 = 0x0034BDB0; // type:func
 // pair) that splat lumped into the unit's first real function. Pin the pad
 // to its size and the real prologue after it (same recovery as cod/015180's
 // 19 padding mis-splits).
+// text/235FE8 carve (2026-06-13, pick #3b, GUI widget-method band): 16 padding
+// mis-splits. Each is a preceding function's epilogue-pad fragment (one or two
+// addiu-sp/nop pairs, sometimes a lone swc1 tail store) that splat lumped onto
+// the next function, demoting its real `addiu $sp,-0xN` prologue to an internal
+// label. In each: blob pinned to its size, real prologue pinned after it (same
+// recovery as cod/015180's padding mis-splits). The handwritten 8-byte
+// stub-table fragments in this range (func_00336068/00336218/... = pure
+// addiu-sp/nop runs that ARE their own functions) need no pin.
+func_00336A18 = 0x00336A18; // type:func size:0x10
+func_00336A28 = 0x00336A28; // type:func
+func_00336A68 = 0x00336A68; // type:func size:0x10
+func_00336A78 = 0x00336A78; // type:func
+func_00336D20 = 0x00336D20; // type:func size:0x8
+func_00336D28 = 0x00336D28; // type:func
+func_00337090 = 0x00337090; // type:func size:0x8
+func_00337098 = 0x00337098; // type:func
+func_00337270 = 0x00337270; // type:func size:0x8
+func_00337278 = 0x00337278; // type:func
+func_003375C8 = 0x003375C8; // type:func size:0x8
+func_003375D0 = 0x003375D0; // type:func
+func_0033C0F8 = 0x0033C0F8; // type:func size:0x8
+func_0033C100 = 0x0033C100; // type:func
+func_0033D1F0 = 0x0033D1F0; // type:func size:0x8
+func_0033D1F8 = 0x0033D1F8; // type:func
+func_0033D4A8 = 0x0033D4A8; // type:func size:0x8
+func_0033D4B0 = 0x0033D4B0; // type:func
+func_0033DE08 = 0x0033DE08; // type:func size:0x8
+func_0033DE10 = 0x0033DE10; // type:func
+func_0033E4B8 = 0x0033E4B8; // type:func size:0x8
+func_0033E4C0 = 0x0033E4C0; // type:func
+func_0033EB50 = 0x0033EB50; // type:func size:0x8
+func_0033EB58 = 0x0033EB58; // type:func
+func_0033EE00 = 0x0033EE00; // type:func size:0x8
+func_0033EE08 = 0x0033EE08; // type:func
+func_0033EFF8 = 0x0033EFF8; // type:func size:0x8
+func_0033F000 = 0x0033F000; // type:func
+func_0033F1F8 = 0x0033F1F8; // type:func size:0x8
+func_0033F200 = 0x0033F200; // type:func
+func_0033F508 = 0x0033F508; // type:func size:0x8
+func_0033F510 = 0x0033F510; // type:func
 func_00290870 = 0x00290870; // type:func size:0x8
 func_00290878 = 0x00290878; // type:func
 // text/188580 sub-TU data anchors: give the two .bss objects the unit reads

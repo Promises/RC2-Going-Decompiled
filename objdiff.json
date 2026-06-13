@@ -123,6 +123,17 @@
       }
     },
     {
+      "name": "usa/text/235FE8",
+      "target_path": "going-decompiled/build/usa/expected/text/235FE8.o",
+      "base_path": "going-decompiled/build/usa/obj/text/235FE8.o",
+      "metadata": {
+        "source_path": "going-decompiled/src/usa/text/235FE8.c",
+        "progress_categories": [
+          "text"
+        ]
+      }
+    },
+    {
       "name": "usa/text/248B50",
       "target_path": "going-decompiled/build/usa/expected/text/248B50.o",
       "base_path": "going-decompiled/build/usa/obj/text/248B50.o",

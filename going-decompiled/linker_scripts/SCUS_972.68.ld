@@ -186,6 +186,7 @@ SECTIONS
         going-decompiled/build/usa/going-decompiled/asm/usa/text/1A00F0.o(.text*);
         going-decompiled/build/usa/going-decompiled/src/usa/text/1A8180.o(.text*);
         going-decompiled/build/usa/going-decompiled/asm/usa/text/1B21E8.o(.text*);
+        going-decompiled/build/usa/going-decompiled/src/usa/text/235FE8.o(.text*);
         going-decompiled/build/usa/going-decompiled/src/usa/text/248B50.o(.text*);
         going-decompiled/build/usa/going-decompiled/asm/usa/text/24BF88.o(.text*);
         going-decompiled/build/usa/going-decompiled/src/usa/text/250080.o(.text*);
@@ -206,6 +207,7 @@ SECTIONS
         going-decompiled/build/usa/going-decompiled/asm/usa/text/1A00F0.o(.data*);
         going-decompiled/build/usa/going-decompiled/src/usa/text/1A8180.o(.data*);
         going-decompiled/build/usa/going-decompiled/asm/usa/text/1B21E8.o(.data*);
+        going-decompiled/build/usa/going-decompiled/src/usa/text/235FE8.o(.data*);
         going-decompiled/build/usa/going-decompiled/src/usa/text/248B50.o(.data*);
         going-decompiled/build/usa/going-decompiled/asm/usa/text/24BF88.o(.data*);
         going-decompiled/build/usa/going-decompiled/src/usa/text/250080.o(.data*);
@@ -231,6 +233,7 @@ SECTIONS
         going-decompiled/build/usa/going-decompiled/asm/usa/text/1A00F0.o(.bss COMMON .scommon);
         going-decompiled/build/usa/going-decompiled/src/usa/text/1A8180.o(.bss COMMON .scommon);
         going-decompiled/build/usa/going-decompiled/asm/usa/text/1B21E8.o(.bss COMMON .scommon);
+        going-decompiled/build/usa/going-decompiled/src/usa/text/235FE8.o(.bss COMMON .scommon);
         going-decompiled/build/usa/going-decompiled/src/usa/text/248B50.o(.bss COMMON .scommon);
         going-decompiled/build/usa/going-decompiled/asm/usa/text/24BF88.o(.bss COMMON .scommon);
         going-decompiled/build/usa/going-decompiled/src/usa/text/250080.o(.bss COMMON .scommon);
