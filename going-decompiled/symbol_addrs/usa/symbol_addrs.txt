@@ -1288,3 +1288,69 @@ ExplodeBombletWithDamage = 0x00333E40; // CONFIRMED mechanism - damaging bomblet
 g_pendingBoltCredit = 0x001A7A1C; // CONFIRMED - PlayerStats +0x1C - deferred bolt credit, drained (x+49)/50 per kill
 g_pendingNanotechXp = 0x001A7A18; // CONFIRMED - PlayerStats +0x18 - deferred nanotech XP, drained (x+49)/50 per kill
 g_pHeroGroundMoby = 0x001AD7CC; // PARTIAL - hero support/ground moby ptr - writer untraced
+
+// === Track-B GUI subsystem (element base + type ctors + dialog/popup/screen classes; audited - 1 bad vtable dropped). ===
+GuiElementBaseInit = 0x00336DD0; // CONFIRMED - base GuiElement ctor - allocs 5 pool vecs (pos/scale/aux/color/alpha) - stores pool +0x2c name +0x28 - sets visible
+GuiElementInstallBaseVtable = 0x00336DB8; // CONFIRMED - installs g_GuiElementVtable at elem +0x30
+GuiElementGetColor = 0x00336C28; // CONFIRMED - return elem +0xc (RGBA color vec)
+GuiElementGetScaleVec = 0x00336C20; // CONFIRMED - return elem +0x4 (scale vec)
+GuiElementShareScaleVec = 0x00336CB8; // CONFIRMED - point elem +0x4 at a shared scale vec
+GuiElementSetVisible = 0x00336C70; // CONFIRMED - elem +0x10 visible flag = 1.0/0.0
+GuiElementIsVisible = 0x00336C90; // CONFIRMED - return elem +0x10 visible flag gt 0
+GuiElementSetScale = 0x00336D90; // CONFIRMED - write vec4 into elem +0x4
+GuiElementSetPos = 0x00336C40; // CONFIRMED - write vec4 into elem +0x0
+GuiElementSetAlpha = 0x003371C8; // CONFIRMED - elem +0x38 alpha = float
+GuiElementSetGlyph = 0x00337198; // CONFIRMED - atlas lookup into elem +0x40 glyph handle
+GuiElementSetText = 0x00337860; // CONFIRMED - elem +0x40 = text handle
+GuiElementSetTextFlag = 0x00337858; // CONFIRMED - elem +0x44 = text align/flag
+GuiTextElementInit = 0x003377B0; // CONFIRMED - text element ctor (text vtable, default 0.2 box)
+GuiSpriteElementInit = 0x00337518; // CONFIRMED - sprite/image element ctor
+GuiListElementInit = 0x00337210; // CONFIRMED - scroll-list element ctor (capacity +0x3c, count +0x40)
+GuiListRowElementInit = 0x003371D8; // CONFIRMED - list-row element ctor (g_GuiListRowVtable)
+GuiElementInitTypeB = 0x00336FB0; // CONFIRMED - element variant ctor (vtable 0x1ada38)
+GuiElementInitTypeC = 0x00337770; // CONFIRMED - element variant ctor (vtable 0x1ad9f8)
+GuiSpriteSetTexture = 0x00337728; // CONFIRMED - elem +0x34 texture descriptor = (textureId, frame)
+GuiSpriteGetTextureVec = 0x003375C0; // CONFIRMED - return elem +0x34 texture descriptor
+GuiSpriteElementDraw = 0x00337128; // CONFIRMED - sprite draw virtual (blit)
+GuiTextElementDraw = 0x003378A0; // CONFIRMED - text draw virtual (align 0 left 1 center 2 right)
+GuiTextElementMeasure = 0x00337868; // CONFIRMED - text pixel-width measure
+GuiListSetVisibleRows = 0x00337B70; // CONFIRMED - list visible-row count
+GuiListSetItemCount = 0x00337A38; // CONFIRMED - list +0x40 item count
+GuiListSetScrollPos = 0x00337A40; // CONFIRMED - map index/count to fractional scrollbar position
+GuiListSetColorPair0 = 0x003372A0; // CONFIRMED - list color vec +0x0/+0x4
+GuiListSetColorPair1 = 0x003372B8; // CONFIRMED - list color vec +0x8/+0xc
+GuiFontAtlasLookupGlyph = 0x00337BF8; // CONFIRMED - scan (key,glyph) pairs at atlas +0x1c
+GuiFontAtlasRelocate = 0x00337B90; // CONFIRMED - fix up glyph offset-to-ptr entries
+GuiDialogBoxInitElements = 0x0033BB98; // CONFIRMED - build 5 border + 3 text rows
+GuiDialogBoxInitBorder = 0x0033BC20; // CONFIRMED - border glyphs + 3 text rows from glyph-id array
+GuiDialogBoxSetText3 = 0x0033C098; // CONFIRMED - title +0x198 body +0x248 footer +0x1f0
+GuiDialogBoxSetBounds = 0x0033C078; // CONFIRMED - 6-float bbox at +0x2a8 to +0x2bc
+GuiDialogBoxSetScale = 0x0033C0F0; // CONFIRMED - open/scale factor +0x2a4
+GuiQuitDialogInit = 0x0033E788; // PROBABLE - yes/no quit dialog - identity from child strings
+GuiQuitDialogInitElements = 0x0033E750; // CONFIRMED - phase-1 element builder for the quit dialog
+GuiDialogBoxVariantBInit = 0x0033DA38; // CONFIRMED mechanism - dialog box variant (prompt 0x2c29)
+GuiDialogBoxVariantCInit = 0x0033CDB8; // CONFIRMED mechanism - dialog box variant (prompt 0x307b)
+GuiConfirmPopupInit = 0x0033A0B8; // CONFIRMED mechanism - title + 2-row confirm popup
+GuiConfirmPopupTick = 0x0033A368; // CONFIRMED mechanism - layout + advances progress globals
+GuiConfirmPopupDraw = 0x0033A5D8; // CONFIRMED - submit 4 glyph + 3 text elements
+GuiProgressBarWidgetInit = 0x0033B568; // PROBABLE - progress bar + percent text - identity inferred
+GuiHelpPromptWidgetInit = 0x00342BF0; // PROBABLE - 2 button-prompt glyphs - identity inferred
+GuiMapScreenInit = 0x003463F8; // PROBABLE - galactic map screen (MapSpr child labels)
+GuiMapScreenTick = 0x00346EF0; // CONFIRMED mechanism - galactic map mode dispatch + child layout
+GuiWeaponGridScreenInit = 0x00347680; // CONFIRMED - pause weapon/gadget grid screen
+GuiWeaponGridTick = 0x00347B88; // CONFIRMED - grid cursor over inventory/ammo - pick to D_001F2800
+GuiInfoPanelScreenInit = 0x00344950; // CONFIRMED mechanism - title + 3-row info panel
+GuiQuickSelectWheelInit = 0x003400E0; // CONFIRMED mechanism - 8-icon radial quick-select wheel
+GuiQuickSelectWheelTick = 0x00340AA8; // CONFIRMED - equipped-item driven wheel rotate
+GuiLevelInfoPanelInit = 0x0033AB18; // CONFIRMED mechanism - 9-row level-info text panel
+GuiLevelInfoPanelTick = 0x0033AF70; // CONFIRMED - shows g_levelSelectEntries at g_nMapCurrentLevel
+GuiScrollListScreenInit = 0x00341C78; // CONFIRMED mechanism - scroll-list panel screen
+GuiIconListScreenInit = 0x0033C1B8; // CONFIRMED mechanism - 3-row icon list + sprites
+GuiIconScreenInit = 0x00342130; // CONFIRMED mechanism - title + sprite + child screen
+GuiIconScreenInit2 = 0x00343028; // CONFIRMED mechanism - title + 2 sprites screen
+GuiTitledSpriteScreenInit = 0x00344170; // CONFIRMED mechanism - title + 2 text + sprite + child
+GuiStatsPanelScreenInit = 0x0033F720; // CONFIRMED mechanism - multi-row stats panel screen
+GuiManagerInitListRows = 0x0034ED28; // CONFIRMED - build 0x1a list-row elements (phase-1)
+GuiManagerInitHudLists = 0x0034EDB8; // CONFIRMED - configure 0x1a HUD lists + bg sprite (phase-2)
+g_GuiElementVtable = 0x001ADA58; // CONFIRMED - base GuiElement vtable (installed at elem +0x30)
+g_GuiListRowVtable = 0x001AD9D8; // CONFIRMED - GuiListRow element vtable
