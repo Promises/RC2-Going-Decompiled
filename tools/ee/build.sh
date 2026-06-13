@@ -78,6 +78,7 @@ if [ -d "$SRC" ]; then
       */usa/text/235FE8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # GUI widget-method band (carve pick #3b)
       */usa/text/1CA080.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # menu-screens A (carve pick #5)
       */usa/text/1D54C0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # menu-screens B (carve pick #5)
+      */usa/text/1B4218.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # moby-bind band (carve pick #5/moby-bind)
     esac
     "$WIBO" "$G/cpp.exe" $CPPDEF $INCC "$c" "$BUILD/_unit.i"
     "$WIBO" "$G/cc1.exe" -quiet -O2 $GFLAG $CC1EXTRA "$BUILD/_unit.i" -o "$BUILD/_unit.s"

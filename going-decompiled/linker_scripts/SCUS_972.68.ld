@@ -186,6 +186,8 @@ SECTIONS
         going-decompiled/build/usa/going-decompiled/asm/usa/text/1A00F0.o(.text*);
         going-decompiled/build/usa/going-decompiled/src/usa/text/1A8180.o(.text*);
         going-decompiled/build/usa/going-decompiled/asm/usa/text/1B21E8.o(.text*);
+        going-decompiled/build/usa/going-decompiled/src/usa/text/1B4218.o(.text*);
+        going-decompiled/build/usa/going-decompiled/asm/usa/text/1B8FA8.o(.text*);
         going-decompiled/build/usa/going-decompiled/src/usa/text/1CA080.o(.text*);
         going-decompiled/build/usa/going-decompiled/src/usa/text/1D54C0.o(.text*);
         going-decompiled/build/usa/going-decompiled/asm/usa/text/1DFF80.o(.text*);
@@ -210,6 +212,8 @@ SECTIONS
         going-decompiled/build/usa/going-decompiled/asm/usa/text/1A00F0.o(.data*);
         going-decompiled/build/usa/going-decompiled/src/usa/text/1A8180.o(.data*);
         going-decompiled/build/usa/going-decompiled/asm/usa/text/1B21E8.o(.data*);
+        going-decompiled/build/usa/going-decompiled/src/usa/text/1B4218.o(.data*);
+        going-decompiled/build/usa/going-decompiled/asm/usa/text/1B8FA8.o(.data*);
         going-decompiled/build/usa/going-decompiled/src/usa/text/1CA080.o(.data*);
         going-decompiled/build/usa/going-decompiled/src/usa/text/1D54C0.o(.data*);
         going-decompiled/build/usa/going-decompiled/asm/usa/text/1DFF80.o(.data*);
@@ -239,6 +243,8 @@ SECTIONS
         going-decompiled/build/usa/going-decompiled/asm/usa/text/1A00F0.o(.bss COMMON .scommon);
         going-decompiled/build/usa/going-decompiled/src/usa/text/1A8180.o(.bss COMMON .scommon);
         going-decompiled/build/usa/going-decompiled/asm/usa/text/1B21E8.o(.bss COMMON .scommon);
+        going-decompiled/build/usa/going-decompiled/src/usa/text/1B4218.o(.bss COMMON .scommon);
+        going-decompiled/build/usa/going-decompiled/asm/usa/text/1B8FA8.o(.bss COMMON .scommon);
         going-decompiled/build/usa/going-decompiled/src/usa/text/1CA080.o(.bss COMMON .scommon);
         going-decompiled/build/usa/going-decompiled/src/usa/text/1D54C0.o(.bss COMMON .scommon);
         going-decompiled/build/usa/going-decompiled/asm/usa/text/1DFF80.o(.bss COMMON .scommon);

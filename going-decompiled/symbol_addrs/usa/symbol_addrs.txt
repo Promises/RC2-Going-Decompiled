@@ -1145,6 +1145,16 @@ func_002B1340 = 0x002B1340; // type:func size:0x8
 func_002B1348 = 0x002B1348; // type:func
 func_002B17D0 = 0x002B17D0; // type:func size:0x28
 func_002B17F8 = 0x002B17F8; // type:func
+// moby-bind carve (text/1B4218): 6 pure 8-byte epilogue-pad mis-splits.
+// Each pad is the preceding function's `addiu $sp,+0xN; nop` epilogue-pad that
+// spimdisasm mis-promoted to its own glabel, demoting the next real prologue.
+// Pin pad `type:func size:0x8`; the real start already carries a named symbol.
+func_002B50B8 = 0x002B50B8; // type:func size:0x8 (pad before InitMobySpringFollowState)
+func_002B5FF8 = 0x002B5FF8; // type:func size:0x8 (pad before StepMobyMotion)
+func_002B61B8 = 0x002B61B8; // type:func size:0x8 (pad before UpdateMobyMotionVelocity)
+func_002B6FC8 = 0x002B6FC8; // type:func size:0x8 (pad before SetMobyMotionParams)
+func_002B7038 = 0x002B7038; // type:func size:0x8 (pad before DriveMobyAlongWaypoints)
+func_002B7140 = 0x002B7140; // type:func size:0x8 (pad before SetMobyWaypointPath)
 g_pMobyGroupIterCursor = 0x001B1CB8; // CONFIRMED mechanism - moby-group iterator - cursor into the current group's i16 slot list (func_002A9468 init / func_002A9550 advance)
 g_mobyGroupIterSlot = 0x001B1CBC; // CONFIRMED mechanism - moby-group iterator - current moby slot index (list entry & 0x7FFF)
 g_pMobyGroupIterMoby = 0x001B1CC0; // CONFIRMED mechanism - moby-group iterator - current moby ptr (g_mobyTableBase + slot*0x100), 0 when iteration not active

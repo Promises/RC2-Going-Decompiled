@@ -295,7 +295,26 @@ segments:
       #   Later-cc1 TU model (no load-PRE -> -fno-gcse, 8-byte-packed saves +
       #   switch/jtbl stay INCLUDE_ASM). gp-dense: many g_bestiary*/g_extras*/
       #   g_shipCustomize* + GetLocalizedString/PlayGlobalSound externs.
-      - [0x1B21E8, asm, text/1B21E8] # .text mid 4 (0x2B2268..0x2CA0FF)
+      # RANKED-CARVE-PIPELINE PICK #5 / moby-bind (2026-06-13): the
+      #   moby-bind / locomotion / target-lock / game-state-stack /
+      #   dialog-voice band (vaddr 0x2B4298..0x2B9027) carved out of the big
+      #   text/1B21E8 asm tile into a -G8 -fno-gcse c sub-unit text/1B4218
+      #   (later-cc1 TU model: sized externs under -G8, no load-PRE -> -fno-gcse,
+      #   8-byte-packed saves + the two switch fns 0x2B5B30/0x2B82A0 stay
+      #   INCLUDE_ASM behind the jtbl reloc gap). 6 pure 8-byte epilogue-pad
+      #   mis-splits (a preceding fn's epilogue-pad pair demoting the next real
+      #   prologue to an internal label) pinned the proven way in symbol_addrs:
+      #   func_002B50B8/5FF8/61B8/6FC8/7038/7140 each `type:func size:0x8`,
+      #   the real start (InitMobySpringFollowState/StepMobyMotion/
+      #   UpdateMobyMotionVelocity/SetMobyMotionParams/DriveMobyAlongWaypoints/
+      #   SetMobyWaypointPath) already carries a named symbol = its boundary.
+      #   The handwritten 8-byte stub-table fragments (func_002B46C8/4F40/4F80/
+      #   58B8/7218/7570/77E0/8FD8 = addiu $sp/nop runs that are their own
+      #   functions) stay INCLUDE_ASM and need no pin. Tail resumes at the real
+      #   func_002B9028 (after func_002B8FD8's stub run ends at 0x2B9028).
+      - [0x1B21E8, asm, text/1B21E8] # .text mid 4 head (0x2B2268..0x2B4297)
+      - [0x1B4218, c, text/1B4218]   # moby-bind band (0x2B4298..0x2B9027)
+      - [0x1B8FA8, asm, text/1B8FA8] # .text mid 4 tail (0x2B9028..0x2CA0FF)
       - [0x1CA080, c, text/1CA080]   # menu-screens A (0x2CA100..0x2D553F, 136 entries)
       - [0x1D54C0, c, text/1D54C0]   # menu-screens B (0x2D5540..0x2DFFFF, 117 entries)
       - [0x1DFF80, asm, text/1DFF80] # .text mid 4b (0x2E0000..0x336067)
