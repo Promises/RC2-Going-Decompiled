@@ -143,6 +143,17 @@
           "text"
         ]
       }
+    },
+    {
+      "name": "eu/cod/015180",
+      "target_path": "going-decompiled/build/eu/expected/cod/015180.o",
+      "base_path": "going-decompiled/build/eu/obj/cod/015180.o",
+      "metadata": {
+        "source_path": "going-decompiled/src/eu/cod/015180.c",
+        "progress_categories": [
+          "cod"
+        ]
+      }
     }
   ]
 }

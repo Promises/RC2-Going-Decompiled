@@ -71,7 +71,18 @@ segments:
     subalign: null
     subsegments:
       - [0x000000, textbin, cod/000000] # .vutext
-      - [0x015180, asm, cod/015180] # core.text
+      # R24 EU REGION-AXIS PILOT (2026-06-13): retyped asm->c to stand up the
+      # FIRST EU per-function objdiff unit. Mirrors the USA head c-unit
+      # (cod/015180). MEASURED: 100/105 USA-matched cod funcs are byte-shape-
+      # identical in EU (67 byte-identical, 33 reloc-only deltas = the +0x80
+      # global/gp shift, gp EU 0x1AF070 vs USA 0x1AEFF0); the engine head
+      # (0x115200..0x131620) is a clean mirror. The crt0/entry cluster
+      # (0x131628.. incl _start EU 0x131b48 vs USA 0x131ae8) genuinely diverges
+      # (PAL/NTSC boot, BCD clock) and stays INCLUDE_ASM. Kept as ONE c unit
+      # (not the USA 3-way snd/-G8 carve, whose boundaries sit in the diverged
+      # zone) for a -G0 pilot. EU text is 0x80 longer than USA (core.data at
+      # vram 0x133C00 vs USA 0x133B80).
+      - [0x015180, c, cod/015180] # core.text (EU mirror, -G0)
       - [0x033B80, data, cod/033B80] # core.data
       - [0x03A200, rodata, cod/03A200] # core.rdata
       - { type: bss, vram: 0x0013C100, name: cod/0013C100 } # core.bss

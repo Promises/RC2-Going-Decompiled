@@ -9,13 +9,13 @@ SECTIONS
         FILL(0x00000000);
         cod_TEXT_START = .;
         going-decompiled/build/eu/going-decompiled/asm/eu/data/cod/000000.o(.text*);
-        going-decompiled/build/eu/going-decompiled/asm/eu/cod/015180.o(.text*);
+        going-decompiled/build/eu/going-decompiled/src/eu/cod/015180.o(.text*);
         . = ALIGN(., 16);
         cod_TEXT_END = .;
         cod_TEXT_SIZE = ABSOLUTE(cod_TEXT_END - cod_TEXT_START);
         cod_DATA_START = .;
         going-decompiled/build/eu/going-decompiled/asm/eu/data/cod/000000.o(.data*);
-        going-decompiled/build/eu/going-decompiled/asm/eu/cod/015180.o(.data*);
+        going-decompiled/build/eu/going-decompiled/src/eu/cod/015180.o(.data*);
         going-decompiled/build/eu/going-decompiled/asm/eu/data/cod/033B80.data.o(.data*);
         . = ALIGN(., 16);
         cod_DATA_END = .;
@@ -32,7 +32,7 @@ SECTIONS
         FILL(0x00000000);
         cod_BSS_START = .;
         going-decompiled/build/eu/going-decompiled/asm/eu/data/cod/000000.o(.bss COMMON .scommon);
-        going-decompiled/build/eu/going-decompiled/asm/eu/cod/015180.o(.bss COMMON .scommon);
+        going-decompiled/build/eu/going-decompiled/src/eu/cod/015180.o(.bss COMMON .scommon);
         going-decompiled/build/eu/going-decompiled/asm/eu/data/cod/0013C100.bss.o(.bss COMMON .scommon);
         . = ALIGN(., 16);
         cod_BSS_END = .;

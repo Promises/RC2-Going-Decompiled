@@ -329,10 +329,15 @@ nonmatching D_00141B58, 0x28
 dlabel D_00141B58
     /* 00141B58 */ .space 0x28
 
-nonmatching D_00141B80, 0x28
+nonmatching g_mcRpcClient, 0x24
 
-dlabel D_00141B80
-    /* 00141B80 */ .space 0x28
+dlabel g_mcRpcClient
+    /* 00141B80 */ .space 0x24
+
+nonmatching g_mcInitialized, 0x4
+
+dlabel g_mcInitialized
+    /* 00141BA4 */ .space 0x04
 
 nonmatching D_00141BA8, 0x4
 
@@ -369,9 +374,9 @@ nonmatching D_00142080, 0x10C0
 dlabel D_00142080
     /* 00142080 */ .space 0x10C0
 
-nonmatching D_00143140, 0x48
+nonmatching g_mcRpcResult, 0x48
 
-dlabel D_00143140
+dlabel g_mcRpcResult
     /* 00143140 */ .space 0x48
 
 nonmatching D_00143188, 0x28
@@ -454,10 +459,50 @@ nonmatching D_0014B5C0, 0x34A40
 dlabel D_0014B5C0
     /* 0014B5C0 */ .space 0x34A40
 
-nonmatching D_00180000, 0x27080
+nonmatching D_00180000, 0xA07C
 
 dlabel D_00180000
-    /* 00180000 */ .space 0x27080
+    /* 00180000 */ .space 0xA07C
+
+nonmatching g_nNanotechBonusHealTimer, 0x1698
+
+dlabel g_nNanotechBonusHealTimer
+    /* 0018A07C */ .space 0x1698
+
+nonmatching g_giantClankHealth, 0xA40
+
+dlabel g_giantClankHealth
+    /* 0018B714 */ .space 0xA40
+
+nonmatching g_bPlayerMode, 0x20C
+
+dlabel g_bPlayerMode
+    /* 0018C154 */ .space 0x20C
+
+nonmatching g_air, 0xC
+
+dlabel g_air
+    /* 0018C360 */ .space 0x0C
+
+nonmatching g_health, 0xEF8C
+
+dlabel g_health
+    /* 0018C36C */ .space 0xEF8C
+
+nonmatching g_platinumBoltFlags, 0x7930
+
+dlabel g_platinumBoltFlags
+    /* 0019B2F8 */ .space 0x7930
+
+nonmatching g_saveImageGlobal, 0x2800
+
+dlabel g_saveImageGlobal
+    /* 001A2C28 */ .space 0x2800
+
+nonmatching g_saveImageArea, 0x1C58
+
+dlabel g_saveImageArea
+    /* 001A5428 */ .space 0x1C58
 
 nonmatching D_001A7080, 0xC
 
@@ -549,10 +594,15 @@ nonmatching D_001A7290, 0x78
 dlabel D_001A7290
     /* 001A7290 */ .space 0x78
 
-nonmatching D_001A7308, 0x1E8
+nonmatching D_001A7308, 0x198
 
 dlabel D_001A7308
-    /* 001A7308 */ .space 0x1E8
+    /* 001A7308 */ .space 0x198
+
+nonmatching g_nSaveLoadStatusCode, 0x50
+
+dlabel g_nSaveLoadStatusCode
+    /* 001A74A0 */ .space 0x50
 
 nonmatching D_001A74F0, 0x10
 

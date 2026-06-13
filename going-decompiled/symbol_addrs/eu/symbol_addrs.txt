@@ -52,7 +52,7 @@ McDelayMillis = 0x00127B40; // CONFIRMED - SetAlarm+SleepThread busy-wait helper
 McChdir = 0x00127F98; // UNCONFIRMED - RPC cmd 0x10 in SaveLoadStateMachine case 3, mapped to sceMcChdir by cmd number only (USA 0x127f98)
 McGetEntSpace = 0x00128180; // UNCONFIRMED - RPC cmd 0x11 in SaveLoadStateMachine case 5, mapped to sceMcGetEntSpace by cmd number only (USA 0x128180)
 InitMemCardLib = 0x0029B7E0; // CONFIRMED - game-level libmc bring-up, calls McInit, logs failure (0x1a9ae0) (USA 0x29bc38, USA log 0x1a9a60)
-BuildSaveGamePaths = 0x00299550; // CONFIRMED - derives per-region save dir from boot title id, patches save path templates (USA 0x299998). NOTE behavioural diff - EU handles only region letters E/P; USA also handles K (Korea) and falls back to A (America)
+BuildSaveGamePaths = 0x00299550; // CONFIRMED - derives per-region save dir from boot title id, patches save path templates (USA 0x299998). NOTE behavioural diff - EU handles only region letters E/P, USA also handles K (Korea) and falls back to A (America)
 g_saveDirTemplate = 0x001A79B8; // CONFIRMED - "/BA****-*****RATCHET" dir-name template patched by BuildSaveGamePaths (USA 0x1a7938)
 g_saveIconSysPath = 0x001A79E8; // CONFIRMED - "/<dir>/icon.sys" save icon descriptor path (USA 0x1a7968)
 g_saveStaticIcoPath = 0x001A7A08; // CONFIRMED - "/<dir>/static.ico" save icon model path (USA 0x1a7988)
@@ -112,7 +112,7 @@ VendorPurchaseStateMachine = 0x002F9898; // CONFIRMED - vendor buy, bolt SPEND p
 RestorePlayerProgressState = 0x002DF760; // UNCONFIRMED - in-RAM new-area/post-load state rebuild, writes g_boltCount (USA 0x2df7a0, EU writer of 0x1a7a80 @0x2dfac0)
 
 // === Track-B health functions (EU mirror, signature-verified). ===
-UpdateNanotechOrb = 0x00314B60; // CONFIRMED - nanotech-orb heal state machine (clamp to g_maxHealth) (USA 0x3144c8). NOTE PAL 50Hz timing - timers scaled by (x*5+2)/6 vs USA NTSC; heal-SFX 300 (EU) vs 0x168 (USA)
+UpdateNanotechOrb = 0x00314B60; // CONFIRMED - nanotech-orb heal state machine (clamp to g_maxHealth) (USA 0x3144c8). NOTE PAL 50Hz timing - timers scaled by (x*5+2)/6 vs USA NTSC, heal-SFX 300 (EU) vs 0x168 (USA)
 RevivePlayerMinHealth = 0x002E7E00; // CONFIRMED - respawn clamp g_health>=1 (USA 0x2e7e70)
 LoadLevelAndInitHealth = 0x0026EC50; // CONFIRMED - level loader, inits g_health=1, calls MapInit+GuiManagerCreate (USA 0x26ede8)
 
