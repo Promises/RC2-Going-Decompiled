@@ -40,6 +40,8 @@ case "$REGION/$UNIT" in
   usa/text/16E980) GFLAG="-G8";; # 16E980 head: camera/screen-FX unit (carve pick #6). Plain -G8, NO -fno-gcse (original keeps the %hi CSE - load-PRE present)
   usa/text/248B50) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # GUI sub-chunk 1 (carve pick #3a; later-cc1 TU model, sized externs under -G8)
   usa/text/235FE8) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # GUI widget-method band (carve pick #3b; same later-cc1 GUI TU model)
+  usa/text/1CA080) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # menu-screens A (carve pick #5; later-cc1 TU model, gp-dense)
+  usa/text/1D54C0) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # menu-screens B (carve pick #5; later-cc1 TU model, gp-dense)
 esac
 
 # Pre-filter the original asm so VU0 (COP2) macro-mode instructions assemble

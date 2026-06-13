@@ -76,6 +76,8 @@ if [ -d "$SRC" ]; then
       */usa/text/16E980.c) GFLAG="-G8";; # 16E980 head camera/screen-FX unit (carve pick #6; plain -G8, original keeps the %hi CSE)
       */usa/text/248B50.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # GUI sub-chunk 1 (carve pick #3a)
       */usa/text/235FE8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # GUI widget-method band (carve pick #3b)
+      */usa/text/1CA080.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # menu-screens A (carve pick #5)
+      */usa/text/1D54C0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # menu-screens B (carve pick #5)
     esac
     "$WIBO" "$G/cpp.exe" $CPPDEF $INCC "$c" "$BUILD/_unit.i"
     "$WIBO" "$G/cc1.exe" -quiet -O2 $GFLAG $CC1EXTRA "$BUILD/_unit.i" -o "$BUILD/_unit.s"
