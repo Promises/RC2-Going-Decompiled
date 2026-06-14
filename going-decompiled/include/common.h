@@ -3,6 +3,26 @@
 
 #include "include_asm.h"
 
+/* Two build targets share this tree (see docs/PORTING.md):
+ *   - default (no macro): the byte-exact PS2 build (ee-gcc EABI) - the matching
+ *     oracle. Unmatchable functions use INCLUDE_ASM (the original MIPS .s).
+ *   - TARGET_NATIVE: a portable x86/ARM build. Matched C is reused as-is;
+ *     INCLUDE_ASM functions provide a functionally-equivalent C body in their
+ *     #else branch. Build this target ILP32 so pointers stay 4 bytes like the
+ *     PS2/EE (keeps struct layouts identical). Hardware (GS/VIF/DMA/VU) code is
+ *     not yet ported - that needs the platform backend (deferred). */
+#ifdef TARGET_NATIVE
+#include <stdint.h>
+typedef int8_t   s8;
+typedef int16_t  s16;
+typedef int32_t  s32;
+typedef int64_t  s64;
+typedef uint8_t  u8;
+typedef uint16_t u16;
+typedef uint32_t u32;
+typedef uint64_t u64;
+typedef float    f32;
+#else
 typedef char s8;
 typedef short s16;
 typedef int s32;
@@ -14,6 +34,7 @@ typedef unsigned int u32;
 typedef unsigned long u64;
 
 typedef float f32;
+#endif
 
 #define UNK_TYPE s32
 #define UNK_PTR void*
