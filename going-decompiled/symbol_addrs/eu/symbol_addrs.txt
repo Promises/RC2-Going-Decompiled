@@ -316,3 +316,29 @@ g_nSavePromptPending = 0x001A7C14; // CONFIRMED - u32 show-saving-prompt gate re
 RenderSaveLoadStatusPopup = 0x00286288; // CONFIRMED mechanism (signature match - inner switch on g_nSaveLoadStatusCode + GetSavePromptPending gate) - draws the save/load + memory-card system message popup (phase x g_nSaveLoadStatusCode), status enum UNCONFIRMED (USA 0x286378, -0xf0)
 UpdateSaveTaskState = 0x00299380; // CONFIRMED mechanism (exact structural match) - drives the save flow off the MC task state, sets g_nSaveLoadStatusCode + save-prompt flag, calls RequestGameStateChange/SetSavePromptPending, status enum UNCONFIRMED (USA 0x2997c8, -0x448)
 g_nSaveLoadStatusCode = 0x001A74A0; // UNCONFIRMED enum - status code selecting the save/load popup body string, written by UpdateSaveTaskState, read by RenderSaveLoadStatusPopup (USA 0x1a7420, +0x80)
+
+// === EU text/1A7D10 leading-padding mis-split pins (mirror USA text/1A8180 boundary
+// pins). Each padding block (orphaned epilogue addiu-sp/nop pairs from the preceding
+// function) is pinned as its own func so the real body that follows starts at a clean
+// glabel and its region-agnostic C body can be ported byte-exact. ===
+func_002A9268 = 0x002A9268; // type:func size:0x10
+func_002A9278 = 0x002A9278; // type:func
+func_002AAB98 = 0x002AAB98; // type:func size:0x10 padding pair, real func_002AABA8 = USA func_002AAFA8 lerp
+func_002AABA8 = 0x002AABA8; // type:func
+func_002B0EC0 = 0x002B0EC0; // type:func size:0x8 padding pair, real func_002B0EC8 = USA func_002B11C8
+func_002B0EC8 = 0x002B0EC8; // type:func
+func_002B1040 = 0x002B1040; // type:func size:0x8 padding pair, real func_002B1048 = USA func_002B1348
+func_002B1048 = 0x002B1048; // type:func
+
+// === EU text mis-split boundary pins (mirror the USA leading-padding pin pattern). ===
+// 249FE8: 0x8 epilogue-padding pair before the (idx<<2)+0x20 store accessor.
+func_0034BC20 = 0x0034BC20; // type:func size:0x8 padding pair, real func_0034BC28 = USA func_0034A7A0
+func_0034BC28 = 0x0034BC28; // type:func
+// 183088: 0x38 handwritten stub block fused ahead of the first scale helper (D_1A7990 * x).
+func_00283108 = 0x00283108; // type:func size:0x38 handwritten stub block, real func_00283140 = USA func_00283230
+func_00283140 = 0x00283140; // type:func
+
+// 1D5488: name the EU sound-channel volume table so the slot-2 store folds into a
+// single %hi/%lo reloc (g_sndChannelVolumes+0x8) instead of section-relative
+// D_00180000+0x8730, matching the USA twin func_002D87B0.
+g_sndChannelVolumes = 0x00188728; // PARTIAL - per-channel master volume block (USA 0x1886a8, +0x80) - slot 2 written by func_002D8740

@@ -37,6 +37,15 @@ typedef struct MenuCmd {
     s32 arg;    /* 0x4 */
 } MenuCmd;
 
+/* Sound-channel volume snapshot/table (EU). g_sndChannelVolumes is pinned at the
+ * EU address 0x188728 (USA 0x1886A8) so its slot-2 store folds into a single
+ * %hi/%lo reloc (g_sndChannelVolumes+0x8). Sized >=16 to keep the address out of
+ * cc1 small data, matching the USA twin. */
+__asm__(".extern D_1A7C28, 16");
+__asm__(".extern g_sndChannelVolumes, 16");
+extern s32 D_1A7C28;              /* saved sound-channel volume snapshot (USA D_1A7BA8) */
+extern s32 g_sndChannelVolumes[]; /* sound-channel volume table */
+
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D5508);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D59D0);
@@ -176,18 +185,16 @@ s32 func_002D8720(void) {
     return 0;
 }
 
-/* Snapshot the saved channel volume back into the live table slot 2.
- *
- * HELD as INCLUDE_ASM in EU (region-delta): the USA twin func_002D87B0 matches
- * because g_sndChannelVolumes is a NAMED symbol at 0x1886A8, so slot 2 is the
- * small folded reloc `g_sndChannelVolumes+0x8` (one lui %hi / sw %lo pair). The
- * EU split named no symbol at the corresponding EU address (0x188728), so the EU
- * target references it section-relative as `D_00180000 + 0x8730`. cc1 cannot
- * fold a 0x8730 addend into a single %hi/%lo reloc (it exceeds the 0x7FFF %lo
- * range and gets materialised with an extra li/addu), and naming the EU symbol
- * would require a re-split (out of Phase-B scope). Only the relocation symbol
- * differs; the instruction body is otherwise byte-identical to the USA match. */
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D8740);
+/**
+ * func_002D8740 (USA func_002D87B0) - snapshot the saved channel volume back into
+ * the live table slot 2. Recovered by pinning the EU g_sndChannelVolumes symbol
+ * at 0x188728 so the slot-2 store folds into a single %hi/%lo reloc
+ * (g_sndChannelVolumes+0x8) instead of section-relative D_00180000+0x8730.
+ */
+s32 func_002D8740(void) {
+    g_sndChannelVolumes[2] = D_1A7C28;
+    return 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D8758);
 

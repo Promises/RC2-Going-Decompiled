@@ -189,11 +189,16 @@ void func_0034B840(GuiWidget *w, f32 v) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", func_0034B848);
 
-/* HELD: EU twin of USA func_0034A7A0 (store a2 at (idx<<2)+0x20). func_0034BC20
- * was split with the previous function's epilogue padding (addiu $sp,+0x10;nop)
- * merged onto its start; a clean C accessor can't reproduce the leading padding
- * and we do not re-split in this phase. Region-delta (split), not a code diff. */
+/* func_0034BC20: leading 0x8 padding pair (orphaned epilogue of the preceding
+ * function), split off via the symbol_addrs pin so the real body below starts
+ * clean. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", func_0034BC20);
+
+/* func_0034BC28 (USA func_0034A7A0): store a2 at +0x20 of the +0x4-stride index
+ * entry idx. Recovered from the EU padding mis-split. */
+void func_0034BC28(GuiWidget *w, s32 idx, s32 v) {
+    *(s32 *)((char *)w + (idx << 2) + 0x20) = v;
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", func_0034BC38);
 

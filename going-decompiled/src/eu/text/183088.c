@@ -24,17 +24,23 @@
 
 /* Per-unit scale factors (EU sdata, gp-relative). EU addresses of the USA
  * D_1A7910.. cluster; initial values measured in the USA rom carry over. */
+extern f32 D_1A7990; /* = 1.0    (time-scale a) */
 extern f32 D_1A7994; /* = 1.0    (time-scale b) */
 extern f32 D_1A7998; /* = 1.0    (time-scale c) */
 extern f32 D_1A799C; /* = 1/60   (frames -> seconds @60Hz) */
 extern f32 D_1A79A0; /* = 1/3600 (frames -> minutes @60Hz) */
 
-/* func_00283108: EU merge of the 0x38-byte handwritten stub block (paired
- * `addiu $sp,+0xN` / nop words, no prologue/return — not compiler output) with
- * the first scale helper (D_1A7990 * x). The stub words make it un-C-able, so
- * the leading scale helper that matches in USA (func_00283230) cannot be
- * carved out here. Kept as raw asm. */
+/* func_00283108: 0x38-byte handwritten stub block (paired `addiu $sp,+0xN` / nop
+ * words, no prologue/return — not compiler output), split off via the
+ * symbol_addrs pin so the first scale helper below starts clean. Kept as raw
+ * asm (un-C-able stub words). */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/183088", func_00283108);
+
+/** func_00283140 (USA func_00283230): scale x by the D_1A7990 conversion factor.
+ * Recovered from the EU stub-fusion mis-split. */
+f32 func_00283140(f32 x) {
+    return D_1A7990 * x;
+}
 
 /* func_00283150: (s32)((f32)x * D_1A7990 + 0.5f) rounded-conversion twin —
  * blocked by the adda.s/madd.s ACC-constant fused-madd codegen wall (the

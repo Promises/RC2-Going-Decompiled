@@ -12,21 +12,18 @@
  * Built at -O2 -G8 -fno-gcse (per-unit GFLAG/CC1EXTRA in objdiff_build.sh /
  * diff.sh / build.sh) — same later-SN-cc1 TU model as the USA sibling.
  *
- * REGION HOLDS (left INCLUDE_ASM, real region-delta data, not failures):
- *   - func_002A9268  (USA func_002A96C8): EU split swallowed two orphaned
- *     `addiu $sp,+N / nop` padding pairs into the glabel ahead of the real
- *     body (alabel func_002A9278). C emits only the body, so the leading
- *     padding bytes never match. Mis-split; re-split is owned by Phase A.
- *   - func_002B0EC0  (USA func_002B11C8): same leading-padding mis-split
- *     (real body at alabel func_002B0EC8).
- *   - func_002B1040  (USA func_002B1348): same leading-padding mis-split.
- *   - func_002AAB98  (USA func_002AAFA8, the lerp a+(b-a)*t): the EU split
- *     fused this 0x10 function with the preceding 0x10 fragment into one
- *     0x20 symbol (real lerp at alabel func_002AABA8). No clean 1:1 EU stub.
+ * RECOVERED (2026-06-14): the four leading-padding mis-splits were split off via
+ * symbol_addrs pins (padding func + real-start func) and their region-agnostic
+ * bodies ported byte-exact: func_002A9278 (USA func_002A96C8), func_002AABA8
+ * (USA func_002AAFA8 lerp), func_002B0EC8 (USA func_002B11C8), func_002B1048
+ * (USA func_002B1348). The pinned padding funcs (func_002A9268/002AAB98/002B0EC0/
+ * 002B1040) stay INCLUDE_ASM by design (they are bare epilogue padding).
+ *
+ * REGION HOLD (genuine PAL/NTSC divergence, left INCLUDE_ASM):
  *   - USA func_002B1D18 (bounds-checked per-level lookup, bound 0x15) has NO
  *     EU counterpart: no EU function in this unit performs an `sltiu ,0x15`
  *     table read — the PAL build's per-level lookup diverges (different level
- *     count / table), the known PAL/NTSC behavioural delta for this unit.
+ *     count / table), the project's first confirmed PAL/NTSC behavioural delta.
  */
 
 /* gp-addressable / assembler-absolute symbols (size class 12, see USA header). */
@@ -36,9 +33,9 @@ __asm__(".extern g_mobyGroupCount, 12");
 __asm__(".extern g_pMobyGroupIterCursor, 12");
 __asm__(".extern g_mobyGroupIterSlot, 12");
 __asm__(".extern g_pMobyGroupIterMoby, 12");
-__asm__(".extern D_1A8CA4, 12");
-__asm__(".extern D_1A8CB0, 12");
-__asm__(".extern D_001B1750, 12");
+__asm__(".extern D_1A8D54, 12");
+__asm__(".extern D_1A8D60, 12");
+__asm__(".extern g_pActiveNanotechOrb, 12");
 __asm__(".extern D_1A7A4F, 12");
 __asm__(".extern D_1A8BD0, 12");
 __asm__(".extern g_skillPointFlags, 12");
@@ -76,9 +73,9 @@ extern s32 g_mobyGroupCount;           /* number of moby groups */
 extern u16 *g_pMobyGroupIterCursor;    /* group iterator: current list entry */
 extern u16 g_mobyGroupIterSlot;        /* group iterator: current slot index */
 extern Moby *g_pMobyGroupIterMoby;     /* group iterator: current moby */
-extern s32 D_1A8CA4;                   /* breath/oxygen HUD inversion flag */
-extern f32 D_1A8CB0;                   /* inverted breath meter source value */
-extern f32 D_001B1750;                 /* breath meter source value */
+extern s32 D_1A8D54;                   /* breath/oxygen HUD inversion flag (USA D_1A8CA4) */
+extern f32 D_1A8D60;                   /* inverted breath meter source value (USA D_1A8CB0) */
+extern u8 g_pActiveNanotechOrb[];      /* breath meter source at +0x24 (USA D_001B1750) */
 extern u8 D_1A7A4F;                    /* "freeze palette cycling" flag */
 extern f32 D_1A8BD0;                   /* default hit-direction Vec4 for func_002A9AE0 */
 
@@ -112,11 +109,11 @@ extern s32 func_002B0940(s32 ctx, void *out, void *a, void *b); /* EU 4-arg trac
 extern s32 func_002B0B40(void *p);     /* EU forward target (USA func_002B0E40) */
 extern s32 func_002B0C40(void *p);     /* EU forward target (USA func_002B0F40) */
 extern s32 func_002837D0(void *vec);
-extern s32 func_00283BF8(f32 x, f32 y);
+extern s32 func_00283B08(f32 x, f32 y);  /* EU 2D consumer (USA func_00283BF8) */
 extern s32 func_002A12C0(void *p, s32 r, s32 g, s32 b);
 extern s32 func_00283638(Moby *moby);
 extern s32 PostMobyHitEvent(Moby *moby, s32 a, s32 b, s32 c, Vec4 *dir);
-extern f32 func_002837F8(void *p, f32 *src);
+extern f32 func_00283708(void *p, f32 *src);  /* EU breath-meter sampler (USA func_002837F8) */
 extern f32 GetFloatAbs(f32 x);
 
 
@@ -219,11 +216,24 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A9008);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A9100);
 
-/* EU twin of USA func_002A96C8 (decrement packed countdown). HOLD: EU split
- * fused two orphaned `addiu $sp,+N / nop` padding pairs into this glabel ahead
- * of the real body (alabel func_002A9278); the C body emits no leading padding,
- * so the symbol's prefix bytes can't match. Mis-split (Phase A owns re-split). */
+/* func_002A9268: leading 0x10 padding pair (orphaned epilogue of func_002A9100),
+ * split off via the symbol_addrs pin so the real body below starts clean. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A9268);
+
+/**
+ * func_002A9278 (USA func_002A96C8) - decrement the 8-bit countdown packed in
+ * the top byte of *p (clamped at zero); returns nonzero once it reaches zero.
+ * Region-agnostic body (recovered from the EU padding mis-split).
+ */
+s32 func_002A9278(u32 *p, s32 dec) {
+    s32 t = ((s32)*p >> 24) - dec;
+
+    if (t < 0) {
+        t = 0;
+    }
+    *p = (*p & 0xFFFFFF) | (t << 24);
+    return t == 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A92B0);
 
@@ -343,11 +353,17 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AA2B8);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AA408);
 
-/* EU twin of USA func_002AAFA8 (linear interpolation a+(b-a)*t). HOLD: the EU
- * split fused this 0x10 function with the preceding 0x10 fragment into one
- * 0x20 symbol func_002AAB98 (real lerp at alabel func_002AABA8); no clean 1:1
- * EU stub exists to port onto. Mis-split (Phase A owns re-split). */
+/* func_002AAB98: leading 0x10 padding pair, split off via the symbol_addrs pin
+ * so the real lerp body below (func_002AABA8) starts clean. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AAB98);
+
+/**
+ * func_002AABA8 (USA func_002AAFA8) - linear interpolation: a + (b - a) * t.
+ * Region-agnostic body (recovered from the EU padding mis-split).
+ */
+f32 func_002AABA8(f32 a, f32 b, f32 t) {
+    return a + (b - a) * t;
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AABB8);
 
@@ -629,20 +645,45 @@ s32 func_002B0CC0(u8 *p) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002B0CE0);
 
-/* EU twin of USA func_002B11C8 (sample breath/oxygen meter, inverts from 100
- * when the HUD inversion flag is set). HOLD: EU split fused an orphaned
- * `addiu $sp,+0x10 / nop` pair into this glabel ahead of the real body
- * (alabel func_002B0EC8). Mis-split (Phase A owns re-split). */
+/* func_002B0EC0: leading 0x8 padding pair, split off via the symbol_addrs pin
+ * so the real body below (func_002B0EC8) starts clean. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002B0EC0);
+
+/* func_002B0EC8 (USA func_002B11C8) - sample the breath/oxygen meter value; when
+ * the HUD inversion flag is set the meter counts down from 100 instead. The body
+ * is C-shape-correct (92.73%) but the EU build reads its normal-path source via
+ * `g_pActiveNanotechOrb + 0x24` (a non-zero constant offset) where USA reads the
+ * bare symbol D_001B1750 (offset 0). cc1 schedules the offset-0 `%lo` addiu
+ * before the jal (nop in the delay slot, the original's form) but SINKS the
+ * offset-0x24 addiu INTO the jal delay slot — a scheduler quirk triggered by the
+ * non-zero constant offset that no source shape defeats (local-hoist made it
+ * worse, 80.91%). This is why the USA twin matches and the EU twin cannot.
+ * Left as INCLUDE_ASM. Body for reference:
+ *   if (D_1A8D54 == 0) return func_00283708(p, g_pActiveNanotechOrb + 0x24);
+ *   return 100.0f - func_00283708(p, &D_1A8D60); */
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002B0EC8);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002B0F20);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002B0F70);
 
-/* EU twin of USA func_002B1348 (resolve a tracked position from a caller
- * vector and forward its x/y to the 2D consumer). HOLD: EU split fused orphaned
- * padding into this glabel ahead of the real body. Mis-split. */
+/* func_002B1040: leading 0x8 padding pair, split off via the symbol_addrs pin
+ * so the real body below (func_002B1048) starts clean. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002B1040);
+
+/**
+ * func_002B1048 (USA func_002B1348) - resolve a tracked position from a caller
+ * vector (128-bit local copy) and forward its x/y to the 2D consumer.
+ * Recovered from the EU padding mis-split; EU callees func_002B0940/func_00283B08
+ * (USA func_002B0C40/func_00283BF8).
+ */
+void func_002B1048(s32 ctx, Vec4 *vec, void *b) {
+    QVec t;
+
+    t.q = *(u_long128 *)vec;
+    func_002B0940(ctx, (void *)&t, (void *)&t, b);
+    func_00283B08(t.v.x, t.v.y);
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002B1080);
 

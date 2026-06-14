@@ -459,10 +459,15 @@ nonmatching D_0014B5C0, 0x34A40
 dlabel D_0014B5C0
     /* 0014B5C0 */ .space 0x34A40
 
-nonmatching D_00180000, 0xA07C
+nonmatching D_00180000, 0x8728
 
 dlabel D_00180000
-    /* 00180000 */ .space 0xA07C
+    /* 00180000 */ .space 0x8728
+
+nonmatching g_sndChannelVolumes, 0x1954
+
+dlabel g_sndChannelVolumes
+    /* 00188728 */ .space 0x1954
 
 nonmatching g_nNanotechBonusHealTimer, 0x1698
 

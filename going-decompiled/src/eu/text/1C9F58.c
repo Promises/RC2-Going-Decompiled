@@ -326,13 +326,12 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", UpdateSkillPoint
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", DrawSkillPointsMenu);
 
-/* func_002D1118 (USA func_002D1150): trivial `return 0` stub, body is
- * byte-identical to USA in isolation. Held as INCLUDE_ASM per the Phase-B
- * directive: the USA recon end (0x2D4D00) overlaps the text/1D54C0 hint start
- * (0x2D2DA8 in EU terms), so this unit's tail boundary against the next unit is
- * not yet re-derived by signature — leave it raw until the boundary is settled
- * rather than risk asserting a match across an unverified unit edge. */
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002D1118);
+/* func_002D1118 (USA func_002D1150): trivial `return 0` stub, byte-identical to
+ * the USA twin. The unit's tail boundary is settled by the verified Phase-A
+ * tiling, so the stub is safe to port. */
+s32 func_002D1118(void) {
+    return 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002D1120);
 
