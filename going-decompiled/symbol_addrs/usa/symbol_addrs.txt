@@ -612,6 +612,17 @@ g_sceneArenaCursor = 0x001B2230; // PARTIAL - scene arena allocation cursor - re
 SpawnMoby = 0x0029FE08; // type:func
 InitMobyFromClass = 0x0029FF00; // type:func
 FreeMoby = 0x002A0170; // CONFIRMED - state +0x20 = 0xFD when below g_mobySpawnStart (static slot) else 0xFE, release time +0xA0 = g_gameTime+2, then UpdateMobyGridCells with sentinel 0x80807F7F to drop it from the spatial grid
+// text/1A00F0 carve padding pins (2026-06-14): spimdisasm fused each function's
+// trailing epilogue-pad ("addiu $sp,+N; nop" runs) into the NEXT symbol start and
+// demoted the real prologue to an internal alabel. Pin the pad as its own sized
+// func and the real prologue as a func start so the unit targets don't carry pad.
+func_002A0360 = 0x002A0360; // type:func size:0x8 (pad before func_002A0368)
+func_002A0368 = 0x002A0368; // type:func
+func_002A0460 = 0x002A0460; // type:func size:0x20 (pad before func_002A0480)
+func_002A0480 = 0x002A0480; // type:func
+func_002A0798 = 0x002A0798; // type:func size:0x18 (pad before func_002A07B0)
+func_002A07B0 = 0x002A07B0; // type:func
+func_002A0C20 = 0x002A0C20; // type:func size:0x8 (pad before CloseMobyDmaSegment)
 UpdateActiveMobys = 0x002B7578; // CONFIRMED - per-frame walk - BuildActiveMobyChain into g_activeMobyChainHead then for each chained moby runs UpdateMobyAnimation unless mode 0x40, calls pUpdate +0x64 with moby arg, then UpdateMobyBSphereAndGrid unless mode 4 - the per-class pUpdate bodies live in level overlays not this ELF
 BuildActiveMobyChain = 0x002A16D8; // CONFIRMED - walks the moby table - distance-culls pos +0x10 vs g_flCameraPos against drawDist byte +0x30 squared, buckets survivors by class slot +0x22 into scratchpad lists linked via +0x28, whole-group pull-in via group byte +0x21 and g_mobyGroupLists, collects mode-0x1000 mobys to g_mobyFlagged1000List, returns chain head
 UpdateMobyAnimation = 0x002A13E0; // CONFIRMED - advances anim time +0x44 by rate +0x48 stepping frames +0x40/+0x41 and seqs +0x42/+0x43 from class hdr+0x48 seq table, updates frame ptrs +0x58/+0x5C and flags +0x60, fires anim-keyed sound events via PlayMobySound from the seq event array

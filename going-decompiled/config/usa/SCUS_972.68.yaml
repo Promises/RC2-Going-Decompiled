@@ -269,7 +269,20 @@ segments:
       #     the gap); func_00352CE8 ends at 0x352D08 (jr/nop at 0x352D00/04);
       #     the trailing pure-nop pad run 0x352D08..0x35307C stays an asm piece
       #     (text/252C88) so the last c function isn't polluted with pad.
-      - [0x1A00F0, asm, text/1A00F0] # .text tail head (0x2A0170..0x2A81FF)
+      # RANKED-CARVE-PIPELINE TIER-1-C (2026-06-14): text/1A00F0 -
+      #   the ".text tail head" tile (vaddr 0x2A0170..0x2A81FC, 62 fns (58 + 4 pad fragments)) retyped
+      #   asm->c, built at -O2 -G8 -fno-gcse (later-cc1 gameplay/UI TU model).
+      #   Named systems inside (~37%): moby lifecycle (FreeMoby), moby
+      #   render/anim/grid helpers, PickLowAmmoWeaponForDrop,
+      #   IncrementBestiaryKillCount. Boundaries are real, consecutive function
+      #   starts verified in the disassembly: text/198FA0 ends at 0x2A016F
+      #   (func_00299020..0x2A016F); 0x2A0170 is FreeMoby's prologue. The tile's
+      #   last function func_002A7AA8 ends exactly at 0x2A81FC (jr/delay at
+      #   0x2A81F8/FC, no pad) and 0x2A8200 is func_002A8200's prologue = the
+      #   text/1A8180 unit start, so this abuts 1A8180 with no overlap. Walls:
+      #   8-byte-packed saves (every 2+-GPR-save fn), switch/jtbl reloc-gap fns,
+      #   handwritten VU-chain builders all stay INCLUDE_ASM.
+      - [0x1A00F0, c, text/1A00F0]   # Tier-1-C carve (0x2A0170..0x2A81FC, 62 fns (58 + 4 pad fragments))
       - [0x1A8180, c, text/1A8180]   # game-state cluster (0x2A8200..0x2B2267)
       # RANKED-CARVE-PIPELINE PICK #3a (2026-06-13): first GUI-block sub-chunk -
       #   text/248B50 (vaddr 0x348BD0..0x34C007, 65 fns): GUI widget accessor
