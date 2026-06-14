@@ -1,214 +1,335 @@
 {
-  "$schema": "https://raw.githubusercontent.com/encounter/objdiff/main/config.schema.json",
-  "min_version": "2.0.0",
-  "build_target": false,
-  "build_base": false,
-  "watch_patterns": [
-    "going-decompiled/src/**/*.c",
-    "going-decompiled/asm/**/*.s",
-    "going-decompiled/config/**/*.yaml"
-  ],
-  "options": {
-    "mips.instrCategory": "r5900",
-    "mips.abi": "eabi32"
+ "$schema": "https://raw.githubusercontent.com/encounter/objdiff/main/config.schema.json",
+ "min_version": "2.0.0",
+ "build_target": false,
+ "build_base": false,
+ "watch_patterns": [
+  "going-decompiled/src/**/*.c",
+  "going-decompiled/asm/**/*.s",
+  "going-decompiled/config/**/*.yaml"
+ ],
+ "options": {
+  "mips.instrCategory": "r5900",
+  "mips.abi": "eabi32"
+ },
+ "progress_categories": [
+  {
+   "id": "cod",
+   "name": "core.text"
   },
-  "progress_categories": [
-    {
-      "id": "cod",
-      "name": "core.text"
-    },
-    {
-      "id": "text",
-      "name": ".text"
-    }
-  ],
-  "units": [
-    {
-      "name": "usa/cod/015180",
-      "target_path": "going-decompiled/build/usa/expected/cod/015180.o",
-      "base_path": "going-decompiled/build/usa/obj/cod/015180.o",
-      "metadata": {
-        "source_path": "going-decompiled/src/usa/cod/015180.c",
-        "progress_categories": [
-          "cod"
-        ]
-      }
-    },
-    {
-      "name": "usa/cod/0321A0",
-      "target_path": "going-decompiled/build/usa/expected/cod/0321A0.o",
-      "base_path": "going-decompiled/build/usa/obj/cod/0321A0.o",
-      "metadata": {
-        "source_path": "going-decompiled/src/usa/cod/0321A0.c",
-        "progress_categories": [
-          "cod"
-        ]
-      }
-    },
-    {
-      "name": "usa/cod/033970",
-      "target_path": "going-decompiled/build/usa/expected/cod/033970.o",
-      "base_path": "going-decompiled/build/usa/obj/cod/033970.o",
-      "metadata": {
-        "source_path": "going-decompiled/src/usa/cod/033970.c",
-        "progress_categories": [
-          "cod"
-        ]
-      }
-    },
-    {
-      "name": "usa/text/16E980",
-      "target_path": "going-decompiled/build/usa/expected/text/16E980.o",
-      "base_path": "going-decompiled/build/usa/obj/text/16E980.o",
-      "metadata": {
-        "source_path": "going-decompiled/src/usa/text/16E980.c",
-        "progress_categories": [
-          "text"
-        ]
-      }
-    },
-    {
-      "name": "usa/text/183178",
-      "target_path": "going-decompiled/build/usa/expected/text/183178.o",
-      "base_path": "going-decompiled/build/usa/obj/text/183178.o",
-      "metadata": {
-        "source_path": "going-decompiled/src/usa/text/183178.c",
-        "progress_categories": [
-          "text"
-        ]
-      }
-    },
-    {
-      "name": "usa/text/188580",
-      "target_path": "going-decompiled/build/usa/expected/text/188580.o",
-      "base_path": "going-decompiled/build/usa/obj/text/188580.o",
-      "metadata": {
-        "source_path": "going-decompiled/src/usa/text/188580.c",
-        "progress_categories": [
-          "text"
-        ]
-      }
-    },
-    {
-      "name": "usa/text/1907F0",
-      "target_path": "going-decompiled/build/usa/expected/text/1907F0.o",
-      "base_path": "going-decompiled/build/usa/obj/text/1907F0.o",
-      "metadata": {
-        "source_path": "going-decompiled/src/usa/text/1907F0.c",
-        "progress_categories": [
-          "text"
-        ]
-      }
-    },
-    {
-      "name": "usa/text/198FA0",
-      "target_path": "going-decompiled/build/usa/expected/text/198FA0.o",
-      "base_path": "going-decompiled/build/usa/obj/text/198FA0.o",
-      "metadata": {
-        "source_path": "going-decompiled/src/usa/text/198FA0.c",
-        "progress_categories": [
-          "text"
-        ]
-      }
-    },
-    {
-      "name": "usa/text/1A8180",
-      "target_path": "going-decompiled/build/usa/expected/text/1A8180.o",
-      "base_path": "going-decompiled/build/usa/obj/text/1A8180.o",
-      "metadata": {
-        "source_path": "going-decompiled/src/usa/text/1A8180.c",
-        "progress_categories": [
-          "text"
-        ]
-      }
-    },
-    {
-      "name": "usa/text/235FE8",
-      "target_path": "going-decompiled/build/usa/expected/text/235FE8.o",
-      "base_path": "going-decompiled/build/usa/obj/text/235FE8.o",
-      "metadata": {
-        "source_path": "going-decompiled/src/usa/text/235FE8.c",
-        "progress_categories": [
-          "text"
-        ]
-      }
-    },
-    {
-      "name": "usa/text/248B50",
-      "target_path": "going-decompiled/build/usa/expected/text/248B50.o",
-      "base_path": "going-decompiled/build/usa/obj/text/248B50.o",
-      "metadata": {
-        "source_path": "going-decompiled/src/usa/text/248B50.c",
-        "progress_categories": [
-          "text"
-        ]
-      }
-    },
-    {
-      "name": "usa/text/250080",
-      "target_path": "going-decompiled/build/usa/expected/text/250080.o",
-      "base_path": "going-decompiled/build/usa/obj/text/250080.o",
-      "metadata": {
-        "source_path": "going-decompiled/src/usa/text/250080.c",
-        "progress_categories": [
-          "text"
-        ]
-      }
-    },
-    {
-      "name": "eu/cod/015180",
-      "target_path": "going-decompiled/build/eu/expected/cod/015180.o",
-      "base_path": "going-decompiled/build/eu/obj/cod/015180.o",
-      "metadata": {
-        "source_path": "going-decompiled/src/eu/cod/015180.c",
-        "progress_categories": [
-          "cod"
-        ]
-      }
-    },
-    {
-      "name": "eu/cod/0321A0",
-      "target_path": "going-decompiled/build/eu/expected/cod/0321A0.o",
-      "base_path": "going-decompiled/build/eu/obj/cod/0321A0.o",
-      "metadata": {
-        "source_path": "going-decompiled/src/eu/cod/0321A0.c",
-        "progress_categories": [
-          "cod"
-        ]
-      }
-    },
-    {
-      "name": "usa/text/1CA080",
-      "target_path": "going-decompiled/build/usa/expected/text/1CA080.o",
-      "base_path": "going-decompiled/build/usa/obj/text/1CA080.o",
-      "metadata": {
-        "source_path": "going-decompiled/src/usa/text/1CA080.c",
-        "progress_categories": [
-          "text"
-        ]
-      }
-    },
-    {
-      "name": "usa/text/1D54C0",
-      "target_path": "going-decompiled/build/usa/expected/text/1D54C0.o",
-      "base_path": "going-decompiled/build/usa/obj/text/1D54C0.o",
-      "metadata": {
-        "source_path": "going-decompiled/src/usa/text/1D54C0.c",
-        "progress_categories": [
-          "text"
-        ]
-      }
-    },
-    {
-      "name": "usa/text/1B4218",
-      "target_path": "going-decompiled/build/usa/expected/text/1B4218.o",
-      "base_path": "going-decompiled/build/usa/obj/text/1B4218.o",
-      "metadata": {
-        "source_path": "going-decompiled/src/usa/text/1B4218.c",
-        "progress_categories": [
-          "text"
-        ]
-      }
-    }
-  ]
+  {
+   "id": "text",
+   "name": ".text"
+  }
+ ],
+ "units": [
+  {
+   "name": "usa/cod/015180",
+   "target_path": "going-decompiled/build/usa/expected/cod/015180.o",
+   "base_path": "going-decompiled/build/usa/obj/cod/015180.o",
+   "metadata": {
+    "source_path": "going-decompiled/src/usa/cod/015180.c",
+    "progress_categories": [
+     "cod"
+    ]
+   }
+  },
+  {
+   "name": "usa/cod/0321A0",
+   "target_path": "going-decompiled/build/usa/expected/cod/0321A0.o",
+   "base_path": "going-decompiled/build/usa/obj/cod/0321A0.o",
+   "metadata": {
+    "source_path": "going-decompiled/src/usa/cod/0321A0.c",
+    "progress_categories": [
+     "cod"
+    ]
+   }
+  },
+  {
+   "name": "usa/cod/033970",
+   "target_path": "going-decompiled/build/usa/expected/cod/033970.o",
+   "base_path": "going-decompiled/build/usa/obj/cod/033970.o",
+   "metadata": {
+    "source_path": "going-decompiled/src/usa/cod/033970.c",
+    "progress_categories": [
+     "cod"
+    ]
+   }
+  },
+  {
+   "name": "usa/text/16E980",
+   "target_path": "going-decompiled/build/usa/expected/text/16E980.o",
+   "base_path": "going-decompiled/build/usa/obj/text/16E980.o",
+   "metadata": {
+    "source_path": "going-decompiled/src/usa/text/16E980.c",
+    "progress_categories": [
+     "text"
+    ]
+   }
+  },
+  {
+   "name": "usa/text/183178",
+   "target_path": "going-decompiled/build/usa/expected/text/183178.o",
+   "base_path": "going-decompiled/build/usa/obj/text/183178.o",
+   "metadata": {
+    "source_path": "going-decompiled/src/usa/text/183178.c",
+    "progress_categories": [
+     "text"
+    ]
+   }
+  },
+  {
+   "name": "usa/text/188580",
+   "target_path": "going-decompiled/build/usa/expected/text/188580.o",
+   "base_path": "going-decompiled/build/usa/obj/text/188580.o",
+   "metadata": {
+    "source_path": "going-decompiled/src/usa/text/188580.c",
+    "progress_categories": [
+     "text"
+    ]
+   }
+  },
+  {
+   "name": "usa/text/1907F0",
+   "target_path": "going-decompiled/build/usa/expected/text/1907F0.o",
+   "base_path": "going-decompiled/build/usa/obj/text/1907F0.o",
+   "metadata": {
+    "source_path": "going-decompiled/src/usa/text/1907F0.c",
+    "progress_categories": [
+     "text"
+    ]
+   }
+  },
+  {
+   "name": "usa/text/198FA0",
+   "target_path": "going-decompiled/build/usa/expected/text/198FA0.o",
+   "base_path": "going-decompiled/build/usa/obj/text/198FA0.o",
+   "metadata": {
+    "source_path": "going-decompiled/src/usa/text/198FA0.c",
+    "progress_categories": [
+     "text"
+    ]
+   }
+  },
+  {
+   "name": "usa/text/1A8180",
+   "target_path": "going-decompiled/build/usa/expected/text/1A8180.o",
+   "base_path": "going-decompiled/build/usa/obj/text/1A8180.o",
+   "metadata": {
+    "source_path": "going-decompiled/src/usa/text/1A8180.c",
+    "progress_categories": [
+     "text"
+    ]
+   }
+  },
+  {
+   "name": "usa/text/235FE8",
+   "target_path": "going-decompiled/build/usa/expected/text/235FE8.o",
+   "base_path": "going-decompiled/build/usa/obj/text/235FE8.o",
+   "metadata": {
+    "source_path": "going-decompiled/src/usa/text/235FE8.c",
+    "progress_categories": [
+     "text"
+    ]
+   }
+  },
+  {
+   "name": "usa/text/248B50",
+   "target_path": "going-decompiled/build/usa/expected/text/248B50.o",
+   "base_path": "going-decompiled/build/usa/obj/text/248B50.o",
+   "metadata": {
+    "source_path": "going-decompiled/src/usa/text/248B50.c",
+    "progress_categories": [
+     "text"
+    ]
+   }
+  },
+  {
+   "name": "usa/text/250080",
+   "target_path": "going-decompiled/build/usa/expected/text/250080.o",
+   "base_path": "going-decompiled/build/usa/obj/text/250080.o",
+   "metadata": {
+    "source_path": "going-decompiled/src/usa/text/250080.c",
+    "progress_categories": [
+     "text"
+    ]
+   }
+  },
+  {
+   "name": "eu/cod/015180",
+   "target_path": "going-decompiled/build/eu/expected/cod/015180.o",
+   "base_path": "going-decompiled/build/eu/obj/cod/015180.o",
+   "metadata": {
+    "source_path": "going-decompiled/src/eu/cod/015180.c",
+    "progress_categories": [
+     "cod"
+    ]
+   }
+  },
+  {
+   "name": "eu/cod/0321A0",
+   "target_path": "going-decompiled/build/eu/expected/cod/0321A0.o",
+   "base_path": "going-decompiled/build/eu/obj/cod/0321A0.o",
+   "metadata": {
+    "source_path": "going-decompiled/src/eu/cod/0321A0.c",
+    "progress_categories": [
+     "cod"
+    ]
+   }
+  },
+  {
+   "name": "usa/text/1CA080",
+   "target_path": "going-decompiled/build/usa/expected/text/1CA080.o",
+   "base_path": "going-decompiled/build/usa/obj/text/1CA080.o",
+   "metadata": {
+    "source_path": "going-decompiled/src/usa/text/1CA080.c",
+    "progress_categories": [
+     "text"
+    ]
+   }
+  },
+  {
+   "name": "usa/text/1D54C0",
+   "target_path": "going-decompiled/build/usa/expected/text/1D54C0.o",
+   "base_path": "going-decompiled/build/usa/obj/text/1D54C0.o",
+   "metadata": {
+    "source_path": "going-decompiled/src/usa/text/1D54C0.c",
+    "progress_categories": [
+     "text"
+    ]
+   }
+  },
+  {
+   "name": "usa/text/1B4218",
+   "target_path": "going-decompiled/build/usa/expected/text/1B4218.o",
+   "base_path": "going-decompiled/build/usa/obj/text/1B4218.o",
+   "metadata": {
+    "source_path": "going-decompiled/src/usa/text/1B4218.c",
+    "progress_categories": [
+     "text"
+    ]
+   }
+  },
+  {
+   "name": "eu/text/16E7B8",
+   "target_path": "going-decompiled/build/eu/expected/text/16E7B8.o",
+   "base_path": "going-decompiled/build/eu/obj/text/16E7B8.o",
+   "metadata": {
+    "source_path": "going-decompiled/src/eu/text/16E7B8.c",
+    "progress_categories": [
+     "text"
+    ]
+   }
+  },
+  {
+   "name": "eu/text/183088",
+   "target_path": "going-decompiled/build/eu/expected/text/183088.o",
+   "base_path": "going-decompiled/build/eu/obj/text/183088.o",
+   "metadata": {
+    "source_path": "going-decompiled/src/eu/text/183088.c",
+    "progress_categories": [
+     "text"
+    ]
+   }
+  },
+  {
+   "name": "eu/text/188470",
+   "target_path": "going-decompiled/build/eu/expected/text/188470.o",
+   "base_path": "going-decompiled/build/eu/obj/text/188470.o",
+   "metadata": {
+    "source_path": "going-decompiled/src/eu/text/188470.c",
+    "progress_categories": [
+     "text"
+    ]
+   }
+  },
+  {
+   "name": "eu/text/190808",
+   "target_path": "going-decompiled/build/eu/expected/text/190808.o",
+   "base_path": "going-decompiled/build/eu/obj/text/190808.o",
+   "metadata": {
+    "source_path": "going-decompiled/src/eu/text/190808.c",
+    "progress_categories": [
+     "text"
+    ]
+   }
+  },
+  {
+   "name": "eu/text/198B58",
+   "target_path": "going-decompiled/build/eu/expected/text/198B58.o",
+   "base_path": "going-decompiled/build/eu/obj/text/198B58.o",
+   "metadata": {
+    "source_path": "going-decompiled/src/eu/text/198B58.c",
+    "progress_categories": [
+     "text"
+    ]
+   }
+  },
+  {
+   "name": "eu/text/1A7D10",
+   "target_path": "going-decompiled/build/eu/expected/text/1A7D10.o",
+   "base_path": "going-decompiled/build/eu/obj/text/1A7D10.o",
+   "metadata": {
+    "source_path": "going-decompiled/src/eu/text/1A7D10.c",
+    "progress_categories": [
+     "text"
+    ]
+   }
+  },
+  {
+   "name": "eu/text/1C9F58",
+   "target_path": "going-decompiled/build/eu/expected/text/1C9F58.o",
+   "base_path": "going-decompiled/build/eu/obj/text/1C9F58.o",
+   "metadata": {
+    "source_path": "going-decompiled/src/eu/text/1C9F58.c",
+    "progress_categories": [
+     "text"
+    ]
+   }
+  },
+  {
+   "name": "eu/text/1D5488",
+   "target_path": "going-decompiled/build/eu/expected/text/1D5488.o",
+   "base_path": "going-decompiled/build/eu/obj/text/1D5488.o",
+   "metadata": {
+    "source_path": "going-decompiled/src/eu/text/1D5488.c",
+    "progress_categories": [
+     "text"
+    ]
+   }
+  },
+  {
+   "name": "eu/text/236ED8",
+   "target_path": "going-decompiled/build/eu/expected/text/236ED8.o",
+   "base_path": "going-decompiled/build/eu/obj/text/236ED8.o",
+   "metadata": {
+    "source_path": "going-decompiled/src/eu/text/236ED8.c",
+    "progress_categories": [
+     "text"
+    ]
+   }
+  },
+  {
+   "name": "eu/text/249FE8",
+   "target_path": "going-decompiled/build/eu/expected/text/249FE8.o",
+   "base_path": "going-decompiled/build/eu/obj/text/249FE8.o",
+   "metadata": {
+    "source_path": "going-decompiled/src/eu/text/249FE8.c",
+    "progress_categories": [
+     "text"
+    ]
+   }
+  },
+  {
+   "name": "eu/text/251520",
+   "target_path": "going-decompiled/build/eu/expected/text/251520.o",
+   "base_path": "going-decompiled/build/eu/obj/text/251520.o",
+   "metadata": {
+    "source_path": "going-decompiled/src/eu/text/251520.c",
+    "progress_categories": [
+     "text"
+    ]
+   }
+  }
+ ]
 }

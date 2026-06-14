@@ -43,6 +43,18 @@ case "$REGION/$UNIT" in
   usa/text/1CA080) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # menu-screens A (carve pick #5; later-cc1 TU model, gp-dense)
   usa/text/1D54C0) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # menu-screens B (carve pick #5; later-cc1 TU model, gp-dense)
   usa/text/1B4218) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # moby-bind band (later-cc1 TU model, sized externs under -G8)
+  # EU TEXT RE-TILE (Phase A, 2026-06-14): EU twins of the 11 USA text c-units.
+  eu/text/16E7B8) GFLAG="-G8";;                          # USA 16E980 twin
+  eu/text/183088) GFLAG="-G8";;                          # USA 183178 twin
+  eu/text/188470) GFLAG="-G8";;                          # USA 188580 twin
+  eu/text/190808) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 1907F0 twin
+  eu/text/198B58) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 198FA0 twin
+  eu/text/1A7D10) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 1A8180 twin
+  eu/text/1C9F58) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 1CA080 twin
+  eu/text/1D5488) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 1D54C0 twin
+  eu/text/236ED8) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 235FE8 twin
+  eu/text/249FE8) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 248B50 twin
+  eu/text/251520) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 250080 twin
 esac
 
 # Pre-filter the original asm so VU0 (COP2) macro-mode instructions assemble

@@ -79,6 +79,18 @@ if [ -d "$SRC" ]; then
       */usa/text/1CA080.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # menu-screens A (carve pick #5)
       */usa/text/1D54C0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # menu-screens B (carve pick #5)
       */usa/text/1B4218.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # moby-bind band (carve pick #5/moby-bind)
+      # EU TEXT RE-TILE (Phase A, 2026-06-14): EU twins of the 11 USA text c-units.
+      */eu/text/16E7B8.c) GFLAG="-G8";;                          # USA 16E980 twin
+      */eu/text/183088.c) GFLAG="-G8";;                          # USA 183178 twin
+      */eu/text/188470.c) GFLAG="-G8";;                          # USA 188580 twin
+      */eu/text/190808.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 1907F0 twin
+      */eu/text/198B58.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 198FA0 twin
+      */eu/text/1A7D10.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 1A8180 twin
+      */eu/text/1C9F58.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 1CA080 twin
+      */eu/text/1D5488.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 1D54C0 twin
+      */eu/text/236ED8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 235FE8 twin
+      */eu/text/249FE8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 248B50 twin
+      */eu/text/251520.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 250080 twin
     esac
     "$WIBO" "$G/cpp.exe" $CPPDEF $INCC "$c" "$BUILD/_unit.i"
     "$WIBO" "$G/cc1.exe" -quiet -O2 $GFLAG $CC1EXTRA "$BUILD/_unit.i" -o "$BUILD/_unit.s"

@@ -170,7 +170,53 @@ segments:
     bss_size: 0x0
     subalign: null
     subsegments:
-      - [0x16E700, asm, text/16E700] # .text
+      # PHASE A EU TEXT RE-TILE (2026-06-14): replicate the USA text carve tiling
+      # at EU-mirror addresses so the 11 USA text c-units become objdiff-matchable
+      # in the EU (region-axis) build. This is pure INFRASTRUCTURE - every unit is
+      # left all-INCLUDE_ASM (0 matches); Phase B ports the bodies. Each EU c-unit
+      # is named text/<eu-fileoff> (fileoff = euStart - 0x100080).
+      #
+      # Boundaries were SIGNATURE-MATCHED against the EU rom, NOT offset-mapped:
+      # the USA->EU text delta is non-constant and accumulates region-by-region
+      # (and Dstart != Dend), so each edge was re-derived by matching the USA
+      # unit's first/last function body (masked over %hi/%lo/jal relocations)
+      # against the EU disassembly, chaining through clean neighbour functions
+      # where the boundary function's body diverges PAL-vs-NTSC. Verified EU
+      # (start,end) vram per USA unit:
+      #   16E980 0x26E838..0x273FB8   183178 0x283108..0x2832D8
+      #   188580 0x2884F0..0x2887C8   1907F0 0x290888..0x2912C0
+      #   198FA0 0x298BD8..0x29FCF8   1A8180 0x2A7D90..0x2B1EE8
+      #   1CA080 0x2C9FD8..0x2D5508   1D54C0 0x2D5508..0x2DFFC0
+      #   235FE8 0x336F58..0x34A068   248B50 0x34A068..0x34D490
+      #   250080 0x3515A0..0x355080 (segment tail)
+      # Two hints from the recon were CORRECTED by signature match: the 1CA080
+      # end / 1D54C0 start was a self-overlap (hints 0x2D4D00 vs 0x2D2DA8) - the
+      # true adjacent boundary is 0x2D5508 (DrawShipCustomizeMenu's EU twin
+      # func_002D4EA0 ends there, just like USA 1CA080 abuts 1D54C0 at 0x2D5540);
+      # and 235FE8 start is 0x336F58 (one EU function past the 0x336E98 hint -
+      # func_00336E98 stays in the preceding asm tile). 250080 is the segment
+      # tail: its last fn func_00352CE8 maps to EU func_00354188, ending the text
+      # at fileoff 0x255000 = legal.data start.
+      - [0x16E700, asm, text/16E700] # .text head (0x26E780..0x26E838)
+      - [0x16E7B8, c, text/16E7B8]   # USA 16E980 twin (0x26E838..0x273FB8)
+      - [0x173F38, asm, text/173F38] # .text gap (0x273FB8..0x283108)
+      - [0x183088, c, text/183088]   # USA 183178 twin (0x283108..0x2832D8)
+      - [0x183258, asm, text/183258] # .text gap (0x2832D8..0x2884F0)
+      - [0x188470, c, text/188470]   # USA 188580 twin (0x2884F0..0x2887C8)
+      - [0x188748, asm, text/188748] # .text gap (0x2887C8..0x290888)
+      - [0x190808, c, text/190808]   # USA 1907F0 twin (0x290888..0x2912C0)
+      - [0x191240, asm, text/191240] # .text gap (0x2912C0..0x298BD8)
+      - [0x198B58, c, text/198B58]   # USA 198FA0 twin (0x298BD8..0x29FCF8)
+      - [0x19FC78, asm, text/19FC78] # .text gap (0x29FCF8..0x2A7D90)
+      - [0x1A7D10, c, text/1A7D10]   # USA 1A8180 twin (0x2A7D90..0x2B1EE8)
+      - [0x1B1E68, asm, text/1B1E68] # .text gap (0x2B1EE8..0x2C9FD8)
+      - [0x1C9F58, c, text/1C9F58]   # USA 1CA080 twin (0x2C9FD8..0x2D5508)
+      - [0x1D5488, c, text/1D5488]   # USA 1D54C0 twin (0x2D5508..0x2DFFC0)
+      - [0x1DFF40, asm, text/1DFF40] # .text gap (0x2DFFC0..0x336F58)
+      - [0x236ED8, c, text/236ED8]   # USA 235FE8 twin (0x336F58..0x34A068)
+      - [0x249FE8, c, text/249FE8]   # USA 248B50 twin (0x34A068..0x34D490)
+      - [0x24D410, asm, text/24D410] # .text gap (0x34D490..0x3515A0)
+      - [0x251520, c, text/251520]   # USA 250080 twin (0x3515A0..0x355080, segment tail)
 
   - name: legal.data
     type: code
