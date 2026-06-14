@@ -131,6 +131,14 @@ func_0033F508 = 0x0033F508; // type:func size:0x8
 func_0033F510 = 0x0033F510; // type:func
 func_00290870 = 0x00290870; // type:func size:0x8
 func_00290878 = 0x00290878; // type:func
+// text/188858 Tier-1-A carve: leading-epilogue mis-split pins. spimdisasm
+// fused a preceding function's trailing pad/stub run onto the next real
+// prologue, demoting it to an internal label. Pin each pad `type:func
+// size:0xN`, the real start `type:func`, so the carved unit can match it.
+func_002898D8 = 0x002898D8; // type:func size:0x8
+func_002898E0 = 0x002898E0; // type:func - real subtitle-clear leaf
+func_0028C698 = 0x0028C698; // type:func size:0x48
+func_0028C6E0 = 0x0028C6E0; // type:func - real HUD-init forwarder
 // text/188580 sub-TU data anchors: give the two .bss objects the unit reads
 // their own symbols (otherwise spimdisasm attaches them to far-away preceding
 // named symbols with huge offsets, which forces raw-offset C).

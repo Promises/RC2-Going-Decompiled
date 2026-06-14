@@ -221,9 +221,21 @@ segments:
       - [0x16E980, c, text/16E980]   # carve pick #6 (0x26EA00..0x274127)
       - [0x1740A8, asm, text/1740A8] # .text head remainder (0x274128..0x2831F7)
       - [0x183178, c, text/183178]   # -G8 sub-TU (0x2831F8..0x2833C7, 12 fns)
+      # RANKED-CARVE-PIPELINE TIER-1-A (2026-06-14): text/188858 -
+      #   the .text mid 2 tile (vaddr 0x2888D8..0x29086F, ~108 fns) retyped
+      #   asm->c, built at -O2 -G8 -fno-gcse (later-cc1 gameplay/UI TU model).
+      #   High-value named systems live inside: GiveInventoryItem,
+      #   GetWeaponUpgradeLevel, the cinematic-queue, UpdateBoltCounterHud,
+      #   GetLocalizedString, DebugMalloc. Boundaries are real, consecutive
+      #   function starts verified in the disassembly: 0x2888D8 is
+      #   func_002888D8's real prologue (g_itemEquippedSlot reader, abuts
+      #   text/188580 which ends at 0x2888D7); func_002907B8 ends at 0x290870
+      #   (jr/nop at 0x290868/6C) = the start of text/1907F0, so the tile abuts
+      #   1907F0 with no overlap. Walls expected: 8-byte-packed saves (every
+      #   2+-GPR-save fn), switch/jtbl reloc-gap functions stay INCLUDE_ASM.
       - [0x183348, asm, text/183348] # .text mid (0x2833C8..0x2885FF)
       - [0x188580, c, text/188580]   # -G8 sub-TU (0x288600..0x2888D7, 11 fns)
-      - [0x188858, asm, text/188858] # .text mid 2 (0x2888D8..0x29086F)
+      - [0x188858, c, text/188858]   # -G8 -fno-gcse carve (0x2888D8..0x29086F, ~108 fns)
       - [0x1907F0, c, text/1907F0]   # -G8 sub-TU (0x290870..0x2912B7, 14 fns)
       - [0x191238, asm, text/191238] # .text mid 3 (0x2912B8..0x29901F)
       - [0x198FA0, c, text/198FA0]   # PILOT c-unit (0x299020..0x2A016F, 153 fns)
