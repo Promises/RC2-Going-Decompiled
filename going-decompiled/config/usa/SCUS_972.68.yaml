@@ -237,7 +237,21 @@ segments:
       - [0x188580, c, text/188580]   # -G8 sub-TU (0x288600..0x2888D7, 11 fns)
       - [0x188858, c, text/188858]   # -G8 -fno-gcse carve (0x2888D8..0x29086F, ~108 fns)
       - [0x1907F0, c, text/1907F0]   # -G8 sub-TU (0x290870..0x2912B7, 14 fns)
-      - [0x191238, asm, text/191238] # .text mid 3 (0x2912B8..0x29901F)
+      # RANKED-CARVE-PIPELINE TIER-1-B (2026-06-14): text/191238 -
+      #   the .text mid 3 tile (vaddr 0x2912B8..0x29901F, 95 fns) retyped
+      #   asm->c, built at -O2 -G8 -fno-gcse (later-cc1 gameplay/UI TU model).
+      #   Named systems inside (~40%): boot/IRX init (LoadIrxModuleFromBuffer,
+      #   SetupMemoryArenaTable, BootSystemInit), the sky render (RenderSky,
+      #   DrawSkyShellsScaledSpin, BindSkyData), the segment/asset loader
+      #   (ParseLoadedSegment, StreamSceneSegment, RegisterMobyClass,
+      #   LoadMobyClassFromWad, UpdateLevelStagingMachine), and the MAP/minimap
+      #   system. Boundaries are real, consecutive function starts verified in
+      #   the disassembly: text/1907F0 ends at 0x2912B7 (func_002912B8 is this
+      #   tile's first real prologue); 0x299020 is func_00299020's prologue =
+      #   the existing text/198FA0 unit start, so the tile abuts 198FA0 with no
+      #   overlap. Walls expected: 8-byte-packed saves (every 2+-GPR-save fn),
+      #   switch/jtbl reloc-gap functions stay INCLUDE_ASM.
+      - [0x191238, c, text/191238]   # -G8 -fno-gcse carve (0x2912B8..0x29901F, 95 fns)
       - [0x198FA0, c, text/198FA0]   # PILOT c-unit (0x299020..0x2A016F, 153 fns)
       # RANKED-CARVE-PIPELINE PICKS #1 + #2 (2026-06-12, R21 full-binary sweep):
       #   text/1A8180 (vaddr 0x2A8200..0x2B2267, ~190 fns): the "game-state

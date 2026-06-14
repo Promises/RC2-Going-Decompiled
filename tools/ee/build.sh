@@ -71,6 +71,7 @@ if [ -d "$SRC" ]; then
       */usa/text/188580.c) GFLAG="-G8";; # camera-aux sub-TU
       */usa/text/188858.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # Tier-1-A carve (.text mid 2)
       */usa/text/1907F0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # level-init/screen-fade sub-TU
+      */usa/text/191238.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # Tier-1-B carve (.text mid 3)
       */usa/text/198FA0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # save/GUI-wrapper unit
       */usa/text/1A8180.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # game-state cluster sub-TU
       */usa/text/250080.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # segment-tail FMV/debug-stub sub-TU
