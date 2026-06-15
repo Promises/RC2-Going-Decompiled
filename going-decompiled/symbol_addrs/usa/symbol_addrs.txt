@@ -473,6 +473,8 @@ g_cdReadMode = 0x001A63E8; // CONFIRMED - sceCdRMode used for game streaming - p
 g_discToc = 0x0014B540; // CONFIRMED - master disc asset directory - 0x5800 bytes from LBA 0x3e9 via LoadDiscToc - holds WAD base LBAs at +0x32c/+0x36c, global-asset sector pair tables 0x14c310/0x14c338/0x14f368 stride 8, text-table offset, per-level TOC directory at 0x150538
 g_levelWadBaseLbn = 0x0014B86C; // PARTIAL - g_discToc+0x32c - base LBA added to the boot code chunk 0x14b878, frontend chunk 0x14b888 and level overlay 0x14b890 offset pairs - which named disc WAD this maps to is unverified - Ghidra alias g_nLevelWadBaseLbn
 g_globalWadBaseLbn = 0x0014B8AC; // CONFIRMED - g_discToc+0x36c - base LBA added to every global-asset sector offset (text table, GuiSystemInit, MapInit and MapBeginUpload textures, galactic map, cinematics, dialog voice) - Ghidra alias g_nGlobalWadBaseLbn
+g_mapDataTocPrimary = 0x0014CA30; // CONFIRMED - g_discToc per-level map-data TOC table, stride 8 indexed by level, +0 sector LBN offset (added to g_globalWadBaseLbn), +4 sector count/size (<<7 = map texture width) - read by MapInit/MapDataExistsForLevel/GalacticMapScreenTick when selector byte 0x1a7b05 == 0
+g_mapDataTocSecondary = 0x0014CB10; // CONFIRMED - second g_discToc per-level map-data TOC table (same stride-8 offset/size layout as g_mapDataTocPrimary) selected when selector byte 0x1a7b05 != 0 - alternate map asset set (selector source untraced; pre-existing notes guess PAL)
 g_textTableLbnOffset = 0x0014CBF0; // CONFIRMED - disc TOC field - sector offset of the language text-table file relative to g_globalWadBaseLbn - read only by StreamTextTable - Ghidra alias g_nTextTableLbnOffset
 g_levelTocDirectory = 0x00150538; // CONFIRMED - per-level records inside g_discToc stride 0x18 holding the LBAs of each level's three TOC chunks - consumed by LoadLevelToc
 g_levelTocHeader = 0x001507D8; // PARTIAL - 0x60-byte current-level TOC header from LoadLevelToc - level data base LBA at +4 and sector pairs at 0x1507e8/0x1507f8 used by staging machine FUN_00294310 - field roles not fully traced
@@ -871,6 +873,7 @@ g_texUploadCount = 0x001B157C; // CONFIRMED - entries pending in g_texUploadQueu
 g_uiTextureCount = 0x001B1580; // CONFIRMED - count of registered UI textures
 g_uiTextureCache = 0x001B96C0; // CONFIRMED - UI texture records (0x10 bytes - cached TEX0 + vram offsets + dims)
 g_uiTextureDataBase = 0x001B1584; // CONFIRMED - base ptr of UI texture pixel data
+BuildUiTextureDescriptors = 0x00292650; // CONFIRMED - (descTable,count) parses the loaded WAD UI/HUD texture descriptor table (0x10 stride: width,height,signed dims) into g_uiTextureCache GS-upload records (width>>4 @+10, height>>4 @+8, PSM 0x13/0x14 @+0xe, Log2Floor dims @+0xc/+0xd, first 8 bytes zeroed) and sets g_uiTextureCount - called per level by LoadLevelAndInitHealth and by InitLoadingSceneSystem
 g_hudIconMap = 0x001B1810; // CONFIRMED - HUD icon id to clut/texture slot map
 g_hudTextureSlots = 0x001B1814; // CONFIRMED - HUD texture slot table ptr
 g_hudClutSlots = 0x001B1818; // CONFIRMED - HUD CLUT slot table ptr
