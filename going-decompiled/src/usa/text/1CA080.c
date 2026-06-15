@@ -66,6 +66,9 @@ extern void func_0029D878(void);
 
 extern void MenuScreenLoad(void);
 
+/* Menu sub-screen error/status latch (absolute %hi/%lo data word). */
+extern s32 D_25CABC;
+
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA100);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA138);
@@ -364,7 +367,17 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D2FC8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D3138);
 
+/* GUI null-check gate: if the GUI is up, latch error code -0x12C; return 0. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D3388);
+#else
+s32 func_002D3388(void) {
+    if (g_guiInstance) {
+        D_25CABC = -0x12C;
+    }
+    return 0;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D33A8);
 

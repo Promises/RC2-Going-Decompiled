@@ -445,12 +445,31 @@ f32 func_002AB150(f32 target, f32 rate, f32 *p) {
     return GetFloatAbs(target - nv);
 }
 
-/* func_002AB1A8: integer approach-by-rate step; returns the remaining
- * delta mapped through func_002835E0 as a float. Best attempt 95%: the
- * original negates the rate argument in place under a branch-likely and
- * keeps the delta on the reloaded-pointer register - register-coloring
- * wall (the float twin func_002AB150 matches). */
+/**
+ * Integer approach-by-rate step (int twin of func_002AB150): move *p toward
+ * target by at most rate, store it back, and return the remaining signed
+ * delta mapped to a float through func_002835E0.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB1A8);
+#else
+f32 func_002AB1A8(s32 *p, s32 target, s32 rate) {
+    s32 d = target - *p;
+    s32 nv;
+
+    if (rate < d) {
+        d = rate;
+    } else {
+        rate = -rate;
+        if (d < rate) {
+            d = rate;
+        }
+    }
+    nv = *p + d;
+    *p = nv;
+    return (f32)func_002835E0(target - nv);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB208);
 
@@ -544,11 +563,21 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC728);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC978);
 
-/* func_002AC980: wrap an angle into [-pi, pi) via the shared frac helper
- * (angle+pi scaled by 1/2pi, frac scaled back by 2pi, recentred). Best
- * attempt 99.5%: byte-identical except the final product colours f0 where
- * the original reuses f12 - the register-coloring wall. */
+/**
+ * Wrap an angle into [-pi, pi) via the shared frac helper: take the fractional
+ * part of (angle + pi) * (1/2pi), scale it back by 2pi and recentre by -pi.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC980);
+#else
+f32 func_002AC980(f32 angle) {
+    f32 frac;
+    f32 scratch;
+
+    frac = func_00284678(&scratch, (angle + 3.14159274f) * 0.159154937f);
+    return frac * 6.28318548f - 3.14159274f;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC9D8);
 
