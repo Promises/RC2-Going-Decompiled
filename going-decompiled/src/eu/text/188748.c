@@ -62,10 +62,18 @@ extern s32 g_nSavePromptPending;      /* show-saving-prompt gate (EU 0x1A7C14) *
 __asm__(".extern g_miscExtras, 16");
 extern u8  g_miscExtras;              /* misc unlock/extras byte (EU 0x1A7A92) */
 extern s32 D_1A9060;                  /* gp small countdown gate (EU twin of USA D_1A8FB0) */
+/* Countdown-gate companion latches, read with the lui/%lo absolute-macro shape;
+ * size override so cc1 emits the one-insn symbolic macro (not gp_rel) under -G8.
+ * EU twins of USA D_1A8FB4 / D_1A8FB8. */
+__asm__(".extern D_1A9064, 16");
+extern s32 D_1A9064;
+__asm__(".extern D_1A9068, 16");
+extern s32 D_1A9068;
 
 /* Unit-local / cross-unit callees (EU addresses). */
 void ResetCinematicQueue(CinematicQueue *q);
 void func_0028C318(void *p);
+void func_0028BF08(void);             /* HUD widget-table reseed (EU twin of USA func_0028BF80) */
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_002887C8);
 
@@ -313,7 +321,15 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028EAE0);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028EB28);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028EC88);
+/* Re-seed the HUD widget table (func_0028BF08), then arm the countdown gate
+ * (D_1A9060 = 1) and its companion latches (D_1A9068 = -1, D_1A9064 = 0).
+ * (USA func_0028EC70.) */
+void func_0028EC88(void) {
+    func_0028BF08();
+    D_1A9060 = 1;
+    D_1A9068 = -1;
+    D_1A9064 = 0;
+}
 
 /* Decrement the countdown gate at D_1A9060, clamping at 0. */
 void func_0028ECC0(void) {

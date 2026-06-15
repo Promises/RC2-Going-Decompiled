@@ -46,6 +46,17 @@ __asm__(".extern g_sndChannelVolumes, 16");
 extern s32 D_1A7C28;              /* saved sound-channel volume snapshot (USA D_1A7BA8) */
 extern s32 g_sndChannelVolumes[]; /* sound-channel volume table */
 
+/* Galactic-map upload sequence counter (EU D_25BA80; USA D_25BA60). */
+extern s32 D_25BA80[];
+/* Active map cache slot index (EU sdata; USA g_mapActiveSlot). */
+extern s32 g_mapActiveSlot[];
+/* Newly-pressed digital pad button mask (edge-detected this frame). */
+extern s32 g_padButtonsPressed[];
+/* Front-end / pause-menu requested-next-screen pointer; D_25E420 is a specific
+ * menu-screen instance (EU; USA g_pNextMenuScreen / D_25E660). */
+extern void *g_pNextMenuScreen[];
+extern u8 D_25E420[];
+
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D5508);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D59D0);
@@ -54,7 +65,11 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D5A08);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D5BC8);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D5C10);
+/* Reset the galactic-map upload sequence counter. Returns 0. (USA func_002D5C48) */
+s32 func_002D5C10(void) {
+    D_25BA80[0] = 0;
+    return 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D5C20);
 
@@ -121,7 +136,11 @@ s32 func_002D64F8(void) {
     return 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D6528);
+/* Mark no map slot active (-1). Returns 0. (USA func_002D65B8) */
+s32 func_002D6528(void) {
+    g_mapActiveSlot[0] = -1;
+    return 0;
+}
 
 /* return 0 stub. */
 s32 func_002D6540(void) {
@@ -177,7 +196,11 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D82D8);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D8700);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D8708);
+/* Mark no map slot active (-1). Returns 0. (Twin of func_002D6528; USA func_002D8778) */
+s32 func_002D8708(void) {
+    g_mapActiveSlot[0] = -1;
+    return 0;
+}
 
 /* Forwarding wrapper: func_002DF178(1); return 0. */
 s32 func_002D8720(void) {
@@ -261,7 +284,14 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002DC4E8);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002DC680);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002DC7A0);
+/* If the confirm button (mask 0x40) was just pressed, request the menu screen
+ * at D_25E420 as the next screen. Always returns 0. (USA func_002DC7D8) */
+s32 func_002DC7A0(void) {
+    if (g_padButtonsPressed[0] & 0x40) {
+        g_pNextMenuScreen[0] = D_25E420;
+    }
+    return 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002DC7C8);
 

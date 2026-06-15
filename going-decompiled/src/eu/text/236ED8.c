@@ -83,7 +83,15 @@ void *func_003377A8(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_003377C0);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_003377F0);
+/* func_003377F0: 4-component linear interpolation dst = (1-t)*a + t*b. The
+ * leading object pointer (a0) is unused by the body. USA func_00336918. */
+void func_003377F0(void *self, f32 t, f32 *dst, f32 *a, f32 *b) {
+    f32 it = 1.0f - t;
+    dst[0] = it * a[0] + t * b[0];
+    dst[1] = it * a[1] + t * b[1];
+    dst[2] = it * a[2] + t * b[2];
+    dst[3] = it * a[3] + t * b[3];
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00337860);
 
@@ -91,7 +99,16 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_003378F0);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00337940);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_003379A0);
+/* func_003379A0: 4-component lerp between two interleaved vec4s packed in src
+ * (a[i] at src+0x8+8i, b[i] at src+0xC+8i): dst[i] = (1-t)*a[i] + t*b[i].
+ * USA func_00336AC8. */
+void func_003379A0(f32 *src, f32 t, f32 *dst) {
+    f32 it = 1.0f - t;
+    dst[0] = it * src[2] + t * src[3];
+    dst[1] = it * src[4] + t * src[5];
+    dst[2] = it * src[6] + t * src[7];
+    dst[3] = it * src[8] + t * src[9];
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00337A10);
 
@@ -220,7 +237,12 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00338508);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00338600);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00338630);
+/* func_00338630: return the first float of the vector at p+0x34 converted to
+ * int (cvt.w.s). USA func_00337758. */
+s32 func_00338630(void *p) {
+    f32 *vec = *(f32 **)((char *)p + 0x34);
+    return (s32)vec[0];
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00338648);
 
@@ -246,7 +268,14 @@ void func_00338730(GuiElement *e, s32 text) {
     *(s32 *)((char *)e + 0x40) = text;
 }
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00338738);
+/* func_00338738: measure the text element's string - forwards the text handle
+ * (+0x40), a -1 max-width sentinel, the +0x34 field, and the scale.x (*(scale+0))
+ * to the shared text-measure helper func_0027F6C0. USA GuiTextElementMeasure. */
+extern s32 func_0027F6C0(s32 text, s32 maxWidth, s32 arg2, f32 scaleX);
+s32 func_00338738(GuiElement *e) {
+    return func_0027F6C0(*(s32 *)((char *)e + 0x40), -1,
+                         *(s32 *)((char *)e + 0x34), e->scale[0]);
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00338768);
 
@@ -415,9 +444,20 @@ void func_0033C8F0(void *p, f32 v) {
     *(f32 *)((char *)p + 0x214) = v;
 }
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033C8F8);
+/* func_0033C8F8: store v into the int array at p+0x1C8, element index idx.
+ * USA func_0033BA18. */
+void func_0033C8F8(void *p, s32 idx, s32 v) {
+    s32 *row = (s32 *)((char *)p + idx * 4);
+    row[0x72] = v;
+}
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033C908);
+/* func_0033C908: clamp - if idx is below the count at p+0x208, store it at
+ * p+0x218. USA func_0033BA28. */
+void func_0033C908(void *p, s32 idx) {
+    if (idx < *(s32 *)((char *)p + 0x208)) {
+        *(s32 *)((char *)p + 0x218) = idx;
+    }
+}
 
 /* func_0033C920: store an int at +0x21C. USA func_0033BA40. */
 void func_0033C920(void *p, s32 v) {
@@ -690,7 +730,11 @@ void func_00344410(void *p, s32 v) {
     *(s32 *)((char *)p + 0x170) = v;
 }
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00344418);
+/* func_00344418: return base (p+0x260) + index (p+0x16C) * 0x14 - a pointer
+ * into a 20-byte-stride array. USA func_003432C0. */
+s32 func_00344418(void *p) {
+    return *(s32 *)((char *)p + 0x260) + *(s32 *)((char *)p + 0x16C) * 0x14;
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00344430);
 
@@ -793,7 +837,14 @@ s32 func_00345620(void *p) {
     return *(s32 *)((char *)p + 0x360);
 }
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00345628);
+/* func_00345628: if idx is in range (<4) record it at p+0x2C4, then reset the
+ * field at p+0x1A0 to zero. USA func_003444D0. */
+void func_00345628(void *p, u32 idx) {
+    if (idx < 4) {
+        *(s32 *)((char *)p + 0x2C4) = idx;
+    }
+    *(s32 *)((char *)p + 0x1A0) = 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00345640);
 
