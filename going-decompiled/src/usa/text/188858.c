@@ -57,8 +57,38 @@ extern s32 D_1A8FB4;
 __asm__(".extern D_1A8FB8, 16");
 extern s32 D_1A8FB8;
 
-/* Larger %hi/%lo globals (arrays/structs — already non-small, no override). */
-extern void *g_pHudAssetHeader;     /* DebugMalloc'd HUD asset header (0x1B1808) */
+/* Larger %hi/%lo globals (arrays/structs — already non-small, no override).
+ * g_pHudAssetHeader[1] (the word at +0x4) is a pointer to the HUD icon-slot
+ * table (8-byte records). Modelled as an array so accesses fold the +4 into
+ * the %lo relocation as the original does. */
+extern void *g_pHudAssetHeader[];   /* DebugMalloc'd HUD asset header (0x1B1808) */
+
+/* One HUD icon-slot record (8-byte stride) in g_pHudAssetHeader[1]'s table. */
+typedef struct HudIconSlot {
+    u16 texId;     /* +0x0 */
+    u16 maxLevel;  /* +0x2: number of upgrade frames available */
+    u16 baseFrame; /* +0x4: first map index for this icon */
+    u8  paletteId; /* +0x6 */
+    u8  _pad7;     /* +0x7 */
+} HudIconSlot;                                /* stride 0x8 */
+
+/* HUD icon-id -> {clut slot, texture slot} map; each entry indexes the
+ * g_hudClutSlots / g_hudTextureSlots tables. */
+typedef struct HudIconMapEntry {
+    s16 clutSlot;    /* +0x0 */
+    s16 textureSlot; /* +0x2 */
+} HudIconMapEntry;                            /* stride 0x4 */
+__asm__(".extern g_hudIconMap, 16");
+extern HudIconMapEntry *g_hudIconMap;         /* 0x1B1810 */
+/* CLUT / texture slot tables: 8-byte-stride records, the gs-handle word at +0. */
+typedef struct HudGsSlot {
+    s32 handle;   /* +0x0: negative = unallocated */
+    s32 _pad4;    /* +0x4 */
+} HudGsSlot;                                  /* stride 0x8 */
+__asm__(".extern g_hudClutSlots, 16");
+extern HudGsSlot *g_hudClutSlots;             /* 0x1B1818 */
+__asm__(".extern g_hudTextureSlots, 16");
+extern HudGsSlot *g_hudTextureSlots;          /* 0x1B1814 */
 
 /* DebugMalloc bump pool (all %hi/%lo scalars). */
 __asm__(".extern g_debugMallocPoolBase, 16");
@@ -154,6 +184,13 @@ extern Rec2552B0 D_2552B0[];   /* 13-entry record table (0x2552B0) */
 
 /* Forward declarations of unit-local callees. */
 void ResetCinematicQueue(CinematicQueue *q);
+void func_00289540(CinematicQueue *q);
+void func_00289560(CinematicQueue *q);
+s32 func_0028B560(s32 iconName);
+void func_0028BF80(void);
+void func_0028C728(void);
+void func_0028ABC0(s32 a, s32 b);
+void func_0028C090(u8 *w, s32 iconName);
 void func_0028C390(void *p);
 void func_0028BE10(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g);
 void func_0029DB10(s32 a, s32 b);
@@ -274,7 +311,23 @@ void func_00289560(CinematicQueue *q) {
     }
 }
 
+/* Flush the cinematic queue: mark all queued cinematics watched
+ * (func_00289560), clear the queue's leading word, then reset it
+ * (func_00289540).
+ *
+ * NEAR-MISS (85%): logic exact, but cc1 allocates a 0x20-byte frame for the
+ * two callee-saves where the original uses 0x10, and sibling-call-optimises the
+ * tail func_00289540 into a `j`. Both are fixed cc1 codegen choices; kept as the
+ * portable #else body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_002895E0);
+#else
+void func_002895E0(CinematicQueue *q) {
+    func_00289560(q);
+    *(s32 *)q = 0;
+    func_00289540(q);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", StartCinematicFromQueue);
 
@@ -361,7 +414,23 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028AA08);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028AA70);
 
+/* Subtitle-event dispatch: for area-transition event 0x17 queue subtitle line
+ * (0x9F3, voice 0x4A); for event 0x19 queue line (0xA35, voice 0x8C).
+ *
+ * NEAR-MISS (73%): logic exact, but cc1 uses a 0x20-byte frame (orig 0x10) and
+ * sibling-call-optimises the second func_0028ABC0 into a `j`. Kept as #else. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028AB70);
+#else
+void func_0028AB70(s32 event) {
+    if (event == 0x17) {
+        func_0028ABC0(0x9F3, 0x4A);
+    }
+    if (event == 0x19) {
+        func_0028ABC0(0xA35, 0x8C);
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028ABC0);
 
@@ -375,7 +444,28 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028B0B0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028B558);
 
+/* Linear-scan the HUD icon-slot table for the entry whose texture id equals
+ * `name`, stopping at the 0xFFFF sentinel; return its index (or the sentinel
+ * index when not found).
+ *
+ * NEAR-MISS (89%): frameless leaf, logic + the peeled first iteration match,
+ * but the original schedules two padding `nop`s between the two loop-exit
+ * branches that cc1 doesn't emit. Fixed scheduling difference; kept as #else. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028B560);
+#else
+s32 func_0028B560(s32 name) {
+    HudIconSlot *table = (HudIconSlot *)g_pHudAssetHeader[1];
+    s32 i = 0;
+    while (table[i].texId != 0xFFFF) {
+        if (table[i].texId == name) {
+            break;
+        }
+        i++;
+    }
+    return i;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", InitHudMobyTable);
 
@@ -415,7 +505,33 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", SwapMobyTableCo
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028BE10);
 
+/* Initialise a HUD widget `w`: bind its icon graphics (func_0028C090 using the
+ * icon id at +0x20), unpack the staged layout fields (+0x24/+0x28/+0x2C/+0x30/
+ * +0x34/+0x38) into their live slots, run the widget's init callback (+0x30)
+ * when present, and clear the dirty flag (+0x68).
+ *
+ * NEAR-MISS (99.4%): logic byte-identical except cc1's epilogue restores
+ * $31 before $16 where the original restores $16 first. A fixed cc1 epilogue
+ * register-restore ordering; kept as the portable #else body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028BF18);
+#else
+void func_0028BF18(u8 *w) {
+    void (*init)(u8 *);
+    func_0028C090(w, *(s32 *)(w + 0x20));
+    init = *(void (**)(u8 *))(w + 0x30);
+    *(s32 *)(w + 0x4) = *(s32 *)(w + 0x24);
+    *(s32 *)(w + 0x14) = *(s32 *)(w + 0x34);
+    *(s32 *)(w + 0x18) = *(s32 *)(w + 0x38);
+    *(s32 *)(w + 0xC) = *(s32 *)(w + 0x2C);
+    *(s32 *)(w + 0x8) = *(s32 *)(w + 0x28);
+    *(void (**)(u8 *))(w + 0x10) = init;
+    if (init != 0) {
+        init(w);
+    }
+    *(s32 *)(w + 0x68) = 0;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028BF80);
 
@@ -431,7 +547,25 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028BF80);
  */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C010);
 
+/* Resolve the HUD icon slot for `iconName` (via func_0028B560), then copy its
+ * texture id, palette id and base-frame field out of the icon-slot table into
+ * the widget record `w`, recording the slot index in w[+0x40].
+ *
+ * NEAR-MISS (59%): logic correct (the original re-reads the table pointer per
+ * field access, modelled here by the per-access cast), but cc1 still allocates a
+ * 0x20-byte frame for the two callee-saves (orig 0x10) and schedules the loads
+ * differently. Fixed cc1 codegen; kept as the portable #else body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C090);
+#else
+void func_0028C090(u8 *w, s32 iconName) {
+    s32 slot = func_0028B560(iconName);
+    *(s16 *)(w + 0x40) = (s16)slot;
+    *(s32 *)(w + 0x0) = ((HudIconSlot *)g_pHudAssetHeader[1])[slot].texId;
+    *(s8 *)(w + 0x42) = ((HudIconSlot *)g_pHudAssetHeader[1])[slot].paletteId;
+    *(s32 *)(w + 0x44) = ((HudIconSlot *)g_pHudAssetHeader[1])[slot].baseFrame;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C100);
 
@@ -485,7 +619,27 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C728);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C7A8);
 
+/* Build the weapon-select wheel widget `w`: rebuild its icon list
+ * (func_0028C728), then seed the wheel geometry/state (half-extents 0xD2/0xC8,
+ * type tag -2, mode 0x1E, cleared cursors).
+ *
+ * NEAR-MISS (89%): logic exact, but cc1 uses a 0x20-byte frame (orig 0x10) for
+ * the two callee-saves and schedules the trailing zero-stores in a different
+ * order. Fixed cc1 codegen; kept as the portable #else body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C7F0);
+#else
+void func_0028C7F0(u8 *w) {
+    func_0028C728();
+    *(s32 *)(w + 0x58) = 0xD2;
+    *(s32 *)(w + 0x5C) = 0xC8;
+    *(s32 *)(w + 0x74) = -2;
+    *(s32 *)(w + 0x78) = 0x1E;
+    *(s32 *)(w + 0x70) = 0;
+    *(s16 *)(w + 0x48) = 0;
+    *(s16 *)(w + 0x4A) = 0;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C840);
 
@@ -524,7 +678,14 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028EAC8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028EB10);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028EC70);
+/* Re-seed the HUD widget table (func_0028BF80), then arm the countdown gate
+ * (D_1A8FB0 = 1) and its companion latches (D_1A8FB8 = -1, D_1A8FB4 = 0). */
+void func_0028EC70(void) {
+    func_0028BF80();
+    D_1A8FB0 = 1;
+    D_1A8FB8 = -1;
+    D_1A8FB4 = 0;
+}
 
 /* Decrement the countdown gate at D_1A8FB0, clamping at 0. */
 void func_0028ECA8(void) {
@@ -535,7 +696,38 @@ void func_0028ECA8(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028ECC0);
 
+/* Resolve the live HUD icon-map index for icon `name` at upgrade `level`.
+ * Looks the icon up in the slot table (func_0028B560), bounds-checks `level`
+ * against the slot's frame count, then verifies both the CLUT and texture GS
+ * slots are allocated. Returns the map index (baseFrame + level) on success,
+ * else 0.
+ *
+ * NEAR-MISS (55%): logic correct, but the original threads the branch-likely
+ * (bltzl) clut check and the `movz` result-select tail through a register
+ * allocation cc1 doesn't reproduce, plus the two-callee-save 0x20-vs-0x10 frame.
+ * Kept as the portable #else body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028EDF0);
+#else
+s32 func_0028EDF0(s32 name, s32 level) {
+    HudIconSlot *table = (HudIconSlot *)g_pHudAssetHeader[1];
+    HudIconSlot *slot = &table[func_0028B560(name)];
+    if (slot->texId == 0xFFFF) {
+        return 0;
+    }
+    if (level < (s32)slot->maxLevel) {
+        s32 mapIndex = slot->baseFrame + level;
+        HudIconMapEntry *e = &g_hudIconMap[mapIndex];
+        if (g_hudClutSlots[e->clutSlot].handle < 0) {
+            return 0;
+        }
+        if ((g_hudTextureSlots[e->textureSlot].handle & 0x80000000) == 0) {
+            return mapIndex;
+        }
+    }
+    return 0;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", GetHudIconTex0);
 
