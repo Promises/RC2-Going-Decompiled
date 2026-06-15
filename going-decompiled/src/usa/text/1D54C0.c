@@ -46,6 +46,54 @@ __asm__(".extern g_sndChannelVolumes, 16");
 extern s32 D_1A7BA8;              /* saved sound-channel volume snapshot */
 extern s32 g_sndChannelVolumes[]; /* sound-channel volume table */
 
+/* Newly-pressed digital pad button mask (edge-detected this frame). Modelled
+ * as an array so the -G8 cc1 emits the explicit lui/lw address form. */
+extern s32 g_padButtonsPressed[];
+/* Galactic-map planet-select input handler in the preceding asm band. */
+extern void func_0029DD40(s32 buttons);
+
+/* Player character/control mode: 0=Ratchet, 1=Clank-solo, 2=Giant Clank. */
+extern u8 g_bPlayerMode;
+
+/* Map state block. The galactic-map slot table is 5 interleaved {id,flags}
+ * pairs (stride 8) starting at +0x40 (id) / +0x44 (flags). */
+extern u8 D_001B1E90[];
+
+/* Front-end / pause-menu screen-manager pointers (array-modelled for the
+ * explicit lui/lw address form). */
+extern void *g_pCurrentMenuScreen[];  /* active screen instance */
+extern void *g_pNextMenuScreen[];     /* requested next screen instance */
+extern u8 D_25E660[];                 /* a specific menu-screen instance */
+
+/* Menu-subsystem state block. Only the Galactic-Map save-page fields are
+ * modelled here; the rest is opaque padding. */
+typedef struct MenuState {
+    u8  _pad0[0x168];
+    s32 savePageActive;  /* 0x168 - nonzero while the save page is up */
+    s32 savePageBytes;   /* 0x16C - running byte counter for the save */
+} MenuState;
+extern MenuState D_1F27C0;
+extern s32 func_002A1138(s32 arg);
+
+/* Galactic-map cache state (array-modelled for the explicit address form). */
+extern s32 D_25BA60[];        /* map upload sequence counter */
+extern s32 g_mapActiveSlot[]; /* active map cache slot index */
+
+/* Persistent save block; its first word seeds a few rotating lookups. */
+extern s32 g_playerProgress[];
+extern s32 D_260570[];        /* 19-entry lookup table */
+
+/* Galactic-map planet-row builder state. */
+extern s32 D_1A7C0C[];        /* number of active planet rows */
+extern u8  D_18D0E8[];        /* per-row source index (reversed) */
+extern u32 D_254E48[];        /* index -> 4-byte record (icon id in low half) */
+typedef struct MapPlanetRow { /* 12-byte display record */
+    u16 icon;   /* 0x0 */
+    u16 flag;   /* 0x2 - set to 1 for active rows */
+    u8  _pad[8];
+} MapPlanetRow;
+extern MapPlanetRow D_25AD90[];
+
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5540);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5A10);
@@ -54,9 +102,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5A48);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5C08);
 
-/* Delay-slot store scheduling wall: a lone `D_25BA60 = 0; return 0` the
- * original keeps out of the jr delay slot while cc1 sinks the store in. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5C48);
+/* Reset the galactic-map upload sequence counter. Returns 0. */
+s32 func_002D5C48(void) {
+    D_25BA60[0] = 0;
+    return 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5C58);
 
@@ -70,9 +120,28 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D6028);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D60E8);
 
+/* Feed this frame's newly-pressed buttons to the planet-select handler.
+ * Near-miss: our cc1 fills the jal delay slot with the $31 reload that the
+ * original keeps as a nop (delay-slot scheduling wall). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D6158);
+#else
+s32 func_002D6158(void) {
+    func_0029DD40(g_padButtonsPressed[0]);
+    return 0;
+}
+#endif
 
+/* Same planet-select input forward as func_002D6158 (sibling screen).
+ * Same delay-slot scheduling wall near-miss. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D6180);
+#else
+s32 func_002D6180(void) {
+    func_0029DD40(g_padButtonsPressed[0]);
+    return 0;
+}
+#endif
 
 /* Draw-batch wrapper. */
 s32 func_002D61A8(void) {
@@ -123,8 +192,11 @@ s32 func_002D6588(void) {
     return 0;
 }
 
-/* Delay-slot store scheduling wall: `g_mapActiveSlot = -1; return 0`. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D65B8);
+/* Mark no map slot active (-1). Returns 0. */
+s32 func_002D65B8(void) {
+    g_mapActiveSlot[0] = -1;
+    return 0;
+}
 
 /* return 0 stub. */
 s32 func_002D65D0(void) {
@@ -182,8 +254,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", HandleGalacticM
 /* Handwritten frameless stub fragment (no jr — addiu $sp run). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D8770);
 
-/* Delay-slot store scheduling wall: `g_mapActiveSlot = -1; return 0`. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D8778);
+/* Mark no map slot active (-1). Returns 0. (Twin of func_002D65B8.) */
+s32 func_002D8778(void) {
+    g_mapActiveSlot[0] = -1;
+    return 0;
+}
 
 /* Forwarding wrapper: func_002DF1B8(1); return 0. */
 s32 func_002D8790(void) {
@@ -201,7 +276,26 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D87C8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D8A68);
 
+/* Rebuild the galactic-map planet display rows: for each of the D_1A7C0C
+ * active rows, mark it active (flag=1) and set its icon from D_254E48 indexed
+ * by the (reversed) source-order byte in D_18D0E8; then clear the icon of the
+ * row just past the last. Returns 0.
+ * Near-miss: our cc1 strength-reduces the reversed D_18D0E8 index into a
+ * decrementing pointer; the original recomputes &D_18D0E8[n-1-i] each pass. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D8DD0);
+#else
+s32 func_002D8DD0(void) {
+    s32 n = D_1A7C0C[0];
+    s32 i;
+    for (i = 0; i < n; i++) {
+        D_25AD90[i].flag = 1;
+        D_25AD90[i].icon = (u16)D_254E48[D_18D0E8[n - 1 - i]];
+    }
+    D_25AD90[D_1A7C0C[0]].icon = 0;
+    return 0;
+}
+#endif
 
 /* return 0 stub. */
 s32 func_002D8E58(void) {
@@ -222,7 +316,19 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D9C18);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D9D60);
 
+/* Set a draw record's mode field (+0x2 of the object at obj->0x34): in
+ * Clank-solo (g_bPlayerMode==1) use 0, otherwise 3. Always returns 0.
+ * Near-miss: register-coloring (original reuses $2 for the value + return;
+ * our cc1 colours the value into $5). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DA330);
+#else
+s32 func_002DA330(void *obj) {
+    s16 *rec = *(s16 **)((u8 *)obj + 0x34);
+    rec[1] = (g_bPlayerMode == 1) ? 0 : 3;
+    return 0;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DA358);
 
@@ -262,7 +368,14 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC520);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC6B8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC7D8);
+/* If the confirm button (mask 0x40) was just pressed, request the menu screen
+ * at D_25E660 as the next screen. Always returns 0. */
+s32 func_002DC7D8(void) {
+    if (g_padButtonsPressed[0] & 0x40) {
+        g_pNextMenuScreen[0] = D_25E660;
+    }
+    return 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC800);
 
@@ -274,7 +387,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC8A8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC940);
 
+/* Seed obj->0x34 with a rotating entry from D_260570, indexed by the save
+ * block's first word modulo 19. Returns 0.
+ * Near-miss: the original delays the D_260570 %lo address add past the divu
+ * trap to fill scheduling slots; our cc1 emits it earlier. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DCBB0);
+#else
+s32 func_002DCBB0(void *obj) {
+    *(s32 *)((u8 *)obj + 0x34) = D_260570[(u32)g_playerProgress[0] % 19];
+    return 0;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DCBF0);
 
@@ -314,15 +438,98 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF368);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF428);
 
+/* Look up the map slot with id == arg and return a packed display colour:
+ * 0x4F000 if its flag bit 0 is set, else 0x11800; -1 if no slot matched.
+ * Same address-base CSE near-miss as func_002DF560. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF500);
+#else
+s32 func_002DF500(s32 id) {
+    s32 *pflag = (s32 *)(D_001B1E90 + 0x44);
+    s32 *pid   = (s32 *)(D_001B1E90 + 0x40);
+    s32 i = 0;
+    do {
+        i++;
+        if (*pid == id) {
+            return (*pflag & 1) ? 0x4F000 : 0x11800;
+        }
+        pflag += 2;
+        pid += 2;
+    } while (i < 5);
+    return -1;
+}
+#endif
 
+/* Find the map slot whose id == arg among the 5 slots and OR 0x4 into its
+ * flags; returns 0 on hit, 1 if no slot matched. The id/flags arrays are
+ * interleaved (stride 8 bytes) starting at D_001B1E90+0x40/+0x44.
+ * Near-miss: the original sets up the two pointers with two independent
+ * lui/addiu pairs; our cc1 derives the second from the first (+4) via local
+ * CSE of the address base (cannot be disabled with -fno-gcse). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF560);
+#else
+s32 func_002DF560(s32 id) {
+    s32 *pid   = (s32 *)(D_001B1E90 + 0x40);
+    s32 *pflag = (s32 *)(D_001B1E90 + 0x44);
+    s32 i = 0;
+    do {
+        i++;
+        if (*pid == id) {
+            *pflag |= 4;
+            return 0;
+        }
+        pflag += 2;
+        pid += 2;
+    } while (i < 5);
+    return 1;
+}
+#endif
 
+/* Mirror of func_002DF560 that CLEARS the 0x4 flag on the matching slot;
+ * returns 0 on hit, 1 if no slot matched.
+ * Same address-base CSE near-miss as func_002DF560. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF5B0);
+#else
+s32 func_002DF5B0(s32 id) {
+    s32 *pid   = (s32 *)(D_001B1E90 + 0x40);
+    s32 *pflag = (s32 *)(D_001B1E90 + 0x44);
+    s32 i = 0;
+    do {
+        i++;
+        if (*pid == id) {
+            *pflag &= ~4;
+            return 0;
+        }
+        pflag += 2;
+        pid += 2;
+    } while (i < 5);
+    return 1;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF600);
 
+/* Fill a 16-bit sprite/quad header (dst) from a source rect (src): copies
+ * src width(+0x24)/height(+0x20) into the size fields and their halves into
+ * the centre fields, with fixed framing constants.
+ * Near-miss: instruction scheduling + temp-register choice differ from the
+ * original (store-heavy leaf schedule wall). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF620);
+#else
+void func_002DF620(s16 *dst, void *src) {
+    dst[0] = 0;
+    dst[1] = *(u16 *)((u8 *)src + 0x24);
+    dst[2] = 0;
+    dst[3] = *(u16 *)((u8 *)src + 0x20);
+    dst[4] = (s16)(*(s32 *)((u8 *)src + 0x20) >> 1);
+    dst[8] = 0x10;
+    dst[5] = (s16)(*(s32 *)((u8 *)src + 0x24) >> 1);
+    dst[9] = 0;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF660);
 
@@ -334,7 +541,22 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", RestorePlayerPr
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DFE60);
 
+/* Galactic-Map save/load progress accumulator: while the save page is active
+ * (D_1F27C0+0x168 != 0), advance its byte counter (+0x16C) by `amount` and
+ * forward `handle` to func_002A1138; returns that result, or 0 if inactive.
+ * Near-miss: our cc1 picks a branch-likely (bnel) shape and moves `amount`
+ * differently from the original's plain-beqz + delay-slot move. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DFF68);
+#else
+s32 func_002DFF68(s32 handle, s32 amount) {
+    if (D_1F27C0.savePageActive == 0) {
+        return 0;
+    }
+    D_1F27C0.savePageBytes += amount;
+    return func_002A1138(handle);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DFFA0);
 
