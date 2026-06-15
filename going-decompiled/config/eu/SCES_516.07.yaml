@@ -203,11 +203,21 @@ segments:
       - [0x183088, c, text/183088]   # USA 183178 twin (0x283108..0x2832D8)
       - [0x183258, asm, text/183258] # .text gap (0x2832D8..0x2884F0)
       - [0x188470, c, text/188470]   # USA 188580 twin (0x2884F0..0x2887C8)
-      - [0x188748, asm, text/188748] # .text gap (0x2887C8..0x290888)
+      # REGION-AXIS CARVE (2026-06-15): retype 3 EU text gaps asm->c so the recent
+      # USA carves text/188858, text/191238, text/1A00F0 become objdiff-matchable
+      # in the EU build. Boundaries were SIGNATURE-MATCHED (NOT offset-projected):
+      # each gap is exactly one USA-unit twin (its start = the previous EU c-unit
+      # end, its end = the next EU c-unit start), and the first matched function's
+      # body was confirmed byte-shape-identical against the EU disassembly. Mirror
+      # the USA GFLAG (-G8 -fno-gcse) per unit. EU unit named by EU fileoff.
+      #   188748 = USA 188858 twin (start func_002887C8 = USA func_002888D8)
+      #   191240 = USA 191238 twin (start func_002912C0 = USA func_002912B8)
+      #   19FC78 = USA 1A00F0 twin (start func_0029FCF8 = USA FreeMoby 0x2A0170)
+      - [0x188748, c, text/188748]   # USA 188858 twin (0x2887C8..0x290888)
       - [0x190808, c, text/190808]   # USA 1907F0 twin (0x290888..0x2912C0)
-      - [0x191240, asm, text/191240] # .text gap (0x2912C0..0x298BD8)
+      - [0x191240, c, text/191240]   # USA 191238 twin (0x2912C0..0x298BD8)
       - [0x198B58, c, text/198B58]   # USA 198FA0 twin (0x298BD8..0x29FCF8)
-      - [0x19FC78, asm, text/19FC78] # .text gap (0x29FCF8..0x2A7D90)
+      - [0x19FC78, c, text/19FC78]   # USA 1A00F0 twin (0x29FCF8..0x2A7D90)
       - [0x1A7D10, c, text/1A7D10]   # USA 1A8180 twin (0x2A7D90..0x2B1EE8)
       - [0x1B1E68, asm, text/1B1E68] # .text gap (0x2B1EE8..0x2C9FD8)
       - [0x1C9F58, c, text/1C9F58]   # USA 1CA080 twin (0x2C9FD8..0x2D5508)

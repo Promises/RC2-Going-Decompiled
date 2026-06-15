@@ -342,3 +342,10 @@ func_00283140 = 0x00283140; // type:func
 // single %hi/%lo reloc (g_sndChannelVolumes+0x8) instead of section-relative
 // D_00180000+0x8730, matching the USA twin func_002D87B0.
 g_sndChannelVolumes = 0x00188728; // PARTIAL - per-channel master volume block (USA 0x1886a8, +0x80) - slot 2 written by func_002D8740
+
+// === REGION-AXIS CARVE pins (2026-06-15): name the EU twins of two jal targets
+// referenced by ported bodies in text/188748 + text/19FC78, so the EU target asm
+// uses the same symbol name the ported C calls (objdiff matches the reloc by
+// name). Both signature-matched against the USA originals. ===
+ResetCinematicQueue = 0x002892D0; // CONFIRMED (signature match) - 5-slot cinematic reel queue init, called by func_00289430 (USA 0x2893E0, EU twin func_002892D0)
+FillMemory32 = 0x00283320; // CONFIRMED (signature match) - unrolled 32-bit word-fill, called by func_002A0B88 (USA 0x283410, EU twin func_00283320)

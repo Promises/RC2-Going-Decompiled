@@ -102,6 +102,10 @@ if [ -d "$SRC" ]; then
       */eu/text/236ED8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 235FE8 twin
       */eu/text/249FE8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 248B50 twin
       */eu/text/251520.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 250080 twin
+      # REGION-AXIS CARVE (2026-06-15): EU twins of the 3 recent USA text carves.
+      */eu/text/188748.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 188858 twin
+      */eu/text/191240.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 191238 twin
+      */eu/text/19FC78.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 1A00F0 twin
     esac
     "$WIBO" "$G/cpp.exe" $CPPDEF $INCC "$c" "$BUILD/_unit.i"
     "$WIBO" "$G/cc1.exe" -quiet -O2 $GFLAG $CC1EXTRA "$BUILD/_unit.i" -o "$BUILD/_unit.s"

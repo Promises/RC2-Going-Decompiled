@@ -66,6 +66,10 @@ case "$REGION/$UNIT" in
   eu/text/236ED8) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 235FE8 twin
   eu/text/249FE8) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 248B50 twin
   eu/text/251520) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 250080 twin
+  # REGION-AXIS CARVE (2026-06-15): EU twins of the 3 recent USA text carves.
+  eu/text/188748) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 188858 twin
+  eu/text/191240) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 191238 twin
+  eu/text/19FC78) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 1A00F0 twin
 esac
 
 # Pre-filter the original asm so VU0 (COP2) macro-mode instructions assemble
