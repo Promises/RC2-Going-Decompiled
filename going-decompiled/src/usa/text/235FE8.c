@@ -29,11 +29,13 @@ __asm__(".extern g_GuiElementVtable, 16");
 __asm__(".extern D_1AD988, 16");
 __asm__(".extern D_1AD9A8, 16");
 __asm__(".extern D_1AD9F8, 16");
+__asm__(".extern g_GuiListRowVtable, 16");
 
 extern void *g_GuiElementVtable; /* base GuiElement vtable installed at +0x30 */
 extern void *D_1AD988;           /* vtable installed by func_003368D0 / func_003368E8 */
 extern void *D_1AD9A8;           /* vtable installed by func_00336678 */
 extern void *D_1AD9F8;           /* vtable installed by func_00337830 */
+extern void *g_GuiListRowVtable; /* GuiListRow element vtable installed by func_00337278 */
 
 extern void GuiSpriteElementDraw(void *p);
 
@@ -109,7 +111,16 @@ void *func_003368D0(void *p) {
  * above the branch; cc1 sinks it into the conditional store. 50% best. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003368E8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336918);
+/* func_00336918: 4-component linear interpolation dst = (1-t)*a + t*b. The
+ * leading object pointer (a0) is unused by the body - this is a widget method
+ * whose `this` carries no state into the blend. */
+void func_00336918(void *self, f32 t, f32 *dst, f32 *a, f32 *b) {
+    f32 it = 1.0f - t;
+    dst[0] = it * a[0] + t * b[0];
+    dst[1] = it * a[1] + t * b[1];
+    dst[2] = it * a[2] + t * b[2];
+    dst[3] = it * a[3] + t * b[3];
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336988);
 
@@ -121,7 +132,15 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336A68);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336A78);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336AC8);
+/* func_00336AC8: 4-component lerp between two interleaved vec4s packed in src
+ * (a[i] at src+0x8+8i, b[i] at src+0xC+8i): dst[i] = (1-t)*a[i] + t*b[i]. */
+void func_00336AC8(f32 *src, f32 t, f32 *dst) {
+    f32 it = 1.0f - t;
+    dst[0] = it * src[2] + t * src[3];
+    dst[1] = it * src[4] + t * src[5];
+    dst[2] = it * src[6] + t * src[7];
+    dst[3] = it * src[8] + t * src[9];
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336B38);
 
@@ -141,6 +160,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336BA8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336BC8);
 
+/* func_00336C10: return the word at g_waterPool + 0xC0, reached via a one-insn
+ * %gp_rel load. WALL: g_waterPool (0x1B2260) is outside the -G8 small-data
+ * window, so cc1 emits the two-insn absolute %hi/%lo macro instead of the
+ * original's %gp_rel($28) - the same gp_rel/absolute mix seen in func_00336BC8. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336C10);
 
 /* func_00336C18: return the element's pos-vector pointer (+0x0). */
@@ -230,7 +253,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiListElementI
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337270);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337278);
+/* func_00337278: install the GuiListRow vtable at p+0x30, then call
+ * func_00336F00(p). */
+void func_00337278(void *p) {
+    *(void **)((char *)p + 0x30) = &g_GuiListRowVtable;
+    func_00336F00(p);
+    __asm__ __volatile__("");
+}
 
 /* GuiListSetColorPair0: write two colors into *(e+0xC) at +0/+4, re-reading the
  * block pointer between stores. WALL: reloaded-pointer CSE wall. 60% best. */
@@ -239,8 +268,15 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiListSetColor
 /* GuiListSetColorPair1: as GuiListSetColorPair0 at +8/+0xC. WALL: same. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiListSetColorPair1);
 
+/* func_003372D0: write the high (alpha) byte of color words [0] and [1] of the
+ * element's color block (+0xC), preserving the low 24 RGB bits. WALL: the
+ * original RELOADS e->color (lw 0xC) before the second word and interleaves the
+ * two halves; cc1 CSEs the pointer and batches the masks. ~24% best. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003372D0);
 
+/* func_00337310: write the high (alpha) byte of color words [2] and [3] of the
+ * element's color block (+0xC), preserving the low 24 RGB bits. WALL: same
+ * reloaded-pointer / interleave mismatch as func_003372D0. ~24% best. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337310);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337350);
@@ -266,7 +302,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337630);
  * re-reading the pointer per store. WALL: reloaded-pointer CSE wall. 80% best. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiSpriteSetTexture);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337758);
+/* func_00337758: return the first float of the vector at p+0x34 converted to
+ * int (cvt.w.s). */
+s32 func_00337758(void *p) {
+    f32 *vec = *(f32 **)((char *)p + 0x34);
+    return (s32)vec[0];
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementInitTypeC);
 
@@ -291,7 +332,14 @@ void GuiElementSetText(GuiElement *e, s32 text) {
     *(s32 *)((char *)e + 0x40) = text;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiTextElementMeasure);
+/* GuiTextElementMeasure: measure the text element's string - forwards the text
+ * handle (+0x40), a -1 max-width sentinel, the +0x34 field, and the scale.x
+ * (*(scale+0)) to the shared text-measure helper func_0027F858. */
+extern s32 func_0027F858(s32 text, s32 maxWidth, s32 arg2, f32 scaleX);
+s32 GuiTextElementMeasure(GuiElement *e) {
+    return func_0027F858(*(s32 *)((char *)e + 0x40), -1,
+                         *(s32 *)((char *)e + 0x34), e->scale[0]);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337898);
 
@@ -479,9 +527,19 @@ void func_0033BA10(void *p, f32 v) {
     *(f32 *)((char *)p + 0x214) = v;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033BA18);
+/* func_0033BA18: store v into the int array at p+0x1C8, element index idx. */
+void func_0033BA18(void *p, s32 idx, s32 v) {
+    s32 *row = (s32 *)((char *)p + idx * 4);
+    row[0x72] = v;
+}
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033BA28);
+/* func_0033BA28: clamp - if idx is below the count at p+0x208, store it at
+ * p+0x218. */
+void func_0033BA28(void *p, s32 idx) {
+    if (idx < *(s32 *)((char *)p + 0x208)) {
+        *(s32 *)((char *)p + 0x218) = idx;
+    }
+}
 
 /* func_0033BA40: store an int at +0x21C. */
 void func_0033BA40(void *p, s32 v) {
@@ -533,6 +591,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033C1A8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiIconListScreenInit);
 
+/* func_0033C580: a bare `daddu $2,$4,$0` fall-through fragment (NO jr $31) -
+ * a handwritten stub-table entry, not a real C function. WALL: stays asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033C580);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033C588);
@@ -795,7 +855,11 @@ void func_003432B8(void *p, s32 v) {
     *(s32 *)((char *)p + 0x170) = v;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003432C0);
+/* func_003432C0: return base (p+0x260) + index (p+0x16C) * 0x14 - a pointer
+ * into a 20-byte-stride array. */
+s32 func_003432C0(void *p) {
+    return *(s32 *)((char *)p + 0x260) + *(s32 *)((char *)p + 0x16C) * 0x14;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003432D8);
 
@@ -903,7 +967,14 @@ s32 func_003444C8(void *p) {
     return *(s32 *)((char *)p + 0x360);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003444D0);
+/* func_003444D0: if idx is in range (<4) record it at p+0x2C4, then reset the
+ * field at p+0x1A0 to zero. */
+void func_003444D0(void *p, u32 idx) {
+    if (idx < 4) {
+        *(s32 *)((char *)p + 0x2C4) = idx;
+    }
+    *(s32 *)((char *)p + 0x1A0) = 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003444E8);
 
