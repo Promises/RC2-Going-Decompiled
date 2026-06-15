@@ -621,8 +621,12 @@ g_stagedSegmentCeiling = 0x001BAEAC; // CONFIRMED - arena-table +0x6c = 0x1F0C00
 g_sceneArenaCursor = 0x001B2230; // PARTIAL - scene arena allocation cursor - reset to 0x100000 by InitLoadingSceneSystem, decremented 0x60000 or 0x40000 to carve scene buffers - full ownership across systems untraced - Ghidra alias g_nSceneArenaCursor
 
 // === Track-B moby / game-object entity system (engine side - per-moby update funcs are overlay-resident). ===
-SpawnMoby = 0x0029FE08; // type:func
-InitMobyFromClass = 0x0029FF00; // type:func
+// Moby entity record (0x100 bytes) layout is recovered in include/moby.h (24 offsets static-asserted
+// against the SCUS_972.68 readers/writers). Key fields: +0x00 bsphere, +0x10 position, +0x20 state,
+// +0x22 classSlot, +0x34 modeFlags, +0x64 pUpdate(overlay), +0x68 aux/vars, +0xAA classId, +0xC0 matrix,
+// +0xF0 facing/heading. SpawnMoby/FreeMoby/UpdateActiveMobys are the pool spawn/free/per-frame walk.
+SpawnMoby = 0x0029FE08; // CONFIRMED (fail printf "Tried to create moby and couldn't" 0x1A9DC8) - scans g_mobySpawnStart..g_mobyTableEnd stride 0x100 for a slot with state +0x20 >= 0xFE whose release time +0xA0 <= g_gameTime, calls InitMobyFromClass, attaches the 0x80-byte aux block (moby+0x68 = g_mobyAuxBlockBase + index*0x80, memset 0), decrements g_mobySpawnCredit; returns Moby* or 0
+InitMobyFromClass = 0x0029FF00; // CONFIRMED - memset(moby,0,0x100) then stamps defaults: +0x22 classSlot=g_mobyClassSlotRemap[classId], +0x23 alpha 0x80, +0xAA classId, +0xAC uid (slotIndex<<16), +0x38 color qword, +0x2C scale, +0x48/+0x4C anim rates 1.0; if class loaded binds +0x64 pUpdate from g_mobyClassUpdateFuncs[slot], +0x24 pClass header, +0x78 collMesh, mode flags - else headerless table + flags|=5/7
 FreeMoby = 0x002A0170; // CONFIRMED - state +0x20 = 0xFD when below g_mobySpawnStart (static slot) else 0xFE, release time +0xA0 = g_gameTime+2, then UpdateMobyGridCells with sentinel 0x80807F7F to drop it from the spatial grid
 // text/1A00F0 carve padding pins (2026-06-14): spimdisasm fused each function's
 // trailing epilogue-pad ("addiu $sp,+N; nop" runs) into the NEXT symbol start and
