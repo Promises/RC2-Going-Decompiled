@@ -44,7 +44,25 @@ extern void FillMemory32(void *dst, u32 pattern, s32 len);
  * a default-then-conditional-override in $a0. A fixed if-conversion / branch-
  * shape difference, not reachable by source form. Left INCLUDE_ASM.
  */
+extern void *g_mobySpawnStart;
+extern s32 g_gameTime;
+extern void UpdateMobyGridCells(void *moby, u32 sentinelRange);
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", FreeMoby);
+#else
+void FreeMoby(void *moby) {
+    u8 state;
+    if ((u32)moby < (u32)g_mobySpawnStart) {
+        state = 0xFD;
+    } else {
+        state = 0xFE;
+    }
+    *(u8 *)((u8 *)moby + 0x20) = state;
+    *(s32 *)((u8 *)moby + 0xA0) = g_gameTime + 2;
+    UpdateMobyGridCells(moby, 0x80807F7F);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", ResolveMobyAnimFramePtrs);
 
@@ -76,7 +94,22 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A08C0);
  * (two lui/addiu pairs) and fills the branch delay with the second pointer
  * increment; cc1 strength-reduces the second base to `addu b,a,64` and schedules
  * the loop body differently. Reduced-strength + loop-scheduling. Left INCLUDE_ASM. */
+extern u32 g_mobySpawnCredit[];
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0918);
+#else
+void func_002A0918(void) {
+    u32 *a = &g_mobySpawnCredit[0x10];
+    u32 *b = &g_mobySpawnCredit[0x20];
+    s32 i = 0xF;
+    do {
+        *a++ = 0;
+        *b++ = 0;
+        i--;
+    } while (i >= 0);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0958);
 
@@ -111,13 +144,28 @@ void func_002A1000(void) {
  * WALL (81.82%): the empty-asm guard restores the jal+frame, but cc1 schedules
  * the `sd $ra` one slot later than the original (which interleaves it between
  * the two address `lui`s). A fixed prologue-scheduling artifact; left INCLUDE_ASM. */
+extern u8 g_proceduralAnimBounds[];
+extern void CopyQwords(void *dst, void *src, s32 len);
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A1028);
+#else
+void func_002A1028(void) {
+    CopyQwords(&g_proceduralAnimBounds[0x280], (void *)0x70003A00, 0x3C0);
+}
+#endif
 
 /* Loads the procedural-anim bounds (g_proceduralAnimBounds[0x280]) into the
  * scratch block at 0x70003A00 via CopyQwords.
  * WALL (81.82%): same prologue-scheduling artifact as func_002A1028 (cc1 sinks
  * the `sd $ra` one slot past the original interleave). Left INCLUDE_ASM. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A1058);
+#else
+void func_002A1058(void) {
+    CopyQwords((void *)0x70003A00, &g_proceduralAnimBounds[0x280], 0x3C0);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", BeginMobyDrawSegment);
 
@@ -127,13 +175,26 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A1138);
  * Closes out the per-frame moby render chain: flush the moby DMA segment, run
  * the deferred sprite/SPR render pipeline, then (if the second deferred segment
  * still has an open tag) close the moby glow segment.
- * WALL (92.67%): the original emits a per-branch epilogue (duplicate
- * `ld $ra; jr $ra` after the conditional CloseMobyGlowSegment jal, with a nop
- * in the jal delay slot); the pinned cc1 shares one epilogue between both
- * paths and sinks `ld $ra` into the jal delay slot (5 fewer instructions).
- * A structural branch-tail-duplication codegen difference. Left INCLUDE_ASM.
+ * MATCHED: the prior "branch-tail-duplication" reading was wrong — the only
+ * deltas were (1) g_deferredSegment2Tag being sized as small-data (gp_rel) under
+ * -G8, fixed by the size-16 absolute-extern override, and (2) cc1 sibling-calling
+ * the conditional CloseMobyGlowSegment, suppressed by the empty-asm guard so the
+ * original jal + shared epilogue is reproduced.
  */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", FinishMobyRenderChain);
+extern s32 g_deferredSegment2Tag;
+__asm__(".extern g_deferredSegment2Tag, 16");
+extern void CloseMobyDmaSegment(void);
+extern void RunSprRenderPipeline(void);
+extern void CloseMobyGlowSegment(void);
+
+void FinishMobyRenderChain(void) {
+    CloseMobyDmaSegment();
+    RunSprRenderPipeline();
+    if (g_deferredSegment2Tag != 0) {
+        CloseMobyGlowSegment();
+        __asm__ __volatile__("");
+    }
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", RenderMobys);
 
@@ -141,12 +202,20 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", RenderMobys);
  * Marks a platinum-bolt slot as collected: sets bit 0x80 in
  * g_platinumBoltFlags at offset 0x70 + slot + 16*progress (the current save
  * profile's level/progress index). A slot of 0xFF means "no bolt", a no-op.
- * WALL (99.29%): the final index add is `addu $2,$3,$2` (slot + product) in
- * the original but cc1 canonicalises the commutative add to `addu $2,$2,$3`
- * (product + slot) regardless of source operand order or reassociation — a
- * fixed operand-ordering artifact. Left INCLUDE_ASM.
+ * MATCHED: the prior "commutative-add operand order" reading was wrong — the only
+ * delta was the +0x70 offset. The original folds it into the base-address reloc
+ * (g_platinumBoltFlags + 0x70, hi/lo), so materialising `&g_platinumBoltFlags[0x70]`
+ * as the base pointer (instead of adding 0x70 to the index) reproduces the bytes.
  */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A1268);
+extern s32 g_playerProgress;
+extern u8 g_platinumBoltFlags[];
+
+void func_002A1268(s32 slot) {
+    if (slot != 0xFF) {
+        u8 *base = &g_platinumBoltFlags[0x70];
+        base[slot + (g_playerProgress << 4)] |= 0x80;
+    }
+}
 
 /*
  * Packs a 4-byte tuple (hi,b1,b2,b3) into the 64-bit field at +0x38 of a moby:
@@ -157,7 +226,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A1268);
  * to right into $v0, cc1 builds `(b2<<8 | b1)` as a sub-tree first. A fixed
  * commutative-OR canonicalisation, not reachable by reassociation. INCLUDE_ASM.
  */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A12A0);
+#else
+void func_002A12A0(s64 *moby, s64 hi, s64 b1, s64 b2, s64 b3) {
+    moby[7] = (((hi << 32) | b1) | (b2 << 8)) | (b3 << 16);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A12C0);
 
@@ -170,7 +245,16 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A12C0);
  * before the `sw`. Its 64-bit narrowing/sub-word lowering differs from the
  * later SN cc1 that built the original. Left INCLUDE_ASM.
  */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A12F0);
+#else
+void func_002A12F0(u64 *moby, u32 *out0, u32 *out1, u32 *out2) {
+    u64 packed = moby[7];
+    *out0 = (packed >> 32) & 0xFF;
+    *out1 = (packed >> 40) & 0xFF;
+    *out2 = (packed >> 48) & 0xFF;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A1320);
 
