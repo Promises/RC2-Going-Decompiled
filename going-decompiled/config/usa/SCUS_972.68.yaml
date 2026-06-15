@@ -219,7 +219,23 @@ segments:
       #   words before the real prologue at 0x26F850) is pinned in
       #   symbol_addrs.txt the proven way.
       - [0x16E980, c, text/16E980]   # carve pick #6 (0x26EA00..0x274127)
-      - [0x1740A8, asm, text/1740A8] # .text head remainder (0x274128..0x2831F7)
+      # USA CARVE MEGA-BATCH PHASE A (2026-06-14): TILE A - the old single asm
+      #   tile text/1740A8 (0x274128..0x2831F7) is retyped into 5 pieces: two
+      #   handwritten/VU0 asm islands kept as asm, and two render/draw-2D c units
+      #   (text/178E88, text/1823B8) flanking the VU1 sphere-map island. Boundaries
+      #   are real, consecutive function starts verified in the disassembly:
+      #     0x276168 LookupCollSector, 0x278E88 GetCollHitMaterial,
+      #     0x2812A8 func_002812A8, 0x2823B8 func_002823B8 - each a glabel start
+      #     whose preceding word is the prior function's epilogue/nop. Both c
+      #     pieces built at -O2 -G8 -fno-gcse (later-cc1 gameplay/UI TU model).
+      #     13 inter-function epilogue-pad mis-splits in the two c ranges pinned
+      #     in symbol_addrs.txt the proven way (pad type:func size:0xN + the real
+      #     next start type:func).
+      - [0x1740A8, asm, text/1740A8] # TILE A head: 2 trivial leaves + moby-transform VU0 (0x274128..0x276167)
+      - [0x176168, asm, text/176168] # TILE A collision band - HANDWRITTEN (0x276168..0x278E87)
+      - [0x178E88, c, text/178E88]   # TILE A render/draw-2D A (0x278E88..0x2812A7)
+      - [0x1812A8, asm, text/1812A8] # TILE A VU1 sphere-map island - handwritten (0x2812A8..0x2823B7)
+      - [0x1823B8, c, text/1823B8]   # TILE A render/draw-2D B (0x2823B8..0x2831F4)
       - [0x183178, c, text/183178]   # -G8 sub-TU (0x2831F8..0x2833C7, 12 fns)
       # RANKED-CARVE-PIPELINE TIER-1-A (2026-06-14): text/188858 -
       #   the .text mid 2 tile (vaddr 0x2888D8..0x29086F, ~108 fns) retyped
@@ -233,7 +249,18 @@ segments:
       #   (jr/nop at 0x290868/6C) = the start of text/1907F0, so the tile abuts
       #   1907F0 with no overlap. Walls expected: 8-byte-packed saves (every
       #   2+-GPR-save fn), switch/jtbl reloc-gap functions stay INCLUDE_ASM.
-      - [0x183348, asm, text/183348] # .text mid (0x2833C8..0x2885FF)
+      # USA CARVE MEGA-BATCH PHASE A (2026-06-14): TILE C - the old single asm
+      #   tile text/183348 (0x2833C8..0x2885FF) is retyped into 3 pieces: head asm
+      #   (handwritten/VU0 leaves), a math C-helper band (text/183558), and a tail
+      #   asm (SetVideoMode + GS-draw, a separate later carve). Built at -O2 -G0
+      #   (this math band is NOT a later-cc1 gp_rel TU; most of its functions are
+      #   handwritten VU0 and stay INCLUDE_ASM). Boundaries are real, consecutive
+      #   function starts verified in the disassembly: 0x283558 func_00283558,
+      #   0x2849B0 SetVideoMode. No padding pins (func_002835B8 + func_00284998 are
+      #   no-jr fragments that already split as their own symbols - INCLUDE_ASM).
+      - [0x183348, asm, text/183348] # TILE C head: handwritten/VU0 leaves (0x2833C8..0x283557)
+      - [0x183558, c, text/183558]   # TILE C math C-helper band -G0 (0x283558..0x2849AF)
+      - [0x1849B0, asm, text/1849B0] # TILE C tail: SetVideoMode + GS-draw (0x2849B0..0x2885FF)
       - [0x188580, c, text/188580]   # -G8 sub-TU (0x288600..0x2888D7, 11 fns)
       - [0x188858, c, text/188858]   # -G8 -fno-gcse carve (0x2888D8..0x29086F, ~108 fns)
       - [0x1907F0, c, text/1907F0]   # -G8 sub-TU (0x290870..0x2912B7, 14 fns)
@@ -356,10 +383,44 @@ segments:
       - [0x1B8FA8, asm, text/1B8FA8] # .text mid 4 tail (0x2B9028..0x2CA0FF)
       - [0x1CA080, c, text/1CA080]   # menu-screens A (0x2CA100..0x2D553F, 136 entries)
       - [0x1D54C0, c, text/1D54C0]   # menu-screens B (0x2D5540..0x2DFFFF, 117 entries)
-      - [0x1DFF80, asm, text/1DFF80] # .text mid 4b (0x2E0000..0x336067)
+      # USA CARVE MEGA-BATCH PHASE A (2026-06-14): TILE B - the old single asm
+      #   tile text/1DFF80 (0x2E0000..0x336067) is retyped into 4 pieces: three
+      #   c units (moby-glow/shrub/sky/sound-emit/cinematic; tfrag/tie draw +
+      #   vendor shop + GS/VIF pipeline; bolt economy + turret weapon) and a tail
+      #   asm (named weapon-FX, separate later carve). All three c pieces built at
+      #   -O2 -G8 -fno-gcse (later-cc1 gameplay/UI TU model). Boundaries are real,
+      #   consecutive function starts verified in the disassembly: 0x2F0040
+      #   CloseTfragDrawSegment, 0x2FFC20 func_002FFC20, 0x308090 func_00308090.
+      #   15 inter-function epilogue-fragment splits pinned in symbol_addrs.txt
+      #   (type:func size:0xN); the gp-store fragments + sw-tail no-jr fragments
+      #   already split as their own symbols and stay INCLUDE_ASM.
+      # Each TILE B c-unit's c-range stops at its first spimdisasm c-mode
+      #   tail-fusion fragment (j/data-ref-only functions with no jal that
+      #   spimdisasm can't promote — they otherwise fuse into one giant
+      #   INCLUDE_ASM blob that objdiff over-scores as fake matches). The fused
+      #   tail of each is islanded as an asm segment named by its fileoff. The
+      #   three cut points are real consecutive function boundaries verified in
+      #   the disassembly: 0x2E6F50 (after OnEmitterVoiceEnded), 0x2FA628 (after
+      #   func_002FA608), 0x301338 (after func_003011C0).
+      - [0x1DFF80, c, text/1DFF80]   # TILE B moby-glow/shrub/sky/sound-emit/cinematic head (0x2E0000..0x2E6F4F)
+      - [0x1E6ED0, asm, text/1E6ED0] # TILE B 1DFF80 fused tail island (0x2E6F50..0x2F003F)
+      - [0x1EFFC0, c, text/1EFFC0]   # TILE B tfrag/tie draw + vendor shop + GS/VIF pipeline head (0x2F0040..0x2FA627)
+      - [0x1FA5A8, asm, text/1FA5A8] # TILE B 1EFFC0 fused tail island (0x2FA628..0x2FFC1F)
+      - [0x1FFBA0, c, text/1FFBA0]   # TILE B bolt economy + turret weapon head (0x2FFC20..0x301337)
+      - [0x2012B8, asm, text/2012B8] # TILE B 1FFBA0 fused tail island (0x301338..0x30808F)
+      - [0x208010, asm, text/208010] # TILE B tail: named weapon-FX (0x308090..0x336067)
       - [0x235FE8, c, text/235FE8]   # GUI widget-method band (0x336068..0x348BCF, 344 fns)
       - [0x248B50, c, text/248B50]   # GUI sub-chunk 1 (0x348BD0..0x34C007)
-      - [0x24BF88, asm, text/24BF88] # .text mid 5 (0x34C008..0x3500FF)
+      # USA CARVE MEGA-BATCH PHASE A (2026-06-14): TILE D - the old single asm
+      #   tile text/24BF88 (0x34C008..0x3500FF) is retyped into 2 pieces: the head
+      #   asm keeps the big switch func 0x34C008 (jtbl-reloc-blocked) and the
+      #   GUI/camera-helper c unit text/24D728 follows. Built at -O2 -G8 -fno-gcse
+      #   (later-cc1 gameplay/UI TU model). Boundary 0x34D7A8 func_0034D7A8 is a
+      #   real consecutive function start. No padding pins (the orphan epilogue
+      #   fragments func_0034ED20/EF60/F300/F9F0/FD90/DBC8 already split as their
+      #   own symbols and stay INCLUDE_ASM).
+      - [0x24BF88, asm, text/24BF88] # TILE D head: big switch func 0x34C008 (0x34C008..0x34D7A7)
+      - [0x24D728, c, text/24D728]   # TILE D GUI/camera helpers (0x34D7A8..0x3500FF)
       - [0x250080, c, text/250080]   # segment-tail unit (0x350100..0x352D07)
       - [0x252C88, asm, text/252C88] # trailing nop pad (0x352D08..0x35307C)
 

@@ -1521,3 +1521,42 @@ g_mobyMotionProfileTicks = 0x001AA10C; // CONFIRMED - accumulated RCNT0 ticks in
 g_mobyMotionProfileCount = 0x001AA114; // CONFIRMED - count of measured moby-motion steps
 g_mobyTargetGroupLists = 0x001B173C; // CONFIRMED mechanism - per-group candidate-list ptr array (bss, runtime-populated)
 g_mobyTargetGroupDescs = 0x001B1740; // CONFIRMED mechanism - target-group descriptor table stride 0x30 (bss, runtime-populated)
+
+// === USA CARVE MEGA-BATCH PHASE A (2026-06-14): padding pins ===
+// TILE A (text/178E88 + text/1823B8 c ranges): inter-function epilogue-pad
+// pseudo-functions (addiu $sp,+0xN / nop runs = the prior function's
+// epilogue restore mis-promoted to its own glabel). Pin each pad
+// `type:func size:0xN`; pin the real next start `type:func` so the re-split
+// keeps the next real prologue as its own function (not an internal label).
+func_00279D68 = 0x00279D68; // type:func size:0x20 (TILE A epilogue pad)
+func_00279D88 = 0x00279D88; // type:func (TILE A real next start after pad 0x00279D68)
+func_0027A130 = 0x0027A130; // type:func size:0x8 (TILE A epilogue pad)
+func_0027A138 = 0x0027A138; // type:func (TILE A real next start after pad 0x0027A130)
+func_0027CAD8 = 0x0027CAD8; // type:func size:0x8 (TILE A epilogue pad)
+func_0027CB70 = 0x0027CB70; // type:func size:0x10 (TILE A epilogue pad)
+func_0027CB80 = 0x0027CB80; // type:func (TILE A real next start after pad 0x0027CB70)
+func_0027E690 = 0x0027E690; // type:func size:0x8 (TILE A epilogue pad)
+func_0027E818 = 0x0027E818; // type:func size:0x8 (TILE A epilogue pad)
+func_0027EB20 = 0x0027EB20; // type:func size:0x8 (TILE A epilogue pad)
+func_0027F4D0 = 0x0027F4D0; // type:func size:0x8 (TILE A epilogue pad)
+func_0027F4D8 = 0x0027F4D8; // type:func (TILE A real next start after pad 0x0027F4D0)
+func_0027FCA8 = 0x0027FCA8; // type:func size:0x8 (TILE A epilogue pad)
+func_0027FCB0 = 0x0027FCB0; // type:func (TILE A real next start after pad 0x0027FCA8)
+func_00280CD0 = 0x00280CD0; // type:func size:0x10 (TILE A epilogue pad)
+func_00281010 = 0x00281010; // type:func size:0x10 (TILE A epilogue pad)
+func_00281020 = 0x00281020; // type:func (TILE A real next start after pad 0x00281010)
+func_00282790 = 0x00282790; // type:func size:0x8 (TILE A epilogue pad)
+func_00282798 = 0x00282798; // type:func (TILE A real next start after pad 0x00282790)
+func_00282E50 = 0x00282E50; // type:func size:0x18 (TILE A epilogue pad)
+// TILE B (text/1DFF80 + text/1EFFC0 + text/1FFBA0 c HEADS): no-jr-ra
+// return/epilogue fragments that already split as their own glabels; pin the
+// measured size so the re-split keeps them isolated from the following start.
+// Only the fragments that fall inside a c-HEAD range need pinning — the fused
+// tails (0x2E6F50.., 0x2FA628.., 0x301338..) are now asm islands (text/1E6ED0,
+// text/1FA5A8, text/2012B8), which are single asm blobs and need no c-mode pins.
+func_002E0448 = 0x002E0448; // type:func size:0xC (TILE B epilogue fragment)
+func_002E43E8 = 0x002E43E8; // type:func size:0xC (TILE B epilogue fragment)
+func_002E6D28 = 0x002E6D28; // type:func size:0xC (TILE B epilogue fragment)
+func_002F6940 = 0x002F6940; // type:func size:0xC (TILE B epilogue fragment)
+func_00301010 = 0x00301010; // type:func size:0xC (TILE B epilogue fragment)
+

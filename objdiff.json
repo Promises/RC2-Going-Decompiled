@@ -189,6 +189,83 @@
       }
     },
     {
+      "name": "usa/text/178E88",
+      "target_path": "going-decompiled/build/usa/expected/text/178E88.o",
+      "base_path": "going-decompiled/build/usa/obj/text/178E88.o",
+      "metadata": {
+        "source_path": "going-decompiled/src/usa/text/178E88.c",
+        "progress_categories": [
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "usa/text/1823B8",
+      "target_path": "going-decompiled/build/usa/expected/text/1823B8.o",
+      "base_path": "going-decompiled/build/usa/obj/text/1823B8.o",
+      "metadata": {
+        "source_path": "going-decompiled/src/usa/text/1823B8.c",
+        "progress_categories": [
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "usa/text/1DFF80",
+      "target_path": "going-decompiled/build/usa/expected/text/1DFF80.o",
+      "base_path": "going-decompiled/build/usa/obj/text/1DFF80.o",
+      "metadata": {
+        "source_path": "going-decompiled/src/usa/text/1DFF80.c",
+        "progress_categories": [
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "usa/text/1EFFC0",
+      "target_path": "going-decompiled/build/usa/expected/text/1EFFC0.o",
+      "base_path": "going-decompiled/build/usa/obj/text/1EFFC0.o",
+      "metadata": {
+        "source_path": "going-decompiled/src/usa/text/1EFFC0.c",
+        "progress_categories": [
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "usa/text/1FFBA0",
+      "target_path": "going-decompiled/build/usa/expected/text/1FFBA0.o",
+      "base_path": "going-decompiled/build/usa/obj/text/1FFBA0.o",
+      "metadata": {
+        "source_path": "going-decompiled/src/usa/text/1FFBA0.c",
+        "progress_categories": [
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "usa/text/183558",
+      "target_path": "going-decompiled/build/usa/expected/text/183558.o",
+      "base_path": "going-decompiled/build/usa/obj/text/183558.o",
+      "metadata": {
+        "source_path": "going-decompiled/src/usa/text/183558.c",
+        "progress_categories": [
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "usa/text/24D728",
+      "target_path": "going-decompiled/build/usa/expected/text/24D728.o",
+      "base_path": "going-decompiled/build/usa/obj/text/24D728.o",
+      "metadata": {
+        "source_path": "going-decompiled/src/usa/text/24D728.c",
+        "progress_categories": [
+          "text"
+        ]
+      }
+    },
+    {
       "name": "eu/cod/015180",
       "target_path": "going-decompiled/build/eu/expected/cod/015180.o",
       "base_path": "going-decompiled/build/eu/obj/cod/015180.o",
