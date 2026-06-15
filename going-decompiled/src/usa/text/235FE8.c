@@ -38,6 +38,11 @@ extern void *D_1AD9F8;           /* vtable installed by func_00337830 */
 extern void *g_GuiListRowVtable; /* GuiListRow element vtable installed by func_00337278 */
 
 extern void GuiSpriteElementDraw(void *p);
+extern void GuiDialogBoxInitElements(void *p);
+
+/* Small-data (gp_rel) vtable globals installed by the func_00336B88/BA8 ctors. */
+extern void *D_1AD908;
+extern void *D_1AD8E8;
 
 /* A GUI element: first words are pointers into a shared float-vector pool
  * (pos +0x0, scale +0x4), a color block +0xC, a visibility-scalar pointer
@@ -57,7 +62,7 @@ extern void func_00336F00(void *p);
 extern void func_00336678(void *p, s32 flag);
 extern void func_003368E8(void *p, s32 flag);
 extern void func_00337C48(void);
-extern void func_00343AD0(void *p);
+extern s32 func_00343AD0(void *p);
 extern void func_00343E80(void *p);
 extern void func_00343F68(void *p);
 extern void func_0033BE60(void *p, s32 v);
@@ -91,8 +96,20 @@ void func_00336648(void) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336668);
 
 /* func_00336678: if (flag & 1) install the D_1AD9A8 vtable at p+0x4, then call
- * func_00337C48(). WALL: same hoisted-address-vs-sunk wall as func_003368E8. */
+ * func_00337C48(). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336678);
+#else
+/* TODO(match): functional equivalent - not byte-exact; the original hoists the
+   %hi/%lo address computation above the branch; cc1 sinks it into the
+   conditional store. Same wall as func_003368E8. */
+void func_00336678(void *p, s32 flag) {
+    if (flag & 1) {
+        *(void **)((char *)p + 0x4) = &D_1AD9A8;
+    }
+    func_00337C48();
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiComputeBlendWeights);
 
@@ -107,9 +124,20 @@ void *func_003368D0(void *p) {
 }
 
 /* func_003368E8: if (flag & 1) install the D_1AD988 vtable at p+0x0, then call
- * func_00337C48(). WALL: the original hoists the %hi/%lo address computation
- * above the branch; cc1 sinks it into the conditional store. 50% best. */
+ * func_00337C48(). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003368E8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; the original hoists the
+   %hi/%lo address computation above the branch; cc1 sinks it into the
+   conditional store. 50% best. */
+void func_003368E8(void *p, s32 flag) {
+    if (flag & 1) {
+        *(void **)p = &D_1AD988;
+    }
+    func_00337C48();
+}
+#endif
 
 /* func_00336918: 4-component linear interpolation dst = (1-t)*a + t*b. The
  * leading object pointer (a0) is unused by the body - this is a widget method
@@ -150,21 +178,46 @@ void func_00336B68(void *p, s32 flag) {
     __asm__ __volatile__("");
 }
 
-/* func_00336B88: install &D_1AD908 at p+0x0 then forward to func_003368E8. WALL:
- * the original fills the jal delay slot with the field store; cc1 fills it with
- * a nop and stores before the call. 77% best. */
+/* func_00336B88: install &D_1AD908 at p+0x0 then forward to func_003368E8. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336B88);
+#else
+/* TODO(match): functional equivalent - not byte-exact; the original fills the
+   jal delay slot with the field store; cc1 fills it with a nop and stores
+   before the call. 77% best. */
+void func_00336B88(void *p, s32 flag) {
+    *(void **)p = &D_1AD908;
+    func_003368E8(p, flag);
+}
+#endif
 
-/* func_00336BA8: as func_00336B88 with &D_1AD8E8. WALL: same delay-slot fill. */
+/* func_00336BA8: as func_00336B88 with &D_1AD8E8. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336BA8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; same delay-slot fill
+   wall as func_00336B88. */
+void func_00336BA8(void *p, s32 flag) {
+    *(void **)p = &D_1AD8E8;
+    func_003368E8(p, flag);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336BC8);
 
 /* func_00336C10: return the word at g_waterPool + 0xC0, reached via a one-insn
- * %gp_rel load. WALL: g_waterPool (0x1B2260) is outside the -G8 small-data
- * window, so cc1 emits the two-insn absolute %hi/%lo macro instead of the
- * original's %gp_rel($28) - the same gp_rel/absolute mix seen in func_00336BC8. */
+ * %gp_rel load. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336C10);
+#else
+/* TODO(match): functional equivalent - not byte-exact; g_waterPool (0x1B2260)
+   is outside the -G8 small-data window, so cc1 emits the two-insn absolute
+   %hi/%lo macro instead of the original's one-insn %gp_rel($28). */
+extern s32 g_waterPool[];
+s32 func_00336C10(void) {
+    return g_waterPool[0xC0 / 4];
+}
+#endif
 
 /* func_00336C18: return the element's pos-vector pointer (+0x0). */
 f32 *func_00336C18(GuiElement *e) {
@@ -184,10 +237,20 @@ s32 *GuiElementGetColor(GuiElement *e) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336C30);
 
 /* GuiElementSetPos: write four floats into *(e+0x0), re-reading the vector
- * pointer before every store. WALL: this cc1 always CSEs the four same-block
- * `lw` reloads into one (volatile forces the reload but mis-schedules into 4
- * registers vs the original's 2-register interleave). 76% best. */
+ * pointer before every store. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementSetPos);
+#else
+/* TODO(match): functional equivalent - not byte-exact; this cc1 always CSEs the
+   four same-block `lw` reloads into one (the original reloads e->pos before each
+   store, alternating two registers). 76% best. */
+void GuiElementSetPos(GuiElement *e, f32 x, f32 y, f32 z, f32 w) {
+    e->pos[0] = x;
+    e->pos[1] = y;
+    e->pos[2] = z;
+    e->pos[3] = w;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336C68);
 
@@ -212,9 +275,19 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336D20);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336D28);
 
-/* GuiElementSetScale: as GuiElementSetPos for the scale vector at +0x4.
- * WALL: same reloaded-pointer CSE wall. 76% best. */
+/* GuiElementSetScale: as GuiElementSetPos for the scale vector at +0x4. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementSetScale);
+#else
+/* TODO(match): functional equivalent - not byte-exact; same reloaded-pointer
+   CSE wall as GuiElementSetPos. 76% best. */
+void GuiElementSetScale(GuiElement *e, f32 x, f32 y, f32 z, f32 w) {
+    e->scale[0] = x;
+    e->scale[1] = y;
+    e->scale[2] = z;
+    e->scale[3] = w;
+}
+#endif
 
 /* GuiElementInstallBaseVtable: install the base vtable at +0x30, return e. */
 GuiElement *GuiElementInstallBaseVtable(GuiElement *e) {
@@ -240,7 +313,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337110);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiSpriteElementDraw);
 
+/* GuiElementSetGlyph: look up the glyph for (codepoint, font) and store the
+ * resulting handle at +0x40. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementSetGlyph);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame wall
+   ($16/$31 16-byte vs 8-byte slot packing). */
+extern s32 GuiFontAtlasLookupGlyph(s32 codepoint, s32 font);
+void GuiElementSetGlyph(GuiElement *e, s32 codepoint, s32 font) {
+    *(s32 *)((char *)e + 0x40) = GuiFontAtlasLookupGlyph(codepoint, font);
+}
+#endif
 
 /* GuiElementSetAlpha: write the alpha float through the element's +0x38 ptr. */
 void GuiElementSetAlpha(GuiElement *e, f32 alpha) {
@@ -262,22 +346,60 @@ void func_00337278(void *p) {
 }
 
 /* GuiListSetColorPair0: write two colors into *(e+0xC) at +0/+4, re-reading the
- * block pointer between stores. WALL: reloaded-pointer CSE wall. 60% best. */
+ * block pointer between stores. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiListSetColorPair0);
+#else
+/* TODO(match): functional equivalent - not byte-exact; reloaded-pointer CSE
+   wall. 76% best. */
+void GuiListSetColorPair0(GuiElement *e, s32 c0, s32 c1) {
+    e->color[0] = c0;
+    e->color[1] = c1;
+}
+#endif
 
-/* GuiListSetColorPair1: as GuiListSetColorPair0 at +8/+0xC. WALL: same. */
+/* GuiListSetColorPair1: as GuiListSetColorPair0 at +8/+0xC. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiListSetColorPair1);
+#else
+/* TODO(match): functional equivalent - not byte-exact; reloaded-pointer CSE
+   wall. 76% best. */
+void GuiListSetColorPair1(GuiElement *e, s32 c0, s32 c1) {
+    e->color[2] = c0;
+    e->color[3] = c1;
+}
+#endif
 
 /* func_003372D0: write the high (alpha) byte of color words [0] and [1] of the
- * element's color block (+0xC), preserving the low 24 RGB bits. WALL: the
- * original RELOADS e->color (lw 0xC) before the second word and interleaves the
- * two halves; cc1 CSEs the pointer and batches the masks. ~24% best. */
+ * element's color block (+0xC), preserving the low 24 RGB bits. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003372D0);
+#else
+/* TODO(match): functional equivalent - not byte-exact; the original reloads
+   e->color before the second word and interleaves the two halves; cc1 CSEs the
+   pointer and batches the masks. ~24% best. */
+void func_003372D0(GuiElement *e, s32 a0, s32 a1) {
+    s32 *c = e->color;
+    c[0] = (c[0] & 0xFFFFFF) | (a0 << 24);
+    c = e->color;
+    c[1] = (c[1] & 0xFFFFFF) | (a1 << 24);
+}
+#endif
 
 /* func_00337310: write the high (alpha) byte of color words [2] and [3] of the
- * element's color block (+0xC), preserving the low 24 RGB bits. WALL: same
- * reloaded-pointer / interleave mismatch as func_003372D0. ~24% best. */
+ * element's color block (+0xC), preserving the low 24 RGB bits. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337310);
+#else
+/* TODO(match): functional equivalent - not byte-exact; same reloaded-pointer /
+   interleave mismatch as func_003372D0. ~24% best. */
+void func_00337310(GuiElement *e, s32 a0, s32 a1) {
+    s32 *c = e->color;
+    c[2] = (c[2] & 0xFFFFFF) | (a0 << 24);
+    c = e->color;
+    c[3] = (c[3] & 0xFFFFFF) | (a1 << 24);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337350);
 
@@ -299,8 +421,19 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003375D0);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337630);
 
 /* GuiSpriteSetTexture: write two int->float coords through *(e+0x34),
- * re-reading the pointer per store. WALL: reloaded-pointer CSE wall. 80% best. */
+ * re-reading the pointer per store. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiSpriteSetTexture);
+#else
+/* TODO(match): functional equivalent - not byte-exact; reloaded-pointer CSE wall
+   (cc1 collapses the two *(e+0x34) reloads). 90% best. */
+void GuiSpriteSetTexture(GuiElement *e, s32 u, s32 v) {
+    f32 fu = (f32)u;
+    f32 fv = (f32)v;
+    (*(f32 **)((char *)e + 0x34))[0] = fu;
+    (*(f32 **)((char *)e + 0x34))[1] = fv;
+}
+#endif
 
 /* func_00337758: return the first float of the vector at p+0x34 converted to
  * int (cvt.w.s). */
@@ -393,9 +526,19 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337CE0);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiPoolAlloc);
 
 /* func_00337D78: push a node onto the pool free-list at p+0x14 and decrement
- * the live count at p+0x10. WALL: the original stores the old head into *node
- * before writing head=node; cc1 reorders the two independent stores. 96% best. */
+ * the live count at p+0x10. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337D78);
+#else
+/* TODO(match): functional equivalent - not byte-exact; the original stores the
+   old head into *node before writing head=node; cc1 reorders the two
+   independent stores. 96% best. */
+void func_00337D78(void *pool, void **node) {
+    *node = *(void **)((char *)pool + 0x14);
+    *(void **)((char *)pool + 0x14) = node;
+    *(s32 *)((char *)pool + 0x10) -= 1;
+}
+#endif
 
 /* func_00337D98: return the small-data global D_1ADAF0. */
 extern s32 D_1ADAF0;
@@ -405,11 +548,21 @@ s32 func_00337D98(void) {
 }
 
 /* func_00337DA0: bounds-checked lookup into the 4-entry small-data table
- * D_1ADAD8 (idx<4 ? D_1ADAD8[idx] : 0). WALL: the original takes the table base
- * via one-insn %gp_rel($28); cc1 emits the two-insn absolute %hi/%lo for the
- * indexed array base under -G8 (the mixed gp_rel/absolute reload artifact).
- * 88% best. */
+ * D_1ADAD8 (idx<4 ? D_1ADAD8[idx] : 0). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337DA0);
+#else
+/* TODO(match): functional equivalent - not byte-exact; the original takes the
+   table base via one-insn %gp_rel($28); cc1 emits the two-insn absolute %hi/%lo
+   for the indexed array base under -G8. 88% best. */
+extern s32 D_1ADAD8[4];
+s32 func_00337DA0(u32 idx) {
+    if (idx < 4) {
+        return D_1ADAD8[idx];
+    }
+    return 0;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337DC8);
 
@@ -569,12 +722,33 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033BE70);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033BF90);
 
 /* func_0033C060: write two floats through *(p+0x0) at +0/+4, re-reading the
- * pointer between stores. WALL: reloaded-pointer CSE wall. 60% best. */
+ * pointer between stores. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033C060);
+#else
+/* TODO(match): functional equivalent - not byte-exact; reloaded-pointer CSE
+   wall. 76% best. */
+void func_0033C060(void *p, f32 a, f32 b) {
+    (*(f32 **)p)[0] = a;
+    (*(f32 **)p)[1] = b;
+}
+#endif
 
-/* GuiDialogBoxSetBounds: write six dialog-box bound floats. WALL: the original
- * keeps source store order; cc1 reschedules the independent stores. 95% best. */
+/* GuiDialogBoxSetBounds: write six dialog-box bound floats. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiDialogBoxSetBounds);
+#else
+/* TODO(match): functional equivalent - not byte-exact; the original keeps source
+   store order; cc1 reschedules the independent stores ascending. 95% best. */
+void GuiDialogBoxSetBounds(void *p, f32 a, f32 b, f32 c, f32 d, f32 e, f32 f) {
+    *(f32 *)((char *)p + 0x2B4) = f;
+    *(f32 *)((char *)p + 0x2A8) = a;
+    *(f32 *)((char *)p + 0x2AC) = b;
+    *(f32 *)((char *)p + 0x2B8) = c;
+    *(f32 *)((char *)p + 0x2BC) = d;
+    *(f32 *)((char *)p + 0x2B0) = e;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiDialogBoxSetText3);
 
@@ -599,7 +773,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033C588);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033C958);
 
+/* func_0033CD80: init the embedded dialog-box (at p+0x8), return the object. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033CD80);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame wall
+   (the body matches but the pinned cc1 lays the $16/$31 saves in 16-byte slots
+   vs the original's 8-byte packing). 99.64% best. */
+void *func_0033CD80(void *p) {
+    GuiDialogBoxInitElements((char *)p + 0x8);
+    return p;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033CDB0);
 
@@ -609,7 +794,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033CEE0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D070);
 
+/* func_0033D1C0: init the embedded dialog-box (at p+0x8), return the object
+ * (identical body to func_0033CD80). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D1C0);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
+   wall. 99.64% best. */
+void *func_0033D1C0(void *p) {
+    GuiDialogBoxInitElements((char *)p + 0x8);
+    return p;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D1F0);
 
@@ -659,7 +855,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E5E8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E680);
 
+/* GuiQuitDialogInitElements: init the embedded dialog-box (at p+0x8), return the
+ * object (identical body to func_0033CD80). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiQuitDialogInitElements);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
+   wall. 99.64% best. */
+void *GuiQuitDialogInitElements(void *p) {
+    GuiDialogBoxInitElements((char *)p + 0x8);
+    return p;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E780);
 
@@ -773,9 +980,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003420C0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiIconScreenInit);
 
-/* func_00342450: write three ints at +0x318/+0x310/+0x314 in that source order.
- * WALL: cc1 reorders the three independent stores ascending. 95% best. */
+/* func_00342450: write three ints at +0x318/+0x310/+0x314 in that source order. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342450);
+#else
+/* TODO(match): functional equivalent - not byte-exact; cc1 reorders the three
+   independent stores ascending. 95% best. */
+void func_00342450(void *p, s32 a, s32 b, s32 c) {
+    *(s32 *)((char *)p + 0x318) = c;
+    *(s32 *)((char *)p + 0x310) = a;
+    *(s32 *)((char *)p + 0x314) = b;
+}
+#endif
 
 /* func_00342460: store an int at +0x230. */
 void func_00342460(void *p, s32 v) {
@@ -845,10 +1061,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342FD8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiIconScreenInit2);
 
-/* func_00343290: store v at p+0x260 then call func_00348DA0(p+0x188). WALL: the
- * original keeps a $a0 copy and fills the jal delay slot with the store; cc1
- * stores before the call. 68% best. */
+/* func_00343290: store v at p+0x260 then call func_00348DA0(p+0x188). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343290);
+#else
+/* TODO(match): functional equivalent - not byte-exact; the original keeps a $a0
+   copy and fills the jal delay slot with the store; cc1 stores before the call.
+   68% best. */
+void func_00343290(void *p, s32 v) {
+    *(s32 *)((char *)p + 0x260) = v;
+    func_00348DA0((char *)p + 0x188);
+}
+#endif
 
 /* func_003432B8: store an int at +0x170. */
 void func_003432B8(void *p, s32 v) {
@@ -896,10 +1120,21 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003437F0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343888);
 
-/* func_00343AD0: indexed +0x28 lookup gated on the +0x10 flag. WALL: the
- * original lowers the guard as a branch-likely (bnel + nullified load in the
- * delay slot); cc1 emits beqz + a separate load. 38% best. */
+/* func_00343AD0: indexed +0x28 lookup gated on the +0x10 flag: if (p[0x10]==0)
+ * return 0; else return *(p + p[0x14]*4 + 0x28). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343AD0);
+#else
+/* TODO(match): functional equivalent - not byte-exact; the original lowers the
+   guard as a branch-likely (bnel + nullified load in the delay slot); cc1 emits
+   beqz + a separate load. 38% best. */
+s32 func_00343AD0(void *p) {
+    if (*(s32 *)((char *)p + 0x10) == 0) {
+        return 0;
+    }
+    return *(s32 *)((char *)p + *(s32 *)((char *)p + 0x14) * 4 + 0x28);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343AF8);
 
@@ -918,8 +1153,17 @@ void func_00343F48(void *p, f32 v) {
     *(f32 *)((char *)p + 0x4) = v;
 }
 
-/* func_00343F50: as func_0033C060. WALL: reloaded-pointer CSE wall. 60% best. */
+/* func_00343F50: as func_0033C060: write two floats through *(p+0x0). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343F50);
+#else
+/* TODO(match): functional equivalent - not byte-exact; reloaded-pointer CSE
+   wall. 76% best. */
+void func_00343F50(void *p, f32 a, f32 b) {
+    (*(f32 **)p)[0] = a;
+    (*(f32 **)p)[1] = b;
+}
+#endif
 
 /* func_00343F68: clear the int at +0x90. */
 void func_00343F68(void *p) {
