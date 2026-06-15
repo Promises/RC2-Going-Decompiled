@@ -696,7 +696,15 @@ EnqueueCinematic = 0x002894C8; // CONFIRMED - pushes (reelId, typeFlag = reelId-
 DequeueCinematic = 0x00289428; // CONFIRMED - pops (id, type) from the ring tail +0x34, slots cleared to -1, clears busy when emptied - returns 0 on empty
 StartCinematicFromQueue = 0x00289610; // CONFIRMED - dequeues and requests cinematic playback - type 0 RequestGameStateChange(1,...) type 1 RequestGameStateChange(2,...) (game states 1/2 = the two cinematic-playback states), second arg 2 when chaining from state 1/2, rewinds on reject
 BuildAttractReelPlaylist = 0x0026EC58; // CONFIRMED - srand(product of sceCdReadClock RTC fields) then fills the out array with randomized attract reel ids - family 0xB9+perm(0..2) and alternating family 0xB3 or 0xB6 (order GetRandomInt(2)) - frontend menu state 3 idle 0x708 frames triggers PopGameState then enqueue of out[1]
-GetRandomInt = 0x002A8648; // CONFIRMED - rand right-shift 16 and 0x7FFF modulo n - trap(7) divide guard on n==0
+// === Track-B random-number helper library (text/1A8180) - game-side wrappers over libc rand. ===
+rand = 0x001163B0; // CONFIRMED (libc, MATCHED in cod/015180) - LCG state=state*0x41C64E6D+0x3039 in reent block (PTR_DAT_00133E74 +0x58) then returns state & 0x7FFFFFFF. Core RNG behind the whole 1A8180 family. (already-matched func_001163B0 - name is identity only)
+srand = 0x001163A0; // CONFIRMED (libc, MATCHED in cod/015180) - stores seed into reent block +0x58. Sole in-ELF caller BuildAttractReelPlaylist seeds from sceCdReadClock RTC product. (already-matched func_001163A0 - identity only)
+GetRandomInt = 0x002A8648; // CONFIRMED - random int in half-open range 0..n-1 via (rand>>16 & 0x7FFF) mod n - trap(7) divide guard on n==0. Head of the 1A8180 random-helper family
+RandRangeInclusive = 0x002A8688; // CONFIRMED - random int in inclusive range lo..hi via (rand>>16 & 0x7FFF) mod ((hi-lo)+1) + lo
+GetRandomFloatRange = 0x002A86E0; // CONFIRMED - random float in half-open lo..hi via lo + (rand>>16 & 0x7FFF)*(hi-lo)/32768 (15-bit fraction) - heavily used by particle spawners
+GetRandomFloatSigned = 0x002A8740; // CONFIRMED - random magnitude in lo..hi (12-bit fraction, /4096) with random sign bit (rand>>16 & 1) giving symmetric +/- jitter
+GetRandomAngle = 0x002A87A8; // CONFIRMED (MATCHED by glabel - identity only) - random angle in -pi..pi via ((rand>>16 & 0xFFF) - 0x800) * (pi/2048)
+GetRandomVectorInSphere = 0x002A8868; // CONFIRMED - random vec3 direction - radius=GetRandomFloatRange(radiusLo,radiusHi) (caller float args forwarded), two random angles a,b=GetRandomAngle() giving out=(sin a*cos b, cos a*cos b, sin b)*radius - sig void(float* out, float radiusLo, float radiusHi) - uses SinfVu0/CosfVu0
 FillMemory32 = 0x00283410; // CONFIRMED - word-fill of length bytes with a 32-bit pattern (unrolled x2) - boot fills the 8x8 gray boot texture 0x1BAF80 with 0x80808080
 g_cinematicQueue = 0x001BACC0; // CONFIRMED - the pending-cinematic reel queue record - ring of 5 (id, typeFlag) pairs at +8, head +0x30 tail +0x34 count +0x38 stateWhenStarted +0x40 busy +0x44 - reset by BootSystemInit, fed by boot intro 0xB2 and the attract idle path
 g_vblankCount = 0x001A7208; // CONFIRMED - u64 vblank counter incremented by OnVblankInterrupt every vblank start
