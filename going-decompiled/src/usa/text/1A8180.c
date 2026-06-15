@@ -129,6 +129,11 @@ extern s32 CollSphere(void *center, s32 mask, void *moby);
 extern s32 func_001163B0(void);        /* core random-state step */
 extern s32 ProbeMobyGroundBelow(Moby *moby);
 extern s32 func_002846E8(void *a, void *b, void *c);
+/* func_002846E8's real prototype: blend vec4 dst from src by phase t (t in
+ * $f12). The (void*,void*,void*) form above is only used by the pure
+ * register-passthrough forwarder func_002AA3D0. */
+typedef void (*LerpByteVec4PackedFn)(f32 t, void *dst, void *src);
+#define LerpByteVec4PackedVu0 ((LerpByteVec4PackedFn)func_002846E8)
 extern s32 func_0029DA88(s32 a);
 extern char *GetLocalizedString(s32 stringId);
 extern s32 func_0029DAD0(char *text, s32 arg);
@@ -179,6 +184,7 @@ f32 func_002A8600(f32 x) {
     return 1.0f - t * t;
 }
 
+/* unreachable code fragment (stray FP tail from splat over-split), not C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8628);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", GetRandomInt);
@@ -217,20 +223,24 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8948);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8A68);
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8B00);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8B08);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8C70);
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8CF8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8D08);
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A90A0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A90A8);
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9348);
 
 /* func_002A9370: count a group's active mobys (state == -1 counts all,
@@ -258,12 +268,66 @@ void func_002A9400(s32 group, s32 lightMode) {
     }
 }
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9458);
 
+/**
+ * Begin iterating a moby group: validate the group index, point the iterator
+ * globals at the group's slot list, fetch the first moby into *out, then apply
+ * the active/inactive filter (wantInactive/wantActive) before chaining to the
+ * iterator-advance helper. Returns -1 for an empty/invalid group, 0 when the
+ * first moby is filtered out, else the advance helper's result.
+ */
+#ifndef TARGET_NATIVE
+/* TODO(match): functional equivalent - 85%. The filter lattice and the
+   size-12 %hi/%lo-vs-%gp_rel reload of g_pMobyGroupIterMoby reproduce, but the
+   later cc1 schedules the wantActive-path reload straight-line (absolute
+   lui/lw) with the $ra restore in the branch delay slot, while the pinned cc1
+   fills that delay slot with the reload itself (forced %gp_rel form) and folds
+   the two return paths - register-coloring + delay-slot wall (same family as
+   func_002AC9E0). Revisit once the gameplay-TU compiler is available. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9468);
+#else
+s32 func_002A9468(Moby **out, s32 group, s32 wantInactive, s32 wantActive) {
+    u16 *list;
+    s32 slot;
+    s32 sign;
+
+    if (group < 0 || g_mobyGroupCount < group) {
+        *out = 0;
+        return -1;
+    }
+    *out = 0;
+    g_pMobyGroupIterMoby = 0;
+    list = g_mobyGroupLists[group];
+    g_pMobyGroupIterCursor = list;
+    if (list == 0) {
+        return -1;
+    }
+    slot = *list & 0x7FFF;
+    g_mobyGroupIterSlot = slot;
+    g_pMobyGroupIterMoby = (Moby *)((u8 *)g_mobyTableBase + slot * 0x100);
+    *out = g_pMobyGroupIterMoby;
+    sign = (u32)(s32)g_pMobyGroupIterMoby->state >> 31;
+    if (wantInactive == 0) {
+        if (wantActive == 0 && sign == 0) {
+            return 0;
+        }
+    } else {
+        if (wantActive == 0) {
+            return 0;
+        }
+        if (sign != 0) {
+            return 0;
+        }
+    }
+    return func_002A9550(out, g_pMobyGroupIterMoby);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9550);
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A96B8);
 
 /**
@@ -280,6 +344,7 @@ s32 func_002A96C8(u32 *p, s32 dec) {
     return t == 0;
 }
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9700);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9708);
@@ -300,6 +365,7 @@ f32 func_002A9888(Vec4 *pos) {
     return ProbeGroundHeight(pos, 0.5f, 0x20);
 }
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A98B0);
 
 /* func_002A98B8: first polygon edge (0x10-stride xy verts) the point lies
@@ -311,6 +377,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A98B8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9958);
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9A28);
 
 /**
@@ -337,6 +404,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9A90);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9BD8);
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9C80);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9C88);
@@ -350,6 +418,7 @@ s32 func_002A9F30(Moby *moby, s32 a, s32 b, s32 c) {
     return PostMobyHitEvent(moby, a, b, c, (Vec4 *)&D_1A8BD0);
 }
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9F58);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", GetWaterSurfaceHeight);
@@ -374,7 +443,37 @@ s32 func_002AA3D0(void *a, void *b, void *c) {
     return func_002846E8(a, b, c);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AA3F0);
+/* Two free-running phase counters for the ping-pong colour ramp; the selector
+ * arg picks which one to advance (gp-addressable small data). */
+extern s32 D_1A9E94;
+extern s32 D_1A9E98;
+
+/**
+ * Advance a ping-pong colour ramp: bump (or reset) one of two free-running
+ * phase counters, fold it into a triangle wave over [0,2*period) to a 0..1
+ * blend, and write the interpolated packed vec4 colour.
+ */
+void func_002AA3F0(void *dst, void *src, s32 period, s32 useSecond, s32 reset) {
+    s32 *phase = &D_1A9E98;
+    s32 pos;
+    f32 t;
+
+    if (!useSecond) {
+        phase = &D_1A9E94;
+    }
+
+    *phase = *phase + 1;
+    if (reset != 0) {
+        *phase = 0;
+    }
+    pos = *phase % (period * 2);
+    if (pos >= period) {
+        t = 1.0f - (f32)(pos - period) / (f32)period;
+    } else {
+        t = (f32)pos / (f32)period;
+    }
+    LerpByteVec4PackedVu0(t, src, dst);
+}
 
 /**
  * Query a moby's pending hit-event record: returns the record when it
@@ -403,6 +502,7 @@ s32 func_002AA4A8(Moby *m, u32 mask, s32 keep) {
     return 0;
 }
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AA500);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AA508);
@@ -411,6 +511,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AA6B8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AA808);
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AAF98);
 
 /**
@@ -471,6 +572,7 @@ f32 func_002AB1A8(s32 *p, s32 target, s32 rate) {
 }
 #endif
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB208);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB210);
@@ -553,6 +655,7 @@ void func_002AC4B8(Moby *moby) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC4D0);
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC538);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", MatrixToEulerAngles);
@@ -561,6 +664,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC668);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC728);
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC978);
 
 /**
@@ -579,6 +683,7 @@ f32 func_002AC980(f32 angle) {
 }
 #endif
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC9D8);
 
 /* func_002AC9E0: true when m is a valid moby-table entry with class id in
@@ -592,10 +697,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ACA20);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AD590);
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AD858);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AD860);
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AD8B0);
 
 /* func_002AD8B8: append a moby's table slot to an i16 count-prefixed list
@@ -614,14 +721,17 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AD9B0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADA30);
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADB08);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADB10);
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADB98);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADBA0);
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADC30);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADC50);
@@ -632,6 +742,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADD28);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADDD0);
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADF10);
 
 /**
@@ -672,6 +783,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE7E8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE9E0);
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AF590);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AF598);
@@ -684,6 +796,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AF948);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AF9C8);
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFA58);
 
 /**
@@ -703,10 +816,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFCD8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFD90);
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFE58);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFE68);
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFF08);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFF10);
@@ -719,12 +834,14 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B02C8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B03E8);
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0BD8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0BF0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0C40);
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0CA8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0CC0);
@@ -763,6 +880,7 @@ s32 func_002B0F18(u8 *p) {
     return func_002B0E40(p + 0x10);
 }
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0F38);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0F40);
@@ -776,6 +894,7 @@ s32 func_002B0FC0(u8 *p) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0FE0);
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B11C0);
 
 /**
@@ -793,6 +912,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1220);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1270);
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1340);
 
 /**
@@ -807,25 +927,66 @@ void func_002B1348(s32 ctx, Vec4 *vec, void *b) {
     func_00283BF8(t.v.x, t.v.y);
 }
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1380);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", SampleRainHeightmap);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", SpawnRaindropImpactFx);
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1708);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1710);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1778);
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B17D0);
 
+/**
+ * Set a moby's "freeze fade" weight at +0x70: while the palette-cycle freeze
+ * flag is set it tracks the supplied value, otherwise it snaps to 1.0. When
+ * the caller asks to settle (settle != 0) and the weight has not yet reached
+ * the moby's base value at +0x20, kick the shared eased-approach helper.
+ */
+#ifndef TARGET_NATIVE
+/* TODO(match): functional equivalent - 99.67%, a single c.eq.s operand-order
+   instruction. The later cc1 loads the +0x70 weight first AND uses it as the
+   compare's fs; the pinned cc1 ties fs to the != LHS while loading the RHS
+   first, so it can never produce both at once (operand-scheduling wall).
+   Revisit once the gameplay-TU compiler is available. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B17F8);
+#else
+void func_002B17F8(f32 value, s32 a1, u8 *p, s32 a3, s32 settle) {
+    if (D_1A7A4F != 0) {
+        *(f32 *)(p + 0x70) = value;
+    } else {
+        *(f32 *)(p + 0x70) = 1.0f;
+    }
+    if (settle != 0 && *(f32 *)(p + 0x70) != *(f32 *)(p + 0x20)) {
+        func_002AFAB0(0.03f, 0.3f);
+    }
+}
+#endif
 
+/* unreachable code fragment (stray sh + $sp tail from splat over-split), not C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1870);
 
+/**
+ * Look up a localized string by id and hand it (with the caller's second arg)
+ * to the GUI text helper func_0029DAD0.
+ */
+#ifndef TARGET_NATIVE
+/* TODO(match): functional equivalent - save-layout wall ($16/$31 packed
+   8-byte by the later cc1 vs 16-byte by the pinned cc1). Body is a plain
+   two-call forward. Revisit once the gameplay-TU compiler is available. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1880);
+#else
+s32 func_002B1880(s32 stringId, s32 arg) {
+    return func_0029DAD0(GetLocalizedString(stringId), arg);
+}
+#endif
 
 /**
  * Forward to func_0029DA88 (GUI text helper).
@@ -836,6 +997,7 @@ s32 func_002B18B0(s32 a) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B18D0);
 
+/* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1A80);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1A90);
@@ -849,9 +1011,61 @@ s32 func_002B1BC8(void) {
     return D_139648[0];
 }
 
+/**
+ * Remaining platinum bolts: total collected (func_002B1C20) minus the
+ * palette-cycle base counter (func_002B1BC8), clamped to [0, 40].
+ */
+#ifndef TARGET_NATIVE
+/* TODO(match): functional equivalent - save-layout wall ($16/$31 packed 8-byte
+   by the later cc1 vs 16-byte by the pinned cc1); the subtract and [0,40]
+   movz/movn clamp are otherwise exact. Revisit once the gameplay-TU compiler
+   is available. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1BD8);
+#else
+s32 func_002B1BD8(void) {
+    s32 remaining = func_002B1C20() - func_002B1BC8();
 
+    if (remaining < 0) {
+        remaining = 0;
+    }
+    if (remaining > 0x28) {
+        remaining = 0x28;
+    }
+    return remaining;
+}
+#endif
+
+/**
+ * Total collected platinum bolts across all levels (sum of CountPlatinumBolts
+ * over levels 0..0x1B, skipping the unused level 0x1A), clamped to [0, 40].
+ */
+#ifndef TARGET_NATIVE
+/* TODO(match): functional equivalent - save-layout wall ($16/$17/$18/$31, the
+   later cc1 packs the four callee-save slots 8-byte where the pinned cc1
+   reserves 16). The level-skip beql loop and the [0,40] movz/movn clamp are
+   otherwise exact. Revisit once the gameplay-TU compiler is available. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1C20);
+#else
+extern s32 CountPlatinumBolts(s32 level);
+
+s32 func_002B1C20(void) {
+    s32 total = 0;
+    s32 level;
+
+    for (level = 0; level < 0x1C; level++) {
+        if (level != 0x1A) {
+            total += CountPlatinumBolts(level);
+        }
+    }
+    if (total < 0) {
+        total = 0;
+    }
+    if (total > 0x28) {
+        total = 0x28;
+    }
+    return total;
+}
+#endif
 
 /* CountPlatinumBolts: count one level's collected platinum bolts (4 flags
  * at level*4, plus the 4 extra flags at +0x68 for level 2), clamped to
