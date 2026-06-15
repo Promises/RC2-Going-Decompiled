@@ -39,6 +39,7 @@ __asm__(".extern D_1ABA84, 16");
 __asm__(".extern D_1ABA88, 16");
 __asm__(".extern D_1ABA8C, 16");
 __asm__(".extern D_1ABA90, 16");
+__asm__(".extern D_138180, 16");
 
 /* Singleton GUI-manager instance (null until the GUI is up). The wrappers here
  * only ever forward `instance + fixed-widget-offset` to widget methods. */
@@ -100,6 +101,9 @@ extern char D_25BA70[];
 /* Front-end screen-state blob slice at D_1F27C0 (menu reciprocal/clear scratch). */
 extern u8 D_1F27C0[];
 
+/* Global input/UI flags object; the menu code reads the flag word at +0x1C4. */
+extern u8 D_138180[];
+
 /* Bestiary/list base-pointer pair selected by D_1A7318. */
 extern s32 D_1A7318;
 extern u8 D_1AB678[];
@@ -156,9 +160,61 @@ void func_002CA998(void) {
     *(s32 *)(p + 0x1F0) = 1;
 }
 
+/* List-scroller "select previous": decrement the cursor (list[1]); when it drops
+ * to 0 or below, wrap to the limit (list[0]). Then skip backwards over empty
+ * (==0) slots in the entry array (list+0xC, one s32 per row). Returns the entry
+ * value the cursor lands on.
+ * Near-miss (~91%): the original emits a 64-bit sign-extension `daddu` copy of
+ * the decremented index for the `> 0` test (stored vs tested registers differ)
+ * plus a base-first commutative `addu`; our cc1 reuses one register and emits
+ * the addu operands swapped. Preserved as portable C. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", ListScrollerSelectPrev);
+#else
+/* TODO(match): functional equivalent - not byte-exact; EE 64-bit sign-extend
+ * `daddu` copy + commutative-addu operand order not reproduced by cc1. */
+s32 ListScrollerSelectPrev(s32 *list) {
+    s32 *entries = list + 3;
+    s32 entry;
+    do {
+        s32 idx = list[1] - 1;
+        list[1] = idx;
+        if (idx <= 0) {
+            idx = list[0];
+        }
+        list[1] = idx;
+        entry = entries[idx];
+    } while (entry == 0);
+    return entry;
+}
+#endif
 
+/* List-scroller "select next": increment the cursor (list[1]); when it passes
+ * the limit (list[0]) wrap to 0, then skip forward over empty (==0) slots in the
+ * entry array (list+0xC). Returns the entry value the cursor lands on.
+ * Near-miss (99.33%): single commutative-`addu` operand order differs — the
+ * original forms `entries_base + idx<<2` (loop-invariant base first); cc1 emits
+ * `idx<<2 + entries_base`. Preserved as portable C. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", ListScrollerSelectNext);
+#else
+/* TODO(match): functional equivalent - not byte-exact; commutative-addu operand
+ * order (base-first vs index-first) not reproduced by cc1. */
+s32 ListScrollerSelectNext(s32 *list) {
+    s32 limit = list[0];
+    s32 *entries = list + 3;
+    s32 entry;
+    do {
+        s32 idx = list[1] + 1;
+        if (limit < idx) {
+            idx = 0;
+        }
+        list[1] = idx;
+        entry = entries[idx];
+    } while (entry == 0);
+    return entry;
+}
+#endif
 
 /* GUI wrapper: forward the bestiary widget to its hide/show method. */
 s32 func_002CAA38(void) {
@@ -312,7 +368,46 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", TickActiveMenuS
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", RenderMenuScreenWidgets);
 
+/* Menu screen-state query: only acts when the active screen (ss[0x14]) is the
+ * one passed in. Returns a tri-state confirm/cancel code driven by the global
+ * input flags (D_138180[0x1C4]) and the screen's pending-result fields.
+ * Near-miss (~48%): the original keeps the second D_138180[0x1C4] reload and the
+ * branch-likely (beql/bnel) loop shape from the load-PRE-present SN cc1; our cc1
+ * CSEs the reload and the andi 0x10 test, producing a structurally different
+ * (shorter) body. Preserved as portable C. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CD450);
+#else
+/* TODO(match): functional equivalent - not byte-exact; cc1 CSEs the global-flag
+ * reload + andi the original re-emits under branch-likely. */
+s32 func_002CD450(s32 screen) {
+    u8 *ss = g_particleFxBlob + 0x100;
+    s32 flags;
+    s32 v;
+    if (*(s32 *)(*(u8 **)(ss + 0x14) + 0xE8) != screen) {
+        return 0;
+    }
+    flags = *(s32 *)(D_138180 + 0x1C4);
+    if (flags & 0x900) {
+        if (*(s32 *)(ss + 0x134) == 0) {
+            return 1;
+        }
+        flags = *(s32 *)(D_138180 + 0x1C4);
+    }
+    if (!(flags & 0x10)) {
+        return 0;
+    }
+    v = *(s32 *)(*(u8 **)(ss + 0x14) + 0xE0);
+    if (v != 0) {
+        *(s32 *)(ss + 0x18) = v;
+        return 0;
+    }
+    if (*(s32 *)(ss + 0x134) == 0) {
+        return -1;
+    }
+    return 0;
+}
+#endif
 
 /* Stores D_1A7318 ? &D_1AB648 : &D_1AB678 into list[0x34], returns 0. Left as
  * INCLUDE_ASM: the original has an anomalous +0x60 stack adjust prologue with no
