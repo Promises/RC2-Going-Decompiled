@@ -544,6 +544,15 @@ g_cameraModeVtbl = 0x0026E900; // CONFIRMED - camera mode vtable (lvl.camvtbl) -
 g_cameraFov = 0x001B5558; // CONFIRMED - current camera FOV angle in radians - interpolated by StepCameraFovInterp then converted to cot(fov/2) - Ghidra alias g_flCameraFov
 g_cameraProjScale = 0x001B9070; // CONFIRMED - projection scale cot(fov/2) - written by FOV interp and cinematic keys - consumed by BuildCameraProjection - Ghidra alias g_flCameraProjScale
 g_bCameraUnderwater = 0x001B5580; // CONFIRMED - 1 when camera is below water surface - set by CheckCameraUnderwater - render loop 0x27C3D0 draws fullscreen water tint from color at 0x1AD560 when set - Ghidra alias g_nCameraUnderwater
+// --- camera shake channels (CameraShakeChannel: +0 amplitude, +4 output offset, +8 timer seeded to duration then decremented, +0xC duration captured on frame 1 for sin window) consumed by ApplyCameraShakeAxis, seeded by impact/effect triggers (e.g. surface-impact FX 0x2ACA20) ---
+g_cameraShakeUp = 0x001B52E0; // CONFIRMED - shake channel axis 0 - offsets g_cameraPos along camera up row 0x1B5510 - amplitude/duration written by impact FX (0x2ACA20 sets amp 0.4-dist*0.0175, dur 0x19) - struct CameraShakeChannel
+g_cameraShakeRight = 0x001B52F0; // CONFIRMED - shake channel axis 1 - offsets g_cameraPos along camera right row 0x1B54F0 - sin-windowed decay in ApplyCameraShakeAxis - struct CameraShakeChannel
+g_cameraShakeRoll = 0x001B5300; // CONFIRMED - shake channel axis 2 - rolls g_cameraMatrix around forward axis via quat - cos-windowed decay in ApplyCameraShakeAxis - struct CameraShakeChannel
+// --- camera FOV interpolator state block 0x1B5550..0x1B5570 driven by StepCameraFovInterp ---
+g_cameraFovBase = 0x001B5554; // CONFIRMED - FOV interp start/base angle (radians) - g_cameraFov lerps from here toward g_cameraFovTarget
+g_cameraFovInterpMode = 0x001B5568; // CONFIRMED - FOV interp mode byte read by StepCameraFovInterp - 0 snap, 1 sin-eased, 2 angle-lerp, 3 damped spring
+g_cameraFovInterpActive = 0x001B5569; // CONFIRMED - FOV interp active flag - StepCameraFovInterp runs only while 1, self-clears on completion
+g_cameraFovTarget = 0x001B5570; // CONFIRMED - FOV interp target angle (radians) - destination for the g_cameraFov interpolation
 g_screenFadeBlack = 0x001B1520; // CONFIRMED - black screen fade level 0..1 - driven by UpdateScreenFadeBlack and forced by exit cinematic - render draws black overlay with alpha level*128
 g_screenFadeWhite = 0x001B1524; // CONFIRMED - white screen flash level 0..1 - driven by UpdateScreenFadeWhite - render draws white overlay with alpha level*128 - Ghidra alias g_flScreenFadeWhite
 g_heroPos = 0x00189EA0; // CONFIRMED - hero (player) world position vec4 - debug overlay prints it with the Hero format string at 0x1A88E8 - used by camera takeover sphere tests and hero motion tracking - Ghidra alias g_flHeroPos float[4]
