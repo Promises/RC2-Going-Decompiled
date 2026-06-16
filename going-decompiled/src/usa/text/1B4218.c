@@ -75,8 +75,10 @@ extern f32 g_mobyMotionProfileTicks;       /* 0x1AA10C accumulated RCNT0 ticks *
  * it absolutely, so it must be sized out of small-data. */
 __asm__(".extern g_nGameStatePending, 16");
 __asm__(".extern g_gameStateStack, 32");
+__asm__(".extern g_health, 16");
 extern s32 g_nGameStatePending;            /* 0x1A8BB8 pending state (-2 = none) */
 extern s32 g_gameStateStack[8];            /* 0x1B1CD0 int[8] saved game-state ids */
+extern s32 g_health;                       /* 0x18C2EC current health (0 = dead) */
 
 /* The file-load + dialog-voice manager state block lives at g_saveImageArea +
  * 0x1000 (a fixed RAM scratch area past the per-area save image). Only the
@@ -97,21 +99,39 @@ typedef struct FileLoadVoiceState {
     /* 0x00 */ u8 pad00[0x4];
     /* 0x04 */ s16 fileLoadActive;        /* nonzero while a CD read is in flight */
     /* 0x06 */ u8 readStopped;            /* set after CdStopRead */
-    /* 0x07 */ u8 pad07[0x41];
+    /* 0x07 */ u8 pad07[0x1D];
+    /* 0x24 */ s32 soundBankId;           /* loaded global sound-bank id, init -1 */
+    /* 0x28 */ u8 pad28[0x4];
+    /* 0x2C */ s16 fileLoadPhase;         /* file-load progress phase (1 = armed, 2 = reading) */
+    /* 0x2E */ u8 pad2E[0x2];
+    /* 0x30 */ s32 fileLoadByteCursor;    /* current byte cursor of the active read */
+    /* 0x34 */ s32 fileLoadWordCount;     /* byteCursor rounded down to words (>>2) */
+    /* 0x38 */ u8 pad38[0x4];
+    /* 0x3C */ s16 dialogVoiceId;         /* primary dialog-voice id, init -1 */
+    /* 0x3E */ u8 pad3E[0x2];
+    /* 0x40 */ u8 dialogState;            /* primary dialog state, init 0x20 */
+    /* 0x41 */ u8 dialogFlag1;            /* init 0 */
+    /* 0x42 */ u8 dialogFlag2;            /* init 0 */
+    /* 0x43 */ u8 dialogFlag3;            /* init 0 */
+    /* 0x44 */ s32 ambientState;          /* ambient-voice state word, init 0 */
     /* 0x48 */ s16 ambientArg0;           /* queued ambient-voice params */
     /* 0x4A */ s16 ambientArg2;
     /* 0x4C */ s16 ambientArg1;
-    /* 0x4E */ u8 pad4E[0x2];
+    /* 0x4E */ s16 ambientFlag;           /* init 0 */
     /* 0x50 */ DialogVoiceChannel ch0;    /* primary dialog voice channel */
-    /* 0x54 */ u8 pad54[0x18];
+    /* 0x54 */ u8 pad54[0x14];
+    /* 0x68 */ s32 secondaryState;        /* secondary-voice state word, init 0 */
     /* 0x6C */ s16 dialogArg1;            /* queued dialog-voice params */
     /* 0x6E */ s16 dialogArg0;
     /* 0x70 */ s16 dialogArg2;
-    /* 0x72 */ u8 pad72[0x2];
+    /* 0x72 */ s16 secondaryFlag;         /* init 0 */
     /* 0x74 */ DialogVoiceChannel ch1;    /* secondary voice channel */
     /* 0x78 */ u8 pad78[0xC];
     /* 0x84 */ s32 dialogArg3;
-    /* 0x88 */ u8 pad88[0x10];
+    /* 0x88 */ u8 pad88[0x4];
+    /* 0x8C */ s32 tertiaryState;         /* tertiary-voice state word, init 0 */
+    /* 0x90 */ u8 pad90[0x6];
+    /* 0x96 */ s16 tertiaryFlag;          /* init 0 */
     /* 0x98 */ DialogVoiceChannel ch2;    /* tertiary voice channel */
 } FileLoadVoiceState;
 
@@ -247,7 +267,41 @@ s32 IsGameStatePending(s32 state) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", RequestGameStateChange);
 
+/* Pop the top of the 8-deep game-state stack into the pending-transition slot,
+ * recording the caller's two transition args. The pop is gated: it only happens
+ * when a transition is currently quiescent (pending == -2), the stack is
+ * non-empty, and the player is alive (g_health != 0). Returns 0 on a successful
+ * pop, 1 when there is nothing to pop (empty stack / transition already pending),
+ * and -1 when the player is dead.
+ * WALL: boolean-materialise idiom. The original lowers the first gate
+ * (pending != -2) with a preset-1 / movz-zero idiom (matching the movz chain
+ * used for the depth and health gates); this cc1 lowers the same `!=` with
+ * sltu, which cascades into a different register coloring (best 63.10%).
+ * Genuine codegen-idiom wall — functional equivalent only. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", PopGameState);
+#else
+/* TODO(match): functional equivalent - not byte-exact; boolean-materialise idiom wall. */
+s32 PopGameState(s32 argA, s32 argB) {
+    s32 depth = g_gameStateStackDepth;
+    s32 status = (g_nGameStatePending != -2);
+    if (depth == 0) {
+        status = 1;
+    }
+    if (g_health == 0) {
+        status = -1;
+    }
+    if (status != 0) {
+        return status;
+    }
+    g_gameStatePendingArgA = argA;
+    g_gameStatePendingArgB = argB;
+    g_gameStateStackDepth = depth - 1;
+    g_nGameStatePending = g_gameStateStack[depth - 1];
+    g_gameStateTransitionDoneFlag = 0;
+    return status;
+}
+#endif
 
 /* Returns the game state at the top of the 8-deep state stack, or -2 if empty. */
 s32 GetGameStateStackTop(void) {
@@ -335,7 +389,55 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", CheckMobyOverWa
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", BeginFrameDrawList);
 
+/* The builtin classId->update-fn binding table (0xC-byte entries, -1-terminated;
+ * empty in the shipped ELF, filled by overlay code). All four globals below sit
+ * outside the gp window / are sized > 8, so the original materialises them with
+ * the lui/%lo absolute macro. */
+typedef struct MobyUpdateBinding {
+    /* 0x0 */ s32 classId;     /* class id key (-1 = end of table) */
+    /* 0x4 */ void *pUpdate;   /* per-class update fn to install */
+    /* 0x8 */ s32 pad8;
+} MobyUpdateBinding;
+__asm__(".extern g_builtinMobyUpdateBindings, 16");
+__asm__(".extern g_mobyClassUpdateFuncs, 16");
+__asm__(".extern g_mobyClassUpdateFuncsNoHeader, 16");
+__asm__(".extern g_mobyClassCount, 16");
+__asm__(".extern g_mobyClassCountNoHeader, 16");
+extern MobyUpdateBinding g_builtinMobyUpdateBindings[];  /* 0x26E880 */
+extern void *g_mobyClassUpdateFuncs[];          /* 0x1CDEC0 header-class pUpdate table */
+extern void *g_mobyClassUpdateFuncsNoHeader[];  /* 0x1D0460 headerless pUpdate table */
+extern s32 g_mobyClassCount;                    /* 0x1B1AC0 header-class slot count */
+extern s32 g_mobyClassCountNoHeader;            /* 0x1B1AC4 headerless slot count */
+
+/* Resolve `classId` in the builtin binding table and copy its update fn into the
+ * next free slot of the appropriate per-class pUpdate table. Scans the table for
+ * the first entry whose key is `classId` or the -1 terminator (counting the index
+ * reached); writes that entry's fn to g_mobyClassUpdateFuncs[g_mobyClassCount] —
+ * or, when `headerless`, to g_mobyClassUpdateFuncsNoHeader[g_mobyClassCountNoHeader].
+ * WALL: address-CSE / induction. The original holds the table base live in a
+ * preserved register ($t0) across the whole function and reuses it for the final
+ * bindings[index] access; this cc1 re-materialises the base (lui/%lo) at the end,
+ * which cascades into a different register coloring (best 60.81%). Genuine
+ * address-rematerialise-vs-preserve wall — functional equivalent only. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", BindMobyClassUpdateFunc);
+#else
+/* TODO(match): functional equivalent - not byte-exact; table-base address-CSE wall. */
+void BindMobyClassUpdateFunc(s32 classId, s32 headerless) {
+    s32 index = 0;
+    while (g_builtinMobyUpdateBindings[index].classId != -1 &&
+           g_builtinMobyUpdateBindings[index].classId != classId) {
+        index++;
+    }
+    if (headerless) {
+        g_mobyClassUpdateFuncsNoHeader[g_mobyClassCountNoHeader] =
+            g_builtinMobyUpdateBindings[index].pUpdate;
+    } else {
+        g_mobyClassUpdateFuncs[g_mobyClassCount] =
+            g_builtinMobyUpdateBindings[index].pUpdate;
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B7570);
 
@@ -368,7 +470,42 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", KickLevelBankDi
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B77E0);
 
+extern char D_1AA198[];                    /* file-load init debug string */
+extern void InitDialogSoundChannel(void);  /* 0x2B7610 dialog sound-channel setup */
+extern void InstallFileLoadPump(void);     /* 0x2B7E... installs the snd-pump callback */
+
+/* Reset the entire file-load + dialog-voice manager to its idle defaults: clear
+ * every per-channel state/flag word, reset the primary dialog voice id (-1) and
+ * its state byte (0x20), reset the global sound-bank id (-1), then (re)initialise
+ * the dialog sound channel and install the per-snd-pump file-load pump.
+ * WALL: delay-slot-fill + constant-sharing. The original sinks the soundBankId
+ * (+0x24) = -1 store into the InitDialogSoundChannel call's delay slot and shares
+ * the single `li -1` between it and the dialogVoiceId (+0x3C) store; this cc1
+ * materialises a second -1 and schedules the +0x24 store inline (best 86.30%).
+ * Genuine scheduler/coloring wall — functional equivalent only. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", InitFileLoadSystem);
+#else
+/* TODO(match): functional equivalent - not byte-exact; delay-slot-fill + const-share wall. */
+void InitFileLoadSystem(void) {
+    DebugPrintStub(D_1AA198);
+    g_fileLoadVoiceState.dialogVoiceId = -1;
+    g_fileLoadVoiceState.dialogState = 0x20;
+    g_fileLoadVoiceState.dialogFlag1 = 0;
+    g_fileLoadVoiceState.dialogFlag2 = 0;
+    g_fileLoadVoiceState.dialogFlag3 = 0;
+    g_fileLoadVoiceState.ambientState = 0;
+    g_fileLoadVoiceState.ambientFlag = 0;
+    g_fileLoadVoiceState.secondaryState = 0;
+    g_fileLoadVoiceState.secondaryFlag = 0;
+    g_fileLoadVoiceState.tertiaryState = 0;
+    g_fileLoadVoiceState.tertiaryFlag = 0;
+    g_fileLoadVoiceState.soundBankId = -1;
+    InitDialogSoundChannel();
+    InstallFileLoadPump();
+    __asm__ __volatile__("");
+}
+#endif
 
 /* Register the file-load completion handler as the per-snd-pump tick callback.
  * The empty asm guard blocks cc1's sibling-call (`j`) so the original jal+frame
@@ -536,6 +673,38 @@ void OnTertiaryVoiceStarted(s32 voiceId, long handleAddr) {
     handle->state = 7;
 }
 
+/* File-load read-cursor callback: stash the just-read byte cursor into the
+ * voice handle, then (only while the file-load is in its "armed" phase and the
+ * cursor is non-zero) advance the phase to "reading" and publish the cursor and
+ * its word count (cursor / 4) into the file-load voice manager. The handle
+ * arrives as a 64-bit value whose low 32 bits hold the address.
+ * WALL: reloaded-ptr CSE. The original re-loads handle->sampleCursor from memory
+ * for both the +0x30 publish and the +0x34 word-count divide; this cc1 CSEs the
+ * load away to the just-stored byteCursor register (best 87.04%). Genuine
+ * reload-vs-CSE wall — functional equivalent only. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B8F68);
+#else
+/* TODO(match): functional equivalent - not byte-exact; reloaded-ptr CSE wall. */
+void func_002B8F68(s32 byteCursor, long handleAddr) {
+    VoiceHandle *handle = (VoiceHandle *)handleAddr;
+    if (handle == NULL) {
+        return;
+    }
+    handle->sampleCursor = byteCursor;
+    if (handle->gate == 0) {
+        return;
+    }
+    if (g_fileLoadVoiceState.fileLoadPhase != 1) {
+        return;
+    }
+    if (byteCursor == 0) {
+        return;
+    }
+    g_fileLoadVoiceState.fileLoadPhase = 2;
+    g_fileLoadVoiceState.fileLoadByteCursor = handle->sampleCursor;
+    g_fileLoadVoiceState.fileLoadWordCount = handle->sampleCursor / 4;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B8FD8);
