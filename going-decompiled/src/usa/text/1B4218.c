@@ -98,8 +98,15 @@ typedef struct DialogVoiceChannel {
 typedef struct FileLoadVoiceState {
     /* 0x00 */ u8 pad00[0x4];
     /* 0x04 */ s16 fileLoadActive;        /* nonzero while a CD read is in flight */
-    /* 0x06 */ u8 readStopped;            /* set after CdStopRead */
-    /* 0x07 */ u8 pad07[0x1D];
+    /* 0x06 */ u8 readStopped;            /* abort flag: set after CdStopRead */
+    /* 0x07 */ u8 pad07[0x1];
+    /* 0x08 */ s32 fileLoadLbn;           /* active read start LBN */
+    /* 0x0C */ u8 pad0C[0x4];
+    /* 0x10 */ s32 fileLoadSectorCount;   /* active read sector count */
+    /* 0x14 */ s32 fileLoadDest;          /* active read destination address */
+    /* 0x18 */ void *pLoadCallback;       /* completion callback fn(arg, success) */
+    /* 0x1C */ s32 loadCallbackArg;       /* completion callback first arg */
+    /* 0x20 */ u8 pad20[0x4];
     /* 0x24 */ s32 soundBankId;           /* loaded global sound-bank id, init -1 */
     /* 0x28 */ u8 pad28[0x4];
     /* 0x2C */ s16 fileLoadPhase;         /* file-load progress phase (1 = armed, 2 = reading) */
@@ -119,7 +126,11 @@ typedef struct FileLoadVoiceState {
     /* 0x4C */ s16 ambientArg1;
     /* 0x4E */ s16 ambientFlag;           /* init 0 */
     /* 0x50 */ DialogVoiceChannel ch0;    /* primary dialog voice channel */
-    /* 0x54 */ u8 pad54[0x14];
+    /* 0x54 */ s16 ambientCursor;         /* ambient-voice playback cursor, init 0 */
+    /* 0x56 */ u8 pad56[0x2];
+    /* 0x58 */ s32 ambientVolume;         /* ambient-voice volume (10) */
+    /* 0x5C */ s32 ambientSampleRate;     /* ambient-voice sample rate (48000) */
+    /* 0x60 */ u8 pad60[0x8];
     /* 0x68 */ s32 secondaryState;        /* secondary-voice state word, init 0 */
     /* 0x6C */ s16 dialogArg1;            /* queued dialog-voice params */
     /* 0x6E */ s16 dialogArg0;
@@ -140,19 +151,37 @@ typedef struct FileLoadVoiceState {
 /* Callees (value-returning declarations keep cc1 from sibling-call optimising
  * forwarding tails — see text/198FA0). */
 extern void SetSndPumpCallback(void *cb);  /* 0x1336D0 */
-extern void PumpFileLoadCompletion(void);  /* 0x2B8CA8 snd-pump tick */
+extern void PumpFileLoadCompletion(s32 phase);  /* 0x2B8CA8 snd-pump tick */
 extern void CdStopRead(void);              /* 0x133640 */
+extern s32 CdGetLoadStatus(void);          /* 0x133688 */
+extern void FlushCache(s32 mode);          /* 0x0011AEA0 */
+__asm__(".extern g_fileLoadState, 16");
+extern s16 g_fileLoadState;                /* 0x1A63AC 0 idle / 1 requested / 2 in progress */
 extern void DebugPrintStub(const char *s); /* 0x26FEC8 retail debug no-op */
 extern char D_1AA220[];                    /* tertiary-voice debug string */
 extern void OnSoundBankLoaded(s32 bankId, long pOut);  /* 0x2B7690 forward decl */
 extern void snd_BankLoadFromEE_CB(s32 arg, void *cb, long pOut);  /* 0x1325E8 */
+extern void snd_BankLoadAsync(s32 bankAddr, s32 a1, void *cb, long pStatus);  /* 0x132498 */
+__asm__(".extern g_discToc, 16");
+extern u8 g_discToc[];                      /* 0x14B540 master disc asset directory */
 
 /* The sound-bank load-status slots live at g_listenerPosHistory + 0x17A0 (s32
  * per bank id); the loader writes -1 there and lets OnSoundBankLoaded fill it. */
 #define g_soundBankLoadStatus ((s32 *)(g_listenerPosHistory + 0x17A0))
 extern void StepMobyMotion(Moby *moby, Vec4 *target, f32 speed);  /* 0x2B6000 */
 extern s32 StartDialogVoice(s32 a0, s32 a1, s32 a2, s32 a3);      /* 0x2B7878 */
-extern s32 StartAmbientVoice(s32 a0, s32 a1, s32 a2);            /* 0x2B7CA0 */
+extern s32 StartAmbientVoice(s32 idx, s16 flags, s16 pan);       /* 0x2B7CA0 */
+extern s32 StartSecondaryVoice(s32 idx, s16 flags, s16 pan);     /* 0x2B7D98 */
+extern s32 snd_PlaySample(s64 sampleStart, s64 sampleEnd, s32 a2, s32 a3,
+                          s32 pan, s32 a5, void *startCb, long context);  /* 0x133350 */
+extern void func_002B8ED0(s32 voiceId, long handle);  /* secondary-voice start cb */
+extern void func_002B8E78(s32 voiceId, long handle);  /* chained-voice start cb */
+extern void OnAmbientVoiceStarted(s32 voiceId, long handle);  /* 0x2B8DC8 */
+
+/* The dialog sample-address table: g_discToc + 0x5300 holds per-id sector
+ * offsets (stride 8), g_discToc + 0x52FC is the global-WAD base added to each. */
+#define g_dialogSampleTable ((s32 *)(g_discToc + 0x5300))
+#define g_dialogSampleBase  (*(s32 *)(g_discToc + 0x52FC))
 
 /* A playing-voice handle (returned by the snd voice allocator). The voice
  * playback callbacks below transition the +0xA state byte and bookkeep +0x0 id,
@@ -190,12 +219,21 @@ typedef struct LevelObject {
 } LevelObject;
 extern LevelObject D_2403D0[];              /* 0x2403D0 level-object table */
 
+/* Per-frame moby threat flash + burst update.
+ * WALL: save-layout — saves 8 callee-saves + $ra at 8-byte spacing (the pinned
+ * cc1 packs at 16-byte spacing), plus float register temps. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", UpdateMobyThreatFlashAndBurst);
 
+/* Classify a candidate target by proximity band (near/mid/far threat tier).
+ * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing, with fp temps. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ClassifyTargetProximity);
 
+/* Handwritten stub-table fragment (orphaned addiu $sp / nop run) — see unit
+ * header; kept INCLUDE_ASM permanently. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B46C8);
 
+/* Bind a moby to a parent transform (locomotion attach helper).
+ * WALL: save-layout — 1 callee-save + $ra at 8-byte spacing. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", BindMobyToParent);
 
 /* One-shot latch of moby anim-flag bit 0. Returns 1 if newly set, 0 if it was
@@ -222,14 +260,24 @@ s32 func_002B47D0(Moby *moby) {
     return moby->animFlags & 4;
 }
 
+/* Compute squared distance from a moby to its auto-target candidate.
+ * WALL: save-layout — 4 callee-saves + $ra at 8-byte spacing, with fp temps. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", CalcMobyTargetThreatDist);
 
+/* Scan a moby group for the best auto-target by threat distance.
+ * WALL: save-layout — 6 callee-saves + $ra at 8-byte spacing. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", FindTargetInGroup);
 
+/* Test whether a target lies within the active range band.
+ * WALL: save-layout — 2 callee-saves + $ra at 8-byte spacing, with fp temps. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", CheckTargetInRangeBand);
 
+/* Acquire the moby's auto-target (the top-level target-lock entry point).
+ * WALL: save-layout — 8 callee-saves + $ra at 8-byte spacing, with fp temps. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", AcquireMobyAutoTarget);
 
+/* Handwritten stub-table fragment (orphaned addiu $sp / nop run) — see unit
+ * header; kept INCLUDE_ASM permanently (no prologue/jr of its own). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B4F40);
 
 /* True if moby is the backing object of level-object slot `slot`
@@ -238,16 +286,29 @@ s32 CheckMobyIsLevelObjectSlot(Moby *moby, s32 slot) {
     return D_2403D0[slot].mobyPtr == (s32)moby;
 }
 
+/* Handwritten stub-table fragment (orphaned addiu $sp / nop run) — see unit
+ * header; kept INCLUDE_ASM permanently. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B4F80);
 
+/* Apply a moby's local-transform delta (spring-follow position step).
+ * WALL: save-layout — 6 callee-saves + $ra at 8-byte spacing, with fp temps
+ * and sq/lq 128-bit matrix moves. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ApplyMobyLocalTransformDelta);
 
+/* Size-pinned 8-byte epilogue pad pseudo-function — see unit header; kept
+ * INCLUDE_ASM permanently. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B50B8);
 
+/* Initialise a moby's spring-follow state block.
+ * WALL: save-layout — 8 callee-saves + $ra at 8-byte spacing, with fp temps. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", InitMobySpringFollowState);
 
+/* Per-frame moby spring-follow step (damped position/orientation chase).
+ * WALL: save-layout — 8 callee-saves + $ra at 8-byte spacing, with fp/madd. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StepMobySpringFollow);
 
+/* Handwritten stub-table fragment (orphaned addiu $sp / nop run) — see unit
+ * header; kept INCLUDE_ASM permanently. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B58B8);
 
 /* Arm the game-state transition timer (frames to stall before the pending switch). */
@@ -265,6 +326,9 @@ s32 IsGameStatePending(s32 state) {
     return g_nGameStatePending == state;
 }
 
+/* Request a game-state change: pushes the target state onto the 8-deep stack and
+ * arms the pending-transition slot (the push counterpart to PopGameState).
+ * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", RequestGameStateChange);
 
 /* Pop the top of the 8-deep game-state stack into the pending-transition slot,
@@ -317,12 +381,21 @@ s32 GetPrevGameState(void) {
     return g_nGameStatePrev;
 }
 
+/* Top-level per-frame game-state machine (commits the pending transition).
+ * WALL: splat jtbl reloc-identity gap (the switch dispatch table) + save-layout;
+ * see unit header. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", UpdateGameState);
 
+/* Steer a moby toward a world point (locomotion heading helper).
+ * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing, with fp temps. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", DriveMobyTowardPoint);
 
+/* Size-pinned 8-byte epilogue pad pseudo-function — see unit header. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B5FF8);
 
+/* Core per-frame moby locomotion step (steer / collide / ground / lean).
+ * WALL: save-layout — 4 callee-saves + $ra at 8-byte spacing, with fp/madd and
+ * sq/lq 128-bit moves. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StepMobyMotion);
 
 /* Advance a moby's motion using its own facing target and its +0xF8 move speed.
@@ -338,16 +411,28 @@ void DriveMobyInPlace(Moby *moby, f32 speed) {
     __asm__ __volatile__("");
 }
 
+/* Size-pinned 8-byte epilogue pad pseudo-function — see unit header. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B61B8);
 
+/* Integrate a moby's motion-controller velocity for the frame.
+ * WALL: save-layout — 5 callee-saves + $ra at 8-byte spacing, with fp/madd. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", UpdateMobyMotionVelocity);
 
+/* Resolve a moby's per-frame motion against collision geometry.
+ * WALL: save-layout — 6 callee-saves + $ra at 8-byte spacing, with fp/madd and
+ * sq/lq 128-bit moves. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ResolveMobyMotionCollision);
 
+/* Apply ground-snap and fire ground/landing events after motion resolve.
+ * WALL: save-layout — 6 callee-saves + $ra at 8-byte spacing, with fp temps. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ApplyMobyGroundAndEvents);
 
+/* Probe the ground line below a moby (raycast for the ground normal/height).
+ * WALL: save-layout — 2 callee-saves + $ra at 8-byte spacing, with fp temps. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ProbeMobyGroundLine);
 
+/* Test whether a moby is a ground-mover (locomotion mode predicate).
+ * WALL: save-layout — 1 callee-save + $ra at 8-byte spacing. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", CheckMobyGroundMover);
 
 /* Returns the moby's motion-controller block: *(*(moby+0x68)+0x18). */
@@ -355,22 +440,39 @@ s32 GetMobyMotionController(Moby *moby) {
     return moby->pExtra[0x18 / 4];
 }
 
+/* Resolve a moby against a collision sphere (push-out + slide).
+ * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing, with fp/madd. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ResolveMobySphereCollision);
 
+/* Constrain a moby's motion to a collision edge.
+ * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing, with fp/madd. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ResolveMobyEdgeConstraint);
 
+/* Update a moby's lean angle from its turn rate (locomotion banking).
+ * WALL: save-layout — 2 callee-saves + $ra at 8-byte spacing, with fp temps. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", UpdateMobyLeanFromTurn);
 
+/* Size-pinned 8-byte epilogue pad pseudo-function — see unit header. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B6FC8);
 
+/* Set a moby motion-controller's speed/accel parameters via its +0x18 block.
+ * WALL: float register save-layout — saves $f20..$f23 (swc1) plus the call to
+ * GetMobyMotionController forces the original's 0x30 fp-save frame, which the
+ * pinned cc1's fp-save packing does not reproduce. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", SetMobyMotionParams);
 
+/* Size-pinned 8-byte epilogue pad pseudo-function — see unit header. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B7038);
 
+/* Drive a moby along its waypoint path (follow + arrival logic).
+ * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing, with fp temps. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", DriveMobyAlongWaypoints);
 
+/* Size-pinned 8-byte epilogue pad pseudo-function — see unit header. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B7140);
 
+/* Set a moby's waypoint path (install the waypoint array into its controller).
+ * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", SetMobyWaypointPath);
 
 /* Profiling hook: add the current EE RCNT0 count (read as unsigned, hence the
@@ -381,12 +483,25 @@ void AccumMobyMotionProfile(void) {
     g_mobyMotionProfileTicks += (f32)(u32)(*(volatile s32 *)0x10000000);
 }
 
+/* Handwritten stub-table fragment (orphaned addiu $sp / nop run) — see unit
+ * header; kept INCLUDE_ASM permanently. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B7218);
 
+/* Test whether a moby's forward path is blocked by collision geometry.
+ * WALL: save-layout — 2 callee-saves + $ra at 8-byte spacing, with fp temps. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", CheckMobyPathBlocked);
 
+/* Test whether a moby is positioned over a water volume.
+ * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing, with fp temps. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", CheckMobyOverWater);
 
+/* Begin the per-frame GS draw-list: writes the frame DMA chain header (GIF/DMA
+ * tags) at g_frameDmaCursor, primes the screen context, and queues the frame.
+ * WALL: hardware DMA-packet builder. The original reloads g_frameDmaCursor from
+ * memory after every tag store and mixes %lo-absolute and %gp_rel access to the
+ * same cursor (a gp/absolute-mix the pinned cc1 won't reproduce); the literal
+ * 0x30000009/0x50000009/0x70000000 GIF tags also resist clean C expression.
+ * Tier-3 hardware — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", BeginFrameDrawList);
 
 /* The builtin classId->update-fn binding table (0xC-byte entries, -1-terminated;
@@ -439,11 +554,37 @@ void BindMobyClassUpdateFunc(s32 classId, s32 headerless) {
 }
 #endif
 
+/* Handwritten stub-table fragment (orphaned addiu $sp / nop run) — see unit
+ * header; kept INCLUDE_ASM permanently. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B7570);
 
+/* Per-frame driver: walk the active-moby list and run each moby's class update
+ * fn + draw-list binding.
+ * WALL: save-layout — 1 callee-save + $ra at 8-byte spacing, plus an indirect
+ * per-moby call loop. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", UpdateActiveMobys);
 
+extern void func_0011D620(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g, s32 h, s32 i);
+extern void func_00133250(s32 a, s32 b, s32 c, s32 d);
+extern u8 D_001A7210[];                     /* dialog sound-channel config block */
+
+/* Set up the dialog sound channel: configure mixer slot D_001A7210+0x38 (twice,
+ * around a mid-level snd setup call), establishing the dialog-voice routing.
+ * WALL: address-CSE (inverse). The original re-materialises the D_001A7210+0x38
+ * address (lui/%hi+addiu/%lo) for each of the two func_0011D620 calls with no
+ * callee-save (frame 0x20, single $31); this cc1 hoists the shared address into
+ * a preserved $16, forcing an extra save and a 0x30 frame (best 48%). Genuine
+ * rematerialise-vs-CSE wall — functional equivalent only. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", InitDialogSoundChannel);
+#else
+/* TODO(match): functional equivalent - not byte-exact; address-CSE wall. */
+void InitDialogSoundChannel(void) {
+    func_0011D620((s32)(D_001A7210 + 0x38), 3, 0, 0, 0, 0, 0, 0, 0);
+    func_00133250(7, 0xA000, 0, 1);
+    func_0011D620((s32)(D_001A7210 + 0x38), 3, 0, 0, 0, 0, 0, 0, 0);
+}
+#endif
 
 /* Sound-bank load callback: stores the loaded bank id through the (optional)
  * out-pointer. The out-pointer arrives as a 64-bit value whose low 32 bits hold
@@ -454,7 +595,24 @@ void OnSoundBankLoaded(s32 bankId, long pOut) {
     }
 }
 
+/* Kick the async load of the boot/global 989snd sample bank into status slot 0.
+ * Resets that slot to -1 (loading) and registers OnSoundBankLoaded as the
+ * completion callback (the status-slot pointer is zero-extended to 64 bits for
+ * the RPC). The bank's EE address is the global-WAD base plus its TOC offset.
+ * WALL: address-fold (same family as LoadLevelSoundBank / OnDialogVoiceStarted).
+ * The original keeps %lo(g_listenerPosHistory) in a base register and adds
+ * 0x17A0 with a separate `addiu` (two-step base); this cc1 folds 0x17A0 into the
+ * symbol's %lo reloc. Functional equivalent only. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", LoadGlobalSoundBank);
+#else
+/* TODO(match): functional equivalent - not byte-exact; address-fold wall. */
+void LoadGlobalSoundBank(void) {
+    g_soundBankLoadStatus[0] = -1;
+    snd_BankLoadAsync(*(s32 *)(g_discToc + 0x52B0) + *(s32 *)(g_discToc + 0x529C),
+                      0, OnSoundBankLoaded, (long)(u32)&g_soundBankLoadStatus[0]);
+}
+#endif
 
 /* Kick an async EE-side sound-bank load for `bankSlot`, resetting its
  * load-status slot to -1 and registering OnSoundBankLoaded as the completion
@@ -466,8 +624,32 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", LoadGlobalSound
  * Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", LoadLevelSoundBank);
 
+/* Kick the disc load of level sound-bank `bankSlot` if its TOC entry exists:
+ * resets the bank's load-status slot to -1 (loading) and registers
+ * OnSoundBankLoaded; when the TOC entry is empty, clears the status slot to 0
+ * (no bank). The bank's EE address is the global-WAD base plus its TOC offset.
+ * WALL: address-fold (same family as LoadLevelSoundBank / OnDialogVoiceStarted)
+ * — the original adds 0x17A4/0x17A0 to %lo(g_listenerPosHistory) with a separate
+ * addiu; this cc1 folds it into the %lo reloc. Functional equivalent only. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", KickLevelBankDiscLoad);
+#else
+/* TODO(match): functional equivalent - not byte-exact; address-fold wall. */
+void KickLevelBankDiscLoad(s32 bankSlot) {
+    s32 tocOffset = *(s32 *)(g_discToc + 0x52E0 + bankSlot * 8);
+    if (tocOffset != 0) {
+        g_soundBankLoadStatus[bankSlot + 1] = -1;
+        snd_BankLoadAsync(tocOffset + *(s32 *)(g_discToc + 0x529C),
+                          0, OnSoundBankLoaded,
+                          (long)(u32)&g_soundBankLoadStatus[bankSlot + 1]);
+    } else {
+        g_soundBankLoadStatus[bankSlot + 1] = 0;
+    }
+}
+#endif
 
+/* Handwritten stub-table fragment (orphaned addiu $sp / nop run) — see unit
+ * header; kept INCLUDE_ASM permanently. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B77E0);
 
 extern char D_1AA198[];                    /* file-load init debug string */
@@ -515,18 +697,138 @@ void InstallFileLoadPump(void) {
     __asm__ __volatile__("");
 }
 
+/* Primary dialog/voice playback entry: looks up `dialogId` across the
+ * language-keyed sample tables (banded by id range 1000..6000 = dialog
+ * categories), and on a hit arms the primary voice block, allocates a voice
+ * handle, and plays via snd_PlaySample. The subtitle SM syncs to this state.
+ * WALL: save-layout — 8 callee-saves + $ra at 8-byte spacing, plus the
+ * deeply-nested id-band tree, sq/lq 128-bit handle copies, and the
+ * snd_PlaySample 64-bit arg marshal. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StartDialogVoice);
 
+/* Fade/stop the primary dialog voice (advance to phase 3, then snd_StopVoice).
+ * WALL: save-layout — 1 callee-save + $ra at 8-byte spacing. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StopDialogVoice);
 
+/* Start an ambient/secondary-channel voice from sample-table entry `idx`.
+ * No-op if the ambient channel is already busy (ambientState != 0) or the entry
+ * is empty. Arms the ambient state machine (state -1, flag 1, volume 10, sample
+ * rate 48000) and plays the sample pair via snd_PlaySample with
+ * OnAmbientVoiceStarted as the start callback.
+ * WALL: snd_PlaySample 64-bit arg marshal. The two sample addresses are passed
+ * sign-extended (dsll32/dsra32) and the callback as a zero-extended 64-bit stack
+ * arg; cc1 won't reproduce the exact register/stack-slot marshaling of this 8+
+ * arg call from C. Functional equivalent only. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StartAmbientVoice);
+#else
+/* TODO(match): functional equivalent - not byte-exact; snd_PlaySample arg-marshal wall. */
+s32 StartAmbientVoice(s32 idx, s16 flags, s16 pan) {
+    if (g_fileLoadVoiceState.ambientState != 0) {
+        return 0;
+    }
+    if (g_dialogSampleTable[idx * 2] == 0) {
+        return 0;
+    }
+    g_fileLoadVoiceState.ambientVolume = 10;
+    g_fileLoadVoiceState.ambientSampleRate = 48000;
+    g_fileLoadVoiceState.ambientFlag = 1;
+    g_fileLoadVoiceState.ambientArg0 = idx;
+    g_fileLoadVoiceState.ambientArg2 = pan;
+    g_fileLoadVoiceState.ambientArg1 = flags;
+    g_fileLoadVoiceState.ambientState = -1;
+    g_fileLoadVoiceState.ambientCursor = 0;
+    snd_PlaySample(g_dialogSampleBase + g_dialogSampleTable[idx * 2],
+                   g_dialogSampleBase + g_dialogSampleTable[(idx + 1) * 2],
+                   0, 0, pan, 0, OnAmbientVoiceStarted,
+                   (long)(u32)&g_fileLoadVoiceState.ambientState);
+    return 0;
+}
+#endif
 
+/* Like StartAmbientVoice but gated on idx >= 0 and uses func_002B8ED0 as the
+ * voice-start callback (the secondary-channel variant). No-op if the ambient
+ * channel is busy or the sample-table entry is empty.
+ * WALL: snd_PlaySample 64-bit arg marshal (same as StartAmbientVoice). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StartSecondaryVoice);
+#else
+/* TODO(match): functional equivalent - not byte-exact; snd_PlaySample arg-marshal wall. */
+s32 StartSecondaryVoice(s32 idx, s16 flags, s16 pan) {
+    if (idx < 0) {
+        return 0;
+    }
+    if (g_fileLoadVoiceState.ambientState != 0) {
+        return 0;
+    }
+    if (g_dialogSampleTable[idx * 2] == 0) {
+        return 0;
+    }
+    g_fileLoadVoiceState.ambientFlag = 1;
+    g_fileLoadVoiceState.ambientVolume = 10;
+    g_fileLoadVoiceState.ambientSampleRate = 48000;
+    g_fileLoadVoiceState.ambientArg0 = idx;
+    g_fileLoadVoiceState.ambientState = -1;
+    g_fileLoadVoiceState.ambientArg2 = pan;
+    g_fileLoadVoiceState.ambientArg1 = flags;
+    g_fileLoadVoiceState.ambientCursor = 0;
+    snd_PlaySample(g_dialogSampleBase + g_dialogSampleTable[idx * 2],
+                   g_dialogSampleBase + g_dialogSampleTable[(idx + 1) * 2],
+                   0, 0, pan, 0, func_002B8ED0,
+                   (long)(u32)&g_fileLoadVoiceState.ambientState);
+    return 0;
+}
+#endif
 
+/* Chain a follow-on secondary-voice segment (the seamless continuation of an
+ * already-playing ambient/secondary voice). No-op unless the channel is in the
+ * chainable state (ambientFlag != 9, ambientState allocated and not -1) and the
+ * next sample-table entry exists. Arms ambientFlag 9 and plays the continuation
+ * sample pair via snd_PlaySample with func_002B8E78 as the start callback.
+ * WALL: snd_PlaySample 64-bit arg marshal (same as StartAmbientVoice). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ChainSecondaryVoice);
+#else
+/* TODO(match): functional equivalent - not byte-exact; snd_PlaySample arg-marshal wall. */
+s32 ChainSecondaryVoice(s32 idx, s16 flags, s16 pan) {
+    if (g_fileLoadVoiceState.ambientFlag == 9) {
+        return 0;
+    }
+    if (g_fileLoadVoiceState.ambientState == 0 ||
+        g_fileLoadVoiceState.ambientState == -1) {
+        return 0;
+    }
+    if (g_dialogSampleTable[(idx + 1) * 2] == 0) {
+        return 0;
+    }
+    g_fileLoadVoiceState.ambientSampleRate = 48000;
+    g_fileLoadVoiceState.ambientArg0 = idx;
+    g_fileLoadVoiceState.ambientFlag = 9;
+    g_fileLoadVoiceState.ambientVolume = 10;
+    g_fileLoadVoiceState.ambientArg2 = pan;
+    g_fileLoadVoiceState.ambientArg1 = flags;
+    g_fileLoadVoiceState.ambientCursor = 0;
+    /* start = entry[idx+3], end = entry[idx+2] (the original at 0x2B7E90 passes
+       them in this order - the continuation sample plays from +3 to +2). */
+    snd_PlaySample(g_dialogSampleBase + g_dialogSampleTable[(idx + 3) * 2],
+                   g_dialogSampleBase + g_dialogSampleTable[(idx + 2) * 2],
+                   0, 0, pan, 0, func_002B8E78,
+                   (long)(u32)&g_fileLoadVoiceState.ambientState);
+    return 0;
+}
+#endif
 
+/* Start the tertiary (third-priority) voice channel from sample-table entry
+ * `idx` if its TOC bank exists. Arms the tertiary state block (state 1, volume
+ * 10, sample rate 48000) and plays via snd_PlaySample with func_002B8E28 as the
+ * start callback; returns 1 on a started voice, 0 otherwise.
+ * WALL: snd_PlaySample 64-bit arg marshal (same as StartAmbientVoice) — the
+ * sample addresses are passed sign-extended and the callback as a zero-extended
+ * 64-bit stack arg. Functional equivalent only. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StartTertiaryVoice);
 
+/* Reset all three dialog-voice channels to their idle/cleared state.
+ * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ResetDialogVoiceChannels);
 
 /* Drive all dialog-voice channels to full volume (state -0x8000, fade target 0).
@@ -559,23 +861,152 @@ void SetDialogVoiceFadeTargets(s32 target) {
     }
 }
 
+/* Step one dialog-voice channel's per-frame volume-fade state machine.
+ * WALL: splat jtbl reloc-identity gap (the channel-state switch dispatch table)
+ * + save-layout — 3 callee-saves + $ra at 8-byte spacing; see unit header. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StepDialogVoiceChannel);
 
+/* Per-frame tick of the dialog/voice manager: drives the primary/secondary/
+ * tertiary voice state machines (volume ramps via snd_SetVoiceVolumeRamp, stop
+ * via snd_StopVoice), consumes queued dialog/ambient/tertiary voices, and pumps
+ * the file-load completion path.
+ * WALL: switch dispatch (the (state-2) jtbl) + save-layout (3 callee-saves +
+ * $ra at 8-byte spacing). Functional equivalent only. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", UpdateDialogVoiceManager);
 
+/* Abort the in-flight CD file read: if a read is active, emit the
+ * "music_StopLoad" debug string (retail no-op), send the stop command, and set
+ * the abort flag so the completion callback receives success=false.
+ * WALL: save-layout — saves $16 + $31 (two callee-saves at 8-byte spacing),
+ * which the pinned cc1 packs at 16-byte spacing. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StopFileLoad);
+#else
+/* TODO(match): functional equivalent - not byte-exact; save-layout wall. */
+extern char D_1AA1E8[];                    /* "music_StopLoad" debug string */
+void StopFileLoad(void) {
+    if (g_fileLoadVoiceState.fileLoadActive != 0) {
+        DebugPrintStub(D_1AA1E8);
+        CdStopRead();
+        g_fileLoadVoiceState.readStopped = 1;
+    }
+}
+#endif
 
+/* Kick an async CD file read of `sectorCount` sectors from `lbn` into `dest`.
+ * Refuses while a read is already active or when sectorCount is zero. Clears the
+ * completion callback, records the request, sets the active flag, and returns
+ * the byte size (sectorCount << 11); on CdStartRead failure emits the
+ * "load file failed to start" debug string (retail no-op) and spin-waits.
+ * WALL: save-layout — saves $16/$17/$18/$19/$31 (five callee-saves at 8-byte
+ * spacing), which the pinned cc1 packs at 16-byte spacing. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StartFileLoad);
+#else
+/* TODO(match): functional equivalent - not byte-exact; save-layout wall. */
+extern char D_1AA1F8[];                    /* "load file failed to start" debug string */
+extern s32 CdStartRead(s32 lbn, s32 sectors, s32 dest, void *rmode);  /* 0x133398 */
+extern void func_002833D8(void);           /* spin-wait on fatal load failure */
+s32 StartFileLoad(s32 dest, s32 lbn, s32 sectorCount) {
+    if (g_fileLoadVoiceState.fileLoadActive != 0 || sectorCount == 0) {
+        return 0;
+    }
+    g_fileLoadVoiceState.pLoadCallback = NULL;
+    g_fileLoadVoiceState.loadCallbackArg = 0;
+    if (CdStartRead(lbn, sectorCount, dest,
+                    (void *)((u8 *)&g_fileLoadVoiceState + 0x40)) == 0) {
+        DebugPrintStub(D_1AA1F8);
+        func_002833D8();
+        return 0;
+    }
+    g_fileLoadVoiceState.fileLoadDest = dest;
+    g_fileLoadVoiceState.fileLoadActive = 1;
+    g_fileLoadVoiceState.fileLoadLbn = lbn;
+    g_fileLoadVoiceState.fileLoadSectorCount = sectorCount;
+    return sectorCount << 11;
+}
+#endif
 
+/* Like StartFileLoad but also registers a completion callback fn(arg, success),
+ * fired by PumpFileLoadCompletion when the read finishes.
+ * WALL: save-layout — saves $16/$17/$31 (three callee-saves at 8-byte spacing). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StartFileLoadWithCallback);
+#else
+/* TODO(match): functional equivalent - not byte-exact; save-layout wall. */
+s32 StartFileLoadWithCallback(s32 dest, s32 lbn, s32 sectorCount,
+                              void *callback, s32 callbackArg) {
+    s32 size = StartFileLoad(dest, lbn, sectorCount);
+    if (size != 0) {
+        g_fileLoadVoiceState.pLoadCallback = callback;
+        g_fileLoadVoiceState.loadCallbackArg = callbackArg;
+    }
+    return size;
+}
+#endif
 
+/* Kick a raw CD read directly via CdStartRead, bypassing the g_fileLoadState
+ * request record: builds a local sceCdRMode from the global read mode with the
+ * spindle-speed byte overridden, clears the retry counters, then pumps snd. Used
+ * by the frontend/level-staging machine that polls completion itself.
+ * WALL: builds a stack-local sceCdRMode via packed byte/half stores
+ * (CONCAT11 idiom) that this cc1 lowers with a different store/merge sequence;
+ * also reads several un-named CD-mode globals. Tier-3 hardware glue — left as
+ * INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", KickRawFileRead);
 
+/* Start a file load while keeping the dialog-voice system pumping (the variant
+ * used during streamed-cinematic loads).
+ * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StartFileLoadPumpingVoice);
 
+/* Pump the dialog-voice system once per snd tick (the snd-pump entry that calls
+ * UpdateDialogVoiceManager under the right gating).
+ * WALL: save-layout — 2 callee-saves + $ra at 8-byte spacing. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", PumpDialogVoiceSystem);
 
+/* Per-snd-pump tick handler (installed by InstallFileLoadPump). Only acts when
+ * the pump phase arg is 1 (a load is outstanding): polls CdGetLoadStatus, holds
+ * g_fileLoadState at 2 while the read is still busy, and on completion flushes
+ * the cache, clears the manager's active/abort flags, and fires the registered
+ * completion callback fn(arg, success) where success is false iff StopFileLoad
+ * aborted the read (readStopped set).
+ * WALL: g_fileLoadState materialise. The whole FlushCache/callback tail is
+ * byte-exact (96%); the only delta is the `g_fileLoadState = 2` store. The
+ * original splits the address into an explicit GPR (lui $3,%hi hoisted into the
+ * CdGetLoadStatus beqz delay slot, sh $2,%lo($3) sunk into the b delay slot);
+ * this cc1 emits it either gp_rel (1-insn, size<=15) or via the $at assembler
+ * macro (size>=16) — never a hoisted cc1-allocated base reg. Genuine
+ * gp/absolute-mix + delay-slot-hoist wall — functional equivalent only. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", PumpFileLoadCompletion);
+#else
+/* TODO(match): functional equivalent - not byte-exact; g_fileLoadState materialise wall. */
+void PumpFileLoadCompletion(s32 phase) {
+    void *callback;
+    s32 arg;
+    s32 success;
+
+    if (phase != 1) {
+        return;
+    }
+    if (CdGetLoadStatus() != 0) {
+        g_fileLoadState = 2;
+        return;
+    }
+    FlushCache(0);
+    success = (g_fileLoadVoiceState.readStopped == 0);
+    callback = g_fileLoadVoiceState.pLoadCallback;
+    g_fileLoadVoiceState.fileLoadActive = 0;
+    g_fileLoadVoiceState.readStopped = 0;
+    if (callback != NULL) {
+        arg = g_fileLoadVoiceState.loadCallbackArg;
+        g_fileLoadVoiceState.loadCallbackArg = 0;
+        g_fileLoadVoiceState.pLoadCallback = NULL;
+        ((void (*)(s32, s32))callback)(arg, success);
+    }
+}
+#endif
 
 /* Voice-playback callback: on a non-null handle with a set flag, advance the
  * voice state 2 -> 3. */
@@ -707,4 +1138,6 @@ void func_002B8F68(s32 byteCursor, long handleAddr) {
 }
 #endif
 
+/* Handwritten stub-table fragment (orphaned addiu $sp / nop run) — see unit
+ * header; kept INCLUDE_ASM permanently. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B8FD8);
