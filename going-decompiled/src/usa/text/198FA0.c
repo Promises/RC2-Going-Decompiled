@@ -825,8 +825,9 @@ s32 func_0029D798(void) {
     }
 }
 
-/** Forward `arg` to the widget at g_guiInstance+0x3DA78 (method func_0033E070);
- *  0 when the GUI is down. */
+/** UpdateAudioOptionsMenuInGameDispatch: route from the in-game pause/options screen
+ *  into the audio-options tab - forward `arg` to the widget at g_guiInstance+0x3DA78
+ *  (method func_0033E070 = UpdateAudioOptionsMenuInGame); 0 when the GUI is down. */
 s32 func_0029D7C8(s32 arg) {
     if (g_guiInstance == 0) {
         return 0;

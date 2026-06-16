@@ -438,6 +438,32 @@ SetPopupTitleText = 0x003492B8; // CONFIRMED - assigns 5 title/border text widge
 UpdatePopupMenu = 0x00349728; // CONFIRMED - per-frame layout + D-pad nav (masks 0x1000/0x4000), skips disabled items, returns selIndex (popup+0x4ac)
 BuildPausePromptPopup = 0x002CBED0; // CONFIRMED - populates the pause/confirm popup (title textIds + items), disables the first 3 items when g_bPlayerMode==1, calls UpdatePopupMenu
 
+// === Track-B in-game PAUSE / MENU-OVERLAY core (g_nGameState==4). ===
+// The in-level main loop LoadLevelAndInitHealth runs, in case 4 each frame:
+//   FUN_002b9f20 (frozen world tick) -> UpdateMenuOverlayStateMachine -> RenderPauseMenuOverlay.
+// EnterMenuOverlayMode is the state-4 enter-action (from UpdateGameState, via
+// RequestGameStateChange(4, modeId, ...)). modeId selects the big switch in the state machine:
+//   1=save/system prompt, 6=camera pull-out, 7=inventory/weapon-wheel overlay,
+//   0xb=progressive-scan confirm, plus timed/wait-button confirm popups (2..5, 8..0xa).
+// All of these live in the unsplit region (0x286xxx-0x288xxx), safe as active symbols.
+UpdateMenuOverlayStateMachine = 0x00287140; // CONFIRMED - per-frame driver of the in-game pause/menu overlay; big switch on g_nMenuOverlayModeLive (save prompts, camera pull-out, inventory overlay, progressive-scan/confirm popups). Sole caller LoadLevelAndInitHealth case 4. EU anchor
+EnterMenuOverlayMode = 0x00286270; // CONFIRMED - enter the in-game pause/menu overlay (g_nGameState==4 enter-action): stores modeId into g_nMenuOverlayMode/Live, sets g_nMenuOverlayActive = (gameStateStackTop != 3), lowers dialog voice. Called by UpdateGameState. EU anchor
+TickPauseOverlayState = 0x00286210; // CONFIRMED - UpdateGameState case-3 per-frame hook while a pause overlay is pending: mutes voice, pumps sound, clears g_nMenuOverlayModeLive for the frame. NOT the menu logic (that is UpdateMenuOverlayStateMachine)
+IsMenuOverlayActive = 0x00286200; // CONFIRMED - returns g_nMenuOverlayActive; true when the pause/menu overlay is up over a non-gameplay state-stack top. Read by RenderPauseMenuOverlay to choose world-redraw vs widget-draw
+GetMenuOverlayMode = 0x00286160; // CONFIRMED - returns g_nMenuOverlayMode (stored mode id); DrawActiveGuiScreens early-outs when g_nGameState==4 && mode==8 (the in-game audio-options sub-screen)
+GetMenuOverlayModeLive = 0x002861F0; // CONFIRMED - returns g_nMenuOverlayModeLive (per-frame-live mode id), read by RenderSaveLoadStatusPopup and the inventory-overlay (mode==7) checks
+// NOTE - these 3 are MATCHED funcs in split c-units, so their identity is recorded in the
+// .c DOC COMMENT (not as an active symbol - an active rename would desync the by-name objdiff
+// match at the next re-split, per project_no_rename_matched_funcs):
+//   IsInventoryOverlayMode          @0x00288870 (188580.c func_00288870) - returns g_nMenuOverlayModeLive==7 (inventory/weapon-wheel overlay)
+//   AdvanceInventoryOverlayToActive @0x00288840 (188580.c func_00288840) - mode 7: advances g_nMenuOverlaySubState 1->2
+//   UpdateAudioOptionsMenuInGameDispatch @0x0029D7C8 (198FA0.c func_0029D7C8) - forwards to UpdateAudioOptionsMenuInGame on g_pGuiManager+0x3da78
+// --- pause/menu-overlay globals ---
+g_nMenuOverlayActive = 0x001BAC88; // CONFIRMED - int flag (0/1): in-game pause/menu overlay is up over a non-gameplay state-stack top. Written by EnterMenuOverlayMode, read by IsMenuOverlayActive/RenderPauseMenuOverlay
+g_nMenuOverlayMode = 0x001A8A5C; // CONFIRMED - stored in-game pause/menu overlay mode id (1=save prompt, 6=camera pull-out, 7=inventory, 8=audio-options-in-game, 0xb=progressive-scan, ...). Written by EnterMenuOverlayMode
+g_nMenuOverlayModeLive = 0x001BAC40; // CONFIRMED - per-frame-live copy of the overlay mode id; set by EnterMenuOverlayMode, cleared each frame by TickPauseOverlayState, drives the UpdateMenuOverlayStateMachine switch
+g_nMenuOverlaySubState = 0x001BAC58; // CONFIRMED - sub-state/phase counter within the current overlay mode (e.g. inventory open 0->1->2, fade-exit 0..3), advanced per-frame by UpdateMenuOverlayStateMachine
+
 // === Track-B front-end / pause-menu screen manager (g_pCurrentMenuScreen drives the per-frame widget tick; ~0x2CB000-0x2DE000). ===
 MenuScreenDoAction = 0x002D67C0; // CONFIRMED - front-end/pause action dispatcher(opcode,arg,outFlag), opcode 9 writes g_currentLanguage (single writer, confirmed 1 of 23 xrefs), 6/8/10/0xb push/pop/swap current vs previous screen, 4/5/0xc/0xd RequestGameStateChange. Command-record wrappers 0x2d6ad8/0x2d6b00 read opcode at +2 arg at +4
 MenuScreenLoad = 0x002CB038; // CONFIRMED - loads a screen by g_lastMenuScreenId (switch), maps id to screen-instance struct + sets text-table/VRAM/map banks

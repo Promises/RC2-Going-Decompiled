@@ -54,7 +54,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188580", func_00288748);
  * jal+epilogue. Same 16-byte save-slot wall as cod/0321A0. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188580", func_002887C0);
 
-/** If the 0x1BAC00 block is in state 7 with sub-step 1, advance it to 2. */
+/** AdvanceInventoryOverlayToActive: in the in-game inventory/weapon-wheel overlay
+ * (menu-overlay mode 7), advance the open sub-state 1->2 (shown/accept-input).
+ * D_001BAC00 is the menu-overlay state block: .unk40 = live mode (== g_nMenuOverlayModeLive,
+ * 7=inventory), .unk58 = sub-state (== g_nMenuOverlaySubState). */
 void func_00288840(void) {
     UnkCamAuxState *state = &D_001BAC00;
 
@@ -63,7 +66,8 @@ void func_00288840(void) {
     }
 }
 
-/** True while the 0x1BAC00 block is in state 7. */
+/** IsInventoryOverlayMode: true while the menu-overlay is in mode 7
+ * (the in-game inventory / weapon-wheel overlay). */
 s32 func_00288870(void) {
     return D_001BAC00.unk40 == 7;
 }
