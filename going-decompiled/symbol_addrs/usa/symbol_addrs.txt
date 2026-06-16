@@ -1385,6 +1385,26 @@ g_pendingBoltCredit = 0x001A7A1C; // CONFIRMED - PlayerStats +0x1C - deferred bo
 g_pendingNanotechXp = 0x001A7A18; // CONFIRMED - PlayerStats +0x18 - deferred nanotech XP, drained (x+49)/50 per kill
 g_pHeroGroundMoby = 0x001AD7CC; // PARTIAL - hero support/ground moby ptr - writer untraced
 
+// === Track-B combat/damage core (the shared damage pipeline every weapon funnels through; Track-B 2026-06-16). ===
+// The firing -> projectile -> damage path: a weapon updater builds a 0x28-byte DAMAGE PACKET, then
+// either posts it to one moby or broadcasts it over a sphere. Consumers are overlay per-class handlers
+// that read g_collHitEventRing and subtract from the target's combat HP (moby->pVars[0] -> +0x00 float).
+ApplyExplosionAreaDamage = 0x00328960; // CONFIRMED mechanism - per-frame AoE/explosion damage tick (item 0, PROBABLE Gravity Bomb): QueryMobysInSphere gather + BuildMobyDamagePacket(dmg g_weaponTable[slot].+0x70, flags 0x830000) + PostMobyDamagePacket + QueueWeaponStatusReaction type 0x20 for each damageable non-hero moby in radius. Damage source = g_weaponTable[g_itemEquippedSlot[0]]
+QueueWeaponStatusReaction = 0x0032E578; // PARTIAL - queues a per-moby weapon hit-reaction effect into the 30-slot table 0x2360D0 (stride 0x20); gated on g_itemStateFlags[weaponId] bit8, enemy +0x46==5, flagged-1000, GetMobyCombatState health>0. Twin of QueueWeaponHitFlashReaction. Exact status-effect (freeze/shock) inferred
+QueueWeaponHitFlashReaction = 0x00334F58; // PARTIAL - twin of QueueWeaponStatusReaction; 30-slot table 0x237780 (stride 0x30), g_itemStateFlags bit2 gate, RED 0xFF0000 flash color, applies a small recoil damage packet (flags 0x810000, reaction 5) on knockback threshold. Only caller UpdateTurretTracers
+g_itemStateFlags = 0x001A7A88; // PARTIAL - u8[0x38] per-item persistent state/capability flag byte (saved+restored by RestorePlayerProgressState alongside g_inventoryOwned). bit2 enables the QueueWeaponHitFlashReaction effect, bit8 enables QueueWeaponStatusReaction. Full bit map UNCONFIRMED
+
+// --- Damage-pipeline helpers in text/1A8180 (ALREADY SPLIT as INCLUDE_ASM func_002XXXXX glabels in
+//     src/usa/text/1A8180.c). Renamed + fully documented in Ghidra (plate comments) but DELIBERATELY
+//     NOT emitted as active "name = addr;" symbols: doing so would relabel the glabel splat generates
+//     and desync the committed .c (the matcher owns that file). When 1A8180 is matched, promote these
+//     to active symbols together with the glabel rename. Identities (CONFIRMED, Track-B 2026-06-16):
+//       0x002A9A68 BuildMobyDamagePacket  - fills 0x28B packet: +0x00 hitDir, +0x10 source, +0x14 flags, +0x1c damage(=g_weaponTable+0x70), +0x20 hasDir=1; caller stamps +0x18 reactionType / +0x1a classId
+//       0x002A9C88 PostMobyDamagePacket   - copies a built packet into g_collHitEventRing (single target, dedupe via moby+0xA8, keeps larger damage)
+//       0x002A9A90 ApplyRadialMobyDamage  - builds packet (dir from source facing/matrix) then QueryMobysInSphere broadcast (area damage)
+//       0x002AC058 GetMobyCombatState     - returns moby damageable-state block (moby->pVars[0]) when MOBY_MODE bit 0x20 set; +0x00 health float, +0x04 typeCategory s16 (1=crate, else enemy)
+//       0x002AFE68 SphericalAnglesToVec3  - (radius,azimuth,elevation)->vec3 cone-scatter helper, 19 FX/weapon callers
+
 // === Track-B GUI subsystem (element base + type ctors + dialog/popup/screen classes; audited - 1 bad vtable dropped). ===
 GuiElementBaseInit = 0x00336DD0; // CONFIRMED - base GuiElement ctor - allocs 5 pool vecs (pos/scale/aux/color/alpha) - stores pool +0x2c name +0x28 - sets visible
 GuiElementInstallBaseVtable = 0x00336DB8; // CONFIRMED - installs g_GuiElementVtable at elem +0x30
