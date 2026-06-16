@@ -381,12 +381,20 @@ PostGuiScreenEvent = 0x0029C510; // CONFIRMED - if g_guiInstance exists, forward
 GuiScreenSetEventAndReveal = 0x0034BD40; // CONFIRMED structurally - stores eventId at screen+0x3F4, if pending flag screen+0x400 set clears it, sets dirty screen+0xC=1, activates 4 child widgets at +0x1D4/+0x25C/+0x2E4/+0x36C (0x88 stride). Flash/reveal of a GUI screen page on an event
 
 // === Track-B localization / text-table + subtitle system (EU anchors - string content + table layout vary per language). ===
+// Text-table entry layout = TextTableEntry (going-decompiled/include/text_table.h):
+//   +0 char* str | +4 int textId | +8 int voiceClip (-1 none) | +0xC reserved (0x10 total).
+// CONFIRMED from 4 sites: GetLocalizedString returns entry+0; FindTextTableEntry matches entry+4;
+// UpdateSubtitleStateMachine reads entry+8 as voice index (into 0x14DF60, compared to g_dialogVoiceId-6000);
+// StreamTextTable relocates entry+0 with stride 0x10. Two producers: the level loader
+// (LoadLevelAndInitHealth 0x26EDE8, picks the g_currentLanguage slot from a 6-slot level-WAD text TOC)
+// and StreamTextTable (on-demand per-scene swap).
 GetLocalizedString = 0x002899F8; // CONFIRMED - textId to char* via the active text table, ~100 callers (menus/HUD/vendor/map), backed by FindTextTableEntry. broad EU anchor reach
 FindTextTableEntry = 0x00289988; // CONFIRMED - linear-search g_pActiveTextTable (count g_activeTextTableCount, entry stride 0x10, id at +4), returns index or -1
 StreamTextTable = 0x002D8F70; // CONFIRMED - streams the per-language text table into g_pTextTableLoadBuf, relocates entry str ptrs, installs as active (saves prev into cmd+0x54/+0x38)
 RestorePrevTextTable = 0x002D8F00; // CONFIRMED - pop side, restores the text table saved by StreamTextTable
-UpdateSubtitleStateMachine = 0x00289BB8; // CONFIRMED - per-frame subtitle/dialog driver (state 0..8), voice-syncs via entry+8 (voice-clip index hypothesis UNCONFIRMED)
+UpdateSubtitleStateMachine = 0x00289BB8; // CONFIRMED - per-frame subtitle/dialog driver (state 0..8), voice-syncs via TextTableEntry+8 voiceClip (CONFIRMED: indexes voice table 0x14DF60, compared to g_dialogVoiceId-6000)
 BeginSubtitleDisplay = 0x00289A60; // CONFIRMED - builds the text sprite/box for the current subtitle entry, positions by string width, resets state
+// DrawSubtitleBox @ 0x0028A4E8 (Ghidra-only, in INCLUDE_ASM unit text/188858 - no active entry) - CONFIRMED per-frame subtitle box render, called by RenderFrame, draws g_pActiveTextTable[g_subtitleEntryIndex] with state-driven border anim. Pairs with UpdateSubtitleStateMachine.
 g_pActiveTextTable = 0x001B17C0; // CONFIRMED - active localized text table base (0x10-byte entries +0 char* str +4 textId +8 voice param). EU anchor
 g_activeTextTableCount = 0x00254E24; // CONFIRMED - entry count of g_pActiveTextTable
 g_currentLanguage = 0x001A7BBC; // CONFIRMED - language index (u8), set by dialog/movie cmd opcode 9 (FUN_002d67c0), selects the per-language table slot. EU anchor
