@@ -1075,6 +1075,11 @@ GetWaterSurfaceHeight = 0x002A9F60; // CONFIRMED - water surface z at a point - 
 SampleWaterHeightfield = 0x002FE6B8; // CONFIRMED mechanism - bilinear sample of the dynamic wave lattice (double-buffered, stride 0x1190) + slope normal
 PlayLevelCinematic = 0x002F6220; // CONFIRMED - in-level cutscene player (game state 2) - unlock bit + scene arena carve + StreamSceneSegment/BindSceneChunk - both callers UpdateGameState. Ghidra alias PlayInLevelCutscene
 BeginRespawnScene = 0x002E8010; // CONFIRMED mechanism - death-respawn skit kickoff - exit mode 0 + PlayGlobalSceneBlocking(3) - sole caller UpdateGameState
+RunRespawnScenePlayerRestore = 0x002E80A0; // CONFIRMED mechanism - per-frame handler for the respawn/global-scene state (UpdateGameState case 6, called when pendingArgA!=4). After the death/respawn skit it mutes voice, clears g_bGlobalSceneActive, and restores the player to the saved respawn transform (g_respawnReturnTransform/g_respawnPlayerPos/g_respawnPlayerYaw) when DAT_152c2a==0 (else default restore), then re-inits camera/player. Ghidra alias FUN_002e80a0
+g_respawnReturnTransform = 0x00152C70; // CONFIRMED - death/respawn RETURN transform (4x4 matrix). Read only by RunRespawnScenePlayerRestore to re-place the player; written by level/checkpoint overlay code (not in static segment)
+g_respawnPlayerPos = 0x00152C80; // CONFIRMED - saved player position (vec3) for respawn restore - read by RunRespawnScenePlayerRestore
+g_respawnPlayerYaw = 0x00152C88; // CONFIRMED - saved player yaw (float) for respawn restore - read by RunRespawnScenePlayerRestore (WrapAnglePiSum-adjusted)
+g_bGlobalSceneActive = 0x0018C0D5; // CONFIRMED - byte set 1 while a global/respawn/vendor dialog scene is playing (PlayGlobalSceneBlocking, EnterVendorMenu, PlayInLevelCutscene), cleared 0 by RunRespawnScenePlayerRestore on return to gameplay. Distinct from g_bPlayerMode at 0x18C0D4
 CinematicsMenuTick = 0x002D18B8; // CONFIRMED - Goodies Cinematics screen input tick - 33-reel carousel over g_cinematicsMenuTable - X enqueues + starts the reel
 DrawCinematicsMenu = 0x002D1B20; // CONFIRMED - draw half of the Cinematics screen - locked placeholder string 0x2C56
 Vec3DotVu0 = 0x00283760; // CONFIRMED - 3-component dot product via VU0
