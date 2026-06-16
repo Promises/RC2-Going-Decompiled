@@ -26,6 +26,21 @@
  * a clean C accessor can't reproduce that leading padding and we don't re-split
  * here, so it stays INCLUDE_ASM. The remaining USA-only matches are themselves
  * INCLUDE_ASM in USA (toolchain walls), so they carry no body to port.
+ *
+ * REGION-DELTA HELD (func_0034B1E8): USA func_0034B1E8 (leaf `sw a1,0x0(a0)`)
+ * matches byte-exact in USA, but its EU twin store has NO standalone splat
+ * symbol — the EU split merged the preceding stub's epilogue (`addiu $sp,+0x20;
+ * nop`, USA twin of func_0034B1E0) AND the store body into a single symbol
+ * func_0034C668, with the store starting at the internal label func_0034C670
+ * (`jr ra; sw a1,0x0(a0)`). A clean C accessor can't reproduce a function whose
+ * first instruction is that orphaned stub epilogue. Splitting func_0034C670 off
+ * needs a symbol_addrs size pin + a configure.py re-split (out of this lane), so
+ * the func_0034B1E8 twin stays in func_0034C668's INCLUDE_ASM. Its successor
+ * func_0034C678 (= USA func_0034B1F0, the +0x4 transition with the +0x3FC/+0x3F8/
+ * +0x3F4 latch) is the gp-vs-absolute g_bPlayerMode WALL on the USA side — and
+ * EU emits the ABSOLUTE `lui %hi/lbu %lo` form here, so the EU twin would in fact
+ * match where USA does not (a region addressing-model divergence worth a future
+ * EU-only attempt, separate from this leaf-store batch).
  */
 
 /* GUI widget — flat field view (offsets are the byte displacements the
@@ -107,7 +122,12 @@ void SetPopupLayoutMode(GuiWidget *w, s32 mode) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", SetPopupTitleText);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", SetPopupItemEnabled);
+/* SetPopupItemEnabled: store the enabled flag for popup item idx at +0x488
+ * (s32-stride item table). Region-agnostic leaf store; byte-identical to USA
+ * (text/248B50). */
+void SetPopupItemEnabled(GuiWidget *w, s32 idx, s32 enabled) {
+    *(s32 *)((char *)w + (idx << 2) + 0x488) = enabled;
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", SetPopupItemText);
 

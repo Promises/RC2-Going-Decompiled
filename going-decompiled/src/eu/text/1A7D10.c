@@ -316,6 +316,16 @@ s32 func_002A9F80(void *a, void *b, void *c) {
     return func_002846E8(a, b, c);
 }
 
+/* func_002A9FA0 (positional twin of USA func_002AA3F0, the ping-pong colour-ramp
+ * triangle-wave blend): GENUINE PAL/NTSC SOURCE DIVERGENCE — do NOT port the USA
+ * body. USA computes the wave over [0, period*2) directly (`sll period,1` for the
+ * modulus base, compare `pos < period`), 0xB4 bytes. The EU twin instead rescales
+ * the period: half-period = (period*5 + 2)/6 and full-period = (period*10 + 2)/6
+ * (hardcoded mult-by-10 / div-by-6 with rounding, asm 0x108 bytes) — a deliberate
+ * frame-rate retime of the animation for 50Hz PAL. Same phase counters
+ * (D_1A9F14/D_1A9F18 = EU twins of USA D_1A9E94/D_1A9E98), same movz selector and
+ * same func_002845F8 lerp tail (= USA func_002846E8), but the period arithmetic is
+ * different source, not an address shift or schedule delta. Stays INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A9FA0);
 
 /**
