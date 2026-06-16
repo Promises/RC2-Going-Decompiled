@@ -46,15 +46,67 @@ typedef struct GuiWidget {
     /* 0x150 */ s32 unk150;
 } GuiWidget;
 
+/* player character/control mode (0x18C0D4): 0 Ratchet, 1 Clank-solo, 2 Giant Clank. */
+extern u8 g_bPlayerMode;
+
+/* func_00348BD0: run the type-C element init on the widget and return it.
+ * Best 99.6%: the original packs the two callee saves ($16,$31) into a 0x10
+ * frame (8-byte slots); the pinned cc1 reserves a 0x20 frame (16-byte slots).
+ * WALL: 0x20-vs-0x10 frame for 2 callee-saves. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348BD0);
 
+/* func_00348BF8: build/init a GUI text element — alloc its backing object via
+ * GuiPoolAlloc + GuiPlacementNew, run GuiTextElementInit, then seed the colour/
+ * style fields (+0xAC..+0xCC). WALL: 3 callee saves ($16,$17,$31) — the pinned
+ * cc1's 0x20 frame with 16-byte save slots diverges from the original's packed
+ * 0x10/8-byte layout. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348BF8);
 
+/* func_00348CB8: page/selection-advance logic gated on the input mask bits
+ * (0x1000/0x4000/0x40); plays a sound and walks the +0x6C entry table.
+ * WALL: 4 callee saves ($16,$17,$18,$31) — frame-layout divergence. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348CB8);
 
+/* func_00348D98: handwritten epilogue-only stump (`addiu $sp,$sp,0x10; nop`,
+ * no prologue, no `jr ra`) — the trailing half of a hand-split asm routine.
+ * No C body can reproduce a function with no return. WALL: split-artifact stub. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348D98);
 
+/* func_00348DA0: store the keyframe table pointer at +0x68, then scan it to
+ * count how many leading entries (stride 0x14, capped at 80) have a positive
+ * first float; the count lands in +0xC0. Finally, if the current cursor +0x60
+ * has run past the new count, reset it to 0.
+ * Best 47%: the original emits the two prologue stores (+0x68,+0xC0) first and
+ * computes the loop-end pointer in the bc1f delay slot, then keeps the float
+ * compare result live across the loop; the pinned cc1 hoists the float setup
+ * above the stores and re-shapes the loop entry with an extra branch. WALL:
+ * instruction scheduling + branch-likely loop layout. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348DA0);
+#else
+void func_00348DA0(GuiWidget *w, f32 *table) {
+    f32 *end;
+    s32 count;
+
+    *(f32 **)((char *)w + 0x68) = table;
+    *(s32 *)((char *)w + 0xC0) = 0;
+    end = table + 0x50;
+    if (0.0f < *table) {
+        count = *(s32 *)((char *)w + 0xC0);
+        while (1) {
+            table += 5;
+            *(s32 *)((char *)w + 0xC0) = count + 1;
+            if (*table <= 0.0f || (s32)end <= (s32)table) {
+                break;
+            }
+            count = *(s32 *)((char *)w + 0xC0);
+        }
+    }
+    if (*(s32 *)((char *)w + 0xC0) <= *(s32 *)((char *)w + 0x60)) {
+        *(s32 *)((char *)w + 0x60) = 0;
+    }
+}
+#endif
 
 /* func_00348E10: set the +0xB8 / +0xBC field pair. Best 96%: the original
  * stores +0xBC first then fills the jr delay slot with the +0xB8 store; the
@@ -112,7 +164,11 @@ void SetPopupLayoutMode(GuiWidget *w, s32 mode) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", SetPopupTitleText);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", SetPopupItemEnabled);
+/* SetPopupItemEnabled: store the enabled flag for popup item idx at +0x488
+ * (s32-stride item table). */
+void SetPopupItemEnabled(GuiWidget *w, s32 idx, s32 enabled) {
+    *(s32 *)((char *)w + (idx << 2) + 0x488) = enabled;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", SetPopupItemText);
 
@@ -129,7 +185,33 @@ GuiWidget *func_00349E88(GuiWidget *w) {
     return w;
 }
 
+/* func_00349E90: reset the widget's selection table — clear +0x0 and +0x148,
+ * fill the 64-entry s32 array at +0x44..+0x140 with -1, then clear +0x150/+0x154.
+ * Best 86.75%: the original drives the fill with a single induction pointer at
+ * w+0x50 using negative store offsets and fills the branch delay slot with the
+ * pointer increment; the pinned cc1 splits the base into two registers (one for
+ * the offset-0 store, one for the negative offsets). WALL: reloaded-ptr CSE /
+ * base-register split. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00349E90);
+#else
+void func_00349E90(GuiWidget *w) {
+    s32 *p;
+    s32 i;
+    *(s32 *)((char *)w + 0x0) = 0;
+    *(s32 *)((char *)w + 0x148) = 0;
+    p = (s32 *)((char *)w + 0x44);
+    for (i = 15; i >= 0; i--) {
+        p[0] = -1;
+        p[1] = -1;
+        p[2] = -1;
+        p[3] = -1;
+        p += 4;
+    }
+    *(s32 *)((char *)w + 0x154) = 0;
+    *(s32 *)((char *)w + 0x150) = 0;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00349ED0);
 
@@ -151,6 +233,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A1D8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A210);
 
+/* func_0034A2C8: handwritten epilogue-only stump (`addiu $sp,$sp,0x10; nop`,
+ * no prologue, no `jr ra`). WALL: split-artifact stub. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A2C8);
 
 /* func_0034A2D0: store a1 to the +0x2C field. */
@@ -185,7 +269,24 @@ s32 func_0034A308(GuiWidget *w, s32 v) {
     return old;
 }
 
+/* func_0034A318: write a 4-float record (f13,f14,f15,f16) into the 0x10-stride
+ * slot idx at +0x30, and store f12 into the parallel s32-stride slot at +0x70.
+ * Best 58%: the original copies the record base into a fresh register before
+ * every swc1 (4 daddu copies) and emits the stores in ascending order with the
+ * +0x70 store in the jr delay slot; the pinned cc1 folds to one base and stores
+ * +0x3C first. WALL: per-store base copy / dual-register slot fill. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A318);
+#else
+void func_0034A318(GuiWidget *w, s32 idx, f32 a, f32 b, f32 c, f32 d, f32 e) {
+    f32 *rec = (f32 *)((char *)w + idx * 0x10);
+    rec[0xC] = b;
+    rec[0xD] = c;
+    rec[0xE] = d;
+    rec[0xF] = e;
+    *(f32 *)((char *)w + idx * 4 + 0x70) = a;
+}
+#endif
 
 /* func_0034A350: store the float pair into +0/+0xC of the +0x4-stride index
  * entry idx. Instructions match, but the original copies the entry pointer to a
@@ -215,12 +316,51 @@ void func_0034A3B8(GuiWidget *w, f32 v) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A3C0);
 
+/* func_0034A658: zero a 2x12-word block at widget +0x2C (two outer passes, each
+ * three inner passes of four words).
+ * Best 72%: the original preserves the widget base in a fresh register and fills
+ * both bne delay slots with the pointer advances; the pinned cc1 folds the base
+ * into the cursor and emits the advances before the branches. WALL: base
+ * preservation + delay-slot fill. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A658);
+#else
+void func_0034A658(GuiWidget *w) {
+    u32 *p;
+    u32 *row;
+    s32 outer;
+    s32 inner;
 
+    outer = 1;
+    p = (u32 *)((char *)w + 0x2C);
+    do {
+        outer--;
+        row = p + 0xC;
+        inner = 2;
+        do {
+            p[0] = 0;
+            inner--;
+            p[1] = 0;
+            p[2] = 0;
+            p[3] = 0;
+            p += 4;
+        } while (inner != -1);
+        p = row;
+    } while (outer != -1);
+}
+#endif
+
+/* func_0034A6A8: handwritten epilogue-only stump (`addiu $sp,$sp,0x10; nop`,
+ * no prologue, no `jr ra`). WALL: split-artifact stub. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A6A8);
 
+/* func_0034A6B0: initialise a transform/animation record (+0x0..+0x28) and call
+ * func_0034A7B0 four times to seed its float sub-records. WALL: callee saves
+ * ($16,$31) plus a saved $f20 — frame-layout divergence (0x20 vs packed). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A6B0);
 
+/* func_0034A798: handwritten epilogue-only stump (`addiu $sp,$sp,0x10; nop`,
+ * no prologue, no `jr ra`). WALL: split-artifact stub. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A798);
 
 /* func_0034A7A0: store a2 at +0x20 of the +0x4-stride index entry idx. */
@@ -228,7 +368,22 @@ void func_0034A7A0(GuiWidget *w, s32 idx, s32 v) {
     *(s32 *)((char *)w + (idx << 2) + 0x20) = v;
 }
 
+/* func_0034A7B0: write a 4-float record (f12..f15) at +0x2C of the slot indexed
+ * by (idx1<<4) + idx2*0x30 in the widget. Same shape as func_0034A318 — the
+ * original copies the base before each swc1 and stores ascending with the last
+ * in the jr delay slot; the pinned cc1 folds the base. WALL: per-store base
+ * copy / dual-register slot fill. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A7B0);
+#else
+void func_0034A7B0(GuiWidget *w, s32 idx1, s32 idx2, f32 a, f32 b, f32 c, f32 d) {
+    f32 *rec = (f32 *)((char *)w + (idx1 << 4) + idx2 * 0x30 + 0x2C);
+    rec[0] = a;
+    rec[1] = b;
+    rec[2] = c;
+    rec[3] = d;
+}
+#endif
 
 /* func_0034A7E8: store a2 at +0x8C of the +0x4-stride index entry idx. */
 void func_0034A7E8(GuiWidget *w, s32 idx, s32 v) {
@@ -252,18 +407,53 @@ void func_0034A858(GuiWidget *w, f32 v) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A860);
 
+/* func_0034A9F8: build a list-row widget — init three type-B sub-elements
+ * (+0x10/+0x5C/+0xA8) and a list-row element (+0xF4). WALL: 2 callee saves
+ * ($16,$31) packed by the original into a 0x10 frame; the pinned cc1 reserves a
+ * 0x20 frame. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A9F8);
 
+/* func_0034AA90: handwritten epilogue-only stump (`addiu $sp,$sp,0x20; nop`,
+ * no prologue, no `jr ra`). WALL: split-artifact stub. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034AA90);
 
+/* func_0034AA98: large GUI screen/menu construction routine (0x70 frame, 8+
+ * callee saves). WALL: many callee saves — frame-layout divergence. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034AA98);
 
+/* func_0034B1E0: handwritten epilogue-only stump (`addiu $sp,$sp,0x20; nop`,
+ * no prologue, no `jr ra`). WALL: split-artifact stub. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034B1E0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034B1E8);
+/* func_0034B1E8: store a1 to the +0x0 field. */
+void func_0034B1E8(GuiWidget *w, s32 v) {
+    *(s32 *)((char *)w + 0x0) = v;
+}
 
+/* func_0034B1F0: set the +0x4 target value; when it actually changes and the
+ * player is in normal (Ratchet) mode, latch the previous value at +0x3FC and
+ * arm the transition timers (+0x3F8 = 180, +0x3F4 = 300).
+ * Best 90%: every instruction matches except the g_bPlayerMode load — the
+ * original uses absolute `lui %hi / lbu %lo`, but under this unit's -G8 build the
+ * pinned cc1 emits a gp-relative `lbu 0(gp)`. WALL: gp-relative vs absolute
+ * global addressing. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034B1F0);
+#else
+void func_0034B1F0(GuiWidget *w, s32 v) {
+    s32 old = *(s32 *)((char *)w + 0x4);
+    if (old != v && g_bPlayerMode == 0) {
+        *(s32 *)((char *)w + 0x3FC) = old;
+        *(s32 *)((char *)w + 0x3F8) = 0xB4;
+        *(s32 *)((char *)w + 0x3F4) = 0x12C;
+    }
+    *(s32 *)((char *)w + 0x4) = v;
+}
+#endif
 
+/* func_0034B220: GUI value/gauge update routine reading the D_1AE5E8/D_1AE5F8
+ * tables (0x80 frame, 5 GPR + 2 fp callee saves). WALL: many callee saves —
+ * frame-layout divergence. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034B220);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034B548);
@@ -282,6 +472,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034BD28);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", GuiScreenSetEventAndReveal);
 
+/* func_0034BDA8: handwritten store fragment (`sw $2,0x3F4($4); nop`, no
+ * prologue, no `jr ra`, source value in an undefined $2). WALL: split-artifact
+ * stub. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034BDA8);
 
+/* func_0034BDB0: large GUI screen construction routine — inits a run of type-B
+ * elements plus a type-C element and sub-screens (0x90 frame, 10+ callee saves).
+ * WALL: many callee saves — frame-layout divergence. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034BDB0);
