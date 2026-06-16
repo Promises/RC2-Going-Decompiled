@@ -249,7 +249,35 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E4280);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", UpdateSkyShellRotation);
 
+extern u8 g_skyShellMatrix[]; /* 0x1B2270 - shared sky-shell transform matrix */
+extern void MatrixIdentityVu0(void *m);
+extern void UpdateSkyShellRotation(s32 shellIdx);
+extern void DrawSkyShell(s32 shellIdx);
+
+/* Draw every sky shell with its fixed per-shell spin: shells 0..9 spin via
+ * UpdateSkyShellRotation, shells 10+ fall back to an identity matrix (no spin
+ * data), then each is drawn.  The shell count (g_pSkyData+0x6) is re-read every
+ * iteration.
+ * TODO(match): functional equivalent - not byte-exact; this cc1's loop-invariant
+ * code motion hoists the g_skyShellMatrix %hi address out of the loop into an
+ * extra callee save (s1), growing the frame 0x10 -> 0x30, where the original
+ * re-materializes the address inline in the (rarely taken) matrix block and
+ * needs no s1 (the LICM-hoist wall). Body control flow + branch order match. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", DrawSkyShellsFixedSpin);
+#else
+void DrawSkyShellsFixedSpin(void) {
+    s32 i;
+    for (i = 0; i < *(s16 *)(g_pSkyData + 0x6); i++) {
+        if (i >= 0xA) {
+            MatrixIdentityVu0(g_skyShellMatrix);
+        } else {
+            UpdateSkyShellRotation(i);
+        }
+        DrawSkyShell(i);
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E43E8);
 
@@ -330,13 +358,86 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E5074);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", CullSkyPieceVisibility);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", ComputeListenerOcclusionProbe);
+extern u8 g_cameraPos[];      /* 0x1B52C0 - listener / camera world position */
+extern u8 g_collHitPoint[];   /* 0x1C4F20 - last line-trace hit point */
+extern u8 g_sndChannelVolumes[]; /* 0x188F40 - sound-channel mix state block */
+extern void Vec4SubVu0(void *dst, void *a, void *b);
+extern void Vec4ScaleVu0(void *dst, void *src, float s);
+extern void Vec4AddVu0(void *dst, void *a, void *b);
+extern void func_00283968(void *dst, void *src, float s);
+extern s32 func_002A87F0(float a, float b);
+extern s32 CollLine(void *a, void *b, s32 mask, s32 owner, s32 flags);
 
+/* Build a listener occlusion probe in vec4 `out`: trace a collision line from the
+ * camera toward `out`'s world position; if it hits, pull `out` back to 0.75 of
+ * the camera->hit distance (camera + 0.75*(hit-camera)), nudging the listener
+ * probe to just in front of the occluder.
+ * TODO(match): functional equivalent - not byte-exact; body order is exact but
+ * two walls remain - this cc1 packs the three callee saves (s0,s1,ra) at a
+ * 16-byte stride (0x20 frame) where the original uses an 8-byte stride (0x10
+ * frame), and it lowers the trailing Vec4AddVu0 to a sibling/tail j that the
+ * original keeps as a jal + restore. */
+#ifndef TARGET_NATIVE
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", ComputeListenerOcclusionProbe);
+#else
+void ComputeListenerOcclusionProbe(void *out) {
+    func_002A87F0(0.5f, 6.0f);
+    Vec4AddVu0(out, out, g_cameraPos);
+    if (CollLine(g_cameraPos, out, 0x82,
+                 *(s32 *)(g_sndChannelVolumes + 0x24), 0) != 0) {
+        Vec4SubVu0(out, g_collHitPoint, g_cameraPos);
+        Vec4ScaleVu0(out, out, 0.75f);
+        Vec4AddVu0(out, out, g_cameraPos);
+    }
+}
+#endif
+
+/* Cast an occlusion ray from emitter `emitter` toward listener `outHit`: build a
+ * probe point a short distance (0.75 * +64) along the emitter->camera direction,
+ * offset from the camera, then collision-trace a line from there into the world
+ * (mask 0x82, owner *(emitter+0x18)).  Used to test whether a sound source is
+ * occluded from the listener.
+ * TODO(match): functional equivalent - not byte-exact; every body instruction
+ * matches; the only delta is frame layout - this cc1 packs the callee saves
+ * (s0,s1,s2,ra) at a 16-byte stride (0x50 frame) where the original uses an
+ * 8-byte stride (0x30 frame) (the 8-byte-packed save wall, same as
+ * func_002E6D98). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", CastEmitterOcclusionRay);
+#else
+void CastEmitterOcclusionRay(void *emitter, void *outHit) {
+    f32 probe[4];
+    Vec4SubVu0(probe, (u8 *)emitter + 0x20, g_cameraPos);
+    Vec4ScaleVu0(probe, probe, 0.75f);
+    func_00283968(probe, probe, 64.0f);
+    Vec4AddVu0(probe, probe, g_cameraPos);
+    CollLine(outHit, probe, 0x82, *(s32 *)((u8 *)emitter + 0x18), 0);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", ComputeVolumeFalloff);
 
+extern float func_002837F8(void *a, void *b);
+extern s32 ComputeVolumeFalloff(void *slot, float dist, float lo, float hi);
+extern u8 g_cameraPos[]; /* 0x1B52C0 - listener / camera world position */
+
+/* Compute the falloff volume for emitter slot `slot` relative to listener `pos`:
+ * measure the distance from `pos` to the camera, then evaluate the slot's
+ * distance-falloff curve (curve params live at *(slot+0x8): near at +0x0, far at
+ * +0x4). Returns the resulting volume level.
+ * TODO(match): functional equivalent - not byte-exact; structurally exact (only
+ * delta is the prologue frame size) - the original packs the two 8-byte saves
+ * (s0,ra) into a 0x10 frame with ra at +0x8, while this cc1 rounds to a 0x20
+ * frame with ra at +0x10 (the frame-rounding / outgoing-arg-reserve wall). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", ComputeEmitterVolume);
+#else
+s32 ComputeEmitterVolume(void *slot, void *pos) {
+    float dist = func_002837F8(pos, g_cameraPos);
+    float *curve = *(float **)((u8 *)slot + 0x8);
+    return ComputeVolumeFalloff(curve, dist, curve[0], curve[1]);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", ComputeEmitterPan);
 
