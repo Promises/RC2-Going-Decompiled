@@ -337,6 +337,19 @@ g_inventoryOwned = 0x001A7B00; // CONFIRMED - u8[0x38] per-item have-flag, cheat
 g_inventoryNewFlag = 0x001A7B38; // CONFIRMED - u8[0x38] newly-acquired flag per item, set with g_inventoryOwned by GiveInventoryItem (HUD NEW badge)
 g_inventoryOrder = 0x001A7B70; // CONFIRMED - byte inventory display order (low6=itemId, bit0x40=owned, 0xff terminator). Built by AddItemToInventoryOrder, walked by BuildVendorItemList
 
+// === Track-B gadget/equip system (gadgets are inventory items; "All gadgets" cheat writes g_inventoryOwned subset; class-streaming + quick-select equip). ===
+// NOTE: the gadget/equip FUNCTIONS are all INCLUDE_ASM in already-split units (191238.c, 188858.c, 1FFBA0.c, 1907F0.c, 1A8180.c),
+// so per the glabel-desync rule they are named in Ghidra + doc-comments ONLY (no active name=0xADDR entries). Data globals below are safe to make active.
+// Ghidra-only function names (addr in comment): EquipGadgetItem 0x2AE6C8, EnsureGadgetClassResident 0x294CD0, LoadGadgetClassIntoCacheSlot 0x294C48,
+// IsGadgetClassResident 0x294EE0, ActivateGadgetMobyClass 0x295238, SwapActiveGadgetMoby 0x3009F8,
+// UpdateQuickSelectWheelInput 0x28C840, PopulateQuickSelectWheel 0x28C728, SyncEquippedItemSlots 0x28C7A8, GrantDefaultGadgetLoadout 0x2911F0.
+g_equippedItemSlots = 0x001A73B8; // CONFIRMED - u32[8] currently-equipped item-IDs (quick-select wheel slots). RestorePlayerProgressState zeroes 0x1A73B8.. then seeds slot0=0x1E slot1=0x2A as default loadout; "Wildfire Boots" cheat writes slot0 (0x1A73B8=0x23), "Mine Launcher" writes slot1 (0x1A73BC=0x22). Read by PopulateQuickSelectWheel/DrawWeaponSelectWheel, synced by SyncEquippedItemSlots. EU anchor (cheat)
+g_activeGadgetItem = 0x0018C0E8; // CONFIRMED - item-ID of the currently-active gadget (the one whose moby class must stay resident). Set by EquipGadgetItem and the quick-select wheel selection (UpdateQuickSelectWheelInput); read by EnsureGadgetClassResident to avoid evicting its class
+g_gadgetClassToc = 0x00150080; // CONFIRMED - gadget moby-class table-of-contents, stride 5 ints (0x14), up to 0x30 entries; classId stored at +0x00 of each entry (the field walked at stride 5). Scanned by IsGadgetClassResident/LoadGadgetClassIntoCacheSlot/ActivateGadgetMobyClass
+g_residentGadgetClassCache = 0x00152D04; // CONFIRMED - 3-entry cache holding which TOC index is loaded in each of the 3 resident gadget SRAM slots. Managed by EnsureGadgetClassResident, consumed by LoadGadgetClassIntoCacheSlot
+g_gadgetClassSramBase = 0x00152D10; // CONFIRMED - base of the 3 per-gadget SRAM blocks (each 0xC800 bytes; slot k at base + k*0xC800). cf. debug str "*AFTER GADGET* - free sram" @0x1A9340
+g_swapGadgetItemIndex = 0x001B229A; // CONFIRMED role - item index selected for the in-world active-gadget moby swap, read by SwapActiveGadgetMoby to pick g_weaponTable[idx].classId. UNCONFIRMED per-value gadget identity
+
 // === Track-B HUD counters + ammo-drop (direct readers of cheat-pnach globals, strong EU anchors). ===
 UpdateBoltCounterHud = 0x0028AD38; // CONFIRMED - per-frame tick of the on-screen bolt counter, rolls g_nBoltCounterDisplayed toward live g_boltCount and spawns +/- delta popups, snaps via ResetBoltCounterHud on vendor enter. Reads g_boltCount 0x1A7A00. EU anchor
 ResetBoltCounterHud = 0x0028ACB8; // CONFIRMED - snaps the bolt counter display to live g_boltCount with no animation and clears the popup array. Reads g_boltCount 0x1A7A00. EU anchor
