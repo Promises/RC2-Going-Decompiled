@@ -356,6 +356,33 @@ ResetBoltCounterHud = 0x0028ACB8; // CONFIRMED - snaps the bolt counter display 
 TickBoltCounterHud = 0x0029D990; // CONFIRMED - guarded wrapper calling UpdateBoltCounterHud only when the HUD render context (g_guiInstance 0x1a8d04) is present
 FlushHudDisplayValue = 0x0029D9E0; // CONFIRMED - flushes a HUD display value into the render object at g_guiInstance+0x376c8, used to push g_nBoltCounterDisplayed to the renderer
 g_nBoltCounterDisplayed = 0x001B18C8; // CONFIRMED - displayed (animated) bolt count rolling toward g_boltCount, private to the bolt-counter HUD (target at +4, delta accumulator at +8)
+// --- Track-B HUD RENDER subsystem (per-frame on-screen draw of ammo/bolt/health elements). ---
+// Render path: RenderFrame HUD layer (g_dwRenderLayerMask bit 0x80) -> DrawActiveGuiScreens then DrawHudElements then DrawSubtitleBox.
+// Update path: TickAndDrawHud -> TickHudElements(+RefreshAmmoHudElement) + TickActiveGuiScreens.
+// NOTE: all of these except DrawHudIconQuadPixel below live INSIDE already-split units
+// (src/usa/text/188858.c func_0028B*-0290* and 198FA0.c func_0029C*-029D*) as INCLUDE_ASM with
+// func_<ADDR> glabels; per the glabel-desync rule they are Ghidra-renamed + documented ONLY (no
+// active name=addr; entry, which would rename the glabel and desync the objdiff match):
+//   0x0028ECC0 DrawHudElements       - per-frame on-screen HUD draw, RenderFrame HUD layer (mask 0x80); GS Z DAT_001b17fc=0xfffff0; iterates 13 element slots (0x2552B0 stride 0x90) calling each draw cb (+0x18); advances HUD fade DAT_001b1734 (0..0x80). cbs emit ammo/bolt digits + weapon icon + Giant Clank health bar
+//   0x0029CD18 DrawActiveGuiScreens  - draws active GuiManager screens in RenderFrame HUD layer just before DrawHudElements (callback tables +0x3f9d4/f9f4/f9fc/fa1c); bolt counter (via FlushHudDisplayValue) renders here
+//   0x0029CA98 TickActiveGuiScreens  - per-frame tick of active GuiManager screens (tables +0x3f9d8/f9f0/f9f8/fa18); update twin of DrawActiveGuiScreens
+//   0x0029DC70 TickAndDrawHud        - HUD update wrapper: g_pGuiManager set + DAT_001a8c64==0 -> TickHudElements(1) + TickActiveGuiScreens; called by TickActiveMenuScreen + pause/inventory transition (state 7)
+//   0x0028E9A0 TickHudElements       - per-frame UPDATE of the 13-slot element table; calls RefreshAmmoHudElement, runs reveal/expiry countdown, invokes each tick cb (+0x14)
+//   0x0028EB10 RefreshAmmoHudElement - re-registers the equipped-weapon AMMO element (icon + &g_weaponAmmo+slot) each frame, or the Giant Clank HEALTH bar (&g_giantClankHealth 0x18B694, 200) when g_bPlayerMode==2
+//   0x0028BE10 RegisterHudElement    - (slotAndFlags,iconId,initFn,tickFn,drawFn,valuePtr,value) registers/updates one element into 0x2552B0 (stride 0x90); pending cfg +0x20..+0x38; vendor state allows only slots 0/2
+//   0x0028BF18 ActivateHudElement    - copies pending cfg (+0x20..+0x38) into live fields (+0x00 flags,+0x04 icon,+0x08 value,+0x0c valuePtr,+0x10 initFn,+0x14 tickFn,+0x18 drawFn) + calls init cb; defines the element struct map
+//   0x0028BF80 ClearAllHudElements   - frees all 13 element slots
+//   0x0028C010 FreeHudElementByHandle- frees the slot whose handle id (+0x44) matches arg; returns 1 if found
+//   0x0028EC70 DisableHud            - HUD off: ClearAllHudElements + DAT_001a8fb0=1 (disabled gate read by RefreshAmmoHudElement)
+//   0x0028C390 LayoutHudCounterDigits- sizes a numeric element box: clamps smoothed display value, counts decimal digits, grows w/h (+0x5c/+0x58) per digit
+//   0x0028F0D0 DrawHudIconQuadTiled  - HUD icon GS sprite quad (PRIM 0x156) at tile coords (*0x10), icon-native UV, alpha tint; TEX0 via GetHudIconTex0
+//   0x0028F540 DrawHudIconQuadSized  - HUD icon sprite quad, explicit pixel w/h, tile coords, alpha tint
+//   0x0028F8E0 DrawHudIconQuadPixelRgb - HUD icon sprite quad at pixel coords, full RGB color
+//   0x0028FFF0 DrawHudIconQuadExplicitUv - HUD icon sprite quad with explicit UV + size, alpha tint
+//   0x0028F2C0 DrawHudIconQuadPerCornerUv - HUD icon textured quad, per-corner UVs from int[4], 4-vertex
+//   0x0028FAE0 DrawHudSpriteTex0     - generic 2D/HUD textured sprite quad taking GS TEX0 directly, explicit UV+size, alpha
+//   0x0028FC78 DrawHudSpriteRotated  - rotated HUD textured quad (PRIM 0x154 strip) via cos/sin(angle); for spinning/angled icons
+DrawHudIconQuadPixel = 0x0028F700; // CONFIRMED - HUD icon GS sprite quad (PRIM 0x156) at pixel coords (no *0x10), icon-native UV size, alpha tint; TEX0 via GetHudIconTex0, GS Z word DAT_001b17fc. NOT in any split unit (gap between split funcs), so safe as an active symbol
 DrawWeaponSelectWheel = 0x0028D110; // CONFIRMED - renders the weapon quick-select wheel + ammo counter for the highlighted slot, reads g_weaponAmmo[id] 0x139688 and g_weaponTable ammoCapacity(+0x8e), formats with g_szAmmoFraction, red tint when ammo 0. EU anchor
 g_szAmmoFraction = 0x001A8E28; // CONFIRMED - the "%d/%d" format string used by DrawWeaponSelectWheel to draw current/capacity ammo
 PickLowAmmoWeaponForDrop = 0x002A76F8; // CONFIRMED - picks a random owned weapon below ammo capacity so an ammo pickup can drop for it, needs g_inventoryOwned[i] 0x1a7b00 AND g_weaponTable ammoCapacity(+0x8e) nonzero AND g_weaponAmmo[i] 0x139688 below capacity. Reads g_weaponAmmo + g_inventoryOwned. EU anchor
