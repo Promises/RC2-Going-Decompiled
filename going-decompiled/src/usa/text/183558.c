@@ -38,7 +38,18 @@ f32 func_002835D8(s32 bits) {
     return *(f32 *)&bits;
 }
 #endif
+/*
+ * Absolute value of a signed integer. Hand-written: `bgez; neg; addi` with
+ * the result move in the jr delay slot - a schedule ee-gcc never emits.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002835E0);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+s32 func_002835E0(s32 x) {
+    return (x < 0) ? -x : x;
+}
+#endif
 /*
  * Absolute value of a float. Hand-written: the original is a single R5900
  * `abs.s` in the jr delay slot; ee-gcc 2.9 has no abssf2 pattern (it lowers to
@@ -65,7 +76,19 @@ f32 func_00283600(f32 a, f32 b) {
     return (a < b) ? a : b;
 }
 #endif
+/*
+ * Smaller of three signed integers: min(a, min(b, c)). Hand-written: two
+ * R5900 `pminw` (parallel min word) ops that ee-gcc 2.9 cannot emit.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283608);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+s32 func_00283608(s32 a, s32 b, s32 c) {
+    s32 m = (a < b) ? a : b;
+    return (m < c) ? m : c;
+}
+#endif
 /*
  * Clamp x into [lo, hi]. Hand-written: the original is `max.s; min.s` (R5900
  * native min/max), which ee-gcc 2.9 cannot emit (no sminsf3/smaxsf3 — it
@@ -249,8 +272,27 @@ f32 Vec3LengthVu0(const Vec4f v) {
     return __builtin_sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
 }
 #endif
+/** Return the 2D length sqrt(v.x*v.x + v.y*v.y) of the xy components (VU0 vmul/vaddy/vsqrt). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002837D0);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+f32 func_002837D0(const Vec4f v) {
+    return __builtin_sqrtf(v[0] * v[0] + v[1] * v[1]);
+}
+#endif
+/** Return the 3D distance sqrt(|a-b|^2) between points a and b (VU0 vsub/vmul/vmadd/vsqrt). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002837F8);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+f32 func_002837F8(const Vec4f a, const Vec4f b) {
+    f32 dx = a[0] - b[0];
+    f32 dy = a[1] - b[1];
+    f32 dz = a[2] - b[2];
+    return __builtin_sqrtf(dx * dx + dy * dy + dz * dz);
+}
+#endif
 /** Return the 2D distance in the x,y plane between a and b (VU0 vsub/vmul/vsqrt). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", DistXYVu0);
@@ -261,48 +303,743 @@ f32 DistXYVu0(const Vec4f a, const Vec4f b) {
     return __builtin_sqrtf(dx * dx + dy * dy);
 }
 #endif
+/** Return the squared 3D distance |a-b|^2 between points a and b (VU0 vsub/vmul/vmadd). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283860);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+f32 func_00283860(const Vec4f a, const Vec4f b) {
+    f32 dx = a[0] - b[0];
+    f32 dy = a[1] - b[1];
+    f32 dz = a[2] - b[2];
+    return dx * dx + dy * dy + dz * dz;
+}
+#endif
+
+/**
+ * Sphere overlap test: return 1 if the two spheres overlap, else 0. Sphere a
+ * is centred at a.xyz with radius a.w, sphere b at b.xyz with radius b.w. The
+ * VU0 code compares the squared centre distance against the squared radius sum
+ * (vsub/vadd.w/vmul/vmadd) and returns 1 when dist^2 < (a.w+b.w)^2.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283888);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+s32 func_00283888(const Vec4f a, const Vec4f b) {
+    f32 dx = a[0] - b[0];
+    f32 dy = a[1] - b[1];
+    f32 dz = a[2] - b[2];
+    f32 rsum = a[3] + b[3];
+    f32 d = (dx * dx + dy * dy + dz * dz) - rsum * rsum;
+    return (d < 0.0f) ? 1 : 0;
+}
+#endif
+
+/**
+ * Rescale the xyz of src to length 'len' and store into dst (VU0 vrsqrt). The
+ * VU seeds the reciprocal-sqrt numerator with 'len' so the result is
+ * src * (len / |src|). A zero-length src yields the zero vector.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", Vec3RescaleToLenVu0);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+void Vec3RescaleToLenVu0(Vec4f dst, f32 len, const Vec4f src) {
+    f32 len2 = src[0] * src[0] + src[1] * src[1] + src[2] * src[2];
+    if (len2 != 0.0f) {
+        f32 q = len / __builtin_sqrtf(len2);
+        dst[0] = src[0] * q;
+        dst[1] = src[1] * q;
+        dst[2] = src[2] * q;
+    } else {
+        dst[0] = 0.0f;
+        dst[1] = 0.0f;
+        dst[2] = 0.0f;
+    }
+}
+#endif
+
+/** Rescale the xy of src to length 'len' and store into dst (2D variant of Vec3RescaleToLenVu0). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283920);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+void func_00283920(Vec4f dst, f32 len, const Vec4f src) {
+    f32 len2 = src[0] * src[0] + src[1] * src[1];
+    if (len2 != 0.0f) {
+        f32 q = len / __builtin_sqrtf(len2);
+        dst[0] = src[0] * q;
+        dst[1] = src[1] * q;
+    } else {
+        dst[0] = 0.0f;
+        dst[1] = 0.0f;
+    }
+}
+#endif
+
+/**
+ * Normalize src.xyz to length 'minLen' into dst if |src| >= minLen; return 1 on
+ * success, 0 if the vector is too short (degenerate). The VU0 code computes the
+ * length, then divides only when the length is non-zero and >= the threshold.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283968);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+s32 func_00283968(Vec4f dst, f32 minLen, const Vec4f src) {
+    f32 len = __builtin_sqrtf(src[0] * src[0] + src[1] * src[1] + src[2] * src[2]);
+    if (len != 0.0f && (minLen - len) <= 0.0f) {
+        f32 q = minLen / len;
+        dst[0] = src[0] * q;
+        dst[1] = src[1] * q;
+        dst[2] = src[2] * q;
+        return 1;
+    }
+    return 0;
+}
+#endif
+
+/**
+ * Move point 'src' toward the surface of the unit sphere about it by reflecting
+ * across the normalized direction: builds a normalized direction from 'dir',
+ * projects (src) onto it, and reflects. If the projection is negative the point
+ * is left unchanged (copied verbatim). VU0 vrsqrt/vmul/vmadd/vsub.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002839D8);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+void func_002839D8(Vec4f dst, const Vec4f src, const Vec4f dir) {
+    f32 vx = -src[0], vy = -src[1], vz = -src[2];
+    f32 dlen2 = dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2];
+    f32 inv = 1.0f / __builtin_sqrtf(dlen2);
+    f32 nx = dir[0] * inv, ny = dir[1] * inv, nz = dir[2] * inv;
+    f32 proj = vx * nx + vy * ny + vz * nz;
+    if (proj >= 0.0f) {
+        f32 px = nx * proj, py = ny * proj, pz = nz * proj;
+        px = (px - vx) * 2.0f;
+        py = (py - vy) * 2.0f;
+        pz = (pz - vz) * 2.0f;
+        dst[0] = vx + px;
+        dst[1] = vy + py;
+        dst[2] = vz + pz;
+    } else {
+        dst[0] = src[0];
+        dst[1] = src[1];
+        dst[2] = src[2];
+        dst[3] = src[3];
+    }
+}
+#endif
+
+/**
+ * Transform vector v by the 3x3 rotation part of matrix m (rows m[0..2]); the
+ * w lane of the result comes from v.w (no translation). out = m * v.
+ * VU0 vmulax/vmadday/vmaddaz/vmaddw.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283A48);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+void func_00283A48(Vec4f out, const Vec4f v, const Vec4f m) {
+    const Vec4f *r = (const Vec4f *)m;
+    int i;
+    for (i = 0; i < 4; i++)
+        out[i] = r[0][i] * v[0] + r[1][i] * v[1] + r[2][i] * v[2];
+    out[3] += v[3];
+}
+#endif
+
+/**
+ * Transform point v by the full 4x4 matrix m (rows m[0..3]); the translation
+ * row m[3] is scaled by v.w. out = m * v. VU0 vmulax/vmadday/vmaddaz/vmaddw.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283A70);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+void func_00283A70(Vec4f out, const Vec4f v, const Vec4f m) {
+    const Vec4f *r = (const Vec4f *)m;
+    int i;
+    for (i = 0; i < 4; i++)
+        out[i] = r[0][i] * v[0] + r[1][i] * v[1] + r[2][i] * v[2] + r[3][i] * v[3];
+}
+#endif
+
+/** Unpack 4 unsigned bytes (packed in 's') to a float vector in dst (VU0 vitof0). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283AA0);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+void func_00283AA0(Vec4f dst, u32 packed) {
+    dst[0] = (f32)(packed & 0xFF);
+    dst[1] = (f32)((packed >> 8) & 0xFF);
+    dst[2] = (f32)((packed >> 16) & 0xFF);
+    dst[3] = (f32)((packed >> 24) & 0xFF);
+}
+#endif
+
+/** Convert the 4 floats at src to integers and pack them down to 4 bytes (VU0 vftoi0/ppach/ppacb). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283AB8);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+u32 func_00283AB8(const Vec4f src) {
+    u32 b0 = (u32)(s32)src[0] & 0xFF;
+    u32 b1 = (u32)(s32)src[1] & 0xFF;
+    u32 b2 = (u32)(s32)src[2] & 0xFF;
+    u32 b3 = (u32)(s32)src[3] & 0xFF;
+    return b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
+}
+#endif
+
+/** Unpack 4 signed shorts (packed in 's') to a float vector in dst (VU0 vitof0). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283AE0);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+void func_00283AE0(Vec4f dst, u32 packedLo, u32 packedHi) {
+    dst[0] = (f32)(s16)(packedLo & 0xFFFF);
+    dst[1] = (f32)(s16)((packedLo >> 16) & 0xFFFF);
+    dst[2] = (f32)(s16)(packedHi & 0xFFFF);
+    dst[3] = (f32)(s16)((packedHi >> 16) & 0xFFFF);
+}
+#endif
+
+/** Sum 'count' bytes starting at 'data' and return the total (R5900 2-at-a-time add loop). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283B00);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+s32 func_00283B00(const u8 *data, s32 count) {
+    s32 sum = 0;
+    s32 i;
+    for (i = 0; i < count; i++)
+        sum += data[i];
+    return sum;
+}
+#endif
+
+/*
+ * Sine via VU microprogram upload (vcallms 0xC80). Genuinely hardware: the value
+ * goes through a uploaded VU0 microcode routine, not portable VU macro-mode math.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283B30);
+#else
+/* TODO(hle): VU0 microprogram (vcallms 0xC80) - sine; needs VU backend. Scalar stand-in. */
+f32 func_00283B30(f32 x) {
+    return __builtin_sinf(x);
+}
+#endif
+
+/*
+ * Cosine via VU microprogram upload (vcallms 0xC90). Hardware VU0 microcode.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283B48);
+#else
+/* TODO(hle): VU0 microprogram (vcallms 0xC90) - cosine; needs VU backend. Scalar stand-in. */
+f32 func_00283B48(f32 x) {
+    return __builtin_cosf(x);
+}
+#endif
+
+/*
+ * Arc-sine-style approximation: returns the inverse-trig value of x using a
+ * polynomial in sqrt(1-|x|) (coefficient table D_1AC440) with sign handling.
+ * The VU0/FPU schedule (madda chains + vsqrt) is hand-written. The portable
+ * standard-library form is functionally equivalent.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283B60);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+f32 func_00283B60(f32 x) {
+    return __builtin_asinf(x);
+}
+#endif
+
+/*
+ * atan2(y, x): four-quadrant arc-tangent built from a rational/polynomial
+ * approximation selected by sign and magnitude (tables D_1AC460/480) with VU0
+ * Horner evaluation. Portable library form is functionally equivalent.
+ * Arguments: $f12 = y-like, $f13 = x-like.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283BF8);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+f32 func_00283BF8(f32 y, f32 x) {
+    return __builtin_atan2f(y, x);
+}
+#endif
+
+/** Build a 3x3 identity matrix (3 rows of 16 bytes) at dst (VU0 vmulx/vmr32/vaddw). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283D10);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+void func_00283D10(Vec4f dst) {
+    Vec4f *r = (Vec4f *)dst;
+    int i, j;
+    for (i = 0; i < 3; i++)
+        for (j = 0; j < 4; j++)
+            r[i][j] = (i == j) ? 1.0f : 0.0f;
+}
+#endif
+
+/** Build a 4x4 identity matrix at dst (VU0 vmulx/vmr32/vmove/vaddw). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", MatrixIdentityVu0);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+void MatrixIdentityVu0(Vec4f dst) {
+    Vec4f *r = (Vec4f *)dst;
+    int i, j;
+    for (i = 0; i < 4; i++)
+        for (j = 0; j < 4; j++)
+            r[i][j] = (i == j) ? 1.0f : 0.0f;
+}
+#endif
+
+/**
+ * Build a 4x4 uniform-scale matrix with scale 's' on the diagonal (x,y,z) and
+ * 1 in [3][3]; translation row is identity. VU0 vmulx/vmove/vaddx.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283D68);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+void func_00283D68(Vec4f dst, f32 s) {
+    Vec4f *r = (Vec4f *)dst;
+    int i, j;
+    for (i = 0; i < 4; i++)
+        for (j = 0; j < 4; j++)
+            r[i][j] = 0.0f;
+    r[0][0] = s;
+    r[1][1] = s;
+    r[2][2] = s;
+    r[3][3] = 1.0f;
+}
+#endif
+
+/*
+ * Build a rotation matrix via VU microprogram (vcallms 0xD18) producing the
+ * first 3 rows from a vector in src. Hardware VU0 microcode upload.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283DA0);
+#else
+/* TODO(hle): VU0 microprogram (vcallms 0xD18) builds rotation matrix; needs VU backend. */
+void func_00283DA0(Vec4f dst, const Vec4f src);
+#endif
+
+/*
+ * Build a rotation matrix via VU microprogram (vcallms 0xD18) producing all 4
+ * rows from a vector in src. Hardware VU0 microcode upload.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283DC0);
+#else
+/* TODO(hle): VU0 microprogram (vcallms 0xD18) builds rotation matrix; needs VU backend. */
+void func_00283DC0(Vec4f dst, const Vec4f src);
+#endif
+
+/*
+ * Build a 4x4 rotation matrix from Euler angles (radians) stored in angles[0..2]
+ * (z at +0, y at +4, x at +8): R = Rz * Ry * Rx applied incrementally. Each
+ * non-zero angle's sine/cosine come from an inline range-reduced polynomial
+ * (coefficients 0xBE2AAAA4 etc. = the -1/6, 1/120,... Taylor terms); the matrix
+ * starts as identity and is composed by the per-axis rotations. The handwritten
+ * VU0/FPU schedule has no compiler equivalent.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283DE0);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+void func_00283DE0(Vec4f dst, const f32 *angles) {
+    Vec4f *r = (Vec4f *)dst;
+    f32 az = angles[2], ay = angles[1], ax = angles[0];
+    int i, j, k;
+    f32 m[4][4];
+    /* start from identity */
+    for (i = 0; i < 4; i++)
+        for (j = 0; j < 4; j++)
+            m[i][j] = (i == j) ? 1.0f : 0.0f;
+    /* compose Rx, Ry, Rz only for the non-zero angles, in the asm's order */
+    if (ax != 0.0f) {
+        f32 c = __builtin_cosf(ax), s = __builtin_sinf(ax);
+        f32 rot[4][4] = {{1,0,0,0},{0,c,s,0},{0,-s,c,0},{0,0,0,1}};
+        f32 tmp[4][4];
+        for (i = 0; i < 4; i++)
+            for (j = 0; j < 4; j++) {
+                tmp[i][j] = 0.0f;
+                for (k = 0; k < 4; k++) tmp[i][j] += rot[i][k] * m[k][j];
+            }
+        for (i = 0; i < 4; i++) for (j = 0; j < 4; j++) m[i][j] = tmp[i][j];
+    }
+    if (ay != 0.0f) {
+        f32 c = __builtin_cosf(ay), s = __builtin_sinf(ay);
+        f32 rot[4][4] = {{c,0,-s,0},{0,1,0,0},{s,0,c,0},{0,0,0,1}};
+        f32 tmp[4][4];
+        for (i = 0; i < 4; i++)
+            for (j = 0; j < 4; j++) {
+                tmp[i][j] = 0.0f;
+                for (k = 0; k < 4; k++) tmp[i][j] += rot[i][k] * m[k][j];
+            }
+        for (i = 0; i < 4; i++) for (j = 0; j < 4; j++) m[i][j] = tmp[i][j];
+    }
+    if (az != 0.0f) {
+        f32 c = __builtin_cosf(az), s = __builtin_sinf(az);
+        f32 rot[4][4] = {{c,s,0,0},{-s,c,0,0},{0,0,1,0},{0,0,0,1}};
+        f32 tmp[4][4];
+        for (i = 0; i < 4; i++)
+            for (j = 0; j < 4; j++) {
+                tmp[i][j] = 0.0f;
+                for (k = 0; k < 4; k++) tmp[i][j] += rot[i][k] * m[k][j];
+            }
+        for (i = 0; i < 4; i++) for (j = 0; j < 4; j++) m[i][j] = tmp[i][j];
+    }
+    for (i = 0; i < 4; i++)
+        for (j = 0; j < 4; j++)
+            r[i][j] = m[i][j];
+}
+#endif
+/** Copy the 3x3 (3 rows) of matrix src into dst and set dst row 3 to (0,0,0,1). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284008);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+void func_00284008(Vec4f dst, const Vec4f src) {
+    int i, j;
+    for (i = 0; i < 3; i++)
+        for (j = 0; j < 4; j++)
+            dst[i * 4 + j] = src[i * 4 + j];
+    dst[12] = 0.0f; dst[13] = 0.0f; dst[14] = 0.0f; dst[15] = 1.0f;
+}
+#endif
+
+/** Copy the 3x3 (3 rows) of matrix src into dst, leaving row 3 untouched. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284028);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+void func_00284028(Vec4f dst, const Vec4f src) {
+    int i, j;
+    for (i = 0; i < 3; i++)
+        for (j = 0; j < 4; j++)
+            dst[i * 4 + j] = src[i * 4 + j];
+}
+#endif
+
+/** Transpose the 3x3 rotation part of src into dst, clearing each row's w; sets dst row 3 = (0,0,0,1). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284048);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+void func_00284048(Vec4f dst, const Vec4f src) {
+    int i, j;
+    for (i = 0; i < 3; i++)
+        for (j = 0; j < 3; j++)
+            dst[i * 4 + j] = src[j * 4 + i];
+    dst[3] = 0.0f; dst[7] = 0.0f; dst[11] = 0.0f;
+    dst[12] = 0.0f; dst[13] = 0.0f; dst[14] = 0.0f; dst[15] = 1.0f;
+}
+#endif
+
+/** Transpose the 3x3 rotation part of src into dst, clearing each row's w; row 3 untouched. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284098);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+void func_00284098(Vec4f dst, const Vec4f src) {
+    int i, j;
+    for (i = 0; i < 3; i++)
+        for (j = 0; j < 3; j++)
+            dst[i * 4 + j] = src[j * 4 + i];
+    dst[3] = 0.0f; dst[7] = 0.0f; dst[11] = 0.0f;
+}
+#endif
+
+/** Multiply two 3x3 matrices (3 rows each): dst = a * b. VU0 vmulax/vmadday/vmaddz. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002840E8);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+void func_002840E8(Vec4f dst, const Vec4f a, const Vec4f b) {
+    const Vec4f *ar = (const Vec4f *)a;
+    const Vec4f *br = (const Vec4f *)b;
+    Vec4f *dr = (Vec4f *)dst;
+    int i, j;
+    for (i = 0; i < 3; i++)
+        for (j = 0; j < 4; j++)
+            dr[i][j] = ar[0][j] * br[i][0] + ar[1][j] * br[i][1] + ar[2][j] * br[i][2];
+}
+#endif
+
+/** Multiply two 4x4 matrices: dst = a * b (loops over b's 4 rows). VU0 vmulax/vmadda chain. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", MatrixMultiplyVu0);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+void MatrixMultiplyVu0(Vec4f dst, const Vec4f a, const Vec4f b) {
+    const Vec4f *ar = (const Vec4f *)a;
+    const Vec4f *br = (const Vec4f *)b;
+    Vec4f *dr = (Vec4f *)dst;
+    int i, j;
+    for (i = 0; i < 4; i++)
+        for (j = 0; j < 4; j++)
+            dr[i][j] = ar[0][j] * br[i][0] + ar[1][j] * br[i][1]
+                     + ar[2][j] * br[i][2] + ar[3][j] * br[i][3];
+}
+#endif
+
+/**
+ * Hamilton quaternion product: dst = a * b (xyz = vector part, w = scalar).
+ * dst = (a.w*b.xyz + b.w*a.xyz + a.xyz x b.xyz, a.w*b.w - dot(a.xyz, b.xyz)).
+ * VU0 vopmula/vopmsub (cross) + vmulw + vmaddz (dot). Args: $5=a, $6=b.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284180);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+void func_00284180(Vec4f dst, const Vec4f a, const Vec4f b) {
+    f32 ax = a[0], ay = a[1], az = a[2], aw = a[3];
+    f32 bx = b[0], by = b[1], bz = b[2], bw = b[3];
+    dst[0] = aw * bx + bw * ax + (ay * bz - az * by);
+    dst[1] = aw * by + bw * ay + (az * bx - ax * bz);
+    dst[2] = aw * bz + bw * az + (ax * by - ay * bx);
+    dst[3] = aw * bw - (ax * bx + ay * by + az * bz);
+}
+#endif
+
+/**
+ * Normalized linear interpolation of two quaternions: blends a and b by factor
+ * t (q = a*(1-t) + b*t), takes the short arc by negating the b contribution when
+ * the dot is negative, then normalizes. VU0 vmulw/vmulx/vadd/vrsqrt/vmulq.
+ * Args: $f12=t, $5=a, $6=b.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002841C0);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+void func_002841C0(Vec4f dst, f32 t, const Vec4f a, const Vec4f b) {
+    f32 wa = 1.0f - t;
+    f32 q[4];
+    f32 sum2 = 0.0f, dot = 0.0f;
+    int i;
+    for (i = 0; i < 4; i++) {
+        f32 s = a[i] * wa + b[i] * t;
+        q[i] = s;
+        sum2 += s * s;
+        dot += (a[i] * wa) * (b[i] * t);
+    }
+    if (dot < 0.0f) {
+        sum2 = 0.0f;
+        for (i = 0; i < 4; i++) {
+            f32 s = a[i] * wa - b[i] * t;
+            q[i] = s;
+            sum2 += s * s;
+        }
+    }
+    {
+        f32 inv = 1.0f / __builtin_sqrtf(sum2);
+        for (i = 0; i < 4; i++)
+            dst[i] = q[i] * inv;
+    }
+}
+#endif
+
+/*
+ * Rotate stored data by angle $f12 about an axis selected by 'mode' ($5),
+ * computing sin/cos through the VU sin/cos microprograms (func_00283B30/B48,
+ * vcallms). The vcallms-based trig makes this hardware-tied.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284248);
+#else
+/* TODO(hle): uses VU0 sin/cos microprograms (vcallms via func_00283B30/B48); needs VU backend. */
+void func_00284248(Vec4f dst, f32 angle, s32 mode);
+#endif
+
+/** Build the 3x3 rotation matrix (rows 0..2) for the quaternion at src; store at dst. VU0 quat->matrix. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284308);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+void func_00284308(const Vec4f src, Vec4f dst) {
+    f32 x = src[0], y = src[1], z = src[2], w = src[3];
+    f32 xx = 2*x*x, yy = 2*y*y, zz = 2*z*z;
+    f32 xy = 2*x*y, xz = 2*x*z, yz = 2*y*z;
+    f32 wx = 2*w*x, wy = 2*w*y, wz = 2*w*z;
+    Vec4f *r = (Vec4f *)dst;
+    r[0][0] = 1.0f - (yy + zz); r[0][1] = xy + wz;          r[0][2] = xz - wy;          r[0][3] = 0.0f;
+    r[1][0] = xy - wz;          r[1][1] = 1.0f - (xx + zz); r[1][2] = yz + wx;          r[1][3] = 0.0f;
+    r[2][0] = xz + wy;          r[2][1] = yz - wx;          r[2][2] = 1.0f - (xx + yy); r[2][3] = 0.0f;
+}
+#endif
+
+/** Build the 4x4 rotation matrix for the quaternion at src; store at dst (row 3 = identity). VU0 quat->matrix. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284380);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+void func_00284380(const Vec4f src, Vec4f dst) {
+    f32 x = src[0], y = src[1], z = src[2], w = src[3];
+    f32 xx = 2*x*x, yy = 2*y*y, zz = 2*z*z;
+    f32 xy = 2*x*y, xz = 2*x*z, yz = 2*y*z;
+    f32 wx = 2*w*x, wy = 2*w*y, wz = 2*w*z;
+    Vec4f *r = (Vec4f *)dst;
+    r[0][0] = 1.0f - (yy + zz); r[0][1] = xy + wz;          r[0][2] = xz - wy;          r[0][3] = 0.0f;
+    r[1][0] = xy - wz;          r[1][1] = 1.0f - (xx + zz); r[1][2] = yz + wx;          r[1][3] = 0.0f;
+    r[2][0] = xz + wy;          r[2][1] = yz - wx;          r[2][2] = 1.0f - (xx + yy); r[2][3] = 0.0f;
+    r[3][0] = 0.0f;             r[3][1] = 0.0f;             r[3][2] = 0.0f;             r[3][3] = 1.0f;
+}
+#endif
+
+/**
+ * Build a 4x4 transform from quaternion (src=$4) and per-axis scale (scale=$5),
+ * writing to out=$7. The rotation matrix is formed from the quaternion, each row
+ * scaled by the corresponding scale component, and the translation row set to
+ * (0,0,0,1). VU0 quat->matrix + vmulx/vmuly/vmulz per row.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284408);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+void func_00284408(const Vec4f src, const Vec4f scale, const Vec4f unused, Vec4f out) {
+    f32 x = src[0], y = src[1], z = src[2], w = src[3];
+    f32 xx = 2*x*x, yy = 2*y*y, zz = 2*z*z;
+    f32 xy = 2*x*y, xz = 2*x*z, yz = 2*y*z;
+    f32 wx = 2*w*x, wy = 2*w*y, wz = 2*w*z;
+    Vec4f *r = (Vec4f *)out;
+    (void)unused;
+    r[0][0] = 1.0f - (yy + zz); r[0][1] = xy + wz;          r[0][2] = xz - wy;
+    r[1][0] = xy - wz;          r[1][1] = 1.0f - (xx + zz); r[1][2] = yz + wx;
+    r[2][0] = xz + wy;          r[2][1] = yz - wx;          r[2][2] = 1.0f - (xx + yy);
+    r[0][0] *= scale[0]; r[0][1] *= scale[0]; r[0][2] *= scale[0]; r[0][3] = 0.0f;
+    r[1][0] *= scale[1]; r[1][1] *= scale[1]; r[1][2] *= scale[1]; r[1][3] = 0.0f;
+    r[2][0] *= scale[2]; r[2][1] *= scale[2]; r[2][2] *= scale[2]; r[2][3] = 0.0f;
+    r[3][0] = 0.0f; r[3][1] = 0.0f; r[3][2] = 0.0f; r[3][3] = 1.0f;
+}
+#endif
+
+/**
+ * Unpack a compact pose record at src ($4) into three float vectors at dst ($5):
+ * a row of signed shorts converted with a 1/2^15 scale (vitof15), a second
+ * 1/2^15 row, and a row of signed shorts at integer scale (vitof0). VU0 vitof.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002844A0);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+void func_002844A0(const s16 *src, Vec4f dst) {
+    int i;
+    const f32 inv15 = 1.0f / 32768.0f;
+    for (i = 0; i < 4; i++) dst[i] = (f32)src[i] * inv15;
+    for (i = 0; i < 3; i++) dst[4 + i] = (f32)src[4 + i] * inv15;
+    for (i = 0; i < 3; i++) dst[8 + i] = (f32)src[8 + i];
+}
+#endif
+
+/**
+ * Linearly interpolate two 3x3 matrices a ($5) and b ($6) by factor t ($f12)
+ * into dst ($4): each row = a_row*(1-t) + b_row*t. VU0 vmulaw/vmaddx.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002844F8);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+void func_002844F8(Vec4f dst, f32 t, const Vec4f a, const Vec4f b) {
+    f32 wa = 1.0f - t;
+    int i;
+    for (i = 0; i < 12; i++)
+        dst[i] = a[i] * wa + b[i] * t;
+}
+#endif
+
+/** Sum two angles (radians) and wrap the result into [-pi, pi]. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284548);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+f32 func_00284548(f32 a, f32 b) {
+    f32 r = a + b;
+    if (r >= PR_PI) r -= 2.0f * PR_PI;
+    if (r < -PR_PI) r += 2.0f * PR_PI;
+    return r;
+}
+#endif
+
+/** Subtract two angles (radians) and wrap the difference into [-pi, pi]. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284590);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+f32 func_00284590(f32 a, f32 b) {
+    f32 r = a - b;
+    if (r >= PR_PI) r -= 2.0f * PR_PI;
+    if (r < -PR_PI) r += 2.0f * PR_PI;
+    return r;
+}
+#endif
+
+/**
+ * Range-reduce an angle to the symmetric fundamental period: returns
+ * (frac(x/(2pi) + 0.5) - 0.5) * 2pi, i.e. x wrapped into [-pi, pi]. Uses an
+ * inline truncate-toward-floor (cvt.w.s + sign correction).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002845D8);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+f32 func_002845D8(f32 x) {
+    f32 two_pi = 6.28318548202514648f;       /* 0x40C90FDB */
+    f32 inv_two_pi = 0.159154936671257019f;  /* 0x3E22F983 */
+    f32 t = x * inv_two_pi + 0.5f;
+    s32 trunc = (s32)t;
+    s32 fl = ((*(s32 *)&x) >> 31) + trunc;   /* floor via sign-bit correction */
+    f32 frac = t - (f32)fl;
+    return (frac - 0.5f) * two_pi;
+}
+#endif
+
+/** Shortest absolute angular distance between angles a and b (radians): result in [0, pi]. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284630);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+f32 func_00284630(f32 a, f32 b) {
+    f32 d = a - b;
+    d = (d < 0.0f) ? -d : d;
+    if (d >= PR_PI) d = 2.0f * PR_PI - d;
+    return d;
+}
+#endif
+
+/** Fractional part of x: x - trunc(x) (VU0 cvt.w.s/cvt.s.w; truncates toward zero). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284668);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+f32 func_00284668(f32 x) {
+    return x - (f32)(s32)x;
+}
+#endif
+
+/** Split x into integer part (stored at *intPart) and return the fractional part. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284678);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+f32 func_00284678(f32 *intPart, f32 x) {
+    f32 ip = (f32)(s32)x;
+    *intPart = ip;
+    return x - ip;
+}
+#endif
 /*
  * Convert a signed integer to a float. Hand-written: the original packs
  * `mtc1; cvt.s.w` with no mtc1->cvt hazard nop and a bare `nop` delay slot;
@@ -330,11 +1067,85 @@ s32 FloatToInt(f32 x) {
     return (s32)x;
 }
 #endif
+/** Floating-point remainder a mod b: a - trunc(a/b)*b (VU0 vdiv/vftoi0/vitof0/vsub/vmul). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002846B0);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+f32 func_002846B0(f32 a, f32 b) {
+    f32 q = a / b;
+    return (q - (f32)(s32)q) * b;
+}
+#endif
+
+/**
+ * Blend two packed colours c0 ($4) and c1 ($5) by factor t ($f12) and pack the
+ * result back to a 4-byte colour: out = trunc(c0*(1-t) + c1*t) per channel.
+ * VU0 unpack (vitof0) + vmulaw/vmaddx + vftoi0 + ppach/ppacb.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002846E8);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+u32 func_002846E8(u32 c0, u32 c1, f32 t) {
+    f32 w0 = 1.0f - t;
+    u32 out = 0;
+    int i;
+    for (i = 0; i < 4; i++) {
+        f32 a = (f32)((c0 >> (i * 8)) & 0xFF);
+        f32 b = (f32)((c1 >> (i * 8)) & 0xFF);
+        u32 v = (u32)(s32)(a * w0 + b * t) & 0xFF;
+        out |= v << (i * 8);
+    }
+    return out;
+}
+#endif
+
+/**
+ * Signed-side test of point p ($4) against the plane through point q ($5) with
+ * normal n ($6): returns 1 if dot(p - q, n) >= 0 else 0 (the asm computes
+ * 1 - signbit(dot)). VU0 vsub/vmul/vmadd.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284730);
+#else
+/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+s32 func_00284730(const Vec4f p, const Vec4f q, const Vec4f n) {
+    f32 d = (p[0] - q[0]) * n[0] + (p[1] - q[1]) * n[1] + (p[2] - q[2]) * n[2];
+    return (d < 0.0f) ? 0 : 1;
+}
+#endif
+
+/*
+ * Classify a point against a precomputed VU0 frustum/clip volume (constants
+ * resident from g_fogColorRed+0x50). Returns -1/0/1 for which side / clip region
+ * the transformed point lands in. Runs entirely in VU0 macro-mode against
+ * resident VU constants - hardware-coupled, not a portable pure-math helper.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284768);
+#else
+/* TODO(hle): VU0 clip/frustum classifier using resident VU constants; needs VU backend. */
+s32 func_00284768(const Vec4f p, f32 param);
+#endif
+
+/*
+ * Screen-clip / RLE bit-stream codec helper that wraps the VU0 clip classifier
+ * func_00284768 (it jal's into it at the head). Pure byte/bit manipulation but
+ * tied to that VU0 classifier; left as asm until the VU backend exists.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284860);
+#else
+/* TODO(hle): wraps the VU0 clip classifier func_00284768; needs VU backend. */
+s32 func_00284860(u8 *dst, u8 *dstEnd, const u8 *src, const u8 *table);
+#endif
+
+/*
+ * Stack-frame epilogue fragment surfaced by the disassembler as a standalone
+ * label (only `addiu $sp` ops, no real body). Not a callable function; kept as
+ * asm so the bytes stay in place.
+ */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284998);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", SetVideoMode);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284A20);
