@@ -1566,7 +1566,7 @@ ApplyMobyLocalTransformDelta = 0x002B4FA8; // PROBABLE - applies a local-space o
 InitMobySpringFollowState = 0x002B50C0; // CONFIRMED mechanism - init a moby spring-follow physics packet (defaults from a table)
 StepMobySpringFollow = 0x002B53D8; // CONFIRMED mechanism - spring-damper follow integrator (stiffness +0x48, damping +0x54)
 StepMobyMotion = 0x002B6000; // CONFIRMED - core per-frame moby locomotion step (steer+collide+ground+lean)
-GetMobyMotionController = 0x002B6C48; // CONFIRMED - returns the moby motion-controller block (*(moby+0x68)+0x18)
+GetMobyMotionController = 0x002B6C48; // CONFIRMED - returns the moby MotionController block (*(moby+0x68 pVars)+0x18); 0 if none. Field map: include/moby_motion.h MobyMotionController
 DriveMobyTowardPoint = 0x002B5F10; // CONFIRMED - derive heading to a point then StepMobyMotion
 DriveMobyAlongFacing = 0x002B6178; // CONFIRMED - StepMobyMotion using the moby own facing (+0xf8)
 DriveMobyInPlace = 0x002B6198; // CONFIRMED - degenerate StepMobyMotion (no translation target)
@@ -1580,7 +1580,7 @@ ApplyMobyGroundAndEvents = 0x002B6748; // CONFIRMED - ground snap, grounded/airb
 ProbeMobyGroundLine = 0x002B6AE0; // CONFIRMED - vertical CollLine ground probe, fills controller ground height/normal/material
 CheckMobyGroundMover = 0x002B6BF8; // CONFIRMED - flag controller bit when standing on a moving platform moby
 UpdateMobyLeanFromTurn = 0x002B6E18; // CONFIRMED - bank attached sub-mobys from turn rate, clamp to +/-pi/2
-SetMobyMotionParams = 0x002B6FD0; // CONFIRMED - set controller accel/maxStep/decel fields
+SetMobyMotionParams = 0x002B6FD0; // CONFIRMED - configure MotionController speed profile(accel,maxSpeed,speed,velZ): ctrl+0x20=+0x24=accel, +0x28=maxSpeed, +0x14=+0x18=speed, +0x1C=velZ. See include/moby_motion.h
 CheckMobyPathBlocked = 0x002B7238; // CONFIRMED - test the edge constraint ahead, set stuck bit
 CheckMobyOverWater = 0x002B72E0; // PROBABLE - true if moby is above a water surface
 AccumMobyMotionProfile = 0x002B71C0; // CONFIRMED - add RCNT0 ticks + count to the motion profiling counters
