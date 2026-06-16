@@ -23,9 +23,13 @@ extern void func_0029D4B8(void); /* USA func_0029D958 */
 extern void func_0029D448(void); /* USA func_0029D8E8 */
 extern void func_0029CD08(void); /* USA func_0029D1A8 */
 extern void func_0029CD78(void); /* USA func_0029D218 */
+extern void func_0029CD38(s32 buttons); /* USA func_0029D1D8 */
 
 /* Forwarding-wrapper target (EU name; USA func_002DF1B8). */
 extern void func_002DF178(s32 mode);
+
+/* 2D-batch sub-rect submit helper (EU func_002896A0; USA func_002897B0). */
+extern void func_002896A0(s32 x0, s32 x1, s32 y0, s32 y1);
 
 /* Front-end / pause screen-action dispatcher (op, arg, out-flag ptr). */
 extern s32 MenuScreenDoAction(s32 op, s32 arg, void *outFlag);
@@ -126,7 +130,12 @@ s32 func_002D6448(void) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D6478);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D64D0);
+/* Forward this frame's newly-pressed buttons to a per-screen draw helper.
+ * (USA func_002D6560.) */
+s32 func_002D64D0(void) {
+    func_0029CD38(g_padButtonsPressed[0]);
+    return 0;
+}
 
 /* Draw-batch wrapper. */
 s32 func_002D64F8(void) {
@@ -293,7 +302,15 @@ s32 func_002DC7A0(void) {
     return 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002DC7C8);
+/* Submit the menu object's sub-rect (origin +0x18/+0x1C, size +0x20/+0x24) to
+ * the 2D batch helper; always returns 2. (USA func_002DC800.) */
+s32 func_002DC7C8(void *obj) {
+    s32 x = *(s32 *)((u8 *)obj + 0x18);
+    s32 y = *(s32 *)((u8 *)obj + 0x1C);
+    func_002896A0(x, x + *(s32 *)((u8 *)obj + 0x20),
+                  y, y + *(s32 *)((u8 *)obj + 0x24));
+    return 2;
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002DC800);
 
