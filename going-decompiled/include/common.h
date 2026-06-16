@@ -13,6 +13,8 @@
  *     not yet ported - that needs the platform backend (deferred). */
 #ifdef TARGET_NATIVE
 #include <stdint.h>
+#define _USE_MATH_DEFINES   /* M_PI on MSVC; harmless elsewhere */
+#include <math.h>           /* PR_PI below uses M_PI */
 typedef int8_t   s8;
 typedef int16_t  s16;
 typedef int32_t  s32;
@@ -85,7 +87,8 @@ typedef float f32;
 
 #define PR_BREAK() asm("break")
 
-/* 3.14159265358979323846f */
-#define PR_PI (float)M_PI
+/* literal so PR_PI is valid in BOTH builds (the matching build pulls in no
+ * <math.h>); same float bits as (float)M_PI. */
+#define PR_PI 3.14159265358979323846f
 
 #endif /* COMMON_H */
