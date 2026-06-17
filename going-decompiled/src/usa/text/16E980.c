@@ -44,6 +44,7 @@ extern s32 g_nGameState[];       /* incomplete-array decl: keeps the 4-byte int
                                   * out of cc1 small data (two-insn absolute
                                   * access like the original) */
 extern f32 g_screenFadeBlack;    /* black screen fade level 0..1 */
+extern f32 g_screenFadeWhite;    /* white screen flash level 0..1 */
 
 /* One 0xA0-byte camera slot (fields per the Track-B pass; only the ones this
  * unit touches are declared). */
@@ -127,14 +128,151 @@ typedef struct ScreenSpriteFxQueue {
 } ScreenSpriteFxQueue;
 extern ScreenSpriteFxQueue g_screenSpriteFxQueue;
 
+extern void DecompressWad(s32 wadId, void *header);
+extern void func_0011AEA0(s32 a);
+extern void ResetFrameArenas(void);
+extern void InstallVif1DmacHandlers(void);
+extern void RemoveVif1DmacHandlers(void);
+extern void func_002857C8(s32 a, s32 b, s32 c);
+extern void AppendDrawEnvContext1(void);
+extern void AppendDrawEnvContext2(void);
+extern void AppendScreenClearPacket(s32 a);
+extern u64 AppendTextureUploadBuildTex0(void *src, s32 vramDst, s32 w, s32 h);
+extern void AppendFrameInitGsState(void);
+extern void func_00285CE8(void);
+extern void KickFrameDmaChain(void);
+extern void WaitFrameDmaFence(s32 a);
+extern void WaitGsPathsIdle(s32 a, s32 b);
+extern void WaitVblankGetField(s32 a);
+extern void DrawFullScreenTint(s32 a, s32 b, s32 c, s32 d);
+extern s32 g_vramFrameBufB;
+
+/* g_memoryArenaTable[0x14] points at the decompressed image chunk header used by
+ * the splash/loading frame paths: header[0] = width, header[1] = height, the
+ * pixel data starts at header + 0x10. */
+typedef struct ImageChunkHeader {
+    /* 0x00 */ s32 width;
+    /* 0x04 */ s32 height;
+    /* 0x08 */ u8 pad8[8];
+    /* 0x10 */ u8 pixels[0];
+} ImageChunkHeader;
+extern void *g_memoryArenaTable[];   /* +0x14 (index 5) = image chunk header */
+
+/* ShowSplashImage: decompress a still-image chunk and fade it in over 65 frames.
+ * Uploads the image texture each frame, draws a full-screen tint quad whose
+ * brightness ramps from 0x80 down past 0 (stepping by 2), and pumps the frame
+ * DMA / vblank pipeline. Used for boot/menu stills. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", ShowSplashImage);
+#else
+/* TODO(match): functional equivalent - not byte-exact; three callee-saves at
+   8-byte slot spacing (the 0x20-vs-0x10 packed-save wall). */
+void ShowSplashImage(s32 wadId) {
+    ImageChunkHeader *img = (ImageChunkHeader *)g_memoryArenaTable[5];
+    s32 brightness = 0x80;
 
+    DecompressWad(wadId, img);
+    func_0011AEA0(0);
+
+    do {
+        ResetFrameArenas();
+        img = (ImageChunkHeader *)g_memoryArenaTable[5];
+        AppendTextureUploadBuildTex0((char *)img + 0x10, g_vramFrameBufB,
+                                     img->width, img->height);
+        AppendFrameInitGsState();
+        DrawFullScreenTint(0, 0, 0, brightness);
+        AppendDrawEnvContext2();
+        brightness -= 2;
+        func_00285CE8();
+        func_0011AEA0(0);
+        KickFrameDmaChain();
+        WaitFrameDmaFence(1);
+        WaitGsPathsIdle(0, 0);
+        WaitVblankGetField(0);
+    } while (brightness >= 0);
+}
+#endif
+
+/* func_0026EAC8: render one fully pipelined frame of the current loading image.
+ * Decompresses the image chunk, resets the frame arenas, installs the VIF1 DMA
+ * handlers, builds and kicks a frame that uploads the image texture and clears
+ * the screen, then waits for the frame to retire before tearing the handlers
+ * back down. The single-frame sibling of ShowSplashImage's fade loop. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026EAC8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; two callee-saves at
+   8-byte slot spacing (the 0x20-vs-0x10 packed-save wall). */
+void func_0026EAC8(s32 wadId) {
+    ImageChunkHeader *img = (ImageChunkHeader *)g_memoryArenaTable[5];
 
+    DecompressWad(wadId, img);
+    func_0011AEA0(0);
+    ResetFrameArenas();
+    InstallVif1DmacHandlers();
+    func_002857C8(0, 0, 0);
+    AppendDrawEnvContext1();
+    AppendScreenClearPacket(0);
+
+    img = (ImageChunkHeader *)g_memoryArenaTable[5];
+    AppendTextureUploadBuildTex0((char *)img + 0x10, g_vramFrameBufB,
+                                 img->width, img->height);
+    AppendFrameInitGsState();
+    AppendDrawEnvContext2();
+    func_00285CE8();
+    func_0011AEA0(0);
+    KickFrameDmaChain();
+    WaitFrameDmaFence(1);
+    WaitGsPathsIdle(0, 0);
+    WaitVblankGetField(0);
+    RemoveVif1DmacHandlers();
+}
+#endif
+
+/* func_0026EB98: pick a randomized ordering of the three attract-reel slots.
+ * A 3-way random roll seeds (a, b, c) with a base permutation of {0,1,2}, then a
+ * second coin-flip optionally swaps b and c. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026EB98);
+#else
+extern s32 GetRandomInt(s32 range);
+/* TODO(match): functional equivalent - not byte-exact; four callee-saves at
+   8-byte slot spacing (the 0x20-vs-0x10 packed-save wall). */
+void func_0026EB98(s32 *a, s32 *b, s32 *c) {
+    s32 roll = GetRandomInt(3);
 
+    if (roll == 1) {
+        *a = 1;
+        *b = 0;
+        *c = 2;
+    } else if (roll == 0) {
+        *a = 0;
+        *b = 1;
+        *c = 2;
+    } else if (roll == 2) {
+        *a = 2;
+        *b = 1;
+        *c = 0;
+    }
+
+    if (GetRandomInt(2) != 0) {
+        s32 t = *c;
+        *c = *b;
+        *b = t;
+    }
+}
+#endif
+
+/* BuildAttractReelPlaylist: seed the RNG from the RTC (sceCdReadClock) and build
+ * a randomized attract-reel playlist. WALL: six callee-saves at 8-byte slot
+ * spacing (the 0x20-vs-0x10 packed-save frame) plus the multi-field RNG-seed
+ * mult chain; left INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", BuildAttractReelPlaylist);
 
+/* LoadLevelAndInitHealth: large level-load + health/stat init driver. WALL:
+ * jump-table switch + many callee-saves at 8-byte slot spacing (packed-save
+ * wall); the body spans 660+ instructions with opaque sub-systems. Left
+ * INCLUDE_ASM (not honestly decompilable without extensive cross-tracing). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", LoadLevelAndInitHealth);
 
 /* func_0026F718: stub-table entry — compiled-out hook, always returns 0. */
@@ -284,13 +422,47 @@ void func_0026F818(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026F820);
 
+/* func_0026F850: large boot/menu still-image build helper. WALL: jump-table
+ * switch + eight callee-saves at 8-byte slot spacing (packed-save wall). Left
+ * INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026F850);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026FC80);
 
+/* func_0026FC88: assemble a texture-upload descriptor for a 32-bit image
+ * (FillMemory32 the 0x54-byte descriptor, then fill GS register words from the
+ * image dims via Log2Floor). WALL: five callee-saves at 8-byte slot spacing
+ * (packed-save wall) + the descriptor-building register packing. Left
+ * INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026FC88);
 
+/* func_0026FE58: kick the boot dialog-voice file load then build the splash
+ * image's texture-upload descriptor. Streams the voice chunk described by the
+ * disc TOC WAD fields (+0x32C/+0x330/+0x334) into g_proceduralAnimFrames, then
+ * calls func_0026FC88 to assemble a texture descriptor (VRAM base
+ * g_vramTextureBase[+0x28], 0x3FFC00 bytes) and latches its handle word into the
+ * raw-read state block (+0x34). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026FE58);
+#else
+extern void StartFileLoadPumpingVoice(void *dst, s32 lbn, s32 size);
+extern void func_0026FC88(void *src, void *descOut, s32 vramBase, s32 size);
+extern u8 *g_proceduralAnimFrames;
+extern s32 g_discToc[];                 /* +0x32C/+0x330/+0x334 WAD fields */
+extern s32 g_vramTextureBase_28;        /* g_vramTextureBase + 0x28 */
+extern u64 g_bRawReadFellBack_34;       /* g_bRawReadFellBack + 0x34 */
+/* TODO(match): functional equivalent - not byte-exact; two callee-saves at
+   8-byte slot spacing (the 0x20-vs-0x10 packed-save wall). */
+void func_0026FE58(void) {
+    u64 desc[6];   /* 0x30-byte texture-upload descriptor scratch */
+
+    StartFileLoadPumpingVoice(g_proceduralAnimFrames,
+                              g_discToc[0x330 / 4] + g_discToc[0x32C / 4],
+                              g_discToc[0x334 / 4]);
+    func_0026FC88(g_proceduralAnimFrames, desc, g_vramTextureBase_28, 0x3FFC00);
+    g_bRawReadFellBack_34 = desc[0];
+}
+#endif
 
 /* DebugPrintStub: varargs debug-print hook, compiled to a no-op in retail —
  * only the EABI varargs register spill remains, and crucially the ORIGINAL
@@ -300,8 +472,21 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026FE58);
  * WALL: float-varargs register-spill prologue. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", DebugPrintStub);
 
+/* func_0026FF00: MIS-SPLIT fragment. The .s opens with six words
+ * (sw $2,0x38($4) / nop / addiu $sp,0x10 / nop / addiu $sp,0x20 / nop) that are
+ * the TAIL of the preceding function, then `alabel func_0026FF18` — the real
+ * entry (a camera fov / fade-mode setter writing g_cameraState +0x3D4.. by
+ * arg-0 mode). A clean C #else body would drop the leading tail words and shift
+ * the segment layout, so this stays permanently INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026FF00);
 
+/* StepCameraFovInterp: camera FOV interpolation state machine (mode at
+ * g_cameraState +0x3E8, enable flag +0x3E9). Eases the live FOV (+0x3D8) toward
+ * its target by the active easing mode (spring func_002703C0, linear, smooth
+ * func_002A8A68), then rebuilds the projection (BuildCameraProjection,
+ * g_cameraProjScale = 0.5/tan(fov*0.5)). WALL: four fp/gpr callee-saves at
+ * 8-byte slot spacing (packed-save wall) + branch-likely-driven fp control flow.
+ * Left INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", StepCameraFovInterp);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002701B8);
@@ -326,7 +511,31 @@ void func_002701C0(void) {
 }
 #endif
 
+/* func_00270220: run every queued one-shot camera callback. D_001B1300+0x180
+ * holds the queued-count; D_001B1300+0x140 is the function-pointer array. Calls
+ * each pointer in turn (re-reading the live count each iteration so a callback
+ * may shorten the queue), then clears the count back to 0. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00270220);
+#else
+extern s32 g_cameraCallbackCount;          /* D_001B1300 + 0x180 */
+extern void (*g_cameraCallbacks[])(void);  /* D_001B1300 + 0x140 */
+/* TODO(match): functional equivalent - not byte-exact; three callee-saves at
+   8-byte slot spacing (the 0x20-vs-0x10 packed-save wall). */
+void func_00270220(void) {
+    s32 i = 0;
+
+    if (g_cameraCallbackCount > 0) {
+        void (**slot)(void) = &g_cameraCallbacks[0];
+        do {
+            i++;
+            (*slot)();
+            slot++;
+        } while (i < g_cameraCallbackCount);
+    }
+    g_cameraCallbackCount = 0;
+}
+#endif
 
 /* func_00270290: find the first camera slot whose type matches `type`
  * (48-slot linear scan); returns NULL when no slot matches. */
@@ -344,6 +553,9 @@ Camera *func_00270290(s32 type) {
     return NULL;
 }
 
+/* func_002702C8: no-return handwritten table-word fragment (see header
+ * STUB-TABLE note) - not reachable compiler output. Kept permanently
+ * INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002702C8);
 
 /* func_002702D8: critically-damped spring step toward a target. Advances `cur`
@@ -463,8 +675,18 @@ void CallCameraEnterHandler(Camera *cam) {
     }
 }
 
+/* SwitchActiveCamera: activate a new camera slot - pick transition kind/duration
+ * (default 0.018), save the old camera into g_prevCamera with a history copy,
+ * reset the frames-since-cut counter, run the enter handler and snap g_cameraPos
+ * to the new slot pos +0x30. WALL: deep nested branching with multiple
+ * callee-saves at 8-byte slot spacing (packed-save wall); 0x2A0 bytes. Left
+ * INCLUDE_ASM (too large to honestly decompile without subtle ordering risk). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", SwitchActiveCamera);
 
+/* TestCameraTakeover: decide whether a candidate camera slot should take over
+ * the active camera (mode-vtbl takeover handler + a per-type priority switch).
+ * WALL: jump-table switch (jtbl_0026C4F0_text) + three callee-saves at 8-byte
+ * slot spacing (packed-save wall). Left INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", TestCameraTakeover);
 
 /* CallCameraPollHandler: invoke the camera-mode vtbl `poll` handler
@@ -531,11 +753,71 @@ s32 DispatchCameraMode(void) {
 }
 #endif
 
+/* func_00270B68: camera-transition curve builder (consumed by func_00270D60).
+ * Builds the blend basis/control points from the three normalised key vectors.
+ * WALL: thirteen callee-saves at 8-byte slot spacing (packed-save wall) +
+ * heavy interleaved fp/qword math. Left INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00270B68);
 
+/* func_00270D60: build the camera-transition control vectors from the active
+ * cinematic camera-key block (g_soundBankHandles +0x22B0). Normalises the three
+ * key vectors (+0xC0/+0xD0/+0xE0) to unit length, stashes two of them at
+ * g_cameraTransitionState +0x90/+0xA0, then forwards the normalised set to
+ * func_00270B68 (the transition-curve builder) and finally copies +0xD0->+0xB0. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00270D60);
+#else
+extern void func_00270B68(void *a, void *b, void *c, Vec4 *d, Vec4 *e, Vec4 *f);
+extern void Vec3RescaleToLenVu0(Vec4 *dst, const Vec4 *src, f32 len);
+extern char g_soundBankHandlesBlk[]; /* g_soundBankHandles + 0x20 */
+/* TODO(match): functional equivalent - not byte-exact; five callee-saves
+   (incl. $f20) at 8-byte slot spacing (the 0x20-vs-0x10 packed-save wall). */
+void func_00270D60(void) {
+    CameraTransitionState *t = &g_cameraTransitionState;
+    /* +0x2290 holds the live cinematic camera-key block pointer (reloaded each
+     * use); +0x80 is a separate control field forwarded to the curve builder. */
+    char *keys = *(char **)(g_soundBankHandlesBlk + 0x2290);
+    Vec4 v0, v1, v2;
 
+    Vec3RescaleToLenVu0(&v0, (Vec4 *)(keys + 0xC0), 1.0f);
+    keys = *(char **)(g_soundBankHandlesBlk + 0x2290);
+    Vec3RescaleToLenVu0(&v1, (Vec4 *)(keys + 0xD0), 1.0f);
+    keys = *(char **)(g_soundBankHandlesBlk + 0x2290);
+    Vec3RescaleToLenVu0(&v2, (Vec4 *)(keys + 0xE0), 1.0f);
+
+    *(Vec4 *)((char *)t + 0x90) = v0;
+    *(Vec4 *)((char *)t + 0xA0) = v2;
+
+    func_00270B68((char *)t + 0x70, (char *)t + 0xC0,
+                  g_soundBankHandlesBlk + 0x80, &v0, &v1, &v2);
+
+    *(Vec4 *)((char *)t + 0xB0) = *(Vec4 *)((char *)t + 0xD0);
+}
+#endif
+
+/* func_00270E40: when no transition is pending (kind == 0), seed the saved
+ * source pair from the current pair: src0 = cur0, src1 = cur1. If the
+ * transition mode byte (+0x3) is 2, src0 is first offset by the hero-relative
+ * delta (g_heroPos + 0xD0) before being saved. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00270E40);
+#else
+extern void Vec4AddVu0(Vec4 *dst, const Vec4 *a, const Vec4 *b);
+extern Vec4 g_heroPos_D0;   /* g_heroPos + 0xD0 */
+/* TODO(match): functional equivalent - not byte-exact; two callee-saves at
+   8-byte slot spacing (the 0x20-vs-0x10 packed-save wall). */
+void func_00270E40(void) {
+    CameraTransitionState *t = &g_cameraTransitionState;
+
+    if (t->kind == 0) {
+        t->src0 = t->cur0;
+        if (t->pad3[0] == 2) {
+            Vec4AddVu0(&t->src0, &t->src0, &g_heroPos_D0);
+        }
+        t->src1 = t->cur1;
+    }
+}
+#endif
 
 /* func_00270EB8: while a camera transition is pending (kind != 0), snap the
  * transition's current qword pos/target pair (+0x50/+0x60) from the saved
@@ -560,20 +842,64 @@ void func_00270EB8(void) {
 }
 #endif
 
+/* BeginCameraTransition: kick a camera-to-camera blend from prev to active.
+ * WALL: seven callee-saves at 8-byte slot spacing (packed-save wall) + qword
+ * block copies of the transition source pair. Left INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", BeginCameraTransition);
 
+/* func_00271140: instant-settle / blend-start branch of the transition pipeline
+ * (forwarded from ApplyCameraTransition when no blend is pending). WALL: nine
+ * fp/gpr callee-saves at 8-byte slot spacing (packed-save wall) + interleaved
+ * Vec4 math and func_002A8A68/func_002AC468 calls. Left INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00271140);
 
+/* func_002712E8: running-blend interpolation branch of the transition pipeline
+ * (forwarded from ApplyCameraTransition while a blend is in flight). WALL:
+ * fourteen callee-saves at 8-byte slot spacing (packed-save wall); 0x410 bytes
+ * of interleaved fp/qword math. Left INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002712E8);
 
+/* ApplyCameraTransition: advance the active camera blend into `out`. With no
+ * transition pending (kind == 0) it forwards to func_00271140 (start/instant
+ * settle); while one is running it forwards to func_002712E8 (interpolate). On
+ * the running path, once the blend reports complete it copies the resulting
+ * 4-row matrix into g_cameraMatrix and clears the transition (kind = 0, +0x0
+ * halfword = 0). */
+/* WALL: three callee-saves at 8-byte slot spacing (0x20-vs-0x10 packed-save).
+   Left INCLUDE_ASM (no #else): the matrix copy gates on the INTERPOLATOR's RETURN
+   value (not kind), and the 4th row goes to g_cameraPos (NOT g_cameraMatrix[3]) - a
+   functional-equiv body is error-prone here; revisit with care. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", ApplyCameraTransition);
 
+/* ApplyCameraShakeAxis: apply one shake channel to the camera - axis 0/1 offset
+ * g_cameraPos along the matrix up/right rows, axis 2 rolls g_cameraMatrix; each
+ * is sin/cos-windowed decay, skipped for camera type 6. WALL: five callee-saves
+ * at 8-byte slot spacing (packed-save wall) + interleaved fp windowing math.
+ * Left INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", ApplyCameraShakeAxis);
 
+/* TrackHeroMotionForCamera: smooth the hero facing / velocity / speed / lateral
+ * direction from g_heroPos deltas for the camera logic to consume. WALL: twelve
+ * callee-saves at 8-byte slot spacing (packed-save wall) + heavy interleaved fp
+ * math. Left INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", TrackHeroMotionForCamera);
 
+/* CheckCameraUnderwater: walk a short downward collision ray (up to 6 CollLine
+ * steps) from the camera position to decide whether the camera is submerged,
+ * comparing against GetWaterSurfaceHeight; records the result into the camera
+ * state (+0x400). Skipped for camera type 6 and outside g_nGameState==0. WALL:
+ * four callee-saves at 8-byte slot spacing (packed-save wall) + the
+ * branch-likely-driven ray loop and qword block copies. Left INCLUDE_ASM
+ * (result-offset/loop ordering is too easy to get subtly wrong). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", CheckCameraUnderwater);
 
+/* func_00271FE8: per-frame camera-id / cinematic-state arbiter. Reads the active
+ * cinematic key block (g_soundBankHandles +0x22B0) and player progress to pick
+ * the live camera mode id (D_001B1300 +0x190) and a derived sub-id (+0x18C),
+ * gated by distance thresholds and per-flag overrides. WALL: gp/absolute mix -
+ * the same symbol (D_001B1300 +0x190) is accessed both via %gp_rel and via
+ * %hi/%lo in the one function, which no single C small-data classification
+ * reproduces. Frameless leaf otherwise. Left INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00271FE8);
 
 /* func_002721A8: start a fade-from-black — fade level forced to 1.0, target 0,
@@ -594,16 +920,154 @@ void func_002721A8(f32 duration) {
 }
 #endif
 
+/* UpdateScreenFadeBlack: per-frame driver that eases g_screenFadeBlack toward
+ * fadeBlackTarget at fadeBlackRate (no-op while the rate is 0). When the level
+ * reaches the target a follow-up timer (func_002832F8 on the +0x270 field) may
+ * re-arm the target to 0; once both target and current level have settled at
+ * (or below) 0 the rate is cleared so the driver idles. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", UpdateScreenFadeBlack);
+#else
+extern void func_002AB150(f32 *level, f32 target);
+extern s32 func_002832F8(void *timer);
+/* TODO(match): functional equivalent - not byte-exact; four callee-saves
+   (incl. $f20) at 8-byte slot spacing (the 0x20-vs-0x10 packed-save wall). */
+void UpdateScreenFadeBlack(void) {
+    CameraSysState *cs = &g_cameraState;
 
+    if (cs->fadeBlackRate == 0.0f) {
+        return;
+    }
+    func_002AB150(&g_screenFadeBlack, cs->fadeBlackTarget);
+    if (g_screenFadeBlack == cs->fadeBlackTarget) {
+        if (func_002832F8((char *)cs + 0x270) == 1) {
+            cs->fadeBlackTarget = 0.0f;
+        }
+    }
+    if (cs->fadeBlackTarget <= 0.0f && g_screenFadeBlack <= 0.0f) {
+        cs->fadeBlackRate = 0.0f;
+    }
+}
+#endif
+
+/* UpdateScreenFadeWhite: white-flash twin of UpdateScreenFadeBlack. Eases
+ * g_screenFadeWhite toward fadeWhiteTarget (+0x27C) at fadeWhiteRate (+0x274);
+ * idles while the rate is 0. Eases toward the target via func_002AB150, then
+ * the settle/re-arm (func_002832F8 on the +0x280 timer) and rate-clear mirror
+ * the black-fade path. */
+/* WALL: three callee-saves at 8-byte slot spacing (0x20-vs-0x10 packed-save).
+   Left INCLUDE_ASM (no #else): the ease step has a target==0 branch that eases
+   toward the +0x278 field (not +0x27C) - easy to get subtly wrong; revisit with care. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", UpdateScreenFadeWhite);
 
+/* UpdateCamera: top-level per-frame camera tick. Advances the fade overlays and
+ * frame counter, runs the hero-motion tracker and the mode-arbitration
+ * dispatcher, then resolves the active transition: kicks a fresh blend when the
+ * transition state just became 1/2, interpolates while it is 3, otherwise snaps
+ * the live camera fields from the active slot. A forced-override hook
+ * (func_0026F7C0) can rebuild the camera basis directly from a cinematic block.
+ * Finally it derives g_cameraRot from g_cameraMatrix, applies the three shake
+ * channels, runs the underwater + fog-zone sampling and the FOV interpolation. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", UpdateCamera);
+#else
+extern void TrackHeroMotionForCamera(void);
+extern void func_00271FE8(void);
+extern void BeginCameraTransition(Camera *active, Camera *prev);
+extern s32 func_0026F7C0(void);
+extern void ApplyCameraTransition(Vec4 *out);
+extern void MatrixToEulerAngles(const Vec4 *m, Vec4 *outRot);
+extern void ApplyCameraShakeAxis(void *channel, s32 axis);
+extern void CheckCameraUnderwater(void);
+extern void SampleCameraFogZone(Vec4 *pos);
+extern void Vec3CrossVu0(Vec4 *dst, const Vec4 *a, const Vec4 *b);
+extern void Vec3RescaleToLenVu0(Vec4 *dst, const Vec4 *src, f32 len);
+extern void StepCameraFovInterp(void);
+extern Vec4 g_cameraPos;
+extern Vec4 g_cameraRot;
+extern Vec4 g_cameraMatrix;   /* 3-row rotation matrix at 0x1B54F0 */
+extern Vec4 g_cameraShakeUp;
+extern Vec4 g_cameraShakeRight;
+extern Vec4 g_cameraShakeRoll;
+extern Vec4 g_cinematicCameraBlock[]; /* g_nNanotechBonusHealTimer + 0x12F4 */
+extern u8 D_1A7A4C;
+/* TODO(match): functional equivalent - not byte-exact; four callee-saves
+   (incl. $f20) at 8-byte slot spacing (the 0x20-vs-0x10 packed-save wall). */
+void UpdateCamera(void) {
+    CameraSysState *cs = &g_cameraState;
+    s32 transition;
+    Camera *active;
 
+    *(s32 *)((char *)cs + 0x404) += 1;
+    UpdateScreenFadeBlack();
+    UpdateScreenFadeWhite();
+    func_00271FE8();
+    TrackHeroMotionForCamera();
+    DispatchCameraMode();
+
+    active = (Camera *)cs->activeCamera;
+    transition = *(u16 *)((char *)cs + 0x290);
+    if ((u32)(transition - 1) < 2u) {
+        BeginCameraTransition(active, cs->prevCamera);
+    }
+
+    if (*(s16 *)((char *)cs + 0x290) == 3) {
+        ApplyCameraTransition((Vec4 *)active); /* a0 = cs->activeCamera, not cs+0x140 */
+    } else {
+        /* snap the live camera fields straight from the active slot */
+        *(Vec4 *)((char *)cs + 0x140) = *(Vec4 *)((char *)active + 0x30);
+        *(Vec4 *)((char *)cs + 0x370) = *(Vec4 *)((char *)active + 0x00);
+        *(Vec4 *)((char *)cs + 0x380) = *(Vec4 *)((char *)active + 0x10);
+        *(Vec4 *)((char *)cs + 0x390) = *(Vec4 *)((char *)active + 0x20);
+    }
+
+    if (func_0026F7C0() != 0) {
+        /* cinematic override: copy pos + look vector, rebuild the basis */
+        g_cameraPos = g_cinematicCameraBlock[0];
+        *(Vec4 *)((char *)&g_cameraPos + 0x230) = g_cinematicCameraBlock[1];
+        Vec3CrossVu0((Vec4 *)((char *)&g_cameraPos + 0x240),
+                     (Vec4 *)((char *)&g_cameraPos + 0x230),
+                     &g_cinematicCameraBlock[0]);
+        Vec3RescaleToLenVu0((Vec4 *)((char *)&g_cameraPos + 0x240),
+                            (Vec4 *)((char *)&g_cameraPos + 0x240), 1.0f);
+        Vec3CrossVu0((Vec4 *)((char *)&g_cameraPos + 0x250),
+                     (Vec4 *)((char *)&g_cameraPos + 0x240),
+                     (Vec4 *)((char *)&g_cameraPos + 0x230));
+        Vec3RescaleToLenVu0((Vec4 *)((char *)&g_cameraPos + 0x250),
+                            (Vec4 *)((char *)&g_cameraPos + 0x250), 1.0f);
+    }
+
+    MatrixToEulerAngles((const Vec4 *)&g_cameraMatrix, &g_cameraRot);
+    ApplyCameraShakeAxis(&g_cameraShakeUp, 0);
+    ApplyCameraShakeAxis(&g_cameraShakeRight, 1);
+    ApplyCameraShakeAxis(&g_cameraShakeRoll, 2);
+    CheckCameraUnderwater();
+    SampleCameraFogZone(&g_cameraPos);
+
+    if (D_1A7A4C != 0) {
+        Vec3CrossVu0((Vec4 *)((char *)&g_cameraMatrix + 0x10),
+                     (Vec4 *)((char *)&g_cameraMatrix + 0x20),
+                     (Vec4 *)&g_cameraMatrix);
+    }
+    StepCameraFovInterp();
+    *(Vec4 *)((char *)&g_cameraMatrix + 0x50) = (Vec4){0};
+}
+#endif
+
+/* func_00272550: MIS-SPLIT fragment. The .s opens with four words
+ * (daddu $2,$5,$0 / nop / addiu $sp,0x10 / nop) that are the TAIL of the
+ * preceding function (its return path), followed by `alabel func_00272560` —
+ * the real entry. A clean C #else body would only emit the real function and
+ * drop the leading tail words, shifting the segment layout. Kept permanently
+ * INCLUDE_ASM so the orphaned tail words stay in place. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00272550);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002725D8);
 
+/* DrawLensFlare: project the sun/light source to screen space and draw the
+ * lens-flare sprite chain. WALL: seventeen callee-saves at 8-byte slot spacing
+ * (packed-save wall) + interleaved projection/draw fp math; 0x10C bytes. Left
+ * INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", DrawLensFlare);
 
 /* DrawScreenSpriteFxEntry(x, y, fx): render one queued screen-sprite effect at
@@ -654,6 +1118,10 @@ void DrawScreenSpriteFxEntry(f32 x, f32 y, ScreenSpriteFx *fx) {
 }
 #endif
 
+/* func_00272CC0: screen-sprite-FX pre-pass (run by DrawScreenSpriteFxQueue
+ * before the per-entry draw). WALL: sixteen callee-saves at 8-byte slot spacing
+ * (packed-save wall); 0x1B8 bytes of interleaved projection/draw math. Left
+ * INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00272CC0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00273320);
@@ -783,16 +1251,38 @@ void DrawScreenSpriteFxQueue(void) {
 }
 #endif
 
+/* func_002735A8: orphaned fill word (see header STUB-TABLE note) - not reachable
+ * compiler output. Kept permanently INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002735A8);
 
+/* SampleCameraFogZone: sample the fog volume the camera is inside (func_002A7490
+ * locate, then lerp the per-zone fog colour/density into g_blobShadowCount+0x4..).
+ * WALL: two callee-saves (incl. $f20) at 8-byte slot spacing (packed-save wall)
+ * + byte-packed RGBA channel lerp with fixed-point mult chains. Left
+ * INCLUDE_ASM (high ordering risk - left bare rather than risk an incorrect body). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", SampleCameraFogZone);
 
+/* func_00273740: collision/projectile helper. WALL: ten callee-saves at 8-byte
+ * slot spacing (packed-save wall) + interleaved fp/qword math. Left INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00273740);
 
+/* func_00273988: collision/projectile helper (Vec4Scale/Sub + func_002B0C40
+ * pushout). WALL: many callee-saves at 8-byte slot spacing (packed-save wall) +
+ * interleaved fp/qword math. Left INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00273988);
 
+/* func_00273B80: per-state moby/projectile dispatcher (state byte +0x5D, 6-way).
+ * WALL: jump-table switch (jtbl_0026C510_text) + three callee-saves at 8-byte
+ * slot spacing (packed-save wall). Left INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00273B80);
 
+/* func_00273D20: projectile collision-response handler (Vec3 cross/rescale,
+ * pushout func_002B0E40, PlayMobySound on impact material). WALL: seven
+ * callee-saves at 8-byte slot spacing (packed-save wall) + interleaved fp/qword
+ * math. Left INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00273D20);
 
+/* func_00273EA8: projectile/effect state helper (sibling of func_00273D20).
+ * WALL: eight callee-saves at 8-byte slot spacing (packed-save wall) +
+ * interleaved fp/qword math. Left INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00273EA8);
