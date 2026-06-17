@@ -30,6 +30,11 @@
 
 /* cc1-small / assembler-absolute symbols (see header). */
 __asm__(".extern g_guiInstance, 16");
+/* The two right-justified-label draw functions (func_002CE9C0 / func_002D0230,
+ * USA twins func_002CE9D8 / func_002D0240) read their Y position word via the
+ * lui/%lo "assembler macro" shape, so each needs a 16-byte extern override. */
+__asm__(".extern D_1ABA4C, 16");
+__asm__(".extern D_1ABA9C, 16");
 
 /* Singleton GUI-manager instance (null until the GUI is up). The wrappers here
  * only ever forward `instance + fixed-widget-offset` to widget methods. */
@@ -73,6 +78,21 @@ extern void func_0029D2F8(void);
 extern void func_0029CF38(void);
 
 extern void MenuScreenLoad(void);
+
+/* Localized-string lookup (EU 0x2898E8) and the right-justified text draw
+ * primitive (EU func_0027FF28 = USA func_00280090). */
+extern char *GetLocalizedString(s32 id);
+extern void func_0027FF28(s32 x, s32 y, u64 color, char *str, s64 wrap);
+
+/* Per-screen helpers + label-position words for the two right-justified-label
+ * draw functions (EU addresses; X word is gp-relative small data, Y word is the
+ * absolute lui/%lo macro sized above). */
+extern void func_0029CE58(void); /* USA func_0029D2F8 */
+extern void func_0029CEC8(void); /* USA func_0029D368 */
+extern s32 D_1ABA48; /* USA D_1AB9E0 (gp-rel X) */
+extern s32 D_1ABA4C; /* USA D_1AB9E4 (abs Y)    */
+extern s32 D_1ABA98; /* USA D_1ABA28 (gp-rel X) */
+extern s32 D_1ABA9C; /* USA D_1ABA2C (abs Y)    */
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002C9FD8);
 
@@ -280,7 +300,18 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002CE890);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002CE8F0);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002CE9C0);
+/* Draw the localized string right-justified at the alternate label slot.
+ * EU twin of USA func_002CE9D8; the localized-string id is the PAL id 0xB60
+ * (NTSC uses 0x2BE5). */
+s32 func_002CE9C0(void) {
+    char *str;
+    func_0027CA28(0);
+    func_0029CE58();
+    str = GetLocalizedString(0xB60);
+    func_0027FF28(D_1ABA48, D_1ABA4C, 0x80F0F0F0, str, -1);
+    func_0027CB48();
+    return 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002CEA20);
 
@@ -309,7 +340,18 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002D0100);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002D0148);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002D0230);
+/* Draw the localized string right-justified as a label inside a 2D batch.
+ * EU twin of USA func_002D0240; the localized-string id is the PAL id 0xB60
+ * (NTSC uses 0x2BE5). */
+s32 func_002D0230(void) {
+    char *str;
+    func_0027CA28(0);
+    func_0029CEC8();
+    str = GetLocalizedString(0xB60);
+    func_0027FF28(D_1ABA98, D_1ABA9C, 0x80F0F0F0, str, -1);
+    func_0027CB48();
+    return 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002D0290);
 
