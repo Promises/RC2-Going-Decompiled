@@ -216,19 +216,19 @@ GuiPoolAlloc = 0x00337CE8; // CONFIRMED - pop free-list head else bump-allocate 
 GuiPlacementNew = 0x00337C50; // CONFIRMED - placement operator new(size,ptr) returns ptr
 GuiComputeBlendWeights = 0x003366A8; // CONFIRMED (behaviors.cpp) - writes 4 floats t, t*0.5, 1-t, (1-t)*0.5
 GuiHermiteInterp = 0x0034FBC0; // CONFIRMED (mathUtil.cpp assert line 36) - cubic Hermite blend of t over 4 controls
-g_guiInstance = 0x001A8D04; // CONFIRMED - singleton GUI manager pointer - sole writer GuiManagerCreate, 90+ readers
+g_guiInstance = 0x001A8D04; // CONFIRMED - singleton GUI manager pointer - sole writer GuiManagerCreate, 90+ readers. alias g_pGuiManager (native #else name, lw v0,-0x72fc(0x1b) in func_002D5EC8)
 GuiManagerCreate = 0x0029DB80; // CONFIRMED - allocs 0x3FB20-byte instance, runs GuiSystemInit, stores g_guiInstance
 GuiSystemInit = 0x0034F308; // CONFIRMED behaviour - GUI master ctor - sets up pool then builds 30+ widget objects
 GuiElementInit = 0x00336FE8; // PARTIAL - base GUI element init (two 0x10 pool sub-records, default scale)
 GuiScreenWithPlanetNameInit = 0x003493E0; // PARTIAL - a GUI screen ctor (7 named children) - planet-select id UNCONFIRMED
 
 // === Track-B MAP/minimap subsystem (in-binary cluster ~0x295778..0x298xxx - map.cpp via __FILE__ @0x1a95b8 in MapInit). ===
-g_mapCurrentLevel = 0x001C5150; // CONFIRMED - current map level id (clamped 0..0x1b), set by MapSetCurrentLevel
+g_mapCurrentLevel = 0x001C5150; // CONFIRMED - current map level id (clamped 0..0x1b), set by MapSetCurrentLevel. alias g_nMapCurrentLevel (native #else name, sw v1,0x5150(0x1c) in func_002D65D8, lw 0x230(0x1c4f20) in func_002DBC98)
 g_mapTextureHandle = 0x001C5158; // CONFIRMED - GS texture handle for uploaded map image (-1 none), set in MapInit
 g_mapTextureWidth = 0x001C5160; // CONFIRMED - width in texels of uploaded map texture, set in MapInit
 g_mapAvailable = 0x001C4F44; // CONFIRMED - flag a map is available/uploaded for current level
 g_mapHasData = 0x001C4F48; // CONFIRMED - flag this level has map data loaded, gates MapBuildBitmap
-g_mapActiveSlot = 0x001C5154; // CONFIRMED - active map cache slot index (0..4, -2 while uploading)
+g_mapActiveSlot = 0x001C5154; // CONFIRMED - active map cache slot index (0..4, -2 while uploading). alias g_nMapActiveSlot (native #else name, lw 0x234(0x1c4f20) in func_002DBC98)
 g_mapBlipList = 0x001C4F40; // CONFIRMED - ptr to map blips/icons list (0x28-byte records), drawn by MapDraw
 g_mapBitmapBuffer = 0x001C4F28; // CONFIRMED - ptr to 0x1000-byte 1bpp discovered-area bitmap (8 rows of 0x200)
 g_mapVertexData = 0x001C4F20; // CONFIRMED - ptr to map outline vertex data copied from level asset in MapInit
@@ -332,7 +332,7 @@ FindWeaponSlotByName = 0x00288ED8; // CONFIRMED - linear-scans inventory for a g
 g_weaponTable = 0x00239B20; // CONFIRMED - per-weapon-VARIANT def/state table, stride 0xe0, indexed by g_itemEquippedSlot[id]. Fields (width from reader) +0x00 u32 exists, +0x04 u8 upgradeLevel, +0x14 u32 boltPrice, +0x3c u16 nameStringId, +0x4a s16 nextVariantSlot, +0x4c s16 prevVariantSlot, +0x6c u32 upgradeCountGate, +0x88 s16 sellsAmmoFlag, +0x8e u16 ammoCapacity, +0x92 u16 ammoStartGrant
 g_itemEquippedSlot = 0x00139568; // CONFIRMED - byte[0x38] itemId to active g_weaponTable variant slot, identity at boot then remapped by SetWeaponUpgradeSlot
 g_weaponAmmo = 0x00139688; // CONFIRMED - s32[0x38] current ammo per item, clamped to g_weaponTable ammoCapacity(+0x8e). Cheat "Infinite Ammo" writes individual slots (0x1396ac=id9). EU anchor
-g_weaponXp = 0x00139868; // CONFIRMED - s32[0x38] per-weapon XP/upgrade-progress accumulator (NOT ammo cap - real ammo cap is g_weaponTable+0x8e). Cheat "Have Weapon Upgraded" writes individual slots (0x13988c=id9). EU anchor
+g_weaponXp = 0x00139868; // CONFIRMED - s32[0x38] per-weapon XP/upgrade-progress accumulator (NOT ammo cap - real ammo cap is g_weaponTable+0x8e). Cheat "Have Weapon Upgraded" writes individual slots (0x13988c=id9). EU anchor. alias g_weaponAmmoCapacity (native #else name in func_002D9C18 is a MISNOMER - it reads g_weaponXp[slot]>>5 at 0x2D9CE0 as a GUI scroll/progress-bar position, not ammo capacity)
 g_inventoryOwned = 0x001A7B00; // CONFIRMED - u8[0x38] per-item have-flag, cheat-pnach inventory have-flags base. Written by GiveInventoryItem. EU anchor
 g_inventoryNewFlag = 0x001A7B38; // CONFIRMED - u8[0x38] newly-acquired flag per item, set with g_inventoryOwned by GiveInventoryItem (HUD NEW badge)
 g_inventoryOrder = 0x001A7B70; // CONFIRMED - byte inventory display order (low6=itemId, bit0x40=owned, 0xff terminator). Built by AddItemToInventoryOrder, walked by BuildVendorItemList
@@ -423,7 +423,7 @@ UpdateSubtitleStateMachine = 0x00289BB8; // CONFIRMED - per-frame subtitle/dialo
 BeginSubtitleDisplay = 0x00289A60; // CONFIRMED - builds the text sprite/box for the current subtitle entry, positions by string width, resets state
 // DrawSubtitleBox @ 0x0028A4E8 (Ghidra-only, in INCLUDE_ASM unit text/188858 - no active entry) - CONFIRMED per-frame subtitle box render, called by RenderFrame, draws g_pActiveTextTable[g_subtitleEntryIndex] with state-driven border anim. Pairs with UpdateSubtitleStateMachine.
 g_pActiveTextTable = 0x001B17C0; // CONFIRMED - active localized text table base (0x10-byte entries +0 char* str +4 textId +8 voice param). EU anchor
-g_activeTextTableCount = 0x00254E24; // CONFIRMED - entry count of g_pActiveTextTable
+g_activeTextTableCount = 0x00254E24; // CONFIRMED - entry count of g_pActiveTextTable. alias g_nActiveTextTableCount (native #else name, sw %lo(g_activeTextTableCount) in RestorePrevTextTable @0x2D8F54)
 g_currentLanguage = 0x001A7BBC; // CONFIRMED - language index (u8), set by dialog/movie cmd opcode 9 (FUN_002d67c0), selects the per-language table slot. EU anchor
 g_pTextTableLoadBuf = 0x001F28D8; // CONFIRMED - streaming load buffer for the language text table (indexed by g_currentLanguage)
 g_subtitleEntryIndex = 0x00254E18; // CONFIRMED - index into g_pActiveTextTable of the subtitle being shown (-1 none)
@@ -1479,7 +1479,7 @@ ExplodeBombletFxOnly = 0x00332EE8; // CONFIRMED mechanism - non-damaging bomblet
 UpdateSeekerBomblet = 0x00333450; // CONFIRMED mechanism - seeking bomblet (PROBABLE Bouncer)
 ExplodeBombletWithDamage = 0x00333E40; // CONFIRMED mechanism - damaging bomblet explosion (10->55 on upgrade)
 g_pendingBoltCredit = 0x001A7A1C; // CONFIRMED - PlayerStats +0x1C - deferred bolt credit, drained (x+49)/50 per kill
-g_pendingNanotechXp = 0x001A7A18; // CONFIRMED - PlayerStats +0x18 - deferred nanotech XP, drained (x+49)/50 per kill
+g_pendingNanotechXp = 0x001A7A18; // CONFIRMED - PlayerStats +0x18 - deferred nanotech XP, drained (x+49)/50 per kill. alias g_nPendingNanotechXp (native #else base name in cheat handler func_002DECE0: writes byte (&g_nPendingNanotechXp + found) where found in 0x50..0x6d -> actual store sb at 0x1A7A68+(found-0x50), so C base resolves to 0x1A7A18. Name is the annotator's best guess - touched region 0x1A7A68.. is a per-cheat unlocked-flags byte array, NOT itself the pending-XP word)
 g_pHeroGroundMoby = 0x001AD7CC; // PARTIAL - hero support/ground moby ptr - writer untraced
 
 // === Track-B combat/damage core (the shared damage pipeline every weapon funnels through; Track-B 2026-06-16). ===
@@ -1703,4 +1703,23 @@ func_002E43E8 = 0x002E43E8; // type:func size:0xC (TILE B epilogue fragment)
 func_002E6D28 = 0x002E6D28; // type:func size:0xC (TILE B epilogue fragment)
 func_002F6940 = 0x002F6940; // type:func size:0xC (TILE B epilogue fragment)
 func_00301010 = 0x00301010; // type:func size:0xC (TILE B epilogue fragment)
+
+// === Track-B M2 native-arena data globals (referenced by TARGET_NATIVE #else
+// bodies. Addresses recovered + verified in Ghidra by tracing the %hi/%lo or
+// gp_rel load of each referencing function. EU = TODO unless noted.) ===
+// The 6 g_n*/alias names below resolve via documented `alias` comments on their
+// canonical lines (g_guiInstance, g_mapCurrentLevel, g_mapActiveSlot,
+// g_activeTextTableCount, g_pendingNanotechXp, g_weaponXp) - no duplicate
+// symbol line needed for splat. Genuinely-new globals get a direct entry:
+g_menuScreenBlock = 0x001F27C0; // CONFIRMED - g_particleFxBlob(0x1F26C0)+0x100 menu-screen mgr block, lui 0x1f/addiu 0x27c0 in func_002D65D8 + StreamTextTable helper func_002DF1B8. EU TODO (g_particleFxBlob EU base + 0x100)
+g_itemEquipSlotTable = 0x001A7398; // CONFIRMED - s32[] equip-slot table, GrantDefaultGadgetLoadout func_002911F0 stores 0x1E at [0] (sw 0x7398(0x1a)) and 0x2F at [2] (sw 0x73a0(0x1a)). EU TODO
+g_areaTable = 0x001393E0; // CONFIRMED - AreaRecord[] stride 0xA0 (statusFlag s16 +0x18, selected-idx s32 +0x148, exit-flag s32 +0x17C), func_002F72D8 lui 0x14/addiu -0x6c20. EU TODO
+g_exitCinematicCallback = 0x001A8C80; // CONFIRMED - deferred level-exit cinematic callback fn ptr, sole writer func_002F6B10 (sw a0,-0x7380(0x1b)). EU TODO
+g_exitCinematicCallbackArg = 0x001A8C84; // CONFIRMED - arg for g_exitCinematicCallback, func_002F6B10 sw a1,-0x636c(gp) (gp 0x1AEFF0). EU TODO
+g_exitFadeRate = 0x001A8C7C; // CONFIRMED - f32 exit fade ramp rate, set to 1.2f by func_002F6B20 (swc1 f2,-0x6374(gp)). EU TODO
+g_cinematicExitPending = 0x001A7478; // CONFIRMED - s32 exit-cinematic-pending flag, set 1 by func_002F7328 (sw s1,-0x7b78(gp)). EU TODO
+g_exitSceneArmed = 0x0013955C; // CONFIRMED - s32 cleared (set 0) when the exit scene starts, func_002F7328 sw zero,-0x6aa4(0x14). EU TODO
+g_vendorUi = 0x0021F1C0; // CONFIRMED - VendorUiState (captionWidget s32 +0x3C, captionCounter s32 +0x64), SetVendorCaption lui %hi(0x21E000+0x11C0). EU TODO
+g_vendorCaptionFmt = 0x001AD338; // CONFIRMED - vendor caption format/template string (was D_1AD338), arg2 of func_00115DA8 in SetVendorCaption. EU TODO
+g_tieDrawTemplate = 0x001ACAE0; // CONFIRMED - 0x20-qword tie draw-segment template (was D_1ACAE0), CopyQwords source in BuildTieDrawSegment (lui %hi/addiu %lo @0x2F1DB4). EU TODO
 
