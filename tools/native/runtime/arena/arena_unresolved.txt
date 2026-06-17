@@ -1,0 +1,51 @@
+# Native data globals referenced by #else bodies that have NO
+# canonical address (not a D_xxxxxx name, not in symbol_addrs,
+# not a documented alias). Each needs its ROM address recovered
+# in Ghidra and added to symbol_addrs (Track-B) before the arena
+# can place it. Count: 46
+g_areaTable
+g_bRawReadFellBack_34
+g_cameraCallbackCount
+g_cameraCallbacks
+g_cameraHelperMoby
+g_cameraHistory
+g_cameraHistorySnapshot
+g_cameraSnapshot
+g_cameraSnapshotPtr
+g_cinematicCameraBlock
+g_cinematicExitPending
+g_dialogBusy
+g_exitCinematicCallback
+g_exitCinematicCallbackArg
+g_exitFadeRate
+g_exitSceneArmed
+g_gadgetDisplay
+g_heroOrientVec
+g_heroPosVec
+g_heroPos_D0
+g_heroZoom
+g_itemEquipSlotTable
+g_menuScreenBlock
+g_mobyClassTable
+g_nActiveTextTableCount
+g_nGsPixelOffsetX
+g_nGsPixelOffsetY
+g_nMapActiveSlot
+g_nMapCurrentLevel
+g_nPendingNanotechXp
+g_pGuiManager
+g_pendingVoiceAux
+g_pendingVoiceId
+g_quickSelectMap
+g_screenCenterDefaultX
+g_screenCenterDefaultY
+g_soundBankHandlesBlk
+g_tieDrawTemplate
+g_vendorCaptionFmt
+g_vendorUi
+g_voiceTrigger
+g_voiceTriggerAux
+g_vramTextureBase_28
+g_weaponAmmoCapacity
+g_weaponClassTable
+g_weaponSlotTable
