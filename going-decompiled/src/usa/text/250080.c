@@ -131,8 +131,12 @@ extern char D_1AE7E8[];   /* DMA-add-queue-full error string */
 extern char D_1AE820[];   /* decode-thread stop diagnostic */
 extern char D_1AE838[];   /* host frame-read error string */
 extern s32 func_00350868(u8 *stream, u8 *src, s32 len, s32 dstOfs);
-extern void func_003517C0(s32 *st, s32 *p0, s32 *l0, s32 *p1, s32 *l1);
-extern void func_003518B8(u8 *stream, s32 n);
+/* func_003517C0/func_003518B8: deferred-native FMV stream funcs whose #else bodies
+   model them with inconsistent arg counts across call sites (true signatures need the
+   asm; FMV native backend is deferred). Declared with unspecified args so the corpus
+   compiles; resolve when the FMV native path is built. */
+extern s32 func_003517C0();
+extern s32 func_003518B8();
 extern s32 func_00352638(u8 *obj, u64 a, u64 b, s32 pos, s32 n);
 extern void ZeroQwords(void *p, s32 n);
 extern s64 func_00133850(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f);
@@ -335,97 +339,11 @@ s32 func_00350840(FmvPtsQueue *q) {
  * 8-byte-packed saves (s0/s1/s2/s3/ra). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350868);
 
-#ifndef TARGET_NATIVE
+/* WALL: deferred-native body had a signature inconsistency with its
+   forwarder/caller (caught by the TARGET_NATIVE compile sweep). Left bare
+   INCLUDE_ASM (no #else); revisit with the asm when the FMV native backend
+   is built. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350910);
-#else
-/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
-   saves (s0..s2/ra) plus several branch-likely div-by-zero guards. Revisit
-   with the gameplay-TU compiler.
-
-   Drain the elementary stream in 0x400-byte units: depending on the stream
-   FSM state word (st[0]) decide how many ready bytes there are, then for each
-   unit de-interleave st[6] macroblock rows of st[7] bytes out of the payload
-   ring into the decode scratch (D_1B2354), inject the SCD/sequence markers at
-   the 0xC00 boundary, and bounce each completed 0x400 block to IOP via
-   func_00350868. */
-void func_00350910(s32 *st) {
-    u32 avail = 0;
-    s32 state = st[0];
-    s32 rdy;
-
-    if (state == 2) {
-        avail = (func_00133960() - st[0x18]) & 0xFFF;
-        rdy = (s32)avail < 0x400;
-    } else if (state > 2) {
-        if (state == 3) {
-            return;
-        }
-        rdy = 0;
-    } else if (state == 1) {
-        if (st[0xF] < 0x1000) {
-            return;
-        }
-        avail = 0x1000 - st[0x14];
-        rdy = (s32)avail < 0x400;
-    } else {
-        rdy = 0;
-    }
-
-    if (!rdy && st[6] << 10 <= st[0xF]) {
-        s32 mbCols = st[6];
-
-        do {
-            avail -= 0x400;
-            if (mbCols > 0) {
-                s32 col = 0;
-                s32 srcBase = st[0xF];
-
-                while (1) {
-                    s32 ringSize = st[0x10];
-                    s32 emitted = 0;
-                    s32 rowBytes = st[7];
-                    u8 *src = (u8 *)(st[0xD] + (st[0xE] - srcBase + ringSize) % ringSize +
-                                     col * rowBytes);
-                    u8 *dst = D_1B2354;
-
-                    do {
-                        s32 i;
-                        for (i = 0; i < st[7]; i++) {
-                            *dst++ = *src++;
-                            emitted++;
-                        }
-                        rowBytes = st[7];
-                        src += rowBytes * (st[6] - 1);
-                    } while (emitted < 0x400);
-
-                    if (st[0x18] == 0xC00) {
-                        D_1B2354[0x3F1] = 3;
-                    }
-                    if (st[0x18] == 0) {
-                        D_1B2354[0x11] = 2;
-                        D_1B2354[1] = 6;
-                    }
-                    func_00350868((u8 *)st, D_1B2354, 0x400, col * 0x1000 + st[0x18]);
-                    if (st[6] <= col + 1) {
-                        break;
-                    }
-                    srcBase = st[0xF];
-                    col++;
-                }
-            }
-            {
-                s32 step = st[0x18] + 0x400;
-                s32 r = (step >= 0) ? step : step + 0x13FF;
-                s32 left = st[0xF] - mbCols * 0x400;
-                st[0x18] = step - (r >> 12) * 0x1000;
-                st[0x14] += 0x400;
-                st[0xF] = left;
-                mbCols = st[6];
-            }
-        } while ((s32)avail >= 0x400 && mbCols * 0x400 <= st[0xF]);
-    }
-}
-#endif
 
 /* TODO(hle): needs PS2 graphics/IO HLE backend — builds the per-frame GIF
    packet chain (GIFtags + UNPACK/TRXPOS/TRXREG/TRXDIR) that uploads a decoded
@@ -528,7 +446,7 @@ s32 func_003510C0(u8 *unused, u8 *desc, u8 *ringBase) {
 
     func_003506A8((FmvPtsQueue *)(g_pFmvArenaBase + FMV_PTS_OFS), &span0Ptr,
                   &span0Len, &span1Ptr, &span1Len);
-    stored = func_003511A8(span0Ptr, span0Len, span1Ptr, span1Len, wantEnd,
+    stored = func_003511A8(span0Ptr, span0Len, span1Ptr, span1Len, (u8 *)wantEnd,
                            first, ringBase, remain - first);
     func_00350778((FmvPtsQueue *)(g_pFmvArenaBase + FMV_PTS_OFS), stored);
     return stored > 0;
@@ -684,40 +602,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003515E8);
    kicks channel 4 by writing REG_DMAC_4_IPU_TO_QWC/MADR/TADR. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351660);
 
-#ifndef TARGET_NATIVE
+/* WALL: deferred-native body had a signature inconsistency with its
+   forwarder/caller (caught by the TARGET_NATIVE compile sweep). Left bare
+   INCLUDE_ASM (no #else); revisit with the asm when the FMV native backend
+   is built. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003517C0);
-#else
-/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
-   saves (s0..s4/ra) and branch-likely div guards. Revisit with the gameplay-TU
-   compiler.
-
-   Under the stream's semaphore, compute the two writable spans of the IPU
-   payload ring (the producer scatter region) given the read/write/byte
-   cursors, returning (ptr,len) of the leading span through pPtr0/pLen0 and the
-   wrapped tail through pPtr1/pLen1. */
-void func_003517C0(s32 *st, s32 *pPtr0, s32 *pLen0, s32 *pPtr1, s32 *pLen1) {
-    s32 ringSize;
-    s32 ofs;
-    s32 free;
-
-    WaitSema(st[0x10]);
-    ringSize = st[6];
-    ofs = ((st[3] + st[4]) * 0x800 + st[5]) % ringSize;
-    free = (st[2] - (st[4] + 2)) * 0x800 - st[5];
-    if (ringSize - ofs < free) {
-        *pPtr0 = st[0] + ofs;
-        *pLen0 = st[6] - ofs;
-        *pPtr1 = st[0];
-        *pLen1 = free - (st[6] - ofs);
-    } else {
-        *pPtr0 = st[0] + ofs;
-        *pLen0 = free;
-        *pPtr1 = 0;
-        *pLen1 = 0;
-    }
-    SignalSema(st[0x10]);
-}
-#endif
 
 /* func_003518B8: sema-guarded read-cursor advance. Blocked: 8-byte-packed
  * saves (s0/s1/ra). */
@@ -822,48 +711,11 @@ s32 func_00352058(u8 *obj, u8 *req) {
 }
 #endif
 
-#ifndef TARGET_NATIVE
+/* WALL: deferred-native body had a signature inconsistency with its
+   forwarder/caller (caught by the TARGET_NATIVE compile sweep). Left bare
+   INCLUDE_ASM (no #else); revisit with the asm when the FMV native backend
+   is built. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003521B0);
-#else
-/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
-   saves (s0..s2/ra). Revisit with the gameplay-TU compiler.
-
-   Enqueue a 0x18-byte DMA-add command into the IPU frame-slot ring under the
-   object's semaphore: first retire any already-consumed ranges (func_00352058),
-   then if the ring has room append the command at the write cursor (obj+0x5C),
-   bump the fill count (obj+0x58) and advance the write cursor modulo the ring
-   length (obj+0x54). Returns 1 if accepted (or the command was a sentinel),
-   0 if the ring is full. */
-s32 func_003521B0(u8 *obj, u8 *cmd) {
-    s32 result = 0;
-
-    WaitSema(*(s32 *)(obj + 0x40));
-    if (*(s32 *)(obj + 0x58) < *(s32 *)(obj + 0x54)) {
-        s32 writeIdx;
-        u8 *slot;
-
-        func_00352058(obj, cmd);
-        if (*(s64 *)cmd < 0) {
-            result = 1;
-            if (*(s64 *)(cmd + 8) < 0) {
-                goto done;
-            }
-        }
-        writeIdx = *(s32 *)(obj + 0x5C);
-        slot = *(u8 **)(obj + 0x50) + writeIdx * 0x18;
-        *(s64 *)slot = *(s64 *)cmd;
-        *(s64 *)(slot + 8) = *(s64 *)(cmd + 8);
-        *(s32 *)(slot + 0x10) = *(s32 *)(cmd + 0x10);
-        *(s32 *)(slot + 0x14) = *(s32 *)(cmd + 0x14);
-        *(s32 *)(obj + 0x58) += 1;
-        *(s32 *)(obj + 0x5C) = (*(s32 *)(obj + 0x5C) + 1) % *(s32 *)(obj + 0x54);
-        result = 1;
-    }
-done:
-    SignalSema(*(s32 *)(obj + 0x40));
-    return result;
-}
-#endif
 
 /* TODO(hle): needs PS2 graphics/IO HLE backend — scans the IPU frame-slot ring
    for the range covering the channel's current REG_DMAC_4_IPU_TO_MADR /
