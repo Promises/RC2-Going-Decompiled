@@ -1143,6 +1143,8 @@ DistXYVu0 = 0x00283830; // CONFIRMED - horizontal xy distance between two vec4s
 SetVec4UnitZ = 0x00283648; // CONFIRMED - writes a unit +Z vec4 via vmr32 of vf0
 ScaleVec4IncludingW = 0x00283710; // CONFIRMED - vec4 scale including w - sibling of Vec4ScaleVu0 which preserves w
 GetFloatAbs = 0x002835F8; // CONFIRMED - fabsf
+WrapAnglePiSum = 0x00284548; // CONFIRMED - sum two angles (radians), wrap into [-pi,pi]: r=a+b; if(r>=pi)r-=2pi; if(r<-pi)r+=2pi (183558; harness name->addr; .c still func_00284548 until next re-split)
+WrapAnglePiDiff = 0x00284590; // CONFIRMED - signed angle difference a-b, wrapped into [-pi,pi] (183558; .c still func_00284590 until next re-split)
 g_pCollWorldData = 0x001BAF00; // CONFIRMED - ptr to the world collision sector structure - set by level overlays
 g_collMobyMeshCache = 0x001BAF04; // CONFIRMED - base of the 8 x 0x800 skinned moby collision mesh cache
 g_collMobyMeshCacheKeys = 0x001BAF08; // CONFIRMED - the 8 cache keys

@@ -785,13 +785,14 @@ s32 func_00352058(u8 *obj, u8 *req) {
                     *(s32 *)(slot + 0x10) = (slotPos + take) % sectorSize;
 
                     if (remain - take == 0) {
+                        s32 tail;   /* C89: declare at block top (ee-gcc) */
                         if (*(s64 *)slot >= 0) {
                             *(s32 *)(slot + 0x14) = 0;
                             *(s64 *)slot = -1;
                             *(s64 *)(slot + 8) = -1;
                             *(s32 *)(slot + 0x10) = 0;
                         }
-                        s32 tail = *(s32 *)(obj + 0x58) - 1;
+                        tail = *(s32 *)(obj + 0x58) - 1;
                         if (tail < 0) {
                             tail = 0;
                         }
