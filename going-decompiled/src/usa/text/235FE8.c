@@ -378,7 +378,32 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementInit)
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337090);
 
+/* func_00337098: list-element ctor. Install the D_1ADA38 vtable at p+0x30; when
+ * the pool at p+0x2C is live, free up to two pooled nodes back to it - the node
+ * at p+0x34 unless the +0x44 latch is set, and the node at p+0x38 unless the
+ * +0x48 latch is set (each free passes a0 = the pool, not p). Then run the
+ * shared ctor func_00336F00(p, flag). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337098);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame +
+   branch-likely (bnel) guard wall. */
+extern void *D_1ADA38;
+void func_00337098(void *p, s32 flag) {
+    *(void **)((char *)p + 0x30) = &D_1ADA38;
+    if (*(s32 *)((char *)p + 0x2C) != 0) {
+        if (*(s32 *)((char *)p + 0x44) == 0) {
+            func_00337D78(*(void **)((char *)p + 0x2C),
+                          *(void ***)((char *)p + 0x34));
+        }
+        if (*(s32 *)((char *)p + 0x48) == 0) {
+            func_00337D78(*(void **)((char *)p + 0x2C),
+                          *(void ***)((char *)p + 0x38));
+        }
+    }
+    ((void (*)(void *, s32))func_00336F00)(p, flag);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337110);
 
@@ -828,7 +853,27 @@ void func_0033A7D8(void *p, s32 v) {
     *(s32 *)((char *)p + 0x328) = v;
 }
 
+/* func_0033A7E0: seed this confirm-dialog screen's text - set the dialog box
+ * (p+0x8) title/body/footer to localized strings 0x2C34/0x2C32/0x2BE5, zero its
+ * scale, and clear the +0x32C "text ready" flag (the sibling of func_0033A860,
+ * which raises that flag with the 0x2C33 title variant). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A7E0);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 4-callee-save frame
+   wall. */
+extern s32 GetLocalizedString(s32 id);
+extern void GuiDialogBoxSetText3(void *p, s32 t0, s32 t1, s32 t2);
+extern void GuiDialogBoxSetScale(void *p, f32 scale);
+void func_0033A7E0(void *p) {
+    s32 t0 = GetLocalizedString(0x2C34);
+    s32 t1 = GetLocalizedString(0x2C32);
+    s32 t2 = GetLocalizedString(0x2BE5);
+    GuiDialogBoxSetText3((char *)p + 0x8, t0, t1, t2);
+    GuiDialogBoxSetScale((char *)p + 0x8, 0.0f);
+    *(s32 *)((char *)p + 0x32C) = 0;
+}
+#endif
 
 /* func_0033A860: populate this confirm-dialog screen's text - set the dialog box
  * (p+0x8) title/body/footer to localized strings 0x2C33/0x2C32/0x2BE5, zero its
@@ -2110,7 +2155,33 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344800);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344808);
 
+/* func_003448C0: init the info-panel screen's fourteen embedded sub-elements at
+ * their fixed offsets (six type-B at p+0x0/+0x4C/+0x98/+0xE4/+0x130/+0x17C, two
+ * type-C at +0x1C8/+0x220, the D_1ADA18 widget at +0x278, then five more type-C
+ * at +0x2B8/+0x310/+0x368/+0x3C0/+0x418), return the object. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003448C0);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
+   wall. */
+void *func_003448C0(void *p) {
+    GuiElementInitTypeB(p);
+    GuiElementInitTypeB((char *)p + 0x4C);
+    GuiElementInitTypeB((char *)p + 0x98);
+    GuiElementInitTypeB((char *)p + 0xE4);
+    GuiElementInitTypeB((char *)p + 0x130);
+    GuiElementInitTypeB((char *)p + 0x17C);
+    GuiElementInitTypeC((char *)p + 0x1C8);
+    GuiElementInitTypeC((char *)p + 0x220);
+    func_003374D8((char *)p + 0x278);
+    GuiElementInitTypeC((char *)p + 0x2B8);
+    GuiElementInitTypeC((char *)p + 0x310);
+    GuiElementInitTypeC((char *)p + 0x368);
+    GuiElementInitTypeC((char *)p + 0x3C0);
+    GuiElementInitTypeC((char *)p + 0x418);
+    return p;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiInfoPanelScreenInit);
 
