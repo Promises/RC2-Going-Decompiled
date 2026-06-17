@@ -71,11 +71,55 @@ extern void func_00348DA0(void *p);
 extern void func_00348E60(void *p);
 extern void func_00348E70(void *p);
 
+#ifdef TARGET_NATIVE
+/* Shared GUI sub-element init/widget callees referenced by the functional-
+ * equivalent #else bodies below (declared up front so each body sees a
+ * consistent prototype regardless of source order). */
+extern void GuiElementInitTypeB(void *p);
+extern void GuiElementInitTypeC(void *p);
+extern void GuiListRowElementInit(void *p);
+extern void func_00348BD0(void *p);
+extern void func_00348CB8(void *w);
+extern void func_00348E28(void *w, f32 x, f32 y);
+extern void func_00348E58(void *w, s32 res);
+#endif
+
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336068);
 
+/* func_00336168: copy a 16-byte (quadword) vector from *p into the active
+ * camera's render block at +0x80. The camera is g_activeCamera unless its
+ * mode word (+0x86) differs from 5, in which case func_00270290(5) supplies a
+ * substitute camera; the render block lives at *(camera+0x70). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336168);
+#else
+/* TODO(match): functional equivalent - not byte-exact; sq/lq 128-bit copy +
+   branch wall. */
+typedef struct GuiQword { s32 w[4]; } GuiQword;
+extern void *g_activeCamera;
+extern void *func_00270290(s32 mode);
+void func_00336168(GuiQword *src) {
+    void *cam = g_activeCamera;
+    void *base = (*(s16 *)((char *)cam + 0x86) == 5) ? cam : func_00270290(5);
+    GuiQword *dst = (GuiQword *)((char *)*(void **)((char *)base + 0x70) + 0x80);
+    *dst = *src;
+}
+#endif
 
+/* func_003361C0: as func_00336168 but writes the quadword to the camera render
+ * block at +0x90 instead of +0x80. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003361C0);
+#else
+/* TODO(match): functional equivalent - not byte-exact; sq/lq 128-bit copy +
+   branch wall. */
+void func_003361C0(GuiQword *src) {
+    void *cam = g_activeCamera;
+    void *base = (*(s16 *)((char *)cam + 0x86) == 5) ? cam : func_00270290(5);
+    GuiQword *dst = (GuiQword *)((char *)*(void **)((char *)base + 0x70) + 0x90);
+    *dst = *src;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336218);
 
@@ -154,11 +198,38 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336988);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336A18);
 
+/* func_00336A28: cubic Hermite blend of t between the two control values at
+ * src+0x8 and src+0xC (endpoint tangents 0 and 1), writing the result to
+ * *dst. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336A28);
+#else
+/* TODO(match): functional equivalent - not byte-exact; single-callee-save plus
+   the float-constant setup hoist the original interleaves differently. */
+extern f32 GuiHermiteInterp(f32 t, f32 c0, f32 c1, f32 c2, f32 c3);
+void func_00336A28(f32 *src, f32 t, f32 *dst) {
+    *dst = GuiHermiteInterp(t, 0.0f, src[2], src[3], 1.0f);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336A68);
 
+/* func_00336A78: install the D_1AD8C8 vtable at p+0x4, free the pooled node
+ * (*(p+0x2C) is the pool, *(p+0x28) the node) via func_00337D78, then run the
+ * base ctor func_00336678(p, flag). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336A78);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame
+   wall. */
+extern void *D_1AD8C8;
+extern void func_00337D78(void *pool, void **node);
+void func_00336A78(void *p, s32 flag) {
+    *(void **)((char *)p + 0x4) = &D_1AD8C8;
+    func_00337D78(*(void **)((char *)p + 0x2C), *(void ***)((char *)p + 0x28));
+    func_00336678(p, flag);
+}
+#endif
 
 /* func_00336AC8: 4-component lerp between two interleaved vec4s packed in src
  * (a[i] at src+0x8+8i, b[i] at src+0xC+8i): dst[i] = (1-t)*a[i] + t*b[i]. */
@@ -403,7 +474,20 @@ void func_00337310(GuiElement *e, s32 a0, s32 a1) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337350);
 
+/* func_003374D8: run the base GuiElement init then overwrite the +0x30 vtable
+ * slot with the D_1ADA18 vtable; return the object. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003374D8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
+   wall ($16/$31 16-byte vs 8-byte slot packing). */
+extern void *D_1ADA18;
+void *func_003374D8(void *p) {
+    GuiElementInstallBaseVtable(p);
+    *(void **)((char *)p + 0x30) = &D_1ADA18;
+    return p;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337510);
 
@@ -416,7 +500,24 @@ f32 *GuiSpriteGetTextureVec(GuiElement *e) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003375C8);
 
+/* func_003375D0: install the D_1ADA18 vtable at p+0x30; if the pool at p+0x2C is
+ * live and the node slot p+0x38 is still empty, free the node *(p+0x34) back to
+ * it (func_00337D78); then run the shared ctor func_00336F00(p, flag). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003375D0);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame +
+   branch-likely wall. */
+void func_003375D0(void *p, s32 flag) {
+    *(void **)((char *)p + 0x30) = &D_1ADA18;
+    if (*(s32 *)((char *)p + 0x2C) != 0 && *(s32 *)((char *)p + 0x38) == 0) {
+        /* free node *(p+0x34) back to the pool at *(p+0x2C) (a0 = *(p+0x2C),
+           not p - the bnel that would set a0=p is nullified on this path) */
+        func_00337D78(*(void **)((char *)p + 0x2C), *(void ***)((char *)p + 0x34));
+    }
+    ((void (*)(void *, s32))func_00336F00)(p, flag);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337630);
 
@@ -568,7 +669,19 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337DC8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003380B8);
 
+/* func_00338A80: init two embedded type-B GUI elements (at p+0x10 and p+0x5C),
+ * return the object. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338A80);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
+   wall. */
+void *func_00338A80(void *p) {
+    GuiElementInitTypeB((char *)p + 0x10);
+    GuiElementInitTypeB((char *)p + 0x5C);
+    return p;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338AB8);
 
@@ -594,7 +707,23 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00339678);
 void func_003396E0(void) {
 }
 
+/* func_003396E8: map a small selector to a scale constant - selector 0 -> 0.7,
+ * 1 -> 0.8, anything else -> 1.0. The first argument is ignored. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003396E8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; multi-way branch +
+   float-constant materialization wall. */
+f32 func_003396E8(s32 unused, s32 sel) {
+    if (sel == 1) {
+        return 0.8f;
+    }
+    if (sel == 0) {
+        return 0.7f;
+    }
+    return 1.0f;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00339740);
 
@@ -612,7 +741,25 @@ void func_00339F90(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00339F98);
 
+/* func_0033A048: init the screen's eight embedded sub-elements at their fixed
+ * offsets (four type-B then four type-C), return the object. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A048);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
+   wall. */
+void *func_0033A048(void *p) {
+    GuiElementInitTypeB((char *)p + 0x8);
+    GuiElementInitTypeB((char *)p + 0x54);
+    GuiElementInitTypeB((char *)p + 0xA0);
+    GuiElementInitTypeB((char *)p + 0xEC);
+    GuiElementInitTypeC((char *)p + 0x138);
+    GuiElementInitTypeC((char *)p + 0x190);
+    GuiElementInitTypeC((char *)p + 0x1E8);
+    GuiElementInitTypeC((char *)p + 0x240);
+    return p;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A0B0);
 
@@ -622,7 +769,19 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiConfirmPopup
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiConfirmPopupDraw);
 
+/* func_0033A640: init the embedded dialog-box (p+0x8) and a type-B element
+ * (p+0x2D8), return the object. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A640);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
+   wall. */
+void *func_0033A640(void *p) {
+    GuiDialogBoxInitElements((char *)p + 0x8);
+    GuiElementInitTypeB((char *)p + 0x2D8);
+    return p;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A678);
 
@@ -671,7 +830,24 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033B560);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiProgressBarWidgetInit);
 
+/* func_0033B6D0: when the +0x21C flag is set, position the element at p+0x170
+ * from the anchor vector at *(p+0x20C): x = anchor[0] + D_1ADCE0; y = anchor[1]
+ * + D_1ADCE4; z = w = 0. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033B6D0);
+#else
+/* TODO(match): functional equivalent - not byte-exact; gp_rel/absolute float
+   constant addressing mix wall. */
+extern f32 D_1ADCE0, D_1ADCE4;
+void func_0033B6D0(void *p) {
+    if (*(s32 *)((char *)p + 0x21C) != 0) {
+        f32 *anchor = *(f32 **)((char *)p + 0x20C);
+        GuiElementSetPos((GuiElement *)((char *)p + 0x170),
+                         anchor[0] + D_1ADCE0, anchor[1] + D_1ADCE4,
+                         0.0f, 0.0f);
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033B720);
 
@@ -750,7 +926,20 @@ void GuiDialogBoxSetBounds(void *p, f32 a, f32 b, f32 c, f32 d, f32 e, f32 f) {
 }
 #endif
 
+/* GuiDialogBoxSetText3: assign the three dialog-box text labels - the title
+ * (p+0x198 <- t0), the body (p+0x248 <- t2) and the prompt (p+0x1F0 <- t1). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiDialogBoxSetText3);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame
+   wall. */
+extern void GuiElementSetText(GuiElement *e, s32 text);
+void GuiDialogBoxSetText3(void *p, s32 t0, s32 t1, s32 t2) {
+    GuiElementSetText((GuiElement *)((char *)p + 0x198), t0); /* title */
+    GuiElementSetText((GuiElement *)((char *)p + 0x248), t1); /* body */
+    GuiElementSetText((GuiElement *)((char *)p + 0x1F0), t2); /* footer */
+}
+#endif
 
 /* GuiDialogBoxSetScale: store the dialog-box scale float at +0x2A4. */
 void GuiDialogBoxSetScale(void *p, f32 scale) {
@@ -815,7 +1004,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D320);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D3C0);
 
+/* func_0033D478: init the embedded dialog-box (at p+0x8), return the object
+ * (byte-identical body to func_0033CD80). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D478);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
+   wall ($16/$31 16-byte vs 8-byte slot packing). */
+void *func_0033D478(void *p) {
+    GuiDialogBoxInitElements((char *)p + 0x8);
+    return p;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D4A8);
 
@@ -825,7 +1025,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D5D8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D780);
 
+/* func_0033DA00: init the embedded dialog-box (at p+0x8), return the object
+ * (byte-identical body to func_0033CD80). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DA00);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
+   wall. */
+void *func_0033DA00(void *p) {
+    GuiDialogBoxInitElements((char *)p + 0x8);
+    return p;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DA30);
 
@@ -835,7 +1046,20 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DB60);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DC68);
 
+/* func_0033DDC8: init the embedded dialog-box (p+0x8) and two list-row elements
+ * (p+0x2DC, p+0x324), return the object. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DDC8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
+   wall. */
+void *func_0033DDC8(void *p) {
+    GuiDialogBoxInitElements((char *)p + 0x8);
+    GuiListRowElementInit((char *)p + 0x2DC);
+    GuiListRowElementInit((char *)p + 0x324);
+    return p;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DE08);
 
@@ -845,7 +1069,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E070);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E308);
 
+/* func_0033E488: init the embedded dialog-box (at p+0x8), return the object
+ * (byte-identical body to func_0033CD80). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E488);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
+   wall. */
+void *func_0033E488(void *p) {
+    GuiDialogBoxInitElements((char *)p + 0x8);
+    return p;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E4B8);
 
@@ -876,7 +1111,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E8B0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E9B8);
 
+/* func_0033EB20: init the embedded dialog-box (at p+0x8), return the object
+ * (byte-identical body to func_0033CD80). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EB20);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
+   wall. */
+void *func_0033EB20(void *p) {
+    GuiDialogBoxInitElements((char *)p + 0x8);
+    return p;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EB50);
 
@@ -886,7 +1132,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EC80);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033ED18);
 
+/* func_0033EDD0: init the embedded dialog-box (at p+0x8), return the object
+ * (byte-identical body to func_0033CD80). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EDD0);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
+   wall. */
+void *func_0033EDD0(void *p) {
+    GuiDialogBoxInitElements((char *)p + 0x8);
+    return p;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EE00);
 
@@ -894,7 +1151,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EE08);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EF30);
 
+/* func_0033EFC8: init the embedded dialog-box (at p+0x8), return the object
+ * (byte-identical body to func_0033CD80). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EFC8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
+   wall. */
+void *func_0033EFC8(void *p) {
+    GuiDialogBoxInitElements((char *)p + 0x8);
+    return p;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EFF8);
 
@@ -902,13 +1170,37 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F000);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F128);
 
+/* func_0033F1C0: init the embedded dialog-box (p+0x8) and the GuiWidget at
+ * p+0x2E0 (func_00348BD0), return the object. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F1C0);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
+   wall. */
+void *func_0033F1C0(void *p) {
+    GuiDialogBoxInitElements((char *)p + 0x8);
+    func_00348BD0((char *)p + 0x2E0);
+    return p;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F1F8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F200);
 
+/* func_0033F360: call func_0033F398(p) to get a row index, then return the
+ * row's address: base (+0x3B8) + index * 0x14 (20-byte stride). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F360);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
+   wall. */
+void func_0033F398(void *p);
+s32 func_0033F360(void *p) {
+    s32 idx = ((s32 (*)(void *))func_0033F398)(p);
+    return *(s32 *)((char *)p + 0x3B8) + idx * 0x14;
+}
+#endif
 
 /* func_0033F398: forward p+0x2E0 to func_00348E60. */
 void func_0033F398(void *p) {
@@ -916,19 +1208,76 @@ void func_0033F398(void *p) {
     __asm__ __volatile__("");
 }
 
+/* func_0033F3B8: init the GuiWidget at p+0x2E0, then record the row-data
+ * pointer (arg) at p+0x3B8. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F3B8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame
+   wall ($16/$17/$31 16-byte vs 8-byte slot packing). */
+extern void func_00348DA0(void *p);
+void func_0033F3B8(void *p, s32 rows) {
+    func_00348DA0((char *)p + 0x2E0);
+    *(s32 *)((char *)p + 0x3B8) = rows;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F3F0);
 
+/* func_0033F478: tear down the embedded dialog-box (p+0x8), then reconfigure the
+ * GuiWidget at p+0x2E0 with the per-language resource D_1ADEB0[g_currentLanguage]
+ * (func_00348E58) and re-init it (func_00348E70). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F478);
+#else
+/* TODO(match): functional equivalent - not byte-exact; gp_rel(D_1ADEB0) vs
+   absolute(g_currentLanguage) addressing mix + 2-callee-save frame wall. */
+extern u8 g_currentLanguage;
+extern s32 D_1ADEB0[];
+void func_0033F478(void *p) {
+    void *w = (char *)p + 0x2E0;
+    func_0033BF90((char *)p + 0x8);
+    func_00348E58(w, D_1ADEB0[g_currentLanguage]);
+    func_00348E70(w);
+}
+#endif
 
+/* func_0033F4D0: init the embedded dialog-box (p+0x8) and a type-C element
+ * (p+0x2E0), return the object. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F4D0);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
+   wall. */
+void *func_0033F4D0(void *p) {
+    GuiDialogBoxInitElements((char *)p + 0x8);
+    GuiElementInitTypeC((char *)p + 0x2E0);
+    return p;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F508);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F510);
 
+/* func_0033F610: forward the embedded dialog-box (p+0x8) to func_0033BE70, then
+ * push the two floats from the vector at *(p+0x2D8) into it via func_0033C060.
+ * Returns bit 6 of the flags argument. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F610);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame
+   wall. */
+extern void func_0033BE70(void *p, s32 flags);
+extern void func_0033C060(void *p, f32 a, f32 b);
+s32 func_0033F610(void *p, s32 flags) {
+    f32 *v;
+    func_0033BE70((char *)p + 0x8, flags);
+    v = *(f32 **)((char *)p + 0x2D8);
+    func_0033C060((char *)p + 0x8, v[0], v[1]);
+    return (flags >> 6) & 1;
+}
+#endif
 
 /* func_0033F670: forward p+0x8 to func_0033BF90. */
 void func_0033F670(void *p) {
@@ -936,7 +1285,30 @@ void func_0033F670(void *p) {
     __asm__ __volatile__("");
 }
 
+/* func_0033F690: init the screen's thirteen embedded sub-elements (the dialog
+ * box at +0x8, the D_1ADA18 widget at +0x2DC, three type-C, one type-B, then
+ * seven more type-C), return the object. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F690);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
+   wall. */
+void *func_0033F690(void *p) {
+    GuiDialogBoxInitElements((char *)p + 0x8);
+    func_003374D8((char *)p + 0x2DC);
+    GuiElementInitTypeC((char *)p + 0x318);
+    GuiElementInitTypeC((char *)p + 0x370);
+    GuiElementInitTypeC((char *)p + 0x3C8);
+    GuiElementInitTypeB((char *)p + 0x420);
+    GuiElementInitTypeC((char *)p + 0x470);
+    GuiElementInitTypeC((char *)p + 0x4C8);
+    GuiElementInitTypeC((char *)p + 0x520);
+    GuiElementInitTypeC((char *)p + 0x578);
+    GuiElementInitTypeC((char *)p + 0x5D0);
+    GuiElementInitTypeC((char *)p + 0x628);
+    return p;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F718);
 
@@ -970,7 +1342,24 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003418D8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341A80);
 
+/* func_00341C28: init the screen's six embedded sub-elements at their fixed
+ * offsets (two type-B, one type-C, one type-B, a list-row, and the D_1ADA18
+ * widget), return the object. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341C28);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
+   wall. */
+void *func_00341C28(void *p) {
+    GuiElementInitTypeB(p);
+    GuiElementInitTypeB((char *)p + 0x4C);
+    GuiElementInitTypeC((char *)p + 0x98);
+    GuiElementInitTypeB((char *)p + 0xF0);
+    GuiListRowElementInit((char *)p + 0x13C);
+    func_003374D8((char *)p + 0x184);
+    return p;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiScrollListScreenInit);
 
@@ -998,13 +1387,71 @@ void func_00342460(void *p, s32 v) {
     *(s32 *)((char *)p + 0x230) = v;
 }
 
+/* func_00342468: look up an entry from the D_265250 table for column
+ * sel=*(p+0x31C): table[sel*8 + count] where count=*(p+sel*4+0x1B8). For the
+ * special column 2, when the extras flag is clear and the +0x1C0 counter has
+ * reached 3+, the entry is suppressed (returns 0). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342468);
+#else
+/* TODO(match): functional equivalent - not byte-exact; movz conditional-move +
+   absolute table addressing wall. */
+extern s32 D_265250[];
+extern u8 g_miscExtras;
+s32 func_00342468(void *p) {
+    s32 sel = *(s32 *)((char *)p + 0x31C);
+    s32 count = *(s32 *)((char *)p + sel * 4 + 0x1B8);
+    s32 result = D_265250[sel * 8 + count];
+    if (sel == 2 && g_miscExtras == 0 && *(s32 *)((char *)p + 0x1C0) >= 3) {
+        result = 0;
+    }
+    return result;
+}
+#endif
 
+/* func_003424C8: resolve a row address for the selected column (*(p+0x31C)).
+ * Column 0 -> base(+0x310) + count(+0x1B8)*0x14; column 1 -> base(+0x314) +
+ * count(+0x1BC)*0x14; otherwise -> base(+0x318) + count(+sel*4+0x1B8)*0x14
+ * (the +0x1B8 array runs parallel to the column index). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003424C8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; switch-style multi-way
+   branch wall. */
+s32 func_003424C8(void *p) {
+    s32 sel = *(s32 *)((char *)p + 0x31C);
+    if (sel == 0) {
+        return *(s32 *)((char *)p + 0x310) + *(s32 *)((char *)p + 0x1B8) * 0x14;
+    }
+    if (sel == 1) {
+        return *(s32 *)((char *)p + 0x314) + *(s32 *)((char *)p + 0x1BC) * 0x14;
+    }
+    return *(s32 *)((char *)p + 0x318) +
+           *(s32 *)((char *)p + sel * 4 + 0x1B8) * 0x14;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342520);
 
+/* func_00342670: position the embedded element at p+0x130 from the anchor
+ * vector at *(p+0x228) and the per-column index *(p+sel*4+0x1B8) where
+ * sel=*(p+0x31C): x = D_1AE0B0 + anchor[0]; y = D_1AE0B4 + D_1AE0B8*idx +
+ * anchor[1]; z = w = 0. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342670);
+#else
+/* TODO(match): functional equivalent - not byte-exact; gp_rel/absolute float
+   constant addressing mix wall. */
+extern f32 D_1AE0B0, D_1AE0B4, D_1AE0B8;
+void func_00342670(void *p) {
+    s32 sel = *(s32 *)((char *)p + 0x31C);
+    f32 *anchor = *(f32 **)((char *)p + 0x228);
+    f32 idx = (f32)*(s32 *)((char *)p + sel * 4 + 0x1B8);
+    f32 x = D_1AE0B0 + anchor[0];
+    f32 y = (D_1AE0B4 + D_1AE0B8 * idx) + anchor[1];
+    GuiElementSetPos((GuiElement *)((char *)p + 0x130), x, y, 0.0f, 0.0f);
+}
+#endif
 
 /* func_003426D8: no-op stub (empty body - registered/overridable hook). */
 void func_003426D8(void) {
@@ -1030,7 +1477,20 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342998);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342B30);
 
+/* func_00342BA0: init the GuiWidget at p+0x10 and two type-B elements
+ * (p+0xEC, p+0x138), return the object. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342BA0);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
+   wall. */
+void *func_00342BA0(void *p) {
+    func_00348BD0((char *)p + 0x10);
+    GuiElementInitTypeB((char *)p + 0xEC);
+    GuiElementInitTypeB((char *)p + 0x138);
+    return p;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342BE0);
 
@@ -1043,7 +1503,19 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiHelpPromptWi
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342D60);
 
+/* func_00342D68: call func_00342DA0(p) to get a row index, then return the
+ * row's address: base (+0xE8) + index * 0x14 (20-byte stride). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342D68);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
+   wall. */
+void func_00342DA0(void *p);
+s32 func_00342D68(void *p) {
+    s32 idx = ((s32 (*)(void *))func_00342DA0)(p);
+    return *(s32 *)((char *)p + 0xE8) + idx * 0x14;
+}
+#endif
 
 /* func_00342DA0: forward p+0x10 to func_00348E60. */
 void func_00342DA0(void *p) {
@@ -1051,13 +1523,56 @@ void func_00342DA0(void *p) {
     __asm__ __volatile__("");
 }
 
+/* func_00342DC0: init the GuiWidget at p+0x10, then record the row-data
+ * pointer (arg) at p+0xE8. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342DC0);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame
+   wall. */
+void func_00342DC0(void *p, s32 rows) {
+    func_00348DA0((char *)p + 0x10);
+    *(s32 *)((char *)p + 0xE8) = rows;
+}
+#endif
 
+/* func_00342DF8: refresh the GuiWidget at p+0x10 (func_00348CB8), then re-feed
+ * it the two floats from the vector at *(p+0x0) via func_00348E28. Returns 0. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342DF8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame
+   wall. */
+s32 func_00342DF8(void *p) {
+    void *w = (char *)p + 0x10;
+    func_00348CB8(w);
+    {
+        f32 *v = *(f32 **)p;
+        func_00348E28(w, v[0], v[1]);
+    }
+    return 0;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342E48);
 
+/* func_00342FD8: init the screen's six embedded sub-elements (four type-B, the
+ * D_1ADA18 widget at +0x130, and the GuiWidget at +0x188), return the object. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342FD8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
+   wall. */
+void *func_00342FD8(void *p) {
+    GuiElementInitTypeB(p);
+    GuiElementInitTypeB((char *)p + 0x4C);
+    GuiElementInitTypeB((char *)p + 0x98);
+    GuiElementInitTypeB((char *)p + 0xE4);
+    func_003374D8((char *)p + 0x130);
+    func_00348BD0((char *)p + 0x188);
+    return p;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiIconScreenInit2);
 
@@ -1085,7 +1600,23 @@ s32 func_003432C0(void *p) {
     return *(s32 *)((char *)p + 0x260) + *(s32 *)((char *)p + 0x16C) * 0x14;
 }
 
+/* func_003432D8: position the embedded element at p+0xE4. Reads the anchor
+ * vector at *(p+0x180): x = D_1AE150 + anchor[0]; y = D_1AE154 +
+ * D_1AE158*(float)(*(p+0x16C)) + anchor[1]; z = w = 0. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003432D8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; gp_rel/absolute float
+   constant addressing mix wall. */
+extern f32 D_1AE150, D_1AE154, D_1AE158;
+void func_003432D8(void *p) {
+    f32 *anchor = *(f32 **)((char *)p + 0x180);
+    f32 idx = (f32)*(s32 *)((char *)p + 0x16C);
+    f32 x = D_1AE150 + anchor[0];
+    f32 y = (D_1AE154 + D_1AE158 * idx) + anchor[1];
+    GuiElementSetPos((GuiElement *)((char *)p + 0xE4), x, y, 0.0f, 0.0f);
+}
+#endif
 
 /* func_00343330: no-op stub (empty body - registered/overridable hook). */
 void func_00343330(void) {
@@ -1105,7 +1636,27 @@ void func_00343558(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343578);
 
+/* func_00343668: when the +0x170 flag is set, draw the two sprite elements
+ * (p+0x0 and p+0x4C) and run the three sub-draws (func_003434C8/00343558/
+ * 00343578). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343668);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame +
+   branch-likely guard wall. */
+extern void func_003434C8(void *p);
+extern void func_00343558(void *p);
+extern void func_00343578(void *p);
+void func_00343668(void *p) {
+    if (*(s32 *)((char *)p + 0x170) != 0) {
+        GuiSpriteElementDraw(p);
+        GuiSpriteElementDraw((char *)p + 0x4C);
+        func_003434C8(p);
+        func_00343558(p);
+        func_00343578(p);
+    }
+}
+#endif
 
 /* func_003436C0: identity passthrough - return the first arg. */
 void *func_003436C0(void *p) {
@@ -1177,7 +1728,27 @@ s32 func_00343F70(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343F78);
 
+/* func_00344110: init the screen's eight embedded sub-elements at their fixed
+ * offsets (three type-B, the D_1ADA18 widget, three type-C, and the identity
+ * widget func_003436C0), return the object. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344110);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
+   wall. */
+extern void *func_003436C0(void *p);
+void *func_00344110(void *p) {
+    GuiElementInitTypeB(p);
+    GuiElementInitTypeB((char *)p + 0x4C);
+    GuiElementInitTypeB((char *)p + 0x98);
+    func_003374D8((char *)p + 0xE4);
+    GuiElementInitTypeC((char *)p + 0x1B0);
+    GuiElementInitTypeC((char *)p + 0x208);
+    GuiElementInitTypeC((char *)p + 0x260);
+    func_003436C0((char *)p + 0x2C8);
+    return p;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiTitledSpriteScreenInit);
 
