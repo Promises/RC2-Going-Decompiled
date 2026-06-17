@@ -104,8 +104,14 @@ extern s32 func_0011AAD0(s32 count);           /* RotateThreadReadyQueue */
 extern s32 func_00351910(void *dmaq);
 extern s32 func_00350830(FmvPtsQueue *q);
 extern s32 func_00350840(FmvPtsQueue *q);
+/* func_00350910 reads $a0 as the stream-state ptr and returns nothing (void).
+   The matching build keeps the original `(void)`-shaped forward decl so the
+   byte-exact forwarder func_00350840 below (`return func_00350910()`) compiles
+   identically; the native build uses the real `void(s32*)` signature. */
 #ifndef TARGET_NATIVE
 extern s32 func_00350910(void);
+#else
+void func_00350910(s32 *st);
 #endif
 extern s32 func_001338C8(void);
 extern s32 func_0012EE28(void);
@@ -329,21 +335,121 @@ s32 func_00350830(FmvPtsQueue *q) {
  * its undefined result, which also keeps cc1 from sibling-call optimising
  * the forwarding tails.)
  */
+#ifndef TARGET_NATIVE
 s32 func_00350840(FmvPtsQueue *q) {
     if (q->started != 0) {
-        return func_00350910();
+        return func_00350910();   /* byte-exact: jal then jr $31 forwarding $2 */
     }
 }
+#else
+s32 func_00350840(FmvPtsQueue *q) {
+    /* Native: func_00350910 is void and takes the stream-state ptr; pass q
+       (the asm forwards its own $a0 unchanged). The original forwards the
+       leftover $2; here that result is undefined, so return 0. */
+    if (q->started != 0) {
+        func_00350910((s32 *)q);
+    }
+    return 0;
+}
+#endif
 
 /* func_00350868: SIF-DMA bounce of a decoded block to IOP memory. Blocked:
  * 8-byte-packed saves (s0/s1/s2/s3/ra). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350868);
 
-/* WALL: deferred-native body had a signature inconsistency with its
-   forwarder/caller (caught by the TARGET_NATIVE compile sweep). Left bare
-   INCLUDE_ASM (no #else); revisit with the asm when the FMV native backend
-   is built. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350910);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
+   saves (s0..s2/ra) plus several branch-likely div-by-zero guards. Revisit
+   with the gameplay-TU compiler.
+
+   Drain the elementary stream in 0x400-byte units: depending on the stream
+   FSM state word (st[0]) decide how many ready bytes there are, then for each
+   unit de-interleave st[6] macroblock rows of st[7] bytes out of the payload
+   ring into the decode scratch (D_1B2354), inject the SCD/sequence markers at
+   the 0xC00 boundary, and bounce each completed 0x400 block to IOP via
+   func_00350868. Procedure (void): the asm reads $a0 as the stream-state ptr
+   (daddu $16,$4,$0; lw 0x0($16)); its caller func_00350840 forwards its own
+   $a0 unchanged and returns the leftover $2 (the "undefined result"). */
+void func_00350910(s32 *st) {
+    u32 avail = 0;
+    s32 state = st[0];
+    s32 rdy;
+
+    if (state == 2) {
+        avail = (func_00133960() - st[0x18]) & 0xFFF;
+        rdy = (s32)avail < 0x400;
+    } else if (state > 2) {
+        if (state == 3) {
+            return;
+        }
+        rdy = 0;
+    } else if (state == 1) {
+        if (st[0xF] < 0x1000) {
+            return;
+        }
+        avail = 0x1000 - st[0x14];
+        rdy = (s32)avail < 0x400;
+    } else {
+        rdy = 0;
+    }
+
+    if (!rdy && st[6] << 10 <= st[0xF]) {
+        s32 mbCols = st[6];
+
+        do {
+            avail -= 0x400;
+            if (mbCols > 0) {
+                s32 col = 0;
+                s32 srcBase = st[0xF];
+
+                while (1) {
+                    s32 ringSize = st[0x10];
+                    s32 emitted = 0;
+                    s32 rowBytes = st[7];
+                    u8 *src = (u8 *)(st[0xD] + (st[0xE] - srcBase + ringSize) % ringSize +
+                                     col * rowBytes);
+                    u8 *dst = D_1B2354;
+
+                    do {
+                        s32 i;
+                        for (i = 0; i < st[7]; i++) {
+                            *dst++ = *src++;
+                            emitted++;
+                        }
+                        rowBytes = st[7];
+                        src += rowBytes * (st[6] - 1);
+                    } while (emitted < 0x400);
+
+                    if (st[0x18] == 0xC00) {
+                        D_1B2354[0x3F1] = 3;
+                    }
+                    if (st[0x18] == 0) {
+                        D_1B2354[0x11] = 2;
+                        D_1B2354[1] = 6;
+                    }
+                    func_00350868((u8 *)st, D_1B2354, 0x400, col * 0x1000 + st[0x18]);
+                    if (st[6] <= col + 1) {
+                        break;
+                    }
+                    srcBase = st[0xF];
+                    col++;
+                }
+            }
+            {
+                s32 step = st[0x18] + 0x400;
+                s32 r = (step >= 0) ? step : step + 0x13FF;
+                s32 left = st[0xF] - mbCols * 0x400;
+                st[0x18] = step - (r >> 12) * 0x1000;
+                st[0x14] += 0x400;
+                st[0xF] = left;
+                mbCols = st[6];
+            }
+        } while ((s32)avail >= 0x400 && mbCols * 0x400 <= st[0xF]);
+    }
+}
+#endif
 
 /* TODO(hle): needs PS2 graphics/IO HLE backend — builds the per-frame GIF
    packet chain (GIFtags + UNPACK/TRXPOS/TRXREG/TRXDIR) that uploads a decoded
