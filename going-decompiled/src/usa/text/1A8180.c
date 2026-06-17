@@ -152,6 +152,12 @@ extern s32 func_002AFAB0(f32 step, f32 max);
 extern f32 GetFloatAbs(f32 x);
 extern s32 func_002835E0(s32 x);
 extern f32 func_00284678(f32 *out, f32 angle);
+extern f32 func_00283B30(f32 angle);  /* cosine */
+extern f32 func_00284590(f32 a, f32 b);
+extern s32 func_00284548(f32 a, f32 b);
+extern void Vec4SubVu0(Vec4 *dst, Vec4 *a, Vec4 *b);
+extern void Vec4ScaleVu0(Vec4 *dst, Vec4 *src, f32 s);
+extern void Vec3RescaleToLenVu0(Vec4 *dst, f32 len, Vec4 *src);
 
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8200);
@@ -191,9 +197,28 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", GetRandomInt);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8688);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A86E0);
+/**
+ * Uniform random float in [lo, hi): scale a 15-bit random fraction
+ * (rand>>16 & 0x7FFF) / 32768 across the (hi - lo) span.
+ */
+f32 func_002A86E0(f32 lo, f32 hi) {
+    return lo + (f32)((func_001163B0() >> 16) & 0x7FFF) * (hi - lo) * 0.000030517578125f;
+}
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8740);
+/**
+ * Random signed offset in [lo, hi): a 12-bit random fraction (rand>>16 & 0xFFF)
+ * scaled across the (hi - lo) span and added to lo, with its sign flipped when
+ * the random value is odd.
+ */
+f32 func_002A8740(f32 lo, f32 hi) {
+    s32 r = func_001163B0() >> 16;
+    f32 v = lo + (f32)(r & 0xFFF) * (hi - lo) * 0.000244140625f;
+
+    if (r & 1) {
+        v = -v;
+    }
+    return v;
+}
 
 /**
  * Random small angle: uniform in [-0x800, 0x800) scaled by pi/2048 —
@@ -221,7 +246,28 @@ f32 func_002A8910(f32 a1, f32 a0, f32 b0, f32 b1, f32 t) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8948);
 
+/**
+ * Cosine ("smootherstep"-style) ease between a and b by t in [0,1]: shortcut
+ * the endpoints (t==0 -> a, t==1 -> b), otherwise blend by (1 - cos(t*pi))/2.
+ */
+#ifndef TARGET_NATIVE
+/* TODO(match): functional equivalent - 95.7%. The two endpoint c.eq.s shortcuts
+   and the (1 - cos(t*pi))*0.5 blend reproduce, but the later cc1 schedules the
+   compare's zero/one constant materialisation differently from the pinned cc1
+   (operand/const-scheduling wall). Revisit once the gameplay-TU compiler is
+   available. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8A68);
+#else
+f32 func_002A8A68(f32 a, f32 b, f32 t) {
+    if (t == 0.0f) {
+        return a;
+    }
+    if (t == 1.0f) {
+        return b;
+    }
+    return a + (b - a) * ((1.0f - func_00283B30(t * 3.14159274f)) * 0.5f);
+}
+#endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8B00);
@@ -521,7 +567,13 @@ f32 func_002AAFA8(f32 a, f32 b, f32 t) {
     return a + (b - a) * t;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AAFB8);
+/**
+ * Two-stage scalar transform: feed (b, a) through func_00284590, scale the
+ * result by c, and forward (a, scaled) to func_00284548.
+ */
+s32 func_002AAFB8(f32 a, f32 b, f32 c) {
+    return func_00284548(a, func_00284590(b, a) * c);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB000);
 
@@ -869,7 +921,26 @@ f32 func_002B0DA0(s32 ctx, void *a, void *b) {
     return out.z;
 }
 
+/**
+ * Build a unit "to-camera" direction in out: out = D_1A8CB0 - src, flatten z to
+ * 0, normalise to length 1, and flip it when the flag is clear.
+ */
+#ifndef TARGET_NATIVE
+/* TODO(match): functional equivalent - save-layout wall ($16/$17/$31 packed
+   8-byte by the later cc1 vs 16-byte by the pinned cc1). The Sub/flatten/
+   rescale/conditional-negate sequence is otherwise straightforward. Revisit
+   once the gameplay-TU compiler is available. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0DC8);
+#else
+void func_002B0DC8(Vec4 *src, Vec4 *out, s32 keepSign) {
+    Vec4SubVu0(out, (Vec4 *)&D_1A8CB0, src);
+    out->z = 0.0f;
+    Vec3RescaleToLenVu0(out, 1.0f, out);
+    if (keepSign == 0) {
+        Vec4ScaleVu0(out, out, -1.0f);
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0E40);
 
