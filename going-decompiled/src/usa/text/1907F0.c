@@ -59,6 +59,55 @@ extern s32 func_002832F8(s32 *counter);   /* shared countdown step (text/183178)
 extern void func_0029C600(s32 arg0);
 extern s32 DrawFullScreenTint(s32 r, s32 g, s32 b, s32 a);
 
+/* Forward decls for the screen-fade / level-init helpers and their callees. */
+extern s32  func_00290EA0(void);            /* fade pump status callback */
+extern s32  func_00290920(void);            /* fade draw callback */
+extern void func_002911F0(void);            /* grant default gadget loadout (defined below) */
+extern s32  func_00291148(void);            /* validate inventory display order (defined below) */
+extern void func_0029C5B0(s32 (*pump)(void), s32 (*draw)(void), s32 slot); /* register pump+draw callbacks */
+extern void func_002AB1A8(s32 *counter, s32 start, s32 mode);              /* arm a countdown */
+
+/* func_00290FD0 level-init callees (Track-B names where known). */
+extern void InstallFileLoadPump(void);
+extern void func_002FCFC8(void);
+extern void SetupMemoryArenaTable(void);
+extern void FillMemory32(void *dst, s32 pattern, s32 nbytes);
+extern void InitScreenGeometry(void);
+extern void BuildCameraProjection(void);
+extern void func_00280FE0(void);
+extern void ResetFrameArenas(void);
+extern void RegisterParticleUpdateHandlers(void);
+extern void InstallVif1DmacHandlers(void);
+extern void MarkLevelAvailable(s32 level);
+extern s32  g_vramTextureBase;
+extern s32  g_vramDynamicBase;
+extern s32  g_vramAllocCursor;
+extern u8   g_mobyClassSlotRemap[];   /* 0x1CE460 */
+extern u8   g_mobyClassBounds[];      /* 0x1D1500 */
+extern u8   g_mobyClassDataSizes[];   /* 0x1D0D80 */
+extern u8   g_tieClassQueue[];        /* 0x216200 */
+extern u8   g_tieVisibleClassList[];  /* 0x21D600 */
+extern u8   g_tieTexVramTable[];      /* 0x21D000 */
+extern u8   g_shrubClassTable[];      /* 0x2125D0 */
+extern u8   g_shrubRelightList[];     /* 0x2140D0 */
+extern u8   g_shrubTexVramTable[];    /* 0x213AD0 */
+extern u8   g_pLastOcclusionMask[];   /* 0x1B1698 */
+extern s32  D_1A9A88;                  /* cleared at the end of the init pass */
+
+/* Inventory display-order / ownership system (text/183178 data block). */
+extern u8   g_inventoryOrder[];        /* 0x1A7B70: byte[] low6=itemId, bit0x40=owned, 0xFF terminator */
+extern u8   g_inventoryOwned[];        /* 0x1A7B00: u8[0x38] per-item have-flag */
+extern u8   g_inventoryNewFlag[];      /* 0x1A7B38: u8[0x38] newly-acquired flag */
+extern s32  func_00289190(s32 itemClass);   /* true when the item class is still ownable */
+extern void GiveInventoryItem(s32 itemId);
+extern void func_002AE6C8(s32 itemId);      /* EquipGadgetItem */
+extern void func_002912B8(s32 progress);    /* re-insert everything unlocked at the player's progress */
+extern s32  g_playerProgress;          /* 0x1A79F8 */
+extern u32  g_itemEquipSlotTable[];    /* 0x1A7398: equip-slot table written for items 0x1E/0x2F (idx 0 / idx 2) */
+
+#define INVENTORY_ORDER_COUNT 0x20      /* loop walks g_inventoryOrder[0 .. 0x1F] (end = &g_inventoryOrder[0x20]) */
+#define ITEM_HELIPACK         0x1E
+
 /* func_00290870: 8 bytes of inter-function padding (addiu $sp,+0x90 / nop)
  * split off via symbol_addrs size:0x8; the real function begins at
  * func_00290878. Pure padding, no C. */
@@ -70,13 +119,42 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1907F0", func_00290870);
  * Body reproduces 1:1 at 84% — blocked by the 8-byte-packed callee-save
  * layout (saves s0/s1/s2/ra/f20 at sp+0x0..0x20; see header) plus a void
  * tail call this cc1 sibling-call-optimises. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1907F0", func_00290878);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed
+ * callee-save layout (s0/s1/s2/ra/f20) + a void sibling-call tail. */
+void func_00290878(s32 owner, s32 colourA, s32 colourB, f32 progress) {
+    s32 current;
+
+    /* Register the pump+draw callbacks the first time, or when a new owner
+     * pre-empts a non-transition fade (D_1A9004 != 2). */
+    if (D_1A9000 == 0 || (D_1A9004 != 2 && owner == 2)) {
+        D_1A9004 = owner;
+        func_0029C5B0(func_00290EA0, func_00290920, 1);
+    }
+    current = D_1A9004;
+
+    /* Only the slot's current owner may (re)arm the fade. */
+    if (owner == current) {
+        D_1A900C = colourA;
+        D_1A9010 = colourB;
+        D_1A9008 = progress;
+        func_002AB1A8(&D_1A9000, 0xA, 2);
+    }
+}
+#endif
 
 /* func_00290920: the fade draw callback (rebuilds the camera projection with
  * a pinched FOV, draws the letterbox/fade rectangles via func_0027E4D0 and
  * the two colour overlays via func_002846E8/func_003017F8). Blocked by the
  * 8-byte-packed callee-save layout (s0..s5+ra+f20..f25 packed at sp+0x0..,
- * see header). */
+ * see header).
+ * NO #else: this is 0x57C bytes of dense, opaque letterbox/bar interpolation
+ * geometry (a dozen cvt.w.s/magic-constant FP chains feeding func_0027E4D0
+ * rect draws) whose per-bar coordinate math is not recovered to the fidelity
+ * a faithful functional-equivalent would need — left bare with this wall note
+ * per the "don't fabricate speculative C for opaque functions" rule. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1907F0", func_00290920);
 
 /**
@@ -103,7 +181,17 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1907F0", func_00290EE0);
  * value; the pinned cc1 always materialises two (no source shape or flag
  * found that shares them; a volatile re-read shape adds an lw instead).
  * Left as INCLUDE_ASM. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1907F0", func_00290EE8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; the original cc1
+ * shares one `li v0,1` for both the store and the return value, the pinned
+ * cc1 materialises two. */
+s32 func_00290EE8(void) {
+    D_1A9018 = 1;
+    return 1;
+}
+#endif
 
 /**
  * Per-frame full-screen tint pump: raise the tint level toward 10 while
@@ -167,13 +255,83 @@ s32 func_00290FC0(void) {
  * 28)). Blocked twice over: the `break 0,7` div-guard encoding (documented
  * toolchain wall) AND the absolute %hi/%lo read of g_playerProgress that
  * this TU's small declaration cannot express (see header). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1907F0", func_00290FD0);
+#else
+/* TODO(match): functional equivalent - not byte-exact; blocked by the
+ * `break 0,7` div-by-28 guard encoding and the gp/absolute-mixed
+ * g_playerProgress read. */
+void func_00290FD0(void) {
+    InstallFileLoadPump();
+    func_002FCFC8();
+    SetupMemoryArenaTable();
+
+    /* Reset the dynamic-texture VRAM cursor to the static-texture base. */
+    g_vramDynamicBase = g_vramTextureBase;
+    g_vramAllocCursor = g_vramTextureBase;
+
+    FillMemory32(&g_pLastOcclusionMask[0x28], 0x87654321, 0x10);
+    FillMemory32(g_mobyClassSlotRemap,        -1, 0x2000);
+    FillMemory32(g_mobyClassBounds,           -1, 0xF00);
+    FillMemory32(g_mobyClassDataSizes,         0, 0xF0);
+    FillMemory32(&g_tieClassQueue[0x200],     -1, 0x2000);
+    FillMemory32(&g_tieVisibleClassList[0x200], -1, 0x800);
+    FillMemory32(&g_tieTexVramTable[0x400],    0, 0x80);
+    FillMemory32(&g_shrubClassTable[0x100],   -1, 0x1000);
+    FillMemory32(&g_shrubRelightList[0x400],  -1, 0x400);
+    FillMemory32(&g_shrubTexVramTable[0x400],  0, 0x40);
+
+    InitScreenGeometry();
+    BuildCameraProjection();
+    func_00280FE0();
+    ResetFrameArenas();
+    RegisterParticleUpdateHandlers();
+    InstallVif1DmacHandlers();
+    func_002911F0();
+
+    if (g_playerProgress != 0) {
+        MarkLevelAvailable(g_playerProgress % 0x1C);
+    }
+    D_1A9A88 = 0;
+}
+#endif
 
 /* func_00291148: validate the inventory display order (0xff-out entries no
  * longer ownable per func_00289190, Heli-Pack 0x1E exempt; returns 1 when
  * already clean). Blocked by the 8-byte-packed callee-save layout (saves
  * s0..s5+ra at sp+0x0..0x30; see header). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1907F0", func_00291148);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed
+ * callee-save layout (s0..s5+ra). Walks the inventory display order and
+ * 0xFF-clears any entry whose item class is no longer ownable. Returns 1 if
+ * the order was already clean, 0 if it had to clear an entry. */
+s32 func_00291148(void) {
+    s32 i;
+    s32 clean = 1;
+
+    for (i = 0; i < INVENTORY_ORDER_COUNT; i++) {
+        u8 entry = g_inventoryOrder[i];
+        s32 itemClass;
+
+        if (entry == 0xFF) {
+            continue;                      /* terminator/empty slot */
+        }
+        itemClass = entry & 0x3F;
+        if (itemClass == ITEM_HELIPACK) {
+            continue;                      /* Heli-Pack is always exempt */
+        }
+        /* Clear the entry when the class is no longer ownable, or when it
+         * resolves to class 0 (an invalid order byte). */
+        if (func_00289190(itemClass) == 0 || itemClass == 0) {
+            g_inventoryOrder[i] = 0xFF;
+            clean = 0;
+        }
+    }
+    return clean;
+}
+#endif
 
 /* func_002911F0: grant the always-owned starting items if missing (0x1E
  * Heli-Pack with its order entry + equip slot, 0x2A with its order entry,
@@ -186,4 +344,39 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1907F0", func_00291148);
  * COLORING: the original (later SN) cc1 colours the three single-use
  * byte-store temps (0x5E/0x6A) v1-then-v0, the pinned cc1 v0-then-v1; no
  * source shape found that flips it. Left as INCLUDE_ASM. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1907F0", func_002911F0);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 99.40% wall is pure
+ * register-coloring of the three byte-store temps (see above).
+ * GrantDefaultGadgetLoadout: grant the always-owned starting items that the
+ * save is missing, then re-validate and rebuild the display order. */
+void func_002911F0(void) {
+    /* 0x1E Heli-Pack: owned bit in display-order slot 0, equip-slot[0]. */
+    if (g_inventoryOwned[0x1E] == 0) {
+        GiveInventoryItem(0x1E);
+        func_002AE6C8(0x1E);
+        g_inventoryOrder[0]      = 0x5E;   /* 0x1E | 0x40 (owned) */
+        g_itemEquipSlotTable[0]  = 0x1E;
+    }
+    /* 0x2A: owned bit in display-order slot 1. */
+    if (g_inventoryOwned[0x2A] == 0) {
+        GiveInventoryItem(0x2A);
+        func_002AE6C8(0x2A);
+        g_inventoryOrder[1]      = 0x6A;   /* 0x2A | 0x40 (owned) */
+    }
+    /* 0x2F: equip-slot[2]. */
+    if (g_inventoryOwned[0x2F] == 0) {
+        GiveInventoryItem(0x2F);
+        g_itemEquipSlotTable[2]  = 0x2F;
+    }
+    /* 0x06: ensure the owned + newly-acquired flag pair is set. */
+    if (g_inventoryOwned[0x06] == 0) {
+        g_inventoryNewFlag[0x06] = 1;
+        g_inventoryOwned[0x06]   = 1;
+    }
+
+    func_00291148();
+    func_002912B8(g_playerProgress);
+}
+#endif
