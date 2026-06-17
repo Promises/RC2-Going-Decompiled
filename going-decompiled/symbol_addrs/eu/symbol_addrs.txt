@@ -337,6 +337,15 @@ func_0034BC28 = 0x0034BC28; // type:func
 // 183088: 0x38 handwritten stub block fused ahead of the first scale helper (D_1A7990 * x).
 func_00283108 = 0x00283108; // type:func size:0x38 handwritten stub block, real func_00283140 = USA func_00283230
 func_00283140 = 0x00283140; // type:func
+// 236ED8: 0x8 epilogue-padding pair (addiu $sp,0x30; nop) fused ahead of the GuiListRow ctor.
+func_00338148 = 0x00338148; // type:func size:0x8 padding pair, real func_00338150 = USA func_00337278
+func_00338150 = 0x00338150; // type:func
+// 188748: 0x48 run of epilogue-padding pairs fused ahead of the HUD-init forwarder.
+func_0028C620 = 0x0028C620; // type:func size:0x48 padding-pair run, real func_0028C668 = USA func_0028C6E0
+func_0028C668 = 0x0028C668; // type:func
+// 249FE8: 0x8 epilogue-padding pair (addiu $sp,0x20; nop) fused ahead of the sw $5,(arg) store stub.
+func_0034C668 = 0x0034C668; // type:func size:0x8 padding pair, real func_0034C670 = USA func_0034B1E8
+func_0034C670 = 0x0034C670; // type:func
 
 // 1D5488: name the EU sound-channel volume table so the slot-2 store folds into a
 // single %hi/%lo reloc (g_sndChannelVolumes+0x8) instead of section-relative

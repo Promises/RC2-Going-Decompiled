@@ -12,10 +12,12 @@
 
 /* Keep the absolute-addressed globals on the two-insn %hi/%lo macro under -G8. */
 __asm__(".extern D_1ADA28, 16");
+__asm__(".extern D_1ADA78, 16");
 __asm__(".extern D_1ADA98, 16");
 __asm__(".extern D_1ADAF8, 16");
 
 extern void *D_1ADA28;  /* vtable installed by func_003377A8 (USA D_1AD988) */
+extern void *D_1ADA78;  /* GuiListRow vtable installed by func_00338150 (USA g_GuiListRowVtable) */
 extern void *D_1ADA98;  /* vtable installed by func_00338700 (USA D_1AD9F8) */
 extern void *D_1ADAF8;  /* base GuiElement vtable, +0x30 (USA g_GuiElementVtable) */
 extern s32 D_1ADB90;    /* small-data accessor target (USA D_1ADAF0) */
@@ -208,6 +210,16 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_003380B0);
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_003380E8);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00338148);
+
+/* func_00338150: install the GuiListRow vtable (D_1ADA78) at p+0x30, then call
+ * func_00337DD8(p). Recovered from the EU padding mis-split (split off
+ * func_00338148's 0x8 epilogue stump via the symbol_addrs pin). USA func_00337278
+ * (installs g_GuiListRowVtable, calls func_00336F00). */
+void func_00338150(void *p) {
+    *(void **)((char *)p + 0x30) = &D_1ADA78;
+    func_00337DD8(p);
+    __asm__ __volatile__("");
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00338178);
 

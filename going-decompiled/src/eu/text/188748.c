@@ -11,9 +11,10 @@
  * scripts). EU function names follow the EU vaddr (USA func_002895xx ->
  * EU func_002894xx etc). Of the 15 USA-matched bodies, 14 mirror here; the two
  * empty-leaf twins (func_002896A0, func_0028A468) were already emitted as C by
- * the splat stub generator. USA func_0028C6E0 has NO clean EU twin (region
- * layout divergence - the EU build folds that HUD-init forwarder differently;
- * its USA address falls mid-function in EU func_0028C6B0), so it is not ported.
+ * the splat stub generator. USA func_0028C6E0's HUD-init forwarder twin is
+ * EU func_0028C668 (recovered 2026-06-17 via the padding mis-split fix: the EU
+ * split had fused it behind a 0x48 epilogue-stump run as func_0028C620; a
+ * symbol_addrs pin promotes 0x0028C668 to its own glabel).
  */
 
 /* Per-weapon-variant def/state record (g_weaponTable, stride 0xE0). */
@@ -74,6 +75,8 @@ extern s32 D_1A9068;
 void ResetCinematicQueue(CinematicQueue *q);
 void func_0028C318(void *p);
 void func_0028BF08(void);             /* HUD widget-table reseed (EU twin of USA func_0028BF80) */
+void func_0029D670(s32 a, s32 b);     /* HUD subsystem enable (EU twin of USA func_0029DB10) */
+void func_002B1858(s32 a, s32 b, s32 c); /* HUD element register (EU twin of USA func_002B1B48) */
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_002887C8);
 
@@ -274,6 +277,17 @@ void func_0028C418(void *p) {
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028C450);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028C620);
+
+/* func_0028C668: HUD-init forwarder - enable a HUD subsystem via
+ * func_0029D670(arg, 1) then register HUD element 0xD with
+ * func_002B1858(0xD, 0, 1). Recovered from the EU padding mis-split (split off
+ * func_0028C620's 0x48 epilogue-stump run via the symbol_addrs pin). USA twin
+ * func_0028C6E0 (calls func_0029DB10 / func_002B1B48). */
+void func_0028C668(s32 arg) {
+    func_0029D670(arg, 1);
+    func_002B1858(0xD, 0, 1);
+    __asm__ __volatile__("");
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028C698);
 

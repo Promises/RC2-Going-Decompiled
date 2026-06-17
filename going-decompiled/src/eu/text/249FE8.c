@@ -245,6 +245,13 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", func_0034BF18);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", func_0034C668);
 
+/* func_0034C670 (USA func_0034B1E8): store a1 to the +0x0 field. Recovered from
+ * the EU padding mis-split (split off func_0034C668's 0x8 epilogue stump via the
+ * symbol_addrs pin). Region-agnostic leaf store. */
+void func_0034C670(GuiWidget *w, s32 v) {
+    *(s32 *)((char *)w + 0x0) = v;
+}
+
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", func_0034C678);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", func_0034C6A8);
