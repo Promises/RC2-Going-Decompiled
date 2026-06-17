@@ -830,15 +830,83 @@ void func_0033A7D8(void *p, s32 v) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A7E0);
 
+/* func_0033A860: populate this confirm-dialog screen's text - set the dialog box
+ * (p+0x8) title/body/footer to localized strings 0x2C33/0x2C32/0x2BE5, zero its
+ * scale, raise the +0x32C "text ready" flag, and return 1. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A860);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 4-callee-save frame
+   wall. */
+extern s32 GetLocalizedString(s32 id);
+extern void GuiDialogBoxSetText3(void *p, s32 t0, s32 t1, s32 t2);
+extern void GuiDialogBoxSetScale(void *p, f32 scale);
+s32 func_0033A860(void *p) {
+    s32 t0 = GetLocalizedString(0x2C33);
+    s32 t1 = GetLocalizedString(0x2C32);
+    s32 t2 = GetLocalizedString(0x2BE5);
+    GuiDialogBoxSetText3((char *)p + 0x8, t0, t1, t2);
+    GuiDialogBoxSetScale((char *)p + 0x8, 0.0f);
+    *(s32 *)((char *)p + 0x32C) = 1;
+    return 1;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A8E8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A8F0);
 
+/* func_0033A9F8: draw this confirm-dialog screen. Sets the dialog box's (p+0x8)
+ * +0x2C4 footer-visible flag to 1 when any global menu lock (D_1A8C88 / D_1A8C8C)
+ * is engaged or the local +0x330 flag is set; additionally sets it to 1 (with
+ * arg 1) when the +0x32C "text ready" flag equals 1. Then draws the box
+ * (func_0033BF90) and the background sprite at p+0x2D8. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A9F8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; branch-likely (beql)
+   guard + reloaded-flag CSE wall. */
+extern s32 D_1A8C88, D_1A8C8C;
+extern void func_0033BE68(void *p, s32 v);
+void func_0033A9F8(void *p) {
+    void *box = (char *)p + 0x8;
+    if (D_1A8C88 != 0 || D_1A8C8C != 0 || *(s32 *)((char *)p + 0x330) != 0) {
+        func_0033BE68(box, 0);
+    }
+    if (*(s32 *)((char *)p + 0x32C) == 1) {
+        func_0033BE68(box, 1);
+    }
+    func_0033BF90(box);
+    GuiSpriteElementDraw((char *)p + 0x2D8);
+}
+#endif
 
+/* func_0033AA80: init the level-info panel's thirteen embedded sub-elements at
+ * their fixed offsets (four type-B at p+0x8/+0x54/+0xA0/+0xEC, then nine type-C
+ * at +0x138/+0x190/+0x1E8/+0x240/+0x298/+0x2F0/+0x348/+0x3A0/+0x3F8), return the
+ * object. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033AA80);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
+   wall. */
+void *func_0033AA80(void *p) {
+    GuiElementInitTypeB((char *)p + 0x8);
+    GuiElementInitTypeB((char *)p + 0x54);
+    GuiElementInitTypeB((char *)p + 0xA0);
+    GuiElementInitTypeB((char *)p + 0xEC);
+    GuiElementInitTypeC((char *)p + 0x138);
+    GuiElementInitTypeC((char *)p + 0x190);
+    GuiElementInitTypeC((char *)p + 0x1E8);
+    GuiElementInitTypeC((char *)p + 0x240);
+    GuiElementInitTypeC((char *)p + 0x298);
+    GuiElementInitTypeC((char *)p + 0x2F0);
+    GuiElementInitTypeC((char *)p + 0x348);
+    GuiElementInitTypeC((char *)p + 0x3A0);
+    GuiElementInitTypeC((char *)p + 0x3F8);
+    return p;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033AB10);
 
@@ -848,9 +916,61 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033AF68);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiLevelInfoPanelTick);
 
+/* func_0033B428: draw the map-screen panel - only when the +0x490 "panel built"
+ * flag is set. Draws the two background sprites (p+0x8, p+0x54), pushes two GS
+ * register packets (TEST/0x42=0x44 then SCISSOR/0x47=0xB), renders the map layer
+ * (MapDraw(0,1) + func_002DBC98(0)), draws the two foreground sprites (p+0xA0,
+ * p+0xEC) and the nine text labels at +0x138 (stride 0x58). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033B428);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame +
+   branch-likely (beql) guard wall. */
+extern void AppendGsRegPacket(s32 reg, s32 val);
+extern void MapDraw(s32 a, s32 b);
+extern void func_002DBC98(s32 a);
+extern void GuiTextElementDraw(void *e);
+void func_0033B428(void *p) {
+    if (*(s32 *)((char *)p + 0x490) != 0) {
+        GuiSpriteElementDraw((char *)p + 0x8);
+        GuiSpriteElementDraw((char *)p + 0x54);
+        AppendGsRegPacket(0x42, 0x44);
+        AppendGsRegPacket(0x47, 0xB);
+        MapDraw(0, 1);
+        func_002DBC98(0);
+        GuiSpriteElementDraw((char *)p + 0xA0);
+        GuiSpriteElementDraw((char *)p + 0xEC);
+        GuiTextElementDraw((char *)p + 0x138);
+        GuiTextElementDraw((char *)p + 0x190);
+        GuiTextElementDraw((char *)p + 0x1E8);
+        GuiTextElementDraw((char *)p + 0x240);
+        GuiTextElementDraw((char *)p + 0x298);
+        GuiTextElementDraw((char *)p + 0x2F0);
+        GuiTextElementDraw((char *)p + 0x348);
+        GuiTextElementDraw((char *)p + 0x3A0);
+        GuiTextElementDraw((char *)p + 0x3F8);
+    }
+}
+#endif
 
+/* func_0033B4E8: init the map-screen panel's six embedded sub-elements - four
+ * type-B elements (p+0x4, stride 0x4C), the D_1ADA18 widget at +0x134, and one
+ * type-C element at +0x170; return the object. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033B4E8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 4-callee-save frame
+   wall. */
+void *func_0033B4E8(void *p) {
+    GuiElementInitTypeB((char *)p + 0x4);
+    GuiElementInitTypeB((char *)p + 0x50);
+    GuiElementInitTypeB((char *)p + 0x9C);
+    GuiElementInitTypeB((char *)p + 0xE8);
+    func_003374D8((char *)p + 0x134);
+    GuiElementInitTypeC((char *)p + 0x170);
+    return p;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033B560);
 
@@ -1061,7 +1181,29 @@ void GuiDialogBoxSetScale(void *p, f32 scale) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033C0F8);
 
+/* func_0033C100: init the screen's ten embedded sub-elements at their fixed
+ * offsets (five type-B at p+0/+0x4C/+0x98/+0xE4/+0x130, three type-C at
+ * +0x1D8/+0x230/+0x288, then the two D_1ADA18 widgets at +0x2E0/+0x31C), return
+ * the object. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033C100);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 4-callee-save frame
+   wall. */
+void *func_0033C100(void *p) {
+    GuiElementInitTypeB(p);
+    GuiElementInitTypeB((char *)p + 0x4C);
+    GuiElementInitTypeB((char *)p + 0x98);
+    GuiElementInitTypeB((char *)p + 0xE4);
+    GuiElementInitTypeB((char *)p + 0x130);
+    GuiElementInitTypeC((char *)p + 0x1D8);
+    GuiElementInitTypeC((char *)p + 0x230);
+    GuiElementInitTypeC((char *)p + 0x288);
+    func_003374D8((char *)p + 0x2E0);
+    func_003374D8((char *)p + 0x31C);
+    return p;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033C1A8);
 
@@ -1113,7 +1255,35 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D1F0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D1F8);
 
+/* func_0033D320: re-layout this dialog-box screen and (on first open) chime.
+ *  - Run the dialog-box layout func_0033BE70 on the embedded box at p+0x8.
+ *  - Re-feed it the two floats of the vector at *(p+0x2DC) via func_0033C060.
+ *  - When (flags & 0x40) is set AND the +0x2D8 "already opened" latch is still
+ *    clear, toggle the global one-shot flag D_1A7BB9, play the open chime
+ *    (PlayGlobalSound(4,0,0)) and rebuild the camera projection.
+ * Returns bit 6 of the flags argument. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D320);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame +
+   branch-likely (beql) guard wall. */
+extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern void BuildCameraProjection(void);
+extern u8 D_1A7BB9;
+s32 func_0033D320(void *p, s32 flags) {
+    void *box = (char *)p + 0x8;
+    f32 *v;
+    func_0033BE70(box, flags);
+    v = *(f32 **)((char *)p + 0x2DC);
+    func_0033C060(box, v[0], v[1]);
+    if ((flags & 0x40) != 0 && *(s32 *)((char *)p + 0x2D8) == 0) {
+        D_1A7BB9 = (D_1A7BB9 < 1);
+        PlayGlobalSound(4, 0, 0);
+        BuildCameraProjection();
+    }
+    return (flags >> 6) & 1;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D3C0);
 
