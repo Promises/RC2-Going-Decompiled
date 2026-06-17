@@ -40,6 +40,23 @@ __asm__(".extern D_1ABA88, 16");
 __asm__(".extern D_1ABA8C, 16");
 __asm__(".extern D_1ABA90, 16");
 __asm__(".extern D_138180, 16");
+/* func_002CDEB0 cheat-flag mirror: source byte flags + s16 menu mirrors. */
+__asm__(".extern D_1A7BD1, 16");
+__asm__(".extern D_1A7BD2, 16");
+__asm__(".extern D_1A7BD3, 16");
+__asm__(".extern D_1A7BD4, 16");
+__asm__(".extern D_1A7BD6, 16");
+__asm__(".extern D_1AA5A2, 16");
+__asm__(".extern D_1AA5BA, 16");
+__asm__(".extern D_1AA5D2, 16");
+__asm__(".extern D_1AA5EA, 16");
+__asm__(".extern D_1AA602, 16");
+/* func_002D1850 extras-availability latch targets. */
+__asm__(".extern g_lastMenuScreenId, 16");
+__asm__(".extern D_1ABA50, 16");
+__asm__(".extern D_1ABA54, 16");
+__asm__(".extern D_1ABA58, 16");
+__asm__(".extern D_1ABA4C, 16");
 
 /* Singleton GUI-manager instance (null until the GUI is up). The wrappers here
  * only ever forward `instance + fixed-widget-offset` to widget methods. */
@@ -129,16 +146,28 @@ extern s32 D_1AA450, D_1AA454, D_1AA458; /* per-feature availability (gp-rel) */
 extern s32 D_1ABA80;               /* skill-points highlight flag (gp-rel) */
 extern s32 D_1ABA84, D_1ABA88, D_1ABA8C, D_1ABA90; /* per-menu "new" flags (abs) */
 
+/* Mis-split fragment: orphaned stack-pointer adjusts (addiu $sp / nops) with
+ * no jr $ra — not a real function entry; left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA100);
 
+/* menu helper: uses 128-bit sq/lq (vector) loads/stores — left as INCLUDE_ASM
+ * (the EE quadword ops are not emitted from scalar C). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA138);
 
+/* menu helper: uses 128-bit sq/lq (vector) loads/stores — left as INCLUDE_ASM
+ * (the EE quadword ops are not emitted from scalar C). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA3E8);
 
+/* menu helper: uses 128-bit sq/lq (vector) loads/stores — left as INCLUDE_ASM
+ * (the EE quadword ops are not emitted from scalar C). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA618);
 
+/* menu helper: uses 128-bit sq/lq (vector) loads/stores — left as INCLUDE_ASM
+ * (the EE quadword ops are not emitted from scalar C). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA740);
 
+/* Mis-split fragment: orphaned stack-pointer adjusts (addiu $sp / nops) with
+ * no jr $ra — not a real function entry; left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA960);
 
 /* Read the screen-state word stashed at g_pTextTableLoadBuf+0xD8. */
@@ -232,7 +261,31 @@ s32 func_002CAA70(void) {
     return 0;
 }
 
+/* Draw a centered two-line header inside a 2D batch: from the screen-rect at
+ * `p` (center x = p[0x18], y = p[0x1C], width = p[0x20]) it half-splits the
+ * width and draws localized string 0x31C8 left-justified at center-half and
+ * 0x31C4 at center+half, both in 0x80F0F0F0.
+ * Wall: 8-byte-packed-save (saves $16/$17/$18/$31). Preserved as portable C. */
+extern void DrawDebugString(s32 x, s32 y, u64 color, char *str, s64 wrap);
+extern void func_00280120(s32 x, s32 y, u64 color, char *str, s64 wrap);
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CAAA8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 3-GPR packed-save frame. */
+s32 func_002CAAA8(s32 *p) {
+    s32 cx = p[6];   /* p[0x18] */
+    s32 half = p[8] >> 1; /* p[0x20] width / 2 */
+    s32 y = p[7];    /* p[0x1C] */
+    char *s;
+    Begin2dDrawBatch(0);
+    s = GetLocalizedString(0x31C8);
+    DrawDebugString(cx - half, y, 0x80F0F0F0, s, -1);
+    s = GetLocalizedString(0x31C4);
+    func_00280120(cx + half, y, 0x80F0F0F0, s, -1);
+    End2dDrawBatch();
+    return 0;
+}
+#endif
 
 /* Clear a 20-entry s32 array (D_1F27C0+0x16C..+0x1BC) to -1, back to front.
  * Near-miss: cc1 folds %lo(D_1F27C0)+0x1BC into one addiu, but the original
@@ -268,12 +321,20 @@ void func_002CAB90(float x) {
 }
 #endif
 
+/* menu helper: uses 128-bit sq/lq (vector) loads/stores — left as INCLUDE_ASM
+ * (the EE quadword ops are not emitted from scalar C). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CABC0);
 
+/* menu-screen lifecycle routine: 8-byte-packed-save wall (saves 4 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", RequestMenuScreenChange);
 
+/* screen-capture/restore routine: 8-byte-packed-save wall (saves 5 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", CaptureScreenToVram);
 
+/* screen-capture/restore routine: 8-byte-packed-save wall (saves 5 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", RestoreScreenFromVram);
 
 /* Seed the camera/projection scratch (near/aspect/scale + clears) then rebuild
@@ -295,12 +356,20 @@ void func_002CAFD8(void) {
 }
 #endif
 
+/* menu-screen lifecycle routine: switch/jump-table dispatch (splat jtbl reloc gap) — left as
+ * INCLUDE_ASM (cc1 jtbl layout not reproduced). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", MenuScreenLoad);
 
+/* menu helper: 8-byte-packed-save wall (saves 5 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CB560);
 
+/* menu helper: uses 128-bit sq/lq (vector) loads/stores — left as INCLUDE_ASM
+ * (the EE quadword ops are not emitted from scalar C). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CB720);
 
+/* menu helper: switch/jump-table dispatch (splat jtbl reloc gap) — left as
+ * INCLUDE_ASM (cc1 jtbl layout not reproduced). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CB860);
 
 /* MenuScreenLoad then mark the screen-state scratch ready (state=2). */
@@ -319,12 +388,22 @@ void func_002CBA40(void) {
     *(s32 *)(p + 0x4) = 0;
 }
 
+/* Commit a menu transition: full-screen tint then latch the screen-state
+ * scratch (state=4, capture pending sub-state). Near-miss: the original emits a
+ * dead conditional store (p[0x4]=1 then unconditional =0) the later cc1
+ * load-PRE keeps but ours eliminates — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", MenuScreenCommitTransition);
 
+/* menu-screen lifecycle routine: 8-byte-packed-save wall (saves 8 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", MenuScreenUpdate);
 
+/* menu helper: 8-byte-packed-save wall (saves 2 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CBD68);
 
+/* menu data/list builder: 8-byte-packed-save wall (saves 3 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", BuildPausePromptPopup);
 
 /* Level-select slot-index validity gate (idx < 0x15 or idx == 0x18). */
@@ -332,8 +411,12 @@ s32 IsLevelListEntryEnabled(s32 idx) {
     return (idx < 0x15 || idx == 0x18);
 }
 
+/* menu input/update handler: 8-byte-packed-save wall (saves 7 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", LevelSelectListHandleInput);
 
+/* level-select list routine: 8-byte-packed-save wall (saves 9 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", LevelSelectListRender);
 
 /* Dispatch a 3-way menu action: 0 -> 1, 1 -> func_002D67A0(3,&D_25BA70), else 0.
@@ -356,16 +439,29 @@ s32 func_002CC788(s32 action) {
 }
 #endif
 
+/* menu helper: switch/jump-table dispatch (splat jtbl reloc gap) — left as
+ * INCLUDE_ASM (cc1 jtbl layout not reproduced). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CC7D8);
 
+/* menu helper: switch/jump-table dispatch (splat jtbl reloc gap) — left as
+ * INCLUDE_ASM (cc1 jtbl layout not reproduced). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CC858);
 
+/* menu helper: switch/jump-table dispatch (splat jtbl reloc gap) — left as
+ * INCLUDE_ASM (cc1 jtbl layout not reproduced). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CC908);
 
+/* 3-way menu action dispatch (0/1/2 -> toggle / func_002D67A0 / func_0029DCB8)
+ * plus the nanotech-bonus-heal-timer store. Near-miss: single-register result
+ * threading + store scheduling differ — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CCA18);
 
+/* menu-screen lifecycle routine: 8-byte-packed-save wall (saves 4 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", TickActiveMenuScreen);
 
+/* menu-screen lifecycle routine: 8-byte-packed-save wall (saves 9 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", RenderMenuScreenWidgets);
 
 /* Menu screen-state query: only acts when the active screen (ss[0x14]) is the
@@ -414,6 +510,8 @@ s32 func_002CD450(s32 screen) {
  * matching restore (frame artifact) that our cc1 won't reproduce from clean C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CD4E8);
 
+/* menu data/list builder: ldl/ldr/sdl/sdr unaligned struct/const copy — left as INCLUDE_ASM
+ * (cc1 won't reproduce the unaligned 64-bit copy idiom from clean C). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", BuildCheatMenuItemList);
 
 /* return 0 stub. */
@@ -432,12 +530,43 @@ s32 func_002CD660(s32 *list) {
     return 0;
 }
 
+/* menu helper: ldl/ldr/sdl/sdr unaligned struct/const copy — left as INCLUDE_ASM
+ * (cc1 won't reproduce the unaligned 64-bit copy idiom from clean C). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CD670);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CDEB0);
+/* Cheat-flag mirror: for each source toggle byte (D_1A7BDn) write 3 ("on") or 0
+ * ("off") into the matching cheat-menu item-state halfword (D_1AA5xx/D_1AA602).
+ * Leaf, pure data shuffle.
+ * Near-miss (~83%): the original schedules each ternary's `move rd,zero` into
+ * the beqz delay slot while emitting the previous result's store before the
+ * branch; our cc1 hoists the move ahead of the store and leaves a nop in the
+ * delay slot (branch-fill scheduling the later cc1 won't reproduce from clean
+ * C). Preserved as portable C. */
+extern u8 D_1A7BD1, D_1A7BD2, D_1A7BD3, D_1A7BD4, D_1A7BD6;
+extern s16 D_1AA5A2, D_1AA5BA, D_1AA5D2, D_1AA5EA, D_1AA602;
 
+#ifndef TARGET_NATIVE
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CDEB0);
+#else
+/* TODO(match): functional equivalent - not byte-exact; ternary move/store
+ * delay-slot scheduling not reproduced by cc1. */
+void func_002CDEB0(void) {
+    D_1AA5A2 = D_1A7BD1 ? 3 : 0;
+    D_1AA5BA = D_1A7BD2 ? 3 : 0;
+    D_1AA5D2 = D_1A7BD3 ? 3 : 0;
+    D_1AA5EA = D_1A7BD4 ? 3 : 0;
+    D_1AA602 = D_1A7BD6 ? 3 : 0;
+}
+#endif
+
+/* Level-exit confirm dispatch for the active menu screen: validates the pending
+ * pick against the global input flags + per-screen tables and sets g_nLevelExit*.
+ * Near-miss: the chained per-screen pointer compares the later cc1 lays out
+ * differently — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CDF48);
 
+/* menu helper: 8-byte-packed-save wall (saves 2 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE0C8);
 
 /* Draw-batch wrapper: render one menu sub-element inside a 2D batch. */
@@ -448,10 +577,16 @@ s32 func_002CE200(void) {
     return 0;
 }
 
+/* menu helper: 8-byte-packed-save wall (saves 3 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE230);
 
+/* menu helper: 8-byte-packed-save wall (saves 2 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE3A0);
 
+/* menu helper: 8-byte-packed-save wall (saves 3 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE498);
 
 /* Draw-batch wrapper. */
@@ -472,6 +607,8 @@ s32 func_002CE610(void) {
     return 0;
 }
 
+/* menu helper: 8-byte-packed-save wall (saves 2 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE618);
 
 /* Draw-batch wrapper. */
@@ -482,9 +619,25 @@ s32 func_002CE6A8(void) {
     return 0;
 }
 
+/* menu helper: 8-byte-packed-save wall (saves 4 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE6D8);
 
+/* GUI wrapper: when the GUI is up, register a widget (instance + 0x3A000) and
+ * stash the returned handle in widget[0x34].
+ * Wall: 8-byte-packed-save (saves $16 + $31). Preserved as portable C. */
+extern s32 func_00345298(void *widget);
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE830);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame. */
+s32 func_002CE830(s32 *out) {
+    if (g_guiInstance) {
+        out[0xD] = func_00345298(g_guiInstance + 0x3A000);
+    }
+    return 0;
+}
+#endif
 
 /* Draw-batch wrapper. */
 s32 func_002CE878(void) {
@@ -494,8 +647,12 @@ s32 func_002CE878(void) {
     return 0;
 }
 
+/* menu helper: 8-byte-packed-save wall (saves 3 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE8A8);
 
+/* menu helper: 8-byte-packed-save wall (saves 3 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE908);
 
 /* Draw the localized string 0x2BE5 right-justified at the alternate label slot. */
@@ -509,10 +666,16 @@ s32 func_002CE9D8(void) {
     return 0;
 }
 
+/* menu helper: 8-byte-packed-save wall (saves 2 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CEA38);
 
+/* menu input/update handler: 8-byte-packed-save wall (saves 3 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateBestiaryMenuInput);
 
+/* menu/HUD draw routine: 8-byte-packed-save wall (saves 9 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawBestiaryEntry);
 
 /* Reset the bestiary cursor to entry 1. */
@@ -526,14 +689,36 @@ s32 func_002CF550(void) {
     return 0;
 }
 
+/* menu/HUD draw routine: 8-byte-packed-save wall (saves 4 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawBestiaryPagingArrows);
 
+/* menu/HUD draw routine: 8-byte-packed-save wall (saves 6 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawMenuPagingChrome);
 
+/* menu/HUD draw routine: 8-byte-packed-save wall (saves 6 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawMenuItemSelectionBox);
 
+/* GUI wrapper: when the GUI is up, register a widget (instance + 0x3C160) and
+ * stash the returned handle in widget[0x34].
+ * Wall: 8-byte-packed-save (saves $16 + $31). Preserved as portable C. */
+extern s32 func_00342468(void *widget);
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D0110);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame. */
+s32 func_002D0110(s32 *out) {
+    if (g_guiInstance) {
+        out[0xD] = func_00342468(g_guiInstance + 0x3C160);
+    }
+    return 0;
+}
+#endif
 
+/* menu helper: 8-byte-packed-save wall (saves 3 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D0158);
 
 /* Draw the localized string 0x2BE5 as a right-justified label inside a 2D batch. */
@@ -547,10 +732,16 @@ s32 func_002D0240(void) {
     return 0;
 }
 
+/* menu helper: 8-byte-packed-save wall (saves 7 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D02A0);
 
+/* menu input/update handler: 8-byte-packed-save wall (saves 4 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateCheatMenuInput);
 
+/* menu/HUD draw routine: 8-byte-packed-save wall (saves 9 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawCheatMenu);
 
 /* return 0 stub. */
@@ -558,8 +749,12 @@ s32 func_002D0B40(void) {
     return 0;
 }
 
+/* menu input/update handler: 8-byte-packed-save wall (saves 3 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateSkillPointsMenu);
 
+/* menu/HUD draw routine: 8-byte-packed-save wall (saves 8 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawSkillPointsMenu);
 
 /* return 0 stub. */
@@ -567,26 +762,82 @@ s32 func_002D1150(void) {
     return 0;
 }
 
+/* menu input/update handler: switch/jump-table dispatch (splat jtbl reloc gap) — left as
+ * INCLUDE_ASM (cc1 jtbl layout not reproduced). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateExtrasMenuInput);
 
+/* menu/HUD draw routine: 8-byte-packed-save wall (saves 6 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawExtrasMenu);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D1850);
+/* When the GUI is up, latch the extras-menu availability flags: always mark the
+ * last screen id (=1), then set the per-feature "new" flags for each unlocked
+ * extras feature (D_1AA450/D_1AA458) and, if any extras are unlocked
+ * (g_miscExtras), the museum + master flags. Leaf.
+ * Near-miss (~69%): the original fills each beqz delay slot with the next flag
+ * store (and emits the museum/master pair in the opposite commutative order);
+ * our cc1 leaves nops in the delay slots and stores in source order — the
+ * later-cc1 branch-fill scheduling we can't reproduce from clean C. Preserved
+ * as portable C. */
+extern s32 g_lastMenuScreenId;
+extern s32 D_1ABA50, D_1ABA54, D_1ABA58, D_1ABA4C;
 
+#ifndef TARGET_NATIVE
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D1850);
+#else
+/* TODO(match): functional equivalent - not byte-exact; delay-slot branch-fill +
+ * commutative store order not reproduced by cc1. */
+s32 func_002D1850(void) {
+    if (g_guiInstance) {
+        g_lastMenuScreenId = 1;
+        if (D_1AA450) {
+            D_1ABA50 = 1;
+        }
+        if (D_1AA458) {
+            D_1ABA54 = 1;
+        }
+        if (g_miscExtras) {
+            D_1ABA58 = 1;
+            D_1ABA4C = 1;
+        }
+    }
+    return 0;
+}
+#endif
+
+/* menu input/update handler: 8-byte-packed-save wall (saves 6 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", CinematicsMenuTick);
 
+/* menu/HUD draw routine: 8-byte-packed-save wall (saves 6 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawCinematicsMenu);
 
+/* When the GUI is up, mark each cinematics-menu row available iff its bit in
+ * g_cinematicUnlockedFlags is set (sllv bit-test loop). The variable-shift mask
+ * idiom isn't reproduced from clean C — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D1E88);
 
+/* menu input/update handler: switch/jump-table dispatch (splat jtbl reloc gap) — left as
+ * INCLUDE_ASM (cc1 jtbl layout not reproduced). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdatePlanetWarpMenuInput);
 
+/* menu/HUD draw routine: 8-byte-packed-save wall (saves 6 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawPlanetWarpMenu);
 
+/* When the GUI is up and extras unlocked, latch the per-extra-feature
+ * availability flags (D_1ABA71..D_1ABA77) from the source toggle bytes
+ * (D_1A7BF2..D_1A7C0A). Near-miss: same ternary move/store delay-slot wall as
+ * func_002CDEB0 — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D2538);
 
+/* menu input/update handler: switch/jump-table dispatch (splat jtbl reloc gap) — left as
+ * INCLUDE_ASM (cc1 jtbl layout not reproduced). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateInsomniacMuseumInput);
 
+/* menu/HUD draw routine: 8-byte-packed-save wall (saves 7 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawInsomniacMuseumMenu);
 
 /* When the GUI is up, latch the "new content" flags for each extras-menu entry.
@@ -616,8 +867,12 @@ s32 func_002D2C60(void) {
 }
 #endif
 
+/* menu input/update handler: 8-byte-packed-save wall (saves 2 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateHelpTopicMenuInput);
 
+/* menu/HUD draw routine: 8-byte-packed-save wall (saves 2 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawHelpTopicMenu);
 
 /* return 0 stub. */
@@ -625,8 +880,12 @@ s32 func_002D2FC0(void) {
     return 0;
 }
 
+/* menu helper: 8-byte-packed-save wall (saves 3 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D2FC8);
 
+/* menu helper: 8-byte-packed-save wall (saves 3 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D3138);
 
 /* GUI null-check gate: if the GUI is up, latch error code -0x12C; return 0. */
@@ -641,8 +900,12 @@ s32 func_002D3388(void) {
 }
 #endif
 
+/* menu helper: 8-byte-packed-save wall (saves 2 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D33A8);
 
+/* menu helper: 8-byte-packed-save wall (saves 4 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D34E8);
 
 /* return 0 stub. */
@@ -650,8 +913,12 @@ s32 func_002D37E0(void) {
     return 0;
 }
 
+/* menu helper: 8-byte-packed-save wall (saves 2 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D37E8);
 
+/* menu helper: 8-byte-packed-save wall (saves 2 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D38C8);
 
 /* Forward the currently-pressed pad buttons to the menu input handler; return 0.
@@ -719,7 +986,38 @@ s32 func_002D3F48(void) {
     return 0;
 }
 
+/* Menu confirm/cancel poll: on the "confirm" pad bit (0x10) returns the active
+ * screen's pending result (latches it into screen[0x18]) or -1 when the screen
+ * has no pending sub-result; on a "back/cancel" bit (0x900) returns 1; otherwise
+ * ticks the idle handler func_0029D838 and returns 0.
+ * Wall: 8-byte-packed-save (saves $16 + $31) + the load-PRE/branch-likely shape.
+ * Preserved as portable C. */
+extern void func_0029D838(void);
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D3F78);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame. */
+s32 func_002D3F78(void) {
+    s32 flags = g_padButtonsPressed;
+    s32 *ss = (s32 *)(g_particleFxBlob + 0x100);
+    if (flags & 0x10) {
+        s32 v = *(s32 *)(*(u8 **)((u8 *)ss + 0x14) + 0xE0);
+        if (v != 0) {
+            ss[6] = v; /* screen[0x18] */
+            return 0;
+        }
+        if (ss[0x4D] == 0) { /* screen[0x134] */
+            return -1;
+        }
+        return 0;
+    }
+    if (flags & 0x900) {
+        return 1;
+    }
+    func_0029D838();
+    return 0;
+}
+#endif
 
 /* Draw-batch wrapper. */
 s32 func_002D4000(void) {
@@ -788,6 +1086,8 @@ s32 func_002D4370(void) {
 }
 #endif
 
+/* menu helper: 8-byte-packed-save wall (saves 2 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D43B0);
 
 /* Draw-batch wrapper. */
@@ -798,14 +1098,26 @@ s32 func_002D4438(void) {
     return 0;
 }
 
+/* menu helper: 8-byte-packed-save wall (saves 2 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D4468);
 
+/* menu helper: 8-byte-packed-save wall (saves 2 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D44E8);
 
+/* menu helper: 8-byte-packed-save wall (saves 6 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D4568);
 
+/* menu input/update handler: uses 128-bit sq/lq (vector) loads/stores — left as INCLUDE_ASM
+ * (the EE quadword ops are not emitted from scalar C). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateShipCustomizeInput);
 
+/* menu helper: 8-byte-packed-save wall (saves 9 GPRs incl $31; later cc1
+ * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D4D38);
 
+/* menu/HUD draw routine: ldl/ldr/sdl/sdr unaligned struct/const copy — left as INCLUDE_ASM
+ * (cc1 won't reproduce the unaligned 64-bit copy idiom from clean C). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawShipCustomizeMenu);
