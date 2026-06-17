@@ -687,7 +687,33 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338AB8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338CD0);
 
+/* func_00338CD8: configure a scrolling-list widget.
+ *  - Store the row-count (a1) at +0x1C4 and the page-size (a2) at +0x1B8.
+ *  - Seed the widget's pos vector (*(p+0x0)) with (x,y), clear the +0x1A7 byte
+ *    flag, and set the +0x1B0 "active" flag.
+ *  - Build the embedded sub-list at p+0xA8: record its address at +0x1D8, run
+ *    func_0027F7F8(p+0xA8, -1) and keep its handle at +0x1D4.
+ *  - Initialise the widget's scale vector (*(p+0x4)) x-component to 1.0. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338CD8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; reloaded-pointer CSE
+   (the original reloads *(p+0x0) before each pos store) + jal-delay-slot store
+   scheduling wall. */
+extern s32 func_0027F7F8(void *p, s32 mode);
+void func_00338CD8(void *p, s32 a1, f32 x, f32 y, s32 a2) {
+    void *sub = (char *)p + 0xA8;
+    *(s32 *)((char *)p + 0x1C4) = a1;
+    (*(f32 **)p)[0] = x;
+    (*(f32 **)p)[1] = y;
+    *(u8 *)((char *)p + 0x1A7) = 0;
+    *(s32 *)((char *)p + 0x1B8) = a2;
+    *(s32 *)((char *)p + 0x1D8) = (s32)sub;
+    *(s32 *)((char *)p + 0x1D4) = func_0027F7F8(sub, -1);
+    *(s32 *)((char *)p + 0x1B0) = 1;
+    (*(f32 **)((char *)p + 0x4))[0] = 1.0f;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338D48);
 
@@ -893,9 +919,96 @@ void func_0033BE68(void *p, s32 v) {
     *(s32 *)((char *)p + 0x2C4) = v;
 }
 
+/* func_0033BE70: lay out the dialog box's five body rows then (when the +0x2C0
+ * "show border labels" flag is set) its three border-relative text labels.
+ *  - For each of the five rows i (element at p+0xC + i*0x4C, row-active flag is
+ *    the halfword at p+0x188 + i*2): when active, anchor the row at the dialog's
+ *    own vector (*(p+0x0)) origin and apply the shared alpha at *(p+0x2A4).
+ *  - When *(p+0x2C0) is set, place the title (p+0x198), body (p+0x248) and
+ *    footer (p+0x1F0) at the origin offset by the (x,y) bound pairs at
+ *    +0x2A8/+0x2AC, +0x2B8/+0x2BC and +0x2B0/+0x2B4 respectively.
+ * The flags second argument is unused by this method. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033BE70);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 4-callee-save + $f20
+   saved-FPR frame wall. */
+void func_0033BE70(void *p, s32 flags) {
+    s32 i;
+    f32 *origin;
+    GuiElement *row = (GuiElement *)((char *)p + 0xC);
+    s16 *active = (s16 *)((char *)p + 0x188);
+    (void)flags;
+    for (i = 0; i <= 4; i++) {
+        if (active[i] != 0) {
+            origin = *(f32 **)p;
+            GuiElementSetPos(row, origin[0], origin[1], 0.0f, 0.0f);
+            GuiElementSetAlpha(row, *(f32 *)((char *)p + 0x2A4));
+        }
+        row = (GuiElement *)((char *)row + 0x4C);
+    }
+    if (*(s32 *)((char *)p + 0x2C0) != 0) {
+        origin = *(f32 **)p;
+        GuiElementSetPos((GuiElement *)((char *)p + 0x198),
+                         origin[0] + *(f32 *)((char *)p + 0x2A8),
+                         origin[1] + *(f32 *)((char *)p + 0x2AC), 0.0f, 0.0f);
+        origin = *(f32 **)p;
+        GuiElementSetPos((GuiElement *)((char *)p + 0x248),
+                         origin[0] + *(f32 *)((char *)p + 0x2B8),
+                         origin[1] + *(f32 *)((char *)p + 0x2BC), 0.0f, 0.0f);
+        origin = *(f32 **)p;
+        GuiElementSetPos((GuiElement *)((char *)p + 0x1F0),
+                         origin[0] + *(f32 *)((char *)p + 0x2B0),
+                         origin[1] + *(f32 *)((char *)p + 0x2B4), 0.0f, 0.0f);
+    }
+}
+#endif
 
+/* func_0033BF90: draw the dialog box's five body rows then its three border
+ * text labels.
+ *  - For each of the five rows i: when the row-active halfword at p+0x188 + i*2
+ *    is set, dispatch the row object at *(p+0x3C + i*0x4C) through its vtable -
+ *    call (*obj->draw)(rowBase + obj->offset) where rowBase = p+0xC + i*0x4C,
+ *    obj->offset is the halfword at obj+0x8 and obj->draw the fn-ptr at obj+0xC.
+ *  - When *(p+0x2C0) is set draw the title (p+0x198); additionally when
+ *    *(p+0x2C4) is set draw the body (p+0x248) - but only if *(p+0x2CC) is set -
+ *    and the footer (p+0x1F0) whenever *(p+0x2C8) is set. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033BF90);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 5-callee-save frame +
+   branch-likely (beql) guard chain + vtable-dispatch loop wall. */
+extern void GuiTextElementDraw(void *e);
+void func_0033BF90(void *p) {
+    s32 i;
+    s16 *active = (s16 *)((char *)p + 0x188);
+    char *obj = (char *)p + 0x3C;
+    char *rowBase = (char *)p + 0xC;
+    for (i = 0; i <= 4; i++) {
+        if (active[i] != 0) {
+            void *o = *(void **)obj;
+            s16 off = *(s16 *)((char *)o + 0x8);
+            void (*draw)(void *) = *(void (**)(void *))((char *)o + 0xC);
+            draw(rowBase + off);
+        }
+        obj += 0x4C;
+        rowBase += 0x4C;
+    }
+    if (*(s32 *)((char *)p + 0x2C0) != 0) {
+        GuiTextElementDraw((char *)p + 0x198);
+        if (*(s32 *)((char *)p + 0x2C4) != 0) {
+            s32 footer = *(s32 *)((char *)p + 0x2C8);
+            if (*(s32 *)((char *)p + 0x2CC) != 0) {
+                GuiTextElementDraw((char *)p + 0x248);
+                footer = *(s32 *)((char *)p + 0x2C8);
+            }
+            if (footer != 0) {
+                GuiTextElementDraw((char *)p + 0x1F0);
+            }
+        }
+    }
+}
+#endif
 
 /* func_0033C060: write two floats through *(p+0x0) at +0/+4, re-reading the
  * pointer between stores. */
@@ -1086,7 +1199,33 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E4B8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E4C0);
 
+/* func_0033E5E8: re-layout this dialog-box screen and (on first open) chime.
+ *  - Run the dialog-box layout func_0033BE70 on the embedded box at p+0x8.
+ *  - Re-feed it the two floats of the vector at *(p+0x2DC) via func_0033C060.
+ *  - When (flags & 0x40) is set AND the +0x2D8 "already opened" latch is still
+ *    clear, play the open chime (PlayGlobalSound(4,0,0)) and toggle the global
+ *    one-shot flag D_1A7B9E (set it to !D_1A7B9E).
+ * Returns bit 6 of the flags argument. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E5E8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame +
+   branch-likely (beql) guard wall. */
+extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern u8 D_1A7B9E;
+s32 func_0033E5E8(void *p, s32 flags) {
+    void *box = (char *)p + 0x8;
+    f32 *v;
+    func_0033BE70(box, flags);
+    v = *(f32 **)((char *)p + 0x2DC);
+    func_0033C060(box, v[0], v[1]);
+    if ((flags & 0x40) != 0 && *(s32 *)((char *)p + 0x2D8) == 0) {
+        PlayGlobalSound(4, 0, 0);
+        D_1A7B9E = (D_1A7B9E < 1);
+    }
+    return (flags >> 6) & 1;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E680);
 
