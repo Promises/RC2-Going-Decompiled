@@ -49,6 +49,17 @@ typedef struct GuiWidget {
 /* player character/control mode (0x18C0D4): 0 Ratchet, 1 Clank-solo, 2 Giant Clank. */
 extern u8 g_bPlayerMode;
 
+/* GUI instance root (g_guiInstance): the glyph-font owner; widget glyph setters
+ * index it at +0x8710 to reach the glyph atlas. */
+extern u8 *g_guiInstance;
+
+#ifdef TARGET_NATIVE
+/* forward decls for the matched-but-defined-later helpers the #else bodies call,
+ * so the ILP32 compile gate sees their real signatures (not an implicit int()). */
+void func_0034A318(GuiWidget *w, s32 idx, f32 a, f32 b, f32 c, f32 d, f32 e);
+void func_0034A350(GuiWidget *w, s32 idx, f32 a, f32 b);
+#endif
+
 /* func_00348BD0: run the type-C element init on the widget and return it.
  * Best 99.6%: the original packs the two callee saves ($16,$31) into a 0x10
  * frame (8-byte slots); the pinned cc1 reserves a 0x20 frame (16-byte slots).
@@ -148,8 +159,39 @@ s32 func_00348E68(GuiWidget *w) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348E70);
 
+/* func_00349200: build a 6-row list widget — init seven type-B sub-elements
+ * (the row container at +0x218 plus six rows at +0x4C..+0x1C8, stride 0x58 is
+ * irrelevant here as each is a fixed offset) then run type-C init across the
+ * seven 0x58-stride row slots starting at +0x218; returns the widget.
+ * WALL: 4 callee saves ($16,$17,$18,$19) — the original packs them into a 0x30
+ * frame at 8-byte slot spacing; the pinned cc1 reserves 16-byte save slots. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00349200);
+#else
+GuiWidget *func_00349200(GuiWidget *w) {
+    char *row;
+    s32 i;
 
+    GuiElementInitTypeB((char *)w + 0x218);
+    GuiElementInitTypeB((char *)w + 0x4C);
+    GuiElementInitTypeB((char *)w + 0x98);
+    GuiElementInitTypeB((char *)w + 0xE4);
+    GuiElementInitTypeB((char *)w + 0x130);
+    GuiElementInitTypeB((char *)w + 0x17C);
+    GuiElementInitTypeB((char *)w + 0x1C8);
+
+    row = (char *)w + 0x218;
+    for (i = 6; i >= 0; i--) {
+        GuiElementInitTypeC(row);
+        row += 0x58;
+    }
+    return w;
+}
+#endif
+
+/* func_003492A0: handwritten epilogue-only stump (`addiu $sp,$sp,0x30; nop`,
+ * no prologue, no `jr ra`) — the trailing half of a hand-split asm routine.
+ * No C body can reproduce a function with no return. WALL: split-artifact stub. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_003492A0);
 
 /* SetPopupVisible: store the visibility flag at popup +0x4B8. */
@@ -162,7 +204,24 @@ void SetPopupLayoutMode(GuiWidget *w, s32 mode) {
     *(s32 *)((char *)w + 0x4BC) = mode;
 }
 
+/* SetPopupTitleText: bind the five glyph slots of a popup's title/border decor
+ * to glyph IDs taken from the source record `src` — title (+0x0) onto the popup
+ * body, then four border pieces (src+0x8/+0x10/+0x20/+0x18) onto the four corner
+ * sub-elements (+0x130/+0x4C/+0x98/+0xE4). Each glyph is looked up in the GUI
+ * instance's atlas (g_guiInstance + 0x8710).
+ * WALL: 3 callee saves ($16,$17,$18) — 0x20-vs-packed frame divergence. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", SetPopupTitleText);
+#else
+void SetPopupTitleText(GuiWidget *w, s32 *src) {
+    u8 *atlas = g_guiInstance + 0x8710;
+    GuiElementSetGlyph(w, atlas, src[0]);            /* src+0x0  */
+    GuiElementSetGlyph((char *)w + 0x130, atlas, src[2]); /* src+0x8  */
+    GuiElementSetGlyph((char *)w + 0x4C, atlas, src[4]);  /* src+0x10 */
+    GuiElementSetGlyph((char *)w + 0x98, atlas, src[8]);  /* src+0x20 */
+    GuiElementSetGlyph((char *)w + 0xE4, atlas, src[6]);  /* src+0x18 */
+}
+#endif
 
 /* SetPopupItemEnabled: store the enabled flag for popup item idx at +0x488
  * (s32-stride item table). */
@@ -170,10 +229,35 @@ void SetPopupItemEnabled(GuiWidget *w, s32 idx, s32 enabled) {
     *(s32 *)((char *)w + (idx << 2) + 0x488) = enabled;
 }
 
+/* SetPopupItemText: record the item count at +0x4B4, then for each of `count`
+ * popup rows (row slots at +0x218, stride 0x58) resolve the string id in
+ * `ids[i]` via GetLocalizedString and apply it to that row's text element.
+ * WALL: 3 callee saves ($16,$17,$18) — 0x20-vs-packed frame divergence. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", SetPopupItemText);
+#else
+void SetPopupItemText(GuiWidget *w, s32 count, s32 *ids) {
+    char *row;
+    s32 i;
+
+    *(s32 *)((char *)w + 0x4B4) = count;
+    if (count > 0) {
+        row = (char *)w + 0x218;
+        for (i = count; i != 0; i--) {
+            char *text = GetLocalizedString(*ids);
+            GuiElementSetText(row, text);
+            ids++;
+            row += 0x58;
+        }
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", GuiScreenWithPlanetNameInit);
 
+/* func_00349720: handwritten epilogue-only stump (`addiu $sp,$sp,0x30; nop`,
+ * no prologue, no `jr ra`) — the trailing half of a hand-split asm routine.
+ * No C body can reproduce a function with no return. WALL: split-artifact stub. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00349720);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", UpdatePopupMenu);
@@ -231,7 +315,37 @@ void func_0034A1D0(GuiWidget *w, s32 v) {
  * as the cursor. Best 67%. WALL: base-pointer preservation / register alloc. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A1D8);
 
+/* func_0034A210: reset a slider/animation widget to its rest state — clear the
+ * value/flag fields (+0x18,+0x28,+0x2C,+0x80), seed the step constant at +0x24
+ * (0.005), zero record slot 0 and fill record slot 1 with 1.0 via func_0034A318,
+ * clear the +0x4-stride index entry 0 (func_0034A350), mark "2 records" at +0x84,
+ * clear +0x20, and set the "armed" flag +0x1C to 1. The +0x18 field is reloaded
+ * after being zeroed, so the slot-0 fill writes 0.0.
+ * WALL: 2 callee saves ($16,$31) plus a saved $f20 — 0x20-vs-packed frame. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A210);
+#else
+GuiWidget *func_0034A210(GuiWidget *w) {
+    f32 zero;
+
+    w->unk18 = 0.0f;
+    w->unk28 = 0;
+    w->unk2C = 0;
+    w->unk80 = 0;
+    zero = w->unk18;                 /* reload: now 0.0 */
+    w->unk24 = 0.005f;               /* 0x3BA3D70A */
+
+    func_0034A318(w, 0, zero, zero, zero, zero, zero);
+    func_0034A318(w, 1, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f);
+
+    w->unk84 = 2;
+    func_0034A350(w, 0, zero, zero);
+
+    w->unk20 = 0;
+    w->unk1C = 1;
+    return w;
+}
+#endif
 
 /* func_0034A2C8: handwritten epilogue-only stump (`addiu $sp,$sp,0x10; nop`,
  * no prologue, no `jr ra`). WALL: split-artifact stub. */
@@ -470,7 +584,26 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034BA50);
  * WALL: just-in-time reload register alternation. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034BD28);
 
+/* GuiScreenSetEventAndReveal: stash the pending event id at +0x3F4. If the screen
+ * is currently armed-for-reveal (+0x400 set), consume that flag (+0x400=0), raise
+ * the "dirty/redraw" flag (+0xC=1), and trigger the four corner reveal animations
+ * (sub-widgets at +0x1D4/+0x25C/+0x2E4/+0x36C) forward via func_0034A370(.,1).
+ * WALL: 2 callee saves ($16,$31) — 0x10-frame-vs-packed divergence. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", GuiScreenSetEventAndReveal);
+#else
+void GuiScreenSetEventAndReveal(GuiWidget *w, s32 event) {
+    *(s32 *)((char *)w + 0x3F4) = event;
+    if (*(s32 *)((char *)w + 0x400) != 0) {
+        *(s32 *)((char *)w + 0x400) = 0;
+        *(s32 *)((char *)w + 0xC) = 1;
+        func_0034A370((char *)w + 0x1D4, 1);
+        func_0034A370((char *)w + 0x25C, 1);
+        func_0034A370((char *)w + 0x2E4, 1);
+        func_0034A370((char *)w + 0x36C, 1);
+    }
+}
+#endif
 
 /* func_0034BDA8: handwritten store fragment (`sw $2,0x3F4($4); nop`, no
  * prologue, no `jr ra`, source value in an undefined $2). WALL: split-artifact
