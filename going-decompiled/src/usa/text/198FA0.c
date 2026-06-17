@@ -186,6 +186,15 @@ void func_00299020(void) {
     D_1393E0.busy = 0;
 }
 
+/* func_00299040 (and the 0x299xxx save-handler family below: func_00299178/
+ * func_002991E8/func_00299238/func_002992B8/func_002992E8/func_00299348/
+ * func_002993D8/func_00299478/func_002994B0/func_00299568/func_002995E0/
+ * func_00299758/func_002997C8/func_002998D0/func_00299918): memory-card
+ * save/load status handlers. WALLED by the reload-artifact described in the
+ * file header — each reads a small-range save-context global both via the
+ * 1-insn %gp_rel form (in a branch/jr delay slot) AND via the absolute lui/$at
+ * macro elsewhere in the same function; GNU as picks one form per symbol, so
+ * the unit-wide extern model cannot reproduce both. Left as asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299040);
 
 /** If no save/load action is pending (flag bit 0 clear), reset the popup
@@ -217,7 +226,16 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_002992E8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299348);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299398);
+/** If a card transaction finished selecting (mode 2) with no result yet
+ *  (result < 0), force result 7 and show popup status 0xB. Mirror of
+ *  func_00299528 with result 7 / status 0xB. */
+void func_00299398(void) {
+    if (D_1393E0.mode == 2 && D_1393E0.result < 0) {
+        D_1393E0.result = 7;
+        D_1393E0.subResult = 0;
+        g_nSaveLoadStatusCode[0] = 0xB;
+    }
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_002993D8);
 
@@ -284,6 +302,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_002998D0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299918);
 
+/* func_00299960: 2-insn leaf `return g_savePromptLatch;` (the latched flag at
+ * 0x1B19BC, also read by func_00299968). UNMATCHABLE: the original reads it via
+ * a single %gp_rel($gp) load in the jr delay slot, but under the unit's -G0
+ * model cc1 emits the absolute lui/lw pair for a normal extern (the same
+ * symbol is accessed absolutely in func_00299968) — the reload-artifact wall
+ * named in the header. Left as asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299960);
 
 /* Latched event flag at g_pSkyShellSpinRates+0xAC (0x1B19BC): an unrelated
@@ -305,16 +329,29 @@ s32 func_00299980(void) {
     return g_nSaveLoadStatusCode[0] == 2;
 }
 
+/* BuildSaveGamePaths: builds the per-slot memory-card path strings. Multi-
+ * callee-save save-system function — same 8-byte-packed callee-save frame wall
+ * as func_0029C678 (our cc1 reserves 16 bytes per saved register). Left as asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", BuildSaveGamePaths);
 
+/* func_00299B00: 0x14 bytes of dead inter-function fill (`daddu $2,$0,$0` /
+ * `daddu $2,$3,$0` / `addiu $sp,0x40` epilogue orphans, no jr) — not
+ * compiler-reachable C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299B00);
 
+/* func_00299B18 / func_00299BF8: save-buffer setup helpers (multi callee-save).
+ * 8-byte-packed callee-save frame wall, see func_0029C678. Left as asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299B18);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299BF8);
 
+/* SaveLoadStateMachine: the 0x1EA0-byte memory-card transaction state machine
+ * (the largest function in the unit). Multi callee-save + libmc call graph;
+ * 8-byte-packed callee-save frame wall, see func_0029C678. Left as asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", SaveLoadStateMachine);
 
+/* BuildSaveImage: assembles the save payload from the section table. Multi
+ * callee-save; 8-byte-packed callee-save frame wall, see func_0029C678. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", BuildSaveImage);
 
 /** Game-level libmc bring-up: bind the memory-card RPC services (McInit) and
@@ -345,10 +382,21 @@ s32 CalcSaveSectionsSize(SaveSection *table) {
     return size + 8;
 }
 
+/* func_0029BCA0: CRC-16 (poly 0xEDB88320, 8-bit-at-a-time) over the save buffer
+ * sized by CalcSaveSectionsSize(g_saveSectionTableGlobal). Uses three callee-
+ * saved regs ($16/$17/$31) in an 8-byte-packed 0x20 frame — the callee-save
+ * frame wall (our cc1 reserves 16 bytes per saved reg), see func_0029C678. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029BCA0);
 
+/* func_0029BD48: verify a save section's stored CRC against func_0029BCA0.
+ * One callee-save reg in an 8-byte-packed frame — callee-save frame wall, see
+ * func_0029C678. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029BD48);
 
+/* SerializeSaveSections / func_0029BEA0 / DeserializeSaveSections /
+ * CommitProgressCheckpoint: the save-section (de)serializers and the progress
+ * checkpoint writer. Multi callee-save; 8-byte-packed callee-save frame wall,
+ * see func_0029C678. Left as asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", SerializeSaveSections);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029BEA0);
@@ -484,6 +532,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029CA98);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029CC48);
 
+/* func_0029CCB8: if the GUI is up and several gating flags (D_1A9A88,
+ * g_nNanotechBonusHealTimer+4, D_1A8C64, D_1A9A8C) permit, forward to the
+ * widget at g_guiInstance+0x3F7B0 (func_0033B720). UNMATCHABLE: it reads
+ * g_guiInstance (and D_1A9A88/D_1A9A8C) through %gp_rel($gp) while the rest of
+ * the unit reads g_guiInstance via the absolute lui/lw pair — the reload-
+ * artifact wall (one form per symbol), see the file header. Left as asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029CCB8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029CD18);
@@ -966,6 +1020,10 @@ s32 func_0029DB58(void) {
     return func_00336BC8(g_bPalMode != 0);
 }
 
+/* GuiManagerCreate: allocates and initialises the 0x3FB20-byte GuiManager
+ * singleton (g_guiInstance) and installs the default no-op callbacks
+ * (func_0029CF08/func_0029DB50). Large multi callee-save constructor; 8-byte-
+ * packed callee-save frame wall, see func_0029C678. Left as asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", GuiManagerCreate);
 
 /** If the GUI is up and the popup-busy gate (D_1A8C64) is clear, pause the
@@ -980,8 +1038,18 @@ s32 func_0029DC70(void) {
     }
 }
 
+/* func_0029DCB0: MIS-SPLIT — splat began the symbol one instruction early, so
+ * the body carries the leaked `addiu $sp,0x10; nop` epilogue of the preceding
+ * func_0029DC70 before the real entry (the internal `alabel func_0029DCB8`).
+ * The real body maps g_playerProgress (0x16->9, 0x17->0x12, else 0) and calls
+ * RequestLevelExit(.,1); but the prepended dead prologue can't be expressed as
+ * one C function. Left as asm until the split boundary is corrected. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DCB0);
 
+/* func_0029DD08: MIS-SPLIT (same shape as func_0029DCB0) — leaked `addiu
+ * $sp,0x10; nop` epilogue of func_0029DCB0 prepended; the real body (internal
+ * `alabel func_0029DD10`) is the g_guiInstance+0x3CEA0 wrapper to func_0033A9F8.
+ * Not expressible as one C function with the dead prologue. Left as asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DD08);
 
 /** Forward `arg` to the widget at g_guiInstance+0x3CEA0 (method func_0033A8F0);
@@ -993,6 +1061,9 @@ s32 func_0029DD40(s32 arg) {
     return func_0033A8F0(g_guiInstance + 0x3CEA0, arg);
 }
 
+/* func_0029DD80: 0xC bytes of dead inter-function fill (`sw $2,gp_rel(...)` +
+ * `addiu $sp,0x50` epilogue orphan, no jr) — the split tail of func_0029DD90,
+ * not compiler-reachable C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DD80);
 
 /* func_0029DD90: toSPR DMA-kick helper (writes SADR/QWC/MADR at 0x1000D400,
@@ -1000,8 +1071,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DD80);
  * (4 orphan unreachable words). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DD90);
 
+/* func_0029DDB0: hardware DMA busy-wait — spins on the CHCR busy bit (0x100) of
+ * DMA channel register 0x1000D400 until the toSPR transfer completes. A bare
+ * register poll loop (internal `alabel func_0029DDB8`, `j` back-edge, nop-padded
+ * loads); not compiler-reachable from C. Left as asm (hardware/HLE). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DDB0);
 
+/* func_0029DDE8 / func_0029E090 / func_0029E1D0 / DecompressWad / func_0029E5D8
+ * / func_0029E5F8 / EnableDmacChannels / FlushPendingTexUploads: hand-written
+ * DMAC/SPR/VIF assembly (splat-flagged "Handwritten function"). They poke the
+ * EE peripheral registers (0x1000xxxx) with trapping `add`/`teq` and bare
+ * register spin loops that no C source reproduces — not compiler-reachable.
+ * Left as asm (hardware/HLE). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DDE8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", EnableDmacChannels);
@@ -1018,6 +1099,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029E5D8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029E5F8);
 
+/* UpdateLevelObjectiveStates: scans the objective list and updates per-level
+ * objective completion state. Multi callee-save; 8-byte-packed callee-save
+ * frame wall, see func_0029C678. Left as asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", UpdateLevelObjectiveStates);
 
 /* EvaluateProgressCondition(cond, arg): 12-case switch (0=always, 1=level
@@ -1092,10 +1176,22 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029EBF8);
  * func_0029EA90. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029EC70);
 
+/* func_0029ECE0: the 0x1118-byte cinematic/dialog driver (largest non-state-
+ * machine function here). Deep multi callee-save ($16/$17/$18+); 8-byte-packed
+ * callee-save frame wall, see func_0029C678. Left as asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029ECE0);
 
+/* func_0029FDF8: a single orphan `lh $2,0x24($3)` (no prologue/jr) — dead
+ * inter-function fill spilled from the tail of func_0029ECE0, not compiler-
+ * reachable C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029FDF8);
 
+/* SpawnMoby: allocates a moby from the spawn free-list (g_mobySpawnStart..
+ * g_mobyTableEnd) and initialises it. Multi callee-save; 8-byte-packed
+ * callee-save frame wall, see func_0029C678. Left as asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", SpawnMoby);
 
+/* InitMobyFromClass: zero-fills a moby's 0x100-byte state (FillMemory32) and
+ * binds it to a class via g_mobyClassSlotRemap. Multi callee-save; 8-byte-
+ * packed callee-save frame wall, see func_0029C678. Left as asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", InitMobyFromClass);
