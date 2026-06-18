@@ -111,6 +111,21 @@ def main():
         for name, a in placed:
             f.write("PROVIDE(%s = __gamedata_start + 0x%X);\n" % (name, a - base))
 
+    # ---- arena_map.txt : machine-readable placement map for the PINE snapshot
+    # seeder (tester's state-seeding harness). Seeding only needs base/span (the
+    # whole [base, base+span) ROM range copies into &g_dataArena[0]); the
+    # per-symbol rows let the harness validate a named global's value against the
+    # snapshot byte at its rom_addr.
+    with open(os.path.join(outdir, "arena_map.txt"), "w") as f:
+        f.write("# native globals-arena placement map (Mechanic B).\n")
+        f.write("# storage symbol: g_dataArena  ==  __gamedata_start (linker)\n")
+        f.write("# seed: memcpy snapshot[rom_addr] -> g_dataArena[rom_addr - base]\n")
+        f.write("#       for rom_addr in [base, base+span).\n")
+        f.write("# base 0x%06X  span 0x%X  placed %d\n" % (base, span, len(placed)))
+        f.write("# columns: <symbol> <rom_addr> <arena_offset>\n")
+        for name, a in placed:
+            f.write("%s 0x%06X 0x%X\n" % (name, a, a - base))
+
     # ---- arena_unresolved.txt : the tail needing canonical addresses (Track-B)
     with open(os.path.join(outdir, "arena_unresolved.txt"), "w") as f:
         f.write("# Native data globals referenced by #else bodies that have NO\n")
@@ -123,7 +138,7 @@ def main():
 
     print("base=0x%06X span=0x%X (%d bytes)" % (base, span, span))
     print("placed=%d  unresolved=%d  (of %d)" % (len(placed), len(unresolved), len(names)))
-    print("wrote arena.ld, arena_storage.c, arena_unresolved.txt to", outdir)
+    print("wrote arena.ld, arena_storage.c, arena_map.txt, arena_unresolved.txt to", outdir)
 
 
 if __name__ == "__main__":
