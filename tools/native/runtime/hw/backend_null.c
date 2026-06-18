@@ -66,4 +66,49 @@ void WaitFrameDmaFence(void)       {} /* else spins on the fence flags */
 u64  WaitGsPathsIdle(void)         { return 0; } /* else spins on VIF1/GIF CHCR */
 u32  WaitVblankGetField(void)      { return 1; } /* field bit for frame pacing */
 
+/* ===========================================================================
+ * Batch 2 - data-driven from the tester's ranked stub-hit sweep (stub_hits.txt).
+ * Triaged per no-op contract; the 6 NEEDS-SHIM hits (InitMobyFromClass,
+ * MenuScreenLoad, RequestLevelExit, UpdateVendorMenuInput, func_0027B988 screen
+ * dims, func_00278EC0 scene-arena) are NOT here - a blind no-op would corrupt
+ * the frame; they get functional shims separately.
+ * =========================================================================== */
+
+/* --- VOID-NOOP: GS/render-packet emit, render bookkeeping, or EE/SDK sync that
+ * writes no gameplay state read back in-frame. ----------------------------- */
+void func_0011AAD0(void)            {} /* RotateThreadReadyQueue - syscall(0x2b) yield */
+void func_0027E4D0(void)            {} /* AppendScreenRectFill - GIF sprite-fill */
+void BuildCameraProjection(void)    {} /* GS projection matrices (render-read 0x1b908x) */
+void BuildFrameViewMatrices(void)   {} /* view/world-screen matrices (render-read 0x1b518x) */
+void CloseMobyDmaSegment(void)      {} /* DMA tag splice */
+void FlushHudDisplayValue(void)     {} /* HUD display value into GuiManager (render) */
+void RenderFrame(void)              {} /* master draw chain - packets + render-support
+                                       * (vis-mask/procedural-anim/fade clamps); none
+                                       * is gameplay state, safe to drop one frame */
+void RenderMenuScreenWidgets(void)  {} /* front-end compositor - packets only */
+void UpdateScreenFadeWhite(void)    {} /* drives the (visual) white-fade ramp */
+void func_00272cc0(void)            {} /* DrawLockOnReticle - lock-on sprites */
+void func_002857C8(void)            {} /* SetScreenClearColor - patches clear-packet RGBA */
+void snd_BankLoadAsync(void)        {} /* kicks IOP RPC#3 - idle headless */
+
+/* --- DEADLOCK-RISK -> no-op: a cosmetic vblank-blocking fade whose per-iter
+ * WaitFrameDmaFence/WaitVblankGetField never advance headless. Writes only
+ * fade/render state. --------------------------------------------------------*/
+void FadeOutToBlackBlocking(void)   {}
+
+/* --- RETURN-CONST: caller uses the return; a fixed benign value is safe. The
+ * non-void no-ops below also return 0 because their declared return is used or
+ * could be (UploadTieTextures int, StartFileLoadPumpingVoice u64 - callers
+ * discard, but return a defined 0 not a garbage register). ------------------ */
+s32  UploadTieTextures(void)          { return 0; } /* tie tex upload - caller ignores */
+u64  StartFileLoadPumpingVoice(void)  { return 0; } /* voice-pump wrapper - discarded */
+u32  SetSndPumpCallback(void)         { return 0; } /* install IOP pump cb - discarded */
+u32  func_0011D620(void)              { return 0; } /* sceSifCallRpc - 0 = RPC success */
+u32  func_0028BE10(void)              { return 0; } /* RegisterHudElement - handle, render-only */
+u32  func_00286200(void)              { return 0; } /* IsMenuOverlayActive - 0 = inactive (New Game) */
+/* IsGadgetClassValid: MUST return 1, NOT 0. Caller func_00291148 sets the
+ * inventory-order slot to 0xFF when this returns 0 - a 0 here WIPES inventory
+ * in-frame. 1 (valid) is the non-destructive headless default. */
+u32  func_00289190(void)              { return 1; }
+
 #endif /* TARGET_NATIVE */
