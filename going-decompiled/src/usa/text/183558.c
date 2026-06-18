@@ -986,6 +986,17 @@ f32 func_00284590(f32 a, f32 b) {
 }
 #endif
 
+#ifdef TARGET_NATIVE
+/* Native canonical-name wrappers: other #else bodies (16E980/1FFBA0) call these
+ * by their canonical names (symbol_addrs WrapAnglePiSum/Diff = 0x284548/0x284590,
+ * sigs verified (f32,f32)); the matched path still calls them by func_ name and
+ * the proper rename is gated on a splat re-split. A forwarding wrapper (not an
+ * alias - alias attrs are unsupported on darwin/clang) resolves the native link
+ * to the real bodies, portable across clang+gcc, TARGET_NATIVE-only. */
+f32 WrapAnglePiSum(f32 a, f32 b)  { return func_00284548(a, b); }
+f32 WrapAnglePiDiff(f32 a, f32 b) { return func_00284590(a, b); }
+#endif
+
 /**
  * Range-reduce an angle to the symmetric fundamental period: returns
  * (frac(x/(2pi) + 0.5) - 0.5) * 2pi, i.e. x wrapped into [-pi, pi]. Uses an
