@@ -785,7 +785,7 @@ g_heroFacingDir = 0x0018A0E0; // CONFIRMED - hero (Ratchet) facing/forward unit 
 // === Track-B boot/init + IOP module loading + title front-end, and memory/heap arena layer (round 17, adversarially verified). ===
 BootSystemInit = 0x002914D8; // CONFIRMED - one-shot boot bring-up at top of LoadLevelAndInitHealth - hw resets, SetVideoMode, vblank ISR, IOP reboot with IOPRP255.IMG, RPC/cd re-init, volume-ID sector to BuildSaveGamePaths, LoadDiscToc, boot WAD decompress to 0x614000 + 10 IRX loads, controller/mc/sound/file-load init, RCNT1 start, cinematic queue reset - full order in plate comment
 LoadIrxModuleFromBuffer = 0x00291328; // CONFIRMED - (eeAddr, size, iopAddr) - sceSifSetDma EE to IOP, busy-wait sceSifDmaStat, then sceSifLoadModuleBuffer(iopAddr,0,0) - called 10x by BootSystemInit with boot-WAD pairs at 0x614018-0x61405C (the IRX set lives in the boot WAD)
-DebugPrintStub = 0x0026FEC8; // CONFIRMED - empty retail stub receiving debug strings (0x1A9060 Rebooted IOP, 0x1A9070 loaded irx modules) - compiled-out debug print
+DebugPrintStub = 0x0026FEC8; // CONFIRMED - DebugPrintStub(const char*fmt,...): retail NO-OP. Body only spills varargs a1-t3 + FP f12-f18 to own frame, no output/writes/callees. PURE shim = empty body. Receives debug strings (0x1A9060 Rebooted IOP, 0x1A9070 loaded irx modules)
 InitControllers = 0x002B9468; // CONFIRMED - sceDbcInit then opens controller ports 0 and 1 - handles at 0x138314/0x138694 - g_padButtonsHeld/Pressed live inside the port-0 buffer block
 SetVideoMode = 0x002849B0; // CONFIRMED - ResetVif1AndGif then sceGsResetGraph - g_bProgressiveScan selects (0,0,0x50,1) DTV480p else interlaced mode 3 PAL when g_bPalMode set, 2 NTSC otherwise
 SetupGsDisplayBuffers = 0x0027BAA0; // CONFIRMED - CONFIRMED - sets up GS draw/display buffer layout by video mode - PAL branch uses draw 0x100000 / disp 0x1E0000 (0x200x0x1C0 dims, flag 4), progressive branch keeps 0x118000/0x1E8000 with the 0x280-wide (0x200,0x1a0,0x280,0x1c0, flag 0) setup, NTSC default otherwise
@@ -811,7 +811,7 @@ GetRandomFloatRange = 0x002A86E0; // CONFIRMED - random float in half-open lo..h
 GetRandomFloatSigned = 0x002A8740; // CONFIRMED - random magnitude in lo..hi (12-bit fraction, /4096) with random sign bit (rand>>16 & 1) giving symmetric +/- jitter
 GetRandomAngle = 0x002A87A8; // CONFIRMED (MATCHED by glabel - identity only) - random angle in -pi..pi via ((rand>>16 & 0xFFF) - 0x800) * (pi/2048)
 GetRandomVectorInSphere = 0x002A8868; // CONFIRMED - random vec3 direction - radius=GetRandomFloatRange(radiusLo,radiusHi) (caller float args forwarded), two random angles a,b=GetRandomAngle() giving out=(sin a*cos b, cos a*cos b, sin b)*radius - sig void(float* out, float radiusLo, float radiusHi) - uses SinfVu0/CosfVu0
-FillMemory32 = 0x00283410; // CONFIRMED - word-fill of length bytes with a 32-bit pattern (unrolled x2) - boot fills the 8x8 gray boot texture 0x1BAF80 with 0x80808080
+FillMemory32 = 0x00283410; // CONFIRMED - FillMemory32(void*dst,u32 word,s32 nbytes): writes nbytes/4 copies of 32-bit word to dst (a2 is a BYTE count, mult of 4, writes >=1 word even if nbytes<=0). PURE memset32. e.g. boot fills 8x8 gray boot texture 0x1BAF80 with 0x80808080
 g_cinematicQueue = 0x001BACC0; // CONFIRMED - the pending-cinematic reel queue record - ring of 5 (id, typeFlag) pairs at +8, head +0x30 tail +0x34 count +0x38 stateWhenStarted +0x40 busy +0x44 - reset by BootSystemInit, fed by boot intro 0xB2 and the attract idle path
 g_vblankCount = 0x001A7208; // CONFIRMED - u64 vblank counter incremented by OnVblankInterrupt every vblank start
 g_hblankTicksAccum = 0x001A7200; // CONFIRMED - u64 master time base - RCNT1 (hblank-clocked, mode 0x82) accumulated by the frame loop in LoadLevelAndInitHealth - OnVblankInterrupt snapshots accum+live into 0x1A7210
@@ -931,7 +931,7 @@ MatrixMultiplyVu0 = 0x00284138; // CONFIRMED - 4x4 matrix multiply via VU0 macro
 Vec4ScaleVu0 = 0x002836E0; // CONFIRMED - vec4 scale via VU0 macro ops
 Vec4AddVu0 = 0x00283670; // CONFIRMED - vec4 add via VU0 macro ops
 Vec4SubVu0 = 0x002836A0; // CONFIRMED - vec4 subtract via VU0 macro ops
-CopyQwords = 0x00283500; // CONFIRMED - quadword memcpy loop
+CopyQwords = 0x00283500; // CONFIRMED - CopyQwords(void*dst,const void*src,s32 nbytes): 128-bit qword memcpy dst<-src, copies nbytes/16 qwords (a2 is a BYTE count, mult of 16, copies >=1 qword even if nbytes<=0). dst,src order confirmed. PURE.
 FloatToInt = 0x002846A0; // CONFIRMED - float to int via cvt
 IntToFloat = 0x00284690; // CONFIRMED - int to float via cvt
 Log2Floor = 0x002833C8; // CONFIRMED - integer log2 via plzcw

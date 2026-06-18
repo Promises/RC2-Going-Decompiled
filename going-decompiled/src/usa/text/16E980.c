@@ -476,7 +476,17 @@ void func_0026FE58(void) {
  * float-varargs prologue). The pinned cc1 emits the GPR varargs spill but
  * never the FP spill for a `(char*, ...)` body, so this cannot match from C.
  * WALL: float-varargs register-spill prologue. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", DebugPrintStub);
+#else
+/* Retail no-op: the body only spills its varargs registers and returns; no
+ * memory writes outside its own frame, no output, return value ignored.
+ * (Analysis-confirmed leaf no-op @0x26FEC8.) */
+s32 DebugPrintStub(const char *fmt, ...) {
+    (void)fmt;
+    return 0;
+}
+#endif
 
 /* func_0026FF00: MIS-SPLIT fragment. The .s opens with six words
  * (sw $2,0x38($4) / nop / addiu $sp,0x10 / nop / addiu $sp,0x20 / nop) that are

@@ -1,5 +1,5 @@
-# still-undefined game functions to weak-stub (M4), over the full USA 21-unit link.
-# regenerate: link all usa units (no stubs), nm -u, drop libc/@GLIBC + data globals.
+# still-undefined game functions to weak-stub (M4), over the full USA link + sdk shims.
+# regenerate: link all usa units + runtime/sdk (no stubs), nm -u, drop libc/@GLIBC + data globals.
 AllocateTieTextureVram
 AppendDrawEnvContext1
 AppendDrawEnvContext2
@@ -26,12 +26,10 @@ CloseShrubDrawSegment
 CollLine
 ComputeAudioChannelMix
 ComputeVolumeFalloff
-CopyQwords
 CosfVu0
 CountPlatinumBolts
 CullAndBinTieInstances
 CullAndEmitShrubs
-DebugPrintStub
 DecompressWad
 DrawDebugString
 DrawFont1CenteredLabel
@@ -50,7 +48,6 @@ EmitTieLodMorphPackets
 EnableInlineColorCodes
 End2dDrawBatch
 FadeOutToBlackBlocking
-FillMemory32
 FindTextTableEntry
 FlushCache
 FlushHudDisplayValue

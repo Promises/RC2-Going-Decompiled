@@ -44,9 +44,15 @@ docker --context "$CTX" run --rm -v "$ROOT":/work -w /work "$IMG" sh -c '
   gcc $CFLAGS -c tools/native/runtime/arena/arena_storage.c -o /tmp/arena_storage.o
   gcc $CFLAGS -c tools/native/runtime/rt0/stubs.c           -o /tmp/stubs.o
   gcc $CFLAGS -c tools/native/runtime/rt0/native_stub.c     -o /tmp/native_stub.o
+  # M1 SDK/EE utility shims (portable bodies for raw-split leaf routines).
+  sdkobjs=""
+  for s in tools/native/runtime/sdk/*.c; do
+    [ -e "$s" ] || break
+    sb=$(basename "$s" .c); gcc $CFLAGS -c "$s" -o /tmp/sdk_$sb.o && sdkobjs="$sdkobjs /tmp/sdk_$sb.o"
+  done
   gcc -m32 -shared -Wl,--unresolved-symbols=ignore-all \
       -Wl,-T,tools/native/runtime/arena/arena.ld \
-      $objs /tmp/arena_storage.o /tmp/stubs.o /tmp/native_stub.o -lm \
+      $objs /tmp/arena_storage.o /tmp/stubs.o /tmp/native_stub.o $sdkobjs -lm \
       -o /tmp/native_full.so 2>/dev/null
   # Genuine gaps only: drop versioned libc imports + housekeeping weaks.
   nm -u /tmp/native_full.so | sed "s/^ *[Uw] //" | sort -u \
