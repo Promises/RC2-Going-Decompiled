@@ -1527,6 +1527,7 @@ GuiSpriteGetTextureVec = 0x003375C0; // CONFIRMED - return elem +0x34 texture de
 GuiSpriteElementDraw = 0x00337128; // CONFIRMED - sprite draw virtual (blit)
 GuiTextElementDraw = 0x003378A0; // CONFIRMED - text draw virtual (align 0 left 1 center 2 right)
 GuiTextElementMeasure = 0x00337868; // CONFIRMED - text pixel-width measure
+GuiMenuListDraw = 0x00348E70; // UNCONFIRMED (not runtime-traced) - per-frame draw of a vertical text-menu/list widget: per-row layout via self+0x5c origin, SetText (localized unless self+0xc4), per-row color (sel +0xac / normal +0xb0 / disabled +0xb4) + optional highlight rects (DrawFlatRect2d), GuiTextElementDraw each row. PURE/PORTABLE (HW only in callees). Callers: FUN_0033f478/00342978/00342e48/00343558. EU mirror 0x0034A300.
 GuiListSetVisibleRows = 0x00337B70; // CONFIRMED - list visible-row count
 GuiListSetItemCount = 0x00337A38; // CONFIRMED - list +0x40 item count
 GuiListSetScrollPos = 0x00337A40; // CONFIRMED - map index/count to fractional scrollbar position

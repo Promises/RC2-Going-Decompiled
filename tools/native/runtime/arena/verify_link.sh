@@ -17,7 +17,7 @@ docker --context "$CTX" run --rm -v "$ROOT":/work -w /work "$IMG" sh -c '
   set -e
   CFLAGS="-m32 -DTARGET_NATIVE -O0 -I/work/going-decompiled/include -I/work/tools/native -include /work/tools/native/mips_callees.h -ffunction-sections -fdata-sections -Wno-implicit-function-declaration -Wno-int-conversion -Wno-builtin-declaration-mismatch"
   objs=""
-  for f in $(grep -rl TARGET_NATIVE going-decompiled/src); do
+  for f in $(grep -rl TARGET_NATIVE going-decompiled/src/usa); do
     b=$(basename "$f" .c)
     gcc $CFLAGS -c "$f" -o /tmp/$b.o 2>/dev/null && objs="$objs /tmp/$b.o"
   done

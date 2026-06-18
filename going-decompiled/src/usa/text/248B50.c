@@ -58,6 +58,24 @@ extern u8 *g_guiInstance;
  * so the ILP32 compile gate sees their real signatures (not an implicit int()). */
 void func_0034A318(GuiWidget *w, s32 idx, f32 a, f32 b, f32 c, f32 d, f32 e);
 void func_0034A350(GuiWidget *w, s32 idx, f32 a, f32 b);
+
+/* game callees used by GuiMenuListDraw (func_00348E70). Declared here (not in a
+ * central header) with their real signatures so the ILP32 gate sees them; they
+ * stay INCLUDE_ASM / runtime stubs natively. */
+f32 *func_00336C18(GuiWidget *e);                                /* scratch vec2 */
+void GuiElementSetScale(GuiWidget *e, f32 x, f32 y, f32 z, f32 w);
+/* GuiElementSetText / GetLocalizedString are intentionally left implicit here:
+ * they are already called with char* args elsewhere in this unit, so a file-
+ * scope prototype would conflict. Implicit decls are accepted by the gate. */
+s32 *GuiElementGetColor(GuiWidget *e);
+s32 GuiTextElementMeasure(GuiWidget *e);
+void GuiTextElementDraw(GuiWidget *e);
+/* DrawFlatRect2d: corners (x1,y1)-(x2,y2) at depth z, fill = pointer to a packed
+ * 64-bit GS colour word (tex0 is a pointer despite the historic u64 typing). */
+void func_0027F168(s32 x1, s32 y1, s32 x2, s32 y2, s64 z, u64 tex0);
+/* func_0027F790: the unconditional tail call; real defined symbol (returns s32,
+ * called for side effect). Identity not yet confirmed - keep the func_ name. */
+s32 func_0027F790(void);
 #endif
 
 /* func_00348BD0: run the type-C element init on the widget and return it.
@@ -157,7 +175,97 @@ s32 func_00348E68(GuiWidget *w) {
     return *(s32 *)((char *)w + 0xC0);
 }
 
+/* func_00348E70 / GuiMenuListDraw: per-frame draw of a vertical text-menu/list
+ * widget. For each of +0xC0 rows it positions a shared text element via the
+ * +0x5C origin (origin[0]=x in scratch[0], origin[1]+rowYBase+rowYStep*i in
+ * scratch[1]), sets its scale (+0x68 entry stride 0x14, entry[0]=scale) and text
+ * (raw id when +0xC4, else localized), nudges the y by 3px for the 0x307A
+ * sentinel id, colours it (disabled +0xB4 when the +0x6C row flag is 0, else
+ * normal +0xB0 / selected +0xAC when +0x60 highlight == i) and optionally draws
+ * underline rects (left underline when +0xCC == i; selected underline when
+ * highlighted and +0xC8 set), then GuiTextElementDraw. PURE/PORTABLE — only the
+ * draw callees touch hardware. Functional equivalent, not byte-exact. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348E70);
+#else
+void func_00348E70(void *self) {
+    char *p = (char *)self;
+    f32 *scratch = func_00336C18((GuiWidget *)self);
+    s32 rowCount;
+    s32 i;
+
+    scratch[0] = ((f32 *)(*(void **)(p + 0x5C)))[0];   /* origin[0] -> scratch[0] */
+
+    rowCount = *(s32 *)(p + 0xC0);
+    if (rowCount > 0) {
+        for (i = 0; i < rowCount; i++) {
+            char *entry = *(char **)(p + 0x68) + i * 0x14;
+            s32 rowYBase = *(s32 *)(p + 0xB8);
+            s32 rowYStep = *(s32 *)(p + 0xBC);
+            f32 originY = ((f32 *)(*(void **)(p + 0x5C)))[1];
+
+            scratch[1] = (f32)(rowYBase + rowYStep * i) + originY;
+
+            GuiElementSetScale((GuiWidget *)self, *(f32 *)entry, 0.0f, 0.0f, 0.0f);
+
+            if (*(s32 *)(entry + 4) == 0x307A) {
+                scratch[1] += 3.0f;
+            }
+
+            if (*(s32 *)(p + 0xC4)) {
+                GuiElementSetText((GuiWidget *)self, *(s32 *)(entry + 4));
+            } else {
+                GuiElementSetText((GuiWidget *)self,
+                                  (s32)GetLocalizedString(*(s32 *)(entry + 4)));
+            }
+
+            if (*(s32 *)(p + i * 4 + 0x6C) == 0) {
+                /* disabled row */
+                *GuiElementGetColor((GuiWidget *)self) = *(s32 *)(p + 0xB4);
+            } else {
+                f32 originX = scratch[0];
+                f32 rowY = scratch[1];
+
+                if (*(s32 *)(p + 0xCC) == i) {
+                    /* left underline rect (selected colour fill) */
+                    u32 fill = (*(u32 *)(p + 0xAC) & 0x00FFFFFF) | 0x20000000;
+                    u64 packed = ((u64)fill << 32) | fill;
+                    s32 w1 = GuiTextElementMeasure((GuiWidget *)self) >> 1;
+                    s32 y1 = (s32)(rowY + 2.0f);
+                    s32 x1 = (s32)(originX - (f32)w1 - 2.0f - 16.0f);
+                    s32 w2 = GuiTextElementMeasure((GuiWidget *)self) >> 1;
+                    s32 y2 = (s32)(rowY - 2.0f + 16.0f);
+                    s32 x2 = (s32)(originX - (f32)w2 - 2.0f - 16.0f + 8.0f);
+                    func_0027F168(x1, y1, x2, y2, 0, (u64)(unsigned long)&packed);
+                }
+
+                if (*(s32 *)(p + 0x60) != i) {
+                    /* normal (unhighlighted) row */
+                    *GuiElementGetColor((GuiWidget *)self) = *(s32 *)(p + 0xB0);
+                } else {
+                    /* highlighted (selected) row */
+                    *GuiElementGetColor((GuiWidget *)self) = *(s32 *)(p + 0xAC);
+                    if (*(s32 *)(p + 0xC8)) {
+                        u32 fill = (*(u32 *)(p + 0xAC) & 0x00FFFFFF) | 0x20000000;
+                        u64 packed = ((u64)fill << 32) | fill;
+                        s32 w1 = GuiTextElementMeasure((GuiWidget *)self) >> 1;
+                        s32 y1 = (s32)(rowY - 2.0f);
+                        s32 x1 = (s32)(originX - (f32)w1 - 8.0f);
+                        s32 w2 = GuiTextElementMeasure((GuiWidget *)self) >> 1;
+                        s32 y2 = (s32)(rowY + 2.0f + 16.0f);
+                        s32 x2 = (s32)(originX + (f32)w2 + 9.0f);
+                        func_0027F168(x1, y1, x2, y2, 0, (u64)(unsigned long)&packed);
+                    }
+                }
+            }
+
+            GuiTextElementDraw((GuiWidget *)self);
+        }
+    }
+
+    func_0027F790();
+}
+#endif
 
 /* func_00349200: build a 6-row list widget — init seven type-B sub-elements
  * (the row container at +0x218 plus six rows at +0x4C..+0x1C8, stride 0x58 is

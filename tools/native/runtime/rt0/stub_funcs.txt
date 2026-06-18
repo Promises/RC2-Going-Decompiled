@@ -1,5 +1,5 @@
-# still-undefined game functions to weak-stub (M4), over the full 21-unit link.
-# regenerate: link all units (no stubs), nm -u, drop libc/@GLIBC + data globals.
+# still-undefined game functions to weak-stub (M4), over the full USA 21-unit link.
+# regenerate: link all usa units (no stubs), nm -u, drop libc/@GLIBC + data globals.
 AllocateTieTextureVram
 AppendDrawEnvContext1
 AppendDrawEnvContext2
@@ -242,7 +242,6 @@ func_00345298
 func_00348BD0
 func_00348CB8
 func_00348E28
-func_00348E70
 func_0034A350
 func_0034A370
 func_0034EF68
