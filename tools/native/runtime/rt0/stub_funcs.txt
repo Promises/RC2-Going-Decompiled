@@ -97,8 +97,6 @@ func_0012F9C8
 func_0012FA70
 func_00131A98
 func_00132938
-func_00132AC8
-func_00133230
 func_00133850
 func_001338C8
 func_00133960
@@ -231,4 +229,3 @@ g_loadedHeldItemModelId
 g_pSkyShellSpinRates
 sceCdReadClock
 snd_PlaySample
-snd_Pump
