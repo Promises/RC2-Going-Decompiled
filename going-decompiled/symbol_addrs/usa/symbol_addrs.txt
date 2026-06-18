@@ -515,10 +515,10 @@ StartTertiaryVoice = 0x002B7FA8; // CONFIRMED - starts the tertiary voice channe
 UpdateDialogVoiceManager = 0x002B8498; // CONFIRMED - per-frame tick driving the primary/secondary/tertiary voice state machines, fade ramps, queued loads, consumes g_pendingDialogVoiceId
 PumpDialogVoiceSystem = 0x002B8C00; // CONFIRMED - global pump (UpdateDialogVoiceManager + snd_Pump), blocking variant spins until the load/busy flag clears
 AllocVoiceHandleSlot = 0x002E6888; // CONFIRMED - finds a free slot in g_voiceHandleTable (0x70 stride, cap 0x2a generic / 0x34 for two special emitters)
-g_dialogVoiceActive = 0x001A6410; // CONFIRMED - nonzero (-1) while a primary dialog voice is active, gates StartDialogVoice re-entry
+g_dialogVoiceActive = 0x001A6410; // CONFIRMED - nonzero (-1) while a primary dialog voice is active, gates StartDialogVoice re-entry. alias g_dialogBusy (native #else name in func_002FFF68, lw DAT_001a6410 busy gate)
 g_dialogVoiceId = 0x001A6414; // CONFIRMED - s16 currently-playing dialog id, the subtitle SM compares g_dialogVoiceId-6000 to the text-entry voice index for sync
 g_dialogVoicePhase = 0x001A641A; // CONFIRMED - s16 primary voice phase (1 start, 5/6 fade/stop)
-g_pendingDialogVoiceId = 0x001A63CC; // CONFIRMED - s32 queued dialog id consumed by UpdateDialogVoiceManager via StartDialogVoice when no voice active (-1 none)
+g_pendingDialogVoiceId = 0x001A63CC; // CONFIRMED - s32 queued dialog id consumed by UpdateDialogVoiceManager via StartDialogVoice when no voice active (-1 none). alias g_pendingVoiceId (native #else name in func_002FFF68, compared to -1 then set to 0xDB7)
 // NOTE the old g_voiceHandleTable 0x1886D4 label was slot0+4 of g_soundEmitterTable (base 0x1886D0, defined below) - superseded
 
 // === Track-B CD / asset streaming loader (file streamer + EE-IOP CD bridge + disc TOC - anchored on the 0x1AA1F8 load-fail string). ===
@@ -636,7 +636,7 @@ g_cameraFovInterpActive = 0x001B5569; // CONFIRMED - FOV interp active flag - St
 g_cameraFovTarget = 0x001B5570; // CONFIRMED - FOV interp target angle (radians) - destination for the g_cameraFov interpolation
 g_screenFadeBlack = 0x001B1520; // CONFIRMED - black screen fade level 0..1 - driven by UpdateScreenFadeBlack and forced by exit cinematic - render draws black overlay with alpha level*128
 g_screenFadeWhite = 0x001B1524; // CONFIRMED - white screen flash level 0..1 - driven by UpdateScreenFadeWhite - render draws white overlay with alpha level*128 - Ghidra alias g_flScreenFadeWhite
-g_heroPos = 0x00189EA0; // CONFIRMED - hero (player) world position vec4 - debug overlay prints it with the Hero format string at 0x1A88E8 - used by camera takeover sphere tests and hero motion tracking - Ghidra alias g_flHeroPos float[4]
+g_heroPos = 0x00189EA0; // CONFIRMED - hero (player) world position vec4 - debug overlay prints it with the Hero format string at 0x1A88E8 - used by camera takeover sphere tests and hero motion tracking - Ghidra alias g_flHeroPos float[4]. alias g_heroPosVec (native #else name in func_002FFF68, same addr 0x189EA0)
 
 // === Track-B level staging / loading-scene / scene loader / menu-bg streamer (the CD-streamer consumers). ===
 UpdateLevelStagingMachine = 0x00294310; // CONFIRMED - per-tick staging state machine 0-5 - states 0/1 KickRawFileRead the two level chunks (level TOC pairs 0x1507e8/0x1507f8 + base 0x1507dc) below the 0x1F0C000 ceiling - 2 waits g_bLoadingSceneBanksHeld then StartLevelMusicStream + LoadGlobalSoundBank - 3 waits g_soundBankHandles[0] - 4 KickLevelBankDiscLoad(0) - 5 waits handle then done returns 1 - stall over 0x2d0 ticks or RPC error drops spindlctrl 0x1a7900 to 0 and rewinds one state to retry
@@ -983,8 +983,8 @@ g_fullScreenTintPacket = 0x00138850; // CONFIRMED - prebuilt full-screen alpha t
 g_fadeQuadPacket = 0x00138990; // CONFIRMED - prebuilt fade quad packet used by FadeOutToBlackBlocking
 g_screenWidth = 0x001A7340; // CONFIRMED - active display width in pixels
 g_screenHeight = 0x001A7344; // CONFIRMED - active display height in pixels
-g_gsPixelOffsetX = 0x001A7350; // CONFIRMED - GS window X offset
-g_gsPixelOffsetY = 0x001A7354; // CONFIRMED - GS window Y offset
+g_gsPixelOffsetX = 0x001A7350; // CONFIRMED - GS window X offset. alias g_nGsPixelOffsetX (native #else name in DrawScreenSpriteFxQueue, same addr 0x1A7350, Ghidra label g_nGsPixelOffsetX)
+g_gsPixelOffsetY = 0x001A7354; // CONFIRMED - GS window Y offset. alias g_nGsPixelOffsetY (native #else name in DrawScreenSpriteFxQueue, same addr 0x1A7354, Ghidra label g_nGsPixelOffsetY)
 g_vif1DmacHandlerId = 0x001B2240; // CONFIRMED - handler id from AddDmacHandler ch1
 g_busErrorDmacHandlerId = 0x001B2244; // CONFIRMED - handler id from AddDmacHandler ch15
 g_screenGrabTex0Full = 0x001A8780; // CONFIRMED - TEX0 for full-res screen grab as texture
@@ -1722,4 +1722,46 @@ g_exitSceneArmed = 0x0013955C; // CONFIRMED - s32 cleared (set 0) when the exit 
 g_vendorUi = 0x0021F1C0; // CONFIRMED - VendorUiState (captionWidget s32 +0x3C, captionCounter s32 +0x64), SetVendorCaption lui %hi(0x21E000+0x11C0). EU TODO
 g_vendorCaptionFmt = 0x001AD338; // CONFIRMED - vendor caption format/template string (was D_1AD338), arg2 of func_00115DA8 in SetVendorCaption. EU TODO
 g_tieDrawTemplate = 0x001ACAE0; // CONFIRMED - 0x20-qword tie draw-segment template (was D_1ACAE0), CopyQwords source in BuildTieDrawSegment (lui %hi/addiu %lo @0x2F1DB4). EU TODO
+
+// === Track-B M2 native-arena data globals, batch 2 (the 29-global tail).
+// All recovered + verified in Ghidra by decompiling the referencing #else
+// function and reading the actual absolute load address. EU = TODO unless noted.
+// Aliases handled on canonical lines above (g_dialogBusy->g_dialogVoiceActive,
+// g_pendingVoiceId->g_pendingDialogVoiceId, g_nGsPixelOffsetX/Y->g_gsPixelOffsetX/Y,
+// g_heroPosVec->g_heroPos) - no duplicate `=` line needed for those.
+// --- camera snapshot/history (func_002701C0) ---
+g_cameraSnapshot = 0x001B74D0; // CONFIRMED - 0xA0-byte active-camera snapshot buffer, CopyQwords dst from g_pActiveCamera in func_002701C0 (FUN_002701c0 dst 0x1b74d0). EU TODO
+g_cameraHistory = 0x001B76B0; // CONFIRMED - 0x280-byte live camera history block, CopyQwords src in func_002701C0. EU TODO
+g_cameraHistorySnapshot = 0x001B7BB0; // CONFIRMED - 0x280-byte saved copy of g_cameraHistory, CopyQwords dst in func_002701C0, then stored into g_cameraSnapshotPtr. EU TODO
+g_cameraSnapshotPtr = 0x001B7540; // CONFIRMED - static ptr slot set to &g_cameraHistorySnapshot in func_002701C0 (DAT_001b7540 = &DAT_001b7bb0). EU TODO
+// --- camera one-shot callback queue (func_00270220, D_001B1300 block) ---
+g_cameraCallbacks = 0x001B1440; // CONFIRMED - fn-ptr array (D_001B1300+0x140) walked in func_00270220, calls each (*slot)() (DAT_001b1440). EU TODO
+g_cameraCallbackCount = 0x001B1480; // CONFIRMED - s32 queued-callback count (D_001B1300+0x180), loop bound in func_00270220, cleared to 0 after (DAT_001b1480). EU TODO
+// --- camera helper moby (func_00270500) ---
+g_cameraHelperMoby = 0x001B53E4; // CONFIRMED - static ptr slot holding the lazily-spawned camera helper moby (heap ptr), set via func_00303818 / FreeMoby in func_00270500 (DAT_001b53e4). The slot is static at this ROM addr, the moby it points at is heap. EU TODO
+// --- cinematic camera key block (UpdateCamera) ---
+g_cinematicCameraBlock = 0x0018B2F0; // CONFIRMED - cinematic camera override block (g_nNanotechBonusHealTimer 0x189FFC + 0x12F4), block[0] pos at 0x18B2F0 / block[1] look at 0x18B300 copied into g_cameraPos in UpdateCamera when FUN_0026f7c0 nonzero (_DAT_0018b2f0). EU TODO
+// --- hero pos/orient + delta (func_002FFF68, func_00270E40) ---
+g_heroOrientVec = 0x00189EB0; // CONFIRMED - hero orientation quad (g_heroPos 0x189EA0 + 0x10), copied into g_gadgetDisplay+0x20 in func_002FFF68 (_DAT_00189eb0). EU TODO
+g_heroPos_D0 = 0x00189F70; // CONFIRMED - g_heroPos + 0xD0 hero-relative delta vec4, b-operand of Vec4AddVu0 in func_00270E40 (0x189f70). EU TODO
+// --- gadget display scratch + hero zoom (func_002FFF68) ---
+g_gadgetDisplay = 0x001B2290; // CONFIRMED - gadget/turret display scratch block, base of the field writes in func_002FFF68 (DAT_001b2290, fields +2 zoom, +4 recip, +0x10 pos, +0x20 orient). EU TODO
+g_heroZoom = 0x001AD7D8; // CONFIRMED - s16 hero zoom level, IntToFloat source in func_002FFF68 (DAT_001ad7d8). EU TODO
+// --- pending voice aux + voice trigger words (func_002FFF68) ---
+g_pendingVoiceAux = 0x001A63D0; // CONFIRMED - s32 aux word beside g_pendingDialogVoiceId (0x1A63CC+4), zeroed in func_002FFF68 when queuing voice 0xDB7 (DAT_001a63d0). EU TODO
+g_voiceTrigger = 0x001AD7C4; // CONFIRMED - s32 voice-trigger flag, set to 1 in func_002FFF68 when arming pending voice (DAT_001ad7c4). EU TODO
+g_voiceTriggerAux = 0x001AD7C8; // CONFIRMED - s32 aux word beside g_voiceTrigger (0x1AD7C4+4), zeroed in func_002FFF68 (DAT_001ad7c8). EU TODO
+// --- weapon / moby class tables + quick-select map (func_002FFF68) ---
+g_weaponClassTable = 0x00239B34; // CONFIRMED - classId column of the weapon table (0xE0 stride), indexed *(int*)(base + qsMap[i]*0xE0) in func_002FFF68 (DAT_00239b34). EU TODO
+g_weaponSlotTable = 0x00239B2C; // CONFIRMED - slot column of the weapon table (0xE0 stride, 8 bytes before classId column), indexed by g_itemEquippedSlot[gadgetId] in func_002FFF68 (DAT_00239b2c). EU TODO
+g_mobyClassTable = 0x0018B040; // CONFIRMED addr - moby class lookup table, referenced in func_002FFF68 (xref to 0x18B040); indexed with stride 0x50 there. EU TODO
+g_quickSelectMap = 0x00139587; // CONFIRMED addr - quick-select id map; byte[0] at 0x139587 read in func_002FFF68 (lbu -0x6a79). Adjacent bytes (full map extent) not yet traced. EU TODO
+// --- boot splash texture descriptor (func_0026FE58), offsets into existing struct bases ---
+g_vramTextureBase_28 = 0x001A730C; // CONFIRMED - g_vramTextureBase(0x1A72E4)+0x28, VRAM base arg passed to func_0026FC88 in func_0026FE58 (DAT_001a730c). EU TODO
+g_bRawReadFellBack_34 = 0x001A7468; // CONFIRMED - g_bRawReadFellBack(0x1A7434)+0x34, latches the texture descriptor handle word (desc[0]) in func_0026FE58 (DAT_001a7468). EU TODO
+// --- screen-space sprite fx defaults (DrawScreenSpriteFxQueue) ---
+g_screenCenterDefaultX = 0x001A7348; // CONFIRMED - s32 default screen-centre X, IntToFloat'd as the direct-entry sprite x in DrawScreenSpriteFxQueue (DAT_001a7348). EU TODO
+g_screenCenterDefaultY = 0x001A734C; // CONFIRMED - s32 default screen-centre Y, IntToFloat'd as the direct-entry sprite y in DrawScreenSpriteFxQueue (DAT_001a734c). EU TODO
+// --- sound bank handles block alias base (func_00270D60) ---
+g_soundBankHandlesBlk = 0x00189E20; // CONFIRMED - g_soundBankHandles(0x189E00)+0x20 base, +0x2290 reaches g_pHeroMoby (0x18C0B0) and +0x80 reaches g_heroPos (0x189EA0) - the cinematic-camera-key ptr/control fields read in func_00270D60. EU TODO
 

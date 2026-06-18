@@ -2,33 +2,4 @@
 # canonical address (not a D_xxxxxx name, not in symbol_addrs,
 # not a documented alias). Each needs its ROM address recovered
 # in Ghidra and added to symbol_addrs (Track-B) before the arena
-# can place it. Count: 29
-g_bRawReadFellBack_34
-g_cameraCallbackCount
-g_cameraCallbacks
-g_cameraHelperMoby
-g_cameraHistory
-g_cameraHistorySnapshot
-g_cameraSnapshot
-g_cameraSnapshotPtr
-g_cinematicCameraBlock
-g_dialogBusy
-g_gadgetDisplay
-g_heroOrientVec
-g_heroPosVec
-g_heroPos_D0
-g_heroZoom
-g_mobyClassTable
-g_nGsPixelOffsetX
-g_nGsPixelOffsetY
-g_pendingVoiceAux
-g_pendingVoiceId
-g_quickSelectMap
-g_screenCenterDefaultX
-g_screenCenterDefaultY
-g_soundBankHandlesBlk
-g_voiceTrigger
-g_voiceTriggerAux
-g_vramTextureBase_28
-g_weaponClassTable
-g_weaponSlotTable
+# can place it. Count: 0
