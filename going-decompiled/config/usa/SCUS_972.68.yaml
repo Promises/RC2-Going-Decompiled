@@ -232,8 +232,14 @@ segments:
       #     in symbol_addrs.txt the proven way (pad type:func size:0xN + the real
       #     next start type:func).
       - [0x1740A8, asm, text/1740A8] # TILE A head: 2 trivial leaves + moby-transform VU0 (0x274128..0x276167)
-      - [0x176168, asm, text/176168] # TILE A collision band - HANDWRITTEN (0x276168..0x278E87)
-      - [0x178E88, c, text/178E88]   # TILE A render/draw-2D A (0x278E88..0x2812A7)
+      - [0x176168, asm, text/176168] # TILE A collision band - HANDWRITTEN (0x276168..0x278EBF; incl GetCollHitMaterial + its 2-word tail pad at 0x278EB8)
+      # RE-SPLIT (2026-06-18): boundary moved 0x178E88->0x178E40 (vaddr 0x278F08->
+      #   0x278EC0). The old 0x278F08 boundary cut func_00278EC0 (SceneTransition-
+      #   TeardownA, one fn 0x278EC0..0x278F88 per Ghidra) in half: head landed in
+      #   176168's bogus func_00278EB8, tail in this unit's bogus func_00278F08.
+      #   Starting the c unit at the real 0x278EC0 prologue makes it whole; name
+      #   pinned text/178E88 so the hand-written .c is preserved.
+      - [0x178E40, c, text/178E88]   # TILE A render/draw-2D A (0x278EC0..0x2812A7)
       - [0x1812A8, asm, text/1812A8] # TILE A VU1 sphere-map island - handwritten (0x2812A8..0x2823B7)
       - [0x1823B8, c, text/1823B8]   # TILE A render/draw-2D B (0x2823B8..0x2831F4)
       - [0x183178, c, text/183178]   # -G8 sub-TU (0x2831F8..0x2833C7, 12 fns)

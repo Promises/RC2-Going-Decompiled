@@ -121,7 +121,7 @@ extern void func_0027F0A8(const u64 *corners, u64 tex0);
  * the +0x44 offset compiles to the absolute %hi/%lo form. */
 extern u8 g_sceneActorMobys[];
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00278F08);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00278EC0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00278F90);
 
