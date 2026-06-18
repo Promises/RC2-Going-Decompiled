@@ -1841,3 +1841,24 @@ g_soundBankHandlesBlk = 0x00189E20; // CONFIRMED - g_soundBankHandles(0x189E00)+
 // BuildHeroCameraBasis     = 0x00270D60; // CONFIRMED behavior - normalizes hero moby axes then ComputeCameraOrbitAngles. EU 0x00270BC0
 // BeginCameraTransitionKind2Pair = 0x00270E40; // CONFIRMED - under g_bCameraTransitionKind==0, seeds transition target pos/quat pair (0x1B54D0/E0) from source (0x1B5460/70), adds g_heroPos_D0 when the pending-kind byte 0x1B5413 == 2. EU 0x00270CA0
 // ApplyCameraTransitionStep = 0x002712E8; // CONFIRMED - per-frame ease of yaw pitch radius, rebuilds g_cameraMatrix rows (0x1B54F0/5500/5510) + writes g_flCameraPos, returns 1 when no frames left. EU 0x00271178
+
+// --- GUI-screen Draw/Tick accessor pairs (text/198FA0) ---
+// Thin forwarders - each null-checks g_pGuiManager then calls a per-screen tick or
+// draw handler at (g_pGuiManager + screen-offset). Recorded as comments NOT active
+// name=addr lines (these are MATCHED bare-C bodies func_00XXXXXX in text/198FA0.c -
+// keep the func_ name in the .c; an active rename would break the by-name objdiff
+// match). Screen identity is read from the named handler target where one exists
+// (CONFIRMED), else from the g_pGuiManager
+// offset alone (UNCONFIRMED handler name). EU TODO for all.
+// DispatchWeaponGridDraw      = 0x0029CFE0; // CONFIRMED - forwards to FUN_00348628(g_pGuiManager + 0x39620), the WeaponGrid draw (pairs with GuiWeaponGridTick).
+// DispatchMapScreenDraw       = 0x0029D010; // CONFIRMED - forwards to FUN_00347550(g_pGuiManager + 0x39af0), the MapScreen draw (pairs with GuiMapScreenTick).
+// DispatchWeaponGridTick      = 0x0029D040; // CONFIRMED - forwards to GuiWeaponGridTick(g_pGuiManager + 0x39620, arg).
+// DispatchMapScreenTick       = 0x0029D080; // CONFIRMED - forwards to GuiMapScreenTick(g_pGuiManager + 0x39af0, arg0, arg1).
+// DispatchConfirmPopupTick    = 0x0029D0C8; // CONFIRMED - forwards to GuiConfirmPopupTick(g_pGuiManager + 0x3b418, arg) (0x33A368).
+// DispatchConfirmPopupDraw    = 0x0029D108; // CONFIRMED - forwards to GuiConfirmPopupDraw(g_pGuiManager + 0x3b418) (0x33A5D8).
+// DispatchLevelInfoPanelTick  = 0x0029D138; // CONFIRMED - forwards to GuiLevelInfoPanelTick(g_pGuiManager + 0x3af80, arg) (0x33AF70).
+// DispatchLevelInfoPanelDraw  = 0x0029D178; // CONFIRMED - forwards to FUN_0033b428(g_pGuiManager + 0x3af80), the LevelInfoPanel draw (0x33B428).
+// Adjacent pairs left UNCONFIRMED (handler targets unnamed, screen identity not pinned):
+//   0x0029D1A8 draw -> FUN_0033c958(+0x3b6f8)   /  0x0029D1D8 tick -> FUN_0033c588(+0x3b6f8)
+//   0x0029D218 draw -> FUN_0033fef8(+0x3ba58)   /  0x0029D248 tick -> FUN_0033fab0(+0x3ba58)
+//   0x0029D288 draw -> FUN_003462c0(+0x3a000)   /  0x0029D2B8 tick -> FUN_003453d0(+0x3a000)
