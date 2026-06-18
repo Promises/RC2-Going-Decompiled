@@ -125,4 +125,21 @@ void func_002888D8(void)       {} /* AdvanceWeaponVariant(itemId) - inventory bk
 void func_00288F30(void)       {} /* weapon progress-gate iterate(itemId) - bk */
 void func_002AE6C8(void)       {} /* EquipGadgetItem(itemId) - equip bookkeeping */
 
+/* ===========================================================================
+ * M3 batch 4 - data-driven from the tester's refreshed stub-hit sweep. 7 no-ops
+ * (6 VOID-NOOP + 1 RETURN-CONST). The 2 NEEDS-SHIM hits (func_002912B8 rebuilds
+ * g_inventoryOrder; func_002CABC0 resets the world camera g_flCameraPos/Matrix)
+ * are NOT here - they write in-frame-read game state and get functional shims.
+ * =========================================================================== */
+void func_0011AEA0(void)            {} /* FlushCache (real symbol - callers use
+                                        * the func_ name/addr, not "FlushCache") */
+void AppendTexFlushDefaultTex0(void){} /* GIF default-TEX0 flush DMA tag */
+void RenderSaveLoadStatusPopup(void){} /* Begin2dDrawBatch..End - GS packets only */
+void RunSprRenderPipeline(void)     {} /* CPU-side render packet gen (RunRenderTaskList) */
+void func_0026FC88(void)            {} /* GS CLUT+texture upload packets; *outTex0 render-only */
+void func_00271FE8(void)            {} /* draw/cull context-flag (write-only); UpdateCamera writes
+                                        * g_flCameraPos/Matrix itself AFTER this returns */
+u64  func_00133250(void)            { return 0; } /* blocking IOP snd RPC + snd_Pump drain loop -
+                                        * deadlock headless; 0 = IOP-ready/success the callers want */
+
 #endif /* TARGET_NATIVE */

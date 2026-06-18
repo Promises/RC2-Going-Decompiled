@@ -1,7 +1,6 @@
 # still-undefined game functions to weak-stub (M4), over the full USA link + sdk + hw backend.
 # regenerate: link all usa units + runtime/{sdk,hw} (no stubs), nm -u, drop libc/@GLIBC + data globals.
 AllocateTieTextureVram
-AppendTexFlushDefaultTex0
 AppendTextureUploadBuildTex0
 ApplyCameraShakeAxis
 ApplyCameraTransition
@@ -61,12 +60,10 @@ ProjectWorldToScreen
 PumpDialogVoiceSystem
 RegisterParticleUpdateHandlers
 RemoveVif1DmacHandlers
-RenderSaveLoadStatusPopup
 RequestLevelExit
 ResetDebugHeap
 ResetFrameArenas
 ResolveOcclusionVisMask
-RunSprRenderPipeline
 SampleCameraFogZone
 SetMobyAnimSequence
 SetupMemoryArenaTable
@@ -87,7 +84,6 @@ _ITM_deregisterTMCloneTable
 _ITM_registerTMCloneTable
 func_00115DA8
 func_001163B0
-func_0011AEA0
 func_0012EE28
 func_0012F738
 func_0012F950
@@ -96,13 +92,10 @@ func_0012F9C8
 func_0012FA70
 func_00131A98
 func_00132938
-func_00133250
 func_00133850
 func_001338C8
 func_00133960
-func_0026FC88
 func_00270B68
-func_00271FE8
 func_00278EC0
 func_00278F90
 func_0027B988
