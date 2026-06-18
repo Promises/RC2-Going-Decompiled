@@ -81,6 +81,17 @@ void func_0027E4D0(void)            {} /* AppendScreenRectFill - GIF sprite-fill
 void BuildCameraProjection(void)    {} /* GS projection matrices (render-read 0x1b908x) */
 void BuildFrameViewMatrices(void)   {} /* view/world-screen matrices (render-read 0x1b518x) */
 void CloseMobyDmaSegment(void)      {} /* DMA tag splice */
+/* CullAndEmitShrubs / CullAndBinTieInstances: hand-written inline VU0 macro-mode
+ * DMA-chain builders (scratchpad + SPR-FROM DMA kicks) - a faithful #else is
+ * impossible (the hardware IS the logic). Their only persisted writes are
+ * render-output: the frame render-DMA cursor g_frameDmaCursor(0x1B2228) and the
+ * tie render-list size globals - all reset each frame, no game-logic reader (the
+ * bracketing open-tag g_pShrubSegmentOpenTag 0x1B2034 is written by their caller
+ * BuildShrubDrawSegment, also render-output). Tester EXCLUDED these from the
+ * state watch - so a render-emitter no-op is the correct contract, like
+ * RenderFrame. */
+void CullAndEmitShrubs(void)        {} /* shrub cull+emit - render-output only */
+void CullAndBinTieInstances(void)   {} /* tie cull+bin draw/relight lists - render-output only */
 /* FlushHudDisplayValue: removed - text/198FA0.c now joins the native link (it
  * holds InitMobyFromClass's #else body) and provides the REAL bare-C forwarder
  * (g_guiInstance-guarded push to the HUD render object). A no-op here would
