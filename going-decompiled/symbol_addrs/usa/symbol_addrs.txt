@@ -340,6 +340,7 @@ DrawCheatMenu = 0x002D0750; // CONFIRMED - Cheats menu renderer, reads g_cheatFl
 // === Track-B Gadgetron vendor shop UI (bolt-SPEND path, anchored on g_boltCount 0x1A7A00). ===
 EnterVendorMenu = 0x002F8FF8; // CONFIRMED - opens the vendor shop UI, sets g_nVendorMode, builds buyable list, resets cursor/state, sets g_nGameState=5. EU anchor
 UpdateVendorMenuInput = 0x002FA240; // CONFIRMED - vendor input handler, reads g_boltCount + GetVendorItemPrice for affordability before VendorPurchaseStateMachine. EU anchor
+UpdateVendorMenuInputForward = 0x002FA608; // CONFIRMED - thin unconditional forwarder to UpdateVendorMenuInput, only caller is EnterVendorMenu on its ammo-vendor (g_nVendorMode==1) branches. OFF the plain New-Game gameplay frame path (vendor only reached via g_nGameStatePending==5)
 DrawVendorItemDetail = 0x002FB718; // CONFIRMED - renders selected-item detail panel, reads g_boltCount to colour price red when unaffordable. EU anchor
 GetVendorItemPrice = 0x002F7390; // CONFIRMED - returns bolt price of the selected vendor item (unit price or weapon upgrade cost)
 BuildVendorItemList = 0x002F7488; // CONFIRMED - rebuilds g_vendorItemList (stride 0x18, count g_nVendorItemCount) from inventory + per-weapon availability
@@ -526,6 +527,7 @@ g_nMenuOverlaySubState = 0x001BAC58; // CONFIRMED - sub-state/phase counter with
 // === Track-B front-end / pause-menu screen manager (g_pCurrentMenuScreen drives the per-frame widget tick; ~0x2CB000-0x2DE000). ===
 MenuScreenDoAction = 0x002D67C0; // CONFIRMED - front-end/pause action dispatcher(opcode,arg,outFlag), opcode 9 writes g_currentLanguage (single writer, confirmed 1 of 23 xrefs), 6/8/10/0xb push/pop/swap current vs previous screen, 4/5/0xc/0xd RequestGameStateChange. Command-record wrappers 0x2d6ad8/0x2d6b00 read opcode at +2 arg at +4
 MenuScreenLoad = 0x002CB038; // CONFIRMED - loads a screen by g_lastMenuScreenId (switch), maps id to screen-instance struct + sets text-table/VRAM/map banks
+MenuScreenBeginLoad = 0x002CBA10; // CONFIRMED - sub-state-1 handler of the menu-screen transition machine (FUN_002cb860 switch on DAT_001f27c0), calls MenuScreenLoad then advances sub-state to 2. OFF the plain New-Game gameplay frame path (gated by g_nGameState==3 menu state)
 RequestMenuScreenChange = 0x002CAC28; // CONFIRMED - open/switch a front-end or pause screen, builds the pause prompt when g_nGameState==0, sets g_lastMenuScreenId, re-syncs the galactic map to g_playerProgress
 MenuScreenUpdate = 0x002CBAB8; // CONFIRMED - per-frame tick of g_pCurrentMenuScreen, iterates up to 14 widget objects (vtable +8 update / +0xc activate) handling focus change + teardown
 MenuScreenCommitTransition = 0x002CBA58; // CONFIRMED - commits a queued change, g_pCurrentMenuScreen = g_pNextMenuScreen, clears g_pNextMenuScreen, sets the 0x1F27C0 commit-state flag
