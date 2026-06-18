@@ -223,7 +223,7 @@ extern s32   D_1A8D48;             /* gp small: weapon-wheel cursor (0x1A8D48) *
 
 extern s32   g_boltCount;          /* live bolt total (0x1A7A00) */
 extern s32   g_nBoltCounterDisplayed[]; /* bolt-counter HUD roll state (0x1B18C8) */
-void FlushHudDisplayValue(void);
+s32 FlushHudDisplayValue(s32 displayState);
 
 /* func_002888D8(itemId): advance an item to its next weapon variant. Reads the
  * active variant's next-variant slot (g_weaponTable[slot].nextVariantSlot); when
@@ -872,7 +872,7 @@ void ResetBoltCounterHud(void) {
     g_nBoltCounterDisplayed[1] = bolts;
     g_nBoltCounterDisplayed[0] = bolts;
     g_nBoltCounterDisplayed[2] = 0;
-    FlushHudDisplayValue();
+    FlushHudDisplayValue((s32)(u32)g_nBoltCounterDisplayed);
     g_nBoltCounterDisplayed[4] = 0;
     g_nBoltCounterDisplayed[3] = -1;
     rec = (u8 *)&g_hudMobyAuxBlockBase + 0x44;
