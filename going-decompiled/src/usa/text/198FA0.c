@@ -1191,7 +1191,130 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029FDF8);
  * callee-save frame wall, see func_0029C678. Left as asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", SpawnMoby);
 
+/* Moby-class binding tables consulted by InitMobyFromClass (all arena-placed). */
+extern void FillMemory32(void *dst, s32 pattern, s32 nbytes);
+extern u8    g_mobyClassSlotRemap[];            /* 0x1CE460 classId -> slot byte */
+extern s16   g_mobyClassSlotToId[];             /* 0x1CE280 slot -> classId (reverse) */
+extern void *g_mobyClassUpdateFuncs[];          /* 0x1CDEC0 per-slot pUpdate (header) */
+extern void *g_mobyClassUpdateFuncsNoHeader[];  /* 0x1D0460 per-slot pUpdate (headerless) */
+extern void *g_mobyClassHeaders[];              /* 0x1CDB00 per-slot class-header ptr */
+extern u8   *g_mobyTableBase;                   /* 0x1B1ADC base of the 0x100-stride table */
+extern void  ResolveMobyAnimFramePtrs(void *moby);
+
 /* InitMobyFromClass: zero-fills a moby's 0x100-byte state (FillMemory32) and
- * binds it to a class via g_mobyClassSlotRemap. Multi callee-save; 8-byte-
- * packed callee-save frame wall, see func_0029C678. Left as asm. */
+ * binds it to a class. Stamps the defaults the spawn path expects - classSlot
+ * (+0x22) = g_mobyClassSlotRemap[classId], alpha (+0x23)=0x80, default tint
+ * qword (+0x38), uid (+0xAC) = (tableIndex<<16), classId (+0xAA), the 0x7F/0x80
+ * colour-channel bytes, and the 1.0 anim rates (+0x48/+0x4C). It then validates
+ * the slot through the reverse map g_mobyClassSlotToId: if it does NOT round-trip
+ * back to classId the class has no loaded header, so it takes the headerless
+ * path (flags |= 5, pUpdate from g_mobyClassUpdateFuncsNoHeader, flags |= 2 when
+ * none) and returns. Otherwise it binds the header: pClass (+0x24), pUpdate from
+ * g_mobyClassUpdateFuncs, scale (+0x2C) and flag bits from the header, optional
+ * collision mesh (+0x78), then resolves anim-frame pointers when the class has
+ * an animation set. The matching build keeps the asm (multi callee-save, 8-byte-
+ * packed save-slot frame wall - see func_0029C678). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", InitMobyFromClass);
+#else
+void InitMobyFromClass(void *moby, s32 classId) {
+    u8 *m = (u8 *)moby;
+    u8 slot;
+    s32 index;
+    u8 *pc;
+    void *animSet;
+
+    FillMemory32(m, 0, 0x100);
+
+    slot = g_mobyClassSlotRemap[classId];
+    m[0x23] = 0x80;                 /* alpha */
+    m[0x22] = slot;                 /* class slot */
+    m[0xA8] = 0xFF;
+    m[0x21] = 0xFF;
+    m[0x61] = 0xFF;
+    m[0x62] = 0xFF;
+    *(u64 *)(m + 0x38) = 0x0040404000000000ULL; /* default tint qword */
+    *(s16 *)(m + 0x36) = 0x7F80;
+    index = (s32)(m - g_mobyTableBase) >> 8;     /* slot index in the 0x100 table */
+    *(s32 *)(m + 0xAC) = index << 16;            /* uid */
+    m[0x6D] = 0xFF;
+    m[0xA5] = 0x7F;
+    m[0xA7] = 0x80;
+    *(s16 *)(m + 0xAA) = (s16)classId;
+    m[0x6E] = 0;
+    m[0x6C] = 0xFF;
+    m[0xA4] = 0x7F;
+    m[0xA6] = 0x80;
+
+    if (g_mobyClassSlotToId[slot] != classId) {
+        /* headerless class - no loaded header for this slot */
+        u16 flags = (u16)(*(u16 *)(m + 0x34) | 0x5);
+        void *upd = g_mobyClassUpdateFuncsNoHeader[slot];
+        *(s32 *)(m + 0x24) = 0;
+        *(s32 *)(m + 0x98) = 0;
+        *(void **)(m + 0x64) = upd;
+        if (upd == 0) {
+            flags |= 0x2;
+        }
+        *(u16 *)(m + 0x34) = flags;
+        return;
+    }
+
+    /* header class */
+    {
+        void *upd = g_mobyClassUpdateFuncs[slot];
+        *(void **)(m + 0x64) = upd;
+        if (upd == 0) {
+            *(u16 *)(m + 0x34) |= 0x2;
+        }
+    }
+    pc = (u8 *)g_mobyClassHeaders[slot];
+    *(void **)(m + 0x24) = pc;
+    m[0x62] = pc[0x0E];
+    *(u16 *)(m + 0x34) |= *(u16 *)(pc + 0x44);
+    *(s32 *)(m + 0x98) = *(s32 *)(pc + 0x10);
+    *(f32 *)(m + 0x4C) = 1.0f;
+    *(f32 *)(m + 0x2C) = *(f32 *)(pc + 0x24);    /* default scale */
+    *(f32 *)(m + 0x48) = 1.0f;
+    if (*(s32 *)(pc + 0x40) != 0) {
+        *(u16 *)(m + 0x34) |= 0x10;
+        *(s32 *)(m + 0x78) = *(s32 *)(pc + 0x40); /* collision mesh */
+    }
+
+    pc = *(u8 **)(m + 0x24);
+    if (pc[0x0F] != 0) {
+        m[0x6F] = 0x18;
+        *(s32 *)(m + 0x70) = 0;
+        *(u16 *)(m + 0x34) |= 0x400;
+        *(s32 *)(m + 0x74) = 0;
+        m[0xBD] = 0;
+    }
+
+    pc = *(u8 **)(m + 0x24);
+    if (pc[0x06] != 0) {
+        m[0x63] = 0x18;
+    }
+
+    pc = *(u8 **)(m + 0x24);
+    animSet = *(void **)(pc + 0x48);
+    if (animSet != 0) {
+        ResolveMobyAnimFramePtrs(m);
+        pc = *(u8 **)(m + 0x24);
+        animSet = *(void **)(pc + 0x48);
+        if (*(u8 *)((u8 *)animSet + 0x10) >= 2) {
+            *(u16 *)(m + 0x34) &= 0xFFFD;
+        }
+        pc = *(u8 **)(m + 0x24);
+        if (pc[0x0C] == 1) {
+            animSet = *(void **)(pc + 0x48);
+            if (*(u8 *)((u8 *)animSet + 0x10) < 2) {
+                *(s32 *)(m + 0x48) = 0;
+                animSet = *(void **)(pc + 0x48);
+                if (*(s8 *)((u8 *)animSet + 0x11) < 0) {
+                    *(u16 *)(m + 0x34) |= 0x40;
+                }
+            }
+        }
+    }
+}
+#endif

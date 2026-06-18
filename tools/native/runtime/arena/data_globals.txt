@@ -315,7 +315,9 @@ g_mobyClassBounds
 g_mobyClassCount
 g_mobyClassCountNoHeader
 g_mobyClassDataSizes
+g_mobyClassHeaders
 g_mobyClassSlotRemap
+g_mobyClassSlotToId
 g_mobyClassTable
 g_mobyClassUpdateFuncs
 g_mobyClassUpdateFuncsNoHeader

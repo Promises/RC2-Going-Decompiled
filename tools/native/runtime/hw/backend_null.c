@@ -81,7 +81,10 @@ void func_0027E4D0(void)            {} /* AppendScreenRectFill - GIF sprite-fill
 void BuildCameraProjection(void)    {} /* GS projection matrices (render-read 0x1b908x) */
 void BuildFrameViewMatrices(void)   {} /* view/world-screen matrices (render-read 0x1b518x) */
 void CloseMobyDmaSegment(void)      {} /* DMA tag splice */
-void FlushHudDisplayValue(void)     {} /* HUD display value into GuiManager (render) */
+/* FlushHudDisplayValue: removed - text/198FA0.c now joins the native link (it
+ * holds InitMobyFromClass's #else body) and provides the REAL bare-C forwarder
+ * (g_guiInstance-guarded push to the HUD render object). A no-op here would
+ * multiply-define it. */
 void RenderFrame(void)              {} /* master draw chain - packets + render-support
                                        * (vis-mask/procedural-anim/fade clamps); none
                                        * is gameplay state, safe to drop one frame */

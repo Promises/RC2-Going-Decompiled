@@ -804,7 +804,7 @@ g_pReservedMoby0 = 0x001B151C; // PARTIAL - pointer to reserved moby slot 0 (gp+
 g_mobySpawnCredit = 0x001B1A00; // UNCONFIRMED - decremented by SpawnMoby when nonzero, read by 0x2A7AA8/0x312EC0/0x31E1D8 - looks like a spawn budget counter, incrementer not found in ELF
 g_mobyClassHeaders = 0x001CDB00; // CONFIRMED - loaded moby class header ptr per class slot - indexed via g_mobyClassSlotRemap - same table PlaySoundFromClassBank uses
 g_mobyClassSlotRemap = 0x001CE460; // CONFIRMED - u8[0x2000] class id to loaded slot remap, 0xFF = not loaded - memset 0xFF on scene init
-g_mobyClassSlotToId = 0x001CE280; // CONFIRMED - u16 per slot reverse map slot to class id - InitMobyFromClass validates remap consistency through it
+g_mobyClassSlotToId = 0x001CE280; // CONFIRMED - s16 per slot reverse map slot to class id (read signed via lh) - InitMobyFromClass validates remap consistency through it
 g_mobyClassUpdateFuncs = 0x001CDEC0; // CONFIRMED - per-class-slot pUpdate function table for header classes - copied into moby+0x64 at init, populated by BindMobyClassUpdateFunc
 g_mobyClassUpdateFuncsNoHeader = 0x001D0460; // CONFIRMED - per-slot pUpdate table for classes registered with null header (slot counter g_mobyClassCountNoHeader)
 g_mobyClassDataSizes = 0x001D0D80; // PARTIAL - u32 per slot - class data size hdr byte +0x2D << 10, sentinels 0xFFF00000/0xFFFC0000 for special slots - consumer not traced
