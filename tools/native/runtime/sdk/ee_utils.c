@@ -45,4 +45,13 @@ void CopyQwords(void *dst, const void *src, s32 nbytes)
     } while (n > 0);
 }
 
+/* func_00286260 @0x00286260: store `mode` to the word at 0x1BAC94 (asm:
+ * sw $a0, %lo(D_001BAC90 + 0x4)). Trivial leaf, raw-split (no .c home); on the
+ * RequestGameStateChange progress-transition path. */
+void func_00286260(s32 mode)
+{
+    extern s32 D_001BAC94;
+    D_001BAC94 = mode;
+}
+
 #endif /* TARGET_NATIVE */

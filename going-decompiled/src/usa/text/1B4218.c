@@ -328,8 +328,113 @@ s32 IsGameStatePending(s32 state) {
 
 /* Request a game-state change: pushes the target state onto the 8-deep stack and
  * arms the pending-transition slot (the push counterpart to PopGameState).
- * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing. */
+ *
+ * Gate ladder (returns a reject code, 0 = accepted). Each gate is an
+ * unconditional, condition-guarded assignment to `result`, applied in asm order
+ * so a later gate overrides an earlier one (the original lowers them as
+ * movz/movn chains):
+ *   - result starts -1; if g_nGameStatePending == -2 -> result = 0 (idle);
+ *   - if push==1 && g_gameStateStackDepth > 7 -> result = -2 (stack full);
+ *   - slotActive = (stateId < 0) ? 0 : stateSlotTable[stateId];
+ *     if slotActive != 0 -> result = -3 (already active);
+ *   - if g_health == 0 -> result = -1 (death gate, applied LAST so it wins).
+ * On accept (result == 0) it stashes the pending id + the two args + the
+ * out-flag pointer, applies the occlusion-override player-progress special case,
+ * and (if push) pushes the current game state.
+ *
+ * NATIVE SHIM (no byte target; matching build uses INCLUDE_ASM above). Derived
+ * register-exact from RequestGameStateChange.s @0x2B58F8.
+ *
+ * WALL (matching build): save-layout — 3 callee-saves + $ra at 8-byte spacing. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", RequestGameStateChange);
+#else
+extern s32 g_nGameState;                /* 0x1A8BB0 current top-level game/screen state id */
+extern s32 g_playerProgress;            /* 0x1A79F8 persistent-save player progress word */
+extern s32 g_occlusionOverrideMode;     /* 0x1B168C occlusion override (1 all / 2 octant / 3 sector) */
+extern s32 D_001A8B88[];                /* 0x1A8B88 per-state "slot active" table (s32 stride) */
+extern s32 D_001C4EC0;                  /* 0x1C4EC0 (= g_pointLights + 0x2400) progress sub-flag */
+extern void func_00286260(s32 mode);    /* 0x286260 trivial PURE: g_someGlobal = mode */
+
+s32 RequestGameStateChange(s32 stateId, s32 push, s32 argA, s32 argB, s8 *outDoneFlag) {
+    s32 result;
+    s32 slotActive;
+
+    if (outDoneFlag != 0) {
+        *outDoneFlag = 0;
+    }
+
+    /* gate 1: pending == -2 (idle) accepts; movz $17,$0 in the bne delay slot
+       always evaluates regardless of the push branch. */
+    result = -1;
+    if (g_nGameStatePending == -2) {
+        result = 0;
+    }
+    /* gate 2: push==1 && depth > 7 -> -2 (stack full). slti<8 then movz -2. */
+    if (push == 1) {
+        if (g_gameStateStackDepth >= 8) {
+            result = -2;
+        }
+    }
+    /* gate 3: slot table lookup (skipped, slotActive=0, when stateId < 0). */
+    slotActive = (stateId < 0) ? 0 : D_001A8B88[stateId];
+    if (slotActive != 0) {
+        result = -3;
+    }
+    /* gate 4 (LAST, wins): death gate. */
+    if (g_health == 0) {
+        result = -1;
+    }
+
+    if (result != 0) {
+        return result;
+    }
+
+    /* accepted: stash pending id + args + out-flag pointer. */
+    g_gameStatePendingArgA = argA;
+    g_gameStatePendingArgB = argB;
+    g_gameStateTransitionDoneFlag = (s32)outDoneFlag;
+    g_nGameStatePending = stateId;
+
+    /* occlusion-override player-progress special case. The asm reloads
+       g_playerProgress between the two blocks; reproduce both branches exactly.
+       `$2` flowing into the second block (L5A04) is always the reloaded
+       progress in every path, so the second test is progress-relative. */
+    {
+        s32 progress = g_playerProgress;
+        /* first block: (progress==8 && D_001C4EC0==1) || (progress==0x13 && D_001C4EC0==0),
+           then stateId in {3,4}. */
+        if ((progress == 8 && D_001C4EC0 == 1) ||
+            (progress == 0x13 && D_001C4EC0 == 0)) {
+            if ((u32)(stateId - 3) < 2) {
+                g_occlusionOverrideMode = 2;
+                if (stateId == 4) {
+                    func_00286260(2);
+                }
+            }
+        }
+        /* second block: reload progress; progress in {0x16,0x17} && stateId in {3,4}. */
+        progress = g_playerProgress;
+        if ((u32)(progress - 0x16) < 2) {
+            if ((u32)(stateId - 3) < 2) {
+                g_occlusionOverrideMode = 3;
+                if (stateId == 4) {
+                    func_00286260(3);
+                }
+            }
+        }
+    }
+
+    /* push the current game state onto the 8-deep stack. */
+    if (push == 1) {
+        s32 depth = g_gameStateStackDepth;
+        g_gameStateStack[depth] = g_nGameState;
+        g_gameStateStackDepth = depth + 1;
+    }
+
+    return result;
+}
+#endif
 
 /* Pop the top of the 8-deep game-state stack into the pending-transition slot,
  * recording the caller's two transition args. The pop is gated: it only happens

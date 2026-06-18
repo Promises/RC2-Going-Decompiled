@@ -2,7 +2,7 @@
 # storage symbol: g_dataArena  ==  __gamedata_start (linker)
 # seed: memcpy snapshot[rom_addr] -> g_dataArena[rom_addr - base]
 #       for rom_addr in [base, base+span).
-# base 0x138180  span 0x146780  placed 408
+# base 0x138180  span 0x146780  placed 411
 # columns: <symbol> <rom_addr> <arena_offset>
 D_138180 0x138180 0x0
 g_padButtonsHeld 0x138340 0x1C0
@@ -123,6 +123,7 @@ D_1A8A78 0x1A8A78 0x708F8
 D_1A8A80 0x1A8A80 0x70900
 D_1A8AE0 0x1A8AE0 0x70960
 g_nLevelExitRequested 0x1A8B84 0x70A04
+D_001A8B88 0x1A8B88 0x70A08
 g_nGameState 0x1A8BB0 0x70A30
 g_nGameStatePrev 0x1A8BB4 0x70A34
 g_nGameStatePending 0x1A8BB8 0x70A38
@@ -330,12 +331,14 @@ g_fxHooksPostArgs 0x1BA0C0 0x81F40
 g_drawHooksAfterTiesFuncs 0x1BA1C0 0x82040
 g_drawHooksAfterTiesArgs 0x1BA2C0 0x82140
 D_001BAC00 0x1BAC00 0x82A80
+D_001BAC94 0x1BAC94 0x82B14
 g_cinematicQueue 0x1BACC0 0x82B40
 g_occlusionVisMask 0x1BAD40 0x82BC0
 g_memoryArenaTable 0x1BAE40 0x82CC0
 g_splashImageBuffer 0x1BAE54 0x82CD4
 g_collHitPoint 0x1BAF20 0x82DA0
 g_collHitEventRing 0x1BF180 0x87000
+D_001C4EC0 0x1C4EC0 0x8CD40
 D_001C4F30 0x1C4F30 0x8CDB0
 g_nMapCurrentLevel 0x1C5150 0x8CFD0
 g_mapActiveSlot 0x1C5154 0x8CFD4

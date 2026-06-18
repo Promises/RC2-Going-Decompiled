@@ -84,7 +84,6 @@ RemoveVif1DmacHandlers
 RenderFrame
 RenderMenuScreenWidgets
 RenderSaveLoadStatusPopup
-RequestGameStateChange
 RequestLevelExit
 ResetDebugHeap
 ResetFrameArenas
@@ -141,7 +140,6 @@ func_00278F90
 func_0027B988
 func_0027E4D0
 func_0027F0A8
-func_0027F7A8
 func_0027F858
 func_00280090
 func_00280120

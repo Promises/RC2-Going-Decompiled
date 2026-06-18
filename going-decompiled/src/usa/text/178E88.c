@@ -542,7 +542,32 @@ void func_0027F7A0(void) {
 }
 #endif
 
+/* func_0027F7A8 (MeasureTextByGlyphTable): sum the signed per-glyph advance
+ * widths of `str` - each glyph is 4 bytes in `glyphTable`, signed advance at +3 -
+ * stopping at NUL or after `maxChars` chars (maxChars == -1 means until NUL). A
+ * zero advance is skipped (movn). The current char's advance is folded in before
+ * the maxChars return check (the movn sits in the beq delay slot). Worker behind
+ * the three font wrappers below. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F7A8);
+#else
+s32 func_0027F7A8(const char *str, s32 maxChars, const void *glyphTable) {
+    const u8 *s = (const u8 *)str;
+    const s8 *gt = (const s8 *)glyphTable;
+    s32 sum = 0;
+    s32 i;
+    if (maxChars == 0 || s[0] == 0) return 0;
+    i = 1;
+    do {
+        s8 advance = gt[s[0] * 4 + 3];
+        s++;
+        if (advance != 0) sum += advance;
+        if (i == maxChars) return sum;
+        i++;
+    } while (s[0] != 0);
+    return sum;
+}
+#endif
 
 /** Measure pixel width of a string in the D_263B10 font. */
 s32 func_0027F7F8(const char *str, s32 maxChars) {
