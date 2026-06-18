@@ -389,7 +389,9 @@ g_screenCenterDefaultX
 g_screenCenterDefaultY
 g_screenFadeBlack
 g_screenFadeWhite
+g_screenHeight
 g_screenSpriteFxQueue
+g_screenWidth
 g_shrubClassTable
 g_shrubRelightList
 g_shrubTexVramTable

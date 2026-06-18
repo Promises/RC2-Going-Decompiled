@@ -109,7 +109,7 @@ __attribute__((weak)) void func_00133960(void) { native_stub_hit("func_00133960"
 __attribute__((weak)) void func_00270B68(void) { native_stub_hit("func_00270B68"); }
 __attribute__((weak)) void func_00278EC0(void) { native_stub_hit("func_00278EC0"); }
 __attribute__((weak)) void func_00278F90(void) { native_stub_hit("func_00278F90"); }
-__attribute__((weak)) void func_0027B988(void) { native_stub_hit("func_0027B988"); }
+__attribute__((weak)) void func_0027A550(void) { native_stub_hit("func_0027A550"); }
 __attribute__((weak)) void func_0027F0A8(void) { native_stub_hit("func_0027F0A8"); }
 __attribute__((weak)) void func_0027F858(void) { native_stub_hit("func_0027F858"); }
 __attribute__((weak)) void func_00280090(void) { native_stub_hit("func_00280090"); }

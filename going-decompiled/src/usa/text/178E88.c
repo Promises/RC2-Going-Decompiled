@@ -104,6 +104,14 @@ extern u8 g_fullScreenTintPacket[];
 /* GS window pixel offsets (absolute %hi/%lo). */
 extern s32 g_gsPixelOffsetX[];
 extern s32 g_gsPixelOffsetY[];
+
+/* Active display geometry + the GS screen context the viewport is derived from
+ * (func_0027B988). g_screenHeight is the base of {height, halfW, halfH}. */
+extern u8  g_gsScreenContext[]; /* 0x1A6480 - dims at +0x150 (w) / +0x152 (h) */
+extern s32 g_screenWidth[];     /* 0x1A7340 */
+extern s32 g_screenHeight[];    /* 0x1A7344 */
+extern f32 IntToFloat(s32 x);
+extern void func_0027A550(void);
 /* Append a 4-vertex flat (untextured-coord) sprite quad packet given a pointer
  * to four packed XYZ2 corner words and a TEX0 value. */
 extern void func_0027F0A8(const u64 *corners, u64 tex0);
@@ -210,7 +218,45 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", BuildCameraProj
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027B858);
 
+/* RecomputeScreenViewportFromGsContext: derive the active display geometry and
+ * the 2D draw viewport from the GS screen context's pixel dimensions
+ * (g_gsScreenContext +0x150 width / +0x152 height). Publishes width/height and
+ * the half-extents to g_screenWidth / g_screenHeight[0..2], the four GS-window
+ * pixel offsets (12.4 fixed-point, centred on 0x800) to g_gsPixelOffsetX /
+ * g_gsPixelOffsetY[0..2], and the float viewport scale/half-extents into the
+ * camera/projection scratch (g_sceneActorMobys+0x674 == D_1B8FC0: +0xB0 aspect
+ * 0.62, +0x200/+0x204 half-extents, +0x208/+0x20C ×4), then runs func_0027A550.
+ * The matching build keeps the asm. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027B988);
+#else
+void func_0027B988(void) {
+    u8 *vp = g_sceneActorMobys + 0x674; /* D_1B8FC0 camera/projection scratch */
+    s32 w16 = *(s16 *)(g_gsScreenContext + 0x150);
+    s32 h16 = *(s16 *)(g_gsScreenContext + 0x152);
+    s32 halfW = w16 >> 1;
+    s32 halfH = h16 >> 1;
+    f32 wHalf, hHalf;
+
+    g_screenHeight[0] = h16;
+    g_gsPixelOffsetX[0] = (0x800 - halfW) << 4;
+    g_gsPixelOffsetY[0] = (0x800 - halfH) << 4;
+    g_gsPixelOffsetY[1] = (halfW + 0x800) << 4;
+    g_gsPixelOffsetY[2] = (halfH + 0x800) << 4;
+    *(f32 *)(vp + 0xB0) = 0.62f;
+    g_screenWidth[0] = w16;
+    g_screenHeight[1] = halfW;
+    g_screenHeight[2] = halfH;
+
+    wHalf = IntToFloat(w16) * 0.5f;
+    *(f32 *)(vp + 0x200) = wHalf;
+    hHalf = IntToFloat(h16) * 0.5f;
+    *(f32 *)(vp + 0x204) = hHalf;
+    *(f32 *)(vp + 0x20C) = hHalf * 4.0f;
+    *(f32 *)(vp + 0x208) = wHalf * 4.0f;
+    func_0027A550();
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", SetupGsDisplayBuffers);
 

@@ -2,7 +2,7 @@
 # storage symbol: g_dataArena  ==  __gamedata_start (linker)
 # seed: memcpy snapshot[rom_addr] -> g_dataArena[rom_addr - base]
 #       for rom_addr in [base, base+span).
-# base 0x138180  span 0x146780  placed 425
+# base 0x138180  span 0x146780  placed 427
 # columns: <symbol> <rom_addr> <arena_offset>
 D_138180 0x138180 0x0
 g_padButtonsHeld 0x138340 0x1C0
@@ -69,6 +69,8 @@ g_vramFrameBufB 0x1A72DC 0x6F15C
 g_vramTextureBase 0x1A72E4 0x6F164
 g_vramTextureBase_28 0x1A730C 0x6F18C
 D_001A7318 0x1A7318 0x6F198
+g_screenWidth 0x1A7340 0x6F1C0
+g_screenHeight 0x1A7344 0x6F1C4
 g_screenCenterDefaultX 0x1A7348 0x6F1C8
 g_screenCenterDefaultY 0x1A734C 0x6F1CC
 g_gsPixelOffsetX 0x1A7350 0x6F1D0
