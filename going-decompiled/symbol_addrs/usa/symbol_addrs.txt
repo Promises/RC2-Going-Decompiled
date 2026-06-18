@@ -387,6 +387,22 @@ DrawWeaponSelectWheel = 0x0028D110; // CONFIRMED - renders the weapon quick-sele
 g_szAmmoFraction = 0x001A8E28; // CONFIRMED - the "%d/%d" format string used by DrawWeaponSelectWheel to draw current/capacity ammo
 PickLowAmmoWeaponForDrop = 0x002A76F8; // CONFIRMED - picks a random owned weapon below ammo capacity so an ammo pickup can drop for it, needs g_inventoryOwned[i] 0x1a7b00 AND g_weaponTable ammoCapacity(+0x8e) nonzero AND g_weaponAmmo[i] 0x139688 below capacity. Reads g_weaponAmmo + g_inventoryOwned. EU anchor
 
+// --- Track-B 2D/sprite/text draw-primitive subsystem (the GS-packet builders + fixed-font/text-box
+// renderers around DrawFlatRect2d/DrawGlyphQuad). These all live INSIDE the already-split unit
+// src/usa/text/178E88.c as INCLUDE_ASM with func_<ADDR> glabels, so per the glabel-desync rule they
+// are Ghidra-renamed + documented ONLY (no active name=addr; entry, which would rename the glabel
+// and desync the objdiff match). EU twins located by region-invariant byte-signature (deltas are
+// NON-constant across this unit: 0xa8 at the high end vs 0x198 mid-unit), each EU addr verified by
+// decompile. g_pFrameDmaCursor = USA 0x1B2228 / EU 0x1B22A8; GS pixel offset = USA 0x1A7350/4 EU
+// 0x1A73D0/4; inline-color flag = USA 0x1B15E8 / EU 0x1B1668.
+//   0x0027E4D0 AppendScreenRectFill         - CONFIRMED - lowest-level flat-color screen-space rect; emits GIF AD + PRIM=sprite(0x10000005) RGBAQ + 2 XYZ corners (cells *16 + pixel offset -8 bias, z=0xfffff000) to g_pFrameDmaCursor. EU 0x0027E338
+//   0x0027F0A8 AppendFlatSprite2d           - CONFIRMED - flat textured sprite GIF packet (0x4c STQ+RGBAQ+XYZ, 2 corners) from a 4-qword vertex block + TEX0; low-level helper behind DrawFlatRect2d. EU 0x0027EF10
+//   0x0027F7A0 DisableInlineColorCodes      - CONFIRMED - off-switch counterpart to EnableInlineColorCodes (0x27F790); clears inline color-byte parsing flag (writes 0). EU 0x0027F608
+//   0x0027F858 ComputeScaledTextAdvance     - CONFIRMED - returns int width = FloatToInt(sum of glyphTable[c].advance(byte +3) * scale) over up to maxCount chars; pure measurement, no globals. EU 0x0027F6C0
+//   0x00280090 DrawFont1StringRightAligned - CONFIRMED - right-aligned font-1 string: MeasureFont1Text then DrawFixedFontString at (rightEdgeX - width); GetUiTextureTex0(1), glyph table 0x263B10. EU 0x0027FF28
+//   0x00280120 DrawFont2StringRightAligned - CONFIRMED - right-aligned font-2 twin of the above (only diff: GetUiTextureTex0(2), glyph table 0x263EB0). EU 0x0027FFB8
+//   0x00280550 DrawWrappedTextBox           - CONFIRMED - word-wrapped multi-line text-box renderer; measures words vs box width, balances/centers lines, sets per-box AppendGsScissorRect, draws each line via DrawGlyphRun; layout descriptor s16[] fields documented in Ghidra plate. EU 0x002804A8
+
 // === Track-B Skill Points menu (reader/renderer of g_skillPointFlags 0x1A7A68; award writer is overlay-only). ===
 CountSkillPointsCompleted = 0x002B1DA8; // CONFIRMED - counts set bytes in g_skillPointFlags (scans 0x20 entries) clamped to [0,30], returns earned total. Reads g_skillPointFlags 0x1A7A68. EU anchor
 UpdateSkillPointsMenu = 0x002D0B48; // CONFIRMED - input/cursor handler for the Skill Points tab, up(pad 0x1000)/down(0x4000) move g_nSkillPointsMenuCursor over 30 entries, reads g_skillPointFlags[cursor] to grey locked rows. Reads g_skillPointFlags 0x1A7A68. EU anchor
