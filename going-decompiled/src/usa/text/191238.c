@@ -110,7 +110,44 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291320);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadIrxModuleFromBuffer);
 
+/* Memory-region table consumed by ResetFrameArenas + the loaders. */
+extern u8   g_memoryArenaTable[]; /* 0x1BAE40, 0x9C bytes */
+extern s32  g_sceneArenaCursor;   /* 0x1B2230 */
+
+/* SetupMemoryArenaTable: zero the 0x9C-byte g_memoryArenaTable then fill the EE
+ * memory-region base addresses the loaders + ResetFrameArenas read: the scene
+ * arena halves at 0x354000 (+cursor / +2*cursor), splash/loading-WAD buffers,
+ * the per-asset display-model buffers (ship/held-item/player), GUI + debug-malloc
+ * pools, and the boot-WAD / upper-RAM region tops. Called per level by
+ * RebootIopAndInitEngine + InitLoadingSceneSystem. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", SetupMemoryArenaTable);
+#else
+void SetupMemoryArenaTable(void) {
+    u8 *t = g_memoryArenaTable;
+    s32 cursor = g_sceneArenaCursor;
+    memset(t, 0, 0x9C);
+    *(s32 *)(t + 0x04) = 0x100000;
+    *(s32 *)(t + 0x08) = 0x354000;          /* g_relocOffsetLimit */
+    *(s32 *)(t + 0x0C) = 0x354000;          /* g_sceneDecompressBase (half0) */
+    *(s32 *)(t + 0x10) = cursor + 0x354000; /* g_pSceneArenaBase (half1) */
+    *(s32 *)(t + 0x14) = cursor * 2 + 0x354000; /* g_pSplashImageBuffer */
+    *(s32 *)(t + 0x18) = cursor * 2 + 0x454000; /* g_pLoadingSceneWad */
+    *(s32 *)(t + 0x68) = cursor * 2 + 0x454000;
+    *(s32 *)(t + 0x6C) = 0x1F0C000;         /* g_stagedSegmentCeiling */
+    *(s32 *)(t + 0x70) = 0x1F0C000;         /* g_shipModelBufferBase */
+    *(s32 *)(t + 0x74) = 0x1F20000;         /* g_heldItemModelBufferBase */
+    *(s32 *)(t + 0x78) = 0x1F28000;         /* g_playerModelBufferBase */
+    *(s32 *)(t + 0x7C) = 0x1F54000;         /* g_debugMallocPoolBase */
+    *(s32 *)(t + 0x80) = 0x1FB8000;         /* g_guiMemoryBase */
+    *(s32 *)(t + 0x84) = 0x1FF8000;         /* boot-WAD staging top */
+    *(s32 *)(t + 0x88) = 0x1FFC000;
+    *(s32 *)(t + 0x8C) = 0x7000000;
+    *(s32 *)(t + 0x90) = 0x7100000;
+    *(s32 *)(t + 0x94) = 0x7180000;
+    *(s32 *)(t + 0x98) = 0x7200000;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BootSystemInit);
 

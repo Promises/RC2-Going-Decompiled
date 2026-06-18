@@ -71,7 +71,6 @@ ResolveMobyAnimFramePtrs
 ResolveOcclusionVisMask
 SampleCameraFogZone
 SetMobyAnimSequence
-SetupMemoryArenaTable
 SinfVu0
 StepCameraFovInterp
 StepMobyMotion
