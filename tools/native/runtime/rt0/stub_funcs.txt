@@ -25,7 +25,6 @@ CloseMobyGlowSegment
 CloseShrubDrawSegment
 CollLine
 ComputeAudioChannelMix
-ComputeVolumeFalloff
 CosfVu0
 CountPlatinumBolts
 CullAndBinTieInstances
@@ -54,7 +53,6 @@ FlushHudDisplayValue
 GatherActiveObjectives
 GetHudIconTex0
 GetMenuOverlayMode
-GetRandomInt
 GetUiTextureTex0
 GiveInventoryItem
 GuiFontAtlasLookupGlyph
@@ -73,7 +71,6 @@ MatrixToEulerAngles
 MeasureFont2Text
 MenuScreenDoAction
 MenuScreenLoad
-PlayGlobalSound
 PostMobyHitEvent
 ProbeGroundHeight
 ProbeMobyGroundBelow

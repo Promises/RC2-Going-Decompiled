@@ -422,11 +422,57 @@ void CastEmitterOcclusionRay(void *emitter, void *outHit) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", ComputeVolumeFalloff);
-
 extern float func_002837F8(void *a, void *b);
 extern s32 ComputeVolumeFalloff(void *slot, float dist, float lo, float hi);
 extern u8 g_cameraPos[]; /* 0x1B52C0 - listener / camera world position */
+
+/* Map a listener distance to a volume level along the emitter's distance
+ * falloff curve. `def` points at the sound definition; `dist` is the listener
+ * distance; `near`/`far` are the curve's inner/outer radii (def+0x0 / def+0x4).
+ * The curve interpolates between two integer volume levels: the far volume at
+ * def+0x8 (returned when dist >= far) and the near volume def+0xC (returned when
+ * dist <= near). In between, the level is def+0x8 plus the fraction of the
+ * (def+0xC - def+0x8) span given by the position of `dist` in [near, far],
+ * measured from the far end: linear in (far-dist)/(far-near) by default, or in
+ * its square ((far-dist)^2/(far-near)^2) when the curve's squared-falloff bit
+ * (def+0x19 & 1) is set. The interpolation uses int->float conversion of the
+ * volume delta and truncates the result back to int (IntToFloat/FloatToInt in
+ * the asm). NATIVE SHIM (no byte target; matching build uses asm). */
+#ifndef TARGET_NATIVE
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", ComputeVolumeFalloff);
+#else
+s32 ComputeVolumeFalloff(void *def, float dist, float near, float far) {
+    u8 *d = (u8 *)def;
+    s32 nearVol = *(s32 *)(d + 0xC);
+    s32 farVol  = *(s32 *)(d + 0x8);
+    float num;   /* (far-dist) or (far-dist)^2 */
+    float den;   /* (far-near) or (far-near)^2 */
+
+    if (*(u8 *)(d + 0x19) & 1) {
+        /* squared falloff */
+        if (dist <= near) {
+            return nearVol;
+        }
+        if (far <= dist) {
+            return farVol;
+        }
+        num = (far - dist) * (far - dist);
+        den = (far - near) * (far - near);
+    } else {
+        /* linear falloff */
+        if (dist <= near) {
+            return nearVol;
+        }
+        if (far <= dist) {
+            return farVol;
+        }
+        num = far - dist;
+        den = far - near;
+    }
+    /* asm order: num * (float)(nearVol - farVol) / den, then truncate */
+    return farVol + (s32)(num * (float)(nearVol - farVol) / den);
+}
+#endif
 
 /* Compute the falloff volume for emitter slot `slot` relative to listener `pos`:
  * measure the distance from `pos` to the camera, then evaluate the slot's
@@ -560,13 +606,157 @@ s32 AllocVoiceHandleSlot(void *owner) {
 }
 #endif
 
+/* Allocate and arm a 3D sound emitter for sound definition `pSoundDef`.
+ *
+ * `flags` selects the emitter mode (bit 0x4 = "no-loop"/one-shot gate, bit 0x10
+ * = skip the distance-volume cull), `ownerMoby` is the moby the emitter follows
+ * (0 = world-anchored), `pPos` is an explicit world position used when there is
+ * no owner, and `volScale` is the requested volume scale.
+ *
+ * Returns the allocated slot index, or -1 if the sound def fails its enable
+ * gate, no voice slot is free, or the emitter is culled for being too quiet.
+ *
+ * Gate (asm-authoritative): when (flags & 4) == 0 the def's enable byte
+ * (def+0x18) must be 0; when (flags & 4) != 0 it must be non-zero; otherwise -1.
+ *
+ * The emitter pool is addressed through g_listenerPosHistory (the table base
+ * g_soundEmitterTable sits +0x70 past it), so the slot record begins at
+ * e = g_listenerPosHistory + slot*0x70 and the per-slot fields use the same
+ * absolute displacements the asm emits (def at +0x78, last-pan -1.0f at +0xB0,
+ * sample id at +0x7C, voice cursor 0xFFFF at +0x7E, volScale at +0x80, owner
+ * and link words 0 at +0x88/+0x8C, the 16-byte occlusion-ring scratch zeroed at
+ * +0xA0, the position vec4 at +0x90, voice handle -1 at +0x70, flags at +0x75,
+ * state 7 at +0x74, occlusion cursor 0 at +0x82, pitch at +0x84).
+ *
+ * Position: from ownerMoby+0x10 (with +1.0 added to the w lane at +0x98) when an
+ * owner is given; else from pPos; else a zero vec4 with flags |= 0x11 (mark as
+ * unpositioned + one-shot). Unless flags & 0x10, the emitter is culled when its
+ * distance-attenuated volume is below 0x20. Pitch is def+0x14, or a random value
+ * in [def+0x10, def+0x14) when the two differ. NATIVE SHIM (no byte target). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", StartSoundEmitter);
+#else
+extern s32 GetRandomInt(s32 n);
+extern void func_00283638(void *dst); /* zero a 16-byte quadword */
+
+s32 StartSoundEmitter(void *pSoundDef, s32 flags, void *ownerMoby,
+                      void *pPos, s32 volScale) {
+    u8 *def = (u8 *)pSoundDef;
+    s32 slot;
+    u8 *e;       /* g_listenerPosHistory + slot*0x70 */
+    s32 pitch;
+
+    /* enable gate */
+    if (flags & 0x4) {
+        if (def[0x18] == 0) {
+            return -1;
+        }
+    } else {
+        if (def[0x18] != 0) {
+            return -1;
+        }
+    }
+
+    slot = AllocVoiceHandleSlot(ownerMoby);
+    if (slot >= 0x34) {
+        return -1;
+    }
+
+    e = g_listenerPosHistory + slot * 0x70;
+
+    *(void **)(e + 0x78) = pSoundDef;
+    *(float *)(e + 0xB0) = -1.0f;
+    *(s16 *)(e + 0x7C) = *(u16 *)(def + 0x1A);
+    *(s16 *)(e + 0x7E) = (s16)0xFFFF;
+    *(s16 *)(e + 0x80) = (s16)volScale;
+    *(s32 *)(e + 0x88) = 0;
+    *(s32 *)(e + 0x8C) = 0;
+    func_00283638(e + 0xA0); /* zero the 16-byte scratch quad */
+
+    /* position vec4 at e+0x90 */
+    if (ownerMoby != NULL) {
+        *(u_long128 *)(e + 0x90) = *(u_long128 *)((u8 *)ownerMoby + 0x10);
+        *(float *)(e + 0x98) += 1.0f;
+    } else if (pPos != NULL) {
+        *(u_long128 *)(e + 0x90) = *(u_long128 *)pPos;
+    } else {
+        func_00283638(e + 0x90);
+        flags |= 0x11;
+    }
+
+    /* distance-volume cull (unless flagged off) */
+    if (!(flags & 0x10)) {
+        if (ComputeEmitterVolume(e + 0x70, e + 0x90) < 0x20) {
+            return -1;
+        }
+    } else {
+        if (volScale < 0x20) {
+            return -1;
+        }
+    }
+
+    *(u8 *)(e + 0x75) = (u8)flags;
+    *(u8 *)(e + 0x74) = 7;
+    *(s16 *)(e + 0x82) = 0;
+
+    /* pitch: fixed def+0x14, or random in [def+0x10, def+0x14) */
+    pitch = *(s32 *)(def + 0x14);
+    if (*(s32 *)(def + 0x14) != *(s32 *)(def + 0x10)) {
+        pitch = GetRandomInt(*(s32 *)(def + 0x14) - *(s32 *)(def + 0x10)) +
+                *(s32 *)(def + 0x10);
+    }
+
+    *(s32 *)(e + 0x70) = -1;
+    *(s32 *)(e + 0x84) = pitch;
+
+    return slot;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", PlayMobySound);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", PlaySoundFromClassBank);
 
+/* Play one of the global/common (UI/menu/system) sounds by index.
+ *
+ * `soundIdx` selects an entry in the global sound-def pool g_globalSoundDefsPtr
+ * (a 0x20-byte stride array bounded by g_nGlobalSoundDefs); `posOverride` is an
+ * optional explicit position and `owner` the owning moby. Returns the emitter
+ * slot index, or -1 if the pool is unset, the index is out of range, or no
+ * emitter could be started.
+ *
+ * Delegates to StartSoundEmitter with flags 0, pPos = 0, volScale = 0x400; on
+ * success it records the source sound index (s16 at slot+0x7E) and owner
+ * (s32 at slot+0x88) into the slot record (addressed off g_listenerPosHistory,
+ * +0x70 ahead of g_soundEmitterTable). NATIVE SHIM (no byte target). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", PlayGlobalSound);
+#else
+extern void *g_globalSoundDefsPtr; /* 0x1B162C - global sound-def pool */
+extern s32 g_nGlobalSoundDefs;     /* 0x1A8BBC - count of global sound defs */
+
+s32 PlayGlobalSound(s32 soundIdx, s32 posOverride, s32 owner) {
+    u8 *pool = (u8 *)g_globalSoundDefsPtr;
+    s32 slot;
+    u8 *e;
+
+    if (pool == NULL) {
+        return -1;
+    }
+    if (soundIdx >= g_nGlobalSoundDefs) {
+        return -1;
+    }
+
+    slot = StartSoundEmitter(pool + soundIdx * 0x20, posOverride, (void *)owner,
+                             NULL, 0x400);
+    if (slot >= 0) {
+        e = g_listenerPosHistory + slot * 0x70;
+        *(s16 *)(e + 0x7E) = (s16)soundIdx;
+        *(s32 *)(e + 0x88) = owner;
+    }
+    return slot;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E6D28);
 

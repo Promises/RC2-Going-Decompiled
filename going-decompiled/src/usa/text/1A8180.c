@@ -199,7 +199,24 @@ f32 func_002A8600(f32 x) {
 /* unreachable code fragment (stray FP tail from splat over-split), not C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8628);
 
+/**
+ * Uniform random integer in [0, n): take a 15-bit random value from the core
+ * LCG (func_001163B0() >> 16 & 0x7FFF) and reduce it modulo n.
+ *
+ * The asm shifts the 31-bit LCG output right by 16 (arithmetic, but bit 31 is
+ * already clear so it is a logical shift in effect), masks to 15 bits, then
+ * computes the remainder by n. n == 0 traps on hardware (break 0x7 in the div
+ * delay slot); no caller passes 0, so the native shim leaves that path to the
+ * platform divide. NATIVE SHIM (no byte target; matching build uses asm).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", GetRandomInt);
+#else
+s32 GetRandomInt(s32 n) {
+    s32 r = (func_001163B0() >> 16) & 0x7FFF;
+    return r % n;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8688);
 

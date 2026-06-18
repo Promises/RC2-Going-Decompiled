@@ -271,6 +271,7 @@ g_gameStateTransitionDelay
 g_gameStateTransitionDoneFlag
 g_gameStateTransitionTimer
 g_gameTime
+g_globalSoundDefsPtr
 g_gsPixelOffsetX
 g_gsPixelOffsetY
 g_gsScreenContext
@@ -327,6 +328,7 @@ g_nFileLoadState
 g_nGameState
 g_nGameStatePending
 g_nGameStatePrev
+g_nGlobalSoundDefs
 g_nGsPixelOffsetX
 g_nGsPixelOffsetY
 g_nLevelExitRequested
