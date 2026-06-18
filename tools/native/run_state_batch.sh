@@ -8,8 +8,12 @@
 set -eu
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$ROOT"
 IMG="${NATIVE_IMG:-native-build}"
 CTX="${DOCKER_CONTEXT:-colima-ee-x86}"
+
+# regenerate the fuzz batch from all void(void) TARGET_NATIVE funcs (host python)
+python3 tools/native/gen_batch.py going-decompiled/src > tools/native/state_batch_gen.c
 
 docker --context "$CTX" run --rm -v "$ROOT":/work -w /work "$IMG" sh -c '
   set -e
@@ -21,7 +25,7 @@ docker --context "$CTX" run --rm -v "$ROOT":/work -w /work "$IMG" sh -c '
   gcc $CF -c tools/native/runtime/arena/arena_storage.c -o /tmp/arena.o
   gcc $CF -c tools/native/runtime/rt0/stubs.c           -o /tmp/stubs.o
   gcc $CF -c tools/native/runtime/rt0/native_stub.c     -o /tmp/nstub.o
-  gcc $CF -c tools/native/state_run_batch.c             -o /tmp/batch.o
+  gcc $CF -c tools/native/state_batch_gen.c             -o /tmp/batch.o
   gcc -m32 -Wl,--gc-sections -Wl,-T,tools/native/runtime/arena/arena.ld \
       /tmp/batch.o $objs /tmp/arena.o /tmp/stubs.o /tmp/nstub.o -lm -o /tmp/nbatch 2>/tmp/link.err \
     || { echo "LINK FAILED (undefined = unplaced global or missing stub — decomper priority):";
