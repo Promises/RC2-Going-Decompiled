@@ -57,9 +57,6 @@ GetMenuOverlayMode
 GetRandomInt
 GetUiTextureTex0
 GiveInventoryItem
-GuiDialogBoxInitElements
-GuiElementInitTypeB
-GuiElementInitTypeC
 GuiFontAtlasLookupGlyph
 GuiListRowElementInit
 GuiListSetScrollPos

@@ -372,7 +372,17 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336EF8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336F00);
 
+/* GuiElementInitTypeB: install the TypeB GuiElement vtable (D_1ADA38) at +0x30.
+ * The asm installs the base vtable first, but that store is fully overwritten by
+ * this one - functionally a single store. Return value (p) is unused by callers. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementInitTypeB);
+#else
+void GuiElementInitTypeB(void *p) {
+    extern void *D_1ADA38;
+    *(void **)((char *)p + 0x30) = &D_1ADA38;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementInit);
 
@@ -568,7 +578,16 @@ s32 func_00337758(void *p) {
     return (s32)vec[0];
 }
 
+/* GuiElementInitTypeC: identical to TypeB but installs the TypeC vtable
+ * (D_1AD9F8) at +0x30. Return value (p) unused by callers. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementInitTypeC);
+#else
+void GuiElementInitTypeC(void *p) {
+    extern void *D_1AD9F8;
+    *(void **)((char *)p + 0x30) = &D_1AD9F8;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003377A8);
 
@@ -1068,7 +1087,23 @@ void func_0033BA40(void *p, s32 v) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033BA48);
 
+/* GuiDialogBoxInitElements: build the dialog-box sub-elements over p - 5 TypeB
+ * border elements (p+0xC, stride 0x4C) then 3 TypeC text rows (p+0x198, +0x1F0,
+ * +0x248). All field writes happen inside the TypeB/TypeC ctors. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiDialogBoxInitElements);
+#else
+void GuiDialogBoxInitElements(void *p) {
+    char *base = (char *)p;
+    s32 i;
+    for (i = 0; i < 5; i++) {
+        GuiElementInitTypeB(base + 0xC + i * 0x4C);
+    }
+    GuiElementInitTypeC(base + 0x198);
+    GuiElementInitTypeC(base + 0x1F0);
+    GuiElementInitTypeC(base + 0x248);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033BC18);
 

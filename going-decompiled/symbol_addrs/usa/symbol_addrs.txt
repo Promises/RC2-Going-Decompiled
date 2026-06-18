@@ -1568,6 +1568,9 @@ GuiManagerInitListRows = 0x0034ED28; // CONFIRMED - build 0x1a list-row elements
 GuiManagerInitHudLists = 0x0034EDB8; // CONFIRMED - configure 0x1a HUD lists + bg sprite (phase-2)
 g_GuiElementVtable = 0x001ADA58; // CONFIRMED - base GuiElement vtable (installed at elem +0x30)
 g_GuiListRowVtable = 0x001AD9D8; // CONFIRMED - GuiListRow element vtable
+// TypeB/TypeC variant vtables are referenced in code as D_1ADA38 / D_1AD9F8
+// (installed at elem +0x30 by GuiElementInitTypeB/C). Descriptive g_ rename is a
+// future Track-B cleanup (would touch the existing D_1ADA38/D_1AD9F8 #else refs).
 
 // === Track-B front-end / pause-menu screens cluster (0x2CA000-0x2DFFFF; per-screen state in gp cluster 0x1AB9E8..; audited - PostHudNotifyEvent 0x29C488 SKIPPED as matched-in-198FA0). ===
 DrawBestiaryEntry = 0x002CED10; // CONFIRMED mechanism - render one bestiary catalog entry - name/desc + 4 stat bars + defeat count - PROBABLE retail enemy bestiary
