@@ -474,10 +474,20 @@ nonmatching g_menuBgImageTocA, 0x28
 dlabel g_menuBgImageTocA
     /* 0014C310 */ .space 0x28
 
-nonmatching g_menuBgImageTocB, 0x8B8
+nonmatching g_menuBgImageTocB, 0x6F8
 
 dlabel g_menuBgImageTocB
-    /* 0014C338 */ .space 0x8B8
+    /* 0014C338 */ .space 0x6F8
+
+nonmatching g_mapDataTocPrimary, 0xE0
+
+dlabel g_mapDataTocPrimary
+    /* 0014CA30 */ .space 0xE0
+
+nonmatching g_mapDataTocSecondary, 0xE0
+
+dlabel g_mapDataTocSecondary
+    /* 0014CB10 */ .space 0xE0
 
 nonmatching g_textTableLbnOffset, 0x2774
 
@@ -504,10 +514,15 @@ nonmatching g_shipModelToc, 0x18
 dlabel g_shipModelToc
     /* 0014FE18 */ .space 0x18
 
-nonmatching g_shipTextureToc, 0x614
+nonmatching g_shipTextureToc, 0x250
 
 dlabel g_shipTextureToc
-    /* 0014FE30 */ .space 0x614
+    /* 0014FE30 */ .space 0x250
+
+nonmatching g_gadgetClassToc, 0x3C4
+
+dlabel g_gadgetClassToc
+    /* 00150080 */ .space 0x3C4
 
 nonmatching g_castModelWadBaseLbn, 0x4
 
@@ -579,10 +594,35 @@ nonmatching g_loadingSceneIndex, 0x4
 dlabel g_loadingSceneIndex
     /* 00152C64 */ .space 0x04
 
-nonmatching g_loadingScenesPlayed, 0x2D398
+nonmatching g_loadingScenesPlayed, 0x8
 
 dlabel g_loadingScenesPlayed
-    /* 00152C68 */ .space 0x2D398
+    /* 00152C68 */ .space 0x08
+
+nonmatching g_respawnReturnTransform, 0x10
+
+dlabel g_respawnReturnTransform
+    /* 00152C70 */ .space 0x10
+
+nonmatching g_respawnPlayerPos, 0x8
+
+dlabel g_respawnPlayerPos
+    /* 00152C80 */ .space 0x08
+
+nonmatching g_respawnPlayerYaw, 0x7C
+
+dlabel g_respawnPlayerYaw
+    /* 00152C88 */ .space 0x7C
+
+nonmatching g_residentGadgetClassCache, 0xC
+
+dlabel g_residentGadgetClassCache
+    /* 00152D04 */ .space 0x0C
+
+nonmatching g_gadgetClassSramBase, 0x2D2F0
+
+dlabel g_gadgetClassSramBase
+    /* 00152D10 */ .space 0x2D2F0
 
 nonmatching D_00180000, 0x8510
 
@@ -619,35 +659,80 @@ nonmatching g_listenerOcclusionProbes, 0x60
 dlabel g_listenerOcclusionProbes
     /* 00189DA0 */ .space 0x60
 
-nonmatching g_soundBankHandles, 0xA0
+nonmatching g_soundBankHandles, 0x20
 
 dlabel g_soundBankHandles
-    /* 00189E00 */ .space 0xA0
+    /* 00189E00 */ .space 0x20
 
-nonmatching g_heroPos, 0x15C
+nonmatching g_soundBankHandlesBlk, 0x80
+
+dlabel g_soundBankHandlesBlk
+    /* 00189E20 */ .space 0x80
+
+nonmatching g_heroPos, 0x10
 
 dlabel g_heroPos
-    /* 00189EA0 */ .space 0x15C
+    /* 00189EA0 */ .space 0x10
 
-nonmatching g_nNanotechBonusHealTimer, 0x1698
+nonmatching g_heroOrientVec, 0xC0
+
+dlabel g_heroOrientVec
+    /* 00189EB0 */ .space 0xC0
+
+nonmatching g_heroPos_D0, 0x8C
+
+dlabel g_heroPos_D0
+    /* 00189F70 */ .space 0x8C
+
+nonmatching g_nNanotechBonusHealTimer, 0xE4
 
 dlabel g_nNanotechBonusHealTimer
-    /* 00189FFC */ .space 0x1698
+    /* 00189FFC */ .space 0xE4
+
+nonmatching g_heroFacingDir, 0xF60
+
+dlabel g_heroFacingDir
+    /* 0018A0E0 */ .space 0xF60
+
+nonmatching g_mobyClassTable, 0x2B0
+
+dlabel g_mobyClassTable
+    /* 0018B040 */ .space 0x2B0
+
+nonmatching g_cinematicCameraBlock, 0x3A4
+
+dlabel g_cinematicCameraBlock
+    /* 0018B2F0 */ .space 0x3A4
 
 nonmatching g_giantClankHealth, 0xA1C
 
 dlabel g_giantClankHealth
     /* 0018B694 */ .space 0xA1C
 
-nonmatching g_pHeroMoby, 0x24
+nonmatching g_pHeroMoby, 0x4
 
 dlabel g_pHeroMoby
-    /* 0018C0B0 */ .space 0x24
+    /* 0018C0B0 */ .space 0x04
 
-nonmatching g_bPlayerMode, 0x20C
+nonmatching g_heroState, 0x20
+
+dlabel g_heroState
+    /* 0018C0B4 */ .space 0x20
+
+nonmatching g_bPlayerMode, 0x1
 
 dlabel g_bPlayerMode
-    /* 0018C0D4 */ .space 0x20C
+    /* 0018C0D4 */ .space 0x01
+
+nonmatching g_bGlobalSceneActive, 0x13
+
+dlabel g_bGlobalSceneActive
+    /* 0018C0D5 */ .space 0x13
+
+nonmatching g_activeGadgetItem, 0x1F8
+
+dlabel g_activeGadgetItem
+    /* 0018C0E8 */ .space 0x1F8
 
 nonmatching g_air, 0xC
 
@@ -709,10 +794,15 @@ nonmatching g_fileLoadCallbackArg, 0x8
 dlabel g_fileLoadCallbackArg
     /* 001A63C4 */ .space 0x08
 
-nonmatching g_pendingDialogVoiceId, 0x1C
+nonmatching g_pendingDialogVoiceId, 0x4
 
 dlabel g_pendingDialogVoiceId
-    /* 001A63CC */ .space 0x1C
+    /* 001A63CC */ .space 0x04
+
+nonmatching g_pendingVoiceAux, 0x18
+
+dlabel g_pendingVoiceAux
+    /* 001A63D0 */ .space 0x18
 
 nonmatching g_cdReadMode, 0x28
 
@@ -924,30 +1014,55 @@ nonmatching g_vramZBuffer, 0x4
 dlabel g_vramZBuffer
     /* 001A72E0 */ .space 0x04
 
-nonmatching g_vramTextureBase, 0x5C
+nonmatching g_vramTextureBase, 0x28
 
 dlabel g_vramTextureBase
-    /* 001A72E4 */ .space 0x5C
+    /* 001A72E4 */ .space 0x28
+
+nonmatching g_vramTextureBase_28, 0x34
+
+dlabel g_vramTextureBase_28
+    /* 001A730C */ .space 0x34
 
 nonmatching g_screenWidth, 0x4
 
 dlabel g_screenWidth
     /* 001A7340 */ .space 0x04
 
-nonmatching g_screenHeight, 0xC
+nonmatching g_screenHeight, 0x4
 
 dlabel g_screenHeight
-    /* 001A7344 */ .space 0x0C
+    /* 001A7344 */ .space 0x04
+
+nonmatching g_screenCenterDefaultX, 0x4
+
+dlabel g_screenCenterDefaultX
+    /* 001A7348 */ .space 0x04
+
+nonmatching g_screenCenterDefaultY, 0x4
+
+dlabel g_screenCenterDefaultY
+    /* 001A734C */ .space 0x04
 
 nonmatching g_gsPixelOffsetX, 0x4
 
 dlabel g_gsPixelOffsetX
     /* 001A7350 */ .space 0x04
 
-nonmatching g_gsPixelOffsetY, 0xCC
+nonmatching g_gsPixelOffsetY, 0x44
 
 dlabel g_gsPixelOffsetY
-    /* 001A7354 */ .space 0xCC
+    /* 001A7354 */ .space 0x44
+
+nonmatching g_itemEquipSlotTable, 0x20
+
+dlabel g_itemEquipSlotTable
+    /* 001A7398 */ .space 0x20
+
+nonmatching g_equippedItemSlots, 0x68
+
+dlabel g_equippedItemSlots
+    /* 001A73B8 */ .space 0x68
 
 nonmatching g_nSaveLoadStatusCode, 0xC
 
@@ -964,12 +1079,22 @@ nonmatching g_rawReadStallTimer, 0x4
 dlabel g_rawReadStallTimer
     /* 001A7430 */ .space 0x04
 
-nonmatching g_bRawReadFellBack, 0x3C
+nonmatching g_bRawReadFellBack, 0x34
 
 dlabel g_bRawReadFellBack
-    /* 001A7434 */ .space 0x3C
+    /* 001A7434 */ .space 0x34
 
-nonmatching D_001A7470, 0x10
+nonmatching g_bRawReadFellBack_34, 0x8
+
+dlabel g_bRawReadFellBack_34
+    /* 001A7468 */ .space 0x08
+
+nonmatching D_001A7470, 0x8
 
 dlabel D_001A7470
-    /* 001A7470 */ .space 0x10
+    /* 001A7470 */ .space 0x08
+
+nonmatching g_cinematicExitPending, 0x8
+
+dlabel g_cinematicExitPending
+    /* 001A7478 */ .space 0x08

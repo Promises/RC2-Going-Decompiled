@@ -1468,11 +1468,17 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F2C0);
  * Left INCLUDE_ASM (not yet fully traced). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F540);
 
-/* func_0028F6E8(...): HUD icon slot helper (~0x1F8 bytes).
+/* func_0028F6E8(...): HUD icon slot setup thunk (0x14 bytes) that falls into
+ * DrawHudIconQuadPixel at 0x28F700.
  *
  * WALL: callee-saves + jal gates; register colouring not reproducible from C.
  * Left INCLUDE_ASM (not yet fully traced). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F6E8);
+
+/* func_0028F700 = DrawHudIconQuadPixel (0x1E0 bytes): HUD icon GS sprite quad at
+ * pixel coords. A real function (jal'd by func_002D9D60), split out of the
+ * preceding func_0028F6E8 thunk via a type:func pin. Left INCLUDE_ASM. */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F700);
 
 /* func_0028F8E0(...): HUD icon upload/draw helper (~0x200 bytes; 128-bit block
  * moves).
