@@ -111,4 +111,18 @@ u32  func_00286200(void)              { return 0; } /* IsMenuOverlayActive - 0 =
  * in-frame. 1 (valid) is the non-destructive headless default. */
 u32  func_00289190(void)              { return 1; }
 
+/* ===========================================================================
+ * Batch 3 - water-pool state machine (text/1FFBA0 func_003002E0 / func_00300C08)
+ * #else bodies. These five callees are trap-stubs in native; their effects are
+ * headless-irrelevant to the pool-state fields the tester's identity check
+ * verifies (g_waterPool / g_cameraState writes happen in the C body, not here),
+ * so a strong no-op lets the #else bodies run faithfully without aborting.
+ * =========================================================================== */
+void SpawnParticleType55(void) {} /* particle emit (0x2C74C0) - no GS headless;
+                                   * the durable hue-counter tick is done in C */
+void StopDialogVoice(void)     {} /* dialog-voice fade/stop - audio bookkeeping */
+void func_002888D8(void)       {} /* AdvanceWeaponVariant(itemId) - inventory bk */
+void func_00288F30(void)       {} /* weapon progress-gate iterate(itemId) - bk */
+void func_002AE6C8(void)       {} /* EquipGadgetItem(itemId) - equip bookkeeping */
+
 #endif /* TARGET_NATIVE */

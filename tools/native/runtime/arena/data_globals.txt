@@ -32,6 +32,11 @@ D_001ABBF9
 D_001ABC00
 D_001ABC01
 D_001ABD20
+D_001AD7C4
+D_001AD7C8
+D_001AD7DC
+D_001AD7E0
+D_001AD7E4
 D_001B1518
 D_001B1750
 D_001B1E90
@@ -152,6 +157,7 @@ D_1ABA8C
 D_1ABA90
 D_1ABB6C
 D_1ABD48
+D_1AD7FC
 D_1AD8C8
 D_1AD8E8
 D_1AD908
@@ -218,6 +224,7 @@ g_cameraHistorySnapshot
 g_cameraMatrix
 g_cameraModeVtbl
 g_cameraPos
+g_cameraProjScale
 g_cameraRot
 g_cameraShakeRight
 g_cameraShakeRoll
@@ -335,6 +342,7 @@ g_nLevelExitRequested
 g_nMapActiveSlot
 g_nMapCurrentLevel
 g_nMusicVolume
+g_nNanotechBonusHealTimer
 g_nPendingNanotechXp
 g_nSaveLoadStatusCode
 g_nSavePromptPending

@@ -1769,8 +1769,8 @@ g_gadgetDisplay = 0x001B2290; // CONFIRMED - gadget/turret display scratch block
 g_heroZoom = 0x001AD7D8; // CONFIRMED - s16 hero zoom level, IntToFloat source in func_002FFF68 (DAT_001ad7d8). EU TODO
 // --- pending voice aux + voice trigger words (func_002FFF68) ---
 g_pendingVoiceAux = 0x001A63D0; // CONFIRMED - s32 aux word beside g_pendingDialogVoiceId (0x1A63CC+4), zeroed in func_002FFF68 when queuing voice 0xDB7 (DAT_001a63d0). EU TODO
-g_voiceTrigger = 0x001AD7C4; // CONFIRMED - s32 voice-trigger flag, set to 1 in func_002FFF68 when arming pending voice (DAT_001ad7c4). EU TODO
-g_voiceTriggerAux = 0x001AD7C8; // CONFIRMED - s32 aux word beside g_voiceTrigger (0x1AD7C4+4), zeroed in func_002FFF68 (DAT_001ad7c8). EU TODO
+g_voiceTrigger = 0x001AD7C4; // CONFIRMED addr - s32 set to 1 in func_002FFF68 when arming pending voice; ALSO the water-pool S0 charge-enable flag (func_003002E0 clears it on completion). Shared word - likely a cutscene/voice charge handshake, not purely a voice trigger; name UNCONFIRMED. EU TODO
+g_voiceTriggerAux = 0x001AD7C8; // CONFIRMED addr - s32 aux word at g_voiceTrigger+4, zeroed in func_002FFF68; ALSO incremented to 0xB5 as the water-pool S0 charge counter (func_003002E0). Shared word; name UNCONFIRMED. EU TODO
 // --- weapon / moby class tables + quick-select map (func_002FFF68) ---
 g_weaponClassTable = 0x00239B34; // CONFIRMED - classId column of the weapon table (0xE0 stride), indexed *(int*)(base + qsMap[i]*0xE0) in func_002FFF68 (DAT_00239b34). EU TODO
 g_weaponSlotTable = 0x00239B2C; // CONFIRMED - slot column of the weapon table (0xE0 stride, 8 bytes before classId column), indexed by g_itemEquippedSlot[gadgetId] in func_002FFF68 (DAT_00239b2c). EU TODO

@@ -2,7 +2,7 @@
 # storage symbol: g_dataArena  ==  __gamedata_start (linker)
 # seed: memcpy snapshot[rom_addr] -> g_dataArena[rom_addr - base]
 #       for rom_addr in [base, base+span).
-# base 0x138180  span 0x146780  placed 413
+# base 0x138180  span 0x146780  placed 421
 # columns: <symbol> <rom_addr> <arena_offset>
 D_138180 0x138180 0x0
 g_padButtonsHeld 0x138340 0x1C0
@@ -41,6 +41,7 @@ g_heroPos 0x189EA0 0x51D20
 g_heroPosVec 0x189EA0 0x51D20
 g_heroOrientVec 0x189EB0 0x51D30
 g_heroPos_D0 0x189F70 0x51DF0
+g_nNanotechBonusHealTimer 0x189FFC 0x51E7C
 D_0018A168 0x18A168 0x51FE8
 g_mobyClassTable 0x18B040 0x52EC0
 g_cinematicCameraBlock 0x18B2F0 0x53170
@@ -208,10 +209,16 @@ D_001ABD20 0x1ABD20 0x73BA0
 D_1ABD48 0x1ABD48 0x73BC8
 g_tieDrawTemplate 0x1ACAE0 0x74960
 g_vendorCaptionFmt 0x1AD338 0x751B8
+D_001AD7C4 0x1AD7C4 0x75644
 g_voiceTrigger 0x1AD7C4 0x75644
+D_001AD7C8 0x1AD7C8 0x75648
 g_voiceTriggerAux 0x1AD7C8 0x75648
 g_pHeroGroundMoby 0x1AD7CC 0x7564C
 g_heroZoom 0x1AD7D8 0x75658
+D_001AD7DC 0x1AD7DC 0x7565C
+D_001AD7E0 0x1AD7E0 0x75660
+D_001AD7E4 0x1AD7E4 0x75664
+D_1AD7FC 0x1AD7FC 0x7567C
 D_1AD8C8 0x1AD8C8 0x75748
 D_1AD8E8 0x1AD8E8 0x75768
 D_1AD908 0x1AD908 0x75788
@@ -326,6 +333,7 @@ g_cameraHistorySnapshot 0x1B7BB0 0x7FA30
 g_cameraSlotActive 0x1B7E30 0x7FCB0
 g_sceneActorMobys 0x1B894C 0x807CC
 D_1B8FC0 0x1B8FC0 0x80E40
+g_cameraProjScale 0x1B9070 0x80EF0
 g_fxHooksPreFuncs 0x1B9DC0 0x81C40
 g_fxHooksPreArgs 0x1B9EC0 0x81D40
 g_fxHooksPostFuncs 0x1B9FC0 0x81E40

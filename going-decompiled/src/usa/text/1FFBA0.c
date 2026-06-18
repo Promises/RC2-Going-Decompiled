@@ -27,6 +27,50 @@ typedef struct { unsigned long long _q[2]; } __attribute__((aligned(16))) u_long
 typedef unsigned long u_long128 __attribute__((mode(TI)));
 #endif
 
+#ifdef TARGET_NATIVE
+/* Shared decls for the water-pool state machine + spark-burst #else bodies. */
+typedef f32 Vec4f[4] __attribute__((aligned(16)));
+
+__asm__(".extern g_cameraMatrix, 16");
+extern u8 g_cameraMatrix[];     /* 0x1B54F0 camera rotation matrix; row0 at +0x00 */
+__asm__(".extern g_cameraPos, 16");
+extern u8 g_cameraPos[];        /* 0x1B52C0 camera world position vec4 */
+__asm__(".extern g_cameraState, 16");
+extern u8 g_cameraState[];      /* 0x1B5180 camera state block */
+extern f32 g_cameraProjScale;   /* 0x1B9070 projection scale cot(fov/2) */
+__asm__(".extern g_saveImageArea, 16");
+extern u8 g_saveImageArea[];    /* 0x1A53A8 per-area save image RAM buffer */
+__asm__(".extern g_nNanotechBonusHealTimer, 16");
+extern u8 g_nNanotechBonusHealTimer[]; /* 0x189FFC; +4 (0x18A000) written by S6 */
+
+extern void Vec4ScaleVu0(Vec4f dst, f32 s, const Vec4f src);
+extern void AddFxDrawHookLate(void (*hook)(void), s32 arg);
+extern void RequestGameStateChange(s32 a, s32 b, s32 c, s32 d, s32 e);
+extern void StopDialogVoice(void);
+extern void BuildCameraProjection(void);
+extern void func_00283D10(Vec4f dst);  /* identity/clear quad (has #else body) */
+extern f32  func_00283B48(f32 x);       /* VU0 sine   (has #else body) */
+extern f32  func_00283B30(f32 x);       /* VU0 cosine (has #else body) */
+extern f32  func_00284548(f32 a, f32 b);/* WrapAnglePiSum (has #else body) */
+extern void func_00300288(void);
+extern void func_003007F8(void *moby);
+extern void *func_003009F8(void *moby);
+extern void func_00300B88(void);
+extern void func_00300E70(void);
+extern void func_00300C08(void);
+/* weapon/dialog bookkeeping (trap-stubs in native; no-ops in backend_null.c). */
+extern void func_002888D8(s32 itemId);
+extern void func_00288F30(s32 itemId);
+extern void func_002AE6C8(s32 itemId);
+
+/* gp_rel scratch globals (not yet in symbol_addrs; listed for arena regen). */
+extern s32 D_001AD7C4;          /* 0x1AD7C4 S0 charge-enable flag */
+extern s32 D_001AD7C8;          /* 0x1AD7C8 S0 charge counter (0..0xB5) */
+extern u16 D_001AD7DC;          /* 0x1AD7DC S0 initial pool timer (waterPool+0x32) */
+extern u16 D_001AD7E0;          /* 0x1AD7E0 S1 pool timer reload */
+extern u16 D_001AD7E4;          /* 0x1AD7E4 S4 pool timer reload */
+#endif
+
 /* gp-addressable small globals (<= 8 bytes -> %gp_rel). */
 extern void *g_pHeroGroundMoby; /* 0x1AD7CC hero support/ground moby ptr */
 
@@ -316,8 +360,182 @@ void func_00300288(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_003002E0);
 #else
+/* Step one tick of the pool's countdown timer at *t (g_waterPool+0x32). Inlined
+ * from func_00283328 (a trap-stub in native): returns 1 when the timer is idle
+ * (c==0), 0 while it is still counting down, 2 on the tick it reaches zero. */
+static s32 poolTimerStep(s16 *t) {
+    s16 c = *t;
+    s16 r;
+    if (c == 0) {
+        return 1;
+    }
+    r = (s16)((c < 1 ? 1 : c) - 1);   /* max(c,1) - 1 */
+    *t = r;
+    return r >= 1 ? 0 : 2;            /* r>0 -> still counting, else finished */
+}
+
 void func_003002E0(void) {
-    /* TODO(hle): water-pool VU0 state machine (jtbl_0026DD50_text). */
+    s32 state = *(s16 *)(g_waterPool + 0x30);
+    s16 *timer = (s16 *)(g_waterPool + 0x32);
+    void *poolMoby;
+
+    if ((u32)state >= 8) {
+        return;   /* jump-table default: states 0..7 only */
+    }
+
+    switch (state) {
+    case 0: {
+        if (poolTimerStep(timer) == 0) {
+            /* still counting: keep the surface-fade hook live and wait */
+            AddFxDrawHookLate(func_00300B88, 0);
+            return;
+        }
+        /* decide whether to keep charging or to complete the transition */
+        if (D_001AD7C4 != 0) {
+            u8 *img = g_saveImageArea + 0x1000;
+            s32 charging = (*(s16 *)(img + 0x72) != 3)
+                        || (*(s16 *)(img + 0x6C) >= 0x1770);
+            if (charging) {
+                s32 c = D_001AD7C8;
+                D_001AD7C8 = c + 1;
+                if (c < 0xB5) {
+                    AddFxDrawHookLate(func_00300B88, 0);
+                    return;
+                }
+            }
+        }
+        /* completion: snap the cinematic camera + arm the pool moby */
+        StopDialogVoice();
+        *(f32 *)(g_cameraState + 0x140) = 25.0f;   /* 0x41C80000 */
+        *(f32 *)(g_cameraState + 0x144) = 25.0f;
+        *(f32 *)(g_cameraState + 0x148) = 900.0f;  /* 0x44610000 */
+        D_001AD7C4 = 0;
+        func_00283D10((f32 *)(g_cameraState + 0x370));
+        D_001AD7C8 = 0;
+        poolMoby = *(void **)(g_waterPool + 0x60);
+        *(f32 *)(g_cameraState + 0x150) = 0.0f;
+        *(f32 *)(g_cameraState + 0x154) = 0.0f;
+        *(f32 *)(g_cameraState + 0x158) = 0.0f;
+        *(s16 *)(g_waterPool + 0x30) = 1;
+        *(s16 *)(g_waterPool + 0x32) = (s16)D_001AD7DC;
+        *(s16 *)(g_waterPool + 0x3E) = 0;
+        *(u_long128 *)((u8 *)poolMoby + 0xF0) =
+            *(u_long128 *)(g_cameraState + 0x150);
+        if (*(u8 *)(g_waterPool + 0x65) != 0) {
+            union { u32 u; f32 f; } negHalfPi = { 0xBFC90FDCu }; /* ~= -pi/2 */
+            *(f32 *)((u8 *)poolMoby + 0xF4) =
+                func_00284548(*(f32 *)((u8 *)poolMoby + 0xF4), negHalfPi.f);
+        }
+        {
+            union { u32 u; f32 f; } k = { 0x3F0FEA69u };
+            g_cameraProjScale = func_00283B48(k.f) / func_00283B30(k.f);
+        }
+        BuildCameraProjection();
+        *(u16 *)((u8 *)poolMoby + 0x34) &= 0xFFBE;   /* clear bit 0x41 */
+        return;
+    }
+
+    case 1: {
+        func_003007F8(*(void **)(g_waterPool + 0x60));
+        if (poolTimerStep(timer) != 0) {
+            *(s16 *)(g_waterPool + 0x32) = (s16)D_001AD7E0;
+            *(f32 *)(g_waterPool + 0x34) = 1.0f / IntToFloat((s16)D_001AD7E0);
+            *(s16 *)(g_waterPool + 0x30) = 2;
+            *(u8 *)(g_waterPool + 0x64) = 0;
+        }
+        return;
+    }
+
+    case 2: {
+        poolMoby = *(void **)(g_waterPool + 0x60);
+        func_003007F8(poolMoby);
+        func_00300C08();
+        if (poolTimerStep(timer) != 0) {
+            *(s16 *)(g_waterPool + 0x32) = 2;
+            *(s16 *)(g_waterPool + 0x30) = 3;
+            *(s16 *)(g_waterPool + 0x66) = 0x80;
+            AddFxDrawHookLate(func_00300E70, 0);
+        }
+        return;
+    }
+
+    case 3: {
+        poolMoby = *(void **)(g_waterPool + 0x60);
+        AddFxDrawHookLate(func_00300E70, 0);
+        if (poolTimerStep(timer) != 0) {
+            *(s16 *)(g_waterPool + 0x32) = 0xC;
+            *(s16 *)(g_waterPool + 0x30) = 4;
+            *(void **)(g_waterPool + 0x60) = func_003009F8(poolMoby);
+        }
+        return;
+    }
+
+    case 4: {
+        poolMoby = *(void **)(g_waterPool + 0x60);
+        if (poolMoby != 0) {
+            func_003007F8(poolMoby);
+        }
+        AddFxDrawHookLate(func_00300E70, 0);
+        /* 0x3DAAAAAB ~= 0.0833333, 0x43000000 = 128.0 */
+        *(s16 *)(g_waterPool + 0x66) =
+            (s16)FloatToInt(IntToFloat(*(s16 *)(g_waterPool + 0x32))
+                            * 0.0833333321f * 128.0f);
+        if (poolTimerStep(timer) != 0) {
+            *(s16 *)(g_waterPool + 0x30) = 5;
+            *(s16 *)(g_waterPool + 0x32) = (s16)D_001AD7E4;
+            *(s16 *)(g_waterPool + 0x66) = 0;
+        }
+        return;
+    }
+
+    case 5: {
+        poolMoby = *(void **)(g_waterPool + 0x60);
+        if (poolMoby != 0) {
+            func_003007F8(poolMoby);
+        }
+        if (poolTimerStep(timer) != 0) {
+            *(s16 *)(g_waterPool + 0x32) = 3;
+            *(s16 *)(g_waterPool + 0x30) = 6;
+        }
+        return;
+    }
+
+    case 6: {
+        poolMoby = *(void **)(g_waterPool + 0x60);
+        if (poolMoby != 0) {
+            func_003007F8(poolMoby);
+        }
+        AddFxDrawHookLate(func_00300B88, 0);
+        if (poolTimerStep(timer) == 0) {
+            return;
+        }
+        *(s16 *)(g_waterPool + 0x32) = 0;
+        *(u8 *)(g_waterPool + 0x3D) = 1;
+        *(s16 *)(g_waterPool + 0x3E) = 1;
+        *(s16 *)(g_nNanotechBonusHealTimer + 4) = (s16)(g_heroZoom + 5); /* 0x18A000 */
+        *(f32 *)(g_waterPool + 0x34) = 1.0f / IntToFloat(g_heroZoom);
+        func_00300288();
+        *(void **)(g_waterPool + 0x60) = 0;
+        func_002888D8(*(s16 *)(g_waterPool + 0x38));
+        func_00288F30(*(s16 *)(g_waterPool + 0x38));
+        if (*(u8 *)(g_waterPool + 0x65) != 0) {
+            func_002AE6C8(*(s16 *)(g_waterPool + 0x38));
+        }
+        *(s16 *)(g_waterPool + 0x30) = 7;
+        return;
+    }
+
+    case 7: {
+        u16 cnt = *(u16 *)(g_waterPool + 0x32);
+        *(s16 *)(g_waterPool + 0x32) = (s16)(cnt + 1);
+        if ((s16)cnt < g_heroZoom) {
+            AddFxDrawHookLate(func_00300B88, 0);
+        } else {
+            RequestGameStateChange(0, 2, 0, 0, 0);
+        }
+        return;
+    }
+    }
 }
 #endif
 
@@ -391,8 +609,57 @@ void func_00300B88(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_00300C08);
 #else
+/* Vec3LerpVu0: dst = a + (b-a)*t on xyz, dst.w = a.w (has its own #else body). */
+extern void func_002836B8(Vec4f dst, f32 t, const Vec4f a, const Vec4f b);
+/* Particle spawner (0x2C74C0). Headless: no-op in backend_null.c. In-game it
+ * returns the new particle and the caller patches two of its bytes; headless no
+ * particle exists, so those patches are dropped (only the durable hue-counter
+ * tick at g_waterPool+0x64 is reproduced). */
+extern void SpawnParticleType55(f32 sizeStart, f32 sizeEnd, f32 third,
+                                void *pos, void *effectDef, s32 life, u32 color,
+                                s32 hue, s32 a8, s32 a9, s32 a10);
+__asm__(".extern D_1AD7FC, 16");
+extern f32 D_1AD7FC; /* 0x1AD7FC == 2.0f, brightness multiplier */
+
 void func_00300C08(void) {
-    /* TODO(hle): VU0 spark-burst particle emit (SpawnParticleType55). */
+    Vec4f sp0;            /* sp+0x00 scratch scaled axis */
+    Vec4f ptA;           /* sp+0x10 = camPos + 17 * camRow0 */
+    Vec4f ptB;           /* sp+0x20 = camPos + 0.1 * camRow0 */
+    Vec4f P;             /* sp+0x30 = lerp(ptB, ptA, t) */
+    Vec4f *camRow0 = (Vec4f *)g_cameraMatrix;
+    Vec4f *camPos  = (Vec4f *)g_cameraPos;
+    s32 counter = *(u8 *)(g_waterPool + 0x64);
+    f32 t, bright;
+
+    Vec4ScaleVu0(sp0, 17.0f, *camRow0);   /* 0x41100000 */
+    Vec4AddVu0(ptA, *camPos, sp0);
+    Vec4ScaleVu0(sp0, 0.1f, *camRow0);    /* 0x3DCCCCCD */
+    Vec4AddVu0(ptB, *camPos, sp0);
+
+    t = IntToFloat(*(s16 *)(g_waterPool + 0x32)) * *(f32 *)(g_waterPool + 0x34);
+    func_002836B8(P, t, ptB, ptA);        /* P = ptB + (ptA - ptB) * t */
+
+    /* bright = D_1AD7FC (2.0) * 0x484D1400 (210000.0) = 420000.0 */
+    {
+        union { u32 u; f32 f; } k = { 0x484D1400u };
+        bright = D_1AD7FC * k.f;
+    }
+
+    /* spark 1: red, hue = counter */
+    SpawnParticleType55(bright, bright, 0.0f, P, D_1A8BD0, 4, 0xFF2020,
+                        counter, 0x7F, 0x7F, 0);
+    /* spark 2: red, hue = (counter + 0x80) % 255 */
+    SpawnParticleType55(bright, bright, 0.0f, P, D_1A8BD0, 4, 0xFF2020,
+                        (counter + 0x80) % 0xFF, 0x7F, 0x7F, 0);
+    /* spark 3: white, half size, hue = (counter + 0x80) % 255 */
+    {
+        f32 bright2 = bright * 0.5f;      /* 0x3F000000 */
+        SpawnParticleType55(bright2, bright2, 0.0f, P, D_1A8BD0, 4, 0xFFFFFF,
+                            (counter + 0x80) % 0xFF, 0x7F, 0x7F, 0);
+    }
+
+    /* durable state: advance the spark hue counter (wraps as a u8). */
+    *(u8 *)(g_waterPool + 0x64) = (u8)(counter + 1);
 }
 #endif
 
