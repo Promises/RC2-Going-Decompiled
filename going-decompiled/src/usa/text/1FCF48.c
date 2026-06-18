@@ -9,10 +9,25 @@ extern s32  g_renderTaskList;     /* 0x1B1630 render-task-list ptr for RunRender
 extern s32  g_renderTaskWorkBuf;  /* 0x1B1634 render-task work-buffer ptr */
 extern u8  *g_frameDmaCursor;     /* 0x1B2228 frame VIF1 chain write cursor */
 extern s32  D_1A8BC0;             /* 0x1A8BC0 scene-arena reserve size (set 0x2000 by teardown) */
+extern s32  g_playerProgress;     /* 0x1A79F8 story-progress level */
+extern s32  D_262D30[];           /* 0x262D30 per-progress scene-arena cursor table */
+extern s32  D_262D98[];           /* 0x262D98 per-progress scene-arena reserve table */
+void func_002FD020(void);         /* defined below in this unit */
 
-/* SelectSceneArenaRegion: picks the scene/render-arena region by g_playerProgress
- * then calls func_002FD020. Still INCLUDE_ASM (leaf #else bodies land first). */
+/* SelectSceneArenaRegion: select the scene/render-arena region for the current
+ * story progress. Index the two per-progress tables by g_playerProgress (or 0
+ * when it is past the 0x19-entry tables), publish the reserve (D_1A8BC0) and the
+ * scene-arena cursor, then rederive the render-task list (func_002FD020). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FCF48", func_002FCFC8);
+#else
+void func_002FCFC8(void) {
+    s32 idx = ((u32)g_playerProgress < 0x19) ? g_playerProgress : 0;
+    D_1A8BC0 = D_262D98[idx];
+    g_sceneArenaCursor = D_262D30[idx];
+    func_002FD020();
+}
+#endif
 
 /* func_002FD020: derive the render-task-list and work-buffer pointers from the
  * active frame-arena half. g_renderTaskList = arenaHalf + sceneCursor - reserve;

@@ -432,3 +432,5 @@ g_frameArenaFlip
 g_sceneArenaCursor
 g_renderTaskList
 g_renderTaskWorkBuf
+D_262D30
+D_262D98
