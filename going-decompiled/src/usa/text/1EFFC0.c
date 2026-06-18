@@ -270,7 +270,7 @@ void func_002F6B10(void *callback, void *arg) {
 }
 
 void func_002F72D8(void);
-void EnqueueCinematic(void *queue);
+void EnqueueCinematic(void *queue, s32 reelId);
 void StartCinematicFromQueue(void *queue);
 
 extern u8 g_cinematicQueue[];      /* 0x1BACC0 pending-cinematic reel queue */
@@ -332,7 +332,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F7328);
 #else
 void func_002F7328(void) {
     g_cinematicExitPending = 1;
-    EnqueueCinematic(g_cinematicQueue);
+    EnqueueCinematic(g_cinematicQueue, 0x15);
     StartCinematicFromQueue(g_cinematicQueue);
     func_002F6B10(func_002F72D8, 0);
     g_exitSceneMode[4] = 1;
