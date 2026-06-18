@@ -1,17 +1,11 @@
-# still-undefined game functions to weak-stub (M4), over the full USA link + sdk shims.
-# regenerate: link all usa units + runtime/sdk (no stubs), nm -u, drop libc/@GLIBC + data globals.
+# still-undefined game functions to weak-stub (M4), over the full USA link + sdk + hw backend.
+# regenerate: link all usa units + runtime/{sdk,hw} (no stubs), nm -u, drop libc/@GLIBC + data globals.
 AllocateTieTextureVram
-AppendDrawEnvContext1
-AppendDrawEnvContext2
-AppendFrameInitGsState
-AppendGsRegPacket
-AppendScreenClearPacket
 AppendTexFlushDefaultTex0
 AppendTextureUploadBuildTex0
 ApplyCameraShakeAxis
 ApplyCameraTransition
 AssertFail
-Begin2dDrawBatch
 BeginCameraTransition
 BuildCameraProjection
 BuildFrameViewMatrices
@@ -34,21 +28,17 @@ DrawDebugString
 DrawFont1CenteredLabel
 DrawFont1RightJustifiedLabel
 DrawFont2TextBox
-DrawGlyphQuad
 DrawHudIconQuadTiled
 DrawHudSpriteRotated
 DrawHudSpriteTex0
-DrawRotatedSprite2d
 DrawSkyPiecesFormatA
 DrawSkyPiecesFormatB
 DrawStringFont1
 EmitTieDrawPackets
 EmitTieLodMorphPackets
 EnableInlineColorCodes
-End2dDrawBatch
 FadeOutToBlackBlocking
 FindTextTableEntry
-FlushCache
 FlushHudDisplayValue
 GatherActiveObjectives
 GetHudIconTex0
@@ -59,11 +49,9 @@ GuiFontAtlasLookupGlyph
 GuiListRowElementInit
 GuiListSetScrollPos
 GuiSpriteElementDraw
-GuiTextElementDraw
 InitMobyFromClass
 InitScreenGeometry
 InstallVif1DmacHandlers
-KickFrameDmaChain
 MapDraw
 MapSetCurrentLevel
 MarkLevelAvailable
@@ -105,9 +93,6 @@ UpdateSkyShellRotation
 UpdateVendorMenuInput
 UploadTieTextures
 Vec3DistSqVu0
-WaitFrameDmaFence
-WaitGsPathsIdle
-WaitVblankGetField
 ZeroQwords
 _ITM_deregisterTMCloneTable
 _ITM_registerTMCloneTable

@@ -44,11 +44,12 @@ docker --context "$CTX" run --rm -v "$ROOT":/work -w /work "$IMG" sh -c '
   gcc $CFLAGS -c tools/native/runtime/arena/arena_storage.c -o /tmp/arena_storage.o
   gcc $CFLAGS -c tools/native/runtime/rt0/stubs.c           -o /tmp/stubs.o
   gcc $CFLAGS -c tools/native/runtime/rt0/native_stub.c     -o /tmp/native_stub.o
-  # M1 SDK/EE utility shims (portable bodies for raw-split leaf routines).
+  # M1 SDK/EE utility shims + M3 ps2hw backend (no-op GS/VIF/DMA). Both are
+  # TARGET_NATIVE-only strong defs that override weak M4 trap-stubs.
   sdkobjs=""
-  for s in tools/native/runtime/sdk/*.c; do
-    [ -e "$s" ] || break
-    sb=$(basename "$s" .c); gcc $CFLAGS -c "$s" -o /tmp/sdk_$sb.o && sdkobjs="$sdkobjs /tmp/sdk_$sb.o"
+  for s in tools/native/runtime/sdk/*.c tools/native/runtime/hw/*.c; do
+    [ -e "$s" ] || continue
+    sb=$(basename "$s" .c); gcc $CFLAGS -c "$s" -o /tmp/rt_$sb.o && sdkobjs="$sdkobjs /tmp/rt_$sb.o"
   done
   gcc -m32 -shared -Wl,--unresolved-symbols=ignore-all \
       -Wl,-T,tools/native/runtime/arena/arena.ld \
