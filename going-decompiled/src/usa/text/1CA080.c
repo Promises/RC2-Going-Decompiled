@@ -135,6 +135,10 @@ extern void BuildCameraProjection(void);
 extern void BuildFrameViewMatrices(void);
 extern void func_002CABC0(void);
 
+/* World camera default-pose targets (func_002CABC0). */
+extern f32 g_cameraPos[4];     /* 0x1B52C0 - camera world position vec4 */
+extern f32 g_cameraMatrix[12]; /* 0x1B54F0 - camera rotation matrix, 3 vec4 rows */
+
 /* Twin of func_002D0240 for the alternate label slot (func_002CE9D8). */
 extern void func_0029D2F8(void);
 extern s32 D_1AB9E0;
@@ -321,9 +325,30 @@ void func_002CAB90(float x) {
 }
 #endif
 
-/* menu helper: uses 128-bit sq/lq (vector) loads/stores — left as INCLUDE_ASM
- * (the EE quadword ops are not emitted from scalar C). */
+/* ResetWorldCamera: snap the world camera back to its default pose. Writes
+ * g_cameraPos = (256, 256, 64) and rebuilds g_cameraMatrix as a 3x4 basis that
+ * is identity on the diagonal (matrix[0]=matrix[5]=matrix[10]=1) plus a 1.0 in
+ * the row-2 translation slot (matrix[11]). Takes no inputs and calls nothing -
+ * a pure constant-store, so the native shim is byte-faithful to the asm. The
+ * matching build keeps the asm: the original zeroes the matrix with 128-bit
+ * `sq` writes that scalar C does not emit. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CABC0);
+#else
+void func_002CABC0(void) {
+    s32 i;
+    g_cameraPos[0] = 256.0f;
+    g_cameraPos[1] = 256.0f;
+    g_cameraPos[2] = 64.0f;
+    for (i = 0; i < 12; i++) {
+        g_cameraMatrix[i] = 0.0f;
+    }
+    g_cameraMatrix[0]  = 1.0f;
+    g_cameraMatrix[5]  = 1.0f;
+    g_cameraMatrix[10] = 1.0f;
+    g_cameraMatrix[11] = 1.0f;
+}
+#endif
 
 /* menu-screen lifecycle routine: 8-byte-packed-save wall (saves 4 GPRs incl $31; later cc1
  * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
