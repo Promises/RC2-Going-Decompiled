@@ -237,6 +237,7 @@ g_cameraSnapshot
 g_cameraSnapshotPtr
 g_cameraState
 g_cameraTransitionState
+g_cameraZoneType
 g_cinematicCameraBlock
 g_cinematicExitPending
 g_cinematicQueue
@@ -288,6 +289,7 @@ g_GuiElementVtable
 g_guiInstance
 g_GuiListRowVtable
 g_health
+g_heroFacingDir
 g_heroOrientVec
 g_heroPos
 g_heroPos_D0

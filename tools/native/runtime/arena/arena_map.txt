@@ -2,7 +2,7 @@
 # storage symbol: g_dataArena  ==  __gamedata_start (linker)
 # seed: memcpy snapshot[rom_addr] -> g_dataArena[rom_addr - base]
 #       for rom_addr in [base, base+span).
-# base 0x138180  span 0x146780  placed 439
+# base 0x138180  span 0x146780  placed 441
 # columns: <symbol> <rom_addr> <arena_offset>
 D_138180 0x138180 0x0
 g_padButtonsHeld 0x138340 0x1C0
@@ -43,12 +43,14 @@ g_heroPosVec 0x189EA0 0x51D20
 g_heroOrientVec 0x189EB0 0x51D30
 g_heroPos_D0 0x189F70 0x51DF0
 g_nNanotechBonusHealTimer 0x189FFC 0x51E7C
+g_heroFacingDir 0x18A0E0 0x51F60
 D_0018A168 0x18A168 0x51FE8
 g_mobyClassTable 0x18B040 0x52EC0
 g_cinematicCameraBlock 0x18B2F0 0x53170
 g_pHeroMoby 0x18C0B0 0x53F30
 g_heroState 0x18C0B4 0x53F34
 g_bPlayerMode 0x18C0D4 0x53F54
+g_cameraZoneType 0x18C2C0 0x54140
 g_health 0x18C2EC 0x5416C
 D_18D0E8 0x18D0E8 0x54F68
 g_platinumBoltFlags 0x19B278 0x630F8

@@ -784,7 +784,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00270B68);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00270D60);
 #else
 extern void func_00270B68(void *a, void *b, void *c, Vec4 *d, Vec4 *e, Vec4 *f);
-extern void Vec3RescaleToLenVu0(Vec4 *dst, const Vec4 *src, f32 len);
+/* arg order is (dst, len, src) - matches the native definition in text/183558
+ * (Vec4ScaleVu0/Vec3RescaleToLenVu0 take the f32 scalar BEFORE the src ptr).
+ * The f32 lands in $f12 regardless of position, so the EE/EABI build is
+ * unaffected; native ILP32 is positional, so the scalar must come second. */
+extern void Vec3RescaleToLenVu0(Vec4 *dst, f32 len, const Vec4 *src);
 extern char g_soundBankHandlesBlk[]; /* g_soundBankHandles + 0x20 */
 /* TODO(match): functional equivalent - not byte-exact; five callee-saves
    (incl. $f20) at 8-byte slot spacing (the 0x20-vs-0x10 packed-save wall). */
@@ -795,11 +799,11 @@ void func_00270D60(void) {
     char *keys = *(char **)(g_soundBankHandlesBlk + 0x2290);
     Vec4 v0, v1, v2;
 
-    Vec3RescaleToLenVu0(&v0, (Vec4 *)(keys + 0xC0), 1.0f);
+    Vec3RescaleToLenVu0(&v0, 1.0f, (Vec4 *)(keys + 0xC0));
     keys = *(char **)(g_soundBankHandlesBlk + 0x2290);
-    Vec3RescaleToLenVu0(&v1, (Vec4 *)(keys + 0xD0), 1.0f);
+    Vec3RescaleToLenVu0(&v1, 1.0f, (Vec4 *)(keys + 0xD0));
     keys = *(char **)(g_soundBankHandlesBlk + 0x2290);
-    Vec3RescaleToLenVu0(&v2, (Vec4 *)(keys + 0xE0), 1.0f);
+    Vec3RescaleToLenVu0(&v2, 1.0f, (Vec4 *)(keys + 0xE0));
 
     *(Vec4 *)((char *)t + 0x90) = v0;
     *(Vec4 *)((char *)t + 0xA0) = v2;
@@ -894,11 +898,116 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", ApplyCameraTran
  * Left INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", ApplyCameraShakeAxis);
 
+/* Per-frame hero-motion tracking block, a sub-region of g_cameraState at
+ * +0x1A0 (vaddr 0x1B5320; the original addresses it as g_prevCamera+0xC). The
+ * camera mode handlers read these smoothed/derived hero signals. */
+typedef struct HeroCamMotion {
+    /* 0x00 */ f32 smoothX;         /* hero x (snapped to g_heroPos.x) */
+    /* 0x04 */ f32 smoothY;         /* hero y (snapped to g_heroPos.y) */
+    /* 0x08 */ f32 smoothHeight;    /* spring-smoothed hero z (height) */
+    /* 0x0C */ f32 rawZ;            /* last frame's hero z */
+    /* 0x10 */ f32 heightVel;       /* height-spring velocity state */
+    /* 0x14 */ u8  pad14[0x0C];
+    /* 0x20 */ Vec4 facingDir;      /* smoothed camera-facing unit dir */
+    /* 0x30 */ Vec4 facingRingCur;  /* newest negated-facing sample */
+    /* 0x40 */ Vec4 facingRingPrev; /* previous negated-facing sample */
+    /* 0x50 */ Vec4 facingVel;      /* facing-spring velocity (per xyz) */
+    /* 0x60 */ Vec4 prevPos;        /* hero position last frame */
+    /* 0x70 */ Vec4 velocity;       /* hero velocity this frame */
+    /* 0x80 */ Vec4 lateralDir;     /* normalized sideways direction */
+    /* 0x90 */ Vec4 forwardProj;    /* velocity projected onto facing */
+    /* 0xA0 */ f32 speed;           /* |velocity| */
+    /* 0xA4 */ f32 lateralSpeed;    /* |lateralDir| before normalizing */
+    /* 0xA8 */ f32 forwardSpeed;    /* velocity . facing */
+    /* 0xAC */ f32 orientZRing[5];  /* ring of g_heroOrientVec[2] history */
+} HeroCamMotion;
+
 /* TrackHeroMotionForCamera: smooth the hero facing / velocity / speed / lateral
  * direction from g_heroPos deltas for the camera logic to consume. WALL: twelve
  * callee-saves at 8-byte slot spacing (packed-save wall) + heavy interleaved fp
- * math. Left INCLUDE_ASM. */
+ * math. Left INCLUDE_ASM for the matching build. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", TrackHeroMotionForCamera);
+#else
+extern f32 Vec3DotVu0(const Vec4 *a, const Vec4 *b);
+extern f32 Vec3LengthVu0(const Vec4 *v);
+extern void Vec4SubVu0(Vec4 *dst, const Vec4 *a, const Vec4 *b);
+extern void Vec4ScaleVu0(Vec4 *dst, f32 s, const Vec4 *src);
+extern void Vec3RescaleToLenVu0(Vec4 *dst, f32 len, const Vec4 *src); /* (dst,len,src) */
+extern Vec4 g_heroPos;          /* 0x189EA0 hero world position */
+extern Vec4 g_heroFacingDir;    /* 0x18A0E0 hero forward unit dir (negated here) */
+extern f32 g_heroOrientVec[4];  /* 0x189EB0 hero orientation quad */
+extern s32 g_heroState;         /* 0x18C0B4 hero action-state code */
+extern s32 g_cameraZoneType;    /* 0x18C2C0 current camera zone/type id */
+/* TODO(match): functional equivalent - not byte-exact; twelve callee-saves at
+   8-byte slot spacing (packed-save wall) + the interleaved fp pipeline. Float
+   constants are exact: 0.015f=0x3c75c28f, 0.2f=0x3e4ccccd, -0.98f=0xbf7ae148,
+   0.0075f=0x3bf5c28f, 0.175f=0x3e333333. */
+void TrackHeroMotionForCamera(void) {
+    HeroCamMotion *m = (HeroCamMotion *)((char *)&g_cameraState + 0x1A0);
+    Vec4 facing;    /* newest camera-facing sample = -normalize(hero facing) */
+    Vec4 fwdProj;   /* facing scaled by the forward speed */
+    f32 dot;
+
+    Vec3RescaleToLenVu0(&facing, -1.0f, &g_heroFacingDir);
+
+    /* shift the 2-slot facing history, push the new sample. NB: the ring stores
+       the PRE-nudge sample (the antipode +0.2 fix-up below only feeds the spring,
+       not the history) - faithful to the asm, which stores +0x30 before the nudge. */
+    m->facingRingPrev = m->facingRingCur;
+    m->facingRingCur = facing;
+
+    /* if the new sample nearly reverses the smoothed facing, nudge it so the
+       spring does not lock up at the antipode */
+    dot = Vec3DotVu0(&m->facingDir, &facing);
+    if (dot < -0.98f) {
+        facing.x += 0.2f;
+        facing.y += 0.2f;
+        facing.z += 0.2f;
+    }
+
+    /* critically-damped spring of each facing axis toward the new sample */
+    m->facingDir.x = func_002702D8(m->facingDir.x, facing.x, 0.015f, 0.2f, 0.0f, &m->facingVel.x);
+    m->facingDir.y = func_002702D8(m->facingDir.y, facing.y, 0.015f, 0.2f, 0.0f, &m->facingVel.y);
+    m->facingDir.z = func_002702D8(m->facingDir.z, facing.z, 0.015f, 0.2f, 0.0f, &m->facingVel.z);
+    Vec3RescaleToLenVu0(&m->facingDir, 1.0f, &m->facingDir);
+
+    /* hero velocity + speed this frame (prevPos still holds last frame's pos) */
+    Vec4SubVu0(&m->velocity, &g_heroPos, &m->prevPos);
+    m->speed = Vec3LengthVu0(&m->velocity);
+
+    /* split the velocity into forward (along facing) and lateral components */
+    m->forwardSpeed = Vec3DotVu0(&m->velocity, &facing);
+    Vec3RescaleToLenVu0(&fwdProj, m->forwardSpeed, &facing);
+    m->forwardProj = fwdProj;
+    Vec4SubVu0(&m->lateralDir, &m->velocity, &fwdProj);
+    m->lateralSpeed = Vec3LengthVu0(&m->lateralDir);
+    Vec4ScaleVu0(&m->lateralDir, 1.0f / m->lateralSpeed, &m->lateralDir);
+
+    /* remember this frame's hero position for next frame's delta */
+    m->prevPos = g_heroPos;
+
+    if (g_cameraZoneType == 0x50 && g_heroState != 0x11) {
+        m->smoothY = g_heroPos.y;
+        m->smoothX = g_heroPos.x;
+    } else {
+        m->smoothX = g_heroPos.x;
+        m->smoothY = g_heroPos.y;
+        m->smoothHeight = func_002702D8(m->smoothHeight, g_heroPos.z, 0.0075f, 0.175f,
+                                        0.0f, &m->heightVel);
+        m->rawZ = g_heroPos.z;
+    }
+
+    /* push the hero orient-Z history ring (shift down by one, append newest) */
+    {
+        s32 i;
+        for (i = 0; i < 4; i++) {
+            m->orientZRing[i] = m->orientZRing[i + 1];
+        }
+        m->orientZRing[i] = g_heroOrientVec[2];
+    }
+}
+#endif
 
 /* CheckCameraUnderwater: walk a short downward collision ray (up to 6 CollLine
  * steps) from the camera position to decide whether the camera is submerged,
@@ -997,7 +1106,7 @@ extern void ApplyCameraShakeAxis(void *channel, s32 axis);
 extern void CheckCameraUnderwater(void);
 extern void SampleCameraFogZone(Vec4 *pos);
 extern void Vec3CrossVu0(Vec4 *dst, const Vec4 *a, const Vec4 *b);
-extern void Vec3RescaleToLenVu0(Vec4 *dst, const Vec4 *src, f32 len);
+extern void Vec3RescaleToLenVu0(Vec4 *dst, f32 len, const Vec4 *src); /* (dst,len,src) - see func_00270D60 note */
 extern void StepCameraFovInterp(void);
 extern Vec4 g_cameraPos;
 extern Vec4 g_cameraRot;
@@ -1044,13 +1153,13 @@ void UpdateCamera(void) {
         Vec3CrossVu0((Vec4 *)((char *)&g_cameraPos + 0x240),
                      (Vec4 *)((char *)&g_cameraPos + 0x230),
                      &g_cinematicCameraBlock[0]);
-        Vec3RescaleToLenVu0((Vec4 *)((char *)&g_cameraPos + 0x240),
-                            (Vec4 *)((char *)&g_cameraPos + 0x240), 1.0f);
+        Vec3RescaleToLenVu0((Vec4 *)((char *)&g_cameraPos + 0x240), 1.0f,
+                            (Vec4 *)((char *)&g_cameraPos + 0x240));
         Vec3CrossVu0((Vec4 *)((char *)&g_cameraPos + 0x250),
                      (Vec4 *)((char *)&g_cameraPos + 0x240),
                      (Vec4 *)((char *)&g_cameraPos + 0x230));
-        Vec3RescaleToLenVu0((Vec4 *)((char *)&g_cameraPos + 0x250),
-                            (Vec4 *)((char *)&g_cameraPos + 0x250), 1.0f);
+        Vec3RescaleToLenVu0((Vec4 *)((char *)&g_cameraPos + 0x250), 1.0f,
+                            (Vec4 *)((char *)&g_cameraPos + 0x250));
     }
 
     MatrixToEulerAngles((const Vec4 *)&g_cameraMatrix, &g_cameraRot);

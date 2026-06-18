@@ -76,7 +76,6 @@ StepCameraFovInterp
 StepMobyMotion
 SwitchActiveCamera
 TestCameraTakeover
-TrackHeroMotionForCamera
 UpdateBoltCounterHud
 UpdateLevelObjectiveStates
 UpdateMobyBSphereAndGrid
