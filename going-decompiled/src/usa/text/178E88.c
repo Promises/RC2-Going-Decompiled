@@ -121,9 +121,62 @@ extern void func_0027F0A8(const u64 *corners, u64 tex0);
  * the +0x44 offset compiles to the absolute %hi/%lo form. */
 extern u8 g_sceneActorMobys[];
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00278EC0);
+/* Scene-transition teardown/fade-out targets + callees. */
+extern u8   g_memoryArenaTable[]; /* 0x1BAE40 memory-region table */
+extern s32  g_sceneArenaCursor;   /* 0x1B2230 */
+extern s32  D_1A8BC0;             /* 0x1A8BC0 scene-arena reserve */
+extern s32  g_vramDynamicBase;    /* 0x1A72D4 VRAM dynamic region base */
+extern f32  g_screenFadeBlack;    /* 0x1B1520 black-fade level 0..1 */
+extern void StopAllSoundEmitters(void);     /* 0x2E6E18 */
+extern void WaitFrameDmaFence(s32);
+extern u32  WaitVblankGetField(s32);
+extern void ResetFrameArenas(void);         /* text/1FCF48 */
+extern void FadeOutToBlackBlocking(s32);    /* defined below as INCLUDE_ASM */
+extern void func_002FCFC8(void);            /* text/1FCF48 SelectSceneArenaRegion */
 
+/* SceneTransitionTeardownA: fence + vblank wait, bump the frame counter, set up
+ * the scene-transition block at g_cameraSlotActive+0xD0 (arena halves +0x60000,
+ * the work span +0xD0800, the old scene cursor -0x60000), reserve 0x2000
+ * (D_1A8BC0), reset the scene cursor to 0x60000 + the frame arenas, stop all
+ * sound emitters, stash g_vramDynamicBase, and force the black fade fully on. */
+#ifndef TARGET_NATIVE
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00278EC0);
+#else
+void func_00278EC0(void) {
+    u8 *cam = g_cameraSlotActive + 0xD0;
+    s32 half0;
+    WaitFrameDmaFence(1);
+    WaitVblankGetField(0);
+    half0 = *(s32 *)(g_memoryArenaTable + 0xC);
+    (&g_renderLayerMask)[1] += 1;                         /* frame counter at +0x4 */
+    *(s32 *)(cam + 0x14) = g_sceneArenaCursor - 0x60000;
+    *(s32 *)(cam + 0x00) = half0 + 0x60000;
+    *(s32 *)(cam + 0x04) = *(s32 *)(g_memoryArenaTable + 0x10) + 0x60000;
+    *(s32 *)(cam + 0x08) = half0 + 0x60000 + 0xD0800;
+    D_1A8BC0 = 0x2000;
+    g_sceneArenaCursor = 0x60000;
+    ResetFrameArenas();
+    StopAllSoundEmitters();
+    *(s16 *)(cam + 0x26) = 0;
+    *(s32 *)(cam + 0x18) = g_vramDynamicBase;
+    g_screenFadeBlack = 1.0f;
+}
+#endif
+
+/* SceneTransitionFadeOut: fence wait, reselect the scene-arena region + reset
+ * the frame arenas, save the camera-slot VRAM dynamic base into g_vramDynamicBase,
+ * then run the 30-frame blocking fade to black. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00278F90);
+#else
+void func_00278F90(void) {
+    WaitFrameDmaFence(1);
+    func_002FCFC8();
+    ResetFrameArenas();
+    g_vramDynamicBase = *(s32 *)(g_cameraSlotActive + 0xE8);
+    FadeOutToBlackBlocking(0x1E);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00278FD0);
 

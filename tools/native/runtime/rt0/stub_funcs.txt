@@ -75,6 +75,7 @@ SetupMemoryArenaTable
 SinfVu0
 StepCameraFovInterp
 StepMobyMotion
+StopAllSoundEmitters
 SwitchActiveCamera
 TestCameraTakeover
 TrackHeroMotionForCamera
@@ -101,8 +102,6 @@ func_00133850
 func_001338C8
 func_00133960
 func_00270B68
-func_00278EC0
-func_00278F90
 func_0027A550
 func_0027F0A8
 func_0027F858
