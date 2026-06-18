@@ -818,7 +818,7 @@ void func_00270E40(void) {
     if (t->kind == 0) {
         t->src0 = t->cur0;
         if (t->pad3[0] == 2) {
-            Vec4AddVu0(&t->src0, &t->src0, &g_heroPos_D0);
+            Vec4AddVu0(&t->src0, &g_heroPos_D0, &t->src0);  /* asm arg order: a=delta (its .w is kept), b=src0 */
         }
         t->src1 = t->cur1;
     }

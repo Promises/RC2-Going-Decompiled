@@ -1754,8 +1754,8 @@ g_voiceTriggerAux = 0x001AD7C8; // CONFIRMED - s32 aux word beside g_voiceTrigge
 // --- weapon / moby class tables + quick-select map (func_002FFF68) ---
 g_weaponClassTable = 0x00239B34; // CONFIRMED - classId column of the weapon table (0xE0 stride), indexed *(int*)(base + qsMap[i]*0xE0) in func_002FFF68 (DAT_00239b34). EU TODO
 g_weaponSlotTable = 0x00239B2C; // CONFIRMED - slot column of the weapon table (0xE0 stride, 8 bytes before classId column), indexed by g_itemEquippedSlot[gadgetId] in func_002FFF68 (DAT_00239b2c). EU TODO
-g_mobyClassTable = 0x0018B040; // CONFIRMED addr - moby class lookup table, referenced in func_002FFF68 (xref to 0x18B040); indexed with stride 0x50 there. EU TODO
-g_quickSelectMap = 0x00139587; // CONFIRMED addr - quick-select id map; byte[0] at 0x139587 read in func_002FFF68 (lbu -0x6a79). Adjacent bytes (full map extent) not yet traced. EU TODO
+g_mobyClassTable = 0x0018B040; // CONFIRMED addr - moby class lookup table, referenced in func_002FFF68 (xref to 0x18B040), indexed with stride 0x50 there. EU TODO
+g_quickSelectMap = 0x00139587; // CONFIRMED addr - quick-select id map, byte[0] at 0x139587 read in func_002FFF68 (lbu -0x6a79). Adjacent bytes (full map extent) not yet traced. EU TODO
 // --- boot splash texture descriptor (func_0026FE58), offsets into existing struct bases ---
 g_vramTextureBase_28 = 0x001A730C; // CONFIRMED - g_vramTextureBase(0x1A72E4)+0x28, VRAM base arg passed to func_0026FC88 in func_0026FE58 (DAT_001a730c). EU TODO
 g_bRawReadFellBack_34 = 0x001A7468; // CONFIRMED - g_bRawReadFellBack(0x1A7434)+0x34, latches the texture descriptor handle word (desc[0]) in func_0026FE58 (DAT_001a7468). EU TODO
