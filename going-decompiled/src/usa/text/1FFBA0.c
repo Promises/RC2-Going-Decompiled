@@ -230,7 +230,7 @@ void func_002FFF68(void) {
     *(f32 *)(st + 0x04) = 1.0f / IntToFloat(g_heroZoom);
     *(u_long128 *)(st + 0x10) = *(u_long128 *)g_heroPosVec;     /* +0x10..+0x1C */
     *(u_long128 *)(st + 0x20) = *(u_long128 *)g_heroOrientVec;  /* +0x20..+0x2C */
-    *(s32 *)(st + 0x00) = 0;
+    *(s16 *)(st + 0x00) = 0;  /* asm: sh (halfword) - must NOT overrun into +0x02 (g_heroZoom) */
 
     if (g_dialogBusy == 0 && g_pendingVoiceId == -1) {
         g_pendingVoiceAux = 0;
@@ -251,7 +251,7 @@ void func_002FFF68(void) {
         classId = 0x259;
         animArg = 0;
     } else {
-        *(s32 *)(st + 0x00) = 0;
+        *(s16 *)(st + 0x00) = 0;  /* asm: sh (halfword) - must NOT overrun into +0x02 (g_heroZoom) */
         *(u8 *)(st + 0x0C) = 0;
         *(u8 *)(st + 0x0D) = 0;
         *(u_long128 *)(st + 0x18) = *(u_long128 *)(g_heroPosVec + 8);
