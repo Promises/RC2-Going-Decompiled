@@ -820,7 +820,37 @@ void func_002E6D98(void) {
 }
 #endif
 
+/* 989snd service calls used by the teardown flush. */
+extern void func_00133230(void);
+extern void func_00132AC8(void);
+extern s32  snd_Pump(void);
+
+/* StopAllSoundEmitters: level-teardown audio flush. Drain the 989snd ring
+ * (func_00133230 + func_00132AC8 + snd_Pump until idle), then zero the listener
+ * position ring (4 vec4 + the count word at +0x40) and reset all 52 voice slots
+ * (stride 0x70) by clearing each slot's state word (+0x70) and flag byte (+0x74),
+ * all based at g_listenerPosHistory. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", StopAllSoundEmitters);
+#else
+void StopAllSoundEmitters(void) {
+    u8 *p;
+    s32 i;
+    func_00133230();
+    snd_Pump();
+    func_00132AC8();
+    while (snd_Pump() != 0) {
+    }
+    for (i = 0; i < 0x40; i += 4) {
+        *(s32 *)(g_listenerPosHistory + i) = 0;
+    }
+    *(s32 *)(g_listenerPosHistory + 0x40) = 0;
+    for (p = g_listenerPosHistory; p < g_listenerPosHistory + 0x16C0; p += 0x70) {
+        *(s32 *)(p + 0x70) = 0;
+        *(u8 *)(p + 0x74) = 0;
+    }
+}
+#endif
 
 /* Store `handle` into the voice-handle word of the emitter slot, if non-NULL.
  * The slot arrives as a 32-bit value sign-extended into a 64-bit register. */
