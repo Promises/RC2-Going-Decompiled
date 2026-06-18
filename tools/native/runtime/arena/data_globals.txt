@@ -426,3 +426,9 @@ g_weaponAmmoCapacity
 g_weaponClassTable
 g_weaponSlotTable
 g_weaponTable
+D_1A8BC0
+g_frameArenaBase
+g_frameArenaFlip
+g_sceneArenaCursor
+g_renderTaskList
+g_renderTaskWorkBuf

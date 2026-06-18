@@ -67,7 +67,6 @@ PumpDialogVoiceSystem
 RegisterParticleUpdateHandlers
 RemoveVif1DmacHandlers
 ResetDebugHeap
-ResetFrameArenas
 ResolveMobyAnimFramePtrs
 ResolveOcclusionVisMask
 SampleCameraFogZone

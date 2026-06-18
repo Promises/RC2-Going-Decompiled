@@ -2,7 +2,7 @@
 # storage symbol: g_dataArena  ==  __gamedata_start (linker)
 # seed: memcpy snapshot[rom_addr] -> g_dataArena[rom_addr - base]
 #       for rom_addr in [base, base+span).
-# base 0x138180  span 0x146780  placed 428
+# base 0x138180  span 0x146780  placed 434
 # columns: <symbol> <rom_addr> <arena_offset>
 D_138180 0x138180 0x0
 g_padButtonsHeld 0x138340 0x1C0
@@ -132,6 +132,7 @@ g_nGameState 0x1A8BB0 0x70A30
 g_nGameStatePrev 0x1A8BB4 0x70A34
 g_nGameStatePending 0x1A8BB8 0x70A38
 g_nGlobalSoundDefs 0x1A8BBC 0x70A3C
+D_1A8BC0 0x1A8BC0 0x70A40
 D_1A8BD0 0x1A8BD0 0x70A50
 g_exitFadeRate 0x1A8C7C 0x70AFC
 g_exitCinematicCallback 0x1A8C80 0x70B00
@@ -269,6 +270,8 @@ g_blobShadowCount 0x1B15BC 0x7943C
 g_nLevelExitDestination 0x1B1600 0x79480
 g_gameTime 0x1B1608 0x79488
 g_globalSoundDefsPtr 0x1B162C 0x794AC
+g_renderTaskList 0x1B1630 0x794B0
+g_renderTaskWorkBuf 0x1B1634 0x794B4
 g_occlusionOverrideMode 0x1B168C 0x7950C
 g_occlusionMode 0x1B1690 0x79510
 g_pLastOcclusionMask 0x1B1698 0x79518
@@ -308,7 +311,10 @@ g_pTieMatrixArray 0x1B213C 0x79FBC
 g_tieVramLruHead 0x1B2160 0x79FE0
 g_tieVramLruTail 0x1B2164 0x79FE4
 g_tieVramLruSize 0x1B2168 0x79FE8
+g_frameArenaBase 0x1B2220 0x7A0A0
 g_frameDmaCursor 0x1B2228 0x7A0A8
+g_sceneArenaCursor 0x1B2230 0x7A0B0
+g_frameArenaFlip 0x1B2234 0x7A0B4
 g_pWaterWaveGrids 0x1B2250 0x7A0D0
 g_bWaterWavesActive 0x1B2258 0x7A0D8
 g_bWaterPoolActive 0x1B225C 0x7A0DC
