@@ -1,36 +1,32 @@
-# Native trap-stub hits — TARGET_NATIVE void(void) sweep vs New Game snapshot.
-# Regenerate: tools/native/run_state_batch.sh 2>/dev/null | (parse [STUB] caller -> stub)
-# Format: <count>  <stub symbol>  <- <reaching callers>
-# Ranked by hit count = decomper shim priority. 32 distinct stubs, 41 total hits.
+# Native trap-stub hits — TARGET_NATIVE void(void) sweep vs New Game (post-M3).
+# Format: <count> <stub>  [MISSING-FROM-BACKEND]  <- reaching callers
+# Ranked = decomper shim priority. MISSING = not in rt0/stubs.c|sdk|hw at all.
+# 28 distinct stubs, 33 hits.
 
- 3  AppendGsRegPacket          <- BuildTieDrawSegment, func_00300B88, func_00300E70
- 3  CopyQwords                 <- func_002701C0, func_002A1028, func_002A1058
- 3  FillMemory32               <- UpdateOcclusionVisMask, func_00280FE0, func_002A1000
- 2  AppendDrawEnvContext1      <- func_0027C0A8, func_00280FB8
  2  SetSndPumpCallback         <- InstallFileLoadPump, func_00290FD0
+ 2  func_0011AEA0              <- BuildShrubDrawSegment, BuildTieDrawSegment
+ 2  func_0011D620              <- InitDialogSoundChannel, InitFileLoadSystem
+ 2  func_0027E4D0              <- func_00300B88, func_00300E70
  2  func_0028BE10              <- func_0028BF80, func_0028EC70
- 1  AppendScreenClearPacket    <- DrawFrameWithoutHud
  1  BuildCameraProjection      <- func_002CAFD8
  1  BuildFrameViewMatrices     <- func_0034F9B8
  1  CloseMobyDmaSegment        <- FinishMobyRenderChain
- 1  DebugPrintStub             <- InitFileLoadSystem
  1  FadeOutToBlackBlocking     <- func_002F6B20
  1  FlushHudDisplayValue       <- ResetBoltCounterHud
  1  InitMobyFromClass          <- func_00300288
  1  MenuScreenLoad             <- func_002CBA10
+ 1  RenderFrame                <- DrawFrameWithoutHud
  1  RenderMenuScreenWidgets    <- func_0027CB80
- 1  RequestGameStateChange     <- func_002F7328
  1  RequestLevelExit           <- func_002F72D8
  1  StartFileLoadPumpingVoice  <- func_0026FE58
  1  UpdateScreenFadeWhite      <- UpdateCamera
  1  UpdateVendorMenuInput      <- func_002FA608
  1  UploadTieTextures          <- FlushTieTextureUploads
  1  func_0011AAD0              <- func_00350100
- 1  func_0011AEA0              <- BuildShrubDrawSegment
- 1  func_0011D620              <- InitDialogSoundChannel
  1  func_00272cc0              <- DrawScreenSpriteFxQueue
  1  func_00278EC0              <- func_00291980
  1  func_00278F90              <- func_002919A0
+ 1  func_0027B988              <- func_00280FB8
  1  func_002857C8              <- UnhideAllMobysAndPopState
  1  func_00286200              <- func_0027CB08
  1  func_00289190              <- func_002911F0

@@ -26,9 +26,26 @@ docker --context "$CTX" run --rm -v "$ROOT":/work -w /work "$IMG" sh -c '
   gcc $CF -c tools/native/runtime/rt0/stubs.c           -o /tmp/stubs.o
   gcc $CF -c tools/native/runtime/rt0/native_stub.c     -o /tmp/nstub.o
   gcc $CF -c tools/native/state_batch_gen.c             -o /tmp/batch.o
-  gcc -m32 -Wl,--gc-sections -Wl,-T,tools/native/runtime/arena/arena.ld \
-      /tmp/batch.o $objs /tmp/arena.o /tmp/stubs.o /tmp/nstub.o -lm -o /tmp/nbatch 2>/tmp/link.err \
-    || { echo "LINK FAILED (undefined = unplaced global or missing stub — decomper priority):";
-         grep -iE "undefined reference" /tmp/link.err | head; exit 1; }
+  # M1 SDK shims + M3 ps2hw backend (strong defs overriding weak trap-stubs) —
+  # mirror link_native.sh so the runner tracks the decomper`s evolving backend.
+  back="/tmp/arena.o /tmp/stubs.o /tmp/nstub.o"
+  for s in tools/native/runtime/sdk/*.c tools/native/runtime/hw/*.c; do
+    [ -e "$s" ] || continue; sb=$(basename "$s" .c)
+    gcc $CF -c "$s" -o /tmp/rt_$sb.o 2>/dev/null && back="$back /tmp/rt_$sb.o" || true
+  done
+  # Self-heal: probe-link to find anything STILL undefined (symbols the backend
+  # does not yet cover), and auto-generate a weak trap-stub for each so the link
+  # succeeds and a hit reports the exact missing symbol (decomper priority).
+  gcc -m32 -shared -Wl,--allow-multiple-definition -Wl,--unresolved-symbols=ignore-all -Wl,-T,tools/native/runtime/arena/arena.ld \
+      /tmp/batch.o $objs $back -lm -o /tmp/probe.so 2>/dev/null || true
+  echo "extern void native_stub_hit(const char *);" > /tmp/auto_stubs.c
+  nm -u /tmp/probe.so | sed "s/^ *[Uw] //" | sort -u \
+    | grep -v "@GLIBC" | grep -vE "^(_ITM_|__gmon_start__|__cxa_finalize|stderr|native_stub_hit)$" \
+    | sed "s/.*/__attribute__((weak)) void \\0(void){ native_stub_hit(\"\\0\"); }/" >> /tmp/auto_stubs.c
+  echo "auto-stubbed $(($(wc -l < /tmp/auto_stubs.c)-1)) still-undefined symbols (not in backend)"
+  gcc $CF -c /tmp/auto_stubs.c -o /tmp/auto_stubs.o
+  gcc -m32 -Wl,--allow-multiple-definition -Wl,--gc-sections -Wl,-T,tools/native/runtime/arena/arena.ld \
+      /tmp/batch.o $objs $back /tmp/auto_stubs.o -lm -o /tmp/nbatch 2>/tmp/link.err \
+    || { echo "LINK FAILED:"; head -25 /tmp/link.err; exit 1; }
   /tmp/nbatch
 '
