@@ -1785,3 +1785,16 @@ g_screenCenterDefaultY = 0x001A734C; // CONFIRMED - s32 default screen-centre Y,
 // --- sound bank handles block alias base (func_00270D60) ---
 g_soundBankHandlesBlk = 0x00189E20; // CONFIRMED - g_soundBankHandles(0x189E00)+0x20 base, +0x2290 reaches g_pHeroMoby (0x18C0B0) and +0x80 reaches g_heroPos (0x189EA0) - the cinematic-camera-key ptr/control fields read in func_00270D60. EU TODO
 
+// --- camera update helpers cluster (text/16E980) - Track-B names ---
+// Recorded as comments NOT active name=addr lines. Seven are INCLUDE_ASM func_ glabels
+// in text/16E980.c (active symbols would desync the .c glabel refs at re-split); the
+// exception is FindCameraSlotById (0x270290), which is a MATCHED bare-C body (unit 100%)
+// - keep the func_ name in the .c, identity here is documentation only. Ghidra plates set.
+// SnapshotCameraState      = 0x002701C0; // CONFIRMED - CopyQwords active cam 0xA0 block + 0x280 history into snapshot bufs, sets g_cameraSnapshotPtr. EU 0x00270020
+// RunCameraCallbacks       = 0x00270220; // CONFIRMED - invokes g_cameraCallbacks[0..count] then clears g_cameraCallbackCount. EU 0x00270080
+// FindCameraSlotByType     = 0x00270290; // CONFIRMED (MATCHED real-C func_00270290, doc'd in 16E980.c) - linear scan of g_cameraSlots (base 0x1B56D0, 48 slots stride 0xA0) for the type field (+0x86) == arg, returns slot or NULL. EU 0x002700F0
+// UpdateCameraHelperMobySlot = 0x00270500; // CONFIRMED - lazily spawns or frees g_cameraHelperMoby per camera flag +0x86. EU 0x00270360
+// ComputeCameraOrbitAngles = 0x00270B68; // UNCONFIRMED name - converts a pos/orient delta into two asin-based angles + length triple. EU 0x002709C8
+// BuildHeroCameraBasis     = 0x00270D60; // CONFIRMED behavior - normalizes hero moby axes then ComputeCameraOrbitAngles. EU 0x00270BC0
+// BeginCameraTransitionKind2Pair = 0x00270E40; // CONFIRMED - under g_bCameraTransitionKind==0, seeds transition target pos/quat pair (0x1B54D0/E0) from source (0x1B5460/70), adds g_heroPos_D0 when the pending-kind byte 0x1B5413 == 2. EU 0x00270CA0
+// ApplyCameraTransitionStep = 0x002712E8; // CONFIRMED - per-frame ease of yaw pitch radius, rebuilds g_cameraMatrix rows (0x1B54F0/5500/5510) + writes g_flCameraPos, returns 1 when no frames left. EU 0x00271178
