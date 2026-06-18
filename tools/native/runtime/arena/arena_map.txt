@@ -2,7 +2,7 @@
 # storage symbol: g_dataArena  ==  __gamedata_start (linker)
 # seed: memcpy snapshot[rom_addr] -> g_dataArena[rom_addr - base]
 #       for rom_addr in [base, base+span).
-# base 0x138180  span 0x146780  placed 436
+# base 0x138180  span 0x146780  placed 439
 # columns: <symbol> <rom_addr> <arena_offset>
 D_138180 0x138180 0x0
 g_padButtonsHeld 0x138340 0x1C0
@@ -213,6 +213,7 @@ D_001ABD20 0x1ABD20 0x73BA0
 D_1ABD48 0x1ABD48 0x73BC8
 g_tieDrawTemplate 0x1ACAE0 0x74960
 g_vendorCaptionFmt 0x1AD338 0x751B8
+D_1AD564 0x1AD564 0x753E4
 D_001AD7C4 0x1AD7C4 0x75644
 g_voiceTrigger 0x1AD7C4 0x75644
 D_001AD7C8 0x1AD7C8 0x75648
@@ -299,6 +300,7 @@ g_pMobyGroupIterCursor 0x1B1CB8 0x79B38
 g_mobyGroupIterSlot 0x1B1CBC 0x79B3C
 g_pMobyGroupIterMoby 0x1B1CC0 0x79B40
 g_gameStateStack 0x1B1CD0 0x79B50
+g_particleFarFadeMax 0x1B1D20 0x79BA0
 D_001B1E90 0x1B1E90 0x79D10
 D_001B1FA8 0x1B1FA8 0x79E28
 g_pShrubSegmentOpenTag 0x1B2034 0x79EB4
@@ -334,6 +336,7 @@ g_activeCamera 0x1B5310 0x7D190
 g_cameraHelperMoby 0x1B53E4 0x7D264
 g_cameraTransitionState 0x1B5410 0x7D290
 g_cameraMatrix 0x1B54F0 0x7D370
+g_bCameraUnderwater 0x1B5580 0x7D400
 g_cameraSlots 0x1B56D0 0x7D550
 g_cameraSnapshot 0x1B74D0 0x7F350
 g_cameraSnapshotPtr 0x1B7540 0x7F3C0

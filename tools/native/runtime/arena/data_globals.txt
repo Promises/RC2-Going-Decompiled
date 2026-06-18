@@ -434,3 +434,6 @@ g_renderTaskList
 g_renderTaskWorkBuf
 D_262D30
 D_262D98
+g_bCameraUnderwater
+g_particleFarFadeMax
+D_1AD564

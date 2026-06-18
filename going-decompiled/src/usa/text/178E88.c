@@ -239,7 +239,41 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027A138);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", BuildFrameViewMatrices);
 
+/* Camera fog/particle setup driven by the underwater state. */
+extern s32 g_bCameraUnderwater;   /* 0x1B5580 */
+extern s32 g_particleFarFadeMax;  /* 0x1B1D20 far-fade clamp */
+extern u8  D_1AD564[];            /* 0x1AD564 underwater fog params {b,b,b,_, f,f,f,f} */
+
+/* func_0027A550: load the camera fog block (3 colour bytes + 4 floats) into the
+ * camera/projection scratch (g_sceneActorMobys+0x674 = D_1B8FC0, +0x218..+0x238)
+ * and set the particle far-fade clamp - from the underwater params (D_1AD564) +
+ * fade 0x40000 when g_bCameraUnderwater, else the normal block (g_blobShadowCount
+ * +0x4) + fade 0x1F4000 - then rebuild the camera projection and clear the
+ * screen-grab pending word (g_blobShadowCount+0x18). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027A550);
+#else
+void func_0027A550(void) {
+    u8 *vp = g_sceneActorMobys + 0x674;
+    u8 *f;
+    if (g_bCameraUnderwater != 0) {
+        f = D_1AD564;
+        g_particleFarFadeMax = 0x40000;
+    } else {
+        f = (u8 *)g_blobShadowCount + 0x4;
+        g_particleFarFadeMax = 0x1F4000;
+    }
+    *(s32 *)(vp + 0x230) = f[0];
+    *(f32 *)(vp + 0x22C) = *(f32 *)(f + 0x10);
+    *(s32 *)(vp + 0x234) = f[1];
+    *(s32 *)(vp + 0x238) = f[2];
+    *(f32 *)(vp + 0x218) = *(f32 *)(f + 0x4);
+    *(f32 *)(vp + 0x21C) = *(f32 *)(f + 0x8);
+    *(f32 *)(vp + 0x228) = *(f32 *)(f + 0xC);
+    BuildCameraProjection();
+    *(s32 *)((u8 *)g_blobShadowCount + 0x18) = 0;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", LookupOcclusionGridCell);
 
