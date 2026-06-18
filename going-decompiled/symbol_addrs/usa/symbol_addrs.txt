@@ -210,6 +210,48 @@ snd_PrintError = 0x00115D48; // CONFIRMED - 989snd error/log printer (printf var
 AssertFail = 0x00115E38; // CONFIRMED - assert formatter (file,line,expr)
 DebugMalloc = 0x0028BCF8; // CONFIRMED role - 16-byte-aligned bump allocator
 
+// === Track-B 989snd EE->IOP command-id wrapper map (cod/0321A0 unit, block 0x132828..0x133988). ===
+// DOC-ONLY (no active name=addr): every entry below is a thin per-command wrapper already present
+// as matched bare-C or INCLUDE_ASM in src/usa/cod/0321A0.c, so adding active symbols here would
+// desync the carve. Recorded for the strategic M3-audio read. CLASSIFICATION: snd_QueueCommandToRing
+// entries are ASYNC (ring-buffered, NON-blocking, CPU-SIDE marshalling - portable). snd_SendCommandSync
+// entries are SYNC (BLOCKING sceSifCallRpc to the IOP - IOP/SPU-HARDWARE-BOUNDARY, M3-audio territory,
+// deadlock with no IOP backend). All sub-op semantics live on the IOP 989snd module not this ELF =
+// UNCONFIRMED. One entry per line. addr -> cmd id, payload bytes, sync/async, EU twin.
+// 0x00132828 cmd 0x08 payload 0    ASYNC  matched   EU TODO
+// 0x00132858 cmd 0x06 payload 4    ASYNC  matched   EU TODO
+// 0x00132888 cmd 0x09 payload 8    ASYNC  matched   EU TODO
+// 0x001328C0 cmd 0x60 payload 0x1C ASYNC  INCLUDE_ASM (renamable) EU twin 0x00132920
+// 0x00132938 cmd 0x0B payload 4    ASYNC  matched   EU TODO  callers InitSoundEmitterSystem etc
+// 0x00132978 cmd 0x0D payload 8    ASYNC  matched   EU TODO
+// 0x001329B0 cmd 0x4E payload 0x0C ASYNC  matched   EU TODO
+// 0x00132A70 cmd 0x15 payload 4    ASYNC  matched   EU TODO  callers StepDialogVoiceChannel UpdateSoundEmitters
+// 0x00132AC8 cmd 0x18 payload 0    ASYNC  matched   EU TODO
+// 0x00132AF8 cmd 0x16 payload 4    ASYNC  matched   EU TODO
+// 0x00132B28 cmd 0x17 payload 4    ASYNC  matched   EU TODO
+// 0x00132B58 cmd 0x19 payload 4    ASYNC  matched   EU TODO  forwards completion-cb+ctx
+// 0x00133220 flag set g_sndDeferFlush=1 (suppress ring auto-flush)  CPU-SIDE  INCLUDE_ASM (renamable) EU twin 0x00133280
+// 0x00133230 flag clear + one snd_Pump (resume+flush)  mostly CPU-SIDE  matched  EU twin 0x00133290
+// 0x00133250 cmd 0x2A payload 0x10 SYNC   INCLUDE_ASM (renamable) IOP-ready init  EU twin 0x001332B0
+// 0x00133310 cmd 0x34 payload 0    ASYNC  matched   EU TODO
+// 0x001333D0 cmd 0x2D payload 4    ASYNC  matched   EU TODO
+// 0x00133430 cmd 0x32 payload 4    ASYNC  matched   EU TODO  forwards completion-cb+ctx
+// 0x00133460 cmd 0x4F payload 4    ASYNC  matched   EU TODO  forwards completion-cb+ctx
+// 0x00133490 cmd 0x36 payload 4    SYNC   matched   EU TODO
+// 0x00133710 cmd 0x50 payload 0x14 ASYNC  matched   EU TODO
+// 0x00133750 cmd 0x51 payload 8    ASYNC  matched   EU twin 0x00133730  music-stream control (StartLevelMusicStream)
+// 0x00133788 cmd 0x10 payload 0x10 ASYNC  matched   EU TODO
+// 0x001337F0 cmd 0x4A payload 0    SYNC   matched   EU twin 0x00133850
+// 0x00133820 cmd 0x4B payload 0    SYNC   matched   EU twin 0x00133880
+// 0x00133850 cmd 0x3B payload 0x18 SYNC   matched   EU twin 0x001338B0  caller func_00350520
+// 0x00133890 cmd 0x3D payload 0    SYNC   matched   EU twin 0x001338F0
+// 0x001338C8 cmd 0x3C payload 0    SYNC   matched   EU twin 0x00133928
+// 0x001338F0 cmd 0x3E payload 0x14 SYNC   matched   EU twin 0x00133950
+// 0x00133930 cmd 0x5A payload 8    SYNC   matched   EU twin 0x00133990
+// 0x00133960 cmd 0x5B payload 0    SYNC   matched   EU twin 0x001339C0
+// 0x00133988 int scale (x*0x5F4)/0x2E5 = x*1524/741  CPU-SIDE math  INCLUDE_ASM (renamable) EU twin 0x001339E8
+// 0x00131A98 NOT-SOUND outlier - OSD/RTC local-time (tz+DST) adjust for save timestamps  CPU-SIDE  cod/015180 unit
+
 // === Track-B GUI subsystem (in-binary cluster ~0x336000..0x350000 - gui/*.cpp via AssertFail attribution). ===
 GuiPoolInit = 0x00337C60; // CONFIRMED (memoryManagement.cpp assert line 37) - fixed-block free-list pool header init
 GuiPoolAlloc = 0x00337CE8; // CONFIRMED - pop free-list head else bump-allocate one node - 37+ widget ctors call it
