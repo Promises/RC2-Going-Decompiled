@@ -12,7 +12,14 @@
  *  makes these byte-exact.
  * ------------------------------------------------------------------------- */
 
+#ifdef TARGET_NATIVE
+/* gcc -m32 cannot emulate the 128-bit integer (mode(TI)); these units only
+ * COPY/zero quadwords (no 128-bit arithmetic), so a 16-byte aligned struct is
+ * an exact portable stand-in. Inert to the matching build (keeps mode(TI)). */
+typedef struct { unsigned long long _q[2]; } __attribute__((aligned(16))) u_long128;
+#else
 typedef unsigned long u_long128 __attribute__((mode(TI)));
+#endif
 
 extern u8 g_listenerPosHistory[]; /* 0x188660 - ring of 4 listener vec4 */
 

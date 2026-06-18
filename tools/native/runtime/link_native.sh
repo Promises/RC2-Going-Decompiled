@@ -22,11 +22,22 @@ CTX="${DOCKER_CONTEXT:-colima-ee-x86}"
 docker --context "$CTX" run --rm -v "$ROOT":/work -w /work "$IMG" sh -c '
   set -e
   CFLAGS="-m32 -DTARGET_NATIVE -O0 -I/work/going-decompiled/include -I/work/tools/native -I/work/tools/native/runtime/rt0 -include /work/tools/native/mips_callees.h -ffunction-sections -fdata-sections -Wno-implicit-function-declaration -Wno-int-conversion -Wno-builtin-declaration-mismatch"
-  objs=""
+  objs=""; total=0; okc=0; failed=""
   for f in $(grep -rl TARGET_NATIVE going-decompiled/src); do
-    b=$(basename "$f" .c)
-    gcc $CFLAGS -c "$f" -o /tmp/$b.o 2>/dev/null && objs="$objs /tmp/$b.o"
+    b=$(basename "$f" .c); total=$((total+1))
+    if gcc $CFLAGS -c "$f" -o /tmp/$b.o 2>/tmp/$b.cerr; then
+      okc=$((okc+1)); objs="$objs /tmp/$b.o"
+    else
+      failed="$failed $b"
+    fi
   done
+  echo "=== units compiled (VM gcc): $okc / $total ==="
+  if [ -n "$failed" ]; then
+    echo "!! UNITS DROPPED (do not compile under gcc -m32):$failed"
+    echo "!! their symbols are ABSENT from this link; the residual below is only"
+    echo "!! over the units that compiled. See first error per dropped unit:"
+    for b in $failed; do echo "   $b: $(grep -m1 "error:" /tmp/$b.cerr)"; done
+  fi
   gcc $CFLAGS -c tools/native/runtime/arena/arena_storage.c -o /tmp/arena_storage.o
   gcc $CFLAGS -c tools/native/runtime/rt0/stubs.c           -o /tmp/stubs.o
   gcc $CFLAGS -c tools/native/runtime/rt0/native_stub.c     -o /tmp/native_stub.o

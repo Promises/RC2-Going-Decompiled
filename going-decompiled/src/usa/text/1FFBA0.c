@@ -19,7 +19,13 @@
  */
 
 /* 128-bit quadword type (lq/sq copies), as in the sibling carve units. */
+#ifdef TARGET_NATIVE
+/* gcc -m32 cannot emulate mode(TI); copy/zero-only here, so a 16-byte aligned
+ * struct is an exact portable stand-in. Inert to the matching build. */
+typedef struct { unsigned long long _q[2]; } __attribute__((aligned(16))) u_long128;
+#else
 typedef unsigned long u_long128 __attribute__((mode(TI)));
+#endif
 
 /* gp-addressable small globals (<= 8 bytes -> %gp_rel). */
 extern void *g_pHeroGroundMoby; /* 0x1AD7CC hero support/ground moby ptr */
@@ -263,7 +269,7 @@ void *func_00300190(s32 classId, s32 animArg) {
     *(f32 *)(m + 0x18) = 900.0f;     /* 0x44610000 */
     *(f32 *)(m + 0x1C) = 1.0f;       /* 0x3F800000 */
     *(f32 *)(m + 0x10) = 5.0f;
-    *(u_long128 *)(m + 0xF0) = 0;
+    *(u_long128 *)(m + 0xF0) = (u_long128){0};  /* sq zero (portable: native u_long128 is a struct) */
     if (animArg < 0) {
         void *ctrl = *(void **)(m + 0x24);
         if (ctrl != 0 && *(u8 *)((u8 *)ctrl + 0xC) >= 2) {

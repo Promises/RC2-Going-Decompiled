@@ -94,7 +94,13 @@ extern CameraSysState g_cameraState;
 /* Camera transition state @0x1B5410 (+0x02 kind, Vec4 src/cur pos pairs).
  * The 16-byte Vec4 struct assignments compile to the original block-move
  * shape (address regs + offset-0 lq/sq). */
+#ifdef TARGET_NATIVE
+/* gcc -m32 cannot emulate mode(TI); copy-only here, so a 16-byte aligned struct
+ * is an exact portable stand-in. Inert to the matching build. */
+typedef struct { unsigned long long _q[2]; } __attribute__((aligned(16))) u_long128;
+#else
 typedef unsigned long u_long128 __attribute__((mode(TI)));
+#endif
 typedef struct Vec4 { f32 x, y, z, w; } __attribute__((aligned(16))) Vec4;
 typedef struct CameraTransitionState {
     /* 0x00 */ u8 pad0[2];

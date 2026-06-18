@@ -51,7 +51,13 @@ __asm__(".extern D_1A8BD0, 12");
 __asm__(".extern g_skillPointFlags, 12");
 __asm__(".extern g_abLevelAvailableFlags, 12");
 
+#ifdef TARGET_NATIVE
+/* gcc -m32 cannot emulate mode(TI); copy-only here, so a 16-byte aligned struct
+ * is an exact portable stand-in. Inert to the matching build. */
+typedef struct { unsigned long long _q[2]; } __attribute__((aligned(16))) u_long128;
+#else
 typedef unsigned long u_long128 __attribute__((mode(TI)));
+#endif
 typedef struct Vec4 { f32 x, y, z, w; } Vec4;
 typedef union QVec { u_long128 q; Vec4 v; } QVec;
 
