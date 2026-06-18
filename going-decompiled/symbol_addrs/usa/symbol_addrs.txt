@@ -1822,6 +1822,7 @@ g_quickSelectMap = 0x00139587; // CONFIRMED addr - quick-select id map, byte[0] 
 g_vramTextureBase_28 = 0x001A730C; // CONFIRMED - g_vramTextureBase(0x1A72E4)+0x28, VRAM base arg passed to func_0026FC88 in func_0026FE58 (DAT_001a730c). EU TODO
 g_bRawReadFellBack_34 = 0x001A7468; // CONFIRMED - g_bRawReadFellBack(0x1A7434)+0x34, latches the texture descriptor handle word (desc[0]) in func_0026FE58 (DAT_001a7468). EU TODO
 // --- screen-space sprite fx defaults (DrawScreenSpriteFxQueue) ---
+// ProjectWorldToScreen = 0x0027A138; // CONFIRMED - void(f32 *out, ScreenSpriteFx *fx): projects a world point to screen coords; called by name from DrawScreenSpriteFxQueue/DrawLensFlare (#else, 16E980.c). Defined as INCLUDE_ASM func_0027A138 in text/178E88.c - recorded as a comment (not active) to avoid renaming that glabel at re-split; the native PROVIDE pipeline reads this. EU TODO
 g_screenCenterDefaultX = 0x001A7348; // CONFIRMED - s32 default screen-centre X, IntToFloat'd as the direct-entry sprite x in DrawScreenSpriteFxQueue (DAT_001a7348). EU TODO
 g_screenCenterDefaultY = 0x001A734C; // CONFIRMED - s32 default screen-centre Y, IntToFloat'd as the direct-entry sprite y in DrawScreenSpriteFxQueue (DAT_001a734c). EU TODO
 // --- sound bank handles block alias base (func_00270D60) ---
