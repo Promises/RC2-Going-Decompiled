@@ -24,6 +24,10 @@
 extern void func_00278EC0(void);
 extern void func_00278F90(void);
 
+/* Inventory-order rebuild helpers (text/188858). */
+extern s32 IsItemUnlockedAtProgress(s32 itemId, s32 progress);
+extern s32 AddItemToInventoryOrder(s32 itemId);
+
 /*
  * func_00291980 / func_002919A0 — thin frame-keeping forwarders to two
  * subsystem entry points in text/16E980's neighbourhood. The original does not
@@ -85,7 +89,22 @@ s32 MapIsLevelRevealed(s32 level) {
  *     0x29C separately (3 insns); plus the same `daddu` zero-idiom.
  */
 
+/* func_002912B8(progress): rebuild the inventory quick-select order. Walks item
+ * ids 0..0x37 and, for each that IsItemUnlockedAtProgress reports available at
+ * the given story progress (id 0 excluded), appends it via AddItemToInventoryOrder
+ * (which owns the g_inventoryOrder writes). The matching build keeps the asm. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002912B8);
+#else
+void func_002912B8(s32 progress) {
+    s32 i;
+    for (i = 0; i < 0x38; i++) {
+        if (IsItemUnlockedAtProgress(i, progress) != 0 && i != 0) {
+            AddItemToInventoryOrder(i);
+        }
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291320);
 

@@ -356,12 +356,43 @@ s32 FindWeaponSlotByName(s32 name) {
  * cc1 does not reproduce. Left INCLUDE_ASM (not yet fully traced). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_00288F30);
 
-/* IsItemUnlockedAtProgress(itemId): test whether `itemId` is unlocked at the
- * current story-progress level (9-entry gate scan; two callee-saves).
+s32 IsVendorUpgradesUnlocked(void); /* fwd: defined below in this unit */
+
+/* IsItemUnlockedAtProgress(itemId, progress): whether `itemId` may appear in the
+ * vendor at the given story-progress level. Item 9 is a special case (unlocked
+ * once the vendor upgrade tier is). Otherwise it scans the {itemId, minProgress}
+ * gate table D_240340 (stride 8, -2 sentinel): an item is unlocked when it has a
+ * gate entry whose minProgress it has reached AND progress is still in the early
+ * band (< 0x15). Returns 0 otherwise.
  *
- * WALL: two callee-saves (0x20 frame) + a jal-gated 9-entry scan whose branch
- * colouring cc1 does not reproduce. Left INCLUDE_ASM (not yet fully traced). */
+ * The matching build keeps the asm (two callee-saves + a jal-gated scan whose
+ * branch colouring cc1 does not reproduce). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", IsItemUnlockedAtProgress);
+#else
+s32 IsItemUnlockedAtProgress(s32 itemId, s32 progress) {
+    s32 *entry;
+    s32 early;
+
+    if (itemId == 9 && IsVendorUpgradesUnlocked() != 0) {
+        return 1;
+    }
+    if (D_240340[0] == -2) {
+        return 0;
+    }
+    early = (progress < 0x15);
+    entry = D_240340;
+    do {
+        s32 id   = entry[0];
+        s32 minP = entry[1];
+        entry += 2;
+        if (id == itemId && progress >= minP && early) {
+            return 1;
+        }
+    } while (entry[0] != -2);
+    return 0;
+}
+#endif
 
 /*
  * func_00289190(key): return 1 if `key` appears as the first word of any

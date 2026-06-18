@@ -2,7 +2,7 @@
 # storage symbol: g_dataArena  ==  __gamedata_start (linker)
 # seed: memcpy snapshot[rom_addr] -> g_dataArena[rom_addr - base]
 #       for rom_addr in [base, base+span).
-# base 0x138180  span 0x146780  placed 427
+# base 0x138180  span 0x146780  placed 428
 # columns: <symbol> <rom_addr> <arena_offset>
 D_138180 0x138180 0x0
 g_padButtonsHeld 0x138340 0x1C0
@@ -397,6 +397,7 @@ g_weaponTable 0x239B20 0x1019A0
 g_weaponSlotTable 0x239B2C 0x1019AC
 g_weaponClassTable 0x239B34 0x1019B4
 D_00239B8C 0x239B8C 0x101A0C
+D_240340 0x240340 0x1081C0
 D_2403D0 0x2403D0 0x108250
 g_nActiveTextTableCount 0x254E24 0x11CCA4
 D_254E48 0x254E48 0x11CCC8
