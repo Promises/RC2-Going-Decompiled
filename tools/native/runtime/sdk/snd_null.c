@@ -17,6 +17,12 @@
  *                       989snd unit - then pumps). Drop both; return 0.
  *   func_00132AC8     - snd_QueueCommandToRing(0x18) wrapper; nothing reaches the
  *                       (absent) IOP, so dropping the queue is a no-op.
+ *   snd_PlaySample    - cmd 0x2C start-voice command-ring wrapper. Only sends the
+ *                       IOP play command (no EE-side game state - the callers
+ *                       StartAmbientVoice / StartSecondaryVoice / ChainSecondary-
+ *                       Voice set the voice state themselves before calling, and
+ *                       all discard its returned voice handle). Caller-cleaned
+ *                       cdecl makes the (void) no-op ABI-safe vs its 8+ args.
  */
 #ifdef TARGET_NATIVE
 #include "common.h"
@@ -24,5 +30,6 @@
 s32 snd_Pump(void)        { return 0; }
 s32 func_00133230(void)   { return 0; }
 s32 func_00132AC8(void)   { return 0; }
+s32 snd_PlaySample(void)  { return 0; }
 
 #endif /* TARGET_NATIVE */

@@ -228,4 +228,3 @@ g_loadedArmorVariant
 g_loadedHeldItemModelId
 g_pSkyShellSpinRates
 sceCdReadClock
-snd_PlaySample
