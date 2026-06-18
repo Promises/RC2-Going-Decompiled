@@ -840,7 +840,7 @@ g_proceduralAnimSlotTimer = 0x001B1A80; // CONFIRMED - u32[0x10] per-slot frame 
 g_pHeroMoby = 0x0018C0B0; // CONFIRMED identity - hero (Ratchet) moby pointer. ClassifyTargetProximity/AcquireMobyAutoTarget load it as the lock-on reference, measure distance from candidates to (g_pHeroMoby+0x10)=its world position, return it as the auto-target anchor, CalcMobyTargetThreatDist biases +42 toward it. moby+0x10 pos == g_heroPos. Zeroed by InitLoadingSceneSystem, set to the class-0 cast member by cinematic playback FUN_002ec038. Live per-frame gameplay writer is overlay-side (0x01800000), so the gameplay assignment is not in this image, but every reader treats it as the player. Read by 90+ systems
 g_heroState = 0x0018C0B4; // CONFIRMED - hero (Ratchet) movement/action state code (small int), right after g_pHeroMoby. Branched on by many readers SpawnThrusterExhaustFlameFx denser/brighter exhaust on states 8 and 0x7b(123) (boost), UpdateLockOnScannerGadget extends scan range on 0x1d, TrackHeroMotionForCamera special-cases !=0x11, also grab/throw + turret + bolt-pickup + nanotech FX. Exact enum value->action map (idle/walk/run/jump/grind/swim/boost) UNCONFIRMED, per-frame writer overlay-side
 g_heroFacingDir = 0x0018A0E0; // CONFIRMED - hero (Ratchet) facing/forward unit direction vec3 (0x18A0E0..E8). Reset by InitLoadingSceneSystem to (0,0,-1) default -Z, same block that zeroes g_pHeroMoby. TrackHeroMotionForCamera negates it (len -1.0) to derive smoothed camera-facing 0x1B5340. Direction PARAM for billboard/decal sprite draws + gadget-beam arc builders. Per-frame writer overlay-side
-g_cameraZoneType = 0x0018C2C0; // PARTIAL - current camera zone/type id (int). Only 2 readers in this image, both reads (writer overlay-side). TestCameraTakeover rule-7 slots take over only when their type field (+0x86) equals it; TrackHeroMotionForCamera bypasses the hero-height spring smoothing (snaps x/y only) when it equals 0x50. Exact value->zone map UNCONFIRMED. EU TODO
+g_cameraZoneType = 0x0018C2C0; // PARTIAL - current camera zone/type id (int). Only 2 readers in this image, both reads (writer overlay-side). TestCameraTakeover rule-7 slots take over only when their type field (+0x86) equals it - TrackHeroMotionForCamera bypasses the hero-height spring smoothing (snaps x/y only) when it equals 0x50. Exact value->zone map UNCONFIRMED. EU TODO
 
 // === Track-B boot/init + IOP module loading + title front-end, and memory/heap arena layer (round 17, adversarially verified). ===
 BootSystemInit = 0x002914D8; // CONFIRMED - one-shot boot bring-up at top of LoadLevelAndInitHealth - hw resets, SetVideoMode, vblank ISR, IOP reboot with IOPRP255.IMG, RPC/cd re-init, volume-ID sector to BuildSaveGamePaths, LoadDiscToc, boot WAD decompress to 0x614000 + 10 IRX loads, controller/mc/sound/file-load init, RCNT1 start, cinematic queue reset - full order in plate comment
@@ -1011,7 +1011,7 @@ FlushPendingTexUploads = 0x0029DF18; // type:func
 InitFmvPlaybackEngine = 0x00350150; // PARTIAL - movie playback bring-up - IPU thread + vblank/GIF handlers
 OnFmvVblankFlip = 0x00350D08; // CONFIRMED mechanism - field-synced FMV frame display via GIF sceDmaSend
 OnFmvGifDmaInterrupt = 0x00350ED8; // UNCONFIRMED internals - DMAC ch2 handler registered for FMV
-g_frameDmaCursor = 0x001B2228; // CONFIRMED - frame VIF1 chain write cursor - the GS DMA builder every draw call appends through
+g_frameDmaCursor = 0x001B2228; // CONFIRMED - per-frame render-DMA WRITE pointer (Ghidra g_pFrameDmaCursor, uint*) - the GS DMA chain builder every draw/emit call appends through then advances - segment helpers reserve a qword by adding 0x10. RENDER-OUTPUT pointer only, no game-logic reader - safe to exclude from the state watch
 g_2dBatchOpenTag = 0x001B1574; // CONFIRMED - open CNT tag of the current 2D batch segment
 g_2dBatchCloseTag = 0x001B1578; // CONFIRMED - close tag patched by End2dDrawBatch for the upload detour
 g_mobySegmentOpenTag = 0x001B1AD0; // CONFIRMED - open tag of the moby draw segment
@@ -1097,9 +1097,9 @@ EmitTieDrawPackets = 0x002F2CE0; // CONFIRMED mechanism - per-class per-LOD tie 
 EmitTieLodMorphPackets = 0x002F3890; // PARTIAL - emission for the LOD-transition list with the tie-morph microcode
 PatchTieVertexLighting = 0x002F4CD0; // CONFIRMED - post-fence-0x202 relight - dir+point lights rotated into instance space
 PatchTiePacketTex0 = 0x002F1C90; // CONFIRMED mechanism - patches TEX0 TBPs of visible tie class packets
-BuildShrubDrawSegment = 0x002E1FD8; // CONFIRMED - shrub layer entry (mask bit 0x8, fence 0x204)
+BuildShrubDrawSegment = 0x002E1FD8; // CONFIRMED - shrub layer entry (mask bit 0x8, fence 0x204) - OPENS a DMA-chain segment - reserves one tag qword at g_frameDmaCursor, stashes that address in g_pShrubSegmentOpenTag and advances cursor by 0x10, resets g_nVramAllocCursor, FlushCache, CullAndEmitShrubs, kicks the relight list, then CloseShrubDrawSegment. Single caller RenderFrame 0x27C3D0
 CullAndEmitShrubs = 0x002E2040; // CONFIRMED mechanism - shrub instance cull+emit with two shrub microcode blobs + sway sine table - does NOT test the occlusion mask
-CloseShrubDrawSegment = 0x002E1DB0; // CONFIRMED - splices shrub texture uploads - prints the shrub texture overflow string 0x1ABE10
+CloseShrubDrawSegment = 0x002E1DB0; // CONFIRMED - CLOSES the segment opened by BuildShrubDrawSegment - reads g_pShrubSegmentOpenTag back and writes DMATAG next-tags (0x20000000, word1 chain address, words2/3 zero) to splice UploadShrubTextures uploads ahead of the shrub packets - prints overflow string 0x1ABE10 above 0x400000 VRAM - tracks g_shrubVramPeak. Sole caller BuildShrubDrawSegment
 UploadShrubTextures = 0x002E37A0; // CONFIRMED role - shrub texture upload packets - fills g_shrubTexVramTable
 PatchShrubVertexLighting = 0x002E3A50; // CONFIRMED - post-fence-0x204 relight - 24 packed colors per instance via VU0 microprograms
 PatchShrubPacketTex0 = 0x002E1ED0; // CONFIRMED mechanism - patches TEX0 TBPs of visible shrub class packets
@@ -1164,8 +1164,9 @@ g_tieVramLruTail = 0x001B2164; // PARTIAL - LRU tail
 g_tieVramLruSize = 0x001B2168; // PARTIAL - LRU size
 g_tieTexVramTable = 0x0021D000; // CONFIRMED - tie texture VRAM table
 g_tieVisibleClassList = 0x0021D600; // CONFIRMED - negative-terminated visible tie class index list
-g_pShrubSegmentOpenTag = 0x001B2034; // CONFIRMED - shrub segment head tag
-g_shrubVramPeak = 0x001B203C; // CONFIRMED - peak shrub texture VRAM use
+g_pShrubSegmentOpenTag = 0x001B2034; // CONFIRMED - render-DMA open-tag bookkeeping pointer (uint*) - BuildShrubDrawSegment stashes the reserved qword address here and advances g_frameDmaCursor by 0x10 [WRITE 0x2E1FF4] - CloseShrubDrawSegment reads it back to back-patch DMATAG next-tags 0x20000000 that splice the shrub texture uploads ahead of the shrub packets [5 READs 0x2E1DB8..0x2E1E68]. Touched only by the Build/Close pair - render-output, safe to exclude from state watch
+g_shrubVramPeak = 0x001B203C; // CONFIRMED - peak shrub texture VRAM use - high-water mark, only READ+WRITE by CloseShrubDrawSegment (0x2E1E40/0x2E1E4C) comparing against UploadShrubTextures return - diagnostic, render-output
+// EU TODO (verified by exact instruction signature, +0x80 region delta - not yet renamed in EU, evidence-driven apply pending): BuildShrubDrawSegment EU=0x002E1F90 (open-tag WRITE @0x2E1FAC), CloseShrubDrawSegment EU=0x002E1D68 (5 READs of open-tag), g_pShrubSegmentOpenTag EU=0x001B20B4, g_shrubVramPeak EU=0x001B20BC, g_frameDmaCursor EU=0x001B22A8
 g_pShrubInstanceArray = 0x001B2018; // PARTIAL - shrub instances stride 0x20
 g_pShrubMatrixArray = 0x001B2020; // PARTIAL - shrub matrices stride 0x40
 g_pShrubColorArray = 0x001B2024; // PARTIAL - 24 packed colors per instance stride 0x60
