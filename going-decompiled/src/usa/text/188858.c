@@ -561,16 +561,44 @@ s32 StartCinematicFromQueue(CinematicQueue *q) {
 }
 #endif
 
+/* Targets touched by RequestLevelExit (all arena-placed / native). */
+extern s32  g_nLevelExitDestination;   /* 0x1B1600 next level/scene id */
+extern u8   D_1393E0[];                /* 0x1393E0 level-transition latch blob */
+extern u8   g_nSaveLoadStatusCode[];   /* 0x1A7420 save/load popup status block */
+extern void CommitProgressCheckpoint(s32 a, s32 destination);
+void ClearSavePromptPending(void);     /* defined below in this unit */
+
 /* RequestLevelExit(destination, doSave): raise the in-level exit flag
- * (g_nLevelExitRequested) and record the destination; when destination != -1
- * also resets a transition latch (D_1393E0+0x17C/+0x18) and clears a save/load
- * status bit (g_nSaveLoadStatusCode+0x4 & ~0x200). When doSave is set, clears
+ * (g_nLevelExitRequested) and record the destination; when destination == -1
+ * (the "no explicit destination" sentinel) also resets a transition latch
+ * (D_1393E0+0x17C/+0x18) and clears a save/load status bit
+ * (g_nSaveLoadStatusCode+0x4 & ~0x200). When doSave is set, clears
  * the save-prompt gate and commits a progress checkpoint.
  *
- * WALL: a single-$31 frame but a mixed %gp_rel (exit flag / destination) +
- * %hi/%lo (status code, latch) addressing and two tail jal gates whose branch
- * colouring cc1 does not reproduce. Left INCLUDE_ASM. */
+ * The matching build stays INCLUDE_ASM (a single-$31 frame, but mixed %gp_rel
+ * (exit flag / destination) + %hi/%lo (status code, latch) addressing and two
+ * tail jal gates whose branch colouring cc1 does not reproduce). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", RequestLevelExit);
+#else
+void RequestLevelExit(s32 destination, s32 doSave) {
+    g_nLevelExitRequested = 1;
+    g_nLevelExitDestination = destination;
+    if (destination == -1) {
+        if (*(s32 *)(D_1393E0 + 0x17C) != 0) {
+            *(s32 *)(D_1393E0 + 0x17C) = 0;
+        }
+        if (*(s16 *)(D_1393E0 + 0x18) >= 0) {
+            *(s16 *)(D_1393E0 + 0x18) = (s16)destination;
+        }
+        *(s32 *)(g_nSaveLoadStatusCode + 0x4) &= ~0x200;
+    }
+    if (doSave != 0) {
+        ClearSavePromptPending();
+        CommitProgressCheckpoint(0, g_nLevelExitDestination);
+    }
+}
+#endif
 
 /* Non-zero while the main in-level frame loop has been asked to exit. */
 s32 IsLevelExitRequested(void) {

@@ -74,6 +74,7 @@ D_00261978
 D_00261BE8
 D_00262BA0
 D_138180
+D_1393E0
 D_1395B8
 D_139648
 D_18D0E8
@@ -340,6 +341,7 @@ g_nGameStatePrev
 g_nGlobalSoundDefs
 g_nGsPixelOffsetX
 g_nGsPixelOffsetY
+g_nLevelExitDestination
 g_nLevelExitRequested
 g_nMapActiveSlot
 g_nMapCurrentLevel

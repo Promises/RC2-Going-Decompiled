@@ -2,12 +2,13 @@
 # storage symbol: g_dataArena  ==  __gamedata_start (linker)
 # seed: memcpy snapshot[rom_addr] -> g_dataArena[rom_addr - base]
 #       for rom_addr in [base, base+span).
-# base 0x138180  span 0x146780  placed 423
+# base 0x138180  span 0x146780  placed 425
 # columns: <symbol> <rom_addr> <arena_offset>
 D_138180 0x138180 0x0
 g_padButtonsHeld 0x138340 0x1C0
 g_padButtonsPressed 0x138344 0x1C4
 g_fullScreenTintPacket 0x138850 0x6D0
+D_1393E0 0x1393E0 0x1260
 g_areaTable 0x1393E0 0x1260
 D_001393E8 0x1393E8 0x1268
 D_001393F0 0x1393F0 0x1270
@@ -263,6 +264,7 @@ g_fxHooksLateFuncs 0x1B1598 0x79418
 g_fxHooksLateArgs 0x1B15A8 0x79428
 g_fxHooksLateCount 0x1B15B8 0x79438
 g_blobShadowCount 0x1B15BC 0x7943C
+g_nLevelExitDestination 0x1B1600 0x79480
 g_gameTime 0x1B1608 0x79488
 g_globalSoundDefsPtr 0x1B162C 0x794AC
 g_occlusionOverrideMode 0x1B168C 0x7950C
