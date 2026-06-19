@@ -1023,6 +1023,11 @@ FlushPendingTexUploads = 0x0029DF18; // type:func
 InitFmvPlaybackEngine = 0x00350150; // PARTIAL - movie playback bring-up - IPU thread + vblank/GIF handlers
 OnFmvVblankFlip = 0x00350D08; // CONFIRMED mechanism - field-synced FMV frame display via GIF sceDmaSend
 OnFmvGifDmaInterrupt = 0x00350ED8; // UNCONFIRMED internals - DMAC ch2 handler registered for FMV
+FmvDisplayWorkerLoop = 0x00352868; // CONFIRMED - body of the FMV decode-thread (entry func_003527c8) - per picture fetches+DMAs the decoded frame, checks the playback FSM state word (stream+0xA8 ==1 stop), spin-yields until FmvFrameQueueGetWriteSlot frees a slot, builds per-tile GIF display chains (func_00350b60), then FmvFrameQueuePush commits the slot (EU 0x353D08 +0x14A0 - TODO name)
+FmvFrameQueueInit = 0x00352B30; // CONFIRMED - init the FMV decoded-frame display ring (FmvFrameQueue at g_pFmvArenaBase+0xD9168) - sets gsFrames/frames/writeIdx/count/capacity then clears each slot header {state=0,index=i}, called by InitFmvPlaybackEngine with capacity 2 (EU 0x353FD0 +0x14A0 byte-identical - TODO name)
+FmvFrameQueuePush = 0x00352BB8; // CONFIRMED - producer commit - under DI/EI marks frames[writeIdx].state=2, count++, writeIdx=(writeIdx+1)%capacity, called by FmvDisplayWorkerLoop (EU 0x354058 +0x14A0 - TODO name)
+FmvFrameQueueGetWriteSlot = 0x00352C30; // CONFIRMED - returns writable GS slot gsFrames+writeIdx*0xD0000 or 0 when full (count==capacity), spin-gated by FmvDisplayWorkerLoop (EU 0x3540D0 +0x14A0 byte-identical - TODO name)
+FmvFrameQueueGetDisplaySlot = 0x00352C80; // CONFIRMED - returns oldest queued decoded-frame slot frames+((writeIdx-count+cap)%cap)*0x138C0 or 0 when empty, read by OnFmvVblankFlip each field (EU 0x354120 +0x14A0 byte-identical - TODO name)
 g_frameDmaCursor = 0x001B2228; // CONFIRMED - per-frame render-DMA WRITE pointer (Ghidra g_pFrameDmaCursor, uint*) - the GS DMA chain builder every draw/emit call appends through then advances - segment helpers reserve a qword by adding 0x10. RENDER-OUTPUT pointer only, no game-logic reader - safe to exclude from the state watch
 g_2dBatchOpenTag = 0x001B1574; // CONFIRMED - open CNT tag of the current 2D batch segment
 g_2dBatchCloseTag = 0x001B1578; // CONFIRMED - close tag patched by End2dDrawBatch for the upload detour
