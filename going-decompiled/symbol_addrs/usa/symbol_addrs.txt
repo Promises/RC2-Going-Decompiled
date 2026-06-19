@@ -151,7 +151,7 @@ D_001BAC00 = 0x001BAC00; // size:0x90
 // +0x268/+0x26C black-fade rate/target). Without this pin spimdisasm attaches
 // the base to the far-away filler symbol D_001B2354 (+0x2E2C), forcing
 // raw-offset C.
-g_cameraState = 0x001B5180;
+g_cameraState = 0x001B5180; // CONFIRMED - CameraSysState in 16E980.c. IN-LEVEL overlay note - cs+0x000 to +0x180 is sentinel-init (0x7FFF0000 pattern), the HeroCamMotion sub-block cs+0x1A0 (0x1B5320, written by TrackHeroMotionForCamera) is live at static offsets in-level, but cs+0x190 activeCamera reads UNMAPPED 0x089C1000 in-level (overlay-resident camera object, NOT a frontend pointer) - so the camera transform heads (camPos +0x140, matrix) are overlay-managed not at these frontend offsets. See tools/native/camera_map_re.md
 
 // === Track-B PlayerStats globals (persistent save block @0x1A7A00). CONFIRMED via cheat CRC B3A71D10 + code trace. ===
 g_boltCount = 0x001A7A00; // u32 currency, add path CollectBolts, spend path VendorPurchaseStateMachine
