@@ -54,7 +54,6 @@ MatrixToEulerAngles
 McInit
 MeasureFont2Text
 MenuScreenDoAction
-MenuScreenLoad
 PostMobyHitEvent
 ProbeGroundHeight
 ProbeMobyGroundBelow

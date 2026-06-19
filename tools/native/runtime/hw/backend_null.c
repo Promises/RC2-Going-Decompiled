@@ -165,4 +165,15 @@ void func_00271FE8(void)            {} /* draw/cull context-flag (write-only); U
 u64  func_00133250(void)            { return 0; } /* blocking IOP snd RPC + snd_Pump drain loop -
                                         * deadlock headless; 0 = IOP-ready/success the callers want */
 
+/* ===========================================================================
+ * M5 - in-level driven-frame trap list (tester FINALIZED 2026-06-19,
+ * state/inlevel_trap_list.md). MenuScreenLoad is the only trap that is a
+ * weak-stub-only symbol (no #else body), so it gets its strong no-op here -
+ * which also un-traps its #else caller func_002CBA10 (-> MenuScreenLoad + 2
+ * particle-blob writes). The other 12 traps all have TARGET_NATIVE #else bodies
+ * (a strong no-op here would multiply-define), so they are shimmed in-place at
+ * the #else-body level - see the NATIVE_INLEVEL_SHIM guards in their units.
+ * =========================================================================== */
+void MenuScreenLoad(void)           {} /* blocking menu-screen asset load (caller func_002CBA10) */
+
 #endif /* TARGET_NATIVE */
