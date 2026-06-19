@@ -1066,9 +1066,21 @@ s32 func_0029DD40(s32 arg) {
  * not compiler-reachable C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DD80);
 
-/* func_0029DD90: toSPR DMA-kick helper (writes SADR/QWC/MADR at 0x1000D400,
- * CHCR 0x100) - called 4x from the sky piece stagers. Split off func_0029DD80
- * (4 orphan unreachable words). */
+/* func_0029DD90: toSPR (SPR-TO) DMA-kick helper — program the channel registers
+ * at 0x1000D400 (QWC @+0x80, sadr @+0x20, madr @+0x10) and start the transfer
+ * (CHCR=0x100 @+0x00); called 4x from the sky-piece stagers. The C body is
+ *   volatile u32 *ch = (volatile u32*)0x1000D400;
+ *   ch[0x20]=qwc; ch[8]=sadr; ch[4]=madr; ch[0]=0x100;
+ * and reproduces the single-base store sequence and exact offsets — but it is
+ * WALLED by two later-cc1 traits the pinned cc1 cannot match under this unit's
+ * fixed -O2 -G8 -fno-gcse recipe (best 68.75%):
+ *   (a) the original materialises the CHCR 0x100 constant LATE (just before the
+ *       final store, in source order), whereas the pinned cc1's insn scheduler
+ *       hoists `li $2,256` to the top; only -fno-schedule-insns2 keeps it late,
+ *       and that flag can't be added unit-wide without regressing the other 83.
+ *   (b) the original colours the base register $1 ($at) and the constant $2,
+ *       while the pinned cc1 picks $2/$3 (the same register-coloring wall as
+ *       func_0029C448/func_0029C5B0). Left as asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DD90);
 
 /* func_0029DDB0: hardware DMA busy-wait — spins on the CHCR busy bit (0x100) of
