@@ -1676,6 +1676,23 @@ g_GuiListRowVtable = 0x001AD9D8; // CONFIRMED - GuiListRow element vtable
 // TypeB/TypeC variant vtables are referenced in code as D_1ADA38 / D_1AD9F8
 // (installed at elem +0x30 by GuiElementInitTypeB/C). Descriptive g_ rename is a
 // future Track-B cleanup (would touch the existing D_1ADA38/D_1AD9F8 #else refs).
+//
+// === Recovered GUI struct types -> going-decompiled/include/gui.h (Track-B) ===
+// GuiElement  - leaf drawable node, base sizeof 0x4C / text variant 0x58. vtable at
+//   +0x30 (slot +0xC = draw, +0x14 = dtor). Pooled vec4 ptrs: +0x00 pos, +0x04 scale,
+//   +0x08 aux, +0x0C color, +0x10 visible. +0x28 name, +0x2C pool. Subtype union at
+//   +0x34..+0x54 (sprite uv/alpha/tex, text string/align/autofit, list cap/count/sentinel).
+//   Field-map evidence: the GuiElement* accessors/ctors above (all CONFIRMED).
+// GuiWidget   - container/screen that OWNS elements. Recovered in full as the GuiMenuList
+//   variant (sizeof 0xD0): embeds a scratch GuiElement at +0x00, then +0x5C originVec,
+//   +0x60 selectedRow, +0x68 rowArray (stride 0x14), +0x6C rowEnabled[16], +0xAC/+0xB0/+0xB4
+//   color triple, +0xB8/+0xBC row Y base/step, +0xC0 rowCount, +0xC4 useRawText, +0xC8/+0xCC
+//   underline. Evidence: the GuiMenuList* accessors + GuiMenuListDraw above.
+// NOTE: Gui*ScreenInit screen objects do NOT share one struct - each ctor lays its children
+//   out inline at fixed offsets; gui.h documents the common screen-header prefix + the
+//   0x88-stride child-widget activation record (child+0x18 alpha/+0x1C state/+0x28 init).
+//   The GuiManager singleton g_guiInstance (addr 0x1A8D04, sizeof 0x3FB20) is the root, NOT a GuiWidget.
+// Layout is region-agnostic: EU v1.00 twins share it (gui.h serves both builds).
 
 // === Track-B front-end / pause-menu screens cluster (0x2CA000-0x2DFFFF; per-screen state in gp cluster 0x1AB9E8..; audited - PostHudNotifyEvent 0x29C488 SKIPPED as matched-in-198FA0). ===
 DrawBestiaryEntry = 0x002CED10; // CONFIRMED mechanism - render one bestiary catalog entry - name/desc + 4 stat bars + defeat count - PROBABLE retail enemy bestiary
