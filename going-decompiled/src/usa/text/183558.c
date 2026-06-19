@@ -1011,7 +1011,11 @@ f32 func_002845D8(f32 x) {
     f32 inv_two_pi = 0.159154936671257019f;  /* 0x3E22F983 */
     f32 t = x * inv_two_pi + 0.5f;
     s32 trunc = (s32)t;
-    s32 fl = ((*(s32 *)&x) >> 31) + trunc;   /* floor via sign-bit correction */
+    /* floor via sign-bit correction - the asm corrects with the sign of t
+     * (mfc1 from the add.s result, sra 0x1f), NOT the sign of x. For x in
+     * (-pi,0), sign(x)=-1 but t in (0,0.5) so sign(t)=0; using sign(x) here put
+     * fl off by 1 -> frac off by 1 -> result off by a full 2pi (tester-caught). */
+    s32 fl = ((*(s32 *)&t) >> 31) + trunc;
     f32 frac = t - (f32)fl;
     return (frac - 0.5f) * two_pi;
 }
