@@ -1,9 +1,19 @@
 # Camera-map RE — answer to the in-level camera handoff (2026-06-19)
 
-**In reply to** `tools/ee/eetest/CAMERA_MAP_EVIDENCE.md`. Source of truth for the
-static struct: the matched `going-decompiled/src/usa/text/16E980.c` (Camera /
-CameraSysState / HeroCamMotion typedefs). Correlated against the tester's
-`inlevel_combat` capture.
+**In reply to** `tools/ee/eetest/CAMERA_MAP_EVIDENCE.md`. Correlated against the
+tester's `inlevel_combat` capture.
+
+> **CORRECTION (struct offsets superseded):** the authoritative, auditor-verified
+> Camera / CameraSysState / CameraModeVtblEntry layout now lives in
+> `going-decompiled/include/camera.h` (commit 319318b). A fresh asm re-trace
+> corrected several offsets used in the field tables below — use camera.h, not
+> this doc, for exact offsets: Camera priority is a **byte at +0x7C** (not +0x7D),
+> the takeover rule is a **u32 at +0x74**, the transition-state block is at
+> **cs+0x290** (not +0x5490), the FOV block is at **cs+0x3D4**, and screen
+> fade-black is a **separate global at 0x1B1520** (NOT inside CameraSysState).
+> The architectural conclusions here (0x089C1000 unmapped, activeCamera at
+> cs+0x190 overlay-resident, the HeroCamMotion sub-block at cs+0x1A0 mapping 1:1
+> to the live anchors) remain CORRECT and auditor-confirmed.
 
 ## TL;DR
 - The **HeroCamMotion sub-block at cs+0x1A0 is the one fully-static, in-level-live
