@@ -82,17 +82,27 @@ a const string over the global, not the global's real in-level location.
 predicate so the harness never snapshots a mid-load instant again:
 
 ```
-seed_is_live  ==  (u32@0x1A8BB0 < 16)            # g_nGameState is a small enum 0..9
+seed_is_live  ==  (u32@0x1A8BB0 == 0)            # g_nGameState == 0 = pure gameplay (not a transition)
               &&  (u32@0x1B1608 != 0)            # g_gameTime is ticking
               &&  (u32@0x1B2040 != 0)            # g_pSkyData set (sky resident)
+              &&  (u32@0x18C0B0 != 0)            # g_pHeroMoby set (hero spawned)
 ```
 
 At such an instant the New-Game arena map is **directly valid** — seed every
 captured arena global from the dump, exclude only the category-2 static-rodata
 constants. No structural remap, no per-address shift, no big exclude-list.
-`inlevel_run2_load` already demonstrates a near-clean settled capture (only the
-1 static format-string flagged). State 0 (pure gameplay) would be ideal; state 6
-already gives a fully-populated layout.
+
+**Why all four predicates** (each of the two existing captures fails a different
+one, so neither alone is a clean gameplay seed):
+- `inlevel/` = just-loaded: hero spawned (`g_pHeroMoby`=0x1960680) but
+  `g_gameTime`=0 and `g_nGameState` reads "rend" (transient rodata shift) → fails
+  the state/time predicates.
+- `inlevel_run2_load` = state 6 (travel/transition): `g_gameTime`=79, layout
+  intact, but `g_pHeroMoby`=0 (hero despawned for travel) and state≠0 → fails the
+  hero/state predicates.
+
+Use `g_nGameState==0` for a strict gameplay seed; relax to `<16` only if a
+transition-state seed is acceptable. The map is structurally valid in either case.
 
 If the existing `inlevel/` seed must be used as-is, it is only trustworthy for the
 **category-1 always-resident pointers** above; the rest is mid-load noise and must
