@@ -460,13 +460,13 @@ extern u64 g_bRawReadFellBack_34;       /* g_bRawReadFellBack + 0x34 */
 /* TODO(match): functional equivalent - not byte-exact; two callee-saves at
    8-byte slot spacing (the 0x20-vs-0x10 packed-save wall). */
 void func_0026FE58(void) {
-    u64 desc[6];   /* 0x30-byte texture-upload descriptor scratch */
-
-    StartFileLoadPumpingVoice(g_proceduralAnimFrames,
-                              g_discToc[0x330 / 4] + g_discToc[0x32C / 4],
-                              g_discToc[0x334 / 4]);
-    func_0026FC88(g_proceduralAnimFrames, desc, g_vramTextureBase_28, 0x3FFC00);
-    g_bRawReadFellBack_34 = desc[0];
+    /* IN-LEVEL native frame-path: out-of-scope driven-frame TRAP (tester
+     * inlevel_trap_list.md). Its #else is a blocking voice/file load
+     * (StartFileLoadPumpingVoice -> IOP RPC, deadlocks headless) plus a GS
+     * texture upload - not seed-reclaimable. No-op (blocking-load contract, like
+     * the other in-level load/render traps). Reconstruction in git (commit
+     * 1fd00c0). NOTE: this is a file/texture-load trap, NOT an activeCamera-deref
+     * despite the trap-list grouping. */
 }
 #endif
 
@@ -539,17 +539,13 @@ extern void (*g_cameraCallbacks[])(void);  /* D_001B1300 + 0x140 */
 /* TODO(match): functional equivalent - not byte-exact; three callee-saves at
    8-byte slot spacing (the 0x20-vs-0x10 packed-save wall). */
 void func_00270220(void) {
-    s32 i = 0;
-
-    if (g_cameraCallbackCount > 0) {
-        void (**slot)(void) = &g_cameraCallbacks[0];
-        do {
-            i++;
-            (*slot)();
-            slot++;
-        } while (i < g_cameraCallbackCount);
-    }
-    g_cameraCallbackCount = 0;
+    /* IN-LEVEL native frame-path: out-of-scope driven-frame TRAP (tester
+     * inlevel_trap_list.md). It calls every g_cameraCallbacks[] slot, which
+     * in-level hold OVERLAY function pointers (registered by overlay code), and
+     * its loop bound g_cameraCallbackCount (0x1B1480) is in the relocated band so
+     * reads garbage at the static address - faults/runaway on real EE. No-op:
+     * the camera-callback dispatch is overlay-driven in-level. Reconstruction in
+     * git (commit 1fd00c0). */
 }
 #endif
 
@@ -1119,63 +1115,15 @@ extern u8 D_1A7A4C;
 /* TODO(match): functional equivalent - not byte-exact; four callee-saves
    (incl. $f20) at 8-byte slot spacing (the 0x20-vs-0x10 packed-save wall). */
 void UpdateCamera(void) {
-    CameraSysState *cs = &g_cameraState;
-    s32 transition;
-    Camera *active;
-
-    *(s32 *)((char *)cs + 0x404) += 1;
-    UpdateScreenFadeBlack();
-    UpdateScreenFadeWhite();
-    func_00271FE8();
-    TrackHeroMotionForCamera();
-    DispatchCameraMode();
-
-    active = (Camera *)cs->activeCamera;
-    transition = *(u16 *)((char *)cs + 0x290);
-    if ((u32)(transition - 1) < 2u) {
-        BeginCameraTransition(active, cs->prevCamera);
-    }
-
-    if (*(s16 *)((char *)cs + 0x290) == 3) {
-        ApplyCameraTransition((Vec4 *)active); /* a0 = cs->activeCamera, not cs+0x140 */
-    } else {
-        /* snap the live camera fields straight from the active slot */
-        *(Vec4 *)((char *)cs + 0x140) = *(Vec4 *)((char *)active + 0x30);
-        *(Vec4 *)((char *)cs + 0x370) = *(Vec4 *)((char *)active + 0x00);
-        *(Vec4 *)((char *)cs + 0x380) = *(Vec4 *)((char *)active + 0x10);
-        *(Vec4 *)((char *)cs + 0x390) = *(Vec4 *)((char *)active + 0x20);
-    }
-
-    if (func_0026F7C0() != 0) {
-        /* cinematic override: copy pos + look vector, rebuild the basis */
-        g_cameraPos = g_cinematicCameraBlock[0];
-        *(Vec4 *)((char *)&g_cameraPos + 0x230) = g_cinematicCameraBlock[1];
-        Vec3CrossVu0((Vec4 *)((char *)&g_cameraPos + 0x240),
-                     (Vec4 *)((char *)&g_cameraPos + 0x230),
-                     &g_cinematicCameraBlock[0]);
-        Vec3RescaleToLenVu0((Vec4 *)((char *)&g_cameraPos + 0x240), 1.0f,
-                            (Vec4 *)((char *)&g_cameraPos + 0x240));
-        Vec3CrossVu0((Vec4 *)((char *)&g_cameraPos + 0x250),
-                     (Vec4 *)((char *)&g_cameraPos + 0x240),
-                     (Vec4 *)((char *)&g_cameraPos + 0x230));
-        Vec3RescaleToLenVu0((Vec4 *)((char *)&g_cameraPos + 0x250), 1.0f,
-                            (Vec4 *)((char *)&g_cameraPos + 0x250));
-    }
-
-    MatrixToEulerAngles((const Vec4 *)&g_cameraMatrix, &g_cameraRot);
-    ApplyCameraShakeAxis(&g_cameraShakeUp, 0);
-    ApplyCameraShakeAxis(&g_cameraShakeRight, 1);
-    ApplyCameraShakeAxis(&g_cameraShakeRoll, 2);
-    CheckCameraUnderwater();
-    SampleCameraFogZone(&g_cameraPos);
-
-    if (D_1A7A4C != 0) {
-        Vec3CrossVu0((Vec4 *)((char *)&g_cameraMatrix + 0x10),
-                     (Vec4 *)((char *)&g_cameraMatrix + 0x20),
-                     (Vec4 *)&g_cameraMatrix);
-    }
-    StepCameraFovInterp();
-    *(Vec4 *)((char *)&g_cameraMatrix + 0x50) = (Vec4){0};
+    /* IN-LEVEL native frame-path: UpdateCamera is an out-of-scope driven-frame
+     * TRAP (tester state/inlevel_trap_list.md). It dereferences cs->activeCamera
+     * (g_cameraState+0x190) - the OVERLAY-resident pointer (the unmapped
+     * 0x089C1000) in-level, see tools/native/camera_map_re.md - and reads other
+     * relocated-band camera globals, faulting on real EE. No-op the tick: the
+     * camera transform is externally supplied (seeded from the in-level dump),
+     * and TrackHeroMotionForCamera is driven + validated separately. The full
+     * frontend reconstruction is preserved in git (commit 1fd00c0); restore and
+     * guard it if the in-level seed is ever un-relocated. */
 }
 #endif
 
