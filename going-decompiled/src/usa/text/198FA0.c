@@ -1028,7 +1028,17 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", GuiManagerCreat
 
 /** If the GUI is up and the popup-busy gate (D_1A8C64) is clear, pause the
  *  game world (func_0028E9A0(1)) and run the GUI pump (func_0029CA98),
- *  propagating its result. */
+ *  propagating its result.
+ *
+ *  The two early-exit paths (GUI down, or popup-busy) fall off the end with no
+ *  explicit `return`: the pinned cc1 incidentally leaves the in-register value
+ *  in $v0 (0 when g_guiInstance==0, the loaded D_1A8C64 when it is non-zero), so
+ *  the matching PS2 build is byte-exact AS WRITTEN. A different host compiler
+ *  resolves the fall-off-end UB differently and DIVERGES on the return value
+ *  (memory effects are identical). The #else makes those two returns explicit so
+ *  the native/functional-equivalence build agrees with the real R5900 result.
+ *  Do not add explicit returns to the #ifndef arm - that breaks the byte match. */
+#ifndef TARGET_NATIVE
 s32 func_0029DC70(void) {
     if (g_guiInstance != 0) {
         if (D_1A8C64 == 0) {
@@ -1037,6 +1047,18 @@ s32 func_0029DC70(void) {
         }
     }
 }
+#else
+s32 func_0029DC70(void) {
+    if (g_guiInstance == 0) {
+        return 0;
+    }
+    if (D_1A8C64 != 0) {
+        return D_1A8C64;
+    }
+    func_0028E9A0(1);
+    return func_0029CA98();
+}
+#endif
 
 /* func_0029DCB0: MIS-SPLIT — splat began the symbol one instruction early, so
  * the body carries the leaked `addiu $sp,0x10; nop` epilogue of the preceding
