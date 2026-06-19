@@ -31,8 +31,11 @@ Camera (0xA0 bytes)                 CameraSysState  (g_cameraState = 0x1B5180)
   +0x8C  s16 modeId (vtbl index)      +0x268/+0x26C  fadeBlackTarget / fadeBlackRate
   +0x8E  s16 snapFlag                 +0x3D4..+0x3E9  FOV / fade-mode block
 ```
-`UpdateCamera` does, unconditionally: `active = cs->activeCamera; cs.camPos(+0x140)
-= active->pos(+0x30)`. In the **frontend**, `activeCamera` is a valid `Camera*`.
+`UpdateCamera` reads `active = cs->activeCamera` and **dereferences it on every
+branch** (transition==3 passes `active` to `ApplyCameraTransition`; the else branch
+does `cs.camPos(+0x140) = active->pos(+0x30)`) — so an invalid `activeCamera` faults
+regardless of path. In the **frontend**, `activeCamera` is a valid `Camera*`, set by
+`SwitchActiveCamera` (0x2705E0, store @0x2707E8). In-level it is not (below).
 
 ### `0x089C1000` is an UNMAPPED EE address
 Checked against every EE address space:
