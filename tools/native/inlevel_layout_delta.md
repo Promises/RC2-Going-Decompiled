@@ -1,146 +1,106 @@
-# In-level global layout delta — RE deliverable (2026-06-19)
+# In-level global layout delta — RE deliverable (2026-06-19, CORRECTED)
 
-**For:** the tester's autonomous in-build harness, gated on making the captured
-in-level seed (`tools/ee/eetest/state/inlevel/`) usable for native frame-path
-effect-diff.
+**For:** the tester's autonomous in-build harness, to seed/validate native
+frame-path state against the in-level dump.
 
-**Headline result (overturns the working assumption):** there is **NO structural
-in-level global relocation**. The New-Game arena map (`arena_map.txt`, 441
-globals) is **structurally valid in-level** — at a *settled* gameplay instant,
-30+ named globals read sane live values at their exact mapped addresses. The
-"layout differs / MIXED" behaviour the harness saw is **an artifact of WHEN the
-canonical `inlevel/` seed was captured** (a transient mid-load instant), not of
-where the globals live.
+> ## ⚠️ CORRECTION — my earlier conclusion was WRONG
+> An earlier version of this doc concluded "**no structural in-level relocation**;
+> the `inlevel/` seed is just a mid-load capture artifact." **That was wrong**, and
+> the tester empirically refuted it at human-confirmed controllable gameplay
+> (Ratchet actively moving), with a 100%-byte-match relocation map.
+>
+> **There IS a persistent in-level data relocation.** My error: I anchored
+> "settled/canonical" on `inlevel_run2_load` (which happens to be captured at a
+> state-6 *pre-relocation transition*) and dismissed `inlevel/` (the real,
+> relocated gameplay state) as a "transient artifact." Exactly backwards. The
+> static-only RE could see the rodata-string overlap but mis-explained it as a
+> transient spill instead of a real runtime relocation. Owning that.
 
-Reproduce all of this with `tools/native/runtime/arena/correlate_inlevel.py
-[--dir=inlevel|inlevel_run2_load] [--ranges] [--table]`.
+## The relocation (ground truth — tester + independently reconfirmed)
 
-## Capture geometry (from snapshot.json)
+During in-level gameplay, a contiguous data block is **relocated to higher
+addresses**. To read the LIVE value of a global whose static (ELF/arena) address
+is `A`:
 
-`inlevel/` regions (EE addresses): globals `0x1A7000..0x1BC000` (86 KB), input
-`0x138300..0x138700`, sound `0x189E00..0x18DE00`, sky_obj `0x1F4000..0x1FC000`.
-(Base is **0x1A7000**, i.e. snapshot `addr=1732608` — easy to misread as
-0x1A6400 by hand; the script reads it from JSON.)
+| static range | in-level live location | contains |
+|---|---|---|
+| `0x1A8000 .. 0x1A9480` | **`A + 0x350`** (block A) | `g_nGameState` 0x1A8BB0 → live **0x1A8F00** |
+| `0x1A9480 .. 0x1B1600` | **`A + 0x340`** (block B) | `g_gameTime` 0x1B1608 → live **0x1B1948** |
+| everything else | `A` (unshifted) | PlayerStats 0x1A7A00+, g_pHeroMoby 0x18C0B0, g_pSkyData 0x1B2040, g_mobyClassTable 0x18B040, and 0x1B1600+ |
 
-## The three categories of the delta
+Reproduce / re-map with `tools/native/runtime/arena/detect_reloc_shift.py
+[inlevel_dir]` — it slides the dump against the static ELF and recovers the shift
+profile per 0x100 block. Confirmed boundaries: unshifted `<0x1A8000`, **+0x350**
+`0x1A8000–0x1A9480`, **+0x340** `0x1A9480–0x1B1600`, unshifted `0x1B1600+`.
 
-Correlating arena globals against the ground-truth dumps + the **static boot ELF**
-(`extracted/usa/SCUS_972.68`, single LOAD seg `0x100080`, filesz==memsz so the
-whole `0x100080..0x352D08` is PROGBITS) splits every arena entry into:
+### Proof (my own dumps, both directions)
+- `inlevel/` (real gameplay, RELOCATED): `g_nGameState` static 0x1A8BB0 = `"render
+  s[etup]"` (string), reloc **0x1A8F00 = 0** (live state); `g_gameTime` static
+  0x1B1608 = 0, reloc **0x1B1948 = 0x4DF6 (ticking)**.
+- `inlevel_run2_load` (state-6 transition, UNRELOCATED): `g_nGameState` static
+  0x1A8BB0 = **6** (live), reloc 0x1A8F00 = garbage; `g_gameTime` static 0x1B1608
+  = **0x4F (ticking)**, reloc 0x1B1948 = 0.
 
-### 1. LIVE — valid in-level at the mapped address (the large majority)
-Confirmed by `run2_load` (settled, state=6): sane values at the New-Game
-addresses. Examples (run2_load):
-- `g_mobyTableBase`=0x858C40, `g_mobySpawnStart`=0x858D40, `g_mobyTableEnd`,
-  `g_mobyAuxBlockBase`, `g_sceneActorMobys`=0x858D40
-- `g_frameArenaBase`=0x354000, `g_frameDmaCursor`=0x470500,
-  `g_renderTaskList`=0x4D6000, `g_deferredSegment2Tag`=0x467540
-- `g_pSkyData`=0x6FEB00, `g_pSkySegmentOpenTag`=0x454090
-- `g_guiInstance`/`g_pGuiManager`=0x1FB8000, `g_debugMallocCursor`=0x1FA8A00
-- vram cursors `0x1A72D0..0x1A730C`, HUD asset pointers `0x1B1808..0x1B1864`
-- `g_pHeroMoby` (0x18C0B0)=0x1960680, `g_mobyClassTable` (0x18B040)=0x1984C80,
-  `g_soundBankHandles` (0x189E00)=0x193E00 (sound region)
+So `inlevel/` is the canonical relocated gameplay layout; `run2_load` was a
+pre-relocation snapshot (which is what fooled the static-only pass).
 
-These need **no exclude** when the seed is captured at a settled frame.
+### The "render setup" / "rend" at g_nGameState, re-explained correctly
+`g_nGameState` static 0x1A8BB0 reads the bytes of `"render setup"` (static rodata
+at 0x1A8860) **because block A is relocated +0x350**: the loader's copy places
+static-`0x1A8860` content at `0x1A8860+0x350 = 0x1A8BB0`. It is **not** a transient
+spill — it is the persistent consequence of the +0x350 relocation. The real live
+`g_nGameState` is at `0x1A8BB0 + 0x350 = 0x1A8F00` (= 0 during gameplay).
 
-### 2. STATIC-RODATA over-capture — never a live global (persistent, exclude always)
-A handful of arena_map entries were placed on addresses that are actually
-**string-literal / const rodata** in the ELF, not mutable globals. They read the
-same constant in menu, in-level, and the static ELF. The arena seed/native build
-should treat these as constants, not state. Confirmed static rodata in this span:
-`"error: sceSifBindRpc"`@0x1A7500, `"render setup"`@0x1A8860 & 0x1ACE10,
-`"loaders.cpp"`@0x1A91F0, `"map level %d"`/`"map level 0"`@0x1A9448, the vendor
-caption format `g_vendorCaptionFmt`@0x1AD338. (This is also an `arena_map.txt`
-quality note — see "Follow-ups".)
+## Leading mechanism hypothesis: a gp-base shift of +0x340 (relocator RE in flight)
 
-### 3. CAPTURE-INSTANT noise — only in the canonical `inlevel/` seed (re-capture to fix)
-The `inlevel/` seed was taken at a **transient mid-load instant**. Two effects,
-both absent from `run2_load`:
-- **Rodata block shifted +0x340.** In `inlevel/`, the static rodata string block
-  appears ~+0x340 above its ELF/settled position (`"map level 0"` at 0x1A9788 vs
-  static 0x1A9448; `"render setup"` lands on **0x1A8BB0 = g_nGameState**). The
-  loader was caught mid-relocation/staging. In `run2_load` those strings sit at
-  their exact static addresses — i.e. settled/intact.
-- **Gameplay globals not yet populated.** `g_gameTime` (0x1B1608)=0, the moby
-  table pointers=0, all camera state (0x1B5180+)=0, `g_frameDmaCursor`=0,
-  `g_mobySpawnCredit`=0x87654321 (poison). All are **live at the same addresses
-  in `run2_load`** (g_gameTime=79, g_mobySpawnStart=0x858D40, camera floats live).
+`g_gameTime` is accessed **gp-relative**: `lw …,0x2618(gp)`, boot gp = `0x1AEFF0`
+→ `0x1B1608` (static). The live value sits at `0x1B1948 = 0x1B1608 + 0x340`. If
+in-level code runs with **gp = `0x1AEFF0 + 0x340 = 0x1AF330`**, then `gp+0x2618` =
+`0x1B1948` exactly — so block B (+0x340) is explained by a **+0x340 gp-base
+shift**, with the data block relocated to match. A ghidra-annotator is confirming:
+where gp is set for in-level, whether the accessors are resident-code-with-shifted-gp
+or a disc-loaded overlay, why block A is +0x350 (0x10 more than block B — an
+insertion at 0x1A9480), and completeness (any relocated ranges outside the
+captured window). **This section will be finalized when that RE lands** — the map
+above is ground truth regardless of mechanism.
 
-## The `g_nGameState` = "rend" anomaly — explained
+## What the tester needs to do
 
-`g_nGameState` (0x1A8BB0) is a **real global**, correctly mapped: static ELF init
-there is `00 00 00 00 | 00 00 00 00 | fe ff ff ff | 02 00 00 00` (state/prev/
-pending/soundDefs), menu reads **4**, `run2_load` reads **6** (matching its
-snapshot `state=6`). The `inlevel/` seed reads `0x646E6572` ("rend", from the
-"…**rend**er setup" string) **only because** the +0x340-shifted rodata block
-transiently overlapped 0x1A8BB0 at that capture instant. It is a runtime spill of
-a const string over the global, not the global's real in-level location.
-
-## Recommendation (unblocks the tester cleanly)
-
-**Re-capture the canonical seed at a SETTLED gameplay frame**, gated on a liveness
-predicate so the harness never snapshots a mid-load instant again:
+The native arena (`arena_map.txt`) is laid out at **static** addresses. To seed it
+from the in-level dump you must **un-relocate**: for a global at static `A`,
 
 ```
-seed_is_live  ==  (u32@0x1A8BB0 == 0)            # g_nGameState == 0 = pure gameplay (not a transition)
-              &&  (u32@0x1B1608 != 0)            # g_gameTime is ticking
-              &&  (u32@0x1B2040 != 0)            # g_pSkyData set (sky resident)
-              &&  (u32@0x18C0B0 != 0)            # g_pHeroMoby set (hero spawned)
+if 0x1A8000 <= A < 0x1A9480:  read dump at A + 0x350
+elif 0x1A9480 <= A < 0x1B1600: read dump at A + 0x340
+else:                          read dump at A
 ```
 
-At such an instant the New-Game arena map is **directly valid** — seed every
-captured arena global from the dump, exclude only the category-2 static-rodata
-constants. No structural remap, no per-address shift, no big exclude-list.
+i.e. seed arena slot `A` from `dump[reloc(A)]`. Conversely, to validate native
+output against the dump, compare native `A` to `dump[reloc(A)]`. Globals outside
+`0x1A8000–0x1B1600` (PlayerStats, sky/hero/mobyClass pointers, the 0x1B1600+
+camera/render block) are at their static addresses — no adjustment.
 
-**Why all four predicates** (each of the two existing captures fails a different
-one, so neither alone is a clean gameplay seed):
-- `inlevel/` = just-loaded: hero spawned (`g_pHeroMoby`=0x1960680) but
-  `g_gameTime`=0 and `g_nGameState` reads "rend" (transient rodata shift) → fails
-  the state/time predicates.
-- `inlevel_run2_load` = state 6 (travel/transition): `g_gameTime`=79, layout
-  intact, but `g_pHeroMoby`=0 (hero despawned for travel) and state≠0 → fails the
-  hero/state predicates.
+Liveness gate for capturing a clean gameplay seed (unchanged, still valid): read
+g_nGameState at its **live** location `0x1A8F00` (== 0 for gameplay), g_gameTime at
+`0x1B1948` (!= 0), g_pSkyData `0x1B2040` (!= 0, unshifted), g_pHeroMoby `0x18C0B0`
+(!= 0, unshifted).
 
-Use `g_nGameState==0` for a strict gameplay seed; relax to `<16` only if a
-transition-state seed is acceptable. The map is structurally valid in either case.
+## Still valid from the first pass (these parts hold)
 
-If the existing `inlevel/` seed must be used as-is, it is only trustworthy for the
-**category-1 always-resident pointers** above; the rest is mid-load noise and must
-be excluded — but the right fix is re-capture, not a 70-block exclude-list (which
-would be encoding a capture artifact as if it were structure).
+- **Capture geometry:** `inlevel/` globals window base **0x1A7000** (snapshot
+  addr=1732608); input 0x138300+, sound 0x189E00+ (holds g_bPlayerMode 0x18C0D4,
+  g_pHeroMoby 0x18C0B0), sky 0x1F4000+.
+- **STATIC-RODATA over-capture (category 2):** a set of arena entries sit on static
+  rodata string literals (`"render setup"`@0x1A8860, `"map level %d"`@0x1A9448,
+  `g_vendorCaptionFmt`@0x1AD338, etc.) — const, never live state. Already handled:
+  11 demoted to `data_const.txt` (the effect-diff exclude-list, commit fc200f2).
+  NOTE these rodata addresses are themselves INSIDE the relocated block, so their
+  live copy is at `A+0x350/+0x340` too — but being const, both copies are equal.
+- **Unshifted live anchors:** PlayerStats 0x1A7A00+, g_pHeroMoby 0x18C0B0,
+  g_pSkyData 0x1B2040, g_mobyClassTable 0x18B040 — valid at static addresses.
 
-## Independent Ghidra corroboration (2026-06-19)
-
-A ghidra-annotator independently re-verified the two load-bearing claims against
-the USA program (trusting nothing):
-
-- **Claim 1 — `g_nGameState` 0x1A8BB0 is a real mutable global, not a string:
-  CORROBORATED.** ~80 xrefs; absolute integer stores from `UpdateGameState`
-  (@0x2B5EF4 `lui at,0x1b; sw v1,-0x7450(at)`), `LoadLevelAndInitHealth`,
-  `PlayCinematic`, `EnterVendorMenu`, etc. The literal `"render setup\0"` is at
-  0x1A8860, **exactly 0x350 below** 0x1A8BB0 in the same `.lit` rodata segment
-  (0x1A7C80–0x1B12BB) — that is the "rend" overlap. **Bonus:**
-  `LoadLevelAndInitHealth` @0x26F284 does `sw zero,-0x7450(at)` = **writes
-  `g_nGameState = 0` on level boot** — directly confirming 0 is the valid in-level
-  gameplay value (validates the `==0` liveness predicate above).
-- **Claim 2 — no structural in-level remap: CORROBORATED.** `g_gameTime`
-  (gp+0x2618), `g_mobyTableBase`/`g_mobySpawnStart`, `g_cameraState` (base
-  0x1B54F0), `g_frameDmaCursor`, `g_pSkyData` are all accessed by absolute
-  `lui+lw/sw` or gp-relative (gp=0x1AEFF0) to their **fixed** addresses — the
-  *pointer values* they hold are dynamic heap bases, but the global *slots* never
-  relocate per level.
-- **Claim 3 — deliberate +0x350 relocator: not found.** No `.text` writes the
-  0x1A8860 rodata region; consistent with a mid-DMA/decompression staging capture
-  artifact (not invented — simply absent), matching the transient-instant model.
-
-(Block shift is ~0x340–0x350: the "map level" block measures +0x340, the
-render-setup→g_nGameState overlap is exactly +0x350.)
-
-## Follow-ups
-- **arena_map quality:** category-2 entries are static const/rodata mislabelled as
-  globals; worth demoting in `data_globals.txt` / the gen_arena seed so the native
-  build doesn't treat constants as mutable state.
-- **Optional Ghidra corroboration (dispatched separately):** identify the loader
-  code that relocates/stages the rodata block (the +0x340 shift) so the harness
-  can also key its capture off "loader idle", and confirm no other in-level
-  remap exists outside the captured window.
+## Tooling
+- `detect_reloc_shift.py [dir]` — recovers the shift profile (dump vs static ELF).
+- `correlate_inlevel.py [--dir=] [--ranges] [--table]` — per-global value/class
+  table (note: its "overlaid:span"/"zero" classes for the 0x1A8000–0x1B1600 block
+  were the *symptom* of the relocation, now correctly explained above).
