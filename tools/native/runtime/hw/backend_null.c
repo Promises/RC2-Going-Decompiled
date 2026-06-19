@@ -92,6 +92,15 @@ void CloseMobyDmaSegment(void)      {} /* DMA tag splice */
  * RenderFrame. */
 void CullAndEmitShrubs(void)        {} /* shrub cull+emit - render-output only */
 void CullAndBinTieInstances(void)   {} /* tie cull+bin draw/relight lists - render-output only */
+/* func_00283558 = KickDmaChannelD: writes only the SPR-FROM DMA channel regs +
+ * SYNC (kicks the shrub relight list). Pure hardware, no headless DMA - no-op. */
+void func_00283558(void)            {} /* KickDmaChannelD - SPR-FROM DMA kick */
+/* AllocateTieTextureVram: tie-texture VRAM LRU allocator built entirely from
+ * inline VU0 macro-mode + SPR scratchpad + SPR-TO/FROM DMA (like the cull pair,
+ * a faithful #else is impossible - the hardware is the logic). Its only persisted
+ * writes are render-VRAM state (g_tieVramLruHead/Tail/Size + the VRAM slot table),
+ * consumed only by the tie render path - render-output, no game-logic reader. */
+void AllocateTieTextureVram(void)   {} /* tie-VRAM LRU alloc - render-output only */
 /* FlushHudDisplayValue: removed - text/198FA0.c now joins the native link (it
  * holds InitMobyFromClass's #else body) and provides the REAL bare-C forwarder
  * (g_guiInstance-guarded push to the HUD render object). A no-op here would

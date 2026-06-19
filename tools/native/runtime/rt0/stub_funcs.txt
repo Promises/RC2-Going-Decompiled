@@ -1,6 +1,5 @@
 # still-undefined game functions to weak-stub (M4), over the full USA link + sdk + hw backend.
 # regenerate: link all usa units + runtime/{sdk,hw} (no stubs), nm -u, drop libc/@GLIBC + data globals.
-AllocateTieTextureVram
 AppendTextureUploadBuildTex0
 ApplyCameraShakeAxis
 ApplyCameraTransition
@@ -103,7 +102,6 @@ func_00280090
 func_00280120
 func_00280550
 func_002833D8
-func_00283558
 func_00283DA0
 func_002859E0
 func_00285CE8
