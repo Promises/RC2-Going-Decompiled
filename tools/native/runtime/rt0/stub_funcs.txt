@@ -46,7 +46,6 @@ GuiFontAtlasLookupGlyph
 GuiListRowElementInit
 GuiListSetScrollPos
 GuiSpriteElementDraw
-InitScreenGeometry
 InstallVif1DmacHandlers
 MapDraw
 MapSetCurrentLevel

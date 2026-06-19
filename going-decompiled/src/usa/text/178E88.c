@@ -299,7 +299,52 @@ void UpdateOcclusionVisMask(void) {
 }
 #endif
 
+/* InitScreenGeometry: one-time screen-geometry + projection-viewport init from
+ * the GS screen context pixel dims (g_gsScreenContext +0x150 width / +0x152
+ * height). Sibling of func_0027B988 (same idioms): publishes width/height + the
+ * two half-extents to g_screenWidth / g_screenHeight[0..2], the four 12.4
+ * fixed-point GS-window offsets (centred on 0x800) to g_gsPixelOffsetX[0] /
+ * g_gsPixelOffsetY[0..2], and the float viewport scale + half-extents into the
+ * camera/projection scratch (g_sceneActorMobys+0x674 = D_1B8FC0). Unlike
+ * func_0027B988 it also seeds the fixed projection constants (+0xA0 32, +0xA4
+ * 2^20, +0x1DC 2^19, +0x1E8 255) and does NOT call func_0027A550. The matching
+ * build keeps the asm. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", InitScreenGeometry);
+#else
+void InitScreenGeometry(void) {
+    u8 *vp = g_sceneActorMobys + 0x674; /* D_1B8FC0 camera/projection scratch */
+    s32 w16 = *(s16 *)(g_gsScreenContext + 0x150);
+    s32 h16 = *(s16 *)(g_gsScreenContext + 0x152);
+    s32 halfW = w16 >> 1;
+    s32 halfH = h16 >> 1;
+    f32 wHalf, hHalf;
+
+    g_screenWidth[0] = w16;
+    g_screenHeight[0] = h16;
+    g_screenHeight[1] = halfW;   /* g_screenCenterDefaultX 0x1A7348 */
+    g_screenHeight[2] = halfH;   /* g_screenCenterDefaultY 0x1A734C */
+    g_gsPixelOffsetX[0] = (0x800 - halfW) << 4;
+    g_gsPixelOffsetY[0] = (0x800 - halfH) << 4;
+    g_gsPixelOffsetY[1] = (halfW + 0x800) << 4;   /* scissor max X 0x1A7358 */
+    g_gsPixelOffsetY[2] = (halfH + 0x800) << 4;   /* scissor max Y 0x1A735C */
+
+    wHalf = IntToFloat(w16) * 0.5f;
+    hHalf = IntToFloat(h16) * 0.5f;
+
+    *(f32 *)(vp + 0xA0)  = 32.0f;        /* 0x42000000 */
+    *(f32 *)(vp + 0xA4)  = 1048576.0f;   /* 0x49800000 */
+    *(f32 *)(vp + 0xB0)  = 0.62f;        /* 0x3F1EB852 - g_cameraProjScale init */
+    *(f32 *)(vp + 0x200) = wHalf;
+    *(f32 *)(vp + 0x204) = hHalf;
+    *(f32 *)(vp + 0x208) = wHalf * 4.0f;
+    *(f32 *)(vp + 0x20C) = hHalf * 4.0f;
+    *(s32 *)(vp + 0x218) = 0;
+    *(f32 *)(vp + 0x21C) = 524288.0f;    /* 0x49000000 */
+    *(f32 *)(vp + 0x228) = 255.0f;       /* 0x437F0000 */
+    *(s32 *)(vp + 0x22C) = 0;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", BuildCameraProjection);
 
