@@ -78,27 +78,74 @@ typedef struct FmvFrameQueue {
     /* 0x10 */ s32 capacity;  /* number of slots */
 } FmvFrameQueue;
 
-/* The pts queue control block (arena+0xD9100): a started flag and the
- * elementary-stream cursor state used by the header/payload walker. */
+/* The pts queue control block (arena+0xD9100, 0x68 bytes — the gap to the next
+ * arena block FMV_FRAMEQ_OFS at +0xD9168): a started flag and the
+ * elementary-stream cursor state used by the header/payload walker.
+ *
+ * Word-index map confirmed from the accessors func_003506A8 (CONFIRMED, span
+ * helper, word idx [0xc..0x10]), func_00350608 (commit, reads [5],[6],[0x12],
+ * [0x13],[0x17]), func_00350660 (reset, clears [0xc],[0xe],[0xf],[0x11],[0x14],
+ * [0x16],[0x17]) and func_00350830 (queued gate, [0x14]). Fields past +0x50
+ * recovered from those accessors; ones with no inferable meaning are explicit
+ * padding to the true block size (NOT invented). */
 typedef struct FmvPtsQueue {
-    /* 0x00 */ s32 started;   /* header consumed / stream live */
-    /* 0x04 */ s32 mode;      /* stream type (4 = headerless) */
-    /* 0x08 */ u8 hdr[0x28];  /* buffered packet header bytes */
-    /* 0x30 */ s32 hdrFill;   /* header bytes buffered so far */
-    /* 0x34 */ u8 *dataPtr;   /* payload ring base */
-    /* 0x38 */ s32 ringOfs;   /* payload write offset (wraps) */
-    /* 0x3C */ s32 consumed;  /* payload bytes consumed */
-    /* 0x40 */ s32 ringSize;  /* payload ring size (1KB granular) */
-    /* 0x44 */ s32 received;  /* payload bytes received in total */
-    /* 0x48 */ u8 pad48[0x8];
-    /* 0x50 */ s32 queued;    /* bytes queued for the IPU */
+    /* 0x00 */ s32 started;   /* header consumed / stream live — CONFIRMED */
+    /* 0x04 */ s32 mode;      /* stream type (4 = headerless) — CONFIRMED */
+    /* 0x08 */ u8 hdr[0x28];  /* buffered packet header bytes — CONFIRMED */
+    /* 0x30 */ s32 hdrFill;   /* header bytes buffered so far — CONFIRMED */
+    /* 0x34 */ u8 *dataPtr;   /* payload ring base — CONFIRMED */
+    /* 0x38 */ s32 ringOfs;   /* payload write offset (wraps) — CONFIRMED */
+    /* 0x3C */ s32 consumed;  /* payload bytes consumed — CONFIRMED */
+    /* 0x40 */ s32 ringSize;  /* payload ring size (1KB granular) — CONFIRMED */
+    /* 0x44 */ s32 received;  /* payload bytes received in total — CONFIRMED */
+    /* 0x48 */ s32 commitBase;/* idx[0x12]: base passed to func_001338f0 (commit) — PROBABLE */
+    /* 0x4C */ s32 commitLen; /* idx[0x13]: length snapped to 1KB at commit — PROBABLE */
+    /* 0x50 */ s32 queued;    /* idx[0x14]: bytes queued for the IPU — CONFIRMED */
+    /* 0x54 */ s32 _pad54;    /* idx[0x15]: untouched in traced accessors — UNCONFIRMED */
+    /* 0x58 */ s32 field58;   /* idx[0x16]: cleared on reset (func_00350660) — UNCONFIRMED */
+    /* 0x5C */ s32 commitArg; /* idx[0x17]: arg5 to func_001338f0, cleared on reset — PROBABLE */
+    /* 0x60 */ u8  pad60[0x8];/* to block extent 0x68 (FRAMEQ_OFS - PTS_OFS) — padding */
 } FmvPtsQueue;
 
-/* Generic FMV object handle (state word at +0xA8 = the playback FSM). */
+/* FMV stream object (arena+0xD9048, 0xB8 bytes — the gap to the next arena
+ * block FMV_PTS_OFS at +0xD9100). Constructed by FmvStreamInit: a 5-slot
+ * stream-event callback table at +0x00 (func_0012FA70 registers event ids
+ * 0/1/2/3/5), an embedded bitstream/IPU-DMA sub-object at +0x48
+ * (FmvBitstreamObjInit(obj+0x48,...) — this is FMV_DMAQ_OFS = STREAM+0x48),
+ * and the playback FSM state word at +0xA8 (func_003525D0 reset=0, func_00352620
+ * read, func_00352628 exchange, FmvRequestStop set=1). The 0x00..0xA8 span is
+ * opaque here (callback table + bitstream object internals); only the FSM word
+ * is named. Trailing bytes padded to the true block size. */
 typedef struct FmvStream {
-    /* 0x00 */ u8 pad[0xA8];
-    /* 0xA8 */ s32 state;
+    /* 0x00 */ u8  pad[0xA8]; /* callback table + embedded bitstream obj (+0x48) — opaque */
+    /* 0xA8 */ s32 state;     /* playback FSM (0=idle,1=stop,2=running,3=done) — CONFIRMED */
+    /* 0xAC */ u8  padAC[0xC];/* to block extent 0xB8 (PTS_OFS - STREAM_OFS) — padding */
 } FmvStream;
+
+/* Full, bindable layouts — verified under ILP32 (the tester's host model and the
+ * R5900 ABI both 4-byte pointer). ee-gcc 2.9 predates __SIZEOF_POINTER__ so the
+ * checks are guarded; they're a no-op on the matching cross-compile but bind the
+ * sizes the functional-equivalence tester allocates against. */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+_Static_assert(sizeof(FmvPtsRing)   == 0x5000C, "FmvPtsRing must be 0x5000C under ILP32");
+_Static_assert(__builtin_offsetof(FmvPtsRing, readOfs) == 0x50000, "FmvPtsRing.readOfs");
+_Static_assert(__builtin_offsetof(FmvPtsRing, size)    == 0x50008, "FmvPtsRing.size");
+
+_Static_assert(sizeof(FmvFrameQueue) == 0x14, "FmvFrameQueue must be 0x14 under ILP32");
+_Static_assert(__builtin_offsetof(FmvFrameQueue, writeIdx) == 0x08, "FmvFrameQueue.writeIdx");
+_Static_assert(__builtin_offsetof(FmvFrameQueue, count)    == 0x0C, "FmvFrameQueue.count");
+_Static_assert(__builtin_offsetof(FmvFrameQueue, capacity) == 0x10, "FmvFrameQueue.capacity");
+
+_Static_assert(sizeof(FmvPtsQueue) == 0x68, "FmvPtsQueue must be 0x68 (PTS arena block) under ILP32");
+_Static_assert(__builtin_offsetof(FmvPtsQueue, hdrFill)  == 0x30, "FmvPtsQueue.hdrFill");
+_Static_assert(__builtin_offsetof(FmvPtsQueue, dataPtr)  == 0x34, "FmvPtsQueue.dataPtr");
+_Static_assert(__builtin_offsetof(FmvPtsQueue, ringSize) == 0x40, "FmvPtsQueue.ringSize");
+_Static_assert(__builtin_offsetof(FmvPtsQueue, queued)   == 0x50, "FmvPtsQueue.queued");
+_Static_assert(__builtin_offsetof(FmvPtsQueue, commitArg)== 0x5C, "FmvPtsQueue.commitArg");
+
+_Static_assert(sizeof(FmvStream) == 0xB8, "FmvStream must be 0xB8 (STREAM arena block) under ILP32");
+_Static_assert(__builtin_offsetof(FmvStream, state) == 0xA8, "FmvStream.state");
+#endif
 
 extern s32 func_0011AAD0(s32 count);           /* RotateThreadReadyQueue */
 extern s32 func_00351910(void *dmaq);

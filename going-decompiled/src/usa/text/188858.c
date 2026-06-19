@@ -37,6 +37,22 @@ typedef struct CinematicQueue {
     s32           active;     /* +0x44 */
 } CinematicQueue;
 
+/* Full, bindable layout — verified under ILP32. ResetCinematicQueue clears the
+ * whole record (cursors +0x30/+0x34, count +0x38, 0x28-byte 0xCD poison of the
+ * slots, active +0x44, gameStateMode +0x40=1); the highest field touched across
+ * every accessor (Enqueue/Dequeue/Start/func_00289560/func_002895E0) is active
+ * at +0x44, so the record is 0x48 bytes. ee-gcc 2.9 predates __SIZEOF_POINTER__
+ * so the check is guarded (no-op on the matching cross-compile). */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+_Static_assert(sizeof(CinematicQueue) == 0x48, "CinematicQueue must be 0x48 under ILP32");
+_Static_assert(__builtin_offsetof(CinematicQueue, slots)       == 0x08, "CinematicQueue.slots");
+_Static_assert(__builtin_offsetof(CinematicQueue, writeCursor) == 0x30, "CinematicQueue.writeCursor");
+_Static_assert(__builtin_offsetof(CinematicQueue, readCursor)  == 0x34, "CinematicQueue.readCursor");
+_Static_assert(__builtin_offsetof(CinematicQueue, count)       == 0x38, "CinematicQueue.count");
+_Static_assert(__builtin_offsetof(CinematicQueue, gameStateMode) == 0x40, "CinematicQueue.gameStateMode");
+_Static_assert(__builtin_offsetof(CinematicQueue, active)      == 0x44, "CinematicQueue.active");
+#endif
+
 /* gp-relative small-data globals (read %gp_rel in the original). */
 extern s32 g_nSavePromptPending;    /* show-saving-prompt gate (0x1A7B94) */
 extern s32 g_nLevelExitRequested;   /* in-level frame-loop exit flag (0x1A8B84) */
