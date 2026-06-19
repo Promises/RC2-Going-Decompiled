@@ -51,18 +51,52 @@ static-`0x1A8860` content at `0x1A8860+0x350 = 0x1A8BB0`. It is **not** a transi
 spill — it is the persistent consequence of the +0x350 relocation. The real live
 `g_nGameState` is at `0x1A8BB0 + 0x350 = 0x1A8F00` (= 0 during gameplay).
 
-## Leading mechanism hypothesis: a gp-base shift of +0x340 (relocator RE in flight)
+## Mechanism: NOT a gp-shift — the relocator is outside the boot ELF (likely a disc overlay)
 
-`g_gameTime` is accessed **gp-relative**: `lw …,0x2618(gp)`, boot gp = `0x1AEFF0`
-→ `0x1B1608` (static). The live value sits at `0x1B1948 = 0x1B1608 + 0x340`. If
-in-level code runs with **gp = `0x1AEFF0 + 0x340 = 0x1AF330`**, then `gp+0x2618` =
-`0x1B1948` exactly — so block B (+0x340) is explained by a **+0x340 gp-base
-shift**, with the data block relocated to match. A ghidra-annotator is confirming:
-where gp is set for in-level, whether the accessors are resident-code-with-shifted-gp
-or a disc-loaded overlay, why block A is +0x350 (0x10 more than block B — an
-insertion at 0x1A9480), and completeness (any relocated ranges outside the
-captured window). **This section will be finalized when that RE lands** — the map
-above is ground truth regardless of mechanism.
+A gp-base-shift hypothesis (gp 0x1AEFF0 → 0x1AF330) was **REFUTED** by an
+independent Ghidra RE:
+- **gp is set exactly once**, in `_start` (0x131C50: `move gp,a0`, a0=0x1AEFF0),
+  and **never reassigned** anywhere in the boot ELF. No level-load/overlay/main-loop
+  path shifts it. (The lone non-`_start` `lui gp,0x1001` is scratch-register reuse
+  in a VU1 packet builder, not a gp reassignment.)
+- The **resident** in-level accessors read/write the **static** addresses: ~19
+  gameplay functions read `g_gameTime` via `lw 0x2618(gp)` = 0x1B1608; the clock
+  writer `FUN_002F6110` writes 0x1B1608 **absolutely** (`lui v0,0x1b; sw …,0x1608`).
+- `0x1A8F00` (live g_nGameState) has **zero** references in the boot ELF;
+  `0x1B1948`'s only static refs are a coincidental GIF-template table.
+- **No** memcpy/DMA/decompress of a ~0x9600 block into 0x1A8340, anywhere.
+
+**Yet the relocated data is genuinely LIVE, not a frozen copy:** the dump at
+0x1B1948 holds `g_gameTime`=0x4DF6 plus live floats and `0x9` — values that are
+**all-zero in the ELF**, so something *writes* them at runtime. And nothing in the
+boot ELF does.
+
+**Therefore the gameplay code driving the captured frames is not the boot-ELF
+resident engine** — the relocation is produced *outside* `SCUS_972.68`, consistent
+with a **disc-loaded engine/level overlay linked +0x340/+0x350** (R&C's overlays,
+the "DVP/VU overlays TODO" in CLAUDE.md). That overlay's code+data is not in the
+boot ELF, so from this binary alone: the block-A +0x350 vs block-B +0x340 split
+(the 0x10 insertion at 0x1A9480), the writer of 0x1A8F00, and completeness
+(whether code/other segments outside the captured window are also relocated)
+**cannot be determined.** I will not guess them.
+
+> **⚠️ Implication worth surfacing (not yet confirmed):** if gameplay runs a
+> +0x340-relocated overlay instance, then the boot-ELF resident gameplay functions
+> we've been matching (StepMobyMotion 0x2B6000, UpdateGameState 0x2B5B38, …) may be
+> a frontend/dormant instance, with the *running* in-level copies at a shifted
+> base. This needs runtime proof before it changes any decomp assumption.
+
+### Decisive next step (runtime — the tester's instrumentation can settle it)
+Static analysis is exhausted. In PCSX2, during confirmed controllable gameplay,
+set a **write-watchpoint on 0x1B1948 and on 0x1B1608** for one frame:
+- which address the running clock actually writes tells us live-vs-dormant;
+- the **PC** of the 0x1B1948 writer tells us whether it is resident `.text`
+  (→ a relocating loader patched the absolute refs) or shifted `.text`
+  (→ a relocated overlay instance). Either answer resolves the mechanism and the
+  completeness question in one shot.
+
+The **empirical un-relocation map below is ground truth regardless of mechanism**,
+so the tester's seeding/validation is unblocked now.
 
 ## What the tester needs to do
 
