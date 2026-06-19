@@ -1614,6 +1614,11 @@ GuiSpriteElementDraw = 0x00337128; // CONFIRMED - sprite draw virtual (blit)
 GuiTextElementDraw = 0x003378A0; // CONFIRMED - text draw virtual (align 0 left 1 center 2 right)
 GuiTextElementMeasure = 0x00337868; // CONFIRMED - text pixel-width measure
 GuiMenuListDraw = 0x00348E70; // UNCONFIRMED (not runtime-traced) - per-frame draw of a vertical text-menu/list widget per-row layout via self+0x5c origin, SetText (localized unless self+0xc4), per-row color (sel +0xac / normal +0xb0 / disabled +0xb4) + optional highlight rects (DrawFlatRect2d), GuiTextElementDraw each row. PURE/PORTABLE (HW only in callees). Callers FUN_0033f478/00342978/00342e48/00343558. EU mirror 0x0034A300.
+GuiMenuListSetRows = 0x00348DA0; // CONFIRMED - binds row-entry array (self+0x68) then counts rows (entry stride 5 floats=0x14, stop on entry[0]<=0 sentinel or cap 16) into self+0xc0 rowCount, clamps self+0x60 selectedRow. GuiMenuList accessor family. EU 0x0034A230
+GuiMenuListHandleInput = 0x00348CB8; // CONFIRMED - D-pad nav for the menu-list - pad 0x1000 up/0x4000 down/0x40 confirm, moves self+0x60 selectedRow wrapping in [0,rowCount-1] skipping disabled rows (self+0x6c flag==0), plays UI sound 3 via PlayGlobalSound, returns 1 on confirm of an enabled row. EU 0x0034A148
+GuiMenuListSetRowSpacing = 0x00348E10; // CONFIRMED - sets self+0xb8 rowYBase and self+0xbc rowYStep (row Y = base + step*i in GuiMenuListDraw). GuiMenuList accessor family. EU 0x0034A2A0
+GuiMenuListSetOrigin = 0x00348E28; // CONFIRMED - writes the float vec at *(self+0x5c) - [0]=originX [1]=originY [2]=0 [3]=0 - the per-row layout origin read by GuiMenuListDraw. EU 0x0034A2B8
+// GuiMenuList accessor family - MATCHED real-C in text/248B50.c, kept as func_ (naming a matched fn in symbol_addrs desyncs its frozen .s glabel and breaks the by-name objdiff match): func_00348E20 SetSelectedUnderlineFlag (+0xc8), func_00348E50 SetSelectedRow (+0x60), func_00348E58 SetUnderlineRow (+0xcc), func_00348E60 GetSelectedRow (returns +0x60), func_00348E68 GetRowCount (returns +0xc0). Identity in their text/248B50.c doc comments + Ghidra plates.
 GuiListSetVisibleRows = 0x00337B70; // CONFIRMED - list visible-row count
 GuiListSetItemCount = 0x00337A38; // CONFIRMED - list +0x40 item count
 GuiListSetScrollPos = 0x00337A40; // CONFIRMED - map index/count to fractional scrollbar position
