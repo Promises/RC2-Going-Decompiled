@@ -55,7 +55,19 @@ typedef struct Moby {
     /* 0xBE */ u8 animFlags;      /* one-shot latch bits set by SetMobyFlagBit* */
     /* 0xBF */ u8 padBF[0x39];
     /* 0xF8 */ f32 moveSpeed;     /* per-frame move speed (moby+0xF8) */
+    /* 0xFC */ u8 padTail[0x100 - 0xFC]; /* pad this local field-view out to the
+                                            canonical Moby SIZE (0x100, see moby.h)
+                                            so the functional-equivalence tester can
+                                            allocate + bind a full Moby. Keeps this
+                                            TU's own field names; only the size is
+                                            unified. Byte-neutral: trailing only. */
 } Moby;
+/* Verify the view spans the full canonical 0x100 record (ILP32 only — the
+ * matching ee-gcc 2.9 lacks both _Static_assert and __SIZEOF_POINTER__, and a
+ * 64-bit host widens pExtra; same guard as include/moby.h). */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+_Static_assert(sizeof(Moby) == 0x100, "Moby must be 0x100 under ILP32");
+#endif
 
 /* True small / gp-addressable globals (complete <=8-byte declarations -> %gp_rel). */
 extern s32 g_gameStateStackDepth;          /* 0x1AA100 game-state stack depth (gated <8) */

@@ -80,7 +80,21 @@ typedef struct Moby {
     /* 0xBC */ u8 lightMode;
     /* 0xBD */ u8 padBD[1];
     /* 0xBE */ u8 animFlags;
+    /* 0xBF */ u8 padTail[0x100 - 0xBF]; /* pad this local field-view out to the
+                                            canonical Moby SIZE (0x100, see moby.h)
+                                            so the functional-equivalence tester can
+                                            allocate + bind a full Moby. This keeps
+                                            the TU's own field names (which diverge
+                                            from moby.h's) - only the total size is
+                                            unified. Byte-neutral: trailing only, no
+                                            field above this moves. */
 } Moby;
+/* Verify the view spans the full canonical 0x100 record (ILP32 only — the
+ * matching ee-gcc 2.9 lacks both _Static_assert and __SIZEOF_POINTER__, and a
+ * 64-bit host widens pExtra; same guard as include/moby.h). */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+_Static_assert(sizeof(Moby) == 0x100, "Moby must be 0x100 under ILP32");
+#endif
 
 /* Moby animation header view for func_002A85B8 (anim id bookkeeping). */
 typedef struct MobyAnim {
