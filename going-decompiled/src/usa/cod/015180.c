@@ -1064,6 +1064,11 @@ s32 func_0011F688(s32 *dst, s32 *src, u32 nbytes) {
     return 0;
 }
 
+/* func_0011F6C0(first, last, value): linear find — return the first pointer in
+ * [first,last) whose word equals value, else 0. The original is a frameless leaf
+ * built from branch-likely (beql/bnel) tests and movz tail-merges at the found/
+ * not-found joins; ee-gcc 2.9 at -O2 emits an ordinary beq/bne loop (12.5%), not
+ * this conditional-move form, so it can't match from C. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F6C0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F700);
@@ -1121,6 +1126,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F938);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F9E4);
 
+/* func_0011FA18: frameless tail call `j func_0011F130` in the original. Because
+ * func_0011F130 is itself a framed non-leaf, ee-gcc 2.9 declines the sibling-call
+ * optimisation here and emits a full jal + stack frame, so this shape can't match
+ * from C. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011FA18);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", exit);
@@ -1320,7 +1329,15 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00121450);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00121AB8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00121B18);
+/**
+ * Frameless tail-call thunk: forward to func_00120368 (which dispatches the
+ * installed handler D_00135D34). Takes and returns nothing. The original is a
+ * bare `j func_00120368`; ee-gcc 2.9 reproduces the sibling call because both
+ * the thunk and target are void(void) leaves with no argument/return shuffle.
+ */
+void func_00121B18(void) {
+    func_00120368();
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00121B20);
 

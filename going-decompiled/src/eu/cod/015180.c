@@ -1615,7 +1615,15 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00121450);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00121AB8);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00121B18);
+/**
+ * Frameless tail-call thunk: forward to func_00120368 (which dispatches the
+ * installed handler D_00135DB4). Takes and returns nothing. The original is a
+ * bare `j func_00120368`; ee-gcc 2.9 reproduces the sibling call because both
+ * the thunk and target are void(void) leaves with no argument/return shuffle.
+ */
+void func_00121B18(void) {
+    func_00120368();
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00121B20);
 
