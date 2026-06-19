@@ -46,6 +46,17 @@ def load_symbol_addrs(path):
     return addr, alias
 
 
+def load_names(path):
+    """Read one symbol name per line, stripping `#` comments and blanks."""
+    out = set()
+    with open(path) as f:
+        for ln in f:
+            ln = ln.split("#", 1)[0].strip()
+            if ln:
+                out.add(ln)
+    return out
+
+
 def resolve(name, addr_by_name, addr_by_alias):
     m = re.fullmatch(r'D_([0-9A-Fa-f]{6,8})', name)
     if m:
@@ -63,18 +74,23 @@ def main():
     names_path, syms_path, outdir = sys.argv[1:4]
     os.makedirs(outdir, exist_ok=True)
 
-    with open(names_path) as f:
-        names = sorted({ln.strip() for ln in f if ln.strip()})
+    names = load_names(names_path)
+    # const/rodata entries (string literals etc.) live in a sibling data_const.txt;
+    # they are still PLACED (referenced by #else bodies, seeded from the snapshot)
+    # but tagged `const` so the tester's effect-diff excludes them. See that file.
+    const_path = os.path.join(os.path.dirname(names_path), "data_const.txt")
+    const_names = load_names(const_path) if os.path.exists(const_path) else set()
+    names = names | const_names  # place the union; const ones just carry a tag
     addr_by_name, addr_by_alias = load_symbol_addrs(syms_path)
 
-    placed = []      # (name, addr)
+    placed = []      # (name, addr, is_const)
     unresolved = []
-    for n in names:
+    for n in sorted(names):
         a = resolve(n, addr_by_name, addr_by_alias)
         if a is None:
             unresolved.append(n)
         else:
-            placed.append((n, a))
+            placed.append((n, a, n in const_names))
     placed.sort(key=lambda t: t[1])
 
     base = placed[0][1]
@@ -108,8 +124,9 @@ def main():
         f.write("}\n")
         f.write("INSERT AFTER .bss;\n\n")
         f.write("/* ROM base = 0x%06X */\n" % base)
-        for name, a in placed:
-            f.write("PROVIDE(%s = __gamedata_start + 0x%X);\n" % (name, a - base))
+        for name, a, is_const in placed:
+            tag = "  /* const */" if is_const else ""
+            f.write("PROVIDE(%s = __gamedata_start + 0x%X);%s\n" % (name, a - base, tag))
 
     # ---- arena_map.txt : machine-readable placement map for the PINE snapshot
     # seeder (tester's state-seeding harness). Seeding only needs base/span (the
@@ -121,10 +138,14 @@ def main():
         f.write("# storage symbol: g_dataArena  ==  __gamedata_start (linker)\n")
         f.write("# seed: memcpy snapshot[rom_addr] -> g_dataArena[rom_addr - base]\n")
         f.write("#       for rom_addr in [base, base+span).\n")
-        f.write("# base 0x%06X  span 0x%X  placed %d\n" % (base, span, len(placed)))
-        f.write("# columns: <symbol> <rom_addr> <arena_offset>\n")
-        for name, a in placed:
-            f.write("%s 0x%06X 0x%X\n" % (name, a, a - base))
+        n_const = sum(1 for _, _, c in placed if c)
+        f.write("# base 0x%06X  span 0x%X  placed %d  (const %d)\n"
+                % (base, span, len(placed), n_const))
+        f.write("# columns: <symbol> <rom_addr> <arena_offset> [const]\n")
+        f.write("#   'const' tag = static rodata/string literal (see data_const.txt);\n")
+        f.write("#   NOT mutable state - the tester's effect-diff must EXCLUDE these.\n")
+        for name, a, is_const in placed:
+            f.write("%s 0x%06X 0x%X%s\n" % (name, a, a - base, " const" if is_const else ""))
 
     # ---- arena_unresolved.txt : the tail needing canonical addresses (Track-B)
     with open(os.path.join(outdir, "arena_unresolved.txt"), "w") as f:
@@ -137,7 +158,8 @@ def main():
             f.write(n + "\n")
 
     print("base=0x%06X span=0x%X (%d bytes)" % (base, span, span))
-    print("placed=%d  unresolved=%d  (of %d)" % (len(placed), len(unresolved), len(names)))
+    print("placed=%d  (const %d)  unresolved=%d  (of %d)"
+          % (len(placed), sum(1 for _, _, c in placed if c), len(unresolved), len(names)))
     print("wrote arena.ld, arena_storage.c, arena_map.txt, arena_unresolved.txt to", outdir)
 
 

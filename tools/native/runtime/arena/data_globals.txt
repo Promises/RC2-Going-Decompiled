@@ -131,10 +131,6 @@ D_1A9020
 D_1A9A88
 D_1A9E94
 D_1A9E98
-D_1AA198
-D_1AA1E8
-D_1AA1F8
-D_1AA220
 D_1AA450
 D_1AA454
 D_1AA458
@@ -178,13 +174,7 @@ D_1AE0B8
 D_1AE150
 D_1AE154
 D_1AE158
-D_1AE758
-D_1AE770
 D_1AE788
-D_1AE7D8
-D_1AE7E8
-D_1AE820
-D_1AE838
 D_1AE860
 D_1B2354
 D_1B8FC0
@@ -412,7 +402,6 @@ g_tieVisibleClassList
 g_tieVramLruHead
 g_tieVramLruSize
 g_tieVramLruTail
-g_vendorCaptionFmt
 g_vendorUi
 g_voiceTrigger
 g_voiceTriggerAux

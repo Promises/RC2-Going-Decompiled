@@ -1,0 +1,25 @@
+# data_const.txt - arena entries that are STATIC const/rodata (string literals or
+# a blank format template) in the boot ELF, NOT mutable game state. Recovered by
+# classify_const_globals.py (static-ELF word-run scan) + a Ghidra xref check
+# (2026-06-19; see ../../inlevel_layout_delta.md). These are referenced by
+# #else bodies as `extern const char[]` strings (passed to debug-print / caption
+# helpers), so gen_arena.py STILL PLACES them (resolved + seeded from the PINE
+# snapshot) - but TAGS them `const` in arena_map.txt. The tester's in-level
+# effect-diff MUST EXCLUDE these: they never change, so a diff on them is a false
+# mismatch. This is the authoritative const exclude-list.
+# NOTE: this is the AUTHORITATIVE list (Ghidra no-writer verified). The classifier
+# is a candidate-finder only and UNDER-reports word-less assert strings (e.g.
+# D_1AE770 "t>=0.0f && t<= 1.0f" has no 3-letter word) and blank templates
+# (g_vendorCaptionFmt) - those were added here after a manual xref check.
+# Format: one NAME per line; trailing `#` comment = the static string content.
+D_1AA198            # "Initialising music..."
+D_1AA1E8            # "music_StopLoad"
+D_1AA1F8            # "****Load file failed to start!****"  (DebugPrintStub arg, text/1B4218.c)
+D_1AA220            # "wtf - music handle got lost"
+g_vendorCaptionFmt  # 0x1AD338 vendor caption format template (blank/padded; 1 reader SetVendorCaption@0x2F9784, no writers)
+D_1AE758            # "gui/mathUtil.cpp" assert file (D_1AE758 = str@0x1AE757 + 1)
+D_1AE770            # "t>=0.0f && t<= 1.0f" assert expr
+D_1AE7D8            # "[ Error ] %s"
+D_1AE7E8            # "pts buffer overflow"
+D_1AE820            # "decode thread: aborted"
+D_1AE838            # "sceMpegGetPicture() decode error"

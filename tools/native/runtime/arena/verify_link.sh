@@ -31,7 +31,10 @@ docker --context "$CTX" run --rm -v "$ROOT":/work -w /work "$IMG" sh -c '
 
 # Placed = data_globals minus the generator-unresolved tail.
 grep -vE '^#' "$ARENA/arena_unresolved.txt" | sort -u > /tmp/_unres.txt
-sort -u "$ARENA/data_globals.txt" > /tmp/_names.txt
+# placed names = mutable data_globals + the const-tagged entries (data_const.txt,
+# field 1 of non-comment lines) - both are PROVIDEd in arena.ld and must resolve.
+awk '$1 !~ /^#/ {print $1}' "$ARENA/data_globals.txt" "$ARENA/data_const.txt" \
+  | sort -u > /tmp/_names.txt
 comm -23 /tmp/_names.txt /tmp/_unres.txt > /tmp/_placed.txt
 
 # Any placed global still undefined is a FAIL (use python for set logic — comm

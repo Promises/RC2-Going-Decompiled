@@ -2,8 +2,10 @@
 # storage symbol: g_dataArena  ==  __gamedata_start (linker)
 # seed: memcpy snapshot[rom_addr] -> g_dataArena[rom_addr - base]
 #       for rom_addr in [base, base+span).
-# base 0x138180  span 0x146780  placed 441
-# columns: <symbol> <rom_addr> <arena_offset>
+# base 0x138180  span 0x146780  placed 441  (const 11)
+# columns: <symbol> <rom_addr> <arena_offset> [const]
+#   'const' tag = static rodata/string literal (see data_const.txt);
+#   NOT mutable state - the tester's effect-diff must EXCLUDE these.
 D_138180 0x138180 0x0
 g_padButtonsHeld 0x138340 0x1C0
 g_padButtonsPressed 0x138344 0x1C4
@@ -176,10 +178,10 @@ g_gameStateStackDepth 0x1AA100 0x71F80
 g_gameStateTransitionDoneFlag 0x1AA104 0x71F84
 g_mobyMotionProfileTicks 0x1AA10C 0x71F8C
 g_mobyMotionProfileCount 0x1AA114 0x71F94
-D_1AA198 0x1AA198 0x72018
-D_1AA1E8 0x1AA1E8 0x72068
-D_1AA1F8 0x1AA1F8 0x72078
-D_1AA220 0x1AA220 0x720A0
+D_1AA198 0x1AA198 0x72018 const
+D_1AA1E8 0x1AA1E8 0x72068 const
+D_1AA1F8 0x1AA1F8 0x72078 const
+D_1AA220 0x1AA220 0x720A0 const
 D_1AA450 0x1AA450 0x722D0
 D_1AA454 0x1AA454 0x722D4
 D_1AA458 0x1AA458 0x722D8
@@ -214,7 +216,7 @@ D_001ABC01 0x1ABC01 0x73A81
 D_001ABD20 0x1ABD20 0x73BA0
 D_1ABD48 0x1ABD48 0x73BC8
 g_tieDrawTemplate 0x1ACAE0 0x74960
-g_vendorCaptionFmt 0x1AD338 0x751B8
+g_vendorCaptionFmt 0x1AD338 0x751B8 const
 D_1AD564 0x1AD564 0x753E4
 D_001AD7C4 0x1AD7C4 0x75644
 g_voiceTrigger 0x1AD7C4 0x75644
@@ -247,13 +249,13 @@ D_1AE0B8 0x1AE0B8 0x75F38
 D_1AE150 0x1AE150 0x75FD0
 D_1AE154 0x1AE154 0x75FD4
 D_1AE158 0x1AE158 0x75FD8
-D_1AE758 0x1AE758 0x765D8
-D_1AE770 0x1AE770 0x765F0
+D_1AE758 0x1AE758 0x765D8 const
+D_1AE770 0x1AE770 0x765F0 const
 D_1AE788 0x1AE788 0x76608
-D_1AE7D8 0x1AE7D8 0x76658
-D_1AE7E8 0x1AE7E8 0x76668
-D_1AE820 0x1AE820 0x766A0
-D_1AE838 0x1AE838 0x766B8
+D_1AE7D8 0x1AE7D8 0x76658 const
+D_1AE7E8 0x1AE7E8 0x76668 const
+D_1AE820 0x1AE820 0x766A0 const
+D_1AE838 0x1AE838 0x766B8 const
 D_1AE860 0x1AE860 0x766E0
 g_cameraCallbacks 0x1B1440 0x792C0
 g_cameraCallbackCount 0x1B1480 0x79300
