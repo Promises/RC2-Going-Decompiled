@@ -1218,8 +1218,39 @@ s32 func_002D3BB0(void) {
     return 0;
 }
 
-/* 8-byte-packed-save wall: input handler saving $16 + $31 (2 GPRs). */
+/* Menu confirm/cancel poll variant (same shape as func_002D3F78): confirm bit
+ * (0x10) latches the active screen's pending result into block[0x18] (or returns
+ * -1 when no pending sub-result); cancel bit (0x900) returns 1; otherwise ticks
+ * the idle handler func_0029D4E8 and returns 0.
+ * Wall: 8-byte-packed-save ($16 + $31) with the result-threaded-$16 /
+ * branch-likely merge shape the later cc1 emits. Preserved as portable C. */
+extern void func_0029D4E8(void);
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D3BE0);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 1-GPR packed-save frame +
+ * branch-likely confirm shape / single-register result threading. */
+s32 func_002D3BE0(void) {
+    s32 flags = g_padButtonsPressed;
+    s32 *block = (s32 *)g_menuScreenBlock;
+    if (flags & 0x10) {
+        s32 v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
+        if (v != 0) {
+            block[0x18 / 4] = v;
+            return 0;
+        }
+        if (block[0x134 / 4] == 0) {
+            return -1;
+        }
+        return 0;
+    }
+    if (flags & 0x900) {
+        return 1;
+    }
+    func_0029D4E8();
+    return 0;
+}
+#endif
 
 /* Draw-batch wrapper. */
 s32 func_002D3C68(void) {
@@ -1229,8 +1260,59 @@ s32 func_002D3C68(void) {
     return 0;
 }
 
-/* 8-byte-packed-save wall: input handler saving $16 + $31 (2 GPRs). */
+/* Cinematics/cutscene confirm poll: on the confirm (0x10) and cancel (0x900) pad
+ * bits it first "unlocks" the current cutscene record (struct at g_health+0x464):
+ * clamps the play-count at +0x1D4 toward g_gsPixelOffsetY+0x3C, raises the
+ * high-water mark at +0x1D8 to that same value, and sets the bit for the current
+ * g_playerProgress slot (plus the 0x80000000 sentinel) in the seen-mask at +0x1DC.
+ * Confirm then returns the active screen's pending result tri-state (latched into
+ * block[0x18]); cancel returns 1; the idle path ticks func_0029D528 and returns 0.
+ * Wall: 8-byte-packed-save ($16 + $31) + bnel branch-likely dead-store shape.
+ * Preserved as portable C. */
+extern void func_0029D528(void);
+extern s32 g_health;            /* 0x18C2EC - base of the per-cutscene unlock records at +0x464 */
+extern s32 g_gsPixelOffsetY;    /* 0x1A7354 - play-count source at +0x3C */
+extern s32 g_playerProgress;    /* 0x1A79F8 - current progress slot (seen-mask bit index) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D3C98);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 1-GPR packed-save frame +
+ * bnel branch-likely dead stores / single-register result threading. */
+static void MenuCutsceneUnlockCurrent(void) {
+    u8 *rec = (u8 *)&g_health + 0x464;
+    s32 target = *(s32 *)((u8 *)&g_gsPixelOffsetY + 0x3C);
+    if (*(u16 *)(rec + 0x1D4) <= 0xFFFE) {
+        *(u16 *)(rec + 0x1D4) = (u16)(target + 1);
+    }
+    if (*(s32 *)(rec + 0x1D8) < target) {
+        *(s32 *)(rec + 0x1D8) = target;
+    }
+    *(u32 *)(rec + 0x1DC) |= (1u << g_playerProgress) | 0x80000000u;
+}
+s32 func_002D3C98(void) {
+    s32 flags = g_padButtonsPressed;
+    s32 *block = (s32 *)g_menuScreenBlock;
+    if (flags & 0x10) {
+        s32 v;
+        MenuCutsceneUnlockCurrent();
+        v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
+        if (v != 0) {
+            block[0x18 / 4] = v;
+            return 0;
+        }
+        if (block[0x134 / 4] == 0) {
+            return -1;
+        }
+        return 0;
+    }
+    if (flags & 0x900) {
+        MenuCutsceneUnlockCurrent();
+        return 1;
+    }
+    func_0029D528();
+    return 0;
+}
+#endif
 
 /* Draw-batch wrapper. */
 s32 func_002D3DD8(void) {
@@ -1240,8 +1322,35 @@ s32 func_002D3DD8(void) {
     return 0;
 }
 
-/* 8-byte-packed-save wall: input handler saving $16 + $31 (2 GPRs). */
+/* Menu confirm/cancel poll variant (idle handler func_0029D598). Same shape as
+ * func_002D3F78. Wall: 8-byte-packed-save ($16 + $31) + branch-likely confirm
+ * shape / single-register result threading. Preserved as portable C. */
+extern void func_0029D598(void);
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D3E08);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 1-GPR packed-save frame. */
+s32 func_002D3E08(void) {
+    s32 flags = g_padButtonsPressed;
+    s32 *block = (s32 *)g_menuScreenBlock;
+    if (flags & 0x10) {
+        s32 v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
+        if (v != 0) {
+            block[0x18 / 4] = v;
+            return 0;
+        }
+        if (block[0x134 / 4] == 0) {
+            return -1;
+        }
+        return 0;
+    }
+    if (flags & 0x900) {
+        return 1;
+    }
+    func_0029D598();
+    return 0;
+}
+#endif
 
 /* Draw-batch wrapper. */
 s32 func_002D3E90(void) {
@@ -1251,8 +1360,35 @@ s32 func_002D3E90(void) {
     return 0;
 }
 
-/* 8-byte-packed-save wall: input handler saving $16 + $31 (2 GPRs). */
+/* Menu confirm/cancel poll variant (idle handler func_0029D608). Same shape as
+ * func_002D3F78. Wall: 8-byte-packed-save ($16 + $31) + branch-likely confirm
+ * shape / single-register result threading. Preserved as portable C. */
+extern void func_0029D608(void);
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D3EC0);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 1-GPR packed-save frame. */
+s32 func_002D3EC0(void) {
+    s32 flags = g_padButtonsPressed;
+    s32 *block = (s32 *)g_menuScreenBlock;
+    if (flags & 0x10) {
+        s32 v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
+        if (v != 0) {
+            block[0x18 / 4] = v;
+            return 0;
+        }
+        if (block[0x134 / 4] == 0) {
+            return -1;
+        }
+        return 0;
+    }
+    if (flags & 0x900) {
+        return 1;
+    }
+    func_0029D608();
+    return 0;
+}
+#endif
 
 /* Draw-batch wrapper. */
 s32 func_002D3F48(void) {
@@ -1303,8 +1439,35 @@ s32 func_002D4000(void) {
     return 0;
 }
 
-/* 8-byte-packed-save wall: input handler saving $16 + $31 (2 GPRs). */
+/* Menu confirm/cancel poll variant (idle handler func_0029D7C8). Same shape as
+ * func_002D3F78. Wall: 8-byte-packed-save ($16 + $31) + branch-likely confirm
+ * shape / single-register result threading. Preserved as portable C. */
+extern void func_0029D7C8(void);
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D4030);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 1-GPR packed-save frame. */
+s32 func_002D4030(void) {
+    s32 flags = g_padButtonsPressed;
+    s32 *block = (s32 *)g_menuScreenBlock;
+    if (flags & 0x10) {
+        s32 v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
+        if (v != 0) {
+            block[0x18 / 4] = v;
+            return 0;
+        }
+        if (block[0x134 / 4] == 0) {
+            return -1;
+        }
+        return 0;
+    }
+    if (flags & 0x900) {
+        return 1;
+    }
+    func_0029D7C8();
+    return 0;
+}
+#endif
 
 /* Draw-batch wrapper. */
 s32 func_002D40B8(void) {
@@ -1314,8 +1477,42 @@ s32 func_002D40B8(void) {
     return 0;
 }
 
-/* 8-byte-packed-save wall: input handler saving $16 + $31 (2 GPRs). */
+/* Menu confirm/cancel poll variant with a deferred game-state action: confirm
+ * (0x10) and cancel (0x900) behave like func_002D3F78; the idle path ticks
+ * func_0029D678 and, when that signals (nonzero), fires MenuScreenDoAction(0xD,0,
+ * &outFlag) — opcode 0xD is a RequestGameStateChange — with the out-flag slot
+ * pre-zeroed. Wall: 8-byte-packed-save ($16 + $31). Preserved as portable C. */
+extern s32 func_0029D678(void);
+extern s32 MenuScreenDoAction(s32 opcode, s32 arg, s32 *outFlag);
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D40E8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 1-GPR packed-save frame +
+ * branch-likely confirm shape. */
+s32 func_002D40E8(void) {
+    s32 flags = g_padButtonsPressed;
+    s32 *block = (s32 *)g_menuScreenBlock;
+    if (flags & 0x10) {
+        s32 v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
+        if (v != 0) {
+            block[0x18 / 4] = v;
+            return 0;
+        }
+        if (block[0x134 / 4] == 0) {
+            return -1;
+        }
+        return 0;
+    }
+    if (flags & 0x900) {
+        return 1;
+    }
+    if (func_0029D678() != 0) {
+        s32 outFlag = 0;
+        MenuScreenDoAction(0xD, 0, &outFlag);
+    }
+    return 0;
+}
+#endif
 
 /* Draw-batch wrapper. */
 s32 func_002D4188(void) {
@@ -1325,8 +1522,35 @@ s32 func_002D4188(void) {
     return 0;
 }
 
-/* 8-byte-packed-save wall: input handler saving $16 + $31 (2 GPRs). */
+/* Menu confirm/cancel poll variant (idle handler func_0029D6E8). Same shape as
+ * func_002D3F78. Wall: 8-byte-packed-save ($16 + $31) + branch-likely confirm
+ * shape / single-register result threading. Preserved as portable C. */
+extern void func_0029D6E8(void);
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D41B8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 1-GPR packed-save frame. */
+s32 func_002D41B8(void) {
+    s32 flags = g_padButtonsPressed;
+    s32 *block = (s32 *)g_menuScreenBlock;
+    if (flags & 0x10) {
+        s32 v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
+        if (v != 0) {
+            block[0x18 / 4] = v;
+            return 0;
+        }
+        if (block[0x134 / 4] == 0) {
+            return -1;
+        }
+        return 0;
+    }
+    if (flags & 0x900) {
+        return 1;
+    }
+    func_0029D6E8();
+    return 0;
+}
+#endif
 
 /* Draw-batch wrapper. */
 s32 func_002D4240(void) {
@@ -1336,8 +1560,52 @@ s32 func_002D4240(void) {
     return 0;
 }
 
-/* 8-byte-packed-save wall: input handler saving $16 + $17 + $31 (3 GPRs). */
+/* Menu confirm/cancel poll driven by the global input flag word (D_138180[0x1C4])
+ * that also forwards a selected GUI-list entry as a menu command. Confirm (0x10)
+ * latches the active screen's pending result like the other polls; cancel (0x900)
+ * returns 1; otherwise it ticks the idle handler func_0029D758 and, on the
+ * confirm pad bit (0x40) with the GUI up, reads the selected entry of the list
+ * widget at g_guiInstance+0x3F3F0 (func_0033F360) and builds a command record
+ * (opcode = entry[0x8], arg = entry[0xC]) handed to func_002D6B00 (-> MenuScreenDoAction).
+ * Wall: 8-byte-packed-save ($16 + $17 + $31). Preserved as portable C. */
+extern void func_0029D758(void);
+extern void *func_0033F360(void *widget);
+extern void func_002D6B00(void *record);
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D4270);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame +
+ * branch-likely confirm shape / single-register result threading. */
+s32 func_002D4270(void) {
+    s32 flags = *(s32 *)(D_138180 + 0x1C4);
+    s32 *block;
+    s32 v;
+    if (flags & 0x10) {
+        block = (s32 *)g_menuScreenBlock;
+        v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
+        if (v != 0) {
+            block[0x18 / 4] = v;
+            return 0;
+        }
+        if (block[0x134 / 4] == 0) {
+            return -1;
+        }
+        return 0;
+    }
+    if (flags & 0x900) {
+        return 1;
+    }
+    func_0029D758();
+    if ((*(s32 *)(D_138180 + 0x1C4) & 0x40) && g_guiInstance) {
+        u8 record[0x30];
+        u8 *entry = (u8 *)func_0033F360(g_guiInstance + 0x3F3F0);
+        *(u16 *)(record + 0x2) = *(u16 *)(entry + 0x8);
+        *(s32 *)(record + 0x4) = *(s32 *)(entry + 0xC);
+        func_002D6B00(record);
+    }
+    return 0;
+}
+#endif
 
 /* Draw-batch wrapper. */
 s32 func_002D4340(void) {
