@@ -176,7 +176,7 @@ extern f32 func_00283B30(f32 angle);  /* cosine */
 extern f32 func_00284590(f32 a, f32 b);
 extern s32 func_00284548(f32 a, f32 b);
 extern void Vec4SubVu0(Vec4 *dst, Vec4 *a, Vec4 *b);
-extern void Vec4ScaleVu0(Vec4 *dst, Vec4 *src, f32 s);
+extern void Vec4ScaleVu0(Vec4 *dst, f32 s, const Vec4 *src);   /* sig: scale BEFORE src (matches the def in 183558.c) */
 extern void Vec3RescaleToLenVu0(Vec4 *dst, f32 len, Vec4 *src);
 
 
@@ -990,7 +990,7 @@ void func_002B0DC8(Vec4 *src, Vec4 *out, s32 keepSign) {
     out->z = 0.0f;
     Vec3RescaleToLenVu0(out, 1.0f, out);
     if (keepSign == 0) {
-        Vec4ScaleVu0(out, out, -1.0f);
+        Vec4ScaleVu0(out, -1.0f, out);   /* sig is (dst, f32 scale, src); negate in place */
     }
 }
 #endif

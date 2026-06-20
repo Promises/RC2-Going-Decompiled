@@ -937,8 +937,9 @@ void func_00284408(const Vec4f src, const Vec4f scale, const Vec4f translation, 
 
 /**
  * Unpack a compact pose record at src ($4) into three float vectors at dst ($5):
- * a row of signed shorts converted with a 1/2^15 scale (vitof15), a second
- * 1/2^15 row, and a row of signed shorts at integer scale (vitof0). VU0 vitof.
+ * row1 = signed shorts at 1/2^15 (vitof15.xyzw); row2 = UNSIGNED shorts at
+ * 1/4096 (psrlw + vitof15.xyz) with its w-lane left as the raw un-converted int;
+ * row3 = signed shorts at integer scale (vitof0.xyz). VU0 vitof.
  */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002844A0);
@@ -947,8 +948,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002844A0);
 void func_002844A0(const s16 *src, Vec4f dst) {
     int i;
     const f32 inv15 = 1.0f / 32768.0f;
+    /* row1: signed shorts, vitof15 (/2^15) on all 4 lanes */
     for (i = 0; i < 4; i++) dst[i] = (f32)src[i] * inv15;
-    for (i = 0; i < 3; i++) dst[4 + i] = (f32)src[4 + i] * inv15;
+    /* row2: UNSIGNED shorts scaled by 1/4096 (asm psrlw + vitof15.xyz); the w
+     * lane is left as the raw un-converted int (u16)src[7]<<3, not a float. */
+    for (i = 0; i < 3; i++) dst[4 + i] = (f32)((unsigned short)src[4 + i]) * (1.0f / 4096.0f);
+    *(u32 *)&dst[7] = (u32)((unsigned short)src[7] << 3);
+    /* row3: signed shorts at integer scale (vitof0) */
     for (i = 0; i < 3; i++) dst[8 + i] = (f32)src[8 + i];
 }
 #endif

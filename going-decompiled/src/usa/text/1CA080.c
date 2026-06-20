@@ -205,7 +205,10 @@ void func_002CA998(void) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", ListScrollerSelectPrev);
 #else
 /* TODO(match): functional equivalent - not byte-exact; EE 64-bit sign-extend
- * `daddu` copy + commutative-addu operand order not reproduced by cc1. */
+ * `daddu` copy + commutative-addu operand order not reproduced by cc1.
+ * Returns the ADDRESS of the landed (non-empty) entry: the asm leaves
+ * v0 = &entries[idx] at jr ra (not the entry value; sibling SelectNext returns
+ * the value). The caller discards the result, so the game is unaffected. */
 s32 ListScrollerSelectPrev(s32 *list) {
     s32 *entries = list + 3;
     s32 entry;
@@ -218,7 +221,7 @@ s32 ListScrollerSelectPrev(s32 *list) {
         list[1] = idx;
         entry = entries[idx];
     } while (entry == 0);
-    return entry;
+    return (s32)&entries[list[1]];   /* list[1] holds the final idx */
 }
 #endif
 

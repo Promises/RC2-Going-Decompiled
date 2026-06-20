@@ -431,7 +431,7 @@ void func_00350910(s32 *st) {
         if (state == 3) {
             return;
         }
-        rdy = 0;
+        rdy = 1;   /* avail stays 0 here, so (s32)avail < 0x400 == 1 -> skips the drain */
     } else if (state == 1) {
         if (st[0xF] < 0x1000) {
             return;
@@ -439,7 +439,7 @@ void func_00350910(s32 *st) {
         avail = 0x1000 - st[0x14];
         rdy = (s32)avail < 0x400;
     } else {
-        rdy = 0;
+        rdy = 1;   /* avail stays 0 here, so (s32)avail < 0x400 == 1 -> skips the drain */
     }
 
     if (!rdy && st[6] << 10 <= st[0xF]) {
