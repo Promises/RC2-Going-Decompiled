@@ -192,7 +192,23 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8448);
  * recomputes the second mask from the original flags where the later cc1
  * keeps an incremental masked value and a -1 compare register in a0 - the
  * register-coloring/store-scheduling wall. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A85B8);
+#else
+void func_002A85B8(MobyAnim *m, s32 animId, s32 subAnim) {
+    u8 flags = m->animFlags & 0xFE;   /* clear "done" bit 0 */
+    u8 oldId = m->animId;
+
+    m->animId = animId;
+    m->prevAnimId = oldId;
+    m->animTimer = 0;
+    m->animFlags = flags;
+    if (subAnim != -1) {
+        m->subAnim = subAnim;
+        m->animFlags = flags & 0xFD; /* also clear bit 1 for the sub-anim path */
+    }
+}
+#endif
 
 /**
  * Quadratic ease-in: x squared.
@@ -292,7 +308,25 @@ f32 func_002A8910(f32 a1, f32 a0, f32 b0, f32 b1, f32 t) {
  * slot earlier - the register-coloring + store-scheduling wall. Re-derived from
  * func_002A8910 (the matched scalar twin); not byte-reachable with the pinned
  * cc1. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8948);
+#else
+void func_002A8948(Vec4 *out, Vec4 *p1, Vec4 *p2, Vec4 *p3, Vec4 *p4, f32 t) {
+    if (t == 0.0f) {
+        *out = *p1;
+        return;
+    }
+    if (t == 1.0f) {
+        *out = *p2;
+        return;
+    }
+    /* per axis: scalar cubic of the (p3,p1)->(p2,p4) segment; w := 0 */
+    out->x = func_002A8910(p3->x, p1->x, p2->x, p4->x, t);
+    out->y = func_002A8910(p3->y, p1->y, p2->y, p4->y, t);
+    out->w = 0.0f;
+    out->z = func_002A8910(p3->z, p1->z, p2->z, p4->z, t);
+}
+#endif
 
 /**
  * Cosine ("smootherstep"-style) ease between a and b by t in [0,1]: shortcut
@@ -337,12 +371,47 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A90A8);
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9348);
 
-/* func_002A9370: count a group's active mobys (state == -1 counts all,
- * otherwise only those in the given anim state). Best attempt 82%: byte-
- * identical except the list pointer colours v1 (reusing the address temp)
- * where the original loads it into v0 with a later move into a0 - the
- * register-coloring wall. */
+/* func_002A9370: count a group's active mobys filtered by anim state. When
+ * state == -1 every active (state byte >= 0) moby in the group is counted;
+ * otherwise the count is of the active mobys whose state byte differs from
+ * `state` (the equal-state ones are skipped). group == -1 returns 0. Best
+ * attempt 82%: byte-identical except the list pointer colours v1 (reusing
+ * the address temp) where the original loads it into v0 with a later move
+ * into a0 - the register-coloring wall. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9370);
+#else
+s32 func_002A9370(s32 group, s32 state) {
+    u16 *list;
+    s32 count;
+
+    if (group == -1) {
+        return 0;
+    }
+    list = g_mobyGroupLists[group];
+    if (list == 0) {
+        return 0;
+    }
+    count = 0;
+    do {
+        u16 entry = *list;
+        Moby *moby = (Moby *)((u8 *)g_mobyTableBase + (entry & 0x7FFF) * 0x100);
+
+        if (moby->state >= 0) {
+            if (state == -1) {
+                count = count + 1;
+            } else if ((u8)moby->state != state) {
+                count = count + 1;
+            }
+        }
+        list = list + 1;
+        if ((s16)entry < 0) {
+            break;
+        }
+    } while (1);
+    return count;
+}
+#endif
 
 /**
  * Set the light-mode byte of every moby in a group.
@@ -449,7 +518,23 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9708);
  * an asm scheduling barrier recover the copy/const order): the pinned cc1
  * still hoists the call-argument moves above the second source copy where
  * the later cc1 keeps them below - prologue-scheduling wall. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", ProbeGroundHeight);
+#else
+f32 ProbeGroundHeight(Vec4 *pos, f32 zOffset, s32 mask) {
+    QVec from;
+    QVec to;
+
+    from.q = *(u_long128 *)pos;
+    from.v.z = 0.00999999978f;          /* 0x3C23D70A == 0.01f */
+    to.q = *(u_long128 *)pos;
+    to.v.z = pos->z + zOffset;
+    if (CollLine(&to, &from, mask | 2, 0, 0) == 0) {
+        return 0.0f;
+    }
+    return g_collHitPoint.z;
+}
+#endif
 
 /**
  * Ground probe with the default parameters: half a unit above the query
@@ -467,7 +552,34 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A98B0);
  * div-by-zero check of the i%%n twice (one hoisted to the loop top) around
  * a single CSEd div - the div-expansion-scheduling wall (same family as
  * func_00351328). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A98B8);
+#else
+s32 func_002A98B8(f32 *pt, f32 *verts, s32 n) {
+    f32 px = pt[0];
+    f32 py = pt[1];
+    s32 i;
+
+    if (n <= 0) {
+        return 0;
+    }
+    for (i = 0; i < n; i++) {
+        s32 j = (i + 1) % n;
+        f32 *cur = (f32 *)((u8 *)verts + i * 0x10);
+        f32 *nxt = (f32 *)((u8 *)verts + j * 0x10);
+        f32 ex = px - cur[0];
+        f32 ey = py - cur[1];
+        f32 dx = nxt[0] - cur[0];
+        f32 dy = nxt[1] - cur[1];
+        f32 cross = dx * ey - dy * ex;
+
+        if (0.0f < cross) {
+            return i + 1;
+        }
+    }
+    return 0;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9958);
 
@@ -492,7 +604,17 @@ s32 func_002A9A38(f32 power, Moby *moby, s32 a, s32 b) {
  * live flag). Best attempt 58%: the pinned cc1 materialises the li 1 after
  * the first store (original: first insn, in v1) and insists on filling the
  * jr delay slot with the volatile sq - register-coloring + slot-fill wall. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9A68);
+#else
+void func_002A9A68(void *rec, s32 a, s32 b, f32 power, void *src) {
+    *(s32 *)((u8 *)rec + 0x10) = a;
+    *(s32 *)((u8 *)rec + 0x14) = b;
+    *(f32 *)((u8 *)rec + 0x1C) = power;
+    *(s32 *)((u8 *)rec + 0x20) = 1;          /* live flag */
+    *(u_long128 *)rec = *(u_long128 *)src;    /* 128-bit source vector at +0x00 */
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9A90);
 
@@ -744,11 +866,35 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ABFD0);
  * return-0) but the later cc1 emits two scheduler nops between the andi
  * and its beqz that the pinned cc1 never produces (same wall as
  * func_002AC088/func_002AC9E0). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC058);
+#else
+s32 func_002AC058(Moby *moby) {
+    if (moby == 0) {
+        return 0;
+    }
+    if ((moby->modeBits & 0x20) != 0) {
+        return moby->pExtra[0];
+    }
+    return 0;
+}
+#endif
 
 /* func_002AC088: read word 4 of a moby's extra/pvar block. Same two-
  * scheduler-nops wall as func_002AC058 (best attempt 66%). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC088);
+#else
+s32 func_002AC088(Moby *moby) {
+    if (moby == 0) {
+        return 0;
+    }
+    if ((moby->modeBits & 0x20) != 0) {
+        return moby->pExtra[4];
+    }
+    return 0;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC0B8);
 
@@ -801,7 +947,22 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC9D8);
  * g_mobyTableBase/End reproduce (size-12 class), but the later cc1 lays the
  * shared return-0 out early with backward branches and pads the first
  * compare with two scheduler nops (same wall as func_002AC058). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC9E0);
+#else
+s32 func_002AC9E0(Moby *m) {
+    if (m == 0) {
+        return 0;
+    }
+    if ((u32)m < (u32)g_mobyTableBase) {
+        return 0;
+    }
+    if ((u32)g_mobyTableEnd < (u32)m) {
+        return 0;
+    }
+    return (u32)(m->oClass - 500) < 0x29;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ACA20);
 
@@ -819,13 +980,55 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AD8B0);
  * if absent and below cap. Best attempt 69%: the later cc1 derives the
  * loop bound from a register copy of the count and pads the scan loop -
  * scan-loop scheduling wall (sibling of func_002AD938). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AD8B8);
+#else
+void func_002AD8B8(Moby *moby, s16 *list, s32 cap) {
+    s16 slot = (s16)(((u8 *)moby - (u8 *)g_mobyTableBase) >> 8);
+    s16 count = list[0];
+    s16 i;
+
+    if (count > 0) {
+        for (i = 1; i <= count; i++) {
+            if (list[i] == slot) {
+                return;   /* already present */
+            }
+        }
+    }
+    if ((s32)list[0] < (s32)(s16)cap) {
+        s16 n = (s16)((u16)list[0] + 1);
+
+        list[0] = n;
+        list[n] = slot;   /* append after the live entries */
+    }
+}
+#endif
 
 /* func_002AD938: remove a moby from an i16 count-prefixed list by swapping
  * the last entry into its slot. Best attempt 57%: the original keeps the
  * raw count in a register across the scan with branch-likely reloads the
  * pinned cc1 will not produce - scan-loop scheduling wall. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AD938);
+#else
+void func_002AD938(Moby *moby, s16 *list) {
+    s16 count = list[0];
+    s16 i;
+
+    if (count <= 0) {
+        return;
+    }
+    for (i = 1; i <= count; i++) {
+        Moby *entry = (Moby *)((u8 *)g_mobyTableBase + (s16)list[i] * 0x100);
+
+        if (entry == moby) {
+            list[i] = list[(u16)list[0]];   /* swap last entry into this slot */
+            list[0] = (u16)list[0] - 1;
+            return;
+        }
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AD9B0);
 
@@ -885,7 +1088,30 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE558);
  * 75%: the original contains an EMPTY 28-iteration delay loop padded with
  * four scheduler nops per iteration (later-cc1 emission that the pinned cc1
  * collapses), plus the trailing free-slot scan - not reproducible. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", MarkLevelAvailable);
+#else
+void MarkLevelAvailable(s32 level) {
+    s32 i;
+    s32 idx;
+
+    if (g_abLevelAvailableFlags[level] != 0) {
+        return;   /* already available */
+    }
+    /* original spins an empty 28-iteration delay loop here (no state effect) */
+    g_abLevelAvailableFlags[level] = 1;
+    if (level >= 0x15 && level != 0x18) {
+        return;   /* only regular levels (< 0x15) and level 0x18 are ordered */
+    }
+    idx = 0;
+    for (i = 0; i < 0x1C; i++) {
+        if (g_anAvailableLevelOrder[i] != 0) {
+            idx = idx + 1;
+        }
+    }
+    g_anAvailableLevelOrder[idx] = level;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE6C8);
 
@@ -1222,7 +1448,35 @@ s32 func_002B1C20(void) {
  * [0, 40]. Best attempt 94%: byte-identical except a single later-cc1
  * scheduler nop before each counting loop's bottom branch (the movn-in-
  * delay-slot loops themselves reproduce). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", CountPlatinumBolts);
+#else
+s32 CountPlatinumBolts(s32 level) {
+    u8 *flags = &g_platinumBoltFlags[level * 4];
+    s32 count = 0;
+    s32 i;
+
+    for (i = 0; i < 4; i++) {
+        if (flags[i] != 0) {
+            count = count + 1;
+        }
+    }
+    if (level == 2) {
+        for (i = 0; i < 4; i++) {
+            if (g_platinumBoltFlags[0x68 + i] != 0) {
+                count = count + 1;
+            }
+        }
+    }
+    if (count < 0) {
+        count = 0;
+    }
+    if (count > 0x28) {
+        count = 0x28;
+    }
+    return count;
+}
+#endif
 
 /**
  * Bounds-checked read of the per-level lookup table (21 levels).
