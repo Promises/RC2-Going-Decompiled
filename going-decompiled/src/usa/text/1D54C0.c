@@ -27,6 +27,13 @@ extern void func_0029D218(void);
 extern void func_0029DD10(void);
 extern void func_0029D1A8(void);
 
+/* Per-frame GUI-list tick/input handlers (text/1A00F0 band): each takes the
+ * pad pressed-mask in $a0 (the asm loads g_padButtonsPressed[0] into a0 before
+ * the call). Without the arg, cc1 forwards garbage d-pad bits → phantom cursor
+ * nav → spurious UI sound. */
+extern s32 func_0029D398(s32 padPressed);
+extern s32 func_0029D8A8(s32 padPressed);
+
 /* Forwarding-wrapper target. */
 extern void func_002DF1B8(s32 mode);
 
@@ -268,7 +275,7 @@ s32 func_002D5F10(void) {
     if (pressed & 0x900) {
         return 1;
     }
-    func_0029D398();
+    func_0029D398(g_padButtonsPressed[0]);   /* pass the pad mask (asm loads g_padButtonsPressed[0] into a0 at 0x2d5f74) */
     if ((pressed & 0x40) && g_pGuiManager != 0) {
         s32 item = func_003424C8((u8 *)g_pGuiManager + 0x3C160);
         s16 cmd[8];
@@ -459,7 +466,7 @@ s32 func_002D6408(void) {
     if (pressed & 0x900) {
         return 1;
     }
-    func_0029D8A8();
+    func_0029D8A8(g_padButtonsPressed[0]);   /* pass the pad mask (asm loads g_padButtonsPressed[0] into a0 at 0x2d6420) */
     if ((pressed & 0x40) && g_pGuiManager != 0) {
         s32 item = func_003432C0((u8 *)g_pGuiManager + 0x3e760);
         s16 cmd[8];

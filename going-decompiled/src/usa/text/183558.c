@@ -253,14 +253,16 @@ f32 Vec3DotVu0(const Vec4f a, const Vec4f b) {
 }
 #endif
 
-/** dst = a x b (3D cross product; VU0 vopmula/vopmsub). */
+/** dst = -(a x b) (3D cross product; VU0 vopmula ACC,b,a / vopmsub vf3,a,b yields
+ *  the canonical PS2 NEGATED outer product). dst.w is left undefined by the VU
+ *  path (vf3.w holds a stale lane). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", Vec3CrossVu0);
 #else
 void Vec3CrossVu0(Vec4f dst, const Vec4f a, const Vec4f b) {
-    dst[0] = a[1] * b[2] - a[2] * b[1];
-    dst[1] = a[2] * b[0] - a[0] * b[2];
-    dst[2] = a[0] * b[1] - a[1] * b[0];
+    dst[0] = a[2] * b[1] - a[1] * b[2];
+    dst[1] = a[0] * b[2] - a[2] * b[0];
+    dst[2] = a[1] * b[0] - a[0] * b[1];
 }
 #endif
 
@@ -494,16 +496,19 @@ u32 func_00283AB8(const Vec4f src) {
 }
 #endif
 
-/** Unpack 4 signed shorts (packed in 's') to a float vector in dst (VU0 vitof0). */
+/** Unpack 4 signed shorts to a float vector in dst (VU0 pextlh/psraw/vitof0).
+ *  The asm unpacks all four s16 lanes from the low 64 bits of the SINGLE packed
+ *  doubleword arg (caller 0x2A053C passes one 64-bit value); there is no second
+ *  source register. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283AE0);
 #else
 /* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
-void func_00283AE0(Vec4f dst, u32 packedLo, u32 packedHi) {
-    dst[0] = (f32)(s16)(packedLo & 0xFFFF);
-    dst[1] = (f32)(s16)((packedLo >> 16) & 0xFFFF);
-    dst[2] = (f32)(s16)(packedHi & 0xFFFF);
-    dst[3] = (f32)(s16)((packedHi >> 16) & 0xFFFF);
+void func_00283AE0(Vec4f dst, u64 packed4) {
+    dst[0] = (f32)(s16)( packed4        & 0xFFFF);
+    dst[1] = (f32)(s16)((packed4 >> 16) & 0xFFFF);
+    dst[2] = (f32)(s16)((packed4 >> 32) & 0xFFFF);
+    dst[3] = (f32)(s16)((packed4 >> 48) & 0xFFFF);
 }
 #endif
 
@@ -875,9 +880,10 @@ void func_00284308(const Vec4f src, Vec4f dst) {
     f32 xy = 2*x*y, xz = 2*x*z, yz = 2*y*z;
     f32 wx = 2*w*x, wy = 2*w*y, wz = 2*w*z;
     Vec4f *r = (Vec4f *)dst;
-    r[0][0] = 1.0f - (yy + zz); r[0][1] = xy + wz;          r[0][2] = xz - wy;          r[0][3] = 0.0f;
-    r[1][0] = xy - wz;          r[1][1] = 1.0f - (xx + zz); r[1][2] = yz + wx;          r[1][3] = 0.0f;
-    r[2][0] = xz + wy;          r[2][1] = yz - wx;          r[2][2] = 1.0f - (xx + yy); r[2][3] = 0.0f;
+    /* off-diagonal w-terms match the VU0 output (the opposite sign builds the transpose). */
+    r[0][0] = 1.0f - (yy + zz); r[0][1] = xy - wz;          r[0][2] = xz + wy;          r[0][3] = 0.0f;
+    r[1][0] = xy + wz;          r[1][1] = 1.0f - (xx + zz); r[1][2] = yz - wx;          r[1][3] = 0.0f;
+    r[2][0] = xz - wy;          r[2][1] = yz + wx;          r[2][2] = 1.0f - (xx + yy); r[2][3] = 0.0f;
 }
 #endif
 
@@ -892,37 +898,40 @@ void func_00284380(const Vec4f src, Vec4f dst) {
     f32 xy = 2*x*y, xz = 2*x*z, yz = 2*y*z;
     f32 wx = 2*w*x, wy = 2*w*y, wz = 2*w*z;
     Vec4f *r = (Vec4f *)dst;
-    r[0][0] = 1.0f - (yy + zz); r[0][1] = xy + wz;          r[0][2] = xz - wy;          r[0][3] = 0.0f;
-    r[1][0] = xy - wz;          r[1][1] = 1.0f - (xx + zz); r[1][2] = yz + wx;          r[1][3] = 0.0f;
-    r[2][0] = xz + wy;          r[2][1] = yz - wx;          r[2][2] = 1.0f - (xx + yy); r[2][3] = 0.0f;
+    /* off-diagonal w-terms match the VU0 output (the opposite sign builds the transpose). */
+    r[0][0] = 1.0f - (yy + zz); r[0][1] = xy - wz;          r[0][2] = xz + wy;          r[0][3] = 0.0f;
+    r[1][0] = xy + wz;          r[1][1] = 1.0f - (xx + zz); r[1][2] = yz - wx;          r[1][3] = 0.0f;
+    r[2][0] = xz - wy;          r[2][1] = yz + wx;          r[2][2] = 1.0f - (xx + yy); r[2][3] = 0.0f;
     r[3][0] = 0.0f;             r[3][1] = 0.0f;             r[3][2] = 0.0f;             r[3][3] = 1.0f;
 }
 #endif
 
 /**
- * Build a 4x4 transform from quaternion (src=$4) and per-axis scale (scale=$5),
- * writing to out=$7. The rotation matrix is formed from the quaternion, each row
- * scaled by the corresponding scale component, and the translation row set to
- * (0,0,0,1). VU0 quat->matrix + vmulx/vmuly/vmulz per row.
+ * Build a 4x4 transform from quaternion (src=$4), per-axis scale (scale=$5) and
+ * translation (translation=$6), writing to out=$7. The rotation matrix is formed
+ * from the quaternion, each row scaled by the corresponding scale component, and
+ * the translation row set to (translation.x, translation.y, translation.z, 1)
+ * (asm loads vf17 from a2, sets .w=1, stores to row3). VU0 quat->matrix +
+ * vmulx/vmuly/vmulz per row.
  */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284408);
 #else
 /* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
-void func_00284408(const Vec4f src, const Vec4f scale, const Vec4f unused, Vec4f out) {
+void func_00284408(const Vec4f src, const Vec4f scale, const Vec4f translation, Vec4f out) {
     f32 x = src[0], y = src[1], z = src[2], w = src[3];
     f32 xx = 2*x*x, yy = 2*y*y, zz = 2*z*z;
     f32 xy = 2*x*y, xz = 2*x*z, yz = 2*y*z;
     f32 wx = 2*w*x, wy = 2*w*y, wz = 2*w*z;
     Vec4f *r = (Vec4f *)out;
-    (void)unused;
-    r[0][0] = 1.0f - (yy + zz); r[0][1] = xy + wz;          r[0][2] = xz - wy;
-    r[1][0] = xy - wz;          r[1][1] = 1.0f - (xx + zz); r[1][2] = yz + wx;
-    r[2][0] = xz + wy;          r[2][1] = yz - wx;          r[2][2] = 1.0f - (xx + yy);
+    /* off-diagonal w-terms match the VU0 output (the opposite sign builds the transpose). */
+    r[0][0] = 1.0f - (yy + zz); r[0][1] = xy - wz;          r[0][2] = xz + wy;
+    r[1][0] = xy + wz;          r[1][1] = 1.0f - (xx + zz); r[1][2] = yz - wx;
+    r[2][0] = xz - wy;          r[2][1] = yz + wx;          r[2][2] = 1.0f - (xx + yy);
     r[0][0] *= scale[0]; r[0][1] *= scale[0]; r[0][2] *= scale[0]; r[0][3] = 0.0f;
     r[1][0] *= scale[1]; r[1][1] *= scale[1]; r[1][2] *= scale[1]; r[1][3] = 0.0f;
     r[2][0] *= scale[2]; r[2][1] *= scale[2]; r[2][2] *= scale[2]; r[2][3] = 0.0f;
-    r[3][0] = 0.0f; r[3][1] = 0.0f; r[3][2] = 0.0f; r[3][3] = 1.0f;
+    r[3][0] = translation[0]; r[3][1] = translation[1]; r[3][2] = translation[2]; r[3][3] = 1.0f;
 }
 #endif
 
