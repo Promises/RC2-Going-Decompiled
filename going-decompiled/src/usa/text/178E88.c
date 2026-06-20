@@ -60,6 +60,8 @@ extern s32 g_drawHooksAfterTiesCount[];
 extern DrawHookFn g_drawHooksAfterTiesFuncs[];
 extern void *g_drawHooksAfterTiesArgs[];
 extern s32 g_drawHooksAfterShrubsCount[];
+extern DrawHookFn g_drawHooksAfterShrubsFuncs[];
+extern void *g_drawHooksAfterShrubsArgs[];
 
 /* Misc per-frame render state cleared by ResetPerFrameDrawQueues. The absolute
  * globals are incomplete arrays; the four sdata one-shots (D_1A86F4/8760/8770
@@ -275,7 +277,52 @@ void func_0027A550(void) {
 }
 #endif
 
+/* Occlusion BSP-grid root pointer (g_renderTaskWorkBuf+0x4C == 0x1B1680).
+ * Modelled as an incomplete array so the +0x4C access stays absolute %hi/%lo
+ * under -G8. The pointed-to node tree is a 3-level (z,y,x) bucket grid: each
+ * node is {u16 origin, u16 extent, u16 child[extent]} (all read via lhu) and the final x-level
+ * holds a 0x80-byte cell index (0xFFFF = empty). */
+extern s32 g_renderTaskWorkBuf[];
+#define g_occlusionGridRoot ((u8 *)g_renderTaskWorkBuf[0x13])
+
+/* LookupOcclusionGridCell - walk the per-frame occlusion bucket grid for the
+ * integer cell coords (x,y,z) and return a pointer to the matching 0x80-byte
+ * occlusion cell record, or NULL when any axis falls outside its node's
+ * [origin, origin+extent) span or hits an empty child. The leaf cell base is
+ * the grid root plus the root's first word (the cell-array offset).
+ * Near-miss (best 69.7%): the original keeps the grid root pinned in one
+ * register (deriving each node ptr from it) and emits the y-level "child
+ * present" test as a branch-likely (`bnezl`), an asymmetric codegen shape that
+ * clean structured C with three uniform if-returns does not reproduce. Correct
+ * C preserved as the portable body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", LookupOcclusionGridCell);
+#else
+void *LookupOcclusionGridCell(s32 x, s32 y, s32 z) {
+    u8 *root = g_occlusionGridRoot;
+    u8 *leafBase = root + *(s32 *)root;
+    u8 *node = root + 4;
+    s32 idx;
+
+    z -= *(u16 *)(node + 0);
+    if (z < 0 || z >= *(u16 *)(node + 2)) return (void *)0;
+    idx = *(u16 *)(node + 4 + z * 2);
+    if (idx == 0) return (void *)0;
+
+    node = root + idx * 4;
+    y -= *(u16 *)(node + 0);
+    if (y < 0 || y >= *(u16 *)(node + 2)) return (void *)0;
+    idx = *(u16 *)(node + 4 + y * 2);
+    if (idx == 0) return (void *)0;
+
+    node = root + idx * 4;
+    x -= *(u16 *)(node + 0);
+    if (x < 0 || x >= *(u16 *)(node + 2)) return (void *)0;
+    idx = *(u16 *)(node + 4 + x * 2);
+    if (idx == 0xFFFF) return (void *)0;
+    return leafBase + (idx << 7);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", LookupNeighborOcclusionCell);
 
@@ -549,7 +596,21 @@ void AddFxDrawHookPreParticles(DrawHookFn func, void *arg) {
 }
 #endif
 
+/* Run every registered pre-particle fx draw hook in order, each as
+ * func(arg). The count is re-read each iteration so a hook may extend the
+ * queue. Driver for AddFxDrawHookPreParticles.
+ * Near-miss: the three-deep packed callee-save block (sd $16/$17/$18) + the
+ * branch-likely re-test loop is a register/save-layout wall. Correct C
+ * preserved as the portable body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", RunFxDrawHooksPreParticles);
+#else
+void RunFxDrawHooksPreParticles(void) {
+    s32 i;
+    for (i = 0; i < g_fxHooksPreCount[0]; i++)
+        g_fxHooksPreFuncs[i](g_fxHooksPreArgs[i]);
+}
+#endif
 
 /* Register a (func,arg) callback in the after-ties draw queue (cap 0x40), run
  * by RunDrawHooksAfterTies. No-op when the queue is full.
@@ -568,9 +629,33 @@ void func_0027D500(DrawHookFn func, void *arg) {
 }
 #endif
 
+/* Run every registered after-ties draw hook in order as func(arg); the count is
+ * re-read each iteration. Driver for func_0027D500 (AddDrawHookAfterTies).
+ * Near-miss: same packed-save / branch-likely loop wall as
+ * RunFxDrawHooksPreParticles. Correct C preserved as the portable body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", RunDrawHooksAfterTies);
+#else
+void RunDrawHooksAfterTies(void) {
+    s32 i;
+    for (i = 0; i < g_drawHooksAfterTiesCount[0]; i++)
+        g_drawHooksAfterTiesFuncs[i](g_drawHooksAfterTiesArgs[i]);
+}
+#endif
 
+/* Run every registered after-shrubs draw hook in order as func(arg); the count
+ * is re-read each iteration.
+ * Near-miss: same packed-save / branch-likely loop wall as
+ * RunFxDrawHooksPreParticles. Correct C preserved as the portable body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", RunDrawHooksAfterShrubs);
+#else
+void RunDrawHooksAfterShrubs(void) {
+    s32 i;
+    for (i = 0; i < g_drawHooksAfterShrubsCount[0]; i++)
+        g_drawHooksAfterShrubsFuncs[i](g_drawHooksAfterShrubsArgs[i]);
+}
+#endif
 
 /* Register a (func,arg) callback in the post-particle fx draw queue (cap 0x40),
  * run by RunFxDrawHooksPostParticles. No-op when the queue is full.
@@ -589,7 +674,19 @@ void AddFxDrawHookPostParticles(DrawHookFn func, void *arg) {
 }
 #endif
 
+/* Run every registered post-particle fx draw hook in order as func(arg); the
+ * count is re-read each iteration. Driver for AddFxDrawHookPostParticles.
+ * Near-miss: same packed-save / branch-likely loop wall as
+ * RunFxDrawHooksPreParticles. Correct C preserved as the portable body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", RunFxDrawHooksPostParticles);
+#else
+void RunFxDrawHooksPostParticles(void) {
+    s32 i;
+    for (i = 0; i < g_fxHooksPostCount[0]; i++)
+        g_fxHooksPostFuncs[i](g_fxHooksPostArgs[i]);
+}
+#endif
 
 /* Register a (func,arg) callback in the small late fx draw queue (cap 4), run
  * by RunFxDrawHooksLate at the end of the RenderFrame fx layer. No-op when
@@ -609,7 +706,19 @@ void AddFxDrawHookLate(DrawHookFn func, void *arg) {
 }
 #endif
 
+/* Run every registered late fx draw hook in order as func(arg); the count is
+ * re-read each iteration. Driver for AddFxDrawHookLate (small cap-4 queue).
+ * Near-miss: same packed-save / branch-likely loop wall as
+ * RunFxDrawHooksPreParticles. Correct C preserved as the portable body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", RunFxDrawHooksLate);
+#else
+void RunFxDrawHooksLate(void) {
+    s32 i;
+    for (i = 0; i < g_fxHooksLateCount[0]; i++)
+        g_fxHooksLateFuncs[i](g_fxHooksLateArgs[i]);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawBlobShadows);
 
@@ -762,7 +871,37 @@ s32 func_0027F838(const char *str, s32 maxChars) {
     return func_0027F7A8(str, maxChars, D_264250);
 }
 
+/* func_0027F858 (MeasureScaledTextByGlyphTable): the scaled sibling of
+ * func_0027F7A8. Sum each glyph's signed advance width (4-byte entry, advance
+ * at +3) as a float, multiply each by `scale`, accumulate, and round the total
+ * back to an integer. Stops at NUL or after `maxChars` chars (the maxChars test
+ * fires after folding the current glyph). Worker behind func_0027F900.
+ * Near-miss: the four packed GPR saves ($16-$19) + two FPR saves ($f20/$f21)
+ * and the IntToFloat-per-glyph call shape are a save-layout wall. Correct C
+ * preserved as the portable body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F858);
+#else
+extern s32 FloatToInt(f32 x);
+s32 func_0027F858(const char *str, s32 maxChars, const void *glyphTable,
+                  f32 scale) {
+    const u8 *s = (const u8 *)str;
+    const s8 *gt = (const s8 *)glyphTable;
+    f32 acc = 0.0f;
+    s32 i;
+    if (maxChars != 0 && s[0] != 0) {
+        i = 1;
+        do {
+            s8 advance = gt[s[0] * 4 + 3];
+            s++;
+            acc += IntToFloat(advance) * scale;
+            if (i == maxChars) break;
+            i++;
+        } while (s[0] != 0);
+    }
+    return FloatToInt(acc);
+}
+#endif
 
 /** Measure scaled pixel width of a string in the D_263B10 font. */
 s32 func_0027F900(const char *str, s32 maxChars, f32 scale) {
