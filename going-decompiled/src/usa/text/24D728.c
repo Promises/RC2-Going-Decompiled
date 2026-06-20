@@ -19,6 +19,50 @@ typedef struct GuiElement {
     /* 0x0C */ s32 *color;   /* -> RGBA color block, color[0] = packed ARGB */
 } GuiElement;
 
+/*
+ * GuiHudManager (size 0x15B0) - the HUD/bolt-counter manager sub-object the
+ * constructor at 0x34D490 builds and the per-frame updater at 0x34F068 drives.
+ * It is embedded in the outer GuiInstance at offset +0x7A0 (see
+ * GuiManagerInitHudLists: `$17+0x7A0` is handed to this object's helpers, and
+ * the next outer field is the list at +0x1D50 -> the manager spans
+ * [0x7A0, 0x1D50) of the outer = 0x1D50-0x7A0 = 0x15B0 bytes). The constructor's
+ * highest store is at +0x15A8 (4-byte) -> 0x15AC, padded to 0x15B0; CONFIRMED.
+ *
+ * Opaque sized blob: bodies access it via raw `(char*)mgr+off` casts, so only
+ * the size is pinned (byte-neutral). Fields confirmed via the constructor /
+ * updater / the leaf accessors below:
+ *   +0x2A0  GuiSprite sub-object (frame sprite; GuiSpriteSetTexture target)  CONFIRMED
+ *   +0x2DC  texture/frame handle word                                        CONFIRMED
+ *   +0x378  GuiElement (bolt/HUD counter element; GuiElementGetColor target) CONFIRMED
+ *   +0x15A4 frame-sprite mode selector (0/1)                                 CONFIRMED
+ *   (other offsets are sub-element arrays + flags, left as padding)
+ */
+typedef struct GuiHudManager { u8 _bytes[0x15B0]; } GuiHudManager;
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+_Static_assert(sizeof(GuiHudManager) == 0x15B0, "GuiHudManager spans outer[0x7A0..0x1D50)");
+#endif
+
+/*
+ * GuiInstance (size 0x2238) - the outer GUI manager object (loaded via the
+ * global g_guiInstance). It embeds the GuiHudManager at +0x7A0 and owns three
+ * GuiList objects at +0x1D50, +0x1D8C and +0x1FDC (each ~0x250 bytes, init'd by
+ * GuiManagerInitHudLists / GuiManagerInitListRows). Its two cached font glyphs
+ * sit at +0x222C/+0x2230, so the object reaches 0x2234; it occupies the
+ * [0x36F28, 0x39160) slot (0x2238 bytes) of the g_guiInstance singleton.
+ * Size 0x2238 CONFIRMED via the sibling-object boundary in GuiSystemInit
+ * (0x34F664): it hands the HUD-region base at instance+0x36F28 and the NEXT
+ * sibling object (GuiScreenWithPlanetNameInit) sits at instance+0x39160, so this
+ * region spans 0x39160-0x36F28 = 0x2238.
+ *
+ * Opaque sized blob (raw `(char*)mgr+off` access). Fields used by the forwarders
+ * below:
+ *   +0x1D8C  GuiList (HUD list head; func_00339A88 / func_00339F98 target)  CONFIRMED
+ */
+typedef struct GuiInstance { u8 _bytes[0x2238]; } GuiInstance;
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+_Static_assert(sizeof(GuiInstance) == 0x2238, "GuiInstance occupies game-state[0x36F28..0x39160)");
+#endif
+
 extern s32 *GuiElementGetColor(GuiElement *e);
 extern void GuiSpriteSetTexture(void *sprite, s32 textureId, s32 frame);
 extern void func_00339A88(void *p);
@@ -33,8 +77,8 @@ extern u8 g_cameraState[];
 
 /* func_0034D7A8: read the packed color of the sub-element at +0x378 and return
  * only its top (alpha) byte. */
-s32 func_0034D7A8(u8 *mgr) {
-    s32 *color = GuiElementGetColor((GuiElement *)(mgr + 0x378));
+s32 func_0034D7A8(GuiHudManager *mgr) {
+    s32 *color = GuiElementGetColor((GuiElement *)((u8 *)mgr + 0x378));
     return color[0] & 0xFF000000;
 }
 
@@ -47,14 +91,14 @@ s32 func_0034D7A8(u8 *mgr) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034D7D0);
 #else
-void func_0034D7D0(u8 *mgr, s32 mode) {
-    *(s32 *)(mgr + 0x15A4) = mode;
+void func_0034D7D0(GuiHudManager *mgr, s32 mode) {
+    *(s32 *)((u8 *)mgr + 0x15A4) = mode;
     switch (mode) {
     case 0:
-        GuiSpriteSetTexture(mgr + 0x2A0, 0x7567, 0);
+        GuiSpriteSetTexture((u8 *)mgr + 0x2A0, 0x7567, 0);
         break;
     case 1:
-        GuiSpriteSetTexture(mgr + 0x2A0, 0xEAA2, 0);
+        GuiSpriteSetTexture((u8 *)mgr + 0x2A0, 0xEAA2, 0);
         break;
     }
     __asm__ __volatile__("");
@@ -72,8 +116,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034DB68);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034DBC8);
 
 /* func_0034DBD8: store the texture/frame handle into the manager at +0x2DC. */
-void func_0034DBD8(u8 *mgr, s32 value) {
-    *(s32 *)(mgr + 0x2DC) = value;
+void func_0034DBD8(GuiHudManager *mgr, s32 value) {
+    *(s32 *)((u8 *)mgr + 0x2DC) = value;
 }
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034DBE0);
@@ -96,23 +140,29 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F028);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F1C0);
 
-/* func_0034F200: forward the manager's HUD list (+0x1D8C) to func_00339A88.
- * The empty asm guard blocks cc1's void sibling-call (keeps jal + frame). */
-void func_0034F200(u8 *mgr) {
-    func_00339A88(mgr + 0x1D8C);
+/* func_0034F200: forward the outer GuiInstance's HUD list (+0x1D8C) to
+ * func_00339A88. (mgr here is the OUTER GuiInstance, not the +0x7A0
+ * GuiHudManager: +0x1D8C is the list field GuiManagerInitHudLists initializes at
+ * `$17+0x1D8C`.) The empty asm guard blocks cc1's void sibling-call. */
+void func_0034F200(GuiInstance *mgr) {
+    func_00339A88((u8 *)mgr + 0x1D8C);
     __asm__ __volatile__("");
 }
 
-/* func_0034F220: forward the manager's HUD list (+0x1D8C) to func_00339F98. */
-void func_0034F220(u8 *mgr) {
-    func_00339F98(mgr + 0x1D8C);
+/* func_0034F220: forward the outer GuiInstance's HUD list (+0x1D8C) to
+ * func_00339F98 (same object/field as func_0034F200). */
+void func_0034F220(GuiInstance *mgr) {
+    func_00339F98((u8 *)mgr + 0x1D8C);
     __asm__ __volatile__("");
 }
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F240);
 
-/* func_0034F300: identity - return the manager pointer unchanged. */
-void *func_0034F300(void *mgr) {
+/* func_0034F300: identity - return the manager pointer unchanged (a vtable
+ * "get self" accessor). Typed as GuiInstance * by association with the adjacent
+ * func_0034F200/F220 outer-object forwarders; the body is pure `return mgr`, so
+ * the choice of pointee is byte-neutral (UNCONFIRMED which object). */
+GuiInstance *func_0034F300(GuiInstance *mgr) {
     return mgr;
 }
 
