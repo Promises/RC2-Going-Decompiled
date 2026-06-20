@@ -45,12 +45,17 @@ typedef struct Vec4 {
 } __attribute__((aligned(16))) Vec4;
 
 /* Vec4 has no pointer fields, so its size/alignment are ABI-independent: these
- * hold under both the EE build and any native (ILP32 or LP64) compile. */
+ * hold under both ILP32 and LP64 native compiles. Guard on C11 so the ee-gcc 2.9
+ * (C89) matching toolchain - which lacks _Static_assert/_Alignof and would emit
+ * recoverable parse-error noise when a matched TU includes this header - skips
+ * them. Byte output is unaffected either way; this just keeps the EE build log clean. */
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
 _Static_assert(sizeof(Vec4) == 0x10, "Vec4 must be 16 bytes for lqc2/sqc2");
 _Static_assert(__builtin_offsetof(Vec4, x) == 0x0, "Vec4.x");
 _Static_assert(__builtin_offsetof(Vec4, y) == 0x4, "Vec4.y");
 _Static_assert(__builtin_offsetof(Vec4, z) == 0x8, "Vec4.z");
 _Static_assert(__builtin_offsetof(Vec4, w) == 0xC, "Vec4.w");
 _Static_assert(_Alignof(Vec4) == 0x10, "Vec4 must be 16-byte aligned");
+#endif
 
 #endif /* VEC_H */

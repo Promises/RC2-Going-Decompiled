@@ -1,4 +1,45 @@
 #include "common.h"
+#include "sound_emitter.h"   /* SoundEmitterSlot (0x70 emitter slot) */
+#include "moby.h"            /* Moby (0x100 entity record) */
+#include "vec.h"             /* Vec4 (16-byte xyzw) */
+
+/* ------------------------------------------------------------------------- *
+ *  Sound-definition record (the per-sound tuning blob a play call references).
+ *
+ *  Recovered from the USA v2.00 (SCUS_972.68) emitter cluster.  Every play
+ *  entry point strides its sound-def pool by 0x20 bytes (PlayGlobalSound and
+ *  PlaySoundFromClassBank both index `pool + idx*0x20`), so the record is
+ *  exactly 0x20 bytes.  Field offsets are CONFIRMED from the asm that reads
+ *  them:
+ *    - StartSoundEmitter (0x2E68A0): reads +0x18 (enable gate, byte),
+ *      +0x1A (sampleId, u16), +0x10/+0x14 (pitch min/max, s32).
+ *    - ComputeVolumeFalloff (0x2E5398): reads +0x19 bit0 (squared-falloff flag),
+ *      +0x08 (far volume, s32), +0x0C (near volume, s32).
+ *    - ComputeEmitterVolume (0x2E5490): reads +0x00 / +0x04 as the curve's
+ *      near/far radii (float) via the slot's def pointer.
+ *  +0x1C is the bank index per sound_emitter.h (PROBABLE, not touched here).
+ *  Gaps are padding/unverified.
+ *
+ *  Bodies below address the record with raw byte casts (matching the asm), so
+ *  this stays a sized record with named CONFIRMED fields; the size is what the
+ *  retype guarantees. */
+typedef struct SoundDef {
+    /* 0x00 */ f32 nearRadius;   /* CONFIRMED inner falloff radius             */
+    /* 0x04 */ f32 farRadius;    /* CONFIRMED outer falloff radius             */
+    /* 0x08 */ s32 farVolume;    /* CONFIRMED volume at/beyond farRadius       */
+    /* 0x0C */ s32 nearVolume;   /* CONFIRMED volume at/within nearRadius      */
+    /* 0x10 */ s32 pitchMin;     /* CONFIRMED pitch range low                  */
+    /* 0x14 */ s32 pitchMax;     /* CONFIRMED pitch range high (== min: fixed) */
+    /* 0x18 */ u8  enableGate;   /* CONFIRMED start gate vs flags&4            */
+    /* 0x19 */ u8  curveFlags;   /* CONFIRMED bit0 = squared falloff           */
+    /* 0x1A */ u16 sampleId;     /* CONFIRMED 989snd sample id                 */
+    /* 0x1C */ s32 bankIndex;    /* PROBABLE  bank handle index (per header)   */
+} SoundDef;                      /* sizeof == 0x20 */
+/* Guard skips the assert on the ee-gcc 2.9 (C89) matching toolchain, which
+ * predates __SIZEOF_POINTER__ and _Static_assert - only the native build checks it. */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+_Static_assert(sizeof(SoundDef) == 0x20, "SoundDef must be 0x20 (pool stride)");
+#endif
 
 /* ------------------------------------------------------------------------- *
  *  3D sound-emitter system (moby-glow / shrub / sky / sound-emitter unit)
@@ -387,7 +428,7 @@ extern s32 CollLine(void *a, void *b, s32 mask, s32 owner, s32 flags);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", ComputeListenerOcclusionProbe);
 #else
-void ComputeListenerOcclusionProbe(void *out) {
+void ComputeListenerOcclusionProbe(Vec4 *out) {
     func_002A87F0(0.5f, 6.0f);
     Vec4AddVu0(out, out, g_cameraPos);
     if (CollLine(g_cameraPos, out, 0x82,
@@ -412,7 +453,7 @@ void ComputeListenerOcclusionProbe(void *out) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", CastEmitterOcclusionRay);
 #else
-void CastEmitterOcclusionRay(void *emitter, void *outHit) {
+void CastEmitterOcclusionRay(SoundEmitterSlot *emitter, void *outHit) {
     f32 probe[4];
     Vec4SubVu0(probe, (u8 *)emitter + 0x20, g_cameraPos);
     Vec4ScaleVu0(probe, probe, 0.75f);
@@ -423,7 +464,7 @@ void CastEmitterOcclusionRay(void *emitter, void *outHit) {
 #endif
 
 extern float func_002837F8(void *a, void *b);
-extern s32 ComputeVolumeFalloff(void *slot, float dist, float lo, float hi);
+extern s32 ComputeVolumeFalloff(SoundDef *def, float dist, float lo, float hi);
 extern u8 g_cameraPos[]; /* 0x1B52C0 - listener / camera world position */
 
 /* Map a listener distance to a volume level along the emitter's distance
@@ -441,7 +482,7 @@ extern u8 g_cameraPos[]; /* 0x1B52C0 - listener / camera world position */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", ComputeVolumeFalloff);
 #else
-s32 ComputeVolumeFalloff(void *def, float dist, float near, float far) {
+s32 ComputeVolumeFalloff(SoundDef *def, float dist, float near, float far) {
     u8 *d = (u8 *)def;
     s32 nearVol = *(s32 *)(d + 0xC);
     s32 farVol  = *(s32 *)(d + 0x8);
@@ -485,7 +526,7 @@ s32 ComputeVolumeFalloff(void *def, float dist, float near, float far) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", ComputeEmitterVolume);
 #else
-s32 ComputeEmitterVolume(void *slot, void *pos) {
+s32 ComputeEmitterVolume(SoundEmitterSlot *slot, Vec4 *pos) {
     float dist = func_002837F8(pos, g_cameraPos);
     float *curve = *(float **)((u8 *)slot + 0x8);
     return ComputeVolumeFalloff(curve, dist, curve[0], curve[1]);
@@ -582,7 +623,7 @@ extern u8 g_soundBankHandles[]; /* 0x189E00 - loaded 989snd bank handle array */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", AllocVoiceHandleSlot);
 #else
-s32 AllocVoiceHandleSlot(void *owner) {
+s32 AllocVoiceHandleSlot(Moby *owner) {
     u8 *bankBase = g_soundBankHandles + 0x20;
     s32 limit;
     s32 idx;
@@ -639,8 +680,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", StartSoundEmitt
 extern s32 GetRandomInt(s32 n);
 extern void func_00283638(void *dst); /* zero a 16-byte quadword */
 
-s32 StartSoundEmitter(void *pSoundDef, s32 flags, void *ownerMoby,
-                      void *pPos, s32 volScale) {
+s32 StartSoundEmitter(SoundDef *pSoundDef, s32 flags, Moby *ownerMoby,
+                      Vec4 *pPos, s32 volScale) {
     u8 *def = (u8 *)pSoundDef;
     s32 slot;
     u8 *e;       /* g_listenerPosHistory + slot*0x70 */
