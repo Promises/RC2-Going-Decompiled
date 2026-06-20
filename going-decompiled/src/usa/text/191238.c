@@ -273,7 +273,32 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BindSceneChunk)
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadGlobalDialogScene);
 
+#ifndef TARGET_NATIVE
+/* TODO(match): functional equivalent - not byte-exact (87.5%); save-layout wall
+ * (saves s0+ra -> the pinned 2.9-ee-991111 cc1 reserves a 0x20 frame where the
+ * original's later cc1 packs the two 8-byte slots into 0x10) plus a gp_rel/
+ * absolute divergence: g_sceneArenaBase/g_sceneArenaCursor lower to %gp_rel
+ * under -G8 where the original reloads them with absolute lui/%lo. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", SelectSceneSubChunk);
+#else
+/*
+ * SelectSceneSubChunk — repoint the scene streaming buffer at sub-chunk `which`,
+ * bind that scene chunk, then restore the buffer to the live arena allocation.
+ * The sub-chunk descriptor block lives at g_cameraSlotActive+0x990: +0x70 holds
+ * the active streaming-buffer pointer (g_pSceneLoadBuffer), and +0x74[which] the
+ * per-sub-chunk saved pointer. After BindSceneChunk consumes the temporary the
+ * buffer is reset to g_sceneArenaBase + g_sceneArenaCursor.
+ */
+extern u8 g_cameraSlotActive[];
+extern s32 g_sceneArenaBase;
+extern void BindSceneChunk(void);
+void SelectSceneSubChunk(s32 which) {
+    u8 *t = &g_cameraSlotActive[0x990];
+    *(s32 *)(t + 0x70) = *(s32 *)(t + which * 4 + 0x74);
+    BindSceneChunk();
+    *(s32 *)(t + 0x70) = g_sceneArenaBase + g_sceneArenaCursor;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294970);
 
@@ -289,7 +314,57 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294CD0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294E98);
 
+#ifndef TARGET_NATIVE
+/* TODO(match): functional equivalent - not byte-exact (52%); loop-peel wall -
+ * same as func_00295478: the pinned cc1 lowers the peeled first TOC-search
+ * iteration to `bnel`/branch-likely where the original uses a plain `beq` then
+ * a rotated do-while. Body/registers otherwise track the original. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294EE0);
+#else
+/*
+ * func_00294EE0 — query a gadget moby-class id's load state.
+ * Looks the class id up in the gadget-class TOC (g_discToc+0x4B40, stride 5
+ * ints, up to 0x30 entries). If the id isn't in the TOC at all, returns 1.
+ * Otherwise checks the 3-entry in-flight request list (g_respawnPlayerYaw+0x7C)
+ * for the found index and returns 1 if it IS present (already in-flight), else 0
+ * (asm: xori j,0x3 / sltu 0,_ at 0x294F6C). Companion query to func_00295478
+ * (which enqueues the load).
+ */
+extern s32 g_discToc[];
+extern s32 g_respawnPlayerYaw[];
+s32 func_00294EE0(s32 classId) {
+    s32 *toc = g_discToc;
+    s32 idx;
+    if (toc[0x12D0] == classId) {               /* g_discToc + 0x4B40 */
+        idx = 0;
+    } else {
+        s32 *p = toc + 0x12D0;
+        for (idx = 1; idx < 0x30; idx++) {
+            p += 5;
+            if (p[0] == classId) {
+                break;
+            }
+        }
+    }
+    if (idx == 0x30) {
+        return 1;                               /* not in the gadget TOC */
+    }
+    {
+        s32 *req = &g_respawnPlayerYaw[0x1F];    /* g_respawnPlayerYaw + 0x7C */
+        s32 j;
+        if (req[0] == idx) {
+            j = 0;
+        } else {
+            for (j = 1; j < 3; j++) {
+                if (req[j] == idx) {
+                    break;
+                }
+            }
+        }
+        return (j ^ 3) != 0;                      /* found -> nonzero, else 0 */
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadMobyClassFromWad);
 
@@ -340,7 +415,49 @@ void func_00295478(s32 classId, void *dest) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002954F0);
 
+#ifndef TARGET_NATIVE
+/* TODO(match): functional equivalent - not byte-exact (22%); 64-bit shift wall -
+ * the pinned cc1 lowers each `(u64)x << n` field shift to a `dsll32`+`dsrl` pair
+ * where the original emits a single `dsll`/`dsll32`, plus the gp_rel/absolute
+ * divergence on g_texUploadCount (-G8 small-data vs original absolute lui/%lo).
+ * Pure scalar GS-register packing; semantics verified against the asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00295630);
+#else
+/*
+ * func_00295630 — build a GS texture-register word from the texel-format fields
+ * and, if the upload queue has room (< 0x40 entries), append a 0x10-byte
+ * descriptor to g_texUploadQueue. The 64-bit word packs the width-log2 (clamped
+ * so the shift floor is 6), the source address (a0<<26 | 0x1300000 base), the
+ * destination page field (a1<<30), the texel halfwords (a4>>8 at bit 37) and the
+ * fixed 0x8000<<19 + top sign bit. The queue entry mirrors a2/a3 as raw words
+ * and a0/a1/(a4>>8)/(a5>>8) as the byte/halfword fields. Returns the packed word
+ * whether or not the entry was queued.
+ */
+extern s32 g_texUploadQueue[];
+extern s32 g_texUploadCount;
+u64 func_00295630(s32 a0, s32 a1, s32 a2, s32 a3, s32 a4, s32 a5) {
+    s32 shift = (a0 < 6) ? 0 : (a0 - 6);
+    u64 packed = (u64)(u32)(a5 >> 8)
+               | ((u64)(u32)(1 << shift) << 14)
+               | (((u64)(u32)a0 << 26) | 0x1300000)
+               | ((u64)(u32)a1 << 30)
+               | ((u64)(u32)(a4 >> 8) << 37)
+               | ((u64)0x8000 << 19)
+               | ((u64)-1 << 63);
+    if (g_texUploadCount < 0x40) {
+        s32 *e = &g_texUploadQueue[g_texUploadCount * 4];
+        e[0] = a2;
+        *(s16 *)((u8 *)e + 6) = (s16)(a4 >> 8);
+        *(s16 *)((u8 *)e + 4) = 0;
+        e[2] = a3;
+        *(s16 *)((u8 *)e + 0xE) = (s16)(a5 >> 8);
+        *(u8 *)((u8 *)e + 0xC) = (u8)a0;
+        *(u8 *)((u8 *)e + 0xD) = (u8)a1;
+        g_texUploadCount++;
+    }
+    return packed;
+}
+#endif
 
 #ifndef TARGET_NATIVE
 /* TODO(match): functional equivalent - not byte-exact (95.97%); register-color
