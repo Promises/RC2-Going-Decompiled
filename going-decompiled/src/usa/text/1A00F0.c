@@ -92,11 +92,123 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0678);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0798);
 
+/*
+ * func_002A07B0(moby, sub, rec): one-time init of a moby render/anim sub-record
+ * `rec` and link it onto moby's chain (head at moby+0x54). No-op if already
+ * initialised (rec[1] != 0). Stamps rec[0]=sub, rec[1]=1, four 1.0f fields at
+ * +0x1C/+0x20/+0x24/+0x28, derives a 0x70000000-based scratchpad packet pointer
+ * at +0x4 by walking moby's descriptor table (moby+0x24 -> +0x1C -> [rec[0]<<2 +4]
+ * -> +idx), then push-links rec at the head of moby's +0x54 list.
+ * WALL (~15%): all instructions reproduce but this cc1 software-pipelines the
+ * descriptor-table loads up early and reschedules the four 1.0f swc1 stores
+ * (emits +0x24 first), while the original keeps the float block grouped and the
+ * pointer chain at the tail. A fixed instruction-scheduling artifact, not
+ * reachable by source statement order. Left INCLUDE_ASM.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A07B0);
+#else
+void func_002A07B0(u8 *moby, u8 sub, u8 *rec) {
+    u8 *p;
+    s32 idx;
+    if (rec[1] == 0) {
+        rec[0] = sub;
+        rec[1] = 1;
+        *(float *)(rec + 0x28) = 1.0f;
+        *(float *)(rec + 0x1C) = 1.0f;
+        *(float *)(rec + 0x20) = 1.0f;
+        *(float *)(rec + 0x24) = 1.0f;
+        {
+            u8 *tbl = *(u8 **)(moby + 0x24);
+            u8 *base = *(u8 **)(tbl + 0x1C);
+            p = *(u8 **)(base + (rec[0] << 2) + 4);
+        }
+        idx = p[0];
+        *(u32 *)(rec + 4) = ((p + idx)[4] << 6) + 0x70000000;
+        *(u32 *)(rec + 8) = *(u32 *)(moby + 0x54);
+        *(u8 **)(moby + 0x54) = rec;
+    }
+}
+#endif
 
+/*
+ * func_002A0828(list, node): unlink `node` from `list`'s singly-linked free/active
+ * chain (head at list+0x54, nodes linked through +0x8) and then wipe the removed
+ * node with FillMemory32(node, 0, 0x40). A null `node` is a no-op. Walks from the
+ * head to find `node`'s predecessor, splices it out (prev->next = node->next or
+ * head = node->next when it was first), then zeroes the node's 0x40-byte record.
+ * WALL: the original lowers the search loop and the head-vs-body tests as a chain
+ * of branch-LIKELY forms (bne/beql/bnel) that reload the head from memory and put
+ * the `prev = prev->next` advance in nullified delay slots, and tail-calls
+ * FillMemory32 sharing the epilogue; this cc1 produces a plain-branch loop shape
+ * with extra reloads and a different beql/bnel placement (~41%). A fixed
+ * branch-likely / loop-scheduling artifact, not reachable by source form.
+ * Left INCLUDE_ASM.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0828);
+#else
+struct A0828Node { u8 _pad[8]; struct A0828Node *next; };
+struct A0828List { u8 _pad[0x54]; struct A0828Node *head; };
+void func_002A0828(struct A0828List *list, struct A0828Node *node) {
+    if (node != 0) {
+        if (list->head == node) {
+            list->head = node->next;
+        } else {
+            struct A0828Node *prev = list->head;
+            if (prev != 0) {
+                struct A0828Node *cur = prev->next;
+                if (cur != 0) {
+                    while (cur != node) {
+                        prev = cur;
+                        cur = prev->next;
+                        if (cur == 0) {
+                            break;
+                        }
+                    }
+                    if (cur == node) {
+                        prev->next = node->next;
+                    }
+                }
+            }
+        }
+        FillMemory32(node, 0, 0x40);
+    }
+}
+#endif
 
+/*
+ * AcquireProceduralAnimSlot (func_002A08C0): first-fit/reuse a procedural-anim-frame
+ * slot for a moby. Scans g_proceduralAnimSlotOwners[0..0xF]; reuses the slot already
+ * owned by `moby`, or claims the first free (==0) slot, storing `moby` as the owner
+ * and resetting that slot's frame counter (g_proceduralAnimSlotTimer); returns the
+ * slot index, or -1 if all 16 slots are taken by other mobys.
+ * WALL (~67%): the original lowers the two slot tests (==0 and ==moby) as a pair of
+ * branch-LIKELY forms (beqzl/bnel) that put the `sw moby` store and the `slot++`
+ * increment in the (nullified) delay slots; this cc1 always emits a plain bnez
+ * skip-forward with a separate beql tail and never the branch-likely store pattern.
+ * A fixed branch-shape / branch-likely lowering, not reachable by source form.
+ * Left INCLUDE_ASM.
+ */
+extern u32 g_proceduralAnimSlotOwners[];
+extern u32 g_proceduralAnimSlotTimer[];
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A08C0);
+#else
+s32 func_002A08C0(u32 moby) {
+    s32 slot;
+    for (slot = 0; slot < 0x10; slot++) {
+        u32 cur = g_proceduralAnimSlotOwners[slot];
+        if (cur == 0 || cur == moby) {
+            g_proceduralAnimSlotOwners[slot] = moby;
+            g_proceduralAnimSlotTimer[slot] = 0;
+            return slot;
+        }
+    }
+    return -1;
+}
+#endif
 
 /* Clears the two 16-word moby spawn-credit sub-tables at g_mobySpawnCredit
  * +0x40 and +0x80 (e.g. on level reset).
@@ -244,7 +356,25 @@ void func_002A12A0(s64 *moby, s64 hi, s64 b1, s64 b2, s64 b3) {
 }
 #endif
 
+/*
+ * func_002A12C0: writes the high 32 bits of the moby's 64-bit field at +0x38 as a
+ * packed 3-byte tuple (b0 in bits 32..39, b1 in 40..47, b2 in 48..55), preserving
+ * the existing low 32 bits. Inverse of func_002A12F0 which reads the three bytes
+ * back out.
+ * WALL (~83%): the original masks the low half with `ld` + `dsll32 0/dsrl32 0` and
+ * folds the OR tree strictly left-to-right (low|a1|a2|a3); this cc1 lowers the
+ * low-half mask to a `lwu` word-load and reassociates the OR tree (building an
+ * a2|a1 sub-tree, a3<<16 first) — the same commutative-OR canonicalisation +
+ * 64-bit narrowing artifact seen in func_002A12A0/func_002A12F0. Left INCLUDE_ASM.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A12C0);
+#else
+void func_002A12C0(u64 *moby, u64 b0, u64 b1, u64 b2) {
+    u64 lo = (u32)moby[7];
+    moby[7] = lo | (b0 << 32) | (b1 << 40) | (b2 << 48);
+}
+#endif
 
 /*
  * Unpacks 3 bytes out of the high half of the +0x38 field of a moby into three
