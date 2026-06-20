@@ -427,6 +427,12 @@ void func_002CBA40(void) {
  * load-PRE keeps but ours eliminates — preserved as portable C. */
 extern void DrawFullScreenTint(s32 r, s32 g, s32 b, s32 a);
 #ifndef TARGET_NATIVE
+/* NEAR-MISS (91%, not byte-exact): real C reaches this far — the body (bnel
+ * branch-likely dead store, address-rematerialise-after-call, final-store order)
+ * all match — but cc1 schedules the callee-save `sd ra` after only ONE of the
+ * three zeroed-arg `move`s for DrawFullScreenTint, where the original interleaves
+ * it after two (`daddu a0; daddu a1; sd ra; daddu a2`). That frame-save
+ * scheduling slot has no C-level lever, so this stays INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", MenuScreenCommitTransition);
 #else
 /* TODO(match): functional equivalent - not byte-exact; the original keeps a dead

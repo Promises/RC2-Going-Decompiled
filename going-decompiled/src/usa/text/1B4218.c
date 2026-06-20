@@ -220,7 +220,12 @@ extern u8 g_listenerPosHistory[];          /* 0x188660 */
  * symbol sits below the gp window, so the original addresses it absolutely). */
 __asm__(".extern g_pendingDialogVoiceId, 16");
 extern s32 g_pendingDialogVoiceId;         /* 0x1A63CC */
-#define g_dialogVoicePlayingState (*(s16 *)((u8 *)&g_pendingDialogVoiceId + 8))
+/* The s16 "playing state" mirror sits at 0x1A63D4 = g_pendingVoiceAux (0x1A63D0)
+ * + 4. The voice callbacks reference it relative to g_pendingVoiceAux (its own
+ * named symbol), so address it through that symbol for a byte-exact reloc. */
+__asm__(".extern g_pendingVoiceAux, 16");
+extern u8 g_pendingVoiceAux[];             /* 0x1A63D0 */
+#define g_dialogVoicePlayingState (*(s16 *)(g_pendingVoiceAux + 4))
 
 /* The level-object table (stride 0xA430); field +0x4 of each entry is the
  * backing moby pointer. Used by CheckMobyIsLevelObjectSlot. */
@@ -1246,7 +1251,31 @@ void OnAmbientVoiceStarted(s32 voiceId, long handleAddr) {
  * to 90.79%, but the original sinks the final `g_pendingDialogVoiceId+8` store
  * into the `jr` delay slot; this cc1 emits it before the jr (with a nop delay). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B8E28);
+/* Voice-playback callback: record the id, and when the voice was in state 1
+ * advance it to state 4; if additionally the voice gate is open, publish the
+ * prior state (1) to the playing-state mirror. A zero id instead clears the
+ * voice state to 0. Structuring the id==0 case as the else-tail (rather than an
+ * early return) reproduces the original's plain-beqz dispatch, and publishing
+ * the captured prior state (== 1) lets cc1 reuse the loaded state register and
+ * sink the mirror store into the jr delay slot. */
+void func_002B8E28(s32 voiceId, long handleAddr) {
+    VoiceHandle *handle = (VoiceHandle *)handleAddr;
+    if (handle == NULL) {
+        return;
+    }
+    handle->voiceId = voiceId;
+    if (voiceId != 0) {
+        s16 state = handle->state;
+        if (state == 1) {
+            handle->state = 4;
+            if (handle->gate != 0) {
+                g_dialogVoicePlayingState = state;
+            }
+        }
+    } else {
+        handle->state = 0;
+    }
+}
 #else
 /* TODO(match): functional equivalent - not byte-exact; delay-slot-store wall. */
 void func_002B8E28(s32 voiceId, long handleAddr) {
@@ -1278,7 +1307,31 @@ void func_002B8E28(s32 voiceId, long handleAddr) {
  * delay) where the original uses a plain `beqz` branching to the state-0 block
  * (best 58-63%); structurally divergent. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B8E78);
+/* Voice-playback callback: record the id but only when it is negative (the
+ * positive-id store is annulled by the original's `bltzl`); a zero id clears the
+ * voice state to 0. When the voice was in state 9 advance it to state 4, and if
+ * the voice gate is open publish 1 to the playing-state mirror. Structuring the
+ * id==0 case as the else-tail (not an early return) reproduces the original's
+ * plain-beqz dispatch and sinks the mirror store into the jr delay slot. */
+void func_002B8E78(s32 voiceId, long handleAddr) {
+    VoiceHandle *handle = (VoiceHandle *)handleAddr;
+    if (handle == NULL) {
+        return;
+    }
+    if (voiceId < 0) {
+        handle->voiceId = voiceId;
+    }
+    if (voiceId != 0) {
+        if (handle->state == 9) {
+            handle->state = 4;
+            if (handle->gate != 0) {
+                g_dialogVoicePlayingState = 1;
+            }
+        }
+    } else {
+        handle->state = 0;
+    }
+}
 #else
 /* TODO(match): functional equivalent - not byte-exact; branch-likely codegen wall. */
 void func_002B8E78(s32 voiceId, long handleAddr) {
