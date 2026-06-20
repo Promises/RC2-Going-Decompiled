@@ -410,7 +410,7 @@ extern u8 g_cameraPos[];      /* 0x1B52C0 - listener / camera world position */
 extern u8 g_collHitPoint[];   /* 0x1C4F20 - last line-trace hit point */
 extern u8 g_sndChannelVolumes[]; /* 0x188F40 - sound-channel mix state block */
 extern void Vec4SubVu0(void *dst, void *a, void *b);
-extern void Vec4ScaleVu0(void *dst, void *src, float s);
+extern void Vec4ScaleVu0(void *dst, float s, void *src);   /* sig: scale BEFORE src (def 183558.c:200) */
 extern void Vec4AddVu0(void *dst, void *a, void *b);
 extern void func_00283968(void *dst, void *src, float s);
 extern s32 func_002A87F0(float a, float b);
@@ -434,7 +434,7 @@ void ComputeListenerOcclusionProbe(Vec4 *out) {
     if (CollLine(g_cameraPos, out, 0x82,
                  *(s32 *)(g_sndChannelVolumes + 0x24), 0) != 0) {
         Vec4SubVu0(out, g_collHitPoint, g_cameraPos);
-        Vec4ScaleVu0(out, out, 0.75f);
+        Vec4ScaleVu0(out, 0.75f, out);   /* (dst, scale, src) - was arg-swapped */
         Vec4AddVu0(out, out, g_cameraPos);
     }
 }
@@ -456,7 +456,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", CastEmitterOccl
 void CastEmitterOcclusionRay(SoundEmitterSlot *emitter, void *outHit) {
     f32 probe[4];
     Vec4SubVu0(probe, (u8 *)emitter + 0x20, g_cameraPos);
-    Vec4ScaleVu0(probe, probe, 0.75f);
+    Vec4ScaleVu0(probe, 0.75f, probe);   /* (dst, scale, src) - was arg-swapped */
     func_00283968(probe, probe, 64.0f);
     Vec4AddVu0(probe, probe, g_cameraPos);
     CollLine(outHit, probe, 0x82, *(s32 *)((u8 *)emitter + 0x18), 0);
