@@ -281,6 +281,17 @@ f32 func_002A8910(f32 a1, f32 a0, f32 b0, f32 b1, f32 t) {
     return c * t3 + ((a1 - a0) - c) * t2 + (b0 - a1) * t + a0;
 }
 
+/* func_002A8948: per-component cubic (Catmull-Rom-style) blend of four control
+ * vectors p1..p4 into out at parameter t - for each of x/y/z it is the vector
+ * form of func_002A8910(p3, p1, p2, p4, t), with w forced to 0; t==0 copies p1
+ * and t==1 copies p2 verbatim (128-bit lq/sq). Best attempt 78.7%: structure
+ * (the two endpoint shortcuts incl. the bc1fl with the hoisted p3.x delay-slot
+ * load, the lq/sq quad copies, the three per-axis cubic evaluations) all
+ * reproduce, but the per-component FP arithmetic colours its temporaries into
+ * different physical registers than the original and the endpoint sq lands a
+ * slot earlier - the register-coloring + store-scheduling wall. Re-derived from
+ * func_002A8910 (the matched scalar twin); not byte-reachable with the pinned
+ * cc1. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8948);
 
 /**
