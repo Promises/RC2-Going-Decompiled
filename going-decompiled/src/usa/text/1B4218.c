@@ -823,9 +823,30 @@ void InstallFileLoadPump(void) {
  * snd_PlaySample 64-bit arg marshal. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StartDialogVoice);
 
-/* Fade/stop the primary dialog voice (advance to phase 3, then snd_StopVoice).
- * WALL: save-layout — 1 callee-save + $ra at 8-byte spacing. */
+/* Stop the secondary dialog voice channel. No-op unless the secondary voice is
+ * allocated (secondaryState != 0) and is currently in its playing state
+ * (secondaryFlag == 3); in that case it sends the snd stop command and advances
+ * the secondary flag to 4 (stopping). Returns 1 when it issued the stop, 0
+ * otherwise.
+ * WALL (matching build): save-layout — saves $16 + $31 (two callee-saves at
+ * 8-byte spacing), which the pinned cc1 packs at 16-byte spacing. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StopDialogVoice);
+#else
+/* TODO(match): functional equivalent - not byte-exact; save-layout wall. */
+extern void func_00133400(void);           /* 0x133400 snd voice-stop command */
+s32 StopDialogVoice(void) {
+    if (g_fileLoadVoiceState.secondaryState == 0) {
+        return 0;
+    }
+    if (g_fileLoadVoiceState.secondaryFlag != 3) {
+        return 0;
+    }
+    func_00133400();
+    g_fileLoadVoiceState.secondaryFlag = 4;
+    return 1;
+}
+#endif
 
 /* Start an ambient/secondary-channel voice from sample-table entry `idx`.
  * No-op if the ambient channel is already busy (ambientState != 0) or the entry
@@ -948,21 +969,45 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StartTertiaryVo
  * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ResetDialogVoiceChannels);
 
-/* Drive all dialog-voice channels to full volume (state -0x8000, fade target 0).
- * The secondary channel (ch1) is only touched when `includeSecondary` is set.
- * WALL: independent-store rescheduling. The original emits the unconditional
- * ch2(+0x98)/ch0(+0x50) block in descending-offset order; this cc1's scheduler
- * always sorts the two independent same-base stores ascending (ch0 then ch2),
- * regardless of source order or an inter-store barrier (best 87.23%). Left as
- * INCLUDE_ASM. */
+/* Drive all dialog-voice channels to full volume (volume state = -0x8000, the
+ * high "active" bit set, fade target 0). The secondary channel (ch1) is only
+ * touched when `includeSecondary` is nonzero.
+ * WALL (matching build): independent-store rescheduling. The original emits the
+ * unconditional ch2(+0x98)/ch0(+0x50) block in descending-offset order; this cc1's
+ * scheduler always sorts the two independent same-base stores ascending (ch0 then
+ * ch2), regardless of source order or an inter-store barrier (best 87.23%). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", SetDialogVoiceVolumesMax);
+#else
+/* TODO(match): functional equivalent - not byte-exact; store-rescheduling wall. */
+void SetDialogVoiceVolumesMax(s32 includeSecondary) {
+    if (includeSecondary) {
+        g_fileLoadVoiceState.ch1.volume = (s16)-0x8000;
+        g_fileLoadVoiceState.ch1.fadeTarget = 0;
+    }
+    g_fileLoadVoiceState.ch2.volume = (s16)-0x8000;
+    g_fileLoadVoiceState.ch2.fadeTarget = 0;
+    g_fileLoadVoiceState.ch0.volume = (s16)-0x8000;
+    g_fileLoadVoiceState.ch0.fadeTarget = 0;
+}
+#endif
 
-/* Mute all three dialog-voice channels (volume state = 4).
- * WALL: same independent-store rescheduling as SetDialogVoiceVolumesMax — the
- * original stores ch1(+0x74)/ch0(+0x50)/ch2(+0x98) in that order; this cc1
- * reschedules the three same-base stores (best 99.71%, only ordering differs).
- * Left as INCLUDE_ASM. */
+/* Mute all three dialog-voice channels (volume state = 4). Only each channel's
+ * volume word is written; the fade target is left untouched.
+ * WALL (matching build): same independent-store rescheduling as
+ * SetDialogVoiceVolumesMax — the original stores ch1(+0x74)/ch0(+0x50)/ch2(+0x98)
+ * in that order; this cc1 reschedules the three same-base stores (best 99.71%,
+ * only ordering differs). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", SetDialogVoiceVolumesMute);
+#else
+/* TODO(match): functional equivalent - not byte-exact; store-rescheduling wall. */
+void SetDialogVoiceVolumesMute(void) {
+    g_fileLoadVoiceState.ch1.volume = 4;
+    g_fileLoadVoiceState.ch0.volume = 4;
+    g_fileLoadVoiceState.ch2.volume = 4;
+}
+#endif
 
 /* Set the fade target on each currently-active dialog-voice channel (a channel
  * is active when its volume state has the high bit set). */
@@ -1141,14 +1186,38 @@ void func_002B8D18(s32 flag, long handleAddr) {
 }
 
 /* Primary dialog-voice start callback: record the id (mirroring it into the
- * emitter's listener block at +0x70), advance state 1 -> 2, or (when the id is
- * zero) kick the queued dialog voice from the manager's parameters.
- * WALL: address-fold vs displacement. The mirror write
+ * emitter's listener block at +0x70 when the handle has a valid sample slot),
+ * advance state 1 -> 2, or (when the id is zero) kick the queued dialog voice
+ * from the manager's stashed parameters.
+ * WALL (matching build): address-fold vs displacement. The mirror write
  * `g_listenerPosHistory[slot*0x70 + 0x70]` matches to 99.97%, but the original
  * keeps +0x70 as the store displacement (`sw $4,0x70($3)`) while this cc1 folds
- * it into the materialised base address (one instruction / reg differs). Left
- * as INCLUDE_ASM. */
+ * it into the materialised base address (one instruction / reg differs). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", OnDialogVoiceStarted);
+#else
+/* TODO(match): functional equivalent - not byte-exact; address-fold wall. */
+void OnDialogVoiceStarted(s32 voiceId, long handleAddr) {
+    VoiceHandle *handle = (VoiceHandle *)handleAddr;
+    if (handle == NULL) {
+        return;
+    }
+    handle->voiceId = voiceId;
+    if (handle->sampleSlot >= 0) {
+        *(s32 *)(g_listenerPosHistory + handle->sampleSlot * 0x70 + 0x70) = voiceId;
+    }
+    if (voiceId != 0) {
+        if (handle->state == 1) {
+            handle->state = 2;
+        }
+    } else {
+        StartDialogVoice(g_fileLoadVoiceState.dialogArg1,
+                         g_fileLoadVoiceState.dialogArg2,
+                         g_fileLoadVoiceState.dialogArg3,
+                         g_fileLoadVoiceState.dialogArg0);
+    }
+}
+#endif
 
 /* Ambient-voice start callback: record the id and advance state 1 -> 2, or (when
  * the id is zero) kick the queued ambient voice from the manager's parameters. */
@@ -1169,21 +1238,70 @@ void OnAmbientVoiceStarted(s32 voiceId, long handleAddr) {
     }
 }
 
-/* Voice-playback callback: record the id, transition state 1 -> 4 when the voice
- * gate is open, and publish the prior state to the playing-state mirror.
- * WALL: store-into-delay-slot scheduling. The structure matches to 90.79%, but
- * the original sinks the final `g_pendingDialogVoiceId+8` store into the `jr`
- * delay slot; this cc1 emits it before the jr (with a nop delay). Left as
- * INCLUDE_ASM. */
+/* Voice-playback callback: record the id, and when the voice was in state 1
+ * advance it to state 4; if additionally the voice gate is open, publish the
+ * prior state (1) to the playing-state mirror. A zero id instead clears the
+ * voice state to 0.
+ * WALL (matching build): store-into-delay-slot scheduling. The structure matches
+ * to 90.79%, but the original sinks the final `g_pendingDialogVoiceId+8` store
+ * into the `jr` delay slot; this cc1 emits it before the jr (with a nop delay). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B8E28);
+#else
+/* TODO(match): functional equivalent - not byte-exact; delay-slot-store wall. */
+void func_002B8E28(s32 voiceId, long handleAddr) {
+    VoiceHandle *handle = (VoiceHandle *)handleAddr;
+    if (handle == NULL) {
+        return;
+    }
+    handle->voiceId = voiceId;
+    if (voiceId == 0) {
+        handle->state = 0;
+        return;
+    }
+    if (handle->state != 1) {
+        return;
+    }
+    handle->state = 4;
+    if (handle->gate != 0) {
+        g_dialogVoicePlayingState = 1;
+    }
+}
+#endif
 
-/* Voice-playback callback: record a negative id, transition state 9 -> 4 when
- * the voice gate is open, and publish 1 to the playing-state mirror.
- * WALL: cc1's branch-likely heuristic emits the voiceId==0 test as `bnezl`
- * (branch to the state-check with the state load annulled in the delay) where
- * the original uses a plain `beqz` branching to the state-0 block (best
- * 58-63%); structurally divergent. Left as INCLUDE_ASM. */
+/* Voice-playback callback: record the id but only when it is negative (the
+ * positive-id store is annulled by the original's `bltzl`); a zero id clears the
+ * voice state to 0. When the voice was in state 9 advance it to state 4, and if
+ * the voice gate is open publish 1 to the playing-state mirror.
+ * WALL (matching build): cc1's branch-likely heuristic emits the voiceId==0 test
+ * as `bnezl` (branch to the state-check with the state load annulled in the
+ * delay) where the original uses a plain `beqz` branching to the state-0 block
+ * (best 58-63%); structurally divergent. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B8E78);
+#else
+/* TODO(match): functional equivalent - not byte-exact; branch-likely codegen wall. */
+void func_002B8E78(s32 voiceId, long handleAddr) {
+    VoiceHandle *handle = (VoiceHandle *)handleAddr;
+    if (handle == NULL) {
+        return;
+    }
+    if (voiceId < 0) {
+        handle->voiceId = voiceId;
+    }
+    if (voiceId == 0) {
+        handle->state = 0;
+        return;
+    }
+    if (handle->state != 9) {
+        return;
+    }
+    handle->state = 4;
+    if (handle->gate != 0) {
+        g_dialogVoicePlayingState = 1;
+    }
+}
+#endif
 
 /* Voice-playback callback: record the id and transition state 1 -> 8 (or clear
  * to 0 when the id is zero). */
