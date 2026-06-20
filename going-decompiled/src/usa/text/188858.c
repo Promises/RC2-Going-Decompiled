@@ -207,6 +207,55 @@ typedef struct Rec2552B0 {
 } Rec2552B0;                                  /* stride 0x90 */
 extern Rec2552B0 D_2552B0[];   /* 13-entry record table (0x2552B0) */
 
+/* HudElement: one on-screen HUD element record — the same 0x90-stride record
+ * type held by the D_2552B0[] registry (13 slots) that RegisterHudElement
+ * (func_0028BE10) / ActivateHudElement (func_0028BF18) manage. The six widget
+ * helpers below (init/reset/seed callbacks) all take a pointer to one of these.
+ * Modelled as an opaque sized blob: the bodies reach fields by raw cast (mixed
+ * gp/absolute addressing makes typed field access perturb the matching codegen),
+ * so only the SIZE is bound. Size 0x90 is authoritative — it is the registry
+ * stride (D_2552B0 stride 0x90, == sizeof Rec2552B0) and the max offset touched
+ * across every accessor is the +0x7C type tag (one s32, ends at 0x80), well
+ * inside 0x90.
+ *
+ * Field map (per-field confidence; gaps are real padding, not invented):
+ *   +0x00 s32   live icon texId         CONFIRMED (func_0028C090 writes w+0x0)
+ *   +0x04 s32   live iconId             CONFIRMED (ActivateHudElement: <-pending+0x24)
+ *   +0x08 s32   live value              CONFIRMED (LayoutHudCounterDigits reads +0x8)
+ *   +0x0C ptr   live valuePtr           CONFIRMED (LayoutHudCounterDigits reads +0xC)
+ *   +0x10 fnptr live initFn             CONFIRMED (ActivateHudElement: <-pending+0x30)
+ *   +0x14 fnptr live tickFn             CONFIRMED (ActivateHudElement: <-pending+0x34)
+ *   +0x18 fnptr live drawFn             CONFIRMED (ActivateHudElement: <-pending+0x38)
+ *   +0x20 s32   pending flags           CONFIRMED (RegisterHudElement +0x20)
+ *   +0x24 s32   pending iconId          CONFIRMED (RegisterHudElement +0x24)
+ *   +0x28 s32   pending value           CONFIRMED (RegisterHudElement +0x28)
+ *   +0x2C ptr   pending valuePtr        CONFIRMED (RegisterHudElement +0x2C)
+ *   +0x30 fnptr pending initFn          CONFIRMED (RegisterHudElement +0x30)
+ *   +0x34 fnptr pending tickFn          CONFIRMED (RegisterHudElement +0x34)
+ *   +0x38 fnptr pending drawFn          CONFIRMED (RegisterHudElement +0x38)
+ *   +0x40 s16   icon slot index         CONFIRMED (func_0028C090 w+0x40)
+ *   +0x42 s8    icon paletteId          CONFIRMED (func_0028C090 w+0x42)
+ *   +0x44 s32   icon baseFrame          CONFIRMED (func_0028C090 w+0x44)
+ *   +0x48 s16   cursor A                CONFIRMED (func_0028C490/C7F0/D6D8)
+ *   +0x4A s16   cursor B                CONFIRMED (func_0028C490/C7F0/D6D8)
+ *   +0x58 s32   width / X half-extent   CONFIRMED (LayoutHudCounterDigits, seed fns)
+ *   +0x5C s32   height / Y half-extent  CONFIRMED (LayoutHudCounterDigits, seed fns)
+ *   +0x60 u32   layout/orientation flags CONFIRMED (LayoutHudCounterDigits reads)
+ *   +0x64 s32   element handle id (key) CONFIRMED (RegisterHudElement +0x64)
+ *   +0x68 s32   dirty flag              CONFIRMED (RegisterHudElement=1 / Activate=0)
+ *   +0x70 s32   (cleared on register)   PROBABLE (RegisterHudElement +0x70=0)
+ *   +0x74 s32   smoothed display value  CONFIRMED (LayoutHudCounterDigits +0x74)
+ *   +0x78 s32   clamped display / mode  CONFIRMED (LayoutHudCounterDigits +0x78)
+ *   +0x7C s32   element type tag        CONFIRMED (0xD2 health / 0x96 ammo / -2 wheel)
+ * (Fields +0x4C..+0x57, +0x6C, the +0x42..+0x47 sub-bytes etc. are not yet
+ *  pinned and remain inside the blob.) */
+typedef struct HudElement {
+    u8 _bytes[0x90];
+} HudElement;
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+_Static_assert(sizeof(HudElement) == 0x90, "HudElement must be 0x90 (registry stride)");
+#endif
+
 /* Forward declarations of unit-local callees. */
 void ResetCinematicQueue(CinematicQueue *q);
 void func_00289540(CinematicQueue *q);
@@ -215,14 +264,14 @@ s32 func_0028B560(s32 iconName);
 void func_0028BF80(void);
 void func_0028C728(void);
 void func_0028ABC0(s32 a, s32 b);
-void func_0028C090(u8 *w, s32 iconName);
+void func_0028C090(HudElement *w, s32 iconName);
 void func_0028C390(void *p);
 void func_0028BE10(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g);
 void func_0029DB10(s32 a, s32 b);
 void func_002B1B48(s32 a, s32 b, s32 c);
 void ResetDebugHeap(void);
 void *DebugMalloc(s32 size);
-void func_0028BF18(u8 *w);
+void func_0028BF18(HudElement *w);
 s32 DequeueCinematic(CinematicQueue *q, s32 *outId, s32 *outFlags);
 s32 RequestGameStateChange(s32 a, s32 b, s32 c, s32 d, s32 e);
 s32 FindTextTableEntry(s32 textId);
@@ -1051,20 +1100,21 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028BE10);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028BF18);
 #else
-void func_0028BF18(u8 *w) {
-    void (*init)(u8 *);
-    func_0028C090(w, *(s32 *)(w + 0x20));
-    init = *(void (**)(u8 *))(w + 0x30);
-    *(s32 *)(w + 0x4) = *(s32 *)(w + 0x24);
-    *(s32 *)(w + 0x14) = *(s32 *)(w + 0x34);
-    *(s32 *)(w + 0x18) = *(s32 *)(w + 0x38);
-    *(s32 *)(w + 0xC) = *(s32 *)(w + 0x2C);
-    *(s32 *)(w + 0x8) = *(s32 *)(w + 0x28);
-    *(void (**)(u8 *))(w + 0x10) = init;
+void func_0028BF18(HudElement *w) {
+    u8 *b = (u8 *)w;
+    void (*init)(HudElement *);
+    func_0028C090(w, *(s32 *)(b + 0x20));
+    init = *(void (**)(HudElement *))(b + 0x30);
+    *(s32 *)(b + 0x4) = *(s32 *)(b + 0x24);
+    *(s32 *)(b + 0x14) = *(s32 *)(b + 0x34);
+    *(s32 *)(b + 0x18) = *(s32 *)(b + 0x38);
+    *(s32 *)(b + 0xC) = *(s32 *)(b + 0x2C);
+    *(s32 *)(b + 0x8) = *(s32 *)(b + 0x28);
+    *(void (**)(HudElement *))(b + 0x10) = init;
     if (init != 0) {
         init(w);
     }
-    *(s32 *)(w + 0x68) = 0;
+    *(s32 *)(b + 0x68) = 0;
 }
 #endif
 
@@ -1086,7 +1136,7 @@ void func_0028BF80(void) {
         func_0028BE10(i, 0xFFFF, 0, 0, 0, 0, 1);
         *(s32 *)(rec + 0x7C) = 0;
         *(s32 *)(rec + 0x6C) = -6;
-        func_0028BF18(rec);
+        func_0028BF18((HudElement *)rec);
         rec += 0x90;
     }
 }
@@ -1115,12 +1165,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C010);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C090);
 #else
-void func_0028C090(u8 *w, s32 iconName) {
+void func_0028C090(HudElement *w, s32 iconName) {
+    u8 *b = (u8 *)w;
     s32 slot = func_0028B560(iconName);
-    *(s16 *)(w + 0x40) = (s16)slot;
-    *(s32 *)(w + 0x0) = ((HudIconSlot *)g_pHudAssetHeader[1])[slot].texId;
-    *(s8 *)(w + 0x42) = ((HudIconSlot *)g_pHudAssetHeader[1])[slot].paletteId;
-    *(s32 *)(w + 0x44) = ((HudIconSlot *)g_pHudAssetHeader[1])[slot].baseFrame;
+    *(s16 *)(b + 0x40) = (s16)slot;
+    *(s32 *)(b + 0x0) = ((HudIconSlot *)g_pHudAssetHeader[1])[slot].texId;
+    *(s8 *)(b + 0x42) = ((HudIconSlot *)g_pHudAssetHeader[1])[slot].paletteId;
+    *(s32 *)(b + 0x44) = ((HudIconSlot *)g_pHudAssetHeader[1])[slot].baseFrame;
 }
 #endif
 
@@ -1197,7 +1248,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C390);
 
 /* Reset a HUD widget record: set its type tag (+0x7C = 0xD2), clear the two
  * 16-bit cursor fields (+0x48/+0x4A) and re-init it via func_0028C390. */
-void func_0028C490(void *p) {
+void func_0028C490(HudElement *p) {
     *(s32 *)((u8 *)p + 0x7C) = 0xD2;
     *(s16 *)((u8 *)p + 0x48) = 0;
     *(s16 *)((u8 *)p + 0x4A) = 0;
@@ -1261,15 +1312,16 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C7A8);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C7F0);
 #else
-void func_0028C7F0(u8 *w) {
+void func_0028C7F0(HudElement *w) {
+    u8 *b = (u8 *)w;
     func_0028C728();
-    *(s32 *)(w + 0x58) = 0xD2;
-    *(s32 *)(w + 0x5C) = 0xC8;
-    *(s32 *)(w + 0x74) = -2;
-    *(s32 *)(w + 0x78) = 0x1E;
-    *(s32 *)(w + 0x70) = 0;
-    *(s16 *)(w + 0x48) = 0;
-    *(s16 *)(w + 0x4A) = 0;
+    *(s32 *)(b + 0x58) = 0xD2;
+    *(s32 *)(b + 0x5C) = 0xC8;
+    *(s32 *)(b + 0x74) = -2;
+    *(s32 *)(b + 0x78) = 0x1E;
+    *(s32 *)(b + 0x70) = 0;
+    *(s16 *)(b + 0x48) = 0;
+    *(s16 *)(b + 0x4A) = 0;
 }
 #endif
 
@@ -1300,15 +1352,16 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", DrawWeaponSelec
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028D6D8);
 #else
-void func_0028D6D8(u8 *w) {
+void func_0028D6D8(HudElement *w) {
+    u8 *b = (u8 *)w;
     *(s32 *)((u8 *)&g_hudMobySpawnStart + 0x28) = 8;
     *(void **)((u8 *)&g_hudMobySpawnStart + 0x2C) = &D_1A8DD8;
-    *(s32 *)(w + 0x58) = 0xD2;
-    *(s32 *)(w + 0x78) = 0x1E;
-    *(s32 *)(w + 0x5C) = 0xC8;
-    *(s32 *)(w + 0x74) = -2;
-    *(s16 *)(w + 0x48) = 0;
-    *(s16 *)(w + 0x4A) = 0;
+    *(s32 *)(b + 0x58) = 0xD2;
+    *(s32 *)(b + 0x78) = 0x1E;
+    *(s32 *)(b + 0x5C) = 0xC8;
+    *(s32 *)(b + 0x74) = -2;
+    *(s16 *)(b + 0x48) = 0;
+    *(s16 *)(b + 0x4A) = 0;
     D_1A8D48 = 0;
 }
 #endif
@@ -1334,10 +1387,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028E640);
 
 /* Seed a HUD widget record's geometry (+0x5C/+0x58 = 0x20, type tag +0x7C =
  * 0x96) then re-init it via func_0028C390 (empty-asm guard keeps the jal). */
-void func_0028E7A0(u8 *p) {
-    *(s32 *)(p + 0x58) = 0x20;
-    *(s32 *)(p + 0x7C) = 0x96;
-    *(s32 *)(p + 0x5C) = 0x20;
+void func_0028E7A0(HudElement *p) {
+    u8 *b = (u8 *)p;
+    *(s32 *)(b + 0x58) = 0x20;
+    *(s32 *)(b + 0x7C) = 0x96;
+    *(s32 *)(b + 0x5C) = 0x20;
     func_0028C390(p);
     __asm__ __volatile__("");
 }
