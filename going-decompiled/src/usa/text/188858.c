@@ -463,10 +463,19 @@ s32 IsItemUnlockedAtProgress(s32 itemId, s32 progress) {
  * func_00289190(key): return 1 if `key` appears as the first word of any
  * {key,_} pair in D_240340 (stride 8, -2 sentinel), else 0.
  *
- * WALL (~5%): logic matches but cc1 lays out the loop / sentinel preload with a
- * different register assignment and branch structure (the original threads the
- * %lo-immediate first-element load into the loop differently). Left INCLUDE_ASM.
- */
+ * WALL (93.12%, register-colouring + sentinel CSE): with the explicit
+ * pre-loop-load / do-while / re-load form
+ *     s32 *p = D_240340; s32 cur = *p;
+ *     if (cur != -2) do { cur = *p; p += 2; if (key==cur) return 1; cur = *p; }
+ *                    while (cur != -2);
+ *     return 0;
+ * cc1 reproduces the original's exact branch/instruction layout. The only
+ * residual delta is register allocation: the original keeps the loaded value in
+ * $2 and materialises the -2 sentinel TWICE (once in $2 for the first-element
+ * compare, once in $5 for the loop test), whereas -O2 CSEs the sentinel into a
+ * single $2 and colours the loaded value into $5. The original is effectively
+ * *less* optimised here (un-CSE'd constant) — not reachable from clean C at -O2.
+ * Left INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_00289190);
 
 /* UpgradeWeaponToMax(itemId): repeatedly advance the item's weapon variant
@@ -777,12 +786,22 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_002898E0);
  * the entry whose id (+0x4) matches `textId`; return its index, or -1 when the
  * table is empty or has no match.
  *
- * WALL (53.67%): logic correct, but the original RE-READS g_subtitleState's
- * +0x2C count from memory every loop iteration (recomputing &g_subtitleState)
- * and indexes the table as `base + i*0x10`, whereas our cc1 caches the count in
- * a register (CSE) and walks a `+= 0x10` pointer — a fixed CSE / loop-strength
- * idiom difference. Left INCLUDE_ASM.
- */
+ * WALL (67.70%, LICM/aliasing): the first-element special-case + i++/re-read
+ * index form
+ *     if (g_subtitleState.tableCount > 0) {
+ *         TextEntry *t = g_pActiveTextTable;
+ *         if (t[0].id == textId) return 0;
+ *         for (i = 1; i < g_subtitleState.tableCount; i++)
+ *             if (t[i].id == textId) return i;
+ *     } return -1;
+ * gets the entry/first-element shape and the in-loop bnel branch-likely right,
+ * but the original RE-READS g_subtitleState's +0x2C count from memory every
+ * iteration and indexes the table as `base + i*0x10` (keeping the base live),
+ * whereas this cc1 hoists the count load out of the loop (LICM — independent of
+ * -fno-gcse, since it's loop-invariant load motion, not PRE) and walks a
+ * `+= 0x10` pointer. The original treats the count load as if it could alias
+ * the table writes (it doesn't), so the re-read can't be reproduced from clean
+ * non-volatile C. Left INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", FindTextTableEntry);
 
 /* GetLocalizedString(textId): resolve `textId` to its localized C string. Looks
