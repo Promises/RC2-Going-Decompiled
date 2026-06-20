@@ -66,6 +66,11 @@ extern char *g_guiInstance;
  * small front-end screen-state scratch struct. */
 extern u8 g_particleFxBlob[];
 
+/* Menu-screen manager block (== g_particleFxBlob + 0x100). The same scratch the
+ * functions above reach via `g_particleFxBlob + 0x100`; the SN cc1 anchors it on
+ * its own symbol. */
+extern u8 g_menuScreenBlock[];
+
 /* Selected catalog/list cursors (small-data scalars). */
 extern s32 g_bestiaryCursor;     /* selected bestiary entry (1..0x3f) */
 extern u8 g_pTextTableLoadBuf[]; /* active language text-table load buffer (also a base for menu screen-state words at +0xD8/+0x118) */
@@ -419,8 +424,25 @@ void func_002CBA40(void) {
 /* Commit a menu transition: full-screen tint then latch the screen-state
  * scratch (state=4, capture pending sub-state). Near-miss: the original emits a
  * dead conditional store (p[0x4]=1 then unconditional =0) the later cc1
- * load-PRE keeps but ours eliminates — left as INCLUDE_ASM. */
+ * load-PRE keeps but ours eliminates — preserved as portable C. */
+extern void DrawFullScreenTint(s32 r, s32 g, s32 b, s32 a);
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", MenuScreenCommitTransition);
+#else
+/* TODO(match): functional equivalent - not byte-exact; the original keeps a dead
+ * conditional store (block[0x4]=1 then unconditionally =0) the later cc1 load-PRE
+ * retains but ours eliminates. The transient block[0x4]=1 has no observable effect
+ * (no intervening call), so the captured block[0x18] -> block[0x14] latch and the
+ * state=4 store are byte-faithful. */
+void MenuScreenCommitTransition(void) {
+    s32 *block = (s32 *)g_menuScreenBlock;
+    DrawFullScreenTint(0, 0, 0, 0x38);
+    block[0x14 / 4] = block[0x18 / 4]; /* latch pending sub-state */
+    block[0]        = 4;               /* state = commit */
+    block[0x4 / 4]  = 0;
+    block[0x18 / 4] = 0;
+}
+#endif
 
 /* menu-screen lifecycle routine: 8-byte-packed-save wall (saves 8 GPRs incl $31; later cc1
  * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
@@ -481,8 +503,34 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CC908);
 
 /* 3-way menu action dispatch (0/1/2 -> toggle / func_002D67A0 / func_0029DCB8)
  * plus the nanotech-bonus-heal-timer store. Near-miss: single-register result
- * threading + store scheduling differ — left as INCLUDE_ASM. */
+ * threading + store scheduling differ — preserved as portable C.
+ *   action==0: arm g_nNanotechBonusHealTimer mirror (s16 at +4 = 0xA), return 1
+ *   action==1: return func_002D67A0(3, &D_25BA70)
+ *   action==2: func_0029DCB8(), return 1
+ *   else:      return 0
+ */
+extern u8 g_nNanotechBonusHealTimer[];
+extern void func_0029DCB8(void);
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CCA18);
+#else
+/* TODO(match): functional equivalent - not byte-exact; single-register result
+ * threading + branch-delay store scheduling not reproduced by cc1. */
+s32 func_002CCA18(s32 action) {
+    if (action == 1) {
+        return func_002D67A0(3, D_25BA70);
+    }
+    if (action == 0) {
+        *(s16 *)(g_nNanotechBonusHealTimer + 4) = 0xA;
+        return 1;
+    }
+    if (action == 2) {
+        func_0029DCB8();
+        return 1;
+    }
+    return 0;
+}
+#endif
 
 /* menu-screen lifecycle routine: 8-byte-packed-save wall (saves 4 GPRs incl $31; later cc1
  * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
@@ -535,8 +583,20 @@ s32 func_002CD450(s32 screen) {
 
 /* Stores D_1A7318 ? &D_1AB648 : &D_1AB678 into list[0x34], returns 0. Left as
  * INCLUDE_ASM: the original has an anomalous +0x60 stack adjust prologue with no
- * matching restore (frame artifact) that our cc1 won't reproduce from clean C. */
+ * matching restore (frame artifact) that our cc1 won't reproduce from clean C.
+ * Preserved as portable C for the native target. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CD4E8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; anomalous +0x60 frame
+ * prologue without matching restore not reproduced from clean C. The selector
+ * is D_1A7318 (== g_vramTextureBase_28 + 0xC); movn picks &D_1AB648 when nonzero,
+ * else &D_1AB678. Stores into list[0x34/4] (= list[0xD]) and returns 0. */
+s32 func_002CD4E8(s32 *list) {
+    list[0xD] = (s32)(D_1A7318 ? D_1AB648 : D_1AB678);
+    return 0;
+}
+#endif
 
 /* menu data/list builder: ldl/ldr/sdl/sdr unaligned struct/const copy — left as INCLUDE_ASM
  * (cc1 won't reproduce the unaligned 64-bit copy idiom from clean C). */
@@ -635,9 +695,43 @@ s32 func_002CE610(void) {
     return 0;
 }
 
-/* menu helper: 8-byte-packed-save wall (saves 2 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* Confirm/cancel poll variant: on the "confirm" pad bit (0x10) acknowledges the
+ * input (func_0028C7A8) then returns the active screen's pending result (latched
+ * into block[0x18]) or -1 when the screen has no pending sub-result; on a
+ * "back/cancel" bit (0x900) acknowledges + returns 1; otherwise ticks the idle
+ * handler func_0029DA18 and returns 0.
+ * Wall: 8-byte-packed-save (saves $16 + $31). Preserved as portable C. */
+extern void func_0028C7A8(void);
+extern void func_0029DA18(void);
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE618);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame +
+ * branch-likely confirm shape. */
+s32 func_002CE618(void) {
+    s32 flags = g_padButtonsPressed;
+    s32 *block = (s32 *)g_menuScreenBlock;
+    if (flags & 0x10) {
+        s32 v;
+        func_0028C7A8();
+        v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
+        if (v != 0) {
+            block[0x18 / 4] = v;
+            return 0;
+        }
+        if (block[0x134 / 4] == 0) {
+            return -1;
+        }
+        return 0;
+    }
+    if (flags & 0x900) {
+        func_0028C7A8();
+        return 1;
+    }
+    func_0029DA18();
+    return 0;
+}
+#endif
 
 /* Draw-batch wrapper. */
 s32 func_002CE6A8(void) {
@@ -694,9 +788,29 @@ s32 func_002CE9D8(void) {
     return 0;
 }
 
-/* menu helper: 8-byte-packed-save wall (saves 2 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* GUI wrapper: when the GUI is up, configure the widget at instance+0x3C160 —
+ * mark it active (func_00342460(w,1)), bind its three data blobs
+ * (func_00342450(w, &D_2615D8, &D_261678, &D_261730)) and clear its selection
+ * (func_00342520(w,0)). Returns 0.
+ * Wall: 8-byte-packed-save (saves $16 + $31). Preserved as portable C. */
+extern void func_00342460(void *widget, s32 arg);
+extern void func_00342450(void *widget, void *a, void *b, void *c);
+extern void func_00342520(void *widget, s32 arg);
+extern u8 D_2615D8, D_261678, D_261730;
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CEA38);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame. */
+s32 func_002CEA38(void) {
+    if (g_guiInstance) {
+        char *w = g_guiInstance + 0x3C160;
+        func_00342460(w, 1);
+        func_00342450(w, &D_2615D8, &D_261678, &D_261730);
+        func_00342520(w, 0);
+    }
+    return 0;
+}
+#endif
 
 /* menu input/update handler: 8-byte-packed-save wall (saves 3 GPRs incl $31; later cc1
  * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
@@ -908,9 +1022,75 @@ s32 func_002D2FC0(void) {
     return 0;
 }
 
-/* menu helper: 8-byte-packed-save wall (saves 3 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* Options sub-screen input handler. Confirm (0x10) latches the screen result
+ * (resets g_optionsSubCursor) like the other polls. Cancel (0x900) resets the
+ * cursor and returns 1. Up (0x8000) decrements the 6-entry cursor (clamp at 0);
+ * Down (0x2000) increments (clamp at 5). Each move plays sound 3 (moved) or 5
+ * (blocked at an edge). After a move, if the cursor changed it latches an error
+ * code (-0x12C) into D_25CA80[0x3C]; then mirrors the cursor into D_25CB30 and
+ * stores the s16 entry from the D_1ABDEA table into D_25CA80[0x34]. Returns the
+ * confirm/cancel tri-state.
+ * Wall: 8-byte-packed-save (saves $16 + $17 + $31). Preserved as portable C. */
+extern s32 g_optionsSubCursor;
+extern u8 D_25CA80[];
+extern s32 D_25CB30;
+extern u8 D_1ABDEA[]; /* s16 entries on a 4-byte stride */
+extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D2FC8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 3-GPR packed-save frame +
+ * branch-likely / reload scheduling not reproduced by cc1. */
+s32 func_002D2FC8(void) {
+    s32 flags = g_padButtonsPressed;
+    s32 old = g_optionsSubCursor;
+    s32 result = 0;
+    s32 cur;
+
+    if (flags & 0x10) {
+        s32 *block;
+        s32 v;
+        g_optionsSubCursor = 0;
+        block = (s32 *)g_menuScreenBlock;
+        v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
+        if (v != 0) {
+            block[0x18 / 4] = v;
+            return 0;
+        }
+        if (block[0x134 / 4] == 0) {
+            return -1;
+        }
+        return 0;
+    }
+
+    if (flags & 0x900) {
+        g_optionsSubCursor = 0;
+        result = 1;
+    } else if (flags & 0x8000) {
+        PlayGlobalSound(old <= 0 ? 5 : 3, 0, 0);
+        cur = g_optionsSubCursor - 1;
+        g_optionsSubCursor = cur;
+        if (cur < 0) {
+            g_optionsSubCursor = 0;
+        }
+    } else if (flags & 0x2000) {
+        PlayGlobalSound(old < 5 ? 3 : 5, 0, 0);
+        cur = g_optionsSubCursor + 1;
+        g_optionsSubCursor = cur;
+        if (cur >= 6) {
+            g_optionsSubCursor = 5;
+        }
+    }
+
+    if (old != g_optionsSubCursor) {
+        *(s32 *)(D_25CA80 + 0x3C) = -0x12C;
+    }
+    cur = g_optionsSubCursor;
+    D_25CB30 = cur;
+    *(s32 *)(D_25CA80 + 0x34) = *(s16 *)(D_1ABDEA + cur * 4);
+    return result;
+}
+#endif
 
 /* menu helper: 8-byte-packed-save wall (saves 3 GPRs incl $31; later cc1
  * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
@@ -928,9 +1108,71 @@ s32 func_002D3388(void) {
 }
 #endif
 
-/* menu helper: 8-byte-packed-save wall (saves 2 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* Help-topic sub-browser input handler. Confirm (0x10) latches the screen's
+ * pending result like the other confirm polls (resets g_helpPageCursor to 0).
+ * Cancel (0x900) returns 1. Up (0x8000) decrements the 7-page cursor clamped at
+ * 0; Down (0x2000) increments clamped at 6. Each move plays sound 3 (moved) or
+ * sound 5 (blocked at an edge). The landed page is mirrored into D_25CCC8.
+ * Returns the confirm/cancel tri-state (1 / -1 / 0).
+ * Wall: 8-byte-packed-save (saves $16 + $31) + branch-likely shape. Portable C. */
+extern s32 g_helpPageCursor;
+extern s32 D_25CCC8;
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D33A8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame +
+ * branch-likely / reload scheduling not reproduced by cc1. */
+s32 func_002D33A8(void) {
+    s32 flags = g_padButtonsPressed;
+    s32 result = 0;
+    s32 page;
+
+    if (flags & 0x10) {
+        s32 *block = (s32 *)g_menuScreenBlock;
+        s32 v;
+        g_helpPageCursor = 0;
+        v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
+        if (v != 0) {
+            block[0x18 / 4] = v;
+            return 0;
+        }
+        if (block[0x134 / 4] == 0) {
+            return -1;
+        }
+        return 0;
+    }
+
+    if (flags & 0x900) {
+        g_helpPageCursor = 0;
+        result = 1;
+        page = g_helpPageCursor;
+        D_25CCC8 = page;
+        return result;
+    }
+
+    if (flags & 0x8000) {
+        s32 cur = g_helpPageCursor - 1;
+        g_helpPageCursor = cur;
+        PlayGlobalSound(cur < 0 ? 5 : 3, 0, 0);
+        cur = g_helpPageCursor;
+        if (cur < 0) {
+            g_helpPageCursor = 0;
+        }
+    } else if (flags & 0x2000) {
+        s32 cur = g_helpPageCursor + 1;
+        g_helpPageCursor = cur;
+        PlayGlobalSound(cur < 7 ? 3 : 5, 0, 0);
+        cur = g_helpPageCursor;
+        if (cur >= 7) {
+            g_helpPageCursor = 6;
+        }
+    }
+
+    page = g_helpPageCursor;
+    D_25CCC8 = page;
+    return result;
+}
+#endif
 
 /* menu helper: 8-byte-packed-save wall (saves 4 GPRs incl $31; later cc1
  * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
@@ -1114,9 +1356,40 @@ s32 func_002D4370(void) {
 }
 #endif
 
-/* menu helper: 8-byte-packed-save wall (saves 2 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* Confirm/cancel poll driven by the global input flag word (D_138180[0x1C4]).
+ * Confirm (0x10) latches the active screen's pending result like the other
+ * polls; cancel (0x900) returns 1; otherwise ticks the idle handler
+ * func_0029D408 with D_138180[0x1C0] and returns 0.
+ * Wall: 8-byte-packed-save (saves $16 + $31). Preserved as portable C. */
+extern void func_0029D408(s32 arg);
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D43B0);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame +
+ * branch-likely confirm shape. */
+s32 func_002D43B0(void) {
+    s32 flags = *(s32 *)(D_138180 + 0x1C4);
+    s32 *block;
+    s32 v;
+    if (flags & 0x10) {
+        block = (s32 *)g_menuScreenBlock;
+        v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
+        if (v != 0) {
+            block[0x18 / 4] = v;
+            return 0;
+        }
+        if (block[0x134 / 4] == 0) {
+            return -1;
+        }
+        return 0;
+    }
+    if (flags & 0x900) {
+        return 1;
+    }
+    func_0029D408(*(s32 *)(D_138180 + 0x1C0));
+    return 0;
+}
+#endif
 
 /* Draw-batch wrapper. */
 s32 func_002D4438(void) {
@@ -1126,13 +1399,49 @@ s32 func_002D4438(void) {
     return 0;
 }
 
-/* menu helper: 8-byte-packed-save wall (saves 2 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* GUI wrapper: when the GUI is up, configure the list widget at instance+0x3C480
+ * — func_003444D0(w, 0) (mode), func_00344458(w, &D_259F38) (bind data),
+ * func_003444A0(w) (rebuild), func_003444C0(w, &D_25D0C0) (bind labels). Returns 0.
+ * Wall: 8-byte-packed-save (saves $16 + $31). Preserved as portable C. */
+extern void func_003444D0(void *widget, s32 mode);
+extern void func_00344458(void *widget, void *data);
+extern void func_003444A0(void *widget);
+extern void func_003444C0(void *widget, void *labels);
+extern u8 D_259F38, D_25D0C0, D_259CC0, D_25D268;
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D4468);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame. */
+s32 func_002D4468(void) {
+    if (g_guiInstance) {
+        char *w = g_guiInstance + 0x3C480;
+        func_003444D0(w, 0);
+        func_00344458(w, &D_259F38);
+        func_003444A0(w);
+        func_003444C0(w, &D_25D0C0);
+    }
+    return 0;
+}
+#endif
 
-/* menu helper: 8-byte-packed-save wall (saves 2 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* GUI wrapper: twin of func_002D4468 for the same widget (instance+0x3C480) with
+ * the alternate mode/data/labels (func_003444D0(w,1), &D_259CC0, &D_25D268).
+ * Wall: 8-byte-packed-save (saves $16 + $31). Preserved as portable C. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D44E8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame. */
+s32 func_002D44E8(void) {
+    if (g_guiInstance) {
+        char *w = g_guiInstance + 0x3C480;
+        func_003444D0(w, 1);
+        func_00344458(w, &D_259CC0);
+        func_003444A0(w);
+        func_003444C0(w, &D_25D268);
+    }
+    return 0;
+}
+#endif
 
 /* menu helper: 8-byte-packed-save wall (saves 6 GPRs incl $31; later cc1
  * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
