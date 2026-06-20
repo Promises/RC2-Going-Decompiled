@@ -9,11 +9,23 @@ extern s32 D_239A90[];
  * at D_239A90, stride 0x14). */
 typedef struct UiSpritePacket {
     u8  pad0[0x70];
-    u64 unk70;
-    u64 tex0;
-    u64 tex1;
-    u64 clamp;
+    u64 unk70;  /* 0x70 cleared to 0 (prim/alpha slot) */
+    u64 tex0;   /* 0x78 TEX0 from GetUiTextureTex0(texId) */
+    u64 tex1;   /* 0x80 fixed 0xFF9000000260 */
+    u64 clamp;  /* 0x88 CLAMP from D_239A90[idx*5] OR (wrapMode<<32) */
 } UiSpritePacket;
+
+/* Size pin (byte-neutral). func_00282798 (InitBillboardSpriteState) only writes
+ * the GS-register sub-block at 0x70..0x8F, so 0x90 is the minimum bindable size;
+ * the real billboard-rasterizer context is larger but its tail is not touched by
+ * this entry, so it is left as the leading pad. Confirmed write offsets
+ * 0x70/0x78/0x80/0x88 (all u64) from the asm. */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+_Static_assert(sizeof(UiSpritePacket) == 0x90, "UiSpritePacket bindable view 0x90");
+_Static_assert(__builtin_offsetof(UiSpritePacket, tex0)  == 0x78, "tex0");
+_Static_assert(__builtin_offsetof(UiSpritePacket, tex1)  == 0x80, "tex1");
+_Static_assert(__builtin_offsetof(UiSpritePacket, clamp) == 0x88, "clamp");
+#endif
 
 /* MIS-SPLIT fragment (not a real function entry): the glabel sits mid-routine,
  * on the `lw $4,0x958($29)` that follows the prologue of the large UI-sprite

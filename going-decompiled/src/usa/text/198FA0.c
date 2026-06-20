@@ -109,11 +109,20 @@ extern s32 func_0033A8F0(void *widget, s32 arg);
  * srcPtr is NULL. (Stride 0x10; tag/_pad carry per-section metadata used by
  * the (de)serializers, not by the size calculation.) */
 typedef struct SaveSection {
-    void *srcPtr;
-    s32   len;
-    s32   tag;
-    s32   _pad;
+    void *srcPtr;  /* 0x0 payload source; NULL terminates the table */
+    s32   len;     /* 0x4 payload byte length (summed by CalcSaveSectionsSize) */
+    s32   tag;     /* 0x8 PROBABLE: per-section metadata (used by (de)serializers) */
+    s32   _pad;    /* 0xC PROBABLE pad rounding the stride to 0x10 */
 } SaveSection;
+
+/* Size pin (byte-neutral). CalcSaveSectionsSize confirms the entry stride is
+ * 0x10 (asm: `addiu a0,a0,0x10` per iteration), reads srcPtr@0x0 and len@0x4,
+ * and stops at the first entry whose srcPtr is NULL. The tester builds a valid
+ * table by laying out 0x10-byte entries terminated by a {NULL,...} entry. */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+_Static_assert(sizeof(SaveSection) == 0x10, "SaveSection stride 0x10");
+_Static_assert(__builtin_offsetof(SaveSection, len) == 0x4, "len");
+#endif
 
 /* GUI widget methods the g_guiInstance wrappers forward to (text/1A00F0
  * range). All are value-returning (which keeps this cc1 from sibling-call

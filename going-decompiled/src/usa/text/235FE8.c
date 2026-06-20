@@ -95,7 +95,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336168);
 #else
 /* TODO(match): functional equivalent - not byte-exact; sq/lq 128-bit copy +
    branch wall. */
+/* A 16-byte (128-bit) quadword record. func_00336168/func_003361C0 copy it with
+ * a single lq/sq (`lq v0,0x0(src); sq v0,0x0(dst)`) into the active camera's
+ * render block at +0x80 / +0x90 respectively. Size pin is byte-neutral. */
 typedef struct GuiQword { s32 w[4]; } GuiQword;
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+_Static_assert(sizeof(GuiQword) == 0x10, "GuiQword is a 128-bit quadword");
+#endif
 extern void *g_activeCamera;
 extern void *func_00270290(s32 mode);
 void func_00336168(GuiQword *src) {

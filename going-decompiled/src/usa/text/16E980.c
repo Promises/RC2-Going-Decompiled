@@ -134,6 +134,17 @@ typedef struct ScreenSpriteFxQueue {
 } ScreenSpriteFxQueue;
 extern ScreenSpriteFxQueue g_screenSpriteFxQueue;
 
+/* Size pin (byte-neutral; asserts compile to nothing). ScreenSpriteFx is a
+ * 0x30-byte queue element: confirmed by g_screenSpriteFxQueue.count sitting at
+ * 0x120 (== 6 * 0x30) and by DrawScreenSpriteFxEntry's highest field read at
+ * +0x2C (s32 mode). volatile u_long128 at +0 forces 16-byte alignment, and
+ * 0x30 is already a multiple of 16. ee-gcc 2.9 predates __SIZEOF_POINTER__,
+ * so the guard skips it on the matching (non-native) toolchain. */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+_Static_assert(sizeof(ScreenSpriteFx) == 0x30, "ScreenSpriteFx stride 0x30");
+_Static_assert(__builtin_offsetof(ScreenSpriteFxQueue, count) == 0x120, "count");
+#endif
+
 extern void DecompressWad(s32 wadId, void *header);
 extern void func_0011AEA0(s32 a);
 extern void ResetFrameArenas(void);

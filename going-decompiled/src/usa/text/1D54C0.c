@@ -40,6 +40,16 @@ typedef struct MenuCmd {
     s32 arg;    /* 0x4 */
 } MenuCmd;
 
+/* Size pin (byte-neutral). func_002D6AD8/func_002D6B00 read only op@0x2 (lh) and
+ * arg@0x4 (lw), forwarding both to MenuScreenDoAction. The minimal bindable
+ * record is 0x8 (callers in this TU build it in a 0x10 stack scratch, but the
+ * named type itself is only ever touched at +2/+4). */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+_Static_assert(sizeof(MenuCmd) == 0x8, "MenuCmd bindable record 0x8");
+_Static_assert(__builtin_offsetof(MenuCmd, op)  == 0x2, "op");
+_Static_assert(__builtin_offsetof(MenuCmd, arg) == 0x4, "arg");
+#endif
+
 /* gp-addressable globals read via the assembler-absolute macro (see header). */
 __asm__(".extern D_1A7BA8, 16");
 __asm__(".extern g_sndChannelVolumes, 16");
