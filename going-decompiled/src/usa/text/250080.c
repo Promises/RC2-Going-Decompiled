@@ -204,7 +204,7 @@ extern s32 func_00352C30(u8 *fq);
 extern void func_00352BB8(u8 *fq);
 extern void func_00350B60(void *gif, u8 *frame, u32 a, u32 b, s32 idx);
 extern void WaitSema(s32 sema);
-extern void SignalSema(s32 sema);
+extern s32 SignalSema(s32 sema);   /* SDK SignalSema returns int (eekernel.h); func_00352000 returns it */
 extern s32 func_00133960(void);
 /* Stream-event callbacks registered by func_00352468 (defined later). */
 s32 func_00352A20(s32 unused, s32 *frame);
@@ -831,7 +831,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352000);
    Snap the residual byte cursor up to the next 2KB (0x800) boundary, under the
    object's sema. The asm biases by 0x7FF then arithmetic-right-shifts by 11
    (with the +0xFFE negative-input correction the compiler inserts); the cursor
-   is a non-negative byte count, so this is the usual round-up-to-2KB. */
+   is a non-negative byte count, so this is the usual round-up-to-2KB.
+   RETURN: the asm stores the rounded cursor in the SignalSema jal delay slot, so
+   $2 at `jr` is SignalSema's return value (NOT the rounded cursor) - return that.
+   (Fixes else_divergences #15: the return diverged on real R5900.) */
 s32 func_00352000(u8 *obj) {
     s32 v;
 
@@ -839,8 +842,7 @@ s32 func_00352000(u8 *obj) {
     v = *(s32 *)(obj + 0x14);
     v = (((v + 0x7FF >= 0) ? v + 0x7FF : v + 0xFFE) >> 11) << 11;
     *(s32 *)(obj + 0x14) = v;
-    SignalSema(*(s32 *)(obj + 0x40));
-    return v;
+    return SignalSema(*(s32 *)(obj + 0x40));
 }
 #endif
 
