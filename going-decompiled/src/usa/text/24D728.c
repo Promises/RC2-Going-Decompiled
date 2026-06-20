@@ -209,6 +209,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034FAF8);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", GuiHermiteInterp);
 #else
 extern void AssertFail(const char *file, s32 line, const char *expr);
+/* rodata assert strings (bytes verified in Ghidra, USA SCUS_972.68):
+ *   D_1AE758 = "gui/mathUtil.cpp"        (source file)
+ *   D_1AE770 = "t>=0.0f && t<= 1.0f"     (clamp predicate) */
 extern const char D_1AE758[];
 extern const char D_1AE770[];
 f32 GuiHermiteInterp(f32 t, f32 a, f32 b, f32 c, f32 d) {
