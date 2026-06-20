@@ -103,6 +103,27 @@ extern void func_0028E9A0(s32 arg);
 extern s32 func_0029CA98(void);
 extern s32 func_0033A8F0(void *widget, s32 arg);
 
+/* Progress/dialog flag globals read by the 0x29EAxx predicate family below.
+ * Widths follow the original load opcodes (lbu = u8, lw = s32). Declared here
+ * for the TARGET_NATIVE #else arms; the #ifndef arms stay INCLUDE_ASM (these
+ * declarations emit no code, so the matching build is unaffected). */
+extern u8  g_miscExtras;             /* 0x1A7A12 misc-extras gate byte (nonzero blocks) */
+extern s32 D_1397E0;                 /* 0x1397E0 status word; bit 0x8000000 = busy */
+extern u8  D_1395C1;                 /* 0x1395C1 dialog-active flag */
+extern u8  D_1A7B0D;                 /* 0x1A7B0D dialog flag */
+extern u8  D_1A7B14;                 /* 0x1A7B14 dialog flag */
+extern s32 D_1397C4;                 /* 0x1397C4 streaming state (sign = idle) */
+extern u8  D_1395D5;                 /* 0x1395D5 streaming-busy flag */
+extern u8  D_1A7BDD;                 /* 0x1A7BDD dialog flag */
+extern u8  D_1A7B10;                 /* 0x1A7B10 dialog flag */
+extern s32 g_cinematicUnlockedFlags; /* 0x139768 cinematic bitfield (read at +0x90/+0x98) */
+
+/* Gating globals + widget method for the func_0029CCB8 popup-poll wrapper. */
+extern s32 D_1A9A88;                 /* 0x1A9A88 GUI-active gate (gp small-data) */
+extern s32 D_1A9A8C;                 /* 0x1A9A8C GUI-ready gate (gp small-data) */
+extern s32 g_nNanotechBonusHealTimer;/* 0x189FFC; +0x4 is a separate s16 sub-state */
+extern s32 func_0033B720(void *widget); /* GUI popup-poll method */
+
 /* One entry of a save-section descriptor table. The serialized layout each
  * entry contributes is an 8-byte header followed by `len` payload bytes,
  * padded up to a 4-byte boundary. The table is terminated by an entry whose
@@ -499,7 +520,20 @@ s32 func_0029C570(void) {
  * original (later SN) cc1 copies BOTH args to $t0/$t1 and duplicates the slot
  * base ($a0 + a gratuitous $v1 copy) while the pinned cc1 copies only `a` and
  * keeps one base. Same coloring wall as func_002911F0. Left as asm. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029C5B0);
+#else
+s32 func_0029C5B0(s32 a, s32 b, s32 idx) {
+    char *slot;
+    if (g_guiInstance == 0 || (u32)idx >= 2) {
+        return 0;
+    }
+    slot = g_guiInstance + 0x38000 + idx * 8;
+    *(s32 *)(slot + 0x7A18) = a;
+    *(s32 *)(slot + 0x7A1C) = b;
+    return 1;
+}
+#endif
 
 /* func_0029C600(idx): clear the slot pair at g_guiInstance+0x3FA18+idx*8 (the
  * counterpart of func_0029C5B0). UNMATCHABLE in this unit: it reads
@@ -508,7 +542,19 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029C5B0);
  * original TU (the proven reload-artifact wall). The unit-wide extern model
  * can only express one side per symbol (g_guiInstance is modeled absolute,
  * favouring the ~60 wrappers), so this stays asm. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029C600);
+#else
+void func_0029C600(s32 idx) {
+    char *slot;
+    if ((u32)idx >= 2) {
+        return;
+    }
+    slot = g_guiInstance + 0x38000 + idx * 8;
+    *(s32 *)(slot + 0x7A18) = 0;
+    *(s32 *)(slot + 0x7A1C) = 0;
+}
+#endif
 
 /* func_0029C638: 16 bytes of dead inter-function fill (`li $v0,0` + epilogue
  * orphan, no jr) — not compiler-reachable C. */
@@ -547,7 +593,31 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029CC48);
  * g_guiInstance (and D_1A9A88/D_1A9A8C) through %gp_rel($gp) while the rest of
  * the unit reads g_guiInstance via the absolute lui/lw pair — the reload-
  * artifact wall (one form per symbol), see the file header. Left as asm. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029CCB8);
+#else
+void func_0029CCB8(void) {
+    /* All five gates must permit before the popup-poll runs:
+     *  D_1A9A88 set, the nanotech sub-state half at +0x4 clear, the popup-busy
+     *  gate D_1A8C64 clear, D_1A9A8C set, and the GUI instance up. */
+    if (D_1A9A88 == 0) {
+        return;
+    }
+    if (*(s16 *)((char *)&g_nNanotechBonusHealTimer + 0x4) != 0) {
+        return;
+    }
+    if (D_1A8C64 != 0) {
+        return;
+    }
+    if (D_1A9A8C == 0) {
+        return;
+    }
+    if (g_guiInstance == 0) {
+        return;
+    }
+    func_0033B720(g_guiInstance + 0x3F7B0);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029CD18);
 
@@ -1183,19 +1253,71 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", GatherActiveObj
  * emits the branch + per-path constant materialisation (`bnez; addiu $2,1 /
  * daddu $2,0`). Same class: func_0029EC70. Predicates returning 0/1/2
  * (func_0029EB68/func_0029EBF8) are NOT walled - scc cannot synthesise 2. */
+/** Returns 1 iff the misc-extras gate is clear (g_miscExtras == 0) AND the
+ *  D_1397E0 busy bit (0x8000000) is set; 0 otherwise. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029EA90);
+#else
+s32 func_0029EA90(void) {
+    if (g_miscExtras != 0) {
+        return 0;
+    }
+    if ((D_1397E0 & 0x8000000) != 0) {
+        return 1;
+    }
+    return 0;
+}
+#endif
 
-/* 0/1 predicate (dialog flags D_1395C1/D_1A7B0D/D_1A7B14) - scc-tail wall,
- * see func_0029EA90. */
+/** Returns 1 iff all three dialog flags are set (D_1395C1, D_1A7B0D, D_1A7B14);
+ *  0 as soon as any is clear. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029EAC8);
+#else
+s32 func_0029EAC8(void) {
+    if (D_1395C1 == 0) {
+        return 0;
+    }
+    if (D_1A7B0D == 0) {
+        return 0;
+    }
+    if (D_1A7B14 != 0) {
+        return 1;
+    }
+    return 0;
+}
+#endif
 
-/* 0/1 predicate (D_1397C4 streaming state + D_1395D5 flag) - scc-tail wall,
- * see func_0029EA90. */
+/** Returns 1 iff a stream is in flight (D_1397C4 < 0) AND the busy flag
+ *  D_1395D5 is set; 0 otherwise. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029EB08);
+#else
+s32 func_0029EB08(void) {
+    if (D_1397C4 >= 0) {
+        return 0;
+    }
+    if (D_1395D5 != 0) {
+        return 1;
+    }
+    return 0;
+}
+#endif
 
-/* 0/1 predicate (D_1A7BDD/D_1A7B10 dialog flags) - scc-tail wall, see
- * func_0029EA90. */
+/** Returns 1 iff both dialog flags are set (D_1A7BDD AND D_1A7B10); 0 otherwise. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029EB38);
+#else
+s32 func_0029EB38(void) {
+    if (D_1A7BDD == 0) {
+        return 0;
+    }
+    if (D_1A7B10 != 0) {
+        return 1;
+    }
+    return 0;
+}
+#endif
 
 /* func_0029EB68: cinematic skip-prompt arbiter (posts HUD message 0x1F/0x20
  * into D_257502, returns 0/1/2 on the D_1395B8[0x1D] / cinematic word +0x5C
@@ -1214,10 +1336,24 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029EB68);
  * 52.77%. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029EBF8);
 
-/* 0/1 predicate over the cinematic-flag words +0x90/+0x98 - its final
- * `if (bit) return 1; return 0;` block hits the scc-tail wall, see
- * func_0029EA90. */
+/** Returns 1 iff cinematic-flag word +0x90 has bit 0x10000 set AND word +0x98
+ *  has bit 0x4000000 set; 0 otherwise. (The original has a redundant early-out
+ *  testing the same two bits first; it cannot change the result, so the #else
+ *  collapses to the single conjunction.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029EC70);
+#else
+s32 func_0029EC70(void) {
+    char *flags = (char *)&g_cinematicUnlockedFlags;
+    if ((*(s32 *)(flags + 0x90) & 0x10000) == 0) {
+        return 0;
+    }
+    if ((*(s32 *)(flags + 0x98) & 0x4000000) != 0) {
+        return 1;
+    }
+    return 0;
+}
+#endif
 
 /* func_0029ECE0: the 0x1118-byte cinematic/dialog driver (largest non-state-
  * machine function here). Deep multi callee-save ($16/$17/$18+); 8-byte-packed
