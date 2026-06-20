@@ -520,7 +520,12 @@ s32 func_002AA3B0(Moby *moby) {
 }
 
 /**
- * Forward to the shared vector helper func_002846E8.
+ * Forward to the shared 2-colour blend helper func_002846E8.
+ *
+ * TYPE NOTE: a/b/c stay void* on purpose. func_002846E8 reads its GPR args by
+ * VALUE via pextlb/pextlh (they ARE packed 32-bit RGBA colour words, not
+ * pointers) and never dereferences them; c is unused by the callee. So these
+ * are not Vec4* (the earlier "vector op" hypothesis is disproven by the asm).
  */
 s32 func_002AA3D0(void *a, void *b, void *c) {
     return func_002846E8(a, b, c);
@@ -534,7 +539,12 @@ extern s32 D_1A9E98;
 /**
  * Advance a ping-pong colour ramp: bump (or reset) one of two free-running
  * phase counters, fold it into a triangle wave over [0,2*period) to a 0..1
- * blend, and write the interpolated packed vec4 colour.
+ * blend, and blend between the two packed colours by t.
+ *
+ * TYPE NOTE: dst/src stay void* on purpose. They flow straight into
+ * func_002846E8, which consumes its arg registers by VALUE as packed 32-bit
+ * RGBA colour words (pextlb/pextlh, no memory load) and returns the blended
+ * word; they are not Vec4* pointers.
  */
 void func_002AA3F0(void *dst, void *src, s32 period, s32 useSecond, s32 reset) {
     s32 *phase = &D_1A9E98;
@@ -890,6 +900,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFA58);
 
 /**
  * Unpack a 0xBBGGRR colour word and forward to the colour setter.
+ *
+ * TYPE NOTE: p stays void*. The callee func_002A12C0 writes the packed RGB into
+ * the low 24 bits of the 8-byte field at p+0x38 (ld/sd, high dword preserved).
+ * That +0x38 colour field does not match the recovered Moby layout (0x38 falls
+ * in Moby's unnamed pad36 block) and no confirmed caller is available, so the
+ * container struct is unidentified - left void* rather than guessed as Moby*.
  */
 s32 func_002AFA80(void *p, s32 rgb) {
     s32 b = rgb >> 16;
@@ -983,6 +999,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0E40);
 
 /**
  * Forward to func_002B0E40 on the sub-object at +0x10.
+ *
+ * TYPE NOTE: p stays u8*. func_002B0E40 consumes p+0x10 as a Vec4* (it runs
+ * SetVec4UnitZ / Vec4SubVu0 / Vec3RescaleToLenVu0 / Vec4ScaleVu0 on it), so
+ * p+0x10 is a Vec4 (a direction/position vec). The container is consistent with
+ * a Moby (pos@0x10) but that single-field match is not conclusive and the
+ * caller hands in a stack-local pointer, so p is left u8* rather than Moby*.
  */
 s32 func_002B0F18(u8 *p) {
     return func_002B0E40(p + 0x10);
@@ -995,6 +1017,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0F40);
 
 /**
  * Forward to func_002B0F40 on the sub-object at +0x10.
+ *
+ * TYPE NOTE: p stays u8*. func_002B0F40 consumes p+0x10 (its a0) as a Vec4*
+ * (Vec3RescaleToLenVu0 / Vec4AddVu0), so p+0x10 is a Vec4. As with func_002B0F18
+ * the container is plausibly a Moby (pos@0x10) but unconfirmed (caller passes a
+ * stack-local pointer, StepMobySpringFollow @ 0x2B5844), so p is left u8*.
  */
 s32 func_002B0FC0(u8 *p) {
     return func_002B0F40(p + 0x10);
@@ -1008,8 +1035,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B11C0);
 /**
  * Sample the breath/oxygen meter value; when the HUD inversion flag is set
  * the meter counts down from 100 instead.
+ *
+ * `p` is read directly as an offset-0 16-byte vector by func_002837F8 (lqc2),
+ * so it is a Vec4* (a world position point); callers pass moby+0x10, i.e. the
+ * moby's position vec (verified in CheckMobyOverWater @ 0x2B7334).
  */
-f32 func_002B11C8(void *p) {
+f32 func_002B11C8(Vec4 *p) {
     if (D_1A8CA4 == 0) {
         return func_002837F8(p, &D_001B1750);
     }
