@@ -280,7 +280,25 @@ void func_00336BA8(void *p, s32 flag) {
 }
 #endif
 
+/* func_00336BC8: seed the gadget-swap zoom animation. Store the swap flag/index
+ * (a0) as a word at g_swapGadgetItemIndex+0x86, then two zoom factors: at +0x8A
+ * the start scale (1.0 when a0==0, else 1.0769) and at +0x8E the end scale (1.0
+ * when a0==0, else 0.9). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336BC8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; same-symbol gp_rel /
+   absolute reload wall - the original reaches +0x86 and +0x8E through the one-
+   insn %gp_rel($28) form but +0x8A through the two-insn absolute %hi/%lo macro;
+   cc1 cannot reproduce that asymmetric per-field addressing mode mix. */
+extern s32 g_swapGadgetItemIndex;
+void func_00336BC8(s32 flag) {
+    char *base = (char *)&g_swapGadgetItemIndex;
+    *(s32 *)(base + 0x86) = flag;
+    *(f32 *)(base + 0x8A) = (flag != 0) ? 1.076923f : 1.0f;
+    *(f32 *)(base + 0x8E) = (flag != 0) ? 0.9f : 1.0f;
+}
+#endif
 
 /* func_00336C10: return the word at g_waterPool + 0xC0, reached via a one-insn
  * %gp_rel load. */
@@ -423,7 +441,46 @@ void func_00337098(void *p, s32 flag) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337110);
 
+/* GuiSpriteElementDraw: if the element is visible (*(e+0x10) scalar != 0) and
+ * has a live texture handle (+0x40), submit the sprite to the 2D blitter
+ * func_003017F8 - position (*(e+0x0)), scale (*(e+0x4)) with y pre-scaled by the
+ * global sprite y-fudge (g_swapGadgetItemIndex+0x8E), color (*(e+0xC)), the
+ * +0x38 vec and the +0x40 handle. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiSpriteElementDraw);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 92.7%. Structure, frame
+   (asm barrier defeats the tail-call), branches and reloc all match; the only
+   delta is -O2 instruction scheduling of the independent argument loads - the
+   original loads the gp_rel y-fudge into fv0 first then scale[1] into fa3
+   (mul.s fa3,fa3,fv0) and fills the jal delay slot with pos[0]; this cc1
+   schedules the global load late and hoists pos[0]. Pure scheduler artifact. */
+extern s32 g_swapGadgetItemIndex;
+extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
+                          f32 px, f32 py, f32 sx, f32 syg, f32 v38);
+void GuiSpriteElementDraw(void *p) {
+    GuiElement *e = (GuiElement *)p;
+    s32 handle;
+    f32 *pos, *scale, *vec38;
+    s32 *color;
+    if (e->visible[0] == 0.0f) {
+        return;
+    }
+    handle = *(s32 *)((char *)e + 0x40);
+    if (handle == 0) {
+        return;
+    }
+    pos = e->pos;
+    scale = e->scale;
+    color = *(s32 **)((char *)e + 0xC);
+    vec38 = *(f32 **)((char *)e + 0x38);
+    func_003017F8(handle, color[0], scale, vec38,
+                  pos[0], pos[1], scale[0],
+                  scale[1] * *(f32 *)((char *)&g_swapGadgetItemIndex + 0x8E),
+                  vec38[0]);
+    __asm__ __volatile__("");
+}
+#endif
 
 /* GuiElementSetGlyph: look up the glyph for (codepoint, font) and store the
  * resulting handle at +0x40. */
@@ -443,7 +500,23 @@ void GuiElementSetAlpha(GuiElement *e, f32 alpha) {
     **(f32 **)((char *)e + 0x38) = alpha;
 }
 
+/* GuiListRowElementInit: run the base GuiElement vtable install, then overwrite
+ * the +0x30 vtable slot with the GuiListRow vtable. (The original also returns
+ * the object in v0, but every caller discards it.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiListRowElementInit);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed two-save
+   frame wall - holding the object across the GuiElementInstallBaseVtable call
+   needs s0 saved alongside ra, and this cc1 lays the two saves out in a -0x20
+   frame where the original packs them into -0x10. */
+extern GuiElement *GuiElementInstallBaseVtable(GuiElement *e);
+void GuiListRowElementInit(void *p) {
+    GuiElement *e = (GuiElement *)p;
+    GuiElementInstallBaseVtable(e);
+    *(void **)((char *)e + 0x30) = &g_GuiListRowVtable;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiListElementInit);
 
@@ -597,7 +670,36 @@ void GuiElementInitTypeC(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003377A8);
 
+/* GuiTextElementInit: run the base GuiElement init, then set up a text element:
+ * install the D_263B10 glyph/format table at +0x34, mark it active (+0x38 = 1,
+ * 64-bit), clear the text handle (+0x40), reset the scale vector (*(e+0x4)) to
+ * {1.0, 1.0}, and seed the text params: +0x54 = 1, +0x4C = 0x200, +0x50 = 0.7f,
+ * +0x44 = 1, +0x48 = 0. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiTextElementInit);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed two-save
+   frame wall (target uses a -0x10 frame with s0@0x0/ra@0x8; this cc1 emits a
+   -0x20 frame) plus the -fno-gcse double-reload of *(e+0x4) collapses. 49%. */
+extern void GuiElementBaseInit(void *p);
+extern void *D_263B10;
+void GuiTextElementInit(GuiElement *e) {
+    f32 *scale;
+    GuiElementBaseInit(e);
+    *(void **)((char *)e + 0x34) = &D_263B10;
+    *(s64 *)((char *)e + 0x38) = 1;
+    *(s32 *)((char *)e + 0x40) = 0;
+    scale = *(f32 **)((char *)e + 0x4);
+    scale[0] = 1.0f;
+    scale = *(f32 **)((char *)e + 0x4);
+    scale[1] = 1.0f;
+    *(s32 *)((char *)e + 0x54) = 1;
+    *(s32 *)((char *)e + 0x4C) = 0x200;
+    *(f32 *)((char *)e + 0x50) = 0.7f;
+    *(s32 *)((char *)e + 0x44) = 1;
+    *(s32 *)((char *)e + 0x48) = 0;
+}
+#endif
 
 /* func_00337830: install the D_1AD9F8 vtable at p+0x30, then call func_00336F00(p). */
 void func_00337830(void *p) {
