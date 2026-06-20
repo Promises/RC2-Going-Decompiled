@@ -27,6 +27,16 @@ typedef struct { unsigned long long _q[2]; } __attribute__((aligned(16))) u_long
 typedef unsigned long u_long128 __attribute__((mode(TI)));
 #endif
 
+/* Canonical Moby entity record (full field layout in include/moby.h, sizeof
+ * 0x100). The moby helpers in this unit forward an opaque moby handle to the
+ * lifecycle/spawn/grid engine functions; a full-size opaque view is enough here
+ * (the bodies do their own (u8*)moby offset arithmetic). Byte-neutral: a struct
+ * typedef emits no code, and pointer->pointer retyping is ABI-identical. */
+typedef struct Moby { u8 _bytes[0x100]; } Moby;
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+_Static_assert(sizeof(Moby) == 0x100, "Moby must be 0x100 under ILP32");
+#endif
+
 #ifdef TARGET_NATIVE
 /* Shared decls for the water-pool state machine + spark-burst #else bodies. */
 typedef f32 Vec4f[4] __attribute__((aligned(16)));
@@ -53,8 +63,8 @@ extern f32  func_00283B48(f32 x);       /* VU0 sine   (has #else body) */
 extern f32  func_00283B30(f32 x);       /* VU0 cosine (has #else body) */
 extern f32  func_00284548(f32 a, f32 b);/* WrapAnglePiSum (has #else body) */
 extern void func_00300288(void);
-extern void func_003007F8(void *moby);
-extern void *func_003009F8(void *moby);
+extern void func_003007F8(Moby *moby);
+extern void *func_003009F8(Moby *moby);
 extern void func_00300B88(void);
 extern void func_00300E70(void);
 extern void func_00300C08(void);
@@ -96,7 +106,7 @@ extern u8 g_gsScreenContext[]; /* 0x1A6480 GS screen context (disp dims at +0x15
 
 extern void func_002AE0B8(void *a, void *b, void *c, void *d);
 extern void func_002ADF48(void *a, void *b, void *c, void *d, void *e, void *f);
-extern void func_00300120(void *moby, s32 classId);
+extern void func_00300120(Moby *moby, s32 classId);
 extern void *func_00300190(s32 classId, s32 animArg);
 extern void AppendGsRegPacket(s32 regId, s64 value);
 extern f32 IntToFloat(s32 v);
@@ -137,8 +147,9 @@ extern void func_002B0E40(void *transform, void *slot, s32 flag);
 __asm__(".extern g_soundBankHandles, 16");
 extern u8 g_soundBankHandles[]; /* 0x18A148 sound-bank handle table (+0x20 base) */
 extern s16 D_0018A168;          /* hero-attached-sound enable flag */
-s32 func_002FFC20(void *p1, void *p2, void *p3, u8 *moby, void *src) {
+s32 func_002FFC20(void *p1, void *p2, void *p3, Moby *moby, void *src) {
     SoundPoolSlot *table = (SoundPoolSlot *)(D_00220000 + 0x1260);
+    u8 *m = (u8 *)moby;
     u_long128 xform;
     s32 i;
     for (i = 0; i < 0x80; i++) {
@@ -147,7 +158,7 @@ s32 func_002FFC20(void *p1, void *p2, void *p3, u8 *moby, void *src) {
             if (src != 0) {
                 xform = *(u_long128 *)src;
             } else {
-                xform = *(u_long128 *)(moby + 0x10);
+                xform = *(u_long128 *)(m + 0x10);
             }
             *(void **)(slot + 0x1C) = moby;     /* claim slot with the moby handle */
             *(void **)(slot + 0x10) = p1;       /* caller params at +0x10..+0x18 */
@@ -279,7 +290,7 @@ void func_00300118(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_00300120);
 #else
-void func_00300120(void *moby, s32 classId) {
+void func_00300120(Moby *moby, s32 classId) {
     u8 *aux;
     InitMobyFromClass(moby, classId);
     aux = g_mobyAuxBlockBase
@@ -304,7 +315,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_00300190);
 void *func_00300190(s32 classId, s32 animArg) {
     u8 *m = *(u8 **)(g_waterPool + 0x68);
     u16 flags;
-    func_00300120(m, classId);
+    func_00300120((Moby *)m, classId);
     *(u16 *)(m + 0x34) &= 0xFFBC;
     *(u8 *)(m + 0x30) = 0xFF;
     *(u16 *)(m + 0x32) = 0x20;
@@ -550,7 +561,7 @@ void func_003002E0(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_003007F8);
 #else
-void func_003007F8(void *moby) {
+void func_003007F8(Moby *moby) {
     (void)moby; /* TODO(hle): VU0 turret transform + trail */
 }
 #endif
@@ -573,7 +584,7 @@ extern s32 IsGadgetClassResident(s32 classId);
 extern void EnsureGadgetClassResident(s32 classId);
 extern void PumpDialogVoiceSystem(s32 arg);
 extern void ActivateGadgetMobyClass(s32 classId);
-void *func_003009F8(void *moby) {
+void *func_003009F8(Moby *moby) {
     /* TODO(match): see func_002FFF68 — same scattered weapon-table globals.
      * Behaviour documented above; reconstruct once those globals are named. */
     (void)moby;

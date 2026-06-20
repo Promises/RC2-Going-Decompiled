@@ -1234,6 +1234,15 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029FDF8);
  * callee-save frame wall, see func_0029C678. Left as asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", SpawnMoby);
 
+/* Canonical Moby entity record (full field layout in include/moby.h, sizeof
+ * 0x100). InitMobyFromClass zero-fills and stamps it; the body does its own
+ * (u8*)moby offset arithmetic, so a full-size opaque view suffices. Byte-neutral
+ * (a struct typedef emits no code; the matching arm is INCLUDE_ASM regardless). */
+typedef struct Moby { u8 _bytes[0x100]; } Moby;
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+_Static_assert(sizeof(Moby) == 0x100, "Moby must be 0x100 under ILP32");
+#endif
+
 /* Moby-class binding tables consulted by InitMobyFromClass (all arena-placed). */
 extern void FillMemory32(void *dst, s32 pattern, s32 nbytes);
 extern u8    g_mobyClassSlotRemap[];            /* 0x1CE460 classId -> slot byte */
@@ -1260,7 +1269,7 @@ extern void  ResolveMobyAnimFramePtrs(void *moby);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", InitMobyFromClass);
 #else
-void InitMobyFromClass(void *moby, s32 classId) {
+void InitMobyFromClass(Moby *moby, s32 classId) {
     u8 *m = (u8 *)moby;
     u8 slot;
     s32 index;

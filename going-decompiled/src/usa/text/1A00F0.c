@@ -33,6 +33,16 @@
 
 extern void FillMemory32(void *dst, u32 pattern, s32 len);
 
+/* Canonical Moby entity record (full field layout in include/moby.h, sizeof
+ * 0x100). The moby lifecycle helpers in this unit forward an opaque moby handle;
+ * the bodies do their own (u8*)moby offset arithmetic, so a full-size opaque view
+ * suffices. Byte-neutral (a struct typedef emits no code; the matching arms are
+ * INCLUDE_ASM regardless). */
+typedef struct Moby { u8 _bytes[0x100]; } Moby;
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+_Static_assert(sizeof(Moby) == 0x100, "Moby must be 0x100 under ILP32");
+#endif
+
 /*
  * Releases a moby slot: marks its state byte (+0x20) 0xFD for a static slot
  * (below the dynamic-spawn region) or 0xFE for a dynamic slot, schedules its
@@ -51,7 +61,7 @@ extern void UpdateMobyGridCells(void *moby, u32 sentinelRange);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", FreeMoby);
 #else
-void FreeMoby(void *moby) {
+void FreeMoby(Moby *moby) {
     u8 state;
     if ((u32)moby < (u32)g_mobySpawnStart) {
         state = 0xFD;
