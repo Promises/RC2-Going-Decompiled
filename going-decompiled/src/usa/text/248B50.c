@@ -137,11 +137,18 @@ void func_00348DA0(GuiWidget *w, f32 *table) {
 }
 #endif
 
-/* func_00348E10: set the +0xB8 / +0xBC field pair. Best 96%: the original
- * stores +0xBC first then fills the jr delay slot with the +0xB8 store; the
- * pinned cc1 schedules the two independent struct stores in ascending-offset
- * order. WALL: ascending-offset store scheduling. */
+/* func_00348E10: set the +0xB8 / +0xBC field pair (a1 -> +0xB8, a2 -> +0xBC).
+ * Best 96%: the original stores +0xBC first then fills the jr delay slot with
+ * the +0xB8 store; the pinned cc1 schedules the two independent struct stores in
+ * ascending-offset order. WALL: ascending-offset store scheduling. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348E10);
+#else
+void func_00348E10(GuiWidget *w, s32 a, s32 b) {
+    *(s32 *)((char *)w + 0xB8) = a;
+    *(s32 *)((char *)w + 0xBC) = b;
+}
+#endif
 
 /* func_00348E20: store a1 to the +0xC8 field. */
 void func_00348E20(GuiWidget *w, s32 v) {
@@ -153,7 +160,17 @@ void func_00348E20(GuiWidget *w, s32 v) {
  * original alternates two scratch registers reloaded just-in-time; the pinned
  * cc1 hoists the volatile reloads and reuses one register. WALL: just-in-time
  * reload register alternation. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348E28);
+#else
+void func_00348E28(GuiWidget *w, f32 x, f32 y) {
+    f32 *block = *(f32 **)((char *)w + 0x5C);
+    block[0] = x;
+    block[1] = y;
+    *(s32 *)(block + 2) = 0;
+    *(s32 *)(block + 3) = 0;
+}
+#endif
 
 /* func_00348E50: store a1 to the +0x60 field. */
 void func_00348E50(GuiWidget *w, s32 v) {
@@ -421,7 +438,21 @@ void func_0034A1D0(GuiWidget *w, s32 v) {
  * (counter 3 down to -1). Instructions match, but the original preserves the
  * base pointer in a fresh register (move v0,a0) while the pinned cc1 reuses a0
  * as the cursor. Best 67%. WALL: base-pointer preservation / register alloc. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A1D8);
+#else
+void func_0034A1D8(GuiWidget *w) {
+    s32 *p = (s32 *)((char *)w + 0x30);
+    s32 i;
+    for (i = 3; i >= 0; i--) {
+        p[0] = 0;
+        p[1] = 0;
+        p[2] = 0;
+        p[3] = 0;
+        p += 4;
+    }
+}
+#endif
 
 /* func_0034A210: reset a slider/animation widget to its rest state — clear the
  * value/flag fields (+0x18,+0x28,+0x2C,+0x80), seed the step constant at +0x24
@@ -472,8 +503,16 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A2D8);
 /* func_0034A2E0: arm the +0x18/+0x28 pair — flag +0x28 = 1 and clear +0x18.
  * The original emits a dead lwc1 +0x18 before the li 1; under -fno-gcse the
  * pinned cc1 swaps that order. Best 60%. WALL: dead-load vs immediate
- * scheduling order. */
+ * scheduling order. (+0x18 is stored as integer 0 — the dead load is read as
+ * float but discarded, so the only functional effect is +0x28=1, +0x18=0.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A2E0);
+#else
+void func_0034A2E0(GuiWidget *w) {
+    w->unk28 = 1;
+    *(s32 *)((char *)w + 0x18) = 0;
+}
+#endif
 
 /* func_0034A2F8: same handwritten no-return store fragment as func_0034A2D8
  * (bare swc1 $f1,0x18(a0), no jr ra). WALL: handwritten tail fragment. */
@@ -514,17 +553,42 @@ void func_0034A318(GuiWidget *w, s32 idx, f32 a, f32 b, f32 c, f32 d, f32 e) {
  * entry idx. Instructions match, but the original copies the entry pointer to a
  * second register and fills the jr slot with the +0 store; the pinned cc1 folds
  * to one register, ascending order. Best 80%. WALL: dual-register + slot fill. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A350);
+#else
+void func_0034A350(GuiWidget *w, s32 idx, f32 a, f32 b) {
+    char *entry = (char *)w + (idx << 2);
+    *(f32 *)(entry + 0x0) = a;
+    *(f32 *)(entry + 0xC) = b;
+}
+#endif
 
 /* func_0034A368: store a1 to the +0x84 field. */
 void func_0034A368(GuiWidget *w, s32 v) {
     w->unk84 = v;
 }
 
-/* func_0034A370: latch +0x1C to a1 once (while +0x28 is 0), set +0x18 to 1.0
- * when a1==1 else 0.0, then +0x28 = 1. Best 62%: branch-likely block layout +
- * register-allocation deltas. WALL: branch-likely block layout. */
+/* func_0034A370: always latch +0x1C to a1; then, only while +0x28 is still 0,
+ * arm the widget: set +0x18 (integer 0 when a1==1, float 1.0 otherwise) and
+ * set the armed flag +0x28 = 1. NOTE the polarity — a1==1 stores 0, any other
+ * value stores 1.0f (asm: bne $5,1 -> swc1 1.0; fallthrough -> sw $0). Best 62%:
+ * branch-likely block layout + register-allocation deltas. WALL: branch-likely
+ * block layout. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A370);
+#else
+void func_0034A370(GuiWidget *w, s32 v) {
+    w->unk1C = v;
+    if (w->unk28 == 0) {
+        if (v == 1) {
+            *(s32 *)((char *)w + 0x18) = 0;
+        } else {
+            w->unk18 = 1.0f;
+        }
+        w->unk28 = 1;
+    }
+}
+#endif
 
 /* func_0034A3B0: store a1 to the +0x20 field. */
 void func_0034A3B0(GuiWidget *w, s32 v) {
@@ -613,14 +677,29 @@ void func_0034A7E8(GuiWidget *w, s32 idx, s32 v) {
 }
 
 /* func_0034A7F8: set +0x10 enable float (1.0 when flag set else 0.0), then
- * +0x1C = 1 and +0x14 = 1. Best 99.8%: every instruction matches; the original
- * fills the jr delay slot with the +0x14 store. WALL: trailing-store slot fill. */
+ * +0x1C = 1 and +0x14 = 1. Best 99.8% (re-confirmed 2026-06-20): every
+ * instruction matches; the original fills the jr delay slot with the +0x14
+ * store (+0x1C stored first), but this unit's cc1 always emits +0x14 first and
+ * sinks +0x1C into the delay slot regardless of C statement order. WALL:
+ * trailing-store delay-slot fill. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A7F8);
 
-/* func_0034A820: set +0x10 enable float (1.0 when flag clear else 0.0), then
- * +0x1C = 1 and +0x14 = -1. Best 80%: same trailing-store slot fill plus a
+/* func_0034A820: set +0x10 enable float (1.0 when flag clear else integer 0),
+ * then +0x1C = 1 and +0x14 = -1. Best 80%: same trailing-store slot fill plus a
  * constant-load schedule delta. WALL: trailing-store delay-slot fill. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A820);
+#else
+void func_0034A820(GuiWidget *w, s32 flag) {
+    if (flag == 0) {
+        *(f32 *)((char *)w + 0x10) = 1.0f;
+    } else {
+        *(s32 *)((char *)w + 0x10) = 0;
+    }
+    *(s32 *)((char *)w + 0x1C) = 1;
+    *(s32 *)((char *)w + 0x14) = -1;
+}
+#endif
 
 /* func_0034A858: store the float arg to the +0x18 field. */
 void func_0034A858(GuiWidget *w, f32 v) {
@@ -690,7 +769,15 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034BA50);
  * +0x8 (pointer re-read per store). Best 60%: the original alternates two
  * scratch registers reloaded just-in-time; the pinned cc1 hoists/reuses one.
  * WALL: just-in-time reload register alternation. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034BD28);
+#else
+void func_0034BD28(GuiWidget *w, f32 x, f32 y) {
+    f32 *block = *(f32 **)((char *)w + 0x8);
+    block[0] = x;
+    block[1] = y;
+}
+#endif
 
 /* GuiScreenSetEventAndReveal: stash the pending event id at +0x3F4. If the screen
  * is currently armed-for-reveal (+0x400 set), consume that flag (+0x400=0), raise
