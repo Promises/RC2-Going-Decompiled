@@ -208,18 +208,49 @@ extern u8 *g_pTextTableLoadBuf;    /* 0x1F28D8 language text-table load buffer *
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5540);
 
-/* Toggle the map slot at g_particleFxBlob+0x100 +0x1CC via func_002DF428. Wall:
- * 2-GPR callee-save (8-byte-packed 0x10 frame). Bare INCLUDE_ASM. */
+/* Toggle the map slot at g_particleFxBlob+0x100 +0x1CC via func_002DF428 and
+ * store the result back. Returns 0. Wall: 2-GPR callee-save (8-byte-packed 0x10
+ * frame). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5A10);
+#else
+    /* TODO(match): functional equivalent - not byte-exact. */
+s32 func_002D5A10(void) {
+    u8 *blk = (u8 *)g_menuScreenBlock;
+    *(s32 *)(blk + 0x1CC) = func_002DF428(*(s32 *)(blk + 0x1CC));
+    return 0;
+}
+#endif
 
 /* Draw the title-screen language-select glyph row (GuiFontAtlas lookups + two
  * localized strings). Wall: $f20 callee-save + many leaf calls + gp/abs FP
  * constant mix. Bare INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5A48);
 
-/* Select the active language's menu-background image index, stash on the screen
- * object (+0x34). Wall: gp-relative language table + reloaded-ptr CSE. Bare. */
+/* Select the active language's menu-background image index from the gp-relative
+ * table D_1AAA58, stash it on the screen object (+0x34), refresh the cached
+ * language snapshot (D_1ABAE8) and bump the upload-sequence counter D_25BA60.
+ * Returns 0. Best real attempt 87.5%: register coloring matches, but our cc1
+ * schedules the gp_rel table-base addiu before the index shift and zeroes the
+ * return reg with `move` where the original uses `daddu` (return-form +
+ * scheduling wall). Wall: gp-relative language table + reloaded-ptr CSE. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5C08);
+#else
+    /* TODO(match): functional equivalent - not byte-exact (87.5%). */
+s32 func_002D5C08(void *obj) {
+    extern s32 D_25B9A0;     /* current language index */
+    extern s32 D_1ABAE8;     /* cached language snapshot */
+    extern s32 D_1AAA58;     /* per-language bg-index table base */
+    s32 lang = D_25B9A0;
+    if (D_1ABAE8 != lang) {
+        D_1ABAE8 = lang;
+    }
+    *(s32 *)((u8 *)obj + 0x34) = (&D_1AAA58)[lang];
+    D_25BA60[0] = lang + 1;
+    return 0;
+}
+#endif
 
 /* Reset the galactic-map upload sequence counter. Returns 0. */
 s32 func_002D5C48(void) {
@@ -227,9 +258,51 @@ s32 func_002D5C48(void) {
     return 0;
 }
 
-/* Per-language menu-background readiness check (returns 0/1 from the selected
- * bg image's load flags). Wall: gp/absolute address mix + bnel/beql ladder. */
+/* Per-language menu-background readiness check + screen-back driver. Selects the
+ * active language's bg image index (g_menuBgImageIndex = D_1ABAF0[language]); if
+ * `focus` is not the manager screen's focused widget returns 0, else drives the
+ * standard exit/back navigation from g_padButtonsPressed: L1/R1 (0x900) returns
+ * 1 unless an override (g_menuScreenBlock+0x134) is set; on back (0x10) mirrors
+ * the next-screen pointer into +0x18 (returning 0), or requests parent (-1) /
+ * stays (0). Returns 0/1/-1.
+ * Wall: gp/absolute address mix + bnel/beql ladder. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5C58);
+#else
+    /* TODO(match): functional equivalent - not byte-exact. */
+s32 func_002D5C58(void *focus) {
+    extern s32 D_1ABAF0[];           /* per-language bg image index table */
+    extern s32 g_menuBgImageIndex;
+    extern u8  g_currentLanguage;
+    u8 *blk = (u8 *)g_menuScreenBlock;   /* g_menuScreenBlock == D_1F27C0 */
+    u8 *scr;
+    s32 pressed;
+    g_menuBgImageIndex = D_1ABAF0[g_currentLanguage];
+    scr = *(u8 **)(blk + 0x14);
+    if (*(void **)(scr + 0xE8) != focus) {
+        return 0;
+    }
+    pressed = g_padButtonsPressed[0];
+    if (pressed & 0x900) {
+        if (*(s32 *)(blk + 0x134) == 0) {
+            return 1;
+        }
+        pressed = g_padButtonsPressed[0];
+    }
+    if ((pressed & 0x10) == 0) {
+        return 0;
+    }
+    scr = *(u8 **)(blk + 0x14);
+    if (*(s32 *)(scr + 0xE0) != 0) {
+        *(s32 *)(blk + 0x18) = *(s32 *)(scr + 0xE0);
+        return 0;
+    }
+    if (*(s32 *)(blk + 0x134) == 0) {
+        return -1;
+    }
+    return 0;
+}
+#endif
 
 /* Draw the title-screen menu header glyph row (GuiFontAtlas lookups + two
  * localized strings). Wall: $f20 callee-save + many leaf calls + gp/abs FP
@@ -1284,9 +1357,63 @@ s32 func_002DC520(MenuWidget *obj) {
 }
 #endif
 
-/* Menu list/grid draw helper (72-instruction variant). Wall: draw loop + multi
- * callee-save frame + GS packets. Bare INCLUDE_ASM. */
+/* Build the galactic-map level-select list: for each available level (from
+ * g_anAvailableLevelOrder, up to 0x1C entries) fill a 0xC-stride list entry at
+ * g_pLevelSelectListEntries+0xA8 (icon/name from the D_262BA0 caption table,
+ * sub-mode 3, target screen &D_25E660); zero the entry past the last. Then mark
+ * the widget dirty (obj->0x30 |= 0x8000), clear obj->0x40, and scan the active
+ * level-id list (D_1AA510) for the current map level (g_mapVertexData+0x230),
+ * storing its row into obj->0x40. Returns 0.
+ * Wall: leading splat mis-split fragment + draw-loop schedule. Bare. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC6B8);
+#else
+    /* TODO(match): functional equivalent - not byte-exact. */
+s32 func_002DC6B8(MenuWidget *obj) {
+    extern s32 g_anAvailableLevelOrder[];
+    extern u8  D_262BA0[];                /* level caption table (stride 0xC) */
+    extern u8  g_pLevelSelectListEntries[];
+    extern u8  D_25E660[];                /* level-detail screen instance */
+    extern s32 *D_1AA510;                 /* active level-id list */
+    extern u8  g_mapVertexData[];
+    u8 *o = (u8 *)obj;
+    u8 *e = g_pLevelSelectListEntries + 0xA8;
+    s32 n = 0;
+    s32 lvl = g_anAvailableLevelOrder[0];
+    if (lvl != 0) {
+        do {
+            u8 *cap = D_262BA0 + lvl * 0xC;
+            *(s16 *)(e + 2) = 3;
+            *(s32 *)(e + 4) = (s32)D_25E660;
+            *(s16 *)(e + 8) = *(u16 *)(cap + 4);
+            *(s16 *)(e + 0) = *(u16 *)(cap + 0);
+            n++;
+            e += 0xC;
+            if (n >= 0x1C) break;
+            lvl = g_anAvailableLevelOrder[n];
+        } while (lvl != 0);
+    }
+    *(s16 *)(g_pLevelSelectListEntries + 0xA8 + n * 0xC) = 0;
+    *(s32 *)(o + 0x40) = 0;
+    *(s32 *)(o + 0x30) |= 0x8000;
+    {
+        s32 *list = D_1AA510;
+        s32 cur = *(s32 *)(g_mapVertexData + 0x230);
+        s32 i = 0;
+        if (list[0] != 0) {
+            for (;;) {
+                if (list[i] == cur) {
+                    *(s32 *)(o + 0x40) = i;
+                    break;
+                }
+                i++;
+                if (list[i] == 0) break;
+            }
+        }
+    }
+    return 0;
+}
+#endif
 
 /* If the confirm button (mask 0x40) was just pressed, request the menu screen
  * at D_25E660 as the next screen. Always returns 0. */
