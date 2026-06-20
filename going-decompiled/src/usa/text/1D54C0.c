@@ -50,6 +50,62 @@ _Static_assert(__builtin_offsetof(MenuCmd, op)  == 0x2, "op");
 _Static_assert(__builtin_offsetof(MenuCmd, arg) == 0x4, "arg");
 #endif
 
+/* ------------------------------------------------------------------------
+ * MenuWidget — the per-screen menu content widget (the `obj` passed to every
+ * per-widget tick/draw/input handler in this unit). NOT the screen-manager
+ * object: that is the distinct, larger record reached through
+ * g_pCurrentMenuScreen[0] (fields +0xE0 next-screen, +0xE8 focused-widget,
+ * +0x128 dirty flag, +0x12C commit flag). A MenuWidget is the focused-widget
+ * value stored at screen+0xE8; the 25 handlers below all operate on one.
+ *
+ * It is a polymorphic base whose low region is shared by every subtype and
+ * whose high region (>=0x44) is reused as per-subtype overlay storage (the
+ * streaming-image state machine, the objectives-level array, the slider state,
+ * etc.). Because the bodies access it with raw (char*)obj + 0x.. casts and the
+ * high region means different things per subtype, the type is intentionally
+ * OPAQUE (a sized byte blob): the tester only needs a correct allocation SIZE
+ * to bind a live instance, and over-allocating is harmless.
+ *
+ * Confirmed touched offsets (this unit; CONFIRMED = read+write seen in asm):
+ *   +0x10  u32  base flags (func_002D8E60 ORs bit 4 = reload-request) CONFIRMED
+ *   +0x18  s32  rect origin x        CONFIRMED (func_002DC800 / func_002DC940)
+ *   +0x1C  s32  rect origin y        CONFIRMED
+ *   +0x20  s32  rect width           CONFIRMED (many draw handlers)
+ *   +0x24  s32  rect height          CONFIRMED
+ *   +0x30  u32  subtype state/flags  CONFIRMED (func_002DB080 switch driver)
+ *   +0x34  ptr  data/cmd/row table   CONFIRMED (cmd table for func_002D6AA0)
+ *   +0x38  s32  selected-row/scroll  CONFIRMED (func_002DC0F0/378/520)
+ *   +0x3C  s32  sub-cursor / uv x    CONFIRMED (func_002DAE70/DB080)
+ *   +0x40  s32  cursor / selection   CONFIRMED (func_002D6AA0 row, func_002D87C8)
+ *   +0x44  s32  subtype state / level-array base CONFIRMED
+ *   +0x48  s32  map-slot id A        CONFIRMED (func_002DB028/DD7E8/DD858)
+ *   +0x4C  s32  map-slot id B        CONFIRMED
+ *   +0x50  s32  cached state / slot  CONFIRMED
+ *   +0x54  s32  cached state / slot  CONFIRMED (func_002DC838/878/CCC8)
+ *   +0x58  s32  cached state / uv    CONFIRMED (func_002DAE70/DB080)
+ *   +0x5C  s32  stream frame counter CONFIRMED (func_002DAAF8/DB080)
+ *   +0x60  s32  stream scroll offset CONFIRMED (func_002DA358/DAAF8/DB080)
+ *   +0x44..0xA0  s32[24] level/objective id array (objectives subtype) CONFIRMED
+ *   +0xA0  s32  active-objective count (func_002D8270)                  CONFIRMED
+ *   +0xA4..0xBB  u8[24] per-level handled-flag array (func_002DA358)    CONFIRMED
+ * Gaps (e.g. +0x00..0x10, +0x28..0x30, +0x64..0xA0 in non-objectives subtypes)
+ * are left as opaque padding — never invented as named fields.
+ *
+ * SIZE: the widest confirmed access is the +0xA4 handled-flag byte array,
+ * touched through index 0x17 => last byte +0xBB. We size the bindable record at
+ * 0xC0 (16-aligned, the next PS2-natural boundary above 0xBB). This is a SAFE
+ * LOWER BOUND for allocation, not a claimed exact ctor sizeof (the exact ctor
+ * was not located; the 25 handlers never touch beyond +0xBB). UNCONFIRMED that
+ * the true object is exactly 0xC0 — it may be larger; it is never smaller.
+ * ------------------------------------------------------------------------ */
+typedef struct MenuWidget {
+    u8 _bytes[0xC0];
+} MenuWidget;
+
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+_Static_assert(sizeof(MenuWidget) == 0xC0, "MenuWidget bindable record 0xC0");
+#endif
+
 /* gp-addressable globals read via the assembler-absolute macro (see header). */
 __asm__(".extern D_1A7BA8, 16");
 __asm__(".extern g_sndChannelVolumes, 16");
@@ -179,7 +235,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5D10);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5EC8);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002D5EC8(void *obj) {
+s32 func_002D5EC8(MenuWidget *obj) {
     if (g_pGuiManager != 0) {
         *(s32 *)((u8 *)obj + 0x34) = func_00342468((u8 *)g_pGuiManager + 0x3C160);
     }
@@ -596,7 +652,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", GalacticMapScre
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D8270);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002D8270(void *obj) {
+s32 func_002D8270(MenuWidget *obj) {
     extern s32 D_0025A6FC, D_0025A6F4, D_0025A600;
     u8 *o = (u8 *)obj;
     s32 *pLevel;
@@ -649,7 +705,7 @@ s32 func_002D87B0(void) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D87C8);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002D87C8(void *obj) {
+s32 func_002D87C8(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
     s32 pressed = g_padButtonsPressed[0];
     s32 sel;
@@ -751,7 +807,7 @@ s32 func_002D8E58(void) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D8E60);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002D8E60(void *obj) {
+s32 func_002D8E60(MenuWidget *obj) {
     s32 *ids   = (s32 *)(D_001B1E90 + 0x40);
     s32 *flags = (s32 *)(D_001B1E90 + 0x44);
     s32 i;
@@ -816,7 +872,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D9718);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D9C18);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-void func_002D9C18(void *obj, void *entry, s32 col, s32 row, s32 x, s32 y) {
+void func_002D9C18(MenuWidget *obj, void *entry, s32 col, s32 row, s32 x, s32 y) {
     extern u8  g_itemEquippedSlot[];
     extern s32 g_weaponAmmoCapacity[];
     extern u8  D_00239B8C[];   /* per-weapon ammo-capacity record table (stride 0xE0) */
@@ -847,7 +903,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D9D60);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DA330);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DA330(void *obj) {
+s32 func_002DA330(MenuWidget *obj) {
     s16 *rec = *(s16 **)((u8 *)obj + 0x34);
     rec[1] = (g_bPlayerMode == 1) ? 0 : 3;
     return 0;
@@ -863,7 +919,7 @@ s32 func_002DA330(void *obj) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DA358);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DA358(void *obj) {
+s32 func_002DA358(MenuWidget *obj) {
     extern s32 D_00261900[];
     u8 *o = (u8 *)obj;
     s32 i;
@@ -908,7 +964,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DA488);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DA4F0);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DA4F0(void *obj) {
+s32 func_002DA4F0(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
     s32 hasSave = (g_playerProgress[0] != 0);
     s32 w, x, step, rowY;
@@ -977,7 +1033,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DAAF8);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DAE70);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DAE70(void *obj) {
+s32 func_002DAE70(MenuWidget *obj) {
     extern s16 D_001A65E0;
     extern s16 D_001A65E2;
     u8 *o = (u8 *)obj;
@@ -1001,7 +1057,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", InitMenuBgImage
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DB028);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DB028(void *obj) {
+s32 func_002DB028(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
     *(s32 *)(o + 0x48) = func_002DF428(*(s32 *)(o + 0x48));
     *(s32 *)(o + 0x4C) = func_002DF428(*(s32 *)(o + 0x4C));
@@ -1090,7 +1146,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DBEE0);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC0F0);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DC0F0(void *obj) {
+s32 func_002DC0F0(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
     s32 *rows;
     s32 n, step, y, i;
@@ -1132,7 +1188,7 @@ s32 func_002DC0F0(void *obj) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC378);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DC378(void *obj) {
+s32 func_002DC378(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
     s32 pressed = g_padButtonsPressed[0];
     if (*(s32 *)((u8 *)g_pCurrentMenuScreen[0] + 0xE8) != (s32)o) {
@@ -1194,7 +1250,7 @@ s32 func_002DC378(void *obj) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC520);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DC520(void *obj) {
+s32 func_002DC520(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
     s32 *rows = *(s32 **)(o + 0x34);
     s32 n = 0;
@@ -1236,7 +1292,7 @@ s32 func_002DC7D8(void) {
 
 /* Submit the menu object's sub-rect (origin +0x18/+0x1C, size +0x20/+0x24) to
  * the 2D batch helper; always returns 2. */
-s32 func_002DC800(void *obj) {
+s32 func_002DC800(MenuWidget *obj) {
     s32 x = *(s32 *)((u8 *)obj + 0x18);
     s32 y = *(s32 *)((u8 *)obj + 0x1C);
     func_002897B0(x, x + *(s32 *)((u8 *)obj + 0x20),
@@ -1251,7 +1307,7 @@ s32 func_002DC800(void *obj) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC838);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DC838(void *obj) {
+s32 func_002DC838(MenuWidget *obj) {
     *(s32 *)((u8 *)g_pCurrentMenuScreen[0] + 0x12C) = 0;
     *(s32 *)((u8 *)obj + 0x54) = func_002DF368(0);
     return 0;
@@ -1264,7 +1320,7 @@ s32 func_002DC838(void *obj) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC878);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DC878(void *obj) {
+s32 func_002DC878(MenuWidget *obj) {
     *(s32 *)((u8 *)obj + 0x54) = func_002DF428(*(s32 *)((u8 *)obj + 0x54));
     return 0;
 }
@@ -1308,7 +1364,7 @@ s32 func_002DC8A8(void) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC940);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DC940(void *obj) {
+s32 func_002DC940(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
     s32 str = 0x1abbe0;   /* default: pre-localized fallback buffer */
     Begin2dDrawBatch(0);
@@ -1339,7 +1395,7 @@ s32 func_002DC940(void *obj) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DCBB0);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DCBB0(void *obj) {
+s32 func_002DCBB0(MenuWidget *obj) {
     *(s32 *)((u8 *)obj + 0x34) = D_260570[(u32)g_playerProgress[0] % 19];
     return 0;
 }
@@ -1352,7 +1408,7 @@ s32 func_002DCBB0(void *obj) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DCBF0);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DCBF0(void *obj) {
+s32 func_002DCBF0(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
     s32 pressed = g_padButtonsPressed[0];
     s32 prev;
@@ -1388,7 +1444,7 @@ s32 func_002DCBF0(void *obj) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DCCC8);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DCCC8(void *obj) {
+s32 func_002DCCC8(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
     s32 pressed = g_padButtonsPressed[0];
     if ((pressed & 0x900) && D_001F28F4 == 0) {
@@ -1421,7 +1477,7 @@ s32 func_002DCCC8(void *obj) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DCDC0);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DCDC0(void *obj) {
+s32 func_002DCDC0(MenuWidget *obj) {
     extern u8 D_001ABC00, D_001ABC01, D_001ABBF8, D_001ABBF9;
     u8 *o = (u8 *)obj;
     u8 label[2];
@@ -1458,7 +1514,7 @@ s32 func_002DCDC0(void *obj) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DCF58);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DCF58(void *obj) {
+s32 func_002DCF58(MenuWidget *obj) {
     extern s32 D_00262BA0[];
     u8 *o = (u8 *)obj;
     u8 *focus = *(u8 **)((u8 *)g_pCurrentMenuScreen[0] + 0xE8);
@@ -1501,7 +1557,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DD630);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DD7E8);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DD7E8(void *obj) {
+s32 func_002DD7E8(MenuWidget *obj) {
     extern u8 D_001A8C88;
     u8 *o = (u8 *)obj;
     func_002DF1B8(1);
@@ -1522,7 +1578,7 @@ s32 func_002DD7E8(void *obj) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DD858);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DD858(void *obj) {
+s32 func_002DD858(MenuWidget *obj) {
     *(s32 *)((u8 *)obj + 0x48) = func_002DF428(*(s32 *)((u8 *)obj + 0x48));
     return 0;
 }
@@ -1549,7 +1605,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DD888);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DDD30);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DDD30(void *obj) {
+s32 func_002DDD30(MenuWidget *obj) {
     extern s32 D_001F28F8, D_0013953C, D_00139544, D_001F2924, D_001393E8;
     extern s32 D_0013954C, D_001393F0, D_0013955C, D_001A7424, D_001A7C10;
     extern s32 D_001A8C8C, D_00152C28, D_001C4F30, D_001F28FC;
