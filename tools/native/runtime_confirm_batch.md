@@ -5,6 +5,24 @@ that changes it and how. All observable via injected gameplay (movement onto
 pickups, firing, vendor/menu navigation). USA (SCUS_972.68) addresses; values are
 the in-RAM globals. Format: `name | addr | type | expected runtime behavior`.
 
+## Machine-readable (behavior_probe.py) — `addr  name  dir  trigger`
+
+Fields are whitespace-delimited; `dir` is the expected change direction
+(`+`=increases, `-`=decreases, `=`=set-to-value, `~`=converges-over-frames).
+
+```
+0x001A7A00  g_boltCount              +  bolt pickup increments by denomination; vendor purchase decrements by price
+0x0018C2EC  g_health                 -  enemy/hazard damage decreases; nanotech pickup increases (clamp g_maxHealth)
+0x001A7A08  g_maxHealth              +  nanotech health-upgrade pickup steps up one cube; else constant in-level
+0x00139688  g_weaponAmmo             -  firing equipped weapon decrements slot[itemId] (base+itemId*4); ammo pickup/buy increases
+0x001A7B00  g_inventoryOwned         +  acquiring an item (vendor buy / GiveInventoryItem) flips byte[itemId] 0->1
+0x001A73B8  g_equippedItemSlots      =  assigning a quick-select wheel slot sets slot u32 to the equipped itemId
+0x00139568  g_itemEquippedSlot       =  buying a weapon-variant upgrade remaps byte[itemId] to the new variant slot
+0x001A7A68  g_skillPointFlags        +  completing a skill-point challenge sets its flag 0->1
+0x001A8BB0  g_nGameState             =  UI nav sets it: vendor=5 pause/overlay=4 frontend/map=3 cinematic=1 in-level=0
+0x001B18C8  g_nBoltCounterDisplayed  ~  after a bolt pickup, rolls toward g_boltCount over frames (target+4, accum+8)
+```
+
 | name | addr | type | injected input → how the value changes |
 |------|------|------|----------------------------------------|
 | `g_boltCount` | `0x001A7A00` | u32 | Move hero onto a bolt pickup → **increments** by the bolt denomination (CollectBolts). Vendor purchase → **decrements** by item price. Monotonic-up on pickup — cleanest observable. |
