@@ -188,9 +188,9 @@ s32 func_00348E68(GuiWidget *w) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348E70);
 #else
-void func_00348E70(void *self) {
+void func_00348E70(GuiWidget *self) {
     char *p = (char *)self;
-    f32 *scratch = func_00336C18((GuiWidget *)self);
+    f32 *scratch = func_00336C18(self);
     s32 rowCount;
     s32 i;
 
