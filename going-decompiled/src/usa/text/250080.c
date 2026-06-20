@@ -212,6 +212,13 @@ s32 func_00352A48(void);
 s32 func_00352A80(void);
 s32 func_00352AB0(void);
 extern s32 func_00352AE0(u8 *obj);
+/* DI/EI primitives + stream/host helpers referenced only by the #else bodies. */
+extern void func_0011F5E0(void);   /* disable interrupts (DI) */
+extern void func_0011F628(void);   /* enable interrupts (EI) */
+extern void func_00351F58(u8 *obj);
+extern void func_0012F940(u8 *obj);
+extern s32 func_0012F9B8(u8 *host);
+s32 func_00352C80(FmvFrameQueue *q);
 #endif
 
 /**
@@ -784,13 +791,58 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351C20);
  * 8-byte-packed saves (s0@0x0, ra@0x8). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351F58);
 
+#ifndef TARGET_NATIVE
 /* func_00351FB0: sema-guarded total-bytes-queued read. Blocked:
  * 8-byte-packed saves (s0/s1/ra). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351FB0);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
+   saves (s0/s1/ra). Revisit with the gameplay-TU compiler.
 
+   NOTE(type): `obj` is the embedded bitstream/IPU-DMA sub-object (FmvStream+0x48,
+   built by func_003515E8), the same sibling type not yet recovered for
+   func_00352058/func_00350520 — sema +0x40, retired-block count +0x10
+   (in 2KB units), residual byte cursor +0x14; left u8* with raw offsets.
+
+   Total elementary-stream bytes queued for the IPU, read under the object's
+   sema: (retired 2KB blocks << 11) + residual byte cursor. */
+s32 func_00351FB0(void *stream) {
+    u8 *obj = (u8 *)stream;
+    s32 total;
+
+    WaitSema(*(s32 *)(obj + 0x40));
+    total = (*(s32 *)(obj + 0x10) << 11) + *(s32 *)(obj + 0x14);
+    SignalSema(*(s32 *)(obj + 0x40));
+    return total;
+}
+#endif
+
+#ifndef TARGET_NATIVE
 /* func_00352000: sema-guarded 2KB round-up of the byte cursor. Blocked:
  * 8-byte-packed saves (s0@0x0, ra@0x8). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352000);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
+   saves (s0/ra). Revisit with the gameplay-TU compiler.
+
+   NOTE(type): `obj` is the embedded bitstream sub-object (FmvStream+0x48); sema
+   +0x40, residual byte cursor +0x14 (raw offsets, sibling type not recovered).
+
+   Snap the residual byte cursor up to the next 2KB (0x800) boundary, under the
+   object's sema. The asm biases by 0x7FF then arithmetic-right-shifts by 11
+   (with the +0xFFE negative-input correction the compiler inserts); the cursor
+   is a non-negative byte count, so this is the usual round-up-to-2KB. */
+s32 func_00352000(u8 *obj) {
+    s32 v;
+
+    WaitSema(*(s32 *)(obj + 0x40));
+    v = *(s32 *)(obj + 0x14);
+    v = (((v + 0x7FF >= 0) ? v + 0x7FF : v + 0xFFE) >> 11) << 11;
+    *(s32 *)(obj + 0x14) = v;
+    SignalSema(*(s32 *)(obj + 0x40));
+    return v;
+}
+#endif
 
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352058);
@@ -940,15 +992,39 @@ void func_003525D0(FmvStream *s) {
     s->state = 0;
 }
 
+#ifndef TARGET_NATIVE
 /* func_003525D8: stop + detach the embedded stream. Blocked: 8-byte-packed
  * saves (s0@0x0, ra@0x8). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003525D8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
+   saves (s0/ra). Revisit with the gameplay-TU compiler.
 
+   Tear the FMV stream down: stop the embedded bitstream/IPU-DMA object at +0x48
+   (channel teardown + DeleteSema) and detach the stream's message dispatch
+   table (func_0012F940). Always reports success. */
+s32 func_003525D8(FmvStream *obj) {
+    func_00351F58((u8 *)obj + 0x48);
+    func_0012F940((u8 *)obj);
+    return 1;
+}
+#endif
+
+#ifndef TARGET_NATIVE
 /* func_00352610: `s->state = 1; return 1;`. Blocked: the original (later
  * SN cc1) reuses ONE `li v0,1` for both the store and the return value; the
  * pinned cc1 always materialises two (same wall as text/1907F0
  * func_00290EE8, re-measured here at 63%). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352610);
+#else
+/* TODO(match): functional equivalent - not byte-exact; the later-SN cc1 reuses
+   one `li v0,1` for both the store and the return; the pinned cc1 emits two.
+   Request a stop: mark the playback FSM "stop" (state 1) and report accepted. */
+s32 func_00352610(FmvStream *s) {
+    s->state = 1;
+    return 1;
+}
+#endif
 
 /**
  * Read the playback FSM state.
@@ -989,9 +1065,24 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003526A0);
  * boundary). Blocked: 8-byte-packed saves (s0@0x20, ra@0x28). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003526A8);
 
+#ifndef TARGET_NATIVE
 /* func_00352780: poll stream-done then host-side done. Blocked:
  * 8-byte-packed saves (s0/s1/ra). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352780);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
+   saves (s0/s1/ra). Revisit with the gameplay-TU compiler.
+
+   End-of-playback poll: false while the embedded stream still has bytes queued
+   (func_00352680 != 0); once the stream has drained, report whether the host
+   side has also signalled done (func_0012F9B8 != 0). */
+s32 func_00352780(FmvStream *obj) {
+    if (func_00352680(obj) != 0) {
+        return 0;
+    }
+    return func_0012F9B8((u8 *)obj) != 0;
+}
+#endif
 
 /* func_003527C8: the FMV decode-thread main loop. Blocked: 8-byte-packed
  * saves (s0/s1/s2/ra) plus a delay-slot %gp_rel read of g_pFmvArenaBase
@@ -1126,14 +1217,48 @@ s32 func_00352BA0(FmvFrameQueue *q) {
     return q->count == q->capacity;
 }
 
+#ifndef TARGET_NATIVE
 /* func_00352BB8: commit the just-decoded slot (mark state 2, advance the
  * write cursor modulo capacity) under DI/EI. Blocked: 8-byte-packed saves
  * (s0@0x0, ra@0x8). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352BB8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
+   saves (s0/ra). Revisit with the gameplay-TU compiler.
 
+   Commit the just-decoded frame slot for display, with interrupts disabled:
+   mark the current write slot's state word = 2 (ready), bump the queued count,
+   and advance the write cursor modulo the slot capacity. */
+void func_00352BB8(u8 *fq) {
+    FmvFrameQueue *q = (FmvFrameQueue *)fq;
+
+    func_0011F5E0();   /* DI */
+    *(s32 *)(q->frames + q->writeIdx * 0x138C0) = 2;
+    q->count++;
+    q->writeIdx = (q->writeIdx + 1) % q->capacity;
+    func_0011F628();   /* EI */
+}
+#endif
+
+#ifndef TARGET_NATIVE
 /* func_00352C30: writable GS frame pointer (writeIdx * 0xD0000). Blocked:
  * 8-byte-packed saves (s0@0x0, ra@0x8). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352C30);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
+   saves (s0/ra). Revisit with the gameplay-TU compiler.
+
+   Address of the GS frame buffer the producer may write next: 0 if the display
+   queue is full, else gsFrames + writeIdx * 0xD0000 (the GS-side stride). */
+s32 func_00352C30(u8 *fq) {
+    FmvFrameQueue *q = (FmvFrameQueue *)fq;
+
+    if (func_00352BA0(q) != 0) {
+        return 0;
+    }
+    return (s32)(q->gsFrames + q->writeIdx * 0xD0000);
+}
+#endif
 
 /**
  * True when the frame queue holds no displayable frame.
@@ -1142,9 +1267,27 @@ s32 func_00352C70(FmvFrameQueue *q) {
     return q->count == 0;
 }
 
+#ifndef TARGET_NATIVE
 /* func_00352C80: oldest queued decoded-frame pointer ((writeIdx - count +
  * cap) % cap slot). Blocked: 8-byte-packed saves (s0@0x0, ra@0x8). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352C80);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
+   saves (s0/ra). Revisit with the gameplay-TU compiler.
+
+   Address of the oldest decoded frame still queued for display: 0 if the queue
+   is empty, else the frame slot at ((writeIdx - count + capacity) % capacity)
+   in the 0x138C0-stride slot array. */
+s32 func_00352C80(FmvFrameQueue *q) {
+    s32 idx;
+
+    if (func_00352C70(q) != 0) {
+        return 0;
+    }
+    idx = (q->writeIdx - q->count + q->capacity) % q->capacity;
+    return (s32)(q->frames + idx * 0x138C0);
+}
+#endif
 
 /**
  * Release the oldest displayed frame from the queue (if any).
