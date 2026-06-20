@@ -800,6 +800,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352058);
    scheduling + branch-likely wall, same family as func_00351328). Revisit with
    the gameplay-TU compiler.
 
+   NOTE(type): `obj` here is NOT a FmvStream — it is the *embedded bitstream/
+   IPU-DMA sub-object* (the one a FmvStream holds at +0x48, constructed by
+   func_003515E8 and reached by the func_00352590/B0/680 forwarders via
+   obj+0x48). Its own field layout (slot-ring base +0x50, ring length +0x54,
+   read/write cursors +0x58/+0x5C, sector size +0x08) starts at offset 0, so it
+   does not fit FmvStream (0xB8) — left u8* until that sibling type is recovered.
+
    ACK consumed DMA-tag ranges against the IPU frame-slot ring: walks the slot
    array (slots are 0x18 bytes, base at obj+0x50, ring length obj+0x54, read
    cursor obj+0x58, write cursor obj+0x5C, sector size obj+0x08*0x800) from the
@@ -887,16 +894,16 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352468);
    report, two DMA-add-queue pumps, retry, and the cursor snapshot), clear the
    playback FSM (func_003525D0), then build the embedded bitstream object at
    +0x48 (func_003515E8). Always reports success. */
-s32 func_00352468(u8 *obj, u64 p2, u64 p3, u64 p4, u64 p5, u64 p6, u64 p7,
+s32 func_00352468(FmvStream *obj, u64 p2, u64 p3, u64 p4, u64 p5, u64 p6, u64 p7,
                   u64 p8) {
     func_0012F738();
-    func_0012FA70(obj, 0, (void *)func_00352A20, 0);
-    func_0012FA70(obj, 1, (void *)func_00352A48, 0);
-    func_0012FA70(obj, 2, (void *)func_00352A80, 0);
-    func_0012FA70(obj, 3, (void *)func_00352AB0, 0);
-    func_0012FA70(obj, 5, (void *)func_00352AE0, 0);
-    func_003525D0((FmvStream *)obj);
-    func_003515E8(obj + 0x48, p4, p5, p6, p7, p8);
+    func_0012FA70((u8 *)obj, 0, (void *)func_00352A20, 0);
+    func_0012FA70((u8 *)obj, 1, (void *)func_00352A48, 0);
+    func_0012FA70((u8 *)obj, 2, (void *)func_00352A80, 0);
+    func_0012FA70((u8 *)obj, 3, (void *)func_00352AB0, 0);
+    func_0012FA70((u8 *)obj, 5, (void *)func_00352AE0, 0);
+    func_003525D0(obj);
+    func_003515E8((u8 *)obj + 0x48, p4, p5, p6, p7, p8);
     return 1;
 }
 #endif
@@ -915,15 +922,15 @@ s32 func_00352570(void) {
 /**
  * Forward to the bitstream feeder of the stream object embedded at +0x48.
  */
-s32 func_00352590(u8 *obj) {
-    return func_003517C0(obj + 0x48);
+s32 func_00352590(FmvStream *obj) {
+    return func_003517C0((u8 *)obj + 0x48);
 }
 
 /**
  * Forward to the read-cursor advance of the embedded stream object.
  */
-s32 func_003525B0(u8 *obj) {
-    return func_003518B8(obj + 0x48);
+s32 func_003525B0(FmvStream *obj) {
+    return func_003518B8((u8 *)obj + 0x48);
 }
 
 /**
@@ -971,8 +978,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352638);
 /**
  * Forward to the total-bytes-queued read of the embedded stream object.
  */
-s32 func_00352680(u8 *obj) {
-    return func_00351FB0(obj + 0x48);
+s32 func_00352680(FmvStream *obj) {
+    return func_00351FB0((u8 *)obj + 0x48);
 }
 
 /* func_003526A0: 8 bytes of inter-function padding, no C. */
