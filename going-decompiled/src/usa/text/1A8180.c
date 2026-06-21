@@ -173,7 +173,14 @@ extern f32 GetFloatAbs(f32 x);
 extern s32 func_002835E0(s32 x);
 extern f32 func_00284678(f32 *out, f32 angle);
 extern f32 func_00283B30(f32 angle);  /* cosine */
+extern f32 func_00283B48(f32 angle);  /* sine (0x18 after cosine in 183558.c) */
 extern f32 func_00284590(f32 a, f32 b);
+/* func_002AB000: spring-style scalar approach. Clamps an absolute step
+ * (|v0|-bounded) applied to *p toward 0 by a velocity term, re-clamping into
+ * +/-|v0| and returning the residual |distance| in $f0. v0..v3 arrive in
+ * $f12..$f15. Defined later in this unit (still INCLUDE_ASM); declared here so
+ * the #else bodies above can call it with the right f32 return. */
+extern f32 func_002AB000(f32 *p, f32 v0, f32 v1, f32 v2, f32 v3);
 /* func_00284548 == WrapAnglePiSum, which genuinely returns f32 in $f0. The
  * native #else of func_002AB668 needs the true f32 return (else ee-gcc inserts a
  * spurious int->float cvt that corrupts the *p out-param, else_divergences #19).
@@ -1088,7 +1095,53 @@ f32 func_002AB668(f32 a, f32 maxStep, f32 *p, s32 sign) {
 }
 #endif
 
+/* func_002AB700: critically-damped scalar angle driver. Eases the stored angle
+ * *p toward `target` while tracking its angular velocity in *vel.
+ *
+ *   - When mode == 2 a rotation-side `sign` is derived from the relative signs
+ *     of target and the current angle so the spring takes the shorter wrap arc
+ *     (sign = +1 when target>0 & *p<0, -1 when target<0 & *p>0, else 0); for any
+ *     other mode the caller's mode value is used directly as that sign.
+ *   - func_002AB5A0 gives the signed wrapped delta (cur->target on the chosen
+ *     side); func_002AB000 integrates the spring step into *vel (stiffness/
+ *     damping/dt in b/c/d); *p is re-wrapped against *vel and the residual delta
+ *     recomputed. When the residual is below a dt-scaled epsilon the angle snaps
+ *     exactly to target and the velocity is zeroed.
+ *
+ * Returns the residual signed angle error (0 when snapped). Walled: saves
+ * $16-$18/$31 + $f20-$f23 (save-layout wall). b/c/d are $f13/$f14/$f15. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB700);
+#else
+f32 func_002AB700(f32 *p, f32 *vel, s32 mode, f32 target, f32 b, f32 c, f32 d) {
+    s32 sign;
+    f32 delta;
+    f32 r;
+
+    if (mode == 2) {
+        if (target > 0.0f && *p < 0.0f) {
+            sign = 1;
+        } else if (target < 0.0f && *p > 0.0f) {
+            sign = -1;
+        } else {
+            sign = 0;
+        }
+    } else {
+        sign = mode;
+    }
+
+    delta = func_002AB5A0(target, *p, sign);
+    func_002AB000(vel, delta, b, c, d);
+    *p = func_00284548(*p, *vel);            /* func_00284548 == WrapAnglePiSum */
+    r = func_002AB5A0(target, *p, sign);
+    if (GetFloatAbs(r) < d * 0.009999999776f) {   /* 0x3C23D70A */
+        *p = target;
+        *vel = 0.0f;
+        return *vel;
+    }
+    return r;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB868);
 
@@ -1540,9 +1593,60 @@ s32 func_002AFA80(void *p, s32 rgb) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFAB0);
 
+/* func_002AFCD8: advance one oscillating angle channel and project it to a
+ * scalar offset stored at out+0x18.
+ *
+ *   - The phase *p1 is always stepped by `b` and wrapped into (-pi,pi].
+ *   - When the amplitude `c` is positive the offset is recomputed from scratch:
+ *     out->0x18 = sin(phase)*amp + c  (amp = `a`).
+ *   - When `c` is non-positive the channel runs incrementally: the previous
+ *     per-frame contribution *p2 is first subtracted out of out->0x18, the new
+ *     contribution sin(phase)*a is stored into *p2, and that is added back —
+ *     i.e. out->0x18 is edited in place by the delta of this channel.
+ *
+ * Walled: saves $16-$18/$31 + $f20/$f21. func_00283B48 is sine; a/b/c are the
+ * $f12/$f13/$f14 args. Returns void. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFCD8);
+#else
+void func_002AFCD8(void *out, f32 *p1, f32 *p2, f32 a, f32 b, f32 c) {
+    f32 *offset = (f32 *)((u8 *)out + 0x18);
 
+    if (c > 0.0f) {
+        *p1 = func_00284548(*p1, b);          /* WrapAnglePiSum */
+        *offset = func_00283B48(*p1) * a + c;
+    } else {
+        *p1 = func_00284548(*p1, b);
+        *offset = *offset - *p2;
+        *p2 = func_00283B48(*p1) * a;
+        *offset = *offset + *p2;
+    }
+}
+#endif
+
+/* func_002AFD90: build the XY components of a spherical-swing direction into
+ * out+0xF0 / out+0xF4 from two phase angles, then advance both phases.
+ *
+ *   out->0xF0 = scale * sin(*p1) * sin(*p2);
+ *   out->0xF4 = scale * sin(*p1) * cos(*p2);
+ *   *p1 = WrapAnglePiSum(*p1, b);   (b = $f13)
+ *   *p2 = WrapAnglePiSum(*p2, c);   (c = $f14)
+ *
+ * The sin/cos sample the phases BEFORE they are advanced. func_00283B48 is sine,
+ * func_00283B30 cosine. Walled: saves $16-$18/$31 + $f20-$f23; scale is $f12.
+ * Returns void. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFD90);
+#else
+void func_002AFD90(void *out, f32 *p1, f32 *p2, f32 scale, f32 b, f32 c) {
+    f32 sinP1 = func_00283B48(*p1);
+
+    *(f32 *)((u8 *)out + 0xF0) = scale * sinP1 * func_00283B48(*p2);
+    *(f32 *)((u8 *)out + 0xF4) = scale * func_00283B48(*p1) * func_00283B30(*p2);
+    *p1 = func_00284548(*p1, b);              /* WrapAnglePiSum */
+    *p2 = func_00284548(*p2, c);
+}
+#endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFE58);
