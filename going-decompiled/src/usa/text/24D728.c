@@ -70,6 +70,22 @@ extern void func_00339F98(void *p);
 extern void func_00283D10(void *p);
 extern void BuildFrameViewMatrices(void);
 
+/* List/sprite sub-widget reset helpers (text/248B50, addr 0x34A7F8/0x34A370):
+ * clear an animation slot of a sub-list / sprite by flag. Forwarders only -
+ * their semantics are not under test here. */
+extern void func_0034A7F8(void *list, s32 flag);
+extern void func_0034A370(void *sprite, s32 mode);
+
+/* GuiElement list-row float-field + sub-element setters (text/235FE8):
+ *   func_00336C18 returns the element's primary vec pointer (`*(void**)(e+0)`);
+ *   func_003372D0 / func_00337310 pack two bytes into the element's two color
+ *     blocks (top byte of words at +0x0/+0x4 resp. +0x8/+0xC);
+ *   func_00337B88 stores a word at e+0x44. */
+extern f32 *func_00336C18(GuiElement *e);
+extern void func_003372D0(GuiElement *e, s32 b0, s32 b1);
+extern void func_00337310(GuiElement *e, s32 b0, s32 b1);
+extern void func_00337B88(GuiElement *e, s32 value);
+
 /* Keep the absolute-addressed camera state on the two-insn %hi/%lo macro under
  * -G8 (it is far outside the gp small-data window). */
 __asm__(".extern g_cameraState, 16");
@@ -105,13 +121,67 @@ void func_0034D7D0(GuiHudManager *mgr, s32 mode) {
 }
 #endif
 
+/* func_0034D828: (re)assign the HUD frame-sprite texture and, on the first
+ * activation after the manager's row state was torn down, reset the five
+ * scrollable sub-list/sprite slots. Stores the new "active" flag (arg2) at
+ * +0x1584; if the +0x1588 "needs-reset" latch is set, it clears the latch,
+ * resets the four list slots (+0xF3C/+0xFD0/+0x1064/+0x1180 via func_0034A7F8)
+ * and the sprite slot (+0x10F8 via func_0034A370 mode 1), then retargets the
+ * frame sprite (+0x158) to texture `tex`. Independently, if the +0x159C latch is
+ * set, it retargets the frame sprite too. `tex` is the GuiSprite texture id. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034D828);
+#else
+void func_0034D828(GuiHudManager *mgr, s32 tex, s32 activeFlag) {
+    u8 *m = (u8 *)mgr;
+    *(s32 *)(m + 0x1584) = activeFlag;
+    if (*(s32 *)(m + 0x1588) != 0) {
+        *(s32 *)(m + 0x1588) = 0;
+        func_0034A7F8(m + 0xF3C, 0);
+        func_0034A7F8(m + 0xFD0, 0);
+        func_0034A7F8(m + 0x1064, 0);
+        func_0034A370(m + 0x10F8, 1);
+        func_0034A7F8(m + 0x1180, 0);
+        GuiSpriteSetTexture(m + 0x158, tex, 0);
+    }
+    if (*(s32 *)(m + 0x159C) != 0) {
+        GuiSpriteSetTexture(m + 0x158, tex, 0);
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034D8C8);
 
+/* func_0034DAB0: drives the HUD sub-element at +0x5D8 - pad-gated "snap" tween,
+ * a color-ramp tween, then writes the tween handle/alpha and sets visibility.
+ * Left as bare INCLUDE_ASM: a faithful cmp-oracle is blocked because its tween
+ * callee func_002AA3F0 (1A8180.c, linked whole into the cmp suite) runs a real
+ * VU0 LerpByteVec4PackedVu0 + absolute D_1A9E94/98 globals (the absolute-symbol
+ * ld --gc-sections wall), and it cannot be mocked instead without colliding with
+ * that linked real body. Not seedable cleanly; revisit when func_002AA3F0 itself
+ * is oracled. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034DAB0);
 
+/* func_0034DB68: sibling of func_0034D828 for the manager's OTHER scrollable
+ * region - store the "active" flag (arg) at +0x158C, and if the +0x1590
+ * needs-reset latch is set, clear it and reset that region's four sub-list slots
+ * (+0x1214/+0x12A8/+0x133C/+0x13D0 via func_0034A7F8, flag 0). `flag` is the new
+ * active state. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034DB68);
+#else
+void func_0034DB68(GuiHudManager *mgr, s32 flag) {
+    u8 *m = (u8 *)mgr;
+    *(s32 *)(m + 0x158C) = flag;
+    if (*(s32 *)(m + 0x1590) != 0) {
+        *(s32 *)(m + 0x1590) = 0;
+        func_0034A7F8(m + 0x1214, 0);
+        func_0034A7F8(m + 0x12A8, 0);
+        func_0034A7F8(m + 0x133C, 0);
+        func_0034A7F8(m + 0x13D0, 0);
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034DBC8);
 
@@ -134,7 +204,40 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", GuiManagerInitH
 void func_0034EF60(void) {
 }
 
+/* func_0034EF68: initialize the `index`-th HUD list row (each row is a 0x48-byte
+ * GuiElement at base + index*0x48). It sets the row's two leading floats from the
+ * integer args `x` and `y` (its primary vec, fetched via func_00336C18), packs
+ * `shade` into both color blocks (func_003372D0/func_00337310, byte b0==b1) and
+ * its top-byte handle (func_00337B88, shade<<24), then dispatches the row's
+ * type-specific finalizer through the small vtable at row+0x30: it reads a s16
+ * element-offset at vtable+0x8 and the function pointer at vtable+0xC and calls
+ * it on (row + offset). `x`/`y` are integer pixel coords; `shade` an 8-bit
+ * intensity. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034EF68);
+#else
+typedef struct GuiRowVtable {
+    /* 0x00 */ u8 _pad[8];
+    /* 0x08 */ s16 elemOffset;
+    /* 0x0A */ u8 _pad0A[2];
+    /* 0x0C */ void (*finalize)(void *elem);
+} GuiRowVtable;
+
+void func_0034EF68(u8 *base, s32 index, s32 x, s32 y, s32 shade) {
+    GuiElement *row = (GuiElement *)(base + index * 0x48);
+    GuiRowVtable *vt;
+    f32 *vec;
+    vec = func_00336C18(row);
+    vec[0] = (f32)x;
+    vec = func_00336C18(row);
+    vec[1] = (f32)y;
+    func_003372D0(row, shade, shade);
+    func_00337310(row, shade, shade);
+    func_00337B88(row, shade << 24);
+    vt = *(GuiRowVtable **)((u8 *)row + 0x30);
+    vt->finalize((u8 *)row + vt->elemOffset);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F028);
 
@@ -214,6 +317,18 @@ extern void AssertFail(const char *file, s32 line, const char *expr);
  *   D_1AE770 = "t>=0.0f && t<= 1.0f"     (clamp predicate) */
 extern const char D_1AE758[];
 extern const char D_1AE770[];
+/* WEAK: when this unit is co-linked into the eetest cmp suite alongside
+ * text/235FE8 (whose cmp_235FE8.c supplies a strong deterministic GuiHermiteInterp
+ * stand-in for its func_00336A28 oracle), both objects would otherwise define
+ * the cross-unit symbol GuiHermiteInterp -> multiple-definition link error. The
+ * weak attribute (TARGET_NATIVE arm only) lets that test stand-in win the link.
+ * NOTE: cmp_235FE8.c's stand-in is a DETERMINISTIC NON-Hermite fake, NOT
+ * equivalent to this real cubic-Hermite body - but that is harmless: its only
+ * consumer (cmp_func_00336A28) jal's the same GuiHermiteInterp symbol on BOTH the
+ * asm-oracle and c_ sides, so the fake cancels; no cmp test checks real Hermite
+ * output, and no function under test calls it (gc-sections drops this weak body).
+ * In the matching build this arm is the INCLUDE_ASM original, so weak is inert. */
+__attribute__((weak))
 f32 GuiHermiteInterp(f32 t, f32 a, f32 b, f32 c, f32 d) {
     f32 t2, t3;
     if (!(t >= 0.0f && t <= 1.0f)) {
