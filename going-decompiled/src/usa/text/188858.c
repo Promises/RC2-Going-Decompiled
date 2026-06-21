@@ -147,7 +147,9 @@ typedef struct WeaponDef {
     u8  _pad3E[0xC];
     s16 nextVariantSlot; /* +0x4A */
     s16 prevVariantSlot; /* +0x4C */
-    u8  _pad4E[0x3A];
+    u8  _pad4E[0x1E];
+    s32 xpThreshold;     /* +0x6C: variant XP threshold (<<5); negative = no clamp */
+    u8  _pad70[0x18];
     s16 sellsAmmoFlag;   /* +0x88 */
     u8  _pad8A[0x4];
     u16 ammoCapacity;    /* +0x8E */
@@ -157,6 +159,8 @@ typedef struct WeaponDef {
 
 extern u8 g_itemEquippedSlot[0x38];           /* itemId -> active variant slot (0x139568) */
 extern WeaponDef g_weaponTable[];             /* per-variant def/state table (0x239B20) */
+extern s32 g_weaponXp[0x38];                  /* per-item XP/upgrade accumulator (0x139868) */
+extern s32 g_weaponAmmo[0x38];                /* per-item current ammo (0x139688) */
 
 /* Sound-bank / weapon-context block accessed by func_0028EAC8 at base+0x20.
  * +0x1268 holds the active weapon's item id; +0x22D4 is a "no ammo sale" gate. */
@@ -300,7 +304,30 @@ s32 FlushHudDisplayValue(s32 displayState);
  * WALL: frameless leaf, but the XP clamp lowers as a branch-likely (bnel) store
  * and the per-variant index uses a `mult`-scaled stride that cc1's array
  * indexing does not reproduce here. Left INCLUDE_ASM. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_002888D8);
+#else
+void func_002888D8(s32 itemId) {
+    u8  slot = g_itemEquippedSlot[itemId];
+    s16 next = g_weaponTable[slot].nextVariantSlot;
+    s32 threshold;
+
+    if (next == 0) {
+        return;
+    }
+    threshold = g_weaponTable[slot].xpThreshold;
+    if (threshold >= 0) {
+        threshold <<= 5;
+        if (g_weaponXp[itemId] < threshold) {
+            g_weaponXp[itemId] = threshold;
+        }
+    }
+    g_itemEquippedSlot[itemId] = (u8)next;
+    if (g_weaponTable[next & 0xFF].exists != 0) {
+        g_weaponAmmo[itemId] = g_weaponTable[next & 0xFF].ammoCapacity;
+    }
+}
+#endif
 
 /* GetWeaponUpgradeLevel(itemId): return how many variant-upgrade steps the item
  * has taken — walks the prevVariantSlot chain (+0x4C) to find the base variant,
@@ -308,7 +335,28 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_002888D8);
  *
  * WALL: two chained do-while scans whose `mult`-scaled (stride 0xE0) variant
  * indexing and bnez loop colouring cc1 does not reproduce. Left INCLUDE_ASM. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", GetWeaponUpgradeLevel);
+#else
+s32 GetWeaponUpgradeLevel(s32 itemId) {
+    s32 slot = itemId;
+    s32 count = 0;
+    /* walk prevVariantSlot back to the base variant */
+    if (g_weaponTable[slot].prevVariantSlot != 0) {
+        do {
+            slot = g_weaponTable[slot].prevVariantSlot;
+        } while (g_weaponTable[slot].prevVariantSlot != 0);
+    }
+    /* count nextVariantSlot steps forward from the base */
+    if (g_weaponTable[slot].nextVariantSlot != 0) {
+        do {
+            slot = g_weaponTable[slot].nextVariantSlot;
+            count++;
+        } while (g_weaponTable[slot].nextVariantSlot != 0);
+    }
+    return count;
+}
+#endif
 
 /* SetWeaponUpgradeSlot(itemId, level): set the item's active variant to the
  * given upgrade `level`. Compares `level` against the current
@@ -339,7 +387,24 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_00288B08);
  * addiu base,0x6); our cc1 folds the +6 into the %lo relocation (one symbolic
  * address per access). The address-fold-vs-displacement wall. Left INCLUDE_ASM.
  */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_00288BB0);
+#else
+s32 func_00288BB0(s32 key) {
+    s16 *p;
+    for (p = (s16 *)(D_259F38 + 6); *p != -1; p = (s16 *)((u8 *)p + 0xA)) {
+        if ((s32)*p == key) {
+            return 1;
+        }
+    }
+    for (p = (s16 *)(D_259CC0 + 6); *p != -1; p = (s16 *)((u8 *)p + 0xA)) {
+        if ((s32)*p == key) {
+            return 1;
+        }
+    }
+    return 0;
+}
+#endif
 
 /* func_00288C30(itemId): register an item pickup in the recent-items slot table
  * (g_gsPixelOffsetY+0x64, 8 slots). Gated by func_00288BB0 (D_25E308 membership)
@@ -476,7 +541,25 @@ s32 IsItemUnlockedAtProgress(s32 itemId, s32 progress) {
  * single $2 and colours the loaded value into $5. The original is effectively
  * *less* optimised here (un-CSE'd constant) — not reachable from clean C at -O2.
  * Left INCLUDE_ASM. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_00289190);
+#else
+s32 func_00289190(s32 key) {
+    s32 *p = D_240340;
+    s32 cur = *p;
+    if (cur != -2) {
+        do {
+            cur = *p;
+            p += 2;
+            if (key == cur) {
+                return 1;
+            }
+            cur = *p;
+        } while (cur != -2);
+    }
+    return 0;
+}
+#endif
 
 /* UpgradeWeaponToMax(itemId): repeatedly advance the item's weapon variant
  * (following nextVariantSlot) until the top variant, updating
@@ -506,7 +589,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", GetWeaponStatsA
  * lw base) where our cc1 schedules each lui/lw pair together — a fixed
  * load-scheduling difference unaffected by operand order. Left INCLUDE_ASM.
  */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_00289398);
+#else
+s32 func_00289398(s32 size, s32 *out) {
+    if ((u32)0x40000 < (u32)size) {
+        *out = 0;
+        return -1;
+    }
+    *out = (g_sceneDecompressBase + g_sceneArenaCursor) - size;
+    return 0;
+}
+#endif
 
 /* Handwritten no-return fragment: `sh $0,0x1C($a0); nop` with NO jr $ra (it
  * falls through). Not expressible as a returning C function — INCLUDE_ASM. */
@@ -1052,7 +1146,15 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028BBA0);
  * base into $a0); our cc1 schedules the constant after the load. A fixed
  * instruction-scheduling difference. Left INCLUDE_ASM.
  */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", ResetDebugHeap);
+#else
+void ResetDebugHeap(void) {
+    u8 *base = g_debugMallocPoolBase;
+    g_debugMallocCursor = base;
+    g_debugMallocEnd = base + 0x64000;
+}
+#endif
 
 /* DebugMalloc(size): bump-allocate `size` bytes (rounded up to 16) from the
  * debug pool. Lazily (re)initialises the pool on first use, and returns 0 when
@@ -1090,7 +1192,32 @@ void *DebugMalloc(s32 size) {
  * expressible per declaration, and the gp_rel-in-delay-slot form is fixed
  * SN-cc1 behaviour). Left INCLUDE_ASM.
  */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", SwapMobyTableContext);
+#else
+void SwapMobyTableContext(s32 newId) {
+    void *base, *spawn, *end, *aux;
+    if (newId == g_activeMobyTableId) {
+        return;
+    }
+    base  = g_mobyTableBase;
+    spawn = g_mobySpawnStart;
+    end   = g_mobyTableEnd;
+    aux   = g_mobyAuxBlockBase;
+
+    g_activeMobyTableId = g_activeMobyTableId ^ 1;
+
+    g_mobyTableBase    = g_hudMobyTableBase;
+    g_mobySpawnStart   = g_hudMobySpawnStart;
+    g_mobyTableEnd     = g_hudMobyTableEnd;
+    g_mobyAuxBlockBase = g_hudMobyAuxBlockBase;
+
+    g_hudMobyTableBase    = base;
+    g_hudMobySpawnStart   = spawn;
+    g_hudMobyTableEnd     = end;
+    g_hudMobyAuxBlockBase = aux;
+}
+#endif
 
 /* func_0028BE10(packed, b, c, d, e, f, g): update HUD widget list slot
  * `packed & 0xF` of the D_2552B0 table (stride 0x90). Compares the slot's stored
@@ -1171,7 +1298,25 @@ void func_0028BF80(void) {
  * to base+0x64 (reading 0x0(ptr)) where our cc1 keeps the key in $a0 and reads
  * 0x64(base) — an induction-variable / arg-colouring choice. Left INCLUDE_ASM.
  */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C010);
+#else
+s32 func_0028C010(s32 key) {
+    s32 i = 0;
+    if (D_2552B0[0].key != key) {
+        do {
+            if (++i >= 0xD) {
+                return 0;
+            }
+        } while (D_2552B0[i].key != key);
+    }
+    if (i >= 0xD) {
+        return 0;
+    }
+    func_0028BE10(i, 0xFFFF, 0, 0, 0, 0, 0);
+    return 1;
+}
+#endif
 
 /* Resolve the HUD icon slot for `iconName` (via func_0028B560), then copy its
  * texture id, palette id and base-frame field out of the icon-slot table into
@@ -1242,7 +1387,28 @@ void func_0028C108(s32 key, s32 value) {
  * live in a saved register; our cc1 emits `andi;bnez`, no branch-likely, and
  * re-reads the extent — a fixed branch/colouring heuristic. Left INCLUDE_ASM.
  */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C180);
+#else
+s32 func_0028C180(HudElement *rec, s32 *pA, s32 *pB) {
+    u8  *b = (u8 *)rec;
+    s32  flags = *(s32 *)(b + 0x60);
+    s32  xExtent = *(s32 *)(b + 0x58);
+    s32  yExtent = *(s32 *)(b + 0x5C);
+
+    if ((flags & 1) == 0 && (flags & 2) == 0) {
+        *pB = *pB - (yExtent >> 1);
+    }
+    if ((flags & 4) == 0) {
+        if ((flags & 8) != 0) {
+            *pA = *pA - xExtent;
+        } else {
+            *pA = *pA - (xExtent >> 1);
+        }
+    }
+    return 0;
+}
+#endif
 
 /* func_0028C1E8(rec, pX, pY, ...): apply a HUD layout record's alignment flags
  * (+0x60) to an (*pX,*pY) coordinate using fractional offset tables
