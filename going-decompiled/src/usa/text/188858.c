@@ -817,11 +817,13 @@ void func_002895E0(CinematicQueue *q) {
 /* StartCinematicFromQueue(q): if the queue has a pending cinematic, mark it
  * active, dequeue the next {id, flag}, pick a game-state mode (1 or 2 based on
  * g_nGameState) and request the matching game-state transition
- * (RequestGameStateChange). flag==0 requests the level-cinematic mode (arg id in
- * slot 4); flag==1 requests the standard-cinematic mode (arg id in slot 3); any
- * other flag value skips the request. On a failed (<0) request the queue is
- * flushed via func_00289540. Returns 1 when nothing started (empty / request
- * returned <= 0), else 0.
+ * (RequestGameStateChange, with the computed mode as arg b). flag==0 requests
+ * the level-cinematic transition (arg id in slot 4); flag==1 requests the
+ * standard-cinematic transition (arg id in slot 3); any other flag value skips
+ * the request. On a failed (<0) request the queue is
+ * flushed via func_00289540. Returns 1 only when the request returned exactly 0
+ * (or no request was made); a non-zero request result (positive OR negative)
+ * and the empty-queue early-out both return 0.
  *
  * WALL: multiple callee-saves (0x30 frame), a movz mode-select and the two-way
  * argument shuffle / branch colouring around RequestGameStateChange that cc1
@@ -843,14 +845,16 @@ s32 StartCinematicFromQueue(CinematicQueue *q) {
     q->gameStateMode = mode;
     result = 0;
     if (flag == 0) {
-        result = RequestGameStateChange(1, 1, 0, id, 0);
+        result = RequestGameStateChange(1, mode, 0, id, 0);
     } else if (flag == 1) {
-        result = RequestGameStateChange(2, 1, id, 0, 0);
+        result = RequestGameStateChange(2, mode, id, 0, 0);
     }
     if (result < 0) {
         func_00289540(q);
     }
-    return result <= 0;
+    /* sltiu result,1 : an UNSIGNED "< 1", i.e. exactly result == 0 (a negative
+     * result is a large unsigned and returns 0, same as a positive one). */
+    return (u32)result < 1;
 }
 #endif
 
