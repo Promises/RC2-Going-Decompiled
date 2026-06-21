@@ -219,6 +219,15 @@ extern s32 SampleWaterHeightfield(f32 x, f32 y, f32 z, f32 *outHeight);
 extern void func_00284248(Vec4 *out, f32 angle, s32 axis);
 extern void func_00284180(Vec4 *out, Vec4 *a, Vec4 *b);
 
+/* 4x4 row-major matrix (4 Vec4 rows). func_00284048 builds a rotation matrix
+ * from a quaternion (src Vec4 quat -> dst Mat4x4); func_00283A70 transforms a
+ * Vec4 by a Mat4x4 (dst = mat * vec). Both are VU0 (183558.c region). */
+typedef struct Mat4x4 { Vec4 row[4]; } Mat4x4;
+extern void func_00284048(Mat4x4 *dst, const Vec4 *quat);
+extern void func_00283A70(Vec4 *dst, const Vec4 *vec, const Mat4x4 *mat);
+/* FloatToInt: truncate a float to an s32 (cvt.w.s style). */
+extern s32 FloatToInt(f32 x);
+
 /* Water surface globals (the g_waterPool Vec4 packs xy-centre, z-surface,
  * w-radius; see symbol_addrs). */
 extern s32 g_bWaterWavesActive;        /* gate for the wave-heightfield path */
@@ -1147,7 +1156,22 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB868);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ABAE8);
 
+/* func_002ABD00: pack four [0,1] float colour components into a 0xAABBGGRR u32.
+ * Each of r/g/b/a (passed in $f12/$f13/$f14/$f15) is scaled by 255.0, truncated
+ * to an int (FloatToInt), masked to a byte and shifted into its channel:
+ *   r = bits 0-7, g = bits 8-15, b = bits 16-23, a = bits 24-31.
+ * Walled: $f20-$f23 + $31 saves (save-layout wall). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ABD00);
+#else
+s32 func_002ABD00(f32 r, f32 g, f32 b, f32 a) {
+    s32 ri = FloatToInt(r * 255.0f) & 0xFF;
+    s32 gi = FloatToInt(g * 255.0f) & 0xFF;
+    s32 bi = FloatToInt(b * 255.0f) & 0xFF;
+    s32 ai = FloatToInt(a * 255.0f);
+    return ri | (gi << 8) | (bi << 16) | (ai << 24);
+}
+#endif
 
 /**
  * Conditionally exchange three values: bit0 swaps a/b, bit1 swaps b/c,
@@ -1203,11 +1227,79 @@ u32 func_002ABE08(u32 word, s32 bits) {
 }
 #endif
 
+/* func_002ABE90: orthonormalise the 3 columns of the rotation 3x3 of a Mat4x4.
+ * For each column i (0..2): gather the column (the i-th element of rows 0,1,2,
+ * stride 0x10) into a scratch Vec3 (w zeroed), normalise it to unit length via
+ * Vec3RescaleToLenVu0(len 1.0), then scatter it back into column i.
+ * Walled: $16/$17/$18 + $31 saves (save-layout wall). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ABE90);
+#else
+void func_002ABE90(Mat4x4 *mat) {
+    f32 *base = (f32 *)mat;
+    s32 i;
 
+    for (i = 0; i < 3; i++) {
+        Vec4 col;
+        f32 *src = base + i;        /* &mat[row0][col i] */
+        s32 j;
+
+        col.w = 0.0f;
+        for (j = 0; j < 3; j++) {
+            ((f32 *)&col)[j] = *src;
+            src += 4;               /* next row (stride 0x10 bytes) */
+        }
+        Vec3RescaleToLenVu0(&col, 1.0f, &col);
+        {
+            f32 *dst = base + i;
+            for (j = 0; j < 3; j++) {
+                *dst = ((f32 *)&col)[j];
+                dst += 4;
+            }
+        }
+    }
+}
+#endif
+
+/* func_002ABF50: transform the delta (c - a) into the local frame of quaternion
+ * q and return component `idx` of the result. Builds the rotation matrix from q
+ * (func_00284048), transforms the delta vector by it (func_00283A70), and reads
+ * out result[idx]. Args: a, q, c, idx. Walled: $16-$19 + $31 saves. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ABF50);
+#else
+f32 func_002ABF50(const Vec4 *a, const Vec4 *q, const Vec4 *c, s32 idx) {
+    Vec4 delta;
+    Vec4 result;
+    Mat4x4 mat;
 
+    Vec4SubVu0(&delta, (Vec4 *)c, (Vec4 *)a);
+    func_00284048(&mat, q);
+    func_00283A70(&result, &delta, &mat);
+    return ((f32 *)&result)[idx];
+}
+#endif
+
+/* func_002ABFD0: remove the component of `vec` along `axis`, scaled by `scale`.
+ * Normalises axis (Vec3RescaleToLenVu0, len 1.0), projects vec onto it
+ * (Vec3DotVu0), scales the projection by `scale`, scales the unit axis by that
+ * amount and subtracts it from vec, writing the result into *out.
+ *   out = vec - scale * dot(vec, unit(axis)) * unit(axis)
+ * Args: out, vec, axis, scale ($f12). Walled: $f20 + $16-$18 + $31 saves. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ABFD0);
+#else
+void func_002ABFD0(Vec4 *out, Vec4 *vec, Vec4 *axis, f32 scale) {
+    Vec4 unit;
+    Vec4 proj;
+    f32 amount;
+
+    Vec3RescaleToLenVu0(&unit, 1.0f, axis);
+    amount = Vec3DotVu0(&unit, vec) * scale;
+    Vec4ScaleVu0(&proj, amount, &unit);
+    Vec4SubVu0(out, vec, &proj);
+}
+#endif
 
 /* func_002AC058: read word 0 of a moby's extra/pvar block (mode bit 0x20
  * gates the block). Best attempt 66%: structure identical (bnezl + shared
