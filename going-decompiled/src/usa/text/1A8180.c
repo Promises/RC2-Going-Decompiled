@@ -248,7 +248,20 @@ s32 GetRandomInt(s32 n) {
 }
 #endif
 
+/* func_002A8688: uniform random integer in [lo, hi] (inclusive) — take a 15-bit
+ * random value from the core LCG (func_001163B0() >> 16 & 0x7FFF) and reduce it
+ * modulo the span (hi - lo + 1), then bias by lo. Walled: saves $16/$17/$31
+ * (save-layout wall). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8688);
+#else
+s32 func_002A8688(s32 lo, s32 hi) {
+    s32 span = hi - lo + 1;
+    s32 r = (func_001163B0() >> 16) & 0x7FFF;
+
+    return r % span + lo;
+}
+#endif
 
 /**
  * Uniform random float in [lo, hi): scale a 15-bit random fraction
@@ -813,9 +826,52 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB2C0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB3B0);
 
+/* func_002AB5A0: wrap an angle into (-pi, pi] (via WrapAnglePiDiff), then when a
+ * direction sign is supplied bias the result onto the requested rotation side:
+ * if the wrapped delta already agrees with the sign (delta*sign > 0) keep it; an
+ * almost-zero delta collapses to 0; otherwise add/subtract a full 2*pi turn so
+ * the result rotates the requested way. Walled: $f20/$f21 + $16/$31 saves. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB5A0);
+#else
+f32 func_002AB5A0(f32 a, f32 b, s32 sign) {
+    f32 d = func_00284590(a, b);   /* func_00284590 == WrapAnglePiDiff(a - b) */
 
+    if (sign == 0) {
+        return d;
+    }
+    if (0.0f < d * (f32)sign) {
+        return d;
+    }
+    if (GetFloatAbs(d) <= 0.00174532062f) {   /* 0x3AE4C38A */
+        return 0.0f;
+    }
+    if (0.0f < d) {
+        return d - 6.28318548f;               /* 0x40C90FDC = 2*pi */
+    }
+    return d + 6.28318548f;
+}
+#endif
+
+/* func_002AB668: step a stored angle (*p) toward target `a` by at most `maxStep`
+ * (clamped both ways), wrapping the sum into (-pi, pi], and return the residual
+ * signed angle difference after the step. `sign` forces the rotation side (see
+ * func_002AB5A0). Walled: $f20/$f21 + $16/$17/$31 saves (save-layout wall). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB668);
+#else
+f32 func_002AB668(f32 a, f32 maxStep, f32 *p, s32 sign) {
+    f32 delta = func_002AB5A0(a, p[0], sign);
+
+    if (maxStep < delta) {
+        delta = maxStep;
+    } else if (delta < -maxStep) {
+        delta = -maxStep;
+    }
+    p[0] = func_00284548(p[0], delta);   /* func_00284548 == WrapAnglePiSum */
+    return func_002AB5A0(a, p[0], sign);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB700);
 
@@ -853,7 +909,31 @@ void func_002ABDA8(s32 *a, s32 *b, s32 *c, s32 bits) {
     }
 }
 
+/* func_002ABE08: conditionally permute the low three colour channels of a packed
+ * 0xAABBGGRR word. When `bits` is 0 the word is returned unchanged; otherwise the
+ * R/G/B bytes are unpacked and swapped per func_002ABDA8's bit mask (bit0 R<->G,
+ * bit1 G<->B, bit2 R<->B), with the alpha (top) byte preserved. Walled: $16/$31
+ * saves (save-layout wall). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ABE08);
+#else
+u32 func_002ABE08(u32 word, s32 bits) {
+    s32 r;
+    s32 g;
+    s32 b;
+    s32 a;
+
+    if (bits == 0) {
+        return word;
+    }
+    r = word & 0xFF;
+    g = (word & 0xFF00) >> 8;
+    b = (word >> 16) & 0xFF;
+    a = word >> 24;
+    func_002ABDA8(&r, &g, &b, bits);
+    return (a << 24) | (b << 16) | (g << 8) | r;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ABE90);
 
@@ -900,7 +980,24 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC0B8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC1E0);
 
+/* func_002AC468: build a scratch transform/matrix (func_00284008), feed it
+ * through func_002AC1E0 with `out`, then resolve `in` against it (func_00284028).
+ * The 0x40-byte scratch is a 4x4 matrix shared by all three helpers. Walled:
+ * $16/$17/$31 saves (save-layout wall). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC468);
+#else
+extern void func_00284008(void *m);
+extern void func_00284028(void *src, void *m);
+
+void func_002AC468(void *out, void *in) {
+    u8 scratch[0x40];   /* 4x4 matrix */
+
+    func_00284008(scratch);
+    func_002AC1E0(out, scratch);
+    func_00284028(in, scratch);
+}
+#endif
 
 /**
  * Copy the hero's velocity pair (+0x38, 64-bit) onto another moby.
@@ -909,7 +1006,20 @@ void func_002AC4B8(Moby *moby) {
     *(u64 *)((u8 *)moby + 0x38) = *(u64 *)((u8 *)g_pHeroMoby[0] + 0x38);
 }
 
+/* func_002AC4D0: axis-angle -> quaternion. out.xyz = axis(src) * sin(angle/2),
+ * out.w = cos(angle/2). Walled: $f20 + $16/$17/$31 saves (save-layout wall). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC4D0);
+#else
+extern f32 func_00283B48(f32 x);   /* sine */
+
+void func_002AC4D0(Vec4 *out, const Vec4 *src, f32 angle) {
+    f32 half = angle * 0.5f;
+
+    Vec4ScaleVu0(out, func_00283B48(half), src);
+    out->w = func_00283B30(half);   /* +0xC = w (quaternion-style) */
+}
+#endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC538);
@@ -1030,9 +1140,50 @@ void func_002AD938(Moby *moby, s16 *list) {
 }
 #endif
 
+/* func_002AD9B0: jitter a Vec3 in place — add an independent uniform random
+ * offset in [-amt, amt) to each of x/y/z. Walled: $f20/$f21 + $16/$31 saves
+ * (save-layout wall). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AD9B0);
+#else
+void func_002AD9B0(Vec4 *p, f32 amt) {
+    p->x = p->x + func_002A86E0(-amt, amt);   /* func_002A86E0 == GetRandomFloatRange */
+    p->y = p->y + func_002A86E0(-amt, amt);
+    p->z = p->z + func_002A86E0(-amt, amt);
+}
+#endif
 
+/* func_002ADA30: test whether `pos` falls inside segment `segIdx`'s unit-cube
+ * bounds. Subtract the segment origin (table at *(g_deferredSegment2Tag+0xCC),
+ * 0x80-stride, origin at +0x30), transform the offset into the segment's local
+ * frame (func_00283A48), and return 1 only if all of x/y/z land in [-1, 1].
+ * segIdx == -1 returns 0. Walled: $16/$31 saves (save-layout wall). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADA30);
+#else
+extern void func_00283A48(Vec4 *out, Vec4 *local);
+extern u8 g_deferredSegment2Tag[];   /* +0xCC holds the segment-table base ptr */
+
+s32 func_002ADA30(Vec4 *pos, s32 segIdx) {
+    u8 *seg;
+    Vec4 local;
+    Vec4 out;
+
+    if (segIdx == -1) {
+        return 0;
+    }
+    seg = *(u8 **)(g_deferredSegment2Tag + 0xCC) + segIdx * 0x80;
+    Vec4SubVu0(&local, pos, (Vec4 *)(seg + 0x30));
+    local.w = 0.0f;
+    func_00283A48(&out, &local);
+    if (-1.0f <= out.x && out.x <= 1.0f &&
+        -1.0f <= out.y && out.y <= 1.0f &&
+        -1.0f <= out.z && out.z <= 1.0f) {
+        return 1;
+    }
+    return 0;
+}
+#endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADB08);
@@ -1128,7 +1279,27 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AF6A0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AF728);
 
+/* func_002AF948: round a float to `digits` decimal places. Builds the scale
+ * 10^digits (digits<=0 -> 1), adds the half-ulp rounding bias 1/(2*scale),
+ * truncates (FloatToInt) the scaled value, and divides back. Walled: $f20 +
+ * $31 saves (save-layout wall). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AF948);
+#else
+extern s32 FloatToInt(f32 x);
+
+f32 func_002AF948(s32 digits, f32 x) {
+    s32 pow10 = 1;
+    f32 scale;
+
+    while (digits > 0) {
+        pow10 = pow10 * 10;
+        digits = digits - 1;
+    }
+    scale = (f32)pow10;
+    return (f32)FloatToInt((x + 1.0f / (scale + scale)) * scale) / scale;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AF9C8);
 
