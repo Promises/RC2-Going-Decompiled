@@ -679,9 +679,75 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE230);
  * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE3A0);
 
-/* menu helper: 8-byte-packed-save wall (saves 3 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* Per-screen menu tick + render-fence latch (one of the func_002CE498 family,
+ * the cleanest with the standard menuScreenBlock confirm latch). Confirm (0x10)
+ * latches the active screen's pending result (block[0x14]->0xE0 into block[0x18],
+ * else -1/0); cancel (0x900) returns 1; otherwise it ticks the idle handler
+ * func_0029D080(buttons, &scratch). Then, with the GUI up, it samples the frame
+ * timestamp twice via func_00337D98 (a gp-relative frame counter); when the two
+ * reads agree, the file-load is idle, and the per-screen present record
+ * (D_00259C58) shows this frame already presented (offsets 0x50/0x54 == now and
+ * state 0x44 in {2,4}) it CLEARS the "needs redraw" bit 0x4 of the live object
+ * (*D_259C24)[0x10]; otherwise it SETS that bit. Finally it stamps the present
+ * record (D_00259C58[0x58] = now).
+ * Wall: 8-byte-packed-save ($16 + $17 + $31). Preserved as portable C. */
+extern s32 func_00337D98(void);
+extern void func_0029D080(s32 buttons, void *scratch);
+extern s16 g_fileLoadState;
+extern s32 D_259C24;       /* ptr-to-live-object global */
+extern u8 D_00259C58[];    /* per-screen present record */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE498);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 3-GPR packed-save frame +
+ * branch-likely present-record fence shape. */
+s32 func_002CE498(void) {
+    s32 t0 = func_00337D98();
+    s32 flags = g_padButtonsPressed;
+    s32 result = 0;
+    s32 *block;
+    s32 v;
+    if (flags & 0x10) {
+        block = (s32 *)g_menuScreenBlock;
+        v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
+        if (v != 0) {
+            block[0x18 / 4] = v;
+            return 0;
+        }
+        if (block[0x134 / 4] == 0) {
+            return -1;
+        }
+        return 0;
+    }
+    if (flags & 0x900) {
+        result = 1;
+    } else {
+        u8 scratch[0x30];
+        func_0029D080(flags, scratch);
+    }
+    if (g_guiInstance) {
+        s32 now = func_00337D98();
+        u8 *rec = D_00259C58;
+        s32 *live = (s32 *)D_259C24;
+        s32 clear = 0;
+        if (now == t0 && g_fileLoadState == 0) {
+            if (*(s32 *)(rec + 0x50) == now && *(s32 *)(rec + 0x44) == 2) {
+                clear = 1;
+            } else if (*(s32 *)(rec + 0x54) == now &&
+                       *(s32 *)(rec + 0x44) == 4) {
+                clear = 1;
+            }
+        }
+        if (clear) {
+            live[0x10 / 4] &= ~0x4;
+        } else {
+            live[0x10 / 4] |= 0x4;
+        }
+        *(s32 *)(rec + 0x58) = now;
+    }
+    return result;
+}
+#endif
 
 /* Draw-batch wrapper. */
 s32 func_002CE5D8(void) {
@@ -775,13 +841,73 @@ s32 func_002CE878(void) {
     return 0;
 }
 
-/* menu helper: 8-byte-packed-save wall (saves 3 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* GUI accessor: when the GUI is up, mark the widget at instance+0x3C160 active
+ * (func_00342460(w, 1)) and store its queried value (func_00342468(w)) into
+ * out[0x34]. Returns 0.
+ * Wall: 8-byte-packed-save ($16 + $17 + $31). Preserved as portable C. */
+extern void func_00342460(void *widget, s32 arg);
+extern s32 func_00342468(void *widget);
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE8A8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 3-GPR packed-save frame. */
+s32 func_002CE8A8(s32 *out) {
+    if (g_guiInstance) {
+        char *w = g_guiInstance + 0x3C160;
+        func_00342460(w, 1);
+        out[0x34 / 4] = func_00342468(w);
+    }
+    return 0;
+}
+#endif
 
-/* menu helper: 8-byte-packed-save wall (saves 3 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* Menu confirm/cancel poll + command builder, twin of func_002D0158 without the
+ * arg==0 sound. Confirm (0x10) latches the active screen's pending result
+ * (block[0x14]->0xE0 into block[0x18], else -1/0); cancel (0x900) returns 1;
+ * otherwise it ticks the idle handler func_0029D328 and, on the confirm pad bit
+ * (0x40) with the GUI up, reads the selected entry of the list widget at
+ * g_guiInstance+0x3C160 (func_003424C8) and builds an 8-byte command record
+ * (op = (u16)entry[0x8] at rec+0x2, arg = entry[0xC] at rec+0x4) handed to
+ * func_002D6B00 (-> MenuScreenDoAction).
+ * Wall: 8-byte-packed-save ($16 + $17 + $31). Preserved as portable C. */
+extern void func_0029D328(void);
+extern void *func_003424C8(void *widget);
+extern void func_002D6B00(void *record);
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE908);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame +
+ * branch-likely confirm shape / single-register result threading. */
+s32 func_002CE908(void) {
+    s32 flags = *(s32 *)(D_138180 + 0x1C4);
+    s32 *block;
+    s32 v;
+    if (flags & 0x10) {
+        block = (s32 *)g_menuScreenBlock;
+        v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
+        if (v != 0) {
+            block[0x18 / 4] = v;
+            return 0;
+        }
+        if (block[0x134 / 4] == 0) {
+            return -1;
+        }
+        return 0;
+    }
+    if (flags & 0x900) {
+        return 1;
+    }
+    func_0029D328();
+    if ((*(s32 *)(D_138180 + 0x1C4) & 0x40) && g_guiInstance) {
+        u8 record[0x30];
+        u8 *entry = (u8 *)func_003424C8(g_guiInstance + 0x3C160);
+        *(u16 *)(record + 0x2) = *(u16 *)(entry + 0x8);
+        *(s32 *)(record + 0x4) = *(s32 *)(entry + 0xC);
+        func_002D6B00(record);
+    }
+    return 0;
+}
+#endif
 
 /* Draw the localized string 0x2BE5 right-justified at the alternate label slot. */
 s32 func_002CE9D8(void) {
@@ -865,9 +991,56 @@ s32 func_002D0110(s32 *out) {
 }
 #endif
 
-/* menu helper: 8-byte-packed-save wall (saves 3 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* Menu confirm/cancel poll + command builder, twin of func_002D4270. Confirm
+ * (0x10) latches the active screen's pending result (block[0x14]->0xE0 into
+ * block[0x18], else -1/0); cancel (0x900) returns 1; otherwise it ticks the idle
+ * handler func_0029D398 and, on the confirm pad bit (0x40) with the GUI up, reads
+ * the selected entry of the list widget at g_guiInstance+0x3C160 (func_003424C8)
+ * and builds an 8-byte command record (op = (u16)entry[0x8] at rec+0x2, arg =
+ * entry[0xC] at rec+0x4). When arg is 0 it plays UI sound 5, then hands the
+ * record to func_002D6B00 (-> MenuScreenDoAction).
+ * Wall: 8-byte-packed-save ($16 + $17 + $31). Preserved as portable C. */
+extern void func_0029D398(void);
+extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D0158);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame +
+ * branch-likely confirm shape / single-register result threading. */
+s32 func_002D0158(void) {
+    s32 flags = *(s32 *)(D_138180 + 0x1C4);
+    s32 *block;
+    s32 v;
+    if (flags & 0x10) {
+        block = (s32 *)g_menuScreenBlock;
+        v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
+        if (v != 0) {
+            block[0x18 / 4] = v;
+            return 0;
+        }
+        if (block[0x134 / 4] == 0) {
+            return -1;
+        }
+        return 0;
+    }
+    if (flags & 0x900) {
+        return 1;
+    }
+    func_0029D398();
+    if ((*(s32 *)(D_138180 + 0x1C4) & 0x40) && g_guiInstance) {
+        u8 record[0x30];
+        u8 *entry = (u8 *)func_003424C8(g_guiInstance + 0x3C160);
+        s32 arg = *(s32 *)(entry + 0xC);
+        *(u16 *)(record + 0x2) = *(u16 *)(entry + 0x8);
+        *(s32 *)(record + 0x4) = arg;
+        if (arg == 0) {
+            PlayGlobalSound(5, 0, 0);
+        }
+        func_002D6B00(record);
+    }
+    return 0;
+}
+#endif
 
 /* Draw the localized string 0x2BE5 as a right-justified label inside a 2D batch. */
 s32 func_002D0240(void) {
