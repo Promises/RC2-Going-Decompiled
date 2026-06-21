@@ -358,15 +358,40 @@ s32 GetWeaponUpgradeLevel(s32 itemId) {
 }
 #endif
 
-/* SetWeaponUpgradeSlot(itemId, level): set the item's active variant to the
- * given upgrade `level`. Compares `level` against the current
- * GetWeaponUpgradeLevel; when higher, walks to the base variant and steps
- * `level` times down the prevVariantSlot chain, writing the resulting slot into
- * g_itemEquippedSlot[itemId]. Returns 1 when the slot changed, else 0.
+/* SetWeaponUpgradeSlot(itemId, level): point the item's active variant at the
+ * variant `level` upgrade-steps above its base. Bails (returns 0) when the
+ * item's current GetWeaponUpgradeLevel is below `level` (cannot select a
+ * not-yet-unlocked variant); otherwise walks the prevVariantSlot chain back to
+ * the base variant, steps `level` nextVariantSlot links forward from there, and
+ * writes that slot into g_itemEquippedSlot[itemId], returning 1.
  *
  * WALL: four callee-saves (0x30 frame), a jal to GetWeaponUpgradeLevel and the
  * `mult`-scaled (0xE0) chain walks with bnez loop colouring. Left INCLUDE_ASM. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", SetWeaponUpgradeSlot);
+#else
+s32 SetWeaponUpgradeSlot(s32 itemId, s32 level) {
+    s32 slot = itemId;
+    s32 i;
+
+    /* cannot select a variant above what the item has unlocked */
+    if (GetWeaponUpgradeLevel(slot) < level) {
+        return 0;
+    }
+    /* walk prevVariantSlot back to the base variant */
+    if (g_weaponTable[slot].prevVariantSlot != 0) {
+        do {
+            slot = g_weaponTable[slot].prevVariantSlot;
+        } while (g_weaponTable[slot].prevVariantSlot != 0);
+    }
+    /* step `level` nextVariantSlot links forward from the base */
+    for (i = level; i > 0; i--) {
+        slot = g_weaponTable[slot].nextVariantSlot;
+    }
+    g_itemEquippedSlot[itemId] = (u8)slot;
+    return 1;
+}
+#endif
 
 /* func_00288B08(key): copy a 0x30-byte word table from D_1A8B10 onto the stack
  * (via ldl/ldr/sdl/sdr unaligned block moves) and linear-scan it for `key`,
@@ -561,23 +586,92 @@ s32 func_00289190(s32 key) {
 }
 #endif
 
-/* UpgradeWeaponToMax(itemId): repeatedly advance the item's weapon variant
- * (following nextVariantSlot) until the top variant, updating
- * g_itemEquippedSlot. Single callee-save (0x10 frame).
+/* UpgradeWeaponToMax(itemId): select the item's "fully upgraded" weapon variant
+ * and zero its accumulated XP. Returns 0 (no change) when the item's currently
+ * equipped variant does not exist; otherwise picks an upgrade level by item id
+ * (a 0x2A-entry dispatch table over itemId-0xC: most items resolve to level 2,
+ * a handful to level 1; out-of-range items also resolve to level 2), calls
+ * SetWeaponUpgradeSlot(itemId, level), and on success resets g_weaponXp[itemId]
+ * to 0. Returns SetWeaponUpgradeSlot's result.
  *
- * WALL: single callee-save + jal, with the 0xE0-stride `mult` chain walk and
- * bnez loop colouring cc1 does not reproduce. Left INCLUDE_ASM. */
+ * WALL: single callee-save + jal, a jtbl dispatch and the 0xE0-stride `mult`
+ * chain walk with bnez loop colouring cc1 does not reproduce. Left INCLUDE_ASM. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", UpgradeWeaponToMax);
+#else
+s32 UpgradeWeaponToMax(s32 itemId) {
+    /* jtbl_0026C6D0_text: itemId-0xC -> target level. Two targets only — most
+     * entries pick level 2, indices {0,2,5,6,41} pick level 1. */
+    static const u8 kUpgradeLevelByItem[0x2A] = {
+        1, 2, 1, 2, 2, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+        2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+        2, 2, 2, 2, 2, 2, 2, 2, 2, 1,
+    };
+    s32 slot = g_itemEquippedSlot[itemId];
+    s32 idx;
+    s32 level;
+    s32 ok;
+
+    if (g_weaponTable[slot].exists == 0) {
+        return 0;
+    }
+    idx = itemId - 0xC;
+    level = ((u32)idx < 0x2A) ? kUpgradeLevelByItem[idx] : 2;
+
+    ok = SetWeaponUpgradeSlot(itemId, level);
+    if (ok != 0) {
+        g_weaponXp[itemId] = 0;
+    }
+    return ok;
+}
+#endif
 
 /* GetWeaponStatsAtLevel(out, itemId, level): resolve the variant `level` steps
  * up the upgrade chain of weapon `itemId` (walk prevVariantSlot to the base,
- * then forward `level` nextVariantSlot steps) and, when that variant's
- * upgradeLevel matches `level`, copy its full 0xE0-byte WeaponDef into *out.
- * Returns 1 on a successful copy, else 0.
+ * then up to `level` forward nextVariantSlot steps — stopping early at a
+ * terminal variant) and, when that variant's upgradeLevel matches `level`, copy
+ * its full 0xE0-byte WeaponDef into *out. Returns 1 on a successful copy, else 0
+ * (also returns 0 immediately when level >= 0xFF).
  *
  * WALL (sq/lq 128-bit): the struct copy is emitted as a 128-bit lq/sq block move
  * the matcher cannot reproduce from C struct assignment. Left INCLUDE_ASM. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", GetWeaponStatsAtLevel);
+#else
+s32 GetWeaponStatsAtLevel(WeaponDef *out, s32 itemId, s32 level) {
+    s32 slot = itemId;
+    s32 count;
+
+    if (level >= 0xFF) {
+        return 0;
+    }
+    /* walk prevVariantSlot back to the base variant */
+    if (g_weaponTable[slot].prevVariantSlot != 0) {
+        do {
+            slot = g_weaponTable[slot].prevVariantSlot;
+        } while (g_weaponTable[slot].prevVariantSlot != 0);
+    }
+    /* step up to `level` nextVariantSlot links forward, halting at a terminal */
+    if (level > 0 && g_weaponTable[slot].nextVariantSlot != 0) {
+        count = 0;
+        for (;;) {
+            count++;
+            slot = g_weaponTable[slot].nextVariantSlot;
+            if (count >= level) {
+                break;
+            }
+            if (g_weaponTable[slot].nextVariantSlot == 0) {
+                break;
+            }
+        }
+    }
+    if ((s32)g_weaponTable[slot].upgradeLevel != level) {
+        return 0;
+    }
+    *out = g_weaponTable[slot];   /* full 0xE0-byte WeaponDef copy */
+    return 1;
+}
+#endif
 
 /*
  * Compute the scene-arena address that would remain after carving `size`
