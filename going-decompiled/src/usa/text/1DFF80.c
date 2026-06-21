@@ -163,7 +163,42 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E0000);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E0010);
 
+/* Request a transition into game state 7 (cinematic-hide), stashing the two
+ * caller args for the deferred state-enter action, clearing the pre-particle
+ * hook count, re-arming the scene cast helper, then marking every moby in the
+ * table hidden (set bit 0x80 in the u16 mode word at moby+0x34).  `argA`/`argB`
+ * are the state-change arguments cached at g_pendingStateArgA/B (read back when
+ * state 7 is committed).  Counterpart of UnhideAllMobysAndPopState.
+ * NEAR-MISS (~85%, structurally identical): cc1 lowers the table-walk to a plain
+ * `bnez` where the original uses a branch-likely (`bnel`) that hoists the moby
+ * mode-word load into the delay slot (the branch-likely lowering wall).  Also a
+ * 2-callee-save (s0,s1) 8-byte-packed prologue this cc1 rounds to 16-byte.  The
+ * C is faithful. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", HideAllMobysAndPushState);
+#else
+extern u8 *g_mobyTableBase;
+extern u8 *g_mobyTableEnd;
+extern void func_002857C8(s32 a, s32 b, s32 c);
+extern void RequestGameStateChange(s32 stateId, s32 push, s32 c, s32 d);
+extern s32 g_fxHooksPreCount;          /* 0x1B1588 - pre-particle hook count   */
+extern s32 g_pendingStateArgA;         /* 0x1ABE00 - stashed state-change argA  */
+extern s32 g_pendingStateArgB;         /* 0x1ABE04 - stashed state-change argB  */
+
+void HideAllMobysAndPushState(s32 argA, s32 argB) {
+    u8 *moby;
+
+    RequestGameStateChange(7, 1, 0, 0);
+    g_pendingStateArgA = argA;
+    g_pendingStateArgB = argB;
+    g_fxHooksPreCount = 0;
+    func_002857C8(0, 0, 0);
+
+    for (moby = g_mobyTableBase; moby < g_mobyTableEnd; moby += 0x100) {
+        *(u16 *)(moby + 0x34) |= 0x80;
+    }
+}
+#endif
 
 __asm__(".extern g_sceneActorMobys, 16");
 extern u8 g_sceneActorMobys[]; /* 0x1B894C - current scene cast moby pointers */
@@ -533,7 +568,81 @@ s32 ComputeEmitterVolume(SoundEmitterSlot *slot, Vec4 *pos) {
 }
 #endif
 
+/* Compute the stereo pan angle (in degrees) for emitter slot `slot`, the
+ * direction of the sound source in camera space.
+ *
+ * The emitter->listener vector (slot - g_cameraPos) is rotated into camera space
+ * by the camera matrix (g_cameraPos+0x230 == 0x1B54F0), the azimuth is taken as
+ * atan2(x, z) of that camera-space direction, normalised into [0, 2pi), and the
+ * planar distance is measured.  For close sources (planar distance < 2.0) the
+ * raw azimuth is smoothed against the slot's previous angle (stored at slot+0x40)
+ * with a +/-0.2 rad hysteresis dead-band so a near, fast-moving source does not
+ * pan-jitter; for distant sources (>= 2.0) the last-angle field (slot+0x40) is
+ * reset to -1.0 (so the hysteresis restarts next time), but the RETURN is still
+ * the current frame's azimuth in degrees (the asm keeps it in callee-saved $f20).
+ * The radian angle is converted to degrees (*180/pi) and truncated to int.
+ *
+ * TODO(match): functional equivalent - not byte-exact.  WALLED: three 8-byte
+ * callee saves (s0,s1,s2) + two fp saves (f20,f21) packed 8-byte where this cc1
+ * rounds to 16-byte, and the hysteresis tests lower to branch-likely (`bc1fl`)
+ * stores that cc1 emits as plain `bc1f` + store.  Control flow + call order are
+ * faithful. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", ComputeEmitterPan);
+#else
+extern void func_00284098(void *dst, void *mtx, void *src); /* rotate vec by mtx */
+extern void func_00283A48(void *dst, void *a, void *b);     /* vec helper        */
+extern float func_00283BF8(float x, float z);               /* atan2(x, z)       */
+extern float func_002837D0(void *v);                        /* planar magnitude  */
+extern float WrapAnglePiSum(float a, float b);              /* wrap a+b to [-pi,pi]*/
+extern float WrapAnglePiDiff(float a, float b);             /* wrap a-b to [-pi,pi]*/
+extern s32   FloatToInt(float v);
+
+s32 ComputeEmitterPan(SoundEmitterSlot *slot, Vec4 *pos) {
+    f32 dir[4];        /* sp+0x00: emitter->listener, then camera-space dir */
+    f32 rot[4];        /* sp+0x10: rotated scratch                          */
+    f32 azimuth;       /* f20: working radian angle                         */
+    f32 planar;        /* f0:  planar distance                              */
+    f32 lastAngle;     /* slot+0x40: previous frame's angle                 */
+
+    Vec4SubVu0(dir, pos, g_cameraPos);
+    /* asm passes ($4=rot, $5=cameraMatrix, $6=cameraPos) - reproduced verbatim */
+    func_00284098(rot, g_cameraPos + 0x230, g_cameraPos);
+    func_00283A48(dir, dir, rot);
+
+    azimuth = -func_00283BF8(dir[0], dir[1]);
+    if (azimuth < 0.0f) {
+        azimuth += 6.2831855f;             /* +2pi -> [0, 2pi)              */
+    }
+
+    planar = func_002837D0(dir);
+    if (planar < 2.0f) {
+        lastAngle = *(f32 *)((u8 *)slot + 0x40);
+        if (lastAngle < 0.0f) {
+            /* no valid previous angle: accept the raw azimuth */
+            *(f32 *)((u8 *)slot + 0x40) = azimuth;
+        } else {
+            f32 delta = WrapAnglePiDiff(azimuth, lastAngle);
+            if (delta > 0.2f) {
+                /* moving away CCW faster than the dead-band: clamp the step */
+                azimuth = WrapAnglePiSum(*(f32 *)((u8 *)slot + 0x40), 0.2f);
+            } else if (delta < -0.2f) {
+                /* moving away CW faster than the dead-band: clamp the step */
+                azimuth = WrapAnglePiDiff(*(f32 *)((u8 *)slot + 0x40), 0.2f);
+            }
+            /* within +/-0.2: keep the raw azimuth */
+            *(f32 *)((u8 *)slot + 0x40) = azimuth;
+        }
+    } else {
+        /* distant source: the asm only STORES -1.0 into the last-angle field
+         * (slot+0x40); $f20 (azimuth) is callee-saved and still holds the
+         * normalized azimuth, so the RETURN uses that, NOT -1.0. */
+        *(f32 *)((u8 *)slot + 0x40) = -1.0f;
+    }
+
+    return FloatToInt(azimuth * 57.2958f);   /* radians -> degrees, trunc    */
+}
+#endif
 
 __asm__(".extern D_1A7BA8, 16");
 extern s32 D_1A7BA8; /* tuning input A (screen/scale base) */
@@ -562,7 +671,36 @@ void func_002E5698(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", InitSoundEmitterSystem);
 
+/* Point the IOP streamed-audio engine at the new level's music stream, then
+ * log post-reverb free SRAM.  Issues 989snd ring command 0x51 sub-op 2 (start /
+ * point stream) via func_00133750(2, levelStreamSector) where the stream sector
+ * is g_levelTocHeader+0xC (== 0x1507E4), then queries free SRAM post-reverb with
+ * the 0x4A/0x4B snd commands (func_001337F0 / func_00133820) and feeds the result
+ * into the retail-noop DebugPrintStub ("*AFTER REVERB* level %d - free sram %d").
+ * Sole caller is the per-level audio bring-up (UpdateLevelStagingMachine state 2).
+ * NEAR-MISS: WALLED - 2 callee saves (s0,s1) packed 8-byte where this cc1 rounds
+ * the frame.  NATIVE SHIM (no byte target). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", StartLevelMusicStream);
+#else
+extern u8  g_levelTocHeader[];   /* 0x1507D8 - current-level TOC header        */
+extern s32 g_playerProgress;     /* 0x1A79F8 - player progress / level number  */
+extern const char D_1ABE90[];    /* "*AFTER REVERB* level %d - free sram %d"   */
+extern void func_00133750(s32 cmd, s32 streamSector);  /* snd cmd 0x51 sub-op 2 */
+extern s32  func_001337F0(void);                       /* snd cmd 0x4A          */
+extern s32  func_00133820(void);                       /* snd cmd 0x4B          */
+extern void DebugPrintStub(const char *fmt, ...);      /* retail no-op          */
+
+void StartLevelMusicStream(void) {
+    s32 sramA;
+    s32 sramB;
+
+    func_00133750(2, *(s32 *)(g_levelTocHeader + 0xC));
+    sramA = func_001337F0();
+    sramB = func_00133820();
+    DebugPrintStub(D_1ABE90, g_playerProgress, sramA, sramB);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", UpdateSoundEmitters);
 
@@ -754,9 +892,98 @@ s32 StartSoundEmitter(SoundDef *pSoundDef, s32 flags, Moby *ownerMoby,
 }
 #endif
 
+/* Play sound `soundIdx` from owner moby `owner`'s class sound bank.
+ *
+ * The moby's loaded class header (moby+0x24) carries a sound-def count byte at
+ * +0xD and a 0x20-byte-stride sound-def array pointer at +0x28; the def for
+ * `soundIdx` is array[soundIdx].  Delegates to StartSoundEmitter with the given
+ * `flags`, the owner moby, no explicit position, and volume scale 0x400; on
+ * success it stamps the source sound index (s16 at slot+0x7E) and owner (s32 at
+ * slot+0x88) into the slot record (off g_listenerPosHistory, +0x70 ahead of
+ * g_soundEmitterTable).  Returns the slot index, or -1 if the owner is null, its
+ * class is unloaded, the class has no def array, soundIdx is out of range, or no
+ * emitter could be started.
+ * NEAR-MISS: WALLED - 2 callee saves (s0,s1) 8-byte-packed + the null/range
+ * guards lower to branch-likely (`beql`/`bnel`) the cc1 emits as plain branches.
+ * NATIVE SHIM (no byte target). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", PlayMobySound);
+#else
+s32 PlayMobySound(s32 soundIdx, s32 flags, Moby *owner) {
+    u8 *classHdr;
+    u8 *defArray;
+    s32 slot;
+    u8 *e;
 
+    if (owner == NULL) {
+        return -1;
+    }
+    classHdr = *(u8 **)((u8 *)owner + 0x24);
+    if (classHdr == NULL) {
+        return -1;
+    }
+    defArray = *(u8 **)(classHdr + 0x28);
+    if (defArray == NULL) {
+        return -1;
+    }
+    if (soundIdx >= *(u8 *)(classHdr + 0xD)) {
+        return -1;
+    }
+
+    slot = StartSoundEmitter((SoundDef *)(defArray + soundIdx * 0x20), flags,
+                             owner, NULL, 0x400);
+    if (slot >= 0) {
+        e = g_listenerPosHistory + slot * 0x70;
+        *(s16 *)(e + 0x7E) = (s16)soundIdx;
+        *(s32 *)(e + 0x88) = (s32)owner;
+    }
+    return slot;
+}
+#endif
+
+extern u8 g_mobyClassSlotRemap[]; /* 0x1CE460 - class id -> loaded slot (0xFF=unloaded) */
+extern u8 *g_mobyClassHeaders[];  /* 0x1CDB00 - loaded class header ptr per slot       */
+
+/* Like PlayMobySound, but resolves the class sound bank from a class id rather
+ * than from a live moby: `classId` indexes the remap table g_mobyClassSlotRemap
+ * to a loaded slot, which indexes g_mobyClassHeaders to the class header (count
+ * byte +0xD, 0x20-stride def array +0x28).  Plays def `soundIdx` with `flags`,
+ * owner `owner`, no explicit position, volume scale 0x400, stamping soundIdx and
+ * owner into the slot.  Returns the slot index, or -1 if the class is unloaded,
+ * has no def array, soundIdx is out of range, or no emitter could be started.
+ * NEAR-MISS: WALLED - same 2-save/branch-likely walls as PlayMobySound, plus a
+ * `mult`-based slot stride.  NATIVE SHIM (no byte target). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", PlaySoundFromClassBank);
+#else
+s32 PlaySoundFromClassBank(s32 soundIdx, s32 flags, Moby *owner, s32 classId) {
+    u8 *classHdr;
+    u8 *defArray;
+    s32 slot;
+    u8 *e;
+
+    classHdr = g_mobyClassHeaders[g_mobyClassSlotRemap[classId]];
+    if (classHdr == NULL) {
+        return -1;
+    }
+    defArray = *(u8 **)(classHdr + 0x28);
+    if (defArray == NULL) {
+        return -1;
+    }
+    if (soundIdx >= *(u8 *)(classHdr + 0xD)) {
+        return -1;
+    }
+
+    slot = StartSoundEmitter((SoundDef *)(defArray + soundIdx * 0x20), flags,
+                             owner, NULL, 0x400);
+    if (slot >= 0) {
+        e = g_listenerPosHistory + slot * 0x70;
+        *(s16 *)(e + 0x7E) = (s16)soundIdx;
+        *(s32 *)(e + 0x88) = (s32)owner;
+    }
+    return slot;
+}
+#endif
 
 /* Play one of the global/common (UI/menu/system) sounds by index.
  *
