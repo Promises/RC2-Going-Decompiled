@@ -241,6 +241,12 @@ void func_002933D0(s32 slot, s32 size) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00293438);
 
+/* TODO(match): functional equivalent - not byte-exact (48.12%); strength-reduce/
+ * register-color wall - the original's later cc1 addresses the 0x18-stride entry
+ * three ways (mult idx*0x18 for ev0, shift-add idx*3 for ev1/ev2) where the
+ * pinned 2.9-ee-991111 cc1 CSEs them to one base+mult with immediate ld offsets,
+ * shuffling the whole GIF-tag-pack register coloring. Body (3-way idx>=0 / idx<-1
+ * / idx==-1 GIF-tag emit) is semantically equivalent. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00293760);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002938B0);
@@ -545,6 +551,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00297B48);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapBuildBitmapFrom4bpp);
 
+/* TODO(match): functional equivalent - not byte-exact (64.83%); induction-var/
+ * strength-reduction wall - the original's later cc1 keeps the loop index `i`
+ * live (count-up `slt i,count`, recomputing i*2 in the branch delay slot) where
+ * the pinned 2.9-ee-991111 cc1 strength-reduces it to an `i*3 += 3` accumulator
+ * and rewrites the bound test as a count-down, diverging the whole loop frame.
+ * The div-by-3 trap idiom (beql/break 0,7) and the 4bpp nibble unpack otherwise
+ * reproduce exactly. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00297E80);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00297F98);
@@ -561,6 +574,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002984E0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00298730);
 
+/* TODO(match): functional equivalent - not byte-exact (85.25%); branch-likely
+ * wall - the original's later cc1 lowers the `progress==0x14` test to `beql`
+ * (branch-likely) with the equal-path `lui %hi(g_pointLights)` in the annulled
+ * delay slot; the pinned 2.9-ee-991111 cc1 only emits a plain `beq`. Body
+ * (signed n%2 -> D_1A9428 / idx<<4 -> D_255E50) otherwise matches. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002988C8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00298918);
