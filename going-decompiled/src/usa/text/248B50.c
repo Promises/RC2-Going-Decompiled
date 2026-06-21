@@ -221,7 +221,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348D98);
  * computes the loop-end pointer in the bc1f delay slot, then keeps the float
  * compare result live across the loop; the pinned cc1 hoists the float setup
  * above the stores and re-shapes the loop entry with an extra branch. WALL:
- * instruction scheduling + branch-likely loop layout. */
+ * instruction scheduling + branch-likely loop layout.
+ * Oracle: cmp_func_00348DA0 (cmp_248B50.c) — bit-exact on real R5900. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348DA0);
 #else
@@ -401,7 +402,10 @@ void func_00348E70(GuiWidget *self) {
  * irrelevant here as each is a fixed offset) then run type-C init across the
  * seven 0x58-stride row slots starting at +0x218; returns the widget.
  * WALL: 4 callee saves ($16,$17,$18,$19) — the original packs them into a 0x30
- * frame at 8-byte slot spacing; the pinned cc1 reserves 16-byte save slots. */
+ * frame at 8-byte slot spacing; the pinned cc1 reserves 16-byte save slots. NOT
+ * oracle-seedable: its GuiElementInitTypeB/C callees store &D_1ADA38/&D_1AD9F8
+ * (absolute-address %hi/%lo symbols) which crash the cmp runner's ld
+ * --gc-sections — the same absolute-address-symbol wall as GuiQuitDialogInit. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00349200);
 #else
@@ -469,7 +473,11 @@ void SetPopupItemEnabled(GuiWidget *w, s32 idx, s32 enabled) {
 /* SetPopupItemText: record the item count at +0x4B4, then for each of `count`
  * popup rows (row slots at +0x218, stride 0x58) resolve the string id in
  * `ids[i]` via GetLocalizedString and apply it to that row's text element.
- * WALL: 3 callee saves ($16,$17,$18) — 0x20-vs-packed frame divergence. */
+ * WALL: 3 callee saves ($16,$17,$18) — 0x20-vs-packed frame divergence. NOT
+ * oracle-seedable in the current cmp link: its GetLocalizedString callee collides
+ * with the co-linked text/188858 strong body, whose own #else pulls FindTextTableEntry
+ * (INCLUDE_ASM) + &D_1A8D28 (absolute) — the ld --gc-sections absolute-symbol wall;
+ * a private mock cannot win the multiple-definition. Logic verified by asm trace. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", SetPopupItemText);
 #else
@@ -512,7 +520,8 @@ GuiWidget *func_00349E88(GuiWidget *w) {
  * w+0x50 using negative store offsets and fills the branch delay slot with the
  * pointer increment; the pinned cc1 splits the base into two registers (one for
  * the offset-0 store, one for the negative offsets). WALL: reloaded-ptr CSE /
- * base-register split. */
+ * base-register split.
+ * Oracle: cmp_func_00349E90 (cmp_248B50.c) — bit-exact on real R5900. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00349E90);
 #else
@@ -865,7 +874,8 @@ void func_0034A3C0(GuiWidget *w, s32 applyStep) {
  * Best 72%: the original preserves the widget base in a fresh register and fills
  * both bne delay slots with the pointer advances; the pinned cc1 folds the base
  * into the cursor and emits the advances before the branches. WALL: base
- * preservation + delay-slot fill. */
+ * preservation + delay-slot fill.
+ * Oracle: cmp_func_0034A658 (cmp_248B50.c) — bit-exact on real R5900. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A658);
 #else
@@ -1083,9 +1093,15 @@ void func_0034A860(GuiAnim *a) {
 #endif
 
 /* func_0034A9F8: build a list-row widget — init three type-B sub-elements
- * (+0x10/+0x5C/+0xA8) and a list-row element (+0xF4). WALL: 2 callee saves
- * ($16,$31) packed by the original into a 0x10 frame; the pinned cc1 reserves a
- * 0x20 frame. */
+ * (+0x10/+0x5C/+0xA8) and a list-row element (+0xF4) via GuiListRowElementInit,
+ * clear the +0x140 record (func_0034A1D8), then install two vtable pointers and
+ * run func_003368D0 over the +0x1CC/+0x1D0 slots: store &D_1AD8E8 at +0x1CC and
+ * &D_1AD908 at +0x1D0, finally clear four more records (+0x1D4/+0x25C/+0x2E4/
+ * +0x36C via func_0034A1D8). Returns the widget.
+ * WALL: byte-match — 2 callee saves ($16,$31) packed by the original into a 0x10
+ * frame; the pinned cc1 reserves a 0x20 frame. NOT oracle-seedable: the two
+ * &D_1AD8E8 / &D_1AD908 stores are absolute-address %hi/%lo symbols that crash
+ * the cmp runner's ld --gc-sections (the absolute-address-symbol wall). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A9F8);
 
 /* func_0034AA90: handwritten epilogue-only stump (`addiu $sp,$sp,0x20; nop`,
