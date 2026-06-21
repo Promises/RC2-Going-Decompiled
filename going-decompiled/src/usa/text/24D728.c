@@ -84,9 +84,12 @@ extern void UpdateMobyBSphereAndGrid(void *mobySub);
 
 /* List/sprite sub-widget reset helpers (text/248B50, addr 0x34A7F8/0x34A370):
  * clear an animation slot of a sub-list / sprite by flag. Forwarders only -
- * their semantics are not under test here. */
+ * their semantics are not under test here. func_0034A3B8 stores a float into the
+ * widget's +0x24 field. */
 extern void func_0034A7F8(void *list, s32 flag);
 extern void func_0034A370(void *sprite, s32 mode);
+extern void func_0034A3B8(void *widget, f32 v);
+extern void GuiElementSetVisible(GuiElement *e, s32 show);
 
 /* GuiElement list-row float-field + sub-element setters (text/235FE8):
  *   func_00336C18 returns the element's primary vec pointer (`*(void**)(e+0)`);
@@ -162,7 +165,48 @@ void func_0034D828(GuiHudManager *mgr, s32 tex, s32 activeFlag) {
 }
 #endif
 
+/* func_0034D8C8: arm the manager's six animated HUD-frame sub-widgets. Store the
+ * new active-state flag at +0x1594; then, only when the +0x1598 "needs-rearm"
+ * latch is set, clear it, hide the bolt/HUD counter element (+0x5D8) and, for
+ * each of the six 0x88-byte sub-widgets at +0xC0C/+0xC94/+0xD1C/+0xDA4/+0xE2C/
+ * +0xEB4: first re-arm its animation slot (func_0034A370(., 1)) and then seed its
+ * +0x24 per-frame step (func_0034A3B8) with a video-rate-scaled increment - PAL
+ * (g_bPalMode != 0) uses 0.140 (0x3E0F5C29), NTSC uses ~0.1166 (0x3DEEEEF0), the
+ * 50Hz/60Hz frame-period ratio so the on-screen animation runs at wall-clock
+ * speed in both regions.
+ *
+ * The original recomputes the PAL-gated literal before each of the six
+ * func_0034A3B8 calls (cc1 rematerializes the constant per call site); the value
+ * is identical every iteration, so the portable #else computes it once. `flag` is
+ * the new active-state value; `tex` is unused on this path (it is the shared
+ * sibling signature with func_0034D828). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034D8C8);
+#else
+extern s32 g_bPalMode; /* PAL video-mode flag (USA build clears it -> NTSC) */
+void func_0034D8C8(GuiHudManager *mgr, s32 flag) {
+    u8 *m = (u8 *)mgr;
+    *(s32 *)(m + 0x1594) = flag;
+    if (*(s32 *)(m + 0x1598) != 0) {
+        union { u32 u; f32 f; } step;
+        *(s32 *)(m + 0x1598) = 0;
+        GuiElementSetVisible((GuiElement *)(m + 0x5D8), 0);
+        func_0034A370(m + 0xC0C, 1);
+        func_0034A370(m + 0xC94, 1);
+        func_0034A370(m + 0xD1C, 1);
+        func_0034A370(m + 0xDA4, 1);
+        func_0034A370(m + 0xE2C, 1);
+        func_0034A370(m + 0xEB4, 1);
+        step.u = (g_bPalMode != 0) ? 0x3E0F5C29u : 0x3DEEEEF0u;
+        func_0034A3B8(m + 0xC0C, step.f);
+        func_0034A3B8(m + 0xC94, step.f);
+        func_0034A3B8(m + 0xD1C, step.f);
+        func_0034A3B8(m + 0xDA4, step.f);
+        func_0034A3B8(m + 0xE2C, step.f);
+        func_0034A3B8(m + 0xEB4, step.f);
+    }
+}
+#endif
 
 /* func_0034DAB0: drives the HUD sub-element at +0x5D8 - pad-gated "snap" tween,
  * a color-ramp tween, then writes the tween handle/alpha and sets visibility.
