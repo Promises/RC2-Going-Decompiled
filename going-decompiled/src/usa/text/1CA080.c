@@ -774,7 +774,7 @@ s32 func_002CE610(void) {
  * handler func_0029DA18 and returns 0.
  * Wall: 8-byte-packed-save (saves $16 + $31). Preserved as portable C. */
 extern void func_0028C7A8(void);
-extern void func_0029DA18(void);
+extern s32 func_0029DA18(s32 padPressed);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE618);
 #else
@@ -800,7 +800,7 @@ s32 func_002CE618(void) {
         func_0028C7A8();
         return 1;
     }
-    func_0029DA18();
+    func_0029DA18(flags);
     return 0;
 }
 #endif
@@ -870,7 +870,7 @@ s32 func_002CE8A8(s32 *out) {
  * (op = (u16)entry[0x8] at rec+0x2, arg = entry[0xC] at rec+0x4) handed to
  * func_002D6B00 (-> MenuScreenDoAction).
  * Wall: 8-byte-packed-save ($16 + $17 + $31). Preserved as portable C. */
-extern void func_0029D328(void);
+extern s32 func_0029D328(s32 padPressed);
 extern void *func_003424C8(void *widget);
 extern void func_002D6B00(void *record);
 #ifndef TARGET_NATIVE
@@ -897,7 +897,7 @@ s32 func_002CE908(void) {
     if (flags & 0x900) {
         return 1;
     }
-    func_0029D328();
+    func_0029D328(flags);
     if ((*(s32 *)(D_138180 + 0x1C4) & 0x40) && g_guiInstance) {
         u8 record[0x30];
         u8 *entry = (u8 *)func_003424C8(g_guiInstance + 0x3C160);
@@ -1000,7 +1000,7 @@ s32 func_002D0110(s32 *out) {
  * entry[0xC] at rec+0x4). When arg is 0 it plays UI sound 5, then hands the
  * record to func_002D6B00 (-> MenuScreenDoAction).
  * Wall: 8-byte-packed-save ($16 + $17 + $31). Preserved as portable C. */
-extern void func_0029D398(void);
+extern s32 func_0029D398(s32 padPressed);
 extern void PlayGlobalSound(s32 id, s32 a, s32 b);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D0158);
@@ -1026,7 +1026,7 @@ s32 func_002D0158(void) {
     if (flags & 0x900) {
         return 1;
     }
-    func_0029D398();
+    func_0029D398(flags);
     if ((*(s32 *)(D_138180 + 0x1C4) & 0x40) && g_guiInstance) {
         u8 record[0x30];
         u8 *entry = (u8 *)func_003424C8(g_guiInstance + 0x3C160);
@@ -1397,7 +1397,7 @@ s32 func_002D3BB0(void) {
  * the idle handler func_0029D4E8 and returns 0.
  * Wall: 8-byte-packed-save ($16 + $31) with the result-threaded-$16 /
  * branch-likely merge shape the later cc1 emits. Preserved as portable C. */
-extern void func_0029D4E8(void);
+extern s32 func_0029D4E8(s32 padPressed);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D3BE0);
 #else
@@ -1420,7 +1420,7 @@ s32 func_002D3BE0(void) {
     if (flags & 0x900) {
         return 1;
     }
-    func_0029D4E8();
+    func_0029D4E8(flags);
     return 0;
 }
 #endif
@@ -1442,7 +1442,7 @@ s32 func_002D3C68(void) {
  * block[0x18]); cancel returns 1; the idle path ticks func_0029D528 and returns 0.
  * Wall: 8-byte-packed-save ($16 + $31) + bnel branch-likely dead-store shape.
  * Preserved as portable C. */
-extern void func_0029D528(void);
+extern s32 func_0029D528(s32 padPressed);
 extern s32 g_health;            /* 0x18C2EC - base of the per-cutscene unlock records at +0x464 */
 extern s32 g_gsPixelOffsetY;    /* 0x1A7354 - play-count source at +0x3C */
 extern s32 g_playerProgress;    /* 0x1A79F8 - current progress slot (seen-mask bit index) */
@@ -1482,7 +1482,7 @@ s32 func_002D3C98(void) {
         MenuCutsceneUnlockCurrent();
         return 1;
     }
-    func_0029D528();
+    func_0029D528(flags);
     return 0;
 }
 #endif
@@ -1498,7 +1498,7 @@ s32 func_002D3DD8(void) {
 /* Menu confirm/cancel poll variant (idle handler func_0029D598). Same shape as
  * func_002D3F78. Wall: 8-byte-packed-save ($16 + $31) + branch-likely confirm
  * shape / single-register result threading. Preserved as portable C. */
-extern void func_0029D598(void);
+extern s32 func_0029D598(s32 padPressed);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D3E08);
 #else
@@ -1520,7 +1520,7 @@ s32 func_002D3E08(void) {
     if (flags & 0x900) {
         return 1;
     }
-    func_0029D598();
+    func_0029D598(flags);
     return 0;
 }
 #endif
@@ -1536,7 +1536,7 @@ s32 func_002D3E90(void) {
 /* Menu confirm/cancel poll variant (idle handler func_0029D608). Same shape as
  * func_002D3F78. Wall: 8-byte-packed-save ($16 + $31) + branch-likely confirm
  * shape / single-register result threading. Preserved as portable C. */
-extern void func_0029D608(void);
+extern s32 func_0029D608(s32 padPressed);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D3EC0);
 #else
@@ -1558,7 +1558,7 @@ s32 func_002D3EC0(void) {
     if (flags & 0x900) {
         return 1;
     }
-    func_0029D608();
+    func_0029D608(flags);
     return 0;
 }
 #endif
@@ -1577,7 +1577,7 @@ s32 func_002D3F48(void) {
  * ticks the idle handler func_0029D838 and returns 0.
  * Wall: 8-byte-packed-save (saves $16 + $31) + the load-PRE/branch-likely shape.
  * Preserved as portable C. */
-extern void func_0029D838(void);
+extern s32 func_0029D838(s32 padPressed);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D3F78);
 #else
@@ -1599,7 +1599,7 @@ s32 func_002D3F78(void) {
     if (flags & 0x900) {
         return 1;
     }
-    func_0029D838();
+    func_0029D838(flags);
     return 0;
 }
 #endif
@@ -1615,7 +1615,7 @@ s32 func_002D4000(void) {
 /* Menu confirm/cancel poll variant (idle handler func_0029D7C8). Same shape as
  * func_002D3F78. Wall: 8-byte-packed-save ($16 + $31) + branch-likely confirm
  * shape / single-register result threading. Preserved as portable C. */
-extern void func_0029D7C8(void);
+extern s32 func_0029D7C8(s32 padPressed);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D4030);
 #else
@@ -1637,7 +1637,7 @@ s32 func_002D4030(void) {
     if (flags & 0x900) {
         return 1;
     }
-    func_0029D7C8();
+    func_0029D7C8(flags);
     return 0;
 }
 #endif
@@ -1655,7 +1655,7 @@ s32 func_002D40B8(void) {
  * func_0029D678 and, when that signals (nonzero), fires MenuScreenDoAction(0xD,0,
  * &outFlag) — opcode 0xD is a RequestGameStateChange — with the out-flag slot
  * pre-zeroed. Wall: 8-byte-packed-save ($16 + $31). Preserved as portable C. */
-extern s32 func_0029D678(void);
+extern s32 func_0029D678(s32 padPressed);
 extern s32 MenuScreenDoAction(s32 opcode, s32 arg, s32 *outFlag);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D40E8);
@@ -1679,7 +1679,7 @@ s32 func_002D40E8(void) {
     if (flags & 0x900) {
         return 1;
     }
-    if (func_0029D678() != 0) {
+    if (func_0029D678(flags) != 0) {
         s32 outFlag = 0;
         MenuScreenDoAction(0xD, 0, &outFlag);
     }
@@ -1698,7 +1698,7 @@ s32 func_002D4188(void) {
 /* Menu confirm/cancel poll variant (idle handler func_0029D6E8). Same shape as
  * func_002D3F78. Wall: 8-byte-packed-save ($16 + $31) + branch-likely confirm
  * shape / single-register result threading. Preserved as portable C. */
-extern void func_0029D6E8(void);
+extern s32 func_0029D6E8(s32 padPressed);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D41B8);
 #else
@@ -1720,7 +1720,7 @@ s32 func_002D41B8(void) {
     if (flags & 0x900) {
         return 1;
     }
-    func_0029D6E8();
+    func_0029D6E8(flags);
     return 0;
 }
 #endif
@@ -1741,7 +1741,7 @@ s32 func_002D4240(void) {
  * widget at g_guiInstance+0x3F3F0 (func_0033F360) and builds a command record
  * (opcode = entry[0x8], arg = entry[0xC]) handed to func_002D6B00 (-> MenuScreenDoAction).
  * Wall: 8-byte-packed-save ($16 + $17 + $31). Preserved as portable C. */
-extern void func_0029D758(void);
+extern s32 func_0029D758(s32 padPressed);
 extern void *func_0033F360(void *widget);
 extern void func_002D6B00(void *record);
 #ifndef TARGET_NATIVE
@@ -1768,7 +1768,7 @@ s32 func_002D4270(void) {
     if (flags & 0x900) {
         return 1;
     }
-    func_0029D758();
+    func_0029D758(flags);
     if ((*(s32 *)(D_138180 + 0x1C4) & 0x40) && g_guiInstance) {
         u8 record[0x30];
         u8 *entry = (u8 *)func_0033F360(g_guiInstance + 0x3F3F0);
