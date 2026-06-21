@@ -251,7 +251,73 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00292510);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BindParticleFxAssets);
 
+/*
+ * g_uiTextureCache (0x1B96C0) — per-record GS-upload descriptor, 0x10 bytes.
+ * BuildUiTextureDescriptors parses the loaded WAD UI/HUD descriptor table
+ * (stride 0x10: width, height, signed dimA, signed dimB) into these records:
+ *   +0x0..0x7 zeroed (the cached TEX0 register pair, filled on first upload)
+ *   +0x8  s16  height >> 4   (texels in GS units)
+ *   +0xA  s16  width  >> 4
+ *   +0xC  u8   Log2Floor(|dimA|)   (TEX0 TW field)
+ *   +0xD  u8   Log2Floor(|dimB|)   (TEX0 TH field)
+ *   +0xE  s16  PSM: 0x13 (PSMT8) when dimA >= 0, else 0x14 (PSMT4)
+ */
+#ifdef TARGET_NATIVE
+typedef struct UiTextureRecord {
+    u8  tex0[8];   /* +0x0  cached TEX0 pair, zeroed here */
+    s16 heightHi;  /* +0x8  height >> 4 */
+    s16 widthHi;   /* +0xA  width  >> 4 */
+    u8  log2W;     /* +0xC  Log2Floor(|dimA|) */
+    u8  log2H;     /* +0xD  Log2Floor(|dimB|) */
+    s16 psm;       /* +0xE  0x13 / 0x14 */
+} UiTextureRecord;
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+_Static_assert(sizeof(UiTextureRecord) == 0x10, "UiTextureRecord 0x10");
+#endif
+extern UiTextureRecord g_uiTextureCache[];
+extern s32 g_uiTextureCount;
+extern s32 Log2Floor(s32 v);
+extern s32 func_002835E0(s32 v); /* abs(s32) */
+#endif
+
+/* BuildUiTextureDescriptors(descTable, count) — parse the loaded WAD UI/HUD
+ * texture descriptor table (stride 0x10: width, height, signed dimA, signed
+ * dimB) into g_uiTextureCache GS-upload records and set g_uiTextureCount. Each
+ * descriptor yields one record; the signed dims drive the PSM (0x13 vs 0x14)
+ * and TW/TH (Log2Floor of the magnitude). Called per level by
+ * LoadLevelAndInitHealth and by InitLoadingSceneSystem. The matching build
+ * keeps the asm (save-layout wall). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00292650);
+#else
+void func_00292650(s32 *descTable, s32 count) {
+    s32 i;
+    g_uiTextureCount = 0;
+    for (i = 0; i < count; i++) {
+        s32 width  = *descTable++;
+        UiTextureRecord *rec = &g_uiTextureCache[g_uiTextureCount];
+        s32 height = *descTable++;
+        s32 dimA   = *descTable++;
+        s32 dimB   = *descTable++;
+
+        rec->widthHi  = (s16)(width >> 4);
+        rec->heightHi = (s16)(height >> 4);
+        if (dimA >= 0) {
+            rec->psm = 0x13;
+        } else {
+            rec->psm = 0x14;
+            dimA = func_002835E0(dimA);
+            dimB = func_002835E0(dimB);
+        }
+        rec->log2W = (u8)Log2Floor(dimA);
+        rec = &g_uiTextureCache[g_uiTextureCount];
+        rec->log2H = (u8)Log2Floor(dimB);
+        rec = &g_uiTextureCache[g_uiTextureCount];
+        *(s64 *)rec->tex0 = 0;
+        g_uiTextureCount++;
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BindSkyData);
 
@@ -311,7 +377,57 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002938B0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00293B10);
 
+/*
+ * func_00293B68(groups, instMode, idMap, groupCount) — walk a table of
+ * groupCount group records (stride 0x10) and, for each, emit a sub-set of its
+ * instances (stride 0x40). Per group: word +0x4 packs {hi:hi16, total:lo16};
+ * the walked span starts at base(+0x0) + (total-hi)*0x10 and the inner loop
+ * counter steps by 4 while it is < hi (so it processes every 4th of `hi` units
+ * — one instance per step, advancing the instance pointer by 0x40 each time).
+ * The lo16 total is written back (the high half is consumed). For each
+ * instance, its material id (word +0x20) is, when non-negative, remapped
+ * through idMap (byte table); a negative id passes through. Each instance is
+ * then dispatched to func_00293438 (when instMode != 0, with the material block
+ * arg = instMode + matId*0x10 — instMode doubles as the material-block base
+ * pointer) or func_00293760 (when instMode == 0). The matching build keeps the
+ * asm (save-layout wall). */
+#ifdef TARGET_NATIVE
+extern void func_00293438(void *inst, s32 matBlock, s32 a2, s32 a3, s32 a4, s32 a5, s32 matId);
+extern void func_00293760(void *inst, s32 a1, s32 a2, s32 a3, s32 a4, s32 matId);
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00293B68);
+#else
+void func_00293B68(u8 *groups, s32 instMode, u8 *idMap, s32 groupCount) {
+    s32 g;
+    for (g = 0; g < groupCount; g++) {
+        s32 packed   = *(s32 *)(groups + 4);
+        u8 *base     = *(u8 **)(groups + 0);
+        s32 hi       = packed >> 16;
+        s32 total    = packed & 0xFFFF;
+        u8 *inst     = base + ((total - hi) << 4);
+        s32 k;
+        *(s32 *)(groups + 4) = total;
+        for (k = 0; k < hi; k += 4) {
+            s32 matId = *(s32 *)(inst + 0x20);
+            if (matId >= 0) {
+                matId = idMap[matId];
+            }
+            if (instMode != 0) {
+                func_00293438(inst, instMode + (matId << 4),
+                              *(s32 *)(inst + 0), *(s32 *)(inst + 4),
+                              *(s32 *)(inst + 0x10), *(s32 *)(inst + 0x14), matId);
+            } else {
+                func_00293760(inst, *(s32 *)(inst + 0), *(s32 *)(inst + 4),
+                              *(s32 *)(inst + 0x10), *(s32 *)(inst + 0x14), matId);
+            }
+            inst += 0x40;
+        }
+        groups += 0x10;
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", RelocateMobyClassChunk);
 
@@ -319,7 +435,58 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00293D68);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", FixupMobyClassHeader);
 
+/*
+ * Moby-class slot registry tables (one entry per loaded class slot):
+ *   g_mobyClassSlotRemap  (0x1CE460) u8[0x2000]  classId -> slot, 0xFF = unloaded
+ *   g_mobyClassSlotToId   (0x1CE280) s16[]        slot -> classId (read signed)
+ *   g_mobyClassHeaders    (0x1CDB00) void*[]      loaded header ptr per slot
+ *   g_mobyClassDataSizes  (0x1D0D80) u32[]        per-slot data size
+ *   g_mobyClassCount      (0x1B1AC0) s32          next free header-class slot
+ *   g_mobyClassCountNoHeader (0x1B1AC4) s32       headerless-class slot counter
+ */
+#ifdef TARGET_NATIVE
+extern u8    g_mobyClassSlotRemap[];
+extern s16   g_mobyClassSlotToId[];
+extern void *g_mobyClassHeaders[];
+extern u32   g_mobyClassDataSizes[];
+extern s32   g_mobyClassCount;
+extern s32   g_mobyClassCountNoHeader;
+extern void  BindMobyClassUpdateFunc(s32 classId, s32 headerless);
+extern void  FixupMobyClassHeader(void *hdr, s32 arg2, s32 arg3, s32 classId);
+#endif
+
+/* RegisterMobyClass(hdr, arg2, arg3, classId) — assign a class slot to classId
+ * and fill the registry tables. With a null header it takes a slot from
+ * g_mobyClassCountNoHeader and only records the remap byte (the headerless
+ * update fn is bound). With a real header it takes the next g_mobyClassCount
+ * slot, records remap/reverse-map/header/data-size (data size = header byte
+ * +0x2D << 10, or 0x100000 when that byte is 0xFF), binds the update fn, then
+ * FixupMobyClassHeader rebases the header offsets. The matching build keeps the
+ * asm (save-layout wall). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", RegisterMobyClass);
+#else
+void RegisterMobyClass(u8 *hdr, s32 arg2, s32 arg3, s32 classId) {
+    if (hdr == 0) {
+        s32 slot = g_mobyClassCountNoHeader;
+        BindMobyClassUpdateFunc(classId, 1);
+        g_mobyClassSlotRemap[classId] = (u8)slot;
+        g_mobyClassCountNoHeader = slot + 1;
+    } else {
+        s32 slot = g_mobyClassCount;
+        g_mobyClassSlotRemap[classId] = (u8)slot;
+        g_mobyClassSlotToId[slot] = (s16)classId;
+        g_mobyClassHeaders[slot] = hdr;
+        g_mobyClassDataSizes[slot] = (u32)hdr[0x2D] << 10;
+        if (hdr[0x2D] == 0xFF) {
+            g_mobyClassDataSizes[slot] = 0x100000;
+        }
+        BindMobyClassUpdateFunc(classId, 0);
+        g_mobyClassCount = slot + 1;
+        FixupMobyClassHeader(hdr, arg2, arg3, classId);
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294268);
 
@@ -335,7 +502,73 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", StreamSceneSegm
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BindSceneChunk);
 
+/*
+ * LoadGlobalDialogScene(sceneIndex, mode) — stream a GLOBAL cinematic/dialog
+ * scene chunk and build its sub-chunk pointer table. The g_globalSceneToc lives
+ * inside g_discToc: per-scene {lbnOffset@+0x3E28, sectorCount@+0x3E2C} at
+ * stride 8, plus the shared base LBN at +0x3E24 (g_sceneWadBaseLbn). The scene
+ * descriptor block is g_cameraSlotActive+0x990: +0x70 = load buffer ptr
+ * (g_pSceneLoadBuffer), +0x30 = current scene index, +0x74[] = up to 0x46
+ * sub-chunk pointers (each sub-chunk starts at buffer + entry[0] + 0x800,
+ * advancing through the loaded header entries until a zero entry[1]).
+ *
+ * mode 0 just records the scene index; nonzero additionally pumps the dialog
+ * voice and fades to black before kicking. The voice pump runs once more
+ * (blocking) after the load is requested. The matching build keeps the asm
+ * (save-layout wall). */
+#ifdef TARGET_NATIVE
+extern s32  g_discToc[];          /* 0x14B540 master disc asset directory */
+extern u8   g_cameraSlotActive[]; /* 0x1B7E30 (scene desc block at +0x990) */
+extern s32  StartFileLoad(s32 dest, s32 lbn, s32 sectors);
+extern void FadeOutToBlackBlocking(s32 frames);
+/* PumpDialogVoiceSystem declared via the cmp mock / matched build extern. */
+extern void PumpDialogVoiceSystem(s32 blocking);
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadGlobalDialogScene);
+#else
+void LoadGlobalDialogScene(s32 sceneIndex, s32 mode) {
+    u8 *toc  = (u8 *)g_discToc;
+    s32 *desc = (s32 *)&g_cameraSlotActive[0x990];
+    s32 lbnOff   = *(s32 *)(toc + sceneIndex * 8 + 0x3E28);
+    s32 baseLbn  = *(s32 *)(toc + 0x3E24);
+    s32 sectors  = *(s32 *)(toc + sceneIndex * 8 + 0x3E2C);
+    s32 *entry;
+    s32 i;
+
+    StartFileLoad(desc[0x70 / 4], lbnOff + baseLbn, sectors);
+    if (mode != 0) {
+        PumpDialogVoiceSystem(0);
+        FadeOutToBlackBlocking(mode);
+    }
+    desc[0x30 / 4] = sceneIndex;
+
+    PumpDialogVoiceSystem(1);
+    entry = (s32 *)desc[0x70 / 4];
+    if (entry[1] == 0) {
+        return;
+    }
+    {
+        s32 entryWord0 = entry[0];   /* ofs source carried into the loop top */
+        i = 0;
+        for (;;) {
+            s32 ofs;
+            entry += 2;                       /* advance to the next entry */
+            ofs = entryWord0 + 0x800;
+            desc[0x74 / 4 + i] = desc[0x70 / 4] + ofs;
+            i++;
+            if (i >= 0x46) {
+                break;
+            }
+            if (entry[1] == 0) {
+                break;
+            }
+            entryWord0 = entry[0];
+        }
+    }
+}
+#endif
 
 #ifndef TARGET_NATIVE
 /* TODO(match): functional equivalent - not byte-exact (87.5%); save-layout wall
