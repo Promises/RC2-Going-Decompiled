@@ -1220,6 +1220,7 @@ g_tieVramLruHead = 0x001B2160; // PARTIAL - LRU head
 g_tieVramLruTail = 0x001B2164; // PARTIAL - LRU tail
 g_tieVramLruSize = 0x001B2168; // PARTIAL - LRU size
 g_cinematicSceneParams = 0x001B2188; // CONFIRMED - cinematic scene parameter array (g_tieVramLruSize + 0x20), entries [0]..[5] at +0x20..+0x34, written by the 1EFFC0 cinematic-launch native #else bodies. Harness-bind target for the tester cinematic validations
+g_pendingStateArgA = 0x001ABE00; // CONFIRMED - stashed state-change argA, sibling of g_pendingStateArgB (0x1ABE04), both pushed by HideAllMobysAndPushState and read back when the deferred RequestGameStateChange fires. Harness-bind target for the tester
 g_pendingStateArgB = 0x001ABE04; // CONFIRMED - stashed state-change argB saved on the RequestGameStateChange path and read back when the deferred state change fires, used by the 1DFF80 cinematic/state native #else bodies. Harness-bind target for the tester
 g_tieTexVramTable = 0x0021D000; // CONFIRMED - tie texture VRAM table
 g_tieVisibleClassList = 0x0021D600; // CONFIRMED - negative-terminated visible tie class index list
