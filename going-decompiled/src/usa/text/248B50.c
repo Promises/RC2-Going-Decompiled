@@ -46,6 +46,42 @@ typedef struct GuiWidget {
     /* 0x150 */ s32 unk150;
 } GuiWidget;
 
+/* GuiAnim — the animated sub-widget the func_0034A7F8 / func_0034A860 / func_0034A3C0
+ * family drives (a SEPARATE field layout from GuiWidget: its progress lives at
+ * +0x10, not +0x18). It is a scalar Hermite-eased transition over a small table
+ * of keyframe records.
+ *   +0x00 c0    first control point (Hermite arg 2)
+ *   +0x04 c1    second control point (Hermite arg 3)
+ *   +0x08 c2    extra control point (used by the +0x20 callback path)
+ *   +0x0C c3    extra control point
+ *   +0x10 progress   eased phase in [0,1] (f32; reset stores integer 0)
+ *   +0x14 dir        play direction (+1 forward / -1 reverse / 0 idle)
+ *   +0x18 step       per-frame phase increment (f32)
+ *   +0x1C active     non-zero while the transition is running
+ *   +0x20 sink       optional s32* the blended colour word is written through
+ *   +0x24 keyframe table base — records the per-channel lerp endpoints walk
+ *   +0x8C colorA / +0x90 colorB   packed colour words blended by func_002846E8 */
+typedef struct GuiAnim {
+    /* 0x00 */ f32 c0;
+    /* 0x04 */ f32 c1;
+    /* 0x08 */ f32 c2;
+    /* 0x0C */ f32 c3;
+    /* 0x10 */ f32 progress;
+    /* 0x14 */ s32 dir;
+    /* 0x18 */ f32 step;
+    /* 0x1C */ s32 active;
+    /* 0x20 */ s32 *sink;
+    /* 0x24 */ u8 keyframes[0x68];
+    /* 0x8C */ u32 colorA;
+    /* 0x90 */ u32 colorB;
+} GuiAnim;
+
+/* Guard the layout assert on C11: the ee-gcc 2.9 (C89) matching toolchain lacks
+ * _Static_assert and would emit a parse error; the host clang gate (C11) checks it. */
+#if defined(TARGET_NATIVE) && defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+_Static_assert(sizeof(GuiAnim) == 0x94, "GuiAnim layout");
+#endif
+
 /* player character/control mode (0x18C0D4): 0 Ratchet, 1 Clank-solo, 2 Giant Clank. */
 extern u8 g_bPlayerMode;
 
@@ -58,6 +94,7 @@ extern u8 *g_guiInstance;
  * so the ILP32 compile gate sees their real signatures (not an implicit int()). */
 void func_0034A318(GuiWidget *w, s32 idx, f32 a, f32 b, f32 c, f32 d, f32 e);
 void func_0034A350(GuiWidget *w, s32 idx, f32 a, f32 b);
+void func_0034A7B0(GuiWidget *w, s32 idx1, s32 idx2, f32 a, f32 b, f32 c, f32 d);
 
 /* game callees used by GuiMenuListDraw (func_00348E70). Declared here (not in a
  * central header) with their real signatures so the ILP32 gate sees them; they
@@ -76,6 +113,13 @@ void func_0027F168(s32 x1, s32 y1, s32 x2, s32 y2, s64 z, u64 tex0);
 /* func_0027F790: the unconditional tail call; real defined symbol (returns s32,
  * called for side effect). Identity not yet confirmed - keep the func_ name. */
 s32 func_0027F790(void);
+
+/* callees used by the GuiAnim transition family (func_0034A860 / func_0034A3C0). */
+/* GuiHermiteInterp(t, c0, c1, c2, c3): cubic Hermite blend (0x34FBC0). */
+f32 GuiHermiteInterp(f32 t, f32 c0, f32 c1, f32 c2, f32 c3);
+/* func_002846E8(colorA, colorB, t): per-channel byte lerp of two packed colour
+ * words by phase t (0x2846E8); returns the blended word. */
+u32 func_002846E8(u32 colorA, u32 colorB, f32 t);
 #endif
 
 /* func_00348BD0: run the type-C element init on the widget and return it.
@@ -640,10 +684,40 @@ void func_0034A658(GuiWidget *w) {
  * no prologue, no `jr ra`). WALL: split-artifact stub. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A6A8);
 
-/* func_0034A6B0: initialise a transform/animation record (+0x0..+0x28) and call
- * func_0034A7B0 four times to seed its float sub-records. WALL: callee saves
- * ($16,$31) plus a saved $f20 — frame-layout divergence (0x20 vs packed). */
+/* func_0034A6B0: reset a 2x2 GuiWidget transform/animation record to its
+ * neutral pose. It clears the integer header (+0x10 cursor, +0x1C..+0x28 state
+ * to 0), seeds +0xC = 1.0, the three scale fields +0x0/+0x4/+0x8 = 1.0, and the
+ * per-frame step +0x18 = 0.066668 (0x3D88882F); then it zeroes the four 4-float
+ * sub-records via func_0034A7B0 for each (idx1,idx2) in {(0,0),(0,1),(1,0),
+ * (1,1)} (all four record vectors written 0).
+ *
+ * WALL: callee saves ($16,$31) plus a saved $f20 reloaded as the 0.0 constant —
+ * the original keeps the just-stored +0x10 zero live in $f20 across all four
+ * calls; the pinned cc1 reserves a 0x20 frame and re-materialises 0.0. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A6B0);
+#else
+void func_0034A6B0(GuiWidget *w) {
+    union { u32 u; f32 f; } step;
+    step.u = 0x3D88882Fu;   /* per-frame animation step, exact bits from the .s */
+
+    *(s32 *)((char *)w + 0x10) = 0;     /* cursor (integer 0) */
+    w->unk1C = 0;
+    w->unk20 = 0;
+    w->unk24 = 0.0f;
+    w->unk28 = 0;
+    *(f32 *)((char *)w + 0xC) = 1.0f;
+    w->unk18 = step.f;
+    w->unk00 = 1.0f;
+    *(f32 *)((char *)w + 0x4) = 1.0f;
+    *(f32 *)((char *)w + 0x8) = 1.0f;
+
+    func_0034A7B0(w, 0, 0, 0.0f, 0.0f, 0.0f, 0.0f);
+    func_0034A7B0(w, 0, 1, 0.0f, 0.0f, 0.0f, 0.0f);
+    func_0034A7B0(w, 1, 0, 0.0f, 0.0f, 0.0f, 0.0f);
+    func_0034A7B0(w, 1, 1, 0.0f, 0.0f, 0.0f, 0.0f);
+}
+#endif
 
 /* func_0034A798: handwritten epilogue-only stump (`addiu $sp,$sp,0x10; nop`,
  * no prologue, no `jr ra`). WALL: split-artifact stub. */
@@ -676,13 +750,31 @@ void func_0034A7E8(GuiWidget *w, s32 idx, s32 v) {
     *(s32 *)((char *)w + (idx << 2) + 0x8C) = v;
 }
 
-/* func_0034A7F8: set +0x10 enable float (1.0 when flag set else 0.0), then
- * +0x1C = 1 and +0x14 = 1. Best 99.8% (re-confirmed 2026-06-20): every
- * instruction matches; the original fills the jr delay slot with the +0x14
- * store (+0x1C stored first), but this unit's cc1 always emits +0x14 first and
- * sinks +0x1C into the delay slot regardless of C statement order. WALL:
- * trailing-store delay-slot fill. */
+/* func_0034A7F8: arm the GuiAnim transition forward. Set the progress field
+ * +0x10 (integer 0 when flag is 0, else 1.0f), then mark it active (+0x1C = 1)
+ * and forward-playing (+0x14 = 1). The polarity is the mirror of func_0034A820
+ * (which stores 1.0 when flag clear and sets dir = -1).
+ *
+ * The flag test is a branch-likely (`beql $5,$0`): the int-0 store sits in the
+ * taken delay slot, so flag==0 stores an *integer* 0 and flag!=0 stores 1.0f.
+ *
+ * Best 99.8% byte-match: every instruction matches; the original fills the jr
+ * delay slot with the +0x14 store (+0x1C stored first), but this unit's cc1
+ * always emits +0x14 first and sinks +0x1C into the delay slot regardless of C
+ * statement order. WALL: trailing-store delay-slot fill. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A7F8);
+#else
+void func_0034A7F8(GuiAnim *a, s32 flag) {
+    if (flag == 0) {
+        *(s32 *)((char *)a + 0x10) = 0;
+    } else {
+        a->progress = 1.0f;
+    }
+    a->active = 1;
+    a->dir = 1;
+}
+#endif
 
 /* func_0034A820: set +0x10 enable float (1.0 when flag clear else integer 0),
  * then +0x1C = 1 and +0x14 = -1. Best 80%: same trailing-store slot fill plus a
@@ -706,7 +798,75 @@ void func_0034A858(GuiWidget *w, f32 v) {
     w->unk18 = v;
 }
 
+/* func_0034A860: per-frame tick of a GuiAnim transition. No-op while inactive
+ * (+0x1C == 0). Otherwise it advances the eased phase, blends two keyframe
+ * 4-vectors, and (optionally) blends a colour word:
+ *
+ *  1. Advance the phase by the per-frame step (+0x18): forward (dir +0x14 == 1)
+ *     adds and clamps the top to 1.0; reverse adds nothing — it subtracts and
+ *     clamps the bottom to 0.0. The active flag (+0x1C) stays set only while the
+ *     phase is still inside [0,1]; it clears on the frame the phase saturates.
+ *     (The asm writes the un-clamped phase then immediately overwrites it with
+ *     the clamped value, so only the clamped phase survives.)
+ *  2. t = GuiHermiteInterp(phase, 0, c0, c1, 1) — the eased blend factor.
+ *  3. For each of the two keyframe channels i (dst ptr at +0x24/+0x28): when the
+ *     dst pointer is non-null, lerp the 4-vector  dst[k] = (1-t)*from[k] + t*to[k]
+ *     where  from = anim + 0x3C + i*0x10  and  to = anim + 0x6C + i*0x10.
+ *  4. If the colour sink (+0x20) is non-null, blend the two packed colour words
+ *     (+0x8C,+0x90) by a SECOND Hermite ease (over c2,c3) via func_002846E8 and
+ *     store the result through the sink.
+ *
+ * WALL: 99.x near-miss — the original keeps the saved $f20 (1.0) live across the
+ * whole body and fills both bc1t/beql delay slots with the dead un-clamped store
+ * / pointer advance; the pinned cc1 reloads 1.0 and reorders the clamp stores.
+ * Scalar f32 throughout (no VU0) so the #else is bit-exact. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A860);
+#else
+void func_0034A860(GuiAnim *a) {
+    f32 phase;
+    f32 clamped;
+    f32 t;
+    s32 stillActive;
+    s32 i;
+
+    if (a->active == 0) {
+        return;
+    }
+
+    if (a->dir == 1) {
+        phase = a->progress + a->step;
+        stillActive = (phase <= 1.0f) ? 1 : 0;
+        clamped = (phase <= 1.0f) ? phase : 1.0f;   /* min(phase, 1.0) */
+    } else {
+        phase = a->progress - a->step;
+        stillActive = (0.0f <= phase) ? 1 : 0;
+        clamped = (0.0f <= phase) ? phase : 0.0f;   /* max(phase, 0.0) */
+    }
+    a->active = stillActive;
+    a->progress = clamped;
+
+    t = GuiHermiteInterp(clamped, 0.0f, a->c0, a->c1, 1.0f);
+
+    for (i = 0; i < 2; i++) {
+        f32 *dst = *(f32 **)((char *)a + 0x24 + i * 4);
+        if (dst != 0) {
+            f32 *from = (f32 *)((char *)a + 0x3C + i * 0x10);
+            f32 *to   = (f32 *)((char *)a + 0x6C + i * 0x10);
+            f32 coF = 1.0f - t;
+            dst[0] = coF * from[0] + t * to[0];
+            dst[1] = coF * from[1] + t * to[1];
+            dst[2] = coF * from[2] + t * to[2];
+            dst[3] = coF * from[3] + t * to[3];
+        }
+    }
+
+    if (a->sink != 0) {
+        f32 ct = GuiHermiteInterp(clamped, 0.0f, a->c2, a->c3, 1.0f);
+        *a->sink = (s32)func_002846E8(a->colorA, a->colorB, ct);
+    }
+}
+#endif
 
 /* func_0034A9F8: build a list-row widget — init three type-B sub-elements
  * (+0x10/+0x5C/+0xA8) and a list-row element (+0xF4). WALL: 2 callee saves
