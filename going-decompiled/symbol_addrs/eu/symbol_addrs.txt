@@ -129,6 +129,11 @@ CalcSaveSectionsSize = 0x0029B810; // CONFIRMED - serialized byte size of a desc
 BuildSaveImage = 0x0029B738; // CONFIRMED - builds in-RAM save image from live globals (USA 0x29bb90)
 SaveLoadStateMachine = 0x00299898; // CONFIRMED - per-frame memcard save/load driver (drives McOpen/McRead/McWrite) (USA 0x299cf0)
 CommitProgressCheckpoint = 0x0029BD78; // CONFIRMED - stages checkpoint, arms a write (USA 0x29c1d0)
+ComputeSaveSectionsCrc16 = 0x0029B848; // type:func CONFIRMED - MSB-first non-reflected CRC-16 (seed 0xEDB88320 low16, poly 0x1F45) over a save image, length-guarded by CalcSaveSectionsSize. body identical to USA modulo +0x80 data lo (USA 0x29bca0, delta -0x458)
+VerifySaveHeaderChecksum = 0x0029B8F0; // type:func CONFIRMED - validates a save header block (+0 len, +4 stored CRC, +8 data) via ComputeSaveSectionsCrc16. SaveLoadStateMachine case 0x1B (exact) (USA 0x29bd48, delta -0x458)
+FillSaveSlotInfo = 0x0029BA48; // type:func CONFIRMED - fills one entry of the save-slot info display table 0x139490 (stride slot*0xA0 + dir*0x1C) from a save header image, valid-flag from VerifySaveHeaderChecksum. Reached via SaveLoadStateMachine shared dispatch (cases 0x17 and 0xE both route through it) (USA 0x29bea0, delta -0x458)
+ResetLoadedVariantCache = 0x0029BFC0; // type:func CONFIRMED - resets loaded-save model/variant bookkeeping (4 dwords to -1, 1 to 0) after a successful load. Reached via SaveLoadStateMachine shared dispatch (cases 0x17 and 0xE). EU twin of USA func_0029C418 (matched in USA, kept func_ named there) (USA 0x29c418, delta -0x458)
+g_saveSlotInfoTable = 0x00139490; // CONFIRMED - per-slot save-info display table written by FillSaveSlotInfo - card-slot stride 0xA0, dir-entry stride 0x1C, +0 valid-flag (USA 0x139410, +0x80)
 
 // === Track-B PlayerStats globals (EU mirror, persistent save block @0x1A7A78). Whole block is +0x80 vs USA. g_boltCount + g_miscExtras + g_equippedArmor + g_maxHealth signature-verified via CollectBolts/VendorPurchaseStateMachine/UpdateNanotechOrb/LoadLevelAndInitHealth; rest derived by block offset. ===
 g_boltCount = 0x001A7A80; // CONFIRMED - u32 currency, add path CollectBolts, spend path VendorPurchaseStateMachine (USA 0x1a7a00)

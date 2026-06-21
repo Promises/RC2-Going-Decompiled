@@ -192,6 +192,11 @@ CalcSaveSectionsSize = 0x0029BC68; // serialized byte size of a descriptor table
 BuildSaveImage = 0x0029BB90; // builds in-RAM save image from live globals
 SaveLoadStateMachine = 0x00299CF0; // per-frame memcard save/load driver
 CommitProgressCheckpoint = 0x0029C1D0; // stages checkpoint, arms a write
+ComputeSaveSectionsCrc16 = 0x0029BCA0; // type:func CONFIRMED - MSB-first non-reflected CRC-16 (seed 0xEDB88320 low16, poly 0x1F45) over a save image, length-guarded by CalcSaveSectionsSize. Called by VerifySaveHeaderChecksum. EU twin 0x29B848 delta -0x458
+VerifySaveHeaderChecksum = 0x0029BD48; // type:func CONFIRMED - validates a save header block (+0 len, +4 stored CRC, +8 data) via ComputeSaveSectionsCrc16. Used by SaveLoadStateMachine case 0x1B (exact) on the loaded dir image 0x1A2BB0 and by FillSaveSlotInfo. EU twin 0x29B8F0 delta -0x458
+FillSaveSlotInfo = 0x0029BEA0; // type:func CONFIRMED - fills one entry of the save-slot info display table 0x139410 (stride slot*0xA0 + dir*0x1C) from a save header image, valid-flag from VerifySaveHeaderChecksum. Reached via SaveLoadStateMachine shared dispatch 0x29AD58 (cases 0x17 and 0xE both route through it). EU twin 0x29BA48 delta -0x458
+// func_0029C418 (0x0029C418, EU twin 0x29BFC0 delta -0x458) is already MATCHED real C in src/usa/text/198FA0.c - resets loaded-save model/variant bookkeeping after a load. Intentionally NOT pinned with a descriptive name - renaming a matched function desyncs its frozen nonmatchings .s. Identity lives in its doc comment.
+g_saveSlotInfoTable = 0x00139410; // CONFIRMED - per-slot save-info display table, written by FillSaveSlotInfo and SaveLoadStateMachine - card-slot stride 0xA0, dir-entry stride 0x1C - +0 valid-flag (checksum ok), then header fields copied from the save image. EU twin 0x139490 (+0x80)
 
 // === Track-B 989snd sound subsystem (block 0x131DE8..0x133160). ===
 snd_BankLoadByLoc = 0x00132318; // type:func CONFIRMED (own strings) - sync bank load by CD loc, rpc#3
