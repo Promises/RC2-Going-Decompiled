@@ -1051,9 +1051,64 @@ f32 func_002AB1A8(s32 *p, s32 target, s32 rate) {
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB208);
 
+/* func_002AB210: critically-damped scalar approach. Integrates a spring step
+ * toward `target` into the velocity *vel (func_002AB000 with the stiffness/
+ * damping/dt triple b/c/d), advances *p by the new velocity, and returns the
+ * residual signed distance to the target. When that residual falls below a
+ * dt-scaled epsilon (d * 0.01) the value snaps exactly to target and the
+ * velocity is zeroed (returning 0). Scalar twin of the Vec4 func_002AB2C0 just
+ * below. Walled: $f20-$f22 + $16/$17/$31 saves (save-layout wall). b/c arrive
+ * in $f13/$f14, d in $f15. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB210);
+#else
+f32 func_002AB210(f32 *p, f32 *vel, f32 target, f32 b, f32 c, f32 d) {
+    f32 residual;
 
+    func_002AB000(vel, target - *p, b, c, d);
+    *p = *p + *vel;
+    residual = target - *p;
+    if (GetFloatAbs(residual) < d * 0.009999999776f) {   /* 0x3C23D70A */
+        *p = target;
+        *vel = 0.0f;
+        return *vel;
+    }
+    return residual;
+}
+#endif
+
+/* func_002AB2C0: critically-damped Vec4 approach. Drives the position `cur`
+ * toward `target` along the connecting direction, integrating the scalar
+ * approach speed into *vel via the spring step (func_002AB000 over the current
+ * separation distance, with stiffness/damping/dt b/c/eps). The direction vector
+ * is rescaled to the new speed and added back onto `cur`. Returns the residual
+ * separation (distance - speed); when that drops below a dt-scaled epsilon
+ * (eps * 0.01) the position snaps to `target` (full Vec4 copy) and the velocity
+ * is zeroed (returning 0). Vec4 twin of the scalar func_002AB210 above. Walled:
+ * $f20-$f22 + $16/$17/$18/$31 saves (save-layout wall). b/eps arrive in
+ * $f12/$f14, c in $f13. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB2C0);
+#else
+f32 func_002AB2C0(Vec4 *cur, Vec4 *target, f32 *vel, f32 b, f32 c, f32 eps) {
+    Vec4 dir;
+    f32 dist;
+    f32 residual;
+
+    Vec4SubVu0(&dir, target, cur);
+    dist = Vec3LengthVu0(&dir);
+    func_002AB000(vel, dist, b, c, eps);
+    Vec3RescaleToLenVu0(&dir, *vel, &dir);
+    Vec4AddVu0(cur, cur, &dir);
+    residual = dist - *vel;
+    if (GetFloatAbs(residual) < eps * 0.009999999776f) {   /* 0x3C23D70A */
+        *cur = *target;
+        *vel = 0.0f;
+        return *vel;
+    }
+    return residual;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB3B0);
 
