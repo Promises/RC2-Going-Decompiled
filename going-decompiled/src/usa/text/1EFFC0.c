@@ -242,8 +242,50 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F5DF8);
 /* TODO(hle): needs PS2 graphics/IO HLE backend - hand-written tie VRAM-slot LRU state-machine update (sh/lbu bit packing). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F5F70);
 
-/* TODO(match): functional equivalent pending - multi-absolute-%hi global stores + gp-mix; clears the per-frame FX/draw-hook queues. */
+/* Per-frame reset of the FX / draw-hook queue counters. Zeroes all five hook
+ * counts (pre/post/late particle + after-ties/after-shrubs draw) and the blob
+ * shadow count. Then, only while the player is in Clank-solo mode
+ * (g_bPlayerMode == 1) and not in a pad-suppressed / menu-overlay state
+ * (D_138320 bit 0x10 clear, and neither the committed nor pending top-level
+ * state is the in-game pause overlay 4), clears HUD CLUT slot halfwords
+ * [+4,+6,+8,+0xA,+0xC].
+ *
+ * NOT byte-matched: the original TU reaches g_nGameState / g_nGameStatePending
+ * with %gp_rel HERE, but func_002F6B68 (already matched) reaches the SAME two
+ * symbols with absolute %hi/%lo - one symbol, two addressings in one TU (the
+ * reload artifact). Sizing them to match func_002F6B68 forces this read
+ * absolute, so the encodings here diverge. Body is otherwise
+ * instruction-identical; kept as the portable #else impl. */
+extern s32 g_fxHooksPreCount;            /* 0x1B1588 */
+extern s32 g_fxHooksPostCount;           /* 0x1B158C */
+extern s32 g_fxHooksLateCount;           /* 0x1B15B8 */
+extern s32 g_drawHooksAfterTiesCount;    /* 0x1B1590 */
+extern s32 g_drawHooksAfterShrubsCount;  /* 0x1B1594 */
+extern s32 g_blobShadowCount;            /* 0x1B15BC gp_rel */
+extern u8  g_bPlayerMode;                /* 0x18C0D4 0=Ratchet 1=Clank-solo 2=Giant */
+extern u32 D_138320;                     /* 0x138320 pad/input state word */
+extern s16 g_hudClutSlots[];             /* 0x1B1818 HUD CLUT slot table */
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", ResetFxDrawQueues);
+#else
+void ResetFxDrawQueues(void) {
+    g_fxHooksPreCount = 0;
+    g_drawHooksAfterTiesCount = 0;
+    g_drawHooksAfterShrubsCount = 0;
+    g_fxHooksPostCount = 0;
+    g_fxHooksLateCount = 0;
+    g_blobShadowCount = 0;
+    if (g_bPlayerMode == 1 && !(D_138320 & 0x10) &&
+        g_nGameState != 4 && g_nGameStatePending != 4) {
+        g_hudClutSlots[2] = 0;  /* +0x4 */
+        g_hudClutSlots[3] = 0;  /* +0x6 */
+        g_hudClutSlots[4] = 0;  /* +0x8 */
+        g_hudClutSlots[5] = 0;  /* +0xA */
+        g_hudClutSlots[6] = 0;  /* +0xC */
+    }
+}
+#endif
 
 /* TODO(match): functional equivalent pending - bc1fl float-equal chain + gp/absolute mix; per-frame map/timer bookkeeping. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6110);
@@ -295,13 +337,139 @@ s32 func_002F6B68(void) {
 }
 
 /* TODO(match): functional equivalent pending - marks a cinematic id unlocked then enqueues+starts it; multi callee-save + gp/absolute mix. */
+/* Unlock + start a cinematic by id. Negative ids are a no-op (just clears the
+ * scene param slot). Otherwise: map the id to its asset-table index, mark it
+ * watched in g_cinematicUnlockedFlags (only for ids < 0xB1), reset the
+ * cinematic queue (func_00289560), then dispatch the scene via func_002F6C78
+ * with parameters pulled from this cinematic's g_discToc directory entry. The
+ * 5th param (flag) is 1 only for the special id 0xBF; the language param is
+ * forced to 0 while a queued cinematic is already busy.
+ *
+ * NOT byte-matched: 4 GPR saves (s0-s2 + ra) hit the 8-byte-packed-save wall,
+ * and g_cinematicSceneParams (g_tieVramLruSize + 0x24) is reached %gp_rel here
+ * vs absolute elsewhere - the same-symbol reload artifact. Body is otherwise
+ * instruction-identical; kept as the portable #else impl. */
+s32 MapCinematicIdToIndex(s32 cinId);
+void func_00289560(void *queue);
+void func_002F6C78(s32 p0, s32 p1, s32 p2, s32 p3, s32 p4);
+extern u32 g_cinematicUnlockedFlags[]; /* 0x139768 watched-cinematics bitfield */
+extern u8  g_discToc[];                /* 0x14B540 master disc asset directory */
+extern u8  g_currentLanguage;          /* 0x1A7BBC language index */
+/* Cinematic-scene start param block at g_tieVramLruSize + 0x20 (0x1B2188). */
+extern s32 g_cinematicSceneParams[];   /* [0]=+0x20 .. [4]=+0x30, [5]=+0x34 */
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6B98);
+#else
+void func_002F6B98(s32 cinId) {
+    s32 idx;
+    s32 flag;
+    s32 lang;
+    u8 *entry;
 
-/* TODO(match): functional equivalent pending - stores the 5 cinematic-scene start params + tears down audio/fade; 5 callee-saves. */
+    if (cinId < 0) {
+        g_cinematicSceneParams[1] = 0; /* +0x24 */
+        return;
+    }
+    idx = MapCinematicIdToIndex(cinId);
+    flag = (cinId == 0xBF) ? 1 : 0;
+    if ((u32)cinId < 0xB1) {
+        /* asm: srl 2 / sll 2 -> word index cinId>>2 (NOT >>5; non-standard
+         * overlapping bitfield), bit cinId & 0x1F (sllv). */
+        g_cinematicUnlockedFlags[cinId >> 2] |= 1u << (cinId & 0x1F);
+    }
+    func_00289560(g_cinematicQueue);
+    entry = g_discToc + idx * 0x10;
+    lang = (*(s32 *)g_cinematicQueue != 0) ? 0 : g_currentLanguage;
+    func_002F6C78(*(s32 *)(entry + 0x10) + *(s32 *)(g_discToc + 4),
+                  *(s32 *)(entry + 0x14),
+                  (s32)(entry + 8),
+                  lang,
+                  flag);
+}
+#endif
+
+/* Begin a cinematic scene: set the listener flag bit, run the scene-prep
+ * callbacks (func_00133710 / func_0011AEA0), tear down all sound emitters and
+ * the dialog voice channels, latch the five caller-supplied scene-start params
+ * (plus the saved CD read-mode field) into the cinematic-scene param block,
+ * fade to black, and clear the active subtitle.
+ *
+ * NOT byte-matched: 5 GPR saves (s0-s4 + ra) hit the 8-byte-packed-save wall,
+ * and the param block is reached with mixed absolute %hi/%lo and %gp_rel
+ * (g_tieVramLruSize + 0x30) - the same-symbol reload artifact. Body is
+ * otherwise instruction-identical; kept as the portable #else impl. */
+void func_00133710(s32 a, s32 b, s32 c, s32 d, s32 e);
+void StopAllSoundEmitters(void);
+void ResetDialogVoiceChannels(void);
+void func_002898E0(void);
+extern s16 g_cdReadMode;              /* 0x1A63E8 sceCdRMode (+0x8 = datapattern hw) */
+extern u8 g_listenerPosHistory[];    /* 0x188660 listener pos ring + flags */
+/* Cinematic-scene start param block at g_tieVramLruSize + 0x20 (0x1B2188). */
+extern s32 g_cinematicSceneParams[];  /* [0]=+0x20 .. [4]=+0x30, [5]=+0x34 */
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6C78);
+#else
+void func_002F6C78(s32 p0, s32 p1, s32 p2, s32 p3, s32 p4) {
+    g_listenerPosHistory[0x6B] |= 0x8;
+    func_00133710(2, 0, 0, 0, 0);
+    func_0011AEA0(0);
+    StopAllSoundEmitters();
+    ResetDialogVoiceChannels();
+    g_cinematicSceneParams[0] = p0;                              /* +0x20 */
+    g_cinematicSceneParams[5] = *(s16 *)((u8 *)&g_cdReadMode + 8); /* +0x34 */
+    g_cinematicSceneParams[1] = p1;                              /* +0x24 */
+    g_cinematicSceneParams[2] = p2;                              /* +0x28 */
+    g_cinematicSceneParams[3] = p3;                              /* +0x2C */
+    g_cinematicSceneParams[4] = p4;                              /* +0x30 */
+    FadeOutToBlackBlocking(4);
+    func_002898E0();
+}
+#endif
 
-/* TODO(match): functional equivalent pending - secondary-voice cinematic audio start; multi callee-save + gp/absolute mix. */
+/* Cinematic-exit audio/fade teardown. Clears the exit-pending flag if it was 2,
+ * fades the screen to black (blocking), restarts the secondary voice channel
+ * with the saved sample id, near-mutes the dialog voices, sets the listener
+ * flag bit, and resets the per-frame arenas. Finally, if a deferred
+ * exit-cinematic callback is installed AND the cinematic queue is idle (count
+ * == 0) AND no top-level transition into state 1/2 is pending, fires the
+ * callback once and clears it.
+ *
+ * NOT byte-matched: 2 GPR saves (s0/ra) packed 8-byte (sd s0,0x0 / sd ra,0x8,
+ * frame 0x10) hit the 8-byte-packed-save wall (this cc1 emits 16-byte spacing),
+ * and g_exitCinematicCallbackArg is reached %gp_rel on the read but absolute
+ * %hi/%lo on the clear (the same-symbol reload artifact). Body is otherwise
+ * instruction-identical; kept as the portable #else impl. */
+void StartSecondaryVoice(s32 sampleId, s32 chan, s32 volume);
+void SetDialogVoiceVolumesMute(void);
+void ResetFrameArenas(void);
+extern s32 g_cinematicSceneParams[];     /* 0x1B2188 block; [5]=+0x34 voice id */
+extern u8 g_listenerPosHistory[];        /* 0x188660 listener pos ring + flags */
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6D50);
+#else
+void func_002F6D50(void) {
+    void (*cb)(void *);
+    if (g_cinematicExitPending == 2) {
+        g_cinematicExitPending = 0;
+    }
+    FadeOutToBlackBlocking(4);
+    StartSecondaryVoice(g_cinematicSceneParams[5], 1, 0x400);
+    SetDialogVoiceVolumesMute();
+    g_listenerPosHistory[0x6B] |= 0x10;
+    ResetFrameArenas();
+    cb = (void (*)(void *))g_exitCinematicCallback;
+    if (cb != 0 && *(s32 *)(g_cinematicQueue + 0x38) == 0) {
+        if (g_nGameStatePending != 2 && g_nGameStatePending != 1) {
+            cb(g_exitCinematicCallbackArg);
+            g_exitCinematicCallback = 0;
+            g_exitCinematicCallbackArg = 0;
+        }
+    }
+}
+#endif
 
 /* TODO(match): functional equivalent pending - level-exit cinematic driver loop: streams reels, GIF uploads, state pops; huge frame + lq/sq. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6E10);
