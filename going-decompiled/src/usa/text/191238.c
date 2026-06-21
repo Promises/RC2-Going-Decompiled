@@ -562,6 +562,7 @@ typedef struct MapCache {
     u8  _pad238[0x288 - 0x238];
     s32 slotState[5];      /* +0x288 */
     s32 slotLevelId[5];    /* +0x29C */
+    s32 lockedSlot;        /* +0x2B0  slot index to leave untouched when evicting */
 } MapCache;
 /* Offset checks only on a C11+ host (ee-gcc 2.9 used by the EE-backend suite
  * predates _Static_assert). */
@@ -571,6 +572,7 @@ _Static_assert(__builtin_offsetof(MapCache, currentLevel) == 0x230, "MapCache.cu
 _Static_assert(__builtin_offsetof(MapCache, activeSlot)   == 0x234, "MapCache.activeSlot");
 _Static_assert(__builtin_offsetof(MapCache, slotState)    == 0x288, "MapCache.slotState");
 _Static_assert(__builtin_offsetof(MapCache, slotLevelId)  == 0x29C, "MapCache.slotLevelId");
+_Static_assert(__builtin_offsetof(MapCache, lockedSlot)   == 0x2B0, "MapCache.lockedSlot");
 #endif
 
 extern MapCache g_mapCache;          /* 0x1C4F20 (== g_mapVertexData) */
@@ -584,6 +586,7 @@ s32 MapDataExistsForLevel(s32 levelAndFlag);
 s32 MapFindCacheSlot(s32 levelAndFlag);
 s32 MapGetLevelOrderIndex(s32 level);
 s32 MapUpdateLevelAvailability(void);
+extern s32 func_002835E0(s32 x);     /* integer abs() (text/183558) */
 #endif
 
 /* MapDataExistsForLevel(levelAndFlag): does map data exist for the given level?
@@ -711,7 +714,73 @@ s32 MapGetLevelOrderIndex(s32 level) {
 }
 #endif
 
+/* MapEvictCacheSlot(): choose a cache slot to reuse and mark it free, returning
+ * its index.
+ *
+ * Two phases, both skipping the locked slot (g_mapCache.lockedSlot):
+ *  - If the current level is the hub (0): scan slots 4..0 and return the first
+ *    occupied slot (slotState != 0) that already holds an unassigned id (-1) —
+ *    a free-marked slot is reused as-is, no further work.
+ *  - Otherwise resolve the current level's order index. If the current level is
+ *    not in the level order at all, return 1. Else scan slots 0..4: an occupied
+ *    slot already holding -1 is returned immediately; among the rest pick the
+ *    one whose level's order index is farthest (max |orderIndex(slot) -
+ *    orderIndex(current)|) from the current level. That farthest slot (default 0
+ *    if none qualified) is marked free (slotLevelId = -1) and its index returned.
+ *
+ * WALL: the two branch-likely (beql) slot-skip loops, the movz default-to-0 of
+ * the result, and the packed 0x50 multi-save frame diverge from the pinned
+ * cc1's plain-branch / save-layout shapes. Logic traced op-for-op; kept as the
+ * portable #else body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapEvictCacheSlot);
+#else
+s32 MapEvictCacheSlot(void) {
+    s32 currentOrderIndex;
+    s32 bestSlot;
+    s32 maxDist;
+    s32 i;
+
+    if (g_mapCache.currentLevel == 0) {
+        for (i = 4; i >= 0; i--) {
+            if (g_mapCache.slotState[i] != 0 &&
+                i != g_mapCache.lockedSlot &&
+                g_mapCache.slotLevelId[i] == -1) {
+                return i;
+            }
+        }
+    }
+
+    currentOrderIndex = MapGetLevelOrderIndex(g_mapCache.currentLevel);
+    if (currentOrderIndex == -1) {
+        return 1;
+    }
+
+    bestSlot = -1;
+    maxDist = 0;
+    for (i = 0; i < 5; i++) {
+        s32 dist;
+        if (g_mapCache.slotState[i] == 0 || i == g_mapCache.lockedSlot) {
+            continue;
+        }
+        if (g_mapCache.slotLevelId[i] == -1) {
+            return i;
+        }
+        dist = func_002835E0(MapGetLevelOrderIndex(g_mapCache.slotLevelId[i] & 0xFF)
+                             - currentOrderIndex);
+        if (maxDist < dist) {
+            maxDist = dist;
+            bestSlot = i;
+        }
+    }
+
+    if (bestSlot == -1) {
+        bestSlot = 0;
+    }
+    g_mapCache.slotLevelId[bestSlot] = -1;
+    return bestSlot;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00296490);
 
