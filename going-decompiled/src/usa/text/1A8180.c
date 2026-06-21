@@ -759,7 +759,14 @@ f32 GetWaterSurfaceHeight(Vec4 *pos, Vec4 *outNormal) {
  * (out = qx * qy, then out = out * qz) via the VU0 quaternion helpers.
  *
  * Walled: saves $16-$19/$31 (save-layout wall). The three scratch quaternions
- * live on the stack; func_00284248 takes its angle in $f12. */
+ * live on the stack; func_00284248 takes its angle in $f12.
+ *
+ * ORACLE STATUS = routed-to-tester-EE. func_00284248 (axis-angle quat build)
+ * uploads a vcallms VU0 sin/cos microprogram (func_00283B48 @ 0xC90 /
+ * func_00283B30 @ 0xC80), which is NOT present in the standalone headless cmp
+ * harness, so this body CANNOT be ULP/bit-oracled there. Verification is via the
+ * tester's full-game EE effect-diff (the sin/cos microprograms ARE loaded in the
+ * full-game context), same path as func_002AFCD8/func_002AFD90. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AA058);
 #else
@@ -1129,13 +1136,13 @@ f32 func_002AB5A0(f32 a, f32 b, s32 sign) {
     if (0.0f < d * (f32)sign) {
         return d;
     }
-    if (GetFloatAbs(d) <= 0.00174532062f) {   /* 0x3AE4C38A */
+    if (GetFloatAbs(d) <= 0.00174532947f) {   /* 0x3AE4C38A = 0.1 deg */
         return 0.0f;
     }
     if (0.0f < d) {
-        return d - 6.28318548f;               /* 0x40C90FDC = 2*pi */
+        return d - 6.28318596f;               /* 0x40C90FDC = 2*pi */
     }
-    return d + 6.28318548f;
+    return d + 6.28318596f;
 }
 #endif
 
@@ -1451,6 +1458,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC978);
 /**
  * Wrap an angle into [-pi, pi) via the shared frac helper: take the fractional
  * part of (angle + pi) * (1/2pi), scale it back by 2pi and recentre by -pi.
+ *
+ * LITERAL NOTE (do NOT "fix"): this body's 2pi is 6.28318548f (0x40C90FDB) -
+ * that is the byte-correct value its own .s loads. It is DISTINCT from
+ * func_002AB5A0's 2pi (6.28318596f / 0x40C90FDC, 1 ULP higher) - the two
+ * functions legitimately use different roundings. cmp-oracle-confirmed.
  */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC980);
