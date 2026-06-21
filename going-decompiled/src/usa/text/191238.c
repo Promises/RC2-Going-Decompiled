@@ -177,15 +177,73 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291FC8);
  * func_00291FC8 — thin wrapper: run the subsystem reset (func_00291FF8) then
  * dispatch the kept argument to func_00291EB0.
  */
-extern void func_00291FF8(void);
+extern void func_00291FF8(s32 index);
 extern void func_00291EB0(void *arg);
 void func_00291FC8(void *arg) {
-    func_00291FF8();
+    func_00291FF8((s32)arg);
     func_00291EB0(arg);
 }
 #endif
 
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291FF8);
+#else
+/*
+ * func_00291FF8(index) — flush one entry of the deferred light-relight request
+ * table (g_pointLights+0x100, stride 0x30). Each entry holds a target buffer
+ * pointer (+0xC) and three (offset,length) s16 spans (+0x0/+0x2, +0x4/+0x6,
+ * +0x8/+0xA) — units of u16 elements, hence the <<1 byte scaling. When the
+ * buffer pointer is non-NULL, run the three relight passes
+ * (func_002F5F70/func_002E4178/func_002F1B58), each handed the span's start
+ * pointer, its end pointer (start + length*2), and the entry index; then clear
+ * each span back to 0 so the request is consumed exactly once.
+ *
+ * WALL: two callee-saves (the entry pointer + the index) across three jal sites
+ * with the packed s16-span loads — the pinned cc1's 16-byte save slots and
+ * register colouring diverge from the original's later cc1. Kept as the
+ * portable #else body.
+ */
+/* Three interleaved {off,len} s16 spans at +0x0/+0x2, +0x4/+0x6, +0x8/+0xA. */
+typedef struct LightSpan { s16 off; s16 len; } LightSpan;
+typedef struct LightRelightRequest {
+    LightSpan span[3];   /* +0x0/+0x4/+0x8 off, +0x2/+0x6/+0xA len (u16 elems) */
+    u8       *buffer;    /* +0xC           target relight buffer (NULL == idle) */
+    u8        _pad10[0x30 - 0x10];
+} LightRelightRequest;                       /* stride 0x30 */
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+_Static_assert(__builtin_offsetof(LightRelightRequest, buffer) == 0xC, "LightRelightRequest.buffer");
+_Static_assert(sizeof(LightRelightRequest) == 0x30, "LightRelightRequest stride");
+#endif
+/* The request table starts 0x100 into g_pointLights (0x1C2AC0). */
+extern u8 g_pointLights[];
+extern void func_002F5F70(u8 *start, u8 *end, s32 index);
+extern void func_002E4178(u8 *start, u8 *end, s32 index);
+extern void func_002F1B58(u8 *start, u8 *end, s32 index);
+void func_00291FF8(s32 index) {
+    LightRelightRequest *e =
+        &((LightRelightRequest *)(g_pointLights + 0x100))[index];
+    u8 *buf = e->buffer;
+    if (buf == NULL) {
+        return;
+    }
+    /* each pass: start = buf + off*2, end = start + len*2; relight; then the
+     * spans are cleared so the request is consumed exactly once. */
+    func_002F5F70(buf + (s32)e->span[0].off * 2,
+                  buf + (s32)e->span[0].off * 2 + (s32)e->span[0].len * 2, index);
+    e->span[0].off = 0;
+    e->span[0].len = 0;
+    buf = e->buffer;
+    func_002E4178(buf + (s32)e->span[1].off * 2,
+                  buf + (s32)e->span[1].off * 2 + (s32)e->span[1].len * 2, index);
+    e->span[1].off = 0;
+    e->span[1].len = 0;
+    buf = e->buffer;
+    func_002F1B58(buf + (s32)e->span[2].off * 2,
+                  buf + (s32)e->span[2].off * 2 + (s32)e->span[2].len * 2, index);
+    e->span[2].len = 0;
+    e->span[2].off = 0;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002920C0);
 
@@ -318,7 +376,29 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294C48);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294CD0);
 
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294E98);
+#else
+/*
+ * func_00294E98(a, b) — service the dialog-voice stream around a blocking
+ * gadget-class-load operation: pump the voice system, run the load/lookup
+ * (func_00294C48 — the gadget-class TOC walk), then pump again so streaming
+ * audio is serviced on both sides of the (potentially blocking) call. Mirrors
+ * StartFileLoadPumpingVoice's pump/work/pump shape.
+ *
+ * WALL: three jal sites with two callee-saved args (a in s1, b in s0) — the
+ * pinned 2.9-ee-991111 cc1 reserves a 0x20 frame and 16-byte save slots where
+ * the original's later cc1 packs them; the save-layout wall. Kept as the
+ * portable #else body.
+ */
+extern void PumpDialogVoiceSystem(s32 blocking);
+extern void func_00294C48(s32 a, s32 b);
+void func_00294E98(s32 a, s32 b) {
+    PumpDialogVoiceSystem(1);
+    func_00294C48(a, b);
+    PumpDialogVoiceSystem(1);
+}
+#endif
 
 #ifndef TARGET_NATIVE
 /* TODO(match): functional equivalent - not byte-exact (52%); loop-peel wall -
@@ -525,7 +605,12 @@ s32 func_00295F30(s32 fromEnd) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00295F98);
 
+/* func_00296038 (MapMoveCacheSlot) — relocate a galactic-map cache slot's
+ * contents src -> dst; the portable #else body lives in the galactic-map cache
+ * slice below (after the MapCache struct it depends on). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00296038);
+#endif
 
 /*
  * ── Galactic-map cache / level-availability slice ──────────────────────────
@@ -560,9 +645,10 @@ typedef struct MapCache {
     s32 currentLevel;      /* +0x230 */
     s32 activeSlot;        /* +0x234 */
     u8  _pad238[0x288 - 0x238];
-    s32 slotState[5];      /* +0x288 */
+    s32 slotState[5];      /* +0x288  per-slot pixel-data buffer pointer (0 == empty) */
     s32 slotLevelId[5];    /* +0x29C */
     s32 lockedSlot;        /* +0x2B0  slot index to leave untouched when evicting */
+    s32 slotPixelCount[5]; /* +0x2B4  per-slot qword count of pixel data (CopyQwords len) */
 } MapCache;
 /* Offset checks only on a C11+ host (ee-gcc 2.9 used by the EE-backend suite
  * predates _Static_assert). */
@@ -573,6 +659,7 @@ _Static_assert(__builtin_offsetof(MapCache, activeSlot)   == 0x234, "MapCache.ac
 _Static_assert(__builtin_offsetof(MapCache, slotState)    == 0x288, "MapCache.slotState");
 _Static_assert(__builtin_offsetof(MapCache, slotLevelId)  == 0x29C, "MapCache.slotLevelId");
 _Static_assert(__builtin_offsetof(MapCache, lockedSlot)   == 0x2B0, "MapCache.lockedSlot");
+_Static_assert(__builtin_offsetof(MapCache, slotPixelCount) == 0x2B4, "MapCache.slotPixelCount");
 #endif
 
 extern MapCache g_mapCache;          /* 0x1C4F20 (== g_mapVertexData) */
@@ -587,6 +674,28 @@ s32 MapFindCacheSlot(s32 levelAndFlag);
 s32 MapGetLevelOrderIndex(s32 level);
 s32 MapUpdateLevelAvailability(void);
 extern s32 func_002835E0(s32 x);     /* integer abs() (text/183558) */
+
+/*
+ * func_00296038(dst, src) — MapMoveCacheSlot: relocate a galactic-map cache
+ * slot's contents from `src` to `dst`. Copies the pixel-data buffer
+ * (slotState[src] -> slotState[dst], slotPixelCount[src] qwords via CopyQwords),
+ * carries the slot's level id and pixel-count across, and frees the source slot
+ * (slotLevelId[src] = -1). Used by the cache-slot allocator/compactor.
+ *
+ * WALL: the pinned cc1 folds the three parallel-array base addresses
+ * (&g_mapVertexData + 0x288/0x29C/0x2B4) into single relocs and colours the
+ * indices differently from the original's later cc1. Kept as the portable
+ * #else body (placed here so it follows the MapCache type it reads).
+ */
+extern void CopyQwords(void *dst, const void *src, s32 nbytes);
+void func_00296038(s32 dst, s32 src) {
+    CopyQwords((void *)g_mapCache.slotState[dst],
+               (const void *)g_mapCache.slotState[src],
+               g_mapCache.slotPixelCount[src] << 4);
+    g_mapCache.slotLevelId[dst]    = g_mapCache.slotLevelId[src];
+    g_mapCache.slotPixelCount[dst] = g_mapCache.slotPixelCount[src];
+    g_mapCache.slotLevelId[src]    = -1;
+}
 #endif
 
 /* MapDataExistsForLevel(levelAndFlag): does map data exist for the given level?
@@ -841,7 +950,35 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00297E80);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00297F98);
 
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapBuildBitmap);
+#else
+/*
+ * MapBuildBitmap(dst, src, arg3) — dispatch the map-outline bitmap fill. After
+ * a (no-op) prep call and only when map data is loaded (g_mapHasData != 0),
+ * route by the source descriptor's low flag bit: bit0 set selects the packed
+ * path func_002980D8(dst, src, arg3); bit0 clear selects the plain path
+ * func_00298308(dst, src).
+ *
+ * WALL: two callee-saves (src, arg3) across the gate + the branch-likely
+ * (beql) early-out on g_mapHasData that the pinned cc1 does not reproduce. Kept
+ * as the portable #else body.
+ */
+extern s32  g_mapHasData;
+extern void func_00298AA0(void);
+extern void func_002980D8(void *dst, u8 *src, s32 arg3);
+extern void func_00298308(void *dst, u8 *src);
+void MapBuildBitmap(void *dst, u8 *src, s32 arg3) {
+    func_00298AA0();
+    if (g_mapHasData != 0) {
+        if ((src[0] & 1) != 0) {
+            func_002980D8(dst, src, arg3);
+        } else {
+            func_00298308(dst, src);
+        }
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002980D8);
 
