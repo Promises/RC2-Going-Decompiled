@@ -1034,6 +1034,12 @@ Log2Floor = 0x002833C8; // CONFIRMED - integer log2 via plzcw
 sceDmaSyncChan = 0x00126E60; // type:func
 BuildGsDispEnv = 0x00125A20; // type:func
 BuildGsDrawEnvPacket = 0x00125F20; // type:func
+// === Track-B SCE libgraph GS display-env + image-transfer kernel (cod/015180, region co-located delta +0, byte-identical USA==EU). ===
+GsDefDispEnvNeedsOffsetFix = 0x00125970; // type:func CONFIRMED mechanism - BuildGsDispEnv helper, reads the rom0 ROMVER BIOS-version file and returns date gt 20010608 to gate the per-console DISPLAY X/Y offset fix. INCLUDE_ASM clean glabel. EU same addr 0x125970 delta +0
+GetGsDisplayOffsets = 0x00125A10; // type:func PROBABLE - syscall 0x80 wrapper returning per-console GS DISPLAY X/Y offset corrections via out-ptrs, consumed by BuildGsDispEnv when the ROMVER gate passes. INCLUDE_ASM clean glabel. EU same addr 0x125A10 delta +0
+CalcGsZbufferBasePtr = 0x00125E58; // type:func CONFIRMED mechanism - BuildGsDrawEnvPacket helper, returns frame-buffer size in GS words (the Z-buffer word base) from psm,w,h (64x32 PSMCT32 / 64x64 24-16bpp blocks scaled by interlace). INCLUDE_ASM clean glabel. EU same addr 0x125E58 delta +0
+// BuildGsStoreImagePacket @ 0x00126470 - CONFIRMED - SCE libgraph store-image setup packet builder (companion of BuildGsImageUploadPacket 0x126288) - 7-qword BITBLTBUF/TRXPOS/TRXREG/TRXDIR-host GIF+GS packet, returns 7. INTERIOR ALABEL inside phantom func_0012646C (0xCD fill at 0x12646C head-fused onto the addiu sp,-0x10 prologue) - no own glabel, a func-form pin will NOT split it, real glabel needs a splat boundary override - DEFERRED. Identity in the Ghidra plate. EU same addr 0x126470 delta +0
+// sceGsExecStoreImage @ 0x00126730 - CONFIRMED by embedded strings - SCE libgraph GS-to-EE readback (VIF1 DMAC ch1 GS-MEM drain of REG_VIF1_FIFO) - error strings sceGsExecStoreImage DMA Ch.1 does not terminate / Enough data does not reach VIF1. INTERIOR ALABEL inside phantom func_0012672C (0xCD fill at 0x12672C head-fused onto the addiu sp,-0x90 prologue) - no own glabel, func-form pin will NOT split it - DEFERRED. Identity in the Ghidra plate. EU same addr 0x126730 delta +0
 DisableDmac = 0x0011B658; // type:func
 EnableDmac = 0x0011B6C0; // type:func
 FlushPendingTexUploads = 0x0029DF18; // type:func
