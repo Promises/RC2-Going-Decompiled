@@ -281,6 +281,8 @@ g_mapBlipList = 0x001C4F40; // CONFIRMED - ptr to map blips/icons list (0x28-byt
 g_mapBitmapBuffer = 0x001C4F28; // CONFIRMED - ptr to 0x1000-byte 1bpp discovered-area bitmap (8 rows of 0x200)
 g_mapVertexData = 0x001C4F20; // CONFIRMED - ptr to map outline vertex data copied from level asset in MapInit. Also the MapCache struct base (+0x00 field) - the native #else bodies overlay struct MapCache here (fields available+0x24, currentLevel+0x230, activeSlot+0x234, slotState[5]+0x288, slotLevelId[5]+0x29C, lockedSlot+0x2B0)
 g_pLevelOrder = 0x001AA510; // CONFIRMED - pointer to g_anAvailableLevelOrder (0x139948), the int[0x1c] ordered available-level list read by MapGetLevelOrderIndex and MapFindNearestAvailableLevel
+g_mapDataSet = 0x001A7B05; // CONFIRMED - active map-data-set selector byte - 0 selects the primary map-data TOC, nonzero selects the secondary. Read by MapInit, MapDataExistsForLevel and MapFindNearestAvailableLevel
+// g_mapCache = 0x001C4F20; harness-bind alias for the MapCache struct base (co-located with g_mapVertexData at this address). Splat forbids a 2nd active symbol at one vram, but run_state_suite PROVIDE-binds commented ident=0xHEX lines, so this gives the tester a bindable g_mapCache without a duplicate-symbol error
 g_mapRevealedFlags = 0x0013965F; // CONFIRMED - per-level map-revealed bitmap (byte array), tested by MapIsLevelRevealed
 MapInit = 0x002957C0; // CONFIRMED via map.cpp __FILE__ - per-level map init, called from LoadLevelAndInitHealth
 MapSetCurrentLevel = 0x00296500; // CONFIRMED - stores level into g_mapCurrentLevel then MapUpdateLevelAvailability
