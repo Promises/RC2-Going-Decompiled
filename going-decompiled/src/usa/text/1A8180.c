@@ -174,7 +174,19 @@ extern s32 func_002835E0(s32 x);
 extern f32 func_00284678(f32 *out, f32 angle);
 extern f32 func_00283B30(f32 angle);  /* cosine */
 extern f32 func_00284590(f32 a, f32 b);
+/* func_00284548 == WrapAnglePiSum, which genuinely returns f32 in $f0. The
+ * native #else of func_002AB668 needs the true f32 return (else ee-gcc inserts a
+ * spurious int->float cvt that corrupts the *p out-param, else_divergences #19).
+ * BUT the matching build's func_002AAFB8 (line ~768) byte-matches ONLY with the
+ * s32 form: it returns s32 from this call, so the s32-callee + s32-return type
+ * errors cancel into the exact $f0 passthrough the original emits (verified: a
+ * plain f32 here regresses func_002AAFB8 from 100% to 88.24%). So guard per
+ * build - matching keeps s32, native gets the correct f32. */
+#ifdef TARGET_NATIVE
+extern f32 func_00284548(f32 a, f32 b);
+#else
 extern s32 func_00284548(f32 a, f32 b);
+#endif
 extern void Vec4SubVu0(Vec4 *dst, Vec4 *a, Vec4 *b);
 extern void Vec4ScaleVu0(Vec4 *dst, f32 s, const Vec4 *src);   /* sig: scale BEFORE src (matches the def in 183558.c) */
 extern void Vec3RescaleToLenVu0(Vec4 *dst, f32 len, Vec4 *src);
