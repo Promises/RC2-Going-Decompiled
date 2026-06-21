@@ -1215,9 +1215,110 @@ s32 func_002DBC98(void) {
 }
 #endif
 
-/* Menu background-image renderer (blits the front/back buffers with crossfade).
- * Wall: ~130-instruction draw routine + GS packet build + FP fade math. Bare. */
+/* Galactic-map / list-screen cursor + select input handler. While the per-obj
+ * fade-in counter (obj+0x3C) is running it decrements it and drives the black
+ * screen fade (g_screenFadeBlack = min(count-1,4) * 0.25), returning 0. Once the
+ * fade is done, if this obj is the focused widget it processes the pad:
+ *   - L1/R1 (0x900): return 1 unless the screen-block override (+0x134) is set.
+ *   - cancel (0x10): standard back-nav (screen->E0 -> mgr+0x18, return 0; else
+ *     override ? 0 : -1).
+ *   - dpad Up (0x1000): decrement the scroll index (obj+0x38) if > 0.
+ *   - dpad Down (0x4000): increment scroll if the next row (stride 0x14, +0x14)
+ *     is populated.
+ *   - X (0x40): play sound 0x11; for the selected row (obj+0x34 + scroll*0x14),
+ *     if flag bit0 is set either start a game-state change / fade-to-exit based
+ *     on the D_001B1E90[0] flag, else toggle the row's bool at *(row+4).
+ *   On any scroll change replay the move sound (func_002DFFA0(1,0x11)). Returns 0.
+ * Wall: 3-GPR callee-save frame + deep nested branch ladder.
+ *
+ * Callee $v0/$f0 return types verified from asm: func_002DFFA0 -> void,
+ * RequestGameStateChange / FadeOutToBlackBlocking -> result unused (declared
+ * implicit int); no $f0-returning callee is consumed here. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DBEE0);
+#else
+    /* TODO(match): functional equivalent - not byte-exact. */
+s32 func_002DBEE0(MenuWidget *obj) {
+    extern float g_screenFadeBlack;
+    u8 *o = (u8 *)obj;
+    u8 *blk = (u8 *)g_menuScreenBlock;
+    u8 *scr = *(u8 **)(blk + 0x14);
+    s32 fadeCount = *(s32 *)(o + 0x3C);
+    s32 pressed;
+    s32 oldScroll;
+
+    if (fadeCount != 0) {
+        s32 dec = fadeCount - 1;
+        s32 clamp = (dec < 5) ? dec : 4;
+        *(s32 *)(o + 0x3C) = dec;
+        g_screenFadeBlack = (float)clamp * 0.25f;
+        return 0;
+    }
+    if (*(void **)(scr + 0xE8) != (void *)obj) {
+        return 0;
+    }
+
+    pressed = g_padButtonsPressed[0];
+    if (pressed & 0x900) {
+        if (*(s32 *)(blk + 0x134) == 0) {
+            return 1;
+        }
+    }
+    pressed = g_padButtonsPressed[0];
+    if (pressed & 0x10) {
+        u8 *s = *(u8 **)(blk + 0x14);
+        s32 nxt = *(s32 *)(s + 0xE0);
+        if (nxt != 0) {
+            *(s32 *)(blk + 0x18) = nxt;
+            return 0;
+        }
+        if (*(s32 *)(blk + 0x134) == 0) {
+            return -1;
+        }
+        return 0;
+    }
+
+    /* $17: scroll value captured before any nav (for the change-sound compare). */
+    oldScroll = *(s32 *)(o + 0x38);
+    if (pressed & 0x1000) {
+        if (oldScroll != 0) {
+            *(s32 *)(o + 0x38) = oldScroll - 1;
+        }
+    }
+    pressed = g_padButtonsPressed[0];
+    if (pressed & 0x4000) {
+        s32 sc = *(s32 *)(o + 0x38);
+        s32 row = sc * 0x14 + *(s32 *)(o + 0x34);
+        if (*(s32 *)(row + 0x14) != 0) {
+            *(s32 *)(o + 0x38) = sc + 1;
+        }
+    }
+    pressed = g_padButtonsPressed[0];
+    if (pressed & 0x40) {
+        s32 row;
+        func_002DFFA0(0, 0x11);
+        row = *(s32 *)(o + 0x38) * 0x14 + *(s32 *)(o + 0x34);
+        if (*(s32 *)(row + 0x10) & 0x1) {
+            if (D_001B1E90[0] != 0) {
+                RequestGameStateChange(4, 1, 3, *(s32 *)(blk + 0x14), 0);
+            } else {
+                FadeOutToBlackBlocking(4);
+                *(s32 *)(o + 0x3C) = 0x10;
+                D_001B1E90[0] = (D_001B1E90[0] == 0);
+            }
+        } else {
+            s32 ptr = *(s32 *)(row + 0x4);
+            if (ptr != 0) {
+                *(u8 *)ptr = (*(u8 *)ptr == 0);
+            }
+        }
+    }
+    if (*(s32 *)(o + 0x38) != oldScroll) {
+        func_002DFFA0(1, 0x11);
+    }
+    return 0;
+}
+#endif
 
 /* Draw a label/value list (rows of stride 0x14): an optional empty-list message
  * (mode bit 1), then each row's left label and a right value chosen by the
