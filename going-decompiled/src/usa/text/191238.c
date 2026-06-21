@@ -527,21 +527,231 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00295F98);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00296038);
 
+/*
+ * ── Galactic-map cache / level-availability slice ──────────────────────────
+ *
+ * Shared state object g_mapCache (0x1C4F20, == g_mapVertexData base). The
+ * matched build keeps the lui/%lo absolute access shape, so these declarations
+ * are TARGET_NATIVE-only and never reach the byte-matched objects (the
+ * INCLUDE_ASM arms below own those). Field offsets recovered from the asm +
+ * confirmed against the named globals in symbol_addrs:
+ *   +0x24  s32  available     (g_mapAvailable  0x1C4F44)
+ *   +0x230 s32  currentLevel  (g_mapCurrentLevel 0x1C5150)
+ *   +0x234 s32  activeSlot    (g_mapActiveSlot 0x1C5154)
+ *   +0x288 s32  slotState[5]  per-cache-slot occupancy flag
+ *   +0x29C s32  slotLevelId[5] per-cache-slot level id (-1 == unassigned)
+ *
+ * The level id passed to the cache/TOC lookups carries an optional 0x100 flag
+ * bit: when SET it selects the primary map-data TOC, when CLEAR the secondary
+ * (alternate) TOC; the low byte is the level number. g_mapDataSet (0x1A7B05)
+ * is the active-set selector that drives that flag.
+ *
+ * g_pLevelOrder (0x1AA510) points at the 28-entry galactic-map level-order
+ * array (level ids in display/unlock order; a 0 entry past index 0 means "no
+ * level"). g_discToc (0x14B540) holds the per-level map-data TOC: the +0x14F4
+ * (primary) / +0x15D4 (secondary) word, stride 8 by level, is the sector
+ * count, >0 iff map data exists for that level.
+ */
+#ifdef TARGET_NATIVE
+typedef struct MapCache {
+    u8  _pad00[0x24];
+    s32 available;         /* +0x24  */
+    u8  _pad28[0x230 - 0x28];
+    s32 currentLevel;      /* +0x230 */
+    s32 activeSlot;        /* +0x234 */
+    u8  _pad238[0x288 - 0x238];
+    s32 slotState[5];      /* +0x288 */
+    s32 slotLevelId[5];    /* +0x29C */
+} MapCache;
+/* Offset checks only on a C11+ host (ee-gcc 2.9 used by the EE-backend suite
+ * predates _Static_assert). */
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+_Static_assert(__builtin_offsetof(MapCache, available)    == 0x24,  "MapCache.available");
+_Static_assert(__builtin_offsetof(MapCache, currentLevel) == 0x230, "MapCache.currentLevel");
+_Static_assert(__builtin_offsetof(MapCache, activeSlot)   == 0x234, "MapCache.activeSlot");
+_Static_assert(__builtin_offsetof(MapCache, slotState)    == 0x288, "MapCache.slotState");
+_Static_assert(__builtin_offsetof(MapCache, slotLevelId)  == 0x29C, "MapCache.slotLevelId");
+#endif
+
+extern MapCache g_mapCache;          /* 0x1C4F20 (== g_mapVertexData) */
+extern s32     *g_pLevelOrder;       /* 0x1AA510 -> s32[28] level-order array */
+extern u8       g_mapDataSet;        /* 0x1A7B05 active map-data-set selector */
+extern s32      g_playerProgress;    /* 0x1A79F8 story progress counter */
+/* g_discToc (0x14B540) already declared above; map sector counts live at
+ * +0x14F4 (primary) / +0x15D4 (secondary), stride 8 bytes by level. */
+
+s32 MapDataExistsForLevel(s32 levelAndFlag);
+s32 MapFindCacheSlot(s32 levelAndFlag);
+s32 MapGetLevelOrderIndex(s32 level);
+s32 MapUpdateLevelAvailability(void);
+#endif
+
+/* MapDataExistsForLevel(levelAndFlag): does map data exist for the given level?
+ * The 0x100 flag bit selects the primary map-data TOC when set, the secondary
+ * when clear; the low byte is the level. Reads the per-level sector count from
+ * g_discToc and returns 1 if > 0.
+ *
+ * WALL (70.9%): the early-return `if` lowers to `beql` (branch-likely, with the
+ * level mask computed once in the delay slot) where the pinned cc1 emits a
+ * plain `beqz`. Logic exact; kept as the portable #else body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapDataExistsForLevel);
+#else
+s32 MapDataExistsForLevel(s32 levelAndFlag) {
+    s32 level = levelAndFlag & 0xFF;
+    s32 *toc = g_discToc + level * 2;         /* stride 8 bytes */
+    if (levelAndFlag & 0x100) {
+        return 0 < toc[0x14F4 / 4];           /* primary set sector count */
+    }
+    return 0 < toc[0x15D4 / 4];               /* secondary set sector count */
+}
+#endif
 
+/* MapFindCacheSlot(levelAndFlag): scan the 5 map cache slots for an occupied
+ * slot (slotState != 0) holding this level id. Returns the slot index, or -1.
+ *
+ * WALL (87.9%): the pinned cc1 folds `&g_mapVertexData + 0x29C` into a single
+ * `la` reloc (2 insns) where the original keeps the base and adds 0x29C
+ * separately (3 insns), plus a `daddu`-zero vs `move` idiom drift. Logic exact;
+ * kept as the portable #else body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapFindCacheSlot);
+#else
+s32 MapFindCacheSlot(s32 levelAndFlag) {
+    s32 i;
+    for (i = 0; i < 5; i++) {
+        if (g_mapCache.slotState[i] != 0 && g_mapCache.slotLevelId[i] == levelAndFlag) {
+            return i;
+        }
+    }
+    return -1;
+}
+#endif
 
+/* MapFindNearestAvailableLevel(): pick the level to upload next. Try the
+ * current level (with the active-set 0x100 flag) first; if it's not already
+ * cached and has map data, use it. Otherwise spiral outward through the
+ * level-order array (offsets +1,-1,+2,-2,+3,-3,+4) from the current level's
+ * order index, returning the first ordered level that has map data and isn't
+ * already cached. Returns the level id (|flag), or -1 if none qualifies.
+ *
+ * WALL: the multi-callee-save 0x40 frame is packed 8-byte by the later cc1
+ * (the unit-wide save-layout wall), and the spiral's movz/negu step is coloured
+ * differently. Logic traced op-for-op; kept as the portable #else body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapFindNearestAvailableLevel);
+#else
+s32 MapFindNearestAvailableLevel(void) {
+    s32 flag = (g_mapDataSet == 0) ? 0 : 0x100;
+    s32 candidate = g_mapCache.currentLevel + flag;
+    s32 orderIndex;
+    s32 step;
+    s32 probe;
 
+    if (MapFindCacheSlot(candidate) == -1 && MapDataExistsForLevel(candidate)) {
+        return candidate;
+    }
+
+    orderIndex = 0;
+    if (g_mapCache.currentLevel < 0x1C) {
+        s32 *p = g_pLevelOrder;
+        while (*p != g_mapCache.currentLevel) {
+            p++;
+            orderIndex++;
+        }
+    }
+
+    step = 1;
+    probe = orderIndex + 1;
+    do {
+        if (probe >= 0 && probe < 0x1C && g_pLevelOrder[probe] != 0) {
+            candidate = g_pLevelOrder[probe] + flag;
+            if (MapFindCacheSlot(candidate) == -1 && MapDataExistsForLevel(candidate)) {
+                return candidate;
+            }
+        }
+        step = (step < 1) ? (1 - step) : -step;
+        probe = orderIndex + step;
+    } while (step != 4);
+    return -1;
+}
+#endif
+
+/* MapGetLevelOrderIndex(level): index of `level` in the level-order array
+ * (g_pLevelOrder[28]). Returns 0 if it's the first entry, the matching index up
+ * to 0x1B, or -1 if not found / the resolved entry is empty while the player
+ * has any story progress.
+ *
+ * WALL (75.0%): register-coloring — the original splits the table pointer
+ * across $3/$6, the pinned cc1 keeps it in one register. Logic exact; kept as
+ * the portable #else body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapGetLevelOrderIndex);
+#else
+s32 MapGetLevelOrderIndex(s32 level) {
+    s32 *order = g_pLevelOrder;
+    s32 idx;
+    if (order[0] == level) {
+        idx = 0;
+    } else {
+        s32 i;
+        idx = -1;
+        for (i = 1; i < 0x1C; i++) {
+            idx = i;
+            if (order[i] == level) {
+                break;
+            }
+            idx = -1;
+        }
+    }
+    if (order[idx] == 0 && g_playerProgress != 0) {
+        idx = -1;
+    }
+    return idx;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapEvictCacheSlot);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00296490);
 
+/* MapSetCurrentLevel(level): set the galactic-map current level and refresh the
+ * availability flag. Stores `level` into g_mapCache.currentLevel then calls
+ * MapUpdateLevelAvailability.
+ *
+ * WALL (66.9%): the level store must land in the jal-MapUpdateLevelAvailability
+ * delay slot; the pinned cc1 sinks it into straight-line code and the empty-asm
+ * tail-call guard then occupies the slot. Logic exact; kept as the #else body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapSetCurrentLevel);
+#else
+void MapSetCurrentLevel(s32 level) {
+    g_mapCache.currentLevel = level;
+    MapUpdateLevelAvailability();
+}
+#endif
 
+/* MapUpdateLevelAvailability(): clamp the current level to 0..0x1B, set
+ * g_mapCache.available from MapDataExistsForLevel(currentLevel), then force it
+ * clear when on the hub level (0) with any story progress. Returns available!=0.
+ *
+ * WALL: the clamp+store/jal interleave and the `bnel` (branch-likely) hub-clear
+ * test diverge from the pinned cc1's plain branches and slot scheduling. Logic
+ * traced op-for-op; kept as the portable #else body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapUpdateLevelAvailability);
+#else
+s32 MapUpdateLevelAvailability(void) {
+    if (g_mapCache.currentLevel >= 0x1C) {
+        g_mapCache.currentLevel = 0x1B;
+    }
+    g_mapCache.available = MapDataExistsForLevel(g_mapCache.currentLevel) ? 1 : 0;
+    if (g_mapCache.currentLevel == 0 && g_playerProgress != 0) {
+        g_mapCache.available = 0;
+    }
+    return g_mapCache.available != 0;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapUpdate);
 
