@@ -24,7 +24,9 @@ ASM = "going-decompiled/asm/usa/nonmatchings/text"
 
 inc_re   = re.compile(r'INCLUDE_ASM\([^,]*,\s*(\w+)\)')
 save_re  = re.compile(r'\b(sd|sw|sq)\s+\$(1[6-9]|2[0-3]|30|s[0-7]|fp)\b')
-neg_prol = re.compile(r'addiu\s+\$(sp|29),\s*\$(sp|29),\s*-')
+neg_prol = re.compile(r'addiu\s+\$(sp|29),\s*\$(sp|29),\s*-')   # frame setup (prologue)
+pos_prol = re.compile(r'addiu\s+\$(sp|29),\s*\$(sp|29),\s*0x')  # frame teardown (epilogue)
+jr_ra_re = re.compile(r'\bjr\s+\$(31|ra)\b')                    # genuine function return
 # hardware/VU0 signals -> HLE (correctly bare)
 hw_re    = re.compile(r'\b(lq|sq|qmfc2|qmtc2|cfc2|ctc2|vcallms|vcallmsr|'
                       r'v(mul|add|sub|madd|msub|move|opmula|opmsub|div|sqrt|rsqrt|'
@@ -51,8 +53,16 @@ def classify(unit, func):
     if not os.path.exists(s):
         return "no_s"
     txt = open(s, errors='replace').read()
-    if not neg_prol.search(txt):
-        return "fragment"            # no real frame -> over-split stub
+    # FRAGMENT = splat over-split stub, NOT a standalone callable function:
+    #   - no genuine return (`jr $ra`/`jr $31`), OR
+    #   - epilogue/teardown sliver: a positive `addiu $sp,+N` with NO matching
+    #     negative prologue (the tail of the previous function, mis-split off).
+    # (A real framed fn has both -N prologue and +N epilogue; a real leaf has a
+    #  jr $ra and neither.) These are uncallable - they are not a coverage gap.
+    if not jr_ra_re.search(txt):
+        return "fragment"
+    if pos_prol.search(txt) and not neg_prol.search(txt):
+        return "fragment"
     if hw_re.search(txt) or mmio_re.search(txt):
         return "hle"                 # hardware / VU0 glue
     saves = len(set(save_re.findall(txt)))
