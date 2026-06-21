@@ -114,6 +114,9 @@ void func_0027F168(s32 x1, s32 y1, s32 x2, s32 y2, s64 z, u64 tex0);
  * called for side effect). Identity not yet confirmed - keep the func_ name. */
 s32 func_0027F790(void);
 
+/* PlayGlobalSound(id, a, b): fire-and-forget global UI sound (0x1D9B24). */
+void PlayGlobalSound(s32 id, s32 a, s32 b);
+
 /* callees used by the GuiAnim transition family (func_0034A860 / func_0034A3C0). */
 /* GuiHermiteInterp(t, c0, c1, c2, c3): cubic Hermite blend (0x34FBC0). */
 f32 GuiHermiteInterp(f32 t, f32 c0, f32 c1, f32 c2, f32 c3);
@@ -135,10 +138,75 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348BD0);
  * 0x10/8-byte layout. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348BF8);
 
-/* func_00348CB8: page/selection-advance logic gated on the input mask bits
- * (0x1000/0x4000/0x40); plays a sound and walks the +0x6C entry table.
+/* func_00348CB8: menu selection-advance driven by the per-frame input mask.
+ * The widget keeps the current row index at +0x60, the row-enable table (one
+ * non-zero word per selectable row) at +0x6C, and the row count at +0xC0.
+ *
+ *  - mask & 0x1000 (LEFT/PREV): dir = -1
+ *  - mask & 0x4000 (RIGHT/NEXT): dir = +1
+ *  - mask & 0x40   (CONFIRM, only when neither nav bit set): if the current row
+ *      is selectable (+0x6C[cur] != 0) return 1 immediately; otherwise dir stays
+ *      0 and the function returns 0 below.
+ *  - no relevant bit / dir == 0: return 0 (no sound, no nav).
+ *
+ * On a nav, play the move sound (PlayGlobalSound(3,0,0)), then step the index by
+ * dir with wrap (past the last row -> 0, before row 0 -> count-1), writing each
+ * candidate to +0x60, until a selectable row is found or the scan returns to the
+ * starting row. Returns 0 from every nav path; 1 only from the confirm-hit path.
+ *
  * WALL: 4 callee saves ($16,$17,$18,$31) — frame-layout divergence. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348CB8);
+#else
+s32 func_00348CB8(GuiWidget *w, u32 inputMask) {
+    s32 *curIdx = (s32 *)((char *)w + 0x60);
+    s32 *rowEnable = (s32 *)((char *)w + 0x6C);   /* rowEnable[idx] != 0 => selectable */
+    s32 count = *(s32 *)((char *)w + 0xC0);
+    s32 dir;
+    s32 start;
+    s32 cand;
+
+    if (inputMask & 0x1000) {
+        dir = -1;
+    } else if (inputMask & 0x4000) {
+        dir = 1;
+    } else {
+        dir = 0;
+        if (inputMask & 0x40) {
+            /* confirm: a selectable current row returns 1 immediately; an
+             * unselectable one leaves dir 0 and falls to the no-nav return. */
+            if (rowEnable[*curIdx] != 0) {
+                return 1;
+            }
+        }
+    }
+
+    /* no nav direction (no nav bit, or confirm-miss): return without sound. */
+    if (dir == 0) {
+        return 0;
+    }
+
+    PlayGlobalSound(3, 0, 0);
+
+    start = *curIdx;
+    for (;;) {
+        cand = *curIdx + dir;
+        if ((count - 1) < cand) {
+            cand = 0;            /* wrapped past the last row */
+        }
+        if (cand < 0) {
+            cand = count - 1;    /* wrapped before the first row */
+        }
+        *curIdx = cand;
+        if (rowEnable[cand] != 0) {
+            return 0;            /* landed on a selectable row */
+        }
+        if (start == cand) {
+            return 0;            /* scanned every row, none selectable */
+        }
+    }
+}
+#endif
 
 /* func_00348D98: handwritten epilogue-only stump (`addiu $sp,$sp,0x10; nop`,
  * no prologue, no `jr ra`) — the trailing half of a hand-split asm routine.
@@ -644,7 +712,153 @@ void func_0034A3B8(GuiWidget *w, f32 v) {
     w->unk24 = v;
 }
 
+/* func_0034A3C0: per-frame tick of a keyframe-bracketed GuiWidget transition —
+ * the multi-keyframe cousin of func_0034A860. Layout differs from GuiAnim: this
+ * one keeps progress at +0x18, the per-frame step at +0x24, the play direction
+ * at +0x1C, the active flag at +0x28, the keyframe-time count at +0x84, and the
+ * ascending keyframe-time table (f32) at +0x70.
+ *
+ * No-op while inactive (+0x28 == 0). Otherwise:
+ *  1. Advance the eased phase (+0x18). When applyStep is set it adds (forward,
+ *     dir +0x1C == 1) or subtracts (reverse) the step (+0x24). Forward clamps the
+ *     top to 1.0 and clears active on the frame it saturates; reverse clamps the
+ *     bottom to 0.0 likewise. (The asm writes the raw phase in the compare's delay
+ *     slot then overwrites it with the clamped value, so only the clamp survives.)
+ *  2. Bracket-search the keyframe table for the [lo,hi] pair straddling the phase:
+ *     forward walks UP from index 0 advancing while table[hi] <= phase; reverse
+ *     walks DOWN from count-1 advancing while phase <= table[lo]. (Each side
+ *     short-circuits on the count / monotonicity guards exactly as the asm does,
+ *     so a non-monotone or too-short table leaves lo/hi at their seeds.)
+ *  3. t = (phase - table[lo]) / (table[hi] - table[lo]); then
+ *     ease = GuiHermiteInterp(t, 0, w->unk00, w->unk0C, 1).
+ *  4. When the callback object (+0x2C) is set, dispatch the keyframe pair through
+ *     the target object's vtable: obj = w->unk80; call
+ *     (*vtbl->fn14)(obj + (s16)vtbl->off10, w->unk2C,
+ *                    w + (lo<<4) + 0x30, w + (hi<<4) + 0x30, ease).
+ *  5. If the phase saturated this frame (active just cleared), run the end-of-
+ *     transition dispatch keyed on the mode (+0x20): mode 1 re-latches via
+ *     func_0034A370(w, w->unk1C); mode 2 flips the direction (unk1C ^ 1 ? +1 : -1),
+ *     stores it, and re-latches; other modes do nothing observable.
+ *
+ * WALL: the original threads two index registers ($17 hi / $18 lo) through
+ * branch-likely bracket updates (bltzl/beql), a min.s/max.s clamp pair and the
+ * bc1t/beql delay-slot raw-phase stores; the pinned cc1 reorders the clamp and
+ * spills differently. Scalar f32 throughout (no VU0), so the #else is bit-exact. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A3C0);
+#else
+/* keyframe-callback target vtable (obj at w->unk80): the dispatch reads a
+ * half-word field offset at +0x10 and the method pointer at +0x14. */
+typedef struct GuiKeyframeTargetVtbl {
+    /* 0x00 */ u8 pad00[0x10];
+    /* 0x10 */ s16 fieldOff;
+    /* 0x12 */ u8 pad12[2];
+    /* 0x14 */ void (*apply)(void *target, s32 *cbObj, f32 *recLo, f32 *recHi, f32 ease);
+} GuiKeyframeTargetVtbl;
+
+void func_0034A3C0(GuiWidget *w, s32 applyStep) {
+    f32 phase;
+    f32 *table;
+    s32 count;
+    s32 lo;
+    s32 hi;
+    s32 stillActive;
+    f32 t;
+    f32 ease;
+
+    if (w->unk28 == 0) {
+        return;
+    }
+
+    table = (f32 *)((char *)w + 0x70);
+    lo = 0;
+    hi = 0;
+
+    if (w->unk1C == 1) {
+        /* forward */
+        phase = w->unk18;
+        if (applyStep != 0) {
+            phase = phase + w->unk24;
+        }
+        stillActive = (phase <= 1.0f) ? 1 : 0;
+        w->unk18 = phase;            /* raw store (compare delay slot) */
+        phase = (phase <= 1.0f) ? phase : 1.0f;   /* min(phase, 1.0) */
+        count = w->unk84;
+        w->unk28 = stillActive;
+        w->unk18 = phase;            /* clamped store (overwrites) */
+
+        if (count > 0 && 1 < count && table[0] <= phase) {
+            s32 i = 0;
+            lo = 0;
+            hi = 1;
+            for (;;) {
+                i++;
+                if (!(i < count)) break;
+                if (!((hi + 1) < count)) break;
+                if (!(table[hi] <= phase)) break;
+                lo = hi;
+                hi = hi + 1;
+            }
+        }
+    } else {
+        /* reverse */
+        phase = w->unk18;
+        if (applyStep != 0) {
+            phase = phase - w->unk24;
+        }
+        stillActive = (0.0f <= phase) ? 1 : 0;
+        w->unk18 = phase;            /* raw store (compare delay slot) */
+        phase = (0.0f <= phase) ? phase : 0.0f;   /* max(phase, 0.0) */
+        count = w->unk84;
+        w->unk28 = stillActive;
+        hi = count - 1;
+        lo = count - 1;
+        w->unk18 = phase;            /* clamped store (overwrites) */
+
+        if (hi > 0 && (count - 2) >= 0 && phase <= table[count - 1]) {
+            s32 i = hi;
+            lo = count - 2;
+            for (;;) {
+                i--;
+                if (i <= 0) break;
+                if ((lo - 1) < 0) break;
+                if (!(phase <= table[lo])) break;
+                hi = lo;
+                lo = lo - 1;
+            }
+        }
+    }
+
+    /* normalize the phase inside the [table[lo], table[hi]] bracket and ease it.
+     * unk00 / +0x0C are the two Hermite control points. */
+    t = (phase - table[lo]) / (table[hi] - table[lo]);
+    ease = GuiHermiteInterp(t, 0.0f, w->unk00, *(f32 *)((char *)w + 0x0C), 1.0f);
+
+    if (w->unk2C != 0) {
+        void *obj = *(void **)((char *)w + 0x80);
+        GuiKeyframeTargetVtbl *vtbl = *(GuiKeyframeTargetVtbl **)obj;
+        f32 *recLo = (f32 *)((char *)w + (lo << 4) + 0x30);
+        f32 *recHi = (f32 *)((char *)w + (hi << 4) + 0x30);
+        vtbl->apply((char *)obj + vtbl->fieldOff, (s32 *)w->unk2C, recLo, recHi, ease);
+    }
+
+    /* end-of-transition dispatch (only when the phase saturated this frame). */
+    if (w->unk28 != 0) {
+        return;
+    }
+    if (w->unk20 == 1) {
+        func_0034A370(w, w->unk1C);
+    } else if (w->unk20 < 2) {
+        /* mode 0 / negative: nothing. */
+    } else if (w->unk20 == 2) {
+        s32 dir = ((w->unk1C ^ 1) != 0) ? 1 : -1;
+        w->unk1C = dir;
+        func_0034A370(w, dir);
+    } else {
+        /* mode > 2: read unk1C, discard. */
+    }
+}
+#endif
 
 /* func_0034A658: zero a 2x12-word block at widget +0x2C (two outer passes, each
  * three inner passes of four words).
