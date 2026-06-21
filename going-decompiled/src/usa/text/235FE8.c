@@ -1395,7 +1395,7 @@ void GuiDialogBoxSetBounds(void *p, f32 a, f32 b, f32 c, f32 d, f32 e, f32 f) {
 #endif
 
 /* GuiDialogBoxSetText3: assign the three dialog-box text labels - the title
- * (p+0x198 <- t0), the body (p+0x248 <- t2) and the prompt (p+0x1F0 <- t1). */
+ * (p+0x198 <- t0), the body (p+0x248 <- t1) and the prompt (p+0x1F0 <- t2). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiDialogBoxSetText3);
 #else
