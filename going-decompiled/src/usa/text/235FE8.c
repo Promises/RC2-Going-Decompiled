@@ -756,6 +756,15 @@ void func_00337B88(GuiElement *e, s32 v) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiFontAtlasRelocate);
 
+/* GuiFontAtlasLookupGlyph: linear-scan a font atlas's glyph table (count at
+ * +0x18, 8-byte {key,value} entries at +0x1C) for the entry whose key matches
+ * `codepoint`, returning its value (0 if not found).
+ * NEAR-MISS 42% (best): the original keeps index-based addressing
+ * (sll i,3; addu; lw) with NO first-iteration peel. ee-gcc 2.9 forces a
+ * dilemma - the for/check-then-inc form peels iteration 1 inline, while the
+ * inc-then-check while form strength-reduces the scan to an incrementing
+ * pointer walk. Neither reproduces the original's un-peeled index-addressed
+ * loop. Loop-rotation + IV strength-reduction codegen wall. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiFontAtlasLookupGlyph);
 
 /* func_00337C48: no-op stub (empty body - registered/overridable hook). */
@@ -776,7 +785,45 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiPoolInit);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337CE0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiPoolAlloc);
+/* GuiPoolAlloc: allocate one node from a GUI fixed-size pool.
+ *   +0x00 base    pointer to the backing storage
+ *   +0x04 capacity (byte limit)
+ *   +0x08 elemSize
+ *   +0x0C cursor   bump offset into the backing storage
+ *   +0x10 count    live allocation count
+ *   +0x14 freeList head of the singly-linked free list (next ptr at node+0)
+ * If the free list is non-empty, pop its head; otherwise bump-allocate
+ * base+cursor, advancing cursor by elemSize. Overflowing the capacity trips an
+ * assert and returns NULL. */
+typedef struct GuiPool {
+    /* 0x00 */ char *base;
+    /* 0x04 */ u32 capacity;
+    /* 0x08 */ u32 elemSize;
+    /* 0x0C */ u32 cursor;
+    /* 0x10 */ s32 count;
+    /* 0x14 */ void *freeList;
+} GuiPool;
+extern void AssertFail(const char *file, s32 line, const char *expr);
+/* rodata assert strings (gui pool allocator):
+ *   D_1ADA78 = source file path, D_1ADAC0 = the capacity predicate. */
+extern const char D_1ADA78[];
+extern const char D_1ADAC0[];
+void *GuiPoolAlloc(GuiPool *pool) {
+    void *node = pool->freeList;
+    if (node != 0) {
+        pool->freeList = *(void **)node;
+        pool->count++;
+        return node;
+    }
+    if (pool->cursor + pool->elemSize <= pool->capacity) {
+        char *result = pool->base + pool->cursor;
+        pool->cursor += pool->elemSize;
+        pool->count++;
+        return result;
+    }
+    AssertFail(D_1ADA78, 0x53, D_1ADAC0);
+    return 0;
+}
 
 /* func_00337D78: push a node onto the pool free-list at p+0x14 and decrement
  * the live count at p+0x10. */
@@ -1817,6 +1864,15 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033FCE8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033FDD8);
 
+/* func_0033FEF8: draw one composite screen - run the body builder at p+0x8, blit
+ * the menu backdrop (func_002DBC98(0)), draw its three header text rows, the
+ * inner panel (func_00337630 at p+0x2DC), a sprite (p+0x420), two footer text
+ * rows, then the trailing builder func_0033FDD8(p).
+ * NEAR-MISS 93.75%: body is exact; only the prologue/epilogue differ. The
+ * original packs its two saved regs ($16,$31) into 8-byte slots in a 0x10 frame
+ * (later-cc1 codegen); our pinned ee-gcc 2.9 over-allocates a 0x20 frame with
+ * 16-byte slots. The 16-byte-slot-vs-8-byte-slot frame wall (whole 2-GPR-save
+ * class in this unit). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033FEF8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033FF68);
@@ -2186,6 +2242,17 @@ s32 func_00343AD0(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343AF8);
 
+/* func_00343E80(view, records): build the list view's visible row set. Walk
+ * `records` (stride 0xA, signed item-id at +0x6) up to records+0xFA; for each
+ * owned item (g_inventoryOwned[id] != 0) append the id to the view's row array
+ * at +0x28 (capped at 0x19 entries, count at +0x10), then set the initial
+ * highlighted row +0x14 = count/2 and run layout func_00343888(view, 0).
+ * BLOCKED: the body needs a 2-arg (view, records) prototype, but the
+ * already-matched thin forwarder func_00344458 relies on func_00343E80 being
+ * seen as 1-arg so it passes its own $a1 through untouched. Promoting the arity
+ * here regresses func_00344458's byte-match - left INCLUDE_ASM to preserve it.
+ * (Body is otherwise an integer ownership-filter loop; beql/bgezl branch-likely
+ * placement is the secondary scheduling concern.) */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343E80);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343F30);

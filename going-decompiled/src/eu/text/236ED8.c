@@ -337,7 +337,36 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiPoolInit);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00338B90);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiPoolAlloc);
+/* GuiPoolAlloc: allocate one node from a GUI fixed-size pool (EU twin of USA
+ * GuiPoolAlloc). See the USA unit for the field map. Pop the free list head if
+ * present, else bump-allocate base+cursor; capacity overflow trips an assert. */
+typedef struct GuiPool {
+    /* 0x00 */ char *base;
+    /* 0x04 */ u32 capacity;
+    /* 0x08 */ u32 elemSize;
+    /* 0x0C */ u32 cursor;
+    /* 0x10 */ s32 count;
+    /* 0x14 */ void *freeList;
+} GuiPool;
+extern void AssertFail(const char *file, s32 line, const char *expr);
+extern const char D_1ADB18[];
+extern const char D_1ADB60[];
+void *GuiPoolAlloc(GuiPool *pool) {
+    void *node = pool->freeList;
+    if (node != 0) {
+        pool->freeList = *(void **)node;
+        pool->count++;
+        return node;
+    }
+    if (pool->cursor + pool->elemSize <= pool->capacity) {
+        char *result = pool->base + pool->cursor;
+        pool->cursor += pool->elemSize;
+        pool->count++;
+        return result;
+    }
+    AssertFail(D_1ADB18, 0x53, D_1ADB60);
+    return 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00338C28);
 
