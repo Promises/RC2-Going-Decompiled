@@ -1754,12 +1754,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFAB0);
  * Walled: saves $16-$18/$31 + $f20/$f21. func_00283B48 is sine; a/b/c are the
  * $f12/$f13/$f14 args. Returns void.
  *
- * ORACLE STATUS: trace-only. NOT cmp-oracle-able by the asm-vs-C harness - its
- * sin helper func_00283B48 is a VU0 *microprogram* (vcallms 0xC90) that cannot
- * run standalone headless. Routed to the TESTER's full-game EE effect-diff
- * (PCSX2/PINE, real microprograms loaded). If the tester cannot reach it
- * in-context either, it is a KNOWN un-oracle-able body (trace-only + VU0-
- * microprogram limit) - do NOT count it as oracle-covered. */
+ * ORACLE STATUS: VALIDATED via the tester's full-game EE effect-diff (PASS). Not
+ * cmp-oracle-able by the standalone asm-vs-C harness - its sin helper
+ * func_00283B48 is a VU0 *microprogram* (vcallms 0xC90) that cannot run headless
+ * - but the tester runs it for real (the microprograms ARE loaded in full-game
+ * context). Covered by the tester-EE path, not the standalone cmp-oracle. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFCD8);
 #else
@@ -1790,12 +1789,11 @@ void func_002AFCD8(void *out, f32 *p1, f32 *p2, f32 a, f32 b, f32 c) {
  * func_00283B30 cosine. Walled: saves $16-$18/$31 + $f20-$f23; scale is $f12.
  * Returns void.
  *
- * ORACLE STATUS: trace-only. NOT cmp-oracle-able by the asm-vs-C harness - its
- * sin/cos helpers func_00283B48/func_00283B30 are VU0 *microprograms* (vcallms
- * 0xC80/0xC90) that cannot run standalone headless. Routed to the TESTER's
- * full-game EE effect-diff (PCSX2/PINE, real microprograms loaded). If the tester
- * cannot reach it in-context either, it is a KNOWN un-oracle-able body (trace-only
- * + VU0-microprogram limit) - do NOT count it as oracle-covered. */
+ * ORACLE STATUS: VALIDATED via the tester's full-game EE effect-diff (PASS). Not
+ * cmp-oracle-able by the standalone asm-vs-C harness - its sin/cos helpers
+ * func_00283B48/func_00283B30 are VU0 *microprograms* (vcallms 0xC80/0xC90) that
+ * cannot run headless - but the tester runs them for real (microprograms loaded
+ * in full-game context). Covered by the tester-EE path, not the cmp-oracle. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFD90);
 #else

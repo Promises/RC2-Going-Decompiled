@@ -348,7 +348,14 @@ s32 func_002F6B68(void) {
  * NOT byte-matched: 4 GPR saves (s0-s2 + ra) hit the 8-byte-packed-save wall,
  * and g_cinematicSceneParams (g_tieVramLruSize + 0x24) is reached %gp_rel here
  * vs absolute elsewhere - the same-symbol reload artifact. Body is otherwise
- * instruction-identical; kept as the portable #else impl. */
+ * instruction-identical; kept as the portable #else impl.
+ *
+ * ORACLE STATUS (this cinematic cluster - func_002F6B98 / func_002F6C78 /
+ * func_002F6D50): OUT-OF-SCOPE, tester-classified. They drive a live-cinematic
+ * scene-params block (g_cinematicSceneParams) that is not effect-diffable in the
+ * tester's harness, and depend on disc-asset / queue state not seedable headless.
+ * NOT a coverage gap - an explicit OOS class (live-cinematic-state dependency),
+ * distinct from the standalone-cmp-oracle and tester-EE-effect-diff classes. */
 s32 MapCinematicIdToIndex(s32 cinId);
 void func_00289560(void *queue);
 void func_002F6C78(s32 p0, s32 p1, s32 p2, s32 p3, s32 p4);
