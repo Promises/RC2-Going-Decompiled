@@ -190,6 +190,46 @@ extern s32 func_00284548(f32 a, f32 b);
 extern void Vec4SubVu0(Vec4 *dst, Vec4 *a, Vec4 *b);
 extern void Vec4ScaleVu0(Vec4 *dst, f32 s, const Vec4 *src);   /* sig: scale BEFORE src (matches the def in 183558.c) */
 extern void Vec3RescaleToLenVu0(Vec4 *dst, f32 len, Vec4 *src);
+extern void Vec4AddVu0(Vec4 *dst, Vec4 *a, Vec4 *b);           /* dst = a + b (xyz), via VU0 (183558.c) */
+extern void SetVec4UnitZ(Vec4 *dst);                           /* writes a unit +Z vec4 via vmr32 of vf0 */
+extern void ScaleVec4IncludingW(Vec4 *dst, f32 scale, Vec4 *src); /* vec4 scale incl. w; scale in $f12 */
+/* VU0 reductions that genuinely return their scalar in $f0 — they MUST be
+ * declared f32-returning for the native #else bodies below: an s32 return here
+ * would make ee-gcc insert a spurious cvt.s.w that corrupts the value
+ * (else_divergences #19 class). No matched function in this unit calls them, so
+ * the f32 type is inert to the matched build. */
+extern f32 Vec3DotVu0(Vec4 *a, Vec4 *b);                       /* 3-component dot product */
+extern f32 Vec3LengthVu0(Vec4 *v);                             /* 3-component length (vsqrt) */
+extern f32 DistXYVu0(Vec4 *a, Vec4 *b);                        /* horizontal xy distance */
+extern s32 GetCollHitMaterial(void);                           /* low 5 bits of hit poly info, -1 if none */
+/* SampleWaterHeightfield(x, y, z, &outHeight): bilinear-samples the dynamic wave
+ * lattice; returns nonzero on a valid sample and writes the surface height to
+ * *outHeight (the x/y/z are passed in $f12/$f13/$f14). */
+extern s32 SampleWaterHeightfield(f32 x, f32 y, f32 z, f32 *outHeight);
+/* Quaternion helpers (183558.c region). func_00284248 builds an axis-angle
+ * quaternion (axis 0/1/2 = x/y/z) into *out; func_00284180 multiplies two
+ * quaternions a*b into *out. */
+extern void func_00284248(Vec4 *out, f32 angle, s32 axis);
+extern void func_00284180(Vec4 *out, Vec4 *a, Vec4 *b);
+
+/* Water surface globals (the g_waterPool Vec4 packs xy-centre, z-surface,
+ * w-radius; see symbol_addrs). */
+extern s32 g_bWaterWavesActive;        /* gate for the wave-heightfield path */
+extern s32 g_bWaterPoolActive;         /* gate for the static water-pool test */
+extern Vec4 g_waterPool;               /* xy centre, z surface height, w radius */
+
+/* Blob-shadow drop queue (drawn under mobies that pass the ground probe). */
+extern Vec4 g_collHitNormal;           /* face normal of the last collision hit */
+extern s32 g_blobShadowCount;          /* live entries in g_blobShadowQueue (max 32) */
+typedef struct BlobShadow {
+    /* 0x00 */ Vec4 pos;               /* shadow centre (moby pos +0x10), z bumped to ground */
+    /* 0x10 */ Vec4 normal;            /* ground normal (g_collHitNormal) */
+} BlobShadow;                          /* 0x20 stride */
+extern BlobShadow g_blobShadowQueue[]; /* 32-entry ring (count in g_blobShadowCount) */
+
+/* Per-moby ground-probe mode flag: 0 = straight downward drop probe, nonzero =
+ * probe along the moby's own axis vector (+0xE0). */
+extern s32 D_1A8CA0;
 
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8200);
@@ -662,13 +702,176 @@ s32 func_002A9F30(Moby *moby, s32 a, s32 b, s32 c) {
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9F58);
 
+/* GetWaterSurfaceHeight: water surface z (up axis) under a point. First tries
+ * the dynamic wave heightfield (when g_bWaterWavesActive); otherwise tests the
+ * static water-pool disc g_waterPool (xy centre, z surface, w radius) — the
+ * point is "in the pool" when |pos.z - pool.z| < 0.5 and its xy distance to the
+ * pool centre is within the radius. Returns the pool surface z when inside,
+ * else the point's own z. When outNormal is non-null it gets a unit +Z normal.
+ *
+ * Walled: saves $16/$17/$31 (save-layout wall, see unit header). The VU0
+ * reductions DistXYVu0/GetFloatAbs and SampleWaterHeightfield all return f32 in
+ * $f0 / via the out-pointer; declared accordingly so this body is faithful. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", GetWaterSurfaceHeight);
+#else
+f32 GetWaterSurfaceHeight(Vec4 *pos, Vec4 *outNormal) {
+    f32 height;
 
+    if (g_bWaterWavesActive != 0) {
+        if (SampleWaterHeightfield(pos->x, pos->y, pos->z, &height) != 0) {
+            return height;
+        }
+    }
+    if (g_bWaterPoolActive != 0 &&
+        GetFloatAbs(pos->z - g_waterPool.z) < 0.5f &&
+        DistXYVu0(pos, &g_waterPool) < g_waterPool.w) {
+        if (outNormal != 0) {
+            SetVec4UnitZ(outNormal);
+        }
+        return g_waterPool.z;
+    }
+    if (outNormal != 0) {
+        SetVec4UnitZ(outNormal);
+    }
+    return pos->z;
+}
+#endif
+
+/* func_002AA058: euler-angles → quaternion. Builds three axis-angle quaternions
+ * from eulerAngles.x/.y/.z about axes 0/1/2 and concatenates them
+ * (out = qx * qy, then out = out * qz) via the VU0 quaternion helpers.
+ *
+ * Walled: saves $16-$19/$31 (save-layout wall). The three scratch quaternions
+ * live on the stack; func_00284248 takes its angle in $f12. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AA058);
+#else
+void func_002AA058(Vec4 *outQuat, Vec4 *eulerAngles) {
+    Vec4 qx;
+    Vec4 qy;
+    Vec4 qz;
 
+    func_00284248(&qx, eulerAngles->x, 0);
+    func_00284248(&qy, eulerAngles->y, 1);
+    func_00284248(&qz, eulerAngles->z, 2);
+    func_00284180(outQuat, &qx, &qy);
+    func_00284180(outQuat, outQuat, &qz);
+}
+#endif
+
+/* QueueMobyBlobShadow: enqueue a ground blob shadow under a moby (drop-shadow
+ * render pass). No-op unless the moby's shadow-enable byte (+0x31) is set and
+ * the queue has room (< 32). Copies the moby position (+0x10) into the next slot, probes
+ * the ground straight down (ProbeGroundHeight, zOffset 0.5, mask 0); on a real
+ * surface (material != none) lifts the shadow 0.025 above the ground, stores the
+ * hit normal, and computes an alpha from the moby's height above the ground
+ * (written to slot +0xC): alpha = baseAlpha * max(0.125*(8 - |moby.z - groundZ|), 0.25).
+ *
+ * Walled: saves $16/$17/$31 + $f20/$f21 (save-layout wall). baseAlpha arrives
+ * in $f12 (preserved across the probe in $f21); groundZ is kept in $f20. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", QueueMobyBlobShadow);
+#else
+void QueueMobyBlobShadow(Moby *moby, f32 baseAlpha) {
+    BlobShadow *slot;
+    f32 groundZ;
+    f32 lift;
+    f32 alpha;
 
+    if (*(u8 *)((u8 *)moby + 0x31) == 0) {
+        return;
+    }
+    if (g_blobShadowCount >= 0x20) {
+        return;
+    }
+    slot = &g_blobShadowQueue[g_blobShadowCount];
+    slot->pos = *(Vec4 *)((u8 *)moby + 0x10);
+    groundZ = ProbeGroundHeight((Vec4 *)((u8 *)moby + 0x10), 0.5f, 0);
+    if (GetCollHitMaterial() == 0) {
+        return;
+    }
+    slot = &g_blobShadowQueue[g_blobShadowCount];
+    slot->pos.z = groundZ + 0.0250000004f;     /* 0x3CCCCCCD == 0.025f */
+    slot->normal = g_collHitNormal;
+    lift = (8.0f - GetFloatAbs(*(f32 *)((u8 *)moby + 0x18) - groundZ)) * 0.125f;
+    if (lift < 0.25f) {
+        lift = 0.25f;
+    }
+    alpha = baseAlpha * lift;
+    slot = &g_blobShadowQueue[g_blobShadowCount];
+    g_blobShadowCount = g_blobShadowCount + 1;
+    slot->pos.w = alpha;
+}
+#endif
+
+/* ProbeMobyGroundBelow: ground-fit probe for a moby's drop shadow / ground snap.
+ * Two modes selected by D_1A8CA0: in the default (0) mode, a downward CollLine
+ * (mask 0x22, skipping water material 0) is cast from the moby position
+ * (+0x10) over a 16-unit drop — but only when the moby's "on-ground" factor
+ * (+0xE8) is at least 0.9; the resulting ground z-delta (g_collHitPoint.z minus
+ * moby.z) goes to moby+0x70 and a scale (moby+0xC * 1/4096) to moby+0x74. In
+ * the axis mode (nonzero), the ray is cast along the moby's scaled axis vector
+ * (+0xE0): on a hit it stores the dot of (hitPoint - moby.pos) with the axis to
+ * moby+0x70, a fixed 0.2 to +0x74, and flags moby+0xBD = 0xFF. No hit (or the
+ * default-mode height gate) zeroes moby+0x70/+0x74.
+ *
+ * Walled: saves $16-$18/$31 (save-layout wall). The 1/1024, -8.0, 1/4096 and
+ * 0.2 constants come straight from the asm immediates. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", ProbeMobyGroundBelow);
+#else
+/* Returns s32 only to match the forwarder func_002AA3B0's prototype; the asm
+ * leaves $2 holding store-scratch (no meaningful result), so callers ignore it.
+ * All real output is written into the moby record (+0x70/+0x74/+0xBD). */
+s32 ProbeMobyGroundBelow(Moby *moby) {
+    Vec4 from;
+    Vec4 to;
+    Vec4 hitDelta;
+    f32 zDelta;
+    f32 scale;
+
+    if (D_1A8CA0 == 0) {
+        if (*(f32 *)((u8 *)moby + 0xE8) < 0.9f) {
+            *(s32 *)((u8 *)moby + 0x74) = 0;
+            *(s32 *)((u8 *)moby + 0x70) = 0;
+            return 0;
+        }
+        from = *(Vec4 *)((u8 *)moby + 0x10);
+        from.z = *(f32 *)((u8 *)moby + 0x18) - 16.0f;
+        if (from.z < 0.5f) {
+            from.z = 0.5f;
+        }
+        to = *(Vec4 *)((u8 *)moby + 0x10);
+        to.z = *(f32 *)((u8 *)moby + 0x18) + 0.5f;
+        if (CollLine(&to, &from, 0x22, 0, 0) != 0) {
+            zDelta = g_collHitPoint.z - *(f32 *)((u8 *)moby + 0x18);
+            scale = *(f32 *)((u8 *)moby + 0xC) * 0.000244140625f;   /* 1/4096 */
+            *(f32 *)((u8 *)moby + 0x70) = zDelta;
+            *(f32 *)((u8 *)moby + 0x74) = scale;
+            return 0;
+        }
+    } else {
+        /* `to` = 1/1024 * moby (a near-zero query point); `from` = that point
+         * minus 8 along the moby axis (+0xE0). CollLine casts to<-from. */
+        ScaleVec4IncludingW(&to, 0.0009765625f, (Vec4 *)moby);   /* 1/1024 */
+        Vec4ScaleVu0(&from, -8.0f, (Vec4 *)((u8 *)moby + 0xE0));
+        Vec4AddVu0(&from, &to, &from);
+        if (CollLine(&to, &from, 0x22, 0, 0) != 0) {
+            Vec4SubVu0(&hitDelta, &g_collHitPoint, (Vec4 *)((u8 *)moby + 0x10));
+            zDelta = Vec3DotVu0(&hitDelta, (Vec4 *)((u8 *)moby + 0xE0));
+            scale = 0.200000003f;
+            *(u8 *)((u8 *)moby + 0xBD) = 0xFF;
+            *(f32 *)((u8 *)moby + 0x70) = zDelta;
+            *(f32 *)((u8 *)moby + 0x74) = scale;
+            return 0;
+        }
+    }
+    *(s32 *)((u8 *)moby + 0x74) = 0;
+    *(s32 *)((u8 *)moby + 0x70) = 0;
+    return 0;
+}
+#endif
 
 /**
  * Forward to the moby ground-fit probe (drop-shadow placement).
