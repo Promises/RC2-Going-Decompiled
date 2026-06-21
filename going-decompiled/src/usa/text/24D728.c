@@ -69,6 +69,18 @@ extern void func_00339A88(void *p);
 extern void func_00339F98(void *p);
 extern void func_00283D10(void *p);
 extern void BuildFrameViewMatrices(void);
+extern void func_0034DBE0(void *hudMgr);
+extern void TickBoltCounterHud(void);
+void func_0034F200(GuiInstance *mgr);  /* defined below; called by func_0034F1C0 */
+
+/* Moby per-frame sub-update helpers used by func_0034F9F8:
+ *   func_0026F790(mobySub, 0)        - reset/prep pass on the moby's +0xC00 block
+ *   func_002A1F68(framePtr, frame0Ptr, moby, classFlag) - install an animation
+ *     frame's geometry pointers (computed from the class seq/frame tables). */
+extern void func_0026F790(void *mobySub, s32 zero);
+extern void func_002A1F68(void *framePtr, void *frame0Ptr, void *moby, s32 classFlag);
+extern void UpdateMobyAnimation(void *mobySub);
+extern void UpdateMobyBSphereAndGrid(void *mobySub);
 
 /* List/sprite sub-widget reset helpers (text/248B50, addr 0x34A7F8/0x34A370):
  * clear an animation slot of a sub-list / sprite by flag. Forwarders only -
@@ -196,6 +208,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034E8D8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034ED20);
 
+/* GuiManagerInitListRows: build the manager's scrollable list-row table - 26
+ * contiguous 0x48-byte GuiListRow elements (GuiListRowElementInit, stride 0x48)
+ * from the manager base, a trailing row at +0x750, the embedded GuiHudManager
+ * sub-object (+0x7A0 via func_0034BDB0), and the three list heads at
+ * +0x1D50/+0x1D8C/+0x1FDC (func_003374D8 + func_00338A80 x2); returns mgr.
+ * Left bare INCLUDE_ASM: a faithful cmp-oracle is blocked because its callees'
+ * real TARGET_NATIVE bodies (GuiListRowElementInit / func_003374D8 / func_00338A80
+ * in text/235FE8, linked whole into the cmp suite) transitively install the
+ * absolute GUI vtable data globals (g_GuiElementVtable / g_GuiListRowVtable),
+ * which are undefined in the cmp link (the absolute-data --gc-sections wall), and
+ * those bodies cannot be mocked instead without colliding with the linked real
+ * 235FE8 definitions. Revisit when the GUI element vtable globals are seeded. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", GuiManagerInitListRows);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", GuiManagerInitHudLists);
@@ -241,7 +265,23 @@ void func_0034EF68(u8 *base, s32 index, s32 x, s32 y, s32 shade) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F028);
 
+/* func_0034F1C0: per-frame tick of the outer GuiInstance's HUD widgets - run the
+ * embedded GuiHudManager's frame update (+0x7A0 via func_0034DBE0), forward the
+ * HUD list (func_0034F200), tick the third (planet-name) list (+0x1FDC via
+ * func_00339A88), then update the on-screen bolt counter (TickBoltCounterHud).
+ * NEAR-MISS candidate: kept INCLUDE_ASM for the matching build; the #else is the
+ * portable equivalent (sibling-call chain over the outer GuiInstance). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F1C0);
+#else
+void func_0034F1C0(GuiInstance *mgr) {
+    u8 *m = (u8 *)mgr;
+    func_0034DBE0(m + 0x7A0);
+    func_0034F200(mgr);
+    func_00339A88(m + 0x1FDC);
+    TickBoltCounterHud();
+}
+#endif
 
 /* func_0034F200: forward the outer GuiInstance's HUD list (+0x1D8C) to
  * func_00339A88. (mgr here is the OUTER GuiInstance, not the +0x7A0
@@ -299,7 +339,78 @@ void func_0034F9B8(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F9F0);
 
+/* func_0034F9F8: per-frame update of the two animated HUD moby sub-objects the
+ * manager owns (one at mgr+0xC00, plus a sibling region at mgr+0x600). For each
+ * it runs the moby reset/prep (func_0026F790) and animation step
+ * (UpdateMobyAnimation); then, if the active sequence byte (+0x42 / +0x43) is not
+ * 0xFF, it resolves the current animation frame's geometry pointers out of the
+ * moby's class seq/frame tables and installs them via func_002A1F68, caching the
+ * owning moby base into +0x58 / +0x5C. Finally it recomputes the moby's bounding
+ * sphere and grid placement (UpdateMobyBSphereAndGrid). `mgr` is the manager base.
+ *
+ * Frame-pointer arithmetic (mirrors UpdateActiveMobys' moby anim setup):
+ *   cls = moby2->classTable (+0x24); seqDef = *(cls + seq*4 + 0x48);
+ *   framePtr = (u8*)seqDef + (seqDef[0x10]<<2) + 0x1C + (seqDef[0x13]<<2);
+ *   frame0Ptr = *(seqDef + frame0*4 + 0x1C); classFlag = cls[0x8].
+ * Kept INCLUDE_ASM for the matching build; #else is the portable equivalent. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F9F8);
+#else
+typedef struct MobyAnimSeqDef {
+    /* 0x00 */ u8 _pad00[0x10];
+    /* 0x10 */ u8 frameTableCount;   /* <<2 + 0x1C = offset to first frame entry */
+    /* 0x11 */ u8 _pad11[2];
+    /* 0x13 */ u8 frameEntryIndex;   /* <<2 added to frame base */
+    /* 0x14 */ u8 _pad14[8];
+    /* 0x1C */ u8 frameEntries[1];    /* frame-entry array (each 4 bytes); [f0]+0x1C = geom ptr */
+} MobyAnimSeqDef;
+
+typedef struct MobyAnimClass {
+    /* 0x00 */ u8 _pad00[8];
+    /* 0x08 */ u8 classFlag;            /* lbu -> zero-extended func_002A1F68 arg4 */
+    /* 0x09 */ u8 _pad09[0x3F];
+    /* 0x48 */ MobyAnimSeqDef *seqDefs[1]; /* indexed by sequence byte */
+} MobyAnimClass;
+
+typedef struct HudAnimMoby {
+    /* 0x00 */ u8 _pad00[0x24];
+    /* 0x24 */ MobyAnimClass *classTable;
+    /* 0x28 */ u8 _pad28[0x18];
+    /* 0x40 */ u8 frame0;
+    /* 0x41 */ u8 frame1;
+    /* 0x42 */ u8 seq0;
+    /* 0x43 */ u8 seq1;
+    /* 0x44 */ u8 _pad44[0x14];
+    /* 0x58 */ void *framePtr0;
+    /* 0x5C */ void *framePtr1;
+} HudAnimMoby;
+
+static void installAnimFrame(HudAnimMoby *m2, void *moby, u8 seq, u8 frame0) {
+    MobyAnimClass *cls = m2->classTable;
+    MobyAnimSeqDef *sd = cls->seqDefs[seq];
+    u8 *framePtr = (u8 *)sd + (sd->frameTableCount << 2) + 0x1C
+                 + (sd->frameEntryIndex << 2);
+    void *frame0Ptr = *(void **)((u8 *)sd + frame0 * 4 + 0x1C);
+    func_002A1F68(framePtr, frame0Ptr, moby, cls->classFlag);
+}
+
+void func_0034F9F8(void *mgr) {
+    u8 *base = (u8 *)mgr;
+    HudAnimMoby *m2 = (HudAnimMoby *)(base + 0xC00);
+    func_0026F790(m2, 0);
+    UpdateMobyAnimation(m2);
+    if (m2->seq0 != 0xFF) {
+        installAnimFrame(m2, base, m2->seq0, m2->frame0);
+        m2->framePtr0 = base;
+    }
+    if (m2->seq1 != 0xFF) {
+        base = base + 0x600;
+        installAnimFrame(m2, base, m2->seq1, m2->frame1);
+        m2->framePtr1 = base;
+    }
+    UpdateMobyBSphereAndGrid(m2);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034FAF8);
 
