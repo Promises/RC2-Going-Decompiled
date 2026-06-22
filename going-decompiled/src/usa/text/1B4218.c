@@ -128,7 +128,7 @@ typedef struct FileLoadVoiceState {
     /* 0x34 */ s32 fileLoadWordCount;     /* byteCursor rounded down to words (>>2) */
     /* 0x38 */ u8 pad38[0x4];
     /* 0x3C */ s16 dialogVoiceId;         /* primary dialog-voice id, init -1 */
-    /* 0x3E */ u8 pad3E[0x2];
+    /* 0x3E */ s16 dialogVoiceIdPrev;     /* mirror of dialogVoiceId, reset to -1 */
     /* 0x40 */ u8 dialogState;            /* primary dialog state, init 0x20 */
     /* 0x41 */ u8 dialogFlag1;            /* init 0 */
     /* 0x42 */ u8 dialogFlag2;            /* init 0 */
@@ -154,7 +154,8 @@ typedef struct FileLoadVoiceState {
     /* 0x84 */ s32 dialogArg3;
     /* 0x88 */ u8 pad88[0x4];
     /* 0x8C */ s32 tertiaryState;         /* tertiary-voice state word, init 0 */
-    /* 0x90 */ u8 pad90[0x6];
+    /* 0x90 */ u8 pad90[0x4];
+    /* 0x94 */ s16 tertiaryArg1;          /* queued tertiary-voice param, reset to 0 */
     /* 0x96 */ s16 tertiaryFlag;          /* init 0 */
     /* 0x98 */ DialogVoiceChannel ch2;    /* tertiary voice channel */
 } FileLoadVoiceState;
@@ -837,15 +838,31 @@ void LoadGlobalSoundBank(void) {
 }
 #endif
 
-/* Kick an async EE-side sound-bank load for `bankSlot`, resetting its
- * load-status slot to -1 and registering OnSoundBankLoaded as the completion
- * callback (the status pointer is zero-extended to 64 bits for the RPC).
- * WALL: address-fold. The original materialises `%lo(g_listenerPosHistory)`
- * then adds 0x17A0 with a separate `addiu` (two-step base); this cc1 folds the
- * 0x17A0 into the symbol's %lo reloc (one addiu), so the status-slot address
- * computation diverges (best 54%). Same fold artifact as OnDialogVoiceStarted.
- * Left as INCLUDE_ASM. */
+/* Kick an async EE-side sound-bank load of `bankAddr` for status slot
+ * `bankSlot`, resetting that slot to -1 (loading) and registering
+ * OnSoundBankLoaded as the completion callback (the status-slot pointer is
+ * zero-extended to 64 bits for the RPC). `bankAddr` is the bank's EE address,
+ * forwarded verbatim to the loader.
+ *
+ * NATIVE SHIM (no byte target; matching build uses INCLUDE_ASM above). Derived
+ * register-exact from LoadLevelSoundBank.s @0x2B7700.
+ *
+ * WALL (matching build): address-fold. The original materialises
+ * `%lo(g_listenerPosHistory)` then adds 0x17A0 with a separate `addiu` (two-step
+ * base); this cc1 folds the 0x17A0 into the symbol's %lo reloc (one addiu), so
+ * the status-slot address computation diverges (measured 53.28%, both two-step
+ * and base-pointer phrasings). Same fold artifact as OnDialogVoiceStarted /
+ * LoadGlobalSoundBank. Functional equivalent only. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", LoadLevelSoundBank);
+#else
+/* TODO(match): functional equivalent - not byte-exact; address-fold wall. */
+void LoadLevelSoundBank(s32 bankAddr, s32 bankSlot) {
+    g_soundBankLoadStatus[bankSlot] = -1;
+    snd_BankLoadFromEE_CB(bankAddr, OnSoundBankLoaded,
+                          (long)(u32)&g_soundBankLoadStatus[bankSlot]);
+}
+#endif
 
 /* Kick the disc load of level sound-bank `bankSlot` if its TOC entry exists:
  * resets the bank's load-status slot to -1 (loading) and registers
@@ -1071,9 +1088,62 @@ s32 ChainSecondaryVoice(s32 idx, s16 flags, s16 pan) {
  * 64-bit stack arg. Functional equivalent only. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StartTertiaryVoice);
 
-/* Reset all three dialog-voice channels to their idle/cleared state.
- * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing. */
+/* Reset all three dialog-voice channels to their idle/cleared state. First
+ * drains any voice still mid-allocation: ticks the snd RPC (func_00133230) then
+ * spins snd_Pump while the primary(+0x44)/tertiary(+0x8C)/secondary(+0x68) state
+ * words read -1 (allocation in flight); flushes the snd command queue
+ * (func_00133310) and pumps until snd_Pump reports drained; releases the channel
+ * (func_00133490(1)); then clears every per-channel state/flag/param word. The
+ * primary dialog voice id is preserved into ambientArg0 (+0x48) only when it was
+ * already allocated (dialogVoiceId != -1), and both dialogVoiceId(+0x3C) and its
+ * mirror(+0x3E) are reset to -1.
+ *
+ * NATIVE SHIM (no byte target; matching build uses INCLUDE_ASM above). Derived
+ * register-exact from ResetDialogVoiceChannels.s @0x2B8090.
+ *
+ * WALL (matching build): save-layout — 3 callee-saves + $ra at 8-byte spacing. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ResetDialogVoiceChannels);
+#else
+/* TODO(match): functional equivalent - not byte-exact; save-layout wall. */
+extern void func_00133230(void);   /* 0x133230 snd RPC tick */
+extern s32  snd_Pump(void);        /* 0x133280 snd queue pump (returns busy count) */
+extern void func_00133310(void);   /* 0x133310 flush snd command queue */
+extern void func_00133490(s32 a);  /* 0x133490 release channel */
+void ResetDialogVoiceChannels(void) {
+    func_00133230();
+    while (g_fileLoadVoiceState.ambientState == -1) {
+        snd_Pump();
+    }
+    while (g_fileLoadVoiceState.tertiaryState == -1) {
+        snd_Pump();
+    }
+    while (g_fileLoadVoiceState.secondaryState == -1) {
+        snd_Pump();
+    }
+    func_00133310();
+    while (snd_Pump() != 0) {
+        /* drain the snd command queue */
+    }
+    func_00133490(1);
+
+    g_fileLoadVoiceState.ambientFlag = 0;
+    g_fileLoadVoiceState.ambientArg1 = 0;
+    g_fileLoadVoiceState.ambientState = 0;
+    if (g_fileLoadVoiceState.dialogVoiceId != -1) {
+        g_fileLoadVoiceState.ambientArg0 = (s16)g_fileLoadVoiceState.dialogVoiceId;
+    }
+    g_fileLoadVoiceState.dialogVoiceIdPrev = -1;
+    g_fileLoadVoiceState.secondaryFlag = 0;
+    g_fileLoadVoiceState.dialogArg2 = 0;
+    g_fileLoadVoiceState.secondaryState = 0;
+    g_fileLoadVoiceState.tertiaryFlag = 0;
+    g_fileLoadVoiceState.tertiaryArg1 = 0;
+    g_fileLoadVoiceState.tertiaryState = 0;
+    g_fileLoadVoiceState.fileLoadPhase = 0;
+    g_fileLoadVoiceState.dialogVoiceId = -1;
+}
+#endif
 
 /* Drive all dialog-voice channels to full volume (volume state = -0x8000, the
  * high "active" bit set, fade target 0). The secondary channel (ch1) is only
@@ -1229,9 +1299,30 @@ s32 StartFileLoadWithCallback(s32 dest, s32 lbn, s32 sectorCount,
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", KickRawFileRead);
 
 /* Start a file load while keeping the dialog-voice system pumping (the variant
- * used during streamed-cinematic loads).
- * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing. */
+ * used during streamed-cinematic loads): pumps the dialog-voice system once,
+ * kicks the file load (StartFileLoad), then pumps the dialog-voice system again,
+ * and returns the byte size StartFileLoad reported.
+ *
+ * NATIVE SHIM (no byte target; matching build uses INCLUDE_ASM above). Derived
+ * register-exact from StartFileLoadPumpingVoice.s @0x2B8BA0 (the pump argument is
+ * the literal 1 on both calls; StartFileLoad is fed dest/lbn/sectorCount in arg
+ * order and its return is forwarded verbatim).
+ *
+ * WALL (matching build): save-layout — 3 callee-saves + $ra at 8-byte spacing. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StartFileLoadPumpingVoice);
+#else
+/* TODO(match): functional equivalent - not byte-exact; save-layout wall. */
+extern s16 PumpDialogVoiceSystem(s32 active);  /* 0x2B8C00 forward decl */
+extern s32 StartFileLoad(s32 dest, s32 lbn, s32 sectorCount);  /* 0x2B8A18 */
+s32 StartFileLoadPumpingVoice(s32 dest, s32 lbn, s32 sectorCount) {
+    s32 size;
+    PumpDialogVoiceSystem(1);
+    size = StartFileLoad(dest, lbn, sectorCount);
+    PumpDialogVoiceSystem(1);
+    return size;
+}
+#endif
 
 /* Pump the dialog-voice system once per snd tick (the snd-pump entry that calls
  * UpdateDialogVoiceManager under the right gating).
