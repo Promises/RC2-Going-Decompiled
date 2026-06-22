@@ -197,6 +197,7 @@ extern s32 g_cinematicUnlockedFlags[];        /* cinematics-watched bitfield (0x
 
 /* Tables in other text/data segments. */
 extern s32 D_240340[];   /* {key, _} pairs (stride 8), -2 sentinel (0x240340) */
+extern s16 D_254E48[];   /* 0xAA rows of two s16 columns (bidirectional key<->value lookup, 0x254E48) */
 extern u8  D_259F38[];   /* 6-byte header + 0xA-stride {s16 key,...} records, -1 sentinel */
 extern u8  D_259CC0[];   /* same layout as D_259F38 */
 typedef struct Rec2552B0 {
@@ -993,8 +994,30 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_002898E0);
  * -fno-gcse, since it's loop-invariant load motion, not PRE) and walks a
  * `+= 0x10` pointer. The original treats the count load as if it could alias
  * the table writes (it doesn't), so the re-read can't be reproduced from clean
- * non-volatile C. Left INCLUDE_ASM. */
+ * non-volatile C. Left INCLUDE_ASM for the matching build; the #else below is
+ * the op-for-op faithful portable form (cmp-oracle: cmp_188858_text.c). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", FindTextTableEntry);
+#else
+s32 FindTextTableEntry(s32 textId) {
+    s32 result = -1;
+    s32 i = 0;
+
+    if (g_subtitleState.tableCount > 0) {
+        TextEntry *table = g_pActiveTextTable;
+        if (table[0].id == textId) {
+            return 0;
+        }
+        for (i = 1; i < g_subtitleState.tableCount; i++) {
+            if (table[i].id == textId) {
+                result = i;
+                break;
+            }
+        }
+    }
+    return result;
+}
+#endif
 
 /* GetLocalizedString(textId): resolve `textId` to its localized C string. Looks
  * the id up via FindTextTableEntry; on a hit returns g_pActiveTextTable[idx].str.
@@ -1049,16 +1072,42 @@ void func_0028A4E0(void) {
  * dispatch are not reproducible from C. Left INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028A4E8);
 
-/* func_0028AA08(key, column, outValue): linear-search the D_254E48 table
- * (stride-4 records, up to 0xAA rows) starting at the given column for a row
- * whose first s16 equals `key`; on a hit optionally write the matched value
- * (selected via the column) through `outValue` and return the row index, else
- * return -1.
+/* func_0028AA08(key, column, outValue): bidirectional key<->value lookup over
+ * the D_254E48 table — 0xAA rows of two s16 columns each (row stride 4 bytes).
+ * Sign-extend `key` to s16 and scan rows 0..0xA9, comparing the `column` s16 of
+ * each row (column 0 -> +0, column 1 -> +2) against `key`. On the first match,
+ * if `outValue` is non-NULL, write the row's OTHER column (column!=0 -> col0 at
+ * +0; column==0 -> col1 at +2) through `outValue` (as a u16), and return the
+ * matched row index. With no match across all 0xAA rows, return -1.
  *
- * WALL (frameless leaf, but column*2 row-base striding + an i*4-vs-2 movn output
- * selection that cc1's `?:` does not reproduce, plus the D_254E48 %hi/%lo
- * displacement fold). Left INCLUDE_ASM. */
+ * WALL (frameless leaf, but the column*2 row-base striding + an i*4-vs-2 movn
+ * output-offset selection that cc1's `?:` does not reproduce, plus the D_254E48
+ * %hi/%lo displacement fold). Left INCLUDE_ASM for the matching build; the
+ * #else below is the op-for-op faithful portable form (cmp_188858_text.c). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028AA08);
+#else
+s32 func_0028AA08(s32 key, s32 column, s16 *outValue) {
+    s16 keyHalf = (s16)key;
+    s16 *base = D_254E48;
+    s16 *cell = base + column;   /* &row[0].col[column]; advances by 2 s16 (4 bytes) per row */
+    s32 i = 0;
+
+    do {
+        if (*cell == keyHalf) {
+            if (outValue != 0) {
+                /* searched col0 -> return col1 (+1 s16); searched col!=0 -> col0 (+0) */
+                s16 *out = base + (column != 0 ? (i * 2) : (i * 2 + 1));
+                *outValue = (s16)(u16)*out;
+            }
+            return i;
+        }
+        i++;
+        cell += 2;
+    } while (i < 0xAA);
+    return -1;
+}
+#endif
 
 /* func_0028AA70(key): move the area-data record matching `key` (resolved via
  * func_0028AA08) to the front of the recently-used list at g_health+0xDFC, whose
