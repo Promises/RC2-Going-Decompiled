@@ -272,7 +272,30 @@ s32 SetMobyFlagBit0(Moby *moby) {
  * `andi` test (no xori, unlike bit0). cc1 here either colors the byte into $v0
  * or won't sink the store without an extra xori idiom (best 81.67%); genuine
  * reg-alloc wall, left as INCLUDE_ASM. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", SetMobyFlagBit1);
+#else
+/**
+ * One-shot latch of moby anim-flag bit 1.
+ *
+ * @param moby moby whose animFlags byte (+0xBE) is latched
+ * @return     1 if the bit was newly set (byte rewritten), 0 if it was already
+ *             set (byte left untouched)
+ *
+ * Faithful to the .s: tests `flags & 2`; if already set returns 0 without
+ * storing, otherwise writes `flags | 2` and returns 1. Note the asm computes
+ * `flags | 2` up front (in the branch delay slot) but only commits the store
+ * on the not-yet-set path.
+ */
+s32 SetMobyFlagBit1(Moby *moby) {
+    u8 flags = moby->animFlags;
+    if ((flags & 2) != 0) {
+        return 0;
+    }
+    moby->animFlags = flags | 2;
+    return 1;
+}
+#endif
 
 /* Test moby anim-flag bit 2. */
 s32 func_002B47D0(Moby *moby) {

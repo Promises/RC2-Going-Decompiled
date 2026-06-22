@@ -683,7 +683,37 @@ s32 func_003512F8(u8 *base, u8 **out) {
  * six insns BEFORE the div, while the pinned cc1 keeps the check after the
  * div (with the fill store between) and swaps the size/fill registers.
  * Same div-expansion-scheduling family as GetRandomInt. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351328);
+#else
+/**
+ * Commit up to @n bytes into the pts ring: clamps the request to the free
+ * space (size - fill), advances both the fill count and the wrapped read
+ * offset by that amount, and returns the number of bytes actually committed.
+ *
+ * @param base ring base (header at base+0x50000)
+ * @param n    bytes the caller wishes to commit
+ * @return     bytes committed (= min(n, size - fill))
+ *
+ * Faithful to the .s: reads size/fill/readOfs; take = (n < size-fill) ? n :
+ * (size-fill) via slt+movn; readOfs = (readOfs + take) % size (the div whose
+ * quotient is discarded and remainder mfhi'd back); fill += take stored
+ * unconditionally before the readOfs store; $v0 (the return) is left holding
+ * `take` from the movn and never reloaded.
+ */
+s32 func_00351328(u8 *base, s32 n) {
+    FmvPtsRing *ring = (FmvPtsRing *)base;
+    s32 size = ring->size;
+    s32 fill = ring->fill;
+    s32 readOfs = ring->readOfs;
+    s32 space = size - fill;
+    s32 take = (n < space) ? n : space;
+
+    ring->fill = fill + take;
+    ring->readOfs = (readOfs + take) % size;
+    return take;
+}
+#endif
 
 /**
  * Peek the queued region of the pts ring: returns the queued byte count and
@@ -702,7 +732,34 @@ s32 func_00351370(u8 *base, u8 **out) {
  * fill)). Best attempt 95.6%: instruction-identical (incl. the fill-copy /
  * movn clamp shape) but the copy/condition temporaries colour v1/a2 where
  * the original has a2/v1 - the register-coloring wall. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003513B8);
+#else
+/**
+ * Consume up to @n bytes from the pts ring: drops min(n, fill) bytes off the
+ * queued count, leaving the read offset untouched (the caller wraps it), and
+ * returns the number of bytes actually dropped.
+ *
+ * @param base ring base (header at base+0x50000)
+ * @param n    bytes the caller wishes to drop
+ * @return     bytes dropped (= min(n, fill))
+ *
+ * Faithful to the .s: only the fill field (base+0x50004) is read; take =
+ * (n < fill) ? n : fill via slt+movn. The STORED-back value is `fill - take`
+ * (held in $6) but the RETURN ($v0) is `take` itself — the movn result is
+ * never overwritten, so the function reports the consumed count, not the
+ * remainder. (The cmp oracle caught an earlier version that returned the
+ * remainder.)
+ */
+s32 func_003513B8(u8 *base, s32 n) {
+    FmvPtsRing *ring = (FmvPtsRing *)base;
+    s32 fill = ring->fill;
+    s32 take = (n < fill) ? n : fill;
+
+    ring->fill = fill - take;
+    return take;
+}
+#endif
 
 /**
  * Arm a stream request: store destination + length and report accepted.
