@@ -26,6 +26,10 @@ extern void func_002832F8(void *arg);
 extern u8 g_cameraSlotActive[];
 typedef struct { s32 f[10]; } CamSlotRecord; /* 0x28-byte slot descriptor */
 
+/* Active language index (u8 at 0x1A7BBC); selects the per-language slot inside
+ * the streaming text-table directory relocated by func_00279D88. */
+extern u8 g_currentLanguage;
+
 /* Per-glyph width lookup over a fixed-stride font table. Each table entry is
  * 4 bytes; the signed byte at +3 is the glyph advance width. func_0027F7A8
  * sums integer advances; func_0027F858 sums scaled (float) advances. */
@@ -214,9 +218,99 @@ void func_00279CF0(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g, s32 h,
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00279D68);
 
+/* func_00279D88 - relocate the freshly-streamed per-language text table. The
+ * streaming directory lives at g_cameraSlotActive+0xD0: word[2] (+0x8) is the
+ * load buffer base `dataBase`; the per-language offset word at
+ * dataBase[g_currentLanguage] selects this language's sub-table `tbl`. tbl[0] is
+ * the record count N; the N records begin at tbl+8 (16 bytes each). The first
+ * word of every record holds a buffer-relative offset which is fixed up in place
+ * by adding the sub-table base `tbl` so it becomes an absolute pointer. The
+ * directory's cursor (+0xC) is set to the first record and the count cached at
+ * +0x10. The count cache is written unconditionally (the original stores it in
+ * the blez delay slot); when N <= 0 no records are relocated.
+ * Near-miss: cc1 keeps the loop bound and the record cursor live across a
+ * branch-likely (bnel) reload of +0xC each iteration; expressed straight here. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00279D88);
+#else
+void func_00279D88(void) {
+    u8 *dir = g_cameraSlotActive + 0xD0;
+    s32 *dataBase = *(s32 **)(dir + 0x8);
+    s32 offset = dataBase[g_currentLanguage];
+    s32 *tbl = (s32 *)((u8 *)dataBase + offset);
+    s32 count = tbl[0];
+    s32 *records = tbl + 2;            /* tbl + 8 bytes */
+    s32 i;
 
+    *(s32 **)(dir + 0xC) = records;
+    *(s32 *)(dir + 0x10) = count;     /* count cache: written even when N <= 0 */
+    if (count > 0) {
+        for (i = 0; i < count; i++) {
+            s32 *rec = records + i * 4; /* 16-byte stride */
+            rec[0] += (s32)tbl;         /* relocate offset -> absolute pointer */
+        }
+    }
+}
+#endif
+
+/* func_00279E00 - advance a horizontally-scrolling text cursor across the
+ * camera-slot record table, wrapping when a glyph run runs past the visible
+ * extent. The streaming directory at g_cameraSlotActive+0xD0 holds the start
+ * record index (s16 at +0x20) and a base advance (s16 at +0x22); the records
+ * live in the 0x28-byte table at g_cameraSlotActive+0x458 with its entry count
+ * at +0x500. *pIndex (a1) is seeded with the start index and *pCursor (a2) with
+ * base+`scroll` (a0). Walking records forward: if the current record still fits
+ * (rec.f[2] >= rec.f[1] + cursor) the routine returns 1 (still on this record);
+ * otherwise, if the next record shares the same group id (f[0]) the cursor is
+ * rewound by the run width and the index advanced, looping; any boundary
+ * (negative/missing index, end of table, group change) returns 0 with the index
+ * and cursor left at their last values.
+ * Near-miss: cc1 threads the record cursor and reloaded count through
+ * branch-likely (bnel) tails; expressed as a straight loop here. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00279E00);
+#else
+s32 func_00279E00(s32 scroll, s32 *pIndex, s32 *pCursor) {
+    u8 *dir = g_cameraSlotActive + 0xD0;
+    CamSlotRecord *recs = (CamSlotRecord *)(g_cameraSlotActive + 0x458);
+    s32 *count = (s32 *)(g_cameraSlotActive + 0x458 + 0x500);
+    s32 idx;
+
+    *pIndex = *(s16 *)(dir + 0x20);
+    *pCursor = *(s16 *)(dir + 0x22) + scroll;
+
+    idx = *pIndex;
+    if (idx < 0 || idx >= *count) {
+        return 0;
+    }
+
+    for (;;) {
+        s32 cursor = *pCursor;
+        s32 runStart = recs[idx].f[1];
+        s32 runEnd = recs[idx].f[2];
+
+        if (runEnd >= runStart + cursor) {
+            return 1;                       /* cursor still inside this record */
+        }
+        if (idx + 1 >= *count) {
+            return 0;                       /* no following record */
+        }
+        if (recs[idx].f[0] != recs[idx + 1].f[0]) {
+            return 0;                       /* group id changes: stop here */
+        }
+
+        *pCursor = (cursor - 1) - (runEnd - runStart);
+        if (*pIndex + 1 < 0) {
+            return 0;
+        }
+        *pIndex = *pIndex + 1;
+        idx = *pIndex;
+        if (idx >= *count) {
+            return 0;
+        }
+    }
+}
+#endif
 
 /* func_00279EE8 - forward the camera slot at g_cameraSlotActive+0xF8 to
  * func_002832F8.
