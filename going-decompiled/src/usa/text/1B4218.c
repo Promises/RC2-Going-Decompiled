@@ -1,4 +1,5 @@
 #include "common.h"
+#include "moby_motion.h"
 
 /*
  * text/1B4218 — the "moby-bind / locomotion / target-lock / game-state-stack /
@@ -373,6 +374,14 @@ extern s32 D_001A8B88[];                /* 0x1A8B88 per-state "slot active" tabl
 extern s32 D_001C4EC0;                  /* 0x1C4EC0 (= g_pointLights + 0x2400) progress sub-flag */
 extern void func_00286260(s32 mode);    /* 0x286260 trivial PURE: g_someGlobal = mode */
 
+/* WEAK (TARGET_NATIVE arm only, byte-neutral): when this unit is co-linked into
+ * the eetest cmp suite, cmp_188858_cine.c supplies a strong deterministic
+ * RequestGameStateChange mock for its StartCinematicFromQueue oracle. Both
+ * objects would otherwise multiply-define the symbol. weak lets that test mock
+ * win the link; cmp_1B4218.c does not test this body, and gc-sections drops this
+ * weak copy. In the matching build this arm is the INCLUDE_ASM original, so weak
+ * is inert. */
+__attribute__((weak))
 s32 RequestGameStateChange(s32 stateId, s32 push, s32 argA, s32 argB, s8 *outDoneFlag) {
     s32 result;
     s32 slotActive;
@@ -553,9 +562,40 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ApplyMobyGround
  * WALL: save-layout — 2 callee-saves + $ra at 8-byte spacing, with fp temps. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ProbeMobyGroundLine);
 
-/* Test whether a moby is a ground-mover (locomotion mode predicate).
- * WALL: save-layout — 1 callee-save + $ra at 8-byte spacing. */
+/* Inherit motion from the moving platform a moby is standing on. If the
+ * controller recorded a moby under the ground probe last step
+ * (ctrl->groundHitMoby, +0x88), re-test the moby against that platform's
+ * collision (func_002ADF48, fed the moby + the platform + the moby's pos vec4
+ * at +0x10 and its prev-pos/extent vec4 at +0xF0); on a hit, raise the
+ * platform-rider event bit 0x40 in ctrl->eventFlags (+0x94). No groundHitMoby
+ * => nothing to inherit, return.
+ *
+ * NATIVE SHIM (no byte target; matching build uses INCLUDE_ASM above). Derived
+ * register-exact from CheckMobyGroundMover.s @0x2B6BF8.
+ *
+ * WALL (matching build): save-layout — 1 callee-save + $ra at 8-byte spacing. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", CheckMobyGroundMover);
+#else
+/* func_002ADF48 (text/1A8180 @0x2ADF48): moving-platform re-collision test;
+ * returns nonzero when `moby` is still resting on `platform`. Opaque here. */
+extern s32 func_002ADF48(Moby *moby, void *platform, void *posVec,
+                         void *extentVec, void *posVec2, void *extentVec2);
+
+#define MOBY_MOTION_EVENT_PLATFORM 0x40 /* +0x94: riding a moving platform this step */
+
+void CheckMobyGroundMover(Moby *moby, MobyMotionController *ctrl) {
+    void *platform = ctrl->groundHitMoby;
+    if (platform != 0) {
+        void *posVec = (u8 *)moby + 0x10;
+        void *extentVec = (u8 *)moby + 0xF0;
+        if (func_002ADF48(moby, platform, posVec, extentVec,
+                          posVec, extentVec) != 0) {
+            ctrl->eventFlags |= MOBY_MOTION_EVENT_PLATFORM;
+        }
+    }
+}
+#endif
 
 /* Returns the moby's motion-controller block: *(*(moby+0x68)+0x18). */
 s32 GetMobyMotionController(Moby *moby) {
@@ -577,11 +617,39 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", UpdateMobyLeanF
 /* Size-pinned 8-byte epilogue pad pseudo-function — see unit header. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B6FC8);
 
-/* Set a moby motion-controller's speed/accel parameters via its +0x18 block.
- * WALL: float register save-layout — saves $f20..$f23 (swc1) plus the call to
- * GetMobyMotionController forces the original's 0x30 fp-save frame, which the
- * pinned cc1's fp-save packing does not reproduce. */
+/* Set a moby motion-controller's velocity / accel / max-speed profile. Argument
+ * order is ($f12,$f13,$f14,$f15) on the EE; mapping recovered from the swc1
+ * offsets @0x2B6FD0:
+ *   accel  ($f12) -> accel (+0x20) and accelArrive (+0x24)  [written twice]
+ *   maxSpd ($f13) -> maxSpeed (+0x28)
+ *   speed  ($f14) -> velX (+0x14) and velY (+0x18)          [planar speed, twice]
+ *   velZ   ($f15) -> velZ (+0x1C)
+ * No-op if the moby has no controller.
+ *
+ * (.s store order: velZ, accelArrive, maxSpeed, velY, accel, velX — each lane is
+ * a plain overwrite, so the final state is order-independent; the C groups them
+ * by source param for readability.)
+ *
+ * NATIVE SHIM (no byte target; matching build uses INCLUDE_ASM above).
+ *
+ * WALL (matching build): float register save-layout — saves $f20..$f23 (swc1)
+ * plus the GetMobyMotionController call forces the original's 0x30 fp-save frame,
+ * which the pinned cc1's fp-save packing does not reproduce. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", SetMobyMotionParams);
+#else
+void SetMobyMotionParams(Moby *moby, f32 accel, f32 maxSpd, f32 speed, f32 velZ) {
+    MobyMotionController *ctrl = (MobyMotionController *)GetMobyMotionController(moby);
+    if (ctrl != 0) {
+        ctrl->accel = accel;
+        ctrl->accelArrive = accel;
+        ctrl->maxSpeed = maxSpd;
+        ctrl->velX = speed;
+        ctrl->velY = speed;
+        ctrl->velZ = velZ;
+    }
+}
+#endif
 
 /* Size-pinned 8-byte epilogue pad pseudo-function — see unit header. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B7038);
@@ -593,9 +661,37 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", DriveMobyAlongW
 /* Size-pinned 8-byte epilogue pad pseudo-function — see unit header. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B7140);
 
-/* Set a moby's waypoint path (install the waypoint array into its controller).
- * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing. */
+/* Install a waypoint path into a moby's motion controller. `path` is the path
+ * array (path[0] is its node count as a short, see waypointPath +0xC4). `endIdx`
+ * selects the destination node: pass -1 to walk to the last node (count-1),
+ * otherwise it is used verbatim. `startIdx` seeds the current-node cursor.
+ *
+ * Returns 0 if the moby has no motion controller, else 1.
+ *
+ * NATIVE SHIM (no byte target; matching build uses INCLUDE_ASM above). Derived
+ * register-exact from SetMobyWaypointPath.s @0x2B7148 (the asm reuses the -1
+ * sentinel both as the "no controller" return-stage value and as the endIdx==-1
+ * compare operand; the C below expresses the same two effects directly).
+ *
+ * WALL (matching build): save-layout — 3 callee-saves + $ra at 8-byte spacing. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", SetMobyWaypointPath);
+#else
+s32 SetMobyWaypointPath(Moby *moby, short *path, s32 endIdx, s32 startIdx) {
+    MobyMotionController *ctrl = (MobyMotionController *)GetMobyMotionController(moby);
+    if (ctrl == 0) {
+        return 0;
+    }
+    ctrl->waypointPath = path;
+    if (endIdx == -1) {
+        ctrl->waypointEnd = (s16)(path[0] - 1);
+    } else {
+        ctrl->waypointEnd = (s16)endIdx;
+    }
+    ctrl->waypointCursor = (s16)startIdx;
+    return 1;
+}
+#endif
 
 /* Profiling hook: add the current EE RCNT0 count (read as unsigned, hence the
  * bltz/shift float-conversion idiom) to the accumulated moby-motion tick total
@@ -660,6 +756,11 @@ extern s32 g_mobyClassCountNoHeader;            /* 0x1B1AC4 headerless slot coun
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", BindMobyClassUpdateFunc);
 #else
 /* TODO(match): functional equivalent - not byte-exact; table-base address-CSE wall. */
+/* WEAK (TARGET_NATIVE arm only, byte-neutral): cmp_191238d.c supplies a strong
+ * BindMobyClassUpdateFunc mock; weak lets it win the link when this unit is
+ * co-linked into the cmp suite (this body is untested here; gc-sections drops
+ * it). Inert in the matching build (INCLUDE_ASM arm). */
+__attribute__((weak))
 void BindMobyClassUpdateFunc(s32 classId, s32 headerless) {
     s32 index = 0;
     while (g_builtinMobyUpdateBindings[index].classId != -1 &&
@@ -1074,6 +1175,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StartFileLoad);
 extern char D_1AA1F8[];                    /* "load file failed to start" debug string */
 extern s32 CdStartRead(s32 lbn, s32 sectors, s32 dest, void *rmode);  /* 0x133398 */
 extern void func_002833D8(void);           /* spin-wait on fatal load failure */
+/* WEAK (TARGET_NATIVE arm only, byte-neutral): cmp_191238d.c supplies a strong
+ * StartFileLoad mock; weak lets it win the link when this unit is co-linked into
+ * the cmp suite (this body is untested here; gc-sections drops it). Inert in the
+ * matching build (INCLUDE_ASM arm). */
+__attribute__((weak))
 s32 StartFileLoad(s32 dest, s32 lbn, s32 sectorCount) {
     if (g_fileLoadVoiceState.fileLoadActive != 0 || sectorCount == 0) {
         return 0;
