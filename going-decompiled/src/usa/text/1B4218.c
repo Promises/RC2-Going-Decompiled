@@ -50,7 +50,10 @@ typedef struct Vec4 { f32 x, y, z, w; } Vec4;
 typedef struct Moby {
     /* 0x00 */ u8 pad0[0x10];
     /* 0x10 */ Vec4 facingTarget; /* heading target vec (moby+0x10) */
-    /* 0x20 */ u8 pad20[0x48];
+    /* 0x20 */ u8 pad20[0x14];
+    /* 0x34 */ u16 modeFlags;     /* MODE/behaviour bitfield (see moby.h); bit 0x8000
+                                     mirrors the lean delta (UpdateMobyLeanFromTurn) */
+    /* 0x36 */ u8 pad36[0x32];
     /* 0x68 */ s32 *pExtra;       /* extra/pvars block; motion controller at +0x18 */
     /* 0x6C */ u8 pad6C[0x52];
     /* 0xBE */ u8 animFlags;      /* one-shot latch bits set by SetMobyFlagBit* */
@@ -634,9 +637,106 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ResolveMobySphe
  * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing, with fp/madd. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ResolveMobyEdgeConstraint);
 
-/* Update a moby's lean angle from its turn rate (locomotion banking).
- * WALL: save-layout — 2 callee-saves + $ra at 8-byte spacing, with fp temps. */
+/* Update a moby's lean angle from its turn rate (locomotion banking). Banks the
+ * one or two attached sub-mobys (ctrl->leanTargetA at +0x48, ctrl->leanTargetB
+ * at +0x4C) by the clamped heading-vs-facing delta, split evenly across however
+ * many are present. Runs only if at least one lean target is attached AND the
+ * FREE_YAW mode bit (0x10) is clear.
+ *
+ * Pipeline (op-faithful to the .s @0x2B6E18):
+ *   delta = WrapAnglePiDiff(headingAngle, moby->facingYaw)   // signed, [-pi,pi]
+ *   delta = clamp(delta, -pi/2, +pi/2)
+ *   if (moby->modeFlags & 0x8000) delta = -delta             // mirror flag
+ *   recip = 1 / (presentCount)                               // 1.0 or 0.5
+ *   for each present target T:
+ *       T->leanAngle = clamp(WrapAnglePiSum(delta * recip, T->leanAngle),
+ *                            -pi/2, +pi/2)
+ * Each lean target is a sub-moby carrying its accumulated lean angle as an f32
+ * at +0x68 (see MobyLeanTarget below); WrapAnglePiSum/Diff are pure f32 angle
+ * math (0x284548 / 0x284590, return f32 in $f0).
+ *
+ * NATIVE SHIM (no byte target; matching build uses INCLUDE_ASM above). The float
+ * op ORDER is preserved exactly for bit-exactness: the reciprocal is taken once,
+ * each per-target weight (fanA/fanB) is scaled by it as a separate rounding step,
+ * and only then multiplied by the clamped delta — matching the .s div.s + the two
+ * mul.s @0x2B6EB8/0x2B6EC0 followed by mul.s @0x2B6F0C/0x2B6F5C.
+ *
+ * WALL (matching build): save-layout — 2 callee-saves + $ra at 8-byte spacing,
+ * with $f20..$f23 fp temps; the pinned cc1's save packing does not reproduce it. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", UpdateMobyLeanFromTurn);
+#else
+/* The sub-moby banked by the lean pass: only its accumulated lean angle (f32 at
+ * +0x68) is touched here. Evidence: lwc1/swc1 0x68($2) in UpdateMobyLeanFromTurn.s
+ * (@0x2B6F14 read, @0x2B6F1C write) — a 32-bit float load/store, not a pointer. */
+typedef struct MobyLeanTarget {
+    u8  pad00[0x68];
+    f32 leanAngle;   /* +0x68 accumulated bank angle (radians), clamped +/-pi/2 */
+} MobyLeanTarget;
+
+#define MOBY_LEAN_MIRROR_FLAG 0x8000 /* moby->modeFlags bit: negate the lean delta */
+
+extern f32 WrapAnglePiSum(f32 a, f32 b);   /* 0x284548  wrap a+b into [-pi,pi] */
+extern f32 WrapAnglePiDiff(f32 a, f32 b);  /* 0x284590  wrap a-b into [-pi,pi] */
+
+void UpdateMobyLeanFromTurn(f32 headingAngle, Moby *moby,
+                            MobyMotionController *ctrl) {
+    MobyLeanTarget *targetA = (MobyLeanTarget *)ctrl->leanTargetA;
+    MobyLeanTarget *targetB = (MobyLeanTarget *)ctrl->leanTargetB;
+    f32 halfPi = 1.5707965f;       /* pi/2 clamp bound (lui 0x3FC90FDC) */
+    f32 fanA, fanB, recip, count, delta;
+
+    if ((targetA == 0 && targetB == 0) ||
+        (ctrl->modeFlags & MOBY_MOTION_MODE_FREE_YAW) != 0) {
+        return;
+    }
+
+    /* per-target presence weights + how many targets share the bank */
+    fanA = (targetA != 0) ? 1.0f : 0.0f;
+    if (targetB == 0) {
+        fanB = 0.0f;
+        count = fanA + 0.0f;
+    } else {
+        fanB = 1.0f;
+        count = fanA + 1.0f;
+    }
+
+    /* signed heading-vs-facing delta, clamped to +/-pi/2 */
+    delta = WrapAnglePiDiff(headingAngle, moby->moveSpeed /* +0xF8 facing yaw */);
+    if (delta <= halfPi) {
+        if (delta < -halfPi) {
+            delta = -halfPi;
+        }
+    } else {
+        delta = halfPi;
+    }
+    if ((moby->modeFlags & MOBY_LEAN_MIRROR_FLAG) != 0) {
+        delta = -delta;
+    }
+
+    /* scale each weight by the shared reciprocal (separate rounding, then * delta) */
+    recip = 1.0f / count;
+    fanA = fanA * recip;
+    fanB = fanB * recip;
+
+    if (targetA != 0) {
+        targetA->leanAngle = WrapAnglePiSum(delta * fanA, targetA->leanAngle);
+        if (halfPi < targetA->leanAngle) {
+            targetA->leanAngle = halfPi;
+        } else if (targetA->leanAngle < -halfPi) {
+            targetA->leanAngle = -halfPi;
+        }
+    }
+    if (targetB != 0) {
+        targetB->leanAngle = WrapAnglePiSum(delta * fanB, targetB->leanAngle);
+        if (halfPi < targetB->leanAngle) {
+            targetB->leanAngle = halfPi;
+        } else if (targetB->leanAngle < -halfPi) {
+            targetB->leanAngle = -halfPi;
+        }
+    }
+}
+#endif
 
 /* Size-pinned 8-byte epilogue pad pseudo-function — see unit header. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B6FC8);
