@@ -186,7 +186,12 @@ extern s32 func_002A12C0(void *p, s32 r, s32 g, s32 b);
 extern s32 func_00283638(Moby *moby);
 extern s32 PostMobyHitEvent(Moby *moby, s32 a, s32 b, s32 c, Vec4 *dir);
 extern s32 func_002B1C20(void);
-extern s32 func_002A9550(Moby **out, Moby *moby);
+/* func_002A9550: moby-group iterator advance/filter step. Takes the same
+ * (out, moby, wantInactive, wantActive) 4-arg shape its only caller
+ * func_002A9468 forwards ($a0..$a3 passthrough); the wantInactive/wantActive
+ * filter args were dropped by an earlier 2-arg guess. Defined later in this
+ * unit (#else); declared here for func_002A9468's #else call. */
+extern s32 func_002A9550(Moby **out, Moby *moby, s32 wantInactive, s32 wantActive);
 extern f32 func_002837F8(void *p, f32 *src);
 extern s32 func_002AFAB0(f32 step, f32 max);
 extern f32 GetFloatAbs(f32 x);
@@ -669,11 +674,126 @@ s32 func_002A9468(Moby **out, s32 group, s32 wantInactive, s32 wantActive) {
             return 0;
         }
     }
-    return func_002A9550(out, g_pMobyGroupIterMoby);
+    return func_002A9550(out, g_pMobyGroupIterMoby, wantInactive, wantActive);
 }
 #endif
 
+/**
+ * func_002A9550 — moby-group iterator ADVANCE/filter step (the worker behind
+ * func_002A9468's iteration). Walks the per-group slot list (g_mobyGroupLists)
+ * via the iterator globals and returns the next moby that passes the
+ * active/inactive filter through *out.
+ *
+ *   - If `moby` is the iterator's current moby (g_pMobyGroupIterMoby), resume
+ *     scanning from the saved cursor (g_pMobyGroupIterCursor).
+ *   - Otherwise re-seed: validate moby->group against g_mobyGroupCount, point the
+ *     cursor at that group's slot list, and scan forward until `moby` itself is
+ *     found (so the next step starts right after it).
+ *   Each list entry is a u16 { slot:15 | terminatorSignBit }; the moby is
+ *   g_mobyTableBase + slot*0x100. A negative entry (s16 < 0) terminates the list.
+ *
+ * Filter (matches func_002A9468's lattice), keyed on the moby state sign bit
+ * (sign = 1 when state byte +0x20 is negative, i.e. inactive):
+ *   wantInactive==0, wantActive==0 -> accept the ACTIVE (sign==0) moby
+ *   wantInactive==0, wantActive!=0 -> accept none (always advance)
+ *   wantInactive!=0, wantActive==0 -> accept the next moby unconditionally
+ *   wantInactive!=0, wantActive!=0 -> accept the INACTIVE (sign==1) moby
+ * Returns 0 with the accepted moby in *out, or -1 (with *out cleared) at
+ * end-of-list / invalid group.
+ *
+ * Type-recovery oracle lane (cmp_1A8180c.c). RECOVERED: list entries are u16
+ * read via lhu/lh (+0x7FFF slot mask, sign-bit terminator) -> u16 *cursor;
+ * moby->group is lbu at +0x21 -> u8 group; moby->state is lb at +0x20 -> s8 state
+ * (the .s sign-extends then srl 31). All iterator state lives in the named
+ * globals; no float, no vcallms -> standalone integer/pointer oracle.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9550);
+#else
+s32 func_002A9550(Moby **out, Moby *moby, s32 wantInactive, s32 wantActive) {
+    u16 *cursor;
+    s32 slot;
+    s32 sign;
+    s32 accept;
+
+    *out = 0;
+    if (moby == g_pMobyGroupIterMoby) {
+        /* resume from the saved cursor */
+        cursor = g_pMobyGroupIterCursor;
+        if ((s16)*cursor < 0) {
+            return -1;
+        }
+    } else {
+        /* re-seed the iterator for this moby's own group */
+        if (g_mobyGroupCount < moby->group) {
+            return -1;
+        }
+        g_pMobyGroupIterMoby = 0;
+        cursor = g_mobyGroupLists[moby->group];
+        g_pMobyGroupIterCursor = cursor;
+        if (cursor == 0) {
+            return -1;
+        }
+        /* one entry before the head; the seek loop pre-increments */
+        cursor = cursor - 1;
+        g_pMobyGroupIterCursor = cursor;
+        for (;;) {
+            Moby *m;
+
+            cursor = cursor + 1;
+            g_pMobyGroupIterCursor = cursor;
+            slot = *cursor & 0x7FFF;
+            g_mobyGroupIterSlot = slot;
+            m = (Moby *)((u8 *)g_mobyTableBase + slot * 0x100);
+            g_pMobyGroupIterMoby = m;
+            if ((s16)*cursor < 0) {
+                return -1;
+            }
+            if (moby == m) {
+                break;   /* found it; the filter loop starts on the NEXT entry */
+            }
+            cursor = g_pMobyGroupIterCursor;
+        }
+    }
+
+    /* advance one entry at a time, applying the active/inactive filter */
+    for (;;) {
+        Moby *m;
+
+        cursor = cursor + 1;
+        g_pMobyGroupIterCursor = cursor;
+        slot = *cursor & 0x7FFF;
+        g_mobyGroupIterSlot = slot;
+        m = (Moby *)((u8 *)g_mobyTableBase + slot * 0x100);
+        g_pMobyGroupIterMoby = m;
+        *out = m;
+        sign = (u32)(s32)g_pMobyGroupIterMoby->state >> 31;
+
+        if (wantInactive == 0) {
+            if (wantActive != 0) {
+                accept = 0;                 /* always advance */
+            } else {
+                accept = (sign == 0);       /* accept active */
+            }
+        } else {
+            if (wantActive == 0) {
+                accept = 1;                 /* accept unconditionally */
+            } else {
+                accept = (sign != 0);       /* accept inactive */
+            }
+        }
+        if (accept) {
+            return 0;
+        }
+        /* rejected: keep scanning unless the current entry terminates the list */
+        cursor = g_pMobyGroupIterCursor;
+        if ((s16)*cursor < 0) {
+            *out = 0;
+            return -1;
+        }
+    }
+}
+#endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A96B8);
