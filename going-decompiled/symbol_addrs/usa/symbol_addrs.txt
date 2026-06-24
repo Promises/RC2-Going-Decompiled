@@ -1279,6 +1279,7 @@ ScaleVec4IncludingW = 0x00283710; // CONFIRMED - vec4 scale including w - siblin
 GetFloatAbs = 0x002835F8; // CONFIRMED - fabsf
 WrapAnglePiSum = 0x00284548; // CONFIRMED - sum two angles (radians), wrap into [-pi,pi] r=a+b, if(r>=pi)r-=2pi, if(r<-pi)r+=2pi (183558, harness name->addr, .c still func_00284548 until next re-split)
 WrapAnglePiDiff = 0x00284590; // CONFIRMED - signed angle difference a-b, wrapped into [-pi,pi] (183558, .c still func_00284590 until next re-split)
+Atan2fPoly = 0x00283BF8; // CONFIRMED - 2-arg arctangent - reduce |y|/|x| to the smaller ratio, evaluate the 8-term odd minimax poly (g_atanPolyCoeffs 0x1AC460) then add the quadrant offset (g_atan2QuadrantOffsets 0x1AC480) by the 3 delta sign bits. Self-contained inline VU0 (NO vcallms upload), returns f32 in $f0 (183558, .c still func_00283BF8 until next re-split)
 g_pCollWorldData = 0x001BAF00; // CONFIRMED - ptr to the world collision sector structure - set by level overlays
 g_collMobyMeshCache = 0x001BAF04; // CONFIRMED - base of the 8 x 0x800 skinned moby collision mesh cache
 g_collMobyMeshCacheKeys = 0x001BAF08; // CONFIRMED - the 8 cache keys

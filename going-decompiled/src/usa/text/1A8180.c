@@ -64,7 +64,10 @@ typedef union QVec { u_long128 q; Vec4 v; } QVec;
 /* Minimal moby view (0x100-stride table entries). Field meanings from the
  * Track-B passes; only fields this unit touches are declared. */
 typedef struct Moby {
-    /* 0x00 */ u8 pad0[0x20];
+    /* 0x00 */ u8 pad0[0x10];
+    /* 0x10 */ Vec4 pos;          /* world position (xyz) — also the bsphere centre
+                                     source (moby.h +0x10). RECOVERED: lwc1 at
+                                     +0x10/+0x14 in func_002A8C70.s -> f32 x/y. */
     /* 0x20 */ s8 state;          /* <0 = inactive/free */
     /* 0x21 */ u8 group;
     /* 0x22 */ u8 classSlot;
@@ -80,7 +83,12 @@ typedef struct Moby {
     /* 0xBC */ u8 lightMode;
     /* 0xBD */ u8 padBD[1];
     /* 0xBE */ u8 animFlags;
-    /* 0xBF */ u8 padTail[0x100 - 0xBF]; /* pad this local field-view out to the
+    /* 0xBF */ u8 padBF[0xF8 - 0xBF];
+    /* 0xF8 */ f32 facingAngle;   /* current facing/heading yaw (radians, wrapped
+                                     into [-pi,pi]); driven toward a target angle by
+                                     UpdateMobyFacingAngle (func_002A8B08). RECOVERED:
+                                     lwc1/swc1 at +0xF8 in func_002A8B08.s -> f32. */
+    /* 0xFC */ u8 padTail[0x100 - 0xFC]; /* pad this local field-view out to the
                                             canonical Moby SIZE (0x100, see moby.h)
                                             so the functional-equivalence tester can
                                             allocate + bind a full Moby. This keeps
@@ -161,7 +169,19 @@ extern s32 func_002B0E40(void *p);
 extern s32 func_002B0F40(void *p);
 extern s32 func_002B0C40(s32 ctx, void *out, void *a, void *b);
 extern s32 func_002837D0(void *vec);
+/* func_00283BF8 == Atan2fPoly (183558.c region): 2-arg arctangent (minimax poly
+ * + quadrant offset, self-contained VU0 — no vcallms upload), returns the angle
+ * as f32 in $f0. Native #else of func_002A8C70 needs the true f32 return so the
+ * atan2 result feeds func_002A8B08's angle arg without a spurious int<->float
+ * cvt (same f32-vs-s32 class as func_00284548 above). The two callers in this
+ * unit (func_002A8C70, func_002B1348) are both #else-only, so the f32 form is
+ * inert to the matched build; guarded per-build to mirror the func_00284548
+ * convention. RECOVERED: $f0 return at jr ra in func_00283BF8.s -> f32. */
+#ifdef TARGET_NATIVE
+extern f32 func_00283BF8(f32 y, f32 x);
+#else
 extern s32 func_00283BF8(f32 x, f32 y);
+#endif
 extern s32 func_002A12C0(void *p, s32 r, s32 g, s32 b);
 extern s32 func_00283638(Moby *moby);
 extern s32 PostMobyHitEvent(Moby *moby, s32 a, s32 b, s32 c, Vec4 *dir);
@@ -194,6 +214,13 @@ extern f32 func_00284548(f32 a, f32 b);
 #else
 extern s32 func_00284548(f32 a, f32 b);
 #endif
+/* Canonical-name angle helpers (183558.c): the func_002A8B08 .s calls these by
+ * the WrapAnglePi* glabels (== func_00284548 / func_00284590). Both genuinely
+ * return f32 in $f0. Declared here only for the native #else of
+ * func_002A8B08 / func_002A8C70; inert to the matched build (no matched fn in
+ * this unit calls them by these names). */
+extern f32 WrapAnglePiSum(f32 a, f32 b);    /* a+b wrapped into [-pi,pi] */
+extern f32 WrapAnglePiDiff(f32 a, f32 b);   /* signed (a-b) wrapped into [-pi,pi] */
 extern void Vec4SubVu0(Vec4 *dst, Vec4 *a, Vec4 *b);
 extern void Vec4ScaleVu0(Vec4 *dst, f32 s, const Vec4 *src);   /* sig: scale BEFORE src (matches the def in 183558.c) */
 extern void Vec3RescaleToLenVu0(Vec4 *dst, f32 len, Vec4 *src);
@@ -435,9 +462,86 @@ f32 func_002A8A68(f32 a, f32 b, f32 t) {
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8B00);
 
+/**
+ * UpdateMobyFacingAngle — drive a moby's facing/heading yaw (moby->facingAngle,
+ * +0xF8) toward a target angle by a damped, clamped angular step, returning
+ * nothing (the moby field is updated in place; *driveOut holds the per-frame
+ * angular delta).
+ *
+ *   d   = WrapAnglePiDiff(targetAngle, moby->facingAngle)   signed shortest turn
+ *   s   = clamp(d * 6.366197, -1, 1)                        normalised turn drive
+ *   v   = *driveOut + (gain*s - damp*v)                     damped step integrate
+ *   if (clampLimit != 0)  v = clamp(v, -clampLimit, clampLimit)
+ *   v   = clamp(v, -|d|, |d|)                               never overshoot target
+ *   *driveOut = v
+ *   moby->facingAngle = WrapAnglePiSum(moby->facingAngle, v)
+ *
+ * 6.366197 (0x40CBB7E3) = 20/pi: maps a half-pi-ish error to the [-1,1] drive
+ * band. gain/damp/clampLimit arrive in $f12/$f13/$f14 (the moby ptr in $a0, the
+ * drive-accumulator pointer in $a1).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8B08);
+#else
+void func_002A8B08(Moby *moby, f32 *driveOut, f32 targetAngle,
+                   f32 gain, f32 damp, f32 clampLimit) {
+    /* signed shortest turn from the current heading to the target */
+    f32 d = WrapAnglePiDiff(targetAngle, moby->facingAngle);
+    /* normalised turn drive, clamped to [-1, 1] (0x40CBB7E3 = 20/pi) */
+    f32 s = d * 6.366197f;   /* 0x40CBB7E3 (exact bit pattern) */
+    f32 v;
+    f32 ad;
 
+    if (s > 1.0f) {
+        s = 1.0f;
+    } else if (s < -1.0f) {
+        s = -1.0f;
+    }
+    /* damped integrate: feed-forward gain*s minus damp*current */
+    v = *driveOut;
+    v = v + (gain * s - damp * v);
+    *driveOut = v;
+    /* optional symmetric clamp to the per-call rate limit (0 disables) */
+    if (clampLimit != 0.0f) {
+        if (clampLimit < v) {
+            *driveOut = clampLimit;
+        } else if (v < -clampLimit) {
+            *driveOut = -clampLimit;
+        }
+    }
+    /* never step past the target: clamp the residual into [-|d|, |d|] */
+    ad = GetFloatAbs(d);
+    if (ad < *driveOut) {
+        *driveOut = GetFloatAbs(d);
+    } else if (-GetFloatAbs(d) > *driveOut) {
+        *driveOut = -GetFloatAbs(d);
+    }
+    /* advance and re-wrap the stored heading */
+    moby->facingAngle = WrapAnglePiSum(moby->facingAngle, *driveOut);
+}
+#endif
+
+/**
+ * UpdateMobyFacingTowardPoint — point a moby at a target position: compute the
+ * heading from the planar (x,y) delta and feed it to UpdateMobyFacingAngle.
+ *
+ *   angle = atan2(target->pos.x - moby->pos.x, target->pos.y - moby->pos.y)
+ *   UpdateMobyFacingAngle(moby, driveOut, angle, gain, damp)  [clampLimit param4]
+ *
+ * Pure forwarder; the three trailing floats (gain/damp/clampLimit) pass through
+ * in $f12/$f13/$f14.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8C70);
+#else
+void func_002A8C70(Moby *moby, Moby *target, f32 *driveOut,
+                   f32 gain, f32 damp, f32 clampLimit) {
+    f32 dx = target->pos.x - moby->pos.x;
+    f32 dy = target->pos.y - moby->pos.y;
+    f32 angle = func_00283BF8(dx, dy);
+    func_002A8B08(moby, driveOut, angle, gain, damp, clampLimit);
+}
+#endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8CF8);

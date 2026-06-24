@@ -644,6 +644,7 @@ MatrixIdentityVu0 = 0x00283C48; // CONFIRMED (signature match) - builds 4x4 iden
 MatrixMultiplyVu0 = 0x00284048; // CONFIRMED (signature match) - 4x4 matrix multiply loop (lqc2 4 rows, vmulax/vmadday/vmaddaz/vmaddw chain, bne a2,a3 over 4 cols). byte-identical (USA 0x284138, delta -0xF0)
 WrapAnglePiSum = 0x00284458; // CONFIRMED (signature match) - add.S f12,f13 then wrap into [-pi,pi] using constants 0x4049fdb (+pi) / 0xc049fdb (-pi), double sub/add. byte-identical (USA 0x284548, delta -0xF0)
 WrapAnglePiDiff = 0x002844A0; // CONFIRMED (signature match) - sub.S f12,f13 then wrap into [-pi,pi] (same 0x4049fdb / 0xc049fdb constants, double sub/add). byte-identical (USA 0x284590, delta -0xF0)
+Atan2fPoly = 0x00283B08; // CONFIRMED (signature match) - 2-arg arctangent - reduce |y|/|x|, evaluate the 8-term odd minimax poly (g_atanPolyCoeffs EU 0x1AC4E0) then add the quadrant offset (g_atan2QuadrantOffsets EU 0x1AC500) by the 3 delta sign bits. Self-contained inline VU0 (NO vcallms), returns f32 in $f0. byte-identical structure, data refs +0x80 (USA 0x283BF8, delta -0xF0)
 IntToFloat = 0x002845A0; // CONFIRMED (signature match) - mtc1 a0,f0 then cvt.s.w f0,f0 leaf. byte-identical (USA 0x284690, delta -0xF0)
 FloatToInt = 0x002845B0; // CONFIRMED (signature match) - cvt.w.S f12,f12 then mfc1 v0,f12 leaf. byte-identical (USA 0x2846A0, delta -0xF0)
 
