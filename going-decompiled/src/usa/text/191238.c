@@ -870,7 +870,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00296038);
  * (primary) / +0x15D4 (secondary) word, stride 8 by level, is the sector
  * count, >0 iff map data exists for that level.
  */
-#ifdef TARGET_NATIVE
+/* MapCache type is shared by the matched MapFindCacheSlot body and the
+ * TARGET_NATIVE #else bodies, so it lives outside the TARGET_NATIVE guard. */
 typedef struct MapCache {
     u8  _pad00[0x24];
     s32 available;         /* +0x24  */
@@ -883,6 +884,9 @@ typedef struct MapCache {
     s32 lockedSlot;        /* +0x2B0  slot index to leave untouched when evicting */
     s32 slotPixelCount[5]; /* +0x2B4  per-slot qword count of pixel data (CopyQwords len) */
 } MapCache;
+extern MapCache g_mapVertexData;     /* 0x1C4F20 map cache / vertex-data base */
+
+#ifdef TARGET_NATIVE
 /* Offset checks only on a C11+ host (ee-gcc 2.9 used by the EE-backend suite
  * predates _Static_assert). */
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
@@ -936,9 +940,18 @@ void func_00296038(s32 dst, s32 src) {
  * when clear; the low byte is the level. Reads the per-level sector count from
  * g_discToc and returns 1 if > 0.
  *
- * WALL (70.9%): the early-return `if` lowers to `beql` (branch-likely, with the
- * level mask computed once in the delay slot) where the pinned cc1 emits a
- * plain `beqz`. Logic exact; kept as the portable #else body. */
+ * WALL (register coloring, best 73.2%): the control-flow shape is reproduced
+ * exactly with `if (levelAndFlag & 0x100) return 0 < g_discToc[(levelAndFlag &
+ * 0xFF)*2 + 0x14F4/4]; else ...0x15D4/4` — flag tested first, low-byte mask in
+ * the branch delay slot, the `lui %hi(g_discToc)`/`addiu`/`sll`/`addu` address
+ * arithmetic duplicated (NOT CSE'd) in both arms. The ONLY residual delta is
+ * the pinned cc1's register assignment: the original reuses $2 for the dead
+ * flag reg as the level mask and lands the loaded word in $4 (the dead arg
+ * reg); our cc1 picks v1/v0 instead. Six source phrasings (inline, hoisted
+ * level, pointer-cast, inverted arms) all hold the structure but none flips the
+ * coloring. Logic byte-faithful; kept as the portable #else body, cmp-oracle
+ * validated (cmp_191238_mapdata). (Earlier note blamed beql vs beqz — wrong:
+ * both original and our build emit beqz; the real wall is allocation order.) */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapDataExistsForLevel);
 #else
@@ -955,23 +968,24 @@ s32 MapDataExistsForLevel(s32 levelAndFlag) {
 /* MapFindCacheSlot(levelAndFlag): scan the 5 map cache slots for an occupied
  * slot (slotState != 0) holding this level id. Returns the slot index, or -1.
  *
- * WALL (87.9%): the pinned cc1 folds `&g_mapVertexData + 0x29C` into a single
- * `la` reloc (2 insns) where the original keeps the base and adds 0x29C
- * separately (3 insns), plus a `daddu`-zero vs `move` idiom drift. Logic exact;
- * kept as the portable #else body. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapFindCacheSlot);
-#else
+ * The matched build walks a single moving pointer `id` that starts at
+ * &slotLevelId[0] (g_mapVertexData + 0x29C); slotState[i] is reached as id[-5]
+ * (0x29C - 0x14 == 0x288). Materializing &g_mapVertexData as a base pointer and
+ * adding 0x29C separately is what keeps cc1 from folding the two into one `la`
+ * reloc — the shape the original was built with. Byte-exact USA + EU. */
 s32 MapFindCacheSlot(s32 levelAndFlag) {
-    s32 i;
-    for (i = 0; i < 5; i++) {
-        if (g_mapCache.slotState[i] != 0 && g_mapCache.slotLevelId[i] == levelAndFlag) {
+    s32 *base = (s32 *)&g_mapVertexData;
+    s32 *id   = base + (0x29C / 4);   /* &slotLevelId[0]; slotState[i] == id[i-5] */
+    s32 i = 0;
+    do {
+        if (id[-5] != 0 && id[0] == levelAndFlag) {
             return i;
         }
-    }
+        i++;
+        id++;
+    } while (i < 5);
     return -1;
 }
-#endif
 
 /* MapFindNearestAvailableLevel(): pick the level to upload next. Try the
  * current level (with the active-set 0x100 flag) first; if it's not already

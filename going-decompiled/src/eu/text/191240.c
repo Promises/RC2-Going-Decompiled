@@ -194,7 +194,29 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00295FF8);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00296098);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", MapFindCacheSlot);
+/* MapFindCacheSlot(levelAndFlag): scan the 5 map cache slots for an occupied
+ * slot (slotState != 0) holding this level id. Returns the slot index, or -1.
+ *
+ * The matched build walks a single moving pointer `id` that starts at
+ * &slotLevelId[0] (g_mapVertexData + 0x29C); slotState[i] is reached as id[-5]
+ * (0x29C - 0x14 == 0x288). Materializing &g_mapVertexData as a base pointer and
+ * adding 0x29C separately is what keeps cc1 from folding the two into one `la`
+ * reloc — the shape the original was built with. Byte-exact USA + EU.
+ * (USA text/191238 MapFindCacheSlot; EU g_mapVertexData 0x1C4FA0.) */
+extern s32 g_mapVertexData[];        /* 0x1C4FA0 map cache / vertex-data base */
+s32 MapFindCacheSlot(s32 levelAndFlag) {
+    s32 *base = g_mapVertexData;
+    s32 *id   = base + (0x29C / 4);   /* &slotLevelId[0]; slotState[i] == id[i-5] */
+    s32 i = 0;
+    do {
+        if (id[-5] != 0 && id[0] == levelAndFlag) {
+            return i;
+        }
+        i++;
+        id++;
+    } while (i < 5);
+    return -1;
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", MapDataExistsForLevel);
 
