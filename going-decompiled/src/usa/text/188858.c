@@ -57,6 +57,7 @@ _Static_assert(__builtin_offsetof(CinematicQueue, active)      == 0x44, "Cinemat
 extern s32 g_nSavePromptPending;    /* show-saving-prompt gate (0x1A7B94) */
 extern s32 g_nLevelExitRequested;   /* in-level frame-loop exit flag (0x1A8B84) */
 extern s32 g_nGameState;            /* top-level game state id */
+extern s32 g_gameTime;              /* global frame counter (0x1B1608) */
 
 extern s32 D_1A8FB0;                /* gp small countdown gate (0x1A8FB0) */
 
@@ -185,13 +186,34 @@ typedef struct SubtitleState {
     s32 _pad04;         /* +0x04 */
     u8  _pad08[0x18];
     s32 entryIndex;     /* +0x20: index into g_pActiveTextTable of shown line */
-    s32 showingIndex;   /* +0x24 */
-    s32 showingHandle;  /* +0x28 */
+    s32 showingIndex;   /* +0x24: pending/showing line index (-1 = none) */
+    s32 showingHandle;  /* +0x28: voice/clip handle of the shown line */
     s32 tableCount;     /* +0x2C */
+    u8  _pad30[0x10];
+    s32 phaseTimer;     /* +0x40: per-line phase timer (cleared on arm) */
+    s32 phaseFlag;      /* +0x44: per-line phase flag  (cleared on arm) */
 } SubtitleState;
 extern SubtitleState g_subtitleState;
 extern s32 g_discToc[];                       /* master disc asset directory (0x14B540) */
 extern u8  g_saveImageArea[];                 /* per-area save image RAM buffer (0x1A53A8) */
+
+/* The voice/cinematic-clip control block lives at g_saveImageArea + 0x1000.
+ * func_00289840 reads +0x24 (this area's current clip id) and +0x68 (a "voice
+ * busy" gate); idle == both clear / matching the requested -1. */
+typedef struct AreaClipState {
+    u8  _pad00[0x24];
+    s32 currentClip;   /* +0x24 */
+    u8  _pad28[0x40];
+    s32 voiceBusy;     /* +0x68 */
+} AreaClipState;
+
+/* Per-line subtitle/voice timing record table at g_health+0x66C (stride 0xC,
+ * indexed by the voice handle). +0x0 is a u16 duration; 0xFFFF marks "no line"
+ * (the subtitle cannot be armed). g_health is the small-data anchor the original
+ * folds the +0x66C displacement onto, so the table is expressed relative to it.
+ * g_health is read with the absolute lui/%lo macro shape (size override). */
+__asm__(".extern g_health, 16");
+extern s32 g_health;                          /* 0x18C2EC (region anchor) */
 
 extern s32 g_cinematicUnlockedFlags[];        /* cinematics-watched bitfield (0x139768) */
 
@@ -950,12 +972,50 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_002897B8);
  * g_subtitleState +0x24/+0x28 and clears +0x40/+0x44. Returns 1 when armed, else
  * 0.
  *
- * WALL: a long frameless guard chain over several globals that are addressed as
- * named sub-objects (g_saveImageArea+0x1000, g_health+0x66C) with displacements;
- * the %hi/%lo-vs-displacement fold and the guard branch colouring are fixed
- * SN-cc1 behaviour. Left INCLUDE_ASM (functional model documented above; not
- * fabricated to avoid a wrong-guard defect). */
+ * WALL (81.58%): the C below is op-for-op faithful and reproduces every load,
+ * guard branch, the g_saveImageArea+0x1000 / g_health+0x66C absolute-displacement
+ * folds and the combined `state==6 || time<6` exit exactly — the SOLE residual
+ * difference is the EE 3-operand `mult`: the original schedules it between the
+ * table-base `lui` and `addiu` and reuses the constant-12 register (v0) for the
+ * product, whereas this cc1 emits the `addiu` first and allocates a fresh temp
+ * (a0). That is a pure instruction-scheduling / register-allocation artifact of
+ * the multiply, not expressible from semantically-equivalent C. Left INCLUDE_ASM
+ * for the matching build; the #else is the cmp-oracle'd portable body
+ * (cmp_188858_text.c, 95/95 on real R5900). EU twin func_00289730 (188748) is
+ * byte-identical logic — region-agnostic, no divergence. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_00289840);
+#else
+s32 func_00289840(s32 textIndex, s32 voiceHandle) {
+    u16 *lineTable = (u16 *)((u8 *)&g_health + 0x66C);
+    s32 pending;
+
+    if (g_subtitleState.state != 0) {
+        return 0;
+    }
+    pending = g_subtitleState.showingIndex;
+    if (pending != -1) {
+        return 0;
+    }
+    if (((AreaClipState *)&g_saveImageArea[0x1000])->voiceBusy != 0) {
+        return 0;
+    }
+    if (((AreaClipState *)&g_saveImageArea[0x1000])->currentClip != pending) {
+        return 0;
+    }
+    if (lineTable[voiceHandle * 6] == 0xFFFF) {
+        return 0;
+    }
+    if (g_nGameState == 6 || g_gameTime < 6) {
+        return 0;
+    }
+    g_subtitleState.showingIndex = textIndex;
+    g_subtitleState.showingHandle = voiceHandle;
+    g_subtitleState.phaseTimer = 0;
+    g_subtitleState.phaseFlag = 0;
+    return 1;
+}
+#endif
 
 /* func_002898D8: 8-byte trailing-pad fragment (addiu $sp,+0x20; nop) of the
  * preceding function, pinned as its own symbol; the real function follows. */
@@ -1625,14 +1685,46 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C710);
  * INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C728);
 
-/* func_0028C7A8(): refresh the weapon-wheel icon list in place — walk the 8
- * wheel records (base g_hudMobySpawnStart+0x2C, stride 0x1C) against the
- * g_gsPixelOffsetY+0x64 source table; where a source id differs from the
- * record's cached +0x18 id, write the source id back into the table slot.
+/* SyncEquippedItemSlots / func_0028C7A8(): refresh the 8-entry equipped-item
+ * cache (g_equippedItemSlots[0..7]) from the live weapon-select wheel records.
+ * The wheel-record array base is the pointer stored at g_hudMobySpawnStart+0x2C
+ * (== &D_002550F0, stride 0x1C); each record's +0x18 holds the resolved item id.
+ * For each slot whose cached id differs from the wheel record's +0x18 id, write
+ * the record id into g_equippedItemSlots[i].
  *
- * WALL (gp/absolute-mix + reloaded-ptr): same dual-base addressing /
- * induction-pointer idiom as func_0028C728. Left INCLUDE_ASM. */
+ * WALL (54%, LICM / reloaded-ptr): the original RE-READS the record-array base
+ * pointer (*(g_hudMobySpawnStart+0x2C)) from memory on every iteration, treating
+ * it as if the g_equippedItemSlots store could alias it; this cc1 proves the two
+ * objects disjoint and hoists the invariant base load out of the loop (loop-
+ * invariant code motion, independent of -fno-gcse). The same reloaded-ptr idiom
+ * walls the sibling func_0028C728. Left INCLUDE_ASM for the matching build; the
+ * #else is the cmp-oracle'd portable body (cmp_188858_wheel.c, 32/32 on real
+ * R5900). EU twin func_0028C730 (188748) is byte-identical logic — region-
+ * agnostic, no divergence. */
+extern s32 g_equippedItemSlots[8];            /* currently-equipped item ids (0x1A73B8) */
+
+typedef struct WheelRecord {
+    s32 nameStringId;   /* +0x00 */
+    u8  _pad04[0x14];
+    s32 itemId;         /* +0x18: resolved item id for this wheel slot */
+} WheelRecord;                                /* stride 0x1C */
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C7A8);
+#else
+void func_0028C7A8(void) {
+    WheelRecord **pRec = *(WheelRecord ***)((u8 *)&g_hudMobySpawnStart + 0x2C);
+    s32 *slot = g_equippedItemSlots;
+    s32  i;
+
+    for (i = 0; i < 8; i++) {
+        s32 id = pRec[0][i].itemId;
+        if (slot[i] != id) {
+            slot[i] = id;
+        }
+    }
+}
+#endif
 
 /* Build the weapon-select wheel widget `w`: rebuild its icon list
  * (func_0028C728), then seed the wheel geometry/state (half-extents 0xD2/0xC8,

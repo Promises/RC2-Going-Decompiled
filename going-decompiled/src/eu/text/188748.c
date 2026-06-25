@@ -188,7 +188,81 @@ void func_002896A0(void) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_002896A8);
 
+/* Subtitle state machine record (EU 0x254E78). Region twin of the USA
+ * SubtitleState (see src/usa/text/188858.c). +0x24/+0x28 hold the pending/showing
+ * line index/handle, +0x40/+0x44 the per-line phase timer/flag. */
+typedef struct SubtitleState {
+    s32 state;          /* +0x00 */
+    s32 _pad04;         /* +0x04 */
+    u8  _pad08[0x18];
+    s32 entryIndex;     /* +0x20 */
+    s32 showingIndex;   /* +0x24: pending/showing line index (-1 = none) */
+    s32 showingHandle;  /* +0x28: voice/clip handle of the shown line */
+    s32 tableCount;     /* +0x2C */
+    u8  _pad30[0x10];
+    s32 phaseTimer;     /* +0x40 */
+    s32 phaseFlag;      /* +0x44 */
+} SubtitleState;
+extern SubtitleState g_subtitleState;          /* EU 0x254E78 */
+
+/* The voice/cinematic-clip control block lives at g_saveImageArea + 0x1000
+ * (EU 0x1A6428). +0x24 is this area's current clip id; +0x68 a "voice busy"
+ * gate. EU twin of the USA AreaClipState. */
+typedef struct AreaClipState {
+    u8  _pad00[0x24];
+    s32 currentClip;   /* +0x24 */
+    u8  _pad28[0x40];
+    s32 voiceBusy;     /* +0x68 */
+} AreaClipState;
+extern u8  g_saveImageArea[];                  /* EU 0x1A5428 */
+
+/* Per-line subtitle/voice timing table at g_health+0x66C (EU 0x18C9D8, stride
+ * 0xC, indexed by voice handle; +0x0 u16 duration, 0xFFFF = "no line"). g_health
+ * is the EU region anchor the displacement folds onto. */
+extern s32 g_health;                           /* EU 0x18C36C */
+extern s32 g_nGameState;                        /* EU 0x1A8C60 */
+extern s32 g_gameTime;                          /* global frame counter (EU gp anchor g_nLevelExitDestination+0x8, 0x1B1688) */
+
+/* func_00289730(textIndex, voiceHandle): EU twin of USA func_00289840 — arm a
+ * pending subtitle line. Byte-identical region-agnostic logic; see
+ * src/usa/text/188858.c for the recovered behaviour + the cmp-oracle
+ * (cmp_188858_text.c, 95/95 on real R5900). Only the extern global addresses are
+ * region-shifted (g_subtitleState 0x254E78, g_saveImageArea+0x1000 0x1A6428,
+ * g_health+0x66C 0x18C9D8, g_gameTime via the EU gp anchor
+ * g_nLevelExitDestination+0x8). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_00289730);
+#else
+s32 func_00289730(s32 textIndex, s32 voiceHandle) {
+    u16 *lineTable = (u16 *)((u8 *)&g_health + 0x66C);
+    s32 pending;
+
+    if (g_subtitleState.state != 0) {
+        return 0;
+    }
+    pending = g_subtitleState.showingIndex;
+    if (pending != -1) {
+        return 0;
+    }
+    if (((AreaClipState *)&g_saveImageArea[0x1000])->voiceBusy != 0) {
+        return 0;
+    }
+    if (((AreaClipState *)&g_saveImageArea[0x1000])->currentClip != pending) {
+        return 0;
+    }
+    if (lineTable[voiceHandle * 6] == 0xFFFF) {
+        return 0;
+    }
+    if (g_nGameState == 6 || g_gameTime < 6) {
+        return 0;
+    }
+    g_subtitleState.showingIndex = textIndex;
+    g_subtitleState.showingHandle = voiceHandle;
+    g_subtitleState.phaseTimer = 0;
+    g_subtitleState.phaseFlag = 0;
+    return 1;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_002897C8);
 
@@ -293,7 +367,44 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028C698);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028C6B0);
 
+/* One weapon-select wheel record (stride 0x1C); +0x18 holds the resolved item
+ * id. EU twin of the USA WheelRecord. */
+typedef struct WheelRecord {
+    s32 nameStringId;   /* +0x00 */
+    u8  _pad04[0x14];
+    s32 itemId;         /* +0x18 */
+} WheelRecord;                                /* stride 0x1C */
+
+/* The wheel-record array base pointer is the word at g_pActiveTextTable+0x94
+ * (EU 0x1B18D4; the USA twin reads g_hudMobySpawnStart+0x2C). */
+extern void *g_pActiveTextTable;              /* EU 0x1B1840 (used here as +0x94 anchor) */
+/* g_equippedItemSlots[8]: EU 0x1A7438, addressed off the unnamed region anchor
+ * D_001A7308 (+0x130) — anchor stays its D_ name per the region-anchor rule. */
+extern u8 D_001A7308[];                       /* EU region data anchor */
+
+/* func_0028C730(): EU twin of USA func_0028C7A8 (SyncEquippedItemSlots) — refresh
+ * the 8-entry equipped-item cache (g_equippedItemSlots, EU 0x1A7438) from the
+ * live weapon-select wheel records. Byte-identical region-agnostic logic; see
+ * src/usa/text/188858.c for the recovered behaviour + the cmp-oracle
+ * (cmp_188858_wheel.c, 32/32 on real R5900). Only the extern global addresses are
+ * region-shifted (wheel-base ptr at g_pActiveTextTable+0x94, slots at
+ * D_001A7308+0x130). The original re-reads the base pointer every iteration. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028C730);
+#else
+void func_0028C730(void) {
+    WheelRecord **pRec = *(WheelRecord ***)((u8 *)&g_pActiveTextTable + 0x94);
+    s32 *slot = (s32 *)(D_001A7308 + 0x130);
+    s32  i;
+
+    for (i = 0; i < 8; i++) {
+        s32 id = pRec[0][i].itemId;
+        if (slot[i] != id) {
+            slot[i] = id;
+        }
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028C778);
 
