@@ -104,6 +104,20 @@ extern u8 g_waterPool[]; /* 0x1B2260 static water-pool block; +0x68 = its moby p
 __asm__(".extern g_gsScreenContext, 16");
 extern u8 g_gsScreenContext[]; /* 0x1A6480 GS screen context (disp dims at +0x150/+0x152) */
 
+/* gadget/turret display scratch block @0x1B2290. The water-pool fade quad reads
+ * its level at +0x2 and depth-recip at +0x4; the original addresses them off
+ * g_gadgetDisplay (nearest preceding symbol), so we must too for the %hi/%lo
+ * reloc to pair by name. */
+__asm__(".extern g_gadgetDisplay, 16");
+extern u8 g_gadgetDisplay[]; /* 0x1B2290 */
+
+/* 0x1B229A active-gadget swap index; the water-pool tint level lives at +0x2C
+ * (== g_waterPool+0x66). The original tint/fade quad emitters address this field
+ * off g_swapGadgetItemIndex (nearest preceding symbol), so we must too for the
+ * %hi/%lo reloc to pair by name. */
+__asm__(".extern g_swapGadgetItemIndex, 16");
+extern u8 g_swapGadgetItemIndex[]; /* 0x1B229A */
+
 extern void func_002AE0B8(void *a, void *b, void *c, void *d);
 extern void func_002ADF48(void *a, void *b, void *c, void *d, void *e, void *f);
 extern void func_00300120(Moby *moby, s32 classId);
@@ -126,11 +140,12 @@ extern f32 Vec3DistSqVu0(void *a, void *b);
 __asm__(".extern g_heroPos, 16");
 extern u8 g_heroPos[]; /* 0x189EA0 reference position for turret target ranking */
 
-/* Moby spawn arena: aux blocks are indexed off the spawn-pool base. */
+/* Moby spawn arena: aux blocks are indexed off the spawn-pool base. Both globals
+ * hold a POINTER to the respective arena base (the code loads through them). */
 __asm__(".extern g_mobySpawnStart, 16");
-extern u8 g_mobySpawnStart[];   /* 0x1B22E0 base of moby spawn slots */
+extern u8 *g_mobySpawnStart;   /* 0x1B22E0 -> base of moby spawn slots */
 __asm__(".extern g_mobyAuxBlockBase, 16");
-extern u8 g_mobyAuxBlockBase[]; /* 0x1B22EC base of 0x80-byte per-moby aux blocks */
+extern u8 *g_mobyAuxBlockBase; /* 0x1B22EC -> base of 0x80-byte per-moby aux blocks */
 
 /* Allocate a sound-pool slot (0x20-stride table at D_00220000+0x1260): find the
  * first slot whose +0x1C "active" word is 0, claim it (store handle `id`), stash
@@ -350,9 +365,9 @@ void *func_00300190(s32 classId, s32 animArg) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_00300288);
 #else
 void func_00300288(void) {
-    void *m = *(void **)(g_waterPool + 0x68);
+    Moby *m = *(Moby **)(g_swapGadgetItemIndex + 0x2E);
     func_00300120(m, 0x3EF);
-    m = *(void **)(g_waterPool + 0x68);
+    m = *(Moby **)(g_swapGadgetItemIndex + 0x2E);
     *(f32 *)((u8 *)m + 0x10) = 5.0f;
     *(u8 *)((u8 *)m + 0x30) = 0xFF;
     *(u16 *)((u8 *)m + 0x34) = (u16)(*(u16 *)((u8 *)m + 0x34) | 0x43);
@@ -603,8 +618,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_00300B88);
 void func_00300B88(void) {
     s32 alpha;
     AppendGsRegPacket(0x42, 0x44);
-    alpha = FloatToInt((1.0f - IntToFloat(*(s16 *)(g_waterPool + 0x32))
-                               * *(f32 *)(g_waterPool + 0x34)) * 255.0f);
+    alpha = FloatToInt((1.0f - IntToFloat(*(s16 *)(g_gadgetDisplay + 0x2))
+                               * *(f32 *)(g_gadgetDisplay + 0x4)) * 255.0f);
     func_0027E4D0(0, *(s16 *)(g_gsScreenContext + 0x152), 0,
                   *(s16 *)(g_gsScreenContext + 0x150), alpha << 24);
 }
@@ -683,10 +698,10 @@ void func_00300C08(void) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_00300E70);
 #else
 void func_00300E70(void) {
-    AppendGsRegPacket(0x42, ((s64)*(s16 *)(g_waterPool + 0x66) << 32) | 0x44);
+    AppendGsRegPacket(0x42, ((s64)*(s16 *)(g_swapGadgetItemIndex + 0x2C) << 32) | 0x44);
     func_0027E4D0(0, *(s16 *)(g_gsScreenContext + 0x152), 0,
                   *(s16 *)(g_gsScreenContext + 0x150),
-                  (*(s16 *)(g_waterPool + 0x66) << 24) | 0xFFFFFF);
+                  (*(s16 *)(g_swapGadgetItemIndex + 0x2C) << 24) | 0xFFFFFF);
 }
 #endif
 
@@ -758,7 +773,6 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_003010D8);
 void func_003010D8(void *a0, void *a1) {
     if (g_pHeroGroundMoby != 0) {
         func_002AE0B8(g_pHeroMoby, g_pHeroGroundMoby, a1, a0);
-        __asm__ __volatile__("");
     }
 }
 #endif
@@ -808,14 +822,14 @@ s32 func_00301110(s32 *state, s32 value) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_00301190);
 #else
 void func_00301190(s32 *state, s32 slot) {
-    s32 *entry = (s32 *)((u8 *)state + (slot << 2));
+    s32 *entry = &state[slot];
     s32 count;
     entry[0] = 0;
-    *(s32 *)((u8 *)entry + 0x100) = 0;
-    count = *(s32 *)((u8 *)state + 0x220) - 1;
-    *(s32 *)((u8 *)state + 0x220) = count;
+    entry[0x40] = 0;
+    count = state[0x88] - 1;
+    state[0x88] = count;
     if (count == 0) {
-        *(s32 *)((u8 *)state + 0x224) = 0;
+        state[0x89] = 0;
     }
 }
 #endif
