@@ -330,7 +330,47 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E4178);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E4280);
 
+__asm__(".extern g_pSkyShellSpinRates, 16");
+extern f32 *g_pSkyShellSpinRates; /* 0x1B1910 - per-shell {x,y,z} spin rate table (stride 0xC) */
+extern f32 g_skyShellAngles[];    /* 0x261DB0 - per-shell {x,y,z} accumulated angles (stride 0xC) */
+extern u8 g_skyShellMatrix[];     /* 0x1B2070 - shared sky-shell transform matrix */
+extern float WrapAnglePiSum(float a, float b);
+extern void func_00283DE0(void *matrix, f32 *eulerXYZ);
+
+/* Advance sky shell `shellIdx`'s three Euler angles by its per-shell spin rate
+ * (wrapping each into [-pi,pi] via WrapAnglePiSum) and rebuild the shared sky-
+ * shell rotation matrix from the updated {x,y,z} angles.  The angle table and
+ * spin-rate table are both strided 0xC (three floats per shell).
+ * NEAR-MISS (~70%, structurally faithful): cc1 -O2 -G8 -fno-gcse derives the
+ * three angle-slot pointers eagerly and needs a 5th callee-save, growing the
+ * frame 0x40 -> 0x60/0x70, where the original interleaves each pointer's
+ * derivation with the call stream and keeps only 4 saves (the lazy-derive /
+ * regalloc-schedule wall).  The angle math, call order, and the {x,y,z} stack
+ * vec handed to the matrix builder all match.  Not cmp-oracle'd: the tail calls
+ * the VU0 matrix builder func_00283DE0, which has no native leaf yet. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", UpdateSkyShellRotation);
+#else
+void UpdateSkyShellRotation(s32 shellIdx) {
+    s32 stride = shellIdx * 0xC;
+    f32 *angleX = (f32 *)((u8 *)g_skyShellAngles + stride);
+    f32 *angleY = (f32 *)((u8 *)g_skyShellAngles + 0x4 + stride);
+    f32 *angleZ = (f32 *)((u8 *)g_skyShellAngles + 0x8 + stride);
+    f32 euler[3];
+
+    *angleX = WrapAnglePiSum(*angleX,
+                             *(f32 *)((u8 *)g_pSkyShellSpinRates + stride));
+    *angleY = WrapAnglePiSum(*angleY,
+                             *(f32 *)((u8 *)g_pSkyShellSpinRates + 0x4 + stride));
+    *angleZ = WrapAnglePiSum(*angleZ,
+                             *(f32 *)((u8 *)g_pSkyShellSpinRates + 0x8 + stride));
+
+    euler[0] = *angleX;
+    euler[1] = *angleY;
+    euler[2] = *angleZ;
+    func_00283DE0(g_skyShellMatrix, euler);
+}
+#endif
 
 extern u8 g_skyShellMatrix[]; /* 0x1B2270 - shared sky-shell transform matrix */
 extern void MatrixIdentityVu0(void *m);
