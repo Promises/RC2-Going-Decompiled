@@ -901,9 +901,17 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F4D0);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F4D8);
 
 /* Enable blob shadows: set the enable flag and return 1 (success).
- * Near-miss: the pinned cc1 materialises the constant 1 twice (one reg for the
- * store, one for the return value) instead of reusing a single register as the
- * original does, and pads the jr delay slot with a nop rather than the store. */
+ * Wall (re-checked 2026-06-25): the enable flag lives at 0x1B15E8 and the
+ * original stores it %gp_rel(g_blobShadowCount + 0x2C) - a GPREL16 reloc against
+ * the g_blobShadowCount base + addend 0x2C. The rest of g_blobShadowCount (the
+ * queue at +0x0/+0x4../+0x18) is accessed absolute %hi/%lo in this same unit, so
+ * a single C declaration of g_blobShadowCount cannot be both gp-small (for the
+ * flag) and large/absolute (for the queue) - and a separate gp-small symbol for
+ * the flag emits a GPREL16 reloc against the WRONG symbol name (objdiff matches
+ * relocs by symbol+addend, not resolved address). The original split the flag
+ * into a distinct gp-small global that the linker happened to place at
+ * g_blobShadowCount+0x2C; we cannot reproduce that reloc naming. (Secondary: cc1
+ * also materialises the constant 1 twice here, one reg per use.) Genuine wall. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F790);
 #else
@@ -913,8 +921,11 @@ s32 func_0027F790(void) {
 #endif
 
 /* Disable blob shadows: clear the enable flag.
- * Near-miss: the pinned cc1 emits the store then `jr $31` with a nop in the
- * delay slot, while the original packs the store into the jr delay slot. */
+ * Wall (re-checked 2026-06-25): cc1 DOES pack the store into the jr delay slot
+ * (`jr $31; sw $0,...`) exactly like the original - the delay-slot claim in the
+ * old note was wrong. The genuine wall is the same gp_rel/symbol-naming split as
+ * func_0027F790: the flag store is %gp_rel(g_blobShadowCount + 0x2C) but the
+ * queue base is accessed absolute, unsplittable under one C symbol. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F7A0);
 #else
@@ -928,27 +939,28 @@ void func_0027F7A0(void) {
  * stopping at NUL or after `maxChars` chars (maxChars == -1 means until NUL). A
  * zero advance is skipped (movn). The current char's advance is folded in before
  * the maxChars return check (the movn sits in the beq delay slot). Worker behind
- * the three font wrappers below. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F7A8);
-#else
+ * the three font wrappers below.
+ * MATCHED (2026-06-25, revisit-upgrade from #else): the old near-miss split the
+ * early-out into `return 0` blocks; the single merged tail (`return sum`, sum==0
+ * on the early paths) plus reading the guard byte through `str` directly and
+ * bumping `i` before the advance-fold reproduces the original prologue schedule
+ * 1:1. Leaf, no saves - so no save-packing wall here. */
 s32 func_0027F7A8(const char *str, s32 maxChars, const void *glyphTable) {
-    const u8 *s = (const u8 *)str;
     const s8 *gt = (const s8 *)glyphTable;
     s32 sum = 0;
-    s32 i;
-    if (maxChars == 0 || s[0] == 0) return 0;
-    i = 1;
-    do {
-        s8 advance = gt[s[0] * 4 + 3];
-        s++;
-        if (advance != 0) sum += advance;
-        if (i == maxChars) return sum;
-        i++;
-    } while (s[0] != 0);
+    s32 i = 0;
+    if (maxChars != 0 && ((const u8 *)str)[0] != 0) {
+        const u8 *s = (const u8 *)str;
+        do {
+            s8 advance = gt[s[0] * 4 + 3];
+            s++;
+            i++;
+            if (advance != 0) sum += advance;
+            if (i == maxChars) break;
+        } while (s[0] != 0);
+    }
     return sum;
 }
-#endif
 
 /** Measure pixel width of a string in the D_263B10 font. */
 s32 func_0027F7F8(const char *str, s32 maxChars) {
