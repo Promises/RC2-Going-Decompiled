@@ -246,9 +246,101 @@ extern LevelObject D_2403D0[];              /* 0x2403D0 level-object table */
  * cc1 packs at 16-byte spacing), plus float register temps. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", UpdateMobyThreatFlashAndBurst);
 
-/* Classify a candidate target by proximity band (near/mid/far threat tier).
- * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing, with fp temps. */
+/* --- moby auto-target acquisition: shared globals + leaves ----------------
+ * D_1A8CA0 (0x1A8CA0) is the radial-gravity mode flag — part of the documented
+ * gravity-direction cluster (see symbol_addrs); when set, threat scoring uses
+ * true 3D distance and skips the facing-bias term. Kept under its splat name
+ * (the cluster is deliberately not re-pinned to avoid build desync).
+ * D_001F0000 (0x1F0000) is the per-level effect/zone data-segment base (also
+ * referenced raw by the EU effect-def code); the target-zone pointer table lives
+ * at +0x1680. */
+extern Moby *g_pHeroMoby;        /* 0x18C0B0 hero (Ratchet) moby — lock-on anchor */
+extern s32   g_nGameState;       /* 0x1A8BB0 current top-level game/screen state id */
+extern s32   D_1A8CA0;           /* 0x1A8CA0 radial-gravity mode flag (see above) */
+extern u8    D_001F0000[];       /* 0x1F0000 per-level effect/zone data segment */
+
+extern f32 DistXYVu0(Vec4 *a, Vec4 *b);   /* 0x283830 horizontal XY distance, VU0 */
+extern f32 Dist3DVu0(Vec4 *a, Vec4 *b);   /* 0x2837F8 3D (xyz) distance, VU0 */
+extern f32 Atan2fPoly(f32 y, f32 x);      /* 0x283BF8 2-arg arctangent (VU0/FPU) */
+extern f32 WrapAngleAbsDiff(f32 a, f32 b);/* 0x284630 |a-b| folded into [0,pi] */
+
+/* Point-in-zone test: 1 if hero-pos lies inside the named target zone polygon,
+ * else 0. (0x2A9958 — self-contained crossing-number test.) */
+extern s32 func_002A9958(Vec4 *probePos, Vec4 *polyPoints, s32 count);
+
+/* Target-zone pointer table (D_001F0000 + 0x1680): one pointer per zone id; each
+ * points to a record whose +0x0 is the polygon vertex count and +0x10 the Vec4
+ * vertex array. */
+#define g_targetZoneTable ((void **)(D_001F0000 + 0x1680))
+
+/* Classify a candidate into a proximity band relative to the hero (player).
+ *
+ * Writes the current hero moby into *outHero (always), then — only while in
+ * gameplay (g_nGameState == 0) — measures the horizontal distance from the
+ * candidate position to the hero and returns a band code:
+ *   2 (near)  : zone `nearZoneId` contains the hero (polygon test) OR, when
+ *               nearZoneId == -1, the distance is below `nearRadius`;
+ *   1 (mid)   : likewise for `midZoneId` / `midRadius`;
+ *   0 (none)  : neither band matched (or not in gameplay).
+ * The candidate position is `posOverride` when non-NULL, else the candidate
+ * moby's own world position (candidate+0x10).
+ *
+ * @param candidate   the moby being classified (its +0x10 pos is the default probe)
+ * @param outHero     out: receives g_pHeroMoby
+ * @param nearZoneId  zone id for the near band, or -1 to use nearRadius
+ * @param midZoneId   zone id for the mid band, or -1 to use midRadius
+ * @param posOverride optional explicit probe position (NULL -> candidate pos)
+ * @param nearRadius  near-band radius (used when nearZoneId == -1)
+ * @param midRadius   mid-band radius (used when midZoneId == -1)
+ * @return proximity band 0/1/2
+ *
+ * NATIVE SHIM (no byte target; matching build uses INCLUDE_ASM above). Derived
+ * register-exact from ClassifyTargetProximity.s @0x2B4588.
+ *
+ * WALL (matching build): save-layout — 3 callee-saves + $ra at 8-byte spacing,
+ * with fp temps. cmp-oracle validated. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ClassifyTargetProximity);
+#else
+s32 ClassifyTargetProximity(Moby *candidate, Moby **outHero, s32 nearZoneId,
+                            s32 midZoneId, Vec4 *posOverride,
+                            f32 nearRadius, f32 midRadius) {
+    Vec4 probePos;
+    Moby *hero;
+    f32 dist;
+
+    probePos = posOverride ? *posOverride : candidate->facingTarget;
+    hero = g_pHeroMoby;
+    *outHero = hero;
+    if (g_nGameState != 0) {
+        return 0;
+    }
+
+    dist = DistXYVu0(&probePos, &hero->facingTarget);
+
+    if (nearZoneId != -1) {
+        void *zone = g_targetZoneTable[nearZoneId];
+        if (func_002A9958(&(*outHero)->facingTarget,
+                          (Vec4 *)((u8 *)zone + 0x10), *(s32 *)zone) != 0) {
+            return 2;
+        }
+    } else if (dist < nearRadius) {
+        return 2;
+    }
+
+    if (midZoneId != -1) {
+        void *zone = g_targetZoneTable[midZoneId];
+        if (func_002A9958(&(*outHero)->facingTarget,
+                          (Vec4 *)((u8 *)zone + 0x10), *(s32 *)zone) != 0) {
+            return 1;
+        }
+    } else if (dist < midRadius) {
+        return 1;
+    }
+
+    return 0;
+}
+#endif
 
 /* Handwritten stub-table fragment (orphaned addiu $sp / nop run) — see unit
  * header; kept INCLUDE_ASM permanently. */
@@ -354,15 +446,147 @@ s32 func_002B47D0(Moby *moby) {
     return moby->animFlags & 4;
 }
 
-/* Compute squared distance from a moby to its auto-target candidate.
- * WALL: save-layout — 4 callee-saves + $ra at 8-byte spacing, with fp temps. */
+/* Auto-target threat/scoring metric: how "costly" `target` is for `moby` to
+ * engage. Lower = more attractive. Starts as the planar XY distance between the
+ * two mobys' world positions (moby+0x10 / target+0x10), then:
+ *   - under radial-gravity levels (D_1A8CA0 != 0) it uses the full 3D distance
+ *     instead and applies no facing penalty;
+ *   - otherwise it adds a facing-misalignment penalty: the angle between the
+ *     direction toward the target (atan2 of the XY delta) and the moby's own
+ *     facing yaw (moby+0xF8), scaled by the base distance — so targets behind
+ *     the moby score worse;
+ *   - finally, if the target IS the hero moby, a flat +42 bias is added so the
+ *     player is de-prioritised relative to equidistant enemies.
+ *
+ * @param moby   the seeking moby (its world pos +0x10 and facing yaw +0xF8)
+ * @param target the candidate target moby (its world pos +0x10)
+ * @return the threat-distance score (f32)
+ *
+ * NATIVE SHIM (no byte target; matching build uses INCLUDE_ASM above). Derived
+ * register-exact from CalcMobyTargetThreatDist.s @0x2B47E0.
+ *
+ * WALL (matching build): save-layout — 4 callee-saves + $ra at 8-byte spacing,
+ * with an $f20 fp temp. cmp-oracle validated. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", CalcMobyTargetThreatDist);
+#else
+f32 CalcMobyTargetThreatDist(Moby *moby, Moby *target) {
+    f32 score;
 
-/* Scan a moby group for the best auto-target by threat distance.
- * WALL: save-layout — 6 callee-saves + $ra at 8-byte spacing. */
+    if (D_1A8CA0 != 0) {
+        score = Dist3DVu0(&moby->facingTarget, &target->facingTarget);
+    } else {
+        f32 dx = target->facingTarget.x - moby->facingTarget.x;
+        f32 dy = target->facingTarget.y - moby->facingTarget.y;
+        f32 facingPenalty;
+        score = DistXYVu0(&moby->facingTarget, &target->facingTarget);
+        facingPenalty = WrapAngleAbsDiff(Atan2fPoly(dx, dy),
+                                         moby->moveSpeed /* +0xF8 facing yaw */);
+        score += facingPenalty * score;
+    }
+    if (target == g_pHeroMoby) {
+        score += 42.0f;
+    }
+    return score;
+}
+#endif
+
+/* A target group's candidate list: a count-prefixed array of 8-byte entries.
+ * entry[i].moby is the candidate moby ptr; entry[i].tag a per-entry id byte. The
+ * entry-0 +0x4 slot doubles as the list's entry count (the per-entry moby ptr
+ * only occupies +0x0..+0x3, leaving +0x4/+0x5 for count/tag). */
+typedef struct TargetListEntry {
+    /* 0x0 */ Moby *moby;
+    /* 0x4 */ u8 count;    /* meaningful only in entry 0: total entry count */
+    /* 0x5 */ u8 tag;      /* per-entry id byte */
+    /* 0x6 */ u8 pad[2];
+} TargetListEntry;
+
+/* Target-group descriptor (group stride 0x30). desc[0].groupCount holds the
+ * number of valid groups; the per-group refresh-stamp halfword sits at +0x3A
+ * (the field reaches past the 0x30 stride into the shared tail block, matching
+ * the original `sh ...,0x3A(desc)`). The struct view is only large enough to
+ * cover the two touched fields. */
+typedef struct TargetGroupDesc {
+    /* 0x00 */ s32 groupCount;   /* number of valid groups (read from desc[0]) */
+    /* 0x04 */ u8 pad04[0x36];
+    /* 0x3A */ s16 refreshStamp; /* re-stamped to 10 on each scan */
+} TargetGroupDesc;
+
+extern TargetGroupDesc *g_mobyTargetGroupDescs; /* 0x1B1740 group descriptor table */
+extern TargetListEntry **g_mobyTargetGroupLists;/* 0x1B173C per-group list ptr array */
+extern s32 g_gameTime;                          /* 0x1B1608 global frame counter */
+
+/* Scan a moby group for the best auto-target by threat distance: walks the
+ * candidate list of target group `groupIdx` and returns the moby with the lowest
+ * CalcMobyTargetThreatDist score, also writing that candidate's tag byte
+ * (entry +0x5) into *outTag. Returns 0 (and writes nothing) when the group index
+ * is out of range or the game has been running fewer than 2 frames.
+ *
+ * The list head is re-stamped with a 10-frame refresh value (desc+0x3A = 10) on
+ * entry. An empty list (count 0) returns 0; a single-entry list (count 1)
+ * short-circuits — *outTag gets entry-0's tag and entry-0's moby is returned
+ * without scoring; otherwise every non-NULL candidate is scored and the lowest
+ * wins.
+ *
+ * @param seekingMoby the moby looking for a target (passed to the scorer)
+ * @param groupIdx    target-group index
+ * @param outTag      out: receives the chosen candidate's tag byte
+ * @return the best candidate moby, or 0 if none/out-of-range/too-early
+ *
+ * NATIVE SHIM (no byte target; matching build uses INCLUDE_ASM above). Derived
+ * register-exact from FindTargetInGroup.s @0x2B48B8.
+ *
+ * WALL (matching build): save-layout — 6 callee-saves + $ra at 8-byte spacing. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", FindTargetInGroup);
+#else
+Moby *FindTargetInGroup(Moby *seekingMoby, s32 groupIdx, s32 *outTag) {
+    TargetGroupDesc *desc;
+    TargetListEntry *list;
+    s32 count;
+    s32 i;
+    Moby *best;
+    f32 bestScore;
 
-extern f32 DistXYVu0(Vec4 *a, Vec4 *b);  /* 0x283830 horizontal XY distance */
+    if (groupIdx < 0 || groupIdx >= g_mobyTargetGroupDescs[0].groupCount) {
+        return 0;
+    }
+    if (g_gameTime < 2) {
+        return 0;
+    }
+
+    desc = (TargetGroupDesc *)((u8 *)g_mobyTargetGroupDescs + groupIdx * 0x30);
+    desc->refreshStamp = 10;
+
+    list = g_mobyTargetGroupLists[groupIdx];
+    count = list[0].count;
+    if (count == 0) {
+        return 0;
+    }
+    if (count == 1) {
+        *outTag = g_mobyTargetGroupLists[groupIdx][0].tag;
+        return g_mobyTargetGroupLists[groupIdx][0].moby;
+    }
+
+    best = 0;
+    bestScore = 39847.496f;   /* 0x4B18967F — initial "worse than anything" score */
+    for (i = 0; i < count; i++) {
+        Moby *candidate = g_mobyTargetGroupLists[groupIdx][i].moby;
+        if (candidate != 0) {
+            f32 score = CalcMobyTargetThreatDist(seekingMoby, candidate);
+            if (score < bestScore) {
+                bestScore = score;
+                *outTag = g_mobyTargetGroupLists[groupIdx][i].tag;
+                best = g_mobyTargetGroupLists[groupIdx][i].moby;
+            }
+        }
+        count = g_mobyTargetGroupLists[groupIdx][0].count;
+    }
+    return best;
+}
+#endif
+
 extern f32 GetFloatAbs(f32 x);           /* 0x2835F8 fabsf */
 
 /* Test whether a target moby lies within the active range band of a reference
@@ -470,7 +694,6 @@ s32 IsGameStatePending(s32 state) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", RequestGameStateChange);
 #else
-extern s32 g_nGameState;                /* 0x1A8BB0 current top-level game/screen state id */
 extern s32 g_playerProgress;            /* 0x1A79F8 persistent-save player progress word */
 extern s32 g_occlusionOverrideMode;     /* 0x1B168C occlusion override (1 all / 2 octant / 3 sector) */
 extern s32 D_001A8B88[];                /* 0x1A8B88 per-state "slot active" table (s32 stride) */
