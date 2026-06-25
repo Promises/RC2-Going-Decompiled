@@ -347,7 +347,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementSetPo
 #else
 /* TODO(match): functional equivalent - not byte-exact; this cc1 always CSEs the
    four same-block `lw` reloads into one (the original reloads e->pos before each
-   store, alternating two registers). 76% best. */
+   store, alternating two registers). 76% best.
+   cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
+   (cmp_GuiElementSetPos, run_cmp_suite.sh): offset-correctness oracle confirms
+   the four args land at e->pos[0..3], no 5th store, scale buffer untouched. */
 void GuiElementSetPos(GuiElement *e, f32 x, f32 y, f32 z, f32 w) {
     e->pos[0] = x;
     e->pos[1] = y;
@@ -384,7 +387,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336D28);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementSetScale);
 #else
 /* TODO(match): functional equivalent - not byte-exact; same reloaded-pointer
-   CSE wall as GuiElementSetPos. 76% best. */
+   CSE wall as GuiElementSetPos. 76% best.
+   cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
+   (cmp_GuiElementSetScale, run_cmp_suite.sh): offset-correctness oracle confirms
+   the four args land at e->scale[0..3] (struct +0x4), pos buffer untouched. */
 void GuiElementSetScale(GuiElement *e, f32 x, f32 y, f32 z, f32 w) {
     e->scale[0] = x;
     e->scale[1] = y;
@@ -535,7 +541,11 @@ void GuiSpriteElementDraw(void *p) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementSetGlyph);
 #else
 /* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame wall
-   ($16/$31 16-byte vs 8-byte slot packing). */
+   ($16/$31 16-byte vs 8-byte slot packing).
+   cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
+   (cmp_GuiElementSetGlyph, run_cmp_suite.sh): offset-correctness oracle confirms
+   the lookup result lands at e+0x40 (and nowhere else) with arg order preserved
+   through a deterministic GuiFontAtlasLookupGlyph mock. */
 extern s32 GuiFontAtlasLookupGlyph(s32 codepoint, s32 font);
 void GuiElementSetGlyph(GuiElement *e, s32 codepoint, s32 font) {
     *(s32 *)((char *)e + 0x40) = GuiFontAtlasLookupGlyph(codepoint, font);
@@ -583,7 +593,10 @@ void func_00337278(void *p) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiListSetColorPair0);
 #else
 /* TODO(match): functional equivalent - not byte-exact; reloaded-pointer CSE
-   wall. 76% best. */
+   wall. 76% best.
+   cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
+   (cmp_GuiListSetColorPair0, run_cmp_suite.sh): offset-correctness oracle
+   confirms c0,c1 land at e->color[0],[1] with [2],[3] left sentinel. */
 void GuiListSetColorPair0(GuiElement *e, s32 c0, s32 c1) {
     e->color[0] = c0;
     e->color[1] = c1;
@@ -595,7 +608,10 @@ void GuiListSetColorPair0(GuiElement *e, s32 c0, s32 c1) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiListSetColorPair1);
 #else
 /* TODO(match): functional equivalent - not byte-exact; reloaded-pointer CSE
-   wall. 76% best. */
+   wall. 76% best.
+   cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
+   (cmp_GuiListSetColorPair1, run_cmp_suite.sh): offset-correctness oracle
+   confirms c0,c1 land at e->color[2],[3] with [0],[1] left sentinel. */
 void GuiListSetColorPair1(GuiElement *e, s32 c0, s32 c1) {
     e->color[2] = c0;
     e->color[3] = c1;
@@ -688,7 +704,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337630);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiSpriteSetTexture);
 #else
 /* TODO(match): functional equivalent - not byte-exact; reloaded-pointer CSE wall
-   (cc1 collapses the two *(e+0x34) reloads). 90% best. */
+   (cc1 collapses the two *(e+0x34) reloads). 90% best.
+   cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
+   (cmp_GuiSpriteSetTexture, run_cmp_suite.sh): offset+width oracle confirms
+   (f32)u,(f32)v (cvt.s.w) land at (*(e+0x34))[0],[1] with [2],[3] sentinel and
+   the +0x34 pointer preserved. */
 void GuiSpriteSetTexture(GuiElement *e, s32 u, s32 v) {
     f32 fu = (f32)u;
     f32 fv = (f32)v;
