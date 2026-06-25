@@ -43,6 +43,14 @@ extern s32 g_nBoltCounterDisplayed;            /* base for the save-prompt latch
 extern s32 g_nSaveLoadStatusCode[2];
 extern s32 D_1A8D14;                           /* GUI popup-busy gate */
 
+/* Two card-error gate words in the save-prompt small-data block (EU twins of
+ * USA D_1A8C88 / D_1A8C8C; read by the save/load status handlers below).
+ *   D_1A8D38 : set on a hard/unrecoverable card error (USA D_1A8C88)
+ *   D_1A8D3C : set when a card-removal abort is in progress (USA D_1A8C8C)
+ * (Declared for the TARGET_NATIVE #else arms only — emit no code.) */
+extern s32 D_1A8D38;
+extern s32 D_1A8D3C;
+
 /* Save/load engine context (EU D_139460). Fields recovered from USA unit. */
 typedef struct SaveLoadContext {
     s32 unk0[2];        /* 0x000 */
@@ -173,17 +181,139 @@ void func_00298D08(void) {
     D_139460.subResult = -1;
 }
 
+/** Save-prompt step (EU twin of USA func_00299178): clear the pending-flag's
+ *  0x20 bit, then if a card transaction is in flight (phase==2) translate the
+ *  libmc busy-result into a popup status. busy 0 -> status 9; busy -1 -> ack
+ *  (busy=0) + status 9; busy -2 -> status 5.
+ *  (Walled by the reload-artifact named in the file header.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_00298D30);
+#else
+void func_00298D30(void) {
+    g_nSaveLoadStatusCode[1] &= ~0x20;
+    if (D_139460.phase == 2) {
+        s32 busy = D_139460.busy;
+        if (busy == 0) {
+            g_nSaveLoadStatusCode[0] = 9;
+        } else if (busy == -1) {
+            D_139460.busy = 0;
+            g_nSaveLoadStatusCode[0] = 9;
+        } else if (busy == -2) {
+            g_nSaveLoadStatusCode[0] = 5;
+        }
+    }
+}
+#endif
 
+/** Card-removal step (EU twin of USA func_002991E8): if no abort is in flight
+ *  (busy != -2) show status 3. Otherwise, if a hard card error is latched
+ *  (D_1A8D3C) show status 6; if the pending-flag's 0x2 bit is set show status 6.
+ *  (Walled by the reload-artifact named in the file header.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_00298DA0);
+#else
+void func_00298DA0(void) {
+    s32 cardErr = D_1A8D3C;
+    if (D_139470[0] != -2) {
+        g_nSaveLoadStatusCode[0] = 3;
+        return;
+    }
+    if (cardErr != 0) {
+        g_nSaveLoadStatusCode[0] = 6;
+    } else if (g_nSaveLoadStatusCode[1] & 0x2) {
+        g_nSaveLoadStatusCode[0] = 6;
+    }
+}
+#endif
 
+/** Card-abort step (EU twin of USA func_00299238): if no abort is in flight
+ *  (busy != -2) show status 3. Otherwise dispatch on the pending-flag word:
+ *  bit 0x20 -> if a hard card error is latched (D_1A8D38) clear it and show
+ *  status 0x17, else show status 5; bit 0x8 -> clear it and show status 7.
+ *  (Walled by the reload-artifact named in the file header.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_00298DF0);
+#else
+void func_00298DF0(void) {
+    s32 flags = g_nSaveLoadStatusCode[1];
+    if (D_139470[0] != -2) {
+        g_nSaveLoadStatusCode[0] = 3;
+        return;
+    }
+    if (flags & 0x20) {
+        /* The 0x20 bit is cleared on BOTH the error and no-error paths: the
+         * original writes it back in the branch delay slot before testing
+         * D_1A8D38, so the clear happens regardless of the error result. */
+        g_nSaveLoadStatusCode[1] = flags ^ 0x20;
+        if (D_1A8D38 != 0) {
+            g_nSaveLoadStatusCode[0] = 0x17;
+        } else {
+            g_nSaveLoadStatusCode[0] = 5;
+        }
+    } else if (flags & 0x8) {
+        g_nSaveLoadStatusCode[1] = flags ^ 0x8;
+        g_nSaveLoadStatusCode[0] = 7;
+    }
+}
+#endif
 
+/** Result-timeout step (EU twin of USA func_002992B8): always clear the busy
+ *  flag; then if the libmc result is still pending (result < 0) force result 3
+ *  + subResult 0. Always show status 8 (formatting/working).
+ *  (Walled by the reload-artifact named in the file header.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_00298E70);
+#else
+void func_00298E70(void) {
+    D_139460.busy = 0;
+    if (D_139460.result < 0) {
+        D_139460.subResult = 0;
+        D_139460.result = 3;
+    }
+    g_nSaveLoadStatusCode[0] = 8;
+}
+#endif
 
+/** Format-confirm step (EU twin of USA func_002992E8): when a format request
+ *  (mode 2) is still pending (result < 0): if the secondary/format path flag
+ *  (unk16C) is set, show status 0x11 and set pending-flag bit 0x40; otherwise
+ *  show status 0xE.
+ *  (Walled by the reload-artifact named in the file header.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_00298EA0);
+#else
+void func_00298EA0(void) {
+    if (D_139460.mode == 2 && D_139460.result < 0) {
+        if (D_139460.unk16C != 0) {
+            g_nSaveLoadStatusCode[0] = 0x11;
+            g_nSaveLoadStatusCode[1] |= 0x40;
+        } else {
+            g_nSaveLoadStatusCode[0] = 0xE;
+        }
+    }
+}
+#endif
 
+/** Load-prompt step (EU twin of USA func_00299348): if no transaction is
+ *  active (busy==0) dispatch on the pending-flag word: bits 0x6 -> status 0xA;
+ *  else bit 0x200 -> status 0x19. If a transaction is active show status 3.
+ *  (Walled by the reload-artifact named in the file header.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_00298F00);
+#else
+void func_00298F00(void) {
+    s32 flags = g_nSaveLoadStatusCode[1];
+    if (D_139470[0] != 0) {
+        g_nSaveLoadStatusCode[0] = 3;
+        return;
+    }
+    if (flags & 0x6) {
+        g_nSaveLoadStatusCode[0] = 0xA;
+    } else if (flags & 0x200) {
+        g_nSaveLoadStatusCode[0] = 0x19;
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_00298F50);
 
