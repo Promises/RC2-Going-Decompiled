@@ -30,7 +30,7 @@ __asm__(".extern g_padButtonsPressed, 16");
 __asm__(".extern D_1F27C0, 16");
 __asm__(".extern D_1A7318, 16");
 __asm__(".extern D_2617C0, 16");
-__asm__(".extern D_25BA70, 16");
+__asm__(".extern D_0025BA70, 16");
 __asm__(".extern D_1ABA2C, 16");
 __asm__(".extern D_1AB9E4, 16");
 __asm__(".extern D_1B8FC0, 16");
@@ -118,7 +118,7 @@ extern s32 func_002D67A0(s32 a, void *b);
 /* gp-relative + absolute label position words consumed by func_002D0240. */
 extern s32 D_1ABA28;
 extern s32 D_1ABA2C;
-extern char D_25BA70[];
+extern char D_0025BA70[];
 
 /* Front-end screen-state blob slice at D_1F27C0 (menu reciprocal/clear scratch). */
 extern u8 D_1F27C0[];
@@ -299,15 +299,16 @@ s32 func_002CAAA8(s32 *p) {
 }
 #endif
 
-/* Clear a 20-entry s32 array (D_1F27C0+0x16C..+0x1BC) to -1, back to front.
- * Near-miss: cc1 folds %lo(D_1F27C0)+0x1BC into one addiu, but the original
- * keeps the symbol-%lo and the +0x1BC offset as two separate addiu (the SN
- * assembler-absolute macro shape). Preserved as portable C. */
+/* Clear a 20-entry s32 array (g_menuScreenBlock+0x16C..+0x1BC) to -1, back to
+ * front. Wall: cc1 folds %lo(g_menuScreenBlock)+0x1BC into one addiu, but the
+ * original keeps the symbol-%lo and the +0x1BC offset as two separate addiu (the
+ * SN assembler-absolute macro shape). Preserved as portable C. (g_menuScreenBlock
+ * 0x1F27C0 == the old D_1F27C0 - same address, named here.) */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CAB50);
 #else
 void func_002CAB50(void) {
-    s32 *p = (s32 *)D_1F27C0 + 0x6F;
+    s32 *p = (s32 *)(g_menuScreenBlock + 0x1BC);
     s32 i = 0x13;
     do {
         *p = -1;
@@ -475,25 +476,23 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", LevelSelectList
  * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", LevelSelectListRender);
 
-/* Dispatch a 3-way menu action: 0 -> 1, 1 -> func_002D67A0(3,&D_25BA70), else 0.
- * Near-miss: the original threads the result through a single register with a
- * jump-table-like branch layout our cc1 won't reproduce from an if/else chain.
- * Preserved as portable C. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CC788);
-#else
+/* Dispatch a menu action via a 2-case switch: action 0 -> result 1, action 1 ->
+ * func_002D67A0(3, &D_0025BA70), default -> result 0. (MATCHED: the `switch`
+ * reproduces cc1's early-out layout — the two cases emitted out-of-line after
+ * the default fall-through that merges to a single tail return — which the
+ * earlier if/else-if chain could not.) */
 s32 func_002CC788(s32 action) {
     s32 result = 0;
-    if (action == 0) {
+    switch (action) {
+    case 0:
         result = 1;
-    } else if (action == 1) {
-        result = func_002D67A0(3, D_25BA70);
-    } else {
-        return 0;
+        break;
+    case 1:
+        result = func_002D67A0(3, D_0025BA70);
+        break;
     }
     return result;
 }
-#endif
 
 /* menu helper: switch/jump-table dispatch (splat jtbl reloc gap) — left as
  * INCLUDE_ASM (cc1 jtbl layout not reproduced). */
@@ -507,36 +506,33 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CC858);
  * INCLUDE_ASM (cc1 jtbl layout not reproduced). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CC908);
 
-/* 3-way menu action dispatch (0/1/2 -> toggle / func_002D67A0 / func_0029DCB8)
- * plus the nanotech-bonus-heal-timer store. Near-miss: single-register result
- * threading + store scheduling differ — preserved as portable C.
- *   action==0: arm g_nNanotechBonusHealTimer mirror (s16 at +4 = 0xA), return 1
- *   action==1: return func_002D67A0(3, &D_25BA70)
- *   action==2: func_0029DCB8(), return 1
- *   else:      return 0
- */
+/* 3-case menu action dispatch via switch, result merged to one tail return:
+ *   action==0: arm g_nNanotechBonusHealTimer mirror (s16 at +4 = 0xA), result 1
+ *   action==1: result = func_002D67A0(3, &D_0025BA70)
+ *   action==2: func_0029DCB8(), result 1
+ *   default:   result 0
+ * (MATCHED: written as a `switch` so cc1 emits the comparison-tree dispatch with
+ * out-of-line case bodies and a single-register result threaded to the tail; the
+ * earlier ordered if-chain produced a structurally different body.) */
 extern u8 g_nNanotechBonusHealTimer[];
 extern void func_0029DCB8(void);
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CCA18);
-#else
-/* TODO(match): functional equivalent - not byte-exact; single-register result
- * threading + branch-delay store scheduling not reproduced by cc1. */
 s32 func_002CCA18(s32 action) {
-    if (action == 1) {
-        return func_002D67A0(3, D_25BA70);
-    }
-    if (action == 0) {
+    s32 result = 0;
+    switch (action) {
+    case 0:
         *(s16 *)(g_nNanotechBonusHealTimer + 4) = 0xA;
-        return 1;
-    }
-    if (action == 2) {
+        result = 1;
+        break;
+    case 1:
+        result = func_002D67A0(3, D_0025BA70);
+        break;
+    case 2:
         func_0029DCB8();
-        return 1;
+        result = 1;
+        break;
     }
-    return 0;
+    return result;
 }
-#endif
 
 /* menu-screen lifecycle routine: 8-byte-packed-save wall (saves 4 GPRs incl $31; later cc1
  * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
