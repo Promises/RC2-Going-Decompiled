@@ -418,21 +418,103 @@ s32 CalcSaveSectionsSize(SaveSection *table) {
  * frame wall (our cc1 reserves 16 bytes per saved reg), see func_0029C678. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029BCA0);
 
-/* func_0029BD48: verify a save section's stored CRC against func_0029BCA0.
- * One callee-save reg in an 8-byte-packed frame — callee-save frame wall, see
- * func_0029C678. */
+extern s32 func_0029BCA0(void *buf, s32 len); /* save-buffer CRC */
+
+/* func_0029BD48(image): verify a save image's stored CRC. The image header is
+ * { s32 payloadLen; s32 storedCrc; payload[payloadLen] } (the layout written by
+ * SerializeSaveSections, which stores payloadLen at +0 and the CRC at +4).
+ * Recomputes the CRC over the payload (func_0029BCA0 from image+8 over
+ * payloadLen bytes) and returns 1 iff it equals the stored CRC. An image whose
+ * stored CRC is 0 is treated as empty/invalid and returns 0.
+ *
+ * WALLED at the byte level by the 8-byte-packed callee-save frame (2 saved regs
+ * $16/$31; the pinned 2.9 cc1 reserves 16 bytes/save vs the original's 8 — see
+ * project_matching_ceiling, func_0029C678). The portable #else below is
+ * cmp-oracle-validated (cmp_198FA0). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029BD48);
+#else
+s32 func_0029BD48(void *image) {
+    s32 storedCrc = ((s32 *)image)[1];
+    if (storedCrc == 0) {
+        return 0;
+    }
+    return func_0029BCA0((char *)image + 8, ((s32 *)image)[0]) == storedCrc;
+}
+#endif
 
-/* SerializeSaveSections / func_0029BEA0 / DeserializeSaveSections /
- * CommitProgressCheckpoint: the save-section (de)serializers and the progress
- * checkpoint writer. Multi callee-save; 8-byte-packed callee-save frame wall,
- * see func_0029C678. Left as asm. */
+extern void FillMemory32(void *dst, s32 pattern, s32 nbytes);
+extern void *func_00283460(void *dst, const void *src, s32 nbytes); /* memcpy */
+
+/* SerializeSaveSections(dst, slot, table): write the section table `table` into
+ * the save-image buffer `dst` for memory-card `slot`. The image begins with an
+ * 8-byte header { s32 payloadLen; s32 crc; } at dst+0, followed by the section
+ * stream starting at dst+8. Each non-terminator section emits an 8-byte header
+ * { s32 tag; s32 len; } then its `len` payload bytes, 4-byte aligned. The
+ * per-slot payload source is `srcPtr + len*slot` (each slot's data is packed
+ * contiguously). Sections tagged 0x1770 are zero-filled rather than copied. A
+ * terminator header { -1, 0 } closes the stream; the CRC over the whole payload
+ * (from dst+8, payloadLen bytes) is then stored in the header. Returns the
+ * total image size (payloadLen + 8).
+ *
+ * WALLED at the byte level by the 8-byte-packed callee-save frame (this fn uses
+ * 8 callee-saved regs; the pinned 2.9 cc1 reserves 16 bytes/save vs the
+ * original's 8 — the mips_reg_mode=TImode wall, see project_matching_ceiling;
+ * func_0029C678). Body is logic-exact (every non-prologue insn matches at 71%);
+ * the portable #else below is cmp-oracle-validated (cmp_198FA0). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", SerializeSaveSections);
+#else
+s32 SerializeSaveSections(void *dst, s32 slot, SaveSection *table) {
+    s32 *cursor = (s32 *)((char *)dst + 8);
+    s32 size = 0;
 
+    if (table->srcPtr != 0) {
+        do {
+            s32 len = table->len;
+            cursor[0] = table->tag;
+            cursor[1] = len;
+            size += 8;
+            cursor += 2;
+            if (table->tag == 0x1770) {
+                FillMemory32(cursor, 0, table->len);
+            } else {
+                func_00283460(cursor, (char *)table->srcPtr + len * slot,
+                              table->len);
+            }
+            len = table->len;
+            table++;
+            cursor = (s32 *)(((s32)cursor + len + 3) & -4);
+            size = (size + len + 3) & -4;
+        } while (table->srcPtr != 0);
+    }
+
+    size += 8;
+    cursor[1] = 0;
+    cursor[0] = -1;
+    ((s32 *)dst)[1] = func_0029BCA0((char *)dst + 8, size);
+    ((s32 *)dst)[0] = size;
+    return size + 8;
+}
+#endif
+
+/* func_0029BEA0 / FillSaveSlotInfo: fill one save-slot info-display entry (table
+ * 0x139410, stride slot*0xA0 + dir*0x1C) from a verified header image. WALLED by
+ * BOTH the 8-byte-packed callee-save frame (4 saves) and the unaligned 64-bit
+ * ldl/ldr/sdl/sdr field moves the original emits for the +0x13..+0x7 copy — GNU
+ * cc1 won't generate those from portable C, so no #else either. Left as asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029BEA0);
 
+/* DeserializeSaveSections: parse a save image back into the section table, CRC-
+ * verifying via func_0029BD48 and reconciling each section against g_areaTable.
+ * WALLED by the 8-byte-packed callee-save frame (10 saved regs: s0-s7, fp, ra). Pure logic +
+ * seedable, but a faithful #else needs the full g_areaTable + section-table
+ * layout seeded and shares globals with other cmp units (collision risk); not
+ * yet given a portable arm. Left as asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", DeserializeSaveSections);
 
+/* CommitProgressCheckpoint: write the progress checkpoint. Multi callee-save;
+ * 8-byte-packed callee-save frame wall, see func_0029C678. Left as asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", CommitProgressCheckpoint);
 
 /** Reset the dialog-scene model bookkeeping: mark the armor-variant and

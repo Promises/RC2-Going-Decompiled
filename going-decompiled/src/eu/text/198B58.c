@@ -314,9 +314,74 @@ s32 CalcSaveSectionsSize(SaveSection *table) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_0029B848);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_0029B8F0);
+extern s32 func_0029B848(void *buf, s32 len); /* EU ComputeSaveSectionsCrc16 */
+extern void FillMemory32(void *dst, s32 pattern, s32 nbytes);
+extern void *func_00283370(void *dst, const void *src, s32 nbytes); /* EU byte memcpy */
 
+/* func_0029B8F0(image): EU twin of USA func_0029BD48/VerifySaveHeaderChecksum.
+ * The image header is { s32 payloadLen; s32 storedCrc; payload[payloadLen] };
+ * recompute the CRC (func_0029B848 from image+8 over payloadLen) and return 1
+ * iff it equals the stored CRC. Stored CRC 0 -> empty/invalid -> 0.
+ *
+ * WALLED at the byte level by the 8-byte-packed callee-save frame (see
+ * project_matching_ceiling); the portable #else mirrors the USA body. */
+#ifndef TARGET_NATIVE
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_0029B8F0);
+#else
+s32 func_0029B8F0(void *image) {
+    s32 storedCrc = ((s32 *)image)[1];
+    if (storedCrc == 0) {
+        return 0;
+    }
+    return func_0029B848((char *)image + 8, ((s32 *)image)[0]) == storedCrc;
+}
+#endif
+
+/* SerializeSaveSections(dst, slot, table): EU twin of the USA serializer. Emits
+ * the save image { s32 payloadLen; s32 crc; <sections> } into dst; each section
+ * emits an 8-byte header { tag, len } then `len` payload bytes (4-byte aligned);
+ * tag 0x1770 zero-fills (FillMemory32), else memcpy (func_00283370) from
+ * srcPtr+len*slot. Closes with a { -1, 0 } terminator and stores the payload CRC
+ * (func_0029B848) in the header. Returns the total image size (payloadLen + 8).
+ *
+ * WALLED at the byte level by the 8-byte-packed callee-save frame (8 saved regs;
+ * see project_matching_ceiling). Portable #else mirrors the USA body (logic +
+ * cmp-oracle validated there; structurally identical EU asm). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", SerializeSaveSections);
+#else
+s32 SerializeSaveSections(void *dst, s32 slot, SaveSection *table) {
+    s32 *cursor = (s32 *)((char *)dst + 8);
+    s32 size = 0;
+
+    if (table->srcPtr != 0) {
+        do {
+            s32 len = table->len;
+            cursor[0] = table->tag;
+            cursor[1] = len;
+            size += 8;
+            cursor += 2;
+            if (table->tag == 0x1770) {
+                FillMemory32(cursor, 0, table->len);
+            } else {
+                func_00283370(cursor, (char *)table->srcPtr + len * slot,
+                              table->len);
+            }
+            len = table->len;
+            table++;
+            cursor = (s32 *)(((s32)cursor + len + 3) & -4);
+            size = (size + len + 3) & -4;
+        } while (table->srcPtr != 0);
+    }
+
+    size += 8;
+    cursor[1] = 0;
+    cursor[0] = -1;
+    ((s32 *)dst)[1] = func_0029B848((char *)dst + 8, size);
+    ((s32 *)dst)[0] = size;
+    return size + 8;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_0029BA48);
 
