@@ -101,7 +101,21 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00293BC8);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00293CE0);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00293DC8);
+/*
+ * func_00293DC8 (EU twin of USA func_00293D68, 0x293D68; delta +0x60) — fix up a
+ * freshly-loaded display-model header in place. Copies the 4-byte tag/flags
+ * block (src[0..3] -> dst[4..7]), then rebases the two embedded self-relative
+ * offsets (at src+4 and src+8) to absolute pointers into the loaded buffer:
+ * dst[0] = src + src[4] and dst[0x20] = src + src[8]. Pure region-agnostic leaf.
+ */
+void func_00293DC8(u8 *dst, u8 *src) {
+    dst[4] = src[0];
+    dst[5] = src[1];
+    dst[6] = src[2];
+    dst[7] = src[3];
+    *(s32 *)(dst + 0x00) = (s32)(src + *(s32 *)(src + 4));
+    *(s32 *)(dst + 0x20) = (s32)(src + *(s32 *)(src + 8));
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00293E08);
 

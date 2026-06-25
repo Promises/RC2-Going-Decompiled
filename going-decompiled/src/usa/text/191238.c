@@ -77,8 +77,6 @@ s32 MapIsLevelRevealed(s32 level) {
  *   func_00293B10 (0x293B10, 90.0%) — register-coloring (the table base lands in
  *     $5 not $4) plus the `daddu $r,$0,$0` zero-idiom the later cc1 emits where
  *     ours emits `move` (= addu).
- *   func_00293D68 (0x293D68, 72.7%) — independent-store rescheduling: cc1 hoists
- *     the second offset load above the first pointer store (proved no-alias).
  *   MapDataExistsForLevel (0x296120, 70.9%) — the early-return `if` lowers to
  *     `beql` (branch-likely) where the original uses a plain `beqz` with the
  *     level mask computed once in the delay slot.
@@ -325,7 +323,39 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadPlayerDispl
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BindPlayerDisplayModel);
 
+/*
+ * LoadPlayerDisplayModel(variant) — load the armor-variant player display model
+ * into the dedicated buffer (g_playerModelBufferBase, 0x1F28000) and bind it.
+ * Loads the variant's textures, binds the model, fixes up the loaded header
+ * (func_00293D68) so g_mobyClassHeaders[0] points at the rebased buffer header,
+ * then records the now-loaded armor variant in g_loadedArmorVariant (compared
+ * against g_bEquippedArmor at level exit to trigger a reload). Callers:
+ * ExitVendorMenu, RefreshVendorSelection, UpdateCheatMenuInput.
+ *
+ * WALL: saves s0+ra across three jal sites — the pinned 2.9-ee-991111 cc1
+ * reserves a 0x20 frame (16-byte save slots) where the original's later cc1
+ * packs the two 8-byte slots into a 0x10 frame; it also colours the
+ * g_mobyClassHeaders / g_playerModelBufferBase loads into $4/$3 vs our $4/$5,
+ * shuffling the jal-delay-slot load. Body byte-identical apart from frame size +
+ * load order; kept as the portable #else body. */
+#ifdef TARGET_NATIVE
+extern void *g_mobyClassHeaders[];        /* 0x1CDB00 loaded header ptr per slot */
+extern u8   *g_playerModelBufferBase;     /* 0x1BAEB8 */
+extern s32   g_loadedArmorVariant;        /* 0x1A7290 */
+extern void  LoadPlayerDisplayTextures(s32 variant);
+extern void  BindPlayerDisplayModel(s32 variant);
+void func_00293D68(u8 *dst, u8 *src);
+#endif
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadPlayerDisplayModel);
+#else
+void LoadPlayerDisplayModel(s32 variant) {
+    LoadPlayerDisplayTextures(variant);
+    BindPlayerDisplayModel(variant);
+    func_00293D68((u8 *)g_mobyClassHeaders[0], g_playerModelBufferBase);
+    g_loadedArmorVariant = variant;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadHeldItemDisplayModel);
 
@@ -431,7 +461,23 @@ void func_00293B68(u8 *groups, s32 instMode, u8 *idMap, s32 groupCount) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", RelocateMobyClassChunk);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00293D68);
+/*
+ * func_00293D68(dst, src) — fix up a freshly-loaded display-model header in
+ * place. Copies the 4-byte tag/flags block (src[0..3] -> dst[4..7]), then
+ * rebases the two embedded self-relative offsets (at src+4 and src+8) to
+ * absolute pointers into the loaded buffer: dst[0] = src + src[4] (the data
+ * block) and dst[0x20] = src + src[8] (the secondary block). Pure leaf, no
+ * frame; the caller (LoadPlayerDisplayModel) passes the bound class-header dst
+ * and the buffer-resident header src.
+ */
+void func_00293D68(u8 *dst, u8 *src) {
+    dst[4] = src[0];
+    dst[5] = src[1];
+    dst[6] = src[2];
+    dst[7] = src[3];
+    *(s32 *)(dst + 0x00) = (s32)(src + *(s32 *)(src + 4));
+    *(s32 *)(dst + 0x20) = (s32)(src + *(s32 *)(src + 8));
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", FixupMobyClassHeader);
 
@@ -1138,6 +1184,11 @@ s32 MapEvictCacheSlot(void) {
 }
 #endif
 
+/* func_00296490: NOT trivially-dead. The glabel is an 8-byte orphan teardown
+ * (addiu $sp,+0x20; nop) glued onto a REAL interior body at alabel func_00296498
+ * (a bit-blit loop ending jr $31). It can't be carved as standalone C (the orphan
+ * prefix + un-separately-labeled real loop), so it stays INCLUDE_ASM - but the
+ * loop under it is genuine code, not padding, if anyone revisits the carve. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00296490);
 
 /* MapSetCurrentLevel(level): set the galactic-map current level and refresh the
@@ -1145,8 +1196,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00296490);
  * MapUpdateLevelAvailability.
  *
  * WALL (66.9%): the level store must land in the jal-MapUpdateLevelAvailability
- * delay slot; the pinned cc1 sinks it into straight-line code and the empty-asm
- * tail-call guard then occupies the slot. Logic exact; kept as the #else body. */
+ * delay slot; the pinned cc1 either tail-calls (when MapUpdateLevelAvailability
+ * is visible in-unit) or, with the empty-asm tail-call guard, emits the store in
+ * straight-line code and a `nop` in the delay slot — it will not sink the
+ * independent store into the slot the way the original's later cc1 did. Logic
+ * exact; kept as the #else body. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapSetCurrentLevel);
 #else
