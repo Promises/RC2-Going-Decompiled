@@ -80,7 +80,7 @@ typedef struct SaveSection {
     void *srcPtr;
     s32   len;
     s32   tag;
-    s32   _pad;
+    s32   matchResult; /* 0xC deserializer reconcile result: 0=unmatched, 1=exact, -1=image-shorter, -2=image-longer */
 } SaveSection;
 
 /* GUI widget methods (EU addresses). All value-returning. */
@@ -385,7 +385,118 @@ s32 SerializeSaveSections(void *dst, s32 slot, SaveSection *table) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_0029BA48);
 
+extern int memcmp(); /* K&R decl: avoids the ee-gcc builtin-prototype conflict warning */
+extern s32 D_1A9A20;  /* EU 0x1A9A20 changed-section counter (= USA D_1A99A0) */
+/* D_139460 (the area-record table base, stride 0xA0) is touched at base+0x14C
+ * (selected index) and record+0x24 (result slot); byte-addressed via casts. */
+#define EU_AREA_RECORD_STRIDE 0xA0
+#define EU_AREA_SELECTED_INDEX_OFF 0x14C
+#define EU_AREA_LOAD_RESULT_OFF 0x24
+
+/* DeserializeSaveSections(image, slotMul, table): EU twin of the USA deserializer.
+ * Restores `table` from a save image (inverse of SerializeSaveSections),
+ * reconciling each image section against the descriptor table and returning the
+ * mismatch tally (1 on a bad-CRC image). See the USA unit comment for the full
+ * step breakdown. WALLED by the 8-byte-packed callee-save frame (10 saved regs;
+ * see project_matching_ceiling). Portable #else mirrors the USA body (logic +
+ * cmp-oracle validated there; byte-identical EU asm modulo region symbols). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", DeserializeSaveSections);
+#else
+s32 DeserializeSaveSections(void *image, s32 slotMul, SaveSection *table) {
+    s32 *section;
+    s32 mismatchCount;
+    s32 runningOffset;
+    s32 sentinel;
+    SaveSection *entry;
+
+    if (func_0029B8F0(image) == 0) {
+        return 1;
+    }
+
+    section = (s32 *)((char *)image + 8);
+    mismatchCount = 0;
+    runningOffset = 8;
+
+    for (entry = table; entry->srcPtr != 0; entry++) {
+        entry->matchResult = 0;
+    }
+
+    while (section[0] != -1) {
+        s32 sectionTag = section[0];
+        s32 sectionLen = section[1];
+        SaveSection *match = 0;
+
+        for (entry = table; entry->srcPtr != 0; entry++) {
+            if (entry->tag == sectionTag) {
+                match = entry;
+                break;
+            }
+        }
+
+        if (match != 0 && match->srcPtr != 0) {
+            s32 descLen = match->len;
+            char *dest = (char *)match->srcPtr + slotMul * descLen;
+            char *payload = (char *)(section + 2);
+            s32 copyLen;
+
+            if (sectionLen == descLen) {
+                match->matchResult = 1;
+                copyLen = descLen;
+            } else if (sectionLen < descLen) {
+                match->matchResult = -1;
+                copyLen = sectionLen;
+            } else {
+                match->matchResult = -2;
+                copyLen = descLen;
+            }
+
+            if (memcmp(dest, payload, copyLen) != 0) {
+                D_1A9A20 += 1;
+            }
+
+            if (match->tag == 0x1770) {
+                runningOffset += 8 + ((sectionLen + 3) & -4);
+            } else {
+                func_00283370(dest, payload, copyLen);
+                runningOffset += 8 + ((copyLen + 3) & -4);
+            }
+        } else {
+            mismatchCount += 1;
+        }
+
+        section = (s32 *)((char *)section + 8 + ((sectionLen + 3) & -4));
+    }
+
+    runningOffset += 8;
+
+    if (table->srcPtr != 0) {
+        if (runningOffset != CalcSaveSectionsSize(table)) {
+            mismatchCount += 1;
+        }
+        sentinel = section[2];
+        if (table->tag != sentinel) {
+            entry = table;
+            for (;;) {
+                if (entry->matchResult <= 0) {
+                    mismatchCount += 1;
+                }
+                entry++;
+                if (entry->srcPtr == 0 || entry->tag == sentinel) {
+                    break;
+                }
+            }
+        }
+    }
+
+    {
+        s32 idx = *(s32 *)((char *)&D_139460 + EU_AREA_SELECTED_INDEX_OFF);
+        *(s32 *)((char *)&D_139460 + idx * EU_AREA_RECORD_STRIDE +
+                 EU_AREA_LOAD_RESULT_OFF) = mismatchCount;
+    }
+    return mismatchCount;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", CommitProgressCheckpoint);
 
@@ -1000,7 +1111,74 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_0029E158);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", UpdateLevelObjectiveStates);
 
+/* Progress-condition flag arrays read by EvaluateProgressCondition's 12 cases
+ * (EU addresses). Declared for the TARGET_NATIVE #else arm; emit no code. */
+extern u8  g_abLevelAvailableFlags[]; /* EU 0x1A7C50 per-level available (case 1) */
+extern u8  g_inventoryOwned[];        /* EU 0x1A7B80 per-item have-flag (case 2) */
+extern u8  g_inventoryNewFlag[];      /* EU 0x1A7BB8 per-item newly-acquired (case 3) */
+extern u8  D_139638[];                /* EU 0x139638 dialog/story flag byte-array (case 6) */
+extern u8  g_platinumBoltFlags[];     /* EU 0x19B2F8 per-platinum-bolt flag (case 8) */
+extern s32 g_cinematicUnlockedFlags;  /* EU 0x1397E8 cinematic bitfield (case 9) */
+extern s32 g_mapCurrentLevel;         /* EU current map level id (case 10) */
+extern s32 func_002FD068(s32 level);  /* EU map-progress predicate (case 10 callee) */
+
+/* Per-weapon upgrade record (EU 0x139AA8 base; level field at +0xC). */
+typedef struct WeaponUpgradeRecord {
+    s32 _pad0[3];
+    s32 upgradeLevel;
+} WeaponUpgradeRecord;
+extern WeaponUpgradeRecord D_139AA8[]; /* EU 0x139AA8 per-weapon upgrade table (stride 0x10) */
+
+/* EvaluateProgressCondition(cond, arg): EU twin of the USA progress-condition
+ * evaluator. `cond` is a sign-extended 16-bit selector; each case (0..11)
+ * returns a 0/1 truth value (case 10 returns the map predicate verbatim); any
+ * cond outside [0,11] returns 0. WALLED by the jump-table reloc-identity gap +
+ * the case-9 bit-test lowering residue (best 95% under the unit recipe; see the
+ * USA unit comment). Portable #else mirrors the USA body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", EvaluateProgressCondition);
+#else
+s32 EvaluateProgressCondition(s32 cond, s32 arg) {
+    cond = (s32)(s16)cond;
+    if ((u32)cond >= 0xC) {
+        return 0;
+    }
+    switch (cond) {
+    case 0:
+        return 1;
+    case 1:
+        return g_abLevelAvailableFlags[arg] != 0;
+    case 2:
+        return g_inventoryOwned[arg] != 0;
+    case 3:
+        return g_inventoryNewFlag[arg] != 0;
+    case 4:
+        if (arg >= 0x72) {
+            return 0;
+        }
+        return D_139AA8[arg].upgradeLevel != 0;
+    case 5:
+        if (arg >= 0x72) {
+            return 0;
+        }
+        return (D_139AA8[arg].upgradeLevel < 2) ? 0 : 1;
+    case 6:
+        return D_139638[arg] != 0;
+    case 7:
+        return ((s32 (*)(void))arg)() != 0;
+    case 8:
+        return g_platinumBoltFlags[(arg & 0xFFFF) + ((arg >> 16) * 4)] != 0;
+    case 9: {
+        s32 word = *(s32 *)((char *)&g_cinematicUnlockedFlags + ((arg >> 2) << 2));
+        return (word & (1 << (arg & 0x1F))) != 0;
+    }
+    case 10:
+        return func_002FD068(g_mapCurrentLevel);
+    default: /* case 11 */
+        return 0;
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", GatherActiveObjectives);
 

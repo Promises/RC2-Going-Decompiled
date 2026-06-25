@@ -124,16 +124,41 @@ extern s32 D_1A9A8C;                 /* 0x1A9A8C GUI-ready gate (gp small-data) 
 extern s32 g_nNanotechBonusHealTimer;/* 0x189FFC; +0x4 is a separate s16 sub-state */
 extern s32 func_0033B720(void *widget); /* GUI popup-poll method */
 
+/* Progress-condition flag arrays read by EvaluateProgressCondition's 12 cases
+ * (widths follow the original lbu/lw opcodes). Declared for the TARGET_NATIVE
+ * #else arm; emit no code so the matching build is unaffected. */
+extern u8  g_abLevelAvailableFlags[]; /* 0x1A7BD0 per-level available flag (case 1) */
+extern u8  g_inventoryOwned[];        /* 0x1A7B00 per-item have-flag (case 2) */
+extern u8  g_inventoryNewFlag[];      /* 0x1A7B38 per-item newly-acquired flag (case 3) */
+extern u8  D_1395B8[];                /* 0x1395B8 dialog/story flag byte-array (case 6) */
+extern u8  g_platinumBoltFlags[];     /* 0x19B278 per-platinum-bolt collected flag (case 9) */
+extern s32 g_mapCurrentLevel;         /* 0x1C5150 current map level id (case 10) */
+extern s32 func_002FCEA0(s32 level);  /* map-progress predicate (case 10 callee) */
+
+/* Per-weapon upgrade record: EvaluateProgressCondition cases 4/5 index a stride-
+ * 0x10 table based at 0x139A28 and read the upgrade-level field at +0xC (that
+ * field's symbol is g_weaponUpgradeLevel = 0x139A34). */
+typedef struct WeaponUpgradeRecord {
+    s32 _pad0[3];   /* 0x0 */
+    s32 upgradeLevel; /* 0xC - level; 0 = not started, >=2 = fully upgraded */
+} WeaponUpgradeRecord;
+extern WeaponUpgradeRecord D_139A28[]; /* 0x139A28 per-weapon upgrade table (stride 0x10) */
+
 /* One entry of a save-section descriptor table. The serialized layout each
- * entry contributes is an 8-byte header followed by `len` payload bytes,
- * padded up to a 4-byte boundary. The table is terminated by an entry whose
- * srcPtr is NULL. (Stride 0x10; tag/_pad carry per-section metadata used by
- * the (de)serializers, not by the size calculation.) */
+ * entry contributes is an 8-byte header { tag, len } followed by `len` payload
+ * bytes, padded up to a 4-byte boundary. The table is terminated by an entry
+ * whose srcPtr is NULL. (Stride 0x10.) The +0xC field is scratch the SERIALIZER
+ * ignores (rounds the stride) but the DESERIALIZER writes per entry to record
+ * how that section reconciled against the loaded image:
+ *   0  = never matched (no image section with this tag)
+ *   1  = matched, image section length == descriptor length
+ *  -1  = matched, image section shorter than descriptor (partial restore)
+ *  -2  = matched, image section longer than descriptor (truncated to fit) */
 typedef struct SaveSection {
-    void *srcPtr;  /* 0x0 payload source; NULL terminates the table */
-    s32   len;     /* 0x4 payload byte length (summed by CalcSaveSectionsSize) */
-    s32   tag;     /* 0x8 PROBABLE: per-section metadata (used by (de)serializers) */
-    s32   _pad;    /* 0xC PROBABLE pad rounding the stride to 0x10 */
+    void *srcPtr;      /* 0x0 payload source; NULL terminates the table */
+    s32   len;         /* 0x4 payload byte length (summed by CalcSaveSectionsSize) */
+    s32   tag;         /* 0x8 section identity tag (matched against image headers) */
+    s32   matchResult; /* 0xC deserializer reconcile result (see above) */
 } SaveSection;
 
 /* Size pin (byte-neutral). CalcSaveSectionsSize confirms the entry stride is
@@ -143,6 +168,7 @@ typedef struct SaveSection {
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 _Static_assert(sizeof(SaveSection) == 0x10, "SaveSection stride 0x10");
 _Static_assert(__builtin_offsetof(SaveSection, len) == 0x4, "len");
+_Static_assert(__builtin_offsetof(SaveSection, matchResult) == 0xC, "matchResult");
 #endif
 
 /* GUI widget methods the g_guiInstance wrappers forward to (text/1A00F0
@@ -445,6 +471,20 @@ s32 func_0029BD48(void *image) {
 
 extern void FillMemory32(void *dst, s32 pattern, s32 nbytes);
 extern void *func_00283460(void *dst, const void *src, s32 nbytes); /* memcpy */
+extern int memcmp(); /* K&R decl: avoids the ee-gcc builtin-prototype conflict warning */
+
+/* g_areaTable (0x1393E0): per-area record table, stride 0xA0. The deserializer
+ * touches it only at two fixed byte offsets, so it is byte-addressed here to
+ * keep the offset math faithful to the asm:
+ *   base + 0x14C : the currently-selected area index (s32)
+ *   record + 0x24: a per-area scratch slot where the load reconcile count lands.
+ * (base + 0x14C lands inside record[2]; the engine reuses that word as the
+ *  selected-area index, distinct from the per-record +0x24 result slot.) */
+#define AREA_RECORD_STRIDE 0xA0
+#define AREA_SELECTED_INDEX_OFF 0x14C
+#define AREA_LOAD_RESULT_OFF 0x24
+extern u8  g_areaTable[];        /* 0x1393E0 per-area record table (stride 0xA0) */
+extern s32 D_1A99A0;             /* 0x1A99A0 changed-section counter (bumped on memcmp differ) */
 
 /* SerializeSaveSections(dst, slot, table): write the section table `table` into
  * the save-image buffer `dst` for memory-card `slot`. The image begins with an
@@ -505,13 +545,138 @@ s32 SerializeSaveSections(void *dst, s32 slot, SaveSection *table) {
  * cc1 won't generate those from portable C, so no #else either. Left as asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029BEA0);
 
-/* DeserializeSaveSections: parse a save image back into the section table, CRC-
- * verifying via func_0029BD48 and reconciling each section against g_areaTable.
- * WALLED by the 8-byte-packed callee-save frame (10 saved regs: s0-s7, fp, ra). Pure logic +
- * seedable, but a faithful #else needs the full g_areaTable + section-table
- * layout seeded and shares globals with other cmp units (collision risk); not
- * yet given a portable arm. Left as asm. */
+/* DeserializeSaveSections(image, slotMul, table): restore the section table
+ * `table` from a save `image` (the inverse of SerializeSaveSections), reconciling
+ * each image section against the descriptor table and reporting how many sections
+ * failed to reconcile.
+ *
+ * The image is { s32 payloadLen; s32 crc; <sections> } with each section a header
+ * { s32 tag; s32 len } then `len` payload bytes, 4-byte aligned, closed by a
+ * { -1, * } terminator. `slotMul` selects the destination slice inside each
+ * descriptor's srcPtr (srcPtr + slotMul*descLen), mirroring the serializer's
+ * per-slot packing.
+ *
+ * Steps: (1) CRC-verify via func_0029BD48 — a bad image returns 1 immediately.
+ * (2) Clear every descriptor's matchResult. (3) Walk the image sections: for each,
+ * find the descriptor with the same tag; if found, record matchResult (1 / -1 /
+ * -2 by length comparison), bump the global changed-section counter D_1A99A0 when
+ * the bytes differ, and copy min(lengths) bytes into srcPtr+slotMul*descLen
+ * (except tag-0x1770 zero-fill sections, which are not copied back). Sections
+ * with no matching descriptor count as mismatches. (4) Mismatch tally: also count
+ * a mismatch if the bytes consumed don't equal CalcSaveSectionsSize(table), plus
+ * one for every descriptor that never reconciled (matchResult <= 0). (5) Store the
+ * tally in the selected g_areaTable record (+0x24) and return it.
+ *
+ * WALLED at the byte level by the 8-byte-packed callee-save frame (10 saved regs:
+ * s0-s7, fp, ra; the pinned 2.9 cc1 reserves 16 bytes/save vs the original's 8 —
+ * see project_matching_ceiling, func_0029C678). The portable #else below is
+ * cmp-oracle-validated (cmp_198FA0 isolated suite). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", DeserializeSaveSections);
+#else
+s32 DeserializeSaveSections(void *image, s32 slotMul, SaveSection *table) {
+    s32 *section;        /* current image section header { tag, len, payload... } */
+    s32 mismatchCount;
+    s32 runningOffset;
+    s32 sentinel;
+    SaveSection *entry;
+
+    if (func_0029BD48(image) == 0) {
+        return 1;        /* CRC invalid: nothing restored */
+    }
+
+    section = (s32 *)((char *)image + 8);   /* first section header */
+    mismatchCount = 0;
+    runningOffset = 8;                       /* leading 8-byte image header */
+
+    /* Clear the reconcile result on every descriptor up to the terminator. */
+    for (entry = table; entry->srcPtr != 0; entry++) {
+        entry->matchResult = 0;
+    }
+
+    /* Walk the image's sections (until the { -1, * } terminator). */
+    while (section[0] != -1) {
+        s32 sectionTag = section[0];
+        s32 sectionLen = section[1];
+        SaveSection *match = 0;
+
+        /* Find the descriptor whose tag matches this section's tag. */
+        for (entry = table; entry->srcPtr != 0; entry++) {
+            if (entry->tag == sectionTag) {
+                match = entry;
+                break;
+            }
+        }
+
+        if (match != 0 && match->srcPtr != 0) {
+            s32 descLen = match->len;
+            char *dest = (char *)match->srcPtr + slotMul * descLen;
+            char *payload = (char *)(section + 2);
+            s32 copyLen;
+
+            if (sectionLen == descLen) {
+                match->matchResult = 1;
+                copyLen = descLen;
+            } else if (sectionLen < descLen) {
+                match->matchResult = -1;
+                copyLen = sectionLen;
+            } else {
+                match->matchResult = -2;
+                copyLen = descLen;
+            }
+
+            if (memcmp(dest, payload, copyLen) != 0) {
+                D_1A99A0 += 1;          /* count a section whose bytes changed */
+            }
+
+            if (match->tag == 0x1770) {
+                /* zero-fill section: not restored; advance by its image length */
+                runningOffset += 8 + ((sectionLen + 3) & -4);
+            } else {
+                func_00283460(dest, payload, copyLen);
+                runningOffset += 8 + ((copyLen + 3) & -4);
+            }
+        } else {
+            mismatchCount += 1;          /* no descriptor for this section */
+        }
+
+        /* Advance to the next image section header (payload is len-padded). */
+        section = (s32 *)((char *)section + 8 + ((sectionLen + 3) & -4));
+    }
+
+    runningOffset += 8;                  /* trailing terminator */
+
+    if (table->srcPtr != 0) {
+        if (runningOffset != CalcSaveSectionsSize(table)) {
+            mismatchCount += 1;          /* total byte count disagrees */
+        }
+        /* Count every descriptor that never reconciled (matchResult <= 0),
+         * stopping at the terminator or at a descriptor whose tag equals the
+         * post-terminator image sentinel word. */
+        sentinel = section[2];           /* word just past the terminator header */
+        if (table->tag != sentinel) {
+            entry = table;
+            for (;;) {
+                if (entry->matchResult <= 0) {
+                    mismatchCount += 1;
+                }
+                entry++;
+                if (entry->srcPtr == 0 || entry->tag == sentinel) {
+                    break;
+                }
+            }
+        }
+    }
+
+    /* Record the tally in the currently-selected area record. */
+    {
+        s32 idx = *(s32 *)(g_areaTable + AREA_SELECTED_INDEX_OFF);
+        *(s32 *)(g_areaTable + idx * AREA_RECORD_STRIDE + AREA_LOAD_RESULT_OFF) =
+            mismatchCount;
+    }
+    return mismatchCount;
+}
+#endif
 
 /* CommitProgressCheckpoint: write the progress checkpoint. Multi callee-save;
  * 8-byte-packed callee-save frame wall, see func_0029C678. Left as asm. */
@@ -1312,7 +1477,55 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", UpdateLevelObje
  * (b) the base object emits its jump table as a section-local .rodata label
  * while the split target references named jtbl_0026CA70_text (objdiff reloc
  * identity - needs splat rodata migration for the carved units). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", EvaluateProgressCondition);
+#else
+/* EvaluateProgressCondition(cond, arg): evaluate one progress/unlock predicate.
+ * `cond` is a 16-bit selector (sign-extended); `arg` is the per-case operand
+ * (an index, a function pointer for case 7, or a packed level/bit field). Each
+ * case returns a 0/1 truth value (case 10 returns the map predicate verbatim).
+ * Any cond outside [0,11] returns 0. See the jump-table block decode above. */
+s32 EvaluateProgressCondition(s32 cond, s32 arg) {
+    cond = (s32)(s16)cond;
+    if ((u32)cond >= 0xC) {
+        return 0;
+    }
+    switch (cond) {
+    case 0:
+        return 1;
+    case 1:
+        return g_abLevelAvailableFlags[arg] != 0;
+    case 2:
+        return g_inventoryOwned[arg] != 0;
+    case 3:
+        return g_inventoryNewFlag[arg] != 0;
+    case 4: /* objective/weapon "started" - level field nonzero */
+        if (arg >= 0x72) {
+            return 0;
+        }
+        return D_139A28[arg].upgradeLevel != 0;
+    case 5: /* objective/weapon "complete" - level field >= 2 */
+        if (arg >= 0x72) {
+            return 0;
+        }
+        return (D_139A28[arg].upgradeLevel < 2) ? 0 : 1;
+    case 6:
+        return D_1395B8[arg] != 0;
+    case 7: /* call `arg` as a predicate function pointer */
+        return ((s32 (*)(void))arg)() != 0;
+    case 8: /* platinum bolt: arg packs group (high 16) and slot (low 16) */
+        return g_platinumBoltFlags[(arg & 0xFFFF) + ((arg >> 16) * 4)] != 0;
+    case 9: { /* cinematic bit: arg>>2 selects the word, arg&0x1F the bit */
+        s32 word = *(s32 *)((char *)&g_cinematicUnlockedFlags + ((arg >> 2) << 2));
+        return (word & (1 << (arg & 0x1F))) != 0;
+    }
+    case 10:
+        return func_002FCEA0(g_mapCurrentLevel);
+    default: /* case 11 */
+        return 0;
+    }
+}
+#endif
 
 /* GatherActiveObjectives(outIds, outMask, outVals, wantValues): walks the
  * 0x28-stride objective list (head pointer parked at the unnamed bss word
