@@ -570,7 +570,7 @@ Moby *FindTargetInGroup(Moby *seekingMoby, s32 groupIdx, s32 *outTag) {
     }
 
     best = 0;
-    bestScore = 39847.496f;   /* 0x4B18967F — initial "worse than anything" score */
+    bestScore = 9999999.0f;   /* 0x4B18967F — initial "worse than anything" score */
     for (i = 0; i < count; i++) {
         Moby *candidate = g_mobyTargetGroupLists[groupIdx][i].moby;
         if (candidate != 0) {
@@ -617,9 +617,261 @@ s32 CheckTargetInRangeBand(Moby *moby, Vec4 *refPos, f32 radius, f32 vertBand) {
 }
 #endif
 
+/* Auto-target lock-on result block. The block POINTER is stored at
+ * moby->pExtra + 0xC (i.e. lock = *(MobyLockOn **)((u8*)moby->pExtra + 0xC)).
+ * The scan writes the chosen target, a small status/group code, and the lock-on
+ * anchor position into it. */
+typedef struct MobyLockOn {
+    /* 0x00 */ Vec4 anchorPos;    /* lock-on world anchor (default vec, hero pos,
+                                     or chosen target's +0x10 position) */
+    /* 0x10 */ Moby *target;      /* chosen auto-target moby (or hero) */
+    /* 0x14 */ s32  hasTarget;    /* 1 if a target was locked, 0 otherwise */
+    /* 0x18 */ u8   pad18[0x4];
+    /* 0x1C */ s32  groupCode;    /* group/tag code of the chosen target */
+} MobyLockOn;
+
+/* Candidate-list views for the three special auto-target scan pools. Groups A
+ * and C are count-prefixed halfword arrays of moby-table slot indices (the moby
+ * pointer is g_mobyTableBase + slot * 0x100); group B is a count + a flat array
+ * of direct moby pointers. */
+typedef struct TargetSlotList {
+    /* 0x00 */ s16 count;
+    /* 0x02 */ s16 slot[1];       /* slot[0] is array index 1 (entry[1..count]) */
+} TargetSlotList;
+
+/* Group A scan pool (g_deferredSegment2Tag + 0x130): moby-class 0xCB candidates;
+ * a candidate is eligible only when its state byte (+0x20) == 3. */
+#define g_targetGroupA (*(TargetSlotList *)((u8 *)&g_deferredSegment2Tag + 0x130))
+/* Group C scan pool (g_deferredSegment2Tag + 0x170): moby-class 0xEB0
+ * candidates; the state byte (+0x20) 0xFE/0xFD are rejected. */
+#define g_targetGroupC (*(TargetSlotList *)((u8 *)&g_deferredSegment2Tag + 0x170))
+/* Group B scan pool: a direct moby-pointer array (g_collTriBuffer + 0x11E8) of
+ * length D_1A8CD4. */
+extern s32 D_1A8CD4;                          /* 0x1A8CD4 group-B candidate count */
+#define g_targetGroupB ((Moby **)((u8 *)g_collTriBuffer + 0x11E8))
+
+extern u8 g_deferredSegment2Tag[];            /* 0x1B1B00 render anchor + scan pools */
+extern u8 g_collTriBuffer[];                  /* 0x1C0180 collision tri buffer + pool */
+extern Moby *g_mobyTableBase;                 /* 0x1B1ADC moby entity array base */
+extern u8 g_soundBankHandlesBlk[];            /* 0x189E20 (+0x2290 hero, +0xD0 vec) */
+#define g_heroStateCode (*(s32 *)(g_soundBankHandlesBlk + 0x2294)) /* 0x18C0B4 */
+#define g_lockDefaultVec (*(Vec4 *)(g_soundBankHandlesBlk + 0xD0)) /* 0x189EF0 */
+
+/* Returns the moby's pvars/extra pointer (moby->pExtra[0]) when the moby exists
+ * and carries the auto-target mode flag (mode +0x34 bit 0x20); else 0. */
+extern s32 *func_002AC058(Moby *moby);
+/* Re-anchors the lock-on block's position from the target's transform: rotates
+ * (0, 0, lock+0x10) by the target's orientation (+0xC0) and adds the target
+ * position, writing into lock+0x0. */
+extern void func_002B0BF0(Moby *target, MobyLockOn *lock, f32 x, f32 y, f32 z);
+
 /* Acquire the moby's auto-target (the top-level target-lock entry point).
- * WALL: save-layout — 8 callee-saves + $ra at 8-byte spacing, with fp temps. */
+ *
+ * Drives the auto lock-on for `moby`. Requires `moby` to carry the auto-target
+ * mode flag (mode +0x34 bit 0x20) — otherwise returns 0 with no effect. The
+ * result is written into the moby's lock-on block, whose POINTER is stored at
+ * moby->pExtra + 0xC (lock = *(MobyLockOn **)(pExtra + 0xC)): the chosen target,
+ * a status flag (+0x14), the group/tag code (+0x1C) and the lock-on anchor
+ * position (+0x0).
+ *
+ * The probe position is `posOverride` (arg2) when non-NULL, else the moby's own
+ * world position (moby+0x10). The lock-on block is first reset: target = hero,
+ * anchor = the default vec, flag/code = 0.
+ *
+ * When `forceScan` (arg3) is 0 the function only scans while in gameplay
+ * (g_nGameState == 0) and with the hero in the non-busy state (g_heroState !=
+ * 0x6F); otherwise it returns 0. When `groupIdx` (arg1) is a valid group it
+ * delegates to FindTargetInGroup; when groupIdx == -1 it runs the three special
+ * scan pools (A: class 0xCB / state 3; B: a direct pointer list; C: class 0xEB0)
+ * and keeps the lowest-threat in-range candidate, with the hero itself as an
+ * eligible band-1 fallback.
+ *
+ * For a chosen non-hero target the anchor is re-derived from the target's
+ * transform (via func_002B0BF0 under radial gravity, else by accumulating the
+ * target's +0x10 z into the lock anchor z); the hero/default target keeps the
+ * default vec.
+ *
+ * @param moby        the seeking moby (mode +0x34 bit 0x20 gates the whole fn)
+ * @param groupIdx    target group index, or -1 to run the special scan pools
+ * @param posOverride optional explicit probe position (NULL -> moby+0x10)
+ * @param forceScan   when 0, gate the scan on gameplay + hero state
+ * @param radius      range-band horizontal radius (passed to CheckTargetInRangeBand)
+ * @param vertBand    range-band vertical gap
+ * @return the lock-on status flag (1 if a target was locked, else 0)
+ *
+ * NATIVE SHIM (no byte target; matching build uses INCLUDE_ASM above). Derived
+ * register-exact from AcquireMobyAutoTarget.s @0x2B4AC0.
+ *
+ * WALL (matching build): save-layout — 8 callee-saves + $ra at 8-byte spacing,
+ * with three fp temps. The pinned cc1 packs callee-save slots at 16-byte
+ * spacing, so this frame can't be reproduced. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", AcquireMobyAutoTarget);
+#else
+s32 AcquireMobyAutoTarget(Moby *moby, s32 groupIdx, Vec4 *posOverride,
+                          s32 forceScan, f32 radius, f32 vertBand) {
+    Vec4 probePos;
+    MobyLockOn *lock;
+    Moby *hero;
+    s32 tag;
+    s32 *xform;
+
+    if ((moby->modeFlags & 0x20) == 0) {
+        return 0;
+    }
+
+    lock = *(MobyLockOn **)((u8 *)moby->pExtra + 0xC);
+    probePos = posOverride ? *posOverride : moby->facingTarget;
+
+    hero = g_pHeroMoby;
+    lock->target = hero;
+    lock->anchorPos = g_lockDefaultVec;
+    lock->groupCode = 0;
+    lock->hasTarget = 0;
+
+    if (forceScan == 0) {
+        if (g_nGameState != 0) {
+            return 0;
+        }
+        if (g_heroStateCode == 0x6F) {
+            return 0;
+        }
+    }
+
+    if (groupIdx != -1) {
+        /* Single-group lock-on. */
+        Moby *target = FindTargetInGroup(moby, groupIdx, &tag);
+        if (target == 0) {
+            return lock->hasTarget;
+        }
+        lock->target = target;
+        lock->hasTarget = 1;
+        lock->groupCode = tag;
+        if (target == g_pHeroMoby) {
+            return lock->hasTarget;
+        }
+        lock->anchorPos = target->facingTarget;
+        xform = func_002AC058(target);
+        if (xform == 0) {
+            return lock->hasTarget;
+        }
+        if (D_1A8CA0 != 0) {
+            func_002B0BF0(target, lock, 0.0f, 0.0f, *(f32 *)((u8 *)xform + 0x10));
+            return lock->hasTarget;
+        }
+        lock->anchorPos.z += *(f32 *)((u8 *)xform + 0x10);
+        return lock->hasTarget;
+    } else {
+        /* Multi-pool scan: keep the lowest-threat in-range candidate. */
+        Moby *best = 0;
+        s32 bestCode = 0;
+        f32 bestScore = 9999999.0f;   /* 0x4B18967F argmin sentinel (mtc1 $f20) */
+        s32 i;
+
+        hero = (Moby *)*(s32 *)(g_soundBankHandlesBlk + 0x2290);
+        if (CheckTargetInRangeBand(hero, &probePos, radius, vertBand)) {
+            f32 score = CalcMobyTargetThreatDist(moby, hero);
+            if (score < bestScore) {
+                best = hero;
+                bestScore = score;
+                bestCode = 1;
+            }
+        }
+
+        /* Group A: class 0xCB candidates in state 3. */
+        for (i = 1; i <= g_targetGroupA.count; i++) {
+            Moby *cand = (Moby *)((u8 *)g_mobyTableBase + (g_targetGroupA.slot[i - 1] << 8));
+            u8 stateByte;
+            if (cand == 0) {
+                continue;
+            }
+            if (*(s16 *)((u8 *)cand + 0xAA) != 0xCB) {
+                continue;
+            }
+            stateByte = *((u8 *)cand + 0x20);
+            if (stateByte == 0xFE) {
+                continue;
+            }
+            if (stateByte == 0xFD) {
+                continue;
+            }
+            if (stateByte != 3) {
+                continue;
+            }
+            if (CheckTargetInRangeBand(cand, &probePos, radius, vertBand)) {
+                f32 score = CalcMobyTargetThreatDist(moby, cand);
+                if (score < bestScore) {
+                    best = cand;
+                    bestScore = score;
+                    bestCode = 2;
+                }
+            }
+        }
+
+        /* Group B: a direct moby-pointer list. */
+        for (i = 0; i < D_1A8CD4; i++) {
+            Moby *cand = g_targetGroupB[i];
+            if (CheckTargetInRangeBand(cand, &probePos, radius, vertBand)) {
+                f32 score = CalcMobyTargetThreatDist(moby, cand);
+                if (score < bestScore) {
+                    best = cand;
+                    bestScore = score;
+                    bestCode = 3;
+                }
+            }
+        }
+
+        /* Group C: class 0xEB0 candidates. */
+        for (i = 1; i <= g_targetGroupC.count; i++) {
+            Moby *cand = (Moby *)((u8 *)g_mobyTableBase + (g_targetGroupC.slot[i - 1] << 8));
+            u8 stateByte;
+            if (cand == 0) {
+                continue;
+            }
+            if (*(s16 *)((u8 *)cand + 0xAA) != (s16)0xEB0) {
+                continue;
+            }
+            stateByte = *((u8 *)cand + 0x20);
+            if (stateByte == 0xFE) {
+                continue;
+            }
+            if (stateByte == 0xFD) {
+                continue;
+            }
+            if (CheckTargetInRangeBand(cand, &probePos, radius, vertBand)) {
+                f32 score = CalcMobyTargetThreatDist(moby, cand);
+                if (score < bestScore) {
+                    best = cand;
+                    bestScore = score;
+                    bestCode = 4;
+                }
+            }
+        }
+
+        if (best == 0) {
+            return lock->hasTarget;
+        }
+        lock->groupCode = bestCode;
+        lock->hasTarget = 1;
+        lock->target = best;
+        if (best == (Moby *)*(s32 *)(g_soundBankHandlesBlk + 0x2290)) {
+            lock->anchorPos = g_lockDefaultVec;
+            return lock->hasTarget;
+        }
+        lock->anchorPos = best->facingTarget;
+        xform = func_002AC058(best);
+        if (xform == 0) {
+            return lock->hasTarget;
+        }
+        if (D_1A8CA0 != 0) {
+            func_002B0BF0(best, lock, 0.0f, 0.0f, *(f32 *)((u8 *)xform + 0x10));
+            return lock->hasTarget;
+        }
+        lock->anchorPos.z += *(f32 *)((u8 *)xform + 0x10);
+        return lock->hasTarget;
+    }
+}
+#endif
 
 /* Handwritten stub-table fragment (orphaned addiu $sp / nop run) — see unit
  * header; kept INCLUDE_ASM permanently (no prologue/jr of its own). */
