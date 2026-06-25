@@ -50,10 +50,19 @@ extern void *D_1AD8E8;
 typedef struct GuiElement {
     /* 0x00 */ f32 *pos;     /* -> [x,y,z,w] */
     /* 0x04 */ f32 *scale;   /* -> [x,y,z,w] */
-    /* 0x08 */ s32 unk08;
+    /* 0x08 */ f32 *unk08;   /* -> 16-byte vector block (allocated 2nd by base init) */
     /* 0x0C */ s32 *color;   /* -> color block */
     /* 0x10 */ f32 *visible; /* -> visibility scalar (>0 shown) */
 } GuiElement;
+
+/* GUI fixed-size node pool. Full field map + allocator body are at GuiPoolAlloc
+ * below; forward-declared here so the element constructors (GuiElementBaseInit,
+ * GuiElementInit) that allocate their vector blocks through it see a consistent
+ * prototype regardless of source order. Declaration-only: byte-neutral. */
+typedef struct GuiPool GuiPool;
+extern void *GuiPoolAlloc(GuiPool *pool);
+extern void *GuiPlacementNew(s32 size, void *buf);
+extern void GuiElementSetVisible(GuiElement *e, s32 show);
 
 
 /* callees of the tail-call wrappers below (return values are discarded). */
@@ -390,7 +399,45 @@ GuiElement *GuiElementInstallBaseVtable(GuiElement *e) {
     return e;
 }
 
+/* GuiElementBaseInit: construct the shared base of a GUI element. When a pool is
+ * supplied (a2), stash it at +0x2C and carve five zeroed 16-byte vector blocks
+ * from it (via GuiPoolAlloc + GuiPlacementNew), wiring them into the element in
+ * allocation order at +0x0 (pos), +0x8 (unk08), +0x4 (scale), +0xC (color) and
+ * +0x10 (visible). Then record the element tag (a1) at +0x28, zero the scalar
+ * fields +0x14/+0x18/+0x1C/+0x20/+0x24, and mark the element visible. */
+#ifndef TARGET_NATIVE
+/* TODO(match): functional equivalent - not byte-exact; the 8-byte-packed
+   callee-save frame wall (the original packs s0/s1/ra into a -0x20 frame at
+   0x0/0x8/0x10; this cc1 emits a -0x30 frame at 0x0/0x10/0x20), plus the
+   per-block store scheduling - the original stores the block pointer into the
+   element immediately, then zeroes the block (0x0..0xC) with the trailing
+   0xc(v0) zero sunk into the next GuiPlacementNew delay slot; cc1 batches them
+   differently. 95.9% best. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementBaseInit);
+#else
+void GuiElementBaseInit(GuiElement *e, s32 tag, GuiPool *pool) {
+    *(GuiPool **)((char *)e + 0x2C) = pool;
+    if (pool != 0) {
+        e->pos    = GuiPlacementNew(0x10, GuiPoolAlloc(*(GuiPool **)((char *)e + 0x2C)));
+        e->pos[0] = 0.0f; e->pos[1] = 0.0f; e->pos[2] = 0.0f; e->pos[3] = 0.0f;
+        e->unk08  = GuiPlacementNew(0x10, GuiPoolAlloc(*(GuiPool **)((char *)e + 0x2C)));
+        e->unk08[0] = 0.0f; e->unk08[1] = 0.0f; e->unk08[2] = 0.0f; e->unk08[3] = 0.0f;
+        e->scale  = GuiPlacementNew(0x10, GuiPoolAlloc(*(GuiPool **)((char *)e + 0x2C)));
+        e->scale[0] = 0.0f; e->scale[1] = 0.0f; e->scale[2] = 0.0f; e->scale[3] = 0.0f;
+        e->color  = GuiPlacementNew(0x10, GuiPoolAlloc(*(GuiPool **)((char *)e + 0x2C)));
+        e->color[0] = 0; e->color[1] = 0; e->color[2] = 0; e->color[3] = 0;
+        e->visible = GuiPlacementNew(0x10, GuiPoolAlloc(*(GuiPool **)((char *)e + 0x2C)));
+        e->visible[0] = 0.0f; e->visible[1] = 0.0f; e->visible[2] = 0.0f; e->visible[3] = 0.0f;
+    }
+    *(s32 *)((char *)e + 0x28) = tag;
+    *(s32 *)((char *)e + 0x20) = 0;
+    *(s32 *)((char *)e + 0x14) = 0;
+    *(s32 *)((char *)e + 0x1C) = 0;
+    *(s32 *)((char *)e + 0x18) = 0;
+    *(s32 *)((char *)e + 0x24) = 0;
+    GuiElementSetVisible(e, 1);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336EF8);
 
@@ -670,22 +717,23 @@ void GuiElementInitTypeC(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003377A8);
 
-/* GuiTextElementInit: run the base GuiElement init, then set up a text element:
- * install the D_263B10 glyph/format table at +0x34, mark it active (+0x38 = 1,
- * 64-bit), clear the text handle (+0x40), reset the scale vector (*(e+0x4)) to
- * {1.0, 1.0}, and seed the text params: +0x54 = 1, +0x4C = 0x200, +0x50 = 0.7f,
- * +0x44 = 1, +0x48 = 0. */
+/* GuiTextElementInit: run the base GuiElement init (forwarding its own tag/pool
+ * arguments unchanged), then set up a text element: install the D_263B10
+ * glyph/format table at +0x34, mark it active (+0x38 = 1, 64-bit), clear the
+ * text handle (+0x40), reset the scale vector (*(e+0x4)) to {1.0, 1.0}, and seed
+ * the text params: +0x54 = 1, +0x4C = 0x200, +0x50 = 0.7f, +0x44 = 1, +0x48 = 0.
+ * (The asm leaves a1/a2 untouched across the GuiElementBaseInit call, i.e. this
+ * forwards the tag and pool it was called with.) */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiTextElementInit);
 #else
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed two-save
    frame wall (target uses a -0x10 frame with s0@0x0/ra@0x8; this cc1 emits a
    -0x20 frame) plus the -fno-gcse double-reload of *(e+0x4) collapses. 49%. */
-extern void GuiElementBaseInit(void *p);
 extern void *D_263B10;
-void GuiTextElementInit(GuiElement *e) {
+void GuiTextElementInit(GuiElement *e, s32 tag, GuiPool *pool) {
     f32 *scale;
-    GuiElementBaseInit(e);
+    GuiElementBaseInit(e, tag, pool);
     *(void **)((char *)e + 0x34) = &D_263B10;
     *(s64 *)((char *)e + 0x38) = 1;
     *(s32 *)((char *)e + 0x40) = 0;
@@ -795,14 +843,14 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337CE0);
  * If the free list is non-empty, pop its head; otherwise bump-allocate
  * base+cursor, advancing cursor by elemSize. Overflowing the capacity trips an
  * assert and returns NULL. */
-typedef struct GuiPool {
+struct GuiPool {
     /* 0x00 */ char *base;
     /* 0x04 */ u32 capacity;
     /* 0x08 */ u32 elemSize;
     /* 0x0C */ u32 cursor;
     /* 0x10 */ s32 count;
     /* 0x14 */ void *freeList;
-} GuiPool;
+};
 extern void AssertFail(const char *file, s32 line, const char *expr);
 /* rodata assert strings (gui pool allocator):
  *   D_1ADA78 = source file path, D_1ADAC0 = the capacity predicate. */

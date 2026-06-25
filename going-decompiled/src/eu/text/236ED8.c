@@ -27,10 +27,19 @@ extern s32 D_1ADB90;    /* small-data accessor target (USA D_1ADAF0) */
 typedef struct GuiElement {
     /* 0x00 */ f32 *pos;     /* -> [x,y,z,w] */
     /* 0x04 */ f32 *scale;   /* -> [x,y,z,w] */
-    /* 0x08 */ s32 unk08;
+    /* 0x08 */ f32 *unk08;   /* -> 16-byte vector block (allocated 2nd by base init) */
     /* 0x0C */ s32 *color;   /* -> color block */
     /* 0x10 */ f32 *visible; /* -> visibility scalar (>0 shown) */
 } GuiElement;
+
+/* GUI fixed-size node pool (full field map + allocator at GuiPoolAlloc below).
+ * Forward-declared here so the element constructor (func_00337CA8, USA
+ * GuiElementBaseInit) sees a consistent prototype regardless of source order.
+ * Declaration-only: byte-neutral. */
+typedef struct GuiPool GuiPool;
+extern void *GuiPoolAlloc(GuiPool *pool);
+extern void *GuiPlacementNew(s32 size, void *buf);
+extern void func_00337B48(GuiElement *e, s32 show); /* USA GuiElementSetVisible */
 
 /* callees referenced by the ported wrapper bodies (EU addresses). */
 extern void func_00270340(void);
@@ -181,7 +190,40 @@ GuiElement *func_00337C90(GuiElement *e) {
     return e;
 }
 
+/* func_00337CA8: construct the shared base of a GUI element (USA GuiElementBaseInit).
+ * When a pool is supplied (a2), stash it at +0x2C and carve five zeroed 16-byte
+ * vector blocks from it (GuiPoolAlloc + GuiPlacementNew), wiring them into the
+ * element in allocation order at +0x0 (pos), +0x8 (unk08), +0x4 (scale), +0xC
+ * (color), +0x10 (visible). Then record the element tag (a1) at +0x28, zero the
+ * scalar fields +0x14/+0x18/+0x1C/+0x20/+0x24, and mark the element visible. */
+#ifndef TARGET_NATIVE
+/* TODO(match): functional equivalent - not byte-exact; the same 8-byte-packed
+   callee-save frame wall + per-block store scheduling as USA GuiElementBaseInit. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00337CA8);
+#else
+void func_00337CA8(GuiElement *e, s32 tag, GuiPool *pool) {
+    *(GuiPool **)((char *)e + 0x2C) = pool;
+    if (pool != 0) {
+        e->pos    = GuiPlacementNew(0x10, GuiPoolAlloc(*(GuiPool **)((char *)e + 0x2C)));
+        e->pos[0] = 0.0f; e->pos[1] = 0.0f; e->pos[2] = 0.0f; e->pos[3] = 0.0f;
+        e->unk08  = GuiPlacementNew(0x10, GuiPoolAlloc(*(GuiPool **)((char *)e + 0x2C)));
+        e->unk08[0] = 0.0f; e->unk08[1] = 0.0f; e->unk08[2] = 0.0f; e->unk08[3] = 0.0f;
+        e->scale  = GuiPlacementNew(0x10, GuiPoolAlloc(*(GuiPool **)((char *)e + 0x2C)));
+        e->scale[0] = 0.0f; e->scale[1] = 0.0f; e->scale[2] = 0.0f; e->scale[3] = 0.0f;
+        e->color  = GuiPlacementNew(0x10, GuiPoolAlloc(*(GuiPool **)((char *)e + 0x2C)));
+        e->color[0] = 0; e->color[1] = 0; e->color[2] = 0; e->color[3] = 0;
+        e->visible = GuiPlacementNew(0x10, GuiPoolAlloc(*(GuiPool **)((char *)e + 0x2C)));
+        e->visible[0] = 0.0f; e->visible[1] = 0.0f; e->visible[2] = 0.0f; e->visible[3] = 0.0f;
+    }
+    *(s32 *)((char *)e + 0x28) = tag;
+    *(s32 *)((char *)e + 0x20) = 0;
+    *(s32 *)((char *)e + 0x14) = 0;
+    *(s32 *)((char *)e + 0x1C) = 0;
+    *(s32 *)((char *)e + 0x18) = 0;
+    *(s32 *)((char *)e + 0x24) = 0;
+    func_00337B48(e, 1);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00337DD0);
 
@@ -340,14 +382,14 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00338B90);
 /* GuiPoolAlloc: allocate one node from a GUI fixed-size pool (EU twin of USA
  * GuiPoolAlloc). See the USA unit for the field map. Pop the free list head if
  * present, else bump-allocate base+cursor; capacity overflow trips an assert. */
-typedef struct GuiPool {
+struct GuiPool {
     /* 0x00 */ char *base;
     /* 0x04 */ u32 capacity;
     /* 0x08 */ u32 elemSize;
     /* 0x0C */ u32 cursor;
     /* 0x10 */ s32 count;
     /* 0x14 */ void *freeList;
-} GuiPool;
+};
 extern void AssertFail(const char *file, s32 line, const char *expr);
 extern const char D_1ADB18[];
 extern const char D_1ADB60[];
