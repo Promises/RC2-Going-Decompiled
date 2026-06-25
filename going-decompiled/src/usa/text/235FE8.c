@@ -455,13 +455,65 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336F00);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementInitTypeB);
 #else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame wall
+   (the GuiElementInstallBaseVtable call holds p across $16/$31 in a -0x10 frame).
+   cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
+   (cmp_GuiElementInitTypeB, run_cmp_235FE8_iso.sh): offset oracle confirms +0x30
+   == &D_1ADA38 and every other element byte stays the 0xAA sentinel. */
 void GuiElementInitTypeB(void *p) {
     extern void *D_1ADA38;
     *(void **)((char *)p + 0x30) = &D_1ADA38;
 }
 #endif
 
+/* GuiElementInit: run the base GuiElement init (forwarding tag/pool unchanged),
+ * then, when a pool is present (+0x2C != 0), carve two more zeroed 16-byte
+ * vector blocks from it (GuiPoolAlloc + GuiPlacementNew) into +0x34 and +0x38,
+ * and set the scale vector (*(e+0x4)) to {1.0, 1.0, 1.0}. BOTH latch words are
+ * zeroed regardless of pool: +0x48=0 on the pool==0 path via the branch-likely
+ * delay slot (and again on the pool!=0 fall-through), and +0x44=0 at the shared
+ * tail (.L0033707C) reached by both paths.
+ * (The asm leaves a1/a2 untouched across the GuiElementBaseInit call, i.e. this
+ * forwards the tag and pool it was called with.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementInit);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame wall
+   ($16/$31 16-byte vs 8-byte slot packing) + the trailing per-block zero stores
+   sunk into the GuiPoolAlloc/GuiPlacementNew jal delay slots.
+   cmp-oracle VALIDATED bit-exact vs the original .s on real R5900 on BOTH paths
+   (cmp_GuiElementInit pool!=0, cmp_GuiElementInit_nullpool pool==0;
+   run_cmp_235FE8_iso.sh): the pool!=0 oracle confirms the two pool blocks land at
+   e+0x34/+0x38 zeroed and scale[0..2]=1.0; both oracles confirm +0x44 and +0x48
+   end up 0 regardless of pool. */
+void GuiElementInit(GuiElement *e, s32 tag, GuiPool *pool) {
+    GuiElementBaseInit(e, tag, pool);
+    if (*(GuiPool **)((char *)e + 0x2C) == 0) {
+        /* asm: beql $4,$0 with `sw $0,0x48($16)` in the branch-likely delay slot
+         * -> on the pool==0 path +0x48 is zeroed and we skip straight to the
+         * shared tail that zeroes +0x44. */
+        *(s32 *)((char *)e + 0x48) = 0;
+    } else {
+        f32 *blk0, *blk1, *scale;
+        blk0 = GuiPlacementNew(0x10, GuiPoolAlloc(*(GuiPool **)((char *)e + 0x2C)));
+        *(f32 **)((char *)e + 0x34) = blk0;
+        blk0[0] = 0.0f; blk0[1] = 0.0f; blk0[2] = 0.0f; blk0[3] = 0.0f;
+        blk1 = GuiPlacementNew(0x10, GuiPoolAlloc(*(GuiPool **)((char *)e + 0x2C)));
+        *(f32 **)((char *)e + 0x38) = blk1;
+        blk1[0] = 0.0f; blk1[1] = 0.0f; blk1[2] = 0.0f; blk1[3] = 0.0f;
+        scale = *(f32 **)((char *)e + 0x4);
+        scale[0] = 1.0f;
+        scale = *(f32 **)((char *)e + 0x4);
+        scale[1] = 1.0f;
+        scale = *(f32 **)((char *)e + 0x4);
+        scale[2] = 1.0f;
+        /* asm L41: `sw $0,0x48($16)` on the pool!=0 fall-through */
+        *(s32 *)((char *)e + 0x48) = 0;
+    }
+    /* asm .L0033707C (shared merge): `sw $0,0x44($16)` on BOTH paths */
+    *(s32 *)((char *)e + 0x44) = 0;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337090);
 
@@ -566,7 +618,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiListRowEleme
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed two-save
    frame wall - holding the object across the GuiElementInstallBaseVtable call
    needs s0 saved alongside ra, and this cc1 lays the two saves out in a -0x20
-   frame where the original packs them into -0x10. */
+   frame where the original packs them into -0x10.
+   cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
+   (cmp_GuiListRowElementInit, run_cmp_235FE8_iso.sh): offset oracle confirms
+   +0x30 == &g_GuiListRowVtable and every other element byte stays sentinel. */
 extern GuiElement *GuiElementInstallBaseVtable(GuiElement *e);
 void GuiListRowElementInit(void *p) {
     GuiElement *e = (GuiElement *)p;
@@ -575,7 +630,26 @@ void GuiListRowElementInit(void *p) {
 }
 #endif
 
+/* GuiListElementInit: run the base GuiElement init using the 4th/5th args as its
+ * tag/pool, then store the 2nd arg at +0x3C and the 3rd at +0x34, seed the
+ * sentinel word +0x44 = 0x80000000 and the count/limit word +0x40 = 100. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiListElementInit);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 4-callee-save frame wall
+   ($16/$17/$18/$31 16-byte vs 8-byte slot packing) - the four held arg values
+   force the deeper save frame.
+   cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
+   (cmp_GuiListElementInit, run_cmp_235FE8_iso.sh): offset-correctness oracle confirms
+   v3C->+0x3C, v34->+0x34, +0x44=0x80000000, +0x40=100, base tag/pool forwarded. */
+void GuiListElementInit(GuiElement *e, s32 v3C, s32 v34, s32 tag, GuiPool *pool) {
+    GuiElementBaseInit(e, tag, pool);
+    *(s32 *)((char *)e + 0x3C) = v3C;
+    *(s32 *)((char *)e + 0x34) = v34;
+    *(s32 *)((char *)e + 0x44) = (s32)0x80000000;
+    *(s32 *)((char *)e + 0x40) = 0x64;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337270);
 
@@ -668,7 +742,45 @@ void *func_003374D8(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337510);
 
+/* GuiSpriteElementInit: run the base GuiElement init (forwarding tag/pool
+ * unchanged), then when a pool is present carve a zeroed 16-byte vector block
+ * from it (via the element's +0x2C pool) into +0x34. Always: zero the +0x34
+ * vec's [0],[1] words, seed the position vector (*(e+0x0)) to {100.0, 100.0} and
+ * the scale vector (*(e+0x4)) to {64.0, 64.0}, and clear +0x38.
+ * (The asm forwards a1/a2 unchanged across the GuiElementBaseInit call, so the
+ * pool argument doubles as the carve guard.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiSpriteElementInit);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame wall
+   ($16/$17/$31 16-byte vs 8-byte slot packing) + the float-const loads scheduled
+   across the reloaded +0x34/+0x0/+0x4 pointer reads.
+   cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
+   (cmp_GuiSpriteElementInit, run_cmp_235FE8_iso.sh): offset-correctness oracle
+   confirms the +0x34 block lands zeroed, pos={100,100}, scale={64,64}, +0x38=0. */
+void GuiSpriteElementInit(GuiElement *e, s32 tag, GuiPool *pool) {
+    f32 *vec, *pos, *scale;
+    GuiElementBaseInit(e, tag, pool);
+    if (pool != 0) {
+        vec = GuiPlacementNew(0x10, GuiPoolAlloc(*(GuiPool **)((char *)e + 0x2C)));
+        *(f32 **)((char *)e + 0x34) = vec;
+        vec[0] = 0.0f; vec[1] = 0.0f; vec[2] = 0.0f; vec[3] = 0.0f;
+    }
+    vec = *(f32 **)((char *)e + 0x34);
+    vec[0] = 0.0f;
+    vec = *(f32 **)((char *)e + 0x34);
+    vec[1] = 0.0f;
+    pos = e->pos;
+    pos[0] = 100.0f;
+    pos = e->pos;
+    pos[1] = 100.0f;
+    scale = e->scale;
+    scale[0] = 64.0f;
+    scale = e->scale;
+    scale[1] = 64.0f;
+    *(s32 *)((char *)e + 0x38) = 0;
+}
+#endif
 
 /* GuiSpriteGetTextureVec: return the sprite's texture-vec pointer (+0x34). */
 f32 *GuiSpriteGetTextureVec(GuiElement *e) {
@@ -729,6 +841,11 @@ s32 func_00337758(void *p) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementInitTypeC);
 #else
+/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame wall
+   (same install-then-overwrite shape as GuiElementInitTypeB).
+   cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
+   (cmp_GuiElementInitTypeC, run_cmp_235FE8_iso.sh): offset oracle confirms +0x30
+   == &D_1AD9F8 and every other element byte stays the 0xAA sentinel. */
 void GuiElementInitTypeC(void *p) {
     extern void *D_1AD9F8;
     *(void **)((char *)p + 0x30) = &D_1AD9F8;
@@ -749,7 +866,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiTextElementI
 #else
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed two-save
    frame wall (target uses a -0x10 frame with s0@0x0/ra@0x8; this cc1 emits a
-   -0x20 frame) plus the -fno-gcse double-reload of *(e+0x4) collapses. 49%. */
+   -0x20 frame) plus the -fno-gcse double-reload of *(e+0x4) collapses. 49%.
+   cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
+   (cmp_GuiTextElementInit, run_cmp_235FE8_iso.sh): offset-correctness oracle
+   confirms +0x34=&D_263B10, +0x38=(s64)1 (both words), +0x40=0, scale={1,1},
+   +0x54=1, +0x4C=0x200, +0x50=0.7f (0x3F333333), +0x44=1, +0x48=0; base init
+   forwards the tag to +0x28. */
 extern void *D_263B10;
 void GuiTextElementInit(GuiElement *e, s32 tag, GuiPool *pool) {
     f32 *scale;
