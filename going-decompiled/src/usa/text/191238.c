@@ -153,7 +153,47 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002919C0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", DrawSkyShellsScaledSpin);
 
+/*
+ * RenderSky — draw the sky shells for the current frame. Opens a sky draw
+ * segment, points the shell spin-rate table at the static rates, then draws the
+ * shells with scaled spin in the boot/title area (g_playerProgress == 0) or with
+ * fixed spin in-game. Closes the segment and appends two GS register packets:
+ * SCANMSK (0x47) = 0x5360B and the Z-buffer base (reg 0x4E) packed as
+ * 0x1000000 | (g_vramZBuffer >> 13).
+ *
+ * WALL: compiles op-for-op identical EXCEPT (a) the ROM reads g_playerProgress /
+ * g_vramZBuffer with the absolute lui/%lo macro, but those symbols are small
+ * (<=8) and gp-rel-accessed by 11 OTHER functions in this -G8 TU, so a TU-wide
+ * `.extern ...,16` absolute override would regress them; and (b) the final
+ * AppendGsRegPacket is a tail position which our cc1 lowers to a sibling-call `j`
+ * where the ROM keeps `jal`+epilogue. Both are TU-flag/version artifacts, not
+ * source-controllable here; kept as the portable #else.
+ */
+extern void BeginSkyDrawSegment(void);
+extern void DrawSkyShellsScaledSpin(void);
+extern void DrawSkyShellsFixedSpin(void);
+extern void CloseSkyDrawSegment(void);
+extern void AppendGsRegPacket(s32 reg, s32 val);
+extern s32  g_playerProgress;
+extern s32  g_vramZBuffer;
+extern void *g_pSkyShellSpinRates;
+extern s32  g_skyShellSpinTableStatic[];
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", RenderSky);
+#else
+void RenderSky(void) {
+    BeginSkyDrawSegment();
+    g_pSkyShellSpinRates = g_skyShellSpinTableStatic;
+    if (g_playerProgress != 0) {
+        DrawSkyShellsFixedSpin();
+    } else {
+        DrawSkyShellsScaledSpin();
+    }
+    CloseSkyDrawSegment();
+    AppendGsRegPacket(0x47, 0x5360B);
+    AppendGsRegPacket(0x4E, 0x1000000 | (g_vramZBuffer >> 13));
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291B60);
 
@@ -405,7 +445,39 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00293760);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002938B0);
 
+/*
+ * func_00293B10(table, idx) — relocate the embedded pointers of a freshly
+ * loaded class chunk to absolute addresses. `table` is a base-pointer array at
+ * +0x48; entry idx is the chunk base `chunk`. Field +0x14 holds a chunk-relative
+ * pointer (rebased to chunk + value when non-zero), +0x10 is a byte count, and
+ * +0x1C[count] is an array of chunk-relative pointers each rebased to chunk +
+ * value. This converts the stored file-relative offsets into live pointers.
+ *
+ * WALL: instruction-for-instruction identical EXCEPT the loop-counter zero-init
+ * the original's later cc1 emits as 64-bit `daddu $5,$0,$0` which the pinned
+ * 2.9-ee-991111 cc1 lowers to 32-bit `move $5,$0`. Single-instruction version
+ * delta; kept as the portable #else.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00293B10);
+#else
+void func_00293B10(s32 *table, s32 idx) {
+    u8 *chunk = (u8 *)((s32 *)((u8 *)table + 0x48))[idx];
+    s32 *relPtr = (s32 *)(chunk + 0x14);
+    if (*relPtr != 0) {
+        *relPtr = (s32)(chunk + *relPtr);
+    }
+    if (*(u8 *)(chunk + 0x10) != 0) {
+        s32 *p = (s32 *)(chunk + 0x1C);
+        s32 i = 0;
+        do {
+            *p = (s32)(chunk + *p);
+            i++;
+            p++;
+        } while (i < *(u8 *)(chunk + 0x10));
+    }
+}
+#endif
 
 /*
  * func_00293B68(groups, instMode, idMap, groupCount) — walk a table of
@@ -645,13 +717,84 @@ void SelectSceneSubChunk(s32 which) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294970);
 
+/*
+ * func_002949E0(rec, enable) — commit a pending streaming-slot record. When
+ * enable is set and the record's slot index rec[1] is non-negative, stores the
+ * record's class id rec[0] into the per-slot in-flight table
+ * (g_respawnPlayerYaw+0x48, field +0x34, stride 4 by slot). If the slot index
+ * also equals the currently-armed slot D_1A933C, that latch is toggled to
+ * rec[1] ^ 1. The record's word rec[0] is ALWAYS stamped -1 on return (the latch
+ * toggle is the only externally visible effect of the equal case). The disabled /
+ * negative-slot path just stamps rec[0] = -1. (Verified bit-exact against the asm
+ * on real R5900 via cmp-oracle: the equal branch sets D_1A933C then falls into
+ * the shared `result = -1` tail, so rec[0] is never the toggled value.)
+ *
+ * WALL: compiles instruction-for-instruction identical (same gp_rel D_1A933C
+ * relocs, same bnel, same offsets) EXCEPT the pointer-arg copy the original's
+ * later cc1 emits as 64-bit `daddu $6,$4,$0` which the pinned 2.9-ee-991111 cc1
+ * lowers to 32-bit `move`. Single-instruction version delta; kept as #else.
+ */
+extern s32 g_respawnPlayerYaw[];
+extern s32 D_1A933C;
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002949E0);
+#else
+void func_002949E0(s32 *rec, s32 enable) {
+    if (enable != 0 && rec[1] >= 0) {
+        g_respawnPlayerYaw[0x1F + rec[1]] = rec[0];   /* +0x48 + slot*4 + 0x34 */
+        if (rec[1] == D_1A933C) {
+            D_1A933C = rec[1] ^ 1;
+        }
+    }
+    rec[0] = -1;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294A30);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294B50);
 
+/*
+ * func_00294C48(classId, slot) — request the gadget moby-class load for `slot`.
+ * Looks classId up in the gadget-class TOC (g_discToc+0x4B40, stride 5 ints, up
+ * to 0x30 entries). If absent (idx == 0x30) it does nothing. Otherwise, unless
+ * the per-slot in-flight record (g_respawnPlayerYaw+0x48 + slot, field +0x34)
+ * already equals the found index, it kicks the class load via func_00294B50 with
+ * the per-slot destination buffer (slot*0xC800 + g_respawnPlayerYaw+0x88).
+ *
+ * WALL: instruction-for-instruction identical to the original EXCEPT the
+ * register-to-register copies the original's later cc1 emits as 64-bit `daddu
+ * $r,$0,$0`/`daddu $6,$4,$0` (zero/arg-move idiom) which the pinned 2.9-ee-991111
+ * cc1 lowers to 32-bit `move`/`addu`. Not source-controllable; kept as the
+ * portable #else (verified op-for-op, the only deltas are addu<->daddu).
+ */
+extern s32 g_discToc[];
+extern s32 g_respawnPlayerYaw[];
+extern void func_00294B50(s32 idx, s32 slot, void *dest, s32 a3);
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294C48);
+#else
+void func_00294C48(s32 classId, s32 slot) {
+    s32 *toc = g_discToc;
+    s32 idx = 0;
+    if (toc[0x12D0] != classId) {            /* g_discToc + 0x4B40 */
+        s32 *p = toc + 0x12D0;
+        for (idx = 1; idx < 0x30; idx++) {
+            p += 5;
+            if (p[0] == classId) {
+                break;
+            }
+        }
+    }
+    if (idx != 0x30) {
+        s32 *rec = &g_respawnPlayerYaw[0x12] + slot;   /* g_respawnPlayerYaw+0x48 */
+        if (rec[0xD] != idx) {                          /* field +0x34 */
+            void *dest = (void *)(slot * 0xC800 + (s32)&g_respawnPlayerYaw[0x22]);
+            func_00294B50(idx, slot, dest, 0);          /* +0x88 == [0x12]+0x40 */
+        }
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294CD0);
 
