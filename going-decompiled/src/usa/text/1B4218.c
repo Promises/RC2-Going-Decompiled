@@ -254,9 +254,58 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ClassifyTargetP
  * header; kept INCLUDE_ASM permanently. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B46C8);
 
-/* Bind a moby to a parent transform (locomotion attach helper).
- * WALL: save-layout — 1 callee-save + $ra at 8-byte spacing. */
+extern void UpdateMobyBSphereAndGrid(void *moby);  /* 0x2A1D80 */
+
+/* Field view for the parent-bind copy (offsets from moby.h). Kept local to this
+ * shim so it does not perturb the unit's matching-build Moby view. */
+typedef struct MobyBind {
+    /* 0x00 */ u8   pad00[0x10];
+    /* 0x10 */ Vec4 pos;          /* world position (copied whole from parent) */
+    /* 0x20 */ u8   pad20[0x10];
+    /* 0x30 */ u8   drawDist;     /* LOD/draw-distance byte; 0xFF = never culled */
+    /* 0x31 */ u8   drawDistAlways;/* nonzero = bypass distance cull */
+    /* 0x32 */ u16  bindFlags;    /* 0xFF on parent-bind */
+    /* 0x34 */ u16  modeFlags;    /* MODE bitfield; low 3 bits cleared on bind */
+    /* 0x36 */ u8   pad36[0x2];
+    /* 0x38 */ s64  color;        /* packed color qword (copied whole from parent) */
+    /* 0x40 */ u8   pad40[0x78];
+    /* 0xB8 */ void *pParent;     /* parent moby pointer */
+    /* 0xBC */ u8   padBC[0x34];
+    /* 0xF0 */ Vec4 facing;       /* facing/forward vec (copied whole from parent) */
+} MobyBind;
+
+/* Bind a moby to a parent transform (locomotion attach helper). Forces the
+ * moby never-distance-culled and shadow-enabled, marks it parent-bound, and —
+ * when a parent is given — inherits the parent's world position, facing vector
+ * and color, links the parent pointer, copies the parent's +0x38 color qword,
+ * and re-derives the moby's bounding sphere / spatial-grid bucket. Always clears
+ * the low three MODE bits.
+ *
+ * NATIVE SHIM (no byte target; matching build uses INCLUDE_ASM above). Derived
+ * register-exact from BindMobyToParent.s @0x2B4700.
+ *
+ * WALL (matching build): save-layout — saves $s0/$ra at 8-byte spacing (frame
+ * 0x10); the pinned cc1 packs callee-save GPR slots at 16-byte spacing. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", BindMobyToParent);
+#else
+void BindMobyToParent(void *mobyp, void *parentp) {
+    MobyBind *moby = (MobyBind *)mobyp;
+    MobyBind *parent = (MobyBind *)parentp;
+
+    moby->drawDist = 0xFF;
+    moby->bindFlags = 0xFF;
+    moby->drawDistAlways = 1;
+    if (parent != 0) {
+        moby->pParent = parent;
+        moby->pos = parent->pos;
+        moby->facing = parent->facing;
+        moby->color = parent->color;
+        UpdateMobyBSphereAndGrid(moby);
+    }
+    moby->modeFlags &= 0xFFF8;
+}
+#endif
 
 /* One-shot latch of moby anim-flag bit 0. Returns 1 if newly set, 0 if it was
  * already set (in which case the byte is not rewritten). */
@@ -313,9 +362,36 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", CalcMobyTargetT
  * WALL: save-layout — 6 callee-saves + $ra at 8-byte spacing. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", FindTargetInGroup);
 
-/* Test whether a target lies within the active range band.
- * WALL: save-layout — 2 callee-saves + $ra at 8-byte spacing, with fp temps. */
+extern f32 DistXYVu0(Vec4 *a, Vec4 *b);  /* 0x283830 horizontal XY distance */
+extern f32 GetFloatAbs(f32 x);           /* 0x2835F8 fabsf */
+
+/* Test whether a target moby lies within the active range band of a reference
+ * position: horizontal (XY) distance must be below `radius` AND the vertical
+ * (Z) gap below `vertBand`.
+ *
+ * @param moby     candidate target moby (its facingTarget vec at +0x10 is the
+ *                 XY-distance probe point; +0x18 is its Z)
+ * @param refPos   reference position (Z at +0x8)
+ * @param radius   max horizontal distance
+ * @param vertBand max vertical gap
+ * @return 1 if inside the band, 0 otherwise
+ *
+ * WALL: save-layout — saves $s0/$s1/$ra at 8-byte spacing (frame 0x30); the
+ * pinned cc1 packs callee-save GPR slots at 16-byte spacing (frame 0x40),
+ * confirmed by the compiled base. cmp-oracle validated.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", CheckTargetInRangeBand);
+#else
+s32 CheckTargetInRangeBand(Moby *moby, Vec4 *refPos, f32 radius, f32 vertBand) {
+    if (DistXYVu0(refPos, &moby->facingTarget) < radius) {
+        if (GetFloatAbs(refPos->z - moby->facingTarget.z) < vertBand) {
+            return 1;
+        }
+    }
+    return 0;
+}
+#endif
 
 /* Acquire the moby's auto-target (the top-level target-lock entry point).
  * WALL: save-layout — 8 callee-saves + $ra at 8-byte spacing, with fp temps. */
