@@ -66,6 +66,18 @@ typedef struct Moby {
     /* 0xBE */ u8 animFlags;
 } Moby;
 
+/* Moby animation header view for func_002A8168 (anim id bookkeeping). */
+typedef struct MobyAnim {
+    /* 0x00 */ u8 pad0[0x20];
+    /* 0x20 */ u8 animId;
+    /* 0x21 */ u8 pad21[0x73];
+    /* 0x94 */ u8 prevAnimId;
+    /* 0x95 */ s8 subAnim;
+    /* 0x96 */ u16 animTimer;
+    /* 0x98 */ u8 pad98[0x26];
+    /* 0xBE */ u8 animFlags;
+} MobyAnim;
+
 /* True small / gp-addressable globals (complete <=8-byte declarations). */
 extern Moby *g_mobyTableBase;          /* moby table base (slot stride 0x100) */
 extern Moby *g_mobyTableEnd;           /* moby table end (walk bound) */
@@ -123,7 +135,23 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A7E68);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A7FF8);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A8168);
+/* func_002A8168: begin a moby animation (EU twin of USA func_002A85B8). Stash
+ * the current anim id into the "prev anim id" slot, install the new anim id,
+ * reset the anim timer, and clear the "done" flag (bit 0 of animFlags). If a
+ * sub-anim id is supplied (!= -1), record it and additionally clear bit 1. */
+void func_002A8168(MobyAnim *m, s32 animId, s32 subAnim) {
+    u8 flags = m->animFlags & 0xFE;   /* clear "done" bit 0 */
+    u8 oldId = m->animId;
+
+    m->animId = animId;
+    m->prevAnimId = oldId;
+    m->animTimer = 0;
+    m->animFlags = flags;
+    if (subAnim != -1) {
+        m->subAnim = subAnim;
+        m->animFlags = flags & 0xFD; /* also clear bit 1 for the sub-anim path */
+    }
+}
 
 /**
  * Quadratic ease-in: x squared. (EU twin of USA func_002A85F8.)

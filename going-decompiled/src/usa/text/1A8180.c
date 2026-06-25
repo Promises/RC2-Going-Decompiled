@@ -286,15 +286,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A82D8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8448);
 
-/* func_002A85B8: begin a moby animation (stash prev anim id, reset the anim
- * timer, clear the done flags, optional sub-anim). Best attempt 58%: the
- * pinned cc1 schedules the animFlags store before the timer clear and
- * recomputes the second mask from the original flags where the later cc1
- * keeps an incremental masked value and a -1 compare register in a0 - the
- * register-coloring/store-scheduling wall. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A85B8);
-#else
+/* func_002A85B8: begin a moby animation. Stash the current anim id into the
+ * "prev anim id" slot, install the new anim id, reset the anim timer, and clear
+ * the "done" flag (bit 0 of animFlags). If a sub-anim id is supplied (!= -1),
+ * record it and additionally clear bit 1 of animFlags. */
 void func_002A85B8(MobyAnim *m, s32 animId, s32 subAnim) {
     u8 flags = m->animFlags & 0xFE;   /* clear "done" bit 0 */
     u8 oldId = m->animId;
@@ -308,7 +303,6 @@ void func_002A85B8(MobyAnim *m, s32 animId, s32 subAnim) {
         m->animFlags = flags & 0xFD; /* also clear bit 1 for the sub-anim path */
     }
 }
-#endif
 
 /**
  * Quadratic ease-in: x squared.
