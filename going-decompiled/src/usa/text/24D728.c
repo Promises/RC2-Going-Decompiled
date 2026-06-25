@@ -143,7 +143,13 @@ void func_0034D7D0(GuiHudManager *mgr, s32 mode) {
  * resets the four list slots (+0xF3C/+0xFD0/+0x1064/+0x1180 via func_0034A7F8)
  * and the sprite slot (+0x10F8 via func_0034A370 mode 1), then retargets the
  * frame sprite (+0x158) to texture `tex`. Independently, if the +0x159C latch is
- * set, it retargets the frame sprite too. `tex` is the GuiSprite texture id. */
+ * set, it retargets the frame sprite too. `tex` is the GuiSprite texture id.
+ * WALL (94.3%): the original packs its three callee-saved GPRs (s0/s1/ra) at an
+ * 8-byte stride (frame 0x20); this ee-gcc build emits a 16-byte GPR save slot
+ * (frame 0x30, R5900 128-bit-register stack-slot model), an unfixable
+ * frame-layout ceiling for any function saving 2+ GPRs across calls. The trailing
+ * asm barrier already defeats the tail-call; only the save stride differs. Kept
+ * as the portable #else; the matching build keeps the original bytes. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034D828);
 #else
