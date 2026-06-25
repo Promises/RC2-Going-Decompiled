@@ -135,6 +135,45 @@ extern u8  g_platinumBoltFlags[];     /* 0x19B278 per-platinum-bolt collected fl
 extern s32 g_mapCurrentLevel;         /* 0x1C5150 current map level id (case 10) */
 extern s32 func_002FCEA0(s32 level);  /* map-progress predicate (case 10 callee) */
 
+/* One per-level objective record (stride 0x28) walked by
+ * UpdateLevelObjectiveStates / GatherActiveObjectives. The list is a flat array
+ * terminated by an entry whose `id` is 0. */
+typedef struct LevelObjective {
+    s16 id;             /* 0x00 objective id; 0 terminates the list */
+    s16 cond1Sel;       /* 0x02 first EvaluateProgressCondition selector (cond) */
+    s32 cond1Arg;       /* 0x04 first EvaluateProgressCondition operand (arg) */
+    s16 cond2Sel;       /* 0x08 second EvaluateProgressCondition selector (cond) */
+    s16 _pad0A;         /* 0x0A */
+    s32 cond2Arg;       /* 0x0C second EvaluateProgressCondition operand (arg) */
+    u16 flags;          /* 0x10 bit 0x2 = hidden-when-complete, 0x4 = level-gated */
+    u8  _pad12[0xA];    /* 0x12 */
+    s32 (*tickFn)(s32); /* 0x1C optional per-tick callback */
+    s32 tickArg;        /* 0x20 argument passed to tickFn */
+    s16 state;          /* 0x24 0 = inactive, 1 = active, 2 = complete */
+    s16 tickResult;     /* 0x26 last tickFn return value */
+} LevelObjective;
+
+/* Per-current-level objective-list head table, indexed by MapCache.currentLevel.
+ * Each entry is a LevelObjective* (NULL = no objectives for that level).
+ * (Kept as the splat auto-name D_258B20 / EU D_258BA0 so the carved-unit reloc
+ * resolves without a global re-split rename.) */
+extern LevelObjective *D_258B20[]; /* 0x258B20 objective-list head table */
+
+/* MapCache.currentLevel lives at g_mapVertexData + 0x230 (see symbol comment). */
+extern u8 g_mapVertexData[]; /* 0x1C4F20 MapCache base (byte-addressed here) */
+
+/* Objective-scan scratch parked in the rain-heightmap bss block at +0x34:
+ *   +0x34 outstanding = count of active-but-not-yet-satisfied objectives
+ *                       (0 => the current level's objectives are all met)
+ *   +0x38 head        = cached head pointer for the current level's list */
+typedef struct ObjectiveScan {
+    s32             outstanding; /* +0x34 (struct offset 0x0) */
+    LevelObjective *head;        /* +0x38 (struct offset 0x4) */
+} ObjectiveScan;
+extern u8 g_pRainHeightmap[]; /* 0x1B19A0 (byte-addressed for the +0x34 scratch) */
+
+extern u8 g_levelVisitedMarkers[]; /* 0x1A7BF0 per-level visited byte markers */
+
 /* Per-weapon upgrade record: EvaluateProgressCondition cases 4/5 index a stride-
  * 0x10 table based at 0x139A28 and read the upgrade-level field at +0xC (that
  * field's symbol is g_weaponUpgradeLevel = 0x139A34). */
@@ -385,9 +424,23 @@ s32 func_00299980(void) {
     return g_nSaveLoadStatusCode[0] == 2;
 }
 
-/* BuildSaveGamePaths: builds the per-slot memory-card path strings. Multi-
- * callee-save save-system function — same 8-byte-packed callee-save frame wall
- * as func_0029C678 (our cc1 reserves 16 bytes per saved register). Left as asm. */
+/* BuildSaveGamePaths(cfg): build the per-slot memory-card path strings into the
+ * bss path buffers (g_saveDirTemplate / g_saveIconSysPath / g_saveStaticIcoPath /
+ * g_saveFileFmt and the interior D_1A7950 / D_1A79A8 slots). Reads the region
+ * code at cfg+0x12 (0x45 'E' / 0x50 'P' / 0x4B 'K') to patch g_saveDirTemplate[2],
+ * copies device-id bytes out of cfg into the dir template at fixed offsets (the
+ * three byte-copy loops at 3..6 / 8..0xA / 0xB..0xC), then makes seven
+ * func_00115AC0(dest, src=&g_saveDirTemplate, 0xD) string-formatter calls to
+ * stamp the dir name into each full path.
+ *
+ * SEEDABLE but NOT YET MATCHED/oracle'd: the target buffers are .bss (all zero in
+ * the ROM image), so the strings are assembled purely at runtime from cfg — a
+ * faithful body is writable. The blocker is func_00115AC0's SEMANTICS: it is the
+ * SDK string/path formatter (cod/015180 region, called (dst,src,0xD); its body is
+ * a SIMD zero-byte scan, sprintf/strncpy/path-join family). Its per-function .s
+ * exists (cod/015180/func_00115AC0.s) so it could be linked as a cmp shared callee
+ * - but matching the C without first pinning its exact semantics would be a guess.
+ * Left as asm pending that identity. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", BuildSaveGamePaths);
 
 /* func_00299B00: 0x14 bytes of dead inter-function fill (`daddu $2,$0,$0` /
@@ -1459,10 +1512,78 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029E5D8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029E5F8);
 
-/* UpdateLevelObjectiveStates: scans the objective list and updates per-level
- * objective completion state. Multi callee-save; 8-byte-packed callee-save
- * frame wall, see func_0029C678. Left as asm. */
+/* UpdateLevelObjectiveStates: re-evaluate every objective of the current level.
+ *
+ * Three passes over the current level's objective list (head cached in the
+ * heightmap scratch at +0x38, terminator = id 0):
+ *   1. score each objective's state (0/1/2) from its two progress conditions,
+ *      forcing it inactive (state 0) when level-gated and the level hasn't been
+ *      visited;
+ *   2. run any per-objective tick callback, stashing its result at +0x26;
+ *   3. tally the objectives that are active (state 1) and not hidden-when-
+ *      complete (flags bit 0x2) into the +0x34 outstanding count.
+ *
+ * Returns 1 iff no objectives remain outstanding (the level's objectives are
+ * all satisfied), else 0. Returns 0 immediately if the level has no list.
+ *
+ * WALLED (probed 2026-06-25, best 69.08%): the body logic reproduces
+ * instruction-for-instruction, but the original (later SN cc1) (a) over-allocates
+ * the frame (128 vs 48 bytes, 7 vs 5 callee-saves); (b) fills loop-back delay
+ * slots with branch-likely (`beqzl`/`bnezl` + annulled next-iteration load) where
+ * the pinned cc1 emits plain `beqz` + `nop`. (The function is void and both
+ * builds rematerialise the lui/%lo g_pRainHeightmap+0x38 pair per pass - no
+ * callee-save-base trick is involved here.) Same later-cc1 frame-packing/
+ * scheduling class as GatherActiveObjectives/EvaluateProgressCondition. The
+ * TARGET_NATIVE arm below is the faithful portable body (cmp-oracle'd). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", UpdateLevelObjectiveStates);
+#else
+s32 UpdateLevelObjectiveStates(void) {
+    ObjectiveScan *scan = (ObjectiveScan *)(g_pRainHeightmap + 0x34);
+    LevelObjective *rec;
+
+    rec = D_258B20[*(s32 *)(g_mapVertexData + 0x230)];
+    scan->head = rec;
+    if (rec == NULL) {
+        return 0;
+    }
+
+    /* Pass 1: score each objective from its progress conditions. */
+    for (; rec->id != 0; rec++) {
+        if ((rec->flags & 0x4) &&
+            g_levelVisitedMarkers[*(s32 *)(g_mapVertexData + 0x230)] == 0) {
+            rec->state = 0;
+            continue;
+        }
+        if (EvaluateProgressCondition(rec->cond1Sel, rec->cond1Arg) == 0) {
+            rec->state = 0;
+            continue;
+        }
+        if (EvaluateProgressCondition(rec->cond2Sel, rec->cond2Arg) != 0) {
+            rec->state = 2;
+        } else {
+            rec->state = 1;
+        }
+    }
+
+    /* Pass 2: tick callbacks. */
+    for (rec = scan->head; rec->id != 0; rec++) {
+        if (rec->tickFn != NULL) {
+            rec->tickResult = rec->tickFn(rec->tickArg);
+        }
+    }
+
+    /* Pass 3: count outstanding (active, not hidden-when-complete) objectives. */
+    scan->outstanding = 0;
+    for (rec = scan->head; rec->id != 0; rec++) {
+        if (rec->state == 1 && (rec->flags & 0x2) == 0) {
+            scan->outstanding += 1;
+        }
+    }
+
+    return scan->outstanding == 0;
+}
+#endif
 
 /* EvaluateProgressCondition(cond, arg): 12-case switch (0=always, 1=level
  * available, 2=item owned, 3=item NEW, 4=objective active, 5=objective

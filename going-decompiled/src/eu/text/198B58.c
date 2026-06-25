@@ -1109,7 +1109,88 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_0029E138);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_0029E158);
 
+/* One per-level objective record (stride 0x28). EU twin of the USA struct. */
+typedef struct LevelObjective {
+    s16 id;             /* 0x00 objective id; 0 terminates the list */
+    s16 cond1Sel;       /* 0x02 first EvaluateProgressCondition selector (cond) */
+    s32 cond1Arg;       /* 0x04 first EvaluateProgressCondition operand (arg) */
+    s16 cond2Sel;       /* 0x08 second EvaluateProgressCondition selector (cond) */
+    s16 _pad0A;         /* 0x0A */
+    s32 cond2Arg;       /* 0x0C second EvaluateProgressCondition operand (arg) */
+    u16 flags;          /* 0x10 bit 0x2 = hidden-when-complete, 0x4 = level-gated */
+    u8  _pad12[0xA];    /* 0x12 */
+    s32 (*tickFn)(s32); /* 0x1C optional per-tick callback */
+    s32 tickArg;        /* 0x20 argument passed to tickFn */
+    s16 state;          /* 0x24 0 = inactive, 1 = active, 2 = complete */
+    s16 tickResult;     /* 0x26 last tickFn return value */
+} LevelObjective;
+
+extern LevelObjective *D_258BA0[]; /* EU 0x258BA0 objective-list head table (USA D_258B20) */
+extern u8 g_mapVertexData[];       /* EU 0x1C4FA0 MapCache base (+0x230 = currentLevel) */
+extern u8 D_1A7C70[];              /* EU 0x1A7C70 per-level visited byte markers (USA 0x1A7BF0) */
+
+/* Objective-scan scratch (EU 0x1B1A54): { outstanding @ +0x10C, head @ +0x110 }
+ * off the g_nBoltCounterDisplayed anchor (USA g_pRainHeightmap+0x34/0x38). */
+typedef struct ObjectiveScan {
+    s32             outstanding; /* g_nBoltCounterDisplayed + 0x10C */
+    LevelObjective *head;        /* g_nBoltCounterDisplayed + 0x110 */
+} ObjectiveScan;
+
+/* UpdateLevelObjectiveStates: EU twin. WALLED (later-cc1 register-coloring/frame
+ * wall, same class as the USA twin and the unit's GatherActiveObjectives /
+ * EvaluateProgressCondition); the TARGET_NATIVE arm is the faithful portable
+ * body, cmp-oracle'd 69/69 on the USA twin (region-identical logic). See the USA
+ * 198FA0.c doc comment for the per-pass behaviour. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", UpdateLevelObjectiveStates);
+#else
+s32 UpdateLevelObjectiveStates(void) {
+    ObjectiveScan *scan =
+        (ObjectiveScan *)((char *)&g_nBoltCounterDisplayed + 0x10C);
+    LevelObjective *rec;
+
+    rec = D_258BA0[*(s32 *)(g_mapVertexData + 0x230)];
+    scan->head = rec;
+    if (rec == NULL) {
+        return 0;
+    }
+
+    /* Pass 1: score each objective from its progress conditions. */
+    for (; rec->id != 0; rec++) {
+        if ((rec->flags & 0x4) &&
+            D_1A7C70[*(s32 *)(g_mapVertexData + 0x230)] == 0) {
+            rec->state = 0;
+            continue;
+        }
+        if (EvaluateProgressCondition(rec->cond1Sel, rec->cond1Arg) == 0) {
+            rec->state = 0;
+            continue;
+        }
+        if (EvaluateProgressCondition(rec->cond2Sel, rec->cond2Arg) != 0) {
+            rec->state = 2;
+        } else {
+            rec->state = 1;
+        }
+    }
+
+    /* Pass 2: tick callbacks. */
+    for (rec = scan->head; rec->id != 0; rec++) {
+        if (rec->tickFn != NULL) {
+            rec->tickResult = rec->tickFn(rec->tickArg);
+        }
+    }
+
+    /* Pass 3: count outstanding (active, not hidden-when-complete) objectives. */
+    scan->outstanding = 0;
+    for (rec = scan->head; rec->id != 0; rec++) {
+        if (rec->state == 1 && (rec->flags & 0x2) == 0) {
+            scan->outstanding += 1;
+        }
+    }
+
+    return scan->outstanding == 0;
+}
+#endif
 
 /* Progress-condition flag arrays read by EvaluateProgressCondition's 12 cases
  * (EU addresses). Declared for the TARGET_NATIVE #else arm; emit no code. */
