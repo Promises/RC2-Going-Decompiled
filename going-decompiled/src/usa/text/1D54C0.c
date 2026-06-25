@@ -230,27 +230,21 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5A48);
 /* Select the active language's menu-background image index from the gp-relative
  * table D_1AAA58, stash it on the screen object (+0x34), refresh the cached
  * language snapshot (D_1ABAE8) and bump the upload-sequence counter D_25BA60.
- * Returns 0. Best real attempt 87.5%: register coloring matches, but our cc1
- * schedules the gp_rel table-base addiu before the index shift and zeroes the
- * return reg with `move` where the original uses `daddu` (return-form +
- * scheduling wall). Wall: gp-relative language table + reloaded-ptr CSE. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5C08);
-#else
-    /* TODO(match): functional equivalent - not byte-exact (87.5%). */
+ * Returns 0. MATCHED: the 87.5% near-miss was a symbol-sizing artifact — the
+ * gp-relative table D_1AAA58 must be modeled as a small (<=8B) sized array so
+ * cc1 emits the addiu $28,%gp_rel base form; with that it is byte-exact. */
+extern s32 D_25B9A0[];   /* current language index (lui/%lo) */
+extern s32 D_1ABAE8;     /* cached language snapshot (gp-rel) */
+extern s32 D_1AAA58[2];  /* per-language bg-index table base (gp-rel) */
 s32 func_002D5C08(void *obj) {
-    extern s32 D_25B9A0;     /* current language index */
-    extern s32 D_1ABAE8;     /* cached language snapshot */
-    extern s32 D_1AAA58;     /* per-language bg-index table base */
-    s32 lang = D_25B9A0;
+    s32 lang = D_25B9A0[0];
     if (D_1ABAE8 != lang) {
         D_1ABAE8 = lang;
     }
-    *(s32 *)((u8 *)obj + 0x34) = (&D_1AAA58)[lang];
+    *(s32 *)((u8 *)obj + 0x34) = D_1AAA58[lang];
     D_25BA60[0] = lang + 1;
     return 0;
 }
-#endif
 
 /* Reset the galactic-map upload sequence counter. Returns 0. */
 s32 func_002D5C48(void) {
@@ -401,29 +395,18 @@ s32 func_002D60E8(void) {
 #endif
 
 /* Feed this frame's newly-pressed buttons to the planet-select handler.
- * Near-miss: our cc1 fills the jal delay slot with the $31 reload that the
- * original keeps as a nop (delay-slot scheduling wall). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D6158);
-#else
-    /* TODO(match): functional equivalent - not byte-exact. */
+ * Returns 0. MATCHED (the earlier "delay-slot scheduling wall" note was a
+ * misdiagnosis: cc1 keeps the jal slot as nop here, byte-exact). */
 s32 func_002D6158(void) {
     func_0029DD40(g_padButtonsPressed[0]);
     return 0;
 }
-#endif
 
-/* Same planet-select input forward as func_002D6158 (sibling screen).
- * Same delay-slot scheduling wall near-miss. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D6180);
-#else
-    /* TODO(match): functional equivalent - not byte-exact. */
+/* Same planet-select input forward as func_002D6158 (sibling screen). MATCHED. */
 s32 func_002D6180(void) {
     func_0029DD40(g_padButtonsPressed[0]);
     return 0;
 }
-#endif
 
 /* Draw-batch wrapper. */
 s32 func_002D61A8(void) {
@@ -433,23 +416,27 @@ s32 func_002D61A8(void) {
     return 0;
 }
 
-/* GUI list show/hide for the save panel keyed off which data source was passed
- * (0x1AB098 -> show, 0x1AB068 -> hide). Returns 0. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D61D8);
-#else
-    /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002D61D8(s32 which) {
-    if (g_pGuiManager != 0) {
-        if (which == 0x1ab098) {
-            func_0033A7E0((u8 *)g_pGuiManager + 0x3CEA0);
-        } else if (which == 0x1ab068) {
-            func_0033A860((u8 *)g_pGuiManager + 0x3CEA0);
+/* GUI list show/hide for the save panel keyed off which data-source object was
+ * passed: &D_1AB098 -> show (func_0033A7E0), &D_1AB068 -> hide (func_0033A860),
+ * both on the save list at g_guiInstance + 0x3CEA0. Returns 0. MATCHED. The
+ * prior near-miss compared `which` to the literal ints 0x1ab098/0x1ab068; the
+ * asm actually compares it to the gp-relative ADDRESSES of those globals. */
+__asm__(".extern g_guiInstance, 16");
+extern s32 D_1AB098;   /* save-data source object A (gp-rel; address taken) */
+extern s32 D_1AB068;   /* save-data source object B (gp-rel; address taken) */
+extern char *g_guiInstance;
+extern void func_0033A7E0(void *list);
+extern void func_0033A860(void *list);
+s32 func_002D61D8(void *which) {
+    if (g_guiInstance != 0) {
+        if (which == &D_1AB098) {
+            func_0033A7E0(g_guiInstance + 0x3CEA0);
+        } else if (which == &D_1AB068) {
+            func_0033A860(g_guiInstance + 0x3CEA0);
         }
     }
     return 0;
 }
-#endif
 
 /* return 0 stub. */
 s32 func_002D6240(void) {

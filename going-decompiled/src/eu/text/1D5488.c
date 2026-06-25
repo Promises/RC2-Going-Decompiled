@@ -67,7 +67,25 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D59D0);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D5A08);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D5BC8);
+/* Select the active language's menu-background image index from the gp-relative
+ * table D_1AAAD8, stash it on the screen object (+0x34), refresh the cached
+ * language snapshot (D_1ABB50) and bump the upload-sequence counter D_25BA80.
+ * Returns 0. (USA twin func_002D5C08.) REGION DIFF: when the language snapshot
+ * changes, EU additionally seeds obj+0x3C = -0x2BC (a scroll/timer init the USA
+ * build omits) inside the snapshot-refresh branch. MATCHED. */
+extern s32 D_25B9C0[];   /* current language index (USA D_25B9A0) */
+extern s32 D_1ABB50;     /* cached language snapshot, gp-rel (USA D_1ABAE8) */
+extern s32 D_1AAAD8[2];  /* per-language bg-index table base, gp-rel (USA D_1AAA58) */
+s32 func_002D5BC8(void *obj) {
+    s32 lang = D_25B9C0[0];
+    if (D_1ABB50 != lang) {
+        *(s32 *)((u8 *)obj + 0x3C) = -0x2BC;
+        D_1ABB50 = lang;
+    }
+    *(s32 *)((u8 *)obj + 0x34) = D_1AAAD8[lang];
+    D_25BA80[0] = lang + 1;
+    return 0;
+}
 
 /* Reset the galactic-map upload sequence counter. Returns 0. (USA func_002D5C48) */
 s32 func_002D5C10(void) {
@@ -99,7 +117,27 @@ s32 func_002D6118(void) {
     return 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D6148);
+/* GUI list show/hide for the save panel keyed off which data-source object was
+ * passed: &D_1AB108 -> show (func_0033B6C0), &D_1AB0D8 -> hide (func_0033B740),
+ * both on the save list at g_guiInstance + 0x3CF50. Returns 0. (USA twin
+ * func_002D61D8.) REGION DIFF: list sub-offset 0x3CF50 (USA 0x3CEA0, +0xB0) and
+ * source objects D_1AB108/D_1AB0D8 (USA D_1AB098/D_1AB068, +0x70). MATCHED. */
+__asm__(".extern g_guiInstance, 16");
+extern s32 D_1AB108;   /* save-data source object A (gp-rel; address taken) */
+extern s32 D_1AB0D8;   /* save-data source object B (gp-rel; address taken) */
+extern char *g_guiInstance;
+extern void func_0033B6C0(void *list);
+extern void func_0033B740(void *list);
+s32 func_002D6148(void *which) {
+    if (g_guiInstance != 0) {
+        if (which == &D_1AB108) {
+            func_0033B6C0(g_guiInstance + 0x3CF50);
+        } else if (which == &D_1AB0D8) {
+            func_0033B740(g_guiInstance + 0x3CF50);
+        }
+    }
+    return 0;
+}
 
 /* return 0 stub. */
 s32 func_002D61B0(void) {
