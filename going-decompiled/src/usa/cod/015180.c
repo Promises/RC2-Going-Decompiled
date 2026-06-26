@@ -1,5 +1,32 @@
 #include "common.h"
 
+/* EE-kernel parameter blocks (see include/rtl/ee/eekernel.h); declared locally
+ * so this unit stays free of the full SDK header (whose eetypes.h would clash
+ * with common.h's base typedefs). Layout is byte-identical to the SDK. */
+struct ThreadParam {
+    s32  status;
+    void *entry;
+    void *stack;
+    s32  stackSize;
+    void *gpReg;
+    s32  initPriority;
+    s32  currentPriority;
+    u32  attr;
+    u32  option;
+    s32  waitType;
+    s32  waitId;
+    s32  wakeupCount;
+};
+
+struct SemaParam {
+    s32 currentCount;
+    s32 maxCount;
+    s32 initCount;
+    s32 numWaitThreads;
+    u32 attr;
+    u32 option;
+};
+
 extern s32 D_00133E74;
 extern s32 D_0013A308;
 
@@ -234,9 +261,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AA10);
  * SCE library stub: load the syscall number into $v1 and trap into the EE
  * kernel; the kernel returns its result in $v0 (no register move emitted, so
  * the C body is the bare inline-asm trap). Kept under the splat func_ name so
- * objdiff pairs it by symbol against the frozen asm.
+ * objdiff pairs it by symbol against the frozen asm. Takes a ThreadParam* and
+ * returns the new thread id; the syscall result is left in $v0 by the trap.
  */
-void func_0011AA20(void) {
+s32 func_0011AA20(struct ThreadParam *param) {
     __asm__ volatile("addiu $3, $0, 0x20\n\tsyscall 0" ::: "$3", "memory");
 }
 
@@ -245,9 +273,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AA30);
 /**
  * func_0011AA40 = EE kernel syscall 0x22 (StartThread).
  * SCE library syscall stub (see func_0011AA20): load the syscall number into
- * $v1 and trap; the kernel's result is returned in $v0.
+ * $v1 and trap; the kernel's result is returned in $v0. Takes the thread id
+ * and its start argument.
  */
-void func_0011AA40(void) {
+s32 func_0011AA40(s32 thid, void *arg) {
     __asm__ volatile("addiu $3, $0, 0x22\n\tsyscall 0" ::: "$3", "memory");
 }
 
@@ -266,9 +295,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AAA0);
 /**
  * func_0011AAB0 = EE kernel syscall 0x29 (RotateThreadReadyQueue).
  * SCE library syscall stub (see func_0011AA20): load the syscall number into
- * $v1 and trap; the kernel's result is returned in $v0.
+ * $v1 and trap; the kernel's result is returned in $v0. Called with two
+ * arguments by func_0011B800 (thread id + a constant 1).
  */
-void func_0011AAB0(void) {
+void func_0011AAB0(s32 thid, s32 arg) {
     __asm__ volatile("addiu $3, $0, 0x29\n\tsyscall 0" ::: "$3", "memory");
 }
 
@@ -287,7 +317,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AB00);
  * SCE library syscall stub (see func_0011AA20): load the syscall number into
  * $v1 and trap; the kernel returns the current thread id in $v0.
  */
-void func_0011AB10(void) {
+s32 func_0011AB10(void) {
     __asm__ volatile("addiu $3, $0, 0x2F\n\tsyscall 0" ::: "$3", "memory");
 }
 
@@ -434,7 +464,14 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AE80);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AE90);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AEA0);
+/**
+ * func_0011AEA0 = EE kernel syscall 0x64. SCE library syscall stub (see
+ * func_0011AA20): load the syscall number into $v1 and trap; the kernel's
+ * result is returned in $v0. Exact SDK name UNCONFIRMED.
+ */
+void func_0011AEA0(void) {
+    __asm__ volatile("addiu $3, $0, 0x64\n\tsyscall 0" ::: "$3", "memory");
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AEB0);
 
@@ -541,7 +578,56 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", EnableDmac);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B728);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B800);
+extern s32 D_00134690;   /* worker-thread id / init guard (<=0 until created) */
+extern s32 D_0013C600;   /* semaphore id created for the worker subsystem */
+extern s32 D_0013C608[2];/* StartThread argument block (two words, zeroed) */
+extern u8  D_0013C200[]; /* the worker thread's stack buffer */
+extern s32 D_001AEFF0;   /* the gp base value handed to the worker thread */
+extern void func_0011B728(void); /* the worker thread entry point */
+
+/**
+ * Bring up the unit's background worker thread once. Guards on D_00134690 (>0
+ * means already up): creates a semaphore (func_0011AC20 = CreateSema) with
+ * maxCount 0xFF, then a thread (func_0011AA20 = CreateThread) entered at
+ * func_0011B728 with a 0x400-byte stack and the engine gp. On success it caches
+ * the thread id in D_00134690, starts it (func_0011AA40 = StartThread) with a
+ * zeroed two-word argument block, and yields the ready queue
+ * (func_0011AAB0 = RotateThreadReadyQueue) for the current thread
+ * (func_0011AB10 = GetThreadId). On any failure it returns -1, tearing the
+ * semaphore back down (func_0011AC30 = DeleteSema) if the thread could not be
+ * created. Returns the worker thread id (D_00134690) on success.
+ */
+s32 func_0011B800(void) {
+    struct ThreadParam thread;
+    struct SemaParam sema;
+    s32 thid;
+
+    if (D_00134690 > 0) {
+        return -1;
+    }
+    sema.maxCount = 0xFF;
+    sema.initCount = 0;
+    D_0013C600 = func_0011AC20((s32 *)&sema);
+    if (D_0013C600 < 0) {
+        return -1;
+    }
+    thread.entry = (void *)func_0011B728;
+    thread.stack = D_0013C200;
+    thread.stackSize = 0x400;
+    thread.gpReg = &D_001AEFF0;
+    thread.initPriority = 0;
+    thid = func_0011AA20(&thread);
+    D_00134690 = thid;
+    if (thid < 0) {
+        func_0011AC30(D_0013C600);
+        return -1;
+    }
+    D_0013C608[0] = 0;
+    D_0013C608[1] = 0;
+    func_0011AA40(thid, D_0013C608);
+    func_0011AAB0(func_0011AB10(), 1);
+    return D_00134690;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B8D8);
 
@@ -1144,7 +1230,44 @@ s32 func_0011F700(s32 a, s32 b, s32 c) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F710);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F718);
+extern s32 D_00134DA8[4]; /* handler table: two {arg0,arg1} pairs */
+extern s32 D_00134DA0;    /* cached end-of-walk pointer (func_0011F6C0 side) */
+extern s32 *func_0011F6C0(s32 *first, s32 *last, s32 value);
+
+/**
+ * Install the unit's exception/interrupt handlers and walk the two parallel
+ * handler regions to their common end.
+ *
+ * First registers two handlers via func_0011F818 (syscall 0x74) from the table
+ * D_00134DA8 (a pair of {arg0,arg1} entries). Then it seeds two cursors with
+ * func_0011F700 (syscall 0x83) over the 0x80000000..0x80080000 range, one
+ * keyed on func_0011F6C0 and one on func_0011F688, and advances whichever
+ * cursor (offset back by its handler's fixed bias, 0x20C / 0x168) is behind
+ * until the two biased cursors meet. The meeting point is cached in D_00134DA0.
+ */
+void func_0011F718(void) {
+    s32 p;
+    s32 q;
+    s32 a;
+    s32 b;
+
+    func_0011F818(D_00134DA8[0], D_00134DA8[1]);
+    func_0011F818(D_00134DA8[2], D_00134DA8[3]);
+    p = func_0011F700(0x80000000, 0x80080000, (s32)func_0011F6C0);
+    q = func_0011F700(0x80000000, 0x80080000, (s32)func_0011F688);
+    a = p - 0x20C;
+    b = q - 0x168;
+    while (a != b) {
+        if ((u32)a < (u32)b) {
+            p = func_0011F700(p + 4, 0x80080000, (s32)func_0011F6C0);
+            a = p - 0x20C;
+        } else {
+            q = func_0011F700(q + 4, 0x80080000, (s32)func_0011F688);
+            b = q - 0x168;
+        }
+    }
+    D_00134DA0 = a;
+}
 
 /**
  * func_0011F818 = EE kernel syscall 0x74 (same primitive as func_0011F868).
