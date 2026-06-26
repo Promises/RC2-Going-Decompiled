@@ -1132,13 +1132,29 @@ s32 func_0011F688(s32 *dst, s32 *src, u32 nbytes) {
  * this conditional-move form, so it can't match from C. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F6C0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F700);
+/**
+ * func_0011F700 = EE kernel syscall 0x83. SCE library syscall stub (see
+ * func_0011AA20): load the syscall number into $v1 and trap. Called from the
+ * device/handler init path (func_0011F718) with a 3-word argument. Exact SDK
+ * name UNCONFIRMED.
+ */
+s32 func_0011F700(s32 a, s32 b, s32 c) {
+    __asm__ volatile("addiu $3, $0, 0x83\n\tsyscall 0" ::: "$3", "memory");
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F710);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F718);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F818);
+/**
+ * func_0011F818 = EE kernel syscall 0x74 (same primitive as func_0011F868).
+ * SCE library syscall stub (see func_0011AA20): load the syscall number into
+ * $v1 and trap. Called from the device/handler init path (func_0011F718) with
+ * a 2-word argument. Exact SDK name UNCONFIRMED.
+ */
+s32 func_0011F818(s32 a, s32 b) {
+    __asm__ volatile("addiu $3, $0, 0x74\n\tsyscall 0" ::: "$3", "memory");
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", _InitSys);
 
@@ -1218,9 +1234,25 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", exit);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011FA48);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011FA50);
+/**
+ * func_0011FA50 = EE kernel syscall 0x74 (same primitive as func_0011F868).
+ * SCE library syscall stub (see func_0011AA20): load the syscall number into
+ * $v1 and trap. Called from the GS/DMA reset path (func_0011FAB8) with a
+ * 2-word argument. Exact SDK name UNCONFIRMED.
+ */
+s32 func_0011FA50(s32 a, s32 b) {
+    __asm__ volatile("addiu $3, $0, 0x74\n\tsyscall 0" ::: "$3", "memory");
+}
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011FA60);
+/**
+ * func_0011FA60 = EE kernel syscall 0x5A (same primitive as func_0011F878).
+ * SCE library syscall stub (see func_0011AA20): load the syscall number into
+ * $v1 and trap. Called from the GS/DMA reset path (func_0011FAB8) with a
+ * 3-word argument. Exact SDK name UNCONFIRMED.
+ */
+s32 func_0011FA60(s32 a, s32 b, s32 c) {
+    __asm__ volatile("addiu $3, $0, 0x5A\n\tsyscall 0" ::: "$3", "memory");
+}
 
 /**
  * Copy nbytes>>2 words (32-bit) from src to dst and return 0. Identical body to
@@ -1237,7 +1269,15 @@ s32 func_0011FA70(s32 *dst, s32 *src, u32 nbytes) {
     return 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011FAA8);
+/**
+ * func_0011FAA8 = EE kernel syscall 0x5B (same primitive as func_0011F8C0).
+ * SCE library syscall stub (see func_0011AA20): load the syscall number into
+ * $v1 and trap. Called in a loop from the GS/DMA reset path (func_0011FAB8).
+ * Exact SDK name UNCONFIRMED.
+ */
+s32 func_0011FAA8(s32 a, s32 b) {
+    __asm__ volatile("addiu $3, $0, 0x5B\n\tsyscall 0" ::: "$3", "memory");
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011FAB8);
 
