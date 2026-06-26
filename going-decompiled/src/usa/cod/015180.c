@@ -323,9 +323,24 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AC00);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AC10);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AC20);
+/**
+ * func_0011AC20 = EE kernel syscall 0x40 (CreateSema).
+ * SCE library syscall stub (see func_0011AA20): load the syscall number into
+ * $v1 and trap; the kernel creates a semaphore from the descriptor in $a0 and
+ * returns the new semaphore id in $v0.
+ */
+s32 func_0011AC20(s32 *desc) {
+    __asm__ volatile("addiu $3, $0, 0x40\n\tsyscall 0" ::: "$3", "memory");
+}
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AC30);
+/**
+ * func_0011AC30 = EE kernel syscall 0x41 (DeleteSema).
+ * SCE library syscall stub (see func_0011AA20): load the syscall number into
+ * $v1 and trap; the kernel deletes the semaphore identified by $a0.
+ */
+void func_0011AC30(s32 obj) {
+    __asm__ volatile("addiu $3, $0, 0x41\n\tsyscall 0" ::: "$3", "memory");
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AC40);
 
@@ -1129,9 +1144,25 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", _InitSys);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F864);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F868);
+/**
+ * func_0011F868 = EE kernel syscall 0x74. SCE library syscall stub (see
+ * func_0011AA20): load the syscall number into $v1 and trap. Used during DMA
+ * channel setup (see func_0011F938) with a 2-word argument. Exact SDK name
+ * UNCONFIRMED.
+ */
+s32 func_0011F868(s32 a, s32 b) {
+    __asm__ volatile("addiu $3, $0, 0x74\n\tsyscall 0" ::: "$3", "memory");
+}
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F878);
+/**
+ * func_0011F878 = EE kernel syscall 0x5A. SCE library syscall stub (see
+ * func_0011AA20): load the syscall number into $v1 and trap. Used during DMA
+ * channel setup (see func_0011F938) with a 3-word argument. Exact SDK name
+ * UNCONFIRMED.
+ */
+s32 func_0011F878(s32 a, s32 b, s32 c) {
+    __asm__ volatile("addiu $3, $0, 0x5A\n\tsyscall 0" ::: "$3", "memory");
+}
 
 /**
  * Copy nbytes>>2 words (32-bit) from src to dst and return 0. Identical body to
@@ -1148,7 +1179,15 @@ s32 func_0011F888(s32 *dst, s32 *src, u32 nbytes) {
     return 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F8C0);
+/**
+ * func_0011F8C0 = EE kernel syscall 0x5B. SCE library syscall stub (see
+ * func_0011AA20): load the syscall number into $v1 and trap. Used during DMA
+ * channel setup (see func_0011F938) with a 2-word argument. Exact SDK name
+ * UNCONFIRMED.
+ */
+s32 func_0011F8C0(s32 a, s32 b) {
+    __asm__ volatile("addiu $3, $0, 0x5B\n\tsyscall 0" ::: "$3", "memory");
+}
 
 /**
  * Read a hardware register pair, force its mode field to 0x2000 (clearing the
