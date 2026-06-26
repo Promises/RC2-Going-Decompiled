@@ -1222,9 +1222,31 @@ void func_0011BFC8(s32 ch) {
  * comment in src/usa/cod/015180.c for the functionally-correct C and the two
  * residual ee-gcc codegen diffs (exp<0 register threading + the original's
  * branch-LIKELY `bnel` rounding compare that ee-gcc emits as a plain `bne`).
- * Seedable leaf: candidate for a cmp-oracle'd TARGET_NATIVE #else later.
+ * Seedable leaf: shipped as a cmp-oracle'd portable #else below (asm-vs-C proven
+ * bit-identical on real R5900 by run_cmp_015180_iso.sh).
  */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011C000);
+#else
+s32 func_0011C000(s64 bits) {
+    s64 x = bits;
+    s64 exp = (s64)(((u64)(x << 1)) >> 53) - 0x433;
+    if (exp < -0x35) {
+        return 0;
+    }
+    if (exp >= 0xD) {
+        return 0x270F;
+    }
+    x = (s64)((((u64)x) << 12) >> 12 | 0x10000000000000ULL);
+    if (exp < 0) {
+        u64 v = ((u64)x) >> (s32)(-exp - 2);
+        x = (s64)((v & 3) == 3 ? (v >> 2) + 1 : v >> 2);
+    } else {
+        x = x << (s32)exp;
+    }
+    return (s32)x;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011C090);
 
@@ -2116,10 +2138,110 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00121B20);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001220F0);
 
+/**
+ * func_00122630 = recompose an FpParts descriptor into a packed IEEE-754 double
+ * (NaN->quiet 0x7FF, inf/zero clamps, normal: rebias +0x3FF, round-to-even on
+ * the low 8 mantissa bits, pack sign|exp|mantissa). NEAR-MISS WALL (59.12%) -
+ * see the USA twin for the uninitialized-scratch masking quirk. Shipped as a
+ * cmp-oracle'd portable #else (run_cmp_015180_iso.sh).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00122630);
+#else
+s64 func_00122630(FpParts *p) {
+    s32 cls = p->fpClass;
+    s32 sign = p->sign;
+    s64 mant = p->mantissa;
+    s32 expOut = 0;
+    if (cls < 2) {
+        mant |= 0x0008000000000000ULL;
+        expOut = 0x7FF;
+    } else if (cls == 4) {
+        expOut = 0x7FF;
+        mant = 0;
+    } else if (cls == 2) {
+        mant = 0;
+    } else if (mant != 0) {
+        s32 exp = p->exponent;
+        if (exp < -0x3FE) {
+            s32 sh = -0x3FE - exp;
+            if (sh < 0x39) {
+                mant = (s64)((u64)mant >> sh);
+            } else {
+                mant = 0;
+            }
+            mant = (s64)((u64)mant >> 8);
+        } else if (exp >= 0x400) {
+            expOut = 0x7FF;
+            mant = 0;
+        } else {
+            expOut = exp + 0x3FF;
+            if ((mant & 0xFF) == 0x80) {
+                if (mant & 0x100) {
+                    mant += 0x80;
+                }
+            } else {
+                mant += 0x7F;
+            }
+            if ((u64)mant > 0x1FFFFFFFFFFFFFFFULL) {
+                mant = (s64)((u64)mant >> 1);
+                expOut++;
+            }
+            mant = (s64)((u64)mant >> 8);
+        }
+    }
+    return ((s64)sign << 63) | ((s64)(expOut & 0x7FF) << 52) |
+           (mant & 0x000FFFFFFFFFFFFFLL);
+}
+#endif
 
+/**
+ * func_00122760 = decompose the IEEE-754 double *value into FpParts at out
+ * (sign, 11-bit exponent field, 52-bit fraction; class 2 zero/subnormal, 4 inf,
+ * 1/0 quiet/signalling NaN, 3 normal with mantissa = (frac<<8)|(1<<60) and
+ * exponent rebiased by -0x3FF). NEAR-MISS WALL (93.54%) - see the USA twin for
+ * the sign/exp register-swap + constant-preload scheduling diffs ee-gcc won't
+ * reproduce. Shipped as a cmp-oracle'd portable #else (run_cmp_015180_iso.sh).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00122760);
+#else
+void func_00122760(s64 *value, FpParts *out) {
+    u64 v = *(u64 *)value;
+    s32 sign = (s32)(v >> 63);
+    s64 frac = v & 0x000FFFFFFFFFFFFFULL;
+    s32 exp = (s32)(v >> 52) & 0x7FF;
+    out->sign = sign;
+    if (exp == 0) {
+        out->fpClass = 2;
+        return;
+    }
+    if (exp == 0x7FF) {
+        if (frac == 0) {
+            out->fpClass = 4;
+            return;
+        }
+        if (frac & 0x0008000000000000ULL) {
+            out->fpClass = 1;
+        } else {
+            out->fpClass = 0;
+        }
+        out->mantissa = frac;
+        return;
+    }
+    out->mantissa = (frac << 8) | 0x1000000000000000ULL;
+    out->exponent = exp - 0x3FF;
+    out->fpClass = 3;
+}
+#endif
 
+/* func_00122800 = software double-precision ADD of two decomposed operands
+ * (FpParts a + b -> out). WALL + DEFERRED #else (same soft-float family as its
+ * 59-83% siblings; ~144 instrs with two sticky-shift loops + branch-likely
+ * fillers). A faithful #else also needs the external NaN-constant D_00141890
+ * (EU; = USA D_00141810) seeded into the cmp-oracle, so it is left INCLUDE_ASM
+ * rather than shipped
+ * unverified - see the USA twin for the full behavioural description. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00122800);
 
 /**
@@ -2159,7 +2281,62 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00122B00);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00122DA8);
 
+/**
+ * func_00122F10 = ordered comparison of two decomposed doubles (FpParts):
+ * NaN->1, else order by class then (for equal-sign normals) exponent then
+ * unsigned mantissa. NEAR-MISS WALL (83.70%) - branch-likely + movz/movn sign
+ * selects ee-gcc won't reproduce. Shipped as a cmp-oracle'd portable #else
+ * (run_cmp_015180_iso.sh).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00122F10);
+#else
+s32 func_00122F10(FpParts *a, FpParts *b) {
+    s32 ca = a->fpClass;
+    s32 cb;
+    if ((u32)ca < 2) {
+        return 1;
+    }
+    cb = b->fpClass;
+    if ((u32)cb < 2) {
+        return 1;
+    }
+    if (ca == 4) {
+        if (cb == 4) {
+            return b->sign - a->sign;
+        }
+        return a->sign ? -1 : 1;
+    }
+    if (cb == 4) {
+        return b->sign ? 1 : -1;
+    }
+    if (ca == 2) {
+        if (cb == 2) {
+            return 0;
+        }
+        return b->sign ? 1 : -1;
+    }
+    if (cb == 2) {
+        return a->sign ? -1 : 1;
+    }
+    if (a->sign != b->sign) {
+        return a->sign ? -1 : 1;
+    }
+    if (b->exponent < a->exponent) {
+        return a->sign ? -1 : 1;
+    }
+    if (a->exponent < b->exponent) {
+        return a->sign ? 1 : -1;
+    }
+    if ((u64)b->mantissa < (u64)a->mantissa) {
+        return a->sign ? -1 : 1;
+    }
+    if ((u64)a->mantissa < (u64)b->mantissa) {
+        return a->sign ? 1 : -1;
+    }
+    return 0;
+}
+#endif
 
 /**
  * Compare two doubles by IEEE-754 class: decompose each operand with
@@ -2220,7 +2397,42 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001232EC);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001232F0);
 
+/* Decomposed IEEE-754 single produced by func_00123400 (32-bit fields). */
+typedef struct {
+    s32 fpClass;   /* 0x00: 0=sNaN,1=qNaN,2=zero/subnormal,3=normal,4=inf */
+    s32 sign;      /* 0x04 */
+    s32 exponent;  /* 0x08: unbiased (bias 0x7F) */
+    s32 mantissa;  /* 0x0C: normal = (frac<<7)|(1<<30) */
+} SpParts;
+
+/* func_00123400: decompose the IEEE-754 single at src[0] into SpParts, returning
+ * the class. NEAR-MISS WALL (~68%): register allocation differs AND the asm
+ * returns 1 for both NaN kinds while storing class 0 for a signalling NaN.
+ * Shipped as a cmp-oracle'd portable #else (run_cmp_015180_iso.sh). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00123400);
+#else
+s32 func_00123400(u32 *src, SpParts *out) {
+    u32 bits = src[0];
+    s32 frac = (s32)(bits & 0x7FFFFF);
+    s32 exp = (s32)((bits >> 23) & 0xFF);
+    out->sign = (s32)(bits >> 31);
+    if (exp == 0) {
+        return out->fpClass = 2;
+    }
+    if (exp == 0xFF) {
+        if (frac == 0) {
+            return out->fpClass = 4;
+        }
+        out->fpClass = (frac & 0x100000) ? 1 : 0;
+        out->mantissa = frac;
+        return 1;   /* asm leaves 1 in the return reg for both NaN kinds */
+    }
+    out->mantissa = (frac << 7) | 0x40000000;
+    out->exponent = exp - 0x7F;
+    return out->fpClass = 3;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00123490);
 
