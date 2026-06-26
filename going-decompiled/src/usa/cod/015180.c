@@ -610,6 +610,29 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", DisableDmac);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", EnableDmac);
 
+/**
+ * func_0011B728 = the unit's background worker-thread main loop (entered from
+ * func_0011AA20/StartThread, see func_0011B800). It blocks forever on the
+ * subsystem semaphore D_0013C600 (func_0011AC60/WaitSema); each time it is
+ * signalled it pops the next command record from a 512-entry ring buffer at
+ * *queue (a `s32 head` cursor at 0x00 masked to 0x1FF and advanced modulo 0x200,
+ * then 2-byte {op,arg} records from 0x08) and dispatches on the op byte: 1 ->
+ * func_0011AAD0/ReleaseWaitThread, 0 -> func_0011AB50/WakeupThread, 2 ->
+ * func_0011AB90/SuspendThread (each on the record's thread-id arg byte); any
+ * other op prints the error string D_0013A920 via func_0011C7E8. Never returns.
+ *
+ * NEAR-MATCH WALL (96.76% via objdiff). The faithful C (an infinite loop with a
+ * switch on queue->cmds[idx].op) compiles to a BYTE-IDENTICAL instruction stream
+ * and identical frame/saved-register set (the loop-invariant constants 1, 2,
+ * &D_0013A920 and %hi(D_0013C600) and the two entry-array bases are hoisted
+ * exactly as the original) - the ONLY divergence is ee-gcc -O2 -G0 local-register
+ * coloring inside the dispatch: the original holds the head/index in $3 and the
+ * switch selector in $2 (selector reuses the type-address reg), whereas ee-gcc
+ * assigns the index $2 and the selector $3, cascading a v0<->v1 (+ argaddr a0
+ * vs a2) swap across ~7 instructions. The opcodes and order match; only the
+ * register numbers differ, and the tie-break is not steerable from C. It is also
+ * not shippable as a TARGET_NATIVE #else (the body is EE-kernel syscall stubs
+ * that do not compile on the host). Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B728);
 
 extern s32 D_00134690;   /* worker-thread id / init guard (<=0 until created) */
@@ -861,6 +884,32 @@ s32 func_0011C000(s64 bits) {
 }
 #endif
 
+/**
+ * func_0011C090 = print the double whose bits are `value` in scientific notation
+ * via the formatter func_0011C7E8. Emits a leading '-' (through the char hook
+ * D_00134698) for negatives and works on the magnitude, normalising it into
+ * [0.1, 1.0) while tracking a decimal exponent: when >= 0.1 (D_0013A9D8) it
+ * divides by 10 (func_00122DA8) until < 1.0, counting the exponent up; when
+ * < 0.1 it multiplies by 10 (func_00122B00) until >= 0.1 (D_0013A9E0), counting
+ * down. The normalised mantissa is scaled by 1e6 (D_0013A9E8), truncated to an
+ * integer (func_001212C8) and clamped to four digits (func_0011C000), printed as
+ * "0.dddd" (D_0013A9C0). Finally appends the exponent as "e+NN" (D_0013A9C8) or
+ * "e%d"/"e-NN" (D_0013A9D0).
+ *
+ * WALL + INCLUDE_ASM (FP-constant-pool / li.d toolchain ceiling). The faithful C
+ * (an if/else of two scale loops with explicit func_001212C8/func_0011C000 calls)
+ * reaches only ~50% because the original loads its three non-trivial double
+ * constants - 0.1 (D_0013A9D8 and a second copy D_0013A9E0) and 1e6 (D_0013A9E8)
+ * - from the rodata constant pool via the SN assembler's `li.d`/`ld $5,
+ * %lo(D_..)($at)` macro (recomputed inline, $at, NOT hoisted). From C, ee-gcc
+ * -O2 -G0 EITHER (a) emits the same `li.d $5, 0.1` pseudo for FP literals, which
+ * our GNU `mips-linux-gnu-as -march=r5900` REJECTS ("opcode not supported"; the
+ * original SN asm expanded it into the D_0013A9xx pool entries), OR (b) when the
+ * constants are referenced as named externs, splits the address and HOISTS the
+ * %hi out of the scale loops into extra callee-saved registers (5 saved vs the
+ * original 3), diverging structurally. Neither is steerable from C with this
+ * assembler. The cheaply-buildable constants 1.0/10.0 (ori+dsll32) match fine;
+ * only the pool doubles wall. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C090);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C1F8);
@@ -1846,6 +1895,30 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001210E0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001212C4);
 
+/**
+ * func_001212C8 = truncate the non-negative double whose bits are `x` to a
+ * 64-bit integer, i.e. soft-float __fixunsdfdi for x >= 0 (negative x returns 0).
+ * Splits the value into a high 32-bit limb hi = (u32)(x * 2^-32, func_00122B00
+ * then func_001231C8) and a low part: it forms hi<<32 back into a double through
+ * the inlined unsigned-64 -> double conversion (func_001213B8 of the limb, or of
+ * the halved limb then doubled via func_00122A40 when the top bit is set),
+ * subtracts that from x (func_00122A98) to get the residual double, truncates the
+ * residual to an unsigned 32-bit limb (func_001231C8) and adds it back onto
+ * hi<<32 (subtracting when the residual went slightly negative). Returns
+ * hi*2^32 +/- low. The 2^-32 scale (0x3DF0000000000000) is cheap so it builds
+ * inline (ori+dsll32), avoiding the constant-pool/li.d wall of func_0011C090.
+ *
+ * NEAR-MATCH WALL (78.59% via objdiff). The faithful C above is functionally
+ * exact but loses byte-equality the same way as its soft-float siblings
+ * (func_001213B8 85%, func_001231C8 68%): ee-gcc -O2 -G0 (1) keeps the double
+ * constant 0.0 used by the residual compare AND the residual negate in a
+ * callee-saved register ($18) across the intervening func_00123028 call (3 saved
+ * regs vs the 2 a literal 0 / $0 yields), and (2) lays out the inlined
+ * unsigned-64->double `if (limb<0)` block (func_001213B8 + func_00122A40 self-
+ * add) with different branch placement / register threading than clean C emits.
+ * Neither is steerable from C. It also cannot ship as a TARGET_NATIVE #else: its
+ * multiply dependency func_00122B00 is itself NaN-deferred INCLUDE_ASM (no #else
+ * arm to link against natively). Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001212C8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001213B4);
@@ -2112,6 +2185,27 @@ s64 func_00122A98(s64 a, s64 b) {
     return func_00122630(func_00122800(&pa, &pb, &result));
 }
 
+/* func_00122B00 = software double-precision MULTIPLY of two packed doubles
+ * (a * b -> packed double), the multiply sibling of the add-core func_00122800
+ * and divide-core func_00122DA8. Decomposes both operands with func_00122760,
+ * then: NaN propagates (recomposes the NaN operand with the product sign); the
+ * result sign is signA^signB; 0*inf returns the global NaN descriptor
+ * &D_00141810; zero/inf shortcuts copy the appropriate zero/inf result;
+ * otherwise (both normal) it forms the 122-bit product of the two 61-bit
+ * mantissas from four 64x64 partial products (func_00121AB8/__muldi3), keeps the
+ * high limb with a sticky OR of the dropped bits, sums the exponents,
+ * normalises (one-step shift-down on the leading carry) and round-to-nearest-
+ * even on the low byte, writing class 3 / sign / exponent / mantissa to a result
+ * descriptor recomposed by func_00122630.
+ *
+ * WALL + DEFERRED #else (NaN-global): same soft-float family as func_00122800 /
+ * func_00122DA8 - a sticky-shift normalise loop plus annulling bnel delay-slot
+ * fillers and a movn round-select that ee-gcc -O2 -G0 will not reproduce from
+ * clean C, AND it references the external NaN-constant global D_00141810, which
+ * is NOT in symbol_addrs and is not defined for the TARGET_NATIVE build - so
+ * (exactly like func_00122800) a #else cannot compile/cmp-oracle without first
+ * seeding D_00141810. Left as INCLUDE_ASM here; a faithful #else multiply is a
+ * follow-up gated on D_00141810 being modelled. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00122B00);
 
 /* func_00122DA8 = software double-precision DIVIDE of two decomposed operands
