@@ -1139,7 +1139,16 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceSifRebootIop)
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011EFE8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011EFF0);
+/**
+ * func_0011EFF0 = EE kernel syscall 0x5A. SCE library syscall stub (see
+ * func_0011AA20): load the syscall number into $v1 and trap. Installs a DMA/INTC
+ * handler over a buffer; called from func_0011F058 with a 3-word argument
+ * (handler addr, buffer, length). Same primitive as func_0011F878. Exact SDK
+ * name UNCONFIRMED.
+ */
+s32 func_0011EFF0(s32 a, s32 b, s32 c) {
+    __asm__ volatile("addiu $3, $0, 0x5A\n\tsyscall 0" ::: "$3", "memory");
+}
 
 /**
  * Copy nbytes>>2 words (32-bit) from src to dst and return 0. nbytes is rounded
@@ -1156,11 +1165,63 @@ s32 func_0011F000(s32 *dst, s32 *src, u32 nbytes) {
     return 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F038);
+/**
+ * func_0011F038 = EE kernel syscall 0x5B. SCE library syscall stub (see
+ * func_0011AA20): load the syscall number into $v1 and trap; result returned in
+ * $v0. Takes one argument in $a0 (a channel id — see func_0011F058). Same
+ * primitive as func_0011F8C0. Exact SDK name UNCONFIRMED.
+ */
+s32 func_0011F038(s32 a) {
+    __asm__ volatile("addiu $3, $0, 0x5B\n\tsyscall 0" ::: "$3", "memory");
+}
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F048);
+/**
+ * func_0011F048 = EE kernel syscall 0x74. SCE library syscall stub (see
+ * func_0011AA20): load the syscall number into $v1 and trap. Used during DMA
+ * channel setup (see func_0011F058) with a 2-word argument; callers ignore the
+ * result, so this is modelled as void. Same primitive as func_0011F868. Exact
+ * SDK name UNCONFIRMED.
+ */
+void func_0011F048(s32 a, s32 b) {
+    __asm__ volatile("addiu $3, $0, 0x74\n\tsyscall 0" ::: "$3", "memory");
+}
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F058);
+/* A single DMA channel descriptor in the static init table D_00134AD0: a
+ * (channel-id, mode) word pair consumed by the syscall stubs. Same layout as the
+ * D_00135568 / D_00135CF0 tables used by func_0011F938 / func_0011FAB8. */
+typedef struct DmaChannelInit {
+    s32 channel;
+    s32 mode;
+} DmaChannelInit;
+
+extern DmaChannelInit D_00134AD0[8];
+extern u8 D_00134750;
+extern s32 D_00134AC8;
+
+/**
+ * func_0011F058: bring up the third DMA-channel group (the one _InitSys finishes
+ * with its tail call). Arms channel entry[0] (func_0011F048 = syscall 0x74),
+ * installs the 0x80075000 handler over D_00134750 spanning 0x330 bytes
+ * (func_0011EFF0 = syscall 0x5A), toggles the interrupt-enable syscall
+ * (func_0011AEA0 = 0x64) off then on, arms entries[1] and [2] directly, then for
+ * the remaining entries (3..7) queries each channel (func_0011F038 = syscall
+ * 0x5B) and re-arms it with the returned value. Finally stores func_0011F038(3)
+ * into D_00134AC8. Unlike func_0011F938 / func_0011FAB8 this group has no
+ * hardware gate. Exact SDK name UNCONFIRMED.
+ */
+void func_0011F058(void) {
+    u32 i;
+    func_0011F048(D_00134AD0[0].channel, D_00134AD0[0].mode);
+    func_0011EFF0(0x80075000, (s32)&D_00134750, 0x330);
+    func_0011AEA0(0);
+    func_0011AEA0(2);
+    func_0011F048(D_00134AD0[1].channel, D_00134AD0[1].mode);
+    func_0011F048(D_00134AD0[2].channel, D_00134AD0[2].mode);
+    for (i = 3; i < 8; i++) {
+        func_0011F048(D_00134AD0[i].channel, func_0011F038(D_00134AD0[i].channel));
+    }
+    D_00134AC8 = func_0011F038(3);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F120);
 
@@ -1363,13 +1424,8 @@ s32 func_0011F8D0(void) {
     return (((u32)regs[1] >> 13) & 0x7) < 1;
 }
 
-/* A single DMA channel descriptor in the static init tables D_00135568 /
- * D_00135CF0: a (channel-id, mode) word pair consumed by the syscall stubs. */
-typedef struct DmaChannelInit {
-    s32 channel;
-    s32 mode;
-} DmaChannelInit;
-
+/* D_00135568 / D_00135CF0 are the (channel-id, mode) init tables for the first
+ * two DMA-channel groups; see DmaChannelInit above (defined for func_0011F058). */
 extern DmaChannelInit D_00135568[3];
 extern u8 D_00134DC0;
 
