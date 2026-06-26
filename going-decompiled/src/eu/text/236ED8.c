@@ -604,19 +604,23 @@ extern const char D_1ADB60[];
 
 /* GuiPoolInit: initialise a GUI fixed-size pool header (EU twin of USA
  * GuiPoolInit): base = storage (a2), capacity = byteLimit (a3), elemSize =
- * elemKind (a1, asserted < 4), cursor/count/freeList zeroed. */
+ * elemSize (a1, asserted >= 4 - a node must hold the free-list next ptr),
+ * cursor/count/freeList zeroed. The asm `sltiu a1,4; beqz->stores` fires the
+ * assert for elemSize in [0,4) (same inverted-looking guard as USA). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiPoolInit);
 #else
 /* WALL: functional-equivalent #else (4-GPR-save 8-byte vs 16-byte slot stride);
-   matching arm stays INCLUDE_ASM. */
-void GuiPoolInit(GuiPool *pool, s32 elemKind, void *storage, u32 byteLimit) {
-    if ((u32)elemKind >= 4) {
+   matching arm stays INCLUDE_ASM. Twin of USA GuiPoolInit; the assert-direction
+   bug (was `>= 4`) was caught by the USA cmp-oracle (cmp_GuiPoolInit) and fixed
+   identically here. */
+void GuiPoolInit(GuiPool *pool, s32 elemSize, void *storage, u32 byteLimit) {
+    if ((u32)elemSize < 4) {
         AssertFail(D_1ADB18, 0x25, D_1ADB38);
     }
     pool->base = (char *)storage;
     pool->capacity = byteLimit;
-    pool->elemSize = elemKind;
+    pool->elemSize = elemSize;
     pool->count = 0;
     pool->freeList = 0;
     pool->cursor = 0;

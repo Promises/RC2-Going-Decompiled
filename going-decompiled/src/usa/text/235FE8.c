@@ -726,12 +726,19 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementSetGl
 /* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame wall
    ($16/$31 16-byte vs 8-byte slot packing).
    cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
-   (cmp_GuiElementSetGlyph, run_cmp_suite.sh): offset-correctness oracle confirms
-   the lookup result lands at e+0x40 (and nowhere else) with arg order preserved
-   through a deterministic GuiFontAtlasLookupGlyph mock. */
-extern s32 GuiFontAtlasLookupGlyph(s32 codepoint, s32 font);
+   (cmp_GuiElementSetGlyph, run_cmp_235FE8_iso.sh): offset-correctness oracle
+   confirms the lookup result lands at e+0x40 (and nowhere else) with arg order
+   preserved through a deterministic GuiFontAtlasLookupGlyph mock.
+   The callee is the in-unit GuiFontAtlasLookupGlyph (real signature
+   (GuiFontAtlas*, s32), defined below); declared here with a matching prototype
+   so the TARGET_NATIVE TU has ONE consistent type for the symbol. The matched
+   asm forwards a0=codepoint, a1=font verbatim, so the leading int is reached as
+   the atlas-ptr register - byte-neutral under #else (TARGET_NATIVE only). */
+struct GuiFontAtlas;
+extern s32 GuiFontAtlasLookupGlyph(struct GuiFontAtlas *atlas, s32 codepoint);
 void GuiElementSetGlyph(GuiElement *e, s32 codepoint, s32 font) {
-    *(s32 *)((char *)e + 0x40) = GuiFontAtlasLookupGlyph(codepoint, font);
+    *(s32 *)((char *)e + 0x40) =
+        GuiFontAtlasLookupGlyph((struct GuiFontAtlas *)codepoint, font);
 }
 #endif
 
@@ -1192,7 +1199,17 @@ void GuiFontAtlasRelocate(GuiFontAtlas *atlas) {
  * codepoint matches `codepoint`, returning its glyph value (0 if not found).
  * Hoisting the glyph base into a local pointer is load-bearing for the match:
  * it makes cc1 keep the index-addressed scan (entries + i*8) the original uses
- * rather than folding +0x1C into each load displacement. */
+ * rather than folding +0x1C into each load displacement.
+ *
+ * Under TARGET_NATIVE only, the definition is weak so the cmp harness's
+ * deterministic GuiFontAtlasLookupGlyph mock (a strong def in cmp_235FE8.c) wins
+ * the link without a multiple-definition error, while the host functional-equiv
+ * harness (no mock) still gets this body. The matched (#ifndef TARGET_NATIVE)
+ * build is unaffected - no attribute, so the symbol binding and bytes are
+ * unchanged. */
+#ifdef TARGET_NATIVE
+__attribute__((weak))
+#endif
 s32 GuiFontAtlasLookupGlyph(GuiFontAtlas *atlas, s32 codepoint) {
     s32 count = atlas->glyphCount;
     GuiFontGlyph *glyphs = atlas->glyphs;
@@ -1232,23 +1249,30 @@ extern const char D_1ADAC0[];
 /* GuiPoolInit: initialise a GUI fixed-size pool header.
  *   pool->base     (+0x00) = storage   (a2)
  *   pool->capacity (+0x04) = byteLimit  (a3)
- *   pool->elemSize (+0x08) = elemKind   (a1, asserted < 4 - one of the four GUI
- *                                        element node sizes)
+ *   pool->elemSize (+0x08) = elemSize   (a1, asserted >= 4 - a node must be big
+ *                                        enough to hold the free-list next ptr)
  *   cursor/count/freeList (+0x0C/+0x10/+0x14) zeroed.
- * Overflowing the elemKind bound trips AssertFail. */
+ * An elemSize < 4 trips AssertFail. The asm `sltiu $2,a1,4; beqz $2,stores`
+ * SKIPS the assert when (elemSize < 4) is FALSE (>= 4) and FALLS THROUGH to it
+ * when (elemSize < 4) is TRUE, so the assert fires for elemSize in [0,4). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiPoolInit);
 #else
 /* WALL: functional-equivalent #else; matching arm stays INCLUDE_ASM (4-GPR-save
    8-byte vs 16-byte callee-save slot stride - same later-cc1 frame wall as the
-   other GUI methods in this TU). */
-void GuiPoolInit(GuiPool *pool, s32 elemKind, void *storage, u32 byteLimit) {
-    if ((u32)elemKind >= 4) {
+   other GUI methods in this TU).
+   cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
+   (cmp_GuiPoolInit, run_cmp_235FE8_iso.sh): field-offset oracle + an AssertFail
+   call-count probe confirm every field lands at its offset AND the bound fires
+   on exactly the elemSize<4 side. (The earlier `>= 4` form was direction-
+   inverted - it asserted on the valid large-size case; the oracle caught it.) */
+void GuiPoolInit(GuiPool *pool, s32 elemSize, void *storage, u32 byteLimit) {
+    if ((u32)elemSize < 4) {
         AssertFail(D_1ADA78, 0x25, D_1ADA98);
     }
     pool->base = (char *)storage;
     pool->capacity = byteLimit;
-    pool->elemSize = elemKind;
+    pool->elemSize = elemSize;
     pool->count = 0;
     pool->freeList = 0;
     pool->cursor = 0;
