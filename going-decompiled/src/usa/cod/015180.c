@@ -467,9 +467,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AE90);
 /**
  * func_0011AEA0 = EE kernel syscall 0x64. SCE library syscall stub (see
  * func_0011AA20): load the syscall number into $v1 and trap; the kernel's
- * result is returned in $v0. Exact SDK name UNCONFIRMED.
+ * result is returned in $v0. Takes one argument in $a0 (a mode/channel
+ * selector — see the DMA channel setup paths func_0011F938/func_0011FAB8).
+ * Exact SDK name UNCONFIRMED.
  */
-void func_0011AEA0(void) {
+void func_0011AEA0(s32 mode) {
     __asm__ volatile("addiu $3, $0, 0x64\n\tsyscall 0" ::: "$3", "memory");
 }
 
@@ -1286,10 +1288,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F864);
 /**
  * func_0011F868 = EE kernel syscall 0x74. SCE library syscall stub (see
  * func_0011AA20): load the syscall number into $v1 and trap. Used during DMA
- * channel setup (see func_0011F938) with a 2-word argument. Exact SDK name
- * UNCONFIRMED.
+ * channel setup (see func_0011F938) with a 2-word argument; callers ignore the
+ * result, so this is modelled as void. Exact SDK name UNCONFIRMED.
  */
-s32 func_0011F868(s32 a, s32 b) {
+void func_0011F868(s32 a, s32 b) {
     __asm__ volatile("addiu $3, $0, 0x74\n\tsyscall 0" ::: "$3", "memory");
 }
 
@@ -1320,11 +1322,11 @@ s32 func_0011F888(s32 *dst, s32 *src, u32 nbytes) {
 
 /**
  * func_0011F8C0 = EE kernel syscall 0x5B. SCE library syscall stub (see
- * func_0011AA20): load the syscall number into $v1 and trap. Used during DMA
- * channel setup (see func_0011F938) with a 2-word argument. Exact SDK name
- * UNCONFIRMED.
+ * func_0011AA20): load the syscall number into $v1 and trap; result returned
+ * in $v0. Takes one argument in $a0 (a channel id — see func_0011F938).
+ * Exact SDK name UNCONFIRMED.
  */
-s32 func_0011F8C0(s32 a, s32 b) {
+s32 func_0011F8C0(s32 a) {
     __asm__ volatile("addiu $3, $0, 0x5B\n\tsyscall 0" ::: "$3", "memory");
 }
 
@@ -1343,7 +1345,40 @@ s32 func_0011F8D0(void) {
     return (((u32)regs[1] >> 13) & 0x7) < 1;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F938);
+/* A single DMA channel descriptor in the static init tables D_00135568 /
+ * D_00135CF0: a (channel-id, mode) word pair consumed by the syscall stubs. */
+typedef struct DmaChannelInit {
+    s32 channel;
+    s32 mode;
+} DmaChannelInit;
+
+extern DmaChannelInit D_00135568[3];
+extern u8 D_00134DC0;
+
+/**
+ * func_0011F938: bring up the first DMA-channel group. Gated on func_0011F8D0
+ * (only runs when the hardware mode field reads back clean). Arms channel
+ * entry[0] (func_0011F868 = syscall 0x74), installs the 0x80074000 handler over
+ * D_00134DC0 spanning 0x7A8 bytes (func_0011F878 = syscall 0x5A), toggles the
+ * interrupt-enable syscall (func_0011AEA0 = 0x64) off then on, arms entry[1],
+ * then for the remaining entries (index 2) queries each channel
+ * (func_0011F8C0 = syscall 0x5B) and re-arms it with the returned value.
+ * Exact SDK name UNCONFIRMED.
+ */
+void func_0011F938(void) {
+    u32 i;
+    if (func_0011F8D0()) {
+        func_0011F868(D_00135568[0].channel, D_00135568[0].mode);
+        func_0011F878(0x80074000, (s32)&D_00134DC0, 0x7A8);
+        func_0011AEA0(0);
+        func_0011AEA0(2);
+        func_0011F868(D_00135568[1].channel, D_00135568[1].mode);
+        for (i = 2; i < 3; i++) {
+            func_0011F868(D_00135568[i].channel,
+                          func_0011F8C0(D_00135568[i].channel));
+        }
+    }
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F9E4);
 
@@ -1361,9 +1396,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011FA48);
  * func_0011FA50 = EE kernel syscall 0x74 (same primitive as func_0011F868).
  * SCE library syscall stub (see func_0011AA20): load the syscall number into
  * $v1 and trap. Called from the GS/DMA reset path (func_0011FAB8) with a
- * 2-word argument. Exact SDK name UNCONFIRMED.
+ * 2-word argument; callers ignore the result, so this is modelled as void.
+ * Exact SDK name UNCONFIRMED.
  */
-s32 func_0011FA50(s32 a, s32 b) {
+void func_0011FA50(s32 a, s32 b) {
     __asm__ volatile("addiu $3, $0, 0x74\n\tsyscall 0" ::: "$3", "memory");
 }
 
@@ -1395,14 +1431,44 @@ s32 func_0011FA70(s32 *dst, s32 *src, u32 nbytes) {
 /**
  * func_0011FAA8 = EE kernel syscall 0x5B (same primitive as func_0011F8C0).
  * SCE library syscall stub (see func_0011AA20): load the syscall number into
- * $v1 and trap. Called in a loop from the GS/DMA reset path (func_0011FAB8).
- * Exact SDK name UNCONFIRMED.
+ * $v1 and trap; result returned in $v0. Takes one argument in $a0 (a channel
+ * id). Called in a loop from the GS/DMA reset path (func_0011FAB8). Exact SDK
+ * name UNCONFIRMED.
  */
-s32 func_0011FAA8(s32 a, s32 b) {
+s32 func_0011FAA8(s32 a) {
     __asm__ volatile("addiu $3, $0, 0x5B\n\tsyscall 0" ::: "$3", "memory");
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011FAB8);
+extern DmaChannelInit D_00135CF0[8];
+extern u8 D_00135588;
+extern u8 D_00135CC8;
+
+/**
+ * func_0011FAB8: bring up the second (8-entry) DMA-channel group, used by the
+ * GS/DMA reset path. Skips entirely when timer/DMAC register 0x10001810 has
+ * bit 0x100 set (work already in progress). Otherwise arms entry[0]
+ * (func_0011FA50 = syscall 0x74), installs two handlers via func_0011FA60
+ * (syscall 0x5A) — 0x80076000 over D_00135588 (0x740 bytes) and 0x82000 over
+ * D_00135CC8 (0x28 bytes) — toggles the interrupt-enable syscall
+ * (func_0011AEA0 = 0x64) off then on, arms entry[1], then for entries 2..7
+ * queries each channel (func_0011FAA8 = syscall 0x5B) and re-arms it with the
+ * returned value. Exact SDK name UNCONFIRMED.
+ */
+void func_0011FAB8(void) {
+    u32 i;
+    if ((*(volatile s32 *)0x10001810 & 0x100) == 0) {
+        func_0011FA50(D_00135CF0[0].channel, D_00135CF0[0].mode);
+        func_0011FA60(0x80076000, (s32)&D_00135588, 0x740);
+        func_0011FA60(0x82000, (s32)&D_00135CC8, 0x28);
+        func_0011AEA0(0);
+        func_0011AEA0(2);
+        func_0011FA50(D_00135CF0[1].channel, D_00135CF0[1].mode);
+        for (i = 2; i < 8; i++) {
+            func_0011FA50(D_00135CF0[i].channel,
+                          func_0011FAA8(D_00135CF0[i].channel));
+        }
+    }
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011FB8C);
 
@@ -3123,6 +3189,25 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131CA8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131CB0);
 
+/* InstallLoadedOverlay (0x131CB8): relocate/install the freshly loaded overlay
+ * segment pointed to by g_pLoadedSegment. The segment's first word is the byte
+ * offset to the first section header; from there it walks consecutive 16-byte
+ * section headers { s32 dest; s32 size; s32 pad8; s32 key; }, copying each
+ * section's payload (which immediately follows its header) to the header's dest
+ * VA — 64 bits at a time when dest, src and size are all 8-byte aligned, else
+ * 32 bits at a time. It installs the run of sections that share the first
+ * section's group id (key) and returns that id, stopping at the first section
+ * whose id differs.
+ *
+ * NEAR-MISS (left as INCLUDE_ASM): this is pure memory-relocation C (no
+ * hardware), and a faithful rotated single-running-pointer rendering reproduces
+ * the original instruction-for-instruction EXCEPT that ee-gcc's delay-slot
+ * filler emits the three payload-alignment tests as ordinary `bne` (filling the
+ * delay from before the branch) whereas the original uses annulling `bnel`
+ * branches that lazily recompute `dest + size` only on the taken (4-byte) path.
+ * That is a filler decision, not expressible from C source; -fno-gcse only makes
+ * it worse (frame spill) and the unit is fixed at -O2 -G0, so the branch form
+ * cannot be coerced. ~50% byte-match; honest effort exhausted. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", InstallLoadedOverlay);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", main);
