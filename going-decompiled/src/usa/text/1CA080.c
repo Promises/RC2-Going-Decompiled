@@ -655,9 +655,71 @@ void func_002CDEB0(void) {
  * differently — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CDF48);
 
-/* menu helper: 8-byte-packed-save wall (saves 2 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* Galactic-map / level-select input dispatcher. Reads g_padButtonsPressed:
+ *   - any nav-button bit (mask 0x910) set: returns 1 (the key is swallowed);
+ *   - confirm bit (0x40) pressed: route the current map query (func_0026F7D0) to
+ *     the matching confirm handler — func_002CC908, func_002CC7D8, func_002CCA18,
+ *     or the func_002CC788/func_002CC858 dispatch chosen by the 0x31/0x1C map-cell
+ *     codes from func_0026F800/func_0026F7F8 — returning the handler's result;
+ *   - otherwise just refreshes the panel (func_0029CFA0).
+ * If a handler accepted (result != 0), plays the confirm SFX (id 0x12).
+ * EU twin func_002CE0B0 (byte-identical; region-shifted call targets).
+ * Routes to tester-EE: drives live map/GUI state + PlayGlobalSound; not
+ * standalone cmp-oracle'able.
+ * Wall: every dispatch reuses the func_0026F7D0 result via the EE 64-bit
+ * `daddu rd,rs,zero` move idiom (and a 1-GPR packed save) — not reproduced from
+ * clean C. Preserved as portable C. */
+extern s32 func_0029CFA0(void);
+extern s32 func_0026F7D0(void);
+extern s32 func_0026F7D8(void);
+extern s32 func_0026F7E8(void);
+extern s32 func_0026F7F0(void);
+extern s32 func_0026F7F8(void);
+extern s32 func_0026F800(void);
+extern s32 func_002CC788(s32 q);
+extern s32 func_002CC7D8(s32 q);
+extern s32 func_002CC858(s32 q);
+extern s32 func_002CC908(s32 q);
+extern s32 func_002CCA18(s32 q);
+extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE0C8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 64-bit `daddu` move idiom
+ * + 1-GPR packed-save frame not reproduced by cc1. */
+s32 func_002CE0C8(void) {
+    s32 buttons = g_padButtonsPressed;
+    s32 result = 0;
+
+    if (buttons & 0x910) {
+        result = 1;
+    } else if (buttons & 0x40) {
+        s32 q;
+        func_0029CFA0();
+        q = func_0026F7D0();
+        if (q != 0 && func_0026F7D8() != 0) {
+            result = func_002CC908(q);
+        } else if (func_0026F7F0() != 0) {
+            result = func_002CC7D8(q);
+        } else if (func_0026F7E8() != 0) {
+            result = func_002CCA18(q);
+        } else if (func_0026F800() == 0x31 || func_0026F7F8() != 0 ||
+                   func_0026F800() == 0x1C) {
+            result = func_002CC788(q);
+        } else {
+            result = func_002CC858(q);
+        }
+    } else {
+        func_0029CFA0();
+    }
+
+    if (result != 0) {
+        PlayGlobalSound(0x12, 0, 0);
+    }
+    return result;
+}
+#endif
 
 /* Draw-batch wrapper: render one menu sub-element inside a 2D batch. */
 s32 func_002CE200(void) {
@@ -671,9 +733,65 @@ s32 func_002CE200(void) {
  * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE230);
 
-/* menu helper: 8-byte-packed-save wall (saves 2 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* Insomniac-museum (or sibling extras) screen draw: inside a 2D batch, run the
+ * per-screen overlay (func_0029CFE0) and draw localized title string 0x2BE5 at
+ * (D_1AB9D8, D_1AB9DC) in 0x80F0F0F0; then, if the GUI is up and its museum
+ * widget handle (g_guiInstance+0x38000 .+0x79EC) is non-null, render that moby
+ * model (BeginMobyDrawSegment .. FinishMobyRenderChain + the func_0034F9xx model
+ * setup chain), wait one DMA fence and patch the moby packet's TEX0.
+ * EU twin func_002CE388 (byte-identical; string id 0xB60, widget +0x7A9C,
+ * region-shifted call/data targets).
+ * Routes to tester-EE: drives the live GUI moby + DMA render path; not
+ * standalone cmp-oracle'able.
+ * Wall: `beql` branch-likely on the null-handle guard + EE 64-bit `daddu rd,rs,
+ * zero` handle-copy idiom (1-GPR packed save) — not reproduced from clean C.
+ * Preserved as portable C. */
+extern void func_0029CFE0(void);
+extern void func_002801B8(s32 x, s32 y, u64 color, char *str, s64 sel);
+extern s32 D_1AB9D8, D_1AB9DC;
+extern void BeginMobyDrawSegment(void);
+extern void func_002A1000(void);
+extern void func_002A1028(void);
+extern void func_002A1058(void);
+extern void FinishMobyRenderChain(void);
+extern void func_0034F928(s32 handle);
+extern void func_0034F9B8(s32 handle);
+extern void func_0034F9F8(s32 handle);
+extern void func_0034FAF8(s32 handle, s32 arg);
+extern void WaitFrameDmaFence(s32 mask);
+extern void PatchMobyPacketTex0(void);
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE3A0);
+#else
+/* TODO(match): functional equivalent - not byte-exact; `beql` branch-likely null
+ * guard + 64-bit `daddu` handle-copy idiom not reproduced by cc1. */
+s32 func_002CE3A0(void) {
+    s32 handle;
+
+    Begin2dDrawBatch(0);
+    func_0029CFE0();
+    func_002801B8(D_1AB9D8, D_1AB9DC, 0x80F0F0F0, GetLocalizedString(0x2BE5), -1);
+    End2dDrawBatch();
+
+    if (g_guiInstance != NULL &&
+        *(s32 *)(g_guiInstance + 0x38000 + 0x79EC) != 0) {
+        BeginMobyDrawSegment();
+        func_002A1000();
+        func_002A1028();
+        handle = *(s32 *)(g_guiInstance + 0x38000 + 0x79EC);
+        func_0034F928(handle);
+        func_0034F9B8(handle);
+        func_0034F9F8(handle);
+        func_0034FAF8(handle, handle + 0xC00);
+        func_002A1058();
+        FinishMobyRenderChain();
+        WaitFrameDmaFence(0x10);
+        PatchMobyPacketTex0();
+    }
+    return 0;
+}
+#endif
 
 /* Per-screen menu tick + render-fence latch (one of the func_002CE498 family,
  * the cleanest with the standard menuScreenBlock confirm latch). Confirm (0x10)
@@ -1130,10 +1248,44 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", CinematicsMenuT
  * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawCinematicsMenu);
 
-/* When the GUI is up, mark each cinematics-menu row available iff its bit in
- * g_cinematicUnlockedFlags is set (sllv bit-test loop). The variable-shift mask
- * idiom isn't reproduced from clean C — left as INCLUDE_ASM. */
+/* When the GUI is up, set g_lastMenuScreenId=1 then walk the 32-entry, 6-byte-
+ * stride cinematics-menu row table (D_26183A): for each row, if any extras are
+ * unlocked (g_miscExtras) mark the row available (+8 field = 1); otherwise test
+ * the row's cinematic id (the +6 field) against g_cinematicUnlockedFlags and
+ * write the bit result (1 set / 0 clear) into the same +8 availability field.
+ * EU twin func_002D1E10 (byte-identical; table D_2615E2, region-shifted).
+ * Wall: `bnel` branch-likely (the extras-set fast path's available-store sits in
+ * the nullified delay slot) — the later cc1's branch-likely emission isn't
+ * reproduced from clean C. Preserved as portable C. */
+extern u8 g_cinematicUnlockedFlags[]; /* 0x139768 - cinematic-watched/unlocked bitfield */
+extern u8 D_26183A[];                 /* cinematics-menu row table (6-byte stride records) */
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D1E88);
+#else
+/* TODO(match): functional equivalent - not byte-exact; `bnel` branch-likely
+ * delay-slot store on the extras-unlocked fast path not reproduced by cc1. */
+void func_002D1E88(void) {
+    u8 *row;
+    if (g_guiInstance == NULL) {
+        return;
+    }
+    g_lastMenuScreenId = 1;
+    for (row = D_26183A; row < D_26183A + 0xC0; row += 6) {
+        if (g_miscExtras != 0) {
+            *(s16 *)(row + 8) = 1;
+        } else {
+            s16 id = *(s16 *)(row + 6);
+            u32 mask = 1u << (id & 0x1F);
+            if (*(u32 *)(g_cinematicUnlockedFlags + (id & ~3)) & mask) {
+                *(s16 *)(row + 8) = 1;
+            } else {
+                *(s16 *)(row + 8) = 0;
+            }
+        }
+    }
+}
+#endif
 
 /* menu input/update handler: switch/jump-table dispatch (splat jtbl reloc gap) — left as
  * INCLUDE_ASM (cc1 jtbl layout not reproduced). */
@@ -1144,10 +1296,69 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdatePlanetWar
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawPlanetWarpMenu);
 
 /* When the GUI is up and extras unlocked, latch the per-extra-feature
- * availability flags (D_1ABA71..D_1ABA77) from the source toggle bytes
- * (D_1A7BF2..D_1A7C0A). Near-miss: same ternary move/store delay-slot wall as
- * func_002CDEB0 — left as INCLUDE_ASM. */
+ * availability flags (g_planetWarpEnabled @0x1ABA70 + D_1ABA71..D_1ABA77) from a
+ * pair of inputs: a per-feature "menu enabled" toggle byte (D_1A7BF2/F4/FB/C06/
+ * C07/C0A) gating each block, and the relevant save-data completion bytes in the
+ * progress block D_1395B8. Each available block stores a 1; only the planet-warp
+ * block clears (the rest leave the flag untouched when their guard fails).
+ * EU twin func_002D24C0 (byte-identical; toggles D_1A7C72.., block D_139638,
+ * targets D_1ABAD8.., all region-shifted).
+ * Wall: `bnel`/`beql` branch-likely (the value-1 move sits in the nullified
+ * delay slot of the OR short-circuit tests) — the later cc1's branch-likely
+ * emission isn't reproduced from clean C. Preserved as portable C. */
+extern u8 g_planetWarpEnabled;   /* 0x1ABA70 - planet-warp menu enabled flag */
+extern u8 D_1ABA71, D_1ABA72, D_1ABA73, D_1ABA74, D_1ABA75, D_1ABA76, D_1ABA77;
+extern u8 D_1A7BF2, D_1A7BF4, D_1A7BFB, D_1A7C06, D_1A7C07, D_1A7C0A;
+extern u8 D_1395B8[];            /* save-data per-feature completion block */
+extern u8 D_1395E9;              /* planet-warp prerequisite completion byte */
+extern s32 g_playerProgress;     /* 0x1A79F8 - current save progress slot */
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D2538);
+#else
+/* TODO(match): functional equivalent - not byte-exact; `bnel`/`beql` branch-
+ * likely delay-slot value moves not reproduced by cc1. */
+void func_002D2538(void) {
+    if (g_guiInstance == NULL) {
+        return;
+    }
+    if (g_miscExtras == 0) {
+        return;
+    }
+    if (D_1A7BF2 != 0) {
+        if (D_1395E9 != 0) {
+            g_planetWarpEnabled = 1;
+        }
+    }
+    if (D_1A7BF4 != 0) {
+        if (D_1395B8[0x4D] != 0 || D_1395B8[0x52] != 0) {
+            D_1ABA71 = 1;
+        }
+    }
+    if (D_1A7BFB != 0) {
+        if (D_1395B8[0x57] != 0 || D_1395B8[0x5C] != 0) {
+            D_1ABA72 = 1;
+        }
+    }
+    if (D_1A7BFB != 0) {
+        if (D_1395B8[0x3D] != 0) {
+            D_1ABA73 = 1;
+        }
+    }
+    if (D_1A7C0A != 0) {
+        D_1ABA74 = 1;
+    }
+    if (D_1A7C06 != 0) {
+        D_1ABA75 = 1;
+    }
+    if (D_1A7C07 != 0) {
+        D_1ABA76 = 1;
+    }
+    if (D_1AA458 != 0 && g_playerProgress > 0) {
+        D_1ABA77 = 1;
+    }
+}
+#endif
 
 /* menu input/update handler: switch/jump-table dispatch (splat jtbl reloc gap) — left as
  * INCLUDE_ASM (cc1 jtbl layout not reproduced). */
@@ -1358,9 +1569,70 @@ s32 func_002D37E0(void) {
     return 0;
 }
 
-/* menu helper: 8-byte-packed-save wall (saves 2 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* Planet-warp / cinematic-camera confirm input handler. Reads g_padButtonsPressed:
+ *   - Triangle (0x10): the same menu-screen "back/confirm" latch as the other
+ *     menu input handlers — if the active screen instance (block[0x14]) has a
+ *     pending result at +0xE0, store it into block[0x18] and return 0; else
+ *     return -1 when block[0x134] is clear, 0 otherwise;
+ *   - {L1|R1}=0x900: returns 1 (consume the page nav);
+ *   - X (0x40): plays the confirm SFX (id 4); then if a cinematic camera is
+ *     already active (D_1A790C) tears it down (clears D_1A790C + the two sound-
+ *     bank cinematic-channel words at g_soundBankHandlesBlk+0x14F8/+0x1500),
+ *     otherwise arms it (D_1A790C=1) and seeds the cinematic camera vector via
+ *     Vec3RescaleToLenVu0(camBlock+0x10, soundBlkBase, 1.0f);
+ *   - otherwise returns 0.
+ * EU twin func_002D3770 (byte-identical; region-shifted symbols).
+ * Routes to tester-EE: drives PlayGlobalSound + the VU0 Vec3RescaleToLenVu0
+ * micro-op + live cinematic-camera state; not standalone cmp-oracle'able.
+ * Wall: `beql` branch-likely on the +0xE0 latch + VU0/float-arg scheduling — not
+ * reproduced from clean C. Preserved as portable C. */
+extern s32 D_1A790C;             /* cinematic-camera-active latch */
+extern u8 g_soundBankHandlesBlk[];   /* 0x189E20 - sound-bank handle block */
+extern u8 g_cinematicCameraBlock[];  /* 0x18B2F0 - cinematic camera override block */
+extern void Vec3RescaleToLenVu0(void *dst, void *src, f32 len);
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D37E8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; `beql` branch-likely latch
+ * + VU0 float-arg scheduling not reproduced by cc1. */
+s32 func_002D37E8(void) {
+    s32 flags = g_padButtonsPressed;
+    s32 result = 0;
+
+    if (flags & 0x10) {
+        s32 *block = (s32 *)g_menuScreenBlock;
+        s32 v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
+        if (v != 0) {
+            block[0x18 / 4] = v;
+            return 0;
+        }
+        if (block[0x134 / 4] == 0) {
+            return -1;
+        }
+        return 0;
+    }
+
+    if (flags & 0x900) {
+        return 1;
+    }
+
+    if (flags & 0x40) {
+        PlayGlobalSound(4, 0, 0);
+        if (D_1A790C != 0) {
+            D_1A790C = 0;
+            *(s32 *)(g_soundBankHandlesBlk + 0x14F8) = 0;
+            *(s32 *)(g_soundBankHandlesBlk + 0x1500) = 0;
+        } else {
+            D_1A790C = 1;
+            Vec3RescaleToLenVu0(g_cinematicCameraBlock + 0x10,
+                                g_cinematicCameraBlock + 0x10 - 0x14E0, 1.0f);
+        }
+    }
+
+    return result;
+}
+#endif
 
 /* menu helper: 8-byte-packed-save wall (saves 2 GPRs incl $31; later cc1
  * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
