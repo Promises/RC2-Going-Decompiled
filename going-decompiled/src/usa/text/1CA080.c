@@ -674,7 +674,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CDF48);
  * BEFORE func_0026F7D0 runs, i.e. func_0029CFA0's result), via the EE 64-bit
  * `daddu rd,rs,zero` move idiom (plus a 1-GPR packed save) — not reproduced from
  * clean C. Preserved as portable C. */
-extern s32 func_0029CFA0(void);
+extern s32 func_0029CFA0(s32 buttons);
 extern s32 func_0026F7D0(void);
 extern s32 func_0026F7D8(void);
 extern s32 func_0026F7E8(void);
@@ -700,10 +700,13 @@ s32 func_002CE0C8(void) {
     if (buttons & 0x910) {
         result = 1;
     } else if (buttons & 0x40) {
-        /* sel = func_0029CFA0()'s return ($16): the panel-refresh result, reused
-         * as the argument to every confirm handler. The func_0026F7D0/D8/F0/E8
-         * queries only gate which handler runs. */
-        s32 sel = func_0029CFA0();
+        /* sel = func_0029CFA0(buttons)'s return ($16): refresh the popup panel,
+         * forwarding the pad-buttons word ($a0 = g_padButtonsPressed at the asm
+         * jal site), and reuse its return as the argument to every confirm
+         * handler. The func_0026F7D0/D8/F0/E8 queries only gate which handler
+         * runs. (Dropping the buttons arg drove a phantom nav sound at
+         * 0x1886D0 — the BUG #22 residual.) */
+        s32 sel = func_0029CFA0(buttons);
         if (func_0026F7D0() != 0 && func_0026F7D8() != 0) {
             result = func_002CC908(sel);
         } else if (func_0026F7F0() != 0) {
@@ -717,7 +720,7 @@ s32 func_002CE0C8(void) {
             result = func_002CC858(sel);
         }
     } else {
-        func_0029CFA0();
+        func_0029CFA0(buttons);
     }
 
     if (result != 0) {
