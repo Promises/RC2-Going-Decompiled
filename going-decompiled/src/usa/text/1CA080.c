@@ -657,17 +657,22 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CDF48);
 
 /* Galactic-map / level-select input dispatcher. Reads g_padButtonsPressed:
  *   - any nav-button bit (mask 0x910) set: returns 1 (the key is swallowed);
- *   - confirm bit (0x40) pressed: route the current map query (func_0026F7D0) to
- *     the matching confirm handler — func_002CC908, func_002CC7D8, func_002CCA18,
- *     or the func_002CC788/func_002CC858 dispatch chosen by the 0x31/0x1C map-cell
- *     codes from func_0026F800/func_0026F7F8 — returning the handler's result;
+ *   - confirm bit (0x40) pressed: refresh the panel (func_0029CFA0) and capture
+ *     its return as the SELECTION, then route to the matching confirm handler —
+ *     func_002CC908, func_002CC7D8, func_002CCA18, or the func_002CC788/
+ *     func_002CC858 dispatch chosen by the 0x31/0x1C map-cell codes from
+ *     func_0026F800/func_0026F7F8 — passing the selection and returning the
+ *     handler's result. The func_0026F7D0/D8/F0/E8 queries only GATE which
+ *     handler runs; they are NOT the handler argument.
  *   - otherwise just refreshes the panel (func_0029CFA0).
  * If a handler accepted (result != 0), plays the confirm SFX (id 0x12).
  * EU twin func_002CE0B0 (byte-identical; region-shifted call targets).
  * Routes to tester-EE: drives live map/GUI state + PlayGlobalSound; not
  * standalone cmp-oracle'able.
- * Wall: every dispatch reuses the func_0026F7D0 result via the EE 64-bit
- * `daddu rd,rs,zero` move idiom (and a 1-GPR packed save) — not reproduced from
+ * Wall: the selection (func_0029CFA0's return) is moved into a saved reg in the
+ * delay slot of the NEXT call (jal func_0026F7D0; daddu $16,$2,$0 — captures $2
+ * BEFORE func_0026F7D0 runs, i.e. func_0029CFA0's result), via the EE 64-bit
+ * `daddu rd,rs,zero` move idiom (plus a 1-GPR packed save) — not reproduced from
  * clean C. Preserved as portable C. */
 extern s32 func_0029CFA0(void);
 extern s32 func_0026F7D0(void);
@@ -695,20 +700,21 @@ s32 func_002CE0C8(void) {
     if (buttons & 0x910) {
         result = 1;
     } else if (buttons & 0x40) {
-        s32 q;
-        func_0029CFA0();
-        q = func_0026F7D0();
-        if (q != 0 && func_0026F7D8() != 0) {
-            result = func_002CC908(q);
+        /* sel = func_0029CFA0()'s return ($16): the panel-refresh result, reused
+         * as the argument to every confirm handler. The func_0026F7D0/D8/F0/E8
+         * queries only gate which handler runs. */
+        s32 sel = func_0029CFA0();
+        if (func_0026F7D0() != 0 && func_0026F7D8() != 0) {
+            result = func_002CC908(sel);
         } else if (func_0026F7F0() != 0) {
-            result = func_002CC7D8(q);
+            result = func_002CC7D8(sel);
         } else if (func_0026F7E8() != 0) {
-            result = func_002CCA18(q);
+            result = func_002CCA18(sel);
         } else if (func_0026F800() == 0x31 || func_0026F7F8() != 0 ||
                    func_0026F800() == 0x1C) {
-            result = func_002CC788(q);
+            result = func_002CC788(sel);
         } else {
-            result = func_002CC858(q);
+            result = func_002CC858(sel);
         }
     } else {
         func_0029CFA0();
