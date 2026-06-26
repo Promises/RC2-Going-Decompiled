@@ -1042,6 +1042,21 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011B658);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011B6C0);
 
+/**
+ * func_0011B728 = the unit's background worker-thread main loop (EU twin, same
+ * address). Blocks forever on the subsystem semaphore D_0013C600
+ * (func_0011AC60/WaitSema), pops the next {op,arg} record from the 512-entry ring
+ * at *queue (head cursor at +0x0 masked to 0x1FF, records from +0x8) and
+ * dispatches on the op byte: 1 -> func_0011AAD0, 0 -> func_0011AB50, 2 ->
+ * func_0011AB90 (each on the record's arg byte), any other op prints the error
+ * string D_0013A920 via func_0011C7E8. Never returns.
+ *
+ * NEAR-MATCH WALL (~96.4%): see the USA twin's note. The faithful C is a
+ * byte-identical instruction stream modulo a gcc-2.9 local-allocator tie-break
+ * (the original colours the index/idx*2 in $3 with the op selector in $2; ee-gcc
+ * swaps to index $2 / idx*2 $5 / selector $3). Not steerable from C, and the body
+ * is EE-kernel syscall stubs that do not compile on the host (no TARGET_NATIVE
+ * #else applies). Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011B728);
 
 extern s32 D_00134710;   /* worker-thread id / init guard (<=0 until created) */
@@ -1248,7 +1263,70 @@ s32 func_0011C000(s64 bits) {
 }
 #endif
 
+/**
+ * func_0011C090 = print the double whose bits are `value` in scientific notation
+ * via func_0011C7E8 (EU twin of the USA function, same address). Emits a leading
+ * '-' (through the char hook D_00134718) for negatives, normalises the magnitude
+ * into [0.1, 1.0) tracking a decimal exponent (scale up by 10 / func_00122B00 when
+ * < 0.1, down by 10 / func_00122DA8 when >= 1.0), scales the mantissa by 1e6
+ * (D_0013AA68), truncates (func_001212C8) and clamps (func_0011C000), then prints
+ * "0.dddd" (D_0013AA40) followed by "e+NN" (D_0013AA48) or "e-NN" (D_0013AA50).
+ *
+ * MATCHING WALL (FP-constant-pool / li.d): see the USA twin's note. The matching
+ * arm stays INCLUDE_ASM (byte-exact); the faithful body references the recovered
+ * pool-double bit patterns (0.1 = 0x3FB999999999999A, 1e6 = 0x412E848000000000)
+ * and the cheap inline 1.0/10.0. EU data symbols are the +0x80-shifted twins of
+ * USA's. (A magnitude of exactly 0.0 would spin the scale-up loop forever, so the
+ * caller never passes 0.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011C090);
+#else
+extern s32 func_00123028(s64 a, s64 b);
+extern s64 func_00122A98(s64 a, s64 b);
+extern s64 func_00122B00(s64 a, s64 b);
+extern s64 func_00122DA8(s64 a, s64 b);
+extern s64 func_001212C8(s64 x);
+extern s32 func_0011C000(s64 bits);
+extern s32 func_0011C7E8(void *fmt, ...);
+extern void (*D_00134718)(s32 ch);         /* single-character output hook */
+extern char D_0013AA40[];                  /* "0.%d" */
+extern char D_0013AA48[];                  /* "e+%d" */
+extern char D_0013AA50[];                  /* "e%d"  */
+
+#define DBL_0_1 0x3FB999999999999ALL       /* 0.1  (D_0013AA58 / D_0013AA60) */
+#define DBL_1E6 0x412E848000000000LL       /* 1e6  (D_0013AA68)              */
+#define DBL_10  0x4024000000000000LL       /* 10.0 */
+#define DBL_1   0x3FF0000000000000LL       /* 1.0  */
+
+s32 func_0011C090(s64 value) {
+    s32 exp = 0;
+    s64 scaled;
+    s32 digits;
+
+    if (func_00123028(value, 0) < 0) {
+        value = func_00122A98(0, value);
+        D_00134718('-');
+    }
+    if (func_00123028(value, DBL_0_1) < 0) {
+        do {
+            value = func_00122B00(value, DBL_10);
+            exp--;
+        } while (func_00123028(value, DBL_0_1) < 0);
+    } else {
+        while (func_00123028(value, DBL_1) >= 0) {
+            value = func_00122DA8(value, DBL_10);
+            exp++;
+        }
+    }
+    scaled = func_00122B00(value, DBL_1E6);
+    digits = func_0011C000(func_001212C8(scaled));
+    func_0011C7E8(D_0013AA40, digits);
+    if (exp < 0) {
+        return func_0011C7E8(D_0013AA50, exp);
+    }
+    return func_0011C7E8(D_0013AA48, exp);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011C1F8);
 

@@ -621,18 +621,24 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", EnableDmac);
  * func_0011AB90/SuspendThread (each on the record's thread-id arg byte); any
  * other op prints the error string D_0013A920 via func_0011C7E8. Never returns.
  *
- * NEAR-MATCH WALL (96.76% via objdiff). The faithful C (an infinite loop with a
+ * NEAR-MATCH WALL (~96.4% via objdiff). The faithful C (an infinite loop with a
  * switch on queue->cmds[idx].op) compiles to a BYTE-IDENTICAL instruction stream
  * and identical frame/saved-register set (the loop-invariant constants 1, 2,
- * &D_0013A920 and %hi(D_0013C600) and the two entry-array bases are hoisted
- * exactly as the original) - the ONLY divergence is ee-gcc -O2 -G0 local-register
- * coloring inside the dispatch: the original holds the head/index in $3 and the
- * switch selector in $2 (selector reuses the type-address reg), whereas ee-gcc
- * assigns the index $2 and the selector $3, cascading a v0<->v1 (+ argaddr a0
- * vs a2) swap across ~7 instructions. The opcodes and order match; only the
- * register numbers differ, and the tie-break is not steerable from C. It is also
- * not shippable as a TARGET_NATIVE #else (the body is EE-kernel syscall stubs
- * that do not compile on the host). Left as INCLUDE_ASM. */
+ * &D_0013A920 and %hi(D_0013C600) and the two entry-array bases queue+8/queue+9
+ * are hoisted exactly as the original) - the ONLY divergence is ee-gcc -O2 -G0
+ * local-register coloring inside the dispatch. The original keeps the masked
+ * index in $3 and REUSES $3 in place for idx*2 (sll $3,$3,1), holding idx*2 live
+ * across the whole switch (the op>=2 path recomputes &arg = queue+9+$3), with the
+ * op selector in $2 (lbu $2,($2) reusing the &op address reg) and &arg parked in
+ * $6/a2; ee-gcc instead colours the index $2, spills idx*2 into a FRESH $5/a1
+ * (sll $5,$2,1, not an in-place reuse), and puts the selector in $3 - cascading a
+ * v0<->v1 (+ arg-pointer a0/v0 vs a2/v1) swap across ~7 instructions. The opcodes
+ * and order match; only the register numbers differ. Re-attempted this batch with
+ * an explicit idx*2 temp, sinking the queue[0] store past the op read, and
+ * splitting the head load into a separate local - every form lands at 96.1-96.4%
+ * with the SAME swap; the priority tie-break (which pseudo wins $2) is not
+ * steerable from C. Also not shippable as a TARGET_NATIVE #else (the body is
+ * EE-kernel syscall stubs that do not compile on the host). Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B728);
 
 extern s32 D_00134690;   /* worker-thread id / init guard (<=0 until created) */
@@ -896,8 +902,7 @@ s32 func_0011C000(s64 bits) {
  * "0.dddd" (D_0013A9C0). Finally appends the exponent as "e+NN" (D_0013A9C8) or
  * "e%d"/"e-NN" (D_0013A9D0).
  *
- * WALL + INCLUDE_ASM (FP-constant-pool / li.d toolchain ceiling). The faithful C
- * (an if/else of two scale loops with explicit func_001212C8/func_0011C000 calls)
+ * MATCHING WALL (FP-constant-pool / li.d toolchain ceiling). A byte-exact rebuild
  * reaches only ~50% because the original loads its three non-trivial double
  * constants - 0.1 (D_0013A9D8 and a second copy D_0013A9E0) and 1e6 (D_0013A9E8)
  * - from the rodata constant pool via the SN assembler's `li.d`/`ld $5,
@@ -908,9 +913,66 @@ s32 func_0011C000(s64 bits) {
  * constants are referenced as named externs, splits the address and HOISTS the
  * %hi out of the scale loops into extra callee-saved registers (5 saved vs the
  * original 3), diverging structurally. Neither is steerable from C with this
- * assembler. The cheaply-buildable constants 1.0/10.0 (ori+dsll32) match fine;
- * only the pool doubles wall. Left as INCLUDE_ASM. */
+ * assembler, so the MATCHING arm stays INCLUDE_ASM (byte-exact). The li.d
+ * rejection is purely a matching-toolchain problem, NOT a behaviour problem: the
+ * faithful body below references the pool doubles by their recovered bit patterns
+ * (0.1 = 0x3FB999999999999A, 1e6 = 0x412E848000000000; the cheap 1.0/10.0 the
+ * original builds inline with ori+dsll32) and is cmp-oracle'd asm-vs-C
+ * bit-identical (every formatted byte) on the real R5900 by
+ * tools/ee/eetest/cmp/isolated/run_cmp_015180_iso.sh. Note a magnitude of exactly
+ * 0.0 would spin the scale-up loop forever (0*10 stays < 0.1), so the caller never
+ * passes 0; the oracle excludes it for the same reason. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C090);
+#else
+extern s32 func_00123028(s64 a, s64 b);   /* soft-float ordered compare (a<=>b) */
+extern s64 func_00122A98(s64 a, s64 b);   /* soft-float subtract a - b          */
+extern s64 func_00122B00(s64 a, s64 b);   /* soft-float multiply a * b          */
+extern s64 func_00122DA8(s64 a, s64 b);   /* soft-float divide a / b            */
+extern s64 func_001212C8(s64 x);          /* truncate non-negative double -> u64 */
+extern s32 func_0011C000(s64 bits);       /* scaled mantissa -> clamped digits   */
+extern s32 func_0011C7E8(void *fmt, ...);  /* the printf-style formatter sink     */
+extern void (*D_00134698)(s32 ch);        /* single-character output hook        */
+extern char D_0013A9C0[];                  /* "0.%d" */
+extern char D_0013A9C8[];                  /* "e+%d" */
+extern char D_0013A9D0[];                  /* "e%d"  */
+
+/* recovered bit patterns of the rodata/inline double constants */
+#define DBL_0_1 0x3FB999999999999ALL      /* 0.1  (D_0013A9D8 / D_0013A9E0) */
+#define DBL_1E6 0x412E848000000000LL      /* 1e6  (D_0013A9E8)              */
+#define DBL_10  0x4024000000000000LL      /* 10.0 (built ori 0x8048,dsll32) */
+#define DBL_1   0x3FF0000000000000LL      /* 1.0  (built ori 0xFFC0,dsll32) */
+
+s32 func_0011C090(s64 value) {
+    s32 exp = 0;
+    s64 scaled;
+    s32 digits;
+
+    if (func_00123028(value, 0) < 0) {           /* negative: emit '-', use |value| */
+        value = func_00122A98(0, value);
+        D_00134698('-');
+    }
+    if (func_00123028(value, DBL_0_1) < 0) {      /* |value| < 0.1: scale up by 10 */
+        do {
+            value = func_00122B00(value, DBL_10);
+            exp--;
+        } while (func_00123028(value, DBL_0_1) < 0);
+    } else {                                      /* |value| >= 1.0: scale down by 10 */
+        while (func_00123028(value, DBL_1) >= 0) {
+            value = func_00122DA8(value, DBL_10);
+            exp++;
+        }
+    }
+    /* mantissa now in [0.1, 1.0): scale to six digits, truncate, clamp, print */
+    scaled = func_00122B00(value, DBL_1E6);
+    digits = func_0011C000(func_001212C8(scaled));
+    func_0011C7E8(D_0013A9C0, digits);            /* "0.dddd" */
+    if (exp < 0) {
+        return func_0011C7E8(D_0013A9D0, exp);    /* "e-NN" (sign carried by %d) */
+    }
+    return func_0011C7E8(D_0013A9C8, exp);        /* "e+NN" */
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C1F8);
 
