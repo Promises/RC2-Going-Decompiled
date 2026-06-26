@@ -2118,11 +2118,62 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001212C8);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001213B4);
 
+extern s64 func_00123078(s32 x);
+extern s64 func_00122B00(s64 a, s64 b);
+extern s64 func_00122A40(s64 a, s64 b);
+
+/**
+ * func_001213B8 = convert a 64-bit signed integer to a double (packed bits),
+ * i.e. soft-float __floatdidf. The high 32 bits are converted as a signed int
+ * and scaled by 2^32 (two 65536.0 multiplies); the low 32 bits are converted as
+ * a signed int and, when negative, biased by +2^32 so they contribute as an
+ * unsigned 32-bit limb. result = (double)hi * 2^32 + (unsigned)lo.
+ *
+ * NEAR-MISS WALL (85.92% via objdiff, region-co-located with USA). Functionally
+ * faithful; the only divergence is ee-gcc -O2 -G0 rematerialising the 65536.0
+ * multiplier constant before each func_00122B00 call rather than keeping it in a
+ * callee-saved register across both (a reload policy choice). Shipped as a
+ * portable TARGET_NATIVE #else; verification routed to tester-EE (calls sibling
+ * soft-float #else bodies).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001213B8);
+#else
+s64 func_001213B8(s64 value) {
+    s64 scale = 0x40F0000000000000LL;
+    s32 hi = (s32)(value >> 32);
+    s64 hiDouble = func_00122B00(func_00122B00(func_00123078(hi), scale), scale);
+    s32 lo = (s32)(value & 0xFFFFFFFFLL);
+    s64 loDouble = func_00123078(lo);
+    if (lo < 0) {
+        loDouble = func_00122A40(loDouble, 0x41F0000000000000LL);
+    }
+    return func_00122A40(loDouble, hiDouble);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00121450);
 
+/**
+ * func_00121AB8 = 64-bit integer multiply (low 64 bits), a*b (libgcc __muldi3).
+ * NEAR-MISS WALL (72.29% via objdiff, region-co-located with USA): correct
+ * instruction set, but ee-gcc -O2 -G0 differs in half-product register
+ * allocation and materialises the 0xFFFFFFFF mask via `dli` vs the original
+ * `lui;dsrl32`. Standalone-seedable (pure a*b) -> HARD-GATE cmp-oracle candidate,
+ * routed to tester-EE for the real-R5900 run.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00121AB8);
+#else
+s64 func_00121AB8(s64 a, s64 b) {
+    union { struct { s32 low; s32 high; } s; s64 ll; } w, uu, vv;
+    uu.ll = a;
+    vv.ll = b;
+    w.ll = (s64)((u64)(u32)uu.s.low * (u32)vv.s.low);
+    w.s.high += uu.s.low * vv.s.high + uu.s.high * vv.s.low;
+    return w.ll;
+}
+#endif
 
 /**
  * Frameless tail-call thunk: forward to func_00120368 (which dispatches the
@@ -2279,6 +2330,18 @@ s64 func_00122A98(s64 a, s64 b) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00122B00);
 
+/* func_00122DA8 = software double-precision DIVIDE (FpParts a / b -> packed
+ * double via func_00122630): decompose both with func_00122760; NaN propagates;
+ * result sign = signA^signB; inf/inf and 0/0 -> NaN constant &D_00141810;
+ * inf/finite -> inf, 0/finite -> 0, finite/inf -> 0, finite/0 -> inf; both
+ * normal -> exponent-align + restoring bitwise long-division of the 61-bit
+ * mantissas with round-to-nearest-even.
+ *
+ * WALL + INCLUDE_ASM (region-co-located with USA; same class as the add-core
+ * func_00122800). The mantissa loop uses annulling `bnel` + a `movn` round-select
+ * ee-gcc -O2 -G0 won't reproduce, and it references external NaN global
+ * D_00141810 (not in symbol_addrs / not defined for TARGET_NATIVE), so a #else
+ * cannot compile/cmp-oracle without first seeding D_00141810. Follow-up. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00122DA8);
 
 /**
@@ -2353,24 +2416,117 @@ s32 func_00123028(s64 a, s64 b) {
     return func_00122F10(&pa, &pb);
 }
 
+/**
+ * func_00123078 = convert a 32-bit signed integer to a double (soft-float
+ * __floatsidf). zero -> class 2; else class 3 with magnitude mantissa, exponent
+ * seeded 60, normalising left-shift loop to put the leading bit at position 60;
+ * INT_MIN returns the constant double -2^31 (0xC1E0000000000000). Recomposed by
+ * func_00122630.
+ *
+ * NEAR-MISS WALL (87.07% via objdiff, region-co-located with USA). Control flow,
+ * constants and the `(u64)-1 >> 4` limit all match; the residual is ee-gcc -O2
+ * -G0 delay-slot/register allocation in the normalise loop/tail. Shipped as a
+ * portable TARGET_NATIVE #else; verification routed to tester-EE (calls sibling
+ * soft-float func_00122630 #else).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00123078);
+#else
+s64 func_00123078(s32 x) {
+    FpParts parts;
+    s64 mant;
+    parts.fpClass = 3;
+    parts.sign = (u32)x >> 31;
+    if (x == 0) {
+        parts.fpClass = 2;
+        return func_00122630(&parts);
+    }
+    parts.exponent = 60;
+    if (parts.sign != 0) {
+        if (x == (s32)0x80000000) {
+            return (s64)0xC1E0000000000000ULL;
+        }
+        parts.mantissa = -x;
+    } else {
+        parts.mantissa = x;
+    }
+    mant = parts.mantissa;
+    if ((u64)mant <= (u64)-1 >> 4) {
+        s32 exp = parts.exponent;
+        do {
+            mant <<= 1;
+            exp--;
+        } while ((u64)mant <= (u64)-1 >> 4);
+        parts.exponent = exp;
+        parts.mantissa = mant;
+    }
+    return func_00122630(&parts);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00123130);
 
+/**
+ * func_001231C8 = convert a non-negative double to a 32-bit integer (truncate
+ * toward zero; soft-float __fixunsdfsi-style). NaN/zero/subnormal/negative -> 0;
+ * infinity and exponent>=32 -> 0xFFFFFFFF; otherwise shift the class-3 mantissa
+ * (leading bit at 60) into place: right by (60-exp), left by (exp-60) above.
+ *
+ * NEAR-MISS WALL (68.20% via objdiff, region-co-located with USA). Logic faithful
+ * (unsigned class<2 -> sltiu matches) but dense with ee-gcc -O2 -G0 soft-float
+ * fillers: `xori;beqz` vs `li;beq` equality, annulling `bnel` range check,
+ * `lui;ori` overflow constant. Shipped as a portable TARGET_NATIVE #else;
+ * verification routed to tester-EE (calls sibling soft-float func_00122760 #else).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001231C8);
+#else
+s32 func_001231C8(s64 a) {
+    s64 va = a;
+    FpParts parts;
+    s32 cls;
+    s32 exp;
+    func_00122760(&va, &parts);
+    cls = parts.fpClass;
+    if (cls == 2) {
+        return 0;
+    }
+    if ((u32)cls < 2) {
+        return 0;
+    }
+    if (parts.sign != 0) {
+        return 0;
+    }
+    if (cls == 4) {
+        return 0xFFFFFFFF;
+    }
+    exp = parts.exponent;
+    if (exp < 0) {
+        return 0;
+    }
+    if (exp >= 32) {
+        return 0xFFFFFFFF;
+    }
+    if (exp < 61) {
+        return (s32)((u64)parts.mantissa >> (60 - exp));
+    }
+    return (s32)((u64)parts.mantissa << (exp - 60));
+}
+#endif
 
 /**
  * Build an FpParts descriptor from explicit class/sign/exponent and a 64-bit
- * mantissa (8-byte aligned at offset 0x10) and recompose it into a double via
- * func_00122630, discarding the result.
+ * mantissa (8-byte aligned at offset 0x10) and recompose it into a packed double
+ * via func_00122630, RETURNING that double (the .s tail-passes func_00122630's
+ * v0/v1 through unchanged — no reload before jr ra).
  */
-void func_00123268(s32 fpClass, s32 sign, s32 exponent, s64 mantissa) {
+s64 func_00123268(s32 fpClass, s32 sign, s32 exponent, s64 mantissa) {
     FpParts parts;
     parts.fpClass = fpClass;
     parts.sign = sign;
     parts.exponent = exponent;
     parts.mantissa = mantissa;
-    func_00122630(&parts);
+    return func_00122630(&parts);
 }
 
 /**
@@ -2448,7 +2604,31 @@ void func_001234C0(s32 arg0, s32 arg1, s32 arg2, s32 arg3) {
     func_001232F0(args);
 }
 
+extern s32 func_00123400(u32 *src, SpParts *out);
+
+/**
+ * func_001234F0 = convert a single-precision float to a double and recompose it
+ * (soft-float __extendsfdf2 helper): decompose into SpParts (func_00123400),
+ * widen the 31-bit single mantissa to the 61-bit double form (<<30), hand to
+ * func_00123268, RETURNING the recomposed double (the soft-float __extendsfdf2
+ * widen result — the .s tail-passes func_00123268's v0/v1 through, no reload
+ * before jr ra).
+ *
+ * NEAR-MISS WALL (75.00% via objdiff, region-co-located with USA): post-call body
+ * is byte-identical; the only divergence is ee-gcc -O2 -G0 scheduling the three
+ * prologue insns {save $31, &f, swc1 spill} in a different order. Shipped as a
+ * portable TARGET_NATIVE #else; cmp-oracle'd (extendsfdf2, the double-bits return).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001234F0);
+#else
+s64 func_001234F0(float f) {
+    SpParts sp;
+    func_00123400((u32 *)&f, &sp);
+    return func_00123268(sp.fpClass, sp.sign, sp.exponent,
+                         (s64)((u64)(u32)sp.mantissa << 30));
+}
+#endif
 
 /**
  * Decode a little-endian base-128 varint from src into *out, 7 bits per byte
