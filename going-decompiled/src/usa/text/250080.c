@@ -183,7 +183,7 @@ extern u8 *D_1B2354;  /* IPU decode output scratch buffer (0x1B2354) */
 extern char D_1AE7E8[];   /* DMA-add-queue-full error string */
 extern char D_1AE820[];   /* decode-thread stop diagnostic */
 extern char D_1AE838[];   /* host frame-read error string */
-extern s32 func_00350868(u8 *stream, u8 *src, s32 len, s32 dstOfs);
+extern void func_00350868(u8 *stream, u8 *src, s32 len, s32 dstOfs);
 /* func_003517C0/func_003518B8: deferred-native FMV stream funcs whose #else bodies
    model them with inconsistent arg counts across call sites (true signatures need the
    asm; FMV native backend is deferred). Declared with unspecified args so the corpus
@@ -211,14 +211,28 @@ s32 func_00352A20(s32 unused, s32 *frame);
 s32 func_00352A48(void);
 s32 func_00352A80(void);
 s32 func_00352AB0(void);
-extern s32 func_00352AE0(u8 *obj);
+/* func_00352AE0 is a stream-event callback (id 5): the dispatcher passes the
+   event id in arg0 (unused) and the stream object in arg1. */
+extern s32 func_00352AE0(s32 unused, u8 *obj);
 /* DI/EI primitives + stream/host helpers referenced only by the #else bodies. */
 extern void func_0011F5E0(void);   /* disable interrupts (DI) */
 extern void func_0011F628(void);   /* enable interrupts (EI) */
-extern void func_00351F58(u8 *obj);
+extern s32 func_00351F58(u8 *obj);
 extern void func_0012F940(u8 *obj);
 extern s32 func_0012F9B8(u8 *host);
 s32 func_00352C80(FmvFrameQueue *q);
+/* Stream-commit + reset callees referenced only by the #else bodies. */
+extern s32 func_001338F0(s32 commitBase, s32 len, s32 commitArg, s32 queued, s32 arg5);
+extern void func_00133890(s32 *obj);   /* commit-path stream lock */
+/* SIF-DMA bounce primitives (func_00350868 #else): queue a SIF DMA, busy-wait
+   for the slot, poll for completion, then signal. */
+extern s32 func_0011AEA0(s32 mode);    /* sceSifSetDChain / SIF DMA arm */
+extern s32 func_0011AFE0(void *desc, s32 count);  /* sceSifSetDma (returns id) */
+extern s32 func_0011AFC0(s32 id);      /* sceSifDmaStat (busy while >= 0) */
+extern void func_00133930(s32 len, s32 dstOfs);  /* post-transfer notify */
+/* IPU_TO channel teardown callees (func_00351F58 #else). */
+extern s32 func_00351550(s32 mode);    /* DMAC ch4 CHCR suspend write */
+extern void func_0011AC30(s32 sema);   /* DeleteSema */
 #endif
 
 /**
@@ -313,12 +327,60 @@ s32 func_003505E0(void) {
  * not compiler output — no C can produce it. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350600);
 
+#ifndef TARGET_NATIVE
 /* func_00350608: read-chunk dispatch on the stream object. Blocked:
  * 8-byte-packed saves (s0@0x0, ra@0x8; see header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350608);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
+   saves (s0@0x0, ra@0x8). Revisit with the gameplay-TU compiler.
 
+   Commit the buffered packet to the IPU bitstream feeder: snap the staged
+   commit length (commitLen) down to a 1KB (0x400) boundary - biasing a negative
+   value by +0x3FF first so the arithmetic >>10<<10 floors toward zero the same
+   way the compiler's sra/sll pair does - then hand {commitBase, snappedLen,
+   commitArg, hdr-word@0x14, hdr-word@0x18} to func_001338F0 and flip the
+   stream's `started` word to 2 (header consumed). Returns 2 (the started value
+   is reused as the return - the func_001338F0 result is discarded).
+
+   NOTE(offset): args 4 and 5 come from word idx [5] (q+0x14) and [6] (q+0x18),
+   both inside the packet-header staging area hdr[0x28] (NOT q->queued@0x50 - the
+   cmp oracle caught an earlier version that read queued). Raw offsets kept. */
+s32 func_00350608(FmvPtsQueue *q) {
+    s32 len = q->commitLen;
+    s32 snapped = ((len >= 0 ? len : len + 0x3FF) >> 10) << 10;
+
+    func_001338F0(q->commitBase, snapped, q->commitArg,
+                  *(s32 *)((u8 *)q + 0x14), *(s32 *)((u8 *)q + 0x18));
+    q->started = 2;
+    return 2;
+}
+#endif
+
+#ifndef TARGET_NATIVE
 /* func_00350660: stream-state reset. Blocked: 8-byte-packed saves. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350660);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
+   saves (s0@0x0, ra@0x8). Revisit with the gameplay-TU compiler.
+
+   Reset the pts-queue stream cursor to "no packet buffered": acquire the stream
+   lock (func_00133890) then clear the started flag, the header-staging fill, the
+   payload ring offset/consumed/received cursors, the queued count, and the two
+   commit scratch words (field58 / commitArg). The payload base, ring size and
+   mode are left intact. Returns void. */
+void func_00350660(FmvPtsQueue *q) {
+    func_00133890((s32 *)q);
+    q->commitArg = 0;
+    q->started = 0;
+    q->hdrFill = 0;
+    q->ringOfs = 0;
+    q->consumed = 0;
+    q->received = 0;
+    q->queued = 0;
+    q->field58 = 0;
+}
+#endif
 
 /**
  * Compute the two writable spans of the pts payload ring (the producer's
@@ -407,9 +469,43 @@ s32 func_00350840(FmvPtsQueue *q) {
 }
 #endif
 
+#ifndef TARGET_NATIVE
 /* func_00350868: SIF-DMA bounce of a decoded block to IOP memory. Blocked:
  * 8-byte-packed saves (s0/s1/s2/s3/ra). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350868);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
+   saves (s0/s1/s2/s3/ra).
+
+   ROUTE: tester-EE-pending (NOT isolated-cmp-oracleable) - the two do/while
+   loops busy-wait on real SIF-DMA hardware (func_0011AFE0 returns 0 until a DMA
+   slot frees; func_0011AFC0 returns >= 0 while the transfer is in flight), so an
+   isolated EE with mocked SIF stubs would hang or pass vacuously. Verify under
+   the live tester-EE FMV-playback scenario instead.
+
+   Bounce a decoded 0x400 block from EE (src) to the IOP at the stream's IOP
+   buffer base (obj[0x48]) + dstOfs: build a 4-word SIF-DMA descriptor
+   {src, iopBase, len, 0}, arm the chain (func_0011AEA0), retry the enqueue until
+   a slot is granted, wait for completion, then notify (func_00133930). */
+void func_00350868(u8 *obj, u8 *src, s32 len, s32 dstOfs) {
+    s32 desc[4];
+    s32 id;
+    s32 stat;
+
+    func_0011AEA0(0);
+    desc[0] = (s32)src;
+    desc[1] = *(s32 *)(obj + 0x48);
+    desc[2] = len;
+    desc[3] = 0;
+    do {
+        id = func_0011AFE0(desc, 1);
+    } while (id == 0);
+    do {
+        stat = func_0011AFC0(id);
+    } while (stat >= 0);
+    func_00133930(len, dstOfs);
+}
+#endif
 
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350910);
@@ -844,9 +940,31 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351B10);
    (REG_IPU_CMD) and re-arms REG_DMAC_4_IPU_TO_MADR/TADR/QWC. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351C20);
 
+#ifndef TARGET_NATIVE
 /* func_00351F58: IPU_TO channel teardown + DeleteSema. Blocked:
  * 8-byte-packed saves (s0@0x0, ra@0x8). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351F58);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
+   saves (s0@0x0, ra@0x8).
+
+   ROUTE: tester-EE-pending (NOT isolated-cmp-oracleable) - clears the live DMAC
+   channel-4 (IPU_TO) QWC/MADR/TADR MMIO registers directly, which has no
+   portable-C semantics on a non-EE host and touches hardware on the real EE
+   outside a running DMA. Verify under the live tester-EE FMV-playback teardown.
+
+   Tear down the IPU_TO DMA channel: suspend it (func_00351550(5)), zero its
+   transfer registers (QWC 0x1000B410, MADR 0x1000B420, TADR 0x1000B430), then
+   delete the object's completion sema (obj[0x40]). Always reports success (1). */
+s32 func_00351F58(u8 *obj) {
+    func_00351550(5);
+    *(volatile u32 *)0x1000B420 = 0;   /* MADR */
+    *(volatile u32 *)0x1000B410 = 0;   /* QWC  */
+    *(volatile u32 *)0x1000B430 = 0;   /* TADR */
+    func_0011AC30(*(s32 *)(obj + 0x40));
+    return 1;
+}
+#endif
 
 #ifndef TARGET_NATIVE
 /* func_00351FB0: sema-guarded total-bytes-queued read. Blocked:
@@ -1240,9 +1358,28 @@ s32 func_00352AB0(void) {
     return 1;
 }
 
+#ifndef TARGET_NATIVE
 /* func_00352AE0: snapshot the DMA queue cursor pair into the stream object.
  * Blocked: 8-byte-packed saves (s0@0x20, ra@0x28). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352AE0);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
+   saves (s0@0x20, ra@0x28). Revisit with the gameplay-TU compiler.
+
+   Stream-event callback (id 5): read the two 64-bit cursor words of the IPU
+   DMA-add queue (at arena+0xD9090) via func_003522C0 into a stack pair, then
+   stash them into the stream object at +0x8 / +0x10 (the snapshot the retry
+   path replays from). The event id arrives in arg0 (unused); the stream object
+   in arg1. Always reports handled (1). */
+s32 func_00352AE0(s32 unused, u8 *obj) {
+    u64 cursor[2];
+
+    func_003522C0(g_pFmvArenaBase + FMV_DMAQ_OFS, cursor);
+    *(u64 *)(obj + 0x8) = cursor[0];
+    *(u64 *)(obj + 0x10) = cursor[1];
+    return 1;
+}
+#endif
 
 /* func_00352B30: initialise the decoded-frame display queue (fields, then
  * clear each slot's {state,index} header). Best attempt 88%: byte-identical

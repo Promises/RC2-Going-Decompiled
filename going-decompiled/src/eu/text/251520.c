@@ -161,10 +161,16 @@ s32 func_00351A80(void) {
 /* func_00351AA0 (USA func_00350600): inter-function padding, no C. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00351AA0);
 
-/* func_00351AA8 (USA func_00350608): blocked, 8-byte-packed saves. */
+/* func_00351AA8 (USA func_00350608): commit-dispatch on the stream object.
+ * Blocked, 8-byte-packed saves; asm-logic identical to USA func_00350608 (the
+ * commit callee shifts: EU func_00133950 vs USA func_001338F0). The portable
+ * TARGET_NATIVE body lives in the USA twin (src/usa/text/250080.c). */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00351AA8);
 
-/* func_00351B00 (USA func_00350660): blocked, 8-byte-packed saves. */
+/* func_00351B00 (USA func_00350660): stream-state reset. Blocked, 8-byte-packed
+ * saves; asm-logic identical to USA func_00350660 (lock callee shifts: EU
+ * func_001338F0 vs USA func_00133890). The portable TARGET_NATIVE body lives in
+ * the USA twin (src/usa/text/250080.c). */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00351B00);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00351B48);
@@ -193,7 +199,9 @@ s32 func_00351CE0(FmvPtsQueue *q) {
 }
 
 /* func_00351D08 (USA func_00350868): SIF-DMA bounce of a decoded block to IOP
- * memory. Blocked: 8-byte-packed saves. */
+ * memory. Blocked: 8-byte-packed saves; asm-logic identical to USA func_00350868
+ * (notify callee shifts: EU func_00133990 vs USA func_00133930). The portable
+ * TARGET_NATIVE body lives in the USA twin (tester-EE-routed: SIF busy-wait). */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00351D08);
 
 /* func_00351DB0 (USA func_00350910): bitstream feeder (EU twin). Blocked in
@@ -345,7 +353,10 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00352FB0);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_003530C0);
 
-/* func_003533F8 (USA func_00351F58): blocked, 8-byte-packed saves. */
+/* func_003533F8 (USA func_00351F58): IPU_TO channel teardown + DeleteSema.
+ * Blocked: 8-byte-packed saves; asm-logic identical to USA func_00351F58 (same
+ * DMAC ch4 MMIO regs 0x1000B410/420/430). The portable TARGET_NATIVE body lives
+ * in the USA twin (tester-EE-routed: live DMAC MMIO). */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_003533F8);
 
 /* func_00353450 (USA func_00351FB0): blocked, 8-byte-packed saves. */
@@ -488,7 +499,11 @@ s32 func_00353F50(void) {
     return 1;
 }
 
-/* func_00353F80 (USA func_00352AE0): blocked, 8-byte-packed saves. */
+/* func_00353F80 (USA func_00352AE0): snapshot the DMA-queue cursor pair into the
+ * stream object (stream-event callback id 5). Blocked: 8-byte-packed saves;
+ * asm-logic identical to USA func_00352AE0 (snapshot callee shifts: EU
+ * func_00353760 vs USA func_003522C0). The portable TARGET_NATIVE body lives in
+ * the USA twin (src/usa/text/250080.c). */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00353F80);
 
 /* func_00353FD0 (USA func_00352B30): blocked, register-coloring wall. */
