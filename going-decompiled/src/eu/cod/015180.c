@@ -247,7 +247,7 @@ extern void func_00124540(void);
 
 extern s32 func_00124B88(s32 arg0);
 extern s32 func_0011F5E0(void);
-extern void func_0011F628(void);
+extern s32 func_0011F628(void);
 extern s32 D_00141840;
 
 /* func_001248B0: if the callback D_00141844 is installed and the suppression
@@ -738,7 +738,15 @@ void func_0011AAB0(s32 thid, s32 arg) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AAC0);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AAD0);
+/**
+ * func_0011AAD0 = EE kernel syscall 0x2B (ReleaseWaitThread).
+ * SCE library syscall stub (see func_0011AA20): load the syscall number into
+ * $v1 and trap; the kernel releases the given thread from its wait state and
+ * returns its result in $v0. Called by func_0011B728 with a thread id.
+ */
+s32 func_0011AAD0(s32 thid) {
+    __asm__ volatile("addiu $3, $0, 0x2B\n\tsyscall 0" ::: "$3", "memory");
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AAE0);
 
@@ -761,7 +769,15 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AB30);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AB40);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AB50);
+/**
+ * func_0011AB50 = EE kernel syscall 0x33 (WakeupThread).
+ * SCE library syscall stub (see func_0011AA20): load the syscall number into
+ * $v1 and trap; the kernel wakes the sleeping thread and returns its result in
+ * $v0. Called by func_0011B728 with a thread id.
+ */
+s32 func_0011AB50(s32 thid) {
+    __asm__ volatile("addiu $3, $0, 0x33\n\tsyscall 0" ::: "$3", "memory");
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AB60);
 
@@ -769,7 +785,15 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AB70);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AB80);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AB90);
+/**
+ * func_0011AB90 = EE kernel syscall 0x37 (SuspendThread).
+ * SCE library syscall stub (see func_0011AA20): load the syscall number into
+ * $v1 and trap; the kernel suspends the given thread and returns its result in
+ * $v0. Called by func_0011B728 with a thread id.
+ */
+s32 func_0011AB90(s32 thid) {
+    __asm__ volatile("addiu $3, $0, 0x37\n\tsyscall 0" ::: "$3", "memory");
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011ABA0);
 
@@ -810,7 +834,15 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AC40);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AC50);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AC60);
+/**
+ * func_0011AC60 = EE kernel syscall 0x44 (WaitSema).
+ * SCE library syscall stub (see func_0011AA20): load the syscall number into
+ * $v1 and trap; the kernel blocks the caller until the semaphore can be taken.
+ * Used as the table-lock acquire (see func_0011D868 / func_0011AC40 release).
+ */
+void func_0011AC60(s32 sema) {
+    __asm__ volatile("addiu $3, $0, 0x44\n\tsyscall 0" ::: "$3", "memory");
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AC70);
 
@@ -1177,13 +1209,44 @@ void func_0011BFC8(s32 ch) {
     }
 }
 
+/**
+ * func_0011C000 = convert the IEEE-754 double whose raw bits are `bits` into a
+ * clamped integer in [0, 9999]. Extracts the 11-bit exponent field and rebiases
+ * it to exp = field - 0x433 (the power-of-two that scales the 53-bit
+ * significand, including the implicit leading 1). Values below 2^-53 round to 0;
+ * values needing >= 2^13 saturate to 9999 (0x270F). Otherwise the significand is
+ * shifted left by exp (exp >= 0) or right by (-exp - 2) with a round-up when the
+ * two dropped low bits are both set, and the low 32 bits are returned.
+ *
+ * NEAR-MISS WALL (95.56% via objdiff, not byte-exact) - see the USA twin's
+ * comment in src/usa/cod/015180.c for the functionally-correct C and the two
+ * residual ee-gcc codegen diffs (exp<0 register threading + the original's
+ * branch-LIKELY `bnel` rounding compare that ee-gcc emits as a plain `bne`).
+ * Seedable leaf: candidate for a cmp-oracle'd TARGET_NATIVE #else later.
+ */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011C000);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011C090);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011C1F8);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011C7E8);
+/**
+ * func_0011C7E8 = printf-style wrapper around the core formatter func_0011C1F8.
+ * Spills its variadic register arguments ($a1..$a7) to the stack home area and
+ * forwards (dest, va_list) to func_0011C1F8, returning its result. `dest` is the
+ * sink passed straight through; the va_list points at the first variadic arg.
+ */
+extern s32 func_0011C1F8(void *dest, void *args);
+
+s32 func_0011C7E8(void *dest, ...) {
+    /* EABI single-float va_start (va_list == char*): point past the named arg
+     * into the spilled variadic register-save area. */
+    char *ap = (char *)__builtin_next_arg(dest)
+               - (__builtin_args_info(2) >= 8
+                      ? 0
+                      : (8 - __builtin_args_info(2)) * 8);
+    return func_0011C1F8(dest, ap);
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011C820);
 
@@ -1557,9 +1620,46 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011F170);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011F364);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011F5E0);
+/**
+ * func_0011F5E0 = disable EE interrupts, reporting the prior enable state.
+ * Reads COP0 Status, isolates the EIE bit (0x10000); if interrupts were off it
+ * returns 0 immediately. Otherwise it executes the handwritten `di` (disable)
+ * then `sync.p`, re-reading Status until the EIE bit clears (the EE pipeline can
+ * leave it set for a cycle), and returns non-zero. The di/sync.p ARE the
+ * operation, so they are matched with inline asm. Pairs with func_0011F628.
+ */
+s32 func_0011F5E0(void) {
+    s32 status, cur;
+    __asm__ volatile("mfc0 %0, $12" : "=r"(status));
+    status &= 0x10000;
+    if (status != 0) {
+        do {
+            __asm__ volatile("di");
+            __asm__ volatile("sync.p");
+            __asm__ volatile("mfc0 %0, $12" : "=r"(cur));
+            cur &= 0x10000;
+        } while (cur != 0);
+    }
+    return status != 0;
+}
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011F628);
+/**
+ * func_0011F628 = re-enable EE interrupts, reporting the prior enable state.
+ * Reads COP0 Status, isolates the EIE bit (0x10000), executes the handwritten
+ * `ei` instruction to enable interrupts, and returns non-zero iff interrupts
+ * were already enabled. The `ei` is the operation itself, so it is matched with
+ * inline asm rather than modelled. Pairs with func_0011F5E0 (suspend).
+ */
+s32 func_0011F628(void) {
+    s32 status;
+    __asm__ volatile(
+        "mfc0 %0, $12\n\t"
+        "lui  $3, 0x1\n\t"
+        "and  %0, %0, $3\n\t"
+        "ei"
+        : "=r"(status) :: "$3", "memory");
+    return status != 0;
+}
 
 /**
  * Create the paired handles D_00134DB8 / D_00134DBC from two identical
