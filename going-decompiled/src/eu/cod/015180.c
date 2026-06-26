@@ -170,9 +170,6 @@ extern s32 func_0011B030(s32 arg0);
 extern s32 D_00134DB8;
 extern s32 D_00134DBC;
 
-extern void func_0011ACD0(s32 *out);
-extern void func_0011ACC0(s32 *in);
-
 extern s32 D_001417EC;
 extern void func_0011FB98(void);
 
@@ -665,11 +662,27 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AA00);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AA10);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AA20);
+/**
+ * func_0011AA20 = EE kernel syscall 0x20 (CreateThread).
+ * SCE library stub: load the syscall number into $v1 and trap into the EE
+ * kernel; the kernel returns its result in $v0 (no register move emitted, so
+ * the C body is the bare inline-asm trap). Kept under the splat func_ name so
+ * objdiff pairs it by symbol against the frozen asm.
+ */
+void func_0011AA20(void) {
+    __asm__ volatile("addiu $3, $0, 0x20\n\tsyscall 0" ::: "$3", "memory");
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AA30);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AA40);
+/**
+ * func_0011AA40 = EE kernel syscall 0x22 (StartThread).
+ * SCE library syscall stub (see func_0011AA20): load the syscall number into
+ * $v1 and trap; the kernel's result is returned in $v0.
+ */
+void func_0011AA40(void) {
+    __asm__ volatile("addiu $3, $0, 0x22\n\tsyscall 0" ::: "$3", "memory");
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AA50);
 
@@ -683,7 +696,14 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AA90);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AAA0);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AAB0);
+/**
+ * func_0011AAB0 = EE kernel syscall 0x29 (RotateThreadReadyQueue).
+ * SCE library syscall stub (see func_0011AA20): load the syscall number into
+ * $v1 and trap; the kernel's result is returned in $v0.
+ */
+void func_0011AAB0(void) {
+    __asm__ volatile("addiu $3, $0, 0x29\n\tsyscall 0" ::: "$3", "memory");
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AAC0);
 
@@ -695,7 +715,14 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AAF0);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AB00);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AB10);
+/**
+ * func_0011AB10 = EE kernel syscall 0x2F (GetThreadId).
+ * SCE library syscall stub (see func_0011AA20): load the syscall number into
+ * $v1 and trap; the kernel returns the current thread id in $v0.
+ */
+void func_0011AB10(void) {
+    __asm__ volatile("addiu $3, $0, 0x2F\n\tsyscall 0" ::: "$3", "memory");
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AB20);
 
@@ -749,9 +776,25 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011ACA0);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011ACB0);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011ACC0);
+/**
+ * func_0011ACC0 = EE kernel syscall 0x4A. SCE library syscall stub (see
+ * func_0011AA20): load the syscall number into $v1 and trap. Called as a
+ * register-write primitive: the $a0 pointer holds the value the kernel writes
+ * to a hardware register (see func_0011F8D0). Exact SDK name UNCONFIRMED.
+ */
+void func_0011ACC0(s32 *in) {
+    __asm__ volatile("addiu $3, $0, 0x4A\n\tsyscall 0" ::: "$3", "memory");
+}
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011ACD0);
+/**
+ * func_0011ACD0 = EE kernel syscall 0x4B. SCE library syscall stub (see
+ * func_0011AA20): load the syscall number into $v1 and trap. Called as a
+ * register-read primitive: the kernel stores the register value through the
+ * $a0 pointer (see func_0011F8D0). Exact SDK name UNCONFIRMED.
+ */
+void func_0011ACD0(s32 *out) {
+    __asm__ volatile("addiu $3, $0, 0x4B\n\tsyscall 0" ::: "$3", "memory");
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011ACE0);
 
