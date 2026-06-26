@@ -170,9 +170,51 @@ void func_00336678(void *p, s32 flag) {
 }
 #endif
 
+/* GuiComputeBlendWeights: from a single blend factor t, fill a 4-float weight
+ * vector for a two-control-point blend: out[0]=t, out[1]=t*0.5, out[2]=1-t,
+ * out[3]=(1-t)*0.5 (the .5-scaled entries are the tangent weights). Asserts the
+ * output pointer is non-NULL first (AssertFail with the D_1AD890 source path,
+ * line 0x3D, predicate D_1AD8A8). Like the other widget-method blends in this
+ * unit (func_00336918 / func_00336988) the leading object pointer (a0) is unused
+ * by the body; t arrives in $f12 and the output pointer in $a1. */
+#ifndef TARGET_NATIVE
+/* TODO(match): functional equivalent - not byte-exact; the 8-byte-packed
+   callee-save frame wall (original packs s0/ra/f20 into a -0x20 frame at
+   0x0/0x8/0x10; this cc1 emits a -0x30 frame at 0x0/0x10/0x20). The body insn
+   stream (assert, the 1.0/0.5 li.s constants, the four stores) is otherwise
+   bit-identical. 99.62% best. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiComputeBlendWeights);
+#else
+extern void AssertFail(const char *file, s32 line, const char *expr);
+extern const char D_1AD890[]; /* assert source-file path */
+extern const char D_1AD8A8[]; /* assert predicate text ("out") */
+void GuiComputeBlendWeights(void *self, f32 t, f32 *out) {
+    (void)self;
+    if (out == 0) {
+        AssertFail(D_1AD890, 0x3D, D_1AD8A8);
+    }
+    out[0] = t;
+    out[2] = 1.0f - t;
+    out[1] = t * 0.5f;
+    out[3] = (1.0f - t) * 0.5f;
+}
+#endif
 
+/* func_00336720: install the D_1AD968 vtable at p+0x4, then run the base ctor
+ * func_00336678(p, flag) (the field store sits in the jal delay slot). */
+#ifndef TARGET_NATIVE
+/* TODO(match): functional equivalent - not byte-exact; the original fills the
+   func_00336678 jal delay slot with the +0x4 vtable store; cc1 emits the store
+   ahead of the call and nops the slot. Same jal-delay-slot-store wall as
+   func_00336B88. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336720);
+#else
+extern void *D_1AD968;
+void func_00336720(void *p, s32 flag) {
+    *(void **)((char *)p + 0x4) = &D_1AD968;
+    func_00336678(p, flag);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336768);
 
@@ -209,7 +251,26 @@ void func_00336918(void *self, f32 t, f32 *dst, f32 *a, f32 *b) {
     dst[3] = it * a[3] + t * b[3];
 }
 
+/* func_00336988: per-channel blend of a 4-int vector. For each component i in
+ * {0,1,2,3}, out[i] = func_002846E8(t, aSrc[i], bSrc[i]) - the shared scalar
+ * color/alpha interpolation helper applied component-wise. The leading object
+ * pointer (a0) carries no state into the blend and is unused by the body. */
+#ifndef TARGET_NATIVE
+/* TODO(match): functional equivalent - not byte-exact; the 8-byte-packed
+   callee-save frame wall (this cc1 emits a -0x50 frame with 16-byte-strided
+   spill slots for s0/s1/s2/ra/f20; the original packs them into a -0x30 frame
+   at 0x0/0x8/0x10/0x18/0x20). The body insn stream is otherwise identical.
+   87.5% best. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336988);
+#else
+extern s32 func_002846E8(f32 t, s32 a, s32 b);
+void func_00336988(void *self, s32 *out, s32 *aSrc, s32 *bSrc, f32 t) {
+    out[0] = func_002846E8(t, aSrc[0], bSrc[0]);
+    out[1] = func_002846E8(t, aSrc[1], bSrc[1]);
+    out[2] = func_002846E8(t, aSrc[2], bSrc[2]);
+    out[3] = func_002846E8(t, aSrc[3], bSrc[3]);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336A18);
 
@@ -376,11 +437,55 @@ s32 GuiElementIsVisible(GuiElement *e) {
     return *e->visible > 0.0f;
 }
 
+/* GuiElementShareScaleVec: rebind the element's scale vector (+0x4) to an
+ * externally-owned vector. If the new pointer differs from the current scale,
+ * and the element owns a pool (+0x2C) and has not yet released its own scale
+ * node (the +0x18 latch is clear), free the old scale node back to the pool
+ * (func_00337D78) and set the +0x18 latch; then install the new pointer. */
+#ifndef TARGET_NATIVE
+/* TODO(match): functional equivalent - not byte-exact; the early-out compares
+   compile to branch-likely (beql/bnel) with the shared-tail store sunk into the
+   delay slots, plus the 8-byte-packed callee-save frame wall (original -0x20
+   frame at 0x0/0x8/0x10; cc1 emits -0x30 at 0x0/0x10/0x20). 95% best. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementShareScaleVec);
+#else
+void GuiElementShareScaleVec(GuiElement *e, f32 *newScale) {
+    if (newScale == e->scale) {
+        return;
+    }
+    if (*(void **)((char *)e + 0x2C) != 0 && *(s32 *)((char *)e + 0x18) == 0) {
+        func_00337D78(*(void **)((char *)e + 0x2C), (void **)e->scale);
+        *(s32 *)((char *)e + 0x18) = 1;
+    }
+    e->scale = newScale;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336D20);
 
+/* func_00336D28: rebind the element's visibility-scalar vector (+0x10) to an
+ * externally-owned vector. If the new pointer differs from the current one, and
+ * the element owns a pool (+0x2C) and has not yet released its own visibility
+ * node (the +0x24 latch is clear), free the old node back to the pool
+ * (func_00337D78) and set the +0x24 latch; then install the new pointer. The
+ * +0x10/+0x24 pairing here mirrors the +0x4/+0x18 pairing in
+ * GuiElementShareScaleVec. */
+#ifndef TARGET_NATIVE
+/* TODO(match): functional equivalent - not byte-exact; same beql/bnel early-out
+   + 8-byte-packed callee-save frame wall as GuiElementShareScaleVec. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336D28);
+#else
+void func_00336D28(GuiElement *e, f32 *newVisible) {
+    if (newVisible == e->visible) {
+        return;
+    }
+    if (*(void **)((char *)e + 0x2C) != 0 && *(s32 *)((char *)e + 0x24) == 0) {
+        func_00337D78(*(void **)((char *)e + 0x2C), (void **)e->visible);
+        *(s32 *)((char *)e + 0x24) = 1;
+    }
+    e->visible = newVisible;
+}
+#endif
 
 /* GuiElementSetScale: as GuiElementSetPos for the scale vector at +0x4. */
 #ifndef TARGET_NATIVE
@@ -447,6 +552,18 @@ void GuiElementBaseInit(GuiElement *e, s32 tag, GuiPool *pool) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336EF8);
 
+/* func_00336F00: shared GuiElement base destructor. Reinstall the base vtable
+ * at +0x30, then (only when the element owns a pool at +0x2C) free each of its
+ * four still-owned vector nodes back to the pool, guarded by per-node release
+ * latches: pos(+0x0)/latch +0x14, unk08(+0x8)/latch +0x1C, scale(+0x4)/latch
+ * +0x20, color(+0xC)/latch +0x18 (each free passes a0 = the pool, not the
+ * element). Finally, if (flag & 1), run the dtor tail hook func_00337C48.
+ * Left INCLUDE_ASM (no #else): the destructor takes a second (flag) arg, but the
+ * 1-arg `func_00336F00` extern that the matched tail-callers (func_00337278 /
+ * func_00337830) rely on - they call it with a1 left untouched - is part of the
+ * matched (non-TARGET_NATIVE) build and cannot coexist with a 2-arg C definition
+ * in the same TU. A #else body would require region-splitting that extern, which
+ * the matched callers would then fail to satisfy under TARGET_NATIVE. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336F00);
 
 /* GuiElementInitTypeB: install the TypeB GuiElement vtable (D_1ADA38) at +0x30.

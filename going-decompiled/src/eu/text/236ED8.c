@@ -79,9 +79,47 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00337540);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00337550);
 
+/* GuiComputeBlendWeights: from a single blend factor t, fill a 4-float weight
+ * vector for a two-control-point blend: out[0]=t, out[1]=t*0.5, out[2]=1-t,
+ * out[3]=(1-t)*0.5. Asserts the output pointer is non-NULL (AssertFail with the
+ * D_1AD930 path, line 0x3D, predicate D_1AD948). The leading object pointer (a0)
+ * is unused; t arrives in $f12 and the output pointer in $a1. USA twin
+ * GuiComputeBlendWeights (byte-identical logic). */
+#ifndef TARGET_NATIVE
+/* TODO(match): functional equivalent - not byte-exact; the 8-byte-packed
+   callee-save frame wall (s0/ra/f20 packed into a -0x20 frame). Body otherwise
+   bit-identical to the asm. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiComputeBlendWeights);
+#else
+extern void AssertFail(const char *file, s32 line, const char *expr);
+extern const char D_1AD930[]; /* assert source-file path */
+extern const char D_1AD948[]; /* assert predicate text */
+void GuiComputeBlendWeights(void *self, f32 t, f32 *out) {
+    (void)self;
+    if (out == 0) {
+        AssertFail(D_1AD930, 0x3D, D_1AD948);
+    }
+    out[0] = t;
+    out[2] = 1.0f - t;
+    out[1] = t * 0.5f;
+    out[3] = (1.0f - t) * 0.5f;
+}
+#endif
 
+/* func_003375F8: install the D_1ADA08 vtable at p+0x4, then run the base ctor
+ * func_00337550(p, flag) (the field store sits in the jal delay slot). USA twin
+ * func_00336720 (USA installs D_1AD968 / calls func_00336678). */
+#ifndef TARGET_NATIVE
+/* TODO(match): functional equivalent - not byte-exact; jal-delay-slot-store
+   wall (the original fills the func_00337550 delay slot with the +0x4 store). */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_003375F8);
+#else
+extern void *D_1ADA08;
+void func_003375F8(void *p, s32 flag) {
+    *(void **)((char *)p + 0x4) = &D_1ADA08;
+    func_00337550(p, flag);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00337640);
 
@@ -104,7 +142,24 @@ void func_003377F0(void *self, f32 t, f32 *dst, f32 *a, f32 *b) {
     dst[3] = it * a[3] + t * b[3];
 }
 
+/* func_00337860: per-channel blend of a 4-int vector. For each component i in
+ * {0,1,2,3}, out[i] = func_002845F8(t, aSrc[i], bSrc[i]) - the scalar color/alpha
+ * interpolation helper applied component-wise. The leading object pointer (a0)
+ * is unused. USA twin func_00336988 (USA calls func_002846E8; EU's region-
+ * specific commit helper is func_002845F8). */
+#ifndef TARGET_NATIVE
+/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee-save
+   frame wall (s0/s1/s2/ra/f20). Body insn stream otherwise identical. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00337860);
+#else
+extern s32 func_002845F8(f32 t, s32 a, s32 b);
+void func_00337860(void *self, s32 *out, s32 *aSrc, s32 *bSrc, f32 t) {
+    out[0] = func_002845F8(t, aSrc[0], bSrc[0]);
+    out[1] = func_002845F8(t, aSrc[1], bSrc[1]);
+    out[2] = func_002845F8(t, aSrc[2], bSrc[2]);
+    out[3] = func_002845F8(t, aSrc[3], bSrc[3]);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_003378F0);
 
@@ -177,9 +232,49 @@ s32 func_00337B68(GuiElement *e) {
     return *e->visible > 0.0f;
 }
 
+/* func_00337B90: rebind the element's scale vector (+0x4) to an externally-owned
+ * vector. If the new pointer differs from the current scale, and the element owns
+ * a pool (+0x2C) and has not yet released its own scale node (the +0x18 latch is
+ * clear), free the old scale node back to the pool (func_00338C28) and set +0x18;
+ * then install the new pointer. USA twin GuiElementShareScaleVec (USA pool-free
+ * is func_00337D78). */
+#ifndef TARGET_NATIVE
+/* TODO(match): functional equivalent - not byte-exact; beql/bnel early-out +
+   8-byte-packed callee-save frame wall. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00337B90);
+#else
+extern void func_00338C28(void *pool, void **node);
+void func_00337B90(GuiElement *e, f32 *newScale) {
+    if (newScale == e->scale) {
+        return;
+    }
+    if (*(void **)((char *)e + 0x2C) != 0 && *(s32 *)((char *)e + 0x18) == 0) {
+        func_00338C28(*(void **)((char *)e + 0x2C), (void **)e->scale);
+        *(s32 *)((char *)e + 0x18) = 1;
+    }
+    e->scale = newScale;
+}
+#endif
 
+/* func_00337BF8: rebind the element's visibility-scalar vector (+0x10) to an
+ * externally-owned vector. Same shape as func_00337B90 with the +0x10/+0x24
+ * field/latch pair. USA twin func_00336D28. */
+#ifndef TARGET_NATIVE
+/* TODO(match): functional equivalent - not byte-exact; same beql/bnel early-out
+   + 8-byte-packed callee-save frame wall as func_00337B90. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00337BF8);
+#else
+void func_00337BF8(GuiElement *e, f32 *newVisible) {
+    if (newVisible == e->visible) {
+        return;
+    }
+    if (*(void **)((char *)e + 0x2C) != 0 && *(s32 *)((char *)e + 0x24) == 0) {
+        func_00338C28(*(void **)((char *)e + 0x2C), (void **)e->visible);
+        *(s32 *)((char *)e + 0x24) = 1;
+    }
+    e->visible = newVisible;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00337C68);
 
