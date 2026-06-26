@@ -55,11 +55,24 @@ typedef struct GuiElement {
     /* 0x10 */ f32 *visible; /* -> visibility scalar (>0 shown) */
 } GuiElement;
 
-/* GUI fixed-size node pool. Full field map + allocator body are at GuiPoolAlloc
- * below; forward-declared here so the element constructors (GuiElementBaseInit,
- * GuiElementInit) that allocate their vector blocks through it see a consistent
- * prototype regardless of source order. Declaration-only: byte-neutral. */
-typedef struct GuiPool GuiPool;
+/* GUI fixed-size node pool (allocator body at GuiPoolAlloc, initialiser at
+ * GuiPoolInit). Defined up front so the element constructors (GuiElementBaseInit,
+ * GuiElementInit) and GuiPoolInit all see the field layout regardless of source
+ * order. Pure type info: byte-neutral.
+ *   +0x00 base     pointer to the backing storage
+ *   +0x04 capacity byte limit
+ *   +0x08 elemSize  per-node byte size / element kind
+ *   +0x0C cursor    bump offset into the backing storage
+ *   +0x10 count     live allocation count
+ *   +0x14 freeList  head of the singly-linked free list (next ptr at node+0) */
+typedef struct GuiPool {
+    /* 0x00 */ char *base;
+    /* 0x04 */ u32 capacity;
+    /* 0x08 */ u32 elemSize;
+    /* 0x0C */ u32 cursor;
+    /* 0x10 */ s32 count;
+    /* 0x14 */ void *freeList;
+} GuiPool;
 extern void *GuiPoolAlloc(GuiPool *pool);
 extern void *GuiPlacementNew(s32 size, void *buf);
 extern void GuiElementSetVisible(GuiElement *e, s32 show);
@@ -926,7 +939,54 @@ void func_003375D0(void *p, s32 flag) {
 }
 #endif
 
+/* func_00337630: draw one GUI sprite element. Bails immediately if the element
+ * is hidden (its visibility scalar at *(e->0x10) is 0). When the global tint
+ * override g_guiTintEnabled is set, the sprite's primitive-block colour word
+ * (*(e->0xC) -> [0]) has its low 24 bits (RGB) replaced from g_guiTintRgb while
+ * the top 8 bits (alpha) are preserved. It then replicates that colour word
+ * across a 4-vertex stack quad, converts the texture coords (*(e->0x34) -> [0,1])
+ * to integer via func_0028EDF0, and emits the quad through func_0028F2C0 using
+ * the element's screen position (e->pos = e->0x0) and scale (e->0x4). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337630);
+#else
+/* WALL + LIVE-STATE: functional-equivalent #else routed to tester-EE (cannot be
+   standalone cmp-oracle'd - it drives the live GS quad-emit path through
+   func_0028EDF0/func_0028F2C0 and reads the g_guiTint* render globals). cc1
+   walls: the visibility early-out is a `bc1tl` branch-likely (delay slot
+   nullified on the taken/return path), the coord conversions are raw `cvt.w.s`,
+   and the tint globals are %gp_rel small-data loads. */
+extern s32 g_guiTintEnabled;          /* D_1AD9CC: non-zero -> apply RGB tint */
+extern u32 g_guiTintRgb;              /* D_1AD9D0: 0x00RRGGBB tint colour */
+extern s32 func_0028EDF0(s32 u, s32 v);
+extern void func_0028F2C0(s32 handle, s32 x0, s32 y0, s32 x1, s32 y1, void *quad);
+void func_00337630(GuiElement *e) {
+    f32 *primColorBlock;
+    f32 *texCoord;
+    f32 *pos;
+    f32 *scale;
+    s32 quad[4];
+    s32 handle;
+
+    if (*e->visible == 0.0f) {
+        return;
+    }
+    if (g_guiTintEnabled) {
+        u32 *prim = *(u32 **)((char *)e + 0x0C);
+        *prim = (*prim & 0xFF000000) | (g_guiTintRgb & 0x00FFFFFF);
+    }
+    primColorBlock = *(f32 **)((char *)e + 0x0C);
+    texCoord = *(f32 **)((char *)e + 0x34);
+    quad[0] = *(s32 *)primColorBlock;
+    quad[1] = *(s32 *)primColorBlock;
+    quad[2] = *(s32 *)primColorBlock;
+    quad[3] = *(s32 *)primColorBlock;
+    handle = func_0028EDF0((s32)texCoord[0], (s32)texCoord[1]);
+    scale = *(f32 **)((char *)e + 0x04);
+    pos = *(f32 **)((char *)e + 0x00);
+    func_0028F2C0(handle, (s32)pos[0], (s32)pos[1], (s32)scale[0], (s32)scale[1], quad);
+}
+#endif
 
 /* GuiSpriteSetTexture: write two int->float coords through *(e+0x34),
  * re-reading the pointer per store. */
@@ -1044,7 +1104,34 @@ void GuiListSetItemCount(GuiElement *e, s32 count) {
     *(s32 *)((char *)e + 0x40) = count;
 }
 
+/* GuiListSetScrollPos: position the list's scroll-thumb. Given a requested row
+ * `pos`, clamp it to the list's total row count (+0x40), then write the thumb
+ * position through the +0x04 scale-vector pointer as
+ *   thumb = (clamp / totalRows) * trackLength       (trackLength = +0x3C)
+ * If the list has zero rows the thumb collapses to 0. All four int->float
+ * conversions are unsigned (the original emits the (u32) widening idiom). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiListSetScrollPos);
+#else
+/* WALL: functional-equivalent #else; matching arm stays INCLUDE_ASM. cc1 walls:
+   the clamp lowers to a `movz` conditional-move, every widening is the
+   (f32)(u32) unsigned-conversion idiom, and the +0x40 load is materialised
+   twice (once for the ==0 test, once for the divide) - load scheduling our cc1
+   does not reproduce. */
+void GuiListSetScrollPos(GuiElement *e, s32 pos) {
+    s32 totalRows = *(s32 *)((char *)e + 0x40);
+    s32 trackLength = *(s32 *)((char *)e + 0x3C);
+    s32 clamp = totalRows;
+    if ((u32)totalRows >= (u32)pos) {
+        clamp = pos; /* clamp = min(totalRows, pos), unsigned */
+    }
+    if ((f32)(u32)totalRows == 0.0f) {
+        e->scale[0] = 0.0f;
+        return;
+    }
+    e->scale[0] = ((f32)(u32)clamp / (f32)(u32)totalRows) * (f32)(u32)trackLength;
+}
+#endif
 
 /* func_00337B68: store an int at +0x38. */
 void func_00337B68(GuiElement *e, s32 v) {
@@ -1062,18 +1149,64 @@ void func_00337B88(GuiElement *e, s32 v) {
     *(s32 *)((char *)e + 0x44) = v;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiFontAtlasRelocate);
+/* A font atlas's glyph lookup table: a 32-bit glyph count at +0x18 followed by
+ * an inline array of {codepoint, glyphValue} pairs starting at +0x1C. Only the
+ * lookup-relevant tail is typed (the +0x00..+0x18 header is opaque here). The
+ * `value` field doubles as a load-time-relative offset that GuiFontAtlasRelocate
+ * rebases to an absolute pointer (atlas base + offset). */
+typedef struct GuiFontGlyph {
+    /* 0x00 */ s32 codepoint;
+    /* 0x04 */ s32 value;
+} GuiFontGlyph;
+typedef struct GuiFontAtlas {
+    /* 0x00 */ char header[0x18];
+    /* 0x18 */ s32 glyphCount;
+    /* 0x1C */ GuiFontGlyph glyphs[1];
+} GuiFontAtlas;
 
-/* GuiFontAtlasLookupGlyph: linear-scan a font atlas's glyph table (count at
- * +0x18, 8-byte {key,value} entries at +0x1C) for the entry whose key matches
- * `codepoint`, returning its value (0 if not found).
- * NEAR-MISS 42% (best): the original keeps index-based addressing
- * (sll i,3; addu; lw) with NO first-iteration peel. ee-gcc 2.9 forces a
- * dilemma - the for/check-then-inc form peels iteration 1 inline, while the
- * inc-then-check while form strength-reduces the scan to an incrementing
- * pointer walk. Neither reproduces the original's un-peeled index-addressed
- * loop. Loop-rotation + IV strength-reduction codegen wall. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiFontAtlasLookupGlyph);
+/* GuiFontAtlasRelocate: walk the glyph table and rebase each glyph's `value`
+ * field from a load-relative offset to an absolute pointer (atlas base + the
+ * stored offset), handing the rebased pointer to func_003014A8 (per-glyph
+ * fixup/register hook). Runs once after the atlas blob is loaded into memory. */
+#ifndef TARGET_NATIVE
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiFontAtlasRelocate);
+#else
+/* WALL: functional-equivalent #else (body assembles instruction-for-instruction
+   identical, verified via tools/ee/match.sh). The matching arm stays
+   INCLUDE_ASM because this 4-GPR-save method hits the later-cc1 8-byte callee-
+   save slot stride vs the pinned-cc1 16-byte stride (frame 0x20 w/ sd at
+   0x0/0x8/0x10/0x18; our cc1 emits frame 0x40 w/ 16-byte stride). */
+extern void func_003014A8(void *p);
+void GuiFontAtlasRelocate(GuiFontAtlas *atlas) {
+    s32 count = atlas->glyphCount;
+    GuiFontGlyph *g = atlas->glyphs;
+    s32 i;
+    for (i = 0; i < count; i++) {
+        g[i].value = (s32)((char *)g[i].value + (s32)atlas);
+        func_003014A8((void *)g[i].value);
+    }
+}
+#endif
+
+/* GuiFontAtlasLookupGlyph: linear-scan the atlas glyph table for the entry whose
+ * codepoint matches `codepoint`, returning its glyph value (0 if not found).
+ * Hoisting the glyph base into a local pointer is load-bearing for the match:
+ * it makes cc1 keep the index-addressed scan (entries + i*8) the original uses
+ * rather than folding +0x1C into each load displacement. */
+s32 GuiFontAtlasLookupGlyph(GuiFontAtlas *atlas, s32 codepoint) {
+    s32 count = atlas->glyphCount;
+    GuiFontGlyph *glyphs = atlas->glyphs;
+    s32 i = 0;
+    s32 result = 0;
+    while (i < count) {
+        if (glyphs[i].codepoint == codepoint) {
+            result = glyphs[i].value;
+            break;
+        }
+        i++;
+    }
+    return result;
+}
 
 /* func_00337C48: no-op stub (empty body - registered/overridable hook). */
 void func_00337C48(void) {
@@ -1089,7 +1222,38 @@ void *func_00337C58(void *p) {
     return p;
 }
 
+/* rodata assert strings shared by the GUI pool routines:
+ *   D_1ADA78 = source file path, D_1ADA98 = elemKind-bound predicate (GuiPoolInit),
+ *   D_1ADAC0 = capacity predicate (GuiPoolAlloc). */
+extern const char D_1ADA78[];
+extern const char D_1ADA98[];
+extern const char D_1ADAC0[];
+
+/* GuiPoolInit: initialise a GUI fixed-size pool header.
+ *   pool->base     (+0x00) = storage   (a2)
+ *   pool->capacity (+0x04) = byteLimit  (a3)
+ *   pool->elemSize (+0x08) = elemKind   (a1, asserted < 4 - one of the four GUI
+ *                                        element node sizes)
+ *   cursor/count/freeList (+0x0C/+0x10/+0x14) zeroed.
+ * Overflowing the elemKind bound trips AssertFail. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiPoolInit);
+#else
+/* WALL: functional-equivalent #else; matching arm stays INCLUDE_ASM (4-GPR-save
+   8-byte vs 16-byte callee-save slot stride - same later-cc1 frame wall as the
+   other GUI methods in this TU). */
+void GuiPoolInit(GuiPool *pool, s32 elemKind, void *storage, u32 byteLimit) {
+    if ((u32)elemKind >= 4) {
+        AssertFail(D_1ADA78, 0x25, D_1ADA98);
+    }
+    pool->base = (char *)storage;
+    pool->capacity = byteLimit;
+    pool->elemSize = elemKind;
+    pool->count = 0;
+    pool->freeList = 0;
+    pool->cursor = 0;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337CE0);
 
@@ -1103,19 +1267,6 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337CE0);
  * If the free list is non-empty, pop its head; otherwise bump-allocate
  * base+cursor, advancing cursor by elemSize. Overflowing the capacity trips an
  * assert and returns NULL. */
-struct GuiPool {
-    /* 0x00 */ char *base;
-    /* 0x04 */ u32 capacity;
-    /* 0x08 */ u32 elemSize;
-    /* 0x0C */ u32 cursor;
-    /* 0x10 */ s32 count;
-    /* 0x14 */ void *freeList;
-};
-extern void AssertFail(const char *file, s32 line, const char *expr);
-/* rodata assert strings (gui pool allocator):
- *   D_1ADA78 = source file path, D_1ADAC0 = the capacity predicate. */
-extern const char D_1ADA78[];
-extern const char D_1ADAC0[];
 void *GuiPoolAlloc(GuiPool *pool) {
     void *node = pool->freeList;
     if (node != 0) {
