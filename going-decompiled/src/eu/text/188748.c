@@ -283,7 +283,60 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028A470);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028A990);
 
+/* func_0028A9F8(key): EU twin of USA func_0028AA70 — move the area-data record
+ * matching `key` to the MRU end of the recently-used byte list at g_health+0xDFC
+ * (length D_1A7C8C). `key` is resolved to its area-data row id via
+ * func_0028A990(key, column 1); a -1 result is a no-op. The id is located in the
+ * list, the intervening bytes are shifted down to close the gap, and the id is
+ * re-appended at the end (an id not yet present is simply appended). Region-
+ * agnostic logic; only the length global (D_1A7C8C, +0x80 of USA D_1A7C0C) differs.
+ *
+ * WALL: single-$31 (sd) frame, a jal gate, a branch-likely scan and an in-place
+ * byte-shift loop with the g_health+0xDFC absolute fold and the gp/absolute split
+ * on the length global. Left INCLUDE_ASM for the matching build; #else portable. */
+extern s32 D_1A7C8C;             /* EU area-LRU list length (0x1A7C8C) */
+s32 func_0028A990(s32 key, s32 column, s16 *outValue);
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028A9F8);
+#else
+void func_0028A9F8(s32 key) {
+    u8 *lru;
+    s32 len;
+    s32 row;
+    s32 i;
+
+    row = func_0028A990(key, 1, 0);
+    if (row == -1) {
+        return;
+    }
+    lru = (u8 *)&g_health + 0xDFC;
+    len = D_1A7C8C;
+    i = 0;
+    if (lru[0] != (u8)row) {
+        if (len <= 0) {
+            goto append;
+        }
+        for (i = 1; i < len; i++) {
+            if (lru[i] == (u8)row) {
+                break;
+            }
+        }
+    }
+    if (i >= len) {
+        goto append;
+    }
+    for (; i < len - 1; i++) {
+        lru[i] = lru[i + 1];
+    }
+    lru[i] = 0;
+    D_1A7C8C = len - 1;
+append:
+    len = D_1A7C8C;
+    lru[len] = (u8)row;
+    D_1A7C8C = len + 1;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028AAF8);
 
