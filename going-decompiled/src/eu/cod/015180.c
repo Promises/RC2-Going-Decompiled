@@ -2114,7 +2114,57 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001210E0);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001212C4);
 
+/**
+ * func_001212C8 = truncate the non-negative double whose bits are `x` to a
+ * 64-bit integer, i.e. soft-float __fixunsdfdi (negative x -> 0). Splits into a
+ * high 32-bit limb hi = trunc(x * 2^-32) and a low residual: builds hi<<32 back
+ * into a double (func_001213B8 of the limb, or of the halved limb then doubled
+ * via func_00122A40 when the top bit is set), subtracts it from x
+ * (func_00122A98), truncates the residual to a 32-bit limb (func_001231C8) and
+ * adds it onto hi<<32 (subtracting when the residual went slightly negative).
+ *
+ * NEAR-MATCH WALL (region-co-located with USA). Functionally exact but loses
+ * byte-equality the same way as its soft-float siblings (callee-saved 0.0 const,
+ * inlined unsigned-64->double branch layout). Seedable: now that its multiply
+ * dependency func_00122B00 ships a #else, it ships a faithful portable
+ * TARGET_NATIVE #else, cmp-oracle'd bit-identical on the real R5900. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001212C8);
+#else
+extern s32 func_00123028(s64 a, s64 b);
+extern s32 func_001231C8(s64 a);
+extern s64 func_001213B8(s64 value);
+extern s64 func_00122A40(s64 a, s64 b);
+extern s64 func_00122A98(s64 a, s64 b);
+extern s64 func_00122B00(s64 a, s64 b);
+
+s64 func_001212C8(s64 x) {
+    s32 hi, lo;
+    s64 hiShift, hiD, lowD, result;
+
+    if (func_00123028(x, 0) < 0) {       /* x < 0.0 -> 0 */
+        return 0;
+    }
+    /* high limb hi = trunc(x * 2^-32); 0x3DF0000000000000 == 2^-32 */
+    hi = func_001231C8(func_00122B00(x, 0x3DF0000000000000LL));
+    hiShift = (s64)hi << 32;
+    if (hiShift < 0) {                   /* hi bit31 set: halve then double to dodge */
+        hiD = func_001213B8((s64)((u64)hiShift >> 1));   /* the floatdidf sign overflow */
+        hiD = func_00122A40(hiD, hiD);
+    } else {
+        hiD = func_001213B8(hiShift);    /* hiD = (double)(hi << 32) */
+    }
+    lowD = func_00122A98(x, hiD);        /* residual = x - hi*2^32 */
+    if (func_00123028(lowD, 0) >= 0) {
+        lo = func_001231C8(lowD);
+        result = hiShift + (s64)(u64)(u32)lo;
+    } else {                             /* residual went slightly negative */
+        lo = func_001231C8(func_00122A98(0, lowD));
+        result = hiShift - (s64)(u64)(u32)lo;
+    }
+    return result;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001213B4);
 
@@ -2286,14 +2336,139 @@ void func_00122760(s64 *value, FpParts *out) {
 }
 #endif
 
+/* The soft-float canonical-NaN descriptor (EU; = USA D_00141810, +0x80-shifted).
+ * Recovered from the ROM image at vaddr 0x00141890: a 0x28-byte block that is
+ * ALL ZEROES, i.e. a zero-filled FpParts {class 0, sign 0, exp 0, mantissa 0}.
+ * The add/multiply/divide cores return &D_00141890 on their invalid-operation
+ * result paths; func_00122630 recomposes it to the canonical quiet NaN
+ * 0x7FF8000000000000. Declared here so the portable #else cores can take its
+ * address (defined in the unit's data). */
+extern FpParts D_00141890;
+
 /* func_00122800 = software double-precision ADD of two decomposed operands
- * (FpParts a + b -> out). WALL + DEFERRED #else (same soft-float family as its
- * 59-83% siblings; ~144 instrs with two sticky-shift loops + branch-likely
- * fillers). A faithful #else also needs the external NaN-constant D_00141890
- * (EU; = USA D_00141810) seeded into the cmp-oracle, so it is left INCLUDE_ASM
- * rather than shipped
- * unverified - see the USA twin for the full behavioural description. */
+ * (FpParts a + b -> out). NaN propagates; inf+inf opposite sign -> NaN constant
+ * &D_00141890; zero/inf shortcuts copy the surviving operand; otherwise align +
+ * add (like signs) or subtract (unlike signs), renormalise, write class 3.
+ *
+ * NEAR-MISS WALL (region-co-located with USA; ~144 instrs, two sticky-shift
+ * loops + branch-likely fillers). Seedable: ships a faithful portable
+ * TARGET_NATIVE #else, cmp-oracle'd bit-identical on the real R5900 - see the
+ * USA twin for the full behavioural description. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00122800);
+#else
+FpParts *func_00122800(FpParts *a, FpParts *b, FpParts *out) {
+    s32 clsA, clsB;
+    s32 expA, expB, expR;
+    s32 signA, signB;
+    s64 mantA, mantB;
+    s32 d, ad;
+
+    clsA = a->fpClass;
+    if (clsA < 2) {                      /* a is NaN -> propagate a */
+        return a;
+    }
+    clsB = b->fpClass;
+    if (clsB < 2) {                      /* b is NaN -> propagate b */
+        return b;
+    }
+    if (clsA == 4) {                     /* a is inf */
+        if (clsB != 4) {
+            return a;                    /* inf + finite = inf */
+        }
+        if (a->sign == b->sign) {
+            return a;                    /* inf + inf (same sign) = inf */
+        }
+        return &D_00141890;              /* inf + (-inf) = NaN */
+    }
+    if (clsB == 4) {                     /* finite + inf = inf */
+        return b;
+    }
+    if (clsB == 2) {                     /* b is zero */
+        if (clsA != 2) {
+            return a;                    /* normal + 0 = a */
+        }
+        *out = *a;                       /* 0 + 0 = zero, sign = signA & signB */
+        out->sign = a->sign & b->sign;
+        return out;
+    }
+    if (clsA == 2) {                     /* 0 + normal = b */
+        return b;
+    }
+
+    /* both normal: align the smaller mantissa, then add or subtract. */
+    expA = a->exponent;
+    expB = b->exponent;
+    mantA = a->mantissa;
+    mantB = b->mantissa;
+    signA = a->sign;
+    signB = b->sign;
+    d = expA - expB;
+    ad = (d >= 0) ? d : -d;
+    if (ad < 64) {
+        if (expA > expB) {
+            while (expB < expA) {
+                mantB = (s64)(((u64)mantB >> 1) | ((u64)mantB & 1));
+                expB++;
+            }
+            expR = expA;
+        } else if (expA < expB) {
+            s32 cnt = expB - expA;
+            while (cnt != 0) {
+                mantA = (s64)(((u64)mantA >> 1) | ((u64)mantA & 1));
+                cnt--;
+            }
+            expR = expB;
+        } else {
+            expR = expA;
+        }
+    } else {                             /* exponent gap >= 64: drop the smaller */
+        if (expA > expB) {
+            mantB = 0;
+            expR = expA;
+        } else {
+            mantA = 0;
+            expR = expB;
+        }
+    }
+
+    if (signA == signB) {                /* like signs: add */
+        out->sign = signA;
+        out->exponent = expR;
+        out->mantissa = mantA + mantB;
+    } else {                             /* unlike signs: subtract smaller */
+        s64 diff = (signA != 0) ? (mantB - mantA) : (mantA - mantB);
+        out->exponent = expR;
+        if (diff < 0) {
+            out->mantissa = -diff;
+            out->sign = 1;
+        } else {
+            out->mantissa = diff;
+            out->sign = 0;
+        }
+        {                                /* renormalise up on cancellation */
+            s64 m = out->mantissa;
+            s32 e = out->exponent;
+            while ((u64)(m - 1) < 0x0FFFFFFFFFFFFFFFULL) {
+                m <<= 1;
+                e--;
+                out->mantissa = m;
+                out->exponent = e;
+            }
+        }
+    }
+
+    out->fpClass = 3;
+    {                                    /* one-step renormalise down on carry */
+        s64 m = out->mantissa;
+        if ((u64)m > 0x1FFFFFFFFFFFFFFFULL) {
+            out->mantissa = (s64)(((u64)m >> 1) | ((u64)m & 1));
+            out->exponent += 1;
+        }
+    }
+    return out;
+}
+#endif
 
 /**
  * Software double-precision binary op: decompose both operands into their
@@ -2328,21 +2503,203 @@ s64 func_00122A98(s64 a, s64 b) {
     return func_00122630(func_00122800(&pa, &pb, &result));
 }
 
+/* func_00122B00 = software double-precision MULTIPLY of two packed doubles
+ * (a * b -> packed double). NaN propagates with the product sign; 0*inf -> NaN
+ * constant &D_00141890; otherwise (both normal) the 122-bit product of the two
+ * 61-bit mantissas is built from four 32x32 partial products (func_00121AB8),
+ * normalised and round-to-nearest-even.
+ *
+ * NEAR-MISS WALL (region-co-located with USA). Seedable: ships a faithful
+ * portable TARGET_NATIVE #else, cmp-oracle'd bit-identical on the real R5900
+ * (incl. the 0*inf NaN path reading D_00141890). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00122B00);
+#else
+extern s64 func_00121AB8(s64 a, s64 b);
+
+s64 func_00122B00(s64 a, s64 b) {
+    FpParts pa, pb, result;
+    s64 va = a, vb = b;
+    s32 clsA, clsB, comb;
+    u64 aLo, aHi, bLo, bHi, p0, p1, p2, p3, mid, midCarry, low64, lowCarry, high64;
+    s32 exp;
+
+    func_00122760(&va, &pa);
+    func_00122760(&vb, &pb);
+    comb = (pa.sign ^ pb.sign) != 0;
+
+    clsA = pa.fpClass;
+    if (clsA < 2) {                      /* a is NaN -> propagate a, product sign */
+        pa.sign = comb;
+        return func_00122630(&pa);
+    }
+    clsB = pb.fpClass;
+    if (clsB < 2) {                      /* b is NaN -> propagate b, product sign */
+        pb.sign = comb;
+        return func_00122630(&pb);
+    }
+    if (clsA == 4) {                     /* a is inf */
+        if (clsB == 2) {
+            return func_00122630(&D_00141890);   /* inf * 0 = NaN */
+        }
+        pa.sign = comb;                  /* inf * (inf|normal) = inf */
+        return func_00122630(&pa);
+    }
+    if (clsB == 4) {                     /* a is not inf, b is inf */
+        if (clsA == 2) {
+            return func_00122630(&D_00141890);   /* 0 * inf = NaN */
+        }
+        pb.sign = comb;                  /* normal * inf = inf */
+        return func_00122630(&pb);
+    }
+    if (clsA == 2) {                     /* 0 * finite = zero */
+        pa.sign = comb;
+        return func_00122630(&pa);
+    }
+    if (clsB == 2) {                     /* normal * 0 = zero */
+        pb.sign = comb;
+        return func_00122630(&pb);
+    }
+
+    /* both normal: 122-bit product of the two 61-bit mantissas (high limb kept
+     * with a sticky OR of the dropped low bits), then normalise + round. */
+    aLo = (u64)pa.mantissa & 0xFFFFFFFFULL;
+    aHi = (u64)pa.mantissa >> 32;
+    bLo = (u64)pb.mantissa & 0xFFFFFFFFULL;
+    bHi = (u64)pb.mantissa >> 32;
+    p0 = (u64)func_00121AB8((s64)bLo, (s64)aLo);
+    p1 = (u64)func_00121AB8((s64)bHi, (s64)aLo);
+    p2 = (u64)func_00121AB8((s64)bLo, (s64)aHi);
+    p3 = (u64)func_00121AB8((s64)bHi, (s64)aHi);
+    mid = p1 + p2;
+    midCarry = (mid < p1) ? 1 : 0;
+    low64 = p0 + (mid << 32);
+    lowCarry = (low64 < p0) ? 1 : 0;
+    high64 = ((midCarry << 32) | lowCarry) + (((mid >> 32) & 0xFFFFFFFFULL) + p3);
+    exp = pa.exponent + pb.exponent + 4;
+
+    result.sign = comb;
+    result.exponent = exp;
+
+    while (high64 > 0x1FFFFFFFFFFFFFFFULL) {     /* renormalise down (carry) */
+        s32 bit = (s32)(high64 & 1);
+        result.exponent = ++exp;
+        if (bit != 0) {
+            low64 = (low64 >> 1) | 0x8000000000000000ULL;
+        }
+        high64 >>= 1;
+    }
+    while (high64 < 0x1000000000000000ULL) {     /* renormalise up */
+        u64 topbit = low64 & 0x8000000000000000ULL;
+        high64 <<= 1;
+        if (topbit != 0) {
+            high64 |= 1;
+        }
+        low64 <<= 1;
+        result.exponent = --exp;
+    }
+
+    if ((s32)(high64 & 0xFF) == 0x80) {          /* round-to-nearest-even, low byte */
+        if (high64 & 0x100) {                    /* odd -> round up */
+            high64 += 0x80;
+        } else if (low64 != 0) {                 /* even, inexact -> round up */
+            high64 += 0x80;
+        }
+    }
+    result.mantissa = (s64)high64;
+    result.fpClass = 3;
+    return func_00122630(&result);
+}
+#endif
 
 /* func_00122DA8 = software double-precision DIVIDE (FpParts a / b -> packed
  * double via func_00122630): decompose both with func_00122760; NaN propagates;
- * result sign = signA^signB; inf/inf and 0/0 -> NaN constant &D_00141810;
+ * result sign = signA^signB; inf/inf and 0/0 -> NaN constant &D_00141890;
  * inf/finite -> inf, 0/finite -> 0, finite/inf -> 0, finite/0 -> inf; both
  * normal -> exponent-align + restoring bitwise long-division of the 61-bit
  * mantissas with round-to-nearest-even.
  *
- * WALL + INCLUDE_ASM (region-co-located with USA; same class as the add-core
- * func_00122800). The mantissa loop uses annulling `bnel` + a `movn` round-select
- * ee-gcc -O2 -G0 won't reproduce, and it references external NaN global
- * D_00141810 (not in symbol_addrs / not defined for TARGET_NATIVE), so a #else
- * cannot compile/cmp-oracle without first seeding D_00141810. Follow-up. */
+ * NEAR-MISS WALL (region-co-located with USA; same class as the add-core
+ * func_00122800). Seedable: ships a faithful portable TARGET_NATIVE #else,
+ * cmp-oracle'd bit-identical on the real R5900 (incl. the inf/inf and 0/0 NaN
+ * paths reading D_00141890). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00122DA8);
+#else
+s64 func_00122DA8(s64 a, s64 b) {
+    FpParts pa, pb;
+    s64 va = a, vb = b;
+    s32 clsA, clsB, comb, expR;
+    u64 rem, divisor, bitmask, quotient;
+
+    func_00122760(&va, &pa);
+    func_00122760(&vb, &pb);
+
+    clsA = pa.fpClass;
+    if (clsA < 2) {                      /* a is NaN -> propagate a */
+        return func_00122630(&pa);
+    }
+    clsB = pb.fpClass;
+    if (clsB < 2) {                      /* b is NaN -> propagate b */
+        return func_00122630(&pb);
+    }
+    comb = (pa.sign ^ pb.sign) != 0;
+    pa.sign = comb;                      /* quotient sign = signA ^ signB */
+
+    if (clsA == 4) {                     /* a is inf */
+        if (clsB != 4) {
+            return func_00122630(&pa);   /* inf / finite = inf */
+        }
+        return func_00122630(&D_00141890);   /* inf / inf = NaN */
+    }
+    if (clsA == 2) {                     /* a is zero */
+        if (clsB != 2) {
+            return func_00122630(&pa);   /* 0 / finite or 0 / inf = 0 */
+        }
+        return func_00122630(&D_00141890);   /* 0 / 0 = NaN */
+    }
+    /* a is normal */
+    if (clsB == 4) {                     /* normal / inf = 0 */
+        pa.mantissa = 0;
+        pa.exponent = 0;
+        return func_00122630(&pa);
+    }
+    if (clsB == 2) {                     /* normal / 0 = inf */
+        pa.fpClass = 4;
+        return func_00122630(&pa);
+    }
+
+    /* both normal: restoring bitwise long division of the 61-bit mantissas. */
+    expR = pa.exponent - pb.exponent;
+    rem = (u64)pa.mantissa;
+    divisor = (u64)pb.mantissa;
+    if (rem < divisor) {                 /* pre-shift so the leading bit lands at 2^60 */
+        expR--;
+        rem <<= 1;
+    }
+    pa.exponent = expR;
+    bitmask = 0x1000000000000000ULL;     /* quotient bit 60, descending to bit 0 */
+    quotient = 0;
+    do {
+        if (rem >= divisor) {
+            quotient |= bitmask;
+            rem -= divisor;
+        }
+        bitmask >>= 1;
+        rem <<= 1;
+    } while (bitmask != 0);
+
+    if ((s32)(quotient & 0xFF) == 0x80) {        /* round-to-nearest-even, low byte */
+        if (quotient & 0x100) {                  /* odd -> round up */
+            quotient += 0x80;
+        } else if (rem != 0) {                   /* even, inexact remainder -> round up */
+            quotient += 0x80;
+        }
+    }
+    pa.mantissa = (s64)quotient;
+    return func_00122630(&pa);
+}
+#endif
 
 /**
  * func_00122F10 = ordered comparison of two decomposed doubles (FpParts):
