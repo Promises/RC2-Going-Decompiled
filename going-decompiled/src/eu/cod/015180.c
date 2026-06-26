@@ -1593,7 +1593,26 @@ s32 func_0011F818(s32 a, s32 b) {
     __asm__ volatile("addiu $3, $0, 0x74\n\tsyscall 0" ::: "$3", "memory");
 }
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011F828);
+extern void func_0011F058(void);
+extern void func_0011F938(void);
+extern void func_0011FAB8(void);
+
+/**
+ * func_0011F828 = _InitSys (USA 0x0011F828): EE crt0 runtime bring-up, called
+ * once from _start before main. Runs the unit's init sequence in fixed order —
+ * thread/exception scaffolding (func_0011F640), device/handler init
+ * (func_0011F718), the GS/DMA reset path (func_0011FAB8), the background worker
+ * thread (func_0011B800) and the first DMA-channel group (func_0011F938) — then
+ * tail-calls func_0011F058 to finish.
+ */
+void func_0011F828(void) {
+    func_0011F640();
+    func_0011F718();
+    func_0011FAB8();
+    func_0011B800();
+    func_0011F938();
+    func_0011F058();
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011F864);
 
@@ -3135,15 +3154,133 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00131A68);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00131AF8);
 
+/* func_00131B48 = _start (USA 0x00131AE8): the EE ELF entry point — hand-written
+ * crt0, NOT compilable from C and not given a portable #else (it IS the machine
+ * bootstrap: a C-only boot still enters through this exact assembly before any C
+ * can run). It clears all 32 GPRs (padduw), all 32 FPRs (mtc1), HI/LO/HI1/LO1/SA
+ * and the FCR, zeroes the .bss span (EU D_0013C100..D_001A74F0) with 128-bit
+ * `sq` stores, sets up $gp (EU D_001AF070) and $sp via the two SetMemoryMode
+ * syscalls (0x3C/0x3D), then calls _InitSys, func_0011AEA0(0), enables
+ * interrupts (ei) and calls main before tail-jumping to exit. Left as
+ * INCLUDE_ASM by nature. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00131B48);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00131D08);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00131D10);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00131D18);
+/* A 16-byte section header in a loaded overlay/WAD segment. The section's
+ * payload immediately follows the header inline (at +0x10). */
+typedef struct SectionHeader {
+    void *dest;   /* 0x0 destination VA the payload is relocated to */
+    s32   size;   /* 0x4 payload size in bytes */
+    s32   pad8;   /* 0x8 (unused) */
+    s32   key;    /* 0xC group id shared by a contiguous run of sections */
+} SectionHeader;  /* 0x10 */
 
+extern u8 *g_pLoadedSegment;
+
+/* func_00131D18 = InstallLoadedOverlay (USA 0x00131CB8): relocate/install the
+ * freshly loaded overlay segment pointed to by g_pLoadedSegment (EU data symbol
+ * D_001A7308). The segment's first word is the byte offset to the first section
+ * header; from there it walks consecutive 16-byte section headers, copying each
+ * section's payload (which immediately follows its header) to the header's dest
+ * VA — 64 bits at a time when dest, src and size are all 8-byte aligned, else
+ * 32 bits at a time. It installs the run of sections that share the first
+ * section's group id (key) and returns that id, stopping at the first section
+ * whose id differs.
+ *
+ * NEAR-MISS, kept as INCLUDE_ASM for the matching build (#ifndef TARGET_NATIVE):
+ * ee-gcc's delay-slot filler emits the three payload-alignment tests as ordinary
+ * `bne` whereas the original uses annulling `bnel` branches that recompute
+ * `dest + size` only on the taken (4-byte) path — a filler decision not
+ * expressible from C source. The portable #else below is the functionally-
+ * faithful rendering (cmp-oracle'd against the .s on real R5900). */
+#ifndef TARGET_NATIVE
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00131D18);
+#else
+s32 func_00131D18(void) {
+    u8 *base = g_pLoadedSegment;
+    SectionHeader *hdr = (SectionHeader *)(base + *(s32 *)base);
+    s32 key = 0;
+
+    for (;;) {
+        u8 *src = (u8 *)hdr + 0x10;
+        u8 *dst = (u8 *)hdr->dest;
+        s32 size;
+
+        if (key != 0) {
+            if (hdr->key != key) {
+                return key;
+            }
+        } else {
+            key = hdr->key;
+        }
+        size = hdr->size;
+
+        if (((size & 7) == 0) && (((u32)src & 7) == 0) && (((u32)dst & 7) == 0)) {
+            /* dest, src and size all 8-byte aligned: copy 64 bits at a time */
+            u64 *d = (u64 *)dst;
+            u64 *s = (u64 *)src;
+            u64 *end = (u64 *)(dst + size);
+            while (d != end) {
+                *d = *s;
+                d++;
+                s++;
+            }
+        } else {
+            /* otherwise copy 32 bits at a time */
+            s32 *d = (s32 *)dst;
+            s32 *s = (s32 *)src;
+            s32 *end = (s32 *)(dst + size);
+            while (d != end) {
+                *d = *s;
+                d++;
+                s++;
+            }
+        }
+        hdr = (SectionHeader *)(src + size);
+    }
+}
+#endif
+
+extern void LoadLevelAndInitHealth(void);
+extern s32 func_00131D18(void);
+
+/* func_00131DF8 = main (USA 0x00131D98): the game's top-level loop. Runs the
+ * one-shot init func_0011FC48 once, then loops forever: call the current stage
+ * routine (initially the level loader LoadLevelAndInitHealth), install the
+ * overlay segment it loaded (func_00131D18 = InstallLoadedOverlay) and adopt
+ * that call's returned id as the next stage routine to run, then pump the frame
+ * twice via func_0011AEA0 (modes 0 and 2). Never returns.
+ *
+ * NEAR-MISS, kept as INCLUDE_ASM for the matching build (#ifndef TARGET_NATIVE):
+ * the body is otherwise byte-exact, but the original fills the first
+ * func_0011AEA0(0) call's delay slot with the func_00131D18-return capture
+ * (`move s0,v0`) and emits the `a0=0` arg setup standalone, whereas ee-gcc fills
+ * that delay slot with the closest arg setup (`a0=0`). That is a delay-slot
+ * filler tie-break no C statement ordering can change. The portable #else below
+ * is the C entry. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00131DF8);
+#else
+/* The C entry routine compiles to the symbol `main` via an asm label rather than
+ * being literally named `main` so cc1 does not inject the `jal __main` ctor hook
+ * (the original is built freestanding and has no such call). */
+void GameMain(void) __asm__("main");
+void GameMain(void) {
+    void (*stage)(void);
+
+    func_0011FC48();
+    stage = LoadLevelAndInitHealth;
+    for (;;) {
+        stage();
+        stage = (void (*)(void))func_00131D18();
+        func_0011AEA0(0);
+        func_0011AEA0(2);
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", snd_Init);
 
