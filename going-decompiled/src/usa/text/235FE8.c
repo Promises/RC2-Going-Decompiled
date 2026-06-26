@@ -154,19 +154,20 @@ void func_00336648(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336668);
 
-/* func_00336678: if (flag & 1) install the D_1AD9A8 vtable at p+0x4, then call
- * func_00337C48(). */
+/* func_00336678: ALWAYS install the D_1AD9A8 vtable at p+0x4, then call
+ * func_00337C48() only when (flag & 1). The store sits in the delay slot of the
+ * `beqz flag&1` branch, so it is unconditional; the call is the fall-through. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336678);
 #else
 /* TODO(match): functional equivalent - not byte-exact; the original hoists the
-   %hi/%lo address computation above the branch; cc1 sinks it into the
-   conditional store. Same wall as func_003368E8. */
+   %hi/%lo address computation above the branch and stores in the branch delay
+   slot, a form cc1 won't reproduce here. */
 void func_00336678(void *p, s32 flag) {
+    *(void **)((char *)p + 0x4) = &D_1AD9A8;   /* delay-slot store: unconditional */
     if (flag & 1) {
-        *(void **)((char *)p + 0x4) = &D_1AD9A8;
+        func_00337C48();
     }
-    func_00337C48();
 }
 #endif
 
