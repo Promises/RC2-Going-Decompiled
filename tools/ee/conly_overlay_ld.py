@@ -36,7 +36,7 @@ Usage:
     calt_vram_hex optional VMA for the catch-all (default 0x00C00000) — must be
                   above the main image's text_VRAM_END and below 0x01800000.
 """
-import sys, os
+import sys, os, re
 
 LOAD_SECS = (".text* .rodata* .rodata.* .data* .sdata* .sdata2* "
              ".lit8 .lit4 .gcc_except_table*")
@@ -82,6 +82,38 @@ def main():
     # leading `_gp` assignment line, so they precede the first base section.
     src = open(base_ld).read()
     lines = src.splitlines(keepends=True)
+
+    # ---- Pin .cod_bss to its true VRAM anchor ------------------------------
+    # .cod_bss is NOLOAD and FLOWS from cod_RODATA_END, but the cod text/data
+    # layout comes up 0x720 short, so the flowing base lands the whole bss block
+    # (and the gp-window globals DEFINED-with-storage inside it:
+    # g_nSaveLoadStatusCode/g_vramDynamicBase/...) ~0x720 below their real
+    # addresses — past the gp window floor -> R_MIPS_GPREL16 truncations (the
+    # symbol_addrs PROVIDE never fires because the symbols are defined here, not
+    # undefined). The anchor is encoded in the cod bss object name
+    # `data/cod/<HEX>.bss.o` (USA 0x0013C080, EU 0x0013C100); 0x<HEX> +
+    # cod_BSS_SIZE lands exactly on core_lit. Pinning .cod_bss to it puts every
+    # in-bss global back at its real address. This is the C-only overlay .ld
+    # only — churn-free for the matching build (matching is per-unit objdiff and
+    # never uses the full .ld). NOTE: the upstream 0x720 cod text/data deficit is
+    # a separate latent splat-layout issue; it doesn't affect matching (functions
+    # are absolute-pinned).
+    cod_bss_anchor = None
+    for ln in lines:
+        m = re.search(r"/cod/0*([0-9A-Fa-f]+)\.bss\.o", ln)
+        if m:
+            cod_bss_anchor = int(m.group(1), 16)
+            break
+    if cod_bss_anchor is not None:
+        pinned = 0
+        for i, ln in enumerate(lines):
+            m = re.match(r"^(\s*)\.cod_bss\s+\(NOLOAD\)\s*:(.*)$", ln)
+            if m:
+                lines[i] = "%s.cod_bss 0x%08X (NOLOAD) :%s\n" % (
+                    m.group(1), cod_bss_anchor, m.group(2).rstrip())
+                pinned += 1
+        print("   pinned .cod_bss to 0x%08X (%d header)" % (cod_bss_anchor, pinned))
+
     inj = None
     for i, ln in enumerate(lines):
         if "_gp" in ln and "=" in ln:
