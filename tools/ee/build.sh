@@ -122,7 +122,18 @@ SYMS="$BUILD/undefined_syms_auto.txt"
 # auto-symbols by address). Resolves references it didn't emit labels for.
 ALLSYMS="$BUILD/all_addr_syms.ld"
 grep -rhoE '(D_|func_)[0-9A-Fa-f]{4,}' "$ASM" | sort -u | sed -E 's/^(D_|func_)([0-9A-Fa-f]+)$/\1\2 = 0x\2;/' > "$ALLSYMS"
-echo "   defined $(wc -l < "$ALLSYMS") address symbols"
+# jtbl_<hex>_text jump-table symbols (address encoded in the name): splat
+# references them by name from the code but does not emit a label, and the
+# D_/func_ blanket above does not cover them. Define each at its named address.
+grep -rhoE 'jtbl_[0-9A-Fa-f]+_text' "$ASM" | sort -u \
+  | sed -E 's/^jtbl_([0-9A-Fa-f]+)_text$/jtbl_\1_text = 0x\1;/' >> "$ALLSYMS"
+# Track-B NAMED symbols (snd_PrintError, AssertFail, Mc*, WrapAngle*, rand, ...)
+# from symbol_addrs: matched C calls these by name, but they are not address-named
+# so the blanket misses them. PROVIDE name=addr (first-wins/only-if-undefined, so
+# it never clashes with a real definition). Mirrors run_state_suite.sh.
+SYMADDR="going-decompiled/symbol_addrs/$REGION/symbol_addrs.txt"
+[ -f "$SYMADDR" ] && sed -nE 's@^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=[[:space:]]*(0x[0-9A-Fa-f]+).*@PROVIDE(\1 = \2);@p' "$SYMADDR" >> "$ALLSYMS"
+echo "   defined $(wc -l < "$ALLSYMS") address symbols (D_/func_/jtbl_ + symbol_addrs PROVIDE)"
 mips-linux-gnu-ld -EL --allow-multiple-definition -T "$LD" -T "$SYMS" -T "$ALLSYMS" -Map "$BUILD/$BASENAME.map" -o "$ELF" 2> "$BUILD/ld.log" \
   || { echo "LD errors (first 20):"; head -20 "$BUILD/ld.log"; }
 
