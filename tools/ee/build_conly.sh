@@ -51,17 +51,17 @@ NINCC="-Itools/ee/eetest/shim -Igoing-decompiled/include -Igoing-decompiled/incl
 NCPPDEF="-D__GNUC__=2 -D__GNUC_MINOR__=9 -D__mips__ -D__mips=3 -D__R5900 -D__LANGUAGE_C -D_LANGUAGE_C -D__EE__ -DTARGET_NATIVE"
 SNAS=tools/ee/cc/ee/bin/as.exe
 
-# C-ONLY build: blanket -G0 (reverted da17f51's per-unit -G8). Per-unit -G8 made
-# the -G8 sub-TUs byte-exact BUT reintroduced R_MIPS_GPREL16 truncation in the
-# overlay link (the C-emitted %gp_rel reaches far .data globals, not just the
-# in-window ones the .cod_bss pin fixed) AND did NOT fix the boot (the real
-# blocker is the base 0x1AA9C8->0x352D08 data divergence, which faults in early
-# boot before any -G8 menu unit runs). The -G0/-Gn tension is user-ruled OFF-PATH
-# / moot — see progress/2026-06-27-conly-data-residual.md. -G0 keeps the overlay
-# link clean; the C-only image is functional, not byte-matching.
-unit_flags() {
-  GFLAG="-G0"; CC1EXTRA=""
-}
+# C-ONLY build (Option 1, user-approved): NORMAL objects at per-unit -G8 (matching
+# build.sh) so they are BYTE-EXACT (fixes the 0x1AA9C8->0x352D08 data divergence =
+# the -G0 code-lengthening of the -G8 sub-TUs). The earlier da17f51 truncation was
+# NOT the normal objects (their far globals already carry .extern,16 overrides ->
+# absolute, e.g. g_levelDialogToc; g_savePromptLatch is in-window) — it was da17f51
+# compiling the CALT (#else/TARGET_NATIVE) objects at -G8 too via the shared
+# unit_flags; the portable #else arms lack those overrides so their %gp_rel reaches
+# far globals -> GPREL16 truncation. FIX: NORMAL = per-unit -G8 (unit_flags.sh);
+# CALT = forced -G0 (overlay at 0xC00000, functional not byte-matching -> no
+# truncation). See progress/2026-06-27-conly-data-residual.md.
+. "$(dirname "$0")/unit_flags.sh"
 
 # 1) Assemble section .s files (verbatim from build.sh).
 echo "== [$REGION] assembling section .s files =="
@@ -105,7 +105,9 @@ calt_ok=0; calt_fail=0
 for c in $(find "$SRC" -name '*.c'); do
   grep -q '^#else' "$c" || continue
   o="$BUILD/${c%.c}.calt.o"
-  unit_flags "$c"
+  unit_flags "$c"; GFLAG="-G0"; CC1EXTRA=""  # CALT overlay: force -G0 (portable
+  # #else arms lack the .extern,16 far-global overrides -> -G8 would %gp_rel-truncate;
+  # the overlay is at 0xC00000, functional not byte-matching, so -G0 is correct).
   rm -f "$o"
   if ! "$WIBO" "$G/cpp.exe" $NCPPDEF $NINCC "$c" "$BUILD/_calt.i" 2> "$o.cpp.log"; then
     echo "   CALT CPP FAIL  $c"; tail -3 "$o.cpp.log"; calt_fail=$((calt_fail+1)); continue
