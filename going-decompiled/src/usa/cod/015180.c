@@ -107,6 +107,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115DA8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115E28);
 
+// recovered splat-dropped code (epilogue-stump mis-split): raw words, byte-exact
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115E38);
+
 /* func_00115E68: tail-calls func_001175F0(arg0, 0, 0xA) and returns its result
  * sign-extended from 32 to 64 bits. Not matched: the original saves $31 with a
  * 128-bit `sq` (not the `sd` ee-gcc emits here at -O2 -G0) and carries an extra
@@ -818,6 +821,9 @@ void func_0011BAF0(s32 *arg0) {
         arg0[3] = (s32)arg0 + 0x10;
     }
 }
+
+// recovered splat-dropped code (epilogue-stump mis-split): raw words, byte-exact
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BB30);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BB38);
 
@@ -3629,6 +3635,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001272A8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127340);
 
+// recovered splat-dropped code (epilogue-stump mis-split): raw words, byte-exact
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127348);
+
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127500);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127508);
@@ -3685,7 +3694,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127CC0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127E40);
 
+// recovered splat-dropped code (epilogue-stump mis-split): raw words, byte-exact
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127E48);
+
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127F90);
+
+// recovered splat-dropped code (epilogue-stump mis-split): raw words, byte-exact
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127F98);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128068);
 
@@ -4730,6 +4745,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131CA8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131CB0);
 
+
 /* A 16-byte section header in a loaded overlay/WAD segment. The section's
  * payload immediately follows the header inline (at +0x10). */
 typedef struct SectionHeader {
@@ -4849,6 +4865,9 @@ void GameMain(void) {
     }
 }
 #endif
+
+// recovered splat-dropped code (epilogue-stump mis-split): raw words, byte-exact
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131DE8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", snd_Pump);
 
