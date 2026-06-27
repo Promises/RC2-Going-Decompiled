@@ -36,10 +36,13 @@ calt_ok=0; calt_fail=0
 for c in $(find "$SRC" -name '*.c'); do
   /usr/bin/grep -q '^#else' "$c" || continue
   o="$BUILD/${c%.c}.calt.o"; unit_flags "$c"; rm -f "$o"
-  if ! "$WIBO" "$G/cpp.exe" $NCPPDEF $NINCC "$c" "$BUILD/_calt.i" 2> "$o.cpp.log"; then
+  # PER-UNIT cpp output (not a shared $BUILD/_calt.i): a shared same-PATH scratch
+  # can serve stale 9p-cached content across units -> cross-contaminated objects.
+  ci="${o%.o}._c.i"; rm -f "$ci"
+  if ! "$WIBO" "$G/cpp.exe" $NCPPDEF $NINCC "$c" "$ci" 2> "$o.cpp.log"; then
     echo "  CALT CPP FAIL $c"; tail -2 "$o.cpp.log"; calt_fail=$((calt_fail+1)); continue; fi
   cs="$BUILD/${c%.c}.calt.s"; mkdir -p "$(dirname "$cs")"
-  if ! "$WIBO" "$G/cc1.exe" -quiet -O2 $GFLAG $CC1EXTRA "$BUILD/_calt.i" -o "$cs" 2> "$o.cc1.log"; then
+  if ! "$WIBO" "$G/cc1.exe" -quiet -O2 $GFLAG $CC1EXTRA "$ci" -o "$cs" 2> "$o.cc1.log"; then
     echo "  CALT CC1 FAIL $c"; tail -4 "$o.cc1.log"; calt_fail=$((calt_fail+1)); continue; fi
   # Assemble with GNU as (NOT SN as.exe) so GNU ld accepts the symtab. The
   # TARGET_NATIVE arm has no INCLUDE_ASM, so the .s is pure code — no macro ctx.

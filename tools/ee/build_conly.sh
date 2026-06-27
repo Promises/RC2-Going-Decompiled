@@ -82,14 +82,22 @@ for c in $(find "$SRC" -name '*.c'); do
   o="$BUILD/${c%.c}.o"
   mkdir -p "$(dirname "$o")"
   unit_flags "$c"
+  # PER-UNIT intermediates (next to the object), NOT a shared $BUILD/_unit.s:
+  # under qemu virtio-9p a rewritten same-PATH scratch file can serve STALE
+  # cached content to the subsequent `as` read, so a shared _unit.s let one
+  # unit's cc1 output be assembled into ANOTHER unit's object (proven: linked
+  # 183178.o held 1EFFC0's code, 1EFFC0.o held cod/0321A0's, etc -> PC16
+  # branch truncations). A unique path per unit is never rewritten, so the 9p
+  # cache cannot alias across units.
+  ui="${o%.o}._u.i"; us="${o%.o}._u.s"
   # FAIL-LOUD: clear stale object+intermediates, abort on ANY step error, verify
   # the object materialized — a silent stale .o = false 'byte-exact'/boot result.
-  rm -f "$o" "$BUILD/_unit.i" "$BUILD/_unit.s"
-  "$WIBO" "$G/cpp.exe" $CPPDEF $INCC "$c" "$BUILD/_unit.i" \
+  rm -f "$o" "$ui" "$us"
+  "$WIBO" "$G/cpp.exe" $CPPDEF $INCC "$c" "$ui" \
     || { echo "BUILD FAIL (cpp): $c" >&2; exit 1; }
-  "$WIBO" "$G/cc1.exe" -quiet -O2 $GFLAG $CC1EXTRA "$BUILD/_unit.i" -o "$BUILD/_unit.s" \
+  "$WIBO" "$G/cc1.exe" -quiet -O2 $GFLAG $CC1EXTRA "$ui" -o "$us" \
     || { echo "BUILD FAIL (cc1): $c" >&2; exit 1; }
-  sh tools/ee/asm_unit.sh "$REGION" "/work/$BUILD/_unit.s" "/work/$o" "$GFLAG" \
+  sh tools/ee/asm_unit.sh "$REGION" "/work/$us" "/work/$o" "$GFLAG" \
     || { echo "BUILD FAIL (as): $c" >&2; exit 1; }
   [ -s "$o" ] || { echo "BUILD FAIL (no object produced): $c" >&2; exit 1; }
   mips-linux-gnu-strip "$o" -N dummy-symbol-name 2>/dev/null || true
@@ -108,14 +116,17 @@ for c in $(find "$SRC" -name '*.c'); do
   unit_flags "$c"; GFLAG="-G0"; CC1EXTRA=""  # CALT overlay: force -G0 (portable
   # #else arms lack the .extern,16 far-global overrides -> -G8 would %gp_rel-truncate;
   # the overlay is at 0xC00000, functional not byte-matching, so -G0 is correct).
-  rm -f "$o"
-  if ! "$WIBO" "$G/cpp.exe" $NCPPDEF $NINCC "$c" "$BUILD/_calt.i" 2> "$o.cpp.log"; then
+  # PER-UNIT intermediates (see NORMAL loop): a shared $BUILD/_calt.s can serve
+  # stale 9p-cached content across units -> cross-contaminated .calt.o objects.
+  ci="${o%.o}._c.i"; cs="${o%.o}._c.s"
+  rm -f "$o" "$ci" "$cs"
+  if ! "$WIBO" "$G/cpp.exe" $NCPPDEF $NINCC "$c" "$ci" 2> "$o.cpp.log"; then
     echo "   CALT CPP FAIL  $c"; tail -3 "$o.cpp.log"; calt_fail=$((calt_fail+1)); continue
   fi
-  if ! "$WIBO" "$G/cc1.exe" -quiet -O2 $GFLAG $CC1EXTRA "$BUILD/_calt.i" -o "$BUILD/_calt.s" 2> "$o.cc1.log"; then
+  if ! "$WIBO" "$G/cc1.exe" -quiet -O2 $GFLAG $CC1EXTRA "$ci" -o "$cs" 2> "$o.cc1.log"; then
     echo "   CALT CC1 FAIL  $c"; tail -5 "$o.cc1.log"; calt_fail=$((calt_fail+1)); continue
   fi
-  if ! "$WIBO" "$SNAS" -EL "$GFLAG" -o "$o" "$BUILD/_calt.s" 2> "$o.as.log"; then
+  if ! "$WIBO" "$SNAS" -EL "$GFLAG" -o "$o" "$cs" 2> "$o.as.log"; then
     echo "   CALT AS  FAIL  $c"; tail -5 "$o.as.log"; calt_fail=$((calt_fail+1)); continue
   fi
   echo "$o" >> "$CALT_LIST"

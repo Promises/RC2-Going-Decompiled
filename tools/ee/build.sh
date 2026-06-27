@@ -107,15 +107,22 @@ if [ -d "$SRC" ]; then
       */eu/text/191240.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 191238 twin
       */eu/text/19FC78.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 1A00F0 twin
     esac
+    # PER-UNIT intermediates (next to the object), NOT a shared $BUILD/_unit.s:
+    # under qemu virtio-9p a rewritten same-PATH scratch file can serve STALE
+    # cached content to the subsequent `as` read, so a shared _unit.s let one
+    # unit's cc1 output be assembled into ANOTHER unit's object (cross-
+    # contaminated objects -> PC16 branch truncations at link). A unique path
+    # per unit is never rewritten, so the 9p cache cannot alias across units.
+    ui="${o%.o}._u.i"; us="${o%.o}._u.s"
     # FAIL-LOUD: clear stale object + intermediates first so a failed compile can
     # NEVER leave a stale .o behind; abort non-zero on ANY step error; verify the
     # object actually materialized. (A silent stale .o = false 'byte-exact'/boot.)
-    rm -f "$o" "$BUILD/_unit.i" "$BUILD/_unit.s"
-    "$WIBO" "$G/cpp.exe" $CPPDEF $INCC "$c" "$BUILD/_unit.i" \
+    rm -f "$o" "$ui" "$us"
+    "$WIBO" "$G/cpp.exe" $CPPDEF $INCC "$c" "$ui" \
       || { echo "BUILD FAIL (cpp): $c" >&2; exit 1; }
-    "$WIBO" "$G/cc1.exe" -quiet -O2 $GFLAG $CC1EXTRA "$BUILD/_unit.i" -o "$BUILD/_unit.s" \
+    "$WIBO" "$G/cc1.exe" -quiet -O2 $GFLAG $CC1EXTRA "$ui" -o "$us" \
       || { echo "BUILD FAIL (cc1): $c" >&2; exit 1; }
-    sh tools/ee/asm_unit.sh "$REGION" "/work/$BUILD/_unit.s" "/work/$o" "$GFLAG" \
+    sh tools/ee/asm_unit.sh "$REGION" "/work/$us" "/work/$o" "$GFLAG" \
       || { echo "BUILD FAIL (as): $c" >&2; exit 1; }
     [ -s "$o" ] || { echo "BUILD FAIL (no object produced): $c" >&2; exit 1; }
     mips-linux-gnu-strip "$o" -N dummy-symbol-name 2>/dev/null || true
