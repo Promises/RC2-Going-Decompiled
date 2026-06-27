@@ -114,6 +114,29 @@ def main():
                 pinned += 1
         print("   pinned .cod_bss to 0x%08X (%d header)" % (cod_bss_anchor, pinned))
 
+    # ---- Match the original ROM's 8-byte .text unit packing -----------------
+    # The per-unit `.o` .text sections are gas-default 2**4 (16)-aligned, but
+    # cc1 emits `.p2align 3` (8) and the ORIGINAL ROM packs text units at 8:
+    # all 22 text units start 8-aligned, but only 10 are 16-aligned -- the 12
+    # that are 8-but-not-16 (e.g. 1740A8 @ 0x274128, 176168 @ 0x2761E8) are
+    # impossible under 16-byte alignment, proving the original granularity is 8.
+    # With no SUBALIGN the linker force-aligns each unit's .text to 16, inserting
+    # +8 inter-unit padding the original lacks (8 such boundaries before 1D54C0
+    # = +0x40, masked by -0x30 of splat-short units -> net +0x10). That floats
+    # every downstream unit up, so the baked `.word <func>` pointer tables in
+    # .lit/.data resolve to wrong (too-high) addresses -- the ~764K C-only data
+    # residual; nm confirms func_002D6248 links at 0x2D6258 (+0x10). SUBALIGN(8)
+    # forces 8-byte input alignment so units pack at their original positions.
+    # C-only overlay .ld ONLY -- the matching full-ROM link script is untouched.
+    # (The .cod text segment is already byte-exact: its 3 units happen to be
+    # 16-aligned, so this is scoped to the .text segment that actually drifts.)
+    for i, ln in enumerate(lines):
+        m = re.match(r"^(\s*\.text\s+0x[0-9A-Fa-f]+\s*:\s*AT\([^)]*\))(.*)$", ln)
+        if m:
+            lines[i] = "%s SUBALIGN(8)%s\n" % (m.group(1), m.group(2).rstrip())
+            print("   set .text SUBALIGN(8) (match original 8-byte unit packing)")
+            break
+
     inj = None
     for i, ln in enumerate(lines):
         if "_gp" in ln and "=" in ln:
