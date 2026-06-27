@@ -1700,12 +1700,6 @@ void func_0028C490(HudElement *p) {
     __asm__ __volatile__("");
 }
 
-/* func_0028C4C0: 8-byte zero pad between functions — splat drops all-zero
- * inter-function regions, so recover it as a raw-word filler to keep the unit
- * size==span byte-exact (else downstream funcs shift, corrupting baked pointer
- * tables). 06333c5 precedent; NO re-split. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C4C0);
-
 /* func_0028C4C8(...): HUD widget reset/layout helper (~0x1CC bytes, some FP).
  *
  * WALL: callee-saves + float math + jal gates; not reproducible from C. Left

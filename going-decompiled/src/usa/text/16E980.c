@@ -374,13 +374,6 @@ s32 func_0026F7A8(void) {
     return 0;
 }
 
-/* func_0026F7B0: 8-byte zero pad between stub-table entries. splat/spimdisasm
- * drops all-zero inter-function regions (no .s, no symbol), so the unit would be
- * 0x8 SHORT here and every downstream function would shift -0x8 — corrupting the
- * baked .word <func> pointer tables. Recover the pad as a raw-word INCLUDE_ASM
- * filler (06333c5 precedent) to keep the unit size==span byte-exact. NO re-split. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026F7B0);
-
 /* func_0026F7B8: stub-table entry — compiled-out hook, no-op. */
 void func_0026F7B8(void) {
 }

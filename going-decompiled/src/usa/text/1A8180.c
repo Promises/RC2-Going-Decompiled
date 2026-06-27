@@ -320,11 +320,6 @@ f32 func_002A8600(f32 x) {
     return 1.0f - t * t;
 }
 
-/* func_002A8620: 8-byte zero pad between functions (splat drops all-zero
- * inter-function regions) — raw-word filler keeps the unit size==span byte-exact
- * (06333c5 precedent; NO re-split). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8620);
-
 /* unreachable code fragment (stray FP tail from splat over-split), not C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8628);
 
@@ -619,11 +614,6 @@ void func_002A9400(s32 group, s32 lightMode) {
         } while (entry >= 0);
     }
 }
-
-/* func_002A9450: 8-byte zero pad between functions (splat drops all-zero
- * inter-function regions) — raw-word filler keeps the unit size==span byte-exact
- * (06333c5 precedent; NO re-split). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9450);
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9458);
