@@ -55,29 +55,22 @@ SYMS="$BUILD/undefined_syms_auto.txt"
 ALLSYMS="$BUILD/all_addr_syms.ld"
 /usr/bin/grep -rhoE '(D_|func_)[0-9A-Fa-f]{4,}' "$ASM" | sort -u | sed -E 's/^(D_|func_)([0-9A-Fa-f]+)$/\1\2 = 0x\2;/' > "$ALLSYMS"
 
-echo "== [$REGION] (3) building C-alt-overlay .ld =="
+echo "== [$REGION] (3) building C-alt-overlay .ld (isolated catch-all) =="
 LDB="$BUILD/$BASENAME.conly.ld"
-python3 - "$LD" "$LDB" "$CALT_LIST" <<'PY'
-import sys, re, os
-src, dst, listf = sys.argv[1:4]
-units=set()
-if os.path.exists(listf):
-    for ln in open(listf):
-        ln=ln.strip()
-        if ln.endswith('.calt.o'): units.add(ln[:-len('.calt.o')])
-pat=re.compile(r'^(\s*)(\S+/src/\S+?)\.o\((\.text\*|\.data\*|\.rodata\*|\.bss COMMON \.scommon)\);\s*$')
-out=[]; ins=0
-for line in open(src):
-    m=pat.match(line)
-    if m and m.group(2) in units:
-        out.append("%s%s.calt.o(%s);\n"%(m.group(1),m.group(2),m.group(3))); ins+=1
-    out.append(line)
-open(dst,'w').write(''.join(out))
-print("   injected %d calt placements (%d units)"%(ins,len(units)))
-PY
+# Isolate the calt objects into a FIXED high-VRAM catch-all placed FIRST in
+# SECTIONS{} (script-order-first wins symbol resolution under
+# --allow-multiple-definition), leaving the base layout VERBATIM so every
+# raw-asm %gp_rel symbol keeps its clean-link address (no gp-window drift).
+# See tools/ee/conly_overlay_ld.py for the full rationale.
+python3 tools/ee/conly_overlay_ld.py "$LD" "$CALT_LIST" "$LDB" 0x00C00000
 
 echo "== [$REGION] (3) LINK Attempt B: overlay .ld, first-def-wins =="
-mips-linux-gnu-ld -EL --allow-multiple-definition -T "$LDB" -T "$SYMS" -T "$ALLSYMS" \
+# conly_provides.ld: link-only PROVIDE aliases for the compiler-runtime helpers
+# (__divdi3/.../fptodp) the calt objects reference; NOT symbol_addrs (would break
+# matches). Add the tester's symbol -T scripts (ghidra_named_funcs.ld, arena map,
+# symbol_addrs PROVIDE) to this command as needed — they compose orthogonally.
+mips-linux-gnu-ld -EL --allow-multiple-definition \
+  -T "$LDB" -T tools/ee/conly_provides.ld -T "$SYMS" -T "$ALLSYMS" \
   -Map "$BUILD/$BASENAME.conly.map" -o "$ELF" 2> "$BUILD/ld.conly.log" || true
 echo "   --- ld.conly.log (head 40) ---"; head -40 "$BUILD/ld.conly.log"
 echo "   --- ld.conly.log line count: $(wc -l < "$BUILD/ld.conly.log") ---"
