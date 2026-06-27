@@ -51,16 +51,17 @@ NINCC="-Itools/ee/eetest/shim -Igoing-decompiled/include -Igoing-decompiled/incl
 NCPPDEF="-D__GNUC__=2 -D__GNUC_MINOR__=9 -D__mips__ -D__mips=3 -D__R5900 -D__LANGUAGE_C -D_LANGUAGE_C -D__EE__ -DTARGET_NATIVE"
 SNAS=tools/ee/cc/ee/bin/as.exe
 
-# C-ONLY build: use build.sh's PER-UNIT -G flags so the NORMAL objects are
-# byte-exact. (The earlier blanket -G0 from 54a809a made every -G8 unit emit
-# absolute lui/%lo addressing instead of the 1-instr %gp_rel store -> the unit
-# compiled LONGER -> every function after drifted -> .data/.lit `.word <func>`
-# pointer tables resolved to WRONG linked addresses -> boot deref. The original
-# -G0 rationale (gp-window globals truncating) was actually the .cod_bss
-# misplacement, since fixed by the anchor pin 36fcf47 + cod recoveries
-# 347edf4/06333c5, so -G8 %gp_rel no longer overflows.) CHURN-FREE for matching:
-# build.sh keeps its own inline copy; this only changes the C-only path.
-. "$(dirname "$0")/unit_flags.sh"
+# C-ONLY build: blanket -G0 (reverted da17f51's per-unit -G8). Per-unit -G8 made
+# the -G8 sub-TUs byte-exact BUT reintroduced R_MIPS_GPREL16 truncation in the
+# overlay link (the C-emitted %gp_rel reaches far .data globals, not just the
+# in-window ones the .cod_bss pin fixed) AND did NOT fix the boot (the real
+# blocker is the base 0x1AA9C8->0x352D08 data divergence, which faults in early
+# boot before any -G8 menu unit runs). The -G0/-Gn tension is user-ruled OFF-PATH
+# / moot — see progress/2026-06-27-conly-data-residual.md. -G0 keeps the overlay
+# link clean; the C-only image is functional, not byte-matching.
+unit_flags() {
+  GFLAG="-G0"; CC1EXTRA=""
+}
 
 # 1) Assemble section .s files (verbatim from build.sh).
 echo "== [$REGION] assembling section .s files =="
