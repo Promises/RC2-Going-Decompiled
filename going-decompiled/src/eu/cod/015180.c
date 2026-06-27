@@ -1328,7 +1328,264 @@ s32 func_0011C090(s64 value) {
 }
 #endif
 
+/**
+ * func_0011C1F8 = the Kprintf/vfprintf CORE (formatted-output engine). EU twin of
+ * the USA function at the same address (cod/015180 is region-co-located, delta +0);
+ * see the USA unit for the full recovered structure. Walks `fmt`, emits each byte
+ * via (*D_00134698)(int), and on '%' parses a zero-pad width + length modifier
+ * ('l'/'h') then dispatches o/x/d/u/e/f/s/c via jtbl_0013A9F0; integers render
+ * right-to-left into a 32-byte stack buffer (NUL at sp+0x1F). MATCHING WALL: a
+ * faithful reconstruction rebuilds to ~85.7% byte-identical (same frame/saves/jump
+ * table); the residual is an unsteerable ee-gcc 2.9 char-load-scheduling + temp-
+ * allocation tie-break (lbu-reload vs move, a2 vs a3), not behaviour. The MATCHING
+ * arm stays INCLUDE_ASM in both regions; the portable #else (below) is the correct
+ * printf, cmp-oracle'd asm-vs-C bit-identical on the real R5900 in the USA region
+ * (region-co-located code; the only EU delta is the +0x80-shifted char hook
+ * D_00134718). The %e/%f path composes onto func_0011C090's own #else.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011C1F8);
+#else
+extern s32 func_0011F5E0(void);
+extern s32 func_0011F628(void);
+extern s64 func_001234F0(float f);
+extern s64 func_00121450(s64 a, s64 b);   /* __moddi3  signed mod   */
+extern s64 func_0011FC68(s64 a, s64 b);   /* __divdi3  signed div   */
+extern u64 func_001220F0(u64 u, u64 v);   /* __umoddi3 unsigned mod */
+extern u64 func_00121B20(u64 u, u64 v);   /* __udivdi3 unsigned div */
+
+s32 func_0011C1F8(char *fmt, s64 *ap) {
+    char buf[32];
+    s64 n;
+    char *s = fmt;
+    char *p;
+    char *q;
+    char *pad;
+    s32 lenmod;
+    s32 c;
+    s32 saved = func_0011F5E0();
+
+    if (*s == 0) goto Lend;
+
+    for (;;) {
+        pad = 0;
+        lenmod = 0;
+        c = (s8)*s;
+        if (c != '%') goto Lputc;
+        p = s + 1;
+    Lscan:
+        s = p;
+        {
+            s32 idx = (s8)((u8)*s - 0x30);
+            if ((u32)idx >= 0x49) { p = s + 1; goto Lskip; }
+            switch (idx) {
+            case '0' - '0': { /* zero-pad field width */
+                s32 w;
+                s32 d1 = *(p + 1) - 0x30;
+                if ((u8)d1 < 0xA) {
+                    s32 d2 = *(p + 2) - 0x30;
+                    if ((u32)d2 < 0xA) {
+                        w = d1 * 10 + d2;
+                        if (w >= 0x20) w = 0x1F;
+                        s = p + 2;
+                    } else {
+                        w = d1;
+                        s = p + 1;
+                    }
+                    if (w > 0) {
+                        pad = &buf[0x1F] - w;
+                        p = s + 1;
+                        do {
+                            buf[0x1F - w] = '0';
+                            w--;
+                        } while (w > 0);
+                        s = p;
+                        goto Lscan;
+                    }
+                    p = s + 1;
+                    goto Lscan;
+                }
+                p++;
+                goto Lscan;
+            }
+            case 'l' - '0':
+                lenmod = 0x6C;
+                p++;
+                goto Lscan;
+            case 'h' - '0':
+                lenmod = 0x68;
+                p++;
+                goto Lscan;
+            case 'o' - '0':
+                if (lenmod == 0x6C) { ap++; n = *(ap - 1); }
+                else if (lenmod == 0x68) { ap++; n = *(u16 *)(ap - 1); }
+                else { ap++; n = *(u32 *)(ap - 1); }
+                q = &buf[0x1F];
+                buf[0x1F] = 0;
+                if (n == 0) {
+                    q = &buf[0x1E];
+                    buf[0x1E] = '0';
+                    p++;
+                } else {
+                    p++;
+                    do {
+                        *--q = (char)((n & 7) + 0x30);
+                        n = (u64)n >> 3;
+                    } while (n != 0);
+                }
+                if (pad != 0 && pad < q) q = pad;
+                if (*q == 0) goto Lskip;
+                do { D_00134718(*q); q++; } while (*q != 0);
+                s = p;
+                goto Lcont;
+            case 'x' - '0':
+                if (lenmod == 0x6C) { ap++; n = *(ap - 1); }
+                else if (lenmod == 0x68) { ap++; n = *(u16 *)(ap - 1); }
+                else { ap++; n = *(u32 *)(ap - 1); }
+                q = &buf[0x1F];
+                buf[0x1F] = 0;
+                if (n == 0) {
+                    q = &buf[0x1E];
+                    buf[0x1E] = '0';
+                    p++;
+                } else {
+                    p++;
+                    do {
+                        u64 nib = n & 0xF;
+                        *--q = (char)(nib < 0xA ? nib + 0x30 : nib + 0x57);
+                        n = (u64)n >> 4;
+                    } while (n != 0);
+                }
+                if (pad != 0 && pad < q) q = pad;
+                if (*q == 0) goto Lskip;
+                do { D_00134718(*q); q++; } while (*q != 0);
+                s = p;
+                goto Lcont;
+            case 'd' - '0':
+            {
+                s64 dn;
+                if (lenmod == 0x6C) { ap++; dn = *(ap - 1); }
+                else if (lenmod == 0x68) { ap++; dn = *(s16 *)(ap - 1); }
+                else { ap++; dn = *(s32 *)(ap - 1); }
+                q = &buf[0x1F];
+                buf[0x1F] = 0;
+                if (dn == 0) {
+                    q = &buf[0x1E];
+                    buf[0x1E] = '0';
+                    p++;
+                } else {
+                    if (dn < 0) {
+                        D_00134718('-');
+                        dn = -dn;
+                    }
+                    p++;
+                    while (dn != 0) {
+                        *--q = (char)(func_00121450(dn, 10) + 0x30);
+                        dn = func_0011FC68(dn, 10);
+                    }
+                }
+                if (pad != 0 && pad < q) q = pad;
+                if (*q == 0) goto Lskip;
+                do { D_00134718(*q); q++; } while (*q != 0);
+                s = p;
+                goto Lcont;
+            }
+            case 'u' - '0':
+                if (lenmod == 0x6C) { ap++; n = *(ap - 1); }
+                else if (lenmod == 0x68) { ap++; n = *(u16 *)(ap - 1); }
+                else { ap++; n = *(u32 *)(ap - 1); }
+                q = &buf[0x1F];
+                buf[0x1F] = 0;
+                if (n == 0) {
+                    q = &buf[0x1E];
+                    buf[0x1E] = '0';
+                    p++;
+                } else {
+                    p++;
+                    do {
+                        *--q = (char)(func_001220F0(n, 10) + 0x30);
+                        n = func_00121B20(n, 10);
+                    } while (n != 0);
+                }
+                if (pad != 0 && pad < q) q = pad;
+                if (*q == 0) goto Lskip;
+                do { D_00134718(*q); q++; } while (*q != 0);
+                s = p;
+                goto Lcont;
+            case 'e' - '0':
+            case 'f' - '0': {
+                float f;
+                ap++;
+                f = *(float *)(ap - 1);
+                if (f == 0.0f) {
+                    D_00134718('0');
+                    p++;
+                } else {
+                    p++;
+                    func_0011C090(func_001234F0(f));
+                }
+                s = p;
+                goto Lcont;
+            }
+            case 's' - '0': {
+                char *str;
+                ap++;
+                str = (char *)*(s32 *)(ap - 1);
+                if (*str == 0) {
+                    D_00134718('(');
+                    p++;
+                    D_00134718('n');
+                    D_00134718('u');
+                    D_00134718('l');
+                    D_00134718('l');
+                    D_00134718(')');
+                    s = p;
+                    goto Lcont;
+                }
+                q = str;
+                p++;
+                do {
+                    D_00134718(*q);
+                    q++;
+                } while (*q != 0);
+                s = p;
+                goto Lcont;
+            }
+            case 'c' - '0':
+            {
+                s64 cn;
+                ap++;
+                cn = *(char *)(ap - 1);
+                D_00134718((s32)cn);
+                p++;
+                s = p;
+                goto Lcont;
+            }
+            default:
+                p++;
+                goto Lskip;
+            }
+        }
+
+    Lputc:
+        D_00134718(c);
+        p = s + 1;
+        s = p;
+        goto Lcont;
+
+    Lskip:
+        s = p;
+    Lcont:
+        if (*s == 0) break;
+    }
+
+Lend:
+    if (saved != 0) {
+        return func_0011F628();
+    }
+    return 0;
+}
+#endif
 
 /**
  * func_0011C7E8 = printf-style wrapper around the core formatter func_0011C1F8.
@@ -1336,7 +1593,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011C1F8);
  * forwards (dest, va_list) to func_0011C1F8, returning its result. `dest` is the
  * sink passed straight through; the va_list points at the first variadic arg.
  */
-extern s32 func_0011C1F8(void *dest, void *args);
+extern s32 func_0011C1F8(char *fmt, s64 *ap);
 
 s32 func_0011C7E8(void *dest, ...) {
     /* EABI single-float va_start (va_list == char*): point past the named arg
@@ -1345,7 +1602,7 @@ s32 func_0011C7E8(void *dest, ...) {
                - (__builtin_args_info(2) >= 8
                       ? 0
                       : (8 - __builtin_args_info(2)) * 8);
-    return func_0011C1F8(dest, ap);
+    return func_0011C1F8((char *)dest, (s64 *)ap);
 }
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011C820);
@@ -2067,7 +2324,24 @@ void func_0011FC48(void) {
     }
 }
 
+/**
+ * func_0011FC68 = libgcc `__divdi3` (signed 64-bit division, a / b); EU twin of
+ * the USA function at the same address (region-co-located, delta +0). ee-gcc
+ * inlines libgcc2.c's signed wrapper around `__udivmoddi4` (sign-strip via
+ * bgez/negu, unsigned long-division core driven by `__clz_tab` D_0013AC58 and
+ * 16-bit-digit `udiv_qrnnd` with `divu`/`break 0,7`, then re-sign the quotient).
+ * Compiler runtime, NOT game code; not reconstructable as clean hand C that
+ * matches byte-exact, so the MATCHING arm stays INCLUDE_ASM (links verbatim). The
+ * portable #else is the faithful behaviour (`a / b`), cmp-oracle'd bit-identical
+ * on the real R5900. Excluded domains (`break 0,7` / overflow): b == 0 and
+ * INT64_MIN / -1. See the USA unit for the full analysis. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011FC68);
+#else
+s64 func_0011FC68(s64 a, s64 b) {
+    return a / b;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00120354);
 
@@ -2280,7 +2554,22 @@ s64 func_001213B8(s64 value) {
 }
 #endif
 
+/**
+ * func_00121450 = libgcc `__moddi3` (signed 64-bit modulo, a % b); EU twin of the
+ * USA function at the same address (region-co-located, delta +0). ee-gcc inlines
+ * libgcc2.c's signed wrapper around `__udivmoddi4` (sign-strip, unsigned core via
+ * `__clz_tab` D_0013AD58 + `udiv_qrnnd`/`break 0,7`, remainder takes the dividend's
+ * sign). Compiler runtime, NOT game code; the MATCHING arm stays INCLUDE_ASM
+ * (links verbatim). The portable #else is the faithful behaviour (`a % b`),
+ * cmp-oracle'd bit-identical on the real R5900. Excluded domains: b == 0 and
+ * INT64_MIN / -1. See the USA unit for the full analysis. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00121450);
+#else
+s64 func_00121450(s64 a, s64 b) {
+    return a % b;
+}
+#endif
 
 /**
  * func_00121AB8 = 64-bit integer multiply (low 64 bits), a*b (libgcc __muldi3).
@@ -2313,9 +2602,41 @@ void func_00121B18(void) {
     func_00120368();
 }
 
+/**
+ * func_00121B20 = libgcc `__udivdi3` (unsigned 64-bit division, u / v); EU twin of
+ * the USA function at the same address (region-co-located, delta +0). Inlines
+ * libgcc2.c's `__udivmoddi4` long division directly (no sign handling — straight
+ * to the sltu/divu unsigned core via `__clz_tab` D_0013AE58 + `udiv_qrnnd`/
+ * `break 0,7`); the quotient is returned, the remainder discarded. Compiler
+ * runtime, NOT game code; the MATCHING arm stays INCLUDE_ASM (links verbatim). The
+ * portable #else is the faithful behaviour (`u / v`), cmp-oracle'd bit-identical on
+ * the real R5900. Excluded domain: v == 0. Paired: func_001220F0 = `__umoddi3`. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00121B20);
+#else
+u64 func_00121B20(u64 u, u64 v) {
+    return u / v;
+}
+#endif
 
+/**
+ * func_001220F0 = libgcc `__umoddi3` (unsigned 64-bit modulo, u % v); EU twin of
+ * the USA function at the same address (region-co-located, delta +0). Inlines
+ * libgcc2.c's `__udivmoddi4` long division (count_leading_zeros via the 256-byte
+ * `__clz_tab` D_0013AF58, then 16-bit-digit `udiv_qrnnd` with `divu`/`break 0,7`).
+ * Compiler runtime, NOT game code and NOT a format sub-engine - not reconstructable
+ * as clean hand C that matches byte-exact; links verbatim. Paired: func_00121B20 =
+ * `__udivdi3`. See the USA unit for the full analysis. The MATCHING arm stays
+ * INCLUDE_ASM in both regions; the portable #else is the faithful behaviour
+ * (`u % v`), cmp-oracle'd bit-identical on the real R5900. Excluded domain: v == 0.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001220F0);
+#else
+u64 func_001220F0(u64 u, u64 v) {
+    return u % v;
+}
+#endif
 
 /**
  * func_00122630 = recompose an FpParts descriptor into a packed IEEE-754 double

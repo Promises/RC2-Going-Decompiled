@@ -974,7 +974,290 @@ s32 func_0011C090(s64 value) {
 }
 #endif
 
+/**
+ * func_0011C1F8 = the Kprintf/vfprintf CORE - a hand-rolled formatted-output
+ * engine. Signature `s32 func_0011C1F8(char *fmt, s64 *ap)`: walks `fmt`, emitting
+ * every literal byte through the global char hook (*D_00134698)(int), and on '%'
+ * parses an optional zero-pad field width ("%0NN", 1-2 digits, clamped to 31) and
+ * an optional length modifier ('l' -> 64-bit, 'h' -> 16-bit, else 32-bit), then
+ * dispatches a conversion via the jump table jtbl_0013A9F0 (indexed by spec-'0'):
+ *   o  octal      (digits built with n&7, n>>=3)
+ *   x  hex        (n&0xF, n>>=4; 'a'-'f' lowercase, +0x57)
+ *   d  signed dec (emits '-', uses func_00121450 %10 / func_0011FC68 /10)
+ *   u  unsigned   (func_001220F0 %10 / func_00121B20 /10)
+ *   e,f float     (lwc1 arg; ==0 -> '0', else func_001234F0 then func_0011C090)
+ *   s  string     ("(null)" when the target is empty, else byte-copy)
+ *   c  char        (sign-extended single byte)
+ * Integers are formatted right-to-left into a 32-byte stack buffer ending at a NUL
+ * at sp+0x1F; the field width pre-fills '0's from sp+(0x1F-w) and the digit start
+ * pointer is clamped down to it. Wraps the whole run between func_0011F5E0 (disable
+ * interrupts) and func_0011F628 (restore); the return value is the interrupt-state
+ * cookie (0 / func_0011F628()). Variadic args are pulled from `ap` in 8-byte slots.
+ *
+ * MATCHING WALL (cc1 register-allocation + char-load-scheduling ceiling). A clean,
+ * behaviourally-faithful reconstruction of the full control flow (the goto-state-
+ * machine, the jtbl switch in memory order, the per-branch `ap++; *(T*)(ap-1)`
+ * arg fetch, the s0=cursor / s1=value / s2=p / s3=ap / s4=pad / s5=hook / s6=cookie
+ * register model) rebuilds to ~85.7% byte-identical (380/380 instrs, same frame,
+ * same prologue/saves, same jump table). The residual is NOT behaviour - it is two
+ * unsteerable ee-gcc 2.9 choices that diverge per call site:
+ *   (1) the char output loops: the original re-loads each emitted byte as a fresh
+ *       `lbu` (separate from the `lb` zero-test), whereas gcc CSEs our `*q` to one
+ *       load + `move` (this also cascades the hook-pointer to v1 vs v0);
+ *   (2) the length-modifier temp lands in a2 vs the original's a3, and %c's byte
+ *       in a temp vs s1.
+ * Both are scheduler/allocator tie-breaks invariant under every source phrasing
+ * tried (do-while vs while, (s8)(u8) casts, per-case vs shared value locals,
+ * declaration order). The MATCHING arm stays INCLUDE_ASM (byte-exact). The
+ * recovered faithful C ships as the portable TARGET_NATIVE #else: it is a correct
+ * printf, cmp-oracle'd asm-vs-C bit-identical (the D_00134698 hook-captured byte
+ * stream over every conversion specifier, width and length modifier) on the real
+ * R5900 by run_cmp_015180_iso.sh. The %e/%f path composes onto func_0011C090's
+ * own #else (itself cmp-oracle'd).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C1F8);
+#else
+extern s32 func_0011F5E0(void);
+extern s32 func_0011F628(void);
+extern s64 func_001234F0(float f);
+extern s64 func_00121450(s64 a, s64 b);   /* __moddi3  signed mod   */
+extern s64 func_0011FC68(s64 a, s64 b);   /* __divdi3  signed div   */
+extern u64 func_001220F0(u64 u, u64 v);   /* __umoddi3 unsigned mod */
+extern u64 func_00121B20(u64 u, u64 v);   /* __udivdi3 unsigned div */
+
+s32 func_0011C1F8(char *fmt, s64 *ap) {
+    char buf[32];
+    s64 n;
+    char *s = fmt;
+    char *p;
+    char *q;
+    char *pad;
+    s32 lenmod;
+    s32 c;
+    s32 saved = func_0011F5E0();
+
+    if (*s == 0) goto Lend;
+
+    for (;;) {
+        pad = 0;
+        lenmod = 0;
+        c = (s8)*s;
+        if (c != '%') goto Lputc;
+        p = s + 1;
+    Lscan:
+        s = p;
+        {
+            s32 idx = (s8)((u8)*s - 0x30);
+            if ((u32)idx >= 0x49) { p = s + 1; goto Lskip; }
+            switch (idx) {
+            case '0' - '0': { /* zero-pad field width */
+                s32 w;
+                s32 d1 = *(p + 1) - 0x30;
+                if ((u8)d1 < 0xA) {
+                    s32 d2 = *(p + 2) - 0x30;
+                    if ((u32)d2 < 0xA) {
+                        w = d1 * 10 + d2;
+                        if (w >= 0x20) w = 0x1F;
+                        s = p + 2;
+                    } else {
+                        w = d1;
+                        s = p + 1;
+                    }
+                    if (w > 0) {
+                        pad = &buf[0x1F] - w;
+                        p = s + 1;
+                        do {
+                            buf[0x1F - w] = '0';
+                            w--;
+                        } while (w > 0);
+                        s = p;
+                        goto Lscan;
+                    }
+                    p = s + 1;
+                    goto Lscan;
+                }
+                p++;
+                goto Lscan;
+            }
+            case 'l' - '0':
+                lenmod = 0x6C;
+                p++;
+                goto Lscan;
+            case 'h' - '0':
+                lenmod = 0x68;
+                p++;
+                goto Lscan;
+            case 'o' - '0':
+                if (lenmod == 0x6C) { ap++; n = *(ap - 1); }
+                else if (lenmod == 0x68) { ap++; n = *(u16 *)(ap - 1); }
+                else { ap++; n = *(u32 *)(ap - 1); }
+                q = &buf[0x1F];
+                buf[0x1F] = 0;
+                if (n == 0) {
+                    q = &buf[0x1E];
+                    buf[0x1E] = '0';
+                    p++;
+                } else {
+                    p++;
+                    do {
+                        *--q = (char)((n & 7) + 0x30);
+                        n = (u64)n >> 3;
+                    } while (n != 0);
+                }
+                if (pad != 0 && pad < q) q = pad;
+                if (*q == 0) goto Lskip;
+                do { D_00134698(*q); q++; } while (*q != 0);
+                s = p;
+                goto Lcont;
+            case 'x' - '0':
+                if (lenmod == 0x6C) { ap++; n = *(ap - 1); }
+                else if (lenmod == 0x68) { ap++; n = *(u16 *)(ap - 1); }
+                else { ap++; n = *(u32 *)(ap - 1); }
+                q = &buf[0x1F];
+                buf[0x1F] = 0;
+                if (n == 0) {
+                    q = &buf[0x1E];
+                    buf[0x1E] = '0';
+                    p++;
+                } else {
+                    p++;
+                    do {
+                        u64 nib = n & 0xF;
+                        *--q = (char)(nib < 0xA ? nib + 0x30 : nib + 0x57);
+                        n = (u64)n >> 4;
+                    } while (n != 0);
+                }
+                if (pad != 0 && pad < q) q = pad;
+                if (*q == 0) goto Lskip;
+                do { D_00134698(*q); q++; } while (*q != 0);
+                s = p;
+                goto Lcont;
+            case 'd' - '0':
+            {
+                s64 dn;
+                if (lenmod == 0x6C) { ap++; dn = *(ap - 1); }
+                else if (lenmod == 0x68) { ap++; dn = *(s16 *)(ap - 1); }
+                else { ap++; dn = *(s32 *)(ap - 1); }
+                q = &buf[0x1F];
+                buf[0x1F] = 0;
+                if (dn == 0) {
+                    q = &buf[0x1E];
+                    buf[0x1E] = '0';
+                    p++;
+                } else {
+                    if (dn < 0) {
+                        D_00134698('-');
+                        dn = -dn;
+                    }
+                    p++;
+                    while (dn != 0) {
+                        *--q = (char)(func_00121450(dn, 10) + 0x30);
+                        dn = func_0011FC68(dn, 10);
+                    }
+                }
+                if (pad != 0 && pad < q) q = pad;
+                if (*q == 0) goto Lskip;
+                do { D_00134698(*q); q++; } while (*q != 0);
+                s = p;
+                goto Lcont;
+            }
+            case 'u' - '0':
+                if (lenmod == 0x6C) { ap++; n = *(ap - 1); }
+                else if (lenmod == 0x68) { ap++; n = *(u16 *)(ap - 1); }
+                else { ap++; n = *(u32 *)(ap - 1); }
+                q = &buf[0x1F];
+                buf[0x1F] = 0;
+                if (n == 0) {
+                    q = &buf[0x1E];
+                    buf[0x1E] = '0';
+                    p++;
+                } else {
+                    p++;
+                    do {
+                        *--q = (char)(func_001220F0(n, 10) + 0x30);
+                        n = func_00121B20(n, 10);
+                    } while (n != 0);
+                }
+                if (pad != 0 && pad < q) q = pad;
+                if (*q == 0) goto Lskip;
+                do { D_00134698(*q); q++; } while (*q != 0);
+                s = p;
+                goto Lcont;
+            case 'e' - '0':
+            case 'f' - '0': {
+                float f;
+                ap++;
+                f = *(float *)(ap - 1);
+                if (f == 0.0f) {
+                    D_00134698('0');
+                    p++;
+                } else {
+                    p++;
+                    func_0011C090(func_001234F0(f));
+                }
+                s = p;
+                goto Lcont;
+            }
+            case 's' - '0': {
+                char *str;
+                ap++;
+                str = (char *)*(s32 *)(ap - 1);
+                if (*str == 0) {
+                    D_00134698('(');
+                    p++;
+                    D_00134698('n');
+                    D_00134698('u');
+                    D_00134698('l');
+                    D_00134698('l');
+                    D_00134698(')');
+                    s = p;
+                    goto Lcont;
+                }
+                q = str;
+                p++;
+                do {
+                    D_00134698(*q);
+                    q++;
+                } while (*q != 0);
+                s = p;
+                goto Lcont;
+            }
+            case 'c' - '0':
+            {
+                s64 cn;
+                ap++;
+                cn = *(char *)(ap - 1);
+                D_00134698((s32)cn);
+                p++;
+                s = p;
+                goto Lcont;
+            }
+            default:
+                p++;
+                goto Lskip;
+            }
+        }
+
+    Lputc:
+        D_00134698(c);
+        p = s + 1;
+        s = p;
+        goto Lcont;
+
+    Lskip:
+        s = p;
+    Lcont:
+        if (*s == 0) break;
+    }
+
+Lend:
+    if (saved != 0) {
+        return func_0011F628();
+    }
+    return 0;
+}
+#endif
 
 /**
  * func_0011C7E8 = printf-style wrapper around the core formatter func_0011C1F8.
@@ -982,7 +1265,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C1F8);
  * forwards (dest, va_list) to func_0011C1F8, returning its result. `dest` is the
  * sink passed straight through; the va_list points at the first variadic arg.
  */
-extern s32 func_0011C1F8(void *dest, void *args);
+extern s32 func_0011C1F8(char *fmt, s64 *ap);
 
 s32 func_0011C7E8(void *dest, ...) {
     /* EABI single-float va_start (va_list == char*): point past the named arg
@@ -991,7 +1274,7 @@ s32 func_0011C7E8(void *dest, ...) {
                - (__builtin_args_info(2) >= 8
                       ? 0
                       : (8 - __builtin_args_info(2)) * 8);
-    return func_0011C1F8(dest, ap);
+    return func_0011C1F8((char *)dest, (s64 *)ap);
 }
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", Kprintf);
@@ -1814,7 +2097,30 @@ void func_0011FC48(void) {
     }
 }
 
+/**
+ * func_0011FC68 = libgcc `__divdi3` (signed 64-bit division, a / b). ee-gcc
+ * inlines libgcc2.c's signed wrapper around `__udivmoddi4`: it takes the
+ * magnitudes of both operands (the bgez/negu sign-strip sequences at entry),
+ * runs the unsigned long-division core (count_leading_zeros normalisation via
+ * the 256-byte `__clz_tab` D_0013AC58, then 16-bit-digit `udiv_qrnnd` with the
+ * host `divu` — hence the `break 0,7` divide-by-zero traps), and negates the
+ * quotient when exactly one operand was negative.
+ *
+ * NOT GAME CODE: compiler runtime emitted by ee-gcc itself; the
+ * `udiv_qrnnd`/`count_leading_zeros` macros are arch-specific compiler internals
+ * not reconstructable as clean hand C that matches byte-exact, so the MATCHING
+ * arm stays INCLUDE_ASM (links verbatim like the other SDK/runtime routines in
+ * this unit). The portable #else is the faithful behaviour (`a / b`), cmp-oracle'd
+ * asm-vs-C bit-identical on the real R5900 by run_cmp_015180_iso.sh. Excluded
+ * domains (the asm traps `break 0,7` / the host raises on overflow): b == 0 and
+ * INT64_MIN / -1 — the caller (func_0011C1F8's %d, always b == 10) never hits them. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011FC68);
+#else
+s64 func_0011FC68(s64 a, s64 b) {
+    return a / b;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00120354);
 
@@ -2060,7 +2366,28 @@ s64 func_001213B8(s64 value) {
 }
 #endif
 
+/**
+ * func_00121450 = libgcc `__moddi3` (signed 64-bit modulo, a % b). ee-gcc inlines
+ * libgcc2.c's signed wrapper around `__udivmoddi4`: it takes the magnitudes of
+ * both operands (the bgez/negu sign-strip sequences at entry), runs the unsigned
+ * long-division core (count_leading_zeros via the 256-byte `__clz_tab` D_0013AD58,
+ * then 16-bit-digit `udiv_qrnnd` with `divu`/`break 0,7`), captures the remainder
+ * through the inlined `&w` slot (sp+0), and gives it the sign of the dividend a.
+ *
+ * NOT GAME CODE: compiler runtime emitted by ee-gcc itself; not reconstructable
+ * as clean hand C that matches byte-exact, so the MATCHING arm stays INCLUDE_ASM
+ * (links verbatim). The portable #else is the faithful behaviour (`a % b`),
+ * cmp-oracle'd asm-vs-C bit-identical on the real R5900. Excluded domains (the
+ * asm traps `break 0,7` / overflow): b == 0 and INT64_MIN / -1. Paired siblings:
+ * func_0011FC68 = `__divdi3`, func_00121B20 = `__udivdi3`, func_001220F0 =
+ * `__umoddi3`. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00121450);
+#else
+s64 func_00121450(s64 a, s64 b) {
+    return a % b;
+}
+#endif
 
 /**
  * func_00121AB8 = 64-bit integer multiply (low 64 bits of the product), a*b,
@@ -2102,9 +2429,57 @@ void func_00121B18(void) {
     func_00120368();
 }
 
+/**
+ * func_00121B20 = libgcc `__udivdi3` (unsigned 64-bit division, u / v). It inlines
+ * libgcc2.c's `__udivmoddi4` long division directly (no sign handling at entry —
+ * straight to the sltu/divu unsigned core): count_leading_zeros normalisation via
+ * the 256-byte `__clz_tab` D_0013AE58, then schoolbook 16-bit-digit division using
+ * the host `divu` via the longlong.h `udiv_qrnnd` macro (hence the `break 0,7`
+ * divide-by-zero traps). The quotient is returned; the remainder is discarded.
+ *
+ * NOT GAME CODE: compiler runtime emitted by ee-gcc itself; not reconstructable
+ * as clean hand C that matches byte-exact, so the MATCHING arm stays INCLUDE_ASM
+ * (links verbatim). The portable #else is the faithful behaviour (`u / v`),
+ * cmp-oracle'd asm-vs-C bit-identical on the real R5900. Excluded domain (the asm
+ * traps `break 0,7`): v == 0 — the caller (func_0011C1F8's %u, always v == 10)
+ * never hits it. Paired sibling: func_001220F0 = `__umoddi3` (u % v). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00121B20);
+#else
+u64 func_00121B20(u64 u, u64 v) {
+    return u / v;
+}
+#endif
 
+/**
+ * func_001220F0 = libgcc `__umoddi3` (unsigned 64-bit modulo, u % v). It inlines
+ * libgcc2.c's `__udivmoddi4` long-division: a `count_leading_zeros` normalisation
+ * driven by the 256-byte `__clz_tab` (D_0013AF58 - the classic 0,1,2,2,3,3,3,3,...
+ * leading-bit table), then schoolbook 16-bit-digit division using the host `divu`
+ * via the longlong.h `udiv_qrnnd` macro (hence the `break 0,7` divide-by-zero
+ * traps). The remainder slot pointer is the inlined `&w` (sp+0); the quotient is
+ * computed but discarded, and the remainder is returned. Paired helpers in this
+ * unit: func_00121B20 = `__udivdi3` (u / v), func_0011FC68 = `__divdi3` (signed
+ * a / b), func_00121450 = `__moddi3` (signed a % b). The format core
+ * func_0011C1F8 calls these to render %u/%d.
+ *
+ * NOT GAME CODE / NOT a format sub-engine: this is compiler runtime emitted by
+ * ee-gcc itself (it is the body the EE longlong.h macros + libgcc2.c expand to).
+ * It is not reconstructable as clean hand-written C and matched byte-exact - the
+ * `udiv_qrnnd`/`count_leading_zeros` macros are arch-specific compiler internals
+ * (the `divu`+`break` digit step, the dsll32/dsra32 64->32 splits). The MATCHING
+ * arm stays INCLUDE_ASM; it links verbatim like the other SDK/runtime routines in
+ * this unit. The portable #else is the faithful behaviour (`u % v`), cmp-oracle'd
+ * asm-vs-C bit-identical on the real R5900. Excluded domain (the asm traps
+ * `break 0,7`): v == 0 — the %u caller always passes v == 10.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001220F0);
+#else
+u64 func_001220F0(u64 u, u64 v) {
+    return u % v;
+}
+#endif
 
 /* Decomposed IEEE-754 double produced by func_00122760: a class tag, sign,
  * unbiased exponent and the explicit mantissa. */
