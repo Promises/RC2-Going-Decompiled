@@ -81,9 +81,16 @@ for c in $(find "$SRC" -name '*.c'); do
   o="$BUILD/${c%.c}.o"
   mkdir -p "$(dirname "$o")"
   unit_flags "$c"
-  "$WIBO" "$G/cpp.exe" $CPPDEF $INCC "$c" "$BUILD/_unit.i"
-  "$WIBO" "$G/cc1.exe" -quiet -O2 $GFLAG $CC1EXTRA "$BUILD/_unit.i" -o "$BUILD/_unit.s"
-  sh tools/ee/asm_unit.sh "$REGION" "/work/$BUILD/_unit.s" "/work/$o" "$GFLAG"
+  # FAIL-LOUD: clear stale object+intermediates, abort on ANY step error, verify
+  # the object materialized — a silent stale .o = false 'byte-exact'/boot result.
+  rm -f "$o" "$BUILD/_unit.i" "$BUILD/_unit.s"
+  "$WIBO" "$G/cpp.exe" $CPPDEF $INCC "$c" "$BUILD/_unit.i" \
+    || { echo "BUILD FAIL (cpp): $c" >&2; exit 1; }
+  "$WIBO" "$G/cc1.exe" -quiet -O2 $GFLAG $CC1EXTRA "$BUILD/_unit.i" -o "$BUILD/_unit.s" \
+    || { echo "BUILD FAIL (cc1): $c" >&2; exit 1; }
+  sh tools/ee/asm_unit.sh "$REGION" "/work/$BUILD/_unit.s" "/work/$o" "$GFLAG" \
+    || { echo "BUILD FAIL (as): $c" >&2; exit 1; }
+  [ -s "$o" ] || { echo "BUILD FAIL (no object produced): $c" >&2; exit 1; }
   mips-linux-gnu-strip "$o" -N dummy-symbol-name 2>/dev/null || true
   m=$((m+1))
 done
@@ -162,6 +169,9 @@ print("   injected %d calt placement lines for %d units" % (ins, len(units)))
 PY
 
 echo "== [$REGION] LINK Attempt B: C-alt-overlay .ld =="
+# FAIL-LOUD: clear stale ELF/rom so the `[ -s "$ELF" ]` gate below can NEVER pass
+# on a previous run's image when THIS link fails.
+rm -f "$ELF" "$BUILD/$BASENAME.conly.rom"
 mips-linux-gnu-ld -EL --allow-multiple-definition -T "$LDB" -T "$SYMS" -T "$ALLSYMS" \
   -Map "$BUILD/$BASENAME.conly.map" -o "$ELF" 2> "$BUILD/ld.conly.log" || true
 echo "   --- Attempt B ld.log (head) ---"; head -40 "$BUILD/ld.conly.log" || true

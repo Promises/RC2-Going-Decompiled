@@ -107,9 +107,17 @@ if [ -d "$SRC" ]; then
       */eu/text/191240.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 191238 twin
       */eu/text/19FC78.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 1A00F0 twin
     esac
-    "$WIBO" "$G/cpp.exe" $CPPDEF $INCC "$c" "$BUILD/_unit.i"
-    "$WIBO" "$G/cc1.exe" -quiet -O2 $GFLAG $CC1EXTRA "$BUILD/_unit.i" -o "$BUILD/_unit.s"
-    sh tools/ee/asm_unit.sh "$REGION" "/work/$BUILD/_unit.s" "/work/$o" "$GFLAG"
+    # FAIL-LOUD: clear stale object + intermediates first so a failed compile can
+    # NEVER leave a stale .o behind; abort non-zero on ANY step error; verify the
+    # object actually materialized. (A silent stale .o = false 'byte-exact'/boot.)
+    rm -f "$o" "$BUILD/_unit.i" "$BUILD/_unit.s"
+    "$WIBO" "$G/cpp.exe" $CPPDEF $INCC "$c" "$BUILD/_unit.i" \
+      || { echo "BUILD FAIL (cpp): $c" >&2; exit 1; }
+    "$WIBO" "$G/cc1.exe" -quiet -O2 $GFLAG $CC1EXTRA "$BUILD/_unit.i" -o "$BUILD/_unit.s" \
+      || { echo "BUILD FAIL (cc1): $c" >&2; exit 1; }
+    sh tools/ee/asm_unit.sh "$REGION" "/work/$BUILD/_unit.s" "/work/$o" "$GFLAG" \
+      || { echo "BUILD FAIL (as): $c" >&2; exit 1; }
+    [ -s "$o" ] || { echo "BUILD FAIL (no object produced): $c" >&2; exit 1; }
     mips-linux-gnu-strip "$o" -N dummy-symbol-name 2>/dev/null || true
     m=$((m+1))
   done
@@ -149,6 +157,10 @@ grep -rhoE '[[:space:],]\.L[0-9A-Fa-f]{6,8}([[:space:]]|$)' "$ASM" \
 SYMADDR="going-decompiled/symbol_addrs/$REGION/symbol_addrs.txt"
 [ -f "$SYMADDR" ] && sed -nE 's@^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=[[:space:]]*(0x[0-9A-Fa-f]+).*@PROVIDE(\1 = \2);@p' "$SYMADDR" >> "$ALLSYMS"
 echo "   defined $(wc -l < "$ALLSYMS") address symbols (D_/func_/jtbl_ + symbol_addrs PROVIDE)"
+# FAIL-LOUD: clear stale link outputs so a failed/partial link can NEVER be
+# mistaken for a fresh success (the `|| {…}` below only REPORTS ld errors; the
+# `[ -f "$ELFLMA" ]` gate then operates on a guaranteed-fresh file).
+rm -f "$ELF" "$ELFLMA" "$ROM"
 mips-linux-gnu-ld -EL --allow-multiple-definition -T "$LD" -T "$SYMS" -T "$ALLSYMS" -Map "$BUILD/$BASENAME.map" -o "$ELF" 2> "$BUILD/ld.log" \
   || { echo "LD errors (first 20):"; head -20 "$BUILD/ld.log"; }
 
