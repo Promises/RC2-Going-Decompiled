@@ -883,6 +883,11 @@ s32 CheckMobyIsLevelObjectSlot(Moby *moby, s32 slot) {
     return D_2403D0[slot].mobyPtr == (s32)moby;
 }
 
+/* func_002B4F78: 8-byte zero pad between functions (splat drops all-zero
+ * inter-function regions) — raw-word filler keeps the unit size==span byte-exact
+ * (06333c5 precedent; NO re-split). */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B4F78);
+
 /* Handwritten stub-table fragment (orphaned addiu $sp / nop run) — see unit
  * header; kept INCLUDE_ASM permanently. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B4F80);
@@ -912,6 +917,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B58B8);
 void SetGameStateTransitionTimer(s32 frames) {
     g_gameStateTransitionTimer = frames;
 }
+
+/* func_002B58D0: 8-byte zero pad between functions (splat drops all-zero
+ * inter-function regions) — raw-word filler keeps the unit size==span byte-exact
+ * (06333c5 precedent; NO re-split). */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B58D0);
 
 /* Set the game-state transition stall length. */
 void SetGameStateTransitionDelay(s32 frames) {
