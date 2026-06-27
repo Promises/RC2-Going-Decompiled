@@ -127,6 +127,14 @@ grep -rhoE '(D_|func_)[0-9A-Fa-f]{4,}' "$ASM" | sort -u | sed -E 's/^(D_|func_)(
 # D_/func_ blanket above does not cover them. Define each at its named address.
 grep -rhoE 'jtbl_[0-9A-Fa-f]+_text' "$ASM" | sort -u \
   | sed -E 's/^jtbl_([0-9A-Fa-f]+)_text$/jtbl_\1_text = 0x\1;/' >> "$ALLSYMS"
+# Computed-referenced .L<hex> local labels: splat keeps branch/jump-table targets
+# local, but a %hi/%lo/.word reference to one can be CROSS-UNIT (the label is
+# defined in another unit, where it stays local -> undefined in the referrer).
+# Define each at its named address (address-in-name). Link-only; any within-unit
+# duplicate is address-consistent under --allow-multiple-definition.
+grep -rhoE '%(hi|lo)\(\.L[0-9A-Fa-f]+\)|\.word[[:space:]]+\.L[0-9A-Fa-f]+' "$ASM" \
+  | grep -oE '\.L[0-9A-Fa-f]+' | sort -u \
+  | sed -E 's/^\.L([0-9A-Fa-f]+)$/.L\1 = 0x\1;/' >> "$ALLSYMS"
 # Track-B NAMED symbols (snd_PrintError, AssertFail, Mc*, WrapAngle*, rand, ...)
 # from symbol_addrs: matched C calls these by name, but they are not address-named
 # so the blanket misses them. PROVIDE name=addr (first-wins/only-if-undefined, so
