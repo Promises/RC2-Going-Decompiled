@@ -24,11 +24,9 @@ NCPPDEF="-D__GNUC__=2 -D__GNUC_MINOR__=9 -D__mips__ -D__mips=3 -D__R5900 -D__LAN
 SNAS=tools/ee/cc/ee/bin/as.exe
 
 unit_flags() {
+  # C-ONLY build: ALL units at -G0 (per 54a809a) — dissolves the gp_rel overflow.
+  # The C-only image is functional, not byte-matching, so no -G8 small-data needed.
   GFLAG="-G0"; CC1EXTRA=""
-  case "$1" in
-    */cod/0321A0.c|*/text/183178.c|*/text/188580.c|*/text/16E980.c) GFLAG="-G8";;
-    */text/188858.c|*/text/1907F0.c|*/text/191238.c|*/text/198FA0.c|*/text/1A00F0.c|*/text/1A8180.c|*/text/250080.c|*/text/248B50.c|*/text/235FE8.c|*/text/1CA080.c|*/text/1D54C0.c|*/text/1B4218.c|*/text/178E88.c|*/text/1823B8.c|*/text/1DFF80.c|*/text/1EFFC0.c|*/text/1FFBA0.c|*/text/24D728.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
-  esac
 }
 
 echo "== [$REGION] (2b) compiling C-alt (TARGET_NATIVE) objects =="
