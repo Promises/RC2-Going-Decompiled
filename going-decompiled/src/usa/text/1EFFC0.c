@@ -632,6 +632,12 @@ void func_002FA608(void) {
     __asm__ __volatile__("");
 }
 
+/* func_002FA624: 4-byte trailing-alignment nop after the unit's last function.
+ * The compiler does not emit it (and splat drops the standalone pad word), so the
+ * unit would be 0x4 SHORT — recover it as a raw-word filler to keep size==span
+ * byte-exact (06333c5 precedent; NO re-split). */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002FA624);
+
 /* The unit tail (0x2FA628..0x2FFC1F) is the spimdisasm c-mode tail-fusion blob:
  * functions reached only by j / data-ref (no jal) that spimdisasm cannot promote
  * to their own symbols, so they fuse into one INCLUDE_ASM. It is islanded as the
