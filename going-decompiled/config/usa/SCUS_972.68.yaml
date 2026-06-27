@@ -88,7 +88,16 @@ segments:
       - [0x033970, c, cod/033970] # core.text tail (0x1339F0..0x133B7F)
       - [0x033B00, data, cod/033B00] # core.data
       - [0x03A180, rodata, cod/03A180] # core.rdata
-      - { type: bss, vram: 0x0013C080, name: cod/0013C080 } # core.bss
+      # ROM-anchor the bss at 0x3C000 (= vram 0x13C080) so splat BOUNDS the rodata
+      # there instead of over-extending it across the bss region to the next
+      # ROM-backed subsegment (core.lit @ 0xA7400). Without this anchor the rodata
+      # absorbed 0x13C080..0x1A7480 as ~437KB of .rodata zeros AND the bss was
+      # declared on top of it -> the bss was double-emitted (PROGBITS + NOBITS),
+      # inflating .cod by ~0x6B400 so the flowing .cod_bss overlapped .core_lit
+      # (fixed VMA 0x1A7480). Anchored, the rodata ends at 0x3C000 (~0x1E80) and
+      # the bss is the lone NOBITS 0x13C080..0x1A7480 (size 0x6B400 inferred from
+      # the constant +0x100080 linear delta, exactly as before).
+      - [0x03C000, bss, cod/0013C080] # core.bss
 
   - name: core.lit
     type: code

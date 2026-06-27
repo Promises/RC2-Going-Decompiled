@@ -96,7 +96,14 @@ segments:
       - [0x0339D0, c, cod/033970] # core.text tail (EU 0x133A50.., -G0)
       - [0x033B80, data, cod/033B80] # core.data
       - [0x03A200, rodata, cod/03A200] # core.rdata
-      - { type: bss, vram: 0x0013C100, name: cod/0013C100 } # core.bss
+      # ROM-anchor the bss at 0x3C080 (= vram 0x13C100) so splat BOUNDS the rodata
+      # there instead of over-extending it across the bss region (mirrors the USA
+      # cod/03A180 fix). Without the anchor the rodata absorbed the bss zeros as
+      # ~437KB .rodata AND the bss was declared on top -> double-emitted, inflating
+      # .cod so the flowing .cod_bss overlapped .core_lit. Anchored, the rodata
+      # ends at 0x3C080 and the bss is the lone NOBITS region (size inferred from
+      # the constant +0x100080 linear delta, exactly as before).
+      - [0x03C080, bss, cod/0013C100] # core.bss
 
   - name: core.lit
     type: code
