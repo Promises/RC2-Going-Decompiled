@@ -135,6 +135,13 @@ grep -rhoE 'jtbl_[0-9A-Fa-f]+_text' "$ASM" | sort -u \
 grep -rhoE '%(hi|lo)\(\.L[0-9A-Fa-f]+\)|\.word[[:space:]]+\.L[0-9A-Fa-f]+' "$ASM" \
   | grep -oE '\.L[0-9A-Fa-f]+' | sort -u \
   | sed -E 's/^\.L([0-9A-Fa-f]+)$/.L\1 = 0x\1;/' >> "$ALLSYMS"
+# Also branch-operand .L<hex> refs (b/beq/bltz/...): a CROSS-SPLIT-BOUNDARY branch
+# can target a label defined in an adjacent unit (where it stays local) -> undefined
+# in the branching unit. Define those too (address-in-name). Within-unit duplicates
+# are address-consistent; a too-far branch would already have failed in the original.
+grep -rhoE '[[:space:],]\.L[0-9A-Fa-f]{6,8}([[:space:]]|$)' "$ASM" \
+  | grep -oE '\.L[0-9A-Fa-f]+' | sort -u \
+  | sed -E 's/^\.L([0-9A-Fa-f]+)$/.L\1 = 0x\1;/' >> "$ALLSYMS"
 # Track-B NAMED symbols (snd_PrintError, AssertFail, Mc*, WrapAngle*, rand, ...)
 # from symbol_addrs: matched C calls these by name, but they are not address-named
 # so the blanket misses them. PROVIDE name=addr (first-wins/only-if-undefined, so
