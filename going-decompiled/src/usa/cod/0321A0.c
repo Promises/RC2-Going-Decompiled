@@ -57,6 +57,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", snd_BankLoadAsyn
  * fallthrough/data-ref, so spimdisasm emits no .s for it — see STATUS). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_001325E0);
 
+/* func_001325E8 = snd_BankLoadFromEE_CB (0x1325E8): recovered splat-dropped
+ * function (spimdisasm emitted no .s — reached by fallthrough/data-ref).
+ * Raw words, byte-exact; recovers the 0xF0 that shifted cod rodata/jtbls -0xF0. */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_001325E8);
+
 /* snd_BankLoadFromIOP: multi-callee-save frame — blocked by the same 16-byte
  * save-slot layout wall as snd_SetupDmaTransfer. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", snd_BankLoadFromIOP);
