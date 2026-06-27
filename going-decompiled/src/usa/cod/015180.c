@@ -403,10 +403,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AC50);
 /**
  * func_0011AC60 = EE kernel syscall 0x44 (WaitSema).
  * SCE library syscall stub (see func_0011AA20): load the syscall number into
- * $v1 and trap; the kernel blocks the caller until the semaphore can be taken.
- * Used as the table-lock acquire (see func_0011D868 / func_0011AC40 release).
+ * $v1 and trap; the kernel blocks the caller until the semaphore can be taken
+ * and returns the semaphore id in $v0. Used as the table-lock acquire (see
+ * func_0011D868 / func_0011AC40 release) and by the worker loop func_0011B728.
  */
-void func_0011AC60(s32 sema) {
+s32 func_0011AC60(s32 sema) {
     __asm__ volatile("addiu $3, $0, 0x44\n\tsyscall 0" ::: "$3", "memory");
 }
 
@@ -610,43 +611,65 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", DisableDmac);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", EnableDmac);
 
+extern s32  D_0013C600;  /* semaphore id created for the worker subsystem */
+extern char D_0013A920[]; /* error format string for an unknown command op */
+extern s32  func_0011C7E8(void *fmt, ...); /* printf-style formatter (defined below) */
+
+/* The worker thread's command ring: a `head` write-cursor (masked to 0x1FF on
+ * read, advanced modulo 0x200) followed by 512 interleaved {op, arg} byte pairs
+ * starting at offset 8. */
+struct WorkerQueue {
+    s32 head;
+    s32 pad;
+    u8  cmds[1024];
+};
+
 /**
  * func_0011B728 = the unit's background worker-thread main loop (entered from
  * func_0011AA20/StartThread, see func_0011B800). It blocks forever on the
  * subsystem semaphore D_0013C600 (func_0011AC60/WaitSema); each time it is
- * signalled it pops the next command record from a 512-entry ring buffer at
- * *queue (a `s32 head` cursor at 0x00 masked to 0x1FF and advanced modulo 0x200,
- * then 2-byte {op,arg} records from 0x08) and dispatches on the op byte: 1 ->
- * func_0011AAD0/ReleaseWaitThread, 0 -> func_0011AB50/WakeupThread, 2 ->
- * func_0011AB90/SuspendThread (each on the record's thread-id arg byte); any
- * other op prints the error string D_0013A920 via func_0011C7E8. Never returns.
+ * signalled it pops the next command record from the 512-entry ring buffer at
+ * *queue (the `head` cursor masked to 0x1FF, then the 2-byte {op,arg} record at
+ * cmds[idx*2]) and dispatches on the op byte: 0 -> func_0011AB50/WakeupThread,
+ * 1 -> func_0011AAD0/ReleaseWaitThread, 2 -> func_0011AB90/SuspendThread (each
+ * on the record's thread-id arg byte); any other op prints the error string
+ * D_0013A920 via func_0011C7E8. Never returns.
  *
- * NEAR-MATCH WALL (~96.4% via objdiff). The faithful C (an infinite loop with a
- * switch on queue->cmds[idx].op) compiles to a BYTE-IDENTICAL instruction stream
- * and identical frame/saved-register set (the loop-invariant constants 1, 2,
- * &D_0013A920 and %hi(D_0013C600) and the two entry-array bases queue+8/queue+9
- * are hoisted exactly as the original) - the ONLY divergence is ee-gcc -O2 -G0
- * local-register coloring inside the dispatch. The original keeps the masked
- * index in $3 and REUSES $3 in place for idx*2 (sll $3,$3,1), holding idx*2 live
- * across the whole switch (the op>=2 path recomputes &arg = queue+9+$3), with the
- * op selector in $2 (lbu $2,($2) reusing the &op address reg) and &arg parked in
- * $6/a2; ee-gcc instead colours the index $2, spills idx*2 into a FRESH $5/a1
- * (sll $5,$2,1, not an in-place reuse), and puts the selector in $3 - cascading a
- * v0<->v1 (+ arg-pointer a0/v0 vs a2/v1) swap across ~7 instructions. The opcodes
- * and order match; only the register numbers differ. Re-attempted this batch with
- * an explicit idx*2 temp, sinking the queue[0] store past the op read, and
- * splitting the head load into a separate local - every form lands at 96.1-96.4%
- * with the SAME swap; the priority tie-break (which pseudo wins $2) is not
- * steerable from C. Also not shippable as a TARGET_NATIVE #else (the body is
- * EE-kernel syscall stubs that do not compile on the host). Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B728);
+ * The op[] and arg[] views are hoisted as two loop-invariant base pointers
+ * (queue+8 / queue+9) indexed by the record offset idx*2, matching ee-gcc's
+ * register allocation; the switch cases are ordered 0,1,2 to reproduce the
+ * original case-block layout.
+ */
+void func_0011B728(struct WorkerQueue *queue) {
+    u8 *op = (u8 *)queue + 8;
+    u8 *arg = (u8 *)queue + 9;
+    for (;;) {
+        s32 idx, slot;
+        func_0011AC60(D_0013C600);
+        idx = queue->head & 0x1FF;
+        queue->head = idx + 1;
+        slot = idx * 2;
+        switch (op[slot]) {
+        case 0:
+            func_0011AB50(arg[slot]);
+            break;
+        case 1:
+            func_0011AAD0(arg[slot]);
+            break;
+        case 2:
+            func_0011AB90(arg[slot]);
+            break;
+        default:
+            func_0011C7E8(D_0013A920);
+            break;
+        }
+    }
+}
 
 extern s32 D_00134690;   /* worker-thread id / init guard (<=0 until created) */
-extern s32 D_0013C600;   /* semaphore id created for the worker subsystem */
 extern s32 D_0013C608[2];/* StartThread argument block (two words, zeroed) */
 extern u8  D_0013C200[]; /* the worker thread's stack buffer */
 extern s32 D_001AEFF0;   /* the gp base value handed to the worker thread */
-extern void func_0011B728(void); /* the worker thread entry point */
 
 /**
  * Bring up the unit's background worker thread once. Guards on D_00134690 (>0
@@ -1484,7 +1507,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D950);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D9C0);
 
-extern void func_0011AC60(s32 handle);
+extern s32 func_0011AC60(s32 handle);
 extern s32 D_00134734;
 
 /**

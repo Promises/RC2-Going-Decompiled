@@ -155,7 +155,7 @@ extern s32 D_0013473C;
  * allocates it to $3 (keeping $2 for the table base). A one-register
  * allocation choice this cc1 won't reproduce. Left as INCLUDE_ASM. */
 
-extern void func_0011AC60(s32 handle);
+extern s32 func_0011AC60(s32 handle);
 extern s32 D_00134734;
 
 /* func_0011DDC8: tail-call forward of the global handle D_00134734 to
@@ -837,10 +837,11 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011AC50);
 /**
  * func_0011AC60 = EE kernel syscall 0x44 (WaitSema).
  * SCE library syscall stub (see func_0011AA20): load the syscall number into
- * $v1 and trap; the kernel blocks the caller until the semaphore can be taken.
- * Used as the table-lock acquire (see func_0011D868 / func_0011AC40 release).
+ * $v1 and trap; the kernel blocks the caller until the semaphore can be taken
+ * and returns the semaphore id in $v0. Used as the table-lock acquire (see
+ * func_0011D868 / func_0011AC40 release) and by the worker loop func_0011B728.
  */
-void func_0011AC60(s32 sema) {
+s32 func_0011AC60(s32 sema) {
     __asm__ volatile("addiu $3, $0, 0x44\n\tsyscall 0" ::: "$3", "memory");
 }
 
@@ -1042,29 +1043,65 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011B658);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011B6C0);
 
+extern s32  D_0013C680;  /* semaphore id created for the worker subsystem */
+extern char D_0013A9A0[]; /* error format string for an unknown command op */
+extern s32  func_0011C7E8(void *fmt, ...); /* printf-style formatter (defined below) */
+
+/* The worker thread's command ring: a `head` write-cursor (masked to 0x1FF on
+ * read, advanced modulo 0x200) followed by 512 interleaved {op, arg} byte pairs
+ * starting at offset 8. */
+struct WorkerQueue {
+    s32 head;
+    s32 pad;
+    u8  cmds[1024];
+};
+
 /**
  * func_0011B728 = the unit's background worker-thread main loop (EU twin, same
- * address). Blocks forever on the subsystem semaphore D_0013C600
- * (func_0011AC60/WaitSema), pops the next {op,arg} record from the 512-entry ring
- * at *queue (head cursor at +0x0 masked to 0x1FF, records from +0x8) and
- * dispatches on the op byte: 1 -> func_0011AAD0, 0 -> func_0011AB50, 2 ->
- * func_0011AB90 (each on the record's arg byte), any other op prints the error
- * string D_0013A920 via func_0011C7E8. Never returns.
+ * address as the USA build). Blocks forever on the subsystem semaphore
+ * D_0013C680 (func_0011AC60/WaitSema); each time it is signalled it pops the next
+ * command record from the 512-entry ring buffer at *queue (the `head` cursor
+ * masked to 0x1FF, then the 2-byte {op,arg} record at cmds[idx*2]) and dispatches
+ * on the op byte: 0 -> func_0011AB50/WakeupThread, 1 -> func_0011AAD0/
+ * ReleaseWaitThread, 2 -> func_0011AB90/SuspendThread (each on the record's
+ * thread-id arg byte); any other op prints the error string D_0013A9A0 via
+ * func_0011C7E8. Never returns.
  *
- * NEAR-MATCH WALL (~96.4%): see the USA twin's note. The faithful C is a
- * byte-identical instruction stream modulo a gcc-2.9 local-allocator tie-break
- * (the original colours the index/idx*2 in $3 with the op selector in $2; ee-gcc
- * swaps to index $2 / idx*2 $5 / selector $3). Not steerable from C, and the body
- * is EE-kernel syscall stubs that do not compile on the host (no TARGET_NATIVE
- * #else applies). Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011B728);
+ * The op[] and arg[] views are hoisted as two loop-invariant base pointers
+ * (queue+8 / queue+9) indexed by the record offset idx*2, matching ee-gcc's
+ * register allocation; the switch cases are ordered 0,1,2 to reproduce the
+ * original case-block layout.
+ */
+void func_0011B728(struct WorkerQueue *queue) {
+    u8 *op = (u8 *)queue + 8;
+    u8 *arg = (u8 *)queue + 9;
+    for (;;) {
+        s32 idx, slot;
+        func_0011AC60(D_0013C680);
+        idx = queue->head & 0x1FF;
+        queue->head = idx + 1;
+        slot = idx * 2;
+        switch (op[slot]) {
+        case 0:
+            func_0011AB50(arg[slot]);
+            break;
+        case 1:
+            func_0011AAD0(arg[slot]);
+            break;
+        case 2:
+            func_0011AB90(arg[slot]);
+            break;
+        default:
+            func_0011C7E8(D_0013A9A0);
+            break;
+        }
+    }
+}
 
 extern s32 D_00134710;   /* worker-thread id / init guard (<=0 until created) */
-extern s32 D_0013C680;   /* semaphore id created for the worker subsystem */
 extern s32 D_0013C688[2];/* StartThread argument block (two words, zeroed) */
 extern u8  D_0013C280[]; /* the worker thread's stack buffer */
 extern s32 D_001AF070;   /* the gp base value handed to the worker thread */
-extern void func_0011B728(void); /* the worker thread entry point */
 
 /**
  * Bring up the unit's background worker thread once. Guards on D_00134710 (>0
