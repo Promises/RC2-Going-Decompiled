@@ -51,33 +51,21 @@ NINCC="-Itools/ee/eetest/shim -Igoing-decompiled/include -Igoing-decompiled/incl
 NCPPDEF="-D__GNUC__=2 -D__GNUC_MINOR__=9 -D__mips__ -D__mips=3 -D__R5900 -D__LANGUAGE_C -D_LANGUAGE_C -D__EE__ -DTARGET_NATIVE"
 SNAS=tools/ee/cc/ee/bin/as.exe
 
-# per-unit -G / cc1 flag override (kept in sync with build.sh)
+# C-ONLY build: compile EVERY unit at -G0 (NOT build.sh's per-unit -G8). The
+# C-only image is functional, not byte-matching, so it doesn't need the -G8 small-
+# data %gp_rel form that the matching build uses to byte-match. Forcing -G0 emits
+# absolute (lui/%hi-%lo) addressing for the matched C's globals, removing their
+# R_MIPS_GPREL16 relocs from the full link -> the 6 gp-window globals
+# (g_nSaveLoadStatusCode/g_vramDynamicBase/...) no longer truncate. This is
+# CHURN-FREE for the matching build (build.sh keeps its -G8 per-unit overrides;
+# only this separate C-only path changes). NOTE: explicit `%gp_rel(sym)` in the
+# RAW ASM (.s) is unaffected by -G0 (it is an assembler directive, not compiler
+# small-data) — if those raw-asm gp_rel refs alone still overflow the 64KB gp
+# window (the tester measured a 1.2MB total gp_rel span dominated by raw-asm
+# units), that residue is the structural overlay/-G wall and is escalated, NOT
+# fixed here (fixing it would change the matching asm and break matches).
 unit_flags() {
   GFLAG="-G0"; CC1EXTRA=""
-  case "$1" in
-    */cod/0321A0.c) GFLAG="-G8";;
-    */usa/text/183178.c) GFLAG="-G8";;
-    */usa/text/188580.c) GFLAG="-G8";;
-    */usa/text/188858.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
-    */usa/text/1907F0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
-    */usa/text/191238.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
-    */usa/text/198FA0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
-    */usa/text/1A00F0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
-    */usa/text/1A8180.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
-    */usa/text/250080.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
-    */usa/text/16E980.c) GFLAG="-G8";;
-    */usa/text/248B50.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
-    */usa/text/235FE8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
-    */usa/text/1CA080.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
-    */usa/text/1D54C0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
-    */usa/text/1B4218.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
-    */usa/text/178E88.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
-    */usa/text/1823B8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
-    */usa/text/1DFF80.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
-    */usa/text/1EFFC0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
-    */usa/text/1FFBA0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
-    */usa/text/24D728.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
-  esac
 }
 
 # 1) Assemble section .s files (verbatim from build.sh).
