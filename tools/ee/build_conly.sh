@@ -51,22 +51,16 @@ NINCC="-Itools/ee/eetest/shim -Igoing-decompiled/include -Igoing-decompiled/incl
 NCPPDEF="-D__GNUC__=2 -D__GNUC_MINOR__=9 -D__mips__ -D__mips=3 -D__R5900 -D__LANGUAGE_C -D_LANGUAGE_C -D__EE__ -DTARGET_NATIVE"
 SNAS=tools/ee/cc/ee/bin/as.exe
 
-# C-ONLY build: compile EVERY unit at -G0 (NOT build.sh's per-unit -G8). The
-# C-only image is functional, not byte-matching, so it doesn't need the -G8 small-
-# data %gp_rel form that the matching build uses to byte-match. Forcing -G0 emits
-# absolute (lui/%hi-%lo) addressing for the matched C's globals, removing their
-# R_MIPS_GPREL16 relocs from the full link -> the 6 gp-window globals
-# (g_nSaveLoadStatusCode/g_vramDynamicBase/...) no longer truncate. This is
-# CHURN-FREE for the matching build (build.sh keeps its -G8 per-unit overrides;
-# only this separate C-only path changes). NOTE: explicit `%gp_rel(sym)` in the
-# RAW ASM (.s) is unaffected by -G0 (it is an assembler directive, not compiler
-# small-data) — if those raw-asm gp_rel refs alone still overflow the 64KB gp
-# window (the tester measured a 1.2MB total gp_rel span dominated by raw-asm
-# units), that residue is the structural overlay/-G wall and is escalated, NOT
-# fixed here (fixing it would change the matching asm and break matches).
-unit_flags() {
-  GFLAG="-G0"; CC1EXTRA=""
-}
+# C-ONLY build: use build.sh's PER-UNIT -G flags so the NORMAL objects are
+# byte-exact. (The earlier blanket -G0 from 54a809a made every -G8 unit emit
+# absolute lui/%lo addressing instead of the 1-instr %gp_rel store -> the unit
+# compiled LONGER -> every function after drifted -> .data/.lit `.word <func>`
+# pointer tables resolved to WRONG linked addresses -> boot deref. The original
+# -G0 rationale (gp-window globals truncating) was actually the .cod_bss
+# misplacement, since fixed by the anchor pin 36fcf47 + cod recoveries
+# 347edf4/06333c5, so -G8 %gp_rel no longer overflows.) CHURN-FREE for matching:
+# build.sh keeps its own inline copy; this only changes the C-only path.
+. "$(dirname "$0")/unit_flags.sh"
 
 # 1) Assemble section .s files (verbatim from build.sh).
 echo "== [$REGION] assembling section .s files =="

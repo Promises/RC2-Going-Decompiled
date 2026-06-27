@@ -23,11 +23,11 @@ NINCC="-Itools/ee/eetest/shim -Igoing-decompiled/include -Igoing-decompiled/incl
 NCPPDEF="-D__GNUC__=2 -D__GNUC_MINOR__=9 -D__mips__ -D__mips=3 -D__R5900 -D__LANGUAGE_C -D_LANGUAGE_C -D__EE__ -DTARGET_NATIVE"
 SNAS=tools/ee/cc/ee/bin/as.exe
 
-unit_flags() {
-  # C-ONLY build: ALL units at -G0 (per 54a809a) — dissolves the gp_rel overflow.
-  # The C-only image is functional, not byte-matching, so no -G8 small-data needed.
-  GFLAG="-G0"; CC1EXTRA=""
-}
+# Per-unit -G flags (shared with build.sh's list) so the -G8 sub-TUs are
+# byte-exact — at -G0 they emit absolute addressing, compile longer, and drift
+# every later function -> wrong .data/.lit pointers. Safe post .cod_bss pin
+# (36fcf47) + cod recoveries (347edf4/06333c5). See unit_flags.sh.
+. "$(dirname "$0")/unit_flags.sh"
 
 echo "== [$REGION] (2b) compiling C-alt (TARGET_NATIVE) objects =="
 CALT_LIST="$BUILD/conly_calt_units.txt"; : > "$CALT_LIST"
