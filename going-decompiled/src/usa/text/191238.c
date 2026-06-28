@@ -180,6 +180,7 @@ void RenderSky(void) {
     CloseSkyDrawSegment();
     AppendGsRegPacket(0x47, 0x5360B);
     AppendGsRegPacket(0x4E, 0x1000000 | (g_vramZBuffer >> 13));
+    __asm__ __volatile__("");
 }
 #endif
 
@@ -208,6 +209,7 @@ extern void func_00291EB0(void *arg);
 void func_00291FC8(void *arg) {
     func_00291FF8((s32)arg);
     func_00291EB0(arg);
+    __asm__ __volatile__("");
 }
 #endif
 
@@ -591,6 +593,7 @@ void RegisterMobyClass(u8 *hdr, s32 arg2, s32 arg3, s32 classId) {
         g_mobyClassCount = slot + 1;
         FixupMobyClassHeader(hdr, arg2, arg3, classId);
     }
+    __asm__ __volatile__("");
 }
 #endif
 
@@ -781,6 +784,7 @@ void func_00294C48(s32 classId, s32 slot) {
             func_00294B50(idx, slot, dest, 0);          /* +0x88 == [0x12]+0x40 */
         }
     }
+    __asm__ __volatile__("");
 }
 #endif
 
@@ -807,6 +811,7 @@ void func_00294E98(s32 a, s32 b) {
     PumpDialogVoiceSystem(1);
     func_00294C48(a, b);
     PumpDialogVoiceSystem(1);
+    __asm__ __volatile__("");
 }
 #endif
 
@@ -906,6 +911,7 @@ void func_00295478(s32 classId, void *dest) {
         *(s16 *)(g_loadingScenesPlayed + 0x7C) = (s16)idx;
         func_00294B50(idx, -1, dest, 1);
     }
+    __asm__ __volatile__("");
 }
 #endif
 
@@ -1357,6 +1363,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapSetCurrentLe
 void MapSetCurrentLevel(s32 level) {
     g_mapCache.currentLevel = level;
     MapUpdateLevelAvailability();
+    __asm__ __volatile__("");
 }
 #endif
 
@@ -1428,6 +1435,7 @@ void MapBuildBitmap(void *dst, u8 *src, s32 arg3) {
             func_00298308(dst, src);
         }
     }
+    __asm__ __volatile__("");
 }
 #endif
 
