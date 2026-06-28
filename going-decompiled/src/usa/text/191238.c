@@ -401,7 +401,7 @@ __asm__(".extern g_pLoadedSegment, 16");
 __asm__(".extern g_pHudAssetHeader, 16");
 extern u8 *g_pLoadedSegment;
 extern u8 *g_pHudAssetHeader;
-extern void DecompressWad(void *src);
+extern void DecompressWad(void *src, void *dest);
 #ifndef TARGET_NATIVE
 /* TODO(match): functional equivalent - not byte-exact; save-layout wall (saves
  * s0+ra -> pinned cc1 reserves a 0x20 frame vs the original's 0x10). Body is
@@ -409,15 +409,28 @@ extern void DecompressWad(void *src);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002933D0);
 #else
 /*
- * func_002933D0 — per HUD-asset-slot reset. When the rounded-up size (param2)
- * is non-zero, decompress that slot's WAD chunk from the loaded segment
- * (chunk offset at g_pLoadedSegment[slot] +0x20, relative to the segment base).
- * Then clears the slot's status word (+0x74) in the HUD asset header table.
+ * func_002933D0 (DecompressHudBankWad) — decompress one HUD-asset-slot WAD chunk
+ * from the loaded segment into a caller-supplied destination buffer, then clear
+ * the slot's reloc-status word.
+ *   slot — HUD asset slot index.
+ *   dest — destination buffer pointer. It is aligned UP to 16 bytes and used as
+ *          DecompressWad's output ($5); a null result skips the decompress.
+ * The compressed chunk's segment-relative offset lives at g_pLoadedSegment +
+ * slot*8 + 0x20; src = segment_base + that offset.
+ *
+ * IMPORTANT: DecompressWad is DecompressWad(src, dest) — it writes the
+ * decompressed bytes through its second arg ($5, the write cursor in
+ * DecompressWad.s). arg2 here is therefore the DESTINATION POINTER, not a byte
+ * length; (dest+0xF)&~0xF is a 16-byte pointer alignment + null guard. (Verified
+ * vs the asm and 4 sibling callers + the ParseLoadedSegment call site; the
+ * earlier "byteLen" reading was wrong and made the #else drop $5 -> a wild
+ * decompress write that poisoned the live 0x754000 segment.)
  */
-void func_002933D0(s32 slot, s32 size) {
-    if (((size + 0xF) & 0xFFFFFFF0) != 0) {
+void func_002933D0(s32 slot, u8 *dest) {
+    dest = (u8 *)(((s32)dest + 0xF) & 0xFFFFFFF0);
+    if (dest != 0) {
         u8 *seg = g_pLoadedSegment;
-        DecompressWad(*(s32 *)(seg + slot * 8 + 0x20) + seg);
+        DecompressWad(*(s32 *)(seg + slot * 8 + 0x20) + seg, dest);
     }
     *(s32 *)(g_pHudAssetHeader + slot * 4 + 0x74) = 0;
 }
