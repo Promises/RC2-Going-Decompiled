@@ -36,16 +36,37 @@ MACINC="$ROOT/going-decompiled/build/$REGION/include/macro.inc"
 # dir (e.g. expected/cod/015180.o and expected/cod/0321A0.o) cannot race on one
 # mirror (one run's rm -rf would yank the tree out from under the other's
 # mkdir/sed, failing with ENOENT).
-FIXROOT="$(dirname "$OUT_O")/.asmfix-$REGION-$(basename "$OUT_O" .o)"
-rm -rf "$FIXROOT"
-mkdir -p "$FIXROOT/going-decompiled/asm/$REGION/nonmatchings" "$FIXROOT/include"
-# Mirror every nonmatching .s through the VU0 fixup, preserving subdirs.
-find "$ASMSRC" -name '*.s' | while read -r s; do
-  rel="${s#"$ROOT"/}"
-  mkdir -p "$FIXROOT/$(dirname "$rel")"
-  sed -f "$VU0FIX" "$s" > "$FIXROOT/$rel"
-done
-cp "$MACINC" "$FIXROOT/include/macro.inc"
+# OPT-IN shared mirror (ASMFIX_SHARED): the mirror is the SAME whole-tree copy
+# for every unit, but rebuilding it per-unit over a slow 9p mount dominates the
+# build (minutes/unit). When ASMFIX_SHARED names a path, build the mirror ONCE
+# (guarded by a .built marker) and reuse it for every subsequent unit. Safe only
+# for SEQUENTIAL unit builds (one asm_unit.sh at a time) — which build_conly is.
+# Default (env unset) keeps the per-unit race-safe behaviour verbatim.
+if [ -n "${ASMFIX_SHARED:-}" ]; then
+  FIXROOT="$ASMFIX_SHARED"
+  if [ ! -f "$FIXROOT/.built" ]; then
+    rm -rf "$FIXROOT"
+    mkdir -p "$FIXROOT/going-decompiled/asm/$REGION/nonmatchings" "$FIXROOT/include"
+    find "$ASMSRC" -name '*.s' | while read -r s; do
+      rel="${s#"$ROOT"/}"
+      mkdir -p "$FIXROOT/$(dirname "$rel")"
+      sed -f "$VU0FIX" "$s" > "$FIXROOT/$rel"
+    done
+    cp "$MACINC" "$FIXROOT/include/macro.inc"
+    : > "$FIXROOT/.built"
+  fi
+else
+  FIXROOT="$(dirname "$OUT_O")/.asmfix-$REGION-$(basename "$OUT_O" .o)"
+  rm -rf "$FIXROOT"
+  mkdir -p "$FIXROOT/going-decompiled/asm/$REGION/nonmatchings" "$FIXROOT/include"
+  # Mirror every nonmatching .s through the VU0 fixup, preserving subdirs.
+  find "$ASMSRC" -name '*.s' | while read -r s; do
+    rel="${s#"$ROOT"/}"
+    mkdir -p "$FIXROOT/$(dirname "$rel")"
+    sed -f "$VU0FIX" "$s" > "$FIXROOT/$rel"
+  done
+  cp "$MACINC" "$FIXROOT/include/macro.inc"
+fi
 
 # Assemble with CWD at the mirror so source-relative `.include`s resolve there.
 cd "$FIXROOT"
