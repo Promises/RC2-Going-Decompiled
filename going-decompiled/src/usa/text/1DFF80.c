@@ -122,43 +122,11 @@ typedef struct EmitterView {
 #define EMITTER_VIEW(idx) \
     ((EmitterView *)(g_listenerPosHistory + (idx) * 0x70))
 
-/* 989snd deferred key-on callback: store the freshly allocated voice handle in
- * the emitter slot and advance state 1 -> 2.  A zero handle means the voice
- * failed to start, so free the slot (state 0, clear the bookkeeping words). The
- * slot arrives as a 64-bit value whose low 32 bits hold its address. */
-void OnEmitterVoiceKeyedOn(s32 handle, long slotAddr) {
-    SoundEmitter *slot = (SoundEmitter *)slotAddr;
-    if (slot == NULL) {
-        return;
-    }
-    slot->voiceHandle = handle;
-    if (handle != 0) {
-        if (slot->state == 1) {
-            slot->state = 2;
-        }
-    } else {
-        slot->owner = 0;
-        slot->f1C = 0;
-        slot->state = 0;
-    }
-}
-
-/* 989snd voice-ended callback: record the (zero) handle and free the emitter
- * slot - clear the state byte and the owner/link bookkeeping words. */
-void OnEmitterVoiceEnded(s32 handle, long slotAddr) {
-    SoundEmitter *slot = (SoundEmitter *)slotAddr;
-    if (slot == NULL) {
-        return;
-    }
-    slot->voiceHandle = handle;
-    if (handle != 0) {
-        return;
-    }
-    slot->owner = 0;
-    slot->f1C = 0;
-    slot->state = 0;
-}
-
+/* NOTE: OnEmitterVoiceKeyedOn / OnEmitterVoiceEnded (real addrs 0x2E6ED8 /
+ * 0x2E6F20) live at the END of this unit in the original; they are defined in
+ * address order down by func_002E6EC0, NOT here. cc1 emits functions in source
+ * order, so defining them at the top would link them at the unit start and shove
+ * func_002E0000..end +0x78 (the 41K C-only pointer residual). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E0000);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E0010);
@@ -1168,6 +1136,50 @@ void func_002E6EC0(s32 handle, long slotAddr) {
         slot->voiceHandle = handle;
     }
 }
+
+/* 989snd deferred key-on callback (0x2E6ED8): store the freshly allocated voice
+ * handle in the emitter slot and advance state 1 -> 2.  A zero handle means the
+ * voice failed to start, so free the slot (state 0, clear the bookkeeping words).
+ * The slot arrives as a 64-bit value whose low 32 bits hold its address.
+ * Defined HERE (not at file top) to match the original address order. */
+void OnEmitterVoiceKeyedOn(s32 handle, long slotAddr) {
+    SoundEmitter *slot = (SoundEmitter *)slotAddr;
+    if (slot == NULL) {
+        return;
+    }
+    slot->voiceHandle = handle;
+    if (handle != 0) {
+        if (slot->state == 1) {
+            slot->state = 2;
+        }
+    } else {
+        slot->owner = 0;
+        slot->f1C = 0;
+        slot->state = 0;
+    }
+}
+
+/* 989snd voice-ended callback (0x2E6F20): record the (zero) handle and free the
+ * emitter slot - clear the state byte and the owner/link bookkeeping words. */
+void OnEmitterVoiceEnded(s32 handle, long slotAddr) {
+    SoundEmitter *slot = (SoundEmitter *)slotAddr;
+    if (slot == NULL) {
+        return;
+    }
+    slot->voiceHandle = handle;
+    if (handle != 0) {
+        return;
+    }
+    slot->owner = 0;
+    slot->f1C = 0;
+    slot->state = 0;
+}
+
+/* func_002E6F4C: 4-byte trailing-alignment nop after the unit's last function
+ * (OnEmitterVoiceEnded ends at 0x2E6F4C; the next unit starts at 0x2E6F50). The
+ * compiler does not emit it, so recover it as a raw-word filler to keep the unit
+ * size==span byte-exact (06333c5 precedent). */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E6F4C);
 
 /* The unit tail (0x2E6F50..0x2F003F) is the spimdisasm c-mode tail-fusion blob:
  * functions reached only by j / data-ref (no jal) that spimdisasm cannot promote
