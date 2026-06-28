@@ -28,39 +28,10 @@ extern void func_00278F90(void);
 extern s32 IsItemUnlockedAtProgress(s32 itemId, s32 progress);
 extern s32 AddItemToInventoryOrder(s32 itemId);
 
-/*
- * func_00291980 / func_002919A0 — thin frame-keeping forwarders to two
- * subsystem entry points in text/16E980's neighbourhood. The original does not
- * sibling-call (it builds a frame + jal), so an empty-asm guard suppresses
- * cc1's tail-call lowering.
- */
-void func_00291980(void) {
-    func_00278EC0();
-    __asm__ __volatile__("");
-}
-
-void func_002919A0(void) {
-    func_00278F90();
-    __asm__ __volatile__("");
-}
-
-/*
- * MapIsLevelRevealed — returns the per-level "map discovered" bit (0/1). Indexes
- * the revealed-area bitmap as byte level/8, bit level%8 (signed div/mod via the
- * shift-with-bias idiom). The (always-true) bounds guard yields 0 for the
- * degenerate case. The bitmap tail g_mapRevealedFlags (0x13965F) is the +0xA7
- * slice of a larger table based at D_1395B8 (0x1395B8 + 0xA7 == 0x13965F).
- */
+/* D_1395B8: revealed-area bitmap base; the map "discovered" bit slice is at
+ * +0xA7 (g_mapRevealedFlags 0x13965F). Used by MapIsLevelRevealed (moved to
+ * address order down by MapInit) and the reveal setter below. */
 extern u8 D_1395B8[];
-s32 MapIsLevelRevealed(s32 level) {
-    s32 byteIndex = level / 8;
-    s32 bit = level - byteIndex * 8;
-    s32 result = 0;
-    if ((u32)bit < 8) {
-        result = (D_1395B8[0xA7 + byteIndex] >> bit) & 1;
-    }
-    return result;
-}
 
 /*
  * NON-MATCHING map/loader helpers left as INCLUDE_ASM (honest measured walls
@@ -148,6 +119,23 @@ void SetupMemoryArenaTable(void) {
 #endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BootSystemInit);
+
+/*
+ * func_00291980 / func_002919A0 (0x291980 / 0x2919A0) — thin frame-keeping
+ * forwarders to two subsystem entry points in text/16E980's neighbourhood. The
+ * original does not sibling-call (it builds a frame + jal), so an empty-asm guard
+ * suppresses cc1's tail-call lowering. Defined HERE in address order (between
+ * BootSystemInit @0x2914D8 and func_002919C0), NOT at the file top.
+ */
+void func_00291980(void) {
+    func_00278EC0();
+    __asm__ __volatile__("");
+}
+
+void func_002919A0(void) {
+    func_00278F90();
+    __asm__ __volatile__("");
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002919C0);
 
@@ -997,6 +985,23 @@ s32 func_002956F8(s32 level) {
 }
 #endif
 
+/*
+ * MapIsLevelRevealed (0x295778) — returns the per-level "map discovered" bit
+ * (0/1). Indexes the revealed-area bitmap as byte level/8, bit level%8 (signed
+ * div/mod via the shift-with-bias idiom). The (always-true) bounds guard yields 0
+ * for the degenerate case. Defined HERE in address order (between func_002956F8
+ * @0x2956F8 and MapInit @0x2957C0), NOT at the file top.
+ */
+s32 MapIsLevelRevealed(s32 level) {
+    s32 byteIndex = level / 8;
+    s32 bit = level - byteIndex * 8;
+    s32 result = 0;
+    if ((u32)bit < 8) {
+        result = (D_1395B8[0xA7 + byteIndex] >> bit) & 1;
+    }
+    return result;
+}
+
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapInit);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapBeginUpload);
@@ -1124,6 +1129,30 @@ void func_00296038(s32 dst, s32 src) {
 }
 #endif
 
+/* MapFindCacheSlot(levelAndFlag) (0x2960D8): scan the 5 map cache slots for an
+ * occupied slot (slotState != 0) holding this level id. Returns the slot index,
+ * or -1. Defined HERE in address order (before MapDataExistsForLevel @0x296120),
+ * NOT after it.
+ *
+ * The matched build walks a single moving pointer `id` that starts at
+ * &slotLevelId[0] (g_mapVertexData + 0x29C); slotState[i] is reached as id[-5]
+ * (0x29C - 0x14 == 0x288). Materializing &g_mapVertexData as a base pointer and
+ * adding 0x29C separately is what keeps cc1 from folding the two into one `la`
+ * reloc — the shape the original was built with. Byte-exact USA + EU. */
+s32 MapFindCacheSlot(s32 levelAndFlag) {
+    s32 *base = (s32 *)&g_mapVertexData;
+    s32 *id   = base + (0x29C / 4);   /* &slotLevelId[0]; slotState[i] == id[i-5] */
+    s32 i = 0;
+    do {
+        if (id[-5] != 0 && id[0] == levelAndFlag) {
+            return i;
+        }
+        i++;
+        id++;
+    } while (i < 5);
+    return -1;
+}
+
 /* MapDataExistsForLevel(levelAndFlag): does map data exist for the given level?
  * The 0x100 flag bit selects the primary map-data TOC when set, the secondary
  * when clear; the low byte is the level. Reads the per-level sector count from
@@ -1153,28 +1182,6 @@ s32 MapDataExistsForLevel(s32 levelAndFlag) {
     return 0 < toc[0x15D4 / 4];               /* secondary set sector count */
 }
 #endif
-
-/* MapFindCacheSlot(levelAndFlag): scan the 5 map cache slots for an occupied
- * slot (slotState != 0) holding this level id. Returns the slot index, or -1.
- *
- * The matched build walks a single moving pointer `id` that starts at
- * &slotLevelId[0] (g_mapVertexData + 0x29C); slotState[i] is reached as id[-5]
- * (0x29C - 0x14 == 0x288). Materializing &g_mapVertexData as a base pointer and
- * adding 0x29C separately is what keeps cc1 from folding the two into one `la`
- * reloc — the shape the original was built with. Byte-exact USA + EU. */
-s32 MapFindCacheSlot(s32 levelAndFlag) {
-    s32 *base = (s32 *)&g_mapVertexData;
-    s32 *id   = base + (0x29C / 4);   /* &slotLevelId[0]; slotState[i] == id[i-5] */
-    s32 i = 0;
-    do {
-        if (id[-5] != 0 && id[0] == levelAndFlag) {
-            return i;
-        }
-        i++;
-        id++;
-    } while (i < 5);
-    return -1;
-}
 
 /* MapFindNearestAvailableLevel(): pick the level to upload next. Try the
  * current level (with the active-set 0x100 flag) first; if it's not already
