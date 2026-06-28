@@ -114,10 +114,16 @@ echo "== (6) HOST: cmp vs original main segment =="
 import sys,struct
 elf=open(sys.argv[1],'rb').read(); orig=open(sys.argv[2],'rb').read()
 # objcopy-equivalent: load PT_LOAD of the MAIN region (vaddr 0x100080) to a flat
-# image at file offset 0, compare against orig .rom (which is vaddr-0x100000 flat).
+# image at file offset 0, compare against orig .rom. The .rom is the loadable
+# flat image starting at the MAIN PT_LOAD vaddr 0x100080 (header-stripped:
+# .rom[0]==vaddr 0x100080, NOT 0x100000), so base MUST be 0x100080 — using
+# 0x100000 mis-aligns by the 0x80 ELF header and reports a bogus ~1.1M diffs.
+# (NOTE: nonzero diffs here are EXPECTED — every calt-redirected reference
+# (jal/%lo/.word retargeted into the 0x017Exxxx island) differs from retail; the
+# authoritative base-exactness check is nm placed-addr-vs-original per function.)
 en='<'
 e_phoff,=struct.unpack_from('<I',elf,28); e_phnum,=struct.unpack_from('<H',elf,44)
-diffs=0; calt_ptr=0; first=None; base=0x100000
+diffs=0; calt_ptr=0; first=None; base=0x100080
 for i in range(e_phnum):
     o=e_phoff+i*32
     p_type,p_off,p_vaddr,p_paddr,p_filesz,p_memsz,_,_=struct.unpack_from('<IIIIIIII',elf,o)
