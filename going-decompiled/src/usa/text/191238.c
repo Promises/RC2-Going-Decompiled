@@ -77,7 +77,41 @@ void func_002912B8(s32 progress) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291320);
 
+/* LoadIrxModuleFromBuffer: load an IRX module from an in-memory image. Build the
+ * loadfile arg block on the stack ([0]=image, [4]=arg, [8]=size, [C]=0), request
+ * the load (func_0011AFE0); on success spin the completion poll (func_0011AFC0)
+ * until it returns negative, then start the module (func_0011ED08(arg,0,0)) and
+ * return 1 iff that succeeded (>=0). If the load request itself fails (returns 0),
+ * return 1 without running/starting. */
+extern void *func_0011AFE0(void *argBlock, s32 mode, void *arg);
+extern s32 func_0011AFC0(void *handle);
+extern s32 func_0011ED08(void *arg, s32 a1, s32 a2);
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadIrxModuleFromBuffer);
+#else
+s32 LoadIrxModuleFromBuffer(void *image, s32 size, void *arg) {
+    s32 args[4];
+    void *h;
+    s32 result = 1;
+
+    args[0] = (s32)image;
+    args[1] = (s32)arg;
+    args[2] = size;
+    args[3] = 0;
+    h = func_0011AFE0(args, 1, arg);
+    if (h != 0) {
+        s32 r;
+        do {
+            r = func_0011AFC0(h);
+        } while (r >= 0);
+        r = func_0011ED08(arg, 0, 0);
+        result = (r >= 0) ? 1 : 0;
+    }
+    return result;
+}
+/* byte-walled: 4 callee-saves at 16-byte slots (this cc1) vs the original 8-byte
+ * packing. Correct C kept as the portable #else; cmp-oracle'd (callees mocked). */
+#endif
 
 /* Memory-region table consumed by ResetFrameArenas + the loaders. */
 extern u8   g_memoryArenaTable[]; /* 0x1BAE40, 0x9C bytes */
@@ -620,7 +654,36 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", UpdateLevelStag
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294550);
 
+/* StreamSceneSegment: kick the streaming load of scene sub-segment `idx`. The
+ * scene descriptor at g_cameraSlotActive+0x990 holds the active level's base
+ * index (+0x30) and load-buffer handle (+0x70). The per-segment LBN table sits at
+ * g_discToc+0x6348 + base*0x14C; segment `idx` spans [toc[idx], toc[idx+1]). When
+ * that span is non-empty, start the file read (dest, toc[idx]+baseLbn, sectors)
+ * and pump one dialog-voice service pass. Always returns 1. */
+extern u8  g_cameraSlotActive[];
+extern s32 g_discToc[];
+extern s32 StartFileLoad(s32 dest, s32 lbn, s32 sectors);
+extern void PumpDialogVoiceSystem(s32 blocking);
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", StreamSceneSegment);
+#else
+s32 StreamSceneSegment(s32 idx) {
+    s32 *desc = (s32 *)&g_cameraSlotActive[0x990];
+    s32 base = desc[0x30 / 4];
+    s32 *toc = (s32 *)((u8 *)g_discToc + 0x6348 + base * 0x14C);
+    s32 thisOff = toc[idx];
+    s32 sectors = toc[idx + 1] - thisOff;
+
+    if (sectors > 0) {
+        StartFileLoad(desc[0x70 / 4], thisOff + g_discToc[0x6314 / 4], sectors);
+        PumpDialogVoiceSystem(0);
+    }
+    return 1;
+}
+/* byte-walled 71%: GPR coloring + schedule (the descriptor/dest loads and the
+ * toc-base register assignment differ from the original's). Correct C kept as the
+ * portable #else; cmp-oracle'd (StartFileLoad/PumpDialogVoiceSystem mocked). */
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BindSceneChunk);
 
@@ -719,7 +782,32 @@ void SelectSceneSubChunk(s32 which) {
 }
 #endif
 
+/* func_00294970: reset the streaming in-flight slot table. Word-clear the whole
+ * table (g_respawnPlayerYaw+0x48, 0x35840 bytes), then arm the sentinels: the
+ * s16 at +0x14 and the three in-flight request-list words at +0x34/+0x38/+0x3C
+ * all set to -1 (empty). */
+extern void FillMemory32(void *dst, u32 val, s32 len);
+extern s32 g_respawnPlayerYaw[];
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294970);
+#else
+void func_00294970(void) {
+    s32 *rec = &g_respawnPlayerYaw[0x12];   /* +0x48 */
+    s32 *p;
+    s32 i;
+
+    FillMemory32(rec, 0, 0x35840);
+    *(s16 *)((u8 *)rec + 0x14) = -1;
+    p = (s32 *)((u8 *)rec + 0x3C);
+    for (i = 2; i >= 0; i--) {
+        *p = -1;
+        p--;
+    }
+}
+/* byte-walled at 95%: 2 callee-saves land at 16-byte slots (this cc1) vs the
+ * original's 8-byte packing (frame 0x20 vs 0x10) + the trailing loop delay-slot
+ * schedule. Correct C kept as the portable #else; cmp-oracle'd (mock FillMemory32). */
+#endif
 
 /*
  * func_002949E0(rec, enable) — commit a pending streaming-slot record. When
@@ -733,14 +821,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294970);
  * on real R5900 via cmp-oracle: the equal branch sets D_1A933C then falls into
  * the shared `result = -1` tail, so rec[0] is never the toggled value.)
  *
- * WALL: compiles instruction-for-instruction identical (same gp_rel D_1A933C
- * relocs, same bnel, same offsets) EXCEPT the pointer-arg copy the original's
- * later cc1 emits as 64-bit `daddu $6,$4,$0` which the pinned 2.9-ee-991111 cc1
- * lowers to 32-bit `move`. Single-instruction version delta; kept as #else.
+ * ENGINE-2.96 MATCH under per-function sched-ON (Validation A confirmed): the
+ * body is byte-exact with the engine cc1 + sched-ON (`-fno-strict-aliasing
+ * -fno-builtin`, no `-fno-schedule-insns`) + move_fixup for the daddu-vs-move.
+ * TU CAVEAT: NOT co-committable with sched-OFF siblings in 191238 — a TU compiles
+ * with ONE scheduler setting. Provable per-fn; commit only if 191238 goes
+ * sched-ON-uniform. Under the pinned 2.9 cc1 (sched-OFF) it is instruction-
+ * identical EXCEPT the pointer-arg copy emitted as 64-bit `daddu $6,$4,$0` vs the
+ * 2.9 32-bit `move` (a single-instruction version delta).
  */
 extern s32 g_respawnPlayerYaw[];
 extern s32 D_1A933C;
-#ifndef TARGET_NATIVE
+#if !defined(TARGET_NATIVE) && !defined(MATCH_func_002949E0)
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002949E0);
 #else
 void func_002949E0(s32 *rec, s32 enable) {
@@ -1467,7 +1559,19 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00298730);
  * (branch-likely) with the equal-path `lui %hi(g_pointLights)` in the annulled
  * delay slot; the pinned 2.9-ee-991111 cc1 only emits a plain `beq`. Body
  * (signed n%2 -> D_1A9428 / idx<<4 -> D_255E50) otherwise matches. */
+extern s32 D_1A9428;      /* gp-relative UI-slot base */
+extern u8  D_255E50[];    /* per-index UI element table (0x10 stride) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002988C8);
+#else
+void *func_002988C8(s32 idx) {
+    if (g_playerProgress == 0x14) {
+        s32 n = *(s32 *)(g_pointLights + 0x2400);
+        return (u8 *)&D_1A9428 + ((n % 2) << 4);
+    }
+    return &D_255E50[idx * 0x10];
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00298918);
 

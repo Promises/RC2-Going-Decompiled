@@ -417,22 +417,14 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336C30);
 
 /* GuiElementSetPos: write four floats into *(e+0x0), re-reading the vector
  * pointer before every store. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementSetPos);
-#else
-/* TODO(match): functional equivalent - not byte-exact; this cc1 always CSEs the
-   four same-block `lw` reloads into one (the original reloads e->pos before each
-   store, alternating two registers). 76% best.
-   cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
-   (cmp_GuiElementSetPos, run_cmp_suite.sh): offset-correctness oracle confirms
-   the four args land at e->pos[0..3], no 5th store, scale buffer untouched. */
+/* Byte-exact under the canonical engine flags (-fno-strict-aliasing restores
+   the per-store e->pos reload the original emits between the four stores). */
 void GuiElementSetPos(GuiElement *e, f32 x, f32 y, f32 z, f32 w) {
     e->pos[0] = x;
     e->pos[1] = y;
     e->pos[2] = z;
     e->pos[3] = w;
 }
-#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336C68);
 
@@ -502,21 +494,14 @@ void func_00336D28(GuiElement *e, f32 *newVisible) {
 #endif
 
 /* GuiElementSetScale: as GuiElementSetPos for the scale vector at +0x4. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementSetScale);
-#else
-/* TODO(match): functional equivalent - not byte-exact; same reloaded-pointer
-   CSE wall as GuiElementSetPos. 76% best.
-   cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
-   (cmp_GuiElementSetScale, run_cmp_suite.sh): offset-correctness oracle confirms
-   the four args land at e->scale[0..3] (struct +0x4), pos buffer untouched. */
+/* Byte-exact under the canonical engine flags (same per-store reload as
+   GuiElementSetPos, on the scale vector at +0x4). */
 void GuiElementSetScale(GuiElement *e, f32 x, f32 y, f32 z, f32 w) {
     e->scale[0] = x;
     e->scale[1] = y;
     e->scale[2] = z;
     e->scale[3] = w;
 }
-#endif
 
 /* GuiElementInstallBaseVtable: install the base vtable at +0x30, return e. */
 GuiElement *GuiElementInstallBaseVtable(GuiElement *e) {
@@ -801,34 +786,20 @@ void func_00337278(void *p) {
 
 /* GuiListSetColorPair0: write two colors into *(e+0xC) at +0/+4, re-reading the
  * block pointer between stores. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiListSetColorPair0);
-#else
-/* TODO(match): functional equivalent - not byte-exact; reloaded-pointer CSE
-   wall. 76% best.
-   cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
-   (cmp_GuiListSetColorPair0, run_cmp_suite.sh): offset-correctness oracle
-   confirms c0,c1 land at e->color[0],[1] with [2],[3] left sentinel. */
+/* Byte-exact under the canonical engine flags (-fno-strict-aliasing restores
+   the e->color reload between the two stores). */
 void GuiListSetColorPair0(GuiElement *e, s32 c0, s32 c1) {
     e->color[0] = c0;
     e->color[1] = c1;
 }
-#endif
 
 /* GuiListSetColorPair1: as GuiListSetColorPair0 at +8/+0xC. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiListSetColorPair1);
-#else
-/* TODO(match): functional equivalent - not byte-exact; reloaded-pointer CSE
-   wall. 76% best.
-   cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
-   (cmp_GuiListSetColorPair1, run_cmp_suite.sh): offset-correctness oracle
-   confirms c0,c1 land at e->color[2],[3] with [0],[1] left sentinel. */
+/* Byte-exact under the canonical engine flags (e->color reload as in
+   GuiListSetColorPair0, at +8/+0xC). */
 void GuiListSetColorPair1(GuiElement *e, s32 c0, s32 c1) {
     e->color[2] = c0;
     e->color[3] = c1;
 }
-#endif
 
 /* func_003372D0: write the high (alpha) byte of color words [0] and [1] of the
  * element's color block (+0xC), preserving the low 24 RGB bits. */
@@ -1310,18 +1281,12 @@ void *GuiPoolAlloc(GuiPool *pool) {
 
 /* func_00337D78: push a node onto the pool free-list at p+0x14 and decrement
  * the live count at p+0x10. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337D78);
-#else
-/* TODO(match): functional equivalent - not byte-exact; the original stores the
-   old head into *node before writing head=node; cc1 reorders the two
-   independent stores. 96% best. */
+/* Byte-exact under the canonical engine flags. */
 void func_00337D78(void *pool, void **node) {
     *node = *(void **)((char *)pool + 0x14);
     *(void **)((char *)pool + 0x14) = node;
     *(s32 *)((char *)pool + 0x10) -= 1;
 }
-#endif
 
 /* func_00337D98: return the small-data global D_1ADAF0. */
 extern s32 D_1ADAF0;
@@ -1850,16 +1815,12 @@ void func_0033BF90(void *p) {
 
 /* func_0033C060: write two floats through *(p+0x0) at +0/+4, re-reading the
  * pointer between stores. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033C060);
-#else
-/* TODO(match): functional equivalent - not byte-exact; reloaded-pointer CSE
-   wall. 76% best. */
+/* Byte-exact under the canonical engine flags (-fno-strict-aliasing restores
+   the pointer reload between the two stores). */
 void func_0033C060(void *p, f32 a, f32 b) {
     (*(f32 **)p)[0] = a;
     (*(f32 **)p)[1] = b;
 }
-#endif
 
 /* GuiDialogBoxSetBounds: write six dialog-box bound floats. */
 #ifndef TARGET_NATIVE
@@ -2752,16 +2713,12 @@ void func_00343F48(void *p, f32 v) {
 }
 
 /* func_00343F50: as func_0033C060: write two floats through *(p+0x0). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343F50);
-#else
-/* TODO(match): functional equivalent - not byte-exact; reloaded-pointer CSE
-   wall. 76% best. */
+/* Byte-exact under the canonical engine flags (pointer reload as in
+   func_0033C060). */
 void func_00343F50(void *p, f32 a, f32 b) {
     (*(f32 **)p)[0] = a;
     (*(f32 **)p)[1] = b;
 }
-#endif
 
 /* func_00343F68: clear the int at +0x90. */
 void func_00343F68(void *p) {
@@ -2894,13 +2851,121 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003457A0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00345890);
 
+/*
+ * func_00345F00 / func_00345FF0 / func_003460E0 / func_003461D0 — four sibling
+ * GUI-screen builders. Each fills a 0x5C-byte screen descriptor on the stack
+ * from the owning object `obj`'s config fields plus a per-builder label const
+ * and a 7-entry block of layout globals, then hands the descriptor to
+ * func_003380B8 (the populator that instantiates the screen's GUI elements).
+ * The four differ ONLY in their label const + their global block; the descriptor
+ * shape and the obj field offsets are identical. Save-wall blocked for matching
+ * ($16-$19/$31 packed 8-byte); provided as TARGET_NATIVE #else arms, cmp-oracle'd
+ * (cmp_235FE8_iso.c mocks func_003380B8 and byte-compares the built descriptor
+ * vs the original asm).
+ */
+typedef struct GuiScreenDesc {
+    void *label;        /* 0x00  &labelConst */
+    s32   cfg0;         /* 0x04  globalBlock[0] (by value) */
+    s32   cfg1;         /* 0x08  globalBlock[1] (by value) */
+    s32   objCfg4AC;    /* 0x0C  obj[0x4AC] */
+    s32   objCfg4B0;    /* 0x10  obj[0x4B0] */
+    void *layout0;      /* 0x14  &globalBlock[2] */
+    void *layout1;      /* 0x18  &globalBlock[3] */
+    void *layout2;      /* 0x1C  &globalBlock[4] */
+    void *layout3;      /* 0x20  &globalBlock[5] */
+    void *layout4;      /* 0x24  &globalBlock[6] */
+    void *child130;     /* 0x28  obj+0x130 */
+    s32   _z2C;         /* 0x2C  0 */
+    void *child17C;     /* 0x30  obj+0x17C */
+    s32   _z34;         /* 0x34  0 */
+    s32   _z38;         /* 0x38  0 */
+    void *child278;     /* 0x3C  obj+0x278 */
+    s32   _z40;         /* 0x40  0 */
+    void *child220;     /* 0x44  obj+0x220 */
+    s32   objCfg4A0;    /* 0x48  obj[0x4A0] */
+    s32   objCfg4B4;    /* 0x4C  obj[0x4B4] */
+    s32   _z50;         /* 0x50  0 */
+    s32   typeActive;   /* 0x54  obj[0x4B8] == this builder's screen-type index */
+    s32   enable;       /* 0x58  1 */
+} GuiScreenDesc;
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+_Static_assert(sizeof(GuiScreenDesc) == 0x5C, "GuiScreenDesc must be 0x5C under ILP32");
+#endif
+
+extern void func_003380B8(void *desc);   /* GUI screen populator (consumer) */
+
+/* per-builder label consts (address-taken) */
+extern u8 D_25E308[], D_1AA850[], D_1AA890[], D_1AA830[];
+/* per-builder 7-global layout blocks: first two read by VALUE, last five by ADDRESS */
+extern s32 D_1AE2F0, D_1AE2F4; extern u8 D_1AE2F8[], D_1AE300[], D_1AE308[], D_1AE310[], D_1AE318[];
+extern s32 D_1AE320, D_1AE324; extern u8 D_1AE328[], D_1AE330[], D_1AE338[], D_1AE340[], D_1AE348[];
+extern s32 D_1AE350, D_1AE354; extern u8 D_1AE358[], D_1AE360[], D_1AE368[], D_1AE370[], D_1AE378[];
+extern s32 D_1AE380, D_1AE384; extern u8 D_1AE388[], D_1AE390[], D_1AE398[], D_1AE3A0[], D_1AE3A8[];
+
+#ifdef TARGET_NATIVE
+/* Shared descriptor builder (the four siblings are one shape; see doc above). */
+static void GuiBuildScreenDesc(u8 *obj, void *label, s32 cfg0, s32 cfg1,
+                               void *l0, void *l1, void *l2, void *l3, void *l4,
+                               s32 typeIndex) {
+    GuiScreenDesc d;
+    d.label = label;
+    d.cfg0 = cfg0;
+    d.cfg1 = cfg1;
+    d.objCfg4AC = *(s32 *)(obj + 0x4AC);
+    d.objCfg4B0 = *(s32 *)(obj + 0x4B0);
+    d.layout0 = l0; d.layout1 = l1; d.layout2 = l2; d.layout3 = l3; d.layout4 = l4;
+    d.child130 = obj + 0x130;
+    d._z2C = 0;
+    d.child17C = obj + 0x17C;
+    d._z34 = 0;
+    d._z38 = 0;
+    d.child278 = obj + 0x278;
+    d._z40 = 0;
+    d.child220 = obj + 0x220;
+    d.objCfg4A0 = *(s32 *)(obj + 0x4A0);
+    d.objCfg4B4 = *(s32 *)(obj + 0x4B4);
+    d._z50 = 0;
+    d.typeActive = (*(s32 *)(obj + 0x4B8) == typeIndex);
+    d.enable = 1;
+    func_003380B8(&d);
+}
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00345F00);
+#else
+void func_00345F00(void *obj) {
+    GuiBuildScreenDesc((u8 *)obj, D_25E308, D_1AE2F0, D_1AE2F4,
+                       D_1AE2F8, D_1AE300, D_1AE308, D_1AE310, D_1AE318, 2);
+}
+#endif
 
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00345FF0);
+#else
+void func_00345FF0(void *obj) {
+    GuiBuildScreenDesc((u8 *)obj, D_1AA850, D_1AE320, D_1AE324,
+                       D_1AE328, D_1AE330, D_1AE338, D_1AE340, D_1AE348, 1);
+}
+#endif
 
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003460E0);
+#else
+void func_003460E0(void *obj) {
+    GuiBuildScreenDesc((u8 *)obj, D_1AA890, D_1AE350, D_1AE354,
+                       D_1AE358, D_1AE360, D_1AE368, D_1AE370, D_1AE378, 3);
+}
+#endif
 
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003461D0);
+#else
+void func_003461D0(void *obj) {
+    GuiBuildScreenDesc((u8 *)obj, D_1AA830, D_1AE380, D_1AE384,
+                       D_1AE388, D_1AE390, D_1AE398, D_1AE3A0, D_1AE3A8, 0);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003462C0);
 
@@ -2916,11 +2981,154 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00346CD8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiMapScreenTick);
 
+/* Family-2 screen descriptor (0x5C bytes), shared by func_00347228 / func_00347348
+ * / func_00347450. Distinct field layout from the func_00345F00 four. */
+typedef struct GuiScreenDesc2 {
+    void *label;        /* 0x00  &labelConst */
+    s32   cfg0;         /* 0x04  block[0] (by value) */
+    s32   cfg1;         /* 0x08  block[1] (by value) */
+    s32   objCfg4FC;    /* 0x0C  obj[0x4FC] */
+    s32   objCfg500;    /* 0x10  obj[0x500] */
+    void *layout0;      /* 0x14  &block[2] */
+    void *layout1;      /* 0x18  &block[3] */
+    void *layout2;      /* 0x1C  &block[4] */
+    void *layout3;      /* 0x20  &block[5] */
+    void *layout4;      /* 0x24  &block[6] */
+    void *child130;     /* 0x28  obj+0x130 */
+    s32   _z2C;         /* 0x2C  0 */
+    void *child17C;     /* 0x30  obj+0x17C */
+    s32   _z34;         /* 0x34  0 */
+    s32   typeIndex;    /* 0x38  this builder's screen-type index (literal) */
+    void *child278;     /* 0x3C  obj+0x278 */
+    void *child4B8;     /* 0x40  obj+0x4B8 */
+    void *child220;     /* 0x44  obj+0x220 */
+    s32   objCfg470;    /* 0x48  obj[0x470] */
+    s32   objCfg504;    /* 0x4C  obj[0x504] */
+    s32   _z50;         /* 0x50  0 for most builders; func_00347228 packs a scratch ptr here */
+    s32   typeActive;   /* 0x54  obj[0x508] == typeIndex */
+    s32   enable;       /* 0x58  1 */
+} GuiScreenDesc2;
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+_Static_assert(sizeof(GuiScreenDesc2) == 0x5C, "GuiScreenDesc2 must be 0x5C under ILP32");
+#endif
+
+/*
+ * func_00347228 — screen builder, family-2 variant. Same GuiScreenDesc2 shape as
+ * func_00347348/450 but: (1) screen-type index 0, so typeActive = (obj[0x508]==0);
+ * (2) it uses the D_1AE428 global block (cfg0/cfg1 by value, layout0..4 = the five
+ * &D_1AE430..450 addresses) and label const D_259CC0; (3) the distinguishing trait
+ * — desc[0x50] carries a pointer to a local 8-byte copy of the D_1AE088 scratch
+ * buffer (the original does an unaligned ldl/ldr -> sdl/sdr 8-byte copy onto the
+ * frame, then stores its address into the descriptor). Save-wall blocked for
+ * matching (frame 0xB0, six callee-saves at 8-byte spacing); TARGET_NATIVE #else
+ * arm, cmp-oracle'd via cmp_GuiScreenBuilders2 (the scratch ptr is a stack address,
+ * volatile across asm-vs-C — func_003380B8 dereferences the pointed-to bytes, so the
+ * downstream effect is identical as long as those 8 bytes equal D_1AE088's).
+ */
+extern u8 D_1AE088[];               /* 8-byte scratch source */
+extern u8 D_259CC0[];               /* family-2 label const for the index-0 screen */
+extern s32 D_1AE428, D_1AE42C;      /* cfg0, cfg1 (read by value) */
+extern u8 D_1AE430[], D_1AE438[], D_1AE440[], D_1AE448[], D_1AE450[];  /* layout0..4 */
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00347228);
+#else
+void func_00347228(void *obj_) {
+    u8 *obj = (u8 *)obj_;
+    GuiScreenDesc2 d;
+    u8 scratch[8];
+    s32 i;
 
+    /* unaligned 8-byte copy of D_1AE088 (the original uses ldl/ldr -> sdl/sdr) */
+    for (i = 0; i < 8; i++) scratch[i] = D_1AE088[i];
+
+    d.label = D_259CC0;
+    d.cfg0 = D_1AE428;
+    d.cfg1 = D_1AE42C;
+    d.objCfg4FC = *(s32 *)(obj + 0x4FC);
+    d.objCfg500 = *(s32 *)(obj + 0x500);
+    d.layout0 = D_1AE430; d.layout1 = D_1AE438; d.layout2 = D_1AE440;
+    d.layout3 = D_1AE448; d.layout4 = D_1AE450;
+    d.child130 = obj + 0x130;
+    d._z2C = 0;
+    d.child17C = obj + 0x17C;
+    d._z34 = 0;
+    d.typeIndex = 0;
+    d.child278 = obj + 0x278;
+    d.child4B8 = obj + 0x4B8;
+    d.child220 = obj + 0x220;
+    d.objCfg470 = *(s32 *)(obj + 0x470);
+    d.objCfg504 = *(s32 *)(obj + 0x504);
+    d._z50 = (s32)scratch;                      /* desc[0x50] = ptr to the local scratch copy (ILP32) */
+    d.typeActive = (*(s32 *)(obj + 0x508) == 0);
+    d.enable = 1;
+    func_003380B8(&d);
+}
+#endif
+
+/*
+ * func_00347348 / func_00347450 — two more screen builders ("family-2" shape, a
+ * distinct field layout from the func_00345F00 four). Each fills a 0x5C-byte
+ * descriptor from the owning object + a per-builder label const and 7-global
+ * block plus a screen-type index, then hands it to func_003380B8. The index
+ * appears literally at desc[0x38] AND drives the desc[0x54] match flag
+ * (obj[0x508] == index): 348 -> 3, 450 -> 1. (func_00347228 is the same family
+ * but routes a pointed-to local D_1AE088 scratch buffer through desc[0x50]; left
+ * INCLUDE_ASM for a separate pass.) Save-wall blocked for matching; provided as
+ * TARGET_NATIVE #else arms, cmp-oracle'd (cmp_GuiScreenBuilders2). The
+ * GuiScreenDesc2 layout is defined above func_00347228.
+ */
+
+/* family-2 label consts (absolute) + 7-global blocks (first two read by value) */
+extern u8 D_1AA7F8[], D_1AA8B8[];
+extern s32 D_1AE458, D_1AE45C; extern u8 D_1AE460[], D_1AE468[], D_1AE470[], D_1AE478[], D_1AE480[];
+extern s32 D_1AE488, D_1AE48C; extern u8 D_1AE490[], D_1AE498[], D_1AE4A0[], D_1AE4A8[], D_1AE4B0[];
+
+#ifdef TARGET_NATIVE
+static void GuiBuildScreenDesc2(u8 *obj, void *label, s32 cfg0, s32 cfg1,
+                                void *l0, void *l1, void *l2, void *l3, void *l4,
+                                s32 typeIndex) {
+    GuiScreenDesc2 d;
+    d.label = label;
+    d.cfg0 = cfg0;
+    d.cfg1 = cfg1;
+    d.objCfg4FC = *(s32 *)(obj + 0x4FC);
+    d.objCfg500 = *(s32 *)(obj + 0x500);
+    d.layout0 = l0; d.layout1 = l1; d.layout2 = l2; d.layout3 = l3; d.layout4 = l4;
+    d.child130 = obj + 0x130;
+    d._z2C = 0;
+    d.child17C = obj + 0x17C;
+    d._z34 = 0;
+    d.typeIndex = typeIndex;
+    d.child278 = obj + 0x278;
+    d.child4B8 = obj + 0x4B8;
+    d.child220 = obj + 0x220;
+    d.objCfg470 = *(s32 *)(obj + 0x470);
+    d.objCfg504 = *(s32 *)(obj + 0x504);
+    d._z50 = 0;
+    d.typeActive = (*(s32 *)(obj + 0x508) == typeIndex);
+    d.enable = 1;
+    func_003380B8(&d);
+}
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00347348);
+#else
+void func_00347348(void *obj) {
+    GuiBuildScreenDesc2((u8 *)obj, D_1AA7F8, D_1AE458, D_1AE45C,
+                        D_1AE460, D_1AE468, D_1AE470, D_1AE478, D_1AE480, 3);
+}
+#endif
 
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00347450);
+#else
+void func_00347450(void *obj) {
+    GuiBuildScreenDesc2((u8 *)obj, D_1AA8B8, D_1AE488, D_1AE48C,
+                        D_1AE490, D_1AE498, D_1AE4A0, D_1AE4A8, D_1AE4B0, 1);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00347550);
 

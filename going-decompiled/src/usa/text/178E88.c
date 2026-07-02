@@ -418,7 +418,32 @@ void *LookupOcclusionGridCell(s32 x, s32 y, s32 z) {
 }
 #endif
 
+/* LookupNeighborOcclusionCell: probe two occlusion-grid cells and return the
+ * first that resolves (nonzero). `bias` (< 0.5 vs >= 0.5) picks which cell is
+ * tried first — the near cell (x0,y0,z0) when bias < 0.5, else the far cell
+ * (x1,y1,z1); the other is the fallback. Byte-walled: 6 callee-saves at 16-byte
+ * slots (this cc1) vs the original's 8-byte packing. Correct C as the portable
+ * #else body; seedable (mock LookupOcclusionGridCell) -> cmp-oracle. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", LookupNeighborOcclusionCell);
+#else
+void *LookupNeighborOcclusionCell(f32 bias, s32 x0, s32 y0, s32 z0,
+                                  s32 x1, s32 y1, s32 z1) {
+    void *cell;
+    if (bias < 0.5f) {
+        cell = LookupOcclusionGridCell(x0, y0, z0);
+        if (cell != (void *)0) {
+            return cell;
+        }
+        return LookupOcclusionGridCell(x1, y1, z1);
+    }
+    cell = LookupOcclusionGridCell(x1, y1, z1);
+    if (cell != (void *)0) {
+        return cell;
+    }
+    return LookupOcclusionGridCell(x0, y0, z0);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", ResolveOcclusionVisMask);
 
@@ -567,7 +592,20 @@ void ResetPerFrameDrawQueues(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", AppendFrameInitGsState);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027BFA8);
+/* func_0027BFA8: program the GS privileged display registers (0x12000000 page)
+ * from the saved screen-context words. PMODE(0x00)=0xFFA1 enables read-circuit 1;
+ * the DISPFB/DISPLAY pairs (0x20/0x70/0x80/0x90/0xA0) are loaded from
+ * g_gsScreenContext +0x8/+0x10/+0x18; BGCOLOR(0xE0) and 0xD0 are cleared. */
+void func_0027BFA8(void) {
+    *(volatile u64 *)0x120000E0 = 0;
+    *(volatile u64 *)0x12000000 = 0xFFA1;
+    *(volatile u64 *)0x12000020 = *(u64 *)(g_gsScreenContext + 0x8);
+    *(volatile u64 *)0x12000070 = *(u64 *)(g_gsScreenContext + 0x10);
+    *(volatile u64 *)0x12000090 = *(u64 *)(g_gsScreenContext + 0x10);
+    *(volatile u64 *)0x12000080 = *(u64 *)(g_gsScreenContext + 0x18);
+    *(volatile u64 *)0x120000A0 = *(u64 *)(g_gsScreenContext + 0x18);
+    *(volatile u64 *)0x120000D0 = 0;
+}
 
 /* SetupViewModelDepthRange - set a near/compressed GS depth range for the
  * held-item view-model pass so the weapon never clips into world geometry, then
@@ -1119,7 +1157,35 @@ void func_00280FE0(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00281010);
 
+/* func_00281020: compute a per-actor occlusion ratio. For actor `idx` in
+ * g_sceneActorMobys (0x30 stride, field cluster based at +0x44), read its
+ * w/h (+0x24/+0x26 as s16), scan w*h packed pixels in `pixels` counting how many
+ * whose low 24 bits exceed the actor's depth threshold (+0x14), then store the
+ * visible fraction (n-exceed)/n as a float through the actor's result pointer
+ * (+0x10). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00281020);
+#else
+void func_00281020(u32 *pixels, s32 idx) {
+    u8 *base = g_sceneActorMobys + 0x44;
+    u8 *e = base + idx * 0x30;
+    s32 n = *(s16 *)(e + 0x24) * *(s16 *)(e + 0x26);
+    s32 cnt = 0;
+    if (n > 0) {
+        u32 thr = *(u32 *)(e + 0x14);
+        u32 *p = pixels;
+        s32 i = n;
+        do {
+            cnt += (thr < (*p & 0xFFFFFF));
+            p++;
+        } while (--i);
+    }
+    *(f32 *)(*(u32 **)(base + idx * 0x30 + 0x10)) = (f32)(n - cnt) / (f32)n;
+}
+/* byte-match walled at ~82% (GPR coloring + %hi-base rematerialize vs reuse; a
+ * fixed regalloc shape this cc1 won't reproduce). Correct C kept as the portable
+ * #else body; seedable -> cmp-oracle. */
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002810C0);
 

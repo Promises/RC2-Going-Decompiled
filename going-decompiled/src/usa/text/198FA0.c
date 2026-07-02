@@ -300,7 +300,50 @@ void func_00299020(void) {
  * 1-insn %gp_rel form (in a branch/jr delay slot) AND via the absolute lui/$at
  * macro elsewhere in the same function; GNU as picks one form per symbol, so
  * the unit-wide extern model cannot reproduce both. Left as asm. */
+/** Save/load top-level status arbiter. Always consumes the pending-flag's 0x2
+ *  and 0x4 bits first. Then: if no save is pending (areaTable/dirty +0x17C == 0)
+ *  -> status 3. Otherwise route the original flags: bit 0x80 (or secondary-path
+ *  +0x16C) -> status 0x15 (consume 0x80, set 0x40); bit 0x100 -> status 0x14
+ *  (consume 0x100, set 0x40); else if a card transaction is active (busy != 0)
+ *  clear the pending flag and, on a hard/abort card error (D_1A8C88/D_1A8C8C)
+ *  show status 3, else show status 2 (set bit 0x1); else (idle) bit 0x200 ->
+ *  status 0x19 (consume 0x200).
+ *  (Walled for matching by the reload-artifact named in the file header.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299040);
+#else
+void func_00299040(void) {
+    s32 flags = g_nSaveLoadStatusCode[1];
+    s32 cleared = flags & ~0x6;
+    g_nSaveLoadStatusCode[1] = cleared;
+    if (D_1393E0.dirty == 0) {
+        g_nSaveLoadStatusCode[0] = 3;
+        return;
+    }
+    if ((flags & 0x80) || D_1393E0.unk16C != 0) {
+        g_nSaveLoadStatusCode[0] = 0x15;
+        g_nSaveLoadStatusCode[1] = (cleared & ~0x80) | 0x40;
+        return;
+    }
+    if (flags & 0x100) {
+        g_nSaveLoadStatusCode[0] = 0x14;
+        g_nSaveLoadStatusCode[1] = (cleared ^ 0x100) | 0x40;
+        return;
+    }
+    if (D_1393E0.busy != 0) {
+        D_1393E0.dirty = 0;
+        if (D_1A8C88 != 0 || D_1A8C8C != 0) {
+            g_nSaveLoadStatusCode[0] = 3;
+        } else {
+            g_nSaveLoadStatusCode[0] = 2;
+            g_nSaveLoadStatusCode[1] = cleared | 0x1;
+        }
+    } else if (flags & 0x200) {
+        g_nSaveLoadStatusCode[0] = 0x19;
+        g_nSaveLoadStatusCode[1] = cleared ^ 0x200;
+    }
+}
+#endif
 
 /** If no save/load action is pending (flag bit 0 clear), reset the popup
  *  status to 3 (idle). */
@@ -463,11 +506,83 @@ void func_00299398(void) {
     }
 }
 
+/** Save/load step (only while a card transaction finished selecting, mode 2,
+ *  result < 0): secondary-path flag (+0x16C) set -> status 0xC; else a deep
+ *  abort (busy < -1) -> status 3; else if the active slot is the sentinel -2,
+ *  pick status 0x13 (or 0xC when the unkC + 0x20 byte total reaches 0x1DB);
+ *  else (slot >= -1) -> status 0x10.
+ *  (Walled for matching by the reload-artifact named in the file header.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_002993D8);
+#else
+void func_002993D8(void) {
+    if (D_1393E0.mode != 2 || D_1393E0.result >= 0) {
+        return;
+    }
+    if (D_1393E0.unk16C != 0) {
+        g_nSaveLoadStatusCode[0] = 0xC;
+        return;
+    }
+    if (D_1393E0.busy < -1) {
+        g_nSaveLoadStatusCode[0] = 3;
+        return;
+    }
+    if (D_1393E0.slot == -2) {
+        if (D_1393E0.unkC + D_1393E0.unk1C[1] < 0x1DB) {
+            g_nSaveLoadStatusCode[0] = 0x13;
+        } else {
+            g_nSaveLoadStatusCode[0] = 0xC;
+        }
+    } else if (D_1393E0.slot >= -1) {
+        g_nSaveLoadStatusCode[0] = 0x10;
+    }
+}
+#endif
 
+/** Save/load status predicate: while a card transaction is active
+ *  (D_1393F0/busy != 0) show popup status 3 (idle/none); otherwise, if the
+ *  pending-flag's 0x2 bit is set, show status 0xD. (Walled for matching by the
+ *  reload-artifact named in the file header — kept as asm + a typed #else.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299478);
+#else
+void func_00299478(void) {
+    if (D_1393F0[0] != 0) {
+        g_nSaveLoadStatusCode[0] = 3;
+    } else if (g_nSaveLoadStatusCode[1] & 0x2) {
+        g_nSaveLoadStatusCode[0] = 0xD;
+    }
+}
+#endif
 
+/** Save/load status dispatch: while a card transaction is active
+ *  (D_1393F0/busy != 0) show status 3. Otherwise route on the pending-flag word:
+ *  bit 0x20 -> clear it, then if a hard card error is latched (D_1A8C88) show
+ *  status 0x18 else status 0xC; bit 0x10 -> clear it and show status 0xE.
+ *  (Walled for matching by the reload-artifact named in the file header.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_002994B0);
+#else
+void func_002994B0(void) {
+    s32 flags;
+    if (D_1393F0[0] != 0) {
+        g_nSaveLoadStatusCode[0] = 3;
+        return;
+    }
+    flags = g_nSaveLoadStatusCode[1];
+    if (flags & 0x20) {
+        g_nSaveLoadStatusCode[1] = flags ^ 0x20;   /* consume bit 0x20 */
+        if (D_1A8C88 != 0) {
+            g_nSaveLoadStatusCode[0] = 0x18;
+        } else {
+            g_nSaveLoadStatusCode[0] = 0xC;
+        }
+    } else if (flags & 0x10) {
+        g_nSaveLoadStatusCode[1] = flags ^ 0x10;   /* consume bit 0x10 */
+        g_nSaveLoadStatusCode[0] = 0xE;
+    }
+}
+#endif
 
 /** If a card transaction finished selecting (mode 2) with no result yet,
  *  force result 9 (cancelled) and show popup status 0xF. */
@@ -479,9 +594,64 @@ void func_00299528(void) {
     }
 }
 
+/** Save/load step (only while a card transaction finished selecting, mode 2,
+ *  with no result yet, result < 0): if the secondary-path flag (+0x16C) is set,
+ *  show status 0x12 and set the pending-flag's 0x40 bit; otherwise commit
+ *  result 7 / subResult 0, show status 0x16, and reset the transaction
+ *  (unk148 + slot cleared).
+ *  (Walled for matching by the reload-artifact named in the file header.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299568);
+#else
+void func_00299568(void) {
+    if (D_1393E0.mode != 2 || D_1393E0.result >= 0) {
+        return;
+    }
+    if (D_1393E0.unk16C != 0) {
+        g_nSaveLoadStatusCode[0] = 0x12;
+        g_nSaveLoadStatusCode[1] |= 0x40;
+    } else {
+        D_1393E0.result = 7;
+        D_1393E0.subResult = 0;
+        g_nSaveLoadStatusCode[0] = 0x16;
+        D_1393E0.unk148 = 0;
+        D_1393E0.slot = 0;
+    }
+}
+#endif
 
+/** Save/load status: first consume the pending-flag's 0x4 and 0x2 bits if set.
+ *  Then route on the remaining flags: bit 0x80 -> status 0x15 (consume 0x80, set
+ *  0x40); bit 0x100 -> status 0x14 (consume 0x100, set 0x40); else if a card
+ *  transaction is active (g_areaTable/busy != 0) -> status 3; else if the
+ *  save-pending flag (+0x17C) is set -> status 1.
+ *  (Walled for matching by the reload-artifact named in the file header.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_002995E0);
+#else
+void func_002995E0(void) {
+    s32 flags = g_nSaveLoadStatusCode[1];
+    if (flags & 0x4) {
+        g_nSaveLoadStatusCode[1] = flags & ~0x4;
+    }
+    flags = g_nSaveLoadStatusCode[1];
+    if (flags & 0x2) {
+        g_nSaveLoadStatusCode[1] = flags & ~0x2;
+    }
+    flags = g_nSaveLoadStatusCode[1];
+    if (flags & 0x80) {
+        g_nSaveLoadStatusCode[0] = 0x15;
+        g_nSaveLoadStatusCode[1] = (flags ^ 0x80) | 0x40;
+    } else if (flags & 0x100) {
+        g_nSaveLoadStatusCode[0] = 0x14;
+        g_nSaveLoadStatusCode[1] = (flags ^ 0x100) | 0x40;
+    } else if (D_1393E0.busy != 0) {
+        g_nSaveLoadStatusCode[0] = 3;
+    } else if (D_1393E0.dirty != 0) {
+        g_nSaveLoadStatusCode[0] = 1;
+    }
+}
+#endif
 
 /** If no save/load confirmation is pending (flag bit 6 clear), reset the popup
  *  status to 3 (idle). First of four identical per-call-site stubs. */
@@ -520,13 +690,116 @@ void func_00299730(void) {
     }
 }
 
+/** Save/load step (only while a card transaction finished selecting, mode 2,
+ *  result < 0): if the secondary-path flag (+0x16C) or the retry slot (+0x24)
+ *  is set, clear the save-pending flag (+0x17C), show status 0x15 and set the
+ *  pending-flag's 0x440 bits; otherwise mark save-pending (+0x17C = 1) and show
+ *  status 1.
+ *  (Walled for matching by the reload-artifact named in the file header.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299758);
+#else
+void func_00299758(void) {
+    if (D_1393E0.mode != 2 || D_1393E0.result >= 0) {
+        return;
+    }
+    if (D_1393E0.unk16C != 0 || D_1393E0.unk1C[2] != 0) {
+        g_nSaveLoadStatusCode[0] = 0x15;
+        D_1393E0.dirty = 0;
+        g_nSaveLoadStatusCode[1] |= 0x440;
+    } else {
+        g_nSaveLoadStatusCode[0] = 1;
+        D_1393E0.dirty = 1;
+    }
+}
+#endif
 
+/** Save-complete handler (only while a card transaction finished, mode 2,
+ *  result < 0). Nothing pending (secondary-path +0x16C == 0 and not busy) ->
+ *  mark save-pending (+0x17C = 1) and show status 1. Secondary path
+ *  (+0x16C != 0) -> clear the pending flag, show status 0x15, then drive a
+ *  game-state change to the save/load screen (RequestGameStateChange(4,
+ *  g_nGameState == 0 ? 1 : 2, 1, 0, 0)); if already in the level-exit state
+ *  (g_nGameState == 6) flush the pending cinematic (func_00289798); finally show
+ *  status 2. Else (busy, no secondary path) -> consume the pending-flag's 0x40
+ *  bit, set bit 0x1, show status 2.
+ *  (Walled for matching by the reload-artifact named in the file header.) */
+extern s32 g_nGameState;
+extern void RequestGameStateChange(s32 newState, s32 argA, s32 argB, s32 argC, s32 argD);
+extern void func_00289798(void);
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_002997C8);
+#else
+void func_002997C8(void) {
+    if (D_1393E0.mode != 2 || D_1393E0.result >= 0) {
+        return;
+    }
+    if (D_1393E0.unk16C == 0 && D_1393E0.busy == 0) {
+        D_1393E0.dirty = 1;
+        g_nSaveLoadStatusCode[0] = 1;
+        return;
+    }
+    D_1393E0.dirty = 0;
+    if (D_1393E0.unk16C != 0) {
+        g_nSaveLoadStatusCode[0] = 0x15;
+        g_nSaveLoadStatusCode[1] = 0x40;
+        if (g_nGameState == 0) {
+            RequestGameStateChange(4, 1, 1, 0, 0);
+        } else {
+            RequestGameStateChange(4, 2, 1, 0, 0);
+        }
+        if (g_nGameState == 6) {
+            func_00289798();
+        }
+        g_nSaveLoadStatusCode[0] = 2;
+    } else {
+        g_nSaveLoadStatusCode[1] = (g_nSaveLoadStatusCode[1] & ~0x40) | 0x1;
+        g_nSaveLoadStatusCode[0] = 2;
+    }
+}
+#endif
 
+/** Save/load status: while a card-removal abort is NOT in flight
+ *  (D_1393F0/busy != -2) show status 3; otherwise, if the pending-flag's 0x20
+ *  bit is set, consume it and show status 5.
+ *  (Walled for matching by the reload-artifact named in the file header.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_002998D0);
+#else
+void func_002998D0(void) {
+    s32 flags;
+    if (D_1393F0[0] != -2) {
+        g_nSaveLoadStatusCode[0] = 3;
+        return;
+    }
+    flags = g_nSaveLoadStatusCode[1];
+    if (flags & 0x20) {
+        g_nSaveLoadStatusCode[1] = flags ^ 0x20;   /* consume bit 0x20 */
+        g_nSaveLoadStatusCode[0] = 5;
+    }
+}
+#endif
 
+/** Save/load status: while a card transaction is active (D_1393F0/busy != 0)
+ *  show status 3; otherwise, if the pending-flag's 0x20 bit is set, consume it
+ *  and show status 0xC.
+ *  (Walled for matching by the reload-artifact named in the file header.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299918);
+#else
+void func_00299918(void) {
+    s32 flags;
+    if (D_1393F0[0] != 0) {
+        g_nSaveLoadStatusCode[0] = 3;
+        return;
+    }
+    flags = g_nSaveLoadStatusCode[1];
+    if (flags & 0x20) {
+        g_nSaveLoadStatusCode[1] = flags ^ 0x20;   /* consume bit 0x20 */
+        g_nSaveLoadStatusCode[0] = 0xC;
+    }
+}
+#endif
 
 /* func_00299960: 2-insn leaf `return g_savePromptLatch;` (the latched flag at
  * 0x1B19BC, also read by func_00299968). UNMATCHABLE: the original reads it via
@@ -581,9 +854,102 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299B00);
 
 /* func_00299B18 / func_00299BF8: save-buffer setup helpers (multi callee-save).
  * 8-byte-packed callee-save frame wall, see func_0029C678. Left as asm. */
+/* forward decls: CalcSaveSectionsSize/DeserializeSaveSections are defined below;
+ * the two section-table globals + the error string aren't declared elsewhere. */
+extern s32  CalcSaveSectionsSize(SaveSection *table);
+extern s32  DeserializeSaveSections(void *image, s32 slotMul, SaveSection *table);
+extern void func_0029C418(void);
+extern SaveSection g_saveSectionTableGlobal[];
+extern SaveSection g_saveSectionTableArea[];
+extern char D_1A99A8[];   /* "save size mismatch" log string */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299B18);
+#else
+/* func_00299B18(image): restore a save image. First validates the image's two
+ * leading size words against the live section-table sizes (global then area);
+ * on a mismatch it logs g_saveSizeMismatchMsg and bails without touching the
+ * tables. Otherwise it skips the size header and deserializes the global block
+ * (slot 0) followed by all 0x1C area slots, advancing the image cursor by each
+ * block's size, then finalizes via func_0029C418. */
+void func_00299B18(u8 *image) {
+    s32 sizeGlobal = CalcSaveSectionsSize(g_saveSectionTableGlobal);
+    s32 sizeArea = CalcSaveSectionsSize(g_saveSectionTableArea);
+    s32 i;
 
+    if (*(s32 *)(image + 0) != sizeGlobal || *(s32 *)(image + 4) != sizeArea) {
+        DebugPrintStub(D_1A99A8);
+        return;
+    }
+
+    image += 8;
+    DeserializeSaveSections(image, 0, g_saveSectionTableGlobal);
+    image += sizeGlobal;
+    for (i = 0; i < 0x1C; i++) {
+        DeserializeSaveSections(image, i, g_saveSectionTableArea);
+        image += sizeArea;
+    }
+    func_0029C418();
+}
+#endif
+
+/* func_00299BF8 callees/globals (declared for the TARGET_NATIVE #else only). */
+extern u8   g_areaTable[];    /* 0x1393E0 per-area record table (aliases D_1393E0) */
+extern u8   g_discToc[];      /* 0x14B540 master disc asset directory (byte-addressed) */
+extern s32  g_playerProgress; /* 0x1A79F8 first word of the persistent save block */
+extern void func_00289398(s32 sectorByteOffset, void *outBuf); /* load save file -> *outBuf */
+extern void PumpDialogVoiceSystem(s32 blocking);
+extern void StartFileLoadPumpingVoice(void *buf, s32 lba, s32 size);
+
+/** func_00299BF8 — load-side save-image restore orchestrator (counterpart of
+ *  BuildSaveImage). Reads the current save file off the disc TOC, restores the
+ *  serialized game state through func_00299B18 while preserving the 0x28-byte
+ *  g_bPalMode video-config block across it, then clears the "resident asset" and
+ *  progress latches so the newly-loaded state takes effect:
+ *    - load the save file (func_00289398) at g_discToc[+0x344]<<11, service the
+ *      voice pump, then kick the file load (StartFileLoadPumpingVoice) with the
+ *      level/global WAD base LBAs from g_discToc[+0x340]/[+0x32C]/[+0x344];
+ *    - snapshot g_bPalMode -> scratch, run func_00299B18 on the image body at
+ *      buf + buf[0x10], restore g_bPalMode <- scratch;
+ *    - reset g_playerProgress head word, clear the save-context dirty flag
+ *      (g_areaTable+0x17C) and force the active card slot (+0x18) to -1 if held,
+ *      invalidate the resident armor/held-item model ids and the dialog-scene
+ *      latches at g_levelDialogToc+0x13C8/+0x13E0, and drop the 0x200 pending bit
+ *      in g_nSaveLoadStatusCode[1].
+ *  Not isolatable as a cmp (its callees func_00299B18/func_00283460 live in-unit,
+ *  so the runner's T->c_ rename would drag the whole save subsystem); the #else
+ *  is native-checked + trace-verified. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299BF8);
+#else
+void func_00299BF8(void) {
+    u8   scratch[0x28];
+    void *buf;
+
+    func_00289398(*(s32 *)(g_discToc + 0x344) << 11, &buf);
+    PumpDialogVoiceSystem(1);
+    StartFileLoadPumpingVoice(buf,
+                              *(s32 *)(g_discToc + 0x340) + *(s32 *)(g_discToc + 0x32C),
+                              *(s32 *)(g_discToc + 0x344));
+
+    /* preserve the g_bPalMode block across the destructive image restore */
+    func_00283460(scratch, &g_bPalMode, 0x28);
+    func_00299B18((u8 *)buf + *(s32 *)((u8 *)buf + 0x10));
+    func_00283460(&g_bPalMode, scratch, 0x28);
+
+    g_playerProgress = 0;
+    if (*(s32 *)(g_areaTable + 0x17C) != 0) {
+        *(s32 *)(g_areaTable + 0x17C) = 0;
+    }
+    if (*(s16 *)(g_areaTable + 0x18) >= 0) {
+        *(s16 *)(g_areaTable + 0x18) = -1;
+    }
+    *(s32 *)(&g_levelDialogToc + 0x13C8) = -1;      /* 0x13B0 + 0x18 */
+    g_loadedArmorVariant = -1;
+    g_nSaveLoadStatusCode[1] &= ~0x200;
+    g_loadedHeldItemModelId = -1;
+    *(s32 *)(&g_levelDialogToc + 0x13E0) = -1;      /* 0x13B0 + 0x30 */
+}
+#endif
 
 /* SaveLoadStateMachine: the 0x1EA0-byte memory-card transaction state machine
  * (the largest function in the unit). Multi callee-save + libmc call graph;
@@ -889,7 +1255,16 @@ void func_0029C418(void) {
  * way in func_0029DAD0/func_0029DB10; no source shape found that flips it
  * (local-gui, copy-first, bare-return variants all probed). Same coloring
  * wall as func_002911F0. Left as asm. */
+extern s32 func_00339398(char *widget, s32 a, s32 b);
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029C448);
+#else
+s32 func_0029C448(s32 a, s32 b) {
+    if (g_guiInstance != 0) {
+        return func_00339398(g_guiInstance + 0x36F28, a, b);
+    }
+}
+#endif
 
 /** Forward `arg` to the HUD render object at g_guiInstance+0x376C8 (method
  *  func_0034DB68). */
@@ -1790,7 +2165,72 @@ s32 EvaluateProgressCondition(s32 cond, s32 arg) {
  * preloads it to a register; theirs rematerialises it in a beql delay slot),
  * (c) the original copies the outIds cursor and reloads rec->state in the
  * value-select block where ours CSEs. Left as asm. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", GatherActiveObjectives);
+#else
+s32 GatherActiveObjectives(s32 *outIds, s32 *outMask, s32 *outVals, s32 wantValues) {
+    u8 *rec = *(u8 **)(g_pRainHeightmap + 0x38);   /* objective list head */
+    s32 count = 0;
+    s32 allComplete = 1;
+
+    *outIds = 0;
+    if (outMask != 0) {
+        *outMask = 0;
+    }
+    if (outVals != 0) {
+        *outVals = -1;
+    }
+    if (rec == 0) {
+        return 0;
+    }
+
+    while (*(s16 *)(rec + 0x0) != 0) {           /* rec->id */
+        s32 state = *(s16 *)(rec + 0x24);
+        u16 flags = *(u16 *)(rec + 0x10);
+
+        if (state != 2 && (flags & 2) == 0) {
+            allComplete = 0;                     /* a visible, not-complete one */
+        }
+        if ((flags & 2) != 0) {                  /* hidden -> skip, no count */
+            rec += 0x28;
+            continue;
+        }
+        if (state == 0) {                        /* inactive -> skip, no count */
+            rec += 0x28;
+            continue;
+        }
+        if ((flags & 1) != 0 && state == 2) {    /* completed+flag1 -> skip */
+            rec += 0x28;
+            continue;
+        }
+
+        /* emit: id, or (when wantValues) the display value in its place */
+        outIds[0] = *(s16 *)(rec + 0x0);
+        if (wantValues != 0) {
+            if (state == 2) {
+                outIds[0] = 0x31B9;
+            } else {
+                outIds[0] = *(s16 *)(rec + *(s16 *)(rec + 0x26) * 2 + 0x14);
+            }
+        }
+        if (outMask != 0 && state == 2) {
+            *outMask |= (1 << count);            /* completion bit for this slot */
+        }
+        if (outVals != 0) {
+            *outVals = *(s16 *)(rec + 0x12) + *(s16 *)(rec + 0x26);
+            outVals++;
+        }
+        outIds++;
+        count++;
+        rec += 0x28;
+    }
+
+    if (outMask != 0 && allComplete != 0) {
+        *outMask |= 0x80000000;                  /* bit 31 = all non-hidden complete */
+    }
+    return count;
+}
+#endif
 
 /* func_0029EA90 (and EAC8/EB08/EB38 below): 0/1 predicates over globals
  * (g_miscExtras + D_1397E0 bit 0x8000000 here). WALLED (probed 2026-06-12):
@@ -1872,7 +2312,26 @@ s32 func_0029EB38(void) {
  * halves live in registers and re-materialises the D_1395B8 base via addiu
  * before each reload, while the pinned cc1 folds the +0x1D element address
  * into the lui/lbu pair (pointer-local shapes scored worse). Left as asm. */
+extern s16 D_257502;   /* cinematic-unlock status code (0x1F / 0x20) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029EB68);
+#else
+s32 func_0029EB68(void) {
+    /* cinematic word sits at &g_cinematicUnlockedFlags + 0x5C (region-anchor
+     * sibling global; same base-relative access as the +0x90/+0x98 readers). */
+    s32 cinWord = *(s32 *)((char *)&g_cinematicUnlockedFlags + 0x5C);
+
+    if (D_1395B8[0x1D] == 0) {
+        D_257502 = 0x1F;                    /* story flag clear */
+        return (cinWord >= 0) ? 0 : 2;      /* cinematic ready vs still locked */
+    }
+    if (cinWord >= 0) {
+        D_257502 = 0x20;                    /* story flag set + cinematic ready */
+        return 1;
+    }
+    return 0;                               /* story flag set, cinematic locked */
+}
+#endif
 
 /* func_0029EBF8: dialog-skip arbiter twin of func_0029EB68 on the D_1A7BDD/
  * D_1A7B10 byte pair (posts 0x28/0x29 into D_2579B2, returns 0/1/2). WALLED
@@ -1881,7 +2340,26 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029EB68);
  * pinned cc1 tracks the lbu value range and deletes the narrowing on every
  * shape probed (u8 locals, s32 locals + (u8) casts, a|b joint test). Best
  * 52.77%. */
+extern s16 D_2579B2;   /* dialog-skip status code (0x28 / 0x29) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029EBF8);
+#else
+s32 func_0029EBF8(void) {
+    if (D_1A7BDD == 0) {
+        if (D_1A7B10 == 0) {
+            D_2579B2 = 0x28;   /* neither flag: base skip code, no arbitration */
+            return 0;
+        }
+        D_2579B2 = 0x29;       /* only the second flag set */
+        return 2;
+    }
+    if (D_1A7B10 == 0) {
+        D_2579B2 = 0x29;       /* only the first flag set */
+        return 1;
+    }
+    return 0;                  /* both set: no skip, D_2579B2 unchanged */
+}
+#endif
 
 /** Returns 1 iff cinematic-flag word +0x90 has bit 0x10000 set AND word +0x98
  *  has bit 0x4000000 set; 0 otherwise. (The original has a redundant early-out

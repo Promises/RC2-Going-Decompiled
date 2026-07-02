@@ -2,8 +2,10 @@
 memcmp = 0x00115340; // libc.a (verbatim, 96B-verified)
 memcpy = 0x001153D4; // libc.a (verbatim, 96B-verified)
 memset = 0x00115484; // libc.a (verbatim, 96B-verified)
-rename = 0x0011D3A0; // libc.a (verbatim, 28B-verified)
+func_0011D3A0 = 0x0011D3A0; // NOT libc rename (mis-record: 28B-prologue coincidence, full-body 7/30, 0xB0 vs rename.o 0x8C). SIF-packet builder for cmd 0x80000009, sibling of func_0011D2F0
 s_isnan = 0x001313C8; // libc.a (verbatim, 56B-verified)
+e_sqrt = 0x001310C0; // libm.a __ieee754_sqrt (verbatim, full 193w-verified vs e_sqrt.o, 6 jal-relocs only)
+// w_sqrt = 0x00131430 - libm.a w_sqrt VERBATIM-verified (67w, all diffs at 6 jal + 7 data %hi/%lo relocs vs w_sqrt.o). ACTIVE naming BLOCKED: 0x131430 is the head-fused real-start inside the func_00131424 CD-fill mis-split. d3's end-to-end re-config dry-run (forum 300) PROVED the `func_<addr>=addr;//type:func` forcing pin AND the size-pin form are INERT for this CDCD-fused address (alabel+.word, no glabel split) - so it needs the splat/spimdisasm TOOLING FIX, NOT a symbol_addrs pin. Identity recorded here; promote to active func/rename->w_sqrt only after the tooling lands.
 
 // === Track-B MAP/minimap subsystem (EU mirror of USA - same map.cpp __FILE__ @0x1a9678 in MapInit, signature-verified). text delta USA->EU is +0x60 across 0x296xxx and +0x30 at 0x297-0x298; data/bss globals are +0x80. ===
 g_mapCurrentLevel = 0x001C51D0; // CONFIRMED - current map level id (clamped 0..0x1b), set by MapSetCurrentLevel (USA 0x1c5150)

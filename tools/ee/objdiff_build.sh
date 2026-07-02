@@ -136,7 +136,7 @@ PY
 #   - base:   strip the ee-gcc placeholder symbols so the symbol tables line up.
 #     The base KEEPS the `.NON_MATCHING` markers for functions still on INCLUDE_ASM
 #     — that is exactly how objdiff knows they aren't decompiled yet.
-docker --context colima-ee-x86 run --rm -v "$ROOT":/work ee-build sh -c "
+docker --context colima-ee-x86 run --rm -e ASMFIX_SHARED -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work; WIBO=/usr/local/bin/wibo; G=tools/ee/cc/lib/gcc-lib/ee/2.9-ee-991111
   \$WIBO \$G/cpp.exe $CPPDEF $INC $TGTC $W/target.i
   \$WIBO \$G/cc1.exe -quiet -O2 -G0 $W/target.i -o $W/target.s

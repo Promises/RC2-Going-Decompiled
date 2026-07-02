@@ -338,8 +338,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8628);
  * delay slot); no caller passes 0, so the native shim leaves that path to the
  * platform divide. NATIVE SHIM (no byte target; matching build uses asm).
  */
-#ifndef TARGET_NATIVE
+#if !defined(TARGET_NATIVE) && !defined(MATCH_GetRandomInt)
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", GetRandomInt);
+#elif defined(MATCH_GetRandomInt)
+/* engine-2.96 byte-match (verify_match.sh RAW: byte+reloc identical). rand @0x1163B0. */
+s32 GetRandomInt(s32 n) {
+    return ((rand() >> 16) & 0x7FFF) % n;
+}
 #else
 s32 GetRandomInt(s32 n) {
     s32 r = (func_001163B0() >> 16) & 0x7FFF;
@@ -351,12 +356,19 @@ s32 GetRandomInt(s32 n) {
  * random value from the core LCG (func_001163B0() >> 16 & 0x7FFF) and reduce it
  * modulo the span (hi - lo + 1), then bias by lo. Walled: saves $16/$17/$31
  * (save-layout wall). */
+/* RandRangeInclusive: uniform random int in [lo, hi] inclusive.
+ * PARKED (engine-2.96): correct C reaches 80.95% but the residual is a pure
+ * fine-scheduling offset — the prologue `sd $17` callee-save and the `sra`
+ * land one instruction earlier in the original; regalloc/structure are
+ * identical. This is the 001003-vs-exact-2.96 scheduler gap (not C-controllable,
+ * not post-pass-fixable — [[reference_register_coloring_wall]] scheduling class).
+ * Best faithful body kept as the TARGET_NATIVE #else. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8688);
 #else
 s32 func_002A8688(s32 lo, s32 hi) {
-    s32 span = hi - lo + 1;
     s32 r = (func_001163B0() >> 16) & 0x7FFF;
+    s32 span = hi - lo + 1;
 
     return r % span + lo;
 }
@@ -1294,6 +1306,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB208);
  * velocity is zeroed (returning 0). Scalar twin of the Vec4 func_002AB2C0 just
  * below. Walled: $f20-$f22 + $16/$17/$31 saves (save-layout wall). b/c arrive
  * in $f13/$f14, d in $f15. */
+/* PARKED (engine-2.96): 65% — regalloc/structural gap (frame -48 vs -64, s0/s1
+ * hold p/vel swapped, commutative operand order); not save-layout. NOT crackable
+ * with 001003 vs exact-2.96. Faithful body kept as #else. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB210);
 #else
@@ -1322,6 +1337,8 @@ f32 func_002AB210(f32 *p, f32 *vel, f32 target, f32 b, f32 c, f32 d) {
  * is zeroed (returning 0). Vec4 twin of the scalar func_002AB210 above. Walled:
  * $f20-$f22 + $16/$17/$18/$31 saves (save-layout wall). b/eps arrive in
  * $f12/$f14, c in $f13. */
+/* PARKED (engine-2.96): Vec4 spring twin of func_002AB210 — same regalloc/
+ * structural wall class. Faithful body kept as #else. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB2C0);
 #else
@@ -1451,6 +1468,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ABAE8);
  * to an int (FloatToInt), masked to a byte and shifted into its channel:
  *   r = bits 0-7, g = bits 8-15, b = bits 16-23, a = bits 24-31.
  * Walled: $f20-$f23 + $31 saves (save-layout wall). */
+/* PARKED (engine-2.96): correct C, but the 4-channel mul/FloatToInt/mask
+ * sequence + fp-save ordering schedules differently than the original
+ * (fine-scheduling, 001003-vs-exact-2.96 gap). Faithful body kept as #else. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ABD00);
 #else
@@ -1658,6 +1678,9 @@ void func_002AC4B8(Moby *moby) {
 
 /* func_002AC4D0: axis-angle -> quaternion. out.xyz = axis(src) * sin(angle/2),
  * out.w = cos(angle/2). Walled: $f20 + $16/$17/$31 saves (save-layout wall). */
+/* PARKED (engine-2.96): correct C, but frame is -0x30 vs my -0x20 + $ra/save
+ * ordering differs (frame/regalloc, 001003-vs-exact-2.96 gap; possibly a missing
+ * stack temp in the source). Faithful body kept as #else. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC4D0);
 #else
@@ -1810,13 +1833,17 @@ void func_002AD9B0(Vec4 *p, f32 amt) {
 
 /* func_002ADA30: test whether `pos` falls inside segment `segIdx`'s unit-cube
  * bounds. Subtract the segment origin (table at *(g_deferredSegment2Tag+0xCC),
- * 0x80-stride, origin at +0x30), transform the offset into the segment's local
- * frame (func_00283A48), and return 1 only if all of x/y/z land in [-1, 1].
+ * 0x80-stride, origin at +0x30), rotate the offset into the segment's local
+ * frame by the segment's 3x3 rotation matrix (at seg+0x40) via func_00283A48
+ * (out = m * local), and return 1 only if all of x/y/z land in [-1, 1].
  * segIdx == -1 returns 0. Walled: $16/$31 saves (save-layout wall). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADA30);
 #else
-extern void func_00283A48(Vec4 *out, Vec4 *local);
+/* out = m * v (3x3 rotate; see the canonical def in text/183558.c). The asm
+ * passes the segment's rotation matrix (seg+0x40) as the 3rd arg - dropping it
+ * silently leaves `out` undefined, so it must be forwarded. */
+extern void func_00283A48(Vec4 *out, Vec4 *v, Vec4 *m);
 extern u8 g_deferredSegment2Tag[];   /* +0xCC holds the segment-table base ptr */
 
 s32 func_002ADA30(Vec4 *pos, s32 segIdx) {
@@ -1830,7 +1857,7 @@ s32 func_002ADA30(Vec4 *pos, s32 segIdx) {
     seg = *(u8 **)(g_deferredSegment2Tag + 0xCC) + segIdx * 0x80;
     Vec4SubVu0(&local, pos, (Vec4 *)(seg + 0x30));
     local.w = 0.0f;
-    func_00283A48(&out, &local);
+    func_00283A48(&out, &local, (Vec4 *)(seg + 0x40));
     if (-1.0f <= out.x && out.x <= 1.0f &&
         -1.0f <= out.y && out.y <= 1.0f &&
         -1.0f <= out.z && out.z <= 1.0f) {
@@ -1848,7 +1875,32 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADB10);
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADB98);
 
+/* func_002ADBA0(subject): scan the point-light manager block
+ * (g_pointLights+0x2400) back-to-front — for each active light entry
+ * (g_pointLights+0x2420, 0x10 stride, count at mgr+0xC) call the predicate
+ * func_00284730(subject, &entry, &entry+0x20); on the first hit record the
+ * 1-based index and stop. Returns 1 iff that hit index equals the manager's
+ * head field (mgr+0x0) — i.e. the top-most entry was the match. */
+extern u8 g_pointLights[];
+extern s32 func_00284730(void *subject, void *entry, void *entryHi);
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADBA0);
+#else
+s32 func_002ADBA0(void *subject) {
+    u8 *mgr = g_pointLights + 0x2400;
+    s32 found = 0;
+    s32 i;
+
+    for (i = *(s32 *)(mgr + 0xC) - 1; i >= 0; i--) {
+        u8 *entry = g_pointLights + 0x2420 + i * 0x10;
+        if (func_00284730(subject, entry, entry + 0x20) != 0) {
+            found = i + 1;
+            break;
+        }
+    }
+    return found == *(s32 *)mgr;
+}
+#endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADC30);
@@ -2265,9 +2317,68 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B18D0);
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1A80);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1A90);
+/* shared by func_002B1A90 + func_002B1B48 (the notice-slot pair) — declared
+ * above both so the TARGET_NATIVE #else bodies compile. */
+extern s32   D_1A8C60;  /* pending-notice arg2 latch */
+extern void *D_1A8C64;  /* pending-notice subject latch */
+extern void  func_0029DB10(char *text, s32 arg);
 
+/* func_002B1A90(subject, stringId, arg2): claim the single global notice slot for
+ * `subject`. If this subject already holds it (D_1A8C64 == subject): refresh the
+ * text and return 2. If a DIFFERENT subject holds it (D_1A8C64 != 0): reject,
+ * return 0. Otherwise claim it (latch D_1A8C64 = subject) and return 1. In the
+ * claim/refresh cases it localizes stringId (when set) through func_0029DB10,
+ * writes D_1A8C60 = 2, and records the stringId at &g_pMobyGroupIterMoby+0x8. */
+#ifndef TARGET_NATIVE
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1A90);
+#else
+s32 func_002B1A90(void *subject, s32 stringId, s32 arg2) {
+    if (D_1A8C64 == subject) {
+        if (stringId != 0) {
+            func_0029DB10(GetLocalizedString(stringId), arg2);
+        }
+        *(s32 *)((u8 *)&g_pMobyGroupIterMoby + 0x8) = stringId;
+        D_1A8C60 = 2;
+        return 2;
+    }
+    if (D_1A8C64 != 0) {
+        return 0;
+    }
+    if (stringId != 0) {
+        func_0029DB10(GetLocalizedString(stringId), arg2);
+    }
+    D_1A8C64 = subject;
+    D_1A8C60 = 2;
+    *(s32 *)((u8 *)&g_pMobyGroupIterMoby + 0x8) = stringId;
+    return 1;
+}
+#endif
+
+/* func_002B1B48(subject, stringId, arg2): guarded one-shot notice/prompt setup.
+ * First runs func_002B1A90(subject) as a gate — if it returns non-zero, abort
+ * with that code. Otherwise, when stringId is set, localize it and hand the
+ * text + arg2 to func_0029DB10 (the display/queue helper). Latches the pending
+ * notice state (g_pendingNoticeArg2 = arg2, g_pendingNoticeSubject = subject,
+ * and the subject-slot's stringId at &g_pMobyGroupIterMoby+0x8) and returns 3.
+ * (D_1A8C60/D_1A8C64/func_0029DB10 declared above the pair; func_002B1A90 is
+ * defined just above so needs no forward decl in the TARGET_NATIVE build.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1B48);
+#else
+s32 func_002B1B48(void *subject, s32 stringId, s32 arg2) {
+    s32 gate = func_002B1A90(subject, stringId, arg2);
+    if (gate != 0) {
+        return gate;
+    }
+    if (stringId != 0) {
+        func_0029DB10(GetLocalizedString(stringId), arg2);
+    }
+    D_1A8C60 = arg2;
+    D_1A8C64 = subject;
+    *(s32 *)((u8 *)&g_pMobyGroupIterMoby + 0x8) = stringId;
+    return 3;
+}
+#endif
 
 /**
  * Read the palette-cycle counter base byte.

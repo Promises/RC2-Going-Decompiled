@@ -49,8 +49,11 @@ extern f32 g_screenFadeWhite;    /* white screen flash level 0..1 */
 /* One 0xA0-byte camera slot (fields per the Track-B pass; only the ones this
  * unit touches are declared). */
 typedef struct Camera {
-    /* 0x00 */ u8 pad0[0x7D];
-    /* 0x7D */ u8 unk7D;          /* cleared on activation */
+    /* 0x00 */ u8 pad0[0x74];
+    /* 0x74 */ s32 takeKind;      /* takeover rule selector (TestCameraTakeover switch) */
+    /* 0x78 */ u8 pad78[4];
+    /* 0x7C */ u8 priority;       /* takeover priority; 0 = slot not eligible */
+    /* 0x7D */ u8 unk7D;          /* cleared on activation; case-1/2 takeover gate */
     /* 0x7E */ s16 unk7E;         /* set to 1 on activation */
     /* 0x80 */ u8 pad80[4];
     /* 0x84 */ s16 configIndex;
@@ -75,22 +78,6 @@ typedef struct CameraModeVtblEntry {
 extern Camera g_cameraSlots[48];
 extern CameraModeVtblEntry g_cameraModeVtbl[];
 
-/* Camera-system file-scope state block @0x1B5180 (pinned in symbol_addrs so
- * the base+offset accesses symbolize; +0x190 aliases the separately-named
- * g_activeCamera). Only fields this unit touches are declared. */
-typedef struct CameraSysState {
-    /* 0x000 */ u8 pad0[0x190];
-    /* 0x190 */ volatile Camera *volatile activeCamera; /* fully volatile: the
-                                                * original re-reads the pointer
-                                                * between dereferences and keeps
-                                                * the store order interleaved */
-    /* 0x194 */ Camera *prevCamera;
-    /* 0x198 */ u8 pad198[0xD0];
-    /* 0x268 */ f32 fadeBlackRate;    /* per-tick fade step = 1/duration */
-    /* 0x26C */ f32 fadeBlackTarget;  /* fade-to level */
-} CameraSysState;
-extern CameraSysState g_cameraState;
-
 /* Camera transition state @0x1B5410 (+0x02 kind, Vec4 src/cur pos pairs).
  * The 16-byte Vec4 struct assignments compile to the original block-move
  * shape (address regs + offset-0 lq/sq). */
@@ -102,13 +89,66 @@ typedef struct { unsigned long long _q[2]; } __attribute__((aligned(16))) u_long
 typedef unsigned long u_long128 __attribute__((mode(TI)));
 #endif
 typedef struct Vec4 { f32 x, y, z, w; } __attribute__((aligned(16))) Vec4;
+
+/* Camera-system file-scope state block @0x1B5180 (pinned in symbol_addrs so
+ * the base+offset accesses symbolize; +0x190 aliases the separately-named
+ * g_activeCamera). Only fields this unit touches are declared. */
+typedef struct CameraSysState {
+    /* 0x000 */ u8 pad0[0x140];
+    /* 0x140 */ Vec4 camPos;         /* live camera position (z at +0x148) */
+    /* 0x150 */ u8 pad150[0x40];
+    /* 0x190 */ volatile Camera *volatile activeCamera; /* fully volatile: the
+                                                * original re-reads the pointer
+                                                * between dereferences and keeps
+                                                * the store order interleaved */
+    /* 0x194 */ Camera *prevCamera;
+    /* 0x198 */ u8 pad198[0xD0];
+    /* 0x268 */ f32 fadeBlackRate;    /* per-tick fade step = 1/duration */
+    /* 0x26C */ f32 fadeBlackTarget;  /* fade-to level */
+    /* 0x270 */ u8 fadeBlackTimer[4]; /* func_002832F8 re-arm timer */
+    /* 0x274 */ f32 fadeWhiteRate;    /* white-flash per-tick step */
+    /* 0x278 */ f32 fadeWhiteOutRate; /* alternate step clamp used while fadeWhiteTarget==0 (fade-out) */
+    /* 0x27C */ f32 fadeWhiteTarget;  /* white flash-to level */
+    /* 0x280 */ u8 fadeWhiteTimer[4]; /* func_002832F8 re-arm timer */
+    /* 0x284 */ u8 pad284[0x14C];
+    /* 0x3D0 */ f32 fovSpringVel;     /* spring-ease state (func_002703C0) */
+    /* 0x3D4 */ f32 fovTarget;
+    /* 0x3D8 */ f32 fovLive;          /* current FOV fed to the projection */
+    /* 0x3DC */ f32 fovStiffness;     /* spring params (roles per func_002703C0) */
+    /* 0x3E0 */ f32 fovDamping;
+    /* 0x3E4 */ f32 fovMaxSpeed;
+    /* 0x3E8 */ u8 fovMode;           /* 0 snap, 1 linear, 2 smooth, 3 spring */
+    /* 0x3E9 */ u8 fovEnabled;        /* 1 = interpolation active */
+    /* 0x3EA */ s16 fovTimer;         /* countdown (func_00283328) */
+    /* 0x3EC */ f32 fovRate;          /* timer -> 0..1 scale */
+    /* 0x3F0 */ f32 fovFrom;          /* ease start FOV */
+    /* 0x3F4 */ u8 pad3F4[0xC];
+    /* 0x400 */ s32 underwater;       /* set by CheckCameraUnderwater */
+} CameraSysState;
+extern CameraSysState g_cameraState;
+
 typedef struct CameraTransitionState {
-    /* 0x00 */ u8 pad0[2];
-    /* 0x02 */ u8 kind;               /* g_bCameraTransitionKind */
-    /* 0x03 */ u8 pad3[0x4D];
+    /* 0x00 */ s16 state;             /* 1 = armed, 3 = blending; cleared on completion */
+    /* 0x02 */ u8 kind;               /* g_bCameraTransitionKind (latched from pendingKind) */
+    /* 0x03 */ u8 pendingKind;        /* requested blend kind for the next transition */
+    /* 0x04 */ u8 pad4[0xC];
+    /* 0x10 */ f32 blendA[6];         /* instant/blend-start state (func_00271140):
+                                       * [0] progress, [1]<-[2], [3]=0, [4]<-[5] on kick */
+    /* 0x28 */ u8 pad28[8];
+    /* 0x30 */ Vec4 vec30;            /* seeded from cur1 on a kind-0 kick */
+    /* 0x40 */ Vec4 vec40;            /* seeded from cur0 on a kind-0 kick */
     /* 0x50 */ Vec4 cur0;
     /* 0x60 */ Vec4 cur1;
-    /* 0x70 */ u8 pad70[0x50];
+    /* 0x70 */ f32 sphYaw;            /* running-blend state (func_002712E8) */
+    /* 0x74 */ f32 sphPitch;
+    /* 0x78 */ f32 sphDist;
+    /* 0x7C */ s32 blendTarget;
+    /* 0x80 */ f32 blendRate;         /* 1 / blendCount */
+    /* 0x84 */ s32 blendCount;
+    /* 0x88 */ u8 pad88[8];
+    /* 0x90 */ Vec4 basisFwd;         /* normalised cine-key basis (func_00270D60) */
+    /* 0xA0 */ Vec4 basisUp;
+    /* 0xB0 */ Vec4 oriB;
     /* 0xC0 */ Vec4 src0;
     /* 0xD0 */ Vec4 src1;
 } CameraTransitionState;
@@ -453,12 +493,88 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026F850);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026FC80);
 
-/* func_0026FC88: assemble a texture-upload descriptor for a 32-bit image
- * (FillMemory32 the 0x54-byte descriptor, then fill GS register words from the
- * image dims via Log2Floor). WALL: five callee-saves at 8-byte slot spacing
- * (packed-save wall) + the descriptor-building register packing. Left
- * INCLUDE_ASM. */
+/* func_0026FC88: upload a palettised texture (16x16 CLUT + image) to GS VRAM
+ * and emit a 3-qword TEX0 packet into descOut. The source blob is a header:
+ * +0x8 width, +0xC height, +0x14 CLUT pixel mode (0 = CT32 -> 0x400-byte CLUT,
+ * else CT16 -> 0x200), CLUT data at +0x20, image data right after the CLUT.
+ * Uploads the CLUT (16x16, clutVram>>8) then the image (PSM 0x1B, imageVram>>8,
+ * buffer width max(1,w/64)), each via func_126288 descriptor + GIF-path image
+ * kick + path idle; then packs TEX0: TBP/TBW/PSM 0x1B/TW/TH/TCC/CBP/CPSM +
+ * bit 63, and descOut = { TEX0, 1, 0 }. */
+#ifdef TARGET_NATIVE
+extern void FillMemory32(void *dst, s32 val, s32 nbytes);
+extern s32 Log2Floor(s32 x);
+extern void func_126288(void *ctx, s32 bp, s32 bw, s32 psm, s32 x, s32 y,
+                        s32 w, s32 h);
+extern void KickGifImageUpload(void *ctx, void *data);
+typedef struct GsTexUploadBlk {
+    /* 0x00 */ void *clutData;
+    /* 0x04 */ void *imageData;
+    /* 0x08 */ u8 pad08[0xC];
+    /* 0x14 */ s32 clutBytes;   /* 0x200 (CT16) or 0x400 (CT32) */
+    /* 0x18 */ s32 pixelCount;
+    /* 0x1C */ u8 pad1C[0x10];
+    /* 0x2C */ s32 imageBp;     /* GS block pointer of the image */
+    /* 0x30 */ u8 pad30[0xC];
+    /* 0x3C */ s32 bufWidth;    /* TBW: max(1, width/64) */
+    /* 0x40 */ u8 pad40[0xC];
+    /* 0x4C */ s32 log2W;
+    /* 0x50 */ s32 log2H;
+} GsTexUploadBlk; /* 0x54 */
+typedef struct GsTexBlobHeader {
+    /* 0x00 */ u8 pad0[8];
+    /* 0x08 */ s32 width;
+    /* 0x0C */ s32 height;
+    /* 0x10 */ u8 pad10[4];
+    /* 0x14 */ s32 clutPsm;     /* 0 = CT32, else CT16 */
+    /* 0x18 */ u8 pad18[8];
+    /* 0x20 */ u8 data[1];      /* CLUT then image (inline, size varies) */
+} GsTexBlobHeader;
+void func_0026FC88(void *src, void *descOut, s32 imageVram, s32 clutVram) {
+    GsTexUploadBlk blk;
+    u8 ctx[0x60];
+    GsTexBlobHeader *tex = src;
+    u64 *out = descOut;
+    s32 clutBp = clutVram >> 8;
+    u64 tex0;
+
+    FillMemory32(&blk, 0, 0x54);
+    blk.clutData = tex->data;
+    blk.clutBytes = tex->clutPsm ? 0x200 : 0x400;
+    blk.log2W = Log2Floor(tex->width);
+    blk.log2H = Log2Floor(tex->height);
+    blk.imageData = (u8 *)tex + blk.clutBytes + 0x20;
+    blk.pixelCount = tex->width * tex->height;
+    func_126288(ctx, (s16)clutBp, 1, (s16)tex->clutPsm, 0, 0, 0x10, 0x10);
+    func_0011AEA0(0);
+    KickGifImageUpload(ctx, blk.clutData);
+    WaitGsPathsIdle(0, 0);
+    blk.bufWidth = tex->width >> 6;
+    if (blk.bufWidth <= 0) {
+        blk.bufWidth = 1;
+    }
+    blk.imageBp = imageVram >> 8;
+    func_126288(ctx, (s16)blk.imageBp, (s16)blk.bufWidth, 0x1B, 0, 0,
+                (s16)tex->width, (s16)tex->height);
+    func_0011AEA0(0);
+    KickGifImageUpload(ctx, blk.imageData);
+    WaitGsPathsIdle(0, 0);
+    tex0 = (u64)(u32)blk.imageBp
+         | ((u64)(u32)blk.bufWidth << 14)
+         | ((u64)0x1B << 20)
+         | ((u64)(u32)blk.log2W << 26)
+         | ((u64)(u32)blk.log2H << 30)
+         | ((u64)1 << 34)                  /* TCC = RGBA */
+         | ((u64)(u32)clutBp << 37)        /* CBP */
+         | ((u64)(u32)tex->clutPsm << 51)  /* CPSM */
+         | ((u64)1 << 63);
+    out[0] = tex0;
+    out[1] = 1;
+    out[2] = 0;
+}
+#else
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026FC88);
+#endif
 
 /* func_0026FE58: kick the boot dialog-voice file load then build the splash
  * image's texture-upload descriptor. Streams the voice chunk described by the
@@ -509,19 +625,120 @@ s32 DebugPrintStub(const char *fmt, ...) {
 /* func_0026FF00: MIS-SPLIT fragment. The .s opens with six words
  * (sw $2,0x38($4) / nop / addiu $sp,0x10 / nop / addiu $sp,0x20 / nop) that are
  * the TAIL of the preceding function, then `alabel func_0026FF18` — the real
- * entry (a camera fov / fade-mode setter writing g_cameraState +0x3D4.. by
- * arg-0 mode). A clean C #else body would drop the leading tail words and shift
- * the segment layout, so this stays permanently INCLUDE_ASM. */
+ * entry. The matching build keeps the whole tile INCLUDE_ASM (dropping the
+ * head words would shift the layout); the native build gets the REAL function
+ * below under its interior name. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026FF00);
+#else
+/* func_0026FF18: start a camera-FOV ease — the setter feeding
+ * StepCameraFovInterp. mode 0 = snap to `fov` next tick; modes 1/2 = timed
+ * linear/smooth ease over `frames` (0 frames degrades to a snap): arms the
+ * countdown, latches fovFrom=fovLive and rate=1/frames; mode 3 = critically-
+ * damped spring with the given stiffness/damping/maxSpeed. Other modes: no-op.
+ * All arming paths set fovEnabled=1. */
+extern f32 IntToFloat(s32 x);
+void func_0026FF18(s32 frames, s32 mode, f32 fov, f32 stiffness, f32 damping,
+                   f32 maxSpeed) {
+    switch (mode) {
+    case 0:
+        g_cameraState.fovEnabled = 1;
+        g_cameraState.fovTarget = fov;
+        g_cameraState.fovMode = 0;
+        break;
+    case 1:
+    case 2:
+        if (frames == 0) {
+            g_cameraState.fovTarget = fov;
+            g_cameraState.fovMode = 0;
+        } else {
+            g_cameraState.fovTimer = (s16)frames;
+            g_cameraState.fovFrom = g_cameraState.fovLive;
+            g_cameraState.fovMode = (u8)mode;
+            g_cameraState.fovRate = 1.0f / IntToFloat(frames);
+        }
+        g_cameraState.fovEnabled = 1;
+        break;
+    case 3:
+        g_cameraState.fovMaxSpeed = maxSpeed;
+        g_cameraState.fovMode = (u8)mode;
+        g_cameraState.fovTarget = fov;
+        g_cameraState.fovEnabled = 1;
+        g_cameraState.fovStiffness = stiffness;
+        g_cameraState.fovDamping = damping;
+        break;
+    default:
+        break;
+    }
+}
+#endif
 
 /* StepCameraFovInterp: camera FOV interpolation state machine (mode at
  * g_cameraState +0x3E8, enable flag +0x3E9). Eases the live FOV (+0x3D8) toward
  * its target by the active easing mode (spring func_002703C0, linear, smooth
  * func_002A8A68), then rebuilds the projection (BuildCameraProjection,
- * g_cameraProjScale = 0.5/tan(fov*0.5)). WALL: four fp/gpr callee-saves at
+ * g_cameraProjScale = tan(fov*0.5) = sin/cos of the half-angle). WALL: four fp/gpr callee-saves at
  * 8-byte slot spacing (packed-save wall) + branch-likely-driven fp control flow.
  * Left INCLUDE_ASM. */
+#ifdef TARGET_NATIVE
+extern s32 func_00283328(s16 *timer);
+extern f32 IntToFloat(s32 x);
+extern f32 func_002A8A68(f32 target, f32 from, f32 s);
+extern f32 func_002703C0(f32 cur, f32 target, f32 stiffness, f32 damping,
+                         f32 maxSpeed, f32 *vel); /* def later in this unit */
+extern f32 GetFloatAbs(f32 x);
+extern f32 func_00283B48(f32 x); /* sin */
+extern f32 func_00283B30(f32 x); /* cos */
+extern void BuildCameraProjection(void);
+extern f32 g_cameraProjScale;
+void StepCameraFovInterp(void) {
+    if (g_cameraState.fovEnabled != 1) {
+        return;
+    }
+    switch (g_cameraState.fovMode) {
+    case 0: /* snap */
+        g_cameraState.fovEnabled = 0;
+        g_cameraState.fovLive = g_cameraState.fovTarget;
+        break;
+    case 1: { /* linear from fovFrom toward fovTarget over the timer */
+        f32 s;
+        if (func_00283328(&g_cameraState.fovTimer) != 0) {
+            g_cameraState.fovEnabled = 0;
+        }
+        s = IntToFloat(g_cameraState.fovTimer) * g_cameraState.fovRate;
+        g_cameraState.fovLive = g_cameraState.fovTarget +
+            (g_cameraState.fovFrom - g_cameraState.fovTarget) * s;
+        break;
+    }
+    case 2: /* smooth-step ease */
+        if (func_00283328(&g_cameraState.fovTimer) != 0) {
+            g_cameraState.fovEnabled = 0;
+        }
+        g_cameraState.fovLive = func_002A8A68(
+            g_cameraState.fovTarget, g_cameraState.fovFrom,
+            IntToFloat(g_cameraState.fovTimer) * g_cameraState.fovRate);
+        break;
+    case 3: /* critically-damped spring; settle when the velocity dies */
+        g_cameraState.fovLive = func_002703C0(g_cameraState.fovLive,
+            g_cameraState.fovTarget, g_cameraState.fovStiffness,
+            g_cameraState.fovDamping, g_cameraState.fovMaxSpeed,
+            &g_cameraState.fovSpringVel);
+        if (GetFloatAbs(g_cameraState.fovSpringVel) < 1e-4f) {
+            g_cameraState.fovEnabled = 0;
+        }
+        break;
+    default:
+        break;
+    }
+    {
+        f32 half = g_cameraState.fovLive * 0.5f;
+        g_cameraProjScale = func_00283B48(half) / func_00283B30(half); /* tan(fov/2) */
+        BuildCameraProjection();
+    }
+}
+#else
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", StepCameraFovInterp);
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002701B8);
 
@@ -713,11 +930,111 @@ void CallCameraEnterHandler(Camera *cam) {
  * INCLUDE_ASM (too large to honestly decompile without subtle ordering risk). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", SwitchActiveCamera);
 
+/* Camera takeover trigger-table row (pointed to by the word at
+ * g_cameraCallbackCount+4, 0x1B1484; 32-byte rows indexed by
+ * Camera.configIndex). Row +0x1C -> trigger object: +0xC = volume pointer
+ * passed to func_002ADA30 against g_heroPos, +0x24 = link index into the
+ * D_001B1300 pointer-table rows (<0 = none). Semantics UNCONFIRMED beyond
+ * offsets (deferred Track-B naming: the 0x1B1484 slot needs a symbol pin). */
+typedef struct CamTrigObj {
+    /* 0x00 */ u8 pad0[0xC];
+    /* 0x0C */ void *volume;
+    /* 0x10 */ u8 pad10[0x14];
+    /* 0x24 */ s32 linkIdx;
+} CamTrigObj;
+typedef struct CamTakeRow {
+    /* 0x00 */ u8 pad0[0x1C];
+    /* 0x1C */ CamTrigObj *obj;
+} CamTakeRow; /* 0x20 stride */
+
 /* TestCameraTakeover: decide whether a candidate camera slot should take over
  * the active camera (mode-vtbl takeover handler + a per-type priority switch).
  * WALL: jump-table switch (jtbl_0026C4F0_text) + three callee-saves at 8-byte
  * slot spacing (packed-save wall). Left INCLUDE_ASM. */
+#ifdef TARGET_NATIVE
+extern s32 g_cameraCallbackCount;
+extern char g_soundBankHandlesBlk[]; /* g_soundBankHandles + 0x20 */
+extern s32 func_002ADA30(void *pos, void *volume);
+extern void *D_001B1300; /* base pointer of the 32-byte-row link table */
+extern Vec4 g_heroPos;   /* 0x189EA0 hero world position */
+s32 TestCameraTakeover(Camera *cand, Camera *cur) {
+    /* the trigger-row table lives in the word AFTER g_cameraCallbackCount
+     * (0x1B1484, unnamed - deferred Track-B pin) */
+    CamTakeRow *rows;
+    s32 (*handler)();
+    s32 r;
+
+    if (cand->priority == 0) {
+        return 0;
+    }
+    handler = g_cameraModeVtbl[cand->modeId].takeover;
+    if (handler != 0) {
+        r = handler(cand, cur);
+        if (r == -1) {
+            return 0;
+        }
+        if (r == 1) {
+            return 1;
+        }
+    }
+    switch (cand->takeKind) {
+    case 1:
+    case 2:
+        if (cand->unk7D == 0) {
+            return 0;
+        }
+        /* fall through */
+    case 0:
+        if (cur == 0) {
+            return 1;
+        }
+        if (cur->unk7E != 0) {
+            return 1;
+        }
+        return cur->priority < cand->priority;
+    case 4: {
+        CamTrigObj *obj;
+        rows = ((CamTakeRow **)&g_cameraCallbackCount)[1];
+        obj = rows[cand->configIndex].obj;
+        if (cur != 0 && cur->unk7E == 0) {
+            if (!(cur->priority < cand->priority)) {
+                return 0;
+            }
+        }
+        return func_002ADA30(&g_heroPos, obj->volume) != 0;
+    }
+    case 7: {
+        CamTrigObj *obj;
+        if (cand->type != *(s32 *)(g_soundBankHandlesBlk + 0x24A0)) {
+            return 0;
+        }
+        /* NOTE: the original dereferences cur with NO null check here */
+        if (cur->unk7E == 0) {
+            if (!(cur->priority < cand->priority)) {
+                return 0;
+            }
+        }
+        if (cand->type != 3) {
+            return 1;
+        }
+        rows = ((CamTakeRow **)&g_cameraCallbackCount)[1];
+        obj = rows[cand->configIndex].obj;
+        if (obj->linkIdx < 0) {
+            return 1;
+        }
+        if (*(s32 *)(g_soundBankHandlesBlk + 0x630) !=
+            *(s32 *)((char *)D_001B1300 + (obj->linkIdx << 5) + 0x10)) {
+            return 0;
+        }
+        return *(s32 *)(g_soundBankHandlesBlk + 0x640) != 0;
+    }
+    default: /* kinds 3, 5, 6 */
+        return 0;
+    }
+}
+#else
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", TestCameraTakeover);
+#endif
 
 /* CallCameraPollHandler: invoke the camera-mode vtbl `poll` handler
  * (slot +0x10) for the camera's mode id, if the level overlay installed one. */
@@ -787,13 +1104,70 @@ s32 DispatchCameraMode(void) {
  * Builds the blend basis/control points from the three normalised key vectors.
  * WALL: thirteen callee-saves at 8-byte slot spacing (packed-save wall) +
  * heavy interleaved fp/qword math. Left INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00270B68);
+#ifdef TARGET_NATIVE
+extern void Vec4SubVu0(Vec4 *dst, const Vec4 *a, const Vec4 *b);
+extern f32 Vec3DotVu0(const Vec4 *a, const Vec4 *b);
+extern f32 Vec3LengthVu0(const Vec4 *v);
+extern void Vec3RescaleToLenVu0(Vec4 *dst, f32 len, const Vec4 *src);
+extern f32 func_00283B60(f32 x); /* acos-family (PI/2 - result below) */
+extern void func_002ADD28(void *dst, const Vec4 *v, const Vec4 *axis, f32 ang);
+/* Decompose the offset posA-posB into camera-relative spherical coords in the
+ * (fwd,right,up) basis: out->x = signed azimuth around `up` (sign from
+ * `right`), out->y = signed elevation (sign from `up` against the offset
+ * direction), out->z = offset length. Zero-length guards clamp the divisor to
+ * 1e-4 like the original. */
+void func_00270B68(void *out_, void *posA, void *posB, Vec4 *fwd, Vec4 *right,
+                   Vec4 *up) {
+    Vec4 d;      /* posA - posB */
+    Vec4 axial;  /* component of d along up */
+    Vec4 perp;   /* d with the axial part removed */
+    Vec4 unit;   /* scratch unit vector */
+    Vec4 rot;    /* fwd rotated by the azimuth */
+    f32 *out = out_;
+    f32 dot, len, ang;
 
-/* func_00270D60: build the camera-transition control vectors from the active
- * cinematic camera-key block (g_soundBankHandles +0x22B0). Normalises the three
- * key vectors (+0xC0/+0xD0/+0xE0) to unit length, stashes two of them at
- * g_cameraTransitionState +0x90/+0xA0, then forwards the normalised set to
- * func_00270B68 (the transition-curve builder) and finally copies +0xD0->+0xB0. */
+    Vec4SubVu0(&d, posA, posB);
+    dot = Vec3DotVu0(&d, up);
+    Vec3RescaleToLenVu0(&axial, dot, up);
+    Vec4SubVu0(&perp, &d, &axial);
+    dot = Vec3DotVu0(fwd, &perp);
+    len = Vec3LengthVu0(&perp);
+    if (len == 0.0f) {
+        len = 1e-4f;
+    }
+    ang = 1.5707964f - func_00283B60(dot / len);
+    Vec3RescaleToLenVu0(&unit, 1.0f, &perp);
+    if (Vec3DotVu0(right, &unit) < 0.0f) {
+        ang = -ang;
+    }
+    out[0] = ang;
+    func_002ADD28(&rot, fwd, up, ang);
+    dot = Vec3DotVu0(&rot, &d);
+    len = Vec3LengthVu0(&d);
+    if (len == 0.0f) {
+        len = 1e-4f;
+    }
+    ang = 1.5707964f - func_00283B60(dot / len);
+    Vec3RescaleToLenVu0(&unit, 1.0f, &d);
+    /* SIGN IDIOM (audit catch): this arm is `bc1f` + ALWAYS-EXECUTED delay
+     * neg + fallthrough mov -> negate when dot >= 0. (out[0] above is the
+     * OPPOSITE shape: `bc1tl` + annulled delay -> negate when dot < 0.
+     * Branch-likely-nullified vs always-execute-delay sign-selects look
+     * identical in C but mean opposite things.) */
+    if (Vec3DotVu0(up, &unit) >= 0.0f) {
+        ang = -ang;
+    }
+    out[1] = ang;
+    out[2] = Vec3LengthVu0(&d);
+}
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00270B68);
+#endif
+
+/* func_00270D60: re-seed the spherical running-blend state from the cine-key
+ * basis: normalise the three key rows (keys+0xC0/D0/E0), latch fwd/up into
+ * basisFwd/basisUp, decompose the src0-vs-(g_soundBankHandlesBlk+0x80) offset
+ * via func_00270B68 into sph*, and mirror src1 into oriB. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00270D60);
 #else
@@ -819,13 +1193,13 @@ void func_00270D60(void) {
     keys = *(char **)(g_soundBankHandlesBlk + 0x2290);
     Vec3RescaleToLenVu0(&v2, 1.0f, (Vec4 *)(keys + 0xE0));
 
-    *(Vec4 *)((char *)t + 0x90) = v0;
-    *(Vec4 *)((char *)t + 0xA0) = v2;
+    t->basisFwd = v0;
+    t->basisUp = v2;
 
-    func_00270B68((char *)t + 0x70, (char *)t + 0xC0,
+    func_00270B68(&t->sphYaw, &t->src0,
                   g_soundBankHandlesBlk + 0x80, &v0, &v1, &v2);
 
-    *(Vec4 *)((char *)t + 0xB0) = *(Vec4 *)((char *)t + 0xD0);
+    t->oriB = t->src1;
 }
 #endif
 
@@ -845,7 +1219,7 @@ void func_00270E40(void) {
 
     if (t->kind == 0) {
         t->src0 = t->cur0;
-        if (t->pad3[0] == 2) {
+        if (t->pendingKind == 2) {
             Vec4AddVu0(&t->src0, &g_heroPos_D0, &t->src0);  /* asm arg order: a=delta (its .w is kept), b=src0 */
         }
         t->src1 = t->cur1;
@@ -876,22 +1250,319 @@ void func_00270EB8(void) {
 }
 #endif
 
-/* BeginCameraTransition: kick a camera-to-camera blend from prev to active.
- * WALL: seven callee-saves at 8-byte slot spacing (packed-save wall) + qword
- * block copies of the transition source pair. Left INCLUDE_ASM. */
+/* BeginCameraTransition: kick a camera-to-camera blend into `active`. With the
+ * transition armed (state==1) it captures the blend sources by pendingKind:
+ * kind 0 = cur pair from the camera (pos row +0x30 + func_002AC468
+ * orientation), kind 2 = src pair + func_00270D60, others = spherical path
+ * (normalise the three cine-key basis rows at keys+0xC0/D0/E0, decompose
+ * cam-vs-hook offset via func_00270B68 into sph*, capture oriB and mirror it
+ * into src1). Un-armed: kind 2 = func_00270E40+func_00270D60, kind 1 =
+ * func_00270E40 + oriB<-src1, kind 0 = func_00270EB8. Then state=3, kind is
+ * latched, and the interpolator state is seeded: kind 0 primes blendA and the
+ * vec30/vec40 pair from cur0/cur1; other kinds bump blendCount and set
+ * blendTarget/blendRate = 1/count. The second parameter is unused (kept for
+ * the established caller signature). */
+#ifdef TARGET_NATIVE
+extern void func_002AC468(void *dstOri, Camera *cam);
+extern void func_00270D60(void);
+extern void func_00270E40(void);
+extern void func_00270EB8(void);
+void BeginCameraTransition(Camera *active, Camera *prev) {
+    CameraTransitionState *ts = &g_cameraTransitionState;
+    Vec4 fwd, right, up;
+
+    (void)prev;
+    if (ts->state == 1) {
+        if (ts->pendingKind == 0) {
+            ts->cur0 = *(Vec4 *)((u8 *)active + 0x30);
+            func_002AC468(&ts->cur1, active);
+        } else if (ts->pendingKind == 2) {
+            ts->src0 = *(Vec4 *)((u8 *)active + 0x30);
+            func_002AC468(&ts->src1, active);
+            func_00270D60();
+        } else {
+            char *keys = *(char **)(g_soundBankHandlesBlk + 0x2290);
+            /* camera hook object: pointer stored 0x100 BEFORE the transition
+             * state block (deferred Track-B pin) */
+            u8 *hook = *(u8 **)((u8 *)&g_cameraTransitionState - 0x100);
+
+            Vec3RescaleToLenVu0(&fwd, 1.0f, (Vec4 *)(keys + 0xC0));
+            Vec3RescaleToLenVu0(&right, 1.0f, (Vec4 *)(keys + 0xD0));
+            Vec3RescaleToLenVu0(&up, 1.0f, (Vec4 *)(keys + 0xE0));
+            func_00270B68(&ts->sphYaw, (u8 *)active + 0x30, hook + 0x30,
+                          &fwd, &right, &up);
+            func_002AC468(&ts->oriB, active);
+            ts->src1 = ts->oriB;
+        }
+    } else {
+        if (ts->pendingKind == 2) {
+            func_00270E40();
+            func_00270D60();
+        } else if (ts->pendingKind == 1) {
+            func_00270E40();
+            ts->oriB = ts->src1;
+        } else if (ts->pendingKind == 0) {
+            func_00270EB8();
+        }
+    }
+    ts->state = 3;
+    ts->kind = ts->pendingKind;
+    if (ts->pendingKind == 0) {
+        ts->blendA[3] = 0.0f;
+        ts->blendA[4] = ts->blendA[5];
+        ts->vec40 = ts->cur0;
+        ts->blendA[0] = 0.0f;
+        ts->blendA[1] = ts->blendA[2];
+        ts->vec30 = ts->cur1;
+    } else {
+        ts->blendCount += 1;
+        ts->blendTarget = ts->blendCount;
+        ts->blendRate = 1.0f / IntToFloat(ts->blendCount);
+    }
+}
+#else
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", BeginCameraTransition);
+#endif
 
 /* func_00271140: instant-settle / blend-start branch of the transition pipeline
  * (forwarded from ApplyCameraTransition when no blend is pending). WALL: nine
  * fp/gpr callee-saves at 8-byte slot spacing (packed-save wall) + interleaved
  * Vec4 math and func_002A8A68/func_002AC468 calls. Left INCLUDE_ASM. */
+#ifdef TARGET_NATIVE
+/* View of CameraTransitionState+0x10: two smooth-stepped blend tracks
+ * (orientation at +0x0, position at +0xC) with per-track step + latched step,
+ * the from-pair at +0x20/+0x30 and the out-pair at +0x40/+0x50 (aliasing
+ * cur0/cur1 in the parent struct). */
+typedef struct CamBlendState {
+    /* 0x00 */ f32 oriProgress;
+    /* 0x04 */ f32 oriStep;
+    /* 0x08 */ f32 oriStepLatch;
+    /* 0x0C */ f32 posProgress;
+    /* 0x10 */ f32 posStep;
+    /* 0x14 */ f32 posStepLatch;
+    /* 0x18 */ u8 pad18[8];
+    /* 0x20 */ Vec4 oriFrom;
+    /* 0x30 */ Vec4 posFrom;
+    /* 0x40 */ Vec4 posOut;
+    /* 0x50 */ Vec4 oriOut;
+} CamBlendState;
+extern Vec4 g_cameraPos;      /* 0x1B52C0; camera matrix at +0x230 */
+extern Vec4 g_heroPos_D0;     /* g_heroPos + 0xD0 per-frame hero delta */
+extern void func_002841C0(void *dst, void *from, void *to, f32 t); /* ori lerp */
+extern void func_00284380(void *ori, void *mtxOut);
+extern void func_00284028(void *mtxDst, void *mtxSrc);
+/* Instant-settle / blend-start interpolator (kind-0 path of
+ * ApplyCameraTransition). Returns 1 once BOTH tracks have reached 1.0;
+ * otherwise drifts the position anchor by the hero frame delta
+ * (g_heroPos_D0), smooth-step lerps position (into posOut and g_cameraPos)
+ * and orientation (from oriFrom toward the live camera orientation, into
+ * oriOut then the g_cameraMatrix at g_cameraPos+0x230), advances both
+ * progress tracks clamped to 1.0, and returns 0. */
+s32 func_00271140(Vec4 *out, void *state) {
+    CamBlendState *st = state;
+    u8 *cam = (u8 *)out;
+    Vec4 oriNow;
+    u8 mtx[0x40];
+    f32 t;
+
+    if (st->posProgress == 1.0f && st->oriProgress == 1.0f) {
+        return 1;
+    }
+    t = func_002A8A68(0.0f, 1.0f, st->posProgress);
+    Vec4AddVu0(&st->posFrom, &g_heroPos_D0, &st->posFrom);
+    st->posOut.x = st->posFrom.x + (*(f32 *)(cam + 0x30) - st->posFrom.x) * t;
+    st->posOut.y = st->posFrom.y + (*(f32 *)(cam + 0x34) - st->posFrom.y) * t;
+    st->posOut.z = st->posFrom.z + (*(f32 *)(cam + 0x38) - st->posFrom.z) * t;
+    g_cameraPos = st->posOut;
+    func_002AC468(&oriNow, (Camera *)cam);
+    t = func_002A8A68(0.0f, 1.0f, st->oriProgress);
+    func_002841C0(&st->oriOut, &st->oriFrom, &oriNow, t);
+    func_00284380(&st->oriOut, mtx);
+    func_00284028((u8 *)&g_cameraPos + 0x230, mtx);
+    st->posProgress += st->posStep;
+    if (st->posProgress > 1.0f) {
+        st->posProgress = 1.0f;
+    }
+    st->oriProgress += st->oriStep;
+    if (st->oriProgress > 1.0f) {
+        st->oriProgress = 1.0f;
+    }
+    return 0;
+}
+#else
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00271140);
+#endif
 
 /* func_002712E8: running-blend interpolation branch of the transition pipeline
- * (forwarded from ApplyCameraTransition while a blend is in flight). WALL:
+ * (forwarded from ApplyCameraTransition while a blend is in flight).
+ * DECODE IN PROGRESS (fable 2026-07-02, ~85%, body deferred one session
+ * rather than risk a mis-routed operand in the uncertain band — the same
+ * risk class as the audited B68 sign bug):
+ *  - st = ts+0x70 view (sph* / blendTarget / rate / count; +0x20/+0x30 =
+ *    basisFwd/basisUp, +0x40 oriB, +0x50/+0x60 = src0/src1).
+ *  - early-out: blendTarget <= 0 -> return 1. Ease factor f24 =
+ *    1 / func_002A8A68(1.0, (f32)count, (f32)target * rate).
+ *  - kind==2: anchor = g_heroPos, basis from st(+0x20/+0x30), right = cross,
+ *    live sph via func_00270B68(cam->pos vs anchor). kind!=2: anchor =
+ *    out+0x30, basis normalized from cineKeys+0xC0/+0xE0, sph = {PI,0,0}.
+ *  - eases sphYaw/sphPitch by WrapAnglePiSum(old, WrapAnglePiDiff(new,old)
+ *    * f24), dist linearly; rebuilds pos = anchor + rotate(rotate(fwd*dist,
+ *    up, yaw), right, pitch); pos -> st+0x50 AND g_cameraPos.
+ *  - orientation band (UNCERTAIN OPERANDS): oriB -> matrix (func_00284308
+ *    at sp+0x80), roll delta = (PI/2 - acos-form) signed by row1 dot,
+ *    >PI/2 wrap-correction with 2PI(0x40C90FDC) adjust, <1e-5(0x3727C5AC)
+ *    fast-path copies rows, else func_002AC4D0 quat + func_002ADC50
+ *    applications; final rows renormalized (row1 = cross with
+ *    g_heroFacingDir, len -1.0!), func_002AC468 captures into src1 AND oriB,
+ *    func_002832F8 ticks blendTarget; return 0. */
+/* WALL:
  * fourteen callee-saves at 8-byte slot spacing (packed-save wall); 0x410 bytes
  * of interleaved fp/qword math. Left INCLUDE_ASM. */
+#ifdef TARGET_NATIVE
+extern void Vec3CrossVu0(Vec4 *dst, const Vec4 *a, const Vec4 *b);
+extern void Vec4ScaleVu0(Vec4 *dst, f32 s, const Vec4 *src);
+extern void func_002AC4D0(void *dstQuat, const Vec4 *axis, f32 ang);
+extern void func_002ADC50(void *dst, const Vec4 *v, const void *quat);
+extern void func_00284308(void *rot, void *mtx); /* rotation -> 3-row matrix */
+extern void func_002AC468(void *dstOri, Camera *cam);
+extern s32 func_002832F8(void *timer);
+extern f32 IntToFloat(s32 x);
+extern f32 GetFloatAbs(f32 x);
+extern f32 WrapAnglePiDiff(f32 a, f32 b);
+extern f32 WrapAnglePiSum(f32 a, f32 b);
+extern f32 func_002A8A68(f32 target, f32 from, f32 s);
+extern Vec4 g_heroPos;
+extern Vec4 g_heroFacingDir;
+extern Vec4 g_cameraMatrix;   /* 3-row rotation matrix at 0x1B54F0 */
+extern Vec4 g_cameraPos;      /* 0x1B52C0 */
+/* one-ULP-precise constants the original uses (bit-encoded: the yaw-band
+ * threshold and the 2PI adjust are one ULP ABOVE the rounded value, so float
+ * literals would mis-round them) */
+static const union { u32 u; f32 f; } kPiO2      = { 0x3FC90FDB };
+static const union { u32 u; f32 f; } kPiO2Ulp   = { 0x3FC90FDC };
+static const union { u32 u; f32 f; } kTwoPiUlp  = { 0x40C90FDC };
+static const union { u32 u; f32 f; } kPi        = { 0x40490FDB };
+/* View of CameraTransitionState+0x70 (the running-blend state). */
+typedef struct SphBlendState {
+    /* 0x00 */ f32 yaw;
+    /* 0x04 */ f32 pitch;
+    /* 0x08 */ f32 dist;
+    /* 0x0C */ s32 target;   /* countdown; <=0 = blend complete */
+    /* 0x10 */ f32 rate;
+    /* 0x14 */ s32 count;
+    /* 0x18 */ u8 pad18[8];
+    /* 0x20 */ Vec4 basisFwd;
+    /* 0x30 */ Vec4 basisUp;
+    /* 0x40 */ Vec4 oriB;
+    /* 0x50 */ Vec4 posOut;
+    /* 0x60 */ Vec4 oriOut;
+} SphBlendState;
+s32 func_002712E8(Vec4 *out, void *state) {
+    SphBlendState *st = state;
+    Vec4 sph;    /* eased-toward spherical targets {yaw,pitch,dist} */
+    Vec4 fwd, right, up, anchor, arm, flat, proj;
+    Vec4 mtxRows[3];
+    Vec4 b0, b1, probe, quat2;
+    f32 ease, yawDelta, roll, rollStep, elev;
+
+    if (st->target <= 0) {
+        return 1;
+    }
+    ease = 1.0f / func_002A8A68(1.0f, IntToFloat(st->count),
+                                IntToFloat(st->target) * st->rate);
+    if (g_cameraTransitionState.kind == 2) {
+        anchor = g_heroPos;
+        fwd = st->basisFwd;
+        up = st->basisUp;
+        Vec3CrossVu0(&right, &fwd, &up);
+        func_00270B68(&sph, (u8 *)out + 0x30, &anchor, &fwd, &right, &up);
+    } else {
+        char *keys = *(char **)(g_soundBankHandlesBlk + 0x2290);
+        anchor = *(Vec4 *)((u8 *)out + 0x30);
+        Vec3RescaleToLenVu0(&fwd, 1.0f, (Vec4 *)(keys + 0xC0));
+        Vec3RescaleToLenVu0(&up, 1.0f, (Vec4 *)(keys + 0xE0));
+        sph.x = kPi.f;
+        sph.y = 0.0f;
+        sph.z = 0.0f;
+    }
+    /* ease the spherical coords toward the targets (angles wrap-aware) */
+    yawDelta = WrapAnglePiDiff(sph.x, st->yaw);
+    st->yaw = WrapAnglePiSum(st->yaw, yawDelta * ease);
+    st->pitch = WrapAnglePiSum(st->pitch, WrapAnglePiDiff(sph.y, st->pitch) * ease);
+    st->dist += (sph.z - st->dist) * ease;
+    /* rebuild the camera position: fwd scaled to dist, yawed around up,
+     * pitched around the derived right axis, off the anchor */
+    Vec3RescaleToLenVu0(&arm, st->dist, &fwd);
+    func_002ADD28(&arm, &arm, &up, st->yaw);
+    Vec3CrossVu0(&right, &arm, &up);
+    Vec3RescaleToLenVu0(&right, 1.0f, &right);
+    func_002ADD28(&arm, &arm, &right, st->pitch);
+    Vec4AddVu0(&st->posOut, &anchor, &arm);
+    g_cameraPos = st->posOut;
+    /* orientation: decompose the target basis (out rows) against the current
+     * blend orientation (oriB as a 3-row matrix) */
+    func_00284308(&st->oriB, mtxRows);
+    Vec4ScaleVu0(&proj, Vec3DotVu0(&mtxRows[2], out), &mtxRows[2]);
+    Vec4SubVu0(&flat, out, &proj);
+    roll = kPiO2.f - func_00283B60(Vec3DotVu0(&mtxRows[0], &flat) /
+                                   Vec3LengthVu0(&flat));
+    /* SIGN IDIOM: bc1tl + annulled delay -> keep positive when dot >= 0 */
+    if (!(Vec3DotVu0(&flat, &mtxRows[1]) >= 0.0f)) {
+        roll = -roll;
+    }
+    /* yaw crossed more than a quarter turn this step: the roll decomposition
+     * flips branch - wrap it by one ULP-above-2PI when the yaw delta and the
+     * roll sign disagree */
+    if (GetFloatAbs(yawDelta) > kPiO2Ulp.f) {
+        f32 sign = (Vec3DotVu0(&flat, &mtxRows[1]) >= 0.0f) ? 1.0f : -1.0f;
+        if ((0.0f <= yawDelta && sign < 0.0f) ||
+            (yawDelta < 0.0f && 0.0f <= sign)) {
+            if (roll < 0.0f) {
+                roll += kTwoPiUlp.f;
+            } else {
+                roll -= kTwoPiUlp.f;
+            }
+        }
+    }
+    rollStep = roll * ease;
+    /* roll-step the current basis rows */
+    if (GetFloatAbs(rollStep) < 1e-5f) {
+        b0 = mtxRows[0];
+        b1 = mtxRows[1];
+    } else {
+        func_002AC4D0(&probe, &mtxRows[2], rollStep);
+        func_002ADC50(&b0, &mtxRows[0], &probe);
+        func_002ADC50(&b1, &mtxRows[1], &probe);
+    }
+    /* full-roll probe row (NOTE: the small-roll arm copies ROW 0, not row 2) */
+    if (GetFloatAbs(roll) < 1e-5f) {
+        probe = mtxRows[0];
+    } else {
+        func_002AC4D0(&quat2, &mtxRows[2], roll);
+        func_002ADC50(&probe, &mtxRows[0], &quat2);
+    }
+    /* elevation step toward the target row0, signed by the target row2 */
+    elev = kPiO2.f - func_00283B60(Vec3DotVu0(&probe, out));
+    /* SIGN IDIOM: bc1fl + annulled delay -> negate when the dot is < 0 */
+    if (!(Vec3DotVu0(&probe, (Vec4 *)((u8 *)out + 0x20)) >= 0.0f)) {
+        elev = -elev;
+    }
+    func_002ADD28(&b0, &b0, &b1, elev * ease);
+    /* write the camera matrix: row0 = |b0|, row1 = -|row0 x heroFacing|,
+     * row2 = row1 x row0; then capture the new orientation into BOTH
+     * oriOut (src1) and oriB, and tick the countdown */
+    Vec3RescaleToLenVu0(&g_cameraMatrix, 1.0f, &b0);
+    Vec3CrossVu0(&(&g_cameraMatrix)[1], &g_cameraMatrix, &g_heroFacingDir);
+    Vec3RescaleToLenVu0(&(&g_cameraMatrix)[1], -1.0f, &(&g_cameraMatrix)[1]);
+    Vec3CrossVu0(&(&g_cameraMatrix)[2], &(&g_cameraMatrix)[1], &g_cameraMatrix);
+    func_002AC468(&st->oriOut, (Camera *)&g_cameraMatrix);
+    func_002AC468(&st->oriB, (Camera *)&g_cameraMatrix);
+    func_002832F8(&st->target);
+    return 0;
+}
+#else
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002712E8);
+#endif
 
 /* ApplyCameraTransition: advance the active camera blend into `out`. With no
  * transition pending (kind == 0) it forwards to func_00271140 (start/instant
@@ -899,18 +1570,117 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002712E8);
  * the running path, once the blend reports complete it copies the resulting
  * 4-row matrix into g_cameraMatrix and clears the transition (kind = 0, +0x0
  * halfword = 0). */
-/* WALL: three callee-saves at 8-byte slot spacing (0x20-vs-0x10 packed-save).
-   Left INCLUDE_ASM (no #else): the matrix copy gates on the INTERPOLATOR's RETURN
-   value (not kind), and the 4th row goes to g_cameraPos (NOT g_cameraMatrix[3]) - a
-   functional-equiv body is error-prone here; revisit with care. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", ApplyCameraTransition);
+#ifdef TARGET_NATIVE
+extern s32 func_00271140(Vec4 *out, void *state);
+extern s32 func_002712E8(Vec4 *out, void *state);
+extern Vec4 g_cameraMatrix;   /* 3-row rotation matrix at 0x1B54F0 */
+extern Vec4 g_cameraPos;      /* 0x1B52C0 = g_cameraMatrix - 0x230 */
+void ApplyCameraTransition(Vec4 *out) {
+    s32 done;
 
-/* ApplyCameraShakeAxis: apply one shake channel to the camera - axis 0/1 offset
- * g_cameraPos along the matrix up/right rows, axis 2 rolls g_cameraMatrix; each
- * is sin/cos-windowed decay, skipped for camera type 6. WALL: five callee-saves
- * at 8-byte slot spacing (packed-save wall) + interleaved fp windowing math.
- * Left INCLUDE_ASM. */
+    /* The matrix copy gates on the INTERPOLATOR'S RETURN value (not kind),
+     * and the 4th row goes to g_cameraPos, NOT g_cameraMatrix[3]. */
+    if (g_cameraTransitionState.kind == 0) {
+        done = func_00271140(out, (u8 *)&g_cameraTransitionState + 0x10);
+    } else {
+        done = func_002712E8(out, (u8 *)&g_cameraTransitionState + 0x70);
+    }
+    if (done != 0) {
+        (&g_cameraMatrix)[0] = out[0];
+        (&g_cameraMatrix)[1] = out[1];
+        (&g_cameraMatrix)[2] = out[2];
+        g_cameraPos = out[3];
+        g_cameraTransitionState.kind = 0;
+        g_cameraTransitionState.state = 0;
+    }
+}
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", ApplyCameraTransition);
+#endif
+
+/* One camera-shake channel (three instances driven per frame). +0x0 base
+ * amplitude, +0x4 this frame's applied value, +0x8 countdown timer,
+ * +0xC peak (timer high-water mark used to normalise the decay). */
+typedef struct CamShakeChannel {
+    /* 0x00 */ f32 amplitude;
+    /* 0x04 */ f32 current;
+    /* 0x08 */ s32 timer;
+    /* 0x0C */ s32 peak;
+} CamShakeChannel;
+
+/* ApplyCameraShakeAxis: apply one shake channel to the camera. Modes 0/1
+ * offset g_cameraPos along a g_cameraMatrix row (0 = row 2, 1 = row 0) by
+ * amplitude * cos(wrap(2*timer)) * t^2 where t = timer/peak; mode 2 rolls
+ * g_cameraMatrix by amplitude * sin(wrap(elapsed/60*step - step*10)) * t^3 *
+ * min(1, elapsed/10) (step = D_1A85B8 * pi/180). Camera type 6 clears the
+ * channel; timer==0 clears the peak. */
+#ifdef TARGET_NATIVE
+extern Camera *g_activeCamera;      /* aliases g_cameraState+0x190 */
+extern f32 D_1A85B8;                /* shake roll speed (degrees/tick) */
+extern s32 func_002832F8(void *timer);
+extern f32 func_002845D8(f32 x);    /* wrap angle */
+extern void func_002ADCE0(void *dst, f32 ang);   /* build roll rotation */
+extern void func_00284308(void *rot, void *mtx); /* rotation -> 3-row matrix */
+extern void func_002840E8(void *dst, void *a, void *b); /* mtx multiply */
+void ApplyCameraShakeAxis(void *channel, s32 axis) {
+    CamShakeChannel *sh = channel;
+    Camera *cam = g_activeCamera;
+    Vec4 ofs;
+    u8 mtx[0x30];
+    f32 t;
+
+    if (cam != 0 && cam->type == 6) {
+        sh->peak = 0;
+        sh->timer = 0;
+        return;
+    }
+    if (sh->timer == 0) {
+        sh->peak = 0;
+        return;
+    }
+    if (sh->peak < sh->timer) {
+        sh->peak = sh->timer;
+    }
+    func_002832F8(&sh->timer);
+    t = IntToFloat(sh->timer) / IntToFloat(sh->peak);
+    switch (axis) {
+    case 0:
+    case 1: {
+        f32 c = func_00283B30(func_002845D8(IntToFloat(sh->timer) * 2.0f));
+        Vec4 *row = (axis == 0) ? &(&g_cameraMatrix)[2] : &g_cameraMatrix;
+        f32 amp = sh->amplitude * c * t * t;
+
+        sh->current = amp;
+        Vec3RescaleToLenVu0(&ofs, amp, row);
+        Vec4AddVu0(&g_cameraPos, &g_cameraPos, &ofs);
+        break;
+    }
+    case 2: {
+        f32 t3 = t * t * t;
+        f32 step = D_1A85B8 * 0.017453292f;              /* deg -> rad */
+        f32 e60 = IntToFloat(sh->peak - sh->timer) * 0.016666668f;
+        f32 ramp = e60 * 6.0f;
+        f32 ang;
+
+        if (ramp > 1.0f) {
+            ramp = 1.0f;
+        }
+        ang = sh->amplitude *
+              func_00283B48(func_002845D8(e60 * step - step * 10.0f)) *
+              t3 * ramp;
+        sh->current = ang;
+        func_002ADCE0(&ofs, ang);
+        func_00284308(&ofs, mtx);
+        func_002840E8(&g_cameraMatrix, mtx, &g_cameraMatrix);
+        break;
+    }
+    default:
+        break;
+    }
+}
+#else
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", ApplyCameraShakeAxis);
+#endif
 
 /* Per-frame hero-motion tracking block, a sub-region of g_cameraState at
  * +0x1A0 (vaddr 0x1B5320; the original addresses it as g_prevCamera+0xC). The
@@ -1026,11 +1796,55 @@ void TrackHeroMotionForCamera(void) {
 /* CheckCameraUnderwater: walk a short downward collision ray (up to 6 CollLine
  * steps) from the camera position to decide whether the camera is submerged,
  * comparing against GetWaterSurfaceHeight; records the result into the camera
- * state (+0x400). Skipped for camera type 6 and outside g_nGameState==0. WALL:
- * four callee-saves at 8-byte slot spacing (packed-save wall) + the
- * branch-likely-driven ray loop and qword block copies. Left INCLUDE_ASM
- * (result-offset/loop ordering is too easy to get subtly wrong). */
+ * state (+0x400). Skipped for camera type 6 and outside g_nGameState==0.
+ * WALL (re-graded on the engine pipeline, fable 2026-07-02): (a) the
+ * volatile activeCamera deref emits lhu+sll+sra vs the original lh (castable),
+ * (b) 2.96 splits the Vec4 copies into ld/sd pairs vs the original lq/sq,
+ * (c) decisive: the original fills the beq delay slot with a 1-insn %gp_rel
+ * g_nGameState load (extern class 9..15), which conflicts with this unit's
+ * established incomplete-array/absolute model for that symbol (changing it
+ * ripples through every matched fn's assembly). Portable #else below;
+ * cmp-oracle queued (mocked CollLine/GetCollHitMaterial/water-height). */
+#if defined(MATCH_CheckCameraUnderwater) || defined(TARGET_NATIVE)
+extern s32 CollLine(Vec4 *from, Vec4 *to, s32 mask, void *a, void *b);
+extern s32 GetCollHitMaterial(void);
+extern f32 GetWaterSurfaceHeight(Vec4 *at, s32 mode);
+extern Vec4 g_collHitPoint;
+void CheckCameraUnderwater(void) {
+    Vec4 top;    /* probe segment start (camera z + 0.75) */
+    Vec4 bottom; /* probe segment end (camera z - 0.75) */
+    s32 i;
+
+    if (g_cameraState.activeCamera->type == 6 || g_nGameState[0] != 0) {
+        g_cameraState.underwater = 0;
+        return;
+    }
+    top = g_cameraState.camPos;
+    bottom = g_cameraState.camPos;
+    i = 0;
+    top.z += 0.75f;
+    bottom.z -= 0.75f;
+    while (i < 6) {
+        if (CollLine(&top, &bottom, 0x12, 0, 0) == 0) {
+            break; /* nothing below: leave the flag as-is */
+        }
+        if (GetCollHitMaterial() == 0) { /* water surface */
+            if (g_cameraState.camPos.z < GetWaterSurfaceHeight(&g_collHitPoint, 0) + 0.04f) {
+                g_cameraState.underwater = 1;
+            } else {
+                g_cameraState.underwater = 0;
+            }
+            return;
+        }
+        /* solid: restart the probe just below the hit point */
+        top = g_collHitPoint;
+        top.z -= 0.01f;
+        i++;
+    }
+}
+#else
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", CheckCameraUnderwater);
+#endif
 
 /* func_00271FE8: per-frame camera-id / cinematic-state arbiter. Reads the active
  * cinematic key block (g_soundBankHandles +0x22B0) and player progress to pick
@@ -1042,16 +1856,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", CheckCameraUnde
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00271FE8);
 
 /* func_002721A8: start a fade-from-black — fade level forced to 1.0, target 0,
- * rate = 1/duration (g_cameraState +0x268/+0x26C). Instructions all match, but
- * the original schedules the g_cameraState lui/addiu address early and pads
- * the div.s latency with two nops before the divide (the SN-as
- * float-pipeline-latency padding). The pinned cc1 + GNU as emit no such pad.
- * Best 83%. WALL: SN-as div.s latency nop padding. */
-#ifndef TARGET_NATIVE
+ * rate = 1/duration (g_cameraState +0x268/+0x26C).
+ * ENGINE-2.96 MATCH (candidate, fable 2026-07-02): BYTE+RELOC IDENTICAL via
+ * the engine pipeline — 2.96 cc1 + split-addresses patch
+ * (tools/ee/patch_cc296_splitaddr.py), -O2 -G8 -fno-builtin
+ * -fno-strict-aliasing, scheduling ON, mtc1_fixup (the two "SN-as div.s
+ * latency" nops are the mtc1->div.s hazard pads the fixup restores — the old
+ * wall note was a misdiagnosis). Guard: MATCH_func_002721A8 promotes the real
+ * C for the per-function engine build; the regular 2.9 unit build keeps
+ * INCLUDE_ASM (two-compiler build). Pending tester's authoritative verify. */
+#if !defined(TARGET_NATIVE) && !defined(MATCH_func_002721A8)
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002721A8);
 #else
-/* TODO(match): functional equivalent - not byte-exact; SN-as div.s latency nop
-   padding (two nops pad the divide that GNU as does not emit). */
 void func_002721A8(f32 duration) {
     g_screenFadeBlack = 1.0f;
     g_cameraState.fadeBlackTarget = 0.0f;
@@ -1064,27 +1880,36 @@ void func_002721A8(f32 duration) {
  * reaches the target a follow-up timer (func_002832F8 on the +0x270 field) may
  * re-arm the target to 0; once both target and current level have settled at
  * (or below) 0 the rate is cleared so the driver idles. */
-#ifndef TARGET_NATIVE
+#if !defined(TARGET_NATIVE) && !defined(MATCH_UpdateScreenFadeBlack)
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", UpdateScreenFadeBlack);
 #else
-extern void func_002AB150(f32 *level, f32 target);
+/* Canonical signature per the callee def (1A8180 line ~1255): f32 return,
+ * (target/$f12, rate/$f13, level-ptr/$4) — the rate arg IS read (step clamp).
+ * The old 2-arg decl here DROPPED it (caught 2026-07-02, engine lane);
+ * cmp-oracle is STALE for this body until re-run with the 3-arg call. */
+extern f32 func_002AB150(f32 target, f32 rate, f32 *level);
 extern s32 func_002832F8(void *timer);
-/* TODO(match): functional equivalent - not byte-exact; four callee-saves
-   (incl. $f20) at 8-byte slot spacing (the 0x20-vs-0x10 packed-save wall). */
+/* TODO(match): functional equivalent - not byte-exact. Engine-2.96 pipeline
+   (fable 2026-07-02) reproduces the whole body shape (direct g_cameraState
+   accesses give the %hi-in-s1 + per-arm lo_sum re-derivation), but walls on
+   the FP-SAVE-SLOT ABI: the original allocates $f20 an 8-byte save slot at a
+   16-aligned offset (f20@+0x20, frame 0x30 = FP_INC=2 with swc1); 001003
+   packs a 4-byte slot (f20@+0x18, frame 0x20) and no flag reaches the
+   original model (-mfp64 inert, -mdouble-float emits s.d). Wall class gates
+   every $f2x-saving fn in this TU. */
 void UpdateScreenFadeBlack(void) {
-    CameraSysState *cs = &g_cameraState;
-
-    if (cs->fadeBlackRate == 0.0f) {
+    if (g_cameraState.fadeBlackRate == 0.0f) {
         return;
     }
-    func_002AB150(&g_screenFadeBlack, cs->fadeBlackTarget);
-    if (g_screenFadeBlack == cs->fadeBlackTarget) {
-        if (func_002832F8((char *)cs + 0x270) == 1) {
-            cs->fadeBlackTarget = 0.0f;
+    func_002AB150(g_cameraState.fadeBlackTarget, g_cameraState.fadeBlackRate,
+                  &g_screenFadeBlack);
+    if (g_screenFadeBlack == g_cameraState.fadeBlackTarget) {
+        if (func_002832F8((char *)&g_cameraState + 0x270) == 1) {
+            g_cameraState.fadeBlackTarget = 0.0f;
         }
     }
-    if (cs->fadeBlackTarget <= 0.0f && g_screenFadeBlack <= 0.0f) {
-        cs->fadeBlackRate = 0.0f;
+    if (g_cameraState.fadeBlackTarget <= 0.0f && g_screenFadeBlack <= 0.0f) {
+        g_cameraState.fadeBlackRate = 0.0f;
     }
 }
 #endif
@@ -1094,10 +1919,46 @@ void UpdateScreenFadeBlack(void) {
  * idles while the rate is 0. Eases toward the target via func_002AB150, then
  * the settle/re-arm (func_002832F8 on the +0x280 timer) and rate-clear mirror
  * the black-fade path. */
-/* WALL: three callee-saves at 8-byte slot spacing (0x20-vs-0x10 packed-save).
-   Left INCLUDE_ASM (no #else): the ease step has a target==0 branch that eases
-   toward the +0x278 field (not +0x27C) - easy to get subtly wrong; revisit with care. */
+/* Engine-2.96 candidate (fable 2026-07-02): the target==0 branch passes a
+ * THIRD-arg rate slot from +0x278 (the fade-out step clamp) — settled as a
+ * genuine 3-arg prototyped call (callee def in 1A8180 reads $f13; K&R mixed
+ * arity is impossible: this cc1 promotes unprototyped floats via fptodp).
+ * The g_screenFadeWhite loads are
+ * the size-class-9..15 mix (absolute straight-line, %gp_rel in delay slots),
+ * so this must be assembled through asm_unit.sh's -G8 SN-parity path with
+ * `.extern g_screenFadeWhite, 12`. */
+#if defined(MATCH_UpdateScreenFadeWhite) || defined(TARGET_NATIVE)
+#ifndef TARGET_NATIVE
+__asm__(".extern g_screenFadeWhite, 12");
+#endif
+/* Canonical signature per the callee def (1A8180): the rate/$f13 arg is a
+ * real step clamp, CSE-satisfied at the call sites by the preceding compare
+ * loads (which is why the asm LOOKS 2-arg). */
+extern f32 func_002AB150(f32 target, f32 rate, f32 *level);
+extern s32 func_002832F8();
+void UpdateScreenFadeWhite(void) {
+    if (g_cameraState.fadeWhiteRate == 0.0f) {
+        return;
+    }
+    if (g_cameraState.fadeWhiteTarget == 0.0f) {
+        func_002AB150(g_cameraState.fadeWhiteTarget,
+                      g_cameraState.fadeWhiteOutRate, &g_screenFadeWhite);
+    } else {
+        func_002AB150(g_cameraState.fadeWhiteTarget,
+                      g_cameraState.fadeWhiteRate, &g_screenFadeWhite);
+    }
+    if (g_screenFadeWhite == g_cameraState.fadeWhiteTarget) {
+        if (func_002832F8(g_cameraState.fadeWhiteTimer) == 1) {
+            g_cameraState.fadeWhiteTarget = 0.0f;
+        }
+    }
+    if (g_cameraState.fadeWhiteTarget <= 0.0f && g_screenFadeWhite <= 0.0f) {
+        g_cameraState.fadeWhiteRate = 0.0f;
+    }
+}
+#else
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", UpdateScreenFadeWhite);
+#endif
 
 /* UpdateCamera: top-level per-frame camera tick. Advances the fade overlays and
  * frame counter, runs the hero-motion tracker and the mode-arbitration
@@ -1346,12 +2207,65 @@ void DrawScreenSpriteFxQueue(void) {
  * compiler output. Kept permanently INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002735A8);
 
+/* Fog zone record: 0x80-stride entries at g_collTriBuffer+0x1540, indexed by
+ * the zone id func_002A7490 returns. Two packed-RGB endpoint colours (+0x54 A,
+ * +0x58 B) and four f32 param pairs lerped by the blend factor t: near/far
+ * fog intensities and two 1024-scaled distances. Flag bit 2 (+0x50) enables
+ * the zone. Field semantics UNCONFIRMED beyond widths/offsets. */
+typedef struct FogZone {
+    /* 0x00 */ u8 pad0[0x50];
+    /* 0x50 */ s32 flags;         /* bit 2 = fog active */
+    /* 0x54 */ u32 colorA;        /* packed 00RRGGBB endpoint at t=0 */
+    /* 0x58 */ u32 colorB;        /* packed 00RRGGBB endpoint at t=1 */
+    /* 0x5C */ f32 distA0;        /* 1024-scaled after lerp -> fog+0x8 */
+    /* 0x60 */ f32 intensA0;      /* 255-complement after lerp -> fog+0x10 */
+    /* 0x64 */ f32 distB0;        /* 1024-scaled after lerp -> fog+0xC */
+    /* 0x68 */ f32 intensB0;      /* 255-complement after lerp -> fog+0x14 */
+    /* 0x6C */ f32 distA1;
+    /* 0x70 */ f32 intensA1;
+    /* 0x74 */ f32 distB1;
+    /* 0x78 */ f32 intensB1;
+} FogZone;
+
 /* SampleCameraFogZone: sample the fog volume the camera is inside (func_002A7490
- * locate, then lerp the per-zone fog colour/density into g_blobShadowCount+0x4..).
- * WALL: two callee-saves (incl. $f20) at 8-byte slot spacing (packed-save wall)
- * + byte-packed RGBA channel lerp with fixed-point mult chains. Left
- * INCLUDE_ASM (high ordering risk - left bare rather than risk an incorrect body). */
+ * locate, then lerp the per-zone fog colour/density into the fog-param block at
+ * g_blobShadowCount+0x4.. -- bytes b/g/r at +4/5/6, distances*1024 at +8/+0xC,
+ * 255-complemented intensities at +0x10/+0x14; deferred Track-B pin for the
+ * block symbol. Old packed-save wall note superseded: engine unit, #else lane. */
+#ifdef TARGET_NATIVE
+extern s32 func_002A7490(Vec4 *pos, f32 *tOut, s32 *zoneOut);
+extern s32 FloatToInt(f32 x);
+extern u8 g_collTriBuffer[];
+extern s32 g_blobShadowCount;
+void SampleCameraFogZone(Vec4 *pos) {
+    f32 t;
+    s32 zone;
+    u8 *fog = (u8 *)&g_blobShadowCount; /* param block lives at +0x4.. */
+    FogZone *z;
+    s32 ti, inv;
+    f32 k;
+
+    if (func_002A7490(pos, &t, &zone) == 0) {
+        return;
+    }
+    z = (FogZone *)(g_collTriBuffer + 0x1540 + (zone << 7));
+    if (!(z->flags & 2)) {
+        return;
+    }
+    ti = FloatToInt(t * 255.0f);
+    inv = 255 - ti;
+    k = 1.0f - t;
+    fog[4] = (u8)(((z->colorB & 0xFF) * ti + (z->colorA & 0xFF) * inv) >> 8);
+    fog[5] = (u8)((((z->colorB >> 8) & 0xFF) * ti + ((z->colorA >> 8) & 0xFF) * inv) >> 8);
+    fog[6] = (u8)((((z->colorB >> 16) & 0xFF) * ti + ((z->colorA >> 16) & 0xFF) * inv) >> 8);
+    *(f32 *)(fog + 0x08) = (z->distA1 * t + z->distA0 * k) * 1024.0f;
+    *(f32 *)(fog + 0x0C) = (z->distB1 * t + z->distB0 * k) * 1024.0f;
+    *(f32 *)(fog + 0x10) = 255.0f - (z->intensA1 * t + z->intensA0 * k) * 255.0f;
+    *(f32 *)(fog + 0x14) = 255.0f - (z->intensB1 * t + z->intensB0 * k) * 255.0f;
+}
+#else
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", SampleCameraFogZone);
+#endif
 
 /* func_00273740: collision/projectile helper. WALL: ten callee-saves at 8-byte
  * slot spacing (packed-save wall) + interleaved fp/qword math. Left INCLUDE_ASM. */
