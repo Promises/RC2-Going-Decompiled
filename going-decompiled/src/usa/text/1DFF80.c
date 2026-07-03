@@ -72,8 +72,22 @@ __asm__(".extern g_pSkyData, 16");
 extern u8 *g_pSkyData;             /* 0x1B2040 - relocated sky chunk ptr */
 __asm__(".extern g_pSkySegmentOpenTag, 16");
 extern u8 *g_pSkySegmentOpenTag;   /* 0x1B2060 - sky segment head tag */
+__asm__(".extern g_pSkySegmentCloseTag, 16");
+extern u8 *g_pSkySegmentCloseTag;  /* 0x1B2064 - sky segment tail/close tag */
+extern void FlushPendingTexUploads(void);     /* 0x29DF18 - drain queued GS tex uploads */
+extern void AppendTexFlushDefaultTex0(void);  /* 0x2FD5D8 - TEXFLUSH + default TEX0_1 packet */
 __asm__(".extern g_pShrubSegmentOpenTag, 16");
 extern u8 *g_pShrubSegmentOpenTag; /* 0x1B2034 - shrub segment head tag */
+extern s32 g_shrubVramPeak;        /* 0x1B203C - shrub texture VRAM high-water mark */
+extern s32 UploadShrubTextures(s32 vramAllocCursor); /* 0x2E37A0 - returns VRAM used */
+extern char D_1ABE10[];            /* VRAM-overflow warning fmt string */
+extern void DebugPrintStub(const char *fmt, ...);    /* 0x26FEC8 - retail no-op */
+extern s32  g_shrubVisibleClassList[]; /* 0x213FD0 - visible shrub class list, -1 term */
+extern u8  *g_shrubClassTable[];       /* 0x2125D0 - shrub class record ptr array */
+extern s16  g_shrubTexVramTable[];     /* 0x213AD0 - texId -> {tbp_lo,tbp_hi}, stride 4 */
+extern u8  *g_pShrubInstanceArray;     /* 0x1B2018 - shrub instance array base, stride 0x20 */
+extern u8   g_gsScreenContext[];       /* 0x1A6480 - GS screen context; dims at +0x150/+0x152 */
+extern void AppendGsRegPacket(s32 regId, s32 value); /* 0x2FD3F0 - append GIF A+D reg-write */
 __asm__(".extern g_vramDynamicBase, 16");
 extern s32 g_vramDynamicBase;      /* 0x1A72D4 - VRAM dynamic region base */
 __asm__(".extern g_vramAllocCursor, 16");
@@ -236,9 +250,134 @@ void *func_002E0568(void *rec) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E05C0);
 
+/* Sibling of func_002E07F8: builds the same 32-scanline-strip framebuffer-fill
+ * GIF packet, but first appends a standalone GS register write (AppendGsRegPacket),
+ * uses a fixed fill colour (0x7F808080) instead of a caller value, and leaves the
+ * chain open (advances the cursor without emitting a closing DMAtag). Screen dims
+ * from g_gsScreenContext; nRows = h/32. GS AD register-data kept as documented hex.
+ * Handwritten-style packet build; portable-only #else. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E0650);
+#else
+void func_002E0650(void) {
+    u8  *ctx     = g_gsScreenContext;
+    s32  screenH = *(s16 *)(ctx + 0x150);
+    s32  screenV = *(s16 *)(ctx + 0x152);
+    s32  nRows   = screenH / 32;
+    u32 *dmatag;
+    u64 *ad;
+    s32  i;
 
+    AppendGsRegPacket(0x42, 0x64);
+
+    /* opening DMAtag: qwc = 5 reg-writes + nRows quads */
+    dmatag = (u32 *)g_frameDmaCursor;
+    dmatag[0] = (nRows + 5) | 0x10000000;
+    dmatag[1] = 0;
+    dmatag[2] = 0;
+    dmatag[3] = (nRows + 5) | 0x50000000;
+    g_frameDmaCursor = (u8 *)dmatag + 0x10;
+
+    /* GIFtag(A+D) + AD register-write list; each AD entry = {data @+0, GS reg @+8} */
+    ad = (u64 *)g_frameDmaCursor;
+    ad[0] = ((u64)0x8000 << 45) | 1;                        /* GIFtag: NLOOP=1, NREG=1 */
+    ad[1] = 0xE;                                            /*   descriptor: A+D */
+    ad[2] = 0x31001;                 ad[3] = 0x47;         /* AD: data -> GS reg */
+    ad[4] = ((u64)0x9000 << 46) | 0x8001; ad[5] = 0x10;   /* AD: data -> GS reg */
+    ad[6] = 0x146;                   ad[7] = 0x7F808080;   /* AD: data (fill colour) -> GS reg */
+    ad[8] = (u64)(nRows | 0x8000) | ((u64)0x9000 << 46);
+    ad[9] = 0x44;                                           /* AD: data -> GS reg */
+
+    /* one screen-spanning sprite quad per strip; XY packed 16.16, Y band += 0x200 */
+    if (nRows > 0) {
+        s32  vEdge    = screenV << 3;
+        s32  hEdge    = screenH << 3;
+        u64  xLeftHi  = (u64)(u32)(0x8000 - vEdge)          << 16;
+        u64  xRightHi = (u64)(u32)((screenV << 3) + 0x7FF0) << 16;
+        s32  yTop     = 0x8000 - hEdge;
+        s32  yBot     = 0x8200 - hEdge;
+        u64 *quad     = (u64 *)((u8 *)dmatag + 0x60);
+
+        for (i = 0; i < nRows; i++) {
+            quad[0] = (u32)yTop | xLeftHi;
+            quad[1] = (u32)yBot | xRightHi;
+            quad += 2;
+            yTop += 0x200;
+            yBot += 0x200;
+        }
+    }
+
+    /* leave the chain open: just advance past the reg-writes + quad rows */
+    g_frameDmaCursor = (u8 *)g_frameDmaCursor + (nRows << 4) + 0x50;
+}
+#endif
+
+/* Build the GIF/DMA packet that fills the framebuffer in horizontal strips (one
+ * screen-wide sprite quad per 32 scanlines) — the screen-clear path. Emits an
+ * opening DMAtag (qwc = 5 register-writes + nRows quad rows), a GIFtag(A+D) with
+ * its GS register setup list, then one sprite quad per strip (XY packed 16.16,
+ * origin 0x8000, Y band stepped 0x200 per row), and a closing DMAtag. Screen
+ * dims come from g_gsScreenContext (+0x150 h, +0x152 v). GS AD register-data
+ * words are kept as documented hex (not guessed register names). Handwritten-
+ * style packet build; portable-only #else. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E07F8);
+#else
+void func_002E07F8(u64 arg0) {
+    u8  *ctx     = g_gsScreenContext;
+    s32  screenH = *(s16 *)(ctx + 0x150);
+    s32  screenV = *(s16 *)(ctx + 0x152);
+    s32  nRows   = screenH / 32;           /* one filled sprite strip per 32 scanlines */
+    u32 *dmatag  = (u32 *)g_frameDmaCursor;
+    u64 *ad;
+    s32  i;
+
+    /* opening DMAtag: id=CNT (0x10000000), qwc = 5 reg-writes + nRows quads */
+    dmatag[0] = (nRows + 5) | 0x10000000;
+    dmatag[1] = 0;
+    dmatag[2] = 0;
+    dmatag[3] = (nRows + 5) | 0x50000000;
+    g_frameDmaCursor = (u8 *)dmatag + 0x10;
+
+    /* GIFtag(A+D) + AD register-write list; each AD entry = {data @+0, GS reg @+8} */
+    ad = (u64 *)g_frameDmaCursor;
+    ad[0] = ((u64)0x8000 << 45) | 1;                        /* GIFtag: NLOOP=1, NREG=1 */
+    ad[1] = 0xE;                                            /*   descriptor: A+D */
+    ad[2] = 0x3D801;              ad[3] = 0x47;             /* AD: data -> GS reg */
+    ad[4] = ((u64)0x9000 << 46) | 1; ad[5] = 0x10;         /* AD: data -> GS reg */
+    ad[6] = 0x146;               ad[7] = arg0;             /* AD: data -> GS reg (caller) */
+    ad[8] = (u64)(nRows | 0x8000) | ((u64)0x9000 << 46);
+    ad[9] = 0x44;                                           /* AD: data -> GS reg */
+
+    /* one screen-spanning sprite quad per strip; XY packed 16.16, Y band += 0x200 */
+    if (nRows > 0) {
+        s32  vEdge    = screenV << 3;
+        s32  hEdge    = screenH << 3;
+        u64  xLeftHi  = (u64)(u32)(0x8000 - vEdge)          << 16;
+        u64  xRightHi = (u64)(u32)((screenV << 3) + 0x7FF0) << 16;
+        s32  yTop     = 0x8000 - hEdge;
+        s32  yBot     = 0x8200 - hEdge;
+        u64 *quad     = (u64 *)((u8 *)dmatag + 0x60);
+
+        for (i = 0; i < nRows; i++) {
+            quad[0] = (u32)yTop | xLeftHi;
+            quad[1] = (u32)yBot | xRightHi;
+            quad += 2;
+            yTop += 0x200;
+            yBot += 0x200;
+        }
+    }
+
+    /* closing DMAtag */
+    dmatag = (u32 *)((u8 *)g_frameDmaCursor + (nRows << 4) + 0x50);
+    g_frameDmaCursor = (u8 *)dmatag;
+    dmatag[0] = 0x10000000;
+    dmatag[1] = 0;
+    dmatag[2] = 0x13000000;
+    dmatag[3] = 0;
+    g_frameDmaCursor = (u8 *)dmatag + 0x10;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", EmitMobyGlowPackets);
 
@@ -254,9 +393,107 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E19C0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E1A58);
 
+/* Close the shrub draw segment opened by BuildShrubDrawSegment: the shrub twin
+ * of CloseSkyDrawSegment. Splices the shrub texture uploads ahead of the shrub
+ * packets via the same DMAtag NEXT-tag detour, then bookkeeps VRAM usage:
+ *   1. reserve a qword at the current cursor as the close tag, advance +0x10;
+ *   2. finalise the open tag (DMAcnt, next = advanced cursor);
+ *   3. upload the shrub textures (returns VRAM bytes used) + append tex flush;
+ *   4. if usage exceeds 0x400000, print the overflow warning (retail no-op);
+ *      track the high-water mark in g_shrubVramPeak;
+ *   5. emit a return tag back to openTag+0x10, then fill the reserved close tag.
+ * The close tag here is tracked in a local (no close-tag global, unlike sky). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", CloseShrubDrawSegment);
+#else
+void CloseShrubDrawSegment(void) {
+    u32 *closeTag = (u32 *)g_frameDmaCursor;
+    u32 *openTag;
+    u32 *tag;
+    s32 vramUsed;
 
+    g_frameDmaCursor = (u8 *)closeTag + 0x10;
+
+    openTag = (u32 *)g_pShrubSegmentOpenTag;
+    openTag[0] = 0x20000000;
+    openTag[1] = (u32)g_frameDmaCursor;
+    openTag[2] = 0;
+    openTag[3] = 0;
+
+    vramUsed = UploadShrubTextures(g_vramAllocCursor);
+    AppendTexFlushDefaultTex0();
+
+    if (vramUsed > 0x400000) {
+        DebugPrintStub(D_1ABE10);
+    }
+    if (vramUsed > g_shrubVramPeak) {
+        g_shrubVramPeak = vramUsed;
+    }
+
+    tag = (u32 *)g_frameDmaCursor;
+    tag[0] = 0x20000000;
+    tag[1] = (u32)(g_pShrubSegmentOpenTag + 0x10);
+    tag[2] = 0;
+    tag[3] = 0;
+    g_frameDmaCursor = (u8 *)g_frameDmaCursor + 0x10;
+
+    closeTag[0] = 0x20000000;
+    closeTag[1] = (u32)g_frameDmaCursor;
+    closeTag[2] = 0;
+    closeTag[3] = 0;
+}
+#endif
+
+/* Patch the GS TEX0 texture-base-pointer (TBP) fields in every visible shrub's
+ * draw packets with the VRAM addresses resolved by UploadShrubTextures. Walks
+ * the -1-terminated g_shrubVisibleClassList; for each class record, over its
+ * nItems (+0x28) sub-packets (ptr array at +0x40, stride 8); for each packet,
+ * over its nTags giftags (base = packet+0x20 + (packet[0x14]<<4), stride 0x40);
+ * looks up the giftag's texture id (byte +0x13) in g_shrubTexVramTable (stride
+ * 4: {tbp_lo, tbp_hi}) and, when non-zero, splices the 14-bit TBP into the TEX0
+ * AD-data words at +0x30 (TEX0_1) and +0x20 (TEX0_2), preserving the upper bits
+ * (mask 0xFFFFC000). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", PatchShrubPacketTex0);
+#else
+void PatchShrubPacketTex0(void) {
+    s32 *listPtr = g_shrubVisibleClassList;
+    s32 classIdx = listPtr[0];
+
+    if (classIdx < 0) {
+        return;
+    }
+    do {
+        u8 *classRec = g_shrubClassTable[classIdx];
+        s32 nItems = *(s16 *)(classRec + 0x28);
+        s32 i;
+
+        listPtr++;
+        for (i = 0; i < nItems; i++) {
+            u8 *packet = *(u8 **)(classRec + 0x40 + i * 8);
+            s32 nTags = *(s32 *)(packet + 0x10);
+            u8 *giftag = packet + 0x20 + (*(s32 *)(packet + 0x14) << 4);
+            s32 k;
+
+            for (k = 0; k < nTags; k++) {
+                s16 *vram = &g_shrubTexVramTable[giftag[0x13] * 2];
+                s16 lo = vram[0];
+                s16 hi;
+
+                if (lo != 0) {
+                    *(u32 *)(giftag + 0x30) = (*(u32 *)(giftag + 0x30) & 0xFFFFC000) | (u32)lo;
+                }
+                hi = vram[1];
+                if (hi != 0) {
+                    *(u32 *)(giftag + 0x20) = (*(u32 *)(giftag + 0x20) & 0xFFFFC000) | (u32)hi;
+                }
+                giftag += 0x40;
+            }
+        }
+        classIdx = *listPtr;
+    } while (classIdx >= 0);
+}
+#endif
 
 extern u8 g_shrubRelightList[];    /* 0x2140D0 - shrub relight list */
 extern void func_0011AEA0(s32 arg);
@@ -294,7 +531,44 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", PatchShrubVerte
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E4000);
 
+/* Remove LOD level `mode` from a run of shrub instances. For each shrub id in
+ * [idStart, idEnd), examine the 4-nibble active-LOD field at instance+0x1E: find
+ * the nibble equal to `mode`, drop it (shift the higher nibbles down one, fill
+ * the top nibble with 0xF), and write the field back. When the field saturates
+ * to 0xFFFF (all levels exhausted) also set the "collapsed" byte at +0x1B.
+ * (Handwritten asm in the ROM — uses `j`/`add`; not byte-matchable from C, so
+ * this is a portable-only #else. Instances stride 0x20 in g_pShrubInstanceArray.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E4178);
+#else
+void func_002E4178(u16 *idStart, u16 *idEnd, s32 mode) {
+    u8 *instArray = g_pShrubInstanceArray;
+    u16 *p;
+
+    for (p = idStart; p != idEnd; p++) {
+        u8 *inst = instArray + (*p) * 0x20;
+        u16 flags = *(u16 *)(inst + 0x1E);
+        u16 v;
+
+        if ((flags & 0x000F) == (mode << 0)) {
+            v = (u16)((flags >> 4) | 0xF000);
+        } else if ((flags & 0x00F0) == (mode << 4)) {
+            v = (u16)(((flags >> 4) & 0x0FF0) | (flags & 0x000F) | 0xF000);
+        } else if ((flags & 0x0F00) == (mode << 8)) {
+            v = (u16)(((flags >> 4) & 0x0F00) | (flags & 0x00FF) | 0xF000);
+        } else if ((flags & 0xF000) == (mode << 12)) {
+            v = (u16)(flags | 0xF000);
+        } else {
+            continue;
+        }
+
+        *(u16 *)(inst + 0x1E) = v;
+        if (v == 0xFFFF) {
+            *(u8 *)(inst + 0x1B) = 1;
+        }
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E4280);
 
@@ -400,7 +674,51 @@ void BeginSkyDrawSegment(void) {
 }
 #endif
 
+/* Close the sky draw segment opened by BeginSkyDrawSegment: it splices the
+ * queued texture uploads AHEAD of the sky geometry via a DMAtag NEXT-tag detour.
+ *   1. reserve a qword at the current cursor as the close tag, advance +0x10;
+ *   2. finalise the open tag (DMAcnt 0x20000000, next = advanced cursor);
+ *   3. drain the pending tex uploads (both callees advance g_frameDmaCursor);
+ *   4. emit a return tag pointing back to openTag+0x10 (past the open tag);
+ *   5. fill the reserved close tag (DMAcnt, next = cursor);
+ *   6. reset the VRAM bump cursor to the dynamic base.
+ * Each tag is 4 words: [id/qwc, next-addr, 0, 0]. g_frameDmaCursor is re-read
+ * after the flush calls (they mutate it), so the reads are not cached. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", CloseSkyDrawSegment);
+#else
+void CloseSkyDrawSegment(void) {
+    u32 *closeTag = (u32 *)g_frameDmaCursor;
+    u32 *openTag;
+    u32 *tag;
+
+    g_pSkySegmentCloseTag = (u8 *)closeTag;
+    g_frameDmaCursor = (u8 *)closeTag + 0x10;
+
+    openTag = (u32 *)g_pSkySegmentOpenTag;
+    openTag[0] = 0x20000000;
+    openTag[1] = (u32)g_frameDmaCursor;
+    openTag[2] = 0;
+    openTag[3] = 0;
+
+    FlushPendingTexUploads();
+    AppendTexFlushDefaultTex0();
+
+    tag = (u32 *)g_frameDmaCursor;
+    tag[0] = 0x20000000;
+    tag[1] = (u32)(g_pSkySegmentOpenTag + 0x10);
+    tag[2] = 0;
+    tag[3] = 0;
+    g_frameDmaCursor = (u8 *)g_frameDmaCursor + 0x10;
+
+    closeTag[0] = 0x20000000;
+    closeTag[1] = (u32)g_frameDmaCursor;
+    closeTag[2] = 0;
+    closeTag[3] = 0;
+
+    g_vramAllocCursor = g_vramDynamicBase;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E4750);
 

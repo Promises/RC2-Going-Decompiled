@@ -125,6 +125,9 @@ extern u16 g_mobyGroupIterSlot;        /* group iterator: current slot index */
 extern Moby *g_pMobyGroupIterMoby;     /* group iterator: current moby */
 extern s32 D_1A8CA4;                   /* breath/oxygen HUD inversion flag */
 extern f32 D_1A8CB0;                   /* inverted breath meter source value */
+/* g_soundBankHandles+0x20 base (0x189E20); func_002B0E40 reads a reference
+ * position Vec4 at +0xB0 and a sign-selector float at +0xBC. */
+extern u8 g_soundBankHandlesBlk[];
 extern f32 D_001B1750;                 /* breath meter source value */
 extern u8 D_1A7A4F;                    /* "freeze palette cycling" flag */
 extern f32 D_1A8BD0;                   /* default hit-direction Vec4 for func_002A9F30 (declared as its first float so cc1 schedules the address materialisation as one insn) */
@@ -165,9 +168,10 @@ typedef void (*LerpByteVec4PackedFn)(f32 t, void *dst, void *src);
 extern s32 func_0029DA88(s32 a);
 extern char *GetLocalizedString(s32 stringId);
 extern s32 func_0029DAD0(char *text, s32 arg);
-extern s32 func_002B0E40(void *p);
-extern s32 func_002B0F40(void *p);
-extern s32 func_002B0C40(s32 ctx, void *out, void *a, void *b);
+extern void func_002B0E40(Vec4 *a, Vec4 *out, s32 flag);
+extern void func_002B0F40(Vec4 *a, Vec4 *out, Vec4 *src, f32 t);
+extern void func_002B0C40(s32 ctx, void *out, void *a, void *b);
+extern void func_002B1270(void *a, Vec4 *b, void *c);
 extern s32 func_002837D0(void *vec);
 /* func_00283BF8 == Atan2fPoly (183558.c region): 2-arg arctangent (minimax poly
  * + quadrant offset, self-contained VU0 — no vcallms upload), returns the angle
@@ -193,6 +197,9 @@ extern s32 func_002B1C20(void);
  * unit (#else); declared here for func_002A9468's #else call. */
 extern s32 func_002A9550(Moby **out, Moby *moby, s32 wantInactive, s32 wantActive);
 extern f32 func_002837F8(void *p, f32 *src);
+/* func_002A0368: read a reference value from an object (1A00F0 unit); takes the
+ * object pointer in $4 (not a float), returns the value as f32 in $f0. */
+extern f32 func_002A0368(void *obj);
 extern s32 func_002AFAB0(f32 step, f32 max);
 extern f32 GetFloatAbs(f32 x);
 extern s32 func_002835E0(s32 x);
@@ -279,8 +286,51 @@ extern BlobShadow g_blobShadowQueue[]; /* 32-entry ring (count in g_blobShadowCo
  * probe along the moby's own axis vector (+0xE0). */
 extern s32 D_1A8CA0;
 
+/* Resolve the moby's current/next anim-frame data pointers (+0x58/+0x5C) from
+ * its active sequence + frame indices. Defined in another unit. */
+extern void ResolveMobyAnimFramePtrs(Moby *moby);
 
+/**
+ * Set a moby's active animation sequence `seq` and frame `frameIdx`, clamping
+ * the frame to the sequence's frame count. The sequence descriptor is
+ * pClass+0x48+seq*4; its byte at +0x10 is the frame count, +0x11 the loop-sound
+ * index. animFrame is clamped to [0, frameCount-1]; animFrameNext = frame+1
+ * clamped to frameCount-1 (and wrapped to 0 if it would still reach the count).
+ * Then resolves the frame pointers, seeds animRate2 from the resolved frame,
+ * clears the anim-event byte's bit 1, and caches the loop-sound index.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8200);
+#else
+void func_002A8200(Moby *moby, s32 seq, s32 frameIdx) {
+    u8 *m = (u8 *)moby;
+    u8 *pClass = *(u8 **)(m + 0x24);                     /* moby->pClass */
+    u8 *seqEntry = *(u8 **)(pClass + 0x48 + seq * 4);
+    s32 frameCount = *(u8 *)(seqEntry + 0x10);
+    s32 cur, next;
+
+    m[0x42] = (u8)seq;                                   /* animSeq */
+
+    cur = (frameIdx < frameCount) ? frameIdx : (frameCount - 1);
+    next = cur + 1;
+    m[0x40] = (u8)cur;                                   /* animFrame */
+    m[0x41] = (u8)next;                                  /* animFrameNext */
+    if ((frameCount - 1) < next) {
+        m[0x41] = (u8)(frameCount - 1);
+    }
+
+    m[0x43] = (u8)seq;                                   /* animSeqNext */
+    if (m[0x41] >= frameCount) {
+        m[0x41] = 0;
+    }
+
+    ResolveMobyAnimFramePtrs(moby);
+
+    *(f32 *)(m + 0x4C) = *(f32 *)(*(u8 **)(m + 0x58));   /* animRate2 = *animFramePtr */
+    m[0x60] &= 0xFD;                                     /* animEventByte: clear bit 1 */
+    m[0x6C] = *(u8 *)(seqEntry + 0x11);                  /* loopSoundIdx */
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A82D8);
 
@@ -1905,7 +1955,25 @@ s32 func_002ADBA0(void *subject) {
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADC30);
 
+/**
+ * Rotate vector `v` by quaternion `q`, writing the result to `out`:
+ * out = q * (v as a pure quaternion, w=0) * conjugate(q). The conjugate negates
+ * the xyz of q and keeps its w.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADC50);
+#else
+void func_002ADC50(Vec4 *out, Vec4 *v, Vec4 *q) {
+    Vec4 conj, vpure, rotated;
+
+    Vec4ScaleVu0(&conj, -1.0f, q);
+    conj.w = q->w;
+    vpure = *v;
+    vpure.w = 0.0f;
+    func_00284180(&rotated, q, &vpure);
+    func_00284180(out, &rotated, &conj);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADCE0);
 
@@ -2008,7 +2076,22 @@ f32 func_002AF948(s32 digits, f32 x) {
 }
 #endif
 
+/**
+ * Test whether `x` sits just below the object's reference value: returns 1 when
+ * x <= round(refValue, 4) AND the gap (rounded - x) is smaller than
+ * round(obj->field48 * 0.5, 4); otherwise 0. Both quantities are rounded to 4
+ * decimal places via func_002AF948. refValue = func_002A0368(obj).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AF9C8);
+#else
+s32 func_002AF9C8(void *obj, f32 x) {
+    f32 rounded = func_002AF948(4, func_002A0368(obj));
+    f32 delta = rounded - x;
+    f32 half = func_002AF948(4, *(f32 *)((u8 *)obj + 0x48) * 0.5f);
+    return (x <= rounded) && (delta < half);
+}
+#endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFA58);
@@ -2122,14 +2205,55 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0BD8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0BF0);
 
+/**
+ * Transform vector `a` into `out` by a rotation. When a matrix `b` is supplied
+ * (b != 0) use it directly; otherwise build one from the quaternion at ctx+0xC0
+ * into a scratch matrix and transform through that.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0C40);
+#else
+void func_002B0C40(s32 ctx, void *out, void *a, void *b) {
+    if (b != 0) {
+        func_00283A48((Vec4 *)out, (Vec4 *)a, (Vec4 *)b);
+    } else {
+        Mat4x4 mat;
+        func_00284048(&mat, (const Vec4 *)(ctx + 0xC0));
+        func_00283A48((Vec4 *)out, (Vec4 *)a, (Vec4 *)&mat);
+    }
+}
+#endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0CA8);
 
+/**
+ * Resolve `a` into `out` via func_002B0C40, rescale out's XY to horizontal
+ * length `len`, then transform out in place by the object's matrix at ctx+0xC0.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0CC0);
+#else
+void func_002B0CC0(s32 ctx, Vec4 *out, void *a, void *b, f32 len) {
+    func_002B0C40(ctx, out, a, b);
+    func_00283920(out, out, len);
+    func_00283A48(out, out, (Vec4 *)(ctx + 0xC0));
+}
+#endif
 
+/**
+ * Resolve `a` into `out` via func_002B0C40, override out.z with the supplied
+ * height t, then transform out in place by the object's matrix at ctx+0xC0.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0D20);
+#else
+void func_002B0D20(s32 ctx, Vec4 *out, void *a, void *b, f32 t) {
+    func_002B0C40(ctx, out, a, b);
+    out->z = t;
+    func_00283A48(out, out, (Vec4 *)(ctx + 0xC0));
+}
+#endif
 
 /**
  * Resolve a tracked position into a local vector, then forward it to the
@@ -2173,7 +2297,36 @@ void func_002B0DC8(Vec4 *src, Vec4 *out, s32 keepSign) {
 }
 #endif
 
+/**
+ * Compute a direction vector into `out`, selected by two mode flags:
+ *  - D_1A8CA0 == 0: out = world +Z (SetVec4UnitZ).
+ *  - else D_1A8CA4 != 0: out = normalised flattened to-camera dir from `a`
+ *    (func_002B0DC8 with keepSign=1).
+ *  - else: out = (reference point g_soundBankHandlesBlk+0xB0) - a, rescaled to
+ *    length ±1 (negative when the +0xBC selector is positive).
+ * Finally, when flag == 0 the result is negated in place.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0E40);
+#else
+void func_002B0E40(Vec4 *a, Vec4 *out, s32 flag) {
+    if (D_1A8CA0 == 0) {
+        SetVec4UnitZ(out);
+    } else if (D_1A8CA4 != 0) {
+        func_002B0DC8(a, out, 1);
+    } else {
+        f32 sign = 1.0f;
+        if (0.0f < *(f32 *)(g_soundBankHandlesBlk + 0xBC)) {
+            sign = -1.0f;
+        }
+        Vec4SubVu0(out, (Vec4 *)(g_soundBankHandlesBlk + 0xB0), a);
+        Vec3RescaleToLenVu0(out, sign, out);
+    }
+    if (flag == 0) {
+        Vec4ScaleVu0(out, -1.0f, out);
+    }
+}
+#endif
 
 /**
  * Forward to func_002B0E40 on the sub-object at +0x10.
@@ -2191,7 +2344,26 @@ s32 func_002B0F18(u8 *p) {
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0F38);
 
+/**
+ * Offset a base position `src` into `out` by a direction of magnitude t:
+ *  - D_1A8CA0 == 0 (simple mode): out.z = src.z - t (straight vertical drop).
+ *  - else: build a direction from `a` (func_002B0E40 with flag=0), rescale it to
+ *    length t, and add it to src: out = src + t*dir.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0F40);
+#else
+void func_002B0F40(Vec4 *a, Vec4 *out, Vec4 *src, f32 t) {
+    if (D_1A8CA0 == 0) {
+        out->z = src->z - t;
+    } else {
+        Vec4 dir;
+        func_002B0E40(a, &dir, 0);
+        Vec3RescaleToLenVu0(&dir, t, &dir);
+        Vec4AddVu0(out, src, &dir);
+    }
+}
+#endif
 
 /**
  * Forward to func_002B0F40 on the sub-object at +0x10.
@@ -2225,7 +2397,29 @@ f32 func_002B11C8(Vec4 *p) {
     return 100.0f - func_002837F8(p, &D_1A8CB0);
 }
 
+/**
+ * func_002B1220 = OrientMatrixToGravityInverted(mtx3x4, gravDir, outMtxOpt):
+ * orient mtx3x4 toward "up" by negating the gravity direction and delegating to
+ * func_002B1270 (OrientMatrixToGravity, which orients toward gravDir).
+ *
+ * gravDir (arg2/$5) is scaled by -1 into a scratch vector; outMtxOpt (arg3/$6),
+ * the optional delta-matrix output, is passed through unchanged.
+ *
+ * NOTE: the negated source is arg2/gravDir, NOT arg3. The body never explicitly
+ * moves $5 because it forwards it straight into Vec4ScaleVu0, whose src operand
+ * IS $5 — `n`/Vec4ScaleVu0 @0x2836E0 does `lqc2 $vf1,0(a1)` (a1=$5). func_002B1270's
+ * gravDir param is likewise $5. Arg3/$6 is outMtxOpt (an output pointer); negating
+ * it would be meaningless.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1220);
+#else
+void func_002B1220(void *mtx3x4, Vec4 *gravDir, void *outMtxOpt) {
+    Vec4 invGravDir;
+    Vec4ScaleVu0(&invGravDir, -1.0f, gravDir);
+    func_002B1270(mtx3x4, &invGravDir, outMtxOpt);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1270);
 
@@ -2256,7 +2450,22 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1708);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1710);
 
+/* Callee of func_002B1778's #else arm (func_002B1710 itself stays INCLUDE_ASM,
+ * its own #else is out of this cohort — this prototype is needed only so the
+ * carried func_002B1778 #else body compiles under TARGET_NATIVE). */
+extern f32 func_002B1710(s32 a, s32 b);
+
+/** func_002B1778 — sample the sine of the (a mod b) index angle, remap it from
+ *  [-1,1] to [0,1], and drive the packed-vec4 2-colour blend by that weight:
+ *  LerpByteVec4Packed(sin(func_002B1710(a,b))*0.5+0.5, dst, src). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1778);
+#else
+void func_002B1778(s32 a, s32 b, void *dst, void *src) {
+    f32 s = func_00283B48(func_002B1710(a, b));
+    LerpByteVec4PackedVu0(s * 0.5f + 0.5f, dst, src);
+}
+#endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B17D0);
