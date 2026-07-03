@@ -1709,6 +1709,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC468);
 #else
 extern void func_00284008(void *m);
 extern void func_00284028(void *src, void *m);
+extern void func_002AC1E0(void *out, void *m);
 
 void func_002AC468(void *out, void *in) {
     u8 scratch[0x40];   /* 4x4 matrix */
@@ -2234,6 +2235,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0CA8);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0CC0);
 #else
+extern void func_00283920(Vec4 *dst, Vec4 *src, f32 len);   /* rescale xy to length len (VU0) */
 void func_002B0CC0(s32 ctx, Vec4 *out, void *a, void *b, f32 len) {
     func_002B0C40(ctx, out, a, b);
     func_00283920(out, out, len);
@@ -2338,7 +2340,7 @@ void func_002B0E40(Vec4 *a, Vec4 *out, s32 flag) {
  * caller hands in a stack-local pointer, so p is left u8* rather than Moby*.
  */
 s32 func_002B0F18(u8 *p) {
-    return func_002B0E40(p + 0x10);
+    return ((s32 (*)(u8 *))func_002B0E40)(p + 0x10);
 }
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
@@ -2374,7 +2376,7 @@ void func_002B0F40(Vec4 *a, Vec4 *out, Vec4 *src, f32 t) {
  * stack-local pointer, StepMobySpringFollow @ 0x2B5844), so p is left u8*.
  */
 s32 func_002B0FC0(u8 *p) {
-    return func_002B0F40(p + 0x10);
+    return ((s32 (*)(u8 *))func_002B0F40)(p + 0x10);
 }
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0FE0);
