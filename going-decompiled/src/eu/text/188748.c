@@ -124,9 +124,46 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_002892C8);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", ResetCinematicQueue);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_00289318);
+/*
+ * EU twin of USA DequeueCinematic (0x289428). Pop the slot at the read cursor
+ * into *outId/*outFlags, decrement the count (clearing `active` when it hits 0),
+ * clear both slot words to -1, advance the read cursor (wrap at 5), return 1 —
+ * unless the queue was empty (return 0). `readCursor` is re-read per slot access
+ * to reproduce the -G8 -fno-gcse build's kept loads. No data globals → the USA C
+ * ports verbatim.
+ */
+s32 func_00289318(CinematicQueue *q, s32 *outId, s32 *outFlags) {
+    if (q->count == 0) {
+        return 0;
+    }
+    if (--q->count == 0) {
+        q->active = 0;
+    }
+    *outId = q->slots[q->readCursor].id;
+    *outFlags = q->slots[q->readCursor].flag;
+    q->slots[q->readCursor].id = -1;
+    q->slots[q->readCursor].flag = -1;
+    q->readCursor = (q->readCursor + 1 != 5) ? (q->readCursor + 1) : 0;
+    return 1;
+}
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_002893B8);
+/*
+ * EU twin of USA EnqueueCinematic (0x2894C8). Push cinematic `id` at the tail:
+ * refuse (return 0) when full (count == 5) or currently playing (active != 0),
+ * else store {id, isMovie=(id in [0x20,0xB0])} at the write slot, bump the count,
+ * advance the write cursor (wrap at 5), return 1. `writeCursor` re-read per access
+ * to match the kept loads. No data globals → the USA C ports verbatim.
+ */
+s32 func_002893B8(CinematicQueue *q, s32 id) {
+    if (q->count == 5 || q->active != 0) {
+        return 0;
+    }
+    q->slots[q->writeCursor].id = id;
+    q->slots[q->writeCursor].flag = ((u32)(id - 0x20) < 0x91) ? 1 : 0;
+    q->count = q->count + 1;
+    q->writeCursor = (q->writeCursor + 1 != 5) ? (q->writeCursor + 1) : 0;
+    return 1;
+}
 
 /* Forward to ResetCinematicQueue (keeps its own frame; the empty-asm guard
  * suppresses cc1's sibling-call so the original jal+frame is reproduced). */

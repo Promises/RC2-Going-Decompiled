@@ -332,11 +332,6 @@ extern u8 D_00143640[];
  * them in registers here, giving a different instruction shape. Left as
  * INCLUDE_ASM. */
 
-/* func_0012B3C0(arg0): thin wrapper that calls func_0012C508(arg0, 3) and
- * returns. The original keeps a real frame + jal (no sibling-call), but ee-gcc
- * sibling-call-optimizes the tail call to `j func_0012C508`; that codegen-shape
- * mismatch isn't expressible in clean source. Left as INCLUDE_ASM. */
-
 extern s32 D_00137F10[];
 
 extern s32 func_0012C788(s32 *arg0, s32 arg1);
@@ -2521,7 +2516,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001212C4);
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001212C8);
 #else
 extern s32 func_00123028(s64 a, s64 b);
-extern s32 func_001231C8(s64 a);
+extern u32 func_001231C8(s64 a);
 extern s64 func_001213B8(s64 value);
 extern s64 func_00122A40(s64 a, s64 b);
 extern s64 func_00122A98(s64 a, s64 b);
@@ -3140,13 +3135,11 @@ s64 func_00122DA8(s64 a, s64 b) {
 /**
  * func_00122F10 = ordered comparison of two decomposed doubles (FpParts):
  * NaN->1, else order by class then (for equal-sign normals) exponent then
- * unsigned mantissa. NEAR-MISS WALL (83.70%) - branch-likely + movz/movn sign
- * selects ee-gcc won't reproduce. Shipped as a cmp-oracle'd portable #else
- * (run_cmp_015180_iso.sh).
+ * unsigned mantissa. MATCHED (byte-exact) via the near-miss idiom levers, same as
+ * the USA twin (delta 0): (cX^K)==0 xori class tests, c?1:-1 (movz) vs (c==0)?-1:1
+ * (movn) sign-selects, and a-first magnitude compares (a>b) to recover the
+ * annulling bnel + register threading.
  */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00122F10);
-#else
 s32 func_00122F10(FpParts *a, FpParts *b) {
     s32 ca = a->fpClass;
     s32 cb;
@@ -3157,42 +3150,41 @@ s32 func_00122F10(FpParts *a, FpParts *b) {
     if ((u32)cb < 2) {
         return 1;
     }
-    if (ca == 4) {
-        if (cb == 4) {
+    if ((ca ^ 4) == 0) {
+        if ((cb ^ 4) == 0) {
             return b->sign - a->sign;
         }
         return a->sign ? -1 : 1;
     }
-    if (cb == 4) {
+    if ((cb ^ 4) == 0) {
         return b->sign ? 1 : -1;
     }
-    if (ca == 2) {
-        if (cb == 2) {
+    if ((ca ^ 2) == 0) {
+        if ((cb ^ 2) == 0) {
             return 0;
         }
-        return b->sign ? 1 : -1;
+        return (b->sign == 0) ? -1 : 1;
     }
-    if (cb == 2) {
+    if ((cb ^ 2) == 0) {
         return a->sign ? -1 : 1;
     }
     if (a->sign != b->sign) {
         return a->sign ? -1 : 1;
     }
-    if (b->exponent < a->exponent) {
+    if (a->exponent > b->exponent) {
         return a->sign ? -1 : 1;
     }
-    if (a->exponent < b->exponent) {
+    if (b->exponent > a->exponent) {
         return a->sign ? 1 : -1;
     }
-    if ((u64)b->mantissa < (u64)a->mantissa) {
+    if ((u64)a->mantissa > (u64)b->mantissa) {
         return a->sign ? -1 : 1;
     }
-    if ((u64)a->mantissa < (u64)b->mantissa) {
+    if ((u64)b->mantissa > (u64)a->mantissa) {
         return a->sign ? 1 : -1;
     }
     return 0;
 }
-#endif
 
 /**
  * Compare two doubles by IEEE-754 class: decompose each operand with
@@ -3265,23 +3257,20 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00123130);
  * infinity and exponent>=32 -> 0xFFFFFFFF; otherwise shift the class-3 mantissa
  * (leading bit at 60) into place: right by (60-exp), left by (exp-60) above.
  *
- * NEAR-MISS WALL (68.20% via objdiff, region-co-located with USA). Logic faithful
- * (unsigned class<2 -> sltiu matches) but dense with ee-gcc -O2 -G0 soft-float
- * fillers: `xori;beqz` vs `li;beq` equality, annulling `bnel` range check,
- * `lui;ori` overflow constant. Shipped as a portable TARGET_NATIVE #else;
- * verification routed to tester-EE (calls sibling soft-float func_00122760 #else).
+ * MATCHED (byte-exact) via the near-miss idiom levers — same as the USA twin
+ * (region-co-located, delta 0): return type u32 makes 0xFFFFFFFF build as
+ * `lui;ori` (not s32 `li -1`) and frees the annulling `bnel`; `(cls^K)==0` forces
+ * the `xori;beqz` class tests; and `if (exp>=0x3D) return <<; return >>;` lays the
+ * `<<` block first to match the original's order. Calls sibling func_00122760.
  */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001231C8);
-#else
-s32 func_001231C8(s64 a) {
+u32 func_001231C8(s64 a) {
     s64 va = a;
     FpParts parts;
     s32 cls;
     s32 exp;
     func_00122760(&va, &parts);
     cls = parts.fpClass;
-    if (cls == 2) {
+    if ((cls ^ 2) == 0) {
         return 0;
     }
     if ((u32)cls < 2) {
@@ -3290,22 +3279,21 @@ s32 func_001231C8(s64 a) {
     if (parts.sign != 0) {
         return 0;
     }
-    if (cls == 4) {
-        return 0xFFFFFFFF;
+    if ((cls ^ 4) == 0) {
+        return 0xFFFFFFFFu;
     }
     exp = parts.exponent;
     if (exp < 0) {
         return 0;
     }
-    if (exp >= 32) {
-        return 0xFFFFFFFF;
+    if (exp >= 0x20) {
+        return 0xFFFFFFFFu;
     }
-    if (exp < 61) {
-        return (s32)((u64)parts.mantissa >> (60 - exp));
+    if (exp >= 0x3D) {
+        return (u32)((u64)parts.mantissa << (exp - 0x3C));
     }
-    return (s32)((u64)parts.mantissa << (exp - 60));
+    return (u32)((u64)parts.mantissa >> (0x3C - exp));
 }
-#endif
 
 /**
  * Build an FpParts descriptor from explicit class/sign/exponent and a 64-bit
@@ -3848,7 +3836,14 @@ void func_0012B198(s32 arg0) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012B1C0);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012B3C0);
+/* func_0012B3C0(arg0): thin wrapper — forwards to func_0012C508(arg0, 3) and
+ * returns its result. (The prior "sibling-call wall" note was wrong: ee-gcc 2.9
+ * has NO sibling-call optimization for a value-returning call, so this compiles
+ * to the original's jal + real frame — byte-exact. EU matches USA at delta 0.) */
+extern s32 func_0012C508(s32 arg0, s32 arg1);
+s32 func_0012B3C0(s32 arg0) {
+    return func_0012C508(arg0, 3);
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012B3E0);
 

@@ -745,17 +745,13 @@ void ResetCinematicQueue(CinematicQueue *q) {
 #endif
 
 /*
- * DequeueCinematic(q, outId, outFlags): pop the slot at the read cursor into
- * *outId/*outFlags, clear it to -1, advance the read cursor mod 5; returns 1
- * unless the queue was empty. EnqueueCinematic(q, id): push id at the write
- * cursor (refused when full/playing), set the "standard cinematic id" flag,
- * advance mod 5. (See func_00289560 for the matched companion.)
- *
- * WALL (94.87% / 77.24%): logic + the (x+1 != 5)?x+1:0 cursor wrap are exact,
- * but the final `q->cursor = wrap` store sinks into the jr-delay slot with the
- * movz immediately before jr in the original; GNU as schedules jr ahead of the
- * movz here. Enqueue additionally drifts the queue-pointer register colouring
- * off its branch-likely early checks. The jr-delay conditional-move tail wall.
+ * DequeueCinematic(q, outId, outFlags) + EnqueueCinematic(q, id): the cinematic
+ * ring-buffer pop/push pair. Both are BYTE-EXACT matches. The (x+1 != 5)?x+1:0
+ * cursor wrap emits a movz that the original schedules immediately before jr in
+ * its delay slot; the asm_unit.sh -G8 pendmov handler now reproduces exactly
+ * that ordering (harness fix @8098872), so the earlier "jr-delay conditional-move
+ * tail wall" no longer applies. Per-function docs below. (See func_00289560 for
+ * the matched companion.)
  */
 /*
  * Pop the head cinematic request off the queue `q`: return 0 if empty, else

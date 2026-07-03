@@ -114,6 +114,13 @@ extern u8 D_139648[];                  /* palette-cycle counter base (incomplete
  * forwarding tails — see USA text/198FA0). */
 extern f32 ProbeGroundHeight(Vec4 *pos, f32 zOffset, s32 mask);
 extern s32 func_001163B0(void);        /* core random-state step */
+/* Angle helpers (EU twins of USA func_00284590/func_00284548 == WrapAnglePi*).
+ * func_002844A0 genuinely returns f32 in $f0; func_00284458 also returns f32,
+ * but the matching build's func_002AABB8 byte-matches ONLY with the s32 form —
+ * the s32-callee + s32-return type errors cancel into the exact $f0 passthrough
+ * the original emits (same trick as USA func_00284548 → func_002AAFB8). */
+extern f32 func_002844A0(f32 a, f32 b);
+extern s32 func_00284458(f32 a, f32 b);
 extern s32 ProbeMobyGroundBelow(Moby *moby);
 extern s32 func_002846E8(void *a, void *b, void *c);
 extern s32 func_0029DA88(s32 a);
@@ -175,9 +182,24 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A81F8);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A8238);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A8290);
+/* EU twin of USA func_002A86E0 (1A8180): random f32 in [lo, hi). Pure compute
+ * (func_001163B0 random-state step + 2^-15 scale), no data globals -> no +0x80
+ * swap, region-co-located callee (delta 0). */
+f32 func_002A8290(f32 lo, f32 hi) {
+    return lo + (f32)((func_001163B0() >> 16) & 0x7FFF) * (hi - lo) * 0.000030517578125f;
+}
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A82F0);
+/* EU twin of USA func_002A8740 (1A8180): signed random f32 in [-hi, hi)-ish
+ * (12-bit random, 2^-12 scale, coin-flip negate). Pure compute, no data globals. */
+f32 func_002A82F0(f32 lo, f32 hi) {
+    s32 r = func_001163B0() >> 16;
+    f32 v = lo + (f32)(r & 0xFFF) * (hi - lo) * 0.000244140625f;
+
+    if (r & 1) {
+        v = -v;
+    }
+    return v;
+}
 
 /**
  * Random small angle: uniform in [-0x800, 0x800) scaled by pi/2048 — i.e. a
@@ -403,7 +425,16 @@ f32 func_002AABA8(f32 a, f32 b, f32 t) {
     return a + (b - a) * t;
 }
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AABB8);
+/*
+ * EU twin of USA func_002AAFB8 (0x2AAFB8). Two-stage scalar transform: feed
+ * (b, a) through func_002844A0, scale the result by c, and forward (a, scaled)
+ * to func_00284458. Byte-identical to the USA twin except the two callee
+ * addresses (EU twins, shifted -0xF0). The s32 return + s32 func_00284458 decl
+ * cancel into the original's exact $f0 passthrough (see the extern note above).
+ */
+s32 func_002AABB8(f32 a, f32 b, f32 c) {
+    return func_00284458(a, func_002844A0(b, a) * c);
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AAC00);
 
