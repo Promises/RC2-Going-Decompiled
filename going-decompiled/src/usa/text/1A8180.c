@@ -972,7 +972,45 @@ s32 func_002A96C8(u32 *p, s32 dec) {
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9700);
 
+extern f32 func_002835C0(f32 x); /* sqrtf */
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9708);
+#else
+/**
+ * Solve the quadratic a*x^2 + b*x + c = 0 for real roots.
+ *
+ * Returns the number of real roots and writes them to *out1 / *out2:
+ *   2  two distinct real roots (discriminant > 0), ordered so *out1 >= *out2
+ *   1  a single repeated root -b/(2a) (discriminant == 0), written to *out1
+ *   0  no real roots (discriminant < 0); *out1 / *out2 still receive the
+ *      formal values (-b +/- sqrt(|disc|)) / (2a) that the caller may ignore
+ */
+s32 func_002A9708(f32 a, f32 b, f32 c, f32 *out1, f32 *out2)
+{
+    f32 disc = b * b - a * (c * 4.0f);
+
+    if (disc == 0.0f) {
+        *out1 = -b / (a + a);
+        return 1;
+    } else {
+        f32 root = func_002835C0(GetFloatAbs(disc)); /* sqrt(|disc|) */
+        f32 hi = (-b + root) / (a + a);
+        f32 lo = (-b - root) / (a + a);
+
+        *out1 = hi;
+        *out2 = lo;
+        if (*out1 < lo) {
+            *out2 = *out1;
+            *out1 = lo;
+        }
+        if (disc > 0.0f) {
+            return 2;
+        }
+        return 0;
+    }
+}
+#endif
 
 /* ProbeGroundHeight: ground height under a point - CollLine from z=0.01 up
  * to pos.z + zOffset, returns the hit z or 0 (the 0.5f/0x20 defaults come
@@ -2283,7 +2321,45 @@ void func_002ADD28(Vec4 *dst, Vec4 *src, Vec4 *axis, f32 angle) {
 }
 #endif
 
+extern void Vec3CrossVu0(Vec4 *dst, Vec4 *a, Vec4 *b);   /* fwd (also declared later) */
+extern f32 func_00283B60(f32 x);                          /* arccos */
+
+/**
+ * Rotate vector `a` a fraction `t` of the way toward `b`, into `out` (slerp-like).
+ * Axis = normalize(cross(b, a)); cosθ = dot(a, b) — divided by |a|·|b| unless
+ * `useRaw` != 0 (and if that product is 0, out = a and returns). Builds a rotation
+ * quaternion by ((π/2 − acos(cosθ))·t·0.5) about the axis and rotates a by it
+ * (func_002ADC50).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADDD0);
+#else
+void func_002ADDD0(Vec4 *out, Vec4 *a, Vec4 *b, s32 useRaw, f32 t) {
+    Vec4 quat;
+    f32 cosA;
+    f32 angle;
+    f32 rotAngle;
+
+    Vec3CrossVu0(&quat, b, a);
+    Vec3RescaleToLenVu0(&quat, 1.0f, &quat);
+    cosA = Vec3DotVu0(a, b);
+
+    if (useRaw == 0) {
+        f32 lenAB = Vec3LengthVu0(a) * Vec3LengthVu0(b);
+        if (lenAB == 0.0f) {
+            *out = *a;
+            return;
+        }
+        cosA = cosA / lenAB;
+    }
+
+    angle = func_00283B60(cosA);
+    rotAngle = (1.5707964f - angle) * (t * 0.5f);
+    Vec4ScaleVu0(&quat, func_00283B48(rotAngle), &quat);
+    quat.w = func_00283B30(rotAngle);
+    func_002ADC50(out, a, &quat);
+}
+#endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADF10);
@@ -2715,7 +2791,34 @@ void func_002AFE68(void *handle, f32 value, f32 angle1, f32 angle2) {
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFF08);
 
+extern u8 D_26CB10[];   /* 0x54-byte config table snapshotted per call */
+extern s32 func_002B1880(s32 stringId, s32 arg);              /* defined later this unit */
+extern s32 func_002B1B48(void *subject, s32 stringId, s32 arg2);
+
+/**
+ * Snapshot the D_26CB10 config table (0x54 bytes) into a local, clamp the index
+ * `sel` to [0, 0x14], then dispatch: sel==3 shows the localized string at
+ * table+0xC (func_002B1880), otherwise runs the notice/prompt setup with the
+ * string id at table+sel*4 (func_002B1B48). Returns the dispatched call's result.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFF10);
+#else
+s32 func_002AFF10(s32 sel) {
+    u8 table[0x54];
+    s32 idx;
+
+    memcpy(table, D_26CB10, 0x54);
+    idx = (sel > -1) ? sel : 0;
+    if (idx >= 0x15) {
+        idx = 0x14;
+    }
+    if (idx == 3) {
+        return func_002B1880(*(s32 *)(table + 0xC), 0xF0);
+    }
+    return func_002B1B48((void *)8, *(s32 *)(table + idx * 4), 0xB4);
+}
+#endif
 
 /* Callees for func_002B0038 (sigs traced from call registers / symbol_addrs). */
 extern void func_002A0A58(Moby *parent, void *srcTransform, Mat4x4 *out);

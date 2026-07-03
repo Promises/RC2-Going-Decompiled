@@ -13,6 +13,7 @@
  *     not yet ported - that needs the platform backend (deferred). */
 #ifdef TARGET_NATIVE
 #include <stdint.h>
+#include <string.h>         /* memset/memcpy/memcmp used by #else portable bodies */
 #define _USE_MATH_DEFINES   /* M_PI on MSVC; harmless elsewhere */
 #include <math.h>           /* PR_PI below uses M_PI */
 typedef int8_t   s8;
