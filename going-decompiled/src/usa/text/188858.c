@@ -757,45 +757,46 @@ void ResetCinematicQueue(CinematicQueue *q) {
  * movz here. Enqueue additionally drifts the queue-pointer register colouring
  * off its branch-likely early checks. The jr-delay conditional-move tail wall.
  */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", DequeueCinematic);
-#else
+/*
+ * Pop the head cinematic request off the queue `q`: return 0 if empty, else
+ * decrement the count (clearing the active flag when it hits 0), copy the head
+ * slot's {id, flag} to *outId/*outFlags, mark that slot free (-1/-1), advance the
+ * read cursor with a wrap at 5, and return 1. `readCursor` is re-read for every
+ * slot access (matching the -G8 -fno-gcse build, which keeps each load rather than
+ * caching the cursor in a register).
+ */
 s32 DequeueCinematic(CinematicQueue *q, s32 *outId, s32 *outFlags) {
-    s32 rc;
     if (q->count == 0) {
         return 0;
     }
     if (--q->count == 0) {
         q->active = 0;
     }
-    rc = q->readCursor;
-    *outId = q->slots[rc].id;
-    *outFlags = q->slots[rc].flag;
-    q->slots[rc].id = -1;
-    q->slots[rc].flag = -1;
-    rc = q->readCursor + 1;
-    q->readCursor = (rc != 5) ? rc : 0;
+    *outId = q->slots[q->readCursor].id;
+    *outFlags = q->slots[q->readCursor].flag;
+    q->slots[q->readCursor].id = -1;
+    q->slots[q->readCursor].flag = -1;
+    q->readCursor = (q->readCursor + 1 != 5) ? (q->readCursor + 1) : 0;
     return 1;
 }
-#endif
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", EnqueueCinematic);
-#else
+/*
+ * Push cinematic `id` onto the tail of queue `q`: refuse (return 0) when the
+ * queue is full (count == 5) or currently playing one (active != 0), else store
+ * {id, isMovie=(id in [0x20,0xB0])} at the write slot, bump the count, advance the
+ * write cursor (wrap at 5), and return 1. `writeCursor` is re-read for each slot
+ * access + the wrap (matching the -G8 -fno-gcse build's kept loads).
+ */
 s32 EnqueueCinematic(CinematicQueue *q, s32 id) {
-    s32 wc;
     if (q->count == 5 || q->active != 0) {
         return 0;
     }
-    wc = q->writeCursor;
-    q->slots[wc].id = id;
+    q->slots[q->writeCursor].id = id;
     q->slots[q->writeCursor].flag = ((u32)(id - 0x20) < 0x91) ? 1 : 0;
-    wc = q->writeCursor + 1;
-    q->writeCursor = (wc != 5) ? wc : 0;
     q->count = q->count + 1;
+    q->writeCursor = (q->writeCursor + 1 != 5) ? (q->writeCursor + 1) : 0;
     return 1;
 }
-#endif
 
 /* Forward to ResetCinematicQueue (keeps its own frame; the empty-asm guard
  * suppresses cc1's sibling-call so the original jal+frame is reproduced). */

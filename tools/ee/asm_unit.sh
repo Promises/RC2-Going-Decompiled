@@ -226,7 +226,11 @@ if [ "$GFLAG" = "-G8" ]; then
         if (pmst == 1 && $0 ~ /^\t(j|b|beq|bne|blez|bgez|bgtz|bltz)[a-z]*\t/) {
           dst = pendmov; sub(/^\tmov[nz]\t/, "", dst); sub(/,.*/, "", dst)
           gsub(/\$/, "\\$", dst)
-          if ($0 !~ (dst "([^0-9a-z]|$)")) { print; pmst = 2; next }
+          # HOLD the branch too (do not print yet): pmst==2 decides from the
+          # delay slot whether the cond-move fills an empty (nop) slot or must
+          # stay BEFORE a slot cc1 already filled (the `movz; jr $31; store(delay)`
+          # return tail). Printing the branch here orphaned the store.
+          if ($0 !~ (dst "([^0-9a-z]|$)")) { heldbr = $0; pmst = 2; next }
         }
         if (pmst == 0 && nore == 0 && $0 ~ /^\t(j|b|beq|bne|blez|bgez|bgtz|bltz)[a-z]*\t/) {
           # bare reorder-mode branch directly after the cond-move
@@ -238,14 +242,22 @@ if [ "$GFLAG" = "-G8" ]; then
             next
           }
         }
-        if (pmst == 2 && $0 ~ /^\tnop[ \t]*$/) {
-          # the cond-move takes the place of the explicit nop in the slot
-          print pendmov; pendmov = ""; pmst = 0; next
+        if (pmst == 2) {
+          if ($0 ~ /^\tnop[ \t]*$/) {
+            # cc1 left an empty (nop) slot in its noreorder bracket: SN-as fills
+            # it with the cond-move (branch printed, then the move in the slot;
+            # the nop is dropped).
+            print heldbr; print pendmov; heldbr = ""; pendmov = ""; pmst = 0; next
+          }
+          # cc1 ALREADY filled the delay slot with a real insn (the
+          # `movz; jr $31; store(delay)` return tail): the cond-move is an
+          # ordinary insn BEFORE the branch, not a slot filler. Emit move, then
+          # branch, then fall through to print the real slot insn ($0).
+          print pendmov; print heldbr; heldbr = ""; pendmov = ""; pmst = 0
+        } else {
+          # any other shape: flush the held cond-move in its original place.
+          print pendmov; pendmov = ""; pmst = 0
         }
-        # any other shape: flush the held cond-move in its original place
-        # (before whatever we are looking at, incl. an already-printed
-        # branch only in the impossible pmst==2 non-nop case)
-        print pendmov; pendmov = ""; pmst = 0
       }
     }
     /^\tmov[nz]\t\$/ { pendmov = $0; pmst = 0; next }
@@ -315,6 +327,8 @@ if [ "$GFLAG" = "-G8" ]; then
     }
     { print; prevcop = ($0 ~ /^\t(l\.s|lwc1)\t\$f[0-9]+,[A-Za-z_]/) }
     END {
+      if (pendmov != "") print pendmov
+      if (heldbr != "") print heldbr
       if (pendbr != "") print pendbr
       if (pend != "") print pend
     }

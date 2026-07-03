@@ -2320,7 +2320,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001212C4);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001212C8);
 #else
 extern s32 func_00123028(s64 a, s64 b);
-extern s32 func_001231C8(s64 a);
+extern u32 func_001231C8(s64 a);
 extern s64 func_001213B8(s64 value);
 extern s64 func_00122A40(s64 a, s64 b);
 extern s64 func_00122A98(s64 a, s64 b);
@@ -3030,15 +3030,13 @@ s64 func_00122DA8(s64 a, s64 b) {
  * unsigned mantissa, yielding a negative/zero/positive result whose sign tracks
  * a<b / a==b / a>b. (Two infinities or two zeros compare by sign difference.)
  *
- * NEAR-MISS WALL (83.70% via objdiff). The original is a chain of branch-likely
- * (`bnel`) compares with `movz`/`movn` sign-select fillers that ee-gcc -O2 -G0
- * will not reproduce from C if/return control flow. Seedable (FpParts pair ->
- * int): shipped as a cmp-oracle'd portable #else (asm-vs-C proven bit-identical
- * on real R5900 by run_cmp_015180_iso.sh).
+ * MATCHED (byte-exact) via the near-miss idiom levers — the "83.70% wall" was
+ * C-controllable: (1) `(cX^K)==0` forces the original's `xori;beqz` class tests;
+ * (2) the sign-selects use `c?1:-1` (movz) vs `(c==0)?-1:1` (movn) to reproduce
+ * the original's distinct movz/movn fillers + tail-merging; (3) writing the
+ * exponent/mantissa magnitude compares a-first (`a>b`, not `b<a`) makes a's field
+ * load first and recovers the annulling `bnel` branch-likely + register threading.
  */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00122F10);
-#else
 s32 func_00122F10(FpParts *a, FpParts *b) {
     s32 ca = a->fpClass;
     s32 cb;
@@ -3049,42 +3047,41 @@ s32 func_00122F10(FpParts *a, FpParts *b) {
     if ((u32)cb < 2) {
         return 1;
     }
-    if (ca == 4) {
-        if (cb == 4) {
+    if ((ca ^ 4) == 0) {
+        if ((cb ^ 4) == 0) {
             return b->sign - a->sign;
         }
         return a->sign ? -1 : 1;
     }
-    if (cb == 4) {
+    if ((cb ^ 4) == 0) {
         return b->sign ? 1 : -1;
     }
-    if (ca == 2) {
-        if (cb == 2) {
+    if ((ca ^ 2) == 0) {
+        if ((cb ^ 2) == 0) {
             return 0;
         }
-        return b->sign ? 1 : -1;
+        return (b->sign == 0) ? -1 : 1;
     }
-    if (cb == 2) {
+    if ((cb ^ 2) == 0) {
         return a->sign ? -1 : 1;
     }
     if (a->sign != b->sign) {
         return a->sign ? -1 : 1;
     }
-    if (b->exponent < a->exponent) {
+    if (a->exponent > b->exponent) {
         return a->sign ? -1 : 1;
     }
-    if (a->exponent < b->exponent) {
+    if (b->exponent > a->exponent) {
         return a->sign ? 1 : -1;
     }
-    if ((u64)b->mantissa < (u64)a->mantissa) {
+    if ((u64)a->mantissa > (u64)b->mantissa) {
         return a->sign ? -1 : 1;
     }
-    if ((u64)a->mantissa < (u64)b->mantissa) {
+    if ((u64)b->mantissa > (u64)a->mantissa) {
         return a->sign ? 1 : -1;
     }
     return 0;
 }
-#endif
 
 extern s32 func_00122F10(FpParts *a, FpParts *b);
 
@@ -3168,26 +3165,21 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00123130);
  * (leading bit at position 60) is shifted to place the integer value in the low
  * bits: right by (60-exp) for exp<=60, left by (exp-60) above.
  *
- * NEAR-MISS WALL (68.20% via objdiff). Logic is faithful (the unsigned class<2
- * compare matches sltiu) but the function is dense with ee-gcc -O2 -G0 soft-float
- * fillers the charter flags as wall-prone: the original tests `cls==2`/`cls==4`
- * with `xori;beqz` (ee-gcc emits `li;beq`), the exponent range check uses an
- * annulling `bnel` (ee-gcc emits `bnez`), and the overflow constant is built
- * `lui;ori` (ee-gcc `li -1`). None are controllable from C if/return flow.
- * Shipped as a portable TARGET_NATIVE #else; the #else calls sibling soft-float
- * func_00122760 (#else), so verification is routed to tester-EE.
+ * MATCHED (byte-exact) via the near-miss idiom levers — the former "68.20% wall"
+ * was C-controllable after all: (1) return type u32 makes the overflow constant
+ * 0xFFFFFFFF build as `lui;ori` (not the s32 `li -1`) and frees the annulling
+ * `bnel` on the exponent range check; (2) `(cls^K)==0` forces the original's
+ * `xori;beqz` class tests where `cls==K` would emit `li;beq`. Calls sibling
+ * soft-float func_00122760.
  */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001231C8);
-#else
-s32 func_001231C8(s64 a) {
+u32 func_001231C8(s64 a) {
     s64 va = a;
     FpParts parts;
     s32 cls;
     s32 exp;
     func_00122760(&va, &parts);
     cls = parts.fpClass;
-    if (cls == 2) {
+    if ((cls ^ 2) == 0) {
         return 0;
     }
     if ((u32)cls < 2) {
@@ -3196,22 +3188,21 @@ s32 func_001231C8(s64 a) {
     if (parts.sign != 0) {
         return 0;
     }
-    if (cls == 4) {
-        return 0xFFFFFFFF;
+    if ((cls ^ 4) == 0) {
+        return 0xFFFFFFFFu;
     }
     exp = parts.exponent;
     if (exp < 0) {
         return 0;
     }
-    if (exp >= 32) {
-        return 0xFFFFFFFF;
+    if (exp >= 0x20) {
+        return 0xFFFFFFFFu;
     }
-    if (exp < 61) {
-        return (s32)((u64)parts.mantissa >> (60 - exp));
+    if (exp >= 0x3D) {
+        return (u32)((u64)parts.mantissa << (exp - 0x3C));
     }
-    return (s32)((u64)parts.mantissa << (exp - 60));
+    return (u32)((u64)parts.mantissa >> (0x3C - exp));
 }
-#endif
 
 /**
  * Build an FpParts descriptor from explicit class/sign/exponent and a 64-bit
@@ -3657,19 +3648,116 @@ s32 func_00127630(s32 arg0, s32 arg1, s32 arg2) {
     return result;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127668);
+extern u8   D_00141B00[];   /* libmc RPC client block (init flag @+0x24) */
+extern s32  D_00137E6C;     /* libmc mutex/semaphore handle */
+extern s32  D_00141B80;     /* libmc RPC send-buffer (fd marshalled @+0) */
+extern u8   D_001430C0[];   /* libmc RPC receive-buffer */
+extern s32  func_0011AC70(s32 sema);
+extern void func_0011AC40(s32 sema);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127720);
+/**
+ * func_00127668 = McClose (libmc): close the memory-card file descriptor `fd`.
+ * Guards on the RPC client being initialised (returns -0x64 / -100 if not), takes
+ * the libmc mutex (returns -0xC8 / -200 if that fails), marshals fd into the send
+ * buffer and issues RPC #3 (func_0011D620, sceSifCallRpc-style). On RPC success
+ * records status 3 in D_00137E68; on RPC failure releases the mutex. Returns the
+ * RPC result.
+ */
+s32 func_00127668(s32 fd) {
+    u8 *client = D_00141B00;
+    s32 r;
+    if (*(s32 *)(client + 0x24) == 0) {
+        return -0x64;
+    }
+    if (func_0011AC70(D_00137E6C) < 0) {
+        return -0xC8;
+    }
+    D_00141B80 = fd;
+    r = func_0011D620(client, 3, 1, &D_00141B80, 0x30, D_001430C0, 4, 0, 0);
+    if (r == 0) {
+        D_00137E68 = 3;
+    } else {
+        func_0011AC40(D_00137E6C);
+    }
+    return r;
+}
+
+/** func_00127720 = McSeek (libmc): seek fd to offset by whence. Same RPC-wrapper
+ *  pattern as McClose (func_00127668) — init guard, mutex, RPC #4 — with the send
+ *  buffer carrying fd @+0, offset @+0x10, whence @+0x14. */
+s32 func_00127720(s32 fd, s32 offset, s32 whence) {
+    u8 *client = D_00141B00;
+    s32 r;
+    if (*(s32 *)(client + 0x24) == 0) {
+        return -0x64;
+    }
+    if (func_0011AC70(D_00137E6C) < 0) {
+        return -0xC8;
+    }
+    D_00141B80 = fd;
+    *(s32 *)((char *)&D_00141B80 + 0x10) = offset;
+    *(s32 *)((char *)&D_00141B80 + 0x14) = whence;
+    r = func_0011D620(client, 4, 1, &D_00141B80, 0x30, D_001430C0, 4, 0, 0);
+    if (r == 0) {
+        D_00137E68 = 4;
+    } else {
+        func_0011AC40(D_00137E6C);
+    }
+    return r;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001277F8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127888);
+extern void func_0011CEC8(void *buf, s32 size);  /* cache writeback/invalidate */
+extern u8   D_00142000[];                         /* libmc DMA staging buffer */
+extern void func_001277F8(void);                  /* McRead RPC end-callback */
+
+/** func_00127888 = McRead (libmc): read `size` bytes from fd into `buf`. RPC #5
+ *  send buffer carries fd@+0, size@+0xC, buf@+0x18, DMA-staging @+0x1C; flushes
+ *  the user buffer and the DMA buffer before the RPC, which runs with the
+ *  func_001277F8 end-callback (endArg = the DMA buffer). */
+s32 func_00127888(s32 fd, void *buf, s32 size) {
+    u8 *client = D_00141B00;
+    s32 r;
+    if (*(s32 *)(client + 0x24) == 0) {
+        return -0x64;
+    }
+    if (func_0011AC70(D_00137E6C) < 0) {
+        return -0xC8;
+    }
+    D_00141B80 = fd;
+    *(u8 **)((char *)&D_00141B80 + 0x1C) = D_00142000;
+    *(void **)((char *)&D_00141B80 + 0x18) = buf;
+    *(s32 *)((char *)&D_00141B80 + 0xC) = size;
+    func_0011CEC8(buf, size);
+    func_0011CEC8(D_00142000, 0xC0);
+    r = func_0011D620(client, 5, 1, &D_00141B80, 0x30, D_001430C0, 4,
+                      (s32)func_001277F8, (s32)D_00142000);
+    if (r == 0) {
+        D_00137E68 = 5;
+    } else {
+        func_0011AC40(D_00137E6C);
+    }
+    return r;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001279A0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127B18);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127B40);
+extern void func_00127B18(void);   /* libmc timer callback */
+extern s32  func_0011AB40(void);   /* start/arm the timer (void tail call) */
+
+/** func_00127B40 = McDelayMillis (libmc): arm a `millis`-ms timer whose expiry
+ *  runs func_00127B18. Registers the handler (func_0011A9A0) with a fresh timer
+ *  object (func_0011AB10) then tail-calls func_0011AB40 to start it. */
+void func_00127B40(s32 millis) {
+    s32 id = millis & 0xFFFF;
+    void (*cb)(void) = func_00127B18;
+    s32 obj = func_0011AB10();
+    func_0011A9A0(id, cb, obj);
+    func_0011AB40();
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127B88);
 
@@ -3878,11 +3966,14 @@ void func_0012B198(s32 arg0) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012B1C0);
 
-/* func_0012B3C0(arg0): thin wrapper that calls func_0012C508(arg0, 3) and
- * returns. The original keeps a real frame + jal (no sibling-call), but ee-gcc
- * sibling-call-optimizes the tail call to `j func_0012C508`; that codegen-shape
- * mismatch isn't expressible in clean source. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012B3C0);
+/* func_0012B3C0(arg0): thin wrapper — forwards to func_0012C508(arg0, 3) and
+ * returns its result. (The prior "sibling-call wall" note was wrong: ee-gcc 2.9
+ * has NO sibling-call optimization, so this compiles to the original's jal +
+ * real frame — byte-exact.) */
+extern s32 func_0012C508(s32 arg0, s32 arg1);
+s32 func_0012B3C0(s32 arg0) {
+    return func_0012C508(arg0, 3);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012B3E0);
 
