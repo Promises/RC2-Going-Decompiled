@@ -90,7 +90,7 @@ extern void func_00343F68(void *p);
 extern void func_0033BE60(void *p, s32 v);
 extern void func_0033BF90(void *p);
 extern void func_00348DA0(void *p);
-extern void func_00348E60(void *p);
+extern s32 func_00348E60(void *p);
 extern void func_00348E70(void *p);
 
 #ifdef TARGET_NATIVE
@@ -101,9 +101,30 @@ extern void GuiElementInitTypeB(void *p);
 extern void GuiElementInitTypeC(void *p);
 extern void GuiListRowElementInit(void *p);
 extern void func_00348BD0(void *p);
-extern void func_00348CB8(void *w);
+extern void func_00348CB8(void *w, s32 inputMask); /* 248B50: selection-advance by input mask */
 extern void func_00348E28(void *w, f32 x, f32 y);
 extern void func_00348E58(void *w, s32 res);
+/* --- cohort-4 coverage-body deps (byte-neutral extern decls) --- */
+extern void func_00115AC0(void *dst, const void *src, s32 len); /* SDK memcpy */
+extern void func_00115DA8(char *dst, const char *fmt, ...);     /* SDK sprintf */
+extern s32 GetLocalizedString(s32 id);  /* textId -> char* (declared early for func_003395F0) */
+extern void func_00338D48(void *p, s32 a1, f32 x, f32 y, s32 a2);
+extern void func_00348E10(void *w, s32 a, s32 b); /* 248B50:269 */
+extern s32 func_00348E68(void *w);      /* 248B50:313 - list row count */
+extern void GuiMenuListDraw(void *w);   /* 0x348E70 - per-frame menu-list draw */
+extern u32 func_002AA3F0(u32 color1, u32 color2, s32 period, s32 counterSel, s32 reset); /* color-pulse (d1) */
+extern s32 g_padButtonsPressed;         /* 0x138344 - buttons pressed this frame */
+extern u8 D_1A7BBA;                     /* toggled widescreen/mode flag */
+extern f32 D_1AE0C0, D_1AE0C4;          /* GUI anchor x/y position offsets */
+extern f32 D_1AE0C8, D_1AE0CC;          /* GUI size params (float, truncated to int) */
+extern f32 D_1AE108, D_1AE10C;          /* list row Y-step / X-offset */
+extern f32 D_1AE1E8, D_1AE1EC;          /* GUI x/y-position offset constants */
+extern s32 D_1ADC68;                    /* GUI x-offset (int, used as float) */
+extern s32 D_1ADC6C;                    /* GUI y-offset (int, used as float) */
+extern s32 D_1ADC70;                    /* GUI y per-counter step (int multiplier) */
+/* defined later in-unit; forward-declared for func_0033A8F0's earlier #else use */
+extern void func_0033C060(void *p, f32 a, f32 b);
+extern void func_0033BE70(void *p, s32 flags);
 #endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336068);
@@ -1364,7 +1385,18 @@ void func_00338CD8(void *p, s32 a1, f32 x, f32 y, s32 a2) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338D48);
 
+/* Init a widget sub-block: copy a 0xFF-byte template into p+0x2084, then run the
+ * setup helper func_00338D48 on p+0x1FDC with kind 2, a caller id (or the 0x168
+ * default when id == -1), and fixed 255.0/80.0 params. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338F18);
+#else
+void func_00338F18(void *p, const void *src, s32 id) {
+    s32 kind = (id != -1) ? id : 0x168;
+    func_00115AC0((char *)p + 0x2084, src, 0xFF);
+    func_00338D48((char *)p + 0x1FDC, 2, 255.0f, 80.0f, kind);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338F80);
 
@@ -1372,9 +1404,32 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338F88);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00339398);
 
+/* Format a localized caption into a widget sub-block: sprintf the text of
+ * localized string `strId` (used as the format) with `fmtArg` into p+0x1E34,
+ * then run the setup helper func_00338CD8 on p+0x1D8C with kind 2, a caller id
+ * (or the 0x78 default when id == -1), and fixed 255.0/135.0 params. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003395F0);
+#else
+void func_003395F0(void *p, s32 strId, s32 fmtArg, s32 id) {
+    s32 kind = (id != -1) ? id : 0x78;
+    func_00115DA8((char *)p + 0x1E34, (const char *)GetLocalizedString(strId), fmtArg);
+    func_00338CD8((char *)p + 0x1D8C, 2, 255.0f, 135.0f, kind);
+}
+#endif
 
+/* Sibling of func_00338F18: copy a 0xFE-byte template into p+0x1E34, then run
+ * func_00338D48 on p+0x1D8C with kind 2, a caller id (or the 0xB4 default when
+ * id == -1), and fixed 255.0/123.0 params. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00339678);
+#else
+void func_00339678(void *p, const void *src, s32 id) {
+    s32 kind = (id != -1) ? id : 0xB4;
+    func_00115AC0((char *)p + 0x1E34, src, 0xFE);
+    func_00338D48((char *)p + 0x1D8C, 2, 255.0f, 123.0f, kind);
+}
+#endif
 
 /* func_003396E0: no-op stub (empty body - registered/overridable hook). */
 void func_003396E0(void) {
@@ -1521,7 +1576,37 @@ s32 func_0033A860(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A8E8);
 
+/* Update a pulsing list-cursor widget: place its frame sub-element (+0x8) at the
+ * tracked anchor (*(w+0x324)) via func_0033C060 + func_0033BE70, tick the colour
+ * pulse when dpad up/down is held, set the cursor sprite's (+0x2D8) colour to the
+ * pulsed blend of 0x60442D00/0x70FFFEED, then position that sprite at the anchor
+ * offset by fixed constants plus a per-frame-counter (w+0x328) Y step. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A8F0);
+#else
+s32 func_0033A8F0(void *w) {
+    void *sub = (char *)w + 0x8;
+    f32 *anchor = *(f32 **)((char *)w + 0x324);
+    s32 counter;
+    f32 *a;
+
+    func_0033C060(sub, anchor[0], anchor[1]);
+    func_0033BE70(sub, 0);   /* 2nd arg (flags) ignored by the callee */
+    if (g_padButtonsPressed & 0x5000) {
+        func_002AA3F0(0, 0, 1, 0, 1);
+    }
+    *GuiElementGetColor((GuiElement *)((char *)w + 0x2D8)) =
+        func_002AA3F0(0x60442D00, 0x70FFFEED, 0x14, 0, 0);
+
+    counter = *(s32 *)((char *)w + 0x328);
+    a = *(f32 **)((char *)w + 0x324);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x2D8),
+                     a[0] + (f32)D_1ADC68,
+                     a[1] + (f32)(counter * D_1ADC70) + (f32)D_1ADC6C,
+                     0.0f, 0.0f);
+    return 0;
+}
+#endif
 
 /* func_0033A9F8: draw this confirm-dialog screen. Sets the dialog box's (p+0x8)
  * +0x2C4 footer-visible flag to 1 when any global menu lock (D_1A8C88 / D_1A8C8C)
@@ -2116,7 +2201,27 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EB50);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EB58);
 
+/* Position a widget sub-element (+0x8) at its anchor (*(w+0x2DC)); when the
+ * confirm bit (arg & 0x40) is set and the widget isn't already busy (+0x2D8 == 0),
+ * play the confirm sound and toggle the widescreen flag D_1A7BBA. Returns bit 6
+ * of the input flags. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EC80);
+#else
+s32 func_0033EC80(void *w, s32 flags) {
+    void *sub = (char *)w + 0x8;
+    f32 *anchor;
+
+    func_0033BE70(sub, flags);   /* 2nd arg ignored by the callee */
+    anchor = *(f32 **)((char *)w + 0x2DC);
+    func_0033C060(sub, anchor[0], anchor[1]);
+    if ((flags & 0x40) && *(s32 *)((char *)w + 0x2D8) == 0) {
+        PlayGlobalSound(4, 0, 0);
+        D_1A7BBA = (D_1A7BBA == 0) ? 1 : 0;
+    }
+    return (flags >> 6) & 1;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033ED18);
 
@@ -2137,7 +2242,26 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EE00);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EE08);
 
+/* Sibling of func_0033EC80: position a sub-element (+0x8) at its anchor
+ * (*(w+0x2DC)); on the confirm bit (arg & 0x40) while not busy (+0x2D8 == 0),
+ * play the confirm sound + toggle D_1A7BBA. Returns bit 6 of the flags. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EF30);
+#else
+s32 func_0033EF30(void *w, s32 flags) {
+    void *sub = (char *)w + 0x8;
+    f32 *anchor;
+
+    func_0033BE70(sub, flags);
+    anchor = *(f32 **)((char *)w + 0x2DC);
+    func_0033C060(sub, anchor[0], anchor[1]);
+    if ((flags & 0x40) && *(s32 *)((char *)w + 0x2D8) == 0) {
+        PlayGlobalSound(4, 0, 0);
+        D_1A7BBA = (D_1A7BBA == 0) ? 1 : 0;
+    }
+    return (flags >> 6) & 1;
+}
+#endif
 
 /* func_0033EFC8: init the embedded dialog-box (at p+0x8), return the object
  * (byte-identical body to func_0033CD80). */
@@ -2156,7 +2280,26 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EFF8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F000);
 
+/* Verbatim sibling of func_0033EC80/func_0033EF30: sub-element position (+0x8 at
+ * anchor *(w+0x2DC)) + confirm-sound/D_1A7BBA-toggle on (arg & 0x40) while not
+ * busy (+0x2D8 == 0). Returns bit 6 of the flags. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F128);
+#else
+s32 func_0033F128(void *w, s32 flags) {
+    void *sub = (char *)w + 0x8;
+    f32 *anchor;
+
+    func_0033BE70(sub, flags);
+    anchor = *(f32 **)((char *)w + 0x2DC);
+    func_0033C060(sub, anchor[0], anchor[1]);
+    if ((flags & 0x40) && *(s32 *)((char *)w + 0x2D8) == 0) {
+        PlayGlobalSound(4, 0, 0);
+        D_1A7BBA = (D_1A7BBA == 0) ? 1 : 0;
+    }
+    return (flags >> 6) & 1;
+}
+#endif
 
 /* func_0033F1C0: init the embedded dialog-box (p+0x8) and the GuiWidget at
  * p+0x2E0 (func_00348BD0), return the object. */
@@ -2210,7 +2353,25 @@ void func_0033F3B8(void *p, s32 rows) {
 }
 #endif
 
+/* Reposition two linked sub-elements to the tracked anchor (*(w+0x3BC)): run the
+ * pre-step func_0033BE70 on the inner element (+0x8), place it at the anchor via
+ * func_0033C060, set the outer element's (+0x2E0) value from arg1, then place it
+ * at the anchor via func_00348E28. The anchor is re-read for each placement.
+ * Returns bit 6 of arg1. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F3F0);
+#else
+s32 func_0033F3F0(void *w, s32 arg1) {
+    f32 *anchor;
+    func_0033BE70((char *)w + 0x8, arg1);   /* 2nd arg (flags) is ignored by the callee */
+    anchor = *(f32 **)((char *)w + 0x3BC);
+    func_0033C060((char *)w + 0x8, anchor[0], anchor[1]);
+    func_00348CB8((char *)w + 0x2E0, arg1);
+    anchor = *(f32 **)((char *)w + 0x3BC);
+    func_00348E28((char *)w + 0x2E0, anchor[0], anchor[1]);
+    return (arg1 >> 6) & 1;
+}
+#endif
 
 /* func_0033F478: tear down the embedded dialog-box (p+0x8), then reconfigure the
  * GuiWidget at p+0x2E0 with the per-language resource D_1ADEB0[g_currentLanguage]
@@ -2454,7 +2615,32 @@ void func_00342670(void *p) {
 void func_003426D8(void) {
 }
 
+/* Update a selectable list widget: position its element (+0x238) at the tracked
+ * anchor (*(w+0x228)) offset by D_1AE0C0/C4, apply the size params D_1AE0C8/CC,
+ * advance its selection by the input mask, then record the element's new state
+ * into the per-row table (w+0x1B8)[w+0x31C] and pulse the colour when it changed. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003426E0);
+#else
+void func_003426E0(void *w, s32 inputMask) {
+    void *sub = (char *)w + 0x238;
+    s32 *table = (s32 *)((char *)w + 0x1B8);
+    f32 *anchor = *(f32 **)((char *)w + 0x228);
+    s32 idx;
+    s32 oldVal;
+
+    func_00348E28(sub, anchor[0] + D_1AE0C0, anchor[1] + D_1AE0C4);
+    func_00348E10(sub, (s32)D_1AE0C8, (s32)D_1AE0CC);
+    func_00348CB8(sub, inputMask);
+    idx = *(s32 *)((char *)w + 0x31C);
+    oldVal = table[idx];
+    table[idx] = func_00348E60(sub);
+    idx = *(s32 *)((char *)w + 0x31C);
+    if (oldVal != table[idx]) {
+        func_002AA3F0(0, 0, 1, 0, 1);
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003427D0);
 
@@ -2533,16 +2719,17 @@ void func_00342DC0(void *p, s32 rows) {
 }
 #endif
 
-/* func_00342DF8: refresh the GuiWidget at p+0x10 (func_00348CB8), then re-feed
+/* func_00342DF8: advance the GuiWidget at p+0x10 by the input mask (func_00348CB8),
+ * then re-feed
  * it the two floats from the vector at *(p+0x0) via func_00348E28. Returns 0. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342DF8);
 #else
 /* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame
    wall. */
-s32 func_00342DF8(void *p) {
+s32 func_00342DF8(void *p, s32 inputMask) {
     void *w = (char *)p + 0x10;
-    func_00348CB8(w);
+    func_00348CB8(w, inputMask);   /* forwards its own $5 (inputMask) — asm sets $5 nowhere */
     {
         f32 *v = *(f32 **)p;
         func_00348E28(w, v[0], v[1]);
@@ -2551,7 +2738,44 @@ s32 func_00342DF8(void *p) {
 }
 #endif
 
+/* Draw a vertical menu list: for each of func_00348E68 rows, position the two
+ * per-row sprites (+0xEC frame, +0x138 text) at the anchor (*(w+0)) offset by
+ * D_1AE10C (x) and D_1AE108*row (y), colour the text sprite the pulsed selected
+ * colour when func_00342DA0 says this row is selected else the static 0x55F0C070,
+ * and draw both; then run the menu-list draw. Pulses the counter when dpad held. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342E48);
+#else
+void func_00342E48(void *w) {
+    void *list = (char *)w + 0x10;
+    s32 count = func_00348E68(list);
+    s32 i;
+
+    if (g_padButtonsPressed & 0x5000) {
+        func_002AA3F0(0, 0, 1, 0, 1);
+    }
+    for (i = 0; i < count; i++) {
+        f32 *anchor;
+        s32 *color;
+
+        anchor = *(f32 **)((char *)w + 0x0);
+        GuiElementSetPos((GuiElement *)((char *)w + 0xEC),
+                         anchor[0] + D_1AE10C, anchor[1] + D_1AE108 * (f32)i, 0.0f, 0.0f);
+        anchor = *(f32 **)((char *)w + 0x0);
+        GuiElementSetPos((GuiElement *)((char *)w + 0x138),
+                         anchor[0] + D_1AE10C, anchor[1] + D_1AE108 * (f32)i, 0.0f, 0.0f);
+        color = GuiElementGetColor((GuiElement *)((char *)w + 0x138));
+        if (((s32 (*)(void *))func_00342DA0)(w) == i) {
+            *color = func_002AA3F0(0x20FFFEED, 0x70FFFEED, 0x14, 0, 0);
+        } else {
+            *color = 0x55F0C070;
+        }
+        GuiSpriteElementDraw((char *)w + 0xEC);
+        GuiSpriteElementDraw((char *)w + 0x138);
+    }
+    GuiMenuListDraw(list);
+}
+#endif
 
 /* func_00342FD8: init the screen's six embedded sub-elements (four type-B, the
  * D_1ADA18 widget at +0x130, and the GuiWidget at +0x188), return the object. */
@@ -2623,7 +2847,21 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343338);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003433D0);
 
+/* Draw a pulsing sprite sub-element (+0xE4): when dpad up/down is pressed
+ * (0x5000), tick the color-pulse counter; then set the sprite's colour to the
+ * pulsed blend of 0x60442D00 and 0x70FFFEED (period 0x14) and draw it. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003434C8);
+#else
+void func_003434C8(void *w) {
+    if (g_padButtonsPressed & 0x5000) {
+        func_002AA3F0(0, 0, 1, 0, 1);
+    }
+    *GuiElementGetColor((GuiElement *)((char *)w + 0xE4)) =
+        func_002AA3F0(0x60442D00, 0x70FFFEED, 0x14, 0, 0);
+    GuiSpriteElementDraw((char *)w + 0xE4);
+}
+#endif
 
 /* func_00343558: forward p+0x188 to func_00348E70. */
 void func_00343558(void *p) {
@@ -2664,7 +2902,39 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003436C8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003436D0);
 
+/* Construct/reset a widget: if given a node pool, record it (+0x8C) and alloc +
+ * placement-new the element's primary block (stored at +0x0, zeroed 4 words),
+ * then clear the 0x64-byte state region (+0x28) and seed the fixed fields —
+ * scale defaults 16.0 at +0x4/+0xC, everything else zero. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003437F0);
+#else
+void func_003437F0(void *w, GuiPool *pool) {
+    /* +0x8C = pool is written UNCONDITIONALLY: the original's `sw $4,0x8C($16)`
+       sits in the beqz delay slot, so it runs even on the pool==0 reset path
+       (storing 0). The memset below clears +0x28..+0x8C exclusive, so +0x8C is
+       not otherwise zeroed — the write must stay above the guard. */
+    *(GuiPool **)((char *)w + 0x8C) = pool;
+    if (pool != 0) {
+        s32 *blk;
+        blk = (s32 *)GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        *(void **)w = blk;
+        blk[0] = 0; blk[1] = 0; blk[2] = 0; blk[3] = 0;
+    }
+    memset((char *)w + 0x28, 0, 0x64);
+    *(s32 *)((char *)w + 0x94) = 0;
+    *(f32 *)((char *)w + 0xC) = 16.0f;
+    *(s32 *)((char *)w + 0x10) = 0;
+    *(s32 *)((char *)w + 0x20) = 0;
+    *(s32 *)((char *)w + 0x24) = 0;
+    *(s32 *)((char *)w + 0x14) = 0;
+    *(f32 *)((char *)w + 0x4) = 16.0f;
+    *(s32 *)((char *)w + 0x8) = 0;
+    *(s32 *)((char *)w + 0x18) = 0;
+    *(s32 *)((char *)w + 0x1C) = 0;
+    *(s32 *)((char *)w + 0x90) = 0;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343888);
 
@@ -2795,7 +3065,22 @@ void func_003444D0(void *p, u32 idx) {
     *(s32 *)((char *)p + 0x1A0) = 0;
 }
 
+/* Position or hide a widget sub-element (+0x208): if the gate func_00343F70
+ * (queried on +0x2C8) returns 0, hide it; otherwise place it at the tracked
+ * anchor (*(w+0x2B8)) offset by the fixed constants D_1AE1E8/D_1AE1EC. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003444E8);
+#else
+void func_003444E8(void *w) {
+    if (func_00343F70((char *)w + 0x2C8) == 0) {
+        GuiElementSetVisible((GuiElement *)((char *)w + 0x208), 0);
+    } else {
+        f32 *pos = *(f32 **)((char *)w + 0x2B8);
+        GuiElementSetPos((GuiElement *)((char *)w + 0x208),
+                         D_1AE1E8 + pos[0], D_1AE1EC + pos[1], 0.0f, 0.0f);
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344558);
 

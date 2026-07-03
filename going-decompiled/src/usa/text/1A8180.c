@@ -264,6 +264,26 @@ extern void func_00284180(Vec4 *out, Vec4 *a, Vec4 *b);
 typedef struct Mat4x4 { Vec4 row[4]; } Mat4x4;
 extern void func_00284048(Mat4x4 *dst, const Vec4 *quat);
 extern void func_00283A70(Vec4 *dst, const Vec4 *vec, const Mat4x4 *mat);
+#ifdef TARGET_NATIVE
+/* --- cohort-4 coverage-body deps (byte-neutral extern decls) --- */
+extern u8 g_pCollWorldData[];        /* collision-world block; +0x14 = hit-event ring write cursor */
+extern u8 g_proceduralAnimBounds[];  /* per-slot cached pose-bounds Vec4, stride 0x10 */
+extern Moby *g_mobyFlagged1000List[];/* null-terminated array of flagged mobys */
+extern void func_00283460(void *dst, void *src, s32 n);      /* byte copy */
+extern f32 func_002835C0(f32 x);                             /* sqrtf */
+extern void func_00283AA0(Vec4 *dst, u32 packed);
+extern void func_00283DC0(Mat4x4 *dst, Vec4 *in);            /* build rotation matrix from a vec (VU0) */
+extern void func_002840E8(void *dst, void *a, void *b);      /* 3x3 matrix multiply (a*b -> dst) */
+extern void func_00284308(Vec4 *quat, void *outMtx);         /* quaternion -> 3x4 matrix */
+extern s32 func_002A08C0(void *obj);                         /* acquire a procedural-anim slot; <0 = none */
+extern void func_002A12F0(void *src, s32 *r, s32 *g, s32 *b);
+extern void func_002A3288(void *obj, s32 flags);             /* bind the acquired procedural-anim slot */
+extern f32 func_002B0150(Vec4 *query, Moby *moby, s32 *outFlag, f32 a, f32 b, f32 c, f32 d);
+extern f32 IntToFloat(s32 x);
+extern void MatrixMultiplyVu0(Mat4x4 *dst, Mat4x4 *a, Mat4x4 *b);
+extern void MatrixToEulerAngles(Mat4x4 *mtx, void *outAngles);
+extern void Vec3CrossVu0(Vec4 *dst, Vec4 *a, Vec4 *b);
+#endif
 /* FloatToInt: truncate a float to an s32 (cvt.w.s style). */
 extern s32 FloatToInt(f32 x);
 
@@ -332,7 +352,62 @@ void func_002A8200(Moby *moby, s32 seq, s32 frameIdx) {
 }
 #endif
 
+/**
+ * Start animation sequence `idx` at frame `arg3` on a moby, blended over `arg4`
+ * frames. arg3 is clamped to the sequence's [.., frameCount-1]. When arg4 <= 0
+ * this delegates to func_002A8200 (instant set). Otherwise it starts a timed
+ * blend: when the moby is already mid-blend (animTime > 0.025, or either blend
+ * word at +0x50/+0x54 set) it acquires a procedural-anim slot (func_002A08C0),
+ * snapshots the current pose bounds into g_proceduralAnimBounds[slot], stashes
+ * the current sequence (+0x42 → +0xA9) and marks it procedural (+0x42 = 0xFF).
+ * Then it sets the target frame, resolves the frame pointers, and seeds the
+ * blend: animRate=1, animRate2=1/arg4, animTime=0, clears animEventByte bit 1,
+ * caches loopSoundIdx.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A82D8);
+#else
+void func_002A82D8(Moby *obj, s32 idx, s32 arg3, s32 arg4) {
+    u8 *m = (u8 *)obj;
+    u8 *pClass = *(u8 **)(m + 0x24);
+    u8 *seqEntry = *(u8 **)(pClass + 0x48 + idx * 4);
+    s32 frameCount = *(u8 *)(seqEntry + 0x10);
+    s32 clampedFrame = (arg3 < frameCount) ? arg3 : (frameCount - 1);
+
+    if (arg4 <= 0) {
+        func_002A8200(obj, idx, clampedFrame);
+        return;
+    }
+
+    if (0.025f < *(f32 *)(m + 0x44) ||
+        *(s32 *)(m + 0x50) != 0 ||
+        *(s32 *)(m + 0x54) != 0) {
+        s32 slot = func_002A08C0(obj);
+        if (slot < 0) {
+            m[0x41] = (u8)clampedFrame;
+        } else {
+            func_002A3288(obj, slot | 0x300);
+            *(Vec4 *)(g_proceduralAnimBounds + slot * 0x10) = *(Vec4 *)(m + 0x80);
+            if (m[0x42] != 0xFF) {
+                m[0xA9] = m[0x42];
+            }
+            m[0x42] = 0xFF;
+            m[0x40] = (u8)slot;
+            m[0x41] = (u8)clampedFrame;
+        }
+    } else {
+        m[0x41] = (u8)clampedFrame;
+    }
+
+    m[0x43] = (u8)idx;
+    ResolveMobyAnimFramePtrs(obj);
+    *(f32 *)(m + 0x48) = 1.0f;
+    *(f32 *)(m + 0x4C) = 1.0f / IntToFloat(arg4);
+    *(f32 *)(m + 0x44) = 0.0f;
+    m[0x60] &= 0xFD;
+    m[0x6C] = *(u8 *)(seqEntry + 0x11);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8448);
 
@@ -994,7 +1069,56 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9BD8);
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9C80);
 
+/**
+ * Record a moby collision hit into the 64-entry hit-event ring, deduped per
+ * moby. If the moby already owns a ring slot (hitEventSlot != 0xFF) that still
+ * belongs to it: when the new hit is closer (hitInfo depth +0x1C < the slot's
+ * +0x2C) just OR the new flags into it and return; otherwise carry the slot's
+ * existing flags forward into a fresh entry. A new entry is written at the ring
+ * write cursor (g_pCollWorldData+0x14, wrapping mod 64): the hit vec, flags
+ * (|carried), material/normal fields, depth, and the owning moby; the moby's
+ * hitEventSlot is pointed at it and the cursor advances.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9C88);
+#else
+void func_002A9C88(Moby *moby, void *hitInfo) {
+    u8 *m = (u8 *)moby;
+    u8 *hi = (u8 *)hitInfo;
+    s32 ringCursor = *(s32 *)(g_pCollWorldData + 0x14);
+    s32 carriedFlags = 0;
+    s32 slot = *(u8 *)(m + 0xA8);
+    u8 *entry;
+
+    if (slot != 0xFF) {
+        u8 *existing = g_collHitEventRing + slot * 0x40;
+        if (*(Moby **)(existing + 0x38) == moby) {
+            if (*(f32 *)(hi + 0x1C) < *(f32 *)(existing + 0x2C)) {
+                *(s32 *)(existing + 0x24) |= *(s32 *)(hi + 0x14);
+                return;
+            }
+            carriedFlags = *(s32 *)(existing + 0x24);
+        }
+        /* else: slot was reused by another moby — fall through to a new entry */
+    }
+
+    entry = g_collHitEventRing + ringCursor * 0x40;
+    func_00283638((Moby *)entry);                       /* zero entry[0..0x10] */
+    *(Vec4 *)(entry + 0x10) = *(Vec4 *)hi;
+    *(s32 *)(entry + 0x24) = *(s32 *)(hi + 0x14) | carriedFlags;
+    *(s32 *)(entry + 0x20) = *(s32 *)(hi + 0x10);
+    entry[0x28] = hi[0x18];
+    entry[0x29] = hi[0x19];
+    *(u16 *)(entry + 0x2A) = *(u16 *)(hi + 0x1A);
+    *(f32 *)(entry + 0x2C) = *(f32 *)(hi + 0x1C);
+    *(f32 *)(entry + 0x34) = *(f32 *)(hi + 0x24);
+    *(s32 *)(entry + 0x3C) = 0;
+    *(s32 *)(entry + 0x30) = *(s32 *)(hi + 0x20);
+    *(Moby **)(entry + 0x38) = moby;
+    m[0xA8] = (u8)ringCursor;
+    *(s32 *)(g_pCollWorldData + 0x14) = (ringCursor + 1) & 0x3F;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", PostMobyHitEvent);
 
@@ -1750,7 +1874,44 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC538);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", MatrixToEulerAngles);
 
+/**
+ * Advance a countdown/fade field pair on `obj`. When the counter (+0x0) is
+ * running (!=0) but its active flag (+0x2) is clear, does nothing. Otherwise
+ * clears the flag, reloads the counter from its reset value (+0xC), and either:
+ *   - counter was 0: refreshes the RGB bytes (+0x4/+0x5/+0x6) from `src`'s packed
+ *     colour (func_002A12F0), or
+ *   - counter was running: rescales it to resetValue * counter / divisor(+0xE),
+ *     clamped to at least 1.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC668);
+#else
+void func_002AC668(void *src, u8 *obj) {
+    s16 counter = *(s16 *)(obj + 0x0);
+
+    if (counter != 0 && *(s16 *)(obj + 0x2) == 0) {
+        return;
+    }
+
+    *(s16 *)(obj + 0x2) = 0;
+    *(s16 *)(obj + 0x0) = (s16)*(u16 *)(obj + 0xC);
+
+    if (counter == 0) {
+        s32 r, g, b;
+        func_002A12F0(src, &r, &g, &b);
+        obj[0x4] = (u8)r;
+        obj[0x6] = (u8)b;
+        obj[0x5] = (u8)g;
+    } else {
+        f32 ratio = (f32)counter / IntToFloat(*(s16 *)(obj + 0xE));
+        s32 scaled = FloatToInt((f32)*(s16 *)(obj + 0xC) * ratio);
+        *(s16 *)(obj + 0x0) = (s16)scaled;
+        if ((s16)scaled <= 0) {
+            *(s16 *)(obj + 0x0) = 1;
+        }
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC728);
 
@@ -1921,7 +2082,33 @@ s32 func_002ADA30(Vec4 *pos, s32 segIdx) {
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADB08);
 
+/**
+ * Test whether `pos` lies within unit distance of segment `segIdx`'s local
+ * frame. The segment table base is *(g_deferredSegment2Tag+0xD4); each entry is
+ * 0x80 bytes with its origin at +0x30 and a 3x3 rotation at +0x40. Transforms
+ * (pos - origin) into the segment's local frame and returns 1 if the resulting
+ * length is < 1.0, else 0. A negative segIdx returns 0.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADB10);
+#else
+s32 func_002ADB10(Vec4 *pos, s32 segIdx) {
+    u8 *seg;
+    Vec4 delta;
+    Vec4 local;
+    f32 dist;
+
+    if (segIdx < 0) {
+        return 0;
+    }
+    seg = *(u8 **)(g_deferredSegment2Tag + 0xD4) + segIdx * 0x80;
+    Vec4SubVu0(&delta, pos, (Vec4 *)(seg + 0x30));
+    delta.w = 0.0f;
+    func_00283A48(&local, &delta, (Vec4 *)(seg + 0x40));
+    dist = Vec3LengthVu0(&local);
+    return dist < 1.0f;
+}
+#endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADB98);
@@ -1978,7 +2165,26 @@ void func_002ADC50(Vec4 *out, Vec4 *v, Vec4 *q) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADCE0);
 
+/**
+ * Rotate `src` about `axis` by `angle` into `dst`. For a negligible angle
+ * (|angle| < 1e-5) it just copies src to dst; otherwise it normalises the axis,
+ * builds the axis-angle quaternion (func_002AC4D0), and rotates src by it
+ * (func_002ADC50).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADD28);
+#else
+void func_002ADD28(Vec4 *dst, Vec4 *src, Vec4 *axis, f32 angle) {
+    if (GetFloatAbs(angle) < 1e-5f) {
+        *dst = *src;
+    } else {
+        Vec4 quat;
+        Vec3RescaleToLenVu0(&quat, 1.0f, axis);
+        func_002AC4D0(&quat, &quat, angle);
+        func_002ADC50(dst, src, &quat);
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADDD0);
 
@@ -2008,7 +2214,32 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE2D8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE460);
 
+/**
+ * Compose two orientation matrices (from m1 and m2), convert the product to euler
+ * angles written into `out`, then stash the source vectors: out+0x10 always gets
+ * arg2, and out+0x20 gets m1 when out's flag word (+0x3C) has bit 0x2 set.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE558);
+#else
+void func_002AE558(void *out, Vec4 *arg2, Vec4 *m1, Vec4 *m2) {
+    Mat4x4 rot1;
+    Mat4x4 mtx1;
+    Mat4x4 rot2;
+    Mat4x4 product;
+    u8 *o = (u8 *)out;
+
+    func_00283DC0(&rot1, m1);
+    func_00284048(&mtx1, (const Vec4 *)&rot1);
+    func_00283DC0(&rot2, m2);
+    MatrixMultiplyVu0(&product, &mtx1, &rot2);
+    MatrixToEulerAngles(&product, out);
+    if (*(s32 *)(o + 0x3C) & 0x2) {
+        *(Vec4 *)(o + 0x20) = *m1;
+    }
+    *(Vec4 *)(o + 0x10) = *arg2;
+}
+#endif
 
 /* MarkLevelAvailable: set a level's available flag and append it to the
  * ordered level list (regular levels < 0x15, plus level 0x18). Best attempt
@@ -2051,7 +2282,29 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AF590);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AF598);
 
+/**
+ * Decode a packed RGBA colour pointed to by `colorPtr` into a signed direction/
+ * offset vector scaled by its alpha: unpack to floats, recentre RGB around 127
+ * (so 0x80 -> 0), and scale the whole vector by alpha * 1e-4. Writes to `out`.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AF6A0);
+#else
+void func_002AF6A0(Vec4 *out, u32 *colorPtr) {
+    Vec4 color;
+    Vec4 offset;
+    f32 alpha;
+
+    offset.x = 127.0f;
+    offset.y = 127.0f;
+    offset.z = 127.0f;
+    offset.w = 0.0f;
+    func_00283AA0(&color, *colorPtr);
+    alpha = color.w * 0.0001f;
+    Vec4SubVu0(&color, &color, &offset);
+    Vec4ScaleVu0(out, alpha, &color);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AF728);
 
@@ -2197,7 +2450,51 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0038);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0150);
 
+/**
+ * Pick the nearest valid moby to `queryVec` from the flagged-moby list. For each
+ * entry: skip if it has no pvar block (func_002AC058 == 0) or its word0 float is
+ * 0, then score it with func_002B0150 (skip on its reject flag). Track the moby
+ * with the smallest score. The list cursor only advances on a skip — a scored
+ * entry re-reads the same slot (func_002B0150 consumes/compacts it), mirroring
+ * the original's loop exactly. Returns the best moby, or NULL if none.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B02C8);
+#else
+Moby *func_002B02C8(Vec4 *queryVec, f32 a, f32 b, f32 c, f32 d) {
+    Moby **cursor = g_mobyFlagged1000List;
+    Moby *moby = *cursor;
+    Moby *best = 0;
+    f32 bestScore = 99999008.0f;   /* 0x4CBEBC20 */
+    Vec4 query;
+
+    if (moby == 0) {
+        return 0;
+    }
+    query = *queryVec;
+
+    do {
+        s32 pvar = func_002AC058(moby);
+        if (pvar == 0) {
+            cursor++;
+        } else if (*(f32 *)pvar == 0.0f) {
+            cursor++;
+        } else {
+            s32 reject;
+            f32 score = func_002B0150(&query, moby, &reject, a, b, c, d);
+            if (reject != 0) {
+                cursor++;
+            } else if (score < bestScore) {
+                bestScore = score;
+                best = moby;
+            }
+        }
+        moby = *cursor;
+    } while (moby != 0);
+
+    return best;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B03E8);
 
@@ -2423,7 +2720,36 @@ void func_002B1220(void *mtx3x4, Vec4 *gravDir, void *outMtxOpt) {
 }
 #endif
 
+/**
+ * func_002B1270 = OrientMatrixToGravity: rotate the 3x4 matrix `mtx3x4` so its
+ * +0x20 axis aligns toward the gravity direction, in place. Builds the shortest-
+ * arc half-angle quaternion from cross(normalize(gravDir), mtx+0x20): the xyz is
+ * that cross scaled by 0.5, w = -sqrt(1 - |xyz|^2). Converts the quaternion to a
+ * 3x4 matrix (func_00284308) and multiplies it into mtx3x4 (func_002840E8). If
+ * outMtxOpt != 0, the 0x30-byte delta matrix is also copied out.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1270);
+#else
+void func_002B1270(void *mtx3x4, Vec4 *gravDir, void *outMtxOpt) {
+    u8 quatMtx[0x30];
+    Vec4 normGrav;
+    Vec4 quat;
+    f32 lenSq;
+
+    Vec3RescaleToLenVu0(&normGrav, 1.0f, gravDir);
+    Vec3CrossVu0(&quat, &normGrav, (Vec4 *)((char *)mtx3x4 + 0x20));
+    Vec4ScaleVu0(&quat, 0.5f, &quat);
+    lenSq = Vec3LengthVu0(&quat);
+    lenSq = lenSq * lenSq;
+    quat.w = -func_002835C0(1.0f - lenSq);
+    func_00284308(&quat, quatMtx);
+    func_002840E8(mtx3x4, quatMtx, mtx3x4);
+    if (outMtxOpt != 0) {
+        func_00283460(outMtxOpt, quatMtx, 0x30);
+    }
+}
+#endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1340);
