@@ -207,12 +207,11 @@ extern f32 func_00284678(f32 *out, f32 angle);
 extern f32 func_00283B30(f32 angle);  /* cosine */
 extern f32 func_00283B48(f32 angle);  /* sine (0x18 after cosine in 183558.c) */
 extern f32 func_00284590(f32 a, f32 b);
-/* func_002AB000: spring-style scalar approach. Clamps an absolute step
- * (|v0|-bounded) applied to *p toward 0 by a velocity term, re-clamping into
- * +/-|v0| and returning the residual |distance| in $f0. v0..v3 arrive in
- * $f12..$f15. Defined later in this unit (still INCLUDE_ASM); declared here so
- * the #else bodies above can call it with the right f32 return. */
-extern f32 func_002AB000(f32 *p, f32 v0, f32 v1, f32 v2, f32 v3);
+/* func_002AB000: spring-style scalar step. Clamps *p to +/-|v0|, integrates
+ * *p = p*(1-v2) + v1*v0, clamps to +/-v3 (when v3>0), then re-clamps to +/-|v0|.
+ * v0..v3 arrive in $f12..$f15. Return is void: the asm leaves an incidental $f0
+ * but all callers discard it. Defined later in this unit (#else). */
+extern void func_002AB000(f32 *p, f32 v0, f32 v1, f32 v2, f32 v3);
 /* func_00284548 == WrapAnglePiSum, which genuinely returns f32 in $f0. The
  * native #else of func_002AB668 needs the true f32 return (else ee-gcc inserts a
  * spurious int->float cvt that corrupts the *p out-param, else_divergences #19).
@@ -532,7 +531,24 @@ f32 func_002A87A8(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A87F0);
 
+/**
+ * Generate a random direction vector into `dst`: a random magnitude in [lo, hi]
+ * (func_002A86E0) and two random angles (func_002A87A8), mapped to cartesian —
+ * x = r·cos(a2)·sin(a1), y = r·sin(a2)·sin(a1), z = r·cos(a1). The lo/hi pass
+ * straight through to the magnitude RNG. (func_00283B30 = cos, ...B48 = sin.)
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8868);
+#else
+void func_002A8868(Vec4 *dst, f32 lo, f32 hi) {
+    f32 radius = func_002A86E0(lo, hi);
+    f32 angle2 = func_002A87A8();
+    f32 angle1 = func_002A87A8();
+    dst->x = radius * func_00283B30(angle2) * func_00283B48(angle1);
+    dst->y = radius * func_00283B48(angle2) * func_00283B48(angle1);
+    dst->z = radius * func_00283B30(angle1);
+}
+#endif
 
 /**
  * Cubic blend through two value pairs: hermite-style interpolation of the
@@ -1420,7 +1436,42 @@ s32 func_002AAFB8(f32 a, f32 b, f32 c) {
     return func_00284548(a, func_00284590(b, a) * c);
 }
 
+/**
+ * Rate-limited integrator with symmetric clamps on *state. First clamps *state to
+ * [-|maxDelta|, |maxDelta|]; then integrates *state = v + (b*maxDelta - c*v)
+ * (i.e. v*(1-c) + b*maxDelta) and clamps to [-bound, bound] when bound > 0;
+ * finally re-clamps to [-|maxDelta|, |maxDelta|].
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB000);
+#else
+void func_002AB000(f32 *state, f32 maxDelta, f32 b, f32 c, f32 bound) {
+    f32 lim = GetFloatAbs(maxDelta);
+    f32 v;
+
+    if (*state > lim) {
+        *state = lim;
+    } else if (*state < -lim) {
+        *state = -lim;
+    }
+
+    v = *state;
+    *state = v + (b * maxDelta - c * v);
+    if (0.0f < bound) {
+        if (*state > bound) {
+            *state = bound;
+        } else if (*state < -bound) {
+            *state = -bound;
+        }
+    }
+
+    if (*state > lim) {
+        *state = lim;
+    } else if (*state < -lim) {
+        *state = -lim;
+    }
+}
+#endif
 
 /**
  * Step a float toward a target by at most rate, returning how far from the
@@ -1872,7 +1923,53 @@ void func_002AC4D0(Vec4 *out, const Vec4 *src, f32 angle) {
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC538);
 
+/* Matrix helpers for MatrixToEulerAngles (also declared later for the AE-family). */
+extern void func_00283DC0(Mat4x4 *dst, Vec4 *in);   /* build a rotation matrix from a vec (VU0) */
+extern void func_00283DE0(Mat4x4 *dst, Vec4 *in);   /* sibling rotation builder (0xD18 variant) */
+extern void MatrixMultiplyVu0(Mat4x4 *dst, Mat4x4 *a, Mat4x4 *b);
+
+/**
+ * Extract ZYX-style euler angles from a rotation matrix `mtx` into out[0..2].
+ * Copies the 3x3 into a scratch matrix (translation row zeroed to {0,0,0,1}),
+ * then peels the angles with three atan2 (func_00283BF8) + Givens rotations that
+ * successively zero the off-axis terms: a1=atan2(row0.x,row0.y) about -Z, then
+ * a2=atan2(row0.x,-row0.z) about -Y, then a3=atan2(row1.y,row1.z) on the residual.
+ * Writes out[0]=a3, out[1]=a2, out[2]=a1.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", MatrixToEulerAngles);
+#else
+void MatrixToEulerAngles(Mat4x4 *mtx, void *out) {
+    Mat4x4 m;
+    Mat4x4 rot;
+    Vec4 axis;
+    f32 *e = (f32 *)out;
+    f32 a1, a2, a3;
+
+    m = *mtx;
+    func_00283638((Moby *)((u8 *)&m + 0x30));   /* zero the translation row */
+    *(f32 *)((u8 *)&m + 0x3C) = 1.0f;
+
+    a1 = func_00283BF8(*(f32 *)((u8 *)&m + 0x00), *(f32 *)((u8 *)&m + 0x04));
+    axis.x = 0.0f;
+    axis.y = 0.0f;
+    axis.z = -a1;
+    func_00283DC0(&rot, &axis);
+    MatrixMultiplyVu0(&m, &rot, &m);
+
+    a2 = func_00283BF8(*(f32 *)((u8 *)&m + 0x00), -*(f32 *)((u8 *)&m + 0x08));
+    axis.x = 0.0f;
+    axis.y = -a2;
+    axis.z = 0.0f;
+    func_00283DE0(&rot, &axis);
+    MatrixMultiplyVu0(&m, &rot, &m);
+
+    a3 = func_00283BF8(*(f32 *)((u8 *)&m + 0x14), *(f32 *)((u8 *)&m + 0x18));
+    e[2] = a1;
+    e[1] = a2;
+    e[0] = a3;
+}
+#endif
 
 /**
  * Advance a countdown/fade field pair on `obj`. When the counter (+0x0) is
@@ -2206,13 +2303,84 @@ s32 func_002ADF18(Moby *moby) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADF48);
 
+extern void func_00283DC0(Mat4x4 *dst, Vec4 *in);   /* build rotation matrix from a vec (VU0) */
+
+/**
+ * Transform `in` into `out` by the orientation of obj's resolved sub-source
+ * (func_002ADF18 = pvar word 2). If there is no sub-source, out = in (copy) and
+ * returns 0. Otherwise builds its rotation matrix; when the source's flag (+0x3C)
+ * has bit 0x2, it composes an extra rotation from the source's +0x20 vec and
+ * re-applies obj's own matrix at +0xC0. Returns 1 when transformed.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE0B8);
+#else
+s32 func_002AE0B8(void *self, void *obj, Vec4 *in, Vec4 *out) {
+    s32 src = func_002ADF18((Moby *)obj);
+    Mat4x4 rot;
+
+    (void)self;
+    if (src == 0) {
+        *out = *in;
+        return 0;
+    }
+    func_00283DC0(&rot, (Vec4 *)src);
+    if (*(s32 *)(src + 0x3C) & 0x2) {
+        Mat4x4 rot2;
+        Mat4x4 mtx;
+        func_00283DC0(&rot2, (Vec4 *)(src + 0x20));
+        func_00284048(&mtx, (const Vec4 *)&rot2);
+        func_00283A48(out, in, (Vec4 *)&mtx);
+        func_00283A48(out, out, (Vec4 *)((u8 *)obj + 0xC0));
+    } else {
+        func_00283A48(out, in, (Vec4 *)&rot);
+    }
+    return 1;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE198);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE2D8);
 
+extern void MatrixMultiplyVu0(Mat4x4 *dst, Mat4x4 *a, Mat4x4 *b);
+extern void MatrixToEulerAngles(Mat4x4 *mtx, void *outAngles);
+
+/**
+ * Compute a moby's local-frame offset + composed orientation from its resolved
+ * sub-source. No source (func_002ADF18==0) → returns 0. Otherwise builds the
+ * source's base rotation matrix — from obj+0xF0 when the source flag +0x3C bit
+ * 0x40 is set, else obj+0xC0 — transforms (arg3 - obj pos+0x10) into that frame
+ * (out arg5), then composes with arg4's rotation (MatrixMultiplyVu0) and writes
+ * the euler angles to arg6. Returns 1.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE460);
+#else
+s32 func_002AE460(void *self, Moby *obj, Vec4 *arg3, Vec4 *arg4, void *arg5, void *arg6) {
+    s32 src = func_002ADF18(obj);
+    Mat4x4 rot;
+    Vec4 delta;
+    Mat4x4 composed;
+    (void)self;
+
+    if (src == 0) {
+        return 0;
+    }
+    if (*(s32 *)(src + 0x3C) & 0x40) {
+        func_00283DC0(&rot, (Vec4 *)((u8 *)obj + 0xF0));
+        func_00284048(&rot, (const Vec4 *)&rot);
+    } else {
+        func_00284048(&rot, (const Vec4 *)((u8 *)obj + 0xC0));
+    }
+    Vec4SubVu0(&delta, arg3, (Vec4 *)((u8 *)obj + 0x10));
+    func_00283A70((Vec4 *)arg5, &delta, &rot);
+    func_00283DC0(&composed, arg4);
+    MatrixMultiplyVu0(&composed, &rot, &composed);
+    MatrixToEulerAngles(&composed, arg6);
+    return 1;
+}
+#endif
 
 /**
  * Compose two orientation matrices (from m1 and m2), convert the product to euler
@@ -2271,7 +2439,58 @@ void MarkLevelAvailable(s32 level) {
 }
 #endif
 
+extern s32 g_activeGadgetItem[];   /* [0]=active gadget item; [1]/[2]/[3] = per-mode slots */
+extern s16 g_fileLoadState;
+extern s32 func_00294EE0(s32 fileId);   /* nonzero if the item's resource is already resident */
+extern s32 func_00294CD0(s32 fileId);   /* kick the item's resource load */
+
+/**
+ * Equip gadget `itemId`. Looks up its weapon-variant entry (g_weaponTable indexed
+ * by g_itemEquippedSlot[itemId], 0xE0 stride) and dispatches on its mode (+0xC):
+ *   - mode 0: needs a resource. If not resident (func_00294EE0==0) and a file load
+ *     is already in progress (g_fileLoadState!=0), abort (return 0). Otherwise set
+ *     it active and, if still not resident, kick its load (func_00294CD0).
+ *   - mode 1/2/3: record itemId into the matching g_activeGadgetItem slot (1/2/3).
+ * Returns 1 when equipped/queued, 0 when aborted.
+ *
+ * NOTE: the field passed to func_00294EE0/func_00294CD0 is the weapon-variant
+ * entry's +0x14, which symbol_addrs currently labels "boltPrice". Either that
+ * label is context-dependent or slightly off — the #else is faithful to the asm
+ * (it forwards +0x14 to those two calls regardless); flagged for a Ghidra recheck.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE6C8);
+#else
+s32 func_002AE6C8(s32 itemId) {
+    u8 *w = (u8 *)&g_weaponTable[g_itemEquippedSlot[itemId]];
+    s32 mode = *(s32 *)(w + 0xC);
+
+    if (mode == 0) {
+        if (func_00294EE0(*(s32 *)(w + 0x14)) == 0 && g_fileLoadState != 0) {
+            return 0;
+        }
+        g_activeGadgetItem[0] = itemId;
+        if (func_00294EE0(*(s32 *)(w + 0x14)) != 0) {
+            return 1;
+        }
+        func_00294CD0(*(s32 *)(w + 0x14));
+        return 1;
+    }
+    if (mode == 3) {
+        g_activeGadgetItem[3] = itemId;
+        return 1;
+    }
+    if (mode == 2) {
+        g_activeGadgetItem[2] = itemId;
+        return 1;
+    }
+    if (mode == 1) {
+        g_activeGadgetItem[1] = itemId;
+        return 1;
+    }
+    return 0;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE7E8);
 
@@ -2280,7 +2499,45 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE9E0);
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AF590);
 
+extern s32 func_00283AB8(Vec4 *v);   /* pack a float {x,y,z,scale} vec into a word */
+
+/**
+ * Quantise a vector into a packed word written to *out. Scales the vector so its
+ * largest-magnitude component maps to a chosen precision: takes maxAbs of x/y/z,
+ * derives an integer scale = clamp(trunc(maxAbs * 158.73), 1, 255) (FloatToInt
+ * truncates toward zero, not rounds), normalises
+ * each component by 1/(scale*1e-4) and biases by 127, then packs {x',y',z',scale}
+ * via func_00283AB8.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AF598);
+#else
+void func_002AF598(Vec4 *vec, s32 *out) {
+    f32 ax = GetFloatAbs(vec->x);
+    f32 ay = GetFloatAbs(vec->y);
+    f32 az = GetFloatAbs(vec->z);
+    f32 maxAbs;
+    s32 scale;
+    f32 inv;
+    Vec4 packed;
+
+    maxAbs = (ay > ax) ? ay : ax;
+    maxAbs = (az > maxAbs) ? az : maxAbs;
+    scale = FloatToInt(maxAbs * 0x1.3d75d8p7f);   /* * 158.73016 */
+    if (scale >= 0x100) {
+        scale = 0xFF;
+    }
+    if (scale <= 0) {
+        scale = 1;
+    }
+    inv = 1.0f / ((f32)scale * 1e-4f);
+    packed.x = vec->x * inv + 127.0f;
+    packed.y = vec->y * inv + 127.0f;
+    packed.z = vec->z * inv + 127.0f;
+    packed.w = (f32)scale;
+    *out = func_00283AB8(&packed);
+}
+#endif
 
 /**
  * Decode a packed RGBA colour pointed to by `colorPtr` into a signed direction/
@@ -2439,14 +2696,76 @@ void func_002AFD90(void *out, f32 *p1, f32 *p2, f32 scale, f32 b, f32 c) {
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFE58);
 
+/**
+ * Convert spherical coordinates (radius, azimuth, elevation) to a cartesian
+ * vector in `dst`: x = r·cos(az)·cos(el), y = r·sin(az)·cos(el), z = r·sin(el).
+ * (func_00283B30 = cosine, func_00283B48 = sine.)
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFE68);
+#else
+void func_002AFE68(void *handle, f32 value, f32 angle1, f32 angle2) {
+    Vec4 *dst = (Vec4 *)handle;
+    dst->x = value * func_00283B30(angle1) * func_00283B30(angle2);
+    dst->y = value * func_00283B48(angle1) * func_00283B30(angle2);
+    dst->z = value * func_00283B48(angle2);
+}
+#endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFF08);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFF10);
 
+/* Callees for func_002B0038 (sigs traced from call registers / symbol_addrs). */
+extern void func_002A0A58(Moby *parent, void *srcTransform, Mat4x4 *out);
+extern void UpdateMobyAnimation(Moby *moby);
+extern void UpdateMobyBSphereAndGrid(Moby *moby);
+extern void func_002A1F20(Moby *moby);
+
+/**
+ * Rebuild a child moby's transform from its parent + a source transform, then
+ * re-run its per-frame updates. Composes parent/srcTransform into a scratch
+ * matrix (func_002A0A58), copies the translation row (matrix+0x30) to the child
+ * pos (+0x10), optionally mirrors basis rows 0/1/2 per the flags bits 1/2/4,
+ * ticks the animation, refreshes the bounding sphere/grid (unless mode bit 4),
+ * installs the matrix at child+0xC0 (func_00284028/func_002ABE90) and runs
+ * func_002A1F20. Finally mirrors parent's mode bit 0 into the child's flags
+ * (set 0x40|0x01 / clear 0x41) and forces the 0x6 dirty bits.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0038);
+#else
+void func_002B0038(Moby *parent, Moby *child, void *srcTransform, s32 flags) {
+    u8 *c = (u8 *)child;
+    Mat4x4 m;
+
+    func_002A0A58(parent, srcTransform, &m);
+    *(Vec4 *)(c + 0x10) = *(Vec4 *)((u8 *)&m + 0x30);
+    if (flags & 1) {
+        Vec4ScaleVu0((Vec4 *)&m, -1.0f, (Vec4 *)&m);
+    }
+    if (flags & 2) {
+        Vec4ScaleVu0((Vec4 *)((u8 *)&m + 0x10), -1.0f, (Vec4 *)((u8 *)&m + 0x10));
+    }
+    if (flags & 4) {
+        Vec4ScaleVu0((Vec4 *)((u8 *)&m + 0x20), -1.0f, (Vec4 *)((u8 *)&m + 0x20));
+    }
+    UpdateMobyAnimation(child);
+    if ((*(u16 *)(c + 0x34) & 4) == 0) {
+        UpdateMobyBSphereAndGrid(child);
+    }
+    func_00284028(c + 0xC0, &m);
+    func_002ABE90((Mat4x4 *)(c + 0xC0));
+    func_002A1F20(child);
+    if (*(u16 *)((u8 *)parent + 0x34) & 1) {
+        *(u16 *)(c + 0x34) = (u16)(*(u16 *)(c + 0x34) | 0x41);
+    } else {
+        *(u16 *)(c + 0x34) = (u16)(*(u16 *)(c + 0x34) & 0xFFBE);
+    }
+    *(u16 *)(c + 0x34) = (u16)(*(u16 *)(c + 0x34) | 0x6);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0150);
 

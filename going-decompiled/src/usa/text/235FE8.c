@@ -1467,7 +1467,44 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00339B00);
 void func_00339F90(void) {
 }
 
+/* func_00339F98: temporarily override a camera-projection parameter, rebuild the
+ * projection, run one per-mode scene update, then restore the parameter and
+ * rebuild again. *(w+0x4) is a curve/animator whose first float gates the whole
+ * op: if it is 0 the widget is inactive and nothing happens. The overridden
+ * parameter is a float at g_sceneActorMobys+0x674+0xB0 (an unnamed projection
+ * sub-struct co-located with the scene-cast region); it is forced to 0.62 for
+ * the duration. Mode = *(w+0x1C8): 0 -> func_00339B00(w) (the full per-frame
+ * update); 2 -> func_00339F90() (stub hook); any other value -> no update. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00339F98);
+#else
+extern u8 g_sceneActorMobys[];
+extern void func_00339B00(void *w);
+extern void BuildCameraProjection(void);
+void func_00339F98(void *w) {
+    f32 *camParam;
+    f32 saved;
+    s32 mode;
+
+    if (*(f32 *)(*(void **)((char *)w + 0x4)) == 0.0f) {
+        return;
+    }
+    camParam = (f32 *)(g_sceneActorMobys + 0x674 + 0xB0);
+    saved = *camParam;
+    *camParam = 0.62f; /* 0x3F1EB852 */
+    BuildCameraProjection();
+
+    mode = *(s32 *)((char *)w + 0x1C8);
+    if (mode == 0) {
+        func_00339B00(w);
+    } else if (mode == 2) {
+        func_00339F90();
+    }
+
+    *camParam = saved;
+    BuildCameraProjection();
+}
+#endif
 
 /* func_0033A048: init the screen's eight embedded sub-elements at their fixed
  * offsets (four type-B then four type-C), return the object. */
@@ -1491,7 +1528,78 @@ void *func_0033A048(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A0B0);
 
+/* GuiConfirmPopupInit: construct the confirm popup (4 button-icon elements + 4
+ * text rows). Pool -> alloc the 0x10-byte placement record (+0x4) and zero it
+ * (the +0x0 pool store + the +0x2D8=1 "active" flag are unconditional). Record
+ * seeded 256x198. Init four icon elements (+0x8/+0x54/+0xA0/+0xEC from
+ * D_1ADBE8/BF0/BF8/C00) and four text elements (+0x138/+0x190/+0x1E8/+0x240 from
+ * D_1ADC08/C10/C18/C28); mark +0x1E8 as a text element. Colour them, assign
+ * glyphs 0x6B..0x6E from the atlas (g_guiInstance+0x8710), set the three visible
+ * text rows (localized 0x2C5B / 0x2BE5, plus the in-place buffer at +0x298), then
+ * run one GuiConfirmPopupTick(w, 0) to lay it out. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiConfirmPopupInit);
+#else
+void GuiConfirmPopupTick(void *w, s32 arg2);
+extern char *g_guiInstance;
+extern u8 D_1ADBE8[], D_1ADBF0[], D_1ADBF8[], D_1ADC00[];
+extern u8 D_1ADC08[], D_1ADC10[], D_1ADC18[], D_1ADC28[];
+void GuiConfirmPopupInit(void *w, GuiPool *pool) {
+    GuiElement *icon0 = (GuiElement *)((char *)w + 0x8);
+    GuiElement *icon1 = (GuiElement *)((char *)w + 0x54);
+    GuiElement *icon2 = (GuiElement *)((char *)w + 0xA0);
+    GuiElement *icon3 = (GuiElement *)((char *)w + 0xEC);
+    GuiElement *text0 = (GuiElement *)((char *)w + 0x138);
+    GuiElement *text1 = (GuiElement *)((char *)w + 0x190);
+    GuiElement *text2 = (GuiElement *)((char *)w + 0x1E8);
+    GuiElement *text3 = (GuiElement *)((char *)w + 0x240);
+    void *rec;
+
+    *(GuiPool **)((char *)w + 0x0) = pool;
+    *(s32 *)((char *)w + 0x2D8) = 1; /* unconditional (beqz delay slot) */
+    if (pool != 0) {
+        rec = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        *(void **)((char *)w + 0x4) = rec;
+        *(s32 *)((char *)rec + 0x0) = 0;
+        *(s32 *)((char *)rec + 0x4) = 0;
+        *(s32 *)((char *)rec + 0x8) = 0;
+        *(s32 *)((char *)rec + 0xC) = 0;
+    }
+
+    rec = *(void **)((char *)w + 0x4);
+    *(f32 *)((char *)rec + 0x0) = 256.0f;
+    *(f32 *)((char *)rec + 0x4) = 198.0f;
+
+    GuiElementInit(icon0, (s32)D_1ADBE8, pool);
+    GuiElementInit(icon1, (s32)D_1ADBF0, pool);
+    GuiElementInit(icon2, (s32)D_1ADBF8, pool);
+    GuiElementInit(icon3, (s32)D_1ADC00, pool);
+    GuiTextElementInit(text0, (s32)D_1ADC08, pool);
+    GuiTextElementInit(text1, (s32)D_1ADC10, pool);
+    GuiTextElementInit(text2, (s32)D_1ADC18, pool);
+    GuiTextElementInit(text3, (s32)D_1ADC28, pool);
+    GuiElementSetTextFlag(text2, 1);
+
+    *GuiElementGetColor(icon0) = 0x60442D00;
+    *GuiElementGetColor(icon1) = 0x60241700;
+    *GuiElementGetColor(icon2) = 0x55F0C070;
+    *GuiElementGetColor(icon3) = 0x55F0C070;
+    *GuiElementGetColor(text0) = (s32)0x80F0F0F0;
+    *GuiElementGetColor(text1) = (s32)0x80F0F0F0;
+    *GuiElementGetColor(text2) = (s32)0x80F0F0F0;
+
+    GuiElementSetGlyph(icon0, (s32)(g_guiInstance + 0x8710), 0x6B);
+    GuiElementSetGlyph(icon1, (s32)(g_guiInstance + 0x8710), 0x6C);
+    GuiElementSetGlyph(icon2, (s32)(g_guiInstance + 0x8710), 0x6D);
+    GuiElementSetGlyph(icon3, (s32)(g_guiInstance + 0x8710), 0x6E);
+
+    GuiElementSetText(text0, GetLocalizedString(0x2C5B));
+    GuiElementSetText(text1, GetLocalizedString(0x2BE5));
+    GuiElementSetText(text2, (s32)((char *)w + 0x298));
+
+    GuiConfirmPopupTick(w, 0);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiConfirmPopupTick);
 
@@ -1511,7 +1619,59 @@ void *func_0033A640(void *p) {
 }
 #endif
 
+/* func_0033A678: construct a bordered dialog/popup widget. If a pool is given,
+ * allocate its 0x10-byte placement record (+0x324) and zero it. Seed the panel
+ * element (+0x8) size to 256x212, init its border art from D_1ADC50, then set
+ * its bounds (64, -164, 10, 136, 10, 99). Init the icon GuiElement (+0x2D8) from
+ * D_1ADC60, force its packed colour to 0x70FFFEED, and give it glyph 0xD6 from
+ * the shared atlas (g_guiInstance+0x8710). Finally run func_0033A7E0(w) (the
+ * show hook) and clear +0x330. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A678);
+#else
+/* GuiElementInit / GuiElementGetColor / GuiElementSetGlyph are defined earlier
+ * in this unit; only the not-yet-defined callees need forward decls here. */
+extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
+void GuiDialogBoxSetBounds(void *p, f32 a, f32 b, f32 c, f32 d, f32 e, f32 f);
+extern void func_0033A7E0(void *w);
+extern char *g_guiInstance;
+extern u8 D_1ADC50[];
+extern u8 D_1ADC60[];
+void func_0033A678(void *w, GuiPool *pool) {
+    GuiElement *icon = (GuiElement *)((char *)w + 0x2D8);
+    void *obj;
+    s32 *color;
+
+    /* +0x0 = pool is stored unconditionally (beqz delay slot). */
+    *(GuiPool **)((char *)w + 0x0) = pool;
+    if (pool != 0) {
+        obj = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        *(void **)((char *)w + 0x324) = obj;
+        *(s32 *)((char *)obj + 0x0) = 0;
+        *(s32 *)((char *)obj + 0x4) = 0;
+        *(s32 *)((char *)obj + 0x8) = 0;
+        *(s32 *)((char *)obj + 0xC) = 0;
+    }
+
+    obj = *(void **)((char *)w + 0x324);
+    *(f32 *)((char *)obj + 0x0) = 256.0f;
+    *(f32 *)((char *)obj + 0x4) = 212.0f;
+
+    *(s32 *)((char *)w + 0x328) = 0;
+    GuiDialogBoxInitBorder((char *)w + 0x8, pool, D_1ADC50);
+    GuiDialogBoxSetBounds((char *)w + 0x8, 64.0f, -164.0f, 10.0f, 136.0f, 10.0f, 99.0f);
+
+    /* the "tag"/"codepoint" params are s32 by declaration but carry data
+     * addresses here (the original passes the pointer through an int slot). */
+    GuiElementInit(icon, (s32)D_1ADC60, pool);
+    color = GuiElementGetColor(icon);
+    *color = 0x70FFFEED;
+    GuiElementSetGlyph(icon, (s32)(g_guiInstance + 0x8710), 0xD6);
+
+    func_0033A7E0(w);
+    *(s32 *)((char *)w + 0x330) = 0;
+}
+#endif
 
 /* func_0033A7A8: set the +0x330 flag to 1. */
 void func_0033A7A8(void *p) {
@@ -1726,7 +1886,54 @@ void *func_0033B4E8(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033B560);
 
+/* GuiProgressBarWidgetInit: construct a progress-bar widget. Clears +0x208 and
+ * records the pool at +0x210 (unconditional). If a pool is given, allocate its
+ * 0x10-byte placement record (+0x20C) and zero it. The bar's fill float (rec+4)
+ * is derived from a config float at g_swapGadgetItemIndex+0x8A: fill =
+ * (s32)(cfg*300 + 0.5) rounded, with rec+0 fixed at 70. Init the sprite element
+ * (+0x134) from D_1ADC60, scale it 24x24, colour 0x60F0F0B0, and set +0x214=65.
+ * Init the text element (+0x170) from D_1ADC60, colour 0x80F0F0F0, scale 0.7. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiProgressBarWidgetInit);
+#else
+extern s32 g_swapGadgetItemIndex;
+extern u8 D_1ADC60[];
+void GuiProgressBarWidgetInit(void *w, GuiPool *pool) {
+    GuiElement *sprite = (GuiElement *)((char *)w + 0x134);
+    GuiElement *text = (GuiElement *)((char *)w + 0x170);
+    void *rec;
+    s32 *color;
+    f32 cfg;
+
+    *(s32 *)((char *)w + 0x208) = 0;
+    /* +0x210 = pool is stored unconditionally (beqz delay slot). */
+    *(GuiPool **)((char *)w + 0x210) = pool;
+    if (pool != 0) {
+        rec = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        *(void **)((char *)w + 0x20C) = rec;
+        *(s32 *)((char *)rec + 0x0) = 0;
+        *(s32 *)((char *)rec + 0x4) = 0;
+        *(s32 *)((char *)rec + 0x8) = 0;
+        *(s32 *)((char *)rec + 0xC) = 0;
+    }
+
+    cfg = *(f32 *)((char *)&g_swapGadgetItemIndex + 0x8A);
+    rec = *(void **)((char *)w + 0x20C);
+    *(f32 *)((char *)rec + 0x0) = 70.0f;
+    *(f32 *)((char *)rec + 0x4) = (f32)(s32)(cfg * 300.0f + 0.5f);
+
+    GuiSpriteElementInit(sprite, (s32)D_1ADC60, pool);
+    GuiElementSetScale(sprite, 24.0f, 24.0f, 0.0f, 0.0f);
+    color = GuiElementGetColor(sprite);
+    *color = 0x60F0F0B0;
+    *(f32 *)((char *)w + 0x214) = 65.0f;
+
+    GuiTextElementInit(text, (s32)D_1ADC60, pool);
+    color = GuiElementGetColor(text);
+    *color = (s32)0x80F0F0F0;
+    GuiElementSetScale(text, 0.7f, 0.7f, 0.0f, 0.0f);
+}
+#endif
 
 /* func_0033B6D0: when the +0x21C flag is set, position the element at p+0x170
  * from the anchor vector at *(p+0x20C): x = anchor[0] + D_1ADCE0; y = anchor[1]
@@ -1996,7 +2203,48 @@ void *func_0033CD80(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033CDB0);
 
+/* GuiDialogBoxVariantCInit: dialog constructor (variant C, sibling of
+ * GuiQuitDialogInit). Panel (+0x8) 255x195, border from D_1ADD98, text rows =
+ * strings 0x307B/0x2BE4/0x2BE5, bounds (0,-143,0,114,0,125), scale 0.65. Clears
+ * +0x2D8 and +0x2D4, then runs func_0033CEE0(w, 0) (its body builder). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiDialogBoxVariantCInit);
+#else
+extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
+extern void func_0033CEE0(void *w, s32 flag);
+extern u8 D_1ADD98[];
+void GuiDialogBoxVariantCInit(void *w, GuiPool *pool) {
+    void *obj;
+    s32 t0, t1, t2;
+
+    /* +0x0 = pool is stored unconditionally (beqz delay slot). */
+    *(GuiPool **)((char *)w + 0x0) = pool;
+    if (pool != 0) {
+        obj = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        *(void **)((char *)w + 0x2DC) = obj;
+        *(s32 *)((char *)obj + 0x0) = 0;
+        *(s32 *)((char *)obj + 0x4) = 0;
+        *(s32 *)((char *)obj + 0x8) = 0;
+        *(s32 *)((char *)obj + 0xC) = 0;
+    }
+
+    obj = *(void **)((char *)w + 0x2DC);
+    *(f32 *)((char *)obj + 0x0) = 255.0f;
+    *(f32 *)((char *)obj + 0x4) = 195.0f;
+    GuiDialogBoxInitBorder((char *)w + 0x8, pool, D_1ADD98);
+
+    t0 = GetLocalizedString(0x307B);
+    t1 = GetLocalizedString(0x2BE4);
+    t2 = GetLocalizedString(0x2BE5);
+    GuiDialogBoxSetText3((char *)w + 0x8, t0, t1, t2);
+
+    GuiDialogBoxSetBounds((char *)w + 0x8, 0.0f, -143.0f, 0.0f, 114.0f, 0.0f, 125.0f);
+    GuiDialogBoxSetScale((char *)w + 0x8, 0.65f);
+    *(s32 *)((char *)w + 0x2D8) = 0;
+    *(s32 *)((char *)w + 0x2D4) = 0;
+    func_0033CEE0(w, 0);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033CEE0);
 
@@ -2087,7 +2335,47 @@ void *func_0033DA00(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DA30);
 
+/* GuiDialogBoxVariantBInit: dialog constructor (variant B, sibling of
+ * GuiQuitDialogInit). Panel (+0x8) 255x195, border from D_1ADE10, text rows =
+ * strings 0x2C29/0x2BE4/0x2BE5, bounds (0,-143,0,114,0,140), scale 0.2. Clears
+ * +0x2D8, then runs func_0033DB60(w, 0) (its body builder). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiDialogBoxVariantBInit);
+#else
+extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
+extern void func_0033DB60(void *w, s32 flag);
+extern u8 D_1ADE10[];
+void GuiDialogBoxVariantBInit(void *w, GuiPool *pool) {
+    void *obj;
+    s32 t0, t1, t2;
+
+    /* +0x0 = pool is stored unconditionally (beqz delay slot). */
+    *(GuiPool **)((char *)w + 0x0) = pool;
+    if (pool != 0) {
+        obj = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        *(void **)((char *)w + 0x2DC) = obj;
+        *(s32 *)((char *)obj + 0x0) = 0;
+        *(s32 *)((char *)obj + 0x4) = 0;
+        *(s32 *)((char *)obj + 0x8) = 0;
+        *(s32 *)((char *)obj + 0xC) = 0;
+    }
+
+    obj = *(void **)((char *)w + 0x2DC);
+    *(f32 *)((char *)obj + 0x0) = 255.0f;
+    *(f32 *)((char *)obj + 0x4) = 195.0f;
+    GuiDialogBoxInitBorder((char *)w + 0x8, pool, D_1ADE10);
+
+    t0 = GetLocalizedString(0x2C29);
+    t1 = GetLocalizedString(0x2BE4);
+    t2 = GetLocalizedString(0x2BE5);
+    GuiDialogBoxSetText3((char *)w + 0x8, t0, t1, t2);
+
+    GuiDialogBoxSetBounds((char *)w + 0x8, 0.0f, -143.0f, 0.0f, 114.0f, 0.0f, 140.0f);
+    GuiDialogBoxSetScale((char *)w + 0x8, 0.2f);
+    *(s32 *)((char *)w + 0x2D8) = 0;
+    func_0033DB60(w, 0);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DB60);
 
@@ -2178,7 +2466,48 @@ void *GuiQuitDialogInitElements(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E780);
 
+/* GuiQuitDialogInit: construct the quit-confirmation dialog. If a pool is given,
+ * allocate its 0x10-byte placement record (+0x2DC) and zero it. Seed the panel
+ * (+0x8) to 255x195, init border art from D_1ADE60, set its three text rows to
+ * localized strings 0x2BF7/0x2BE4/0x2BE5, bounds (0,-143,0,114,0,140), scale 0.4.
+ * Clear +0x2D8 and run func_0033E8B0(w, 0) (the option-list builder). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiQuitDialogInit);
+#else
+extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
+extern void func_0033E8B0(void *w, s32 flag);
+extern u8 D_1ADE60[];
+void GuiQuitDialogInit(void *w, GuiPool *pool) {
+    void *obj;
+    s32 t0, t1, t2;
+
+    /* +0x0 = pool is stored unconditionally (beqz delay slot). */
+    *(GuiPool **)((char *)w + 0x0) = pool;
+    if (pool != 0) {
+        obj = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        *(void **)((char *)w + 0x2DC) = obj;
+        *(s32 *)((char *)obj + 0x0) = 0;
+        *(s32 *)((char *)obj + 0x4) = 0;
+        *(s32 *)((char *)obj + 0x8) = 0;
+        *(s32 *)((char *)obj + 0xC) = 0;
+    }
+
+    obj = *(void **)((char *)w + 0x2DC);
+    *(f32 *)((char *)obj + 0x0) = 255.0f;
+    *(f32 *)((char *)obj + 0x4) = 195.0f;
+    GuiDialogBoxInitBorder((char *)w + 0x8, pool, D_1ADE60);
+
+    t0 = GetLocalizedString(0x2BF7);
+    t1 = GetLocalizedString(0x2BE4);
+    t2 = GetLocalizedString(0x2BE5);
+    GuiDialogBoxSetText3((char *)w + 0x8, t0, t1, t2);
+
+    GuiDialogBoxSetBounds((char *)w + 0x8, 0.0f, -143.0f, 0.0f, 114.0f, 0.0f, 140.0f);
+    GuiDialogBoxSetScale((char *)w + 0x8, 0.4f);
+    *(s32 *)((char *)w + 0x2D8) = 0;
+    func_0033E8B0(w, 0);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E8B0);
 
@@ -2525,7 +2854,83 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341F40);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003420C0);
 
+/* GuiIconScreenInit: construct an icon screen (five button-glyph elements, a
+ * text row, and a sprite). Pool -> alloc the 0x10-byte placement record (+0x228)
+ * and zero it (the +0x22C pool store + the +0x230=1 flag are unconditional).
+ * Record seeded 251x170. Init five elements (+0x0/D_1ADBE8, +0x98/D_1ADBF0,
+ * +0x4C/D_1ADBF8, +0xE4/D_1ADC00, +0x130/D_1ADF98), the text row (+0x1D0/D_1ADC08),
+ * the sprite (+0x17C/D_1AE098), and the sub-block (+0x238) via func_00348BF8(pool).
+ * Colour all seven, alpha three buttons (+0x0/+0x4C/+0xE4) to 1.0, assign glyphs
+ * 0x91/0x94/0x92/0x93/0x95, scale the label 1.0x1.05, set its text (localized
+ * 0x2BEB), texture the sprite (0xEA9D) scaled 32x32, and clear the +0x1B8 block. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiIconScreenInit);
+#else
+extern void func_00348BF8(void *w, void *pool);
+extern char *g_guiInstance;
+extern u8 D_1ADBE8[], D_1ADBF0[], D_1ADBF8[], D_1ADC00[], D_1ADF98[];
+extern u8 D_1ADC08[], D_1AE098[];
+void GuiIconScreenInit(void *w, GuiPool *pool) {
+    GuiElement *e0 = (GuiElement *)((char *)w + 0x0);
+    GuiElement *e1 = (GuiElement *)((char *)w + 0x98);
+    GuiElement *e2 = (GuiElement *)((char *)w + 0x4C);
+    GuiElement *e3 = (GuiElement *)((char *)w + 0xE4);
+    GuiElement *e4 = (GuiElement *)((char *)w + 0x130);
+    GuiElement *text = (GuiElement *)((char *)w + 0x1D0);
+    GuiElement *sprite = (GuiElement *)((char *)w + 0x17C);
+    void *sub = (char *)w + 0x238;
+    void *rec;
+
+    /* +0x22C = pool is stored unconditionally (beqz delay slot). */
+    *(GuiPool **)((char *)w + 0x22C) = pool;
+    if (pool != 0) {
+        rec = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        *(void **)((char *)w + 0x228) = rec;
+        *(s32 *)((char *)rec + 0x0) = 0;
+        *(s32 *)((char *)rec + 0x4) = 0;
+        *(s32 *)((char *)rec + 0x8) = 0;
+        *(s32 *)((char *)rec + 0xC) = 0;
+    }
+
+    *(s32 *)((char *)w + 0x230) = 1;
+    rec = *(void **)((char *)w + 0x228);
+    *(f32 *)((char *)rec + 0x0) = 251.0f;
+    *(f32 *)((char *)rec + 0x4) = 170.0f;
+
+    GuiElementInit(e0, (s32)D_1ADBE8, pool);
+    GuiElementInit(e1, (s32)D_1ADBF0, pool);
+    GuiElementInit(e2, (s32)D_1ADBF8, pool);
+    GuiElementInit(e3, (s32)D_1ADC00, pool);
+    GuiElementInit(e4, (s32)D_1ADF98, pool);
+    GuiTextElementInit(text, (s32)D_1ADC08, pool);
+    GuiSpriteElementInit(sprite, (s32)D_1AE098, pool);
+    func_00348BF8(sub, pool);
+
+    *GuiElementGetColor(e0) = 0x60442D00;
+    *GuiElementGetColor(e1) = (s32)0x80FFDE8D;
+    *GuiElementGetColor(e2) = 0x55F0C070;
+    *GuiElementGetColor(e3) = 0x55F0C070;
+    *GuiElementGetColor(e4) = 0x70FFFEED;
+    *GuiElementGetColor(text) = (s32)0x80F0F0F0;
+    *GuiElementGetColor(sprite) = 0x60F0F0B0;
+
+    GuiElementSetAlpha(e0, 1.0f);
+    GuiElementSetAlpha(e2, 1.0f);
+    GuiElementSetAlpha(e3, 1.0f);
+
+    GuiElementSetGlyph(e0, (s32)(g_guiInstance + 0x8710), 0x91);
+    GuiElementSetGlyph(e1, (s32)(g_guiInstance + 0x8710), 0x94);
+    GuiElementSetGlyph(e2, (s32)(g_guiInstance + 0x8710), 0x92);
+    GuiElementSetGlyph(e3, (s32)(g_guiInstance + 0x8710), 0x93);
+    GuiElementSetGlyph(e4, (s32)(g_guiInstance + 0x8710), 0x95);
+
+    GuiElementSetScale(e4, 1.0f, 1.05f, 0.0f, 0.0f);
+    GuiElementSetText(text, GetLocalizedString(0x2BEB));
+    GuiSpriteSetTexture(sprite, 0xEA9D, 0);
+    memset((char *)w + 0x1B8, 0, 0xC);
+    GuiElementSetScale(sprite, 32.0f, 32.0f, 0.0f, 0.0f);
+}
+#endif
 
 /* func_00342450: write three ints at +0x318/+0x310/+0x314 in that source order. */
 #ifndef TARGET_NATIVE
@@ -2682,7 +3087,62 @@ void func_00342BE8(void *p, s32 v) {
     *(s32 *)((char *)p + 0x8) = v;
 }
 
+/* GuiHelpPromptWidgetInit: construct the help-prompt widget (two button-glyph
+ * elements + a label list). Pool -> alloc the 0x10-byte placement record (+0x0)
+ * and zero it (the +0x4 pool store is unconditional). Seed the record to 250x120.
+ * Init two icon elements (+0xEC from D_1ADBE8, +0x138 from D_1ADBF0), colour them
+ * 0x60442D00 / 0x55F0C070, give them glyphs 0x73 / 0x74 from the shared atlas
+ * (g_guiInstance+0x8710), and set both alphas to D_1AE104. Then init the label
+ * block (+0x10) via func_00348BF8(pool) + func_00348E10(0xB, 0x3C), and run
+ * func_00342DF8(w, 0). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiHelpPromptWidgetInit);
+#else
+extern void func_00348BF8(void *w, void *pool);
+extern u8 D_1ADBE8[];
+extern u8 D_1ADBF0[];
+extern f32 D_1AE104;
+s32 func_00342DF8(void *p, s32 inputMask);
+void GuiHelpPromptWidgetInit(void *w, GuiPool *pool) {
+    GuiElement *e0 = (GuiElement *)((char *)w + 0xEC);
+    GuiElement *e1 = (GuiElement *)((char *)w + 0x138);
+    void *obj;
+    s32 *color;
+
+    /* +0x4 = pool is stored unconditionally (beqz delay slot). */
+    *(GuiPool **)((char *)w + 0x4) = pool;
+    if (pool != 0) {
+        obj = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        *(void **)((char *)w + 0x0) = obj;
+        *(s32 *)((char *)obj + 0x0) = 0;
+        *(s32 *)((char *)obj + 0x4) = 0;
+        *(s32 *)((char *)obj + 0x8) = 0;
+        *(s32 *)((char *)obj + 0xC) = 0;
+    }
+
+    obj = *(void **)((char *)w + 0x0);
+    *(f32 *)((char *)obj + 0x0) = 250.0f;
+    *(f32 *)((char *)obj + 0x4) = 120.0f;
+
+    GuiElementInit(e0, (s32)D_1ADBE8, pool);
+    GuiElementInit(e1, (s32)D_1ADBF0, pool);
+
+    color = GuiElementGetColor(e0);
+    *color = 0x60442D00;
+    color = GuiElementGetColor(e1);
+    *color = 0x55F0C070;
+
+    GuiElementSetGlyph(e0, (s32)(g_guiInstance + 0x8710), 0x73);
+    GuiElementSetGlyph(e1, (s32)(g_guiInstance + 0x8710), 0x74);
+
+    GuiElementSetAlpha(e0, D_1AE104);
+    GuiElementSetAlpha(e1, D_1AE104);
+
+    func_00348BF8((char *)w + 0x10, pool);
+    func_00348E10((char *)w + 0x10, 0xB, 0x3C);
+    func_00342DF8(w, 0);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342D60);
 
@@ -2795,7 +3255,75 @@ void *func_00342FD8(void *p) {
 }
 #endif
 
+/* GuiIconScreenInit2: construct an icon screen (two button-glyph elements, a
+ * label element, and a sprite). Pool -> alloc the 0x10-byte placement record
+ * (+0x180) and zero it (the +0x184 pool store + the +0x170=1 flag are
+ * unconditional). Record seeded 253x200. Init element +0x0 (D_1ADBE8), +0x4C
+ * (D_1ADBF8), +0xE4 (D_1ADF98), and sprite +0x130 (D_1AE098); init the sub-block
+ * +0x188 via func_00348BF8(pool). Colour the four elements, alpha the two button
+ * glyphs to 1.0, assign glyphs 0xCD/0xCE/0x95 from the atlas, scale the label
+ * 1.0x1.05, texture the sprite (0xEA9D) scaled 32x32. Finally write the descriptor
+ * (+0x174=0xEAA6, +0x178=&D_1AE110, +0x17C=4) after clearing +0x16C, and hand the
+ * sub-block its value via func_00348E50. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiIconScreenInit2);
+#else
+extern void func_00348BF8(void *w, void *pool);
+extern void func_00348E50(void *w, s32 v);
+extern u8 D_1ADBE8[], D_1ADBF8[], D_1ADF98[], D_1AE098[], D_1AE110[];
+void GuiIconScreenInit2(void *w, GuiPool *pool) {
+    GuiElement *e0 = (GuiElement *)((char *)w + 0x0);
+    GuiElement *e1 = (GuiElement *)((char *)w + 0x4C);
+    GuiElement *e2 = (GuiElement *)((char *)w + 0xE4);
+    GuiElement *sprite = (GuiElement *)((char *)w + 0x130);
+    void *sub = (char *)w + 0x188;
+    void *rec;
+
+    /* +0x184 = pool is stored unconditionally (beqz delay slot). */
+    *(GuiPool **)((char *)w + 0x184) = pool;
+    if (pool != 0) {
+        rec = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        *(void **)((char *)w + 0x180) = rec;
+        *(s32 *)((char *)rec + 0x0) = 0;
+        *(s32 *)((char *)rec + 0x4) = 0;
+        *(s32 *)((char *)rec + 0x8) = 0;
+        *(s32 *)((char *)rec + 0xC) = 0;
+    }
+
+    *(s32 *)((char *)w + 0x170) = 1;
+    rec = *(void **)((char *)w + 0x180);
+    *(f32 *)((char *)rec + 0x0) = 253.0f;
+    *(f32 *)((char *)rec + 0x4) = 200.0f;
+
+    GuiElementInit(e0, (s32)D_1ADBE8, pool);
+    GuiElementInit(e1, (s32)D_1ADBF8, pool);
+    GuiElementInit(e2, (s32)D_1ADF98, pool);
+    GuiSpriteElementInit(sprite, (s32)D_1AE098, pool);
+    func_00348BF8(sub, pool);
+
+    *GuiElementGetColor(e0) = 0x60442D00;
+    *GuiElementGetColor(e1) = 0x55F0C070;
+    *GuiElementGetColor(e2) = 0x70FFFEED;
+    *GuiElementGetColor(sprite) = 0x60F0F0B0;
+
+    GuiElementSetAlpha(e0, 1.0f);
+    GuiElementSetAlpha(e1, 1.0f);
+
+    GuiElementSetGlyph(e0, (s32)(g_guiInstance + 0x8710), 0xCD);
+    GuiElementSetGlyph(e1, (s32)(g_guiInstance + 0x8710), 0xCE);
+    GuiElementSetGlyph(e2, (s32)(g_guiInstance + 0x8710), 0x95);
+
+    GuiElementSetScale(e2, 1.0f, 1.05f, 0.0f, 0.0f);
+    GuiSpriteSetTexture(sprite, 0xEA9D, 0);
+    memset((char *)w + 0x16C, 0, 4);
+    GuiElementSetScale(sprite, 32.0f, 32.0f, 0.0f, 0.0f);
+
+    *(s32 *)((char *)w + 0x174) = 0xEAA6;
+    *(void **)((char *)w + 0x178) = D_1AE110;
+    *(s32 *)((char *)w + 0x17C) = 4;
+    func_00348E50(sub, *(s32 *)((char *)w + 0x16C));
+}
+#endif
 
 /* func_00343290: store v at p+0x260 then call func_00348DA0(p+0x188). */
 #ifndef TARGET_NATIVE
