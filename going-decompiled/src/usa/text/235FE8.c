@@ -2397,6 +2397,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D3C0);
 #else
 extern void func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
 extern u8 D_1ADDA8[], D_1ADDB0[], D_1A7BB9;
+/* func_0033D3C0: draw a two-part on-screen caption - dialog-box body (func_0033BF90) plus a localized caption (GetLocalizedString 0x307A / D_1ADDA8[D_1A7BB9]) at (0x100,0xAA). */
 void func_0033D3C0(void *e) {
     char buf[128];
     s32 s1, s2;
@@ -2565,6 +2566,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E680);
 #else
 extern void func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
 extern u8 D_1ADDA8[], D_1ADDB0[];
+/* func_0033E680: caption sibling drawn with state-dependent colour (localized 0x2C2F; 0x80D0D0D0 vs 0x70808080 keyed on *(w+0x2D8); flag D_1A7B9E). */
 void func_0033E680(void *w) {
     char buf[128];
     s32 s1, s2;
@@ -2720,6 +2722,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033ED18);
 #else
 extern void func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
 extern u8 D_1ADDA8[], D_1ADDB0[];
+/* func_0033ED18: caption twin drawing localized string 0x2C30 (flag D_1A7BBA) at (0x100,0xAA) in colour 0x80F0F0F0. */
 void func_0033ED18(void *e) {
     char buf[128];
     s32 s1, s2;
@@ -3069,6 +3072,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033FCE8);
 #else
 extern f32 D_1ADF38, D_1ADF3C, D_1ADF40, D_1ADF44;
 extern f32 D_1ADF48, D_1ADF4C, D_1ADF50, D_1ADF54;
+/* func_0033FCE8: lay out the stats-panel value rows - four GuiElementSetPos at anchor *(w+0x2D8) plus the D_1ADF38.. offset table. */
 void func_0033FCE8(void *w) {
     f32 *anchor = *(f32 **)((char *)w + 0x2D8);
 
@@ -3086,6 +3090,7 @@ extern s32 CountPlatinumBolts(s32 group);
 extern s32 func_002B1D18(s32 idx);
 extern u8 g_mapVertexData[], D_1ADBA8[], D_1ADF70[];
 extern s32 D_1ADF68;
+/* func_0033FDD8: map-screen per-planet bolt-stats draw - two-pass into w+0x6C0 (localized planet name, then platinum tally via CountPlatinumBolts + func_002B1D18), repositioning/drawing row w+0x470. */
 void func_0033FDD8(void *w) {
     s32 idx = *(s32 *)(g_mapVertexData + 0x230);
 
@@ -3797,6 +3802,7 @@ void func_00343558(void *p) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343578);
 #else
 extern f32 D_1AE198, D_1AE19C, D_1AE1A0;
+/* func_00343578: draw loop - per-element GuiElementSetPos/GuiSpriteSetTexture then draw, over the shared element at w+0x130. */
 void func_00343578(void *w) {
     GuiElement *e = (GuiElement *)((char *)w + 0x130);
     s32 count = *(s32 *)((char *)w + 0x17C);
@@ -4111,6 +4117,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344558);
 extern s32 func_001157AC(const char *s); /* SDK strlen */
 extern u8 D_1AE1F8[], D_1ADBA8[];
 extern f32 D_1AE1F0, D_1AE1F4;
+/* func_00344558: caption finalizer - select strId by mode 0/1/2 (0x2BE7/0x2BE8/0x2BEA), branch on strlen<0x31, then final GuiElementSetPos. */
 void func_00344558(void *w) {
     char buf[256];
     s32 mode = *(s32 *)((char *)w + 0x2C4);
@@ -4175,6 +4182,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344800);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344808);
 #else
 extern void func_00343AF8(void *w);
+/* func_00344808: draw the titled sprite set + resolve the equipped-weapon caption (hidden-guard; g_itemEquippedSlot[func_00343AD0]->g_weaponTable[slot*0xE0+8]->GetLocalizedString). */
 void func_00344808(void *w) {
     s32 slot;
     s32 captionId;
@@ -4347,6 +4355,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344F18);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00345080);
 #else
+/* func_00345080: weapon-grid input handler - LEFT/RIGHT/UP/DOWN flag dispatch (incl. the col<0 reused-col exit) updating the +0x4B4 selection index. */
 void func_00345080(void *w, void *a) {
     s32 flags = (s32)a;
     s32 col, row;
@@ -4399,6 +4408,7 @@ void func_00345080(void *w, void *a) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003451B8);
 #else
 extern s16 D_1AA856;
+/* func_003451B8: mode-1 nav state machine - directional flag dispatch, finalizing +0x4B4 from D_1AA856. */
 void func_003451B8(void *w, void *a) {
     s32 flags = (s32)a;
 
@@ -4437,6 +4447,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003457A0);
 #else
 extern f32 D_1AE298, D_1AE29C, D_1AE2A0, D_1AE2A4;
 extern f32 D_1AE2A8, D_1AE2AC, D_1AE2B0, D_1AE2B4;
+/* func_003457A0: weapon-panel tail layout - four GuiElementSetPos at shared anchor *(w+0x4A0) plus the D_1AE298.. offset table. */
 void func_003457A0(void *w) {
     f32 *anchor = *(f32 **)((char *)w + 0x4A0);
 
