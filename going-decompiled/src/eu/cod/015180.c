@@ -33,8 +33,8 @@ struct SemaParam {
     u32 option;
 };
 
-extern s32 D_00133E74;
-extern s32 D_0013A308;
+extern s32 D_00133EF4;
+extern s32 D_0013A388;
 
 /* 0xCDCDCDCD inter-function-fill class (func_001158F4, func_0011F364,
  * func_0011FB8C, func_00124414, func_00125D94, func_00126104, func_00126284,
@@ -72,7 +72,7 @@ extern s32 D_0013A308;
  * dsll32/dsra32 sign-extend that cc1 elides for an s32-returning callee. Both
  * are codegen/ABI forms this compiler won't reproduce. Left as INCLUDE_ASM. */
 
-extern s32 D_00134688;
+extern s32 D_00134708;
 
 extern void func_0011B050(s32 count, s32 *value);
 
@@ -99,9 +99,9 @@ typedef struct ListHead0013CA40 {
     void *tail;       /* 0xC */
     s32 firstSlot[4]; /* 0x10 */
 } ListHead0013CA40;
-extern ListHead0013CA40 D_0013CA40;
+extern ListHead0013CA40 D_0013CAC0;
 
-extern s32 D_0013D080[];
+extern s32 D_0013D100[];
 
 /* func_0011CB58: subsystem reset — DisableDmac(5); func_0011A950(5,
  * D_0013CF54); D_0013469C = 0. Body is structurally identical at 98.46%, but the
@@ -109,14 +109,14 @@ extern s32 D_0013D080[];
  * $2 (v0); a one-register global allocation offset this cc1 won't reproduce from
  * source. Left as INCLUDE_ASM. */
 
-extern char *D_0013CF64; /* 8-byte-stride (key,value) table for negative indices */
-extern char *D_0013CF6C; /* 8-byte-stride (key,value) table for indices >= 0 */
+extern char *D_0013CFE4; /* 8-byte-stride (key,value) table for negative indices */
+extern char *D_0013CFEC; /* 8-byte-stride (key,value) table for indices >= 0 */
 
 extern s32 func_0011CBE8(s32 arg0, s32 arg1, s32 arg2, s32 arg3, s32 arg4,
                          s32 arg5, s32 arg6);
 
 extern void func_0011CB58(void);
-extern s32 D_001346A0;
+extern s32 D_00134720;
 
 /* func_0011D208: allocate the next slot of a circular pool described by arg0
  * (arg0[5]=slot base, arg0[6]=slot count, arg0[9]=counter). index = counter %
@@ -141,48 +141,48 @@ extern s32 D_001346A0;
  * the original two-exit branch shape. Left as INCLUDE_ASM. */
 
 extern s32 func_0011AC20(s32 *desc);
-extern s32 D_00134738;
-extern s32 D_0013473C;
+extern s32 D_001347B8;
+extern s32 D_001347BC;
 
 /* func_0011D950: look up slot `idx` in the fixed 0x20-entry table D_0013FE80
  * (0x10-byte stride). After the lazy-init (func_0011D868) and acquiring the
- * table lock (func_0011AC60(D_00134738)), release the lock (func_0011AC40) and
+ * table lock (func_0011AC60(D_001347B8)), release the lock (func_0011AC40) and
  * return the slot address when idx (unsigned) is in range, else 0. Body
- * `func_0011D868(); func_0011AC60(D_00134738); if (idx >= 0x20) {
- * func_0011AC40(D_00134738); return 0; } slot = &D_0013FE80[idx*0x10];
- * func_0011AC40(D_00134738); return slot;` reaches 99.6% — every instruction
+ * `func_0011D868(); func_0011AC60(D_001347B8); if (idx >= 0x20) {
+ * func_0011AC40(D_001347B8); return 0; } slot = &D_0013FE80[idx*0x10];
+ * func_0011AC40(D_001347B8); return slot;` reaches 99.6% — every instruction
  * lines up except the sltiu range-check lands in $2 here while the original
  * allocates it to $3 (keeping $2 for the table base). A one-register
  * allocation choice this cc1 won't reproduce. Left as INCLUDE_ASM. */
 
 extern s32 func_0011AC60(s32 handle);
-extern s32 D_00134734;
+extern s32 D_001347B4;
 
-/* func_0011DDC8: tail-call forward of the global handle D_00134734 to
+/* func_0011DDC8: tail-call forward of the global handle D_001347B4 to
  * func_0011AC40 (the original is a frameless `j func_0011AC40`). ee-gcc 2.9 does
  * not apply sibling-call optimisation for this shape — it emits a full jal with
  * a stack frame — so it can't match from C. Left as INCLUDE_ASM. */
 
-extern s32 D_0013472C;
-extern u8 D_001400A8[4];
+extern s32 D_001347AC;
+extern u8 D_00140128[4];
 
 /* func_0011E740: 0x60 bytes of inter-function padding (`addiu sp,+0xN; nop`
  * filler words) split off by symbol_addrs size:0x60; the real function begins at
  * sceSifInitIopHeap. Pure padding, no C. */
 
 /* sceSifInitIopHeap: real function recovered from the splat mis-split above (init/
- * retry loop around sceSifBindRpc, writes D_00134744). Boundary now correct;
+ * retry loop around sceSifBindRpc, writes D_001347C4). Boundary now correct;
  * body not yet decompiled. Left as INCLUDE_ASM. */
 
 extern s32 func_0011D620(void *a0, s32 a1, s32 a2, void *a3, s32 a4,
                          void *a5, s32 a6, s32 a7, s32 a8);
-extern s32 D_00134744;
-extern s32 D_00140140;
+extern s32 D_001347C4;
 extern s32 D_001401C0;
-extern s32 D_00140180;
+extern s32 D_00140240;
+extern s32 D_00140200;
 
-extern s32 D_00134748;
-extern u8 D_00140528[4];
+extern s32 D_001347C8;
+extern u8 D_001405A8[4];
 
 extern void func_0011EB00(s32 arg0, s32 arg1, s32 arg2, void *outbuf);
 
@@ -195,25 +195,25 @@ extern s32 func_0011B030(s32 arg0);
  * tail `j` and hoists the $ra restore into the bne delay slot — a codegen-shape
  * mismatch not expressible in source. Left as INCLUDE_ASM. */
 
-extern s32 D_00134DB8;
-extern s32 D_00134DBC;
+extern s32 D_00134E38;
+extern s32 D_00134E3C;
 
-extern s32 D_001417EC;
+extern s32 D_0014186C;
 extern void func_0011FB98(void);
 
-extern void (*D_00135D34)(void);
+extern void (*D_00135DB4)(void);
 
 extern s32 func_00115544(const char *a, const char *b);
 
 extern s32 func_00115F28(s32 size);
 
-extern s32 (*D_00135D38)(void);
+extern s32 (*D_00135DB8)(void);
 
 extern s32 func_00120498(void);
 
-extern s32 D_00141800;
-extern u8 D_001417F0[16];
-extern u8 D_00141808;
+extern s32 D_00141880;
+extern u8 D_00141870[16];
+extern u8 D_00141888;
 
 /* Decomposed IEEE-754 double produced by func_00122760: a class tag, sign,
  * unbiased exponent and the explicit mantissa. */
@@ -248,7 +248,7 @@ extern void func_00124540(void);
 extern s32 func_00124B88(s32 arg0);
 extern s32 func_0011F5E0(void);
 extern s32 func_0011F628(void);
-extern s32 D_00141840;
+extern s32 D_001418C0;
 
 /* func_001248B0: if the callback D_00141844 is installed and the suppression
  * flag D_001363A4 is clear, invoke the callback with the parameter D_00141848.
@@ -258,7 +258,7 @@ extern s32 D_00141840;
  * (func_001248F8 even references `func_001248B0 + 0x8` as the real entry). Can't
  * be matched at the unit level without a re-split. Left as INCLUDE_ASM. */
 
-extern s32 D_00137E00;
+extern s32 D_00137E80;
 
 /**
  * Normalise a handle/id: if its top nibble (bits 31..28) equals 7, clear the
@@ -266,11 +266,11 @@ extern s32 D_00137E00;
  * return arg0 unchanged.
  */
 
-extern s32 D_00137E30[];
+extern s32 D_00137EB0[];
 
 /**
- * Bounds-checked lookup into the 10-entry table D_00137E30. Returns
- * D_00137E30[arg0] for arg0 in [0,9], or 0 if arg0 is out of range.
+ * Bounds-checked lookup into the 10-entry table D_00137EB0. Returns
+ * D_00137EB0[arg0] for arg0 in [0,9], or 0 if arg0 is out of range.
  */
 
 /* EU note: the USA padding-pin split for func_00127220 has no clean EU mirror —
@@ -292,47 +292,47 @@ struct Obj127220 {
 extern s32 func_00127508(s32 arg0, s32 arg1, s32 arg2, s32 arg3);
 extern s32 D_00137E68;
 
-extern s32 *D_00141B28;
-extern s32 *D_00141B2C;
-extern s32 *D_00141B30;
+extern s32 *D_00141BA8;
+extern s32 *D_00141BAC;
+extern s32 *D_00141BB0;
 
-extern s32 D_00143108;
-extern s32 D_00143180;
+extern s32 D_00143188;
+extern s32 D_00143200;
 
-/* func_00128440(arg0): open the D_00143180 subsystem in mode 0x80000904 with
- * arg0 stored at (&D_00143180)[1], via func_0011D620; on failure log D_0013B868
- * (func_00128898) and return 0, else return the handle D_00143180. ~70% — the
- * original parks %hi(D_00143180) in callee-saved $16 and reuses it for the final
- * `lw $2,%lo(D_00143180)($16)`, and selects a `bgez` over the `bgezl` ee-gcc
+/* func_00128440(arg0): open the D_00143200 subsystem in mode 0x80000904 with
+ * arg0 stored at (&D_00143200)[1], via func_0011D620; on failure log D_0013B868
+ * (func_00128898) and return 0, else return the handle D_00143200. ~70% — the
+ * original parks %hi(D_00143200) in callee-saved $16 and reuses it for the final
+ * `lw $2,%lo(D_00143200)($16)`, and selects a `bgez` over the `bgezl` ee-gcc
  * emits for the early-return shape. A reg-alloc + branch-form mismatch this cc1
  * won't reproduce. Left as INCLUDE_ASM. */
 
-extern s32 D_00137E80;
-extern u8 D_00143640[];
+extern s32 D_00137F00;
+extern u8 D_001436C0[];
 
 /* func_00128A48: 0x8 bytes of inter-function padding split off by symbol_addrs
  * size:0x8; the real function begins at func_00128A50. Pure padding, no C. */
 
 /* func_00128A50: real function recovered from the splat mis-split above (indexes
- * the 0x330-stride table D_00143640, dispatches to func_00128D58/DB0/E98 + a
+ * the 0x330-stride table D_001436C0, dispatches to func_00128D58/DB0/E98 + a
  * memcpy). Boundary now correct; body not yet decompiled. Left as INCLUDE_ASM. */
 
 /* func_00128D58(index): acquire a resource via func_00128578(index); on success
  * (non-negative handle) record it at entry+0x8 and set the active flag at
- * entry+0x4 in the 0x330-stride D_00143640 table. ~87% — the original keeps two
+ * entry+0x4 in the 0x330-stride D_001436C0 table. ~87% — the original keeps two
  * separate base registers for the same entry pointer ($5 and a copied $3) and
  * stores result-then-flag; ee-gcc uses one base and reschedules the pair. A
  * scheduling/reg-alloc shape this cc1 won't reproduce. Left as INCLUDE_ASM. */
 
 /* func_00128E18(index): lazily refresh the two-word state cache D_00137E88 from
- * table entry `index` (stride 0x330 in D_00143640; object pointer at +0xC).
+ * table entry `index` (stride 0x330 in D_001436C0; object pointer at +0xC).
  * Returns 0 when obj[0x7C] is 0 or the cache already holds the (obj[0x7C],
  * (obj+0x80)[0x7C]) pair; otherwise updates the cache and returns 1. Behaviour
  * recovered, but the original spills obj/next to a stack frame and ee-gcc keeps
  * them in registers here, giving a different instruction shape. Left as
  * INCLUDE_ASM. */
 
-extern s32 D_00137F10[];
+extern s32 D_00137F90[];
 
 extern s32 func_0012C788(s32 *arg0, s32 arg1);
 extern s32 func_0012C878(s32 *arg0, s32 arg1);
@@ -452,7 +452,7 @@ extern void func_00130240(void *buf);
  * sibling-call it (emits jal + frame). Left as INCLUDE_ASM. */
 
 extern void func_00131540(void);
-extern s8 D_00138158[];
+extern s8 D_001381D8[];
 
 /* EU note: the USA padding-pin split for func_00131628 has no clean EU mirror —
  * the EU split keeps the inter-function padding fused (asm symbol func_00131620),
@@ -491,18 +491,18 @@ extern void func_00131908(u8 *arg0);
 
 
 /**
- * Accessor: return the global pointer/handle D_00133E74 (the base of the
+ * Accessor: return the global pointer/handle D_00133EF4 (the base of the
  * subsystem context block this unit operates on).
  */
 s32 func_00115200(void) {
-    return D_00133E74;
+    return D_00133EF4;
 }
 
 /**
- * Accessor: return the address of the global D_0013A308.
+ * Accessor: return the address of the global D_0013A388.
  */
 s32 *func_00115210(void) {
-    return &D_0013A308;
+    return &D_0013A388;
 }
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00115220);
@@ -557,19 +557,19 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00116360);
 
 /**
  * Seed the random-number generator: store arg0 as the RNG state word at
- * D_00133E74 + 0x58 (the seed consumed by func_001163B0).
+ * D_00133EF4 + 0x58 (the seed consumed by func_001163B0).
  */
 void func_001163A0(s32 arg0) {
-    *(s32 *)(D_00133E74 + 0x58) = arg0;
+    *(s32 *)(D_00133EF4 + 0x58) = arg0;
 }
 
 /**
- * Linear-congruential RNG. Advances the 32-bit state at D_00133E74 + 0x58 with
+ * Linear-congruential RNG. Advances the 32-bit state at D_00133EF4 + 0x58 with
  * the classic glibc constants (state = state*0x41C64E6D + 0x3039) and returns
  * the new state masked to 31 bits (non-negative).
  */
 s32 func_001163B0(void) {
-    s32 *p = (s32 *)(D_00133E74 + 0x58);
+    s32 *p = (s32 *)(D_00133EF4 + 0x58);
     s32 v = *p * 0x41C64E6D + 0x3039;
     *p = v;
     return v & 0x7FFFFFFF;
@@ -1000,10 +1000,10 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011B080);
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011B090);
 
 /**
- * Reset the global counter/flag D_00134688 to 0.
+ * Reset the global counter/flag D_00134708 to 0.
  */
 void func_0011B0A0(void) {
-    D_00134688 = 0;
+    D_00134708 = 0;
 }
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011B0B0);
@@ -1188,15 +1188,15 @@ void func_0011BAA0(s32 arg0) {
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011BAC4);
 
 /**
- * Initialise the global list head D_0013CA40: store `value`, clear the entry
+ * Initialise the global list head D_0013CAC0: store `value`, clear the entry
  * count, and point both head and tail links at the inline first slot (+0x10);
- * returns &D_0013CA40. (The volatile stores pin the original head/count/tail
+ * returns &D_0013CAC0. (The volatile stores pin the original head/count/tail
  * store order, which the scheduler would otherwise batch — this is the
  * volatile-pinning technique that cracked the old ~98.5% wall.)
  */
 s32 *func_0011BAC8(s32 value) {
-    s32 *base = (s32 *)&D_0013CA40;
-    D_0013CA40.value = value;
+    s32 *base = (s32 *)&D_0013CAC0;
+    D_0013CAC0.value = value;
     *(volatile s32 *)(base + 2) = (s32)(base + 4);
     *(volatile s32 *)(base + 1) = 0;
     *(volatile s32 *)(base + 3) = (s32)(base + 4);
@@ -1658,11 +1658,11 @@ void func_0011C8A0(s32 *arg0, s32 *arg1) {
 }
 
 /**
- * Lookup into the global table D_0013D080: return D_0013D080[arg0]
+ * Lookup into the global table D_0013D100: return D_0013D100[arg0]
  * (no bounds checking).
  */
 s32 func_0011C8B0(s32 arg0) {
-    return D_0013D080[arg0];
+    return D_0013D100[arg0];
 }
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011C8C8);
@@ -1673,7 +1673,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011CB58);
 
 /**
  * Store a (key,value) pair into the sign-selected table pair: entry `index`
- * of D_0013CF6C for index >= 0, of D_0013CF64 for index < 0 (the negative
+ * of D_0013CFEC for index >= 0, of D_0013CFE4 for index < 0 (the negative
  * index reaches backwards from that table's base); key at slot+0x0, value at
  * slot+0x4. (Reusing `index` for the loaded table pointer keeps it in $a0
  * like the original, the pre-computed `addr` rides the bgez delay slot, and
@@ -1682,9 +1682,9 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011CB58);
 void func_0011CB90(s32 index, s32 key, s32 value) {
     s32 addr = index * 8;
     if (index < 0) {
-        index = (s32)D_0013CF64;
+        index = (s32)D_0013CFE4;
     } else {
-        index = (s32)D_0013CF6C;
+        index = (s32)D_0013CFEC;
     }
     addr += index;
     ((volatile s32 *)addr)[1] = value;
@@ -1698,9 +1698,9 @@ void func_0011CB90(s32 index, s32 key, s32 value) {
 void func_0011CBC0(s32 index) {
     s32 addr = index * 8;
     if (index < 0) {
-        index = (s32)D_0013CF64;
+        index = (s32)D_0013CFE4;
     } else {
-        index = (s32)D_0013CF6C;
+        index = (s32)D_0013CFEC;
     }
     addr += index;
     *(s32 *)addr = 0;
@@ -1734,11 +1734,11 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011CF78);
 
 /**
  * Reset helper: run the subsystem reset routine func_0011CB58(), then clear the
- * global state word D_001346A0 to 0.
+ * global state word D_00134720 to 0.
  */
 void func_0011D118(void) {
     func_0011CB58();
-    D_001346A0 = 0;
+    D_00134720 = 0;
 }
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011D140);
@@ -1773,19 +1773,19 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011D810);
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011D850);
 
 /**
- * Lazily create the two paired handles D_00134738 / D_0013473C (sentinel -1 =
+ * Lazily create the two paired handles D_001347B8 / D_001347BC (sentinel -1 =
  * uninitialised on the first): build a small descriptor on the stack (fields 1
  * and 2 set, field 5 cleared), then create both handles from it via
- * func_0011AC20. A no-op once D_00134738 exists.
+ * func_0011AC20. A no-op once D_001347B8 exists.
  */
 void func_0011D868(void) {
-    if (D_00134738 == -1) {
+    if (D_001347B8 == -1) {
         s32 desc[8];
         desc[5] = 0;
         desc[2] = 1;
         desc[1] = 1;
-        D_00134738 = func_0011AC20(desc);
-        D_0013473C = func_0011AC20(desc);
+        D_001347B8 = func_0011AC20(desc);
+        D_001347BC = func_0011AC20(desc);
     }
 }
 
@@ -1796,27 +1796,27 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011D950);
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011D9C0);
 
 /**
- * Lazily create the singleton handle D_00134734 (sentinel -1 = uninitialised):
+ * Lazily create the singleton handle D_001347B4 (sentinel -1 = uninitialised):
  * build a small descriptor on the stack (fields 1 and 2 set, field 5 cleared),
  * hand it to func_0011AC20 and cache the resulting handle. A no-op once created.
  */
 void func_0011DD48(void) {
-    if (D_00134734 == -1) {
+    if (D_001347B4 == -1) {
         s32 desc[8];
         desc[5] = 0;
         desc[2] = 1;
         desc[1] = 1;
-        D_00134734 = func_0011AC20(desc);
+        D_001347B4 = func_0011AC20(desc);
     }
 }
 
 /**
  * Run the func_0011DD48 teardown step, then forward the global handle
- * D_00134734 to func_0011AC60. Always returns 0.
+ * D_001347B4 to func_0011AC60. Always returns 0.
  */
 s32 func_0011DD98(void) {
     func_0011DD48();
-    func_0011AC60(D_00134734);
+    func_0011AC60(D_001347B4);
     return 0;
 }
 
@@ -1829,12 +1829,12 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011DE08);
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011E010);
 
 /**
- * Reset the subsystem state guarded by D_0013472C: clear the flag word to 0 and
- * zero the 4-byte descriptor at D_001400A8. Always returns 0.
+ * Reset the subsystem state guarded by D_001347AC: clear the flag word to 0 and
+ * zero the 4-byte descriptor at D_00140128. Always returns 0.
  */
 s32 func_0011E0A0(void) {
-    D_0013472C = 0;
-    memset(D_001400A8, 0, 4);
+    D_001347AC = 0;
+    memset(D_00140128, 0, 4);
     return 0;
 }
 
@@ -1847,22 +1847,22 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011E4E0);
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011E740);
 
 /**
- * Register a request with the D_00140180 service: bail out returning 0 if the
- * service slot D_00134744 is inactive (negative); otherwise stash the request
- * parameters (arg1, arg0, arg2) into the D_001401C0 descriptor and submit it via
- * func_0011D620. Returns the resulting handle D_00140180 on success, 0 on
+ * Register a request with the D_00140200 service: bail out returning 0 if the
+ * service slot D_001347C4 is inactive (negative); otherwise stash the request
+ * parameters (arg1, arg0, arg2) into the D_00140240 descriptor and submit it via
+ * func_0011D620. Returns the resulting handle D_00140200 on success, 0 on
  * failure.
  */
 s32 func_0011E828(s32 arg0, s32 arg1, s32 arg2) {
-    if (D_00134744 < 0) {
+    if (D_001347C4 < 0) {
         return 0;
     }
-    (&D_001401C0)[0] = arg1;
-    (&D_001401C0)[1] = arg0;
-    (&D_001401C0)[2] = arg2;
-    if (func_0011D620(&D_00140140, 4, 0, &D_001401C0, 0xC,
-                      &D_00140180, 4, 0, 0) >= 0) {
-        return D_00140180;
+    (&D_00140240)[0] = arg1;
+    (&D_00140240)[1] = arg0;
+    (&D_00140240)[2] = arg2;
+    if (func_0011D620(&D_001401C0, 4, 0, &D_00140240, 0xC,
+                      &D_00140200, 4, 0, 0) >= 0) {
+        return D_00140200;
     }
     return 0;
 }
@@ -1876,13 +1876,13 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011E938);
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011EA38);
 
 /**
- * Reset the subsystem state guarded by D_00134748: set the flag word to -1
- * (uninitialised sentinel) and zero the 4-byte descriptor at D_00140528.
+ * Reset the subsystem state guarded by D_001347C8: set the flag word to -1
+ * (uninitialised sentinel) and zero the 4-byte descriptor at D_001405A8.
  * Always returns 0.
  */
 s32 func_0011EAC8(void) {
-    D_00134748 = -1;
-    memset(D_00140528, 0, 4);
+    D_001347C8 = -1;
+    memset(D_001405A8, 0, 4);
     return 0;
 }
 
@@ -2051,7 +2051,7 @@ s32 func_0011F628(void) {
 }
 
 /**
- * Create the paired handles D_00134DB8 / D_00134DBC from two identical
+ * Create the paired handles D_00134E38 / D_00134E3C from two identical
  * descriptors (each with fields 1 and 2 set to 1) via func_0011AC20.
  */
 void func_0011F640(void) {
@@ -2061,8 +2061,8 @@ void func_0011F640(void) {
     desc1[2] = 1;
     desc2[1] = 1;
     desc2[2] = 1;
-    D_00134DB8 = func_0011AC20(desc1);
-    D_00134DBC = func_0011AC20(desc2);
+    D_00134E38 = func_0011AC20(desc1);
+    D_00134E3C = func_0011AC20(desc2);
 }
 
 /**
@@ -2345,13 +2345,13 @@ void func_0011FAB8(void) {
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011FB8C);
 
 /**
- * One-shot initialiser: the first time it is called (guard word D_001417EC is
+ * One-shot initialiser: the first time it is called (guard word D_0014186C is
  * still zero) it sets the guard and tail-calls func_0011FB98 to do the real
  * setup; subsequent calls do nothing.
  */
 void func_0011FC48(void) {
-    if (D_001417EC == 0) {
-        D_001417EC = 1;
+    if (D_0014186C == 0) {
+        D_0014186C = 1;
         func_0011FB98();
     }
 }
@@ -2378,10 +2378,10 @@ s64 func_0011FC68(s64 a, s64 b) {
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00120354);
 
 /**
- * Invoke the installed callback held in the global function pointer D_00135D34.
+ * Invoke the installed callback held in the global function pointer D_00135DB4.
  */
 void func_00120368(void) {
-    D_00135D34();
+    D_00135DB4();
 }
 
 /**
@@ -2416,48 +2416,48 @@ s32 *func_001203C8(void) {
 }
 
 /**
- * Return the value produced by the installed callback D_00135D38 (a base
+ * Return the value produced by the installed callback D_00135DB8 (a base
  * value/pointer queried by the +4 / +8 variants below).
  */
 s32 func_00120420(void) {
-    return D_00135D38();
+    return D_00135DB8();
 }
 
 /**
- * Return D_00135D38() + 8 (the base value from the callback, offset by 8 bytes).
+ * Return D_00135DB8() + 8 (the base value from the callback, offset by 8 bytes).
  */
 s32 func_00120448(void) {
-    return D_00135D38() + 8;
+    return D_00135DB8() + 8;
 }
 
 /**
- * Install func_00120498 as the active callback D_00135D38 and invoke it once
+ * Install func_00120498 as the active callback D_00135DB8 and invoke it once
  * (priming its lazily-initialised state).
  */
 void func_00120470(void) {
-    D_00135D38 = func_00120498;
-    D_00135D38();
+    D_00135DB8 = func_00120498;
+    D_00135DB8();
 }
 
 /**
- * Lazily initialise and return the 16-byte singleton at D_001417F0. On first
- * call (guarded by the flag D_00141800) the block is zeroed and its field at
- * offset 4 is pointed at D_00141808. Always returns the block's address.
+ * Lazily initialise and return the 16-byte singleton at D_00141870. On first
+ * call (guarded by the flag D_00141880) the block is zeroed and its field at
+ * offset 4 is pointed at D_00141888. Always returns the block's address.
  */
 s32 func_00120498(void) {
-    if (!D_00141800) {
-        D_00141800 = 1;
-        memset(D_001417F0, 0, 0x10);
-        *(u8 **)(D_001417F0 + 4) = &D_00141808;
+    if (!D_00141880) {
+        D_00141880 = 1;
+        memset(D_00141870, 0, 0x10);
+        *(u8 **)(D_00141870 + 4) = &D_00141888;
     }
-    return (s32)D_001417F0;
+    return (s32)D_00141870;
 }
 
 /**
- * Return D_00135D38() + 4 (the base value from the callback, offset by 4 bytes).
+ * Return D_00135DB8() + 4 (the base value from the callback, offset by 4 bytes).
  */
 s32 func_00120500(void) {
-    return D_00135D38() + 4;
+    return D_00135DB8() + 4;
 }
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00120528);
@@ -3502,7 +3502,7 @@ void func_00124568(s32 id) {
 }
 
 /**
- * Install `handler` as the active interrupt handler in the global D_00141840.
+ * Install `handler` as the active interrupt handler in the global D_001418C0.
  * Aborts (returning 0) if func_00124B88(1) reports the slot is busy. Otherwise,
  * with interrupts disabled (func_0011F5E0), swaps in the new handler, restores
  * the prior interrupt-enable state (func_0011F628 when they were on) and returns
@@ -3515,8 +3515,8 @@ s32 func_001245D0(s32 handler) {
         return 0;
     }
     wasEnabled = func_0011F5E0();
-    old = D_00141840;
-    D_00141840 = handler;
+    old = D_001418C0;
+    D_001418C0 = handler;
     if (wasEnabled != 0) {
         func_0011F628();
     }
@@ -3566,10 +3566,10 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001256D8);
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001257D0);
 
 /**
- * Accessor: return the address of the global D_00137E00.
+ * Accessor: return the address of the global D_00137E80.
  */
 s32 *func_00125960(void) {
-    return &D_00137E00;
+    return &D_00137E80;
 }
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012596C);
@@ -3629,7 +3629,7 @@ void func_00126F00(u8 *dst, s32 count) {
 /* func_00126F38 is sceDmaGetChan - libdma channel-struct lookup (kept func_ name - matched). */
 s32 func_00126F38(u32 arg0) {
     if (arg0 < 0xA) {
-        return D_00137E30[arg0];
+        return D_00137EB0[arg0];
     }
     return 0;
 }
@@ -3673,14 +3673,14 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", McSync);
 /**
  * Read fields from the structure at physical address arg0 (accessed through the
  * uncached mirror, arg0 | 0x20000000) and publish them through three optional
- * global out-pointers: p[0] -> *D_00141B28, p[1] -> *D_00141B2C, and the word at
- * p+0x90 -> *D_00141B30. Each store is skipped if its out-pointer is null.
+ * global out-pointers: p[0] -> *D_00141BA8, p[1] -> *D_00141BAC, and the word at
+ * p+0x90 -> *D_00141BB0. Each store is skipped if its out-pointer is null.
  */
 void func_00127C68(u32 arg0) {
     s32 *p = (s32 *)(arg0 | 0x20000000);
-    if (D_00141B28) *D_00141B28 = p[0];
-    if (D_00141B2C) *D_00141B2C = p[1];
-    if (D_00141B30) *D_00141B30 = *(s32 *)((char *)p + 0x90);
+    if (D_00141BA8) *D_00141BA8 = p[0];
+    if (D_00141BAC) *D_00141BAC = p[1];
+    if (D_00141BB0) *D_00141BB0 = *(s32 *)((char *)p + 0x90);
 }
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", McGetInfo);
@@ -3698,15 +3698,15 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", McMkDir);
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", McGetEntSpace);
 
 /**
- * Initialise the D_00143180 subsystem by calling func_0011D620 with the config
- * block at &D_00143108, mode 0x80000963, two 0x400-sized buffers both pointing
- * at &D_00143180, and zeroed trailing arguments; returns the resulting handle
- * stored in D_00143180.
+ * Initialise the D_00143200 subsystem by calling func_0011D620 with the config
+ * block at &D_00143188, mode 0x80000963, two 0x400-sized buffers both pointing
+ * at &D_00143200, and zeroed trailing arguments; returns the resulting handle
+ * stored in D_00143200.
  */
 s32 func_00128250(void) {
-    func_0011D620(&D_00143108, 0x80000963, 0, &D_00143180, 0x400,
-                  &D_00143180, 0x400, 0, 0);
-    return D_00143180;
+    func_0011D620(&D_00143188, 0x80000963, 0, &D_00143200, 0x400,
+                  &D_00143200, 0x400, 0, 0);
+    return D_00143200;
 }
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001282A8);
@@ -3726,16 +3726,16 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001287A8);
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00128898);
 
 /**
- * Reset the 16-entry table at D_00143640 (each entry is 0x330 bytes): zero the
+ * Reset the 16-entry table at D_001436C0 (each entry is 0x330 bytes): zero the
  * first three words of every entry across the 0x3300-byte span, set the
- * initialised flag D_00137E80 to 1, and return 1.
+ * initialised flag D_00137F00 to 1, and return 1.
  */
 s32 func_001288C0(void) {
     s32 *entry;
     s32 *end;
-    D_00137E80 = 1;
-    entry = (s32 *)D_00143640;
-    end = (s32 *)(D_00143640 + 0x3300);
+    D_00137F00 = 1;
+    entry = (s32 *)D_001436C0;
+    end = (s32 *)(D_001436C0 + 0x3300);
     do {
         entry[0] = 0;
         entry[1] = 0;
@@ -3867,12 +3867,12 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012C230);
 
 /**
  * Issue an IPU command: write `cmd` to the IPU_CMD hardware register
- * (0x10002000), then look up D_00137F10[cmd >> 28] (indexed by the command's
+ * (0x10002000), then look up D_00137F90[cmd >> 28] (indexed by the command's
  * top nibble = the IPU opcode) and cache it in arg0->field_0x818.
  */
 void func_0012C380(s32 *arg0, u32 cmd) {
     *(volatile u32 *)0x10002000 = cmd;
-    *(s32 *)((u8 *)arg0 + 0x818) = D_00137F10[cmd >> 28];
+    *(s32 *)((u8 *)arg0 + 0x818) = D_00137F90[cmd >> 28];
 }
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012C3B0);
@@ -4447,15 +4447,15 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0013153C);
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00131540);
 
 /**
- * Lazily initialise the global block D_00138158 (calling func_00131540() the
+ * Lazily initialise the global block D_001381D8 (calling func_00131540() the
  * first time, detected by its leading byte being 0), then return 1 if byte 4 of
  * the block equals 0x54 ('T'), else 0 — a region/territory check.
  */
 s32 func_001315E0(void) {
-    if (D_00138158[0] == 0) {
+    if (D_001381D8[0] == 0) {
         func_00131540();
     }
-    return D_00138158[4] == 0x54;
+    return D_001381D8[4] == 0x54;
 }
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00131620);
