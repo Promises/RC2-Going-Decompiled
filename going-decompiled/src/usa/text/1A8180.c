@@ -1625,7 +1625,92 @@ f32 func_002AB2C0(Vec4 *cur, Vec4 *target, f32 *vel, f32 b, f32 c, f32 eps) {
 }
 #endif
 
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB3B0);
+#else
+/**
+ * One-dimensional acceleration-limited "arrival" controller: advance a position
+ * *pPos toward `target` by integrating a velocity *pVel that is itself ramped up
+ * and braked so the motion decelerates to a stop at the target.
+ *
+ *   target   goal position
+ *   velRate  max change applied to the velocity while spinning up (per step)
+ *   accel    braking/deceleration rate; also the kinematic constant used for the
+ *            stopping-distance test and the sqrt(2*accel*d) arrival speed
+ *   maxSpeed velocity magnitude cap
+ *   pPos     position accumulator (read + written)
+ *   pVel     velocity state (read + written)
+ *
+ * Returns the velocity applied this step, or the residual distance when the
+ * step would reach/overshoot the target (in which case *pPos is snapped to it).
+ *
+ * Behaviour by case:
+ *  - already stopped exactly on target -> return 0.
+ *  - velocity opposing the target (product < 0): bleed |*pVel| by accel, then
+ *    integrate (raw, unclamped) -- kills momentum that points the wrong way.
+ *  - moving toward target, inside braking distance 0.5*vel^2/accel: step the
+ *    velocity toward 0 (by accel, or accel*1.1 when nearly stopped short).
+ *  - moving toward target, outside braking distance: ramp the velocity (by
+ *    velRate) toward the arrival speed sqrt(2*accel*diff), capped at maxSpeed.
+ *  Then integrate: if |newVel| < |diff| add it to *pPos and return it, else
+ *  snap *pPos to target and return diff.
+ */
+f32 func_002AB3B0(f32 target, f32 velRate, f32 accel, f32 maxSpeed, f32 *pPos, f32 *pVel)
+{
+    f32 diff = target - *pPos;
+    f32 absDiff;
+    f32 absVel;
+
+    if (*pVel == 0.0f && diff == 0.0f) {
+        return 0.0f;
+    }
+
+    if (*pVel * diff >= 0.0f) {
+        /* velocity points toward the target (or is stationary) */
+        f32 brakeDist = 0.5f * (*pVel * *pVel) / accel;
+
+        absDiff = GetFloatAbs(diff);
+        if (absDiff < brakeDist) {
+            /* within stopping distance: decelerate toward a halt */
+            absVel = GetFloatAbs(*pVel);
+            if (brakeDist < absDiff + absVel) {
+                func_002AB150(0.0f, accel, pVel);
+            } else {
+                func_002AB150(0.0f, accel * 1.1f, pVel);
+            }
+        } else {
+            /* still approaching: ramp velocity toward the arrival speed */
+            f32 speed = func_002835C0(2.0f * accel * diff);
+            if (maxSpeed < speed) {
+                speed = maxSpeed;
+            }
+            if (diff < 0.0f) {
+                func_002AB150(-speed, velRate, pVel);
+            } else {
+                func_002AB150(speed, velRate, pVel);
+            }
+        }
+
+        absDiff = GetFloatAbs(diff);
+        absVel = GetFloatAbs(*pVel);
+        if (absVel < absDiff) {
+            *pPos = *pPos + *pVel;
+            return *pVel;
+        }
+        *pPos = target;
+        return diff;
+    } else {
+        /* velocity opposes the target: bleed it off by accel, then integrate */
+        if (*pVel >= 0.0f) {
+            *pVel = *pVel - accel;
+        } else {
+            *pVel = *pVel + accel;
+        }
+        *pPos = *pPos + *pVel;
+        return *pVel;
+    }
+}
+#endif
 
 /* func_002AB5A0: wrap an angle into (-pi, pi] (via WrapAnglePiDiff), then when a
  * direction sign is supplied bias the result onto the requested rotation side:
@@ -1722,9 +1807,184 @@ f32 func_002AB700(f32 *p, f32 *vel, s32 mode, f32 target, f32 b, f32 c, f32 d) {
 }
 #endif
 
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB868);
+#else
+/**
+ * Angular counterpart of func_002AB3B0: drive an angle *pAngle toward `target`
+ * with an acceleration-limited angular velocity *pVel, honouring shortest-arc
+ * (-pi, pi] wrapping. Deltas go through func_002AB5A0 (signed wrapped diff on
+ * the chosen rotation side), the accelerating velocity step goes through
+ * func_002AB668 (clamped, wrapping), and the angle integrates via WrapAnglePiSum.
+ *
+ *   target   goal angle
+ *   maxStep  max angle the velocity may move per accelerate step (func_002AB668)
+ *   accel    braking/deceleration rate + kinematic constant
+ *   maxSpeed angular-speed cap
+ *   pAngle   angle accumulator (read + written, kept wrapped)
+ *   pVel     angular velocity (read + written)
+ *   mode     rotation-side selector: 2 => derive the shorter-arc sign from the
+ *            signs of target and *pAngle (as func_002AB700 does); any other value
+ *            is used directly as the sign fed to func_002AB5A0.
+ *
+ * Returns the residual signed angle error: 0 when already stopped on target,
+ * *pVel after an integrating step, or the fresh delta when the step reaches/
+ * overshoots and *pAngle snaps to target.
+ */
+f32 func_002AB868(f32 target, f32 maxStep, f32 accel, f32 maxSpeed, f32 *pAngle, f32 *pVel, s32 mode)
+{
+    s32 sign;
+    f32 delta;
+    f32 absDelta;
+    f32 absVel;
 
+    if (mode == 2) {
+        if (0.0f < target && *pAngle < 0.0f) {
+            sign = 1;
+        } else if (target < 0.0f && 0.0f < *pAngle) {
+            sign = -1;
+        } else {
+            sign = 0;
+        }
+    } else {
+        sign = mode;
+    }
+
+    delta = func_002AB5A0(target, *pAngle, sign);
+
+    if (*pVel == 0.0f && delta == 0.0f) {
+        return 0.0f;
+    }
+
+    if (*pVel * delta >= 0.0f) {
+        /* velocity points toward the target */
+        f32 brakeDist = 0.5f * (*pVel * *pVel) / accel;
+
+        absDelta = GetFloatAbs(delta);
+        if (absDelta < brakeDist) {
+            /* within stopping distance: decelerate the velocity toward a halt */
+            absVel = GetFloatAbs(*pVel);
+            if (brakeDist < absDelta + absVel) {
+                func_002AB150(0.0f, accel, pVel);
+            } else {
+                func_002AB150(0.0f, accel * 1.1f, pVel);
+            }
+        } else {
+            /* still approaching: ramp velocity toward the arrival speed */
+            f32 speed = func_002835C0(2.0f * accel * delta);
+            if (maxSpeed < speed) {
+                speed = maxSpeed;
+            }
+            if (delta < 0.0f) {
+                func_002AB668(-speed, maxStep, pVel, 0);
+            } else {
+                func_002AB668(speed, maxStep, pVel, 0);
+            }
+        }
+
+        absDelta = GetFloatAbs(delta);
+        absVel = GetFloatAbs(*pVel);
+        if (absVel < absDelta) {
+            *pAngle = WrapAnglePiSum(*pVel, *pAngle);
+            return *pVel;
+        }
+        *pAngle = target;
+        return delta;
+    } else {
+        /* velocity opposes the target: bleed it off by accel, then integrate */
+        if (*pVel >= 0.0f) {
+            *pVel = *pVel - accel;
+        } else {
+            *pVel = *pVel + accel;
+        }
+        *pAngle = WrapAnglePiSum(*pVel, *pAngle);
+        return *pVel;
+    }
+}
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ABAE8);
+#else
+/**
+ * Single-state variant of func_002AB3B0: ramp/brake a velocity *pVel so it
+ * arrives at a target `dist` units away, WITHOUT integrating a position (the
+ * caller adds *pVel to its own position each step). `dist` is the signed
+ * remaining distance, passed directly rather than derived from a position.
+ *
+ *   dist     signed distance still to cover
+ *   velRate  max change applied to the velocity while spinning up
+ *   accel    braking/deceleration rate + kinematic constant
+ *   maxSpeed velocity magnitude cap
+ *   pVel     velocity state (read + written)
+ *
+ * Same three cases as func_002AB3B0 (brake inside the stopping distance
+ * 0.5*vel^2/accel; else ramp toward the arrival speed sqrt(2*accel*dist) capped
+ * at maxSpeed; velocity opposing the target is bled off by accel), all via the
+ * clamped-approach step func_002AB150. The finalize clamps *pVel so its
+ * magnitude never exceeds |dist|, so one integration step lands on the target
+ * rather than overshooting. The two callers discard the result, so this is void.
+ */
+void func_002ABAE8(f32 dist, f32 velRate, f32 accel, f32 maxSpeed, f32 *pVel)
+{
+    f32 absDist;
+    f32 absVel;
+
+    if (dist == 0.0f && *pVel == 0.0f) {
+        return;
+    }
+
+    if (*pVel * dist >= 0.0f && dist != 0.0f) {
+        /* velocity points toward the target */
+        f32 brakeDist = 0.5f * (*pVel * *pVel) / accel;
+
+        absDist = GetFloatAbs(dist);
+        if (absDist < brakeDist) {
+            /* within stopping distance: decelerate toward a halt */
+            absVel = GetFloatAbs(*pVel);
+            if (brakeDist < absDist + absVel) {
+                func_002AB150(0.0f, accel, pVel);
+            } else {
+                func_002AB150(0.0f, accel * 1.1f, pVel);
+            }
+        } else {
+            /* still approaching: ramp velocity toward the arrival speed */
+            f32 speed = func_002835C0(2.0f * accel * dist);
+            if (maxSpeed < speed) {
+                speed = maxSpeed;
+            }
+            if (dist < 0.0f) {
+                func_002AB150(-speed, velRate, pVel);
+            } else {
+                func_002AB150(speed, velRate, pVel);
+            }
+        }
+
+        /* don't let the velocity carry past the target in one step */
+        absDist = GetFloatAbs(dist);
+        absVel = GetFloatAbs(*pVel);
+        if (absVel >= absDist) {
+            *pVel = dist;
+        }
+    } else {
+        /* velocity opposes the target (or dist == 0): bleed it off by accel */
+        if (*pVel >= 0.0f) {
+            *pVel = *pVel - accel;
+        } else {
+            *pVel = *pVel + accel;
+        }
+        if (dist < 0.0f) {
+            if (*pVel < dist) {
+                *pVel = dist;
+            }
+        } else if (dist > 0.0f) {
+            if (*pVel > dist) {
+                *pVel = dist;
+            }
+        }
+    }
+}
+#endif
 
 /* func_002ABD00: pack four [0,1] float colour components into a 0xAABBGGRR u32.
  * Each of r/g/b/a (passed in $f12/$f13/$f14/$f15) is scaled by 255.0, truncated

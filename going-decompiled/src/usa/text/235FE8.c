@@ -44,6 +44,9 @@ extern void GuiDialogBoxInitElements(void *p);
 extern void *D_1AD908;
 extern void *D_1AD8E8;
 
+extern u8 g_weaponTable[];              /* 0x239B20 - variant table, stride 0xE0 */
+extern u8 g_itemEquippedSlot[];         /* 0x139568 - itemId -> variant slot */
+
 /* A GUI element: first words are pointers into a shared float-vector pool
  * (pos +0x0, scale +0x4), a color block +0xC, a visibility-scalar pointer
  * +0x10; the vtable lives at +0x30. Only touched fields are typed. */
@@ -2389,7 +2392,23 @@ s32 func_0033D320(void *p, s32 flags) {
 }
 #endif
 
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D3C0);
+#else
+extern void func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
+extern u8 D_1ADDA8[], D_1ADDB0[], D_1A7BB9;
+void func_0033D3C0(void *e) {
+    char buf[128];
+    s32 s1, s2;
+
+    func_0033BF90((char *)e + 8);
+
+    s1 = GetLocalizedString(0x307A);
+    s2 = GetLocalizedString(*(s32 *)(D_1ADDA8 + (D_1A7BB9 ? 4 : 0)));
+    func_00115DA8(buf, (const char *)D_1ADDB0, (const char *)s1, (const char *)s2);
+    func_002801B8(0x100, 0xAA, 0x80F0F0F0, buf, -1);
+}
+#endif
 
 /* func_0033D478: init the embedded dialog-box (at p+0x8), return the object
  * (byte-identical body to func_0033CD80). */
@@ -2541,7 +2560,25 @@ s32 func_0033E5E8(void *p, s32 flags) {
 }
 #endif
 
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E680);
+#else
+extern void func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
+extern u8 D_1ADDA8[], D_1ADDB0[];
+void func_0033E680(void *w) {
+    char buf[128];
+    s32 s1, s2;
+    u32 color;
+
+    func_0033BF90((char *)w + 0x8);
+
+    color = (*(s32 *)((char *)w + 0x2D8) == 0) ? 0x80D0D0D0 : 0x70808080;
+    s1 = GetLocalizedString(0x2C2F);
+    s2 = GetLocalizedString(*(s32 *)(D_1ADDA8 + (D_1A7B9E ? 4 : 0)));
+    func_00115DA8(buf, (const char *)D_1ADDB0, (const char *)s1, (const char *)s2);
+    func_002801B8(0x100, 0xAA, color, buf, -1);
+}
+#endif
 
 /* GuiQuitDialogInitElements: init the embedded dialog-box (at p+0x8), return the
  * object (identical body to func_0033CD80). */
@@ -2678,7 +2715,23 @@ s32 func_0033EC80(void *w, s32 flags) {
 }
 #endif
 
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033ED18);
+#else
+extern void func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
+extern u8 D_1ADDA8[], D_1ADDB0[];
+void func_0033ED18(void *e) {
+    char buf[128];
+    s32 s1, s2;
+
+    func_0033BF90((char *)e + 0x8);
+
+    s1 = GetLocalizedString(0x2C30);
+    s2 = GetLocalizedString(*(s32 *)(D_1ADDA8 + (D_1A7BBA ? 4 : 0)));
+    func_00115DA8(buf, (const char *)D_1ADDB0, (const char *)s1, (const char *)s2);
+    func_002801B8(0x100, 0xAA, 0x80F0F0F0, buf, -1);
+}
+#endif
 
 /* func_0033EDD0: init the embedded dialog-box (at p+0x8), return the object
  * (byte-identical body to func_0033CD80). */
@@ -3011,9 +3064,53 @@ void GuiStatsPanelScreenInit(void *w, GuiPool *pool) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033FAB0);
 
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033FCE8);
+#else
+extern f32 D_1ADF38, D_1ADF3C, D_1ADF40, D_1ADF44;
+extern f32 D_1ADF48, D_1ADF4C, D_1ADF50, D_1ADF54;
+void func_0033FCE8(void *w) {
+    f32 *anchor = *(f32 **)((char *)w + 0x2D8);
 
+    GuiElementSetPos((GuiElement *)((char *)w + 0x578), D_1ADF50 + anchor[0], D_1ADF54 + anchor[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x470), D_1ADF38 + anchor[0], D_1ADF3C + anchor[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x4C8), D_1ADF40 + anchor[0], D_1ADF44 + anchor[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x520), D_1ADF48 + anchor[0], D_1ADF4C + anchor[1], 0.0f, 0.0f);
+}
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033FDD8);
+#else
+extern s32 CountPlatinumBolts(s32 group);
+extern s32 func_002B1D18(s32 idx);
+extern u8 g_mapVertexData[], D_1ADBA8[], D_1ADF70[];
+extern s32 D_1ADF68;
+void func_0033FDD8(void *w) {
+    s32 idx = *(s32 *)(g_mapVertexData + 0x230);
+
+    if ((u32)(idx - 1) < 0x14) {
+        char *buf = (char *)w + 0x6C0;
+        GuiElement *row = (GuiElement *)((char *)w + 0x470);
+        f32 *pos;
+        s32 platinum, extra;
+
+        func_00115DA8(buf, (const char *)D_1ADBA8, (const char *)GetLocalizedString(0x2C51));
+        GuiElementSetTextFlag(row, 0);
+        GuiTextElementDraw(row);
+
+        platinum = CountPlatinumBolts(*(s32 *)(g_mapVertexData + 0x230));
+        extra = func_002B1D18(*(s32 *)(g_mapVertexData + 0x230));
+        func_00115DA8(buf, (const char *)D_1ADF70, platinum, extra);
+
+        pos = func_00336C18(row);
+        GuiElementSetPos(row, pos[0] + (f32)D_1ADF68, pos[1], 0.0f, 0.0f);
+        GuiElementSetTextFlag(row, 2);
+        GuiTextElementDraw(row);
+        GuiTextElementDraw((GuiElement *)((char *)w + 0x578));
+    }
+}
+#endif
 
 /* func_0033FEF8: draw one composite screen - run the body builder at p+0x8, blit
  * the menu backdrop (func_002DBC98(0)), draw its three header text rows, the
@@ -3696,7 +3793,28 @@ void func_00343558(void *p) {
     __asm__ __volatile__("");
 }
 
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343578);
+#else
+extern f32 D_1AE198, D_1AE19C, D_1AE1A0;
+void func_00343578(void *w) {
+    GuiElement *e = (GuiElement *)((char *)w + 0x130);
+    s32 count = *(s32 *)((char *)w + 0x17C);
+    s32 i;
+
+    for (i = 0; i < count; i++) {
+        f32 *anchor = *(f32 **)((char *)w + 0x180);
+        s32 *frames = *(s32 **)((char *)w + 0x178);
+        s32 texId = (i == 3) ? 0xEA9E : 0xEAA6;
+
+        GuiElementSetPos(e, anchor[0] + D_1AE198,
+                         (anchor[1] + D_1AE19C) + D_1AE1A0 * (f32)i, 0.0f, 0.0f);
+        *(s32 *)((char *)w + 0x174) = texId;
+        GuiSpriteSetTexture(e, texId, frames[i]);
+        func_00337630(e);
+    }
+}
+#endif
 
 /* func_00343668: when the +0x170 flag is set, draw the two sprite elements
  * (p+0x0 and p+0x4C) and run the three sub-draws (func_003434C8/00343558/
@@ -3987,7 +4105,38 @@ void func_003444E8(void *w) {
 }
 #endif
 
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344558);
+#else
+extern s32 func_001157AC(const char *s); /* SDK strlen */
+extern u8 D_1AE1F8[], D_1ADBA8[];
+extern f32 D_1AE1F0, D_1AE1F4;
+void func_00344558(void *w) {
+    char buf[256];
+    s32 mode = *(s32 *)((char *)w + 0x2C4);
+    f32 *anchor;
+
+    GuiElementSetVisible((GuiElement *)((char *)w + 0x1B0), 1);
+
+    if (mode == 0 || mode == 1 || mode == 2) {
+        s32 strId = (mode == 0) ? 0x2BE7 : (mode == 1) ? 0x2BE8 : 0x2BEA;
+        func_00115DA8(buf, (const char *)D_1AE1F8,
+                      (const char *)GetLocalizedString(strId),
+                      (const char *)GetLocalizedString(0x2BEB));
+    }
+
+    if (func_001157AC(buf) < 0x31) {
+        func_00115AC0((char *)w + 0x120, buf, 0x31);
+    } else {
+        func_00115DA8((char *)w + 0x120, (const char *)D_1ADBA8,
+                      (const char *)GetLocalizedString(0));
+    }
+
+    anchor = *(f32 **)((char *)w + 0x2B8);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x1B0),
+                     D_1AE1F0 + anchor[0], D_1AE1F4 + anchor[1], 0.0f, 0.0f);
+}
+#endif
 
 /* func_003446B8: lay out the titled-sprite sub-widget. Reads the anchor position
  * record at *(w+0x2B8) (float x at [0], y at [1]) and positions five child
@@ -4022,7 +4171,31 @@ void func_003446B8(void *w, s32 flag) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344800);
 
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344808);
+#else
+extern void func_00343AF8(void *w);
+void func_00344808(void *w) {
+    s32 slot;
+    s32 captionId;
+
+    if (*(s32 *)((char *)w + 0x2C0) == 0) {
+        return;
+    }
+    GuiSpriteElementDraw(w);
+    GuiSpriteElementDraw((char *)w + 0x4C);
+    GuiSpriteElementDraw((char *)w + 0x98);
+    GuiTextElementDraw((char *)w + 0x1B0);
+    func_00343AF8((char *)w + 0x2C8);
+
+    slot = g_itemEquippedSlot[func_00343AD0((char *)w + 0x2C8)];
+    captionId = *(s32 *)(g_weaponTable + slot * 0xE0 + 8);
+    GuiElementSetText((GuiElement *)((char *)w + 0x208), GetLocalizedString(captionId));
+
+    GuiTextElementDraw((char *)w + 0x208);
+    GuiTextElementDraw((char *)w + 0x260);
+}
+#endif
 
 /* func_003448C0: init the info-panel screen's fourteen embedded sub-elements at
  * their fixed offsets (six type-B at p+0x0/+0x4C/+0x98/+0xE4/+0x130/+0x17C, two
@@ -4171,15 +4344,108 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344E08);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344F18);
 
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00345080);
+#else
+void func_00345080(void *w, void *a) {
+    s32 flags = (s32)a;
+    s32 col, row;
 
+    if (flags & 0x1000) {            /* LEFT: col-- */
+        PlayGlobalSound(3, 0, 0);
+        col = *(s32 *)((char *)w + 0x4B0) - 1;
+        *(s32 *)((char *)w + 0x4B0) = col;
+        if (col < 0) {               /* col was 0 */
+            row = *(s32 *)((char *)w + 0x4AC);
+            if (row == 0) {
+                *(s32 *)((char *)w + 0x4B8) = 2;
+                *(s32 *)((char *)w + 0x4B0) = 1;
+                *(s32 *)((char *)w + 0x4AC) = 3;
+            } else if (row == 1) {
+                *(s32 *)((char *)w + 0x4B0) = 1;
+            }
+            /* row >= 2: +0x4B0 stays -1 (faithful reused-col exit) */
+        }
+    } else if (flags & 0x4000) {     /* RIGHT: col++ wrap 0<->1 */
+        PlayGlobalSound(3, 0, 0);
+        col = *(s32 *)((char *)w + 0x4B0) + 1;
+        if (col > 1) col = 0;
+        *(s32 *)((char *)w + 0x4B0) = col;
+    } else if (flags & 0x8000) {     /* UP: row-- */
+        PlayGlobalSound(3, 0, 0);
+        row = *(s32 *)((char *)w + 0x4AC) - 1;
+        *(s32 *)((char *)w + 0x4AC) = row;
+        if (row < 0) {
+            *(s32 *)((char *)w + 0x4AC) = 3;
+            *(s32 *)((char *)w + 0x4B0) = 1;
+            *(s32 *)((char *)w + 0x4B8) = 2;
+        }
+    } else if (flags & 0x2000) {     /* DOWN: row++ wrap at 2 */
+        PlayGlobalSound(3, 0, 0);
+        row = *(s32 *)((char *)w + 0x4AC) + 1;
+        *(s32 *)((char *)w + 0x4AC) = row;
+        if (row >= 2) {
+            *(s32 *)((char *)w + 0x4AC) = 0;
+        }
+    }
+
+    col = *(s32 *)((char *)w + 0x4B0);
+    row = *(s32 *)((char *)w + 0x4AC);
+    *(s32 *)((char *)w + 0x4B4) = row + col * 2;
+}
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003451B8);
+#else
+extern s16 D_1AA856;
+void func_003451B8(void *w, void *a) {
+    s32 flags = (s32)a;
+
+    if (flags & 0x1000) {
+        PlayGlobalSound(3, 0, 0);
+        *(s32 *)((char *)w + 0x4B8) = 2;
+        *(s32 *)((char *)w + 0x4B0) = 1;
+        *(s32 *)((char *)w + 0x4AC) = 3;
+    } else if (flags & 0x4000) {
+        PlayGlobalSound(3, 0, 0);
+        *(s32 *)((char *)w + 0x4B8) = 2;
+        *(s32 *)((char *)w + 0x4AC) = 3;
+        *(s32 *)((char *)w + 0x4B0) = 0;
+    } else if (flags & 0x8000) {
+        PlayGlobalSound(3, 0, 0);
+        *(s32 *)((char *)w + 0x4B8) = 0;
+        *(s32 *)((char *)w + 0x4AC) = 1;
+        *(s32 *)((char *)w + 0x4B0) = 0;
+    } else if (flags & 0x2000) {
+        PlayGlobalSound(3, 0, 0);
+        *(s32 *)((char *)w + 0x4B0) = 0;
+        *(s32 *)((char *)w + 0x4B8) = 3;
+        *(s32 *)((char *)w + 0x4AC) = 0;
+    }
+
+    *(s32 *)((char *)w + 0x4B4) = D_1AA856;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00345298);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003453D0);
 
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003457A0);
+#else
+extern f32 D_1AE298, D_1AE29C, D_1AE2A0, D_1AE2A4;
+extern f32 D_1AE2A8, D_1AE2AC, D_1AE2B0, D_1AE2B4;
+void func_003457A0(void *w) {
+    f32 *anchor = *(f32 **)((char *)w + 0x4A0);
+
+    GuiElementSetPos((GuiElement *)((char *)w + 0x368), D_1AE298 + anchor[0], D_1AE29C + anchor[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x3C0), D_1AE2A0 + anchor[0], D_1AE2A4 + anchor[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x418), D_1AE2A8 + anchor[0], D_1AE2AC + anchor[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x310), D_1AE2B0 + anchor[0], D_1AE2B4 + anchor[1], 0.0f, 0.0f);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00345890);
 

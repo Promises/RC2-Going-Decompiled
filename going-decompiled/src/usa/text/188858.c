@@ -756,7 +756,7 @@ void ResetCinematicQueue(CinematicQueue *q) {
 /*
  * Pop the head cinematic request off the queue `q`: return 0 if empty, else
  * decrement the count (clearing the active flag when it hits 0), copy the head
- * slot's {id, flag} to *outId/*outFlags, mark that slot free (-1/-1), advance the
+ * slot's {id, flag} to *outId / *outFlags, mark that slot free (-1/-1), advance the
  * read cursor with a wrap at 5, and return 1. `readCursor` is re-read for every
  * slot access (matching the -G8 -fno-gcse build, which keeps each load rather than
  * caching the cursor in a register).
@@ -1379,13 +1379,109 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028B6F0);
  *
  * WALL: callee-saves + jal gate; register colouring not reproducible from C.
  * Left INCLUDE_ASM (not yet fully traced). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028B8C8);
+#else
+/**
+ * Relocate (and mark allocated) the GS handles for one HUD asset's CLUT and
+ * texture slots, biasing them by an aligned base address.
+ *
+ * The HUD asset header (g_pHudAssetHeader[0]) holds three per-asset s32 arrays
+ * indexed by assetId: cumulative CLUT-slot end indices at +0x14, cumulative
+ * texture-slot end indices at +0x34, and the stored relocation base at +0x74.
+ * If this asset's +0x74 word is already non-zero it is relocated -> no-op.
+ * Otherwise the (16-byte aligned) base is stored, and every g_hudClutSlots /
+ * g_hudTextureSlots handle in this asset's [prevEnd, end) range gets its sign
+ * bit cleared (marking it allocated) and the base added.
+ *
+ *   assetId  index of the HUD asset
+ *   baseAddr byte offset added to each handle (rounded up to a multiple of 16)
+ */
+void func_0028B8C8(s32 assetId, s32 baseAddr) {
+    u8 *hdr = (u8 *)g_pHudAssetHeader[0];
+    s32 *relBase = (s32 *)(hdr + 0x74 + assetId * 4);
+    s32 base;
+    s32 start;
+    s32 end;
+    s32 i;
+
+    if (*relBase != 0) {
+        return; /* asset already relocated */
+    }
+
+    base = (baseAddr + 0xF) & ~0xF;
+    *relBase = base;
+
+    /* CLUT slots owned by this asset: the range [prevEnd, end) */
+    start = (assetId == 0) ? 0 : *(s32 *)(hdr + 0x14 + (assetId - 1) * 4);
+    end = *(s32 *)(hdr + 0x14 + assetId * 4);
+    for (i = start; i < end; i++) {
+        g_hudClutSlots[i].handle &= 0x7FFFFFFF;
+        g_hudClutSlots[i].handle += base;
+    }
+
+    /* texture slots owned by this asset: the range [prevEnd, end) */
+    start = (assetId == 0) ? 0 : *(s32 *)(hdr + 0x34 + (assetId - 1) * 4);
+    end = *(s32 *)(hdr + 0x34 + assetId * 4);
+    for (i = start; i < end; i++) {
+        g_hudTextureSlots[i].handle &= 0x7FFFFFFF;
+        g_hudTextureSlots[i].handle += base;
+    }
+}
+#endif
 
 /* func_0028BA28(...): HUD moby-table accessor/populate helper (~0x174 bytes).
  *
  * WALL: callee-saves + jal gate; register colouring not reproducible from C.
  * Left INCLUDE_ASM (not yet fully traced). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028BA28);
+#else
+/**
+ * Inverse of func_0028B8C8: un-relocate and free one HUD asset's CLUT and
+ * texture GS handles. For each g_hudClutSlots / g_hudTextureSlots handle in this
+ * asset's [prevEnd, end) range (bounds from the header arrays at +0x14 / +0x34),
+ * subtract the stored base (+0x74) and set the sign bit to mark the slot
+ * unallocated; then clear the stored base word. Asset 0 additionally clears the
+ * +0x4 halfword of each of its texture slots up front.
+ *
+ *   assetId  index of the HUD asset to unload
+ */
+void func_0028BA28(s32 assetId) {
+    u8 *hdr = (u8 *)g_pHudAssetHeader[0];
+    s32 relBase = *(s32 *)(hdr + 0x74 + assetId * 4);
+    s32 start;
+    s32 end;
+    s32 i;
+
+    if (assetId == 0) {
+        /* asset 0 only: clear the +0x4 halfword of every one of its texture slots */
+        end = *(s32 *)(hdr + 0x34);
+        for (i = 0; i < end; i++) {
+            *(s16 *)((u8 *)&g_hudTextureSlots[i] + 0x4) = 0;
+        }
+    }
+
+    /* CLUT slots [prevEnd, end): remove the base and mark unallocated */
+    start = (assetId == 0) ? 0 : *(s32 *)(hdr + 0x14 + (assetId - 1) * 4);
+    end = *(s32 *)(hdr + 0x14 + assetId * 4);
+    for (i = start; i < end; i++) {
+        g_hudClutSlots[i].handle -= relBase;
+        g_hudClutSlots[i].handle |= (s32)0x80000000;
+    }
+
+    /* texture slots [prevEnd, end): remove the base and mark unallocated */
+    start = (assetId == 0) ? 0 : *(s32 *)(hdr + 0x34 + (assetId - 1) * 4);
+    end = *(s32 *)(hdr + 0x34 + assetId * 4);
+    for (i = start; i < end; i++) {
+        g_hudTextureSlots[i].handle -= relBase;
+        g_hudTextureSlots[i].handle |= (s32)0x80000000;
+    }
+
+    /* clear the stored relocation base */
+    *(s32 *)(hdr + 0x74 + assetId * 4) = 0;
+}
+#endif
 
 /* func_0028BBA0(...): HUD moby-table accessor/populate helper (~0x124 bytes).
  *
