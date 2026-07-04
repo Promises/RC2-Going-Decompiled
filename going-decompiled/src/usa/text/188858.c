@@ -184,7 +184,12 @@ extern TextEntry *g_pActiveTextTable;         /* active localized text table (0x
 typedef struct SubtitleState {
     s32 state;          /* +0x00 */
     s32 _pad04;         /* +0x04 */
-    u8  _pad08[0x18];
+    s32 boxHalfWidth;   /* +0x08: half the measured text width + 10 (BeginSubtitleDisplay) */
+    s32 boxHalfHeight;  /* +0x0C: half the measured text height + 5 */
+    s32 field10;        /* +0x10 */
+    s32 boxPosY;        /* +0x14: on-screen box top Y (clamped to the screen) */
+    s32 field18;        /* +0x18 */
+    s32 field1C;        /* +0x1C */
     s32 entryIndex;     /* +0x20: index into g_pActiveTextTable of shown line */
     s32 showingIndex;   /* +0x24: pending/showing line index (-1 = none) */
     s32 showingHandle;  /* +0x28: voice/clip handle of the shown line */
@@ -192,6 +197,7 @@ typedef struct SubtitleState {
     u8  _pad30[0x10];
     s32 phaseTimer;     /* +0x40: per-line phase timer (cleared on arm) */
     s32 phaseFlag;      /* +0x44: per-line phase flag  (cleared on arm) */
+    s32 textPixelWidth; /* +0x48: strlen(text) * 7 (BeginSubtitleDisplay) */
 } SubtitleState;
 extern SubtitleState g_subtitleState;
 extern s32 g_discToc[];                       /* master disc asset directory (0x14B540) */
@@ -416,14 +422,37 @@ s32 SetWeaponUpgradeSlot(s32 itemId, s32 level) {
 }
 #endif
 
-/* func_00288B08(key): copy a 0x30-byte word table from D_1A8B10 onto the stack
- * (via ldl/ldr/sdl/sdr unaligned block moves) and linear-scan it for `key`,
- * returning 1 when present (before a zero terminator), else 0.
- *
- * WALL: the unaligned ldl/ldr + sdl/sdr block copy of the source table is a
- * memcpy-style idiom the matcher does not emit from struct/array C. Left
- * INCLUDE_ASM. */
+extern u8 D_1A8B10[]; /* 0x30-byte, zero-terminated s32 key table */
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_00288B08);
+#else
+/**
+ * Copy the 0x30-byte key table at D_1A8B10 onto the stack and linear-scan it for
+ * `key`, returning 1 when `key` is present (before the zero terminator) and 0
+ * otherwise (empty table or terminator reached). The terminator itself is never
+ * matched against `key`.
+ */
+s32 func_00288B08(s32 key) {
+    s32 table[12];
+    s32 *p;
+
+    memcpy(table, D_1A8B10, sizeof(table));
+
+    if (table[0] == 0) {
+        return 0;
+    }
+    for (p = table;;) {
+        if (*p == key) {
+            return 1;
+        }
+        p++;
+        if (*p == 0) {
+            return 0;
+        }
+    }
+}
+#endif
 
 /*
  * func_00288BB0(key): return 1 if `key` is present (as the first s16 of any
@@ -1018,18 +1047,47 @@ s32 func_00289840(s32 textIndex, s32 voiceHandle) {
  * preceding function, pinned as its own symbol; the real function follows. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_002898D8);
 
-/*
- * func_002898E0(): tear down the currently-shown subtitle line — if a voice
- * clip is associated (via g_pActiveTextTable[entryIndex].voice), its disc-TOC
- * entry is present and it matches the area save image's current clip, bump the
- * save image's subtitle sub-state to 5; then reset the subtitle state machine.
- *
- * WALL (84.30%): logic exact, but the original holds &g_subtitleState's %hi in
- * one register across the whole function (CSE of the high half), whereas our
- * cc1 re-materialises `lui %hi(g_subtitleState)` per access — the %hi-CSE the
- * unit-wide -fno-gcse (needed by most of this TU) disables. Left INCLUDE_ASM.
- */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_002898E0);
+#else
+/**
+ * Tear down the currently-shown subtitle line.
+ *
+ * When a subtitle is active (state != 0): if its line has an associated voice
+ * clip (g_pActiveTextTable[entryIndex].voice), that clip has a disc-TOC entry,
+ * and the clip matches the area save-image's active clip
+ * (voice == (s16)saveImage[+0x6C] - 0x1770), then bump the save-image's subtitle
+ * sub-state (+0x72) to 5 unless it is already 6 or 7. In every active case the
+ * subtitle state machine is then reset (state/_pad04 cleared, entry/showing
+ * index set to -1). No-op when no subtitle is showing.
+ */
+void func_002898E0(void) {
+    SubtitleState *ss = &g_subtitleState;
+    s32 entryIndex;
+    s32 voice;
+
+    if (ss->state == 0) {
+        return;
+    }
+
+    entryIndex = ss->entryIndex;
+    if (entryIndex != -1) {
+        voice = g_pActiveTextTable[entryIndex].voice;
+        if (voice != -1 && *(s32 *)((u8 *)g_discToc + voice * 4 + 0x2A20) != 0) {
+            u8 *saveImage = g_saveImageArea + 0x1000;
+            if (voice == *(s16 *)(saveImage + 0x6C) - 0x1770
+                && (u32)(*(u16 *)(saveImage + 0x72) - 6) >= 2) {
+                *(s16 *)(saveImage + 0x72) = 5;
+            }
+        }
+    }
+
+    ss->state = 0;
+    ss->_pad04 = 0;
+    ss->entryIndex = -1;
+    ss->showingIndex = -1;
+}
+#endif
 
 /*
  * FindTextTableEntry(textId): linear-search the active localized text table for
@@ -1105,13 +1163,77 @@ char *GetLocalizedString(s32 textId) {
  * $ra. Not a real function; left INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_00289A58);
 
-/* BeginSubtitleDisplay(...): start showing a subtitle line — resolve the text
- * entry, allocate the on-screen handle and seed the subtitle state machine.
- *
- * WALL: multiple callee-saves + jal gates over g_subtitleState / the text table
- * with branch colouring cc1 does not reproduce. Left INCLUDE_ASM (not yet fully
- * traced). */
+extern s32 g_bPalMode;          /* 0x1A7B98 - PAL flag (0 = NTSC) */
+extern s32 g_screenHeight;      /* 0x1A7344 - active display height */
+extern u16 D_1A7B9C;            /* 0x1A7B9C - subtitle-sound-enabled flag */
+extern s32 D_1A8D20[];          /* gp small-data table indexed by g_bPalMode */
+extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
+extern void func_00280C98(s16 *layout, s16 clipX0, s16 clipX1, s16 left, s16 right,
+                          s16 anchorX, s16 y, s16 lineHeight, s32 flags);
+extern void func_00280BB8(void *layout, s32 color, const char *text, s32 arg4);
+extern s32 func_001157AC(const char *s); /* SDK strlen */
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", BeginSubtitleDisplay);
+#else
+/**
+ * Start showing the current subtitle line: arm the subtitle state machine and
+ * lay out its on-screen box.
+ *
+ * Sets g_subtitleState.state = 1, plays the subtitle blip (PlayGlobalSound) when
+ * D_1A7B9C is set, then measures the text of the active line
+ * (g_pActiveTextTable[entryIndex].str): func_00280C98 builds a layout descriptor
+ * on the stack with the fixed subtitle margins, func_00280BB8 flows the text into
+ * it, and the resulting half-width/half-height come back at layout bytes +0xC /
+ * +0xE. Those (halved, + 10 / + 5) plus a fixed 0x100/8/8 are stored into the
+ * box fields; textPixelWidth is strlen*7 (0 for an empty line). Finally the box Y
+ * is positioned near the screen bottom (screenHeight-0x3C) and nudged up if it
+ * would clip the bottom margin.
+ */
+void BeginSubtitleDisplay(void) {
+    SubtitleState *ss = &g_subtitleState;
+    u8 layout[0x40];
+    const char *text;
+    s16 measuredW;
+    s16 measuredH;
+    s32 screenH;
+
+    ss->state = 1;
+    ss->_pad04 = 0;
+
+    if (D_1A7B9C != 0) {
+        PlayGlobalSound(0, 1, 0);
+    }
+
+    text = g_pActiveTextTable[ss->entryIndex].str;
+
+    func_00280C98((s16 *)layout, 0xF0, 0x1E0, 0x2C, 0x1D4, 0x100, 0x168, 0x10, 7);
+    func_00280BB8(layout, 0x80FFA888, text, -1);
+
+    /* measured box size returned by func_00280BB8 in the layout scratch */
+    measuredW = *(s16 *)(layout + 0xC);
+    measuredH = *(s16 *)(layout + 0xE);
+
+    ss->boxHalfWidth = (measuredW >> 1) + 0xA;
+    ss->boxHalfHeight = (measuredH >> 1) + 0x5;
+    ss->field10 = 0x100;
+    ss->boxPosY = D_1A8D20[g_bPalMode];
+    ss->field1C = 8;
+    ss->field18 = 8;
+    ss->textPixelWidth = 0;
+
+    if (text != 0) {
+        s32 len = func_001157AC(text);
+        ss->textPixelWidth = len * 8 - len; /* strlen * 7 */
+    }
+
+    screenH = g_screenHeight;
+    ss->boxPosY = screenH - 0x3C;
+    if (screenH - 0xC < (screenH - 0x3C) + ss->boxHalfHeight) {
+        ss->boxPosY = screenH - (ss->boxHalfHeight + 0xC);
+    }
+}
+#endif
 
 /* UpdateSubtitleStateMachine(): per-frame tick of the subtitle/voice display
  * state machine (large dispatcher, ~0x928 bytes).
@@ -1360,14 +1482,51 @@ s32 func_0028B560(s32 name) {
 }
 #endif
 
-/* InitHudMobyTable(): first-time setup of the HUD moby-table context — rebuild
- * all 13 D_2552B0 widget records (func_0028BE10 per slot), then DebugMalloc the
- * HUD moby table / spawn / aux blocks when not already allocated and record them
- * in g_hudMobyTableBase etc.
- *
- * WALL: five callee-saves (0x30 frame) + multiple jal allocations and the
- * gp/absolute-mixed global stores; not reproducible from C. Left INCLUDE_ASM. */
+extern void func_00283438(void *base, s32 size); /* clear/init a memory block */
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", InitHudMobyTable);
+#else
+/**
+ * First-time setup of the HUD moby-table context.
+ *
+ * Rebuilds all 13 D_2552B0 widget records (registering each via func_0028BE10 and
+ * seeding its fields: key = -1, +0x20 = 0x10000, +0x6C = -6, +0x7C/field04/field24
+ * = 0). Then, if the HUD moby table has not been allocated yet, DebugMalloc's the
+ * 0x2800-byte table and the 0x1400-byte aux block. Records the table extent
+ * (g_hudMobyTableBase..End, spawn start), clears + initialises it (func_00283438),
+ * tags its +0x20 byte 0xFF, rebuilds the weapon-select wheel (func_0028C728) and
+ * snaps the bolt counter (ResetBoltCounterHud).
+ */
+void InitHudMobyTable(void) {
+    s32 i;
+
+    *(s32 *)((u8 *)&g_pActiveTextTable + 0x30) = 0;
+    *(s32 *)((u8 *)&g_pActiveTextTable + 0x34) = 0;
+
+    for (i = 0; i < 13; i++) {
+        D_2552B0[i].key = -1;
+        *(s32 *)((u8 *)&D_2552B0[i] + 0x20) = 0x10000;
+        func_0028BE10(i, 0xFFFF, 0, 0, 0, 0, 1);
+        *(s32 *)((u8 *)&D_2552B0[i] + 0x7C) = 0;
+        *(s32 *)((u8 *)&D_2552B0[i] + 0x6C) = -6;
+        D_2552B0[i].field04 = 0;
+        D_2552B0[i].field24 = 0;
+    }
+
+    if (g_hudMobyTableBase == 0) {
+        g_hudMobyTableBase = DebugMalloc(0x2800);
+        g_hudMobyAuxBlockBase = DebugMalloc(0x1400);
+    }
+
+    g_hudMobyTableEnd = (u8 *)g_hudMobyTableBase + 0x2800;
+    g_hudMobySpawnStart = g_hudMobyTableBase;
+    func_00283438(g_hudMobyTableBase, 0x2800);
+    *((u8 *)g_hudMobyTableBase + 0x20) = 0xFF;
+    func_0028C728();
+    ResetBoltCounterHud();
+}
+#endif
 
 /* func_0028B6F0(...): HUD moby-table population helper (~0x1D4 bytes).
  *
@@ -1375,10 +1534,6 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", InitHudMobyTabl
  * not reproducible from C. Left INCLUDE_ASM (not yet fully traced). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028B6F0);
 
-/* func_0028B8C8(...): HUD moby-table accessor/populate helper (~0x160 bytes).
- *
- * WALL: callee-saves + jal gate; register colouring not reproducible from C.
- * Left INCLUDE_ASM (not yet fully traced). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028B8C8);
 #else
@@ -1430,10 +1585,6 @@ void func_0028B8C8(s32 assetId, s32 baseAddr) {
 }
 #endif
 
-/* func_0028BA28(...): HUD moby-table accessor/populate helper (~0x174 bytes).
- *
- * WALL: callee-saves + jal gate; register colouring not reproducible from C.
- * Left INCLUDE_ASM (not yet fully traced). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028BA28);
 #else
@@ -1981,16 +2132,74 @@ s32 func_0028E7D0(void) {
  * function; left INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028E7D8);
 
-/* func_0028E7E8(slot): pick the current animation frame for HUD icon `slot`
- * (mode at +0x2 selects: static frame, time-driven mod cycle, ping-pong, one-shot
- * or random) from the icon-slot table at g_pHudAssetHeader[1], writing the
- * chosen map index back into the widget at +0x4. Returns the frame index.
- *
- * WALL: three callee-saves (0x20 frame) + several div/mfhi/mflo modulo steps
- * (with break-on-div-by-zero) and a GetRandomInt jal whose register colouring cc1
- * does not reproduce. Left INCLUDE_ASM (functional model documented; not
- * fabricated to avoid a wrong-modulo defect). */
+extern s32 GetRandomInt(s32 max);   /* uniform [0, max) */
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028E7E8);
+#else
+/**
+ * Pick the current animation frame for a HUD icon widget and cache it.
+ *
+ * `slot` is the widget: +0x0 (s16) icon id, +0x2 (u8) animation mode, +0x4 (s32)
+ * cached current frame (also this function's output), +0xC (s32) animation start
+ * time. The icon record comes from the table at g_pHudAssetHeader[1] indexed by
+ * the icon id; from it we use maxLevel (+0x2) as the frame count, baseFrame
+ * (+0x4) as the first map index, and the byte at +0x7 as the per-frame duration.
+ *
+ * Modes: 0 = hold baseFrame; 1 = loop (baseFrame + elapsed/dur mod count);
+ * 2 = ping-pong (reflect through 2*count-2); 3 = one-shot ping-pong that, once
+ * finished, holds baseFrame and reschedules the start time 2*count + rand(30) +
+ * 10 ticks ahead. An icon with texId 0xFFFF, or any other mode, yields frame 0.
+ * The chosen frame is written back to slot+0x4 and returned.
+ */
+s32 func_0028E7E8(void *slot) {
+    u8 *w = (u8 *)slot;
+    HudIconSlot *icon = &((HudIconSlot *)g_pHudAssetHeader[1])[*(s16 *)(w + 0x0)];
+    s32 dur;
+    s32 count;
+    s32 phase;
+    s32 frame = 0;
+
+    if (icon->texId == 0xFFFF) {
+        *(s32 *)(w + 0x4) = 0;
+        return 0;
+    }
+
+    switch (*(u8 *)(w + 0x2)) {
+    case 0: /* static: hold the base frame */
+        frame = icon->baseFrame;
+        break;
+    case 1: /* loop on a fixed cadence */
+        dur = ((u8 *)icon)[0x7];
+        frame = icon->baseFrame + (g_gameTime - *(s32 *)(w + 0xC)) / dur % icon->maxLevel;
+        break;
+    case 2: /* ping-pong: run forward then back */
+        dur = ((u8 *)icon)[0x7];
+        count = icon->maxLevel;
+        phase = (g_gameTime - *(s32 *)(w + 0xC)) / dur % (2 * count - 2);
+        frame = icon->baseFrame + (phase < count ? phase : 2 * count - (phase + 2));
+        break;
+    case 3: /* one-shot ping-pong, then hold + schedule a random restart */
+        if (*(s32 *)(w + 0xC) < g_gameTime) {
+            dur = ((u8 *)icon)[0x7];
+            count = icon->maxLevel;
+            phase = (g_gameTime - *(s32 *)(w + 0xC)) / dur;
+            if (phase < 2 * count - 2) {
+                frame = icon->baseFrame + (phase < count ? phase : 2 * count - (phase + 2));
+            } else {
+                frame = icon->baseFrame;
+                *(s32 *)(w + 0xC) = 2 * count + GetRandomInt(0x1E) + 0xA;
+            }
+        } else {
+            frame = *(s32 *)(w + 0x4);
+        }
+        break;
+    }
+
+    *(s32 *)(w + 0x4) = frame;
+    return frame;
+}
+#endif
 
 /* func_0028E9A0(...): HUD icon-frame helper (~0x128 bytes).
  *
@@ -2107,11 +2316,56 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F0D0);
  * reproduce from C. Left INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F2C0);
 
-/* func_0028F540(...): HUD icon slot helper (~0x1A8 bytes).
- *
- * WALL: callee-saves + jal gates; register colouring not reproducible from C.
- * Left INCLUDE_ASM (not yet fully traced). */
+__asm__(".extern g_frameDmaCursor, 16");
+extern u32 *g_frameDmaCursor;   /* 0x1B2228 - per-frame render-DMA write pointer */
+__asm__(".extern g_gsPixelOffsetX, 16");
+extern s32 g_gsPixelOffsetX;    /* 0x1A7350 - GS window X offset */
+__asm__(".extern g_gsPixelOffsetY, 16");
+extern s32 g_gsPixelOffsetY;    /* 0x1A7354 - GS window Y offset */
+extern u64 GetHudIconTex0(s32 iconIndex);   /* resolve a HUD icon's GS tex0 register */
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F540);
+#else
+/**
+ * Draw a 1:1 HUD icon: append a textured-sprite GIF packet (0x60-byte NLOOP=5)
+ * to the frame render-DMA chain (g_frameDmaCursor) blitting the icon's texture
+ * over screen rect (x,y)..(x+w,y+h). The tex0 register is resolved via
+ * GetHudIconTex0(iconIndex); UV spans (0,0)..(w,h) texels (fixed-point <<4 for U,
+ * <<20 for V); RGB tint 0x7F7F7F with the given alpha; Z from
+ * &g_pActiveTextTable+0x3C. Screen coords are 1/16-pixel subpixel (coord<<4, -8
+ * bias, off = g_gsPixelOffset). Advances the cursor by 0x60.
+ */
+void func_0028F540(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, s32 alpha) {
+    u8 *p = (u8 *)g_frameDmaCursor;
+    s32 offX = g_gsPixelOffsetX;
+    s32 offY = g_gsPixelOffsetY;
+    u64 z = (u64)(u32)*(s32 *)((u8 *)&g_pActiveTextTable + 0x3C) << 32;
+
+    *(u32 *)(p + 0x0) = 0x10000005;
+    *(u32 *)(p + 0x4) = 0;
+    *(u32 *)(p + 0x8) = 0;
+    *(u32 *)(p + 0xC) = 0x50000005;
+    g_frameDmaCursor = (u32 *)(p + 0x10);
+
+    *(u64 *)(p + 0x10) = ((u64)0xE800 << 47) | 0x8001;
+    *(u64 *)(p + 0x18) = 0x5353106;
+    *(u64 *)(p + 0x20) = GetHudIconTex0(iconIndex);
+    *(u64 *)(p + 0x28) = 0x156;
+    *(u64 *)(p + 0x30) = ((u64)(u32)alpha << 24) | 0x7F7F7F;
+    *(u64 *)(p + 0x38) = 0; /* near UV (0,0) */
+    *(u64 *)(p + 0x40) = (u64)(u32)((x << 4) + offX - 8)
+                       | ((u64)(u32)((y << 4) + offY - 8) << 16)
+                       | z;
+    *(u64 *)(p + 0x48) = (u64)(u32)((w << 4) + (h << 20)); /* far UV (w,h) texels */
+    *(u64 *)(p + 0x50) = (u64)(u32)(((x + w) << 4) + offX - 8)
+                       | ((u64)(u32)(((y + h) << 4) + offY - 8) << 16)
+                       | z;
+    *(u64 *)(p + 0x58) = 0;
+
+    g_frameDmaCursor = (u32 *)((u8 *)g_frameDmaCursor + 0x50);
+}
+#endif
 
 /* func_0028F6E8(...): HUD icon slot setup thunk (0x14 bytes) that falls into
  * DrawHudIconQuadPixel at 0x28F700.
@@ -2120,10 +2374,56 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F540);
  * Left INCLUDE_ASM (not yet fully traced). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F6E8);
 
-/* func_0028F700 = DrawHudIconQuadPixel (0x1E0 bytes): HUD icon GS sprite quad at
- * pixel coords. A real function (jal'd by func_002D9D60), split out of the
- * preceding func_0028F6E8 thunk via a type:func pin. Left INCLUDE_ASM. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F700);
+#else
+/**
+ * func_0028F700 = DrawHudIconQuadPixel: draw a HUD icon as a textured-sprite GIF
+ * packet (0x60-byte NLOOP=5) at whole-pixel screen coords. Sibling of
+ * func_0028F540; the two differences are that screen coordinates are whole
+ * pixels here (no <<4 subpixel), and the UV rectangle spans the icon's full
+ * texture - 2^wLog2 x 2^hLog2 texels, where wLog2/hLog2 are the bytes at +0x6/
+ * +0x7 of the icon's g_hudTextureSlots entry (indexed through
+ * g_hudIconMap[iconIndex].textureSlot) - rather than the passed size.
+ *
+ *   iconIndex  index into g_hudIconMap (and GetHudIconTex0)
+ *   x, y       top-left screen pixel
+ *   w, h       screen size in pixels
+ *   alpha      tint alpha (RGB fixed 0x7F7F7F)
+ */
+void func_0028F700(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, s32 alpha) {
+    u8 *p = (u8 *)g_frameDmaCursor;
+    s32 offX = g_gsPixelOffsetX;
+    s32 offY = g_gsPixelOffsetY;
+    u64 z = (u64)(u32)*(s32 *)((u8 *)&g_pActiveTextTable + 0x3C) << 32;
+    HudGsSlot *tex = &g_hudTextureSlots[g_hudIconMap[iconIndex].textureSlot];
+    s32 uExtent = 1 << ((u8 *)tex)[0x6]; /* 2^texWidthLog2 texels */
+    s32 vExtent = 1 << ((u8 *)tex)[0x7]; /* 2^texHeightLog2 texels */
+
+    *(u32 *)(p + 0x0) = 0x10000005;
+    *(u32 *)(p + 0x4) = 0;
+    *(u32 *)(p + 0x8) = 0;
+    *(u32 *)(p + 0xC) = 0x50000005;
+    g_frameDmaCursor = (u32 *)(p + 0x10);
+
+    *(u64 *)(p + 0x10) = ((u64)0xE800 << 47) | 0x8001;
+    *(u64 *)(p + 0x18) = 0x5353106;
+    *(u64 *)(p + 0x20) = GetHudIconTex0(iconIndex);
+    *(u64 *)(p + 0x28) = 0x156;
+    *(u64 *)(p + 0x30) = ((u64)(u32)alpha << 24) | 0x7F7F7F;
+    *(u64 *)(p + 0x38) = 0; /* near UV (0,0) */
+    *(u64 *)(p + 0x40) = (u64)(u32)(x + offX - 8)
+                       | ((u64)(u32)(y + offY - 8) << 16)
+                       | z;
+    *(u64 *)(p + 0x48) = (u64)(u32)((uExtent << 4) + (vExtent << 20)); /* far UV = full texture */
+    *(u64 *)(p + 0x50) = (u64)(u32)((x + w) + offX - 8)
+                       | ((u64)(u32)((y + h) + offY - 8) << 16)
+                       | z;
+    *(u64 *)(p + 0x58) = 0;
+
+    g_frameDmaCursor = (u32 *)((u8 *)g_frameDmaCursor + 0x50);
+}
+#endif
 
 /* func_0028F8E0(...): HUD icon upload/draw helper (~0x200 bytes; 128-bit block
  * moves).
@@ -2132,11 +2432,64 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F700);
  * reproduce from C. Left INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F8E0);
 
-/* func_0028FAE0(...): HUD icon slot helper (~0x18C bytes).
- *
- * WALL: callee-saves + jal gates; register colouring not reproducible from C.
- * Left INCLUDE_ASM (not yet fully traced). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028FAE0);
+#else
+/**
+ * Append a textured-sprite GIF packet (a 0x60-byte, NLOOP=5 draw) to the frame
+ * render-DMA chain (g_frameDmaCursor), then advance the cursor by 0x60. Draws a
+ * quad from screen corner (x0,y0) to (x0+w, y0+h) mapped to UV (u0,v0) .. plus
+ * the texture extents 2^(uShift+4) / 2^(vShift+4), tinted RGB 0x7F7F7F with the
+ * given alpha. The packed Z comes from the render-depth field at
+ * &g_pActiveTextTable + 0x3C.
+ *
+ * Layout at cursor p:
+ *   p+0x00 : chain tags 0x10000005 / 0x50000005
+ *   p+0x10 : GIFtag (NLOOP=5) + register data (0x5353106, reg1, 0x156)
+ *   p+0x30 : colour (0x7F7F7F | alpha<<24)
+ *   p+0x38 : near UV (u0 | v0<<16)
+ *   p+0x40 : near XY (x0+off-8 | (y0+off-8)<<16 | z<<32)
+ *   p+0x48 : far UV  (u0+2^(uShift+4) | (v0+2^(vShift+4))<<16)
+ *   p+0x50 : far XY  (x0+w+off-8 | (y0+h+off-8)<<16 | z<<32)
+ * off = g_gsPixelOffset{X,Y}.
+ */
+void func_0028FAE0(s32 reg1, s32 x0, s32 y0, s32 uShift, s32 vShift, s32 w, s32 h, s32 u0, s32 v0, s32 alpha) {
+    u8 *p = (u8 *)g_frameDmaCursor;
+    s32 offX = g_gsPixelOffsetX;
+    s32 offY = g_gsPixelOffsetY;
+    u64 z = (u64)(u32)*(s32 *)((u8 *)&g_pActiveTextTable + 0x3C) << 32;
+
+    /* DMA/GIF chain header (NLOOP=5) */
+    *(u32 *)(p + 0x0) = 0x10000005;
+    *(u32 *)(p + 0x4) = 0;
+    *(u32 *)(p + 0x8) = 0;
+    *(u32 *)(p + 0xC) = 0x50000005;
+    g_frameDmaCursor = (u32 *)(p + 0x10);
+
+    /* GIFtag + fixed register data */
+    *(u64 *)(p + 0x10) = ((u64)0xE800 << 47) | 0x8001;
+    *(u64 *)(p + 0x18) = 0x5353106;
+    *(u64 *)(p + 0x20) = (u64)(u32)reg1;
+    *(u64 *)(p + 0x28) = 0x156;
+
+    /* colour, near UV, near XY */
+    *(u64 *)(p + 0x30) = ((u64)(u32)alpha << 24) | 0x7F7F7F;
+    *(u64 *)(p + 0x38) = (u64)(u32)u0 | ((u64)(u32)v0 << 16);
+    *(u64 *)(p + 0x40) = (u64)(u32)(x0 + offX - 8)
+                       | ((u64)(u32)(y0 + offY - 8) << 16)
+                       | z;
+
+    /* far UV, far XY */
+    *(u64 *)(p + 0x48) = (u64)(u32)(u0 + (1 << (uShift + 4)))
+                       | ((u64)(u32)(v0 + (1 << (vShift + 4))) << 16);
+    *(u64 *)(p + 0x50) = (u64)(u32)((x0 + w) + offX - 8)
+                       | ((u64)(u32)((y0 + h) + offY - 8) << 16)
+                       | z;
+    *(u64 *)(p + 0x58) = 0;
+
+    g_frameDmaCursor = (u32 *)((u8 *)g_frameDmaCursor + 0x50);
+}
+#endif
 
 /* func_0028FC70: mis-split 1-instruction fragment — `addiu $sp,+0xE0` epilogue
  * tail, pinned as its own symbol; no jr $ra. Not a real function; left
@@ -2161,25 +2514,156 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028FFF0);
  * Left INCLUDE_ASM (not yet fully traced). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_002901B0);
 
-/* func_00290320(...): HUD element helper (~0x18C bytes; near-twin of
- * func_002904B0).
- *
- * WALL: callee-saves + jal gates; register colouring not reproducible from C.
- * Left INCLUDE_ASM (not yet fully traced). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_00290320);
-
-/* func_002904B0(...): HUD element helper (~0x18C bytes; near-twin of
- * func_00290320).
+#else
+/**
+ * Near-twin of func_00290640 (and func_002904B0): append a GIF/DMA packet to the
+ * frame render-DMA chain (g_frameDmaCursor) that programs a GS rectangle from
+ * two corner points, then advance the cursor by 0x40. Identical layout to
+ * func_00290640 except the register at p+0x20 is 0x41 (vs 0x46) and the packed
+ * Z field is the fixed constant 0x00FFFFF000000000 rather than a caller value.
  *
- * WALL: callee-saves + jal gates; register colouring not reproducible from C.
- * Left INCLUDE_ASM (not yet fully traced). */
+ * `mode` picks the coordinate convention: mode != 0 = whole pixels (-8 bias);
+ * mode == 0 = 1/16-pixel subpixel (coord<<4, -0x10 bias). off = g_gsPixelOffset.
+ */
+void func_00290320(s32 x0, s32 y0, s32 x1, s32 y1, u64 reg4, s32 mode) {
+    u8 *p = (u8 *)g_frameDmaCursor;
+    u64 z = (u64)0xFFFFF000u << 24; /* fixed Z = 0x00FFFFF000000000 */
+
+    *(u32 *)(p + 0x0) = 0x10000003;
+    *(u32 *)(p + 0x4) = 0;
+    *(u32 *)(p + 0x8) = 0;
+    *(u32 *)(p + 0xC) = 0x50000003;
+    g_frameDmaCursor = (u32 *)(p + 0x10);
+
+    *(u64 *)(p + 0x10) = ((u64)0x8800 << 47) | 0x8001;
+    *(u64 *)(p + 0x18) = 0x4410;
+    *(u64 *)(p + 0x20) = 0x41;
+    *(u64 *)(p + 0x28) = reg4;
+
+    if (mode == 0) {
+        *(u64 *)(p + 0x30) = (u64)(u32)((x0 << 4) + g_gsPixelOffsetX - 0x10)
+                           | ((u64)(u32)((y0 << 4) + g_gsPixelOffsetY - 0x10) << 16)
+                           | z;
+        *(u64 *)(p + 0x38) = (u64)(u32)((x1 << 4) + g_gsPixelOffsetX - 0x10)
+                           | ((u64)(u32)((y1 << 4) + g_gsPixelOffsetY - 0x10) << 16)
+                           | z;
+    } else {
+        *(u64 *)(p + 0x30) = (u64)(u32)(x0 + g_gsPixelOffsetX - 8)
+                           | ((u64)(u32)(y0 + g_gsPixelOffsetY - 8) << 16)
+                           | z;
+        *(u64 *)(p + 0x38) = (u64)(u32)(x1 + g_gsPixelOffsetX - 8)
+                           | ((u64)(u32)(y1 + g_gsPixelOffsetY - 8) << 16)
+                           | z;
+    }
+
+    g_frameDmaCursor = (u32 *)((u8 *)g_frameDmaCursor + 0x30);
+}
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_002904B0);
-
-/* func_00290640(...): HUD element helper (~0x174 bytes).
+#else
+/**
+ * GS rectangle GIF-packet builder, twin of func_00290320: identical to it
+ * (fixed Z 0x00FFFFF000000000, 6 args, both coordinate modes) except the
+ * register written at p+0x20 is 0x46 rather than 0x41. Appends the packet to the
+ * frame render-DMA chain (g_frameDmaCursor) and advances the cursor by 0x40.
  *
- * WALL: callee-saves + jal gates; register colouring not reproducible from C.
- * Left INCLUDE_ASM (not yet fully traced). */
+ * `mode` picks the coordinate convention: mode != 0 = whole pixels (-8 bias);
+ * mode == 0 = 1/16-pixel subpixel (coord<<4, -0x10 bias). off = g_gsPixelOffset.
+ */
+void func_002904B0(s32 x0, s32 y0, s32 x1, s32 y1, u64 reg4, s32 mode) {
+    u8 *p = (u8 *)g_frameDmaCursor;
+    u64 z = (u64)0xFFFFF000u << 24; /* fixed Z = 0x00FFFFF000000000 */
+
+    *(u32 *)(p + 0x0) = 0x10000003;
+    *(u32 *)(p + 0x4) = 0;
+    *(u32 *)(p + 0x8) = 0;
+    *(u32 *)(p + 0xC) = 0x50000003;
+    g_frameDmaCursor = (u32 *)(p + 0x10);
+
+    *(u64 *)(p + 0x10) = ((u64)0x8800 << 47) | 0x8001;
+    *(u64 *)(p + 0x18) = 0x4410;
+    *(u64 *)(p + 0x20) = 0x46;
+    *(u64 *)(p + 0x28) = reg4;
+
+    if (mode == 0) {
+        *(u64 *)(p + 0x30) = (u64)(u32)((x0 << 4) + g_gsPixelOffsetX - 0x10)
+                           | ((u64)(u32)((y0 << 4) + g_gsPixelOffsetY - 0x10) << 16)
+                           | z;
+        *(u64 *)(p + 0x38) = (u64)(u32)((x1 << 4) + g_gsPixelOffsetX - 0x10)
+                           | ((u64)(u32)((y1 << 4) + g_gsPixelOffsetY - 0x10) << 16)
+                           | z;
+    } else {
+        *(u64 *)(p + 0x30) = (u64)(u32)(x0 + g_gsPixelOffsetX - 8)
+                           | ((u64)(u32)(y0 + g_gsPixelOffsetY - 8) << 16)
+                           | z;
+        *(u64 *)(p + 0x38) = (u64)(u32)(x1 + g_gsPixelOffsetX - 8)
+                           | ((u64)(u32)(y1 + g_gsPixelOffsetY - 8) << 16)
+                           | z;
+    }
+
+    g_frameDmaCursor = (u32 *)((u8 *)g_frameDmaCursor + 0x30);
+}
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_00290640);
+#else
+/**
+ * Append a GIF/DMA packet to the frame render-DMA chain (g_frameDmaCursor) that
+ * sets a GS scissor/region rectangle from two corner points, then advance the
+ * write cursor.
+ *
+ * Layout written at the cursor `p`:
+ *   p+0x00 : DMA/GIF chain tags (0x10000003, 0, 0, 0x50000003) - cursor bumped +0x10
+ *   p+0x10 : GIFtag (REGLIST) + the register data qwords 0x4410, 0x46, reg4
+ *   p+0x30 : point 0 packed as (x0+off | (y0+off)<<16 | zHigh<<32)
+ *   p+0x38 : point 1 packed the same way from (x1,y1)
+ * then the cursor is advanced to p+0x40.
+ *
+ * `mode` selects the coordinate fixed-point convention: mode != 0 uses whole
+ * pixels biased by -8; mode == 0 shifts each coord left by 4 (1/16-pixel
+ * subpixel) and biases by -0x10. off = g_gsPixelOffset{X,Y}.
+ */
+void func_00290640(s32 x0, s32 y0, s32 x1, s32 y1, u64 reg4, s32 zHigh, s32 mode) {
+    u8 *p = (u8 *)g_frameDmaCursor;
+    u64 z = (u64)(u32)zHigh << 32;
+
+    /* DMA/GIF chain header tags */
+    *(u32 *)(p + 0x0) = 0x10000003;
+    *(u32 *)(p + 0x4) = 0;
+    *(u32 *)(p + 0x8) = 0;
+    *(u32 *)(p + 0xC) = 0x50000003;
+    g_frameDmaCursor = (u32 *)(p + 0x10);
+
+    /* GIFtag + register data qwords */
+    *(u64 *)(p + 0x10) = ((u64)0x8800 << 47) | 0x8001;
+    *(u64 *)(p + 0x18) = 0x4410;
+    *(u64 *)(p + 0x20) = 0x46;
+    *(u64 *)(p + 0x28) = reg4;
+
+    if (mode == 0) {
+        *(u64 *)(p + 0x30) = (u64)(u32)((x0 << 4) + g_gsPixelOffsetX - 0x10)
+                           | ((u64)(u32)((y0 << 4) + g_gsPixelOffsetY - 0x10) << 16)
+                           | z;
+        *(u64 *)(p + 0x38) = (u64)(u32)((x1 << 4) + g_gsPixelOffsetX - 0x10)
+                           | ((u64)(u32)((y1 << 4) + g_gsPixelOffsetY - 0x10) << 16)
+                           | z;
+    } else {
+        *(u64 *)(p + 0x30) = (u64)(u32)(x0 + g_gsPixelOffsetX - 8)
+                           | ((u64)(u32)(y0 + g_gsPixelOffsetY - 8) << 16)
+                           | z;
+        *(u64 *)(p + 0x38) = (u64)(u32)(x1 + g_gsPixelOffsetX - 8)
+                           | ((u64)(u32)(y1 + g_gsPixelOffsetY - 8) << 16)
+                           | z;
+    }
+
+    g_frameDmaCursor = (u32 *)((u8 *)g_frameDmaCursor + 0x30);
+}
+#endif
 
 /* func_002907B8(...): HUD element helper / unit tail (~0xB8 bytes).
  *

@@ -38,14 +38,12 @@ extern void *D_1AD9F8;           /* vtable installed by func_00337830 */
 extern void *g_GuiListRowVtable; /* GuiListRow element vtable installed by func_00337278 */
 
 extern void GuiSpriteElementDraw(void *p);
+extern void GuiTextElementDraw(void *e);
 extern void GuiDialogBoxInitElements(void *p);
 
 /* Small-data (gp_rel) vtable globals installed by the func_00336B88/BA8 ctors. */
 extern void *D_1AD908;
 extern void *D_1AD8E8;
-
-extern u8 g_weaponTable[];              /* 0x239B20 - variant table, stride 0xE0 */
-extern u8 g_itemEquippedSlot[];         /* 0x139568 - itemId -> variant slot */
 
 /* A GUI element: first words are pointers into a shared float-vector pool
  * (pos +0x0, scale +0x4), a color block +0xC, a visibility-scalar pointer
@@ -93,7 +91,8 @@ extern void func_00343F68(void *p);
 extern void func_0033BE60(void *p, s32 v);
 extern void func_0033BF90(void *p);
 extern void func_00348DA0(void *p);
-extern s32 func_00348E60(void *p);
+extern s32 func_00348E60(void *p);  /* 248B50:308 - returns a state value */
+extern void func_00348E10(void *w, s32 a, s32 b); /* 248B50:269 */
 extern void func_00348E70(void *p);
 
 #ifdef TARGET_NATIVE
@@ -107,27 +106,54 @@ extern void func_00348BD0(void *p);
 extern void func_00348CB8(void *w, s32 inputMask); /* 248B50: selection-advance by input mask */
 extern void func_00348E28(void *w, f32 x, f32 y);
 extern void func_00348E58(void *w, s32 res);
-/* --- cohort-4 coverage-body deps (byte-neutral extern decls) --- */
 extern void func_00115AC0(void *dst, const void *src, s32 len); /* SDK memcpy */
-extern void func_00115DA8(char *dst, const char *fmt, ...);     /* SDK sprintf */
-extern s32 GetLocalizedString(s32 id);  /* textId -> char* (declared early for func_003395F0) */
 extern void func_00338D48(void *p, s32 a1, f32 x, f32 y, s32 a2);
-extern void func_00348E10(void *w, s32 a, s32 b); /* 248B50:269 */
-extern s32 func_00348E68(void *w);      /* 248B50:313 - list row count */
-extern void GuiMenuListDraw(void *w);   /* 0x348E70 - per-frame menu-list draw */
-extern u32 func_002AA3F0(u32 color1, u32 color2, s32 period, s32 counterSel, s32 reset); /* color-pulse (d1) */
+extern void func_0033FDD8(void *p);
+extern void func_00342958(void *p);
+extern void func_00342978(void *p);
+extern void func_00342998(void *p);
+extern f32 D_1AE1E8;                    /* GUI x-position offset constant */
+extern f32 D_1AE1EC;                    /* GUI y-position offset constant */
+extern void func_00115DA8(char *dst, const char *fmt, ...); /* SDK sprintf */
+extern s32 GetLocalizedString(s32 id);  /* textId -> char* (declared early for func_003395F0) */
 extern s32 g_padButtonsPressed;         /* 0x138344 - buttons pressed this frame */
-extern u8 D_1A7BBA;                     /* toggled widescreen/mode flag */
 extern f32 D_1AE0C0, D_1AE0C4;          /* GUI anchor x/y position offsets */
 extern f32 D_1AE0C8, D_1AE0CC;          /* GUI size params (float, truncated to int) */
+extern f32 D_1AE0D0, D_1AE0D4, D_1AE0D8, D_1AE0DC, D_1AE0E0; /* sub-element x/y offset pairs */
+extern f32 D_1AE0E4, D_1AE0E8, D_1AE0EC, D_1AE0F0, D_1AE0F4;
+extern void func_00342670(void *w);     /* positions w+0x130 from the selected row */
+extern s32 func_00348E68(void *w);      /* 248B50:313 - list row count */
+extern void GuiMenuListDraw(void *w);   /* 0x348E70 - per-frame menu-list draw */
 extern f32 D_1AE108, D_1AE10C;          /* list row Y-step / X-offset */
-extern f32 D_1AE1E8, D_1AE1EC;          /* GUI x/y-position offset constants */
+extern f32 D_1AE160, D_1AE164;          /* func_00343338 anchor x/y offsets */
+extern f32 D_1AE168, D_1AE16C;          /* func_00343338 size params (float->int) */
+extern void func_00339740(void *w);     /* func_00339A88 mode-0 sub-updater */
+extern u8 D_1A7BBA;                      /* toggled widescreen/mode flag */
+/* func_003453D0 (weapon-select builder) deps */
+extern void SetWeaponUpgradeSlot(s32 a, s32 b); /* 0x288A20 - retarget upgrade slot */
+extern void func_00344E08(void *w, void *a);    /* mode-0 handler */
+extern void func_00344F18(void *w, void *a);    /* mode-2 handler */
+extern void func_00345080(void *w, void *a);    /* mode-3 handler */
+extern void func_003451B8(void *w, void *a);    /* mode-1 handler */
+extern void func_003457A0(void *w);             /* weapon-panel tail draw */
+extern s16 g_equippedArmor;             /* 0x1A7A20 */
+extern u8 g_inventoryOwned[];           /* per-item owned flags */
+extern u8 g_weaponTable[];              /* 0x239B20 - variant table, stride 0xE0 */
+extern u8 g_itemEquippedSlot[];         /* 0x139568 - itemId -> variant slot */
+extern s32 D_1AE248[];                  /* 4-entry stringId table */
+extern f32 D_1AE280[];                  /* {x,y} offset pair for the +0x1C8 element */
+extern f32 D_1AE258, D_1AE25C, D_1AE260, D_1AE264, D_1AE268, D_1AE26C, D_1AE270;
+extern f32 D_1AE274, D_1AE278, D_1AE27C, D_1AE288, D_1AE28C, D_1AE290, D_1AE294;
 extern s32 D_1ADC68;                    /* GUI x-offset (int, used as float) */
 extern s32 D_1ADC6C;                    /* GUI y-offset (int, used as float) */
 extern s32 D_1ADC70;                    /* GUI y per-counter step (int multiplier) */
 /* defined later in-unit; forward-declared for func_0033A8F0's earlier #else use */
 extern void func_0033C060(void *p, f32 a, f32 b);
 extern void func_0033BE70(void *p, s32 flags);
+/* color-pulse: blends color1/color2 by a period counter, returns packed RGBA (d1) */
+extern u32 func_002AA3F0(u32 color1, u32 color2, s32 period, s32 counterSel, s32 reset);
+/* func_00338CD8 (void*,s32,f32,f32,s32) + func_0033BE70 (void*,s32) are defined
+ * later in this unit, before their #else callers below — no extern needed. */
 #endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336068);
@@ -1462,7 +1488,25 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00339740);
 void func_00339A80(void) {
 }
 
+/* Refresh a widget with a live sub-value (*(w+0x4)[0] != 0): dispatch on its
+ * mode (+0x1C8) — mode 0 runs the sub-updater func_00339740, mode 2 the (empty)
+ * func_00339A80 — then always run the (empty) tail func_003396E0. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00339A88);
+#else
+void func_00339A88(void *w) {
+    f32 *p = *(f32 **)((char *)w + 0x4);
+    if (p[0] == 0.0f) {
+        return;
+    }
+    switch (*(s32 *)((char *)w + 0x1C8)) {
+    case 0: func_00339740(w); break;
+    case 2: func_00339A80();  break;
+    default: break;
+    }
+    func_003396E0();
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00339B00);
 
@@ -1606,7 +1650,23 @@ void GuiConfirmPopupInit(void *w, GuiPool *pool) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiConfirmPopupTick);
 
+/* Draw a confirm popup when it's active (+0x2D8 != 0): four sprite sub-elements
+ * (+0x8/+0x54/+0xA0/+0xEC) and three text sub-elements (+0x138/+0x190/+0x1E8). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiConfirmPopupDraw);
+#else
+void GuiConfirmPopupDraw(void *w) {
+    if (*(s32 *)((char *)w + 0x2D8) != 0) {
+        GuiSpriteElementDraw((char *)w + 0x8);
+        GuiSpriteElementDraw((char *)w + 0x54);
+        GuiSpriteElementDraw((char *)w + 0xA0);
+        GuiSpriteElementDraw((char *)w + 0xEC);
+        GuiTextElementDraw((char *)w + 0x138);
+        GuiTextElementDraw((char *)w + 0x190);
+        GuiTextElementDraw((char *)w + 0x1E8);
+    }
+}
+#endif
 
 /* func_0033A640: init the embedded dialog-box (p+0x8) and a type-B element
  * (p+0x2D8), return the object. */
@@ -2306,7 +2366,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033CDB0);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiDialogBoxVariantCInit);
 #else
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
-extern void func_0033CEE0(void *w, s32 flag);
+extern s32 func_0033CEE0(void *w, s32 flag);
 extern u8 D_1ADD98[];
 void GuiDialogBoxVariantCInit(void *w, GuiPool *pool) {
     void *obj;
@@ -2341,7 +2401,67 @@ void GuiDialogBoxVariantCInit(void *w, GuiPool *pool) {
 }
 #endif
 
+/* func_0033CEE0: variant-C dialog handler — a 2D map-pan controller. Re-anchors
+ * the dialog box (+0x8) via func_0033BE70/func_0033C060. On confirm (0x40) with
+ * selection +0x2D8 == 0, plays sound 4. On any D-pad bit (0xF000), nudges the GS
+ * screen-context pan offsets: Y (g_gsScreenContext+0x16A) -1 on 0x1000 (clamp
+ * >= -0x20) / +1 on 0x4000 (clamp <= 0x20); X (+0x168) -1 on 0x8000 (clamp
+ * >= -0x28) / +1 on 0x2000 (clamp <= 0x28). If the pan actually moved, plays
+ * sound 4, then rebuilds the display env via func_002857F0(). Returns bit 6 of
+ * flags. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033CEE0);
+#else
+extern u8 g_gsScreenContext[];
+extern void func_002857F0(void);
+extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+s32 func_0033CEE0(void *w, s32 flags) {
+    void *box = (char *)w + 0x8;
+    f32 *anchor;
+    s16 *panX = (s16 *)(g_gsScreenContext + 0x168);
+    s16 *panY = (s16 *)(g_gsScreenContext + 0x16A);
+    s16 origX, origY;
+
+    func_0033BE70(box, flags);
+    anchor = *(f32 **)((char *)w + 0x2DC);
+    func_0033C060(box, anchor[0], anchor[1]);
+
+    if ((flags & 0x40) && *(s32 *)((char *)w + 0x2D8) == 0) {
+        PlayGlobalSound(4, 0, 0);
+    }
+
+    if (flags & 0xF000) {
+        origX = *panX;
+        origY = *panY;
+        if (flags & 0x1000) {          /* pan up: Y - 1, clamp to -0x20 */
+            s16 v = (s16)(*panY - 1);
+            *panY = v;
+            if (v < -0x20) *panY = -0x20;
+        }
+        if (flags & 0x4000) {          /* pan down: Y + 1, clamp to 0x20 */
+            s16 v = (s16)(*panY + 1);
+            *panY = v;
+            if (v >= 0x21) *panY = 0x20;
+        }
+        if (flags & 0x8000) {          /* pan left: X - 1, clamp to -0x28 */
+            s16 v = (s16)(*panX - 1);
+            *panX = v;
+            if (v < -0x28) *panX = -0x28;
+        }
+        if (flags & 0x2000) {          /* pan right: X + 1, clamp to 0x28 */
+            s16 v = (s16)(*panX + 1);
+            *panX = v;
+            if (v >= 0x29) *panX = 0x28;
+        }
+        if (origX != *panX || origY != *panY) {
+            PlayGlobalSound(4, 0, 0);
+        }
+        func_002857F0();
+    }
+
+    return (flags >> 6) & 1;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D070);
 
@@ -2360,7 +2480,48 @@ void *func_0033D1C0(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D1F0);
 
+/* func_0033D1F8: construct a dialog-box screen (GuiQuitDialogInit-family). Pool ->
+ * alloc the 0x10-byte placement record (+0x2DC) and zero it (+0x0 pool store
+ * unconditional). Panel (+0x8) seeded 255x195, border art from D_1ADDB8, three
+ * text rows = localized 0x307A/0x2BE4/0x2BE5, bounds (0,-143,0,114,0,140), scale
+ * 0.65. Clear +0x2D8, then func_0033D320(w, 0) (its re-layout builder). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D1F8);
+#else
+s32 func_0033D320(void *p, s32 flags);
+extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
+extern u8 D_1ADDB8[];
+void func_0033D1F8(void *w, GuiPool *pool) {
+    void *obj;
+    s32 t0, t1, t2;
+
+    /* +0x0 = pool is stored unconditionally (beqz delay slot). */
+    *(GuiPool **)((char *)w + 0x0) = pool;
+    if (pool != 0) {
+        obj = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        *(void **)((char *)w + 0x2DC) = obj;
+        *(s32 *)((char *)obj + 0x0) = 0;
+        *(s32 *)((char *)obj + 0x4) = 0;
+        *(s32 *)((char *)obj + 0x8) = 0;
+        *(s32 *)((char *)obj + 0xC) = 0;
+    }
+
+    obj = *(void **)((char *)w + 0x2DC);
+    *(f32 *)((char *)obj + 0x0) = 255.0f;
+    *(f32 *)((char *)obj + 0x4) = 195.0f;
+    GuiDialogBoxInitBorder((char *)w + 0x8, pool, D_1ADDB8);
+
+    t0 = GetLocalizedString(0x307A);
+    t1 = GetLocalizedString(0x2BE4);
+    t2 = GetLocalizedString(0x2BE5);
+    GuiDialogBoxSetText3((char *)w + 0x8, t0, t1, t2);
+
+    GuiDialogBoxSetBounds((char *)w + 0x8, 0.0f, -143.0f, 0.0f, 114.0f, 0.0f, 140.0f);
+    GuiDialogBoxSetScale((char *)w + 0x8, 0.65f);
+    *(s32 *)((char *)w + 0x2D8) = 0;
+    func_0033D320(w, 0);
+}
+#endif
 
 /* func_0033D320: re-layout this dialog-box screen and (on first open) chime.
  *  - Run the dialog-box layout func_0033BE70 on the embedded box at p+0x8.
@@ -2392,12 +2553,16 @@ s32 func_0033D320(void *p, s32 flags) {
 }
 #endif
 
+/* func_0033D3C0: draw a two-part formatted caption. Lays out the box body
+ * (func_0033BF90(e+8)), formats the D_1ADDB0 template with two localized strings
+ * (the fixed 0x307A plus one of the two ids in D_1ADDA8 selected by the one-shot
+ * flag D_1A7BB9) into a scratch buffer, then draws it at (0x100, 0xAA) in colour
+ * 0x80F0F0F0 via func_002801B8. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D3C0);
 #else
 extern void func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
 extern u8 D_1ADDA8[], D_1ADDB0[], D_1A7BB9;
-/* func_0033D3C0: draw a two-part on-screen caption - dialog-box body (func_0033BF90) plus a localized caption (GetLocalizedString 0x307A / D_1ADDA8[D_1A7BB9]) at (0x100,0xAA). */
 void func_0033D3C0(void *e) {
     char buf[128];
     s32 s1, s2;
@@ -2426,9 +2591,91 @@ void *func_0033D478(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D4A8);
 
+/* func_0033D4B0: dialog-box screen constructor (func_0033D1F8 family). Panel
+ * 255x195, border D_1ADDC8, text rows localized 0x2C2E/0x2BE4/0x2BE5, bounds
+ * (0,-143,0,114,0,140), scale 0.65, then func_0033D5D8(w, 0). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D4B0);
+#else
+s32 func_0033D5D8(void *w, s32 flags);
+extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
+extern u8 D_1ADDC8[];
+void func_0033D4B0(void *w, GuiPool *pool) {
+    void *obj;
+    s32 t0, t1, t2;
 
+    *(GuiPool **)((char *)w + 0x0) = pool;
+    if (pool != 0) {
+        obj = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        *(void **)((char *)w + 0x2DC) = obj;
+        *(s32 *)((char *)obj + 0x0) = 0;
+        *(s32 *)((char *)obj + 0x4) = 0;
+        *(s32 *)((char *)obj + 0x8) = 0;
+        *(s32 *)((char *)obj + 0xC) = 0;
+    }
+
+    obj = *(void **)((char *)w + 0x2DC);
+    *(f32 *)((char *)obj + 0x0) = 255.0f;
+    *(f32 *)((char *)obj + 0x4) = 195.0f;
+    GuiDialogBoxInitBorder((char *)w + 0x8, pool, D_1ADDC8);
+
+    t0 = GetLocalizedString(0x2C2E);
+    t1 = GetLocalizedString(0x2BE4);
+    t2 = GetLocalizedString(0x2BE5);
+    GuiDialogBoxSetText3((char *)w + 0x8, t0, t1, t2);
+
+    GuiDialogBoxSetBounds((char *)w + 0x8, 0.0f, -143.0f, 0.0f, 114.0f, 0.0f, 140.0f);
+    GuiDialogBoxSetScale((char *)w + 0x8, 0.65f);
+    *(s32 *)((char *)w + 0x2D8) = 0;
+    func_0033D5D8(w, 0);
+}
+#endif
+
+/* func_0033D5D8: the settings-menu re-layout + input handler (closer of
+ * func_0033D4B0). Re-anchors the dialog box (+0x8) via func_0033BE70/func_0033C060.
+ * Left (0x1000) / right (0x4000) cycle the selection +0x2D8 through 0..3
+ * ((sel+3)%4 / (sel+1)%4) with move sound 3. On confirm (0x40, sound 4) it toggles
+ * the option for the current row: 0 -> word D_1A7BAC, 1 -> word D_1A7BB0,
+ * 2 -> D_1A7BB4 = (D_1A7BB4+1)%3, 3 -> byte D_1A7BB9 + BuildCameraProjection().
+ * Returns bit 6 of flags. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D5D8);
+#else
+extern void BuildCameraProjection(void);
+extern s32 D_1A7BAC, D_1A7BB0, D_1A7BB4;
+extern u8 D_1A7BB9;
+s32 func_0033D5D8(void *w, s32 flags) {
+    void *box = (char *)w + 0x8;
+    f32 *anchor;
+    s32 sel;
+
+    func_0033BE70(box, flags);
+    anchor = *(f32 **)((char *)w + 0x2DC);
+    func_0033C060(box, anchor[0], anchor[1]);
+
+    if (flags & 0x1000) {
+        PlayGlobalSound(3, 0, 0);
+        *(s32 *)((char *)w + 0x2D8) = (*(s32 *)((char *)w + 0x2D8) + 3) % 4;
+    } else if (flags & 0x4000) {
+        PlayGlobalSound(3, 0, 0);
+        *(s32 *)((char *)w + 0x2D8) = (*(s32 *)((char *)w + 0x2D8) + 1) % 4;
+    } else if (flags & 0x40) {
+        PlayGlobalSound(4, 0, 0);
+        sel = *(s32 *)((char *)w + 0x2D8);
+        if (sel == 0) {
+            D_1A7BAC = (D_1A7BAC == 0) ? 1 : 0;
+        } else if (sel == 1) {
+            D_1A7BB0 = (D_1A7BB0 == 0) ? 1 : 0;
+        } else if (sel == 2) {
+            D_1A7BB4 = (D_1A7BB4 + 1) % 3;
+        } else if (sel == 3) {
+            D_1A7BB9 = (D_1A7BB9 == 0) ? 1 : 0;
+            BuildCameraProjection();
+        }
+    }
+    return (flags >> 6) & 1;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D780);
 
@@ -2455,7 +2702,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DA30);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiDialogBoxVariantBInit);
 #else
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
-extern void func_0033DB60(void *w, s32 flag);
+extern s32 func_0033DB60(void *w, s32 flag);
 extern u8 D_1ADE10[];
 void GuiDialogBoxVariantBInit(void *w, GuiPool *pool) {
     void *obj;
@@ -2489,9 +2736,72 @@ void GuiDialogBoxVariantBInit(void *w, GuiPool *pool) {
 }
 #endif
 
+/* func_0033DB60: verbatim twin of func_0033E8B0 (variant-B dialog option handler).
+ * Re-anchors the dialog box (+0x8) via func_0033BE70/func_0033C060, then on L/R
+ * (0x1000|0x4000) plays move sound 3 + cycles selection +0x2D8 = (sel+1)%2; on
+ * confirm (0x40) plays sound 4 + toggles the per-row option flag (D_1A7B9D for
+ * row 0, D_1A7B9C for row 1). Returns bit 6 of flags. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DB60);
+#else
+extern u8 D_1A7B9C, D_1A7B9D;
+s32 func_0033DB60(void *w, s32 flags) {
+    void *box = (char *)w + 0x8;
+    f32 *anchor;
+    s32 sel;
 
+    func_0033BE70(box, flags);
+    anchor = *(f32 **)((char *)w + 0x2DC);
+    func_0033C060(box, anchor[0], anchor[1]);
+
+    if ((flags & 0x1000) || (flags & 0x4000)) {
+        PlayGlobalSound(3, 0, 0);
+        *(s32 *)((char *)w + 0x2D8) = (*(s32 *)((char *)w + 0x2D8) + 1) % 2;
+    } else if (flags & 0x40) {
+        PlayGlobalSound(4, 0, 0);
+        sel = *(s32 *)((char *)w + 0x2D8);
+        if (sel == 0) {
+            D_1A7B9D = (D_1A7B9D == 0) ? 1 : 0;
+        } else if (sel == 1) {
+            D_1A7B9C = (D_1A7B9C == 0) ? 1 : 0;
+        }
+    }
+    return (flags >> 6) & 1;
+}
+#endif
+
+/* func_0033DC68: draw a two-row toggle menu (each row a formatted caption). Lays
+ * out the box body (func_0033BF90(w+8)), then draws two rows via func_002801B8:
+ * row 0 at (0x100, 0x96) = D_1ADDB0 template with strings 0x2C75 + the D_1ADDA8 id
+ * picked by flag D_1A7B9D; row 1 at (0x100, 0xBE) with 0x2C74 + the id picked by
+ * D_1A7B9C. The currently-selected row (*(w+0x2D8)) is drawn bright (0x80D0D0D0),
+ * the other dimmed (0x70808080). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DC68);
+#else
+extern void func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
+extern u8 D_1ADDA8[], D_1ADDB0[], D_1A7B9C, D_1A7B9D;
+void func_0033DC68(void *w) {
+    char buf[128];
+    s32 sel = *(s32 *)((char *)w + 0x2D8);
+    u32 color;
+    s32 s0, s1;
+
+    func_0033BF90((char *)w + 0x8);
+
+    color = (sel == 0) ? 0x80D0D0D0 : 0x70808080;
+    s0 = GetLocalizedString(0x2C75);
+    s1 = GetLocalizedString(*(s32 *)(D_1ADDA8 + (D_1A7B9D ? 4 : 0)));
+    func_00115DA8(buf, (const char *)D_1ADDB0, (const char *)s0, (const char *)s1);
+    func_002801B8(0x100, 0x96, color, buf, -1);
+
+    color = (sel == 1) ? 0x80D0D0D0 : 0x70808080;
+    s0 = GetLocalizedString(0x2C74);
+    s1 = GetLocalizedString(*(s32 *)(D_1ADDA8 + (D_1A7B9C ? 4 : 0)));
+    func_00115DA8(buf, (const char *)D_1ADDB0, (const char *)s0, (const char *)s1);
+    func_002801B8(0x100, 0xBE, color, buf, -1);
+}
+#endif
 
 /* func_0033DDC8: init the embedded dialog-box (p+0x8) and two list-row elements
  * (p+0x2DC, p+0x324), return the object. */
@@ -2510,9 +2820,143 @@ void *func_0033DDC8(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DE08);
 
+/* func_0033DE10: dialog-box screen with TWO scrolling lists (record at +0x36C).
+ * Panel 255x195, border D_1ADE20, text rows localized 0x2C2D/0x2BE4/0x2BE5, bounds
+ * (0,-143,0,114,0,140), scale 0.67. Builds two identical lists (+0x2DC and +0x324),
+ * each: GuiListElementInit(0x96 tall, v34=1, tag D_1ADC60), 0x10 visible rows,
+ * 0x400 items, scroll 0, colour pairs (0x55F0C070 x2, 0x60442D00 x2), +0x44=
+ * 0x20FFFFFF / +0x38=0. Clear +0x2D8, then func_0033E070(w, 0). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DE10);
+#else
+s32 func_0033E070(void *w, s32 flags);
+extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
+extern u8 D_1ADE20[], D_1ADC60[];
+void func_0033DE10(void *w, GuiPool *pool) {
+    GuiElement *list1 = (GuiElement *)((char *)w + 0x2DC);
+    GuiElement *list2 = (GuiElement *)((char *)w + 0x324);
+    void *obj;
+    s32 t0, t1, t2;
 
+    *(GuiPool **)((char *)w + 0x0) = pool;
+    if (pool != 0) {
+        obj = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        *(void **)((char *)w + 0x36C) = obj;
+        *(s32 *)((char *)obj + 0x0) = 0;
+        *(s32 *)((char *)obj + 0x4) = 0;
+        *(s32 *)((char *)obj + 0x8) = 0;
+        *(s32 *)((char *)obj + 0xC) = 0;
+    }
+
+    obj = *(void **)((char *)w + 0x36C);
+    *(f32 *)((char *)obj + 0x0) = 255.0f;
+    *(f32 *)((char *)obj + 0x4) = 195.0f;
+    GuiDialogBoxInitBorder((char *)w + 0x8, pool, D_1ADE20);
+
+    t0 = GetLocalizedString(0x2C2D);
+    t1 = GetLocalizedString(0x2BE4);
+    t2 = GetLocalizedString(0x2BE5);
+    GuiDialogBoxSetText3((char *)w + 0x8, t0, t1, t2);
+    GuiDialogBoxSetBounds((char *)w + 0x8, 0.0f, -143.0f, 0.0f, 114.0f, 0.0f, 140.0f);
+    GuiDialogBoxSetScale((char *)w + 0x8, 0.67f);
+
+    GuiListElementInit(list1, 0x96, 1, (s32)D_1ADC60, pool);
+    GuiListSetVisibleRows(list1, 0x10);
+    GuiListSetItemCount(list1, 0x400);
+    GuiListSetScrollPos(list1, 0);
+    GuiListSetColorPair0(list1, 0x55F0C070, 0x55F0C070);
+    GuiListSetColorPair1(list1, 0x60442D00, 0x60442D00);
+    func_00337B88(list1, 0x20FFFFFF);
+    func_00337B68(list1, 0);
+
+    GuiListElementInit(list2, 0x96, 1, (s32)D_1ADC60, pool);
+    GuiListSetVisibleRows(list2, 0x10);
+    GuiListSetItemCount(list2, 0x400);
+    GuiListSetScrollPos(list2, 0);
+    GuiListSetColorPair0(list2, 0x55F0C070, 0x55F0C070);
+    GuiListSetColorPair1(list2, 0x60442D00, 0x60442D00);
+    func_00337B88(list2, 0x20FFFFFF);
+    func_00337B68(list2, 0);
+
+    *(s32 *)((char *)w + 0x2D8) = 0;
+    func_0033E070(w, 0);
+}
+#endif
+
+/* func_0033E070: the in-game audio-options menu handler (closer of func_0033DE10 —
+ * this is UpdateAudioOptionsMenuInGame). Re-anchors the box + positions the two
+ * volume-slider lists (music +0x2DC, sfx +0x324) at the anchor (*(w+0x36C)) plus
+ * D_1ADE30..3C. Left/right (0x1000/0x4000) cycle the selected row +0x2D8 through
+ * 0..2 ((sel+2)%3 / (sel+1)%3) with sound 3. Holding up (0x8000) / down (0x2000)
+ * steps the selected slider by 6, clamped to [0, 0x400] (row 0 = g_musicVolume,
+ * row 1 = g_sfxVolume). Confirm (0x40) on row 2 toggles g_audioStereoMode + pushes
+ * it to the driver (func_00132938), other rows play sound 5. Always mirrors the
+ * volumes into the list scroll positions and recomputes the channel mix
+ * (func_002E5698). Returns bit 6 of flags. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E070);
+#else
+extern void func_00132938(s32 stereoOff);
+extern void func_002E5698(void);
+extern s32 g_padButtonsHeld, g_musicVolume, g_sfxVolume, g_audioStereoMode;
+extern f32 D_1ADE30, D_1ADE34, D_1ADE38, D_1ADE3C;
+s32 func_0033E070(void *w, s32 flags) {
+    void *box = (char *)w + 0x8;
+    GuiElement *musicList = (GuiElement *)((char *)w + 0x2DC);
+    GuiElement *sfxList = (GuiElement *)((char *)w + 0x324);
+    f32 *anchor;
+    s32 sel, held, v;
+
+    func_0033BE70(box, flags);
+    anchor = *(f32 **)((char *)w + 0x36C);
+    func_0033C060(box, anchor[0], anchor[1]);
+    anchor = *(f32 **)((char *)w + 0x36C);
+    GuiElementSetPos(musicList, anchor[0] + D_1ADE30, anchor[1] + D_1ADE34, 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x36C);
+    GuiElementSetPos(sfxList, anchor[0] + D_1ADE38, anchor[1] + D_1ADE3C, 0.0f, 0.0f);
+
+    if (flags & 0x1000) {
+        PlayGlobalSound(3, 0, 0);
+        *(s32 *)((char *)w + 0x2D8) = (*(s32 *)((char *)w + 0x2D8) + 2) % 3;
+    } else if (flags & 0x4000) {
+        PlayGlobalSound(3, 0, 0);
+        *(s32 *)((char *)w + 0x2D8) = (*(s32 *)((char *)w + 0x2D8) + 1) % 3;
+    } else {
+        held = g_padButtonsHeld;
+        sel = *(s32 *)((char *)w + 0x2D8);
+        if (held & 0x8000) {
+            if (sel == 0) {
+                v = g_musicVolume - 6;
+                g_musicVolume = (v < 0) ? 0 : v;
+            } else if (sel == 1) {
+                v = g_sfxVolume - 6;
+                g_sfxVolume = (v < 0) ? 0 : v;
+            }
+        } else if (held & 0x2000) {
+            if (sel == 0) {
+                v = g_musicVolume + 6;
+                g_musicVolume = (v > 0x400) ? 0x400 : v;
+            } else if (sel == 1) {
+                v = g_sfxVolume + 6;
+                g_sfxVolume = (v > 0x400) ? 0x400 : v;
+            }
+        } else if (flags & 0x40) {
+            if (sel == 2) {
+                PlayGlobalSound(4, 0, 0);
+                g_audioStereoMode = (g_audioStereoMode == 0) ? 1 : 0;
+                func_00132938(g_audioStereoMode ^ 1);
+            } else {
+                PlayGlobalSound(5, 0, 0);
+            }
+        }
+    }
+
+    GuiListSetScrollPos(sfxList, g_sfxVolume);
+    GuiListSetScrollPos(musicList, g_musicVolume);
+    func_002E5698();
+    return (flags >> 6) & 1;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E308);
 
@@ -2531,7 +2975,46 @@ void *func_0033E488(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E4B8);
 
+/* func_0033E4C0: dialog-box screen constructor (twin of func_0033D1F8). Panel
+ * 255x195, border D_1ADE50, text rows localized 0x2C2F/0x2BE4/0x2BE5, bounds
+ * (0,-143,0,114,0,140), scale 0.3, then func_0033E5E8(w, 0). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E4C0);
+#else
+s32 func_0033E5E8(void *p, s32 flags);
+extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
+extern u8 D_1ADE50[];
+void func_0033E4C0(void *w, GuiPool *pool) {
+    void *obj;
+    s32 t0, t1, t2;
+
+    /* +0x0 = pool is stored unconditionally (beqz delay slot). */
+    *(GuiPool **)((char *)w + 0x0) = pool;
+    if (pool != 0) {
+        obj = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        *(void **)((char *)w + 0x2DC) = obj;
+        *(s32 *)((char *)obj + 0x0) = 0;
+        *(s32 *)((char *)obj + 0x4) = 0;
+        *(s32 *)((char *)obj + 0x8) = 0;
+        *(s32 *)((char *)obj + 0xC) = 0;
+    }
+
+    obj = *(void **)((char *)w + 0x2DC);
+    *(f32 *)((char *)obj + 0x0) = 255.0f;
+    *(f32 *)((char *)obj + 0x4) = 195.0f;
+    GuiDialogBoxInitBorder((char *)w + 0x8, pool, D_1ADE50);
+
+    t0 = GetLocalizedString(0x2C2F);
+    t1 = GetLocalizedString(0x2BE4);
+    t2 = GetLocalizedString(0x2BE5);
+    GuiDialogBoxSetText3((char *)w + 0x8, t0, t1, t2);
+
+    GuiDialogBoxSetBounds((char *)w + 0x8, 0.0f, -143.0f, 0.0f, 114.0f, 0.0f, 140.0f);
+    GuiDialogBoxSetScale((char *)w + 0x8, 0.3f);
+    *(s32 *)((char *)w + 0x2D8) = 0;
+    func_0033E5E8(w, 0);
+}
+#endif
 
 /* func_0033E5E8: re-layout this dialog-box screen and (on first open) chime.
  *  - Run the dialog-box layout func_0033BE70 on the embedded box at p+0x8.
@@ -2561,12 +3044,16 @@ s32 func_0033E5E8(void *p, s32 flags) {
 }
 #endif
 
+/* func_0033E680: draw a two-part formatted caption (sibling of func_0033D3C0),
+ * with a state-dependent colour: 0x80D0D0D0 when *(w+0x2D8)==0 (dimmed) else
+ * 0x70808080. Lays out the box body (func_0033BF90(w+8)), formats D_1ADDB0 with
+ * the fixed string 0x2C2F plus the D_1ADDA8 id selected by flag D_1A7B9E, draws it
+ * at (0x100, 0xAA). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E680);
 #else
 extern void func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
 extern u8 D_1ADDA8[], D_1ADDB0[];
-/* func_0033E680: caption sibling drawn with state-dependent colour (localized 0x2C2F; 0x80D0D0D0 vs 0x70808080 keyed on *(w+0x2D8); flag D_1A7B9E). */
 void func_0033E680(void *w) {
     char buf[128];
     s32 s1, s2;
@@ -2650,7 +3137,6 @@ void GuiQuitDialogInit(void *w, GuiPool *pool) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E8B0);
 #else
 extern u8 D_1A7BBB;
-extern void PlayGlobalSound(s32 id, s32 a, s32 b);
 s32 func_0033E8B0(void *w, s32 flags) {
     void *box = (char *)w + 0x8;
     f32 *anchor;
@@ -2693,7 +3179,45 @@ void *func_0033EB20(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EB50);
 
+/* func_0033EB58: dialog-box screen constructor (func_0033D1F8 family). Panel
+ * 255x195, border D_1ADE70, text rows localized 0x2BF7/0x2BE4/0x2BE5, bounds
+ * (0,-143,0,114,0,140), scale 0.3, then func_0033EC80(w, 0). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EB58);
+#else
+s32 func_0033EC80(void *w, s32 flags);
+extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
+extern u8 D_1ADE70[];
+void func_0033EB58(void *w, GuiPool *pool) {
+    void *obj;
+    s32 t0, t1, t2;
+
+    *(GuiPool **)((char *)w + 0x0) = pool;
+    if (pool != 0) {
+        obj = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        *(void **)((char *)w + 0x2DC) = obj;
+        *(s32 *)((char *)obj + 0x0) = 0;
+        *(s32 *)((char *)obj + 0x4) = 0;
+        *(s32 *)((char *)obj + 0x8) = 0;
+        *(s32 *)((char *)obj + 0xC) = 0;
+    }
+
+    obj = *(void **)((char *)w + 0x2DC);
+    *(f32 *)((char *)obj + 0x0) = 255.0f;
+    *(f32 *)((char *)obj + 0x4) = 195.0f;
+    GuiDialogBoxInitBorder((char *)w + 0x8, pool, D_1ADE70);
+
+    t0 = GetLocalizedString(0x2BF7);
+    t1 = GetLocalizedString(0x2BE4);
+    t2 = GetLocalizedString(0x2BE5);
+    GuiDialogBoxSetText3((char *)w + 0x8, t0, t1, t2);
+
+    GuiDialogBoxSetBounds((char *)w + 0x8, 0.0f, -143.0f, 0.0f, 114.0f, 0.0f, 140.0f);
+    GuiDialogBoxSetScale((char *)w + 0x8, 0.3f);
+    *(s32 *)((char *)w + 0x2D8) = 0;
+    func_0033EC80(w, 0);
+}
+#endif
 
 /* Position a widget sub-element (+0x8) at its anchor (*(w+0x2DC)); when the
  * confirm bit (arg & 0x40) is set and the widget isn't already busy (+0x2D8 == 0),
@@ -2717,12 +3241,14 @@ s32 func_0033EC80(void *w, s32 flags) {
 }
 #endif
 
+/* func_0033ED18: draw a two-part formatted caption (twin of func_0033D3C0), with
+ * the fixed string 0x2C30, the D_1ADDA8 id selected by flag D_1A7BBA, colour
+ * 0x80F0F0F0, drawn at (0x100, 0xAA). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033ED18);
 #else
 extern void func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
 extern u8 D_1ADDA8[], D_1ADDB0[];
-/* func_0033ED18: caption twin drawing localized string 0x2C30 (flag D_1A7BBA) at (0x100,0xAA) in colour 0x80F0F0F0. */
 void func_0033ED18(void *e) {
     char buf[128];
     s32 s1, s2;
@@ -2751,7 +3277,45 @@ void *func_0033EDD0(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EE00);
 
+/* func_0033EE08: dialog-box screen constructor (func_0033D1F8 family). Panel
+ * 255x195, border D_1ADE80, text rows localized 0x2BF7/0x2BE4/0x2BE5, bounds
+ * (0,-143,0,114,0,140), scale 0.4, then func_0033EF30(w, 0). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EE08);
+#else
+s32 func_0033EF30(void *w, s32 flags);
+extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
+extern u8 D_1ADE80[];
+void func_0033EE08(void *w, GuiPool *pool) {
+    void *obj;
+    s32 t0, t1, t2;
+
+    *(GuiPool **)((char *)w + 0x0) = pool;
+    if (pool != 0) {
+        obj = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        *(void **)((char *)w + 0x2DC) = obj;
+        *(s32 *)((char *)obj + 0x0) = 0;
+        *(s32 *)((char *)obj + 0x4) = 0;
+        *(s32 *)((char *)obj + 0x8) = 0;
+        *(s32 *)((char *)obj + 0xC) = 0;
+    }
+
+    obj = *(void **)((char *)w + 0x2DC);
+    *(f32 *)((char *)obj + 0x0) = 255.0f;
+    *(f32 *)((char *)obj + 0x4) = 195.0f;
+    GuiDialogBoxInitBorder((char *)w + 0x8, pool, D_1ADE80);
+
+    t0 = GetLocalizedString(0x2BF7);
+    t1 = GetLocalizedString(0x2BE4);
+    t2 = GetLocalizedString(0x2BE5);
+    GuiDialogBoxSetText3((char *)w + 0x8, t0, t1, t2);
+
+    GuiDialogBoxSetBounds((char *)w + 0x8, 0.0f, -143.0f, 0.0f, 114.0f, 0.0f, 140.0f);
+    GuiDialogBoxSetScale((char *)w + 0x8, 0.4f);
+    *(s32 *)((char *)w + 0x2D8) = 0;
+    func_0033EF30(w, 0);
+}
+#endif
 
 /* Sibling of func_0033EC80: position a sub-element (+0x8) at its anchor
  * (*(w+0x2DC)); on the confirm bit (arg & 0x40) while not busy (+0x2D8 == 0),
@@ -2789,7 +3353,45 @@ void *func_0033EFC8(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EFF8);
 
+/* func_0033F000: dialog-box screen constructor (func_0033D1F8 family). Panel
+ * 255x195, border D_1ADE90, text rows localized 0x2BF7/0x2BE4/0x2BE5, bounds
+ * (0,-143,0,114,0,140), scale 0.4, then func_0033F128(w, 0). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F000);
+#else
+s32 func_0033F128(void *w, s32 flags);
+extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
+extern u8 D_1ADE90[];
+void func_0033F000(void *w, GuiPool *pool) {
+    void *obj;
+    s32 t0, t1, t2;
+
+    *(GuiPool **)((char *)w + 0x0) = pool;
+    if (pool != 0) {
+        obj = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        *(void **)((char *)w + 0x2DC) = obj;
+        *(s32 *)((char *)obj + 0x0) = 0;
+        *(s32 *)((char *)obj + 0x4) = 0;
+        *(s32 *)((char *)obj + 0x8) = 0;
+        *(s32 *)((char *)obj + 0xC) = 0;
+    }
+
+    obj = *(void **)((char *)w + 0x2DC);
+    *(f32 *)((char *)obj + 0x0) = 255.0f;
+    *(f32 *)((char *)obj + 0x4) = 195.0f;
+    GuiDialogBoxInitBorder((char *)w + 0x8, pool, D_1ADE90);
+
+    t0 = GetLocalizedString(0x2BF7);
+    t1 = GetLocalizedString(0x2BE4);
+    t2 = GetLocalizedString(0x2BE5);
+    GuiDialogBoxSetText3((char *)w + 0x8, t0, t1, t2);
+
+    GuiDialogBoxSetBounds((char *)w + 0x8, 0.0f, -143.0f, 0.0f, 114.0f, 0.0f, 140.0f);
+    GuiDialogBoxSetScale((char *)w + 0x8, 0.4f);
+    *(s32 *)((char *)w + 0x2D8) = 0;
+    func_0033F128(w, 0);
+}
+#endif
 
 /* Verbatim sibling of func_0033EC80/func_0033EF30: sub-element position (+0x8 at
  * anchor *(w+0x2DC)) + confirm-sound/D_1A7BBA-toggle on (arg & 0x40) while not
@@ -2828,7 +3430,54 @@ void *func_0033F1C0(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F1F8);
 
+/* func_0033F200: dialog-box screen constructor with an embedded list (record at
+ * +0x3BC). Panel 255x195, border D_1ADEA0, text rows localized 0x2C36/0x2C0B/
+ * 0x2BE5, bounds (0,-143,0,114,0,140), scale 0.4, clear +0x2D8. Then builds the
+ * list element (+0x2E0): func_00348BF8(pool), func_00348E10(-0x53, 0x20),
+ * func_00348E20(1), and runs func_0033F3F0(w, 0). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F200);
+#else
+s32 func_0033F3F0(void *w, s32 arg1);
+extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
+extern void func_00348BF8(void *w, void *pool);
+extern void func_00348E20(void *w, s32 v);
+extern u8 D_1ADEA0[];
+void func_0033F200(void *w, GuiPool *pool) {
+    void *obj;
+    void *list = (char *)w + 0x2E0;
+    s32 t0, t1, t2;
+
+    *(GuiPool **)((char *)w + 0x0) = pool;
+    if (pool != 0) {
+        obj = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        *(void **)((char *)w + 0x3BC) = obj;
+        *(s32 *)((char *)obj + 0x0) = 0;
+        *(s32 *)((char *)obj + 0x4) = 0;
+        *(s32 *)((char *)obj + 0x8) = 0;
+        *(s32 *)((char *)obj + 0xC) = 0;
+    }
+
+    obj = *(void **)((char *)w + 0x3BC);
+    *(f32 *)((char *)obj + 0x0) = 255.0f;
+    *(f32 *)((char *)obj + 0x4) = 195.0f;
+    GuiDialogBoxInitBorder((char *)w + 0x8, pool, D_1ADEA0);
+
+    t0 = GetLocalizedString(0x2C36);
+    t1 = GetLocalizedString(0x2C0B);
+    t2 = GetLocalizedString(0x2BE5);
+    GuiDialogBoxSetText3((char *)w + 0x8, t0, t1, t2);
+
+    GuiDialogBoxSetBounds((char *)w + 0x8, 0.0f, -143.0f, 0.0f, 114.0f, 0.0f, 140.0f);
+    GuiDialogBoxSetScale((char *)w + 0x8, 0.4f);
+    *(s32 *)((char *)w + 0x2D8) = 0;
+
+    func_00348BF8(list, pool);
+    func_00348E10(list, -0x53, 0x20);
+    func_00348E20(list, 1);
+    func_0033F3F0(w, 0);
+}
+#endif
 
 /* func_0033F360: call func_0033F398(p) to get a row index, then return the
  * row's address: base (+0x3B8) + index * 0x14 (20-byte stride). */
@@ -2918,7 +3567,43 @@ void *func_0033F4D0(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F508);
 
+/* func_0033F510: a wider dialog-box screen constructor (record at +0x2D8, panel
+ * 255x208, border D_1ADEC8). Two-row text (localized 0x2CB7 title, empty middle,
+ * 0x2BE5 footer), bounds (-128,-183,112,110,102,110), no scale, then
+ * func_0033F610(w, 0). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F510);
+#else
+s32 func_0033F610(void *p, s32 flags);
+extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
+extern u8 D_1ADEC8[];
+void func_0033F510(void *w, GuiPool *pool) {
+    void *obj;
+    s32 t0, t2;
+
+    *(GuiPool **)((char *)w + 0x0) = pool;
+    if (pool != 0) {
+        obj = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        *(void **)((char *)w + 0x2D8) = obj;
+        *(s32 *)((char *)obj + 0x0) = 0;
+        *(s32 *)((char *)obj + 0x4) = 0;
+        *(s32 *)((char *)obj + 0x8) = 0;
+        *(s32 *)((char *)obj + 0xC) = 0;
+    }
+
+    obj = *(void **)((char *)w + 0x2D8);
+    *(f32 *)((char *)obj + 0x0) = 255.0f;
+    *(f32 *)((char *)obj + 0x4) = 208.0f;
+    GuiDialogBoxInitBorder((char *)w + 0x8, pool, D_1ADEC8);
+
+    t0 = GetLocalizedString(0x2CB7);
+    t2 = GetLocalizedString(0x2BE5);
+    GuiDialogBoxSetText3((char *)w + 0x8, t0, 0, t2);
+
+    GuiDialogBoxSetBounds((char *)w + 0x8, -128.0f, -183.0f, 112.0f, 110.0f, 102.0f, 110.0f);
+    func_0033F610(w, 0);
+}
+#endif
 
 /* func_0033F610: forward the embedded dialog-box (p+0x8) to func_0033BE70, then
  * push the two floats from the vector at *(p+0x2D8) into it via func_0033C060.
@@ -3067,12 +3752,15 @@ void GuiStatsPanelScreenInit(void *w, GuiPool *pool) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033FAB0);
 
+/* func_0033FCE8: stats-panel value-row layout. Positions four value elements at
+ * fixed data-driven offsets from the shared anchor record *(w+0x2D8): +0x578 at
+ * (D_1ADF50, D_1ADF54), +0x470 at (D_1ADF38, D_1ADF3C), +0x4C8 at
+ * (D_1ADF40, D_1ADF44), and +0x520 at (D_1ADF48, D_1ADF4C). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033FCE8);
 #else
 extern f32 D_1ADF38, D_1ADF3C, D_1ADF40, D_1ADF44;
 extern f32 D_1ADF48, D_1ADF4C, D_1ADF50, D_1ADF54;
-/* func_0033FCE8: lay out the stats-panel value rows - four GuiElementSetPos at anchor *(w+0x2D8) plus the D_1ADF38.. offset table. */
 void func_0033FCE8(void *w) {
     f32 *anchor = *(f32 **)((char *)w + 0x2D8);
 
@@ -3083,6 +3771,13 @@ void func_0033FCE8(void *w) {
 }
 #endif
 
+/* func_0033FDD8: draw the map screen's planet bolt-stats line. Only runs for a
+ * valid selected planet (g_mapVertexData+0x230 in [1,20]). First formats the
+ * planet name (localized 0x2C51) into the +0x6C0 buffer via D_1ADBA8 and draws
+ * row +0x470; then reformats it as the platinum-bolt tally
+ * (CountPlatinumBolts / func_002B1D18 table lookup, via D_1ADF70), repositions
+ * row +0x470 (x = pos.x + D_1ADF68, y = pos.y) right-aligned (flag 2), and draws
+ * rows +0x470 and +0x578. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033FDD8);
 #else
@@ -3090,7 +3785,6 @@ extern s32 CountPlatinumBolts(s32 group);
 extern s32 func_002B1D18(s32 idx);
 extern u8 g_mapVertexData[], D_1ADBA8[], D_1ADF70[];
 extern s32 D_1ADF68;
-/* func_0033FDD8: map-screen per-planet bolt-stats draw - two-pass into w+0x6C0 (localized planet name, then platinum tally via CountPlatinumBolts + func_002B1D18), repositioning/drawing row w+0x470. */
 void func_0033FDD8(void *w) {
     s32 idx = *(s32 *)(g_mapVertexData + 0x230);
 
@@ -3126,7 +3820,25 @@ void func_0033FDD8(void *w) {
  * (later-cc1 codegen); our pinned ee-gcc 2.9 over-allocates a 0x20 frame with
  * 16-byte slots. The 16-byte-slot-vs-8-byte-slot frame wall (whole 2-GPR-save
  * class in this unit). */
+/* Draw a composite dialog widget: run its background/frame sub-draws, then draw
+ * its text sub-elements (offsets 0x318/0x370/0x3C8/0x628/0x5D0), a sprite
+ * (0x420) and two helper sub-draws (0x2DC frame, and the tail func_0033FDD8). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033FEF8);
+#else
+void func_0033FEF8(void *e) {
+    func_0033BF90((char *)e + 0x8);
+    func_002DBC98(0);
+    GuiTextElementDraw((char *)e + 0x318);
+    GuiTextElementDraw((char *)e + 0x370);
+    GuiTextElementDraw((char *)e + 0x3C8);
+    func_00337630((GuiElement *)((char *)e + 0x2DC));
+    GuiSpriteElementDraw((char *)e + 0x420);
+    GuiTextElementDraw((char *)e + 0x628);
+    GuiTextElementDraw((char *)e + 0x5D0);
+    func_0033FDD8(e);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033FF68);
 
@@ -3448,7 +4160,38 @@ void func_003426E0(void *w, s32 inputMask) {
 }
 #endif
 
+/* Lay out + refresh a composite list widget: position its five sub-elements
+ * (root, +0x98, +0x4C, +0xE4, +0x1D0) at the tracked anchor (*(w+0x228)) each
+ * offset by its own D_1AE0Dx/Ex/Fx pair; set the highlight sprite's (+0x130)
+ * colour to the pulsed blend; run the row updater (func_003426E0), the selected-
+ * row positioner (func_00342670) and a no-op (func_003426D8); return the current
+ * row's recorded state ((w+0x1B8)[w+0x31C]). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003427D0);
+#else
+s32 func_003427D0(void *w, s32 inputMask) {
+    f32 *anchor;
+
+    anchor = *(f32 **)((char *)w + 0x228);
+    GuiElementSetPos((GuiElement *)w, D_1AE0D0 + anchor[0], D_1AE0D4 + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x228);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x98), D_1AE0E0 + anchor[0], D_1AE0E4 + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x228);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x4C), D_1AE0D8 + anchor[0], D_1AE0DC + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x228);
+    GuiElementSetPos((GuiElement *)((char *)w + 0xE4), D_1AE0E8 + anchor[0], D_1AE0EC + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x228);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x1D0), D_1AE0F0 + anchor[0], D_1AE0F4 + anchor[1], 0.0f, 0.0f);
+
+    *GuiElementGetColor((GuiElement *)((char *)w + 0x130)) =
+        func_002AA3F0(0x60442D00, 0x70FFFEED, 0x14, 0, 0);
+
+    func_003426E0(w, inputMask);
+    func_00342670(w);
+    func_003426D8();
+    return ((s32 *)((char *)w + 0x1B8))[*(s32 *)((char *)w + 0x31C)];
+}
+#endif
 
 /* func_00342958: forward p+0x130 to GuiSpriteElementDraw. */
 void func_00342958(void *p) {
@@ -3464,7 +4207,25 @@ void func_00342978(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342998);
 
+/* Draw a composite widget only when its enabled flag (+0x230) is set: four
+ * sprite sub-elements (base, +0x98, +0x4C, +0xE4), a text sub-element (+0x1D0),
+ * and three helper sub-draws (func_00342958/78/98). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342B30);
+#else
+void func_00342B30(void *w) {
+    if (*(s32 *)((char *)w + 0x230) != 0) {
+        GuiSpriteElementDraw(w);
+        GuiSpriteElementDraw((char *)w + 0x98);
+        GuiSpriteElementDraw((char *)w + 0x4C);
+        GuiSpriteElementDraw((char *)w + 0xE4);
+        GuiTextElementDraw((char *)w + 0x1D0);
+        func_00342958(w);
+        func_00342978(w);
+        func_00342998(w);
+    }
+}
+#endif
 
 /* func_00342BA0: init the GuiWidget at p+0x10 and two type-B elements
  * (p+0xEC, p+0x138), return the object. */
@@ -3772,9 +4533,54 @@ void func_003432D8(void *p) {
 void func_00343330(void) {
 }
 
+/* Update a scrollable list element: position its sub-element (+0x188) at the
+ * tracked anchor (*(w+0x180)) + D_1AE160/164, apply the size params D_1AE168/16C,
+ * advance its selection by the input mask, and record the resulting state at
+ * (w+0x16C). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343338);
+#else
+void func_00343338(void *w, s32 inputMask) {
+    void *sub = (char *)w + 0x188;
+    f32 *anchor = *(f32 **)((char *)w + 0x180);
+    func_00348E28(sub, anchor[0] + D_1AE160, anchor[1] + D_1AE164);
+    func_00348E10(sub, (s32)D_1AE168, (s32)D_1AE16C);
+    func_00348CB8(sub, inputMask);
+    *(s32 *)((char *)w + 0x16C) = func_00348E60(sub);
+}
+#endif
 
+/* func_003433D0: position + fade the two-element header group, then run its
+ * sub-builders. Places element w at the anchor (*(w+0x180)) plus (D_1AE170,
+ * D_1AE174) and element +0x4C at (D_1AE178, D_1AE17C). Fades both to the alpha
+ * D_1AE180[func_00348E68(w+0x188) - 1] (list-row-count driven). Runs
+ * func_00343338(w, inputMask), func_003432D8(w), func_00343330(), and returns the
+ * cached value at +0x16C. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003433D0);
+#else
+extern f32 D_1AE170, D_1AE174, D_1AE178, D_1AE17C;
+extern f32 D_1AE180[];
+s32 func_003433D0(void *w, s32 inputMask) {
+    f32 *anchor = *(f32 **)((char *)w + 0x180);
+    f32 alpha;
+    s32 idx;
+
+    GuiElementSetPos((GuiElement *)w, D_1AE170 + anchor[0], D_1AE174 + anchor[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x4C), D_1AE178 + anchor[0], D_1AE17C + anchor[1], 0.0f, 0.0f);
+
+    idx = func_00348E68((char *)w + 0x188) - 1;
+    alpha = D_1AE180[idx];
+    GuiElementSetAlpha((GuiElement *)w, alpha);
+    GuiElementSetAlpha((GuiElement *)((char *)w + 0x4C), alpha);
+
+    func_00343338(w, inputMask);
+    func_003432D8(w);
+    func_00343330();
+
+    return *(s32 *)((char *)w + 0x16C);
+}
+#endif
 
 /* Draw a pulsing sprite sub-element (+0xE4): when dpad up/down is pressed
  * (0x5000), tick the color-pulse counter; then set the sprite's colour to the
@@ -3798,11 +4604,15 @@ void func_00343558(void *p) {
     __asm__ __volatile__("");
 }
 
+/* func_00343578: draw the row of icon sprites. Loops i over *(w+0x17C) entries:
+ * positions the shared sprite element (+0x130) at the anchor (*(w+0x180)) plus
+ * (D_1AE198, D_1AE19C + D_1AE1A0*i), sets its texture (id 0xEA9E for i==3 else
+ * 0xEAA6 — also recorded at +0x174, frame = *(w+0x178)[i]), and draws it via
+ * func_00337630. Bails immediately if the count is <= 0. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343578);
 #else
 extern f32 D_1AE198, D_1AE19C, D_1AE1A0;
-/* func_00343578: draw loop - per-element GuiElementSetPos/GuiSpriteSetTexture then draw, over the shared element at w+0x130. */
 void func_00343578(void *w) {
     GuiElement *e = (GuiElement *)((char *)w + 0x130);
     s32 count = *(s32 *)((char *)w + 0x17C);
@@ -4111,13 +4921,19 @@ void func_003444E8(void *w) {
 }
 #endif
 
+/* func_00344558: build the titled-sprite's caption label. Shows element +0x1B0,
+ * then formats a two-part string into a scratch buffer according to the mode at
+ * *(w+0x2C4) (0 -> string 0x2BE7, 1 -> 0x2BE8, 2 -> 0x2BEA; each combined with the
+ * suffix 0x2BEB via the D_1AE1F8 format). If the result fits (< 0x31 chars) it is
+ * copied into +0x120; otherwise the +0x120 field gets the overflow template
+ * D_1ADBA8 (localized string 0). Finally positions +0x1B0 at the anchor
+ * (*(w+0x2B8)) plus (D_1AE1F0, D_1AE1F4). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344558);
 #else
 extern s32 func_001157AC(const char *s); /* SDK strlen */
 extern u8 D_1AE1F8[], D_1ADBA8[];
 extern f32 D_1AE1F0, D_1AE1F4;
-/* func_00344558: caption finalizer - select strId by mode 0/1/2 (0x2BE7/0x2BE8/0x2BEA), branch on strlen<0x31, then final GuiElementSetPos. */
 void func_00344558(void *w) {
     char buf[256];
     s32 mode = *(s32 *)((char *)w + 0x2C4);
@@ -4178,11 +4994,16 @@ void func_003446B8(void *w, s32 flag) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344800);
 
+/* func_00344808: draw the titled-sprite widget. Bails if hidden (*(w+0x2C0)==0).
+ * Draws three sprite elements (w, +0x4C, +0x98) and the title text (+0x1B0), lays
+ * out the sub-widget (func_00343AF8(+0x2C8)), then resolves the currently-selected
+ * weapon's caption: slot = g_itemEquippedSlot[func_00343AD0(+0x2C8)]; captionId =
+ * g_weaponTable[slot*0xE0 + 8]; sets +0x208's text to that localized string and
+ * draws +0x208 and +0x260. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344808);
 #else
 extern void func_00343AF8(void *w);
-/* func_00344808: draw the titled sprite set + resolve the equipped-weapon caption (hidden-guard; g_itemEquippedSlot[func_00343AD0]->g_weaponTable[slot*0xE0+8]->GetLocalizedString). */
 void func_00344808(void *w) {
     s32 slot;
     s32 captionId;
@@ -4348,14 +5169,133 @@ void GuiInfoPanelScreenInit(void *w, GuiPool *pool) {
 }
 #endif
 
+/* func_00344E08: weapon-select mode-0 (2x2 grid) input handler. The 2nd arg is the
+ * D-pad input mask (threaded as void* through func_003453D0). Left (0x1000): column
+ * +0x4B0=1, page +0x4B8=2. Right (0x4000): column 0, page 2. Up (0x8000): row
+ * +0x4AC--, on underflow clamp to 0 + set page +0x4B8=1. Down (0x2000): row++, on
+ * reaching 2 wrap to 0 + page 1 + column 0. Each plays move sound 3. Finally looks
+ * up the selected row in the 0xA-byte-stride table D_1AA830 and records its +6
+ * halfword field at +0x4B4. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344E08);
+#else
+extern u8 D_1AA830[];
+void func_00344E08(void *w, void *a) {
+    s32 flags = (s32)a;
+    s32 idx;
 
+    if (flags & 0x1000) {
+        PlayGlobalSound(3, 0, 0);
+        *(s32 *)((char *)w + 0x4B0) = 1;
+        *(s32 *)((char *)w + 0x4B8) = 2;
+    } else if (flags & 0x4000) {
+        PlayGlobalSound(3, 0, 0);
+        *(s32 *)((char *)w + 0x4B0) = 0;
+        *(s32 *)((char *)w + 0x4B8) = 2;
+    } else if (flags & 0x8000) {
+        PlayGlobalSound(3, 0, 0);
+        *(s32 *)((char *)w + 0x4AC) = *(s32 *)((char *)w + 0x4AC) - 1;
+        if (*(s32 *)((char *)w + 0x4AC) < 0) {
+            *(s32 *)((char *)w + 0x4AC) = 0;
+            *(s32 *)((char *)w + 0x4B8) = 1;
+        }
+    } else if (flags & 0x2000) {
+        PlayGlobalSound(3, 0, 0);
+        *(s32 *)((char *)w + 0x4AC) = *(s32 *)((char *)w + 0x4AC) + 1;
+        if (*(s32 *)((char *)w + 0x4AC) >= 2) {
+            *(s32 *)((char *)w + 0x4AC) = 0;
+            *(s32 *)((char *)w + 0x4B8) = 1;
+            *(s32 *)((char *)w + 0x4B0) = 0;
+        }
+    }
+
+    idx = *(s32 *)((char *)w + 0x4AC);
+    *(s32 *)((char *)w + 0x4B4) = *(s16 *)(D_1AA830 + idx * 0xA + 6);
+}
+#endif
+
+/* func_00344F18: weapon-select mode-2 (2-col x 4-row grid) input handler. 2nd arg
+ * = D-pad mask. Adjusts column +0x4B0 (L/R) and row +0x4AC (up/down) with wrap
+ * across the grid edges, flipping page +0x4B8 on the wrap-arounds; each direction
+ * plays sound 3. The shared wrap exits carry path-specific constants (inlined
+ * here). Finally records the (row + col*4)'th 0xA-stride entry's +6 halfword from
+ * D_25E308 at +0x4B4. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344F18);
+#else
+extern u8 D_25E308[];
+void func_00344F18(void *w, void *a) {
+    s32 flags = (s32)a;
+    s32 col, row, idx;
 
+    if (flags & 0x1000) {            /* LEFT: col-- */
+        PlayGlobalSound(3, 0, 0);
+        col = *(s32 *)((char *)w + 0x4B0) - 1;
+        *(s32 *)((char *)w + 0x4B0) = col;
+        if (col < 0) {
+            row = *(s32 *)((char *)w + 0x4AC);
+            if (row < 2) {
+                *(s32 *)((char *)w + 0x4B0) = 0;
+                *(s32 *)((char *)w + 0x4B8) = 0;
+            } else if (row == 2) {
+                *(s32 *)((char *)w + 0x4B0) = 1;
+            } else {
+                *(s32 *)((char *)w + 0x4B0) = 0;
+                *(s32 *)((char *)w + 0x4B8) = 1;
+                *(s32 *)((char *)w + 0x4AC) = 0;
+            }
+        }
+    } else if (flags & 0x4000) {     /* RIGHT: col++ */
+        PlayGlobalSound(3, 0, 0);
+        col = *(s32 *)((char *)w + 0x4B0) + 1;
+        *(s32 *)((char *)w + 0x4B0) = col;
+        if (col >= 2) {
+            row = *(s32 *)((char *)w + 0x4AC);
+            if (row < 2) {
+                *(s32 *)((char *)w + 0x4B0) = 0;
+                *(s32 *)((char *)w + 0x4B8) = 0;
+            } else if (row == 2) {
+                *(s32 *)((char *)w + 0x4B0) = 0;
+            } else {
+                *(s32 *)((char *)w + 0x4B0) = 0;
+                *(s32 *)((char *)w + 0x4B8) = 3;
+                *(s32 *)((char *)w + 0x4AC) = 0;
+            }
+        }
+    } else if (flags & 0x8000) {     /* UP: row-- */
+        PlayGlobalSound(3, 0, 0);
+        row = *(s32 *)((char *)w + 0x4AC) - 1;
+        *(s32 *)((char *)w + 0x4AC) = row;
+        if (row < 0) {
+            *(s32 *)((char *)w + 0x4AC) = 3;
+        }
+    } else if (flags & 0x2000) {     /* DOWN: row++ */
+        PlayGlobalSound(3, 0, 0);
+        row = *(s32 *)((char *)w + 0x4AC) + 1;
+        *(s32 *)((char *)w + 0x4AC) = row;
+        if (row >= 4) {
+            *(s32 *)((char *)w + 0x4AC) = 0;
+            *(s32 *)((char *)w + 0x4B8) = 3;
+            *(s32 *)((char *)w + 0x4B0) = 0;
+        }
+    }
+
+    col = *(s32 *)((char *)w + 0x4B0);
+    row = *(s32 *)((char *)w + 0x4AC);
+    idx = row + col * 4;
+    *(s32 *)((char *)w + 0x4B4) = *(s16 *)(D_25E308 + idx * 0xA + 6);
+}
+#endif
+
+/* func_00345080: weapon-select mode-3 (2-col x 2-row grid) input handler. 2nd arg
+ * = D-pad mask. Adjusts column +0x4B0 (L/R) and row +0x4AC (up/down) with
+ * wrap/page-flip (+0x4B8) at the edges; each direction plays sound 3. Records the
+ * flat index row + col*2 directly at +0x4B4 (no table). Note the LEFT/col==0/row>=2
+ * path faithfully leaves +0x4B0 at -1 (the original reuses the just-stored col-1
+ * for the index rather than re-clamping). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00345080);
 #else
-/* func_00345080: weapon-grid input handler - LEFT/RIGHT/UP/DOWN flag dispatch (incl. the col<0 reused-col exit) updating the +0x4B4 selection index. */
 void func_00345080(void *w, void *a) {
     s32 flags = (s32)a;
     s32 col, row;
@@ -4404,11 +5344,15 @@ void func_00345080(void *w, void *a) {
 }
 #endif
 
+/* func_003451B8: weapon-select mode-1 (single-row) input handler. 2nd arg = D-pad
+ * mask. Each direction sets a fixed selection state and plays move sound 3:
+ * left (0x1000) -> page +0x4B8=2, col +0x4B0=1, row +0x4AC=3; right (0x4000) ->
+ * page 2, row 3, col 0; up (0x8000) -> page 0, row 1, col 0; down (0x2000) ->
+ * col 0, page 3, row 0. Records the fixed table halfword D_1AA856 at +0x4B4. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003451B8);
 #else
 extern s16 D_1AA856;
-/* func_003451B8: mode-1 nav state machine - directional flag dispatch, finalizing +0x4B4 from D_1AA856. */
 void func_003451B8(void *w, void *a) {
     s32 flags = (s32)a;
 
@@ -4440,14 +5384,77 @@ void func_003451B8(void *w, void *a) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00345298);
 
+/* Build the weapon-select screen. Reset the selection (+0x4B4), clear the caption
+ * id (D_1ADAF0=-1), apply the equipped-armor upgrade slot, then dispatch on the
+ * screen mode (+0x4B8) to the per-mode sub-builder. Recompute the caption id from
+ * either the D_1AE248 category table (mode ended at 3) or the owned weapon's
+ * nameStringId (g_inventoryOwned -> g_weaponTable[g_itemEquippedSlot]+0x6). Lay out
+ * the nine panel sub-elements at the anchor (*(w+0x4A0)) + their D_1AE2xx offsets,
+ * pulse + colour the caption sprite (+0x17C), and draw the panel tail. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003453D0);
+#else
+void func_003453D0(void *w, void *arg1) {
+    s32 mode, result, idx;
+    f32 *anchor;
 
+    *(s32 *)((char *)w + 0x4B4) = 0;
+    D_1ADAF0 = -1;
+    SetWeaponUpgradeSlot(6, g_equippedArmor);
+
+    mode = *(s32 *)((char *)w + 0x4B8);
+    if (mode == 1)      func_003451B8(w, arg1);
+    else if (mode == 0) func_00344E08(w, arg1);
+    else if (mode == 2) func_00344F18(w, arg1);
+    else if (mode == 3) func_00345080(w, arg1);
+    result = *(s32 *)((char *)w + 0x4B8);
+
+    if (result != 3) {
+        idx = *(s32 *)((char *)w + 0x4B4);
+        if (g_inventoryOwned[idx] != 0) {
+            D_1ADAF0 = *(s16 *)&g_weaponTable[g_itemEquippedSlot[idx] * 0xE0 + 0x6];
+        }
+    } else {
+        D_1ADAF0 = D_1AE248[*(s32 *)((char *)w + 0x4B4)];
+    }
+
+    anchor = *(f32 **)((char *)w + 0x4A0);
+    GuiElementSetPos((GuiElement *)w, D_1AE258 + anchor[0], D_1AE25C + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x4A0);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x4C), D_1AE278 + anchor[0], D_1AE27C + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x4A0);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x98), D_1AE260 + anchor[0], D_1AE264 + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x4A0);
+    GuiElementSetPos((GuiElement *)((char *)w + 0xE4), D_1AE268 + anchor[0], D_1AE26C + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x4A0);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x130), D_1AE270 + anchor[0], D_1AE274 + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x4A0);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x1C8), D_1AE280[0] + anchor[0], D_1AE280[1] + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x4A0);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x2B8), D_1AE288 + anchor[0], D_1AE28C + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x4A0);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x220), D_1AE290 + anchor[0], D_1AE294 + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x4A0);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x17C), D_1AE290 + anchor[0], D_1AE294 + anchor[1], 0.0f, 0.0f);
+
+    if (g_padButtonsPressed & 0xF000) {
+        func_002AA3F0(0, 0, 1, 0, 1);
+    }
+    *GuiElementGetColor((GuiElement *)((char *)w + 0x17C)) =
+        func_002AA3F0(0x60442D00, 0x70FFFEED, 0x14, 0, 0);
+    func_003457A0(w);
+}
+#endif
+
+/* func_003457A0: weapon-panel tail layout. Positions four elements at fixed
+ * data-driven offsets from the shared anchor record *(w+0x4A0): +0x368 at
+ * (D_1AE298, D_1AE29C), +0x3C0 at (D_1AE2A0, D_1AE2A4), +0x418 at
+ * (D_1AE2A8, D_1AE2AC), and +0x310 at (D_1AE2B0, D_1AE2B4). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003457A0);
 #else
 extern f32 D_1AE298, D_1AE29C, D_1AE2A0, D_1AE2A4;
 extern f32 D_1AE2A8, D_1AE2AC, D_1AE2B0, D_1AE2B4;
-/* func_003457A0: weapon-panel tail layout - four GuiElementSetPos at shared anchor *(w+0x4A0) plus the D_1AE298.. offset table. */
 void func_003457A0(void *w) {
     f32 *anchor = *(f32 **)((char *)w + 0x4A0);
 
@@ -4578,7 +5585,30 @@ void func_003461D0(void *obj) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003462C0);
 
+/* Construct a composite widget: init six TypeB sub-elements (base, +0x4C, +0x98,
+ * +0xE4, +0x130, +0x17C), two TypeC (+0x1C8, +0x220), a sub-list (+0x278), then
+ * five more TypeC (+0x2B8, +0x310, +0x368, +0x3C0, +0x418); returns the widget. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00346368);
+#else
+void *func_00346368(void *w) {
+    GuiElementInitTypeB(w);
+    GuiElementInitTypeB((char *)w + 0x4C);
+    GuiElementInitTypeB((char *)w + 0x98);
+    GuiElementInitTypeB((char *)w + 0xE4);
+    GuiElementInitTypeB((char *)w + 0x130);
+    GuiElementInitTypeB((char *)w + 0x17C);
+    GuiElementInitTypeC((char *)w + 0x1C8);
+    GuiElementInitTypeC((char *)w + 0x220);
+    func_003374D8((char *)w + 0x278);
+    GuiElementInitTypeC((char *)w + 0x2B8);
+    GuiElementInitTypeC((char *)w + 0x310);
+    GuiElementInitTypeC((char *)w + 0x368);
+    GuiElementInitTypeC((char *)w + 0x3C0);
+    GuiElementInitTypeC((char *)w + 0x418);
+    return w;
+}
+#endif
 
 /* GuiMapScreenInit: construct the map screen — six button-glyph elements
  * (+0x0/+0x4C/+0x98/+0xE4/+0x130/+0x17C), seven text rows, and a sprite (+0x278).
@@ -4850,9 +5880,59 @@ void func_00347450(void *obj) {
 }
 #endif
 
+/* func_00347550: draw the weapon-grid screen. Bails if hidden (*(w+0x4F8)==0).
+ * Draws four sprite elements (w/+0x4C/+0x98/+0xE4) and a text row (+0x1C8), runs
+ * the three family-2 sub-builders func_00347228/00347348/00347450, then draws the
+ * detail sprite (+0x17C) and five more text rows (+0x310/+0x2B8/+0x368/+0x3C0/
+ * +0x418). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00347550);
+#else
+void func_00347550(void *w) {
+    if (*(s32 *)((char *)w + 0x4F8) == 0) {
+        return;
+    }
+    GuiSpriteElementDraw(w);
+    GuiSpriteElementDraw((char *)w + 0x4C);
+    GuiSpriteElementDraw((char *)w + 0x98);
+    GuiSpriteElementDraw((char *)w + 0xE4);
+    GuiTextElementDraw((char *)w + 0x1C8);
+    func_00347228(w);
+    func_00347348(w);
+    func_00347450(w);
+    GuiSpriteElementDraw((char *)w + 0x17C);
+    GuiTextElementDraw((char *)w + 0x310);
+    GuiTextElementDraw((char *)w + 0x2B8);
+    GuiTextElementDraw((char *)w + 0x368);
+    GuiTextElementDraw((char *)w + 0x3C0);
+    GuiTextElementDraw((char *)w + 0x418);
+}
+#endif
 
+/* Construct a list-style composite widget: six TypeB sub-elements (base..+0x17C),
+ * a list-row (+0x1C8), three TypeC (+0x210, +0x268, +0x2C0), a sub-list (+0x318),
+ * then three more TypeB (+0x354, +0x3A0, +0x3EC); returns the widget. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003475F0);
+#else
+void *func_003475F0(void *w) {
+    GuiElementInitTypeB(w);
+    GuiElementInitTypeB((char *)w + 0x4C);
+    GuiElementInitTypeB((char *)w + 0x98);
+    GuiElementInitTypeB((char *)w + 0xE4);
+    GuiElementInitTypeB((char *)w + 0x130);
+    GuiElementInitTypeB((char *)w + 0x17C);
+    GuiListRowElementInit((char *)w + 0x1C8);
+    GuiElementInitTypeC((char *)w + 0x210);
+    GuiElementInitTypeC((char *)w + 0x268);
+    GuiElementInitTypeC((char *)w + 0x2C0);
+    func_003374D8((char *)w + 0x318);
+    GuiElementInitTypeB((char *)w + 0x354);
+    GuiElementInitTypeB((char *)w + 0x3A0);
+    GuiElementInitTypeB((char *)w + 0x3EC);
+    return w;
+}
+#endif
 
 /* GuiWeaponGridScreenInit: construct the weapon-grid screen — eight header/detail
  * button-glyph elements, a scrolling list (+0x1C8), a sprite (+0x318), and three
