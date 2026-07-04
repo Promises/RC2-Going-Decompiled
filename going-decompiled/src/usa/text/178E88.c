@@ -12,6 +12,7 @@ extern s32 g_blobShadowCount[];
 extern s32 g_renderLayerMask;
 
 /* Draw-env / frame helpers (defined elsewhere in the render unit). */
+extern void BuildCameraProjection(void); /* 0x27B0A0 - rebuild projection/viewport */
 extern void AppendDrawEnvContext1(void);
 extern void AppendScreenClearPacket(s32 mode);
 extern void RenderFrame(void);
@@ -590,7 +591,42 @@ void ResetPerFrameDrawQueues(void) {
 }
 #endif
 
+extern u8 D_1391D0[]; /* prebuilt GS init packet A */
+extern u8 D_139120[]; /* prebuilt GS init packet B */
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", AppendFrameInitGsState);
+#else
+/**
+ * Append the per-frame GS-state init to the frame DMA chain: two DMATAG-ref
+ * qwords that splice in the prebuilt packets D_1391D0 and D_139120, followed by
+ * a GS register write (reg 0x3D) whose value packs the three scene-render words
+ * at g_sceneActorMobys+0x674 (+0x230 | +0x234<<8 | +0x238<<16).
+ */
+void AppendFrameInitGsState(void) {
+    u8 *p = (u8 *)g_frameDmaCursor[0];
+    u8 *sceneState = g_sceneActorMobys + 0x674;
+    u64 value;
+
+    *(u32 *)(p + 0x00) = 0x30000013; /* DMATAG ref -> D_1391D0 */
+    *(void **)(p + 0x04) = D_1391D0;
+    *(u32 *)(p + 0x08) = 0;
+    *(u32 *)(p + 0x0C) = 0x50000013;
+    g_frameDmaCursor[0] = (u32 *)(p + 0x10);
+
+    *(u32 *)(p + 0x10) = 0x3000000B; /* DMATAG ref -> D_139120 */
+    *(void **)(p + 0x14) = D_139120;
+    *(u32 *)(p + 0x18) = 0;
+    *(u32 *)(p + 0x1C) = 0x5000000B;
+
+    value = (u64)(u32)*(s32 *)(sceneState + 0x230)
+          | ((u64)(u32)*(s32 *)(sceneState + 0x234) << 8)
+          | ((u64)(u32)*(s32 *)(sceneState + 0x238) << 16);
+
+    g_frameDmaCursor[0] = (u32 *)(p + 0x20);
+    AppendGsRegPacket(0x3D, value);
+}
+#endif
 
 /* func_0027BFA8: program the GS privileged display registers (0x12000000 page)
  * from the saved screen-context words. PMODE(0x00)=0xFFA1 enables read-circuit 1;
@@ -700,9 +736,120 @@ void func_0027CB80(void) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", Begin2dDrawBatch);
+/* 2D draw-batch / HUD texture-cache state (absolute %hi/%lo + a few gp scalars). */
+extern void *g_2dBatchOpenTag;    /* saved DMA cursor at batch open */
+extern s32 g_vramAllocCursor;     /* running VRAM alloc cursor */
+extern s32 g_uiTextureCount;      /* live UI texture-cache entry count */
+extern u8  g_uiTextureCache[];    /* UI texture cache, 0x10-byte entries */
+extern s32 g_texUploadCount;
+extern u64 g_screenGrabTex0Full;  /* screen-grab tex0 (full / half res) */
+extern u64 g_screenGrabTex0Half;
+extern s32 D_1A8790;
+extern s32 g_vramFrameBufB;       /* back framebuffer VRAM base */
+extern u8 *g_hudTextureSlots;     /* 8-byte slots; +0x4 = VRAM block */
+extern u8 *g_hudClutSlots;
+extern void *g_pHudAssetHeader[]; /* [0] = header base (+0x24 clut count, +0x44 tex count) */
 
+#ifndef TARGET_NATIVE
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", Begin2dDrawBatch);
+#else
+/**
+ * Open a 2D draw batch: stash the current frame DMA cursor as the batch open tag,
+ * reserve a tag qword, reset the VRAM alloc cursor to the dynamic base, and clear
+ * the texture-upload count. Then flush per-batch caches: zero every live
+ * g_uiTextureCache entry and the two screen-grab tex0 handles.
+ *
+ * Unless `skipHudReset` is set, also evicts stale HUD textures: every
+ * g_hudTextureSlots entry whose VRAM block is at/above the back framebuffer has
+ * its +0x4 address cleared, and all g_hudClutSlots VRAM addresses are cleared
+ * (counts from the HUD asset header +0x44 / +0x24).
+ */
+void Begin2dDrawBatch(s32 skipHudReset) {
+    u32 *cursor = g_frameDmaCursor[0];
+    s32 n;
+    s32 i;
+
+    g_2dBatchOpenTag = cursor;
+    g_frameDmaCursor[0] = (u32 *)((u8 *)cursor + 0x10);
+    g_vramAllocCursor = g_vramDynamicBase;
+    g_texUploadCount = 0;
+
+    n = g_uiTextureCount;
+    for (i = 0; i < n; i++) {
+        *(u64 *)(g_uiTextureCache + i * 0x10) = 0;
+    }
+
+    g_screenGrabTex0Full = 0;
+    g_screenGrabTex0Half = 0;
+    D_1A8790 = 0;
+
+    if (skipHudReset != 0) {
+        return;
+    }
+
+    n = *(s32 *)((u8 *)g_pHudAssetHeader[0] + 0x44);
+    for (i = 0; i < n; i++) {
+        u8 *slot = g_hudTextureSlots + i * 8;
+        if (*(u16 *)(slot + 0x4) >= (g_vramFrameBufB >> 8)) {
+            *(s16 *)(slot + 0x4) = 0;
+        }
+    }
+
+    n = *(s32 *)((u8 *)g_pHudAssetHeader[0] + 0x24);
+    for (i = 0; i < n; i++) {
+        *(s16 *)(g_hudClutSlots + i * 8 + 0x4) = 0;
+    }
+}
+#endif
+
+extern void *g_2dBatchCloseTag; /* saved DMA cursor at batch close */
+extern void FlushPendingTexUploads(void);
+extern void AppendTexFlushDefaultTex0(void);
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", End2dDrawBatch);
+#else
+/**
+ * Close the 2D draw batch opened by Begin2dDrawBatch by back-patching the DMA
+ * chain. Reserves a close tag at the current cursor, patches the open tag to
+ * jump past it, flushes pending texture uploads (which append their own
+ * packets), splices a tag that jumps back into the batch body, and finally
+ * completes the close tag to continue the chain. All spliced tags are DMATAG
+ * next (0x20000000) qwords.
+ */
+void End2dDrawBatch(void) {
+    u8 *openTag = (u8 *)g_2dBatchOpenTag;
+    u8 *cur;
+    u8 *mid;
+
+    g_2dBatchCloseTag = g_frameDmaCursor[0];
+    cur = (u8 *)g_frameDmaCursor[0];
+    g_frameDmaCursor[0] = (u32 *)(cur + 0x10); /* reserve the close tag */
+
+    /* back-patch the open tag to jump over the reserved close tag */
+    *(u32 *)(openTag + 0x0) = 0x20000000;
+    *(void **)(openTag + 0x4) = g_frameDmaCursor[0];
+    *(u32 *)(openTag + 0x8) = 0;
+    *(u32 *)(openTag + 0xC) = 0;
+
+    FlushPendingTexUploads();
+    AppendTexFlushDefaultTex0();
+
+    /* after the tex flush, splice a tag that jumps back into the batch body */
+    mid = (u8 *)g_frameDmaCursor[0];
+    *(u32 *)(mid + 0x0) = 0x20000000;
+    *(void **)(mid + 0x4) = openTag + 0x10;
+    *(u32 *)(mid + 0x8) = 0;
+    *(u32 *)(mid + 0xC) = 0;
+    g_frameDmaCursor[0] = (u32 *)(mid + 0x10);
+
+    /* finalise the close tag to continue the chain */
+    *(u32 *)((u8 *)g_2dBatchCloseTag + 0x0) = 0x20000000;
+    *(void **)((u8 *)g_2dBatchCloseTag + 0x4) = g_frameDmaCursor[0];
+    *(u32 *)((u8 *)g_2dBatchCloseTag + 0x8) = 0;
+    *(u32 *)((u8 *)g_2dBatchCloseTag + 0xC) = 0;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027CDC8);
 
@@ -1056,7 +1203,22 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawFixedFontSt
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027FBA8);
 
+extern u64 GetUiTextureTex0(s32 slot); /* resolve a UI texture's GS tex0 register */
+extern void DrawFixedFontString(s32 a, s32 b, s32 c, s32 d, s32 e, u64 tex0, u8 *glyphTable);
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawDebugString);
+#else
+/**
+ * Draw a string with the built-in debug font: resolve the UI font texture
+ * (GetUiTextureTex0 slot 2) and forward the five caller args plus that tex0 and
+ * the g_debugFontGlyphTable glyph metrics to DrawFixedFontString.
+ */
+void DrawDebugString(s32 a, s32 b, s32 c, s32 d, s32 e) {
+    u64 tex0 = GetUiTextureTex0(2);
+    DrawFixedFontString(a, b, c, d, e, tex0, g_debugFontGlyphTable);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027FCA8);
 
@@ -1076,9 +1238,46 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002802E8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280380);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280440);
+extern f32 func_002804C0(f32 inputScale, const char *str, s32 maxChars, s32 count); /* text auto-scale (below) */
+extern void func_00280380(s32 a, s32 b, s32 c, const char *str, s32 maxChars, f32 scale); /* scaled text draw */
 
+#ifndef TARGET_NATIVE
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280440);
+#else
+/**
+ * Draw a string auto-scaled to fit `count` pixels: compute the horizontal fit
+ * factor for (str, maxChars, count) at floor `inputScale` (func_002804C0), then
+ * render the string at that scale via func_00280380.
+ */
+void func_00280440(f32 inputScale, s32 a, s32 b, s32 c, const char *str, s32 maxChars, s32 count) {
+    f32 scale = func_002804C0(inputScale, str, maxChars, count);
+    func_00280380(a, b, c, str, maxChars, scale);
+}
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002804C0);
+#else
+/**
+ * Compute a horizontal auto-scale factor to fit a string into `count` pixels.
+ *
+ * Measures the string's rendered width at scale 1.0 (func_0027F900, 0 for a null
+ * string). If the string already fits (count >= width) returns 1.0; otherwise
+ * returns width-fit ratio count/width, floored at `inputScale`.
+ */
+f32 func_002804C0(f32 inputScale, const char *str, s32 maxChars, s32 count) {
+    s32 width = (str != 0) ? func_0027F900(str, maxChars, 1.0f) : 0;
+    f32 result = 1.0f;
+
+    if (count < width) {
+        result = (f32)count / (f32)width;
+        if (result < inputScale) {
+            result = inputScale;
+        }
+    }
+    return result;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280550);
 

@@ -483,15 +483,71 @@ s32 func_00288BB0(s32 key) {
 }
 #endif
 
-/* func_00288C30(itemId): register an item pickup in the recent-items slot table
- * (g_gsPixelOffsetY+0x64, 8 slots). Gated by func_00288BB0 (D_25E308 membership)
- * and func_00288B08, and only when the item's variant exists; finds a free /
- * matching slot and records the item id there.
- *
- * WALL: two callee-saves + two jal gates, a sentinel scan over D_25E308 and a
- * branch-likely (beql/bnel) slot search whose register colouring cc1 does not
- * reproduce. Left INCLUDE_ASM. */
+extern s32 func_00288BB0(s32 id); /* item-validity check (D_00259F38 lookup) */
+extern u8 D_25E308[];             /* stride-0xA record table, s16 id at +0x6, -1 terminated */
+extern s32 g_equippedItemSlots[8]; /* currently-equipped item ids (0x1A73B8) */
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_00288C30);
+#else
+/**
+ * Register an item pickup in the 8-slot recent-items table (g_equippedItemSlots).
+ *
+ * Does nothing unless func_00288BB0 accepts the item. Then, if the item is
+ * already listed in the D_25E308 record table, or its variant's g_weaponTable
+ * entry has a non-zero +0xC field, or func_00288B08 reports it present, it is
+ * skipped. Otherwise the item id is stored in the first g_equippedItemSlots slot
+ * that is empty or already holds it (slot 0 is a fast path); if all 8 slots are
+ * taken by other items nothing is recorded.
+ */
+void func_00288C30(s32 itemId) {
+    s16 *id;
+    s32 variantSlot;
+    s32 slot;
+
+    if (func_00288BB0(itemId) == 0) {
+        return;
+    }
+
+    /* already listed in the D_25E308 table -> nothing to do */
+    id = (s16 *)(D_25E308 + 0x6);
+    if (*id != -1) {
+        for (;;) {
+            if (itemId == *id) {
+                return;
+            }
+            id = (s16 *)((u8 *)id + 0xA);
+            if (*id == -1) {
+                break;
+            }
+        }
+    }
+
+    variantSlot = g_itemEquippedSlot[itemId];
+    if (*(s32 *)((u8 *)&g_weaponTable[variantSlot] + 0xC) != 0) {
+        return;
+    }
+    if (func_00288B08(itemId) != 0) {
+        return;
+    }
+
+    if (g_equippedItemSlots[0] == 0 || g_equippedItemSlots[0] == itemId) {
+        slot = 0;
+    } else {
+        slot = 1;
+        for (;;) {
+            if (slot >= 8) {
+                return; /* no free slot */
+            }
+            if (g_equippedItemSlots[slot] == 0 || g_equippedItemSlots[slot] == itemId) {
+                break;
+            }
+            slot++;
+        }
+    }
+    g_equippedItemSlots[slot] = itemId;
+}
+#endif
 
 /* GiveInventoryItem(itemId, ...): mark an item owned (g_inventoryOwned) and run
  * the downstream registration (variant advance / order-list insertion). Single
@@ -1634,11 +1690,54 @@ void func_0028BA28(s32 assetId) {
 }
 #endif
 
-/* func_0028BBA0(...): HUD moby-table accessor/populate helper (~0x124 bytes).
- *
- * WALL: callee-saves + jal gate; register colouring not reproducible from C.
- * Left INCLUDE_ASM (not yet fully traced). */
+extern void func_002901B0(s32 handle, s32 vramBlk, s32 fmt, s32 wLog, s32 hLog, s32 kickMode); /* UploadTextureToGs */
+extern s32 g_vramTextureBase; /* 0x1A72E4 - VRAM static texture base */
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028BBA0);
+#else
+/**
+ * Upload a HUD asset's textures to GS VRAM.
+ *
+ * Relocates the shared HUD asset once (func_0028B8C8(0, baseAddr)) if this
+ * asset's header +0x74 flag is not yet set. Then, walking this asset's texture
+ * slot range [prevEnd, end) (header +0x34 cumulative bounds), uploads each
+ * g_hudTextureSlots entry to GS at the running VRAM cursor (func_002901B0 =
+ * UploadTextureToGs, fmt 0x1B, dims from the slot's +0x6/+0x7 log2 bytes),
+ * records the VRAM block in the slot's +0x4 field, and advances the cursor by
+ * the texture size (1 << (wLog + hLog)) << 2.
+ *
+ *   assetId   HUD asset index
+ *   baseAddr  relocation base handed to func_0028B8C8
+ *   kickMode  passed through to func_002901B0
+ */
+void func_0028BBA0(s32 assetId, s32 baseAddr, s32 kickMode) {
+    u8 *hdr = (u8 *)g_pHudAssetHeader[0];
+    s32 vramCursor;
+    s32 start;
+    s32 end;
+    s32 i;
+
+    if (*(s32 *)(hdr + 0x74 + assetId * 4) == 0) {
+        func_0028B8C8(0, baseAddr);
+    }
+
+    vramCursor = *(s32 *)((u8 *)&g_vramTextureBase + 0x24);
+
+    start = (assetId == 0) ? 0 : *(s32 *)(hdr + 0x34 + (assetId - 1) * 4);
+    end = *(s32 *)(hdr + 0x34 + assetId * 4);
+    for (i = start; i < end; i++) {
+        HudGsSlot *tex = &g_hudTextureSlots[i];
+        s32 wLog = ((u8 *)tex)[0x6];
+        s32 hLog = ((u8 *)tex)[0x7];
+        s32 vramBlk = vramCursor >> 8;
+
+        func_002901B0(tex->handle, vramBlk, 0x1B, wLog, hLog, kickMode);
+        *(s16 *)((u8 *)tex + 0x4) = vramBlk;
+        vramCursor += (1 << (wLog + hLog)) << 2;
+    }
+}
+#endif
 
 /*
  * ResetDebugHeap(): (re)initialise the DebugMalloc bump allocator — cursor back

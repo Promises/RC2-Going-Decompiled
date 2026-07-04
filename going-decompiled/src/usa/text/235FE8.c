@@ -90,7 +90,7 @@ extern void func_00343E80(void *p);
 extern void func_00343F68(void *p);
 extern void func_0033BE60(void *p, s32 v);
 extern void func_0033BF90(void *p);
-extern void func_00348DA0(void *p);
+extern void func_00348DA0(void *p, void *records);
 extern s32 func_00348E60(void *p);  /* 248B50:308 - returns a state value */
 extern void func_00348E10(void *w, s32 a, s32 b); /* 248B50:269 */
 extern void func_00348E70(void *p);
@@ -2043,7 +2043,59 @@ void func_0033BA40(void *p, s32 v) {
     *(s32 *)((char *)p + 0x21C) = v;
 }
 
+/* func_0033BA48: build a four-glyph button row + count its menu entries. For each
+ * of the four slot elements (w+0x4, stride 0x4C): if the slot's glyph id
+ * srcGlyphs[i] is non-zero, init the element (D_1ADC60, pool at +0x210), set its
+ * colour from D_1ADD08[i], and assign the glyph from the shared atlas
+ * (g_guiInstance+0x8710); otherwise assign glyph 0 and hide it. Then store the
+ * entries pointer at +0x0, and count its valid entries (stride 0x18, terminator
+ * field +4 == -1, capped at 0x10) into +0x208, zeroing the +0x1C8 row array as it
+ * goes. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033BA48);
+#else
+extern u8 D_1ADC60[];
+extern s32 D_1ADD08[];
+void func_0033BA48(void *w, s32 *srcGlyphs, void *entries) {
+    s32 i, idx, off;
+    s32 *row;
+
+    for (i = 0; i <= 3; i++) {
+        GuiElement *elem = (GuiElement *)((char *)w + 0x4 + i * 0x4C);
+        if (srcGlyphs[i] != 0) {
+            GuiElementInit(elem, (s32)D_1ADC60, *(GuiPool **)((char *)w + 0x210));
+            *GuiElementGetColor(elem) = D_1ADD08[i];
+            GuiElementSetGlyph(elem, (s32)(g_guiInstance + 0x8710), srcGlyphs[i]);
+        } else {
+            GuiElementSetGlyph(elem, (s32)(g_guiInstance + 0x8710), 0);
+            GuiElementSetVisible(elem, 0);
+        }
+    }
+
+    *(s32 *)((char *)w + 0x208) = 0;
+    *(void **)((char *)w + 0x0) = entries;
+
+    if (*(s32 *)((char *)entries + 4) != -1) {
+        idx = 0;
+        off = 0;
+        row = (s32 *)((char *)w + 0x1C8);
+        *row = 0;
+        for (;;) {
+            off += 0x18;
+            row++;
+            *(s32 *)((char *)w + 0x208) += 1;
+            if (*(s32 *)((char *)entries + off + 4) == -1) {
+                break;
+            }
+            idx++;
+            if (idx >= 0x10) {
+                break;
+            }
+            *row = 0;
+        }
+    }
+}
+#endif
 
 /* GuiDialogBoxInitElements: build the dialog-box sub-elements over p - 5 TypeB
  * border elements (p+0xC, stride 0x4C) then 3 TypeC text rows (p+0x198, +0x1F0,
@@ -3162,7 +3214,45 @@ s32 func_0033E8B0(void *w, s32 flags) {
 }
 #endif
 
+/* func_0033E9B8: draw the two-line widescreen/mode toggle caption on dialog `w`.
+ * Opens a text batch (func_0027F7A0), then draws two localized lines centred at
+ * x=0x100 (y=0x96 and y=0xBE). Each line is sprintf'd from the shared format
+ * D_1ADDB0 with a fixed label (GetLocalizedString(0x2C30) / (0x3079)) and a
+ * value string chosen from the 2-entry id table D_1ADDA8 by the toggle byte
+ * (D_1A7BBA for line 1, D_1A7BBB for line 2). The currently-selected line
+ * (*(w+0x2D8): 0 or 1) is drawn bright (0x80D0D0D0), the other dimmed
+ * (0x70808080). Closes the batch (func_0027F790). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E9B8);
+#else
+extern void func_0027F7A0(void);
+extern void func_0027F790(void);
+void func_0033E9B8(void *w) {
+    char buf[128];
+    s32 sel = *(s32 *)((char *)w + 0x2D8);
+    s32 label, value;
+    u32 color;
+
+    func_0033BF90((char *)w + 0x8);
+    func_0027F7A0();
+
+    /* line 1 (y=0x96), highlighted when line 0 is selected */
+    color = (sel == 0) ? 0x80D0D0D0 : 0x70808080;
+    label = GetLocalizedString(0x2C30);
+    value = GetLocalizedString(*(s32 *)&D_1ADDA8[D_1A7BBA ? 4 : 0]);
+    func_00115DA8(buf, (const char *)D_1ADDB0, (const char *)label, (const char *)value);
+    func_002801B8(0x100, 0x96, color, buf, -1);
+
+    /* line 2 (y=0xBE), highlighted when line 1 is selected */
+    color = (sel == 1) ? 0x80D0D0D0 : 0x70808080;
+    label = GetLocalizedString(0x3079);
+    value = GetLocalizedString(*(s32 *)&D_1ADDA8[D_1A7BBB ? 4 : 0]);
+    func_00115DA8(buf, (const char *)D_1ADDB0, (const char *)label, (const char *)value);
+    func_002801B8(0x100, 0xBE, color, buf, -1);
+
+    func_0027F790();
+}
+#endif
 
 /* func_0033EB20: init the embedded dialog-box (at p+0x8), return the object
  * (byte-identical body to func_0033CD80). */
@@ -3506,10 +3596,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F3B8);
 #else
 /* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame
    wall ($16/$17/$31 16-byte vs 8-byte slot packing). */
-extern void func_00348DA0(void *p);
-void func_0033F3B8(void *p, s32 rows) {
-    func_00348DA0((char *)p + 0x2E0);
-    *(s32 *)((char *)p + 0x3B8) = rows;
+extern void func_00348DA0(void *p, void *records);
+void func_0033F3B8(void *p, void *records) {
+    func_00348DA0((char *)p + 0x2E0, records);
+    *(void **)((char *)p + 0x3B8) = records;
 }
 #endif
 
@@ -3856,9 +3946,138 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341548);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341708);
 
+/* func_003418D8: d-pad + confirm handler for the two-region weapon grid `w`
+ * (a 4-column x N main grid at col +0x814 / row +0x818, plus a 2-wide sub-region
+ * occupying rows 4/5). `flags` (held buttons): up (0x1000) row-- wrapping to 5;
+ * down (0x4000) row++ wrapping to 0; left (0x8000) col--, and on underflow drops
+ * to col 3 (or, when the row is 4/5, crosses into the sub-region: col 2, row-=4,
+ * region flag +0x81C=1); right (0x2000) col++, and on overflow past 4 wraps to
+ * col 0 (row 4 -> row 0 + flag; row 5 -> col 1/row 1 + flag). Confirm (0x40)
+ * forwards to func_00341708(w, D_00259F38, 4). Each path then refreshes the
+ * selected entry +0x820 = D_00259F38[col + row*4].field_0x6. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003418D8);
+#else
+extern u8 D_00259F38[];
+extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern void func_00341708(void *w, void *table, s32 mult);
+void func_003418D8(void *w, s32 flags) {
+    s32 v, idx;
 
+    if (flags & 0x1000) {          /* up: row-- wrap to 5 */
+        PlayGlobalSound(3, 0, 0);
+        v = *(s32 *)((char *)w + 0x818) - 1;
+        *(s32 *)((char *)w + 0x818) = (v >= 0) ? v : 5;
+    } else if (flags & 0x4000) {   /* down: row++ wrap to 0 */
+        PlayGlobalSound(3, 0, 0);
+        v = *(s32 *)((char *)w + 0x818) + 1;
+        *(s32 *)((char *)w + 0x818) = (v > 5) ? 0 : v;
+    } else if (flags & 0x8000) {   /* left: col-- (may cross into sub-region) */
+        PlayGlobalSound(3, 0, 0);
+        v = *(s32 *)((char *)w + 0x814) - 1;
+        if (v >= 0) {
+            *(s32 *)((char *)w + 0x814) = v;
+        } else {
+            s32 t = *(s32 *)((char *)w + 0x818) - 4;
+            if ((u32)t < 2) {          /* rows 4/5 -> 2-wide sub-region */
+                *(s32 *)((char *)w + 0x814) = 2;
+                *(s32 *)((char *)w + 0x818) = t;
+                *(s32 *)((char *)w + 0x81C) = 1;
+            } else {
+                *(s32 *)((char *)w + 0x814) = 3;
+            }
+        }
+    } else if (flags & 0x2000) {   /* right: col++ (may wrap/cross region) */
+        PlayGlobalSound(3, 0, 0);
+        v = *(s32 *)((char *)w + 0x814) + 1;
+        if (v < 4) {
+            *(s32 *)((char *)w + 0x814) = v;
+        } else {
+            s32 r = *(s32 *)((char *)w + 0x818);
+            *(s32 *)((char *)w + 0x814) = 0;
+            if (r == 4) {
+                *(s32 *)((char *)w + 0x818) = 0;
+                *(s32 *)((char *)w + 0x81C) = 1;
+            } else if (r == 5) {
+                *(s32 *)((char *)w + 0x81C) = 1;
+                *(s32 *)((char *)w + 0x814) = 1;
+                *(s32 *)((char *)w + 0x818) = 1;
+            }
+        }
+    } else if (flags & 0x40) {     /* confirm */
+        func_00341708(w, D_00259F38, 4);
+    }
+
+    /* tail (all paths): result entry from the grid table */
+    idx = *(s32 *)((char *)w + 0x814) + *(s32 *)((char *)w + 0x818) * 4;
+    *(s32 *)((char *)w + 0x820) = *(s16 *)&D_00259F38[idx * 0xA + 0x6];
+}
+#endif
+
+/* func_00341A80: d-pad + confirm handler for the 3-column weapon grid `w` (sibling
+ * of func_003418D8; col +0x814 / row +0x818, table D_259CC0 stride 0xA, idx =
+ * col + row*3). up (0x1000) row-- wrapping to 1, but column 0 is single-row so it
+ * pins row 0; down (0x4000) row++ wrapping to 0, column 0 pins row 0; left
+ * (0x8000) col--, and on underflow (or leaving column 0 from row 1) crosses to
+ * col 3 with row += 4 and clears the region flag +0x81C; right (0x2000) col++,
+ * and past column 2 wraps to col 0 with row += 4 and flag cleared. Confirm (0x40)
+ * forwards to func_00341708(w, D_259CC0, 3). Each path then refreshes +0x820 =
+ * D_259CC0[col + row*3].field_0x6. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341A80);
+#else
+extern u8 D_259CC0[];
+extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern void func_00341708(void *w, void *table, s32 mult);
+void func_00341A80(void *w, s32 flags) {
+    s32 v, idx;
+
+    if (flags & 0x1000) {          /* up: row-- (column 0 pins row 0) */
+        s32 col = *(s32 *)((char *)w + 0x814);
+        v = *(s32 *)((char *)w + 0x818) - 1;
+        v = (v >= 0) ? v : 1;
+        if (col == 0) {
+            v = 0;
+        }
+        *(s32 *)((char *)w + 0x818) = v;
+        PlayGlobalSound(3, 0, 0);
+    } else if (flags & 0x4000) {   /* down: row++ wrap to 0 (column 0 pins row 0) */
+        s32 col = *(s32 *)((char *)w + 0x814);
+        v = *(s32 *)((char *)w + 0x818) + 1;
+        v = (v >= 2) ? 0 : v;
+        if (col == 0) {
+            v = 0;
+        }
+        *(s32 *)((char *)w + 0x818) = v;
+        PlayGlobalSound(3, 0, 0);
+    } else if (flags & 0x8000) {   /* left: col-- (may cross to the +4 row region) */
+        PlayGlobalSound(3, 0, 0);
+        v = *(s32 *)((char *)w + 0x814) - 1;
+        if (v < 0 || (v == 0 && *(s32 *)((char *)w + 0x818) == 1)) {
+            *(s32 *)((char *)w + 0x814) = 3;
+            *(s32 *)((char *)w + 0x818) = *(s32 *)((char *)w + 0x818) + 4;
+            *(s32 *)((char *)w + 0x81C) = 0;
+        } else {
+            *(s32 *)((char *)w + 0x814) = v;
+        }
+    } else if (flags & 0x2000) {   /* right: col++ (may cross to the +4 row region) */
+        PlayGlobalSound(3, 0, 0);
+        v = *(s32 *)((char *)w + 0x814) + 1;
+        if (v < 3) {
+            *(s32 *)((char *)w + 0x814) = v;
+        } else {
+            *(s32 *)((char *)w + 0x814) = 0;
+            *(s32 *)((char *)w + 0x818) = *(s32 *)((char *)w + 0x818) + 4;
+            *(s32 *)((char *)w + 0x81C) = 0;
+        }
+    } else if (flags & 0x40) {     /* confirm */
+        func_00341708(w, D_259CC0, 3);
+    }
+
+    idx = *(s32 *)((char *)w + 0x814) + *(s32 *)((char *)w + 0x818) * 3;
+    *(s32 *)((char *)w + 0x820) = *(s16 *)&D_259CC0[idx * 0xA + 0x6];
+}
+#endif
 
 /* func_00341C28: init the screen's six embedded sub-elements at their fixed
  * offsets (two type-B, one type-C, one type-B, a list-row, and the D_1ADA18
@@ -3963,7 +4182,75 @@ void GuiScrollListScreenInit(void *w, GuiPool *pool) {
 }
 #endif
 
+/* func_00341F40: 2D grid-cursor move + selection readout. `flags` selects a
+ * direction (0x1000 up / 0x4000 down on the row axis +0x218 wrapping mod
+ * rowCount +0x220; 0x8000 left / 0x2000 right on the col axis +0x214 wrapping mod
+ * colCount +0x21C), each accompanied by the cursor sound (PlayGlobalSound(3,0,0)).
+ * Then re-positions the cursor element (*(w+0x1C0)) and, when `table` is non-null,
+ * records the s16 at table[col + row*colCount].field_0x6 into +0x224. Called with
+ * table==0 at init (a no-op early-out). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341F40);
+#else
+void func_00341F40(void *w, s32 flags, s32 table) {
+    f32 offset[2];
+    GuiElement *cursor;
+    s32 col, row, idx;
+
+    /* zeroed 8-byte (Vec2) position offset, added to the cursor element's pos */
+    memset(offset, 0, 8);
+    if (table == 0) {
+        return;
+    }
+
+    *(s32 *)((char *)w + 0x224) = 0;
+    cursor = *(GuiElement **)((char *)w + 0x1C0);
+    GuiElementSetPos((GuiElement *)w,
+                     offset[0] + *(f32 *)((char *)cursor + 0x0),
+                     offset[1] + *(f32 *)((char *)cursor + 0x4),
+                     0.0f, 0.0f);
+
+    if (flags & 0x1000) {                       /* up: row-- wrap to rowCount-1 */
+        s32 cur;
+        PlayGlobalSound(3, 0, 0);
+        cur = *(s32 *)((char *)w + 0x218) - 1;
+        if (cur < 0) {
+            cur = *(s32 *)((char *)w + 0x220) - 1;
+        }
+        *(s32 *)((char *)w + 0x218) = cur;
+    } else if (flags & 0x4000) {                /* down: row++ wrap to 0 */
+        s32 cur;
+        PlayGlobalSound(3, 0, 0);
+        cur = *(s32 *)((char *)w + 0x218) + 1;
+        if (cur >= *(s32 *)((char *)w + 0x220)) {
+            cur = 0;
+        }
+        *(s32 *)((char *)w + 0x218) = cur;
+    } else if (flags & 0x8000) {                /* left: col-- wrap to colCount-1 */
+        s32 cur;
+        PlayGlobalSound(3, 0, 0);
+        cur = *(s32 *)((char *)w + 0x214) - 1;
+        if (cur < 0) {
+            cur = *(s32 *)((char *)w + 0x21C) - 1;
+        }
+        *(s32 *)((char *)w + 0x214) = cur;
+    } else if (flags & 0x2000) {                /* right: col++ wrap to 0 */
+        s32 cur;
+        PlayGlobalSound(3, 0, 0);
+        cur = *(s32 *)((char *)w + 0x214) + 1;
+        if (cur >= *(s32 *)((char *)w + 0x21C)) {
+            cur = 0;
+        }
+        *(s32 *)((char *)w + 0x214) = cur;
+    }
+
+    row = *(s32 *)((char *)w + 0x218);
+    col = *(s32 *)((char *)w + 0x214);
+    idx = col + row * *(s32 *)((char *)w + 0x21C);
+    *(s32 *)((char *)w + 0x224) =
+        *(s16 *)((char *)table + idx * 0xA + 0x6);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003420C0);
 
@@ -4107,7 +4394,56 @@ s32 func_003424C8(void *p) {
 }
 #endif
 
+/* func_00342520: select active column `mode` (0..2) on the multi-column screen
+ * `w`. Loads the column's config value (D_1AE0A0[mode] -> +0x1C4) and table row
+ * (&D_2652B0[mode*0x20] -> +0x1C8), sets the column icon glyph (+0x1CC: 7/8/6),
+ * (re)inits the row widget at +0x238 with the column's item count
+ * (*(w+mode*4+0x1B8)) and its record pointer (*(w+0x310/314/318)), sets the
+ * caption text (+0x1D0) to the column's localized string (0x2BEB/0x2BEC/0x3094)
+ * and the three element alphas (w, +0x4C, +0xE4) to mode's value (0/1/2), and
+ * records the selection at +0x31C. mode>=3 (unsigned) is a no-op. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342520);
+#else
+extern s32 D_1AE0A0[];
+extern u8 D_2652B0[];
+extern void func_00348E50(void *w, s32 v);
+void func_00342520(void *w, s32 mode) {
+    f32 alpha;
+    s32 iconId, strId;
+    void *records;
+
+    if ((u32)mode >= 3) {
+        return;   /* only columns 0, 1, 2 */
+    }
+
+    *(s32 *)((char *)w + 0x1C4) = D_1AE0A0[mode];
+    *(void **)((char *)w + 0x1C8) = &D_2652B0[mode * 0x20];
+
+    if (mode == 0) {
+        iconId = 7; alpha = 0.0f; strId = 0x2BEB;
+        records = *(void **)((char *)w + 0x310);
+    } else if (mode == 1) {
+        iconId = 8; alpha = 1.0f; strId = 0x2BEC;
+        records = *(void **)((char *)w + 0x314);
+    } else {   /* mode == 2 */
+        iconId = 6; alpha = 2.0f; strId = 0x3094;
+        records = *(void **)((char *)w + 0x318);
+    }
+    *(s32 *)((char *)w + 0x1CC) = iconId;
+
+    func_00348E50((char *)w + 0x238, *(s32 *)((char *)w + mode * 4 + 0x1B8));
+    func_00348DA0((char *)w + 0x238, records);
+
+    GuiElementSetText((GuiElement *)((char *)w + 0x1D0), GetLocalizedString(strId));
+
+    GuiElementSetAlpha((GuiElement *)w, alpha);
+    GuiElementSetAlpha((GuiElement *)((char *)w + 0x4C), alpha);
+    GuiElementSetAlpha((GuiElement *)((char *)w + 0xE4), alpha);
+
+    *(s32 *)((char *)w + 0x31C) = mode;
+}
+#endif
 
 /* func_00342670: position the embedded element at p+0x130 from the anchor
  * vector at *(p+0x228) and the per-column index *(p+sel*4+0x1B8) where
@@ -4205,7 +4541,58 @@ void func_00342978(void *p) {
     __asm__ __volatile__("");
 }
 
+/* func_00342998: immediate-mode draw of the active column's icon row on screen
+ * `w`. For each of the *(w+0x1CC) items, reuse the shared icon element (w+0x17C):
+ * position it as a vertical list from the anchor (*(w+0x228)) — x = anchor.x +
+ * D_1AE0F8, y = anchor.y + D_1AE0FC + D_1AE100*i — pick its texture from the
+ * column's entry table (entry = *(w+0x1C8))[i] keyed on the selected column
+ * (*(w+0x31C)), tint the item that matches the column's current index
+ * (*(w+selCol*4+0x1B8)) dim (0x70FFFEED) and the rest bright (0x60F0F0B0), and
+ * submit it (func_00337630). Empty column (count<=0) draws nothing. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342998);
+#else
+extern f32 D_1AE0F8, D_1AE0FC, D_1AE100;
+void func_00342998(void *w) {
+    GuiElement *icon = (GuiElement *)((char *)w + 0x17C);
+    s32 count = *(s32 *)((char *)w + 0x1CC);
+    s32 i;
+
+    for (i = 0; i < count; i++) {
+        f32 *anchor = *(f32 **)((char *)w + 0x228);
+        s32 selCol = *(s32 *)((char *)w + 0x31C);
+        s32 *table = *(s32 **)((char *)w + 0x1C8);
+        s32 entry = table[i];
+        s32 *color;
+
+        GuiElementSetPos(icon,
+                         anchor[0] + D_1AE0F8,
+                         (anchor[1] + D_1AE0FC) + D_1AE100 * (f32)i,
+                         0.0f, 0.0f);
+
+        if (selCol == 2) {
+            if (entry == 5) {
+                GuiSpriteSetTexture(icon, 0xEA9E, 5);
+            } else {
+                GuiSpriteSetTexture(icon, entry, 0);
+            }
+        } else if (selCol == 0) {
+            if (entry == 6) {
+                GuiSpriteSetTexture(icon, 0xEA97, 0);
+            } else {
+                GuiSpriteSetTexture(icon, *(s32 *)((char *)w + 0x1C4), entry);
+            }
+        } else {
+            GuiSpriteSetTexture(icon, *(s32 *)((char *)w + 0x1C4), entry);
+        }
+
+        color = GuiElementGetColor(icon);
+        *color = (i == *(s32 *)((char *)w + selCol * 4 + 0x1B8)) ? 0x70FFFEED
+                                                                : 0x60F0F0B0;
+        func_00337630(icon);
+    }
+}
+#endif
 
 /* Draw a composite widget only when its enabled flag (+0x230) is set: four
  * sprite sub-elements (base, +0x98, +0x4C, +0xE4), a text sub-element (+0x1D0),
@@ -4335,9 +4722,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342DC0);
 #else
 /* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame
    wall. */
-void func_00342DC0(void *p, s32 rows) {
-    func_00348DA0((char *)p + 0x10);
-    *(s32 *)((char *)p + 0xE8) = rows;
+void func_00342DC0(void *p, void *records) {
+    func_00348DA0((char *)p + 0x10, records);
+    *(void **)((char *)p + 0xE8) = records;
 }
 #endif
 
@@ -4487,16 +4874,17 @@ void GuiIconScreenInit2(void *w, GuiPool *pool) {
 }
 #endif
 
-/* func_00343290: store v at p+0x260 then call func_00348DA0(p+0x188). */
+/* func_00343290: cache the row-data pointer at p+0x260 then init the GuiWidget at
+ * p+0x188 with it (func_00348DA0(p+0x188, records)). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343290);
 #else
 /* TODO(match): functional equivalent - not byte-exact; the original keeps a $a0
    copy and fills the jal delay slot with the store; cc1 stores before the call.
    68% best. */
-void func_00343290(void *p, s32 v) {
-    *(s32 *)((char *)p + 0x260) = v;
-    func_00348DA0((char *)p + 0x188);
+void func_00343290(void *p, void *records) {
+    *(void **)((char *)p + 0x260) = records;
+    func_00348DA0((char *)p + 0x188, records);
 }
 #endif
 
@@ -4761,7 +5149,42 @@ s32 func_00343F70(void *p) {
     return *(s32 *)((char *)p + 0x10);
 }
 
+/* func_00343F78: draw the two-layer highlight box behind selection `w`. Both
+ * rects are built from the base position (*(w+0)): the inner fill rect spans
+ * (base + D_1AE1D0/D_1AE1D4) .. (base + D_1AE1D8/D_1AE1DC) in a fixed colour
+ * (0x60241700); the outer rect expands that by +/-D_1AE1E0 in x and +/-D_1AE1E4
+ * in y and is drawn first in a pulsing highlight colour
+ * (func_002AA3F0(0x60241700, 0x55F0C070, ...)). Both are submitted to the GS
+ * rect primitive func_00285EF8 clipped to g_screenWidth x g_screenHeight. The
+ * D_1AE1Dx/Ex offsets are stored as integers (cvt.s.w) and added as floats. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343F78);
+#else
+extern s32 g_screenWidth, g_screenHeight;
+extern s32 D_1AE1D0, D_1AE1D4, D_1AE1D8, D_1AE1DC, D_1AE1E0, D_1AE1E4;
+extern void func_00285EF8(s32 x0, s32 y0, s32 x1, s32 y1, s32 sw, s32 sh, u32 color);
+void func_00343F78(void *w) {
+    f32 *base = *(f32 **)((char *)w + 0x0);
+    f32 bx = base[0];
+    f32 by = base[1];
+    u32 pulsed;
+
+    /* outer border rect (expanded by D_1AE1E0/E4), pulsing highlight colour */
+    pulsed = func_002AA3F0(0x60241700, 0x55F0C070, 0x14, 0, 0);
+    func_00285EF8((s32)(((f32)D_1AE1D0 + bx) - (f32)D_1AE1E0),
+                  (s32)(((f32)D_1AE1D4 + by) - (f32)D_1AE1E4),
+                  (s32)(((f32)D_1AE1D8 + bx) + (f32)D_1AE1E0),
+                  (s32)(((f32)D_1AE1DC + by) + (f32)D_1AE1E4),
+                  g_screenWidth, g_screenHeight, pulsed);
+
+    /* inner fill rect, fixed colour */
+    func_00285EF8((s32)((f32)D_1AE1D0 + bx),
+                  (s32)((f32)D_1AE1D4 + by),
+                  (s32)((f32)D_1AE1D8 + bx),
+                  (s32)((f32)D_1AE1DC + by),
+                  g_screenWidth, g_screenHeight, 0x60241700);
+}
+#endif
 
 /* func_00344110: init the screen's eight embedded sub-elements at their fixed
  * offsets (three type-B, the D_1ADA18 widget, three type-C, and the identity
@@ -5382,7 +5805,51 @@ void func_003451B8(void *w, void *a) {
 }
 #endif
 
+/* func_00345298: read the 16-bit field_0x42 of the weapon variant currently
+ * selected on the weapon-select screen `w`, dispatched by screen mode (+0x4B8):
+ *   mode 0: id = selection (+0x4B4) -> generic owned-variant lookup.
+ *   mode 1: fixed item 6 (only if owned).
+ *   mode 2: id = selection; the item-7 special case (id==7, owns item 0x31 but
+ *           not item 7) reads the 0x31 variant instead, else the generic lookup.
+ *   mode 3: category-table entry D_1AE238[selection], returned directly.
+ *   otherwise, or unowned: 0.
+ * The owned-variant lookup mirrors func_003453D0:
+ * g_weaponTable[g_itemEquippedSlot[id]*0xE0 + 0x42] (signed 16-bit). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00345298);
+#else
+extern s32 D_1AE238[];
+s32 func_00345298(void *w) {
+    s32 mode = *(s32 *)((char *)w + 0x4B8);
+    s32 id;
+
+    if (mode == 1) {
+        if (g_inventoryOwned[6] == 0) {
+            return 0;
+        }
+        return *(s16 *)&g_weaponTable[g_itemEquippedSlot[6] * 0xE0 + 0x42];
+    }
+    if (mode == 3) {
+        return D_1AE238[*(s32 *)((char *)w + 0x4B4)];
+    }
+    if (mode == 0) {
+        id = *(s32 *)((char *)w + 0x4B4);
+    } else if (mode == 2) {
+        id = *(s32 *)((char *)w + 0x4B4);
+        if (id == 7 && g_inventoryOwned[0x31] != 0 && g_inventoryOwned[7] == 0) {
+            return *(s16 *)&g_weaponTable[g_itemEquippedSlot[0x31] * 0xE0 + 0x42];
+        }
+    } else {
+        return 0;   /* mode < 0 or mode >= 4 */
+    }
+
+    /* generic owned-variant lookup on the selected id */
+    if (g_inventoryOwned[id] == 0) {
+        return 0;
+    }
+    return *(s16 *)&g_weaponTable[g_itemEquippedSlot[id] * 0xE0 + 0x42];
+}
+#endif
 
 /* Build the weapon-select screen. Reset the selection (+0x4B4), clear the caption
  * id (D_1ADAF0=-1), apply the equipped-armor upgrade slot, then dispatch on the
@@ -5583,7 +6050,38 @@ void func_003461D0(void *obj) {
 }
 #endif
 
+/* func_003462C0: draw a map/info screen. Bails if hidden (*(w+0x4A8)==0). Draws
+ * four sprite elements (w/+0x4C/+0x98/+0xE4) and three text rows (+0x1C8, +0x2B8,
+ * +0x1C8 again), hides +0x220, then runs the five sub-builders func_003461D0/
+ * 00345FF0/00345F00/003460E0/00345890 and draws the detail sprite (+0x17C). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003462C0);
+#else
+void func_003461D0(void *w);
+void func_00345FF0(void *w);
+void func_00345F00(void *w);
+void func_003460E0(void *w);
+void func_00345890(void *w);
+void func_003462C0(void *w) {
+    if (*(s32 *)((char *)w + 0x4A8) == 0) {
+        return;
+    }
+    GuiSpriteElementDraw(w);
+    GuiSpriteElementDraw((char *)w + 0x4C);
+    GuiSpriteElementDraw((char *)w + 0x98);
+    GuiSpriteElementDraw((char *)w + 0xE4);
+    GuiTextElementDraw((char *)w + 0x1C8);
+    GuiTextElementDraw((char *)w + 0x2B8);
+    GuiTextElementDraw((char *)w + 0x1C8);
+    GuiElementSetVisible((GuiElement *)((char *)w + 0x220), 0);
+    func_003461D0(w);
+    func_00345FF0(w);
+    func_00345F00(w);
+    func_003460E0(w);
+    func_00345890(w);
+    GuiSpriteElementDraw((char *)w + 0x17C);
+}
+#endif
 
 /* Construct a composite widget: init six TypeB sub-elements (base, +0x4C, +0x98,
  * +0xE4, +0x130, +0x17C), two TypeC (+0x1C8, +0x220), a sub-list (+0x278), then
@@ -5727,7 +6225,79 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00346878);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00346AF8);
 
+/* func_00346CD8: d-pad + confirm handler for the weapon-select screen `w`.
+ * `flags` (held-button bits) drives the single-axis cursor at +0x4FC over the
+ * 3-entry D_1AA8B8 table: up (0x1000) decrements clamped at 0 (and resets the
+ * +0x500 sub-state, sets +0x508=3); down (0x4000) just resets +0x500/+0x508;
+ * left (0x8000) decrements wrapping to 2; right (0x2000) increments wrapping to
+ * 0. Confirm (0x40): if the cursor's entry is owned, play the accept sound and
+ * toggle it as the selected weapon (g_menuScreenBlock+0x44) while refreshing the
+ * caption id D_1ADAF0; otherwise play the deny sound. Every path then refreshes
+ * +0x504 = current entry and, when owned, the caption id from
+ * g_weaponTable[g_itemEquippedSlot[entry]*0xE0 + 0x6]. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00346CD8);
+#else
+extern u8 D_1AA8B8[];
+extern u8 g_menuScreenBlock[];
+extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+void func_00346CD8(void *w, s32 flags) {
+    s32 entry;
+
+    if (flags & 0x1000) {          /* up: decrement, clamp at 0 */
+        s32 v;
+        PlayGlobalSound(3, 0, 0);
+        *(s32 *)((char *)w + 0x500) = 0;
+        *(s32 *)((char *)w + 0x508) = 3;
+        v = *(s32 *)((char *)w + 0x4FC) - 1;
+        if (v < 0) {
+            v = 0;
+        }
+        *(s32 *)((char *)w + 0x4FC) = v;
+    } else if (flags & 0x4000) {   /* down: reset sub-state only */
+        PlayGlobalSound(3, 0, 0);
+        *(s32 *)((char *)w + 0x500) = 0;
+        *(s32 *)((char *)w + 0x508) = 0;
+    } else if (flags & 0x8000) {   /* left: decrement, wrap to 2 */
+        s32 v;
+        PlayGlobalSound(3, 0, 0);
+        v = *(s32 *)((char *)w + 0x4FC) - 1;
+        if (v < 0) {
+            v = 2;
+        }
+        *(s32 *)((char *)w + 0x4FC) = v;
+    } else if (flags & 0x2000) {   /* right: increment, wrap to 0 */
+        s32 v;
+        PlayGlobalSound(3, 0, 0);
+        v = *(s32 *)((char *)w + 0x4FC) + 1;
+        if (v >= 3) {
+            v = 0;
+        }
+        *(s32 *)((char *)w + 0x4FC) = v;
+    } else if (flags & 0x40) {     /* confirm: toggle-select the entry */
+        entry = *(s16 *)&D_1AA8B8[*(s32 *)((char *)w + 0x4FC) * 0xA + 0x6];
+        if (entry != 0 && g_inventoryOwned[entry] != 0) {
+            s32 slot = g_itemEquippedSlot[*(s32 *)((char *)w + 0x504)];
+            PlayGlobalSound(4, 0, 0);
+            D_1ADAF0 = *(s16 *)&g_weaponTable[slot * 0xE0 + 0x6];
+            if (*(s32 *)((char *)g_menuScreenBlock + 0x44) == entry) {
+                *(s32 *)((char *)g_menuScreenBlock + 0x44) = 0;
+            } else {
+                *(s32 *)((char *)g_menuScreenBlock + 0x44) = entry;
+            }
+        } else {
+            PlayGlobalSound(5, 0, 0);
+        }
+    }
+
+    /* tail (all paths): refresh the current entry + caption id */
+    entry = *(s16 *)&D_1AA8B8[*(s32 *)((char *)w + 0x4FC) * 0xA + 0x6];
+    *(s32 *)((char *)w + 0x504) = entry;
+    if (entry != 0 && g_inventoryOwned[entry] != 0) {
+        D_1ADAF0 = *(s16 *)&g_weaponTable[g_itemEquippedSlot[entry] * 0xE0 + 0x6];
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiMapScreenTick);
 
