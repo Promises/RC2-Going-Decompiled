@@ -359,9 +359,100 @@ void func_002CABC0(void) {
 }
 #endif
 
-/* menu-screen lifecycle routine: 8-byte-packed-save wall (saves 4 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* RequestMenuScreenChange: open or switch a front-end / pause screen (`screen` is
+ * the target screen id). If we are leaving the in-game pause overlay for anything
+ * other than the audio-options sub-screen (prev game state 4 AND overlay mode != 8),
+ * the block's overlay-active flag (+0x1F4) is cleared. When no pending change is
+ * queued (+0x1F4 == 0) it silences the dialog voice (func_00132AF8(0x5D) +
+ * SetDialogVoiceVolumesMax(0) + snd_Pump). It marks the screen live (block[0] = 1)
+ * and, when not already in-game (g_nGameState == 0), builds the pause prompt. It
+ * selects the screen's list-vtable flag block[0xE8] from the high half of D_1A7A10
+ * and block[0x108], wires the two list records (D_002598F8/D_00259A88 <->
+ * D_00259AD8), latches the active screen id into block[0x8] (block[0x104], or
+ * `screen` when that is 0), clears a batch of transition fields, and — unless
+ * returning to the map (screen == 6) — re-syncs the galactic map to g_playerProgress
+ * (MapSetCurrentLevel + UpdateLevelObjectiveStates + func_002DFE60). Finally it marks
+ * the change committed (block[0x14C] = 1).
+ * Wall: 8-byte-packed-save (4 GPRs) + branch-likely dialog/list-flag shapes — later
+ * cc1 save-slot packing not reproduced. Preserved as portable C. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", RequestMenuScreenChange);
+#else
+extern s32 GetPrevGameState(void);
+extern s32 GetMenuOverlayMode(void);
+extern void func_00132AF8(s32 arg);
+extern void SetDialogVoiceVolumesMax(s32 arg);
+extern void snd_Pump(void);
+extern void BuildPausePromptPopup(void);
+extern void MapSetCurrentLevel(s32 level);
+extern void UpdateLevelObjectiveStates(void);
+extern void func_002DFE60(void);
+extern s32 g_nGameState;
+extern s32 D_1A7A10;
+extern u8 D_002598F8[], D_00259AD8[], D_00259A88[];
+extern s32 D_25B5D8;
+extern s32 g_playerProgress;
+void RequestMenuScreenChange(s32 screen) {
+    u8 *mb = g_menuScreenBlock;
+    s32 cur;
+
+    /* clear the overlay-active flag unless returning to the audio-options sub-screen */
+    if (!(GetPrevGameState() == 4 && GetMenuOverlayMode() == 8)) {
+        *(s32 *)(mb + 0x1F4) = 0;
+    }
+
+    /* no pending change queued: silence the dialog voice */
+    if (*(s32 *)(mb + 0x1F4) == 0) {
+        func_00132AF8(0x5D);
+        SetDialogVoiceVolumesMax(0);
+        *(u8 *)(mb + 0xDB) = 0;
+        if (*(s32 *)(mb + 0x1F4) == 0) {
+            snd_Pump();
+        }
+    } else {
+        *(u8 *)(mb + 0xDB) = 0;
+    }
+
+    *(s32 *)(mb + 0) = 1;
+    if (g_nGameState == 0) {
+        BuildPausePromptPopup();
+    }
+
+    /* pick the list-vtable flag, then wire the two list records accordingly */
+    *(s32 *)(mb + 0x144) = 0;
+    *(s32 *)(mb + 0x148) = 0;
+    if ((D_1A7A10 & 0xFFFF0000) != 0 || *(s32 *)(mb + 0x108) != 0) {
+        *(s32 *)(mb + 0xE8) = 1;
+    } else {
+        *(s32 *)(mb + 0xE8) = 0;
+    }
+    if (*(s32 *)(mb + 0xE8) != 0) {
+        *(u8 **)(D_002598F8 + 0x38) = D_00259AD8;
+        *(u8 **)(D_00259A88 + 0x3C) = D_00259AD8;
+    } else {
+        *(u8 **)(D_002598F8 + 0x38) = D_00259A88;
+        *(u8 **)(D_00259A88 + 0x3C) = D_002598F8;
+    }
+
+    cur = *(s32 *)(mb + 0x104);
+    *(s32 *)(mb + 0x1C8) = 0;
+    *(s32 *)(mb + 0x1C) = 0;
+    *(s32 *)(mb + 0x8) = (cur == 0) ? screen : cur;
+    *(s32 *)(mb + 0x20) = 0;
+    *(s32 *)(mb + 0x120) = 0;
+    *(s32 *)(mb + 0x1C0) = 0;
+    *(s32 *)(mb + 0x1C4) = 0;
+    if (screen != 6) {
+        MapSetCurrentLevel(g_playerProgress);
+        UpdateLevelObjectiveStates();
+        D_25B5D8 = 0;
+        func_002DFE60();
+    }
+    *(s32 *)(mb + 0x1F4) = 0;
+    *(s32 *)(mb + 0x14C) = 1;
+    *(s32 *)(mb + 0x150) = 0;
+}
+#endif
 
 /* screen-capture/restore routine: 8-byte-packed-save wall (saves 5 GPRs incl $31; later cc1
  * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
@@ -517,9 +608,54 @@ s32 LevelSelectListHandleInput(s32 flags) {
 }
 #endif
 
-/* level-select list routine: 8-byte-packed-save wall (saves 9 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* LevelSelectListRender: draws the galactic-map level-select list. Dims the screen
+ * (DrawFullScreenTint), then for each enabled entry (scroller flag at +0xC+i*4 != 0)
+ * of the g_nLevelSelectListCount-rooted scroller, formats "<name> <detail>" into a
+ * local buffer (func_00115DA8 sprintf with format D_1AB920, from the two localized
+ * strings at entry+0x4 and entry+0x0 of the scroller's entry array at +0x8), draws a
+ * row background bar (func_0027F208) and the row text (func_002801B8) at
+ * y = D_1AB918 + row*D_1AB914 where row = 2*i (or 0x24 for the special last row
+ * i==0x18); the row color is the highlight 0x80FFDE8D when it is the selected row
+ * (scroller +0x4) else 0x80808080.
+ * Wall: 8-byte-packed-save (9 GPRs) — later cc1 save-slot packing not reproduced.
+ * Preserved as portable C. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", LevelSelectListRender);
+#else
+extern void func_002801B8(s32 x, s32 y, u64 color, char *str, s64 sel);
+extern void func_0027F208(s32 y0, s32 y1, s32 x0, s32 x1, s32 h, s32 color);
+extern void func_00115DA8(char *dst, const char *fmt, ...); /* SDK sprintf */
+extern s32 D_1AB914;             /* row pitch */
+extern s32 D_1AB918;             /* base row y */
+extern char D_1AB920[];          /* "<name> <detail>" format string */
+s32 LevelSelectListRender(void) {
+    char buf[0x100];
+    s32 *scroller = &g_nLevelSelectListCount;
+    s32 i;
+
+    DrawFullScreenTint(0, 0, 0, 0x60);
+    for (i = 0; i <= g_nLevelSelectListCount; i++) {
+        s32 *entry;
+        s32 flag = *(s32 *)((char *)scroller + 0xC + i * 4);
+        s32 row, y;
+        char *name, *detail;
+        u32 color;
+        if (flag == 0) {
+            continue;
+        }
+        entry = (s32 *)((char *)scroller[2] + i * 8);   /* scroller[0x8] = entry array */
+        row = (i != 0x18) ? i * 2 : 0x24;
+        name = GetLocalizedString(entry[1]);            /* entry+0x4 */
+        detail = GetLocalizedString(entry[0]);          /* entry+0x0 */
+        func_00115DA8(buf, D_1AB920, name, detail);
+        y = D_1AB918 + row * D_1AB914;
+        func_0027F208(y, y + 0xF, 0x40, 0x1C0, 0x60, 0x60442D00);
+        color = (scroller[1] == i) ? 0x80FFDE8D : 0x80808080;
+        func_002801B8(0x100, y, color, buf, -1);
+    }
+    return 0;
+}
+#endif
 
 /* Dispatch a menu action via a 2-case switch: action 0 -> result 1, action 1 ->
  * func_002D67A0(3, &D_0025BA70), default -> result 0. (MATCHED: the `switch`
@@ -1463,9 +1599,85 @@ s32 func_002D0B40(void) {
     return 0;
 }
 
-/* menu input/update handler: 8-byte-packed-save wall (saves 3 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* UpdateSkillPointsMenu: per-frame input for the skill-points menu (cursor
+ * g_nSkillPointsMenuCursor over the 30 skill points). Back (0x10) resets the cursor
+ * and pops the menu-screen block. Exit (0x900) resets the cursor and returns 1. Up
+ * (0x1000)/down (0x4000) move the cursor (wrapping 0..0x1D) with the move sound. It
+ * then updates the info panel for the current entry (D_0025C098+0x58 = cursor): when
+ * the skill point is completed (g_skillPointFlags[cursor]) it records its meta id
+ * (g_skillPointMetaTable[cursor*6 + 2] -> D_25C074) and, if the cursor did not move
+ * and no file load is pending and the panel is showing this same entry
+ * (D_0025C098+0x50/+0x54 == cursor with mode +0x44 == 2/4), clears bit 0x4 of the
+ * render object (*D_25C004 + 0x10); when not completed it sets that bit and zeroes
+ * D_25C074. Returns 1 on exit, the popped value on back, else 0.
+ * (matching arm left INCLUDE_ASM: 8-byte-packed-save wall.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateSkillPointsMenu);
+#else
+extern s32 g_nSkillPointsMenuCursor;
+extern u8 g_skillPointMetaTable[];
+extern u8 D_0025C098[];
+extern u8 *D_25C004;
+extern s32 D_25C074;
+extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+s32 UpdateSkillPointsMenu(void) {
+    s32 buttons = g_padButtonsPressed;
+    s32 cursor0 = g_nSkillPointsMenuCursor;
+    s32 ret = 0;
+    s32 cursor;
+
+    if (buttons & 0x10) {           /* back */
+        s32 e0 = *(s32 *)(*(u8 **)(g_menuScreenBlock + 0x14) + 0xE0);
+        g_nSkillPointsMenuCursor = 0;
+        if (e0 != 0) {
+            *(s32 *)(g_menuScreenBlock + 0x18) = e0;
+            return 0;
+        }
+        return (*(s32 *)(g_menuScreenBlock + 0x134) == 0) ? -1 : 0;
+    }
+
+    if (buttons & 0x900) {          /* exit */
+        g_nSkillPointsMenuCursor = 0;
+        ret = 1;
+    } else if (buttons & 0x1000) {  /* up */
+        s32 v;
+        PlayGlobalSound(3, 0, 0);
+        v = g_nSkillPointsMenuCursor - 1;
+        g_nSkillPointsMenuCursor = (v >= 0) ? v : 0x1D;
+    } else if (buttons & 0x4000) {  /* down */
+        s32 v;
+        PlayGlobalSound(3, 0, 0);
+        v = g_nSkillPointsMenuCursor + 1;
+        g_nSkillPointsMenuCursor = (v < 0x1E) ? v : 0;
+    }
+
+    /* refresh the info panel for the current cursor */
+    cursor = g_nSkillPointsMenuCursor;
+    *(s32 *)(D_0025C098 + 0x58) = cursor;
+
+    if ((&g_skillPointFlags)[cursor] != 0) {
+        /* completed skill point */
+        s32 clear = 0;
+        if (cursor0 == cursor && g_fileLoadState == 0) {
+            s32 mode = *(s32 *)(D_0025C098 + 0x44);
+            if (*(s32 *)(D_0025C098 + 0x50) == cursor0 && mode == 2) {
+                clear = 1;
+            } else if (*(s32 *)(D_0025C098 + 0x54) == cursor0 && mode == 4) {
+                clear = 1;
+            }
+        }
+        if (clear) {
+            *(s32 *)(D_25C004 + 0x10) &= ~0x4;
+        }
+        D_25C074 = *(s16 *)(g_skillPointMetaTable + cursor * 6 + 2);
+    } else {
+        /* not yet completed */
+        *(s32 *)(D_25C004 + 0x10) |= 0x4;
+        D_25C074 = 0;
+    }
+    return ret;
+}
+#endif
 
 /* menu/HUD draw routine: 8-byte-packed-save wall (saves 8 GPRs incl $31; later cc1
  * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
@@ -1476,13 +1688,225 @@ s32 func_002D1150(void) {
     return 0;
 }
 
-/* menu input/update handler: switch/jump-table dispatch (splat jtbl reloc gap) — left as
- * INCLUDE_ASM (cc1 jtbl layout not reproduced). */
+/* UpdateExtrasMenuInput: per-frame input for the Extras menu, a 5-item carousel
+ * (g_extrasMenuCursor in [0,4]). Back (0x10) resets the cursor and latches the
+ * active screen's pending sub-result (block[0x14]->0xE0 into block[0x18], else
+ * -1/0). Cancel (0x900) resets the cursor and returns 1. Up (0x1000)/down (0x4000)
+ * play UI sound 3 and move the cursor with wrap in [0,4]. Confirm (0x40) dispatches
+ * via jtbl_0026CCE0_text: cursor 0 requests the sub-screen g_pNextMenuScreen =
+ * D_25C298; cursors 1..4 act only when enabled (D_1ABA48[cursor] != 0, else play
+ * sound 5) — cursor 1 freezes the screen and enters the making-of state
+ * (CaptureScreenToVram + RequestGameStateChange(9,1,...)); cursors 2/3/4 queue
+ * making-of/credits reels (0xBF / 0xBD+0xBE / 0xC1). Queued reels are then enqueued
+ * and started (EnqueueCinematic x1..2 + StartCinematicFromQueue on g_cinematicQueue,
+ * after stashing the screen fields like CinematicsMenuTick). A deferred UI sound
+ * (4 on success, 5 when disabled) is played once. Every non-back path then runs the
+ * present-record redraw fence (D_0025C230 record, live object *D_25C1F0): SET redraw
+ * bit 0x4 when disabled, else CLEAR it only when the cursor is unchanged, the
+ * file-load is idle, and the present record shows this cursor already presented
+ * (offsets 0x50/0x54 == cursor and state 0x44 in {2,4}).
+ * Wall: switch/jump-table dispatch (splat jtbl reloc gap) + branch-likely fence —
+ * cc1 jtbl layout not reproduced. Preserved as portable C. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateExtrasMenuInput);
+#else
+extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern void CaptureScreenToVram(s32 mode);
+extern s32 EnqueueCinematic(void *queue, s32 reelId);
+extern s32 StartCinematicFromQueue(void *queue);
+extern s32 RequestGameStateChange(s32 stateId, s32 push, s32 c, s32 d, s32 e);
+extern s32 g_extrasMenuCursor;   /* extras carousel cursor 0..4 */
+extern s32 D_1ABA48[];           /* per-item enabled flags */
+extern u8 *g_pNextMenuScreen;    /* 0x1F27D8 - requested next screen */
+extern u8 D_25C298[];            /* extras sub-screen record */
+extern s32 g_cinematicExitPending; /* 0x1A7478 - exit-cinematic-pending flag */
+extern u8 g_cinematicQueue[];    /* 0x1BACC0 - pending-cinematic reel queue record */
+extern s32 g_cameraCallbackCount; /* 0x1B1480 - the making-of path writes +0x80 */
+extern u8 D_0025C230[];          /* per-screen present record */
+extern u8 *D_25C1F0;             /* pointer to the live menu object */
+s32 UpdateExtrasMenuInput(void) {
+    s32 flags = *(s32 *)(D_138180 + 0x1C4);
+    s32 cursor0 = g_extrasMenuCursor;   /* cursor at entry, for the fence check */
+    s32 result = 0;
+    s32 sound = -1;                     /* deferred UI sound (4 ok, 5 disabled) */
+    s32 reel0 = -1, reel1 = -1;         /* queued cinematic reel ids */
+    u8 *mb = g_menuScreenBlock;
+    s32 cursor;
 
-/* menu/HUD draw routine: 8-byte-packed-save wall (saves 6 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+    if (flags & 0x10) {                 /* back */
+        s32 e0 = *(s32 *)(*(u8 **)(mb + 0x14) + 0xE0);
+        g_extrasMenuCursor = 0;
+        if (e0 != 0) {
+            *(s32 *)(mb + 0x18) = e0;
+            return 0;
+        }
+        return (*(s32 *)(mb + 0x134) == 0) ? -1 : 0;
+    }
+
+    if (flags & 0x900) {                /* cancel */
+        g_extrasMenuCursor = 0;
+        return 1;
+    } else if (flags & 0x1000) {        /* up */
+        s32 v;
+        PlayGlobalSound(3, 0, 0);
+        v = g_extrasMenuCursor - 1;
+        g_extrasMenuCursor = (v >= 0) ? v : 4;
+    } else if (flags & 0x4000) {        /* down */
+        s32 v;
+        PlayGlobalSound(3, 0, 0);
+        v = g_extrasMenuCursor + 1;
+        g_extrasMenuCursor = (v < 5) ? v : 0;
+    }
+
+    flags = *(s32 *)(D_138180 + 0x1C4);
+    if ((flags & 0x40) && (u32)g_extrasMenuCursor < 5) {   /* confirm */
+        cursor = g_extrasMenuCursor;
+        switch (cursor) {
+        case 0:
+            g_pNextMenuScreen = D_25C298;
+            sound = 4;
+            break;
+        case 1:
+            if (D_1ABA48[cursor] == 0) {
+                sound = 5;
+            } else {
+                /* freeze the screen + enter the making-of state */
+                CaptureScreenToVram(1);
+                *(s32 *)((u8 *)&g_cameraCallbackCount + 0x80) = 2;
+                *(s32 *)(mb + 0x100) = *(s32 *)(mb + 0x14);
+                *(s32 *)(mb + 0x104) = *(s32 *)(mb + 0x8);
+                RequestGameStateChange(9, 1, 0, 0, 0);
+                sound = 4;
+            }
+            break;
+        case 2:
+            if (D_1ABA48[cursor] == 0) { sound = 5; }
+            else { sound = 4; reel0 = 0xBF; }
+            break;
+        case 3:
+            if (D_1ABA48[cursor] == 0) { sound = 5; }
+            else { sound = 4; reel0 = 0xBD; reel1 = 0xBE; }
+            break;
+        case 4:
+            if (D_1ABA48[cursor] == 0) { sound = 5; }
+            else { sound = 4; reel0 = 0xC1; }
+            break;
+        }
+    }
+
+    /* enqueue + start any requested reels */
+    if (reel0 != -1) {
+        CaptureScreenToVram(0);
+        *(s32 *)(mb + 0x140) = g_cinematicExitPending;
+        *(s32 *)(mb + 0x100) = *(s32 *)(mb + 0x14);
+        *(s32 *)(mb + 0x104) = *(s32 *)(mb + 0x8);
+        g_cinematicExitPending = 2;
+        EnqueueCinematic(g_cinematicQueue, reel0);
+        if (reel1 != -1) {
+            EnqueueCinematic(g_cinematicQueue, reel1);
+        }
+        StartCinematicFromQueue(g_cinematicQueue);
+    }
+    if (sound != -1) {
+        PlayGlobalSound(sound, 0, 0);
+    }
+
+    /* present-record redraw fence */
+    cursor = g_extrasMenuCursor;
+    *(s32 *)(D_0025C230 + 0x58) = cursor;
+    if (D_1ABA48[cursor] == 0) {
+        *(s32 *)(D_25C1F0 + 0x10) |= 0x4;
+    } else if (cursor0 == cursor && g_fileLoadState == 0) {
+        s32 mode = *(s32 *)(D_0025C230 + 0x44);
+        if ((*(s32 *)(D_0025C230 + 0x50) == cursor0 && mode == 2) ||
+            (*(s32 *)(D_0025C230 + 0x54) == cursor0 && mode == 4)) {
+            *(s32 *)(D_25C1F0 + 0x10) &= ~0x4;
+        }
+    }
+    return result;
+}
+#endif
+
+/* DrawExtrasMenu: renders the Extras (5-item) menu screen — same chrome as
+ * DrawPlanetWarpMenu. Opens a 2D batch, blits four title glyphs (atlas
+ * g_guiInstance+0x8710, codepoints 0xD7/0xD8/0xD9/0xDD, colors 0x60442D00/0x60241700/
+ * 0x55F0C070/0x55F0C070, centred at row D_1ABA5C, scale 1.0, y-fudge, v38 0.0); draws
+ * three header strings (0x3095 @0xB3,0x1B; 0x2BE5 @0x161,0x177; 0x2C0B @0xB5,0x177;
+ * color 0x80F0F0F0); draws the paging chrome; then a five-slot cursor-relative
+ * carousel (cursor g_extrasMenuCursor, 5 items). Each slot i shows item at wrapped
+ * index (i + cursor - 2) mod 5, labelled with the localized D_1ABD80[idx] (stride 4,
+ * low halfword) when enabled (D_1ABA48[idx] != 0) else 0x2C56; slot color fades by
+ * distance from centre (edges 0x10/mid 0x50/centre 0x70 F0F0F0), and the centre slot
+ * gets a text-width selection box.
+ * (func_003017F8 ignores its scale/vec38 params — see its body — so glyphs pass NULL.)
+ * Wall: 8-byte-packed-save (6 GPRs) + FP-arg scheduling — later cc1 save-slot packing
+ * not reproduced. Preserved as portable C. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawExtrasMenu);
+#else
+extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
+                          f32 px, f32 py, f32 sx, f32 syg, f32 v38);
+extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
+extern void DrawMenuPagingChrome(void);
+extern s32 func_001157AC(const char *s);          /* SDK strlen */
+extern s32 func_0027F818(const char *str, s32 len); /* menu text pixel width */
+extern void func_00280250(s32 x, s32 y, u32 color, const char *str, s32 flag);
+extern s32 g_extrasMenuCursor;   /* extras carousel cursor 0..4 */
+extern s32 D_1ABA48[];           /* per-item enabled flags */
+extern u8 D_1ABD80[];            /* per-item label string ids (stride 4) */
+extern s32 D_1ABA5C;             /* title glyph row (int, converted to float) */
+extern s32 g_swapGadgetItemIndex; /* +0x8E holds the global sprite y-fudge (f32) */
+s32 DrawExtrasMenu(void) {
+    void *atlas = g_guiInstance + 0x8710;
+    f32 centerX = (f32)(g_screenWidth / 2);
+    f32 row = (f32)D_1ABA5C;
+    f32 yfudge = *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E);
+    s32 cursor;
+    s32 i;
+    s32 y;
+
+    Begin2dDrawBatch(0);
+    /* four title glyphs (v38 = 0.0) */
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD7), 0x60442D00, (f32 *)0, (f32 *)0,
+                  centerX, row, 1.0f, yfudge, 0.0f);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD8), 0x60241700, (f32 *)0, (f32 *)0,
+                  centerX, row, 1.0f, yfudge, 0.0f);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD9), 0x55F0C070, (f32 *)0, (f32 *)0,
+                  centerX, row, 1.0f, yfudge, 0.0f);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xDD), 0x55F0C070, (f32 *)0, (f32 *)0,
+                  centerX, row, 1.0f, yfudge, 0.0f);
+    /* three header strings */
+    func_002801B8(0xB3, 0x1B, 0x80F0F0F0, GetLocalizedString(0x3095), -1);
+    func_002801B8(0x161, 0x177, 0x80F0F0F0, GetLocalizedString(0x2BE5), -1);
+    func_002801B8(0xB5, 0x177, 0x80F0F0F0, GetLocalizedString(0x2C0B), -1);
+    DrawMenuPagingChrome();
+    /* five cursor-relative carousel slots */
+    cursor = g_extrasMenuCursor;
+    y = 0x112;
+    for (i = 0; i < 5; i++) {
+        s32 idx = i + cursor - 2;
+        s32 strId;
+        char *str;
+        u32 color;
+        if (idx < 0) idx += 5;
+        if (idx >= 5) idx -= 5;
+        strId = (D_1ABA48[idx] == 0) ? 0x2C56 : *(s16 *)(D_1ABD80 + idx * 4);
+        str = GetLocalizedString(strId);
+        if (i == 0 || i == 4) {
+            color = 0x10F0F0F0;
+        } else if (i == 1 || i == 3) {
+            color = 0x50F0F0F0;
+        } else {  /* i == 2: focused slot gets a text-width selection box */
+            color = 0x70F0F0F0;
+            DrawMenuItemSelectionBox(func_0027F818(str, func_001157AC(str)), 0x70F0F0F0);
+        }
+        func_00280250(g_screenWidth / 2, y, color, str, -1);
+        y += 0x14;
+    }
+    End2dDrawBatch();
+    return 0;
+}
+#endif
 
 /* When the GUI is up, latch the extras-menu availability flags: always mark the
  * last screen id (=1), then set the per-feature "new" flags for each unlocked
@@ -1519,13 +1943,185 @@ s32 func_002D1850(void) {
 }
 #endif
 
-/* menu input/update handler: 8-byte-packed-save wall (saves 6 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* CinematicsMenuTick: per-frame input for the Goodies "Cinematics" screen, a
+ * 33-reel carousel over g_cinematicsMenuTable (6-byte entries: u16 nameStringId,
+ * u16 reelId @+2, u16 unlocked @+4). Back (0x10) resets the cursor and latches the
+ * active screen's pending sub-result (block[0x14]->0xE0 into block[0x18], else
+ * -1/0). Cancel (0x900) resets the cursor and returns 1. Up (0x1000)/down (0x4000)
+ * play UI sound 3 and move the cursor with wrap in [0,0x20]. Confirm (0x40) on an
+ * unlocked reel plays sound 4, freezes the screen (CaptureScreenToVram), stashes
+ * the old g_cinematicExitPending + the screen block's fields 0x14/0x8 into
+ * block[0x140/0x100/0x104], sets g_cinematicExitPending = 2, then enqueues and
+ * starts the reel (EnqueueCinematic/StartCinematicFromQueue on g_cinematicQueue);
+ * a locked reel just plays sound 5. Every non-back/non-cancel path then runs the
+ * present-record redraw fence (D_0025C3C8 record, live object *D_25C388): SET
+ * redraw bit 0x4 when the reel is locked, else CLEAR it only when the cursor is
+ * unchanged, the file-load is idle, and the present record shows this cursor
+ * already presented (offsets 0x50/0x54 == cursor and state 0x44 in {2,4}).
+ * Wall: 8-byte-packed-save (6 GPRs) + branch-likely present-record fence — later
+ * cc1 save-slot packing not reproduced. Preserved as portable C. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", CinematicsMenuTick);
+#else
+extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern void CaptureScreenToVram(s32 mode);
+extern s32 EnqueueCinematic(void *queue, s32 reelId);
+extern s32 StartCinematicFromQueue(void *queue);
+extern s32 D_1ABA60;             /* 0x1ABA60 - cinematics carousel cursor 0..0x20 */
+extern u8 g_cinematicsMenuTable[]; /* 0x261838 - 33 x 6-byte reel entries */
+extern s32 g_cinematicExitPending; /* 0x1A7478 - exit-cinematic-pending flag */
+extern u8 g_cinematicQueue[];    /* 0x1BACC0 - pending-cinematic reel queue record */
+extern u8 D_0025C3C8[];          /* per-screen present record */
+extern u8 *D_25C388;             /* pointer to the live menu object */
+s32 CinematicsMenuTick(void) {
+    s32 flags = *(s32 *)(D_138180 + 0x1C4);
+    s32 cursor0 = D_1ABA60;              /* cursor at entry, for the fence check */
+    s32 result = 0;
+    s32 cursor;
 
-/* menu/HUD draw routine: 8-byte-packed-save wall (saves 6 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+    if (flags & 0x10) {                 /* back */
+        s32 e0 = *(s32 *)(*(u8 **)(g_menuScreenBlock + 0x14) + 0xE0);
+        D_1ABA60 = 0;
+        if (e0 != 0) {
+            *(s32 *)(g_menuScreenBlock + 0x18) = e0;
+            return 0;
+        }
+        return (*(s32 *)(g_menuScreenBlock + 0x134) == 0) ? -1 : 0;
+    }
+
+    if (flags & 0x900) {                /* cancel */
+        D_1ABA60 = 0;
+        return 1;
+    } else if (flags & 0x1000) {        /* up */
+        s32 v;
+        PlayGlobalSound(3, 0, 0);
+        v = D_1ABA60 - 1;
+        D_1ABA60 = (v >= 0) ? v : 0x20;
+    } else if (flags & 0x4000) {        /* down */
+        s32 v;
+        PlayGlobalSound(3, 0, 0);
+        v = D_1ABA60 + 1;
+        D_1ABA60 = (v < 0x21) ? v : 0;
+    }
+
+    flags = *(s32 *)(D_138180 + 0x1C4);
+    if (flags & 0x40) {                 /* confirm */
+        cursor = D_1ABA60;
+        if (*(s16 *)(g_cinematicsMenuTable + cursor * 6 + 4) != 0) {
+            s16 reelId;                 /* unlocked reel: enqueue + play */
+            PlayGlobalSound(4, 0, 0);
+            CaptureScreenToVram(0);
+            cursor = D_1ABA60;
+            reelId = *(s16 *)(g_cinematicsMenuTable + cursor * 6 + 2);
+            *(s32 *)(g_menuScreenBlock + 0x140) = g_cinematicExitPending;
+            *(s32 *)(g_menuScreenBlock + 0x100) = *(s32 *)(g_menuScreenBlock + 0x14);
+            *(s32 *)(g_menuScreenBlock + 0x104) = *(s32 *)(g_menuScreenBlock + 0x8);
+            g_cinematicExitPending = 2;
+            EnqueueCinematic(g_cinematicQueue, reelId);
+            StartCinematicFromQueue(g_cinematicQueue);
+        } else {
+            PlayGlobalSound(5, 0, 0);   /* locked reel */
+        }
+    }
+
+    /* present-record redraw fence */
+    cursor = D_1ABA60;
+    *(s32 *)(D_0025C3C8 + 0x58) = cursor;
+    if (*(s16 *)(g_cinematicsMenuTable + cursor * 6 + 4) == 0) {
+        *(s32 *)(D_25C388 + 0x10) |= 0x4;
+    } else if (cursor0 == cursor && g_fileLoadState == 0) {
+        s32 mode = *(s32 *)(D_0025C3C8 + 0x44);
+        if ((*(s32 *)(D_0025C3C8 + 0x50) == cursor0 && mode == 2) ||
+            (*(s32 *)(D_0025C3C8 + 0x54) == cursor0 && mode == 4)) {
+            *(s32 *)(D_25C388 + 0x10) &= ~0x4;
+        }
+    }
+    return result;
+}
+#endif
+
+/* DrawCinematicsMenu: renders the cinematics (reel carousel) menu screen — same
+ * chrome as DrawPlanetWarpMenu. Opens a 2D batch, blits four title glyphs (atlas
+ * g_guiInstance+0x8710, codepoints 0xD7/0xD8/0xD9/0xDD, colors 0x60442D00/0x60241700/
+ * 0x55F0C070/0x55F0C070, centred at row D_1ABA64, scale 1.0, y-fudge, v38 0.0); draws
+ * three header strings (0x2CA9 @0xB3,0x1B; 0x2BE5 @0x161,0x177; 0x2C0B @0xB5,0x177;
+ * color 0x80F0F0F0); draws the paging chrome; then a five-slot cursor-relative
+ * carousel over g_cinematicsMenuTable (33 x 6-byte reels, cursor D_1ABA60). Each slot
+ * i shows the reel at wrapped index (i + D_1ABA60 - 2) mod 0x21, labelled with the
+ * localized reel name (entry+0x0) when unlocked (entry+0x4 != 0) else 0x2C56; slot
+ * color fades by distance from centre (edges 0x10/mid 0x50/centre 0x70 F0F0F0), and
+ * the centre slot gets a text-width selection box.
+ * (func_003017F8 ignores its scale/vec38 params — see its body — so glyphs pass NULL.)
+ * Wall: 8-byte-packed-save (6 GPRs) + FP-arg scheduling — later cc1 save-slot packing
+ * not reproduced. Preserved as portable C. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawCinematicsMenu);
+#else
+extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
+                          f32 px, f32 py, f32 sx, f32 syg, f32 v38);
+extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
+extern void DrawMenuPagingChrome(void);
+extern s32 func_001157AC(const char *s);          /* SDK strlen */
+extern s32 func_0027F818(const char *str, s32 len); /* menu text pixel width */
+extern void func_00280250(s32 x, s32 y, u32 color, const char *str, s32 flag);
+extern u8 g_cinematicsMenuTable[]; /* 0x261838 - 33 x 6-byte reel entries */
+extern s32 D_1ABA60;             /* cinematics carousel cursor */
+extern s32 D_1ABA64;             /* title glyph row (int, converted to float) */
+extern s32 g_swapGadgetItemIndex; /* +0x8E holds the global sprite y-fudge (f32) */
+s32 DrawCinematicsMenu(void) {
+    void *atlas = g_guiInstance + 0x8710;
+    f32 centerX = (f32)(g_screenWidth / 2);
+    f32 row = (f32)D_1ABA64;
+    f32 yfudge = *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E);
+    s32 cursor;
+    s32 i;
+    s32 y;
+
+    Begin2dDrawBatch(0);
+    /* four title glyphs (v38 = 0.0) */
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD7), 0x60442D00, (f32 *)0, (f32 *)0,
+                  centerX, row, 1.0f, yfudge, 0.0f);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD8), 0x60241700, (f32 *)0, (f32 *)0,
+                  centerX, row, 1.0f, yfudge, 0.0f);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD9), 0x55F0C070, (f32 *)0, (f32 *)0,
+                  centerX, row, 1.0f, yfudge, 0.0f);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xDD), 0x55F0C070, (f32 *)0, (f32 *)0,
+                  centerX, row, 1.0f, yfudge, 0.0f);
+    /* three header strings */
+    func_002801B8(0xB3, 0x1B, 0x80F0F0F0, GetLocalizedString(0x2CA9), -1);
+    func_002801B8(0x161, 0x177, 0x80F0F0F0, GetLocalizedString(0x2BE5), -1);
+    func_002801B8(0xB5, 0x177, 0x80F0F0F0, GetLocalizedString(0x2C0B), -1);
+    DrawMenuPagingChrome();
+    /* five cursor-relative carousel slots */
+    cursor = D_1ABA60;
+    y = 0x112;
+    for (i = 0; i < 5; i++) {
+        s32 idx = i + cursor - 2;
+        s32 base;
+        s32 strId;
+        char *str;
+        u32 color;
+        if (idx < 0) idx += 0x21;
+        if (idx >= 0x21) idx -= 0x21;
+        base = idx * 6;
+        strId = (*(s16 *)(g_cinematicsMenuTable + base + 4) != 0)
+                    ? *(s16 *)(g_cinematicsMenuTable + base + 0) : 0x2C56;
+        str = GetLocalizedString(strId);
+        if (i == 0 || i == 4) {
+            color = 0x10F0F0F0;
+        } else if (i == 1 || i == 3) {
+            color = 0x50F0F0F0;
+        } else {  /* i == 2: focused slot gets a text-width selection box */
+            color = 0x70F0F0F0;
+            DrawMenuItemSelectionBox(func_0027F818(str, func_001157AC(str)), 0x70F0F0F0);
+        }
+        func_00280250(g_screenWidth / 2, y, color, str, -1);
+        y += 0x14;
+    }
+    End2dDrawBatch();
+    return 0;
+}
+#endif
 
 /* When the GUI is up, set g_lastMenuScreenId=1 then walk the 32-entry, 6-byte-
  * stride cinematics-menu row table (D_26183A): for each row, if any extras are
@@ -1566,13 +2162,186 @@ void func_002D1E88(void) {
 }
 #endif
 
-/* menu input/update handler: switch/jump-table dispatch (splat jtbl reloc gap) — left as
- * INCLUDE_ASM (cc1 jtbl layout not reproduced). */
+/* UpdatePlanetWarpMenuInput: per-frame input for the planet-warp (retail warp)
+ * menu, an 8-item cursor list. Back (0x10) resets the cursor and latches the
+ * active screen's pending sub-result (block[0x14]->0xE0 into block[0x18], else
+ * -1/0). Cancel (0x900) resets the cursor and returns 1. Up (0x1000)/down
+ * (0x4000) play UI sound 3 and move the cursor with wrap in [0,7]. Confirm (0x40)
+ * plays sound 4 for an enabled item (sound 5 for a disabled one) and, via the
+ * cursor jump table, sets the warp mode D_1A7904 and calls RequestLevelExit for a
+ * fixed planet/level id (cursor 7 also stashes g_playerProgress into D_1A7908 when
+ * not already 0x15). Every non-back/non-cancel path then runs the present-record
+ * redraw fence: stamp D_0025C560[0x58] = cursor; SET the live object's redraw bit
+ * 0x4 (*D_25C520[0x10]) when the item is disabled, else CLEAR it only when the
+ * cursor is unchanged, the file-load is idle, and the present record shows this
+ * cursor already presented (offsets 0x50/0x54 == cursor and state 0x44 in {2,4}).
+ * Cursor jump table is jtbl_0026CD00_text (in cursor order).
+ * Wall: switch/jump-table dispatch (splat jtbl reloc gap) + branch-likely present-
+ * record fence — cc1 jtbl layout not reproduced. Preserved as portable C. */
+extern s32 g_planetWarpCursor;   /* 0x1ABA68 - planet-warp cursor 0..7 */
+extern s32 D_1A7904;             /* warp-mode selector written before the exit */
+extern s32 D_1A7908;             /* stashed prior progress slot (cursor-7 case) */
+extern u8 D_0025C560[];          /* per-screen present record */
+extern u8 *D_25C520;             /* pointer to the live menu object */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdatePlanetWarpMenuInput);
+#else
+extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern u8 g_planetWarpEnabled;   /* 0x1ABA70 - per-item enabled flags (indexed) */
+extern s32 g_playerProgress;     /* 0x1A79F8 - current save progress slot */
+s32 UpdatePlanetWarpMenuInput(void) {
+    s32 flags = *(s32 *)(D_138180 + 0x1C4);
+    s32 cursor0 = g_planetWarpCursor;   /* cursor at entry, for the fence check */
+    s32 result = 0;
+    s32 cursor;
 
-/* menu/HUD draw routine: 8-byte-packed-save wall (saves 6 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+    if (flags & 0x10) {                 /* back */
+        s32 e0 = *(s32 *)(*(u8 **)(g_menuScreenBlock + 0x14) + 0xE0);
+        g_planetWarpCursor = 0;
+        if (e0 != 0) {
+            *(s32 *)(g_menuScreenBlock + 0x18) = e0;
+            return 0;
+        }
+        return (*(s32 *)(g_menuScreenBlock + 0x134) == 0) ? -1 : 0;
+    }
+
+    if (flags & 0x900) {                /* cancel */
+        g_planetWarpCursor = 0;
+        return 1;
+    } else if (flags & 0x1000) {        /* up */
+        s32 v;
+        PlayGlobalSound(3, 0, 0);
+        v = g_planetWarpCursor - 1;
+        g_planetWarpCursor = (v >= 0) ? v : 7;
+    } else if (flags & 0x4000) {        /* down */
+        s32 v;
+        PlayGlobalSound(3, 0, 0);
+        v = g_planetWarpCursor + 1;
+        g_planetWarpCursor = (v < 8) ? v : 0;
+    }
+
+    flags = *(s32 *)(D_138180 + 0x1C4);
+    if (flags & 0x40) {                 /* confirm */
+        cursor = g_planetWarpCursor;
+        if ((&g_planetWarpEnabled)[cursor] == 0) {
+            PlayGlobalSound(5, 0, 0);   /* disabled item */
+        } else {
+            PlayGlobalSound(4, 0, 0);
+            cursor = g_planetWarpCursor;
+            if ((u32)cursor < 8) {
+                switch (cursor) {
+                case 0: D_1A7904 = 2; RequestLevelExit(0x2, 1); break;
+                case 1: D_1A7904 = 3; RequestLevelExit(0x4, 1); break;
+                case 2: D_1A7904 = 3; RequestLevelExit(0xB, 1); break;
+                case 3: D_1A7904 = 2; RequestLevelExit(0xB, 1); break;
+                case 4: D_1A7904 = 1; RequestLevelExit(0x1A, 1); break;
+                case 5: D_1A7904 = 1; RequestLevelExit(0x16, 1); break;
+                case 6: D_1A7904 = 1; RequestLevelExit(0x17, 1); break;
+                case 7:
+                    D_1A7904 = 1;
+                    if (g_playerProgress != 0x15) {
+                        D_1A7908 = g_playerProgress;
+                    }
+                    RequestLevelExit(0x15, 1);
+                    break;
+                }
+            }
+        }
+    }
+
+    /* present-record redraw fence */
+    cursor = g_planetWarpCursor;
+    *(s32 *)(D_0025C560 + 0x58) = cursor;
+    if ((&g_planetWarpEnabled)[cursor] == 0) {
+        *(s32 *)(D_25C520 + 0x10) |= 0x4;
+    } else if (cursor0 == cursor && g_fileLoadState == 0) {
+        s32 mode = *(s32 *)(D_0025C560 + 0x44);
+        if ((*(s32 *)(D_0025C560 + 0x50) == cursor0 && mode == 2) ||
+            (*(s32 *)(D_0025C560 + 0x54) == cursor0 && mode == 4)) {
+            *(s32 *)(D_25C520 + 0x10) &= ~0x4;
+        }
+    }
+    return result;
+}
+#endif
+
+/* DrawPlanetWarpMenu: renders the planet-warp menu screen. Opens a 2D batch, blits
+ * four title glyphs (atlas g_guiInstance+0x8710, codepoints 0xD7/0xD8/0xD9/0xDD,
+ * colors 0x60442D00/0x60241700/0x55F0C070/0x55F0C070, centred at row D_1ABA78, scale
+ * 1.0, y-fudge, v38 0.0); draws three header strings (0x3098 @0xB3,0x1B; 0x2BE5
+ * @0x161,0x177; 0x2C0B @0xB5,0x177; color 0x80F0F0F0); draws the L1/R1 paging chrome;
+ * then draws a five-slot cursor-relative carousel. Each visible slot i shows the
+ * planet at wrapped index (i + g_planetWarpCursor - 2) mod 8, labelled with the
+ * localized D_1ABD98[idx] when enabled (g_planetWarpEnabled[idx] != 0) else 0x2C56;
+ * slot color fades by distance from centre (edges 0x10F0F0F0, mid 0x50F0F0F0, centre
+ * 0x70F0F0F0), and the centre slot also gets a text-width-sized selection box.
+ * (func_003017F8 ignores its scale/vec38 params — see its body — so glyphs pass NULL.)
+ * Wall: 8-byte-packed-save (6 GPRs) + FP-arg scheduling — later cc1 save-slot packing
+ * not reproduced. Preserved as portable C. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawPlanetWarpMenu);
+#else
+extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
+                          f32 px, f32 py, f32 sx, f32 syg, f32 v38);
+extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
+extern void DrawMenuPagingChrome(void);
+extern s32 func_001157AC(const char *s);          /* SDK strlen */
+extern s32 func_0027F818(const char *str, s32 len); /* menu text pixel width */
+extern void func_00280250(s32 x, s32 y, u32 color, const char *str, s32 flag);
+extern s16 D_1ABD98[];           /* per-planet label string ids */
+extern s32 D_1ABA78;             /* title glyph row (int, converted to float) */
+extern s32 g_swapGadgetItemIndex; /* +0x8E holds the global sprite y-fudge (f32) */
+s32 DrawPlanetWarpMenu(void) {
+    void *atlas = g_guiInstance + 0x8710;
+    f32 centerX = (f32)(g_screenWidth / 2);
+    f32 row = (f32)D_1ABA78;
+    f32 yfudge = *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E);
+    s32 cursor;
+    s32 i;
+    s32 y;
+
+    Begin2dDrawBatch(0);
+    /* four title glyphs (v38 = 0.0) */
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD7), 0x60442D00, (f32 *)0, (f32 *)0,
+                  centerX, row, 1.0f, yfudge, 0.0f);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD8), 0x60241700, (f32 *)0, (f32 *)0,
+                  centerX, row, 1.0f, yfudge, 0.0f);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD9), 0x55F0C070, (f32 *)0, (f32 *)0,
+                  centerX, row, 1.0f, yfudge, 0.0f);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xDD), 0x55F0C070, (f32 *)0, (f32 *)0,
+                  centerX, row, 1.0f, yfudge, 0.0f);
+    /* three header strings */
+    func_002801B8(0xB3, 0x1B, 0x80F0F0F0, GetLocalizedString(0x3098), -1);
+    func_002801B8(0x161, 0x177, 0x80F0F0F0, GetLocalizedString(0x2BE5), -1);
+    func_002801B8(0xB5, 0x177, 0x80F0F0F0, GetLocalizedString(0x2C0B), -1);
+    DrawMenuPagingChrome();
+    /* five cursor-relative carousel slots */
+    cursor = g_planetWarpCursor;
+    y = 0x112;
+    for (i = 0; i < 5; i++) {
+        s32 idx = i + cursor - 2;
+        s32 strId;
+        char *str;
+        u32 color;
+        if (idx < 0) idx += 8;
+        if (idx >= 8) idx -= 8;
+        strId = ((&g_planetWarpEnabled)[idx] != 0) ? D_1ABD98[idx] : 0x2C56;
+        str = GetLocalizedString(strId);
+        if (i == 0 || i == 4) {
+            color = 0x10F0F0F0;
+        } else if (i == 1 || i == 3) {
+            color = 0x50F0F0F0;
+        } else {  /* i == 2: the focused slot gets a text-width selection box */
+            color = 0x70F0F0F0;
+            DrawMenuItemSelectionBox(func_0027F818(str, func_001157AC(str)), 0x70F0F0F0);
+        }
+        func_00280250(g_screenWidth / 2, y, color, str, -1);
+        y += 0x14;
+    }
+    End2dDrawBatch();
+    return 0;
+}
+#endif
 
 /* When the GUI is up and extras unlocked, latch the per-extra-feature
  * availability flags (g_planetWarpEnabled @0x1ABA70 + D_1ABA71..D_1ABA77) from a
@@ -1639,13 +2408,188 @@ void func_002D2538(void) {
 }
 #endif
 
-/* menu input/update handler: switch/jump-table dispatch (splat jtbl reloc gap) — left as
- * INCLUDE_ASM (cc1 jtbl layout not reproduced). */
+/* UpdateInsomniacMuseumInput: per-frame input for the Insomniac Museum menu, a
+ * 5-item carousel (g_museumMenuCursor in [0,4]). Back (0x10) resets the cursor and
+ * latches the active screen's pending sub-result (block[0x14]->0xE0 into
+ * block[0x18], else -1/0). Cancel (0x900) resets the cursor and returns 1. Up
+ * (0x1000)/down (0x4000) play UI sound 3 and move the cursor with wrap in [0,4].
+ * Confirm (0x40) on an enabled item (D_1ABA80[cursor] != 0) plays sound 4 and, via
+ * jtbl_0026CD20_text, either requests a sub-screen (g_pNextMenuScreen = D_25C760 /
+ * D_25C950 / D_25CB40 for cursors 0/3/4) or, for cursors 1/2, spawns the exhibit
+ * moby into the HUD shadow table (SwapMobyTableContext(0)/SpawnMoby(id)/
+ * SwapMobyTableContext(1); id = (cursor^2)!=0 ? 0x1335 : 0x88D), flags it 0xFF at
+ * +0x30 and copies the hero position into +0x10; a disabled item plays sound 5.
+ * Every non-back path then runs the present-record redraw fence (D_0025C6F8 record,
+ * live object *D_25C6B8): SET redraw bit 0x4 when disabled, else CLEAR it only when
+ * the cursor is unchanged, the file-load is idle, and the present record shows this
+ * cursor already presented (offsets 0x50/0x54 == cursor and state 0x44 in {2,4}).
+ * Wall: switch/jump-table dispatch (splat jtbl reloc gap) + lq/sq hero-pos copy +
+ * branch-likely fence — cc1 jtbl layout not reproduced. Preserved as portable C. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateInsomniacMuseumInput);
+#else
+extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern void SwapMobyTableContext(s32 tableId);
+extern void *SpawnMoby(s32 classId);
+extern s32 g_museumMenuCursor;   /* museum carousel cursor 0..4 */
+extern u8 *g_pNextMenuScreen;    /* 0x1F27D8 - requested next screen */
+extern u8 g_heroPos[];           /* 0x189EA0 - hero world position vec4 */
+extern u8 D_25C760[], D_25C950[], D_25CB40[]; /* museum sub-screen records */
+extern u8 D_0025C6F8[];          /* per-screen present record */
+extern u8 *D_25C6B8;             /* pointer to the live menu object */
+s32 UpdateInsomniacMuseumInput(void) {
+    s32 flags = *(s32 *)(D_138180 + 0x1C4);
+    s32 cursor0 = g_museumMenuCursor;   /* cursor at entry, for the fence check */
+    s32 result = 0;
+    s32 cursor;
 
-/* menu/HUD draw routine: 8-byte-packed-save wall (saves 7 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+    if (flags & 0x10) {                 /* back */
+        s32 e0 = *(s32 *)(*(u8 **)(g_menuScreenBlock + 0x14) + 0xE0);
+        g_museumMenuCursor = 0;
+        if (e0 != 0) {
+            *(s32 *)(g_menuScreenBlock + 0x18) = e0;
+            return 0;
+        }
+        return (*(s32 *)(g_menuScreenBlock + 0x134) == 0) ? -1 : 0;
+    }
+
+    if (flags & 0x900) {                /* cancel */
+        g_museumMenuCursor = 0;
+        return 1;
+    } else if (flags & 0x1000) {        /* up */
+        s32 v;
+        PlayGlobalSound(3, 0, 0);
+        v = g_museumMenuCursor - 1;
+        g_museumMenuCursor = (v >= 0) ? v : 4;
+    } else if (flags & 0x4000) {        /* down */
+        s32 v;
+        PlayGlobalSound(3, 0, 0);
+        v = g_museumMenuCursor + 1;
+        g_museumMenuCursor = (v < 5) ? v : 0;
+    }
+
+    flags = *(s32 *)(D_138180 + 0x1C4);
+    if (flags & 0x40) {                 /* confirm */
+        cursor = g_museumMenuCursor;
+        if ((&D_1ABA80)[cursor] == 0) {
+            PlayGlobalSound(5, 0, 0);   /* disabled item */
+        } else {
+            PlayGlobalSound(4, 0, 0);
+            cursor = g_museumMenuCursor;
+            if ((u32)cursor < 5) {
+                switch (cursor) {
+                case 0:
+                    g_pNextMenuScreen = D_25C760;
+                    break;
+                case 1:
+                case 2: {
+                    /* spawn the exhibit moby into the HUD shadow table */
+                    void *moby;
+                    s32 id = ((cursor ^ 2) != 0) ? 0x1335 : 0x88D;
+                    SwapMobyTableContext(0);
+                    moby = SpawnMoby(id);
+                    SwapMobyTableContext(1);
+                    if (moby != 0) {
+                        u8 *m = (u8 *)moby;
+                        m[0x30] = 0xFF;
+                        /* 128-bit (lq/sq) copy of the hero position into +0x10 */
+                        *(u32 *)(m + 0x10) = *(u32 *)(g_heroPos + 0);
+                        *(u32 *)(m + 0x14) = *(u32 *)(g_heroPos + 4);
+                        *(u32 *)(m + 0x18) = *(u32 *)(g_heroPos + 8);
+                        *(u32 *)(m + 0x1C) = *(u32 *)(g_heroPos + 12);
+                        result = 1;
+                    }
+                    break;
+                }
+                case 3:
+                    g_pNextMenuScreen = D_25C950;
+                    break;
+                case 4:
+                    g_pNextMenuScreen = D_25CB40;
+                    break;
+                }
+            }
+        }
+    }
+
+    /* present-record redraw fence */
+    cursor = g_museumMenuCursor;
+    *(s32 *)(D_0025C6F8 + 0x58) = cursor;
+    if ((&D_1ABA80)[cursor] == 0) {
+        *(s32 *)(D_25C6B8 + 0x10) |= 0x4;
+    } else if (cursor0 == cursor && g_fileLoadState == 0) {
+        s32 mode = *(s32 *)(D_0025C6F8 + 0x44);
+        if ((*(s32 *)(D_0025C6F8 + 0x50) == cursor0 && mode == 2) ||
+            (*(s32 *)(D_0025C6F8 + 0x54) == cursor0 && mode == 4)) {
+            *(s32 *)(D_25C6B8 + 0x10) &= ~0x4;
+        }
+    }
+    return result;
+}
+#endif
+
+/* DrawInsomniacMuseumMenu: renders the Insomniac Museum menu screen. Opens a 2D
+ * batch, blits three title glyphs (atlas g_guiInstance+0x8710, codepoints
+ * 0x8B/0x8C/0x8D, colors 0x60442D00/0x55F0C070/0x55F0C070, centred at row D_1ABA94,
+ * scale 1.0, y-fudge, v38 0.775); draws three centred header strings (0x30A2 @row
+ * 0x41, 0x2C0B @0x141, 0x2BE5 @0x15A, color 0x80F0F0F0); draws four framing lines
+ * (func_002904B0) in color 0x55F0C070; then draws the five menu items in a column
+ * (x 0xA5, y 0x7D stepping 0x1F): each item's color is 0x7000FFFF when it is the
+ * selected row (g_museumMenuCursor) else 0x80F0F0F0, and its label is the localized
+ * D_1ABDA8[i] when the item is enabled (D_1ABA80[i] != 0) else the fallback 0x2C56.
+ * (func_003017F8 ignores its scale/vec38 params — see its body — so glyphs pass NULL.)
+ * Wall: 8-byte-packed-save (7 GPRs) + FP-arg scheduling — later cc1 save-slot packing
+ * not reproduced. Preserved as portable C. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawInsomniacMuseumMenu);
+#else
+extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
+                          f32 px, f32 py, f32 sx, f32 syg, f32 v38);
+extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
+extern void func_002904B0(s32 x0, s32 y0, s32 x1, s32 y1, s32 color, s32 flag);
+extern s32 g_museumMenuCursor;   /* museum carousel cursor 0..4 */
+extern s32 D_1ABA94;             /* title glyph row (int, converted to float) */
+extern s32 D_1ABDA8[];           /* per-item label string ids */
+extern s32 g_swapGadgetItemIndex; /* +0x8E holds the global sprite y-fudge (f32) */
+s32 DrawInsomniacMuseumMenu(void) {
+    void *atlas = g_guiInstance + 0x8710;
+    f32 centerX = (f32)(g_screenWidth / 2);
+    f32 row = (f32)D_1ABA94;
+    f32 yfudge = *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E);
+    s32 cursor;
+    s32 i;
+    s32 y;
+
+    Begin2dDrawBatch(0);
+    /* three title glyphs (v38 = 0.775f = 0x3F466666) */
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8B), 0x60442D00, (f32 *)0, (f32 *)0,
+                  centerX, row, 1.0f, yfudge, 0.775f);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8C), 0x55F0C070, (f32 *)0, (f32 *)0,
+                  centerX, row, 1.0f, yfudge, 0.775f);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8D), 0x55F0C070, (f32 *)0, (f32 *)0,
+                  centerX, row, 1.0f, yfudge, 0.775f);
+    /* three centred header strings */
+    func_002801B8(g_screenWidth / 2, 0x41, 0x80F0F0F0, GetLocalizedString(0x30A2), -1);
+    func_002801B8(g_screenWidth / 2, 0x141, 0x80F0F0F0, GetLocalizedString(0x2C0B), -1);
+    func_002801B8(g_screenWidth / 2, 0x15A, 0x80F0F0F0, GetLocalizedString(0x2BE5), -1);
+    /* framing lines */
+    func_002904B0(0x138, 0x80, 0x1C1, 0x82, 0x55F0C070, 0);
+    func_002904B0(0x138, 0x109, 0x1C3, 0x10B, 0x55F0C070, 0);
+    func_002904B0(0x138, 0x80, 0x13A, 0x109, 0x55F0C070, 0);
+    func_002904B0(0x1C1, 0x80, 0x1C3, 0x109, 0x55F0C070, 0);
+    /* five menu items */
+    cursor = g_museumMenuCursor;
+    y = 0x7D;
+    for (i = 0; i < 5; i++) {
+        u32 color = (i == cursor) ? 0x7000FFFF : 0x80F0F0F0;
+        s32 strId = ((&D_1ABA80)[i] != 0) ? D_1ABDA8[i] : 0x2C56;
+        func_002801B8(0xA5, y, color, GetLocalizedString(strId), -1);
+        y += 0x1F;
+    }
+    End2dDrawBatch();
+    return 0;
+}
+#endif
 
 /* When the GUI is up, latch the "new content" flags for each extras-menu entry.
  * Near-miss: cc1 hoists the g_miscExtras load above (and CSEs it into) the
@@ -1674,13 +2618,114 @@ s32 func_002D2C60(void) {
 }
 #endif
 
-/* menu input/update handler: 8-byte-packed-save wall (saves 2 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* UpdateHelpTopicMenuInput: per-frame input for the help-topics screen, an
+ * 18-entry page list (g_helpTopicCursor in [0,0x11]). Back (0x10) resets the
+ * cursor and latches the active screen's pending sub-result (block[0x14]->0xE0
+ * into block[0x18], else -1/0). Cancel (0x900) resets the cursor and returns 1.
+ * 0x8000 steps to the previous topic (cursor-1, floored at 0); 0x2000 steps to the
+ * next (cursor+1, capped at 0x11) — each plays UI sound 3 when the move stays in
+ * range, sound 5 at the edge. Every non-back path then stamps the active topic:
+ * D_25C940 = cursor and D_25C8C4 = the topic's string id D_1ABDC0[cursor].
+ * Wall: 8-byte-packed-save (2 GPRs) — later cc1 save-slot packing not reproduced.
+ * Preserved as portable C. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateHelpTopicMenuInput);
+#else
+extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern s32 g_helpTopicCursor;    /* 0x1ABA98 - help topic page index 0..0x11 */
+extern s32 D_25C940;             /* active topic index mirror */
+extern s16 D_1ABDC0[];           /* per-topic string-id table (halfwords) */
+extern s32 D_25C8C4;             /* active topic's string id */
+s32 UpdateHelpTopicMenuInput(void) {
+    s32 buttons = g_padButtonsPressed;
+    s32 result = 0;
+    s32 cursor;
 
-/* menu/HUD draw routine: 8-byte-packed-save wall (saves 2 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+    if (buttons & 0x10) {               /* back */
+        s32 e0 = *(s32 *)(*(u8 **)(g_menuScreenBlock + 0x14) + 0xE0);
+        g_helpTopicCursor = 0;
+        if (e0 != 0) {
+            *(s32 *)(g_menuScreenBlock + 0x18) = e0;
+            return 0;
+        }
+        return (*(s32 *)(g_menuScreenBlock + 0x134) == 0) ? -1 : 0;
+    }
+
+    if (buttons & 0x900) {              /* cancel */
+        g_helpTopicCursor = 0;
+        result = 1;
+    } else if (buttons & 0x8000) {      /* previous topic */
+        s32 v;
+        if (g_helpTopicCursor > 0) {
+            PlayGlobalSound(3, 0, 0);
+        } else {
+            PlayGlobalSound(5, 0, 0);
+        }
+        v = g_helpTopicCursor - 1;
+        g_helpTopicCursor = (v >= 0) ? v : 0;
+    } else if (buttons & 0x2000) {      /* next topic */
+        s32 v;
+        if (g_helpTopicCursor < 0x11) {
+            PlayGlobalSound(3, 0, 0);
+        } else {
+            PlayGlobalSound(5, 0, 0);
+        }
+        v = g_helpTopicCursor + 1;
+        g_helpTopicCursor = (v < 0x12) ? v : 0x11;
+    }
+
+    /* stamp the active topic + its string id */
+    cursor = g_helpTopicCursor;
+    D_25C940 = cursor;
+    D_25C8C4 = D_1ABDC0[cursor];
+    return result;
+}
+#endif
+
+/* DrawHelpTopicMenu: renders the help-topics screen chrome. Opens a 2D draw batch,
+ * blits three fixed HUD glyphs (font atlas at g_guiInstance+0x8710, codepoints
+ * 0xDE/0xDF/0xE0 with colors 0x60442D00/0x60241700/0x55F0C070) horizontally centred
+ * (screen width / 2) at row D_1ABA9C, scale 1.0 with the global sprite y-fudge; draws
+ * the left/right paging arrows (left shown when the cursor isn't at the first page,
+ * right when it isn't at the last, index 0x11); then draws the localized footer
+ * string 0x2BE5 at (0x1B0,0x177) in color 0x80F0F0F0, and closes the batch.
+ * (func_003017F8's scale/vec38 pointer params are unused by the callee — verified in
+ * its body @0x3017F8 — so the glyph draws pass NULL.)
+ * Wall: 8-byte-packed-save (2 GPRs) + FP-arg scheduling — later cc1 save-slot
+ * packing not reproduced. Preserved as portable C. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawHelpTopicMenu);
+#else
+extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
+                          f32 px, f32 py, f32 sx, f32 syg, f32 v38);
+extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
+extern void DrawBestiaryPagingArrows(s32 leftEnabled, s32 rightEnabled);
+extern s32 g_helpTopicCursor;    /* 0x1ABA98 - help topic page index 0..0x11 */
+extern s32 g_swapGadgetItemIndex; /* +0x8E holds the global sprite y-fudge (f32) */
+extern s32 D_1ABA9C;             /* glyph row (int, converted to float) */
+s32 DrawHelpTopicMenu(void) {
+    void *atlas = g_guiInstance + 0x8710;
+    f32 centerX = (f32)(g_screenWidth / 2);
+    f32 row = (f32)D_1ABA9C;
+    f32 yfudge = *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E);
+    s32 cursor;
+    char *text;
+
+    Begin2dDrawBatch(0);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xDE), 0x60442D00, (f32 *)0, (f32 *)0,
+                  centerX, row, 1.0f, yfudge, 0.0f);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xDF), 0x60241700, (f32 *)0, (f32 *)0,
+                  centerX, row, 1.0f, yfudge, 0.0f);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xE0), 0x55F0C070, (f32 *)0, (f32 *)0,
+                  centerX, row, 1.0f, yfudge, 0.0f);
+    cursor = g_helpTopicCursor;
+    DrawBestiaryPagingArrows(cursor != 0, cursor != 0x11);
+    text = GetLocalizedString(0x2BE5);
+    func_002801B8(0x1B0, 0x177, 0x80F0F0F0, text, -1);
+    End2dDrawBatch();
+    return 0;
+}
+#endif
 
 /* return 0 stub. */
 s32 func_002D2FC0(void) {

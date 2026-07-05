@@ -40,19 +40,209 @@ extern s32 D_001A7540;     /* active ring buffer index (0/1) (USA D_001A74C0) */
 extern s32 D_001A750C;     /* nonzero when the IOP sound/loader driver is up (USA g_sndIopReady) */
 extern void *D_001A7510;   /* snd_Pump tick callback (USA D_001A7490) */
 
-/* snd_ServiceRpcCompletion: branch-layout shape this cc1 won't reproduce (same
- * wall as USA). Left as INCLUDE_ASM. */
+/* Additional 989snd globals + callees used by the EU-lockstep #else bodies below
+ * (ring core + loaders). EU data symbols are uniformly USA + 0x80 (sdata cluster
+ * AND the cod rodata diagnostic strings alike). Callee sceSifCheckStatRpc appears
+ * as func_0011D810 in EU's stripped symtab; we use the meaningful name here. */
+extern s32   D_001A7528[2]; /* per-buffer ring free space in bytes (USA D_001A74A8) */
+extern u8   *D_001A7530[2]; /* per-buffer 16-byte descriptor arrays (USA D_001A74B0) */
+extern u8   *D_001A7538[2]; /* per-buffer DMA/receive buffers (USA D_001A74B8) */
+extern u8   *D_001A7500;    /* active DMA-transfer buffer (USA D_001A7480) */
+extern s32   D_001A7578;    /* suppresses the completion-mismatch error print (USA D_001A74F8) */
+extern u8    D_001A70C0[];  /* SIF RPC data block, command channel (USA D_001A7040) */
+extern u8    D_001A7100[];  /* DMA send / RPC receive scratch buffer (USA D_001A7080) */
+extern s32   D_001A7104[];  /* RPC reply status word (USA D_001A7084) */
+extern u8    D_001A7140[];  /* RPC command parameter byte buffer (USA D_001A70C0) */
+extern char  D_001A75F8[];  /* command-ring / RPC stall diagnostic (USA D_001A7578) */
+extern char  D_001A7950[];  /* ring-stall diagnostic format string (USA D_001A78D0) */
+extern char  D_0013C078[];  /* ring-wrap diagnostic format string (USA D_0013BFF8) */
+extern void  func_0011AEA0(s32 arg);
+extern s32   sceSifCheckStatRpc(void *rpc);
+extern void  snd_PrintError(const char *msg, ...);
+extern void  snd_SetupDmaTransfer(u8 *buffer, s32 count);
+extern s32   snd_ServiceRpcCompletion(void);
+extern s32   snd_CommitRingEntry(void);
+extern void  snd_FlushCommandRing(void);
+extern s32   func_0011D620(void *rpc, s32 fno, s32 mode, void *sbuf, s32 ssize,
+                           void *rbuf, s32 rsize, void *endfn, s32 endpar);
+/* bank-loader globals (USA + 0x80) + snd_CheckLoadInProgress */
+extern s32   D_001A7508;  /* last bank-load status/error code (USA D_001A7488) */
+extern s32   D_001A7548;  /* ring-busy flag (USA D_001A74C8) */
+extern s32   D_001A7240;  /* load-request word 0 (USA D_001A71C0) */
+extern s32   D_001A7244;  /* load-request word 1 (USA D_001A71C4) */
+extern s32   D_001A7200;  /* IOP load-result slot (USA D_001A7180) */
+extern s32   D_001A7550;  /* async completion context word (USA D_001A74D0) */
+extern s64   D_001A7558;  /* async completion context qword (USA D_001A74D8) */
+extern u8    D_001A71C0[];/* SIF RPC client data block, load channel (USA D_001A7140) */
+extern char  D_001A7680[];/* "sound system not ready" diagnostic (USA D_001A7600) */
+extern char  D_001A76B0[];/* "load already in progress" diagnostic (USA D_001A7630) */
+extern char  D_001A76D0[];/* "load RPC failed" diagnostic (USA D_001A7650) */
+extern char  D_001A77B0[];/* "sound system not ready" diagnostic (USA D_001A7730) */
+extern char  D_001A77E0[];/* "IOP load RPC failed" diagnostic (USA D_001A7760) */
+extern s32   snd_CheckLoadInProgress(s32 noWait);
+extern s32   D_001A7504;  /* active DMA-transfer entry count (USA D_001A7484) */
+extern char  D_0013C020[];/* RPC completion-mismatch diagnostic (USA D_0013BFA0) */
+extern void  func_0011B3D0(void *start, void *end); /* writeback/flush a small range */
+
+/* CD-read / IOP-readiness globals + callees used by the EU-lockstep #else bodies
+ * below (func_00133280..func_001336E8 + snd_CheckLoadInProgress). EU data = USA
+ * + 0x80. NB: EU D_001A7180 here (= USA D_001A7100, the IOP-polled load status)
+ * is a DISTINCT symbol from D_001A7200 above (= USA D_001A7180). */
+extern s32   D_001A7180;  /* IOP-polled load status word (USA D_001A7100, 0 = done) */
+extern u8    D_001A71BF;  /* poll-request scratch byte (USA D_001A713F) */
+extern s32   D_001A7190;  /* EE-side load status (USA g_sndIopLoadStatus 0x1A7110, 0 = done) */
+extern s32   D_001A7514;  /* pending-read marker (USA D_001A7494) */
+extern s32   D_001A7518;  /* cached "load complete" flag (USA D_001A7498) */
+extern s32   func_001253A8(void);            /* direct libcdvd read-start fallback */
+extern s32   func_00124B88(void);            /* direct-RPC load-status fallback */
+extern void  func_0011B500(void *dst, void *src); /* poll IOP load status into dst */
+
+/* snd_ServiceRpcCompletion: poll the cmd-channel RPC result buffer after
+ * func_0011AEA0/sceSifCheckStatRpc; returns 1 when the transfer is complete (both
+ * terminators consumed), 0 while it is still running. Not matched — branch-layout
+ * shape this cc1 won't reproduce (same wall as USA). Portable #else body (EU
+ * lockstep with USA snd_ServiceRpcCompletion; data globals +0x80). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", snd_ServiceRpcCompletion);
+#else
+s32 snd_ServiceRpcCompletion(void) {
+    u32 *buf;
 
-/* snd_SetupDmaTransfer: multi-callee-save 16-byte save-slot layout wall (same
- * as USA snd_SetupDmaTransfer). Left as INCLUDE_ASM. */
+    func_0011AEA0(0);
+    if (D_001A7500 == 0) {
+        return 1; /* no transfer in flight */
+    }
+    if (sceSifCheckStatRpc(D_001A70C0) != 0) {
+        return 0; /* RPC still running */
+    }
+    buf = (u32 *)D_001A7500;
+    if (buf[0] == 0xFFFFFFFF &&
+        *(u32 *)((u8 *)buf + D_001A7504 * 4 + 4) == 0xFFFFFFFF) {
+        D_001A7500 = 0; /* both terminators consumed -> transfer done */
+        return 1;
+    }
+    if (D_001A7578 == 0) {
+        snd_PrintError(D_0013C020);
+    }
+    return 0;
+}
+#endif
+
+/* snd_SetupDmaTransfer: record the DMA buffer/count and write the two -0-header/
+ * terminator slots, flushing both to memory. Not matched — multi-callee-save
+ * 16-byte save-slot layout wall (same as USA). Portable #else body (EU lockstep
+ * with USA snd_SetupDmaTransfer; data globals +0x80). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", snd_SetupDmaTransfer);
+#else
+void snd_SetupDmaTransfer(u8 *buffer, s32 count) {
+    D_001A7504 = count;
+    D_001A7500 = buffer;
+    *(s32 *)(buffer + count * 4 + 4) = 0; /* terminator slot after the list */
+    *(s32 *)(buffer + 0) = 0;             /* header slot */
+    func_0011B3D0(buffer, buffer + 3);
+    func_0011B3D0(buffer + count * 4 + 4, buffer + count * 4 + 4 + 3);
+}
+#endif
 
-/* snd_BankLoadByLoc: multi-callee-save frame wall. Left as INCLUDE_ASM. */
+/* snd_BankLoadByLoc: request a sound-bank load from the IOP over the SIF RPC load
+ * channel and block until the IOP posts the result. Returns the load handle, or 0
+ * on early-out / RPC failure. Not matched — multi-callee-save frame wall (same as
+ * USA). Portable #else body (EU lockstep with USA snd_BankLoadByLoc; globals +0x80).
+ * The `bnel` stores D_001A7240 = arg0 only on the CheckLoadInProgress != 1 path. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", snd_BankLoadByLoc);
+#else
+s32 snd_BankLoadByLoc(s32 arg0, s32 arg1) {
+    D_001A7508 = 0;
 
-/* snd_BankLoadAsync: multi-callee-save frame wall. Left as INCLUDE_ASM. */
+    if (D_001A7548 != 0) {
+        if (D_001A7578 == 0) {
+            snd_PrintError(D_001A7680);
+        }
+        return 0;
+    }
+
+    if (snd_CheckLoadInProgress(1) == 1) {
+        if (D_001A7578 == 0) {
+            snd_PrintError(D_001A76B0);
+        }
+        return 0;
+    }
+
+    D_001A7240 = arg0;
+    D_001A7244 = arg1;
+    D_001A7200 = -1;
+
+    while (sceSifCheckStatRpc(D_001A71C0) != 0) {
+        if (D_001A7578 == 0) {
+            snd_PrintError(D_001A75F8);
+        }
+        snd_Pump();
+        func_0011AEA0(0);
+    }
+
+    if (func_0011D620(D_001A71C0, 3, 1, &D_001A7240, 8, &D_001A7200, 4, 0, 0) < 0) {
+        if (D_001A7578 == 0) {
+            snd_PrintError(D_001A76D0);
+        }
+        D_001A7508 = 0x106;
+        return 0;
+    }
+
+    if (D_001A7200 == -1) {
+        do {
+            func_0011AEA0(0);
+        } while (D_001A7200 == -1);
+    }
+    return D_001A7200;
+}
+#endif
+
+/* snd_BankLoadAsync: fire-and-forget variant of snd_BankLoadByLoc — stage the
+ * request (plus async context arg2/arg3), mark a load pending (D_001A7548 = 1),
+ * issue the load RPC (fn 3), and return without waiting. Returns nothing. Not
+ * matched — same frame wall as USA. Portable #else body (EU lockstep with USA
+ * snd_BankLoadAsync; globals +0x80). Same `bnel` (D_001A7240 = arg0 only on the
+ * proceed path); arg3 lands in D_001A7558 as a sign-extended 64-bit qword. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", snd_BankLoadAsync);
+#else
+void snd_BankLoadAsync(s32 arg0, s32 arg1, s32 arg2, s32 arg3) {
+    D_001A7508 = 0;
+
+    if (D_001A7548 != 0) {
+        if (D_001A7578 == 0) {
+            snd_PrintError(D_001A7680);
+        }
+        return;
+    }
+
+    if (snd_CheckLoadInProgress(1) == 1) {
+        if (D_001A7578 == 0) {
+            snd_PrintError(D_001A76B0);
+        }
+        return;
+    }
+
+    D_001A7240 = arg0;
+    D_001A7244 = arg1;
+    D_001A7200 = -1;
+    D_001A7550 = arg2;
+    D_001A7558 = arg3;
+
+    while (sceSifCheckStatRpc(D_001A71C0) != 0) {
+        if (D_001A7578 == 0) {
+            snd_PrintError(D_001A75F8);
+        }
+        snd_Pump();
+        func_0011AEA0(0);
+    }
+
+    D_001A7548 = 1;
+    func_0011D620(D_001A71C0, 3, 1, &D_001A7240, 8, &D_001A7200, 4, 0, 0);
+}
+#endif
 
 /* func_00132640 (= USA func_001325E0): 4 bytes of inter-function fill before the
  * unrecoverable snd_BankLoadFromEE_CB body (reached only by fallthrough/data-ref,
@@ -62,8 +252,51 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", func_00132640);
 /* snd_BankLoadFromEE_CB: unrecoverable body (see func_00132640). INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", snd_BankLoadFromEE_CB);
 
-/* snd_BankLoadFromIOP: multi-callee-save frame wall. Left as INCLUDE_ASM. */
+/* snd_BankLoadFromIOP: request a bank already resident on the IOP (RPC fn 0x59,
+ * single 4-byte arg) and block until the IOP posts the result. Returns the load
+ * handle, or 0 on early-out / RPC failure. Simplest of the family (no
+ * CheckLoadInProgress gate, no branch-likely). Not matched — same frame wall as
+ * USA. Portable #else body (EU lockstep with USA snd_BankLoadFromIOP; +0x80). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", snd_BankLoadFromIOP);
+#else
+s32 snd_BankLoadFromIOP(s32 arg0) {
+    D_001A7508 = 0;
+
+    if (D_001A7548 != 0) {
+        if (D_001A7578 == 0) {
+            snd_PrintError(D_001A77B0);
+        }
+        return 0;
+    }
+
+    D_001A7240 = arg0;
+    D_001A7200 = -1;
+
+    while (sceSifCheckStatRpc(D_001A71C0) != 0) {
+        if (D_001A7578 == 0) {
+            snd_PrintError(D_001A75F8);
+        }
+        snd_Pump();
+        func_0011AEA0(0);
+    }
+
+    if (func_0011D620(D_001A71C0, 0x59, 1, &D_001A7240, 4, &D_001A7200, 4, 0, 0) < 0) {
+        if (D_001A7578 == 0) {
+            snd_PrintError(D_001A77E0);
+        }
+        D_001A7508 = 0x106;
+        return 0;
+    }
+
+    if (D_001A7200 == -1) {
+        do {
+            func_0011AEA0(0);
+        } while (D_001A7200 == -1);
+    }
+    return D_001A7200;
+}
+#endif
 
 /* func_00132878 (= USA func_00132818): 0x10 bytes of inter-function padding
  * pinned by symbol_addrs size:0x10; the real wrapper begins at func_00132888.
@@ -100,9 +333,22 @@ void func_001328E8(s32 arg0, s32 arg1) {
 }
 
 /* func_00132920 (= USA func_001328C0): builds a 0x1C-byte record (selector
- * 0x60) with an unaligned 24-byte copy the compiler won't emit from natural C.
- * Left as INCLUDE_ASM. */
+ * 0x60) with an unaligned 24-byte copy the compiler won't emit from natural C
+ * (near-miss). Portable #else body (EU lockstep with USA func_001328C0). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", func_00132920);
+#else
+s32 func_00132920(s32 cmd, const void *payload) {
+    s32 buf[8];
+    buf[0] = cmd;
+    if (payload != 0) {
+        memcpy((u8 *)buf + 4, payload, 0x18); /* copy the 0x18-byte payload */
+    } else {
+        *(s32 *)((u8 *)buf + 4) = -1;         /* no payload -> -1 sentinel */
+    }
+    return snd_QueueCommandToRing(0x60, 0x1C, buf, 0, 0);
+}
+#endif
 
 /**
  * func_00132998 (= USA func_00132938): invoke snd_QueueCommandToRing with
@@ -240,11 +486,154 @@ void func_00132C20(s32 arg0, s32 arg1, s32 arg2, s32 arg3, s32 arg4, s32 arg5,
  * snd_SendCommandSync. Pure padding, no C. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", func_00132C68);
 
-/* snd_SendCommandSync: multi-callee-save frame wall. Left as INCLUDE_ASM. */
+/* snd_SendCommandSync: assemble a 989snd command of `count` bytes and issue it
+ * synchronously over the SIF RPC channel, blocking until the reply lands. arg0 is
+ * the RPC function number, arg1 the parameter-byte count, arg2 the parameter
+ * bytes. Returns the RPC reply status word (D_001A7104). Not matched — multi-
+ * callee-save frame wall (same as USA). Portable #else body (EU lockstep with
+ * USA snd_SendCommandSync; data globals +0x80). No branch-likely delay slots. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", snd_SendCommandSync);
+#else
+s32 snd_SendCommandSync(s32 fno, s32 count, void *cmdBytes) {
+    s32 i;
 
-/* snd_QueueCommandToRing: multi-callee-save frame wall. Left as INCLUDE_ASM. */
+    /* copy the command's parameter bytes into the shared RPC send buffer */
+    for (i = 0; i < count; i++) {
+        D_001A7140[i] = ((u8 *)cmdBytes)[i];
+    }
+
+    /* drain any in-flight command-ring DMA before reusing the channel */
+    while (D_001A7500 != 0) {
+        snd_Pump();
+        func_0011AEA0(0);
+    }
+
+    /* kick the DMA transfer, then wait for the SIF RPC channel to go idle */
+    snd_SetupDmaTransfer(D_001A7100, 1);
+    while (sceSifCheckStatRpc(D_001A70C0) != 0) {
+        if (D_001A7578 == 0) {
+            snd_PrintError(D_001A75F8);
+        }
+        snd_Pump();
+        func_0011AEA0(0);
+    }
+
+    /* issue the synchronous RPC (mode 1); a zero-length command sends no buffer */
+    if (count != 0) {
+        func_0011D620(D_001A70C0, fno, 1, D_001A7140, count, D_001A7100, 0xC, 0, 0);
+    } else {
+        func_0011D620(D_001A70C0, fno, 1, 0, 0, D_001A7100, 0xC, 0, 0);
+    }
+
+    /* spin until the completion service confirms the reply landed */
+    while (snd_ServiceRpcCompletion() == 0) {
+    }
+
+    /* if the active ring buffer still holds queued entries and no service is
+     * pending, flush it now */
+    if (*D_001A7520[D_001A7540] != 0 && D_001A7544 == 0) {
+        snd_FlushCommandRing();
+    }
+    return D_001A7104[0];
+}
+#endif
+
+/* snd_QueueCommandToRing: append one command to the active double-buffered 989snd
+ * ring (or, when idle with an empty command, issue a bare sync RPC). Not matched
+ * — multi-callee-save frame wall (same as USA). Portable #else body (EU lockstep
+ * with USA snd_QueueCommandToRing; data globals +0x80, incl. the rodata strings).
+ * No branch-likely delay slots.
+ *
+ * Ring model (buffer i = D_001A7540): D_001A7520[i] -> a 0x1000-byte command
+ * buffer (leading word = entry count, rest packed (u16 sel, u16 count, payload));
+ * D_001A7528[i] = free bytes (write cursor = base + 0x1000 - free); D_001A7530[i]
+ * -> 16-byte descriptors (word0 = arg3, qword@8 = arg4). Cap 0x100 entries. arg4
+ * is 32-bit here but lands as a sign-extended 64-bit qword. D_001A7544 is a
+ * service-pending flag borrowed (cleared then restored) while spinning. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", snd_QueueCommandToRing);
+#else
+s32 snd_QueueCommandToRing(s32 sel, s32 count, void *data, s32 arg3, s32 arg4) {
+    s32 idx;
+    s32 alignedSize;
+    s32 raisedFlag = 0; /* set when we transiently cleared the service flag */
+    s32 spins = 0;      /* ring-full retry counter (drives the stall diagnostics) */
+    s32 i;
+    u8 *cursor;
+    u8 *entry;
+
+    /* idle with an empty command: nothing to queue, so just issue a bare
+     * synchronous RPC (selector as the RPC function number) */
+    if (D_001A7544 == 0 && D_001A7500 == 0 && count == 0 && arg3 == 0) {
+        snd_SetupDmaTransfer(D_001A7100, 1);
+        while (sceSifCheckStatRpc(D_001A70C0) != 0) {
+            if (D_001A7578 == 0) {
+                snd_PrintError(D_001A75F8);
+            }
+            snd_Pump();
+            func_0011AEA0(0);
+        }
+        return func_0011D620(D_001A70C0, sel, 1, 0, 0, D_001A7100, 0xC, 0, 0);
+    }
+
+    /* bytes this command occupies: payload rounded up to a multiple of 4, plus
+     * the 4-byte (sel, count) header */
+    alignedSize = ((count + 3) & ~3) + 4;
+
+    /* wait until the active buffer has room and isn't at its 0x100-entry cap,
+     * pumping the sound system while we spin */
+    idx = D_001A7540;
+    if (*D_001A7520[idx] == 0x100 || D_001A7528[idx] < alignedSize) {
+        for (;;) {
+            if (D_001A7544 != 0) {
+                D_001A7544 = 0;
+                raisedFlag = 1;
+            }
+            snd_Pump();
+            if (spins == 1 && D_001A7578 == 0) {
+                idx = D_001A7540;
+                snd_PrintError(D_0013C078, idx, *D_001A7520[idx]);
+            }
+            idx = D_001A7540;
+            if (*D_001A7520[idx] == 0x100) {
+                spins++;
+                continue;
+            }
+            if (D_001A7528[idx] < alignedSize) {
+                continue;
+            }
+            break;
+        }
+    }
+    if (spins != 0 && D_001A7578 == 0) {
+        snd_PrintError(D_001A7950, spins);
+    }
+    if (raisedFlag != 0) {
+        D_001A7544 = 1; /* restore the service flag we borrowed */
+    }
+
+    /* append the command bytes at the buffer's write cursor: 2-byte selector,
+     * 2-byte length, then the payload */
+    idx = D_001A7540;
+    cursor = (u8 *)D_001A7520[idx] + (0x1000 - D_001A7528[idx]);
+    *(u16 *)cursor = sel;
+    cursor += 2;
+    *(u16 *)cursor = count;
+    cursor += 2;
+    for (i = 0; i < count; i++) {
+        cursor[i] = ((u8 *)data)[i];
+    }
+
+    /* consume the space, write the parallel 16-byte descriptor at the next free
+     * slot (arg3 word + arg4 qword), and commit */
+    D_001A7528[idx] -= alignedSize;
+    entry = D_001A7530[idx] + *D_001A7520[idx] * 16;
+    *(s32 *)entry = arg3;
+    *(s64 *)(entry + 8) = arg4;
+    return snd_CommitRingEntry();
+}
+#endif
 
 /**
  * snd_CommitRingEntry - commit one queued command to the active 989snd ring
@@ -258,12 +647,56 @@ s32 snd_CommitRingEntry(void) {
     return snd_Pump();
 }
 
-/* snd_FlushCommandRing: multi-callee-save frame wall. Left as INCLUDE_ASM. */
+/* snd_FlushCommandRing: DMA-kick + SIF-RPC flush of the active 989snd command
+ * ring buffer, then flip to the other buffer. Not matched — multi-callee-save
+ * frame wall (same as USA). Portable #else body (EU lockstep with USA
+ * snd_FlushCommandRing; data globals +0x80). No branch-likely delay slots. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", snd_FlushCommandRing);
+#else
+void snd_FlushCommandRing(void) {
+    s32 idx = D_001A7540;
 
-/* func_00133280 (= USA func_00133220): store-constant-and-return-it
- * register-allocation shape this cc1 won't reproduce. Left as INCLUDE_ASM. */
+    /* kick the DMA transfer for the buffer currently being filled */
+    snd_SetupDmaTransfer(D_001A7538[idx], *D_001A7520[idx]);
+
+    /* wait for the SIF RPC command channel to go idle */
+    while (sceSifCheckStatRpc(D_001A70C0) != 0) {
+        if (D_001A7578 == 0) {
+            snd_PrintError(D_001A75F8);
+        }
+        func_0011AEA0(0);
+    }
+
+    /* fire the ring-flush RPC (function 0x4D) for the active buffer */
+    idx = D_001A7540;
+    func_0011D620(D_001A70C0, 0x4D, 1,
+                  D_001A7520[idx],              /* send buffer   */
+                  0x1000 - D_001A7528[idx],     /* send size     */
+                  D_001A7538[idx],              /* receive buffer*/
+                  (*D_001A7520[idx] << 2) + 8,  /* receive size  */
+                  0, 0);                        /* no completion callback */
+
+    /* flip to the other buffer and reset it for refilling */
+    idx = (D_001A7540 ^ 1) != 0 ? 1 : 0;
+    D_001A7540 = idx;
+    *D_001A7520[idx] = 0;
+    D_001A7528[idx] = 0xFFC;
+}
+#endif
+
+/* func_00133280 (= USA func_00133220): raise the command-ring service-pending
+ * flag D_001A7544 and return 1, reusing one register for the store and the
+ * return. Not matched even at -G8 (cc1 materialises the constant twice rather
+ * than storing the return register itself) — a store-constant-and-return-it
+ * register-allocation near-miss. Portable #else body (EU lockstep). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", func_00133280);
+#else
+s32 func_00133280(void) {
+    return D_001A7544 = 1; /* raise the command-ring service-pending flag */
+}
+#endif
 
 /**
  * func_00133290 (= USA func_00133230): clear the command-ring service-pending
@@ -275,9 +708,32 @@ s32 func_00133290(void) {
     return snd_Pump();
 }
 
-/* func_001332B0 (= USA func_00133250): IOP-readiness spin loop padded with
- * literal nops plus the multi-callee-save wall. Left as INCLUDE_ASM. */
+/* func_001332B0 (= USA func_00133250): wait for IOP readiness, then send sync
+ * command 0x2A (driver bring-up) with a 4-word record and cache the result in
+ * the readiness flag D_001A750C. Blocked by a jal snd_Pump spin loop padded with
+ * literal nops plus the multi-callee-save save-slot wall (near-miss). Portable
+ * #else body (EU lockstep with USA func_00133250; data globals +0x80). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", func_001332B0);
+#else
+s32 func_001332B0(s32 arg0, s32 arg1, s32 arg2, s32 arg3) {
+    s32 cmd[4];
+
+    if (D_001A750C == 1) {
+        return 0; /* IOP driver already up */
+    }
+    if (D_001A7548 != 0) {
+        while (snd_Pump() != 0) { } /* drain the pending command ring */
+    }
+    snd_CheckLoadInProgress(0); /* block until any in-flight load finishes */
+    cmd[0] = arg0;
+    cmd[1] = arg1;
+    cmd[2] = arg2;
+    cmd[3] = arg3;
+    D_001A750C = snd_SendCommandSync(0x2A, 0x10, cmd); /* 0x2A = bring-up */
+    return D_001A750C;
+}
+#endif
 
 /* func_00133360 (= USA func_00133300): 0x10 bytes of inter-function padding
  * pinned size:0x10; the real wrapper begins at func_00133370. Pure padding. */
@@ -297,9 +753,28 @@ s32 func_00133370(void) {
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", func_001333A0);
 
 /* func_001333B0 (= USA snd_PlaySample): 989snd cmd opcode 0x2C (start voice /
- * play sample), uses an 8+ argument calling convention this cc1 won't reproduce
- * from natural C. Left as INCLUDE_ASM. */
+ * play sample). Builds a 0x20-byte record from a mix of register and stack args
+ * (16-bit fields packed hi|lo, plus four words from the caller's stack) for
+ * snd_QueueCommandToRing count 0x20. The 8+ argument calling convention this cc1
+ * won't reproduce from natural C (near-miss). Portable #else body (EU lockstep
+ * with USA snd_PlaySample; zero data globals, so identical C). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", func_001333B0);
+#else
+s32 func_001333B0(s32 a0, s32 a1, s32 a2, s32 a3, s32 a4, s32 a5,
+                  s32 a6, s32 a7, s32 a8, s32 a9, s32 a10, s64 a11) {
+    s32 rec[8]; /* the 0x20-byte command record handed to the ring */
+    rec[0] = a0;
+    rec[1] = a1;
+    rec[2] = (a4 << 16) | (a2 & 0xFFFF); /* two 16-bit fields packed hi | lo */
+    rec[3] = (a5 << 16) | (a3 & 0xFFFF);
+    rec[4] = a6;
+    rec[5] = a7;
+    rec[6] = a8;
+    rec[7] = a9;
+    return snd_QueueCommandToRing(0x2C, 0x20, rec, a10, a11);
+}
+#endif
 
 /* func_00133420 (= USA func_001333C0): 0x10 bytes of inter-function padding
  * pinned size:0x10; the real wrapper begins at func_00133430. Pure padding. */
@@ -355,13 +830,68 @@ void func_001334F0(s32 arg0) {
     snd_SendCommandSync(0x36, 4, &value);
 }
 
-/* func_00133518 (= USA CdStartRead): multi-callee-save wall plus the
- * cc1-small/assembler-absolute $at-macro store wall. Left as INCLUDE_ASM. */
+/* func_00133518 (= USA CdStartRead): queue ring command 0x38 (start read) with a
+ * 3-word record when the IOP driver is up, else fall back to func_001253A8.
+ * Blocked by the multi-callee-save save-slot wall plus the D_001A7180/D_001A7190
+ * $at-macro absolute stores (cc1-small / assembler-absolute disagreement)
+ * (near-miss). Portable #else body (EU lockstep with USA CdStartRead; data
+ * globals +0x80). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", func_00133518);
+#else
+s32 func_00133518(s32 arg0, s32 arg1, s32 arg2) {
+    s32 cmd[3]; /* the three command words for the 0x38 read request */
 
-/* snd_CheckLoadInProgress: re-materialised lui-macro loop + multi-callee-save
- * wall (same as USA). Left as INCLUDE_ASM. */
+    if (D_001A750C == 0) {
+        return func_001253A8(); /* IOP driver down -> direct libcdvd */
+    }
+    if (snd_CheckLoadInProgress(1) == 1) {
+        return 0; /* a load is already in flight */
+    }
+    D_001A7180 = 1;             /* mark a load in progress */
+    D_001A7190 = 0;             /* clear the EE-side load status */
+    func_0011B3D0(&D_001A7180, &D_001A71BF);
+    cmd[0] = arg0;
+    cmd[1] = arg1;
+    cmd[2] = arg2;
+    D_001A7514 = 1;
+    D_001A7518 = 0;
+    snd_QueueCommandToRing(0x38, 0xC, cmd, 0, 0);
+    return 1;
+}
+#endif
+
+/* snd_CheckLoadInProgress: test/wait on the bank-load-in-progress flag D_001A7180
+ * (via func_0011B500 + snd_Pump), caching the result in D_001A7518. When noWait
+ * is set, report progress without blocking; otherwise pump the sound engine until
+ * the load finishes. Blocked by the re-materialised lui-macro loop plus the
+ * multi-callee-save wall (same as USA) (near-miss). Portable #else body (EU
+ * lockstep with USA snd_CheckLoadInProgress; data globals +0x80). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", snd_CheckLoadInProgress);
+#else
+s32 snd_CheckLoadInProgress(s32 noWait) {
+    s32 done;
+
+    if (D_001A750C == 0) {
+        return func_00124B88(); /* IOP driver down -> direct RPC status */
+    }
+    func_0011B500(&D_001A7180, &D_001A71BF);
+    D_001A7518 = done = (D_001A7180 == 0);
+    if (done) {
+        return 0; /* load already complete */
+    }
+    if (noWait == 1) {
+        return 1; /* still loading, caller asked not to block */
+    }
+    do { /* block: pump the sound engine until the load finishes */
+        snd_Pump();
+        func_0011B500(&D_001A7180, &D_001A71BF);
+        D_001A7518 = done = (D_001A7180 == 0);
+    } while (!done);
+    return 0;
+}
+#endif
 
 /**
  * func_001336A0 (= USA CdStopRead): stop the CD streaming read. When the IOP
@@ -377,9 +907,20 @@ s32 func_001336A0(void) {
     return func_00125620();
 }
 
-/* func_001336E8 (= USA CdGetLoadStatus): symbolic-lw-macro absolute expansion
- * the GNU cc1 won't schedule correctly. Left as INCLUDE_ASM. */
+/* func_001336E8 (= USA CdGetLoadStatus): return the cached EE-side load status
+ * D_001A7190 when the IOP driver is up, else fall back to func_00125588. Blocked
+ * by a symbolic-lw-macro absolute expansion the GNU cc1 won't schedule correctly
+ * (near-miss). Portable #else body (EU lockstep with USA CdGetLoadStatus). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", func_001336E8);
+#else
+s32 func_001336E8(void) {
+    if (D_001A750C == 0) {
+        return func_00125588(); /* IOP driver down -> libcdvd status via RPC */
+    }
+    return D_001A7190;
+}
+#endif
 
 /* func_00133720 (= USA func_001336C0): 0x10 bytes of inter-function padding
  * pinned size:0x10; the real function begins at func_00133730
@@ -549,8 +1090,15 @@ s32 func_001339C0(void) {
 }
 
 /* func_001339E8 (= USA func_00133988): scale arg0 by 1524/741; the only diff is
- * a mflo delay-slot scheduling choice not expressible in source. INCLUDE_ASM. */
+ * a mflo delay-slot scheduling choice not expressible in source (near-miss).
+ * Portable #else body (EU lockstep with USA func_00133988). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", func_001339E8);
+#else
+s32 func_001339E8(s32 x) {
+    return x * 0x5F4 / 0x2E5;
+}
+#endif
 
 /* func_00133A10 (= USA OnVblankInterrupt): bumps the 64-bit tick counter and
  * snapshots the T1_COUNT timer; a timer-address `ori` scheduling residue this
