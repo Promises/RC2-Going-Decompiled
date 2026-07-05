@@ -493,9 +493,88 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CB560);
  * (the EE quadword ops are not emitted from scalar C). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CB720);
 
-/* menu helper: switch/jump-table dispatch (splat jtbl reloc gap) — left as
- * INCLUDE_ASM (cc1 jtbl layout not reproduced). */
+/* Front-end screen-machine per-frame tick (TickFrontEndScreenMachine).
+ * Advances the menu-idle counter (saturating at 0x7D00) and the transition
+ * countdown, runs the area-transition fade timer, lets the save/load driver
+ * (func_002DECE0) run, and — if a save/load op just finished while the screen is
+ * in the "commit" state (4) with a level-exit queued — kicks the game-state
+ * change to bring up the next level. Then dispatches the current screen state
+ * (g_menuScreenBlock[0], 1..5) to its per-state handler and, for the non-terminal
+ * states, runs the shared moby + sound-emitter tick and the optional post-hook.
+ * Matching arm stays INCLUDE_ASM (cc1 jump-table reloc layout not reproduced). */
+extern u8 g_areaTable[];
+extern u8 g_nNanotechBonusHealTimer[];
+extern u8 g_nSaveLoadStatusCode[];
+extern u8 g_nLevelExitDestination[];
+extern u8 g_hudClutSlots[];
+extern s32 RequestGameStateChange(s32 stateId, s32 push, s32 c, s32 d, s32 e);
+extern void func_002DECE0(void);
+extern void UpdateSoundEmitters(void);
+extern void UpdateActiveMobys(void);
+extern void MenuScreenUpdate(void);
+extern void func_002CBD68(void);
+extern void func_002CB560(void);
+extern void func_002CBA10(void);
+extern void func_002CBA40(void);
+extern void MenuScreenCommitTransition(void);
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CB860);
+#else
+s32 func_002CB860(void) {
+    u8 *mb = g_menuScreenBlock;
+    s32 counter;
+
+    *(s32 *)(mb + 0x168) = 0;
+    counter = *(s32 *)(mb + 0x120);
+    *(s32 *)(mb + 0x120) = (counter > 0x7CFF) ? 0x7D00 : counter + 1;
+    if (*(s32 *)(mb + 0x158) != 0)
+        *(s32 *)(mb + 0x158) -= 1;
+
+    /* area-transition fade timer: tick while the area controller is idle
+     * (g_areaTable+0x15C < 3 and its +0x164 timer negative), else reset. */
+    if (*(s32 *)(g_areaTable + 0x15C) < 3 &&
+        *(s32 *)(g_areaTable + 0x164) < 0)
+        *(s32 *)(mb + 0x164) += 1;
+    else
+        *(s32 *)(mb + 0x164) = 0;
+
+    func_002DECE0();
+
+    if ((*(s32 *)(g_nSaveLoadStatusCode + 4) & 1) &&
+        *(s32 *)mb == 4 &&
+        *(s32 *)(g_nLevelExitDestination + 4) >= 8)
+        RequestGameStateChange(4, 1, 1, *(s32 *)(mb + 0x14), 0);
+
+    switch (*(s32 *)mb) {
+    case 1:
+        func_002CBA10();
+        break;
+    case 2:
+        func_002CBA40();
+        break;
+    case 3:
+        MenuScreenCommitTransition();
+        break;
+    case 4:
+        MenuScreenUpdate();
+        break;
+    case 5:
+        func_002CBD68();
+        UpdateSoundEmitters();
+        *(s16 *)(g_nNanotechBonusHealTimer + 4) = 0xA;
+        *(s32 *)(g_hudClutSlots + 0x10) = 0;
+        return 0;
+    default:
+        break;
+    }
+
+    UpdateActiveMobys();
+    UpdateSoundEmitters();
+    if (*(s32 *)(mb + 0x1C) != 0)
+        func_002CB560();
+    return 0;
+}
+#endif
 
 /* MenuScreenLoad then mark the screen-state scratch ready (state=2). */
 void func_002CBA10(void) {
@@ -546,9 +625,58 @@ void MenuScreenCommitTransition(void) {
  * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", MenuScreenUpdate);
 
-/* menu helper: 8-byte-packed-save wall (saves 2 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* Screen-state-5 handler (the terminal "leaving the front-end" state, dispatched
+ * from TickFrontEndScreenMachine). Runs a per-frame countdown (g_menuScreenBlock
+ * +0x24); once it hits zero and no file load is in flight, commits the queued
+ * transition by its sub-state (g_menuScreenBlock+0x1C): 2 = pop back to the map,
+ * 3/4/6 = push game-state 1 with the queued arg (+0xF4), 5 = push game-state 2,
+ * anything else = plain pop. Then, if the equipped-weapon slot changed
+ * (+0x40 != 0 and != +0x30), plays that weapon's voice line via its
+ * g_weaponTable entry, bracketed by dialog-voice pumps.
+ * Matching arm stays INCLUDE_ASM (later cc1 packs 8-byte save slots vs our 16). */
+extern s16 g_fileLoadState;
+extern s32 g_mapCurrentLevel;
+extern u8 g_itemEquippedSlot[];
+extern u8 g_weaponTable[];
+extern void PopGameState(s32 a, s32 b);
+extern void PumpDialogVoiceSystem(s32 blocking);
+extern void func_00294CD0(s32 arg);
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CBD68);
+#else
+void func_002CBD68(void) {
+    u8 *mb = g_menuScreenBlock;
+    s32 sub;
+
+    if (*(s32 *)(mb + 0x24) != 0)
+        *(s32 *)(mb + 0x24) -= 1;
+    if (*(s32 *)(mb + 0x24) != 0)
+        return;
+    if (g_fileLoadState != 0)
+        return;
+
+    sub = *(s32 *)(mb + 0x1C);
+    if (sub == 2) {
+        PopGameState(0, g_mapCurrentLevel);
+    } else if (sub == 3 || sub == 4 || sub == 6) {
+        RequestGameStateChange(1, 1, 0, *(s32 *)(mb + 0xF4), 0);
+    } else if (sub == 5) {
+        RequestGameStateChange(2, 1, *(s32 *)(mb + 0xF4), 0, 0);
+    } else {
+        PopGameState(0, 0);
+    }
+
+    if (*(s32 *)(mb + 0x40) != 0 &&
+        *(s32 *)(mb + 0x30) != *(s32 *)(mb + 0x40)) {
+        u8 *weapon;
+        PumpDialogVoiceSystem(1);
+        weapon = g_weaponTable + g_itemEquippedSlot[*(s32 *)(mb + 0x40)] * 0xE0;
+        func_00294CD0(*(s32 *)(weapon + 0x14));
+        PumpDialogVoiceSystem(1);
+    }
+    PumpDialogVoiceSystem(1);
+}
+#endif
 
 /* menu data/list builder: 8-byte-packed-save wall (saves 3 GPRs incl $31; later cc1
  * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
@@ -854,9 +982,72 @@ void func_002CDEB0(void) {
 
 /* Level-exit confirm dispatch for the active menu screen: validates the pending
  * pick against the global input flags + per-screen tables and sets g_nLevelExit*.
- * Near-miss: the chained per-screen pointer compares the later cc1 lays out
- * differently — left as INCLUDE_ASM. */
+ * Only acts when `item` is the screen's currently-active widget (screen+0xE8) and
+ * the widget's table entry (item+0x34[item+0x40], stride 0xC, +0x2) marks it a
+ * "level exit" (kind 3); then maps the widget identity (one of the six menu-item
+ * records) to a level-exit destination code and arms g_nLevelExitRequested from
+ * that destination's enabled byte (D_1A7BD1..). If the byte is clear the pending
+ * destination is rolled back to its saved value. Anything not handled here is
+ * forwarded to func_002D6B28 (whose result is returned).
+ * Matching arm stays INCLUDE_ASM (later cc1 lays out the chained pointer compares
+ * differently). */
+extern u8 *g_pCurrentMenuScreen;
+extern s32 g_nLevelExitRequested;
+extern s32 func_002D6B28(void *item);
+extern u8 D_00259128[], D_00259178[], D_002591C8[], D_00259218[], D_00259268[], D_002592B8[];
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CDF48);
+#else
+s32 func_002CDF48(void *item) {
+    u8 *screen = g_pCurrentMenuScreen;
+    s32 savedDest;
+    u8 *table;
+    s32 dest;
+    u8 enabled;
+
+    if (*(void **)(screen + 0xE8) != item)
+        return func_002D6B28(item);
+
+    /* item inert while any input flag other than 0x40 is held */
+    if ((*(s32 *)(D_138180 + 0x1C4) & ~0x40) != 0 && item == (void *)D_00259128)
+        return 0;
+    if (g_nLevelExitRequested != 0)
+        return func_002D6B28(item);
+
+    savedDest = *(s32 *)g_nLevelExitDestination;
+
+    /* the widget must be a "level exit" entry (kind 3) in its own table */
+    table = *(u8 **)((u8 *)item + 0x34);
+    if (*(s16 *)(table + *(s32 *)((u8 *)item + 0x40) * 0xC + 0x2) != 3)
+        return func_002D6B28(item);
+
+    if (item == (void *)D_00259128) {
+        *(s32 *)g_nLevelExitDestination = 1;
+        g_nLevelExitRequested = 1;
+        return 0;
+    }
+    if (!(*(s32 *)(D_138180 + 0x1C4) & 0x40))
+        return func_002D6B28(item);
+
+    if (item == (void *)D_00259178)      { dest = 1; enabled = D_1A7BD1; }
+    else if (item == (void *)D_002591C8) { dest = 2; enabled = D_1A7BD2; }
+    else if (item == (void *)D_00259218) { dest = 3; enabled = D_1A7BD3; }
+    else if (item == (void *)D_00259268) { dest = 4; enabled = D_1A7BD4; }
+    else if (item == (void *)D_002592B8) { dest = 6; enabled = D_1A7BD6; }
+    else {
+        /* unrecognised widget: leave the destination untouched */
+        if (g_nLevelExitRequested == 0)
+            *(s32 *)g_nLevelExitDestination = savedDest;
+        return 0;
+    }
+
+    *(s32 *)g_nLevelExitDestination = dest;
+    g_nLevelExitRequested = (enabled != 0);
+    if (g_nLevelExitRequested == 0)
+        *(s32 *)g_nLevelExitDestination = savedDest;
+    return 0;
+}
+#endif
 
 /* Galactic-map / level-select input dispatcher. Reads g_padButtonsPressed:
  *   - any nav-button bit (mask 0x910) set: returns 1 (the key is swallowed);
@@ -941,9 +1132,70 @@ s32 func_002CE200(void) {
     return 0;
 }
 
-/* menu helper: 8-byte-packed-save wall (saves 3 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* Present-record fence variant driving the front-end "leave" navigation. Samples
+ * the frame timestamp (func_00337D98), then on the pad "confirm" bit (0x10) points
+ * g_pNextMenuScreen at the destination screen (D_00259308) and — if the GUI's
+ * pending widget handle (g_guiInstance+0x38000 .+0x79EC) is live — hands it to
+ * func_0034F868; on a "cancel" bit (0x900) does the same handle hand-off and
+ * returns 1; otherwise ticks the idle handler func_0029D040. Then, with the GUI
+ * up, runs the shared present-record redraw fence (D_00259E50 / live object
+ * *D_259E34) exactly like func_002CE498: clear the "needs redraw" bit 0x4 when the
+ * two timestamps agree, the file-load is idle and the record shows this frame
+ * already presented; else set it. Finally stamps the record (D_00259E50[0x58]=now).
+ * Matching arm stays INCLUDE_ASM (later cc1 packs 8-byte save slots vs our 16). */
+extern s32 func_00337D98(void);
+extern void func_0034F868(s32 handle);
+extern void func_0029D040(s32 buttons);
+extern u8 *g_pNextMenuScreen;
+extern u8 D_00259308[];
+extern u8 D_00259E50[];   /* per-screen present record */
+extern s32 D_259E34;      /* ptr-to-live-object global */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE230);
+#else
+s32 func_002CE230(void) {
+    s32 t0 = func_00337D98();
+    s32 flags = g_padButtonsPressed;
+    s32 result = 0;
+
+    if (flags & 0x10) {
+        g_pNextMenuScreen = D_00259308;
+        if (g_guiInstance == NULL)
+            return result;
+        if (*(s32 *)(g_guiInstance + 0x38000 + 0x79EC) != 0)
+            func_0034F868(*(s32 *)(g_guiInstance + 0x38000 + 0x79EC));
+    } else if (flags & 0x900) {
+        if (g_guiInstance != NULL &&
+            *(s32 *)(g_guiInstance + 0x38000 + 0x79EC) != 0)
+            func_0034F868(*(s32 *)(g_guiInstance + 0x38000 + 0x79EC));
+        result = 1;
+    } else {
+        func_0029D040(flags);
+    }
+
+    if (g_guiInstance) {
+        s32 now = func_00337D98();
+        u8 *rec = D_00259E50;
+        s32 *live = (s32 *)D_259E34;
+        s32 clear = 0;
+        if (now == t0 && g_fileLoadState == 0) {
+            if (*(s32 *)(rec + 0x50) == now && *(s32 *)(rec + 0x44) == 2) {
+                clear = 1;
+            } else if (*(s32 *)(rec + 0x54) == now &&
+                       *(s32 *)(rec + 0x44) == 4) {
+                clear = 1;
+            }
+        }
+        if (clear) {
+            live[0x10 / 4] &= ~0x4;
+        } else {
+            live[0x10 / 4] |= 0x4;
+        }
+        *(s32 *)(rec + 0x58) = now;
+    }
+    return result;
+}
+#endif
 
 /* Insomniac-museum (or sibling extras) screen draw: inside a 2D batch, run the
  * per-screen overlay (func_0029CFE0) and draw localized title string 0x2BE5 at
@@ -1139,9 +1391,69 @@ s32 func_002CE6A8(void) {
     return 0;
 }
 
-/* menu helper: 8-byte-packed-save wall (saves 4 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* Confirm/cancel poll + present-record fence (record D_0025E298 / live *D_25E264),
+ * the standard menuScreenBlock confirm latch. Samples the frame timestamp
+ * (func_00337D98); confirm (0x10) latches the active screen's pending result
+ * (block[0x14]->0xE0 into block[0x18], else -1/0); cancel (0x900) returns 1; else
+ * ticks idle handler func_0029D2B8. With the GUI up, clears the "needs redraw" bit
+ * 0x4 when the two timestamps agree, the file-load is idle and the record shows
+ * this frame already presented; else sets it. When the timestamp advanced during
+ * the tick it also latches D_25E444 = -0x22C, then re-samples the timestamp to
+ * stamp the record (D_0025E298[0x58]).
+ * Matching arm stays INCLUDE_ASM (later cc1 packs 8-byte save slots vs our 16). */
+extern void func_0029D2B8(s32 buttons);
+extern u8 D_0025E298[];   /* per-screen present record */
+extern s32 D_25E264;      /* ptr-to-live-object global */
+extern s32 D_25E444;
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE6D8);
+#else
+s32 func_002CE6D8(void) {
+    s32 t0 = func_00337D98();
+    s32 flags = g_padButtonsPressed;
+    s32 result = 0;
+
+    if (flags & 0x10) {
+        s32 *block = (s32 *)g_menuScreenBlock;
+        s32 v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
+        if (v != 0) {
+            block[0x18 / 4] = v;
+            result = 0;
+        } else {
+            result = (block[0x134 / 4] == 0) ? -1 : 0;
+        }
+    } else if (flags & 0x900) {
+        result = 1;
+    } else {
+        func_0029D2B8(flags);
+    }
+
+    if (g_guiInstance) {
+        s32 now = func_00337D98();
+        u8 *rec = D_0025E298;
+        s32 *live = (s32 *)D_25E264;
+        s32 clear = 0;
+        if (now == t0 && g_fileLoadState == 0) {
+            if (*(s32 *)(rec + 0x50) == t0 && *(s32 *)(rec + 0x44) == 2) {
+                clear = 1;
+            } else if (*(s32 *)(rec + 0x54) == t0 &&
+                       *(s32 *)(rec + 0x44) == 4) {
+                clear = 1;
+            }
+        }
+        if (clear) {
+            live[0x10 / 4] &= ~0x4;
+        } else {
+            live[0x10 / 4] |= 0x4;
+        }
+        if (now != t0) {
+            D_25E444 = -0x22C;
+        }
+        *(s32 *)(rec + 0x58) = func_00337D98();
+    }
+    return result;
+}
+#endif
 
 /* GUI wrapper: when the GUI is up, register a widget (instance + 0x3A000) and
  * stash the returned handle in widget[0x34].
@@ -1497,9 +1809,85 @@ s32 func_002D0240(void) {
     return 0;
 }
 
-/* menu helper: 8-byte-packed-save wall (saves 7 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* Refreshes the weapon/gadget-vendor availability record (D_261730) and three
+ * global availability flags from the current inventory. Scans the 0x38 item slots
+ * (skipping empty g_weaponTable entries and the two non-vendor slots 9/10): any
+ * slot the player does not own clears "all owned" (D_1AA450); for owned slots, if
+ * any of the three weapon-variant fields (+0x98/+0x9C/+0xA0) exists but its
+ * corresponding g_itemStateFlags bit (1<<(2*variant)) is not yet set, it clears the
+ * "all variants seen" flags (D_1AA454/D_1AA458). Then populates the D_261730 record
+ * with the caption string-ids / sub-page pointers for either the base set (when no
+ * extras are unlocked, g_miscExtras==0) or the extras set, and lays out + resets the
+ * vendor widget (func_00342450 / func_00342520 on g_guiInstance+0x3C160). Returns 0.
+ * Matching arm stays INCLUDE_ASM (8-byte-packed-save + gp-rel scratch scheduling). */
+extern u8 g_inventoryOwned[];   /* u8[0x38] per-item have-flag */
+extern u8 g_itemStateFlags[];   /* u8[0x38] per-item persistent state bits */
+extern u8 D_0025C430[], D_0025C5C8[], D_0025CCD8[];  /* extras sub-page records */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D02A0);
+#else
+s32 func_002D02A0(void) {
+    u8 *record;
+    s32 i;
+
+    if (g_guiInstance == NULL)
+        return 0;
+
+    D_1AA450 = 1;
+    D_1AA454 = 1;
+    D_1AA458 = 1;
+
+    for (i = 0; i < 0x38; i++) {
+        s32 slot = g_itemEquippedSlot[i];
+        u8 *weapon = g_weaponTable + slot * 0xE0;
+        s32 seen454, seen458;
+        s32 j;
+
+        if (*(s32 *)weapon == 0 || i == 9 || i == 0xA)
+            continue;
+
+        if (g_inventoryOwned[i] == 0) {
+            D_1AA450 = 0;
+            D_1AA454 = 0;
+            D_1AA458 = 0;
+            continue;
+        }
+
+        seen454 = D_1AA454;
+        seen458 = D_1AA458;
+        for (j = 0; j < 3; j++) {
+            if (*(s32 *)(weapon + 0x98 + j * 4) != 0 &&
+                (g_itemStateFlags[i] & (1 << (j * 2))) == 0) {
+                seen454 = 0;
+                seen458 = 0;
+            }
+        }
+        D_1AA458 = seen458;
+        D_1AA454 = seen454;
+    }
+
+    record = (u8 *)&D_261730;
+    if (g_miscExtras == 0) {
+        *(s32 *)(record + 0x68) = 0x2C56;
+        *(s32 *)(record + 0x70) = 0;
+        *(s32 *)(record + 0x40) = 0x2C56;
+        *(s32 *)(record + 0x48) = 0;
+        *(s32 *)(record + 0x54) = 0x2C56;
+        *(s32 *)(record + 0x5C) = 0;
+    } else {
+        *(s32 *)(record + 0x70) = (s32)D_0025CCD8;
+        *(s32 *)(record + 0x40) = 0x3098;
+        *(s32 *)(record + 0x48) = (s32)D_0025C430;
+        *(s32 *)(record + 0x54) = 0x30A2;
+        *(s32 *)(record + 0x5C) = (s32)D_0025C5C8;
+        *(s32 *)(record + 0x68) = 0x30D5;
+    }
+
+    func_00342450(g_guiInstance + 0x3C160, &D_2615D8, &D_261678, &D_261730);
+    func_00342520(g_guiInstance + 0x3C160, 2);
+    return 0;
+}
+#endif
 
 /* UpdateCheatMenuInput: per-frame input for the cheats menu (cursor D_1ABA30 over
  * the 12-entry table D_1ABD50, stride 4: +0x2 cheat id, +0x3 unlock gate). Reads the
@@ -2802,9 +3190,52 @@ s32 func_002D2FC8(void) {
 }
 #endif
 
-/* menu helper: 8-byte-packed-save wall (saves 3 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* Options-menu screen draw: inside a 2D batch, draws the three header glyphs
+ * (0xDE/0xDF/0xE0 in the standard 0x60442D00 / 0x60241700 / 0x55F0C070 colours,
+ * centred at row D_1ABAA4), the left/right paging arrows keyed on the option
+ * cursor (g_optionsSubCursor, 0..5), a slider fill (func_002904B0) whose vertical
+ * endpoints come from the slider fraction *(g_swapGadgetItemIndex+0x8A) scaled by
+ * 330/332, then the localized label for the current option (D_1ABDE8[cursor],
+ * screen-centred) and the footer prompt (string 0x2BE5). Returns 0.
+ * (func_003017F8 ignores its scale/vec38 pointer args — glyph draws pass NULL.)
+ * Wall: 8-byte-packed-save + FP-arg scheduling — later cc1 save-slot packing not
+ * reproduced. Preserved as portable C. */
+extern void func_002904B0(s32 x0, s32 y0, s32 x1, s32 y1, s32 color, s32 flag);
+extern s32 D_1ABAA4;      /* glyph row (int, converted to float) */
+extern u8 D_1ABDE8[];     /* per-option label string-id table, s16 on 4-byte stride */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D3138);
+#else
+/* TODO(match): functional equivalent - not byte-exact; the slider endpoint ints
+ * model the original's `mul; add 0.5; cvt.w.s` as round-half-up. */
+s32 func_002D3138(void) {
+    void *atlas = g_guiInstance + 0x8710;
+    f32 centerX = (f32)(g_screenWidth / 2);
+    f32 row = (f32)D_1ABAA4;
+    f32 yfudge = *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E);
+    f32 frac = *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8A);
+    s32 cursor;
+    char *text;
+
+    Begin2dDrawBatch(0);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xDE), 0x60442D00, (f32 *)0, (f32 *)0,
+                  centerX, row, 1.0f, yfudge, 0.0f);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xDF), 0x60241700, (f32 *)0, (f32 *)0,
+                  centerX, row, 1.0f, yfudge, 0.0f);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xE0), 0x55F0C070, (f32 *)0, (f32 *)0,
+                  centerX, row, 1.0f, yfudge, 0.0f);
+    cursor = g_optionsSubCursor;
+    DrawBestiaryPagingArrows(cursor != 0, cursor != 5);
+    func_002904B0(0x42, (s32)(frac * 330.0f + 0.5f), 0x1CF,
+                  (s32)(frac * 332.0f + 0.5f), 0x55F0C070, 0);
+    text = GetLocalizedString(*(s16 *)(D_1ABDE8 + g_optionsSubCursor * 4));
+    func_002801B8(g_screenWidth / 2, 0x137, 0x80F0F0F0, text, -1);
+    text = GetLocalizedString(0x2BE5);
+    func_002801B8(0x1B0, 0x177, 0x80F0F0F0, text, -1);
+    End2dDrawBatch();
+    return 0;
+}
+#endif
 
 /* GUI null-check gate: if the GUI is up, latch error code -0x12C; return 0. */
 #ifndef TARGET_NATIVE
@@ -2884,9 +3315,64 @@ s32 func_002D33A8(void) {
 }
 #endif
 
-/* menu helper: 8-byte-packed-save wall (saves 4 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* Help/hint-page screen draw: inside a 2D batch, draws the two header glyphs
+ * (0xE5/0xE4, centred at row D_1ABAAC), then the left/right page arrows when the
+ * page cursor (g_helpPageCursor, 0..6) allows: a "prev" arrow (glyph 0x4B at
+ * 216,373) when cursor>0 and a "next" arrow (glyph 0x4A at 295,373) when cursor<6,
+ * each drawn white while its pad direction is held (L1 0x8000 / R1 0x2000) else in
+ * the pulsing inactive colour from func_002AA3F0. The arrows carry their prompt
+ * labels (0x2DD6 / 0x2DD7), and the screen title (0x312A) + footer (0x2BE5) are
+ * centred. Returns 0. (func_003017F8 ignores scale/vec38 — glyph draws pass NULL.)
+ * Wall: 8-byte-packed-save + FP-arg scheduling — later cc1 save-slot packing not
+ * reproduced. Preserved as portable C. */
+extern u32 func_002AA3F0(u32 color1, u32 color2, s32 period, s32 counterSel, s32 reset);
+extern void func_0027FBA8(s32 x, s32 y, u64 color, char *str, s64 wrap);
+extern s32 g_padButtonsHeld;
+extern s32 D_1ABAAC;      /* glyph row (int, converted to float) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D34E8);
+#else
+s32 func_002D34E8(void) {
+    void *atlas = g_guiInstance + 0x8710;
+    f32 centerX = (f32)(g_screenWidth / 2);
+    f32 row = (f32)D_1ABAAC;
+    f32 yfudge = *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E);
+    u32 inactiveArrow;
+    s32 cursor;
+    char *text;
+
+    Begin2dDrawBatch(0);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xE5), 0x60442D00, (f32 *)0, (f32 *)0,
+                  centerX, row, 1.0f, yfudge, 0.0f);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xE4), 0x55F0C070, (f32 *)0, (f32 *)0,
+                  centerX, row, 1.0f, yfudge, 0.0f);
+    inactiveArrow = func_002AA3F0(0x60241700, 0x55F0C070, 0x19, 0, 0);
+
+    cursor = g_helpPageCursor;
+    if (cursor > 0) {
+        u32 color = (g_padButtonsHeld & 0x8000) ? 0x80F0F0F0 : inactiveArrow;
+        func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x4B), color, (f32 *)0, (f32 *)0,
+                      216.0f, 373.0f, 1.0f, yfudge * 0.8f, 0.0f);
+        text = GetLocalizedString(0x2DD6);
+        func_0027FBA8(0x40, 0x171, 0x80F0F0F0, text, -1);
+        cursor = g_helpPageCursor;
+    }
+    if (cursor < 6) {
+        u32 color = (g_padButtonsHeld & 0x2000) ? 0x80F0F0F0 : inactiveArrow;
+        func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x4A), color, (f32 *)0, (f32 *)0,
+                      295.0f, 373.0f, 1.0f, yfudge * 0.8f, 0.0f);
+        text = GetLocalizedString(0x2DD7);
+        func_00280090(0x1C1, 0x171, 0x80F0F0F0, text, -1);
+    }
+
+    text = GetLocalizedString(0x312A);
+    func_002801B8(g_screenWidth / 2, 0x1D, 0x80F0F0F0, text, -1);
+    text = GetLocalizedString(0x2BE5);
+    func_002801B8(g_screenWidth / 2, 0x173, 0x80F0F0F0, text, -1);
+    End2dDrawBatch();
+    return 0;
+}
+#endif
 
 /* return 0 stub. */
 s32 func_002D37E0(void) {
@@ -2958,9 +3444,56 @@ s32 func_002D37E8(void) {
 }
 #endif
 
-/* menu helper: 8-byte-packed-save wall (saves 2 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* Summary/confirmation screen draw: inside a 2D batch, draws three header glyphs
+ * (0x8B/0x8C/0x8D, centred at row D_1ABAB0), three centred lines (localized 0x30D5,
+ * 0x2BE4, 0x2BE5), then two composed lines built with the SDK sprintf
+ * (func_00115DA8): the left line formats D_1AB9F8 with the localized 0x30D5 string
+ * (drawn at 0x86,0xBA via func_0027FBA8) and the right line formats D_1ABA38 with a
+ * localized string chosen by the cinematic-active latch D_1A790C (0x2C5C when set,
+ * else 0x2C5D; drawn at 0x15D,0xBA via func_002801B8). Both composed draws pass the
+ * string length (func_001157AC = strlen) as the clip arg. Returns 0.
+ * (func_003017F8 ignores scale/vec38 — glyph draws pass NULL.)
+ * Wall: 8-byte-packed-save + FP-arg scheduling — later cc1 save-slot packing not
+ * reproduced. Preserved as portable C. */
+extern s32 D_1ABAB0;     /* glyph row (int, converted to float) */
+extern char D_1AB9F8[];  /* sprintf format string (left composed line) */
+extern char D_1ABA38[];  /* sprintf format string (right composed line) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D38C8);
+#else
+s32 func_002D38C8(void) {
+    void *atlas = g_guiInstance + 0x8710;
+    f32 centerX = (f32)(g_screenWidth / 2);
+    f32 row = (f32)D_1ABAB0;
+    f32 yfudge = *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E);
+    char buf[0x40];
+    char *text;
+
+    Begin2dDrawBatch(0);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8B), 0x60442D00, (f32 *)0, (f32 *)0,
+                  centerX, row, 1.0f, yfudge, 0.56f);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8C), 0x55F0C070, (f32 *)0, (f32 *)0,
+                  centerX, row, 1.0f, yfudge, 0.56f);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8D), 0x55F0C070, (f32 *)0, (f32 *)0,
+                  centerX, row, 1.0f, yfudge, 0.56f);
+
+    text = GetLocalizedString(0x30D5);
+    func_002801B8(g_screenWidth / 2, 0x41, 0x80F0F0F0, text, -1);
+    text = GetLocalizedString(0x2BE4);
+    func_002801B8(g_screenWidth / 2, 0x141, 0x80F0F0F0, text, -1);
+    text = GetLocalizedString(0x2BE5);
+    func_002801B8(g_screenWidth / 2, 0x15A, 0x80F0F0F0, text, -1);
+
+    func_00115DA8(buf, D_1AB9F8, GetLocalizedString(0x30D5));
+    func_0027FBA8(0x86, 0xBA, 0x80F0F0F0, buf, func_001157AC(buf));
+
+    func_00115DA8(buf, D_1ABA38, GetLocalizedString(D_1A790C != 0 ? 0x2C5C : 0x2C5D));
+    func_002801B8(0x15D, 0xBA, 0x80F0F0F0, buf, func_001157AC(buf));
+
+    End2dDrawBatch();
+    return 0;
+}
+#endif
 
 /* Forward the currently-pressed pad buttons to the menu input handler; return 0.
  * Near-miss: the original hoists the %hi(g_padButtonsPressed) lui above the
@@ -3482,17 +4015,100 @@ s32 func_002D44E8(void) {
 }
 #endif
 
-/* menu helper: 8-byte-packed-save wall (saves 6 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* Refresh a weapon-swap widget's two caption/price fields from the currently
+ * selected weapon. With the GUI up, lays out the swap gadget (func_00342460 on
+ * g_guiInstance+0x3C160), then reads the selected weapon slot for the gadget at
+ * g_guiInstance+0x3C480 (slot = g_itemEquippedSlot[func_00343AD0(gadget+0x2C8)])
+ * and stores that weapon's g_weaponTable field +0x42 into the widget arg's +0x34;
+ * then fetches the gadget's sub-widget (func_003444C8 = the pointer at +0x360) and
+ * stores the selected weapon's g_weaponTable field +0x6 into that sub-widget's
+ * +0x58. Returns 0.
+ * (The original calls the void forwarder func_00344480, whose only effect is
+ * func_00343AD0(p+0x2C8); we call func_00343AD0 directly to read its index return
+ * — the same idiom the sister unit uses at func_00344808. Matching arm stays
+ * INCLUDE_ASM: 8-byte-packed-save wall.) */
+extern void func_00342460(void *widget, s32 arg);
+extern s32 func_00343AD0(void *p);
+extern s32 func_003444C8(void *p);
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D4568);
+#else
+s32 func_002D4568(void *widget) {
+    u8 *gadget;
+    u8 *subWidget;
+    s32 slot;
+
+    if (g_guiInstance == NULL)
+        return 0;
+
+    func_00342460(g_guiInstance + 0x3C160, 1);
+
+    gadget = (u8 *)g_guiInstance + 0x3C480;
+    slot = g_itemEquippedSlot[func_00343AD0(gadget + 0x2C8)];
+    *(s32 *)((u8 *)widget + 0x34) = *(s16 *)(g_weaponTable + slot * 0xE0 + 0x42);
+
+    subWidget = (u8 *)func_003444C8(gadget);
+    slot = g_itemEquippedSlot[func_00343AD0(gadget + 0x2C8)];
+    *(s32 *)(subWidget + 0x58) = *(s16 *)(g_weaponTable + slot * 0xE0 + 0x6);
+    return 0;
+}
+#endif
 
 /* menu input/update handler: uses 128-bit sq/lq (vector) loads/stores — left as INCLUDE_ASM
  * (the EE quadword ops are not emitted from scalar C). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateShipCustomizeInput);
 
-/* menu helper: 8-byte-packed-save wall (saves 9 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* Draws a two-segment horizontal gradient bar (an audio/level meter) for the
+ * D_26CFD0[idx] record. Each segment's fill width comes from `val` offset by +2 and
+ * +0x28: width = 0x80 - toInt(|256 - (val+off)| * 0.75), clamped >= 0, packed as the
+ * high (alpha) byte of colour 0x00F0F0B0. func_0028F2C0 renders the quad (corners
+ * alternate the two colours) into the element handle from
+ * func_0028EDF0(0xEA97, record[0x10]). The magnitude/scale math runs through the
+ * SDK soft-double helpers (float->double func_001234F0, ordered compare
+ * func_00123028, subtract func_00122A98, multiply func_00122B00, double->int
+ * func_00123130). Return value is unused (the original leaves v0 as the void
+ * func_0028F2C0's leftover). Matching arm stays INCLUDE_ASM (soft-float call
+ * scheduling + 9-GPR packed save). */
+extern s32 func_0028EDF0(s32 u, s32 v);
+extern s64 func_001234F0(float f);
+extern s32 func_00123028(s64 a, s64 b);
+extern s64 func_00122A98(s64 a, s64 b);
+extern s64 func_00122B00(s64 a, s64 b);
+extern s32 func_00123130(s64 x);
+extern void func_0028F2C0(s32 handle, s32 x0, s32 y0, s32 x1, s32 y1, void *quad);
+extern u8 D_26CFD0[];    /* meter record table, stride 0x14 */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D4D38);
+#else
+#define METER_FILL_SCALE 0x3FE8000000000000LL   /* 0.75 (built ori 0xFFA0; dsll32 14) */
+
+/* fill width for one meter segment: 0x80 - round(|256 - v| * 0.75), soft-double. */
+static s32 MeterSegmentWidth(s32 v) {
+    s64 d = func_001234F0(256.0f - (f32)v);
+    if (func_00123028(d, 0) < 0)
+        d = func_00122A98(0, d);
+    return 0x80 - func_00123130(func_00122B00(d, METER_FILL_SCALE));
+}
+
+void func_002D4D38(s32 idx, s32 val) {
+    u8 *rec = D_26CFD0 + idx * 0x14;
+    s32 handle = func_0028EDF0(0xEA97, *(s32 *)(rec + 0x10));
+    s32 w1 = MeterSegmentWidth(val + 2);
+    s32 w2 = MeterSegmentWidth(val + 0x28);
+    u32 color1, color2;
+    s32 quad[4];
+
+    if (w2 < 0) w2 = 0;
+    if (w1 < 0) w1 = 0;
+    color1 = ((u32)w1 << 24) | 0xF0F0B0;
+    color2 = ((u32)w2 << 24) | 0xF0F0B0;
+    quad[0] = color1;
+    quad[1] = color2;
+    quad[2] = color1;
+    quad[3] = color2;
+    func_0028F2C0(handle, val + 2, 0x14E, 0x28, 0x28, quad);
+}
+#endif
 
 /* menu/HUD draw routine: ldl/ldr/sdl/sdr unaligned struct/const copy — left as INCLUDE_ASM
  * (cc1 won't reproduce the unaligned 64-bit copy idiom from clean C). */
