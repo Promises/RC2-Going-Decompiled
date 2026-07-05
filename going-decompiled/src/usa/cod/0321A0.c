@@ -34,15 +34,61 @@ extern void *D_001A7490; /* snd_Pump tick callback (set by SetSndPumpCallback) *
  * D_0013BFA0 via snd_PrintError on stall. Best attempt 78% — ee-gcc lays the
  * early-return-1 branch out as `b`+`li` (or a branch-likely `bnel`) instead of
  * the original's `beqz` straight to the epilogue with the return value in the
- * delay slot. A branch-layout shape this cc1 won't reproduce. */
+ * delay slot. A branch-layout shape this cc1 won't reproduce (near-miss).
+ * Portable #else body. */
+extern void func_0011AEA0(s32 arg);            /* pre-RPC flush/sync */
+extern s32  sceSifCheckStatRpc(void *rpc);     /* nonzero while the RPC is busy */
+extern void snd_PrintError(const char *msg);
+extern u8   D_001A7040[];  /* sceSif RPC data block */
+extern s32  D_001A74F8;    /* suppresses the completion-mismatch error print */
+extern char D_0013BFA0[];  /* "RPC completion mismatch" error string */
+extern u8  *D_001A7480;    /* active DMA-transfer buffer */
+extern s32  D_001A7484;    /* active DMA-transfer entry count */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", snd_ServiceRpcCompletion);
+#else
+s32 snd_ServiceRpcCompletion(void) {
+    u32 *buf;
+
+    func_0011AEA0(0);
+    if (D_001A7480 == 0) {
+        return 1; /* no transfer in flight */
+    }
+    if (sceSifCheckStatRpc(D_001A7040) != 0) {
+        return 0; /* RPC still running */
+    }
+    buf = (u32 *)D_001A7480;
+    if (buf[0] == 0xFFFFFFFF &&
+        *(u32 *)((u8 *)buf + D_001A7484 * 4 + 4) == 0xFFFFFFFF) {
+        D_001A7480 = 0; /* both terminators consumed -> transfer done */
+        return 1;
+    }
+    if (D_001A74F8 == 0) {
+        snd_PrintError(D_0013BFA0);
+    }
+    return 0;
+}
+#endif
 
 /* snd_SetupDmaTransfer: body reproduces 1:1 (89%), but the function saves
  * s0+s1+ra and this cc1 reserves a 16-byte stack slot per callee save (frame
  * 0x30, sd at 0/16/32) while the original packs them 8-byte (frame 0x20, sd at
  * 0/8/16). No flag found that packs the slots (2.95.2 even emits sq); this
- * callee-save-layout wall blocks every multi-save function in this unit. */
+ * callee-save-layout wall blocks every multi-save function in this unit
+ * (near-miss). Portable #else body. */
+extern void func_0011B3D0(void *start, void *end); /* writeback/flush a small range */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", snd_SetupDmaTransfer);
+#else
+void snd_SetupDmaTransfer(u8 *buffer, s32 count) {
+    D_001A7484 = count;
+    D_001A7480 = buffer;
+    *(s32 *)(buffer + count * 4 + 4) = 0; /* terminator slot after the list */
+    *(s32 *)(buffer + 0) = 0;             /* header slot */
+    func_0011B3D0(buffer, buffer + 3);
+    func_0011B3D0(buffer + count * 4 + 4, buffer + count * 4 + 4 + 3);
+}
+#endif
 
 /* snd_BankLoadByLoc: multi-callee-save frame — blocked by the same 16-byte
  * save-slot layout wall as snd_SetupDmaTransfer. */
@@ -107,8 +153,21 @@ void func_00132888(s32 arg0, s32 arg1) {
  * source is itself unaligned, so the original copies it with unaligned
  * ldl/ldr/sdl/sdr. Reproducing that requires a packed (alignment-1) struct copy
  * that ee-gcc 2.9 won't emit from natural C — an aligned struct lands the
- * payload at offset 8 with aligned ld/sd instead. Left as INCLUDE_ASM. */
+ * payload at offset 8 with aligned ld/sd instead (near-miss). Portable #else. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_001328C0);
+#else
+s32 func_001328C0(s32 cmd, const void *payload) {
+    s32 buf[8];
+    buf[0] = cmd;
+    if (payload != 0) {
+        memcpy((u8 *)buf + 4, payload, 0x18); /* copy the 0x18-byte payload */
+    } else {
+        *(s32 *)((u8 *)buf + 4) = -1;         /* no payload -> -1 sentinel */
+    }
+    return snd_QueueCommandToRing(0x60, 0x1C, buf, 0, 0);
+}
+#endif
 
 /**
  * Invoke snd_QueueCommandToRing with selector 0xB, count 4, arg0 passed by
@@ -279,8 +338,14 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", snd_FlushCommand
  * at -G8: ee-gcc materialises the constant twice (`li $3,1; li $2,1; sw $3`)
  * for every store-constant-and-return-it formulation tried, while the original
  * stores the return register itself. A register-allocation shape this cc1
- * won't reproduce from natural C. Left as INCLUDE_ASM. */
+ * won't reproduce from natural C (near-miss). Portable #else body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00133220);
+#else
+s32 func_00133220(void) {
+    return D_001A74C4 = 1; /* raise the command-ring service-pending flag */
+}
+#endif
 
 /**
  * Clear the command-ring service-pending flag D_001A74C4 (set by
@@ -389,8 +454,38 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", CdStartRead);
  * every loop iteration (cc1-small symbolic refs the SN assembler expanded
  * absolutely), while this cc1+GAS either CSEs explicit %hi pairs in extra
  * callee-saved regs or gp-relativises the small declarations. Also hits the
- * multi-callee-save save-slot wall (see snd_SetupDmaTransfer). */
+ * multi-callee-save save-slot wall (see snd_SetupDmaTransfer) (near-miss).
+ * Portable #else body. */
+extern s32  func_00124B88(void);              /* direct-RPC load-status fallback */
+extern void func_0011B500(void *dst, void *src); /* poll IOP load status into dst */
+extern s32  D_001A7100;  /* IOP-polled load status word (0 = done) */
+extern u8   D_001A713F;  /* poll-request scratch byte */
+extern s32  D_001A7498;  /* cached "load complete" flag */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", snd_CheckLoadInProgress);
+#else
+s32 snd_CheckLoadInProgress(s32 noWait) {
+    s32 done;
+
+    if (g_sndIopReady == 0) {
+        return func_00124B88(); /* IOP driver down -> direct RPC status */
+    }
+    func_0011B500(&D_001A7100, &D_001A713F);
+    D_001A7498 = done = (D_001A7100 == 0);
+    if (done) {
+        return 0; /* load already complete */
+    }
+    if (noWait == 1) {
+        return 1; /* still loading, caller asked not to block */
+    }
+    do { /* block: pump the sound engine until the load finishes */
+        snd_Pump();
+        func_0011B500(&D_001A7100, &D_001A713F);
+        D_001A7498 = done = (D_001A7100 == 0);
+    } while (!done);
+    return 0;
+}
+#endif
 
 /**
  * CdStopRead - stop the CD streaming read. When the IOP sound/loader driver is
@@ -410,9 +505,20 @@ s32 CdStopRead(void) {
  * g_sndIopLoadStatus through a symbolic `lw` macro (cc1 considered it small,
  * the SN assembler expanded it absolutely as lui/lw); reproducing that with a
  * file-scope `.extern sym,16` override makes GNU cc1 schedule the 2-insn
- * macro into a branch delay slot, corrupting the expansion. Left as
- * INCLUDE_ASM. */
+ * macro into a branch delay slot, corrupting the expansion (near-miss).
+ * Portable #else body. */
+extern s32 g_sndIopLoadStatus;        /* 0x1A7110 EE-side load status (0 = done) */
+extern s32 QueryCdStatusOverRpc(void);/* 0x125588 libcdvd status via RPC fallback */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", CdGetLoadStatus);
+#else
+s32 CdGetLoadStatus(void) {
+    if (g_sndIopReady == 0) {
+        return QueryCdStatusOverRpc();
+    }
+    return g_sndIopLoadStatus;
+}
+#endif
 
 /* func_001336C0: 0x10 bytes of inter-function padding split off by symbol_addrs
  * size:0x10; the real function begins at SetSndPumpCallback. Pure padding, no C. */
@@ -579,8 +685,14 @@ s32 func_00133960(void) {
 /* func_00133988: scale arg0 by 1524/741, i.e. (arg0 * 0x5F4) / 0x2E5. ~82%; the
  * only diff is that ee-gcc fills the `jr ra` delay slot with the `mflo`, while
  * the original keeps `mflo` before the return and leaves a nop in the slot — a
- * scheduling choice not expressible in source. Left as INCLUDE_ASM. */
+ * scheduling choice not expressible in source (near-miss). Portable #else body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00133988);
+#else
+s32 func_00133988(s32 x) {
+    return x * 0x5F4 / 0x2E5;
+}
+#endif
 
 /* OnVblankInterrupt: bumps the 64-bit tick counter D_001A7208 and snapshots
  * D_001A7210 = D_001A7200 + T1_COUNT (0x10000800). Best attempt 75% (15/16

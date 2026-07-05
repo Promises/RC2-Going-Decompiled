@@ -328,7 +328,29 @@ void func_00279EE8(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00279F08);
 
+/* func_0027A0C8 globals (declared for the TARGET_NATIVE #else only). */
+extern s32 g_playerProgress;      /* 0x1A79F8 story progress counter */
+extern u8  g_platinumBoltFlags[]; /* 0x19B278; +0x230 (0x19B4A8) = per-progress 3-bit nibble-counter table, stride 0x400 */
+
+/** func_0027A0C8 — read a progress-gated nibble counter and scale it. Index the
+ *  per-progress nibble table (g_platinumBoltFlags+0x230, stride 0x400 keyed by
+ *  g_playerProgress) at index>>1; for an odd index the high nibble ((byte>>4)&7)
+ *  selects a slot in `table`, for an even index the raw byte is used, then return
+ *  (value * mult) / 100. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027A0C8);
+#else
+s32 func_0027A0C8(u8 *table, s32 mult, s32 index) {
+    u8 *entry = g_platinumBoltFlags + 0x230 + g_playerProgress * 0x400 + (index >> 1);
+    s32 value;
+    if (index & 1) {
+        value = table[(*entry >> 4) & 7];
+    } else {
+        value = *entry;
+    }
+    return (value * mult) / 100;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027A130);
 
@@ -419,30 +441,28 @@ void *LookupOcclusionGridCell(s32 x, s32 y, s32 z) {
 }
 #endif
 
-/* LookupNeighborOcclusionCell: probe two occlusion-grid cells and return the
- * first that resolves (nonzero). `bias` (< 0.5 vs >= 0.5) picks which cell is
- * tried first — the near cell (x0,y0,z0) when bias < 0.5, else the far cell
- * (x1,y1,z1); the other is the fallback. Byte-walled: 6 callee-saves at 16-byte
- * slots (this cc1) vs the original's 8-byte packing. Correct C as the portable
- * #else body; seedable (mock LookupOcclusionGridCell) -> cmp-oracle. */
+/** LookupNeighborOcclusionCell — resolve an occlusion mask from one of two grid
+ *  cells, preferring by `bias`. When bias < 0.5 cell A (ax,ay,az) is tried first,
+ *  otherwise cell B (bx,by,bz); the other cell is the fallback. Returns the first
+ *  cell that resolves to a non-null occlusion mask (or the fallback's result). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", LookupNeighborOcclusionCell);
 #else
-void *LookupNeighborOcclusionCell(f32 bias, s32 x0, s32 y0, s32 z0,
-                                  s32 x1, s32 y1, s32 z1) {
-    void *cell;
+void *LookupNeighborOcclusionCell(s32 ax, s32 ay, s32 az,
+                                  s32 bx, s32 by, s32 bz, f32 bias) {
+    void *mask;
     if (bias < 0.5f) {
-        cell = LookupOcclusionGridCell(x0, y0, z0);
-        if (cell != (void *)0) {
-            return cell;
+        mask = LookupOcclusionGridCell(ax, ay, az);
+        if (mask == 0) {
+            mask = LookupOcclusionGridCell(bx, by, bz);
         }
-        return LookupOcclusionGridCell(x1, y1, z1);
+    } else {
+        mask = LookupOcclusionGridCell(bx, by, bz);
+        if (mask == 0) {
+            mask = LookupOcclusionGridCell(ax, ay, az);
+        }
     }
-    cell = LookupOcclusionGridCell(x1, y1, z1);
-    if (cell != (void *)0) {
-        return cell;
-    }
-    return LookupOcclusionGridCell(x0, y0, z0);
+    return mask;
 }
 #endif
 
@@ -1007,7 +1027,79 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027DB38);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027DC40);
 
+extern u8 D_1A7BB9;   /* fade-suppress flag byte */
+extern u8 D_1AC860[]; /* GIFtag template A (16 bytes) */
+extern u8 D_1AC870[]; /* GIFtag template B (16 bytes) */
+
+/** func_0027DF80 — advance and render the white screen-fade overlay. Steps the
+ *  fade counter (g_screenFadeWhite[2], at +0x8): when the fade-in flag (+0x4) is
+ *  set it ramps up to 0x34, otherwise it ramps down to 0. Nothing is drawn at 0
+ *  or when D_1A7BB9 suppresses it. Otherwise builds a full-screen white-quad GS
+ *  packet (DMATAG + two patched GIFtag templates + a control qword + 8 XYZ2
+ *  vertices spanning the GS pixel-offset screen extents), with the top/bottom
+ *  edges pulled inward by counter*16 for the wipe animation. Advances
+ *  g_frameDmaCursor by 0x80. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027DF80);
+#else
+void func_0027DF80(void) {
+    s32 counter;
+    u8 *p;
+    u64 mask = 0x00FFFFF300000000ULL;
+    s64 gsX, gsY0, gsY1, gsY2, cnt16;
+
+    if (g_screenFadeWhite[1] != 0) {
+        if (g_screenFadeWhite[2] < 0x34) {
+            g_screenFadeWhite[2] = g_screenFadeWhite[2] + 1;
+        }
+    } else {
+        if (g_screenFadeWhite[2] == 0) {
+            return;
+        }
+        g_screenFadeWhite[2] = g_screenFadeWhite[2] - 1;
+    }
+    counter = g_screenFadeWhite[2];
+    if (counter == 0 || D_1A7BB9 != 0) {
+        return;
+    }
+
+    p = (u8 *)g_frameDmaCursor[0];
+    *(u32 *)(p + 0x00) = 0x10000007; /* DMATAG cnt, 7 qwords */
+    *(u32 *)(p + 0x04) = 0;
+    *(u32 *)(p + 0x08) = 0;
+    *(u32 *)(p + 0x0C) = 0x50000007;
+    g_frameDmaCursor[0] = (u32 *)(p + 0x10);
+
+    *(u64 *)(p + 0x10) = *(u64 *)(D_1AC860 + 0x00); /* GIFtag template A */
+    *(u64 *)(p + 0x18) = *(u64 *)(D_1AC860 + 0x08);
+    *(u16 *)(p + 0x10) = 0x8001;
+    g_frameDmaCursor[0] = (u32 *)(p + 0x20);
+
+    *(u64 *)(p + 0x20) = 0x104;
+    *(u64 *)(p + 0x28) = 0x80000000ULL;
+    g_frameDmaCursor[0] = (u32 *)(p + 0x30);
+
+    *(u64 *)(p + 0x30) = *(u64 *)(D_1AC870 + 0x00); /* GIFtag template B */
+    *(u64 *)(p + 0x38) = *(u64 *)(D_1AC870 + 0x08);
+    *(u16 *)(p + 0x30) = 0x8008;
+    g_frameDmaCursor[0] = (u32 *)(p + 0x40);
+
+    gsX  = g_gsPixelOffsetX[0];
+    gsY0 = g_gsPixelOffsetY[0];
+    gsY1 = g_gsPixelOffsetY[1];
+    gsY2 = g_gsPixelOffsetY[2];
+    cnt16 = (s64)counter << 4;
+    *(u64 *)(p + 0x40) = (u64)gsX  | ((u64)gsY0 << 16) | mask;
+    *(u64 *)(p + 0x48) = (u64)gsX  | ((u64)(gsY0 + cnt16) << 16) | mask;
+    *(u64 *)(p + 0x50) = (u64)gsY1 | ((u64)gsY0 << 16) | mask;
+    *(u64 *)(p + 0x58) = (u64)gsY1 | ((u64)(gsY0 + cnt16) << 16) | mask;
+    *(u64 *)(p + 0x60) = (u64)gsY1 | ((u64)gsY2 << 16) | mask;
+    *(u64 *)(p + 0x68) = (u64)gsY1 | ((u64)(gsY2 - cnt16) << 16) | mask;
+    *(u64 *)(p + 0x70) = (u64)gsX  | ((u64)gsY2 << 16) | mask;
+    *(u64 *)(p + 0x78) = (u64)gsX  | ((u64)(gsY2 - cnt16) << 16) | mask;
+    g_frameDmaCursor[0] = (u32 *)(p + 0x80);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027E1E8);
 
@@ -1034,7 +1126,54 @@ void DrawFullScreenTint(u64 r, s64 g, s64 b, s64 a) {
 }
 #endif
 
+/** func_0027E4D0 — append a scissored screen-rect GS packet to the frame DMA
+ *  chain: DMATAG (cnt, 5 qwords) + patched GIFtag template A (low halfword ->
+ *  0x8001), a control qword (0x144 + `arg4`), patched GIFtag template B (low
+ *  halfword -> 0x8004), then four rect vertices in XYZ2 format. Vertices span
+ *  x in {x0,x1}, y in {y0,y1}: each coord is scaled x16, offset by the GS pixel
+ *  origin, biased -8 (subpixel), with a fixed far-Z of 0x00FFFFF000000000.
+ *  Advances g_frameDmaCursor by 0x60. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027E4D0);
+#else
+void func_0027E4D0(s32 y0, s32 y1, s32 x0, s32 x1, u64 arg4) {
+    u8 *p = (u8 *)g_frameDmaCursor[0];
+    s32 offX = g_gsPixelOffsetX[0];
+    s32 offY = g_gsPixelOffsetY[0];
+    u64 z = 0x00FFFFF000000000ULL;
+    s64 vx0, vx1, vy0, vy1;
+
+    *(u32 *)(p + 0x00) = 0x10000005; /* DMATAG cnt, 5 qwords */
+    *(u32 *)(p + 0x04) = 0;
+    *(u32 *)(p + 0x08) = 0;
+    *(u32 *)(p + 0x0C) = 0x50000005;
+    g_frameDmaCursor[0] = (u32 *)(p + 0x10);
+
+    *(u64 *)(p + 0x10) = *(u64 *)(D_1AC860 + 0x00); /* GIFtag template A */
+    *(u64 *)(p + 0x18) = *(u64 *)(D_1AC860 + 0x08);
+    *(u16 *)(p + 0x10) = 0x8001;                    /* patch low halfword */
+    g_frameDmaCursor[0] = (u32 *)(p + 0x20);
+
+    *(u64 *)(p + 0x20) = 0x144;
+    *(u64 *)(p + 0x28) = arg4;
+    g_frameDmaCursor[0] = (u32 *)(p + 0x30);
+
+    *(u64 *)(p + 0x30) = *(u64 *)(D_1AC870 + 0x00); /* GIFtag template B */
+    *(u64 *)(p + 0x38) = *(u64 *)(D_1AC870 + 0x08);
+    *(u16 *)(p + 0x30) = 0x8004;                    /* patch low halfword */
+    g_frameDmaCursor[0] = (u32 *)(p + 0x40);
+
+    vx0 = x0 * 16 + offX - 8;
+    vx1 = x1 * 16 + offX - 8;
+    vy0 = (s64)(y0 * 16 + offY - 8) << 16;
+    vy1 = (s64)(y1 * 16 + offY - 8) << 16;
+    *(u64 *)(p + 0x40) = (u64)vx0 | (u64)vy0 | z; /* V0 (x0,y0) */
+    *(u64 *)(p + 0x48) = (u64)vx1 | (u64)vy0 | z; /* V1 (x1,y0) */
+    *(u64 *)(p + 0x50) = (u64)vx0 | (u64)vy1 | z; /* V2 (x0,y1) */
+    *(u64 *)(p + 0x58) = (u64)vx1 | (u64)vy1 | z; /* V3 (x1,y1) */
+    g_frameDmaCursor[0] = (u32 *)(p + 0x60);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027E690);
 
@@ -1048,9 +1187,89 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027EB20);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawRotatedSprite2d);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027EFA0);
+extern u8 D_1AC930[]; /* prebuilt GIFtag template (16 bytes) */
 
+/** func_0027EFA0 — append a 4-vertex textured-primitive GS packet to the frame
+ *  DMA chain: a DMATAG (cnt, 9 qwords) + the prebuilt GIFtag at D_1AC930, then a
+ *  leading control qword (mode ? 5 : 0, prim) and a 0x154 tag, followed by four
+ *  vertices each packed as [st, uv, xyz2] (the two attribute arrays are s32[4]
+ *  read stride-4; positions are u64[4] XYZ2). Advances g_frameDmaCursor by 0xA0.
+ *  (st/uv naming inferred from the GS vertex layout.) */
+#ifndef TARGET_NATIVE
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027EFA0);
+#else
+void func_0027EFA0(const u64 *xyz2, const s32 *uv, const s32 *st, u64 prim, s32 mode) {
+    u8 *p = (u8 *)g_frameDmaCursor[0];
+    u8 *d;
+
+    *(u32 *)(p + 0x00) = 0x10000009; /* DMATAG cnt, 9 qwords */
+    *(u32 *)(p + 0x04) = 0;
+    *(u32 *)(p + 0x08) = 0;
+    *(u32 *)(p + 0x0C) = 0x50000009;
+    g_frameDmaCursor[0] = (u32 *)(p + 0x10);
+
+    *(u64 *)(p + 0x10) = *(u64 *)(D_1AC930 + 0x00); /* GIFtag template (16 bytes) */
+    *(u64 *)(p + 0x18) = *(u64 *)(D_1AC930 + 0x08);
+    g_frameDmaCursor[0] = (u32 *)(p + 0x20);
+
+    d = p + 0x20;
+    *(u64 *)(d + 0x00) = mode ? 5 : 0;
+    *(u64 *)(d + 0x08) = prim;
+    *(u64 *)(d + 0x10) = 0x154;
+    *(s64 *)(d + 0x18) = st[0];
+    *(s64 *)(d + 0x20) = uv[0];
+    *(u64 *)(d + 0x28) = xyz2[0];
+    *(s64 *)(d + 0x30) = st[1];
+    *(s64 *)(d + 0x38) = uv[1];
+    *(u64 *)(d + 0x40) = xyz2[1];
+    *(s64 *)(d + 0x48) = st[2];
+    *(s64 *)(d + 0x50) = uv[2];
+    *(u64 *)(d + 0x58) = xyz2[2];
+    *(s64 *)(d + 0x60) = st[3];
+    *(s64 *)(d + 0x68) = uv[3];
+    *(u64 *)(d + 0x70) = xyz2[3];
+    *(u64 *)(d + 0x78) = 0;
+    g_frameDmaCursor[0] = (u32 *)(p + 0xA0);
+}
+#endif
+
+extern u8 D_1AC900[]; /* prebuilt GIFtag template (16 bytes) */
+
+/** func_0027F0A8 — append a 4-corner sprite-quad GS packet to the frame DMA
+ *  chain: a DMATAG (cnt, 5 qwords) + the prebuilt GIFtag at D_1AC900, then four
+ *  interleaved data qwords built from the four `corners` XYZ2 words and two
+ *  sign-extended coordinate words. NOTE: despite the `u64 tex0` param name (a
+ *  reconstruction misnomer — see the forward decl above), arg1 is actually a
+ *  POINTER: the callers (e.g. func_0027F168) pass an address in it and this
+ *  function dereferences its low/high words. Advances g_frameDmaCursor by 0x60. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F0A8);
+#else
+void func_0027F0A8(const u64 *corners, u64 tex0) {
+    u8 *p = (u8 *)g_frameDmaCursor[0];
+    const s32 *coords = (const s32 *)(uintptr_t)tex0; /* arg1 is used as a pointer */
+
+    *(u32 *)(p + 0x00) = 0x10000005; /* DMATAG cnt, 5 qwords */
+    *(u32 *)(p + 0x04) = 0;
+    *(u32 *)(p + 0x08) = 0;
+    *(u32 *)(p + 0x0C) = 0x50000005;
+    g_frameDmaCursor[0] = (u32 *)(p + 0x10);
+
+    *(u64 *)(p + 0x10) = *(u64 *)(D_1AC900 + 0x00); /* GIFtag template (16 bytes) */
+    *(u64 *)(p + 0x18) = *(u64 *)(D_1AC900 + 0x08);
+    g_frameDmaCursor[0] = (u32 *)(p + 0x20);
+
+    *(u64 *)(p + 0x20) = 0x4C;
+    *(s64 *)(p + 0x28) = coords[0];
+    *(u64 *)(p + 0x30) = corners[0];
+    *(u64 *)(p + 0x38) = corners[2];
+    *(s64 *)(p + 0x40) = coords[1];
+    *(u64 *)(p + 0x48) = corners[1];
+    *(u64 *)(p + 0x50) = corners[3];
+    *(u64 *)(p + 0x58) = 0;
+    g_frameDmaCursor[0] = (u32 *)(p + 0x60);
+}
+#endif
 
 /* DrawFlatRect2d - build four packed XYZ2 corner words for an integer cell
  * rect (x1,y1)-(x2,y2) at depth `z` (each coord scaled *16, GS-window-offset,
@@ -1201,10 +1420,23 @@ s32 func_0027F900(const char *str, s32 maxChars, f32 scale) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawFixedFontString);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027FBA8);
-
-extern u64 GetUiTextureTex0(s32 slot); /* resolve a UI texture's GS tex0 register */
+extern u64 GetUiTextureTex0(s32 slot);
 extern void DrawFixedFontString(s32 a, s32 b, s32 c, s32 d, s32 e, u64 tex0, u8 *glyphTable);
+
+#ifndef TARGET_NATIVE
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027FBA8);
+#else
+/**
+ * Draw a string with the D_263B10 font: resolve the UI texture (GetUiTextureTex0
+ * slot 1) and forward the five caller args plus that tex0 and the D_263B10 glyph
+ * metrics to DrawFixedFontString. Twin of DrawDebugString (which uses tex slot 2
+ * and the g_debugFontGlyphTable).
+ */
+void func_0027FBA8(s32 a, s32 b, s32 c, s32 d, s32 e) {
+    u64 tex0 = GetUiTextureTex0(1);
+    DrawFixedFontString(a, b, c, d, e, tex0, D_263B10);
+}
+#endif
 
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawDebugString);
@@ -1224,17 +1456,74 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027FCA8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027FCB0);
 
+extern void func_0027FCB0(s32 a, s32 b, s32 c, u64 tex0, u8 *glyphTable, f32 f1, f32 f2, f32 f3); /* scaled/positioned font draw */
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027FFF0);
+#else
+/**
+ * Draw a string with the D_263B10 font and three float parameters (scale /
+ * position): resolve the UI texture (GetUiTextureTex0 slot 1) and forward the
+ * three int args, that tex0, the D_263B10 glyph metrics, and the three floats to
+ * func_0027FCB0.
+ */
+void func_0027FFF0(s32 a, s32 b, s32 c, f32 f1, f32 f2, f32 f3) {
+    u64 tex0 = GetUiTextureTex0(1);
+    func_0027FCB0(a, b, c, tex0, D_263B10, f1, f2, f3);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280080);
 
+/** func_00280120 — draw a right-aligned debug-font string. Measures the string's
+ *  rendered width (func_0027F818(str, maxChars)), shifts the anchor x left by that
+ *  width, resolves the UI font texture (GetUiTextureTex0 slot 2), and forwards to
+ *  DrawFixedFontString with the debug glyph table. (DrawFixedFontString's d/e
+ *  params carry the string/maxChars — its committed decl types them s32.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280120);
+#else
+void func_00280120(s32 x, s32 arg1, s32 arg2, const char *str, s32 maxChars) {
+    s32 width = func_0027F818(str, maxChars);
+    u64 tex0 = GetUiTextureTex0(2);
+    DrawFixedFontString(x - width, arg1, arg2, (s32)(uintptr_t)str, maxChars, tex0,
+                        g_debugFontGlyphTable);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002801B0);
 
+/** func_00280250 — draw a horizontally-centered debug-font string. Measures the
+ *  rendered width (func_0027F818), centers the anchor (x - width/2), draws via
+ *  DrawFixedFontString (UI font slot 2, debug glyph table), and returns the
+ *  centered x. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280250);
+#else
+s32 func_00280250(s32 x, s32 arg1, s32 arg2, const char *str, s32 maxChars) {
+    s32 width = func_0027F818(str, maxChars);
+    s32 cx = x - (width >> 1);
+    u64 tex0 = GetUiTextureTex0(2);
+    DrawFixedFontString(cx, arg1, arg2, (s32)(uintptr_t)str, maxChars, tex0,
+                        g_debugFontGlyphTable);
+    return cx;
+}
+#endif
 
+/** func_002802E8 — draw a horizontally-centered string in the alternate UI font
+ *  (glyph table D_264250, UI texture slot 3). Same centering as func_00280250:
+ *  measure width (func_0027F838), center (x - width/2), draw, return centered x. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002802E8);
+#else
+s32 func_002802E8(s32 x, s32 arg1, s32 arg2, const char *str, s32 maxChars) {
+    s32 width = func_0027F838(str, maxChars);
+    s32 cx = x - (width >> 1);
+    u64 tex0 = GetUiTextureTex0(3);
+    DrawFixedFontString(cx, arg1, arg2, (s32)(uintptr_t)str, maxChars, tex0, D_264250);
+    return cx;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280380);
 
@@ -1356,34 +1645,33 @@ void func_00280FE0(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00281010);
 
-/* func_00281020: compute a per-actor occlusion ratio. For actor `idx` in
- * g_sceneActorMobys (0x30 stride, field cluster based at +0x44), read its
- * w/h (+0x24/+0x26 as s16), scan w*h packed pixels in `pixels` counting how many
- * whose low 24 bits exceed the actor's depth threshold (+0x14), then store the
- * visible fraction (n-exceed)/n as a float through the actor's result pointer
- * (+0x10). */
+/** func_00281020 — occlusion visibility ratio for a scene actor. The actor's
+ *  record (g_sceneActorMobys+0x44, stride 0x30, indexed by `actorIdx`) holds the
+ *  query rect w/h at +0x24/+0x26, a depth threshold at +0x14, and a result-float
+ *  pointer at +0x10. Count how many of the w*h read-back pixels have their 24-bit
+ *  depth above the threshold, then store the *un*-exceeded fraction
+ *  (total - count)/total to the result float. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00281020);
 #else
-void func_00281020(u32 *pixels, s32 idx) {
-    u8 *base = g_sceneActorMobys + 0x44;
-    u8 *e = base + idx * 0x30;
-    s32 n = *(s16 *)(e + 0x24) * *(s16 *)(e + 0x26);
-    s32 cnt = 0;
-    if (n > 0) {
-        u32 thr = *(u32 *)(e + 0x14);
-        u32 *p = pixels;
-        s32 i = n;
-        do {
-            cnt += (thr < (*p & 0xFFFFFF));
-            p++;
-        } while (--i);
+void func_00281020(u32 *pixels, s32 actorIdx) {
+    u8 *rec = g_sceneActorMobys + 0x44 + actorIdx * 0x30;
+    s32 w = *(s16 *)(rec + 0x24);
+    s32 h = *(s16 *)(rec + 0x26);
+    s32 total = w * h;
+    s32 count = 0;
+
+    if (total > 0) {
+        u32 threshold = *(u32 *)(rec + 0x14);
+        s32 i;
+        for (i = 0; i < total; i++) {
+            if ((pixels[i] & 0xFFFFFF) > threshold) {
+                count++;
+            }
+        }
     }
-    *(f32 *)(*(u32 **)(base + idx * 0x30 + 0x10)) = (f32)(n - cnt) / (f32)n;
+    **(f32 **)(rec + 0x10) = (f32)(total - count) / (f32)total;
 }
-/* byte-match walled at ~82% (GPR coloring + %hi-base rematerialize vs reuse; a
- * fixed regalloc shape this cc1 won't reproduce). Correct C kept as the portable
- * #else body; seedable -> cmp-oracle. */
 #endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002810C0);

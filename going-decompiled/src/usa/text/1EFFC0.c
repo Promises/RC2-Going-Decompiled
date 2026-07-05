@@ -85,8 +85,51 @@ void FadeOutToBlackBlocking(s32 mode);
 /* TODO(hle): needs PS2 graphics/IO HLE backend - closes a tfrag DMA draw segment (writes the 0x20000000 GIF tag into the chain). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", CloseTfragDrawSegment);
 
-/* TODO(hle): needs PS2 graphics/IO HLE backend - patches the TEX0 GS register inside a prebuilt tfrag GIF packet. */
+/* Tfrag texture-patch registry: a 0-terminated array of {packet array, count}
+ * entries; each packet is 0x50 bytes with a texture index at +0x23. */
+typedef struct TfragTexPatch {
+    u32 *packets; /* +0x00 */
+    s32  count;   /* +0x04 */
+} TfragTexPatch;
+extern TfragTexPatch g_tfragTexPatchList[];
+/* Per-texture VRAM block table: two u16 TBP values per texture index. */
+extern u16 g_tfragTexVramTable[];
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", PatchTfragPacketTex0);
+#else
+/**
+ * Relocate the texture pointers in every registered tfrag GIF packet.
+ *
+ * Walks g_tfragTexPatchList (until a null packet array); for each of the entry's
+ * `count` packets (0x50-byte stride) it looks up the packet's texture index
+ * (byte +0x23) in g_tfragTexVramTable and, when non-zero, rewrites the low 14
+ * bits (the GS TBP field) of the packet words at +0x00 and +0x30 with the two
+ * VRAM block values.
+ */
+void PatchTfragPacketTex0(void) {
+    TfragTexPatch *entry;
+
+    for (entry = g_tfragTexPatchList; entry->packets != 0; entry++) {
+        s32 count = entry->count;
+        u8 *packet = (u8 *)entry->packets;
+        s32 i;
+
+        for (i = 0; i < count; i++, packet += 0x50) {
+            s32 texIndex = packet[0x23];
+            u16 tbp0 = g_tfragTexVramTable[texIndex * 2];
+            u16 tbp1 = g_tfragTexVramTable[texIndex * 2 + 1];
+
+            if (tbp0 != 0) {
+                *(u32 *)(packet + 0x00) = (*(u32 *)(packet + 0x00) & 0xFFFFC000) | tbp0;
+            }
+            if (tbp1 != 0) {
+                *(u32 *)(packet + 0x30) = (*(u32 *)(packet + 0x30) & 0xFFFFC000) | tbp1;
+            }
+        }
+    }
+}
+#endif
 
 /* TODO(hle): needs PS2 graphics/IO HLE backend - builds the tfrag VIF1/GIF draw segment into the frame DMA chain. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", BuildTfragDrawSegment);
@@ -106,8 +149,53 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", PatchTfragVerte
 /* TODO(hle): needs PS2 graphics/IO HLE backend - VU0 macro-mode (lqc2/vmul/vsub) tfrag bound/visibility test. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F19D0);
 
-/* TODO(hle): needs PS2 graphics/IO HLE backend - tfrag LOD/morph selector over the VU0-culled tfrag array. */
+extern u8 *g_pTfragArray;   /* 0x1B20F0 -> base of the 0x40-byte tfrag headers */
+
+/** func_002F1B58 — advance the tfrag LOD/morph selector over a list of tfrag
+ *  indices. `list`..`listEnd` is a u16 index array into g_pTfragArray (stride
+ *  0x40). Each tfrag's +0x36 word packs four 4-bit LOD levels; for the first
+ *  nibble position whose value equals the selector nibble (selector, <<4, <<8,
+ *  <<12), the levels below it shift down one and the top nibble is forced to 0xF
+ *  (the "retired" level). When every nibble has retired (word == 0xFFFF) the
+ *  tfrag's +0x35 byte is set to 1 (fully culled). Tfrags matching no position are
+ *  left untouched. Pure integer bookkeeping over the already-VU0-culled array. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F1B58);
+#else
+void func_002F1B58(u16 *list, u16 *listEnd, s32 selector) {
+    u8 *base = g_pTfragArray;
+    s32 sel0 = selector;
+    s32 sel1 = selector << 4;
+    s32 sel2 = selector << 8;
+    s32 sel3 = selector << 12;
+
+    while (list != listEnd) {
+        u16 idx;
+        u8 *tf;
+        s32 flags, nv;
+
+        idx = *list++;
+        tf = base + (idx << 6);
+        flags = *(u16 *)(tf + 0x36);
+
+        if ((flags & 0xF) == sel0) {
+            nv = (flags >> 4) | 0xF000;
+        } else if ((flags & 0xF0) == sel1) {
+            nv = (flags & 0xF) | ((flags >> 4) & 0xFF0) | 0xF000;
+        } else if ((flags & 0xF00) == sel2) {
+            nv = (flags & 0xFF) | ((flags >> 4) & 0xF00) | 0xF000;
+        } else if ((flags & 0xF000) == sel3) {
+            nv = flags | 0xF000;
+        } else {
+            continue;
+        }
+        *(u16 *)(tf + 0x36) = (u16)nv;
+        if (nv == 0xFFFF) {
+            *(u8 *)(tf + 0x35) = 1;
+        }
+    }
+}
+#endif
 
 /* Flush the queued tie texture uploads: build the upload packets for whatever
  * slots the LRU assigned (current VRAM cursor), then append the TEXFLUSH +
@@ -120,8 +208,47 @@ void FlushTieTextureUploads(void) {
     __asm__ __volatile__("");
 }
 
-/* TODO(hle): needs PS2 graphics/IO HLE backend - patches the TEX0 GS register inside a prebuilt tie GIF packet. */
+extern s32 g_tieVisibleClassList[]; /* negative-terminated list of visible TIE class indices */
+extern void *g_tieClassQueue[];     /* per-class record pointers (record: +0xF count, +0x1C packets) */
+extern u16 g_tieTexVramTable[];     /* two u16 VRAM block values per texture index */
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", PatchTiePacketTex0);
+#else
+/**
+ * Relocate the texture pointers in every visible TIE class's GIF packets (the
+ * TIE analogue of PatchTfragPacketTex0).
+ *
+ * For each class index in g_tieVisibleClassList (until a negative terminator),
+ * takes its record from g_tieClassQueue and, for each of the record's `count`
+ * (+0xF) packets (+0x1C, 0x50-byte stride), looks up the packet's texture index
+ * (byte +0x33) in g_tieTexVramTable and, when non-zero, rewrites the low 14 bits
+ * (GS TBP field) of the packet words at +0x00 and +0x20 with the two VRAM blocks.
+ */
+void PatchTiePacketTex0(void) {
+    s32 *visible;
+
+    for (visible = g_tieVisibleClassList; *visible >= 0; visible++) {
+        u8 *record = (u8 *)g_tieClassQueue[*visible];
+        s32 count = *(u8 *)(record + 0xF);
+        u8 *packet = *(u8 **)(record + 0x1C);
+        s32 i;
+
+        for (i = 0; i < count; i++, packet += 0x50) {
+            s32 texIndex = packet[0x33];
+            u16 tbp0 = g_tieTexVramTable[texIndex * 2];
+            u16 tbp1 = g_tieTexVramTable[texIndex * 2 + 1];
+
+            if (tbp0 != 0) {
+                *(u32 *)(packet + 0x00) = (*(u32 *)(packet + 0x00) & 0xFFFFC000) | tbp0;
+            }
+            if (tbp1 != 0) {
+                *(u32 *)(packet + 0x20) = (*(u32 *)(packet + 0x20) & 0xFFFFC000) | tbp1;
+            }
+        }
+    }
+}
+#endif
 
 /* Build a full tie (instanced static geometry) draw segment into the frame's
  * VIF1 chain: emit the GS scissor/setup reg packet, reset the dynamic VRAM
@@ -239,8 +366,51 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F5DD0);
 /* TODO(hle): needs PS2 graphics/IO HLE backend - tie draw-pipeline VIF/GIF helper. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F5DF8);
 
-/* TODO(hle): needs PS2 graphics/IO HLE backend - hand-written tie VRAM-slot LRU state-machine update (sh/lbu bit packing). */
+/** func_002F5F70 — VRAM-slot variant of the tfrag LOD selector (func_002F1B58).
+ *  Walks a u16 index list into g_vramSlotTableStart (stride 0x20); each slot's
+ *  +0x1A word packs four 4-bit LOD levels. For the first nibble position matching
+ *  the selector nibble (selector, <<4, <<8, <<12), the lower levels shift down and
+ *  the top nibble is forced to 0xF; when the word retires to 0xFFFF, the slot's
+ *  +0x1E byte gets bit 0 set (OR 1, preserving the other status bits — unlike
+ *  func_002F1B58 which overwrites its mark byte). Slots matching no position are
+ *  left untouched. Pure integer bit-packing over the VRAM slot table. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F5F70);
+#else
+void func_002F5F70(u16 *list, u16 *listEnd, s32 selector) {
+    u8 *base = (u8 *)g_vramSlotTableStart;
+    s32 sel0 = selector;
+    s32 sel1 = selector << 4;
+    s32 sel2 = selector << 8;
+    s32 sel3 = selector << 12;
+
+    while (list != listEnd) {
+        u16 idx;
+        u8 *slot;
+        s32 flags, nv;
+
+        idx = *list++;
+        slot = base + (idx << 5);
+        flags = *(u16 *)(slot + 0x1A);
+
+        if ((flags & 0xF) == sel0) {
+            nv = (flags >> 4) | 0xF000;
+        } else if ((flags & 0xF0) == sel1) {
+            nv = (flags & 0xF) | ((flags >> 4) & 0xFF0) | 0xF000;
+        } else if ((flags & 0xF00) == sel2) {
+            nv = (flags & 0xFF) | ((flags >> 4) & 0xF00) | 0xF000;
+        } else if ((flags & 0xF000) == sel3) {
+            nv = flags | 0xF000;
+        } else {
+            continue;
+        }
+        *(u16 *)(slot + 0x1A) = (u16)nv;
+        if (nv == 0xFFFF) {
+            *(u8 *)(slot + 0x1E) |= 1;
+        }
+    }
+}
+#endif
 
 /* Per-frame reset of the FX / draw-hook queue counters. Zeroes all five hook
  * counts (pre/post/late particle + after-ties/after-shrubs draw) and the blob
@@ -287,8 +457,52 @@ void ResetFxDrawQueues(void) {
 }
 #endif
 
-/* TODO(match): functional equivalent pending - bc1fl float-equal chain + gp/absolute mix; per-frame map/timer bookkeeping. */
+/* func_002F6110 globals (declared for the TARGET_NATIVE #else only; all resolve
+ * to splat data symbols in the matching build). */
+extern u8  D_138180[];          /* object state block: int flag @+0x1A0, pos/vel floats @+0x100/+0x104/+0x108/+0x10C */
+extern s32 D_1AD1A0;            /* consecutive-idle-frame counter */
+extern s32 g_gameTime;          /* global frame/time tick */
+extern u8  g_gsPixelOffsetY[];  /* block; per-frame counter field @+0x3C */
+extern s32 D_1A8C70;            /* gate: only bump the per-player idle stat when set */
+extern s32 g_playerProgress;    /* current player/save index */
+extern u8  g_health[];          /* block; per-player idle-stat table @+0xEAC, stride 4 */
+extern u8  g_deferredSegment2Tag[]; /* block; previous-frame counter mirror @+0xC0 */
+extern s32 D_1A9E70;            /* set to -1 when the frame counter desyncs */
+
+/** Per-frame idle/bookkeeping tick. Counts consecutive frames in which the
+ *  tracked object is fully at rest — its int flag (D_138180+0x1A0) and all four
+ *  position/velocity floats (+0x100/+0x104/+0x108/+0x10C) are zero — in
+ *  D_1AD1A0, resetting to 0 the moment any is non-zero. Then advances g_gameTime
+ *  and the +0x3C frame counter; while gated (D_1A8C70 set) and still within the
+ *  first 0x384 idle frames, bumps the current player's idle stat; and flags
+ *  D_1A9E70 = -1 if the deferred-segment counter mirror has fallen out of step
+ *  with the previous frame's value. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6110);
+#else
+void func_002F6110(void) {
+    if (*(s32 *)(D_138180 + 0x1A0) == 0 &&
+        *(f32 *)(D_138180 + 0x108) == 0.0f &&
+        *(f32 *)(D_138180 + 0x10C) == 0.0f &&
+        *(f32 *)(D_138180 + 0x100) == 0.0f &&
+        *(f32 *)(D_138180 + 0x104) == 0.0f) {
+        D_1AD1A0 += 1;
+    } else {
+        D_1AD1A0 = 0;
+    }
+
+    g_gameTime += 1;
+    *(s32 *)(g_gsPixelOffsetY + 0x3C) += 1;
+
+    if (D_1A8C70 != 0 && D_1AD1A0 < 0x384) {
+        ((s32 *)(g_health + 0xEAC))[g_playerProgress] += 1;
+    }
+
+    if (*(s32 *)(g_deferredSegment2Tag + 0xC0) != *(s32 *)(g_gsPixelOffsetY + 0x3C) - 1) {
+        D_1A9E70 = -1;
+    }
+}
+#endif
 
 /* TODO(hle): needs PS2 graphics/IO HLE backend - tie draw-pipeline frame-stack sliver (spimdisasm fragment). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6218);
@@ -515,14 +729,115 @@ void func_002F7328(void) {
 }
 #endif
 
-/* TODO(match): functional equivalent pending - vendor item buy/upgrade price lookup; jump-table (jtbl_0026D1C0) switch. */
+/* The vendor-shop UI state block (lives inside the big 0x21E000 UI arena at
+ * +0x11C0). +0x3C is the active text-widget handle SetVendorCaption hands to the
+ * formatter; +0x64 is a per-frame caption-dirty / scroll counter. func_002F8038
+ * also builds parallel entry arrays at +0x140/+0x144/+0x148 (stride 0xC) with the
+ * live entry count at +0x740. The currently-selected slot index lives at +0x80;
+ * per-selected-slot fields sit at base +0x140 with a 0x18 stride. */
+typedef struct VendorUiState {
+    u8  _pad00[0x3C];
+    s32 captionWidget; /* 0x3C text widget the caption string is bound to */
+    u8  _pad40[0x64 - 0x40];
+    s32 captionCounter;/* 0x64 cleared whenever the caption is (re)set */
+} VendorUiState;
+extern VendorUiState g_vendorUi;     /* 0x21F1C0 */
+
+/* GetVendorItemPrice globals/callee (declared for the TARGET_NATIVE #else only). */
+extern u8  g_itemEquippedSlot[0x38]; /* itemId -> active g_weaponTable variant slot (0x139568) */
+extern u8  g_weaponTable[];          /* per-variant def/state table, stride 0xE0 (0x239B20); +0x80 = bolt price */
+extern s32 GetWeaponStatsAtLevel(void *outStatBlock, s32 itemId, s32 level);
+
+/** GetVendorItemPrice — return the bolt price of the currently-selected vendor
+ *  slot. The selected index (g_vendorUi+0x80) picks a slot (base +0x140, stride
+ *  0x18); the slot's +0x154 flag chooses the pricing path:
+ *   - +0x154 != 0 (a weapon/upgrade slot): classify the slot's item id (+0x140)
+ *     via the (id - 0xC) index into a 42-entry table — only classes {0,2,5,6,41}
+ *     price at the current level (mode 1); every other in-range id and every
+ *     out-of-range id prices at the next level (mode 2). Fetch that level's stat
+ *     block with GetWeaponStatsAtLevel and return its +0x80 price if the lookup
+ *     succeeds (else 0).
+ *   - +0x154 == 0 && +0x150 == 0 (a plain item): return g_weaponTable's +0x80
+ *     price for the item's currently-equipped variant slot.
+ *  The +0x154 == 0 && +0x150 != 0 case (and any failed lookup) returns 0. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", GetVendorItemPrice);
+#else
+s32 GetVendorItemPrice(void) {
+    u8  statBlock[0xE0];
+    s32 selIdx = *(s32 *)((char *)&g_vendorUi + 0x80);
+    char *slot = (char *)&g_vendorUi + selIdx * 0x18;
+    s32 price = 0;
+
+    if (*(s32 *)(slot + 0x154) != 0) {
+        s32 itemId = *(s32 *)(slot + 0x140);
+        s32 index = itemId - 0xC;
+        s32 level = 2; /* default: next-level price */
+        if ((u32)index < 0x2A) {
+            switch (index) {
+            case 0: case 2: case 5: case 6: case 41:
+                level = 1; /* these classes price at the current level */
+                break;
+            }
+        }
+        if (GetWeaponStatsAtLevel(statBlock, itemId, level) != 0) {
+            price = *(s32 *)(statBlock + 0x80);
+        }
+    } else if (*(s32 *)(slot + 0x150) == 0) {
+        s32 itemId = *(s32 *)(slot + 0x140);
+        u8  equippedSlot = g_itemEquippedSlot[itemId];
+        price = *(s32 *)(g_weaponTable + equippedSlot * 0xE0 + 0x80);
+    }
+    return price;
+}
+#endif
 
 /* TODO(match): functional equivalent pending - rebuilds the buyable vendor item list from inventory; many callee-saves. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", BuildVendorItemList);
 
-/* TODO(match): functional equivalent pending - vendor menu sub-state reset; many callee-saves + gp/absolute mix. */
+/* func_002F8038 globals (declared for the TARGET_NATIVE #else only). */
+extern s32 D_1AD240;   /* start-index seed: (D_1AD240 != 0) ? +1 : 1 */
+extern s32 D_1AD238;   /* companion latch, cleared to 0 on reset */
+extern s32 D_1AD2E8[]; /* 5 source value words copied into the built entries */
+extern u8  D_1395B8[]; /* story-flag block; per-slot upgrade bitmask byte @+0x8D */
+extern s32 IsVendorUpgradesUnlocked(void);
+
+/** func_002F8038 — rebuild the vendor upgrade-slot entry list. Starting from
+ *  slot (D_1AD240 ? D_1AD240+1 : 1), walk slots [start,5) and append an entry for
+ *  each slot that is EITHER flagged in the per-slot upgrade bitmask
+ *  (D_1395B8[0x8D] bit i, only for i<8) OR — when not flagged — permitted by
+ *  IsVendorUpgradesUnlocked(). Each appended entry (stride 0xC at g_vendorUi+0x140)
+ *  stores (i + 0xEA92) at +0x0, the slot's source word D_1AD2E8[i] at +0x4, and the
+ *  slot index i at +0x8; the running count lives at +0x740. Resets the count and
+ *  the D_1AD238 latch first. Note the flagged path SKIPS the unlock call. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F8038);
+#else
+void func_002F8038(void) {
+    s32 srcVals[5];
+    s32 i, k, count, emit;
+
+    i = (D_1AD240 != 0) ? D_1AD240 + 1 : 1;
+    *(s32 *)((char *)&g_vendorUi + 0x740) = 0;
+    D_1AD238 = 0;
+
+    for (k = 0; k < 5; k++) {
+        srcVals[k] = D_1AD2E8[k];
+    }
+
+    for (; i < 5; i++) {
+        emit = ((u32)i < 8 && ((D_1395B8[0x8D] >> i) & 1)) ? 1 : 0;
+        if (!emit && IsVendorUpgradesUnlocked() == 0) {
+            continue;
+        }
+        count = *(s32 *)((char *)&g_vendorUi + 0x740);
+        *(s32 *)((char *)&g_vendorUi + 0x148 + count * 0xC) = i;
+        *(s32 *)((char *)&g_vendorUi + 0x144 + count * 0xC) = srcVals[i];
+        *(s32 *)((char *)&g_vendorUi + 0x140 + count * 0xC) = i + 0xEA92;
+        *(s32 *)((char *)&g_vendorUi + 0x740) = count + 1;
+    }
+}
+#endif
 
 /* A small lookup table of 4-word records (key + 3 value words), terminated by a
  * zero key. func_002F81A0 finds the record whose key == 'key', then reports
@@ -579,17 +894,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", EnterVendorMenu
 /* TODO(match): functional equivalent pending - vendor preview-actor setup; lq/sq + VU0 vec helpers + many callee-saves. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F95E8);
 
-/* The vendor-shop UI state block (lives inside the big 0x21E000 UI arena at
- * +0x11C0). +0x3C is the active text-widget handle SetVendorCaption hands to the
- * formatter; +0x64 is a per-frame caption-dirty / scroll counter cleared here. */
-typedef struct VendorUiState {
-    u8  _pad00[0x3C];
-    s32 captionWidget; /* 0x3C text widget the caption string is bound to */
-    u8  _pad40[0x64 - 0x40];
-    s32 captionCounter;/* 0x64 cleared whenever the caption is (re)set */
-} VendorUiState;
-
-extern VendorUiState g_vendorUi;     /* 0x21F1C0 */
+/* VendorUiState + g_vendorUi are declared above (moved up for func_002F8038). */
 extern u8 g_vendorCaptionFmt[];      /* 0x1AD338 caption format/template string */
 void func_00115DA8(s32 widget, void *fmt, s32 captionId);
 

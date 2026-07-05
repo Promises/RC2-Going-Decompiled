@@ -468,9 +468,54 @@ s32 IsLevelListEntryEnabled(s32 idx) {
     return (idx < 0x15 || idx == 0x18);
 }
 
-/* menu input/update handler: 8-byte-packed-save wall (saves 7 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* LevelSelectListHandleInput: per-frame input for the level-select scroller (rooted
+ * at g_nLevelSelectListCount). First refreshes each entry's enabled flag (+0xC
+ * array) from g_abLevelAvailableFlags for entries IsLevelListEntryEnabled reports,
+ * then resets +0xC. Then dispatches held-button `flags`: up (0x1000) /down (0x4000)
+ * move the selection (ListScrollerSelectPrev/Next); confirm (0x40) requests the exit
+ * to the selected destination via RequestLevelExit(sel, 1) — except the special
+ * label 0xB47 with D_1A7C09 clear, which exits to 0x19 instead. Returns the selected
+ * index on confirm, else -1.
+ * (matching arm left INCLUDE_ASM: 8-byte-packed-save wall.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", LevelSelectListHandleInput);
+#else
+extern s32 g_nLevelSelectListCount;
+extern u8 g_abLevelAvailableFlags[];
+extern u8 g_levelSelectEntries[];
+extern u8 D_1A7C09;
+extern void RequestLevelExit(s32 destination, s32 commitSave);
+s32 LevelSelectListHandleInput(s32 flags) {
+    s32 *scroller = &g_nLevelSelectListCount;
+    s32 result = -1;
+    s32 i;
+
+    if (g_nLevelSelectListCount >= 0) {
+        for (i = 0; i <= g_nLevelSelectListCount; i++) {
+            if (IsLevelListEntryEnabled(i)) {
+                *(s32 *)((char *)scroller + 0xC + i * 4) =
+                    (g_abLevelAvailableFlags[i] != 0);
+            }
+        }
+    }
+    *(s32 *)((char *)scroller + 0xC) = 0;
+
+    if (flags & 0x1000) {           /* up */
+        ListScrollerSelectPrev(scroller);
+    } else if (flags & 0x4000) {    /* down */
+        ListScrollerSelectNext(scroller);
+    } else if (flags & 0x40) {      /* confirm */
+        s32 sel = *(s32 *)((char *)scroller + 0x4);
+        result = sel;
+        if (*(s32 *)&g_levelSelectEntries[sel * 8] == 0xB47 && D_1A7C09 == 0) {
+            RequestLevelExit(0x19, 1);
+        } else {
+            RequestLevelExit(sel, 1);
+        }
+    }
+    return result;
+}
+#endif
 
 /* level-select list routine: 8-byte-packed-save wall (saves 9 GPRs incl $31; later cc1
  * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
@@ -498,9 +543,31 @@ s32 func_002CC788(s32 action) {
  * INCLUDE_ASM (cc1 jtbl layout not reproduced). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CC7D8);
 
-/* menu helper: switch/jump-table dispatch (splat jtbl reloc gap) — left as
- * INCLUDE_ASM (cc1 jtbl layout not reproduced). */
+/* func_002CC858: dispatch one of seven map-cell config descriptors (D_1AA6D8,
+ * stride 0x18, selected by `q` in 0..6) through func_002D6AD8, returning its result
+ * into a scratch buffer; out-of-range `q` returns 0. Selecting descriptor 0 also
+ * snapshots the sound-bank handle (g_soundBankHandlesBlk +0x1248 -> +0x22C8).
+ * (matching arm left INCLUDE_ASM: cc1 jump-table layout not reproduced.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CC858);
+#else
+extern s32 func_002D6AD8(void *config, void *buf);
+extern u8 D_1AA6D8[];
+extern u8 g_soundBankHandlesBlk[];
+s32 func_002CC858(s32 q) {
+    s32 buf[4];
+
+    buf[0] = 0;
+    if ((u32)q >= 7) {
+        return 0;
+    }
+    if (q == 0) {
+        *(s32 *)(g_soundBankHandlesBlk + 0x22C8) =
+            *(s32 *)(g_soundBankHandlesBlk + 0x1248);
+    }
+    return func_002D6AD8(&D_1AA6D8[q * 0x18], buf);
+}
+#endif
 
 /* menu helper: switch/jump-table dispatch (splat jtbl reloc gap) — left as
  * INCLUDE_ASM (cc1 jtbl layout not reproduced). */
@@ -1067,9 +1134,104 @@ s32 func_002CEA38(void) {
 }
 #endif
 
-/* menu input/update handler: 8-byte-packed-save wall (saves 3 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* UpdateBestiaryMenuInput: per-frame input for the bestiary browser (g_bestiaryCursor
+ * over the catalog, 1..0x3F). Back (0x10) pops the menu-screen block (returns the
+ * popped value). Exit (0x900) returns 1. Left (0x8000)/right (0x2000) move the cursor
+ * to the precomputed previous/next entry (clamped to 1 / 0x3F), with the move sound
+ * (or the edge-deny sound when already at that entry). It then recomputes the nearest
+ * defeated neighbours by scanning g_bestiaryKillCounts (u16[2] per entry) down for the
+ * previous entry with kills (floor 1) and up for the next (ceil = cursor), and updates
+ * the panel display (D_0025ABA0+0x58 / D_0025AC08+0x34) from whether the current entry
+ * has been seen, poking D_0025AC08+0x3C when the cursor moved. Returns 1 on exit, the
+ * popped value on back, else 0.
+ * (matching arm left INCLUDE_ASM: 8-byte-packed-save wall.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateBestiaryMenuInput);
+#else
+extern s32 g_bestiaryPrevEntry;
+extern s32 g_bestiaryNextEntry;
+extern u8 g_bestiaryKillCounts[];
+extern u8 g_bestiaryEntryTable[];
+extern u8 D_0025ABA0[];
+extern u8 D_0025AC08[];
+extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+s32 UpdateBestiaryMenuInput(void) {
+    s32 buttons = g_padButtonsPressed;
+    s32 cursor0 = g_bestiaryCursor;
+    s32 ret = 0;
+    s32 cursor, i;
+
+    if (buttons & 0x10) {           /* back */
+        if (*(s32 *)(*(u8 **)(g_menuScreenBlock + 0x14) + 0xE0) != 0) {
+            *(s32 *)(g_menuScreenBlock + 0x18) = *(s32 *)(g_menuScreenBlock + 0x134);
+            return 0;
+        }
+        return (*(s32 *)(g_menuScreenBlock + 0x134) == 0) ? -1 : 0;
+    }
+
+    if (buttons & 0x900) {          /* exit */
+        ret = 1;
+    } else if (buttons & 0x8000) {  /* left: move to the previous entry */
+        s32 prev = g_bestiaryPrevEntry;
+        PlayGlobalSound((cursor0 == prev) ? 5 : 3, 0, 0);
+        g_bestiaryCursor = (prev > 0) ? prev : 1;
+    } else if (buttons & 0x2000) {  /* right: move to the next entry */
+        s32 next = g_bestiaryNextEntry;
+        PlayGlobalSound((cursor0 == next) ? 5 : 3, 0, 0);
+        g_bestiaryCursor = (next < 0x40) ? next : 0x3F;
+    }
+
+    /* recompute the nearest defeated entries around the cursor */
+    cursor = g_bestiaryCursor;
+    g_bestiaryPrevEntry = cursor - 1;
+    g_bestiaryNextEntry = cursor + 1;
+
+    /* scan down for the previous entry with any kills (floor at 1) */
+    i = cursor - 1;
+    for (;;) {
+        if (*(u16 *)(g_bestiaryKillCounts + i * 4) != 0 ||
+            *(u16 *)(g_bestiaryKillCounts + i * 4 + 2) != 0) {
+            break;
+        }
+        i--;
+        if (i <= 0) {
+            i = 1;
+            break;
+        }
+    }
+    g_bestiaryPrevEntry = i;
+
+    /* scan up for the next entry with any kills (back to cursor if none) */
+    i = cursor + 1;
+    for (;;) {
+        if (*(u16 *)(g_bestiaryKillCounts + i * 4) != 0 ||
+            *(u16 *)(g_bestiaryKillCounts + i * 4 + 2) != 0) {
+            break;
+        }
+        i++;
+        if (i >= 0x40) {
+            i = cursor;
+            break;
+        }
+    }
+    g_bestiaryNextEntry = i;
+
+    /* update the panel display state for the current entry */
+    if (*(u16 *)(g_bestiaryKillCounts + cursor * 4) != 0 ||
+        *(u16 *)(g_bestiaryKillCounts + cursor * 4 + 2) != 0) {
+        *(s32 *)(D_0025ABA0 + 0x58) = cursor - 1;
+        *(s32 *)(D_0025AC08 + 0x34) =
+            *(s16 *)(g_bestiaryEntryTable + cursor * 0x18 + 0xA);
+    } else {
+        *(s32 *)(D_0025ABA0 + 0x58) = 0x3F;
+        *(s32 *)(D_0025AC08 + 0x34) = 0;
+    }
+    if (g_bestiaryCursor != cursor0) {
+        *(s32 *)(D_0025AC08 + 0x3C) = -0x240;
+    }
+    return ret;
+}
+#endif
 
 /* menu/HUD draw routine: 8-byte-packed-save wall (saves 9 GPRs incl $31; later cc1
  * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
@@ -1094,9 +1256,31 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawBestiaryPag
  * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawMenuPagingChrome);
 
-/* menu/HUD draw routine: 8-byte-packed-save wall (saves 6 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* DrawMenuItemSelectionBox: draw the four-sided highlight box around a menu item,
+ * horizontally centred on screen. `width` sets the half-extent (width/2 + 5 either
+ * side of screen centre); four func_002904B0 fills form the top (y 0x138..0x13A),
+ * bottom (0x14D..0x14F), left and right (0x139..0x14E) borders, all in `color`.
+ * (matching arm left INCLUDE_ASM: 8-byte-packed-save wall — cc1 packs the 6-GPR
+ * save frame 8-byte vs our 16-byte.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawMenuItemSelectionBox);
+#else
+extern s32 g_screenWidth;
+extern void func_002904B0(s32 x0, s32 y0, s32 x1, s32 y1, s32 color, s32 flag);
+void DrawMenuItemSelectionBox(s32 width, s32 color) {
+    s32 half = width / 2 + 5;
+    s32 cx = g_screenWidth / 2;
+    s32 right = cx + half;
+    s32 left = cx - half;
+    s32 x0 = left - 2;
+    s32 x1 = right + 4;
+
+    func_002904B0(x0, 0x138, x1, 0x13A, color, 0);        /* top */
+    func_002904B0(x0, 0x14D, x1, 0x14F, color, 0);        /* bottom */
+    func_002904B0(x0, 0x139, left, 0x14E, color, 0);      /* left */
+    func_002904B0(right + 2, 0x139, x1, 0x14E, color, 0); /* right */
+}
+#endif
 
 /* GUI wrapper: when the GUI is up, register a widget (instance + 0x3C160) and
  * stash the returned handle in widget[0x34].
@@ -1180,9 +1364,93 @@ s32 func_002D0240(void) {
  * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D02A0);
 
-/* menu input/update handler: 8-byte-packed-save wall (saves 4 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* UpdateCheatMenuInput: per-frame input for the cheats menu (cursor D_1ABA30 over
+ * the 12-entry table D_1ABD50, stride 4: +0x2 cheat id, +0x3 unlock gate). Reads the
+ * screen's held buttons (D_138180+0x1C4). Back (0x10) resets the cursor and pops the
+ * menu-screen block. Exit (0x900) resets the cursor and returns 1. Up (0x1000)/down
+ * (0x4000) move to the previous/next non-disabled entry (gate 0x64 = disabled),
+ * wrapping, with the move sound. Confirm (0x40) is allowed when the entry is
+ * unlocked — the special gate 0x5A requires g_skillPointFlags, otherwise the player's
+ * completed skill-point count must reach the gate value; on allow it plays the accept
+ * sound and toggles g_cheatFlags[cheatId], reloading the player display model for the
+ * model-changing cheats (2/9/10/0xB); on deny it plays the reject sound. Returns 1 on
+ * exit, the popped value on back, else 0. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateCheatMenuInput);
+#else
+extern s32 CountSkillPointsCompleted(void);
+extern u8 D_138180[];
+extern u8 g_menuScreenBlock[];
+extern s32 D_1ABA30;
+extern u8 D_1ABD50[];
+extern u8 g_cheatFlags[];
+extern u8 g_skillPointFlags;
+extern s16 g_equippedArmor;
+extern void LoadPlayerDisplayModel(s16 armor);
+extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+s32 UpdateCheatMenuInput(void) {
+    s32 skillPts = CountSkillPointsCompleted();
+    s32 flags = *(s32 *)(D_138180 + 0x1C4);
+    s32 gate, cheatId, allow;
+
+    if (flags & 0x10) {                 /* back */
+        D_1ABA30 = 0;
+        if (*(s32 *)(*(u8 **)(g_menuScreenBlock + 0x14) + 0xE0) != 0) {
+            *(s32 *)(g_menuScreenBlock + 0x18) = *(s32 *)(g_menuScreenBlock + 0x134);
+            return 0;
+        }
+        return (*(s32 *)(g_menuScreenBlock + 0x134) == 0) ? -1 : 0;
+    }
+
+    if (flags & 0x900) {                /* exit */
+        D_1ABA30 = 0;
+        return 1;
+    }
+
+    if (flags & 0x1000) {               /* up: previous enabled entry */
+        PlayGlobalSound(3, 0, 0);
+        do {
+            D_1ABA30--;
+            if (D_1ABA30 < 0) {
+                D_1ABA30 = 0xB;
+            }
+        } while (D_1ABD50[D_1ABA30 * 4 + 3] == 0x64);
+    } else if (flags & 0x4000) {        /* down: next enabled entry */
+        PlayGlobalSound(3, 0, 0);
+        do {
+            D_1ABA30++;
+            if (D_1ABA30 >= 0xC) {
+                D_1ABA30 = 0;
+            }
+        } while (D_1ABD50[D_1ABA30 * 4 + 3] == 0x64);
+    }
+
+    /* confirm */
+    if (!(*(s32 *)(D_138180 + 0x1C4) & 0x40)) {
+        return 0;
+    }
+    gate = D_1ABD50[D_1ABA30 * 4 + 3];
+    if (gate == 0x5A) {
+        allow = (g_skillPointFlags != 0);
+    } else {
+        allow = !(skillPts < gate);
+    }
+    if (!allow) {
+        PlayGlobalSound(5, 0, 0);       /* reject */
+        return 0;
+    }
+    PlayGlobalSound(4, 0, 0);           /* accept */
+
+    cheatId = D_1ABD50[D_1ABA30 * 4 + 2];
+    g_cheatFlags[cheatId] = (g_cheatFlags[cheatId] != 0) ? 0 : 1;
+
+    cheatId = D_1ABD50[D_1ABA30 * 4 + 2];
+    if (cheatId == 9 || cheatId == 10 || cheatId == 2 || cheatId == 0xB) {
+        LoadPlayerDisplayModel(g_equippedArmor);
+    }
+    return 0;
+}
+#endif
 
 /* menu/HUD draw routine: 8-byte-packed-save wall (saves 9 GPRs incl $31; later cc1
  * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */

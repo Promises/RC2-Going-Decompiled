@@ -361,9 +361,82 @@ GuiInstance *func_0034F300(GuiInstance *mgr) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", GuiSystemInit);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F868);
+/* func_0034F868 callees (declared for the TARGET_NATIVE #else only). */
+extern void WaitFrameDmaFence(s32 mask);
+extern void WaitGsPathsIdle(s32 a, s32 b);
+extern void func_0011AEA0(s32 arg);                       /* pre-RPC flush/sync */
+extern void KickGifImageUpload(void *packet, void *vramDest);
+extern void func_126288(void *dst, s32 texId, s32 a, s32 b, s32 c,
+                        s32 d, s32 width, s32 height);    /* build a GS image-upload GIF packet */
 
+/** func_0034F868 — flush the queued texture image-uploads for this manager. Wait
+ *  one frame-DMA fence, then for each of the base->+0x2E20 queued entries build a
+ *  16x16 GS image-upload GIF packet (func_126288) for the entry's texture id (the
+ *  low halfword of the stride-4 id list at base+0x2E00) into a stack scratch,
+ *  issue it to the entry's VRAM slot (base+0xE00, stride 0x400) via
+ *  KickGifImageUpload, and wait for the GS paths to idle between uploads. Clears
+ *  the queue count when done. */
+#ifndef TARGET_NATIVE
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F868);
+#else
+void func_0034F868(u8 *base) {
+    u8  packet[0x60];
+    u8 *idCursor;
+    u8 *vramDest;
+    s32 i;
+
+    WaitFrameDmaFence(1);
+    if (*(s32 *)(base + 0x2E20) <= 0) {
+        return;
+    }
+    idCursor = base + 0x2E00;
+    vramDest = base + 0xE00;
+    i = 0;
+    do {
+        func_126288(packet, *(s16 *)idCursor, 1, 0, 0, 0, 0x10, 0x10);
+        i++;
+        func_0011AEA0(0);
+        idCursor += 4;
+        KickGifImageUpload(packet, vramDest);
+        vramDest += 0x400;
+        WaitGsPathsIdle(0, 0);
+    } while (i < *(s32 *)(base + 0x2E20));
+    *(s32 *)(base + 0x2E20) = 0;
+}
+#endif
+
+/* func_0034F928 globals/callee (declared for the TARGET_NATIVE #else only). */
+extern u8   g_dirLightMatrices[];    /* 0x1C26C0, 0x40-stride directional-light matrices */
+extern void func_00283638(void *dst);/* zero a 16-byte quadword at dst */
+
+/** func_0034F928 — install the fixed directional light in matrix slot 14
+ *  (g_dirLightMatrices + 0x380): RGB colour (0.4, 0.8, 1.2) at +0x380/+0x384/
+ *  +0x388, a normalised diagonal direction (~0.577, ~0.577, ~-0.577) at +0x390/
+ *  +0x394/+0x398 with zero w-components at +0x38C/+0x39C, then clear the two
+ *  16-byte matrix-blend blocks at +0x3A0 and +0x3B0. Called with the light-setup
+ *  context (its sibling F9B8/F9F8/FAF8 use it), but this one writes only the
+ *  global directional light, so ctx is unused here. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F928);
+#else
+void func_0034F928(void *ctx) {
+    (void)ctx;
+    union { u32 u; f32 f; } dir;
+
+    *(f32 *)(g_dirLightMatrices + 0x380) = 0.4f; /* 0x3ECCCCCD */
+    *(f32 *)(g_dirLightMatrices + 0x384) = 0.8f; /* 0x3F4CCCCD */
+    *(f32 *)(g_dirLightMatrices + 0x388) = 1.2f; /* 0x3F99999A */
+    *(s32 *)(g_dirLightMatrices + 0x38C) = 0;
+    dir.u = 0x3F13B646u; /* ~0.577 direction component */
+    *(f32 *)(g_dirLightMatrices + 0x390) = dir.f;
+    *(f32 *)(g_dirLightMatrices + 0x394) = dir.f;
+    dir.u = 0xBF13B646u; /* ~-0.577 */
+    *(f32 *)(g_dirLightMatrices + 0x398) = dir.f;
+    *(s32 *)(g_dirLightMatrices + 0x39C) = 0;
+    func_00283638(g_dirLightMatrices + 0x3A0);
+    func_00283638(g_dirLightMatrices + 0x3B0);
+}
+#endif
 
 /* func_0034F9B8: reset the camera-state HUD sub-block (clear the three ints at
  * +0x140/+0x144/+0x148), run func_00283D10 on its +0x370 sub-object, then
@@ -462,7 +535,40 @@ void func_0034F9F8(void *mgr) {
 }
 #endif
 
+/* func_0034FAF8 globals/callees (declared for the TARGET_NATIVE #else only). */
+extern u8  *g_frameDmaCursor;   /* 0x1B2228 frame VIF1 chain write cursor */
+extern s32  g_gsPixelOffsetX[]; /* GS screen X pixel offset (word 0) */
+extern s32  g_gsPixelOffsetY[]; /* GS screen Y pixel offset (word 0) */
+extern u8   D_1AC560[];         /* scratch GS packet-build buffer (screen XY at +0x20/+0x24) */
+extern void CopyQwords(void *dst, const void *src, s32 nbytes);
+extern void func_002A1138(void *rec, s32 flag);
+
+/** func_0034FAF8 — emit a moby's two screen-space GS packets into the frame DMA
+ *  chain. First packet is offset by the record's on-screen delta: screen XY =
+ *  g_gsPixelOffset{X,Y} + rec->{+0xB4,+0xB6} (signed shorts), written into the
+ *  D_1AC560 scratch packet at +0x20/+0x24, CopyQwords'd (0x30 bytes) to the DMA
+ *  cursor which then advances 0x30. func_002A1138(rec, 1) fills in the moby-
+ *  specific packet body, then a second packet at the plain screen origin
+ *  (g_gsPixelOffset{X,Y}) is emitted and the cursor advances 0x30 again. The
+ *  ctx (arg0) is the shared light/render context, unused here. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034FAF8);
+#else
+void func_0034FAF8(void *ctx, u8 *rec) {
+    (void)ctx;
+    *(s32 *)(D_1AC560 + 0x20) = g_gsPixelOffsetX[0] + *(s16 *)(rec + 0xB4);
+    *(s32 *)(D_1AC560 + 0x24) = g_gsPixelOffsetY[0] + *(s16 *)(rec + 0xB6);
+    CopyQwords(g_frameDmaCursor, D_1AC560, 0x30);
+    g_frameDmaCursor += 0x30;
+
+    func_002A1138(rec, 1);
+
+    *(s32 *)(D_1AC560 + 0x20) = g_gsPixelOffsetX[0];
+    *(s32 *)(D_1AC560 + 0x24) = g_gsPixelOffsetY[0];
+    CopyQwords(g_frameDmaCursor, D_1AC560, 0x30);
+    g_frameDmaCursor += 0x30;
+}
+#endif
 
 /* GuiHermiteInterp: cubic-Hermite blend of the four controls a,b,c,d by t
  * (clamped to [0,1] with an assert) - mathUtil.cpp line 36. Returns

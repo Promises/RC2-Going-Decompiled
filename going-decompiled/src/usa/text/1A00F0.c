@@ -74,17 +74,159 @@ void FreeMoby(Moby *moby) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", ResolveMobyAnimFramePtrs);
+/*
+ * ResolveMobyAnimFramePtrs(moby): resolve the moby's primary + secondary anim
+ * frame-data pointers from its animation set table. The table lives at
+ * `animBase(moby+0x24) + 0x48` and is indexed by a 1-byte frame id; each entry
+ * points at an "anim set" record. From the PRIMARY frame (moby+0x42, sub-index
+ * moby+0x40) it caches the frame-data pointer (set[+idx*4+0x1C]) at moby+0x58 and
+ * two set bytes at moby+0x6E (set[0x12]) and moby+0x6C (set[0x11]). When the
+ * primary frame id is the 0xFF sentinel ("procedural"), it instead points moby+0x58
+ * straight into the procedural frame pool (g_proceduralAnimFrames + idx*0x800),
+ * stamps moby+0x6C=0xFF and moby+0x6E=0. The SECONDARY frame (moby+0x43, sub-index
+ * moby+0x41) always caches its frame-data pointer at moby+0x5C.
+ *
+ * Leaf, no callee-saves -> not blocked by this unit's save-slot wall. MATCH-FIRST
+ * PROBED on the R5900 toolchain (2026-06-29): best 63.60% (cached-local 57.72% ->
+ * inline no-cache 63.60%). WALLED - this cc1's instruction scheduling + the repeated
+ * reload of table[frame]/moby[0x42] don't reproduce from source form. Kept as the
+ * TARGET_NATIVE #else arm, cmp-oracle-ready.
+ */
+extern u8 g_proceduralAnimFrames[];
 
+#ifndef TARGET_NATIVE
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", ResolveMobyAnimFramePtrs);
+#else
+void ResolveMobyAnimFramePtrs(Moby *moby) {
+    u8 *m = (u8 *)moby;
+    void **table = (void **)(*(u8 **)(m + 0x24) + 0x48);
+    u8 frame = m[0x42];
+
+    if (frame != 0xFF) {
+        u8 *set = (u8 *)table[frame];
+        *(void **)(m + 0x58) = *(void **)(set + m[0x40] * 4 + 0x1C);
+        m[0x6E] = set[0x12];
+        m[0x6C] = set[0x11];
+    } else {
+        m[0x6C] = frame;          /* 0xFF sentinel */
+        m[0x6E] = 0;
+        *(void **)(m + 0x58) = g_proceduralAnimFrames + (m[0x40] << 11);
+    }
+
+    {
+        u8 *set2 = (u8 *)table[m[0x43]];
+        *(void **)(m + 0x5C) = *(void **)(set2 + m[0x41] * 4 + 0x1C);
+    }
+}
+#endif
+
+/* UpdateMobyAnimLoopSound: maintain the moby's looping sequence sound. The active
+ * emitter slot is held in +0x6D (0xFF = none) and the current sequence id in +0x6C.
+ * If a slot is active, it is stopped (and the slot released) when our slot was
+ * stolen (the emitter's owner at +0x88 no longer points at this moby), the playing
+ * sequence changed (emitter +0x7E != +0x6C), the moby's stop flag +0x34 bit 0x40 is
+ * set, or +0x7C bit 0x8000 is set. If no slot is active and the sequence is present
+ * (+0x6C != 0xFF) and neither stop flag is set, it starts the loop via
+ * PlayMobySound(seq, 4, moby) and records the returned slot in +0x6D. Emitter slots
+ * live at g_listenerPosHistory + slot*0x70. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", UpdateMobyAnimLoopSound);
+#else
+extern u8 g_listenerPosHistory[];
+extern s32 PlayMobySound(s32 seq, s32 mode, Moby *moby);
+extern void StopSoundEmitter(s32 slot);
+void UpdateMobyAnimLoopSound(Moby *moby) {
+    u8 *m = (u8 *)moby;
+    s32 slot = m[0x6D];
+
+    if (slot != 0xFF) {
+        u8 *emitter = g_listenerPosHistory + slot * 0x70;
+        if (*(void **)(emitter + 0x88) != (void *)moby) {
+            /* our slot was stolen by another moby */
+            m[0x6D] = 0xFF;
+            return;
+        }
+        if (*(s16 *)(emitter + 0x7E) != m[0x6C] ||
+            (*(u16 *)(m + 0x34) & 0x40) ||
+            (*(u16 *)(m + 0x7C) & 0x8000)) {
+            StopSoundEmitter(slot);
+            m[0x6D] = 0xFF;
+        }
+        return;
+    }
+
+    /* no active emitter: start the loop unless the sequence is absent or blocked */
+    if (m[0x6C] == 0xFF ||
+        (*(u16 *)(m + 0x34) & 0x40) ||
+        (*(u16 *)(m + 0x7C) & 0x8000)) {
+        return;
+    }
+    m[0x6D] = PlayMobySound(m[0x6C], 4, moby);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0360);
 
+/* func_002A0368: compute the moby's current animation frame time (in 1/16 units).
+ * Selects the active sequence descriptor (+0x5C when the +0x42 sequence id is 0xFF,
+ * else +0x58) and reads its frame count (descriptor +0x4). With no blend
+ * (+0x44 == 0) the result is frames/16. When a blend is active and the two sequence
+ * ids (+0x42/+0x43) match with +0x41 >= +0x40, it linearly interpolates the frame
+ * counts of the +0x58 and +0x5C descriptors by the blend and scales by 1/16;
+ * otherwise it is frames/16 + blend. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0368);
+#else
+extern f32 IntToFloat(s32 n);
+f32 func_002A0368(Moby *moby) {
+    u8 *m = (u8 *)moby;
+    void *animA = (m[0x42] == 0xFF) ? *(void **)(m + 0x5C) : *(void **)(m + 0x58);
+    f32 blend = *(f32 *)(m + 0x44);
+    f32 framesA = IntToFloat(*(s16 *)((char *)animA + 4));
+
+    if (blend == 0.0f) {
+        return framesA * 0.0625f;
+    }
+    if (m[0x42] == m[0x43] && m[0x41] >= m[0x40]) {
+        void *animB = *(void **)(m + 0x5C);
+        f32 framesB = IntToFloat(*(s16 *)((char *)animB + 4));
+        return (framesA * (1.0f - blend) + framesB * blend) * 0.0625f;
+    }
+    return framesA * 0.0625f + blend;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0460);
 
+/*
+ * func_002A0480(moby, out1, out2): read the moby's animation-set dimension and
+ * its log2. animBase(moby+0x24) holds a count byte at +0x2C; when nonzero the
+ * last set record (animBase + count*0x10) carries a signed 16-bit dimension at
+ * +0x2 -> stored to *out1, with Log2Floor(dimension*2) stored to *out2 (the
+ * power-of-two bucket for that dimension). When the count is zero both outs are
+ * cleared. Used when sizing/allocating the moby's anim working buffer.
+ *
+ * Save-wall blocked for matching (saves $16+$31 at 8-byte spacing under the later
+ * cc1 model); provided as the TARGET_NATIVE #else arm, cmp-oracle-ready.
+ */
+extern s32 Log2Floor(s32 value);
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0480);
+#else
+void func_002A0480(Moby *moby, s32 *out1, s32 *out2) {
+    u8 *anim = *(u8 **)((u8 *)moby + 0x24);
+    u8 count = anim[0x2C];
+    if (count != 0) {
+        s16 dim = *(s16 *)(anim + count * 0x10 + 0x2);
+        *out1 = dim;
+        *out2 = Log2Floor(dim << 1);
+    } else {
+        *out1 = 0;
+        *out2 = 0;
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A04D8);
 
@@ -233,7 +375,43 @@ void func_002A0918(void) {
 }
 #endif
 
+/* func_002A0958: service the 16 procedural-animation slots. For each slot with an
+ * owner moby: release the slot (clear the owner) if the owner is being torn down
+ * (+0x20 bit 0x80) or is no longer idle (+0x42 sequence != 0xFF). While idle, hold
+ * for +0x31 frames or until the per-slot timer reaches 0x14; once elapsed, if the
+ * owner's rest animation descriptor (via +0x24 anim set, indexed by +0x43) matches
+ * the idle sequence, kick the blend back toward rest (+0x44 = 1 - +0x4C) and step
+ * the animation (UpdateMobyAnimation). Slots with no owner reset their timer. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0958);
+#else
+extern void UpdateMobyAnimation(Moby *moby);
+void func_002A0958(void) {
+    s32 i;
+    for (i = 0; i < 0x10; i++) {
+        u8 *owner = (u8 *)g_proceduralAnimSlotOwners[i];
+        u8 *animDesc;
+
+        if (owner == NULL) {
+            g_proceduralAnimSlotTimer[i] = 0;
+            continue;
+        }
+        if ((owner[0x20] & 0x80) || owner[0x42] != 0xFF) {
+            g_proceduralAnimSlotOwners[i] = 0;
+            continue;
+        }
+        if (owner[0x31] != 0 || g_proceduralAnimSlotTimer[i] < 0x14) {
+            g_proceduralAnimSlotTimer[i]++;
+            continue;
+        }
+        animDesc = *(u8 **)(*(u8 **)(owner + 0x24) + owner[0x43] * 4 + 0x48);
+        if (animDesc[0x13] == owner[0x42]) {
+            *(f32 *)(owner + 0x44) = 1.0f - *(f32 *)(owner + 0x4C);
+            UpdateMobyAnimation((Moby *)owner);
+        }
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0A58);
 
@@ -444,8 +622,143 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A7490);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A75CC);
 
+/* PickLowAmmoWeaponForDrop: choose which owned weapon an ammo pickup should drop
+ * for, writing the chosen item slot to *outSlot and returning how many boxes to
+ * drop. A weapon is a candidate when it is owned (g_inventoryOwned[i]), has a
+ * non-zero ammo capacity (g_weaponTable[g_itemEquippedSlot[i]*0xE0 + 0x8E]) and is
+ * not one of the excluded slots. First it counts how many candidates are below
+ * capacity (g_weaponAmmo[i] < cap); if any, it picks a random one of those (excl.
+ * slots 0x1F/0x3D); otherwise it picks a random valid candidate (excl. slots
+ * 0x1F/0x3D/0x2D/0x4D). Returns 2 one time in five, else 1. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", PickLowAmmoWeaponForDrop);
+#else
+extern u8 g_inventoryOwned[];
+extern u8 g_itemEquippedSlot[];
+extern u8 g_weaponTable[];
+extern s32 g_weaponAmmo[];
+extern s32 GetRandomInt(s32 n);
+s32 PickLowAmmoWeaponForDrop(s32 arg0, s32 *outSlot) {
+    s32 i, lowCount = 0, validCount = 0;
+    (void)arg0;
 
+    /* count valid weapons and how many are below ammo capacity */
+    for (i = 0; i < 0x38; i++) {
+        u16 cap;
+        if (g_inventoryOwned[i] == 0) {
+            continue;
+        }
+        cap = *(u16 *)&g_weaponTable[g_itemEquippedSlot[i] * 0xE0 + 0x8E];
+        if (cap == 0 || i == 0x1F || i == 0x3D || i == 0x2D || i == 0x4D) {
+            continue;
+        }
+        validCount++;
+        if (g_weaponAmmo[i] < cap) {
+            lowCount++;
+        }
+    }
+
+    if (lowCount != 0) {
+        /* pick a random below-capacity weapon (excludes slots 0x1F/0x3D) */
+        s32 pick = GetRandomInt(lowCount);
+        for (i = 0; i < 0x38; i++) {
+            u16 cap;
+            if (g_inventoryOwned[i] == 0) {
+                continue;
+            }
+            cap = *(u16 *)&g_weaponTable[g_itemEquippedSlot[i] * 0xE0 + 0x8E];
+            if (cap == 0 || !(g_weaponAmmo[i] < cap) || i == 0x1F || i == 0x3D) {
+                continue;
+            }
+            if (pick == 0) {
+                *outSlot = i;
+                break;
+            }
+            pick--;
+        }
+    } else {
+        /* none below capacity: pick a random valid weapon */
+        s32 pick = GetRandomInt(validCount);
+        for (i = 0; i < 0x38; i++) {
+            u16 cap;
+            if (g_inventoryOwned[i] == 0) {
+                continue;
+            }
+            cap = *(u16 *)&g_weaponTable[g_itemEquippedSlot[i] * 0xE0 + 0x8E];
+            if (cap == 0 || i == 0x1F || i == 0x3D || i == 0x2D || i == 0x4D) {
+                continue;
+            }
+            if (pick == 0) {
+                *outSlot = i;
+                break;
+            }
+            pick--;
+        }
+    }
+
+    return (GetRandomInt(5) != 0) ? 1 : 2;
+}
+#endif
+
+/* IncrementBestiaryKillCount: record a defeated enemy in the bestiary. Looks up
+ * the moby's enemy class id (+0xAA) in g_bestiaryEntryTable (0x40 entries, stride
+ * 0x18, each listing up to four class ids at +0x0/+0x2/+0x4/+0x6); if no entry
+ * matches, does nothing. On a match, applies the "misc extras" challenge bonus
+ * (when g_miscExtras is set, D_1A9E70 == -1, and the D_1A7A3A progress counter is
+ * below 0x14): advances D_1A7A3B and, once it reaches half of D_1A7A3A, awards
+ * func_0029C488(0xB4) and steps D_1A7A3A. Finally bumps the matched entry's u16[2]
+ * defeat counter in g_bestiaryKillCounts (stride 4): killType 0 -> +0x0, killType 1
+ * -> +0x2, capped at 0x270F. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", IncrementBestiaryKillCount);
+#else
+extern u8 g_bestiaryEntryTable[];
+extern u8 g_bestiaryKillCounts[];
+extern u8 g_miscExtras;
+extern s32 D_1A9E70;
+extern u8 D_1A7A3A, D_1A7A3B;
+extern void func_0029C488(s32 arg);
+void IncrementBestiaryKillCount(Moby *moby, s32 killType) {
+    s16 classId = *(s16 *)((char *)moby + 0xAA);
+    s32 found = -1;
+    s32 i;
+
+    for (i = 0; i < 0x40; i++) {
+        s16 *entry = (s16 *)(g_bestiaryEntryTable + i * 0x18);
+        if (entry[0] == classId || entry[1] == classId ||
+            entry[2] == classId || entry[3] == classId) {
+            found = i;
+            break;
+        }
+    }
+
+    if (found == -1) {
+        return;
+    }
+
+    /* misc-extras challenge bonus */
+    if (g_miscExtras != 0 && D_1A9E70 == -1 && D_1A7A3A < 0x14) {
+        D_1A7A3B = D_1A7A3B + 1;
+        if (((D_1A7A3B & 0xFF) << 1) >= D_1A7A3A) {
+            func_0029C488(0xB4);
+            D_1A7A3B = 0;
+            D_1A7A3A = D_1A7A3A + 1;
+        }
+    }
+
+    /* bump the per-entry defeat counter (u16[2], capped at 0x270F) */
+    if (killType == 0) {
+        u16 *c = (u16 *)(g_bestiaryKillCounts + found * 4);
+        if (*c < 0x270F) {
+            *c = *c + 1;
+        }
+    } else if (killType == 1) {
+        u16 *c = (u16 *)(g_bestiaryKillCounts + found * 4 + 2);
+        if (*c < 0x270F) {
+            *c = *c + 1;
+        }
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A7AA8);

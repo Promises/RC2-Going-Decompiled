@@ -1177,5 +1177,30 @@ s32 func_00284860(u8 *dst, u8 *dstEnd, const u8 *src, const u8 *table);
  * asm so the bytes stay in place.
  */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284998);
+
+/* SetVideoMode globals/callees (declared for the TARGET_NATIVE #else only). */
+extern s32  g_bPalMode;         /* 0x1A7B98 PAL flag (USA build clears it -> NTSC) */
+extern s32  g_bProgressiveScan; /* NTSC 480p progressive-scan flag */
+extern void func_124418(void);  /* GS/DMA reset preamble */
+extern void sceGsResetGraph(short mode, short inter, short omode, short ffmode);
+
+/** SetVideoMode — reset the GS into the correct scan mode for the current
+ *  region/user setting. PAL always forces interlaced (clears progressive), then:
+ *  progressive -> sceGsResetGraph(0,0,0x50,1) (NTSC 480p); otherwise interlaced
+ *  sceGsResetGraph(0,1,omode,0) with omode = NTSC(2) / PAL(3). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", SetVideoMode);
+#else
+void SetVideoMode(void) {
+    func_124418();
+    if (g_bPalMode != 0) {
+        g_bProgressiveScan = 0;
+    }
+    if (g_bProgressiveScan != 0) {
+        sceGsResetGraph(0, 0, 0x50, 1);
+    } else {
+        sceGsResetGraph(0, 1, (g_bPalMode == 0) ? 2 : 3, 0);
+    }
+}
+#endif
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284A20);
