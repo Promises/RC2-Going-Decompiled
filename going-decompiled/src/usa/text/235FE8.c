@@ -4044,7 +4044,145 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003400D8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiQuickSelectWheelInit);
 
+/* GuiQuickSelectWheelTick: per-frame update for the quick-select weapon wheel `w`.
+ * Layout: the static frame + the six petal decorations (w+0x828/0x8D8/0x930/0x988/
+ * 0x9E0 and the labels at +0x2A8/0x2F4/0x5A0) are pinned at fixed offsets
+ * (D_1AE020..D_1AE048) relative to the placement anchor (*(w+0x80C)); w+0x0/0x4C/
+ * 0xE4/0x130 sit on the anchor itself.
+ * Slots: for each of the 8 wheel positions i, the slot's entry (stride 0x1C) is read
+ * from the quick-select table at *(g_hudMobySpawnStart+0x2C); entry[0] is the petal
+ * texture (0 -> hide the petal at w+0x5EC + i*0x3C, else show + set it), func_00337DC8
+ * (entry[0x18]) yields three colors (petal RGB + the paired GuiList's colour pair),
+ * and the list element (func_0034F300(g_guiInstance+0x36F28) + i*0x48) is shown with
+ * item count 0x64 / scroll 0x64. For an owned weapon (g_weaponTable[slot] non-empty
+ * and either +0x6C or +4 set) the list's item count becomes weaponTable[slot][0x6C]
+ * and, when that is >0, its scroll becomes g_weaponXp[id] >> 5.
+ * Input: flag 0x4 = rotate to previous slot, 0x8 = next, over the 8-slot cursor at
+ * w+0x7CC (wrapping, with the wheel-turn cue PlayGlobalSound(3)); otherwise the d-pad
+ * is dispatched by mode w+0x81C to func_003418D8 (0) or func_00341A80 (1).
+ * Finally: if D_138180[0x1C4] & 0xC pulse the confirm highlight, then refresh the
+ * cursor sprite (w+0x5A0) colour (func_002AA3F0) and alpha (= (f32)cursor index).
+ * Returns 0. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiQuickSelectWheelTick);
+#else
+extern char *g_guiInstance;
+extern u8 g_hudMobySpawnStart[];        /* +0x2C -> quick-select entry table ptr */
+extern s32 g_weaponXp[];                /* itemId -> accumulated weapon XP */
+extern u8 D_138180[];                   /* HUD/input state; +0x1C4 = button bits */
+extern f32 D_1AE020[2], D_1AE028[2], D_1AE030[2], D_1AE038[2], D_1AE040[2], D_1AE048[2];
+extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern char *func_0034F300(char *ctx);              /* -> quick-select GuiList array base */
+extern void func_00337DC8(s32 itemId, s32 *petalRgb, s32 *listC0, s32 *listC1);
+void func_003418D8(void *w, s32 flags);             /* grid d-pad handler (mode 0) */
+void func_00341A80(void *w, s32 flags);             /* grid d-pad handler (mode 1) */
+
+s32 GuiQuickSelectWheelTick(void *w, s32 flag) {
+    f32 *base = *(f32 **)((char *)w + 0x80C);
+    void *tbl;
+    s32 i;
+
+    GuiElementSetPos((GuiElement *)((char *)w + 0x0),   base[0], base[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x4C),  base[0], base[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0xE4),  base[0], base[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x130), base[0], base[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x828), D_1AE020[0] + base[0], D_1AE020[1] + base[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x8D8), D_1AE030[0] + base[0], D_1AE030[1] + base[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x930), D_1AE028[0] + base[0], D_1AE028[1] + base[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x988), D_1AE038[0] + base[0], D_1AE038[1] + base[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x9E0), D_1AE040[0] + base[0], D_1AE040[1] + base[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x2A8), D_1AE048[0] + base[0], D_1AE048[1] + base[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x2F4), D_1AE048[0] + base[0], D_1AE048[1] + base[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x5A0), D_1AE048[0] + base[0], D_1AE048[1] + base[1], 0.0f, 0.0f);
+
+    tbl = *(void **)(g_hudMobySpawnStart + 0x2C);
+    if (tbl != 0) {
+        char *petal = (char *)w + 0x5EC;
+        for (i = 0; i < 8; i++, petal += 0x3C) {
+            char *entry = *(char **)tbl + i * 0x1C;
+            s32 itemId = *(s32 *)(entry + 0x18);
+            s32 *color;
+            char *list;
+            s32 petalRgb, listC0, listC1;
+            s32 slot;
+
+            if (*(s32 *)(entry + 0) == 0) {
+                GuiElementSetVisible((GuiElement *)petal, 0);
+            } else {
+                GuiElementSetVisible((GuiElement *)petal, 1);
+                GuiSpriteSetTexture((GuiElement *)petal, *(s32 *)(entry + 0), 0);
+            }
+
+            list = func_0034F300(g_guiInstance + 0x36F28) + i * 0x48;
+            GuiElementSetVisible((GuiElement *)list, 0);
+
+            petalRgb = listC0 = listC1 = 0;
+            func_00337DC8(itemId, &petalRgb, &listC0, &listC1);
+
+            color = GuiElementGetColor((GuiElement *)petal);
+            *color = (*color & (s32)0xFF000000) | (petalRgb & 0x00FFFFFF);
+
+            list = func_0034F300(g_guiInstance + 0x36F28) + i * 0x48;
+            GuiElementSetVisible((GuiElement *)list, 1);
+            GuiListSetColorPair0((GuiElement *)list, listC0, listC1);
+            GuiListSetItemCount((GuiElement *)list, 0x64);
+            GuiListSetScrollPos((GuiElement *)list, 0x64);
+
+            slot = g_itemEquippedSlot[itemId];
+            if (*(s32 *)&g_weaponTable[slot * 0xE0 + 0] == 0)
+                continue;
+            if (*(s32 *)&g_weaponTable[slot * 0xE0 + 0x6C] == 0 &&
+                g_weaponTable[slot * 0xE0 + 4] == 0)
+                continue;
+
+            GuiListSetItemCount((GuiElement *)list, *(s32 *)&g_weaponTable[slot * 0xE0 + 0x6C]);
+
+            color = GuiElementGetColor((GuiElement *)petal);
+            *color = (*color & (s32)0xFF000000) | (petalRgb & 0x00FFFFFF);
+
+            slot = g_itemEquippedSlot[itemId];
+            if (*(s32 *)&g_weaponTable[slot * 0xE0 + 0x6C] <= 0)
+                continue;
+
+            GuiListSetScrollPos((GuiElement *)list, g_weaponXp[itemId] >> 5);
+        }
+    }
+
+    if (flag & 0x4) {                    /* rotate to previous slot, wrap 0 -> 7 */
+        s32 v;
+        PlayGlobalSound(3, 0, 0);
+        v = *(s32 *)((char *)w + 0x7CC) - 1;
+        *(s32 *)((char *)w + 0x7CC) = (v >= 0) ? v : 7;
+    } else if (flag & 0x8) {             /* rotate to next slot, wrap 7 -> 0 */
+        s32 v;
+        PlayGlobalSound(3, 0, 0);
+        v = *(s32 *)((char *)w + 0x7CC) + 1;
+        *(s32 *)((char *)w + 0x7CC) = (v > 7) ? 0 : v;
+    } else {
+        switch (*(s32 *)((char *)w + 0x81C)) {
+        case 0:
+            func_003418D8(w, flag);
+            break;
+        case 1:
+            func_00341A80(w, flag);
+            break;
+        default:
+            break;
+        }
+    }
+
+    if (*(s32 *)&D_138180[0x1C4] & 0xC) {
+        func_002AA3F0(0, 0, 1, 0, 1);
+    }
+
+    {
+        s32 *cursorColor = GuiElementGetColor((GuiElement *)((char *)w + 0x5A0));
+        *cursorColor = func_002AA3F0(0x60442D00, 0x70FFFEED, 0x14, 0, 0);
+    }
+    GuiElementSetAlpha((GuiElement *)((char *)w + 0x5A0), (f32)*(s32 *)((char *)w + 0x7CC));
+    return 0;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341160);
 
