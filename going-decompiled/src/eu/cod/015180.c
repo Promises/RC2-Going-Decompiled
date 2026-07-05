@@ -297,18 +297,31 @@ extern s32 *D_00141BAC;
 extern s32 *D_00141BB0;
 
 extern s32 D_00143188;
-extern s32 D_00143200;
-
-/* func_00128440(arg0): open the D_00143200 subsystem in mode 0x80000904 with
- * arg0 stored at (&D_00143200)[1], via func_0011D620; on failure log D_0013B868
- * (func_00128898) and return 0, else return the handle D_00143200. ~70% — the
- * original parks %hi(D_00143200) in callee-saved $16 and reuses it for the final
- * `lw $2,%lo(D_00143200)($16)`, and selects a `bgez` over the `bgezl` ee-gcc
- * emits for the early-return shape. A reg-alloc + branch-form mismatch this cc1
- * won't reproduce. Left as INCLUDE_ASM. */
+/* Array-typed +0x80 EU twin (USA D_00143180): func_00128440 stores arg0 at
+ * D_00143200[1] and func_00128250 shares this decl. The array phrasing is
+ * required for the func_00128440 match — see the USA unit's match notes. */
+extern s32 D_00143200[];
+extern char D_0013B8E8[];
+extern void func_00128898(const char *fmt, ...);
 
 extern s32 D_00137F00;
-extern u8 D_001436C0[];
+/* Sub-object of a resource-table entry (dual instance at +0x0/+0x80 of the
+ * object; func_00128DB0 selects between the two by their +0x7C word). */
+typedef struct ResSubObj {
+    u8 pad[0x7C];
+    s32 unk7C;     /* 0x07C — selection key (larger wins) */
+} ResSubObj;
+/* 16-entry resource table (+0x80 EU twin of USA D_00143640), stride 0x330:
+ * +0x4 active flag, +0x8 handle, +0xC object pointer. Struct-typed so
+ * func_00128D58's per-field array indexing compiles to the dual-base store. */
+typedef struct ResTableEntry {
+    s32 unk0;         /* 0x000 */
+    s32 active;       /* 0x004 */
+    s32 handle;       /* 0x008 */
+    ResSubObj *obj;   /* 0x00C */
+    u8 pad[0x330 - 16];
+} ResTableEntry;
+extern ResTableEntry D_001436C0[];
 
 /* func_00128A48: 0x8 bytes of inter-function padding split off by symbol_addrs
  * size:0x8; the real function begins at func_00128A50. Pure padding, no C. */
@@ -317,20 +330,8 @@ extern u8 D_001436C0[];
  * the 0x330-stride table D_001436C0, dispatches to func_00128D58/DB0/E98 + a
  * memcpy). Boundary now correct; body not yet decompiled. Left as INCLUDE_ASM. */
 
-/* func_00128D58(index): acquire a resource via func_00128578(index); on success
- * (non-negative handle) record it at entry+0x8 and set the active flag at
- * entry+0x4 in the 0x330-stride D_001436C0 table. ~87% — the original keeps two
- * separate base registers for the same entry pointer ($5 and a copied $3) and
- * stores result-then-flag; ee-gcc uses one base and reschedules the pair. A
- * scheduling/reg-alloc shape this cc1 won't reproduce. Left as INCLUDE_ASM. */
-
-/* func_00128E18(index): lazily refresh the two-word state cache D_00137E88 from
- * table entry `index` (stride 0x330 in D_001436C0; object pointer at +0xC).
- * Returns 0 when obj[0x7C] is 0 or the cache already holds the (obj[0x7C],
- * (obj+0x80)[0x7C]) pair; otherwise updates the cache and returns 1. Behaviour
- * recovered, but the original spills obj/next to a stack frame and ee-gcc keeps
- * them in registers here, giving a different instruction shape. Left as
- * INCLUDE_ASM. */
+/* func_00128D58 / func_00128DB0 / func_00128E18 now matched below (EU +0x80
+ * twins; see the function-adjacent doc comments). */
 
 extern s32 D_00137F90[];
 
@@ -1381,10 +1382,10 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011C1F8);
 extern s32 func_0011F5E0(void);
 extern s32 func_0011F628(void);
 extern s64 func_001234F0(float f);
-extern s64 func_00121450(s64 a, s64 b);   /* __moddi3  signed mod   */
-extern s64 func_0011FC68(s64 a, s64 b);   /* __divdi3  signed div   */
-extern u64 func_001220F0(u64 u, u64 v);   /* __umoddi3 unsigned mod */
-extern u64 func_00121B20(u64 u, u64 v);   /* __udivdi3 unsigned div */
+extern s64 __moddi3(s64 a, s64 b);   /* __moddi3  signed mod   */
+extern s64 __divdi3(s64 a, s64 b);   /* __divdi3  signed div   */
+extern u64 __umoddi3(u64 u, u64 v);   /* __umoddi3 unsigned mod */
+extern u64 __udivdi3(u64 u, u64 v);   /* __udivdi3 unsigned div */
 
 s32 func_0011C1F8(char *fmt, s64 *ap) {
     char buf[32];
@@ -1512,8 +1513,8 @@ s32 func_0011C1F8(char *fmt, s64 *ap) {
                     }
                     p++;
                     while (dn != 0) {
-                        *--q = (char)(func_00121450(dn, 10) + 0x30);
-                        dn = func_0011FC68(dn, 10);
+                        *--q = (char)(__moddi3(dn, 10) + 0x30);
+                        dn = __divdi3(dn, 10);
                     }
                 }
                 if (pad != 0 && pad < q) q = pad;
@@ -1535,8 +1536,8 @@ s32 func_0011C1F8(char *fmt, s64 *ap) {
                 } else {
                     p++;
                     do {
-                        *--q = (char)(func_001220F0(n, 10) + 0x30);
-                        n = func_00121B20(n, 10);
+                        *--q = (char)(__umoddi3(n, 10) + 0x30);
+                        n = __udivdi3(n, 10);
                     } while (n != 0);
                 }
                 if (pad != 0 && pad < q) q = pad;
@@ -1728,7 +1729,12 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011CDA0);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011CEC8);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011CF74);
+/**
+ * Empty function (single `jr $31`) — a compiled-out hook/stub left in the SIF
+ * area. An empty void body reproduces it exactly.
+ */
+void func_0011CF74(void) {
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011CF78);
 
@@ -1756,7 +1762,25 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011D208);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011D238);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011D2F0);
+extern s32 *func_0011D208(s32 idx);
+
+/**
+ * Enqueue a command against the ring slot for `idx`: allocate the slot via
+ * func_0011D208, copy the descriptor fields obj[5]/obj[7] into it (explicit
+ * temps), stamp the command word 0x8000000C at slot[8], then void-tail-call
+ * func_0011CD60(0x80000008, slot, 0x40, obj[8], obj[9], obj[10]) — six plain
+ * EABI register args, sibcall-optimised to the original's `j` (lever 7).
+ */
+void func_0011D2F0(s32 *obj, s32 idx) {
+    s32 *slot = func_0011D208(idx);
+    s32 a = obj[5];
+    s32 b = obj[7];
+
+    slot[5] = a;
+    slot[7] = b;
+    slot[8] = 0x8000000C;
+    func_0011CD60(0x80000008, (s32)slot, 0x40, obj[8], obj[9], obj[10]);
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011D350);
 
@@ -1768,7 +1792,23 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011D590);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011D620);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011D810);
+/**
+ * Validity predicate for the RPC handle in arg0 (EU twin of USA
+ * sceSifCheckStatRpc; splat hasn't named it here): returns 1 iff arg0[0]
+ * points to a live object, arg0[1] matches obj[6] (the +0x18 id/gen), and
+ * obj[4] (+0x10) bit 0 is set; else 0. The explicit gotos keep the original's
+ * two-exit shape (lever 10).
+ */
+s32 func_0011D810(s32 *arg0) {
+    s32 *obj = (s32 *)*arg0;
+    if (obj == 0) goto ret0;
+    if (arg0[1] != obj[6]) goto ret0;
+    if ((obj[4] & 1) != 0) goto ret1;
+ret0:
+    return 0;
+ret1:
+    return 1;
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011D850);
 
@@ -1791,7 +1831,30 @@ void func_0011D868(void) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011D8C8);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011D950);
+extern void func_0011AC40(s32 sema);
+extern s32 D_001347B8;
+extern u8 D_0013FF00[];
+
+/**
+ * Look up slot `idx` in the fixed 0x20-entry table D_0013FF00 (0x10-byte
+ * stride; EU +0x80 twin of USA D_0013FE80). After the lazy-init
+ * (func_0011D868) and acquiring the table lock (func_0011AC60(D_001347B8)),
+ * release the lock (func_0011AC40) and return the slot address when idx
+ * (unsigned) is in range, else 0. The explicit `goto` keeps the in-range
+ * block as the branch TARGET (lever 10) — the one-register choice for match.
+ */
+void *func_0011D950(u32 idx) {
+    void *slot;
+    func_0011D868();
+    func_0011AC60(D_001347B8);
+    if (idx < 0x20) goto hit;
+    func_0011AC40(D_001347B8);
+    return 0;
+hit:
+    slot = &D_0013FF00[idx * 0x10];
+    func_0011AC40(D_001347B8);
+    return slot;
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011D9C0);
 
@@ -1820,7 +1883,18 @@ s32 func_0011DD98(void) {
     return 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011DDC8);
+extern void func_0011AC40(s32 sema);
+extern s32 D_001347B4;
+
+/**
+ * Release the singleton table lock: forward the global semaphore handle
+ * D_001347B4 (EU +0x80 twin of USA D_00134734) to func_0011AC40 (SignalSema).
+ * A void tail call, sibling-call-optimised to the original's frameless
+ * `j func_0011AC40` (the handle load rides the jump's delay slot).
+ */
+void func_0011DDC8(void) {
+    func_0011AC40(D_001347B4);
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011DDD8);
 
@@ -2003,7 +2077,22 @@ void func_0011F058(void) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011F120);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011F130);
+extern s32 func_0011B080(void);
+extern s32 func_0011B090(void);
+extern s32 func_0011F170(void);
+
+/**
+ * Dispatch on func_0011B080() (EE syscall 0x7F, current context): if it equals
+ * 0x02000000 run func_0011F170, else func_0011B090; return the arm's result.
+ * RETURNING the call result keeps both arms as framed `jal`s converging at the
+ * shared epilogue (lever 7).
+ */
+s32 func_0011F130(void) {
+    if (func_0011B080() == 0x02000000) {
+        return func_0011F170();
+    }
+    return func_0011B090();
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011F170);
 
@@ -2080,7 +2169,18 @@ s32 func_0011F688(s32 *dst, s32 *src, u32 nbytes) {
     return 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011F6C0);
+/**
+ * Linear find: return the first pointer in [p,last) whose word equals value,
+ * else 0. The single combined `&&` loop condition makes ee-gcc peel the first
+ * iteration and emit the deref-then-range branch-likely pair + movz tail-merge
+ * (levers 5+6).
+ */
+s32 *func_0011F6C0(s32 *p, s32 *last, s32 value) {
+    while (*p != value && p < last) {
+        p++;
+    }
+    return (p < last) ? p : 0;
+}
 
 /**
  * func_0011F700 = EE kernel syscall 0x83. SCE library syscall stub (see
@@ -2258,9 +2358,26 @@ void func_0011F938(void) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011F9E4);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011FA18);
+/**
+ * Shutdown hook thunk: void tail call to the func_0011F130 dispatcher,
+ * sibling-call-optimised to the original's `j func_0011F130`.
+ */
+void func_0011FA18(void) {
+    func_0011F130();
+}
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011FA20);
+extern void func_0011A840(s32 code);
+
+/**
+ * libc exit() (EU twin of USA `exit`; splat hasn't named it here): run the
+ * func_0011FA18 shutdown hook, then hand `code` to the terminator
+ * func_0011A840 — a void tail call, sibcall-optimised to the original's
+ * `j func_0011A840` (lever 7, framed form; `code` rides callee-saved $16).
+ */
+void func_0011FA20(s32 code) {
+    func_0011FA18();
+    func_0011A840(code);
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011FA48);
 
@@ -2357,7 +2474,7 @@ void func_0011FC48(void) {
 }
 
 /**
- * func_0011FC68 = libgcc `__divdi3` (signed 64-bit division, a / b); EU twin of
+ * __divdi3 = libgcc `__divdi3` (signed 64-bit division, a / b); EU twin of
  * the USA function at the same address (region-co-located, delta +0). ee-gcc
  * inlines libgcc2.c's signed wrapper around `__udivmoddi4` (sign-strip via
  * bgez/negu, unsigned long-division core driven by `__clz_tab` D_0013AC58 and
@@ -2368,9 +2485,9 @@ void func_0011FC48(void) {
  * on the real R5900. Excluded domains (`break 0,7` / overflow): b == 0 and
  * INT64_MIN / -1. See the USA unit for the full analysis. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011FC68);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", __divdi3);
 #else
-s64 func_0011FC68(s64 a, s64 b) {
+s64 __divdi3(s64 a, s64 b) {
     return a / b;
 }
 #endif
@@ -2587,7 +2704,7 @@ s64 func_001213B8(s64 value) {
 #endif
 
 /**
- * func_00121450 = libgcc `__moddi3` (signed 64-bit modulo, a % b); EU twin of the
+ * __moddi3 = libgcc `__moddi3` (signed 64-bit modulo, a % b); EU twin of the
  * USA function at the same address (region-co-located, delta +0). ee-gcc inlines
  * libgcc2.c's signed wrapper around `__udivmoddi4` (sign-strip, unsigned core via
  * `__clz_tab` D_0013AD58 + `udiv_qrnnd`/`break 0,7`, remainder takes the dividend's
@@ -2596,15 +2713,15 @@ s64 func_001213B8(s64 value) {
  * cmp-oracle'd bit-identical on the real R5900. Excluded domains: b == 0 and
  * INT64_MIN / -1. See the USA unit for the full analysis. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00121450);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", __moddi3);
 #else
-s64 func_00121450(s64 a, s64 b) {
+s64 __moddi3(s64 a, s64 b) {
     return a % b;
 }
 #endif
 
 /**
- * func_00121AB8 = 64-bit integer multiply (low 64 bits), a*b (libgcc __muldi3).
+ * __muldi3 = 64-bit integer multiply (low 64 bits), a*b (libgcc __muldi3).
  * NEAR-MISS WALL (72.29% via objdiff, region-co-located with USA): correct
  * instruction set, but ee-gcc -O2 -G0 differs in half-product register
  * allocation and materialises the 0xFFFFFFFF mask via `dli` vs the original
@@ -2612,9 +2729,9 @@ s64 func_00121450(s64 a, s64 b) {
  * routed to tester-EE for the real-R5900 run.
  */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00121AB8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", __muldi3);
 #else
-s64 func_00121AB8(s64 a, s64 b) {
+s64 __muldi3(s64 a, s64 b) {
     union { struct { s32 low; s32 high; } s; s64 ll; } w, uu, vv;
     uu.ll = a;
     vv.ll = b;
@@ -2635,37 +2752,37 @@ void func_00121B18(void) {
 }
 
 /**
- * func_00121B20 = libgcc `__udivdi3` (unsigned 64-bit division, u / v); EU twin of
+ * __udivdi3 = libgcc `__udivdi3` (unsigned 64-bit division, u / v); EU twin of
  * the USA function at the same address (region-co-located, delta +0). Inlines
  * libgcc2.c's `__udivmoddi4` long division directly (no sign handling — straight
  * to the sltu/divu unsigned core via `__clz_tab` D_0013AE58 + `udiv_qrnnd`/
  * `break 0,7`); the quotient is returned, the remainder discarded. Compiler
  * runtime, NOT game code; the MATCHING arm stays INCLUDE_ASM (links verbatim). The
  * portable #else is the faithful behaviour (`u / v`), cmp-oracle'd bit-identical on
- * the real R5900. Excluded domain: v == 0. Paired: func_001220F0 = `__umoddi3`. */
+ * the real R5900. Excluded domain: v == 0. Paired: __umoddi3 = `__umoddi3`. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00121B20);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", __udivdi3);
 #else
-u64 func_00121B20(u64 u, u64 v) {
+u64 __udivdi3(u64 u, u64 v) {
     return u / v;
 }
 #endif
 
 /**
- * func_001220F0 = libgcc `__umoddi3` (unsigned 64-bit modulo, u % v); EU twin of
+ * __umoddi3 = libgcc `__umoddi3` (unsigned 64-bit modulo, u % v); EU twin of
  * the USA function at the same address (region-co-located, delta +0). Inlines
  * libgcc2.c's `__udivmoddi4` long division (count_leading_zeros via the 256-byte
  * `__clz_tab` D_0013AF58, then 16-bit-digit `udiv_qrnnd` with `divu`/`break 0,7`).
  * Compiler runtime, NOT game code and NOT a format sub-engine - not reconstructable
- * as clean hand C that matches byte-exact; links verbatim. Paired: func_00121B20 =
+ * as clean hand C that matches byte-exact; links verbatim. Paired: __udivdi3 =
  * `__udivdi3`. See the USA unit for the full analysis. The MATCHING arm stays
  * INCLUDE_ASM in both regions; the portable #else is the faithful behaviour
  * (`u % v`), cmp-oracle'd bit-identical on the real R5900. Excluded domain: v == 0.
  */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001220F0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", __umoddi3);
 #else
-u64 func_001220F0(u64 u, u64 v) {
+u64 __umoddi3(u64 u, u64 v) {
     return u % v;
 }
 #endif
@@ -2937,7 +3054,7 @@ s64 func_00122A98(s64 a, s64 b) {
 /* func_00122B00 = software double-precision MULTIPLY of two packed doubles
  * (a * b -> packed double). NaN propagates with the product sign; 0*inf -> NaN
  * constant &D_00141890; otherwise (both normal) the 122-bit product of the two
- * 61-bit mantissas is built from four 32x32 partial products (func_00121AB8),
+ * 61-bit mantissas is built from four 32x32 partial products (__muldi3),
  * normalised and round-to-nearest-even.
  *
  * NEAR-MISS WALL (region-co-located with USA). Seedable: ships a faithful
@@ -2946,7 +3063,7 @@ s64 func_00122A98(s64 a, s64 b) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00122B00);
 #else
-extern s64 func_00121AB8(s64 a, s64 b);
+extern s64 __muldi3(s64 a, s64 b);
 
 s64 func_00122B00(s64 a, s64 b) {
     FpParts pa, pb, result;
@@ -2998,10 +3115,10 @@ s64 func_00122B00(s64 a, s64 b) {
     aHi = (u64)pa.mantissa >> 32;
     bLo = (u64)pb.mantissa & 0xFFFFFFFFULL;
     bHi = (u64)pb.mantissa >> 32;
-    p0 = (u64)func_00121AB8((s64)bLo, (s64)aLo);
-    p1 = (u64)func_00121AB8((s64)bHi, (s64)aLo);
-    p2 = (u64)func_00121AB8((s64)bLo, (s64)aHi);
-    p3 = (u64)func_00121AB8((s64)bHi, (s64)aHi);
+    p0 = (u64)__muldi3((s64)bLo, (s64)aLo);
+    p1 = (u64)__muldi3((s64)bHi, (s64)aLo);
+    p2 = (u64)__muldi3((s64)bLo, (s64)aHi);
+    p3 = (u64)__muldi3((s64)bHi, (s64)aHi);
     mid = p1 + p2;
     midCarry = (mid < p1) ? 1 : 0;
     low64 = p0 + (mid << 32);
@@ -3700,18 +3817,33 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", McGetEntSpace);
 /**
  * Initialise the D_00143200 subsystem by calling func_0011D620 with the config
  * block at &D_00143188, mode 0x80000963, two 0x400-sized buffers both pointing
- * at &D_00143200, and zeroed trailing arguments; returns the resulting handle
- * stored in D_00143200.
+ * at D_00143200, and zeroed trailing arguments; returns the resulting handle
+ * stored in D_00143200[0]. (EU +0x80 twin; array phrasing shared with
+ * func_00128440 — preserves the D_00143200 reloc, byte-neutral vs the scalar.)
  */
 s32 func_00128250(void) {
-    func_0011D620(&D_00143188, 0x80000963, 0, &D_00143200, 0x400,
-                  &D_00143200, 0x400, 0, 0);
-    return D_00143200;
+    func_0011D620(&D_00143188, 0x80000963, 0, D_00143200, 0x400,
+                  D_00143200, 0x400, 0, 0);
+    return D_00143200[0];
 }
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001282A8);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00128440);
+/**
+ * func_00128440(arg0): open the D_00143200 subsystem in mode 0x80000904 with
+ * arg0 stored at D_00143200[1]; on failure log D_0013B8E8 (func_00128898) and
+ * return 0, else return the handle D_00143200[0]. EU +0x80 twin; see the USA
+ * unit for the match notes (array extern, not the scalar (&D)[1] idiom).
+ */
+s32 func_00128440(s32 arg0) {
+    D_00143200[1] = arg0;
+    if (func_0011D620(&D_00143188, 0x80000904, 0, D_00143200, 0x400,
+                      D_00143200, 0x400, 0, 0) < 0) {
+        func_00128898(D_0013B8E8);
+        return 0;
+    }
+    return D_00143200[0];
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001284B0);
 
@@ -3723,7 +3855,14 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001286C8);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001287A8);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00128898);
+/**
+ * Compiled-out VARARGS debug print stub (libmc area): the body is empty but
+ * the `...` still makes ee-gcc home the unnamed arg registers $5-$11 to the
+ * 0x80-byte stack area (the sd run at +0x48..+0x78) — that varargs prologue
+ * IS the whole function. First arg is the (ignored) format string.
+ */
+void func_00128898(const char *fmt, ...) {
+}
 
 /**
  * Reset the 16-entry table at D_001436C0 (each entry is 0x330 bytes): zero the
@@ -3735,7 +3874,7 @@ s32 func_001288C0(void) {
     s32 *end;
     D_00137F00 = 1;
     entry = (s32 *)D_001436C0;
-    end = (s32 *)(D_001436C0 + 0x3300);
+    end = (s32 *)((u8 *)D_001436C0 + 0x3300);
     do {
         entry[0] = 0;
         entry[1] = 0;
@@ -3753,11 +3892,66 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00128B28);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00128C18);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00128D58);
+extern s32 func_00128578(s32 index);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00128DB0);
+/**
+ * func_00128D58(index): acquire a resource via func_00128578(index); on
+ * success record the handle at entry+0x8 and set the active flag at entry+0x4
+ * in the 0x330-stride D_001436C0 table; returns the handle (negative =
+ * failure). EU +0x80 twin (table at D_001436C0); see the USA unit for notes.
+ */
+s32 func_00128D58(s32 index) {
+    s32 h = func_00128578(index);
+    if (h < 0) {
+        return h;
+    }
+    D_001436C0[index].handle = h;
+    D_001436C0[index].active = 1;
+    return h;
+}
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00128E18);
+extern void func_0011B3D0(void *arg0, void *arg1);
+
+/**
+ * func_00128DB0(index): run func_0011B3D0 over table entry `index`'s object
+ * (args: obj, obj+0x100), then return whichever of the object's two
+ * sub-instances (obj / obj+0x80) has the larger +0x7C word (ties -> obj).
+ * EU +0x80 twin (table at D_001436C0); see the USA unit for the match notes.
+ */
+ResSubObj *func_00128DB0(s32 index) {
+    ResSubObj *pair[2];
+    ResSubObj *obj = D_001436C0[index].obj;
+    pair[0] = obj;
+    pair[1] = (ResSubObj *)((u8 *)obj + 0x80);
+    func_0011B3D0(obj, (u8 *)obj + 0x100);
+    return pair[pair[0]->unk7C < pair[1]->unk7C];
+}
+
+extern s32 D_00137F08[];
+
+/**
+ * func_00128E18(index): lazily refresh the two-word state cache D_00137F08
+ * from table entry `index`'s object; returns 0 when obj->unk7C is 0 or the
+ * cache is current, else updates from the pair and returns 1. EU +0x80 twin
+ * (cache D_00137F08, table D_001436C0); see the USA unit for the match notes.
+ */
+s32 func_00128E18(s32 index) {
+    ResSubObj *pair[2];
+    ResSubObj *obj = D_001436C0[index].obj;
+    ResSubObj *next = (ResSubObj *)((u8 *)obj + 0x80);
+    s32 k = obj->unk7C;
+    pair[0] = obj;
+    pair[1] = next;
+    if (k == 0) {
+        return 0;
+    }
+    if (D_00137F08[0] == k && D_00137F08[1] == next->unk7C) {
+        return 0;
+    }
+    D_00137F08[0] = pair[0]->unk7C;
+    D_00137F08[1] = pair[1]->unk7C;
+    return 1;
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00128E98);
 
@@ -4270,7 +4464,18 @@ void func_00130178(s32 *obj) {
     func_00130DB8(0, 0);
 }
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00130240);
+extern u8 D_0013BE68[];
+extern void *func_0011C820(const char *format, ...);
+
+/**
+ * Default message handler: print the message `buf` through func_0011C820
+ * (the EU Kprintf twin) with the fixed format string D_0013BE68 (EU +0x80
+ * twin of USA D_0013BDE8). Void tail call → sibling-call-optimised to the
+ * original's frameless `j func_0011C820`.
+ */
+void func_00130240(void *buf) {
+    func_0011C820((const char *)D_0013BE68, buf);
+}
 
 /**
  * Build a temporary 256-byte descriptor on the stack via func_00115DA8, then
@@ -4343,17 +4548,49 @@ void func_001309C0(s32 *obj) {
     *(s32 *)((u8 *)obj + 0x14C) = func_0012C878(obj, 0xE);
 }
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00130A50);
+extern u8 D_0013BED8[];
+extern u8 D_0013BF08[];
+extern u8 D_0013BF20[];
+extern u8 D_0013BF58[];
+extern void func_00130C68(u8 *arg0);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00130A60);
+/**
+ * Frameless tail-call thunk: dispatch arg0 through func_00130288 with the
+ * fixed message table D_0013BED8 (EU +0x80 twin of USA D_0013BE58). Void tail
+ * call → sibling-call-optimised into the original's `j func_00130288`.
+ * Sibling thunks A60/A70/A80 differ only by table.
+ */
+void func_00130A50(s32 arg0) {
+    func_00130288(arg0, D_0013BED8);
+}
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00130A70);
+/** Sibling of func_00130A50 with message table D_0013BF08 (USA D_0013BE88). */
+void func_00130A60(s32 arg0) {
+    func_00130288(arg0, D_0013BF08);
+}
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00130A80);
+/** Sibling of func_00130A50 with message table D_0013BF20 (USA D_0013BEA0). */
+void func_00130A70(s32 arg0) {
+    func_00130288(arg0, D_0013BF20);
+}
 
+/** Sibling of func_00130A50 with message table D_0013BF58 (USA D_0013BED8). */
+void func_00130A80(s32 arg0) {
+    func_00130288(arg0, D_0013BF58);
+}
+
+/* func_00130A8C: starts with a 0xCDCDCDCD fill word (uninitialised-memory
+ * pattern) before the real entry at 0x130A90 — not producible from C. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00130A8C);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00130AA0);
+/**
+ * Frameless tail-call thunk: forward the sub-object at arg0->field_0x40 + 0x4C
+ * to func_00130C68. Void tail call → sibling-call-optimised to the original's
+ * `j func_00130C68` with the +0x4C adjust in the delay slot.
+ */
+void func_00130AA0(void *arg0) {
+    func_00130C68(*(u8 **)((u8 *)arg0 + 0x40) + 0x4C);
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00130AAC);
 
@@ -4470,7 +4707,16 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00131720);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00131728);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00131790);
+/**
+ * Binary byte (0..99) → packed BCD (EU +0x60 twin of USA func_00131730,
+ * RTC/BCD clock family): BCD(n) = n + 6*(n/10), e.g. 59 → 0x59. The u8
+ * param/return produce the callee-side andi masks; divide-by-10 emits the
+ * divu + beql/break zero-guard (harness break-0,7 fixup) and the native
+ * 3-op `mult`.
+ */
+u8 func_00131790(u8 binary) {
+    return binary / 10 * 6 + binary;
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001317C0);
 
