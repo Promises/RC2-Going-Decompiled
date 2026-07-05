@@ -1162,8 +1162,9 @@ s32 UpdateBestiaryMenuInput(void) {
     s32 cursor, i;
 
     if (buttons & 0x10) {           /* back */
-        if (*(s32 *)(*(u8 **)(g_menuScreenBlock + 0x14) + 0xE0) != 0) {
-            *(s32 *)(g_menuScreenBlock + 0x18) = *(s32 *)(g_menuScreenBlock + 0x134);
+        s32 e0 = *(s32 *)(*(u8 **)(g_menuScreenBlock + 0x14) + 0xE0);
+        if (e0 != 0) {
+            *(s32 *)(g_menuScreenBlock + 0x18) = e0;
             return 0;
         }
         return (*(s32 *)(g_menuScreenBlock + 0x134) == 0) ? -1 : 0;
@@ -1394,9 +1395,10 @@ s32 UpdateCheatMenuInput(void) {
     s32 gate, cheatId, allow;
 
     if (flags & 0x10) {                 /* back */
+        s32 e0 = *(s32 *)(*(u8 **)(g_menuScreenBlock + 0x14) + 0xE0);
         D_1ABA30 = 0;
-        if (*(s32 *)(*(u8 **)(g_menuScreenBlock + 0x14) + 0xE0) != 0) {
-            *(s32 *)(g_menuScreenBlock + 0x18) = *(s32 *)(g_menuScreenBlock + 0x134);
+        if (e0 != 0) {
+            *(s32 *)(g_menuScreenBlock + 0x18) = e0;
             return 0;
         }
         return (*(s32 *)(g_menuScreenBlock + 0x134) == 0) ? -1 : 0;
