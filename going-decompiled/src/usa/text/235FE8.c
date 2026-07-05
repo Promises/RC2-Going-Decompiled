@@ -114,7 +114,7 @@ extern void func_00342978(void *p);
 extern void func_00342998(void *p);
 extern f32 D_1AE1E8;                    /* GUI x-position offset constant */
 extern f32 D_1AE1EC;                    /* GUI y-position offset constant */
-extern void func_00115DA8(char *dst, const char *fmt, ...); /* SDK sprintf */
+extern int func_00115DA8(char *dst, const char *fmt, ...); /* SDK sprintf (returns char count) */
 extern s32 GetLocalizedString(s32 id);  /* textId -> char* (declared early for func_003395F0) */
 extern s32 g_padButtonsPressed;         /* 0x138344 - buttons pressed this frame */
 extern f32 D_1AE0C0, D_1AE0C4;          /* GUI anchor x/y position offsets */
@@ -6689,7 +6689,7 @@ void *func_003475F0(void *w) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiWeaponGridScreenInit);
 #else
-void GuiWeaponGridTick(void *w, s32 flag);
+s32 GuiWeaponGridTick(void *w, s32 flag);
 extern char *g_guiInstance;
 extern u8 D_1ADBE8[], D_1ADBF0[], D_1ADFA0[], D_1ADC00[], D_1ADFA8[], D_1AE4B8[];
 extern u8 D_1AE018[], D_1ADF98[], D_1AE4C0[], D_1ADF78[], D_1ADFB0[], D_1ADC08[];
@@ -6794,7 +6794,137 @@ void GuiWeaponGridScreenInit(void *w, GuiPool *pool) {
 }
 #endif
 
+/* GuiWeaponGridTick: per-frame update for the 6x4 weapon-select grid widget `w`.
+ * `flag` is the input-button bitmask for this frame. D-pad bits move the cursor
+ * (0x1000 left / 0x4000 right over the 6 columns at +0x4C8; 0x8000 up / 0x2000
+ * down over the 4 rows at +0x4C4, each wrapping), playing the move cue and, on a
+ * real cell change, kicking the highlight pulse (func_002AA3F0). The selected
+ * cell maps through D_00259F38[cell] -> item id -> equipped variant slot in
+ * g_weaponTable. All nine sub-elements are repositioned relative to the placement
+ * record (+0x438); the cursor (+0xE4) additionally steps 53.5px per row / 47px
+ * per column. For an owned item it formats the localized name (+0x480) and the
+ * ammo/upgrade line (+0x440, split "cur/cap" at 1000 via func_00115DA8); an
+ * unowned cell clears both text buffers. When 0x40 (confirm) is held on an owned
+ * item it plays the accept cue, records the item in g_menuTransitionMode+0x24 and
+ * returns the selected cell index; otherwise returns -1. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiWeaponGridTick);
+#else
+extern s32 g_weaponAmmo[];              /* 0x139688 - s32 current ammo per item id */
+extern u8 g_inventoryNewFlag[];         /* 0x1A7B38 - per-item "newly acquired" flag */
+extern u8 g_menuTransitionMode[];       /* 0x1F27DC - +0x24 receives the activated item id */
+extern f32 D_1AE4D0[2], D_1AE4D8[2], D_1AE4E0[2], D_1AE4E8[2]; /* {x,y} element offset pairs */
+extern u8 D_1AE4F0[], D_1AE4F8[], D_1AE500[], D_1AE510[], D_1AE2D0[]; /* sprintf format strings */
+
+s32 GuiWeaponGridTick(void *w, s32 flag) {
+    f32 *base = *(f32 **)((char *)w + 0x438);
+    s32 oldCell = *(s32 *)((char *)w + 0x4C4) + *(s32 *)((char *)w + 0x4C8) * 4;
+    s32 newCell;
+    s32 selRow, selCol;
+    s32 result = -1;
+
+    if (flag & 0x1000) {
+        s32 v = *(s32 *)((char *)w + 0x4C8) - 1;
+        PlayGlobalSound(3, 0, 0);
+        *(s32 *)((char *)w + 0x4C8) = (v > -1) ? v : 5;
+    } else if (flag & 0x4000) {
+        s32 v = *(s32 *)((char *)w + 0x4C8) + 1;
+        PlayGlobalSound(3, 0, 0);
+        *(s32 *)((char *)w + 0x4C8) = (5 < v) ? 0 : v;
+    } else if (flag & 0x8000) {
+        s32 v = *(s32 *)((char *)w + 0x4C4) - 1;
+        PlayGlobalSound(3, 0, 0);
+        *(s32 *)((char *)w + 0x4C4) = (v > -1) ? v : 3;
+    } else if (flag & 0x2000) {
+        s32 v = *(s32 *)((char *)w + 0x4C4) + 1;
+        PlayGlobalSound(3, 0, 0);
+        *(s32 *)((char *)w + 0x4C4) = (3 < v) ? 0 : v;
+    }
+
+    selRow = *(s32 *)((char *)w + 0x4C4);
+    selCol = *(s32 *)((char *)w + 0x4C8);
+    newCell = selRow + selCol * 4;
+    if (oldCell != newCell) {
+        func_002AA3F0(0, 0, 1, 0, 1);
+    }
+
+    {
+        s32 *cursorColor = GuiElementGetColor((GuiElement *)((char *)w + 0xE4));
+        *cursorColor = func_002AA3F0(0x60442D00, 0x70FFFEED, 0x14, 0, 0);
+    }
+
+    GuiElementSetPos((GuiElement *)((char *)w + 0x0),   base[0], base[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x4C),  base[0], base[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x130), base[0], base[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x98),  base[0], base[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0xE4),
+                     D_1AE4D0[0] + base[0] + (f32)selRow * 53.5f,
+                     D_1AE4D0[1] + base[1] + (f32)selCol * 47.0f, 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x17C), base[0], base[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x210),
+                     D_1AE4D8[0] + base[0], D_1AE4D8[1] + base[1], 0.0f, 0.0f);
+
+    D_1ADAF0 = -1;
+    if (newCell >= 0) {
+        s16 gridItemId = *(s16 *)((char *)D_00259F38 + newCell * 10 + 6);
+        u8 slot = g_itemEquippedSlot[gridItemId];
+
+        if (g_weaponTable[slot * 0xE0 + 4] != 0) {
+            g_inventoryOwned[gridItemId] = 1;
+            g_inventoryNewFlag[gridItemId] = 1;
+        }
+
+        if (g_inventoryOwned[gridItemId] != 0) {
+            char *namebuf = (char *)w + 0x480;
+            char *statusbuf = (char *)w + 0x440;
+            s16 nameId = *(s16 *)&g_weaponTable[slot * 0xE0 + 6];
+            s32 nameStrArg = *(s32 *)&g_weaponTable[slot * 0xE0 + 8];
+            s32 ammo;
+            u16 capacity;
+
+            D_1ADAF0 = nameId;
+            func_00115DA8(namebuf, (const char *)GetLocalizedString(nameStrArg));
+
+            ammo = g_weaponAmmo[gridItemId];
+            capacity = *(u16 *)&g_weaponTable[slot * 0xE0 + 0x88];
+            if (capacity != 0) {
+                u16 upgrade = *(u16 *)&g_weaponTable[slot * 0xE0 + 0x8E];
+                char *p = statusbuf;
+                p += func_00115DA8(p, (const char *)D_1AE4F0, (const char *)GetLocalizedString(0x2C5F));
+                if (ammo < 1000)
+                    p += func_00115DA8(p, (const char *)D_1AE4F8, ammo);
+                else
+                    p += func_00115DA8(p, (const char *)D_1AE500, ammo / 1000, ammo % 1000);
+                if (upgrade < 1000)
+                    p += func_00115DA8(p, (const char *)D_1AE2D0, upgrade);
+                else
+                    p += func_00115DA8(p, (const char *)D_1AE510, upgrade / 1000, upgrade % 1000);
+            } else {
+                func_00115DA8(statusbuf, (const char *)D_1ADBA8, (const char *)GetLocalizedString(0x2C4F));
+            }
+
+            if (flag & 0x40) {
+                PlayGlobalSound(4, 0, 0);
+                result = newCell;
+                *(s32 *)&g_menuTransitionMode[0x24] = gridItemId;
+            }
+        } else {
+            *((char *)w + 0x440) = 0;
+            *((char *)w + 0x480) = 0;
+            if (flag & 0x40) {
+                PlayGlobalSound(5, 0, 0);
+            }
+        }
+    }
+
+    GuiElementSetPos((GuiElement *)((char *)w + 0x268),
+                     D_1AE4E0[0] + base[0], D_1AE4E0[1] + base[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x2C0),
+                     D_1AE4E8[0] + base[0], D_1AE4E8[1] + base[1], 0.0f, 0.0f);
+
+    return result;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003481E0);
 
