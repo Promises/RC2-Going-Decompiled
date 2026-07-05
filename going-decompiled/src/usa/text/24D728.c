@@ -420,8 +420,8 @@ extern void func_00283638(void *dst);/* zero a 16-byte quadword at dst */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F928);
 #else
 void func_0034F928(void *ctx) {
-    (void)ctx;
     union { u32 u; f32 f; } dir;
+    (void)ctx;
 
     *(f32 *)(g_dirLightMatrices + 0x380) = 0.4f; /* 0x3ECCCCCD */
     *(f32 *)(g_dirLightMatrices + 0x384) = 0.8f; /* 0x3F4CCCCD */
