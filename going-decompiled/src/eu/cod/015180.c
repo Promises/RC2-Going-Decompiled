@@ -1729,12 +1729,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011CDA0);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011CEC8);
 
-/**
- * Empty function (single `jr $31`) — a compiled-out hook/stub left in the SIF
- * area. An empty void body reproduces it exactly.
- */
-void func_0011CF74(void) {
-}
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011CF74);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011CF78);
 
