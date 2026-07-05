@@ -1083,7 +1083,47 @@ s32 func_002A98B8(f32 *pt, f32 *verts, s32 n) {
 }
 #endif
 
+/* func_002A9958(point, poly, count): even-odd point-in-polygon test in the XY
+ * plane. For each polygon edge (adjacent vertices poly[i], poly[(i+1)%count])
+ * that straddles the horizontal line y == point->y, it computes the edge's X
+ * intersection with that line and toggles an inside flag when the crossing lies
+ * left of point->x. Returns 1 if the point is inside (odd crossings), else 0.
+ * Vertices are 16-byte Vec4 records; only .x/.y participate. Pure leaf.
+ *
+ * Matching build stays INCLUDE_ASM: the branch-likely toggle idioms
+ * (bc1tl/bc1fl nullified delay slots) around the crossing test are an
+ * engine-2.96 schedule this C won't reproduce. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9958);
+#else
+s32 func_002A9958(Vec4 *point, Vec4 *poly, s32 count) {
+    s32 inside = 0;
+    s32 i;
+
+    if (count <= 0) {
+        return 0;
+    }
+    for (i = 0; i < count; i++) {
+        Vec4 *vi = &poly[i];
+        Vec4 *vj = &poly[(i + 1 == count) ? 0 : i + 1];
+        s32 crosses;
+
+        if (vi->y < point->y) {
+            crosses = point->y <= vj->y;
+        } else {
+            crosses = vj->y < point->y && point->y <= vi->y;
+        }
+        if (crosses) {
+            f32 t  = (point->y - vi->y) / (vj->y - vi->y);
+            f32 ix = vi->x + t * (vj->x - vi->x);
+            if (ix < point->x) {
+                inside = !inside;
+            }
+        }
+    }
+    return inside;
+}
+#endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9A28);
@@ -1118,9 +1158,78 @@ void func_002A9A68(void *rec, s32 a, s32 b, f32 power, void *src) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9A90);
+/* Ghidra alias CollMobysSphere / QueryMobysInSphere @ 0x00277F58: moby-only
+ * sphere gather + damage-event broadcast into g_collHitEventRing (see
+ * collision.h). Returns the hit count (list in g_collMobyHitList). */
+extern s32 CollMobysSphere(void *targetList, void *filter, Moby *self,
+                           void *hitEvent, f32 radius);
 
+/*
+ * func_002A9A90: issue a directional moby sphere-collision / damage query.
+ *
+ * Builds a spread direction from the moby's orientation — for an oriented moby
+ * (modeBits & 0x100) its motion vector (+0xE0) rescaled to 0.25 then offset by
+ * the matrix column at +0xC0; otherwise a unit heading from the facing yaw
+ * (cos, sin, z=1). The direction is scaled by `scale` and stamped with a fixed
+ * .w magnitude (0x45AFDF66), then folded into a hit-event record together with
+ * the source moby, class id, the two byte tags (arg4/arg5) and the impact
+ * `power`. CollMobysSphere then gathers/broadcasts against that record within
+ * `radius` and returns the hit count.
+ */
+#ifndef TARGET_NATIVE
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9A90);
+#else
+s32 func_002A9A90(Moby *self, void *targetList, s32 arg3, s32 arg4, s32 arg5,
+                  void *filter, f32 radius, f32 power, f32 scale) {
+    Vec4 dir;
+    u8   hitEvent[0x30];
+
+    if (self->modeBits & 0x100) {
+        Vec3RescaleToLenVu0(&dir, 0.25f, (Vec4 *)((u8 *)self + 0xE0));
+        Vec4AddVu0(&dir, &dir, (Vec4 *)((u8 *)self + 0xC0));
+    } else {
+        dir.x = func_00283B30(self->facingAngle);   /* cos */
+        dir.y = func_00283B48(self->facingAngle);   /* sin */
+        dir.z = 1.0f;
+    }
+    Vec4ScaleVu0(&dir, scale, &dir);
+    dir.w = 5627.9248f;   /* 0x45AFDF66 */
+
+    func_002A9A68(hitEvent, (s32)self, arg3, power, &dir);
+    *(u8  *)(hitEvent + 0x18) = (u8)arg4;
+    *(u8  *)(hitEvent + 0x19) = (u8)arg5;
+    *(u16 *)(hitEvent + 0x1A) = self->oClass;
+
+    return CollMobysSphere(targetList, filter, self, hitEvent, radius);
+}
+#endif
+
+/* func_002A0AF8 @ 0x002A0AF8 (text/1A00F0): computes a moby attach-point world
+ * position — scales the local offset by the moby's radius (+0x2C), transforms it
+ * by the orientation matrix (+0xC0) and adds the world position (+0x10) — writing
+ * the resulting Vec4 to `outPoint`. */
+extern void func_002A0AF8(Moby *self, s32 attachId, void *outPoint);
+
+/*
+ * func_002A9BD8: attach-point variant of the directional sphere query.
+ *
+ * Resolves a world-space query origin at moby attach point `attachId`
+ * (func_002A0AF8), then runs the directional moby sphere-collision query
+ * (func_002A9A90) from that origin — forwarding the class/tag params and the
+ * radius/power/scale floats unchanged. Returns the collision hit count.
+ * (func_002A9A90's second parameter is this computed origin point.)
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9BD8);
+#else
+s32 func_002A9BD8(Moby *self, s32 attachId, s32 arg3, s32 arg4, s32 arg5,
+                  void *filter, f32 radius, f32 power, f32 scale) {
+    Vec4 origin;
+    func_002A0AF8(self, attachId, &origin);
+    return func_002A9A90(self, &origin, arg3, arg4, arg5, filter,
+                         radius, power, scale);
+}
+#endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9C80);
@@ -1462,9 +1571,164 @@ s32 func_002AA4A8(Moby *m, u32 mask, s32 keep) {
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AA500);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AA508);
+/* func_002AE7E8 @ 0x002AE7E8: map a moby's class id (+0xAA) to an announcer /
+ * sound-cue id via a class-value switch. Returns the id byte. */
+extern s32 func_002AE7E8(Moby *moby);
+/* pvar-block word readers (defined later in this unit): word 0 / word 4. */
+extern s32 func_002AC058(Moby *moby);
+extern s32 func_002AC088(Moby *moby);
 
+/*
+ * func_002AA508: advance the per-owner "focus target" announcer state and return
+ * the emphasis weight for this frame.
+ *
+ * `owner`s pvar word 0 holds a small state block (`st`): current focus target
+ * moby (+0x18), a hold/cooldown tick counter (+0x1C), the resolved announcer id
+ * (+0x17) and a priority level (+0x04). Each call: (1) drops the focus target if
+ * its moby has despawned (state 0xFE/0xFD); (2) advances the hold counter,
+ * resetting target+counter after 0x79 ticks. Then, for the candidate event
+ * `event`: latches a new focus target (resolving its announcer id) or, on the
+ * same target, suppresses the emphasis weight (returns 0) while inside the
+ * per-kind re-trigger window (kind 9 -> 0x3C ticks, else 0xA ticks). The weight
+ * (event +0x2C) is clamped up to 1.0 for low-priority owners, and a companion
+ * state flag (owners pvar word 4, +0x18) is toggled by event flag 0x100000.
+ *
+ * UNCONFIRMED: state/event field meanings inferred from access pattern; owner is
+ * a Moby, target/candidate are Mobys (func_002AE7E8 reads their class).
+ */
+#ifndef TARGET_NATIVE
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AA508);
+#else
+f32 func_002AA508(Moby *owner, void *event) {
+    u8 *st = (u8 *)func_002AC058(owner);   /* focus-target state (pvar word 0) */
+    f32 weight = 0.0f;
+    s16 counter;
+
+    if (st == NULL) {
+        return 0.0f;
+    }
+
+    /* drop the focus target if its moby has despawned (state 0xFE/0xFD) */
+    {
+        Moby *cur = *(Moby **)(st + 0x18);
+        if (cur != NULL) {
+            u8 state = *(u8 *)((u8 *)cur + 0x20);
+            if (state == 0xFE || state == 0xFD) {
+                *(s16 *)(st + 0x1C) = 0;
+                *(s32 *)(st + 0x18) = 0;
+            }
+        }
+    }
+
+    /* advance the hold counter; expire target + counter after 0x79 ticks */
+    counter = *(s16 *)(st + 0x1C);
+    if (counter != 0) {
+        *(s16 *)(st + 0x1C) = (s16)(*(u16 *)(st + 0x1C) + 1);
+        if (counter >= 0x79) {
+            *(s32 *)(st + 0x18) = 0;
+            *(s16 *)(st + 0x1C) = 0;
+        }
+    }
+
+    if (event == NULL) {
+        return 0.0f;
+    }
+
+    weight = *(f32 *)((u8 *)event + 0x2C);
+    {
+        Moby *cand = *(Moby **)((u8 *)event + 0x20);
+        if (cand != NULL) {
+            if (*(Moby **)(st + 0x18) != cand) {
+                /* new focus target: latch it + resolve its announcer id */
+                *(s32 *)(st + 0x18) = (s32)cand;
+                *(u8 *)(st + 0x17) = (u8)func_002AE7E8(cand);
+                *(s16 *)(st + 0x1C) = 1;
+            } else {
+                /* same target: gate the re-trigger window by event kind */
+                u8  kind = *(u8 *)((u8 *)event + 0x28);
+                s16 c    = *(s16 *)(st + 0x1C);
+                if (kind == 9) {
+                    if (c < 0x3C) {
+                        weight = 0.0f;
+                    } else {
+                        *(s16 *)(st + 0x1C) = 1;
+                    }
+                } else {
+                    if (c < 0xA) {
+                        weight = 0.0f;
+                    }
+                    *(s16 *)(st + 0x1C) = 1;
+                }
+            }
+        }
+    }
+
+    /* low-priority owners get their emphasis floored to 1.0 */
+    if ((f32)*(s16 *)(st + 0x4) <= 1.0f && weight > 0.0f && weight < 1.0f) {
+        weight = 1.0f;
+    }
+
+    /* toggle the companion state flag (owner pvar word 4, +0x18) */
+    if (*(s32 *)((u8 *)event + 0x24) & 0x100000) {
+        u8 *st2 = (u8 *)func_002AC088(owner);
+        if (st2 != NULL) {
+            *(u8 *)(st2 + 0x18) = 1;
+        }
+    } else {
+        u8 *st2 = (u8 *)func_002AC088(owner);
+        if (st2 != NULL) {
+            *(u8 *)(st2 + 0x18) = 0;
+        }
+    }
+
+    return weight;
+}
+#endif
+
+/*
+ * func_002AA6B8: broadcast a per-target directional damage packet to a moby list.
+ *
+ * For each of the `count` mobys in `list` (skipping `skip`), computes the bearing
+ * from the reference position `refPos` to that moby (Atan2fPoly on the xy delta),
+ * builds a hit-event packet — a `magnitude`-scaled direction (cos/sin of the
+ * bearing) in xy, `zComp` in z, the fixed 0x45AFDF66 .w magnitude, plus the
+ * source moby / its class / the tag words (arg6) and bytes (arg7/arg8) / the
+ * `power` float (fa0) — and posts it to that moby via PostMobyDamagePacket
+ * (func_002A9C88). Same packet layout as func_002A9A90's sphere-query record.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AA6B8);
+#else
+void func_002AA6B8(Moby *self, const Vec4 *refPos, Moby **list, s32 count,
+                   Moby *skip, s32 arg6, s32 arg7, s32 arg8,
+                   f32 power, f32 magnitude, f32 zComp) {
+    Vec4 ref = *refPos;   /* 128-bit copy of the reference position */
+    s32  i;
+
+    for (i = 0; i < count; i++) {
+        Moby *entry = list[i];
+        u8   packet[0x30];
+        f32  bearing;
+
+        if (entry == skip) {
+            continue;
+        }
+        bearing = func_00283BF8(entry->pos.x - ref.x, entry->pos.y - ref.y);
+        *(f32 *)(packet + 0x00) = func_00283B30(bearing) * magnitude;  /* cos */
+        *(f32 *)(packet + 0x04) = func_00283B48(bearing) * magnitude;  /* sin */
+        *(f32 *)(packet + 0x08) = zComp;
+        *(f32 *)(packet + 0x0C) = 5627.9248f;   /* 0x45AFDF66 */
+        *(s32 *)(packet + 0x10) = (s32)self;
+        *(s32 *)(packet + 0x14) = arg6;
+        *(u8  *)(packet + 0x18) = (u8)arg7;
+        *(u8  *)(packet + 0x19) = (u8)arg8;
+        *(u16 *)(packet + 0x1A) = self->oClass;
+        *(f32 *)(packet + 0x1C) = power;
+        *(s32 *)(packet + 0x20) = arg6;
+        func_002A9C88(entry, packet);
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AA808);
 
@@ -2181,25 +2445,74 @@ s32 func_002AC088(Moby *moby) {
 }
 #endif
 
+/* func_002AA808: reserve up to `max` spawn slots for `owner` around `origin`
+ * within `radius`, filling `outRecs` (0x10-byte records) and returning the
+ * count actually granted. External (same unit, still INCLUDE_ASM). */
+extern s32 func_002AA808(void *owner, s32 max, void *outRecs, void *origin, f32 radius);
+/* SpawnParticleType04 (0x2BBD70): emit one type-04 particle from a reserved
+ * record at world position `pos`. Trailing ints are lifetime/size/blend params. */
+extern void SpawnParticleType04(void *rec, Vec4 *pos, u32 color, s32 a, s32 b,
+                                s32 c, s32 d, s32 e);
+
+/**
+ * func_002AC0B8 — emit a small burst of type-04 particles around a point.
+ *
+ * Reserves up to 20 particle slots for `owner` within radius 14 of `basePos`
+ * (func_002AA808), then for each granted slot builds a jittered offset direction
+ * from two random angles (func_002AFE68, magnitude 0.03), adds it to `basePos`,
+ * nudges the result up in Z by 0.015, and spawns a type-04 particle there with
+ * two randomised lifetime parameters (RandRangeInclusive 20..35 and 40..60).
+ * `arg3` is forwarded to the reservation helper (owner-context, UNCONFIRMED).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC0B8);
+#else
+void func_002AC0B8(void *owner, Vec4 *basePos, void *arg3) {
+    u8  spawnRecs[20][0x10];   /* func_002AA808 fills up to 20 0x10-byte records */
+    Vec4 dir;
+    s32 count;
+    s32 i;
+
+    count = func_002AA808(owner, 20, spawnRecs, arg3, 14.0f);
+    if (count <= 0) {
+        return;
+    }
+    for (i = 0; i < count; i++) {
+        f32 angle1 = GetRandomAngle();
+        f32 angle2 = GetRandomAngle();
+        s32 r1;
+        s32 r2;
+
+        func_002AFE68(&dir, 0.03f, angle1, angle2);
+        Vec4AddVu0(&dir, &dir, basePos);
+        dir.z += 0.015f;
+
+        r1 = func_002A8688(20, 35);   /* RandRangeInclusive */
+        r2 = func_002A8688(40, 60);
+        SpawnParticleType04(spawnRecs[i], &dir, 0x7000A0FFu, 0xFF, r1, 30, r2, 1);
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC1E0);
 
-/* func_002AC468: build a scratch transform/matrix (func_00284008), feed it
- * through func_002AC1E0 with `out`, then resolve `in` against it (func_00284028).
- * The 0x40-byte scratch is a 4x4 matrix shared by all three helpers. Walled:
- * $16/$17/$31 saves (save-layout wall). */
+/* func_002AC468: build a scratch transform/matrix from `in` (func_00284008),
+ * feed it through func_002AC1E0 with `out`, then resolve `in` against it
+ * (func_00284028). The 0x40-byte scratch is a 4x4 matrix shared by all three
+ * helpers. Walled: $16/$17/$31 saves (save-layout wall). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC468);
 #else
-extern void func_00284008(void *m);
+/* func_00284008 takes (dst, src): both call sites (here and func_002AE2D8)
+ * keep the source pointer live in $5. */
+extern void func_00284008(void *dst, void *src);
 extern void func_00284028(void *src, void *m);
 extern void func_002AC1E0(void *out, void *m);
 
 void func_002AC468(void *out, void *in) {
     u8 scratch[0x40];   /* 4x4 matrix */
 
-    func_00284008(scratch);
+    func_00284008(scratch, in);
     func_002AC1E0(out, scratch);
     func_00284028(in, scratch);
 }
@@ -2857,10 +3170,68 @@ s32 func_002AE198(void *self, Moby *obj, Vec4 *arg3, Vec4 *arg4) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE2D8);
-
-extern void MatrixMultiplyVu0(Mat4x4 *dst, Mat4x4 *a, Mat4x4 *b);
+extern void func_00284008(void *dst, void *src);   /* build/convert matrix dst from src */
 extern void MatrixToEulerAngles(Mat4x4 *mtx, void *outAngles);
+extern s32  func_002AE460(void *self, Moby *obj, Vec4 *arg3, Vec4 *arg4,
+                          void *arg5, void *arg6);
+
+/**
+ * func_002AE2D8 — AE-family placement with a hero/priority fallback.
+ *
+ * Resolves `obj`'s sub-source (func_002ADF18); no source → returns 0. Builds the
+ * source's base rotation matrix — from obj facing (+0xF0) via func_00283DC0 when
+ * the source flag (+0x3C) bit 0x40 is set, else loaded from obj's matrix rows
+ * (+0xC0) via func_00284008 — transforms `point` into that frame (out `outPos`)
+ * and re-adds obj's world position (+0x10); then composes `rotIn`'s rotation with
+ * the base matrix and writes euler angles to `outAngles`.
+ *
+ * Then, on source flag bit 0x4, re-adds the source's own offset (+0x10) into
+ * `outPos` and defers to func_002AE460 for the full compose. Otherwise, unless
+ * `self` is the hero, and only when `self` sorts below `obj` by class slot
+ * (+0x22), adds the source offset clamped to unit length (func_002AD860). Always
+ * returns 1 once a source exists.
+ */
+#ifndef TARGET_NATIVE
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE2D8);
+#else
+s32 func_002AE2D8(Moby *self, Moby *obj, Vec4 *point, Vec4 *rotIn,
+                  Vec4 *outPos, void *outAngles) {
+    s32 src = func_002ADF18(obj);
+    Mat4x4 base;
+    Mat4x4 composed;
+
+    if (src == 0) {
+        return 0;
+    }
+    if (*(s32 *)(src + 0x3C) & 0x40) {
+        func_00283DC0(&base, (Vec4 *)((u8 *)obj + 0xF0));
+    } else {
+        func_00284008(&base, (u8 *)obj + 0xC0);
+    }
+    func_00283A48(outPos, point, (Vec4 *)&base);
+    Vec4AddVu0(outPos, outPos, (Vec4 *)((u8 *)obj + 0x10));
+
+    func_00283DC0(&composed, rotIn);
+    MatrixMultiplyVu0(&composed, &base, &composed);
+    MatrixToEulerAngles(&composed, outAngles);
+
+    if (*(s32 *)(src + 0x3C) & 0x4) {
+        Vec4AddVu0(outPos, outPos, (Vec4 *)(src + 0x10));
+        func_002AE460(self, obj, outPos, outAngles, point, rotIn);
+        return 1;
+    }
+    if (self == g_pHeroMoby[0]) {
+        return 1;
+    }
+    if (self->classSlot < obj->classSlot) {
+        Vec4 srcOffset = *(Vec4 *)(src + 0x10);
+
+        func_002AD860(&srcOffset, 1.0f);
+        Vec4AddVu0(outPos, outPos, &srcOffset);
+    }
+    return 1;
+}
+#endif
 
 /**
  * Compute a moby's local-frame offset + composed orientation from its resolved
@@ -3729,7 +4100,60 @@ void func_002B1348(s32 ctx, Vec4 *vec, void *b) {
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1380);
 
+/* Rain heightmap: a 256x256 grid of byte cell-heights covering the world XZ
+ * span from g_rainHeightmapOrigin, one cell every CellW x CellH world units.
+ * A cell value of 0xFF means "no data". */
+extern u8  *g_pRainHeightmap;             /* 0x1B19A0 */
+extern Vec4 g_rainHeightmapOrigin;        /* 0x1B1960 */
+extern f32  g_rainHeightmapBaseHeight;    /* 0x1B1968 */
+extern f32  g_rainHeightmapCellW;         /* 0x1B1990 */
+extern f32  g_rainHeightmapCellH;         /* 0x1B1994 */
+extern f32  g_rainHeightmapHeightScale;   /* 0x1B1998 */
+extern s32  D_1A91C0;                      /* 0x1A91C0: light-pass validity token */
+
+/* SampleRainHeightmap(pos): return the terrain height under world position `pos`
+ * from the rain heightmap. Converts pos into grid coordinates (u, v) relative to
+ * the heightmap origin, and if they fall inside the 256x256 grid (and the light
+ * pass is current) looks up the cell byte and maps it to a world height
+ * (cell * heightScale + baseHeight). Returns 0.0 when no heightmap is loaded and
+ * a 1023.0 sentinel when the sample is out of range / unavailable.
+ *
+ * Matching build stays INCLUDE_ASM: the qword pos copy + Vu0 subtract and the
+ * gp/absolute-mixed heightmap globals are an engine-2.96 layout this C won't
+ * reproduce. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", SampleRainHeightmap);
+#else
+f32 SampleRainHeightmap(Vec4 *pos) {
+    Vec4 local;
+    Vec4 rel;
+    f32  u, v;
+
+    if (g_pRainHeightmap == NULL) {
+        return 0.0f;
+    }
+    local = *pos;
+    Vec4SubVu0(&rel, &local, &g_rainHeightmapOrigin);
+    u = rel.x / g_rainHeightmapCellW;
+    v = rel.y / g_rainHeightmapCellH;
+    if (u < 0.0f || u > 256.0f || v < 0.0f || v > 256.0f) {
+        return 1023.0f;
+    }
+    if (D_1A91C0 != *(s32 *)(g_pointLights + 0x2400)) {
+        return 1023.0f;
+    }
+    {
+        s32 iv    = FloatToInt(v);
+        s32 iu    = FloatToInt(u);
+        s32 index = (iv << 8) + iu;
+        u8  cell  = g_pRainHeightmap[index];
+        if (cell == 0xFF) {
+            return 1023.0f;
+        }
+        return IntToFloat(cell) * g_rainHeightmapHeightScale + g_rainHeightmapBaseHeight;
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", SpawnRaindropImpactFx);
 
@@ -3816,7 +4240,65 @@ s32 func_002B18B0(s32 a) {
     return func_0029DA88(a);
 }
 
+/* func_00273740 (external): emit one debris/effect sub-object for `owner` at
+ * scatter `offset` off its position/facing, index `index`, with two extra
+ * randomised parameters. */
+extern void func_00273740(Moby *owner, s32 arg1, s32 classId, s32 index,
+                          Vec4 *pos, Vec4 *facing, Vec4 *offset, s32 kind,
+                          f32 f0, f32 f1);
+
+/**
+ * func_002B18D0 — spawn a burst of up to 15 debris/effect sub-objects from
+ * `owner`, one for each set bit (0..14) of `slotMask`.
+ *
+ * Each spawn draws a random horizontal scatter: a random angle and a random
+ * radius in [radiusMin, radiusMax] (both scaled by 1/60), giving a circular
+ * offset (cos, sin) with a random Z in [zMin, zMax]/60. In oriented-gravity mode
+ * (D_1A8CA0 != 0) the offset is first rotated into the owner's orientation frame
+ * (+0xC0). The offset is added to `basePos`, then handed to func_00273740 along
+ * with the owner's class id (+0xAA), world position (+0x10), facing (+0xF0), the
+ * bit index, `kind` (low byte), and two more random parameters (a bearing in
+ * [90,270] and a value in [10,20]).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B18D0);
+#else
+void func_002B18D0(Moby *owner, s32 slotMask, Vec4 *basePos, s32 kind,
+                   f32 radiusMin, f32 radiusMax, f32 zMin, f32 zMax) {
+    const f32 invFrameRate = 0.016666668f;   /* 0x3C888889 = 1/60 */
+    s32 kindByte = kind & 0xFF;
+    s32 i;
+
+    for (i = 0; i < 15; i++) {
+        Vec4 offset;
+        f32 angle;
+        f32 radius;
+        f32 bearing;
+        f32 value;
+
+        if (((slotMask >> i) & 1) == 0) {
+            continue;
+        }
+        angle  = GetRandomAngle();
+        radius = GetRandomFloatRange(radiusMin, radiusMax) * invFrameRate;
+        offset.x = func_00283B30(angle) * radius;   /* cos */
+        offset.y = func_00283B48(angle) * radius;   /* sin */
+        /* original clears the Z int then overwrites it with the float below */
+        offset.z = GetRandomFloatRange(zMin, zMax) * invFrameRate;
+
+        if (D_1A8CA0 != 0) {
+            func_00283A48(&offset, &offset, (Vec4 *)((u8 *)owner + 0xC0));
+        }
+        Vec4AddVu0(&offset, &offset, basePos);
+
+        bearing = GetRandomFloatRange(90.0f, 270.0f);
+        value   = GetRandomFloatRange(10.0f, 20.0f);
+        func_00273740(owner, 2, (s16)owner->oClass, i,   /* lh: signed +0xAA */
+                      (Vec4 *)((u8 *)owner + 0x10), (Vec4 *)((u8 *)owner + 0xF0),
+                      &offset, kindByte, bearing, value);
+    }
+}
+#endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1A80);

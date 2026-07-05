@@ -1847,13 +1847,80 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", CheckCameraUnde
 #endif
 
 /* func_00271FE8: per-frame camera-id / cinematic-state arbiter. Reads the active
- * cinematic key block (g_soundBankHandles +0x22B0) and player progress to pick
- * the live camera mode id (D_001B1300 +0x190) and a derived sub-id (+0x18C),
- * gated by distance thresholds and per-flag overrides. WALL: gp/absolute mix -
- * the same symbol (D_001B1300 +0x190) is accessed both via %gp_rel and via
- * %hi/%lo in the one function, which no single C small-data classification
- * reproduces. Frameless leaf otherwise. Left INCLUDE_ASM. */
+ * cinematic key block (g_soundBankHandlesBlk) and player progress to pick the
+ * live camera mode id (g_cameraCallbackCount +0x10) and a derived sub-id
+ * (+0xC), gated by a camera-Z distance threshold and a hardcoded hero-position
+ * rectangle override (only at story progress 6), then dispatches a queued
+ * camera id from whichever trigger flag byte is set.
+ *
+ * The matching build stays INCLUDE_ASM: BYTE-MATCH wall only (gp/absolute mix -
+ * g_cameraCallbackCount+0x10 is reached both %gp_rel and %hi/%lo in the one
+ * function, which no single C small-data classification reproduces). That is
+ * NOT a portability blocker, so the TARGET_NATIVE #else below is a faithful
+ * op-for-op coverage body. */
+/* g_soundBankHandlesBlk (+0x80 = g_heroPos), g_cameraCallbackCount and
+ * g_cameraPos are already declared above; only these two are new here: */
+extern s32  g_playerProgress;        /* 0x1A79F8 persistent save block; word 0 = story progress */
+extern s32  g_cameraTriggerLatch;    /* 0x1B53E0 queued camera-trigger id latch (UNCONFIRMED) */
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00271FE8);
+#else
+void func_00271FE8(void) {
+    char *sbh   = g_soundBankHandlesBlk;
+    s32 *pMode  = (s32 *)((u8 *)&g_cameraCallbackCount + 0x10);
+    s32 *pSub   = (s32 *)((u8 *)&g_cameraCallbackCount + 0x14);
+    s32 *pOut   = (s32 *)((u8 *)&g_cameraCallbackCount + 0xC);
+    s32 mode;
+
+    /* Base mode from the cinematic-key control words. */
+    *pMode = 0x14;
+    if ((u32)(*(s32 *)(sbh + 0x229C) - 0x11) < 2 ||
+        *(s32 *)(sbh + 0x2294) == 0x70) {
+        *pMode = 0x34;
+    }
+    if (*(s32 *)(sbh + 0x229C) != 0x11) {
+        if (*(f32 *)(sbh + 0x330) < g_cameraPos.z) {
+            *pMode = 0x14;
+        }
+    }
+    /* Hardcoded map-location override: only when the hero stands in a specific
+     * x/y rectangle at story progress 6. */
+    if (g_playerProgress == 6) {
+        f32 hx = *(f32 *)(sbh + 0x80);   /* g_heroPos.x */
+        if (485.7f < hx && hx < 570.7f) {
+            f32 hy = *(f32 *)(sbh + 0x84);   /* g_heroPos.y */
+            if (250.0f < hy && hy < 334.5f) {
+                *pMode = 0x34;
+            }
+        }
+    }
+
+    mode = *pMode;
+    *pSub  = mode;
+    *pMode = mode | 0x80;
+
+    /* Dispatch the queued camera id from the active trigger flag byte. */
+    if (sbh[0x1495]) {
+        g_cameraTriggerLatch = 0x100;
+        *pOut = 0x1B4;
+    } else if (sbh[0x149B]) {
+        g_cameraTriggerLatch = 0xB00;
+        *pOut = 0xBB4;
+    } else if (sbh[0x1496]) {
+        g_cameraTriggerLatch = 0x300;
+        *pOut = 0x3B4;
+    } else if (sbh[0x149C]) {
+        g_cameraTriggerLatch = 0xD00;
+        *pOut = 0xDB4;
+    } else if (sbh[0x1494]) {
+        g_cameraTriggerLatch = 0;
+        *pOut = 0xB4;
+    } else {
+        *pOut = g_cameraTriggerLatch | 0xB4;
+    }
+}
+#endif
 
 /* func_002721A8: start a fade-from-black — fade level forced to 1.0, target 0,
  * rate = 1/duration (g_cameraState +0x268/+0x26C).

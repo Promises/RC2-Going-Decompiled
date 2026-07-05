@@ -1648,7 +1648,62 @@ void GuiConfirmPopupInit(void *w, GuiPool *pool) {
 }
 #endif
 
+/* GuiConfirmPopupTick: lay out the confirm popup's seven visible sub-elements
+ * relative to the placement record at *(w+0x4), then bump the current cutscene
+ * unlock record. The four icon rows (+0x8/+0x54/+0xA0/+0xEC) sit at the record
+ * origin; the three text rows (+0x138/+0x190/+0x1E8) are offset by the fixed
+ * (x,y) pairs D_1ADC38/D_1ADC40/D_1ADC48. func_002E0010 refreshes the in-place
+ * level-name buffer at +0x298 for g_mapCurrentLevel. The tail touches the same
+ * per-cutscene unlock block at (g_health+0x464) as MenuCutsceneUnlockCurrent
+ * (1CA080), but a distinct slot (+0x1C8/+0x1CC/+0x1D0): while g_gameTime>=11 it
+ * increments the saturating u16 play-count at +0x1C8, always raises the u32
+ * high-water mark at +0x1CC toward g_gsPixelOffsetY+0x3C, and sets this
+ * g_playerProgress slot's bit (plus the 0x80000000 sentinel) in the seen-mask
+ * at +0x1D0. arg2 is unused (the ABI-uniform second tick parameter). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiConfirmPopupTick);
+#else
+extern void func_002E0010(void *dst, s32 level);
+extern f32 D_1ADC38[2], D_1ADC40[2], D_1ADC48[2];
+extern s32 g_health;            /* 0x18C2EC - base of the per-cutscene unlock records at +0x464 */
+extern s32 g_gameTime;          /* 0x1B1608 - global frame counter */
+extern s32 g_mapCurrentLevel;   /* 0x1C5150 - current map level id */
+extern s32 g_gsPixelOffsetY;    /* 0x1A7354 - play-count source at +0x3C */
+extern s32 g_playerProgress;    /* 0x1A79F8 - current progress slot (seen-mask bit index) */
+void GuiConfirmPopupTick(void *w, s32 arg2) {
+    GuiElement *icon0 = (GuiElement *)((char *)w + 0x8);
+    GuiElement *icon1 = (GuiElement *)((char *)w + 0x54);
+    GuiElement *icon2 = (GuiElement *)((char *)w + 0xA0);
+    GuiElement *icon3 = (GuiElement *)((char *)w + 0xEC);
+    GuiElement *text0 = (GuiElement *)((char *)w + 0x138);
+    GuiElement *text1 = (GuiElement *)((char *)w + 0x190);
+    GuiElement *text2 = (GuiElement *)((char *)w + 0x1E8);
+    f32 *origin = *(f32 **)((char *)w + 0x4);
+    u8 *rec = (u8 *)&g_health + 0x464;
+    s32 target;
+
+    (void)arg2;
+
+    GuiElementSetPos(icon0, origin[0], origin[1], 0.0f, 0.0f);
+    GuiElementSetPos(icon1, origin[0], origin[1], 0.0f, 0.0f);
+    GuiElementSetPos(icon2, origin[0], origin[1], 0.0f, 0.0f);
+    GuiElementSetPos(icon3, origin[0], origin[1], 0.0f, 0.0f);
+    GuiElementSetPos(text0, D_1ADC38[0] + origin[0], D_1ADC38[1] + origin[1], 0.0f, 0.0f);
+    GuiElementSetPos(text1, D_1ADC40[0] + origin[0], D_1ADC40[1] + origin[1], 0.0f, 0.0f);
+    GuiElementSetPos(text2, D_1ADC48[0] + origin[0], D_1ADC48[1] + origin[1], 0.0f, 0.0f);
+
+    func_002E0010((char *)w + 0x298, g_mapCurrentLevel);
+
+    if (g_gameTime >= 11 && *(u16 *)(rec + 0x1C8) <= 0xFFFE) {
+        *(u16 *)(rec + 0x1C8) = (u16)(*(u16 *)(rec + 0x1C8) + 1);
+    }
+    target = *(s32 *)((u8 *)&g_gsPixelOffsetY + 0x3C);
+    if ((u32)*(s32 *)(rec + 0x1CC) < (u32)target) {
+        *(s32 *)(rec + 0x1CC) = target;
+    }
+    *(u32 *)(rec + 0x1D0) |= (1u << g_playerProgress) | 0x80000000u;
+}
+#endif
 
 /* Draw a confirm popup when it's active (+0x2D8 != 0): four sprite sub-elements
  * (+0x8/+0x54/+0xA0/+0xEC) and three text sub-elements (+0x138/+0x190/+0x1E8). */
@@ -1889,7 +1944,60 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiLevelInfoPan
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033AF68);
 
+/* GuiLevelInfoPanelTick: per-frame layout for the galactic-map level-info panel.
+ * Scales the six "value row" elements (0x190..0x348) uniformly to
+ * (D_1ADCD8, D_1ADCDC), then positions all thirteen sub-elements relative to the
+ * panel origin (the vector at w[0x4]): the four header/icon rows (0x8/0x54/0xA0/
+ * 0xEC) sit on the origin, the label row (0x138) and the value column share the
+ * layout offsets D_1ADCB8/D_1ADCC0/D_1ADCC8/D_1ADCD0, with the six value rows
+ * (0x190..0x348) stepped 18px apart down the column (0/18/36/54/72/90 off the
+ * D_1ADCC0 base, plus +8px on the last row's x). Refreshes the map thumbnail
+ * (func_002E0010 at 0x450 for the current level), and sets the panel caption
+ * (0x3F8) from g_levelSelectEntries[currentLevel].valueStrId — localized, or the
+ * D_1ADC60 placeholder glyph when that id is negative. Returns 0. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiLevelInfoPanelTick);
+#else
+extern f32 D_1ADCB8[2], D_1ADCC0[2], D_1ADCC8[2], D_1ADCD0[2];
+extern f32 D_1ADCD8, D_1ADCDC;
+extern u8 g_mapVertexData[], g_levelSelectEntries[], D_1ADC60[];
+s32 GuiLevelInfoPanelTick(void *w) {
+    f32 *origin = *(f32 **)((char *)w + 0x4);
+    s32 level = *(s32 *)(g_mapVertexData + 0x230);
+    s32 valueStrId;
+
+    GuiElementSetScale((GuiElement *)((char *)w + 0x190), D_1ADCD8, D_1ADCDC, 0.0f, 0.0f);
+    GuiElementSetScale((GuiElement *)((char *)w + 0x1E8), D_1ADCD8, D_1ADCDC, 0.0f, 0.0f);
+    GuiElementSetScale((GuiElement *)((char *)w + 0x240), D_1ADCD8, D_1ADCDC, 0.0f, 0.0f);
+    GuiElementSetScale((GuiElement *)((char *)w + 0x298), D_1ADCD8, D_1ADCDC, 0.0f, 0.0f);
+    GuiElementSetScale((GuiElement *)((char *)w + 0x2F0), D_1ADCD8, D_1ADCDC, 0.0f, 0.0f);
+    GuiElementSetScale((GuiElement *)((char *)w + 0x348), D_1ADCD8, D_1ADCDC, 0.0f, 0.0f);
+
+    GuiElementSetPos((GuiElement *)((char *)w + 0x8),   origin[0], origin[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x54),  origin[0], origin[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0xA0),  origin[0], origin[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0xEC),  origin[0], origin[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x138), D_1ADCB8[0] + origin[0], D_1ADCB8[1] + origin[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x190), D_1ADCC0[0] + origin[0], D_1ADCC0[1] + origin[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x1E8), D_1ADCC0[0] + origin[0], D_1ADCC0[1] + origin[1] + 18.0f, 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x240), D_1ADCC0[0] + origin[0], D_1ADCC0[1] + origin[1] + 36.0f, 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x298), D_1ADCC0[0] + origin[0], D_1ADCC0[1] + origin[1] + 54.0f, 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x2F0), D_1ADCC0[0] + origin[0], D_1ADCC0[1] + origin[1] + 72.0f, 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x348), D_1ADCC0[0] + 8.0f + origin[0], D_1ADCC0[1] + origin[1] + 90.0f, 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x3A0), D_1ADCC8[0] + origin[0], D_1ADCC8[1] + origin[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x3F8), D_1ADCD0[0] + origin[0], D_1ADCD0[1] + origin[1], 0.0f, 0.0f);
+
+    func_002E0010((char *)w + 0x450, level);
+
+    valueStrId = ((s32 *)g_levelSelectEntries)[*(s32 *)(g_mapVertexData + 0x230) * 2 + 1];
+    if (valueStrId < 0) {
+        GuiElementSetText((GuiElement *)((char *)w + 0x3F8), (s32)D_1ADC60);
+    } else {
+        GuiElementSetText((GuiElement *)((char *)w + 0x3F8), GetLocalizedString(valueStrId));
+    }
+    return 0;
+}
+#endif
 
 /* func_0033B428: draw the map-screen panel - only when the +0x490 "panel built"
  * flag is set. Draws the two background sprites (p+0x8, p+0x54), pushes two GS
@@ -5112,10 +5220,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343AF8);
  * highlighted row +0x14 = count/2 and run layout func_00343888(view, 0).
  * BLOCKED: the body needs a 2-arg (view, records) prototype, but the
  * already-matched thin forwarder func_00344458 relies on func_00343E80 being
- * seen as 1-arg so it passes its own $a1 through untouched. Promoting the arity
- * here regresses func_00344458's byte-match - left INCLUDE_ASM to preserve it.
- * (Body is otherwise an integer ownership-filter loop; beql/bgezl branch-likely
- * placement is the secondary scheduling concern.) */
+ * seen as 1-arg (file-scope proto at line 89, visible under TARGET_NATIVE too)
+ * so it passes its own $a1 through untouched. A #else 2-arg definition cascades
+ * an arity fix through func_00344458 and up; left INCLUDE_ASM to preserve the
+ * forwarder's byte-match. (Body is otherwise an integer ownership-filter loop.) */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343E80);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343F30);
@@ -6299,7 +6407,70 @@ void func_00346CD8(void *w, s32 flags) {
 }
 #endif
 
+/* GuiMapScreenTick: per-frame tick for the map screen `w`. Latches the current
+ * mode-state (w+0x508) into *out, clears the transient at w+0x504, resets the
+ * caption id (D_1ADAF0=-1), then forwards (w, mode) to the per-state sub-builder
+ * — 0 -> func_00346878, 1 -> func_00346CD8, 3 -> func_00346AF8 (other states do
+ * nothing). A d-pad press (g_padButtonsPressed & 0xF000) fires a UI feedback
+ * pulse via func_002AA3F0; the caption sprite colour (+0x17C) is refreshed to a
+ * pulsing blend. Finally lays out 11 panel sub-elements at the anchor record
+ * *(w+0x470) plus their fixed (x,y) offset pairs (D_1AE3D8.. and the stack-copied
+ * D_1AE280 for the +0x1C8 element). Mirrors the weapon-screen builder
+ * func_003453D0. Returns nothing (the register-0 return is discarded). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiMapScreenTick);
+#else
+extern void func_00346878(void *w, s32 flags);   /* mode-0 sub-builder */
+extern void func_00346AF8(void *w, s32 flags);   /* mode-3 sub-builder */
+extern f32 D_1AE3D8, D_1AE3DC, D_1AE3E0, D_1AE3E4, D_1AE3E8, D_1AE3EC;
+extern f32 D_1AE3F0, D_1AE3F4, D_1AE3F8, D_1AE3FC;
+extern f32 D_1AE400, D_1AE404, D_1AE408, D_1AE40C, D_1AE410, D_1AE414;
+extern f32 D_1AE418, D_1AE41C, D_1AE420, D_1AE424;
+void GuiMapScreenTick(void *w, s32 mode, s32 *out) {
+    s32 state = *(s32 *)((char *)w + 0x508);
+    f32 *anchor;
+
+    *out = state;
+    *(s32 *)((char *)w + 0x504) = 0;
+    D_1ADAF0 = -1;
+
+    switch (state) {
+        case 0: func_00346878(w, mode); break;
+        case 1: func_00346CD8(w, mode); break;
+        case 3: func_00346AF8(w, mode); break;
+        default: break;
+    }
+
+    if (g_padButtonsPressed & 0xF000) {
+        func_002AA3F0(0, 0, 1, 0, 1);
+    }
+    *GuiElementGetColor((GuiElement *)((char *)w + 0x17C)) =
+        func_002AA3F0(0x60442D00, 0x70FFFEED, 0x14, 0, 0);
+
+    anchor = *(f32 **)((char *)w + 0x470);
+    GuiElementSetPos((GuiElement *)w, D_1AE3D8 + anchor[0], D_1AE3DC + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x470);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x4C), D_1AE3F8 + anchor[0], D_1AE3FC + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x470);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x98), D_1AE3E0 + anchor[0], D_1AE3E4 + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x470);
+    GuiElementSetPos((GuiElement *)((char *)w + 0xE4), D_1AE3E8 + anchor[0], D_1AE3EC + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x470);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x130), D_1AE3F0 + anchor[0], D_1AE3F4 + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x470);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x1C8), D_1AE280[0] + anchor[0], D_1AE280[1] + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x470);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x310), D_1AE408 + anchor[0], D_1AE40C + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x470);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x2B8), D_1AE400 + anchor[0], D_1AE404 + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x470);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x368), D_1AE410 + anchor[0], D_1AE414 + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x470);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x3C0), D_1AE418 + anchor[0], D_1AE41C + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x470);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x418), D_1AE420 + anchor[0], D_1AE424 + anchor[1], 0.0f, 0.0f);
+}
+#endif
 
 /* Family-2 screen descriptor (0x5C bytes), shared by func_00347228 / func_00347348
  * / func_00347450. Distinct field layout from the func_00345F00 four. */

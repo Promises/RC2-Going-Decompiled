@@ -100,7 +100,9 @@ extern HudIconMapEntry *g_hudIconMap;         /* 0x1B1810 */
 /* CLUT / texture slot tables: 8-byte-stride records, the gs-handle word at +0. */
 typedef struct HudGsSlot {
     s32 handle;   /* +0x0: negative = unallocated */
-    s32 _pad4;    /* +0x4 */
+    u16 vramAddr; /* +0x4: resident VRAM block address (0 = not uploaded yet) */
+    u8  logW;     /* +0x6: log2 texture width  (texture slots only) */
+    u8  logH;     /* +0x7: log2 texture height (texture slots only) */
 } HudGsSlot;                                  /* stride 0x8 */
 __asm__(".extern g_hudClutSlots, 16");
 extern HudGsSlot *g_hudClutSlots;             /* 0x1B1818 */
@@ -612,12 +614,65 @@ s32 FindWeaponSlotByName(s32 name) {
     return 0;
 }
 
-/* func_00288F30(itemId): test/iterate the item's progress-gate table (10-entry,
- * walks via a callee-saved cursor). Single callee-save (0x30 frame) + jal.
+/* func_00288F30(itemId): resolve and fire the "acquired / upgraded" announcement
+ * for an inventory item. First arms a subtitle line for a few special item ids
+ * (0xA -> {0x9F8,0x4F}, 0x1B -> {0x9F7,0x4E}, otherwise the generic "got item"
+ * line {0x9AA,1} when the tutorial-health flag g_health+0x678 is clear). Then it
+ * resolves an announcement text id for the item: each upgrade level 0..5 has a
+ * {itemId, textId} pair-list D_1A8B40[level] (-1 terminated); the item's textId is
+ * found by linear search of that list. Item 0xA overrides the search result with a
+ * level-based id (0x1296/0x1297, alternating for upgrade level >= 2). Finally it
+ * dispatches the resolved text id (or 0 when none was found) via func_002B1880.
  *
- * WALL: callee-save + jal gate with a 0xA-bounded scan whose register colouring
- * cc1 does not reproduce. Left INCLUDE_ASM (not yet fully traced). */
+ * The matching build keeps the asm (callee-save + jal gate with a 0xA-bounded scan
+ * whose register colouring cc1 does not reproduce). The #else below is the
+ * functionally-equivalent portable body (the original's unaligned ldl/ldr copy of
+ * D_1A8B40 into a stack buffer before indexing is just a compiler artifact of
+ * copy-then-index; a direct index is equivalent). */
+extern s32 func_00289840(s32 textIndex, s32 voiceHandle); /* defined below, this unit */
+extern s32 func_002B1880(s32 stringId, s32 arg);          /* text/1A8180 */
+extern s32 D_1A8B40[]; /* [upgradeLevel 0..5] -> ptr to {itemId,textId,...,-1} list */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_00288F30);
+#else
+s32 func_00288F30(s32 itemId) {
+    s32 *list;
+    s32 textId = -1;
+    u8 slot, level;
+
+    if (itemId == 0xA) {
+        func_00289840(0x9F8, 0x4F);
+    } else if (itemId == 0x1B) {
+        func_00289840(0x9F7, 0x4E);
+    } else if (*(u16 *)((u8 *)&g_health + 0x678) == 0) {
+        func_00289840(0x9AA, 0x1);
+    }
+
+    slot = g_itemEquippedSlot[itemId];
+    level = g_weaponTable[slot].upgradeLevel;
+    list = (level < 6) ? (s32 *)D_1A8B40[level] : (s32 *)0;
+    if (list != 0) {
+        s32 *p = list;
+        while (*p != -1) {
+            if (*p == itemId) {
+                textId = p[1];
+                break;
+            }
+            p += 2;
+        }
+    }
+
+    if (itemId == 0xA) {
+        level = g_weaponTable[g_itemEquippedSlot[0xA]].upgradeLevel;
+        if (level >= 2) textId = 0x1296;
+        if (level >= 3) textId = 0x1297;
+        if (level >= 4) textId = 0x1296;
+        if (level >= 5) textId = 0x1297;
+    }
+
+    return func_002B1880(textId < 0 ? 0 : textId, -1);
+}
+#endif
 
 s32 IsVendorUpgradesUnlocked(void); /* fwd: defined below in this unit */
 
@@ -1584,11 +1639,78 @@ void InitHudMobyTable(void) {
 }
 #endif
 
-/* func_0028B6F0(...): HUD moby-table population helper (~0x1D4 bytes).
+/* func_002EFD28(dest, src, a, count, b): stage `count` (compressed size / 16)
+ * units of the wad at `src` into the scratch buffer `dest`. Defined elsewhere. */
+extern void func_002EFD28(void *dest, void *src, s32 a, s32 count, s32 b);
+/* DecompressWad(src, dest): decompress the staged wad `src` into `dest` (writes
+ * its output to the 2nd arg — see text/191238.c). Defined in text/198FA0. */
+extern void DecompressWad(void *src, void *dest);
+/* Reserve VRAM for a HUD moby-table entry (defined below). */
+void func_0028B8C8(s32 index, s32 size);
+extern u8 g_menuScreenBlock[];                /* 0x menu-screen scratch/VRAM staging block */
+
+/* func_0028B6F0(mode): load and upload the HUD moby-table wads into VRAM.
  *
- * WALL: multiple callee-saves + jal gates with gp/absolute-mixed addressing;
- * not reproducible from C. Left INCLUDE_ASM (not yet fully traced). */
+ * The header (g_pHudAssetHeader[0]) holds, per sub-bank, a decompressed size
+ * (+0x54/+0x5C/+0x60/+0x64) and a compressed-source pointer (+0x94/+0x9C/+0xA0/
+ * +0xA4); the matching compressed sizes live in g_hudMobySpawnStart (+0x8/+0x10/
+ * +0x14/+0x18). Each present sub-bank (size != 0) is staged into the menu-screen
+ * scratch buffer (g_menuScreenBlock+0x20) via func_002EFD28, decompressed into
+ * the running VRAM address (g_menuScreenBlock+0x114, advanced by each bank's
+ * size) via DecompressWad, then registered with func_0028B8C8.
+ *
+ * Banks 0 and 1 are always loaded; bank 2 only for mode 0 or 2; bank 3 only for
+ * mode 1 or 2. [SEEDABLE: mode] */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028B6F0);
+#else
+void func_0028B6F0(s32 mode) {
+    u8   *hdr  = (u8 *)g_pHudAssetHeader[0];
+    void *dest = *(void **)(g_menuScreenBlock + 0x20);
+    s32   vram = *(s32 *)(g_menuScreenBlock + 0x114);
+    s32   size, clen;
+
+    /* bank 0 — always */
+    size = *(s32 *)(hdr + 0x54);
+    if (size != 0) {
+        clen = *(s32 *)((u8 *)&g_hudMobySpawnStart + 0x8);
+        func_002EFD28(dest, *(void **)(hdr + 0x94), 0, clen / 16, 0);
+        DecompressWad(dest, (void *)vram);
+        func_0028B8C8(0, vram);
+        vram += size;
+    }
+    /* bank 1 — always */
+    size = *(s32 *)(hdr + 0x5C);
+    if (size != 0) {
+        clen = *(s32 *)((u8 *)&g_hudMobySpawnStart + 0x10);
+        func_002EFD28(dest, *(void **)(hdr + 0x9C), 0, clen / 16, 0);
+        DecompressWad(dest, (void *)vram);
+        func_0028B8C8(1, vram);
+        vram += size;
+    }
+    /* bank 2 — mode 0 or 2 */
+    if (mode == 0 || mode == 2) {
+        size = *(s32 *)(hdr + 0x60);
+        if (size != 0) {
+            clen = *(s32 *)((u8 *)&g_hudMobySpawnStart + 0x14);
+            func_002EFD28(dest, *(void **)(hdr + 0xA0), 0, clen / 16, 0);
+            DecompressWad(dest, (void *)vram);
+            func_0028B8C8(3, vram);
+            vram += size;
+        }
+    }
+    /* bank 3 — mode 1 or 2 */
+    if (mode == 1 || mode == 2) {
+        size = *(s32 *)(hdr + 0x64);
+        if (size != 0) {
+            clen = *(s32 *)((u8 *)&g_hudMobySpawnStart + 0x18);
+            func_002EFD28(dest, *(void **)(hdr + 0xA4), 0, clen / 16, 0);
+            DecompressWad(dest, (void *)vram);
+            func_0028B8C8(4, vram);
+        }
+    }
+}
+#endif
 
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028B8C8);
@@ -2049,11 +2171,106 @@ void func_0028C490(HudElement *p) {
  * tables). 06333c5 precedent; NO re-split. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C4C0);
 
-/* func_0028C4C8(...): HUD widget reset/layout helper (~0x1CC bytes, some FP).
+/* func_0028C4C8(w): per-frame smooth-roll update for a HUD counter widget.
  *
- * WALL: callee-saves + float math + jal gates; not reproducible from C. Left
- * INCLUDE_ASM (not yet fully traced). */
+ * (1) Re-clamps the smoothed target (+0x78) from the live value pointer (+0xC):
+ *     max(*valPtr, 0), bounded above by the raw value (+0x8).
+ * (2) When the displayed value (+0x74) has not yet reached the target (+0x78)
+ *     and the widget is "settled" (+0x6C >= 0x18), eases +0x74 toward +0x78:
+ *     arms the +0x7C timer (0xB4), derives an easing step
+ *         step = max( FloatToInt(func_002835C0(delta*0.04) * 5.0), delta/5 )
+ *     clamped to [1,0x79] (delta = |+0x74 - +0x78|), advances the sub-step byte
+ *     accumulator (+0x73) and, once it passes 3, moves +0x74 by (accum>>1)
+ *     toward the target and drains the accumulator by twice that.
+ * (3) Drives the two digit-roll byte counters (+0x70/+0x71): while the +0x7C
+ *     timer is hot (>= 5) they ramp up (cap 8 each); otherwise they wind back
+ *     down and re-arm the settle flag (+0x6C = 1).
+ * (4) Refreshes the icon animation frame via func_0028E7E8(w+0x40).
+ *
+ * The FP easing (IntToFloat/func_002835C0/FloatToInt) is reproduced op-for-op;
+ * the real R5900 helpers do the arithmetic (cmp-oracle validates the result).
+ * [SEEDABLE] pure per-widget state machine over w's byte/word fields.
+ *
+ * Track-B note (+0x7C): written 0xB4 here and read back as a countdown timer,
+ * which conflicts with the "+0x7C = element type tag" label in the HudElement
+ * map above — same tension flagged in func_0028E9A0; left for Track-B. */
+extern float IntToFloat(s32 x);       /* 0x284690: mtc1;cvt.s.w  int -> float */
+extern s32   FloatToInt(float x);     /* 0x2846A0: cvt.w.s;mfc1  float -> int */
+extern float func_002835C0(float x);
+s32 func_0028E7E8(void *iconSlot);  /* returns frame index; real def below in this unit */
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C4C8);
+#else
+void func_0028C4C8(HudElement *w) {
+    u8  *b   = (u8 *)w;
+    u8  *cnt = b + 0x70;                 /* byte counter block ($18 = w+0x70) */
+    s32 *valPtr = *(s32 **)(b + 0xC);
+    s32  cur, target, tag;
+
+    /* (1) clamp the smoothed target from the live value pointer */
+    if (valPtr != 0) {
+        s32 v   = *valPtr;
+        s32 raw = *(s32 *)(b + 0x8);
+        if (v < 0) v = 0;
+        *(s32 *)(b + 0x78) = v;
+        if (raw < v) *(s32 *)(b + 0x78) = raw;
+    }
+
+    /* (2) ease the displayed value toward the target */
+    cur    = *(s32 *)(b + 0x74);
+    target = *(s32 *)(b + 0x78);
+    if (cur != target) {
+        *(s32 *)(b + 0x7C) = 0xB4;
+        if (*(s32 *)(b + 0x6C) >= 0x18) {
+            s32 delta = cur - target;
+            s32 stepF, div5, step, accum;
+            if (delta < 0) delta = -delta;
+
+            stepF = FloatToInt(func_002835C0(IntToFloat(delta) * 0.04f) * 5.0f);
+            div5  = delta / 5;
+            step  = (stepF < div5) ? div5 : stepF;      /* max(stepF, delta/5) */
+            if (step >= 0x7A)   step = 0x79;
+            else if (step <= 0) step = 1;
+
+            accum = (cnt[3] + step) & 0xFF;
+            cnt[3] = (u8)accum;
+            if (accum >= 3) {
+                s32 aa   = *(s32 *)(b + 0x74);
+                s32 tt   = *(s32 *)(b + 0x78);
+                s32 half = accum >> 1;
+                *(s32 *)(b + 0x74) = (tt < aa) ? (aa - half) : (aa + half);
+                cnt[3] = (u8)(cnt[3] - (half << 1));
+            }
+        }
+    }
+
+    /* (3) digit-roll counters keyed on the +0x7C timer */
+    tag = *(s32 *)(b + 0x7C);
+    if (tag < 5) {
+        u8 hi = cnt[1];
+        u8 lo = cnt[0];
+        if (hi != 0) {
+            *(s32 *)(b + 0x6C) = 1;
+            cnt[1] = hi - 1;
+        } else if (lo != 0) {
+            *(s32 *)(b + 0x6C) = 1;
+            cnt[0] = lo - 1;
+        }
+    } else {
+        u8 lo = cnt[0];
+        if (lo < 8) {
+            cnt[0] = lo + 1;
+        } else {
+            u8 hi = cnt[1];
+            if (hi < 8) cnt[1] = hi + 1;
+        }
+    }
+
+    /* (4) refresh the icon animation frame */
+    func_0028E7E8(b + 0x40);
+}
+#endif
 
 /* func_0028C698: 0x48-byte run of handwritten stub-table fragments (addiu
  * $sp,+N; nop pairs) preceding the real function, pinned as one symbol. */
@@ -2084,7 +2301,34 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C710);
  * wheel-record base is reloaded each iteration; the mixed %gp_rel/%hi-lo
  * addressing and induction colouring are fixed SN-cc1 behaviour. Left
  * INCLUDE_ASM. */
+extern s32 g_equippedItemSlots[8];            /* currently-equipped item ids (0x1A73B8) */
+
+typedef struct WheelRecord {
+    s32 nameStringId;   /* +0x00 */
+    u8  _pad04[0x14];
+    s32 itemId;         /* +0x18: resolved item id for this wheel slot */
+} WheelRecord;                                /* stride 0x1C */
+
+extern WheelRecord D_002550F0[];              /* wheel icon-list record array (0x2550F0) */
+extern u8 D_1A8DD0;                            /* wheel record header base (0x1A8DD0) */
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C728);
+#else
+void func_0028C728(void) {
+    s32 i;
+    /* header: slot count 8, record-array pointer, cleared wheel cursor */
+    *(s32 *)((u8 *)&g_hudMobySpawnStart + 0x28) = 8;
+    *(void **)((u8 *)&g_hudMobySpawnStart + 0x2C) = &D_1A8DD0;
+    D_1A8D48 = 0;
+    /* one record per equipped slot: id + its weapon's display-name string id */
+    for (i = 0; i < 8; i++) {
+        s32 id = g_equippedItemSlots[i];
+        D_002550F0[i].itemId       = id;
+        D_002550F0[i].nameStringId = g_weaponTable[g_itemEquippedSlot[id]].nameStringId;
+    }
+}
+#endif
 
 /* SyncEquippedItemSlots / func_0028C7A8(): refresh the 8-entry equipped-item
  * cache (g_equippedItemSlots[0..7]) from the live weapon-select wheel records.
@@ -2102,13 +2346,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C728);
  * #else is the cmp-oracle'd portable body (cmp_188858_wheel.c, 32/32 on real
  * R5900). EU twin func_0028C730 (188748) is byte-identical logic — region-
  * agnostic, no divergence. */
-extern s32 g_equippedItemSlots[8];            /* currently-equipped item ids (0x1A73B8) */
-
-typedef struct WheelRecord {
-    s32 nameStringId;   /* +0x00 */
-    u8  _pad04[0x14];
-    s32 itemId;         /* +0x18: resolved item id for this wheel slot */
-} WheelRecord;                                /* stride 0x1C */
+/* WheelRecord + g_equippedItemSlots already declared by func_0028C728's block above. */
 
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C7A8);
@@ -2300,11 +2538,83 @@ s32 func_0028E7E8(void *slot) {
 }
 #endif
 
-/* func_0028E9A0(...): HUD icon-frame helper (~0x128 bytes).
+/* func_0028E9A0(runTickCallbacks): per-frame update pass over the 13-entry HUD
+ * element registry D_2552B0 (stride 0x90). After a one-shot (re)bind pass
+ * (func_0028EB10), for each record it:
+ *   - clamps the +0x7C per-frame countdown up to 0xA when the record's +0x04
+ *     live-flags has bit 0x10 set OR the global text gate (g_pActiveTextTable+0x34)
+ *     is active;
+ *   - if that countdown is >= 2, decrements it and (while the +0x6C phase < 0x1E)
+ *     bumps the phase, counting the record as "active" in the return value;
+ *   - otherwise (countdown <= 1, still decremented toward 0) counts the +0x6C phase
+ *     DOWN, floored at -6;
+ *   - when the record is dirty (+0x68 != 0) and its phase has reached the -6 floor,
+ *     re-activates it via func_0028BF18;
+ *   - when runTickCallbacks is set and the record has a +0x14 tick callback, invokes
+ *     it with the record.
+ * Returns the count of records whose countdown was still running (>= 2).
  *
- * WALL: callee-saves + modulo/jal scaffolding; not reproducible from C. Left
- * INCLUDE_ASM (not yet fully traced). */
+ * NOTE: +0x14/+0x6C/+0x7C are unnamed in Rec2552B0 and reached by raw offset here.
+ * This function mutates +0x7C as a per-frame countdown, which conflicts with the
+ * "+0x7C = element type tag" note in the HudElement field map above — flagged for a
+ * Track-B revisit; the #else body faithfully mirrors the asm regardless.
+ *
+ * Matching build stays INCLUDE_ASM (callee-saves + gp/absolute-mix + a jalr callback
+ * and peeled likely-branch scan cc1 won't reproduce); #else is the portable body. */
+extern void func_0028EB10(void); /* text/188858, defined below (gp-gated rebind) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028E9A0);
+#else
+s32 func_0028E9A0(s32 runTickCallbacks) {
+    Rec2552B0 *rec = &D_2552B0[0];
+    Rec2552B0 *end = (Rec2552B0 *)((u8 *)&D_2552B0[0] + 0x750);
+    s32 activeCount = 0;
+
+    func_0028EB10();
+
+    do {
+        u8  *r = (u8 *)rec;
+        s32 *countdown = (s32 *)(r + 0x7C); /* per-frame countdown */
+        s32 *phase = (s32 *)(r + 0x6C);     /* animation phase, floored at -6 */
+        s32  t;
+
+        if ((rec->field04 & 0x10) ||
+            (*(s32 *)((u8 *)&g_pActiveTextTable + 0x34) != 0)) {
+            if (*countdown < 0xA) {
+                *countdown = 0xA;
+            }
+        }
+
+        t = *countdown;
+        if (t >= 1) {
+            *countdown = t - 1;
+        }
+        if (t >= 2) {
+            activeCount++;
+            if (*phase < 0x1E) {
+                *phase += 1;
+            }
+        } else if (*phase >= -5) {
+            *phase -= 1;
+        }
+
+        if (rec->field68 != 0 && *phase == -6) {
+            func_0028BF18((HudElement *)rec);
+        }
+
+        if (runTickCallbacks != 0) {
+            void (*tickFn)(HudElement *) = *(void (**)(HudElement *))(r + 0x14);
+            if (tickFn != 0) {
+                tickFn((HudElement *)rec);
+            }
+        }
+
+        rec++;
+    } while (rec < end);
+
+    return activeCount;
+}
+#endif
 
 /* func_0028EAC8(): return the active weapon's item id when that weapon sells
  * ammo (g_weaponTable[slot].sellsAmmoFlag != 0) and the "no ammo sale" gate is
@@ -2394,13 +2704,99 @@ s32 func_0028EDF0(s32 name, s32 level) {
 }
 #endif
 
-/* GetHudIconTex0(...): resolve a HUD icon's GS tex0 register/handle (~0x224
- * bytes).
+/* GetHudIconTex0(iconId): resolve one HUD icon's GS TEX0 register (~0x224
+ * bytes). Looks the icon up in g_hudIconMap to get its CLUT and texture slots;
+ * if either is not currently resident in VRAM (vramAddr == 0) it allocates a
+ * VRAM block (bumping g_vramAllocCursor) and queues an upload into
+ * g_texUploadQueue. Returns the assembled 64-bit GS TEX0 register describing
+ * the texture (TBP0/TBW/PSM/TW/TH) and its CLUT (CBP), with the high bit set.
  *
- * WALL: callee-saves + jal gates over the CLUT/texture slot tables with
- * gp/absolute-mixed addressing; not reproducible from C. Left INCLUDE_ASM (not
- * yet fully traced). */
+ * Pure leaf (no calls, no frame). The matching build stays INCLUDE_ASM: the
+ * CLUT/texture tables are reached through gp/absolute-mixed %hi/%lo addressing
+ * the compiler will not reproduce from this C. */
+typedef struct HudTexUploadEntry {            /* stride 0x10 */
+    s32 clutSrc;    /* +0x0: CLUT source GS handle */
+    u16 clutDst;    /* +0x4: CLUT dest VRAM block addr (0 for descriptor) */
+    u16 clutWidth;  /* +0x6: CLUT width sentinel 0x3FF0, or dest addr on alloc */
+    s32 texSrc;     /* +0x8: texture source GS handle */
+    u8  texLogW;    /* +0xC */
+    u8  texLogH;    /* +0xD */
+    u16 texDst;     /* +0xE: texture dest VRAM block addr (0x3FF0 descriptor) */
+} HudTexUploadEntry;
+extern HudTexUploadEntry g_texUploadQueue[];  /* 0x1B92C0 */
+extern s32 g_texUploadCount;                  /* 0x1B157C: entries pending */
+extern u32 g_vramAllocCursor;                 /* 0x1A72D0: byte VRAM bump cursor */
+extern s32 g_vramFrameBufB;                   /* 0x1A72DC: VRAM frame buffer B base */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", GetHudIconTex0);
+#else
+u64 GetHudIconTex0(s32 iconId) {
+    HudIconMapEntry *e = &g_hudIconMap[iconId];
+    HudGsSlot *clut = &g_hudClutSlots[e->clutSlot];
+    HudGsSlot *tex  = &g_hudTextureSlots[e->textureSlot];
+    s32 queued = 0;
+
+    /* Re-upload whenever either the CLUT or the texture is not resident. */
+    if (clut->vramAddr == 0 || tex->vramAddr == 0) {
+        /* Pre-fill the descriptor half of the pending entry. Both alloc paths
+         * below target this same slot; g_texUploadCount advances only once. */
+        HudTexUploadEntry *ent = &g_texUploadQueue[g_texUploadCount];
+        ent->clutSrc   = clut->handle;
+        ent->clutDst   = 0;
+        ent->clutWidth = 0x3FF0;
+        ent->texSrc    = clut->handle;
+        ent->texDst    = 0x3FF0;
+        ent->texLogH   = 5;
+        ent->texLogW   = 5;
+
+        if (clut->vramAddr == 0) {
+            u32 cursor = g_vramAllocCursor;
+            s32 count  = g_texUploadCount;
+            clut->vramAddr = (u16)(cursor >> 8);
+            g_vramAllocCursor = cursor + 0x400;           /* CLUT is 0x400 bytes */
+            if (count < 0x40) {
+                HudTexUploadEntry *ce = &g_texUploadQueue[count];
+                ce->clutSrc   = clut->handle;
+                ce->clutDst   = 0;
+                ce->clutWidth = clut->vramAddr;
+                queued = 1;
+            }
+        }
+        if (tex->vramAddr == 0) {
+            u32 cursor = g_vramAllocCursor;
+            u32 maxLog = (tex->logH < tex->logW) ? tex->logW : tex->logH;
+            s32 count  = g_texUploadCount;
+            tex->vramAddr = (u16)(cursor >> 8);
+            g_vramAllocCursor = cursor + (1u << (2 * maxLog));
+            if (count < 0x40) {
+                HudTexUploadEntry *te = &g_texUploadQueue[count];
+                te->texSrc  = tex->handle;
+                te->texLogW = tex->logW;
+                te->texLogH = tex->logH;
+                te->texDst  = tex->vramAddr;
+                queued = 1;
+            }
+        }
+        if (queued) {
+            g_texUploadCount++;
+        }
+    }
+
+    /* Assemble the GS TEX0_1 register. */
+    {
+        s32 logW      = tex->logW;
+        s32 tbwShift  = (logW >= 6) ? (logW - 6) : 0;
+        u64 tex0      = (u64)tex->vramAddr;                      /* TBP0  bits 0-13 */
+        tex0 |= (u64)(1u << tbwShift) << 14;                     /* TBW   bits 14-19 */
+        tex0 |= (u64)(((s32)tex->vramAddr < (g_vramFrameBufB >> 8)) ? 27 : 19) << 20; /* PSM bits 20-25 */
+        tex0 |= (u64)tex->logW << 26;                           /* TW    bits 26-29 */
+        tex0 |= (u64)tex->logH << 30;                           /* TH    bits 30-33 */
+        tex0 |= ((u64)clut->vramAddr << 37) | ((u64)0x8000 << 19); /* CBP + CLUT bits */
+        tex0 |= (u64)0x8000000000000000ULL;                     /* high control bit */
+        return tex0;
+    }
+}
+#endif
 
 /* func_0028F0D0(...): HUD icon GS-handle helper (~0x1F0 bytes).
  *

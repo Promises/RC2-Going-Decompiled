@@ -692,8 +692,201 @@ void func_002F6D50(void) {
 }
 #endif
 
-/* TODO(match): functional equivalent pending - level-exit cinematic driver loop: streams reels, GIF uploads, state pops; huge frame + lq/sq. */
+/* Cinematic / FMV playback driver for game-state 1 (= RunCinematicPlaybackFrame,
+ * symbol_addrs 0x2F6E10 - kept as func_002F6E10 to match the INCLUDE_ASM symbol).
+ * If no scene is armed (g_cinematicSceneParams[1] == 0) it tears down the queue and
+ * pops back to the previous state. Otherwise it:
+ *   - blits the letterbox/backdrop UI texture (g_uiTextureCache record #2) to the
+ *     GS: two GIF image-upload packets (func_126288 = BuildGsImageUploadPacket, then
+ *     KickGifImageUpload) plus a packed TEX0 register latched into the record,
+ *   - stops all sound / dialog voices and pumps the save-load state machine until
+ *     the active area's load settles,
+ *   - loops the reel playlist / cinematic queue: for each entry it optionally streams
+ *     the reel file (StartFileLoadPumpingVoice) and plays it to completion
+ *     (PlayFmvMovie, which blocks and returns a skip flag), advancing either the
+ *     attract playlist (g_cinematicQueue[0]/[4]) or the dequeued cinematic
+ *     (DequeueCinematic) and refreshing the scene params from the disc TOC entry,
+ *   - finishes on an empty queue / stop signal by kicking a final upload, resetting
+ *     the VRAM slot table and frame arenas, and chaining to state 2
+ *     (RequestGameStateChange(2,2,id,..)) when a cinematic was dequeued, else
+ *     PopGameState.
+ *
+ * COVERAGE #else only (engine region, ee-gcc 2.96 - not byte-matchable): this body
+ * is GS image-upload hardware plus live-FMV/cinematic state, so it is tester-OOS
+ * (same class as the func_002F6B98/C78/D50 cluster above - not effect-diffable
+ * headless). Faithful op-for-op transcription; the scene-state fields are referenced
+ * via their real named globals (g_sceneFrame @0x1B87F4, g_sceneFmvStreamBase
+ * @0x1B880C) rather than the g_cameraSlotActive+0x990 nearest-symbol base the asm
+ * reaches them through (that base is a linker artifact, unsound in native ILP32). */
+extern u8  g_memoryArenaTable[];       /* 0x1B21A0 memory-region base table */
+extern u8  g_uiTextureCache[];         /* 0x1B96C0 UI texture records, 0x10 stride */
+extern s32 g_uiTextureDataBase;        /* 0x1B1584 base of UI texture pixel data */
+extern s32 g_sceneFrame;               /* 0x1B87F4 scene playback frame counter */
+extern s32 g_sceneFmvStreamBase;       /* 0x1B880C FMV stream target base (UNCONFIRMED) */
+extern s32 g_pendingDialogVoiceId;     /* 0x1A63CC queued dialog voice id (-1 = none) */
+extern u8  D_1AD1F8[];                  /* 0x1AD1F8 caption/string blob */
+void func_0029DAD0(void *str, s32 arg);
+void func_002895E0(void *queue);       /* cinematic-queue helper */
+void func_126288(void *dest, s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g); /* BuildGsImageUploadPacket */
+void func_126DC0(void (*isr)(void), s32 arg);
+void OnVblankInterrupt(void);
+void PopGameState(s32 a, s32 b);
+void WaitFrameDmaFence(s32 mask);
+void KickGifImageUpload(void *packet, s32 dataAddr);
+void WaitGsPathsIdle(s32 a, s32 b);
+s32  snd_CheckLoadInProgress(s32 a);
+void SaveLoadStateMachine(void);
+void StartFileLoadPumpingVoice(s32 dest, s32 src, s32 size);
+s32  PlayFmvMovie(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f);
+s32  DequeueCinematic(void *queue, s32 *outId, s32 *outType);
+s32  RequestGameStateChange(s32 a, s32 b, s32 c, s32 d, s32 e);
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6E10);
+#else
+void func_002F6E10(void) {
+    u8  gifPacket[0x60];    /* GS GIF image-upload packet scratch (frame [0,0x60)) */
+    s32 arenaC, arena14, fmvUploadBase;
+    s32 dequeuedCinId, dequeueResult;
+    s32 skip, done;
+    s32 idx, p2;
+    u8 *tc;
+
+    if (g_cinematicSceneParams[1] == 0) {   /* +0x24: nothing armed */
+        func_0029DAD0(D_1AD1F8, -1);
+        func_002895E0(g_cinematicQueue);
+        PopGameState(0, 0);
+        return;
+    }
+
+    arena14 = *(s32 *)(g_memoryArenaTable + 0x14);
+    arenaC  = *(s32 *)(g_memoryArenaTable + 0xC);
+    fmvUploadBase = arena14 + 0xE0000;
+
+    WaitFrameDmaFence(1);
+
+    /* --- Blit the letterbox/backdrop UI texture (record #2) to the GS. --- */
+    tc = (u8 *)g_uiTextureCache + 0x20;
+    {
+        s32 w = 1 << tc[0xC];   /* 1 << log2Width  */
+        s32 h = 1 << tc[0xD];   /* 1 << log2Height */
+        func_126288(gifPacket, 0x3F70, (s32)(w << 10) >> 16,
+                    *(s16 *)(tc + 0xE), 0, 0, (s16)w, (s16)h);
+        func_0011AEA0(0);
+        KickGifImageUpload(gifPacket,
+                           g_uiTextureDataBase + ((u16)*(u16 *)(tc + 8) << 4));
+        WaitGsPathsIdle(0, 0);
+
+        func_126288(gifPacket, 0x3F6C, 1, 0, 0, 0, 0x10, 0x10);
+        func_0011AEA0(0);
+        KickGifImageUpload(gifPacket,
+                           g_uiTextureDataBase + ((u16)*(u16 *)(tc + 0xA) << 4));
+        WaitGsPathsIdle(0, 0);
+
+        /* Pack the GS TEX0 register for this record and latch it into the record. */
+        {
+            u32 logW = tc[0xC];
+            u32 logH = tc[0xD];
+            s16 texE = *(s16 *)(tc + 0xE);
+            u64 tex0 = (u64)((s32)(1 << tc[0xC]) >> 6) << 14;
+            tex0 |= 0x3F70;
+            tex0 |= (u64)(s64)texE << 20;
+            tex0 |= (u64)logW << 26;
+            tex0 |= (u64)logH << 30;
+            tex0 |= (u64)0xFDB08000u << 19;
+            tex0 |= (u64)0x8000u << 47;
+            *(u64 *)tc = tex0;
+            func_0011AEA0(0);
+        }
+    }
+
+    StopAllSoundEmitters();
+    ResetDialogVoiceChannels();
+    snd_CheckLoadInProgress(0);
+
+    /* --- Pump the save-load state machine until the active area settles. --- */
+    g_pendingDialogVoiceId = -1;
+    while (*(s32 *)((u8 *)g_areaTable + 0x15C) >= 3 ||
+           *(s32 *)((u8 *)g_areaTable + 0x164) >= 0) {
+        SaveLoadStateMachine();
+    }
+
+    /* --- Play the reel playlist / cinematic queue to completion. --- */
+    dequeuedCinId = 0;
+    dequeueResult = -1;
+    done = 0;
+    do {
+        p2 = g_cinematicSceneParams[2];   /* +0x28: current reel descriptor */
+        if (p2 == 0 || *(s32 *)p2 == 0) {
+            g_sceneFmvStreamBase = 0;
+            g_sceneFrame = 0;
+        } else {
+            s32 sz = *(s32 *)(p2 + 4);
+            /* round the byte size up to a 2 KiB unit (signed-shift bias) */
+            s32 rounded = (-1 < sz + 0x7FF) ? (sz + 0x7FF) : (sz + 0xFFE);
+            StartFileLoadPumpingVoice(fmvUploadBase,
+                                      *(s32 *)p2 + *(s32 *)((u8 *)g_discToc + 4),
+                                      rounded >> 11);
+            g_sceneFrame = 0;
+            g_sceneFmvStreamBase = fmvUploadBase;
+        }
+
+        skip = PlayFmvMovie(g_cinematicSceneParams[0], g_cinematicSceneParams[1],
+                            (arenaC + 0x3F) & ~0x3F, (arena14 + 0x3F) & ~0x3F,
+                            g_cinematicSceneParams[3],
+                            (g_cinematicSceneParams[4] != 0) ? 1 : 0);
+
+        if (skip != 0) {
+            *(s32 *)((u8 *)g_cinematicQueue + 0x3C) = 1;
+            func_002895E0(g_cinematicQueue);
+        }
+
+        if (*(s32 *)g_cinematicQueue != 0) {
+            /* attract playlist: wrap the reel index 1..0x18 and read the next id */
+            s32 next = *(s32 *)g_cinematicQueue + 1;
+            s32 base, nextId;
+            *(s32 *)g_cinematicQueue = (next < 0x19) ? next : 1;
+            base = *(s32 *)((u8 *)g_cinematicQueue + 4);
+            nextId = *(s16 *)(base + *(s32 *)g_cinematicQueue * 2);
+            idx = MapCinematicIdToIndex(nextId);
+            g_cinematicSceneParams[0] = *(s32 *)((u8 *)g_discToc + idx * 0x10 + 0x10)
+                                        + *(s32 *)((u8 *)g_discToc + 4);
+            g_cinematicSceneParams[1] = *(s32 *)((u8 *)g_discToc + idx * 0x10 + 0x14);
+        } else if (*(s32 *)((u8 *)g_cinematicQueue + 0x38) == 0) {
+            done = 1;
+        } else {
+            DequeueCinematic(g_cinematicQueue, &dequeuedCinId, &dequeueResult);
+            if (dequeueResult != 0) {
+                if (dequeueResult == 1) {   /* movz: only a "stop" (==1) ends the loop */
+                    done = 1;
+                }
+            } else {
+                idx = MapCinematicIdToIndex(dequeuedCinId);
+                g_cinematicSceneParams[0] = *(s32 *)((u8 *)g_discToc + idx * 0x10 + 0x10)
+                                            + *(s32 *)((u8 *)g_discToc + 4);
+                g_cinematicSceneParams[1] = *(s32 *)((u8 *)g_discToc + idx * 0x10 + 0x14);
+            }
+        }
+    } while (done == 0);
+
+    /* --- Teardown: final upload, reset VRAM/arenas, chain to the next state. --- */
+    snd_CheckLoadInProgress(0);
+    func_126DC0(OnVblankInterrupt, 0);
+    WaitGsPathsIdle(0, 0);
+    KickGifImageUpload(gifPacket,
+                       g_uiTextureDataBase + ((u16)*(u16 *)(tc + 0xA) << 4));
+    WaitGsPathsIdle(0, 0);
+    ResetVramSlotTable();
+    *(u64 *)tc = 0;
+    ResetFrameArenas();
+
+    if (skip == 0 && dequeueResult == 1) {
+        RequestGameStateChange(2, 2, dequeuedCinId, 0, 0);
+    } else {
+        PopGameState(0, 0);
+    }
+}
+#endif
 
 /* Mark the currently-selected area's exit flag (if the area exists and is
  * selectable), then request the level exit. */
