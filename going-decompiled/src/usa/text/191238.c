@@ -620,7 +620,133 @@ void LoadShipDisplayModel(s32 index) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadShipDisplayTexture);
 
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", ParseLoadedSegment);
+#else
+extern u8 *g_pLoadedSegment;
+extern u8 *g_pHudAssetHeader;
+extern u8  g_memoryArenaTable[];
+extern u8  g_hudMobySpawnStart[];
+extern void *g_hudIconMap;
+extern void *g_hudClutSlots;
+extern void *g_hudTextureSlots;
+extern void *DebugMalloc(s32 size, s32 arg2, void *file, s32 line);
+extern void CopyQwords(void *dst, const void *src, s32 nbytes);
+extern s32  UploadDataToIopRing(void *eeAddr, s32 sizeQw, s32 arg3, void *tag);
+extern void func_002933D0(s32 slot, u8 *dest);
+extern void func_0028BBA0(s32 a, void *b, s32 c);
+extern void func_0028B8C8(s32 a, void *b);
+extern void func_0011AEA0(s32 a);
+extern u8 D_1A91F0[];  /* "loaders.cpp" debug __FILE__ string */
+extern u8 D_1A9200[];  /* per-bank IOP-upload debug tag strings */
+extern u8 D_1A9210[];
+extern u8 D_1A9220[];
+extern u8 D_1A9230[];
+/*
+ * ParseLoadedSegment (loaders.cpp @0x293138) — bind the just-loaded HUD asset
+ * segment (g_pLoadedSegment): publish its rounded sub-segment sizes, make a
+ * DebugMalloc'd working copy of its asset header, resolve the embedded section
+ * pointers, and stage the four HUD-bank texture blocks to the IOP upload ring.
+ *
+ *  - Rounds the 5 sub-segment sizes at seg+0x24 (stride 8) up to a multiple of
+ *    64 and stores them into the HUD-context size table g_hudMobySpawnStart+8
+ *    (stride 4).
+ *  - DebugMalloc(round64(seg[0x1C]), 0, "loaders.cpp", 0x305) then CopyQwords a
+ *    copy of the header in from seg + seg[0x18]; publishes it as
+ *    g_pHudAssetHeader (the (size,0,file,line) call proves the 4-arg retail
+ *    debug-malloc signature).
+ *  - Resolves the header's segment-relative section offsets to absolute:
+ *    header[+4]->the +4 global slot, header[8]->g_hudIconMap,
+ *    header[0xC]->g_hudClutSlots, header[0x10]->g_hudTextureSlots. iopBase =
+ *    g_memoryArenaTable[0x10] + 0x60000 is the fixed IOP staging address.
+ *  - Bank 0 (gate header[0x54]): decompress slot 0 into iopBase, DMA
+ *    seg+seg[0x20] (round64(seg[0x24])/16 qwords) to the IOP ring tagged
+ *    D_1A9200, record the GS handle at header+0x94, run func_0028BBA0.
+ *  - Bank 1 (gate header[0x58]): DebugMalloc a scratch buffer sized header[0x58],
+ *    decompress slot 1 into it, run func_0011AEA0(0) + func_0028B8C8; no upload.
+ *  - Banks 2-4 (gates header[0x5C]/[0x60]/[0x64]): DMA seg sections
+ *    0x30/0x34, 0x38/0x3C, 0x40/0x44 to the ring (tags D_1A9210/20/30),
+ *    recording GS handles at header +0x9C/+0xA0/+0xA4.
+ */
+void ParseLoadedSegment(void) {
+    u8 *seg = g_pLoadedSegment;
+    u8 *header;
+    u8 *iopBase;
+    s32 *src;
+    s32 *dst;
+    s32 i;
+    s32 size;
+    s32 sizeQw;
+
+    /* Round the 5 sub-segment sizes up to 64 and publish the size table. */
+    src = (s32 *)(seg + 0x24);
+    dst = (s32 *)(g_hudMobySpawnStart + 8);
+    for (i = 4; i >= 0; i--) {
+        *dst = (*src + 0x3F) & 0xFFFFFFC0;
+        src += 2;
+        dst += 1;
+    }
+
+    /* DebugMalloc + CopyQwords the working header copy. */
+    size = (*(s32 *)(seg + 0x1C) + 0x3F) & 0xFFFFFFC0;
+    header = (u8 *)DebugMalloc(size, 0, D_1A91F0, 0x305);
+    CopyQwords(header, (void *)(*(s32 *)(seg + 0x18) + seg), size);
+    g_pHudAssetHeader = header;
+
+    /* Resolve the header's section pointers + the fixed IOP staging base. */
+    *((u8 **)&g_pHudAssetHeader + 1) = header + *(s32 *)(header + 0x4);
+    iopBase = (u8 *)(*(s32 *)(g_memoryArenaTable + 0x10) + 0x60000);
+    g_hudIconMap      = header + *(s32 *)(header + 0x8);
+    g_hudClutSlots    = header + *(s32 *)(header + 0xC);
+    g_hudTextureSlots = header + *(s32 *)(header + 0x10);
+
+    /* Bank 0. */
+    if (*(s32 *)(header + 0x54) != 0) {
+        sizeQw = ((*(s32 *)(seg + 0x24) + 0x3F) & 0xFFFFFFC0) >> 4;
+        func_002933D0(0, iopBase);
+        *(s32 *)(g_pHudAssetHeader + 0x94) =
+            UploadDataToIopRing((void *)(*(s32 *)(seg + 0x20) + seg),
+                                sizeQw, sizeQw, D_1A9200);
+        func_0028BBA0(0, iopBase, 1);
+    }
+
+    /* Bank 1 (scratch decompress, no upload). */
+    header = g_pHudAssetHeader;
+    if (*(s32 *)(header + 0x58) != 0) {
+        u8 *buf = (u8 *)DebugMalloc(*(s32 *)(header + 0x58), 0, D_1A91F0, 0x32D);
+        func_002933D0(1, buf);
+        func_0011AEA0(0);
+        func_0028B8C8(1, buf);
+    }
+
+    /* Bank 2. */
+    header = g_pHudAssetHeader;
+    if (*(s32 *)(header + 0x5C) != 0) {
+        sizeQw = ((*(s32 *)(seg + 0x34) + 0x3F) & 0xFFFFFFC0) >> 4;
+        *(s32 *)(g_pHudAssetHeader + 0x9C) =
+            UploadDataToIopRing((void *)(*(s32 *)(seg + 0x30) + seg),
+                                sizeQw, sizeQw, D_1A9210);
+    }
+
+    /* Bank 3. */
+    header = g_pHudAssetHeader;
+    if (*(s32 *)(header + 0x60) != 0) {
+        sizeQw = ((*(s32 *)(seg + 0x3C) + 0x3F) & 0xFFFFFFC0) >> 4;
+        *(s32 *)(g_pHudAssetHeader + 0xA0) =
+            UploadDataToIopRing((void *)(*(s32 *)(seg + 0x38) + seg),
+                                sizeQw, sizeQw, D_1A9220);
+    }
+
+    /* Bank 4. */
+    header = g_pHudAssetHeader;
+    if (*(s32 *)(header + 0x64) != 0) {
+        sizeQw = ((*(s32 *)(seg + 0x44) + 0x3F) & 0xFFFFFFC0) >> 4;
+        *(s32 *)(g_pHudAssetHeader + 0xA4) =
+            UploadDataToIopRing((void *)(*(s32 *)(seg + 0x40) + seg),
+                                sizeQw, sizeQw, D_1A9230);
+    }
+}
+#endif
 
 __asm__(".extern g_pLoadedSegment, 16");
 __asm__(".extern g_pHudAssetHeader, 16");
