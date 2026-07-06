@@ -536,8 +536,32 @@ s32 func_00353AC8(FmvStream *s, s32 state) {
     return old;
 }
 
-/* func_00353AD8 (USA func_00352638): blocked, prologue-scheduling shapes. */
+/* func_00353AD8 (USA func_00352638): queue an IPU DMA-add command {addr, size,
+ * pos - obj->streamStart, tag} for a bitstream span into the arena's DMA-add
+ * queue (g_pFmvArenaBase + FMV_DMAQ_OFS); returns the enqueue result. Ported
+ * from the USA body: the g_pFmvArenaBase reference retargets to the EU alias
+ * (g_nVendorBuyQuantity + 0x184) via the file-level macro, and the enqueue
+ * callee shifts func_003521B0 -> func_00353650 (+0x14A0) - both verified against
+ * the EU asm. Matching arm stays asm (prologue-scheduling shapes not reachable
+ * from this source); the #else is the structure-exact functional model. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00353AD8);
+#else
+s32 func_00353AD8(u8 *obj, u64 addr, u64 size, s32 pos, s32 tag) {
+    struct {
+        u64 addr;
+        u64 size;
+        s32 pos;
+        s32 tag;
+    } cmd;
+
+    cmd.addr = addr;
+    cmd.size = size;
+    cmd.pos = pos - *(s32 *)(obj + 0x48); /* pos relative to obj->streamStart */
+    cmd.tag = tag;
+    return func_00353650(g_pFmvArenaBase + FMV_DMAQ_OFS, &cmd);
+}
+#endif
 
 /* === func_00353B20 (USA func_00352680) ============================== */
 /**
