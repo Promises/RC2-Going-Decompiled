@@ -1643,7 +1643,7 @@ void ApplyMobyGroundAndEvents(Moby *moby, MobyMotionController *ctrl,
 
     if (ctrl->stateFlags & 0x1) {
         if (CheckMobyPathBlocked(moby) != 0) {
-            ctrl->stateFlags &= ~0x2;
+            ctrl->stateFlags &= ~0x1;
         } else {
             ctrl->eventFlags |= 0x100;
         }
