@@ -694,9 +694,38 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D6B28);
  * ladder over fixed screen instances. Bare INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D6E98);
 
-/* Compute the galactic-map fade-alpha colour from a pulse value. Wall: ACC-madd
- * / FP-heavy leaf the cc1 schedules differently. Bare INCLUDE_ASM. */
+/* Cross-fade the galactic-map planet colour toward a target over `progress` steps.
+ * Clamps progress to >= 0, substitutes the two default packed RGBA colours when a
+ * colour arg is -1 (0x80FFA888 / 0x8020FFFF), computes the fade fraction
+ * progress/limit (limit = D_1AA460; saturated to 1.0 once progress exceeds it) and
+ * hands the two colours + fraction to the colour-lerp leaf func_002846E8.
+ * WALL: ACC-madd / FP-heavy leaf the cc1 schedules differently; matching arm stays
+ * INCLUDE_ASM, portable #else below. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", SetGalacticMapFadeAlpha);
+#else
+extern s32  D_1AA460;                                          /* galactic-map fade step count */
+extern void func_002846E8(s32 color1, s32 color2, f32 fade);   /* 0x2846E8 packed-RGBA colour lerp */
+
+void SetGalacticMapFadeAlpha(s32 progress, s32 color1, s32 color2) {
+    s32 clampedProgress = (progress < 0) ? 0 : progress;
+    f32 fade;
+
+    if (color1 == -1) {
+        color1 = (s32)0x80FFA888;
+    }
+    if (color2 == -1) {
+        color2 = (s32)0x8020FFFF;
+    }
+
+    if (D_1AA460 < clampedProgress) {
+        fade = 1.0f;
+    } else {
+        fade = 1.0f - (f32)(D_1AA460 - clampedProgress) / (f32)D_1AA460;
+    }
+    func_002846E8(color1, color2, fade);
+}
+#endif
 
 /* Galactic-map grid cursor input (paged Up/Down/Left/Right with edge wrap into
  * linked sibling screens). Wall: very large nested branch graph + divide traps.
