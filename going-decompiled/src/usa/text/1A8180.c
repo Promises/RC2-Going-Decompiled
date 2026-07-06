@@ -704,6 +704,41 @@ void func_002A8C70(Moby *moby, Moby *target, f32 *driveOut,
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8CF8);
 
+/* func_002A8D08 — vertical collision-sweep + resolve of a moby position (MODEL,
+ * UNCONFIRMED). Structurally traced; kept INCLUDE_ASM pending a runtime oracle
+ * (see caveat) rather than shipping a large un-verifiable VU0 body.
+ *
+ *   s32 func_002A8D08(void *ent, Vec4 *ref, Vec4 *pos, s32 flags,
+ *                     f32 stepZ, f32 radius, f32 snapEps, f32 hitEps)
+ *     ent   ($4)  collision-world / entity handle (forwarded to CollLine/CollSphere)
+ *     ref   ($5)  reference position; its xy is overwritten with pos.xy on return
+ *     pos   ($6)  swept position (Vec4, +0x8 = z) — read + written in place
+ *     flags ($7)  bit0 = clamp direction select, bit1 = skip the sphere-nudge loop
+ *     stepZ ($f12) z probe/advance delta      radius ($f13) rescale len + sphere radius
+ *     snapEps ($f14) surface-snap threshold   hitEps ($f15) hit-accept threshold
+ *   returns ($22): 1 normally, 0 once a snap/hit resolution moved `pos`.
+ *
+ * Flow: (1) probe the surface height at pos+stepZ via func_002A9888, restore z,
+ * and if |surface - ref.z| > snapEps run a min/max clamp (bit0 + sign select)
+ * that may snap pos<-ref. (2) Build a rescaled step dir (normalize(pos-ref) *
+ * radius*1.2) and a lifted origin (ref + (0,0,stepZ)); CollLine along it, and on
+ * a hit whose planar angle (func_002837D0/func_00283BF8) passes hitEps, scale the
+ * hit delta (func_1290E0/Vec4ScaleVu0) into pos. (3) Unless bit1 is set, iterate
+ * up to 6x: CollSphere(radius) at pos, and on a hit inside hitEps snap pos to
+ * g_collHitPointNudged and step z by -(stepZ+radius). (4) Re-probe + mirror the
+ * step-1 clamp, then write pos.xy back into ref.
+ *
+ * Helper sigs (recovered): f32 func_002A9888(Vec4 *pos) [surface sample, UNCONFIRMED];
+ * void func_1290E0(void *dst, void *src) [hit-delta build, UNCONFIRMED];
+ * f32 func_002837D0(Vec4 *v) [planar magnitude]; f32 func_00283BF8(f32,f32) [atan2];
+ * Vec4ScaleVu0(dst, scale, src). Delay-slot notes: the bnel @0x2A8F14 and the two
+ * bc1fl @0x2A8F98/0x2A9030 are LIKELY (delay runs only when taken) — the sphere
+ * loop's i++ lives in a bc1fl delay slot.
+ *
+ * ORACLE CAVEAT: engine region (no byte-match) AND VU0-microprogram-dependent
+ * (Vec3RescaleToLenVu0/etc), so — like func_002AA058 — it is NOT ULP/bit-oracleable
+ * in the headless cmp harness; a trustworthy #else needs the tester full-game
+ * effect-diff. Sibling func_002A90A8 is the same class. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8D08);
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
