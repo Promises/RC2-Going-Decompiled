@@ -1625,7 +1625,136 @@ s32 func_00294EE0(s32 classId) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadMobyClassFromWad);
 
+/*
+ * func_00295238(classId) — (re)load a gadget moby-class into one of the three
+ * resident class buffers and refresh its sound bank.
+ *
+ * 1. Look classId up in the gadget-class TOC (g_discToc+0x4B40, stride 5 ints,
+ *    up to 0x30 entries); return if absent (idx == 0x30) or if it is already the
+ *    current class (rec[+0x14] == idx, where rec = g_respawnPlayerYaw+0x48).
+ * 2. Record idx as current (rec[+0x14]) and find which of the three resident
+ *    buffers already holds it (rec[+0x34], stride 4). If none does (slot == 3)
+ *    it logs (DebugPrintStub) and services the voice stream around the evicting
+ *    load (func_00294E98), then reuses buffer slot 0.
+ * 3. WaitFrameDmaFence(1); the destination buffer is slot*0xC800 + (rec+0x40).
+ *    (The <=0xFFFFF branch relocates it into the frame arena — the buffer lives
+ *    above 1MB in practice, so that path is never taken; kept for fidelity.)
+ * 4. Repoint any listener-history entry (g_listenerPosHistory, stride 0x70)
+ *    whose sound object (+0x78, field +0x1C == 4) to D_1A93B0.
+ * 5. If a previous bank handle is live (rec[+0x30]) unload it (func_00132858)
+ *    and pump the sound system until idle. If the TOC slot declares a bank
+ *    (+0x10 field) load it (snd_BankLoadFromIOP into buffer slot) and store the
+ *    handle to rec[+0x30] and g_listenerPosHistory[0x17B0]; else clear rec[+0x30].
+ * 6. Finalise (func_00132828) and load the class (LoadMobyClassFromWad).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00295238);
+#else
+extern s32 g_discToc[];
+extern s32 g_respawnPlayerYaw[];
+extern u8 g_listenerPosHistory[];      /* 0x188660 - stride 0x70 emitter ring */
+extern s32 g_frameArenaBase;           /* per-frame arena base (arena relocate) */
+extern s32 g_sceneArenaCursor;         /* scene arena cursor (arena relocate) */
+extern u8 D_001A7210[];                /* +0x68 -> IOP sound-bank staging base */
+extern char D_1A9370[];                /* eviction debug format string */
+extern s32 D_1A93B0;                   /* default sound-object stand-in */
+extern void WaitFrameDmaFence(s32 mask);
+extern void DebugPrintStub(const char *fmt, ...);
+extern void func_00294E98(s32 id, s32 zero);
+extern s32  func_0029DDE8(void *dst, void *src, s32 count);
+extern void func_00132858(s32 handle);
+extern void func_00132828(void);
+extern s32  snd_BankLoadFromIOP(void *addr);
+extern s32  snd_Pump(void);
+extern void LoadMobyClassFromWad(s32 classId, s32 tocIdx, void *buf);
+
+void func_00295238(s32 classId) {
+    s32 *toc = g_discToc;
+    s32 *rec = &g_respawnPlayerYaw[0x12];  /* g_respawnPlayerYaw + 0x48 */
+    s32 *req;
+    s32 tocIdx, slot;
+    u8 *buf;
+
+    /* 1. locate the class in the gadget-class TOC */
+    if (toc[0x12D0] == classId) {                    /* g_discToc + 0x4B40 */
+        tocIdx = 0;
+    } else {
+        s32 *p = toc + 0x12D0;
+        for (tocIdx = 1; tocIdx < 0x30; tocIdx++) {
+            p += 5;
+            if (p[0] == classId) {
+                break;
+            }
+        }
+    }
+    if (tocIdx == 0x30) {
+        return;                                       /* not in the gadget TOC */
+    }
+    if (tocIdx == *(s16 *)((u8 *)rec + 0x14)) {
+        return;                                       /* already the current class */
+    }
+
+    /* 2. record current + find its resident buffer slot (of 3) */
+    *(s16 *)((u8 *)rec + 0x14) = (s16)tocIdx;
+    req = &rec[0xD];                                  /* rec + 0x34, 3 entries */
+    if (req[0] == tocIdx) {
+        slot = 0;
+    } else {
+        for (slot = 1; slot < 3; slot++) {
+            if (req[slot] == tocIdx) {
+                break;
+            }
+        }
+    }
+
+    WaitFrameDmaFence(1);
+    if (slot == 3) {                                  /* not resident -> evict */
+        DebugPrintStub(D_1A9370, classId);
+        func_00294E98(classId, 0);
+        slot = 0;
+    }
+
+    /* 3. destination buffer for this slot */
+    *(s16 *)((u8 *)rec + 0x16) = (s16)slot;
+    buf = (u8 *)rec + 0x40 + slot * 0xC800;
+    if ((s32)buf <= 0xFFFFF) {                        /* never taken in practice */
+        void *scratch = (void *)(g_frameArenaBase + g_sceneArenaCursor - 0xC800);
+        func_0029DDE8(scratch, buf, 0xC80);
+        buf = scratch;
+    }
+
+    /* 4. repoint stale listener-history sound objects */
+    {
+        u8 *e = g_listenerPosHistory;
+        u8 *end = g_listenerPosHistory + 0x16C0;
+        do {
+            void *q = *(void **)(e + 0x78);
+            if (q != 0 && *(s32 *)((u8 *)q + 0x1C) == 4) {
+                *(void **)(e + 0x78) = &D_1A93B0;
+            }
+            e += 0x70;
+        } while (e < end);
+    }
+
+    /* 5. swap the sound bank */
+    if (rec[0xC] != 0) {                              /* rec + 0x30 = live handle */
+        func_00132858(rec[0xC]);
+        while (snd_Pump() != 0) {
+        }
+    }
+    if (*(s32 *)((u8 *)g_discToc + 0x4B50 + tocIdx * 0x14) != 0) {
+        s32 h = snd_BankLoadFromIOP(*(u8 **)(D_001A7210 + 0x68) + slot * 0xC800);
+        rec[0xC] = h;
+        *(s32 *)(g_listenerPosHistory + 0x17B0) = h;
+    } else {
+        rec[0xC] = 0;
+    }
+
+    /* 6. finalise + load the class */
+    func_00132828();
+    LoadMobyClassFromWad(classId, tocIdx, buf);
+}
+#endif
 
 /*
  * func_00295478 — look up a gadget moby-class id in the gadget-class TOC
