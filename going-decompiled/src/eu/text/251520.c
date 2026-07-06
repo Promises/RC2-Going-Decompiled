@@ -304,8 +304,36 @@ s32 func_00352890(void) {
     return 1;
 }
 
-/* func_00352898 (USA func_003513F8): blocked, 8-byte-packed saves. */
+/* func_00352898 (USA func_003513F8): kick off a CD sector read for the FMV
+ * bitstream. Converts byteLen to 2KB sectors (>>11), issues sceCdRead
+ * (func_001253A8) from the object's LBN cursor (obj+0x4) into buf with a fixed
+ * retry mode {trycount=0x64, spindlctrl=1, datapattern=0}. flag != 0 returns 0
+ * without advancing (query/prime); otherwise advances the cursor, waits
+ * (sceCdSync, func_00124B88(0)) and returns byteLen. Region-agnostic port of the
+ * USA body (SDK callees are region-identical; no data globals). Matching arm
+ * stays asm (8-byte-packed saves). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00352898);
+#else
+extern s32 func_001253A8(u32 lbn, u32 sectors, void *buf, void *mode); /* sceCdRead */
+extern s32 func_00124B88(s32 mode);                                    /* sceCdSync */
+s32 func_00352898(u8 *obj, void *buf, s32 byteLen, s32 flag) {
+    u8 mode[4];
+    s32 sectors = byteLen >> 11; /* bytes -> 2KB sectors */
+
+    mode[0] = 0x64; /* trycount    */
+    mode[1] = 1;    /* spindlctrl  */
+    mode[2] = 0;    /* datapattern */
+    mode[3] = 0;    /* pad */
+    func_001253A8(*(s32 *)(obj + 0x4), sectors, buf, mode);
+    if (flag != 0) {
+        return 0;
+    }
+    *(s32 *)(obj + 0x4) += sectors; /* advance the LBN cursor */
+    func_00124B88(0);
+    return byteLen;
+}
+#endif
 
 /* === func_00352938 (USA func_00351498) ============================== */
 /**
