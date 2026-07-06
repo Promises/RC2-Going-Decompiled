@@ -808,9 +808,45 @@ void SetGalacticMapFadeAlpha(s32 progress, s32 color1, s32 color2) {
  * Bare INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D75D8);
 
-/* Galactic-map grid renderer (planet icons + selection highlight pulse). Wall:
- * heavy FP/ACC pulse math + large nested draw loop + sq/lq packing. Bare. */
+/* Galactic-map streaming-slot teardown. When no CD read is in flight
+ * (g_fileLoadState == 0) it unlocks the currently locked map-cache slot: toggles
+ * that slot's 0x1000 (loaded) bit in slotLevelId[], clears the transition-mode
+ * side flag, and releases lockedSlot. Otherwise, if a menu-driven load is in
+ * progress (g_menuScreenBlock[0xDB]) it aborts the CD read and invalidates the
+ * locked slot outright (slotLevelId[idx] = lockedSlot = -1). Returns 0.
+ * MapCache fields per symbol_addrs: slotLevelId[5] @+0x29C, lockedSlot @+0x2B0. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D7AE0);
+#else
+s32 func_002D7AE0(void) {
+    extern u8  g_mapVertexData[];       /* MapCache base */
+    extern s16 g_fileLoadState;         /* 0x1A63AC: 0 idle / nonzero CD-read busy */
+    extern u8  g_menuTransitionMode[];  /* +0xBF side flag cleared on unlock */
+    s32 idx;
+
+    if (g_fileLoadState == 0) {
+        idx = *(s32 *)(g_mapVertexData + 0x2B0);           /* lockedSlot */
+        if (idx != -1) {
+            s32 *slot = (s32 *)(g_mapVertexData + 0x29C + idx * 4);  /* slotLevelId[idx] */
+            g_menuTransitionMode[0xBF] = 0;
+            *slot ^= 0x1000;
+            *(s32 *)(g_mapVertexData + 0x2B0) = -1;
+        }
+    }
+
+    if (g_fileLoadState != 0) {
+        u8 *blk = (u8 *)g_menuScreenBlock;
+        if (blk[0xDB] != 0) {
+            StopFileLoad();
+            blk[0xDB] = 0;
+            idx = *(s32 *)(g_mapVertexData + 0x2B0);        /* lockedSlot */
+            *(s32 *)(g_mapVertexData + 0x29C + idx * 4) = -1;
+            *(s32 *)(g_mapVertexData + 0x2B0) = -1;
+        }
+    }
+    return 0;
+}
+#endif
 
 /* Galactic-map screen per-frame tick (advance fades, dispatch sub-screens).
  * Wall: large state machine + multi callee-save frame. Bare INCLUDE_ASM. */
