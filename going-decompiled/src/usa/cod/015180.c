@@ -881,7 +881,33 @@ s32 func_0011BEE0(s32 value) {
     return value;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BF18);
+extern s32 D_00134694;
+extern u8 D_0013CE00[];
+
+/* func_0011BF18(c): append byte c to the debug line buffer D_0013CE00 (write
+ * position D_00134694). If the buffer is near full (pos >= 0x7E) reset and flush
+ * it first via func_0011BAA0. A newline (0xA) terminates the line (NUL after it)
+ * and flushes via a void tail call to func_0011BAA0 (sibling-call-optimised to
+ * `j func_0011BAA0` since this fn is void; cf. lever #7); any other byte is
+ * appended and the position advanced. */
+void func_0011BF18(s32 c) {
+    s32 cnt = D_00134694;
+    if (cnt >= 0x7E) {
+        D_00134694 = 0;
+        D_0013CE00[0x7F] = 0;
+        func_0011BAA0((s32)D_0013CE00);
+        cnt = D_00134694;
+    }
+    if (c == 0xA) {
+        D_00134694 = 0;
+        D_0013CE00[cnt] = (u8)c;
+        D_0013CE00[cnt + 1] = 0;
+        func_0011BAA0((s32)D_0013CE00);
+    } else {
+        D_00134694 = cnt + 1;
+        D_0013CE00[cnt] = (u8)c;
+    }
+}
 
 /**
  * Send byte `ch` to the output port via func_0011BEE0, translating a bare LF
@@ -1482,7 +1508,69 @@ void func_0011D1E8(s32 *arg0) {
  * mismatch (2 words), not a source issue. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D208);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D238);
+struct D238Node {
+    s32 data;             /* 0x0:  resource handle freed via func_0011D1E8, then cleared */
+    char _p4[0x8 - 0x4];
+    s32 status;           /* 0x8:  fed to func_0011AC50 when >= 0 (role inferred) */
+    char _pc[0x14 - 0xc];
+    s32 stateA, stateB;   /* 0x14, 0x18: state written by the 0x80000009 command */
+    void (*handler)(s32); /* 0x1C: callback invoked by the 0x8000000A command */
+    s32 handlerArg;       /* 0x20: argument passed to handler */
+    s32 stateC;           /* 0x24: state written by the 0x80000009 command */
+};
+struct D238Obj {
+    char _p0[0x1C];
+    struct D238Node *node;                /* 0x1C: node this request operates on */
+    u32 command;                          /* 0x20 */
+    s32 newStateC, newStateA, newStateB;  /* 0x24, 0x28, 0x2C: new state for the copy command */
+};
+extern void func_0011AC50(s32 arg);
+
+/* func_0011D238(arg0): dispatch on the command word arg0->f20 over the node
+ * arg0->f1C. 0x8000000A invokes the node's callback (n->f1C)(n->f20) if set;
+ * 0x80000009 copies three fields from arg0 into the node; any other value just
+ * uses the node as-is. Then, for every command, if n->f8 >= 0 run
+ * func_0011AC50(n->f8), free n->f0 via func_0011D1E8, and clear n->f0. The
+ * `goto`s are load-bearing: they make the 0x8000000A case and the callback-set
+ * case the branch TARGETS, which is what reproduces the original's dispatch
+ * branch-likely forms (beql/bnel with annulled field loads) and keeps the
+ * callback pointer in $2 — the plain if/else-chain mis-orders the branches and
+ * mis-colours that register. */
+void func_0011D238(struct D238Obj *arg0) {
+    struct D238Node *n;
+    u32 cmd = arg0->command;
+    if (cmd == 0x8000000A) {
+        goto caseInvoke;
+    }
+    if (cmd > 0x8000000A) {
+        n = arg0->node;
+        goto common;
+    }
+    if (cmd == 0x80000009) {
+        goto caseCopy;
+    }
+    n = arg0->node;
+    goto common;
+caseInvoke:
+    n = arg0->node;
+    if (n->handler == 0) {
+        goto common;
+    }
+    n->handler(n->handlerArg);
+    n = arg0->node;
+    goto common;
+caseCopy:
+    n = arg0->node;
+    n->stateC = arg0->newStateC;
+    n->stateA = arg0->newStateA;
+    n->stateB = arg0->newStateB;
+common:
+    if (n->status >= 0) {
+        func_0011AC50(n->status);
+    }
+    func_0011D1E8((s32 *)n->data);
+    n->data = 0;
+}
 
 extern s32 *func_0011D208(s32 idx);
 
@@ -1506,7 +1594,45 @@ void func_0011D2F0(s32 *obj, s32 idx) {
     func_0011CD60(0x80000008, (s32)slot, 0x40, obj[8], obj[9], obj[10]);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D350);
+/* Chained-bucket lookup. Walk the bucket list anchored at table->0x28; within
+ * each bucket walk the node chain at bucket->0x8 (nodes linked by ->0x38) and
+ * return the first node whose key word (->0x0) equals `key`. If a bucket's chain
+ * is exhausted, advance to the next bucket via ->0x14. Returns 0 if nothing
+ * matches. Frameless leaf; the entry guard and both inner walks are emitted as
+ * branch-likely (beql/bnel) loads, which ee-gcc reproduces from this plain
+ * while/while phrasing. */
+struct D350Node {
+    u32 key;                       /* 0x0  */
+    u8  _pad4[0x38 - 0x4];
+    struct D350Node *next;         /* 0x38: next node in this bucket's chain */
+};
+
+struct D350Bucket {
+    u8  _pad0[0x8];
+    struct D350Node *chain;        /* 0x8:  head of the node chain */
+    u8  _padc[0x14 - 0xc];
+    struct D350Bucket *nextBucket; /* 0x14 */
+};
+
+struct D350Table {
+    u8  _pad0[0x28];
+    struct D350Bucket *buckets;    /* 0x28: head of the bucket list */
+};
+
+struct D350Node *func_0011D350(u32 key, struct D350Table *table) {
+    struct D350Bucket *b = table->buckets;
+    while (b != 0) {
+        struct D350Node *n = b->chain;
+        while (n != 0) {
+            if (n->key == key) {
+                return n;
+            }
+            n = n->next;
+        }
+        b = b->nextBucket;
+    }
+    return 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", rename);
 
@@ -1565,7 +1691,33 @@ void func_0011D868(void) {
     }
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D8C8);
+extern s32 func_0011AC60(s32 handle);
+extern void func_0011AC40(s32 arg);
+extern u8 D_0013FE80[];
+
+/* func_0011D8C8: allocate a slot from the 0x200-byte pool D_0013FE80 (32 slots
+ * of 0x10). Under lock (func_0011D868 + func_0011AC60/func_0011AC40 on the lock
+ * handle D_00134738), scan for the first free slot (word at +0x4 is zero), claim
+ * it by storing 0x10000000 there, and return it (or 0 if the pool is full). The
+ * claim store is emitted BEFORE the unlock call so the 0x10000000 constant stays
+ * in a caller-saved temp (it isn't live across the call) — matching the original
+ * frame; storing after the unlock would force it into a callee-saved register. */
+void *func_0011D8C8(void) {
+    u8 *e;
+    func_0011D868();
+    func_0011AC60(D_00134738);
+    e = D_0013FE80;
+    while (e < D_0013FE80 + 0x200) {
+        if (*(s32 *)(e + 4) == 0) {
+            *(s32 *)(e + 4) = 0x10000000;
+            func_0011AC40(D_00134738);
+            return e;
+        }
+        e += 0x10;
+    }
+    func_0011AC40(D_00134738);
+    return 0;
+}
 
 extern void func_0011AC40(s32 sema);
 extern u8 D_0013FE80[];
@@ -4647,7 +4799,34 @@ void func_0012FB70(s32 *arg0) {
     arg0[2] = arg0[3];
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012FB80);
+extern void func_00130288(s32 arg0, void *buf);
+extern char D_0013BD48[];
+
+struct AllocRegion { u32 base; u32 span; u32 cursor; };
+
+/**
+ * func_0012FB80(arg0, region, size, align): bump-allocate within region
+ * {base@0x0, span@0x4, cursor@0x8}. Round cursor UP to a multiple of align,
+ * add size -> end. If base+span >= end, commit cursor=end and return the
+ * aligned start; else the request overflows the region -> dispatch
+ * func_00130288(arg0, &D_0013BD48) and return 0.
+ *
+ * Matched 2026-06-30: round-up = ((cursor+align-1)/align)*align via unsigned
+ * divu+mult (the divu auto-emits the break-7 divide-by-zero guard). Lever #9
+ * (arm order): writing the FIT case first (`if (base+span >= end)`) makes
+ * ee-gcc emit the original `bnel`-to-overflow (overflow = the branch-likely
+ * target). EU twin: same body, data global D_0013BD48 -> +0x80 D_0013BDC8.
+ */
+s32 func_0012FB80(s32 arg0, struct AllocRegion *region, s32 size, u32 align) {
+    u32 rounded = ((region->cursor + align - 1) / align) * align;
+    u32 end = rounded + size;
+    if (region->base + region->span >= end) {
+        region->cursor = end;
+        return rounded;
+    }
+    func_00130288(arg0, D_0013BD48);
+    return 0;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012FBF0);
 
@@ -5119,7 +5298,27 @@ void func_001319E0(u8 *arg0) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131A08);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131A98);
+extern s32 func_00131670(void);
+extern s32 func_001316C8(void);
+extern void func_00131A08(void *arg0, s32 value);
+
+/**
+ * func_00131A98(arg0): combine the two clock/territory getters and dispatch.
+ * value = func_00131670() + (func_001316C8() * 0x3C - 0x21C); then tail-call
+ * func_00131A08(arg0, value). Both getters are parameterless (they read their
+ * own globals), so arg0 only survives across the calls (in $16) for the final
+ * dispatch. Void sibling call (lever #7).
+ *
+ * Matched 2026-06-30: keys were (1) the two getters take NO args (declaring
+ * them void stops ee-gcc reloading a0 before each call), (2) grouping the
+ * constant fold as a temp `r2*0x3C - 0x21C` so -0x21C lands on the product not
+ * on r1, (3) the void tail call compiles to `j func_00131A08`.
+ */
+void func_00131A98(void *arg0) {
+    s32 r1 = func_00131670();
+    s32 t = func_001316C8() * 0x3C - 0x21C;
+    func_00131A08(arg0, r1 + t);
+}
 
 /* _start (0x131AE8): the EE ELF entry point — hand-written crt0, NOT compilable
  * from C and not given a portable #else (it IS the machine bootstrap: a C-only
