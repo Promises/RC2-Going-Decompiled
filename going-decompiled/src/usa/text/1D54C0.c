@@ -975,8 +975,15 @@ s32 func_002D87C8(MenuWidget *obj) {
 #endif
 
 /* Draw the title-screen audio-options sliders (music/sfx bars + mono/stereo
- * label). Wall: heavy FP bar-fill math + many DrawHudIconQuad/Font leaf calls.
- * Bare INCLUDE_ASM. */
+ * label): 3 near-identical blocks reading g_musicVolume / g_sfxVolume /
+ * g_audioStereoMode, each drawing a label (movz/movn-selected colour) plus a
+ * bar-fill of (width * volume) / 1024.
+ * PARK (flag-not-guess): the bar primitives func_002904B0 (6 args) and
+ * func_0028FFF0 (10 args incl. 0x0/0x8 stack slots) have unrecovered signatures;
+ * a portable #else here would guess their arg boundaries/types (silent-bug risk,
+ * no byte-gate on #else content). Ghidra backlog: recover the shared draw-
+ * primitive signatures (func_00280090/002904B0/0028EDF0/0028FFF0/0027FBA8) first,
+ * then this + siblings convert cleanly. Bare INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D8A68);
 
 /* Rebuild the galactic-map planet display rows: for each of the D_1A7C0C
@@ -1313,8 +1320,14 @@ s32 func_002DB028(MenuWidget *obj) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DB080);
 
 /* Draw the streamed help/preview image (loading/autosave overlay variants).
- * Wall: ~200-instruction branch graph + 128-bit packed text-box struct + the
- * DrawGlyphQuad blit. Bare INCLUDE_ASM. */
+ * PARK (flag-not-guess): builds a text-box descriptor on the stack (sh fields at
+ * $sp+0x30..) then copies it via unaligned ldl/ldr/sdl/sdr into $sp+0x10 and
+ * re-draws through func_00280BB8 with per-field decrements (drop-shadow) — the
+ * 128-bit packed descriptor's field roles are only partially recovered, so a
+ * portable #else would guess them (silent-bug risk, #else not byte-gated). The
+ * bottom DrawGlyphQuad path is transparent, but the fn can't be split. Shared
+ * blocker with func_002DA740/002D9178/002DD450: define the func_00280BB8 text-box
+ * descriptor struct ONCE in a Ghidra pass, then convert all four. Bare INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DB700);
 
 /* Load a menu background-image pair (front/back) from disc into the bg buffers.
