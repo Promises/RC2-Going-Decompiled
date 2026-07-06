@@ -1235,10 +1235,22 @@ void func_002DAA50(s32 x, s32 y, s32 on) {
 }
 #endif
 
-/* Streaming-image widget state machine: drives a multi-stage WAD load/decompress
- * for the current map level's preview texture and uploads it to VRAM. Wall:
- * ~250-instruction state machine + StartFileLoad/DecompressWad orchestration +
- * the same partially-recovered slot table. Bare INCLUDE_ASM. */
+/* Streaming-image widget state machine: selects a source index from obj->0x34
+ * flags (0x1 obj->0x58 / 0x2 g_mapCurrentLevel / 0x4 screen->0xE8->0x3C / 0x100
+ * area-record path / else screen->0xE8->0x40, each clamped via movz), then runs a
+ * phase machine on obj->0x44 (even=kick StartFileLoad from the obj->0x30 slot
+ * table with an lbn base chosen by obj->0x34 bits 0x10000/0x10; odd=wait
+ * g_fileLoadState, DecompressWad(src=obj->0x48+obj->0x60, dst=obj->0x48),
+ * Log2Floor tex setup, func_00295630, FlushPendingTexUploads), counter obj->0x5C
+ * capped 0x100.
+ * PARK (flag-not-guess, attempted-and-verified): the control flow is saturated
+ * with branch-LIKELY delay-slot side effects (bnel/beql/beqz whose delay loads of
+ * $2/$16 are nullified per-branch) + movz saturation clamps; a full trace gives a
+ * contradictory $2-source flag into the two StartFileLoad convergence paths,
+ * i.e. real transcription-error risk on a body that is NOT byte-gated as #else.
+ * Needs a dedicated fresh-context pass with per-branch likely-bit verification.
+ * DecompressWad's 2nd arg (dst) is load-bearing — do NOT drop it (poison-bug
+ * class). Bare INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DAAF8);
 
 /* Draw the streamed full-screen image widget once it has loaded (state>=2 and
