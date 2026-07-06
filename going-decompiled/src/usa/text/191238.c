@@ -2479,7 +2479,64 @@ void func_00298308(void *dst, u8 *src) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002984D8);
 
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002984E0);
+#else
+extern u8   *g_mapBitmapBuffer;
+extern u8    D_1A9718[];  /* 64-byte per-nibble accumulation weight LUT */
+extern void  FillMemory32(void *dst, u32 val, s32 len);
+/*
+ * func_002984E0(out) — downsample the loaded 4bpp map source at
+ * g_mapBitmapBuffer[+4] into the 1bpp discovered-area bitmap `out` (the inverse
+ * of func_00298308's expand). Works in bands of four 64-byte input rows: for
+ * each byte both nibbles index a 16-entry weight LUT (copied from D_1A9718) and
+ * accumulate into a 128-column sum buffer; every fourth row that buffer is
+ * thresholded (>=8 -> set) and bit-packed 8 columns/byte to sixteen output
+ * bytes. Consumes 512*64 = 32 KB, emits 128*16 = 2 KB, then clears bit0 of
+ * out[0].
+ */
+void func_002984E0(u8 *out) {
+    s32 acc[128];   /* per-column accumulator (sp[0..0x200)) */
+    s32 lut[16];    /* nibble weight table (sp+0x200) */
+    u8 *lb = (u8 *)lut;
+    u8 *in = *((u8 **)&g_mapBitmapBuffer + 1);  /* g_mapBitmapBuffer[+4] */
+    u8 *outp = out;
+    s32 i;
+    s32 j;
+
+    for (j = 0; j < 0x40; j++) {
+        lb[j] = D_1A9718[j];
+    }
+
+    for (i = 0; i < 0x200; i++) {
+        s32 n;
+        if ((i & 3) == 0) {
+            FillMemory32(acc, 0, 0x200);
+        }
+        for (n = 0; n < 64; n++) {
+            u8 b = *in++;
+            acc[2 * n]     += lut[b & 0xF];
+            acc[2 * n + 1] += lut[b >> 4];
+        }
+        if ((i & 3) == 3) {
+            s32 k;
+            for (k = 0; k < 128; k++) {
+                if (acc[k] < 8) {
+                    acc[k] = 0;
+                } else {
+                    acc[k] = 1 << (k & 7);
+                }
+            }
+            for (k = 0; k < 16; k++) {
+                u8 *a = (u8 *)&acc[8 * k];
+                *outp++ = a[0] | a[4] | a[8] | a[12] | a[16] | a[20] | a[24] | a[28];
+            }
+        }
+    }
+
+    out[0] &= 0xFE;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00298730);
 
