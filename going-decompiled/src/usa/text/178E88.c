@@ -92,8 +92,20 @@ extern void ResolveOcclusionVisMask(void);
 extern s32 func_00286200(void);
 extern void RenderSaveLoadStatusPopup(void);
 
-/* Wrapped text-box renderer (the scaled core behind DrawTextBoxDefault). */
+/* Wrapped text-box renderer (the scaled core behind DrawTextBoxDefault).
+ * The real fn takes SEVEN args: the five int slots, the glyph-metrics table
+ * (D_263B10, passed in $9 on the 0x280B48 path), then the f32 scale — sig
+ * recovered 2026-07-06 (fable, promo-d3 @4cb6be7). The portable #else chain
+ * had DROPPED the glyph-table arg (func_00348DA0 dropped-arg class), running
+ * native text draws through a garbage font table; the TARGET_NATIVE prototype
+ * below carries it. The matching build never calls this in C (func_00280B20's
+ * matching arm is INCLUDE_ASM), so its prototype text is left untouched. */
+#ifdef TARGET_NATIVE
+extern void func_00280550(s32 a, s32 b, s32 c, s32 d, s32 e, u8 *glyphTable,
+                          f32 scale);
+#else
 extern void func_00280550(s32 a, s32 b, s32 c, s32 d, s32 e, f32 scale);
+#endif
 
 /* GS depth-range / register-packet helpers. AppendGsRegPacket takes a 64-bit
  * value (so the constants need the ori/dsll/ori zero-extend) plus a reg id. */
@@ -1571,19 +1583,38 @@ f32 func_002804C0(f32 inputScale, const char *str, s32 maxChars, s32 count) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280550);
 
 /* DrawTextBoxDefault - the unscaled text-box entry: forward to the scaled core
- * with scale 1.0f. The five integer args pass straight through unchanged.
- * Near-miss: the pinned cc1 sibling-call-optimizes the lone tail call to
- * `j func_00280550`; the original keeps a full call+return frame. Correct C
- * preserved as the portable body. */
+ * with scale 1.0f. The real fn takes SIX args (layout, rgba, str, len, tex0,
+ * glyphTable); it passes all six through and appends scale 1.0f into the SEVEN-
+ * arg func_00280550. The portable #else had been 5-arg and silently DROPPED the
+ * glyph-metrics table (the func_00280B48 path passes &D_263B10 in $9) — native
+ * text drew with a garbage font table. #else sig corrected 2026-07-06 (fable
+ * recovery, promo-d3 @4cb6be7); the arg is now forwarded.
+ * Near-miss (matching arm): the pinned cc1 sibling-call-optimizes the lone tail
+ * call to `j func_00280550`; the original keeps a full call+return frame.
+ * Correct C preserved as the portable body. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280B20);
 #else
-void func_00280B20(s32 a, s32 b, s32 c, s32 d, s32 e) {
-    func_00280550(a, b, c, d, e, 1.0f);
+void func_00280B20(s32 a, s32 b, s32 c, s32 d, s32 e, u8 *glyphTable) {
+    func_00280550(a, b, c, d, e, glyphTable, 1.0f);
 }
 #endif
 
+/* func_00280B48 - draw a string with the default UI font: resolve the font
+ * page's GS TEX0 (GetUiTextureTex0 slot 1) and forward the four caller args
+ * plus that tex0 and the D_263B10 glyph-metrics table to the text core
+ * func_00280B20 (SIX args). Sig recovered 2026-07-06 (fable, promo-d3
+ * @4cb6be7). Matching arm stays INCLUDE_ASM (byte-exact is walled by the
+ * tier-wide 8-packed-callee-save frame fingerprint); the #else supplies the
+ * portable body that passes the glyph table down the chain. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280B48);
+#else
+void func_00280B48(s32 a, s32 b, s32 c, s32 d) {
+    u64 tex0 = GetUiTextureTex0(1);
+    func_00280B20(a, b, c, d, (s32)tex0, D_263B10);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280BB8);
 
