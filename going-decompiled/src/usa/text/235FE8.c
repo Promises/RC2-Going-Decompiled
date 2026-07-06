@@ -6467,7 +6467,95 @@ void GuiMapScreenInit(void *w, GuiPool *pool) {
 }
 #endif
 
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00346878);
+#else
+extern u8   D_259CC0[];              /* 2D grid entry table, stride 0xA, +6 = s16 item id */
+extern u8   g_menuTransitionMode[];  /* 0x1F27DC - +0x24 receives the activated item id */
+extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+/*
+ * func_00346878(w, flags) — the mode-0 sub-builder: a 2D-grid cursor/confirm
+ * handler for the D_259CC0 select grid `w` (3 columns wide; grid index =
+ * w+0x4FC column [0..2] + 3 * w+0x500 row, record stride 0xA). Held-button
+ * `flags` move the cursor, each with the wheel cue PlayGlobalSound(3):
+ *   0x1000 up    -> row--, underflow clamps row to 0 and sets w+0x508=1
+ *   0x4000 down  -> from row 0: enter row 1 (seeding col if col==0); from row 1:
+ *                   set w+0x508=3, back to row 0 and col--
+ *   0x8000 left  -> col-- with wrap to 2 (row 0 keeps col 0, row!=0 wraps at 0)
+ *   0x2000 right -> col++ with wrap (>2 -> 0 on row 0, -> 1 on row!=0)
+ *   0x40  confirm-> owned highlighted item: accept cue (4), record in
+ *                   g_menuTransitionMode+0x24 and w+0x504; else deny cue (5)
+ * Every path then refreshes w+0x504 and, for an owned item, its weapon-name
+ * caption id D_1ADAF0 = g_weaponTable[g_itemEquippedSlot[entry]*0xE0 + 6].
+ */
+void func_00346878(void *w, s32 flags) {
+    s16 entry;
+    s32 idx;
+
+    if (flags & 0x1000) {
+        s32 v;
+        PlayGlobalSound(3, 0, 0);
+        v = *(s32 *)((char *)w + 0x500) - 1;
+        *(s32 *)((char *)w + 0x500) = v;
+        if (v < 0) {
+            *(s32 *)((char *)w + 0x500) = 0;
+            *(s32 *)((char *)w + 0x508) = 1;
+        }
+    } else if (flags & 0x4000) {
+        s32 s500;
+        PlayGlobalSound(3, 0, 0);
+        s500 = *(s32 *)((char *)w + 0x500);
+        if (s500 == 0) {
+            if (*(s32 *)((char *)w + 0x4FC) == 0) {
+                *(s32 *)((char *)w + 0x500) = 1;
+                *(s32 *)((char *)w + 0x4FC) = 1;
+            } else {
+                *(s32 *)((char *)w + 0x500) = 1;
+            }
+        } else if (s500 == 1) {
+            *(s32 *)((char *)w + 0x508) = 3;
+            *(s32 *)((char *)w + 0x500) = 0;
+            *(s32 *)((char *)w + 0x4FC) -= 1;
+        }
+    } else if (flags & 0x8000) {
+        s32 c;
+        PlayGlobalSound(3, 0, 0);
+        c = *(s32 *)((char *)w + 0x4FC) - 1;
+        if (*(s32 *)((char *)w + 0x500) == 0) {
+            *(s32 *)((char *)w + 0x4FC) = (c >= 0) ? c : 2;
+        } else {
+            *(s32 *)((char *)w + 0x4FC) = (c > 0) ? c : 2;
+        }
+    } else if (flags & 0x2000) {
+        s32 c;
+        PlayGlobalSound(3, 0, 0);
+        c = *(s32 *)((char *)w + 0x4FC) + 1;
+        if (*(s32 *)((char *)w + 0x500) == 0) {
+            *(s32 *)((char *)w + 0x4FC) = (c <= 2) ? c : 0;
+        } else {
+            *(s32 *)((char *)w + 0x4FC) = (c <= 2) ? c : 1;
+        }
+    } else if (flags & 0x40) {
+        s16 sel;
+        idx = *(s32 *)((char *)w + 0x4FC) + 3 * *(s32 *)((char *)w + 0x500);
+        sel = *(s16 *)&D_259CC0[idx * 0xA + 6];
+        if (sel == 0 || g_inventoryOwned[sel] == 0) {
+            PlayGlobalSound(5, 0, 0);
+        } else {
+            PlayGlobalSound(4, 0, 0);
+            *(s32 *)&g_menuTransitionMode[0x24] = sel;
+            *(s32 *)((char *)w + 0x504) = sel;
+        }
+    }
+
+    idx = *(s32 *)((char *)w + 0x4FC) + 3 * *(s32 *)((char *)w + 0x500);
+    entry = *(s16 *)&D_259CC0[idx * 0xA + 6];
+    *(s32 *)((char *)w + 0x504) = entry;
+    if (entry != 0 && g_inventoryOwned[entry] != 0) {
+        D_1ADAF0 = *(s16 *)&g_weaponTable[g_itemEquippedSlot[entry] * 0xE0 + 6];
+    }
+}
+#endif
 
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00346AF8);
