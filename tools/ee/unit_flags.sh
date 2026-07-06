@@ -46,7 +46,7 @@ unit_flags() {
     */eu/text/1A7D10.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
     */eu/text/1C9F58.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
     */eu/text/1D5488.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
-    */eu/text/236ED8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
+    */eu/text/236ED8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse -fno-strict-aliasing";; # USA 235FE8 twin (#75 -fsa parity)
     */eu/text/249FE8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
     */eu/text/251520.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
     */eu/text/188748.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;

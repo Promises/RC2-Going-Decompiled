@@ -92,7 +92,7 @@ case "$REGION/$UNIT" in
   eu/text/1A7D10) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 1A8180 twin
   eu/text/1C9F58) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 1CA080 twin
   eu/text/1D5488) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 1D54C0 twin
-  eu/text/236ED8) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 235FE8 twin
+  eu/text/236ED8) GFLAG="-G8"; CC1EXTRA="-fno-gcse -fno-strict-aliasing";;    # USA 235FE8 twin (#75 -fsa parity: reload-class unlock, applies when EU carves GuiElementSetPos/Scale etc.)
   eu/text/249FE8) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 248B50 twin
   eu/text/251520) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 250080 twin
   # REGION-AXIS CARVE (2026-06-15): EU twins of the 3 recent USA text carves.
