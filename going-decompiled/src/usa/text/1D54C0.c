@@ -1142,9 +1142,39 @@ s32 func_002DAE70(MenuWidget *obj) {
 }
 #endif
 
-/* Allocate / initialise the menu background-image double buffers. Wall: multi
- * callee-save frame + buffer arithmetic + leaf alloc calls. Bare INCLUDE_ASM. */
+/* Allocate / initialise the menu background-image double buffers. Clears the
+ * pending flag (+0x44), then reserves two map slots (func_002DF368) passing the
+ * "already-preloaded" bit (+0x34 & 0x200). When NOT preloaded, force-allocates a
+ * real slot (func_002DF368(1)) for either buffer that came back empty. Finally
+ * resets the stream cursor (+0x5C = 0) and marks both slot-state fields
+ * (+0x50/+0x54) as -1 (idle). Returns 0.
+ * WALL: multi callee-save frame + buffer arithmetic + leaf alloc calls; matching
+ * arm stays INCLUDE_ASM, portable #else below. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", InitMenuBgImageBuffers);
+#else
+s32 InitMenuBgImageBuffers(void *obj) {
+    s32 preloaded = *(s32 *)((u8 *)obj + 0x34) & 0x200;
+
+    *(s32 *)((u8 *)obj + 0x44) = 0;
+    *(s32 *)((u8 *)obj + 0x48) = func_002DF368(preloaded);
+    *(s32 *)((u8 *)obj + 0x4C) = func_002DF368(preloaded);
+
+    if (preloaded == 0) {
+        if (*(s32 *)((u8 *)obj + 0x48) == 0) {
+            *(s32 *)((u8 *)obj + 0x48) = func_002DF368(1);
+        }
+        if (*(s32 *)((u8 *)obj + 0x4C) == 0) {
+            *(s32 *)((u8 *)obj + 0x4C) = func_002DF368(1);
+        }
+    }
+
+    *(s32 *)((u8 *)obj + 0x5C) = 0;
+    *(s32 *)((u8 *)obj + 0x54) = -1;
+    *(s32 *)((u8 *)obj + 0x50) = -1;
+    return 0;
+}
+#endif
 
 /* Reset a two-slot streaming text widget: toggle both map slots referenced by
  * obj->0x48/0x4C, invalidate the cached state (+0x44/0x50/0x54 = -1) and kick
