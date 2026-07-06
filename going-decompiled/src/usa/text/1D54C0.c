@@ -1217,11 +1217,99 @@ s32 RestorePrevTextTable(void *cmd) {
 }
 #endif
 
-/* Stream the per-language text table into g_pTextTableLoadBuf, relocate the
- * entry string pointers, install it as active and save the previous table into
- * cmd+0x54/+0x38. Wall: large streaming state machine + multi callee-save +
- * pointer-relocation loop. Bare INCLUDE_ASM. */
+/* Stream the per-language text table into g_pTextTableLoadBuf, relocate the entry
+ * string pointers, install it as active and save the previous table into
+ * cmd+0x54/+0x38. Phase machine on cmd->0x50 (jtbl_0026CD80_text, sequential):
+ *   0 kick the header read (disc TOC dir entry, 1 sector) -> 1 (or 5 on refusal)
+ *   1 wait for the read -> 2
+ *   2 kick the language table body read (sectors = size/0x800 into the TOC entry,
+ *     byte remainder stashed in D_1ABB38, 0x64 sectors) -> 3 (or 5 on refusal)
+ *   3 wait, then fix up the loaded table: relocate each of its `count` entry
+ *     pointers by (buffer - 8), swap it in as g_pActiveTextTable (saving the old
+ *     table + subtitle count into cmd->0x54 / cmd->0x38), advance -> 4
+ *   4,5 terminal (no-op). Returns 0.
+ * Matching arm stays INCLUDE_ASM; jtbl targets recovered from data/138B80. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", StreamTextTable);
+#else
+s32 StreamTextTable(void *cmdArg) {
+    extern s16   g_fileLoadState;      /* 0x1A63AC: 0 idle / nonzero CD-read busy */
+    extern u8    g_discToc[];          /* master disc asset directory */
+    extern u8    g_currentLanguage;    /* active language index */
+    extern s32   D_1ABB38;             /* byte remainder into the streamed TOC entry */
+    extern void *g_pActiveTextTable;   /* currently-installed text table */
+    extern u8    g_subtitleState[];    /* +0x2C holds the active table entry count */
+    u8 *cmd = (u8 *)cmdArg;
+
+    switch (*(s32 *)(cmd + 0x50)) {
+    case 0:
+        D_1ABB38 = 0;
+        if (g_fileLoadState != 0) return 0;
+        if (StartFileLoad((s32)g_pTextTableLoadBuf,
+                          *(s32 *)(g_discToc + 0x16B0) + *(s32 *)(g_discToc + 0x36C),
+                          1) == 0) {
+            *(s32 *)(cmd + 0x50) = 5;
+        } else {
+            *(s32 *)(cmd + 0x50) = 1;
+        }
+        break;
+
+    case 1:
+        if (g_fileLoadState != 0) return 0;
+        *(s32 *)(cmd + 0x50) = 2;
+        break;
+
+    case 2: {
+        s32 entry, sectors, lbn;
+        if (g_fileLoadState != 0) return 0;
+        entry = *(s32 *)(g_pTextTableLoadBuf + g_currentLanguage * 4);
+        sectors = entry / 0x800;
+        D_1ABB38 = entry % 0x800;
+        lbn = *(s32 *)(g_discToc + 0x16B0) + *(s32 *)(g_discToc + 0x36C) + sectors;
+        if (StartFileLoad((s32)g_pTextTableLoadBuf, lbn, 0x64) == 0) {
+            *(s32 *)(cmd + 0x50) = 5;
+        } else {
+            *(s32 *)(cmd + 0x50) = 3;
+        }
+        break;
+    }
+
+    case 3: {
+        u8 *mgr = (u8 *)g_menuScreenBlock;
+        u8 *buf;
+        u8 *tocStart;
+        s32 count, size;
+        if (g_fileLoadState != 0) return 0;
+        buf = *(u8 **)(mgr + 0x118);
+        tocStart = buf + D_1ABB38;
+        count = *(s32 *)tocStart;
+        size = *(s32 *)(tocStart + 4);
+        func_00283460(buf, tocStart + 8, ((size + 3) & ~3) - 8);
+        *(void **)(cmd + 0x54) = g_pActiveTextTable;
+        *(s32 *)(cmd + 0x38) = *(s32 *)(g_subtitleState + 0x2C);
+        *(s32 *)(g_subtitleState + 0x2C) = count;
+        g_pActiveTextTable = buf;
+        if (count > 0) {
+            s32 reloc = (s32)buf - 8;
+            s32 *p = (s32 *)buf;
+            s32 k = 0;
+            do {
+                *p += reloc;
+                k++;
+                p = (s32 *)((u8 *)p + 0x10);
+            } while (k < *(s32 *)(g_subtitleState + 0x2C));
+        }
+        *(s32 *)(cmd + 0x50) = 4;
+        *(s32 *)(cmd + 0x10) &= ~4;
+        break;
+    }
+
+    default:  /* states 4, 5 and any out-of-range value: no-op */
+        break;
+    }
+    return 0;
+}
+#endif
 
 /* Draw a wrapped-text-box menu list (skill-points / level-select variant) with
  * per-row scroll clamping and checkbox indicators. Wall: ~250-instruction draw
