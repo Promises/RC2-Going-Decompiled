@@ -883,10 +883,127 @@ s32 func_002D67A0(s32 op, s32 arg) {
     return MenuScreenDoAction(op, arg, &outFlag);
 }
 
-/* Central front-end/pause screen-action dispatcher (op, arg, out-flag ptr).
- * Wall: large jump-table switch over the opcode + multi callee-save frame.
- * Bare INCLUDE_ASM (asm is the source of truth for the jtbl layout). */
+/* Central front-end/pause screen-action dispatcher. `op` (0-13, via
+ * jtbl_0026CD40_text) selects an action on the menu-screen manager block
+ * (g_menuScreenBlock): push/swap a screen (ops 6-8,10,11 stage +0xF4/0x100/0x104
+ * from the current screen fields and set the +0x1C transition kind, then ring the
+ * menu chrome sound func_002DFFA0 and clear *outFlag), request the front-end game
+ * state (ops 4,5,12,13 via RequestGameStateChange with the save/popup status bits
+ * at g_nSaveLoadStatusCode+0x4 toggled), set the next screen (op 3) or the active
+ * language (op 9). Returns 1 when a screen push/swap was staged, else 0.
+ * jtbl targets recovered from data/138B80. Matching arm stays INCLUDE_ASM. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", MenuScreenDoAction);
+#else
+s32 MenuScreenDoAction(s32 op, s32 arg, void *outFlag) {
+    extern u8 g_currentLanguage;
+    extern u8 g_collTriBuffer[];
+    u8 *mb = (u8 *)g_menuScreenBlock;
+    s32 *statusFlags = (s32 *)((u8 *)&g_nSaveLoadStatusCode + 4);
+    s32 *popupState = (s32 *)((u8 *)&g_pTextTableLoadBuf + 0x48);
+    s32 ret = 0;
+
+    switch (op) {
+    case 0:
+    case 1:
+        break;
+
+    case 2:
+        func_002DFFA0(2, 0x11);
+        break;
+
+    case 3:
+        g_pNextMenuScreen[0] = (void *)arg;
+        break;
+
+    case 4:
+        PlayGlobalSound(4, 0, 0);
+        func_002888D0();
+        *statusFlags = (*statusFlags | 2) & ~4;
+        *popupState = 0;
+        RequestGameStateChange(4, 1, 1, arg, 0);
+        break;
+
+    case 5:
+        PlayGlobalSound(4, 0, 0);
+        *statusFlags = (*statusFlags | 4) & ~2;
+        RequestGameStateChange(4, 1, 1, arg, 0);
+        *popupState = 1;
+        break;
+
+    case 6:
+        if ((arg >> 16) != 0) {
+            *(s32 *)(mb + 0xFC) = *(s32 *)(g_collTriBuffer + 0x1020 + (arg >> 16) * 4);
+        }
+        *(s32 *)(mb + 0xF4) = arg & 0xFFFF;
+        *(s32 *)(mb + 0x100) = *(s32 *)(mb + 0x14);
+        *(s32 *)(mb + 0x104) = *(s32 *)(mb + 0x8);
+        *(s32 *)(mb + 0x1C) = 5;
+        ret = 1;
+        func_002DFFA0(0, 0x11);
+        *(s32 *)outFlag = 0;
+        break;
+
+    case 7:
+        *(s32 *)(mb + 0x100) = *(s32 *)(mb + 0x14);
+        *(s32 *)(mb + 0x104) = *(s32 *)(mb + 0x8);
+        *(s32 *)(mb + 0x1C) = 3;
+        *(s32 *)(mb + 0xF4) = arg;
+        func_002DFFA0(0, 0x11);
+        *(s32 *)outFlag = 0;
+        /* fall through: op 7 continues into the op 8 staging */
+    case 8:
+        *(s32 *)(mb + 0xF4) = arg;
+        *(s32 *)(mb + 0x100) = *(s32 *)(mb + 0x14);
+        *(s32 *)(mb + 0x104) = *(s32 *)(mb + 0x8);
+        *(s32 *)(mb + 0x1C) = 4;
+        ret = 1;
+        func_002DFFA0(0, 0x11);
+        *(s32 *)outFlag = 0;
+        break;
+
+    case 9:
+        g_currentLanguage = (u8)arg;
+        *(s32 *)outFlag = 0;
+        ret = 1;
+        break;
+
+    case 10:
+        *(s32 *)(mb + 0xF4) = arg;
+        *(s32 *)(mb + 0x100) = *(s32 *)(mb + 0x14);
+        *(s32 *)(mb + 0x104) = *(s32 *)(mb + 0x8);
+        *(s32 *)(mb + 0x1C) = 6;
+        ret = 1;
+        func_002DFFA0(0, 0x11);
+        *(s32 *)outFlag = 0;
+        break;
+
+    case 11:
+        *(s32 *)(mb + 0x1C) = 7;
+        *(s32 *)(mb + 0x100) = *(s32 *)(mb + 0x14);
+        *(s32 *)(mb + 0x104) = *(s32 *)(mb + 0x8);
+        ret = 1;
+        func_002DFFA0(0, 0x11);
+        *(s32 *)outFlag = 0;
+        break;
+
+    case 12:
+        PlayGlobalSound(4, 0, 0);
+        func_002861D8(0, 0);
+        func_00286138(0, 0);
+        RequestGameStateChange(4, 1, 9, g_pCurrentMenuScreen[0], 0);
+        break;
+
+    case 13:
+        RequestGameStateChange(4, 1, 0xB, g_pCurrentMenuScreen[0], 0);
+        break;
+
+    default:  /* op >= 14: no-op */
+        break;
+    }
+    return ret;
+}
+#endif
 
 /* Register-coloring near-miss (97%): list-entry screen-action forwarder.
  * Dispatch op `op` with the arg pulled from the selected row of the widget's
