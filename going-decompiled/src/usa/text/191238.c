@@ -2432,7 +2432,50 @@ void MapBuildBitmap(void *dst, u8 *src, s32 arg3) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002980D8);
 
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00298308);
+#else
+extern void CopyQwords(void *dst, const void *src, s32 nbytes);
+/*
+ * func_00298308(dst, src) — the "plain" 1bpp->4bpp map-bitmap expander (the
+ * bit0-clear arm of MapBuildBitmap). Builds a 256-entry lookup that fans each
+ * bit k of an input byte out to nibble k of a 32-bit word (bit set -> 0xF), then
+ * for each of 128 rows expands the next 16 source bytes to sixteen 32-bit words
+ * (64 bytes) and replicates that run four times (256 bytes) into dst — a 4x
+ * horizontal scale. Consumes 128*16 = 2048 source bytes, writes 128*256 = 32 KB.
+ */
+void func_00298308(void *dst, u8 *src) {
+    s32 lut[256];   /* bit-expand table: input byte -> nibble mask */
+    s32 row[16];    /* one expanded 16-byte source run */
+    u8 *out = (u8 *)dst;
+    s32 i;
+    s32 j;
+    s32 k;
+
+    for (i = 0; i < 0x100; i++) {
+        lut[i] = 0;
+        if (i & 0x01) lut[i]  = 0x0000000F;
+        if (i & 0x02) lut[i] |= 0x000000F0;
+        if (i & 0x04) lut[i] |= 0x00000F00;
+        if (i & 0x08) lut[i] |= 0x0000F000;
+        if (i & 0x10) lut[i] |= 0x000F0000;
+        if (i & 0x20) lut[i] |= 0x00F00000;
+        if (i & 0x40) lut[i] |= 0x0F000000;
+        if (i & 0x80) lut[i] |= 0xF0000000;
+    }
+
+    for (j = 0; j < 0x80; j++) {
+        for (k = 0; k < 16; k++) {
+            row[k] = lut[*src];
+            src++;
+        }
+        CopyQwords(out, row, 0x40); out += 0x40;
+        CopyQwords(out, row, 0x40); out += 0x40;
+        CopyQwords(out, row, 0x40); out += 0x40;
+        CopyQwords(out, row, 0x40); out += 0x40;
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002984D8);
 
