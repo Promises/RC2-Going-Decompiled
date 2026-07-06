@@ -363,8 +363,42 @@ void func_00352A60(u64 *tag, u64 madr, u64 qwc, u64 id) {
     *tag = madr << 32 | (qwc << 32) >> 4 | (id << 32) >> 32;
 }
 
-/* func_00352A88 (USA func_003515E8): blocked, 8-byte-packed saves. */
+/* func_00352A88 (USA func_003515E8): FMV bitstream/IPU-DMA stream-object
+ * constructor. Records the caller-supplied ring parameters into the object,
+ * folds the ring's physical base into the DMA source-tag word (address masked
+ * to 0x0FFFFFFF, OR'd with the 0x20000000 DMAtag "next"/id field), creates the
+ * object's binary completion semaphore (max=1, init=1), primes the first
+ * IPU_TO tag chain (func_00352B00, EU twin of USA func_00351660), then zeroes
+ * the 64-bit read cursor at +0x48. Always reports success (1). Region-agnostic
+ * port of the USA body: CreateSema is at the shared SDK address 0x11AC20 in
+ * both builds; only the IPU-primer callee shifts (+0x14A0). The original leaves
+ * SemaParam's currentCount/numWaitThreads uninitialised (stack scratch); only
+ * maxCount/initCount are written. Matching arm stays asm (8-byte-packed saves,
+ * s0@0x20, ra@0x28). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00352A88);
+#else
+/* EE-kernel binary-semaphore create (EU func_0011AC20, shared SDK address).
+   SemaParam layout mirrors the SDK's <eekernel.h> (not included by this TU). */
+struct SemaParam { s32 currentCount, maxCount, initCount, numWaitThreads; u32 attr, option; };
+extern s32 CreateSema(struct SemaParam *p);
+extern void func_00352B00(u8 *stream); /* IPU_TO DMA tag-chain primer (defined below) */
+s32 func_00352A88(u8 *obj, u64 ringBase, u64 tagAddr, u64 qwc, u64 tadr, u64 chainId) {
+    struct SemaParam sema;
+    sema.maxCount = 1;
+    sema.initCount = 1;
+    *(s32 *)(obj + 0x0)  = (s32)ringBase;
+    *(s32 *)(obj + 0x4)  = ((s32)tagAddr & 0x0FFFFFFF) | 0x20000000;
+    *(s32 *)(obj + 0x8)  = (s32)qwc;
+    *(s32 *)(obj + 0x18) = (s32)qwc << 11;
+    *(s32 *)(obj + 0x50) = (s32)tadr;
+    *(s32 *)(obj + 0x54) = (s32)chainId;
+    *(s32 *)(obj + 0x40) = CreateSema(&sema);
+    func_00352B00(obj);
+    *(s64 *)(obj + 0x48) = 0;
+    return 1;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00352B00);
 
