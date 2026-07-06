@@ -171,6 +171,10 @@ void func_002919A0(void) {
     __asm__ __volatile__("");
 }
 
+/* func_002919C0 — NOT a real function entry: two `addiu $29,$29,0x10`
+ * stack-restore words with no `jr $31`, i.e. a shared epilogue fragment that
+ * splat glabel'd from a pair of branch/jump targets into func_002919A0's tail.
+ * Not portable-C expressible (no callable body); left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002919C0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", DrawSkyShellsScaledSpin);
