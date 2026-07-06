@@ -429,7 +429,29 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0DF0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", CloseMobyGlowSegment);
 
+/* RunSprRenderPipeline — kick the sprite/moby render pass. Flushes any pending
+ * RPC (func_0011AEA0(0)), stages the 0x800-byte DMA/GIF template (D_238E80) into
+ * the render scratchpad at 0x70003800 via CopyQwords, then runs the frame's
+ * render task list (RunRenderTaskList over g_renderTaskList / g_renderTaskWorkBuf).
+ * The matching build keeps the asm (engine save-layout wall). */
+#ifdef TARGET_NATIVE
+extern void  func_0011AEA0(s32 arg);
+extern void  CopyQwords(void *dst, void *src, s32 len);
+extern void  RunRenderTaskList(void *taskList, void *workBuf);
+extern u8    D_238E80[];              /* 0x238E80  0x800-byte SPR render template */
+extern void *g_renderTaskList;        /* 0x1B1630 */
+extern void *g_renderTaskWorkBuf;     /* 0x1B1634 */
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", RunSprRenderPipeline);
+#else
+void RunSprRenderPipeline(void) {
+    func_0011AEA0(0);
+    CopyQwords((void *)0x70003800, D_238E80, 0x800);
+    RunRenderTaskList(g_renderTaskList, g_renderTaskWorkBuf);
+}
+#endif
 
 /* Clears 0x3C0 bytes of the moby scratchpad block at 0x70003A00 to 0x40000000.
  * The empty-asm guard suppresses cc1's sibling-call (tail-jump) so the original
