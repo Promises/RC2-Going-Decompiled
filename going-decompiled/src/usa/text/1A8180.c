@@ -744,6 +744,32 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8D08);
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A90A0);
 
+/* func_002A90A8 — directional collision sweep of a moby, accumulating hit flags
+ * (MODEL, UNCONFIRMED). Same VU0-collision class as func_002A8D08; kept
+ * INCLUDE_ASM pending a runtime oracle (see that function's caveat).
+ *
+ *   s32 func_002A90A8(void *moby, Vec4 *dir, s32 mask,
+ *                     f32 stepZ, f32 minLen, f32 sphereZOfs)
+ *     moby  ($4)  entity; +0x10 = Vec4 probe point, +0x18 = its z
+ *     dir   ($5)  sweep direction Vec4 (added to the probe point; length-tested)
+ *     mask  ($6)  collision mask: <<1 then bit 0x20 kept, OR'd with 0x2 (line) /
+ *                 0x4 (sphere) per phase for the Coll* calls
+ *     stepZ ($f12) z advance per phase   minLen ($f13) min sweep length + rescale len
+ *     sphereZOfs ($f14) z offset applied after the sphere loop
+ *   returns ($23): accumulated hit-flag bitmask (bit0 sphere-hit, bit1 line-hit,
+ *                  bit2 grazing/angle flag — OR'd as each phase reports).
+ *
+ * Flow: probe = moby+0x10 + dir; if |dir| > minLen, rescale dir to (minLen) and
+ * CollLine along it (on hit: step z by -stepZ, flag). Then up to 6x: CollSphere
+ * at the probe, snapping to g_collHitPointNudged and stepping z by -stepZ on each
+ * hit. Then a final CollLine; on a hit passing the func_002837D0/func_00283BF8
+ * planar-angle test (>0.5) and z test, nudge z by 0.3*overshoot. Ends with a
+ * Vec4SubVu0 and returns the flag word. Likely branch: bc1tl @0x2A92B8 (its
+ * `ori $23,0x4` delay slot runs only when taken). g_collHitPoint /
+ * g_collHitPointNudged / g_pCollWorldData as in func_002A8D08.
+ *
+ * ORACLE CAVEAT: same as func_002A8D08 — VU0-microprogram-dependent, not headless
+ * ULP-oracleable; a trustworthy #else needs the tester full-game effect-diff. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A90A8);
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
