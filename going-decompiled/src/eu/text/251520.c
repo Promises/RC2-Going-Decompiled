@@ -429,7 +429,47 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_003534A0);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_003534F8);
 
+/* func_00353650 (USA func_003521B0): sema-guarded enqueue of a 0x18-byte
+ * DMA-add command into the queue's ring buffer. Under the queue sema
+ * (dmaq+0x40): if there is room (count@0x58 < capacity@0x54), validates the
+ * command via func_003534F8 (EU twin of USA func_00352058) and - unless BOTH
+ * 64-bit words (cmd+0x0, cmd+0x8) are negative (the skip sentinel) - copies
+ * {u64,u64,s32,s32} into ring[writeIdx@0x5C] (base@0x50, stride 0x18), bumps
+ * the count and wraps the write index modulo capacity, returning 1. Returns 0
+ * if the queue is full or the command was the skip sentinel. Region-agnostic
+ * port of the USA body: WaitSema/SignalSema are at the shared SDK addresses
+ * 0x11AC60/0x11AC40 in both builds; only the validator callee shifts (+0x14A0).
+ * Matching arm stays asm; #else is the structure-exact model. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00353650);
+#else
+extern void WaitSema(s32 sema);
+extern s32 SignalSema(s32 sema);
+extern s32 func_003534F8(u8 *obj, u8 *req); /* DMA-add command validator */
+s32 func_00353650(void *dmaq, void *cmd) {
+    u8 *q = (u8 *)dmaq;
+    u8 *c = (u8 *)cmd;
+    s32 result = 0;
+
+    WaitSema(*(s32 *)(q + 0x40));
+    if (*(s32 *)(q + 0x58) < *(s32 *)(q + 0x54)) {   /* count < capacity */
+        func_003534F8(q, c);
+        if (*(s64 *)(c + 0x0) >= 0 || *(s64 *)(c + 0x8) >= 0) {
+            u8 *slot = *(u8 **)(q + 0x50) + *(s32 *)(q + 0x5C) * 0x18;
+            *(s64 *)(slot + 0x0)  = *(s64 *)(c + 0x0);
+            *(s64 *)(slot + 0x8)  = *(s64 *)(c + 0x8);
+            *(s32 *)(slot + 0x10) = *(s32 *)(c + 0x10);
+            *(s32 *)(slot + 0x14) = *(s32 *)(c + 0x14);
+            *(s32 *)(q + 0x58) += 1;
+            *(s32 *)(q + 0x5C) =
+                (*(s32 *)(q + 0x5C) + 1) % *(s32 *)(q + 0x54);
+            result = 1;
+        }
+    }
+    SignalSema(*(s32 *)(q + 0x40));
+    return result;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00353760);
 
