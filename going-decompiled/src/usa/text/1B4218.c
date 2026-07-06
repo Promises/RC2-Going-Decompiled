@@ -185,7 +185,7 @@ extern u8 g_discToc[];                      /* 0x14B540 master disc asset direct
 /* The sound-bank load-status slots live at g_listenerPosHistory + 0x17A0 (s32
  * per bank id); the loader writes -1 there and lets OnSoundBankLoaded fill it. */
 #define g_soundBankLoadStatus ((s32 *)(g_listenerPosHistory + 0x17A0))
-extern void StepMobyMotion(Moby *moby, Vec4 *target, f32 speed);  /* 0x2B6000 */
+extern s32 StepMobyMotion(Moby *moby, Vec4 *target, f32 speed);   /* 0x2B6000 returns eventFlags (+0x94) */
 extern s32 StartDialogVoice(s32 a0, s32 a1, s32 a2, s32 a3);      /* 0x2B7878 */
 extern s32 StartAmbientVoice(s32 idx, s16 flags, s16 pan);       /* 0x2B7CA0 */
 extern s32 StartSecondaryVoice(s32 idx, s16 flags, s16 pan);     /* 0x2B7D98 */
@@ -894,8 +894,45 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B4F80);
 
 /* Apply a moby's local-transform delta (spring-follow position step).
  * WALL: save-layout — 6 callee-saves + $ra at 8-byte spacing, with fp temps
- * and sq/lq 128-bit matrix moves. */
+ * and sq/lq 128-bit matrix moves; matching arm stays INCLUDE_ASM, portable #else below.
+ *
+ * Applies a local rotation delta (rotX/rotY/rotZ) to the moby's orientation (euler at
+ * +0xF0) and shifts its position (+0x10) so the local offset `posDelta` stays fixed in
+ * world space across the rotation: transforms the offset by the pre- and post-delta
+ * orientation matrices and adds the difference to the position (a pivot correction). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ApplyMobyLocalTransformDelta);
+#else
+extern void func_00283DC0(Vec4 *destMat, Vec4 *euler);       /* 0x283DC0 build a matrix from euler angles */
+extern void func_00283A70(Vec4 *dst, Vec4 *vec, Vec4 *mat);  /* 0x283A70 transform a vector by a matrix */
+extern void MatrixMultiplyVu0(Vec4 *dst, Vec4 *a, Vec4 *b);  /* dst = a * b */
+extern void MatrixToEulerAngles(Vec4 *mat, Vec4 *dstEuler);
+extern void Vec4SubVu0(Vec4 *dst, Vec4 *a, Vec4 *b);         /* dst = a - b */
+extern void Vec4AddVu0(Vec4 *dst, Vec4 *a, Vec4 *b);         /* dst = a + b */
+void ApplyMobyLocalTransformDelta(Moby *moby, Vec4 *posDelta, f32 rotX, f32 rotY, f32 rotZ) {
+    Vec4 delta = *posDelta;
+    Vec4 mat[4];         /* current orientation matrix, then combined with the delta */
+    Vec4 deltaMat[4];    /* rotation matrix built from (rotX,rotY,rotZ) */
+    Vec4 euler;          /* {rotX,rotY,rotZ} */
+    Vec4 offsetBefore;   /* posDelta transformed by the pre-delta orientation */
+    Vec4 offsetAfter;    /* posDelta transformed by the post-delta orientation */
+    Vec4 pivotShift;     /* offsetBefore - offsetAfter */
+
+    func_00283DC0(mat, (Vec4 *)((u8 *)moby + 0xF0));
+    func_00283A70(&offsetBefore, &delta, mat);
+
+    ((f32 *)&euler)[0] = rotX;
+    ((f32 *)&euler)[1] = rotY;
+    ((f32 *)&euler)[2] = rotZ;
+    func_00283DC0(deltaMat, &euler);
+    MatrixMultiplyVu0(mat, mat, deltaMat);
+    func_00283A70(&offsetAfter, &delta, mat);
+
+    Vec4SubVu0(&pivotShift, &offsetBefore, &offsetAfter);
+    Vec4AddVu0((Vec4 *)((u8 *)moby + 0x10), (Vec4 *)((u8 *)moby + 0x10), &pivotShift);
+    MatrixToEulerAngles(mat, (Vec4 *)((u8 *)moby + 0xF0));
+}
+#endif
 
 /* Size-pinned 8-byte epilogue pad pseudo-function — see unit header; kept
  * INCLUDE_ASM permanently. */
@@ -1100,22 +1137,314 @@ s32 GetPrevGameState(void) {
     return g_nGameStatePrev;
 }
 
-/* Top-level per-frame game-state machine (commits the pending transition).
- * WALL: splat jtbl reloc-identity gap (the switch dispatch table) + save-layout;
- * see unit header. */
+/* Top-level per-frame game-state machine (commits the pending transition). Runs
+ * the pending state change once its stall delay elapses: rolls g_nGameStatePrev,
+ * runs the LEAVE handler for the current state (g_nGameState), sets the transition
+ * timer, runs the ENTER handler for the pending state (g_nGameStatePending), and —
+ * unless an enter handler aborts the commit (only the level-exit fade, state 2,
+ * while the fade is still ramping up) — finalizes the switch (g_nGameState =
+ * pending, pending = -2) and pulses the caller's done-flag. Early-outs when there
+ * is no pending change (pending == -2), while the stall delay counts down, or when
+ * the player is dead (g_health == 0).
+ * WALL: two splat jtbl reloc-identity gaps (jtbl_0026CB90 leave + jtbl_0026CBC0
+ * enter) + save-layout; matching arm stays INCLUDE_ASM, portable #else below. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", UpdateGameState);
+#else
+extern f32 g_cameraProjScale;   /* 0x1B9070 projection scale cot(fov/2) */
+extern f32 g_exitFadeRate;      /* 0x1A8C7C exit fade ramp rate */
+extern f32 g_screenFadeBlack;   /* 0x1B1520 black screen fade level 0..1 */
+extern s32 g_frameGpuTime;      /* 0x1B1610 per-frame GS time measure (+0x4 = travel/revive flag) */
+extern s32 D_1ABE00;            /* 0x1ABE00 default push-state mode id */
 
-/* Steer a moby toward a world point (locomotion heading helper).
- * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing, with fp temps. */
+extern void func_002F6D50(void);
+extern void func_002F6600(void);
+extern void func_0026FF18(s32 a0, s32 a1, f32 f0, f32 f1, f32 f2, f32 f3);  /* 0x26FF18 camera tween setup */
+extern void BuildCameraProjection(void);                 /* 0x27B0A0 rebuild projection from g_cameraProjScale */
+extern void func_002CB720(void);
+extern void TickPauseOverlayState(void);
+extern void func_002F95E8(void);
+extern void RunRespawnScenePlayerRestore(void);          /* 0x2E80A0 */
+extern void UnhideAllMobysAndPopState(void);             /* 0x2E0198 */
+extern void func_00300118(void);
+extern void func_002919A0(void);
+extern void func_002833D8(void);                         /* default leave/enter handler */
+extern s32  GetMenuOverlayMode(void);                    /* 0x286160 */
+extern void RequestMenuScreenChange(s32 screenId);       /* 0x2CAC28 */
+extern void func_002F6B98(s32 arg);
+extern void EnterMenuOverlayMode(s32 modeId, s32 arg);   /* 0x286270 */
+extern void func_002AB150(f32 *value, f32 target, f32 step);  /* 0x2AB150 approach-value fade */
+extern void PlayLevelCinematic(s32 sceneId);             /* 0x2F6220 */
+extern void RequestLevelExit(s32 destination, s32 commitSave);  /* 0x2896D8 */
+extern void BeginRespawnScene(void);                     /* 0x2E8010 */
+extern void StartTravelToLevel(s32 level);               /* 0x2E7EE8 */
+extern void RevivePlayerMinHealth(void);                 /* 0x2E7E70 */
+extern void EnterVendorMenu(s32 arg);                    /* 0x2F8FF8 */
+extern void HideAllMobysAndPushState(s32 modeId, s32 arg);  /* 0x2E00F8 */
+extern void func_002FFF68(void);
+extern void func_00291980(void);
+
+void UpdateGameState(void) {
+    /* Exact non-canonical float bit patterns, materialised via a named static so
+     * ee-gcc 2.9 accepts the address-of (it rejects &(compound-literal)). */
+    static const u32 kCameraArg = 0x3F8FEA69;
+    static const u32 kExitFadeStep = 0x3DCCCCCE;
+    s32 leaveState = g_nGameState;
+    s32 pending;
+    s32 abort = 0;
+
+    g_nGameStatePrev = leaveState;
+    if (g_nGameStatePending == -2) {
+        return;
+    }
+    if (g_gameStateTransitionDelay > 0) {
+        g_gameStateTransitionDelay--;
+        return;
+    }
+    if (g_health == 0) {
+        return;
+    }
+
+    /* --- LEAVE handler for the current state (jtbl_0026CB90) --- */
+    switch (leaveState) {
+    case 0:
+        break;
+    case 1:
+        func_002F6D50();
+        goto camera_setup;
+    case 2:
+        func_002F6600();
+    camera_setup:
+        g_cameraProjScale = 0.62f;
+        func_0026FF18(0, 3, *(f32 *)&kCameraArg, 0.005f, 0.2f, 0.0f);
+        BuildCameraProjection();
+        break;
+    case 3:
+        if (g_nGameStatePending != 4 || g_gameStatePendingArgA == 8) {
+            func_002CB720();
+        }
+        break;
+    case 4:
+        TickPauseOverlayState();
+        break;
+    case 5:
+        func_002F95E8();
+        break;
+    case 6:
+        if (g_gameStatePendingArgA != 4) {
+            RunRespawnScenePlayerRestore();
+        }
+        break;
+    case 7:
+        UnhideAllMobysAndPopState();
+        break;
+    case 8:
+        func_00300118();
+        break;
+    case 9:
+        func_002919A0();
+        break;
+    default:
+        func_002833D8();
+        break;
+    }
+
+    SetGameStateTransitionTimer(10);
+    abort = 0;
+
+    /* --- ENTER handler for the pending state (jtbl_0026CBC0) --- */
+    pending = g_nGameStatePending;
+    switch (pending) {
+    case 0:
+        break;
+    case 1:
+        func_002F6B98(g_gameStatePendingArgB);
+        break;
+    case 2:
+        if ((u32)(g_nGameState - 1) < 2) {
+            PlayLevelCinematic(g_gameStatePendingArgA);
+        } else {
+            func_002AB150(&g_exitFadeRate, 1.2f, *(f32 *)&kExitFadeStep);
+            g_screenFadeBlack = g_exitFadeRate;
+            if (1.0f < g_exitFadeRate) {
+                g_screenFadeBlack = 1.0f;
+            }
+            if (1.2f <= g_exitFadeRate) {
+                PlayLevelCinematic(g_gameStatePendingArgA);
+                g_exitFadeRate = 1.0f;
+            } else {
+                abort = 1;
+            }
+        }
+        break;
+    case 3:
+        if (g_nGameStatePrev != 4 || GetMenuOverlayMode() == 8) {
+            RequestMenuScreenChange(g_gameStatePendingArgA);
+        }
+        break;
+    case 4:
+        EnterMenuOverlayMode(g_gameStatePendingArgA, g_gameStatePendingArgB);
+        break;
+    case 5:
+        EnterVendorMenu(g_gameStatePendingArgA);
+        break;
+    case 6:
+        if (g_gameStatePendingArgA == 5) {
+            RequestLevelExit(g_gameStatePendingArgB, 1);
+        } else if (g_gameStatePendingArgA == 6) {
+            BeginRespawnScene();
+        } else {
+            if (g_nGameStatePrev == 3) {
+                StartTravelToLevel(g_gameStatePendingArgB);
+            } else {
+                RevivePlayerMinHealth();
+            }
+            (&g_frameGpuTime)[1] = 1;
+        }
+        break;
+    case 7: {
+        s32 modeId = g_gameStatePendingArgA;
+        if (modeId == 0) {
+            modeId = D_1ABE00;
+        }
+        HideAllMobysAndPushState(modeId, g_gameStatePendingArgB);
+        break;
+    }
+    case 8:
+        func_002FFF68();
+        break;
+    case 9:
+        func_00291980();
+        break;
+    default:
+        func_002833D8();
+        break;
+    }
+
+    /* --- commit the transition unless an enter handler aborted it --- */
+    if (abort == 0) {
+        if (g_gameStateTransitionDoneFlag != 0) {
+            *(u8 *)g_gameStateTransitionDoneFlag = 1;
+        }
+        g_nGameStatePending = -2;
+        g_nGameState = pending;
+        g_gameStateTransitionDoneFlag = 0;
+    }
+}
+#endif
+
+/* Steer a moby toward a world point (locomotion heading helper). Returns 8 when the
+ * moby has no motion controller. Otherwise computes the heading to `target` from the
+ * moby position (+0x10/+0x14) via func_00283BF8 (atan2), offsets it by `headingOffset`
+ * (WrapAnglePiSum), and — if the controller is wandering (wanderAmplitude != 0) — adds
+ * the wander offset and, when the wander timer expires (func_00283328), flips the
+ * wander sign and reseeds the timer from [wanderIntervalMin, wanderIntervalMax]. Drives
+ * the motion with StepMobyMotion at that heading and returns its event flags.
+ * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing, with fp temps; matching
+ * arm stays INCLUDE_ASM, portable #else below. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", DriveMobyTowardPoint);
+#else
+extern s32 GetMobyMotionController(Moby *moby);    /* defined below; forward decl */
+extern f32 WrapAnglePiSum(f32 a, f32 b);           /* 0x284548 wrap a+b into [-pi,pi] */
+extern f32 func_00283BF8(f32 dx, f32 dy);          /* 0x283BF8 atan2-style heading from a planar delta */
+extern s32 func_00283328(s16 *timer);              /* 0x283328 tick a frame timer; nonzero when it expires */
+extern s32 RandRangeInclusive(s32 min, s32 max);   /* inclusive integer RNG */
+s32 DriveMobyTowardPoint(Moby *moby, Vec4 *target, f32 headingOffset) {
+    MobyMotionController *ctrl = (MobyMotionController *)GetMobyMotionController(moby);
+    f32 heading;
+
+    if (ctrl == 0) {
+        return 8;
+    }
+
+    heading = WrapAnglePiSum(
+        func_00283BF8(((f32 *)target)[0] - *(f32 *)((u8 *)moby + 0x10),
+                      ((f32 *)target)[1] - *(f32 *)((u8 *)moby + 0x14)),
+        headingOffset);
+
+    if (ctrl->wanderAmplitude != 0.0f) {
+        heading = WrapAnglePiSum(heading, ctrl->wanderAmplitude);
+        if (func_00283328(&ctrl->wanderTimer) != 0) {
+            ctrl->wanderAmplitude = -ctrl->wanderAmplitude;
+            ctrl->wanderTimer = (s16)RandRangeInclusive(ctrl->wanderIntervalMin, ctrl->wanderIntervalMax);
+        }
+    }
+
+    return StepMobyMotion(moby, target, heading);
+}
+#endif
 
 /* Size-pinned 8-byte epilogue pad pseudo-function — see unit header. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B5FF8);
 
-/* Core per-frame moby locomotion step (steer / collide / ground / lean).
+/* Core per-frame moby locomotion step (steer / collide / ground / lean). Driven
+ * once per moby per frame by the Drive* wrappers. Returns 8 when the moby has no
+ * motion controller, and short-circuits (returning the current eventFlags) if it
+ * has already stepped this frame (lastUpdateTime == g_gameTime). Otherwise it
+ * rolls eventFlags into eventFlagsPrev and clears it, optionally inherits a moving
+ * platform (unless MODE_NO_GROUNDMOVER), snapshots the entry position, re-seeds the
+ * ground probe + per-frame state whenever it missed a frame (gap >= 2) or has never
+ * run (lastUpdateTime == 0), stamps lastUpdateTime, then runs the pipeline
+ * (velocity -> collision -> ground/events -> lean -> profile) and returns the
+ * accumulated eventFlags.
  * WALL: save-layout — 4 callee-saves + $ra at 8-byte spacing, with fp/madd and
- * sq/lq 128-bit moves. */
+ * sq/lq 128-bit moves; matching arm stays INCLUDE_ASM, portable #else below. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StepMobyMotion);
+#else
+extern s32 GetMobyMotionController(Moby *moby);                 /* defined below; forward decl */
+extern void CheckMobyGroundMover(Moby *moby, MobyMotionController *ctrl);           /* below */
+extern void ProbeMobyGroundLine(Moby *moby, MobyMotionController *ctrl, f32 depth); /* below */
+extern void func_00283638(Vec4 *vec);                          /* 0x283638 reset vec to default up normal / clear */
+extern void UpdateMobyMotionVelocity(Moby *moby, MobyMotionController *ctrl, Vec4 *target,
+                                     f32 speed, Vec4 *stepOut, Vec4 *velOut);        /* 0x2B60C0 */
+extern void ResolveMobyMotionCollision(Moby *moby, MobyMotionController *ctrl,
+                                       Vec4 *entryPos, Vec4 *velOut);                /* 0x2B6488 */
+extern void ApplyMobyGroundAndEvents(Moby *moby, MobyMotionController *ctrl,
+                                     Vec4 *target, Vec4 *entryPos);                  /* 0x2B67B8 */
+extern void UpdateMobyLeanFromTurn(f32 headingAngle, Moby *moby, MobyMotionController *ctrl); /* below */
+extern void AccumMobyMotionProfile(void);                      /* below; RCNT0 timing accumulators */
+
+s32 StepMobyMotion(Moby *moby, Vec4 *target, f32 speed) {
+    MobyMotionController *ctrl = (MobyMotionController *)GetMobyMotionController(moby);
+    Vec4 entryPos, stepOut, velOut;
+    s32 lastTime;
+
+    if (ctrl == 0) {
+        return 8;
+    }
+    if (g_gameTime == ctrl->lastUpdateTime) {
+        return ctrl->eventFlags;
+    }
+
+    ctrl->eventFlagsPrev = ctrl->eventFlags;
+    ctrl->eventFlags = 0;
+    if ((ctrl->modeFlags & MOBY_MOTION_MODE_NO_GROUNDMOVER) == 0) {
+        CheckMobyGroundMover(moby, ctrl);
+    }
+
+    entryPos = *(Vec4 *)((u8 *)moby + 0x10);
+
+    lastTime = ctrl->lastUpdateTime;
+    if (g_gameTime - lastTime >= 2 || lastTime == 0) {
+        ProbeMobyGroundLine(moby, ctrl, 0.0f);
+        ctrl->animSeqActive = 0xFF;
+        ctrl->stateFlags &= ~2;
+        ctrl->turnDelta = 0.0f;
+        ctrl->wallContactCount = 0;
+        func_00283638((Vec4 *)ctrl->velAccum);
+    }
+
+    ctrl->lastUpdateTime = g_gameTime;
+    UpdateMobyMotionVelocity(moby, ctrl, target, speed, &stepOut, &velOut);
+    ResolveMobyMotionCollision(moby, ctrl, &entryPos, &velOut);
+    ApplyMobyGroundAndEvents(moby, ctrl, target, &entryPos);
+    UpdateMobyLeanFromTurn(speed, moby, ctrl);
+    AccumMobyMotionProfile();
+    return ctrl->eventFlags;
+}
+#endif
 
 /* Advance a moby's motion using its own facing target and its +0xF8 move speed.
  * Empty asm guard blocks the sibling-call so the jal+frame is reproduced. */
@@ -1133,22 +1462,288 @@ void DriveMobyInPlace(Moby *moby, f32 speed) {
 /* Size-pinned 8-byte epilogue pad pseudo-function — see unit header. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B61B8);
 
-/* Integrate a moby's motion-controller velocity for the frame.
- * WALL: save-layout — 5 callee-saves + $ra at 8-byte spacing, with fp/madd. */
+/* Integrate a moby's motion-controller velocity for the frame: steer toward the
+ * target (heading via atan2 + WrapAnglePiSum/Diff, clamped to g_mobyMaxTurnRate),
+ * compute an arrive speed (sqrt(2 * (dist - arriveRadius) * accelArrive) clamped to
+ * maxSpeed), resolve the planar velocity, then apply a ground-slide / gravity /
+ * vertical-step pass and write the velocity accumulator (+0xA0) + verticalVel
+ * (+0xA8) + speed (+0xB0).
+ *
+ * PARKED for a dedicated Ghidra pass (flag-not-guess, 2026-07-06). The first half
+ * is clean (the arrive kinematics use DOCUMENTED constants — the *30 big-turn gate,
+ * the 2*a*d arrive sqrt with accelArrive/maxSpeed, pi, g_mobyMaxTurnRate), but the
+ * back half crosses the confident bar:
+ *   1. Non-canonical magic thresholds with inferred meaning — 0x3E19999A (~0.15),
+ *      0x3DB2B8C4 (~0.0873), 0x3C360B61 (~0.0111) — gate the ground-slide/gravity
+ *      branches; a wrong value or a mis-read likely-branch around them is a silent
+ *      physics bug.
+ *   2. Opaque physics helpers whose role in the velocity update is unclear:
+ *      func_002AB868 (moby yaw +0xF8, ctrl turnDelta +0xB4, velX/Y/Z +0x14..+0x1C),
+ *      func_002AD860 (velocity resolve), func_002ABAE8 (vertical-step, takes
+ *      groundHeight/verticalVel + consts 1.0 / 0x3C360B61). Their out-param
+ *      semantics need recovered types.
+ *   3. Dense likely-branch fp control flow (49 fp ops) — the ground-normal
+ *      projection (Vec3Dot + neg.s) removal and verticalVel clamp chain is easy to
+ *      mis-transcribe silently.
+ * The kinematics are recoverable with a type pass; not safe to hand-write.
+ *
+ * WALL (matching build): save-layout — 5 callee-saves + $ra at 8-byte spacing,
+ * with fp/madd. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", UpdateMobyMotionVelocity);
 
-/* Resolve a moby's per-frame motion against collision geometry.
+/* Resolve a moby's per-frame motion against collision geometry. Integrates the
+ * accumulated planar velocity into the position, then wall-slides up to 8 passes
+ * of ResolveMobySphereCollision | ResolveMobyEdgeConstraint (stopping early once a
+ * pass reports no contact). If anything was hit: recompute the frame displacement
+ * (velAccum = pos - entryPos), clamp its magnitude to the tracked speed (or adopt
+ * the shorter magnitude), and — when the moby is at/below ground — restore it to
+ * the entry height and clamp any downward vertical velocity to 0. Finally bumps
+ * the wall-contact counter when the resulting speed is below half maxSpeed (else
+ * decays it) and records the net position change into posDelta.
  * WALL: save-layout — 6 callee-saves + $ra at 8-byte spacing, with fp/madd and
- * sq/lq 128-bit moves. */
+ * sq/lq 128-bit moves; matching arm stays INCLUDE_ASM, portable #else below. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ResolveMobyMotionCollision);
+#else
+extern void Vec4AddVu0(Vec4 *dst, Vec4 *a, Vec4 *b);   /* dst = a + b (VU0) */
+extern void Vec4SubVu0(Vec4 *dst, Vec4 *a, Vec4 *b);   /* dst = a - b (VU0) */
+extern f32  func_002837D0(Vec4 *v);                    /* 0x2837D0 planar/vector magnitude */
+extern void func_00283920(Vec4 *dst, Vec4 *src, f32 len);  /* 0x283920 rescale src to length len */
+extern void func_002832F8(void *counter);              /* 0x2832F8 decay the wall-contact counter */
+extern s32  ResolveMobySphereCollision(Moby *moby, MobyMotionController *ctrl);  /* defined below */
+extern s32  ResolveMobyEdgeConstraint(void *moby, void *ec);                     /* defined below */
 
-/* Apply ground-snap and fire ground/landing events after motion resolve.
- * WALL: save-layout — 6 callee-saves + $ra at 8-byte spacing, with fp temps. */
+void ResolveMobyMotionCollision(Moby *moby, MobyMotionController *ctrl,
+                                Vec4 *entryPos, Vec4 *velOut) {
+    Vec4 savedPos;
+    s32 anyHit = 0;
+    s32 i;
+
+    (void)velOut;   /* passed by the caller but unused by this pass */
+
+    /* integrate the accumulated velocity, snapshot the pre-collision position */
+    Vec4AddVu0((Vec4 *)((u8 *)moby + 0x10), (Vec4 *)((u8 *)moby + 0x10),
+               (Vec4 *)ctrl->velAccum);
+    savedPos = *(Vec4 *)((u8 *)moby + 0x10);
+    ctrl->wallHitMoby = NULL;
+    ctrl->wallContact[0] = 0.0f;
+    ctrl->wallContact[1] = 0.0f;
+    ctrl->wallContact[2] = 0.0f;
+    ctrl->wallContact[3] = 0.0f;
+
+    for (i = 0; i < 8; i++) {
+        s32 hit = ResolveMobySphereCollision(moby, ctrl) | ResolveMobyEdgeConstraint(moby, ctrl);
+        anyHit |= hit;
+        if (hit == 0) {
+            break;
+        }
+    }
+
+    if (anyHit != 0) {
+        f32 len;
+        Vec4SubVu0((Vec4 *)ctrl->velAccum, (Vec4 *)((u8 *)moby + 0x10), entryPos);
+        len = func_002837D0((Vec4 *)ctrl->velAccum);
+        if (ctrl->speed < len) {
+            func_00283920((Vec4 *)ctrl->velAccum, (Vec4 *)ctrl->velAccum, ctrl->speed);
+        } else {
+            ctrl->speed = len;
+        }
+
+        if (*(f32 *)((u8 *)moby + 0x18) <= ctrl->groundHeight) {
+            if (*(f32 *)((u8 *)moby + 0x18) < ((f32 *)entryPos)[2]) {
+                *(f32 *)((u8 *)moby + 0x18) = ((f32 *)entryPos)[2];
+            }
+            if (ctrl->verticalVel < 0.0f) {
+                ctrl->verticalVel = 0.0f;
+            }
+        }
+
+        if (ctrl->speed < ctrl->maxSpeed * 0.5f) {
+            ctrl->wallContactCount++;
+        } else {
+            func_002832F8(&ctrl->wallContactCount);
+        }
+    } else {
+        func_002832F8(&ctrl->wallContactCount);
+    }
+
+    Vec4SubVu0((Vec4 *)ctrl->posDelta, (Vec4 *)((u8 *)moby + 0x10), &savedPos);
+}
+#endif
+
+/* Apply ground-snap and fire ground/landing events after motion resolve. Re-probes
+ * the ground, then raises the per-step event flags: BLOCKED (0x2) when the moby is
+ * below ground-clearance, AIRBORNE (0x1) when it just rose above ground+clearance
+ * (and was recently grounded), SLOPE (0x4) when the ground normal's tilt exceeds
+ * maxSlopeAngle. If any of those fired, the moby is restored to its entry position
+ * and re-probed. Then snaps the moby onto the ground (and zeroes the grounded/
+ * airborne frame counters accordingly), raises ARRIVED (0x80) within arriveRadius,
+ * runs the path-blocked check (PATH_END 0x100 / clears the steer-block bit), maps
+ * speed to the anim rate (TURN_ANIM mode), drives footstep/turn anim-seq events
+ * (GROUND_ANIM mode), and spawns a water splash (WATER_FX mode) when over water.
+ * WALL: save-layout — 6 callee-saves + $ra at 8-byte spacing, with fp temps;
+ * matching arm stays INCLUDE_ASM, portable #else below. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ApplyMobyGroundAndEvents);
+#else
+extern void ProbeMobyGroundLine(Moby *moby, MobyMotionController *ctrl, f32 depth);  /* below */
+extern f32  func_002837D0(Vec4 *v);                 /* 0x2837D0 vector magnitude */
+extern f32  func_00283BF8(f32 y, f32 x);            /* 0x283BF8 atan2-style angle from a planar delta */
+extern s32  CheckMobyPathBlocked(Moby *moby);       /* below */
+extern s32  CheckMobyOverWater(void *moby, void *ctrl);  /* below */
+extern void func_002A82D8(Moby *moby, s32 animSeq, s32 a2, s32 a3);      /* 0x2A82D8 trigger a move/turn anim-seq */
+extern void func_002A9F30(Moby *moby, s32 a1, s32 a2, Vec4 *pos, f32 f); /* 0x2A9F30 spawn water-surface splash */
 
-/* Probe the ground line below a moby (raycast for the ground normal/height).
- * WALL: save-layout — 2 callee-saves + $ra at 8-byte spacing, with fp temps. */
+void ApplyMobyGroundAndEvents(Moby *moby, MobyMotionController *ctrl,
+                              Vec4 *target, Vec4 *entryPos) {
+    f32 *mobyPos = (f32 *)((u8 *)moby + 0x10);
+    f32 *mobyPosZ = (f32 *)((u8 *)moby + 0x18);
+    s32 eventFired = 0;
+
+    ProbeMobyGroundLine(moby, ctrl, 0.0f);
+
+    if (*mobyPosZ < ctrl->groundHeight - ctrl->groundClearUp) {
+        ctrl->eventFlags |= 0x2;
+        eventFired = 1;
+    }
+    if ((ctrl->modeFlags & 0x1) == 0 && ctrl->airborneFrames < 5 &&
+        (ctrl->groundHeight + ctrl->groundClearDown) < *mobyPosZ) {
+        ctrl->eventFlags |= 0x1;
+        eventFired = 1;
+    }
+    if (ctrl->groundedFrames != 0) {
+        f32 mag = func_002837D0((Vec4 *)ctrl->groundNormal);
+        f32 slope = func_00283BF8(ctrl->groundNormal[2], mag);
+        if (ctrl->maxSlopeAngle < slope) {
+            ctrl->eventFlags |= 0x4;
+            eventFired = 1;
+        }
+    }
+
+    if (eventFired) {
+        *(Vec4 *)mobyPos = *entryPos;
+        ProbeMobyGroundLine(moby, ctrl, 0.0f);
+    }
+
+    if (*mobyPosZ <= ctrl->groundHeight) {
+        if (ctrl->groundHeight <= *mobyPosZ - ctrl->verticalVel) {
+            *mobyPosZ = ctrl->groundHeight;
+        }
+        ctrl->airborneFrames = 0;
+        ctrl->groundedFrames++;
+    } else {
+        ctrl->groundedFrames = 0;
+        ctrl->airborneFrames++;
+    }
+
+    ctrl->distToTarget = DistXYVu0((Vec4 *)mobyPos, target);
+    if (ctrl->distToTarget <= ctrl->arriveRadius) {
+        ctrl->eventFlags |= 0x80;
+    }
+
+    if (ctrl->stateFlags & 0x1) {
+        if (CheckMobyPathBlocked(moby) != 0) {
+            ctrl->stateFlags &= ~0x2;
+        } else {
+            ctrl->eventFlags |= 0x100;
+        }
+    }
+
+    /* anim-rate map from speed (TURN_ANIM) */
+    if (ctrl->modeFlags & 0x80) {
+        s32 a = *(u8 *)((u8 *)moby + 0x43);
+        if (a == ctrl->animSeqIdleA || a == ctrl->animSeqIdleB) {
+            f32 ref = ctrl->animSpeedRef;
+            f32 rate;
+            if (ref == 0.0f) {
+                ref = ctrl->maxSpeed;
+            }
+            rate = ctrl->speed / ref;
+            *(f32 *)((u8 *)moby + 0x48) = rate;
+            if (ctrl->animSpeedClamp < rate) {
+                *(f32 *)((u8 *)moby + 0x48) = ctrl->animSpeedClamp;
+            } else if (rate < 1.0f / ctrl->animSpeedClamp) {
+                *(f32 *)((u8 *)moby + 0x48) = 1.0f / ctrl->animSpeedClamp;
+            }
+        }
+    }
+
+    /* footstep / turn anim-seq events (GROUND_ANIM) */
+    if (ctrl->modeFlags & 0x40) {
+        s32 a = *(u8 *)((u8 *)moby + 0x43);
+        if ((ctrl->stateFlags & 0x2) && ctrl->turnDelta != 0.0f) {
+            if (a == ctrl->animSeqIdleA || a == ctrl->animSeqIdleB) {
+                s32 seq;
+                ctrl->animSeqActive = (u8)a;
+                if (0.0f < ctrl->turnDelta) {
+                    seq = ctrl->animSeqMoveA;
+                } else {
+                    seq = ctrl->animSeqMoveB;
+                }
+                func_002A82D8(moby, seq, 0, 0xA);
+            }
+        } else {
+            if (a == ctrl->animSeqMoveA || a == ctrl->animSeqMoveB) {
+                s32 active = ctrl->animSeqActive;
+                if (active != 0xFF) {
+                    func_002A82D8(moby, active, 0, 0xA);
+                }
+            }
+        }
+    }
+
+    /* water-surface splash (WATER_FX) */
+    if (ctrl->modeFlags & 0x200) {
+        if (CheckMobyOverWater(moby, ctrl) != 0) {
+            func_002A9F30(moby, 0, 0x10000, (Vec4 *)mobyPos, 255.0f);
+        }
+    }
+}
+#endif
+
+/* Probe the ground line below a moby (raycast for the ground normal/height). Casts a
+ * vertical CollLine from just above the moby (pos.z + groundClearUp + 0.1) down to
+ * either pos.z - customDepth (when customDepth != 0) or pos.z - groundClearDown - 0.1.
+ * On a hit, records the ground plane into the controller: groundHeight (hit z),
+ * groundHitMoby, groundHitPoly, groundMaterial (GetCollHitMaterial), and the unit
+ * ground normal (hit normal rescaled to length 1). On a miss, clears those and sets
+ * groundMaterial = -1 with a default up normal (func_00283638).
+ * WALL: save-layout — 2 callee-saves + $ra at 8-byte spacing, with fp temps; matching
+ * arm stays INCLUDE_ASM, portable #else below. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ProbeMobyGroundLine);
+#else
+extern u8 g_pCollWorldData[];   /* 0x1BAF00 collision-result block: +0x18 hitMoby, +0x1C hitPoly, +0x28 hitZ, +0x40 hitNormal */
+extern s32 CollLine(Vec4 *start, Vec4 *end, s32 flags, Moby *ignoreMoby, s32 a4);
+extern s32 GetCollHitMaterial(void);
+extern void Vec3RescaleToLenVu0(Vec4 *dst, Vec4 *src, f32 len);
+extern void func_00283638(Vec4 *normal);   /* 0x283638 reset to the default up normal */
+void ProbeMobyGroundLine(Moby *moby, MobyMotionController *ctrl, f32 customDepth) {
+    Vec4 probeStart = *(Vec4 *)((u8 *)moby + 0x10);
+    Vec4 probeEnd = *(Vec4 *)((u8 *)moby + 0x10);
+
+    ((f32 *)&probeStart)[2] += ctrl->groundClearUp + 0.1f;
+    if (customDepth == 0.0f) {
+        ((f32 *)&probeEnd)[2] -= ctrl->groundClearDown + 0.1f;
+    } else {
+        ((f32 *)&probeEnd)[2] -= customDepth;
+    }
+
+    if (CollLine(&probeStart, &probeEnd, 0, moby, 0) != 0) {
+        ctrl->groundHeight = *(f32 *)(g_pCollWorldData + 0x28);
+        ctrl->groundHitMoby = *(void **)(g_pCollWorldData + 0x18);
+        ctrl->groundHitPoly = *(void **)(g_pCollWorldData + 0x1C);
+        ctrl->groundMaterial = GetCollHitMaterial();
+        Vec3RescaleToLenVu0((Vec4 *)ctrl->groundNormal, (Vec4 *)(g_pCollWorldData + 0x40), 1.0f);
+    } else {
+        ctrl->groundHeight = 0.0f;
+        ctrl->groundHitMoby = NULL;
+        ctrl->groundHitPoly = NULL;
+        ctrl->groundMaterial = -1;
+        func_00283638((Vec4 *)ctrl->groundNormal);
+    }
+}
+#endif
 
 /* Inherit motion from the moving platform a moby is standing on. If the
  * controller recorded a moby under the ground probe last step
@@ -1190,13 +1785,91 @@ s32 GetMobyMotionController(Moby *moby) {
     return moby->pExtra[0x18 / 4];
 }
 
-/* Resolve a moby against a collision sphere (push-out + slide).
- * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing, with fp/madd. */
+/* Resolve a moby against a collision sphere (push-out + slide). Builds a test
+ * sphere centred on the moby position raised by (collRadiusBase + collRadiusStep)
+ * in Z and runs CollSphere at collRadiusBase (query mode 6 when modeFlags bit1 is
+ * set, else 4). On a miss returns 0. On a hit it records the hit moby (+0x84) and
+ * copies the nudged contact vec into wallContact (+0x60); when the hit is a world
+ * poly (hitMoby != 0) with no poly-info (hitPoly < 0) it lowers the shared nudge
+ * point's Z toward the sphere centre; then slides the moby to the nudged hit point
+ * minus the Z offset and returns 1.
+ * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing, with fp/madd;
+ * matching arm stays INCLUDE_ASM, portable #else below. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ResolveMobySphereCollision);
+#else
+extern void Vec4AddVu0(Vec4 *dst, Vec4 *a, Vec4 *b);   /* dst = a + b (VU0) */
+extern void Vec4SubVu0(Vec4 *dst, Vec4 *a, Vec4 *b);   /* dst = a - b (VU0) */
+extern u8 g_pCollWorldData[];                          /* 0x1BAF00 collision-result block */
+extern u8 g_collHitPointNudged[];                      /* 0x1BAF30 hit point nudged toward the query origin */
+extern s32 CollSphere(Vec4 *center, s32 flags, Moby *moby, f32 radius);  /* 0x277268 */
 
-/* Constrain a moby's motion to a collision edge.
- * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing, with fp/madd. */
+s32 ResolveMobySphereCollision(Moby *moby, MobyMotionController *ctrl) {
+    Vec4 sphereOffset;
+    Vec4 center;
+    s32 flags;
+
+    ((f32 *)&sphereOffset)[0] = 0.0f;
+    ((f32 *)&sphereOffset)[1] = 0.0f;
+    ((f32 *)&sphereOffset)[2] = ctrl->collRadiusBase + ctrl->collRadiusStep;
+    ((f32 *)&sphereOffset)[3] = 0.0f;
+    Vec4AddVu0(&center, (Vec4 *)((u8 *)moby + 0x10), &sphereOffset);
+
+    flags = (ctrl->modeFlags & 0x2) ? 6 : 4;
+    if (CollSphere(&center, flags, moby, ctrl->collRadiusBase) == 0) {
+        return 0;
+    }
+
+    ctrl->wallHitMoby = *(void **)(g_pCollWorldData + 0x18);
+    *(Vec4 *)ctrl->wallContact = *(Vec4 *)(g_pCollWorldData + 0x20);
+    if (*(s32 *)(g_pCollWorldData + 0x18) != 0) {
+        if (*(s32 *)(g_pCollWorldData + 0x1C) < 0) {
+            if (((f32 *)&center)[2] < *(f32 *)(g_pCollWorldData + 0x38)) {
+                *(f32 *)(g_pCollWorldData + 0x38) = ((f32 *)&center)[2];
+            }
+        }
+    }
+
+    center = *(Vec4 *)g_collHitPointNudged;
+    Vec4SubVu0((Vec4 *)((u8 *)moby + 0x10), &center, &sphereOffset);
+    return 1;
+}
+#endif
+
+/* Constrain a moby's motion to a collision edge. `ec` is the edge-constraint record:
+ * +0x0 push length, +0x3C edge id (-1 = inactive), +0x9C flags (bit 0 disables),
+ * +0x60 output push vector, +0x94 result flags. No-op (returns 0) when the edge is
+ * inactive or disabled. Otherwise projects the moby position (+0x10) onto the edge
+ * via func_002CA138; if that reports a hit, stores the (projected - position) delta
+ * at +0x60 rescaled to the push length, marks bit 0x10 in +0x94, and returns 1.
+ * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing, with fp/madd; matching
+ * arm stays INCLUDE_ASM, portable #else below. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ResolveMobyEdgeConstraint);
+#else
+extern s32 func_002CA138(s32 edgeId, Vec4 *point, Vec4 *pos, f32 pushLen);  /* 0x2CA138 project onto edge */
+extern void Vec4SubVu0(Vec4 *dst, Vec4 *a, Vec4 *b);            /* dst = a - b (VU0) */
+extern void Vec3RescaleToLenVu0(Vec4 *dst, Vec4 *src, f32 len); /* dst = src * (len / |src|) */
+s32 ResolveMobyEdgeConstraint(void *moby, void *ec) {
+    Vec4 *pos = (Vec4 *)((u8 *)moby + 0x10);
+    Vec4 *push = (Vec4 *)((u8 *)ec + 0x60);
+    Vec4 point;
+
+    if (*(s32 *)((u8 *)ec + 0x3C) == -1)
+        return 0;
+    if (*(s32 *)((u8 *)ec + 0x9C) & 0x1)
+        return 0;
+
+    point = *pos;
+    if (func_002CA138(*(s32 *)((u8 *)ec + 0x3C), &point, pos, *(f32 *)ec) == 0)
+        return 0;
+
+    Vec4SubVu0(push, &point, pos);
+    Vec3RescaleToLenVu0(push, push, *(f32 *)ec);
+    *(s32 *)((u8 *)ec + 0x94) |= 0x10;
+    return 1;
+}
+#endif
 
 /* Update a moby's lean angle from its turn rate (locomotion banking). Banks the
  * one or two attached sub-mobys (ctrl->leanTargetA at +0x48, ctrl->leanTargetB
@@ -1339,9 +2012,51 @@ void SetMobyMotionParams(Moby *moby, f32 accel, f32 maxSpd, f32 speed, f32 velZ)
 /* Size-pinned 8-byte epilogue pad pseudo-function — see unit header. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B7038);
 
-/* Drive a moby along its waypoint path (follow + arrival logic).
- * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing, with fp temps. */
+/* Drive a moby along its waypoint path (follow + arrival logic). No-op (returns 0) with
+ * no motion controller. Binds `path` as the controller's waypoint path if it changed
+ * (SetMobyWaypointPath, whole-path). Steers toward the current node (waypointCursor)
+ * heading via func_00283BF8 while StepMobyMotion targets the end node (waypointEnd).
+ * On arriving within arriveRadius of the current node: returns 1 if that was the end
+ * node, else advances the cursor toward the end (±1 by direction) and returns 0.
+ * Waypoint nodes are vec4s at path + 0x10 + i*0x10; the count is the leading short.
+ * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing, with fp temps; matching
+ * arm stays INCLUDE_ASM, portable #else below. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", DriveMobyAlongWaypoints);
+#else
+s32 SetMobyWaypointPath(Moby *moby, short *path, s32 endIdx, s32 startIdx);  /* defined below */
+extern f32 func_00283BF8(f32 dx, f32 dy);   /* 0x283BF8 atan2-style heading from a planar delta */
+s32 DriveMobyAlongWaypoints(Moby *moby, short *path) {
+    MobyMotionController *ctrl = (MobyMotionController *)GetMobyMotionController(moby);
+    f32 *node;
+    f32 heading;
+
+    if (ctrl == 0) {
+        return 0;
+    }
+    if (path != ctrl->waypointPath) {
+        SetMobyWaypointPath(moby, path, -1, 0);
+    }
+
+    node = (f32 *)((u8 *)path + ctrl->waypointCursor * 0x10 + 0x10);
+    heading = func_00283BF8(node[0] - *(f32 *)((u8 *)moby + 0x10),
+                            node[1] - *(f32 *)((u8 *)moby + 0x14));
+    StepMobyMotion(moby, (Vec4 *)((u8 *)path + ctrl->waypointEnd * 0x10 + 0x10), heading);
+
+    if (DistXYVu0((Vec4 *)((u8 *)moby + 0x10),
+                  (Vec4 *)((u8 *)path + ctrl->waypointCursor * 0x10 + 0x10)) <= ctrl->arriveRadius) {
+        if (ctrl->waypointEnd == ctrl->waypointCursor) {
+            return 1;
+        }
+        if (ctrl->waypointEnd < ctrl->waypointCursor) {
+            ctrl->waypointCursor = ctrl->waypointCursor - 1;
+        } else {
+            ctrl->waypointCursor = ctrl->waypointCursor + 1;
+        }
+    }
+    return 0;
+}
+#endif
 
 /* Size-pinned 8-byte epilogue pad pseudo-function — see unit header. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B7140);
@@ -1390,13 +2105,69 @@ void AccumMobyMotionProfile(void) {
  * header; kept INCLUDE_ASM permanently. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B7218);
 
-/* Test whether a moby's forward path is blocked by collision geometry.
- * WALL: save-layout — 2 callee-saves + $ra at 8-byte spacing, with fp temps. */
+/* Test whether a moby riding a spline/rail is blocked. No-op (returns 0) when the
+ * moby has no motion controller or no active spline constraint (splineConstraintId
+ * == -1). Otherwise fetches the constraint's spline record from the global spline
+ * table (g_targetZoneTable[splineConstraintId]) and, if the moby position (+0x10)
+ * clears the spline polyline (func_002A9958) AND does not project onto the edge
+ * (func_002CA138 misses), reports the path clear (returns 1). Any block marks
+ * stateFlags bit 0 (path-active) and returns 0.
+ * WALL: save-layout — 2 callee-saves + $ra at 8-byte spacing, with fp temps; matching
+ * arm stays INCLUDE_ASM, portable #else below. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", CheckMobyPathBlocked);
+#else
+extern s32 func_002CA138(s32 constraintId, Vec4 *pos, Vec4 *point, f32 len);  /* 0x2CA138 project onto edge */
+s32 CheckMobyPathBlocked(Moby *moby) {
+    MobyMotionController *ctrl = (MobyMotionController *)GetMobyMotionController(moby);
+    void *spline;
+    Vec4 point;
 
-/* Test whether a moby is positioned over a water volume.
- * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing, with fp temps. */
+    if (ctrl == 0 || ctrl->splineConstraintId == -1) {
+        return 0;
+    }
+    spline = g_targetZoneTable[ctrl->splineConstraintId];
+    if (func_002A9958((Vec4 *)((u8 *)moby + 0x10), (Vec4 *)((u8 *)spline + 0x10), *(s32 *)spline) != 0 &&
+        func_002CA138(ctrl->splineConstraintId, (Vec4 *)((u8 *)moby + 0x10), &point, ctrl->collRadiusBase) == 0) {
+        return 1;
+    }
+    ctrl->stateFlags |= 1;
+    return 0;
+}
+#endif
+
+/* Test whether a moby is submerged in a water volume. Quick-rejects (returns 0) when
+ * the moby's Y (+0x18) is at or below the passed volume's top plane (+0x90). Otherwise
+ * looks up the water body actually under the moby (func_002AC088); if none, returns 0.
+ * Then compares the moby Y against that body's surface height (+0x40) minus 0.5:
+ * returns 1 when the moby sits below it. Under radial gravity (D_1A8CA0 != 0) it first
+ * runs the position probe func_002B11C8(moby+0x10) and compares the entry-time Y;
+ * otherwise it compares the moby's current Y directly.
+ * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing, with fp temps; matching
+ * arm stays INCLUDE_ASM, portable #else below. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", CheckMobyOverWater);
+#else
+extern void *func_002AC088(void *moby);           /* 0x2AC088 water body under the moby, or NULL */
+extern void func_002B11C8(Vec4 *pos);             /* 0x2B11C8 radial-gravity position probe */
+s32 CheckMobyOverWater(void *moby, void *waterVol) {
+    f32 y0 = *(f32 *)((u8 *)moby + 0x18);
+    void *body;
+
+    if (y0 <= *(f32 *)((u8 *)waterVol + 0x90))
+        return 0;
+
+    body = func_002AC088(moby);
+    if (body == NULL)
+        return 0;
+
+    if (D_1A8CA0 != 0) {
+        func_002B11C8((Vec4 *)((u8 *)moby + 0x10));
+        return (y0 < *(f32 *)((u8 *)body + 0x40) - 0.5f) ? 1 : 0;
+    }
+    return (*(f32 *)((u8 *)moby + 0x18) < *(f32 *)((u8 *)body + 0x40) - 0.5f) ? 1 : 0;
+}
+#endif
 
 /* Begin the per-frame GS draw-list: writes the frame DMA chain header (GIF/DMA
  * tags) at g_frameDmaCursor, primes the screen context, and queues the frame.
@@ -1466,11 +2237,44 @@ void BindMobyClassUpdateFunc(s32 classId, s32 headerless) {
  * header; kept INCLUDE_ASM permanently. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B7570);
 
-/* Per-frame driver: walk the active-moby list and run each moby's class update
- * fn + draw-list binding.
+/* Per-frame driver: rebuild the active-moby chain (BuildActiveMobyChain, cached in
+ * g_activeMobyChainHead) and tick every node. For each moby whose state byte (+0x20)
+ * is non-negative: unless modeFlags&0x40 is set, advance its animation
+ * (UpdateMobyAnimation); if it has a per-moby update fn (+0x64), call it; then unless
+ * modeFlags&0x4 is set, refresh its bounding sphere + spatial-grid cell
+ * (UpdateMobyBSphereAndGrid). Nodes with a negative state byte are skipped. Walks the
+ * singly-linked chain via the next pointer at +0x28.
  * WALL: save-layout — 1 callee-save + $ra at 8-byte spacing, plus an indirect
- * per-moby call loop. */
+ * per-moby call loop; matching arm stays INCLUDE_ASM, portable #else below. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", UpdateActiveMobys);
+#else
+extern Moby *BuildActiveMobyChain(void);        /* 0x2B62D8 collect live mobys into a chain */
+extern Moby *g_activeMobyChainHead;             /* head cached each frame */
+extern void UpdateMobyAnimation(Moby *moby);    /* 0x2A1360 */
+extern void UpdateMobyBSphereAndGrid(void *moby);  /* 0x2A1D80 */
+void UpdateActiveMobys(void) {
+    Moby *m = BuildActiveMobyChain();
+    g_activeMobyChainHead = m;
+    while (m != NULL) {
+        if (*(s8 *)((u8 *)m + 0x20) >= 0) {         /* skip nodes with a negative state byte */
+            if ((m->modeFlags & 0x40) == 0) {
+                UpdateMobyAnimation(m);
+            }
+            {
+                void (*update)(Moby *) = *(void (**)(Moby *))((u8 *)m + 0x64);
+                if (update != NULL) {
+                    update(m);
+                }
+            }
+            if ((m->modeFlags & 0x4) == 0) {
+                UpdateMobyBSphereAndGrid(m);
+            }
+        }
+        m = *(Moby **)((u8 *)m + 0x28);             /* advance to the next chain node */
+    }
+}
+#endif
 
 extern void func_0011D620(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g, s32 h, s32 i);
 extern void func_00133250(s32 a, s32 b, s32 c, s32 d);
@@ -1641,7 +2445,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StartDialogVoic
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StopDialogVoice);
 #else
 /* TODO(match): functional equivalent - not byte-exact; save-layout wall. */
-extern void func_00133400(void);           /* 0x133400 snd voice-stop command */
+extern void func_00133400(s32 handle);     /* 0x133400 snd_StopVoice: queues 989snd cmd 0x2E for the voice handle */
 s32 StopDialogVoice(void) {
     if (g_fileLoadVoiceState.secondaryState == 0) {
         return 0;
@@ -1649,7 +2453,7 @@ s32 StopDialogVoice(void) {
     if (g_fileLoadVoiceState.secondaryFlag != 3) {
         return 0;
     }
-    func_00133400();
+    func_00133400(g_fileLoadVoiceState.secondaryState);
     g_fileLoadVoiceState.secondaryFlag = 4;
     return 1;
 }
@@ -1883,17 +2687,147 @@ void SetDialogVoiceFadeTargets(s32 target) {
     }
 }
 
-/* Step one dialog-voice channel's per-frame volume-fade state machine.
- * WALL: splat jtbl reloc-identity gap (the channel-state switch dispatch table)
- * + save-layout — 3 callee-saves + $ra at 8-byte spacing; see unit header. */
+/* Step one dialog-voice channel's per-frame playback state machine. No-op (and
+ * on some transitions frees the channel slot) unless a voice is allocated; drives
+ * the 989snd command ring for the channel's voice handle (+0x00) based on its
+ * state (+0x0A) and sub-phase (+0x0C):
+ *   - state 5: send cmd 0x15 (func_00132A70) and advance to state 6;
+ *   - substate wants key-on (+0x0C bit 0x8000) and not yet latched: send cmd 0x2D
+ *     (func_001333D0) + latch state bit 0x8000; when the frame timer (+0x0E)
+ *     expires (func_00283328 == 2) mark the sub-phase finishing (+0x0C = 4);
+ *   - key-on latched but sub-phase no longer wants it: send stop cmd 0x2E
+ *     (func_00133400) + clear the latch;
+ *   - state 2: install the voice-event callback (cmd 0x4F, func_00133460);
+ *   - default (not 1/2/3/8/9): install the sample-cursor + tertiary-started
+ *     callbacks (cmd 0x32 / 0x19) and invalidate the handle (+0x00 = -1);
+ *   - state 7 / no handle: clear state; when the resolved state is 0 free the
+ *     slot (+0x04 = -1).
+ * WALL: splat jtbl reloc-identity gap (the callback-install %hi/%lo refs) +
+ * save-layout — 3 callee-saves + $ra at 8-byte spacing; matching arm stays
+ * INCLUDE_ASM, portable #else below. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StepDialogVoiceChannel);
+#else
+extern void func_00132A70(s32 handle);    /* 0x132A70 989snd cmd 0x15 for the voice handle */
+extern void func_001333D0(s32 handle);    /* 0x1333D0 989snd cmd 0x2D (voice key-on) */
+extern void func_00133400(s32 handle);    /* 0x133400 snd_StopVoice: 989snd cmd 0x2E */
+extern void func_00133430(s32 handle, void *cb, long ctx);  /* 0x133430 989snd cmd 0x32 (install cb) */
+extern void func_00132B58(s32 handle, void *cb, long ctx);  /* 0x132B58 989snd cmd 0x19 (install cb) */
+extern void func_00133460(s32 handle, void *cb, long ctx);  /* 0x133460 989snd cmd 0x4F (install cb) */
+extern void func_002B8F68(s32 byteCursor, long handleAddr);       /* below; sample-cursor callback */
+extern void OnTertiaryVoiceStarted(s32 voiceId, long handleAddr); /* below; tertiary voice-started callback */
+extern void func_002B8D18(s32 flag, long handleAddr);            /* below; voice-event callback */
+
+/* Channel record fields (offsets observed from the asm; no dedicated struct):
+ *   +0x00 s32 handle    active 989snd voice handle (0 = none, -1 = pending/invalid)
+ *   +0x04 s16 slotId    channel slot id (set -1 = free once the voice resolves off)
+ *   +0x0A s16 state     playback state (1/2/3/5/6/7/8/9; bit 0x8000 = key-on latched)
+ *   +0x0C s16 substate  sub-phase (bit 0x8000 = wants key-on; 4 = finishing)
+ *   +0x0E s16 timer     frame timer ticked by func_00283328
+ */
+void StepDialogVoiceChannel(u8 *ch) {
+    s32 handle;
+    s16 st;
+
+    if (*(s16 *)(ch + 0xA) == 9) goto cleanup;
+    if (*(s32 *)(ch + 0x0) == 0) goto cleanup;
+    if (*(s32 *)(ch + 0x0) == -1) goto cleanup;
+
+    if (*(s16 *)(ch + 0xA) == 5) {
+        if (*(s32 *)(ch + 0x0) == 0) {   /* handle != 0 here; dead but faithful */
+            *(s16 *)(ch + 0xA) = 0;
+            goto handle_check;
+        }
+        func_00132A70(*(s32 *)(ch + 0x0));
+        *(s16 *)(ch + 0xA) = 6;
+        goto handle_check;
+    }
+    if (*(s16 *)(ch + 0xA) == 6) {
+        if (*(s32 *)(ch + 0x0) == 0) {   /* handle != 0 here; dead but faithful */
+            *(s16 *)(ch + 0xA) = 0;
+            goto handle_check;
+        }
+        goto substate_check;
+    }
+
+handle_check:
+    if (*(s32 *)(ch + 0x0) == 0) goto finalize;
+substate_check:
+    if ((*(s16 *)(ch + 0xC) & 0x8000) != 0) {
+        if ((*(s16 *)(ch + 0xA) & 0x8000) == 0) {
+            func_001333D0(*(s32 *)(ch + 0x0));
+            *(u16 *)(ch + 0xA) |= 0x8000;
+        }
+        if (func_00283328((s16 *)(ch + 0xE)) == 2) {
+            *(s16 *)(ch + 0xC) = 4;
+        }
+    } else {
+        if ((*(s16 *)(ch + 0xA) & 0x8000) != 0) {
+            func_00133400(*(s32 *)(ch + 0x0));
+            *(u16 *)(ch + 0xA) ^= 0x8000;
+        }
+    }
+
+    if ((*(s16 *)(ch + 0xA) & 0x8000) != 0) goto finalize;
+
+    st = *(s16 *)(ch + 0xA);
+    if (st == 1 || st == 8 || st == 9) goto finalize;
+    if ((u32)(st - 2) < 2) {                 /* state 2 or 3 */
+        if (*(s32 *)(ch + 0x0) == -1) goto finalize;
+        if (st == 2) {
+            func_00133460(*(s32 *)(ch + 0x0), (void *)&func_002B8D18, (long)(u32)ch);
+        }
+        goto finalize;
+    }
+    /* default: not 1/2/3/8/9 */
+    handle = *(s32 *)(ch + 0x0);
+    func_00133430(handle, (void *)&func_002B8F68, (long)(u32)ch);
+    *(s32 *)(ch + 0x0) = -1;
+    func_00132B58(handle, (void *)&OnTertiaryVoiceStarted, (long)(u32)ch);
+    goto finalize;
+
+cleanup:
+    if (*(s16 *)(ch + 0xA) == 7) {
+        *(s16 *)(ch + 0xA) = 0;
+        goto finalize;
+    }
+    if (*(s32 *)(ch + 0x0) != 0) goto finalize;
+    *(s16 *)(ch + 0xA) = 0;
+
+finalize:
+    if (*(s16 *)(ch + 0xA) == 0) {
+        *(s16 *)(ch + 0x4) = -1;
+    }
+}
+#endif
 
 /* Per-frame tick of the dialog/voice manager: drives the primary/secondary/
- * tertiary voice state machines (volume ramps via snd_SetVoiceVolumeRamp, stop
- * via snd_StopVoice), consumes queued dialog/ambient/tertiary voices, and pumps
- * the file-load completion path.
- * WALL: switch dispatch (the (state-2) jtbl) + save-layout (3 callee-saves +
- * $ra at 8-byte spacing). Functional equivalent only. */
+ * tertiary voice state machines, consumes queued dialog/ambient/tertiary voices
+ * (StartSecondaryVoice/ChainSecondaryVoice/StartTertiaryVoice/StartAmbientVoice/
+ * StartDialogVoice), steps each channel via StepDialogVoiceChannel (×3), and pumps
+ * the file-load completion path (snd_CheckLoadInProgress / StartFileLoad + an
+ * indirect completion callback at +0x18).
+ *
+ * PARKED for a dedicated Ghidra pass (flag-not-guess, 2026-07-06) — the asm is
+ * fully readable but faithfully modelling it in C carries real risk without
+ * recovered types/pointers:
+ *   1. Symbol-aliased base pointers: the manager base $16 is materialised via
+ *      %hi/%lo(g_cdReadMode + 0x4) in some paths and via $18 + 0x63A8
+ *      (= g_fileLoadVoiceState) in others — a splat reloc-identity alias, NOT the
+ *      real symbol. The three StepDialogVoiceChannel calls use $16 / $16+0x24 /
+ *      $16+0x48 with $17 = $16 - 0x44 (the file-load field block), so the true
+ *      base offset must be resolved per-site before the channel/field offsets are
+ *      trustworthy — a wrong base silently targets the wrong voice channel.
+ *   2. Sample-timing interpolation math with div-by-zero guards:
+ *      (field_0x4A * field_0xA4) / field_0x34 and
+ *       field_0x4A * (field_0x34 - (field_0x30 - field_0xA4)) / field_0x34.
+ *      Literal to transcribe, but the semantics (what is interpolated) is inferred
+ *      and a wrong field mapping is silent.
+ *   3. A 5-way jtbl_0026CBF0 on (field_0x2C - 2) and an indirect callback jalr $18.
+ * These are determinable with a type-recovery pass but not safe to hand-write.
+ *
+ * WALL (matching build): switch dispatch (the (state-2) jtbl) + save-layout
+ * (3 callee-saves + $ra at 8-byte spacing). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", UpdateDialogVoiceManager);
 
 /* Abort the in-flight CD file read: if a read is active, emit the
@@ -1978,9 +2912,30 @@ s32 StartFileLoadWithCallback(s32 dest, s32 lbn, s32 sectorCount,
  * by the frontend/level-staging machine that polls completion itself.
  * WALL: builds a stack-local sceCdRMode via packed byte/half stores
  * (CONCAT11 idiom) that this cc1 lowers with a different store/merge sequence;
- * also reads several un-named CD-mode globals. Tier-3 hardware glue — left as
- * INCLUDE_ASM. */
+ * also reads several un-named CD-mode globals. Tier-3 hardware glue: the matching
+ * arm stays INCLUDE_ASM (store/merge wall); portable #else arm below for coverage. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", KickRawFileRead);
+#else
+extern u8 g_cdReadMode[4];          /* sceCdRMode template: [0]trycount [1]spindlctrl [2]datapattern [3]pad */
+extern u8 g_rawReadSpindleCtrl;     /* spindle/speed override applied to the local read mode */
+extern s32 g_rawReadStallTimer;     /* raw-read stall watchdog, reset per kick */
+extern s32 g_bRawReadFellBack;      /* "read fell back to slow path" flag, reset per kick */
+extern s32 CdStartRead(s32 lbn, s32 sectors, s32 dest, void *rmode);  /* 0x133398 */
+extern void func_00133230(void);    /* 0x133230 snd RPC tick */
+extern s32 snd_Pump(void);          /* 0x133280 snd queue pump */
+s32 KickRawFileRead(s32 dest, s32 lbn, s32 sectors) {
+    u8 rmode[4];
+    *(u32 *)rmode = *(u32 *)g_cdReadMode;   /* copy the 4-byte read-mode template */
+    rmode[1] = g_rawReadSpindleCtrl;        /* override the spindle/speed field */
+    g_rawReadStallTimer = 0;
+    g_bRawReadFellBack = 0;
+    CdStartRead(lbn, sectors, dest, rmode);
+    func_00133230();
+    snd_Pump();
+    return 1;
+}
+#endif
 
 /* Start a file load while keeping the dialog-voice system pumping (the variant
  * used during streamed-cinematic loads): pumps the dialog-voice system once,
@@ -2009,9 +2964,43 @@ s32 StartFileLoadPumpingVoice(s32 dest, s32 lbn, s32 sectorCount) {
 #endif
 
 /* Pump the dialog-voice system once per snd tick (the snd-pump entry that calls
- * UpdateDialogVoiceManager under the right gating).
- * WALL: save-layout — 2 callee-saves + $ra at 8-byte spacing. */
+ * UpdateDialogVoiceManager under the right gating). Runs one manager tick +
+ * snd-RPC/pump cycle (UpdateDialogVoiceManager, func_00133230, snd_Pump,
+ * func_00133220). When `waitForIdle` is nonzero it repeats that cycle, spinning
+ * (func_002833E8 delay) between iterations, until the file-load is no longer in
+ * flight (fileLoadActive == 0). Returns the final fileLoadActive.
+ * WALL: save-layout — 2 callee-saves + $ra at 8-byte spacing; matching arm stays
+ * INCLUDE_ASM, portable #else below. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", PumpDialogVoiceSystem);
+#else
+extern void UpdateDialogVoiceManager(void);   /* below; dialog-voice state manager tick */
+extern void func_00133230(void);              /* 0x133230 snd RPC tick */
+extern s32  snd_Pump(void);                   /* 0x133280 snd queue pump */
+extern void func_00133220(void);              /* 0x133220 snd RPC flush */
+extern void func_002833E8(s32 cycles);        /* 0x2833E8 busy-wait spin */
+
+s16 PumpDialogVoiceSystem(s32 waitForIdle) {
+    if (waitForIdle != 0) {
+        do {
+            UpdateDialogVoiceManager();
+            func_00133230();
+            snd_Pump();
+            func_00133220();
+            if (g_fileLoadVoiceState.fileLoadActive == 0) {
+                break;
+            }
+            func_002833E8(0x2710);
+        } while (g_fileLoadVoiceState.fileLoadActive != 0);
+    } else {
+        UpdateDialogVoiceManager();
+        func_00133230();
+        snd_Pump();
+        func_00133220();
+    }
+    return g_fileLoadVoiceState.fileLoadActive;
+}
+#endif
 
 /* Per-snd-pump tick handler (installed by InstallFileLoadPump). Only acts when
  * the pump phase arg is 1 (a load is outstanding): polls CdGetLoadStatus, holds

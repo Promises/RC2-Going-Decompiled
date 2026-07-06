@@ -226,7 +226,57 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291CB8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291D28);
 
+/**
+ * func_00291EB0 — build a light-relight request record for point light `index`.
+ *
+ * Fills the request entry (g_pointLights+0x100, stride 0x30) by running three
+ * geometry builders in sequence (func_002F5DF8, func_002E4000, func_002F19D0),
+ * each appending into the shared buffer from the request's cursor (+0xC) up to a
+ * 0x400-byte limit and returning the advanced cursor. Records the per-stage
+ * half-counts ((cursor - base) >> 1, i.e. 16-bit element counts) into the entry
+ * halfwords: +0x2/+0x4 = stage-1 count, +0x6 = stage-2 delta, +0x8 = stage-2
+ * total, +0xA = stage-3 delta. Stops early if any builder hits the limit.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291EB0);
+#else
+extern u8 g_pointLights[];
+extern s32 func_002F5DF8(s32 cursor, s32 limit, s32 index, void *src);
+extern s32 func_002E4000(s32 cursor, s32 limit, s32 index, void *src);
+extern s32 func_002F19D0(s32 cursor, s32 limit, s32 index, void *src);
+
+void func_00291EB0(s32 index) {
+    u8 *req = g_pointLights + 0x100 + index * 0x30;
+    void *src = g_pointLights + index * 0x20 + 0x10;
+    s32 limit = *(s32 *)(req + 0xC) + 0x400;
+    s32 cursor, count;
+
+    if ((u32)*(s32 *)(req + 0xC) >= (u32)limit) {
+        return;
+    }
+    *(s16 *)(req + 0x0) = 0;
+
+    cursor = func_002F5DF8(*(s32 *)(req + 0xC), limit, index, src);
+    count = (cursor - *(s32 *)(req + 0xC)) >> 1;
+    *(s16 *)(req + 0x2) = (s16)count;
+    if ((u32)cursor >= (u32)limit) {
+        return;
+    }
+    *(s16 *)(req + 0x4) = (s16)count;
+
+    cursor = func_002E4000(cursor, limit, index, src);
+    count = (cursor - *(s32 *)(req + 0xC)) >> 1;
+    *(s16 *)(req + 0x6) = (s16)(count - *(u16 *)(req + 0x4));
+    if ((u32)cursor >= (u32)limit) {
+        return;
+    }
+    *(s16 *)(req + 0x8) = (s16)count;
+
+    cursor = func_002F19D0(cursor, limit, index, src);
+    count = (cursor - *(s32 *)(req + 0xC)) >> 1;
+    *(s16 *)(req + 0xA) = (s16)(count - *(u16 *)(req + 0x8));
+}
+#endif
 
 #ifndef TARGET_NATIVE
 /* TODO(match): functional equivalent - not byte-exact; save-layout wall (saves
@@ -239,10 +289,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291FC8);
  * dispatch the kept argument to func_00291EB0.
  */
 extern void func_00291FF8(s32 index);
-extern void func_00291EB0(void *arg);
+extern void func_00291EB0(s32 index);
 void func_00291FC8(void *arg) {
     func_00291FF8((s32)arg);
-    func_00291EB0(arg);
+    func_00291EB0((s32)arg);
     __asm__ __volatile__("");
 }
 #endif
@@ -385,7 +435,49 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BindSkyData);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadPlayerDisplayTextures);
 
+/**
+ * BindPlayerDisplayModel — stage the player display model's textures and header.
+ *
+ * For each of g_playerTexCount entries, writes a 3-doubleword GIF/GS texture
+ * register block into the display list at g_pointLights+0x2280 (stride 0x18):
+ * the per-texture descriptor from g_playerTexDescriptors followed by two fixed
+ * GS register values. Then relocates the player model chunk into place
+ * (RelocateMobyClassChunk from g_pPlayerModelBuffer) and mirrors the first moby
+ * class header's byte +0x8 into +0x9.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BindPlayerDisplayModel);
+#else
+extern s32 g_playerTexCount;
+extern u64 g_playerTexDescriptors[];
+extern void *g_pPlayerModelBuffer;
+extern void *g_mobyClassHeaders[];
+extern u8 D_1A91D0[];
+extern void RelocateMobyClassChunk(void *buffer, s32 slot, void *reloc);
+
+void BindPlayerDisplayModel(void) {
+    s32 count = g_playerTexCount;
+
+    if (count > 0) {
+        u64 *dst = (u64 *)(g_pointLights + 0x2280);
+        u64 *desc = g_playerTexDescriptors;
+        s32 i;
+
+        for (i = 0; i < count; i++) {
+            dst[0] = *desc;                     /* per-texture descriptor */
+            dst[1] = 0x0000FFA0000000E0ULL;     /* fixed GS register A */
+            dst[2] = 0x0040000400004000ULL;     /* fixed GS register B */
+            desc++;
+            dst += 3;
+        }
+    }
+    RelocateMobyClassChunk(g_pPlayerModelBuffer, 0, D_1A91D0);
+    {
+        u8 *hdr = (u8 *)g_mobyClassHeaders[0];
+        hdr[0x9] = hdr[0x8];
+    }
+}
+#endif
 
 /*
  * LoadPlayerDisplayModel(variant) — load the armor-variant player display model
@@ -407,7 +499,7 @@ extern void *g_mobyClassHeaders[];        /* 0x1CDB00 loaded header ptr per slot
 extern u8   *g_playerModelBufferBase;     /* 0x1BAEB8 */
 extern s32   g_loadedArmorVariant;        /* 0x1A7290 */
 extern void  LoadPlayerDisplayTextures(s32 variant);
-extern void  BindPlayerDisplayModel(s32 variant);
+extern void  BindPlayerDisplayModel(void);   /* ignores any arg (reads g_playerTexCount) */
 void func_00293D68(u8 *dst, u8 *src);
 #endif
 #ifndef TARGET_NATIVE
@@ -415,7 +507,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadPlayerDispl
 #else
 void LoadPlayerDisplayModel(s32 variant) {
     LoadPlayerDisplayTextures(variant);
-    BindPlayerDisplayModel(variant);
+    BindPlayerDisplayModel();
     func_00293D68((u8 *)g_mobyClassHeaders[0], g_playerModelBufferBase);
     g_loadedArmorVariant = variant;
 }
@@ -425,7 +517,45 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadHeldItemDis
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00292E90);
 
+/**
+ * LoadShipDisplayModel — load the ship display model for level `index`.
+ *
+ * Records the index at g_levelDialogToc+0x13C8, waits for the frame DMA fence,
+ * then kicks the model's disc read (StartFileLoadPumpingVoice) into
+ * g_shipModelBufferBase from the level's TOC entry (g_discToc + index*8: start
+ * LBN at +0x48D8 plus the base +0x3E24, sector count at +0x48DC). Sets up the
+ * GS texture register block at g_pointLights+0x2280 (descriptor from
+ * g_levelDialogToc+0x13E8 followed by the two fixed GS registers) and rebases
+ * the loaded moby class header (FixupMobyClassHeader).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadShipDisplayModel);
+#else
+extern s32 g_discToc[];
+extern u8 g_levelDialogToc[];
+extern void *g_shipModelBufferBase;
+extern u8 D_1A91E0[];
+extern void WaitFrameDmaFence(s32 mode);
+extern void StartFileLoadPumpingVoice(void *dest, s32 startSector, s32 sectorCount);
+extern void FixupMobyClassHeader(void *hdr, s32 arg2, s32 reloc, s32 classId);
+
+void LoadShipDisplayModel(s32 index) {
+    s32 *entry = (s32 *)((u8 *)g_discToc + index * 8);
+
+    *(s32 *)(g_levelDialogToc + 0x13B0 + 0x18) = index;
+    WaitFrameDmaFence(1);
+    StartFileLoadPumpingVoice(g_shipModelBufferBase,
+                              entry[0x48D8 / 4] + g_discToc[0x3E24 / 4],
+                              entry[0x48DC / 4]);
+    {
+        u64 *reg = (u64 *)(g_pointLights + 0x2280);
+        reg[0] = *(u64 *)(g_levelDialogToc + 0x13B0 + 0x38);
+        reg[1] = 0x0000FFA0000000E0ULL;     /* fixed GS register A */
+        reg[2] = 0x0040000400004000ULL;     /* fixed GS register B */
+    }
+    FixupMobyClassHeader(g_shipModelBufferBase, 0, (s32)D_1A91E0, -1);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadShipDisplayTexture);
 
@@ -568,7 +698,59 @@ void func_00293B68(u8 *groups, s32 instMode, u8 *idMap, s32 groupCount) {
 }
 #endif
 
+/**
+ * RelocateMobyClassChunk — fix up a freshly-loaded moby class chunk in place.
+ *
+ * The chunk header holds three section counts (bytes +0x0/+0x1/+0x2) and two
+ * table offsets (+0x4, +0x8). First it rebases the pointer table at chunk+[0x4]
+ * (one 0x10-byte entry per section): for each entry whose base word is below the
+ * arena limit (g_memoryArenaTable+0x8), its words +0x0 and +0x8 get the chunk
+ * base added. Then it walks the descriptor table at chunk+[0x8] (0x10-byte
+ * stride) until a descriptor's rebased offset word (+0xC) goes negative,
+ * relocating that word and translating each descriptor's 0xFF-terminated name
+ * string through the `nameTable` lookup. Finally hands the pointer table to
+ * func_00293B68 for group instantiation.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", RelocateMobyClassChunk);
+#else
+void RelocateMobyClassChunk(void *chunkArg, s32 arg2, void *nameTableArg) {
+    u8 *chunk = (u8 *)chunkArg;
+    u8 *nameTable = (u8 *)nameTableArg;
+    s32 count = chunk[0] + chunk[1] + chunk[2];
+    s32 *table1 = (s32 *)(chunk + *(s32 *)(chunk + 0x4));
+    u8 *entry = chunk + *(s32 *)(chunk + 0x8);
+    s32 cont;
+
+    if (count != 0) {
+        s32 *e = table1;
+        s32 i;
+        for (i = count; i != 0; i--) {
+            if (e[0] < *(s32 *)(g_memoryArenaTable + 0x8)) {
+                e[0] += (s32)chunk;
+                e[2] += (s32)chunk;      /* word at +0x8 */
+            }
+            e = (s32 *)((u8 *)e + 0x10);
+        }
+    }
+
+    do {
+        s32 *offsetWord = (s32 *)(entry + 0xC);
+        *offsetWord += (s32)chunk;
+        if (entry[0] != 0xFF) {
+            u8 *p = entry;
+            while (*p != 0xFF) {
+                *p = nameTable[*p];
+                p++;
+            }
+        }
+        cont = (*offsetWord >= 0);
+        entry += 0x10;
+    } while (cont);
+
+    func_00293B68((u8 *)table1, arg2, nameTable, count);
+}
+#endif
 
 /*
  * func_00293D68(dst, src) — fix up a freshly-loaded display-model header in
@@ -646,7 +828,38 @@ void RegisterMobyClass(u8 *hdr, s32 arg2, s32 arg3, s32 classId) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294268);
 
+/**
+ * StartFrontendSegmentLoad — allocate the frontend segment buffer and kick its
+ * raw disc read.
+ *
+ * Sizes the buffer from the segment's sector count (g_discToc +0x34C), rounded
+ * to 2048-byte sectors plus a page of slack, then carves it downward from the
+ * top-of-memory marker D_1FF7FF0 (16-byte aligned). Stashes the buffer in
+ * g_pLoadedSegment, writes a 0x60-byte header offset at its head, and starts an
+ * asynchronous raw read of the segment's sectors (start LBN = toc +0x348 plus
+ * base +0x32C, count = toc +0x34C) into the buffer just past the header.
+ *
+ * @return always 1 (load kicked).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", StartFrontendSegmentLoad);
+#else
+extern s32 g_discToc[];  /* 0x14B540 master disc asset directory */
+extern u8 D_1FF7FF0[];   /* top-of-memory marker; segment buffers grow downward from here */
+extern s32 KickRawFileRead(void *dest, s32 startSector, s32 sectorCount, void *toc);
+
+s32 StartFrontendSegmentLoad(void) {
+    u32 size = (((u32)g_discToc[0x34C / 4] << 11) + 0x1057) & 0xFFFFF000;
+    u8 *seg = (u8 *)(((u32)D_1FF7FF0 - size) & 0xFFFFFFF0);
+
+    g_pLoadedSegment = seg;
+    *(s32 *)seg = 0x60;
+    KickRawFileRead(seg + *(s32 *)seg,
+                    g_discToc[0x348 / 4] + g_discToc[0x32C / 4],
+                    g_discToc[0x34C / 4], g_discToc);
+    return 1;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294308);
 
@@ -848,7 +1061,56 @@ void func_002949E0(s32 *rec, s32 enable) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294A30);
 
+/**
+ * func_00294B50 — begin an asynchronous level-asset load for level `level`.
+ *
+ * No-ops (returns 0) if the level's TOC entry is empty (g_discToc + level*0x14,
+ * field +0x4B48 == 0) or a load is already in flight (D_1A9330 != -1). Otherwise
+ * latches the request state (D_1A9330 = level, D_1A9334 = arg2, D_1A9338 = ctx),
+ * arms the respawn slot for arg2 (g_respawnPlayerYaw[0x1F + arg2] = -1) when
+ * valid, and kicks StartFileLoadWithCallback. Two variants: when the entry's
+ * +0x4B50 field is set and `variant` is 0, load the +0x4B4C span with the
+ * func_00294A30 completion callback; otherwise load the +0x4B44 span with
+ * func_002949E0. Start LBN is the span base plus the shared prefix
+ * g_discToc[+0x4B3C]. Returns StartFileLoadWithCallback's result.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294B50);
+#else
+extern s32 g_discToc[];
+extern s32 g_respawnPlayerYaw[];
+extern s32 D_1A9330, D_1A9334;
+extern void *D_1A9338;
+extern void func_00294A30(void);
+extern s32 StartFileLoadWithCallback(void *dest, s32 startSector, s32 count,
+                                     void *callback, void *state);
+
+void func_00294B50(s32 level, s32 arg2, void *dest, s32 variant) {
+    u8 *toc = (u8 *)g_discToc + level * 0x14;
+
+    if (*(s32 *)(toc + 0x4B48) == 0) {
+        return;
+    }
+    if (D_1A9330 != -1) {
+        return;
+    }
+    D_1A9330 = level;
+    D_1A9334 = arg2;
+    D_1A9338 = dest;
+    if (arg2 >= 0) {
+        g_respawnPlayerYaw[0x1F + arg2] = -1;   /* +0x48 + arg2*4 + 0x34 */
+    }
+    if (*(s32 *)(toc + 0x4B50) != 0 && variant == 0) {
+        StartFileLoadWithCallback(dest,
+            *(s32 *)(toc + 0x4B4C) + g_discToc[0x4B3C / 4],
+            *(s32 *)(toc + 0x4B50), (void *)func_00294A30, &D_1A9330);
+        return;
+    }
+    StartFileLoadWithCallback(dest,
+        *(s32 *)(toc + 0x4B44) + g_discToc[0x4B3C / 4],
+        *(s32 *)(toc + 0x4B48), (void *)func_002949E0, &D_1A9330);
+}
+#endif
 
 /*
  * func_00294C48(classId, slot) — request the gadget moby-class load for `slot`.
@@ -1020,7 +1282,55 @@ void func_00295478(s32 classId, void *dest) {
 }
 #endif
 
+/**
+ * func_002954F0 — allocate VRAM for a texture and queue its upload.
+ *
+ * Reserves a VRAM region from g_vramAllocCursor (a 0x400-byte header page plus
+ * 2^(log2W+log2H) for the texel data), builds the 64-bit GS TEX0 register for it
+ * (same packing as func_00295630: TBP0 = cursor2>>8, TBW/TW/TH from the log2
+ * dims, plus the fixed 0x1300000 / 0x8000<<19 / sign bits), and — when the
+ * upload queue has room (<0x40) — appends a descriptor to g_texUploadQueue
+ * (source at desc+0x20, dest at desc+0x420, both VRAM cursors, and the log2
+ * dims). Returns the packed GS TEX0 register.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002954F0);
+#else
+extern s32 g_vramAllocCursor;
+extern s32 g_texUploadQueue[];
+extern s32 g_texUploadCount;
+
+u64 func_002954F0(void *descArg) {
+    u8 *desc = (u8 *)descArg;
+    s32 logW = Log2Floor(*(s32 *)(desc + 0x8));
+    s32 logH = Log2Floor(*(s32 *)(desc + 0xC));
+    s32 cursor = g_vramAllocCursor;
+    s32 cursor2 = cursor + 0x400;
+    s32 shift = (logW < 6) ? 0 : (logW - 6);
+    u64 packed = (u64)(u32)(cursor2 >> 8)
+               | ((u64)(u32)(1 << shift) << 14)
+               | (((u64)(u32)logW << 26) | 0x1300000)
+               | ((u64)(u32)logH << 30)
+               | ((u64)(u32)(cursor >> 8) << 37)
+               | ((u64)0x8000 << 19)
+               | ((u64)-1 << 63);
+
+    g_vramAllocCursor = cursor2 + (1 << (logW + logH));
+
+    if (g_texUploadCount < 0x40) {
+        s32 *e = &g_texUploadQueue[g_texUploadCount * 4];
+        e[0] = (s32)(desc + 0x20);
+        *(s16 *)((u8 *)e + 0x6) = (s16)(cursor >> 8);
+        *(s16 *)((u8 *)e + 0x4) = 0;
+        e[2] = (s32)(desc + 0x420);
+        *(s16 *)((u8 *)e + 0xE) = (s16)(cursor2 >> 8);
+        *(u8 *)((u8 *)e + 0xC) = (u8)logW;
+        *(u8 *)((u8 *)e + 0xD) = (u8)logH;
+        g_texUploadCount++;
+    }
+    return packed;
+}
+#endif
 
 #ifndef TARGET_NATIVE
 /* TODO(match): functional equivalent - not byte-exact (22%); 64-bit shift wall -
@@ -1141,7 +1451,16 @@ s32 func_00295F30(s32 fromEnd) {
     return -1;
 }
 
+/* func_00295F98 (MapPromoteCacheSlot) — pick a usable galactic-map cache slot
+ * and move it to slot 0. First tries func_00295F30(1) (a slot with state set +
+ * id -1); if that returns nonzero it is the answer. Otherwise scans slots 1..4
+ * for the first occupied slot (slotState != 0) whose level id lacks bit 0x1000,
+ * relocates it into slot 0 (func_00296038) and returns its index (or 5 if none).
+ * #else body is in the map-cache slice below (needs the MapCache type +
+ * func_00296038); the INCLUDE_ASM stays here in address order. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00295F98);
+#endif
 
 /* func_00296038 (MapMoveCacheSlot) — relocate a galactic-map cache slot's
  * contents src -> dst; the portable #else body lives in the galactic-map cache
@@ -1237,6 +1556,24 @@ void func_00296038(s32 dst, s32 src) {
     g_mapCache.slotLevelId[dst]    = g_mapCache.slotLevelId[src];
     g_mapCache.slotPixelCount[dst] = g_mapCache.slotPixelCount[src];
     g_mapCache.slotLevelId[src]    = -1;
+}
+
+/* func_00295F98 #else body — placed here so it follows the MapCache type and
+ * func_00296038 it depends on (its INCLUDE_ASM stays in address order above). */
+s32 func_00295F98(void) {
+    s32 slot = func_00295F30(1);
+    s32 i;
+
+    if (slot != 0) {
+        return slot;
+    }
+    for (i = 1; i < 5; i++) {
+        if ((g_mapCache.slotLevelId[i] & 0x1000) == 0 && g_mapCache.slotState[i] != 0) {
+            break;
+        }
+    }
+    func_00296038(0, i);
+    return i;
 }
 #endif
 
@@ -1573,7 +1910,38 @@ void *func_002988C8(s32 idx) {
 }
 #endif
 
+/**
+ * func_00298918 — compute two scaled level-parameter outputs.
+ *
+ * Resolves a level index (arg `level`, or the current g_playerProgress when -1,
+ * clamped to 0 when outside [0,20]), looks up its parameter block
+ * (func_002988C8), and writes two blended, 1/512-scaled values:
+ *   *outX = (block[0] + block[1] * fa) / 512
+ *   *outY = (block[2] + block[3] * fb) / 512
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00298918);
+#else
+void func_00298918(f32 *outX, f32 *outY, s32 level, f32 fa, f32 fb) {
+    f32 v0, v1, v2, v3;
+
+    if (level == -1) {
+        level = g_playerProgress;
+    }
+    if (level < 0) {
+        level = 0;
+    }
+    if (level >= 21) {
+        level = 0;
+    }
+    v0 = ((f32 *)func_002988C8(level))[0];
+    v1 = ((f32 *)func_002988C8(level))[1];
+    *outX = (v0 + v1 * fa) * (1.0f / 512.0f);
+    v2 = ((f32 *)func_002988C8(level))[2];
+    v3 = ((f32 *)func_002988C8(level))[3];
+    *outY = (v2 + v3 * fb) * (1.0f / 512.0f);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002989F8);
 
@@ -1583,4 +1951,52 @@ void func_00298AA0(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00298AA8);
 
+/**
+ * func_00298F20 — save/load status-machine tick.
+ *
+ * Raises the rain-active flag (g_pRainHeightmap+0x1C) when any area-load field
+ * is pending (g_areaTable +0x16C/+0x10 nonzero, or +0x24 positive). Then honours
+ * pending save/load transition bits in the status flags word
+ * (g_nSaveLoadStatusCode+0x4): bit 0x80 -> enter state 0x15, bit 0x100 -> state
+ * 0x14 (each clearing its bit and setting 0x40). Dispatches the per-state
+ * handler from the D_256050 jump table, then bumps the tick counter
+ * (g_pRainHeightmap+0x18) — or resets it to 0 if the handler changed the state.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00298F20);
+#else
+extern u8 g_areaTable[];
+extern u8 g_pRainHeightmap[];
+extern s32 g_nSaveLoadStatusCode[];        /* [0] = state code, [1] (+0x4) = flags */
+extern void (*D_256050[])(void);           /* per-state handler jump table */
+
+void func_00298F20(void) {
+    s32 origState = g_nSaveLoadStatusCode[0];
+    s32 flags;
+
+    if (*(s32 *)(g_areaTable + 0x16C) != 0 ||
+        *(s32 *)(g_areaTable + 0x10) != 0 ||
+        *(s32 *)(g_areaTable + 0x24) > 0) {
+        *(s32 *)(g_pRainHeightmap + 0x1C) = 1;
+    }
+
+    flags = g_nSaveLoadStatusCode[1];
+    if (flags & 0x80) {
+        g_nSaveLoadStatusCode[0] = 0x15;
+        g_nSaveLoadStatusCode[1] = (flags & ~0x80) | 0x40;
+        flags = g_nSaveLoadStatusCode[1];
+    }
+    if (flags & 0x100) {
+        g_nSaveLoadStatusCode[0] = 0x14;
+        g_nSaveLoadStatusCode[1] = (flags & ~0x100) | 0x40;
+    }
+
+    D_256050[g_nSaveLoadStatusCode[0]]();
+
+    if (g_nSaveLoadStatusCode[0] == origState) {
+        *(s32 *)(g_pRainHeightmap + 0x18) += 1;
+    } else {
+        *(s32 *)(g_pRainHeightmap + 0x18) = 0;
+    }
+}
+#endif
