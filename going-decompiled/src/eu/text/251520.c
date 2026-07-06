@@ -173,7 +173,47 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00351AA8);
  * the USA twin (src/usa/text/250080.c). */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00351B00);
 
+/* func_00351B48 (USA func_003506A8): query the pts ring's two writable spans
+ * for the producer. When not yet started, returns either the whole data region
+ * (mode 4) or the header-fill window plus the data region; once started, returns
+ * the wrap-around free window (up to two segments). Region-agnostic port of the
+ * USA body (typed FmvPtsQueue accesses only; no callees, no globals). Matching
+ * arm stays asm (branch-likely scheduling the pinned cc1 won't emit). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00351B48);
+#else
+void func_00351B48(FmvPtsQueue *q, u8 **pPtr0, s32 *pLen0, u8 **pPtr1, s32 *pLen1) {
+    if (q->started == 0) {
+        if (q->mode == 4) {
+            *pPtr0 = q->dataPtr;
+            *pLen0 = q->ringSize;
+            *pPtr1 = 0;
+            *pLen1 = 0;
+        } else {
+            *pPtr0 = (u8 *)q + q->hdrFill + 8;
+            *pLen0 = 0x28 - q->hdrFill;
+            *pPtr1 = q->dataPtr;
+            *pLen1 = q->ringSize;
+        }
+    } else {
+        s32 ringSize = q->ringSize;
+        s32 ringOfs = q->ringOfs;
+        s32 untilEnd = ringSize - q->consumed;
+
+        if (ringSize - ringOfs < untilEnd) {
+            *pPtr0 = q->dataPtr + ringOfs;
+            *pLen0 = ringSize - ringOfs;
+            *pPtr1 = q->dataPtr;
+            *pLen1 = untilEnd - (ringSize - ringOfs);
+        } else {
+            *pPtr0 = q->dataPtr + ringOfs;
+            *pLen0 = untilEnd;
+            *pPtr1 = 0;
+            *pLen1 = 0;
+        }
+    }
+}
+#endif
 
 /* func_00351C18 (USA func_00350778): blocked, register-coloring wall. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00351C18);
@@ -231,7 +271,38 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00352428);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00352560);
 
+/* func_00352648 (USA func_003511A8): scatter two source spans (src0/len0,
+ * src1/len1) into a two-segment ring destination (dst0 with capacity len0d,
+ * wrapping into dst1) given the leading write offset; returns the total bytes
+ * written (0 if it would overflow). Region-agnostic port of the USA body (only
+ * memcpy, which is region-identical). Matching arm stays asm (8-byte-packed
+ * saves s0..s7/ra). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00352648);
+#else
+s32 func_00352648(u8 *dst0, s32 len0d, u8 *dst1, s32 cap, u8 *src0, s32 len1d,
+                  u8 *src1, s32 tail) {
+    if (len1d + tail <= len0d + cap) {
+        if (len1d < len0d) {
+            s32 gap = len0d - len1d;
+            if (tail < gap) {
+                memcpy(dst0, src0, len1d);
+                memcpy(dst0 + len1d, src1, tail);
+            } else {
+                memcpy(dst0, src0, len1d);
+                memcpy(dst0 + len1d, src1, gap);
+                memcpy(dst1, src1 + (len0d - len1d), tail - gap);
+            }
+        } else {
+            memcpy(dst0, src0, len0d);
+            memcpy(dst1, src0 + len0d, len1d - len0d);
+            memcpy(dst1 + (len1d - len0d), src1, tail);
+        }
+        return len1d + tail;
+    }
+    return 0;
+}
+#endif
 
 /* === func_00352778 (USA func_003512D8) ============================== */
 /**
