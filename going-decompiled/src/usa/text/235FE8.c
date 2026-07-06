@@ -5358,7 +5358,60 @@ void *func_003436C0(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003436C8);
 
+/* func_003436D0: map four control floats to a clamped byte value (an interpolated
+ * intensity/alpha, max `hi`). `a0` is passed by the sole caller (func_00343AF8) but
+ * unused here. Runs the unnamed fixed-point helper cluster twice: reduce(x) =
+ * func_001234F0(x, float->int) then func_00123028/func_00122A98 (int wrap: if the
+ * div result is negative, re-wrap) then func_00123298 (int->float). First pass
+ * feeds reduce(c-b) through func_00122B00 with reduce(d); the (c-a) span both
+ * clamps that result (min) and normalises it (ratio = min/(c-a)); second pass runs
+ * reduce(ratio) -> func_00123298 -> f. Result = (s32)((1.0 - f) * 255.0), clamped
+ * so it never exceeds `hi`. Exact helper semantics untraced (kept as func_ names). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003436D0);
+#else
+extern s32   func_001234F0(f32 x);
+extern s32   func_00123028(s32 a, s32 b);
+extern s32   func_00122A98(s32 a, s32 b);
+extern s32   func_00122B00(s32 a, s32 b);
+extern f32   func_00123298(s32 a);
+
+s32 func_003436D0(void *a0, s32 hi, f32 a, f32 b, f32 c, f32 d) {
+    s32 n;
+    f32 f, span;
+    s32 result;
+
+    (void)a0;
+
+    /* first reduce pass on (c - b) */
+    n = func_001234F0(c - b);
+    if (func_00123028(n, 0) < 0) {
+        n = func_00122A98(0, n);
+    }
+    n = func_00122B00(n, func_001234F0(d));
+    f = func_00123298(n);
+
+    /* clamp to the (c - a) span, then normalise into [0,1] */
+    span = c - a;
+    if (span < f) {
+        f = span;
+    }
+    f = f / span;
+
+    /* second reduce pass on the normalised ratio */
+    n = func_001234F0(f);
+    if (func_00123028(n, 0) < 0) {
+        n = func_00122A98(0, n);
+    }
+    f = func_00123298(n);
+
+    result = (s32)((1.0f - f) * 255.0f);
+    if (hi < result) {
+        result = hi;
+    }
+    return result;
+}
+#endif
 
 /* Construct/reset a widget: if given a node pool, record it (+0x8C) and alloc +
  * placement-new the element's primary block (stored at +0x0, zeroed 4 words),
