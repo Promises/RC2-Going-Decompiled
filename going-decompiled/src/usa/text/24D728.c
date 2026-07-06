@@ -359,7 +359,211 @@ GuiInstance *func_0034F300(GuiInstance *mgr) {
     return mgr;
 }
 
+/*
+ * GuiSystemInit(gui) — one-time construction of the whole GUI singleton (the
+ * huge g_guiInstance block, base = gui). Zeroes the 0x8700-byte working area at
+ * gui+4, then registers every GUI sub-object in two passes over the fixed slot
+ * layout: pass 1 calls each screen's constructor func_00xxxxxx(gui+slotOff);
+ * pass 2 calls each screen's <Name>Init(gui+slotOff, ctx) where ctx = the shared
+ * manager context at gui+0x36F10. In between it publishes the singleton pointer
+ * (g_guiInstance = gui), aligns the pool cursor into gui[0], kicks the font-atlas
+ * disc load (StartFileLoadPumpingVoice over g_discToc entries) + relocate, sizes
+ * the GUI pool (GuiPoolInit, 0x8700 bytes of 0x10-granule blocks at gui+4), wires
+ * the HUD lists (GuiManagerInitHudLists), clears the manager status words at
+ * gui+0x38000+0x79D0.., and finally zeroes two small tables. Returns gui.
+ *
+ * Purely integer/pointer construction (no float, no GS/DMA). The matching build
+ * keeps the asm (engine save-layout wall); the #else is a faithful op-for-op
+ * transcription. GuiManagerInitListRows/GuiManagerInitHudLists live in this unit
+ * as INCLUDE_ASM; the ~50 per-screen constructors live in neighbouring units.
+ */
+#ifdef TARGET_NATIVE
+extern void *g_guiInstance;
+extern s32   g_discToc[];             /* 0x14B540  disc TOC (sector tables) */
+extern void  StartFileLoadPumpingVoice(void *dest, s32 startSector, s32 sectorCount);
+extern void  GuiFontAtlasRelocate(void *atlas);
+extern void  GuiPoolInit(void *pool, s32 granule, void *base, s32 size);
+extern void  GuiManagerInitListRows(void *listRows);
+extern void  GuiManagerInitHudLists(void *listRows, void *gui, void *ctx);
+/* pass-1 per-screen constructors (screen sub-object pointer only) */
+extern void  func_00337C58(void *ctx);
+extern void  func_00349200(void *s);
+extern void  func_003475F0(void *s);
+extern void  func_00346368(void *s);
+extern void  func_003448C0(void *s);
+extern void  func_0033FF68(void *s);
+extern void  func_0033AA80(void *s);
+extern void  func_0033A048(void *s);
+extern void  func_0033C100(void *s);
+extern void  func_0033F690(void *s);
+extern void  func_003420D0(void *s);
+extern void  func_00344110(void *s);
+extern void  func_0033F4D0(void *s);
+extern void  func_00341C28(void *s);
+extern void  func_00349E88(void *s);
+extern void  func_0033A640(void *s);
+extern void  GuiQuitDialogInitElements(void *s);
+extern void  func_0033D478(void *s);
+extern void  func_0033DA00(void *s);
+extern void  func_0033DDC8(void *s);
+extern void  func_0033E488(void *s);
+extern void  func_0033CD80(void *s);
+extern void  func_0033D1C0(void *s);
+extern void  func_00348BD0(void *s);
+extern void  func_00342FD8(void *s);
+extern void  func_00342BA0(void *s);
+extern void  func_0033EB20(void *s);
+extern void  func_0033EDD0(void *s);
+extern void  func_0033EFC8(void *s);
+extern void  func_0033F1C0(void *s);
+extern void  func_0033B4E8(void *s);
+/* pass-2 per-screen initializers (screen sub-object + shared ctx) */
+extern void  GuiScreenWithPlanetNameInit(void *s, void *ctx);
+extern void  GuiWeaponGridScreenInit(void *s, void *ctx);
+extern void  GuiMapScreenInit(void *s, void *ctx);
+extern void  GuiInfoPanelScreenInit(void *s, void *ctx);
+extern void  GuiQuickSelectWheelInit(void *s, void *ctx);
+extern void  GuiLevelInfoPanelInit(void *s, void *ctx);
+extern void  GuiScrollListScreenInit(void *s, void *ctx);
+extern void  GuiConfirmPopupInit(void *s, void *ctx);
+extern void  GuiIconScreenInit(void *s, void *ctx);
+extern void  GuiTitledSpriteScreenInit(void *s, void *ctx);
+extern void  GuiIconListScreenInit(void *s, void *ctx);
+extern void  GuiStatsPanelScreenInit(void *s, void *ctx);
+extern void  func_0033F510(void *s, void *ctx);
+extern void  func_00349E90(void *s);
+extern void  GuiProgressBarWidgetInit(void *s, void *ctx);
+extern void  GuiQuitDialogInit(void *s, void *ctx);
+extern void  func_0033D4B0(void *s, void *ctx);
+extern void  func_0033A678(void *s, void *ctx);
+extern void  GuiDialogBoxVariantBInit(void *s, void *ctx);
+extern void  func_0033DE10(void *s, void *ctx);
+extern void  func_0033E4C0(void *s, void *ctx);
+extern void  GuiDialogBoxVariantCInit(void *s, void *ctx);
+extern void  func_0033D1F8(void *s, void *ctx);
+extern void  func_00348BF8(void *s, void *ctx);
+extern void  GuiHelpPromptWidgetInit(void *s, void *ctx);
+extern void  GuiIconScreenInit2(void *s, void *ctx);
+extern void  func_0033EB58(void *s, void *ctx);
+extern void  func_0033EE08(void *s, void *ctx);
+extern void  func_0033F000(void *s, void *ctx);
+extern void  func_0033F200(void *s, void *ctx);
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", GuiSystemInit);
+#else
+void *GuiSystemInit(void *guiArg) {
+    u8 *gui = (u8 *)guiArg;
+    u8 *ctx = gui + 0x36F10;   /* shared GUI manager context ($17) */
+    u8 *mgr = gui + 0x38000;   /* manager status block ($18) */
+    s32 *p;
+    s32  i;
+
+    /* zero the 0x8700-byte working area at gui+4 (0x870 x 0x10-byte rows) */
+    p = (s32 *)(gui + 4);
+    for (i = 0x86F; i != -1; i--) {
+        p[0] = 0;
+        p[1] = 0;
+        p[2] = 0;
+        p[3] = 0;
+        p += 4;
+    }
+
+    /* pass 1 — construct each sub-object */
+    func_00337C58(ctx);
+    GuiManagerInitListRows(gui + 0x36F28);
+    func_00349200(gui + 0x39160);
+    func_003475F0(gui + 0x39620);
+    func_00346368(gui + 0x39AF0);
+    func_003448C0(gui + 0x3A000);
+    func_0033FF68(gui + 0x3A4C0);
+    func_0033AA80(gui + 0x3AF80);
+    func_0033A048(gui + 0x3B418);
+    func_0033C100(gui + 0x3B6F8);
+    func_0033F690(gui + 0x3BA58);
+    func_003420D0(gui + 0x3C160);
+    func_00344110(gui + 0x3C480);
+    func_0033F4D0(gui + 0x3C7E8);
+    func_00341C28(gui + 0x3CB20);
+    func_00349E88(gui + 0x3CD48);
+    func_0033A640(gui + 0x3CEA0);
+    GuiQuitDialogInitElements(gui + 0x3D1D8);
+    func_0033D478(gui + 0x3D4B8);
+    func_0033DA00(gui + 0x3D798);
+    func_0033DDC8(gui + 0x3DA78);
+    func_0033E488(gui + 0x3DDE8);
+    func_0033CD80(gui + 0x3E0C8);
+    func_0033D1C0(gui + 0x3E3A8);
+    func_00348BD0(gui + 0x3E688);
+    func_00342FD8(gui + 0x3E760);
+    func_00342BA0(gui + 0x3E9C8);
+    func_0033EB20(gui + 0x3EB50);
+    func_0033EDD0(gui + 0x3EE30);
+    func_0033EFC8(gui + 0x3F110);
+    func_0033F1C0(gui + 0x3F3F0);
+    func_0033B4E8(gui + 0x3F7B0);
+
+    /* publish the singleton, align the pool cursor into gui[0] */
+    g_guiInstance = gui;
+    *(s32 *)(gui + 0) = ((s32)(gui + 0x3FB20) + 3) & ~3;
+    *(s32 *)(mgr + 0x79D0) = 0x3FB20;
+
+    /* load + relocate the font atlas from disc, size the GUI pool */
+    StartFileLoadPumpingVoice(gui + 0x8710,
+                              g_discToc[0x16B8 / 4] + g_discToc[0x36C / 4],
+                              g_discToc[0x16BC / 4]);
+    GuiFontAtlasRelocate(gui + 0x8710);
+    GuiPoolInit(ctx, 0x10, gui + 4, 0x8700);
+    GuiManagerInitHudLists(gui + 0x36F28, gui, ctx);
+
+    /* clear the leading manager status words, then pass 2 — init each screen */
+    *(s32 *)(mgr + 0x79D4) = 0;
+    *(s32 *)(mgr + 0x79D8) = 0;
+    *(s32 *)(mgr + 0x79DC) = 0;
+    *(s32 *)(mgr + 0x79E0) = 0;
+    GuiScreenWithPlanetNameInit(gui + 0x39160, ctx);
+    GuiWeaponGridScreenInit(gui + 0x39620, ctx);
+    GuiMapScreenInit(gui + 0x39AF0, ctx);
+    GuiInfoPanelScreenInit(gui + 0x3A000, ctx);
+    GuiQuickSelectWheelInit(gui + 0x3A4C0, ctx);
+    GuiLevelInfoPanelInit(gui + 0x3AF80, ctx);
+    GuiScrollListScreenInit(gui + 0x3CB20, ctx);
+    GuiConfirmPopupInit(gui + 0x3B418, ctx);
+    GuiIconScreenInit(gui + 0x3C160, ctx);
+    GuiTitledSpriteScreenInit(gui + 0x3C480, ctx);
+    GuiIconListScreenInit(gui + 0x3B6F8, ctx);
+    GuiStatsPanelScreenInit(gui + 0x3BA58, ctx);
+    func_0033F510(gui + 0x3C7E8, ctx);
+    func_00349E90(gui + 0x3CD48);
+    GuiProgressBarWidgetInit(gui + 0x3F7B0, ctx);
+    GuiQuitDialogInit(gui + 0x3D1D8, ctx);
+    func_0033D4B0(gui + 0x3D4B8, ctx);
+    func_0033A678(gui + 0x3CEA0, ctx);
+    GuiQuitDialogInit(gui + 0x3D1D8, ctx);
+    func_0033D4B0(gui + 0x3D4B8, ctx);
+    GuiDialogBoxVariantBInit(gui + 0x3D798, ctx);
+    func_0033DE10(gui + 0x3DA78, ctx);
+    func_0033E4C0(gui + 0x3DDE8, ctx);
+    GuiDialogBoxVariantCInit(gui + 0x3E0C8, ctx);
+    func_0033D1F8(gui + 0x3E3A8, ctx);
+    func_00348BF8(gui + 0x3E688, ctx);
+    GuiHelpPromptWidgetInit(gui + 0x3E9C8, ctx);
+    GuiIconScreenInit2(gui + 0x3E760, ctx);
+    func_0033EB58(gui + 0x3EB50, ctx);
+    func_0033EE08(gui + 0x3EE30, ctx);
+    func_0033F000(gui + 0x3F110, ctx);
+    func_0033F200(gui + 0x3F3F0, ctx);
+
+    /* clear the trailing manager status words, zero two small tables */
+    *(s32 *)(mgr + 0x79F4) = 0;
+    *(s32 *)(mgr + 0x79EC) = 0;
+    *(s32 *)(mgr + 0x79F0) = 0;
+    memset(gui + 0x3F9F8, 0, 0x20);
+    memset(gui + 0x3FA18, 0, 0x100);
+    return gui;
+}
+#endif
 
 /* func_0034F868 callees (declared for the TARGET_NATIVE #else only). */
 extern void WaitFrameDmaFence(s32 mask);
