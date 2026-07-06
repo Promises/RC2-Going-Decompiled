@@ -1425,7 +1425,13 @@ s32 MapIsLevelRevealed(s32 level) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapInit);
 
+/* MapBeginUpload (0x295D70) — begin streaming the current level's galactic-map
+ * texture into a fresh map-cache slot. Portable #else body lives in the
+ * map-cache slice below (after the MapCache type + g_discToc/g_mapDataSet it
+ * depends on); the INCLUDE_ASM stays here in address order. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapBeginUpload);
+#endif
 
 /*
  * func_00295F30 — scan the 5 map cache slots for the entry whose state word
@@ -1628,6 +1634,112 @@ s32 MapDataExistsForLevel(s32 levelAndFlag) {
         return 0 < toc[0x14F4 / 4];           /* primary set sector count */
     }
     return 0 < toc[0x15D4 / 4];               /* secondary set sector count */
+}
+#endif
+
+/*
+ * MapBeginUpload (0x295D70) — kick off streaming the current level's galactic-
+ * map texture into a fresh cache slot. Advances the two menu-screen DMA cursors
+ * (g_menuScreenBlock +0x10C/+0x110) to carve a scratch pixel buffer, primes the
+ * map-cache bookkeeping (all 5 slots reset, slot 1 = the new pixel buffer,
+ * lockedSlot cleared), then — when a map-data TOC handle is live (cache +0x238
+ * != -1) — issues the disc load for this level's secondary-set map texture:
+ * first upload goes through StartFileLoadPumpingVoice + a voice pump and
+ * func_002EFCA8; an already-armed upload is re-issued via func_002EFD28. Records
+ * the level id (with the g_mapDataSet 0x100 flag) into slotLevelId[1], marks the
+ * cache available, and plays UI sound 0x11. When no TOC handle is live it just
+ * clears `available` and plays the sound.
+ *
+ * MATCH WALL: the 0x20 multi-callee-save frame is packed 8-byte by the later
+ * cc1 (the unit-wide save-layout wall) and the many cache-field stores colour
+ * differently; kept as the portable #else body, placed here in the map-cache
+ * slice after the MapCache type + g_discToc/g_mapDataSet it depends on. The
+ * three still-unnamed cache fields (+0x238 TOC handle, +0x23C load-issued flag,
+ * +0x240 pixel byte size, +0x248 saved DMA cursor) are accessed by raw offset.
+ */
+#ifdef TARGET_NATIVE
+extern u8   g_menuScreenBlock[];   /* 0x1F27C0 menu-screen manager block */
+extern void func_00298AA0(void);
+extern void func_0029ECE0(s32 level, s32 flag);
+extern void StartFileLoadPumpingVoice(void *dest, s32 startSector, s32 sectorCount);
+extern void PumpDialogVoiceSystem(s32 blocking);
+extern s32  func_002EFCA8(s32 dest, s32 handle, s32 zero, s32 byteSize);
+extern s32  func_002EFD28(s32 dest, s32 handle, s32 zero, s32 byteSize, s32 zero2);
+extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+
+void MapBeginUpload(void) {
+    s32 *msb;
+    s32  cur10C, cur110, pixelBuf, handle;
+
+    func_00298AA0();
+    func_0029ECE0(g_mapCache.currentLevel, 1);
+
+    msb    = (s32 *)g_menuScreenBlock;
+    cur10C = msb[0x10C / 4];
+    cur110 = msb[0x110 / 4];
+    pixelBuf = cur10C + 0x9A800;
+    msb[0x110 / 4] = cur110 + 0x48000;
+    msb[0x10C / 4] = pixelBuf + 0x48000;
+
+    *(s32 *)((u8 *)&g_mapCache + 0x248) = cur10C;   /* saved DMA cursor */
+    g_mapCache.slotState[0] = 0;
+    g_mapCache.slotState[1] = pixelBuf;
+    g_mapCache.slotState[2] = cur110;
+    g_mapCache.slotState[3] = 0;
+    g_mapCache.slotState[4] = 0;
+    g_mapCache.slotLevelId[0] = -1;
+    g_mapCache.slotLevelId[1] = -1;
+    g_mapCache.slotLevelId[2] = -1;
+    g_mapCache.slotLevelId[3] = -1;
+    g_mapCache.slotLevelId[4] = -1;
+    g_mapCache.lockedSlot = -1;
+
+    handle = *(s32 *)((u8 *)&g_mapCache + 0x238);   /* map-data TOC handle */
+    if (handle == -1) {
+        g_mapCache.available = 0;
+        PlayGlobalSound(0x11, 0, 0);
+        return;
+    }
+
+    if (*(s32 *)((u8 *)&g_mapCache + 0x23C) == 0 && g_mapDataSet != 0) {
+        /* first upload: stream this level's secondary-set map texture */
+        s32 *toc      = g_discToc + g_mapCache.currentLevel * 2;  /* stride 8 */
+        s32  secSize  = toc[0x15D4 / 4];
+        s32  byteSize = secSize << 7;
+
+        StartFileLoadPumpingVoice((void *)pixelBuf,
+                                  toc[0x15D0 / 4] + g_discToc[0x36C / 4], /* + global WAD base LBA */
+                                  secSize);
+        PumpDialogVoiceSystem(1);
+
+        *(s32 *)((u8 *)&g_mapCache + 0x23C) = 1;
+        *(s32 *)((u8 *)&g_mapCache + 0x240) = byteSize;
+        g_mapCache.slotPixelCount[1] = byteSize;
+        func_002EFCA8(g_mapCache.slotState[1], handle, 0, byteSize);
+
+        g_mapCache.activeSlot = -2;
+        g_mapCache.available  = 1;
+        g_mapCache.slotLevelId[1] = g_playerProgress + 0x100;
+        PlayGlobalSound(0x11, 0, 0);
+        return;
+    }
+
+    /* upload already armed (or secondary set inactive): re-issue it */
+    {
+        s32 byteSize = *(s32 *)((u8 *)&g_mapCache + 0x240);
+        s32 levelId  = g_playerProgress;
+
+        func_002EFD28(g_mapCache.slotState[1], handle, 0, byteSize, 0);
+        g_mapCache.slotPixelCount[1] = byteSize;
+
+        g_mapCache.activeSlot = -2;
+        g_mapCache.available  = 1;
+        if (g_mapDataSet != 0) {
+            levelId = g_playerProgress + 0x100;
+        }
+        g_mapCache.slotLevelId[1] = levelId;
+        PlayGlobalSound(0x11, 0, 0);
+    }
 }
 #endif
 
