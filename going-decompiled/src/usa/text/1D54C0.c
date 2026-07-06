@@ -206,7 +206,161 @@ extern s32 g_playerProgress2;      /* alias for the persistent save block first 
 extern void func_002DFFA0(s32 id, s32 arg);  /* gated menu-sound helper (below) */
 extern u8 *g_pTextTableLoadBuf;    /* 0x1F28D8 language text-table load buffer */
 
+/* Build the ship-customization screen's moby set. Decodes the g_shipCustomization
+ * bitfield into ship model / paint / detail selectors, allocates the moby array
+ * (func_002DF368(1), stored at g_menuScreenBlock+0x1CC, stride 0x100), then spawns
+ * the fixed base parts (slots 0-5) plus optional detail/paint parts (slots 6+),
+ * each InitMobyFromClass'd from a per-selector class-id table (D_1A8C28..58) or a
+ * literal class, tagged with a per-part role byte at +0xBC and (for the mirrored
+ * parts) the +0x34 0x8000 flag. A tuning pass then stamps shared render state on
+ * every spawned moby (colour via func_002A12A0, alpha/scale/anim-rate fields,
+ * UpdateMobyBSphereAndGrid), and finally the current paint selection is matched
+ * against the D_26CFD8 table (stride 0x14 {mask,value}) to seed g_shipCustomizeCursor.
+ * g_menuScreenBlock+0x1D0 = spawned count, +0x1D4 = 0x12C. Returns 0.
+ *
+ * Faithful transcription (offsets/class-ids/shift masks verbatim from asm); the
+ * moby / class-table structs are only partially recovered so raw offsets are kept.
+ * Matching arm stays INCLUDE_ASM. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5540);
+#else
+s32 func_002D5540(void) {
+    extern s32 g_shipCustomization;      /* PlayerStats+0xF8 ship-customize bitfield */
+    extern s32 g_shipCustomizeCursor;    /* selected paint index (gp-rel) */
+    /* Per-selector class-id tables (s16 entries). */
+    extern s16 D_1A8C28[], D_1A8C30[], D_1A8C38[], D_1A8C40[], D_1A8C48[], D_1A8C50[], D_1A8C58[];
+    extern u8  D_26CFD8[];   /* paint-match table, stride 0x14 {s32 mask, s32 value} */
+    extern u8  D_0025D458[];
+    u8 *mgr = (u8 *)g_menuScreenBlock;
+    u8 *base;
+    u8 *m;
+    s32 sc, n, i, cursor;
+    s16 cls;
+
+    func_002CAFD8();
+
+    sc = g_shipCustomization;
+    base = (u8 *)func_002DF368(1);
+    *(void **)(mgr + 0x1CC) = base;
+
+    /* --- Fixed base parts (slots 0-5). --- */
+    InitMobyFromClass(base, 0xD54);
+    base[0xBC] = 9;
+
+    m = base + 0x100;
+    InitMobyFromClass(m, D_1A8C28[(sc >> 2) & 0x3]);
+    m[0xBC] = 8;
+
+    m = base + 0x200;
+    InitMobyFromClass(m, D_1A8C28[(sc >> 2) & 0x3]);
+    m[0xBC] = 8;
+    *(u16 *)(m + 0x34) |= 0x8000;
+
+    m = base + 0x300;
+    InitMobyFromClass(m, D_1A8C30[(sc >> 4) & 0x1]);
+    m[0xBC] = 0;
+
+    m = base + 0x400;
+    InitMobyFromClass(m, D_1A8C38[(sc >> 6) & 0x1]);
+    m[0xBC] = 1;
+
+    m = base + 0x500;
+    InitMobyFromClass(m, D_1A8C38[(sc >> 6) & 0x1]);
+    m[0xBC] = 1;
+    *(u16 *)(m + 0x34) |= 0x8000;
+
+    /* --- Optional / counted parts (slot n, n starts past the 6 fixed slots). --- */
+    n = 6;
+    cls = D_1A8C40[(sc >> 7) & 0x3];
+    if (cls != 0) {
+        m = base + n * 0x100;
+        InitMobyFromClass(m, cls);
+        m[0xBC] = 2;
+        n++;
+    }
+
+    m = base + n * 0x100;
+    InitMobyFromClass(m, D_1A8C48[(sc >> 9) & 0x1]);
+    m[0xBC] = 3;
+    n++;
+
+    m = base + n * 0x100;
+    InitMobyFromClass(m, D_1A8C48[(sc >> 9) & 0x1]);
+    m[0xBC] = 3;
+    *(u16 *)(m + 0x34) |= 0x8000;
+    n++;
+
+    m = base + n * 0x100;
+    InitMobyFromClass(m, D_1A8C50[(sc >> 10) & 0x3]);
+    m[0xBC] = 4;
+    n++;
+
+    m = base + n * 0x100;
+    InitMobyFromClass(m, D_1A8C50[(sc >> 10) & 0x3]);
+    m[0xBC] = 4;
+    *(u16 *)(m + 0x34) |= 0x8000;
+    n++;
+
+    if ((sc >> 12) & 0x1) {
+        m = base + n * 0x100;
+        InitMobyFromClass(m, 0x10E2);
+        m[0xBC] = 5;
+        n++;
+    }
+    if ((sc >> 13) & 0x1) {
+        m = base + n * 0x100;
+        InitMobyFromClass(m, 0x10E4);
+        m[0xBC] = 6;
+        n++;
+    }
+    if ((sc >> 14) & 0x3) {
+        m = base + n * 0x100;
+        InitMobyFromClass(m, D_1A8C58[(sc >> 14) & 0x3]);
+        m[0xBC] = 7;
+        n++;
+    }
+
+    /* --- Shared render-state tuning pass over every spawned moby. --- */
+    for (i = 0; i < n; i++) {
+        m = base + i * 0x100;
+        *(u16 *)(m + 0x32) = 0x1FF;
+        func_002A12A0(m, 0x202020, 0xE, 0xE, 0);
+        *(u16 *)(m + 0x32) = 0xFF;
+        m[0x31] = 1;
+        m[0x30] = 0xFF;
+        if (*(s16 *)(m + 0xAA) == 0x10E3) {
+            m[0x23] = 0xFF;
+        }
+        m[0x20] = 0;
+        *(s32 *)(m + 0x98) = 0;
+        *(u32 *)(m + 0x2C) = 0x3F800000;   /* 1.0f */
+        *(u32 *)(m + 0xF0) = 0x3E58ED5F;
+        *(u32 *)(m + 0xF4) = 0x3EAB1D93;
+        *(u32 *)(m + 0xF8) = 0xC0321212;
+        UpdateMobyBSphereAndGrid(m);
+    }
+
+    /* --- Seed the paint cursor from the D_26CFD8 {mask,value} match table. --- */
+    *(s32 *)(mgr + 0x1D0) = n;
+    *(s32 *)(mgr + 0x1D4) = 0x12C;
+    g_shipCustomizeCursor = 0;
+    cursor = 0;
+    if ((sc & *(s32 *)(D_26CFD8 + 0)) != *(s32 *)(D_26CFD8 + 4)) {
+        cursor = 1;
+        while (cursor < 0x15) {
+            if ((sc & *(s32 *)(D_26CFD8 + cursor * 0x14)) ==
+                *(s32 *)(D_26CFD8 + cursor * 0x14 + 4)) {
+                break;
+            }
+            cursor++;
+        }
+    }
+
+    *(s32 *)(D_0025D458 + 0x3C) = -0x244;
+    g_shipCustomizeCursor = cursor;
+    return 0;
+}
+#endif
 
 /* Toggle the map slot at g_particleFxBlob+0x100 +0x1CC via func_002DF428 and
  * store the result back. Returns 0. Wall: 2-GPR callee-save (8-byte-packed 0x10
