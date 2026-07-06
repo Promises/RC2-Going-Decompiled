@@ -722,15 +722,31 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B8D8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B970);
 
-extern void func_0011B050(s32 count, s32 *value);
+extern s32 func_0011B050(s32 count, s32 *value);
 
-/* func_0011B978(arg0, arg1, arg2): pack a four-word command record (low 16 bits
- * of arg0, arg1, arg2, and the uncached-mirror address of D_0013CA10 ORed with
- * 0x20000000) and push it through func_0011B050 with count 1. Instructions are
- * essentially identical but NOT byte-exact: the original schedules the prologue
- * `sd $31` and `move a1,sp` after the record stores, an ordering ee-gcc won't
- * reproduce from source. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B978);
+extern u8 D_0013CA10[];
+
+/**
+ * Pack a four-word command record (low 16 bits of `a` via the u16 param's
+ * callee-side andi, `b`, `c`, and the uncached-mirror address of D_0013CA10
+ * ORed with 0x20000000) on the stack and push it through func_0011B050 with
+ * count 1, RETURNING its status ($2 passthrough). The old park blamed an
+ * "ordering ee-gcc won't reproduce" (`sd $31` / `move a1,sp` after the record
+ * stores) — the u16-param + local-array + VALUE-RETURN phrasing reproduces
+ * exactly that schedule (the void statement-call form schedules the andi and
+ * stores differently; the live return value is part of the shape).
+ *
+ * MATCHED: byte-exact at -O2 -G0 (raw-byte + symbol-size verified).
+ */
+s32 func_0011B978(u16 a, s32 b, s32 c) {
+    s32 msg[4];
+
+    msg[0] = a;
+    msg[1] = b;
+    msg[2] = c;
+    msg[3] = (s32)((u32)D_0013CA10 | 0x20000000);
+    return func_0011B050(1, msg);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B9C0);
 
@@ -754,15 +770,35 @@ void func_0011B9F8(s32 arg0) {
     func_0011B050(4, &value);
 }
 
-/* func_0011BA20 / func_0011BA58: pack arg0, arg1 and the low 16 bits of arg2
- * into a stack record and push it through func_0011B050 (count -5 / -6). Not
- * matched: the original moves arg1 out of $5 into a temp before reusing $5 for
- * the record address, so it stores arg1 via the temp. ee-gcc instead stores
- * arg1 directly from $5 before clobbering it — a register-allocation/scheduling
- * order this cc1 won't reproduce from C. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BA20);
+/**
+ * Pack a three-word record (a, b, low 16 bits of c via the u16 param's
+ * callee-side andi) on the stack and push it through func_0011B050 with
+ * count -5, returning its status. The old park blamed the arg1-via-temp
+ * store order on the allocator — with the VALUE-RETURN phrasing (see
+ * func_0011B978) cc1 emits exactly the original's early `b`-copy schedule.
+ * Sibling func_0011BA58 differs only by count.
+ *
+ * MATCHED: byte-exact at -O2 -G0 (raw-byte + symbol-size verified).
+ */
+s32 func_0011BA20(s32 a, s32 b, u16 c) {
+    s32 msg[3];
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BA58);
+    msg[0] = a;
+    msg[1] = b;
+    msg[2] = c;
+    return func_0011B050(-5, msg);
+}
+
+/** Sibling of func_0011BA20 with count -6.
+ *  MATCHED: byte-exact at -O2 -G0 (raw-byte + symbol-size verified). */
+s32 func_0011BA58(s32 a, s32 b, u16 c) {
+    s32 msg[3];
+
+    msg[0] = a;
+    msg[1] = b;
+    msg[2] = c;
+    return func_0011B050(-6, msg);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BA90);
 
@@ -3241,7 +3277,46 @@ s64 func_00123078(s32 x) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00123130);
+/**
+ * func_00123130 = convert a double to a SIGNED 32-bit integer (truncate toward
+ * zero), i.e. soft-float __fixdfsi — the signed sibling of func_001231C8. NaN,
+ * zero and negative-exponent inputs return 0; infinity and any value too large
+ * for s32 (unbiased exponent >= 31) saturate to INT_MAX / INT_MIN by sign;
+ * otherwise the class-3 mantissa (leading bit at 60) is right-shifted by
+ * (60 - exp) and negated when the sign bit is set.
+ *
+ * Same idiom set as func_001231C8: class equality via `(cls ^ K) == 0` (xori);
+ * the inf and overflow saturations share one block (both `sign != 0 ? MIN : MAX`,
+ * which lowers to `movn`; the `!= 0` operand order also fixes the saturation
+ * constant build schedule); the sign-apply is `sign == 0 ? r : -r` (negu + movn).
+ *
+ * MATCHED: byte-exact at -O2 -G0 (raw-byte + symbol-size verified).
+ */
+s32 func_00123130(s64 a) {
+    s64 va = a;
+    FpParts parts;
+    s32 cls, exp, result;
+    func_00122760(&va, &parts);
+    cls = parts.fpClass;
+    if ((cls ^ 2) == 0) {
+        return 0;
+    }
+    if ((u32)cls < 2) {
+        return 0;
+    }
+    if ((cls ^ 4) == 0) {
+        return parts.sign != 0 ? (s32)0x80000000 : 0x7FFFFFFF;
+    }
+    exp = parts.exponent;
+    if (exp < 0) {
+        return 0;
+    }
+    if (exp >= 31) {
+        return parts.sign != 0 ? (s32)0x80000000 : 0x7FFFFFFF;
+    }
+    result = (s32)((u64)parts.mantissa >> (60 - exp));
+    return parts.sign == 0 ? result : -result;
+}
 
 /**
  * func_001231C8 = convert a non-negative double to a 32-bit integer (truncating
@@ -3399,23 +3474,15 @@ extern s32 func_00123400(u32 *src, SpParts *out);
  * verbatim. (exponent and mantissa carry over; the single and double unbiased
  * exponents coincide here since func_00123268 re-applies the bias.)
  *
- * NEAR-MISS WALL (75.00% via objdiff). The post-call body is byte-identical; the
- * only divergence is ee-gcc -O2 -G0 scheduling the three independent prologue
- * insns {save $31, compute &f, swc1 spill} in a different order (the original
- * delays the FP spill to just before the call, ee-gcc emits it right after the
- * stack adjust). Pure instruction-scheduling, not steerable from C. Shipped as a
- * portable TARGET_NATIVE #else; cmp-oracle'd (extendsfdf2, the double-bits return).
+ * MATCHED: byte-exact at -O2 -G0 (raw-byte + symbol-size verified). Also the
+ * cmp-oracle'd extendsfdf2 behaviour (the double-bits return).
  */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001234F0);
-#else
 s64 func_001234F0(float f) {
     SpParts sp;
     func_00123400((u32 *)&f, &sp);
     return func_00123268(sp.fpClass, sp.sign, sp.exponent,
                          (s64)((u64)(u32)sp.mantissa << 30));
 }
-#endif
 
 /**
  * Decode a little-endian base-128 varint from src into *out, 7 bits per byte
@@ -4443,13 +4510,29 @@ s32 func_0012F940(void) {
  * to size 0x8 in symbol_addrs so func_0012F950 gets a clean .s. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012F948);
 
-/* func_0012F950(obj, arg1, arg2): seed the display/DMA sub-object obj->field_0x40
- * (set fB0=1, fD8=(arg1 & 0x0FFFFFFF) | 0x20000000, fE4=arg2, fDC=fE0=0) then run
- * func_0012FBF0(obj). The body reproduces every field write, but ee-gcc sibling-
- * call-optimises the trailing void call to `j func_0012FBF0` where the original
- * keeps a stack frame (`sd $31`/`jal`) — the inverse-sibling-call form this cc1
- * won't reproduce. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012F950);
+/**
+ * func_0012F950(arg0, arg1, arg2): seed the display/DMA sub-object at arg0->0x40
+ * (fB0=1, fD8=(arg1 & 0x0FFFFFFF) | 0x20000000, fE4=arg2, fDC=fE0=0) then run
+ * func_0012FBF0(arg0) and return its result.
+ *
+ * MATCHED: byte-exact at -O2 -G0 (raw-byte + symbol-size verified). The
+ * original's stack frame + `jal` (not a `j func_0012FBF0` sibcall) is what
+ * ee-gcc 2.9 -O2 -G0 emits for a VALUE-returning tail call — `return
+ * func_0012FBF0(arg0)` keeps $ra to pass the callee's value back. (The prior
+ * "ee-gcc sibcalls the void call, won't reproduce" note predated that finding; a
+ * void `func_0012FBF0(arg0);` WOULD sibcall to `j`.)
+ */
+extern s32 func_0012FBF0(void *arg0);
+
+s32 func_0012F950(u8 *arg0, u32 arg1, s32 arg2) {
+    u8 *obj = *(u8 **)(arg0 + 0x40);
+    *(s32 *)(obj + 0xB0) = 1;
+    *(s32 *)(obj + 0xD8) = (arg1 & 0x0FFFFFFF) | 0x20000000;
+    *(s32 *)(obj + 0xE4) = arg2;
+    *(s32 *)(obj + 0xE0) = 0;
+    *(s32 *)(obj + 0xDC) = 0;
+    return func_0012FBF0(arg0);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012F998);
 
