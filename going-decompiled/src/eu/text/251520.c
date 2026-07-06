@@ -99,8 +99,18 @@ extern s32 func_00351CE0(FmvPtsQueue *q);
 extern s32 func_00351DB0(void);
 extern s32 func_00133928(void);
 extern s32 func_0012EE28(void);
+#ifndef TARGET_NATIVE
 extern s32 func_00352C60(void *stream);
 extern s32 func_00352D58(void *stream);
+#else
+/* func_00352C60/func_00352D58 (twins of USA func_003517C0/func_003518B8): the
+   #else bodies model them with inconsistent arg counts across call sites (1 arg
+   in the stream forwarders, 5/2 args in func_00352428 - true signatures need
+   the asm; FMV native backend deferred). Declared with unspecified args so the
+   corpus compiles. */
+extern s32 func_00352C60();
+extern s32 func_00352D58();
+#endif
 extern s32 func_00353450(void *stream);
 extern s32 func_00352FB0(void *dmaq);
 extern s32 func_003530C0(void *dmaq);
@@ -267,7 +277,58 @@ void func_00352418(void) {
     D_1AE840 = 0;
 }
 
+/* func_00352428 (USA func_00350F88): copy a window of arrived bytes into the
+ * IPU payload ring's two writable spans - clamps the request to the
+ * descriptor's remaining length, queries the spans (func_00352C60 on the
+ * DMA-queue stream at streamObj+0x48, span pointers masked to the 0x20000000
+ * scratch-pad address window), scatters into them (func_00352648), records the
+ * resulting DMA-add command (func_00353AD8) reporting an error (func_00351968
+ * on D_1AE8A0) if it could not be queued, advances the read cursor
+ * (func_00352D58), and reports whether any bytes were stored. Ported from the
+ * USA body: g_pFmvArenaBase retargets to the EU alias via the file-level macro,
+ * and the callees shift +0x14A0 (func_003517C0->func_00352C60,
+ * func_003511A8->func_00352648, func_00352638->func_00353AD8,
+ * func_003504C8->func_00351968, func_003518B8->func_00352D58); the error string
+ * D_1AE7E8->D_1AE8A0 (both verified against the EU asm). NB the structure-exact
+ * model names the span-query/cursor-advance helpers func_00352C60/func_00352D58,
+ * whereas the matching asm calls func_00353A30/func_00353A50 - a deliberate
+ * modelling choice carried over verbatim from the USA twin (the #else is not
+ * byte-verified). Matching arm stays asm (8-byte-packed saves). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00352428);
+#else
+extern s32 func_00352648(u8 *dst0, s32 len0d, u8 *dst1, s32 cap, u8 *src0, s32 len1d,
+                         u8 *src1, s32 tail);        /* twin func_003511A8 (defined below) */
+extern s32 func_00353AD8(u8 *obj, u64 a, u64 b, s32 pos, s32 n); /* twin func_00352638 (below) */
+extern char D_1AE8A0[];   /* DMA-add-queue-full error string (twin of D_1AE7E8) */
+s32 func_00352428(u8 *unused, u8 *desc, u8 *ringBase) {
+    s32 span0Ptr;
+    s32 span0Len;
+    s32 span1Ptr;
+    s32 span1Len;
+    u8 *streamObj = g_pFmvArenaBase + FMV_STREAM_OFS;
+    s32 start = *(s32 *)(desc + 8);
+    s32 remain = *(s32 *)(desc + 0xC);
+    s32 take = ((s32)(ringBase + *(s32 *)(ringBase + 0x50008)) - start);
+    s32 stored;
+
+    if (remain < take) {
+        take = remain;
+    }
+    func_00352C60((s32 *)(streamObj + 0x48), &span0Ptr, &span0Len, &span1Ptr,
+                  &span1Len);
+    stored = func_00352648((u8 *)((span0Ptr & 0xFFFFFFF) | 0x20000000), span0Len,
+                           (u8 *)((span1Ptr & 0xFFFFFFF) | 0x20000000), span1Len,
+                           (u8 *)start, take, ringBase, remain - take);
+    if (stored > 0 &&
+        func_00353AD8(streamObj, *(u64 *)(desc + 0x10), *(u64 *)(desc + 0x18),
+                      span0Ptr, stored) == 0) {
+        func_00351968(D_1AE8A0);
+    }
+    func_00352D58(streamObj + 0x48, stored);
+    return stored > 0;
+}
+#endif
 
 /* func_00352560 (USA func_003510C0): copy a window of arrived elementary-stream
  * bytes into the pts ring - clamps the request to the ring's free header window
