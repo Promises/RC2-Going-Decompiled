@@ -4190,7 +4190,70 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003413A8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341548);
 
+/* func_00341708: assign the weapon under the grid cursor to the quick-select bar.
+ * `w` is the weapon-grid widget; `table` (D_00259F38) is its grid-entry array
+ * (stride 0xA, +6 = s16 itemId) and `rowStride` the grid's column count. Reads the
+ * item at cell (col w+0x814, row w+0x818). If it is empty (0), un-owned
+ * (g_inventoryOwned) or its equipped weapon has no icon
+ * (g_weaponTable[slot]+0x3C == 0xEA7E sentinel) it just plays the reject cue
+ * (PlayGlobalSound 5). Otherwise it scans the 8 quick-select slots
+ * (base = *(g_hudMobySpawnStart+0x2C) then one more deref; stride 0x1C, +0x18 =
+ * s32 itemId, +0 = icon): if the item already occupies a slot that slot is cleared
+ * first, then the item is (re-)placed into the round-robin `next` slot with its
+ * weapon icon (g_weaponTable[slot]+0x3C) and the confirm cue (PlayGlobalSound 4).
+ * Every path then advances the round-robin cursor w+0x7CC (wrap 7 -> 0). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341708);
+#else
+extern u8 g_hudMobySpawnStart[];        /* +0x2C -> quick-select slot-table ptr */
+extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+
+void func_00341708(void *w, void *table, s32 rowStride) {
+    s32 col = *(s32 *)((char *)w + 0x814);
+    s32 row = *(s32 *)((char *)w + 0x818);
+    s16 item = *(s16 *)((char *)table + (col + row * rowStride) * 0xA + 6);
+    s32 cursor = *(s32 *)((char *)w + 0x7CC);
+
+    if (item == 0 || g_inventoryOwned[item] == 0) {
+        PlayGlobalSound(5, 0, 0);              /* empty cell / not owned */
+    } else {
+        s32 slot = g_itemEquippedSlot[item];
+        if (*(u16 *)&g_weaponTable[slot * 0xE0 + 0x3C] == 0xEA7E) {
+            PlayGlobalSound(5, 0, 0);          /* equipped weapon has no icon */
+        } else {
+            char *base = *(char **)(*(char **)(g_hudMobySpawnStart + 0x2C));
+            s32 next = (cursor == 7) ? 0 : cursor + 1;
+            s32 i, found = 8;
+
+            for (i = 0; i < 8; i++) {          /* already in a quick-select slot? */
+                if (*(s32 *)(base + i * 0x1C + 0x18) == item) {
+                    found = i;
+                    break;
+                }
+            }
+
+            if (found < 8) {                   /* clear its old slot first */
+                char *fslot = base + found * 0x1C;
+                *(s32 *)(fslot + 0x18) = 0;
+                /* itemId was just cleared -> re-reads 0 (slot 0's default icon) */
+                *(s32 *)(fslot + 0) =
+                    *(u16 *)&g_weaponTable[g_itemEquippedSlot[*(s32 *)(fslot + 0x18)] * 0xE0 + 0x3C];
+            }
+
+            {                                  /* (re-)place item into slot `next` */
+                char *nslot = base + next * 0x1C;
+                *(s32 *)(nslot + 0) =
+                    *(u16 *)&g_weaponTable[g_itemEquippedSlot[item] * 0xE0 + 0x3C];
+                *(s32 *)(nslot + 0x18) = item;
+                *(s32 *)(nslot + 4) = 0;
+                PlayGlobalSound(4, 0, 0);      /* confirm cue */
+            }
+        }
+    }
+
+    *(s32 *)((char *)w + 0x7CC) = (cursor + 1 > 7) ? 0 : cursor + 1;   /* advance cursor */
+}
+#endif
 
 /* func_003418D8: d-pad + confirm handler for the two-region weapon grid `w`
  * (a 4-column x N main grid at col +0x814 / row +0x818, plus a 2-wide sub-region
