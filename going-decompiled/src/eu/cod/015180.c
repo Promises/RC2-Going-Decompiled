@@ -1972,28 +1972,6 @@ void *func_0011D8C8(void) {
     return 0;
 }
 
-extern void func_0011AC40(s32 arg);
-
-/* EU twin of func_0011D950: idx lookup in the +0x80-shifted pool D_0013FF00
- * (= USA D_0013FE80 + 0x80) under lock handle D_001347B8 (= D_00134738 + 0x80).
- * The `goto valid` makes the in-range path the branch target (keeps the
- * range-check in $3, pool base in $2) — see the USA twin. */
-void *func_0011D950(s32 idx) {
-    func_0011D868();
-    func_0011AC60(D_001347B8);
-    if ((u32)idx < 0x20) {
-        goto valid;
-    }
-    func_0011AC40(D_001347B8);
-    return 0;
-valid:
-    {
-        void *slot = &D_0013FF00[idx * 0x10];
-        func_0011AC40(D_001347B8);
-        return slot;
-    }
-}
-
 extern void func_0011AC40(s32 sema);
 extern s32 D_001347B8;
 extern u8 D_0013FF00[];
