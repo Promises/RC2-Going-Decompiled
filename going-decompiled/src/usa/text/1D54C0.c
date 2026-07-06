@@ -222,10 +222,48 @@ s32 func_002D5A10(void) {
 }
 #endif
 
-/* Draw the title-screen language-select glyph row (GuiFontAtlas lookups + two
- * localized strings). Wall: $f20 callee-save + many leaf calls + gp/abs FP
- * constant mix. Bare INCLUDE_ASM. */
+/* Draw the title-screen language-select glyph row: three packed-colour glyphs
+ * (font-atlas keys 0x96/0x97/0x98) blitted at the base cursor (D_1ABAD8,
+ * D_1ABADC), followed by two localized strings (textIds 0x2BF8, 0x2BE5) drawn at
+ * base + per-string offset in colour 0x80F0F0F0. The whole row is skipped when
+ * the GUI singleton is absent. Returns 0.
+ *
+ * The matching (INCLUDE_ASM) arm stays the source of truth: the byte-exact build
+ * hoists the shared 0.0f into the callee-save $f20 and interleaves the gp/abs FP
+ * constant loads in a schedule the portable arm does not attempt to reproduce. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5A48);
+#else
+s32 func_002D5A48(void) {
+    /* GUI singleton; the font atlas lives at g_guiInstance + 0x8710. */
+    extern char *g_guiInstance;
+    /* Base cursor + per-string offsets for this row (gp/abs runtime globals). */
+    extern s32 D_1ABAD0, D_1ABAD4, D_1ABAD8, D_1ABADC, D_1ABAE0, D_1ABAE4;
+    /* Glyph-blit shape parameter (abs float @0x1B2328, role unconfirmed). */
+    extern f32 D_1B2328;
+    char *atlas;
+    s32 glyph;
+
+    Begin2dDrawBatch(0);
+    if (g_guiInstance != 0) {
+        atlas = g_guiInstance + 0x8710;
+
+        glyph = GuiFontAtlasLookupGlyph(atlas, 0x96);
+        func_003017F8(glyph, 0x60442D00, (f32)D_1ABAD8, (f32)D_1ABADC, 1.0f, D_1B2328, 0.0f);
+        glyph = GuiFontAtlasLookupGlyph(atlas, 0x97);
+        func_003017F8(glyph, 0x60241700, (f32)D_1ABAD8, (f32)D_1ABADC, 1.0f, D_1B2328, 0.0f);
+        glyph = GuiFontAtlasLookupGlyph(atlas, 0x98);
+        func_003017F8(glyph, 0x55F0C070, (f32)D_1ABAD8, (f32)D_1ABADC, 1.0f, D_1B2328, 0.0f);
+
+        func_002801B8(D_1ABAD8 + D_1ABAD0, D_1ABADC + D_1ABAD4, 0x80F0F0F0,
+                      GetLocalizedString(0x2BF8), -1);
+        func_00280090(D_1ABAD8 + D_1ABAE0, D_1ABADC + D_1ABAE4, 0x80F0F0F0,
+                      GetLocalizedString(0x2BE5), -1);
+    }
+    End2dDrawBatch();
+    return 0;
+}
+#endif
 
 /* Select the active language's menu-background image index from the gp-relative
  * table D_1AAA58, stash it on the screen object (+0x34), refresh the cached
@@ -298,10 +336,48 @@ s32 func_002D5C58(void *focus) {
 }
 #endif
 
-/* Draw the title-screen menu header glyph row (GuiFontAtlas lookups + two
- * localized strings). Wall: $f20 callee-save + many leaf calls + gp/abs FP
- * constant mix. Bare INCLUDE_ASM. */
+/* Draw the title-screen menu header glyph row: three packed-colour glyphs
+ * (font-atlas keys 0x8B/0x8C/0x8D) blitted at the base cursor (D_1ABB10,
+ * D_1ABB14) — the first two carry the shape parameter D_1ABB20, the third 0.0f —
+ * then two localized strings (textIds 0x2BF7, 0x2BE5) at base + per-string offset
+ * in colour 0x80F0F0F0. Skipped when the GUI singleton is absent. Returns 0.
+ *
+ * Sibling of func_002D5A48 over a different cursor/offset/colour set. The
+ * matching (INCLUDE_ASM) arm stays the byte-exact source of truth; the portable
+ * arm does not attempt to reproduce its gp/abs FP-load schedule. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5D10);
+#else
+s32 func_002D5D10(void) {
+    /* GUI singleton; the font atlas lives at g_guiInstance + 0x8710. */
+    extern char *g_guiInstance;
+    /* Base cursor + per-string offsets for this row (gp/abs runtime globals). */
+    extern s32 D_1ABB08, D_1ABB0C, D_1ABB10, D_1ABB14, D_1ABB18, D_1ABB1C;
+    /* Glyph-blit shape parameters (abs/gp floats, roles unconfirmed). */
+    extern f32 D_1B2328, D_1ABB20;
+    char *atlas;
+    s32 glyph;
+
+    Begin2dDrawBatch(0);
+    if (g_guiInstance != 0) {
+        atlas = g_guiInstance + 0x8710;
+
+        glyph = GuiFontAtlasLookupGlyph(atlas, 0x8B);
+        func_003017F8(glyph, 0x60442D00, (f32)D_1ABB10, (f32)D_1ABB14, 1.0f, D_1B2328, D_1ABB20);
+        glyph = GuiFontAtlasLookupGlyph(atlas, 0x8C);
+        func_003017F8(glyph, 0x55F0C070, (f32)D_1ABB10, (f32)D_1ABB14, 1.0f, D_1B2328, D_1ABB20);
+        glyph = GuiFontAtlasLookupGlyph(atlas, 0x8D);
+        func_003017F8(glyph, (s32)0x80FFDE8D, (f32)D_1ABB10, (f32)D_1ABB14, 1.0f, D_1B2328, 0.0f);
+
+        func_002801B8(D_1ABB10 + D_1ABB08, D_1ABB14 + D_1ABB0C, 0x80F0F0F0,
+                      GetLocalizedString(0x2BF7), -1);
+        func_002801B8(D_1ABB10 + D_1ABB18, D_1ABB14 + D_1ABB1C, 0x80F0F0F0,
+                      GetLocalizedString(0x2BE5), -1);
+    }
+    End2dDrawBatch();
+    return 0;
+}
+#endif
 
 /* Seed obj->0x34 from a GUI subsystem query (g_pGuiManager + 0x3C160) when the
  * GUI exists. Returns 0. Wall: 2-GPR callee-save. */
