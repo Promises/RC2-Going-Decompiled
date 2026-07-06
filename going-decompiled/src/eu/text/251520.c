@@ -823,7 +823,79 @@ s32 func_00353C68(FmvStream *obj) {
 }
 #endif
 
+/* func_00353D08 (USA func_00352868): the FMV frame-display worker loop. Pulls
+ * the next decoded picture from the host (func_0012F9A8/func_0012F950), waits
+ * (yielding via func_003515A0) for a free display slot (func_003540D0), builds
+ * the per-tile GIF display chain for each frame tile (func_00352000), commits
+ * the slot (func_00354058), and yields. Exits when the host signals
+ * end-of-stream or the FSM (func_00353AC0) reports stop. Ported from the USA
+ * body: g_pFmvArenaBase retargets to the EU alias via the file-level macro; the
+ * host/dispatch helpers func_0012F9A8/func_0012F950/func_0012F9C8 live in the
+ * shared SDK region (same address in both builds); DebugPrintStub becomes the
+ * EU real printf func_0026FD28; the FMV callees shift +0x14A0
+ * (func_00352620->func_00353AC0, func_00352C30->func_003540D0,
+ * func_00350100->func_003515A0, func_003504C8->func_00351968,
+ * func_00350B60->func_00352000, func_00352BB8->func_00354058); and the
+ * diagnostic strings retarget D_1AE820->D_1AE8D8, D_1AE838->D_1AE8F0 - every
+ * symbol verified against the EU asm. Matching arm stays asm (8-byte-packed
+ * saves + a %gp_rel/absolute reload-artifact wall on g_pFmvArenaBase); the
+ * #else is the structure-exact model (the per-tile GIF chain build is the
+ * deferred FMV native backend, but the loop structure is exact). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00353D08);
+#else
+extern s32 func_0012F9A8(u8 *obj);                 /* host end-of-stream check */
+extern s32 func_0012F950(u8 *obj, s32 ptr, s32 len); /* host frame read */
+extern void func_0012F9C8(u8 *obj);                /* host teardown */
+extern void func_00352000(void *gif, u8 *frame, u32 a, u32 b, s32 idx); /* GIF-chain build (twin func_00350B60) */
+extern s32 func_003540D0(u8 *fq);                  /* acquire display slot (twin func_00352C30) */
+extern void func_00354058(u8 *fq);                 /* commit display slot (twin func_00352BB8) */
+extern char D_1AE8D8[];   /* decode-thread stop diagnostic (twin D_1AE820) */
+extern char D_1AE8F0[];   /* host frame-read error string (twin D_1AE838) */
+s32 func_00353D08(u8 *host) {
+    s32 result = 1;
+
+    for (;;) {
+        u8 *slot;
+        s32 *streamObj = (s32 *)host;
+
+        if (func_0012F9A8(host) != 0) {
+            break;
+        }
+        if (func_00353AC0((FmvStream *)host) == 1) {
+            result = -1;
+            func_0026FD28(D_1AE8D8);
+            break;
+        }
+        while ((slot = (u8 *)func_003540D0(g_pFmvArenaBase + 0xD9168)) == 0) {
+            func_003515A0();
+        }
+        if (func_0012F950(host, (s32)slot, 0x340) < 0) {
+            func_00351968(D_1AE8F0);
+        }
+        if (streamObj[2] == 0) {
+            u32 madr = streamObj[0];
+            u32 tadr = streamObj[1];
+            s32 tile = 0;
+            s32 gifOfs = 0;
+            s32 frameOfs = 0;
+
+            while (tile < *(s32 *)(g_pFmvArenaBase + 0xD9178)) {
+                func_00352000(*(u8 **)(g_pFmvArenaBase + 0xD916C) + gifOfs + 0x40,
+                              *(u8 **)(g_pFmvArenaBase + 0xD9168) + frameOfs, madr, tadr,
+                              tile);
+                frameOfs += 0xD0000;
+                gifOfs += 0x138C0;
+                tile++;
+            }
+        }
+        func_00354058(g_pFmvArenaBase + 0xD9168);
+        func_003515A0();
+    }
+    func_0012F9C8(host);
+    return result;
+}
+#endif
 
 /* === func_00353EC0 (USA func_00352A20) ============================== */
 /**
