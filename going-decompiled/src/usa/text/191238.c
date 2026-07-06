@@ -365,7 +365,64 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002920C0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00292510);
 
+/*
+ * BindParticleFxAssets(hdr, texBase, texRecords, texCount) — bind a freshly
+ * loaded particle-effect asset pack. First rebases the effect-def pointer table:
+ * for each of hdr[0] entries (words at hdr+0x10), a nonzero self-relative offset
+ * is rebased from hdr[8] onto the relocated blob (g_particleFxBlob) and stored
+ * into g_particleEffectDefs; a zero entry gets the blob base. Copies the blob
+ * body (func_00283460(g_particleFxBlob, hdr + hdr[8])). Then builds the particle
+ * texture table: for each of texCount 4-word records at texRecords, writes an
+ * 8-byte g_particleTexTable entry — word0 = ((texBase + rec[0]) << 4) + rec[1]
+ * (data VRAM word addr), word1 = ((texBase + rec[2]) << 4) + Log2Floor(rec[3])
+ * (CLUT addr + log2 height) — and sets g_particleTexCount. The matching build
+ * keeps the asm (engine save-layout wall). */
+#ifdef TARGET_NATIVE
+extern u8   g_particleFxBlob[];       /* 0x1F26C0  relocated per-level blob */
+extern s32  g_particleEffectDefs[];   /* 0x1F24C0  128 effect-def ptrs into blob */
+extern s32  g_particleTexTable[];     /* 0x1F1EC0  8 bytes/tex: VRAM + CLUT addr */
+extern s32  g_particleTexCount;       /* 0x1B1D24 */
+extern void func_00283460(void *dst, void *src);
+extern s32  Log2Floor(s32 x);
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BindParticleFxAssets);
+#else
+void BindParticleFxAssets(void *hdrArg, s32 texBase, s32 *texRecords, s32 texCount) {
+    u8 *hdr       = (u8 *)hdrArg;
+    s32 defCount  = *(s32 *)(hdr + 0);
+    s32 blobField = *(s32 *)(hdr + 8);
+
+    if (defCount > 0) {
+        s32 *entry = (s32 *)(hdr + 0x10);
+        s32 *out   = g_particleEffectDefs;
+        s32  delta = blobField - (s32)g_particleFxBlob;
+        s32  i;
+        for (i = defCount; i != 0; i--) {
+            s32 off = *entry;
+            *out = (off != 0) ? (off - delta) : (s32)g_particleFxBlob;
+            out++;
+            entry++;
+        }
+    }
+
+    func_00283460(g_particleFxBlob, hdr + blobField);
+
+    if (texCount > 0) {
+        s32 *rec = texRecords;
+        s32  slot;
+        g_particleTexCount = 0;
+        do {
+            slot = g_particleTexCount;
+            g_particleTexTable[slot * 2]     = ((texBase + rec[0]) << 4) + rec[1];
+            g_particleTexTable[slot * 2 + 1] = ((texBase + rec[2]) << 4) + Log2Floor(rec[3]);
+            g_particleTexCount = slot + 1;
+            rec += 4;
+        } while (slot + 1 < texCount);
+    }
+}
+#endif
 
 /*
  * g_uiTextureCache (0x1B96C0) — per-record GS-upload descriptor, 0x10 bytes.
