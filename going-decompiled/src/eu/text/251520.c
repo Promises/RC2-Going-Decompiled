@@ -648,7 +648,41 @@ s32 func_00353650(void *dmaq, void *cmd) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00353760);
 
+/* func_00353908 (USA func_00352468): construct the FMV stream object. Resets
+ * its message dispatch table (func_0012F738), registers the five stream-event
+ * callbacks (frame-drop report, two DMA-add-queue pumps, retry, and the cursor
+ * snapshot - func_00353EC0/EE8/F20/F50/F80 at slots 0/1/2/3/5), clears the
+ * playback FSM (func_00353A70), then builds the embedded bitstream object at
+ * +0x48 (func_00352A88). Always reports success. Ported from the USA body: the
+ * dispatch-table helpers func_0012F738/func_0012FA70 live in the shared SDK
+ * region (same address in both builds); the FMV callees shift +0x14A0
+ * (callbacks func_00352A20/A48/A80/AB0/AE0->func_00353EC0/EE8/F20/F50/F80,
+ * func_003525D0->func_00353A70, func_003515E8->func_00352A88) - all verified
+ * against the EU asm. Matching arm stays asm (8-byte-packed saves). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00353908);
+#else
+extern void *func_0012F738(void);                              /* reset dispatch table */
+extern s32 func_0012FA70(u8 *obj, s32 slot, void *cb, s32 arg); /* register callback */
+extern void func_00353A70(FmvStream *s);                       /* clear FSM (twin func_003525D0) */
+extern s32 func_00353EC0(s32 unused, s32 *frame);              /* callback 0 (defined below) */
+extern s32 func_00353EE8(void);                                /* callback 1 (defined below) */
+extern s32 func_00353F20(void);                                /* callback 2 (defined below) */
+extern s32 func_00353F50(void);                                /* callback 3 (defined below) */
+extern s32 func_00353F80(s32 unused, u8 *obj);                 /* callback 5 (twin func_00352AE0) */
+s32 func_00353908(FmvStream *obj, u64 p2, u64 p3, u64 p4, u64 p5, u64 p6, u64 p7,
+                  u64 p8) {
+    func_0012F738();
+    func_0012FA70((u8 *)obj, 0, (void *)func_00353EC0, 0);
+    func_0012FA70((u8 *)obj, 1, (void *)func_00353EE8, 0);
+    func_0012FA70((u8 *)obj, 2, (void *)func_00353F20, 0);
+    func_0012FA70((u8 *)obj, 3, (void *)func_00353F50, 0);
+    func_0012FA70((u8 *)obj, 5, (void *)func_00353F80, 0);
+    func_00353A70(obj);
+    func_00352A88((u8 *)obj + 0x48, p4, p5, p6, p7, p8);
+    return 1;
+}
+#endif
 
 /* func_00353A08 (USA func_00352568): inter-function padding, no C. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00353A08);
