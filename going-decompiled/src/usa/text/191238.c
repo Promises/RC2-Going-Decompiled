@@ -774,7 +774,209 @@ void func_00293D68(u8 *dst, u8 *src) {
     *(s32 *)(dst + 0x20) = (s32)(src + *(s32 *)(src + 8));
 }
 
+/*
+ * FixupMobyClassHeader(hdr, instMode, idMap, classId) — rebase a freshly-loaded
+ * moby class header in place: turn every embedded self-relative offset into an
+ * absolute pointer into the loaded buffer, and record derived per-slot metadata.
+ *
+ * When hdr[0xB] (the "special/compressed" flag) is set it first clamps the data
+ * size word at hdr[0x2C] to 0x3FC00, repacks it into the byte hdr[0x2D]=size>>10
+ * (zeroing 0x2C/0x2E and the flag), and stores the clamped size into
+ * g_mobyClassDataSizes[slot] (slot = g_mobyClassSlotRemap[classId]).
+ *
+ * count = hdr[4]+hdr[5]+hdr[6] (+ the sub-count byte at hdr+hdr[0x2C]*0x10+1 when
+ * hdr[0x2C] is nonzero) is the number of 0x10-byte mesh-block records at hdr[0].
+ * Each record's offset words +0x0/+0x8 are rebased; for records outside the
+ * middle band [hdr4+hdr5, hdr4+hdr5+hdr6) (only when the special flag was set)
+ * the block at record[+8] is compacted (8 word.low16 -> 8 contiguous halfwords),
+ * its +0xC size adjusted, and its tail qwords shifted down via CopyQwords.
+ *
+ * Then the sound-def / anim tables are rebased: single offset words +0x10/+0x14/
+ * +0x18/+0x28; the +0x1C list (count in word[0], entries word[1..]); the +0x20
+ * 0x10-byte descriptor list (per entry: rebase +0xC and remap its 0xFF-terminated
+ * name string through idMap, until a rebased +0xC goes negative); and the +0x48
+ * anim-seq pointer array (hdr[0xC] entries, each sub-record's +0x14 and its
+ * sub[0x10] frame pointers at sub+0x1C). Finally, when classId >= 0 the 16-byte
+ * bounds vector at idMap is copied into g_mobyClassBounds[slot], and the rebased
+ * mesh table hdr[0] (when present) is handed to func_00293B68 for group
+ * instantiation. The matching build keeps the asm (engine save-layout wall).
+ */
+#ifdef TARGET_NATIVE
+extern void DebugPrintStub(const char *fmt, ...);
+extern void CopyQwords(void *dst, const void *src, s32 nbytes);
+extern u8   g_mobyClassSlotRemap[];   /* 0x1CE460  classId -> loaded slot */
+extern u32  g_mobyClassDataSizes[];   /* 0x1D0D80  per-slot clamped data size */
+extern u8   g_mobyClassBounds[];      /* 0x1D1500  16-byte bounds vec per slot */
+extern char D_1A9240[];               /* debug fmt string (DebugPrintStub no-op) */
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", FixupMobyClassHeader);
+#else
+void FixupMobyClassHeader(void *hdrArg, s32 instMode, s32 idMap, s32 classId) {
+    u8 *hdr      = (u8 *)hdrArg;
+    u8 *idMapPtr = (u8 *)idMap;
+    s32 hasSpecial = (hdr[0xB] != 0);
+    s32 count;
+
+    if (hasSpecial) {
+        s32 size = *(s32 *)(hdr + 0x2C);
+        u8  slot;
+        DebugPrintStub(D_1A9240, classId);          /* retail no-op */
+        if (size > 0x3FC00) {
+            size = 0x3FC00;
+        }
+        hdr[0xB]  = 0;
+        hdr[0x2C] = 0;
+        *(u16 *)(hdr + 0x2E) = 0;
+        hdr[0x2D] = (u8)(size >> 10);
+        slot = g_mobyClassSlotRemap[classId];
+        g_mobyClassDataSizes[slot] = (u32)size;
+    }
+
+    count = hdr[4] + hdr[5] + hdr[6];
+    if (hdr[0x2C] != 0) {
+        count += *(u8 *)(hdr + hdr[0x2C] * 0x10 + 1);
+    }
+
+    {
+        s32 firstOff = *(s32 *)(hdr + 0);
+        if (firstOff != 0) {
+            u8 *ptr = hdr + firstOff;
+            *(s32 *)(hdr + 0) = (s32)ptr;
+            if (count != 0) {
+                s32 i;
+                for (i = 0; i < count; i++) {
+                    s32 abs0 = *(s32 *)(ptr + 0) + (s32)hdr;
+                    s32 abs8 = *(s32 *)(ptr + 8) + (s32)hdr;
+                    *(s32 *)(ptr + 0) = abs0;
+                    *(s32 *)(ptr + 8) = abs8;
+                    if (hasSpecial) {
+                        s32 t1 = hdr[4] + hdr[5];
+                        s32 t2 = t1 + hdr[6];
+                        if (i < t1 || i >= t2) {
+                            u16 *dst = (u16 *)abs8;
+                            u16 *src = (u16 *)abs8;
+                            u16  tmp;
+                            s32  qc;
+                            s32  k;
+                            for (k = 0; k < 8; k++) {
+                                u16 v = *src;
+                                *dst = v;
+                                src = (u16 *)((u8 *)src + 4);
+                                dst = (u16 *)((u8 *)dst + 2);
+                            }
+                            tmp = *(u16 *)(abs8 + 0x18);
+                            *(u16 *)(abs8 + 0xE) = 0;
+                            *(u16 *)(abs8 + 0xC) = (u16)(tmp - 0x10);
+                            qc = *(u8 *)(ptr + 0xC);
+                            CopyQwords((void *)(abs8 + 0x10),
+                                       (void *)(abs8 + 0x20), (qc - 2) << 4);
+                        }
+                    }
+                    ptr += 0x10;
+                }
+            }
+        }
+    }
+
+    if (*(s32 *)(hdr + 0x10) != 0) {
+        *(s32 *)(hdr + 0x10) += (s32)hdr;
+    }
+    if (*(s32 *)(hdr + 0x14) != 0) {
+        *(s32 *)(hdr + 0x14) += (s32)hdr;
+    }
+    if (*(s32 *)(hdr + 0x18) != 0) {
+        *(s32 *)(hdr + 0x18) += (s32)hdr;
+    }
+
+    {
+        s32 off1C = *(s32 *)(hdr + 0x1C);
+        if (off1C != 0) {
+            s32 *base = (s32 *)(hdr + off1C);
+            s32  n;
+            *(s32 *)(hdr + 0x1C) = (s32)base;
+            n = base[0];
+            if (n > 0) {
+                s32 j;
+                for (j = 0; j < n; j++) {
+                    base[j + 1] += (s32)hdr;
+                }
+            }
+        }
+    }
+
+    {
+        s32 off20 = *(s32 *)(hdr + 0x20);
+        if (off20 != 0) {
+            u8 *p = hdr + off20;
+            *(s32 *)(hdr + 0x20) = (s32)p;
+            for (;;) {
+                s32 relC = *(s32 *)(p + 0xC) + (s32)hdr;
+                *(s32 *)(p + 0xC) = relC;
+                if (p[0] != 0xFF) {
+                    u8 *q = p;
+                    while (*q != 0xFF) {
+                        *q = idMapPtr[*q];
+                        q++;
+                    }
+                }
+                p += 0x10;
+                if (relC < 0) {
+                    break;
+                }
+            }
+        }
+    }
+
+    if (*(s32 *)(hdr + 0x28) != 0) {
+        *(s32 *)(hdr + 0x28) += (s32)hdr;
+    }
+
+    {
+        s32 m = hdr[0xC];
+        if (m != 0) {
+            s32 *arr = (s32 *)(hdr + 0x48);
+            s32  k;
+            for (k = 0; k < m; k++) {
+                s32 off = arr[k];
+                if (off != 0) {
+                    u8 *sub = hdr + off;
+                    arr[k] = (s32)sub;
+                    if (*(s32 *)(sub + 0x14) != 0) {
+                        *(s32 *)(sub + 0x14) =
+                            (s32)(sub + *(s32 *)(sub + 0x14));
+                    }
+                    {
+                        s32 cnt = *(u8 *)(sub + 0x10);
+                        if (cnt != 0) {
+                            s32 *g = (s32 *)(sub + 0x1C);
+                            s32  l;
+                            for (l = 0; l < cnt; l++) {
+                                g[l] += (s32)hdr;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (classId >= 0) {
+        u8   slot = g_mobyClassSlotRemap[classId];
+        s32 *bdst = (s32 *)(g_mobyClassBounds + slot * 16);
+        s32 *bsrc = (s32 *)idMapPtr;
+        bdst[0] = bsrc[0];
+        bdst[1] = bsrc[1];
+        bdst[2] = bsrc[2];
+        bdst[3] = bsrc[3];
+    }
+
+    if (*(s32 *)(hdr + 0) != 0) {
+        func_00293B68(*(u8 **)(hdr + 0), instMode, idMapPtr, count);
+    }
+}
+#endif
 
 /*
  * Moby-class slot registry tables (one entry per loaded class slot):
