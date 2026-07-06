@@ -228,7 +228,75 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291B70);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291CB8);
 
+/*
+ * func_00291D28 — per-frame refresh of the directional + point light set.
+ * Seeds the directional-light matrix at g_dirLightMatrices+0x340 from the default
+ * D_1A9190, then derives its direction from the camera yaw: angle =
+ * WrapAnglePiSum(g_cameraRot[2], -0.8); +0x350 = cos(angle)*0.866, +0x354 =
+ * sin(angle)*0.866, +0x358 = -0.5, +0x35C = 0.
+ * Then walks the 8 point-light request slots (g_pointLights: light data +0x10
+ * stride 0x20, request record +0x110 stride 0x30). A slot with type 0 is skipped.
+ * Otherwise, if the slot is relevant (func_002837F8(light, req) > 1.0) OR its
+ * radius moved by more than 1.0 (|light[0xC] - req[0xC]|), the light data is
+ * copied into the request record and, by request type, dispatched: type 1 builds
+ * a relight request (func_00291EB0) and is promoted to type 2; type 2 resets +
+ * re-dispatches (func_00291FC8).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291D28);
+#else
+extern u8  g_dirLightMatrices[];       /* 0x1C26C0 - 0x40-stride light matrices */
+extern u8  g_pointLights[];            /* 0x1C2AC0 - stride 0x20 */
+extern f32 g_cameraRot[];              /* 0x1B52D0 - camera euler angles */
+extern u8  D_1A9190[];                 /* default directional-matrix row (16B) */
+extern f32 WrapAnglePiSum(f32 a, f32 b);
+extern f32 func_00283B30(f32 x);       /* cos */
+extern f32 func_00283B48(f32 x);       /* sin */
+extern f32 func_002837F8(void *light, void *req);
+extern f32 GetFloatAbs(f32 x);         /* fabsf */
+extern void func_00291EB0(s32 index);
+extern void func_00291FC8(void *arg);
+
+void func_00291D28(void) {
+    u8 *dir = g_dirLightMatrices;
+    f32 angle;
+    s32 i;
+
+    *(u64 *)(dir + 0x340) = *(u64 *)D_1A9190;          /* seed matrix row (lq/sq) */
+    *(u64 *)(dir + 0x348) = *(u64 *)(D_1A9190 + 8);
+
+    angle = WrapAnglePiSum(g_cameraRot[2], -0.8f);
+    *(f32 *)(dir + 0x350) = func_00283B30(angle) * 0.866f;
+    *(f32 *)(dir + 0x354) = func_00283B48(angle) * 0.866f;
+    *(f32 *)(dir + 0x358) = -0.5f;
+    *(s32 *)(dir + 0x35C) = 0;
+
+    for (i = 0; i < 8; i++) {
+        u8 *light = g_pointLights + 0x10 + i * 0x20;
+        u8 *req = g_pointLights + 0x120 + i * 0x30;    /* record body; type @ -0x10 */
+        s32 type;
+
+        if (*(s32 *)(req - 0x10) == 0) {
+            continue;                                   /* empty slot */
+        }
+        if (!(1.0f < func_002837F8(light, req)) &&
+            !(1.0f < GetFloatAbs(*(f32 *)(light + 0xC) - *(f32 *)(req + 0xC)))) {
+            continue;                                   /* unchanged - keep as is */
+        }
+
+        *(u64 *)req = *(u64 *)light;                     /* copy light data (lq/sq) */
+        *(u64 *)(req + 8) = *(u64 *)(light + 8);
+
+        type = *(s32 *)(req - 0x10);
+        if (type == 1) {
+            func_00291EB0(i);
+            *(s32 *)(req - 0x10) = 2;
+        } else if (type == 2) {
+            func_00291FC8((void *)i);
+        }
+    }
+}
+#endif
 
 /**
  * func_00291EB0 — build a light-relight request record for point light `index`.
