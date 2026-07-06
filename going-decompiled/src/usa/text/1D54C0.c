@@ -1206,8 +1206,61 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DB080);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DB700);
 
 /* Load a menu background-image pair (front/back) from disc into the bg buffers.
- * Wall: multi callee-save + StartFileLoad orchestration. Bare INCLUDE_ASM. */
+ * Per-tick phase machine on obj->0x44: phase 0 kicks a StartFileLoad of the first
+ * buffer (obj+0x48) from the active language's disc-TOC bg entry (base LBN
+ * g_discToc+0x36C + per-index offset at g_discToc + g_menuBgImageIndex*8 + 0xDD0,
+ * sector count +0xDD4); phase 1 waits for the load to finish (g_fileLoadState==0)
+ * then advances; phase 2 kicks the second buffer (obj+0x4C, offsets +0xDF8/+0xDFC);
+ * phase 3 waits then advances to 4 (done). A kick that fails to start sets phase
+ * -1. Each phase is a no-op (returns 0) while its buffer is empty or a load is
+ * still in flight. Always returns 0.
+ * WALL: multi callee-save + StartFileLoad orchestration; matching arm stays
+ * INCLUDE_ASM, portable #else below. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", LoadMenuBgImagePair);
+#else
+extern u8  g_discToc[];                    /* 0x14B540 master disc asset directory */
+extern s16 g_fileLoadState;                /* 0x1A63AC 0 idle / nonzero busy */
+extern s32 g_menuBgImageIndex;             /* active-language bg image index */
+extern s32 StartFileLoad(s32 dest, s32 lbn, s32 sectors);  /* 0x2B8A38 kick async CD read; returns sectors<<11 (0 = refused) */
+
+s32 LoadMenuBgImagePair(void *obj) {
+    s32 phase = *(s32 *)((u8 *)obj + 0x44);
+    s32 idx;
+    s32 dest, lbn, sectors;
+
+    if (phase == 0) {
+        dest = *(s32 *)((u8 *)obj + 0x48);
+        if (dest == 0 || g_fileLoadState != 0) {
+            return 0;
+        }
+        idx = g_menuBgImageIndex;
+        lbn = *(s32 *)(g_discToc + idx * 8 + 0xDD0) + *(s32 *)(g_discToc + 0x36C);
+        sectors = *(s32 *)(g_discToc + idx * 8 + 0xDD4);
+        *(s32 *)((u8 *)obj + 0x44) = (StartFileLoad(dest, lbn, sectors) == 0) ? -1 : phase + 1;
+    } else if (phase == 1) {
+        if (g_fileLoadState != 0) {
+            return 0;
+        }
+        *(s32 *)((u8 *)obj + 0x44) = 2;
+    } else if (phase == 2) {
+        dest = *(s32 *)((u8 *)obj + 0x4C);
+        if (dest == 0 || g_fileLoadState != 0) {
+            return 0;
+        }
+        idx = g_menuBgImageIndex;
+        lbn = *(s32 *)(g_discToc + idx * 8 + 0xDF8) + *(s32 *)(g_discToc + 0x36C);
+        sectors = *(s32 *)(g_discToc + idx * 8 + 0xDFC);
+        *(s32 *)((u8 *)obj + 0x44) = (StartFileLoad(dest, lbn, sectors) == 0) ? -1 : phase + 1;
+    } else if (phase == 3) {
+        if (g_fileLoadState != 0) {
+            return 0;
+        }
+        *(s32 *)((u8 *)obj + 0x44) = 4;
+    }
+    return 0;
+}
+#endif
 
 /* Upload the loaded menu background-image pair to VRAM (GS texture transfer).
  * Wall: GS/VIF packet build + sq/lq 128-bit DMA tags. Bare INCLUDE_ASM. */
