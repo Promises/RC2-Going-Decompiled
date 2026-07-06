@@ -269,7 +269,50 @@ void func_00352418(void) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00352428);
 
+/* func_00352560 (USA func_003510C0): copy a window of arrived elementary-stream
+ * bytes into the pts ring - clamps the request to the ring's free header window
+ * and the descriptor's remaining length, queries the ring's two writable spans
+ * (func_00351B48), scatters into them (func_00352648), advances the ring
+ * (func_00351C18), and reports whether any bytes were stored. Ported from the
+ * USA body: g_pFmvArenaBase retargets to the EU alias via the file-level macro,
+ * and the three callees shift +0x14A0 (func_003506A8->func_00351B48,
+ * func_003511A8->func_00352648, func_00350778->func_00351C18) - all verified
+ * against the EU asm. Matching arm stays asm (8-byte-packed saves). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00352560);
+#else
+extern s32 func_00351C18(FmvPtsQueue *q, s32 n); /* pts-ring advance (twin of func_00350778) */
+extern s32 func_00352648(u8 *dst0, s32 len0d, u8 *dst1, s32 cap, u8 *src0, s32 len1d,
+                         u8 *src1, s32 tail); /* two-span scatter (defined below) */
+s32 func_00352560(u8 *unused, u8 *desc, u8 *ringBase) {
+    u8 *span0Ptr;
+    s32 span0Len;
+    u8 *span1Ptr;
+    s32 span1Len;
+    s32 ringEnd = *(s32 *)(ringBase + 0x50008);
+    u32 wantEnd = *(s32 *)(desc + 8) + 4;
+    u32 ringTop = (u32)(ringBase + ringEnd);
+    s32 first;
+    s32 remain;
+    s32 stored;
+
+    if (ringTop <= wantEnd) {
+        wantEnd -= ringEnd;
+    }
+    remain = *(s32 *)(desc + 0xC) - 4;
+    first = ringTop - wantEnd;
+    if (remain < first) {
+        first = remain;
+    }
+
+    func_00351B48((FmvPtsQueue *)(g_pFmvArenaBase + FMV_PTS_OFS), &span0Ptr,
+                  &span0Len, &span1Ptr, &span1Len);
+    stored = func_00352648(span0Ptr, span0Len, span1Ptr, span1Len, (u8 *)wantEnd,
+                           first, ringBase, remain - first);
+    func_00351C18((FmvPtsQueue *)(g_pFmvArenaBase + FMV_PTS_OFS), stored);
+    return stored > 0;
+}
+#endif
 
 /* func_00352648 (USA func_003511A8): scatter two source spans (src0/len0,
  * src1/len1) into a two-segment ring destination (dst0 with capacity len0d,
