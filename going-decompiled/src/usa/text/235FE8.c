@@ -6469,7 +6469,74 @@ void GuiMapScreenInit(void *w, GuiPool *pool) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00346878);
 
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00346AF8);
+#else
+extern u8   D_1AA7F8[];              /* select-screen entry table, stride 0xA, +6 = s16 item id */
+extern u8   g_menuTransitionMode[];  /* 0x1F27DC - +0x30 receives the activated item id */
+extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+/*
+ * func_00346AF8(w, flags) — the mode-3 sub-builder: a two-axis cursor/confirm
+ * handler for the D_1AA7F8 select screen `w`. `flags` (held-button bits) drives
+ * the cursor index at w+0x4FC and the sub-state at w+0x500/+0x508, each with the
+ * wheel-turn cue PlayGlobalSound(3):
+ *   0x1000 -> advance cursor, set sub-state 0x500=1 / 0x508=0
+ *   0x4000 -> advance cursor, set sub-state 0x508=1 / 0x500=0
+ *   0x8000 -> retreat cursor (wrap to 1 on underflow)
+ *   0x2000 -> advance cursor (wrap to 0 at 2)
+ *   0x40   -> confirm: for the highlighted owned item play the accept cue (4),
+ *             record it in g_menuTransitionMode+0x30 and w+0x504; otherwise the
+ *             deny cue (5).
+ * Every path then refreshes the highlighted entry (w+0x504) and, for an owned
+ * item, its weapon-name caption id D_1ADAF0 = g_weaponTable[slot*0xE0 + 6].
+ */
+void func_00346AF8(void *w, s32 flags) {
+    s16 entry;
+
+    if (flags & 0x1000) {
+        PlayGlobalSound(3, 0, 0);
+        *(s32 *)((char *)w + 0x500) = 1;
+        *(s32 *)((char *)w + 0x508) = 0;
+        *(s32 *)((char *)w + 0x4FC) += 1;
+    } else if (flags & 0x4000) {
+        PlayGlobalSound(3, 0, 0);
+        *(s32 *)((char *)w + 0x508) = 1;
+        *(s32 *)((char *)w + 0x500) = 0;
+        *(s32 *)((char *)w + 0x4FC) += 1;
+    } else if (flags & 0x8000) {
+        s32 v;
+        PlayGlobalSound(3, 0, 0);
+        v = *(s32 *)((char *)w + 0x4FC) - 1;
+        *(s32 *)((char *)w + 0x4FC) = v;
+        if (v < 0) {
+            *(s32 *)((char *)w + 0x4FC) = 1;
+        }
+    } else if (flags & 0x2000) {
+        s32 v;
+        PlayGlobalSound(3, 0, 0);
+        v = *(s32 *)((char *)w + 0x4FC) + 1;
+        *(s32 *)((char *)w + 0x4FC) = v;
+        if (v >= 2) {
+            *(s32 *)((char *)w + 0x4FC) = 0;
+        }
+    } else if (flags & 0x40) {
+        s16 sel = *(s16 *)&D_1AA7F8[*(s32 *)((char *)w + 0x4FC) * 0xA + 6];
+        if (sel == 0 || g_inventoryOwned[sel] == 0) {
+            PlayGlobalSound(5, 0, 0);
+        } else {
+            PlayGlobalSound(4, 0, 0);
+            *(s32 *)&g_menuTransitionMode[0x30] = sel;
+            *(s32 *)((char *)w + 0x504) = sel;
+        }
+    }
+
+    entry = *(s16 *)&D_1AA7F8[*(s32 *)((char *)w + 0x4FC) * 0xA + 6];
+    *(s32 *)((char *)w + 0x504) = entry;
+    if (entry != 0 && g_inventoryOwned[entry] != 0) {
+        D_1ADAF0 = *(s16 *)&g_weaponTable[g_itemEquippedSlot[entry] * 0xE0 + 6];
+    }
+}
+#endif
 
 /* func_00346CD8: d-pad + confirm handler for the weapon-select screen `w`.
  * `flags` (held-button bits) drives the single-axis cursor at +0x4FC over the
