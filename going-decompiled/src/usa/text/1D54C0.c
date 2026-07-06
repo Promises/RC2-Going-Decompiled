@@ -2026,9 +2026,61 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DD0F8);
  * func_002DF620 header fill. Bare INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DD450);
 
-/* Menu screen draw helper (Ghidra merges its boundary with a neighbour). Wall:
- * large draw loop + GS packets + multi callee-save. Bare INCLUDE_ASM. */
+/* Draw the current level-select row label/value for the focused map screen.
+ * Only renders while the area transition state permits it (area+0x15C < 3,
+ * area+0x164 < 0, menuBlock+0x164 >= 0xB, area+0x8 == 2). Derives a level index
+ * from the focused screen's area record (areaEntry->0x30 mod 0x1C); index -1 draws
+ * the "unknown" placeholder string 0x2DAA centered (y + D_1ABC54/2). Otherwise it
+ * draws the level label (formatted by func_002E0010) and, when the row carries a
+ * value string id (>= 0), a second value line below it (y + D_1ABC54); a row with
+ * no value string is drawn as a single centered line (y + D_1ABC54>>1). Returns 2.
+ *
+ * The matching (INCLUDE_ASM) arm remains the byte-exact source of truth (leading
+ * alternate-entry sp adjust + the compiler's div-by-0x1C guard are not modelled).
+ * Offsets read verbatim from asm; area/level structs only partially recovered. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DD630);
+#else
+s32 func_002DD630(void *screenArg) {
+    extern u8  g_areaTable[];
+    extern u8  g_levelSelectEntries[];  /* (labelStrId, valueStrId) pairs, stride 8 */
+    extern s32 D_1ABC54;                /* row vertical spacing */
+    u8 *obj  = (u8 *)screenArg;
+    u8 *area = (u8 *)g_areaTable;
+    u8 *mgr  = (u8 *)g_menuScreenBlock;
+    u8 *focusScreen;
+    s32 areaIdx, lvlIdx, x, baseY;
+
+    focusScreen = *(u8 **)(mgr + 0x14);
+    areaIdx = *(s32 *)(*(u8 **)(focusScreen + 0xE8) + 0x40);
+    lvlIdx  = *(s32 *)(area + areaIdx * 0x1C + 0x30) % 0x1C;
+
+    Begin2dDrawBatch(0);
+
+    if (*(s32 *)(area + 0x15C) < 3 && *(s32 *)(area + 0x164) < 0 &&
+        *(s32 *)(mgr + 0x164) >= 0xB && *(s32 *)(area + 0x8) == 2) {
+        x     = *(s32 *)(obj + 0x18);
+        baseY = *(s32 *)(obj + 0x1C);
+        if (lvlIdx == -1) {
+            func_002801B8(x, baseY + D_1ABC54 / 2, 0x80F0F0F0,
+                          GetLocalizedString(0x2DAA), -1);
+        } else {
+            s32 valStrId = *(s32 *)(g_levelSelectEntries + lvlIdx * 8 + 4);
+            s32 labelY = (valStrId >= 0) ? baseY : baseY + (D_1ABC54 >> 1);
+            char buf[64];   /* func_002E0010 formats the level label here */
+
+            func_002801B8(x, labelY, 0x80F0F0F0, func_002E0010(buf, lvlIdx), -1);
+            if (valStrId >= 0) {
+                func_002801B8(x, baseY + D_1ABC54, 0x80F0F0F0,
+                              GetLocalizedString(valStrId), -1);
+            }
+        }
+    }
+
+    End2dDrawBatch();
+    return 2;
+}
+#endif
 
 /* Enter the galactic-map save-confirm screen: reset the text-table banks, grab
  * a fresh map slot into obj->0x48 (obj->0x4C=0), and prime the autosave/voice
