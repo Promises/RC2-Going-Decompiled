@@ -201,7 +201,6 @@ extern f32 func_002837F8(void *p, f32 *src);
 /* func_002A0368: read a reference value from an object (1A00F0 unit); takes the
  * object pointer in $4 (not a float), returns the value as f32 in $f0. */
 extern f32 func_002A0368(void *obj);
-extern s32 func_002AFAB0(f32 step, f32 max);
 extern f32 GetFloatAbs(f32 x);
 extern s32 func_002835E0(s32 x);
 extern f32 func_00284678(f32 *out, f32 angle);
@@ -3519,7 +3518,93 @@ s32 func_002AFA80(void *p, s32 rgb) {
     return func_002A12C0(p, rgb & 0xFF, g & 0xFF, b & 0xFF);
 }
 
+/**
+ * Advance an object's eased-rotation driver one integration step and (re)bind it
+ * to its owning controller.
+ *
+ * `state` is the driver block embedded in the animated object:
+ *   +0x01  u8    registered flag (nonzero once bound into a controller list)
+ *   +0x10  Vec4  orientation quaternion (rebuilt from the stepped eulers)
+ *   +0x20  f32x3 per-axis blend weight (fanned from the current +0x70 weight)
+ *   +0x40  f32x3 eased euler angles      (the integrator's accumulators)
+ *   +0x50  f32x3 per-axis angular velocity
+ *   +0x60  f32x3 target euler angles     (consumed: the quad is zeroed after use)
+ *   +0x70  f32   blend weight (latched to 1.0 once a step runs)
+ *   +0x78  void* current owning controller
+ *
+ * The block is first re-keyed to `owner`: if it was bound to a different live
+ * controller it is detached (func_002A0828) when still flagged and that owner is
+ * accepting (its +0x20 byte < 0x7F). If the target orientation is already the
+ * identity (zero targets, unit weight, sub-0.005 residual eulers) the driver is
+ * released and the call returns. Otherwise each euler axis is stepped toward its
+ * target by the critically-damped driver func_002AB700 (rate/cap in $f12/$f13),
+ * the block is registered (func_002A07B0) if it was not already, the orientation
+ * quaternion at +0x10 is rebuilt from the stepped eulers, the blend weight is
+ * fanned into +0x20/+0x24/+0x28, the target quad is cleared, and the weight is
+ * latched to 1.0.
+ *
+ * owner/arg3 are opaque controller handles (UNCONFIRMED — passed straight to the
+ * register/deregister helpers in the 1A00F0 unit).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFAB0);
+#else
+/* Controller driver-list bind/unbind helpers (1A00F0 unit). UNCONFIRMED names:
+ * func_002A0828 detaches `state` from an owner; func_002A07B0 attaches it. */
+extern void func_002A0828(void *owner, void *state);
+extern void func_002A07B0(void *owner, void *arg3, void *state);
+
+void func_002AFAB0(void *owner, u8 *state, void *arg3, f32 rate, f32 cap) {
+    void *curOwner = *(void **)(state + 0x78);
+    f32 weight;
+
+    /* Re-key the driver to `owner`, detaching from a live prior controller. */
+    if (curOwner != owner) {
+        if (curOwner != 0) {
+            if (state[1] != 0 && *(u8 *)((u8 *)curOwner + 0x20) < 0x7F) {
+                func_002A0828(curOwner, state);
+            }
+            state[1] = 0;
+        }
+        *(void **)(state + 0x78) = owner;
+    }
+
+    /* Already at the identity target: release and bail. */
+    if (*(f32 *)(state + 0x60) == 0.0f &&
+        *(f32 *)(state + 0x64) == 0.0f &&
+        *(f32 *)(state + 0x68) == 0.0f &&
+        *(f32 *)(state + 0x70) == 1.0f &&
+        GetFloatAbs(*(f32 *)(state + 0x40)) < 0.005f &&
+        GetFloatAbs(*(f32 *)(state + 0x44)) < 0.005f &&
+        GetFloatAbs(*(f32 *)(state + 0x48)) < 0.005f) {
+        if (state[1] != 0) {
+            func_002A0828(owner, state);
+        }
+        return;
+    }
+
+    /* Step each euler axis toward its target with the damped angle driver. */
+    func_002AB700((f32 *)(state + 0x40), (f32 *)(state + 0x50), 0, *(f32 *)(state + 0x60), rate, cap, 0.0f);
+    func_002AB700((f32 *)(state + 0x44), (f32 *)(state + 0x54), 0, *(f32 *)(state + 0x64), rate, cap, 0.0f);
+    func_002AB700((f32 *)(state + 0x48), (f32 *)(state + 0x58), 0, *(f32 *)(state + 0x68), rate, cap, 0.0f);
+
+    if (state[1] == 0) {
+        func_002A07B0(owner, arg3, state);
+    }
+
+    /* Rebuild the orientation quaternion from the stepped eulers, fan the blend
+     * weight across +0x20/+0x24/+0x28, clear the consumed target quad, latch. */
+    func_002AA058((Vec4 *)(state + 0x10), (Vec4 *)(state + 0x40));
+
+    weight = *(f32 *)(state + 0x70);
+    *(f32 *)(state + 0x20) = weight;
+    *(f32 *)(state + 0x24) = weight;
+    *(f32 *)(state + 0x28) = weight;
+
+    func_00283638((Moby *)(state + 0x60));   /* zero the 16-byte target quad */
+    *(f32 *)(state + 0x70) = 1.0f;
+}
+#endif
 
 /* func_002AFCD8: advance one oscillating angle channel and project it to a
  * scalar offset stored at out+0x18.
@@ -4210,7 +4295,7 @@ void func_002B17F8(f32 value, s32 a1, u8 *p, s32 a3, s32 settle) {
         *(f32 *)(p + 0x70) = 1.0f;
     }
     if (settle != 0 && *(f32 *)(p + 0x70) != *(f32 *)(p + 0x20)) {
-        func_002AFAB0(0.03f, 0.3f);
+        func_002AFAB0((void *)a1, p, (void *)a3, 0.03f, 0.3f);
     }
 }
 #endif
