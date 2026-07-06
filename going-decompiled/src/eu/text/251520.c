@@ -580,9 +580,39 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00353B48);
 /* func_00353C20 (USA func_00352780): blocked, 8-byte-packed saves. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00353C20);
 
-/* func_00353C68 (USA func_003527C8): blocked, 8-byte-packed saves +
- * reload-artifact wall. */
+/* func_00353C68 (USA func_003527C8): the FMV decode-thread main loop. Resets
+ * the embedded stream ring (func_00352B00 on obj+0x48), initialises the arena
+ * frame queue (func_00354030 at g_pFmvArenaBase+0xD9168), primes the host frame
+ * reader (func_00353D08), then decodes frames (func_00353AC0) as long as the
+ * arena's "more data" flag (+0xD9174) stays set and no frame reports completion
+ * (returns 1), and finally drives the stream to its terminal state 3
+ * (func_00353AC8). Ported from the USA body: g_pFmvArenaBase retargets to the
+ * EU alias (g_nVendorBuyQuantity + 0x184) via the file-level macro, and the
+ * five callees shift +0x14A0 (func_00351660->func_00352B00,
+ * func_00352B90->func_00354030, func_00352868->func_00353D08,
+ * func_00352620->func_00353AC0, func_00352628->func_00353AC8) - all verified
+ * against the EU asm. Matching arm stays asm (8-byte-packed saves + a
+ * %gp_rel/absolute reload-artifact wall on g_pFmvArenaBase); the #else is the
+ * structure-exact model (the frame decode itself is the deferred FMV native
+ * backend, but the loop structure is exact). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00353C68);
+#else
+extern void func_00352B00(u8 *stream);
+extern s32 func_00353D08(u8 *host);
+extern void func_00354030(FmvFrameQueue *q);
+s32 func_00353C68(FmvStream *obj) {
+    func_00352B00((u8 *)obj + 0x48);
+    func_00354030((FmvFrameQueue *)(g_pFmvArenaBase + 0xD9168));
+    func_00353D08((u8 *)obj);
+    while (*(s32 *)(g_pFmvArenaBase + 0xD9174) != 0) {
+        if (func_00353AC0(obj) == 1) {
+            break;
+        }
+    }
+    return func_00353AC8(obj, 3);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00353D08);
 
