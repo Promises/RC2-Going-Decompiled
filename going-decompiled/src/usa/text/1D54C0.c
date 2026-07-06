@@ -1262,9 +1262,44 @@ s32 LoadMenuBgImagePair(void *obj) {
 }
 #endif
 
-/* Upload the loaded menu background-image pair to VRAM (GS texture transfer).
- * Wall: GS/VIF packet build + sq/lq 128-bit DMA tags. Bare INCLUDE_ASM. */
+/* Draw the loaded menu background-image pair (front/back) as two textured quads.
+ * No-op (returns 0) until both disc loads have completed (obj->0x44 >= 4). Opens a
+ * 2d draw batch, then for each buffer looks up its GS texture handle
+ * (func_002954F0(obj+0x48 / obj+0x4C)) and blits a full 0x100x0x100 quad at the
+ * layout coords in D_1ABBB0.. / D_1ABBC0.. with the shared tint 0x60A09080, then
+ * closes the batch. Returns 8.
+ * NOTE: DrawGlyphQuad reads its two trailing stack args as 64-bit (ld at +0x10/
+ * +0x18 of its frame), so the tint + texture handle are passed as s64 to reproduce
+ * the sd marshal — traced from DrawGlyphQuad.s @0x27E698.
+ * WALL: GS/VIF packet build + sq/lq 128-bit DMA tags; matching arm stays
+ * INCLUDE_ASM, portable #else below. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", UploadMenuBgImagePair);
+#else
+extern s32  func_002954F0(s32 buffer);   /* 0x2954F0 resolve a bg buffer to its GS texture handle */
+/* DrawGlyphQuad (0x27E698) is used unprototyped elsewhere in this unit (C89
+ * implicit decl); the (s64) casts on the trailing tint/texture args force the
+ * 64-bit stack marshal DrawGlyphQuad reads via ld — so no explicit prototype here
+ * (it would conflict with the existing implicit uses). */
+extern s32 D_1ABBB0, D_1ABBB4, D_1ABBB8, D_1ABBBC;   /* front-quad layout params */
+extern s32 D_1ABBC0, D_1ABBC4, D_1ABBC8, D_1ABBCC;   /* back-quad layout params */
+
+s32 UploadMenuBgImagePair(void *obj) {
+    s64 tint = (s64)0x60A09080;
+
+    if (*(s32 *)((u8 *)obj + 0x44) < 4) {
+        return 0;
+    }
+
+    Begin2dDrawBatch(0);
+    DrawGlyphQuad(D_1ABBB0, D_1ABBB4, D_1ABBB8, D_1ABBBC, 0, 0, 0x100, 0x100,
+                  tint, (s64)func_002954F0(*(s32 *)((u8 *)obj + 0x48)));
+    DrawGlyphQuad(D_1ABBC0, D_1ABBC4, D_1ABBC8, D_1ABBCC, 0, 0, 0x100, 0x100,
+                  tint, (s64)func_002954F0(*(s32 *)((u8 *)obj + 0x4C)));
+    End2dDrawBatch();
+    return 8;
+}
+#endif
 
 /* Draw the animated galactic-map planet-cursor sprite at the active slot, with
  * a pulsing scale driven by the global frame counter and a layout that differs
