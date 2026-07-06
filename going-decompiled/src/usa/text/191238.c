@@ -2212,7 +2212,55 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapDraw);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00297B48);
 
+/*
+ * MapBuildBitmapFrom4bpp(dest, srcA, srcB) — convert a 256x256 4bpp map image
+ * into the packed 1bpp minimap bitmap `dest`, in a 16-row-band swizzled layout.
+ * For each of 256 rows: decode the row's 4bpp pixels into the scratchpad at
+ * 0x70000000 (func_00297E80), then for each of 32 column-blocks pack 32 pixels
+ * into one 32-bit word — bit `b` is set when the pixel nibble is nonzero (even b
+ * = low nibble, odd b = high nibble of scratchpad byte[b>>1]). The output word
+ * for (row, col) lands at dest + 4*((row%16) + 512*(row/16)) + col*0x40 (bands of
+ * 16 rows, columns 0x40 bytes apart). The matching build keeps the asm (a
+ * strength-reduction near-miss, 64.83%); this #else is the portable equivalent. */
+#ifdef TARGET_NATIVE
+extern void func_00297E80(void *scratchpad, s32 row, void *srcA, void *srcB);
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapBuildBitmapFrom4bpp);
+#else
+void MapBuildBitmapFrom4bpp(void *destArg, void *srcA, void *srcB) {
+    u8 *dest = (u8 *)destArg;
+    s32 row;
+
+    for (row = 0; row < 0x100; row++) {
+        s32  band = row >> 4;             /* 16-row band index */
+        s32  sub  = row - (band << 4);    /* row within band (row % 16) */
+        s32 *out  = (s32 *)(dest + ((sub + (band << 9)) << 2));
+        s32  col;
+
+        func_00297E80((void *)0x70000000, row, srcA, srcB);
+
+        for (col = 0; col < 0x20; col++) {
+            const u8 *sp = (const u8 *)0x70000000 + col * 16;
+            s32 acc = 0;
+            s32 bit;
+            for (bit = 0; bit < 0x20; bit++) {
+                u8  byte   = sp[bit >> 1];
+                s32 nibble = (bit & 1) ? (byte >> 4) : (byte & 0xF);
+                if (nibble != 0) {
+                    acc |= (s32)(1U << bit);
+                }
+                if ((bit & 0x1F) == 0x1F) {
+                    *out++ = acc;
+                    acc = 0;
+                }
+            }
+            out = (s32 *)((u8 *)out + 0x3C);
+        }
+    }
+}
+#endif
 
 /* TODO(match): functional equivalent - not byte-exact (64.83%); induction-var/
  * strength-reduction wall - the original's later cc1 keeps the loop index `i`
