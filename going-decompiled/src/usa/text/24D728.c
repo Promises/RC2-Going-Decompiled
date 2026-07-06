@@ -349,7 +349,63 @@ void func_0034F220(GuiInstance *mgr) {
     __asm__ __volatile__("");
 }
 
+/*
+ * func_0034F240(gui) — refresh the HUD under a temporary camera-projection
+ * override. Saves the scene camera's projection param (g_sceneActorMobys+0x674,
+ * field +0xB0), forces it to 0.62, and rebuilds the projection
+ * (BuildCameraProjection). Then, unless the suppress flag D_1A8C64 is set, it
+ * re-reads the HUD manager's packed color (func_0034D7A8 on the embedded
+ * GuiHudManager at gui+0x7A0) and re-applies it via func_0034F028 (with the two
+ * gp-globals D_1AE6F4/D_1AE6F8 and the color's top byte). It runs the manager
+ * no-op (func_0034EF60), re-lays the HUD manager (func_0034E8D8), clears the two
+ * GUI manager status words at g_guiInstance+0x38000+0x79E0/+0x79DC while
+ * forwarding the HUD list (func_00339F98 on gui+0x1FDC), ticks func_0029D9B8,
+ * then restores the saved projection param and rebuilds once more. The matching
+ * build keeps the asm (engine save-layout wall). */
+#ifdef TARGET_NATIVE
+extern void *g_guiInstance;
+extern void BuildCameraProjection(void);
+extern void func_0029D9B8(void);
+extern void func_0034F028(void *obj, s32 a, s32 b, s32 c);
+extern void func_0034E8D8(void *p);
+extern u8   g_sceneActorMobys[];      /* 0x1B894C  scene cast moby ptrs (byte base) */
+extern s32  D_1A8C64;                 /* HUD-refresh suppress flag */
+extern s32  D_1AE6F4;                 /* gp-global passed to func_0034F028 */
+extern s32  D_1AE6F8;                 /* gp-global passed to func_0034F028 */
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F240);
+#else
+void func_0034F240(void *guiArg) {
+    u8  *gui = (u8 *)guiArg;
+    u8  *cam = g_sceneActorMobys + 0x674;   /* scene camera params */
+    f32  saved = *(f32 *)(cam + 0xB0);
+
+    *(f32 *)(cam + 0xB0) = 0.62f;           /* 0x3F1EB852 */
+    BuildCameraProjection();
+
+    if (D_1A8C64 == 0) {
+        s32 packed = func_0034D7A8((GuiHudManager *)(gui + 0x7A0));
+        func_0034F028(gui, D_1AE6F4, D_1AE6F8, (s32)((u32)packed >> 24));
+    }
+
+    func_0034EF60();
+    func_0034E8D8(gui + 0x7A0);
+
+    {
+        u8 *mgr = (u8 *)g_guiInstance + 0x38000;
+        *(s32 *)(mgr + 0x79E0) = 0;
+        func_00339F98(gui + 0x1FDC);
+        *(s32 *)(mgr + 0x79DC) = 0;
+    }
+
+    func_0029D9B8();
+
+    *(f32 *)(cam + 0xB0) = saved;
+    BuildCameraProjection();
+}
+#endif
 
 /* func_0034F300: identity - return the manager pointer unchanged (a vtable
  * "get self" accessor). Typed as GuiInstance * by association with the adjacent
