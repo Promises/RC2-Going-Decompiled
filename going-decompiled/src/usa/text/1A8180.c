@@ -157,7 +157,7 @@ extern s32 D_258CF0[0x15];             /* per-level lookup table */
  * optimising forwarding tails — see text/198FA0). */
 extern s32 CollLine(void *to, void *from, s32 mask, void *moby, void *out);
 extern f32 ProbeGroundHeight(Vec4 *pos, f32 zOffset, s32 mask);
-extern s32 CollSphere(void *center, s32 mask, void *moby);
+extern s32 CollSphere(void *center, s32 mask, void *moby, f32 radius); /* radius in $f12, clamped to 10.0 (CONFIRMED per symbol_addrs + func_002A90A8 asm) */
 extern s32 func_001163B0(void);        /* core random-state step */
 extern s32 ProbeMobyGroundBelow(Moby *moby);
 extern s32 func_002846E8(void *a, void *b, void *c);
@@ -173,7 +173,16 @@ extern void func_002B0E40(Vec4 *a, Vec4 *out, s32 flag);
 extern void func_002B0F40(Vec4 *a, Vec4 *out, Vec4 *src, f32 t);
 extern void func_002B0C40(s32 ctx, void *out, void *a, void *b);
 extern void func_002B1270(void *a, Vec4 *b, void *c);
+/* func_002837D0: planar (xy) magnitude of a Vec4, returned as f32 in $f0. The
+ * native #else scanners (func_002A8D08/func_002A90A8) feed it into func_00283BF8
+ * (atan2) and float compares, so they need the true f32 return (an s32 decl would
+ * make ee-gcc insert a spurious cvt.s.w). Guarded like func_00283BF8: the sole
+ * matched-build reference discards the value, so f32 is inert to the matched arm. */
+#ifdef TARGET_NATIVE
+extern f32 func_002837D0(void *vec);
+#else
 extern s32 func_002837D0(void *vec);
+#endif
 /* func_00283BF8 == Atan2fPoly (183558.c region): 2-arg arctangent (minimax poly
  * + quadrant offset, self-contained VU0 — no vcallms upload), returns the angle
  * as f32 in $f0. Native #else of func_002A8C70 needs the true f32 return so the
@@ -189,7 +198,11 @@ extern s32 func_00283BF8(f32 x, f32 y);
 #endif
 extern s32 func_002A12C0(void *p, s32 r, s32 g, s32 b);
 extern s32 func_00283638(Moby *moby);
-extern s32 PostMobyHitEvent(Moby *moby, s32 a, s32 b, s32 c, Vec4 *dir);
+/* PostMobyHitEvent(moby, a1, flags, vecA, vecB, dist): true ABI recovered from
+ * the .s — 5 int/ptr args + f32 dist in $f12, TWO Vec4* (the old 5-arg
+ * (…,s32 c,Vec4 *dir) decl mistyped vecA as s32 and dropped the float). Aligns
+ * with the forwarder func_002A9F30 (1B4218.c already calls that 5-arg-with-float). */
+extern s32 PostMobyHitEvent(Moby *moby, s32 a1, s32 flags, Vec4 *vecA, Vec4 *vecB, f32 dist);
 extern s32 func_002B1C20(void);
 /* func_002A9550: moby-group iterator advance/filter step. Takes the same
  * (out, moby, wantInactive, wantActive) 4-arg shape its only caller
@@ -394,7 +407,63 @@ void func_002A82D8(Moby *obj, s32 idx, s32 arg3, s32 arg4) {
 }
 #endif
 
+/**
+ * Start animation sequence `idx` at frame `frame` on a moby, blended over `arg4`
+ * frames, with an explicit `flags` word (the parameterized sibling of
+ * func_002A82D8 — which is this with flags fixed to the 0x300 bind + no bit-4
+ * force). When arg4 <= 0 this delegates to func_002A8200 (instant set). Otherwise,
+ * if the moby is already mid-blend (animTime > 0.025, or either blend word at
+ * +0x50/+0x54 set) OR flags bit 2 (0x4) forces it, a procedural-anim slot is
+ * acquired (func_002A08C0) and bound (func_002A3288) with bind = slot | (flags&1
+ * ? 0x100 : 0) | (flags&2 ? 0x200 : 0); the current pose bounds snapshot into
+ * g_proceduralAnimBounds[slot] and the current sequence is stashed (+0x42 → +0xA9,
+ * +0x42 = 0xFF procedural marker, +0x40 = slot). Then the target frame, frame
+ * pointers, and blend seed (animRate=1, animRate2=1/arg4, animTime=0, clear
+ * animEventByte bit 1, cache loopSoundIdx) are set — identical to func_002A82D8.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8448);
+#else
+void func_002A8448(Moby *obj, s32 idx, s32 frame, s32 arg4, s32 flags) {
+    u8 *m = (u8 *)obj;
+    u8 *seqEntry;
+
+    if (arg4 <= 0) {
+        func_002A8200(obj, idx, frame);
+        return;
+    }
+
+    if (0.025f < *(f32 *)(m + 0x44) ||
+        *(s32 *)(m + 0x50) != 0 ||
+        *(s32 *)(m + 0x54) != 0 ||
+        (flags & 4) != 0) {
+        s32 slot = func_002A08C0(obj);
+        if (slot >= 0) {
+            s32 bind = (flags & 1) ? (slot | 0x100) : slot;
+            if (flags & 2) {
+                bind |= 0x200;
+            }
+            func_002A3288(obj, bind);
+            *(Vec4 *)(g_proceduralAnimBounds + slot * 0x10) = *(Vec4 *)(m + 0x80);
+            if (m[0x42] != 0xFF) {
+                m[0xA9] = m[0x42];
+            }
+            m[0x42] = 0xFF;
+            m[0x40] = (u8)slot;
+        }
+    }
+    m[0x41] = (u8)frame;
+
+    m[0x43] = (u8)idx;
+    ResolveMobyAnimFramePtrs(obj);
+    *(f32 *)(m + 0x48) = 1.0f;
+    *(f32 *)(m + 0x4C) = 1.0f / IntToFloat(arg4);
+    *(f32 *)(m + 0x44) = 0.0f;
+    m[0x60] &= 0xFD;
+    seqEntry = *(u8 **)(*(u8 **)(m + 0x24) + 0x48 + idx * 4);
+    m[0x6C] = *(u8 *)(seqEntry + 0x11);
+}
+#endif
 
 /* func_002A85B8: begin a moby animation. Stash the current anim id into the
  * "prev anim id" slot, install the new anim id, reset the anim timer, and clear
@@ -737,9 +806,124 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8CF8);
  *
  * ORACLE CAVEAT: engine region (no byte-match) AND VU0-microprogram-dependent
  * (Vec3RescaleToLenVu0/etc), so — like func_002AA058 — it is NOT ULP/bit-oracleable
- * in the headless cmp harness; a trustworthy #else needs the tester full-game
- * effect-diff. Sibling func_002A90A8 is the same class. */
+ * in the headless cmp harness. The #else below is FAITHFUL-STRUCTURE (traced
+ * store-for-store from the .s) but NOT oracle-verified; bit-trust needs the
+ * tester full-game effect-diff. Sibling func_002A90A8 is the same class. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8D08);
+#else
+extern f32 func_002A9888(Vec4 *pos);            /* surface-height sample (defined below) */
+extern void func_1290E0(void *dst, void *src);  /* 0x1290E0 hit-delta build (UNCONFIRMED) */
+
+/* Shared by steps 1 and 4: if the sampled surface is more than snapEps off ref->z,
+ * snap pos to ref. The direction test is gated by flags bit0 (one-sided when set,
+ * either-side when clear). Returns 1 if it snapped. Mirrors the inlined asm clamp. */
+static s32 SnapPosToRefByZ(Vec4 *pos, Vec4 *ref, f32 surface, f32 snapEps, s32 flags) {
+    if (snapEps < GetFloatAbs(surface - ref->z)) {
+        s32 snap;
+        if (flags & 1) {
+            snap = (ref->z < surface);
+        } else if (surface < ref->z) {
+            snap = 1;
+        } else {
+            snap = (ref->z < surface);
+        }
+        if (snap) {
+            *pos = *ref;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+s32 func_002A8D08(void *ent, Vec4 *ref, Vec4 *pos, s32 flags,
+                  f32 stepZ, f32 radius, f32 snapEps, f32 hitEps) {
+    u8  *cw = (u8 *)g_pCollWorldData;   /* collision-result block base */
+    Vec4 diff;        /* pos - ref (sweep vector + hit accumulator) */
+    Vec4 stepDir;     /* diff rescaled to radius*1.2 */
+    Vec4 origin;      /* lifted line origin (ref + up) */
+    Vec4 endpoint;    /* line endpoint (origin + stepDir) */
+    Vec4 up;          /* (0, 0, stepZ, 0) */
+    Vec4 sphereFrom;  /* per-iteration sphere query point */
+    f32  surface;
+    s32  ret = 1;
+    s32  i;
+
+    /* Step 1: surface-probe just above pos, then optional z-snap to ref. */
+    pos->z += stepZ;
+    surface = func_002A9888(pos);
+    pos->z -= stepZ;
+    if (SnapPosToRefByZ(pos, ref, surface, snapEps, flags)) {
+        ret = 0;
+    }
+
+    /* Build the rescaled sweep direction and a lifted line from ref. */
+    Vec4SubVu0(&diff, pos, ref);
+    Vec3RescaleToLenVu0(&stepDir, radius * 1.2f, &diff);
+    up.x = 0.0f; up.y = 0.0f; up.z = stepZ; up.w = 0.0f;
+    Vec4AddVu0(&origin, ref, &up);
+    Vec4AddVu0(&endpoint, &origin, &stepDir);
+
+    /* Step 2: unless step 1 already snapped, line-cast along the sweep and, on a
+     * hit whose planar angle passes hitEps and whose cross term is positive, fold
+     * the scaled hit delta into pos. */
+    if (ret != 0) {
+        if (CollLine(&origin, &endpoint, (flags & 2) | 0x24, ent, (void *)0)) {
+            if (*(s32 *)(cw + 0x1C) > 0) {
+                f32 ang = func_00283BF8(*(f32 *)(cw + 0x48),
+                                        func_002837D0((Vec4 *)(cw + 0x40)));
+                if (hitEps <= ang) {
+                    f32 det;
+                    *(s32 *)(cw + 0x48) = 0;
+                    func_1290E0((Vec4 *)(cw + 0x40), (Vec4 *)(cw + 0x40));
+                    det = -diff.x * *(f32 *)(cw + 0x40)
+                        -  diff.y * *(f32 *)(cw + 0x44);
+                    if (0.0f < det) {
+                        Vec4ScaleVu0((Vec4 *)(cw + 0x40), det, (Vec4 *)(cw + 0x40));
+                        ret = 0;
+                        Vec4AddVu0(&diff, &diff, (Vec4 *)(cw + 0x40));
+                    }
+                }
+                Vec4AddVu0(pos, ref, &diff);   /* pos = ref + accumulated diff */
+            }
+        }
+    }
+
+    /* Step 3: unless bit1 is set, up to 6 sphere nudges toward the pushout point. */
+    if ((flags & 2) == 0) {
+        f32 dropZ = stepZ + radius;
+        for (i = 0; i < 6; i++) {
+            f32 ang;
+            sphereFrom = *pos;
+            sphereFrom.z += dropZ;
+            if (CollSphere(&sphereFrom, 0x24, ent, radius) == 0) {
+                break;
+            }
+            ang = func_00283BF8(DistXYVu0(pos, &g_collHitPoint),
+                                g_collHitPoint.z - pos->z);
+            if (*(s32 *)(cw + 0x18) == 0 && !(hitEps < ang)) {
+                continue;   /* grazing hit: keep scanning without snapping */
+            }
+            *pos = g_collHitPointNudged;
+            ret = 0;
+            pos->z -= dropZ;
+        }
+    }
+
+    /* Step 4: re-probe the surface and mirror the step-1 clamp. */
+    pos->z += stepZ;
+    surface = func_002A9888(pos);
+    pos->z -= stepZ;
+    if (SnapPosToRefByZ(pos, ref, surface, snapEps, flags)) {
+        ret = 0;
+    }
+
+    /* Write the resolved xy back into ref. */
+    ref->x = pos->x;
+    ref->y = pos->y;
+    return ret;
+}
+#endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A90A0);
@@ -768,9 +952,75 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A90A0);
  * `ori $23,0x4` delay slot runs only when taken). g_collHitPoint /
  * g_collHitPointNudged / g_pCollWorldData as in func_002A8D08.
  *
- * ORACLE CAVEAT: same as func_002A8D08 — VU0-microprogram-dependent, not headless
- * ULP-oracleable; a trustworthy #else needs the tester full-game effect-diff. */
+ * ORACLE CAVEAT: VU0-microprogram-dependent, not headless ULP-oracleable — the
+ * #else below is FAITHFUL-STRUCTURE (traced store-for-store from the .s) but NOT
+ * oracle-verified; bit-trust needs the tester full-game effect-diff. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A90A8);
+#else
+s32 func_002A90A8(void *moby, Vec4 *dir, s32 mask, f32 stepZ, f32 minLen, f32 sphereZOfs) {
+    Vec4 *probe = (Vec4 *)((u8 *)moby + 0x10);  /* moby +0x10 = current probe point */
+    u8  *cw     = (u8 *)g_pCollWorldData;        /* collision-result block base */
+    s32  m20    = (mask << 1) & 0x20;            /* base collision mask (mask<<1, bit 0x20) */
+    Vec4 orig;                                   /* probe point before this sweep */
+    Vec4 from, to, rescaled;
+    s32  flags = 0;
+    s32  i;
+
+    orig = *probe;
+    Vec4AddVu0(probe, probe, dir);               /* advance probe by dir */
+
+    /* Phase 1: if the sweep is long enough, line-probe along dir. */
+    if (minLen < Vec3LengthVu0(dir)) {
+        from = orig;
+        from.z += stepZ;
+        Vec3RescaleToLenVu0(&rescaled, minLen, dir);
+        Vec4AddVu0(&to, &rescaled, probe);
+        to.z += stepZ;
+        if (CollLine(&from, &to, m20, moby, (void *)0)) {
+            Vec4SubVu0(probe, &g_collHitPoint, &rescaled);
+            flags = 1;
+            probe->z -= stepZ;
+        }
+    }
+
+    /* Phase 2: up to 6 sphere pushes, snapping to the nudged hit point each time. */
+    for (i = 0; i < 6; i++) {
+        from = *probe;
+        from.z += stepZ;
+        if (CollSphere(&from, m20 | 0x4, moby, minLen) == 0) {
+            break;
+        }
+        *probe = g_collHitPointNudged;
+        flags |= 1;
+        probe->z -= stepZ;
+    }
+
+    /* Phase 3: final downward line probe; flag + optional z nudge toward the hit. */
+    {
+        f32 lowZ = probe->z - sphereZOfs;
+        from = *probe;
+        to   = *probe;
+        from.z += stepZ;
+        to.z    = lowZ - 0.05f;
+        if (CollLine(&from, &to, m20 | 0x2, moby, (void *)0)) {
+            if (*(s32 *)(cw + 0x1C) > 0) {         /* hit-count field */
+                flags |= 2;
+                if (0.5f < func_00283BF8(*(f32 *)(cw + 0x48),
+                                         func_002837D0((Vec4 *)(cw + 0x40)))) {
+                    flags |= 4;                    /* grazing / angle flag */
+                }
+                if (lowZ < *(f32 *)(cw + 0x28)) {
+                    probe->z += 0.3f * (*(f32 *)(cw + 0x28) - lowZ);
+                }
+            }
+        }
+    }
+
+    Vec4SubVu0(dir, probe, &orig);               /* dir <- net displacement */
+    return flags;
+}
+#endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9348);
@@ -1345,13 +1595,61 @@ void func_002A9C88(Moby *moby, void *hitInfo) {
 }
 #endif
 
+/* PostMobyHitEvent: record a 0x40-byte hit/damage event for `moby` into the
+ * 64-slot ring g_collHitEventRing (write cursor at g_pCollWorldData+0x14, wraps
+ * mod 64). Dedupe: moby+0xA8 holds this moby's last event slot (0xFF = none); if
+ * that slot still belongs to `moby` and the new hit is CLOSER (dist < stored
+ * dist), just OR the new flags into the existing record and return — otherwise a
+ * fresh slot is allocated, carrying the old flags forward when the prior record
+ * was this moby's. Record layout: +0x00 vecA, +0x10 vecB, +0x20 a1, +0x24 flags,
+ * +0x2C dist, +0x30 hasDir (|vecB| > 1e-4), +0x34 dist, +0x38 moby, +0x3C 0.
+ * Return is incidental in the original (merge path leaves the merged flags, alloc
+ * path leaves &g_pCollWorldData); callers discard it — we return the record flags. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", PostMobyHitEvent);
+#else
+s32 PostMobyHitEvent(Moby *moby, s32 a1, s32 flags, Vec4 *vecA, Vec4 *vecB, f32 dist) {
+    s32 ringCursor = *(s32 *)(g_pCollWorldData + 0x14);
+    s32 prevIdx    = ((u8 *)moby)[0xA8];   /* this moby's last event slot, 0xFF = none */
+    s32 extraFlags = 0;
+    u8 *rec;
+
+    /* Merge into this moby's existing event if the new hit is closer. */
+    if (prevIdx != 0xFF) {
+        u8 *prev = g_collHitEventRing + prevIdx * 0x40;
+        if (*(Moby **)(prev + 0x38) == moby) {
+            if (dist < *(f32 *)(prev + 0x2C)) {
+                *(s32 *)(prev + 0x24) |= flags;
+                return *(s32 *)(prev + 0x24);
+            }
+            extraFlags = *(s32 *)(prev + 0x24);   /* carry old flags into the new record */
+        }
+    }
+
+    /* Allocate a fresh record at the ring write cursor. */
+    rec = g_collHitEventRing + ringCursor * 0x40;
+    *(s32 *)(rec + 0x24)   = flags | extraFlags;
+    *(s32 *)(rec + 0x20)   = a1;
+    *(f32 *)(rec + 0x34)   = dist;
+    *(Moby **)(rec + 0x38) = moby;
+    *(f32 *)(rec + 0x2C)   = dist;
+    *(s32 *)(rec + 0x3C)   = 0;
+    *(s32 *)(rec + 0x30)   = (0.0001f < Vec3LengthVu0(vecB)) ? 1 : 0; /* hasDir */
+    *(Vec4 *)(rec + 0x00)  = *vecA;
+    *(Vec4 *)(rec + 0x10)  = *vecB;
+    ((u8 *)moby)[0xA8]     = (u8)ringCursor;
+    *(s32 *)(g_pCollWorldData + 0x14) = (ringCursor + 1) & 0x3F;
+    return *(s32 *)(rec + 0x24);
+}
+#endif
 
 /**
- * Post a moby hit event with the default hit direction vector.
+ * Post a moby hit event with the default hit-direction vector (vecB = D_1A8BD0).
+ * Recovered ABI: 5 args incl. f32 dist in $f12 (the old 4-arg (…,s32 c) form
+ * mistyped vecA and dropped the float); matches 1B4218.c's caller.
  */
-s32 func_002A9F30(Moby *moby, s32 a, s32 b, s32 c) {
-    return PostMobyHitEvent(moby, a, b, c, (Vec4 *)&D_1A8BD0);
+s32 func_002A9F30(Moby *moby, s32 a1, s32 flags, Vec4 *vecA, f32 dist) {
+    return PostMobyHitEvent(moby, a1, flags, vecA, (Vec4 *)&D_1A8BD0, dist);
 }
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
@@ -1806,9 +2104,19 @@ f32 func_002AAFA8(f32 a, f32 b, f32 t) {
  * Two-stage scalar transform: feed (b, a) through func_00284590, scale the
  * result by c, and forward (a, scaled) to func_00284548.
  */
+/* Return type guarded like func_002837D0: the matching build byte-matches ONLY
+ * with the s32 form (the s32 callee/return type-errors cancel into the exact $f0
+ * passthrough — 100% vs 88.24% with plain f32), while the native #else needs the
+ * true f32 return so callers (func_002AF728) get the untruncated angle. */
+#ifndef TARGET_NATIVE
 s32 func_002AAFB8(f32 a, f32 b, f32 c) {
     return func_00284548(a, func_00284590(b, a) * c);
 }
+#else
+f32 func_002AAFB8(f32 a, f32 b, f32 c) {
+    return func_00284548(a, func_00284590(b, a) * c);
+}
+#endif
 
 /**
  * Rate-limited integrator with symmetric clamps on *state. First clamps *state to
@@ -2554,7 +2862,54 @@ void func_002AC0B8(void *owner, Vec4 *basePos, void *arg3) {
 }
 #endif
 
+/* func_002AC1E0: convert a 3x3 rotation matrix `m` (row stride 0x10 = 3 floats +
+ * pad) into a quaternion `out` (x,y,z,w at +0x0/+0x4/+0x8/+0xC) — Shepperd's
+ * method. If the trace is positive, use the direct w-largest form; otherwise pick
+ * the largest diagonal element as the pivot p (with j,k the cyclic successors
+ * from the {1,2,0} table D_1A9EA0) and build the quaternion around out[p].
+ * func_002835C0 = sqrtf. (Identity MatrixToQuaternion — UNCONFIRMED name.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC1E0);
+#else
+extern s32 D_1A9EA0[];   /* cyclic next-index table {1, 2, 0} */
+
+void func_002AC1E0(void *out, void *matrix) {
+    f32 *q = (f32 *)out;
+    f32 *m = (f32 *)matrix;
+#define M(i, j) m[(i) * 4 + (j)]     /* M[i][j]; rows are 0x10 bytes (4 floats) apart */
+    f32 trace = M(0, 0) + M(1, 1) + M(2, 2);
+
+    if (0.0f < trace) {
+        f32 s = func_002835C0(trace + 1.0f);
+        f32 scale = 0.5f / s;
+        q[3] = 0.5f * s;                        /* w */
+        q[0] = (M(2, 1) - M(1, 2)) * scale;     /* x */
+        q[1] = (M(0, 2) - M(2, 0)) * scale;     /* y */
+        q[2] = (M(1, 0) - M(0, 1)) * scale;     /* z */
+    } else {
+        s32 p = 0;
+        s32 j, k;
+        f32 s, scale;
+
+        if (M(0, 0) < M(1, 1)) {
+            p = 1;
+        }
+        if (M(p, p) < M(2, 2)) {
+            p = 2;
+        }
+        j = D_1A9EA0[p];
+        k = D_1A9EA0[j];
+
+        s = func_002835C0(M(p, p) - M(j, j) - M(k, k) + 1.0f);
+        q[p] = 0.5f * s;
+        scale = (s == 0.0f) ? s : (0.5f / s);
+        q[3] = (M(k, j) - M(j, k)) * scale;     /* w */
+        q[j] = (M(j, p) + M(p, j)) * scale;
+        q[k] = (M(k, p) + M(p, k)) * scale;
+    }
+#undef M
+}
+#endif
 
 /* func_002AC468: build a scratch transform/matrix from `in` (func_00284008),
  * feed it through func_002AC1E0 with `out`, then resolve `in` against it
@@ -3444,7 +3799,66 @@ s32 func_002AE6C8(s32 itemId) {
 }
 #endif
 
+/* func_002AE7E8: map a moby's class id (+0xAA) to an announcer/category code.
+ * A direct class-id -> code table for the known classes; any other class falls
+ * through to a lookup against the equipped-weapon block (g_soundBankHandlesBlk
+ * +0x1220/+0x1248) and then a linear scan of the equipped-slot list
+ * (g_itemEquippedSlot, 0x38 entries) matching the class id (or the moby's linked
+ * +0xB8 moby's class) against g_weaponTable[slot].+0x14, returning the slot index
+ * or 0xFF. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE7E8);
+#else
+s32 func_002AE7E8(Moby *moby) {
+    s16 cls = *(s16 *)((u8 *)moby + 0xAA);
+    u8 *blk;
+    void *equipped;
+    void *linked;
+    s32 i;
+
+    switch (cls) {
+    case 0xB2E: return 0x1D;
+    case 0x87A: return 0x16;
+    case 0xAC:  return 0xE;
+    case 0x79:  return 0xC;
+    case 0x5DA: return 0x1B;
+    case 0xA66:
+    case 0xA82: return 0x29;
+    case 0x9A9:
+    case 0xA9B: return 0x1C;
+    case 0xB58:
+    case 0xE79: return 0x20;
+    case 0xC07:
+    case 0xCE4:
+    case 0xCE5: return 0x2A;
+    case 0xE64:
+    case 0xECE: return 0x25;
+    case 0xD01: return 0x18;
+    default:    break;
+    }
+
+    blk = g_soundBankHandlesBlk;
+    equipped = *(void **)(blk + 0x1220);
+    if ((void *)moby == equipped) {
+        return *(s32 *)(blk + 0x1248);
+    }
+    linked = *(void **)((u8 *)moby + 0xB8);
+    if (linked != 0 && linked == equipped) {
+        return *(s32 *)(blk + 0x1248);
+    }
+
+    for (i = 0; i < 0x38; i++) {
+        s32 f14 = *(s32 *)((u8 *)&g_weaponTable[g_itemEquippedSlot[i]] + 0x14);
+        if (cls == f14) {
+            return i;
+        }
+        if (linked != 0 && *(s16 *)((u8 *)linked + 0xAA) == f14) {
+            return i;
+        }
+    }
+    return 0xFF;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE9E0);
 
@@ -3518,7 +3932,72 @@ void func_002AF6A0(Vec4 *out, u32 *colorPtr) {
 }
 #endif
 
+/* func_002AF728: per-frame wander/approach AI step for a moby with a control
+ * block `ctrl`. When the wander phase (ctrl+0x28) is idle, pick a fresh heading
+ * jitter (ctrl+0x24) and a random dwell timer (ctrl+0x2A). Otherwise step the
+ * heading toward the target (func_002AB668) and tick the dwell timer
+ * (func_00283328), clearing the phase when it expires. Each frame: advance a
+ * probe point from the moby position along the current yaw (ctrl+0xF8) by
+ * ctrl+0x14, resolve it against the world (func_002A8D08 vertical sweep), snap
+ * the moby ground height (ProbeGroundHeight). If unobstructed OR out of leash
+ * range (ctrl+0x1C), re-aim at the target (ctrl+0x0/+0x4) and re-roll the timer;
+ * else, when within hero range (ctrl+0x20), steer the heading toward the hero
+ * (func_002AAFB8 over the hero bearing, weighted by the normalized hero
+ * distance). Uses func_002AAFB8's guarded f32 return (see above). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AF728);
+#else
+extern f32 GetRandomFloatSigned(f32 lo, f32 hi);   /* 0x2A8740 signed random magnitude */
+extern s32 RandRangeInclusive(s32 lo, s32 hi);     /* 0x2A8688 random int in [lo,hi] */
+extern Vec4 g_heroPos;                             /* 0x189EA0 hero world position */
+
+void func_002AF728(Moby *moby, void *ctrlPtr, f32 stepZ, f32 snapEps) {
+    u8   *m = (u8 *)moby;
+    u8   *c = (u8 *)ctrlPtr;
+    Vec4 *mpos = (Vec4 *)(m + 0x10);
+    Vec4  probe;
+    s32   blocked;
+    f32   dist;
+
+    if (*(s16 *)(c + 0x28) == 0) {
+        /* idle: choose a new heading jitter + dwell timer */
+        *(f32 *)(c + 0x24) += GetRandomFloatSigned(0.7853982f, 2.6183867f);
+        *(s16 *)(c + 0x2A) = (s16)RandRangeInclusive(*(s16 *)(c + 0x2C), *(s16 *)(c + 0x2E));
+        *(s16 *)(c + 0x28) = 1;
+    } else {
+        /* active: converge the heading + tick the dwell timer */
+        func_002AB668(*(f32 *)(c + 0x24), *(f32 *)(c + 0x18), (f32 *)(m + 0xF8), 0);
+        if (func_00283328(c + 0x2A) != 0) {
+            *(s16 *)(c + 0x28) = 0;
+        }
+    }
+
+    /* advance the probe point along the current yaw and resolve it */
+    probe = *mpos;
+    probe.x += func_00283B30(*(f32 *)(m + 0xF8)) * *(f32 *)(c + 0x14);
+    probe.y += func_00283B48(*(f32 *)(m + 0xF8)) * *(f32 *)(c + 0x14);
+    blocked = func_002A8D08(moby, mpos, &probe, 0, stepZ, *(f32 *)(c + 0x10), snapEps, 0.5235988f);
+    *(f32 *)(m + 0x18) = ProbeGroundHeight(mpos, 0.5f, 0);
+    dist = DistXYVu0(mpos, (Vec4 *)c);
+
+    if (blocked == 0 || *(f32 *)(c + 0x1C) < dist) {
+        /* clear path or beyond leash: re-aim at the target and re-roll the timer */
+        *(f32 *)(c + 0x24) = func_00283BF8(*(f32 *)(c + 0x0) - *(f32 *)(m + 0x10),
+                                           *(f32 *)(c + 0x4) - *(f32 *)(m + 0x14));
+        *(s16 *)(c + 0x2A) = (s16)RandRangeInclusive(0x1E, 0x5A);
+        *(s16 *)(c + 0x28) = 1;
+    } else {
+        /* blocked and within leash: steer toward the hero when close enough */
+        f32 heroDist = DistXYVu0(mpos, &g_heroPos);
+        if (heroDist < *(f32 *)(c + 0x20)) {
+            f32 bearing = func_00283BF8(*(f32 *)(m + 0x10) - g_heroPos.x,
+                                        *(f32 *)(m + 0x14) - g_heroPos.y);
+            *(f32 *)(c + 0x24) = func_002AAFB8(*(f32 *)(c + 0x24), bearing,
+                                              heroDist / *(f32 *)(c + 0x20));
+        }
+    }
+}
+#endif
 
 /* func_002AF948: round a float to `digits` decimal places. Builds the scale
  * 10^digits (digits<=0 -> 1), adds the half-ulp rounding bias 1/(2*scale),
@@ -3835,11 +4314,47 @@ void func_002B0038(Moby *parent, Moby *child, void *srcTransform, s32 flags) {
 }
 #endif
 
+/* func_002B0150 (this unit): score a candidate `moby` (position at +0x10) against
+ * a query point. Samples func_002837F8(query, mobyPos); flags the candidate
+ * (*outFlag=1) when b exceeds that sample. Then builds two drive-heading angles
+ * (func_00284630 over the planar bearing func_00283BF8(dx,dy) and over the
+ * XY-distance-vs-dz bearing) and flags again when 0<c<heading1 or 0<d<heading2.
+ * Returns sample*(1+heading1), plus 8.0 when the moby is a valid class-filtered
+ * entry (func_002AC9E0). (Un-parked: func_00284630 CONFIRMED f32(f32,f32)
+ * drive-heading helper — decompiled in 183558.c, used by 1B4218.c.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0150);
+#else
+extern f32 func_00284630(f32 a, f32 b);   /* 0x284630 drive-heading angle helper (CONFIRMED) */
 
-/* func_002B0150 (this unit): score a candidate moby against a query point; args
- * traced from its prologue ($16=$4 query, $17=$5 moby, $18=$6 out) — writes a
- * reject flag to *outFlag and returns the candidate's distance in $f0. */
+f32 func_002B0150(Vec4 *query, Moby *moby, s32 *outFlag, f32 a, f32 b, f32 c, f32 d) {
+    f32 *mpos = (f32 *)((u8 *)moby + 0x10);   /* moby position Vec4 */
+    f32 sample = func_002837F8(query, mpos);
+    f32 heading1, heading2, base;
+
+    *outFlag = 0;
+    if (b < sample) {
+        *outFlag = 1;
+    }
+
+    heading1 = func_00284630(func_00283BF8(mpos[0] - query->x, mpos[1] - query->y), a);
+    heading2 = func_00284630(func_00283BF8(DistXYVu0(query, (Vec4 *)mpos),
+                                           mpos[2] - query->z), 0.0f);
+
+    if (0.0f < c && c < heading1) {
+        *outFlag = 1;
+    }
+    if (0.0f < d && d < heading2) {
+        *outFlag = 1;
+    }
+
+    base = sample + heading1 * sample;
+    if (func_002AC9E0(moby) != 0) {
+        base += 8.0f;
+    }
+    return base;
+}
+#endif
 extern f32 func_002B0150(Vec4 *query, Moby *moby, s32 *outFlag, f32 a, f32 b, f32 c, f32 d);
 extern Moby *g_mobyFlagged1000List[];   /* null-terminated array of flagged mobys */
 
