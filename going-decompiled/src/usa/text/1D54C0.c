@@ -20,6 +20,88 @@
 extern void Begin2dDrawBatch(s32 mode);
 extern void End2dDrawBatch(void);
 
+/* #else-only draw/save callees shared across multiple structure-model bodies;
+ * guarded under TARGET_NATIVE so the matching (INCLUDE_ASM) build is untouched.
+ * str is an int-width localized-string handle (GetLocalizedString returns int). */
+#ifdef TARGET_NATIVE
+extern void DrawFont1RightJustifiedLabel(s32 x, s32 y, u32 color, s32 str, s32 wrap);
+extern void BuildSaveImage(void *dst);
+/* Remaining unit-wide #else-only callee prototypes (empty-paren = no arg-check);
+ * return-typed s32 where the value is consumed, void where ignored. */
+extern void AppendGsRegPacket();
+extern void ComputeAudioChannelMix();
+extern s32  CountSkillPointsCompleted();
+extern void DrawDebugString();
+extern void DrawFont1CenteredLabel();
+extern void DrawGlyphQuad();
+extern void DrawHudIconQuadTiled();
+extern void DrawHudSpriteRotated();
+extern void DrawStringFont1();
+extern void EnableInlineColorCodes();
+extern void FadeOutToBlackBlocking();
+extern void FillMemory32();
+extern s32  GatherActiveObjectives();
+extern s32  GetHudIconTex0();
+extern s32  GetLocalizedString();
+extern s32  GetMenuOverlayMode();
+extern void GuiElementSetVisible();
+extern s32  GuiFontAtlasLookupGlyph();
+extern void GuiListSetItemCount();
+extern void GuiListSetScrollPos();
+extern void MapSetCurrentLevel();
+extern void MarkLevelAvailable();
+extern s32  MeasureFont2Text();
+extern void PumpDialogVoiceSystem();
+extern s32  RequestGameStateChange();
+extern void RequestLevelExit();
+extern s32  StartFileLoad();
+extern void StopFileLoad();
+extern void UpdateLevelObjectiveStates();
+extern void func_00131A98();
+extern void func_00132938();
+extern s32  func_0026F7D0();
+extern s32  func_0026F7D8();
+extern void func_0027F7A0();
+extern void func_00280090();
+extern void func_002801B8();
+extern void func_00283460();
+extern void func_00286138();
+extern void func_002861D8();
+extern s32  func_00288898();
+extern void func_002888A8();
+extern void func_002888D0();
+extern s32  func_0028EDF0();
+extern void func_002904B0();
+extern void func_00297FA0();
+extern void func_00298A00();
+extern void func_00299BF8();
+extern void func_0029D248();
+extern void func_0029D918();
+extern void func_002B1880();
+extern s32  func_002B1D40();
+extern void func_002CA980();
+extern void func_002CAB90();
+extern s32  func_002D6B00();  /* locally defined below; return typed s32 to match its definition */
+extern s32  func_002DF500();
+extern s32  func_002DFF68();  /* locally defined below; return typed s32 to match its definition */
+extern s32  func_002E0010();
+extern void func_003017F8();
+extern void func_0033A7A8();
+extern void func_00342450();
+extern s32  func_00342468();
+extern s32  func_003424C8();
+extern void func_00342520();
+extern void func_00342BE8();
+extern s32  func_00342D68();
+extern void func_00342DC0();
+extern void func_00343290();
+extern void func_003432B8();
+extern s32  func_003432C0();
+extern void func_0034EF68();
+extern s32  func_0034F300();
+extern void sceCdReadClock();
+#endif
+
 /* Per-screen draw helpers in the preceding text/1A00F0 asm band. */
 extern void func_0029D958(void);
 extern void func_0029D8E8(void);
@@ -231,6 +313,10 @@ s32 func_002D5540(void) {
     extern s16 D_1A8C28[], D_1A8C30[], D_1A8C38[], D_1A8C40[], D_1A8C48[], D_1A8C50[], D_1A8C58[];
     extern u8  D_26CFD8[];   /* paint-match table, stride 0x14 {s32 mask, s32 value} */
     extern u8  D_0025D458[];
+    extern void func_002CAFD8(void);                                  /* prime the moby scratch subsystem */
+    extern void InitMobyFromClass(void *moby, s32 classId);           /* spawn a moby from a class id */
+    extern void func_002A12A0(void *moby, s32 color, s32 a, s32 b, s32 c); /* moby colour/render tuning */
+    extern void UpdateMobyBSphereAndGrid(void *moby);                 /* refresh bounding sphere + grid cell */
     u8 *mgr = (u8 *)g_menuScreenBlock;
     u8 *base;
     u8 *m;
@@ -590,10 +676,13 @@ s32 func_002D5F10(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D6028);
 #else
-    /* TODO(match): functional equivalent - not byte-exact. */
+/* Matching arm stays INCLUDE_ASM; #else is the structure model (faithful vs asm:
+ * value*329+0.5, -36 when D_001B2320==1, GetLocalizedString(0x2BE5) label draw).
+ * D_001B2324/D_001B2320 == g_swapGadgetItemIndex+0x8A/+0x86. */
 s32 func_002D6028(void) {
     extern float D_001B2324;
     extern s32   D_001B2320;
+    extern void  func_0029D368(void);   /* per-frame customization-panel helper */
     float yf;
     Begin2dDrawBatch(0);
     func_0029D368();
@@ -1804,11 +1893,14 @@ s32 UploadMenuBgImagePair(void *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DBC98);
 #else
-    /* TODO(match): functional equivalent - not byte-exact. */
+/* Matching arm stays INCLUDE_ASM; #else is the structure model (faithful vs asm,
+ * cross-checked against the EU twin func_002DBC60). */
 s32 func_002DBC98(void) {
     extern s32 D_00261978[];
     extern s32 D_001B1518;
     extern void *D_001C5188, *D_001C5198;
+    extern void DrawHudSpriteTex0(void *tex, s32 x, s32 y, s32 a, s32 b,
+                                  s32 w, s32 h, s32 phase);
     s32 lvl = g_nMapCurrentLevel;
     s32 slot = g_nMapActiveSlot;
     s32 box[4];
@@ -2228,8 +2320,11 @@ s32 func_002DC8A8(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC940);
 #else
-    /* TODO(match): functional equivalent - not byte-exact. */
+/* Matching arm stays INCLUDE_ASM; #else is the structure model — faithful at the
+ * call level (cross-checked vs EU twin func_002DC908); the exact stack text-box
+ * rect packing + flat backing-rect pass are abstracted (see note below). */
 s32 func_002DC940(MenuWidget *obj) {
+    extern void DrawFont2TextBox(void *box, s64 tint, s32 str, s32 mode);
     u8 *o = (u8 *)obj;
     s32 str = 0x1abbe0;   /* default: pre-localized fallback buffer */
     Begin2dDrawBatch(0);
@@ -2521,7 +2616,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DD888);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DDD30);
 #else
-    /* TODO(match): functional equivalent - not byte-exact. */
+/* Matching arm stays INCLUDE_ASM; #else is the structure model — call-level
+ * faithful, cross-checked against the thoroughly-asm-verified EU twin func_002DDCE8
+ * (the EU form navigates the menu block directly; this USA form uses the
+ * g_pCurrentMenuScreen/g_pNextMenuScreen globals per the USA asm). */
 s32 func_002DDD30(MenuWidget *obj) {
     extern s32 D_001F28F8, D_0013953C, D_00139544, D_001F2924, D_001393E8;
     extern s32 D_0013954C, D_001393F0, D_0013955C, D_001A7424, D_001A7C10;
@@ -2529,6 +2627,11 @@ s32 func_002DDD30(MenuWidget *obj) {
     extern u8  D_001A8C88;
     extern s32 D_00139410[], D_00139528; extern s16 D_001393F8;
     extern u8  g_abLevelVisitedMarkers[]; extern u8 D_0025DB48[], D_00260D98[];
+    extern void func_0033A7D8(void *list, s32 sel);   /* GUI save-list cursor */
+    extern s32  func_00299960(void);                  /* consumed: quick-save readiness */
+    extern void func_00299968(void);                  /* arm the quick-save write */
+    extern void func_002F7328(void);                  /* resume-play transition */
+    extern void func_002CA998(void);                  /* post-BuildSaveImage commit step */
     u8 *o = (u8 *)obj;
     s32 prevSel = *(s32 *)(o + 0x40);
     s32 pressed, nav;
@@ -2594,7 +2697,7 @@ s32 func_002DDD30(MenuWidget *obj) {
             PlayGlobalSound(4, 0, 0);
             D_00139528 = 0;
             D_001393F8 = (s16)*(s32 *)(o + 0x40);
-            BuildSaveImage(0x1f29f0);
+            BuildSaveImage((void *)0x1f29f0);
             func_002CA998();
             if (D_00139544 < 0) { extern s32 D_00139548; D_00139548 = 0; D_00139544 = 0xd; }
             D_001F28F8 = 1;
