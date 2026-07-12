@@ -96,7 +96,11 @@ extern s32 func_0011AAD0(s32 count);           /* RotateThreadReadyQueue */
 extern s32 func_00352DB0(void *dmaq);
 extern s32 func_00351CD0(FmvPtsQueue *q);
 extern s32 func_00351CE0(FmvPtsQueue *q);
+#ifndef TARGET_NATIVE
 extern s32 func_00351DB0(void);
+#else
+void func_00351DB0(s32 *st);   /* #else structure model takes the stream-state ptr */
+#endif
 extern s32 func_00133928(void);
 extern s32 func_0012EE28(void);
 #ifndef TARGET_NATIVE
@@ -157,7 +161,40 @@ s32 func_00351990(void) {
 }
 
 /* func_003519C0 (USA func_00350520): blocked, 8-byte-packed saves. */
+/* func_003519C0 (EU twin of USA func_00350520): construct the FMV pts-queue object — zero the
+ * 0x20-qword header, stash payload-ring/scratch bases + stream type(3) + 0x400 granularity, record
+ * the decode buffer, alloc the IPU sema, report success. Matching arm stays INCLUDE_ASM; #else is
+ * the structure model. Word-verified vs USA func_00350520: ZeroQwords->func_00283348 (-0xF0),
+ * func_00133850->func_001338B0 (+0x60), D_1B2354->g_nVendorBuyQuantity+0x18C (+0x80 via the file's anchor). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_003519C0);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee saves. */
+s32 func_003519C0(s32 *obj, s32 ringBase, s32 scratchBase, u8 *decodeBuf) {
+    extern void func_00283348(s32 *dst, s32 nQwords);          /* ZeroQwords twin */
+    extern s64 func_001338B0(s32, s32, s32, s32, s32, s32);    /* IPU sema alloc twin */
+    s64 sema;
+
+    func_00283348(obj + 2, 0x20);
+    obj[0xD] = ringBase;
+    obj[0x10] = scratchBase;
+    obj[1] = 3;
+    obj[0] = 0;
+    obj[0xC] = 0;
+    obj[0xE] = 0;
+    obj[0xF] = 0;
+    obj[0x11] = 0;
+    obj[0x14] = 0;
+    obj[0x16] = 0;
+    obj[0x17] = 0;
+    obj[0x18] = 0;
+    *(u8 **)((char *)&g_nVendorBuyQuantity + 0x18C) = decodeBuf;
+    obj[0x13] = 0x400;
+    sema = func_001338B0(0x400, 0x1000, 0x400, 0, 5, 3);
+    obj[0x12] = (s32)sema;
+    return sema >= 0;
+}
+#endif
 
 /* === func_00351A80 (USA func_003505E0) ============================== */
 /**
@@ -242,11 +279,20 @@ s32 func_00351CD0(FmvPtsQueue *q) {
  * value-returning like the original; the undefined fall-through result is
  * forwarded by callers and keeps cc1 from sibling-call opting the tails.)
  */
+#ifndef TARGET_NATIVE
 s32 func_00351CE0(FmvPtsQueue *q) {
     if (q->started != 0) {
         return func_00351DB0();
     }
 }
+#else
+s32 func_00351CE0(FmvPtsQueue *q) {
+    if (q->started != 0) {
+        func_00351DB0((s32 *)q);
+    }
+    return 0;
+}
+#endif
 
 /* func_00351D08 (USA func_00350868): SIF-DMA bounce of a decoded block to IOP
  * memory. Blocked: 8-byte-packed saves; asm-logic identical to USA func_00350868
@@ -256,7 +302,99 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00351D08);
 
 /* func_00351DB0 (USA func_00350910): bitstream feeder (EU twin). Blocked in
  * USA too — left INCLUDE_ASM there. */
+/* func_00351DB0 (EU twin of USA func_00350910): drain the elementary stream in 0x400-byte units —
+ * per the stream FSM state (st[0]) compute ready bytes, de-interleave st[6] macroblock rows of st[7]
+ * bytes from the payload ring into the decode scratch, inject SCD/sequence markers at the 0xC00
+ * boundary, and bounce each completed 0x400 block to IOP. Takes the stream-state ptr; returns void.
+ * Matching arm stays INCLUDE_ASM; #else is the structure model. Word-verified vs USA func_00350910:
+ * func_00133960->func_001339C0 (+0x60), func_00350868->func_00351D08, D_1B2354->
+ * g_nVendorBuyQuantity+0x18C. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00351DB0);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee saves plus
+   branch-likely div-by-zero guards. */
+void func_00351DB0(s32 *st) {
+    extern s32 func_001339C0(void);                              /* IPU byte-pos twin */
+    extern void func_00351D08(u8 *obj, u8 *src, s32 len, s32 dstOfs); /* block-bounce twin */
+    u8 *decodeBuf = *(u8 **)((char *)&g_nVendorBuyQuantity + 0x18C);
+    u32 avail = 0;
+    s32 state = st[0];
+    s32 rdy;
+
+    if (state == 2) {
+        avail = (func_001339C0() - st[0x18]) & 0xFFF;
+        rdy = (s32)avail < 0x400;
+    } else if (state > 2) {
+        if (state == 3) {
+            return;
+        }
+        rdy = 1;
+    } else if (state == 1) {
+        if (st[0xF] < 0x1000) {
+            return;
+        }
+        avail = 0x1000 - st[0x14];
+        rdy = (s32)avail < 0x400;
+    } else {
+        rdy = 1;
+    }
+
+    if (!rdy && st[6] << 10 <= st[0xF]) {
+        s32 mbCols = st[6];
+
+        do {
+            avail -= 0x400;
+            if (mbCols > 0) {
+                s32 col = 0;
+                s32 srcBase = st[0xF];
+
+                while (1) {
+                    s32 ringSize = st[0x10];
+                    s32 emitted = 0;
+                    s32 rowBytes = st[7];
+                    u8 *src = (u8 *)(st[0xD] + (st[0xE] - srcBase + ringSize) % ringSize +
+                                     col * rowBytes);
+                    u8 *dst = decodeBuf;
+
+                    do {
+                        s32 i;
+                        for (i = 0; i < st[7]; i++) {
+                            *dst++ = *src++;
+                            emitted++;
+                        }
+                        rowBytes = st[7];
+                        src += rowBytes * (st[6] - 1);
+                    } while (emitted < 0x400);
+
+                    if (st[0x18] == 0xC00) {
+                        decodeBuf[0x3F1] = 3;
+                    }
+                    if (st[0x18] == 0) {
+                        decodeBuf[0x11] = 2;
+                        decodeBuf[1] = 6;
+                    }
+                    func_00351D08((u8 *)st, decodeBuf, 0x400, col * 0x1000 + st[0x18]);
+                    if (st[6] <= col + 1) {
+                        break;
+                    }
+                    srcBase = st[0xF];
+                    col++;
+                }
+            }
+            {
+                s32 step = st[0x18] + 0x400;
+                s32 r = (step >= 0) ? step : step + 0x13FF;
+                s32 left = st[0xF] - mbCols * 0x400;
+                st[0x18] = step - (r >> 12) * 0x1000;
+                st[0x14] += 0x400;
+                st[0xF] = left;
+                mbCols = st[6];
+            }
+        } while ((s32)avail >= 0x400 && mbCols * 0x400 <= st[0xF]);
+    }
+}
+#endif
 
 /* func_00352000 (USA func_00350B60): blocked (INCLUDE_ASM in USA too). */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00352000);
@@ -442,7 +580,26 @@ s32 func_00352798(u8 *base, u8 **out) {
 }
 
 /* func_003527C8 (USA func_00351328): blocked, div scheduling wall. */
+/* func_003527C8 (EU twin of USA func_00351328): commit up to n bytes into the pts ring — clamp to
+ * free space (size - fill), advance fill and the wrapped read offset, return bytes committed.
+ * Matching arm stays INCLUDE_ASM; #else is the structure model. Word-verified vs USA func_00351328:
+ * no callees/globals; FmvPtsRing offsets 0x50000/0x50004/0x50008 identical in EU .s. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_003527C8);
+#else
+s32 func_003527C8(u8 *base, s32 n) {
+    FmvPtsRing *ring = (FmvPtsRing *)base;
+    s32 size = ring->size;
+    s32 fill = ring->fill;
+    s32 readOfs = ring->readOfs;
+    s32 space = size - fill;
+    s32 take = (n < space) ? n : space;
+
+    ring->fill = fill + take;
+    ring->readOfs = (readOfs + take) % size;
+    return take;
+}
+#endif
 
 /* === func_00352810 (USA func_00351370) ============================== */
 /**
@@ -459,7 +616,22 @@ s32 func_00352810(u8 *base, u8 **out) {
 }
 
 /* func_00352858 (USA func_003513B8): blocked, register-coloring wall. */
+/* func_00352858 (EU twin of USA func_003513B8): consume up to n bytes from the pts ring — drop
+ * min(n, fill) off the queued count, return bytes dropped. Matching arm stays INCLUDE_ASM; #else is
+ * the structure model. Word-verified vs USA func_003513B8: no callees/globals; only FmvPtsRing.fill
+ * (0x50004) touched, identical in EU .s. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00352858);
+#else
+s32 func_00352858(u8 *base, s32 n) {
+    FmvPtsRing *ring = (FmvPtsRing *)base;
+    s32 fill = ring->fill;
+    s32 take = (n < fill) ? n : fill;
+
+    ring->fill = fill - take;
+    return take;
+}
+#endif
 
 /* === func_00352880 (USA func_003513E0) ============================== */
 /**
@@ -602,7 +774,78 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00353450);
 /* func_003534A0 (USA func_00352000): blocked, 8-byte-packed saves. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_003534A0);
 
+/* func_003534F8 (EU twin of USA func_00352058): ACK consumed DMA-tag ranges against the IPU
+ * frame-slot ring — walk the 0x18-byte slot array (base obj+0x50, ring length obj+0x54, read cursor
+ * obj+0x58, sector size obj+0x08*0x800) from the tail, clamping each slot's remaining length (+0x14)
+ * by how much of the request descriptor (req+0x10 base, req+0x14 length) overlaps it modulo the
+ * sector size, retiring fully-consumed slots and advancing the tail. Matching arm stays INCLUDE_ASM;
+ * #else is the structure model. Word-verified vs USA func_00352058: no callees/globals; all raw
+ * offsets (0x08/0x10/0x14/0x18/0x50/0x54/0x58/0x5C, sll 11 = *0x800) identical in EU .s. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_003534F8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; multiple div ops each guarded by a
+   branch-likely beql/break div-by-zero check. `obj` is the embedded bitstream/IPU-DMA sub-object
+   (slot-ring base +0x50, ring length +0x54, cursors +0x58/+0x5C, sector size +0x08); left u8* with
+   raw offsets until that sibling type is recovered. */
+s32 func_003534F8(u8 *obj, u8 *req) {
+    s32 ringLen = *(s32 *)(obj + 0x54);
+    s32 idx = (*(s32 *)(obj + 0x5C) - *(s32 *)(obj + 0x58) + ringLen) % ringLen;
+    s32 sectorSize = *(s32 *)(obj + 8) * 0x800;
+    s32 ok = 1;
+
+    if (*(s32 *)(obj + 0x58) > 0) {
+        u8 *slot = *(u8 **)(obj + 0x50) + idx * 0x18;
+
+        if (*(s32 *)(slot + 0x14) != 0) {
+            s32 reqLen = *(s32 *)(req + 0x14);
+
+            while (reqLen != 0) {
+                s32 slotPos = *(s32 *)(slot + 0x10);
+
+                if ((slotPos + sectorSize - *(s32 *)(req + 0x10)) % sectorSize < reqLen) {
+                    s32 remain = *(s32 *)(slot + 0x14);
+                    s32 take = *(s32 *)(req + 0x10) + reqLen - slotPos;
+
+                    if (remain < take) {
+                        take = remain;
+                    }
+                    *(s32 *)(slot + 0x14) = remain - take;
+                    *(s32 *)(slot + 0x10) = (slotPos + take) % sectorSize;
+
+                    if (remain - take == 0) {
+                        s32 tail;
+                        if (*(s64 *)slot >= 0) {
+                            *(s32 *)(slot + 0x14) = 0;
+                            *(s64 *)slot = -1;
+                            *(s64 *)(slot + 8) = -1;
+                            *(s32 *)(slot + 0x10) = 0;
+                        }
+                        tail = *(s32 *)(obj + 0x58) - 1;
+                        if (tail < 0) {
+                            tail = 0;
+                        }
+                        *(s32 *)(obj + 0x58) = tail;
+                    }
+                } else {
+                    ok = 0;
+                }
+
+                idx = (idx + 1) % *(s32 *)(obj + 0x54);
+                if (!ok) {
+                    return 0;
+                }
+                slot = *(u8 **)(obj + 0x50) + idx * 0x18;
+                if (*(s32 *)(slot + 0x14) == 0) {
+                    return 0;
+                }
+                reqLen = *(s32 *)(req + 0x14);
+            }
+        }
+    }
+    return 0;
+}
+#endif
 
 /* func_00353650 (USA func_003521B0): sema-guarded enqueue of a 0x18-byte
  * DMA-add command into the queue's ring buffer. Under the queue sema
