@@ -185,7 +185,7 @@ extern TextEntry *g_pActiveTextTable;         /* active localized text table (0x
  * entry count; the +0x24/+0x28 fields hold the showing-subtitle index/handle. */
 typedef struct SubtitleState {
     s32 state;          /* +0x00 */
-    s32 _pad04;         /* +0x04 */
+    s32 animStep;       /* +0x04: per-state open/close animation step (clamped 0..8 / 0..4) */
     s32 boxHalfWidth;   /* +0x08: half the measured text width + 10 (BeginSubtitleDisplay) */
     s32 boxHalfHeight;  /* +0x0C: half the measured text height + 5 */
     s32 field10;        /* +0x10 */
@@ -196,7 +196,8 @@ typedef struct SubtitleState {
     s32 showingIndex;   /* +0x24: pending/showing line index (-1 = none) */
     s32 showingHandle;  /* +0x28: voice/clip handle of the shown line */
     s32 tableCount;     /* +0x2C */
-    u8  _pad30[0x10];
+    s32 boxActiveGate;  /* +0x30: nonzero while the box is live/drawn */
+    u8  _pad34[0xC];
     s32 phaseTimer;     /* +0x40: per-line phase timer (cleared on arm) */
     s32 phaseFlag;      /* +0x44: per-line phase flag  (cleared on arm) */
     s32 textPixelWidth; /* +0x48: strlen(text) * 7 (BeginSubtitleDisplay) */
@@ -301,7 +302,7 @@ void func_0028C728(void);
 void func_0028ABC0(s32 a, s32 b);
 void func_0028C090(HudElement *w, s32 iconName);
 void func_0028C390(void *p);
-void func_0028BE10(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g);
+s32 func_0028BE10(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g); /* returns a widget-slot handle in $2 */
 void func_0029DB10(s32 a, s32 b);
 void func_002B1B48(s32 a, s32 b, s32 c);
 void ResetDebugHeap(void);
@@ -551,14 +552,48 @@ void func_00288C30(s32 itemId) {
 }
 #endif
 
-/* GiveInventoryItem(itemId, ...): mark an item owned (g_inventoryOwned) and run
- * the downstream registration (variant advance / order-list insertion). Single
- * callee-save + jal gates.
+/* GiveInventoryItem(itemId): grant an inventory item (0x288D30). If not already
+ * owned: mark it owned (g_inventoryOwned) + newly-acquired (g_inventoryNewFlag),
+ * and — when the item's active variant sells ammo and the player currently has
+ * none — top its ammo up to the variant's pickup amount. Then register it
+ * (AddItemToInventoryOrder + func_00288C30). Special-case: granting the wrench
+ * (itemId 0x10) while vendor upgrades are unlocked snaps it to upgrade level 2
+ * and clears D_1398A8.
  *
- * WALL: a jal-driven gate chain over g_inventoryOwned / g_weaponTable with the
- * 0xE0-stride `mult` indexing and branch colouring cc1 does not reproduce. Left
- * INCLUDE_ASM. */
+ * WALL (matching build): a jal-driven gate chain over g_inventoryOwned /
+ * g_weaponTable with the 0xE0-stride `mult` indexing + branch colouring cc1 does
+ * not reproduce — stays INCLUDE_ASM. This #else is faithful COVERAGE only. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", GiveInventoryItem);
+#else
+extern u8  g_inventoryNewFlag[];   /* itemId -> "newly acquired" flag (set on grant) */
+extern s32 D_1398A8;               /* cleared when the wrench upgrade is granted */
+extern s32 AddItemToInventoryOrder(s32 itemId);  /* defined below in this unit */
+extern s32 IsVendorUpgradesUnlocked(void);       /* defined below in this unit */
+
+void GiveInventoryItem(s32 itemId)
+{
+    WeaponDef *w;
+    u8 slot;
+
+    if (g_inventoryOwned[itemId] != 0) {
+        return;                            /* already owned — no-op */
+    }
+    slot = g_itemEquippedSlot[itemId];
+    g_inventoryNewFlag[itemId] = 1;
+    g_inventoryOwned[itemId] = 1;
+    w = &g_weaponTable[slot];
+    if (w->sellsAmmoFlag != 0 && g_weaponAmmo[itemId] == 0) {
+        g_weaponAmmo[itemId] = *(u16 *)((u8 *)w + 0x92);   /* variant pickup ammo */
+    }
+    AddItemToInventoryOrder(itemId);
+    func_00288C30(itemId);
+    if (itemId == 0x10 && IsVendorUpgradesUnlocked() != 0) {
+        SetWeaponUpgradeSlot(0x10, 2);
+        D_1398A8 = 0;
+    }
+}
+#endif
 
 /* AddItemToInventoryOrder(itemId): place `itemId` into the inventory quick-select
  * order list (g_inventoryOrder, bounded by D_1A7B90). The item must exist, be at
@@ -1194,7 +1229,7 @@ void func_002898E0(void) {
     }
 
     ss->state = 0;
-    ss->_pad04 = 0;
+    ss->animStep = 0;
     ss->entryIndex = -1;
     ss->showingIndex = -1;
 }
@@ -1310,7 +1345,7 @@ void BeginSubtitleDisplay(void) {
     s32 screenH;
 
     ss->state = 1;
-    ss->_pad04 = 0;
+    ss->animStep = 0;
 
     if (D_1A7B9C != 0) {
         PlayGlobalSound(0, 1, 0);
@@ -1356,11 +1391,178 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", UpdateSubtitleS
 void func_0028A4E0(void) {
 }
 
-/* func_0028A4E8(...): subtitle layout/positioning helper (~0x51C bytes, heavy FP).
+/* func_0028A4E8(): per-frame subtitle-box renderer + open/close animator (~0x51C).
  *
- * WALL: extensive float math + jump tables; FP scheduling and jr-through-jtbl
- * dispatch are not reproducible from C. Left INCLUDE_ASM. */
+ * Ticks the box phase timer (phaseFlag down-counts to 0, clamped; when it hits 0
+ * the vertical slide offset phaseTimer is cleared), then bails unless the state
+ * machine is live (state!=0), the box is active (boxActiveGate), and subtitles-
+ * with-sound is enabled (D_1A7B9C). `state` (1..7) selects one of five paths via
+ * jtbl_0026C7D0_text:
+ *   1  pop-in: fixed 8px inset box.
+ *   2  idle: func_0028A4E0() (currently a no-op).
+ *   3  grow: box half-extents scaled by animStep k/8 (+0x20 base).
+ *   4/5/6  full box + line text, text alpha faded by animStep (state 4 fades in,
+ *          6 fades out, 5 is fully opaque).
+ *   7  shrink/close: extents shrink toward 8, box height = (8-k)*12.
+ * Any drawing path is skipped (-> func_0028A4E0()) when the box-visible byte
+ * D_1A7B9D is 0. field10 (+0x10) is the box centre X, boxPosY (+0x14) the centre
+ * Y; phaseTimer (+0x40) is added to every Y as a slide offset. field18/field1C
+ * (+0x18/+0x1C) persist the last drawn half-width/half-height between frames.
+ * The box quad is drawn by func_0027F208 (int coords) and func_0029C448 (float
+ * coords); the line text is laid out by func_00280C98 and drawn by func_00280BB8.
+ * Colours are GS-packed word constants.
+ *
+ * WALL: extensive FP scheduling + jr-through-jtbl dispatch cc1 does not
+ * reproduce. Matching arm stays INCLUDE_ASM; the #else below is the portable
+ * body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028A4E8);
+#else
+extern u8 D_1A7B9D;   /* 0x1A7B9D - subtitle box-visible flag (byte) */
+/* filled-quad draw (declared identically in text/1CA080.c) */
+extern void func_0027F208(s32 y0, s32 y1, s32 x0, s32 x1, s32 h, s32 color);
+/* border/outline quad draw: int mode+colour then four float box edges (y0,y1,x0,x1) */
+extern void func_0029C448(s32 mode, s32 color, float y0, float y1, float x0, float x1);
+
+/* signed divide-by-8, truncating toward zero (the sra-with-bias idiom) */
+static s32 div8_trunc(s32 v) {
+    return ((v >= 0) ? v : v + 7) >> 3;
+}
+
+void func_0028A4E8(void) {
+    SubtitleState *ss = &g_subtitleState;
+    s32 state;
+    s32 t, y, cx;
+
+    /* phase-timer housekeeping */
+    ss->phaseFlag -= 1;
+    if (ss->phaseFlag < 0) {
+        ss->phaseFlag = 0;
+    }
+    if (ss->phaseFlag == 0) {
+        ss->phaseTimer = 0;
+    }
+
+    /* gating */
+    state = ss->state;
+    if (state == 0) {
+        return;
+    }
+    if (ss->boxActiveGate == 0) {
+        return;
+    }
+    if (D_1A7B9C == 0) {
+        return;
+    }
+    if ((u32)(state - 1) >= 7) {
+        return;
+    }
+
+    t  = ss->phaseTimer;    /* vertical slide offset */
+    y  = ss->boxPosY;       /* centre Y */
+    cx = ss->field10;       /* centre X */
+
+    switch (state) {
+    case 1: {                                   /* pop-in: fixed 8px inset box */
+        if (D_1A7B9D == 0) {
+            func_0028A4E0();
+            return;
+        }
+        ss->field1C = 8;
+        ss->field18 = 8;
+        func_0027F208(y - 8 + t, y + 8 + t, cx - 8, cx + 8, 0x60, 0x60442D00);
+        func_0029C448(0x60, 0x55F0C070,
+                      (float)((y - 8) + t), (float)((y + 8) + t),
+                      (float)(cx - 8), (float)(cx + 8));
+        return;
+    }
+
+    case 2:                                     /* idle */
+        func_0028A4E0();
+        return;
+
+    case 3: {                                   /* grow: extents scaled by k/8 */
+        s32 k = ss->animStep;
+        s32 hh = ss->boxHalfHeight - 0x20;
+        s32 hw = ss->boxHalfWidth - 0x20;
+        s32 dy, dx;
+        if (D_1A7B9D == 0) {
+            func_0028A4E0();
+            return;
+        }
+        if (k >= 9) k = 8;
+        if (k < 0) k = 0;
+        dy = div8_trunc(hh * k) + 0x20;
+        dx = div8_trunc(hw * k) + 0x20;
+        ss->field18 = dx;
+        ss->field1C = dy;
+        func_0027F208(y - dy + t, y + dy + t, cx - dx, cx + dx, 0x60, 0x60442D00);
+        func_0029C448(0x60, 0x55F0C070,
+                      (float)((y - dy) + t), (float)((y + dy) + t),
+                      (float)(cx - dx), (float)(cx + dx));
+        return;
+    }
+
+    case 4:
+    case 5:
+    case 6: {                                   /* full box + faded line text */
+        s32 hh = ss->boxHalfHeight;
+        s32 hw = ss->boxHalfWidth;
+        s32 m, color;
+        const char *str;
+        u8 layout[0x40];
+        if (D_1A7B9D == 0) {
+            func_0028A4E0();
+            return;
+        }
+        ss->field18 = hw;
+        ss->field1C = hh;
+        func_0027F208(y - hh + t, y + hh + t, cx - hw, cx + hw, 0x60, 0x60442D00);
+        func_0029C448(0x60, 0x55F0C070,
+                      (float)((y - hh) + t), (float)((y + hh) + t),
+                      (float)(cx - hw), (float)(cx + hw));
+
+        m = ss->animStep;
+        if (m >= 5) m = 4;
+        if (m < 0) m = 0;
+        if (state == 4) {
+            color = (s32)(((u32)m << 29) | 0x00FFA888);       /* fade in */
+        } else if (state == 6) {
+            color = (s32)(((u32)(4 - m) << 29) | 0x00FFA888); /* fade out */
+        } else {
+            color = (s32)0x80FFA888;                          /* opaque */
+        }
+
+        str = g_pActiveTextTable[ss->entryIndex].str;
+        func_00280C98((s16 *)layout, t + 0xF0, t + 0x1E0, 0x2C, 0x1D4,
+                      0x100, y + t, 0x10, 3);
+        func_00280BB8(layout, color, str, -1);
+        return;
+    }
+
+    case 7: {                                   /* shrink/close */
+        s32 f1c = ss->field1C;
+        s32 f18 = ss->field18;
+        s32 k = ss->animStep;
+        s32 a, b, h;
+        if (D_1A7B9D == 0) {
+            func_0028A4E0();
+            return;
+        }
+        if (k >= 9) k = 8;
+        if (k < 0) k = 0;
+        a = f1c - div8_trunc((f1c - 8) * k);
+        b = f18 - div8_trunc((f18 - 8) * k);
+        h = (8 - k) * 0xC;
+        func_0027F208(y - a + t, y + a + t, cx - b, cx + b, h, 0x60442D00);
+        func_0029C448(h, 0x55F0C070,
+                      (float)((y - a) + t), (float)((y + a) + t),
+                      (float)(cx - b), (float)(cx + b));
+        return;
+    }
+    }
+}
+#endif
 
 /* func_0028AA08(key, column, outValue): bidirectional key<->value lookup over
  * the D_254E48 table — 0xAA rows of two s16 columns each (row stride 4 bytes).
@@ -1551,19 +1753,248 @@ void ResetBoltCounterHud(void) {
 }
 #endif
 
-/* UpdateBoltCounterHud(): per-frame animation of the on-screen bolt counter —
- * rolls the displayed value toward g_boltCount and updates the digit sprites.
+/* UpdateBoltCounterHud(): per-frame animation of the on-screen bolt counter. Rolls
+ * the displayed value (g_nBoltCounterDisplayed[0]) toward the live g_boltCount using
+ * up to two animation slots at g_hudMobyAuxBlockBase+0x44 (stride 0x10). Returns
+ * early via the per-frame gate func_0029C570. Each frame:
+ *   - flushes the current display value (FlushHudDisplayValue);
+ *   - ARM: in game-state 5 with the live total below the display, hard-resets
+ *     (ResetBoltCounterHud); else, when no slot is active (disp[3] == -1) and
+ *     disp[4] == 0, arms a count-DOWN slot if boltCount < display, or a count-UP
+ *     slot if display + accumulator < boltCount (picking slot 1 when slot 0 is busy);
+ *   - HOLD: services the active slot, recomputing its remaining delta, and after
+ *     ~61 held frames commits it to the rolling phase; fires the counter trigger
+ *     func_0029C488(0xB4) whenever a slot is active or already rolling;
+ *   - ROLL: for each of the two slots, promotes an arming slot to 'armed' once its
+ *     tick passes 15, and steps a rolling slot by (s32)((f32)disp[2] * (1/14)) per
+ *     frame, clamping the remaining delta at zero and retiring the slot (snapping to
+ *     the final value) after ~15 roll frames.
+ * disp[]: [0] displayed value, [1] roll base snapshot, [2] roll magnitude,
+ * [3] active-slot index (-1 = none), [4] count-down direction flag.
  *
- * WALL: callee-saves + float roll math whose FP scheduling cc1 does not
- * reproduce. Left INCLUDE_ASM (not yet fully traced). */
+ * WALL (matching build): callee-saves + the FP roll schedule + branch colouring cc1
+ * does not reproduce. Matching arm stays INCLUDE_ASM; #else is the portable body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", UpdateBoltCounterHud);
+#else
+extern s32  func_0029C570(void);   /* per-frame gate: nonzero => skip this frame */
+extern void func_0029C488(s32);    /* bolt-counter HUD trigger (always called with 0xB4) */
 
-/* func_0028B0B0(...): bolt-counter digit-sprite layout/draw (~0x4A8 bytes, very
- * heavy FP).
+/* one bolt-roll animation slot: 2-entry array at g_hudMobyAuxBlockBase+0x44, stride 0x10 */
+typedef struct HudRollSlot {
+    s32 targetDelta;  /* +0x0  signed bolts still to roll onto the display */
+    s32 holdTimer;    /* +0x4  arm-hold frame count, then roll-frame count */
+    s32 tick;         /* +0x8  free-running frame tick (arming -> armed at 15) */
+    s16 _pad0C;       /* +0xC  unused here */
+    s16 phase;        /* +0xE  0 idle, 1 arming, 2 armed/hold, 3 rolling */
+} HudRollSlot;
+
+void UpdateBoltCounterHud(void) {
+    s32         *disp  = g_nBoltCounterDisplayed;
+    HudRollSlot *slots = (HudRollSlot *)((u8 *)&g_hudMobyAuxBlockBase + 0x44);
+    s32 i;
+
+    if (func_0029C570() != 0) {
+        return;
+    }
+    FlushHudDisplayValue((s32)(u32)g_nBoltCounterDisplayed);
+
+    /* --- ARM: maybe start a new roll --- */
+    if (g_nGameState == 5 && g_boltCount < disp[0]) {
+        ResetBoltCounterHud();
+    } else if (disp[4] == 0 && disp[3] == -1) {
+        if (g_boltCount < disp[0]) {
+            s32 idx = (slots[0].phase != 0) ? 1 : 0;
+            slots[idx].phase       = 1;
+            slots[idx].holdTimer   = 0;
+            slots[idx].tick        = 0;
+            slots[idx].targetDelta = disp[0] - g_boltCount;
+            disp[3] = idx;
+            disp[4] = 1;
+        } else if ((disp[0] + disp[2]) < g_boltCount) {
+            s32 idx = (slots[0].phase != 0) ? 1 : 0;
+            slots[idx].phase       = 1;
+            slots[idx].targetDelta = 0;
+            slots[idx].holdTimer   = 0;
+            slots[idx].tick        = 0;
+            disp[3] = idx;
+            disp[4] = 0;
+        }
+    }
+
+    /* --- HOLD: service the active slot, fire the trigger --- */
+    if (disp[3] != -1) {
+        HudRollSlot *s = &slots[disp[3]];
+        if (s->phase != 3) {
+            s32 oldTarget = s->targetDelta;
+            if (oldTarget >= 0) {
+                s32 v = (g_boltCount - disp[0]) + disp[2];
+                s->targetDelta = v;
+                if (v != oldTarget) {
+                    s->holdTimer = 0;
+                }
+            }
+            s->tick      = s->tick + 1;
+            s->holdTimer = s->holdTimer + 1;
+            if (s->holdTimer >= 0x3D) {
+                disp[1]      = disp[0];
+                disp[2]      = s->targetDelta;
+                s->phase     = 3;
+                s->holdTimer = -1;
+            }
+        }
+        func_0029C488(0xB4);
+    } else if (slots[0].phase == 3 || slots[1].phase == 3) {
+        func_0029C488(0xB4);
+    }
+
+    /* --- ROLL: advance both slots' animation --- */
+    for (i = 0; i < 2; i++) {
+        HudRollSlot *s = &slots[i];
+        if (s->phase == 1) {
+            if (s->tick >= 0xF) {
+                s->phase = 2;
+            }
+        } else if (s->phase == 3) {
+            s32 delta = (s32)((f32)disp[2] * (1.0f / 14.0f));   /* 0x3D924925 */
+            s32 newTarget;
+
+            s->holdTimer = s->holdTimer + 1;
+            disp[0]      = disp[0] + delta;
+            newTarget    = s->targetDelta - delta;
+            s->targetDelta = newTarget;
+
+            if (disp[4] != 0) {
+                if (newTarget > 0) {
+                    s->targetDelta = 0;
+                }
+            } else {
+                if (newTarget < 0) {
+                    s->targetDelta = 0;
+                }
+            }
+
+            if (s->holdTimer >= 0xF) {
+                if (disp[0] != disp[1] + disp[2]) {
+                    disp[0] = disp[1] + disp[2];
+                }
+                disp[2]  = 0;
+                disp[3]  = -1;
+                s->phase = 0;
+                disp[4]  = 0;
+            }
+        }
+    }
+}
+#endif
+
+/* func_0028B0B0(): per-frame render of the animated "±N bolts" popup for each of
+ * the two bolt-roll animation slots (g_hudMobyAuxBlockBase+0x44, stride 0x10 —
+ * shared with UpdateBoltCounterHud). For a slot in phase 1/2/3 it derives an
+ * interpolation factor from the slot timers (arming ramp tick/14, hold ramp
+ * holdTimer/14, roll fade 1-(holdTimer-7)/7), lerps the two glyph tints and the
+ * number tint (func_002846E8; the sign of targetDelta selects the palette),
+ * formats targetDelta into a string, then draws the two "±" glyphs (font
+ * codepoints 0xB2/0xB3) and the number. Phase 0 and phase >3 draw nothing.
  *
- * WALL: extensive float positioning math; FP scheduling not reproducible from C.
- * Left INCLUDE_ASM. */
+ * WALL (matching build): callee-saves + the heavy FP positioning schedule +
+ * branch colouring cc1 does not reproduce. Matching arm stays INCLUDE_ASM; #else
+ * is the portable body. Helper ABIs confirmed against the sibling draws in
+ * 1CA080.c — func_003017F8 ignores its scale/vec38 params, hence the NULL/NULL,
+ * and its $6/$7 are clobbered by the intervening glyph lookup here anyway. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028B0B0);
+#else
+extern void *g_guiInstance;            /* GUI singleton ptr (0x1A8D04) */
+extern s16   g_swapGadgetItemIndex;    /* base whose +0x8A holds the HUD sprite y-scale (0x1B229A) */
+extern f32   D_1A8DE0[];               /* per-digit-count x-scale table, 7 entries (0x1A8DE0) */
+extern char  D_1A8E00[];               /* printf format for the bolt-delta number (0x1A8E00) */
+extern s32   func_002846E8(s32 colorA, s32 colorB, f32 t);        /* 0x2846E8 packed-RGBA lerp */
+extern void  func_00115DA8(char *dst, const char *fmt, ...);      /* 0x115DA8 SDK sprintf */
+extern s32   GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint); /* 0x337BF8 */
+/* 0x3017F8 glyph/sprite draw. Callee (text/2012B8) confirms the ABI: color0's
+ * top byte alpha-gates the draw (sra 24; skip if 0); sx,sy are a scale pair each
+ * multiplied by the glyph's intrinsic size at handle+0xC; px,py,v pass through to
+ * func_003018A0. The scale/vec38 pointer params ($a2/$a3) are never read in this
+ * build — hence the NULL/NULL passed here. */
+extern void  func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
+                           f32 px, f32 py, f32 sx, f32 sy, f32 v);
+extern void  func_00280090(s32 x, s32 y, u64 color, char *str, s64 wrap); /* 0x280090 text/number draw */
+
+void func_0028B0B0(void) {
+    HudRollSlot *slot = (HudRollSlot *)((u8 *)&g_hudMobyAuxBlockBase + 0x44);
+    s32 color1 = 0;   /* glyph 0xB2 tint */
+    s32 color2 = 0;   /* glyph 0xB3 tint */
+    s32 c;
+
+    for (c = 1; c >= 0; c--) {
+        s16 phase     = slot->phase;
+        s32 doDraw    = 0;
+        s32 textColor = 0;
+        f32 t;
+
+        if (phase == 2) {
+            s32 hold = slot->holdTimer;
+            t = (hold < 0xE) ? (f32)hold * (1.0f / 14.0f) : 1.0f;
+            color1 = 0x55F0C070;
+            color2 = 0x60442D00;
+            if (slot->targetDelta >= 0) {
+                textColor = func_002846E8(0x8000FFFF, 0x6029A1FF, t);
+            } else {
+                textColor = func_002846E8(0x001010F0, 0x801010F0, t);
+            }
+            doDraw = 0x1F3;
+        } else if (phase == 1) {
+            t = (f32)slot->tick * (1.0f / 14.0f);
+            color1 = func_002846E8(0x00F0C070, 0x55F0C070, t);
+            color2 = func_002846E8(0x00442D00, 0x60442D00, t);
+            if (slot->targetDelta >= 0) {
+                textColor = func_002846E8(0x0029A1FF, 0x6029A1FF, t);
+            } else {
+                textColor = func_002846E8(0x001010F0, 0x801010F0, t);
+            }
+            doDraw = 0x1F3;
+        } else if (phase == 3) {
+            s32 hold = slot->holdTimer;
+            t = (hold < 7) ? 1.0f
+                           : 1.0f - ((f32)hold - 7.0f) * (1.0f / 7.0f);
+            color1 = func_002846E8(0x00F0C070, 0x55F0C070, t);
+            color2 = func_002846E8(0x00442D00, 0x60442D00, t);
+            if (slot->targetDelta >= 0) {
+                textColor = func_002846E8(0x0029A1FF, 0x6029A1FF, t);
+            } else {
+                textColor = func_002846E8(0x001010F0, 0x801010F0, t);
+            }
+            doDraw = 0x1F3;
+        }
+
+        if (doDraw != 0) {
+            char buf[16];
+            s32  len;
+            func_00115DA8(buf, D_1A8E00, slot->targetDelta);
+            len = func_001157AC(buf);
+            if (len > 0) {
+                void *atlas  = (u8 *)g_guiInstance + 0x8710;
+                f32   xscale = D_1A8DE0[len - 1];
+                f32   yfudge = *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8A);
+                f32   glyphY = (f32)(s32)((f32)2 * yfudge + 0.5f);
+                s32   textY  = (s32)((f32)0x24 * yfudge + 0.5f);
+                s32   g1 = GuiFontAtlasLookupGlyph(atlas, 0xB2);
+                s32   g2;
+                func_003017F8(g1, color1, (f32 *)0, (f32 *)0,
+                              (f32)0x1F3, glyphY, 1.0f, 1.0f, xscale);
+                g2 = GuiFontAtlasLookupGlyph(atlas, 0xB3);
+                func_003017F8(g2, color2, (f32 *)0, (f32 *)0,
+                              (f32)0x1F3, glyphY, 1.0f, 1.0f, xscale);
+                len = func_001157AC(buf);
+                func_00280090(0x1BA, textY, textColor, buf, len);
+            }
+        }
+
+        slot = (HudRollSlot *)((u8 *)slot + 0x10);
+    }
+}
+#endif
 
 /* func_0028B558: mis-split 1-instruction fragment — `addiu $sp,+0x10` epilogue
  * tail, pinned as its own symbol; no jr $ra. Not a real function; left
@@ -2139,9 +2570,60 @@ s32 func_0028C180(HudElement *rec, s32 *pA, s32 *pB) {
  * (D_255A00/D_255A60) scaled by the record's half-extents (+0x58/+0x5C), via
  * IntToFloat/FloatToInt round-trips.
  *
- * WALL: callee-saves incl. $f20 + float scaling math (IntToFloat/FloatToInt
- * round-trips); FP scheduling not reproducible from C. Left INCLUDE_ASM. */
+ * The record's +0x7C tag selects both the offset table (set -> D_255A00,
+ * clear -> D_255A60) and the sign of the table index (idxBase - idxDelta vs
+ * idxBase + idxDelta), which is clamped into [0, 0x17]. The +0x60 flags then
+ * pick exactly one axis/direction: bit 1/2 nudge Y by the +0x5C extent (biased
+ * +52 px) negative/positive; bit 4/8 nudge X by the +0x58 extent (biased +20 px)
+ * negative/positive; each nudge = round(table * (extent + bias)). The results
+ * are ADDED into *pX / *pY.
+ *
+ * WALL (matching build): callee-saves incl. $f20 + the FP scaling schedule and
+ * the movz/movz index clamp cc1 does not reproduce. Matching arm stays
+ * INCLUDE_ASM; #else is the portable body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C1E8);
+#else
+extern f32 IntToFloat(s32 v);      /* 0x2846D8 int->float (mtc1;cvt.s.w) */
+extern s32 FloatToInt(f32 x);      /* 0x2846A0 float->int (cvt.w.s;mfc1) */
+extern f32 D_255A00[];             /* fractional-offset table, rec+0x7C set (24 entries) */
+extern f32 D_255A60[];             /* fractional-offset table, rec+0x7C clear (24 entries) */
+void func_0028C1E8(HudElement *rec, s32 *pX, s32 *pY, s32 idxBase, s32 idxDelta) {
+    u8 *r = (u8 *)rec;
+    s32 idx;
+    f32 scale;
+    s32 flags;
+    s32 dx = 0;   /* X nudge from the +0x58 half-extent (flags 4/8) */
+    s32 dy = 0;   /* Y nudge from the +0x5C half-extent (flags 1/2) */
+
+    if (*(s32 *)(r + 0x7C) != 0) {
+        idx = idxBase - idxDelta;
+    } else {
+        idx = idxBase + idxDelta;
+    }
+    if (idx < 0) {
+        idx = 0;
+    }
+    if (idx >= 0x18) {
+        idx = 0x17;
+    }
+    scale = (*(s32 *)(r + 0x7C) != 0) ? D_255A00[idx] : D_255A60[idx];
+
+    flags = *(s32 *)(r + 0x60);
+    if (flags & 0x1) {
+        dy = -FloatToInt(scale * (IntToFloat(*(s32 *)(r + 0x5C)) + 52.0f) + 0.5f);
+    } else if (flags & 0x2) {
+        dy = FloatToInt(scale * (IntToFloat(*(s32 *)(r + 0x5C)) + 52.0f) + 0.5f);
+    } else if (flags & 0x4) {
+        dx = -FloatToInt(scale * (IntToFloat(*(s32 *)(r + 0x58)) + 20.0f) + 0.5f);
+    } else if (flags & 0x8) {
+        dx = FloatToInt(scale * (IntToFloat(*(s32 *)(r + 0x58)) + 20.0f) + 0.5f);
+    }
+
+    *pX += dx;
+    *pY += dy;
+}
+#endif
 
 /* func_0028C390(rec): recompute a HUD widget's auto-sized extents. Resolves the
  * value pointer at rec+0xC (when valid and word-aligned) into the rec+0x78
@@ -2395,12 +2877,215 @@ void func_0028C7F0(HudElement *w) {
  * Left INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C840);
 
-/* DrawWeaponSelectWheel(...): render the weapon-select wheel widget (~0x5C4
- * bytes, heavy FP).
+/* DrawWeaponSelectWheel(w): render the weapon quick-select wheel widget (~0x5C4).
+ *
+ * `w` is the wheel HudElement: w+0x70/+0x71 are the open/close animation counters
+ * (each /8, clamped to [0,1] -> fillA/fillB); w+0x74 is the highlighted item
+ * index; w+0x50/+0x54 are the screen anchor (x,y), aligned in place by
+ * func_0028C180. For each wheel item (count/callback-array at
+ * g_hudMobySpawnStart+0x28/+0x2C, 0x1C stride, indexed base = array[D_1A8D48]) it
+ * computes a per-item angle (WrapAnglePiSum, result unused here), drives the
+ * highlight tween for the selected item (func_0034DAB0), and pokes the GUI alpha
+ * slot (FloatToInt(alpha*0.5) while func_00290FC0(), else 0). For the highlighted
+ * item — unless the popup gate D_1A8C64 is set — it draws the equipped weapon's
+ * ammo counter "%d/%d" (red 0x804040FF when out of ammo, white gradient
+ * otherwise) and the localized weapon name, split onto two lines at the first '-'
+ * or ' '. Returns w+0x58 (the widget status word).
  *
  * WALL: extensive float geometry math; FP scheduling not reproducible from C.
- * Left INCLUDE_ASM. */
+ * Matching arm stays INCLUDE_ASM; the #else below is the portable body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", DrawWeaponSelectWheel);
+#else
+extern f32   WrapAnglePiSum(f32 a, f32 b);   /* 0x284548 wrap a+b into [-pi,pi] */
+extern void  func_0034DAB0(void *elem, s32 flag, f32 t);       /* HUD highlight tween */
+extern s32   func_00290FC0(void);                              /* GUI state gate */
+extern void  func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
+extern char  g_szAmmoFraction[];             /* "%d/%d" ammo-count format string */
+extern s32   D_1A8C64;                        /* GUI popup-busy gate */
+
+s32 DrawWeaponSelectWheel(HudElement *w) {
+    char buf[0x50];
+    s32 posX, posY;
+    f32 fillA, fillB, combined;
+    s32 alpha, selectedIndex, n, i, off;
+    void **table;
+
+    /* open/close animation fractions, each clamped to [0,1] */
+    fillA = IntToFloat(*((u8 *)w + 0x70)) / IntToFloat(8);
+    if (1.0f < fillA) {
+        fillA = 1.0f;
+    } else if (fillA < 0.0f) {
+        fillA = 0.0f;
+    }
+
+    fillB = IntToFloat(*((u8 *)w + 0x71)) / IntToFloat(8);
+    if (1.0f < fillB) {
+        fillB = 1.0f;
+    } else if (fillB < 0.0f) {
+        fillB = 0.0f;
+    }
+
+    alpha = FloatToInt(fillA * 128.0f);
+
+    /* copy the widget's anchor and let func_0028C180 align it in place */
+    posX = *(s32 *)((u8 *)w + 0x50);
+    posY = *(s32 *)((u8 *)w + 0x54);
+    func_0028C180(w, &posX, &posY);
+
+    n = *(s32 *)((u8 *)&g_hudMobySpawnStart + 0x28);
+    if (n > 0) {
+        table = *(void ***)((u8 *)&g_hudMobySpawnStart + 0x2C);
+        off = 0;
+        i = 0;
+        do {
+            u8 *rec;
+
+            /* per-item angle; the original discards the result (extern call kept) */
+            (void)WrapAnglePiSum(2.0f * (f32)i * 3.14159274f / (f32)n - 3.14159274f,
+                                 1.57079637f);
+
+            if (*(s32 *)((u8 *)w + 0x74) == i) {                 /* highlighted item */
+                rec = (u8 *)table[D_1A8D48] + off;
+                if (*(s32 *)rec != 0 && g_guiInstance != 0) {
+                    f32 fi = (f32)(i + 7);
+                    if (fi > 7.0f) {
+                        fi -= 8.0f;
+                    }
+                    func_0034DAB0((u8 *)g_guiInstance + 0x376C8, 1, fi);
+                }
+            }
+
+            rec = (u8 *)table[D_1A8D48] + off;
+            if (*(s32 *)rec != 0 && g_guiInstance != 0) {
+                s32 v = (func_00290FC0() != 0) ? FloatToInt((f32)alpha * 0.5f) : 0;
+                *(s32 *)((u8 *)g_guiInstance + 0x38000 + 0x79DC) = v;
+            }
+
+            n = *(s32 *)((u8 *)&g_hudMobySpawnStart + 0x28);
+            i++;
+            off += 0x1C;
+        } while (i < n);
+    }
+
+    selectedIndex = *(s32 *)((u8 *)w + 0x74);
+    if (selectedIndex < 0) {
+        return *(s32 *)((u8 *)w + 0x58);
+    }
+
+    table = *(void ***)((u8 *)&g_hudMobySpawnStart + 0x2C);
+    if (*(s32 *)((u8 *)table[D_1A8D48] + selectedIndex * 0x1C) == 0) {
+        return *(s32 *)((u8 *)w + 0x58);
+    }
+    if (D_1A8C64 != 0) {
+        return *(s32 *)((u8 *)w + 0x58);
+    }
+
+    combined = fillA * fillB;
+
+    /* ammo counter for the equipped weapon in the highlighted slot */
+    {
+        s32 itemId = g_equippedItemSlots[selectedIndex];
+        WeaponDef *wd = &g_weaponTable[g_itemEquippedSlot[itemId]];
+
+        if (wd->exists != 0 && wd->sellsAmmoFlag != 0) {
+            s32 curAmmo = g_weaponAmmo[itemId];
+            u16 capacity = wd->ammoCapacity;
+            s32 color;
+
+            func_00115DA8(buf, g_szAmmoFraction, curAmmo, capacity);
+            if (curAmmo == 0) {
+                color = func_002846E8(0x004040FF, 0x804040FF, combined);   /* out of ammo: red */
+            } else {
+                color = func_002846E8(0x00F0F0F0, 0x80F0F0F0, combined);   /* white gradient */
+            }
+            func_002801B8(posX + 0x69, posY + 0x70, color, buf, -1);
+        }
+    }
+
+    /* localized weapon name, from the wheel record's item id at +0x18 */
+    {
+        s32 textColor = func_002846E8(0x00F0F0F0, 0x80F0F0F0, combined);
+        u8 *rec = (u8 *)table[D_1A8D48] + selectedIndex * 0x1C;
+        s32 itemId2 = *(s32 *)(rec + 0x18);
+        s16 nameId = *(s16 *)((u8 *)&g_weaponTable[g_itemEquippedSlot[itemId2]] + 0x48);
+        char *name = GetLocalizedString(nameId);
+        s32 splitLen = 0;
+        char *tail = name;
+        s32 len, j, lineY;
+
+        if (name == 0) {
+            return *(s32 *)((u8 *)w + 0x58);
+        }
+        if (func_001157AC(name) == 0) {
+            return *(s32 *)((u8 *)w + 0x58);
+        }
+        len = func_001157AC(name);
+
+        /* first pass: split at the first '-' (checked from index 1) */
+        if (len > 0) {
+            if (name[1] == '-') {
+                tail = name + 2;
+                splitLen = 2;
+            } else {
+                tail = name + 1;
+                j = 1;
+                while (j < len) {
+                    tail++;
+                    if (*tail == '-') {
+                        splitLen = j + 2;
+                        tail++;
+                        break;
+                    }
+                    j++;
+                }
+            }
+        }
+
+        /* if no '-', second pass: split at the first ' ' */
+        if (splitLen == 0 && 0 < len) {
+            if (name[1] == ' ') {
+                tail = name + 2;
+                splitLen = 1;
+            } else {
+                tail = name + 1;
+                j = 1;
+                while (j < len) {
+                    tail++;
+                    if (*tail == ' ') {
+                        splitLen = j + 1;
+                        tail++;
+                        break;
+                    }
+                    j++;
+                }
+            }
+        }
+
+        /* baseline Y depends on whether the equipped weapon sells ammo */
+        {
+            s32 itemId3 = g_equippedItemSlots[selectedIndex];
+            if (g_weaponTable[g_itemEquippedSlot[itemId3]].sellsAmmoFlag != 0) {
+                lineY = posY + 0x4B;
+            } else {
+                lineY = posY + 0x64;
+                if (splitLen != 0) {
+                    lineY = posY + 0x55;
+                }
+            }
+        }
+
+        if (splitLen != 0) {
+            func_002801B8(posX + 0x69, lineY, textColor, name, splitLen);
+            func_002801B8(posX + 0x69, lineY + 0x10, textColor, tail, -1);
+        } else {
+            func_002801B8(posX + 0x69, lineY, textColor, name, -1);
+        }
+    }
+
+    return *(s32 *)((u8 *)w + 0x58);
+}
+#endif
 
 /* func_0028D6D8(w): seed a HUD list widget `w` — register the list descriptor
  * (8 entries, callback &D_1A8DD8) in g_hudMobySpawnStart+0x28/+0x2C, set the
@@ -2429,18 +3114,372 @@ void func_0028D6D8(HudElement *w) {
 }
 #endif
 
-/* func_0028D720(...): weapon-wheel input/selection update (~0x504 bytes, heavy FP).
+/* func_0028D720(w): per-frame input + selection update for the weapon/quick-select
+ * wheel (w = the HUD widget). Reads controller port-0 (D_138180): normalises the
+ * right-stick and, when deflected past 0.9, converts its angle to a wheel slot
+ * ((((angle+2pi)+pi/2)+pi/n) / 2pi * n, mod n); when the stick is centred it does
+ * face-button graph navigation instead — triangle/circle/cross/square each step
+ * to the neighbour link (offsets +0x10/+0x0C/+0x14/+0x08) of the current slot's
+ * 0x1C-stride record, or seed a default (D_1A8DC0/DBC/DC4/DB8) from -1. On a
+ * selection change it resets the colour pulse (func_002AA3F0) and plays the nav
+ * sound (PlayGlobalSound 3). The D-pad-Up edge confirms the selection into
+ * g_soundBankHandlesBlk+0x24E4 (via the slot's +0x18 link); an Up-held/‑release
+ * counter (w+0x70) gates the final publish of the selection to the HUD moby
+ * (g_hudMobyAuxBlockBase+0x14/0x18/0x1C + func_0028C010). The committed category
+ * is invalidated (→0) if its icon slot isn't loaded (g_hudClutSlots flags).
  *
- * WALL: extensive float math; FP scheduling not reproducible from C. Left
- * INCLUDE_ASM. */
+ * WALL (matching build): callee-saves + the FP angle math schedule + branch
+ * colouring cc1 does not reproduce. Matching arm stays INCLUDE_ASM; #else is the
+ * portable body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028D720);
+#else
+extern u8   D_138180[];                /* controller port-0 state (0x138180) */
+extern u8   g_soundBankHandlesBlk[];   /* g_soundBankHandles+0x20 (0x189E20) — declared again below for func_0028EB10 */
+extern s32  g_renderLayerMask;         /* +0x4 = current render layer (0x1B1878-... adj global) */
+extern f32  func_00283BF8(f32 a, f32 b);            /* 0x283BF8 Atan2fPoly(x,y) */
+extern void func_00288888(HudElement *w);           /* 0x288888 (w live at call) */
+extern void func_00288840(void);                    /* 0x288840 */
+extern s32 func_002AA3F0(s32 a, s32 b, s32 c, s32 d, s32 e); /* 0x2AA3F0 colour-pulse reset; returns the pulsed colour */
+extern s32  D_1A8DC0;                  /* default wheel target: triangle (0x1A8DC0) */
+extern s32  D_1A8DC4;                  /* default wheel target: cross    (0x1A8DC4) */
+extern s32  D_1A8DB8;                  /* default wheel target: square   (0x1A8DB8) */
+extern s32  D_1A8DBC;                  /* default wheel target: circle   (0x1A8DBC) */
+extern u8   D_1A7BBB;                  /* gate byte -> func_00288840 (0x1A7BBB) */
 
-/* func_0028DC28(...): weapon-wheel draw/animation (~0xA18 bytes, very heavy FP +
- * jump tables).
+/* neighbour/target link at record[slot]+off within the wheel record block selected
+ * by the cursor D_1A8D48 (block-base array at g_hudMobySpawnStart+0x2C; 0x1C stride). */
+static s32 HudWheelLink(s32 slot, s32 off) {
+    void **blockPtrs = *(void ***)((u8 *)&g_hudMobySpawnStart + 0x2C);
+    u8    *block     = (u8 *)blockPtrs[D_1A8D48];
+    return *(s32 *)(block + slot * 0x1C + off);
+}
+
+void func_0028D720(HudElement *w) {
+    u8 *pw  = (u8 *)w;
+    u8 *pad = D_138180;                          /* controller port-0 state */
+    f32 stickX, stickY, mag, angle;
+    s32 v78, oldSel, newSel;
+
+    func_00288888(w);
+
+    *(s32 *)(pw + 0x7C) = 0xB4;
+    *(s32 *)(pw + 0x6C) = 0x18;
+    *(s32 *)(pad + 0x1CC) = 2;
+
+    stickX = *(f32 *)(pad + 0x148);
+    stickY = *(f32 *)(pad + 0x14C);
+    mag = func_002835C0(stickX * stickX + stickY * stickY);
+    if (mag != 0.0f) {
+        stickX = stickX / mag;
+        stickY = stickY / mag;
+    }
+    angle = func_00283BF8(stickX, stickY);
+
+    /* +0x78: top-byte state gate — arm/refresh the "selection open" latch */
+    v78 = *(s32 *)(pw + 0x78);
+    if ((v78 >> 24) == 0 && *(s16 *)((u8 *)&g_hudClutSlots + 0x4) != 0) {
+        s32 buttons = *(s32 *)(pad + 0x1C4);
+        if ((buttons & 0xF000) != 0 || mag < 0.5f) {
+            *(s32 *)(pw + 0x74) = -1;
+            *(s32 *)(pw + 0x78) = 0x010000FF;
+        } else {
+            s32 dec = v78 - 1;
+            *(s32 *)(pw + 0x78) = dec;
+            if (dec == -1) {
+                *(s32 *)(pw + 0x74) = -1;
+                *(s32 *)(pw + 0x78) = 0x010000FF;
+            }
+        }
+    }
+
+    oldSel = *(s32 *)(pw + 0x74);
+    if (*(s8 *)(pw + 0x7B) == 1) {
+        if (0.0f < mag) {
+            if (0.9f < mag) {
+                s32 n = *(s32 *)((u8 *)&g_hudMobySpawnStart + 0x28);
+                f32 t = (((angle + 3.14159274f) + 3.14159274f + 1.57079637f)
+                         + 3.14159274f / (f32)n)
+                        * 0.159154937f * (f32)n;
+                *(s32 *)(pw + 0x74) = (s32)t % n;
+            }
+        } else {
+            s32 buttons = *(s32 *)(pad + 0x1C4);
+            if ((buttons & 0xF000) != 0) {
+                s32 sel;
+                if ((buttons & 0x1000) != 0) {
+                    sel = (oldSel == -1) ? D_1A8DC0 : HudWheelLink(oldSel, 0x10);
+                } else {
+                    sel = oldSel;
+                }
+                if ((*(s32 *)(pad + 0x1C4) & 0x4000) != 0) {
+                    sel = (sel == -1) ? D_1A8DC4 : HudWheelLink(sel, 0x14);
+                }
+                if ((*(s32 *)(pad + 0x1C4) & 0x8000) != 0) {
+                    sel = (sel == -1) ? D_1A8DB8 : HudWheelLink(sel, 0x08);
+                }
+                if ((*(s32 *)(pad + 0x1C4) & 0x2000) != 0) {
+                    sel = (sel == -1) ? D_1A8DBC : HudWheelLink(sel, 0x0C);
+                }
+                *(s32 *)(pw + 0x74) = sel;
+            }
+        }
+    }
+
+    newSel = *(s32 *)(pw + 0x74);
+    if (newSel != oldSel) {
+        func_002AA3F0(0, 0, 1, 0, 1);
+        *(u8 *)(pw + 0x71) = 0;
+        PlayGlobalSound(3, 0, 0);
+    } else {
+        u8 hold = *(u8 *)(pw + 0x71);
+        if (hold < 8) {
+            *(u8 *)(pw + 0x71) = hold + 1;
+        }
+    }
+
+    if ((*(s32 *)(pad + 0x1C0) & 0x10) != 0) {
+        u8 up = *(u8 *)(pw + 0x70);
+        if (up < 8) {
+            *(u8 *)(pw + 0x70) = up + 1;
+        }
+    } else {
+        if ((*(s32 *)(pad + 0x1C8) & 0x10) != 0) {
+            s32 sel = *(s32 *)(pw + 0x74);
+            *(s32 *)(g_soundBankHandlesBlk + 0x24E4) =
+                (sel == -1) ? 0 : HudWheelLink(sel, 0x18);
+        }
+        if (D_1A7BBB != 0) {
+            func_00288840();
+        }
+        {
+            u8 up = *(u8 *)(pw + 0x70);
+            if (up != 0) {
+                *(u8 *)(pw + 0x70) = up - 1;
+            }
+        }
+    }
+
+    /* invalidate the committed category if its icon slot isn't loaded */
+    {
+        s32 *cat = (s32 *)(g_soundBankHandlesBlk + 0x24E4);
+        if (*cat == 6 && *(s16 *)((u8 *)&g_hudClutSlots + 0x8) == 0) *cat = 0;
+        if (*cat == 7 && *(s16 *)((u8 *)&g_hudClutSlots + 0xC) == 0) *cat = 0;
+        if (*cat == 5 && *(s16 *)((u8 *)&g_hudClutSlots + 0xA) == 0) *cat = 0;
+    }
+
+    /* once the up-counter has drained, publish the selection to the HUD moby */
+    if (*(u8 *)(pw + 0x70) == 0) {
+        *(s32 *)((u8 *)&g_hudMobyAuxBlockBase + 0x18) = *(s32 *)(pw + 0x78);
+        *(s32 *)((u8 *)&g_hudMobyAuxBlockBase + 0x1C) = *(s32 *)(pw + 0x74);
+        func_0028C010(*(s32 *)(pw + 0x64));
+        *(s32 *)(pw + 0x6C) = -6;
+        *(s32 *)((u8 *)&g_hudMobyAuxBlockBase + 0x14) =
+            *(s32 *)((u8 *)&g_renderLayerMask + 0x4);
+    }
+}
+#endif
+
+/* func_0028DC28(hud): draw the weapon-select wheel / item ring (~0xA18 bytes).
  *
- * WALL: extensive float math + jtbl dispatch; neither reproducible from C. Left
- * INCLUDE_ASM. */
+ * (1) computes two open/close fill fractions from hud+0x70/+0x71 (each /8, clamped
+ * to [0,1]); (2) unconditionally draws the 12 chrome/frame glyphs of the wheel
+ * (codepoints 0x08-0x0F, 0x07 x2, 0x86 x2); (3) if hud+0x74 (the active slot) is
+ * >= 0, pulses the selection colour (func_002AA3F0) and draws the selection cursor
+ * box + a count glyph; (4) walks the item ring (g_hudMobySpawnStart+0x28/+0x2C,
+ * stride 0x1C, base table[D_1A8D48]): for each populated slot it computes a ring
+ * position, then a per-category colour via jtbl_0026C7F0_text (gated on the
+ * g_hudClutSlots availability flags), and draws the slot background (when lit) +
+ * the item icon (func_0028EDF0 -> func_0028F2C0); (5) if the active slot was drawn,
+ * draws its localized name (main + shadow, colour cross-faded by fillB*fillA).
+ * Returns the widget status word at hud+0x58.
+ *
+ * WALL: extensive float math + jtbl dispatch; neither reproducible from C.
+ * Matching arm stays INCLUDE_ASM; the #else below is the portable body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028DC28);
+#else
+/* later-defined / asm-only helpers, forward-declared for this arm */
+extern s32  func_0028EDF0(s32 name, s32 level);
+extern void func_002904B0(s32 x0, s32 y0, s32 x1, s32 y1, u64 reg4, s32 mode);
+extern void func_0028F2C0(s32 icon, s32 x, s32 y, s32 w, s32 h, void *colorArr); /* icon block draw */
+extern f32  func_00283B30(f32 angle);   /* 0x283B30 ring X term */
+extern f32  func_00283B48(f32 angle);   /* 0x283B48 ring Y term */
+typedef struct WheelCursorRect { s32 x, y; } WheelCursorRect;
+extern WheelCursorRect D_1A8E30[8];     /* 0x1A8E30 selection-cursor box positions */
+extern s32  D_1A8E70[8];                /* 0x1A8E70 per-slot label text ids */
+
+/* g_hudClutSlots is read here as absolute s16 availability flags at +0x4../+0xC */
+#define CLUT16(off) (*(s16 *)((u8 *)&g_hudClutSlots + (off)))
+
+s32 func_0028DC28(HudElement *hud) {
+    static const struct { s32 cp; u32 color; f32 sx; } topGlyphs[12] = {
+        {0x08, 0x60442D00,  1.0f}, {0x09, 0x60442D00,  1.0f},
+        {0x0A, 0x60442D00,  1.0f}, {0x0B, 0x60442D00,  1.0f},
+        {0x0C, 0x60442D00,  1.0f}, {0x0D, 0x60442D00,  1.0f},
+        {0x0E, 0x60442D00,  1.0f}, {0x0F, 0x60442D00,  1.0f},
+        {0x07, 0x60442D00,  1.0f}, {0x07, 0x60442D00, -1.0f},
+        {0x86, 0x55F0C070,  1.0f}, {0x86, 0x55F0C070, -1.0f},
+    };
+    f32   yfudge  = *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E);
+    s32   clutSum = CLUT16(0x8) + CLUT16(0xC) + CLUT16(0xA);
+    s32   active  = *(s32 *)((u8 *)hud + 0x74);
+    void *atlas   = (u8 *)g_guiInstance + 0x8710;
+    f32   fillA, fillB;
+    s32   selectedDrawn = 0;
+    s32   n, i, k;
+
+    /* open/close fractions, each clamped to [0,1] */
+    fillA = IntToFloat(*((u8 *)hud + 0x70)) / IntToFloat(8);
+    if (1.0f < fillA) {
+        fillA = 1.0f;
+    } else if (fillA < 0.0f) {
+        fillA = 0.0f;
+    }
+
+    fillB = IntToFloat(*((u8 *)hud + 0x71)) / IntToFloat(8);
+    if (1.0f < fillB) {
+        fillB = 1.0f;
+    } else if (fillB < 0.0f) {
+        fillB = 0.0f;
+    }
+
+    /* 12 chrome/frame glyphs (unconditional) */
+    for (k = 0; k < 12; k++) {
+        func_003017F8(GuiFontAtlasLookupGlyph(atlas, topGlyphs[k].cp),
+                      (s32)topGlyphs[k].color, (f32 *)0, (f32 *)0,
+                      129.0f, 208.0f, topGlyphs[k].sx, yfudge, 0.0f);
+    }
+
+    /* selection cursor + count glyph */
+    if (active >= 0) {
+        s32 pulse = func_002AA3F0(0x80442D00, 0x80FFDE8D, 0x19, 0, 0);
+        s32 count = (active - 1 > -1) ? (active - 1) : 7;
+        s32 glyph = GuiFontAtlasLookupGlyph(atlas, 0x10);
+        func_003017F8(glyph, pulse, (f32 *)0, (f32 *)0,
+                      129.0f, 208.0f, 1.0f, yfudge, (f32)count);
+        func_002904B0(D_1A8E30[active].x, D_1A8E30[active].y,
+                      D_1A8E30[active].x + 0x21, D_1A8E30[active].y + 7,
+                      (u64)(u32)pulse, 0);
+    }
+
+    /* item ring */
+    n = *(s32 *)((u8 *)&g_hudMobySpawnStart + 0x28);
+    for (i = 0; i < n; i++) {
+        void **table = *(void ***)((u8 *)&g_hudMobySpawnStart + 0x2C);
+        u8   *rec    = (u8 *)table[D_1A8D48] + i * 0x1C;
+        f32   angle  = WrapAnglePiSum(2.0f * (f32)i * 3.14159274f / (f32)n - 3.14159274f,
+                                      1.57079637f);
+        s32   ringX  = (s32)(func_00283B30(angle) * 80.0f) + 0x72;
+        s32   ringY  = (s32)(func_00283B48(angle) * 75.0f) + 0xC0;
+
+        if (*(s32 *)rec != 0) {
+            s32 kind     = *(s32 *)(rec + 4);
+            s32 drawBg   = 0;
+            s32 drawIcon = 0;
+            u32 color    = 0;
+            u32 colorBg[4], colorGlyph[4];
+            s32 color2;
+            s32 iconA, iconB;
+
+            if (kind == 6 && CLUT16(0x6) == 0) {
+                kind = 7;
+            }
+
+            if ((u32)kind < 0xA) {
+                switch (kind) {
+                case 2:
+                    if (CLUT16(0x4) != 0) {
+                        color = 0x6000FF00; drawBg = 1; drawIcon = 1;
+                        if (i == active) selectedDrawn = 1;
+                    }
+                    break;
+                case 3:
+                    if (CLUT16(0x4) != 0) {
+                        color = 0x6029A1FF; drawBg = 1; drawIcon = 1;
+                        if (i == active) selectedDrawn = 1;
+                    }
+                    break;
+                case 0:
+                    if (CLUT16(0x4) != 0 && clutSum < CLUT16(0x4)) {
+                        color = 0x600000FF; drawBg = 1; drawIcon = 1;
+                        if (i == active) selectedDrawn = 1;
+                    }
+                    break;
+                case 1:
+                    if (CLUT16(0x4) != 0 && clutSum < CLUT16(0x4)) {
+                        color = 0x60FF0000; drawBg = 1; drawIcon = 1;
+                        if (i == active) selectedDrawn = 1;
+                    }
+                    break;
+                case 4:
+                    if (CLUT16(0xA) != 0) {
+                        drawIcon = 1;
+                        if (i == active) selectedDrawn = 1;
+                    }
+                    break;
+                case 6:
+                case 7:
+                    if (CLUT16(0x8) != 0) {
+                        drawIcon = 1;
+                        if (i == active) selectedDrawn = 1;
+                    }
+                    break;
+                case 8:
+                    if (CLUT16(0xC) != 0) {
+                        drawIcon = 1;
+                        if (i == active) selectedDrawn = 1;
+                    }
+                    break;
+                case 9:
+                    if (CLUT16(0x4) != 0) {
+                        drawIcon = 1;
+                        if (i == active) selectedDrawn = 1;
+                    }
+                    break;
+                case 5:
+                default:
+                    break;
+                }
+            }
+
+            if (drawBg) {
+                iconA = func_0028EDF0(*(s32 *)rec, 0xA);
+                colorBg[0] = colorBg[1] = colorBg[2] = colorBg[3] = color;
+                func_0028F2C0(iconA, ringX + 2, ringY + 2, 0x1C, 0x1A, colorBg);
+            }
+
+            color2 = drawIcon ? (s32)0x80FFDE8D : 0x40808080;
+            colorGlyph[0] = colorGlyph[1] = colorGlyph[2] = colorGlyph[3] = (u32)color2;
+            iconB = func_0028EDF0(*(s32 *)rec, kind);
+            func_0028F2C0(iconB, ringX, ringY, 0x1E, 0x1C, colorGlyph);
+        }
+        n = *(s32 *)((u8 *)&g_hudMobySpawnStart + 0x28);   /* reloaded each iteration */
+    }
+
+    /* active slot's localized label (main + shadow) */
+    active = *(s32 *)((u8 *)hud + 0x74);
+    if (selectedDrawn && active >= 0 && active < 8) {
+        s32   textId = D_1A8E70[active];
+        char *str;
+
+        if (textId == 0x2DCA && CLUT16(0x6) != 0) {
+            textId = 0x2DCB;
+        }
+        str = GetLocalizedString(textId);
+        if (str != 0 && func_001157AC(str) != 0) {
+            f32 t = fillB * fillA;
+            s32 colorMain   = func_002846E8(0x00E0C0A0, (s32)0x80E0C0A0, t);
+            s32 colorShadow = func_002846E8(0x00000000, (s32)0x80000000, t);
+            func_002801B8(0x80, 0xC8, (u32)colorShadow, str, -1);
+            func_002801B8(0x81, 0xC9, (u32)colorMain, str, -1);
+        }
+    }
+
+    return *(s32 *)((u8 *)hud + 0x58);
+}
+#undef CLUT16
+#endif
 
 /* func_0028E640(...): HUD widget helper (~0x15C bytes).
  *
@@ -2640,11 +3679,75 @@ s32 func_0028EAC8(void) {
 }
 #endif
 
-/* func_0028EB10(...): HUD widget update helper (~0x15C bytes).
+/* func_0028EB10(): one-shot ammo-vendor HUD-widget (re)bind pass, run at the top
+ * of func_0028E9A0's per-frame update. No-op while the hard-disable gate D_1A8FBC
+ * or the "already armed" gate D_1A8FB0 is set. Otherwise it asks func_0028EAC8
+ * for the active ammo-selling weapon's item id:
+ *   - if a real ammo weapon is equipped (itemId != 0 && its g_weaponTable entry
+ *     exists), it registers the ammo-vendor widget via func_0028BE10 (feeding the
+ *     weapon's name-string id + ammo-capacity and the vendor tick/draw callbacks
+ *     func_0028E7A0 / func_0028E7D0 + the D_002907C0 layout blob), remembering the
+ *     returned handle in D_1A8FB8 and the item in D_1A8FB4;
+ *   - otherwise (no ammo weapon): if the sound-bank state byte
+ *     g_soundBankHandlesBlk[0x22B4] == 2 it first tears down any live widget
+ *     (func_0028C108(handle, 0)) then spawns the generic bank widget (id 0xFFFF,
+ *     priority 0xC8, callbacks func_0028C490 / func_0028C4C8 / func_0028E640+0x40),
+ *     stashing that handle at g_soundBankHandlesBlk[0x1878]; if the byte != 2 it
+ *     just tears the live widget down.
+ * D_1A8FB8 == -1 means "no live widget", so the teardown is skipped in that case.
  *
- * WALL: callee-saves + jal gates; register colouring not reproducible from C.
- * Left INCLUDE_ASM (not yet fully traced). */
+ * WALL (matching build): callee-saves + the gp-rel/absolute global mix + the
+ * peeled likely-branch teardown and multiple jal gates cc1 won't reproduce.
+ * Matching arm stays INCLUDE_ASM; #else is the portable body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028EB10);
+#else
+extern s32 D_1A8FBC;                  /* gp hard-disable gate (0x1A8FBC) */
+extern u8  g_soundBankHandlesBlk[];   /* g_soundBankHandles+0x20 (0x189E20) */
+extern u8  D_002907C0[];              /* ammo-vendor widget layout blob (0x2907C0) */
+extern void func_0028E640(void);      /* generic-bank widget draw callback (INCLUDE_ASM) */
+void func_0028EB10(void) {
+    s32 itemId;
+    u8  slot;
+    WeaponDef *w;
+
+    if (D_1A8FBC != 0) {
+        return;                       /* hard-disabled */
+    }
+    if (D_1A8FB0 != 0) {
+        return;                       /* countdown already armed */
+    }
+
+    itemId = func_0028EAC8();
+    slot = g_itemEquippedSlot[itemId];
+    w = &g_weaponTable[slot];
+    if (itemId != 0 && w->exists != 0) {
+        D_1A8FB4 = itemId;
+        D_1A8FB8 = func_0028BE10(0x10, w->nameStringId,
+                                 (s32)&func_0028E7A0, (s32)D_002907C0,
+                                 (s32)&func_0028E7D0, (s32)&g_weaponAmmo[itemId],
+                                 w->ammoCapacity);
+        return;
+    }
+
+    if (g_soundBankHandlesBlk[0x22B4] == 2) {
+        if (D_1A8FB8 != -1) {
+            func_0028C108(D_1A8FB8, 0);
+            D_1A8FB8 = -1;
+        }
+        *(s16 *)(g_soundBankHandlesBlk + 0x1878) =
+            (s16)func_0028BE10(0x10, 0xFFFF,
+                               (s32)&func_0028C490, (s32)&func_0028C4C8,
+                               (s32)&func_0028E640 + 0x40,
+                               (s32)(g_soundBankHandlesBlk + 0x1874), 0xC8);
+    } else {
+        if (D_1A8FB8 != -1) {
+            func_0028C108(D_1A8FB8, 0);
+            D_1A8FB8 = -1;
+        }
+    }
+}
+#endif
 
 /* Re-seed the HUD widget table (func_0028BF80), then arm the countdown gate
  * (D_1A8FB0 = 1) and its companion latches (D_1A8FB8 = -1, D_1A8FB4 = 0). */
@@ -2662,14 +3765,65 @@ void func_0028ECA8(void) {
     }
 }
 
-/* func_0028ECC0(): per-frame HUD tick — when the HUD CLUT slot is allocated and
- * not faded, run each of the 13 D_2552B0 widget init callbacks (+0x18, via jalr)
- * and refresh state gated on g_nGameState / nanotech-orb visibility.
+/* func_0028ECC0(): per-frame HUD tick (0x28ECC0). Bails (clearing the HUD CLUT
+ * slot) if that slot is already busy or the screen is mid white-fade. Otherwise
+ * runs each of the 13 D_2552B0 widget records' +0x18 init callback (via jalr,
+ * passing the record), then advances the nanotech-orb HUD counters:
+ *   - orb+0xC = 0x64 when both orb counters are idle OR we're not in gameplay
+ *     (g_nGameState != 0);
+ *   - in gameplay (g_nGameState == 0) with a counter active: ramp orb+0x8 toward
+ *     0x80 (when orb+0x4 is running) or back to 0, tick orb+0x4 down, and reset
+ *     it from the 0x3E8 sentinel.
  *
- * WALL: callee-saves + an indirect-call (jalr) callback loop over many globals
- * addressed with gp/absolute-mixed forms; not reproducible from C. Left
- * INCLUDE_ASM. */
+ * WALL (matching build): callee-saves + the indirect-call (jalr) callback loop
+ * over gp/absolute-mixed globals cc1 does not reproduce — stays INCLUDE_ASM.
+ * This #else is faithful COVERAGE only. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028ECC0);
+#else
+extern u8 g_screenFadeWhite[];      /* +0x4 = white-fade level (0 = no fade) */
+extern u8 g_pActiveNanotechOrb[];   /* nanotech-orb HUD counters at +0x4/+0x8/+0xC */
+
+void func_0028ECC0(void)
+{
+    s32 *hudClut = (s32 *)((u8 *)&g_hudClutSlots + 0x10);
+    s32 *orb4 = (s32 *)(g_pActiveNanotechOrb + 0x4);
+    s32 *orb8 = (s32 *)(g_pActiveNanotechOrb + 0x8);
+    s32 *orbC = (s32 *)(g_pActiveNanotechOrb + 0xC);
+    s32 i;
+
+    if (*hudClut != 0 || *(s32 *)(g_screenFadeWhite + 0x4) != 0) {
+        *hudClut = 0;
+        return;
+    }
+
+    *(s32 *)((u8 *)&g_pActiveTextTable + 0x3C) = 0xFFFFF0;
+    for (i = 0; i < 13; i++) {
+        void (*cb)(Rec2552B0 *) = *(void (**)(Rec2552B0 *))((u8 *)&D_2552B0[i] + 0x18);
+        if (cb != 0) {
+            cb(&D_2552B0[i]);
+        }
+    }
+
+    if ((*orb4 == 0 && *orb8 == 0) || g_nGameState != 0) {
+        *orbC = 0x64;
+    } else {
+        if (*orb4 != 0) {
+            s32 v = *orb8 + 0x10;
+            *orb8 = (v < 0x81) ? v : 0x80;   /* ramp up, clamp to 0x80 */
+        } else {
+            s32 v = *orb8 - 0x10;
+            *orb8 = (v >= 0) ? v : 0;        /* ramp down, clamp to 0 */
+        }
+        if (*orb4 != 0) {
+            *orb4 = *orb4 - 1;
+        }
+        if (*orb4 == 0x3E8) {
+            *orb4 = 0;
+        }
+    }
+}
+#endif
 
 /* Resolve the live HUD icon-map index for icon `name` at upgrade `level`.
  * Looks the icon up in the slot table (func_0028B560), bounds-checks `level`
@@ -2798,18 +3952,131 @@ u64 GetHudIconTex0(s32 iconId) {
 }
 #endif
 
-/* func_0028F0D0(...): HUD icon GS-handle helper (~0x1F0 bytes).
- *
- * WALL: callee-saves + jal gates; register colouring not reproducible from C.
- * Left INCLUDE_ASM (not yet fully traced). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F0D0);
+#ifdef TARGET_NATIVE
+/* Externs referenced only by the faithful #else coverage bodies in the
+ * GS/GIF sprite-packet cluster below (func_0028F0D0 .. func_0028FFF0). Guarded
+ * under TARGET_NATIVE so the INCLUDE_ASM (byte-match) arm stays byte-neutral —
+ * the -G8 %gp_rel sizing hacks are the matcher's concern, not the native arm's.
+ * (g_pActiveTextTable, func_00283B30/B48 are already declared file-scope.) */
+extern u32 *g_frameDmaCursor;       /* 0x1B2228 - per-frame render-DMA write ptr */
+extern s32 g_gsPixelOffsetX;        /* 0x1A7350 - GS window X offset */
+extern s32 g_gsPixelOffsetY;        /* 0x1A7354 - GS window Y offset */
+extern u64 GetHudIconTex0(s32 iconIndex);                 /* resolve HUD icon TEX0 */
+extern void Vec4AddVu0(f32 *dst, const f32 *a, const f32 *b); /* 0x283670 */
+extern void Vec4SubVu0(f32 *dst, const f32 *a, const f32 *b); /* 0x2836A0 */
+#endif
 
-/* func_0028F2C0(...): HUD icon upload/draw helper (~0x27C bytes; 128-bit block
- * moves).
+/* func_0028F0D0 = DrawHudIconQuadTiled: draw a HUD icon as a textured-sprite GIF
+ * packet (0x60-byte, NLOOP=5) to the frame render-DMA chain. Sibling of
+ * func_0028F540/func_0028F700: screen coords are 1/16-pixel subpixel (coord<<4,
+ * like func_0028F540), while the UV rectangle spans the icon's full texture
+ * (2^logW x 2^logH texels, like func_0028F700) rather than the passed size.
  *
- * WALL (sq/lq 128-bit): GS packet assembly via 128-bit lq/sq the matcher cannot
- * reproduce from C. Left INCLUDE_ASM. */
+ *   iconIndex  index into g_hudIconMap (and GetHudIconTex0)
+ *   x, y       top-left screen position, tile units (multiplied by 16)
+ *   w, h       size in the same tile units
+ *   alpha      tint alpha (RGB fixed 0x7F7F7F)
+ */
+#ifndef TARGET_NATIVE
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F0D0);
+#else
+void func_0028F0D0(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, s32 alpha) {
+    u8 *p = (u8 *)g_frameDmaCursor;
+    s32 offX = g_gsPixelOffsetX;
+    s32 offY = g_gsPixelOffsetY;
+    u64 z = (u64)(u32)*(s32 *)((u8 *)&g_pActiveTextTable + 0x3C) << 32;
+    HudGsSlot *tex = &g_hudTextureSlots[g_hudIconMap[iconIndex].textureSlot];
+    s32 uExtent = 1 << tex->logW; /* 2^texWidthLog2 texels */
+    s32 vExtent = 1 << tex->logH; /* 2^texHeightLog2 texels */
+
+    *(u32 *)(p + 0x0) = 0x10000005;
+    *(u32 *)(p + 0x4) = 0;
+    *(u32 *)(p + 0x8) = 0;
+    *(u32 *)(p + 0xC) = 0x50000005;
+    g_frameDmaCursor = (u32 *)(p + 0x10);
+
+    *(u64 *)(p + 0x10) = ((u64)0xE800 << 47) | 0x8001;
+    *(u64 *)(p + 0x18) = 0x5353106;
+    *(u64 *)(p + 0x20) = GetHudIconTex0(iconIndex);
+    *(u64 *)(p + 0x28) = 0x156;
+    *(u64 *)(p + 0x30) = ((u64)(u32)alpha << 24) | 0x7F7F7F;
+    *(u64 *)(p + 0x38) = 0; /* near UV (0,0) */
+    *(u64 *)(p + 0x40) = (u64)(u32)((x << 4) + offX - 8)
+                       | ((u64)(u32)((y << 4) + offY - 8) << 16)
+                       | z;
+    *(u64 *)(p + 0x48) = (u64)(u32)((uExtent << 4) + (vExtent << 20)); /* far UV = full texture */
+    *(u64 *)(p + 0x50) = (u64)(u32)(((x + w) << 4) + offX - 8)
+                       | ((u64)(u32)(((y + h) << 4) + offY - 8) << 16)
+                       | z;
+    *(u64 *)(p + 0x58) = 0;
+
+    g_frameDmaCursor = (u32 *)((u8 *)g_frameDmaCursor + 0x50);
+}
+#endif
+
+/* func_0028F2C0: draw a HUD icon as a Gouraud-shaded textured quad — a 0x70-byte
+ * NLOOP=8 GIF packet (the GIFtag qword is the static blob D_1AC8B0) with a
+ * distinct RGBA at each of the 4 corners taken from colorArr[0..3]. UV spans the
+ * icon's full texture (2^logW x 2^logH); screen coords are 1/16-pixel subpixel
+ * (coord<<4). The near/far UV split (u at +0x50, v at +0x68, combined at +0x80)
+ * follows the register order encoded in the D_1AC8B0 GIFtag.
+ *
+ *   iconIndex  index into g_hudIconMap (and GetHudIconTex0)
+ *   x, y       top-left screen position, tile units (multiplied by 16)
+ *   w, h       size in the same tile units
+ *   colorArr   pointer to 4 packed RGBA words, one per corner
+ *              (top-left, top-right, bottom-left, bottom-right)
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F2C0);
+#else
+void func_0028F2C0(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, void *colorArr) {
+    u8 *p = (u8 *)g_frameDmaCursor;
+    s32 *colors = (s32 *)colorArr;
+    s32 offX = g_gsPixelOffsetX;
+    s32 offY = g_gsPixelOffsetY;
+    u64 z = (u64)(u32)*(s32 *)((u8 *)&g_pActiveTextTable + 0x3C) << 32;
+    HudGsSlot *tex = &g_hudTextureSlots[g_hudIconMap[iconIndex].textureSlot];
+    s32 uExtent = 1 << tex->logW;
+    s32 vExtent = 1 << tex->logH;
+
+    *(u32 *)(p + 0x0) = 0x10000008;
+    *(u32 *)(p + 0x4) = 0;
+    *(u32 *)(p + 0x8) = 0;
+    *(u32 *)(p + 0xC) = 0x50000008;
+    g_frameDmaCursor = (u32 *)(p + 0x10);
+
+    /* GIFtag qword (copied 128-bit from D_1AC8B0 in the original) */
+    *(u64 *)(p + 0x10) = 0xE400000000008001ULL;
+    *(u64 *)(p + 0x18) = 0x0053153153153106ULL;
+    g_frameDmaCursor = (u32 *)(p + 0x20);
+
+    *(u64 *)(p + 0x20) = GetHudIconTex0(iconIndex);
+    *(u64 *)(p + 0x28) = 0x15C;
+    *(u64 *)(p + 0x30) = (u64)(u32)colors[0];            /* top-left colour */
+    *(u64 *)(p + 0x38) = 0;                              /* near UV (0,0) */
+    *(u64 *)(p + 0x40) = (u64)(u32)((x << 4) + offX - 8) /* top-left XY */
+                       | ((u64)(u32)((y << 4) + offY - 8) << 16)
+                       | z;
+    *(u64 *)(p + 0x48) = (u64)(u32)colors[1];            /* top-right colour */
+    *(u64 *)(p + 0x50) = (u64)(u32)(uExtent << 4);       /* far UV u */
+    *(u64 *)(p + 0x58) = (u64)(u32)(((x + w) << 4) + offX - 8) /* top-right XY */
+                       | ((u64)(u32)((y << 4) + offY - 8) << 16)
+                       | z;
+    *(u64 *)(p + 0x60) = (u64)(u32)colors[2];            /* bottom-left colour */
+    *(u64 *)(p + 0x68) = (u64)(u32)(vExtent << 20);      /* far UV v */
+    *(u64 *)(p + 0x70) = (u64)(u32)((x << 4) + offX - 8) /* bottom-left XY */
+                       | ((u64)(u32)(((y + h) << 4) + offY - 8) << 16)
+                       | z;
+    *(u64 *)(p + 0x78) = (u64)(u32)colors[3];            /* bottom-right colour */
+    *(u64 *)(p + 0x80) = (u64)(u32)((uExtent << 4) + (vExtent << 20)); /* far UV (u,v) */
+    *(u64 *)(p + 0x88) = (u64)(u32)(((x + w) << 4) + offX - 8) /* bottom-right XY */
+                       | ((u64)(u32)(((y + h) << 4) + offY - 8) << 16)
+                       | z;
+
+    g_frameDmaCursor = (u32 *)((u8 *)g_frameDmaCursor + 0x70);
+}
+#endif
 
 __asm__(".extern g_frameDmaCursor, 16");
 extern u32 *g_frameDmaCursor;   /* 0x1B2228 - per-frame render-DMA write pointer */
@@ -2920,12 +4187,58 @@ void func_0028F700(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, s32 alpha) {
 }
 #endif
 
-/* func_0028F8E0(...): HUD icon upload/draw helper (~0x200 bytes; 128-bit block
- * moves).
+/* func_0028F8E0: draw a HUD icon as a textured-sprite GIF packet (0x60-byte,
+ * NLOOP=5) with a caller-supplied RGB tint. Same shape as func_0028F700
+ * (whole-pixel screen coords, UV spanning the icon's full 2^logW x 2^logH
+ * texture) except the packed colour is (rgb & 0xFFFFFF) | (alpha << 24) built by
+ * assembling the three rgb bytes plus alpha, rather than the fixed 0x7F7F7F.
  *
- * WALL (sq/lq 128-bit): GS packet assembly via 128-bit lq/sq the matcher cannot
- * reproduce from C. Left INCLUDE_ASM. */
+ *   iconIndex  index into g_hudIconMap (and GetHudIconTex0)
+ *   x, y       top-left screen pixel
+ *   w, h       screen size in pixels
+ *   alpha      tint alpha
+ *   rgb        packed 0x00BBGGRR tint colour (low 24 bits used)
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F8E0);
+#else
+void func_0028F8E0(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, s32 alpha, s32 rgb) {
+    u8 *p = (u8 *)g_frameDmaCursor;
+    s32 offX = g_gsPixelOffsetX;
+    s32 offY = g_gsPixelOffsetY;
+    u64 z = (u64)(u32)*(s32 *)((u8 *)&g_pActiveTextTable + 0x3C) << 32;
+    HudGsSlot *tex = &g_hudTextureSlots[g_hudIconMap[iconIndex].textureSlot];
+    s32 uExtent = 1 << tex->logW;
+    s32 vExtent = 1 << tex->logH;
+    u64 color = (u64)(u32)((rgb & 0xFF)
+                         | (rgb & 0xFF00)
+                         | (((rgb >> 16) & 0xFF) << 16)
+                         | (alpha << 24));
+
+    *(u32 *)(p + 0x0) = 0x10000005;
+    *(u32 *)(p + 0x4) = 0;
+    *(u32 *)(p + 0x8) = 0;
+    *(u32 *)(p + 0xC) = 0x50000005;
+    g_frameDmaCursor = (u32 *)(p + 0x10);
+
+    *(u64 *)(p + 0x10) = ((u64)0xE800 << 47) | 0x8001;
+    *(u64 *)(p + 0x18) = 0x5353106;
+    *(u64 *)(p + 0x20) = GetHudIconTex0(iconIndex);
+    *(u64 *)(p + 0x28) = 0x156;
+    *(u64 *)(p + 0x30) = color;
+    *(u64 *)(p + 0x38) = 0; /* near UV (0,0) */
+    *(u64 *)(p + 0x40) = (u64)(u32)(x + offX - 8)
+                       | ((u64)(u32)(y + offY - 8) << 16)
+                       | z;
+    *(u64 *)(p + 0x48) = (u64)(u32)((uExtent << 4) + (vExtent << 20)); /* far UV = full texture */
+    *(u64 *)(p + 0x50) = (u64)(u32)((x + w) + offX - 8)
+                       | ((u64)(u32)((y + h) + offY - 8) << 16)
+                       | z;
+    *(u64 *)(p + 0x58) = 0;
+
+    g_frameDmaCursor = (u32 *)((u8 *)g_frameDmaCursor + 0x50);
+}
+#endif
 
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028FAE0);
@@ -2991,17 +4304,133 @@ void func_0028FAE0(s32 reg1, s32 x0, s32 y0, s32 uShift, s32 vShift, s32 w, s32 
  * INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028FC70);
 
-/* func_0028FC78(...): HUD element draw/layout helper (~0x374 bytes, heavy FP).
+/* func_0028FC78: draw a rotated (oriented) HUD texture quad — a 0x70-byte
+ * NLOOP=7 GIF packet whose four corners are the centre offset by two rotated
+ * half-extent basis vectors. The caller passes a GS TEX0/texbuffer handle
+ * directly (no g_hudIconMap lookup), so this is the raw-texture cousin of the
+ * icon draws above.
  *
- * WALL: extensive float math; FP scheduling not reproducible from C. Left
- * INCLUDE_ASM. */
+ *   cx, cy      quad centre, screen pixels (float; truncated to int per corner)
+ *   halfW       half-width  half-extent (scales the horizontal basis vector)
+ *   halfH       half-height half-extent (scales the vertical basis vector)
+ *   angle       rotation angle fed to the VU0 trig pair
+ *   uExtent     U texel extent (near UV u = uExtent<<4)
+ *   vExtent     V texel extent (far UV v = vExtent<<4)
+ *   texReg      GS register value written at packet +0x20 (TEX0/handle)
+ *
+ * UNCONFIRMED: func_00283B48/func_00283B30 are the sin/cos VU0 pair (per the
+ * atan2-to-cartesian pattern noted elsewhere); the halfW<->halfH assignment is
+ * inferred from the angle=0 case (basis vectors collapse to the screen axes).
+ * The colour is the fixed 0x807F7F7F (alpha 0x80, RGB 0x7F7F7F). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028FC78);
+#else
+void func_0028FC78(f32 cx, f32 cy, f32 halfW, f32 halfH, f32 angle,
+                   s32 uExtent, s32 vExtent, s32 texReg) {
+    u8 *p;
+    s32 offX = g_gsPixelOffsetX;
+    s32 offY = g_gsPixelOffsetY;
+    u64 z = (u64)(u32)*(s32 *)((u8 *)&g_pActiveTextTable + 0x3C) << 32;
+    f32 vecV[4];   /* vertical (height) basis vector    */
+    f32 vecH[4];   /* horizontal (width) basis vector   */
+    f32 center[4];
+    f32 c0[4], c1[4], c2[4], c3[4];
 
-/* func_0028FFF0(...): HUD element helper (~0x1C0 bytes).
+    /* Rotated half-extent basis vectors (sin = func_00283B48, cos = func_00283B30). */
+    vecV[0] = halfH * func_00283B48(angle);
+    vecV[1] = halfH * func_00283B30(angle);
+    vecH[0] = -halfW * func_00283B30(angle);
+    vecH[1] = halfW * func_00283B48(angle);
+    center[0] = cx;
+    center[1] = cy;
+
+    /* Four corners: centre +/- vecV +/- vecH (VU0 vec4 add/sub). */
+    Vec4AddVu0(c0, center, vecV); Vec4SubVu0(c0, c0, vecH);
+    Vec4AddVu0(c1, center, vecV); Vec4AddVu0(c1, c1, vecH);
+    Vec4SubVu0(c2, center, vecV); Vec4SubVu0(c2, c2, vecH);
+    Vec4SubVu0(c3, center, vecV); Vec4AddVu0(c3, c3, vecH);
+
+    p = (u8 *)g_frameDmaCursor;
+    *(u32 *)(p + 0x0) = 0x10000007;
+    *(u32 *)(p + 0x4) = 0;
+    *(u32 *)(p + 0x8) = 0;
+    *(u32 *)(p + 0xC) = 0x50000007;
+    g_frameDmaCursor = (u32 *)(p + 0x10);
+
+    *(u64 *)(p + 0x10) = ((u64)0xB400 << 48) | 0x8001;   /* GIFtag (NLOOP=7) */
+    *(u64 *)(p + 0x18) = 0x53535353106ULL;               /* register descriptor */
+    *(u64 *)(p + 0x20) = (u64)(u32)texReg;               /* TEX0/handle */
+    *(u64 *)(p + 0x28) = 0x154;
+    *(u64 *)(p + 0x30) = 0x807F7F7F;                     /* colour (A=0x80, RGB 0x7F7F7F) */
+    *(u64 *)(p + 0x38) = (u64)(u32)(uExtent << 4);       /* near UV u */
+    *(u64 *)(p + 0x40) = (u64)(u32)((s32)c0[0] + offX - 8)
+                       | ((u64)(u32)((s32)c0[1] + offY - 8) << 16)
+                       | z;
+    *(u64 *)(p + 0x48) = (u64)(u32)((vExtent << 20) + (uExtent << 4)); /* far UV (u,v) */
+    *(u64 *)(p + 0x50) = (u64)(u32)((s32)c1[0] + offX - 8)
+                       | ((u64)(u32)((s32)c1[1] + offY - 8) << 16)
+                       | z;
+    *(u64 *)(p + 0x58) = 0;
+    *(u64 *)(p + 0x60) = (u64)(u32)((s32)c2[0] + offX - 8)
+                       | ((u64)(u32)((s32)c2[1] + offY - 8) << 16)
+                       | z;
+    *(u64 *)(p + 0x68) = (u64)(u32)(vExtent << 20);      /* far UV v */
+    *(u64 *)(p + 0x70) = (u64)(u32)((s32)c3[0] + offX - 8)
+                       | ((u64)(u32)((s32)c3[1] + offY - 8) << 16)
+                       | z;
+    *(u64 *)(p + 0x78) = 0;
+
+    g_frameDmaCursor = (u32 *)((u8 *)g_frameDmaCursor + 0x70);
+}
+#endif
+
+/* func_0028FFF0: draw a HUD icon as a textured-sprite GIF packet (0x60-byte,
+ * NLOOP=5) with fully explicit corner coordinates AND texture coordinates — the
+ * most general of the cluster. Unlike func_0028F540/func_0028F8E0 (which derive
+ * the far UV from the texture size), the caller supplies both the near and far
+ * UV directly. Whole-pixel screen coords; fixed RGB 0x7F7F7F with alpha.
  *
- * WALL: callee-saves + jal gates; register colouring not reproducible from C.
- * Left INCLUDE_ASM (not yet fully traced). */
+ *   iconIndex   index into g_hudIconMap (and GetHudIconTex0)
+ *   x0, y0      near (top-left) screen pixel
+ *   x1, y1      far (bottom-right) screen pixel
+ *   u0, v0      near texel coordinate
+ *   u1, v1      far texel coordinate
+ *   alpha       tint alpha (RGB fixed 0x7F7F7F)
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028FFF0);
+#else
+void func_0028FFF0(s32 iconIndex, s32 x0, s32 y0, s32 x1, s32 y1,
+                   s32 u0, s32 v0, s32 u1, s32 v1, s32 alpha) {
+    u8 *p = (u8 *)g_frameDmaCursor;
+    s32 offX = g_gsPixelOffsetX;
+    s32 offY = g_gsPixelOffsetY;
+    u64 z = (u64)(u32)*(s32 *)((u8 *)&g_pActiveTextTable + 0x3C) << 32;
+
+    *(u32 *)(p + 0x0) = 0x10000005;
+    *(u32 *)(p + 0x4) = 0;
+    *(u32 *)(p + 0x8) = 0;
+    *(u32 *)(p + 0xC) = 0x50000005;
+    g_frameDmaCursor = (u32 *)(p + 0x10);
+
+    *(u64 *)(p + 0x10) = ((u64)0xE800 << 47) | 0x8001;
+    *(u64 *)(p + 0x18) = 0x5353106;
+    *(u64 *)(p + 0x20) = GetHudIconTex0(iconIndex);
+    *(u64 *)(p + 0x28) = 0x156;
+    *(u64 *)(p + 0x30) = ((u64)(u32)alpha << 24) | 0x7F7F7F;
+    *(u64 *)(p + 0x38) = (u64)(u32)(u0 | (v0 << 16));    /* near UV */
+    *(u64 *)(p + 0x40) = (u64)(u32)(x0 + offX - 8)
+                       | ((u64)(u32)(y0 + offY - 8) << 16)
+                       | z;
+    *(u64 *)(p + 0x48) = (u64)(u32)(u1 | (v1 << 16));    /* far UV */
+    *(u64 *)(p + 0x50) = (u64)(u32)(x1 + offX - 8)
+                       | ((u64)(u32)(y1 + offY - 8) << 16)
+                       | z;
+    *(u64 *)(p + 0x58) = 0;
+
+    g_frameDmaCursor = (u32 *)((u8 *)g_frameDmaCursor + 0x50);
+}
+#endif
 
 /* func_002901B0(...): HUD element helper (~0x170 bytes).
  *
