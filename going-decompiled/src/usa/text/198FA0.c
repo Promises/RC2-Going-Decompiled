@@ -844,8 +844,51 @@ s32 func_00299980(void) {
  * a SIMD zero-byte scan, sprintf/strncpy/path-join family). Its per-function .s
  * exists (cod/015180/func_00115AC0.s) so it could be linked as a cmp shared callee
  * - but matching the C without first pinning its exact semantics would be a guess.
- * Left as asm pending that identity. */
+ * Left as asm pending that identity. The TARGET_NATIVE #else below is faithful
+ * coverage — it calls func_00115AC0 by its traced (dst,src,len) signature. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", BuildSaveGamePaths);
+#else
+extern u8   g_saveDirTemplate[];     /* mutable save-dir name template (region + serial) */
+extern u8   D_1A7950[];              /* save path buffer */
+extern u8   D_1A79A8[];              /* save path buffer (+0x14 = a second buffer) */
+extern u8   g_saveIconSysPath[];
+extern u8   g_saveStaticIcoPath[];
+extern u8   g_saveFileFmt[];
+extern void func_00115AC0(void *dst, const void *src, s32 len); /* path-join/copy (UNCONFIRMED) */
+
+void BuildSaveGamePaths(void *rec) {
+    u8 *r    = (u8 *)rec;
+    u8 *tmpl = g_saveDirTemplate;
+    s32 i;
+
+    /* region-code remap into template[2]: 'P' -> 'I', 'E'/'K' unchanged */
+    if (r[0x12] == 0x45) {          /* 'E' */
+        tmpl[2] = 0x45;
+    } else if (r[0x12] == 0x50) {   /* 'P' */
+        tmpl[2] = 0x49;             /* 'I' */
+    } else if (r[0x12] == 0x4B) {   /* 'K' */
+        tmpl[2] = 0x4B;
+    }
+
+    for (i = 3; i < 7; i++) {
+        tmpl[i] = r[i + 0xD];
+    }
+    for (i = 8; i < 0xB; i++) {
+        tmpl[i] = r[i + 0xD];
+    }
+    for (i = 0xB; i < 0xD; i++) {
+        tmpl[i] = r[i + 0xE];
+    }
+
+    func_00115AC0(D_1A7950, tmpl, 0xD);
+    func_00115AC0(g_saveIconSysPath, tmpl, 0xD);
+    func_00115AC0(g_saveStaticIcoPath, tmpl, 0xD);
+    func_00115AC0(D_1A79A8, tmpl, 0xD);
+    func_00115AC0(D_1A79A8 + 0x14, tmpl, 0xD);
+    func_00115AC0(g_saveFileFmt, tmpl, 0xD);
+}
+#endif
 
 /* func_00299B00: 0x14 bytes of dead inter-function fill (`daddu $2,$0,$0` /
  * `daddu $2,$3,$0` / `addiu $sp,0x40` epilogue orphans, no jr) — not
@@ -957,8 +1000,30 @@ void func_00299BF8(void) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", SaveLoadStateMachine);
 
 /* BuildSaveImage: assembles the save payload from the section table. Multi
- * callee-save; 8-byte-packed callee-save frame wall, see func_0029C678. */
+ * callee-save; 8-byte-packed callee-save frame wall, see func_0029C678.
+ * Writes the two section-table sizes as the leading header words (out[0]=global,
+ * out[1]=area), then serializes the global block (slot 0) and all 0x1C area slots
+ * after the header, advancing by each block's written byte count. The
+ * TARGET_NATIVE #else is faithful coverage. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", BuildSaveImage);
+#else
+extern s32 SerializeSaveSections(void *dst, s32 slotMul, SaveSection *table); /* defined below */
+
+void BuildSaveImage(s32 *out) {
+    u8 *p;
+    s32 i;
+
+    out[0] = CalcSaveSectionsSize(g_saveSectionTableGlobal);
+    out[1] = CalcSaveSectionsSize(g_saveSectionTableArea);
+
+    p = (u8 *)out + 8;
+    p += SerializeSaveSections(p, 0, g_saveSectionTableGlobal);
+    for (i = 0; i < 0x1C; i++) {
+        p += SerializeSaveSections(p, i, g_saveSectionTableArea);
+    }
+}
+#endif
 
 /** Game-level libmc bring-up: bind the memory-card RPC services (McInit) and
  *  log the failure string (compiled-out DebugPrintStub) when it errors.
@@ -1391,7 +1456,31 @@ void func_0029CA88(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029CA98);
 
+/* func_0029CC48: rebuild the camera projection with a temporary FOV override.
+ * When the GUI singleton exists, force the camera FOV field (g_sceneActorMobys
+ * +0x724) to 0.62, rebuild the projection, run the GUI camera hook
+ * (func_0034F220 on g_guiInstance+0x36F28), then restore the saved FOV and
+ * rebuild again. Matching build: callee-save frame wall (see func_0029C678);
+ * the TARGET_NATIVE #else is faithful coverage. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029CC48);
+#else
+extern u8   g_sceneActorMobys[];               /* +0x724 = camera FOV field */
+extern void BuildCameraProjection(void);
+extern void func_0034F220(void *guiCameraCtx);
+
+void func_0029CC48(void) {
+    if (g_guiInstance != 0) {
+        f32 *fov = (f32 *)(g_sceneActorMobys + 0x724);
+        f32  saved = *fov;
+        *fov = 0.62f;
+        BuildCameraProjection();
+        func_0034F220(g_guiInstance + 0x36F28);
+        *fov = saved;
+        BuildCameraProjection();
+    }
+}
+#endif
 
 /* func_0029CCB8: if the GUI is up and several gating flags (D_1A9A88,
  * g_nNanotechBonusHealTimer+4, D_1A8C64, D_1A9A8C) permit, forward to the
@@ -2392,8 +2481,56 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029FDF8);
 
 /* SpawnMoby: allocates a moby from the spawn free-list (g_mobySpawnStart..
  * g_mobyTableEnd) and initialises it. Multi callee-save; 8-byte-packed
- * callee-save frame wall, see func_0029C678. Left as asm. */
+ * callee-save frame wall, see func_0029C678. Left as asm (matching). Scans slots
+ * (stride 0x100) for the first free one — state (+0x20) >= 0xFE with an expired
+ * reservation (+0xA0 <= g_gameTime) — inits it (InitMobyFromClass), binds+zeroes
+ * its parallel 0x80-byte aux block (g_mobyAuxBlockBase[slot] at moby+0x68), and
+ * decrements the spawn credit; returns 0 (logging) when full. The TARGET_NATIVE
+ * #else is faithful coverage. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", SpawnMoby);
+#else
+extern u8  *g_mobySpawnStart;    /* 0x1B1AE0 first dynamic moby slot */
+extern u8  *g_mobyTableEnd;      /* 0x1B1AE4 moby table walk bound */
+extern u8  *g_mobyAuxBlockBase;  /* 0x1B1AEC parallel per-moby 0x80-byte block array */
+extern s32  g_mobySpawnCredit;   /* remaining spawn budget */
+extern s32  g_gameTime;          /* global frame counter */
+extern char D_1A9DC8[];          /* "no free moby slot" log string */
+extern void InitMobyFromClass();  /* K&R: defined below with the Moby typedef */
+
+void *SpawnMoby(s32 classId) {
+    u8 *m = g_mobySpawnStart;
+
+    if (m < g_mobyTableEnd) {
+        s32 state = m[0x20];
+        for (;;) {
+            if (state >= 0xFE && !(g_gameTime < *(s32 *)(m + 0xA0))) {
+                if (state == 0xFF) {
+                    m[0x120] = (u8)state;
+                }
+                InitMobyFromClass(m, classId);
+                {
+                    s32 slot = (s32)(m - g_mobySpawnStart) / 0x100;
+                    u8 *aux = g_mobyAuxBlockBase + slot * 0x80;
+                    *(u8 **)(m + 0x68) = aux;
+                    FillMemory32(aux, 0, 0x80);
+                }
+                if (g_mobySpawnCredit != 0) {
+                    g_mobySpawnCredit--;
+                }
+                return m;
+            }
+            m += 0x100;
+            if (m >= g_mobyTableEnd) {
+                break;
+            }
+            state = m[0x20];
+        }
+    }
+    DebugPrintStub(D_1A9DC8);   /* compiled-out; original also passes g_gameTime */
+    return 0;
+}
+#endif
 
 /* Canonical Moby entity record (full field layout in include/moby.h, sizeof
  * 0x100). InitMobyFromClass zero-fills and stamps it; the body does its own
