@@ -41,7 +41,13 @@ __asm__(".extern D_1A8BD0, 12");
 __asm__(".extern g_skillPointFlags, 12");
 __asm__(".extern g_abLevelAvailableFlags, 12");
 
+#ifdef TARGET_NATIVE
+/* gcc -m32 cannot emulate mode(TI); this unit only copies QVecs, so a 16-byte
+   aligned struct suffices for the native structure-model gate (mirrors USA 1A8180). */
+typedef struct { unsigned long long _q[2]; } __attribute__((aligned(16))) u_long128;
+#else
 typedef unsigned long u_long128 __attribute__((mode(TI)));
+#endif
 typedef struct Vec4 { f32 x, y, z, w; } Vec4;
 typedef union QVec { u_long128 q; Vec4 v; } QVec;
 
@@ -136,11 +142,158 @@ extern f32 func_00283708(void *p, f32 *src);  /* EU breath-meter sampler (USA fu
 extern f32 GetFloatAbs(f32 x);
 
 
+/* Set a moby's active animation sequence + frame, clamping the frame to the
+ * sequence frame count, then resolving frame pointers and caching loop sound.
+ * Matching arm stays INCLUDE_ASM; #else is the structure model.
+ * EU-lockstep of USA func_002A8200: ResolveMobyAnimFramePtrs (func_002A01C8) -> func_0029FD50. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A7D90);
+#else
+extern void func_0029FD50(Moby *moby);   /* resolve anim frame ptrs (+0x58/+0x5C) */
 
+void func_002A7D90(Moby *moby, s32 seq, s32 frameIdx) {
+    u8 *m = (u8 *)moby;
+    u8 *pClass = *(u8 **)(m + 0x24);                     /* moby->pClass */
+    u8 *seqEntry = *(u8 **)(pClass + 0x48 + seq * 4);
+    s32 frameCount = *(u8 *)(seqEntry + 0x10);
+    s32 cur, next;
+
+    m[0x42] = (u8)seq;                                   /* animSeq */
+
+    cur = (frameIdx < frameCount) ? frameIdx : (frameCount - 1);
+    next = cur + 1;
+    m[0x40] = (u8)cur;                                   /* animFrame */
+    m[0x41] = (u8)next;                                  /* animFrameNext */
+    if ((frameCount - 1) < next) {
+        m[0x41] = (u8)(frameCount - 1);
+    }
+
+    m[0x43] = (u8)seq;                                   /* animSeqNext */
+    if (m[0x41] >= frameCount) {
+        m[0x41] = 0;
+    }
+
+    func_0029FD50(moby);
+
+    *(f32 *)(m + 0x4C) = *(f32 *)(*(u8 **)(m + 0x58));   /* animRate2 = *animFramePtr */
+    m[0x60] &= 0xFD;                                     /* animEventByte: clear bit 1 */
+    m[0x6C] = *(u8 *)(seqEntry + 0x11);                  /* loopSoundIdx */
+}
+#endif
+
+/* Start anim sequence idx at frame arg3 blended over arg4 frames; arg4 <= 0
+ * delegates to func_002A7D90 (instant set), else seeds a timed blend + optional
+ * procedural-anim slot snapshot. Matching arm stays INCLUDE_ASM; #else is the structure model.
+ * EU-lockstep of USA func_002A82D8: func_002A08C0 -> func_002A0448, func_002A3288 -> func_002A2E30,
+ * func_002A8200 -> func_002A7D90, ResolveMobyAnimFramePtrs (func_002A01C8) -> func_0029FD50,
+ * IntToFloat (func_00284690) -> func_002845A0, g_proceduralAnimBounds -> EU g_proceduralAnimBounds. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A7E68);
+#else
+extern void func_0029FD50(Moby *moby);            /* resolve anim frame ptrs */
+extern s32  func_002A0448(void *obj);             /* acquire procedural-anim slot; <0 = none */
+extern void func_002A2E30(void *obj, s32 flags);  /* bind the acquired procedural-anim slot */
+extern u8   g_proceduralAnimBounds[];             /* per-slot cached pose-bounds Vec4, stride 0x10 */
+extern f32  func_002845A0(s32 x);                 /* int -> float */
 
+void func_002A7E68(Moby *obj, s32 idx, s32 arg3, s32 arg4) {
+    u8 *m = (u8 *)obj;
+    u8 *pClass = *(u8 **)(m + 0x24);
+    u8 *seqEntry = *(u8 **)(pClass + 0x48 + idx * 4);
+    s32 frameCount = *(u8 *)(seqEntry + 0x10);
+    s32 clampedFrame = (arg3 < frameCount) ? arg3 : (frameCount - 1);
+
+    if (arg4 <= 0) {
+        func_002A7D90(obj, idx, clampedFrame);
+        return;
+    }
+
+    if (0.025f < *(f32 *)(m + 0x44) ||
+        *(s32 *)(m + 0x50) != 0 ||
+        *(s32 *)(m + 0x54) != 0) {
+        s32 slot = func_002A0448(obj);
+        if (slot < 0) {
+            m[0x41] = (u8)clampedFrame;
+        } else {
+            func_002A2E30(obj, slot | 0x300);
+            *(Vec4 *)(g_proceduralAnimBounds + slot * 0x10) = *(Vec4 *)(m + 0x80);
+            if (m[0x42] != 0xFF) {
+                m[0xA9] = m[0x42];
+            }
+            m[0x42] = 0xFF;
+            m[0x40] = (u8)slot;
+            m[0x41] = (u8)clampedFrame;
+        }
+    } else {
+        m[0x41] = (u8)clampedFrame;
+    }
+
+    m[0x43] = (u8)idx;
+    func_0029FD50(obj);
+    *(f32 *)(m + 0x48) = 1.0f;
+    *(f32 *)(m + 0x4C) = 1.0f / func_002845A0(arg4);
+    *(f32 *)(m + 0x44) = 0.0f;
+    m[0x60] &= 0xFD;
+    m[0x6C] = *(u8 *)(seqEntry + 0x11);
+}
+#endif
+
+/* Parameterized blend-anim start: like func_002A7E68 but with an explicit flags
+ * word (arg5 in $8, normal EABI); arg4 <= 0 delegates to func_002A7D90 (instant),
+ * else acquires + binds a procedural-anim slot with flags-derived bind bits.
+ * Matching arm stays INCLUDE_ASM; #else is the structure model.
+ * EU-lockstep of USA func_002A8448: func_002A08C0 -> func_002A0448, func_002A3288 -> func_002A2E30,
+ * func_002A8200 -> func_002A7D90, ResolveMobyAnimFramePtrs (func_002A01C8) -> func_0029FD50,
+ * IntToFloat (func_00284690) -> func_002845A0, g_proceduralAnimBounds -> EU g_proceduralAnimBounds. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A7FF8);
+#else
+extern void func_0029FD50(Moby *moby);            /* resolve anim frame ptrs */
+extern s32  func_002A0448(void *obj);             /* acquire procedural-anim slot; <0 = none */
+extern void func_002A2E30(void *obj, s32 flags);  /* bind the acquired procedural-anim slot */
+extern u8   g_proceduralAnimBounds[];             /* per-slot cached pose-bounds Vec4, stride 0x10 */
+extern f32  func_002845A0(s32 x);                 /* int -> float */
+
+void func_002A7FF8(Moby *obj, s32 idx, s32 frame, s32 arg4, s32 flags) {
+    u8 *m = (u8 *)obj;
+    u8 *seqEntry;
+
+    if (arg4 <= 0) {
+        func_002A7D90(obj, idx, frame);
+        return;
+    }
+
+    if (0.025f < *(f32 *)(m + 0x44) ||
+        *(s32 *)(m + 0x50) != 0 ||
+        *(s32 *)(m + 0x54) != 0 ||
+        (flags & 4) != 0) {
+        s32 slot = func_002A0448(obj);
+        if (slot >= 0) {
+            s32 bind = (flags & 1) ? (slot | 0x100) : slot;
+            if (flags & 2) {
+                bind |= 0x200;
+            }
+            func_002A2E30(obj, bind);
+            *(Vec4 *)(g_proceduralAnimBounds + slot * 0x10) = *(Vec4 *)(m + 0x80);
+            if (m[0x42] != 0xFF) {
+                m[0xA9] = m[0x42];
+            }
+            m[0x42] = 0xFF;
+            m[0x40] = (u8)slot;
+        }
+    }
+    m[0x41] = (u8)frame;
+
+    m[0x43] = (u8)idx;
+    func_0029FD50(obj);
+    *(f32 *)(m + 0x48) = 1.0f;
+    *(f32 *)(m + 0x4C) = 1.0f / func_002845A0(arg4);
+    *(f32 *)(m + 0x44) = 0.0f;
+    m[0x60] &= 0xFD;
+    seqEntry = *(u8 **)(*(u8 **)(m + 0x24) + 0x48 + idx * 4);
+    m[0x6C] = *(u8 *)(seqEntry + 0x11);
+}
+#endif
 
 /* func_002A8168: begin a moby animation (EU twin of USA func_002A85B8). Stash
  * the current anim id into the "prev anim id" slot, install the new anim id,
@@ -180,7 +333,20 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A81D8);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A81F8);
 
+/* RandRangeInclusive: uniform random int in [lo, hi] inclusive - a 15-bit LCG
+ * value (func_001163B0 >> 16 & 0x7FFF) reduced modulo the span then biased by lo.
+ * Matching arm stays INCLUDE_ASM; #else is the structure model.
+ * EU-lockstep of USA func_002A8688: func_001163B0 unchanged (delta 0). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A8238);
+#else
+s32 func_002A8238(s32 lo, s32 hi) {
+    s32 r = (func_001163B0() >> 16) & 0x7FFF;
+    s32 span = hi - lo + 1;
+
+    return r % span + lo;
+}
+#endif
 
 /* EU twin of USA func_002A86E0 (1A8180): random f32 in [lo, hi). Pure compute
  * (func_001163B0 random-state step + 2^-15 scale), no data globals -> no +0x80
@@ -209,9 +375,45 @@ f32 func_002A8358(void) {
     return (f32)(((func_001163B0() >> 16) & 0xFFF) - 0x800) * 0.0015339808f;
 }
 
+/* Spawn/place helper: draw two random angles and a random value in [lo, hi],
+ * then hand them to func_002AFB68 for handle.
+ * Matching arm stays INCLUDE_ASM; #else is the structure model.
+ * EU-lockstep of USA func_002A87F0: GetRandomAngle (func_002A87A8) -> func_002A8358,
+ * GetRandomFloatRange (func_002A86E0) -> func_002A8290, func_002AFE68 -> func_002AFB68. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A83A0);
+#else
+extern void func_002AFB68(void *handle, f32 value, f32 angle1, f32 angle2);
 
+void func_002A83A0(void *handle, f32 lo, f32 hi) {
+    f32 angle1 = func_002A8358();
+    f32 angle2 = func_002A8358();
+    f32 value = func_002A8290(lo, hi);
+    func_002AFB68(handle, value, angle1, angle2);
+}
+#endif
+
+/* Random direction vector into dst: a random magnitude in [lo, hi] and two random
+ * angles, mapped to cartesian (x = r*cos(a2)*sin(a1), y = r*sin(a2)*sin(a1),
+ * z = r*cos(a1)). Matching arm stays INCLUDE_ASM; #else is the structure model.
+ * EU-lockstep of USA func_002A8868: func_002A86E0 -> func_002A8290,
+ * GetRandomAngle (func_002A87A8) -> func_002A8358, cos (func_00283B30) -> func_00283A40,
+ * sin (func_00283B48) -> func_00283A58. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A8418);
+#else
+extern f32 func_00283A40(f32 angle);   /* cosine */
+extern f32 func_00283A58(f32 angle);   /* sine */
+
+void func_002A8418(Vec4 *dst, f32 lo, f32 hi) {
+    f32 radius = func_002A8290(lo, hi);
+    f32 angle2 = func_002A8358();
+    f32 angle1 = func_002A8358();
+    dst->x = radius * func_00283A40(angle2) * func_00283A58(angle1);
+    dst->y = radius * func_00283A58(angle2) * func_00283A58(angle1);
+    dst->z = radius * func_00283A40(angle1);
+}
+#endif
 
 /**
  * Cubic blend through two value pairs: hermite-style interpolation of the
@@ -225,15 +427,87 @@ f32 func_002A84C0(f32 a1, f32 a0, f32 b0, f32 b1, f32 t) {
     return c * t3 + ((a1 - a0) - c) * t2 + (b0 - a1) * t + a0;
 }
 
+/* Per-component cubic (Catmull-Rom-style) blend of four control vectors p1..p4
+ * into out at parameter t: for x/y/z the vector form of func_002A84C0(p3,p1,p2,p4,t),
+ * with w forced to 0; t==0 copies p1, t==1 copies p2 verbatim.
+ * Matching arm stays INCLUDE_ASM; #else is the structure model.
+ * EU-lockstep of USA func_002A8948: func_002A8910 -> func_002A84C0 (reuse file-scope). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A84F8);
+#else
+void func_002A84F8(Vec4 *out, Vec4 *p1, Vec4 *p2, Vec4 *p3, Vec4 *p4, f32 t) {
+    if (t == 0.0f) { *out = *p1; return; }
+    if (t == 1.0f) { *out = *p2; return; }
+    out->x = func_002A84C0(p3->x, p1->x, p2->x, p4->x, t);
+    out->y = func_002A84C0(p3->y, p1->y, p2->y, p4->y, t);
+    out->w = 0.0f;
+    out->z = func_002A84C0(p3->z, p1->z, p2->z, p4->z, t);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A8618);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A86B0);
 
+/* UpdateMobyFacingAngle: damped turn of a moby's heading (Moby+0xF8, yaw radians)
+ * toward a target angle, then re-wrap into [-pi,pi]. Matching arm stays INCLUDE_ASM;
+ * #else is the structure model. EU-lockstep of USA func_002A8B08: WrapAnglePiDiff ->
+ * func_002844A0, WrapAnglePiSum -> func_00284458 (EU .s: facingAngle at moby+0xF8,
+ * offset raw since EU Moby typedef doesn't name it - verified vs func_002A86B8.s). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A86B8);
+#else
+void func_002A86B8(Moby *moby, f32 *driveOut, f32 targetAngle,
+                   f32 gain, f32 damp, f32 clampLimit) {
+    f32 *facing = (f32 *)((char *)moby + 0xF8);   /* Moby facingAngle (yaw radians) */
+    f32 d = func_002844A0(targetAngle, *facing);  /* signed shortest turn to target */
+    f32 s = d * 6.366197f;                         /* 0x40CBB7E3 = 20/pi */
+    f32 v;
+    f32 ad;
 
+    if (s > 1.0f) {
+        s = 1.0f;
+    } else if (s < -1.0f) {
+        s = -1.0f;
+    }
+    v = *driveOut;
+    v = v + (gain * s - damp * v);                 /* damped feed-forward integrate */
+    *driveOut = v;
+    if (clampLimit != 0.0f) {
+        if (clampLimit < v) {
+            *driveOut = clampLimit;
+        } else if (v < -clampLimit) {
+            *driveOut = -clampLimit;
+        }
+    }
+    ad = GetFloatAbs(d);                            /* never step past the target */
+    if (ad < *driveOut) {
+        *driveOut = GetFloatAbs(d);
+    } else if (-GetFloatAbs(d) > *driveOut) {
+        *driveOut = -GetFloatAbs(d);
+    }
+    *facing = func_00284458(*facing, *driveOut);   /* advance + re-wrap heading */
+}
+#endif
+
+/* UpdateMobyFacingTowardPoint: point a moby at a target - heading from the planar
+ * (x,y) delta (Moby pos at +0x10/+0x14), fed to func_002A86B8. Matching arm stays
+ * INCLUDE_ASM; #else is the structure model. EU-lockstep of USA func_002A8C70:
+ * atan2 func_00283BF8 -> func_00283B08, UpdateMobyFacingAngle -> func_002A86B8
+ * (pos.x/y raw offsets +0x10/+0x14 verified vs func_002A8820.s). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A8820);
+#else
+void func_002A8820(Moby *moby, Moby *target, f32 *driveOut,
+                   f32 gain, f32 damp, f32 clampLimit) {
+    f32 *mPos = (f32 *)((char *)moby + 0x10);     /* Moby pos.xy */
+    f32 *tPos = (f32 *)((char *)target + 0x10);
+    f32 dx = tPos[0] - mPos[0];
+    f32 dy = tPos[1] - mPos[1];
+    f32 angle = func_00283B08(dx, dy);
+    func_002A86B8(moby, driveOut, angle, gain, damp, clampLimit);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A88A8);
 
@@ -241,6 +515,13 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A88B8);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A8C50);
 
+/* func_002A8EF8: PARKED (bare). Mnemonic-hash MIS-MAP + STUMP-FUSION. The assigned
+ * twin USA func_002A90A8 is a large VU0 directional-collision sweep (CollLine/
+ * CollSphere/Vec*Vu0 jals); EU func_002A8EF8 has ZERO calls and only scans a
+ * moby-group count/filter (g_nBoltCounterDisplayed+0x214 / D_001E0019+0xE587) - a
+ * different function. Its .s head is also 5 orphan epilogue stumps (positive-$sp)
+ * fused before the real start at func_002A8F20. The genuine func_002A90A8 twin
+ * lives at a different EU address; leave INCLUDE_ASM pending a resplit/re-map. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A8EF8);
 
 /**
@@ -264,7 +545,98 @@ void func_002A8FB0(s32 group, s32 lightMode) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A9008);
 
+/* Moby-group iterator ADVANCE/filter step: walk the per-group slot list via the
+ * iterator globals, return the next moby passing the active/inactive filter.
+ * Matching arm stays INCLUDE_ASM; #else is the structure model.
+ * EU-lockstep of USA func_002A9550: all iterator globals are region-agnostic named
+ * symbols (EU splat anchors them off g_nBoltCounterDisplayed, same absolute addrs). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A9100);
+#else
+s32 func_002A9100(Moby **out, Moby *moby, s32 wantInactive, s32 wantActive) {
+    u16 *cursor;
+    s32 slot;
+    s32 sign;
+    s32 accept;
+
+    *out = 0;
+    if (moby == g_pMobyGroupIterMoby) {
+        /* resume from the saved cursor */
+        cursor = g_pMobyGroupIterCursor;
+        if ((s16)*cursor < 0) {
+            return -1;
+        }
+    } else {
+        /* re-seed the iterator for this moby's own group */
+        if (g_mobyGroupCount < moby->group) {
+            return -1;
+        }
+        g_pMobyGroupIterMoby = 0;
+        cursor = g_mobyGroupLists[moby->group];
+        g_pMobyGroupIterCursor = cursor;
+        if (cursor == 0) {
+            return -1;
+        }
+        /* one entry before the head; the seek loop pre-increments */
+        cursor = cursor - 1;
+        g_pMobyGroupIterCursor = cursor;
+        for (;;) {
+            Moby *m;
+
+            cursor = cursor + 1;
+            g_pMobyGroupIterCursor = cursor;
+            slot = *cursor & 0x7FFF;
+            g_mobyGroupIterSlot = slot;
+            m = (Moby *)((u8 *)g_mobyTableBase + slot * 0x100);
+            g_pMobyGroupIterMoby = m;
+            if ((s16)*cursor < 0) {
+                return -1;
+            }
+            if (moby == m) {
+                break;   /* found it; the filter loop starts on the NEXT entry */
+            }
+            cursor = g_pMobyGroupIterCursor;
+        }
+    }
+
+    /* advance one entry at a time, applying the active/inactive filter */
+    for (;;) {
+        Moby *m;
+
+        cursor = cursor + 1;
+        g_pMobyGroupIterCursor = cursor;
+        slot = *cursor & 0x7FFF;
+        g_mobyGroupIterSlot = slot;
+        m = (Moby *)((u8 *)g_mobyTableBase + slot * 0x100);
+        g_pMobyGroupIterMoby = m;
+        *out = m;
+        sign = (u32)(s32)g_pMobyGroupIterMoby->state >> 31;
+
+        if (wantInactive == 0) {
+            if (wantActive != 0) {
+                accept = 0;                 /* always advance */
+            } else {
+                accept = (sign == 0);       /* accept active */
+            }
+        } else {
+            if (wantActive == 0) {
+                accept = 1;                 /* accept unconditionally */
+            } else {
+                accept = (sign != 0);       /* accept inactive */
+            }
+        }
+        if (accept) {
+            return 0;
+        }
+        /* rejected: keep scanning unless the current entry terminates the list */
+        cursor = g_pMobyGroupIterCursor;
+        if ((s16)*cursor < 0) {
+            *out = 0;
+            return -1;
+        }
+    }
+}
+#endif
 
 /* func_002A9268: leading 0x10 padding pair (orphaned epilogue of func_002A9100),
  * split off via the symbol_addrs pin so the real body below starts clean. */
@@ -287,9 +659,63 @@ s32 func_002A9278(u32 *p, s32 dec) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A92B0);
 
+/* Solve the quadratic a*x^2 + b*x + c = 0 for real roots. Returns the root count
+ * and writes them to out1/out2 (out1 >= out2). Matching arm stays INCLUDE_ASM; #else is the structure model.
+ * EU-lockstep of USA func_002A9708: sqrtf func_002835C0 -> func_002834D0, GetFloatAbs kept. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A92B8);
+#else
+extern f32 func_002834D0(f32 x);   /* sqrtf twin (USA func_002835C0) */
 
+s32 func_002A92B8(f32 a, f32 b, f32 c, f32 *out1, f32 *out2)
+{
+    f32 disc = b * b - a * (c * 4.0f);
+
+    if (disc == 0.0f) {
+        *out1 = -b / (a + a);
+        return 1;
+    } else {
+        f32 root = func_002834D0(GetFloatAbs(disc)); /* sqrt(|disc|) */
+        f32 hi = (-b + root) / (a + a);
+        f32 lo = (-b - root) / (a + a);
+
+        *out1 = hi;
+        *out2 = lo;
+        if (*out1 < lo) {
+            *out2 = *out1;
+            *out1 = lo;
+        }
+        if (disc > 0.0f) {
+            return 2;
+        }
+        return 0;
+    }
+}
+#endif
+
+/* ProbeGroundHeight: ground height under a point - CollLine from z=0.01 up to
+ * pos.z + zOffset, returns the hit z or 0. Matching arm stays INCLUDE_ASM; #else is the structure model.
+ * EU-lockstep of USA ProbeGroundHeight: CollLine -> func_00276098, g_collHitPoint kept
+ * (EU splat anchors g_collHitPoint.z off g_nVendorBuyQuantity+0x8D60, same absolute addr). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A93C0);
+#else
+extern s32 CollLine(void *to, void *from, s32 mask, void *moby, void *out);  /* func_00276098 */
+
+f32 func_002A93C0(Vec4 *pos, f32 zOffset, s32 mask) {
+    QVec from;
+    QVec to;
+
+    from.q = *(u_long128 *)pos;
+    from.v.z = 0.00999999978f;          /* 0x3C23D70A == 0.01f */
+    to.q = *(u_long128 *)pos;
+    to.v.z = pos->z + zOffset;
+    if (CollLine(&to, &from, mask | 2, 0, 0) == 0) {
+        return 0.0f;
+    }
+    return g_collHitPoint.z;
+}
+#endif
 
 /**
  * Ground probe with the default parameters: half a unit above the query point,
@@ -301,7 +727,45 @@ f32 func_002A9438(Vec4 *pos) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A9460);
 
+/* func_002A9508(point, poly, count): even-odd point-in-polygon test in the XY
+ * plane. For each polygon edge (adjacent vertices poly[i], poly[(i+1)%count])
+ * that straddles the horizontal line y == point->y, it computes the edge's X
+ * intersection with that line and toggles an inside flag when the crossing lies
+ * left of point->x. Returns 1 if the point is inside (odd crossings), else 0.
+ * Vertices are 16-byte Vec4 records; only .x/.y participate. Pure leaf.
+ * Matching arm stays INCLUDE_ASM; #else is the structure model.
+ * EU-lockstep of USA func_002A9958: no calls, no data refs (delta 0). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A9508);
+#else
+s32 func_002A9508(Vec4 *point, Vec4 *poly, s32 count) {
+    s32 inside = 0;
+    s32 i;
+
+    if (count <= 0) {
+        return 0;
+    }
+    for (i = 0; i < count; i++) {
+        Vec4 *vi = &poly[i];
+        Vec4 *vj = &poly[(i + 1 == count) ? 0 : i + 1];
+        s32 crosses;
+
+        if (vi->y < point->y) {
+            crosses = point->y <= vj->y;
+        } else {
+            crosses = vj->y < point->y && point->y <= vi->y;
+        }
+        if (crosses) {
+            f32 t  = (point->y - vi->y) / (vj->y - vi->y);
+            f32 ix = vi->x + t * (vj->x - vi->x);
+            if (ix < point->x) {
+                inside = !inside;
+            }
+        }
+    }
+    return inside;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A95D8);
 
@@ -320,17 +784,200 @@ s32 func_002A95E8(f32 power, Moby *moby, s32 a, s32 b) {
     return func_00283638(moby);
 }
 
+/* func_002A9618: fill a hit-event record (params + 128-bit source vector +
+ * live flag). Matching arm stays INCLUDE_ASM; #else is the structure model.
+ * EU-lockstep of USA func_002A9A68: no calls, no data refs (delta 0). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A9618);
+#else
+void func_002A9618(void *rec, s32 a, s32 b, f32 power, void *src) {
+    *(s32 *)((u8 *)rec + 0x10) = a;
+    *(s32 *)((u8 *)rec + 0x14) = b;
+    *(f32 *)((u8 *)rec + 0x1C) = power;
+    *(s32 *)((u8 *)rec + 0x20) = 1;          /* live flag */
+    *(u_long128 *)rec = *(u_long128 *)src;    /* 128-bit source vector at +0x00 */
+}
+#endif
 
+/* func_002A9640: issue a directional moby sphere-collision / damage query.
+ * Builds a spread direction from the moby's orientation - for an oriented moby
+ * (modeBits & 0x100) its motion vector (+0xE0) rescaled to 0.25 then offset by
+ * the matrix column at +0xC0; otherwise a unit heading from the facing yaw
+ * (cos, sin, z=1). The direction is scaled by scale and stamped with a fixed
+ * .w magnitude (0x45AFDF66), then folded into a hit-event record together with
+ * the source moby, class id, the two byte tags (arg4/arg5) and the impact
+ * power. CollMobysSphere then gathers/broadcasts against that record within
+ * radius and returns the hit count. Matching arm stays INCLUDE_ASM; #else is the structure model.
+ * EU-lockstep of USA func_002A9A90: Vec3RescaleToLenVu0 -> func_002837E0,
+ * Vec4AddVu0 -> func_00283580, cos -> func_00283A40, sin -> func_00283A58,
+ * Vec4ScaleVu0 -> func_002835F0, func_002A9A68 -> func_002A9618,
+ * CollMobysSphere -> func_00277DE8. self->facingAngle -> raw +0xF8 (EU Moby
+ * lacks the named field; verified lwc1 0xF8 in func_002A9640.s). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A9640);
+#else
+extern void func_002837E0(Vec4 *dst, f32 len, Vec4 *src);   /* Vec3RescaleToLenVu0 */
+extern void func_00283580(Vec4 *dst, Vec4 *a, Vec4 *b);     /* Vec4AddVu0 */
+extern void func_002835F0(Vec4 *dst, f32 s, const Vec4 *src); /* Vec4ScaleVu0 */
+extern s32  func_00277DE8(void *targetList, void *filter, Moby *self,
+                          void *hitEvent, f32 radius);       /* CollMobysSphere */
 
+s32 func_002A9640(Moby *self, void *targetList, s32 arg3, s32 arg4, s32 arg5,
+                  void *filter, f32 radius, f32 power, f32 scale) {
+    Vec4 dir;
+    u8   hitEvent[0x30];
+
+    if (self->modeBits & 0x100) {
+        func_002837E0(&dir, 0.25f, (Vec4 *)((u8 *)self + 0xE0));
+        func_00283580(&dir, &dir, (Vec4 *)((u8 *)self + 0xC0));
+    } else {
+        dir.x = func_00283A40(*(f32 *)((u8 *)self + 0xF8));   /* cos(facingAngle) */
+        dir.y = func_00283A58(*(f32 *)((u8 *)self + 0xF8));   /* sin(facingAngle) */
+        dir.z = 1.0f;
+    }
+    func_002835F0(&dir, scale, &dir);
+    dir.w = 5627.9248f;   /* 0x45AFDF66 */
+
+    func_002A9618(hitEvent, (s32)self, arg3, power, &dir);
+    *(u8  *)(hitEvent + 0x18) = (u8)arg4;
+    *(u8  *)(hitEvent + 0x19) = (u8)arg5;
+    *(u16 *)(hitEvent + 0x1A) = self->oClass;
+
+    return func_00277DE8(targetList, filter, self, hitEvent, radius);
+}
+#endif
+
+/* func_002A9788: attach-point variant of the directional sphere query.
+ * Resolves a world-space query origin at moby attach point attachId
+ * (func_002A0680), then runs the directional moby sphere-collision query
+ * (func_002A9640) from that origin - forwarding the class/tag params and the
+ * radius/power/scale floats unchanged. Returns the collision hit count.
+ * Matching arm stays INCLUDE_ASM; #else is the structure model.
+ * EU-lockstep of USA func_002A9BD8: func_002A0AF8 -> func_002A0680,
+ * func_002A9A90 -> func_002A9640. self is only passed through (no field access). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A9788);
+#else
+extern void func_002A0680(Moby *self, s32 attachId, void *outPoint); /* attach-point world pos */
+
+s32 func_002A9788(Moby *self, s32 attachId, s32 arg3, s32 arg4, s32 arg5,
+                  void *filter, f32 radius, f32 power, f32 scale) {
+    Vec4 origin;
+    func_002A0680(self, attachId, &origin);
+    return func_002A9640(self, &origin, arg3, arg4, arg5, filter,
+                         radius, power, scale);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A9830);
 
+/* func_002A9838: record a moby collision hit into the 64-entry hit-event ring,
+ * deduped per moby. If the moby already owns a ring slot (hitEventSlot != 0xFF)
+ * that still belongs to it: when the new hit is closer (hitInfo depth +0x1C <
+ * the slot's +0x2C) just OR the new flags into it and return; otherwise carry
+ * the slot's existing flags forward into a fresh entry. A new entry is written
+ * at the ring write cursor (g_pCollWorldData+0x14, wrapping mod 64): the hit
+ * vec, flags (|carried), material/normal fields, depth, and the owning moby;
+ * the moby's hitEventSlot is pointed at it and the cursor advances.
+ * Matching arm stays INCLUDE_ASM; #else is the structure model.
+ * EU-lockstep of USA func_002A9C88: func_00283638 -> func_00283548;
+ * g_collHitEventRing (file-scope) + g_pCollWorldData kept (EU anchors
+ * g_nVendorBuyQuantity+0xCFB8 / +0x8D38 = same absolute addrs). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A9838);
+#else
+extern u8  g_pCollWorldData[];          /* collision-world block; +0x14 = ring write cursor */
+extern s32 func_00283548(Moby *moby);   /* zero entry[0..0x10] (EU twin of func_00283638) */
 
+void func_002A9838(Moby *moby, void *hitInfo) {
+    u8 *m = (u8 *)moby;
+    u8 *hi = (u8 *)hitInfo;
+    s32 ringCursor = *(s32 *)(g_pCollWorldData + 0x14);
+    s32 carriedFlags = 0;
+    s32 slot = *(u8 *)(m + 0xA8);
+    u8 *entry;
+
+    if (slot != 0xFF) {
+        u8 *existing = g_collHitEventRing + slot * 0x40;
+        if (*(Moby **)(existing + 0x38) == moby) {
+            if (*(f32 *)(hi + 0x1C) < *(f32 *)(existing + 0x2C)) {
+                *(s32 *)(existing + 0x24) |= *(s32 *)(hi + 0x14);
+                return;
+            }
+            carriedFlags = *(s32 *)(existing + 0x24);
+        }
+        /* else: slot was reused by another moby - fall through to a new entry */
+    }
+
+    entry = g_collHitEventRing + ringCursor * 0x40;
+    func_00283548((Moby *)entry);                       /* zero entry[0..0x10] */
+    *(Vec4 *)(entry + 0x10) = *(Vec4 *)hi;
+    *(s32 *)(entry + 0x24) = *(s32 *)(hi + 0x14) | carriedFlags;
+    *(s32 *)(entry + 0x20) = *(s32 *)(hi + 0x10);
+    entry[0x28] = hi[0x18];
+    entry[0x29] = hi[0x19];
+    *(u16 *)(entry + 0x2A) = *(u16 *)(hi + 0x1A);
+    *(f32 *)(entry + 0x2C) = *(f32 *)(hi + 0x1C);
+    *(f32 *)(entry + 0x34) = *(f32 *)(hi + 0x24);
+    *(s32 *)(entry + 0x3C) = 0;
+    *(s32 *)(entry + 0x30) = *(s32 *)(hi + 0x20);
+    *(Moby **)(entry + 0x38) = moby;
+    m[0xA8] = (u8)ringCursor;
+    *(s32 *)(g_pCollWorldData + 0x14) = (ringCursor + 1) & 0x3F;
+}
+#endif
+
+/* func_002A9988 (== PostMobyHitEvent @0x2A9988): record a 0x40-byte hit/damage
+ * event for moby into the 64-slot ring g_collHitEventRing (write cursor at
+ * g_pCollWorldData+0x14, wraps mod 64). Dedupe: moby+0xA8 holds this moby's last
+ * event slot (0xFF = none); if that slot still belongs to moby and the new hit is
+ * CLOSER (dist < stored dist), just OR the new flags into the existing record and
+ * return - otherwise a fresh slot is allocated, carrying the old flags forward
+ * when the prior record was this moby's. Return is the record flags (discarded).
+ * Matching arm stays INCLUDE_ASM; #else is the structure model.
+ * NAMING: kept as func_002A9988 (matches the .s glabel) to avoid touching the
+ * pre-existing 5-arg PostMobyHitEvent decl/caller (arity-mismatch cleanup flagged
+ * separately). EU-lockstep of USA PostMobyHitEvent: Vec3LengthVu0 -> func_002836B0;
+ * g_collHitEventRing + g_pCollWorldData kept (same absolute addrs). dist in $f12. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A9988);
+#else
+extern f32 func_002836B0(Vec4 *v);   /* Vec3LengthVu0 */
+
+s32 func_002A9988(Moby *moby, s32 a1, s32 flags, Vec4 *vecA, Vec4 *vecB, f32 dist) {
+    s32 ringCursor = *(s32 *)(g_pCollWorldData + 0x14);
+    s32 prevIdx    = ((u8 *)moby)[0xA8];   /* this moby's last event slot, 0xFF = none */
+    s32 extraFlags = 0;
+    u8 *rec;
+
+    /* Merge into this moby's existing event if the new hit is closer. */
+    if (prevIdx != 0xFF) {
+        u8 *prev = g_collHitEventRing + prevIdx * 0x40;
+        if (*(Moby **)(prev + 0x38) == moby) {
+            if (dist < *(f32 *)(prev + 0x2C)) {
+                *(s32 *)(prev + 0x24) |= flags;
+                return *(s32 *)(prev + 0x24);
+            }
+            extraFlags = *(s32 *)(prev + 0x24);   /* carry old flags into the new record */
+        }
+    }
+
+    /* Allocate a fresh record at the ring write cursor. */
+    rec = g_collHitEventRing + ringCursor * 0x40;
+    *(s32 *)(rec + 0x24)   = flags | extraFlags;
+    *(s32 *)(rec + 0x20)   = a1;
+    *(f32 *)(rec + 0x34)   = dist;
+    *(Moby **)(rec + 0x38) = moby;
+    *(f32 *)(rec + 0x2C)   = dist;
+    *(s32 *)(rec + 0x3C)   = 0;
+    *(s32 *)(rec + 0x30)   = (0.0001f < func_002836B0(vecB)) ? 1 : 0; /* hasDir */
+    *(Vec4 *)(rec + 0x00)  = *vecA;
+    *(Vec4 *)(rec + 0x10)  = *vecB;
+    ((u8 *)moby)[0xA8]     = (u8)ringCursor;
+    *(s32 *)(g_pCollWorldData + 0x14) = (ringCursor + 1) & 0x3F;
+    return *(s32 *)(rec + 0x24);
+}
+#endif
 
 /**
  * Post a moby hit event with the default hit direction vector. (EU twin of USA
@@ -342,13 +989,201 @@ s32 func_002A9AE0(Moby *moby, s32 a, s32 b, s32 c) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A9B08);
 
+/* func_002A9B10 (== GetWaterSurfaceHeight): water surface z (up axis) under a
+ * point. First tries the dynamic wave heightfield (when g_bWaterWavesActive);
+ * otherwise tests the static water-pool disc g_waterPool (xy centre, z surface,
+ * w radius) - the point is "in the pool" when |pos.z - pool.z| < 0.5 and its xy
+ * distance to the pool centre is within the radius. Returns the pool surface z
+ * when inside, else the point's own z. When outNormal is non-null it gets a
+ * unit +Z normal. Matching arm stays INCLUDE_ASM; #else is the structure model.
+ * EU-lockstep of USA GetWaterSurfaceHeight: SampleWaterHeightfield ->
+ * func_002FE880, DistXYVu0 -> func_00283740, SetVec4UnitZ -> func_00283558,
+ * GetFloatAbs kept. g_bWaterWavesActive/g_bWaterPoolActive/g_waterPool at
+ * g_nVendorBuyQuantity +0x90/+0x94/+0x98. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A9B10);
+#else
+extern s32  g_bWaterWavesActive;     /* gate for the wave-heightfield path */
+extern s32  g_bWaterPoolActive;      /* gate for the static water-pool test */
+extern Vec4 g_waterPool;             /* xy centre, z surface height, w radius */
+extern s32  func_002FE880(f32 x, f32 y, f32 z, f32 *outHeight);  /* SampleWaterHeightfield */
+extern f32  func_00283740(Vec4 *a, Vec4 *b);                     /* DistXYVu0 */
+extern void func_00283558(Vec4 *dst);                            /* SetVec4UnitZ */
 
+f32 func_002A9B10(Vec4 *pos, Vec4 *outNormal) {
+    f32 height;
+
+    if (g_bWaterWavesActive != 0) {
+        if (func_002FE880(pos->x, pos->y, pos->z, &height) != 0) {
+            return height;
+        }
+    }
+    if (g_bWaterPoolActive != 0 &&
+        GetFloatAbs(pos->z - g_waterPool.z) < 0.5f &&
+        func_00283740(pos, &g_waterPool) < g_waterPool.w) {
+        if (outNormal != 0) {
+            func_00283558(outNormal);
+        }
+        return g_waterPool.z;
+    }
+    if (outNormal != 0) {
+        func_00283558(outNormal);
+    }
+    return pos->z;
+}
+#endif
+
+/* Euler-angles -> quaternion: build three axis-angle quaternions from
+ * eulerAngles.x/.y/.z about axes 0/1/2 and concatenate (out = qx * qy, then
+ * out = out * qz) via the VU0 quaternion helpers. Matching arm stays INCLUDE_ASM;
+ * #else is the structure model. EU-lockstep of USA func_002AA058:
+ * func_00284248 (axis-angle quat build) -> func_00284158,
+ * func_00284180 (quat multiply) -> func_00284090. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A9C08);
+#else
+extern void func_00284158(Vec4 *out, f32 angle, s32 axis);   /* axis-angle quat build */
+extern void func_00284090(Vec4 *out, Vec4 *a, Vec4 *b);      /* quaternion multiply */
 
+void func_002A9C08(Vec4 *outQuat, Vec4 *eulerAngles) {
+    Vec4 qx;
+    Vec4 qy;
+    Vec4 qz;
+
+    func_00284158(&qx, eulerAngles->x, 0);
+    func_00284158(&qy, eulerAngles->y, 1);
+    func_00284158(&qz, eulerAngles->z, 2);
+    func_00284090(outQuat, &qx, &qy);
+    func_00284090(outQuat, outQuat, &qz);
+}
+#endif
+
+/* QueueMobyBlobShadow: enqueue a ground blob shadow under a moby (drop-shadow
+ * render pass). No-op unless the moby's shadow-enable byte (+0x31) is set and
+ * the queue has room (< 32). Copies the moby position (+0x10) into the next slot,
+ * probes the ground straight down (ProbeGroundHeight, zOffset 0.5, mask 0); on a
+ * real surface (material != none) lifts the shadow 0.025 above the ground, stores
+ * the hit normal, and computes an alpha from the moby's height above the ground:
+ * alpha = baseAlpha * max(0.125*(8 - |moby.z - groundZ|), 0.25).
+ * Matching arm stays INCLUDE_ASM; #else is the structure model.
+ * EU-lockstep of USA QueueMobyBlobShadow: ProbeGroundHeight -> func_002A93C0
+ * (file-scope), GetCollHitMaterial -> func_00278D18, GetFloatAbs kept.
+ * g_blobShadowCount = D_001B1380+0x2BC, g_blobShadowQueue = g_nVendorBuyQuantity+0x83F8
+ * (stride 0x20), g_collHitNormal = g_nVendorBuyQuantity+0x8D78 (same absolute addrs). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A9CA0);
+#else
+extern s32 GetCollHitMaterial(void);   /* func_00278D18: low 5 bits of hit poly info, 0 = none/water */
+extern s32 g_blobShadowCount;          /* live entries (max 32); EU D_001B1380+0x2BC */
+typedef struct BlobShadow {
+    /* 0x00 */ Vec4 pos;               /* shadow centre (moby pos +0x10), z bumped to ground, w = alpha */
+    /* 0x10 */ Vec4 normal;            /* ground normal (g_collHitNormal) */
+} BlobShadow;                          /* 0x20 stride */
+extern BlobShadow g_blobShadowQueue[]; /* EU g_nVendorBuyQuantity+0x83F8 */
+extern Vec4 g_collHitNormal;           /* EU g_nVendorBuyQuantity+0x8D78 */
 
+void func_002A9CA0(Moby *moby, f32 baseAlpha) {
+    BlobShadow *slot;
+    f32 groundZ;
+    f32 lift;
+    f32 alpha;
+
+    if (*(u8 *)((u8 *)moby + 0x31) == 0) {
+        return;
+    }
+    if (g_blobShadowCount >= 0x20) {
+        return;
+    }
+    slot = &g_blobShadowQueue[g_blobShadowCount];
+    slot->pos = *(Vec4 *)((u8 *)moby + 0x10);
+    groundZ = func_002A93C0((Vec4 *)((u8 *)moby + 0x10), 0.5f, 0);
+    if (GetCollHitMaterial() == 0) {
+        return;
+    }
+    slot = &g_blobShadowQueue[g_blobShadowCount];
+    slot->pos.z = groundZ + 0.0250000004f;     /* 0x3CCCCCCD == 0.025f */
+    slot->normal = g_collHitNormal;
+    lift = (8.0f - GetFloatAbs(*(f32 *)((u8 *)moby + 0x18) - groundZ)) * 0.125f;
+    if (lift < 0.25f) {
+        lift = 0.25f;
+    }
+    alpha = baseAlpha * lift;
+    slot = &g_blobShadowQueue[g_blobShadowCount];
+    g_blobShadowCount = g_blobShadowCount + 1;
+    slot->pos.w = alpha;
+}
+#endif
+
+/* ProbeMobyGroundBelow: ground-fit probe for a moby's drop shadow / ground snap.
+ * Two modes selected by D_1A8D50: in the default (0) mode a downward CollLine
+ * (mask 0x22) is cast from the moby position (+0x10) over a 16-unit drop, gated by
+ * the moby's on-ground factor (+0xE8) being >= 0.9; the ground z-delta
+ * (g_collHitPoint.z minus moby.z) goes to moby+0x70 and a scale (moby+0xC * 1/4096)
+ * to moby+0x74. In axis mode (nonzero) the ray is cast along the moby's scaled axis
+ * vector (+0xE0): on a hit it stores the dot of (hitPoint - moby.pos) with the axis
+ * to moby+0x70, 0.2 to +0x74, and flags moby+0xBD = 0xFF. No hit (or the height
+ * gate) zeroes moby+0x70/+0x74. Matching arm stays INCLUDE_ASM; #else is the
+ * structure model. EU-lockstep of USA ProbeMobyGroundBelow: guard D_1A8CA0 ->
+ * D_1A8D50, CollLine -> func_00276098, g_collHitPoint = g_nVendorBuyQuantity+0x8D58,
+ * ScaleVec4IncludingW -> func_00283620, Vec4ScaleVu0 -> func_002835F0,
+ * Vec4AddVu0 -> func_00283580, Vec4SubVu0 -> func_002835B0, Vec3DotVu0 -> func_00283670. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A9DC8);
+#else
+extern s32  D_1A8D50;                                          /* probe-mode flag (USA D_1A8CA0) */
+extern s32  func_00276098(void *to, void *from, s32 mask, void *moby, void *out); /* CollLine */
+extern void func_00283620(Vec4 *dst, f32 scale, const Vec4 *src); /* ScaleVec4IncludingW */
+extern void func_002835F0(Vec4 *dst, f32 s, const Vec4 *src);  /* Vec4ScaleVu0 */
+extern void func_00283580(Vec4 *dst, Vec4 *a, Vec4 *b);        /* Vec4AddVu0 */
+extern void func_002835B0(Vec4 *dst, Vec4 *a, Vec4 *b);        /* Vec4SubVu0 */
+extern f32  func_00283670(Vec4 *a, Vec4 *b);                   /* Vec3DotVu0 */
+
+s32 func_002A9DC8(Moby *moby) {
+    Vec4 from;
+    Vec4 to;
+    Vec4 hitDelta;
+    f32 zDelta;
+    f32 scale;
+
+    if (D_1A8D50 == 0) {
+        if (*(f32 *)((u8 *)moby + 0xE8) < 0.9f) {   /* 0x3F666666 */
+            *(s32 *)((u8 *)moby + 0x74) = 0;
+            *(s32 *)((u8 *)moby + 0x70) = 0;
+            return 0;
+        }
+        from = *(Vec4 *)((u8 *)moby + 0x10);
+        from.z = *(f32 *)((u8 *)moby + 0x18) - 16.0f;   /* 0x41800000 */
+        if (from.z < 0.5f) {
+            from.z = 0.5f;
+        }
+        to = *(Vec4 *)((u8 *)moby + 0x10);
+        to.z = *(f32 *)((u8 *)moby + 0x18) + 0.5f;
+        if (func_00276098(&to, &from, 0x22, 0, 0) != 0) {
+            zDelta = g_collHitPoint.z - *(f32 *)((u8 *)moby + 0x18);
+            scale = *(f32 *)((u8 *)moby + 0xC) * 0.000244140625f;   /* 1/4096, 0x39800000 */
+            *(f32 *)((u8 *)moby + 0x70) = zDelta;
+            *(f32 *)((u8 *)moby + 0x74) = scale;
+            return 0;
+        }
+    } else {
+        func_00283620(&to, 0.0009765625f, (Vec4 *)moby);   /* 1/1024, 0x3A800000 */
+        func_002835F0(&from, -8.0f, (Vec4 *)((u8 *)moby + 0xE0));   /* Vec4ScaleVu0 */
+        func_00283580(&from, &to, &from);
+        if (func_00276098(&to, &from, 0x22, 0, 0) != 0) {
+            func_002835B0(&hitDelta, &g_collHitPoint, (Vec4 *)((u8 *)moby + 0x10));
+            zDelta = func_00283670(&hitDelta, (Vec4 *)((u8 *)moby + 0xE0));
+            scale = 0.200000003f;   /* 0x3E4CCCCD */
+            *(u8 *)((u8 *)moby + 0xBD) = 0xFF;
+            *(f32 *)((u8 *)moby + 0x70) = zDelta;
+            *(f32 *)((u8 *)moby + 0x74) = scale;
+            return 0;
+        }
+    }
+    *(s32 *)((u8 *)moby + 0x74) = 0;
+    *(s32 *)((u8 *)moby + 0x70) = 0;
+    return 0;
+}
+#endif
 
 /**
  * Forward to the moby ground-fit probe (drop-shadow placement). (EU twin of
@@ -407,9 +1242,161 @@ s32 func_002AA0A8(Moby *m, u32 mask, s32 keep) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AA100);
 
+/* func_002AA108: advance the per-owner "focus target" announcer state and return
+ * the emphasis weight for this frame. owner's pvar word 0 holds a small state
+ * block (st): current focus target moby (+0x18), a hold/cooldown tick counter
+ * (+0x1C), the resolved announcer id (+0x17), a priority level (+0x04). Each call:
+ * (1) drops the focus target if its moby has despawned (state 0xFE/0xFD);
+ * (2) advances the hold counter, resetting target+counter after 0x64 (100) ticks.
+ * Then, for the candidate event: latches a new focus target (resolving its
+ * announcer id) or, on the same target, suppresses the weight (returns 0) while
+ * inside the per-kind re-trigger window (kind 9 -> 0x32 ticks, else 0x8 ticks). The
+ * weight (event +0x2C) is clamped up to 1.0 for low-priority owners, and a companion
+ * state flag (owner pvar word 4, +0x18) is toggled by event flag 0x100000.
+ * Matching arm stays INCLUDE_ASM; #else is the structure model.
+ * EU-lockstep of USA func_002AA508: func_002AC058 -> func_002ABC58,
+ * func_002AE7E8 -> func_002AE4E0, func_002AC088 -> func_002ABC88.
+ * GENUINE PAL/NTSC TIMING DIFF: hold-expire 0x64 (USA 0x78), kind-9 window 0x32
+ * (USA 0x3C), else window 0x8 (USA 0xA) -- 60->50 Hz frame-count retimes,
+ * verified vs func_002AA108.s slti immediates (0x65 / 0x32 / 0x8). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AA108);
+#else
+extern void *func_002ABC58(Moby *owner);   /* focus-target state (pvar word 0) */
+extern s32   func_002AE4E0(Moby *cand);    /* resolve candidate announcer id */
+extern void *func_002ABC88(Moby *owner);   /* companion state (pvar word 4) */
 
+f32 func_002AA108(Moby *owner, void *event) {
+    u8 *st = (u8 *)func_002ABC58(owner);   /* focus-target state (pvar word 0) */
+    f32 weight = 0.0f;
+    s16 counter;
+
+    if (st == NULL) {
+        return 0.0f;
+    }
+
+    /* drop the focus target if its moby has despawned (state 0xFE/0xFD) */
+    {
+        Moby *cur = *(Moby **)(st + 0x18);
+        if (cur != NULL) {
+            u8 state = *(u8 *)((u8 *)cur + 0x20);
+            if (state == 0xFE || state == 0xFD) {
+                *(s16 *)(st + 0x1C) = 0;
+                *(s32 *)(st + 0x18) = 0;
+            }
+        }
+    }
+
+    /* advance the hold counter; expire target + counter after 0x64 (100) ticks (PAL) */
+    counter = *(s16 *)(st + 0x1C);
+    if (counter != 0) {
+        *(s16 *)(st + 0x1C) = (s16)(*(u16 *)(st + 0x1C) + 1);
+        if (counter >= 0x65) {
+            *(s32 *)(st + 0x18) = 0;
+            *(s16 *)(st + 0x1C) = 0;
+        }
+    }
+
+    if (event == NULL) {
+        return 0.0f;
+    }
+
+    weight = *(f32 *)((u8 *)event + 0x2C);
+    {
+        Moby *cand = *(Moby **)((u8 *)event + 0x20);
+        if (cand != NULL) {
+            if (*(Moby **)(st + 0x18) != cand) {
+                /* new focus target: latch it + resolve its announcer id */
+                *(s32 *)(st + 0x18) = (s32)cand;
+                *(u8 *)(st + 0x17) = (u8)func_002AE4E0(cand);
+                *(s16 *)(st + 0x1C) = 1;
+            } else {
+                /* same target: gate the re-trigger window by event kind (PAL windows) */
+                u8  kind = *(u8 *)((u8 *)event + 0x28);
+                s16 c    = *(s16 *)(st + 0x1C);
+                if (kind == 9) {
+                    if (c < 0x32) {
+                        weight = 0.0f;
+                    } else {
+                        *(s16 *)(st + 0x1C) = 1;
+                    }
+                } else {
+                    if (c < 0x8) {
+                        weight = 0.0f;
+                    }
+                    *(s16 *)(st + 0x1C) = 1;
+                }
+            }
+        }
+    }
+
+    /* low-priority owners get their emphasis floored to 1.0 */
+    if ((f32)*(s16 *)(st + 0x4) <= 1.0f && weight > 0.0f && weight < 1.0f) {
+        weight = 1.0f;
+    }
+
+    /* toggle the companion state flag (owner pvar word 4, +0x18) */
+    if (*(s32 *)((u8 *)event + 0x24) & 0x100000) {
+        u8 *st2 = (u8 *)func_002ABC88(owner);
+        if (st2 != NULL) {
+            *(u8 *)(st2 + 0x18) = 1;
+        }
+    } else {
+        u8 *st2 = (u8 *)func_002ABC88(owner);
+        if (st2 != NULL) {
+            *(u8 *)(st2 + 0x18) = 0;
+        }
+    }
+
+    return weight;
+}
+#endif
+
+/* func_002AA2B8: broadcast a per-target directional damage packet to a moby list.
+ * For each of the count mobys in list (skipping skip), computes the bearing from
+ * refPos to that moby (atan2 on the xy delta), builds a hit-event packet -- a
+ * magnitude-scaled direction (cos/sin of the bearing) in xy, zComp in z, the fixed
+ * 0x45AFDF66 .w magnitude, plus the source moby / its class / the tag words (arg6)
+ * and bytes (arg7/arg8) / the power float -- and posts it to that moby via the
+ * hit-event recorder. Matching arm stays INCLUDE_ASM; #else is the structure model.
+ * EU-lockstep of USA func_002AA6B8: atan2 func_00283BF8 -> func_00283B08 (file-scope),
+ * cos func_00283B30 -> func_00283A40, sin func_00283B48 -> func_00283A58,
+ * func_002A9C88 -> func_002A9838 (file-scope). entry->pos.xy at raw +0x10/+0x14,
+ * self->oClass at +0xAA (verified vs func_002AA2B8.s). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AA2B8);
+#else
+void func_002AA2B8(Moby *self, const Vec4 *refPos, Moby **list, s32 count,
+                   Moby *skip, s32 arg6, s32 arg7, s32 arg8,
+                   f32 power, f32 magnitude, f32 zComp) {
+    Vec4 ref = *refPos;   /* 128-bit copy of the reference position */
+    s32  i;
+
+    for (i = 0; i < count; i++) {
+        Moby *entry = list[i];
+        u8   packet[0x30];
+        f32  bearing;
+
+        if (entry == skip) {
+            continue;
+        }
+        bearing = func_00283B08(*(f32 *)((u8 *)entry + 0x10) - ref.x,
+                                *(f32 *)((u8 *)entry + 0x14) - ref.y);
+        *(f32 *)(packet + 0x00) = func_00283A40(bearing) * magnitude;  /* cos */
+        *(f32 *)(packet + 0x04) = func_00283A58(bearing) * magnitude;  /* sin */
+        *(f32 *)(packet + 0x08) = zComp;
+        *(f32 *)(packet + 0x0C) = 5627.9248f;   /* 0x45AFDF66 */
+        *(s32 *)(packet + 0x10) = (s32)self;
+        *(s32 *)(packet + 0x14) = arg6;
+        *(u8  *)(packet + 0x18) = (u8)arg7;
+        *(u8  *)(packet + 0x19) = (u8)arg8;
+        *(u16 *)(packet + 0x1A) = *(u16 *)((u8 *)self + 0xAA);   /* self->oClass */
+        *(f32 *)(packet + 0x1C) = power;
+        *(s32 *)(packet + 0x20) = arg6;
+        func_002A9838(entry, packet);
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AA408);
 
@@ -436,7 +1423,43 @@ s32 func_002AABB8(f32 a, f32 b, f32 c) {
     return func_00284458(a, func_002844A0(b, a) * c);
 }
 
+/* func_002AAC00: rate-limited integrator with symmetric clamps on *state. First
+ * clamps *state to [-|maxDelta|, |maxDelta|]; then integrates
+ * *state = v + (b*maxDelta - c*v) (i.e. v*(1-c) + b*maxDelta) and clamps to
+ * [-bound, bound] when bound > 0; finally re-clamps to [-|maxDelta|, |maxDelta|].
+ * Matching arm stays INCLUDE_ASM; #else is the structure model.
+ * EU-lockstep of USA func_002AB000: GetFloatAbs kept. No data globals.
+ * b/c/bound arrive in $f13/$f14/$f15. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AAC00);
+#else
+void func_002AAC00(f32 *state, f32 maxDelta, f32 b, f32 c, f32 bound) {
+    f32 lim = GetFloatAbs(maxDelta);
+    f32 v;
+
+    if (*state > lim) {
+        *state = lim;
+    } else if (*state < -lim) {
+        *state = -lim;
+    }
+
+    v = *state;
+    *state = v + (b * maxDelta - c * v);
+    if (0.0f < bound) {
+        if (*state > bound) {
+            *state = bound;
+        } else if (*state < -bound) {
+            *state = -bound;
+        }
+    }
+
+    if (*state > lim) {
+        *state = lim;
+    } else if (*state < -lim) {
+        *state = -lim;
+    }
+}
+#endif
 
 /**
  * Step a float toward a target by at most rate, returning how far from the
@@ -459,7 +1482,33 @@ f32 func_002AAD50(f32 target, f32 rate, f32 *p) {
     return GetFloatAbs(target - nv);
 }
 
+/* func_002AADA8: integer approach-by-rate step (int twin of the float approach).
+ * Move *p toward target by at most rate, store it back, and return the remaining
+ * signed delta mapped to a float. Matching arm stays INCLUDE_ASM; #else is the
+ * structure model. EU-lockstep of USA func_002AB1A8: int->float helper
+ * func_002835E0 -> func_002834F0. No data globals. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AADA8);
+#else
+extern s32 func_002834F0(s32 x);   /* signed int -> float-source helper (USA func_002835E0) */
+
+f32 func_002AADA8(s32 *p, s32 target, s32 rate) {
+    s32 d = target - *p;
+    s32 nv;
+
+    if (rate < d) {
+        d = rate;
+    } else {
+        rate = -rate;
+        if (d < rate) {
+            d = rate;
+        }
+    }
+    nv = *p + d;
+    *p = nv;
+    return (f32)func_002834F0(target - nv);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AAE08);
 
