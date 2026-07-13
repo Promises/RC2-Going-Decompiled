@@ -1127,9 +1127,75 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", BuildActiveMoby
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A1860);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", ReleaseMobyGridBlockBits);
+/* ReleaseMobyGridBlockBits(start, count): clear `count` allocation bits starting
+ * at bit index `start` in g_mobyGridBlockBitmap (byte start>>3, bit start&7). The
+ * original asserts on double-free — clearing a bit that was already 0 executes an
+ * unconditional `teq` trap; the #else models that error path as an early stop
+ * (unreachable in correct use). Handwritten; the matching build keeps the asm. */
+#ifdef TARGET_NATIVE
+extern u8 g_mobyGridBlockBitmap[];   /* 0x1EE460 bit-per-block allocation bitmap */
+#endif
 
+#ifndef TARGET_NATIVE
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", ReleaseMobyGridBlockBits);
+#else
+void ReleaseMobyGridBlockBits(s32 start, s32 count) {
+    for (;;) {
+        u8 *byte = g_mobyGridBlockBitmap + (start >> 3);
+        u8 old = *byte;
+        u8 cleared = (u8)(old & ~(1 << (start & 7)));
+        start++;
+        count--;
+        if (cleared == old) {
+            /* bit already clear — original does an unconditional teq trap
+             * (double-free assert); modelled here as a stop. */
+            return;
+        }
+        *byte = cleared;
+        if (count <= 0) {
+            return;
+        }
+    }
+}
+#endif
+
+/* AllocMobyGridBlockBits(width): allocate a free run of `width` consecutive bits
+ * in g_mobyGridBlockBitmap and return its global bit index. Scans 32-bit words;
+ * within a non-full word it slides an aligned width-bit mask (stepping by width)
+ * until the masked bits are all clear — the mask shifting fully out of the low 32
+ * bits yields position 0x20, meaning no fit, so it advances to the next word.
+ * Sets the run and returns word*0x20 + position. `width` is a power of two
+ * dividing 32. Handwritten (dsllv/dsrlv); the matching build keeps the asm. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", AllocMobyGridBlockBits);
+#else
+s32 AllocMobyGridBlockBits(s32 width) {
+    u32 *p = (u32 *)g_mobyGridBlockBitmap;
+    u32 mask0 = (1u << width) - 1;
+    s32 base = -0x20;
+
+    for (;;) {
+        u32 word = *p++;
+        base += 0x20;
+        if (word == 0xFFFFFFFF) {
+            continue;   /* full word */
+        }
+        {
+            u64 mask = mask0;
+            s32 pos = 0;
+            while (word & (u32)mask) {
+                mask <<= width;
+                pos += width;
+            }
+            if (pos == 0x20) {
+                continue;   /* no run fits in this word */
+            }
+            p[-1] = word | (u32)mask;
+            return base + pos;
+        }
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", UpdateMobyGridCells);
 
