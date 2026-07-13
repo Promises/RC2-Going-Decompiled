@@ -942,6 +942,7 @@ extern s32  g_playerProgress; /* 0x1A79F8 first word of the persistent save bloc
 extern void func_00289398(s32 sectorByteOffset, void *outBuf); /* load save file -> *outBuf */
 extern void PumpDialogVoiceSystem(s32 blocking);
 extern void StartFileLoadPumpingVoice(void *buf, s32 lba, s32 size);
+extern void *func_00283460(void *dst, const void *src, s32 nbytes); /* memcpy — early decl (func_00299BF8 uses it before the later decl; pre-existing native-build error) */
 
 /** func_00299BF8 — load-side save-image restore orchestrator (counterpart of
  *  BuildSaveImage). Reads the current save file off the disc TOC, restores the
@@ -1293,9 +1294,94 @@ s32 DeserializeSaveSections(void *image, s32 slotMul, SaveSection *table) {
 }
 #endif
 
-/* CommitProgressCheckpoint: write the progress checkpoint. Multi callee-save;
- * 8-byte-packed callee-save frame wall, see func_0029C678. Left as asm. */
+/* CommitProgressCheckpoint(flag, areaParam): stage the progress checkpoint into
+ * the in-RAM save image + arm a memcard write. Multi callee-save; 8-byte-packed
+ * callee-save frame wall (matching build left as asm). Reads the RTC
+ * (sceCdReadClock into the g_gsPixelOffsetY+0xC scratch), refreshes area
+ * bookkeeping (func_00298A00 / func_00297FA0), then — when the current area is
+ * valid and this checkpoint isn't suppressed — records boltCount/progress/
+ * D_1A7BC8/clock/miscExtras into the g_areaTable write-slot record
+ * (g_areaTable[+0x18]*0x1C, fields +0x30..+0x40), re-serializes the global +
+ * per-area save images (SerializeSaveSections), and arms the write
+ * (g_areaTable+0x164=0xF, +0x168=area). When areaParam >= 0 it temporarily
+ * switches g_playerProgress to that area (marking it visited) across the
+ * serialize, then restores. Returns nonzero once the write is armed (or on the
+ * flag==0 early-out). The TARGET_NATIVE #else is faithful coverage. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", CommitProgressCheckpoint);
+#else
+extern u8   g_health[];               /* +0xF8C = per-level save-region base */
+extern u8   g_gsPixelOffsetY[];       /* +0xC reused as the sceCdCLOCK scratch buffer */
+extern s32  g_boltCount;
+extern s32  D_1A7BC8;                 /* extra checkpoint word (recorded at rec+0x3C) */
+extern u8   g_saveImageGlobal[];
+extern u8   g_saveImageArea[];
+extern s32  sceCdReadClock(void *clock);
+extern void func_00131A98(void *clock);
+extern void func_00298A00(void);
+extern void func_00297FA0(void *saveRegion);
+extern s32  SerializeSaveSections(void *dst, s32 slotMul, SaveSection *table);
+
+s32 CommitProgressCheckpoint(s32 flag, s32 areaParam) {
+    u8 *at    = g_areaTable;
+    u8 *clock = g_gsPixelOffsetY + 0xC;
+    s32 areaIdx;
+    u8 *rec;
+    s32 savedVisited;
+
+    sceCdReadClock(clock);
+    func_00131A98(clock);
+    func_00298A00();
+    func_00297FA0(g_health + 0xF8C + g_playerProgress * 0x800);
+
+    areaIdx = *(s32 *)(at + 0x148);
+    if (areaIdx == -1 || *(s16 *)(at + areaIdx * 0xA0 + 0x18) < 0) {
+        return flag == 0;
+    }
+
+    *(s32 *)(at + 0x17C) |= flag;
+    if (*(s32 *)(at + 0x17C) == 0) {
+        return *(s32 *)(at + 0x164) == 0xF;
+    }
+    if (flag == 0) {
+        g_nSaveLoadStatusCode[1] |= 0x200;   /* +0x4 word */
+    }
+    if (*(s32 *)(at + 0x15C) >= 3 || *(s32 *)(at + 0x164) >= 0) {
+        return *(s32 *)(at + 0x164) == 0xF;
+    }
+
+    /* commit: snapshot the live progress state into the write-slot record */
+    savedVisited = 0;
+    *(s32 *)(at + 0x150) = g_playerProgress;
+    if (areaParam >= 0) {
+        g_playerProgress = areaParam;
+        savedVisited = g_levelVisitedMarkers[g_playerProgress];
+        if (savedVisited == 0) {
+            g_levelVisitedMarkers[g_playerProgress] = 1;
+        }
+    }
+
+    rec = at + *(s16 *)(at + 0x18) * 0x1C;
+    *(s32 *)(rec + 0x34) = g_boltCount;
+    *(s32 *)(rec + 0x30) = g_playerProgress;
+    *(s32 *)(rec + 0x3C) = D_1A7BC8;
+    *(u64 *)(rec + 0x40) = *(u64 *)clock;
+    *(s32 *)(rec + 0x38) = g_miscExtras;   /* asm stores the byte value as a word (sw) */
+
+    SerializeSaveSections(g_saveImageGlobal, 0, g_saveSectionTableGlobal);
+    SerializeSaveSections(g_saveImageArea, *(s32 *)(at + 0x150), g_saveSectionTableArea);
+
+    if (areaParam >= 0) {
+        g_levelVisitedMarkers[g_playerProgress] = (u8)savedVisited;
+        g_playerProgress = *(s32 *)(at + 0x150);
+    }
+    if (*(s32 *)(at + 0x164) < 0) {
+        *(s32 *)(at + 0x164) = 0xF;
+        *(s32 *)(at + 0x168) = *(s32 *)(at + 0x148);
+    }
+    return *(s32 *)(at + 0x164) == 0xF;
+}
+#endif
 
 /** Reset the dialog-scene model bookkeeping: mark the armor-variant and
  *  held-item models unloaded (-1), clear the two cached entries inside the
@@ -1440,8 +1526,27 @@ s32 func_0029C648(void) {
 
 /* func_0029C678 (and C700/C818/C8F0/CA98/CC48/CD18): 2+-callee-save functions
  * walled by the 8-byte-packed callee-save layout of the later SN cc1 (ours
- * reserves 16 bytes per save) - the wall characterized in the 1907F0 round. */
+ * reserves 16 bytes per save) - the wall characterized in the 1907F0 round.
+ *
+ * func_0029C678: when the GUI singleton exists, dispatch a text-box render
+ * through func_00338F88 with the GUI's text-box context (g_guiInstance+0x36F28)
+ * prepended, forwarding its 10 args verbatim (args 1-7 in $4-$10, arg8 in $11,
+ * args 9-10 on the incoming stack). func_00338F88's 11-arg prototype recovered
+ * via Ghidra. The TARGET_NATIVE #else is faithful coverage. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029C678);
+#else
+extern void func_00338F88(char *ctx, void *state, void *a2, void *text, s32 font,
+                          s32 centre, void *a6, s32 flag, s32 a8, s32 a9, s32 a10);
+
+void func_0029C678(void *state, void *a1, void *text, s32 font, s32 centre,
+                   void *a5, s32 flag, s32 a7, s32 a8, s32 a9) {
+    if (g_guiInstance != 0) {
+        func_00338F88(g_guiInstance + 0x36F28, state, a1, text, font, centre,
+                      a5, flag, a7, a8, a9);
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029C700);
 
@@ -1994,11 +2099,62 @@ s32 func_0029DB58(void) {
     return func_00336BC8(g_bPalMode != 0);
 }
 
-/* GuiManagerCreate: allocates and initialises the 0x3FB20-byte GuiManager
- * singleton (g_guiInstance) and installs the default no-op callbacks
- * (func_0029CF08/func_0029DB50). Large multi callee-save constructor; 8-byte-
- * packed callee-save frame wall, see func_0029C678. Left as asm. */
+/* GuiManagerCreate: allocate + initialise the 0x3FB20-byte GuiManager singleton
+ * (g_guiInstance). Large multi callee-save constructor; 8-byte-packed callee-save
+ * frame wall (matching build left as asm). Poisons the GUI heap (memset 0xCD over
+ * 0x40000 bytes at g_memoryArenaTable[0x80]), clears the input/pad state window
+ * (D_138180 + 0x1A0..0x1CC), runs the mode init (func_0029DB58), placement-news +
+ * inits the instance (GuiPlacementNew / GuiSystemInit), stores it to
+ * g_guiInstance, then installs the two update callbacks at instance+0x3F9D4/
+ * +0x3F9D8 — the special pair (func_0029CF08/func_0029DB50) when g_playerProgress
+ * == 0x1F5, else the default pair (func_0029CF40/func_0029CF10). The TARGET_NATIVE
+ * #else is faithful coverage. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", GuiManagerCreate);
+#else
+extern u8   D_138180[];              /* controller / input state block (0x138180) */
+extern u8   g_memoryArenaTable[];    /* memory-arena table; +0x80 = GUI heap base ptr */
+extern void *GuiPlacementNew(s32 size, void *heap);
+extern void *GuiSystemInit(void *placement, s32 size);
+extern void func_0029CF08(void);     /* progress==0x1F5 update callback pair */
+extern void func_0029DB50(void);
+/* func_0029DB58, func_0029CF40, func_0029CF10 are defined earlier in this unit. */
+
+void GuiManagerCreate(void) {
+    u8   *in   = D_138180;
+    void *heap = *(void **)(g_memoryArenaTable + 0x80);
+    void *instance;
+    void *cb4, *cb3;
+
+    memset(heap, 0xCD, 0x40000);
+    *(s32 *)(in + 0x1CC) = 0;
+    *(s32 *)(in + 0x1A0) = 0;
+    *(s32 *)(in + 0x1A4) = 0;
+    *(s32 *)(in + 0x1A8) = 0;
+    *(s32 *)(in + 0x1AC) = 0;
+    *(s32 *)(in + 0x1B0) = 0;
+    *(s32 *)(in + 0x1B4) = 0;
+    *(s32 *)(in + 0x1B8) = 0;
+    *(s32 *)(in + 0x1BC) = 0;
+    *(s32 *)(in + 0x1C0) = 0;
+    *(s32 *)(in + 0x1C4) = 0;
+    *(s32 *)(in + 0x1C8) = 0;
+
+    func_0029DB58();   /* reads g_bPalMode itself (asm passes it in $4; the callee ignores the arg) */
+    instance = GuiSystemInit(GuiPlacementNew(0x3FB20, heap), 0x40000);
+    g_guiInstance = instance;
+
+    if (g_playerProgress == 0x1F5) {
+        cb4 = (void *)func_0029CF08;
+        cb3 = (void *)func_0029DB50;
+    } else {
+        cb4 = (void *)func_0029CF40;
+        cb3 = (void *)func_0029CF10;
+    }
+    *(void **)((u8 *)instance + 0x3F9D4) = cb4;
+    *(void **)((u8 *)instance + 0x3F9D8) = cb3;
+}
+#endif
 
 /** If the GUI is up and the popup-busy gate (D_1A8C64) is clear, pause the
  *  game world (func_0028E9A0(1)) and run the GUI pump (func_0029CA98),
