@@ -1,5 +1,12 @@
 #include "common.h"
 
+#ifdef TARGET_NATIVE
+/* Local 16-byte VU-lane vector for the structure-exact #else bodies (common.h
+   doesn't pull in vec.h). Byte-neutral: a typedef emits no code and the
+   matching (INCLUDE_ASM) arm never references it. */
+typedef struct Vec4 { f32 x, y, z, w; } __attribute__((aligned(16))) Vec4;
+#endif
+
 /*
  * text/1CA080 — front-end / pause-menu screens band, part A (vaddr
  * 0x2CA100..0x2D553F). Carved out of the big text/1B21E8 asm tile as
@@ -159,17 +166,77 @@ extern s32 D_1ABA84, D_1ABA88, D_1ABA8C, D_1ABA90; /* per-menu "new" flags (abs)
  * no jr $ra — not a real function entry; left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA100);
 
-/* menu helper: uses 128-bit sq/lq (vector) loads/stores — left as INCLUDE_ASM
- * (the EE quadword ops are not emitted from scalar C). */
+/* func_002CA138: 3D vector-geometry helper (menu 3D cursor / pick math). Uses
+ * the VU0 primitives Vec3CrossVu0 + Vec3DotVu0 + Vec3LengthVu0 +
+ * Vec3RescaleToLenVu0 + Vec4Sub/AddVu0 and GetFloatAbs, with 128-bit lq/sq
+ * vertex copies and five FP compares (c.lt.s/c.eq.s) driving bc1t/bc1f
+ * branches. PARK (INCLUDE_ASM): high transcription risk per the blast-radius
+ * guardrail — the dense VU0 vector math plus delay-slot-sensitive FP branches
+ * make a hand-written structure-exact #else unverifiable without an EE oracle;
+ * not worth a silent op-for-op error in coverage-only C. The matching arm is
+ * byte-frozen regardless (later cc1 8-byte-packed saves + qword ops). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA138);
 
-/* menu helper: uses 128-bit sq/lq (vector) loads/stores — left as INCLUDE_ASM
- * (the EE quadword ops are not emitted from scalar C). */
+/* func_002CA3E8: nearest ray/segment-vs-polygon-edge intersection. Indexes an
+ * edge-list table (D_001F0000 + 0x1680, arg0*4) whose header holds the edge
+ * count, builds a normalized direction (Vec4SubVu0 + Vec3LengthVu0 +
+ * Vec3RescaleToLenVu0), then loops the edges computing per-edge intersection
+ * parameters (func_00283638/func_00283A48 helpers) and tracks the nearest hit
+ * parameter + a hit flag returned in $v0. PARK (INCLUDE_ASM): high
+ * transcription risk per the blast-radius guardrail — the per-edge FP
+ * intersection test uses multiple c.eq.s/c.lt.s compares with delay-slot
+ * bc1f/bc1t branches (non-likely branches run their delay slot; a misread is a
+ * silent op-for-op bug), unverifiable without an EE oracle in coverage-only C.
+ * Matching arm is byte-frozen (8-byte-packed saves + qword ops) regardless. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA3E8);
 
-/* menu helper: uses 128-bit sq/lq (vector) loads/stores — left as INCLUDE_ASM
- * (the EE quadword ops are not emitted from scalar C). */
+/* func_002CA618: sample a piecewise-linear Vec4 path at distance `dist`.
+ * The path is a leading s32 count followed by a Vec4 array at +0x10 (0x10
+ * stride). Segment index = floor(dist / segLen); the output index (*outSeg),
+ * fractional remainder (*outFrac) and interpolated point (*outVec) are written.
+ * Index is clamped to [0, count-1): below 0 -> segment 0, at/above the last
+ * interpolable segment -> the last one, and in both clamp cases the frac is 0
+ * and the point is the segment's start vertex. In range, the point is
+ * path[seg] + normalize(path[seg+1] - path[seg]) * frac (VU0 vector helpers).
+ * Matching arm stays INCLUDE_ASM (128-bit lq/sq vertex copies the scalar
+ * matcher can't emit); the #else is the structure-exact model. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA618);
+#else
+extern s32 FloatToInt(f32 v);
+extern f32 IntToFloat(s32 v);
+extern void Vec4SubVu0(void *dst, void *a, void *b);
+extern void Vec4AddVu0(void *dst, void *a, void *b);
+extern void Vec3RescaleToLenVu0(void *dst, void *src, f32 len);
+void func_002CA618(u8 *path, s32 *outSeg, f32 *outFrac, Vec4 *outVec, f32 dist,
+                   f32 segLen) {
+    s32 seg = FloatToInt(dist / segLen);
+    s32 last = *(s32 *)path - 1;
+
+    *outSeg = seg;
+    if (seg < last) {
+        if (seg >= 0) {
+            Vec4 *start = (Vec4 *)(path + seg * 0x10 + 0x10);
+            Vec4 *next  = (Vec4 *)(path + seg * 0x10 + 0x20);
+            f32 frac = dist - IntToFloat(seg) * segLen;
+            Vec4 tmp;
+
+            *outFrac = frac;
+            Vec4SubVu0(&tmp, next, start);
+            *outVec = tmp;
+            Vec3RescaleToLenVu0(outVec, outVec, frac);
+            Vec4AddVu0(&tmp, outVec, start);
+            *outVec = tmp;
+            return;
+        }
+        *outSeg = 0;
+    } else {
+        *outSeg = last;
+    }
+    *outFrac = 0.0f;
+    *outVec = *(Vec4 *)(path + *outSeg * 0x10 + 0x10);
+}
+#endif
 
 /* menu helper: uses 128-bit sq/lq (vector) loads/stores — left as INCLUDE_ASM
  * (the EE quadword ops are not emitted from scalar C). */
@@ -489,9 +556,70 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", MenuScreenLoad)
  * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CB560);
 
-/* menu helper: uses 128-bit sq/lq (vector) loads/stores — left as INCLUDE_ASM
- * (the EE quadword ops are not emitted from scalar C). */
+/* func_002CB720: enter/refresh a menu screen's render context. Resets the
+ * screen state word, publishes the screen's stored camera position (two Vec4s
+ * at +0x50/+0x60) and view block to the live camera globals, rebuilds the
+ * camera projection + frame view matrices, swaps to moby table 0, clears the
+ * per-frame scratch fields, and — for the fade-in screen kinds {3,4,5,6} —
+ * fades from black. When not already shut down (+0x1F4 == 0) it also runs the
+ * frame's sound service: a fixed sound event (0x5D), dialog-voice mute (unless
+ * a level exit is pending on kind 2), the sound pump, emitter update, and a
+ * one-shot dialog-voice pump gated by the +0xDB flag. Matching arm stays
+ * INCLUDE_ASM (128-bit lq/sq camera-vec copies); #else is structure-exact. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CB720);
+#else
+extern void func_002FCFC8(void);
+extern void func_00283460(void *dst, void *src, s32 len);
+extern void func_0027A550(void);
+extern void func_00132B28(s32 id);
+extern s32  IsLevelExitRequested(void);
+extern void SetDialogVoiceVolumesMute(void);
+extern void FadeOutToBlackBlocking(s32 frames);
+extern void func_002B9438(void);
+extern void SwapMobyTableContext(s32 tableId);
+extern void UpdateSoundEmitters(void);      /* file-scope decl is below L545 */
+extern void PumpDialogVoiceSystem(s32 blocking);
+extern f32  g_cameraProjScale;
+void func_002CB720(void) {
+    s32 kind;
+
+    func_002FCFC8();
+    *(s32 *)g_menuScreenBlock = 0;
+    *(Vec4 *)g_cameraPos = *(Vec4 *)(g_menuScreenBlock + 0x50);
+    *(Vec4 *)((u8 *)g_cameraPos + 0x10) = *(Vec4 *)(g_menuScreenBlock + 0x60);
+    func_00283460((u8 *)g_cameraPos + 0x230, g_menuScreenBlock + 0x200, 0x30);
+    g_cameraProjScale = *(f32 *)(g_menuScreenBlock + 0xF8);
+    BuildCameraProjection();
+    BuildFrameViewMatrices();
+    SwapMobyTableContext(0);
+    func_0027A550();
+    *(s32 *)(g_menuScreenBlock + 0x118) = 0;
+    *(s32 *)(g_menuScreenBlock + 0x11C) = 0;
+    *(s32 *)(g_menuScreenBlock + 0x114) = 0;
+    *(s32 *)(g_menuScreenBlock + 0x20) = 0;
+
+    kind = *(s32 *)(g_menuScreenBlock + 0x1C);
+    if ((u32)(kind - 3) < 2 || kind == 6 || kind == 5) {
+        FadeOutToBlackBlocking(0x10);
+    }
+
+    if (*(s32 *)(g_menuScreenBlock + 0x1F4) == 0) {
+        func_00132B28(0x5D);
+        if (*(s32 *)(g_menuScreenBlock + 0x1C) != 2 || !IsLevelExitRequested()) {
+            SetDialogVoiceVolumesMute();
+        }
+        snd_Pump();
+    }
+
+    UpdateSoundEmitters();
+    if (g_menuScreenBlock[0xDB] != 0) {
+        PumpDialogVoiceSystem(1);
+        g_menuScreenBlock[0xDB] = 0;
+    }
+    func_002B9438();
+}
+#endif
 
 /* Front-end screen-machine per-frame tick (TickFrontEndScreenMachine).
  * Advances the menu-idle counter (saturating at 0x7D00) and the transition
@@ -951,8 +1079,15 @@ s32 func_002CD660(s32 *list) {
     return 0;
 }
 
-/* menu helper: ldl/ldr/sdl/sdr unaligned struct/const copy — left as INCLUDE_ASM
- * (cc1 won't reproduce the unaligned 64-bit copy idiom from clean C). */
+/* func_002CD670: a UI screen renderer (~2.1 KB). Dispatches on a screen/mode
+ * selector through a jump table (sltiu + jr $3) and builds GS register packets
+ * (AppendGsRegPacket) for the selected panel — localized strings
+ * (GetLocalizedString), UI textures (GetUiTextureTex0), the active-objectives
+ * list (GatherActiveObjectives), etc. — with ldl/ldr/sdl/sdr unaligned copies.
+ * PARK (INCLUDE_ASM): high transcription risk per the blast-radius guardrail —
+ * combines a splat-jtbl-reloc switch, raw-GS packet assembly (raw-GS-HLE), and
+ * a large unverifiable body; a hand-written #else here is not worth the silent-
+ * error surface in coverage-only C. Matching arm is byte-frozen regardless. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CD670);
 
 /* Cheat-flag mirror: for each source toggle byte (D_1A7BDn) write 3 ("on") or 0
