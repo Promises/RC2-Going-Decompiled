@@ -942,7 +942,12 @@ extern s32  g_playerProgress; /* 0x1A79F8 first word of the persistent save bloc
 extern void func_00289398(s32 sectorByteOffset, void *outBuf); /* load save file -> *outBuf */
 extern void PumpDialogVoiceSystem(s32 blocking);
 extern void StartFileLoadPumpingVoice(void *buf, s32 lba, s32 size);
-extern void *func_00283460(void *dst, const void *src, s32 nbytes); /* memcpy — early decl (func_00299BF8 uses it before the later decl; pre-existing native-build error) */
+#ifdef TARGET_NATIVE
+/* #else-only early decl: func_00299BF8's #else uses func_00283460 before the
+ * file-scope decl further down. Guarded so the matching build (unifdef
+ * -UTARGET_NATIVE) is byte-identical to master. */
+extern void *func_00283460(void *dst, const void *src, s32 nbytes); /* memcpy */
+#endif
 
 /** func_00299BF8 — load-side save-image restore orchestrator (counterpart of
  *  BuildSaveImage). Reads the current save file off the disc TOC, restores the
