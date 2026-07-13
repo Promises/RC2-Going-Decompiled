@@ -300,13 +300,10 @@ void func_002A04D8(void *obj, s32 arg1, void *dst) {
  * (named by shape); the 8-byte func_00283AE0 arg is the raw qword the asm loads.
  * The matching build keeps the asm; faithful TARGET_NATIVE coverage arm. */
 #ifdef TARGET_NATIVE
-/* Signatures match text/183558.c: the scale families take the f32 as the 2nd
- * param (dst, s, src), NOT trailing. */
+/* ScaleVec4IncludingW def site is text/183558.c: the f32 scale is the 2nd param
+ * (dst, s, src), NOT trailing. Vec4AddVu0/Vec4ScaleVu0/func_00283A48/func_00283AE0
+ * are already declared with func_002A04D8 above. */
 extern void ScaleVec4IncludingW(void *dst, f32 s, void *src);
-extern void Vec4AddVu0(void *dst, void *a, void *b);
-extern void Vec4ScaleVu0(void *dst, f32 s, void *src);
-extern void func_00283A48(void *out, void *v, void *m);
-extern void func_00283AE0(void *dst, u64 packed);
 #endif
 
 #ifndef TARGET_NATIVE
@@ -537,11 +534,89 @@ void func_002A0958(void) {
 }
 #endif
 
+/* func_002A0A58 — pose one moby keyframe vector into the caller's buffer arg2.
+ * func_002A4D60 fills arg2 from the moby's keyframe data (input word = arg1 at a
+ * scratch slot). The posed vector at arg2+0x30 is scaled by (obj+0x2C)/1024,
+ * then the moby's rotation is built (func_00284008 from obj+0xC0 into a scratch
+ * matrix) and applied (MatrixMultiplyVu0 arg2 = matrix * arg2), and the
+ * translation (obj+0x10) is added. Helper signatures cross-referenced to
+ * text/183558.c. Callee func_002A4D60 UNCONFIRMED (named by shape). The matching
+ * build keeps the asm; faithful TARGET_NATIVE coverage arm. */
+#ifdef TARGET_NATIVE
+extern void func_002A4D60(void *obj, s32 flag, void *inParams, void *outBuf);
+extern void func_00284008(void *dst, void *src);
+extern void MatrixMultiplyVu0(void *dst, void *a, void *b);
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0A58);
+#else
+void func_002A0A58(void *obj, s32 arg1, void *arg2) {
+    u8 *o = (u8 *)obj;
+    u8 *a2 = (u8 *)arg2;
+    u8 buf[0x50];
+    f32 scale = *(f32 *)(o + 0x2C) * (1.0f / 1024.0f);
 
+    *(s32 *)(buf + 0x40) = arg1;
+    func_002A4D60(obj, 1, buf + 0x40, arg2);
+    Vec4ScaleVu0(a2 + 0x30, scale, a2 + 0x30);
+    func_00284008(buf, o + 0xC0);
+    MatrixMultiplyVu0(arg2, buf, arg2);
+    Vec4AddVu0(a2 + 0x30, a2 + 0x30, o + 0x10);
+}
+#endif
+
+/* func_002A0AF8 — pose one moby keyframe vector into a local scratch buffer and
+ * transform it into dst. func_002A4D60 fills the scratch (input word = arg1); the
+ * posed vector at scratch+0x30 is scaled by (obj+0x2C)/1024 into dst, then the
+ * moby's rotation (func_00283A48 over obj+0xC0) and translation (Vec4AddVu0
+ * obj+0x10) are applied. Callee func_002A4D60 UNCONFIRMED (named by shape). The
+ * matching build keeps the asm; faithful TARGET_NATIVE coverage arm. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0AF8);
+#else
+void func_002A0AF8(void *obj, s32 arg1, void *dst) {
+    u8 *o = (u8 *)obj;
+    u8 buf[0x80];
+    f32 scale = *(f32 *)(o + 0x2C) * (1.0f / 1024.0f);
 
+    *(s32 *)(buf + 0x40) = arg1;
+    func_002A4D60(obj, 1, buf + 0x40, buf);
+    Vec4ScaleVu0(dst, scale, buf + 0x30);
+    func_00283A48(dst, dst, o + 0xC0);
+    Vec4AddVu0(dst, dst, o + 0x10);
+}
+#endif
+
+/* func_002A0B80 — pose and transform a run of `count` moby keyframe vectors in
+ * place. Forwards its args to func_002A4C08 (handwritten VU0 helper that fills
+ * the dst run from the moby's keyframe data), then for each of the count vectors
+ * at dst[i] (stride 0x10) scales by (obj+0x2C)/1024 (Vec4ScaleVu0), applies the
+ * moby rotation (func_00283A48 over obj+0xC0) and adds the translation
+ * (Vec4AddVu0 obj+0x10). Callee func_002A4C08 UNCONFIRMED (named by shape). The
+ * matching build keeps the asm; faithful TARGET_NATIVE coverage arm. */
+#ifdef TARGET_NATIVE
+extern void func_002A4C08(void *obj, s32 count, void *arg2, void *dst);
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0B80);
+#else
+void func_002A0B80(void *obj, s32 count, void *arg2, void *dst) {
+    u8 *o = (u8 *)obj;
+    u8 *p = (u8 *)dst;
+    f32 scale = *(f32 *)(o + 0x2C) * (1.0f / 1024.0f);
+    s32 i;
+
+    func_002A4C08(obj, count, arg2, dst);
+    for (i = count; i > 0; i--) {
+        Vec4ScaleVu0(p, scale, p);
+        func_00283A48(p, p, o + 0xC0);
+        Vec4AddVu0(p, p, o + 0x10);
+        p += 0x10;
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0C20);
 
@@ -888,7 +963,32 @@ void FinishMobyRenderChain(void) {
     }
 }
 
+/* RenderMobys — per-frame moby render driver. Opens the draw segment
+ * (BeginMobyDrawSegment), clears the anim-bounds scratch (func_002A1000), builds
+ * the moby VU1 chain over the whole table (BuildMobyVuChain(g_mobyTableBase,
+ * cursor, -1, 1)); if the chain overran the frame-DMA budget (the limit at
+ * g_frameDmaCursor[+0x4] fell below the write cursor) it logs the "mobys dropped"
+ * overflow string, then finishes the chain (FinishMobyRenderChain). Faithful
+ * TARGET_NATIVE coverage arm; the matching build keeps the asm. */
+#ifdef TARGET_NATIVE
+extern void *g_mobyTableBase;        /* 0x1B1ADC moby entity array base (stride 0x100) */
+extern char  D_1A9E48[];             /* "N mobys dropped" overflow log string */
+extern s32   DebugPrintStub(void *msg);
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", RenderMobys);
+#else
+void RenderMobys(void) {
+    BeginMobyDrawSegment();
+    func_002A1000();
+    g_mobyVuChainCursor = BuildMobyVuChain(g_mobyTableBase, g_mobyVuChainCursor, -1, 1);
+    if (*(s32 *)((u8 *)&g_frameDmaCursor + 0x4) < (s32)g_frameDmaCursor) {
+        DebugPrintStub(D_1A9E48);   /* VU chain budget exceeded — mobys dropped */
+    }
+    FinishMobyRenderChain();
+}
+#endif
 
 /*
  * Marks a platinum-bolt slot as collected: sets bit 0x80 in
@@ -966,9 +1066,60 @@ void func_002A12F0(u64 *moby, u32 *out0, u32 *out1, u32 *out2) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A1320);
+/* func_002A1320(obj, out): resolve the object's packed directional-light field
+ * at obj+0x38 (bytes idx0/idx1/blend, written by func_002A12A0/func_002A12C0)
+ * into an interpolated light vector in out. Looks up the 0x40-stride
+ * g_dirLightMatrices, using the vec4 row at +0x10 of each entry: when blend == 0
+ * it copies matrix idx0's row, otherwise it lerps matrix idx0 -> idx1 by
+ * t = (blend*16)/4096 on x/y/z only (the w lane stays matrix idx0's, since the
+ * VU0 vmadd is .xyz). Handwritten VU0 (lqc2/vitof12/vmaddx); the matching build
+ * keeps the asm — this is the faithful TARGET_NATIVE coverage arm. */
+#ifdef TARGET_NATIVE
+extern u8 g_dirLightMatrices[];   /* 0x1C26C0  0x40-stride dir-light matrices */
+#endif
 
+#ifndef TARGET_NATIVE
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A1320);
+#else
+void func_002A1320(void *obj, f32 *out) {
+    u64 v = *(u64 *)((u8 *)obj + 0x38);
+    u32 idx0  = (u32)v & 0xFF;
+    u32 idx1  = ((u32)v >> 8) & 0xFF;
+    u32 blend = ((u32)v >> 16) & 0xFF;
+    f32 *m0 = (f32 *)(g_dirLightMatrices + idx0 * 0x40 + 0x10);
+
+    if (blend == 0) {
+        out[0] = m0[0];
+        out[1] = m0[1];
+        out[2] = m0[2];
+        out[3] = m0[3];
+    } else {
+        f32 *m1 = (f32 *)(g_dirLightMatrices + idx1 * 0x40 + 0x10);
+        f32 t  = (blend << 4) * (1.0f / 4096.0f);
+        f32 it = 1.0f - t;
+        out[0] = m0[0] * it + m1[0] * t;
+        out[1] = m0[1] * it + m1[1] * t;
+        out[2] = m0[2] * it + m1[2] * t;
+        out[3] = m0[3];   /* w lane unchanged from m0 (vmadd is .xyz only) */
+    }
+}
+#endif
+
+/* func_002A1390(a, b): signed gap between two bounding spheres, scaled by 1/1024
+ * — the centre distance |a.xyz - b.xyz| minus the sum of radii (a.w + b.w), times
+ * 1/1024. Negative when the spheres overlap. Handwritten VU0 (lqc2/vsqrt/vmulq);
+ * the matching build stays asm — this is the faithful TARGET_NATIVE coverage arm. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A1390);
+#else
+f32 func_002A1390(f32 *a, f32 *b) {
+    f32 dx = a[0] - b[0];
+    f32 dy = a[1] - b[1];
+    f32 dz = a[2] - b[2];
+    f32 dist = __builtin_sqrtf(dx * dx + dy * dy + dz * dz);
+    return (dist - (a[3] + b[3])) * (1.0f / 1024.0f);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", UpdateMobyAnimation);
 
