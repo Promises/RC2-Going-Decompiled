@@ -220,9 +220,34 @@ void func_0034D8C8(GuiHudManager *mgr, s32 flag) {
  * callee func_002AA3F0 (1A8180.c, linked whole into the cmp suite) runs a real
  * VU0 LerpByteVec4PackedVu0 + absolute D_1A9E94/98 globals (the absolute-symbol
  * ld --gc-sections wall), and it cannot be mocked instead without colliding with
- * that linked real body. Not seedable cleanly; revisit when func_002AA3F0 itself
- * is oracled. */
+ * that linked real body. Not seedable cleanly; revisit for byte-oracle when
+ * func_002AA3F0 itself is oracled. */
+#ifdef TARGET_NATIVE
+extern s32 g_padButtonsPressed;
+extern u32 func_002AA3F0(u32 color1, u32 color2, s32 period, s32 counterSel, s32 reset);
+extern f32 *func_00337120(GuiElement *e);   /* -> element primary vec (float[0]) */
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034DAB0);
+#else
+/* Structure-exact model (cmp-oracle blocked as noted; matching arm stays asm).
+   Drives the HUD sub-element at +0x5D8: any d-pad direction restarts the tween
+   counter, then a color-ramp tween handle is written into the element's color
+   block, `alpha` into its primary vector, and visibility is set from `visible`. */
+void func_0034DAB0(GuiHudManager *mgr, s32 visible, f32 alpha) {
+    GuiElement *elem;
+    s32 *color;
+    if (g_padButtonsPressed & 0xF000) {
+        func_002AA3F0(0, 0, 1, 0, 1);
+    }
+    elem = (GuiElement *)((u8 *)mgr + 0x5D8);
+    color = GuiElementGetColor(elem);
+    color[0] = func_002AA3F0(0x60442D00, 0x70FFFEED, 0x14, 0, 0);
+    *func_00337120(elem) = alpha;
+    GuiElementSetVisible(elem, visible);
+}
+#endif
 
 /* func_0034DB68: sibling of func_0034D828 for the manager's OTHER scrollable
  * region - store the "active" flag (arg) at +0x158C, and if the +0x1590
@@ -245,6 +270,8 @@ void func_0034DB68(GuiHudManager *mgr, s32 flag) {
 }
 #endif
 
+/* func_0034DBC8: mis-split fragment (two mid-fn stores `sw $2,0x158C/0x1584($4)`,
+ * no prologue/jr) - #47 resplit-pass backlog, not #else material. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034DBC8);
 
 /* func_0034DBD8: store the texture/frame handle into the manager at +0x2DC. */
@@ -254,8 +281,30 @@ void func_0034DBD8(GuiHudManager *mgr, s32 value) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034DBE0);
 
+/* func_0034E8D8(hudMgr): the weapon-select / bolt-counter HUD RENDER pass. Draws
+ * the frame + label sprites/text at the sub-element offsets (+0x4C/+0x98/+0x158/
+ * +0x100 base group; +0x2E0/+0x32C mirrored pair with negated scale when no notice
+ * is pending, D_1A8C64==0), runs the two element-list draw loops (7 rows each,
+ * dispatching each element's own draw fn via its vtable at +0x8/+0xC), then renders
+ * the live bolt count: counts its decimal digits (g_boltCount / 10 loop), formats
+ * it with a language-selected template (g_currentLanguage 3/5/!=4 -> D_1AE6B0 vs
+ * D_1AE6B8, via func_00115DA8) and lays out the digit glyphs across the row with a
+ * per-digit advance (func_0027FCB0 / GetUiTextureTex0), and finally the ">/<"
+ * scroll arrows (D_1A7A3A gate, func_002802E8 x4) and the footer (func_0034BA50).
+ *
+ * PARK (doc-modeled INCLUDE_ASM, NOT #else - per the blast-radius guardrail): this
+ * 1096-byte renderer is (a) NOT cmp-oracle-able (absolute GUI-vtable/text globals +
+ * the whole draw callee set - the --gc-sections wall) AND (b) very high
+ * transcription-risk: it dispatches through per-element function pointers I'd be
+ * guessing the struct layout of (jalr via [+0x8]/[+0xC]), uses the FP<->int
+ * cvt.w.s idiom and bc1f/bc1tl likely-branch delay-slot nullification (0x34EB68,
+ * 0x34EC0C) for the digit layout, and a break-7 divide loop for the digit count -
+ * a one-shot un-verified #else would silently mis-render. Model faithfully once
+ * the GUI element vtables + text pipeline make it oracle-able. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034E8D8);
 
+/* func_0034ED20: mis-split fragment (positive `addiu $sp,+0x40; nop` epilogue tail,
+ * no prologue/jr) - #47 resplit-pass backlog, not #else material. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034ED20);
 
 /* GuiManagerInitListRows: build the manager's scrollable list-row table - 26
@@ -269,10 +318,110 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034ED20);
  * absolute GUI vtable data globals (g_GuiElementVtable / g_GuiListRowVtable),
  * which are undefined in the cmp link (the absolute-data --gc-sections wall), and
  * those bodies cannot be mocked instead without colliding with the linked real
- * 235FE8 definitions. Revisit when the GUI element vtable globals are seeded. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", GuiManagerInitListRows);
+ * 235FE8 definitions. Revisit for byte-oracle when the vtable globals are seeded. */
+#ifdef TARGET_NATIVE
+/* Sibling-unit GUI helpers used by the #else bodies below (real defs in
+   text/235FE8 etc.); their returns are unused here. */
+extern void GuiListRowElementInit(void *row);
+extern void func_0034BDB0(void *hudMgr);
+extern void func_003374D8(void *listHead);
+extern void func_00338A80(void *listHead);
+#endif
 
+#ifndef TARGET_NATIVE
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", GuiManagerInitListRows);
+#else
+/* Structure-exact model (cmp-oracle blocked as noted above; matching arm stays
+   asm). Inits the 26 contiguous 0x48-byte list rows from the manager base plus a
+   27th at +0x750, then the embedded HUD sub-object (+0x7A0) and the three list
+   heads (+0x1D50, +0x1D8C, +0x1FDC). Returns the manager. */
+void *GuiManagerInitListRows(void *mgr) {
+    u8 *row = (u8 *)mgr;
+    s32 i;
+    for (i = 0x19; i != -1; i--) {
+        GuiListRowElementInit(row);
+        row += 0x48;
+    }
+    GuiListRowElementInit((u8 *)mgr + 0x750);
+    func_0034BDB0((u8 *)mgr + 0x7A0);
+    func_003374D8((u8 *)mgr + 0x1D50);
+    func_00338A80((u8 *)mgr + 0x1D8C);
+    func_00338A80((u8 *)mgr + 0x1FDC);
+    return mgr;
+}
+#endif
+
+#ifdef TARGET_NATIVE
+/* Sibling-unit GUI list/sprite helpers + the font-atlas source, used only by the
+   #else body below (opaque struct pointers left void* to avoid pulling their
+   types into this TU). */
+extern void *g_guiInstance;              /* live GUI root; +0x8710 = font atlas */
+extern u8 D_1AE6C8[];                    /* list-element init template */
+extern u8 D_1AE6D8[];                    /* frame-sprite init template */
+extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
+extern void GuiListElementInit(GuiElement *e, s32 v3C, s32 v34, void *tag, void *pool);
+extern void GuiListSetVisibleRows(GuiElement *e, s32 rows);
+extern void GuiListSetItemCount(GuiElement *e, s32 n);
+extern void GuiListSetScrollPos(GuiElement *e, s32 pos);
+extern void GuiListSetColorPair0(GuiElement *e, s32 c0, s32 c1);
+extern void GuiListSetColorPair1(GuiElement *e, s32 c0, s32 c1);
+extern void func_00337B68(GuiElement *e, s32 v);
+extern void func_0034C008(void *listHead, void *gui, void *pool);
+extern void GuiSpriteElementInit(GuiElement *e, void *tmpl, void *pool);
+extern f32 *GuiSpriteGetTextureVec(GuiElement *e);
+extern void func_00338AB8(void *listHead, void *pool);
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", GuiManagerInitHudLists);
+#else
+/* Structure-exact model (cmp-oracle blocked, same abs GUI-vtable --gc-sections
+   wall as GuiManagerInitListRows; matching arm stays asm).
+   Build the HUD manager's list widgets: cache the two selector glyphs ('W','X'
+   at +0x222C/+0x2230), configure the 26 scrollable list rows (visible=5,
+   items=100, two color pairs, per-row finalizers), then set up the frame-list
+   sub-object (+0x7A0), the frame sprite (+0x1D50: two texture-vec constants),
+   record the pool at +0x798, and init the two trailing list heads
+   (+0x1D8C/+0x1FDC). `pool` is the GUI element pool/context. */
+void GuiManagerInitHudLists(void *inst, void *gui, void *pool) {
+    u8 *row = (u8 *)inst;
+    u8 *rowEnd = (u8 *)inst + 0x750;
+    GuiElement *sprite;
+    f32 *vec;
+
+    *(s32 *)((u8 *)inst + 0x222C) =
+        GuiFontAtlasLookupGlyph((char *)g_guiInstance + 0x8710, 0x57);
+    *(s32 *)((u8 *)inst + 0x2230) =
+        GuiFontAtlasLookupGlyph((char *)g_guiInstance + 0x8710, 0x58);
+
+    do {
+        GuiElement *e = (GuiElement *)row;
+        GuiListElementInit(e, 0x20, 1, D_1AE6C8, pool);
+        GuiListSetVisibleRows(e, 5);
+        GuiListSetItemCount(e, 0x64);
+        GuiListSetScrollPos(e, 0);
+        GuiListSetColorPair0(e, 0x8049C1FF, 0x80001EFF);
+        GuiListSetColorPair1(e, 0x50F0C070, 0x50F0C070);
+        func_00337B88(e, (s32)0x80000000);
+        func_00337B68(e, 1);
+        row += 0x48;
+    } while (row < rowEnd);
+
+    func_0034C008((u8 *)inst + 0x7A0, gui, pool);
+
+    sprite = (GuiElement *)((u8 *)inst + 0x1D50);
+    GuiSpriteElementInit(sprite, D_1AE6D8, pool);
+    GuiElementGetColor(sprite)[0] = 0x4F008080;   /* packed float const */
+    vec = GuiSpriteGetTextureVec(sprite);
+    *(s32 *)vec = 0x476A6800;                      /* packed float const */
+    vec = GuiSpriteGetTextureVec(sprite);
+    ((s32 *)vec)[1] = 0;
+
+    *(void **)((u8 *)inst + 0x798) = pool;
+    func_00338AB8((u8 *)inst + 0x1D8C, pool);
+    func_00338AB8((u8 *)inst + 0x1FDC, pool);
+}
+#endif
 
 /* func_0034EF60: empty/no-op leaf (original compiles to jr ra; nop). */
 void func_0034EF60(void) {
@@ -313,7 +462,49 @@ void func_0034EF68(u8 *base, s32 index, s32 x, s32 y, s32 shade) {
 }
 #endif
 
+#ifdef TARGET_NATIVE
+extern f32 func_00283B30(f32 angle);   /* VU0 cosine */
+extern f32 func_00283B48(f32 angle);   /* VU0 sine   */
+extern f32 D_1AE6E4;   /* radial X gain */
+extern f32 D_1AE6E8;   /* radial Y gain */
+extern s32 D_1AE6F0;   /* currently-highlighted slot index */
+extern s32 D_1AE6EC;   /* highlighted-slot vertical bump */
+extern void *g_hudMobySpawnStart;   /* HUD record base; +0x28 = slot count */
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F028);
+#else
+/* Structure-exact model (cmp-oracle blocked, abs/gp GUI globals; matching arm
+   stays asm). Lay out the (up to 8) weapon-wheel slots on a circle: for slot i,
+   angle = 2*pi*i/count - pi/2, placing the HUD element at
+   (baseX + cos*gainX*74 + 0x69, baseY + sin*gainY*74 + 0x64); the highlighted
+   slot (D_1AE6F0) gets an extra vertical bump (D_1AE6EC). `shade` is forwarded
+   to each element initializer. No-op if the slot count is 0. (s32 casts model
+   cvt.w.s; sub-pixel rounding isn't oracle-critical for this low-blast layout.) */
+void func_0034F028(u8 *base, s32 baseX, s32 baseY, s32 shade) {
+    s32 i;
+    if (*(s32 *)((u8 *)&g_hudMobySpawnStart + 0x28) == 0) {
+        return;
+    }
+    for (i = 0; i < 8; i++) {
+        f32 count = (f32)*(s32 *)((u8 *)&g_hudMobySpawnStart + 0x28);
+        f32 angle = 2.0f * (f32)i;
+        s32 x, y;
+        angle = angle * 3.14159265f;   /* 0x40490FDB pi   */
+        angle = angle / count;
+        angle = angle - 3.14159265f;
+        angle = angle + 1.5707963f;    /* 0x3FC90FDB pi/2 */
+        x = baseX + (s32)(func_00283B30(angle) * (D_1AE6E4 * 74.0f)) + 0x69;
+        y = baseY + (s32)(func_00283B48(angle) * (D_1AE6E8 * 74.0f)) + 0x64;
+        if (i == D_1AE6F0) {
+            func_0034EF68(base, i, x, y + D_1AE6EC, shade);
+        } else {
+            func_0034EF68(base, i, x, y, shade);
+        }
+    }
+}
+#endif
 
 /* func_0034F1C0: per-frame tick of the outer GuiInstance's HUD widgets - run the
  * embedded GuiHudManager's frame update (+0x7A0 via func_0034DBE0), forward the
@@ -366,7 +557,7 @@ void func_0034F220(GuiInstance *mgr) {
 extern void *g_guiInstance;
 extern void BuildCameraProjection(void);
 extern void func_0029D9B8(void);
-extern void func_0034F028(void *obj, s32 a, s32 b, s32 c);
+extern void func_0034F028(u8 *obj, s32 a, s32 b, s32 c);
 extern void func_0034E8D8(void *p);
 extern u8   g_sceneActorMobys[];      /* 0x1B894C  scene cast moby ptrs (byte base) */
 extern s32  D_1A8C64;                 /* HUD-refresh suppress flag */
@@ -439,7 +630,7 @@ extern s32   g_discToc[];             /* 0x14B540  disc TOC (sector tables) */
 extern void  StartFileLoadPumpingVoice(void *dest, s32 startSector, s32 sectorCount);
 extern void  GuiFontAtlasRelocate(void *atlas);
 extern void  GuiPoolInit(void *pool, s32 granule, void *base, s32 size);
-extern void  GuiManagerInitListRows(void *listRows);
+extern void *GuiManagerInitListRows(void *listRows);
 extern void  GuiManagerInitHudLists(void *listRows, void *gui, void *ctx);
 /* pass-1 per-screen constructors (screen sub-object pointer only) */
 extern void  func_00337C58(void *ctx);
@@ -720,6 +911,8 @@ void func_0034F9B8(void) {
 }
 #endif
 
+/* func_0034F9F0: mis-split fragment (lone mid-fn `sh $3,0xB6($5)` store, no
+ * prologue/jr) - #47 resplit-pass backlog, not #else material. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F9F0);
 
 /* func_0034F9F8: per-frame update of the two animated HUD moby sub-objects the
@@ -870,6 +1063,63 @@ f32 GuiHermiteInterp(f32 t, f32 a, f32 b, f32 c, f32 d) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034FCA0);
+#ifdef TARGET_NATIVE
+extern s32 g_swapGadgetItemIndex;    /* +0xAE = FMV aspect/letterbox scratch */
+extern u8 *g_pFmvArenaBase;          /* FMV work-arena base (0x1B234C) */
+extern char D_1AE7A0[];              /* FMV debug format string */
+extern void DebugPrintStub(const char *fmt, ...);
+extern s32 func_0011AB10(void);      /* current thread id */
+extern void func_0011AAB0(s32 thid, s32 arg);
+extern void BuildAspectBlitStrips(void *a, void *b);
+extern s32 InitFmvPlaybackEngine(void *a, void *b, void *engineCtx);
+extern s32 func_0034FD90(void *dmaq, void *base, void *addq);   /* playback loop (parked) */
+extern void func_003503D8(void);     /* FMV teardown */
+#endif
 
+#ifndef TARGET_NATIVE
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034FCA0);
+#else
+/* Structure-exact model (cmp-oracle blocked, abs FMV globals; matching arm stays
+   asm). Launch an FMV clip: record the aspect scratch (aspect) and the work-arena
+   base (arena -> g_pFmvArenaBase), build the aspect blit strips, resume the FMV
+   thread, and start the playback engine; if it armed, run the playback main loop
+   (func_0034FD90) over the arena's DMA-add queue (+0xD9048) and frame chain
+   (+0xD9040) and keep its stop reason. Always tears down (func_003503D8) and
+   clears the arena base + aspect scratch. Returns the stop reason (0 if the
+   engine never armed). */
+s32 func_0034FCA0(void *a, void *b, s32 aspect, u8 *arena, void *engineCtx, void *blitCtx) {
+    s32 result = 0;
+    *(s32 *)((u8 *)&g_swapGadgetItemIndex + 0xAE) = aspect;
+    g_pFmvArenaBase = arena;
+    DebugPrintStub(D_1AE7A0, 0x38CAC0);
+    BuildAspectBlitStrips(blitCtx, blitCtx);
+    func_0011AAB0(func_0011AB10(), 1);
+    if (InitFmvPlaybackEngine(a, b, engineCtx) != 0) {
+        u8 *base = g_pFmvArenaBase;
+        result = func_0034FD90(base + 0xD9048, base, base + 0xD9040);
+    }
+    func_003503D8();
+    *(s32 *)((u8 *)&g_swapGadgetItemIndex + 0xAE) = 0;
+    g_pFmvArenaBase = 0;
+    return result;
+}
+#endif
+
+/* func_0034FD90(playCtx, arg1, statsPtr): the FMV playback MAIN LOOP — reads the
+ * elementary-stream length from *statsPtr, then per-vblank (WaitVblankGetField)
+ * pumps the pipeline: a skip/exit decision (D_138180 pad state + g_cinematicExitPending
+ * vs arg1 + D_1A7A10 + g_playerProgress + the pad's 0x800 button bit), a CD sector
+ * read (func_003513F8) into the arena DMA-add queue (+0xD9048), IPU frame decode
+ * (func_003526A8/func_00352780/func_00352C70 on the frame queue +0xD9168), audio
+ * pump (func_00132888 mode 5 + snd_Pump), and pts-ring advance (+0xD9100). Runs
+ * until the stream drains or the user skips; returns the stop reason (sp+0x8).
+ *
+ * PARK (doc-modeled INCLUDE_ASM, NOT #else — per the blast-radius guardrail):
+ * this 880-byte real-time driver is (a) NOT cmp-oracle-able (absolute g_pFmvArenaBase
+ * + the whole FMV IPU/DMA HLE callee set — the --gc-sections wall) AND (b) high
+ * transcription-risk: its skip/exit decision at 0x34FE00–0x34FEBC is a subtle
+ * boolean built from movz/movn + beql/bnel likely-branch delay-slot nullification
+ * (0x34FE4C beql, 0x34FE6C bnel), exactly the class where a one-shot un-verified
+ * #else silently mis-computes. Model it faithfully only once the FMV HLE backend
+ * makes it oracle-able. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034FD90);
