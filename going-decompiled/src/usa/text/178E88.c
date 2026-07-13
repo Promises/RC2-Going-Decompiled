@@ -366,7 +366,49 @@ s32 func_0027A0C8(u8 *table, s32 mult, s32 index) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027A130);
 
+/**
+ * func_0027A138 — project a world position to fixed-point screen coordinates.
+ *
+ * Builds a view matrix (identity with translation -cameraPos*1024 in its bottom
+ * row, times the camera rotation matrix g_cameraState+0x40), transforms
+ * worldPos*1024 through it, then perspective-divides x/y by the transformed
+ * depth times the projection factor (g_cameraProjScale+0x160). Writes the
+ * screen point in the 12.4 fixed-point convention: out[0]/out[1] =
+ * (proj + 2048)*16 for x/y, out[2] = z/1024.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027A138);
+#else
+extern u8 g_cameraState[];       /* +0x40 rotation matrix; +0x140/+0x144/+0x148 position */
+extern u8 g_cameraProjScale[];   /* +0x160 depth scale */
+extern void MatrixIdentityVu0(f32 *m);
+extern void MatrixMultiplyVu0(f32 *dst, f32 *a, f32 *b);
+extern void Vec4ScaleVu0(void *dst, f32 s, void *src);
+extern f32 func_00283A70(void *out, void *in, void *matrix);
+
+void func_0027A138(f32 *out, void *worldPos) {
+    f32 m[16];      /* identity + translation */
+    f32 view[16];   /* camera rotation * translation */
+    f32 wp[4];      /* worldPos * 1024 */
+    f32 tp[4];      /* transformed point */
+    f32 s;
+
+    MatrixIdentityVu0(m);
+    m[12] = -*(f32 *)(g_cameraState + 0x140) * 1024.0f;
+    m[13] = -*(f32 *)(g_cameraState + 0x144) * 1024.0f;
+    m[14] = -*(f32 *)(g_cameraState + 0x148) * 1024.0f;
+    MatrixMultiplyVu0(view, (f32 *)(g_cameraState + 0x40), m);
+
+    Vec4ScaleVu0(wp, 1024.0f, worldPos);
+    wp[3] = 1.0f;
+    func_00283A70(tp, wp, view);
+
+    s = *(f32 *)(g_cameraProjScale + 0x160) / tp[3];
+    out[2] = tp[2] * (1.0f / 1024.0f);
+    out[1] = (tp[1] * s + 2048.0f) * 16.0f;
+    out[0] = (tp[0] * s + 2048.0f) * 16.0f;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", BuildFrameViewMatrices);
 
@@ -547,7 +589,46 @@ void InitScreenGeometry(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", BuildCameraProjection);
 
+/**
+ * func_0027B858 — configure the viewport / camera and rebuild the projection.
+ *
+ * From a target width/height and five projection floats, computes the half
+ * extents, publishes the fixed-point GS window offsets (centred on 0x800, <<4)
+ * to g_gsPixelOffsetX[0] / g_gsPixelOffsetY[0..2], the screen dims + centres to
+ * g_screenWidth/g_screenHeight[0..2], and the viewport scale/half-extents (from
+ * IntToFloat(dim)*0.5 and *4, plus the five floats) into the camera scratch at
+ * g_sceneActorMobys+0x674 (+0xB0/+0x200..+0x22C), then rebuilds the projection.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027B858);
+#else
+void func_0027B858(s32 width, s32 height, f32 fa, f32 fb, f32 fc, f32 fd, f32 fe) {
+    u8 *cam = g_sceneActorMobys + 0x674;
+    s32 halfW = width >> 1;
+    s32 halfH = height >> 1;
+    f32 fw = IntToFloat(width) * 0.5f;
+    f32 fh = IntToFloat(height) * 0.5f;
+
+    *(f32 *)(cam + 0xB0) = fa;
+    g_gsPixelOffsetX[0] = (0x800 - halfW) << 4;
+    g_gsPixelOffsetY[0] = (0x800 - halfH) << 4;
+    g_gsPixelOffsetY[1] = (halfW + 0x800) << 4;
+    g_gsPixelOffsetY[2] = (halfH + 0x800) << 4;
+    g_screenWidth[0] = width;
+    g_screenHeight[0] = height;
+    g_screenHeight[1] = halfW;   /* g_screenCenterDefaultX */
+    g_screenHeight[2] = halfH;   /* g_screenCenterDefaultY */
+    *(f32 *)(cam + 0x200) = fw;
+    *(f32 *)(cam + 0x204) = fh;
+    *(f32 *)(cam + 0x208) = fw * 4.0f;
+    *(f32 *)(cam + 0x20C) = fh * 4.0f;
+    *(f32 *)(cam + 0x218) = fb;
+    *(f32 *)(cam + 0x21C) = fc;
+    *(f32 *)(cam + 0x228) = fd;
+    *(f32 *)(cam + 0x22C) = fe;
+    BuildCameraProjection();
+}
+#endif
 
 /* RecomputeScreenViewportFromGsContext: derive the active display geometry and
  * the 2D draw viewport from the GS screen context's pixel dimensions
@@ -883,7 +964,39 @@ void End2dDrawBatch(void) {
 }
 #endif
 
+/**
+ * func_0027CDC8 — project a world position to normalized screen coordinates.
+ *
+ * Computes (worldPos - g_cameraPos), scales by 1024, transforms by the camera
+ * matrix (func_00283A70, matrix at g_cameraPos-0x100) with w=1, then perspective-
+ * divides by the transformed depth scaled by the projection factor
+ * (g_cameraProjScale+0x160). Maps the result to pixel space (+ half screen
+ * extent) and normalizes by the full screen dimension, writing x to *outX and y
+ * to *outY (both in [0,1] across the viewport).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027CDC8);
+#else
+extern u8 g_cameraPos[];        /* camera position Vec4; camera matrix at -0x100 */
+extern u8 g_cameraProjScale[];  /* projection params; depth scale at +0x160 */
+extern void Vec4SubVu0(void *dst, void *a, void *b);
+extern void Vec4ScaleVu0(void *dst, f32 s, void *src);
+extern f32 func_00283A70(void *out, void *in, void *matrix);
+
+void func_0027CDC8(void *worldPos, f32 *outX, f32 *outY) {
+    f32 v[4];   /* scratch Vec4 {x, y, z, w} */
+
+    Vec4SubVu0(v, worldPos, g_cameraPos);
+    Vec4ScaleVu0(v, 1024.0f, v);
+    v[3] = 1.0f;
+    func_00283A70(v, v, g_cameraPos - 0x100);
+    Vec4ScaleVu0(v, *(f32 *)(g_cameraProjScale + 0x160) / v[3], v);
+    *outX = v[0] + (f32)(g_screenWidth[0] >> 1);
+    *outX = *outX / (f32)g_screenWidth[0];
+    *outY = v[1] + (f32)(g_screenHeight[0] >> 1);
+    *outY = *outY / (f32)g_screenHeight[0];
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", GetUiTextureTex0);
 
@@ -1035,7 +1148,42 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawBlobShadows
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", FadeOutToBlackBlocking);
 
+/**
+ * func_0027DB38 — draw a pulsing debug string.
+ *
+ * Drives a 100-frame triangle wave from g_sceneFrame (frame%100 mapped to
+ * [-1,1]), shapes it with cos(t·pi) into a 0..1 pulse, and blends two packed
+ * colors (0x7FE0E0E0 / 0x5FF0C070, func_002846E8) by that pulse. Draws the
+ * localized string 0x2DB6 (DrawDebugString) at x=0x3C with a y that depends on
+ * the fade-suppress flag D_1A7BB9 (0x17C when set, else 0x148).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027DB38);
+#else
+extern s32 g_sceneFrame;
+extern u8 D_1A7BB9;
+extern f32 func_00283B30(f32 angle);                        /* cosine */
+extern s32 func_002846E8(f32 t, s32 colorA, s32 colorB);    /* blend packed colors by t */
+extern char *GetLocalizedString(s32 id);
+extern void DrawDebugString(s32 a, s32 b, s32 c, s32 d, s32 e);
+
+void func_0027DB38(void) {
+    s32 param = (D_1A7BB9 != 0) ? 0x17C : 0x148;
+    f32 t = (f32)(g_sceneFrame % 100) * 0.02f - 1.0f;
+    f32 pulse;
+    s32 color;
+
+    if (t < -1.0f) {
+        t = -1.0f;
+    }
+    if (1.0f < t) {
+        t = 1.0f;
+    }
+    pulse = (func_00283B30(t * 3.1415927f) + 1.0f) * 0.5f;
+    color = func_002846E8(pulse, 0x7FE0E0E0, 0x5FF0C070);
+    DrawDebugString(0x3C, param, color, (s32)GetLocalizedString(0x2DB6), -1);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027DC40);
 
@@ -1113,9 +1261,103 @@ void func_0027DF80(void) {
 }
 #endif
 
+/**
+ * func_0027E1E8 — emit the layered letterbox/scissor strips from the active
+ * layout descriptor (D_1A8758).
+ *
+ * If the descriptor's top scissor value (+0x8) is set, writes a GS SCISSOR
+ * (0x42) packet from its low+high bytes; if the top border colour (+0x4) has a
+ * nonzero alpha byte, fills the whole screen with it (func_0027E4D0). Then walks
+ * the screen top-to-bottom in two alternating bands per row — band A (step +0x10,
+ * scissor +0x18, colour +0x14) then band B (step +0x20, scissor +0x28, colour
+ * +0x24) — emitting each band's scissor packet and a colour fill clamped to the
+ * screen bottom, until the cursor passes the screen height.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027E1E8);
+#else
+extern u8 *D_1A8758;   /* active scissor-strip layout descriptor */
+extern void func_0027E4D0(s32 y0, s32 y1, s32 x0, s32 x1, u64 color);
 
+void func_0027E1E8(void) {
+    u8 *desc = D_1A8758;
+    s32 height = *(s16 *)(g_gsScreenContext + 0x152);
+    s32 y;
+
+    if (*(u64 *)(desc + 0x8) != 0) {
+        AppendGsRegPacket(0x42, *(u64 *)(desc + 0x8) & 0x000000FF000000FFULL);
+    }
+    if (*(u32 *)(desc + 0x4) & 0xFF000000) {
+        func_0027E4D0(0, height, 0, *(s16 *)(g_gsScreenContext + 0x150),
+                      (u64)*(u32 *)(desc + 0x4));
+    }
+    if (height > 0) {
+        y = 0;
+        do {
+            if (*(u64 *)(desc + 0x18) != 0) {
+                AppendGsRegPacket(0x42, *(u64 *)(desc + 0x18) & 0x000000FF000000FFULL);
+            }
+            if (*(u32 *)(desc + 0x14) & 0xFF000000) {
+                s32 y1 = y + *(s32 *)(desc + 0x10);
+                if (y1 >= height - 1) {
+                    y1 = height - 1;
+                }
+                func_0027E4D0(y, y1, 0, *(s16 *)(g_gsScreenContext + 0x150),
+                              (u64)*(u32 *)(desc + 0x14));
+            }
+            y += *(s32 *)(desc + 0x10);
+            if (*(u64 *)(desc + 0x28) != 0) {
+                AppendGsRegPacket(0x42, *(u64 *)(desc + 0x28) & 0x000000FF000000FFULL);
+            }
+            if (*(u32 *)(desc + 0x24) & 0xFF000000) {
+                s32 y1 = y + *(s32 *)(desc + 0x20);
+                if (y1 >= height - 1) {
+                    y1 = height - 1;
+                }
+                func_0027E4D0(y, y1, 0, *(s16 *)(g_gsScreenContext + 0x150),
+                              (u64)*(u32 *)(desc + 0x24));
+            }
+            y += *(s32 *)(desc + 0x20);
+        } while (y < height);
+    }
+}
+#endif
+
+/**
+ * func_0027E368 — emit the GS scissor / Z-buffer register packets for a render
+ * context.
+ *
+ * When the context's 64-bit field at +0x8 is set, appends GS reg 0x42 (SCISSOR)
+ * masked to its low + high bytes. When the +0x4 field's top byte is set, appends
+ * a Z-buffer setup: reg 0x4E (ZBUF) from g_vramZBuffer>>13 with the frame + mask
+ * bits, a scissored screen rect (func_0027E4D0 over the g_gsScreenContext dims),
+ * and a second ZBUF variant. Finally re-appends reg 0x42 (0x44 variant) when
+ * +0x8 is set.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027E368);
+#else
+extern s32 g_vramZBuffer;
+extern void func_0027E4D0(s32 y0, s32 y1, s32 x0, s32 x1, u64 arg4);
+
+void func_0027E368(void *ctx) {
+    u8 *p = (u8 *)ctx;
+
+    if (*(u64 *)(p + 0x8) != 0) {
+        AppendGsRegPacket(0x42, *(u64 *)(p + 0x8) & 0x000000FF000000FFULL);
+    }
+    if ((*(u32 *)(p + 0x4) & 0xFF000000) != 0) {
+        AppendGsRegPacket(0x4E,
+            (u64)(g_vramZBuffer >> 13) | 0x01000000ULL | 0x100000000ULL);
+        func_0027E4D0(0, *(s16 *)(g_gsScreenContext + 0x152), 0,
+                      *(s16 *)(g_gsScreenContext + 0x150), *(u32 *)(p + 0x4));
+        AppendGsRegPacket(0x4E, (u64)((g_vramZBuffer >> 13) | 0x01000000));
+    }
+    if (*(u64 *)(p + 0x8) != 0) {
+        AppendGsRegPacket(0x42, 0x0000008000000044ULL);
+    }
+}
+#endif
 
 /* DrawFullScreenTint - append a full-screen alpha-tint draw to the frame DMA
  * chain: emit a GS RGBAQ register write packed from the (r,g,b,a) components,
@@ -1308,7 +1550,30 @@ void func_0027F168(s32 x1, s32 y1, s32 x2, s32 y2, s64 z, u64 tex0) {
 }
 #endif
 
+/**
+ * func_0027F208 — draw a beveled rectangle border in a single flat color.
+ *
+ * Emits seven scissored-rect fills (func_0027E4D0) forming a 3-step bevel down
+ * each vertical edge of the [y0,y1] x [x0,x1] box: the interior fill plus, on
+ * the left (x0-2..x0, x0-3..x0-2, x0-4..x0-3) and right (x1..x1+2, x1+2..x1+3,
+ * x1+3..x1+4) sides, three progressively-inset strips whose y-range shrinks by
+ * 1/2/4. The color is packed as (colorHi<<24) | colorLo.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F208);
+#else
+void func_0027F208(s32 y0, s32 y1, s32 x0, s32 x1, s32 colorHi, s32 colorLo) {
+    s32 color = (colorHi << 24) | colorLo;
+
+    func_0027E4D0(y0,     y1,     x0,     x1,     color);
+    func_0027E4D0(y0 + 1, y1 - 1, x0 - 2, x0,     color);
+    func_0027E4D0(y0 + 2, y1 - 2, x0 - 3, x0 - 2, color);
+    func_0027E4D0(y0 + 4, y1 - 4, x0 - 4, x0 - 3, color);
+    func_0027E4D0(y0 + 1, y1 - 1, x1,     x1 + 2, color);
+    func_0027E4D0(y0 + 2, y1 - 2, x1 + 2, x1 + 3, color);
+    func_0027E4D0(y0 + 4, y1 - 4, x1 + 3, x1 + 4, color);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F348);
 
@@ -1644,7 +1909,36 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280CD0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", AppendVu1SphereMapContext);
 
+/**
+ * func_00280EC8 — configure the GS draw region / depth + alpha for a
+ * (1<<zNearBits) x (1<<lo) render target.
+ *
+ * Sets the depth mapping (func_002859E0): in mode!=0 the z-scale comes from the
+ * screen context (g_gsScreenContext+0x16E)<<13, else from the log2 formula
+ * ((0x3FF000 - 4<<clamp(zNearBits+lo,16)) >> 13) << 13. Rebuilds the viewport
+ * for the target dimensions (func_0027B858, with fixed 524288/255 params), then
+ * emits the GS TEST (0x47, alpha ref 0x30000 when mode==0) and SCISSOR (0x42)
+ * register packets.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280EC8);
+#else
+void func_00280EC8(s32 zNearBits, s32 lo, s32 mode, f32 fa) {
+    s32 zScale;
+
+    if (mode != 0) {
+        zScale = *(s16 *)(g_gsScreenContext + 0x16E) << 13;
+    } else {
+        s32 sum = zNearBits + lo;
+        s32 shift = (sum < 17) ? sum : 16;
+        zScale = ((0x3FF000 - (4 << shift)) >> 13) << 13;
+    }
+    func_002859E0(zNearBits, lo, zScale, 0);
+    func_0027B858(1 << zNearBits, 1 << lo, fa, 0.0f, 524288.0f, 255.0f, 0.0f);
+    AppendGsRegPacket(0x47, (mode != 0) ? 0 : 0x30000);
+    AppendGsRegPacket(0x42, 0x0000008000000044ULL);
+}
+#endif
 
 /* Queue the ctx1 draw-env packet, then recompute the GS screen geometry.
  * Near-miss: cc1 sibling-call-optimizes the final func_0027B988() to
