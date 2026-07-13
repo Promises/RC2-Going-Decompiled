@@ -169,7 +169,7 @@ extern s32 func_003518B8(void *stream);
 extern s32 func_00351FB0(void *stream);
 extern s32 func_00351B10(void *dmaq);
 extern s32 func_00351C20(void *dmaq);
-extern void func_003521B0(void *dmaq, void *cmd);
+extern s32 func_003521B0(void *dmaq, void *cmd);  /* returns 1 on enqueue, 0 if full (consumed by func_00352638) */
 extern s32 DebugPrintStub(char *fmt, ...);
 
 /* Helpers referenced by the native (#else) FMV ring orchestration bodies. */
@@ -191,6 +191,7 @@ extern void func_00350868(u8 *stream, u8 *src, s32 len, s32 dstOfs);
 extern s32 func_003517C0();
 extern s32 func_003518B8();
 extern s32 func_00352638(u8 *obj, u64 a, u64 b, s32 pos, s32 n);
+extern s32 func_003522C0();  /* FMV DMA-add-queue enqueue (deferred native; ret ignored) */
 extern void ZeroQwords(void *p, s32 n);
 extern s64 func_00133850(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f);
 extern void *func_0012F738(void);
@@ -384,8 +385,8 @@ void func_00350660(FmvPtsQueue *q) {
 
 /**
  * Compute the two writable spans of the pts payload ring (the producer's
- * scatter region). Returns (ptr,len) of the leading span through *pPtr0/*pLen0
- * and of the wrapped tail span through *pPtr1/*pLen1:
+ * scatter region). Returns (ptr,len) of the leading span through pPtr0/pLen0
+ * and of the wrapped tail span through pPtr1/pLen1:
  *   - stream not started: either the buffered-header window (mode 4 = whole
  *     ring from dataPtr) or the 0x28-byte packet-header staging area at
  *     (q + hdrFill + 8);
@@ -873,9 +874,37 @@ s32 func_003513F0(void) {
     return 1;
 }
 
-/* func_003513F8: CD sector read kickoff. Blocked: 8-byte-packed saves
- * (s0..s4/ra). */
+/* func_003513F8(obj, buf, byteLen, flag): kick off a CD sector read for the FMV
+ * bitstream. Converts byteLen to 2KB sectors (>>11), issues sceCdRead
+ * (func_001253A8) from the object's current LBN cursor (obj+0x4) into buf with a
+ * fixed retry mode {trycount=0x64, spindlctrl=1, datapattern=0}. When flag != 0
+ * it returns 0 without advancing (query/prime mode); otherwise it advances the
+ * LBN cursor by the sector count, waits (sceCdSync, func_00124B88(0)) and returns
+ * byteLen. Matching arm stays asm (8-byte-packed saves s0..s4/ra); the #else is
+ * the structure-exact model (the CD I/O itself is the deferred FMV native
+ * backend, but the call structure + cursor advance are exact). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003513F8);
+#else
+extern s32 func_001253A8(u32 lbn, u32 sectors, void *buf, void *mode); /* sceCdRead */
+extern s32 func_00124B88(s32 mode);                                    /* sceCdSync */
+s32 func_003513F8(u8 *obj, void *buf, s32 byteLen, s32 flag) {
+    u8 mode[4];
+    s32 sectors = byteLen >> 11; /* bytes -> 2KB sectors */
+
+    mode[0] = 0x64; /* trycount   */
+    mode[1] = 1;    /* spindlctrl */
+    mode[2] = 0;    /* datapattern */
+    mode[3] = 0;    /* pad */
+    func_001253A8(*(s32 *)(obj + 0x4), sectors, buf, mode);
+    if (flag != 0) {
+        return 0;
+    }
+    *(s32 *)(obj + 0x4) += sectors; /* advance the LBN cursor */
+    func_00124B88(0);
+    return byteLen;
+}
+#endif
 
 /**
  * Translate a DMA tag address into a sector delta from the stream start:
@@ -1101,11 +1130,43 @@ s32 func_00352058(u8 *obj, u8 *req) {
 }
 #endif
 
-/* WALL: deferred-native body had a signature inconsistency with its
-   forwarder/caller (caught by the TARGET_NATIVE compile sweep). Left bare
-   INCLUDE_ASM (no #else); revisit with the asm when the FMV native backend
-   is built. */
+/* func_003521B0(dmaq, cmd): sema-guarded enqueue of a 0x18-byte DMA-add command
+ * into the queue's ring buffer. Under the queue sema (dmaq+0x40): if there is
+ * room (count@0x58 < capacity@0x54), validates the command via func_00352058 and
+ * - unless BOTH 64-bit words (cmd+0x0, cmd+0x8) are negative (the skip sentinel) -
+ * copies {u64,u64,s32,s32} into ring[writeIdx@0x5C] (base@0x50, stride 0x18),
+ * bumps the count and wraps the write index modulo capacity, returning 1. Returns
+ * 0 if the queue is full or the command was the skip sentinel. (The prior
+ * signature inconsistency was the void-vs-s32 extern, now fixed - the caller
+ * func_00352638 checks the result == 0.) Matching arm stays asm; #else is the
+ * structure-exact model. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003521B0);
+#else
+s32 func_003521B0(void *dmaq, void *cmd) {
+    u8 *q = (u8 *)dmaq;
+    u8 *c = (u8 *)cmd;
+    s32 result = 0;
+
+    WaitSema(*(s32 *)(q + 0x40));
+    if (*(s32 *)(q + 0x58) < *(s32 *)(q + 0x54)) {   /* count < capacity */
+        func_00352058(q, c);
+        if (*(s64 *)(c + 0x0) >= 0 || *(s64 *)(c + 0x8) >= 0) {
+            u8 *slot = *(u8 **)(q + 0x50) + *(s32 *)(q + 0x5C) * 0x18;
+            *(s64 *)(slot + 0x0)  = *(s64 *)(c + 0x0);
+            *(s64 *)(slot + 0x8)  = *(s64 *)(c + 0x8);
+            *(s32 *)(slot + 0x10) = *(s32 *)(c + 0x10);
+            *(s32 *)(slot + 0x14) = *(s32 *)(c + 0x14);
+            *(s32 *)(q + 0x58) += 1;
+            *(s32 *)(q + 0x5C) =
+                (*(s32 *)(q + 0x5C) + 1) % *(s32 *)(q + 0x54);
+            result = 1;
+        }
+    }
+    SignalSema(*(s32 *)(q + 0x40));
+    return result;
+}
+#endif
 
 /* TODO(hle): needs PS2 graphics/IO HLE backend — scans the IPU frame-slot ring
    for the range covering the channel's current REG_DMAC_4_IPU_TO_MADR /
@@ -1221,12 +1282,31 @@ s32 func_00352628(FmvStream *s, s32 state) {
 }
 
 /* func_00352638: queue an IPU DMA-add command {addr, size, pos -
- * obj->streamStart, tag} for a bitstream span. Best attempt 54%: the
- * pinned cc1 schedules the obj->0x48 load + subu early (or, with volatile
- * pinning, pushes the arena load late and pads the jal delay slot) where
- * the original loads obj->0x48 late and puts the rel store in the jal
- * delay slot - prologue-scheduling shapes not reachable from this source. */
+ * obj->streamStart, tag} for a bitstream span into the arena's DMA-add queue
+ * (g_pFmvArenaBase+0xD9090); returns the enqueue result. Best attempt 54%
+ * (matching arm): the pinned cc1 schedules the obj->0x48 load + subu early (or,
+ * with volatile pinning, pushes the arena load late and pads the jal delay slot)
+ * where the original loads obj->0x48 late and puts the rel store in the jal delay
+ * slot - prologue-scheduling shapes not reachable from this source. Matching arm
+ * stays asm; the #else is the structure-exact functional model. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352638);
+#else
+s32 func_00352638(u8 *obj, u64 addr, u64 size, s32 pos, s32 tag) {
+    struct {
+        u64 addr;
+        u64 size;
+        s32 pos;
+        s32 tag;
+    } cmd;
+
+    cmd.addr = addr;
+    cmd.size = size;
+    cmd.pos = pos - *(s32 *)(obj + 0x48); /* pos relative to obj->streamStart */
+    cmd.tag = tag;
+    return func_003521B0(g_pFmvArenaBase + 0xD9090, &cmd);
+}
+#endif
 
 /**
  * Forward to the total-bytes-queued read of the embedded stream object.
@@ -1261,10 +1341,33 @@ s32 func_00352780(FmvStream *obj) {
 }
 #endif
 
-/* func_003527C8: the FMV decode-thread main loop. Blocked: 8-byte-packed
- * saves (s0/s1/s2/ra) plus a delay-slot %gp_rel read of g_pFmvArenaBase
- * mixed with its absolute form (the reload-artifact wall). */
+/* func_003527C8: the FMV decode-thread main loop. Resets the embedded stream
+ * ring (func_00351660 on obj+0x48), initialises the arena frame queue
+ * (func_00352B90 at +0xD9168), primes the host frame reader (func_00352868), then
+ * decodes frames (func_00352620) as long as the arena's "more data" flag
+ * (+0xD9174) stays set and no frame reports completion (returns 1), and finally
+ * drives the stream to its terminal state 3 (func_00352628). Matching arm stays
+ * asm (8-byte-packed saves + a %gp_rel/absolute reload-artifact wall on
+ * g_pFmvArenaBase); the #else is the structure-exact model (the frame decode
+ * itself is the deferred FMV native backend, but the loop structure is exact). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003527C8);
+#else
+extern void func_00351660(u8 *stream);
+extern s32 func_00352868(u8 *host);
+extern void func_00352B90(FmvFrameQueue *q);
+s32 func_003527C8(FmvStream *obj) {
+    func_00351660((u8 *)obj + 0x48);
+    func_00352B90((FmvFrameQueue *)(g_pFmvArenaBase + 0xD9168));
+    func_00352868((u8 *)obj);
+    while (*(s32 *)(g_pFmvArenaBase + 0xD9174) != 0) {
+        if (func_00352620(obj) == 1) {
+            break;
+        }
+    }
+    return func_00352628(obj, 3);
+}
+#endif
 
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352868);
