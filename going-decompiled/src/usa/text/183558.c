@@ -377,6 +377,10 @@ void func_00283920(Vec4f dst, f32 len, const Vec4f src) {
         dst[0] = 0.0f;
         dst[1] = 0.0f;
     }
+    /* Only .xy is computed; the full sqc2 stores back .z/.w unchanged from the
+     * lqc2'd src (preserved on both the compute and zero paths). */
+    dst[2] = src[2];
+    dst[3] = src[3];
 }
 #endif
 
@@ -396,6 +400,8 @@ s32 func_00283968(Vec4f dst, f32 minLen, const Vec4f src) {
         dst[0] = src[0] * q;
         dst[1] = src[1] * q;
         dst[2] = src[2] * q;
+        /* .w is not scaled; the full sqc2 stores it back unchanged from src. */
+        dst[3] = src[3];
         return 1;
     }
     return 0;
@@ -426,6 +432,9 @@ void func_002839D8(Vec4f dst, const Vec4f src, const Vec4f dir) {
         dst[0] = vx + px;
         dst[1] = vy + py;
         dst[2] = vz + pz;
+        /* Reflection touches only .xyz; vf1.w is never negated (the vsub/vadd
+         * are .xyz), so the full sqc2 stores the original src.w — not -src.w. */
+        dst[3] = src[3];
     } else {
         dst[0] = src[0];
         dst[1] = src[1];
