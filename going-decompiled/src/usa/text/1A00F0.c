@@ -228,9 +228,133 @@ void func_002A0480(Moby *moby, s32 *out1, s32 *out2) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A04D8);
+/* func_002A04D8 — pose and average two collision-mesh keyframe vectors for a
+ * moby into dst. Locates the class-header entry (header at obj+0x24, base index
+ * at header+0x2C, plus arg1) and takes hi = max of the two frame counts at
+ * entry+0x6 / entry+0xE. When hi >= 0 it skins the collision mesh
+ * (SkinMobyCollisionMesh) into the SPR cache. It then loads the two packed
+ * keyframe vectors (func_00283AE0 -> vecA/vecB, w set to 1), optionally samples
+ * the per-frame scratchpad vectors at 0x70000000 + count*64 (func_00283A70),
+ * scales each by (obj+0x2C)/1024, applies the moby's 3x3 rotation (func_00283A48
+ * over obj+0xC0) and translation (Vec4AddVu0 obj+0x10), averages the two into dst
+ * (add then *0.5), and stores the func_002837F8 scalar into dst.w. Callee roles
+ * func_00283A48/func_00283AE0/func_002837F8 UNCONFIRMED (named by shape); helper
+ * signatures cross-referenced to text/183558.c (scale families take f32 2nd).
+ * The matching build keeps the asm; faithful TARGET_NATIVE coverage arm. */
+#ifdef TARGET_NATIVE
+extern void Vec4AddVu0(void *dst, void *a, void *b);
+extern void Vec4ScaleVu0(void *dst, f32 s, void *src);
+extern void func_00283A48(void *out, void *v, void *m);
+extern void func_00283A70(void *out, void *v, void *m);
+extern void func_00283AE0(void *dst, u64 packed);
+extern f32  func_002837F8(void *a, void *b);
+extern void SkinMobyCollisionMesh(void *entry, s32 count, u32 flags);
+#endif
 
+#ifndef TARGET_NATIVE
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A04D8);
+#else
+void func_002A04D8(void *obj, s32 arg1, void *dst) {
+    u8 *o = (u8 *)obj;
+    u8 *hdr = *(u8 **)(o + 0x24);
+    u8 *entry = hdr + *(u8 *)(hdr + 0x2C) * 16 + arg1 * 16 + 0x40;
+    s16 a = *(s16 *)(entry + 0x6);
+    s16 b = *(s16 *)(entry + 0xE);
+    s16 hi = (a < b) ? b : a;
+    f32 vecA[4];
+    f32 vecB[4];
+
+    if (hi >= 0) {
+        SkinMobyCollisionMesh(entry, hi + 1, 0x80000000);
+    }
+    func_00283AE0(vecA, *(u64 *)(entry + 0));
+    func_00283AE0(vecB, *(u64 *)(entry + 8));
+    vecB[3] = 1.0f;
+    vecA[3] = 1.0f;
+    if (hi >= 0) {
+        func_00283A70(vecA, vecA, (void *)(0x70000000 + (*(s16 *)(entry + 0x6) << 6)));
+        func_00283A70(vecB, vecB, (void *)(0x70000000 + (*(s16 *)(entry + 0xE) << 6)));
+    }
+    Vec4ScaleVu0(vecA, *(f32 *)(o + 0x2C) * (1.0f / 1024.0f), vecA);
+    Vec4ScaleVu0(vecB, *(f32 *)(o + 0x2C) * (1.0f / 1024.0f), vecB);
+    func_00283A48(vecA, vecA, o + 0xC0);
+    func_00283A48(vecB, vecB, o + 0xC0);
+    Vec4AddVu0(vecA, vecA, o + 0x10);
+    Vec4AddVu0(vecB, vecB, o + 0x10);
+    Vec4AddVu0(dst, vecA, vecB);
+    Vec4ScaleVu0(dst, 0.5f, dst);
+    *(f32 *)((u8 *)dst + 0xC) = func_002837F8(dst, vecA);
+}
+#endif
+
+/* func_002A0678 — transform a moby's indexed sub-vector set into world space.
+ * The moby's class header (obj+0x24) holds a count at +0x2E; the entry table
+ * sits at header + count*16. Byte arg3 offsets into that table to a sentinel:
+ * if the following byte is 0xFF (empty) it returns 0, else that byte indexes the
+ * source vec4 (entry + idx*16). The source is scaled by (obj+0x2C)*(1/1024) via
+ * ScaleVec4IncludingW, then transformed by the moby's matrix rows (obj+0xC0 /
+ * obj+0x10) into dst. When outArray is non-null and the entry's count field
+ * (+0x16) is positive, each of those extra vec4s is likewise loaded
+ * (func_00283AE0), scaled (Vec4ScaleVu0) and w-terminated (1.0) into outArray.
+ * Returns the entry count. Callee roles func_00283A48/func_00283AE0 UNCONFIRMED
+ * (named by shape); the 8-byte func_00283AE0 arg is the raw qword the asm loads.
+ * The matching build keeps the asm; faithful TARGET_NATIVE coverage arm. */
+#ifdef TARGET_NATIVE
+/* Signatures match text/183558.c: the scale families take the f32 as the 2nd
+ * param (dst, s, src), NOT trailing. */
+extern void ScaleVec4IncludingW(void *dst, f32 s, void *src);
+extern void Vec4AddVu0(void *dst, void *a, void *b);
+extern void Vec4ScaleVu0(void *dst, f32 s, void *src);
+extern void func_00283A48(void *out, void *v, void *m);
+extern void func_00283AE0(void *dst, u64 packed);
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0678);
+#else
+s32 func_002A0678(void *obj, void *dst, void *outArray, s32 arg3) {
+    u8 *hdr = *(u8 **)((u8 *)obj + 0x24);
+    s16 n = *(s16 *)(hdr + 0x2E);
+    u8 *entry;
+    u8 *sub;
+    u8 *p;
+    f32 scale;
+    s16 count;
+    u32 idx;
+
+    if (n == 0) {
+        return 0;
+    }
+    entry = hdr + n * 16;
+    p = entry + arg3;
+    if (*(u8 *)(p + 1) == 0xFF) {
+        return 0;
+    }
+    idx = *(u8 *)(p + 1);
+    scale = *(f32 *)((u8 *)obj + 0x2C) * (1.0f / 1024.0f);
+    sub = entry + idx * 16;
+    ScaleVec4IncludingW(dst, scale, sub);
+    sub += 0x10;
+    func_00283A48(dst, dst, (u8 *)obj + 0xC0);
+    Vec4AddVu0(dst, dst, (u8 *)obj + 0x10);
+
+    count = *(s16 *)(sub + 6);
+    if (outArray != 0 && count > 0) {
+        u8 *loopDst = (u8 *)outArray;
+        s16 i = count;
+        do {
+            func_00283AE0(loopDst, *(u64 *)sub);
+            sub += 8;
+            Vec4ScaleVu0(loopDst,
+                         *(f32 *)((u8 *)obj + 0x2C) * (1.0f / 1024.0f), loopDst);
+            *(f32 *)(loopDst + 0xC) = 1.0f;
+            i--;
+            loopDst += 0x10;
+        } while (i != 0);
+    }
+    return count;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0798);
 
@@ -421,13 +545,200 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0B80);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0C20);
 
+/* CloseMobyDmaSegment — close the moby texture-upload DMA segment. Reserves a
+ * DMATAG qword at g_frameDmaCursor and back-patches the segment's open tag
+ * (g_mobySegmentOpenTag) into a CNT tag chaining to it, uploads the moby
+ * textures (UploadMobyTextures over g_vramAllocCursor) + appends the default
+ * TEX0 flush, then lays two more CNT DMATAG qwords closing the chain. DMATAGs
+ * are 4 words (0x10 bytes); 0x20000000 = CNT. g_frameDmaCursor is re-read after
+ * the upload/flush calls (they append through it). The matching build keeps the
+ * asm; this is the faithful TARGET_NATIVE coverage arm. */
+#ifdef TARGET_NATIVE
+extern u32  *g_frameDmaCursor;         /* 0x1B2228 per-frame DMA write pointer */
+extern u32  *g_mobySegmentOpenTag;     /* 0x1B1AD0 moby draw-segment open tag  */
+extern void *g_vramAllocCursor;        /* 0x1A72D0 VRAM bump cursor            */
+extern void  UploadMobyTextures(void *vramCursor);
+extern void  AppendTexFlushDefaultTex0(void);
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", CloseMobyDmaSegment);
+#else
+void CloseMobyDmaSegment(void) {
+    u32 *start = g_frameDmaCursor;
 
+    g_frameDmaCursor += 4;
+    g_mobySegmentOpenTag[0] = 0x20000000;
+    g_mobySegmentOpenTag[1] = (u32)g_frameDmaCursor;
+    g_mobySegmentOpenTag[2] = 0;
+    g_mobySegmentOpenTag[3] = 0;
+
+    UploadMobyTextures(g_vramAllocCursor);
+    AppendTexFlushDefaultTex0();
+
+    g_frameDmaCursor[0] = 0x20000000;
+    g_frameDmaCursor[1] = (u32)(g_mobySegmentOpenTag + 4);
+    g_frameDmaCursor[2] = 0;
+    g_frameDmaCursor[3] = 0;
+    g_frameDmaCursor += 4;
+
+    start[0] = 0x20000000;
+    start[3] = 0;
+    start[1] = (u32)g_frameDmaCursor;
+    start[2] = 0;
+}
+#endif
+
+/* PatchMobyPacketTex0 — stamp texture-VRAM coordinates into every loaded moby
+ * class's GIF packets. Walks the present-class-slot list at
+ * &g_mobyClassDataSizes[0xF0] (s32 slot indices, terminated by a negative
+ * entry). For each slot's class header it follows the texture-binding node
+ * chain at header+0x20 (nodes stride 0x10; node+0xC packs the GIF-packet-entry
+ * pointer in bits 0..30 and a "has next node" flag in bit 31). Each node holds
+ * an inline tex-index byte list (from node+0, terminated by 0xFF); per index it
+ * looks up g_mobyTexVramTable[idx] (two s16 VRAM fields) and OR's each non-zero
+ * field into the low 14 bits of the packet's +0x30 / +0x40 TEX0 words (packet
+ * stride 0x40). The matching build keeps the asm; this is the faithful
+ * TARGET_NATIVE coverage arm. */
+#ifdef TARGET_NATIVE
+extern u32   g_mobyClassDataSizes[];   /* 0x1D0D80  &[0xF0] = present-slot list */
+extern void *g_mobyClassHeaders[];     /* 0x1CDB00  class header ptr per slot   */
+extern s16   g_mobyTexVramTable[];     /* 0x1D0980  2 s16 VRAM fields per tex    */
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", PatchMobyPacketTex0);
+#else
+void PatchMobyPacketTex0(void) {
+    s32 *classSlot = (s32 *)&g_mobyClassDataSizes[0xF0];
 
+    if (*classSlot < 0) {
+        return;
+    }
+    for (;;) {
+        u8 *header = (u8 *)g_mobyClassHeaders[*classSlot];
+        u8 *node = *(u8 **)(header + 0x20);
+
+        for (;;) {
+            s32 nodeLink = *(s32 *)(node + 0xC);
+
+            if (*node != 0xFF) {
+                u8 *packet = (u8 *)(nodeLink & 0x7FFFFFFF);
+                u8 *cursor = node;
+
+                do {
+                    s16 *vram = &g_mobyTexVramTable[*cursor * 2];
+
+                    if (vram[0] != 0) {
+                        *(u32 *)(packet + 0x30) =
+                            (*(u32 *)(packet + 0x30) & 0xFFFFC000) | vram[0];
+                    }
+                    if (vram[1] != 0) {
+                        *(u32 *)(packet + 0x40) =
+                            (*(u32 *)(packet + 0x40) & 0xFFFFC000) | vram[1];
+                    }
+                    cursor++;
+                    packet += 0x40;
+                } while (*cursor != 0xFF);
+            }
+            node += 0x10;
+            if (nodeLink < 0) {
+                break;
+            }
+        }
+        classSlot++;
+        if (*classSlot < 0) {
+            break;
+        }
+    }
+}
+#endif
+
+/* func_002A0DF0 — recompute the moby glow segment's 2D light direction from the
+ * hero. func_002A1320 fills a 2-float vector from g_pHeroMoby; func_00283BF8
+ * turns it into an angle, and the sin/cos-style pair func_00283B30 /
+ * func_00283B48 is scaled by 0.14 into the glow parameter block at
+ * g_deferredSegment2Tag+0x10 (cos) / +0x14 (sin), with a fixed -0.99 at +0x18.
+ * Callee roles UNCONFIRMED (named by shape). The matching build keeps the asm;
+ * this is the faithful TARGET_NATIVE coverage arm. */
+#ifdef TARGET_NATIVE
+extern s32   g_deferredSegment2Tag;
+extern void *g_pHeroMoby;              /* 0x18C0B0 hero (Ratchet) moby         */
+extern void  func_002A1320(void *moby, f32 *outVec);
+extern f32   func_00283BF8(f32 a, f32 b);
+extern f32   func_00283B30(f32 x);
+extern f32   func_00283B48(f32 x);
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0DF0);
+#else
+void func_002A0DF0(void) {
+    f32 vec[2];
+    f32 angle;
+    f32 *glow = (f32 *)((u8 *)&g_deferredSegment2Tag + 0x10);
 
+    func_002A1320(g_pHeroMoby, vec);
+    angle = func_00283BF8(vec[0], vec[1]);
+    glow[0] = func_00283B30(angle) * 0.14f;
+    glow[2] = -0.99f;
+    glow[1] = func_00283B48(angle) * 0.14f;
+}
+#endif
+
+/* CloseMobyGlowSegment — close the deferred moby-glow draw segment. If no glows
+ * were queued this frame (g_mobyGlowCount == 0) it writes just an END DMATAG
+ * (0x10000000) into the segment tag at *g_deferredSegment2Tag. Otherwise it
+ * reserves a CNT qword, builds the glow records (BuildMobyGlowRecords) and emits
+ * their packets (EmitMobyGlowPackets over g_mobyGlowWorkBuf), then closes the
+ * chain with two more CNT DMATAGs. g_deferredSegment2Tag holds the segment-tag
+ * build pointer; g_frameDmaCursor is re-read after the calls. The matching build
+ * keeps the asm; this is the faithful TARGET_NATIVE coverage arm. */
+#ifdef TARGET_NATIVE
+extern s32  g_mobyGlowCount;           /* 0x1B1AFC glow records queued         */
+extern u8   g_mobyGlowWorkBuf[];       /* 0x1EF260 glow record work buffer     */
+extern void BuildMobyGlowRecords(void);
+extern void EmitMobyGlowPackets(void *workBuf);
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", CloseMobyGlowSegment);
+#else
+void CloseMobyGlowSegment(void) {
+    u32 *tag;
+
+    if (g_mobyGlowCount == 0) {
+        tag = (u32 *)g_deferredSegment2Tag;
+        tag[0] = 0x10000000;
+        tag[1] = 0;
+        tag[2] = 0;
+        tag[3] = 0;
+    } else {
+        u32 *start = g_frameDmaCursor;
+
+        g_frameDmaCursor += 4;
+        tag = (u32 *)g_deferredSegment2Tag;
+        tag[0] = 0x20000000;
+        tag[1] = (u32)g_frameDmaCursor;
+        tag[2] = 0;
+        tag[3] = 0;
+
+        BuildMobyGlowRecords();
+        EmitMobyGlowPackets(g_mobyGlowWorkBuf);
+
+        g_frameDmaCursor[0] = 0x20000000;
+        g_frameDmaCursor[1] = (u32)((u32 *)g_deferredSegment2Tag + 4);
+        g_frameDmaCursor[2] = 0;
+        g_frameDmaCursor[3] = 0;
+        g_frameDmaCursor += 4;
+
+        start[0] = 0x20000000;
+        start[3] = 0;
+        start[1] = (u32)g_frameDmaCursor;
+        start[2] = 0;
+    }
+}
+#endif
 
 /* RunSprRenderPipeline — kick the sprite/moby render pass. Flushes any pending
  * RPC (func_0011AEA0(0)), stages the 0x800-byte DMA/GIF template (D_238E80) into
@@ -489,9 +800,68 @@ void func_002A1058(void) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", BeginMobyDrawSegment);
+/* BeginMobyDrawSegment — open the per-frame moby draw segment. Appends the VIF
+ * code-ref tag (D_10FFC0 / D_10FFB0), selects VU1 program 6, kicks the VIF0
+ * chain (D_100080) and appends the segment's GS reg packet (reg 0x47 = SCISSOR,
+ * value 0x5360B). Then it opens the DMA segment: remembers the current
+ * g_frameDmaCursor as the open tag, resets the VRAM bump cursor to
+ * g_vramDynamicBase, reserves a qword, points the frame-DMA scratch at
+ * g_renderTaskWorkBuf-0x10000, seeds the VU-chain cursor from g_renderTaskList,
+ * and clears g_deferredSegment2Tag. The matching build keeps the asm; this is
+ * the faithful TARGET_NATIVE coverage arm. */
+#ifdef TARGET_NATIVE
+extern u16   D_10FFB0;                  /* VIF code-ref tag qword count         */
+extern u8    D_10FFC0[];                /* VIF code-ref tag template            */
+extern u8    D_100080[];                /* VIF0 kick chain                      */
+extern s32   g_activeVu1Program;        /* 0x1B161C uploaded VU1 microcode id   */
+extern void *g_vramDynamicBase;         /* 0x1A72D4 VRAM dynamic region base    */
+extern void *g_mobyVuChainCursor;       /* 0x1B1AD8 moby VU/DMA chain cursor    */
+extern void  AppendVifCodeRefTag(void *code, u32 count);
+extern void  KickVif0Chain(void *chain);
+extern void  AppendGsRegPacket(s32 reg, u32 data);
+#endif
 
+#ifndef TARGET_NATIVE
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", BeginMobyDrawSegment);
+#else
+void BeginMobyDrawSegment(void) {
+    AppendVifCodeRefTag(D_10FFC0, D_10FFB0);
+    g_activeVu1Program = 6;
+    KickVif0Chain(D_100080);
+    AppendGsRegPacket(0x47, 0x5360B);
+
+    g_mobySegmentOpenTag = g_frameDmaCursor;
+    g_vramAllocCursor = g_vramDynamicBase;
+    g_frameDmaCursor = (u32 *)((u8 *)g_frameDmaCursor + 0x10);
+    ((u32 *)&g_frameDmaCursor)[1] = (u32)((u8 *)g_renderTaskWorkBuf - 0x10000);
+    g_mobyVuChainCursor = g_renderTaskList;
+    g_deferredSegment2Tag = 0;
+}
+#endif
+
+/* func_002A1138 — build the moby VU1 render chain for one moby table. Appends
+ * the segment's GS SCISSOR reg packet (0x47 / 0x5360B), flushes the pending RPC
+ * (func_0011AEA0(0)), swaps in the procedural-anim bounds scratch
+ * (func_002A1058), then extends the VU chain (BuildMobyVuChain over the current
+ * g_mobyVuChainCursor), saves the scratch back (func_002A1028) and rewinds the
+ * cursor by one qword. The matching build keeps the asm; faithful TARGET_NATIVE
+ * coverage arm. */
+#ifdef TARGET_NATIVE
+extern void *BuildMobyVuChain(void *tableBase, void *cursor, s32 count, s32 flag);
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A1138);
+#else
+void func_002A1138(void *tableBase, s32 count) {
+    AppendGsRegPacket(0x47, 0x5360B);
+    func_0011AEA0(0);
+    func_002A1058();
+    g_mobyVuChainCursor = BuildMobyVuChain(tableBase, g_mobyVuChainCursor, count, 0);
+    func_002A1028();
+    g_mobyVuChainCursor = (void *)((u8 *)g_mobyVuChainCursor - 0x10);
+}
+#endif
 
 /*
  * Closes out the per-frame moby render chain: flush the moby DMA segment, run
