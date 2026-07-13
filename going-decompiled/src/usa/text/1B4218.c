@@ -120,8 +120,8 @@ typedef struct FileLoadVoiceState {
     /* 0x0C */ u8 pad0C[0x4];
     /* 0x10 */ s32 fileLoadSectorCount;   /* active read sector count */
     /* 0x14 */ s32 fileLoadDest;          /* active read destination address */
-    /* 0x18 */ void *pLoadCallback;       /* completion callback fn(arg, success) */
-    /* 0x1C */ s32 loadCallbackArg;       /* completion callback first arg */
+    /* 0x18 */ void *pLoadCallback;       /* completion callback fn(void *ctx, s32 status) — CONFIRMED */
+    /* 0x1C */ s32 loadCallbackArg;       /* raw word holding the callback's ctx pointer (e.g. &D_1A9330) */
     /* 0x20 */ u8 pad20[0x4];
     /* 0x24 */ s32 soundBankId;           /* loaded global sound-bank id, init -1 */
     /* 0x28 */ u8 pad28[0x4];
@@ -241,10 +241,131 @@ typedef struct LevelObject {
 } LevelObject;
 extern LevelObject D_2403D0[];              /* 0x2403D0 level-object table */
 
-/* Per-frame moby threat flash + burst update.
- * WALL: save-layout — saves 8 callee-saves + $ra at 8-byte spacing (the pinned
- * cc1 packs at 16-byte spacing), plus float register temps. */
+/* Per-frame moby threat-flash + warning-burst update (0x2B4298).
+ *
+ * Walks up to 15 threat slots on a moby, comparing a rising threat gauge
+ * (arg3) against per-slot level bytes (arg2). Two passes:
+ *   1. FLASH pass (only on the frame the cached gauge is still 0 and the live
+ *      gauge is nonzero): lights the moby's per-slot flash bits (moby+0x7C) for
+ *      every active slot whose stored level is below the current fade fraction.
+ *   2. BURST pass (only when the gauge has just fallen below its cached peak):
+ *      for each lit slot whose level now exceeds the fade fraction, spawns a
+ *      warning-burst effect (func_00273740) aimed on a random spread around the
+ *      camera yaw, clears the slot's flash bit, and plays a single global alert
+ *      sound (id 7) for the first burst of the frame.
+ * The cached peak (arg2->lastValue) is refreshed to the live gauge on exit.
+ *
+ * arg1 = moby, arg2 = per-slot threat state (15 level bytes + a cached f32 peak
+ * at +0x10), arg3 = the live threat gauge (f32 value at +0, s16 slot-count at
+ * +0x4). Returns 1 if any burst was spawned this frame, else 0.
+ *
+ * EU divergence: the per-frame rate constant is NTSC 1/60 (0x3C888889); the PAL
+ * (EU) build uses 1/50 (0x3CA3D70B) — see the SpawnParticle* frame-time notes.
+ * The deg->rad factor (0x3C8EFA36) and clamp/scale consts are region-invariant.
+ *
+ * WALL (matching build): 8-byte-spaced callee-save layout (the pinned cc1 packs
+ * at 16-byte spacing) plus $f20/$f21/$f22 temps — stays INCLUDE_ASM. This #else
+ * is faithful COVERAGE only; the matching arm is unchanged. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", UpdateMobyThreatFlashAndBurst);
+#else
+/* Per-slot threat state (arg2). */
+typedef struct MobyThreatState {
+    /* 0x00 */ u8  level[16];   /* per-slot threat level bytes (slots 0..14 used) */
+    /* 0x10 */ f32 lastValue;   /* gauge peak cached from the previous frame */
+} MobyThreatState;
+
+/* Live threat gauge (arg3). */
+typedef struct MobyThreatGauge {
+    /* 0x00 */ f32 value;       /* current threat value */
+    /* 0x04 */ s16 slotCount;   /* divisor: number of slots the value spans */
+} MobyThreatGauge;
+
+extern void func_002A0480(Moby *moby, s32 *outMask, s32 *out2);  /* 0x2A0480 slot dims */
+extern s32  FloatToInt(f32 x);                                   /* 0x2846A0 cvt.w.s;mfc1 */
+extern f32  WrapAnglePiSum(f32 a, f32 b);                        /* 0x284548 wrap a+b to [-pi,pi] */
+extern f32  func_00283B30(f32 angle);                            /* 0x283B30 cos-like leaf (VU0) */
+extern f32  func_00283B48(f32 angle);                            /* 0x283B48 sin-like leaf (VU0) */
+extern f32  GetRandomFloatSigned(f32 lo, f32 hi);               /* 0x2A8740 random +/-mag in lo..hi */
+extern f32  GetRandomFloatRange(f32 lo, f32 hi);               /* 0x2A86E0 uniform lo..hi */
+extern void PlayGlobalSound(s32 id, s32 a, s32 b);              /* 0x2E6C90 fire-and-forget UI sound */
+extern u8   g_cameraState[];                                    /* 0x1B5180; +0x158 = camera yaw f32 */
+extern f32  D_1AA030;                                          /* gp-rel f32 burst-spawn param */
+/* Burst-effect spawner (opaque; called by its recovered register proto per the
+ * physics-park guardrail — arg *semantics* past the aim vec are unconfirmed).
+ * Returns the spawned effect (or 0); the caller stores an update-callback ptr at
+ * effect+0x64. */
+extern void *func_00273740(Moby *moby, s32 one, s32 mobyAA, s32 slot,
+                           void *posVec, void *extentVec, void *velVec,
+                           s32 mask, f32 f0, f32 f1);            /* 0x273740 */
+extern void func_00311A80(void);                               /* 0x311A80 burst update callback */
+
+s32 UpdateMobyThreatFlashAndBurst(Moby *moby, MobyThreatState *ts, MobyThreatGauge *gauge)
+{
+    s32 didBurst = 0;
+    f32 gaugeVal;
+    s32 i;
+
+    /* FLASH pass: only on the frame the cached peak is still 0 and the gauge is live. */
+    if (ts->lastValue == 0.0f && gauge->value != 0.0f) {
+        s32 slotMask;      /* out1 from func_002A0480: per-slot active bitmask */
+        s32 slotDim;       /* out2 (unused here, written by the callee) */
+        f32 v = gauge->value;
+        s32 fadeByte;
+
+        func_002A0480(moby, &slotMask, &slotDim);
+        if (v < 0.0f) v = 0.0f;
+        fadeByte = FloatToInt(v / (f32)gauge->slotCount * 255.0f) & 0xFF;
+        for (i = 0; i < 15; i++) {
+            if ((slotMask & (1 << i)) && ts->level[i] != 0 && ts->level[i] < fadeByte) {
+                *(u16 *)((u8 *)moby + 0x7C) |= (u16)(1 << i);
+            }
+        }
+    }
+
+    /* BURST pass: only when the gauge has fallen below its cached peak. */
+    gaugeVal = gauge->value;
+    if (gaugeVal < ts->lastValue) {
+        s32 fadeByte2;
+        s32 bit = 1;                       /* 1 << i, shifted each slot */
+        f32 v2 = gaugeVal;
+
+        if (v2 < 0.0f) v2 = 0.0f;
+        fadeByte2 = FloatToInt(v2 / (f32)gauge->slotCount * 255.0f) & 0xFF;
+        for (i = 0; i < 15; i++, bit <<= 1) {
+            if ((*(u16 *)((u8 *)moby + 0x7C) & bit) && fadeByte2 < ts->level[i]) {
+                f32 heading, dist, perFrame;
+                f32 vel[3];
+                void *fx;
+
+                /* Aim on a random +/-90..120 deg spread about the camera yaw. */
+                heading = WrapAnglePiSum(GetRandomFloatSigned(90.0f, 120.0f) * 0.017453292f,
+                                         *(f32 *)(g_cameraState + 0x158));
+                dist = GetRandomFloatRange(2.0f, 4.0f);
+                perFrame = dist * (1.0f / 60.0f);        /* NTSC; EU = 1/50 */
+                vel[0] = func_00283B30(heading) * perFrame;   /* x = cos(heading) * d/60 */
+                vel[1] = func_00283B48(heading) * perFrame;   /* y = sin(heading) * d/60 */
+                vel[2] = GetRandomFloatRange(5.0f, 8.0f) * (1.0f / 60.0f);  /* z */
+
+                fx = func_00273740(moby, 1, (s32)*(s16 *)((u8 *)moby + 0xAA), i,
+                                   (u8 *)moby + 0x10, (u8 *)moby + 0xF0, vel,
+                                   0xFF, D_1AA030, 15.0f);
+                if (fx != 0) {
+                    *(void **)((u8 *)fx + 0x64) = (void *)func_00311A80;
+                }
+                *(u16 *)((u8 *)moby + 0x7C) &= (u16)~bit;   /* clear this slot's flash bit */
+                if (!didBurst) {
+                    PlayGlobalSound(7, 0, 0);
+                }
+                didBurst = 1;
+            }
+        }
+    }
+
+    ts->lastValue = gauge->value;
+    return didBurst;
+}
+#endif
 
 /* --- moby auto-target acquisition: shared globals + leaves ----------------
  * D_1A8CA0 (0x1A8CA0) is the radial-gravity mode flag — part of the documented
@@ -938,9 +1059,96 @@ void ApplyMobyLocalTransformDelta(Moby *moby, Vec4 *posDelta, f32 rotX, f32 rotY
  * INCLUDE_ASM permanently. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B50B8);
 
-/* Initialise a moby's spring-follow state block.
- * WALL: save-layout — 8 callee-saves + $ra at 8-byte spacing, with fp temps. */
+/* Initialise a moby's spring-follow state block (0x2B50C0).
+ *
+ * Populates the caller's `state` block from a moby's transform plus a set of
+ * per-channel default vectors, each of which the caller may override:
+ *   state[0x00] (Vec4) = base position. If `targetPos` is given, it is the
+ *      target transformed by the moby orientation (moby+0xC0) then offset by the
+ *      moby position (moby+0x10); otherwise it is just the moby position.
+ *   state[0x10] (Vec4) = the raw target vector (only when `targetPos` given).
+ *   state[0x20] (Vec4) = facing vector — `facingVec` if given, else the moby's
+ *      own facing at +0xF0.
+ *   state[0x48..0xA7] = eight consecutive 3-float channels. Each channel is
+ *      filled from its caller override pointer when non-null, otherwise from a
+ *      const default vector (D_1AA0xx). Two channels are special: +0x84 is
+ *      seeded from GetRandomAngle (one draw per element) and +0x90 is scaled by
+ *      a small constant (0x3998825C). Also raises the moby's spring-follow-active
+ *      mode bit (0x100 at moby+0x34).
+ *
+ * The overrides arrive as arguments 5..11 (7 stack/reg pointers); each is named
+ * here by the state offset it feeds. Region-invariant (no PAL/NTSC constants).
+ *
+ * WALL (matching build): 8 callee-saves + $ra at 8-byte spacing plus $f20 temp
+ * — stays INCLUDE_ASM. In the original the const defaults are copied to stack
+ * scratch and the override selection is a movn/movz over those buffers; that is
+ * a register-materialisation artifact, so this faithful #else selects the const
+ * default pointer directly (same bytes read). COVERAGE only. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", InitMobySpringFollowState);
+#else
+/* Const per-channel default vectors (each a 3-float vec3), in the unit rodata. */
+extern const f32 D_1AA060[3], D_1AA070[3], D_1AA080[3], D_1AA090[3];
+extern const f32 D_1AA0A0[3], D_1AA0B0[3];
+
+extern void func_00283A48(Vec4 *dst, Vec4 *src, Vec4 *matrix);  /* 0x283A48 transform pt by matrix (sibling of func_00283A70) */
+extern void Vec4AddVu0(Vec4 *dst, Vec4 *a, Vec4 *b);            /* 0x283670 dst = a + b (VU0) */
+extern f32  GetRandomAngle(void);                               /* 0x2A87A8 random angle -pi..pi */
+
+/* Per-element scale for the +0x90 channel (raw 0x3998825C ~= 2.9089e-4f). */
+static const union { u32 u; f32 f; } kChan90Scale = { 0x3998825C };
+
+void InitMobySpringFollowState(Moby *moby, void *state,
+                               Vec4 *targetPos, Vec4 *facingVec,
+                               const f32 *ovr9C, const f32 *ovr90,
+                               const f32 *ovr48, const f32 *ovr54,
+                               const f32 *ovr6C, const f32 *ovr60,
+                               const f32 *ovr78)
+{
+    u8 *st = (u8 *)state;
+    const f32 *s48, *s54, *s60, *s6C, *s78, *s90, *s9C;
+    s32 k;
+
+    moby->modeFlags |= 0x100;   /* raise the spring-follow-active mode bit */
+
+    /* state[0x00] = base position; state[0x10] = raw target (when supplied). */
+    if (targetPos != 0) {
+        func_00283A48((Vec4 *)st, targetPos, (Vec4 *)((u8 *)moby + 0xC0));
+        Vec4AddVu0((Vec4 *)st, (Vec4 *)st, (Vec4 *)((u8 *)moby + 0x10));
+        *(Vec4 *)(st + 0x10) = *targetPos;
+    } else {
+        *(Vec4 *)st = *(Vec4 *)((u8 *)moby + 0x10);
+    }
+
+    /* state[0x20] = facing vector (arg, else the moby's own facing at +0xF0). */
+    if (facingVec != 0) {
+        *(Vec4 *)(st + 0x20) = *facingVec;
+    } else {
+        *(Vec4 *)(st + 0x20) = *(Vec4 *)((u8 *)moby + 0xF0);
+    }
+
+    /* Per-channel source = caller override if non-null, else the const default. */
+    s48 = ovr48 ? ovr48 : D_1AA060;
+    s54 = ovr54 ? ovr54 : D_1AA070;
+    s60 = ovr60 ? ovr60 : D_1AA0A0;
+    s6C = ovr6C ? ovr6C : D_1AA080;
+    s78 = ovr78 ? ovr78 : D_1AA090;
+    s90 = ovr90 ? ovr90 : D_1AA0B0;
+    s9C = ovr9C ? ovr9C : D_1AA090;
+
+    /* Fill the eight 3-float channels at state+0x48..+0xA7 element-by-element. */
+    for (k = 0; k < 3; k++) {
+        *(f32 *)(st + 0x48 + k * 4) = s48[k];
+        *(f32 *)(st + 0x54 + k * 4) = s54[k];
+        *(f32 *)(st + 0x60 + k * 4) = s60[k];
+        *(f32 *)(st + 0x6C + k * 4) = s6C[k];
+        *(f32 *)(st + 0x78 + k * 4) = s78[k];
+        *(f32 *)(st + 0x84 + k * 4) = GetRandomAngle();
+        *(f32 *)(st + 0x90 + k * 4) = s90[k] * kChan90Scale.f;
+        *(f32 *)(st + 0x9C + k * 4) = s9C[k];
+    }
+}
+#endif
 
 /* Per-frame moby spring-follow step (damped position/orientation chase).
  * WALL: save-layout — 8 callee-saves + $ra at 8-byte spacing, with fp/madd. */
@@ -1462,34 +1670,172 @@ void DriveMobyInPlace(Moby *moby, f32 speed) {
 /* Size-pinned 8-byte epilogue pad pseudo-function — see unit header. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B61B8);
 
-/* Integrate a moby's motion-controller velocity for the frame: steer toward the
- * target (heading via atan2 + WrapAnglePiSum/Diff, clamped to g_mobyMaxTurnRate),
- * compute an arrive speed (sqrt(2 * (dist - arriveRadius) * accelArrive) clamped to
- * maxSpeed), resolve the planar velocity, then apply a ground-slide / gravity /
- * vertical-step pass and write the velocity accumulator (+0xA0) + verticalVel
- * (+0xA8) + speed (+0xB0).
+/* Integrate a moby's motion-controller velocity for the frame. Called by
+ * StepMobyMotion (0x2B6000) as the steer+accelerate stage:
+ *   1. Unless FREE_YAW, steer the moby's yaw toward the commanded velocity
+ *      (func_002AB868, writes ctrl->turnDelta).
+ *   2. Pick the drive heading `angle`: if there was a wall contact this frame,
+ *      face away from it (atan2 of wallContact-pos, +pi) but limit the turn to
+ *      +/- g_mobyMaxTurnRate off the caller's `speed` heading; otherwise drive
+ *      straight along `speed`.
+ *   3. Pick the drive magnitude `arriveSpeed`: arrive profile
+ *      sqrt(2*(dist-arriveRadius)*accelArrive) clamped to maxSpeed; when inside
+ *      the arriveAngle dead-band or inside arriveRadius, drive a zero command
+ *      (decelerate to a stop) instead.
+ *   4. Resolve the planar velocity: velCmd = (cos,sin)*arriveSpeed - velAccum,
+ *      length-clamped to accel (or accelArrive when reversing), integrated into
+ *      the accumulator; ctrl->speed = |velAccum|.
+ *   5. Unless NO_VERTICAL, run the vertical/ground step: above ground fall by
+ *      decel (+ project onto the ground normal when just leaving a slope, raise
+ *      FELL_STUCK if stepped off); at/below ground clamp the step and ease
+ *      verticalVel toward the surface (func_002ABAE8).
  *
- * PARKED for a dedicated Ghidra pass (flag-not-guess, 2026-07-06). The first half
- * is clean (the arrive kinematics use DOCUMENTED constants — the *30 big-turn gate,
- * the 2*a*d arrive sqrt with accelArrive/maxSpeed, pi, g_mobyMaxTurnRate), but the
- * back half crosses the confident bar:
- *   1. Non-canonical magic thresholds with inferred meaning — 0x3E19999A (~0.15),
- *      0x3DB2B8C4 (~0.0873), 0x3C360B61 (~0.0111) — gate the ground-slide/gravity
- *      branches; a wrong value or a mis-read likely-branch around them is a silent
- *      physics bug.
- *   2. Opaque physics helpers whose role in the velocity update is unclear:
- *      func_002AB868 (moby yaw +0xF8, ctrl turnDelta +0xB4, velX/Y/Z +0x14..+0x1C),
- *      func_002AD860 (velocity resolve), func_002ABAE8 (vertical-step, takes
- *      groundHeight/verticalVel + consts 1.0 / 0x3C360B61). Their out-param
- *      semantics need recovered types.
- *   3. Dense likely-branch fp control flow (49 fp ops) — the ground-normal
- *      projection (Vec3Dot + neg.s) removal and verticalVel clamp chain is easy to
- *      mis-transcribe silently.
- * The kinematics are recoverable with a type pass; not safe to hand-write.
+ * Params: moby (record; pos @+0x10, yaw @+0xF8), ctrl (MobyMotionController),
+ * target (world XY goal), speed (the caller's drive heading — used as an ANGLE
+ * here, not a magnitude; UNCONFIRMED whether it doubles as a speed elsewhere).
+ * stepOut/velOut are passed by StepMobyMotion but this callee ignores them (the
+ * asm reads no arg beyond $6/$f12) — kept in the prototype to match the caller.
  *
- * WALL (matching build): save-layout — 5 callee-saves + $ra at 8-byte spacing,
- * with fp/madd. */
+ * REGION (flag-not-guess): the big-turn gate constant is 30.0f (USA) / 25.0f
+ * (EU 0x41C80000 @0x2b5ef8); the func_002ABAE8 ease rate is 0x3C360B61 (USA) /
+ * 0x3C83126F (EU) — the EU twin unit carries its own value when carved.
+ *
+ * Matching arm stays INCLUDE_ASM (engine region — no byte-match). Faithful
+ * transcription; helper semantics (func_002AB868/00284630/002AD860/002ABAE8/
+ * 00283B30/00283B48) recovered from their prologues by prototype, marked below.
+ * ORACLE-BLOCKED: the VU0 vec/trig helpers aren't loaded in the headless cmp
+ * harness, so this #else is not runtime-verifiable here. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", UpdateMobyMotionVelocity);
+#else
+extern f32  g_mobyMaxTurnRate;                                 /* 0x1AA108 per-step yaw clamp (rad) */
+extern void func_002AB868(f32 *mobyYaw, f32 *turnDeltaOut, f32 speed,
+                          f32 velX, f32 velY, f32 velZ);        /* 0x2AB868 steer yaw toward velocity */
+extern f32  func_00284630(f32 mobyYaw, f32 speed);             /* 0x284630 drive-heading angle helper */
+extern f32  func_002835C0(f32 x);                              /* 0x2835C0 sqrtf */
+extern void func_002AD860(Vec4 *v, f32 maxLen);                /* 0x2AD860 clamp v planar length to maxLen */
+extern void func_002ABAE8(f32 *value, f32 delta, f32 rate1,
+                          f32 rate2, f32 clamp);                /* 0x2ABAE8 rate-limited ease of *value by delta */
+extern f32  func_00283B30(f32 angle);                          /* 0x283B30 cos-like trig leaf (VU0) */
+extern f32  func_00283B48(f32 angle);                          /* 0x283B48 sin-like trig leaf (VU0) */
+extern f32  Vec3DotVu0(Vec4 *a, Vec4 *b);                      /* 0x283760 3-component dot (VU0) */
+extern f32  func_002837D0(Vec4 *v);                            /* 0x2837D0 planar/vector magnitude */
+extern f32  WrapAnglePiDiff(f32 a, f32 b);                     /* 0x284590 wrap a-b into [-pi,pi] */
+
+void UpdateMobyMotionVelocity(Moby *moby, MobyMotionController *ctrl, Vec4 *target,
+                              f32 speed, Vec4 *stepOut, Vec4 *velOut) {
+    f32 *mobyYaw  = (f32 *)((u8 *)moby + 0xF8);
+    Vec4 *mobyPos = (Vec4 *)((u8 *)moby + 0x10);
+    Vec4 stepVec;   /* commanded drive velocity (frame scratch) */
+    Vec4 velCmd;    /* per-frame velocity delta applied to the accumulator */
+    f32 steerAngle;
+    f32 arriveSpeed;
+    f32 dist;
+
+    (void)stepOut;
+    (void)velOut;
+
+    /* 1. Steer yaw toward the commanded velocity (skipped when free-yaw). */
+    if ((ctrl->modeFlags & MOBY_MOTION_MODE_FREE_YAW) == 0) {
+        func_002AB868(mobyYaw, &ctrl->turnDelta, speed, ctrl->velX, ctrl->velY, ctrl->velZ);
+    }
+
+    steerAngle = func_00284630(*mobyYaw, speed);
+
+    /* Inside the heading dead-band: drive a zero command (and flag steer-blocked
+     * when the residual heading error outruns the max turn). */
+    if ((ctrl->modeFlags & MOBY_MOTION_MODE_FREE_YAW) == 0 && ctrl->arriveAngle < steerAngle) {
+        func_00283638(&stepVec);
+        if ((ctrl->turnDelta * 30.0f) < (steerAngle - ctrl->arriveAngle)) {   /* EU: 25.0f */
+            ctrl->stateFlags |= 0x2;
+        }
+        goto resolve;
+    }
+
+    ctrl->stateFlags &= ~0x2;
+    dist = DistXYVu0(mobyPos, target);
+    ctrl->distToTarget = dist;
+    if (dist <= ctrl->arriveRadius) {   /* arrived: zero command */
+        func_00283638(&stepVec);
+        goto resolve;
+    }
+
+    /* Arrive-profile speed, clamped to the controller max. */
+    arriveSpeed = func_002835C0(2.0f * (dist - ctrl->arriveRadius) * ctrl->accelArrive);
+    if (ctrl->maxSpeed < arriveSpeed) {
+        arriveSpeed = ctrl->maxSpeed;
+    }
+
+    {
+        f32 angle;
+        if (ctrl->wallContactCount == 0) {
+            angle = speed;
+        } else {
+            /* Face away from the last wall contact, but limit the deflection to
+             * +/- the max turn rate off the caller heading. */
+            f32 baseAngle = WrapAnglePiSum(Atan2fPoly(ctrl->wallContact[0] - mobyPos->x,
+                                                      ctrl->wallContact[1] - mobyPos->y),
+                                           3.14159274f);
+            f32 turnErr = WrapAnglePiDiff(speed, baseAngle);
+            if (g_mobyMaxTurnRate < turnErr) {
+                turnErr = g_mobyMaxTurnRate;
+            } else if (turnErr < -g_mobyMaxTurnRate) {
+                turnErr = -g_mobyMaxTurnRate;
+            }
+            angle = WrapAnglePiSum(turnErr, baseAngle);
+        }
+        stepVec.x = func_00283B30(angle) * arriveSpeed;
+        stepVec.y = func_00283B48(angle) * arriveSpeed;
+        stepVec.z = 0.0f;
+    }
+
+resolve:
+    /* 4. Fold the command into the velocity accumulator (which aliases +0xA0:
+     * xy = planar accum, z = verticalVel). */
+    Vec4SubVu0(&velCmd, &stepVec, (Vec4 *)&ctrl->velAccum);
+    velCmd.z = 0.0f;
+    if (0.0f < Vec3DotVu0(&stepVec, (Vec4 *)&ctrl->velAccum)) {
+        func_002AD860(&velCmd, ctrl->accel);
+    } else {
+        func_002AD860(&velCmd, ctrl->accelArrive);
+    }
+    Vec4AddVu0((Vec4 *)&ctrl->velAccum, (Vec4 *)&ctrl->velAccum, &velCmd);
+    ctrl->speed = func_002837D0((Vec4 *)&ctrl->velAccum);
+
+    /* 5. Vertical / ground step. */
+    if ((ctrl->modeFlags & MOBY_MOTION_MODE_NO_VERTICAL) == 0) {
+        f32 posZ = *(f32 *)((u8 *)moby + 0x18);
+        if (ctrl->groundHeight < posZ) {
+            /* Above ground. */
+            if (ctrl->airborneFrames < 2 && (posZ - ctrl->groundHeight) < 0.15f) {
+                /* Just left a steep-enough slope: cancel the into-slope velocity. */
+                f32 normalLen = func_002837D0((Vec4 *)ctrl->groundNormal);
+                if (0.0872502104f < Atan2fPoly(ctrl->groundNormal[2], normalLen)) {
+                    f32 intoSlope = -Vec3DotVu0((Vec4 *)&ctrl->velAccum, (Vec4 *)ctrl->groundNormal);
+                    if (intoSlope < ctrl->verticalVel) {
+                        ctrl->verticalVel = -Vec3DotVu0((Vec4 *)&ctrl->velAccum, (Vec4 *)ctrl->groundNormal);
+                    }
+                }
+            }
+            ctrl->verticalVel -= ctrl->decel;
+            if (ctrl->groundedFrames == 0) {
+                ctrl->eventFlags |= MOBY_MOTION_EVENT_FELL_STUCK;
+            }
+        } else {
+            /* At or below ground: clamp the step, ease toward the surface. */
+            f32 penetration = ctrl->groundHeight - posZ;
+            if (penetration < ctrl->verticalVel) {
+                ctrl->verticalVel = penetration;
+            } else if (ctrl->verticalVel < 0.0f) {
+                ctrl->verticalVel = 0.0f;
+            }
+            func_002ABAE8(&ctrl->verticalVel,
+                          ctrl->groundHeight - *(f32 *)((u8 *)moby + 0x18),
+                          0.0111106029f, 0.0111106029f, 1.0f);   /* 0x3C360B61; EU 0x3C83126F */
+        }
+    }
+}
+#endif
 
 /* Resolve a moby's per-frame motion against collision geometry. Integrates the
  * accumulated planar velocity into the position, then wall-slides up to 8 passes
@@ -1509,7 +1855,7 @@ extern void Vec4AddVu0(Vec4 *dst, Vec4 *a, Vec4 *b);   /* dst = a + b (VU0) */
 extern void Vec4SubVu0(Vec4 *dst, Vec4 *a, Vec4 *b);   /* dst = a - b (VU0) */
 extern f32  func_002837D0(Vec4 *v);                    /* 0x2837D0 planar/vector magnitude */
 extern void func_00283920(Vec4 *dst, Vec4 *src, f32 len);  /* 0x283920 rescale src to length len */
-extern void func_002832F8(void *counter);              /* 0x2832F8 decay the wall-contact counter */
+extern s32  func_002832F8(void *counter);              /* 0x2832F8 tick a countdown at *p; returns nonzero while still armed (#61 uses it as void to decay the wall-contact counter, #59 branches on the gate) */
 extern s32  ResolveMobySphereCollision(Moby *moby, MobyMotionController *ctrl);  /* defined below */
 extern s32  ResolveMobyEdgeConstraint(void *moby, void *ec);                     /* defined below */
 
@@ -2425,14 +2771,182 @@ void InstallFileLoadPump(void) {
     __asm__ __volatile__("");
 }
 
-/* Primary dialog/voice playback entry: looks up `dialogId` across the
- * language-keyed sample tables (banded by id range 1000..6000 = dialog
- * categories), and on a hit arms the primary voice block, allocates a voice
- * handle, and plays via snd_PlaySample. The subtitle SM syncs to this state.
- * WALL: save-layout — 8 callee-saves + $ra at 8-byte spacing, plus the
- * deeply-nested id-band tree, sq/lq 128-bit handle copies, and the
- * snd_PlaySample 64-bit arg marshal. */
+/* Primary dialog/voice playback entry: resolves `a0` (a dialog id) to a sample
+ * address across seven language-keyed TOC bands, then — on a hit — arms the
+ * dialog/secondary voice control block (m+0x68..0x88), allocates a voice handle,
+ * initialises the per-voice listener + sound-emitter blocks, and plays the
+ * sample via snd_PlaySample. The subtitle SM syncs to this voice state.
+ *
+ * Id bands (signed, descending — mirrors the original's nested slti tree):
+ *   >= 6000        master language table  D_00147CC0+0x4E0  (stride 4, lang<<10),
+ *                  base D_00147CC0+0x4E0+0x59C4; category `code` = 6
+ *   5000..5999     disc-TOC table  g_discToc+0x4990 (stride 8), base +0x3E24
+ *   4000..4999     level dialog pair  D_B038/D_B03C (stride 0x14C + lang*8),
+ *                  base = g_sceneWadBaseLbn (start+end)
+ *   3000..3999     dialog sample table  g_dialogSampleTable, idx = a0-3000
+ *   2000..2999     dialog sample table, idx = a0 + adjLang - 2000
+ *   1000..1999     disc-TOC table  g_discToc+0x2628 (stride 4), base +0x2624,
+ *                  idx = a0 + adjLang - 1000
+ *   0..999         per-level dialog pair  g_levelDialogToc (stride 0x14C+lang*8),
+ *                  base = g_levelDialogToc+4 (start+end)
+ * where adjLang = (lang == 0) ? 0 : lang-1 for the language-adjusted bands.
+ * No-op if the channel is busy (m+0x68 != 0) or no sample resolves.
+ *
+ * WALL (matching build, INCLUDE_ASM frozen): save-layout — 8 callee-saves + $ra
+ * at 8-byte spacing; the deeply-nested id-band tree; sq/lq 128-bit handle
+ * copies; and the snd_PlaySample 64-bit arg marshal. The #else is a coverage
+ * shim: it uses the shared 8-arg snd_PlaySample form, so the original's extra
+ * args — the `code` category (2, or 6 for the >=6000 band) in $10 and the 0/1
+ * sentinels + start-cb pushed on the stack — are dropped at the marshal wall. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StartDialogVoice);
+#else
+/* TODO(match): functional equivalent - not byte-exact; save-layout + id-band
+   tree + 128-bit handle copies + snd_PlaySample arg-marshal wall. */
+extern u8   g_currentLanguage;             /* current language id (0 = default) */
+extern u8   D_00147CC0[];                  /* 0x147CC0 master language-keyed dialog TOC (>=6000 band) */
+extern u8   D_B038[];                      /* 0xFFB038 per-level dialog sample-pair table (D_B03C = +4) */
+extern s32  g_sceneWadBaseLbn;             /* base LBN added to the 4000-band pair entries */
+extern u8   g_levelDialogToc[];            /* per-level dialog TOC (<1000 band); +4 = base LBN */
+extern s32  AllocVoiceHandleSlot(void);    /* allocates a playing-voice slot; <0 = none free */
+extern u8   g_soundEmitterTable[];         /* per-voice sound-emitter blocks (stride 0x70) */
+extern u8   D_1AA170[];                    /* gp-rel dialog-voice config block */
+extern void OnDialogVoiceStarted(s32 voiceId, long handle);  /* start callback (defined below) */
+
+s32 StartDialogVoice(s32 a0, s32 a1, s32 a2, s32 a3) {
+    u8 *m = (u8 *)&g_fileLoadVoiceState;
+    s32 sampleStart = 0;   /* $17: resolved sample start address */
+    s32 sampleEnd = 0;     /* $19: resolved sample end address (0 if none) */
+    s32 adjLang;
+    s32 handle;
+
+    if (*(s32 *)(m + 0x68) != 0) {    /* secondary/dialog channel already busy */
+        return 0;
+    }
+
+    if (a0 >= 0x1770) {
+        /* >= 6000: master language-keyed dialog table (category code = 6) */
+        s32 e;
+        adjLang = g_currentLanguage ? (s32)g_currentLanguage - 1 : 0;
+        e = *(s32 *)(D_00147CC0 + 0x4E0 + a0 * 4 + (adjLang << 10));
+        if (e != 0) {
+            sampleStart = e + *(s32 *)(D_00147CC0 + 0x4E0 + 0x59C4);
+        }
+    } else if (a0 >= 0x1388) {
+        /* 5000..5999: disc-TOC dialog table (stride 8) + base */
+        s32 e = *(s32 *)(g_discToc + 0x4990 + (a0 - 0x1388) * 8);
+        if (e != 0) {
+            sampleStart = *(s32 *)(g_discToc + 0x3E24) + e;
+        }
+    } else if (a0 >= 0xFA0) {
+        /* 4000..4999: per-level dialog sample pair, base = scene-WAD LBN */
+        s32 base5 = a0 * 0x14C + ((s32)g_currentLanguage << 3);
+        s32 e1 = *(s32 *)(D_B038 + base5);
+        if (e1 != 0) {
+            s32 wad = g_sceneWadBaseLbn;
+            s32 e2 = *(s32 *)(D_B038 + base5 + 4);    /* D_B03C */
+            sampleStart = wad + e1;
+            sampleEnd = e2 ? (wad + e2) : 0;
+        }
+    } else if (a0 >= 0xBB8) {
+        /* 3000..3999: dialog sample table, idx = a0 - 3000 */
+        s32 e = *(s32 *)(g_discToc + 0x5300 + (a0 - 0xBB8) * 8);
+        if (e != 0) {
+            sampleStart = g_dialogSampleBase + e;
+        }
+    } else if (a0 >= 0x7D0) {
+        /* 2000..2999: dialog sample table, language-adjusted idx */
+        adjLang = g_currentLanguage ? (s32)g_currentLanguage - 1 : 0;
+        {
+            s32 e = *(s32 *)(g_discToc + 0x5300 + (a0 + adjLang - 0x7D0) * 8);
+            if (e != 0) {
+                sampleStart = g_dialogSampleBase + e;
+            }
+        }
+    } else if (a0 >= 0x3E8) {
+        /* 1000..1999: disc-TOC table (stride 4) + base, language-adjusted idx */
+        adjLang = g_currentLanguage ? (s32)g_currentLanguage - 1 : 0;
+        {
+            s32 e = *(s32 *)(g_discToc + 0x2628 + (a0 + adjLang - 0x3E8) * 4);
+            if (e != 0) {
+                sampleStart = *(s32 *)(g_discToc + 0x2624) + e;
+            }
+        }
+    } else {
+        /* < 1000: per-level dialog TOC pair (stride 0x14C + lang*8), base +4 */
+        s32 base8 = a0 * 0x14C + ((s32)g_currentLanguage << 3);
+        s32 e1 = *(s32 *)(g_levelDialogToc + 8 + base8);
+        if (e1 != 0) {
+            s32 lbn = *(s32 *)(g_levelDialogToc + 4);
+            s32 e2 = *(s32 *)(g_levelDialogToc + 8 + base8 + 4);
+            sampleStart = lbn + e1;
+            sampleEnd = e2 ? (lbn + e2) : 0;
+        }
+    }
+
+    if (sampleStart == 0) {
+        return 0;
+    }
+
+    /* arm the dialog/secondary voice control block (m+0x68..0x88) */
+    *(s32 *)(m + 0x68) = -1;          /* secondaryState */
+    *(s16 *)(m + 0x72) = 1;           /* secondaryFlag */
+    *(s16 *)(m + 0x6C) = (s16)a0;     /* dialogArg1 = id */
+    *(s16 *)(m + 0x70) = (s16)a1;     /* dialogArg2 */
+    *(s32 *)(m + 0x7C) = 10;          /* volume */
+    *(s32 *)(m + 0x80) = 48000;       /* sample rate (0xBB80) */
+    *(s16 *)(m + 0x6E) = (s16)a3;     /* dialogArg0 = pan */
+    *(s16 *)(m + 0x78) = 0;
+    *(s32 *)(m + 0x84) = a2;          /* dialogArg3 = emitter ptr */
+
+    handle = AllocVoiceHandleSlot();
+    *(s32 *)(m + 0x88) = handle;
+    if (handle >= 0) {
+        u8 *slot = g_listenerPosHistory + handle * 0x70;
+        s16 status = 0;               /* $20: listener-block +0x75 status byte */
+
+        *(s16 *)(slot + 0x7C) = *(u16 *)(D_1AA170 + 0x1A);
+        *(s16 *)(slot + 0x7E) = -1;
+        *(s16 *)(slot + 0x80) = (s16)a3;
+        *(s32 *)(slot + 0x8C) = 0;
+        *(void **)(slot + 0x78) = D_1AA170;
+        *(s32 *)(slot + 0x88) = a2;
+        *(s32 *)(slot + 0xA0) = 0;    /* sq $0: zero the 16 bytes at +0xA0 */
+        *(s32 *)(slot + 0xA4) = 0;
+        *(s32 *)(slot + 0xA8) = 0;
+        *(s32 *)(slot + 0xAC) = 0;
+
+        if (a2 != 0) {
+            /* copy the emitter's 16-byte position from (emitter+0x10), then
+               bump the emitter block's +0x28 float by 1.0 */
+            u8 *dst = g_soundEmitterTable + 0x20 + handle * 0x70;
+            u8 *src = (u8 *)a2 + 0x10;
+            f32 *pw;
+            *(u32 *)(dst + 0x0) = *(u32 *)(src + 0x0);
+            *(u32 *)(dst + 0x4) = *(u32 *)(src + 0x4);
+            *(u32 *)(dst + 0x8) = *(u32 *)(src + 0x8);
+            *(u32 *)(dst + 0xC) = *(u32 *)(src + 0xC);
+            pw = (f32 *)(g_soundEmitterTable + handle * 0x70 + 0x28);
+            *pw = *pw + 1.0f;
+        } else {
+            func_00283638((Vec4 *)(g_soundEmitterTable + 0x20 + handle * 0x70));
+            status = 0x11;
+        }
+
+        *(s32 *)(slot + 0x70) = -1;
+        *(u8 *)(slot + 0x75) = (u8)status;
+        *(u8 *)(slot + 0x74) = 8;
+        *(s16 *)(slot + 0x82) = 0;
+        *(s32 *)(slot + 0x84) = 0;
+    }
+
+    /* fire the sample; snd_PlaySample 64-bit arg-marshal wall (coverage only) */
+    snd_PlaySample((s64)sampleStart, (s64)sampleEnd, 0, 0,
+                   (s16)a3, 0, OnDialogVoiceStarted,
+                   (long)(u32)(m + 0x68));
+    return 0;
+}
+#endif
 
 /* Stop the secondary dialog voice channel. No-op unless the secondary voice is
  * allocated (secondaryState != 0) and is currently in its playing state
@@ -2573,8 +3087,42 @@ s32 ChainSecondaryVoice(s32 idx, s16 flags, s16 pan) {
  * start callback; returns 1 on a started voice, 0 otherwise.
  * WALL: snd_PlaySample 64-bit arg marshal (same as StartAmbientVoice) — the
  * sample addresses are passed sign-extended and the callback as a zero-extended
- * 64-bit stack arg. Functional equivalent only. */
+ * 64-bit stack arg. Functional equivalent only.
+ *
+ * a1 is the sample-table index (stride-8 g_dialogSampleTable); a0/a2/a3 are
+ * stashed to the tertiary state block (+0x90/+0x94/+0x92) with volume 10 and rate
+ * 48000. Uses raw offsets for the unnamed tertiary fields (+0x90/+0x92/+0x9C/
+ * +0xA0/+0xA4) and struct names for tertiaryState/tertiaryArg1/tertiaryFlag. Like
+ * its siblings the snd_PlaySample call is the 8-arg approximation of the wider
+ * marshalled signature; tertiary passes sampleEnd=0, pan=(s16)a3, func_002B8E28
+ * as the start callback, and &tertiaryState as the context. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StartTertiaryVoice);
+#else
+/* TODO(match): functional equivalent - not byte-exact; snd_PlaySample arg-marshal wall. */
+extern void func_002B8E28(s32 voiceId, long handle);   /* 0x2B8E28 tertiary voice-start callback (defined below) */
+s32 StartTertiaryVoice(s32 a0, s32 a1, s32 a2, s32 a3) {
+    u8 *m = (u8 *)&g_fileLoadVoiceState;
+    if (g_fileLoadVoiceState.tertiaryState != 0) {
+        return 0;                          /* channel busy */
+    }
+    if (g_dialogSampleTable[a1 * 2] == 0) {
+        return 0;                          /* no sample bank for this id */
+    }
+    g_fileLoadVoiceState.tertiaryArg1 = (s16)a2;
+    *(s32 *)(m + 0xA0) = 10;                /* volume */
+    *(s32 *)(m + 0xA4) = 48000;            /* sample rate (0xBB80) */
+    g_fileLoadVoiceState.tertiaryState = -1;
+    *(s16 *)(m + 0x90) = (s16)a0;
+    *(s16 *)(m + 0x9C) = 1;
+    g_fileLoadVoiceState.tertiaryFlag = 1;
+    *(s16 *)(m + 0x92) = (s16)a3;
+    snd_PlaySample(g_dialogSampleBase + g_dialogSampleTable[a1 * 2],
+                   0, 0, 0, (s16)a3, 0, func_002B8E28,
+                   (long)(u32)&g_fileLoadVoiceState.tertiaryState);
+    return 1;
+}
+#endif
 
 /* Reset all three dialog-voice channels to their idle/cleared state. First
  * drains any voice still mid-allocation: ticks the snd RPC (func_00133230) then
@@ -2801,34 +3349,255 @@ finalize:
 }
 #endif
 
-/* Per-frame tick of the dialog/voice manager: drives the primary/secondary/
- * tertiary voice state machines, consumes queued dialog/ambient/tertiary voices
- * (StartSecondaryVoice/ChainSecondaryVoice/StartTertiaryVoice/StartAmbientVoice/
- * StartDialogVoice), steps each channel via StepDialogVoiceChannel (×3), and pumps
- * the file-load completion path (snd_CheckLoadInProgress / StartFileLoad + an
- * indirect completion callback at +0x18).
+/* Per-frame tick of the dialog/voice manager (base = g_fileLoadVoiceState =
+ * g_saveImageArea + 0x1000). Three cooperating pieces:
  *
- * PARKED for a dedicated Ghidra pass (flag-not-guess, 2026-07-06) — the asm is
- * fully readable but faithfully modelling it in C carries real risk without
- * recovered types/pointers:
- *   1. Symbol-aliased base pointers: the manager base $16 is materialised via
- *      %hi/%lo(g_cdReadMode + 0x4) in some paths and via $18 + 0x63A8
- *      (= g_fileLoadVoiceState) in others — a splat reloc-identity alias, NOT the
- *      real symbol. The three StepDialogVoiceChannel calls use $16 / $16+0x24 /
- *      $16+0x48 with $17 = $16 - 0x44 (the file-load field block), so the true
- *      base offset must be resolved per-site before the channel/field offsets are
- *      trustworthy — a wrong base silently targets the wrong voice channel.
- *   2. Sample-timing interpolation math with div-by-zero guards:
- *      (field_0x4A * field_0xA4) / field_0x34 and
- *       field_0x4A * (field_0x34 - (field_0x30 - field_0xA4)) / field_0x34.
- *      Literal to transcribe, but the semantics (what is interpolated) is inferred
- *      and a wrong field mapping is silent.
- *   3. A 5-way jtbl_0026CBF0 on (field_0x2C - 2) and an indirect callback jalr $18.
- * These are determinable with a type-recovery pass but not safe to hand-write.
+ *   1. Queue-consume: if the primary channel is idle and a secondary voice is
+ *      queued (+0x4C bit0), start it (StartSecondaryVoice); else chain onto an
+ *      in-flight secondary (ChainSecondaryVoice) when +0x44 is armed and +0x4E==8.
+ *   2. Primary-voice progress: when the aux slot at +0x38 is armed
+ *      (func_002832F8), either finish the primary voice (latch the next state +
+ *      arm the +0x38 timer) or kick the tertiary voice (StartTertiaryVoice); and
+ *      launch the queued dialog voice (StartDialogVoice) once its bank handle
+ *      (+0x24) is ready.
+ *   3. State machine: dispatch on state (+0x2C, jtbl_0026CBF0 over states 2..6)
+ *      to advance the crossfade/timing (states 2 & 6 issue a 989snd play command
+ *      func_00132BC0 with the OnTertiaryVoiceStarted callback), then step the
+ *      three voice channels (+0x44, +0x8C, +0x68) and pump the file-load
+ *      completion path: on an aborted read (+0x6) fire the completion callback
+ *      (+0x18) with success=0; otherwise (re)kick a queued read (StartFileLoad).
  *
- * WALL (matching build): switch dispatch (the (state-2) jtbl) + save-layout
+ * The manager reinterprets the file-load struct's fields cross-purpose (+0x2C is
+ * the switch state, not fileLoadPhase; +0x44 is a voice handle, not ambientState;
+ * +0x30/+0x34 are crossfade timers), and several offsets (+0x7 enable, +0x28,
+ * +0x38, +0x9C, +0xA4) have no named field — so the manager body uses raw offsets
+ * on the base pointer and reserves the struct-field names for the genuine
+ * file-load tail. Control flow is transcribed op-for-op (goto labels = asm block
+ * addresses) with branch-likely delay-slot discipline; the two crossfade divides
+ * carry the original div-by-zero guards (denominator +0x34 non-zero on the taken
+ * path). Region-portable: no divergent immediates; the EU twin reuses this body
+ * verbatim (symbols resolve per-region via symbol_addrs).
+ *
+ * NATIVE #else for coverage — the matching arm stays INCLUDE_ASM (byte-frozen).
+ * WALL (matching build): switch dispatch (the state-2 jtbl) + save-layout
  * (3 callee-saves + $ra at 8-byte spacing). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", UpdateDialogVoiceManager);
+#else
+/* TODO(match): functional equivalent - not byte-exact; switch-dispatch + save-layout wall. */
+extern s32  StartTertiaryVoice(s32 a0, s32 a1, s32 a2, s32 a3);        /* 0x2B7FA8 (INCLUDE_ASM above) */
+extern void func_00132BC0(s32 handle, s32 cmd, s32 sampleCount, s32 a3,
+                          s32 a4, s32 a5, void *startCb, void *ctx);   /* 0x132BC0 989snd play command */
+extern s32  snd_CheckLoadInProgress(s32 flag);                        /* 0x133580 tests/waits bank-load-in-progress */
+extern s32  StartFileLoad(s32 dest, s32 lbn, s32 sectorCount);        /* 0x2B8A18 (defined below) */
+extern char D_1AA1B0[];                    /* dialog-voice load debug strings (retail no-ops) */
+extern char D_1AA1C0[];
+extern char D_1AA1D0[];
+void UpdateDialogVoiceManager(void) {
+    u8 *m = (u8 *)&g_fileLoadVoiceState;   /* manager base = g_saveImageArea + 0x1000 */
+    s16 dvid;
+    s16 idx;
+    s32 h;
+    s32 old44;
+    s32 num;
+    s32 prod;
+    s32 v6;
+    void (*cb)(void *, s32);   /* completion callback: fn(void *ctx, s32 status) — CONFIRMED
+                                * from func_002949E0(s32 *rec, s32) installed via
+                                * StartFileLoadWithCallback with ctx = &D_1A9330 (a pointer) */
+    s32 cbArg;                 /* raw +0x1C word; holds the callback's context pointer */
+    s16 prev;
+    s32 fdest, flbn, fcnt;
+
+    if (*(u8 *)(m + 0x7) != 0) {
+        return;                            /* manager disabled */
+    }
+
+    /* --- 1. consume queued secondary / chained voice --- */
+    if ((*(u16 *)(m + 0x50) & 0x8000) != 0) goto L8568;   /* primary channel active */
+    if ((*(u16 *)(m + 0x4E) & 0x8000) != 0) goto L8568;
+    if (*(s32 *)(m + 0x44) != 0) goto L8534;
+    if ((*(u16 *)(m + 0x4C) & 0x1) == 0) goto L8524;      /* no secondary queued */
+    if (*(s16 *)(m + 0x3C) != -1) goto L8528;             /* primary already assigned */
+    StartSecondaryVoice(*(s16 *)(m + 0x48), *(s16 *)(m + 0x4C), *(s16 *)(m + 0x4A));
+    goto L8568;
+L8524:
+L8528:
+    if (*(s32 *)(m + 0x44) == 0) goto L8564;
+L8534:
+    if (*(s32 *)(m + 0x44) == -1) goto L8564;
+    if (*(s16 *)(m + 0x4E) != 8) goto L8568;
+    ChainSecondaryVoice(*(s16 *)(m + 0x48), *(s16 *)(m + 0x4C), *(s16 *)(m + 0x4A));
+L8564:
+L8568:
+    /* --- 2. primary-voice progress (aux slot at +0x38) --- */
+    if (func_002832F8(m + 0x38) == 0) goto L8608;
+    dvid = *(s16 *)(m + 0x3C);
+    if (dvid == -1) goto L860C;
+    if (*(s16 *)(m + 0x2C) != 0) goto L860C;
+    if (*(s16 *)(m + 0x48) == dvid) {
+        *(s16 *)(m + 0x3C) = -1;
+        goto L8608;
+    }
+    if (*(s16 *)(m + 0x3E) != -1) goto L85F4;
+    /* primary voice finished: latch the next state + arm the +0x38 timer */
+    if ((*(u16 *)(m + 0x4E) & 0x8000) != 0) {
+        *(s16 *)(m + 0x4E) = 5;
+        *(s16 *)(m + 0x2C) = 3;
+    } else {
+        *(s16 *)(m + 0x2C) = 6;
+        *(s32 *)(m + 0xA4) = 15;
+        *(s32 *)(m + 0x34) = 15;
+    }
+    *(s32 *)(m + 0x38) = 300;
+    goto L8608;
+L85F4:
+    if (StartTertiaryVoice(dvid, *(s16 *)(m + 0x3E),
+                           *(s16 *)(m + 0x4C), *(s16 *)(m + 0x4A)) != 0) {
+        *(s32 *)(m + 0x38) = 420;
+    }
+L8608:
+L860C:
+    /* launch the queued dialog voice once its bank handle (+0x24) is ready */
+    h = *(s32 *)(m + 0x24);
+    if (h < 0) goto L8660;
+    if (*(s32 *)(m + 0x68) != 0) {
+        if ((u32)(*(u16 *)(m + 0x72) - 6) < 2u) goto L8660;
+        *(s16 *)(m + 0x72) = 5;
+        goto L8660;
+    }
+    StartDialogVoice(h, 0, *(s32 *)(m + 0x28), 0x400);
+    *(s32 *)(m + 0x28) = 0;
+    *(s32 *)(m + 0x24) = -1;
+L8660:
+    /* --- 3. state machine: dispatch on state (+0x2C) --- */
+    if (*(s16 *)(m + 0x4E) == 9) goto L8918;
+    if (*(s32 *)(m + 0x44) == -1) goto L891C;
+    if ((*(u16 *)(m + 0x50) & 0x8000) != 0) goto L8918;
+    if ((*(u16 *)(m + 0x4E) & 0x8000) != 0) goto L8918;
+    if (*(s16 *)(m + 0x3E) == -1) goto L86D4;
+    if ((*(u16 *)(m + 0x98) & 0x8000) != 0) goto L8918;
+    if ((*(u16 *)(m + 0x96) & 0x8000) != 0) goto L8918;
+L86D4:
+    idx = (s16)(*(u16 *)(m + 0x2C) - 2);
+    if ((u32)idx >= 5) goto L8914;         /* default: no active state */
+    switch (idx) {                         /* jtbl_0026CBF0_text (state - 2) */
+    case 0: goto L8778;                    /* state 2 */
+    case 1: goto L8834;                    /* state 3 */
+    case 2: goto L8880;                    /* state 4 */
+    case 3: goto L88F0;                    /* state 5 */
+    case 4: goto L8704;                    /* state 6 */
+    default: goto L8914;
+    }
+
+L8704: /* state 6: crossfade by (+0x4A * +0xA4) / +0x34, then play + advance */
+    prod = (s32)*(s16 *)(m + 0x4A) * *(s32 *)(m + 0xA4);
+    old44 = *(s32 *)(m + 0x44);
+    *(s32 *)(m + 0x44) = -1;
+    v6 = prod / *(s32 *)(m + 0x34);
+    func_00132BC0(old44, 5, v6, 0, 0, 0, (void *)&OnTertiaryVoiceStarted, m + 0x44);
+    if (func_002832F8(m + 0xA4) == 0) goto L8914;
+    *(s16 *)(m + 0x4E) = 5;
+    *(s16 *)(m + 0x2C) = 3;
+    goto L8914;
+
+L8778: /* state 2: crossfade-in by +0x4A * (+0x34 - (+0x30 - +0xA4)) / +0x34 */
+    num = *(s32 *)(m + 0x34) - (*(s32 *)(m + 0x30) - *(s32 *)(m + 0xA4));
+    v6 = ((s32)*(s16 *)(m + 0x4A) * num) / *(s32 *)(m + 0x34);
+    if (v6 <= 0) goto L87E0;
+    if (*(s16 *)(m + 0x96) != 4) {
+        if (*(s32 *)(m + 0x8C) == 0) goto L87E0;
+        goto L87D4;
+    }
+    if (*(s16 *)(m + 0x9C) != 0) goto L87D4;
+    if (*(s32 *)(m + 0x8C) == 0) goto L87E0;
+L87D4:
+    old44 = *(s32 *)(m + 0x44);
+    if (old44 == 0) goto L87E0;
+    if (*(s16 *)(m + 0x4E) == 9) goto L8914;
+    *(s32 *)(m + 0x44) = -1;
+    func_00132BC0(old44, 5, v6, 0, 0, 0, (void *)&OnTertiaryVoiceStarted, m + 0x44);
+    goto L8918;
+L87E0:
+    *(s16 *)(m + 0x2C) = 3;
+    *(s16 *)(m + 0x4E) = 5;
+    goto L8914;
+
+L8834: /* state 3: start the ambient/looping voice, then advance to state 4 */
+    if (*(s16 *)(m + 0x4E) != 0) goto L8918;
+    if (*(s16 *)(m + 0x9C) != 0) goto L8860;
+    if (*(s32 *)(m + 0x8C) != 0) goto L8918;
+L8860:
+    StartAmbientVoice(*(s16 *)(m + 0x3C), *(s16 *)(m + 0x4C), *(s16 *)(m + 0x4A));
+    *(s16 *)(m + 0x2C) = 4;
+    *(s16 *)(m + 0x3C) = -1;
+    goto L8914;
+
+L8880: /* state 4: once the crossfade elapses (+0xA4 >= +0x34), stop the voice */
+    if (*(s16 *)(m + 0x4E) != 3) goto L8918;
+    if (*(s32 *)(m + 0xA4) < *(s32 *)(m + 0x34)) goto L88D4;
+    if (*(s16 *)(m + 0x96) != 4) goto L88D4;
+    if (*(s16 *)(m + 0x9C) != 0) goto L8918;
+    if (*(s32 *)(m + 0x8C) != 0) goto L891C;
+L88D4:
+    func_00133400(*(s32 *)(m + 0x44));
+    *(s16 *)(m + 0x2C) = 5;
+    *(s16 *)(m + 0x4E) = 8;
+    goto L8914;
+
+L88F0: /* state 5: hold until the voice has fully stopped, then clear state */
+    if (*(s16 *)(m + 0x96) != 4) {
+        *(s16 *)(m + 0x2C) = 0;
+        goto L8914;
+    }
+    if (*(s16 *)(m + 0x9C) != 0) goto L8918;
+    *(s16 *)(m + 0x2C) = 0;
+    /* fall through to L8914 */
+
+L8914:
+L8918:
+L891C:
+    /* step the three dialog voice channels (0x24-byte blocks from +0x44) */
+    StepDialogVoiceChannel(m + 0x44);
+    StepDialogVoiceChannel(m + 0x8C);
+    StepDialogVoiceChannel(m + 0x68);
+
+    /* --- file-load completion / (re)kick --- */
+    if (g_fileLoadVoiceState.readStopped != 0) {
+        /* read was aborted: fire the completion callback with success=0 */
+        DebugPrintStub(D_1AA1B0);
+        if (snd_CheckLoadInProgress(1) != 0) {
+            return;                        /* still loading */
+        }
+        g_fileLoadVoiceState.fileLoadActive = 0;
+        g_fileLoadVoiceState.readStopped = 0;
+        DebugPrintStub(D_1AA1C0);
+        cb = (void (*)(void *, s32))g_fileLoadVoiceState.pLoadCallback;
+        if (cb == 0) {
+            return;
+        }
+        cbArg = g_fileLoadVoiceState.loadCallbackArg;
+        g_fileLoadVoiceState.loadCallbackArg = 0;
+        g_fileLoadVoiceState.pLoadCallback = NULL;
+        DebugPrintStub(D_1AA1D0);
+        cb((void *)cbArg, 0);
+        return;
+    }
+    if (g_fileLoadVoiceState.fileLoadActive == 2) {
+        /* a read is queued (state 2): clear the active gate so StartFileLoad
+         * proceeds, kick it, and restore the request state if it refused */
+        prev = g_fileLoadVoiceState.fileLoadActive;
+        fdest = g_fileLoadVoiceState.fileLoadDest;
+        flbn = g_fileLoadVoiceState.fileLoadLbn;
+        fcnt = g_fileLoadVoiceState.fileLoadSectorCount;
+        g_fileLoadVoiceState.fileLoadActive = 0;
+        StartFileLoad(fdest, flbn, fcnt);
+        if (g_fileLoadVoiceState.fileLoadActive == 0) {
+            g_fileLoadVoiceState.fileLoadActive = prev;
+        }
+    }
+}
+#endif
 
 /* Abort the in-flight CD file read: if a read is active, emit the
  * "music_StopLoad" debug string (retail no-op), send the stop command, and set
@@ -3040,7 +3809,7 @@ void PumpFileLoadCompletion(s32 phase) {
         arg = g_fileLoadVoiceState.loadCallbackArg;
         g_fileLoadVoiceState.loadCallbackArg = 0;
         g_fileLoadVoiceState.pLoadCallback = NULL;
-        ((void (*)(s32, s32))callback)(arg, success);
+        ((void (*)(void *, s32))callback)((void *)arg, success);
     }
 }
 #endif
