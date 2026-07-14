@@ -1334,22 +1334,75 @@ s32 func_002D87C8(MenuWidget *obj) {
 }
 #endif
 
-/* Draw the title-screen audio-options sliders (music/sfx bars + mono/stereo
- * label): 3 near-identical blocks reading g_musicVolume / g_sfxVolume /
- * g_audioStereoMode, each drawing a label (movz/movn-selected colour) plus a
- * bar-fill of (width * volume) / 1024.
- * PARK (flag-not-guess): the bar primitives func_002904B0 (6 args) and
- * func_0028FFF0 (10 args incl. 0x0/0x8 stack slots) have unrecovered signatures;
- * a portable #else here would guess their arg boundaries/types (silent-bug risk).
- * UNBLOCKED (#67, 2026-07-14): the 5 draw-primitive signatures are now recovered +
- * pinned to include/gui.h @ d2994265 (func_002904B0(x0,y0,x1,y1,u64 reg4,mode);
- * func_0028FFF0(icon,x0,y0,x1,y1,u0,v0,u1,v1,alpha); func_0028EDF0(name,level)->s32;
- * func_0027FBA8(a,b,c,d,e); func_00280090(a,b,c,d,e)). No more arg-boundary guessing —
- * faithfully #else-able. Remaining effort = the dense transcription (18 calls: 3 rows
- * music/sfx/stereo, each a movz/movn-coloured label + a func_0028FFF0 fill sized
- * (field*volume)>>10; positions off S[0x20]>>1 / S[0x24]>>2). A clean fresh-pass job
- * with the sigs in hand — not forced here. Bare INCLUDE_ASM pending that pass. */
+/* Draw the title-screen audio-options screen: three rows (music volume, SFX
+ * volume, stereo/mono mode) inside a Begin/End2dDrawBatch. Each row's left
+ * label is drawn in the highlight colour (0x8020FFFF) when it is the selected
+ * row (screen[0x40] == row index) else normal (0x80FFA888). The two volume rows
+ * additionally draw a two-layer bar (outer 0x80696969 / inner 0x80383838) and a
+ * fill icon whose right edge tracks (screen[0x20] - (lx+0x4A)) * volume / 1024
+ * (round-toward-zero); the stereo row draws the localized Mono/Stereo string
+ * (chosen by g_audioStereoMode) instead of a bar. Row Y steps by screen[0x24]>>2
+ * (ry, 2*ry, 3*ry); label/value X derive from screen[0x20]>>1 (lx). Returns 2.
+ *
+ * Portable #else (functional-equiv, NEEDS-ORACLE): op-for-op faithful to the 18
+ * calls; draw-primitive signatures per include/gui.h (#67). The matching arm
+ * stays INCLUDE_ASM (engine-2.96 unit). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D8A68);
+#else
+extern s32 g_musicVolume;
+extern s32 g_sfxVolume;
+extern s32 g_audioStereoMode;
+
+void func_002904B0(s32 x0, s32 y0, s32 x1, s32 y1, u64 reg4, s32 mode);
+void func_0028FFF0(s32 iconIndex, s32 x0, s32 y0, s32 x1, s32 y1,
+                   s32 u0, s32 v0, s32 u1, s32 v1, s32 alpha);
+s32  func_0028EDF0(s32 name, s32 level);
+void func_0027FBA8(s32 a, s32 b, s32 c, s32 d, s32 e);
+void func_00280090(s32 a, s32 b, s32 c, s32 d, s32 e);
+
+s32 func_002D8A68(u8 *screen) {
+    s32 w   = *(s32 *)(screen + 0x20);   /* bar-width basis */
+    s32 h   = *(s32 *)(screen + 0x24);   /* row-height basis */
+    s32 sel = *(s32 *)(screen + 0x40);   /* selected row index */
+    s32 lx  = w >> 1;                     /* label / value-text X base */
+    s32 ry  = h >> 2;                     /* per-row Y step */
+    s32 musicColor  = (sel == 0) ? 0x8020FFFF : 0x80FFA888;
+    s32 sfxColor    = (sel == 1) ? 0x8020FFFF : 0x80FFA888;
+    s32 stereoColor = (sel == 2) ? 0x8020FFFF : 0x80FFA888;
+    s32 mt, st, musicFill, sfxFill, icon;
+
+    Begin2dDrawBatch(0);
+
+    /* row 1 — music volume (y = ry) */
+    func_00280090(lx - 8, ry - 8, musicColor, GetLocalizedString(0x2DA5), -1);
+    func_002904B0(lx + 7, ry - 8, w - 0x3F, ry + 8, 0x80696969, 0);
+    func_002904B0(lx + 9, ry - 6, w - 0x41, ry + 6, 0x80383838, 0);
+    mt = (w - (lx + 0x4A)) * g_musicVolume;
+    musicFill = ((mt >= 0) ? mt : (mt + 0x3FF)) >> 10;
+    icon = func_0028EDF0(0xE99D, 8);
+    func_0028FFF0(icon, (lx + 9) << 4, (ry - 6) << 4, (lx + musicFill + 8) << 4,
+                  (ry + 5) << 4, 0, 0xA0, 0x1F0, 0x150, 0x80);
+
+    /* row 2 — SFX volume (y = 2*ry) */
+    func_00280090(lx - 8, 2 * ry - 8, sfxColor, GetLocalizedString(0x2DA6), -1);
+    func_002904B0(lx + 7, 2 * ry - 8, w - 0x3F, 2 * ry + 8, 0x80696969, 0);
+    func_002904B0(lx + 9, 2 * ry - 6, w - 0x41, 2 * ry + 6, 0x80383838, 0);
+    st = (w - (lx + 0x4A)) * g_sfxVolume;
+    sfxFill = ((st >= 0) ? st : (st + 0x3FF)) >> 10;
+    icon = func_0028EDF0(0xE99D, 9);
+    func_0028FFF0(icon, (lx + 9) << 4, (2 * ry - 6) << 4, (lx + sfxFill + 8) << 4,
+                  (2 * ry + 5) << 4, 0, 0xA0, 0x1F0, 0x150, 0x80);
+
+    /* row 3 — stereo / mono mode (y = 3*ry) */
+    func_00280090(lx - 8, 3 * ry - 8, stereoColor, GetLocalizedString(0x2DA7), -1);
+    func_0027FBA8(lx + 8, 3 * ry - 8, 0x80FFA888,
+                  GetLocalizedString((g_audioStereoMode == 0) ? 0x2DA8 : 0x2DA9), -1);
+
+    End2dDrawBatch();
+    return 2;
+}
+#endif
 
 /* Rebuild the galactic-map planet display rows: for each of the D_1A7C0C
  * active rows, mark it active (flag=1) and set its icon from D_254E48 indexed
@@ -1672,11 +1725,14 @@ s32 func_002DA4F0(MenuWidget *obj) {
 #endif
 
 /* Draw the active-objectives list (gathered via GatherActiveObjectives) with a
- * scrolling text box + per-row checkboxes. UNBLOCKED (#67): the draw-primitive sigs
- * (func_0027FBA8/func_00280BB8) are in gui.h (d2994265) — no arg-boundary guessing.
- * Still a dense fresh-pass #else: ~200-instr draw loop + a 128-bit sq/lq-packed text-box
- * struct + break-0,7 divide traps + 11 branches. Park-with-trace #70 (fresh-pass ready,
- * sigs in hand) — not forced. Bare INCLUDE_ASM pending. */
+ * scrolling text box + per-row checkboxes. The #67 draw-primitive sigs
+ * (func_0027FBA8/func_00280BB8) are in gui.h (d2994265), but that only removes the
+ * arg-boundary guessing for those two — the body stays PARK-class (#70) on harder
+ * walls: ~200-instr draw loop (11 branches) + a 128-bit sq/lq-packed text-box struct
+ * (ldl/ldr copy) + a break-0,7 divide trap + still-UNRECOVERED secondary callees
+ * (func_0027F208 / func_0027F7A0 / func_0027F790 row helpers, func_002DAA50). A
+ * faithful #else would guess those layouts/sigs = silent-bug risk. Bare INCLUDE_ASM
+ * pending their recovery. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DA740);
 
 /* Draw a small checkbox/indicator at (x,y): a 10px highlight rect, an 8px inner
