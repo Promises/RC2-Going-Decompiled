@@ -353,9 +353,9 @@ extern u8  g_platinumBoltFlags[]; /* 0x19B278; +0x230 (0x19B4A8) = per-progress 
 
 /** func_0027A0C8 — read a progress-gated nibble counter and scale it. Index the
  *  per-progress nibble table (g_platinumBoltFlags+0x230, stride 0x400 keyed by
- *  g_playerProgress) at index>>1; for an odd index the high nibble ((byte>>4)&7)
- *  selects a slot in `table`, for an even index the raw byte is used, then return
- *  (value * mult) / 100. */
+ *  g_playerProgress) at index>>1; take the selected byte's low nibble (even index)
+ *  or high nibble (odd index), mask it to 0..7, and use THAT to index `table` — both
+ *  parities index table[nibble & 7]. Return (table[nibble & 7] * mult) / 100. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027A0C8);
 #else
@@ -365,7 +365,7 @@ s32 func_0027A0C8(u8 *table, s32 mult, s32 index) {
     if (index & 1) {
         value = table[(*entry >> 4) & 7];
     } else {
-        value = *entry;
+        value = table[*entry & 7];
     }
     return (value * mult) / 100;
 }
