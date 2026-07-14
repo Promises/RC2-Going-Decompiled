@@ -672,7 +672,10 @@ s32 func_002D5F10(void) {
 
 /* Draw the ship-customization back/help line: a right-justified label whose
  * Y follows the customization-panel scroll fraction (offset by 36px when a
- * sub-panel is open). Returns 0. Wall: float scroll arithmetic. */
+ * sub-panel is open). Returns 0. Wall: float scroll arithmetic.
+ * Byte-match: engine-2.96 SAVE-SLOT wall (prologue packs $16/$31 at 8-byte
+ * spacing 0x0/0x8; 2.9 reserves 16-byte slots) → match impossible, #else is
+ * correct. Not "TODO(match)". */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D6028);
 #else
@@ -1957,7 +1960,14 @@ s32 UploadMenuBgImagePair(void *obj) {
 /* Draw the animated galactic-map planet-cursor sprite at the active slot, with
  * a pulsing scale driven by the global frame counter and a layout that differs
  * for the save-screen vs map-screen instances. Returns 4 when drawn, else 0.
- * Wall: large constant-layout block + GS register packets. */
+ * WALL (empirically confirmed 2026-07-14, canonical-2.9 objdiff): engine-2.96
+ * SAVE-SLOT wall — the ROM packs 9 GPR + 4 FPR saves at 8-byte spacing (frame
+ * 0x70); the pinned 2.9 cc1 reserves 16-byte slots (frame 0xA0). Not
+ * C-controllable → matches impossible, #else is correct (prior "const-layout"
+ * note was imprecise). Secondary near-miss: the ROM reads currentLevel/activeSlot
+ * as g_mapVertexData struct fields (+0x230/+0x234, absolute) where the #else uses
+ * the gp-rel g_nMapCurrentLevel/g_nMapActiveSlot aliases — a real modeling lever,
+ * but it cannot overcome the save-slot wall. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DBC98);
 #else
@@ -2384,7 +2394,10 @@ s32 func_002DC8A8(void) {
 /* Draw the memory-card system-message text box three times (shadow / shadow /
  * face) plus a flat backing rect, choosing the message string from the current
  * card status code (D_001F28A4). Returns 2. Wall: stack text-box struct built
- * with 128-bit packing + gp-relative cached colours. */
+ * with 128-bit packing + gp-relative cached colours.
+ * Byte-match: engine-2.96 SAVE-SLOT wall (prologue packs $16/$17/$31 at 8-byte
+ * spacing 0x40/0x48/0x50; 2.9 reserves 16-byte slots) → match impossible, #else
+ * is correct. Not "TODO(match)". */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC940);
 #else
@@ -2680,7 +2693,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DD888);
  * to the level) or forces a state change; otherwise runs the 4-slot cursor
  * (held nav when bit 0 set), and on X starts a quick save into 0x1F29F0 with a
  * 0xD-frame autosave arm. Returns 0/1/-1.
- * Wall: large branch graph over save-system globals. */
+ * Wall: large branch graph over save-system globals.
+ * Byte-match: engine-2.96 SAVE-SLOT wall (prologue packs 7 regs at 8-byte
+ * spacing 0x0..0x30; 2.9 reserves 16-byte slots) → match impossible, #else is
+ * correct. Not "TODO(match)". */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DDD30);
 #else
