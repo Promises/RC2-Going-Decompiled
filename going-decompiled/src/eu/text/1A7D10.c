@@ -3132,7 +3132,7 @@ void func_002AF420(Moby *moby, void *ctrlPtr, f32 stepZ, f32 snapEps) {
 
     if (*(s16 *)(c + 0x28) == 0) {
         /* idle: choose a new heading jitter + dwell timer */
-        *(f32 *)(c + 0x24) += func_002A82F0(0.7853982f, 2.6183867f);
+        *(f32 *)(c + 0x24) += func_002A82F0(0.7853982f, 2.6179941f);
         *(s16 *)(c + 0x2A) = (s16)func_002A8238(*(s16 *)(c + 0x2C), *(s16 *)(c + 0x2E));
         *(s16 *)(c + 0x28) = 1;
     } else {
@@ -3147,7 +3147,7 @@ void func_002AF420(Moby *moby, void *ctrlPtr, f32 stepZ, f32 snapEps) {
     probe = *mpos;
     probe.x += func_00283A40(*(f32 *)(m + 0xF8)) * *(f32 *)(c + 0x14);
     probe.y += func_00283A58(*(f32 *)(m + 0xF8)) * *(f32 *)(c + 0x14);
-    blocked = func_002A88B8(moby, mpos, &probe, 0, stepZ, *(f32 *)(c + 0x10), snapEps, 0.5235988f);
+    blocked = func_002A88B8(moby, mpos, &probe, 0, stepZ, *(f32 *)(c + 0x10), snapEps, 0.52359885f);
     *(f32 *)(m + 0x18) = func_002A93C0(mpos, 0.5f, 0);
     dist = func_00283740(mpos, (Vec4 *)c);
 
