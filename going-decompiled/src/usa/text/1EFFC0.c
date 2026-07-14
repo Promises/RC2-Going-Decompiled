@@ -131,8 +131,54 @@ void PatchTfragPacketTex0(void) {
 }
 #endif
 
-/* TODO(hle): needs PS2 graphics/IO HLE backend - builds the tfrag VIF1/GIF draw segment into the frame DMA chain. */
+/* Opens/builds the tfrag draw segment into the frame's VIF1 chain. Snapshots
+ * the frame DMA cursor as the segment head tag, advances the cursor by one
+ * qword, resets the dynamic VRAM bump cursor, then builds a view matrix on the
+ * stack (identity, translation row = -1024 * cameraPos with w=1) composed with
+ * the camera view matrix (cameraPos-0x100), uploads it via two VIF unpacks,
+ * culls+emits the tfrags, closes the segment, and clears the 0x3000-byte
+ * tfrag relight list.
+ *
+ * NOT byte-matched (engine-2.96 TU): (1) the original packs the two saved regs
+ * ($16/$31) into 8-byte stack slots (frame 0x50) whereas canonical ee-gcc 2.9
+ * uses 16-byte save slots (frame 0x60) — the save-slot delta; (2) g_frameDmaCursor
+ * is written %gp_rel here but read absolute (the same gp/abs-split reload artifact
+ * documented on BuildTieDrawSegment). Body is otherwise instruction-equivalent;
+ * kept as the portable #else impl. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", BuildTfragDrawSegment);
+#else
+extern u8  *g_pTfragSegmentOpenTag;   /* 0x1B211C tfrag draw-segment head tag */
+extern u16  g_tfragRelightList[];     /* 0x215E00 u16 tfrag ids, 0xFFFF-terminated */
+extern u8   g_cameraPos[];            /* 0x1B52C0 camera world position vec4 */
+
+void MatrixIdentityVu0(void *m);
+void Vec4ScaleVu0(void *dst, f32 scale, void *src);
+void MatrixMultiplyVu0(void *dst, void *a, void *b);
+void AppendVifUnpackPacket(s32 vuAddr, void *data, s32 qwordCount);
+void CullAndEmitTfrags(void);
+void CloseTfragDrawSegment(void);
+void func_00283558(void *dst, s32 fill, s32 len);
+
+void BuildTfragDrawSegment(void) {
+    f32 mtx[16]; /* 0x40-byte stack 4x4 matrix */
+
+    g_pTfragSegmentOpenTag = g_frameDmaCursor;
+    g_frameDmaCursor += 0x10;
+    g_vramAllocCursor = g_vramDynamicBase;
+
+    MatrixIdentityVu0(mtx);
+    Vec4ScaleVu0(&mtx[12], -1024.0f, g_cameraPos);
+    mtx[15] = 1.0f;
+    MatrixMultiplyVu0(mtx, g_cameraPos - 0x100, mtx);
+    AppendVifUnpackPacket(5, mtx, 4);
+    AppendVifUnpackPacket(0x14D, mtx, 4);
+    func_0011AEA0(0);
+    CullAndEmitTfrags();
+    CloseTfragDrawSegment();
+    func_00283558(g_tfragRelightList, 0x3000, 0x40);
+}
+#endif
 
 /* TODO(hle): needs PS2 graphics/IO HLE backend - VU0 frustum-culls tfrags and emits their draw packets. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", CullAndEmitTfrags);
