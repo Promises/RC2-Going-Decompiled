@@ -201,9 +201,110 @@ void func_003361C0(GuiQword *src) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336218);
 
+/* func_00336230(a, b, mode, arg3, arg4): allocate + switch to a camera (mode 5)
+ * and seed its transform block. Snapshots four qwords (*a, *b, g_cameraPos[0],
+ * g_cameraPos[1]) to locals, then SwitchActiveCamera; sub = cam[+0x70]. Common:
+ * cam[0x7D]=1; cam+0x30 = g_cameraPos = *a; cam+0x40 = *b; sub+0x80 = *a;
+ * sub+0x90 = *b; sub+0x120 = arg4; cam[0x88] = mode. mode 3 additionally seeds a
+ * 1.0 blend at sub+0x124 (sub+0x128=0), overrides cam+0x30/+0x40 with the saved
+ * g_cameraPos qwords, copies g_heroPos to sub+0x110 and runs func_00272560(sub+0xFC,
+ * &camPos). mode 2 and 3 both stamp arg3 at sub+0xE0/+0xE4. Faithful TARGET_NATIVE
+ * #else (engine 2.96 qword-copy regalloc = no byte-match). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336230);
+#else
+extern u8   g_cameraPos[];
+extern u8   g_heroPos[];
+extern void SwitchActiveCamera(void *cam);
+extern void func_00272560(void *dst, void *src);
 
+typedef struct { u32 w0, w1, w2, w3; } Qw128_235FE8;   /* one 16-byte lq/sq qword */
+
+void func_00336230(void *a, void *b, s32 mode, s32 arg3, s32 arg4) {
+    u8 *gcp = g_cameraPos;
+    Qw128_235FE8 srcA = *(Qw128_235FE8 *)a;
+    Qw128_235FE8 srcB = *(Qw128_235FE8 *)b;
+    Qw128_235FE8 camPos0 = *(Qw128_235FE8 *)gcp;
+    Qw128_235FE8 camPos1 = *(Qw128_235FE8 *)(gcp + 0x10);
+    u8 *cam = (u8 *)func_00270290(5);
+    u8 *sub;
+
+    SwitchActiveCamera(cam);
+    sub = *(u8 **)(cam + 0x70);
+
+    cam[0x7D] = 1;
+    *(Qw128_235FE8 *)(cam + 0x30) = srcA;
+    *(Qw128_235FE8 *)gcp          = srcA;
+    *(Qw128_235FE8 *)(cam + 0x40) = srcB;
+    *(Qw128_235FE8 *)(sub + 0x80) = srcA;
+    *(Qw128_235FE8 *)(sub + 0x90) = srcB;
+    *(s32 *)(sub + 0x120) = arg4;
+    cam[0x88] = (u8)mode;
+
+    if (mode == 3) {
+        *(s32 *)(sub + 0x128) = 0;
+        *(f32 *)(sub + 0x124) = 1.0f;
+        *(Qw128_235FE8 *)(cam + 0x30) = camPos0;
+        *(Qw128_235FE8 *)(cam + 0x40) = camPos1;
+        *(Qw128_235FE8 *)(sub + 0x110) = *(Qw128_235FE8 *)g_heroPos;
+        func_00272560(sub + 0xFC, &camPos0);
+    }
+    if (mode == 2 || mode == 3) {
+        *(s32 *)(sub + 0xE4) = arg3;
+        *(s32 *)(sub + 0xE0) = arg3;
+    }
+}
+#endif
+
+/* func_003363A0(mode): set the active camera's transition mode. func_002704E0()
+ * refreshes camera bookkeeping; cam = *(g_cameraState+0x190). mode 0 rebuilds the
+ * camera look vector at cam+0x30 from the hero orientation (g_heroOrientVec):
+ * transform it into a scratch matrix (func_00283DC0 then func_00284028, which
+ * fills buf+0x20..), rescale two rows (Vec3RescaleToLenVu0, len -1.0 then 1.2),
+ * combine (Vec4AddVu0) and set cam[0x8A]=1. modes 1/2/4 stamp the transition id at
+ * cam+0x7E (3/2/5) and, for 2/4, clear g_cameraState[0x293] and set the 0.018 fade
+ * rate at +0x2A8/+0x2B4. Faithful TARGET_NATIVE #else (engine 2.96 regalloc = no
+ * byte-match); buf+0x40 is read from the callee-written scratch matrix region. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003363A0);
+#else
+extern s32  g_cameraState[];       /* +0x190 = active camera obj ptr */
+extern u8   g_heroOrientVec[];
+extern void func_00283DC0(void *dst, void *src);
+extern void func_00284028(void *cam, void *scratch);
+extern void Vec3RescaleToLenVu0(void *dst, void *src, f32 len);
+extern void Vec4AddVu0(void *dst, void *a, void *b);
+
+void func_003363A0(s32 mode) {
+    u8 *cs  = (u8 *)g_cameraState;
+    u8 *cam = *(u8 **)(cs + 0x190);
+
+    func_002704E0();
+    if (mode == 0) {
+        u8  buf[0x50];
+        u8 *hero = g_heroOrientVec;
+        func_00283DC0(buf + 0x20, hero);
+        func_00284028(cam, buf + 0x20);
+        Vec3RescaleToLenVu0(buf + 0x10, buf + 0x20, -1.0f);
+        Vec3RescaleToLenVu0(buf + 0x00, buf + 0x40, 1.2f);
+        Vec4AddVu0(cam + 0x30, hero - 0x10, buf + 0x00);
+        Vec4AddVu0(cam + 0x30, cam + 0x30, buf + 0x10);
+        *(s16 *)(*(u8 **)(cs + 0x190) + 0x8A) = 1;
+    } else if (mode == 2) {
+        cs[0x293] = 0;
+        *(s16 *)(cam + 0x7E) = 2;
+        *(f32 *)(cs + 0x2A8) = 0.018f;
+        *(f32 *)(cs + 0x2B4) = 0.018f;
+    } else if (mode == 1) {
+        *(s16 *)(cam + 0x7E) = 3;
+    } else if (mode == 4) {
+        cs[0x293] = 0;
+        *(s16 *)(cam + 0x7E) = 5;
+        *(f32 *)(cs + 0x2A8) = 0.018f;
+        *(f32 *)(cs + 0x2B4) = 0.018f;
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003364E0);
 
@@ -280,7 +381,72 @@ void func_00336720(void *p, s32 flag) {
 }
 #endif
 
+/* func_00336768(arg0, out, t): sample the keyframe track at arg0->field_8 into a
+ * Vec4 at out for time t. obj = arg0[+8]; count = obj[+0x10]; kf = obj[+0xC]
+ * (linked keyframes: next@+0, time@+0x8, Vec4@+0xC). count 0 -> no-op; count 1 ->
+ * copy kf[0]'s Vec4. Otherwise walk the list to the bracket [prev, cur] with
+ * prev.time <= t (stopping at cur.time > t, list end, or the count cap), compute
+ * f = (t - prev.time)/(cur.time - prev.time), and — only when obj[+0x14] is 0 or 1
+ * — write the lerp (1-f)*prev.Vec4 + f*cur.Vec4. Faithful TARGET_NATIVE #else
+ * (engine 2.96 FP scheduling/likely-branch = no byte-match). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336768);
+#else
+void func_00336768(void *arg0, void *out, f32 t) {
+    u8 *o   = (u8 *)out;
+    u8 *obj = *(u8 **)((u8 *)arg0 + 8);
+    s32 count = *(s32 *)(obj + 0x10);
+    u8 *kf, *prev, *cur, *next;
+    s32 i, mode;
+    f32 f, invf, pt, ct;
+
+    if (count == 0) {
+        return;
+    }
+    kf = *(u8 **)(obj + 0xC);
+    if (count == 1) {
+        *(f32 *)(o + 0x0) = *(f32 *)(kf + 0xC);
+        *(f32 *)(o + 0x4) = *(f32 *)(kf + 0x10);
+        *(f32 *)(o + 0x8) = *(f32 *)(kf + 0x14);
+        *(f32 *)(o + 0xC) = *(f32 *)(kf + 0x18);
+        return;
+    }
+
+    prev = kf;
+    cur  = kf;
+    next = *(u8 **)kf;
+    if (next != 0 && *(f32 *)(kf + 0x8) <= t) {
+        for (i = 0; ; ) {
+            cur = next;
+            i++;
+            if ((u32)i >= (u32)count) {
+                break;
+            }
+            next = *(u8 **)cur;
+            if (next == 0) {
+                break;
+            }
+            if (*(f32 *)(cur + 0x8) > t) {
+                break;
+            }
+            prev = cur;
+        }
+    }
+
+    pt = *(f32 *)(prev + 0x8);
+    ct = *(f32 *)(cur + 0x8);
+    f  = (t - pt) / (ct - pt);
+    mode = *(s32 *)(obj + 0x14);
+    if (mode < 0 || mode >= 2) {
+        return;
+    }
+    invf = 1.0f - f;
+    *(f32 *)(o + 0x0) = invf * *(f32 *)(prev + 0xC)  + f * *(f32 *)(cur + 0xC);
+    *(f32 *)(o + 0x4) = invf * *(f32 *)(prev + 0x10) + f * *(f32 *)(cur + 0x10);
+    *(f32 *)(o + 0x8) = invf * *(f32 *)(prev + 0x14) + f * *(f32 *)(cur + 0x14);
+    *(f32 *)(o + 0xC) = invf * *(f32 *)(prev + 0x18) + f * *(f32 *)(cur + 0x18);
+}
+#endif
 
 /* func_003368D0: install the D_1AD988 vtable at +0x0 and return the object. */
 void *func_003368D0(void *p) {
@@ -4038,7 +4204,55 @@ void func_0033FEF8(void *e) {
 }
 #endif
 
+/* func_0033FF68(self): initialise a composite GUI panel — a fixed layout of child
+ * elements at self+offset. Eleven type-B elements (self+0, then stride 0x4C to
+ * +0x214, a list-row at +0x260, then +0x2A8/+0x2F4), a stride-0x4C run of 8 more
+ * type-B (self+0x340..), one at +0x5A0, a stride-0x3C run of 8 func_003374D8
+ * elements (self+0x5EC..), one at +0x7D0, then six type-C (self+0x828/0x880/
+ * 0x8D8/0x930/0x988/0x9E0). Returns self. Faithful TARGET_NATIVE #else. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033FF68);
+#else
+void *func_0033FF68(void *self) {
+    u8 *s = (u8 *)self;
+    u8 *p;
+    s32 i;
+
+    GuiElementInitTypeB(s + 0x000);
+    GuiElementInitTypeB(s + 0x04C);
+    GuiElementInitTypeB(s + 0x098);
+    GuiElementInitTypeB(s + 0x0E4);
+    GuiElementInitTypeB(s + 0x130);
+    GuiElementInitTypeB(s + 0x17C);
+    GuiElementInitTypeB(s + 0x1C8);
+    GuiElementInitTypeB(s + 0x214);
+    GuiListRowElementInit(s + 0x260);
+    GuiElementInitTypeB(s + 0x2A8);
+    GuiElementInitTypeB(s + 0x2F4);
+
+    p = s + 0x340;
+    for (i = 7; i != -1; i--) {
+        GuiElementInitTypeB(p);
+        p += 0x4C;
+    }
+    GuiElementInitTypeB(s + 0x5A0);
+
+    p = s + 0x5EC;
+    for (i = 7; i != -1; i--) {
+        func_003374D8(p);
+        p += 0x3C;
+    }
+    func_003374D8(s + 0x7D0);
+    GuiElementInitTypeC(s + 0x828);
+    GuiElementInitTypeC(s + 0x880);
+    GuiElementInitTypeC(s + 0x8D8);
+    GuiElementInitTypeC(s + 0x930);
+    GuiElementInitTypeC(s + 0x988);
+    GuiElementInitTypeC(s + 0x9E0);
+
+    return self;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003400D8);
 
