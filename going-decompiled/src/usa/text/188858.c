@@ -1421,9 +1421,259 @@ void BeginSubtitleDisplay(void) {
 /* UpdateSubtitleStateMachine(): per-frame tick of the subtitle/voice display
  * state machine (large dispatcher, ~0x928 bytes).
  *
- * WALL: compiler-emitted jump tables (jtbl) + float timing math; the jr-through-
- * jtbl dispatch and FP scheduling are not reproducible from C. Left INCLUDE_ASM. */
+ * MATCH-WALL: compiler jtbl dispatch (jtbl_0026C7A0_text) not reproducible from a
+ * C switch; the #ifndef arm stays INCLUDE_ASM, the #else arm is the faithful
+ * functional model (engine 2.96 = no byte-match; NB it is pure integer, no FP).
+ * Addressing notes: g_subtitleState is at 0x254DF8 — its fields at +0x28..+0x48
+ * (the "0x254e2x" globals) are read via the FULL address (real offsets); .state
+ * (+0) is also written via the %hi page base (the .s `0x4DF8($17)` sites = offset
+ * 0, NOT +0x4DF8). Save table = g_health+0x66C stride 0xC. Voice-clip flags =
+ * g_discToc[voice]+0x2A20. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", UpdateSubtitleStateMachine);
+#else
+extern s32 g_playerProgress;             /* 0x1A79F8 first word: save-valid flag + bit index */
+extern s32 g_gsPixelOffsetY;             /* 0x1A7354; +0x3C = current clip position value */
+extern u16 D_138320, D_138324;           /* pad button state */
+/* g_health (+0x66C save table stride 0xC), g_discToc (+0x2A20 per-voice flag
+ * table), FindTextTableEntry: file-scope. */
+extern s32 g_dialogVoiceId, g_dialogVoicePhase, g_dialogVoiceActive;
+extern s32 g_pendingDialogVoiceId, g_pendingVoiceAux;
+extern void BeginSubtitleDisplay(void);
+extern void StopDialogVoice(void);
+extern void func_0028AA70(s32 id);
+extern s32 func_002832F8(s32 p);
+extern void func_002B1B48(s32 a, s32 b, s32 c);
+void UpdateSubtitleStateMachine(void) {
+    u8  *ss = (u8 *)&g_subtitleState;
+    s32  slot;   /* g_subtitleState+0x28: current save-slot / voice index */
+    u8  *save;
+    s16  sVar;
+    s32  clip;
+    s32  iVar3;
+
+    /* +0x30 = "system ready" gate; +0x34 = arm timer */
+    if (*(s32 *)(ss + 0x30) == 0) {
+        if (g_playerProgress < 0) {
+            if (*(s32 *)(ss + 0x34) == 0) {
+                if ((D_138320 & 0xF000) != 0) {
+                    *(s32 *)(ss + 0x34) = 1;
+                }
+                if (*(s32 *)(ss + 0x34) == 0) {
+                    goto gate;
+                }
+            }
+            *(s32 *)(ss + 0x34) += 1;
+            if (0x77 < *(s32 *)(ss + 0x34)) {
+                *(s32 *)(ss + 0x30) = 1;
+            }
+        } else {
+            *(s32 *)(ss + 0x34) = 0x78;
+            *(s32 *)(ss + 0x30) = 1;
+        }
+    }
+gate:
+    if (((g_nGameState != 0) && (g_nGameState != 7)) || (*(s32 *)(ss + 0x30) == 0)) {
+        g_subtitleState.state = 0;
+        g_subtitleState.animStep = 0;
+        g_subtitleState.showingIndex = -1;
+        return;
+    }
+    g_subtitleState.animStep += 1;
+    if (D_1A7B9C == 0 &&
+        g_pActiveTextTable[g_subtitleState.entryIndex].voice == g_dialogVoiceId - 6000 &&
+        1 < g_dialogVoicePhase - 6) {
+        g_dialogVoicePhase = 5;
+    }
+
+    slot = *(s32 *)(ss + 0x28);
+    save = (u8 *)&g_health + 0x66C + slot * 0xC;
+
+    switch (g_subtitleState.state) {
+    case 0:
+        if (g_subtitleState.showingIndex >= 0) {
+            g_subtitleState.entryIndex = FindTextTableEntry(g_subtitleState.showingIndex);
+            func_0028AA70(g_subtitleState.showingIndex);
+            g_subtitleState.showingIndex = -1;
+            if (g_subtitleState.entryIndex >= 0) {
+                BeginSubtitleDisplay();
+            }
+        }
+        break;
+    case 1:
+    case 2:
+        if (D_1A7B9C != 0 &&
+            g_pActiveTextTable[g_subtitleState.entryIndex].voice != -1 &&
+            *(s32 *)((u8 *)g_discToc + g_pActiveTextTable[g_subtitleState.entryIndex].voice * 4 + 0x2A20) != 0 &&
+            g_dialogVoiceActive == 0 && g_pendingDialogVoiceId == -1) {
+            g_pendingVoiceAux = 0;
+            g_pendingDialogVoiceId = slot + 6000;
+        }
+        if ((D_138324 & 0x10) != 0) {
+            goto commit_state7;
+        }
+        if (g_subtitleState.animStep < 1) {
+            return;
+        }
+        if (g_dialogVoicePhase != 3 || g_dialogVoiceId < 6000) {
+            clip = g_pActiveTextTable[g_subtitleState.entryIndex].voice;
+            if (clip != -1) {
+                if (*(s32 *)((u8 *)g_discToc + clip * 4 + 0x2A20) == 0) {
+                    iVar3 = 3;
+                    goto set_state;
+                }
+                if (clip == g_dialogVoiceId - 6000) {
+                    return;
+                }
+            }
+        }
+        iVar3 = 3;
+        goto set_state;
+    case 3:
+        func_002B1B48(5, 0, 1);
+        if ((D_138324 & 0x10) == 0) {
+            if (g_subtitleState.animStep < 8) {
+                return;
+            }
+            g_subtitleState.state = 4;
+            g_subtitleState.animStep = 0;
+            return;
+        }
+        goto commit_state7;
+    case 4:
+        func_002B1B48(5, 0, 1);
+        if ((D_138324 & 0x10) != 0) {
+            sVar = *(s16 *)(save + 0);
+            if (sVar != -1) {
+                *(s16 *)(save + 0) = sVar + 1;
+            }
+            if (*(u32 *)(save + 4) < *(u32 *)((u8 *)&g_gsPixelOffsetY + 0x3C)) {
+                *(u32 *)(save + 4) = *(u32 *)((u8 *)&g_gsPixelOffsetY + 0x3C);
+            }
+            g_subtitleState.state = 6;
+            g_subtitleState.animStep = 4 - g_subtitleState.animStep;
+            *(u32 *)(save + 8) |= (1u << (g_playerProgress & 0x1F)) | 0x80000000;
+            return;
+        }
+        if (g_subtitleState.animStep < 4) {
+            return;
+        }
+        clip = g_pActiveTextTable[g_subtitleState.entryIndex].voice;
+        if (clip != -1) {
+            if (*(s32 *)((u8 *)g_discToc + clip * 4 + 0x2A20) != 0 && clip != g_dialogVoiceId - 6000 &&
+                D_1A7B9C != 0) {
+                g_subtitleState.state = 5;
+                g_subtitleState.animStep = 0;
+                return;
+            }
+            if (g_pActiveTextTable[g_subtitleState.entryIndex].voice != -1 &&
+                *(s32 *)((u8 *)g_discToc + g_pActiveTextTable[g_subtitleState.entryIndex].voice * 4 + 0x2A20) != 0 &&
+                (g_dialogVoicePhase != 3 || g_dialogVoiceId < 6000) && D_1A7B9C != 0) {
+                return;
+            }
+        }
+        if (D_1A7B9C != 0) {
+            if (g_pActiveTextTable[g_subtitleState.entryIndex].voice != g_dialogVoiceId - 6000) {
+                iVar3 = 5;
+                goto set_state;
+            }
+            StopDialogVoice();
+        }
+        iVar3 = 5;
+        goto set_state;
+    case 5:
+        func_002B1B48(5, 0, 1);
+        if ((g_subtitleState.animStep < *(s32 *)(ss + 0x48) ||
+             (g_pActiveTextTable[g_subtitleState.entryIndex].voice != -1 &&
+              *(s32 *)((u8 *)g_discToc + g_pActiveTextTable[g_subtitleState.entryIndex].voice * 4 + 0x2A20) != 0 &&
+              D_1A7B9C != 0)) &&
+            ((D_1A7B9C == 0 ||
+              (clip = g_pActiveTextTable[g_subtitleState.entryIndex].voice, clip == -1) ||
+              *(s32 *)((u8 *)g_discToc + clip * 4 + 0x2A20) == 0 || clip == g_dialogVoiceId - 6000) &&
+             (D_138324 & 0x10) == 0)) {
+            return;
+        }
+        sVar = *(s16 *)(save + 0);
+        if (sVar != -1) {
+            *(s16 *)(save + 0) = sVar + 1;
+        }
+        if (*(u32 *)(save + 4) < *(u32 *)((u8 *)&g_gsPixelOffsetY + 0x3C)) {
+            *(u32 *)(save + 4) = *(u32 *)((u8 *)&g_gsPixelOffsetY + 0x3C);
+        }
+        g_subtitleState.state = 6;
+        g_subtitleState.animStep = 0;
+        *(u32 *)(save + 8) |= (1u << (g_playerProgress & 0x1F)) | 0x80000000;
+        break;
+    case 6:
+        if (D_1A7B9C != 0 && g_subtitleState.animStep < 4 && (D_138324 & 0x10) == 0) {
+            return;
+        }
+        iVar3 = 7;
+        g_subtitleState.animStep = 0;
+        g_subtitleState.state = iVar3;
+        break;
+    case 7:
+        func_002B1B48(5, 0, 1);
+        if (g_pActiveTextTable[g_subtitleState.entryIndex].voice == g_dialogVoiceId - 6000 &&
+            1 < g_dialogVoicePhase - 6) {
+            g_dialogVoicePhase = 5;
+        }
+        if (7 < g_subtitleState.animStep) {
+            if (*(s32 *)(ss + 0x38) == 0) {
+                g_subtitleState.state = 0;
+                g_subtitleState.entryIndex = -1;
+            } else {
+                g_subtitleState.state = 8;
+            }
+            g_subtitleState.animStep = 0;
+        }
+        break;
+    case 8:
+        if (*(s32 *)(ss + 0x38) == 0) {
+            if (g_subtitleState.entryIndex >= 0) {
+                if (*(s16 *)(ss + 0x3A) == 0) {
+                    if (func_002832F8((s32)(ss + 0x3C)) == 0) {
+                        return;
+                    }
+                    BeginSubtitleDisplay();
+                    *(s16 *)(ss + 0x3A) += 1;
+                    return;
+                }
+                sVar = *(s16 *)(save + 0);
+                if (sVar != -1) {
+                    *(s16 *)(save + 0) = sVar + 1;
+                }
+            }
+            if (*(u32 *)(save + 4) < *(u32 *)((u8 *)&g_gsPixelOffsetY + 0x3C)) {
+                *(u32 *)(save + 4) = *(u32 *)((u8 *)&g_gsPixelOffsetY + 0x3C);
+            }
+            g_subtitleState.entryIndex = -1;
+            g_subtitleState.state = 0;
+            *(s16 *)(ss + 0x3A) = 0;
+            *(u32 *)(save + 8) |= (1u << (g_playerProgress & 0x1F)) | 0x80000000;
+        }
+        break;
+    }
+    return;
+
+commit_state7:
+    sVar = *(s16 *)(save + 0);
+    if (sVar != -1) {
+        *(s16 *)(save + 0) = sVar + 1;
+    }
+    if (*(u32 *)(save + 4) < *(u32 *)((u8 *)&g_gsPixelOffsetY + 0x3C)) {
+        *(u32 *)(save + 4) = *(u32 *)((u8 *)&g_gsPixelOffsetY + 0x3C);
+    }
+    g_subtitleState.state = 7;
+    g_subtitleState.animStep = 0;
+    *(u32 *)(save + 8) |= (1u << (g_playerProgress & 0x1F)) | 0x80000000;
+    return;
+
+set_state:
+    g_subtitleState.animStep = 0;
+    g_subtitleState.state = iVar3;
+}
+#endif
 
 void func_0028A4E0(void) {
 }
