@@ -128,9 +128,89 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/190808", func_00290FD8);
 
 /* func_00291150: EU twin of USA func_00291148 (validate inventory display order).
  * Blocked by the 8-byte-packed callee-save layout (see USA twin). */
+#ifdef TARGET_NATIVE
+#define INVENTORY_ORDER_COUNT 0x20
+#define ITEM_HELIPACK         0x1E
+extern u8  g_inventoryOrder[];            /* EU 0x1A7BF0 (USA 0x1A7B70, +0x80) */
+extern s32 func_00289080(s32 itemClass); /* EU twin of USA func_00289190 (ownable check) */
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/190808", func_00291150);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee-save
+ * layout. Walks the inventory display order and 0xFF-clears any entry whose item
+ * class is no longer ownable. Returns 1 if already clean, 0 if it cleared one. */
+s32 func_00291150(void) {
+    s32 i;
+    s32 clean = 1;
+
+    for (i = 0; i < INVENTORY_ORDER_COUNT; i++) {
+        u8 entry = g_inventoryOrder[i];
+        s32 itemClass;
+
+        if (entry == 0xFF) {
+            continue;                      /* terminator/empty slot */
+        }
+        itemClass = entry & 0x3F;
+        if (itemClass == ITEM_HELIPACK) {
+            continue;                      /* Heli-Pack is always exempt */
+        }
+        if (func_00289080(itemClass) == 0 || itemClass == 0) {
+            g_inventoryOrder[i] = 0xFF;
+            clean = 0;
+        }
+    }
+    return clean;
+}
+#endif
 
 /* func_002911F8: EU twin of USA func_002911F0 (grant always-owned starting
  * items, re-validate display order). Blocked by register-coloring residue (see
  * USA twin). */
+#ifdef TARGET_NATIVE
+extern u8  g_inventoryOwned[];            /* EU 0x1A7B80 (USA 0x1A7B00, +0x80) */
+extern u8  g_inventoryNewFlag[];          /* EU 0x1A7BB8 (USA 0x1A7B38, +0x80) */
+extern u32 g_itemEquipSlotTable[];        /* EU 0x1A7418 (USA 0x1A7398, +0x80) */
+extern s32 g_playerProgress;
+extern void GiveInventoryItem(s32 itemId);
+extern void func_002AE3C0(s32 itemId);    /* EU twin of USA func_002AE6C8 (EquipGadgetItem) */
+extern void func_002912C0(s32 progress);  /* EU twin of USA func_002912B8 (re-insert unlocked) */
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/190808", func_002911F8);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 99.40% wall is pure
+ * register-coloring of the three byte-store temps (see USA twin).
+ * GrantDefaultGadgetLoadout: grant the always-owned starting items the save is
+ * missing, then re-validate and rebuild the display order. */
+void func_002911F8(void) {
+    /* 0x1E Heli-Pack: owned bit in display-order slot 0, equip-slot[0]. */
+    if (g_inventoryOwned[0x1E] == 0) {
+        GiveInventoryItem(0x1E);
+        func_002AE3C0(0x1E);
+        g_inventoryOrder[0]      = 0x5E;   /* 0x1E | 0x40 (owned) */
+        g_itemEquipSlotTable[0]  = 0x1E;
+    }
+    /* 0x2A: owned bit in display-order slot 1. */
+    if (g_inventoryOwned[0x2A] == 0) {
+        GiveInventoryItem(0x2A);
+        func_002AE3C0(0x2A);
+        g_inventoryOrder[1]      = 0x6A;   /* 0x2A | 0x40 (owned) */
+    }
+    /* 0x2F: equip-slot[2]. */
+    if (g_inventoryOwned[0x2F] == 0) {
+        GiveInventoryItem(0x2F);
+        g_itemEquipSlotTable[2]  = 0x2F;
+    }
+    /* 0x06: ensure the owned + newly-acquired flag pair is set. */
+    if (g_inventoryOwned[0x06] == 0) {
+        g_inventoryNewFlag[0x06] = 1;
+        g_inventoryOwned[0x06]   = 1;
+    }
+
+    func_00291150();
+    func_002912C0(g_playerProgress);
+}
+#endif

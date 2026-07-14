@@ -45,7 +45,15 @@ f32 func_00283140(f32 x) {
 /* func_00283150: (s32)((f32)x * D_1A7990 + 0.5f) rounded-conversion twin —
  * blocked by the adda.s/madd.s ACC-constant fused-madd codegen wall (the
  * pinned cc1 only emits mul.s + add.s). Same wall as the USA sibling. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/183088", func_00283150);
+#else
+/* TODO(match): functional equivalent - not byte-exact; adda.s/madd.s ACC-constant
+ * rounding idiom this cc1 won't emit (same wall as USA func_00283240). */
+s32 func_00283150(s32 x) {
+    return (s32)((f32)x * D_1A7990 + 0.5f);
+}
+#endif
 
 /** Scale x by the D_1A7994 conversion factor. */
 f32 func_00283178(f32 x) {
@@ -53,7 +61,15 @@ f32 func_00283178(f32 x) {
 }
 
 /* func_00283188: rounded conversion by D_1A7994 — same adda.s/madd.s wall. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/183088", func_00283188);
+#else
+/* TODO(match): functional equivalent - not byte-exact; adda.s/madd.s wall
+ * (same as USA func_00283278). */
+s32 func_00283188(s32 x) {
+    return (s32)((f32)x * D_1A7994 + 0.5f);
+}
+#endif
 
 /** Scale x by the D_1A7998 conversion factor. */
 f32 func_002831B0(f32 x) {
@@ -61,7 +77,15 @@ f32 func_002831B0(f32 x) {
 }
 
 /* func_002831C0: rounded conversion by D_1A7998 — same adda.s/madd.s wall. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/183088", func_002831C0);
+#else
+/* TODO(match): functional equivalent - not byte-exact; adda.s/madd.s wall
+ * (same as USA func_002832B0). */
+s32 func_002831C0(s32 x) {
+    return (s32)((f32)x * D_1A7998 + 0.5f);
+}
+#endif
 
 /** Convert x from frames to seconds (x * 1/60). */
 f32 func_002831E8(f32 x) {
@@ -74,14 +98,107 @@ f32 func_002831F8(f32 x) {
 }
 
 /* func_00283208: hand-written s32 countdown step (pmaxw + addi). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/183088", func_00283208);
+#else
+/* TODO(match): functional equivalent - not byte-exact; handwritten pmaxw + addi
+ * countdown form (USA func_002832F8). Steps an s32 timer at *p: if already 0 -> 1
+ * (idle); else clamp to >=1, decrement, store; -> 0 while running, 2 on expiry. */
+s32 func_00283208(s32 *p) {
+    s32 v = *p;
+    if (v == 0) {
+        return 1;
+    }
+    if (v < 1) {
+        v = 1;
+    }
+    v -= 1;
+    *p = v;
+    if (v > 0) {
+        return 0;
+    }
+    return 2;
+}
+#endif
 
 /* func_00283238: hand-written s16 countdown step (pmaxw + addi). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/183088", func_00283238);
+#else
+/* TODO(match): functional equivalent - not byte-exact; handwritten pmaxw + addi
+ * countdown (USA func_00283328). s16 twin of func_00283208: same idle/run/expire
+ * return triple (1 idle, 0 running, 2 on expiry). */
+s32 func_00283238(s16 *p) {
+    s32 v = *p;
+    if (v == 0) {
+        return 1;
+    }
+    if (v < 1) {
+        v = 1;
+    }
+    v -= 1;
+    *p = (s16)v;
+    if (v > 0) {
+        return 0;
+    }
+    return 2;
+}
+#endif
 
 /* func_00283268: hand-written u8 countdown step (pmaxw + addi). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/183088", func_00283268);
+#else
+/* TODO(match): functional equivalent - not byte-exact; handwritten pmaxw + addi
+ * countdown (USA func_00283358). u8 twin of func_00283208: value is zero-extended
+ * (lbu) so the clamp only matters when v==0 -> idle return 1; else decrement,
+ * store, return 0 while running / 2 on expiry. */
+s32 func_00283268(u8 *p) {
+    s32 v = *p;
+    if (v == 0) {
+        return 1;
+    }
+    if (v < 1) {
+        v = 1;
+    }
+    v -= 1;
+    *p = (u8)v;
+    if (v > 0) {
+        return 0;
+    }
+    return 2;
+}
+#endif
 
 /* func_00283298: hand-written float countdown step against the D_1A79AC
  * threshold (addi/sub handwritten forms). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/183088", func_00283298);
+#else
+/* TODO(match): functional equivalent - not byte-exact; handwritten dsll32/slti
+ * sign-bit test + sub return form (USA func_00283388). Float countdown timer at *p
+ * against threshold D_1A79AC:
+ *   - if *p > threshold: subtract threshold, store, return 0 (still running);
+ *   - else: snap *p to 0.0, return a sign-of-remaining code: the original
+ *     reinterprets the float bits, shifts them into the high word and signed-
+ *     compares (slti ,1) so the test is true iff the value was negative or exactly
+ *     +0.0 -> returns (test ? 1 : 0) - 2, i.e. -1 for non-positive remaining, -2
+ *     for a strictly positive remaining (0 < *p <= threshold). */
+extern f32 D_1A79AC; /* = 1/60 (float countdown threshold) */
+s32 func_00283298(f32 *p) {
+    f32 v = *p;
+    f32 thr = D_1A79AC;
+    if (v <= thr) {
+        union { f32 f; s32 i; } u;
+        s64 hi;
+        s32 test;
+        u.f = v;
+        *p = 0.0f;
+        hi = (s64)u.i << 32;       /* dsll32 of the sign-extended float bits */
+        test = (hi < 1) ? 1 : 0;   /* slti $2, $1, 1 */
+        return test - 2;
+    }
+    *p = v - thr;
+    return 0;
+}
+#endif
