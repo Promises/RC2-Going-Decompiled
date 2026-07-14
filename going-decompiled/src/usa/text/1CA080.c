@@ -1059,9 +1059,66 @@ s32 func_002CD4E8(s32 *list) {
 }
 #endif
 
-/* menu data/list builder: ldl/ldr/sdl/sdr unaligned struct/const copy — left as INCLUDE_ASM
- * (cc1 won't reproduce the unaligned 64-bit copy idiom from clean C). */
+/* BuildCheatMenuItemList: build the cheat-menu item list. Copies two contiguous
+ * parallel tables (D_1AB958 = 8 cheat-entry indices, -1 terminated; D_1AB978 = the
+ * parallel display values) into one buffer, then for each entry still unlocked
+ * (D_1A7A58[entry] != 0) emits a 0x14-byte menu record into D_0025FC70:
+ *   {+0x0 value = D_1AB978[i], +0x4 label = &g_cheatFlags[entry], +0x8 = 0x2C5C,
+ *    +0xC = 0x2C5D, +0x10 = 0}, and finally a zero terminator at record[count].
+ * Blocked (match): the original ldl/ldr/sdl/sdr unaligned 64-bit copy idiom cc1 won't
+ * reproduce from clean C — #else fallback.
+ * NEEDS-TESTER-ORACLE: the parallel-array wiring + record layout are modeled from the
+ * asm; the contiguous buffer copy is required (the ROM lays D_1AB958/D_1AB978 0x20 apart,
+ * which separate host externs don't guarantee) — the oracle should confirm faithfulness. */
+#ifdef TARGET_NATIVE
+typedef struct {
+    s32  value;    /* +0x0 */
+    u8  *label;    /* +0x4  &g_cheatFlags[entry] */
+    s32  kind1;    /* +0x8  0x2C5C */
+    s32  kind2;    /* +0xC  0x2C5D */
+    s32  flags;    /* +0x10 */
+} CheatMenuItem;   /* 0x14 */
+extern s32 D_1AB958[];   /* 8 cheat-entry indices, -1 terminated */
+extern s32 D_1AB978[];   /* parallel display values */
+extern u8  D_1A7A58[];   /* per-cheat unlock flag, indexed by entry */
+extern u8  g_cheatFlags[];
+extern CheatMenuItem D_0025FC70[];
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", BuildCheatMenuItemList);
+#else
+void BuildCheatMenuItemList(void) {
+    s32 buf[16];   /* contiguous: [0..7] entries, [8..14] parallel values */
+    CheatMenuItem *rec = D_0025FC70;
+    s32 count = 0;
+    s32 i;
+
+    for (i = 0; i < 8; i++) {
+        buf[i] = D_1AB958[i];
+    }
+    for (i = 0; i < 7; i++) {
+        buf[i + 8] = D_1AB978[i];
+    }
+    if (buf[0] != -1) {
+        i = 0;
+        do {
+            s32 entry = buf[i];
+            if (D_1A7A58[entry] != 0) {
+                rec->value = buf[i + 8];
+                rec->label = &g_cheatFlags[entry];
+                rec->kind1 = 0x2C5C;
+                rec->kind2 = 0x2C5D;
+                rec->flags = 0;
+                rec++;
+                count++;
+            }
+            i++;
+        } while (i < 12 && buf[i] != -1);
+    }
+    D_0025FC70[count].value = 0;
+}
+#endif
 
 /* return 0 stub. */
 s32 func_002CD650(void) {

@@ -197,6 +197,9 @@ void func_00278F90(void) {
 }
 #endif
 
+/* func_00278FD0: PARKED #70 — a large (~840-instruction) game-state/frame driver (PopGameState,
+ * StartFileLoad, UpdateSoundEmitters, func_00279xxx sub-steps, func_002AB150). Far too large +
+ * branch/state-heavy to model confidently; a careful multi-pass Ghidra decomposition job. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00278FD0);
 
 /* func_00279CF0 - store a 0x28-byte (10-word) record into the camera-slot
@@ -338,6 +341,10 @@ void func_00279EE8(void) {
 }
 #endif
 
+/* func_00279F08: PARKED #70 (#else not confident) — a branch-heavy (10-branch) decision/
+ * state routine with a single call (func_00279E00) and a save-slot-wall frame. The dense
+ * conditional logic needs a careful Ghidra control-flow trace before a faithful #else.
+ * Not forcing a low-confidence body. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00279F08);
 
 /* func_0027A0C8 globals (declared for the TARGET_NATIVE #else only). */
@@ -410,6 +417,10 @@ void func_0027A138(f32 *out, void *worldPos) {
 }
 #endif
 
+/* BuildFrameViewMatrices: PARKED #70 — composes the per-frame view/projection matrices
+ * (MatrixMultiplyVu0, ScaleVec4IncludingW, Vec4ScaleVu0). VU0 matrix-math class; needs the
+ * exact matrix-chain order + operands traced before a faithful #else (a wrong term silently
+ * corrupts the whole frame transform). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", BuildFrameViewMatrices);
 
 /* Camera fog/particle setup driven by the underwater state. */
@@ -670,6 +681,9 @@ void func_0027B988(void) {
 }
 #endif
 
+/* SetupGsDisplayBuffers: PARKED #70 — GS display/draw-environment bring-up (ApplyGsDisplayEnv,
+ * AppendDrawEnvContext1, AppendScreenClearPacket, BuildScreenDrawPackets, KickGifImageUpload).
+ * GS register/packet-heavy; needs the display-env packet layout traced before a faithful #else. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", SetupGsDisplayBuffers);
 
 /* Zero every per-frame draw-callback queue and one-shot fx slot: the fx
@@ -793,6 +807,10 @@ void func_0027C0A8(void) {
 }
 #endif
 
+/* func_0027C0C8: PARKED #70 — the per-frame moby/scene render-pipeline driver (~20
+ * callees: BuildFrameViewMatrices, BuildCameraProjection, BeginMobyDrawSegment, RenderMobys,
+ * FinishMobyRenderChain, the func_002A10xx moby chain, GS packet appends). Large orchestration
+ * body; needs each stage's wiring traced before a faithful #else — high transcription risk. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027C0C8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", RenderFrame);
@@ -1144,6 +1162,11 @@ void RunFxDrawHooksLate(void) {
 }
 #endif
 
+/* DrawBlobShadows: PARKED #70 (#else not confident) — GS blob-shadow renderer that
+ * projects/scales shadow quads (Vec3RescaleToLenVu0) and emits GS sprite packets
+ * (GetUiTextureTex0 + func_00281540) with the same intricate GS vertex/UV packing class
+ * as DrawGlyphQuad. Needs the GS packet format + projection math traced before a faithful
+ * #else. Not forcing a low-confidence body. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawBlobShadows);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", FadeOutToBlackBlocking);
@@ -1185,6 +1208,9 @@ void func_0027DB38(void) {
 }
 #endif
 
+/* func_0027DC40: PARKED #70 — a debug-overlay draw routine (DrawDebugString + the
+ * func_00280BB8/func_00280C98 font wrappers, func_0027F208). Modest but multi-callee with
+ * layout logic; needs the string/arg wiring traced before a confident #else. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027DC40);
 
 extern u8 D_1A7BB9;   /* fade-suppress flag byte */
@@ -1431,6 +1457,16 @@ void func_0027E4D0(s32 y0, s32 y1, s32 x0, s32 x1, u64 arg4) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027E690);
 
+/* DrawGlyphQuad: emit a textured 2D sprite/glyph quad into the frame DMA packet
+ * (g_frameDmaCursor) — a GIFtag (0x10000007/0x50000007, GS reg 0x154) + UV/XYZ2
+ * vertex pair, advancing the cursor 0x60. Positions are 12.4 fixed-point (<<4) with
+ * g_gsPixelOffsetX/Y adds and a -8 half-texel bias; UVs pack via dsll16 + or-masks.
+ * PARKED #70 (#else not confident): the arg mapping (8 register coords $4-$11 + 2
+ * stack args $15/$16 = which is x/y/w/h/u/v/color/tag?) and the exact GS vertex/UV
+ * packing (shift/offset/mask order, sd packet offsets 0x8..0x58) are intricate GS-
+ * format magic — a wrong shift/UV-swap silently mis-renders. Resolve the GS sprite
+ * vertex format + arg order (cross-check a sibling GS-quad emitter) before a faithful
+ * #else. Not forcing a low-confidence body. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawGlyphQuad);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027E818);
@@ -1439,6 +1475,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawTexturedQua
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027EB20);
 
+/* DrawRotatedSprite2d: PARKED #70 — large (13 callee-save) rotated-sprite emitter with
+ * sin/cos rotation (func_00283B30/B48), Vec4 transforms and FP rounding (FloatToInt) into
+ * a GS packet. Intricate FP+GS-packing class (silent-misrender risk); needs the rotation +
+ * GS format traced before a faithful #else. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawRotatedSprite2d);
 
 extern u8 D_1AC930[]; /* prebuilt GIFtag template (16 bytes) */
@@ -1575,10 +1615,19 @@ void func_0027F208(s32 y0, s32 y1, s32 x0, s32 x1, s32 colorHi, s32 colorLo) {
 }
 #endif
 
+/* func_0027F348: PARKED #70 (#else not confident) — 9-callee-save GS/draw routine
+ * (single call func_0027E4D0) with a large computed-vertex body. Save-slot wall for the
+ * match; the #else needs the vertex/packet build + func_0027E4D0's signature traced
+ * before it's confident. Not forcing a low-confidence body. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F348);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F4D0);
 
+/* func_0027F4D8: PARKED #70 (#else not confident) — rotated-sprite draw with float/angle
+ * math (WrapAnglePiSum + sin/cos func_00283B30/B48, FloatToInt) feeding a GS sprite emit
+ * (GetUiTextureTex0, func_0027EFA0). Intricate FP + GS-packing class; a wrong rounding or
+ * rotation term silently mis-renders. Needs the rotation + GS format traced before a
+ * faithful #else. Not forcing a low-confidence body. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F4D8);
 
 /* Enable blob shadows: set the enable flag and return 1 (success).
@@ -1750,6 +1799,13 @@ void func_0027FFF0(s32 a, s32 b, s32 c, f32 f1, f32 f2, f32 f3) {
 }
 #endif
 
+/* func_00280080: MERGED pad-fragment case — the .s is two mis-split epilogue-pad frags
+ * (addiu $sp,0x40; nop x2) at glabel func_00280080, with the REAL body at alabel
+ * func_00280090. PARKED #70 (needs a symbol_addrs size-pin re-split to separate the body
+ * from the dead pad before a clean #else, same as the 19FC78 fused-frag cases).
+ * Body logic (func_00280090, ready for post-resplit #else — a right-justified fixed-font
+ * string draw): w = func_0027F7F8(d, e); tex0 = GetUiTextureTex0(1);
+ * DrawFixedFontString(a - w, b, c, d, e, (s32)tex0, D_263B10). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280080);
 
 /** func_00280120 — draw a right-aligned debug-font string. Measures the string's
@@ -1768,6 +1824,11 @@ void func_00280120(s32 x, s32 arg1, s32 arg2, const char *str, s32 maxChars) {
 }
 #endif
 
+/* func_002801B0: MERGED pad-fragment case (twin of func_00280080) — mis-split
+ * epilogue-pad frags at the glabel + the real body at an alabel. PARKED #70 (needs a
+ * symbol_addrs size-pin re-split to separate the body from the dead pad before a clean
+ * #else; a right-justified fixed-font string draw of the same func_0027F7F8 / GetUiTextureTex0
+ * / DrawFixedFontString shape as func_00280080). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002801B0);
 
 /** func_00280250 — draw a horizontally-centered debug-font string. Measures the
@@ -1881,9 +1942,32 @@ void func_00280B48(s32 a, s32 b, s32 c, s32 d) {
 }
 #endif
 
+/* func_00280BB8 - draw a string with the debug font (twin of func_00280B48): resolve
+ * the debug-font page's GS TEX0 (GetUiTextureTex0 slot 2) and forward the four caller
+ * args plus that tex0 and the g_debugFontGlyphTable glyph-metrics table to the text core
+ * func_00280B20. Matching arm stays INCLUDE_ASM (byte-exact walled by the tier-wide
+ * 8-packed-callee-save frame fingerprint); the #else supplies the portable body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280BB8);
+#else
+void func_00280BB8(s32 a, s32 b, s32 c, s32 d) {
+    u64 tex0 = GetUiTextureTex0(2);
+    func_00280B20(a, b, c, d, (s32)tex0, g_debugFontGlyphTable);
+}
+#endif
 
+/* func_00280C28 - draw a string with a third UI font page (twin of func_00280B48/
+ * func_00280BB8): resolve the GS TEX0 (GetUiTextureTex0 slot 3) and forward the four
+ * caller args plus that tex0 and the D_264250 glyph-metrics table to the text core
+ * func_00280B20. Matching arm stays INCLUDE_ASM (8-packed-callee-save frame wall). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280C28);
+#else
+void func_00280C28(s32 a, s32 b, s32 c, s32 d) {
+    u64 tex0 = GetUiTextureTex0(3);
+    func_00280B20(a, b, c, d, (s32)tex0, D_264250);
+}
+#endif
 
 /* InitTextBoxLayout - fill the 0x18-byte (12 s16) text-box layout descriptor
  * consumed by DrawWrappedTextBox. Fields: [0]clipX0 [1]clipX1 [2]left [3]right
@@ -1907,6 +1991,9 @@ void func_00280C98(s16 *layout, s16 clipX0, s16 clipX1, s16 left, s16 right,
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280CD0);
 
+/* AppendVu1SphereMapContext: PARKED #70 — builds a VU1 sphere-map matrix context and appends
+ * it via VIF (MatrixMultiplyVu0, func_00283D68, AppendVifCodeRefTag, func_002FD700). VU1/VIF
+ * packet class; needs the matrix + VIF packet format traced before a faithful #else. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", AppendVu1SphereMapContext);
 
 /**
@@ -1999,6 +2086,9 @@ void func_00281020(u32 *pixels, s32 actorIdx) {
 }
 #endif
 
+/* func_002810C0: PARKED #70 — 9-save GS image-upload/path routine (func_00281020,
+ * func_002860B8, WaitGsPathsIdle). GS-transfer class; needs the packet build + callee
+ * signatures traced before a faithful #else. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002810C0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002812A8);
