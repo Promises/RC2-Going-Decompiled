@@ -1048,7 +1048,52 @@ void func_00337310(GuiElement *e, s32 a0, s32 a1) {
 }
 #endif
 
+/* func_00337350(self): draw a two-bar progress/meter widget. When the gate float
+ * at *(self[+0x10]) is non-zero, draws a background bar (func_0027F168 =
+ * DrawFlatRect2d) from (ptrA.x, ptrA.y) of width valCf = (f32)(u32)self[+0x3C],
+ * and a fill bar of width min(ptrB.x, valCf) — clamping ptrB.x to valCf first.
+ * Both share height (int)(ptrA.y + ptrB.y) and colour D_1AD9C8; the &params blocks
+ * carry self[+0x44] (bg) / self[+0xC][0..1] (fill). ptrA = self[+0], ptrB =
+ * self[+4]. Struct/idiom layout Ghidra-verified (unsigned-int->float + min.s).
+ * Faithful TARGET_NATIVE #else (engine 2.96 = no byte-match). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337350);
+#else
+extern void *D_1AD9C8;
+extern void func_0027F168(s32 x0, s32 y0, s32 x1, s32 y1, void *colour, void *params);
+
+void func_00337350(void *self) {
+    u8   *s = (u8 *)self;
+    void *colour = D_1AD9C8;
+    f32  *gate = *(f32 **)(s + 0x10);
+
+    if (*gate != 0.0f) {
+        f32 *ptrA = *(f32 **)(s + 0x00);
+        f32 *ptrB = *(f32 **)(s + 0x04);
+        f32  ax = ptrA[0];
+        f32  ay = ptrA[1];
+        f32  valCf = (f32)(u32)*(s32 *)(s + 0x3C);
+        f32  bx = ptrB[0];
+        f32  bxClamped;
+        s32  y1;
+        s32  rp[2];
+
+        ptrB[0] = (bx < valCf) ? bx : valCf;
+        rp[0] = *(s32 *)(s + 0x44);
+        bxClamped = ptrB[0];
+        y1 = (s32)(ay + ptrB[1]);
+        rp[1] = rp[0];
+        func_0027F168((s32)ax, (s32)ay, (s32)(ax + valCf), y1, colour, rp);
+
+        {
+            s32 *ptr9 = *(s32 **)(s + 0x0C);
+            rp[0] = ptr9[0];
+            rp[1] = ptr9[1];
+        }
+        func_0027F168((s32)ax, (s32)ay, (s32)(ax + bxClamped), y1, colour, rp);
+    }
+}
+#endif
 
 /* func_003374D8: run the base GuiElement init then overwrite the +0x30 vtable
  * slot with the D_1ADA18 vtable; return the object. */
@@ -1546,7 +1591,72 @@ void *func_00338A80(void *p) {
 }
 #endif
 
+/* func_00338AB8(self, pool): construct a two-glyph GUI widget (an on/off toggle
+ * chip). Clears its state fields (byte +0xA8; words +0x1A8/+0x1AC/+0x1C8/+0x1CC = 0,
+ * +0x1C4 = 2, +0x1B0 = 1, +0x1D4 = 0x28) and zeroes the 0x78-byte block at +0x1D8.
+ * If a pool is given, allocates four 16-byte vec4 slots (GuiPoolAlloc +
+ * GuiPlacementNew) for the widget's size (+0x0 = {255,108,0,0}), colour
+ * (+0x8 = {0x60442D00,..}), position (+0x4) and a fourth vector (+0xC). Then inits
+ * the two child glyph elements at +0x10 (tag D_1ADB20, glyph 0x57, alpha 0.02,
+ * colour 0x55F0C070) and +0x5C (tag D_1ADB30, glyph 0x58, colour 0x55F0C070), and
+ * finishes by writing the +0xC vector's colour word 0x80F0F0F0, clearing +0x1B8,
+ * and zeroing the +0x4 vector. Faithful TARGET_NATIVE #else (engine 2.96 = no
+ * byte-match). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338AB8);
+#else
+extern u8 D_1ADB20[], D_1ADB30[];
+extern char *g_guiInstance;
+void func_00338AB8(void *self, GuiPool *pool) {
+    u8  *w = (u8 *)self;
+    u32 *o;
+
+    *(u8 *)(w + 0xA8)   = 0;
+    *(u32 *)(w + 0x1A8) = 0;
+    *(u32 *)(w + 0x1AC) = 0;
+    *(u32 *)(w + 0x1B0) = 1;
+    *(u32 *)(w + 0x1C4) = 2;
+    *(u32 *)(w + 0x1C8) = 0;
+    *(u32 *)(w + 0x1CC) = 0;
+    *(u32 *)(w + 0x1D4) = 0x28;
+    memset(w + 0x1D8, 0, 0x78);
+
+    if (pool != 0) {
+        o = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        *(f32 *)(o + 0) = 255.0f;
+        *(f32 *)(o + 1) = 108.0f;
+        o[2] = 0; o[3] = 0;
+        *(u32 **)(w + 0x0) = o;
+
+        o = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        o[0] = 0x60442D00; o[1] = 0; o[2] = 0; o[3] = 0;
+        *(u32 **)(w + 0x8) = o;
+
+        o = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        *(u32 **)(w + 0x4) = o;
+        o[0] = 0; o[1] = 0; o[2] = 0; o[3] = 0;
+
+        o = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        *(u32 **)(w + 0xC) = o;
+        o[0] = 0; o[1] = 0; o[2] = 0; o[3] = 0;
+    }
+
+    GuiElementInit((GuiElement *)(w + 0x10), (s32)D_1ADB20, pool);
+    GuiElementSetGlyph((GuiElement *)(w + 0x10), (s32)g_guiInstance + 0x8710, 0x57);
+    GuiElementSetAlpha((GuiElement *)(w + 0x10), 0.02f);
+    GuiElementSetVisible((GuiElement *)(w + 0x10), 1);
+    *GuiElementGetColor((GuiElement *)(w + 0x10)) = 0x55F0C070;
+
+    GuiElementInit((GuiElement *)(w + 0x5C), (s32)D_1ADB30, pool);
+    GuiElementSetGlyph((GuiElement *)(w + 0x5C), (s32)g_guiInstance + 0x8710, 0x58);
+    GuiElementSetVisible((GuiElement *)(w + 0x5C), 1);
+    *GuiElementGetColor((GuiElement *)(w + 0x5C)) = 0x55F0C070;
+
+    *(u32 *)(*(u32 **)(w + 0xC)) = (s32)0x80F0F0F0;
+    *(u32 *)(w + 0x1B8) = 0;
+    *(u32 *)(*(u32 **)(w + 0x4)) = 0;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338CD0);
 
@@ -2789,7 +2899,42 @@ s32 func_0033CEE0(void *w, s32 flags) {
 }
 #endif
 
+/* func_0033D070: draw the progressive-scan option screen. Lays out the box body
+ * (func_0033BF90(e+8)), formats the D_1ADDB0 template with the fixed label 0x307B
+ * plus the on/off id from D_1ADDA8 selected by g_bProgressiveScan into a scratch
+ * buffer, and draws it centered at (g_screenWidth/2, 0x8C) in colour 0x80F0F0F0
+ * (func_002801B8). Then lays out a text box (func_00280C98) at a GUI-scaled
+ * position (scale*170, scale*379 rounded, from the config float at
+ * g_swapGadgetItemIndex+0x8A) and draws the help string 0x3136 into it
+ * (func_00280B48). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D070);
+#else
+extern void func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
+extern void func_00280C98(void *layout, s32 x, s32 y, s32 a, s32 b, s32 c, s32 d,
+                          s32 e, s32 f);
+extern void func_00280B48(void *layout, u32 color, const char *text, s32 flag);
+extern u8 D_1ADDA8[], D_1ADDB0[];
+extern s32 g_screenWidth, g_bProgressiveScan, g_swapGadgetItemIndex;
+void func_0033D070(void *e) {
+    char buf[64];
+    u8 layout[32];
+    s32 s1, s2;
+    f32 scale;
+
+    func_0033BF90((char *)e + 8);
+
+    s1 = GetLocalizedString(0x307B);
+    s2 = GetLocalizedString(*(s32 *)(D_1ADDA8 + (g_bProgressiveScan ? 4 : 0)));
+    func_00115DA8(buf, (const char *)D_1ADDB0, (const char *)s1, (const char *)s2);
+    func_002801B8(g_screenWidth >> 1, 0x8C, 0x80F0F0F0, buf, -1);
+
+    scale = *(f32 *)((char *)&g_swapGadgetItemIndex + 0x8A);
+    func_00280C98(layout, (s32)(scale * 170.0f + 0.5f),
+                  (s32)(scale * 379.0f + 0.5f), 0x2C, 0x1D4, 0xFE, 0xDE, 0x14, 3);
+    func_00280B48(layout, 0x80F0F0F0, (const char *)GetLocalizedString(0x3136), -1);
+}
+#endif
 
 /* func_0033D1C0: init the embedded dialog-box (at p+0x8), return the object
  * (identical body to func_0033CD80). */
@@ -3003,7 +3148,66 @@ s32 func_0033D5D8(void *w, s32 flags) {
 }
 #endif
 
+/* func_0033D780(self): render a 4-row settings screen (self[0x2D8] = selected row,
+ * drawn 0x80D0D0D0 vs 0x70808080). Each row: a localized label + a toggle/option
+ * string chosen from a config table by a flag, formatted (func_00115DA8 / D_1ADDB0)
+ * and centred (func_00280250) at per-row coords. Rows 0/1 use string IDs
+ * D_1ADDF8[0/1] gated by D_1A7BAC / D_1A7BB0; row 2 uses (D_1ADE00..)[D_1A7BB4];
+ * row 3 uses D_1ADDA8[0/1] gated by D_1A7BB9. Labels 0x2C78/0x2C77/0x2DAE/0x307A.
+ * Ghidra-verified. Faithful TARGET_NATIVE #else (engine 2.96 = no byte-match). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D780);
+#else
+extern u8   D_1ADDF8[], D_1ADE00[], D_1ADE08[], D_1ADDA8[], D_1ADDB0[];
+extern s32  D_1A7BAC, D_1A7BB0, D_1A7BB4;
+extern u8   D_1A7BB9;
+extern s32  D_1ADDD8, D_1ADDDC, D_1ADDE0, D_1ADDE4, D_1ADDE8, D_1ADDEC, D_1ADDF0, D_1ADDF4;
+extern void func_00280250(s32 x, s32 y, u32 colour, void *str, s32 flag);
+
+void func_0033D780(void *self) {
+    u8  *s = (u8 *)self;
+    char buf[0x80];
+    u8   cfg1[0x14];
+    u8   cfg2[8];
+    s32  sel = *(s32 *)(s + 0x2D8);
+    s32  label, val;
+    u32  colour;
+    s32  idx;
+
+    func_0033BF90(s + 8);
+    memcpy(cfg1 + 0x00, D_1ADDF8, 8);
+    memcpy(cfg1 + 0x08, D_1ADE00, 8);
+    memcpy(cfg1 + 0x10, D_1ADE08, 4);
+    memcpy(cfg2, D_1ADDA8, 8);
+
+    colour = (sel == 0) ? 0x80D0D0D0 : 0x70808080;
+    label = GetLocalizedString(0x2C78);
+    idx = (D_1A7BAC == 0) ? 0 : 4;
+    val = GetLocalizedString(*(s32 *)(cfg1 + idx));
+    func_00115DA8(buf, (char *)D_1ADDB0, (char *)label, (char *)val);
+    func_00280250(D_1ADDD8, D_1ADDDC, colour, buf, -1);
+
+    colour = (sel == 1) ? 0x80D0D0D0 : 0x70808080;
+    label = GetLocalizedString(0x2C77);
+    idx = (D_1A7BB0 == 0) ? 0 : 4;
+    val = GetLocalizedString(*(s32 *)(cfg1 + idx));
+    func_00115DA8(buf, (char *)D_1ADDB0, (char *)label, (char *)val);
+    func_00280250(D_1ADDE0, D_1ADDE4, colour, buf, -1);
+
+    colour = (sel == 2) ? 0x80D0D0D0 : 0x70808080;
+    label = GetLocalizedString(0x2DAE);
+    val = GetLocalizedString(*(s32 *)(cfg1 + 8 + D_1A7BB4 * 4));
+    func_00115DA8(buf, (char *)D_1ADDB0, (char *)label, (char *)val);
+    func_00280250(D_1ADDE8, D_1ADDEC, colour, buf, -1);
+
+    colour = (sel == 3) ? 0x80D0D0D0 : 0x70808080;
+    label = GetLocalizedString(0x307A);
+    idx = (D_1A7BB9 == 0) ? 0 : 4;
+    val = GetLocalizedString(*(s32 *)(cfg2 + idx));
+    func_00115DA8(buf, (char *)D_1ADDB0, (char *)label, (char *)val);
+    func_00280250(D_1ADDF0, D_1ADDF4, colour, buf, -1);
+}
+#endif
 
 /* func_0033DA00: init the embedded dialog-box (at p+0x8), return the object
  * (byte-identical body to func_0033CD80). */
@@ -3284,7 +3488,53 @@ s32 func_0033E070(void *w, s32 flags) {
 }
 #endif
 
+/* func_0033E308(self): render the audio-settings screen — three rows (self[0x2D8]
+ * = selected index; the selected row is drawn in 0x80D0D0D0, others 0x70808080).
+ * Rows 0/1: localized label (string 0x2DA5/0x2DA6 via GetLocalizedString + the
+ * func_00115DA8 formatter with D_1ADE48) right-aligned at (0x100, 0x91/0xBE) with a
+ * meter bar (func_00337350 on self+0x2DC/+0x324). Row 2: label 0x2DA7 + the
+ * stereo/mono string (D_1ADE40[g_audioStereoMode?4:0]) formatted with D_1ADDB0,
+ * centred at (0x100, 0xE1). Ghidra-verified. Faithful TARGET_NATIVE #else. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E308);
+#else
+extern void func_00280120(s32 x, s32 y, u32 colour, void *str, s32 flag); /* draw right-aligned */
+extern void func_00280250(s32 x, s32 y, u32 colour, void *str, s32 flag); /* draw centred */
+extern u8   D_1ADE40[], D_1ADE48[];
+
+void func_0033E308(void *self) {
+    u8  *s = (u8 *)self;
+    u8   buf[0x80];
+    u8   modeStrs[8];
+    s32  sel = *(s32 *)(s + 0x2D8);
+    s32  str;
+    u32  colour;
+
+    func_0033BF90(s + 8);
+
+    colour = (sel == 0) ? 0x80D0D0D0 : 0x70808080;
+    memcpy(modeStrs, D_1ADE40, 8);
+    str = GetLocalizedString(0x2DA5);
+    func_00115DA8((char *)buf, (char *)D_1ADE48, (char *)str);
+    func_00280120(0x100, 0x91, colour, buf, -1);
+    func_00337350(s + 0x2DC);
+
+    colour = (sel == 1) ? 0x80D0D0D0 : 0x70808080;
+    str = GetLocalizedString(0x2DA6);
+    func_00115DA8((char *)buf, (char *)D_1ADE48, (char *)str);
+    func_00280120(0x100, 0xBE, colour, buf, -1);
+    func_00337350(s + 0x324);
+
+    colour = (sel == 2) ? 0x80D0D0D0 : 0x70808080;
+    {
+        s32   label = GetLocalizedString(0x2DA7);
+        s32   idx = (g_audioStereoMode == 0) ? 0 : 4;
+        str = GetLocalizedString(*(s32 *)(modeStrs + idx));
+        func_00115DA8((char *)buf, (char *)D_1ADDB0, (char *)label, (char *)str);
+        func_00280250(0x100, 0xE1, colour, buf, -1);
+    }
+}
+#endif
 
 /* func_0033E488: init the embedded dialog-box (at p+0x8), return the object
  * (byte-identical body to func_0033CD80). */
@@ -4398,11 +4648,204 @@ s32 GuiQuickSelectWheelTick(void *w, s32 flag) {
 }
 #endif
 
+/* func_00341160(self): render the quick-select / weapon-grid screen. No-op unless
+ * self[+0xAB8] is set. Any of the four shoulder buttons (g_padButtonsPressed &
+ * 0xF000) ticks the shared blend counter (func_002AA3F0(0,0,1,1,1)). Recolours the
+ * grid cursor (self+0x214) with a pulsing tint, draws the frame sprites + the five
+ * text labels (self+0x828..+0x9E0), hides self+0x880, then (re)builds the two grid
+ * descriptors (func_00341548 + func_003413A8) and draws the two arrow sprites
+ * (self+0x2A8/+0x2F4) twice — once mirrored (scale negated) and once restored. Then
+ * it dispatches each of the 8 weapon-grid cells (descriptor table self+0x370 stride
+ * 0x4C, element base self+0x340) and each of the 8 quick-select slots (table
+ * self+0x61C stride 0x3C, base self+0x5EC) through the cell object's draw method
+ * (obj+0xC, arg = base + obj[+8]). Finally draws the highlight sprite (self+0x5A0,
+ * colour 0x80FFDE8D) and blits the cursor glyph (func_0034F028). Faithful
+ * TARGET_NATIVE #else (engine 2.96 = no byte-match). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341160);
+#else
+extern void func_0034F028(s32 atlas, s32 x, s32 y, s32 code);
+void func_003413A8(void *self);
+void func_00341548(void *self);
+void func_00341160(void *self) {
+    u8 *s = (u8 *)self;
+    f32 *sc;
 
+    if (*(s32 *)(s + 0xAB8) == 0) {
+        return;
+    }
+
+    if (g_padButtonsPressed & 0xF000) {
+        func_002AA3F0(0, 0, 1, 1, 1);
+    }
+
+    *GuiElementGetColor((GuiElement *)(s + 0x214)) =
+        func_002AA3F0(0x60442D00, 0x70FFFEED, 0x14, 1, 0);
+    GuiSpriteElementDraw(s);
+    GuiSpriteElementDraw(s + 0x4C);
+    GuiSpriteElementDraw(s + 0xE4);
+    GuiSpriteElementDraw(s + 0x130);
+    GuiTextElementDraw(s + 0x828);
+    GuiTextElementDraw(s + 0x8D8);
+    GuiTextElementDraw(s + 0x930);
+    GuiTextElementDraw(s + 0x988);
+    GuiTextElementDraw(s + 0x9E0);
+    GuiElementSetVisible((GuiElement *)(s + 0x880), 0);
+    func_00341548(self);
+    func_003413A8(self);
+
+    GuiSpriteElementDraw(s + 0x214);
+    GuiSpriteElementDraw(s + 0x2A8);
+    GuiSpriteElementDraw(s + 0x2F4);
+    sc = GuiElementGetScaleVec((GuiElement *)(s + 0x2A8)); *sc = -*sc;
+    sc = GuiElementGetScaleVec((GuiElement *)(s + 0x2F4)); *sc = -*sc;
+    GuiSpriteElementDraw(s + 0x2A8);
+    GuiSpriteElementDraw(s + 0x2F4);
+    sc = GuiElementGetScaleVec((GuiElement *)(s + 0x2A8)); *sc = -*sc;
+    sc = GuiElementGetScaleVec((GuiElement *)(s + 0x2F4)); *sc = -*sc;
+
+    {
+        u8 *desc = s + 0x370;
+        u8 *elem = s + 0x340;
+        s32 n = 7;
+        do {
+            u8 *obj = *(u8 **)desc;
+            n--;
+            desc += 0x4C;
+            (*(void (**)(void *))(obj + 0xC))(elem + *(s16 *)(obj + 8));
+            elem += 0x4C;
+        } while (n > -1);
+    }
+    {
+        u8 *desc = s + 0x61C;
+        u8 *elem = s + 0x5EC;
+        s32 n = 7;
+        do {
+            u8 *obj = *(u8 **)desc;
+            n--;
+            desc += 0x3C;
+            (*(void (**)(void *))(obj + 0xC))(elem + *(s16 *)(obj + 8));
+            elem += 0x3C;
+        } while (n > -1);
+    }
+
+    GuiSpriteElementDraw(s + 0x5A0);
+    *GuiElementGetColor((GuiElement *)(s + 0x5A0)) = (s32)0x80FFDE8D;
+    func_0034F028((s32)g_guiInstance + 0x36F28, 0xF3, 0x2B, 0x70);
+}
+#endif
+
+/* func_003413A8(self): build + populate a composite GUI screen descriptor. Copies
+ * four 8-byte layout config blocks (D_1AE050/58/050/60/68) to locals, sets a glyph
+ * on the self+0x17C element (GuiElementSetGlyph, source = g_guiInstance+0x8710),
+ * then assembles a ~0x60-byte parameter block (pointers to the config locals + to
+ * self sub-elements at +0x17C/+0x98/+0x214/+0x260/+0x7D0/+0xA78/+0x880, plus fields
+ * from self+0x814/+0x818/+0x80C/+0x820 and the self[+0x81C]==0 flag) and hands it
+ * to func_003380B8 to instantiate the elements. Struct layout Ghidra-verified.
+ * Faithful TARGET_NATIVE #else (engine 2.96 = no byte-match). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003413A8);
+#else
+extern u8   D_1AE050[], D_1AE058[], D_1AE060[], D_1AE068[];
+extern u8   D_00259F38[];
+extern char *g_guiInstance;
+extern void func_003380B8(void *params);
 
+void func_003413A8(void *self) {
+    u8 *s = (u8 *)self;
+    u8  cfg[5][8];
+    u8  params[0x60];
+
+    memcpy(cfg[0], D_1AE050, 8);
+    memcpy(cfg[1], D_1AE058, 8);
+    memcpy(cfg[2], D_1AE050, 8);
+    memcpy(cfg[3], D_1AE060, 8);
+    memcpy(cfg[4], D_1AE068, 8);
+
+    *(void **)(params + 0x00) = D_00259F38;
+    *(u32 *)(params + 0x04)  = 4;
+    *(u32 *)(params + 0x08)  = 6;
+    *(u32 *)(params + 0x0C)  = *(u32 *)(s + 0x814);
+    *(u32 *)(params + 0x10)  = *(u32 *)(s + 0x818);
+    *(void **)(params + 0x14) = cfg[0];
+    *(void **)(params + 0x18) = cfg[1];
+    *(void **)(params + 0x1C) = cfg[2];
+    *(void **)(params + 0x20) = cfg[3];
+    *(void **)(params + 0x24) = cfg[4];
+    *(void **)(params + 0x28) = s + 0x17C;
+    *(void **)(params + 0x2C) = s + 0x98;
+    *(void **)(params + 0x30) = s + 0x214;
+    *(void **)(params + 0x34) = s + 0x260;
+    *(u32 *)(params + 0x38)  = 0;
+    *(void **)(params + 0x3C) = s + 0x7D0;
+    *(void **)(params + 0x40) = s + 0xA78;
+    *(void **)(params + 0x44) = s + 0x880;
+    *(u32 *)(params + 0x48)  = *(u32 *)(s + 0x80C);
+    *(u32 *)(params + 0x4C)  = *(u32 *)(s + 0x820);
+    *(u32 *)(params + 0x50)  = 0;
+    *(u32 *)(params + 0x54)  = (*(s32 *)(s + 0x81C) == 0);
+    *(u32 *)(params + 0x58)  = 0;
+
+    GuiElementSetGlyph((GuiElement *)(s + 0x17C), (s32)g_guiInstance + 0x8710, 0x23);
+    func_003380B8(params);
+}
+#endif
+
+/* func_00341548(self): build + populate the quick-select / weapon-grid composite
+ * screen descriptor (sibling of func_003413A8). Copies six 8-byte layout config
+ * blocks (D_1AE070/078/070/080/068/088) to locals, sets a glyph on the self+0x17C
+ * element (GuiElementSetGlyph, source = g_guiInstance+0x8710, code 0x5D), then
+ * assembles a ~0x60-byte parameter block (grid table D_259CC0, cols 3, rows 2,
+ * pointers to the config locals + to self sub-elements at +0x17C/+0x214/+0x7D0/
+ * +0xA78/+0x880, fields from self+0x814/+0x818/+0x80C/+0x820 and the
+ * self[+0x81C]==1 flag) and hands it to func_003380B8 to instantiate the elements.
+ * Struct layout asm-verified (struct base sp+0x60). Faithful TARGET_NATIVE #else
+ * (engine 2.96 = no byte-match). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341548);
+#else
+extern u8   D_1AE068[], D_1AE070[], D_1AE078[], D_1AE080[], D_1AE088[];
+extern u8   D_259CC0[];
+void func_00341548(void *self) {
+    u8 *s = (u8 *)self;
+    u8  cfg[6][8];
+    u8  params[0x60];
+
+    memcpy(cfg[0], D_1AE070, 8);
+    memcpy(cfg[1], D_1AE078, 8);
+    memcpy(cfg[2], D_1AE070, 8);
+    memcpy(cfg[3], D_1AE080, 8);
+    memcpy(cfg[4], D_1AE068, 8);
+    memcpy(cfg[5], D_1AE088, 8);
+
+    *(void **)(params + 0x00) = D_259CC0;
+    *(u32 *)(params + 0x04)  = 3;
+    *(u32 *)(params + 0x08)  = 2;
+    *(u32 *)(params + 0x0C)  = *(u32 *)(s + 0x814);
+    *(u32 *)(params + 0x10)  = *(u32 *)(s + 0x818);
+    *(void **)(params + 0x14) = cfg[0];
+    *(void **)(params + 0x18) = cfg[1];
+    *(void **)(params + 0x1C) = cfg[2];
+    *(void **)(params + 0x20) = cfg[3];
+    *(void **)(params + 0x24) = cfg[4];
+    *(void **)(params + 0x28) = s + 0x17C;
+    *(u32 *)(params + 0x2C)  = 0;
+    *(void **)(params + 0x30) = s + 0x214;
+    *(u32 *)(params + 0x34)  = 0;
+    *(u32 *)(params + 0x38)  = 1;
+    *(void **)(params + 0x3C) = s + 0x7D0;
+    *(void **)(params + 0x40) = s + 0xA78;
+    *(void **)(params + 0x44) = s + 0x880;
+    *(u32 *)(params + 0x48)  = *(u32 *)(s + 0x80C);
+    *(u32 *)(params + 0x4C)  = *(u32 *)(s + 0x820);
+    *(void **)(params + 0x50) = cfg[5];
+    *(u32 *)(params + 0x54)  = (*(s32 *)(s + 0x81C) == 1);
+    *(u32 *)(params + 0x58)  = 0;
+
+    GuiElementSetGlyph((GuiElement *)(s + 0x17C), (s32)g_guiInstance + 0x8710, 0x5D);
+    func_003380B8(params);
+}
+#endif
 
 /* func_00341708: assign the weapon under the grid cursor to the quick-select bar.
  * `w` is the weapon-grid widget; `table` (D_00259F38) is its grid-entry array
@@ -7549,6 +7992,93 @@ s32 GuiWeaponGridTick(void *w, s32 flag) {
 }
 #endif
 
+/* func_003481E0: redraw the "command"/status icon triplet for one HUD item. The
+ * item's state byte is looked up in g_itemStateFlags via a stride-10 descriptor
+ * table (D_00259F38[idx].flags, idx = *(p+0x4C4) + *(p+0x4C8)*4). All three sub-
+ * elements (icon p+0x318, left p+0x3A0, right p+0x3EC) start hidden and are
+ * positioned relative to the item's base vector (*(p+0x438)); the icon falls back
+ * to the default position (D_1AE518/D_1AE51C). If flag bit0 is set the icon uses
+ * sprite slot 0 + caption 0x3065; else if bit2, slot 1 + caption 0x3064. Bit4 adds
+ * a second (offset-by-0x2D-and-D_1AE530) row with slot 2 + caption 0x3066. Captions
+ * are drawn auto-fit-width-centered at scale 0.7 (func_00280440), colour 0x80F0F0F0,
+ * max width 0xAF. func_00337630 flushes the icon sprite. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003481E0);
+#else
+extern void func_00280440(f32 scale, s32 x, s32 y, u32 color, const char *text,
+                          s32 flag, s32 maxWidth);
+extern s32 D_1AE518, D_1AE51C;
+extern f32 D_1AE520, D_1AE524, D_1AE528, D_1AE52C, D_1AE530, D_1AE538, D_1AE53C,
+           D_1AE540, D_1AE544;
+extern u8 D_00259F38[], g_itemStateFlags[];
+void func_003481E0(void *p) {
+    GuiElement *icon = (GuiElement *)((char *)p + 0x318);
+    GuiElement *left = (GuiElement *)((char *)p + 0x3A0);
+    GuiElement *right = (GuiElement *)((char *)p + 0x3EC);
+    s32 defX = D_1AE518;
+    s32 defY = D_1AE51C;
+    s32 idx = *(s32 *)((char *)p + 0x4C4) + *(s32 *)((char *)p + 0x4C8) * 4;
+    s16 flagIdx = *(s16 *)(D_00259F38 + idx * 10 + 6);
+    f32 *base;
+    s32 str;
+
+    GuiElementSetVisible(icon, 0);
+    GuiElementSetVisible(left, 0);
+    GuiElementSetVisible(right, 0);
+
+    base = *(f32 **)((char *)p + 0x438);
+    GuiElementSetPos(left, base[0] + D_1AE528, base[1] + D_1AE52C, 0.0f, 0.0f);
+    base = *(f32 **)((char *)p + 0x438);
+    GuiElementSetPos(right, base[0] + D_1AE520, base[1] + D_1AE524, 0.0f, 0.0f);
+    GuiElementSetPos(icon, (f32)defX, (f32)defY, 0.0f, 0.0f);
+
+    if (g_itemStateFlags[flagIdx] & 1) {
+        GuiSpriteSetTexture(icon, 0xEA98, 0);
+        GuiElementSetVisible(icon, 1);
+        GuiElementSetVisible(left, 1);
+        GuiElementSetVisible(right, 1);
+        GuiSpriteElementDraw(left);
+        GuiSpriteElementDraw(right);
+        base = *(f32 **)((char *)p + 0x438);
+        str = GetLocalizedString(0x3065);
+        func_00280440(0.7f, (s32)(base[0] + D_1AE538), (s32)(base[1] + D_1AE53C),
+                      0x80F0F0F0, (const char *)str, -1, 0xAF);
+    } else if (g_itemStateFlags[flagIdx] & 4) {
+        GuiSpriteSetTexture(icon, 0xEA98, 1);
+        GuiElementSetVisible(icon, 1);
+        GuiElementSetVisible(left, 1);
+        GuiElementSetVisible(right, 1);
+        GuiSpriteElementDraw(left);
+        GuiSpriteElementDraw(right);
+        base = *(f32 **)((char *)p + 0x438);
+        str = GetLocalizedString(0x3064);
+        func_00280440(0.7f, (s32)(base[0] + D_1AE538), (s32)(base[1] + D_1AE53C),
+                      0x80F0F0F0, (const char *)str, -1, 0xAF);
+    }
+
+    func_00337630(icon);
+
+    if (g_itemStateFlags[flagIdx] & 0x10) {
+        GuiSpriteSetTexture(icon, 0xEA98, 2);
+        GuiElementSetPos(icon, (f32)defX, (f32)(defY + 0x2D), 0.0f, 0.0f);
+        GuiElementSetVisible(icon, 1);
+        GuiElementSetVisible(left, 1);
+        GuiElementSetVisible(right, 1);
+        base = *(f32 **)((char *)p + 0x438);
+        GuiElementSetPos(left, base[0] + D_1AE528, base[1] + D_1AE52C + D_1AE530,
+                         0.0f, 0.0f);
+        base = *(f32 **)((char *)p + 0x438);
+        GuiElementSetPos(right, base[0] + D_1AE520, base[1] + D_1AE524 + D_1AE530,
+                         0.0f, 0.0f);
+        GuiSpriteElementDraw(left);
+        GuiSpriteElementDraw(right);
+        base = *(f32 **)((char *)p + 0x438);
+        str = GetLocalizedString(0x3066);
+        func_00280440(0.7f, (s32)(base[0] + D_1AE540), (s32)(base[1] + D_1AE544),
+                      0x80F0F0F0, (const char *)str, -1, 0xAF);
+        func_00337630(icon);
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00348628);
