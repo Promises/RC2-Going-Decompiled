@@ -323,8 +323,76 @@ void func_0026EB98(s32 *a, s32 *b, s32 *c) {
 /* BuildAttractReelPlaylist: seed the RNG from the RTC (sceCdReadClock) and build
  * a randomized attract-reel playlist. WALL: six callee-saves at 8-byte slot
  * spacing (the 0x20-vs-0x10 packed-save frame) plus the multi-field RNG-seed
- * mult chain; left INCLUDE_ASM. */
+ * mult chain; left INCLUDE_ASM. The TARGET_NATIVE #else is faithful coverage:
+ * it seeds srand from (sec+1)(hour+1)(min+1)(day+1)(month+1) of the RTC clock,
+ * then fills the reel-playlist struct with three randomized slot orderings
+ * (func_0026EB98) offset by 0xB9 / and a coin-flipped 0xB3<->0xB6 pair. */
+#ifdef TARGET_NATIVE
+extern s32  sceCdReadClock(void *clock);
+extern void srand(u32 seed);
+void BuildAttractReelPlaylist(void *reelState) {
+    u8 *out = (u8 *)reelState;
+    u8  clk[8];
+    s32 vals[3];
+    u16 r0, r1, r2;
+    s32 base2, base3;
+
+    sceCdReadClock(clk);
+    srand((clk[1] + 1) * (clk[3] + 1) * (clk[2] + 1) * (clk[5] + 1) * (clk[6] + 1));
+
+    /* group 1: base 0xB9 (each value written to two slots) */
+    func_0026EB98(&vals[0], &vals[1], &vals[2]);
+    r0 = (u16)vals[0] + 0xB9;
+    r1 = (u16)vals[1] + 0xB9;
+    r2 = (u16)vals[2] + 0xB9;
+    *(u16 *)(out + 0x20) = r0;
+    *(u16 *)(out + 0x28) = r1;
+    *(u16 *)(out + 0x30) = r2;
+    *(u16 *)(out + 0x08) = r0;
+    *(u16 *)(out + 0x10) = r1;
+    *(u16 *)(out + 0x18) = r2;
+
+    if (GetRandomInt(2) == 0) {
+        base2 = 0xB6;
+        base3 = 0xB3;
+    } else {
+        base2 = 0xB3;
+        base3 = 0xB6;
+    }
+
+    /* group 2: base base2 (each value written to three slots) */
+    func_0026EB98(&vals[0], &vals[1], &vals[2]);
+    r0 = (u16)vals[0] + base2;
+    r1 = (u16)vals[1] + base2;
+    r2 = (u16)vals[2] + base2;
+    *(u16 *)(out + 0x22) = r0;
+    *(u16 *)(out + 0x26) = r1;
+    *(u16 *)(out + 0x2C) = r2;
+    *(u16 *)(out + 0x02) = r0;
+    *(u16 *)(out + 0x06) = r1;
+    *(u16 *)(out + 0x0C) = r2;
+    *(u16 *)(out + 0x12) = r0;
+    *(u16 *)(out + 0x16) = r1;
+    *(u16 *)(out + 0x1C) = r2;
+
+    /* group 3: base base3 */
+    func_0026EB98(&vals[0], &vals[1], &vals[2]);
+    r0 = (u16)vals[0] + base3;
+    r1 = (u16)vals[1] + base3;
+    r2 = (u16)vals[2] + base3;
+    *(u16 *)(out + 0x24) = r0;
+    *(u16 *)(out + 0x2A) = r1;
+    *(u16 *)(out + 0x2E) = r2;
+    *(u16 *)(out + 0x04) = r0;
+    *(u16 *)(out + 0x0A) = r1;
+    *(u16 *)(out + 0x0E) = r2;
+    *(u16 *)(out + 0x14) = r0;
+    *(u16 *)(out + 0x1A) = r1;
+    *(u16 *)(out + 0x1E) = r2;
+}
+#else
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", BuildAttractReelPlaylist);
+#endif
 
 /* LoadLevelAndInitHealth: large level-load + health/stat init driver. WALL:
  * jump-table switch + many callee-saves at 8-byte slot spacing (packed-save
