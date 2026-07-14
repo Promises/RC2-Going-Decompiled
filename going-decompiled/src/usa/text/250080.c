@@ -260,11 +260,54 @@ s32 func_00350120(void) {
    installs the vblank-start + DMAC-channel-2 interrupt handlers. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", InitFmvPlaybackEngine);
 
-/* func_003503D8: FMV engine shutdown (kills the IPU thread, restores DMAC).
- * Blocked: the original mixes %gp_rel and absolute %hi/%lo accesses to
- * g_pFmvArenaBase/g_fmvThreadId inside one function (the delay-slot gp_rel
- * reload artifact) — only one form is expressible per declaration. */
+/* func_003503D8: FMV engine shutdown — flat teardown: quiesce (func_00124B88),
+ * stop the IPU/decode helpers (func_003512F0/func_00352B88), kill+delete the FMV
+ * thread (func_0011AA70/func_0011AA30 over g_fmvThreadId), disable DMAC ch2, close
+ * the vblank handler (func_0011A950 + func_126DC0(OnVblankInterrupt)), tear down the
+ * DMA queues (func_003525D8/func_003505E0/func_003513F0 over the arena sub-objects),
+ * quiesce again, and clear bit 1 of the INTC-mask reg 0x1000E000.
+ * Blocked (match): the original mixes %gp_rel and absolute %hi/%lo accesses to
+ * g_pFmvArenaBase/g_fmvThreadId in one function — only one form per declaration.
+ * NEEDS-TESTER-ORACLE: the arena-relative args the asm passes to the void(void)
+ * callees (func_003512F0/func_00352B88/func_003505E0/func_003513F0 — func_00352B88 is
+ * a confirmed void(void) 2.9 match) are dead-passed in the original and dropped here;
+ * the oracle should confirm faithfulness. */
+#ifdef TARGET_NATIVE
+extern void func_0011AA70(s32 threadId);   /* kill thread */
+extern void func_0011AA30(s32 threadId);   /* delete thread */
+extern void DisableDmac(s32 channel);
+extern void func_0011A950(s32 a, s32 b);
+extern void func_126DC0(void *handler);    /* remove vblank handler */
+extern s32  g_fmvThreadId;
+extern void OnVblankInterrupt(void);
+/* forward decls — these are declared/defined later in this file */
+extern s32  func_00124B88(s32 mode);
+extern void func_003512F0(void);
+extern void func_00352B88(void);
+extern s32  func_003525D8(FmvStream *obj);
+extern s32  func_003505E0(void);
+extern s32  func_003513F0(void);
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003503D8);
+#else
+void func_003503D8(void) {
+    func_00124B88(0);
+    func_003512F0();
+    func_00352B88();
+    func_0011AA70(g_fmvThreadId);
+    func_0011AA30(g_fmvThreadId);
+    DisableDmac(2);
+    func_0011A950(2, *(s32 *)(g_pFmvArenaBase + 0xD90F8));
+    func_126DC0((void *)OnVblankInterrupt);
+    func_003525D8((FmvStream *)(g_pFmvArenaBase + 0xD9048));
+    func_003505E0();
+    func_003513F0();
+    func_00124B88(0);
+    *(volatile u32 *)0x1000E000 &= 0xFFFFFFFD;
+}
+#endif
 
 /**
  * Print an FMV error message through the debug stub ("[ Error ] %s\n").
@@ -616,9 +659,26 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", OnFmvVblankFlip
  * ei` interrupt-reenable pair, which no C source can produce. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", OnFmvGifDmaInterrupt);
 
-/* func_00350F28: vblank field-sync waiter. Blocked: 8-byte-packed saves
- * (s0@0x0, ra@0x8) plus a delay-slot %gp_rel read of g_bProgressiveScan. */
+/* func_00350F28: vblank field-sync waiter — spin while WaitVblankGetField(0) still
+ * reports `targetField` and progressive-scan is off; once the field changes (or
+ * progressive is on) latch D_1AE788=1 / D_1AE78C=0 and return 1.
+ * Blocked: 8-byte-packed saves (s0@0x0, ra@0x8) — under 2.9 -G8 -fno-gcse this C
+ * compiles a 16-byte-slot 0x20 frame; the original packs 8-byte in a 0x10 frame
+ * (the genuine save-slot wall). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350F28);
+#else
+/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee saves. */
+extern s32 WaitVblankGetField(s32 mode);
+extern s32 g_bProgressiveScan;
+s32 func_00350F28(s32 targetField) {
+    while (WaitVblankGetField(0) == targetField && g_bProgressiveScan == 0) {
+    }
+    D_1AE788 = 1;
+    D_1AE78C = 0;
+    return 1;
+}
+#endif
 
 /**
  * Clear the "frame displayed this vblank" latch.
@@ -918,9 +978,22 @@ u32 func_00351498(u32 *s, u32 addr) {
     return 0;
 }
 
-/* func_003514E0 / func_00351550: DMAC ch3/ch4 CHCR writes under the
- * ENABLEW suspend protocol. Blocked: 8-byte-packed saves (s0@0x0, ra@0x8). */
+/* func_003514E0: write a DMAC channel CHCR under the ENABLEW suspend protocol —
+ * suspend (ENABLEW = ENABLER | 0x10000), write the CHCR command, resume
+ * (ENABLEW = ENABLER & ~0x10000), bracketed by func_0011F5E0/func_0011F628.
+ * Blocked: 8-byte-packed saves (s0@0x0, ra@0x8) — 2.9 -G8 -fno-gcse emits a
+ * 16-byte-slot 0x20 frame vs the ROM's 8-byte 0x10 (base-vs-target DIFFERS). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003514E0);
+#else
+void func_003514E0(u32 chcrCmd) {
+    func_0011F5E0();   /* DI */
+    *(volatile u32 *)0x1000F590 = *(volatile u32 *)0x1000F520 | 0x10000;
+    *(volatile u32 *)0x1000B000 = chcrCmd;
+    *(volatile u32 *)0x1000F590 = *(volatile u32 *)0x1000F520 & 0xFFFEFFFF;
+    func_0011F628();   /* EI */
+}
+#endif
 
 /* TODO(hle): needs PS2 graphics/IO HLE backend — writes REG_DMAC_4_IPU_TO_CHCR
    under the REG_DMAC_ENABLER/ENABLEW channel-suspend protocol (the companion of
@@ -1231,16 +1304,13 @@ void func_003525D0(FmvStream *s) {
 }
 
 #ifndef TARGET_NATIVE
-/* func_003525D8: stop + detach the embedded stream. Blocked: 8-byte-packed
- * saves (s0@0x0, ra@0x8). */
+/* func_003525D8: stop + detach the embedded stream — channel teardown + DeleteSema
+ * on the object at +0x48, detach the message dispatch table (func_0012F940), report
+ * success. Blocked: 8-byte-packed saves (s0@0x0, ra@0x8) — 2.9 -G8 -fno-gcse compiles
+ * a 16-byte-slot 0x20 frame; the original packs 8-byte in 0x10. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003525D8);
 #else
-/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
-   saves (s0/ra). Revisit with the gameplay-TU compiler.
-
-   Tear the FMV stream down: stop the embedded bitstream/IPU-DMA object at +0x48
-   (channel teardown + DeleteSema) and detach the stream's message dispatch
-   table (func_0012F940). Always reports success. */
+/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee saves. */
 s32 func_003525D8(FmvStream *obj) {
     func_00351F58((u8 *)obj + 0x48);
     func_0012F940((u8 *)obj);
@@ -1318,8 +1388,16 @@ s32 func_00352680(FmvStream *obj) {
 /* func_003526A0: 8 bytes of inter-function padding, no C. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003526A0);
 
-/* func_003526A8: end-of-stream flush (pads the bitstream to a 4-byte
- * boundary). Blocked: 8-byte-packed saves (s0@0x20, ra@0x28). */
+/* func_003526A8: end-of-stream flush (pads the bitstream to a 4-byte boundary).
+ * Blocked (match): 8-byte-packed saves (s0@0x20, ra@0x28).
+ * PARKED #70 (#else not confident): the asm sets up 4 stack out-param pointers
+ * (sp+0x10/+0x14/+0x18/+0x1C) before `jal func_00352590`, then reads sp+0x14/+0x1C
+ * (sum<4 -> early-out) and sp+0x10/+0x18 (masked &0xFFFFFFF | 0x20000000 into DMATAGs
+ * for func_003511A8), also copying D_1AE818 (unaligned lwl/lwr) to sp+0x0 — but Ghidra
+ * decompiles func_00352590 as a 1-param forwarder `FUN_003517c0(p+0x48)`, contradicting
+ * the 4-out-param wiring. Resolve func_00352590.s + func_003517c0 (does it write the 4
+ * slots?) + func_003511A8's arg arity before writing a faithful #else. Not forcing a
+ * low-confidence body. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003526A8);
 
 #ifndef TARGET_NATIVE
@@ -1484,13 +1562,29 @@ s32 func_00352AE0(s32 unused, u8 *obj) {
 }
 #endif
 
-/* func_00352B30: initialise the decoded-frame display queue (fields, then
- * clear each slot's {state,index} header). Best attempt 88%: byte-identical
- * structure (incl. the strength-reduced offset induction var initialised
- * inside the loop preheader, recovered with a volatile q + i*0x138C0
- * indexing) but the i/offset/stride registers colour t0/a1/a2 where the
- * original has a1/a2/t0 - the known register-coloring wall. */
+/* func_00352B30: initialise the decoded-frame display queue — store arg1/base/count
+ * into the header (+0x0/+0x4/+0x10), zero +0x8/+0xC, then for each of `count`
+ * 0x138C0-stride slots off `base` zero the slot's state word (+0x0) and stamp its
+ * index at +0x4. Blocked: under 2.9 -G8 -fno-gcse the header stores schedule in a
+ * different order than the original (sw a1,0x0 first vs the original's sw zero,0xC
+ * first) — an instruction-scheduling wall. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352B30);
+#else
+/* TODO(match): functional equivalent - not byte-exact; header-store scheduling. */
+void func_00352B30(s32 *rec, s32 arg1, s32 base, s32 count) {
+    s32 i, off;
+    rec[3] = 0;
+    rec[0] = arg1;
+    rec[1] = base;
+    rec[4] = count;
+    rec[2] = 0;
+    for (i = 0, off = 0; i < count; i++, off += 0x138C0) {
+        *(s32 *)(rec[1] + off) = 0;
+        *(s32 *)(rec[1] + off + 4) = i;
+    }
+}
+#endif
 
 /**
  * FMV idle hook (frame-queue variant) — does nothing.
