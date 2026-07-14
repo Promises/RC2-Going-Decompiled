@@ -341,11 +341,76 @@ void func_00279EE8(void) {
 }
 #endif
 
-/* func_00279F08: PARKED #70 (#else not confident) — a branch-heavy (10-branch) decision/
- * state routine with a single call (func_00279E00) and a save-slot-wall frame. The dense
- * conditional logic needs a careful Ghidra control-flow trace before a faithful #else.
- * Not forcing a low-confidence body. */
+/* func_00279F08 - advance a table-driven sequence cursor one step and report whether the
+ * step "settled". State lives at g_cameraSlotActive: a s16 cursor (+0xF0) + sub-position
+ * (+0xF2), a 0x28-stride entry table (+0x458, entry.field0 at +0x00, entry.scroll at +0x1C),
+ * an entry count (+0x958), and a mode word at g_cameraCallbackCount+0x80.
+ *   - cursor == -1 (uninitialised): reset to 0; if mode==1, jump to row 4 and set mode=2.
+ *   - else: run func_00279E00 on the current entry's scroll field (it returns whether a new
+ *     index/cursor was produced and writes them out). If it produced one AND the entry's
+ *     scroll field is non-zero, adopt that (index,cursor) pair and return 1. Otherwise step
+ *     the cursor forward, skipping runs of entries whose field0 matches the one we left
+ *     (dedup); return 1 iff we stopped on a DIFFERENT entry (allSame^1). Special-case: if we
+ *     land on row 4 with mode==0, back up to row 3, set mode=1, return 0.
+ *
+ * UN-PARK of a premature #70: the park's only cited blocker was "needs a careful control-flow
+ * trace" - done here, cross-checked Ghidra against the .s (real body @ this glabel) branch by
+ * branch. Engine region - faithful #else, not a byte match. FORMER-PARK: dual-gated (tester
+ * oracle) + d2 heads-up per the un-park guardrails. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00279F08);
+#else
+extern u8 g_cameraCallbackCount[];   /* +0x80 = sequence mode word (0/1/2) */
+
+s32 func_00279F08(void) {
+    s16 *cursor = (s16 *)(g_cameraSlotActive + 0xF0);   /* sequence row cursor */
+    s16 *sub    = (s16 *)(g_cameraSlotActive + 0xF2);   /* sub-position */
+    s32 *mode   = (s32 *)(g_cameraCallbackCount + 0x80);
+    u8  *table  = g_cameraSlotActive + 0x458;           /* 0x28-stride entry table */
+    s32  count  = *(s32 *)(g_cameraSlotActive + 0x958);
+    s32  status;
+
+    if (*cursor == -1) {
+        status = 1;
+        *cursor = 0;
+        *sub = 0;
+        if (*mode == 1) {
+            *mode = 2;
+            *cursor = 4;
+            *sub = 0;
+        }
+    } else {
+        s32 idx, cur;
+        s32 produced = func_00279E00(*(s32 *)(table + *cursor * 0x28 + 0x1C), &idx, &cur);
+        if (produced == 0 || *(s32 *)(table + *cursor * 0x28 + 0x1C) == 0) {
+            s16 prev = *cursor;
+            s32 allSame = 1;
+            *cursor = *cursor + 1;
+            *sub = 0;
+            if (*cursor < count) {
+                do {
+                    if (*(s32 *)(table + *cursor * 0x28) == *(s32 *)(table + prev * 0x28)) {
+                        *cursor = *cursor + 1;
+                    } else {
+                        allSame = 0;
+                    }
+                } while (*cursor < count && allSame);
+            }
+            status = allSame ^ 1;
+            if (*cursor == 4 && *mode == 0) {
+                *cursor = 3;
+                status = 0;
+                *mode = 1;
+            }
+        } else {
+            *cursor = (s16)idx;
+            *sub = (s16)cur;
+            status = 1;
+        }
+    }
+    return status;
+}
+#endif
 
 /* func_0027A0C8 globals (declared for the TARGET_NATIVE #else only). */
 extern s32 g_playerProgress;      /* 0x1A79F8 story progress counter */
