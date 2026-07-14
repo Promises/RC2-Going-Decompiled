@@ -1705,7 +1705,91 @@ void func_00338F18(void *p, const void *src, s32 id) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338F80);
 
+/* func_00338F88(a1, layout, color, val, font, reposFlag, drawFlag, sub, n9, n10,
+ * n11): format + draw a bordered text box. Builds the caption into a 768-byte
+ * scratch buffer by selecting one of seven format strings (D_1ADBA8/98/90/70/58/
+ * 48/38) from the n9/n10/n11/sub argument combination (page/count indicators),
+ * then draws the text with the font selected by `font` (1=DrawFont1TextBox
+ * func_00280B48, 0=DrawFont2 func_00280BB8, 2=DrawFont3 func_00280C28). If
+ * reposFlag is set, vertically re-centers the box (fields at +0x0/+0x2/+0xA from
+ * height +0xE and g_screenHeight). Computes the border rect from the box
+ * half-extents (+0xC width, +0xE height, centered on +0x8/+0xA) padded 10x5, draws
+ * it (DrawTextBoxBorder func_0027F208 + the frame func_00339398), redraws the text,
+ * and restores the layout flag word (+0x12). The +0x12 flag word is toggled with
+ * bits 3/4 (|=3, |=4, &=~4) across the passes. Faithful TARGET_NATIVE #else (engine
+ * 2.96 = no byte-match); all-integer args (no float-arg reordering); the one
+ * mixed-arg call (func_00339398) is asm-verified. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338F88);
+#else
+extern void func_00280B48(void *layout, u32 color, const char *text, s32 flag);
+extern void func_00280BB8(void *layout, u32 color, const char *text, s32 flag);
+extern void func_00280C28(void *layout, u32 color, const char *text, s32 flag);
+extern void func_0027F208(s32 top, s32 bottom, s32 left, s32 right, s32 thickness,
+                          u32 color);
+extern void func_00339398(f32 x0, f32 y0, f32 x1, f32 y1, s32 a1, s32 thickness,
+                          u32 color);
+extern s32 g_screenHeight;
+extern u8 D_1ADB38[], D_1ADB48[], D_1ADB58[], D_1ADB70[], D_1ADB90[], D_1ADB98[],
+          D_1ADBA8[];
+void func_00338F88(void *a1, void *layout, u32 color, s32 val, s32 font,
+                   s32 reposFlag, s32 drawFlag, s32 sub, s32 n9, s32 n10, s32 n11) {
+    s16 *ps = (s16 *)layout;
+    char buf[768];
+    s16 savedFlags = ps[9];
+    s32 dx, dy, top, bottom, left, right;
+
+    ps[9] |= 3;
+
+    if (n9 == 0) {
+        func_00115DA8(buf, (char *)D_1ADBA8, val);
+    } else if (n10 == 0) {
+        if (sub == 0) func_00115DA8(buf, (char *)D_1ADB98, val, 1, 1, n9);
+        else          func_00115DA8(buf, (char *)D_1ADB90, val, 1, n9);
+    } else if (n11 == 0) {
+        if (sub == 0) func_00115DA8(buf, (char *)D_1ADB70, val, 1, 1, n9);
+        else          func_00115DA8(buf, (char *)D_1ADB58, val, 1, n9, n10);
+    } else if (sub == 0) {
+        func_00115DA8(buf, (char *)D_1ADB48, val, 1, 1, n9, 1, n10);
+    } else {
+        func_00115DA8(buf, (char *)D_1ADB38, val, 1, n9, 1);
+    }
+    ps[9] |= 4;
+
+    if (font == 1)      func_00280B48(layout, color, buf, drawFlag);
+    else if (font == 0) func_00280BB8(layout, color, buf, drawFlag);
+    else if (font == 2) func_00280C28(layout, color, buf, drawFlag);
+
+    if (reposFlag != 0) {
+        s16 h = ps[7];
+        s16 y = (s16)((g_screenHeight - h) >> 1);
+        ps[1] = y + h;
+        ps[5] = y + (h >> 1);
+        ps[0] = y;
+    }
+
+    if (font == 1)      func_00280B48(layout, color, buf, drawFlag);
+    else if (font == 0) func_00280BB8(layout, color, buf, drawFlag);
+    else if (font == 2) func_00280C28(layout, color, buf, drawFlag);
+
+    dx = (ps[6] >> 1) + 10;
+    dy = (ps[7] >> 1) + 5;
+    right  = ps[4] + dx;
+    bottom = ps[5] + dy;
+    top    = ps[5] - dy;
+    left   = ps[4] - dx;
+    ps[9] &= (s16)0xFFFB;
+    func_0027F208(top, bottom, left, right, 0x60, 0x60442D00);
+    func_00339398((f32)top, (f32)bottom, (f32)left, (f32)right, (s32)a1, 0x60,
+                  0x55F0C070);
+
+    if (font == 1)      func_00280B48(layout, color, buf, drawFlag);
+    else if (font == 0) func_00280BB8(layout, color, buf, drawFlag);
+    else if (font == 2) func_00280C28(layout, color, buf, drawFlag);
+
+    ps[9] = savedFlags;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00339398);
 
@@ -2216,7 +2300,109 @@ void *func_0033AA80(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033AB10);
 
+/* GuiLevelInfoPanelInit(self, pool): construct the galactic-map level-info panel.
+ * Stores the pool at +0x0, sets the +0x490 "active" flag, and (if a pool is given)
+ * allocates one 16-byte size vector at +0x4 seeded to {256.0, 198.0}. Builds four
+ * header glyph elements (+0x8/+0x54/+0xA0/+0xEC; tags D_1ADBE8/F0/F8/D_1ADC00;
+ * glyphs 0x5F-0x62; colours 0x60442D00/0x60241700/0x55F0C070/0x55F0C070) and nine
+ * text rows (+0x138..+0x3F8; tags D_1ADC08/80/90/98/A0/A8/10/18/28; all white
+ * 0x80F0F0F0). Rows 2-9 get text-flag 0 except the last (+0x3F8) which gets flag 2.
+ * Seven rows are seeded with localized strings (0x2BFB/0x2BF3/0x3129/0x2BFF/0x2C00/
+ * 0x2C01/0x2BE5); row +0x3A0 points at the in-struct buffer +0x450. Sets the byte
+ * flag D_1ADC78 = 0x12 and tail-calls GuiLevelInfoPanelTick. Faithful TARGET_NATIVE
+ * #else (engine 2.96 = no byte-match); no pos/scale calls (no element-last risk). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiLevelInfoPanelInit);
+#else
+extern char *g_guiInstance;
+extern u8 D_1ADBE8[], D_1ADBF0[], D_1ADBF8[], D_1ADC00[], D_1ADC08[], D_1ADC80[],
+          D_1ADC90[], D_1ADC98[], D_1ADCA0[], D_1ADCA8[], D_1ADC10[], D_1ADC18[],
+          D_1ADC28[], D_1ADC78[];
+s32 GuiLevelInfoPanelTick(void *w);
+void GuiLevelInfoPanelInit(void *self, GuiPool *pool) {
+    u8 *s = (u8 *)self;
+    GuiElement *h0 = (GuiElement *)(s + 0x8);
+    GuiElement *h1 = (GuiElement *)(s + 0x54);
+    GuiElement *h2 = (GuiElement *)(s + 0xA0);
+    GuiElement *h3 = (GuiElement *)(s + 0xEC);
+    GuiElement *r0 = (GuiElement *)(s + 0x138);
+    GuiElement *r1 = (GuiElement *)(s + 0x190);
+    GuiElement *r2 = (GuiElement *)(s + 0x1E8);
+    GuiElement *r3 = (GuiElement *)(s + 0x240);
+    GuiElement *r4 = (GuiElement *)(s + 0x298);
+    GuiElement *r5 = (GuiElement *)(s + 0x2F0);
+    GuiElement *r6 = (GuiElement *)(s + 0x348);
+    GuiElement *r7 = (GuiElement *)(s + 0x3A0);
+    GuiElement *r8 = (GuiElement *)(s + 0x3F8);
+    u32 *vec;
+
+    *(GuiPool **)(s + 0x0) = pool;
+    *(s32 *)(s + 0x490) = 1;
+    if (pool != 0) {
+        vec = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        *(u32 **)(s + 0x4) = vec;
+        vec[0] = 0; vec[1] = 0; vec[2] = 0; vec[3] = 0;
+    }
+    vec = *(u32 **)(s + 0x4);
+    *(f32 *)&vec[0] = 256.0f;
+    *(f32 *)&vec[1] = 198.0f;
+
+    GuiElementInit(h0, (s32)D_1ADBE8, pool);
+    GuiElementInit(h1, (s32)D_1ADBF0, pool);
+    GuiElementInit(h2, (s32)D_1ADBF8, pool);
+    GuiElementInit(h3, (s32)D_1ADC00, pool);
+
+    GuiTextElementInit(r0, (s32)D_1ADC08, pool);
+    GuiTextElementInit(r1, (s32)D_1ADC80, pool);
+    GuiTextElementInit(r2, (s32)D_1ADC90, pool);
+    GuiTextElementInit(r3, (s32)D_1ADC98, pool);
+    GuiTextElementInit(r4, (s32)D_1ADCA0, pool);
+    GuiTextElementInit(r5, (s32)D_1ADCA8, pool);
+    GuiTextElementInit(r6, (s32)D_1ADC10, pool);
+    GuiTextElementInit(r7, (s32)D_1ADC18, pool);
+    GuiTextElementInit(r8, (s32)D_1ADC28, pool);
+
+    GuiElementSetTextFlag(r1, 0);
+    GuiElementSetTextFlag(r2, 0);
+    GuiElementSetTextFlag(r3, 0);
+    GuiElementSetTextFlag(r4, 0);
+    GuiElementSetTextFlag(r5, 0);
+    GuiElementSetTextFlag(r6, 0);
+    GuiElementSetTextFlag(r7, 0);
+    GuiElementSetTextFlag(r8, 2);
+
+    *GuiElementGetColor(h0) = 0x60442D00;
+    *GuiElementGetColor(h1) = 0x60241700;
+    *GuiElementGetColor(h2) = 0x55F0C070;
+    *GuiElementGetColor(h3) = 0x55F0C070;
+    *GuiElementGetColor(r0) = (s32)0x80F0F0F0;
+    *GuiElementGetColor(r1) = (s32)0x80F0F0F0;
+    *GuiElementGetColor(r2) = (s32)0x80F0F0F0;
+    *GuiElementGetColor(r3) = (s32)0x80F0F0F0;
+    *GuiElementGetColor(r4) = (s32)0x80F0F0F0;
+    *GuiElementGetColor(r5) = (s32)0x80F0F0F0;
+    *GuiElementGetColor(r6) = (s32)0x80F0F0F0;
+    *GuiElementGetColor(r7) = (s32)0x80F0F0F0;
+    *GuiElementGetColor(r8) = (s32)0x80F0F0F0;
+
+    GuiElementSetGlyph(h0, (s32)g_guiInstance + 0x8710, 0x5F);
+    GuiElementSetGlyph(h1, (s32)g_guiInstance + 0x8710, 0x60);
+    GuiElementSetGlyph(h2, (s32)g_guiInstance + 0x8710, 0x61);
+    GuiElementSetGlyph(h3, (s32)g_guiInstance + 0x8710, 0x62);
+
+    D_1ADC78[0] = 0x12;
+    GuiElementSetText(r0, GetLocalizedString(0x2BFB));
+    GuiElementSetText(r1, GetLocalizedString(0x2BF3));
+    GuiElementSetText(r2, GetLocalizedString(0x3129));
+    GuiElementSetText(r3, GetLocalizedString(0x2BFF));
+    GuiElementSetText(r4, GetLocalizedString(0x2C00));
+    GuiElementSetText(r5, GetLocalizedString(0x2C01));
+    GuiElementSetText(r6, GetLocalizedString(0x2BE5));
+    GuiElementSetText(r7, (s32)(s + 0x450));
+
+    GuiLevelInfoPanelTick(self);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033AF68);
 
@@ -2401,7 +2587,99 @@ void func_0033B6D0(void *p) {
 }
 #endif
 
+/* func_0033B720(w): render a radial/carousel item selector. No-op unless
+ * w[0x87] is set. First lays out the two static frame elements (w+0x50, w+0x9C)
+ * at the placement anchor (*(f32*)w[0x83]) with the shared frame scale
+ * (D_1ADCF8/D_1ADCFC) and dispatches each one's draw method (obj+0xC, arg =
+ * elem + obj[+8]). Then, for each of the w[0x82] carousel entries (entry table at
+ * *w, stride 0x18), places item element w+0x134 on a circle of radius w[0x85]
+ * (x += D_1ADCE8 + r*sin, y += D_1ADCEC + D_1ADCF0*r*cos, angle at entry+0xC),
+ * sets its sprite (entry[0]/entry[1]) and colour (0x80808080 if state==1 else
+ * entry+8), visibility (state!=2) and draws it. The currently-selected entry
+ * (index == w[0x86]) additionally scales the label element (w+0x4) and, unless
+ * hidden (state!=2), positions it (D_1ADD00/D_1ADD04 offsets), sets its text
+ * (entry+0x14, or localized entry+0x10 if 0) and draws it; then dispatches the
+ * label's draw method. Faithful TARGET_NATIVE #else (engine 2.96 = no
+ * byte-match). GuiElementSetPos/SetScale element+arg order asm-verified. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033B720);
+#else
+extern f32 func_00283B30(f32 x);   /* SinfVu0 */
+extern f32 func_00283B48(f32 x);   /* CosfVu0 */
+extern s32 D_1ADCE8, D_1ADCEC;     /* int, converted to float */
+extern f32 D_1ADCF0, D_1ADCF8, D_1ADCFC, D_1ADD00, D_1ADD04;
+void func_0033B720(void *w) {
+    s32 *p = (s32 *)w;
+    GuiElement *frame0 = (GuiElement *)((char *)p + 0x50);
+    GuiElement *frame1 = (GuiElement *)((char *)p + 0x9C);
+    f32 *anchor;
+    s32 obj;
+
+    if (p[0x87] == 0) {
+        return;
+    }
+
+    anchor = *(f32 **)&p[0x83];
+    GuiElementSetPos(frame0, anchor[0], anchor[1], 0.0f, 0.0f);
+    GuiElementSetScale(frame0, D_1ADCF8, D_1ADCFC, 0.0f, 0.0f);
+    obj = p[0x20];
+    (*(void (**)(void *))(obj + 0xC))((char *)frame0 + *(s16 *)(obj + 8));
+
+    anchor = *(f32 **)&p[0x83];
+    GuiElementSetPos(frame1, anchor[0], anchor[1], 0.0f, 0.0f);
+    GuiElementSetScale(frame1, D_1ADCF8, D_1ADCFC, 0.0f, 0.0f);
+    obj = p[0x33];
+    (*(void (**)(void *))(obj + 0xC))((char *)frame1 + *(s16 *)(obj + 8));
+
+    if (p[0x82] > 0) {
+        GuiElement *item = (GuiElement *)((char *)p + 0x134);
+        s32 *state = &p[0x72];
+        s32 index = 0;
+        s32 off = 0;
+        do {
+            u8 *entry = (u8 *)(*p) + off;
+            f32 r = *(f32 *)&p[0x85];
+            f32 rx = r * func_00283B30(*(f32 *)(entry + 0xC));
+            f32 ry = r * func_00283B48(*(f32 *)(entry + 0xC));
+            s32 *color;
+
+            GuiSpriteSetTexture(item, *(s32 *)entry, *(s32 *)(entry + 4));
+            anchor = *(f32 **)&p[0x83];
+            GuiElementSetPos(item, anchor[0] + (f32)D_1ADCE8 + rx,
+                             anchor[1] + (f32)D_1ADCEC + D_1ADCF0 * ry, 0.0f, 0.0f);
+            color = GuiElementGetColor(item);
+            *color = (*state == 1) ? (s32)0x80808080 : *(s32 *)(entry + 8);
+            GuiElementSetVisible(item, *state != 2);
+            func_00337630(item);
+
+            if (index == p[0x86]) {
+                GuiElementSetScale((GuiElement *)((char *)p + 0x4), D_1ADCF8,
+                                   D_1ADCFC, 0.0f, 0.0f);
+                if (*state != 2) {
+                    s32 str;
+                    anchor = *(f32 **)&p[0x83];
+                    GuiElementSetPos((GuiElement *)((char *)p + 0x4),
+                                     anchor[0] + D_1ADD00 + rx,
+                                     anchor[1] + D_1ADD04 + D_1ADCF0 * ry,
+                                     0.0f, 0.0f);
+                    str = *(s32 *)(entry + 0x14);
+                    if (str == 0) {
+                        str = GetLocalizedString(*(s16 *)(entry + 0x10));
+                    }
+                    GuiElementSetText((GuiElement *)((char *)p + 0x170), str);
+                    GuiTextElementDraw((char *)p + 0x170);
+                }
+                obj = p[0xD];
+                (*(void (**)(void *))(obj + 0xC))((char *)p + 0x4 + *(s16 *)(obj + 8));
+            }
+
+            index++;
+            state++;
+            off += 0x18;
+        } while (index < p[0x82]);
+    }
+}
+#endif
 
 /* func_0033BA10: store a float at +0x214. */
 void func_0033BA10(void *p, f32 v) {
@@ -2777,7 +3055,85 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033C580);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033C588);
 
+/* func_0033C958(self): render the galaxy/level-select map screen. Draws the three
+ * frame sprites (self+0x0/+0x4C/+0x98), three text labels (self+0x1D8/+0x230/
+ * +0x288) and a sprite (self+0x2E0). Then for each of the 21 level markers, places
+ * the shared marker element (self+0x31C) at the anchor (*(self+0x1C8)) offset by
+ * the marker's table entry (D_265100, stride 0x10: s32 dx, s32 dy, s32 texIdx,
+ * f32 scale), applies the icon (0xE99E) + scale, tints it visited (0x7029A1FF) vs
+ * unvisited (0x70A0C0C0) from g_levelVisitedMarkers, and draws it if the level is
+ * available (g_abLevelAvailableFlags). Finally, if a planet is selected
+ * (g_mapVertexData+0x230 < 21), dispatches the 3 route sub-elements (self+0x114
+ * table, stride 0x4C, base self+0xE4) via their draw methods and draws two
+ * highlight line-pairs (func_00290320) around the selected planet's screen rect
+ * (func_00336C18 element pos). Faithful TARGET_NATIVE #else (engine 2.96 = no
+ * byte-match); GuiElementSetPos/SetScale element+arg order asm-verified. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033C958);
+#else
+extern void func_00290320(s32 x0, s32 y0, s32 x1, s32 y1, u32 color, s32 flag);
+extern u8 D_265100[], g_levelVisitedMarkers[], g_abLevelAvailableFlags[],
+          g_mapVertexData[];
+void func_0033C958(void *self) {
+    u8 *p = (u8 *)self;
+    GuiElement *marker = (GuiElement *)(p + 0x31C);
+    s32 i;
+
+    GuiSpriteElementDraw(p);
+    GuiSpriteElementDraw(p + 0x4C);
+    GuiSpriteElementDraw(p + 0x98);
+    GuiTextElementDraw(p + 0x1D8);
+    GuiTextElementDraw(p + 0x230);
+    GuiTextElementDraw(p + 0x288);
+    func_00337630((GuiElement *)(p + 0x2E0));
+
+    for (i = 0; i < 0x15; i++) {
+        u8  *tbl = D_265100 + i * 0x10;
+        f32 *anchor = *(f32 **)(p + 0x1C8);
+        GuiElementSetPos(marker, (f32)*(s32 *)(tbl + 0) + anchor[0],
+                         (f32)*(s32 *)(tbl + 4) + anchor[1], 0.0f, 0.0f);
+        GuiSpriteSetTexture(marker, 0xE99E, *(s32 *)(tbl + 8));
+        GuiElementSetScale(marker, *(f32 *)(tbl + 0xC), *(f32 *)(tbl + 0xC),
+                           0.0f, 0.0f);
+        *GuiElementGetColor(marker) =
+            (g_levelVisitedMarkers[i] == 0) ? (s32)0x70A0C0C0 : (s32)0x7029A1FF;
+        if (g_abLevelAvailableFlags[i] != 0) {
+            func_00337630(marker);
+        }
+    }
+
+    if (*(s32 *)(g_mapVertexData + 0x230) < 0x15) {
+        GuiElement *e0E4 = (GuiElement *)(p + 0xE4);
+        GuiElement *e130 = (GuiElement *)(p + 0x130);
+        GuiElement *e17C = (GuiElement *)(p + 0x17C);
+        s32 *desc = (s32 *)(p + 0x114);
+        u8  *base = p + 0xE4;
+        s32  n = 2;
+        f32 *ra, *rb;
+
+        do {
+            s32 obj = *desc;
+            n--;
+            desc += 0x13;
+            (*(void (**)(void *))(obj + 0xC))(base + *(s16 *)(obj + 8));
+            base += 0x4C;
+        } while (n > -1);
+
+        ra = func_00336C18(e0E4); rb = func_00336C18(e130);
+        func_00290320((s32)(ra[0] + 1.0f), (s32)(rb[1] + 6.0f),
+                      (s32)(ra[0] + 1.0f), (s32)(ra[1] - 4.0f), 0x180000FF, 0);
+        ra = func_00336C18(e17C);
+        func_00290320((s32)(ra[0] + 8.0f), (s32)(ra[1] + 2.0f),
+                      (s32)(ra[0] + 304.0f), (s32)(ra[1] + 2.0f), 0x180000FF, 0);
+        ra = func_00336C18(e0E4); rb = func_00336C18(e130);
+        func_00290320((s32)(ra[0] + 1.0f), (s32)(rb[1] + 6.0f),
+                      (s32)(ra[0] + 1.0f), (s32)(ra[1] - 4.0f), 0x180000FF, 0);
+        ra = func_00336C18(e17C);
+        func_00290320((s32)(ra[0] + 8.0f), (s32)(ra[1] + 2.0f),
+                      (s32)(ra[0] + 304.0f), (s32)(ra[1] + 2.0f), 0x180000FF, 0);
+    }
+}
+#endif
 
 /* func_0033CD80: init the embedded dialog-box (at p+0x8), return the object. */
 #ifndef TARGET_NATIVE
@@ -4506,8 +4862,178 @@ void *func_0033FF68(void *self) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003400D8);
 
+/* GuiQuickSelectWheelInit(self, pool): construct the planet/level-select wheel
+ * screen. Stores the pool (+0x810), allocates a size vector at +0x80C = {250, 200},
+ * and builds the static chrome: header/help glyph elements (+0x0/+0x4C/+0xE4/+0x130/
+ * +0x98/+0x17C/+0x1C8/+0x214, glyphs 0x63/0x64/0x66/0x65/0x29/0x5D/0x23/0x5E), four
+ * text rows (+0x8D8/+0x930/+0x988/+0x9E0) and three centered marker glyphs (+0x7D0,
+ * +0x2A8, +0x2F4, +0x5A0) with their colours/scales/positions. Then lays out the 8
+ * wheel slots: each slot gets a label element (+0x340 + i*0x4C, positioned at the
+ * anchor +113/-72) and a sprite icon (+0x5EC + i*0x3C) placed on a circle of radius
+ * ~82x76 centered at (0x15C,0x6D) via WrapAnglePiSum + Sin/Cos of angle i*pi/4-pi.
+ * Shares the first slot's scale vectors into the remaining 7 (two loops, strides
+ * 0x4C/0x3C). Finishes the title/help text (localized 0x2BE9/0x2BF1/0x2BE5), the
+ * bracket labels (+0x988/+0x9E0 scaled 1.25) and the item list (+0x260: 5 rows, 100
+ * items, colour pairs), then tail-calls GuiQuickSelectWheelTick. Faithful
+ * TARGET_NATIVE #else (engine 2.96 = no byte-match); all 12 GuiElementSetPos/SetScale
+ * element+arg orders + the trig layout asm-verified per-call. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiQuickSelectWheelInit);
+#else
+extern char *g_guiInstance;
+extern f32 func_00283B30(f32 x);   /* SinfVu0 */
+extern f32 func_00283B48(f32 x);   /* CosfVu0 */
+extern f32 WrapAnglePiSum(f32 angle, f32 halfPi);
+extern u8 D_1ADBE8[], D_1ADBF0[], D_1ADBF8[], D_1ADC00[], D_1ADF78[], D_1ADF80[],
+          D_1ADD38[], D_1ADF88[], D_1ADF90[], D_1ADF98[], D_1ADFA0[], D_1ADFA8[],
+          D_1ADFB0[], D_1ADFB8[], D_1ADFC8[], D_1ADFD8[], D_1ADFE8[], D_1ADFF8[],
+          D_1ADD30[], D_1AE008[], D_1AE018[], D_1ADB14[], D_1ADB1C[];
+s32 GuiQuickSelectWheelTick(void *w, s32 flag);
+void GuiQuickSelectWheelInit(void *self, GuiPool *pool) {
+    u8 *p = (u8 *)self;
+    s32 i;
+    f32 *vec;
 
+    *(GuiPool **)(p + 0x810) = pool;
+    if (pool != 0) {
+        vec = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        *(f32 **)(p + 0x80C) = vec;
+        vec[0] = 0; vec[1] = 0; vec[2] = 0; vec[3] = 0;
+    }
+    *(s32 *)(p + 0xAB8) = 1;
+    vec = *(f32 **)(p + 0x80C);
+    vec[0] = 250.0f;
+    vec[1] = 200.0f;
+    *(s32 *)(p + 0x814) = 0;
+    *(s32 *)(p + 0x818) = 0;
+    *(s32 *)(p + 0x81C) = 0;
+
+    GuiElementInit((GuiElement *)(p + 0x0),   (s32)D_1ADBE8, pool);
+    GuiElementInit((GuiElement *)(p + 0x4C),  (s32)D_1ADBF0, pool);
+    GuiElementInit((GuiElement *)(p + 0xE4),  (s32)D_1ADBF8, pool);
+    GuiElementInit((GuiElement *)(p + 0x130), (s32)D_1ADC00, pool);
+    GuiElementInit((GuiElement *)(p + 0x98),  (s32)D_1ADF78, pool);
+    GuiTextElementInit((GuiElement *)(p + 0x8D8), (s32)D_1ADF80, pool);
+    GuiTextElementInit((GuiElement *)(p + 0x930), (s32)D_1ADD38, pool);
+    GuiTextElementInit((GuiElement *)(p + 0x988), (s32)D_1ADF88, pool);
+    GuiTextElementInit((GuiElement *)(p + 0x9E0), (s32)D_1ADF90, pool);
+    GuiElementInit((GuiElement *)(p + 0x17C), (s32)D_1ADF98, pool);
+    GuiElementInit((GuiElement *)(p + 0x1C8), (s32)D_1ADFA0, pool);
+    GuiElementInit((GuiElement *)(p + 0x214), (s32)D_1ADFA8, pool);
+    GuiSpriteElementInit((GuiElement *)(p + 0x7D0), (s32)D_1ADFB0, pool);
+    GuiElementSetScale((GuiElement *)(p + 0x7D0), 32.0f, 32.0f, 0.0f, 0.0f);
+
+    *GuiElementGetColor((GuiElement *)(p + 0x0))   = 0x60442D00;
+    *GuiElementGetColor((GuiElement *)(p + 0x4C))  = 0x60241700;
+    *GuiElementGetColor((GuiElement *)(p + 0xE4))  = 0x55F0C070;
+    *GuiElementGetColor((GuiElement *)(p + 0x98))  = 0x60241700;
+    *GuiElementGetColor((GuiElement *)(p + 0x130)) = 0x55F0C070;
+    *GuiElementGetColor((GuiElement *)(p + 0x17C)) = 0x55F0C070;
+    *GuiElementGetColor((GuiElement *)(p + 0x1C8)) = 0x55F0C070;
+    *GuiElementGetColor((GuiElement *)(p + 0x214)) = 0x70FFFEED;
+    *GuiElementGetColor((GuiElement *)(p + 0x7D0)) = 0x60F0F0B0;
+    *GuiElementGetColor((GuiElement *)(p + 0x8D8)) = (s32)0x80F0F0F0;
+    *GuiElementGetColor((GuiElement *)(p + 0x930)) = (s32)0x80F0F0F0;
+    *GuiElementGetColor((GuiElement *)(p + 0x988)) = (s32)0x80F0F0F0;
+    *GuiElementGetColor((GuiElement *)(p + 0x9E0)) = (s32)0x80F0F0F0;
+
+    GuiElementSetGlyph((GuiElement *)(p + 0x0),   (s32)g_guiInstance + 0x8710, 99);
+    GuiElementSetGlyph((GuiElement *)(p + 0x4C),  (s32)g_guiInstance + 0x8710, 100);
+    GuiElementSetGlyph((GuiElement *)(p + 0x98),  (s32)g_guiInstance + 0x8710, 0x29);
+    GuiElementSetGlyph((GuiElement *)(p + 0xE4),  (s32)g_guiInstance + 0x8710, 0x66);
+    GuiElementSetGlyph((GuiElement *)(p + 0x130), (s32)g_guiInstance + 0x8710, 0x65);
+    GuiElementSetGlyph((GuiElement *)(p + 0x17C), (s32)g_guiInstance + 0x8710, 0x5D);
+    GuiElementSetGlyph((GuiElement *)(p + 0x1C8), (s32)g_guiInstance + 0x8710, 0x23);
+    GuiElementSetGlyph((GuiElement *)(p + 0x214), (s32)g_guiInstance + 0x8710, 0x5E);
+
+    GuiElementInit((GuiElement *)(p + 0x2A8), (s32)D_1ADFB8, pool);
+    GuiElementSetGlyph((GuiElement *)(p + 0x2A8), (s32)g_guiInstance + 0x8710, 7);
+    GuiElementSetScale((GuiElement *)(p + 0x2A8), 1.0f, 1.0f, 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)(p + 0x2A8), 125.0f, 208.0f, 0.0f, 0.0f);
+    *GuiElementGetColor((GuiElement *)(p + 0x2A8)) = 0x60442D00;
+
+    GuiElementInit((GuiElement *)(p + 0x2F4), (s32)D_1ADFC8, pool);
+    GuiElementSetGlyph((GuiElement *)(p + 0x2F4), (s32)g_guiInstance + 0x8710, 6);
+    GuiElementSetScale((GuiElement *)(p + 0x2F4), 1.0f, 1.0f, 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)(p + 0x2F4), 125.0f, 208.0f, 0.0f, 0.0f);
+    *GuiElementGetColor((GuiElement *)(p + 0x2F4)) = 0x55F0C070;
+
+    GuiElementInit((GuiElement *)(p + 0x5A0), (s32)D_1ADFD8, pool);
+    GuiElementSetGlyph((GuiElement *)(p + 0x5A0), (s32)g_guiInstance + 0x8710, 0x10);
+    GuiElementSetPos((GuiElement *)(p + 0x5A0), 125.0f, 208.0f, 0.0f, 0.0f);
+    *GuiElementGetColor((GuiElement *)(p + 0x5A0)) = (s32)0x80FFDE8D;
+    GuiElementSetVisible((GuiElement *)(p + 0x5A0), 1);
+
+    *(s32 *)(p + 0x7CC) = 0;
+    for (i = 0; i < 8; i++) {
+        char buf[16];
+        GuiElement *label = (GuiElement *)(p + i * 0x4C + 0x340);
+        GuiElement *icon  = (GuiElement *)(p + i * 0x3C + 0x5EC);
+        f32 *anchor, angle, s, c;
+
+        func_00115DA8(buf, (char *)D_1ADFE8, i);
+        GuiElementInit(label, (s32)buf, pool);
+        GuiElementSetGlyph(label, (s32)g_guiInstance + 0x8710, i + 8);
+        GuiElementSetScale(label, 1.0f, 1.0f, 0.0f, 0.0f);
+        anchor = *(f32 **)(p + 0x80C);
+        GuiElementSetPos(label, anchor[0] + 113.0f, anchor[1] - 72.0f, 0.0f, 0.0f);
+        *GuiElementGetColor(label) = 0x60442D00;
+
+        func_00115DA8(buf, (char *)D_1ADFF8, i);
+        GuiSpriteElementInit(icon, (s32)buf, pool);
+        GuiElementSetVisible(icon, 0);
+        angle = WrapAnglePiSum((f32)i * 2.0f * 0.3926991f - 3.1415927f, 1.5707964f);
+        s = func_00283B30(angle);
+        c = func_00283B48(angle);
+        GuiElementSetPos(icon, (f32)((s32)(s * 82.14f) + 0x15C),
+                         (f32)((s32)(c * 76.442f) + 0x6D), 0.0f, 0.0f);
+        GuiElementSetScale(icon, 32.0f, 32.0f, 0.0f, 0.0f);
+        *GuiElementGetColor(icon) = 0x60F0F0B0;
+    }
+
+    {
+        u8 *la = p + 0x38C;
+        u8 *lb = p + 0x628;
+        s32 k = 6;
+        do {
+            k--;
+            GuiElementShareScaleVec((GuiElement *)la,
+                GuiElementGetScaleVec((GuiElement *)(p + 0x340)));
+            la += 0x4C;
+            GuiElementShareScaleVec((GuiElement *)lb,
+                GuiElementGetScaleVec((GuiElement *)(p + 0x5EC)));
+            lb += 0x3C;
+        } while (k > -1);
+    }
+    GuiElementShareScaleVec((GuiElement *)(p + 0x2A8),
+        GuiElementGetScaleVec((GuiElement *)(p + 0x340)));
+
+    GuiTextElementInit((GuiElement *)(p + 0x828), (s32)D_1ADD30, pool);
+    *(s32 *)(p + 0x828 + 0x54) = 0;
+    GuiTextElementInit((GuiElement *)(p + 0x880), (s32)D_1AE008, pool);
+    *GuiElementGetColor((GuiElement *)(p + 0x828)) = (s32)0x80F0F0F0;
+    *GuiElementGetColor((GuiElement *)(p + 0x880)) = (s32)0x80F0F0F0;
+    GuiElementSetText((GuiElement *)(p + 0x828), GetLocalizedString(0x2BE9));
+    *(u8 *)(p + 0xA78) = 0;
+    GuiElementSetText((GuiElement *)(p + 0x880), (s32)(p + 0xA78));
+    GuiElementSetText((GuiElement *)(p + 0x8D8), GetLocalizedString(0x2BF1));
+    GuiElementSetText((GuiElement *)(p + 0x930), GetLocalizedString(0x2BE5));
+    GuiElementSetText((GuiElement *)(p + 0x988), *(s32 *)D_1ADB14);
+    GuiElementSetText((GuiElement *)(p + 0x9E0), *(s32 *)D_1ADB1C);
+    GuiElementSetScale((GuiElement *)(p + 0x988), 1.25f, 1.25f, 0.0f, 0.0f);
+    GuiElementSetScale((GuiElement *)(p + 0x9E0), 1.25f, 1.25f, 0.0f, 0.0f);
+
+    GuiListElementInit((GuiElement *)(p + 0x260), 0x20, 0, (s32)D_1AE018, pool);
+    GuiListSetVisibleRows((GuiElement *)(p + 0x260), 5);
+    GuiListSetItemCount((GuiElement *)(p + 0x260), 100);
+    GuiListSetScrollPos((GuiElement *)(p + 0x260), 0);
+    GuiListSetColorPair0((GuiElement *)(p + 0x260), 0x6049C1FF, 0x60001EFF);
+    GuiListSetColorPair1((GuiElement *)(p + 0x260), 0x50F0C070, 0x50F0C070);
+    func_00337B88((GuiElement *)(p + 0x260), (s32)0x80000000);
+    func_00337B68((GuiElement *)(p + 0x260), 0);
+    GuiQuickSelectWheelTick(self, 0);
+}
+#endif
 /* GuiQuickSelectWheelTick: per-frame update for the quick-select weapon wheel `w`.
  * Layout: the static frame + the six petal decorations (w+0x828/0x8D8/0x930/0x988/
  * 0x9E0 and the labels at +0x2A8/0x2F4/0x5A0) are pinned at fixed offsets
@@ -8081,4 +8607,121 @@ void func_003481E0(void *p) {
 }
 #endif
 
+/* func_00348628(self): render the weapon quick-select grid (6 rows x 4 cols). No-op
+ * unless self[+0x4C0] is set. Draws the frame sprites, then for each grid cell walks
+ * the entry table (D_00259F38, stride 0x14 shorts, +6 = itemId; row stride 0x28
+ * bytes): positions the cell's four sub-elements (+0x354 backdrop, +0x318 icon,
+ * +0x1C8 ammo/xp list, +0x98 highlight) at the placement anchor (*(self+0x438))
+ * offset by the per-row/col layout constants (D_1AE708-714, 53.5/47.0 icon step,
+ * qword D_1AE548/550 for the list, qword D_1AE558/560 for the highlight). For an
+ * owned item (g_inventoryOwned) it sets the icon (g_weaponTable[slot]+0x3C), and if
+ * that isn't the empty sentinel 0xEA7E, wires the ammo list (count g_weaponTable+0x6C,
+ * scroll g_weaponXp>>5, colours via func_00337DC8; count<1 -> 100/100). Tints the
+ * backdrop for a dry weapon (g_weaponAmmo==0 & g_weaponTable+0x88) and highlights the
+ * currently-activated item (func_0026F7A8(g_menuTransitionMode+0x24)). Finishes with
+ * the header/label elements + func_003481E0. Faithful TARGET_NATIVE #else (engine
+ * 2.96 = no byte-match); all 4 GuiElementSetPos element+arg orders + the qword-split
+ * int/float constants asm-verified per-call. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00348628);
+#else
+extern void func_00337DC8(s32 itemId, s32 *petalRgb, s32 *listC0, s32 *listC1);
+extern s16 func_0026F7A8(s32 activatedId);
+extern s32 g_weaponXp[], g_weaponAmmo[];
+extern u8 g_menuTransitionMode[], D_00259F38[];
+extern s32 D_1AE548, D_1AE54C, D_1AE550, D_1AE554, D_1AE700, D_1AE704, D_1AE708,
+           D_1AE70C;
+extern f32 D_1AE558, D_1AE55C, D_1AE560, D_1AE564, D_1AE710, D_1AE714;
+void func_00348628(void *self) {
+    u8 *p = (u8 *)self;
+    GuiElement *back = (GuiElement *)(p + 0x354);
+    GuiElement *high = (GuiElement *)(p + 0x98);
+    GuiElement *list = (GuiElement *)(p + 0x1C8);
+    GuiElement *icon = (GuiElement *)(p + 0x318);
+    s32 row, col;
+
+    if (*(s32 *)(p + 0x4C0) == 0) {
+        return;
+    }
+
+    GuiSpriteElementDraw(p);
+    GuiSpriteElementDraw(p + 0x4C);
+    GuiSpriteElementDraw(p + 0x130);
+
+    for (row = 0; row < 6; row++) {
+        s16 *grid = (s16 *)(D_00259F38 + 6 + row * 0x28);
+        for (col = 0; col < 4; col++, grid += 5) {
+            s32  item = grid[0];
+            f32 *anchor;
+
+            *GuiElementGetColor(back) = 0x60241700;
+            anchor = *(f32 **)(p + 0x438);
+            GuiElementSetPos(back, D_1AE710 * (f32)col + (f32)D_1AE708 + anchor[0],
+                             D_1AE714 * (f32)row + (f32)D_1AE70C + anchor[1],
+                             0.0f, 0.0f);
+            *GuiElementGetColor(high) = 0x30F0C070;
+            *GuiElementGetColor(back) = 0x60241700;
+            GuiElementSetVisible(list, 0);
+            GuiElementSetVisible(icon, 0);
+
+            if (g_inventoryOwned[item] != 0) {
+                s32 slot = g_itemEquippedSlot[item];
+                s32 tex  = *(u16 *)&g_weaponTable[slot * 0xE0 + 0x3C];
+
+                GuiSpriteSetTexture(icon, tex, 0);
+                anchor = *(f32 **)(p + 0x438);
+                GuiElementSetPos(icon, (f32)col * 53.5f + (f32)D_1AE700 + anchor[0],
+                                 (f32)row * 47.0f + (f32)D_1AE704 + anchor[1],
+                                 0.0f, 0.0f);
+                if (tex == 0xEA7E) {
+                    *GuiElementGetColor(icon) = (s32)0x80808080;
+                } else {
+                    s32 petalRgb = 0, listC0 = 0, listC1 = 0;
+                    GuiListSetItemCount(list,
+                                        *(s32 *)&g_weaponTable[slot * 0xE0 + 0x6C]);
+                    GuiListSetScrollPos(list, g_weaponXp[item] >> 5);
+                    anchor = *(f32 **)(p + 0x438);
+                    GuiElementSetPos(list,
+                                     (f32)(D_1AE550 * col + D_1AE548) + anchor[0],
+                                     (f32)(D_1AE554 * row + D_1AE54C) + anchor[1],
+                                     0.0f, 0.0f);
+                    GuiElementSetVisible(list, 1);
+                    func_00337DC8(item, &petalRgb, &listC0, &listC1);
+                    GuiListSetColorPair0(list, petalRgb, listC0);
+                    *GuiElementGetColor(icon) = listC1;
+                    if (*(s32 *)&g_weaponTable[slot * 0xE0 + 0x6C] < 1) {
+                        GuiListSetItemCount(list, 100);
+                        GuiListSetScrollPos(list, 100);
+                    }
+                }
+
+                if (g_weaponAmmo[item] == 0 &&
+                    *(s16 *)&g_weaponTable[g_itemEquippedSlot[item] * 0xE0 + 0x88]
+                        != 0) {
+                    *GuiElementGetColor(back) = 0x60202080;
+                }
+                GuiElementSetVisible(icon, 1);
+                if (func_0026F7A8(*(s32 *)&g_menuTransitionMode[0x24]) == item) {
+                    *GuiElementGetColor(high) = (s32)0x80FFDE8D;
+                }
+            }
+
+            anchor = *(f32 **)(p + 0x438);
+            GuiElementSetPos(high, D_1AE558 * (f32)col + D_1AE560 + anchor[0],
+                             D_1AE55C * (f32)row + D_1AE564 + anchor[0],
+                             0.0f, 0.0f);
+            GuiSpriteElementDraw(back);
+            func_00337630(icon);
+            func_00337350(list);
+            GuiSpriteElementDraw(high);
+        }
+    }
+
+    GuiSpriteElementDraw(p + 0xE4);
+    GuiSpriteElementDraw(p + 0x17C);
+    GuiTextElementDraw(p + 0x210);
+    GuiTextElementDraw(p + 0x268);
+    GuiTextElementDraw(p + 0x2C0);
+    func_003481E0(self);
+}
+#endif
