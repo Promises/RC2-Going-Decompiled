@@ -1482,7 +1482,7 @@ gate:
     g_subtitleState.animStep += 1;
     if (D_1A7B9C == 0 &&
         g_pActiveTextTable[g_subtitleState.entryIndex].voice == g_dialogVoiceId - 6000 &&
-        1 < g_dialogVoicePhase - 6) {
+        (u32)(g_dialogVoicePhase - 6) >= 2) {
         g_dialogVoicePhase = 5;
     }
 
@@ -1615,7 +1615,7 @@ gate:
     case 7:
         func_002B1B48(5, 0, 1);
         if (g_pActiveTextTable[g_subtitleState.entryIndex].voice == g_dialogVoiceId - 6000 &&
-            1 < g_dialogVoicePhase - 6) {
+            (u32)(g_dialogVoicePhase - 6) >= 2) {
             g_dialogVoicePhase = 5;
         }
         if (7 < g_subtitleState.animStep) {
@@ -3240,12 +3240,259 @@ void func_0028C7F0(HudElement *w) {
 }
 #endif
 
-/* func_0028C840(...): weapon-select wheel slot layout/draw (~0x8CC bytes, very
- * heavy FP).
- *
- * WALL: extensive float geometry math; FP scheduling not reproducible from C.
- * Left INCLUDE_ASM. */
+/* func_0028C840(wheel) = UpdateQuickSelectWheelInput: per-frame handler for the
+ * quick-select item wheel. Active while the open button is held (g_padButtonsHeld
+ * & 0x10); navigates by dpad (g_padButtonsPressed & 0xF000 -> neighbor links) or by
+ * analog-stick angle (atan2 of D_1382C8/CC, snapped to the nearest of the wheel's
+ * item-count slots). Grid entries: gridBase = *(g_hudMobySpawnStart+0x2C), gridPage
+ * = *(gridBase + D_1A8D48*4), entry = gridPage + slot*0x1C (itemId +0x18, dpad
+ * neighbors +0x8/+0xC/+0x10/+0x14). On a confirmed selection plays a cue, sets
+ * g_activeGadgetItem to the chosen item, clamps its ammo to the variant capacity,
+ * and (if the class isn't resident) triggers a gadget-class load. Save-slot fields
+ * at g_health+0x554 (+0 s16 seen-counter, +4 u32 clip pos, +8 u32 flags).
+ * MATCH-WALL only (FP scheduling); un-walled as faithful #else (engine 2.96 = no
+ * byte-match). Float literals are verbatim; the FP-idiom call args + the three
+ * addressing modes (gp-rel / page-base-cleared / weapon-table) are .s-verified. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C840);
+#else
+/* g_guiInstance (void*), PlayGlobalSound, IntToFloat(s32), FloatToInt: file-scope. */
+extern s32 g_padButtonsHeld, g_padButtonsPressed, g_fileLoadState;
+extern u8  g_soundBankHandlesBlk[];  /* +0x1248 = last-selected item id */
+extern s32 D_1A8C64;                 /* input-lock gate */
+extern u8  D_1A7BBB;                 /* inventory-overlay-mode flag */
+extern f32 D_1382C8, D_1382CC;       /* analog stick x / y */
+extern s32 D_13834C, D_138358;       /* input/mode flags */
+extern s32 D_1A8D48;                 /* wheel grid-page index (gp-rel) */
+extern s32 D_1A8DA0, D_1A8DA4, D_1A8D98, D_1A8D9C;   /* dpad-neighbor fallbacks */
+extern f32 D_1A8E10;                 /* wheel-angle snap residual (gp-rel scratch) */
+extern s32 D_1B187C, D_1B1878, D_1B1518;
+extern s32 D_1A8D30;                 /* inventory-overlay mode value */
+extern s32 g_activeGadgetItem;
+extern s32 IsInventoryOverlayMode(void);
+extern s32 IsGadgetClassResident(s32 cls);
+extern void EnsureGadgetClassResident(s32 cls);
+extern void FreeHudElementByHandle(s32 handle);
+extern void AdvanceInventoryOverlayToActive(void);
+extern void StopFileLoad(void);
+extern void DebugPrintStub(s32 p);
+extern f32 SqrtfVu0(f32 x);
+extern f32 Atan2fPoly(f32 y, f32 x);
+extern f32 WrapAnglePiDiff(f32 a, f32 b);
+extern f32 AngleShortestDiff(f32 a, f32 b);
+extern f32 WrapAngleToPiRange(f32 a);
+extern void func_00288888(HudElement *w);
+extern s32 func_00283328(s32 p);
+extern void func_0034D8C8(s32 a, s32 b);
+extern s32 func_00290F98(void);
+extern s32 func_00290FA0(void);
+extern void func_00290FA8(void);
+extern s32 func_00290FC0(void);
+void func_0028C840(void *wheel) {
+    u8  *p = (u8 *)wheel;
+    u8  *save = (u8 *)&g_health + 0x554;   /* +0 s16 counter, +4 u32 clip, +8 u32 flags */
+    s32  gridBase, gridPage, item, sel, cand, dir;
+    u8  *pbVar9 = p + 0x70;
+    f32  ang, mag, snap;
+    s32  bActive;
+
+    if (D_1A8C64 != 0) {
+        return;
+    }
+
+    bActive = 0;
+    if (((D_1A7BBB == 0 || IsInventoryOverlayMode() != 0) || D_1A7BBB == 0) &&
+        (bActive = 1, D_1A7BBB == 0)) {
+        func_00290FA8();
+        if (func_00290FC0() == 0) {
+            bActive = 0;
+        }
+    }
+    if (bActive && g_guiInstance != 0) {
+        s32 mode = 2;
+        if (IsInventoryOverlayMode() != 0) {
+            mode = D_1A8D30;
+        }
+        func_0034D8C8((s32)g_guiInstance + 0x376C8, mode);
+        /* UNCONFIRMED arg: the .s call has a nop delay slot with no arg set;
+           passed the wheel obj to match the existing HudElement* decl. */
+        func_00288888((HudElement *)p);
+    }
+
+    *(s32 *)(p + 0x7C) = 0xB4;
+    *(s32 *)(p + 0x6C) = 0x18;
+    if (func_00283328(0x18C316) != 0 && D_1A7BBB == 0) {
+        D_13834C = 2;
+    }
+
+    mag = SqrtfVu0(D_1382C8 * D_1382C8 + D_1382CC * D_1382CC);
+    ang = D_1382C8;
+    snap = D_1382CC;
+    if (mag != 0.0f) {
+        ang = ang / mag;
+        snap = snap / mag;
+    }
+    ang = Atan2fPoly(ang, snap);
+
+    if ((*(s32 *)(p + 0x78) >> 0x18) == 0 &&
+        ((g_padButtonsPressed & 0xF000) != 0 || mag < 0.5f ||
+         (*(s32 *)(p + 0x78) = *(s32 *)(p + 0x78) - 1, *(s32 *)(p + 0x78) == -1))) {
+        *(s32 *)(p + 0x74) = -1;
+        *(s32 *)(p + 0x78) = 0x10000FF;
+    }
+
+    dir = 0;
+    sel = *(s32 *)(p + 0x74);
+    gridBase = *(s32 *)((u8 *)&g_hudMobySpawnStart + 0x2C);
+    gridPage = *(s32 *)(gridBase + D_1A8D48 * 4);
+
+    if (*(char *)(p + 0x7B) == 1) {
+        if ((g_padButtonsHeld & 0x10) == 0) {
+            dir = *(s32 *)(p + 0x74);
+        } else if (bActive) {
+            s32 count = *(s32 *)((u8 *)&g_hudMobySpawnStart + 0x28);
+            if (0.9f < mag) {
+                f32 wrapped = ang + 3.1415927f + 3.1415927f + 1.5707964f + 3.1415927f / (f32)count;
+                f32 pos = wrapped * 0.15915494f * (f32)count;
+                f32 total = IntToFloat(count);
+                u32 idx;
+                if (sel != -1) {
+                    f32 d = WrapAnglePiDiff(ang, 1.5707964f);
+                    f32 diff = AngleShortestDiff(((f32)sel * 6.2831855f) / total - 3.1415927f, d);
+                    if (diff <= 0.5890487f) {
+                        goto after_nav;
+                    }
+                }
+                idx = (u32)(s32)pos % (u32)count;
+                if ((((idx ^ 1) & 1)) != 0) {
+                    s32 ipos = FloatToInt(pos);
+                    if (0.8f < pos - (f32)ipos) {
+                        idx = idx + 1;
+                    } else if (pos - (f32)ipos < 0.2f) {
+                        idx = idx - 1;
+                    }
+                    idx = (u32)((s32)(idx + count)) % (u32)count;
+                }
+                dir = -1;
+                *(s32 *)(p + 0x74) = idx;
+                D_1A8E10 = WrapAngleToPiRange(wrapped - ((f32)(s32)idx * 0.78539824f + 0.39269912f));
+                if (0.0f < D_1A8E10) {
+                    dir = 1;
+                }
+            } else if (D_138358 == 0 && (g_padButtonsPressed & 0xF000) != 0) {
+                cand = sel;
+                if ((g_padButtonsPressed & 0x1000) != 0 && (cand = D_1A8DA0, sel != -1)) {
+                    cand = *(s32 *)(sel * 0x1C + gridPage + 0x10);
+                }
+                if ((g_padButtonsPressed & 0x4000) != 0 && (item = D_1A8DA4, cand != -1)) {
+                    item = *(s32 *)(cand * 0x1C + gridPage + 0x14);
+                    cand = item;
+                }
+                if ((g_padButtonsPressed & 0x8000) != 0 && (item = D_1A8D98, cand != -1)) {
+                    item = *(s32 *)(cand * 0x1C + gridPage + 8);
+                    cand = item;
+                }
+                if ((g_padButtonsPressed & 0x2000) != 0 && (item = D_1A8D9C, cand != -1)) {
+                    item = *(s32 *)(cand * 0x1C + gridPage + 0xC);
+                    cand = item;
+                }
+                *(s32 *)(p + 0x74) = cand;
+            }
+        after_nav:
+            if (*(s32 *)(*(s32 *)(p + 0x74) * 0x1C + gridPage) == 0) {
+                s32 count = *(s32 *)((u8 *)&g_hudMobySpawnStart + 0x28);
+                if (dir != 0) {
+                    s32 nidx = (*(s32 *)(p + 0x74) + dir) % count;
+                    if (*(s32 *)(nidx * 0x1C + gridPage) != 0) {
+                        *(s32 *)(p + 0x74) = nidx;
+                    }
+                }
+                goto load_check;
+            }
+            dir = *(s32 *)(p + 0x74);
+        } else {
+            dir = *(s32 *)(p + 0x74);
+        }
+    } else {
+    load_check:
+        dir = *(s32 *)(p + 0x74);
+    }
+
+    if (dir == sel) {
+        if (*(u8 *)(p + 0x71) < 8) {
+            *(u8 *)(p + 0x71) += 1;
+        }
+        sel = *(s32 *)(p + 0x74);
+    } else {
+        DebugPrintStub(0x1A8E18);
+        StopFileLoad();
+        *(u8 *)(p + 0x71) = 0;
+        PlayGlobalSound(3, 0, 0);
+        sel = *(s32 *)(p + 0x74);
+    }
+
+    item = (sel < 0) ? -1 :
+        *(s32 *)(sel * 0x1C + gridPage + 0x18);
+    if (sel < 0 ||
+        IsGadgetClassResident(*(s32 *)((u8 *)&g_weaponTable[g_itemEquippedSlot[item]] + 0x14)) != 0) {
+        u8 bVal;
+        if ((g_padButtonsHeld & 0x10) == 0 && g_fileLoadState == 0) {
+            bVal = *pbVar9 - 1;
+            if ((*pbVar9 == 0 || (*pbVar9 = bVal, bVal == 0)) && *(s32 *)(p + 0x74) >= 0) {
+                s32 chosen = *(s32 *)(*(s32 *)(p + 0x74) * 0x1C + gridPage + 0x18);
+                if (chosen != 0) {
+                    if (*(s32 *)((u8 *)g_soundBankHandlesBlk + 0x1248) != chosen &&
+                        *(s16 *)(save + 0) != -1) {
+                        *(s16 *)(save + 0) += 1;
+                    }
+                    if (*(u32 *)(save + 4) < *(u32 *)((u8 *)&g_gsPixelOffsetY + 0x3C)) {
+                        *(u32 *)(save + 4) = *(u32 *)((u8 *)&g_gsPixelOffsetY + 0x3C);
+                    }
+                    *(u32 *)(save + 8) |= (1u << (g_playerProgress & 0x1F)) | 0x80000000;
+                    g_activeGadgetItem = chosen;
+                    if (*(s16 *)((u8 *)&g_weaponTable[g_itemEquippedSlot[chosen]] + 0x88) != 0) {
+                        s32 cap = *(u16 *)((u8 *)&g_weaponTable[g_itemEquippedSlot[chosen]] + 0x8E);
+                        if (cap < g_weaponAmmo[chosen]) {
+                            g_weaponAmmo[chosen] = cap;
+                        }
+                    }
+                }
+            }
+            if (D_1A7BBB == 0) {
+                func_00290FA0();
+                func_00290F98();
+            } else {
+                AdvanceInventoryOverlayToActive();
+            }
+            bVal = *pbVar9;
+        } else {
+            bVal = *pbVar9;
+        }
+        if (bVal < 8) {
+            *pbVar9 = bVal + 1;
+        }
+        bVal = *pbVar9;
+        if (bVal == 0) {
+            D_1B187C = *(s32 *)(p + 0x78);
+*(s32 *)((u8 *)&g_hudMobyAuxBlockBase + 0x1C) = *(s32 *)(p + 0x74);
+            FreeHudElementByHandle(*(s32 *)(p + 0x64));
+            D_1B1878 = D_1B1518;
+            *(s32 *)(p + 0x6C) = -6;
+        }
+    } else {
+        EnsureGadgetClassResident(
+            *(s32 *)((u8 *)&g_weaponTable[g_itemEquippedSlot[
+                *(s32 *)(*(s32 *)(p + 0x74) * 0x1C + gridPage + 0x18)]] + 0x14));
+        if (*pbVar9 == 0) {
+            D_1B187C = *(s32 *)(p + 0x78);
+*(s32 *)((u8 *)&g_hudMobyAuxBlockBase + 0x1C) = *(s32 *)(p + 0x74);
+            FreeHudElementByHandle(*(s32 *)(p + 0x64));
+            D_1B1878 = D_1B1518;
+            *(s32 *)(p + 0x6C) = -6;
+        }
+    }
+}
+#endif
 
 /* DrawWeaponSelectWheel(w): render the weapon quick-select wheel widget (~0x5C4).
  *
