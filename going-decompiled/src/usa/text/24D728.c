@@ -838,6 +838,7 @@ void func_0034F868(u8 *base) {
 
     WaitFrameDmaFence(1);
     if (*(s32 *)(base + 0x2E20) <= 0) {
+        *(s32 *)(base + 0x2E20) = 0;   /* asm zeroes the count on every exit, incl. the <=0 early-out */
         return;
     }
     idCursor = base + 0x2E00;
