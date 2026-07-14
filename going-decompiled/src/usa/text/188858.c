@@ -1131,10 +1131,47 @@ void func_002897B0(void) {
  * also writes -1 to g_subtitleState+0x24, for state 4 it computes 4 - (count) at
  * +0x4DF8. Returns -1 / 6 / 7 depending on the branch taken.
  *
- * WALL (jtbl): a compiler-emitted `switch` jump table (jr through
- * jtbl_0026C780_text). The matcher cannot reproduce the original jump-table
- * layout/relocations from C `switch`; left INCLUDE_ASM. */
+ * MATCH-WALL (jtbl): the matcher can't reproduce the compiler jump-table
+ * layout/relocations from a C `switch`, so the #ifndef arm stays INCLUDE_ASM; the
+ * #else arm is a faithful functional switch (engine 2.96 = no byte-match anyway).
+ * State map (jtbl_0026C780_text): 0 -> showingIndex(+0x24) = -1, return -1;
+ * 1/2/3 -> state = 7, animStep = 0, return 7; 4 -> animStep = 4 - old, state = 6,
+ * return 6; 5 -> state = 6, animStep = 0, return 6; 6/7 -> return 1; else -> 0.
+ * (The state/animStep writes lower as `sw ...,%lo(g_subtitleState)($page)` — the
+ * 0x4DF8/0x4DFC in the .s ARE %lo(g_subtitleState)/+4, i.e. offsets 0 and 4, NOT a
+ * +0x4DF8 struct offset — %hi/%lo page-base addressing.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_002897B8);
+#else
+s32 func_002897B8(void) {
+    switch (g_subtitleState.state) {
+    case 0:
+        g_subtitleState.showingIndex = -1;
+        return -1;
+    case 1:
+    case 2:
+    case 3:
+        g_subtitleState.state = 7;
+        g_subtitleState.animStep = 0;
+        return 7;
+    case 4: {
+        s32 old = g_subtitleState.animStep;
+        g_subtitleState.state = 6;
+        g_subtitleState.animStep = 4 - old;
+        return 6;
+    }
+    case 5:
+        g_subtitleState.state = 6;
+        g_subtitleState.animStep = 0;
+        return 6;
+    case 6:
+    case 7:
+        return 1;
+    default:
+        return 0;
+    }
+}
+#endif
 
 /* func_00289840(textIndex, voiceHandle): arm a pending subtitle line — only when
  * the subtitle state machine is idle (g_subtitleState[0]==0), no line is already
@@ -2383,12 +2420,49 @@ void SwapMobyTableContext(s32 newId) {
  * +0x70/+0x7C) and, when the mask selects bit 0x20, re-inits it via
  * func_0028BF18. Returns the slot's generation counter.
  *
- * WALL: multiple callee-saves + a 7-way field-equality early-out chain whose
- * register colouring and the gameState-5/slot-2 branch-likely guards cc1 does
- * not reproduce; the +0x30 global is also read %gp_rel but written %hi/%lo
- * (the gp/absolute-mix reload artifact). Left INCLUDE_ASM (functional model in
- * the doc above; not fabricated as C to avoid a wrong-field defect). */
+ * MATCH-WALL: a 7-way field-equality early-out chain (register colouring +
+ * gameState-5/slot-2 branch-likely + the +0x30 gp/absolute-mix reload) cc1 won't
+ * reproduce, so the #ifndef arm stays INCLUDE_ASM; the #else arm is the faithful
+ * functional model (engine 2.96 = no byte-match anyway). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028BE10);
+#else
+s32 func_0028BE10(s32 typeAndSlot, s32 a2, s32 a3, s32 a4, s32 a5, s32 a6, s32 a7) {
+    s32 slot = typeAndSlot & 0xF;
+    s32 mask = typeAndSlot & 0xFFF0;
+    u8 *e = (u8 *)&D_2552B0[slot];
+    s32 counter;
+
+    if (g_nGameState == 5 && slot != 0 && slot != 2) {
+        return 0;
+    }
+
+    if (*(s32 *)(e + 0x2C) == a6 && *(s32 *)(e + 0x28) == a7 &&
+        *(s32 *)(e + 0x20) == a2 && *(s32 *)(e + 0x24) == mask &&
+        *(s32 *)(e + 0x30) == a3 && *(s32 *)(e + 0x34) == a4 &&
+        *(s32 *)(e + 0x38) == a5) {
+        return *(s32 *)(e + 0x64);   /* already registered — return its generation */
+    }
+
+    counter = *(s32 *)((u8 *)&g_pActiveTextTable + 0x30);
+    *(s32 *)(e + 0x64) = counter;
+    *(s32 *)((u8 *)&g_pActiveTextTable + 0x30) = counter + 1;
+    *(s32 *)(e + 0x2C) = a6;
+    *(s32 *)(e + 0x28) = a7;
+    *(s32 *)(e + 0x20) = a2;
+    *(s32 *)(e + 0x24) = mask;
+    *(s32 *)(e + 0x30) = a3;
+    *(s32 *)(e + 0x34) = a4;
+    *(s32 *)(e + 0x38) = a5;
+    *(s32 *)(e + 0x68) = 1;
+    *(s32 *)(e + 0x7C) = 0;
+    *(s32 *)(e + 0x70) = 0;
+    if ((mask & *(s32 *)(e + 0x4) & 0x20) != 0) {
+        func_0028BF18((HudElement *)e);
+    }
+    return *(s32 *)(e + 0x64);
+}
+#endif
 
 /* Initialise a HUD widget `w`: bind its icon graphics (func_0028C090 using the
  * icon id at +0x20), unpack the staged layout fields (+0x24/+0x28/+0x2C/+0x30/
@@ -2631,11 +2705,57 @@ void func_0028C1E8(HudElement *rec, s32 *pX, s32 *pY, s32 idxBase, s32 idxDelta)
  * digits of rec+0x8 (loop dividing by 10) and applies the rec+0x60 alignment
  * flags to derive the rec+0x5C/+0x58 half-extents (12 px per digit / 14 px caps).
  *
- * WALL: the digit-count and modulo steps lower as `div`/`mflo` with
- * break-on-div-by-zero scaffolding and branch-likely guards that cc1 does not
- * reproduce from the C `/`,`%`. Left INCLUDE_ASM (functional model documented;
- * not fabricated to avoid a wrong-arithmetic defect). */
+ * MATCH-WALL: the digit-count/modulo lower as `div`/`mflo` with break-on-div-by-
+ * zero scaffolding + branch-likely guards cc1 won't reproduce from C `/`, so the
+ * #ifndef arm stays INCLUDE_ASM; the #else arm is the faithful functional model
+ * (engine 2.96 = no byte-match anyway). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C390);
+#else
+void func_0028C390(void *rec) {
+    u8 *p = (u8 *)rec;
+    s32 valPtr = *(s32 *)(p + 0xC);
+    s32 n, f60, f5C, digits;
+
+    if (valPtr != 0 && (valPtr & 3) == 0) {
+        s32 value = *(s32 *)valPtr;
+        s32 cap = *(s32 *)(p + 0x8);
+        *(s32 *)(p + 0x78) = value;
+        if (cap < value) {
+            *(s32 *)(p + 0x78) = cap;
+        }
+        *(s32 *)(p + 0x74) = *(s32 *)(p + 0x78);
+    } else {
+        *(s32 *)(p + 0x74) = 0x1869F;
+        *(s32 *)(p + 0x78) = 0x1869F;
+    }
+
+    n = *(s32 *)(p + 0x8);
+    f60 = *(s32 *)(p + 0x60);
+    f5C = *(s32 *)(p + 0x5C);
+    digits = 0;
+    if (n >= 0xA) {
+        s32 t = n;
+        do {
+            t = t / 0xA;
+            digits++;
+        } while (t >= 0xA);
+    }
+
+    if ((f60 & 3) == 0 && (f60 & 0xC) != 0) {
+        *(s32 *)(p + 0x5C) = (digits + 1) * 0xC + f5C;
+        if (*(s32 *)(p + 0x58) < 0xE) {
+            *(s32 *)(p + 0x58) = 0xE;
+        }
+        return;
+    }
+
+    if (f5C < 0xC) {
+        *(s32 *)(p + 0x5C) = 0xC;
+    }
+    *(s32 *)(p + 0x58) += (digits + 1) * 0xE;
+}
+#endif
 
 /* Reset a HUD widget record: set its type tag (+0x7C = 0xD2), clear the two
  * 16-bit cursor fields (+0x48/+0x4A) and re-init it via func_0028C390. */
@@ -4432,11 +4552,62 @@ void func_0028FFF0(s32 iconIndex, s32 x0, s32 y0, s32 x1, s32 y1,
 }
 #endif
 
-/* func_002901B0(...): HUD element helper (~0x170 bytes).
- *
- * WALL: callee-saves + jal gates; register colouring not reproducible from C.
- * Left INCLUDE_ASM (not yet fully traced). */
+/* func_002901B0(src, a2, a3, logW, logH, kickNow) = UploadTextureToGs: build a GS
+ * image-upload GIF packet for one texture (TRXPOS/TRXREG/TRXDIR) via
+ * func_126288 (BuildGsImageUploadPacket). The transfer dimensions come from the
+ * log2 dims: width = 1<<logW, height = 1<<logH, GS-buffer-width v12 =
+ * max((1<<logW)>>6, 1), and the qword count tag = 1<<(logW+logH-4). When kickNow==0
+ * it splices a DMA tag chain into g_frameDmaCursor for deferred upload (DMAtag
+ * 0x10000006 + GIFtag 0x50000006 header, then a 0x30000000|tag transfer + trailing
+ * 0x50000000|tag), advancing the cursor by 0x70 then 0x10; otherwise it builds into
+ * a local packet and issues it immediately (func_0011AEA0/FlushCache +
+ * KickGifImageUpload). MATCH-WALL only (callee-save/register-colouring); un-walled
+ * as faithful #else (engine 2.96 = no byte-match). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_002901B0);
+#else
+extern void func_126288(void *buf, s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g);
+extern void func_0011AEA0(s32 mode);   /* FlushCache */
+extern void KickGifImageUpload(void *packet, s32 handle);
+void func_002901B0(s32 handle, s32 vramBlk, s32 fmt, s32 wLog, s32 hLog,
+                   s32 kickMode) {
+    s32 v12 = (1 << wLog) >> 6;
+    s32 tag = 1 << (wLog + hLog - 4);
+    u8 *buf;
+    u8 packet[0x60];
+
+    if (v12 <= 0) {
+        v12 = 1;
+    }
+
+    if (kickMode == 0) {
+        u32 *c = g_frameDmaCursor;
+        c[0] = 0x10000006;
+        c[1] = 0;
+        c[2] = 0;
+        c[3] = 0x50000006;
+        buf = (u8 *)c + 0x10;
+        g_frameDmaCursor = (u32 *)((u8 *)c + 0x70);
+    } else {
+        buf = packet;
+    }
+
+    func_126288(buf, (s16)vramBlk, (s16)v12, (s16)fmt, 0, 0, (s16)(1 << wLog),
+                (s16)(1 << hLog));
+
+    if (kickMode == 0) {
+        u32 *c = g_frameDmaCursor;
+        c[0] = tag | 0x30000000;
+        c[1] = (u32)handle;
+        c[2] = 0;
+        c[3] = tag | 0x50000000;
+        g_frameDmaCursor = (u32 *)((u8 *)c + 0x10);
+    } else {
+        func_0011AEA0(0);
+        KickGifImageUpload(buf, handle);
+    }
+}
+#endif
 
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_00290320);
