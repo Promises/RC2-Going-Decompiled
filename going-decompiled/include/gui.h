@@ -245,4 +245,15 @@ _Static_assert(__builtin_offsetof(GuiWidget, rowArray)     == 0x68, "rowArray");
 _Static_assert(__builtin_offsetof(GuiWidget, rowEnabled)   == 0x6C, "rowEnabled");
 #endif
 
+/* Shared 2D UI draw primitives (recovered signatures; definitions live in
+ * src/usa/text/188858.c / 178E88.c). Include this header in a menu-draw TU to
+ * write faithful #else bodies without guessing arg boundaries (#67 unblock).
+ * Byte-neutral for the matching build (those arms stay INCLUDE_ASM). */
+void func_002904B0(s32 x0, s32 y0, s32 x1, s32 y1, u64 reg4, s32 mode);        /* box/line quad */
+void func_0028FFF0(s32 iconIndex, s32 x0, s32 y0, s32 x1, s32 y1,
+                   s32 u0, s32 v0, s32 u1, s32 v1, s32 alpha);                  /* icon/sprite */
+s32  func_0028EDF0(s32 name, s32 level);                                       /* localized name+level */
+void func_0027FBA8(s32 a, s32 b, s32 c, s32 d, s32 e);                         /* text/glyph draw */
+void func_00280090(s32 a, s32 b, s32 c, s32 d, s32 e);                         /* right-justified fixed-font string */
+
 #endif /* GUI_H */

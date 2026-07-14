@@ -1340,10 +1340,15 @@ s32 func_002D87C8(MenuWidget *obj) {
  * bar-fill of (width * volume) / 1024.
  * PARK (flag-not-guess): the bar primitives func_002904B0 (6 args) and
  * func_0028FFF0 (10 args incl. 0x0/0x8 stack slots) have unrecovered signatures;
- * a portable #else here would guess their arg boundaries/types (silent-bug risk,
- * no byte-gate on #else content). Ghidra backlog: recover the shared draw-
- * primitive signatures (func_00280090/002904B0/0028EDF0/0028FFF0/0027FBA8) first,
- * then this + siblings convert cleanly. Bare INCLUDE_ASM. */
+ * a portable #else here would guess their arg boundaries/types (silent-bug risk).
+ * UNBLOCKED (#67, 2026-07-14): the 5 draw-primitive signatures are now recovered +
+ * pinned to include/gui.h @ d2994265 (func_002904B0(x0,y0,x1,y1,u64 reg4,mode);
+ * func_0028FFF0(icon,x0,y0,x1,y1,u0,v0,u1,v1,alpha); func_0028EDF0(name,level)->s32;
+ * func_0027FBA8(a,b,c,d,e); func_00280090(a,b,c,d,e)). No more arg-boundary guessing —
+ * faithfully #else-able. Remaining effort = the dense transcription (18 calls: 3 rows
+ * music/sfx/stereo, each a movz/movn-coloured label + a func_0028FFF0 fill sized
+ * (field*volume)>>10; positions off S[0x20]>>1 / S[0x24]>>2). A clean fresh-pass job
+ * with the sigs in hand — not forced here. Bare INCLUDE_ASM pending that pass. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D8A68);
 
 /* Rebuild the galactic-map planet display rows: for each of the D_1A7C0C
@@ -1616,8 +1621,12 @@ s32 func_002DA358(MenuWidget *obj) {
 }
 #endif
 
-/* Galactic-map / front-end screen draw helper (variant of the menu list draw).
- * Wall: large draw loop + multi callee-save + 128-bit struct packing. Bare. */
+/* func_002DA488: MERGED pad-fragment case (#47/#70) — the .s is 5 mis-split epilogue-pad
+ * frags at the glabel (sw $0,0x44($4); addiu $sp,+0x10/+0x30/+0x10/+0x130) then the REAL
+ * body at 002DA4B0 (glabel is 0x28 too early). Needs a symbol_addrs re-split (pin func_002DA488
+ * = 002DA4B0, frags off) before a clean #else. Body is trivial + traced, ready post-resplit —
+ * a galactic-map draw kick: AppendGsRegPacket(0x42, 0x44); AppendGsRegPacket(0x47, 0xB);
+ * MapDraw(1, 0); return 8. (The prior 'large draw loop' doc was mismatched.) */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DA488);
 
 /* Draw the title-screen main menu: measure the widest of the fixed option
@@ -1663,8 +1672,11 @@ s32 func_002DA4F0(MenuWidget *obj) {
 #endif
 
 /* Draw the active-objectives list (gathered via GatherActiveObjectives) with a
- * scrolling text box + per-row checkboxes. Wall: ~200-instruction draw loop +
- * 128-bit packed text-box struct + divide traps. Bare INCLUDE_ASM. */
+ * scrolling text box + per-row checkboxes. UNBLOCKED (#67): the draw-primitive sigs
+ * (func_0027FBA8/func_00280BB8) are in gui.h (d2994265) — no arg-boundary guessing.
+ * Still a dense fresh-pass #else: ~200-instr draw loop + a 128-bit sq/lq-packed text-box
+ * struct + break-0,7 divide traps + 11 branches. Park-with-trace #70 (fresh-pass ready,
+ * sigs in hand) — not forced. Bare INCLUDE_ASM pending. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DA740);
 
 /* Draw a small checkbox/indicator at (x,y): a 10px highlight rect, an 8px inner

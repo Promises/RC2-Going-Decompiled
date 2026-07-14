@@ -143,6 +143,12 @@ typedef struct EmitterView {
  * func_002E0000..end +0x78 (the 41K C-only pointer residual). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E0000);
 
+/* func_002E0010: PARKED #70 — a jump-table switch (jtbl_0026CEB0_text, 25 cases on
+ * arg1-2 in 0..0x18) that formats a level-select entry name: in-range cases set a "special
+ * format" flag then GetLocalizedString(0xB44) + GetLocalizedString(g_levelSelectEntries[arg1])
+ * + func_00115DA8; out-of-range/default uses D_1ABA38. Match-walled by the jtbl reloc gap;
+ * the #else needs the 25-case jtbl->flag mapping extracted from the table data before it's
+ * faithful. Not guessing the case mapping. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E0010);
 
 /* Request a transition into game state 7 (cinematic-hide), stashing the two
@@ -215,10 +221,17 @@ void UnhideAllMobysAndPopState(void) {
 }
 #endif
 
+/* func_002E0210: PARKED #70 (#else not confident) — large (~141-instr) VU0 vector/geometry
+ * computation (func_00283460) with dense FP math. Wrong-operand-silent class + high FP
+ * transcription volume; needs the vector chain traced before a faithful #else. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E0210);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E0448);
 
+/* func_002E0458: PARKED #70 (#else not confident) — VU0 vector-math helper (Vec3CrossVu0,
+ * Vec3RescaleToLenVu0, Vec4ScaleVu0, func_00283628) building a normalized/scaled orientation
+ * (used by the glow poser). Wrong-operand-silent; needs the vector chain traced before a
+ * faithful #else. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E0458);
 
 extern void func_002E1220(void *rec);
@@ -248,6 +261,12 @@ void *func_002E0568(void *rec) {
 }
 #endif
 
+/* func_002E05C0: PARKED #70 (#else not confident) — emits a GIF/DMA packet into
+ * g_frameDmaCursor (GIFtag 0x30000003 / 0x50000003 / 0x13000000; indexes D_261CF0 by
+ * arg2*0x30 and the gp-rel D_1ABE08 by arg1) then tail-calls func_002E1A58 — a large
+ * handwritten DMA/VU helper whose arity is ambiguous, so the call args can't be cleanly
+ * resolved. Won't guess. Needs func_002E1A58's signature + the D_261CF0/D_1ABE08 table
+ * types traced before a faithful #else. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E05C0);
 
 /* Sibling of func_002E07F8: builds the same 32-scanline-strip framebuffer-fill
@@ -379,6 +398,12 @@ void func_002E07F8(u64 arg0) {
 }
 #endif
 
+/* EmitMobyGlowPackets: PARKED #70 (#else not confident) — builds the moby-glow GIF/DMA
+ * packets: a setup call (func_002E0650), a GIFtag header (0x30000007/0x50000007/0x13000000
+ * + D_1390B0 into g_frameDmaCursor), then a per-glow loop that pose-transforms each glow
+ * moby's position (neg/sub FP on +0x8/+0xC, +0x10/0x14/0x18 to the scratch, 1000.0f scale)
+ * via func_002E0458 and emits its packet. Intricate FP + GS-packing class (silent-misrender);
+ * needs the glow vertex/packet format traced before a faithful #else. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", EmitMobyGlowPackets);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", BuildMobyGlowRecords);
@@ -646,6 +671,9 @@ void DrawSkyShellsFixedSpin(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E43E8);
 
+/* func_002E43F8: PARKED #70 (#else not confident) — sky-shell render driver (BeginSkyDrawSegment,
+ * DrawSkyShell, CloseSkyDrawSegment, AppendGsRegPacket + FP). GS draw-segment + FP class;
+ * needs the sky-draw wiring traced before a faithful #else. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E43F8);
 
 /* Open a sky draw segment: remember the current DMA cursor as the segment head
@@ -995,7 +1023,65 @@ void func_002E5698(void) {
 }
 #endif
 
+/* InitSoundEmitterSystem: bring up the sound-emitter system — clear the listener ring
+ * (g_listenerPosHistory first 0x40 bytes) and every emitter's +0x40/+0x44 and +0x70/+0x74
+ * fields (0x70-stride up to +0x16C0), init the SDK sound core (snd_Init, mono per
+ * g_audioStereoMode), configure 5 channels (func_001329B0 ch 1/2/4/5/6), and register the
+ * 7 listener slots (func_00132888) + the reverb/params block (func_001328C0). Matching arm
+ * stays INCLUDE_ASM (save-slot wall); #else is the faithful portable body. */
+#ifdef TARGET_NATIVE
+extern s32  g_audioStereoMode;
+extern void snd_Init(s32 mode);
+extern void func_00132938(s32 flag);
+extern void func_00132978(s32 a, s32 b);
+extern void func_001329B0(s32 channel, s32 b, s32 c);
+extern void func_00132888(s32 slot, s32 value);
+extern void func_001328C0(s32 a, s32 *params, s32 c, s32 d);
+#endif
+
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", InitSoundEmitterSystem);
+#else
+void InitSoundEmitterSystem(void) {
+    u8 *base = g_listenerPosHistory;
+    u8 *p;
+    s32 i;
+    s32 params[5];
+
+    for (i = 0; i < 16; i++) {          /* clear the 0x40-byte listener ring */
+        ((s32 *)base)[i] = 0;
+    }
+    *(s32 *)(base + 0x40) = 0;
+    *(s32 *)(base + 0x44) = 0;
+    for (p = base; p < base + 0x16C0; p += 0x70) {   /* clear each emitter's +0x70/+0x74 */
+        *(s32 *)(p + 0x70) = 0;
+        *(u8 *)(p + 0x74) = 0;
+    }
+
+    snd_Init(2);
+    func_00132938(g_audioStereoMode < 1);
+    func_00132978(0, 1);
+    func_001329B0(1, 0x18, 0x2F);
+    func_001329B0(2, 0x18, 0x2F);
+    func_001329B0(4, 0x18, 0x2F);
+    func_001329B0(5, 0x18, 0x2F);
+    func_001329B0(6, 0x18, 0x2F);
+    func_002E5698();
+    func_00132888(0, *(s32 *)(base + 0x48));
+    func_00132888(1, *(s32 *)(base + 0x4C));
+    func_00132888(2, *(s32 *)(base + 0x50));
+    func_00132888(3, *(s32 *)(base + 0x54));
+    func_00132888(4, *(s32 *)(base + 0x58));
+    func_00132888(5, *(s32 *)(base + 0x5C));
+    func_00132888(6, *(s32 *)(base + 0x50));   /* quirk: 7th re-reads +0x50, not +0x60 */
+    params[0] = 6;
+    params[1] = 0x3B;
+    params[2] = 0x6666;
+    params[3] = 0x8000;
+    params[4] = 0x8000;
+    func_001328C0(0, params, 0x6666, 0x8000);
+}
+#endif
 
 /* Point the IOP streamed-audio engine at the new level's music stream, then
  * log post-reverb free SRAM.  Issues 989snd ring command 0x51 sub-op 2 (start /
@@ -1028,6 +1114,11 @@ void StartLevelMusicStream(void) {
 }
 #endif
 
+/* UpdateSoundEmitters: PARKED #70 (#else not confident) — the large (~0xEE4, ~50-call)
+ * per-frame sound-emitter update: per-emitter occlusion raycast (CastEmitterOcclusionRay,
+ * ComputeListenerOcclusionProbe), pan/volume (ComputeEmitterPan, ComputeEmitterVolume) and
+ * SDK sound updates, over the g_listenerPosHistory emitter table. Far too large + FP/branch-
+ * dense to model confidently; a multi-pass Ghidra decomposition job. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", UpdateSoundEmitters);
 
 /* True if emitter slot `slotIndex` is currently owned by `owner` and in a
