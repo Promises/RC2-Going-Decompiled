@@ -1169,7 +1169,64 @@ void RunFxDrawHooksLate(void) {
  * #else. Not forcing a low-confidence body. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawBlobShadows);
 
+/* FadeOutToBlackBlocking(frames) - synchronous fade-to-black run OUTSIDE the normal
+ * game loop (level transitions block on it). Each of `frames` iterations waits the
+ * frame DMA fence + vblank, resets the frame arenas, re-emits the draw environment +
+ * screen clear, sets GS TEST_1 (reg 0x42) and ramps the RGBAQ (reg 1) alpha from 0 up
+ * to 0x80 across the frame count, appends the prebuilt black-overlay quad
+ * (g_fadeQuadPacket) to the frame chain, then kicks the DMA chain and flips the arena.
+ * The per-frame fence stamp (g_renderLayerMask+0x4) is bumped after every vblank wait.
+ * A final fence/vblank/reset + draw-env/clear leaves the next real frame on a cleared
+ * black screen. Direction is a fade-IN of the black overlay (= fade-out of the scene).
+ *
+ * Engine region (ee-gcc 2.96) - faithful #else. The alpha ramp integer-divides by the
+ * decreasing remaining-frame count (i+1); the original's break-on-div-zero guard is
+ * implicit in C since the divisor is always >= 1. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", FadeOutToBlackBlocking);
+#else
+extern u8   g_fadeQuadPacket[];       /* prebuilt black-overlay GS quad packet */
+extern void AppendDrawEnvContext2(void);
+extern void KickFrameDmaChain(void);
+extern void FlipFrameArena(void);
+
+void FadeOutToBlackBlocking(s32 frames)
+{
+    s32 i;
+
+    WaitFrameDmaFence(1);
+    WaitVblankGetField(0);
+    *(s32 *)((u8 *)&g_renderLayerMask + 4) += 1;
+    ResetFrameArenas();
+
+    for (i = frames - 1; i >= 0; i--) {
+        u32 *cursor;
+        AppendDrawEnvContext1();
+        AppendScreenClearPacket(1);
+        AppendDrawEnvContext2();
+        AppendGsRegPacket(0x42, 0x8000000044ULL);
+        AppendGsRegPacket(1, (u64)(0x80 - (i * 0x80) / (i + 1)) << 0x18);
+        cursor = g_frameDmaCursor[0];
+        cursor[0] = 0x30000014;
+        cursor[1] = (u32)g_fadeQuadPacket;
+        cursor[2] = 0;
+        cursor[3] = 0x50000014;
+        g_frameDmaCursor[0] = cursor + 4;
+        WaitFrameDmaFence(1);
+        WaitVblankGetField(0);
+        *(s32 *)((u8 *)&g_renderLayerMask + 4) += 1;
+        KickFrameDmaChain();
+        FlipFrameArena();
+    }
+
+    WaitFrameDmaFence(1);
+    WaitVblankGetField(0);
+    *(s32 *)((u8 *)&g_renderLayerMask + 4) += 1;
+    ResetFrameArenas();
+    AppendDrawEnvContext1();
+    AppendScreenClearPacket(1);
+}
+#endif
 
 /**
  * func_0027DB38 — draw a pulsing debug string.
@@ -1615,11 +1672,32 @@ void func_0027F208(s32 y0, s32 y1, s32 x0, s32 x1, s32 colorHi, s32 colorLo) {
 }
 #endif
 
-/* func_0027F348: PARKED #70 (#else not confident) — 9-callee-save GS/draw routine
- * (single call func_0027E4D0) with a large computed-vertex body. Save-slot wall for the
- * match; the #else needs the vertex/packet build + func_0027E4D0's signature traced
- * before it's confident. Not forcing a low-confidence body. */
+/* func_0027F348 (DrawShadowedBoxOutline) - draws a drop-shadow-style box frame around
+ * the rect y=[y0,y1] x=[x0,x1]: first a solid fill of the rect itself (color's alpha
+ * byte preserved, low bits forced to 4), then eight thin offset bars (each a 2-px-wide
+ * edge/corner segment nudged by +/-1..5) forming the outlined + shadowed border. All
+ * nine draws go through the screen-rect-fill primitive func_0027E4D0.
+ *
+ * UN-PARK of a premature #70: the park cited "vertex/packet build + func_0027E4D0 sig
+ * unconfident", but there is NO vertex build here (that lives inside func_0027E4D0,
+ * declared line 1363 as (y0,y1,x0,x1,color)) - this body is just nine calls with plain
+ * int offsets. Ghidra dropped the first (fill) call's args; recovered from the .s:
+ * func_0027E4D0(y0,y1,x0,x1,(color & 0xFF000000) | 4). Engine region - faithful #else. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F348);
+#else
+void func_0027F348(s32 y0, s32 y1, s32 x0, s32 x1, u64 color) {
+    func_0027E4D0(y0, y1, x0, x1, (color & 0xFF000000) | 4);
+    func_0027E4D0(y0 - 1, y0 + 1, x0 + 3, x1 + 5, color);
+    func_0027E4D0(y0 - 3, y0 - 5, x0 - 1, x1 - 3, color);
+    func_0027E4D0(y0 - 5, y1 - 3, x0 - 1, x0 + 1, color);
+    func_0027E4D0(y0 + 3, y1 + 1, x0 - 3, x0 - 5, color);
+    func_0027E4D0(y1 - 1, y1 + 1, x0 - 3, x1 - 3, color);
+    func_0027E4D0(y1 + 3, y1 + 5, x0 + 3, x1 + 1, color);
+    func_0027E4D0(y0 + 3, y1 + 3, x1 - 1, x1 + 1, color);
+    func_0027E4D0(y0 + 1, y1 - 3, x1 + 3, x1 + 5, color);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F4D0);
 
@@ -1863,7 +1941,23 @@ s32 func_002802E8(s32 x, s32 arg1, s32 arg2, const char *str, s32 maxChars) {
 }
 #endif
 
+/* func_00280380 - draw a scaled glyph run horizontally centered on x=a. Measures the
+ * run's scaled pixel advance (func_0027F900 with the same scale), shifts the origin
+ * left by half that advance to center it, resolves the UI texture (GetUiTextureTex0
+ * slot 1), and forwards to the positioned font-draw func_0027FCB0 with the D_263B10
+ * glyph metrics. The centered variant of func_0027FFF0.
+ *
+ * Engine region (ee-gcc 2.96) - faithful #else. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280380);
+#else
+void func_00280380(s32 a, s32 b, s32 c, const char *str, s32 maxChars, f32 scale) {
+    s32 advance = func_0027F900(str, maxChars, scale);
+    u64 tex0 = GetUiTextureTex0(1);
+    func_0027FCB0(c, (s32)str, maxChars, tex0, D_263B10,
+                  (f32)(a - (advance >> 1)), (f32)b, scale);
+}
+#endif
 
 extern f32 func_002804C0(f32 inputScale, const char *str, s32 maxChars, s32 count); /* text auto-scale (below) */
 extern void func_00280380(s32 a, s32 b, s32 c, const char *str, s32 maxChars, f32 scale); /* scaled text draw */
