@@ -1150,9 +1150,165 @@ void InitMobySpringFollowState(Moby *moby, void *state,
 }
 #endif
 
-/* Per-frame moby spring-follow step (damped position/orientation chase).
- * WALL: save-layout — 8 callee-saves + $ra at 8-byte spacing, with fp/madd. */
+/* StepMobySpringFollow(moby, state, target) - per-frame damped spring-follow step
+ * that chases `moby` toward a target position while adding a per-axis procedural
+ * wobble, and orients + advances the moby by the result. `state` is the follow
+ * block populated by InitMobySpringFollowState (stiffness +0x48, damping +0x54,
+ * clamp limits +0x60/+0x64/+0x68, drive scale +0x6C, first-frame seed gain +0x78,
+ * wobble angle +0x84 / angular-velocity +0x90 / amplitude +0x9C; runtime spring
+ * position +0x30, velocity +0x3C; +0xAC first-frame counter). state+0x00 is the
+ * desired target position and state+0x10 the smoothed anchor.
+ *
+ * When `target` is NULL the follow anchor comes from the camera-key block
+ * (g_soundBankHandlesBlk): if this moby is the active key holder (+0x33C) and the
+ * key has been held >= 2 frames (+0x340) it springs toward g_heroPos, otherwise it
+ * ticks the first-frame arm-counter (func_002832F8, state+0xAC) and skips straight
+ * to the integrator without refreshing the delta. The drive
+ * accel is (-delta.y, delta.x, -1) scaled by state+0x6C; on the first frame the
+ * velocity is seeded by state+0x78 and the counter is armed to 10. The integrator
+ * runs a 3-axis damped spring (vel += k*(accel-pos); vel -= c*vel; pos += vel) and
+ * overwrites the delta with amplitude*cos(wobbleAngle) per axis. The planar offset
+ * is clamped to +/-state+0x60/+0x64, transformed through the moby's 3x4 matrix
+ * (VU0 micro ops), applied as a correction to moby+0x10, then func_002B0FC0
+ * advances the follower with the yaw clamped to +/-state+0x68. Finally any attached
+ * sub-object (func_002ADF18) is moved by this frame's position delta (func_002AE558).
+ *
+ * Engine region (ee-gcc 2.96); the original's 8-byte-spaced callee-save frame + fp
+ * scheduling won't reproduce under the pinned 2.9 cc1, so this is a faithful #else.
+ *
+ * FLAGGED for audit (judgment calls, not byte-gated): (a) the camera-key block is
+ * the CONFIRMED symbol g_soundBankHandlesBlk (0x189E20) - the +0x33C key-moby /
+ * +0x340 hold-count field roles are inferred from the gate, not independently
+ * traced; (b) helper arg orders were read per-call from the .s (Ghidra prints the
+ * FP-first calls WrapAnglePiSum/func_002B0FC0 with the float arg reordered). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StepMobySpringFollow);
+#else
+extern Vec4 g_heroPos;                /* 0x189EA0 hero world position */
+extern u8   g_soundBankHandlesBlk[];  /* 0x189E20 camera-key block; head = fallback anchor Vec4 */
+extern void func_002B0C40(u8 *moby, Vec4 *inDelta, Vec4 *outDelta, s32 flag);
+extern void func_00283DA0(void *dst, void *src);            /* VU0 micro build/transform */
+extern void func_002840E8(void *dstMtx, void *aMtx, void *bMtx);  /* VU0 3x3 matrix multiply */
+extern void func_002B0FC0(f32 yawLimit, u8 *moby, Vec4 *inPos, Vec4 *outPos);
+extern void *func_002ADF18(u8 *moby);                      /* -> attached sub-object or NULL */
+extern void func_002AE558(void *obj, Vec4 *posDelta, Vec4 *auxDelta, void *mobyAux);
+extern f32  func_00283B48(f32 angle);                      /* CosfVu0 */
+extern f32  WrapAnglePiSum(f32 a, f32 b);                  /* 0x284548 */
+extern void Vec4AddVu0(Vec4 *out, Vec4 *a, Vec4 *b);       /* 0x283670 */
+extern void Vec4SubVu0(Vec4 *out, Vec4 *a, Vec4 *b);       /* 0x2836A0 */
+
+void StepMobySpringFollow(u8 *moby, Vec4 *state, Vec4 *target)
+{
+    u8 *st = (u8 *)state;
+    f32 *pos    = (f32 *)(st + 0x30);
+    f32 *vel    = (f32 *)(st + 0x3C);
+    f32 *stiff  = (f32 *)(st + 0x48);
+    f32 *damp   = (f32 *)(st + 0x54);
+    f32 *scale  = (f32 *)(st + 0x6C);
+    f32 *seed   = (f32 *)(st + 0x78);
+    f32 *angle  = (f32 *)(st + 0x84);
+    f32 *angVel = (f32 *)(st + 0x90);
+    f32 *amp    = (f32 *)(st + 0x9C);
+    f32  limitX = *(f32 *)(st + 0x60);
+    f32  limitY = *(f32 *)(st + 0x64);
+    f32  yawLimit = *(f32 *)(st + 0x68);
+
+    Vec4 savedPos = *(Vec4 *)(moby + 0x10);   /* pre-update world pos snapshot */
+    Vec4 savedAux = *(Vec4 *)(moby + 0xF0);   /* pre-update aux vector snapshot */
+    Vec4 accel;
+    Vec4 delta;
+    Vec4 clampPos;
+    Vec4 posVec;
+    u8   mtxScratch[48];
+    Vec4 xformPt;
+    Vec4 correction;
+    Vec4 moveDelta;
+    f32 *accelP = (f32 *)&accel;
+    f32 *deltaP = (f32 *)&delta;
+    f32  s, v;
+    s32  i;
+
+    memset(&accel, 0, 0x10);
+
+    if (target == 0) {
+        /* No explicit target: track the camera-key holder toward the hero, but
+           only once this moby owns the key (+0x33C) and has held it >= 2 frames
+           (+0x340). Otherwise this is a snap frame - tick the arm-counter at
+           state+0xAC and run the integrator without refreshing the delta. */
+        if (*(u8 **)(g_soundBankHandlesBlk + 0x33C) != moby ||
+            *(s32 *)(g_soundBankHandlesBlk + 0x340) < 2) {
+            func_002832F8(st + 0xAC);
+            goto integrate;
+        }
+        Vec4SubVu0(&delta, &g_heroPos, (Vec4 *)(moby + 0x10));
+    } else {
+        Vec4SubVu0(&delta, target, (Vec4 *)(moby + 0x10));
+    }
+
+    /* Project the target-relative delta into moby space and re-subtract the
+       smoothed anchor, then derive the spring drive accel from it. */
+    func_002B0C40(moby, &delta, &delta, 0);
+    Vec4SubVu0(&delta, &delta, (Vec4 *)(st + 0x10));
+    accelP[0] = -delta.y * scale[0];
+    accelP[1] =  delta.x * scale[1];
+    accelP[2] = -scale[2];
+
+    if (*(s32 *)(st + 0xAC) == 0) {         /* first frame: seed velocity, arm counter */
+        for (i = 0; i < 3; i++)
+            vel[i] += accelP[i] * seed[i];
+        *(s32 *)(st + 0xAC) = 10;
+    }
+
+integrate:
+    /* 3-axis damped spring; delta is overwritten with the amplitude*cos wobble. */
+    for (i = 0; i < 3; i++) {
+        s = vel[i] + stiff[i] * (accelP[i] - pos[i]);
+        s = s - damp[i] * s;
+        vel[i] = s;
+        pos[i] += s;
+        angle[i] = WrapAnglePiSum(angle[i], angVel[i]);
+        deltaP[i] = amp[i] * func_00283B48(angle[i]);
+    }
+
+    posVec.x = pos[0] + delta.x;
+    posVec.y = pos[1] + delta.y;
+    posVec.z = 0.0f;
+    posVec.w = 0.0f;
+
+    /* Clamp the planar offset to the per-axis limits. */
+    clampPos = posVec;
+    if (clampPos.x > limitX)       clampPos.x = limitX;
+    else if (clampPos.x < -limitX) clampPos.x = -limitX;
+    if (clampPos.y > limitY)       clampPos.y = limitY;
+    else if (clampPos.y < -limitY) clampPos.y = -limitY;
+
+    /* Transform the clamped offset through the moby's 3x4 matrix and apply it. */
+    func_00283DA0(mtxScratch, &clampPos);
+    func_00283DA0(moby + 0xC0, (Vec4 *)(st + 0x20));
+    func_002840E8(moby + 0xC0, moby + 0xC0, mtxScratch);
+    posVec = *(Vec4 *)(st + 0x10);
+    posVec.z = posVec.z + delta.z;
+    func_00283A48(&xformPt, &posVec, (Vec4 *)(moby + 0xC0));
+    Vec4AddVu0(&xformPt, &xformPt, (Vec4 *)(moby + 0x10));
+    Vec4SubVu0(&correction, state, &xformPt);
+    Vec4AddVu0((Vec4 *)(moby + 0x10), (Vec4 *)(moby + 0x10), &correction);
+
+    /* Advance the follower with the yaw clamped to +/-yawLimit. */
+    v = -*(f32 *)(st + 0x38);
+    if (v > yawLimit)       v = yawLimit;
+    else if (v < -yawLimit) v = -yawLimit;
+    func_002B0FC0(v, moby, (Vec4 *)(moby + 0x10), (Vec4 *)(moby + 0x10));
+
+    /* Propagate this frame's motion to any attached sub-object. */
+    {
+        void *obj = func_002ADF18(moby);
+        if (obj != 0) {
+            Vec4SubVu0(&moveDelta, (Vec4 *)(moby + 0x10), &savedPos);
+            func_002AE558(obj, &moveDelta, &savedAux, moby + 0xF0);
+        }
+    }
+}
+#endif
 
 /* Handwritten stub-table fragment (orphaned addiu $sp / nop run) — see unit
  * header; kept INCLUDE_ASM permanently. */
@@ -2515,14 +2671,56 @@ s32 CheckMobyOverWater(void *moby, void *waterVol) {
 }
 #endif
 
-/* Begin the per-frame GS draw-list: writes the frame DMA chain header (GIF/DMA
- * tags) at g_frameDmaCursor, primes the screen context, and queues the frame.
- * WALL: hardware DMA-packet builder. The original reloads g_frameDmaCursor from
- * memory after every tag store and mixes %lo-absolute and %gp_rel access to the
- * same cursor (a gp/absolute-mix the pinned cc1 won't reproduce); the literal
- * 0x30000009/0x50000009/0x70000000 GIF tags also resist clean C expression.
- * Tier-3 hardware — left as INCLUDE_ASM. */
+/* BeginFrameDrawList(dmaCursor) - opens a new per-frame GS/VIF1 DMA draw list.
+ * Points g_frameDmaCursor at the caller's buffer, then emits the 8-word opening
+ * DMA/GIF header: a DIRECT-mode chain (0x30000009/0x50000009) selecting the GS
+ * screen context (the g_gsScreenContextPtr packet + 0xC0, masked to the 28-bit
+ * physical address the DMAC needs), followed by an UNPACK (0x30000025/0x50000025)
+ * of the framebuffer-setup packet at g_screenBlitPacketB+0x290. Advances the
+ * cursor past the header, bumps the scene-frame counter, then appends either the
+ * cinematic-queue draw path (func_0027DB38, when g_cinematicQueue is set) or the
+ * normal scene path (func_0027DC40), closes the chain with a 0x70000000 end tag,
+ * and flushes the data cache (func_0011AED0) so the DMAC sees the finished packet.
+ *
+ * Engine region (ee-gcc 2.96) - the original reloads g_frameDmaCursor after every
+ * tag store and mixes %lo-absolute with %gp_rel access to the same cursor, which
+ * the pinned 2.9 cc1 won't reproduce, so this is a faithful #else, not a byte match. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", BeginFrameDrawList);
+#else
+extern u32 *g_frameDmaCursor;      /* VIF1/GIF chain write cursor */
+extern u8 *g_gsScreenContextPtr;   /* pointer to the GS screen-context packet */
+extern s32 g_cinematicQueue;
+extern u8 g_cameraSlotActive[];    /* scene-frame counter lives at +0x9C4 */
+extern u8 g_screenBlitPacketB[];   /* framebuffer-setup packet lives at +0x290 */
+extern void func_0027DB38(void);   /* cinematic-queue draw path */
+extern void func_0027DC40(void);   /* normal scene draw path */
+extern void func_0011AED0(s32);    /* data-cache flush */
+
+void BeginFrameDrawList(u32 *dmaCursor)
+{
+    g_frameDmaCursor = dmaCursor;
+    g_frameDmaCursor[0] = 0x30000009;
+    g_frameDmaCursor[1] = ((u32)g_gsScreenContextPtr + 0xC0) & 0x0FFFFFFF;
+    g_frameDmaCursor[2] = 0;
+    g_frameDmaCursor[3] = 0x50000009;
+    g_frameDmaCursor[4] = 0x30000025;
+    g_frameDmaCursor[5] = (u32)&g_screenBlitPacketB[0x290];
+    g_frameDmaCursor[6] = 0;
+    g_frameDmaCursor[7] = 0x50000025;
+    g_frameDmaCursor += 8;
+    *(s32 *)&g_cameraSlotActive[0x9C4] += 1;
+    if (g_cinematicQueue == 0) {
+        func_0027DC40();
+    } else {
+        func_0027DB38();
+    }
+    g_frameDmaCursor[0] = 0x70000000;
+    g_frameDmaCursor[1] = 0;
+    g_frameDmaCursor += 4;
+    func_0011AED0(0);
+}
+#endif
 
 /* The builtin classId->update-fn binding table (0xC-byte entries, -1-terminated;
  * empty in the shipped ELF, filled by overlay code). All four globals below sit
