@@ -969,6 +969,7 @@ extern void *g_cameraHelperMoby;
 /* TODO(match): functional equivalent - not byte-exact; two callee-saves at
    8-byte slot spacing (the 0x20-vs-0x10 packed-save wall). */
 void func_00270500(Camera *cam) {
+    extern void FreeMoby(void *moby);
     if (cam->type == 0) {
         if (g_cameraHelperMoby == NULL) {
             g_cameraHelperMoby = func_00303818((char *)cam - 0x60);

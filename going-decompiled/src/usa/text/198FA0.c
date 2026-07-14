@@ -2295,6 +2295,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029E5F8);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", UpdateLevelObjectiveStates);
 #else
 s32 UpdateLevelObjectiveStates(void) {
+    extern s32 EvaluateProgressCondition(s32 cond, s32 arg);  /* defined later in-unit */
     ObjectiveScan *scan = (ObjectiveScan *)(g_pRainHeightmap + 0x34);
     LevelObjective *rec;
 

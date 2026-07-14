@@ -2351,6 +2351,9 @@ extern s32 *func_0011F6C0(s32 *first, s32 *last, s32 value);
  * until the two biased cursors meet. The meeting point is cached in D_00134E20.
  */
 void func_0011F718(void) {
+#ifdef TARGET_NATIVE
+    extern s32 func_0011F818(s32 a, s32 b);  /* defined later in-unit */
+#endif
     s32 p;
     s32 q;
     s32 a;

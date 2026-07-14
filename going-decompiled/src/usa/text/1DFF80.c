@@ -918,7 +918,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", ComputeEmitterV
 s32 ComputeEmitterVolume(SoundEmitterSlot *slot, Vec4 *pos) {
     float dist = func_002837F8(pos, g_cameraPos);
     float *curve = *(float **)((u8 *)slot + 0x8);
-    return ComputeVolumeFalloff(curve, dist, curve[0], curve[1]);
+    return ComputeVolumeFalloff((SoundDef *)curve, dist, curve[0], curve[1]);
 }
 #endif
 
@@ -1282,7 +1282,7 @@ s32 StartSoundEmitter(SoundDef *pSoundDef, s32 flags, Moby *ownerMoby,
 
     /* distance-volume cull (unless flagged off) */
     if (!(flags & 0x10)) {
-        if (ComputeEmitterVolume(e + 0x70, e + 0x90) < 0x20) {
+        if (ComputeEmitterVolume((SoundEmitterSlot *)(e + 0x70), (Vec4 *)(e + 0x90)) < 0x20) {
             return -1;
         }
     } else {
@@ -1432,7 +1432,7 @@ s32 PlayGlobalSound(s32 soundIdx, s32 posOverride, s32 owner) {
         return -1;
     }
 
-    slot = StartSoundEmitter(pool + soundIdx * 0x20, posOverride, (void *)owner,
+    slot = StartSoundEmitter((SoundDef *)(pool + soundIdx * 0x20), posOverride, (void *)owner,
                              NULL, 0x400);
     if (slot >= 0) {
         e = g_listenerPosHistory + slot * 0x70;
