@@ -1598,17 +1598,64 @@ void func_0027E4D0(s32 y0, s32 y1, s32 x0, s32 x1, u64 arg4) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027E690);
 
-/* DrawGlyphQuad: emit a textured 2D sprite/glyph quad into the frame DMA packet
- * (g_frameDmaCursor) — a GIFtag (0x10000007/0x50000007, GS reg 0x154) + UV/XYZ2
- * vertex pair, advancing the cursor 0x60. Positions are 12.4 fixed-point (<<4) with
- * g_gsPixelOffsetX/Y adds and a -8 half-texel bias; UVs pack via dsll16 + or-masks.
- * PARKED #70 (#else not confident): the arg mapping (8 register coords $4-$11 + 2
- * stack args $15/$16 = which is x/y/w/h/u/v/color/tag?) and the exact GS vertex/UV
- * packing (shift/offset/mask order, sd packet offsets 0x8..0x58) are intricate GS-
- * format magic — a wrong shift/UV-swap silently mis-renders. Resolve the GS sprite
- * vertex format + arg order (cross-check a sibling GS-quad emitter) before a faithful
- * #else. Not forcing a low-confidence body. */
+/* DrawGlyphQuad(x, y, w, h, u, v, uw, uh, param9, param10) — emit a textured 2D
+ * sprite/glyph quad into the frame DMA packet at g_frameDmaCursor. Leaf function: writes
+ * an opening DMA/GIF tag (0x10000007 .. 0x50000007), copies the 16-byte GIFtag template
+ * (D_1AC880), then the caller's two 64-bit header words (param10, param9), a GS reg-0x154
+ * marker, and 4 UV+XYZ2 vertex pairs for the quad corners, and advances the cursor 0x80.
+ * Screen positions are 12.4 fixed-point: x = pixel*0x10 + g_gsPixelOffsetX/Y - 8 (half-texel
+ * bias); the XYZ2 vertex packs x | (y<<16) | the constant z/fog field 0xfffff000000000; the
+ * UV packs u<<4 + v<<20. Corners are (x0,y0)(x1,y0)(x0,y1)(x1,y1) with x1=x0+w, etc.
+ *
+ * UN-PARK of a provably-false #70: the park's blockers — "which arg is x/y/w/h/u/v" and the
+ * "exact GS vertex/UV packing" — are both resolved by a full .s trace (leaf, no calls, so no
+ * helper-arg ambiguity). It IS 10-arg (param9/param10 are real 64-bit stack args at 0x10/0x18
+ * ($sp), written verbatim to the header — NOT a coord); no divergent-arity caller in this TU,
+ * so no Option-D needed. Engine region — faithful #else. FAITHFULNESS (GS-pack/silent-render):
+ * XYZ pack built in s64 (native long is 32-bit, overflows the <<16 + z-field). FORMER-PARK:
+ * dual-gate (tester oracle) + d2 heads-up. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawGlyphQuad);
+#else
+extern u8  D_1AC880[];   /* GIFtag template (16-byte GS primitive header) */
+
+void DrawGlyphQuad(s32 x, s32 y, s32 w, s32 h, s32 u, s32 v, s32 uw, s32 uh,
+                   u64 param9, u64 param10) {
+    u32 *base = g_frameDmaCursor[0];
+    u64 *q = (u64 *)base;
+    s32 offX = g_gsPixelOffsetX[0];
+    s32 offY = g_gsPixelOffsetY[0];
+    s32 x0 = x * 0x10 + offX - 8;
+    s32 x1 = (x + w) * 0x10 + offX - 8;
+    s32 y0 = y * 0x10 + offY - 8;
+    s32 y1 = (y + h) * 0x10 + offY - 8;
+    s32 u0 = u << 4;
+    s32 u1 = (u + uw) << 4;
+    s32 v0 = v << 20;
+    s32 v1 = (v + uh) << 20;
+    const s64 zmask = 0xfffff000000000LL;
+
+    base[0] = 0x10000007;
+    base[1] = 0;
+    base[2] = 0;
+    base[3] = 0x50000007;
+    q[2] = ((u64 *)D_1AC880)[0];                   /* template -> C+0x10 */
+    q[3] = ((u64 *)D_1AC880)[1];                   /* template -> C+0x18 */
+    q[4]  = param10;                               /* C+0x20 */
+    q[5]  = 0x154;                                 /* C+0x28 GS reg id */
+    q[6]  = param9;                                /* C+0x30 */
+    q[7]  = (u64)(v0 + u0);                        /* C+0x38 uv(u0,v0) */
+    q[8]  = (s64)x0 | ((s64)y0 << 16) | zmask;     /* C+0x40 xyz(x0,y0) */
+    q[9]  = (u64)(v0 + u1);                        /* C+0x48 uv(u1,v0) */
+    q[10] = (s64)x1 | ((s64)y0 << 16) | zmask;     /* C+0x50 xyz(x1,y0) */
+    q[11] = (u64)(v1 + u0);                        /* C+0x58 uv(u0,v1) */
+    q[12] = (s64)x0 | ((s64)y1 << 16) | zmask;     /* C+0x60 xyz(x0,y1) */
+    q[13] = (u64)(v1 + u1);                        /* C+0x68 uv(u1,v1) */
+    q[14] = (s64)x1 | ((s64)y1 << 16) | zmask;     /* C+0x70 xyz(x1,y1) */
+    q[15] = 0;                                     /* C+0x78 */
+    g_frameDmaCursor[0] = base + 0x20;             /* advance to C+0x80 */
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027E818);
 
