@@ -560,6 +560,13 @@ void func_00292650(s32 *descTable, s32 count) {
 }
 #endif
 
+/* Bind + relocate a loaded sky-data blob: fix up its internal header pointers
+ * (offset -> absolute by +blob base), publish it to g_pSkyData, then two passes
+ * build per-entry sky-texture params (Log2Floor of dims) and relocate a second
+ * pointer table. PARK (#70): the first pass overlaps a source-word-stream view
+ * ($18 advancing +4 x5) with a 0x10-stride entry-array view of the same region;
+ * that aliasing isn't pinned confidently enough for a faithful #else (silent-bug
+ * risk on the exact field mapping). Bare INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BindSkyData);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadPlayerDisplayTextures);
@@ -642,7 +649,84 @@ void LoadPlayerDisplayModel(s32 variant) {
 }
 #endif
 
+/* Load the held-item display model+texture for `itemId` (twin of
+ * LoadShipDisplayTexture): fence the DMA, kick the disc file load for the item's
+ * TOC entry (stride itemId*0x10: start = +0x4FA0 biased by +0x4F04, count +0x4FA4)
+ * into g_heldItemModelBufferBase, upload a 16x16 base + the loaded mip (dims from
+ * the buffer header at +0x10) as two GS images, cache the packed 64-bit GS
+ * texture register in g_heldItemTexDescriptor, then kick a SECOND disc load for
+ * the model geometry (+0x4F98 / +0x4F9C). Engine-2.96 (save-slot walled) ->
+ * faithful #else; register pack transcribed op-for-op. NEEDS-ORACLE. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadHeldItemDisplayModel);
+#else
+extern void WaitFrameDmaFence(s32 mode);
+extern void PumpDialogVoiceSystem(s32 blocking);
+extern void StartFileLoadPumpingVoice(void *dest, s32 startSector, s32 sectorCount);
+extern void func_0011AEA0(s32 a);
+extern s32  g_discToc[];
+extern u8   g_vramTextureBase[];
+extern u8  *g_heldItemModelBufferBase;    /* loaded model/texture buffer ptr */
+extern u64  g_heldItemTexDescriptor;      /* cached packed GS texture register */
+extern void func_126288(void *dst, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h);
+extern void KickGifImageUpload(void *packet, void *src);
+extern void WaitGsPathsIdle(s32 arg);
+
+void LoadHeldItemDisplayModel(s32 itemId) {
+    u8   packet[0x60];               /* GIF packet scratch (sp+0) */
+    u8  *disc = (u8 *)g_discToc;
+    s32  off  = itemId << 4;         /* itemId * 0x10 = disc TOC stride */
+    u8  *buffer;
+    u8  *hdr;
+    s32  log2, clampW;
+    s16  w, h;
+    u64  reg;
+
+    WaitFrameDmaFence(1);
+    buffer = g_heldItemModelBufferBase;
+    PumpDialogVoiceSystem(1);
+
+    StartFileLoadPumpingVoice(buffer,
+        *(s32 *)(disc + off + 0x4FA0) + *(s32 *)(disc + 0x4F04),
+        *(s32 *)(disc + off + 0x4FA4));
+
+    /* level 0: 16x16 base image */
+    func_126288(packet, (*(s32 *)(g_vramTextureBase + 0x8) << 8) >> 16,
+                1, 0, 0, 0, 0x10, 0x10);
+    func_0011AEA0(0);
+    KickGifImageUpload(packet, buffer + 0x30);
+    WaitGsPathsIdle(0);
+
+    /* level 1: mip sized from the loaded buffer header (+0x10) */
+    hdr    = buffer + 0x10;
+    log2   = Log2Floor(*(s32 *)(hdr + 0x8));
+    clampW = *(s32 *)(hdr + 0x8) >> 6;
+    if (clampW <= 0) {
+        clampW = 1;
+    }
+    w = *(s16 *)(hdr + 0x8);
+    h = *(s16 *)(hdr + 0xC);
+    func_126288(packet, (*(s32 *)(g_vramTextureBase + 0x18) << 8) >> 16,
+                (s16)clampW, 0x1B, 0, 0, w, h);
+    func_0011AEA0(0);
+    KickGifImageUpload(packet, buffer + 0x430);
+    WaitGsPathsIdle(0);
+
+    /* pack the 64-bit GS texture register (op-for-op from the dsll/dsra/or chain) */
+    reg = (u64)((s64) * (s32 *)(g_vramTextureBase + 0x18) >> 8)
+        | ((u64)clampW << 14)
+        | (((u64)log2 << 26) | 0x1B00000)
+        | ((u64)log2 << 30)
+        | (((u64)((s64) * (s32 *)(g_vramTextureBase + 0x8) >> 8) << 37) | ((u64)0x8000 << 19))
+        | ((u64)1 << 63);
+    g_heldItemTexDescriptor = reg;
+
+    /* second disc load: the model geometry */
+    StartFileLoadPumpingVoice(buffer,
+        *(s32 *)(disc + off + 0x4F98) + *(s32 *)(disc + 0x4F04),
+        *(s32 *)(disc + off + 0x4F9C));
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00292E90);
 
@@ -686,7 +770,76 @@ void LoadShipDisplayModel(s32 index) {
 }
 #endif
 
+/* Load the ship-select display texture for `shipId`: fence the frame DMA, resolve
+ * the double-buffered frame-arena slot, kick the disc file load (the shipId TOC
+ * entry: start sector = g_discToc[shipId] header +0x48F0 biased by +0x3E24, count
+ * +0x48F4), then upload two GS image levels (a 16x16 base + the loaded mip whose
+ * dims come from the arena header) into VRAM and cache the packed 64-bit GS
+ * texture register at g_levelDialogToc[0x13B0+0x38] for the draw path to load.
+ * Engine-2.96 TU (prologue packs 6 saved regs at 8-byte slots, frame 0x70-class)
+ * -> save-slot walled, canonical-2.9 can't byte-match; faithful #else, with the
+ * trailing dsll/dsra/or register pack transcribed op-for-op. NEEDS-ORACLE. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadShipDisplayTexture);
+#else
+extern s32  g_frameArenaFlip;             /* double-buffer index (0/1) */
+extern s32  g_frameArenaBase;             /* per-frame arena base (declared later in-unit) */
+extern u8   g_vramTextureBase[];          /* VRAM texture-slot descriptor (+0xC/+0x1C = level TBPs) */
+extern void PumpDialogVoiceSystem(s32 blocking);   /* declared later in-unit */
+extern void func_0011AEA0(s32 a);                  /* declared later in-unit */
+extern void func_126288(void *dst, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h);
+extern void KickGifImageUpload(void *packet, void *src);
+extern void WaitGsPathsIdle(s32 arg);
+
+void LoadShipDisplayTexture(s32 shipId) {
+    u8    packet[0x60];               /* GIF packet scratch (sp+0) */
+    u8   *base  = &g_levelDialogToc[0x13B0];
+    u8   *disc  = (u8 *)g_discToc;
+    void *arena;
+    s32   log2, clampW;
+    s16   w, h;
+    u64   reg;
+
+    *(s32 *)(base + 0x30) = shipId;
+    WaitFrameDmaFence(1);
+    arena = (void *)(&g_frameArenaBase)[1 - g_frameArenaFlip];
+    PumpDialogVoiceSystem(1);
+
+    StartFileLoadPumpingVoice(arena,
+        *(s32 *)(disc + shipId * 8 + 0x48F0) + *(s32 *)(disc + 0x3E24),
+        *(s32 *)(disc + shipId * 8 + 0x48F4));
+
+    /* level 0: 16x16 base image */
+    func_126288(packet, (*(s32 *)(g_vramTextureBase + 0xC) << 8) >> 16,
+                1, 0, 0, 0, 0x10, 0x10);
+    func_0011AEA0(0);
+    KickGifImageUpload(packet, (u8 *)arena + 0x20);
+    WaitGsPathsIdle(0);
+
+    /* level 1: mip level sized from the loaded arena header (+0x8 w, +0xC h) */
+    log2   = Log2Floor(*(s32 *)((u8 *)arena + 0x8));
+    clampW = *(s32 *)((u8 *)arena + 0x8) >> 6;
+    if (clampW <= 0) {
+        clampW = 1;
+    }
+    w = *(s16 *)((u8 *)arena + 0x8);
+    h = *(s16 *)((u8 *)arena + 0xC);
+    func_126288(packet, (*(s32 *)(g_vramTextureBase + 0x1C) << 8) >> 16,
+                (s16)clampW, 0x1B, 0, 0, w, h);
+    func_0011AEA0(0);
+    KickGifImageUpload(packet, (u8 *)arena + 0x420);
+    WaitGsPathsIdle(0);
+
+    /* pack the 64-bit GS texture register (op-for-op from the dsll/dsra/or chain) */
+    reg = (u64)((s64) * (s32 *)(g_vramTextureBase + 0x1C) >> 8)
+        | ((u64)clampW << 14)
+        | (((u64)log2 << 26) | 0x1B00000)
+        | ((u64)log2 << 30)
+        | (((u64)((s64) * (s32 *)(g_vramTextureBase + 0xC) >> 8) << 37) | ((u64)0x8000 << 19))
+        | ((u64)1 << 63);
+    *(u64 *)(base + 0x38) = reg;
+}
+#endif
 
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", ParseLoadedSegment);
@@ -2533,6 +2686,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapUpdate);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapDraw);
 
+/* Per-state writer of two f32 out-params (A=$4, B=$5) selected by g_playerProgress
+ * (cases 2/0xB/7/0x14) with float-threshold gating on g_soundBankHandlesBlk+0x80/
+ * +0x84; returns a written flag. PARK (#70): func_00301430 is called 4x with
+ * ambiguous/unset args and its return drives bltz/slti branches (arg+return
+ * semantics unrecovered), plus ~14 unnamed D_1A9xxx float globals — a faithful
+ * #else would guess the callee contract (silent-bug risk). Bare INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00297B48);
 
 /*
@@ -2735,6 +2894,12 @@ void func_002984E0(u8 *out) {
 }
 #endif
 
+/* Expand a localized template string (id from g_mapVertexData[+0x20] entry
+ * idx*0x28 +0xA) into the dest buffer, substituting "%b" with the equipped
+ * weapon's name via func_00115DA8(sprintf). PARK (#70): nested byte-copy loops
+ * plus a deep indirection chain (mapVertexData -> entry -> slot -> equipped item
+ * -> g_weaponTable[item*0xE0]+0x80 -> name) and unrecovered func_00115DA8 format
+ * semantics — faithful transcription is high silent-bug risk. Bare INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00298730);
 
 /* TODO(match): functional equivalent - not byte-exact (85.25%); branch-likely
