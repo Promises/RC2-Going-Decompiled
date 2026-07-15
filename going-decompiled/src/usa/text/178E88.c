@@ -872,10 +872,29 @@ void func_0027C0A8(void) {
 }
 #endif
 
-/* func_0027C0C8: PARKED #70 — the per-frame moby/scene render-pipeline driver (~20
- * callees: BuildFrameViewMatrices, BuildCameraProjection, BeginMobyDrawSegment, RenderMobys,
- * FinishMobyRenderChain, the func_002A10xx moby chain, GS packet appends). Large orchestration
- * body; needs each stage's wiring traced before a faithful #else — high transcription risk. */
+/* func_0027C0C8 (RenderHeldItemViewModel): PARKED #70 — TRACED, re-walled on a genuine blocker.
+ * Held-item/view-model render pass. If the held item (*(void**)(g_sceneCastCount+0xC)) is null →
+ * RenderMobys(). Else, fully traced .s-vs-Ghidra: read moby handle held+0x68; BeginMobyDrawSegment
+ * + func_002A1000/1028; set/clear draw-flag bit0 at handle+0x34 around func_002A1138(g_mobyTableBase,-1);
+ * SAVE camera matrix (CopyQwords g_cameraMatrix→stack, 0x40) + g_flCameraPos qword (g_cameraMatrix-0x230)
+ * + the g_sceneActorMobys+0x674+0xB0 proj scale; SetupViewModelDepthRange(1.0f,8,8); build a 4-stage
+ * view-model matrix chain (func_129178 identity → func_001292C0/00129368/00129218 with the held+0x10/
+ * +0x14/+0x18 FLOAT euler angles) and install it as the camera matrix; copy held[0] qword into
+ * g_flCameraPos; BuildFrameViewMatrices; func_002A12A0(handle,0x404040,0xe,0,0); install a 4-light block
+ * (g_dirLightMatrices+0x380 ← D_1A8820/8830/8840/8850 qwords at dest offsets 0,+0x20,+0x10,+0x30 —
+ * INTERLEAVED); func_002A1138(handle,1); func_0027C0A8; restore proj scale + camera matrix + g_flCameraPos;
+ * BuildCameraProjection/BuildFrameViewMatrices; AppendGsRegPacket(0x42,0x8000000044)+(8,5);
+ * AppendTexFlushDefaultTex0; func_002A1058; FinishMobyRenderChain; then a 4-corner crosshair pass.
+ *
+ * GENUINE BLOCKER (why re-walled, per the un-park honesty guardrail): the terminal
+ * ProjectAndClipBillboardQuad(func_00281540) consumes a 144-byte stack-context struct assembled in the
+ * loop (sp+0x90.. : 4 corner qwords from held+0x20 stride 0x10, 4 colors 0x80808080, 8 uv floats
+ * held+0x60/+0x64 * D_1A87F8/D_1A8808 + 0.5, then a header mode=5 / D_1A7470 / GIFtag 0xFF9000000260 /
+ * alpha 0x8000000044). func_00281540 is OPAQUE (undecompiled, the same intricate GS vertex/UV-packing
+ * class as the #70-parked DrawBlobShadows), so the struct's exact field layout can only be INFERRED from
+ * these writes, not confirmed from the callee — a faithful #else would depend on reproducing that layout
+ * byte-for-byte for an opaque consumer (silent-layout-bug risk). Everything up to the crosshair pass is
+ * confidently traced; un-park becomes clean once func_00281540's context struct is decompiled/confirmed. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027C0C8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", RenderFrame);
@@ -1766,12 +1785,65 @@ void func_0027F348(s32 y0, s32 y1, s32 x0, s32 x1, u64 color) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F4D0);
 
-/* func_0027F4D8: PARKED #70 (#else not confident) — rotated-sprite draw with float/angle
- * math (WrapAnglePiSum + sin/cos func_00283B30/B48, FloatToInt) feeding a GS sprite emit
- * (GetUiTextureTex0, func_0027EFA0). Intricate FP + GS-packing class; a wrong rounding or
- * rotation term silently mis-renders. Needs the rotation + GS format traced before a
- * faithful #else. Not forcing a low-confidence body. */
+/* func_0027F4D8 (DrawTexturedRingSegments) — draw a textured ring/arc as 16 gouraud quads
+ * (func_0027EFA0) sweeping from startAngle to endAngle about (centerX,centerY), between inner
+ * and outer radius, with the given UI texture. Each quad spans one angular step
+ * (step = (endAngle-startAngle)/segCount) between two edges; ALWAYS 16 segments are emitted
+ * (the count is fixed — segCount only sizes the step). Per edge it takes sin/cos (SinfVu0/CosfVu0)
+ * and packs the 4 corners (edgeA/edgeB × inner/outer) into GS XYZ vertices in the 12.4-style
+ * layout: x = FloatToInt(sin*r)+centerX, y = (FloatToInt(cos*r)+centerY)<<16, plus the constant
+ * z/fog field 0xfffff000000000. Angles are advanced with WrapAnglePiSum (seeded +pi/2).
+ *
+ * UN-PARK of a provably-false #70: the park's cited blocker was "needs the rotation + GS format
+ * traced" — done, .s-vs-Ghidra. Engine region — faithful #else. FAITHFULNESS NOTES: the vertex
+ * pack is built in s64 (native `long` is 32-bit and would overflow the <<16 + z-field); the
+ * WrapAnglePiSum seed uses the EXACT bit pattern 0x3FC90FDC (a decimal pi/2 literal can round to
+ * a different ULP). FORMER-PARK (silent-render class): dual-gate (tester oracle) + d2 heads-up. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F4D8);
+#else
+extern f32 SinfVu0(f32 x);                 /* func_00283B30 */
+extern f32 CosfVu0(f32 x);                 /* func_00283B48 */
+extern f32 WrapAnglePiSum(f32 a, f32 b);   /* 0x284548 */
+extern s32 FloatToInt(f32 x);              /* declared file-scope below, used before it here */
+extern u64 GetUiTextureTex0(s32 slot);     /* declared file-scope below, used before it here */
+
+void func_0027F4D8(f32 startAngle, f32 endAngle, s32 centerX, s32 centerY,
+                   s32 innerR, s32 outerR, const s32 *st, const s32 *uv,
+                   u64 texId, s32 segCount) {
+    const union { u32 u; f32 f; } kHalfPi = { 0x3FC90FDC };
+    u64 tex0 = GetUiTextureTex0(texId);
+    f32 step = (endAngle - startAngle) / (f32)segCount;
+    f32 inner = (f32)innerR;
+    f32 outer = (f32)outerR;
+    f32 angleA = WrapAnglePiSum(startAngle, kHalfPi.f);
+    f32 angleB = WrapAnglePiSum(angleA, step);
+    s32 i;
+
+    for (i = 15; i >= 0; i--) {
+        f32 sinA = SinfVu0(angleA);
+        f32 cosA = CosfVu0(angleA);
+        f32 sinB, cosB;
+        u64 verts[4];
+
+        angleA = angleB;
+        sinB = SinfVu0(angleB);
+        cosB = CosfVu0(angleB);
+
+        verts[0] = (s64)(FloatToInt(sinA * inner) + centerX)
+                 + ((s64)(FloatToInt(cosA * inner) + centerY) << 16) + 0xfffff000000000LL;
+        verts[1] = (s64)(FloatToInt(sinA * outer) + centerX)
+                 + ((s64)(FloatToInt(cosA * outer) + centerY) << 16) + 0xfffff000000000LL;
+        verts[2] = (s64)(FloatToInt(sinB * inner) + centerX)
+                 + ((s64)(FloatToInt(cosB * inner) + centerY) << 16) + 0xfffff000000000LL;
+        verts[3] = (s64)(FloatToInt(sinB * outer) + centerX)
+                 + ((s64)(FloatToInt(cosB * outer) + centerY) << 16) + 0xfffff000000000LL;
+
+        func_0027EFA0(verts, uv, st, tex0, 1);
+        angleB = WrapAnglePiSum(angleA, step);
+    }
+}
+#endif
 
 /* Enable blob shadows: set the enable flag and return 1 (success).
  * Wall (re-checked 2026-06-25): the enable flag lives at 0x1B15E8 and the
