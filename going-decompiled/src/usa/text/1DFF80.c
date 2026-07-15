@@ -221,18 +221,57 @@ void UnhideAllMobysAndPopState(void) {
 }
 #endif
 
-/* func_002E0210: PARKED #70 (#else not confident) — large (~141-instr) VU0 vector/geometry
- * computation (func_00283460) with dense FP math. Wrong-operand-silent class + high FP
- * transcription volume; needs the vector chain traced before a faithful #else. */
+/* func_002E0210: build a save-state snapshot into g_pLevelSelectListEntries[0xF68..]
+ * (early-out when g_soundBankHandlesBlk[0x22B4]==4). PARKED #70 (#else not confident):
+ * gated behind an intricate 0x7FF-iteration nibble-PACKING loop (per-entry andi/srl/
+ * sra bit-field writes into g_platinumBoltFlags-indexed nibbles, with a value==7 skip)
+ * followed by a ~30-field snapshot copy from named globals — the field copy is
+ * mechanical but the nibble packer is high silent-bug risk (exact bit/index mapping).
+ * (Prior note mislabeled it as vector math — it's a save-snapshot builder.) */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E0210);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E0448);
 
-/* func_002E0458: PARKED #70 (#else not confident) — VU0 vector-math helper (Vec3CrossVu0,
- * Vec3RescaleToLenVu0, Vec4ScaleVu0, func_00283628) building a normalized/scaled orientation
- * (used by the glow poser). Wrong-operand-silent; needs the vector chain traced before a
- * faithful #else. */
+/* Build a scaled orientation + a perpendicular unit axis from a direction `src`
+ * (used by the glow poser): copy src to D_001B1E90[0x140], store src*scale at
+ * [0x160], then form a reference axis from the abs components (permuted so the
+ * smallest-magnitude component is placed to keep it least-parallel to src),
+ * cross it with the direction, and renormalize to unit length at [0x150].
+ * Traced fully (func_00283628 = vabs.xyzw; the bc1fl min-abs permutation mapped
+ * op-for-op) -> faithful #else; engine-2.96 so the matching arm stays INCLUDE_ASM. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E0458);
+#else
+extern u8   D_001B1E90[];
+extern void func_00283628(void *dst, void *src);           /* vabs.xyzw (component-wise abs) */
+extern void Vec4ScaleVu0(void *dst, f32 scale, void *src);
+extern void Vec3CrossVu0(void *dst, void *a, void *b);
+extern void Vec3RescaleToLenVu0(void *dst, f32 len, void *src);
+
+void func_002E0458(void *src, f32 scale) {
+    f32   absv[4];
+    u8   *dir  = D_001B1E90 + 0x140;
+    f32  *axis = (f32 *)(D_001B1E90 + 0x150);
+    f32   ax, ay, az;
+
+    ((u64 *)dir)[0] = ((u64 *)src)[0];    /* lq/sq: D[0x140] = *src (128-bit copy) */
+    ((u64 *)dir)[1] = ((u64 *)src)[1];
+    func_00283628(absv, src);             /* absv = |src| per component */
+    Vec4ScaleVu0(D_001B1E90 + 0x160, scale, dir);   /* D[0x160] = dir * scale */
+
+    ax = absv[0]; ay = absv[1]; az = absv[2];
+    if (ax < ay) {
+        if (ax < az) { axis[0] = ax; axis[1] = az; axis[2] = ay; }
+        else         { axis[0] = ay; axis[1] = ax; axis[2] = az; }
+    } else {
+        if (ay < az) { axis[0] = az; axis[1] = ay; axis[2] = ax; }
+        else         { axis[0] = ay; axis[1] = ax; axis[2] = az; }
+    }
+
+    Vec3CrossVu0(axis, axis, dir);            /* axis = axis x dir */
+    Vec3RescaleToLenVu0(axis, 1.0f, axis);    /* normalize to unit length */
+}
+#endif
 
 extern void func_002E1220(void *rec);
 extern void func_002E1370(void *rec);
