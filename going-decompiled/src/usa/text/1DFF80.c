@@ -143,13 +143,49 @@ typedef struct EmitterView {
  * func_002E0000..end +0x78 (the 41K C-only pointer residual). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E0000);
 
-/* func_002E0010: PARKED #70 — a jump-table switch (jtbl_0026CEB0_text, 25 cases on
- * arg1-2 in 0..0x18) that formats a level-select entry name: in-range cases set a "special
- * format" flag then GetLocalizedString(0xB44) + GetLocalizedString(g_levelSelectEntries[arg1])
- * + func_00115DA8; out-of-range/default uses D_1ABA38. Match-walled by the jtbl reloc gap;
- * the #else needs the 25-case jtbl->flag mapping extracted from the table data before it's
- * faithful. Not guessing the case mapping. */
+/* Format a level-select entry's display name into `dst`. A jump table
+ * (jtbl_0026CEB0_text, 25 cases on id-2 in 0..0x18) selects the format: the
+ * "normal" ids {2,5,0xA,0x17,0x18,0x19,0x1A} use the name-only format D_1ABA38;
+ * every other id (including out-of-range) uses the "special" format D_1AB9B8
+ * with a GetLocalizedString(0xB44) prefix. The level name is
+ * GetLocalizedString(g_levelSelectEntries[id]) (stride 8); both go through the
+ * SDK sprintf func_00115DA8. Returns dst.
+ * The 25-case jtbl->flag mapping was extracted from jtbl_0026CEB0_text (0x2E0054
+ * => normal, 0x2E005C => special) — the faithful #else the prior park-note asked
+ * for. Match-walled by the jtbl reloc (engine-2.96); matching arm stays INCLUDE_ASM. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E0010);
+#else
+extern u8    g_levelSelectEntries[];
+extern char  D_1AB9B8[];   /* "special" format: prefix + name */
+extern char  D_1ABA38[];   /* "normal" format: name only */
+extern char *GetLocalizedString(s32 id);
+extern void  func_00115DA8(char *dst, const char *fmt, ...);
+
+char *func_002E0010(char *dst, s32 id) {
+    s32 special = 1;
+    if ((u32)(id - 2) < 0x19) {
+        switch (id) {
+        case 0x2: case 0x5: case 0xA:
+        case 0x17: case 0x18: case 0x19: case 0x1A:
+            special = 0;
+            break;
+        default:
+            special = 1;
+            break;
+        }
+    }
+    if (special) {
+        char *prefix = GetLocalizedString(0xB44);
+        char *name   = GetLocalizedString(*(s32 *)(g_levelSelectEntries + id * 8));
+        func_00115DA8(dst, D_1AB9B8, prefix, name);
+    } else {
+        char *name = GetLocalizedString(*(s32 *)(g_levelSelectEntries + id * 8));
+        func_00115DA8(dst, D_1ABA38, name);
+    }
+    return dst;
+}
+#endif
 
 /* Request a transition into game state 7 (cinematic-hide), stashing the two
  * caller args for the deferred state-enter action, clearing the pre-particle
