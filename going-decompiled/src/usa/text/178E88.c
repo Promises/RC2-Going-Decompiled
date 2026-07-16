@@ -1728,7 +1728,82 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027EB20);
  * sin/cos rotation (func_00283B30/B48), Vec4 transforms and FP rounding (FloatToInt) into
  * a GS packet. Intricate FP+GS-packing class (silent-misrender risk); needs the rotation +
  * GS format traced before a faithful #else. */
+/* DrawRotatedSprite2d(cx, cy, hh, hw, angle, pivX, pivY, u, v, tex0, zField, uvDesc, mirrorX, mirrorY)
+ * — draw a rotated/scaled textured HUD-icon quad. Builds two rotated edge vectors from the angle
+ * (edge1 = hw*(cos,sin), edge2 = hh*(sin,-cos)), then the 4 corners around the fractional pivot
+ * (pivX,pivY): c = center +/- (1-piv or piv)*edge1 +/- (1-piv or piv)*edge2 (via Vec4Scale/Add/Sub).
+ * mirrorX/mirrorY swap the U/V winding (u<<4 vs 0x10 / v<<0x14 vs 0x100000). Emits a 7-qword GIF
+ * packet: DMA/GIF tag + TEX0/ST descriptor + tex0 + 4 {UV, XYZ2} vertices whose screen coords are
+ * FloatToInt(corner*16) + g_gsPixelOffsetX/Y[0] - 8, with the z-field zField<<0x20.
+ *
+ * Engine region — faithful #else, whole-.s traced (Ghidra-complete, 0 lq/sq → all 8-byte sd). GS-pack
+ * safeguard: all 64-bit packs (UV, XYZ, z-field) in s64. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawRotatedSprite2d);
+#else
+extern s32  FloatToInt(f32 x);
+extern f32  SinfVu0(f32 x);
+extern f32  CosfVu0(f32 x);
+extern void Vec4AddVu0(void *dst, void *a, void *b);
+
+void DrawRotatedSprite2d(f32 cx, f32 cy, f32 hh, f32 hw, f32 angle, f32 pivX, f32 pivY,
+                         s32 u, s32 v, u64 tex0, s32 zField, s32 uvDesc, s8 mirrorX, s8 mirrorY) {
+    f32 center[4], edge1[4], edge2[4], c0[4], c1[4], c2[4], c3[4];
+    u8  tmp[16];
+    f32 co = CosfVu0(angle);
+    f32 si = SinfVu0(angle);
+    s64 z  = (s64)zField << 0x20;
+    s32 uA, uB, px, py;
+    s64 vA, vB;
+    u32 *base;
+
+    if (mirrorX == 0) { uB = u << 4; uA = 0x10; } else { uA = u << 4; uB = 0x10; }
+    if (mirrorY == 0) { vB = (s64)(v << 0x14); vA = 0x100000; }
+    else              { vA = (s64)(v << 0x14); vB = 0x100000; }
+
+    center[0] = cx;      center[1] = cy;
+    edge1[0]  = hw * co; edge1[1]  = hw * si;
+    edge2[0]  = hh * si; edge2[1]  = -hh * co;
+
+    Vec4ScaleVu0(tmp, 1.0f - pivY, edge1);  Vec4AddVu0(c0, center, tmp);
+    Vec4ScaleVu0(tmp, 1.0f - pivX, edge2);  Vec4SubVu0(c0, c0, tmp);
+    Vec4ScaleVu0(tmp, 1.0f - pivY, edge1);  Vec4AddVu0(c1, center, tmp);
+    Vec4ScaleVu0(tmp, pivX, edge2);         Vec4AddVu0(c1, c1, tmp);
+    Vec4ScaleVu0(tmp, pivY, edge1);         Vec4SubVu0(c2, center, tmp);
+    Vec4ScaleVu0(tmp, 1.0f - pivX, edge2);  Vec4SubVu0(c2, c2, tmp);
+    Vec4ScaleVu0(tmp, pivY, edge1);         Vec4SubVu0(c3, center, tmp);
+    Vec4ScaleVu0(tmp, pivX, edge2);         Vec4AddVu0(c3, c3, tmp);
+
+    base = g_frameDmaCursor[0];
+    base[0] = 0x10000007;
+    base[1] = 0;
+    base[2] = 0;
+    base[3] = 0x50000007;
+    base[4] = 0x8001;
+    base[5] = 0xb4000000;
+    base[6] = 0x35353106;
+    base[7] = 0x535;
+    *(u64 *)(base + 8) = tex0;
+    base[0xa] = 0x154;
+    base[0xb] = 0;
+    *(s64 *)(base + 0xc) = (s64)uvDesc;
+    *(u64 *)(base + 0xe) = (s64)uA | vA;                                          /* v0 UV */
+    px = FloatToInt(c0[0] * 16.0f); py = FloatToInt(c0[1] * 16.0f);
+    *(u64 *)(base + 0x10) = (s64)(px + g_gsPixelOffsetX[0] - 8) | ((s64)(py + g_gsPixelOffsetY[0] - 8) << 16) | z;
+    *(u64 *)(base + 0x12) = (s64)uB | vA;                                         /* v1 UV */
+    px = FloatToInt(c1[0] * 16.0f); py = FloatToInt(c1[1] * 16.0f);
+    *(u64 *)(base + 0x14) = (s64)(px + g_gsPixelOffsetX[0] - 8) | ((s64)(py + g_gsPixelOffsetY[0] - 8) << 16) | z;
+    *(u64 *)(base + 0x16) = (s64)uA | vB;                                         /* v2 UV */
+    px = FloatToInt(c2[0] * 16.0f); py = FloatToInt(c2[1] * 16.0f);
+    *(u64 *)(base + 0x18) = (s64)(px + g_gsPixelOffsetX[0] - 8) | ((s64)(py + g_gsPixelOffsetY[0] - 8) << 16) | z;
+    *(u64 *)(base + 0x1a) = (s64)uB | vB;                                         /* v3 UV */
+    px = FloatToInt(c3[0] * 16.0f); py = FloatToInt(c3[1] * 16.0f);
+    base[0x1e] = 0;
+    base[0x1f] = 0;
+    *(u64 *)(base + 0x1c) = (s64)(px + g_gsPixelOffsetX[0] - 8) | ((s64)(py + g_gsPixelOffsetY[0] - 8) << 16) | z;
+    g_frameDmaCursor[0] = base + 0x20;
+}
+#endif
 
 extern u8 D_1AC930[]; /* prebuilt GIFtag template (16 bytes) */
 
