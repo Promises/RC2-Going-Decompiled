@@ -2269,10 +2269,83 @@ void func_00280C98(s16 *layout, s16 clipX0, s16 clipX1, s16 left, s16 right,
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280CD0);
 
-/* AppendVu1SphereMapContext: PARKED #70 — builds a VU1 sphere-map matrix context and appends
- * it via VIF (MatrixMultiplyVu0, func_00283D68, AppendVifCodeRefTag, func_002FD700). VU1/VIF
- * packet class; needs the matrix + VIF packet format traced before a faithful #else. */
+/* AppendVu1SphereMapContext — build the VU1 sphere-map/reflection render context and append it
+ * to the frame DMA chain. Lazily uploads the sphere-map microcode (D_10ED30) the first time the
+ * active VU1 program isn't 8, then emits an UNPACK packet: builds a 4x4 view-translation matrix
+ * (func_00283D68 sets the basis at scale 1024, its translation row = -1024 * g_cameraPos via
+ * Vec4ScaleVu0, w=1), multiplies both camera matrices (g_cameraPos-0x100 and -0x80) by it into the
+ * packet (each with a Z-bias D_1A86F0 added to one element), copies the GS drawing-context rows from
+ * g_sceneActorMobys+0x674+0x190.., self-computes the DMA/VIF tag QWC ((packetBytes>>4)-1) into the
+ * opening tag, advances g_frameDmaCursor, and appends the GS state-ref packet (func_002FD700).
+ *
+ * UN-PARK of a provably-false #70: the park's blocker ("needs the matrix + VIF packet format traced")
+ * is resolved — fully traced .s-vs-Ghidra. It's a self-describing DMA packet (the QWC is computed from
+ * the packet size, no opaque consumer of an inferred struct), so faithfully transcribable. Engine
+ * region — faithful #else. Consts 1024/-1024/1.0 are exactly representable (no ULP concern). FORMER-
+ * PARK (VU1/VIF silent-render class): dual-gate (tester oracle) + d2 heads-up. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", AppendVu1SphereMapContext);
+#else
+extern s32  g_activeVu1Program;
+extern f32  D_1A86F0;                                 /* matrix-element Z-bias */
+extern u16  D_10ED20;                                 /* VU1 sphere-map microcode header (first u16) */
+extern u8   D_10ED30[];                               /* VU1 sphere-map microcode blob */
+extern void func_00283D68(f32 scale, void *outMtx);   /* Matrix4x4SetTranslationVu0 */
+extern void AppendVifCodeRefTag(void *blob, s32 hdr);
+extern void func_002FD700(void);                      /* AppendGsStateRefPacket */
+
+void AppendVu1SphereMapContext(void) {
+    u8   mtx[64];   /* 4x4 view-translation matrix (basis + -1024*cameraPos translation row) */
+    u32 *base;
+
+    func_00283D68(1024.0f, mtx);
+    Vec4ScaleVu0(mtx + 0x30, -1024.0f, g_cameraPos);
+    *(f32 *)(mtx + 0x3C) = 1.0f;
+
+    if (g_activeVu1Program != 8) {
+        AppendVifCodeRefTag(D_10ED30, D_10ED20);
+        g_activeVu1Program = 8;
+    }
+
+    base = g_frameDmaCursor[0];
+    base[0] = 0x10000000;
+    base[1] = 0;
+    base[2] = 0x11000000;
+    base[3] = 0x1000404;
+    base[4] = 0;
+    base[5] = 0;
+    base[6] = 0;
+    base[7] = 0x6C0C43A4;
+    MatrixMultiplyVu0((f32 *)(base + 8), (f32 *)(g_cameraPos - 0x100), (f32 *)mtx);
+    *(f32 *)(base + 0x16) = *(f32 *)(base + 0x16) + D_1A86F0;
+    MatrixMultiplyVu0((f32 *)(base + 0x18), (f32 *)(g_cameraPos - 0x80), (f32 *)mtx);
+    *(f32 *)(base + 0x26) = *(f32 *)(base + 0x26) + D_1A86F0;
+
+    {
+        u8 *src = g_sceneActorMobys + 0x674;
+        base[0x28] = 0x8000;
+        base[0x29] = 0x303EC000;
+        base[0x2a] = 0x412;
+        *(f32 *)(base + 0x2b) = *(f32 *)(src + 0x210);
+        *(u64 *)(base + 0x2c) = *(u64 *)(src + 0x190);   /* lq/sq = full 16-byte qword copy */
+        *(u64 *)(base + 0x2e) = *(u64 *)(src + 0x198);
+        *(u64 *)(base + 0x30) = *(u64 *)(src + 0x1A0);   /* lq/sq = full 16-byte qword copy */
+        *(u64 *)(base + 0x32) = *(u64 *)(src + 0x1A8);
+        *(f32 *)(base + 0x34) = *(f32 *)(src + 0x22C);
+        *(f32 *)(base + 0x35) = *(f32 *)(src + 0x228);
+        base[0x36] = 0;
+        base[0x37] = 0;
+        base[0x38] = 0x3000000;
+        base[0x39] = 0x20001D2;
+        base[0x3a] = 0x15000000;
+        base[0x3b] = 0;
+    }
+
+    base[0] |= (u32)((((u8 *)(base + 0x3c) - (u8 *)base) >> 4) - 1);
+    g_frameDmaCursor[0] = base + 0x3c;
+    func_002FD700();
+}
+#endif
 
 /**
  * func_00280EC8 — configure the GS draw region / depth + alpha for a
