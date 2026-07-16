@@ -28,7 +28,15 @@ extern void DrawFont1RightJustifiedLabel(s32 x, s32 y, u32 color, s32 str, s32 w
 extern void BuildSaveImage(void *dst);
 /* Remaining unit-wide #else-only callee prototypes (empty-paren = no arg-check);
  * return-typed s32 where the value is consumed, void where ignored. */
+/* GS A+D reg-write: the DATA is a 64-bit register value. Type + widen it to u64
+ * for the native/#else build (prevents silent truncation of bits >=32 if a
+ * 64-bit-value fn like func_002DD450 is #else'd here); matching-build decl kept
+ * verbatim (byte-neutral — no matched-caller codegen change). */
+#ifdef TARGET_NATIVE
+extern void AppendGsRegPacket(s32 regId, u64 value);
+#else
 extern void AppendGsRegPacket();
+#endif
 extern void ComputeAudioChannelMix();
 extern s32  CountSkillPointsCompleted();
 extern void DrawDebugString();

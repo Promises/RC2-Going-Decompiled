@@ -2544,7 +2544,14 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033B428);
 #else
 /* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame +
    branch-likely (beql) guard wall. */
+/* GS A+D reg-write: the DATA is a 64-bit register value. Widen it to u64 for the
+ * native/#else build (prevents silent truncation of bits >=32); matching-build
+ * decl kept verbatim (byte-neutral). */
+#ifdef TARGET_NATIVE
+extern void AppendGsRegPacket(s32 reg, u64 val);
+#else
 extern void AppendGsRegPacket(s32 reg, s32 val);
+#endif
 extern void MapDraw(s32 a, s32 b);
 extern void func_002DBC98(s32 a);
 extern void GuiTextElementDraw(void *e);

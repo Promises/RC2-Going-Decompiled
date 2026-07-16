@@ -893,7 +893,14 @@ extern void *g_vramDynamicBase;         /* 0x1A72D4 VRAM dynamic region base    
 extern void *g_mobyVuChainCursor;       /* 0x1B1AD8 moby VU/DMA chain cursor    */
 extern void  AppendVifCodeRefTag(void *code, u32 count);
 extern void  KickVif0Chain(void *chain);
+/* GS A+D reg-write: the DATA is a 64-bit register value. Widen it to u64 for the
+ * native/#else build (prevents silent truncation of bits >=32); matching-build
+ * decl kept verbatim (byte-neutral). */
+#ifdef TARGET_NATIVE
+extern void  AppendGsRegPacket(s32 reg, u64 data);
+#else
 extern void  AppendGsRegPacket(s32 reg, u32 data);
+#endif
 #endif
 
 #ifndef TARGET_NATIVE

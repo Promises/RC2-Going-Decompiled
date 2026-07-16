@@ -199,7 +199,14 @@ extern void BeginSkyDrawSegment(void);
 extern void DrawSkyShellsScaledSpin(void);
 extern void DrawSkyShellsFixedSpin(void);
 extern void CloseSkyDrawSegment(void);
+/* GS A+D reg-write: the DATA is a 64-bit register value. Widen it to u64 for the
+ * native/#else build (prevents silent truncation of bits >=32); matching-build
+ * decl kept verbatim (byte-neutral). */
+#ifdef TARGET_NATIVE
+extern void AppendGsRegPacket(s32 reg, u64 val);
+#else
 extern void AppendGsRegPacket(s32 reg, s32 val);
+#endif
 extern s32  g_playerProgress;
 extern s32  g_vramZBuffer;
 extern void *g_pSkyShellSpinRates;
