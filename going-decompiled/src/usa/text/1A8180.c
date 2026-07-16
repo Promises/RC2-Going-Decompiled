@@ -3166,7 +3166,106 @@ s32 func_002AC9E0(Moby *m) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ACA20);
 
+/**
+ * func_002AD590 — explosion / impact FX spawner. Emits a 3-particle sparkle
+ * burst, optional pair of expanding shockwave rings around `moby`, an optional
+ * impact sound, and an optional camera shake.
+ *
+ * @param a          intensity/scale (drives particle spawn speed and ring size).
+ * @param b          camera-shake magnitude; 0 skips the shake, values <= 0 are
+ *                   clamped up to 13.0.
+ * @param moby       moby the rings attach to and the impact sound plays from;
+ *                   0 skips rings + sound.
+ * @param spawnCtx   opaque spawn/handle context forwarded to every FX call.
+ * @param sound      impact sound index; -1 skips the sound.
+ *
+ * Each of the 3 particles copies two 6-entry u32 color palettes (D_1A9F20 and
+ * D_1A9F38) onto the stack, then picks one random color from each palette
+ * (GetRandomInt(6) index) for the SpawnParticleType0B tint pair. The rings are
+ * only spawned when the moby's +0x20 class byte is not 0xFE/0xFD (those two
+ * class ids suppress the impact sound). Faithful #else transcription — the
+ * matching build uses the INCLUDE_ASM arm above.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AD590);
+#else
+/* callees not yet declared above this point (RandRangeInclusive is block-scoped
+ * in a later #else arm; the FX spawners have no file-scope decl). */
+extern s32  RandRangeInclusive(s32 lo, s32 hi);         /* 0x2A8688 */
+extern void SpawnParticleType0B(f32 speed, f32 life, u64 spawnCtx, void *pos,
+                                u32 color1, u32 color2, s32 arg7, s32 arg8,
+                                s32 arg9, s32 arg10);    /* 0x2BCBD0 */
+extern void SpawnShockwaveRingMoby(f32 radius, long moby, u64 spawnCtx,
+                                   void *pos, s32 a4, s32 a5, s32 a6,
+                                   s32 a7, s32 a8);       /* 0x309200 */
+extern void func_00313968(void *shakeBlock, u64 spawnCtx, s32 a2, s32 a3);
+extern s32  PlayMobySound(s32 soundIdx, s32 flags, Moby *owner);   /* 0x2E6B30 */
+
+/* two 6-entry u32 color palettes copied wholesale onto the stack per particle */
+extern u64 D_1A9F20[3];   /* 0x1A9F20 particle color palette A (24 bytes) */
+extern u64 D_1A9F38[3];   /* 0x1A9F38 particle color palette B (24 bytes) */
+extern u8  D_258CA0[];    /* 0x258CA0 camera-shake request block */
+
+void func_002AD590(f32 a, f32 b, long moby, u64 spawnCtx, s32 sound) {
+    const f32 invFrameRate = 0.016666668f;   /* 0x3C888889 = 1/60 */
+    u8 pos[16];                              /* zeroed spawn position (Vec4) */
+    u64 palA[3];                             /* stack copy of D_1A9F20 */
+    u64 palB[3];                             /* stack copy of D_1A9F38 */
+    s32 soundSlot = sound;
+    s32 i = 2;
+
+    func_00283638((Moby *)pos);              /* Vec4ZeroInt: clear the position */
+
+    do {
+        f32 speed = a * 400000.0f;           /* 0x48C35000 */
+        f32 rand;
+        s32 idxA;
+        s32 idxB;
+        s32 life7;
+        s32 life8;
+
+        i = i - 1;
+        rand = GetRandomFloatRange(8.0f, 10.0f) * invFrameRate;
+
+        palA[0] = D_1A9F20[0];
+        palA[1] = D_1A9F20[1];
+        palA[2] = D_1A9F20[2];
+        palB[0] = D_1A9F38[0];
+        palB[1] = D_1A9F38[1];
+        palB[2] = D_1A9F38[2];
+
+        idxA  = GetRandomInt(6);
+        idxB  = GetRandomInt(6);
+        life7 = RandRangeInclusive(0xF, 0x14);
+        life8 = RandRangeInclusive(0x19, 0x1E);
+        SpawnParticleType0B(speed, rand * a, spawnCtx, pos,
+                            *(u32 *)((u8 *)palA + idxA * 4),
+                            *(u32 *)((u8 *)palB + idxB * 4),
+                            life7, life8, 0, 0);
+    } while (-1 < i);
+
+    if (moby != 0) {
+        SpawnShockwaveRingMoby(a * 4.0f, moby, spawnCtx, pos,
+                               0x14, 0x7F, 0x40, 0, 0x30);   /* 0x40800000 */
+        SpawnShockwaveRingMoby(a * 3.0f, moby, spawnCtx, pos,
+                               0x1D, 0x60, 0x20, 0, 0x20);   /* 0x40400000 */
+        {
+            u8 classByte = *(u8 *)((u8 *)moby + 0x20);
+            if (classByte != 0xFE && classByte != 0xFD && soundSlot != -1) {
+                PlayMobySound(soundSlot, 0, (Moby *)moby);
+            }
+        }
+    }
+
+    if (b != 0.0f) {
+        f32 shake = (b <= 0.0f) ? 13.0f : b;   /* 0x41500000 */
+        *(f32 *)(D_258CA0 + 0x20) = shake;
+        *(f32 *)(D_258CA0 + 0x24) = shake;
+        *(f32 *)(D_258CA0 + 0x28) = shake;
+        func_00313968(D_258CA0, spawnCtx, 0, 0);
+    }
+}
+#endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AD858);
