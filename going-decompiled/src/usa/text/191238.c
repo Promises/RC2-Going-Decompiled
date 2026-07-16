@@ -317,7 +317,7 @@ void BootSystemInit(void) {
     srcBuf = (D_1FF0174 + 0x7E8C) - (*(s32 *)((u8 *)g_discToc + 0x33C) << 11);
     dstBuf = (u8 *)(((u32)&D_356D07 & 0xFFFFC000) + 0x2C0000);
     CdReadSync(*(s32 *)((u8 *)g_discToc + 0x338) + *(s32 *)((u8 *)g_discToc + 0x32C),
-               1, srcBuf);
+               *(s32 *)((u8 *)g_discToc + 0x33C), srcBuf);
     func_0011AEA0(0);
     DecompressWad(srcBuf, dstBuf);
     func_0011AEA0(0);
