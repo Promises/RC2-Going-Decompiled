@@ -1659,7 +1659,68 @@ void DrawGlyphQuad(s32 x, s32 y, s32 w, s32 h, s32 u, s32 v, s32 uw, s32 uh,
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027E818);
 
+/* DrawTexturedQuad2d(x, y, w, h, u, v, uw, vh, colors[4], tex0) — draw a float-coordinate
+ * textured quad with per-vertex RGBA (gouraud) into the frame DMA packet. Screen positions are
+ * 12.4 fixed-point (FloatToInt(coord*16) + g_gsPixelOffsetX/Y[0] - 8); the quad is clipped against
+ * the GS window [0x7000, 0x9000] and dropped entirely if any edge falls outside. Emits a 9-qword
+ * GIF packet: DMA/GIF tag, a TEX0 + ST-clamp descriptor, tex0, then 4 {RGBA, ST, XYZ2} vertices for
+ * corners (u0,v0)(u1,v0)(u0,v1)(u1,v1). ST packs u<<4 + v<<20; XYZ packs x | (y<<16) | z-field
+ * 0xfffff000000000; the descriptor packs u0<<4 | u1<<0xe | 0xa | v0<<0x18 | v1<<0x22.
+ *
+ * Engine region — faithful #else, whole-.s traced (Ghidra-complete; 0 lq/sq so all copies are 8-byte
+ * sd/4-byte sw). GS-pack safeguard: all 64-bit packs (XYZ, ST, descriptor) built in s64 — native long
+ * is 32-bit and would overflow the <<16/<<20/<<0x22 fields + the z-field. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawTexturedQuad2d);
+#else
+extern s32 FloatToInt(f32 x);   /* declared file-scope below, used before it here */
+
+void DrawTexturedQuad2d(f32 x, f32 y, f32 w, f32 h, s32 u, s32 v, s32 uw, s32 vh,
+                        u32 *colors, u64 tex0) {
+    s32 x0 = FloatToInt(x * 16.0f) + g_gsPixelOffsetX[0] - 8;
+    s32 x1 = FloatToInt((x + w) * 16.0f) + g_gsPixelOffsetX[0] - 8;
+    s32 y0 = FloatToInt(y * 16.0f) + g_gsPixelOffsetY[0] - 8;
+    s32 y1 = FloatToInt((y + h) * 16.0f) + g_gsPixelOffsetY[0] - 8;
+
+    if (x0 < 0x9001 && x1 > 0x6fff && y0 < 0x9001 && y1 > 0x6fff) {
+        u32 *base = g_frameDmaCursor[0];
+        s32 u1 = u + uw;
+        s32 v1 = v + vh;
+        s64 st_u0 = (s64)(u << 4), st_u1 = (s64)(u1 << 4);
+        s64 st_v0 = (s64)(v << 20), st_v1 = (s64)(v1 << 20);
+        s64 zy0 = ((s64)y0 << 16) | 0xfffff000000000LL;
+        s64 zy1 = ((s64)y1 << 16) | 0xfffff000000000LL;
+
+        base[0] = 0x10000009;
+        base[1] = 0;
+        base[2] = 0;
+        base[3] = 0x50000009;
+        base[4] = 0x8001;
+        base[5] = 0x4000000;
+        base[6] = 0x31531068;
+        base[7] = 0x85315315;
+        *(u64 *)(base + 8)    = ((s64)u << 4) | ((s64)u1 << 0xe) | 0xa | ((s64)v << 0x18) | ((s64)v1 << 0x22);
+        *(u64 *)(base + 0xa)  = tex0;
+        base[0xc] = 0x15c;
+        base[0xd] = 0;
+        *(u64 *)(base + 0xe)  = colors[0];        /* vertex 0 (u0,v0) */
+        *(u64 *)(base + 0x10) = st_v0 + st_u0;
+        *(u64 *)(base + 0x12) = (s64)x0 | zy0;
+        *(u64 *)(base + 0x14) = colors[1];        /* vertex 1 (u1,v0) */
+        *(u64 *)(base + 0x16) = st_v0 + st_u1;
+        *(u64 *)(base + 0x18) = (s64)x1 | zy0;
+        *(u64 *)(base + 0x1a) = colors[2];        /* vertex 2 (u0,v1) */
+        *(u64 *)(base + 0x1c) = st_v1 + st_u0;
+        *(u64 *)(base + 0x1e) = (s64)x0 | zy1;
+        *(u64 *)(base + 0x20) = colors[3];        /* vertex 3 (u1,v1) */
+        *(u64 *)(base + 0x22) = st_v1 + st_u1;
+        *(u64 *)(base + 0x24) = (s64)x1 | zy1;
+        base[0x26] = 5;
+        base[0x27] = 0;
+        g_frameDmaCursor[0] = base + 0x28;
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027EB20);
 
