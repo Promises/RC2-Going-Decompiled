@@ -87,7 +87,16 @@ extern u8  *g_shrubClassTable[];       /* 0x2125D0 - shrub class record ptr arra
 extern s16  g_shrubTexVramTable[];     /* 0x213AD0 - texId -> {tbp_lo,tbp_hi}, stride 4 */
 extern u8  *g_pShrubInstanceArray;     /* 0x1B2018 - shrub instance array base, stride 0x20 */
 extern u8   g_gsScreenContext[];       /* 0x1A6480 - GS screen context; dims at +0x150/+0x152 */
-extern void AppendGsRegPacket(s32 regId, s32 value); /* 0x2FD3F0 - append GIF A+D reg-write */
+/* 0x2FD3F0 - append a GIF A+D reg-write. The DATA is a 64-bit GS register value.
+ * The only in-unit caller is #else-arm (func_002E0650 / EmitMobyGlowPackets), so
+ * the matching-build decl is byte-irrelevant; keep it s32 (untouched) and widen
+ * the value to u64 for the native/#else build only, so EmitMobyGlowPackets can
+ * pack bits >=32 (0x8000<<22/<<24) without truncation. */
+#ifdef TARGET_NATIVE
+extern void AppendGsRegPacket(s32 regId, u64 value);
+#else
+extern void AppendGsRegPacket(s32 regId, s32 value);
+#endif
 __asm__(".extern g_vramDynamicBase, 16");
 extern s32 g_vramDynamicBase;      /* 0x1A72D4 - VRAM dynamic region base */
 __asm__(".extern g_vramAllocCursor, 16");
@@ -473,13 +482,70 @@ void func_002E07F8(u64 arg0) {
 }
 #endif
 
-/* EmitMobyGlowPackets: PARKED #70 (#else not confident) — builds the moby-glow GIF/DMA
- * packets: a setup call (func_002E0650), a GIFtag header (0x30000007/0x50000007/0x13000000
- * + D_1390B0 into g_frameDmaCursor), then a per-glow loop that pose-transforms each glow
- * moby's position (neg/sub FP on +0x8/+0xC, +0x10/0x14/0x18 to the scratch, 1000.0f scale)
- * via func_002E0458 and emits its packet. Intricate FP + GS-packing class (silent-misrender);
- * needs the glow vertex/packet format traced before a faithful #else. */
+/* Build the moby-glow GIF/DMA packets. Emits a DMA/GIF header (0x30000007 CNT tag
+ * + D_1390B0 + 0x13000000 VIF + 0x50000007) into g_frameDmaCursor, then walks the
+ * glow-record list: for each record it orients the glow quad (func_002E0458, scale
+ * 1000.0) and fills a scratch with the record's corner floats (+0x10/14/18
+ * duplicated, and the two derived edges -(+0x8)-(+0xC) / (+0xC)-(+0x8)); an inner
+ * loop emits each of the record's `count` (+0x0) sub-items (advance via
+ * func_002E0568, then func_002E19C0 / func_002E0EA0 / func_002E05C0 x2). Closes
+ * with the frame-buffer GS setup regs (0x4C/0x42, 0x47/0x42) + func_002E07F8. The
+ * closing GS values are 64-bit (0x8000<<22/<<24) — passed via the native u64
+ * AppendGsRegPacket decl above (matching arm untouched). Engine-2.96 -> #else. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", EmitMobyGlowPackets);
+#else
+extern u8  *g_frameDmaCursor;
+extern u8   D_1390B0[];
+extern s32  g_vramFrameBufB;
+extern void func_002E05C0(s32 a, s32 b, s32 c);
+extern void func_002E0EA0(s32 a, s32 b, s32 c);
+extern void func_002E19C0(void *a, void *b);
+
+void EmitMobyGlowPackets(void *list) {
+    u8  *rec  = (u8 *)list;
+    u8  *work = (u8 *)list;
+    u8  *cur;
+    f32  sp[8];
+    s32  i;
+
+    func_002E0650();
+    cur = g_frameDmaCursor;
+    *(u32 *)(cur + 0x0) = 0x30000007;
+    *(u32 *)(cur + 0x4) = (u32)(u8 *)D_1390B0;
+    *(u32 *)(cur + 0x8) = 0x13000000;
+    *(u32 *)(cur + 0xC) = 0x50000007;
+    g_frameDmaCursor = cur + 0x10;
+
+    while (*(s32 *)(rec + 0x0) != 0) {
+        work += 0x30;
+        func_002E0458(rec + 0x20, 1000.0f);
+        sp[0] = sp[4] = *(f32 *)(rec + 0x10);
+        sp[1] = sp[5] = *(f32 *)(rec + 0x14);
+        sp[2] = sp[6] = *(f32 *)(rec + 0x18);
+        sp[3] = -*(f32 *)(rec + 0x8) - *(f32 *)(rec + 0xC);
+        sp[7] =  *(f32 *)(rec + 0xC) - *(f32 *)(rec + 0x8);
+        if (*(s32 *)(rec + 0x0) > 0) {
+            i = 0;
+            do {
+                work = func_002E0568(work);
+                i++;
+                func_002E19C0(sp, &sp[4]);
+                func_002E0EA0(0x70000000, *(s32 *)(D_001B1E90 + 0x170), *(s32 *)(rec + 0x4));
+                func_002E05C0(2, 1, 2);
+                func_002E05C0(1, 0, 2);
+            } while (i < *(s32 *)(rec + 0x0));
+        }
+        rec = work;
+    }
+
+    AppendGsRegPacket(0x4C, (u64)((g_vramFrameBufB >> 13) | 0x80000));
+    AppendGsRegPacket(0x42, ((u64)0x8000 << 22) | 0x64);
+    func_002E07F8(0);
+    AppendGsRegPacket(0x47, 0x5360B);
+    AppendGsRegPacket(0x42, ((u64)0x8000 << 24) | 0x44);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", BuildMobyGlowRecords);
 
