@@ -1025,7 +1025,79 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00293438);
  * / idx==-1 GIF-tag emit) is semantically equivalent. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00293760);
 
+/* Upload two texture-descriptor lists to VRAM. Seeds the dynamic/alloc VRAM
+ * cursors from g_vramTextureBase[0x10], then for each of `count1` list entries
+ * (stride 0x10) dispatches on the entry's format word (+0x0): 0x13 = a full
+ * mip (tbp, width/64 rounded up, w/h from +0x4, cursor += max(w*h,0x100)),
+ * 0x2 = a 16x16 (cursor += 0x200), 0x0 = a 16x16 (cursor += 0x400); any other
+ * format skips the packet build. Each builds a GIF upload packet (func_126288),
+ * kicks it (KickGifImageUpload to base+entry[+0xC]) and waits. A second loop
+ * uploads `count2` entries as format 0x1B from the g_vramTextureBase[0x20] tbp
+ * base (advancing it by w*h*4), to base+entry[+0x8]. Engine-2.96 -> faithful
+ * #else; matching arm INCLUDE_ASM. NEEDS-ORACLE (GS upload / vram-cursor). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002938B0);
+#else
+extern s32 g_vramDynamicBase;
+extern s32 g_vramAllocCursor;
+
+void func_002938B0(u8 *base, s32 count1, s32 count2, u8 *list) {
+    u8  *e = list;
+    u8   packet[0x60];
+    s32  i;
+    s32  vram = *(s32 *)(g_vramTextureBase + 0x10);
+
+    g_vramDynamicBase = vram;
+    g_vramAllocCursor = vram;
+
+    if (count1 > 0) {
+        for (i = count1; i != 0; i--) {
+            s32  fmt = *(s32 *)(e + 0x0);
+            s32  wh  = *(s32 *)(e + 0x4);
+            s32  h   = wh >> 16;
+            s32  w   = wh & 0xFFFF;
+            u8  *dst = base + *(s32 *)(e + 0xC);
+            s32  tbp = (g_vramAllocCursor << 8) >> 16;
+            if (fmt == 0x13) {
+                s32 sz;
+                func_126288(packet, tbp, (w >> 6) ? (w >> 6) : 1, 0x13, 0, 0, (s16)w, h);
+                sz = w * h;
+                g_vramAllocCursor += (sz > 0xFF) ? sz : 0x100;
+            } else if (fmt == 0x2) {
+                func_126288(packet, tbp, 1, 2, 0, 0, 0x10, 0x10);
+                g_vramAllocCursor += 0x200;
+            } else if (fmt == 0x0) {
+                func_126288(packet, tbp, 1, 0, 0, 0, 0x10, 0x10);
+                g_vramAllocCursor += 0x400;
+            }
+            func_0011AEA0(0);
+            e += 0x10;
+            KickGifImageUpload(packet, dst);
+            WaitGsPathsIdle(0);
+        }
+    }
+
+    g_vramDynamicBase = g_vramAllocCursor;
+    {
+        s32 tbpBase = *(s32 *)(g_vramTextureBase + 0x20);
+        if (count2 > 0) {
+            for (i = count2; i != 0; i--) {
+                s32  wh  = *(s32 *)(e + 0x4);
+                u8  *dst = base + *(s32 *)(e + 0x8);
+                s32  h   = wh >> 16;
+                s32  w   = wh & 0xFFFF;
+                s32  tbp = (tbpBase << 8) >> 16;
+                func_126288(packet, tbp, (w >> 6) ? (w >> 6) : 1, 0x1B, 0, 0, (s16)w, h);
+                func_0011AEA0(0);
+                e += 0x10;
+                tbpBase += (w * h) << 2;
+                KickGifImageUpload(packet, dst);
+                WaitGsPathsIdle(0);
+            }
+        }
+    }
+}
+#endif
 
 /*
  * func_00293B10(table, idx) — relocate the embedded pointers of a freshly
@@ -1480,6 +1552,25 @@ s32 StartFrontendSegmentLoad(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294308);
 
+/* Per-frame level-load state machine (returns 1 while busy / 0 idle). TRACED,
+ * jtbl mapped — ready for a careful fresh-pass #else (deferred here: the case-0/1
+ * disc-sector->address chunk math is offset-dense = high silent-bug risk to rush).
+ * Structure: func_00133230(); snd_Pump(); then two arms —
+ *  (a) snd_CheckLoadInProgress(1)!=0: bump g_rawReadStallTimer; if
+ *      g_rawReadSpindleCtrl==1 && timer>=0x2D1 -> set g_bRawReadFellBack, clear
+ *      spindle, if g_levelStagingState<3 decrement it, CdStopRead(); return 0.
+ *  (b) else: if QueryCdStatusOverRpc()!=0 && !g_bRawReadFellBack -> set fell-back,
+ *      if state<3 clear spindle + decrement state. Then if (u32)state<6, switch:
+ * jtbl_0026C8E0 (6 cases, state 0..5 -> 0x2943FC/294468/2944A4/2944CC/2944F4/294510):
+ *   0: read g_discToc[+0x52BC/+0x52AC/+0x529C/+0x52A8], sll<<11 +0xFFF &0xFFFFF000
+ *      (round disc sector*0x800 up to 0x800) -> g_pStagedChunkB/g_pLoadedSegment/
+ *      g_stagedSegmentCeiling; clear g_scenePlayerFadedOut; KickRawFileRead; state++.
+ *   1: g_discToc[+0x52B8/+0x529C/+0x52BC] variant -> KickRawFileRead; state++.
+ *   2: if !g_bLoadingSceneBanksHeld: StartLevelMusicStream(); LoadGlobalSoundBank(); state++.
+ *   3: snd_Pump(); if g_soundBankHandles[0]!=-1: KickLevelBankDiscLoad(0); state++.
+ *   4: KickLevelBankDiscLoad(0); state++.
+ *   5: snd_Pump(); if g_soundBankHandles[1]!=-1: func_00132828(); return 1.
+ * All callees recovered (func_00133230/func_00132828 = void). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", UpdateLevelStagingMachine);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294550);
