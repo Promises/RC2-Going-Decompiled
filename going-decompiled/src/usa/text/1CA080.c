@@ -1037,9 +1037,64 @@ s32 func_002CCA18(s32 action) {
     return result;
 }
 
-/* menu-screen lifecycle routine: 8-byte-packed-save wall (saves 4 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* TickActiveMenuScreen: ticks the currently-active menu screen (the MenuScreen
+ * object at g_menuScreenBlock+0x14) and returns whether it stays open (1) or is
+ * done (0). Level-select list: on a nav/confirm press (0x910) it latches
+ * block+0x1C (2 if block+0x8==4 else 1) and returns 1; otherwise it calls the
+ * list's per-frame handler (function pointer at g_pLevelSelectListEntries+0x84)
+ * and returns whether it succeeded (>=0). Screen "Id10" ticks func_0029DC70.
+ * Map-back-target and galactic-map screens tick only while D_1AB930 is clear:
+ * the former calls func_0029D0C8(0); the latter runs GalacticMapScreenTick(0)
+ * (latching block+0x1C as above when it fires), then func_0029D138(pad), and
+ * returns whether the block's back-target (block+0x18) is no longer the
+ * map-back-target screen. All other active screens (incl. those two while
+ * D_1AB930 is set, and the inert D_0025A038/D_00259B28 ids) tick to no-op -> 0.
+ *
+ * TODO(match): functional equivalent - not byte-exact. 8-byte-packed-save wall
+ * (saves 4 GPRs incl $31; later cc1 packs save slots 8-byte vs our 16-byte);
+ * preserved as portable C, the matching arm stays INCLUDE_ASM. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", TickActiveMenuScreen);
+#else
+extern s32 func_0029D0C8(s32 arg);
+extern s32 func_0029D138(s32 arg);
+extern s32 func_0029DC70(void);
+extern s32 GalacticMapScreenTick(s32 arg);
+extern s32 g_padButtonsPressed;
+extern s32 D_1AB930;
+extern u8 g_MenuScreen_LevelSelectList[];
+extern u8 g_MenuScreen_Id10[];
+extern u8 g_MenuScreen_MapBackTarget[];
+extern u8 g_MenuScreen_GalacticMap[];
+extern u8 g_pLevelSelectListEntries[];
+s32 TickActiveMenuScreen(void) {
+    u8 *screen = *(u8 **)(g_menuScreenBlock + 0x14);
+    s32 result = 0;
+
+    if (screen == g_MenuScreen_LevelSelectList) {
+        if (g_padButtonsPressed & 0x910) {
+            *(s32 *)(g_menuScreenBlock + 0x1C) =
+                (*(s32 *)(g_menuScreenBlock + 0x8) == 4) ? 2 : 1;
+            result = 1;
+        } else {
+            s32 (*tick)(void) = *(s32 (**)(void))(g_pLevelSelectListEntries + 0x84);
+            result = (tick() >= 0);
+        }
+    } else if (screen == g_MenuScreen_Id10) {
+        func_0029DC70();
+    } else if (screen == g_MenuScreen_MapBackTarget && D_1AB930 == 0) {
+        func_0029D0C8(0);
+    } else if (screen == g_MenuScreen_GalacticMap && D_1AB930 == 0) {
+        if (GalacticMapScreenTick(0) != 0) {
+            *(s32 *)(g_menuScreenBlock + 0x1C) =
+                (*(s32 *)(g_menuScreenBlock + 0x8) == 4) ? 2 : 1;
+        }
+        func_0029D138(g_padButtonsPressed);
+        result = (*(u8 **)(g_menuScreenBlock + 0x18) != g_MenuScreen_MapBackTarget);
+    }
+    return result;
+}
+#endif
 
 /* menu-screen lifecycle routine: 8-byte-packed-save wall (saves 9 GPRs incl $31; later cc1
  * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
@@ -1918,9 +1973,144 @@ s32 UpdateBestiaryMenuInput(void) {
 }
 #endif
 
-/* menu/HUD draw routine: 8-byte-packed-save wall (saves 9 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* DrawBestiaryEntry: renders the bestiary ("Monsterpedia") detail page for the
+ * selected enemy (g_bestiaryCursor). Four title glyphs (0xAE..0xB1), six static
+ * stat labels (0x3089/0x308A/0x3088/0x308B plus two composed via D_1AB9F8), and a
+ * couple of section captions. If the enemy has been encountered (either half of
+ * its g_bestiaryKillCounts entry is non-zero) the detail is drawn: four stat bars
+ * (func_002904B0 fills whose length is the entry's stat halfword *0x10/0x12/0x14/
+ * 0x16* scaled by 2.44 and clamped to 244), two paging arrows (glyphs 0x4A/0x4B
+ * that bob with the shared gadget animation and light up in the colour-pulse
+ * colour from func_002AA3F0 unless their pad direction is held), the species name
+ * (entry +0x8, centred, drop-shadow suppressed), a caption (entry +0xC), an
+ * optional note (entry +0xE, or D_1ABA00 when -1), and the kill count line
+ * (D_1ABA10 formatted with the count). Twin of DrawExtrasMenu.
+ *
+ * TODO(match): functional equivalent - not byte-exact. 8-byte-packed-save wall
+ * (saves 9 GPRs incl $31; later cc1 packs save slots 8-byte vs our 16-byte) plus
+ * FP-arg scheduling; preserved as portable C, the matching arm stays INCLUDE_ASM.
+ * (Stat-bar length uses (s32)(v) for cvt.w.s, per the in-unit convention.) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawBestiaryEntry);
+#else
+extern u32 func_002AA3F0(u32 color1, u32 color2, s32 period, s32 counterSel, s32 reset);
+extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
+                          f32 px, f32 py, f32 sx, f32 syg, f32 v38);
+extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
+extern void func_002904B0(s32 x0, s32 y0, s32 x1, s32 y1, s32 color, s32 flag);
+extern void func_00280250(s32 x, s32 y, u32 color, const char *str, s32 flag);
+extern s32 func_001157AC(const char *s);             /* SDK strlen */
+extern s32 func_0027F790(void);                      /* set the sprite drop-shadow flag */
+extern void func_0027F7A0(void);                     /* clear the sprite drop-shadow flag */
+extern s32 g_screenWidth;
+extern s32 g_swapGadgetItemIndex;                    /* +0x8E y-fudge (f32), +0x86 anim phase (s32) */
+extern s32 g_padButtonsHeld;
+extern s32 D_1AB9F4;                                 /* title glyph row (int -> float) */
+extern char D_1AB9F8[];                              /* stat-label sprintf format */
+extern char D_1ABA00[];                              /* fallback note string */
+extern char D_1ABA10[];                              /* kill-count sprintf format */
+s32 DrawBestiaryEntry(void) {
+    void *atlas = g_guiInstance + 0x8710;
+    f32 centerX = (f32)(g_screenWidth / 2);
+    f32 titleRow = (f32)D_1AB9F4;
+    f32 yfudge = *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E);
+    s32 animPhase = *(s32 *)((u8 *)&g_swapGadgetItemIndex + 0x86);
+    s32 cursor = g_bestiaryCursor;
+    u16 *kills = (u16 *)(g_bestiaryKillCounts + cursor * 4);
+    u32 pulseColor;
+    char buf[0x40];
+
+    pulseColor = func_002AA3F0(0x60442D00, 0x80FFDE8D, 0x19, 0, 0);
+    Begin2dDrawBatch(0);
+
+    /* four title glyphs (v38 = 0.0) */
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xAE), 0x60442D00, (f32 *)0, (f32 *)0,
+                  centerX, titleRow, 1.0f, yfudge, 0.0f);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xAF), 0x60241700, (f32 *)0, (f32 *)0,
+                  centerX, titleRow, 1.0f, yfudge, 0.0f);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xB0), 0x55F0C070, (f32 *)0, (f32 *)0,
+                  centerX, titleRow, 1.0f, yfudge, 0.0f);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xB1), 0x55F0C070, (f32 *)0, (f32 *)0,
+                  centerX, titleRow, 1.0f, yfudge, 0.0f);
+
+    /* static stat captions */
+    DrawDebugString(0x1F, 0x3E, 0x80F0F0F0, GetLocalizedString(0x3089), -1);
+    DrawDebugString(0x1F, 0x5C, 0x80F0F0F0, GetLocalizedString(0x308A), -1);
+    DrawDebugString(0x1F, 0x7A, 0x80F0F0F0, GetLocalizedString(0x3088), -1);
+    DrawDebugString(0x1F, 0x98, 0x80F0F0F0, GetLocalizedString(0x308B), -1);
+    func_00115DA8(buf, D_1AB9F8, GetLocalizedString(0x308C));
+    DrawDebugString(0x1F, 0xB8, 0x80F0F0F0, buf, func_001157AC(buf));
+    func_00115DA8(buf, D_1AB9F8, GetLocalizedString(0x308D));
+    DrawDebugString(0x1F, 0xC9, 0x80F0F0F0, buf, func_001157AC(buf));
+
+    func_00280120(0x1DB, 0x175, 0x80F0F0F0, GetLocalizedString(0x2DD8), -1);
+    func_002801B8(0x9A, 0x1A, 0x80F0F0F0, GetLocalizedString(0x305C), -1);
+
+    /* enemy encountered? (either half of the kill-count entry set) */
+    if (kills[0] != 0 || kills[1] != 0) {
+        u8 *entry = g_bestiaryEntryTable + cursor * 0x18;
+        const s16 statOff[4] = { 0x10, 0x12, 0x14, 0x16 };
+        const s16 barY0[4]   = { 0x4E, 0x6C, 0x8B, 0xA9 };
+        const s16 barY1[4]   = { 0x58, 0x76, 0x96, 0xB4 };
+        s32 k;
+
+        /* four stat bars: length = stat * 2.44, clamped to 244 */
+        for (k = 0; k < 4; k++) {
+            s32 len = (s32)((f32)(*(s16 *)(entry + statOff[k])) * 2.44f);
+            if (len >= 0xF5) {
+                len = 0xF4;
+            }
+            func_002904B0(0x1F, barY0[k], len + 0x1F, barY1[k], 0x55F0C070, 0);
+        }
+
+        /* "next" paging arrow */
+        if (cursor < g_bestiaryNextEntry) {
+            u32 color = (g_padButtonsHeld & 0x2000) ? 0x80F0F0F0 : pulseColor;
+            s32 glyph = GuiFontAtlasLookupGlyph(atlas, 0x4A);
+            f32 bob = yfudge * 0.8f;
+            if (animPhase == 1) {
+                bob += -0.05f;
+            }
+            func_003017F8(glyph, color, (f32 *)0, (f32 *)0, 316.0f, 278.0f, 1.0f, bob, 0.0f);
+            func_00280120(0x1D6, 0x114, 0x80F0F0F0, GetLocalizedString(0x2DD7), -1);
+        }
+
+        /* "prev" paging arrow */
+        if (cursor >= 2) {
+            u32 color = (g_padButtonsHeld & 0x8000) ? 0x80F0F0F0 : pulseColor;
+            s32 glyph = GuiFontAtlasLookupGlyph(atlas, 0x4B);
+            f32 bob = yfudge * 0.8f;
+            if (animPhase == 1) {
+                bob += -0.05f;
+            }
+            func_003017F8(glyph, color, (f32 *)0, (f32 *)0, 207.0f, 278.0f, 1.0f, bob, 0.0f);
+            DrawDebugString(0x37, 0x114, 0x80F0F0F0, GetLocalizedString(0x2DD6), -1);
+        }
+
+        /* species name (centred), drop-shadow suppressed */
+        func_0027F7A0();
+        func_00280250(g_screenWidth / 2, 0x114, 0x80F0F0F0,
+                      GetLocalizedString(*(s16 *)(entry + 0x8)), -1);
+        func_0027F790();
+
+        DrawDebugString(0x9C, 0xB9, 0x80F0F0F0, GetLocalizedString(*(s16 *)(entry + 0xC)), -1);
+
+        if (*(s16 *)(entry + 0xE) == -1) {
+            func_00115DA8(buf, D_1ABA00);
+            DrawDebugString(0x9C, 0xCA, 0x80F0F0F0, buf, func_001157AC(buf));
+        } else {
+            DrawDebugString(0x9C, 0xCA, 0x80F0F0F0,
+                            GetLocalizedString(*(s16 *)(entry + 0xE)), -1);
+        }
+
+        /* kill count line */
+        func_00115DA8(buf, D_1ABA10, kills[0], GetLocalizedString(0x2DF7));
+        func_00280250(0x98, 0xE4, 0x80F0F0F0, buf, func_001157AC(buf));
+    }
+    End2dDrawBatch();
+    return 0;
+}
+#endif
 
 /* Reset the bestiary cursor to entry 1. */
 s32 func_002CF540(void) {
@@ -2214,9 +2404,100 @@ s32 UpdateCheatMenuInput(void) {
 }
 #endif
 
-/* menu/HUD draw routine: 8-byte-packed-save wall (saves 9 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* DrawCheatMenu: renders the cheats menu. Three title glyphs (codepoints
+ * 0x8B/0x8C/0x8D) and three header strings, then the 12-entry table D_1ABD50
+ * (stride 4: +0x0 name string id, +0x2 cheat-flag index, +0x3 unlock gate).
+ * Entries with gate 0x64 are hidden (skipped). An entry is "available" when its
+ * gate is met — the special gate 0x5A needs g_skillPointFlags, otherwise the
+ * player's completed skill-point count (CountSkillPointsCompleted) must reach the
+ * gate value. Available rows draw the localized cheat name at x=0x2B and its
+ * ON/OFF state (GetLocalizedString of 0x2C5C/0x2C5D by g_cheatFlags[id]) at
+ * x=0x195. Locked rows draw a "???" placeholder (string 0x2C56) plus a right-
+ * aligned hint composed with sprintf ("needs N skill points" via D_1ABA10, or the
+ * special-gate hint D_1ABA38 for 0x5A), drawn with the drop-shadow flag briefly
+ * cleared (func_0027F7A0 / func_0027F790). The row under the cursor (D_1ABA30) is
+ * drawn in the highlight color 0x7029A1FF. Twin of DrawExtrasMenu; input sibling
+ * is UpdateCheatMenuInput above.
+ *
+ * TODO(match): functional equivalent - not byte-exact. 8-byte-packed-save wall
+ * (saves 9 GPRs incl $31; later cc1 packs save slots 8-byte vs our 16-byte) plus
+ * FP-arg scheduling; preserved as portable C, the matching arm stays INCLUDE_ASM. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawCheatMenu);
+#else
+extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
+                          f32 px, f32 py, f32 sx, f32 syg, f32 v38);
+extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
+extern void func_00280250(s32 x, s32 y, u32 color, const char *str, s32 flag);
+extern s32 func_001157AC(const char *s);          /* SDK strlen */
+extern s32 func_0027F790(void);                   /* set the sprite drop-shadow flag */
+extern void func_0027F7A0(void);                  /* clear the sprite drop-shadow flag */
+extern s32 g_swapGadgetItemIndex;                 /* +0x8E holds the sprite y-fudge (f32) */
+extern s32 D_1ABA34;                              /* title glyph row (int -> float) */
+extern char D_1ABA10[];                           /* "needs N skill points" sprintf format */
+extern char D_1ABA38[];                           /* special-gate hint sprintf format */
+s32 DrawCheatMenu(void) {
+    void *atlas = g_guiInstance + 0x8710;
+    f32 centerX = (f32)(g_screenWidth / 2);
+    f32 titleRow = (f32)D_1ABA34;
+    f32 yfudge = *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E);
+    s32 skillPts = CountSkillPointsCompleted();
+    s32 cursor = D_1ABA30;
+    u8 *entry = D_1ABD50;
+    s32 y = 0x70;
+    s32 i;
+    char buf[0x40];
+
+    Begin2dDrawBatch(0);
+    /* three title glyphs */
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8B), 0x60442D00, (f32 *)0, (f32 *)0,
+                  centerX, titleRow, 1.0f, yfudge, 0.84f);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8C), 0x55F0C070, (f32 *)0, (f32 *)0,
+                  centerX, titleRow, 1.0f, yfudge, 0.84f);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8D), 0x55F0C070, (f32 *)0, (f32 *)0,
+                  centerX, titleRow, 1.0f, yfudge, 0.84f);
+    /* three header strings */
+    func_002801B8(g_screenWidth / 2, 0x41,  0x80F0F0F0, GetLocalizedString(0x2CA8), -1);
+    func_002801B8(g_screenWidth / 2, 0x141, 0x80F0F0F0, GetLocalizedString(0x2BE4), -1);
+    func_002801B8(g_screenWidth / 2, 0x15A, 0x80F0F0F0, GetLocalizedString(0x2BE5), -1);
+
+    for (i = 0; i < 0xC; i++, entry += 4) {
+        u8 gate = entry[3];
+        u32 color;
+        s32 available;
+
+        if (gate == 0x64) {             /* hidden slot */
+            continue;
+        }
+        if (gate == 0x5A) {
+            available = (g_skillPointFlags != 0);
+        } else {
+            available = !(skillPts < gate);
+        }
+
+        if (available) {
+            color = (i == cursor) ? 0x7029A1FF : 0x80F0F0F0;
+            DrawDebugString(0x2B, y, color, GetLocalizedString(*(s16 *)entry), -1);
+            func_00280250(0x195, y, color,
+                          GetLocalizedString(g_cheatFlags[entry[2]] ? 0x2C5C : 0x2C5D), -1);
+        } else {
+            color = (i == cursor) ? 0x7029A1FF : 0x80808080;
+            DrawDebugString(0x2B, y, color, GetLocalizedString(0x2C56), -1);
+            if (gate == 0x5A) {
+                func_00115DA8(buf, D_1ABA38, GetLocalizedString(0x2CBE));
+            } else {
+                func_00115DA8(buf, D_1ABA10, gate, GetLocalizedString(0x2CA6));
+            }
+            func_0027F7A0();            /* suppress drop-shadow for the small hint */
+            func_00280250(0x195, y, color, buf, func_001157AC(buf));
+            func_0027F790();            /* restore drop-shadow */
+        }
+        y += 0x13;
+    }
+    End2dDrawBatch();
+    return 0;
+}
+#endif
 
 /* return 0 stub. */
 s32 func_002D0B40(void) {
@@ -2303,9 +2584,116 @@ s32 UpdateSkillPointsMenu(void) {
 }
 #endif
 
-/* menu/HUD draw routine: 8-byte-packed-save wall (saves 8 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* DrawSkillPointsMenu: renders the skill-points ("Trophies") menu. Four title
+ * glyphs (codepoints 0xD7..0xDA), a header (string 0x2CA6) and the running
+ * completed/total count line ("N / 30", format string 0x2DC5, count from
+ * CountSkillPointsCompleted) drawn with the drop-shadow flag cleared, a second
+ * header (0x2BE5), and a divider fill (func_002904B0). If the cursor's meta entry
+ * has a detail label (g_skillPointMetaTable stride 6, +0x4 halfword != -1) it is
+ * drawn at (0x1A0,0xE0). Finally a five-slot carousel centred on
+ * g_nSkillPointsMenuCursor: each slot's index wraps modulo 30 (0x1E), its RGB is
+ * gold (0x7029A1FF) when that skill point is completed (g_skillPointFlags[idx])
+ * else white (0x80F0F0F0), and its alpha byte encodes focus distance
+ * (edges 0x10, neighbours 0x50, centre 0x70). The centre slot also gets a
+ * text-width selection box. Each slot's label is drawn with the drop-shadow
+ * cleared. Twin of DrawExtrasMenu.
+ *
+ * TODO(match): functional equivalent - not byte-exact. 8-byte-packed-save wall
+ * (saves 8 GPRs incl $31; later cc1 packs save slots 8-byte vs our 16-byte) plus
+ * FP-arg scheduling; preserved as portable C, the matching arm stays INCLUDE_ASM. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawSkillPointsMenu);
+#else
+extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
+                          f32 px, f32 py, f32 sx, f32 syg, f32 v38);
+extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
+extern void func_00280250(s32 x, s32 y, u32 color, const char *str, s32 flag);
+extern void func_0027FBA8(s32 x, s32 y, u64 color, char *str, s64 wrap);
+extern s32 func_0027F818(const char *str, s32 len);  /* menu text pixel width */
+extern s32 func_001157AC(const char *s);             /* SDK strlen */
+extern s32 func_0027F790(void);                      /* set the sprite drop-shadow flag */
+extern void func_0027F7A0(void);                     /* clear the sprite drop-shadow flag */
+extern void DrawMenuPagingChrome(void);
+extern s32 g_swapGadgetItemIndex;                    /* +0x8E holds the sprite y-fudge (f32) */
+extern s32 D_1ABA40;                                 /* title glyph row (int -> float) */
+s32 DrawSkillPointsMenu(void) {
+    void *atlas = g_guiInstance + 0x8710;
+    f32 centerX = (f32)(g_screenWidth / 2);
+    f32 titleRow = (f32)D_1ABA40;
+    f32 yfudge = *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E);
+    u8 *flags = &g_skillPointFlags;                  /* base of the 30 per-skill completion flags */
+    s32 cursor = g_nSkillPointsMenuCursor;
+    s32 y;
+    s32 i;
+    char *fmt;
+    s32 count;
+    char buf[0x40];
+
+    Begin2dDrawBatch(0);
+    /* four title glyphs (v38 = 0.0) */
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD7), 0x60442D00, (f32 *)0, (f32 *)0,
+                  centerX, titleRow, 1.0f, yfudge, 0.0f);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD8), 0x60241700, (f32 *)0, (f32 *)0,
+                  centerX, titleRow, 1.0f, yfudge, 0.0f);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD9), 0x55F0C070, (f32 *)0, (f32 *)0,
+                  centerX, titleRow, 1.0f, yfudge, 0.0f);
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xDA), 0x55F0C070, (f32 *)0, (f32 *)0,
+                  centerX, titleRow, 1.0f, yfudge, 0.0f);
+
+    /* header + "N / 30" completed-count line, drop-shadow suppressed */
+    func_0027F7A0();
+    func_002801B8(0xB9, 0x1B, 0x80F0F0F0, GetLocalizedString(0x2CA6), -1);
+    fmt = GetLocalizedString(0x2DC5);
+    count = CountSkillPointsCompleted();
+    func_00115DA8(buf, fmt, count, 0x1E);
+    func_0027FBA8(0x92, 0x177, 0x80F0F0F0, buf, -1);
+    func_0027F790();
+
+    func_002801B8(0x1AD, 0x177, 0x80F0F0F0, GetLocalizedString(0x2BE5), -1);
+    func_002904B0(0x15E, 0xDA, 0x1E6, 0xDC, 0x55F0C070, 0);
+
+    /* selected entry's detail label, if present */
+    if (*(s16 *)(g_skillPointMetaTable + cursor * 6 + 4) != -1) {
+        func_0027F7A0();
+        func_002801B8(0x1A0, 0xE0, 0x80F0F0F0,
+                      GetLocalizedString(*(s16 *)(g_skillPointMetaTable + cursor * 6 + 4)), -1);
+        func_0027F790();
+    }
+
+    DrawMenuPagingChrome();
+
+    /* five-slot carousel centred on the cursor */
+    y = 0x112;
+    for (i = 0; i < 5; i++) {
+        s32 idx = i + cursor - 2;
+        char *label;
+        u32 color;
+
+        if (idx < 0) {
+            idx += 0x1E;
+        }
+        if (idx >= 0x1E) {
+            idx -= 0x1E;
+        }
+        label = GetLocalizedString(*(s16 *)(g_skillPointMetaTable + idx * 6));
+        color = (flags[idx] ? 0x7029A1FF : 0x80F0F0F0) & 0xFFFFFF;
+        if (i == 0 || i == 4) {
+            color |= 0x10000000;                     /* edge slots, dim */
+        } else if (i == 1 || i == 3) {
+            color |= 0x50000000;                     /* neighbours */
+        } else {                                     /* i == 2: focused slot */
+            color |= 0x70000000;
+            DrawMenuItemSelectionBox(func_0027F818(label, func_001157AC(label)), color);
+        }
+        func_0027F7A0();
+        func_00280250(g_screenWidth / 2, y, color, label, -1);
+        func_0027F790();
+        y += 0x14;
+    }
+    End2dDrawBatch();
+    return 0;
+}
+#endif
 
 /* return 0 stub. */
 s32 func_002D1150(void) {
