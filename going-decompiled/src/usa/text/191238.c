@@ -567,14 +567,73 @@ void func_00292650(s32 *descTable, s32 count) {
 }
 #endif
 
-/* Bind + relocate a loaded sky-data blob: fix up its internal header pointers
- * (offset -> absolute by +blob base), publish it to g_pSkyData, then two passes
- * build per-entry sky-texture params (Log2Floor of dims) and relocate a second
- * pointer table. PARK (#70): the first pass overlaps a source-word-stream view
- * ($18 advancing +4 x5) with a 0x10-stride entry-array view of the same region;
- * that aliasing isn't pinned confidently enough for a faithful #else (silent-bug
- * risk on the exact field mapping). Bare INCLUDE_ASM. */
+/* BindSkyData(skyData): bind + relocate a loaded sky-data blob. Fixes up the
+ * header's file-relative offsets (+0x10/+0x14/+0x18, and +0x1C when non-zero) to
+ * absolute pointers (+ blob base), marks it bound (+0x4 = 1), and publishes it to
+ * g_pSkyData. Then two passes:
+ *  (1) for each of the skyData[0xC] entries — a 0x10-byte array at the relocated
+ *      skyData[0x10], repacked IN PLACE — read the four raw dimension words and
+ *      write width1/width0 >> 4 into +0x8/+0xA and Log2Floor(dim) into +0xC/+0xE
+ *      (the GS TEX0 log2 size fields), zeroing +0x0..0x7. (The prior #70 park
+ *      flagged the source-word-stream vs 0x10-stride-array aliasing as unpinned:
+ *      the two views are the SAME region — $18 starts at skyData[0x10] and steps
+ *      0x10/entry = &entry[i] — and all four reads precede all writes, so the
+ *      in-place repack is exact.)
+ *  (2) relocate the nested pointer table at skyData[0x20] (skyData[0x6] slots):
+ *      each slot points to a record whose own +0x20-stride sub-pointer array
+ *      (length = record[0x0]) is relocated too.
+ *
+ * TODO(match): functional equivalent - not byte-exact. Preserved as portable C;
+ * the matching arm stays INCLUDE_ASM, #else is byte-neutral. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BindSkyData);
+#else
+extern s32 Log2Floor(s32 x);
+extern u8 *g_pSkyData;
+void BindSkyData(u8 *skyData) {
+    s32 count, count2, i, j, k;
+    u8 *entries;
+
+    g_pSkyData = skyData;
+    *(s16 *)(skyData + 0x4) = 1;
+    *(s32 *)(skyData + 0x10) += (s32)skyData;
+    *(s32 *)(skyData + 0x14) += (s32)skyData;
+    *(s32 *)(skyData + 0x18) += (s32)skyData;
+    if (*(s32 *)(skyData + 0x1C) != 0) {
+        *(s32 *)(skyData + 0x1C) += (s32)skyData;
+    }
+
+    /* pass 1: repack each 0x10-byte sky entry in place */
+    count = *(s16 *)(skyData + 0xC);
+    entries = *(u8 **)(skyData + 0x10);
+    for (i = 0; i < count; i++) {
+        u8 *e = entries + i * 0x10;
+        s32 w0 = *(s32 *)(e + 0x0);
+        s32 w1 = *(s32 *)(e + 0x4);
+        s32 w2 = *(s32 *)(e + 0x8);
+        s32 w3 = *(s32 *)(e + 0xC);
+        *(s16 *)(e + 0x8) = w1 >> 4;
+        *(s16 *)(e + 0xA) = w0 >> 4;
+        *(s16 *)(e + 0xC) = Log2Floor(w2);
+        *(s16 *)(e + 0xE) = Log2Floor(w3);
+        *(s64 *)(e + 0x0) = 0;
+    }
+
+    /* pass 2: relocate the nested pointer table at +0x20 */
+    count2 = *(s16 *)(skyData + 0x6);
+    for (j = 0; j < count2; j++) {
+        s32 *slot = (s32 *)(skyData + 0x20 + j * 4);
+        u8 *rec;
+        s32 n;
+        *slot += (s32)skyData;
+        rec = (u8 *)*slot;
+        n = *(s32 *)rec;
+        for (k = 0; k < n; k++) {
+            *(s32 *)(rec + 0x20 + k * 0x20) += (s32)skyData;
+        }
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadPlayerDisplayTextures);
 
