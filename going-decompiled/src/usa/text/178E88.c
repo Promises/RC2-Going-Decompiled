@@ -858,10 +858,169 @@ void func_0027B988(void) {
 }
 #endif
 
-/* SetupGsDisplayBuffers: PARKED #70 — GS display/draw-environment bring-up (ApplyGsDisplayEnv,
- * AppendDrawEnvContext1, AppendScreenClearPacket, BuildScreenDrawPackets, KickGifImageUpload).
- * GS register/packet-heavy; needs the display-env packet layout traced before a faithful #else. */
+/* SetupGsDisplayBuffers(clearVram) — bring up the GS display/draw environment.
+ *
+ * Selects the VRAM framebuffer / Z-buffer / texture-base layout by video mode:
+ *   - NTSC   (pal==0, prog==0): Zbuf 0x118000, FrameBufB 0x1E8000, tex 0x2C0000,
+ *                               BuildScreenDrawPackets(0x200,0x1A0,0x200,0x1C0,0,0)
+ *   - 480p   (pal==0, prog!=0): Zbuf 0x118000, FrameBufB 0x1E8000, tex 0x2C0000,
+ *                               BuildScreenDrawPackets(0x200,0x1A0,0x280,0x1C0,0,0)
+ *   - PAL    (pal!=0):          Zbuf 0x100000, FrameBufB 0x1E0000, tex 0x2C0000,
+ *                               BuildScreenDrawPackets(0x200,0x1C0,0x200,0x200,4,0)
+ * FrameBufA is always 0. Then derives the screen dims / half-extents from the GS
+ * screen-context display size (g_gsScreenContext +0x150 width, +0x152 height),
+ * publishes the fixed-point GS window offsets (centred on 0x800, <<4) and packs
+ * the GS DISPFB/FRAME/SCISSOR/XYOFFSET register images into the D_139120 block
+ * (+0x10..+0x80, with the +0x20/+0x40/+0x60/+0xA0 aliases mirroring their
+ * neighbours) plus the PTR aliases at D_139310 (ZBUF) and D_139380 (ZBUF+PSM).
+ * The texture sub-carves land at g_vramTextureBase+4/+8/+C/+10 (base, +0x1000,
+ * +0x1400, +0x1800).
+ *
+ * When clearVram is nonzero it also wipes VRAM: rebuild the dynamic-alloc cursor,
+ * flush the draw-env / clear packets, then loop 0x20x0x20 image-upload/kick
+ * blits of the zeroed g_collHitTriVert2+0x10 (0x1BAF80) scratch across the whole
+ * framebuffer (count = ctx.width * ctx.height >> 10, stepping 0x100000 bytes).
+ *
+ * Engine region — faithful #else, whole-.s traced (Ghidra-complete; 0 lq/sq, all
+ * 64-bit register images built in s64 so the <<0x10/<<0x20/<<0x30 packs don't
+ * overflow native 32-bit long). The matching arm keeps the shipped bytes. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", SetupGsDisplayBuffers);
+#else
+extern s32 g_bPalMode;         /* 0x1A7B98 PAL flag (USA hard-codes 0) */
+extern s32 g_bProgressiveScan; /* 0x1A7BC0 480p flag */
+extern s32 g_vramZBuffer;      /* 0x1A72E0 VRAM Z-buffer base */
+extern s32 g_vramFrameBufA;    /* 0x1A72D8 front framebuffer base (always 0) */
+extern s32 g_vramFrameBufB;    /* 0x1A72DC back framebuffer base */
+extern u8  g_vramTextureBase[];/* 0x1A72E4 static texture base; +4/+8/+C/+10 carves */
+extern s32 g_vramAllocCursor;  /* 0x1A72D0 dynamic VRAM bump cursor */
+
+/* GS register-image / packet blocks (absolute %hi/%lo; 64-bit sd targets). */
+extern u8 D_139120[];          /* DISPFB/FRAME/SCISSOR/XYOFFSET register images */
+extern u8 D_139310[];          /* ZBUF PTR-reg image alias */
+extern u8 D_139380[];          /* ZBUF+PSM PTR-reg image alias */
+/* Zeroed VRAM-clear source scratch (g_collHitTriVert2 vec4 + 0x10 == 0x1BAF80). */
+extern u8 g_collHitTriVert2[];
+
+extern void BuildScreenDrawPackets(s32 dw, s32 dh, s32 sw, s32 sh, s32 a, s32 b);
+extern void ApplyGsDisplayEnv(void);
+extern void KickGifImageUpload(void *packet, void *src);
+extern void WaitGsPathsIdle(s32 a, s32 b);
+extern void FlushCache(s32 mode);                       /* func_0011AEA0 */
+extern void BuildGsImageUploadPacket(void *packet, s32 dbp, s32 psm, s32 c,
+                                     s32 d, s32 e, s32 w, s32 h); /* func_00126288 */
+
+void SetupGsDisplayBuffers(long clearVram) {
+    u8 *ctx = g_gsScreenContext;
+    u8  packet[0x60];
+    s32 w16, h16;
+    s32 screenWidth, screenHeight;
+    s32 centerX, centerY;
+    s32 fbw;
+    s32 zbuf;
+    s64 frame, zbufPack;
+
+    FlushCache(0);
+
+    if (g_bPalMode == 0) {
+        if (g_bProgressiveScan == 0) {
+            *(s32 *)g_vramTextureBase = 0x2C0000;
+            g_vramZBuffer = 0x118000;
+            g_vramFrameBufB = 0x1E8000;
+            g_vramFrameBufA = 0;
+            BuildScreenDrawPackets(0x200, 0x1A0, 0x200, 0x1C0, 0, 0);
+        } else {
+            g_vramZBuffer = 0x118000;
+            g_vramFrameBufB = 0x1E8000;
+            *(s32 *)g_vramTextureBase = 0x2C0000;
+            g_vramFrameBufA = 0;
+            BuildScreenDrawPackets(0x200, 0x1A0, 0x280, 0x1C0, 0, 0);
+        }
+    } else {
+        g_vramZBuffer = 0x100000;
+        g_vramFrameBufB = 0x1E0000;
+        *(s32 *)g_vramTextureBase = 0x2C0000;
+        g_vramFrameBufA = 0;
+        BuildScreenDrawPackets(0x200, 0x1C0, 0x200, 0x200, 4, 0);
+    }
+
+    /* Derive screen geometry + GS window offsets from the context display dims. */
+    w16 = *(u16 *)(ctx + 0x150);
+    h16 = *(u16 *)(ctx + 0x152);
+    screenWidth  = (s32)((u32)w16 << 16) >> 16;
+    screenHeight = (s32)((u32)h16 << 16) >> 16;
+    centerX = (s32)((u32)w16 << 16) >> 17;
+    centerY = (s32)((u32)h16 << 16) >> 17;
+    fbw     = (s32)((u32)w16 << 16) >> 22;
+
+    g_gsPixelOffsetY[0] = (0x800 - centerY) << 4;
+    g_gsPixelOffsetX[0] = (0x800 - centerX) << 4;
+
+    zbuf = g_vramZBuffer;
+    frame    = ((s64)(g_vramFrameBufB >> 13)) | ((s64)fbw << 16);
+    zbufPack = ((s64)(zbuf >> 13)) | 0x1000000LL;
+
+    /* SCISSOR (max = screen-1) and XYOFFSET (window origin) register images. */
+    {
+        s64 scissorMax = ((s64)(screenWidth - 1) << 16) | ((s64)(screenHeight - 1) << 48);
+        s64 xyOffset   = (s64)g_gsPixelOffsetX[0] | ((s64)g_gsPixelOffsetY[0] << 32);
+        u8 *tex = g_vramTextureBase;
+
+        *(s64 *)(D_139120 + 0x80) = scissorMax;
+        *(s64 *)D_139380          = ((s64)(zbuf >> 13)) | 0x101000000LL;
+
+        g_gsPixelOffsetY[1] = (centerX + 0x800) << 4;
+        g_gsPixelOffsetY[2] = (centerY + 0x800) << 4;
+        *(s32 *)(tex + 0x8)  = *(s32 *)tex + 0x1000;
+        *(s32 *)(tex + 0xC)  = *(s32 *)tex + 0x1400;
+        *(s32 *)(tex + 0x10) = *(s32 *)tex + 0x1800;
+
+        *(s64 *)(D_139120 + 0x20) = frame;
+        *(s64 *)(D_139120 + 0x50) = xyOffset;
+        *(s64 *)(D_139120 + 0x60) = xyOffset;
+        *(s64 *)D_139310          = zbufPack;
+        *(s32 *)(tex + 0x4)  = *(s32 *)tex;
+        g_screenWidth[0]  = screenWidth;
+        g_screenHeight[0] = screenHeight;
+        g_screenHeight[1] = centerX;   /* g_screenCenterDefaultX */
+        g_screenHeight[2] = centerY;   /* g_screenCenterDefaultY */
+        *(s64 *)(D_139120 + 0x10) = frame;
+        *(s64 *)(D_139120 + 0x30) = zbufPack;
+        *(s64 *)(D_139120 + 0x40) = zbufPack;
+        *(s64 *)(D_139120 + 0x70) = scissorMax;
+    }
+
+    if (clearVram != 0) {
+        s32 tileCount, tile;
+
+        g_vramDynamicBase = *(s32 *)g_vramTextureBase;
+        g_vramAllocCursor = *(s32 *)g_vramTextureBase;
+        FlushCache(0);
+        WaitGsPathsIdle(0, 0);
+        FlushCache(0);
+        AppendDrawEnvContext1();
+        AppendScreenClearPacket(0);
+        FlushCache(0);
+        WaitGsPathsIdle(0, 0);
+        ApplyGsDisplayEnv();
+        FillMemory32(g_collHitTriVert2 + 0x10, 0, 0x1000);
+
+        tileCount = (s32)(*(s16 *)(ctx + 0x158) * *(s16 *)(ctx + 0x15A)) >> 10;
+        if (tileCount > 0) {
+            s32 addr = 0;
+            tile = 0;
+            do {
+                tile = tile + 1;
+                BuildGsImageUploadPacket(packet, addr >> 16, 1, 0, 0, 0, 0x20, 0x20);
+                FlushCache(0);
+                KickGifImageUpload(packet, g_collHitTriVert2 + 0x10);
+                WaitGsPathsIdle(0, 0);
+                addr = tile << 20;
+            } while (tile < tileCount);
+        }
+    }
+}
+#endif
 
 /* Zero every per-frame draw-callback queue and one-shot fx slot: the fx
  * pre/post/late hook counts, the after-ties/after-shrubs draw-hook counts, the
