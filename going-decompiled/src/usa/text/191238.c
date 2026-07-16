@@ -635,7 +635,13 @@ void BindSkyData(u8 *skyData) {
 }
 #endif
 
+/* LoadPlayerDisplayTextures (0x292928) — stream + GS-upload the player display
+ * model's texture set. Portable #else body lives in the display-loader slice
+ * below (after the g_vramTextureBase/g_pPlayerModelBuffer decls + its twin
+ * LoadHeldItemDisplayModel); the INCLUDE_ASM stays here in address order. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadPlayerDisplayTextures);
+#endif
 
 /**
  * BindPlayerDisplayModel — stage the player display model's textures and header.
@@ -791,6 +797,96 @@ void LoadHeldItemDisplayModel(s32 itemId) {
     StartFileLoadPumpingVoice(buffer,
         *(s32 *)(disc + off + 0x4F98) + *(s32 *)(disc + 0x4F04),
         *(s32 *)(disc + off + 0x4F9C));
+}
+#endif
+
+/* LoadPlayerDisplayTextures(slot): stream + GS-upload the player display model's
+ * texture set (twin of LoadHeldItemDisplayModel — a per-texture loop instead of
+ * two fixed levels). Picks the texture-set index from the alt-texture flags
+ * (D_1A7A51->6 / D_1A7A4A->8 / D_1A7A53->7 / D_1A7A52->5, else `slot`), kicks that
+ * set's disc read into g_pPlayerModelBuffer, then for each of the buffer's
+ * *(s32*)buffer textures uploads a 16x16 base image + a mip (two func_126288 /
+ * KickGifImageUpload GIF packets) and packs the 64-bit GS TEX0 descriptor into
+ * g_playerTexDescriptors[i], advancing the two VRAM cursors (base +0x4 by 0x400,
+ * base +0x14 by w*h*4); finally kicks the model-geometry disc read. Register pack
+ * transcribed op-for-op (u64). NEEDS-ORACLE. */
+#ifdef TARGET_NATIVE
+extern u8 D_1A7A51, D_1A7A4A, D_1A7A53, D_1A7A52;   /* alt-texture-set select flags */
+void LoadPlayerDisplayTextures(s32 slot) {
+    u8   packet[0x60];               /* GIF packet scratch (sp+0) */
+    u8  *disc = (u8 *)g_discToc;
+    u8  *buffer;
+    s32  texSet, texSetOff, texCount, i;
+    s32  vram4, vram14;              /* advancing VRAM base cursors (+0x4 / +0x14) */
+
+    WaitFrameDmaFence(1);
+    buffer = (u8 *)g_pPlayerModelBuffer;
+    PumpDialogVoiceSystem(1);
+
+    if (D_1A7A51) {
+        texSet = 6;
+    } else if (D_1A7A4A) {
+        texSet = 8;
+    } else if (D_1A7A53) {
+        texSet = 7;
+    } else if (D_1A7A52) {
+        texSet = 5;
+    } else {
+        texSet = slot;
+    }
+
+    texSetOff = texSet << 4;
+    StartFileLoadPumpingVoice(buffer,
+        *(s32 *)(disc + texSetOff + 0x4F10) + *(s32 *)(disc + 0x4F04),
+        *(s32 *)(disc + texSetOff + 0x4F14));
+
+    vram14   = *(s32 *)(g_vramTextureBase + 0x14);
+    vram4    = *(s32 *)(g_vramTextureBase + 0x4);
+    texCount = *(s32 *)buffer;
+    g_playerTexCount = texCount;
+
+    for (i = 0; i < texCount; i++) {
+        u8  *texData = buffer + *(s32 *)(buffer + 4 + i * 4);
+        s32  log2, clampW;
+        s16  w, h;
+        u64  reg;
+
+        /* level 0: 16x16 base image */
+        func_126288(packet, (s16)(vram4 >> 8), 1, 0, 0, 0, 0x10, 0x10);
+        func_0011AEA0(0);
+        KickGifImageUpload(packet, texData + 0x20);
+        WaitGsPathsIdle(0);
+
+        /* level 1: mip sized from the texture header */
+        log2   = Log2Floor(*(s32 *)(texData + 0x8));
+        clampW = *(s32 *)(texData + 0x8) >> 6;
+        if (clampW <= 0) {
+            clampW = 1;
+        }
+        w = *(s16 *)(texData + 0x8);
+        h = *(s16 *)(texData + 0xC);
+        func_126288(packet, (s16)(vram14 >> 8), (s16)clampW, 0x1B, 0, 0, w, h);
+        func_0011AEA0(0);
+        KickGifImageUpload(packet, texData + 0x420);
+        WaitGsPathsIdle(0);
+
+        /* pack the 64-bit GS texture register (op-for-op from the dsll/or chain) */
+        reg = (u64)((s64)vram14 >> 8)
+            | ((u64)clampW << 14)
+            | (((u64)log2 << 26) | 0x1B00000)
+            | ((u64)log2 << 30)
+            | (((u64)((s64)vram4 >> 8) << 37) | ((u64)0x8000 << 19))
+            | ((u64)1 << 63);
+        g_playerTexDescriptors[i] = reg;
+
+        vram4  += 0x400;
+        vram14 += *(s32 *)(texData + 0x8) * *(s32 *)(texData + 0xC) * 4;   /* .s: lw 0xC (full word) */
+    }
+
+    /* second disc load: the model geometry */
+    StartFileLoadPumpingVoice(buffer,
+        *(s32 *)(disc + texSetOff + 0x4F08) + *(s32 *)(disc + 0x4F04),
+        *(s32 *)(disc + texSetOff + 0x4F0C));
 }
 #endif
 
@@ -1074,6 +1170,22 @@ void func_002933D0(s32 slot, u8 *dest) {
 }
 #endif
 
+/* func_00293438(dst, texHdr, tbp, fmt, a, mode, ...): GS texture-register / GIFtag
+ * PACKET BUILDER — writes a run of 128-bit quadwords (sd pairs, dst += 0x10 each)
+ * of packed 64-bit GS registers (TEX0/MIPTBP-class) from the texture header
+ * (texHdr +0x4/+0x6/+0x8/+0xA/+0xC/+0xE dims, Log2Floor'd) and the g_vramTextureBase
+ * +0x10/+0x20 cursors. The `mode` arg ($21) + texHdr[+0x8] select 4 layouts:
+ *   mode>=0 & texHdr[8]!=0 -> mipmapped (.L002935BC);  mode>=0 & texHdr[8]==0 ->
+ *   single (path1);  mode==-1 -> .L002936E4;  mode==-2/-3 -> sky (.L002936A4,
+ *   g_pSkyShellSpinRates+0x20 / +0x38).
+ *
+ * PARK (fresh whole-.s trace 2026-07-17): deterministic (only Log2Floor; no
+ * undeclared-return / no indirect) BUT ~200 instrs of DENSE op-for-op u64
+ * bit-packing across 4 paths (dsll/dsll32/or building ~16 GS-register fields with
+ * exact shift amounts <<6/<<14/<<19/<<24/<<26/<<30/dsll32<<32+5 etc.) — a single
+ * wrong shift silently mis-renders. Capacity-appropriate park: pin the GS-register
+ * field layouts + oracle-gate, then transcribe op-for-op (u64) in fresh context.
+ * Bare INCLUDE_ASM (byte-neutral). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00293438);
 
 /* TODO(match): functional equivalent - not byte-exact (48.12%); strength-reduce/
@@ -3149,12 +3261,25 @@ void func_002984E0(u8 *out) {
 }
 #endif
 
-/* Expand a localized template string (id from g_mapVertexData[+0x20] entry
- * idx*0x28 +0xA) into the dest buffer, substituting "%b" with the equipped
- * weapon's name via func_00115DA8(sprintf). PARK (#70): nested byte-copy loops
- * plus a deep indirection chain (mapVertexData -> entry -> slot -> equipped item
- * -> g_weaponTable[item*0xE0]+0x80 -> name) and unrecovered func_00115DA8 format
- * semantics — faithful transcription is high silent-bug risk. Bare INCLUDE_ASM. */
+/* func_00298730(idx, dest): expand a localized template string (id from
+ * g_mapVertexData[+0x20] entry idx*0x28 +0xA) into dest, substituting the FIRST
+ * "%<c>" sequence then copying the remainder literally. On "%b" it inserts the
+ * equipped weapon's name via the deep indirection mapVertexData[+0x20] +
+ * idx*0x28 -> entry[+0xC] (slot) -> g_itemEquippedSlot[slot] (item) ->
+ * g_weaponTable[item*0xE0]+0x80 (name), formatted func_00115DA8(dest_scratch,
+ * D_1A9758, name); any other "%<c>" formats through D_1A9760 (no arg).
+ *
+ * PARK (#70) — fresh whole-.s trace 2026-07 (blockers pinned, still won't verify):
+ * (1) D_1A9758 / D_1A9760 are UNRECOVERED format-string globals (not in
+ *     symbol_addrs, referenced only from asm/data) — the sprintf output shape is
+ *     unknown, so a faithful #else must GUESS the %b/other substitution text.
+ * (2) the copy is threaded through FIVE likely-branches (beql/bnel @0x298790/
+ *     /987B4/987C0/987DC/298878) whose delay slots interleave dest++ (beqz slot,
+ *     unconditional) with the char store (bnel slot, taken-only) — the exact
+ *     segment-boundary pointer/store ordering is the …l-nullify class that
+ *     silently mis-copies if modeled wrong. (3) single-substitution-then-literal
+ *     structure is unusual and needs oracle confirmation. Recover D_1A9758/D_1A9760
+ *     + oracle-gate, then model. Bare INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00298730);
 
 /* TODO(match): functional equivalent - not byte-exact (85.25%); branch-likely
