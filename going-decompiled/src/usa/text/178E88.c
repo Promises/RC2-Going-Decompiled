@@ -482,11 +482,123 @@ void func_0027A138(f32 *out, void *worldPos) {
 }
 #endif
 
-/* BuildFrameViewMatrices: PARKED #70 — composes the per-frame view/projection matrices
- * (MatrixMultiplyVu0, ScaleVec4IncludingW, Vec4ScaleVu0). VU0 matrix-math class; needs the
- * exact matrix-chain order + operands traced before a faithful #else (a wrong term silently
- * corrupts the whole frame transform). */
+/* BuildFrameViewMatrices — compose the per-frame view + projection matrices used
+ * by the world render pass. Runs once per frame; no arguments, no return.
+ *
+ * Steps (op-for-op faithful to the frozen .s):
+ *   1. Copy the three rows of the camera rotation matrix (g_cameraMatrix, three
+ *      qwords) onto a stack scratch.
+ *   2. Build a 4x4 view-basis at g_cameraState+0x0 from that scratch: the first
+ *      two columns are negated, the third is straight, the 4th column is 0 and
+ *      the bottom-right element is 1.0 (partial transpose / sign-flip of the
+ *      camera rotation).
+ *   3. viewA = MatrixMultiplyVu0(g_cameraState+0x40, g_cameraProjScale+0x10, view)
+ *   4. viewB = MatrixMultiplyVu0(g_cameraState+0x80, g_cameraProjScale+0x50, view)
+ *   5. Apply a perspective/skew adjustment to viewB: for each of the four rows,
+ *      add (row's 4th-column element) * scalar[c] into that row's column c, for
+ *      c in {0,1,2}, where the scalars come from g_sceneActorMobys+0x814/818/81C.
+ *   6. MatrixMultiplyVu0(g_cameraState+0xC0, g_cameraProjScale+0x90, viewB)
+ *   7. Two ScaleVec4IncludingW scalings by g_sceneActorMobys+0x834 into
+ *      g_cameraState+0x100 and +0x110, then copy two more qwords in, and
+ *      MatrixMultiplyVu0(g_cameraState+0x100, g_cameraState+0x100, view).
+ *   8. Copy the view basis (three qwords) to the frustum-plane block
+ *      g_fogColorRed+0x50, then Vec4ScaleVu0(g_fogColorRed+0x80, 1024.0f,
+ *      g_cameraState+0x140) and store 1024.0f at g_fogColorRed+0x8C.
+ *
+ * Base-symbol map used (all absolute %hi/%lo in the .s, resolved via
+ * symbol_addrs): g_cameraMatrix=0x1B54F0 ($18); g_cameraState=0x1B5180
+ * ($16 = g_cameraMatrix-0x370); g_cameraProjScale=0x1B9070 (first
+ * $17 = g_cameraProjScale+0x10 = 0x1B9080; $20 = +0x90 = 0x1B9100);
+ * g_sceneActorMobys=0x1B894C ($19 = +0x674 = 0x1B8FC0 = g_cameraProjScale-0xB0);
+ * g_fogColorRed=0x1B91F0 (second $17 = g_fogColorRed+0x50 = 0x1B9240). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", BuildFrameViewMatrices);
+#else
+void BuildFrameViewMatrices(void) {
+    /* block-scope externs mirroring the file's engine-#else convention */
+    extern u8 g_cameraMatrix[];      /* 0x1B54F0 - 3-row camera rotation matrix */
+    extern u8 g_cameraProjScale[];   /* 0x1B9070 - projection scale / GS matrices at +0x10.. */
+    extern u8 g_sceneActorMobys[];   /* 0x1B894C - scratch block; +0x814.. perspective scalars */
+    extern u8 g_fogColorRed[];       /* 0x1B91F0 - +0x50 frustum-plane block */
+    extern u8 g_cameraState[];       /* 0x1B5180 - view-basis / result matrices */
+    extern void ScaleVec4IncludingW(f32 *dst, f32 scale, f32 *src); /* 0x283710 - vec4 scale incl. w */
+
+    f32 rows[12];        /* stack copy of the three camera-matrix rows */
+    u8 *cam  = g_cameraState;          /* 0x1B5180 */
+    u8 *proj = g_cameraProjScale + 0x10; /* 0x1B9080 */
+    u8 *scal = g_sceneActorMobys + 0x674; /* 0x1B8FC0 - perspective scalars at +0x1A0.. */
+    u8 *fog  = g_fogColorRed + 0x50;   /* 0x1B9240 */
+    f32 s0, s1, s2, w;
+    s32 r;
+
+    /* 1. copy the three camera-matrix rows onto the stack (three lq/sq qwords) */
+    *(u64 *)((u8 *)rows + 0x0)  = *(u64 *)(g_cameraMatrix + 0x0);
+    *(u64 *)((u8 *)rows + 0x8)  = *(u64 *)(g_cameraMatrix + 0x8);
+    *(u64 *)((u8 *)rows + 0x10) = *(u64 *)(g_cameraMatrix + 0x10);
+    *(u64 *)((u8 *)rows + 0x18) = *(u64 *)(g_cameraMatrix + 0x18);
+    *(u64 *)((u8 *)rows + 0x20) = *(u64 *)(g_cameraMatrix + 0x20);
+    *(u64 *)((u8 *)rows + 0x28) = *(u64 *)(g_cameraMatrix + 0x28);
+
+    /* 2. build the view basis at g_cameraState (cols 0/1 negated, col 2 straight) */
+    *(f32 *)(cam + 0x0)  = -rows[4];   /* -rows[0x10] */
+    *(f32 *)(cam + 0x10) = -rows[5];   /* -rows[0x14] */
+    *(f32 *)(cam + 0x20) = -rows[6];   /* -rows[0x18] */
+    *(f32 *)(cam + 0x4)  = -rows[8];   /* -rows[0x20] */
+    *(f32 *)(cam + 0x14) = -rows[9];   /* -rows[0x24] */
+    *(f32 *)(cam + 0x24) = -rows[10];  /* -rows[0x28] */
+    *(f32 *)(cam + 0x8)  = rows[0];    /*  rows[0x0]  */
+    *(f32 *)(cam + 0x18) = rows[1];    /*  rows[0x4]  */
+    *(f32 *)(cam + 0x28) = rows[2];    /*  rows[0x8]  */
+    *(f32 *)(cam + 0x3C) = 1.0f;
+    *(s32 *)(cam + 0x30) = 0;
+    *(s32 *)(cam + 0x34) = 0;
+    *(s32 *)(cam + 0x38) = 0;
+    *(s32 *)(cam + 0xC)  = 0;
+    *(s32 *)(cam + 0x1C) = 0;
+    *(s32 *)(cam + 0x2C) = 0;
+
+    /* 3-4. two view multiplies */
+    MatrixMultiplyVu0((f32 *)(cam + 0x40), (f32 *)proj, (f32 *)cam);
+    MatrixMultiplyVu0((f32 *)(cam + 0x80), (f32 *)(proj + 0x40), (f32 *)cam);
+
+    /* 5. perspective/skew adjust of the +0x80 block: for each row, add the row's
+     *    4th-column element scaled by scalar[c] into columns 0/1/2 */
+    s0 = *(f32 *)(scal + 0x1A0);
+    s1 = *(f32 *)(scal + 0x1A4);
+    s2 = *(f32 *)(scal + 0x1A8);
+    for (r = 0; r < 4; r++) {
+        u8 *row = cam + 0x80 + r * 0x10;
+        w = *(f32 *)(row + 0xC);
+        *(f32 *)(row + 0x0) = *(f32 *)(row + 0x0) + w * s0;
+        *(f32 *)(row + 0x4) = *(f32 *)(row + 0x4) + w * s1;
+        *(f32 *)(row + 0x8) = *(f32 *)(row + 0x8) + w * s2;
+    }
+
+    /* 6. third view multiply */
+    MatrixMultiplyVu0((f32 *)(cam + 0xC0), (f32 *)(proj + 0x80), (f32 *)cam);
+
+    /* 7. two full-width vec4 scalings, two qword copies, then a fourth multiply */
+    ScaleVec4IncludingW((f32 *)(cam + 0x100), *(f32 *)(scal + 0x1C0),
+                        (f32 *)(proj + 0x80));
+    ScaleVec4IncludingW((f32 *)(cam + 0x110), *(f32 *)(scal + 0x1C0),
+                        (f32 *)(proj + 0x90));
+    *(u64 *)(cam + 0x120) = *(u64 *)(proj + 0xA0);
+    *(u64 *)(cam + 0x128) = *(u64 *)(proj + 0xA8);
+    *(u64 *)(cam + 0x130) = *(u64 *)(proj + 0xB0);
+    *(u64 *)(cam + 0x138) = *(u64 *)(proj + 0xB8);
+    MatrixMultiplyVu0((f32 *)(cam + 0x100), (f32 *)(cam + 0x100), (f32 *)cam);
+
+    /* 8. copy the view basis to the frustum-plane block and scale the camera pos */
+    *(u64 *)(fog + 0x0)  = *(u64 *)(cam + 0x0);
+    *(u64 *)(fog + 0x8)  = *(u64 *)(cam + 0x8);
+    *(u64 *)(fog + 0x10) = *(u64 *)(cam + 0x10);
+    *(u64 *)(fog + 0x18) = *(u64 *)(cam + 0x18);
+    *(u64 *)(fog + 0x20) = *(u64 *)(cam + 0x20);
+    *(u64 *)(fog + 0x28) = *(u64 *)(cam + 0x28);
+    Vec4ScaleVu0(fog + 0x30, 1024.0f, cam + 0x140);
+    *(f32 *)(fog + 0x3C) = 1024.0f;
+}
+#endif
 
 /* Camera fog/particle setup driven by the underwater state. */
 extern s32 g_bCameraUnderwater;   /* 0x1B5580 */
