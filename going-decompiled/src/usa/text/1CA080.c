@@ -525,9 +525,53 @@ void RequestMenuScreenChange(s32 screen) {
  * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", CaptureScreenToVram);
 
-/* screen-capture/restore routine: 8-byte-packed-save wall (saves 5 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
+/* Restore the captured screen image from VRAM back to the framebuffer. Fences the
+ * frame DMA + waits a vblank field, bumps the render-layer counter, then blits the
+ * screen (g_screenHeight * 0x600 bytes) in 0x40x0x40 tiles: for the two-buffer case
+ * (menuScreenBlock[0xD0] >= 2) the source starts at 0x3FB000 - size, else at
+ * g_vramDynamicBase; each tile is uploaded via func_126470 + kicked via func_126730
+ * to the dest at menuScreenBlock[0x20], advancing both by 0x4000. Engine-2.96
+ * (8-byte-packed saves) -> faithful #else; matching arm INCLUDE_ASM. NEEDS-ORACLE. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", RestoreScreenFromVram);
+#else
+extern s32  g_screenHeight;
+extern s32  g_vramDynamicBase;
+extern u8   g_renderLayerMask[];
+extern void WaitFrameDmaFence(s32 mask);
+extern s32  WaitVblankGetField(s32 arg);
+extern void func_126470(void *dst, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h);
+extern void func_0011AEA0(s32 a);
+extern void func_126730(void *packet, s32 addr);
+extern void WaitGsPathsIdle(s32 arg);
+
+void RestoreScreenFromVram(void) {
+    u8  packet[0x70];
+    s32 remaining, src, dst;
+
+    WaitFrameDmaFence(1);
+    WaitVblankGetField(0);
+    *(s32 *)(g_renderLayerMask + 0x4) += 1;
+    remaining = g_screenHeight * 0x600;
+    dst = *(s32 *)(g_menuScreenBlock + 0x20);
+    src = g_vramDynamicBase;
+    if (*(s32 *)(g_menuScreenBlock + 0xD0) >= 2) {
+        src = 0x3FB000 - remaining;
+    }
+    if (remaining >= 0) {
+        do {
+            func_126470(packet, (src << 8) >> 16, 1, 0, 0, 0, 0x40, 0x40);
+            src += 0x4000;
+            remaining -= 0x4000;
+            func_0011AEA0(0);
+            func_126730(packet, dst);
+            dst += 0x4000;
+            WaitGsPathsIdle(0);
+        } while (remaining >= 0);
+    }
+    *(s32 *)(g_menuScreenBlock + 0xD0) = 0;
+}
+#endif
 
 /* Seed the camera/projection scratch (near/aspect/scale + clears) then rebuild
  * the camera projection, the front-end matrix block, and the frame view mats.
