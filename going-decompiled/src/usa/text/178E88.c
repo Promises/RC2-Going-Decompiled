@@ -2352,7 +2352,80 @@ void DrawDebugString(s32 a, s32 b, s32 c, s32 d, s32 e) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027FCA8);
 
+/* func_0027FCB0 (DrawGlyphRun) — the scaled/float twin of DrawFixedFontString: draws up to `c`
+ * chars of string `b` at (f1,f2) scaled by f3, in color `a`, one DrawTexturedQuad2d per glyph. Per
+ * char: 4-byte metric {u,v,yofs(s8),advance(s8)} at glyphTable+char*4; control codes 8..15 are
+ * color-escapes (swap active color low-24 from D_1A89B0[c-8] when g_blobShadowCount+0x2C set; entry
+ * [0] latched to `a` unless +0x30 set); 0x80..0xA7 also draw an overlay glyph (code+0x40); <0x20
+ * draw a scaled 24x16 cell in a grayscale (RGB-averaged) color; >0x20 a scaled 16x16 in the active
+ * color; space draws nothing; pen advances by IntToFloat(advance)*scale. Sets GS TEST_1 once.
+ * The file's L2245 decl uses generic a/b/c/f1/f2/f3 for the same registers Ghidra names
+ * color/str/count/x/y/scale: a=color, b=str(ptr-as-int), c=count, f1=x, f2=y, f3=scale.
+ *
+ * Engine region — faithful #else, whole-.s traced. Metric yofs/advance are SIGNED (lb→IntToFloat),
+ * u/v unsigned (lbu); grayscale = (color&0xFF000000) + (avgRGB)*0x10101. Calls the in-file
+ * DrawTexturedQuad2d (10-arg, 4-color array + tex0). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027FCB0);
+#else
+extern s32 D_1A89B0[];   /* 8-entry color-escape table; [0] = latched color */
+
+void func_0027FCB0(s32 a, s32 b, s32 c, u64 tex0, u8 *glyphTable, f32 f1, f32 f2, f32 f3) {
+    s32 color = a;
+    const u8 *s = (const u8 *)b;
+    s32 count = c;
+    f32 x = f1, y = f2, scale = f3;
+    f32 sz16 = scale * 16.0f;
+    s32 i;
+
+    if (*(s32 *)((u8 *)&g_blobShadowCount + 0x30) == 0) {
+        D_1A89B0[0] = color;
+    }
+    AppendGsRegPacket(0x47, 0x33001);
+
+    if (count == 0 || *s == 0) {
+        return;
+    }
+    for (i = 0; ; ) {
+        u8 ch = *s;
+        if ((u8)(ch - 8) < 8) {
+            if (*(s32 *)((u8 *)&g_blobShadowCount + 0x2C) != 0) {
+                color = (color & 0xFF000000) | (D_1A89B0[ch - 8] & 0x00FFFFFF);
+            }
+        } else {
+            const u8 *rec = glyphTable + ch * 4;
+            if ((s8)rec[3] != 0) {
+                f32 yofs = IntToFloat((s8)rec[2]) * scale;
+                u32 col4[4];
+                if ((u8)(ch + 0x80) < 0x28) {
+                    const u8 *orec = glyphTable + (ch + 0x40) * 4;
+                    f32 xofs = IntToFloat((s8)orec[3]) * scale;
+                    f32 oy   = IntToFloat((s8)orec[2]);
+                    col4[0] = col4[1] = col4[2] = col4[3] = color;
+                    DrawTexturedQuad2d(x + xofs, y + oy * scale, sz16, sz16,
+                                       orec[0], orec[1], 0x10, 0x10, col4, tex0);
+                }
+                if (ch < 0x20) {
+                    s32 avg = ((color & 0xFF) + ((color >> 8) & 0xFF) + ((color >> 0x10) & 0xFF)) / 3;
+                    u32 gray = (color & 0xFF000000) + avg * 0x10101;
+                    col4[0] = col4[1] = col4[2] = col4[3] = gray;
+                    DrawTexturedQuad2d(x, y + yofs, scale * 24.0f, scale * 16.0f,
+                                       rec[0], rec[1], 0x18, 0x10, col4, tex0);
+                } else if (ch > 0x20) {
+                    col4[0] = col4[1] = col4[2] = col4[3] = color;
+                    DrawTexturedQuad2d(x, y + yofs, sz16, sz16,
+                                       rec[0], rec[1], 0x10, 0x10, col4, tex0);
+                }
+                x = x + IntToFloat((s8)rec[3]) * scale;
+            }
+        }
+        i++;
+        if (i == count) break;
+        s++;
+        if (*s == 0) break;
+    }
+}
+#endif
 
 extern void func_0027FCB0(s32 a, s32 b, s32 c, u64 tex0, u8 *glyphTable, f32 f1, f32 f2, f32 f3); /* scaled/positioned font draw */
 
