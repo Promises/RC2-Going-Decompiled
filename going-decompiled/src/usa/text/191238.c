@@ -436,7 +436,214 @@ void func_00291FF8(s32 index) {
 }
 #endif
 
+/*
+ * func_002920C0(hdr, out) — build the GS texture registers for a mipmapped
+ * texture and upload its base + CLUT + mip levels to VRAM. Same u64
+ * GS-register-descriptor class as func_002954F0/func_00293438 (TEX0/TEX1/MIPTBP1
+ * packing), plus a pixel-format switch and a per-mip-level upload loop.
+ *
+ *   hdr (arg0):  +0x8  s32  width
+ *                +0xC  s32  height
+ *                +0x10 s32  pixelFormat (0/1/2/0x13/0x14 handled; else default)
+ *                +0x14 s32  CLUT / palette field (also used as CLD control bits)
+ *                +0x1C s32  mipLevelCount
+ *                +0x20 ...  per-mip param / CLUT source table (byte address)
+ *   out (arg1):  receives THREE 64-bit GS registers:
+ *                out[0]    = TEX0-class descriptor (base TBP/TBW/PSM/TW/TH/CBP...)
+ *                out[8]    = TEX1-class descriptor (MXL = mipLevelCount-1 + LOD)
+ *                out[0x10] = MIPTBP1-class descriptor (mip 1..3 TBP/TBW)
+ *   returns -1 (constant).
+ *
+ * For the CLUT/paletted formats (0x13, 0x14) it first reserves a VRAM block and
+ * uploads the palette (KickGifImageUpload of the sc[0] CLUT source). It then
+ * derives each level's texel byte-size (format-dependent) and source pointer,
+ * and walks mipLevelCount levels, uploading each via func_126288
+ * (BuildGsImageUploadPacket) + FlushCache + KickGifImageUpload, advancing
+ * g_vramAllocCursor per level. Finally packs the three descriptors.
+ *
+ * MATCH-WALL (this gameplay TU's later SN cc1 packs save slots 8-byte); un-walled
+ * as a faithful portable #else. The stack scratch is a tightly packed union (the
+ * per-level size/source/tbp/bufwidth arrays alias overlapping slots exactly as
+ * the original frame does), modelled here as one word-indexed scratch buffer.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002920C0);
+#else
+#ifdef TARGET_NATIVE
+extern void FillMemory32(void *dst, u32 val, s32 len);
+extern s32  Log2Floor(s32 v);
+extern void func_126288(void *dst, s32 tbp, s32 a, s32 b, s32 c, s32 d,
+                        s32 w, s32 h);
+extern void func_0011AEA0(s32 a);             /* FlushCache */
+extern void KickGifImageUpload(void *packet, void *src);
+extern void WaitGsPathsIdle(s32 arg);
+extern s32  g_vramAllocCursor;
+#endif
+
+s32 func_002920C0(void *hdrArg, u64 *out) {
+    u8 *hdr = (u8 *)hdrArg;
+    s32 fmt = *(s32 *)(hdr + 0x10);
+    /*
+     * Stack scratch: one word-indexed buffer mirroring the original's packed
+     * frame (offsets 0x00..0x50). FillMemory32 zeroes the whole 0x54 span.
+     *   sc[0]  (0x00)  CLUT/handle flag (source ptr for paletted formats, else 0)
+     *   sc[1]  (0x04)  base-level source pointer (also head of the srcPtr array)
+     *   sc[5]  (0x14)  format-derived palette byte-size (transient scratch)
+     *   sc[6]  (0x18)  base texel byte-size (also head of the size array)
+     *   sc[10] (0x28)  base CLUT/palette VRAM tbp (cursor>>8)
+     *   sc[11] (0x2C)  per-level tbp array: sc[11 + level]  (0x2C..)
+     *   sc[15] (0x3C)  per-level GS buffer-width array: sc[15 + level]
+     *   sc[19] (0x4C)  Log2Floor(width)
+     *   sc[20] (0x50)  Log2Floor(height)
+     * srcPtr[level] = sc[1 + level]  (0x04 + level*4); size[level] = sc[6 + level].
+     */
+    u32 sc[21];
+    u8  packet[0xA0];       /* func_126288 GIF-packet scratch (sp+0x60) */
+    s32 w = *(s32 *)(hdr + 0x8);
+    s32 h = *(s32 *)(hdr + 0xC);
+    s32 mipCount = *(s32 *)(hdr + 0x1C);
+    s32 clut = *(s32 *)(hdr + 0x14);
+    s32 log2W, log2H;
+    s32 level;
+
+    FillMemory32(sc, 0, 0x54);
+
+    /* Format switch #1: CLUT source flag (sc[0]) and palette byte-size (sc[5]). */
+    if (fmt == 2) {
+        sc[0] = 0;
+        sc[5] = 0;
+    } else if (fmt < 3) {
+        if (fmt == 0) {                 /* fmt 0 */
+            sc[0] = 0;
+            sc[5] = 0;
+        }
+        /* fmt 1: leave sc[0]/sc[5] zeroed by FillMemory32 */
+    } else if (fmt < 0x13 || fmt >= 0x15) {
+        /* fmt 3..0x12 or >=0x15: no CLUT block */
+    } else if (fmt == 0x14) {
+        sc[0] = (u32)(s32)(hdr + 0x20);
+        sc[5] = clut ? 0x20 : 0x40;
+    } else {                            /* fmt == 0x13 */
+        sc[0] = (u32)(s32)(hdr + 0x20);
+        sc[5] = clut ? 0x200 : 0x400;
+    }
+
+    log2W = Log2Floor(w);
+    sc[19] = (u32)log2W;
+    log2H = Log2Floor(h);
+    sc[20] = (u32)log2H;
+
+    /* Base-level source pointer sc[1] = hdr + (paletteBytes + 0x20). */
+    sc[1] = (u32)(s32)(hdr + ((s32)sc[5] + 0x20));
+
+    /* Size switch: base texel byte-size sc[6], format-dependent. */
+    if (fmt == 2) {
+        sc[6] = (u32)(w * h * 2);
+    } else if (fmt < 3) {
+        if (fmt == 0) {
+            sc[6] = (u32)(w * h * 4);
+        }
+        /* fmt 1: sc[6] stays zeroed */
+    } else if (fmt == 0x13) {
+        sc[6] = (u32)(w * h);
+    } else if (fmt == 0x14) {
+        sc[6] = (u32)((w * h) >> 1);
+    }
+    /* other fmt >=3: sc[6] stays zeroed */
+
+    /* CLUT/palette upload — only for the paletted formats 0x13 / 0x14. */
+    if ((u32)(fmt - 0x13) < 2) {
+        s32 cursor = g_vramAllocCursor;
+        sc[10] = (u32)(cursor >> 8);            /* base CLUT tbp */
+        if (fmt == 0x14) {
+            g_vramAllocCursor = cursor + 0x100;
+            func_126288(packet, (s16)sc[10], 1, (s16)clut, 0, 0, 8, 2);
+        } else {                                /* fmt 0x13 */
+            g_vramAllocCursor = cursor + (s32)sc[5];
+            func_126288(packet, (s16)sc[10], 1, (s16)clut, 0, 0, 0x10, 0x10);
+        }
+        func_0011AEA0(0);
+        KickGifImageUpload(packet, (void *)(s32)sc[0]);
+        WaitGsPathsIdle(0);
+    }
+
+    /*
+     * Derive per-level size (quarter each level) and per-level source pointer
+     * (previous + previous size), for levels 1..mipCount-1, into the aliased
+     * size[] (sc[6]..) and srcPtr[] (sc[1]..) arrays.
+     */
+    if (mipCount > 1) {
+        s32 i = mipCount - 1;
+        s32 idx = 6;                            /* sc[6] == size[0] (sp+0x18) */
+        do {
+            /* size[]  head sc[6] (0x18): size[n+1] = size[n] >> 2         */
+            sc[idx + 1] = sc[idx] >> 2;
+            /* srcPtr[] head sc[1] (0x04): srcPtr[n+1] = srcPtr[n] + size[n]
+             * (sp+0x18 - 0x14 = sp+0x04 = srcPtr[n]; -0x10 = srcPtr[n+1])  */
+            sc[idx - 4] = sc[idx - 5] + sc[idx];
+            idx++;
+        } while (--i != 0);
+    }
+
+    /* Main mip-upload loop: upload each level and advance the VRAM cursor. */
+    if (mipCount > 0) {
+        for (level = 0; level < mipCount; level++) {
+            s32 bufW = w >> (level + 6);
+            s32 cursor;
+            s32 levelW, levelH;
+            s32 advance;
+
+            if (bufW <= 0) {
+                bufW = 1;
+            }
+            sc[15 + level] = (u32)bufW;             /* GS buffer width for this level */
+
+            cursor = g_vramAllocCursor;
+            sc[11 + level] = (u32)(cursor >> 8);    /* this level's TBP */
+
+            levelW = (s32)(s16)(u16)(w >> level);   /* sign-extend low 16 bits */
+            levelH = (s32)(s16)(u16)(h >> level);
+
+            func_126288(packet, (s16)sc[11 + level], (s16)sc[15 + level],
+                        (s16)fmt, 0, 0, (s16)levelW, (s16)levelH);
+            func_0011AEA0(0);
+            KickGifImageUpload(packet, (void *)(s32)sc[1 + level]);
+            WaitGsPathsIdle(0);
+
+            /* Advance the VRAM cursor by max(size >> (2*level), 0x100). */
+            advance = (s32)sc[6] >> (level * 2);
+            if (advance <= 0xFF) {
+                advance = 0x100;
+            }
+            g_vramAllocCursor = g_vramAllocCursor + advance;
+        }
+    }
+
+    /* Pack the three 64-bit GS descriptors. */
+    out[0] = (u64)(u32)sc[11]                      /* TBP0  (base tbp)     */
+             | ((u64)(u32)sc[15] << 14)            /* TBW                  */
+             | ((u64)(u32)fmt   << 20)             /* PSM                  */
+             | ((u64)(u32)sc[19] << 26)            /* TW = Log2Floor(w)    */
+             | ((u64)(u32)sc[20] << 30)            /* TH = Log2Floor(h)    */
+             | ((u64)0x8000 << 19)                 /* bit 34 (TCC)         */
+             | ((u64)(u32)sc[10] << 37)            /* CBP (CLUT tbp)       */
+             | ((u64)(u32)clut  << 51)             /* CLD/CSA field        */
+             | ((u64)-1 << 63);                    /* top control bit      */
+
+    out[1] = ((u64)(u32)(mipCount - 1) << 2)       /* MXL = mipLevelCount-1 */
+             | ((u64)0xFFA0 << 32)                 /* fixed LOD (K) field  */
+             | 0xE0;                               /* fixed low LOD field  */
+
+    out[2] = (u64)(u32)sc[12]                      /* TBP1                 */
+             | ((u64)(u32)sc[16] << 14)            /* TBW1                 */
+             | ((u64)(u32)sc[13] << 20)            /* TBP2                 */
+             | ((u64)(u32)sc[17] << 34)            /* TBW2                 */
+             | ((u64)(u32)sc[14] << 40)            /* TBP3                 */
+             | ((u64)(u32)sc[18] << 54);           /* TBW3                 */
+
+    return -1;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00292510);
 
