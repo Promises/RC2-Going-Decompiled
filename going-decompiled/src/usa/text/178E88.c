@@ -2979,9 +2979,112 @@ void func_00281020(u32 *pixels, s32 actorIdx) {
 }
 #endif
 
-/* func_002810C0: PARKED #70 — 9-save GS image-upload/path routine (func_00281020,
- * func_002860B8, WaitGsPathsIdle). GS-transfer class; needs the packet build + callee
- * signatures traced before a faithful #else. */
+/**
+ * func_002810C0 / ResolvePendingScreenGrabs — resolve the queued screen-grab
+ * captures by GS local-to-local blitting each pending region into the two
+ * inactive frame-arena halves, then feeding them to the occlusion-query
+ * coverage pass. Produces the screen-grab-as-texture sources consumed by
+ * GetUiTextureTex0 via negative ids. No-op when nothing is queued.
+ *
+ * When g_screenGrabQueryCount (g_blobShadowCount+0x1C) is nonzero it walks the
+ * 0x20-entry descriptor table at g_sceneActorMobys+0x44 (0x1B8990, stride 0x30):
+ * flag bit 2 (+0x1C & 4) marks a pending grab, the source rect is the four
+ * shorts at +0x20/+0x22/+0x24/+0x26, and flag bit 0 marks a completed capture
+ * whose count is then decremented (clearing bits 0 and 2 -> & 0xFFFFFFFA).
+ *
+ * Double-buffering: dst[0] and dst[1] point at the inactive frame-arena half
+ * (g_frameArenaBase[1 - g_frameArenaFlip]) and that half + 0x40000 words. An
+ * INIT pass (walking entries 0x1F..0 downward) blits every pending region into
+ * dst[0] with a WaitGsPathsIdle after each, recording the highest pending index
+ * in `lastPending`. Then, while a pending index remains, an OUTER loop ping-
+ * pongs between the two halves: an INNER pass blits the still-pending entries
+ * below the current index into dst[arenaIdx], ComputeOcclusionQueryCoverage
+ * (func_00281020) then reads back the OTHER half dst[1 - arenaIdx], the
+ * completed grab's count is decremented, and arenaIdx toggles for the next lap.
+ *
+ * Op-for-op-faithful #else transcription (verified against the frozen .s and
+ * Ghidra). The two inner-loop head tests are ee-gcc `beql` LIKELY branches:
+ * their delay-slot `iVar--` fires only when the branch is taken (flag bit 2
+ * clear), while the not-taken (bit set) body path performs the decrement
+ * explicitly at the tail — either way the counter decrements exactly once per
+ * iteration, so a plain `do { if (bit2) { ...blit... } counter--; ptr -= 0x30;
+ * } while (counter >= 0)` is faithful. The loop back-edges are non-likely
+ * `bgez`, so their pointer-step delay slots always run. `lastPending` (iVar5)
+ * captures the PRE-decrement index and is only assigned inside the bit-2 body. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002810C0);
+#else
+extern u32  *g_frameArenaBase[];                        /* 0x1B2220 double-buffer half pair */
+extern s32   g_frameArenaFlip;                          /* 0x1B2234 active-half index 0/1 */
+extern void  func_002860B8(s16 x, s16 y, s16 w, s16 h,  /* GS local-to-local blit */
+                           u32 *dst);
+extern void  WaitGsPathsIdle(s32 a, s32 b);             /* GIF/VIF1/VU0 path-idle spin */
+
+void func_002810C0(void) {
+    u32 *dst[4];
+    u8  *rec;
+    s32  idx;
+    s32  lastPending;
+    s32  arenaIdx;
+
+    if (g_screenGrabQueryCount != 0) {
+        rec = g_sceneActorMobys + 0x44 + 0x5D0;         /* 0x1B8F60 = entry 0x1F */
+        arenaIdx = 0;
+        lastPending = -1;
+        dst[0] = g_frameArenaBase[1 - g_frameArenaFlip];
+        dst[1] = g_frameArenaBase[1 - g_frameArenaFlip] + 0x10000;
+
+        /* INIT pass: blit every pending region into dst[0]. */
+        idx = 0x1F;
+        do {
+            if ((*(u32 *)(rec + 0x1C) & 4) != 0) {
+                func_002860B8(*(s16 *)(rec + 0x20), *(s16 *)(rec + 0x22),
+                              *(s16 *)(rec + 0x24), *(s16 *)(rec + 0x26), dst[0]);
+                WaitGsPathsIdle(0, 0);
+                lastPending = idx;
+            }
+            idx = idx - 1;
+            rec = rec - 0x30;
+        } while (idx >= 0);
+
+        if ((lastPending != -1) && (lastPending >= 0)) {
+            arenaIdx = 1 - arenaIdx;                     /* -> 1 before the outer loop */
+            do {
+                s32 inner = lastPending - 1;
+                s32 innerLast = -1;
+
+                if (inner >= 0) {
+                    rec = g_sceneActorMobys + 0x44 + inner * 0x30;
+                    do {
+                        if ((*(u32 *)(rec + 0x1C) & 4) != 0) {
+                            func_002860B8(*(s16 *)(rec + 0x20), *(s16 *)(rec + 0x22),
+                                          *(s16 *)(rec + 0x24), *(s16 *)(rec + 0x26),
+                                          dst[arenaIdx]);
+                            innerLast = inner;
+                        }
+                        inner = inner - 1;
+                        rec = rec - 0x30;
+                    } while (inner >= 0);
+                }
+
+                func_00281020(dst[1 - arenaIdx], lastPending);
+
+                rec = g_sceneActorMobys + 0x44 + lastPending * 0x30;
+                if ((*(u32 *)(rec + 0x1C) & 1) != 0) {
+                    g_screenGrabQueryCount = g_screenGrabQueryCount - 1;
+                    *(u32 *)(rec + 0x1C) = *(u32 *)(rec + 0x1C) & 0xFFFFFFFA;
+                }
+
+                if (innerLast >= 0) {
+                    WaitGsPathsIdle(0, 0);
+                }
+
+                arenaIdx = 1 - arenaIdx;
+                lastPending = innerLast;
+            } while (lastPending >= 0);
+        }
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002812A8);
