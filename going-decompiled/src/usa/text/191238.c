@@ -201,7 +201,7 @@ extern s32  sceSifRebootIop(const char *img);
 extern s32  func_0011EEA0(void);               /* sceSifSyncIop */
 extern void DebugPrintStub(const char *fmt, ...);
 extern s32  sceSifInitRpc(s32 mode);
-extern void func_0011F5E0(void *arg);
+extern void func_0011F5E0(s32 arg);
 extern void sceSifInitIopHeap(void);
 extern void func_0011F628(void);
 extern void func_0011EAC8(void);               /* sceSifLoadFileReset */
@@ -295,7 +295,7 @@ void BootSystemInit(void) {
     /* --- phase 3: RPC / CD bring-up --- */
     DebugPrintStub((const char *)D_1A9060);
     sceSifInitRpc(0);
-    func_0011F5E0(&D_356D07);
+    func_0011F5E0(0);
     sceSifInitIopHeap();
     func_0011F628();
     func_0011EAC8();
