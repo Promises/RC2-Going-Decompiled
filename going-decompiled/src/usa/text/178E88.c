@@ -2006,7 +2006,69 @@ s32 func_0027F900(const char *str, s32 maxChars, f32 scale) {
     return func_0027F858(str, maxChars, D_263B10, scale);
 }
 
+/* DrawFixedFontString(x, y, color, str, maxLen, tex0, glyphTable) — draw up to maxLen chars of a
+ * string in the fixed-cell font, emitting one DrawGlyphQuad per glyph. Each char indexes a 4-byte
+ * metric record {u, v, yofs(s8), advance(s8)} at glyphTable + char*4. Control codes 8..15 are color-
+ * escapes: when g_blobShadowCount+0x2C is set they swap the active color's low 24 bits from an 8-entry
+ * escape table (D_1A89B0[char-8]); entry [0] is latched to the passed color at entry (unless
+ * g_blobShadowCount+0x30 is set). Printable chars (advance != 0): chars in 0x80..0xA7 additionally draw
+ * an overlay glyph (code+0x40); chars < 0x20 draw a 24x16 cell in a grayscale (RGB-averaged) color;
+ * chars > 0x20 draw a 16x16 cell in the active color; space (0x20) draws nothing. The pen advances by
+ * the metric's advance byte. Sets GS TEST_1 (0x33001) once up front.
+ *
+ * Engine region — faithful #else, .s-traced (Ghidra's decompile OMITS the color-escape state machine).
+ * Plain 10-arg DrawGlyphQuad calls: param9=active color (grayscale for the <0x20 case), param10=tex0
+ * (the two are pushed as stack args; NO Option-D). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawFixedFontString);
+#else
+extern s32 D_1A89B0[];   /* 8-entry color-escape table; [0] = latched default color */
+
+void DrawFixedFontString(s32 x, s32 y, s32 color, s32 str, s32 maxLen,
+                         u64 tex0, u8 *glyphTable) {
+    const u8 *s = (const u8 *)str;   /* str param carries the pointer as an integer */
+    s32 i;
+
+    if (*(s32 *)((u8 *)&g_blobShadowCount + 0x30) == 0) {
+        D_1A89B0[0] = color;
+    }
+    AppendGsRegPacket(0x47, 0x33001);
+
+    if (maxLen == 0 || *s == 0) {
+        return;
+    }
+    for (i = 0; ; ) {
+        u8 c = *s;
+        if ((u8)(c - 8) < 8) {
+            /* control code 8..15: swap the active color's low 24 bits from the escape table */
+            if (*(s32 *)((u8 *)&g_blobShadowCount + 0x2C) != 0) {
+                color = (color & 0xFF000000) | (D_1A89B0[c - 8] & 0x00FFFFFF);
+            }
+        } else {
+            const u8 *rec = glyphTable + c * 4;
+            if ((s8)rec[3] != 0) {                     /* advance != 0 -> printable */
+                if ((u8)(c + 0x80) < 0x28) {           /* 0x80..0xA7: overlay glyph (code+0x40) */
+                    const u8 *orec = glyphTable + (c + 0x40) * 4;
+                    DrawGlyphQuad(x + (s8)orec[3], y + (s8)orec[2], 0x10, 0x10,
+                                  orec[0], orec[1], 0x10, 0x10, color, tex0);
+                }
+                if (c < 0x20) {                        /* control-range: grayscale (avg RGB) 24x16 */
+                    s32 avg = ((color & 0xFF) + ((color >> 8) & 0xFF) + ((color >> 16) & 0xFF)) / 3;
+                    s32 gray = (color & 0xFF000000) | (avg << 16) | (avg << 8) | avg;
+                    DrawGlyphQuad(x, y + (s8)rec[2], 0x18, 0x10, rec[0], rec[1], 0x18, 0x10, gray, tex0);
+                } else if (c > 0x20) {                 /* printable 16x16 (space draws nothing) */
+                    DrawGlyphQuad(x, y + (s8)rec[2], 0x10, 0x10, rec[0], rec[1], 0x10, 0x10, color, tex0);
+                }
+                x += (s8)rec[3];                       /* pen advance */
+            }
+        }
+        i++;
+        if (i == maxLen) break;
+        s++;
+        if (*s == 0) break;
+    }
+}
+#endif
 
 extern u64 GetUiTextureTex0(s32 slot);
 extern void DrawFixedFontString(s32 a, s32 b, s32 c, s32 d, s32 e, u64 tex0, u8 *glyphTable);
