@@ -2211,7 +2211,138 @@ s32 func_00294EE0(s32 classId) {
 }
 #endif
 
+/*
+ * LoadMobyClassFromWad(classId, index, desc) — on-demand load of a single moby
+ * class from its disc WAD into the gadget-class SRAM scratch, then register it.
+ *
+ *   classId (arg0, $23) — class id; the slot/remap key handed to RegisterMobyClass
+ *                         and used to index g_mobyClassSlotRemap afterwards.
+ *   index   (arg1, $19) — g_discToc entry index (stride 0x14); its +0x4B44 field is
+ *                         the compressed LBN (<<11 = byte size, subtracted from the
+ *                         desc base to locate the WAD source in the staged buffer).
+ *   desc    (arg2, $17) — load descriptor: +0x0 = mobyWad offset, +0x8 = texWad
+ *                         offset, +0xC = texWad-present flag.
+ *
+ * When the descriptor carries a texture WAD (+0xC != 0) it first decompresses that
+ * WAD into the SRAM scratch (g_gadgetClassSramBase+0x25800); if the decompressor
+ * reports success (result word == 1) it uploads two GS image levels — a 16x16 base
+ * and the mip whose dimensions come from the reused texParam block
+ * (g_respawnPlayerYaw+0x48) — via BuildGsImageUploadPacket (func_126288) +
+ * KickGifImageUpload, waiting for the GS paths to idle between them. It then
+ * decompresses the moby WAD into the same SRAM scratch and hands it to
+ * RegisterMobyClass, bumping g_mobyClassCount to the texParam +0x12 count across the
+ * call and restoring the saved count afterwards. Finally it marks the registered
+ * slot's data-size entry with the 0xFFF00000 sentinel, seeds every sub-record's
+ * +0x1C field to 4 (header +0xD entries at header +0x28, stride 0x20), and logs the
+ * remaining SRAM via DebugPrintStub (D_1A9340 = "*AFTER GADGET* - free sram").
+ *
+ * Engine-2.96 TU (prologue packs 8 saved regs at 8-byte slots) -> save-slot walled,
+ * canonical-2.9 can't byte-match; faithful #else, transcribed op-for-op from the
+ * frozen .s (incl. the DecompressWad 2-arg src/dest and the sub-record `bnel`
+ * likely-branch loop). NEEDS-ORACLE.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadMobyClassFromWad);
+#else
+extern s32  g_discToc[];                  /* 0x150084 disc TOC, stride 0x14 entries */
+extern s32  g_respawnPlayerYaw[];         /* 0x152C88; +0x48 reused as texParam block */
+extern u8   g_gadgetClassSramBase[];      /* 0x152D10 gadget-class SRAM scratch base   */
+extern u8   g_vramTextureBase[];          /* 0x1A72E4 VRAM cursors (+0x10/+0x20)       */
+extern u8   g_mobyClassSlotRemap[];       /* 0x1CE460 classId -> loaded slot           */
+extern void *g_mobyClassHeaders[];        /* 0x1CDB00 loaded class header ptr per slot  */
+extern u32  g_mobyClassDataSizes[];       /* 0x1D0D80 per-slot data size                */
+extern s32  g_mobyClassCount;             /* 0x1B1AC0 loaded-header class count          */
+extern char D_1A9340[];                   /* "*AFTER GADGET* - free sram" debug fmt      */
+extern void DecompressWad(void *src, void *dest);
+extern void func_0011AEA0(s32 mode);      /* FlushCache / DMA-arm sync                   */
+extern void func_126288(void *dst, s32 tbp, s32 a, s32 b,
+                        s32 c, s32 d, s32 w, s32 h);   /* build GS image-upload packet   */
+extern void KickGifImageUpload(void *packet, void *vramDest);
+extern void WaitGsPathsIdle(s32 mode);    /* $5=0 extra sync arg is unused (see .s)      */
+extern void RegisterMobyClass(u8 *hdr, s32 idMap, s32 nameScratch, s32 classId);
+extern s32  func_001337F0(void);          /* snd free-sram query A                       */
+extern s32  func_00133820(void);          /* snd free-sram query B                       */
+extern void DebugPrintStub(const char *fmt, ...);
+
+void LoadMobyClassFromWad(s32 classId, s32 index, void *descArg) {
+    u8  *desc = (u8 *)descArg;
+    u8   packet[0x60];                                 /* GIF packet scratch (sp+0) */
+    u8  *sram     = &g_gadgetClassSramBase[0x25800];   /* decompress dest + result flag */
+    s16 *texParam = (s16 *)&g_respawnPlayerYaw[0x12];  /* g_respawnPlayerYaw + 0x48     */
+    u8  *wadSrc;
+    s32  savedCount;
+
+    if (*(s32 *)(desc + 0xC) != 0) {                   /* texWad present */
+        /* decompress the texture WAD into the SRAM scratch */
+        wadSrc = desc + *(s32 *)(desc + 0x8);
+        wadSrc -= *(s32 *)((u8 *)g_discToc + index * 0x14 + 0x4B44) << 11;
+        func_0011AEA0(0);
+        DecompressWad(wadSrc, sram);
+        func_0011AEA0(0);
+
+        if (*(s32 *)sram == 1) {                       /* decompress succeeded */
+            /* level 0: 16x16 base image */
+            func_126288(packet,
+                (s16)((*(s32 *)(g_vramTextureBase + 0x10) >> 8) +
+                      *(u16 *)((u8 *)texParam + 0xA)),
+                1, 0, 0, 0, 0x10, 0x10);
+            func_0011AEA0(0);
+            KickGifImageUpload(packet, &g_gadgetClassSramBase[0x25830]);
+            WaitGsPathsIdle(0);
+
+            /* level 1: mip sized from the texParam block */
+            {
+                s32 texdim = *(s32 *)&g_gadgetClassSramBase[0x25818];
+                s32 clampW = texdim >> 6;
+                func_126288(packet,
+                    (((*(s32 *)(g_vramTextureBase + 0x20) +
+                       (*(s32 *)texParam << 2)) << 8) >> 16),
+                    (s16)((clampW > 0) ? clampW : *(s32 *)sram),
+                    0x1B, 0, 0, (texdim << 16) >> 16, (texdim << 16) >> 16);
+                func_0011AEA0(0);
+                KickGifImageUpload(packet, &g_gadgetClassSramBase[0x25C30]);
+                WaitGsPathsIdle(0);
+            }
+        }
+    }
+
+    /* decompress the moby WAD into the SRAM scratch */
+    wadSrc = desc + *(s32 *)(desc + 0x0);
+    wadSrc -= *(s32 *)((u8 *)g_discToc + index * 0x14 + 0x4B44) << 11;
+    func_0011AEA0(0);
+    DecompressWad(wadSrc, sram);
+    func_0011AEA0(0);
+
+    /* register the class: bump the count to the texParam +0x12 value across the
+     * call, restoring the saved count afterwards. */
+    *(u8 *)packet = *(u8 *)((u8 *)texParam + 0x10);    /* sb -> sp+0 name scratch */
+    savedCount = g_mobyClassCount;
+    g_mobyClassCount = *(s16 *)((u8 *)texParam + 0x12);
+    RegisterMobyClass(sram,
+                      (s32)texParam - (*(s16 *)((u8 *)texParam + 0x10) << 4),
+                      (s32)packet, classId);
+
+    /* mark the registered slot + seed its sub-records */
+    {
+        u8  *hdr = (u8 *)g_mobyClassHeaders[g_mobyClassSlotRemap[classId]];
+        g_mobyClassDataSizes[*(s16 *)((u8 *)texParam + 0x12)] = 0xFFF00000;
+        g_mobyClassCount = savedCount;
+        if (*(u8 *)(hdr + 0xD) != 0) {
+            s32 i = 0;
+            do {
+                s32 base = *(s32 *)(hdr + 0x28);
+                *(s32 *)(base + (i << 5) + 0x1C) = 4;
+                i++;
+            } while (i < *(u8 *)(hdr + 0xD));
+        }
+    }
+
+    {
+        s32 sramA = func_001337F0();
+        DebugPrintStub(D_1A9340, sramA, func_00133820());
+    }
+}
+#endif
 
 /*
  * func_00295238(classId) — (re)load a gadget moby-class into one of the three
