@@ -4915,7 +4915,86 @@ f32 SampleRainHeightmap(Vec4 *pos) {
 }
 #endif
 
+/* SpawnRaindropImpactFx(point): resolve where a falling rain drop lands and spawn
+ * its impact effect. `point` is the drop's world XY (a Vec4; its z is filled in
+ * here). Two modes decide the ray's start height:
+ *   - heightmap mode (g_pRainHeightmap set): sample the rain heightmap at `point`,
+ *     lift by g_rainHeightmapHeightScale; bail if that surface is at/above the
+ *     camera (camZ + 5.0); the downward ray starts 2*scale + 2.0 below it.
+ *   - weather-cell mode (else): require the XY inside the (0,0)..(1024,1024) cell
+ *     and start the ray at camZ - 20.0.
+ * A CollLine (mask 0x12) is then cast straight down from `point` to the start
+ * height. On a hit: material 0/3/4 (water) spawns an expanding SpawnWaterRipple-
+ * Particle at the hit point with a random 0.4..0.6 scale; any other material
+ * spawns a SpawnRainSplashParticle whose brightness rises with camera distance.
+ * Also reused overlay-side (0x32A588 water-sinking moby), so not weather-only.
+ *
+ * Matching build stays INCLUDE_ASM: the qword point copies + Vu0 subtract and the
+ * gp/absolute-mixed globals are an engine-2.96 layout this C won't reproduce byte
+ * for byte. The #else below is a faithful op-for-op transcription for the native
+ * cmp/coverage harness. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", SpawnRaindropImpactFx);
+#else
+extern f32  SampleRainHeightmap(Vec4 *pos);
+extern Vec4 g_cameraPos;                                          /* 0x1B52C0: camera world position; [2]/.z is height */
+extern f32  D_1A9FCC;                                             /* ripple surface z-offset (added to hit z) */
+extern s32  D_1A9E74;                                             /* ripple surfaceParam arg */
+extern s32  SpawnWaterRippleParticle(f32 scale, f32 growRate, Vec4 *pos, s32 surfaceParam, s32 rgba);
+extern s32  SpawnRainSplashParticle(Vec4 *pos, s32 brightness, s32 flag);
+
+void SpawnRaindropImpactFx(Vec4 *point) {
+    Vec4 dropPoint;   /* fStack_60 (sp+0x00): ray start / hit-point scratch */
+    Vec4 lineEnd;     /* fStack_50 (sp+0x10): ray end (down from dropPoint) */
+    Vec4 camDelta;    /* auStack_40 (sp+0x20): hit point - camera, for splash brightness */
+    f32  valid = 0.0f;
+
+    dropPoint = *point;
+
+    if (g_pRainHeightmap != 0) {
+        dropPoint.z = SampleRainHeightmap(&dropPoint) + g_rainHeightmapHeightScale;
+        if (g_cameraPos.z + 5.0f <= dropPoint.z) {
+            goto done;
+        }
+        lineEnd = dropPoint;
+        valid = 1.0f;
+        lineEnd.z = lineEnd.z - (g_rainHeightmapHeightScale + g_rainHeightmapHeightScale) - 2.0f;
+    } else {
+        if (dropPoint.x <= 0.0f) {
+            goto done;
+        }
+        if (dropPoint.y <= 0.0f) {
+            goto done;
+        }
+        if (1024.0f <= dropPoint.x) {
+            goto done;
+        }
+        if (1024.0f <= dropPoint.y) {
+            goto done;
+        }
+        lineEnd = dropPoint;
+        valid = 1.0f;
+        lineEnd.z = g_cameraPos.z - 20.0f;
+    }
+
+done:
+    if (valid != 0.0f && CollLine(&dropPoint, &lineEnd, 0x12, 0, 0) != 0) {
+        s32 material = GetCollHitMaterial();
+        if (material == 0 || material == 4 || material == 3) {
+            f32 scale;
+            dropPoint = g_collHitPoint;
+            dropPoint.z = dropPoint.z + D_1A9FCC;
+            scale = GetRandomFloatRange(0.4f, 0.6f);
+            SpawnWaterRippleParticle(scale, 5250.0f, &dropPoint, D_1A9E74, -1);
+        } else {
+            f32 dist;
+            Vec4SubVu0(&camDelta, &g_collHitPoint, &g_cameraPos);
+            dist = func_002837D0(&camDelta);
+            SpawnRainSplashParticle(&g_collHitPoint, (s32)(dist * 3.1833334f + 64.0f) & 0xff, 0);
+        }
+    }
+}
+#endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1708);
