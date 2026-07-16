@@ -1552,26 +1552,124 @@ s32 StartFrontendSegmentLoad(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294308);
 
-/* Per-frame level-load state machine (returns 1 while busy / 0 idle). TRACED,
- * jtbl mapped — ready for a careful fresh-pass #else (deferred here: the case-0/1
- * disc-sector->address chunk math is offset-dense = high silent-bug risk to rush).
- * Structure: func_00133230(); snd_Pump(); then two arms —
- *  (a) snd_CheckLoadInProgress(1)!=0: bump g_rawReadStallTimer; if
- *      g_rawReadSpindleCtrl==1 && timer>=0x2D1 -> set g_bRawReadFellBack, clear
- *      spindle, if g_levelStagingState<3 decrement it, CdStopRead(); return 0.
- *  (b) else: if QueryCdStatusOverRpc()!=0 && !g_bRawReadFellBack -> set fell-back,
- *      if state<3 clear spindle + decrement state. Then if (u32)state<6, switch:
- * jtbl_0026C8E0 (6 cases, state 0..5 -> 0x2943FC/294468/2944A4/2944CC/2944F4/294510):
- *   0: read g_discToc[+0x52BC/+0x52AC/+0x529C/+0x52A8], sll<<11 +0xFFF &0xFFFFF000
- *      (round disc sector*0x800 up to 0x800) -> g_pStagedChunkB/g_pLoadedSegment/
- *      g_stagedSegmentCeiling; clear g_scenePlayerFadedOut; KickRawFileRead; state++.
- *   1: g_discToc[+0x52B8/+0x529C/+0x52BC] variant -> KickRawFileRead; state++.
- *   2: if !g_bLoadingSceneBanksHeld: StartLevelMusicStream(); LoadGlobalSoundBank(); state++.
- *   3: snd_Pump(); if g_soundBankHandles[0]!=-1: KickLevelBankDiscLoad(0); state++.
- *   4: KickLevelBankDiscLoad(0); state++.
- *   5: snd_Pump(); if g_soundBankHandles[1]!=-1: func_00132828(); return 1.
- * All callees recovered (func_00133230/func_00132828 = void). */
+/* Per-frame level-load state machine (returns 1 while a load is in flight, else 0).
+ * Pumps sound, then either (a) while a raw read is in progress, times out a stalled
+ * spindle read (>=0x2D1 frames) into a fell-back + CdStopRead, or (b) advances a
+ * 6-state disc-staging sequence (jtbl_0026C8E0): 0/1 kick raw file reads into
+ * disc-sector->address staged chunks (sector*0x800 rounded up to 0x800), 2 starts
+ * the level music + global sound bank, 3 waits for that bank's handle, 4 kicks the
+ * next bank disc load, 5 waits for its handle then finalizes (func_00132828).
+ * Engine-2.96 (jtbl reloc) -> faithful #else switch; matching arm INCLUDE_ASM.
+ * NEEDS-ORACLE (jtbl + disc-sector chunk-align math). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", UpdateLevelStagingMachine);
+#else
+extern void func_00133230(void);
+extern void func_00132828(void);       /* declared later in-unit */
+extern s32  snd_Pump(void);            /* declared later in-unit (returns status) */
+extern s32  snd_CheckLoadInProgress(s32 arg);
+extern s32  QueryCdStatusOverRpc(void);
+extern void CdStopRead(void);
+extern void StartLevelMusicStream(void);
+extern void LoadGlobalSoundBank(void);
+extern void KickLevelBankDiscLoad(s32 arg);
+extern s32  g_levelStagingState;
+extern s32  g_stagedSegmentCeiling;
+extern u8  *g_pStagedChunkB;
+extern s16  g_scenePlayerFadedOut;
+extern s32  g_bLoadingSceneBanksHeld;
+extern s32  g_soundBankHandles[];
+extern s32  g_rawReadStallTimer;
+extern s32  g_rawReadSpindleCtrl;
+extern s32  g_bRawReadFellBack;
+
+/* disc sector count -> byte size, rounded up to a 0x800 boundary */
+#define STAGE_ROUNDUP(sectors)  ((((sectors) << 11) + 0xFFF) & 0xFFFFF000)
+
+s32 UpdateLevelStagingMachine(void) {
+    u8 *disc = (u8 *)g_discToc;
+    s32 state;
+
+    func_00133230();
+    snd_Pump();
+
+    if (snd_CheckLoadInProgress(1) != 0) {
+        g_rawReadStallTimer++;
+        if (g_rawReadSpindleCtrl != 1) {
+            return 0;
+        }
+        if (g_rawReadStallTimer < 0x2D1) {
+            return 0;
+        }
+        g_bRawReadFellBack = g_rawReadSpindleCtrl;
+        g_rawReadSpindleCtrl = 0;
+        if (g_levelStagingState < 3) {
+            g_levelStagingState--;
+        }
+        CdStopRead();
+        return 0;
+    }
+
+    if (QueryCdStatusOverRpc() != 0) {
+        if (g_bRawReadFellBack == 0) {
+            g_bRawReadFellBack = 1;
+            g_rawReadSpindleCtrl = 0;   /* delay slot of beqz(state<3): runs unconditionally (mirror arm a) */
+            if (g_levelStagingState < 3) {
+                g_levelStagingState--;
+            }
+        }
+    }
+
+    state = g_levelStagingState;
+    if ((u32)state < 6) {
+        switch (state) {
+        case 0: {
+            s32 chunkB = g_stagedSegmentCeiling - STAGE_ROUNDUP(*(s32 *)(disc + 0x52BC));
+            s32 loaded = chunkB - STAGE_ROUNDUP(*(s32 *)(disc + 0x52AC));
+            g_scenePlayerFadedOut = 0;
+            g_pStagedChunkB = (u8 *)chunkB;
+            g_pLoadedSegment = (u8 *)loaded;
+            KickRawFileRead((void *)loaded,
+                            *(s32 *)(disc + 0x52A8) + *(s32 *)(disc + 0x529C),
+                            *(s32 *)(disc + 0x52AC), g_discToc);
+            g_levelStagingState++;
+            break;
+        }
+        case 1:
+            KickRawFileRead(g_pStagedChunkB,
+                            *(s32 *)(disc + 0x52B8) + *(s32 *)(disc + 0x529C),
+                            *(s32 *)(disc + 0x52BC), g_discToc);
+            g_levelStagingState++;
+            break;
+        case 2:
+            if (g_bLoadingSceneBanksHeld == 0) {
+                StartLevelMusicStream();
+                LoadGlobalSoundBank();
+                g_levelStagingState++;
+            }
+            break;
+        case 3:
+            snd_Pump();
+            if (g_soundBankHandles[0] != -1) {
+                g_levelStagingState++;
+            }
+            break;
+        case 4:
+            KickLevelBankDiscLoad(0);
+            g_levelStagingState++;
+            break;
+        case 5:
+            snd_Pump();
+            if (g_soundBankHandles[1] != -1) {
+                func_00132828();
+                return 1;
+            }
+            break;
+        }
+    }
+    return 0;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294550);
 
