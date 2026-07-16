@@ -1875,7 +1875,161 @@ s32 StreamSceneSegment(s32 idx) {
  * portable #else; cmp-oracle'd (StartFileLoad/PumpDialogVoiceSystem mocked). */
 #endif
 
+/*
+ * BindSceneChunk — decompress the current scene WAD and (re)build its actor cast.
+ *
+ * The active scene descriptor lives at g_cameraSlotActive+0x990. First flush the
+ * cache, DecompressWad the compressed scene buffer (g_pSceneLoadBuffer @+0x70)
+ * into the decompressed data area (g_pSceneData @+0x6C), then flush again. The
+ * decompressed header is then parsed:
+ *   data[0x0] (u16) -> g_nSceneTotalFrames  (@+0x40)
+ *   data[0x8] (u16) -> DAT_001b8808         (@+0x48)
+ *   data[0xC] (u16) -> g_nSceneCastCount    (@+0x44)  actor-record count
+ *   data[0x8](s32)  -> camera-key list ptr  g_pSceneCameraKeys = data + data[0x8]
+ *   data[0x4](s32)  -> optional chunk ptr @+0x4C: 0 if data[0x4] < 0x400,
+ *                      else data + data[0x4]
+ * The entry-offset table starts at data+0x14 (one s32 per actor record). For each
+ * actor record `entry = data + table[i]`:
+ *   entry[0x0]  = class id (0x215 / 0x10d1 both remap to 0xd54)
+ *   entry[0xC]  = anim-stream reloc offset  (relocPtr = data + entry[0xC])
+ *   entry+0x10  = per-actor anim/param block bound into the class slot
+ *   entry+0x20  (u8) = sub-offset count; entry[0x2C..] are relocated by +entry+0x10
+ * A cast moby is spawned once per slot (cached in g_pSceneCastMobys[i] @+0x18C,
+ * stride 4). A class id of 0 uses the reserved moby (g_pReservedMoby0) via
+ * InitMobyFromClass; otherwise SpawnMoby allocates one. The freshly spawned moby
+ * gets its flags stamped (+0x32=0x1FF, +0x62=0xFF, +0x34|=6, +0x98=0), its 64-bit
+ * color/tint qword @+0x38 copied from the hero moby (or a default 0x0038383800000000
+ * when there is no hero moby yet), a per-class instance index (+0x42/+0x43 from the
+ * class block's +0xC counter), and +0x63=0x18 when the class byte +0x6 is set. The
+ * 0xd54 cast member (the player/Ratchet stand-in) is cached in g_pScenePlayerMoby
+ * (@+0x54). Finally the anim block is bound at classSlot[+0x48 + idx*4] and the
+ * anim-stream reloc offsets are fixed up in place.
+ *
+ * The matching build keeps the asm (save-layout wall). This #else is the faithful
+ * portable-C transcription (op-for-op from the frozen .s).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BindSceneChunk);
+#else
+extern void func_0011AEA0(s32 mode);                      /* FlushCache */
+extern void DecompressWad(void *src, void *dest);
+extern void InitMobyFromClass(u32 *classMoby, s32 arg);
+extern u32 *SpawnMoby(void);
+extern u16  g_nSceneTotalFrames;   /* 0x1B8800 (desc +0x40) */
+extern s32  DAT_001b8808;          /* 0x1B8808 (desc +0x48) */
+extern u16  g_nSceneCastCount;     /* 0x1B8804 (desc +0x44) */
+extern u32 *g_pSceneCameraKeys;    /* 0x1B8828 (desc +0x68) */
+extern s32  DAT_001b880c;          /* 0x1B880C (desc +0x4C) */
+extern s32  g_nSceneSubChunkFrame; /* 0x1B87F8 (desc +0x38) */
+extern u16 *g_pSceneData;          /* 0x1B882C (desc +0x6C) */
+extern void *g_pSceneLoadBuffer;   /* 0x1B8830 (desc +0x70) */
+extern u32 *g_pSceneCastMobys[];   /* 0x1B894C (desc +0x18C) */
+extern u32 *g_pScenePlayerMoby;    /* 0x1B8814 (desc +0x54) */
+extern u32 *g_pReservedMoby0;
+extern s32  g_pHeroMoby;           /* 0x18C0B0 == g_soundBankHandlesBlk+0x2290 */
+
+void BindSceneChunk(void) {
+    u16 *data;
+    s32  entryOff;
+    s32  classId;
+    s32  relocOff;
+    s32  i;
+    s32 *entry;
+    u32 *moby;
+    u8   instIdx;
+
+    func_0011AEA0(0);
+    DecompressWad(g_pSceneLoadBuffer, g_pSceneData);
+    func_0011AEA0(0);
+
+    data = g_pSceneData;
+    g_nSceneSubChunkFrame = 0;
+    g_nSceneTotalFrames = data[0];
+    DAT_001b8808 = data[4];
+    g_nSceneCastCount = data[6];
+    g_pSceneCameraKeys = (u32 *)((s32)data + *(s32 *)(data + 8));
+    if (*(s32 *)(data + 2) < 0x400) {
+        DAT_001b880c = 0;
+    } else {
+        DAT_001b880c = (s32)data + *(s32 *)(data + 2);
+    }
+
+    i = 0;
+    if ((s16)g_nSceneCastCount > 0) {
+        s32 *entryTable = (s32 *)(data + 10);   /* data + 0x14 */
+
+        entryOff = *entryTable;
+        do {
+            u32 *reservedMoby = g_pReservedMoby0;
+
+            entryTable++;
+            entry = (s32 *)((s32)data + entryOff);
+            classId = entry[0];
+            relocOff = entry[3];               /* entry+0xC */
+            if (classId == 0x215 || classId == 0x10d1) {
+                classId = 0xd54;
+            }
+
+            moby = g_pSceneCastMobys[i];
+            if (moby == 0) {
+                u16 flags34;
+
+                if (classId == 0) {
+                    InitMobyFromClass(reservedMoby, 0);
+                    flags34 = (u16)reservedMoby[0xd];
+                    moby = reservedMoby;
+                } else {
+                    moby = SpawnMoby();
+                    flags34 = (u16)moby[0xd];
+                }
+                *(u16 *)((s32)moby + 0x32) = 0x1ff;
+                *(u8 *)((s32)moby + 0x62) = 0xff;
+                *(u16 *)(moby + 0xd) = flags34 | 6;   /* +0x34 |= 6 */
+                moby[0x26] = 0;                        /* +0x98 = 0 */
+                if (g_pHeroMoby == 0) {
+                    moby[0xe] = 0;                     /* +0x38 low  word */
+                    moby[0xf] = 0x383838;              /* +0x3C high word */
+                } else {
+                    *(u64 *)(moby + 0xe) = *(u64 *)(g_pHeroMoby + 0x38);
+                }
+                if (*(char *)(moby[9] + 6) != 0) {     /* class block +6 */
+                    *(u8 *)((s32)moby + 0x63) = 0x18;
+                }
+                instIdx = *(u8 *)(moby[9] + 0xc);      /* class instance counter */
+                *(u8 *)(moby[9] + 0xc) = instIdx + 1;
+                *(u8 *)((s32)moby + 0x43) = instIdx;
+                *(u8 *)((s32)moby + 0x42) = instIdx;
+                g_pSceneCastMobys[i] = moby;
+                if (*(s16 *)((s32)moby + 0xaa) == 0xd54) {
+                    g_pScenePlayerMoby = moby;
+                }
+                instIdx = *(u8 *)((s32)moby + 0x42);
+            } else {
+                instIdx = *(u8 *)((s32)moby + 0x42);
+            }
+
+            moby[0x1a] = (s32)data + relocOff;         /* +0x68 = relocPtr */
+            *(s32 **)(moby[9] + (u32)instIdx * 4 + 0x48) = entry + 4;  /* entry+0x10 */
+
+            if (*(char *)((s32)entry + 0x20) != 0) {
+                s32 *subOff = entry + 0xb;             /* entry+0x2C */
+                s32  n = 0;
+                do {
+                    n++;
+                    *subOff = (s32)(entry + 4) + *subOff;
+                    subOff++;
+                } while (n < (s32)*(u8 *)((s32)entry + 0x20));
+            }
+
+            i++;
+            if ((s16)g_nSceneCastCount <= i) {
+                break;
+            }
+            entryOff = *entryTable;
+        } while (1);
+    }
+}
+#endif
 
 /*
  * LoadGlobalDialogScene(sceneIndex, mode) — stream a GLOBAL cinematic/dialog
