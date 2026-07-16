@@ -152,7 +152,245 @@ void SetupMemoryArenaTable(void) {
 }
 #endif
 
+/*
+ * BootSystemInit — one-shot boot/hardware bring-up, run at the top of
+ * LoadLevelAndInitHealth (the resident main()'s first call). Sequential init
+ * chain (~69 calls) in these phases:
+ *   1. HW bring-up: VIF1/GIF + DMAC reset, video mode, GS display buffers, cache,
+ *      vblank ISR install, memory-arena table + frame arenas, VIF1 DMAC handlers,
+ *      GS-state init, cd init.
+ *   2. IOP reboot: retry-loop sceSifRebootIop(cdrom0:\IOPRP255.IMG) then a second
+ *      retry-loop sync (func_0011EEA0), both spun until non-zero.
+ *   3. RPC/CD bring-up: RPC + IOP-heap + loadfile init, cd re-init, DVD mmode(2),
+ *      volume-ID sector read (LBA 0x3E8) -> BuildSaveGamePaths, USA hard-codes
+ *      NTSC (g_bPalMode=0), VIF0/VU0 boot chain kick, disc TOC load.
+ *   4. IRX bundle: read+decompress the boot WAD (top-of-RAM src -> 0x614000-region
+ *      dstBuf), sceSifAllocSysMemory IOP heap, then LoadIrxModuleFromBuffer x10
+ *      from the (offset,size) pair table inside the decompressed image, free heap.
+ *   5. Subsystems: upload-ring, controllers, memcard, screen geometry, camera
+ *      projection, sound emitters, file-load system.
+ *   6. VRAM/model consts: reset loaded-variant caches to -1, seed the VRAM static
+ *      texture base fields, mirror the player-model buffer base.
+ *   7. OSD screen-type branch: func_00131628 -> the widescreen byte D_1A7BB9
+ *      (1 for type 1, else 0 for types 0/2).
+ *   8. Boot texture + HW regs: fill an 8x8 gray boot texture (0x80808080) and
+ *      GS-upload it to block 0x3FFB, start RCNT1 (hblank clock, mode 0x82), reset
+ *      the cinematic queue.
+ * void, no params. Sole ELF writer of g_bPalMode (region anchor; EU differs here).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BootSystemInit);
+#else
+/* Phase 1-5 HW/IOP/subsystem callees (declared below BootSystemInit in-unit or
+ * in sibling TUs; block-scope externs keep the #else self-contained). */
+extern void func_124418(void);                 /* ResetVif1AndGif */
+extern void ResetDmacChannels(s32 mode);
+extern void SetVideoMode(void);
+extern void EnableDmacChannels(void);
+extern void SetupGsDisplayBuffers(s32 mode);
+extern void func_0011AE70(s32 mode);           /* EnableCache */
+extern void func_126DC0(void *handler);        /* SetVblankStartHandler */
+extern void func_002FCFC8(void);
+extern void ResetFrameArenas(void);
+extern void InstallVif1DmacHandlers(void);
+extern void AppendFrameInitGsState(void);
+extern void OnVblankInterrupt(void);
+extern s32  sceCdInit(s32 mode);
+extern s32  sceCdDiskReady(s32 mode);
+extern s32  sceSifRebootIop(const char *img);
+extern s32  func_0011EEA0(void);               /* sceSifSyncIop */
+extern void DebugPrintStub(const char *fmt, ...);
+extern s32  sceSifInitRpc(s32 mode);
+extern void func_0011F5E0(void *arg);
+extern void sceSifInitIopHeap(void);
+extern void func_0011F628(void);
+extern void func_0011EAC8(void);               /* sceSifLoadFileReset */
+extern s32  sceCdMmode(s32 media);
+extern void func_0011E0A0(void);
+extern s32  CdReadSync(s32 lba, s32 nsectors, void *buf);
+extern void func_0011AEA0(s32 a);              /* FlushCache */
+extern void BuildSaveGamePaths(void *scratch);
+extern void KickVif0Chain(void *chain);
+extern void LoadDiscToc(void *arg);
+extern void DecompressWad(void *src, void *dest);
+extern void *func_0011E828(s32 a, s32 size, s32 c); /* sceSifAllocSysMemory */
+extern s32  LoadIrxModuleFromBuffer(void *image, s32 size, void *arg);
+extern void sceSifFreeSysMemory(void *handle);
+extern void InitIopUploadRing(void);
+extern void InitControllers(void);
+extern void InitMemCardLib(void);
+extern void InitScreenGeometry(void);
+extern void BuildCameraProjection(void);
+extern void InitSoundEmitterSystem(void);
+extern void InitFileLoadSystem(void);
+extern void func_00294970(void);
+extern s32  func_00131628(void);               /* read OSD screen type */
+extern void FillMemory32(void *dst, u32 word, s32 nbytes);
+extern void func_126288(void *dst, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h);
+extern void KickGifImageUpload(void *packet, void *src);
+extern void WaitGsPathsIdle(s32 arg);
+extern void func_0026FE58(void);
+extern void ResetCinematicQueue(void *queue);
+
+/* Globals touched by boot init. */
+extern s32  g_bProgressiveScan;                /* 0x1A7BC0 */
+extern u8   D_1A7BB9;                           /* widescreen byte */
+extern s32  g_bPalMode;                         /* 0x1A7B98 (USA=0 NTSC) */
+extern s32  g_discToc[];                        /* master disc TOC 0x14B540 */
+extern u8   g_memoryArenaTable[];               /* 0x1BAE40, +0x78 = player buf base */
+extern s32  g_loadedShipModelVariant;           /* 0x152C18 */
+extern s32  g_loadedShipTextureIndex;           /* 0x152C30 */
+extern s32  g_loadedArmorVariant;               /* 0x1A7290 */
+extern s32  g_loadedHeldItemModelId;            /* 0x1A72C0 */
+extern u8   g_vramTextureBase[];                /* 0x1A72E4 VRAM static tex base */
+extern u8   g_vramTextureBase_28[];             /* 0x1A730C (g_vramTextureBase+0x28) */
+extern void *g_pPlayerModelBuffer;              /* 0x1A7294 */
+extern u8   g_collHitTriVert2[];                /* +0x10 = 0x1BAF80 boot-tex fill */
+extern u8   g_cinematicQueue[];                 /* 0x1BACC0 */
+
+/* Boot-image / IOP-reboot data blobs (raw .s symbols). */
+extern u8   D_1A9048[];   /* "cdrom0:\IOPRP255.IMG;1" */
+extern u8   D_1A9060[];   /* "Rebooted IOP" fmt */
+extern u8   D_1A9070[];   /* post-IRX status fmt */
+extern u8   D_356D07;     /* dstBuf page-align source (D_356D07 & 0xFFFFC000) */
+extern u8   D_1FF0174[];  /* top-of-RAM WAD staging base */
+extern u8   D_10E9E0[];   /* VIF0/VU0 boot chain */
+
+/* RCNT1 (hblank clock) registers. */
+#define REG_RCNT1_COUNT (*(volatile u32 *)0x10000800)
+#define REG_RCNT1_MODE  (*(volatile u32 *)0x10000810)
+
+void BootSystemInit(void) {
+    u8  scratch[0x800];   /* sp+0: CdReadSync target + GIF upload packet */
+    void *iopHeap;
+    s32 osdScreenType;
+    u8 *srcBuf;
+    u8 *dstBuf;
+
+    /* --- phase 1: HW bring-up --- */
+    func_124418();
+    ResetDmacChannels(1);
+    g_bProgressiveScan = 0;
+    D_1A7BB9 = 0;
+    SetVideoMode();
+    EnableDmacChannels();
+    SetupGsDisplayBuffers(1);
+    func_0011AE70(3);
+    func_126DC0(&OnVblankInterrupt);
+    func_002FCFC8();
+    SetupMemoryArenaTable();
+    func_002FCFC8();
+    ResetFrameArenas();
+    InstallVif1DmacHandlers();
+    AppendFrameInitGsState();
+    sceCdInit(0);
+    sceCdDiskReady(0);
+
+    /* --- phase 2: IOP reboot (two retry loops until non-zero) --- */
+    do {
+    } while (sceSifRebootIop((const char *)D_1A9048) == 0);
+    do {
+    } while (func_0011EEA0() == 0);
+
+    /* --- phase 3: RPC / CD bring-up --- */
+    DebugPrintStub((const char *)D_1A9060);
+    sceSifInitRpc(0);
+    func_0011F5E0(&D_356D07);
+    sceSifInitIopHeap();
+    func_0011F628();
+    func_0011EAC8();
+    sceCdInit(0);
+    sceCdDiskReady(0);
+    sceCdMmode(2);
+    func_0011E0A0();
+    CdReadSync(0x3E8, 1, scratch);
+    func_0011AEA0(0);
+    g_bPalMode = 0;
+    BuildSaveGamePaths(scratch);
+    KickVif0Chain(&D_10E9E0);
+    LoadDiscToc(&D_1FF0174);
+
+    /* --- phase 4: IRX bundle load --- */
+    /* src = top-of-RAM staging - (discToc[0x33C] << 11); dst = page-aligned
+     * D_356D07 + 0x2C0000. Read+decompress the boot WAD, then load 10 IRX
+     * modules from the (offset,size) pair table inside the decompressed image. */
+    srcBuf = (D_1FF0174 + 0x7E8C) - (*(s32 *)((u8 *)g_discToc + 0x33C) << 11);
+    dstBuf = (u8 *)(((u32)&D_356D07 & 0xFFFFC000) + 0x2C0000);
+    CdReadSync(*(s32 *)((u8 *)g_discToc + 0x338) + *(s32 *)((u8 *)g_discToc + 0x32C),
+               1, srcBuf);
+    func_0011AEA0(0);
+    DecompressWad(srcBuf, dstBuf);
+    func_0011AEA0(0);
+    iopHeap = func_0011E828(1, 0x55730, 0);
+    LoadIrxModuleFromBuffer(*(s32 *)(dstBuf + 0x50) + dstBuf, *(s32 *)(dstBuf + 0x54), iopHeap);
+    LoadIrxModuleFromBuffer(*(s32 *)(dstBuf + 0x48) + dstBuf, *(s32 *)(dstBuf + 0x4C), iopHeap);
+    LoadIrxModuleFromBuffer(*(s32 *)(dstBuf + 0x18) + dstBuf, *(s32 *)(dstBuf + 0x1C), iopHeap);
+    LoadIrxModuleFromBuffer(*(s32 *)(dstBuf + 0x20) + dstBuf, *(s32 *)(dstBuf + 0x24), iopHeap);
+    LoadIrxModuleFromBuffer(*(s32 *)(dstBuf + 0x28) + dstBuf, *(s32 *)(dstBuf + 0x2C), iopHeap);
+    LoadIrxModuleFromBuffer(*(s32 *)(dstBuf + 0x30) + dstBuf, *(s32 *)(dstBuf + 0x34), iopHeap);
+    LoadIrxModuleFromBuffer(*(s32 *)(dstBuf + 0x38) + dstBuf, *(s32 *)(dstBuf + 0x3C), iopHeap);
+    LoadIrxModuleFromBuffer(*(s32 *)(dstBuf + 0x40) + dstBuf, *(s32 *)(dstBuf + 0x44), iopHeap);
+    LoadIrxModuleFromBuffer(*(s32 *)(dstBuf + 0x40) + dstBuf, *(s32 *)(dstBuf + 0x44), iopHeap);
+    LoadIrxModuleFromBuffer(*(s32 *)(dstBuf + 0x58) + dstBuf, *(s32 *)(dstBuf + 0x5C), iopHeap);
+    sceSifFreeSysMemory(iopHeap);
+    DebugPrintStub((const char *)D_1A9070);
+
+    /* --- phase 5: subsystems --- */
+    InitIopUploadRing();
+    sceCdDiskReady(0);
+    InitControllers();
+
+    /* --- phase 6: VRAM / model-cache constants --- */
+    g_loadedShipModelVariant = -1;
+    g_loadedArmorVariant = -1;
+    g_loadedHeldItemModelId = -1;
+    *(s32 *)(g_vramTextureBase + 0x1C) = 0x70000;
+    *(s32 *)(g_vramTextureBase + 0x20) = 0xB0000;
+    *(s32 *)(g_vramTextureBase + 0x24) = 0x140000;
+    *(s32 *)(g_vramTextureBase_28 + 0x0) = 0x1D0000;
+    *(s32 *)(g_vramTextureBase_28 + 0x4) = 0x1E0000;
+    g_pPlayerModelBuffer = *(void **)(g_memoryArenaTable + 0x78);
+    *(s32 *)(g_vramTextureBase + 0x18) = 0x60000;
+    *(s32 *)(g_vramTextureBase + 0x14) = 0;
+    sceCdDiskReady(0);
+    g_loadedShipTextureIndex = -1;
+    InitMemCardLib();
+    InitScreenGeometry();
+    BuildCameraProjection();
+    ResetFrameArenas();
+    sceCdDiskReady(0);
+    InitSoundEmitterSystem();
+    InitFileLoadSystem();
+    func_00294970();
+
+    /* --- phase 7: OSD screen-type -> widescreen byte --- */
+    osdScreenType = func_00131628();
+    if (osdScreenType == 1) {
+        D_1A7BB9 = 1;
+    } else {
+        if (osdScreenType < 2) {
+            if (osdScreenType != 0) {
+                goto after_screen_type;
+            }
+        } else if (osdScreenType != 2) {
+            goto after_screen_type;
+        }
+        D_1A7BB9 = 0;
+    }
+after_screen_type:
+
+    /* --- phase 8: boot texture + HW regs --- */
+    FillMemory32(g_collHitTriVert2 + 0x10, 0x80808080, 0x100);
+    func_126288(scratch, 0x3FFB, 1, 0, 0, 0, 8, 8);
+    func_0011AEA0(0);
+    KickGifImageUpload(scratch, g_collHitTriVert2 + 0x10);
+    WaitGsPathsIdle(0);
+    func_0026FE58();
+    REG_RCNT1_MODE = 0x82;
+    REG_RCNT1_COUNT = 0;
+    ResetCinematicQueue(g_cinematicQueue);
+}
+#endif
 
 /*
  * func_00291980 / func_002919A0 (0x291980 / 0x2919A0) — thin frame-keeping
