@@ -4830,7 +4830,363 @@ Moby *func_002B02C8(Vec4 *queryVec, f32 a, f32 b, f32 c, f32 d) {
 }
 #endif
 
+/**
+ * SelectLockOnTarget — the moby lock-on / auto-aim target selector.
+ *
+ * Walks the per-frame flagged-moby list (g_mobyFlagged1000List), and for every
+ * candidate that (a) is combat-alive, (b) survives the gate12 predicate
+ * (func_002AC9E0), (c) is not on either exclusion list (by moby ptr or by class
+ * id) and (d) sits inside an aim cone, computes an angular+distance cost. The
+ * candidate is confirmed by a line-of-sight ray (CollLine) — with a special
+ * class-0xC20 / class-filter carve-out when the player is in progress-state 0xB.
+ * Every survivor is appended to the out-list (*pOutCount/pOutList, capped at
+ * maxOut). Finally the lowest-cost survivor is moved to the front of the
+ * out-list. Returns the best target moby (0 if none).
+ *
+ * Params (5 floats then 8 int/ptr, per the EABI $f12-$f16 / $4-$11 split):
+ *   enable1     master enable + the "reference cone half-angle" scalar; 0 -> no-op.
+ *   coneYaw2    yaw cone half-angle (radians); 0 -> no-op.
+ *   range3      max target distance; 0 -> no-op.
+ *   conePitch4  pitch cone half-angle (radians).
+ *   innerAngle5 inner (tight) cone half-angle used near-field.
+ *   searchOrigin  aim ray origin Vec4 (eye/muzzle).
+ *   aimDir      aim direction Vec4.
+ *   pOutCount   out: number of survivors written to pOutList.
+ *   pOutList    out: survivor moby-ptr array.
+ *   maxOut      capacity of pOutList.
+ *   excludeMobyList  0-terminated moby-ptr blacklist (or 0).
+ *   gate12      passed to func_002AC9E0 (predicate mode); also selects the two
+ *               scoring methods below.
+ *   excludeClassList  (-1)-terminated class-id blacklist (or 0).
+ *
+ * Two scoring methods, selected by D_1A8CA0 (alt-gravity / pause flag):
+ *   Method A (D_1A8CA0 == 0): planar-bearing method — Atan2fPoly on the xy/z
+ *       deltas of candidate-vs-aim, differenced by AngleShortestDiff.
+ *   Method B (D_1A8CA0 != 0): plane-projection method — build a gravity plane
+ *       basis (func_002B0E40), project candToOrigin and aimDir into it, and take
+ *       the between-vector angle via acos (func_00283B60, as pi/2 - acos = asin).
+ *   Both methods are only entered when enable1 < pi OR coneYaw2 < pi; otherwise
+ *   the angle terms stay 0 and only the distance term scores (LAB_002b09a0).
+ *
+ * NOTE: not byte-matched (engine ee-gcc 2.96 region) — this is the faithful
+ * op-for-op #else coverage body; the matching arm above keeps its asm include.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B03E8);
+#else
+extern f32 func_002837D0(void *vec);           /* Vec2LengthVu0: planar xy magnitude */
+extern f32 func_00283B60(f32 x);               /* acos */
+extern f32 func_00284630(f32 a, f32 b);        /* AngleShortestDiff */
+extern s32 func_002AC9E0(Moby *m);             /* gate predicate (class filter) */
+extern s32 func_00301370(s32 classId);         /* class-id accept filter */
+extern s32 g_playerProgress;                   /* persistent progress counter */
+extern Moby *g_pCollHitMoby;                   /* moby hit by the last CollLine */
+extern s16 D_0018a168;                         /* first-person flag (g_heroFacingDir + 0x88) */
+
+int func_002B03E8(f32 enable1, f32 coneYaw2, f32 range3, f32 conePitch4,
+                  f32 innerAngle5, void *searchOrigin, void *aimDir,
+                  int *pOutCount, int *pOutList, int maxOut,
+                  int *excludeMobyList, int gate12, int *excludeClassList) {
+    Vec4 candPos;          /* sp+0x00 (uStack_180): candidate world position, adjusted */
+    Vec4 scratchA;         /* sp+0x10 (auStack_170): Vec4Scale scratch (method B / axis nudge) */
+    Vec4 candToOrigin;     /* sp+0x20 (auStack_160): candPos - searchOrigin */
+    Vec4 planeNormal;      /* sp+0x30 (auStack_150): method-B gravity-plane normal */
+    Vec4 scratchB;         /* sp+0x40 (auStack_140): Vec4Scale scratch (method B) */
+    Vec4 tanCand;          /* sp+0x50 (auStack_130): candToOrigin projected into plane */
+    Vec4 scratchC;         /* sp+0x60 (auStack_120): normal * dot(normal, aimDir) */
+    Vec4 tanAim;           /* sp+0x70 (auStack_110): aimDir projected into plane */
+    Vec4 scratchD;         /* sp+0x80 (auStack_100): reconstructed aim-in-plane vector */
+
+    Moby *moby;
+    Moby *best = 0;
+    f32 bestScore = 999999.0f;   /* 0x497423F0 */
+    s32 index = 0;               /* iVar7 (alive-candidate counter) */
+    s32 nextIdx = 0;             /* iStack_c0 (0xC0): list index of the NEXT candidate */
+    s32 gatePass;                /* func_002AC9E0 result (lVar4) */
+    f32 *combat;                 /* GetMobyCombatState block (pfVar8) */
+
+    *pOutCount = 0;
+    if (enable1 == 0.0f) {
+        return 0;
+    }
+    if (coneYaw2 == 0.0f) {
+        return 0;
+    }
+    if (range3 == 0.0f) {
+        return 0;
+    }
+
+    moby = (Moby *)g_mobyFlagged1000List[0];
+    if (moby != 0) {
+        char alive = *(char *)((u8 *)moby + 0x31);
+
+        do {
+            nextIdx = index + 1;
+            if (alive != '\0') {
+                s32 state;
+
+                nextIdx = index + 1;
+                gatePass = func_002AC9E0(moby);
+                if ((gatePass == 0) && (gate12 == 0)) {
+                    goto advance;
+                }
+
+                nextIdx = index + 1;
+                state = func_002AC058(moby);
+                if (state == 0) {
+                    goto advance;
+                }
+                combat = (f32 *)state;
+                if ((*combat <= 0.0f) && (gatePass == 0)) {
+                    goto advance;
+                }
+
+                /* class-5 candidates skip the gate-null reject; both accepted
+                 * paths advance the list index by one (via nextIdx = iStack_c0). */
+                if ((moby != 0) && (*(int *)((u8 *)moby + 0x24) != 0) &&
+                    (*(short *)(*(int *)((u8 *)moby + 0x24) + 0x46) == 5)) {
+                    nextIdx = index + 1;
+                } else {
+                    nextIdx = index + 1;
+                    if (gatePass == 0) {
+                        goto advance;
+                    }
+                    nextIdx = index + 1;
+                }
+
+                /* exclusion list #1: moby pointer */
+                if (excludeMobyList != 0) {
+                    s32 slot = 0;
+                    int *cursor = excludeMobyList;
+                    int ent = *cursor;
+                    while (ent != 0) {
+                        if ((int)moby == ent) {
+                            if (excludeMobyList[slot] != 0) {
+                                goto advance;
+                            }
+                            break;
+                        }
+                        cursor++;
+                        slot++;
+                        ent = *cursor;
+                    }
+                }
+
+                /* exclusion list #2: class id */
+                if (excludeClassList != 0) {
+                    s32 want = *excludeClassList;
+                    s32 slot = 0;
+                    if (want != -1) {
+                        int *cursor = excludeClassList;
+                        do {
+                            if (*(short *)((u8 *)moby + 0xAA) == want) {
+                                if (excludeClassList[slot] != -1) {
+                                    goto advance;
+                                }
+                                break;
+                            }
+                            cursor++;
+                            want = *cursor;
+                            slot++;
+                        } while (want != -1);
+                    }
+                }
+
+                /* candidate world position (moby +0x10), z-adjusted by the combat
+                 * state's +0x10 height along the moby axis (or straight up). */
+                candPos = *(Vec4 *)((u8 *)moby + 0x10);
+                if ((D_1A8CA0 == 0) && (D_0018a168 == 0)) {
+                    candPos.z = candPos.z + combat[4];
+                } else {
+                    Vec4ScaleVu0(&scratchA, combat[4], (Vec4 *)((u8 *)moby + 0xE0));
+                    Vec4AddVu0(&candPos, &candPos, &scratchA);
+                }
+
+                Vec4SubVu0(&candToOrigin, &candPos, (Vec4 *)searchOrigin);
+                {
+                    f32 dist = Vec3LengthVu0(&candToOrigin);
+                    if ((dist <= range3) && (0.1f <= dist)) {
+                        f32 angleH = 0.0f;      /* fVar19 / $f22 */
+                        f32 angleV = 0.0f;      /* fVar18 / $f23 */
+                        f32 conePitchN = 0.0f;  /* fVar20 / $f27-seed */
+                        f32 t = func_002A8910(-2.0f, 0.0f, 1.0f, 0.0f, dist / range3);
+                        f32 coneYawBase;        /* $f1 carried into the join */
+                        int pitchWide;          /* bVar2 carried across the goto */
+
+                        coneYawBase = coneYaw2;
+                        if ((enable1 < 3.1415927f) || (coneYaw2 < 3.1415927f)) {
+                            if (D_1A8CA0 == 0) {
+                                /* METHOD A: planar bearing via atan2 + shortest-diff */
+                                f32 a0 = func_00283BF8(candToOrigin.x, candToOrigin.y);
+                                f32 a1 = func_00283BF8(((f32 *)aimDir)[0], ((f32 *)aimDir)[1]);
+                                f32 innerN;
+                                angleH = func_00284630(a0, a1);
+
+                                innerN = enable1;
+                                if (angleV < innerAngle5) {
+                                    innerN = innerAngle5 + (enable1 - innerAngle5) * t;
+                                }
+                                if (angleH < innerN) {
+                                    f32 b0 = func_00283BF8(func_002837D0(&candToOrigin),
+                                                           candToOrigin.z);
+                                    f32 b1 = func_00283BF8(func_002837D0((Vec4 *)aimDir),
+                                                           ((f32 *)aimDir)[2]);
+                                    angleV = func_00284630(b0, b1);
+                                    pitchWide = conePitchN < conePitch4;
+                                    coneYawBase = coneYaw2;   /* $f1 = coneYaw2 */
+                                    goto join097c;
+                                }
+                            } else {
+                                /* METHOD B: gravity-plane projection + acos angle */
+                                f32 lenTanCand;   /* $f21 */
+                                f32 lenTanAim;    /* $f20 */
+                                f32 between;      /* $f22 */
+                                f32 innerN;
+
+                                func_002B0E40((Vec4 *)searchOrigin, &planeNormal, 1);
+                                Vec4ScaleVu0(&scratchB, Vec3DotVu0(&planeNormal, &candToOrigin),
+                                             &planeNormal);
+                                Vec4SubVu0(&tanCand, &candToOrigin, &scratchB);
+                                Vec4ScaleVu0(&scratchC, Vec3DotVu0(&planeNormal, (Vec4 *)aimDir),
+                                             &planeNormal);
+                                Vec4SubVu0(&tanAim, (Vec4 *)aimDir, &scratchC);
+                                between = Vec3DotVu0(&tanAim, &tanCand);
+                                if (angleV <= between) {
+                                    lenTanCand = Vec3LengthVu0(&tanCand);
+                                    if (lenTanCand != angleV) {
+                                        lenTanAim = Vec3LengthVu0(&tanAim);
+                                        if (lenTanAim != angleV) {
+                                            angleH = 1.5707963f -
+                                                     func_00283B60(between /
+                                                                   (lenTanCand * lenTanAim));
+                                            innerN = enable1;
+                                            if (angleV < innerAngle5) {
+                                                innerN = innerAngle5 +
+                                                         (enable1 - innerAngle5) * t;
+                                            }
+                                            if (angleH < innerN) {
+                                                f32 mag, projLen;
+                                                Vec4ScaleVu0(&scratchD, lenTanAim / lenTanCand,
+                                                             &tanCand);
+                                                Vec4AddVu0(&scratchD, &scratchD, &scratchC);
+                                                projLen = Vec3LengthVu0(&scratchD);
+                                                mag = Vec3DotVu0(&scratchD, &candToOrigin);
+                                                pitchWide = conePitchN < conePitch4;
+                                                angleV = 1.5707963f -
+                                                         func_00283B60(mag /
+                                                                       (projLen * dist));
+                                                coneYawBase = coneYaw2;
+                                                goto join097c;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            goto advance;
+                        } else {
+                            goto score;
+                        }
+
+                    join097c:
+                        {
+                            f32 pitchN = coneYawBase;   /* fVar20 default = coneYaw2 */
+                            if (pitchWide) {
+                                pitchN = conePitch4 + (coneYaw2 - conePitch4) * t;
+                            }
+                            if (angleV < pitchN) {
+                                goto score;
+                            }
+                            goto advance;
+                        }
+
+                    score:
+                        {
+                            f32 cost = angleH * 3.0f + angleV * dist * 0.2f + dist * 0.1f;
+                            f32 candScore;
+                            Moby *candBest;
+
+                            if (gatePass != 0) {
+                                cost = cost * 0.8f * range3;
+                            }
+                            candBest = best;
+                            candScore = bestScore;
+                            if (cost < bestScore) {
+                                if (CollLine(searchOrigin, &candPos, 0x12, moby, 0) != 0) {
+                                    if (g_playerProgress == 0xB) {
+                                        if (g_pCollHitMoby == 0) {
+                                            goto advance;
+                                        }
+                                        if (*(short *)((u8 *)g_pCollHitMoby + 0xAA) == 0xC20) {
+                                            goto append;
+                                        }
+                                    }
+                                    if (g_pCollHitMoby == 0) {
+                                        goto advance;
+                                    }
+                                    if (func_00301370(*(u16 *)((u8 *)g_pCollHitMoby + 0xAA)) == 0) {
+                                        goto advance;
+                                    }
+                                }
+                                candScore = cost;
+                                candBest = moby;
+                            }
+                        append:
+                            bestScore = candScore;
+                            best = candBest;
+                            if ((pOutList != 0) && (*pOutCount < maxOut)) {
+                                s32 n = *pOutCount;
+                                pOutList[n] = (int)moby;
+                                *pOutCount = n + 1;
+                            }
+                        }
+                    }
+                }
+            }
+        advance:
+            index = nextIdx;
+            moby = (Moby *)g_mobyFlagged1000List[index];
+            if (moby == 0) {
+                break;
+            }
+            alive = *(char *)((u8 *)moby + 0x31);
+        } while (1);
+    }
+
+    /* Move the best (lowest-cost) survivor to the front of the out-list. */
+    if (pOutList == 0) {
+        return (int)best;
+    }
+    if (best != 0) {
+        s32 i = 0;
+        if (maxOut > 0) {
+            int first = pOutList[0];
+            int *scan = pOutList;
+            if (first != (int)best) {
+                do {
+                    i++;
+                    scan++;
+                    if (maxOut <= i) {
+                        goto done_reorder;
+                    }
+                } while (*scan != (int)best);
+                if (i != 0) {
+                    pOutList[0] = (int)best;
+                    *scan = first;
+                }
+            }
+        }
+    done_reorder:
+        if (i == maxOut) {
+            pOutList[0] = (int)best;
+        }
+    }
+    if (maxOut <= *pOutCount) {
+        return (int)best;
+    }
+    pOutList[*pOutCount] = 0;
+    return (int)best;
+}
+#endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0BD8);
