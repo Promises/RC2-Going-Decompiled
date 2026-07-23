@@ -2731,7 +2731,91 @@ void func_00294C48(s32 classId, s32 slot) {
 }
 #endif
 
+/* func_00294CD0(id): resolve + commit the gadget/weapon equip-slot for weapon key
+ * `id`. Early-outs while a load is in flight (func_00294EE0 busy, or
+ * g_fileLoadState set). Derives the two equipped-weapon keys
+ * (g_weaponTable[slot*0xE0 +0x14], slots = g_itemEquippedSlot indexed by
+ * g_soundBankHandlesBlk[+0x22E4] and g_itemEquipSlotTable[0], with a D_1A7A0C
+ * fallback when they tie), masks each key to -1 if it equals `id`, then matches
+ * both against the 3 gadget-class slots (g_gadgetClassToc via the
+ * g_respawnPlayerYaw[+0x7C + i*4] indices) to find their match indices. Picks the
+ * target slot: 0 if both keys already matched, else the first index >=1 skipping
+ * the two matches. Finally, if a pending sound handle (g_soundBankHandlesBlk
+ * +0x22C8) resolves to the same weapon key as the slot's disc-TOC entry, clears
+ * it; then commits via func_00294C48(id, slot).
+ *
+ * TODO(match): functional equivalent - not byte-exact. Matching arm stays
+ * INCLUDE_ASM; #else byte-neutral. NEEDS-ORACLE. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294CD0);
+#else
+extern s32  func_00294EE0(s32 id);            /* load-in-flight gate (nonzero = busy) */
+extern void func_00294C48(s32 id, s32 slot);  /* commit the resolved slot */
+extern s16  g_fileLoadState;
+extern u8   g_soundBankHandlesBlk[];
+extern u8   g_itemEquippedSlot[];
+extern u32  g_itemEquipSlotTable[];
+extern u8   g_weaponTable[];                  /* stride 0xE0, +0x14 = weapon key */
+extern u8   g_gadgetClassToc[];               /* stride 0x14 */
+extern s32  D_1A7A0C;
+void func_00294CD0(s32 id) {
+    s32 key1, key2, match1, match2, slot, i;
+
+    if (func_00294EE0(id) != 0) {
+        return;
+    }
+    if (g_fileLoadState != 0) {
+        return;
+    }
+
+    key1 = *(s32 *)(g_weaponTable +
+        g_itemEquippedSlot[*(s32 *)(g_soundBankHandlesBlk + 0x22E4)] * 0xE0 + 0x14);
+    key2 = *(s32 *)(g_weaponTable +
+        g_itemEquippedSlot[g_itemEquipSlotTable[0]] * 0xE0 + 0x14);
+    if (key2 == key1) {
+        key2 = *(s32 *)(g_weaponTable + g_itemEquippedSlot[D_1A7A0C] * 0xE0 + 0x14);
+    }
+    if (key1 == id) {
+        key1 = -1;
+    }
+    if (key2 == id) {
+        key2 = -1;
+    }
+
+    match1 = -1;   /* key1's gadget-slot match ($9) */
+    match2 = -1;   /* key2's gadget-slot match ($10) */
+    for (i = 0; i < 3; i++) {
+        s32 gv  = *(s32 *)((u8 *)g_respawnPlayerYaw + 0x7C + i * 4);
+        s32 toc = *(s32 *)(g_gadgetClassToc + gv * 0x14);
+        if (key2 == toc) {
+            match2 = i;
+        }
+        if (key1 == toc) {
+            match1 = i;
+        }
+    }
+
+    slot = 0;
+    if (match1 == 0 || match2 == 0) {
+        slot = 1;
+        while (slot == match1 || slot == match2) {
+            slot++;
+        }
+    }
+
+    if (*(s32 *)(g_soundBankHandlesBlk + 0x22C8) != 0) {
+        s32 gv = *(s32 *)((u8 *)g_respawnPlayerYaw + 0x7C + slot * 4);
+        if (gv != -1) {
+            s32 handle = *(s32 *)(g_soundBankHandlesBlk + 0x22C8);
+            s32 w = *(s32 *)(g_weaponTable + g_itemEquippedSlot[handle] * 0xE0 + 0x14);
+            if (w == *(s32 *)(g_discToc + gv * 0x14 + 0x4B40)) {
+                *(s32 *)(g_soundBankHandlesBlk + 0x22C8) = 0;
+            }
+        }
+    }
+    func_00294C48(id, slot);
+}
+#endif
 
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294E98);
