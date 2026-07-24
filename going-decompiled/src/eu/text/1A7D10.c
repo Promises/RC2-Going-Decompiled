@@ -184,9 +184,15 @@ void func_002A7D90(Moby *moby, s32 seq, s32 frameIdx) {
 /* Start anim sequence idx at frame arg3 blended over arg4 frames; arg4 <= 0
  * delegates to func_002A7D90 (instant set), else seeds a timed blend + optional
  * procedural-anim slot snapshot. Matching arm stays INCLUDE_ASM; #else is the structure model.
- * EU-lockstep of USA func_002A82D8: func_002A08C0 -> func_002A0448, func_002A3288 -> func_002A2E30,
+ * Symbol map vs USA func_002A82D8: func_002A08C0 -> func_002A0448, func_002A3288 -> func_002A2E30,
  * func_002A8200 -> func_002A7D90, ResolveMobyAnimFramePtrs (func_002A01C8) -> func_0029FD50,
- * IntToFloat (func_00284690) -> func_002845A0, g_proceduralAnimBounds -> EU g_proceduralAnimBounds. */
+ * IntToFloat (func_00284690) -> func_002845A0, g_proceduralAnimBounds -> EU g_proceduralAnimBounds.
+ *
+ * NOT a pure symbol-swap of the USA twin. EU is 100 instrs vs USA's 92: the PAL
+ * build carries an EU-ONLY conditional reset of the blend progress (+0x44) that
+ * has no counterpart in func_002A82D8. USA .L002A833C opens straight with
+ * `lwc1 $f1,0x44($16)`; EU inserts 8 words at 002A7ECC-002A7EE8 first. See the
+ * body comment at the reset for the branch-polarity derivation. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A7E68);
 #else
@@ -206,6 +212,28 @@ void func_002A7E68(Moby *obj, s32 idx, s32 arg3, s32 arg4) {
     if (arg4 <= 0) {
         func_002A7D90(obj, idx, clampedFrame);
         return;
+    }
+
+    /* EU-ONLY (no counterpart in USA func_002A82D8): drop any in-flight blend
+     * progress before it is sampled below, when the currently-playing sequence
+     * (+0x42) already equals the last requested one (+0x43) and the +0x60 bit 1
+     * flag is set. From the encoded words at 002A7ECC-002A7EE8:
+     * (.s prints words little-endian; the decoded instruction word follows)
+     *   42000392 -> 92030042  lbu  $3,0x42($16)
+     *   43000292 -> 92020043  lbu  $2,0x43($16)
+     *   06006254 -> 54620006  bnel $3,$2,.L002A7EF0   BNEL op 0x15; differ->skip
+     *   440001C6 -> C6010044   lwc1 $f1,0x44($16)      delay slot, TAKEN only
+     *   60000292 -> 92020060  lbu  $2,0x60($16)
+     *   02004230 -> 30420002  andi $2,$2,0x2
+     *   01004054 -> 54400001  bnel $2,$0,.L002A7EEC   BNEL; bit SET -> TAKEN
+     *   440000AE -> AE000044   sw   $0,0x44($16)       delay slot, TAKEN only
+     * A likely branch executes its delay slot when TAKEN and nullifies it when
+     * not taken, so the zeroing store is gated on the bit being SET, i.e.
+     * `(m[0x60] & 2) != 0` -- the same idiom already modelled below for the
+     * 0xA9 store. Both paths converge on the reload of +0x44, so the 0.025f
+     * test below observes the value this block may have zeroed. */
+    if (m[0x42] == m[0x43] && (m[0x60] & 0x02) != 0) {
+        *(f32 *)(m + 0x44) = 0.0f;                       /* reset blend progress */
     }
 
     if (0.025f < *(f32 *)(m + 0x44) ||
@@ -2271,12 +2299,29 @@ void func_002AC168(Mat4x4 *mtx, void *out) {
  * either: counter was 0 -> refresh the RGB bytes (+0x4/+0x5/+0x6) from src's packed
  * colour (func_002A0E78); counter was running -> rescale it to resetValue *
  * counter / divisor(+0xE), clamped to at least 1. Matching arm stays INCLUDE_ASM;
- * #else is the structure model. EU-lockstep of USA func_002AC668: IntToFloat ->
- * func_002845A0, FloatToInt -> func_002845B0, func_002A12F0 -> func_002A0E78. */
+ * #else is the structure model. Symbol map vs USA func_002AC668: IntToFloat ->
+ * func_002845A0, FloatToInt -> func_002845B0, func_002A12F0 -> func_002A0E78.
+ *
+ * NOT a pure symbol-swap of the USA twin. EU is 76 instrs vs USA's 48 because
+ * the PAL build retimes three of the durations it reads by 5/6 (60Hz frame
+ * counts -> 50Hz), expressed in the .s as ARITHMETIC rather than as changed
+ * constants: `$17 = 6` is pinned as a divisor across the body (hence the extra
+ * callee-saved $18 and $31 moving 0x20 -> 0x28) and each site computes
+ * `(v * 5 + 2) / 6` via sll/addu/addiu/div/mflo. The retime is SELECTIVE: the
+ * live counter read from +0x0 is fed to the FPU UN-retimed. EU also loads +0xC
+ * with `lh` (SIGNED) where USA uses `lhu`. Mechanically porting the USA body
+ * here silently reinstates NTSC timings -- see the per-site notes below. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AC290);
 #else
 extern void func_002A0E78(void *src, s32 *r, s32 *g, s32 *b);
+
+/* PAL 60Hz->50Hz frame-count retime, `(v * 5 + 2) / 6` with a rounding bias of 2.
+ * EU-only; the USA twin uses the raw value at each of these sites. In the .s this
+ * is open-coded per site against the pinned divisor in $17 (addiu $17,$0,0x6):
+ *   80180200 sll $3,$2,2 / 21186200 addu $3,$3,$2 / 02006324 addiu $3,$3,0x2
+ *   1A007100 div $0,$3,$17 / 12180000 mflo $3 */
+#define EU_PAL_RETIME(v) (((v) * 5 + 2) / 6)
 
 void func_002AC290(void *src, u8 *obj) {
     s16 counter = *(s16 *)(obj + 0x0);
@@ -2286,7 +2331,9 @@ void func_002AC290(void *src, u8 *obj) {
     }
 
     *(s16 *)(obj + 0x2) = 0;
-    *(s16 *)(obj + 0x0) = (s16)*(u16 *)(obj + 0xC);
+    /* Site 1: counter reload from +0xC. EU `0C000286` lh $2,0xC($16) is SIGNED
+     * (USA's `0C000296` is lhu), then retimed before `000003A6` sh $3,0x0($16). */
+    *(s16 *)(obj + 0x0) = (s16)EU_PAL_RETIME(*(s16 *)(obj + 0xC));
 
     if (counter == 0) {
         s32 r, g, b;
@@ -2295,14 +2342,23 @@ void func_002AC290(void *src, u8 *obj) {
         obj[0x6] = (u8)b;
         obj[0x5] = (u8)g;
     } else {
-        f32 ratio = (f32)counter / func_002845A0(*(s16 *)(obj + 0xE));
-        s32 scaled = func_002845B0((f32)*(s16 *)(obj + 0xC) * ratio);
+        /* Site 2: the divisor read from +0xE (`0E000386` lh $3,0xE($16)) is
+         * retimed into $4 before `68110A0C` jal func_002845A0.
+         * NOT retimed: `counter`, the live +0x0 value in $18, which goes
+         * straight to `00089244` mtc1 $18,$f1 / cvt.s.w. */
+        f32 ratio = (f32)counter / func_002845A0(EU_PAL_RETIME(*(s16 *)(obj + 0xE)));
+        /* Site 3: the multiplicand is a fresh signed load of +0xC
+         * (`0C000486` lh $4,0xC($16)), retimed into $2 before
+         * `00608244` mtc1 $2,$f12 / cvt.s.w / `02630146` mul.s. */
+        s32 scaled = func_002845B0((f32)EU_PAL_RETIME(*(s16 *)(obj + 0xC)) * ratio);
         *(s16 *)(obj + 0x0) = (s16)scaled;
         if ((s16)scaled <= 0) {
             *(s16 *)(obj + 0x0) = 1;
         }
     }
 }
+
+#undef EU_PAL_RETIME
 #endif
 
 /* func_002AC3C0: per-frame RGB colour fade / ping-pong applied to a target object.
