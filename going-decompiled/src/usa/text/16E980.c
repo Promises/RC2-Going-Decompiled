@@ -1688,7 +1688,7 @@ extern Camera *g_activeCamera;      /* aliases g_cameraState+0x190 */
 extern f32 D_1A85B8;                /* shake roll speed (degrees/tick) */
 extern s32 func_002832F8(void *timer);
 extern f32 func_002845D8(f32 x);    /* wrap angle */
-extern void func_002ADCE0(void *dst, f32 ang);   /* build roll rotation */
+extern void func_002ADCE0(void *dst, f32 ang, void *src); /* build roll rotation about src */
 extern void func_00284308(void *rot, void *mtx); /* rotation -> 3-row matrix */
 extern void func_002840E8(void *dst, void *a, void *b); /* mtx multiply */
 void ApplyCameraShakeAxis(void *channel, s32 axis) {
@@ -1738,7 +1738,7 @@ void ApplyCameraShakeAxis(void *channel, s32 axis) {
               func_00283B48(func_002845D8(e60 * step - step * 10.0f)) *
               t3 * ramp;
         sh->current = ang;
-        func_002ADCE0(&ofs, ang);
+        func_002ADCE0(&ofs, ang, &g_cameraMatrix);
         func_00284308(&ofs, mtx);
         func_002840E8(&g_cameraMatrix, mtx, &g_cameraMatrix);
         break;
@@ -2734,7 +2734,127 @@ s32 func_00273D20(void *moby) {
 }
 #endif
 
-/* func_00273EA8: projectile/effect state helper (sibling of func_00273D20).
- * WALL: eight callee-saves at 8-byte slot spacing (packed-save wall) +
- * interleaved fp/qword math. Left INCLUDE_ASM. */
+/* func_00273EA8 — projectile bounce / reflection state handler (sibling of
+ * func_00273D20).
+ *
+ * Advances the projectile toward the surface (func_00274218), then queries the
+ * swept collision (func_002746D8). On no hit, returns 0 with no effect.
+ *
+ * On a hit it normalises the surface normal (g_collHitNormal to unit length),
+ * builds a local tangent frame from the normal x the moby velocity
+ * (func_00274A98) plus a push-out basis at moby+0x10 (func_002B0E40), and dots
+ * that basis against the normal.
+ *
+ *  - basis.n > 0.7 (near head-on): REFLECT. Recompute v.n against the unit
+ *    normal, form a blend length = v.n + v.n*0.5, but when |v.n*0.5| < 1/30
+ *    (grazing) drop the extra half-term (length = v.n, blend half = 0). Scale
+ *    the normal to that length and subtract it from the velocity (Vec4Sub) to
+ *    reflect. When the half-blend collapsed to 0 (the grazing / near-normal
+ *    case) additionally apply a random SPIN: rescale velocity by a damped
+ *    length (func_002AB150 with rate 0x3AFEDCBB toward target 1/30), cross it
+ *    with the normal to get a spin axis, and build a small rotation of angle
+ *    -0.5*len(axis)/moby[0x2c] (func_002ADCE0) that is slerped 10% into the
+ *    moby orientation at +0x10 (func_002841C0 / QuatSlerpNormalizedVu0).
+ *    Finally, when |v.n| >= 1/30, play the bounce sound: PlayGlobalSound(8) if
+ *    the per-projectile sound id (block+0x5e) is 0xff, else PlayMobySound(id);
+ *    anchor the emitter at block+0x20 (SetSoundEmitterOffset).
+ *  - basis.n <= 0.7 (glancing): SLIDE — project the velocity onto the normal
+ *    (func_002839D8 / Vec3ProjectOntoNormalVu0).
+ *
+ * Always returns 0. `block` = *(moby+0x68) is the projectile physics block.
+ *
+ * Engine #else (functional coverage; the matching arm hits the packed-save
+ * wall — eight callee-saves at 8-byte spacing + interleaved fp/qword math).
+ * The matching build uses the INCLUDE_ASM arm above.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00273EA8);
+#else
+extern void func_00274218(void *moby);
+extern s32  func_002746D8(void *moby);
+extern void func_00274A98(void *moby, void *localOut, Vec4 *tangent);
+extern void func_002B0E40(void *pos, Vec4 *outBasis, s32 flag);
+extern f32  func_002AB150(f32 target, f32 rate, f32 *level);
+extern void func_002839D8(Vec4 *dst, const Vec4 *v, const Vec4 *normal); /* project onto normal */
+extern void Vec3RescaleToLenVu0(Vec4 *dst, f32 len, const Vec4 *src);
+extern void Vec3CrossVu0(Vec4 *dst, const Vec4 *a, const Vec4 *b);
+extern void Vec4SubVu0(Vec4 *dst, const Vec4 *a, const Vec4 *b);
+extern f32  Vec3DotVu0(const Vec4 *a, const Vec4 *b);
+extern f32  Vec3LengthVu0(const Vec4 *v);
+extern f32  GetFloatAbs(f32 x);
+extern s32  PlayMobySound(s32 soundId, s32 flags, void *moby);
+extern s32  PlayGlobalSound(s32 soundId, s32 flags, void *moby);
+extern void SetSoundEmitterOffset(s32 handle, void *offset);
+extern Vec4 g_collHitNormal;
+
+/* bit-exact FP constants (from the .s lui/ori immediates) */
+static const union { u32 u; f32 f; } kOneOver30    = { 0x3D088889 }; /* 1/30      */
+static const union { u32 u; f32 f; } kDotThreshold  = { 0x3F333333 }; /* 0.7       */
+static const union { u32 u; f32 f; } kSpinRate       = { 0x3AFEDCBB }; /* ~0.00194  */
+static const union { u32 u; f32 f; } kSpinSlerp       = { 0x3DCCCCCD }; /* 0.1       */
+
+s32 func_00273EA8(void *moby) {
+    u8 *block = *(u8 **)((u8 *)moby + 0x68);
+
+    func_00274218(moby);
+    if (func_002746D8(moby) != 0) {
+        Vec4 tangent;    /* sp+0x00: normal x velocity                     */
+        Vec4 pushBasis;  /* sp+0x10: push-out basis from func_002B0E40     */
+        Vec4 reflScaled; /* sp+0x20: normal scaled to the reflection blend */
+        Vec4 spinAxis;   /* sp+0x30: velocity x normal (spin rotation axis)*/
+        f32  spinLevel;  /* sp+0x40: damped velocity length for the spin   */
+        f32  basisDot;
+        f32  vn;
+        f32  half;
+        f32  blendLen;
+
+        Vec3RescaleToLenVu0(&g_collHitNormal, 1.0f, &g_collHitNormal);
+        Vec3CrossVu0(&tangent, &g_collHitNormal, (const Vec4 *)block);
+        func_00274A98(moby, block + 0x10, &tangent);
+        func_002B0E40((u8 *)moby + 0x10, &pushBasis, 1);
+
+        basisDot = Vec3DotVu0(&pushBasis, &g_collHitNormal);
+        if (kDotThreshold.f < basisDot) {
+            vn   = Vec3DotVu0((const Vec4 *)block, &g_collHitNormal);
+            half = vn * 0.5f;
+            if (GetFloatAbs(half) < kOneOver30.f) {
+                half     = 0.0f;
+                blendLen = vn + 0.0f;
+            } else {
+                blendLen = vn + half;
+            }
+            Vec3RescaleToLenVu0(&reflScaled, blendLen, &g_collHitNormal);
+            Vec4SubVu0((Vec4 *)block, (const Vec4 *)block, &reflScaled);
+
+            if (half == 0.0f) {
+                spinLevel = Vec3LengthVu0((const Vec4 *)block);
+                func_002AB150(kOneOver30.f, kSpinRate.f, &spinLevel);
+                Vec3RescaleToLenVu0((Vec4 *)block, spinLevel, (const Vec4 *)block);
+                Vec3CrossVu0(&spinAxis, (const Vec4 *)block, &g_collHitNormal);
+                func_002ADCE0(&spinAxis,
+                              (Vec3LengthVu0(&spinAxis) * -0.5f) /
+                                  *(f32 *)(block + 0x2c),
+                              &spinAxis);
+                func_002841C0(block + 0x10, block + 0x10, &spinAxis, kSpinSlerp.f);
+            }
+
+            if (kOneOver30.f <= GetFloatAbs(vn)) {
+                s32 handle;
+                u8  soundId = *(u8 *)(block + 0x5e);
+
+                if (soundId == 0xff) {
+                    handle = PlayGlobalSound(8, 0, moby);
+                } else {
+                    handle = PlayMobySound(soundId, 0, moby);
+                }
+                if (handle != -1) {
+                    SetSoundEmitterOffset(handle, block + 0x20);
+                }
+            }
+        } else {
+            func_002839D8((Vec4 *)block, (const Vec4 *)block, &g_collHitNormal);
+        }
+    }
+    return 0;
+}
+#endif
