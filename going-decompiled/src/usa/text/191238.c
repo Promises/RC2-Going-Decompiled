@@ -4009,7 +4009,648 @@ s32 MapUpdate(void) {
 }
 #endif
 
+/*
+ * MapDraw(useHudPass, applyScissor) — map.cpp. Renders the galactic/level map
+ * screen. Whole body gated by D_1A95F0 (a "suppress map draw" flag). Three
+ * phases:
+ *   (1) if no map for this level (g_mapVertexData.available==0) or the active
+ *       cache slot is out of range (>0x14): draw a localized "map unavailable"
+ *       text box (string 0x3163) via DrawFont1TextBox.
+ *   (2) else (activeSlot >= 0): render the map — fixed-point tile origin/extent
+ *       math from the per-slot scale D_1C4FD4[slot], two GS-DMA map-quad packets
+ *       written directly through g_pFrameDmaCursor, an optional 8-cell bitmap
+ *       overlay grid (func_002904B0), then the blip list g_mapBlipList (0x28-byte
+ *       records): pass 2a computes each visible blip's pixel bounding box into a
+ *       scratch array, pass 2b runs overlap-avoidance (nudges overlapping boxes
+ *       apart along the minimum-penetration axis), pass 2c draws each blip's icon
+ *       (DrawHudIconQuadPixelRgb) or rotated sprite (DrawHudSpriteRotated) plus an
+ *       optional label (func_00298730 + DrawFont2TextBox).
+ *   (3) the player-position marker (tex 0xE99A) when the story progress index
+ *       equals the active slot, colored by the compass/planet tables.
+ *
+ * useHudPass gates Begin2dDrawBatch/End2dDrawBatch wrapping; applyScissor gates
+ * the phase-2 AppendGsScissorRect. Returns void.
+ *
+ * NOTE (engine #else — COVERAGE, not byte-match): the EE build kept this as
+ * INCLUDE_ASM (later cc1). This faithful transcription models the PS2 scratchpad
+ * blip-box array (0x70000000) as the local `blipBox[]` (no scratchpad on native)
+ * and the by-value DrawFont*TextBox headers as packed structs. GS-DMA qword packs
+ * use s64/u64 to avoid 32-bit overflow. Angle constants are bit-exact via unions.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapDraw);
+#else
+extern s32   D_1A95F0;                 /* 0x1A95F0 map-draw suppress gate */
+extern u16   D_1A95F8;                 /* 0x1A95F8 unavailable-box field */
+extern u16   D_1A95FC;                 /* 0x1A95FC unavailable-box field */
+extern u16   D_1A9600;                 /* 0x1A9600 unavailable-box field */
+extern u16   D_1A9604;                 /* 0x1A9604 unavailable-box field */
+extern u32   D_1A9608;                 /* 0x1A9608 scissor x0 */
+extern u32   D_1A960C;                 /* 0x1A960C scissor x1 */
+extern u32   D_1A9610;                 /* 0x1A9610 scissor y0 */
+extern u32   D_1A9614;                 /* 0x1A9614 scissor y1 */
+extern s32   D_1A9618;                 /* 0x1A9618 highlight-blip override enable */
+extern s32   D_1A961C;                 /* 0x1A961C highlight-blip index */
+extern u32   D_1A9620;                 /* 0x1A9620 override box x0 */
+extern u32   D_1A9624;                 /* 0x1A9624 override box y0 */
+extern u32   D_1A9628;                 /* 0x1A9628 override box x1 */
+extern u32   D_1A962C;                 /* 0x1A962C override box y1 */
+extern f32   D_1A95D8;                 /* 0x1A95D8 sprite half-extent (flag 0x800) w */
+extern f32   D_1A95DC;                 /* 0x1A95DC sprite half-extent (flag 0x800) h */
+extern f32   D_1A95E0;                 /* 0x1A95E0 sprite half-extent (flag 0x400) w */
+extern f32   D_1A95E4;                 /* 0x1A95E4 sprite half-extent (flag 0x400) h */
+extern f32   D_1A95E8;                 /* 0x1A95E8 sprite half-extent (flag 0x1000) w */
+extern f32   D_1A95EC;                 /* 0x1A95EC sprite half-extent (flag 0x1000) h */
+extern s32   D_1A9630[];               /* 0x1A9630 special-icon color table, {key,color} pairs stride 8 */
+extern s32   D_1A9634[];               /* 0x1A9634 == D_1A9630 + 4 (the color words) */
+extern f32   D_1A9658[];               /* 0x1A9658 planet-marker color/angle table, stride 4 */
+extern u8    D_1A7B05;                 /* 0x1A7B05 g_mapDataSet (extra-marker gate) */
+extern f32   D_189EB8;                 /* 0x189EB8 hero compass facing angle */
+extern s32   D_18C0BC;                 /* 0x18C0BC compass-override flag (==0xF -> +pi/2) */
+extern s32   D_1C4EC0;                 /* 0x1C4EC0 map-mode const (==2 -> compass override) */
+extern s32   D_1C4F38;                 /* 0x1C4F38 map-quad Z/packet const (== &g_mapVertexData+0x18) */
+extern s32   D_1C4F4C;                 /* 0x1C4F4C bitmap-overlay enable (== &g_mapVertexData+0x2C) */
+extern s32   D_1C4F50[];               /* 0x1C4F50 bitmap-overlay 8-cell grid, stride 0x10 (int[4]) */
+extern s32   D_1C507C[];               /* 0x1C507C per-slot map extent X (>>0xf), stride 4 (== +0x15C) */
+extern s32   D_1C5028[];               /* 0x1C5028 per-slot map extent Y (>>0xf), stride 4 (== +0x108) */
+extern f32   D_1C4FD4[];               /* 0x1C4FD4 per-slot map scale f32, stride 4 (== +0xB4) */
+extern s32   D_1C516C;                 /* 0x1C516C map packet const (>>8) (== +0x24C) */
+
+extern u32  *g_pFrameDmaCursor;        /* 0x1B2228 GS-DMA write cursor (uint*) */
+extern s32   g_nGsPixelOffsetX;        /* 0x1A7350 */
+extern s32   g_nGsPixelOffsetY;        /* 0x1A7354 */
+extern s32   g_nScreenWidth;           /* 0x1A7340 */
+extern s32   g_nScreenHeight;          /* 0x1A7344 */
+extern s32  *g_pMapBlipList;           /* 0x1C4F40 blip records, 0x28 bytes each */
+extern s32  *g_pMapBitmapBuffer;       /* 0x1C4F28 discovered-area bitmap */
+extern void *g_pHudIconMap;            /* 0x1B1810 */
+extern void *g_pHudTextureSlots;       /* 0x1B1814 */
+extern u32   g_weaponUpgradeLevel[];   /* 0x139A34 per-weapon upgrade level, stride 0x10 (word view) */
+extern f32   g_flHeroPos[];            /* 0x189EA0 hero world pos (== g_soundBankHandlesBlk + 0x80) */
+
+extern s32   func_0028EDF0();          /* map/HUD tile tex lookup (2 or 5 args per callsite) */
+extern u64   GetHudIconTex0(s32 iconIndex);
+extern void  Begin2dDrawBatch(s32 mode);
+extern void  End2dDrawBatch(void);
+extern void  AppendGsRegPacket(s32 reg, s32 val);
+extern void  AppendGsScissorRect(s32 x0, s32 y1, s32 x1, s32 y2);
+extern void  func_002904B0(s32 x0, s32 y0, s32 x1, s32 y1, s32 color, s32 flag); /* solid rect */
+extern u64   func_00280B48(void *box, u64 tint, s32 str, s64 mode);              /* DrawFont1TextBox */
+extern void  func_00280BB8(void *box, u64 tint, void *str, s64 mode);            /* DrawFont2TextBox */
+extern void  func_0028F8E0(u64 tex, s32 x, s32 y, s32 w, s32 h, s32 alpha, s32 rgb); /* DrawHudIconQuadPixelRgb */
+extern void  func_0028FC78(f32 x, f32 y, f32 w, f32 h, f32 angle, s32 a, s32 b, u64 tex); /* DrawHudSpriteRotated ($f16 = angle) */
+extern f32   WrapAnglePiSum(f32 angle, f32 sum);
+extern void  func_00298730(s32 blipIdx, void *outBuf);                           /* build blip label */
+extern s32   func_00297B48(f32 x, f32 z, void *outX, void *outY, s32 progress);  /* project hero pos */
+extern void  func_00298918(f32 x, f32 z, void *outX, void *outY, s32 progress);  /* project hero fallback */
+extern void  func_00298AA8(f32 a, f32 b, f32 c, f32 d, f32 e);                   /* extra player marker */
+extern s32   func_00301430(void);                                               /* planet/area index */
+extern void  FUN_00115484(void *dst, s32 val, s32 len);                         /* memset */
+
+/* Angle constants are true-bit f32 (union reinterpret), NOT decimal literals or
+ * integer literals — the .s carries these as floats in $f-registers. */
+static const union { u32 u; f32 f; } _map_half_pi = { 0x3fc90fdb }; /* pi/2 */
+static const union { u32 u; f32 f; } _map_pi      = { 0x40490fdb }; /* pi   */
+#define MAP_HALF_PI (_map_half_pi.f)
+#define MAP_PI      (_map_pi.f)
+
+/* Max blips modeled in place of the PS2 scratchpad (0x70000000) box array
+ * (0x10 bytes/blip). The blip list terminates on (record[+4] & 4); this bounds
+ * the on-native array. 256 boxes = 0x1000 bytes, well inside the 16 KB scratch. */
+#define MAP_BLIP_MAX 256
+
+/* Packed header passed by value to DrawFont1TextBox (the 0x18-byte struct the
+ * .s builds at sp+0x20 and block-copies to sp+0x00). Field offsets from the .s. */
+typedef struct MapUnavailBox {
+    u16 pad00;      /* +0x00 (zeroed) */
+    u16 h;          /* +0x02 = 400 */
+    u16 x;          /* +0x04 = D_1A9600 */
+    u16 y;          /* +0x06 = D_1A9604 */
+    u16 w;          /* +0x08 = D_1A95F8 */
+    u16 field0A;    /* +0x0A = D_1A95FC */
+    u32 pad0C;      /* +0x0C (zeroed) */
+    u16 flags10;    /* +0x10 = 0x10 */
+    u16 pad12;
+    u32 pad14;
+} MapUnavailBox;
+
+/* Packed header passed by value to DrawFont2TextBox for blip labels. Field
+ * offsets from the .s (built at sp+0x00, memset 0x18 then s16 stores). */
+typedef struct MapLabelBox {
+    s16 x0;         /* +0x00 */
+    s16 y0;         /* +0x02 */
+    s16 x1;         /* +0x04 */
+    s16 y1;         /* +0x06 */
+    s16 tx;         /* +0x08 = x0 + width/2 */
+    s16 ty;         /* +0x0A = y0 + 4 */
+    u32 pad0C;
+    u32 pad10;      /* +0x10 lo word = &UNK_0011000F const */
+    u32 pad14;
+} MapLabelBox;
+
+void MapDraw(int useHudPass, long applyScissor) {
+    MapCache *map = &g_mapVertexData;
+    s32 slot;
+    s32 tileStep;
+    s32 originX, originY;          /* iStack_a8 / iStack_ac */
+    u32 extentX, extentY;          /* uStack_a0 / uStack_a4 */
+    s32 tileX0, tileY0;            /* iStack_9c / iStack_98 */
+    s32 wrapX, wrapY, wrapW;       /* iStack_90 / iStack_94 / iStack_8c */
+    s32 hudPass;                   /* iStack_b0 */
+    f32 scale;
+    u64 tex0;
+    u32 *cur;
+    s32 blipBox[MAP_BLIP_MAX][4];  /* was PS2 scratchpad 0x70000000, {x0,y0,x1,y1} */
+    s32 i, j;
+    s32 nextIdx;                    /* PASS-2b loop index; used in its while-cond (C89 scope) */
+    f32 blipScale;
+    MapLabelBox labelBox;
+    char labelStr[80];
+
+    if (D_1A95F0 != 0) {
+        return;
+    }
+
+    hudPass = useHudPass;
+
+    if ((map->available == 0) || (0x14 < map->activeSlot)) {
+        /* ---- PHASE 1: "map unavailable" text box ---- */
+        s32 str = (s32)GetLocalizedString(0x3163);
+        MapUnavailBox box;
+
+        if (hudPass != 0) {
+            Begin2dDrawBatch(0);
+        }
+        FUN_00115484(&box, 0, 0x18);
+        box.h       = 400;
+        box.x       = D_1A9600;
+        box.y       = D_1A9604;
+        box.w       = D_1A95F8;
+        box.field0A = D_1A95FC;
+        box.flags10 = 0x10;
+        func_00280B48(&box, 0x80f0f0f0, str, -1);
+        if (hudPass != 0) {
+            End2dDrawBatch();
+        }
+        return;
+    }
+
+    if (map->activeSlot < 0) {
+        return;
+    }
+
+    /* ---- PHASE 2: render the map ---- */
+    if (useHudPass != 0) {
+        Begin2dDrawBatch(0);
+    }
+
+    slot     = map->activeSlot;
+    scale    = D_1C4FD4[slot];
+    tileStep = (s32)(scale * 512.0f);
+    originX  = 0x800  - (s32)(scale * (f32)(D_1C507C[slot] >> 0xf));
+    originY  = 0x1000 - (s32)(scale * (f32)(D_1C5028[slot] >> 0xf));
+    extentX  = originX + (s32)(scale * 8192.0f);
+    extentY  = originY + (s32)(scale * 8192.0f);
+    {
+        /* Tile origin/extent wrap math. The .s computes both wraps as pure
+         * low-32 mtlo/madd/mflo accumulations — no high-word. wrapX and wrapY
+         * are each extent + tileStep*cells (the earlier Ghidra 64-bit lVar12
+         * form and its high-word OR were an artifact, removed). The div-by-zero
+         * trap(7) guards in the original are dead (tileStep!=0) and are omitted. */
+        s32 ceilRoundedYCells = (originY + tileStep - 1) / tileStep;   /* iVar5 */
+        s32 ceilRoundedXCells = (originX + tileStep - 1) / tileStep;   /* iVar20 */
+        s32 wrapXrem   = ((tileStep + 0x2000) - (s32)extentX) - 1;     /* iVar10 */
+        s32 wrapYcells = (s32)(((tileStep + 0x2000) - (s32)extentY) - 1) / tileStep; /* iVar7 */
+        s32 wrapXcells = wrapXrem / tileStep;                          /* iVar6 */
+        wrapX  = (s32)extentX + tileStep * wrapXcells;                 /* iStack_90 */
+        wrapY  = (s32)extentY + tileStep * wrapYcells;                 /* iStack_94 */
+        wrapW  = (ceilRoundedYCells + wrapYcells) * 0x200 + 0x2000;    /* iStack_8c */
+        tileX0 = originY - tileStep * ceilRoundedYCells;               /* iStack_9c */
+        tileY0 = originX - tileStep * ceilRoundedXCells;               /* iStack_98 */
+
+        AppendGsRegPacket(8, 0);
+        AppendGsRegPacket(0x47, 0);
+        if (applyScissor != 0) {
+            AppendGsScissorRect(D_1A9608, D_1A9610, D_1A960C, D_1A9614);
+        }
+
+        /* --- map-quad GS packet A ---
+         * The .s writes each packet as a DMAtag header qword (4 words) at the
+         * running cursor, advances g_frameDmaCursor by 0x10 past the header
+         * (store @0x296B88), writes the GIF payload (10 qwords, 0x0..0x48) at
+         * the new cursor, then advances by 0x50 past the payload (@0x296C68).
+         * Packet B repeats the pattern (advances @0x296D00 / @0x296DBC), so the
+         * two packets lay end-to-end for a total cursor advance of 0xC0. */
+        cur = g_pFrameDmaCursor;
+        cur[0] = 0x10000005;          /* &DAT_10000005 (DMAtag) */
+        cur[1] = 0;
+        cur[2] = 0;
+        cur[3] = 0x50000005;
+        tex0 = GetHudIconTex0(func_0028EDF0(0xe999, slot));
+        g_pFrameDmaCursor = g_pFrameDmaCursor + 4;   /* +0x10 past header (0x296B88) */
+        cur = g_pFrameDmaCursor;                     /* payload base = header + 0x10 */
+        cur[0]   = 0x8001;
+        cur[1]   = 0x74000000;
+        cur[2]   = 0x5353106;
+        cur[3]   = 0;
+        *(u64 *)(cur + 4) = tex0;
+        cur[6]   = 0x156;
+        cur[7]   = 0;
+        cur[8]   = 0x80808080;
+        cur[9]   = 0;
+        cur[10]  = 0;
+        cur[11]  = 0;
+        {
+            s32 py = tileY0 + g_nGsPixelOffsetY;
+            s32 px = tileX0 + g_nGsPixelOffsetX;
+            s64 zpack = (s64)D_1C4F38;        /* DAT_001c4f38 as a signed value */
+            *(s64 *)(cur + 0xe) = (s64)wrapW |
+                                  (s64)((ceilRoundedXCells + wrapXcells) * 0x200 + 0x2000) << 0x10;
+            *(s64 *)(cur + 0xc) = (s64)(px - 8) | (s64)(py - 8) << 0x10 | zpack << 0x20;
+        }
+        {
+            s32 py = wrapX + g_nGsPixelOffsetY;
+            s32 px = wrapY + g_nGsPixelOffsetX;
+            s64 zpack = (s64)D_1C4F38;
+            cur[0x12] = 0;
+            cur[0x13] = 0;
+            *(s64 *)(cur + 0x10) = (s64)(px - 8) | (s64)(py - 8) << 0x10 | zpack << 0x20;
+        }
+        g_pFrameDmaCursor = g_pFrameDmaCursor + 0x14;   /* +0x50 past payload (0x296C68) */
+
+        AppendGsRegPacket(8, 5);
+        AppendGsRegPacket(0x47, 0x60b);
+
+        /* --- map-quad GS packet B (second tile pass) --- */
+        cur = g_pFrameDmaCursor;
+        cur[0] = 0x10000005;
+        cur[1] = 0;
+        cur[2] = 0;
+        cur[3] = 0x50000005;
+        g_pFrameDmaCursor = g_pFrameDmaCursor + 4;   /* +0x10 past header (0x296D00) */
+        cur = g_pFrameDmaCursor;                     /* payload base = header + 0x10 */
+        cur[0]  = 0x8001;
+        cur[1]  = 0x74000000;
+        cur[2]  = 0x5353106;
+        cur[3]  = 0;
+        *(u64 *)(cur + 4) =
+            (s64)(D_1C516C >> 8) | 0x25320000U |
+            (s64)(s32)(((u32)((u64)tex0 >> 0x25) & 0x3fff)) << 0x25 |
+            0x640000000ULL | 0x8000000000000000ULL;
+        cur[6]  = 0x156;
+        cur[7]  = 0;
+        cur[8]  = 0x80808080;
+        cur[9]  = 0;
+        cur[10] = 0;
+        cur[11] = 0;
+        {
+            s32 py = originX + g_nGsPixelOffsetY;
+            s32 px = originY + g_nGsPixelOffsetX;
+            s64 zpack = (s64)D_1C4F38;
+            cur[0xe] = 0x20002000;
+            cur[0xf] = 0;
+            *(s64 *)(cur + 0xc) = (s64)(px - 8) | (s64)(py - 8) << 0x10 | zpack << 0x20;
+        }
+        {
+            s32 py = (s32)extentX + g_nGsPixelOffsetY;
+            s32 px = (s32)extentY + g_nGsPixelOffsetX;
+            s64 zpack = (s64)D_1C4F38;
+            cur[0x12] = 0;
+            cur[0x13] = 0;
+            *(s64 *)(cur + 0x10) = (s64)(px - 8) | (s64)(py - 8) << 0x10 | zpack << 0x20;
+        }
+        g_pFrameDmaCursor = g_pFrameDmaCursor + 0x14;   /* +0x50 past payload (0x296DBC) */
+        AppendGsRegPacket(0x47, 0x360b);
+
+        /* --- optional bitmap-overlay 8-cell grid --- */
+        if ((D_1C4F4C != 0) && (g_pMapBitmapBuffer != NULL)) {
+            s32 *cell = D_1C4F50;
+            s32 gi = 7;
+            s32 spanY = (s32)extentY - originY;
+            s32 spanX = (s32)extentX - originX;
+            do {
+                s32 v = *cell;
+                if (-1 < v) {
+                    s32 col = (v >= 0 ? v : v + 0xf) >> 4;
+                    s32 leftAcc  = col * spanX;
+                    s32 rem      = v - col * 0x10;
+                    s32 topAcc   = rem * spanY;
+                    s32 rightAcc = col * spanX + spanX;
+                    s32 botAcc   = rem * spanY + spanY;
+                    s32 rr = (rightAcc >= 0 ? rightAcc : rightAcc + 0xf);
+                    s32 lr = (leftAcc  >= 0 ? leftAcc  : leftAcc  + 0xf);
+                    s32 tr = (topAcc   >= 0 ? topAcc   : topAcc   + 0xf);
+                    s32 br = (botAcc   >= 0 ? botAcc   : botAcc   + 0xf);
+                    func_002904B0(originY + (tr >> 4), originX + (lr >> 4),
+                                  originY + (br >> 4), originX + (rr >> 4), 0x20000000, 1);
+                }
+                gi = gi - 1;
+                cell = cell + 4;
+            } while (-1 < gi);
+        }
+
+        /* --- blip list --- */
+        if (g_pMapBlipList != NULL) {
+            blipScale = (D_1C4FD4[slot] + D_1C4FD4[slot] + 5.0f) * 0.07692308f;
+
+            /* PASS 2a — compute each visible blip's pixel bbox into blipBox[] */
+            if ((*(u16 *)(g_pMapBlipList + 1) & 4) == 0) {
+                s32 boff = 0;    /* byte offset into blip record array */
+                i = 0;
+                do {
+                    s32 *rec = (s32 *)((s32)g_pMapBlipList + boff);
+                    if ((rec[9] != 0) &&                        /* +0x24 active */
+                        (*(s16 *)((s32)rec + 6) != 0) &&        /* +0x06 iconType */
+                        ((*(u16 *)((s32)rec + 4) & 1) == 0)) {  /* +0x04 flags bit0 */
+                        u16 flags = *(u16 *)((s32)rec + 4);
+                        f32 pad = 1.0f;
+                        s32 iconIdx;
+                        u8 *slots;
+                        f32 uvY;
+                        s16 texSlot;
+                        f32 rectScale = blipScale;
+                        s32 x0v;
+
+                        if ((flags & 0x80) != 0) {
+                            pad = 1.5f;
+                        }
+                        iconIdx = func_0028EDF0(*(s16 *)((s32)rec + 6),
+                                                *(u16 *)((s32)rec + 8));
+                        slots = (u8 *)g_pHudTextureSlots;
+                        uvY = *(f32 *)((s32)rec + 0x1c);
+                        texSlot = *(s16 *)((s32)g_pHudIconMap + iconIdx * 4 + 2);
+                        if ((*(u16 *)((s32)rec + 4) & 0x200) != 0) {
+                            rectScale = D_1C4FD4[slot];
+                        }
+                        pad = pad * rectScale;
+
+                        x0v = (s32)(((f32)originY +
+                                     *(f32 *)((s32)rec + 0x18) * (f32)(s32)(extentY - originY)) -
+                                    pad * (f32)(1 << ((slots[texSlot * 8 + 6] + 3) & 0x1f)));
+                        blipBox[i][0] = x0v;
+                        blipBox[i][2] = (s32)((f32)x0v +
+                                    pad * (f32)(1 << ((slots[texSlot * 8 + 6] + 4) & 0x1f)));
+                        x0v = (s32)(((f32)originX + uvY * (f32)(s32)(extentX - originX)) -
+                                    pad * (f32)(1 << ((slots[texSlot * 8 + 7] + 3) & 0x1f)));
+                        blipBox[i][1] = x0v;
+                        blipBox[i][3] = (s32)((f32)x0v +
+                                    pad * (f32)(1 << ((slots[texSlot * 8 + 7] + 4) & 0x1f)));
+                    }
+                    boff = boff + 0x28;
+                    i = i + 1;
+                } while ((*(u16 *)((s32)g_pMapBlipList + boff + 4) & 4) == 0);
+            }
+
+            /* PASS 2b — overlap avoidance: nudge overlapping boxes apart */
+            if ((*(u16 *)(g_pMapBlipList + 0xb) & 4) == 0) {
+                s32 aboff = 0;
+                i = 0;
+                do {
+                    nextIdx = i + 1;
+                    if ((*(s32 *)((s32)g_pMapBlipList + aboff + 0x24) != 0) &&
+                        (*(s16 *)((s32)g_pMapBlipList + aboff + 6) != 0) &&
+                        ((*(u16 *)((s32)g_pMapBlipList + aboff + 4) & 3) == 0) &&
+                        ((*(u16 *)(g_pMapBlipList + nextIdx * 10 + 1) & 4) == 0)) {
+                        s32 bboff = nextIdx * 0x28;
+                        j = nextIdx;
+                        do {
+                            s32 dxRight = blipBox[j][2] - blipBox[i][0];
+                            if ((0 < dxRight) &&
+                                ((blipBox[i][2] - blipBox[j][0]) > 0) &&
+                                ((blipBox[j][3] - blipBox[i][1]) > 0) &&
+                                ((blipBox[i][3] - blipBox[j][1]) > 0) &&
+                                (*(s32 *)((s32)g_pMapBlipList + bboff + 0x24) != 0) &&
+                                (*(s16 *)((s32)g_pMapBlipList + bboff + 6) != 0) &&
+                                ((*(u16 *)((s32)g_pMapBlipList + bboff + 4) & 3) == 0)) {
+                                s32 dxLeft = blipBox[i][2] - blipBox[j][0];
+                                s32 dyDown = blipBox[j][3] - blipBox[i][1];
+                                s32 dyUp   = blipBox[i][3] - blipBox[j][1];
+                                s32 pushI_x = 0, pushI_y = 0, pushJ_x = 0, pushJ_y = 0;
+                                if ((dxLeft < dxRight) || (dyDown < dxRight) || (dyUp < dxRight)) {
+                                    if ((dyDown < dxLeft) || (dyUp < dxLeft)) {
+                                        pushJ_y = dyUp >> 1;
+                                        if (dyUp < dyDown) {
+                                            pushI_y = pushJ_y - dyUp;
+                                        } else {
+                                            pushI_y = dyDown >> 1;
+                                            pushJ_y = pushI_y - dyDown;
+                                        }
+                                    } else {
+                                        pushJ_x = dxLeft >> 1;
+                                        pushI_x = pushJ_x - dxLeft;
+                                    }
+                                } else {
+                                    pushI_x = dxRight >> 1;
+                                    pushJ_x = pushI_x - dxRight;
+                                }
+                                blipBox[i][0] += pushI_x;
+                                blipBox[i][2] += pushI_x;
+                                blipBox[i][1] += pushI_y;
+                                blipBox[i][3] += pushI_y;
+                                blipBox[j][0] += pushJ_x;
+                                blipBox[j][2] += pushJ_x;
+                                blipBox[j][1] += pushJ_y;
+                                blipBox[j][3] += pushJ_y;
+                            }
+                            j = j + 1;
+                            bboff = bboff + 0x28;
+                        } while ((*(u16 *)((s32)g_pMapBlipList + bboff + 4) & 4) == 0);
+                    }
+                    aboff = nextIdx * 0x28;
+                    i = nextIdx;
+                } while ((*(u16 *)(g_pMapBlipList + nextIdx * 10 + 0xb) & 4) == 0);
+            }
+
+            /* PASS 2c — draw each blip: icon or rotated sprite, + optional label */
+            i = 0;
+            if ((*(u16 *)(g_pMapBlipList + 1) & 4) == 0) {
+                do {
+                    if ((g_pMapBlipList[i * 10 + 9] != 0) &&
+                        ((*(u16 *)(g_pMapBlipList + i * 10 + 1) & 1) == 0)) {
+                        s16 iconType = *(s16 *)((s32)g_pMapBlipList + i * 0x28 + 6);
+                        s32 variant  = g_pMapBlipList[i * 10 + 2];
+                        s64 variantL = (s64)(s16)variant;
+
+                        if (iconType != 0) {
+                            f32 sprScale;
+
+                            if ((*(u16 *)(g_pMapBlipList + i * 10 + 1) & 0x40) != 0) {
+                                func_002904B0(blipBox[i][0] - 0x20, blipBox[i][1] - 0x20,
+                                              blipBox[i][2] + 0x20, blipBox[i][3] + 0x20,
+                                              0x80000000, 1);
+                            }
+                            if ((D_1A9618 != 0) && (i == D_1A961C)) {
+                                blipBox[i][0] = D_1A9620;
+                                blipBox[i][3] = D_1A962C;
+                                blipBox[i][1] = D_1A9624;
+                                blipBox[i][2] = D_1A9628;
+                            }
+                            sprScale = blipScale;
+                            if ((*(u16 *)(g_pMapBlipList + i * 10 + 1) & 0x200) != 0) {
+                                sprScale = D_1C4FD4[slot];
+                            }
+
+                            if ((*(u16 *)(g_pMapBlipList + i * 10 + 1) & 0x100) == 0) {
+                                /* icon quad (non-rotated) */
+                                s32 rgb = 0x7f7f7f;
+                                if ((*(s16 *)((s32)g_pMapBlipList + i * 0x28 + 6) == -0x1666) &&
+                                    ((u16)(*(u16 *)(g_pMapBlipList + i * 10 + 2) - 0xb) < 4)) {
+                                    s32 k = 0;
+                                    while (1) {
+                                        if (D_1A9630[k * 2] == -1) {
+                                            break;
+                                        }
+                                        if (D_1A9630[k * 2] ==
+                                            (s16)g_pMapBlipList[i * 10 + 2]) {
+                                            rgb = D_1A9634[k * 2];
+                                            break;
+                                        }
+                                        k = k + 1;
+                                    }
+                                    tex0 = (u64)(u32)func_0028EDF0(iconType, (s32)variantL);
+                                    func_0028F8E0(tex0, blipBox[i][0] - 8, blipBox[i][1] - 8,
+                                                  (blipBox[i][2] - blipBox[i][0]) + 8,
+                                                  (blipBox[i][3] - blipBox[i][1]) + 8, 0x80, 0);
+                                }
+                                tex0 = (u64)(u32)func_0028EDF0(iconType, (s32)variantL);
+                                func_0028F8E0(tex0, blipBox[i][0], blipBox[i][1],
+                                              blipBox[i][2] - blipBox[i][0],
+                                              blipBox[i][3] - blipBox[i][1], 0x80, rgb);
+                            } else {
+                                /* rotated sprite */
+                                s32 angle = g_pMapBlipList[i * 10 + 8];
+                                s32 sprA = 0x20;
+                                f32 sprW = sprScale * 256.0f;
+                                f32 sprH = sprW;
+                                s32 cx;
+                                f32 cyf;
+                                u64 sprTex;
+
+                                if ((*(u16 *)(g_pMapBlipList + i * 10 + 1) & 0x400) != 0) {
+                                    sprA = 0x40;
+                                    angle = WrapAnglePiSum(angle, MAP_HALF_PI);
+                                    sprW = sprScale * D_1A95E0;
+                                    sprH = sprScale * D_1A95E4;
+                                    if ((g_weaponUpgradeLevel[(s16)g_pMapBlipList[i * 10] * 4] & 2)
+                                        != 0) {
+                                        variantL = (s64)((s16)variant + 1);
+                                    }
+                                }
+                                if ((*(u16 *)(g_pMapBlipList + i * 10 + 1) & 0x800) != 0) {
+                                    sprA = 0x40;
+                                    angle = WrapAnglePiSum(angle, MAP_HALF_PI);
+                                    sprW = sprScale * D_1A95D8;
+                                    sprH = sprScale * D_1A95DC;
+                                    if ((g_weaponUpgradeLevel[(s16)g_pMapBlipList[i * 10] * 4] & 2)
+                                        != 0) {
+                                        variantL = (s64)((s32)variantL + 1);
+                                    }
+                                }
+                                if ((*(u16 *)(g_pMapBlipList + i * 10 + 1) & 0x1000) != 0) {
+                                    angle = WrapAnglePiSum(angle, MAP_HALF_PI);
+                                    sprW = sprScale * D_1A95E8;
+                                    sprH = sprScale * D_1A95EC;
+                                }
+                                cx    = blipBox[i][0] + blipBox[i][2];
+                                cyf   = (f32)(blipBox[i][1] + blipBox[i][3]) * 0.5f;
+                                sprTex = GetHudIconTex0(func_0028EDF0(iconType, (s32)variantL, cx,
+                                                                      blipBox[i][2], blipBox[i][3]));
+                                func_0028FC78((f32)cx * 0.5f, cyf, sprW, sprH, angle, sprA, 0x20,
+                                              sprTex);
+                            }
+
+                            /* optional label */
+                            if ((*(u16 *)(g_pMapBlipList + i * 10 + 1) & 0x10) != 0) {
+                                u16 lw = *(u16 *)((s32)g_pMapBlipList + i * 0x28 + 0xe);
+                                s16 anchorX = *(s16 *)((s32)g_pMapBlipList + i * 0x28 + 0x12);
+                                s16 anchorY = (s16)g_pMapBlipList[i * 10 + 5];
+                                s32 lwi = (s32)(s16)lw;
+                                s32 lx, ly, lh;
+
+                                if (anchorX == 0) {
+                                    lx = ((blipBox[i][0] + blipBox[i][2]) >> 5) -
+                                         ((s32)(lwi + (u32)(lw >> 0xf)) >> 1);
+                                } else {
+                                    s32 base = (anchorX < 1) ? blipBox[i][0] : blipBox[i][2];
+                                    lx = ((base >> 4) - ((s32)(lwi + (u32)(lw >> 0xf)) >> 1)) +
+                                         (s32)anchorX;
+                                }
+                                lh = (s32)(s16)g_pMapBlipList[i * 10 + 4];
+                                if (anchorY == 0) {
+                                    ly = ((blipBox[i][1] + blipBox[i][3]) >> 5) - lh / 2;
+                                } else {
+                                    s32 base = (anchorY < 1) ? blipBox[i][1] : blipBox[i][3];
+                                    ly = ((base >> 4) - lh / 2) + (s32)anchorY;
+                                }
+                                func_002904B0(lx - 2, ly, lx + lwi + 2, ly + lh + 8,
+                                              0x40000000, 0);
+                                func_00298730(i, labelStr);
+                                FUN_00115484(&labelBox, 0, 0x18);
+                                labelBox.x0 = (s16)ly;          /* +0x00 */
+                                labelBox.y0 = (s16)(ly + lh);   /* +0x02 */
+                                labelBox.x1 = (s16)lx;          /* +0x04 */
+                                labelBox.y1 = (s16)(lx + lwi);  /* +0x06 */
+                                labelBox.tx = (s16)lx + (s16)lw / 2;
+                                labelBox.ty = (s16)ly + 4;
+                                labelBox.pad10 = 0x11000f;   /* &UNK_0011000F low word */
+                                func_00280BB8(&labelBox, 0x80ffa888, labelStr, -1);
+                            }
+                        }
+                    }
+                    i = i + 1;
+                } while ((*(u16 *)(g_pMapBlipList + i * 10 + 1) & 4) == 0);
+            }
+        }
+    }
+
+    /* ---- PHASE 3: player-position marker ---- */
+    {
+        s32 scissorW = g_nScreenWidth;
+        if (g_playerProgress == map->activeSlot) {
+            u64 mkTex = (u64)(u32)func_0028EDF0(0xe99a, 5);
+            f32 mkScale = (D_1C4FD4[slot] * 4.0f + 10.0f) * 0.05769231f;
+            f32 mkColor = D_189EB8;
+            f32 outUV[2];
+            f32 markerW;
+            f32 posX, posY;
+
+            if (D_18C0BC == 0xf) {
+                mkColor = WrapAnglePiSum(D_189EB8, MAP_HALF_PI);
+            }
+            if ((g_playerProgress == 0x14) && (D_1C4EC0 == 2)) {
+                mkColor = MAP_PI;   /* pi, bit-exact 0x40490fdb via union */
+            } else {
+                if ((-1 < func_00301430()) && (g_playerProgress == 7)) {
+                    mkColor = D_1A9658[func_00301430()];
+                }
+            }
+
+            if (func_00297B48(g_flHeroPos[0], g_flHeroPos[1], &outUV[0], &outUV[1],
+                              g_playerProgress) == 0) {
+                func_00298918(g_flHeroPos[0], g_flHeroPos[1], &outUV[0], &outUV[1],
+                              g_playerProgress);
+            }
+
+            markerW = mkScale * 256.0f;
+            posX = (f32)originY + outUV[0] * (f32)(s32)(extentY - originY);
+            posY = (f32)originX + outUV[1] * (f32)(s32)(extentX - originX);
+            mkTex = GetHudIconTex0(mkTex);
+            func_0028FC78(posX, posY, markerW, markerW, mkColor, 0x40, 0x40, mkTex);
+            scissorW = g_nScreenWidth;
+            if (D_1A7B05 != 0) {
+                func_00298AA8((f32)originY, (f32)(s32)extentY, (f32)originX,
+                              (f32)(s32)extentX, mkScale);
+                scissorW = g_nScreenWidth;
+            }
+        }
+        AppendGsScissorRect(0, scissorW - 1, 0, g_nScreenHeight - 1);
+    }
+
+    if (hudPass != 0) {
+        End2dDrawBatch();
+    }
+}
+#endif
 
 /* Per-state writer of two f32 out-params (A=$4, B=$5) selected by g_playerProgress
  * (cases 2/0xB/7/0x14) with float-threshold gating on g_soundBankHandlesBlk+0x80/
