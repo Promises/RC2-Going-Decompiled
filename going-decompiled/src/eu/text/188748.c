@@ -1468,7 +1468,10 @@ void ResetBoltCounterHud(void) {
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", UpdateBoltCounterHud);
 #else
 extern s32  func_0029C118(void);   /* per-frame gate (USA func_0029C570): nonzero => skip this frame */
-extern void func_0029C030(s32);    /* bolt-counter HUD trigger (USA func_0029C488), called with 0xB4 */
+/* bolt-counter HUD trigger (USA func_0029C488). PAL/NTSC TIMING: this build calls it
+ * with 0x96 (150 frames); the USA .s uses 0xB4 (180) at the same call site. Ratio
+ * 150/180 = 0.8333 = 50/60 - a genuine PAL retime, NOT a portable constant. */
+extern void func_0029C030(s32);
 
 /* one bolt-roll animation slot: 2-entry array at g_pActiveTextTable+0xE8, stride 0x10 */
 typedef struct HudRollSlot {
@@ -1538,9 +1541,9 @@ void UpdateBoltCounterHud(void) {
                 s->holdTimer = -1;
             }
         }
-        func_0029C030(0xB4);
+        func_0029C030(0x96);   /* PAL 150 frames (USA/NTSC 0xB4 = 180) */
     } else if (slots[0].phase == 3 || slots[1].phase == 3) {
-        func_0029C030(0xB4);
+        func_0029C030(0x96);   /* PAL 150 frames (USA/NTSC 0xB4 = 180) */
     }
 
     /* --- ROLL: advance both slots' animation --- */
