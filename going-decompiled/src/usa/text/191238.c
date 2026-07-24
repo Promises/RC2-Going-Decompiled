@@ -2808,7 +2808,7 @@ void func_00294CD0(s32 id) {
         if (gv != -1) {
             s32 handle = *(s32 *)(g_soundBankHandlesBlk + 0x22C8);
             s32 w = *(s32 *)(g_weaponTable + g_itemEquippedSlot[handle] * 0xE0 + 0x14);
-            if (w == *(s32 *)(g_discToc + gv * 0x14 + 0x4B40)) {
+            if (w == *(s32 *)((u8 *)g_discToc + gv * 0x14 + 0x4B40)) {
                 *(s32 *)(g_soundBankHandlesBlk + 0x22C8) = 0;
             }
         }
