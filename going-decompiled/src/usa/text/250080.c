@@ -1112,10 +1112,110 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003517C0);
  * saves (s0/s1/ra). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003518B8);
 
-/* TODO(hle): needs PS2 graphics/IO HLE backend — advances the IPU_TO DMA tag
-   ring from the channel's REG_DMAC_4_IPU_TO_CHCR/MADR progress, rebuilds the
-   consumed tags, and re-kicks the channel. */
+/* func_00351910: advance the IPU_TO (DMAC ch4) DMA source-tag RING by the
+ * macroblocks the channel already consumed, re-emit the freshly-freed tags, and
+ * re-kick the channel. Acquires the stream sema (+0x40) — if the "armed" flag
+ * (+0x44) is clear the transfer was torn down, so it reports the FMV error
+ * (D_1AE800) and returns 0. Otherwise it suspends ch4 (func_00351550(5)),
+ * snapshots the channel CHCR/MADR, and translates MADR into a ring position via
+ * func_00351498. The object is the IPU_TO bitstream sub-object (raw offsets, as
+ * in the siblings):
+ *   +0x0  srcBase       physical base address of the macroblock buffer
+ *   +0x4  tagBase       physical base of the source-tag ring (0x10-byte tags)
+ *   +0x8  ringSize (N)  number of macroblock tags in the ring
+ *   +0xC  head          ring index of the oldest still-outstanding tag
+ *   +0x10 outstanding   count of tags the DMAC still owns
+ *   +0x14 ptsAccum      pts accumulator (macroblocks-worth, granularity 0x800)
+ *   +0x40 sema          decode semaphore id
+ *   +0x44 armed         non-zero while the channel is live
+ * The consumed count is derived from how far MADR advanced: sectorDelta =
+ * func_00351498(obj, madr); the number of whole macroblocks consumed rolls
+ * `head` forward and `outstanding` down (mod N ring math). ptsAccum/0x800 gives
+ * how many new tags to (re)emit; each is rebuilt via func_003515C0 with qwc 3
+ * (0x80-id source tag), the final tag of the batch terminated with qwc 0. If any
+ * tag was emitted, ch4's CHCR is restarted (patched to 0x30000000 | 0x100 =
+ * chained transfer, dir=to-memory-off, start). Returns 1. Op-for-op faithful to
+ * the frozen .s (all divides signed `div`; the beql break-0,7 guards are the
+ * compiler's div-by-zero traps for a possibly-zero divisor -> plain % here). */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351910);
+#else
+s32 func_00351910(void *dmaq) {
+    extern char D_1AE800[];   /* FMV "IPU_TO ring not armed" error string */
+    s32 *obj = (s32 *)dmaq;
+    s32 ringSize;         /* $7  = obj[2] (N) */
+    s32 sectorDelta;      /* $2  = func_00351498(obj, madr) */
+    s32 head;             /* running ring head (obj[3]) */
+    s32 outstanding;      /* running outstanding count (obj[4]) */
+    s32 emitIdx;          /* $16 = ring index to (re)emit at */
+    s32 nTags;            /* $19 = ptsAccum / 0x800, tags to emit */
+    s32 ptsAccum;         /* $1  = obj[5] before wrap */
+    s32 ptsQuot;          /* $9  = rounded-toward-zero ptsAccum / 0x800 */
+    u32 chcr;             /* $21 = ch4 CHCR snapshot */
+    u32 madr;             /* $5  = ch4 MADR snapshot */
+    s32 emitted;          /* $23 = flag: at least one tag emitted */
+    s32 i;                /* $17 = emit-loop counter */
+
+    func_0011AC60(obj[0x10]);                 /* WaitSema (acquire) */
+    if (obj[0x11] == 0) {                      /* +0x44 armed clear -> torn down */
+        func_003504C8(D_1AE800);
+        return 0;
+    }
+
+    emitted = 0;
+    func_00351550(5);                          /* suspend ch4 (IPU_TO) */
+    chcr = *(volatile u32 *)0x1000B400;        /* ch4 CHCR */
+    madr = *(volatile u32 *)0x1000B410;        /* ch4 MADR */
+
+    sectorDelta = func_00351498(dmaq, madr);
+    ringSize = obj[2];                         /* N */
+
+    /* consumed macroblocks -> roll head forward, outstanding down */
+    sectorDelta = ((sectorDelta + ringSize) - obj[3]) % ringSize;
+    outstanding = obj[4] - sectorDelta;
+    head = (obj[3] + sectorDelta) % ringSize;
+    obj[4] = outstanding;
+    outstanding = head + outstanding;          /* head + outstanding */
+    obj[3] = head;
+    emitIdx = outstanding % ringSize;
+
+    /* ptsAccum / 0x800, rounded toward zero (bias +0x7FF when negative) */
+    ptsAccum = obj[5];
+    ptsQuot = (ptsAccum >= 0 ? ptsAccum : ptsAccum + 0x7FF) >> 11;
+    nTags = ptsQuot;
+    obj[5] = ptsAccum - ptsQuot * 0x800;       /* keep the remainder */
+
+    if (nTags > 0) {
+        /* prime tag: the slot just behind the batch (outstanding + N - 1) */
+        s32 idx = (outstanding + ringSize - 1) % ringSize;
+        emitted = 1;
+        func_003515C0((u64 *)(obj[1] + idx * 0x10),
+                      (u64)(u32)(obj[0] + idx * 0x800), 3, 0x80);
+    }
+
+    if (nTags > 0) {
+        for (i = 0; i < nTags; i++) {
+            /* last tag of the batch terminates the chain (qwc 0) */
+            u64 qwc = (i != nTags - 1) ? 3 : 0;
+            func_003515C0((u64 *)(obj[1] + emitIdx * 0x10),
+                          (u64)(u32)(obj[0] + emitIdx * 0x800), qwc, 0x80);
+            emitIdx = (emitIdx + 1) % obj[2];
+        }
+    }
+
+    outstanding = obj[4];
+    obj[4] = outstanding + nTags;
+    if (outstanding + nTags != 0) {
+        if (emitted) {
+            chcr = (chcr & 0x0FFFFFFF) | 0x30000000;
+        }
+        func_00351550(chcr | 0x100);           /* restart ch4 */
+    }
+
+    func_0011AC40(obj[0x10]);                   /* SignalSema (release) */
+    return 1;
+}
+#endif
 
 /* func_00351B10: snapshot + halt the IPU DMA channels (save-state capture).
  * Acquires the stream sema, suspends IPU_TO (ch4, func_00351550(5)) and records
