@@ -1024,10 +1024,55 @@ void func_003515C0(u64 *tag, u64 madr, u64 qwc, u64 id) {
  * Blocked: 8-byte-packed saves (s0@0x20, ra@0x28). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003515E8);
 
-/* TODO(hle): needs PS2 graphics/IO HLE backend — builds the IPU_TO DMA source
-   tag chain (one 0x80-qwc IPU_TO tag per macroblock plus the terminator) and
-   kicks channel 4 by writing REG_DMAC_4_IPU_TO_QWC/MADR/TADR. */
+/* func_00351660: initialise the IPU_TO bitstream sub-object's ring state and
+ * build its DMA source-tag chain. Clears the playback counters, resets each
+ * f50-array ring slot (stride 0x18: two -1 handles + two zeroed counters),
+ * emits one 0x80-qwc IPU_TO source tag per macroblock via func_003515C0
+ * (id 0x80) followed by the qwc=2 terminator, then programs channel-4
+ * MADR/QWC/TADR and suspends its CHCR via func_00351550(5). Operates on the
+ * sub-object embedded at FmvStream+0x48 (type not yet recovered -> raw
+ * offsets). Byte-match blocked: 8-byte-packed saves. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351660);
+#else
+void func_00351660(u8 *stream) {
+    s32 i;
+
+    *(s32 *)(stream + 0x44) = 1;
+    *(s32 *)(stream + 0xC) = 0;
+    *(s32 *)(stream + 0x10) = 0;
+    *(s32 *)(stream + 0x14) = 0;
+    *(s32 *)(stream + 0x58) = 0;
+    *(s32 *)(stream + 0x5C) = 0;
+
+    if (*(s32 *)(stream + 0x54) > 0) {
+        for (i = 0; i < *(s32 *)(stream + 0x54); i++) {
+            u8 *slot = *(u8 **)(stream + 0x50) + i * 0x18;
+            *(s64 *)(slot + 0x0) = -1;
+            *(s64 *)(slot + 0x8) = -1;
+            *(s32 *)(slot + 0x10) = 0;
+            *(s32 *)(slot + 0x14) = 0;
+        }
+    }
+
+    i = 0;
+    if (*(s32 *)(stream + 0x8) > 0) {
+        for (i = 0; i < *(s32 *)(stream + 0x8); i++) {
+            func_003515C0((u64 *)(*(u32 *)(stream + 0x4) + i * 0x10),
+                          (*(u32 *)(stream + 0x0) + (i << 11)) & 0x0FFFFFFF,
+                          3, 0x80);
+        }
+    }
+
+    func_003515C0((u64 *)(*(u32 *)(stream + 0x4) + i * 0x10),
+                  *(u32 *)(stream + 0x4) & 0x0FFFFFFF, 2, 0);
+
+    *(volatile u32 *)0x1000B420 = 0;                                    /* ch4 QWC  */
+    *(volatile u32 *)0x1000B410 = *(u32 *)(stream + 0x0) & 0x0FFFFFFF;  /* ch4 MADR */
+    *(volatile u32 *)0x1000B430 = *(u32 *)(stream + 0x4) & 0x0FFFFFFF;  /* ch4 TADR */
+    func_00351550(5);                                                   /* ch4 CHCR suspend */
+}
+#endif
 
 /* WALL: deferred-native body had a signature inconsistency with its
    forwarder/caller (caught by the TARGET_NATIVE compile sweep). Left bare
