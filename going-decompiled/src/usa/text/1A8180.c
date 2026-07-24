@@ -4286,7 +4286,295 @@ s32 func_002AE7E8(Moby *moby) {
 }
 #endif
 
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE9E0);
+#else
+/* --- SpawnBoltShower (func_002AE9E0) faithful #else externs (guarded) ---------
+ * Engine (ee-gcc 2.96) coverage body — functional, NOT a byte-match. The
+ * matching INCLUDE_ASM arm above stays intact. These externs exist only for the
+ * #else body, so they are guarded per the unit's #else-extern rule. */
+extern u32  D_1A7A10;                  /* PlayerStats double-bolts word: (& 0xffff0000) != 0 -> 2x */
+extern u8   D_1A7A13;                  /* cap-select byte: 0 -> cap 0x1d4fd396, else -0x1ab5ae28 */
+extern u8   D_1A7A3A;                  /* capped-path remainder divisor byte (DAT_001a7a38._2_1_) */
+extern u32  D_1A8C70;                  /* scatter-mode flag (moby+0xb0 -> (g_pSkyShellSpinRates+0x10)[b] >> 7) */
+extern u8   g_pSkyShellSpinRates[];    /* +0x10 is the per-class scatter-mode table (DAT_001b1920) */
+extern s32  g_health;                  /* base for the two per-planet economy tables below */
+extern s32  g_playerProgress;          /* current-planet index (gp-rel), indexes the tables */
+extern s32  g_pendingBoltCredit;       /* deferred bolt-credit sink for the capped remainder */
+extern u32  D_001F0000[];              /* +0x1680 = nav-moby pointer table, indexed navTargetIdx*4 */
+
+extern void SpawnBoltDenominationPickup(u64 moby, Vec4 *vel, Vec4 *pos, u32 flags,
+                                        s32 denom, u32 mode);
+extern void func_002CA3E8(s32 navTargetIdx, Vec4 *srcPos, Vec4 *dstPos, Vec4 *out);
+extern s32  func_001234F0(f32 x);      /* float-format helper for DebugPrintStub */
+extern void DebugPrintStub(s32 fmt, ...);
+
+/**
+ * SpawnBoltShower — the bolt-payout scatterer.
+ *
+ * Rolls a random bolt total in [minBolts, maxBolts], optionally doubled when the
+ * PlayerStats double-bolts word (D_1A7A10 upper half) is set, then applies the
+ * dynamic per-planet bolt-economy throttle: rate = earned[planet] * 3600 /
+ * threshold[planet] (halved when double-bolts is on); a low rate multiplies the
+ * total x5, a high rate scales it down toward /10. The (possibly throttled)
+ * total is split into 1000/500/100/50/20/5/1 denomination counters — greedily
+ * unless flag 8 is set, in which case the fill is capped at coinCap (per
+ * denomination row) and the leftover is deferred into g_pendingBoltCredit.
+ * Finally each counted coin is spawned with a scattered (and, when a nav target
+ * is given, ballistically-aimed) velocity via SpawnBoltDenominationPickup.
+ *
+ * @param zStep1      per-coin world-Z step added to the spawn position
+ * @param sourceMoby2 source moby (spawn origin; +0x10 world pos, +0xaa/+0xb0 class bytes)
+ * @param minBolts3   lower bound of the rolled total (clamped to >= 1)
+ * @param maxBolts4   upper bound of the rolled total
+ * @param flags5      spawn flags: bit 3 = capped variant, bit 5 = suppress double-scatter
+ * @param navTargetIdx6 nav-moby table index for ballistic aim (< 0 = no aim)
+ * @param coinCap7    per-denomination fill cap for the capped variant
+ */
+void SpawnBoltShower(f32 zStep1, u64 sourceMoby2, long minBolts3, long maxBolts4,
+                     u32 flags5, int navTargetIdx6, int coinCap7)
+{
+    Moby *moby = (Moby *)(long)(u32)sourceMoby2;
+    int  navTargetIdx = navTargetIdx6;
+    int  coinCap = coinCap7;
+    u32  scatterMode;
+    int  total;
+    int  rate;
+
+    /* the seven denomination counters (1000s .. 1s) */
+    int n1000, n500, n100, n50, n20, n5, n1;
+
+    /* scatter working buffers — kept distinct so the vel/pos pair computed early
+     * survives the intervening writes and reaches SpawnBoltDenominationPickup. */
+    Vec4 scatterAccum;   /* sp+0x00 : Vec4Add accumulator (nav-aim base) */
+    Vec4 vel;            /* sp+0x10 : the coin velocity handed to the spawner */
+    Vec4 step;           /* sp+0x20 : the pos/step vec handed to the spawner */
+    Vec4 step2;          /* sp+0x30 : rescaled scatter offset added into vel */
+    Vec4 ballisticPos;   /* sp+0x50 : ballistic aim work vector */
+    Vec4 navWorldPos;    /* sp+0x60 : nav target world position */
+    Vec4 navRescaled;    /* sp+0x70 : rescaled nav direction */
+    f32  arc;            /* sp+0xb0 : ballistic-arc root out-param */
+    f32  arcOut2;        /* sp+0xb4 : ballistic solver 2nd out-param (unused) */
+
+    func_00283638((Moby *)&scatterAccum);   /* Vec4ZeroInt(scatterAccum) */
+    n1000 = n500 = n100 = n50 = n20 = n5 = n1 = 0;
+
+    /* --- scatter-mode select ------------------------------------------------ */
+    if ((flags5 & 0x20) == 0 && *(u8 *)((u8 *)moby + 0xb0) != 0xff &&
+        (u32)(*(u16 *)((u8 *)moby + 0xaa) - 500) > 0x28) {
+        D_1A8C70 = (u32)((u8)(&g_pSkyShellSpinRates[0x10])[*(u8 *)((u8 *)moby + 0xb0)] >> 7);
+    }
+    scatterMode = 0;
+    if (D_1A8C70 != 0) {
+        scatterMode = (((s32)flags5 >> 5) ^ 1U) & 1;
+    }
+
+    /* --- guards ------------------------------------------------------------- */
+    if (flags5 == 0) {
+        return;
+    }
+    if (minBolts3 == 0 && maxBolts4 == 0) {
+        return;
+    }
+    if (minBolts3 < 1) {
+        minBolts3 = 1;
+    }
+
+    /* --- roll the total ----------------------------------------------------- */
+    total = GetRandomInt(((int)maxBolts4 - (int)minBolts3) + 1) + (int)minBolts3;
+    if ((D_1A7A10 & 0xffff0000) != 0) {
+        total = total * 2;
+    }
+
+    /* --- economy throttle (small payouts only, when scatter-mode active) ----- */
+    if (total < 500 && scatterMode != 0) {
+        int threshold = *(int *)((u8 *)&g_health + 0xEAC + g_playerProgress * 4);
+        if (threshold != 0) {
+            rate = (*(int *)((u8 *)&g_health + 0xF1C + g_playerProgress * 4) * 0xE10) / threshold;
+            if ((D_1A7A10 & 0xffff0000) != 0) {
+                rate = rate / 2;
+            }
+            if (rate < 0x3BFE5913) {
+                if (rate < 0xA6568A6) {
+                    DebugPrintStub(0x1A9F58);
+                    total = total * 5;
+                } else {
+                    DebugPrintStub(0x1A9F68, (-0xCEE480 - rate) / 0x7FFC79C);
+                    total = (total * (-0xCEE480 - rate)) / 0x7FFC79C;
+                }
+                if (D_1A7A13 == 0) {
+                    if (total >= 0x1D4FD397) {
+                        total = 0x1D4FD396;
+                    }
+                } else {
+                    if (total >= -0x1AB5AE27) {
+                        total = -0x1AB5AE28;
+                    }
+                }
+            } else if ((u32)rate > 0x77FCB227) {
+                if (rate < 0xBFC252E) {
+                    f32 shown = IntToFloat((-0x99D909E - rate) / -0x22303B1);
+                    DebugPrintStub(0x1A9F78, func_001234F0(shown));
+                    total = (total * (-0x99D909E - rate)) / -0x22303B1;
+                } else {
+                    /* format arg is the bit pattern 0x3fb99999a0000000 (double 0.1) */
+                    DebugPrintStub(0x1A9F78, 0x3FB99999A0000000LL);
+                    total = total / 10;
+                }
+                if (total < 1) {
+                    total = 1;
+                }
+            }
+        }
+    }
+
+    /* --- denomination split ------------------------------------------------- */
+    if ((flags5 & 8) == 0) {
+        /* greedy split */
+        if (total > 999) { n1000 = total / 1000; total = total % 1000; }
+        if (total > 499) { n500  = total / 500;  total = total % 500;  }
+        if (total > 99)  { n100  = total / 100;  total = total % 100;  }
+        if (total > 0x31){ n50   = total / 0x32; total = total % 0x32; }
+        if (total > 0x13){ n20   = total / 0x14; total = total % 0x14; }
+        if (total > 4)   { n5    = total / 5;    total = total % 5;    }
+        n1 = total;
+        /* negative-clamp guard (only entered if any counter went negative) */
+        if (n1000 < 0 || n500 < 0 || n100 < 0 || n50 < 0 || n20 < 0 || n5 < 0 || total < 0) {
+            DebugPrintStub(0x1A9F88);
+            if (total < 0) total = 0;
+            if (n1000 < 0) n1000 = 0;
+            if (n500  < 0) n500  = 0;
+            if (n100  < 0) n100  = 0;
+            if (n5    < 0) n5    = 0;
+            if (n50   < 0) n50   = 0;
+            n1 = total;
+            if (n20 < 0) n20 = 0;
+        }
+    } else {
+        /* capped split: fill high->low but never exceed the remaining cap */
+        int cap = coinCap;
+        n1000 = cap;
+        if (total / 1000 <= cap) { n1000 = total / 1000; }
+        cap   = cap - n1000;
+        total = total + n1000 * -1000;
+        if (cap > 0) {
+            n500 = total / 500;
+            if (cap < total / 500) { n500 = cap; }
+            cap   = cap - n500;
+            total = total + n500 * -500;
+            if (cap > 0) {
+                n100 = total / 100;
+                if (cap < total / 100) { n100 = cap; }
+                cap   = cap - n100;
+                total = total + n100 * -100;
+                if (cap > 0) {
+                    n50 = total / 0x32;
+                    if (cap < total / 0x32) { n50 = cap; }
+                    cap   = cap - n50;
+                    total = total + n50 * -0x32;
+                    if (cap > 0) {
+                        n20 = total / 0x14;
+                        if (cap < total / 0x14) { n20 = cap; }
+                        cap   = cap - n20;
+                        total = total + n20 * -0x14;
+                        if (cap > 0) {
+                            n5 = total / 5;
+                            if (cap < total / 5) { n5 = cap; }
+                            cap   = cap - n5;
+                            total = total + n5 * -5;
+                            if (cap > 0) {
+                                n1 = total;
+                                if (cap < total) { n1 = cap; }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (D_1A7A3A != 0) {
+            total = total / (int)(u32)D_1A7A3A;
+        }
+        g_pendingBoltCredit = g_pendingBoltCredit + total;
+    }
+
+    /* --- spawn loop: emit each counted coin with a scattered velocity ------- */
+    while (n1 != 0 || n5 != 0 || n20 != 0 || n50 != 0 || n100 != 0 || n500 != 0 || n1000 != 0) {
+        f32 angle;
+        f32 rnd;
+
+        Vec4ScaleVu0(&vel, 0.0009765625f, (const Vec4 *)((u8 *)moby + 0x10)); /* 0x3A800000 = 1/1024 */
+        angle = GetRandomAngle();
+
+        rnd = GetRandomFloatRange(0.0f, 3.0f);
+        step.x = func_00283B30(angle) * 0.016666668f * rnd;
+
+        rnd = GetRandomFloatRange(0.0f, 3.0f);
+        step.y = func_00283B48(angle) * 0.016666668f * rnd;
+
+        step.z = GetRandomFloatRange(3.7f, 6.0f) * 0.016666668f;
+
+        step2.x = step.x;
+        step2.y = step.y;
+        step2.z = 0.0f;   /* w-lane hole zeroed like the .s (uStack_e8 = 0) */
+        Vec3RescaleToLenVu0(&step2, 0.5f, &step2);       /* 0x3F000000 = rescale to length 0.5 */
+        Vec4AddVu0(&vel, &vel, &step2);
+
+        vel.z = vel.z + zStep1;    /* vel.z (sp+0x18) += the per-coin z step */
+
+        if (navTargetIdx >= 0) {
+            /* ballistic aim: solve the arc, clamp to [.. ,120] */
+            int nRoots;
+            f32 flightTime = 120.0f;
+            union { u32 u; f32 f; } gravity;
+            gravity.u = 0xBAC49BA6;   /* bit-exact f32 == -0.0015 (the gravity coeff) */
+            /* .s uses the SAME 0xBAC49BA6 for arg a AND for the step.z subtraction
+             * (Ghidra renders it once as raw hex, once as "-0.0015"). */
+            nRoots = func_002A9708(gravity.f, step.z - gravity.f,
+                                   vel.z - *(f32 *)(D_001F0000[0x1680 / 4 + navTargetIdx] + 0x18),
+                                   &arc, &arcOut2);
+            if ((f32)nRoots < 1.0f || (0.0f < arc && (flightTime = arc, 120.0f <= arc))) {
+                flightTime = 120.0f;
+            }
+            Vec4ScaleVu0(&ballisticPos, flightTime, &step);
+            Vec4AddVu0(&ballisticPos, &ballisticPos, (Vec4 *)((u8 *)moby + 0x10));
+            func_002CA3E8(navTargetIdx, (Vec4 *)((u8 *)moby + 0x10), &ballisticPos, &navWorldPos);
+            Vec4SubVu0(&ballisticPos, &navWorldPos, &vel);
+            navRescaled.w = 0.0f;   /* uStack_d8 = 0 */
+            Vec3RescaleToLenVu0(&navRescaled, 0.25f, &ballisticPos);   /* 0x3E800000 */
+            Vec4SubVu0(&ballisticPos, &ballisticPos, &navRescaled);
+            Vec4ScaleVu0(&ballisticPos, 1.0f / flightTime, &ballisticPos);
+            step.x = ballisticPos.x;
+            step.y = ballisticPos.y;
+        }
+
+        Vec4AddVu0(&step, &step, &scatterAccum);
+
+        /* highest nonzero denomination first */
+        if (n1000 != 0) {
+            SpawnBoltDenominationPickup(sourceMoby2, &vel, &step, flags5, 1000, scatterMode);
+            n1000 = n1000 - 1;
+        } else if (n500 != 0) {
+            SpawnBoltDenominationPickup(sourceMoby2, &vel, &step, flags5, 500, scatterMode);
+            n500 = n500 - 1;
+        } else if (n100 != 0) {
+            SpawnBoltDenominationPickup(sourceMoby2, &vel, &step, flags5, 100, scatterMode);
+            n100 = n100 - 1;
+        } else if (n50 != 0) {
+            SpawnBoltDenominationPickup(sourceMoby2, &vel, &step, flags5, 0x32, scatterMode);
+            n50 = n50 - 1;
+        } else if (n20 != 0) {
+            SpawnBoltDenominationPickup(sourceMoby2, &vel, &step, flags5, 0x14, scatterMode);
+            n20 = n20 - 1;
+        } else if (n5 != 0) {
+            SpawnBoltDenominationPickup(sourceMoby2, &vel, &step, flags5, 5, scatterMode);
+            n5 = n5 - 1;
+        } else {
+            SpawnBoltDenominationPickup(sourceMoby2, &vel, &step, flags5, 1, scatterMode);
+            n1 = n1 - 1;
+        }
+    }
+}
+#endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AF590);
