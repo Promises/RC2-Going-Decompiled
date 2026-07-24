@@ -4927,7 +4927,7 @@ int func_002B03E8(f32 enable1, f32 coneYaw2, f32 range3, f32 conePitch4,
 
                 nextIdx = index + 1;
                 gatePass = func_002AC9E0(moby);
-                if ((gatePass == 0) && (gate12 == 0)) {
+                if ((gatePass != 0) && (gate12 == 0)) {
                     goto advance;
                 }
 
@@ -5117,6 +5117,11 @@ int func_002B03E8(f32 enable1, f32 coneYaw2, f32 range3, f32 conePitch4,
                                             goto advance;
                                         }
                                         if (*(short *)((u8 *)g_pCollHitMoby + 0xAA) == 0xC20) {
+                                            /* .s .L002B0A48 beql delay-slot (swc1 $f20,0xB4)
+                                             * + .L002B0A74 (sw $18,0xB0): this accept path
+                                             * commits bestScore=cost, best=moby. */
+                                            candScore = cost;
+                                            candBest = moby;
                                             goto append;
                                         }
                                     }
