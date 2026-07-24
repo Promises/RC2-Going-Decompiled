@@ -74,21 +74,24 @@ extern s32 D_0013A388;
 
 extern s32 D_00134708;
 
-extern void func_0011B050(s32 count, s32 *value);
+extern s32 func_0011B050(s32 count, s32 *value);   /* returns a status in $2 (mirrors USA) */
 
-/* func_0011B978(arg0, arg1, arg2): pack a four-word command record (low 16 bits
- * of arg0, arg1, arg2, and the uncached-mirror address of D_0013CA10 ORed with
- * 0x20000000) and push it through func_0011B050 with count 1. Instructions are
- * essentially identical but NOT byte-exact: the original schedules the prologue
- * `sd $31` and `move a1,sp` after the record stores, an ordering ee-gcc won't
- * reproduce from source. Left as INCLUDE_ASM. */
+/* EU +0x80 data lane: USA's D_0013CA10 sits at D_0013CA90 in this build. */
+extern u8 D_0013CA90[];
+
+/* func_0011B978(arg0, arg1, arg2): packs a four-word command record (low 16 bits
+ * of arg0, arg1, arg2, and the uncached-mirror address of D_0013CA90 — the EU
+ * +0x80 counterpart of USA's D_0013CA10 — ORed with 0x20000000) and pushes it
+ * through func_0011B050 with count 1.
+ * NOW MATCHED (byte-exact): see the body below. The old park note here blamed a
+ * prologue `sd $31` / `move a1,sp` ordering; the u16-param + local-array +
+ * VALUE-RETURN phrasing reproduces that schedule exactly. */
 
 /* func_0011BA20 / func_0011BA58: pack arg0, arg1 and the low 16 bits of arg2
- * into a stack record and push it through func_0011B050 (count -5 / -6). Not
- * matched: the original moves arg1 out of $5 into a temp before reusing $5 for
- * the record address, so it stores arg1 via the temp. ee-gcc instead stores
- * arg1 directly from $5 before clobbering it — a register-allocation/scheduling
- * order this cc1 won't reproduce from C. Left as INCLUDE_ASM. */
+ * into a stack record and push it through func_0011B050 (count -5 / -6).
+ * NOW MATCHED (byte-exact): see the bodies below. The old park note here blamed
+ * the arg1-via-temp store order on the allocator; the VALUE-RETURN phrasing
+ * (`return func_0011B050(...)`) emits the original's early `b`-copy schedule. */
 
 /* Global list head initialised by func_0011BAC8: value word, entry count,
  * head/tail links and the inline first slot they initially point at. */
@@ -1186,7 +1189,27 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011B8D8);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011B970);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011B978);
+/**
+ * Pack a four-word command record (low 16 bits of `a` via the u16 param's
+ * callee-side andi, `b`, `c`, and the uncached-mirror address of D_0013CA90
+ * ORed with 0x20000000) on the stack and push it through func_0011B050 with
+ * count 1, RETURNING its status ($2 passthrough). The u16-param + local-array
+ * + VALUE-RETURN phrasing reproduces the original's schedule (the void
+ * statement-call form schedules the andi and stores differently; the live
+ * return value is part of the shape).
+ *
+ * EU twin of USA func_0011B978, +0x80 data lane: the record's tail word
+ * references D_0013CA90 here (USA: D_0013CA10).
+ */
+s32 func_0011B978(u16 a, s32 b, s32 c) {
+    s32 msg[4];
+
+    msg[0] = a;
+    msg[1] = b;
+    msg[2] = c;
+    msg[3] = (s32)((u32)D_0013CA90 | 0x20000000);
+    return func_0011B050(1, msg);
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011B9C0);
 
@@ -1210,9 +1233,32 @@ void func_0011B9F8(s32 arg0) {
     func_0011B050(4, &value);
 }
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011BA20);
+/**
+ * Pack a three-word record (a, b, low 16 bits of c via the u16 param's
+ * callee-side andi) on the stack and push it through func_0011B050 with
+ * count -5, returning its status. The VALUE-RETURN phrasing (see
+ * func_0011B978) gives the original's early `b`-copy schedule.
+ * Sibling func_0011BA58 differs only by count. EU twin of USA func_0011BA20
+ * (no SDK data-refs, so no +0x80 swap applies).
+ */
+s32 func_0011BA20(s32 a, s32 b, u16 c) {
+    s32 msg[3];
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011BA58);
+    msg[0] = a;
+    msg[1] = b;
+    msg[2] = c;
+    return func_0011B050(-5, msg);
+}
+
+/** Sibling of func_0011BA20 with count -6. EU twin of USA func_0011BA58. */
+s32 func_0011BA58(s32 a, s32 b, u16 c) {
+    s32 msg[3];
+
+    msg[0] = a;
+    msg[1] = b;
+    msg[2] = c;
+    return func_0011B050(-6, msg);
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011BA90);
 
@@ -3484,6 +3530,13 @@ s64 func_00122DA8(s64 a, s64 b) {
  * the USA twin (delta 0): (cX^K)==0 xori class tests, c?1:-1 (movz) vs (c==0)?-1:1
  * (movn) sign-selects, and a-first magnitude compares (a>b) to recover the
  * annulling bnel + register threading.
+ *
+ * ⚠️ GATE BLIND SPOT: this function's frozen `.s` was DELETED after it matched, so
+ * the routine unit objdiff/diff.sh gate does NOT score it (it resolves as `U` in
+ * the target object) — a future regression or silent re-wall would go unreported.
+ * ELF-verified byte-identical @0x00122F10 (extracted/eu/SCES_516.07) at b6a4a75d,
+ * by instruction-by-instruction disasm of the compiled bytes vs the boot ELF.
+ * Re-verify that way (not via the unit gate) if you touch this.
  */
 s32 func_00122F10(FpParts *a, FpParts *b) {
     s32 ca = a->fpClass;
@@ -3594,7 +3647,46 @@ s64 func_00123078(s32 x) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00123130);
+/**
+ * Convert a double (soft-float bit pattern) to s32 with saturation.
+ * Zero and negative-exponent inputs return 0; infinity and any value too large
+ * for s32 (unbiased exponent >= 31) saturate to INT_MAX / INT_MIN by sign;
+ * otherwise the class-3 mantissa (leading bit at 60) is right-shifted by
+ * (60 - exp) and negated when the sign bit is set.
+ *
+ * Idiom set (as USA): class equality via `(cls ^ K) == 0` (xori); the inf and
+ * overflow saturations share one block (both `sign != 0 ? MIN : MAX`, lowering
+ * to `movn`; the `!= 0` operand order also fixes the saturation-constant build
+ * schedule); the sign-apply is `sign == 0 ? r : -r` (negu + movn).
+ *
+ * EU twin of USA func_00123130 (no SDK data-refs, so no +0x80 swap applies).
+ */
+s32 func_00123130(s64 a) {
+    s64 va = a;
+    FpParts parts;
+    s32 cls, exp, result;
+
+    func_00122760(&va, &parts);
+    cls = parts.fpClass;
+    if ((cls ^ 2) == 0) {
+        return 0;
+    }
+    if ((u32)cls < 2) {
+        return 0;
+    }
+    if ((cls ^ 4) == 0) {
+        return parts.sign != 0 ? (s32)0x80000000 : 0x7FFFFFFF;
+    }
+    exp = parts.exponent;
+    if (exp < 0) {
+        return 0;
+    }
+    if (exp >= 31) {
+        return parts.sign != 0 ? (s32)0x80000000 : 0x7FFFFFFF;
+    }
+    result = (s32)((u64)parts.mantissa >> (60 - exp));
+    return parts.sign == 0 ? result : -result;
+}
 
 /**
  * func_001231C8 = convert a non-negative double to a 32-bit integer (truncate
@@ -3607,6 +3699,12 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00123130);
  * `lui;ori` (not s32 `li -1`) and frees the annulling `bnel`; `(cls^K)==0` forces
  * the `xori;beqz` class tests; and `if (exp>=0x3D) return <<; return >>;` lays the
  * `<<` block first to match the original's order. Calls sibling func_00122760.
+ *
+ * ⚠️ GATE BLIND SPOT: frozen `.s` DELETED after matching, so the unit
+ * objdiff/diff.sh gate does NOT score this function (resolves as `U` in the
+ * target object). ELF-verified byte-identical @0x001231C8
+ * (extracted/eu/SCES_516.07) at b6a4a75d via direct boot-ELF disasm compare.
+ * Re-verify that way (not via the unit gate) if you touch this.
  */
 u32 func_001231C8(s64 a) {
     s64 va = a;
@@ -4261,7 +4359,13 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012B1C0);
 /* func_0012B3C0(arg0): thin wrapper — forwards to func_0012C508(arg0, 3) and
  * returns its result. (The prior "sibling-call wall" note was wrong: ee-gcc 2.9
  * has NO sibling-call optimization for a value-returning call, so this compiles
- * to the original's jal + real frame — byte-exact. EU matches USA at delta 0.) */
+ * to the original's jal + real frame — byte-exact. EU matches USA at delta 0.)
+ *
+ * ⚠️ GATE BLIND SPOT: frozen `.s` DELETED after matching, so the unit
+ * objdiff/diff.sh gate does NOT score this function (resolves as `U` in the
+ * target object). ELF-verified byte-identical @0x0012B3C0
+ * (extracted/eu/SCES_516.07) at b6a4a75d via direct boot-ELF disasm compare.
+ * Re-verify that way (not via the unit gate) if you touch this. */
 extern s32 func_0012C508(s32 arg0, s32 arg1);
 s32 func_0012B3C0(s32 arg0) {
     return func_0012C508(arg0, 3);
