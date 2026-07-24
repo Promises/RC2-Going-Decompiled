@@ -4539,7 +4539,7 @@ void SpawnBoltShower(f32 zStep1, u64 sourceMoby2, long minBolts3, long maxBolts4
             Vec4AddVu0(&ballisticPos, &ballisticPos, (Vec4 *)((u8 *)moby + 0x10));
             func_002CA3E8(navTargetIdx, (Vec4 *)((u8 *)moby + 0x10), &ballisticPos, &navWorldPos);
             Vec4SubVu0(&ballisticPos, &navWorldPos, &vel);
-            navRescaled.w = 0.0f;   /* uStack_d8 = 0 */
+            ballisticPos.z = 0.0f;   /* sw $0,0x48($sp): zero z of rescale source before the Vec3 rescale */
             Vec3RescaleToLenVu0(&navRescaled, 0.25f, &ballisticPos);   /* 0x3E800000 */
             Vec4SubVu0(&ballisticPos, &ballisticPos, &navRescaled);
             Vec4ScaleVu0(&ballisticPos, 1.0f / flightTime, &ballisticPos);
