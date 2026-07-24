@@ -4675,7 +4675,11 @@ void func_002AF728(Moby *moby, void *ctrlPtr, f32 stepZ, f32 snapEps) {
 
     if (*(s16 *)(c + 0x28) == 0) {
         /* idle: choose a new heading jitter + dwell timer */
-        *(f32 *)(c + 0x24) += GetRandomFloatSigned(0.7853982f, 2.6183867f);
+        /* Both spelled from the ROM bits: the .s materialises 0x3F490FDC and
+           0x40278D37. Tidier decimals land one ULP low on the first, and the
+           second was wrong by ~1647 ULP -- its EU twin already carried the
+           correct value. */
+        *(f32 *)(c + 0x24) += GetRandomFloatSigned(0.78539824f, 2.6179941f);
         *(s16 *)(c + 0x2A) = (s16)RandRangeInclusive(*(s16 *)(c + 0x2C), *(s16 *)(c + 0x2E));
         *(s16 *)(c + 0x28) = 1;
     } else {
@@ -4690,7 +4694,9 @@ void func_002AF728(Moby *moby, void *ctrlPtr, f32 stepZ, f32 snapEps) {
     probe = *mpos;
     probe.x += func_00283B30(*(f32 *)(m + 0xF8)) * *(f32 *)(c + 0x14);
     probe.y += func_00283B48(*(f32 *)(m + 0xF8)) * *(f32 *)(c + 0x14);
-    blocked = func_002A8D08(moby, mpos, &probe, 0, stepZ, *(f32 *)(c + 0x10), snapEps, 0.5235988f);
+    /* 0.52359885f is 0x3F060A93, the value the .s materialises; the tidier
+       pi/6 spelling lands one ULP low. */
+    blocked = func_002A8D08(moby, mpos, &probe, 0, stepZ, *(f32 *)(c + 0x10), snapEps, 0.52359885f);
     *(f32 *)(m + 0x18) = ProbeGroundHeight(mpos, 0.5f, 0);
     dist = DistXYVu0(mpos, (Vec4 *)c);
 
