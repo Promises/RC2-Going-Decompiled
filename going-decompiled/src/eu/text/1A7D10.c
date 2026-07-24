@@ -473,7 +473,28 @@ void func_002A84F8(Vec4 *out, Vec4 *p1, Vec4 *p2, Vec4 *p3, Vec4 *p4, f32 t) {
 }
 #endif
 
+/**
+ * Cosine ("smootherstep"-style) ease between a and b by t in [0,1]: shortcut
+ * the endpoints (t==0 -> a, t==1 -> b), otherwise blend by (1 - cos(t*pi))/2.
+ *
+ * EU-lockstep of USA func_002A8A68: cos func_00283B30 -> func_00283A40.
+ * All constants verified identical to the EU .s (pi 0x40490FDB, 1.0 0x3F800000,
+ * 0.5 0x3F000000) - no PAL/NTSC retime in this body.
+ * Matching arm stays INCLUDE_ASM; #else is the structure model.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A8618);
+#else
+f32 func_002A8618(f32 a, f32 b, f32 t) {
+    if (t == 0.0f) {
+        return a;
+    }
+    if (t == 1.0f) {
+        return b;
+    }
+    return a + (b - a) * ((1.0f - func_00283A40(t * 3.14159274f)) * 0.5f);
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A86B0);
 
@@ -2497,7 +2518,320 @@ s32 func_002AC6D8(Moby *m) {
 }
 #endif
 
+/**
+ * func_002AC718 — surface-impact FX dispatcher. EU-lockstep of USA func_002ACA20.
+ *
+ * Emits the full hit effect: optional splash-damage sphere query, Type-0F spark
+ * spray, debris-streak mobys, Type-0B dust + Type-08 mist bursts (tinted from two
+ * random-indexed palettes), up to four shockwave rings, camera shake, impact sound
+ * and an optional screen-space camera FX.
+ *
+ * ⚠️ PAL/NTSC: this body is NOT a pure symbol swap of the USA twin. Six per-frame
+ * rate constants are genuinely retimed (all ratio 60/50 = 1.2), and every value
+ * below was read from the EU .s (func_002AC718.s), never scaled from the USA one:
+ *   1/60  0x3C888889 -> 1/50  0x3CA3D70B   (0.016666668 -> 0.020000001)
+ *   8/60  0x3E088889 -> 8/50  0x3E23D70B   (0.13333334  -> 0.16000001)
+ *   3/60  0x3D4CCCCE -> 3/50  0x3D75C290   (0.050000004 -> 0.060000002)
+ *   0.2/60 0x3B5A740F -> 0.2/50 0x3B83126F (0.0033333336 -> 0.0040000002)
+ *   10/60 0x3E2AAAAB -> 10/50 0x3E4CCCCE   (0.16666667  -> 0.20000002)
+ *   2/60  0x3D088889 -> 2/50  0x3D23D70B   (0.033333335 -> 0.040000003)
+ * Data globals follow the +0x80 EU lane (D_1A9F20->D_1A9FA0, D_1A9F38->D_1A9FB8,
+ * D_258C00->D_258C80, D_258C50->D_258CD0); 23 callee symbols re-pointed.
+ * Matching arm stays INCLUDE_ASM; #else is the structure model.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AC718);
+#else
+/* callees / globals used only by this #else body that have no file-scope decl
+ * above this point. Duplicate file-scope externs are legal. */
+extern s32  func_002A8238(s32 lo, s32 hi);
+extern s32  func_002A81F8(s32 n);
+extern void func_002BD790(f32 speed, void *spawnCtx, Vec4 *dir, u32 c1,
+                                u32 c2, s32 life, s32 a7, s64 a8, s64 a9);
+extern void func_002BC948(f32 speed, f32 life, u64 spawnCtx, void *pos,
+                                u32 c1, u32 c2, s32 a7, s32 a8, s32 a9, s32 a10);
+extern void func_002BC4A0(f32 speed, u64 spawnCtx, Vec4 *dir, u32 c1,
+                                u32 c2, s32 life);
+extern void func_003096D0(f32 radius, long moby, u64 spawnCtx,
+                                   void *pos, s32 a4, s32 a5, s32 a6,
+                                   s32 a7, s32 a8);
+extern void func_003098C8(void *spawnCtx, Vec4 *dir, s32 life, s32 flag, s32 a4); /* SpawnImpactDebrisStreakMoby */
+extern void func_00283878(f32 minLen, Vec4 *dst, Vec4 *src);                      /* Vec3NormalizeCheckedVu0 */
+extern long func_00284678(f32 range, Vec4 *pt);                                  /* ClassifyPointVsScreenBoxVu0 */
+extern void func_00313FE0(void *shakeBlock, u64 spawnCtx, s32 a2, s32 a3);
+extern s32  func_002E6AC8(s32 soundIdx, s32 flags, Moby *owner);
+extern u64  D_1A9FA0[3];     /* particle palette A (USA D_1A9F20 +0x80) */
+extern u64  D_1A9FB8[3];     /* particle palette B (USA D_1A9F38 +0x80) */
+extern u8   D_258C80[];      /* camera-FX block, matFlag==0 (USA D_258C00 +0x80) */
+extern u8   D_258CD0[];      /* camera-FX block, matFlag!=0 (USA D_258C50 +0x80) */
+extern u8   g_cameraState[]; /* shake block at +0x160 (EU g_nVendorBuyQuantity+0x2FB8) */
+extern f32  g_frameGpuTime;  /* last-frame GPU time (EU g_nLevelExitDestination+0x10) */
+extern f32  g_gameTime[];    /* [1] = last-frame CPU/step time (EU g_nLevelExitDestination+0xC) */
+extern Vec4 g_cameraPos;     /* camera world position (EU g_nVendorBuyQuantity+0x30F8) */
+
+void func_002AC718(f32 queryRadius, f32 queryPower, f32 ringRadius, f32 whiteRingRad,
+                   f32 ringDistGate, f32 scale, f32 cameraFxMag, long moby, u64 spawnCtx9,
+                   u64 *pos, s32 sparkCount, s32 dustCount, s32 mistCount, s32 soundIdx,
+                   s32 shakeEnable, s32 debrisCount, s32 lod, u8 matFlag, u32 queryTag) {
+    const f32 invFrameRate = 0.020000001f;   /* 0x3C888889 = 1/60 */
+    Vec4 spawnPos;                            /* {0,0, scale*0.13333334, 0} anchor for rings/dust/mist */
+    Vec4 dir;                                 /* per-particle direction scratch */
+    Vec4 camDelta;                            /* g_cameraPos - pos */
+    u8   hitRec[0x60];                        /* func_00277DE8 hit-event record */
+    f32  camDist;
+
+    spawnPos.x = 0.0f;
+    spawnPos.y = 0.0f;
+    spawnPos.z = scale * 0.16000001f;         /* 0x3E088889 */
+    spawnPos.w = 0.0f;
+
+    /* high GPU+step time forces the reduced-detail path */
+    if (lod == -1 && 1.7f < g_frameGpuTime + g_gameTime[1]) {
+        lod = 1;
+    }
+
+    if (pos == NULL) {
+        pos = (u64 *)(moby + 0x10);
+        if (moby == 0) {
+            return;
+        }
+    }
+
+    /* --- splash-damage moby sphere query --- */
+    if (0.0f < queryRadius) {
+        func_002A95E8(queryPower, (Moby *)hitRec, (s32)moby, (s32)queryTag);
+        hitRec[0x18] = 2;
+        hitRec[0x19] = 1;
+        *(u16 *)(hitRec + 0x1A) = *(u16 *)((u8 *)moby + 0xAA);
+        func_00277DE8(pos, (void *)0x10, (Moby *)moby, hitRec, queryRadius);
+    }
+
+    /* --- Type-0F spark spray --- */
+    if (0 < sparkCount) {
+        s32 sparkLifeBias = lod * 10;
+        do {
+            f32 a2 = func_002A8290(0.26179942f, 1.3962636f);
+            f32 a1 = func_002A8358();
+            f32 mag = func_002A8290(7.0f, 10.5f);
+            u32 c1, c2;
+            s32 life;
+
+            sparkCount--;
+            func_002AFB68(&dir, scale * invFrameRate * mag, a1, a2);  /* SphericalAnglesToVec3 */
+            dir.z += 0.060000002f;                                   /* 0x3D4CCCCE */
+            c1 = func_002ABA08(0x4F007FFF, matFlag);
+            c2 = func_002ABA08(0x1F00007F, matFlag);
+            life = func_002A8238(0x32, 0x64);
+            func_002BD790(scale * 40000.0f, pos, &dir, c1, c2,
+                                life - sparkLifeBias, 1, -1, -1);
+        } while (sparkCount != 0);
+    }
+
+    /* camera distance to the impact point */
+    func_002835B0(&camDelta, &g_cameraPos, (Vec4 *)pos);
+    camDist = func_002836B0(&camDelta);
+
+    /* --- debris-streak mobys --- */
+    if (debrisCount != 0) {
+        Vec4 streak;
+
+        streak.x = func_002A8290(-1.0f, 1.0f);
+        streak.y = func_002A8290(-1.0f, 1.0f);
+        streak.z = func_002A8290(-1.0f, 1.0f);
+        streak.w = 0.0f;
+
+        if (camDist < 14.0f) {
+            s32 life;
+
+            func_002837E0(&streak, camDist * 0.0040000002f, &streak);  /* 0x3B5A740F */
+            camDelta.z += camDist * 0.5f;
+            func_002837E0(&camDelta, (camDist + camDist) * invFrameRate, &camDelta);
+            func_00283580(&streak, &streak, &camDelta);
+            func_00283878(0.20000002f, &streak, &streak);                    /* 0x3E2AAAAB */
+            life = func_002A8238(0x32, 0x4B);
+            func_003098C8(pos, &streak, life, 0, 0);
+        }
+        {
+            s32 i = 0;
+            if (0 < debrisCount - 1) {
+                do {
+                    f32 a2 = func_002A8290(0.26179942f, 1.308997f);
+                    f32 a1 = func_002A8358();
+                    f32 mag = func_002A8290(7.0f, 10.5f);
+                    s32 stagger = i % 3;
+                    s32 life;
+
+                    func_002AFB68(&streak, scale * invFrameRate * mag, a1, a2);
+                    i++;
+                    streak.z += 0.040000003f;                                /* 0x3D088889 */
+                    life = func_002A8238(0x32, 0x4B);
+                    func_003098C8(pos, &streak, life, stagger == 0, 0);
+                } while (i < debrisCount - 1);
+            }
+        }
+    }
+
+    /* --- Type-0B "dust" burst (count falls off with distance) --- */
+    {
+        f32 dc = func_002845A0(dustCount);
+        s32 nDust = dustCount;
+        f32 lifeBoost;
+
+        if (camDist < dc + dc) {
+            nDust = func_002845B0(camDist) / 2;
+        }
+        lifeBoost = (camDist < 7.0f) ? (7.0f - camDist) : 0.0f;
+
+        if (0 < nDust) {
+            s32 dustLifeBias = lod * 5;
+            do {
+                f32 speed = func_002A8290(8.0f, 10.0f);
+                u64 palA[3];
+                u64 palB[3];
+                s32 idx;
+                u32 c1, c2;
+                s32 life1, life2;
+
+                nDust--;
+                palA[0] = D_1A9FA0[0];
+                palA[1] = D_1A9FA0[1];
+                palA[2] = D_1A9FA0[2];
+                palB[0] = D_1A9FB8[0];
+                palB[1] = D_1A9FB8[1];
+                palB[2] = D_1A9FB8[2];
+
+                speed = (speed * invFrameRate - lifeBoost * invFrameRate) * scale;
+                idx = func_002A81F8(6);
+                c1 = func_002ABA08(*(u32 *)((u8 *)palA + idx * 4), matFlag);
+                idx = func_002A81F8(6);
+                c2 = func_002ABA08(*(u32 *)((u8 *)palB + idx * 4), matFlag);
+                life1 = func_002A8238(0xC, 0x11);
+                life2 = func_002A8238(0x19, 0x25);
+                func_002BC948(scale * 400000.0f, speed, (u64)(u32)pos, &spawnPos,
+                                    c1, c2, life1 + lod * -3, life2 - dustLifeBias, 0, 0);
+                life1 = func_002A8238(0x4, 0x8);
+                life2 = func_002A8238(0xC, 0x11);
+                func_002BC948(scale * 400000.0f, speed * 0.5f, (u64)(u32)pos, &spawnPos,
+                                    0x7FFFFFFF, 0xFFFFFF, life1 + lod * -2, life2 + lod * -3, 0, 0);
+            } while (nDust != 0);
+        }
+    }
+
+    /* --- Type-08 "mist" burst --- */
+    if (0 < mistCount) {
+        s32 mistLifeBias = lod * 5;
+        s32 n = mistCount;
+        do {
+            u64  palA[3];
+            u64  palB[3];
+            Vec4 mist;
+            f32  mag;
+            s32  idx;
+            u32  c1, c2;
+            s32  life;
+
+            palA[0] = D_1A9FA0[0];
+            palA[1] = D_1A9FA0[1];
+            palA[2] = D_1A9FA0[2];
+            palB[0] = D_1A9FB8[0];
+            palB[1] = D_1A9FB8[1];
+            palB[2] = D_1A9FB8[2];
+
+            mist.x = func_002A8290(-1.0f, 1.0f);
+            n--;
+            mist.y = func_002A8290(-1.0f, 1.0f);
+            mist.z = func_002A8290(-1.0f, 1.0f);
+            mist.w = 0.0f;
+            mag = func_002A8290(0.0f, 3.0f);
+            func_002837E0(&mist, scale * invFrameRate * mag, &mist);
+            idx = func_002A81F8(6);
+            c1 = func_002ABA08(*(u32 *)((u8 *)palA + idx * 4), matFlag);
+            idx = func_002A81F8(6);
+            c2 = func_002ABA08(*(u32 *)((u8 *)palB + idx * 4), matFlag);
+            life = func_002A8238(0x19, 0x25);
+            func_002BC4A0(200000.0f, (u64)(u32)pos, &mist, c1, c2, life - mistLifeBias);
+        } while (n != 0);
+    }
+
+    /* --- expanding shockwave rings --- */
+    if (moby != 0) {
+        if (0.0f < ringRadius) {
+            s32 r5 = 0x96, g5 = 0x96, b5 = 0x96;  /* first-set color */
+            s32 r6 = 0x7F, g6 = 0x7F, extra = 0;  /* second/third-ring color + alpha bump */
+
+            if (matFlag != 0) {
+                r5 = 0x23;
+                if ((matFlag & 4) == 0) {
+                    r5 = 0x46;
+                    b5 = 0x46;
+                    r6 = 0x3C;
+                } else {
+                    g5 = 0;
+                    b5 = 0xFA;
+                    r6 = 0x20;
+                    g6 = 0;
+                    extra = 100;
+                }
+            }
+
+            if (g_gameTime[1] < 0.95f && ringDistGate < camDist) {
+                func_003096D0(ringRadius, moby, (u64)(u32)pos, &spawnPos,
+                                       0xD, r5, g5, b5, 0x20);
+                func_003096D0(ringRadius, moby, (u64)(u32)pos, &spawnPos,
+                                       0x12, r6, g6, extra + 0x50, 0x20);
+            }
+            func_003096D0(ringRadius, moby, (u64)(u32)pos, &spawnPos,
+                                   0x19, r6, g6, extra, 0x30);
+        }
+        if (moby != 0 && 0.0f < whiteRingRad) {
+            func_003096D0(whiteRingRad, moby, (u64)(u32)pos, &spawnPos,
+                                   0x16, 0xFF, 0xFF, 0xFF, 0x20);
+        }
+    }
+
+    /* --- on-screen camera shake --- */
+    if (shakeEnable != 0) {
+        Vec4 pt;
+
+        pt = *(Vec4 *)pos;
+        pt.w = 2.0f;                                    /* 0x40000000 */
+        if (func_00284678(10.0f, &pt) != -1) {          /* ClassifyPointVsScreenBoxVu0 */
+            if (camDist < 20.0f) {
+                *(f32 *)(g_cameraState + 0x160) = 0.4f - camDist * 0.0175f; /* amplitude */
+            } else {
+                *(f32 *)(g_cameraState + 0x160) = 0.050000012f;
+            }
+            *(s32 *)(g_cameraState + 0x168) = 0x15;   /* PAL 21 (USA/NTSC 0x19 = 25) */     /* timer */
+            *(s32 *)(g_cameraState + 0x16C) = 0;        /* duration */
+        }
+    }
+
+    /* --- impact sound --- */
+    if (moby != 0 && soundIdx != -1) {
+        func_002E6AC8(soundIdx, 0, (Moby *)moby);
+    }
+
+    /* --- optional screen-space camera FX --- */
+    if (cameraFxMag != 0.0f && lod == 0) {
+        Vec4 pt;
+
+        pt = *(Vec4 *)pos;
+        pt.w = cameraFxMag;
+        if (func_00284678(100.0f, &pt) != -1) {         /* 0x42C80000 = 100.0 */
+            f32 mag = (cameraFxMag <= 0.0f) ? 15.0f : cameraFxMag;
+
+            *(f32 *)(D_258C80 + 0x20) = mag;
+            *(f32 *)(D_258C80 + 0x24) = mag;
+            *(f32 *)(D_258C80 + 0x28) = mag;
+            if (matFlag == 0) {
+                func_00313FE0(D_258C80, (u64)(u32)pos, 0, 0);
+            } else {
+                func_00313FE0(D_258CD0, (u64)(u32)pos, 0, 0);
+            }
+        }
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AD288);
 
