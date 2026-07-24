@@ -6051,4 +6051,186 @@ s32 CountSkillPointsCompleted(void) {
     return count;
 }
 
+/**
+ * func_002B1DF0 — apply a hit's damage to a moby and classify the outcome.
+ *
+ * Gated on the moby being damageable (flags+0x34 & 0x20) with a live stats block.
+ * Resolves the attacker's armor/resist record (func_002AA4A8, dropped if the moby's
+ * hit-countdown func_00283328 says inactive), applies the record's +0x2c damage
+ * multiplier (matched class + optional param_3 scale), then deals the damage
+ * (func_002AA508) to the stats health at stats[0], stamps the hit (+0xa8=0xff),
+ * fires the threat flash/burst, and records the attacker's moby slot into hit+0x70.
+ *
+ * It then classifies the result into a damage tier (0 none .. 4 kill), promotes
+ * tiers 1-3 to 6 when param_3 is set, spawns a knockback direction FX for the
+ * '\n'-class stats (tiers >= 2), and finally — unless suppressed by hit state —
+ * builds a reaction direction (record +0x10, or -Z of the moby's forward at +0xC0
+ * with w=5627.9248) and drives the hit reaction (func_002B2268) + stagger anim
+ * (func_002A85B8). Returns the damage tier (0 when any gate rejects the hit).
+ *
+ * Faithful #else transcription — the matching build uses the INCLUDE_ASM arm above.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1DF0);
+#else
+/* callees with no file-scope decl above this point */
+extern long func_002B2268(void *moby, long hit, Vec4 *dir, u32 tier);
+extern void UpdateMobyThreatFlashAndBurst(void *moby, s32 threatIdx, f32 *stats);
+
+u32 func_002B1DF0(void *moby, long hit, long param_3) {
+    u8  *m = (u8 *)moby;
+    u8  *h = (u8 *)hit;
+    int *blk;
+    f32 *stats;
+    s32  threatIdx;
+    long armorRec;         /* func_002AA4A8 record (lVar4) */
+    u8  *r;                /* = (u8 *)armorRec */
+    f32  damage;           /* fVar11 */
+    f32  armorBase = 0.0f; /* fVar14: record +0x2c snapshot (0 when no record) */
+    s32  timeThresh;
+    u32  result = 0;
+
+    if ((*(u16 *)(m + 0x34) & 0x20) == 0) {
+        return 0;
+    }
+    blk = *(int **)(m + 0x68);
+    threatIdx = blk[7];
+    stats = *(f32 **)blk;
+    if (hit == 0 || stats == NULL) {
+        return 0;
+    }
+
+    func_002AC728(moby, h);
+
+    armorRec = func_002AA4A8((Moby *)moby, 0x10000, 0);
+    if (func_00283328((u8 *)stats + 6) == 0) {
+        armorRec = 0;
+    }
+    r = (u8 *)armorRec;
+
+    if (armorRec != 0) {
+        f32 dmgMul = *(f32 *)(h + 0xa8);
+
+        armorBase = *(f32 *)(r + 0x2c);
+        if (dmgMul != 0.0f && *(int *)(r + 0x20) != 0 &&
+            *(s16 *)(m + 0xaa) == *(s16 *)(*(int *)(r + 0x20) + 0xaa)) {
+            *(f32 *)(r + 0x2c) = armorBase * dmgMul;
+        }
+        if (param_3 != 0) {
+            *(f32 *)(r + 0x2c) *= *(f32 *)(h + 0xac);
+        }
+    }
+
+    damage = func_002AA508((Moby *)moby, (void *)armorRec);
+    m[0xa8] = 0xff;
+    stats[0] -= damage;
+    if (threatIdx != 0) {
+        UpdateMobyThreatFlashAndBurst(moby, threatIdx, stats);
+    }
+    if (damage == 0.0f) {
+        return 0;
+    }
+
+    *(u16 *)(h + 0x70) = 0xffff;
+    if (armorRec != 0 && *(int *)(r + 0x20) != 0) {
+        *(s16 *)(h + 0x70) =
+            (s16)(((u8 *)*(void **)(r + 0x20) - (u8 *)g_mobyTableBase) >> 8);
+    }
+
+    /* --- damage-tier classification --- */
+    {
+        s32 slot = (u32)g_itemEquippedSlot[*(u8 *)((u8 *)stats + 0x17)];
+        f32 minHitDmg = (f32)*(s16 *)((u8 *)stats + 4) * *(f32 *)(h + 0x58);
+        f32 dmgVsCap  = damage * *(f32 *)((u8 *)g_weaponTable + slot * 0xE0 + 0x54);
+
+        timeThresh = (minHitDmg <= dmgVsCap) ? 0x5a : 300;
+    }
+
+    if (h[0x77] == 0) {
+        s32 dt = func_002835E0(*(s32 *)g_gameTime - *(s32 *)(h + 0x44));
+        if (timeThresh < dt) {
+            f32 minHit = (f32)*(s16 *)((u8 *)stats + 4) * *(f32 *)(h + 0x58);
+
+            if (damage < minHit) {
+                damage = minHit;
+            }
+        }
+    }
+
+    if (stats[0] <= 0.0f) {
+        result = 4;
+    } else if ((f32)*(s16 *)((u8 *)stats + 4) * *(f32 *)(h + 0x5c) <= damage) {
+        result = 3;
+    } else if (damage < (f32)*(s16 *)((u8 *)stats + 4) * *(f32 *)(h + 0x58)) {
+        if (damage == 0.0f || h[0x77] != 0 || armorRec == 0 ||
+            *(int *)(r + 0x20) == 0 ||
+            *(s16 *)(*(int *)(r + 0x20) + 0xaa) != 0x47) {
+            if (armorBase != 0.0f) {
+                result = 1;
+            }
+        } else {
+            result = 2;
+        }
+    } else {
+        result = 2;
+    }
+
+    if (param_3 != 0 && (u32)(result - 1) < 3) {
+        result = 6;
+    }
+
+    /* knockback FX for the '\n'-class stats on a real (tier >= 2) hit */
+    if (1 < result && armorRec != 0 && *(u8 *)((u8 *)stats + 0x17) == '\n') {
+        Vec4 *dir = (Vec4 *)(r + 0x10);
+        f32   horizLen;
+        Vec4  resolved;
+
+        /* inline of func_002B0D70: it resolves `dir` and calls func_002837D0, but is
+         * byte-matched as void so it cannot hand back func_002837D0's planar length */
+        func_002B0C40((s32)moby, &resolved, dir, (void *)0);
+        horizLen = func_002837D0(&resolved);
+
+        Vec4SubVu0(dir, (Vec4 *)(m + 0x10), &g_heroPos);
+        func_002B0CC0((s32)moby, dir, dir, (void *)0, horizLen);
+    }
+
+    if (result == 0) {
+        return 0;
+    }
+    if ((*(u16 *)(h + 0x38) & 3) != 0) {
+        return 0;
+    }
+    if ((u32)m[0x95] == *(u32 *)(h + 0x48) && result < 4) {
+        if (h[0x75] != 0) {
+            return 0;
+        }
+        if (h[0x1a] < 2) {
+            return 0;
+        }
+    }
+
+    /* --- drive the hit reaction --- */
+    {
+        Vec4 dir;
+
+        if (armorRec == 0 || (*(u32 *)(r + 0x30) & 1) == 0) {
+            Vec4ScaleVu0(&dir, -1.0f, (const Vec4 *)(m + 0xc0));
+            dir.z = 1.0f;
+            *(u32 *)&dir.w = 0x45afdf66;   /* 5627.9248f */
+        } else {
+            dir = *(Vec4 *)(r + 0x10);
+        }
+
+        if (func_002B2268(moby, hit, &dir, result) != 0) {
+            *(s32 *)(h + 0x44) = *(s32 *)g_gameTime;
+            if (*(s32 *)(h + 0x48) == -1) {
+                func_002A85B8((MobyAnim *)moby, h[0x10], -1);
+            } else {
+                func_002A85B8((MobyAnim *)moby, h[0x10], *(s32 *)(h + 0x48));
+            }
+            h[0x1a] = 0;
+        }
+    }
+    return result;
+}
+#endif
