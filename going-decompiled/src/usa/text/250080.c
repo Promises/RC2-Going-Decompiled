@@ -235,6 +235,8 @@ extern void func_00133930(s32 len, s32 dstOfs);  /* post-transfer notify */
 extern void func_00351550(u32 chcrCmd); /* DMAC ch4 (IPU_TO) CHCR suspend write */
 extern void func_0011AC30(s32 sema);   /* DeleteSema */
 extern s32 func_0011AC20(void *param); /* CreateSema (returns sema id) */
+extern s32 func_0011AC60(s32 sema);    /* WaitSema (acquire) */
+extern s32 func_0011AC40(s32 sema);    /* SignalSema (release) */
 void func_00351660(u8 *stream);        /* ring init, defined below (fwd for func_003515E8) */
 #endif
 
@@ -1115,10 +1117,41 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003518B8);
    consumed tags, and re-kicks the channel. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351910);
 
-/* func_00351B10: IPU/DMA state capture + reset. Blocked: 8-byte-packed
- * saves (s0@0x0, ra@0x8) plus lui/ori materialisation of 0x10002010 where
- * the pinned cc1 folds the low half into the load offset. */
+/* func_00351B10: snapshot + halt the IPU DMA channels (save-state capture).
+ * Acquires the stream sema, suspends IPU_TO (ch4, func_00351550(5)) and records
+ * its MADR/TADR/QWC/CHCR into dmaq+0x1C..0x28, spin-waits for the IPU to drain
+ * (IPU_CTRL & 0xF0), suspends IPU_FROM (ch3, func_003514E0(0)) and records its
+ * MADR/QWC/CHCR + IPU_BP/IPU_CTRL into dmaq+0x2C..0x3C, then releases the sema.
+ * Returns 1. Raw offsets (dmaq sub-object type not recovered). Byte-match
+ * blocked: 8-byte-packed saves + folded 0x10002010 materialisation. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351B10);
+#else
+s32 func_00351B10(void *dmaq) {
+    u8 *obj = dmaq;
+
+    func_0011AC60(*(s32 *)(obj + 0x40));                    /* acquire */
+    *(u32 *)(obj + 0x44) = 0;
+    func_00351550(5);                                       /* suspend IPU_TO (ch4) */
+    *(u32 *)(obj + 0x1C) = *(volatile u32 *)0x1000B410;    /* ch4 MADR */
+    *(u32 *)(obj + 0x20) = *(volatile u32 *)0x1000B430;    /* ch4 TADR */
+    *(u32 *)(obj + 0x24) = *(volatile u32 *)0x1000B420;    /* ch4 QWC  */
+    *(u32 *)(obj + 0x28) = *(volatile u32 *)0x1000B400;    /* ch4 CHCR */
+
+    while (*(volatile u32 *)0x10002010 & 0xF0) {           /* wait for IPU to drain */
+    }
+
+    func_003514E0(0);                                       /* suspend IPU_FROM (ch3) */
+    *(u32 *)(obj + 0x2C) = *(volatile u32 *)0x1000B010;    /* ch3 MADR */
+    *(u32 *)(obj + 0x30) = *(volatile u32 *)0x1000B020;    /* ch3 QWC  */
+    *(u32 *)(obj + 0x34) = *(volatile u32 *)0x1000B000;    /* ch3 CHCR */
+    *(u32 *)(obj + 0x38) = *(volatile u32 *)0x10002020;    /* IPU_BP   */
+    *(u32 *)(obj + 0x3C) = *(volatile u32 *)0x10002010;    /* IPU_CTRL */
+
+    func_0011AC40(*(s32 *)(obj + 0x40));                    /* release */
+    return 1;
+}
+#endif
 
 /* TODO(hle): needs PS2 graphics/IO HLE backend — the IPU restart path: reads
    REG_IPU_CTRL/IPU_BP, drains REG_DMAC_3_IPU_FROM, re-issues the IPU command
