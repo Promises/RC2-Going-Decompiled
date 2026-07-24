@@ -2791,7 +2791,10 @@ void func_0029FA60(void *moby, s32 classId) {
                 /* PAL-only: NTSC/USA is a no-op here. Scale the default anim
                  * rate to 50/60 (5/6) when the class has no update function. */
                 if (*(void **)(m + 0x64) == 0) {
-                    *(f32 *)(m + 0x48) = 0.83333331f; /* 0x3F555556 = 5/6 = 50/60 */
+                    *(f32 *)(m + 0x48) = 0.83333337f; /* 0x3F555556 = 50/60. NOT the
+                     * correctly-rounded 5/6: that is 0x3F555555, one ULP LOW. The ROM
+                     * value sits 1 ULP above it (PAL constants were derived as
+                     * USA x 1.2 in float). Spell to the ROM bits; never derive. */
                 }
             }
         }
