@@ -3255,7 +3255,10 @@ void func_002AF420(Moby *moby, void *ctrlPtr, f32 stepZ, f32 snapEps) {
 
     if (*(s16 *)(c + 0x28) == 0) {
         /* idle: choose a new heading jitter + dwell timer */
-        *(f32 *)(c + 0x24) += func_002A82F0(0.7853982f, 2.6179941f);
+        /* 0.785398245f is 0x3F490FDC exactly, which is what the .s materialises
+           (lui/ori 0x3F490FDC). The tidy pi/4 spelling `0.7853982f` encodes to
+           0x3F490FDB -- 1 ULP LOW. Spell float constants from the ROM bits. */
+        *(f32 *)(c + 0x24) += func_002A82F0(0.785398245f, 2.6179941f);
         *(s16 *)(c + 0x2A) = (s16)func_002A8238(*(s16 *)(c + 0x2C), *(s16 *)(c + 0x2E));
         *(s16 *)(c + 0x28) = 1;
     } else {
