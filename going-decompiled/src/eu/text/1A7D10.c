@@ -2379,14 +2379,36 @@ void func_002AC290(void *src, u8 *obj) {
  * the destination and stop (dir set) or restart reversed (dir clear, counter reloaded).
  * Otherwise interpolate each enabled channel by frac=(duration-counter)/duration and
  * push the colour to target via func_002A0E48 (returns 0 when inactive). Matching arm
- * stays INCLUDE_ASM; #else is the structure model. EU-lockstep of USA func_002AC728:
+ * stays INCLUDE_ASM; #else is the structure model. Symbol map vs USA func_002AC728:
  * func_00283328 -> func_00283238, func_002A12C0 -> func_002A0E48, IntToFloat ->
- * func_002845A0, FloatToInt -> func_002845B0. */
+ * func_002845A0, FloatToInt -> func_002845B0.
+ *
+ * NOT a pure symbol-swap of the USA twin. EU is 172 instrs vs USA's 147 because the
+ * PAL build retimes all three of the fade DURATIONS it reads by 5/6 (60Hz frame
+ * counts -> 50Hz), expressed in the .s as ARITHMETIC rather than as changed
+ * constants: each site materialises its own `addiu $N,$0,0x6` divisor and computes
+ * `(v * 5 + 2) / 6` via sll/addu/addiu/div/mflo (three div/mflo pairs in EU, zero in
+ * USA). The retime is SELECTIVE: the live counter read from +0x0 is fed to the FPU
+ * UN-retimed at both interpolation sites -- it is already a PAL-rate tick produced by
+ * func_00283238, so only the durations it is measured against are converted. EU also
+ * loads the +0xE restart reload with `lh` (SIGNED) where USA uses `lhu`. Mechanically
+ * porting the USA body here silently reinstates NTSC timings -- see the per-site
+ * notes below. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AC3C0);
 #else
 extern s32 func_00283238(void *state); /* tick countdown: 0=counting, 1=already 0, 2=just hit 0 */
 extern s32 func_002A0E48(void *target, s32 r, s32 g, s32 b);
+
+/* PAL 60Hz->50Hz frame-count retime, `(v * 5 + 2) / 6` with a rounding bias of 2.
+ * EU-only; the USA twin uses the raw value at each of these sites. Re-defined locally
+ * here because func_002AC290's copy is #undef'd before this body. In the .s each site
+ * open-codes it against its own freshly materialised divisor, e.g. at .L002AC468:
+ *   06000224 addiu $2,$0,0x6 / 80200300 sll $4,$3,2 / 21208300 addu $4,$4,$3
+ *   02008424 addiu $4,$4,0x2 / 1A008200 div $0,$4,$2 / 12200000 mflo $4
+ * The `01004050 beql $2,$0` + `CD010000 break 0,7` pair guarding each div is
+ * ee-gcc's divide-by-zero trap, confirming a real C-level division. */
+#define EU_PAL_RETIME(v) (((v) * 5 + 2) / 6)
 
 s32 func_002AC3C0(void *target, u8 *s) {
     s32 counter;
@@ -2404,27 +2426,48 @@ s32 func_002AC3C0(void *target, u8 *s) {
             /* latch the destination colour and stop */
             return func_002A0E48(target, s[0x4], s[0x5], s[0x6]);
         }
-        /* restart the fade running in reverse */
+        /* restart the fade running in reverse.
+         * Site 1: the reverse duration read from +0xE is retimed before the reload.
+         * EU `0E000586` lh $5,0xE($16) is SIGNED (USA's `0E000396` is lhu), goes
+         * through sll/addu/addiu/div/mflo against `06000324` addiu $3,$0,0x6, and
+         * only then reaches `000002A6` sh $2,0x0($16). USA stores the raw value. */
         *(s16 *)(s + 0x2) = 1;
-        *(s16 *)(s + 0x0) = *(s16 *)(s + 0xE);
+        *(s16 *)(s + 0x0) = (s16)EU_PAL_RETIME(*(s16 *)(s + 0xE));
     }
 
     dir = *(s16 *)(s + 0x2);
     counter = *(s16 *)(s + 0x0);
 
     if (dir == 0) {
-        frac = ((f32)*(s16 *)(s + 0xC) - (f32)counter) / (f32)*(s16 *)(s + 0xC);
+        /* Site 2: the forward duration from +0xC (`0C000386` lh $3,0xC($16), reached
+         * when the likely branch `3A004054` bnel $2,$0 is NOT taken and nullifies its
+         * `0E000386` lh $3,0xE delay slot) is retimed into $4 before `68110A0C`
+         * jal func_002845A0. The retimed float lands in $f0 and serves as BOTH the
+         * minuend and the divisor (`81000146` sub.s $f2,$f0,$f1 / `03150046`
+         * div.s $f20,$f2,$f0), so both uses of the duration are retimed.
+         * NOT retimed: `counter`, the live +0x0 value, whose `00000286` lh $2,0x0($16)
+         * feeds `00088244` mtc1 $2,$f1 / cvt.s.w directly with no div on its path. */
+        f32 dur = func_002845A0(EU_PAL_RETIME(*(s16 *)(s + 0xC)));
+        frac = (dur - (f32)counter) / dur;
         r = s[0x7] ? func_002845B0((f32)s[0x4] + (f32)((s32)s[0x7] - (s32)s[0x4]) * frac) : s[0x4];
         g = s[0x8] ? func_002845B0((f32)s[0x5] + (f32)((s32)s[0x8] - (s32)s[0x5]) * frac) : s[0x5];
         b = s[0x9] ? func_002845B0((f32)s[0x6] + (f32)((s32)s[0x9] - (s32)s[0x6]) * frac) : s[0x6];
     } else {
-        frac = ((f32)*(s16 *)(s + 0xE) - (f32)counter) / (f32)*(s16 *)(s + 0xE);
+        /* Site 3: the reverse duration from +0xE, loaded in the taken delay slot of
+         * `3A004054` bnel $2,$0 as `0E000386` lh $3,0xE($16), is retimed by the same
+         * chain at .L002AC53C (`06000224` addiu $2,$0,0x6 ... `12200000` mflo $4)
+         * before `68110A0C` jal func_002845A0, and likewise serves as both minuend
+         * and divisor via $f0. NOT retimed: `counter` (+0x0), same as site 2. */
+        f32 dur = func_002845A0(EU_PAL_RETIME(*(s16 *)(s + 0xE)));
+        frac = (dur - (f32)counter) / dur;
         r = s[0x7] ? func_002845B0((f32)s[0x7] + (f32)((s32)s[0x4] - (s32)s[0x7]) * frac) : s[0x4];
         g = s[0x8] ? func_002845B0((f32)s[0x8] + (f32)((s32)s[0x5] - (s32)s[0x8]) * frac) : s[0x5];
         b = s[0x9] ? func_002845B0((f32)s[0x9] + (f32)((s32)s[0x6] - (s32)s[0x9]) * frac) : s[0x6];
     }
     return func_002A0E48(target, r, g, b);
 }
+
+#undef EU_PAL_RETIME
 #endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AC670);
