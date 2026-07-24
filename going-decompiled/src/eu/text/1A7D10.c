@@ -2070,13 +2070,21 @@ void *func_002ABC88(Moby *owner) {
 /* func_002ABCB8: emit a small burst of type-04 particles around a point. Reserves
  * up to 20 particle slots for owner within radius 14 of basePos (func_002AA408),
  * then for each granted slot builds a jittered offset direction from two random
- * angles (func_002AFB68, magnitude 0.03), adds it to basePos, nudges the result up
- * in Z by 0.015, and spawns a type-04 particle there with two randomised lifetime
+ * angles (func_002AFB68, magnitude 0.036), adds it to basePos, nudges the result up
+ * in Z by 0.018, and spawns a type-04 particle there with two randomised lifetime
  * parameters (func_002A8238 20..35 and 40..60). arg3 -> the reservation helper
  * (owner-context, UNCONFIRMED). Matching arm stays INCLUDE_ASM; #else is the structure
  * model. EU-lockstep of USA func_002AC0B8: func_002AA808 -> func_002AA408,
  * GetRandomAngle -> func_002A8358, func_002AFE68 -> func_002AFB68, Vec4AddVu0 ->
- * func_00283580, RandRangeInclusive -> func_002A8238, SpawnParticleType04 -> func_002BBA10. */
+ * func_00283580, RandRangeInclusive -> func_002A8238, SpawnParticleType04 -> func_002BBA10.
+ * GENUINE PAL/NTSC DIFF: the jitter magnitude is 0.036 (0x3D1374BD) and the Z nudge
+ * 0.018 (0x3C9374BD) in PAL; the USA twin uses 0.03 / 0.015 -- 60->50 Hz per-frame
+ * rate retimes (ratio 0.8333). Verified vs func_002ABCB8.s lui/ori pairs. Take these
+ * from the EU .s, never from the USA body: an earlier symbol-swap port inherited the
+ * NTSC pair here. The literals are spelled to the exact ROM bits -- plain 0.036f /
+ * 0.018f compile 1 ULP low (0x3D1374BC / 0x3C9374BC). The RandRangeInclusive
+ * lifetimes (20..35, 40..60) and the 30 are region-NEUTRAL, verified present in the
+ * EU .s -- deliberately left unchanged. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002ABCB8);
 #else
@@ -2100,9 +2108,9 @@ void func_002ABCB8(void *owner, Vec4 *basePos, void *arg3) {
         s32 r1;
         s32 r2;
 
-        func_002AFB68(&dir, 0.03f, angle1, angle2);
+        func_002AFB68(&dir, 0.036000002f, angle1, angle2);  /* 0x3D1374BD (USA 0.03f) */
         func_00283580(&dir, &dir, basePos);
-        dir.z += 0.015f;
+        dir.z += 0.018000001f;                              /* 0x3C9374BD (USA 0.015f) */
 
         r1 = func_002A8238(20, 35);   /* RandRangeInclusive */
         r2 = func_002A8238(40, 60);
