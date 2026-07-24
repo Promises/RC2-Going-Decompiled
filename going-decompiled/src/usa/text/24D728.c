@@ -494,7 +494,7 @@ void func_0034F028(u8 *base, s32 baseX, s32 baseY, s32 shade) {
         angle = angle * 3.14159265f;   /* 0x40490FDB pi   */
         angle = angle / count;
         angle = angle - 3.14159265f;
-        angle = angle + 1.5707963f;    /* 0x3FC90FDB pi/2 */
+        angle = angle + 1.5707964f;    /* 0x3FC90FDB pi/2 */
         x = baseX + (s32)(func_00283B30(angle) * (D_1AE6E4 * 74.0f)) + 0x69;
         y = baseY + (s32)(func_00283B48(angle) * (D_1AE6E8 * 74.0f)) + 0x64;
         if (i == D_1AE6F0) {

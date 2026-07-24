@@ -339,7 +339,7 @@ s32 UpdateMobyThreatFlashAndBurst(Moby *moby, MobyThreatState *ts, MobyThreatGau
                 void *fx;
 
                 /* Aim on a random +/-90..120 deg spread about the camera yaw. */
-                heading = WrapAnglePiSum(GetRandomFloatSigned(90.0f, 120.0f) * 0.017453292f,
+                heading = WrapAnglePiSum(GetRandomFloatSigned(90.0f, 120.0f) * 0.017453294f,
                                          *(f32 *)(g_cameraState + 0x158));
                 dist = GetRandomFloatRange(2.0f, 4.0f);
                 perFrame = dist * (1.0f / 60.0f);        /* NTSC; EU = 1/50 */

@@ -2851,9 +2851,9 @@ void func_002AC0B8(void *owner, Vec4 *basePos, void *arg3) {
         s32 r1;
         s32 r2;
 
-        func_002AFE68(&dir, 0.03f, angle1, angle2);
+        func_002AFE68(&dir, 0.030000001f, angle1, angle2);
         Vec4AddVu0(&dir, &dir, basePos);
-        dir.z += 0.015f;
+        dir.z += 0.015000001f;
 
         r1 = func_002A8688(20, 35);   /* RandRangeInclusive */
         r2 = func_002A8688(40, 60);
@@ -5312,7 +5312,7 @@ int func_002B03E8(f32 enable1, f32 coneYaw2, f32 range3, f32 conePitch4,
                         int pitchWide;          /* bVar2 carried across the goto */
 
                         coneYawBase = coneYaw2;
-                        if ((enable1 < 3.1415927f) || (coneYaw2 < 3.1415927f)) {
+                        if ((enable1 < 3.141593f) || (coneYaw2 < 3.141593f)) {
                             if (D_1A8CA0 == 0) {
                                 /* METHOD A: planar bearing via atan2 + shortest-diff */
                                 f32 a0 = func_00283BF8(candToOrigin.x, candToOrigin.y);
@@ -5354,7 +5354,7 @@ int func_002B03E8(f32 enable1, f32 coneYaw2, f32 range3, f32 conePitch4,
                                     if (lenTanCand != angleV) {
                                         lenTanAim = Vec3LengthVu0(&tanAim);
                                         if (lenTanAim != angleV) {
-                                            angleH = 1.5707963f -
+                                            angleH = 1.5707964f -
                                                      func_00283B60(between /
                                                                    (lenTanCand * lenTanAim));
                                             innerN = enable1;
@@ -5370,7 +5370,7 @@ int func_002B03E8(f32 enable1, f32 coneYaw2, f32 range3, f32 conePitch4,
                                                 projLen = Vec3LengthVu0(&scratchD);
                                                 mag = Vec3DotVu0(&scratchD, &candToOrigin);
                                                 pitchWide = conePitchN < conePitch4;
-                                                angleV = 1.5707963f -
+                                                angleV = 1.5707964f -
                                                          func_00283B60(mag /
                                                                        (projLen * dist));
                                                 coneYawBase = coneYaw2;
