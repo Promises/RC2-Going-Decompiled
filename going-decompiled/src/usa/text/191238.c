@@ -2635,7 +2635,55 @@ void func_002949E0(s32 *rec, s32 enable) {
 }
 #endif
 
+/* func_00294A30(rec, flag): one step of a chained disc-load, used as the load
+ * callback. On flag==0 it ends the chain (rec[0] = -1). Otherwise it looks up the
+ * disc-TOC entry for rec[0] and, if that entry's prep field (+0x4B50) is set,
+ * primes the destination buffer (rec[2]): writes 0xC000 to dest +0x14/+0x40/+0x44,
+ * flushes cache, kicks a DMA transfer via func_0011AFE0 (src = D_001A7210[+0x68] +
+ * rec[1]*0xC800, size = prep<<11) and spins on func_0011AFC0 until it drains. Then
+ * it kicks the next chunk's read (StartFileLoadWithCallback → func_002949E0
+ * callback, rec as state). Sibling of func_00294B50 (the dispatcher that starts
+ * this chain) / func_002949E0 (the alternate callback).
+ *
+ * TODO(match): functional equivalent - not byte-exact. Matching arm stays
+ * INCLUDE_ASM; #else byte-neutral. NEEDS-ORACLE. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294A30);
+#else
+extern s32 StartFileLoadWithCallback(void *dest, s32 startSector, s32 count,
+                                     void *callback, void *state);
+extern u8  D_001A7210[];                          /* +0x68 = IOP DMA source base */
+void func_00294A30(s32 *rec, s32 flag) {
+    u8 *toc;
+
+    if (flag == 0) {
+        rec[0] = -1;
+        return;
+    }
+    toc = (u8 *)g_discToc + rec[0] * 0x14;
+    if (*(s32 *)(toc + 0x4B50) != 0) {
+        u8  *dest = (u8 *)rec[2];
+        s32  src  = *(s32 *)(D_001A7210 + 0x68) + rec[1] * 0xC800;
+        s32  block[4];
+        void *handle;
+
+        block[0] = rec[2];
+        block[1] = src;
+        block[2] = *(s32 *)(toc + 0x4B50) << 11;
+        block[3] = 0;
+        *(s32 *)(dest + 0x14) = 0xC000;
+        *(s32 *)(dest + 0x44) = 0xC000;
+        *(s32 *)(dest + 0x40) = 0xC000;
+        func_0011AEA0(0);
+        handle = func_0011AFE0(block, 1, (void *)src);
+        do {
+        } while (func_0011AFC0(handle) >= 0);
+    }
+    StartFileLoadWithCallback((void *)rec[2],
+        *(s32 *)(toc + 0x4B44) + g_discToc[0x4B3C / 4],
+        *(s32 *)(toc + 0x4B48), (void *)func_002949E0, rec);
+}
+#endif
 
 /**
  * func_00294B50 — begin an asynchronous level-asset load for level `level`.
@@ -2657,7 +2705,7 @@ extern s32 g_discToc[];
 extern s32 g_respawnPlayerYaw[];
 extern s32 D_1A9330, D_1A9334;
 extern void *D_1A9338;
-extern void func_00294A30(void);
+extern void func_00294A30(s32 *rec, s32 flag);   /* load-chain step (used as a callback ptr) */
 extern s32 StartFileLoadWithCallback(void *dest, s32 startSector, s32 count,
                                      void *callback, void *state);
 
