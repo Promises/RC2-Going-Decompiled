@@ -234,6 +234,8 @@ extern void func_00133930(s32 len, s32 dstOfs);  /* post-transfer notify */
 /* IPU_TO channel teardown callees (func_00351F58 #else). */
 extern void func_00351550(u32 chcrCmd); /* DMAC ch4 (IPU_TO) CHCR suspend write */
 extern void func_0011AC30(s32 sema);   /* DeleteSema */
+extern s32 func_0011AC20(void *param); /* CreateSema (returns sema id) */
+void func_00351660(u8 *stream);        /* ring init, defined below (fwd for func_003515E8) */
 #endif
 
 /**
@@ -1020,9 +1022,33 @@ void func_003515C0(u64 *tag, u64 madr, u64 qwc, u64 id) {
     *tag = madr << 32 | (qwc << 32) >> 4 | (id << 32) >> 32;
 }
 
-/* func_003515E8: stream object constructor (CreateSema + ring reset).
- * Blocked: 8-byte-packed saves (s0@0x20, ra@0x28). */
+/* func_003515E8: construct the IPU_TO bitstream sub-object. Stores the source
+ * buffer/tag pointers and the two ring counts, builds the +0x4 DMA-tag word
+ * ((b & 0x0FFFFFFF) | 0x20000000 = a "next" tag pointing at physical b), creates
+ * the decode semaphore (init/max = 1) into +0x40, initialises the ring via
+ * func_00351660, and clears the +0x48 pts accumulator. Always returns 1. The
+ * u64 params match the call site (func_00352468); the body uses their low 32
+ * bits (the ROM stores them with sw). Byte-match blocked: 8-byte-packed saves. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003515E8);
+#else
+s32 func_003515E8(u8 *obj, u64 a, u64 b, u64 c, u64 d, u64 e) {
+    s32 semaParam[8];
+
+    *(u32 *)(obj + 0x0) = (u32)a;
+    *(u32 *)(obj + 0x50) = (u32)d;
+    *(u32 *)(obj + 0x54) = (u32)e;
+    semaParam[1] = 1;   /* init count */
+    semaParam[2] = 1;   /* max count  */
+    *(u32 *)(obj + 0x4) = ((u32)b & 0x0FFFFFFF) | 0x20000000;
+    *(u32 *)(obj + 0x18) = (u32)c << 11;
+    *(u32 *)(obj + 0x8) = (u32)c;
+    *(u32 *)(obj + 0x40) = func_0011AC20(semaParam);
+    func_00351660(obj);
+    *(s64 *)(obj + 0x48) = 0;
+    return 1;
+}
+#endif
 
 /* func_00351660: initialise the IPU_TO bitstream sub-object's ring state and
  * build its DMA source-tag chain. Clears the playback counters, resets each
