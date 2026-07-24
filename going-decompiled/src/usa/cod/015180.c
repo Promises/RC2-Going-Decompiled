@@ -268,7 +268,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AA10);
  * returns the new thread id; the syscall result is left in $v0 by the trap.
  */
 s32 func_0011AA20(struct ThreadParam *param) {
+#ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x20\n\tsyscall 0" ::: "$3", "memory");
+#else  /* EE kernel syscall - not executable on the native host */
+#endif
 }
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AA30);
@@ -280,7 +283,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AA30);
  * and its start argument.
  */
 s32 func_0011AA40(s32 thid, void *arg) {
+#ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x22\n\tsyscall 0" ::: "$3", "memory");
+#else  /* EE kernel syscall - not executable on the native host */
+#endif
 }
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AA50);
@@ -302,7 +308,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AAA0);
  * arguments by func_0011B800 (thread id + a constant 1).
  */
 void func_0011AAB0(s32 thid, s32 arg) {
+#ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x29\n\tsyscall 0" ::: "$3", "memory");
+#else  /* EE kernel syscall - not executable on the native host */
+#endif
 }
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AAC0);
@@ -314,7 +323,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AAC0);
  * returns its result in $v0. Called by func_0011B728 with a thread id.
  */
 s32 func_0011AAD0(s32 thid) {
+#ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x2B\n\tsyscall 0" ::: "$3", "memory");
+#else  /* EE kernel syscall - not executable on the native host */
+#endif
 }
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AAE0);
@@ -329,7 +341,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AB00);
  * $v1 and trap; the kernel returns the current thread id in $v0.
  */
 s32 func_0011AB10(void) {
+#ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x2F\n\tsyscall 0" ::: "$3", "memory");
+#else  /* EE kernel syscall - not executable on the native host */
+#endif
 }
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AB20);
@@ -345,7 +360,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AB40);
  * $v0. Called by func_0011B728 with a thread id.
  */
 s32 func_0011AB50(s32 thid) {
+#ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x33\n\tsyscall 0" ::: "$3", "memory");
+#else  /* EE kernel syscall - not executable on the native host */
+#endif
 }
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AB60);
@@ -361,7 +379,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AB80);
  * $v0. Called by func_0011B728 with a thread id.
  */
 s32 func_0011AB90(s32 thid) {
+#ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x37\n\tsyscall 0" ::: "$3", "memory");
+#else  /* EE kernel syscall - not executable on the native host */
+#endif
 }
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ABA0);
@@ -387,7 +408,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AC10);
  * returns the new semaphore id in $v0.
  */
 s32 func_0011AC20(s32 *desc) {
+#ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x40\n\tsyscall 0" ::: "$3", "memory");
+#else  /* EE kernel syscall - not executable on the native host */
+#endif
 }
 
 /**
@@ -396,7 +420,10 @@ s32 func_0011AC20(s32 *desc) {
  * $v1 and trap; the kernel deletes the semaphore identified by $a0.
  */
 void func_0011AC30(s32 obj) {
+#ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x41\n\tsyscall 0" ::: "$3", "memory");
+#else  /* EE kernel syscall - not executable on the native host */
+#endif
 }
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AC40);
@@ -411,7 +438,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AC50);
  * func_0011D868 / func_0011AC40 release) and by the worker loop func_0011B728.
  */
 s32 func_0011AC60(s32 sema) {
+#ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x44\n\tsyscall 0" ::: "$3", "memory");
+#else  /* EE kernel syscall - not executable on the native host */
+#endif
 }
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AC70);
@@ -431,7 +461,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ACB0);
  * to a hardware register (see func_0011F8D0). Exact SDK name UNCONFIRMED.
  */
 void func_0011ACC0(s32 *in) {
+#ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x4A\n\tsyscall 0" ::: "$3", "memory");
+#else  /* EE kernel syscall - not executable on the native host */
+#endif
 }
 
 /**
@@ -441,7 +474,10 @@ void func_0011ACC0(s32 *in) {
  * $a0 pointer (see func_0011F8D0). Exact SDK name UNCONFIRMED.
  */
 void func_0011ACD0(s32 *out) {
+#ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x4B\n\tsyscall 0" ::: "$3", "memory");
+#else  /* EE kernel syscall - not executable on the native host */
+#endif
 }
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ACE0);
@@ -508,7 +544,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AE90);
  * Exact SDK name UNCONFIRMED.
  */
 void func_0011AEA0(s32 mode) {
+#ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x64\n\tsyscall 0" ::: "$3", "memory");
+#else  /* EE kernel syscall - not executable on the native host */
+#endif
 }
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AEB0);
@@ -1915,7 +1954,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011EFE8);
  * name UNCONFIRMED.
  */
 s32 func_0011EFF0(s32 a, s32 b, s32 c) {
+#ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x5A\n\tsyscall 0" ::: "$3", "memory");
+#else  /* EE kernel syscall - not executable on the native host */
+#endif
 }
 
 /**
@@ -1940,7 +1982,10 @@ s32 func_0011F000(s32 *dst, s32 *src, u32 nbytes) {
  * primitive as func_0011F8C0. Exact SDK name UNCONFIRMED.
  */
 s32 func_0011F038(s32 a) {
+#ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x5B\n\tsyscall 0" ::: "$3", "memory");
+#else  /* EE kernel syscall - not executable on the native host */
+#endif
 }
 
 /**
@@ -1951,7 +1996,10 @@ s32 func_0011F038(s32 a) {
  * SDK name UNCONFIRMED.
  */
 void func_0011F048(s32 a, s32 b) {
+#ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x74\n\tsyscall 0" ::: "$3", "memory");
+#else  /* EE kernel syscall - not executable on the native host */
+#endif
 }
 
 /* A single DMA channel descriptor in the static init table D_00134AD0: a
@@ -2025,13 +2073,21 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F364);
  */
 s32 func_0011F5E0(void) {
     s32 status, cur;
+#ifndef TARGET_NATIVE
     __asm__ volatile("mfc0 %0, $12" : "=r"(status));
+#else
+    status = 0;   /* EE COP0 Status read - not host-executable */
+#endif
     status &= 0x10000;
     if (status != 0) {
         do {
+#ifndef TARGET_NATIVE
             __asm__ volatile("di");
             __asm__ volatile("sync.p");
             __asm__ volatile("mfc0 %0, $12" : "=r"(cur));
+#else
+            cur = 0;
+#endif
             cur &= 0x10000;
         } while (cur != 0);
     }
@@ -2047,12 +2103,16 @@ s32 func_0011F5E0(void) {
  */
 s32 func_0011F628(void) {
     s32 status;
+#ifndef TARGET_NATIVE
     __asm__ volatile(
         "mfc0 %0, $12\n\t"
         "lui  $3, 0x1\n\t"
         "and  %0, %0, $3\n\t"
         "ei"
         : "=r"(status) :: "$3", "memory");
+#else
+    status = 0;   /* EE COP0 Status read + ei - not host-executable */
+#endif
     return status != 0;
 }
 
@@ -2112,7 +2172,10 @@ s32 *func_0011F6C0(s32 *p, s32 *last, s32 value) {
  * name UNCONFIRMED.
  */
 s32 func_0011F700(s32 a, s32 b, s32 c) {
+#ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x83\n\tsyscall 0" ::: "$3", "memory");
+#else  /* EE kernel syscall - not executable on the native host */
+#endif
 }
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F710);
@@ -2166,7 +2229,10 @@ void func_0011F718(void) {
  * a 2-word argument. Exact SDK name UNCONFIRMED.
  */
 s32 func_0011F818(s32 a, s32 b) {
+#ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x74\n\tsyscall 0" ::: "$3", "memory");
+#else  /* EE kernel syscall - not executable on the native host */
+#endif
 }
 
 extern void func_0011F058(void);
@@ -2198,7 +2264,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F864);
  * result, so this is modelled as void. Exact SDK name UNCONFIRMED.
  */
 void func_0011F868(s32 a, s32 b) {
+#ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x74\n\tsyscall 0" ::: "$3", "memory");
+#else  /* EE kernel syscall - not executable on the native host */
+#endif
 }
 
 /**
@@ -2208,7 +2277,10 @@ void func_0011F868(s32 a, s32 b) {
  * UNCONFIRMED.
  */
 s32 func_0011F878(s32 a, s32 b, s32 c) {
+#ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x5A\n\tsyscall 0" ::: "$3", "memory");
+#else  /* EE kernel syscall - not executable on the native host */
+#endif
 }
 
 /**
@@ -2233,7 +2305,10 @@ s32 func_0011F888(s32 *dst, s32 *src, u32 nbytes) {
  * Exact SDK name UNCONFIRMED.
  */
 s32 func_0011F8C0(s32 a) {
+#ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x5B\n\tsyscall 0" ::: "$3", "memory");
+#else  /* EE kernel syscall - not executable on the native host */
+#endif
 }
 
 /**
@@ -2316,7 +2391,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011FA48);
  * Exact SDK name UNCONFIRMED.
  */
 void func_0011FA50(s32 a, s32 b) {
+#ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x74\n\tsyscall 0" ::: "$3", "memory");
+#else  /* EE kernel syscall - not executable on the native host */
+#endif
 }
 
 /**
@@ -2326,7 +2404,10 @@ void func_0011FA50(s32 a, s32 b) {
  * 3-word argument. Exact SDK name UNCONFIRMED.
  */
 s32 func_0011FA60(s32 a, s32 b, s32 c) {
+#ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x5A\n\tsyscall 0" ::: "$3", "memory");
+#else  /* EE kernel syscall - not executable on the native host */
+#endif
 }
 
 /**
@@ -2352,7 +2433,10 @@ s32 func_0011FA70(s32 *dst, s32 *src, u32 nbytes) {
  * name UNCONFIRMED.
  */
 s32 func_0011FAA8(s32 a) {
+#ifndef TARGET_NATIVE
     __asm__ volatile("addiu $3, $0, 0x5B\n\tsyscall 0" ::: "$3", "memory");
+#else  /* EE kernel syscall - not executable on the native host */
+#endif
 }
 
 extern DmaChannelInit D_00135CF0[8];
