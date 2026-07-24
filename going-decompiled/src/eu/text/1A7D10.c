@@ -2110,9 +2110,17 @@ void *func_002ABC88(Moby *owner) {
  * rate retimes (ratio 0.8333). Verified vs func_002ABCB8.s lui/ori pairs. Take these
  * from the EU .s, never from the USA body: an earlier symbol-swap port inherited the
  * NTSC pair here. The literals are spelled to the exact ROM bits -- plain 0.036f /
- * 0.018f compile 1 ULP low (0x3D1374BC / 0x3C9374BC). The RandRangeInclusive
- * lifetimes (20..35, 40..60) and the 30 are region-NEUTRAL, verified present in the
- * EU .s -- deliberately left unchanged. */
+ * 0.018f compile 1 ULP low (0x3D1374BC / 0x3C9374BC).
+ * SECOND GENUINE PAL/NTSC DIFF -- expressed as ARITHMETIC, not a constant: PAL
+ * retimes the FIRST lifetime by 5/6 after the call. The EU .s hoists the divisor
+ * (addiu $20, $0, 0x6) out of the loop, then does sll $16,$2,2 / addu $16,$16,$2 /
+ * addiu $16,$16,0x2 / div $0,$16,$20 / mflo $16, i.e. r1 = (ret * 5 + 2) / 6 with an
+ * explicit rounding term. The USA twin (func_002AC0B8) instead has a bare
+ * daddu $16,$2,$0 -- raw. Because the retime is arithmetic rather than a literal, no
+ * constant-comparison audit can see it; take it from the EU .s.
+ * The RandRangeInclusive bounds (20..35, 40..60), the SECOND lifetime r2 (EU
+ * daddu $10,$2,$0 == USA daddu $10,$2,$0, raw in both) and the 30 (0x1E in both) ARE
+ * region-NEUTRAL -- verified instruction-for-instruction against both .s files. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002ABCB8);
 #else
@@ -2140,7 +2148,8 @@ void func_002ABCB8(void *owner, Vec4 *basePos, void *arg3) {
         func_00283580(&dir, &dir, basePos);
         dir.z += 0.018000001f;                              /* 0x3C9374BD (USA 0.015f) */
 
-        r1 = func_002A8238(20, 35);   /* RandRangeInclusive */
+        /* PAL: .s applies the 5/6 retime as arithmetic, (ret*5+2)/6, not as a constant */
+        r1 = (func_002A8238(20, 35) * 5 + 2) / 6;   /* RandRangeInclusive */
         r2 = func_002A8238(40, 60);
         func_002BBA10(spawnRecs[i], &dir, 0x7000A0FFu, 0xFF, r1, 30, r2, 1);
     }
