@@ -2417,11 +2417,81 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00273988);
  * slot spacing (packed-save wall). Left INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00273B80);
 
-/* func_00273D20: projectile collision-response handler (Vec3 cross/rescale,
- * pushout func_002B0E40, PlayMobySound on impact material). WALL: seven
- * callee-saves at 8-byte slot spacing (packed-save wall) + interleaved fp/qword
- * math. Left INCLUDE_ASM. */
+/**
+ * func_00273D20 — projectile collision-response handler.
+ *
+ * For a live projectile state (block+0x5c < 3; else no-op returning 1), advances
+ * the sub-state (func_00274138 for state 0, else func_002742F8), then queries the
+ * surface hit (func_00274510). On a hit it normalises the collision normal
+ * (g_collHitNormal), builds a tangent frame (cross with the moby's forward via
+ * func_00274A98 + a pushout basis via func_002B0E40), and runs the response
+ * (func_00274BB8). If the response did not block (0) it applies the ricochet
+ * (func_00274778) and, for state 0, plays the impact sound; if it blocked, it just
+ * plays the sound. Any spawned sound emitter is anchored at block+0x20. Returns 0
+ * once processed, 1 when the state gate rejects.
+ *
+ * Engine #else (functional; the matching arm hits a packed-save wall). The
+ * matching build uses the INCLUDE_ASM arm above.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00273D20);
+#else
+extern void func_00274138(void *moby);
+extern void func_002742F8(void *moby);
+extern s32  func_00274510(void *moby);
+extern void func_00274A98(void *moby, void *localOut, Vec4 *tangent);
+extern void func_00274778(void *moby, s32 slot, Vec4 *basis);
+extern s32  func_00274BB8(f32 a, f32 b, void *block, Vec4 *normal, Vec4 *basis);
+extern void func_002B0E40(void *pos, Vec4 *outBasis, s32 flag);
+extern s32  PlayMobySound(s32 soundId, s32 flags, void *moby);
+extern void SetSoundEmitterOffset(s32 handle, void *offset);
+extern Vec4 g_collHitNormal;
+
+s32 func_00273D20(void *moby) {
+    u8 *block = *(u8 **)((u8 *)moby + 0x68);
+
+    if (*(u8 *)(block + 0x5c) >= 3) {
+        return 1;
+    }
+    if (*(u8 *)(block + 0x5c) == 0) {
+        func_00274138(moby);
+    } else {
+        func_002742F8(moby);
+    }
+
+    {
+        s32 slot = func_00274510(moby);
+
+        if (slot != -1) {
+            Vec4 tangent;
+            Vec4 basis;
+            s32  soundHandle = -1;
+            s32  blocked;
+            u8   soundId;
+
+            Vec3RescaleToLenVu0(&g_collHitNormal, 1.0f, &g_collHitNormal);
+            Vec3CrossVu0(&tangent, &g_collHitNormal, (const Vec4 *)block);
+            func_00274A98(moby, block + 0x10, &tangent);
+            func_002B0E40((u8 *)moby + 0x10, &basis, 1);
+            blocked = func_00274BB8(*(f32 *)(block + 0x38), *(f32 *)(block + 0x3c),
+                                    block, &g_collHitNormal, &basis);
+            soundId = *(u8 *)(block + 0x5e);
+            if (blocked == 0) {
+                if (soundId != 0xff && *(u8 *)(block + 0x5c) == 0) {
+                    soundHandle = PlayMobySound(soundId, 0, moby);
+                }
+                func_00274778(moby, slot, &basis);
+            } else if (soundId != 0xff) {
+                soundHandle = PlayMobySound(soundId, 0, moby);
+            }
+            if (soundHandle != -1) {
+                SetSoundEmitterOffset(soundHandle, block + 0x20);
+            }
+        }
+    }
+    return 0;
+}
+#endif
 
 /* func_00273EA8: projectile/effect state helper (sibling of func_00273D20).
  * WALL: eight callee-saves at 8-byte slot spacing (packed-save wall) +
