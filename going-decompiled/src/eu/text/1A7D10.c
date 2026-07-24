@@ -3255,9 +3255,14 @@ void func_002AF420(Moby *moby, void *ctrlPtr, f32 stepZ, f32 snapEps) {
 
     if (*(s16 *)(c + 0x28) == 0) {
         /* idle: choose a new heading jitter + dwell timer */
-        /* 0.785398245f is 0x3F490FDC exactly, which is what the .s materialises
-           (lui/ori 0x3F490FDC). The tidy pi/4 spelling `0.7853982f` encodes to
-           0x3F490FDB -- 1 ULP LOW. Spell float constants from the ROM bits. */
+        /* The .s materialises 0x3F490FDC (lui/ori) and 0.785398245f encodes to
+           exactly that. A tidier pi/4 spelling lands one ULP low, on 0x3F490FDB
+           -- spell float constants from the ROM bits, not from the mathematical
+           constant. The wrong spelling is named here by its BITS and not
+           written out as a literal on purpose: a defective constant quoted in a
+           comment is indistinguishable from a live one to any screen that does
+           not strip comments, and this file has already produced six false
+           "leaks" that way. */
         *(f32 *)(c + 0x24) += func_002A82F0(0.785398245f, 2.6179941f);
         *(s16 *)(c + 0x2A) = (s16)func_002A8238(*(s16 *)(c + 0x2C), *(s16 *)(c + 0x2E));
         *(s16 *)(c + 0x28) = 1;
