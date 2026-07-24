@@ -4015,7 +4015,129 @@ void MapBuildBitmap(void *dst, u8 *src, s32 arg3) {
 }
 #endif
 
+/*
+ * func_002980D8(dst, src, ctrl) — the "packed" 1bpp map-outline expander (the
+ * bit0-set arm of MapBuildBitmap; the sibling of the plain func_00298308).
+ * Decodes a two-stream RLE description of a 0x8000-byte (256x256 1bpp) bitmap,
+ * one 0x400-byte output band at a time, through the scratchpad at 0x70000000.
+ *
+ * Two input streams:
+ *   ctrl (arg3) — the run-control stream, read as (skip, run) byte pairs. `skip`
+ *      advances the scratch write pointer that many *pixels* (leaving them at
+ *      their fill value); `run` is the count of pixels to emit next. A `run` of 0
+ *      ends the current pair-scan for this band (the RLE list is skip/run/skip/
+ *      run/...).
+ *   src (arg2) — the bit-source stream. Its first byte seeds the initial toggle
+ *      run length (firstByte>>1) and toggle state; thereafter each emitted pixel
+ *      takes the current `toggle` value, and when the run of same-valued pixels
+ *      is exhausted the next src byte reloads the run length. A src byte of 0 is
+ *      a *carry*: it flips `toggle` and is consumed without emitting, so a chain
+ *      of zero bytes flips the value that many times before the next real length.
+ *
+ * Per band the decoder fills 0x2000 scratch pixels (one byte per pixel, value
+ * 0/1), then bit-packs them 8 pixels/byte into 0x400 bytes (pixel k -> bit k)
+ * and CopyQwords those to dst. Between bands any scratch beyond 0x2000 (RLE that
+ * overran the band, from `skip`) is carried down to the start of the next band's
+ * scratch and the write pointer rewound by 0x2000. Loops until dst reaches
+ * dst+0x8000. The matching build keeps the asm (a strength-reduction near-miss);
+ * this #else is the portable equivalent.
+ *
+ * NOTE(faithful): the bit-pack inner loop writes its partial accumulator to the
+ * output byte after every OR (8 stores/byte, only the last observable) exactly
+ * as the original emits eight `sb`s; kept verbatim for op-for-op fidelity.
+ */
+#ifdef TARGET_NATIVE
+extern void FillMemory32(void *dst, u32 word, s32 nbytes);
+extern void CopyQwords(void *dst, const void *src, s32 nbytes);
+#endif
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002980D8);
+#else
+void func_002980D8(void *dstArg, u8 *src, s32 ctrlArg) {
+    u8 *const scratch    = (u8 *)0x70000000;
+    u8 *const scratchEnd = (u8 *)0x70002000;    /* $21 */
+    u8       *dst        = (u8 *)dstArg;         /* $23 */
+    u8 *const dstEnd     = (u8 *)dstArg + 0x8000; /* $30 */
+    u8       *ctrl       = (u8 *)ctrlArg;        /* $17 */
+    u8       *bits       = src + 1;              /* $19 */
+    s32       toggle     = 1;                    /* $22 */
+    s32       run;                               /* $16 */
+    u8       *wp;                                /* $18 */
+
+    /* Seed the toggle run from the first src byte, then clear the scratch band. */
+    run = *src >> 1;
+    FillMemory32(scratch, 0, 0x2400);
+    wp = scratch;
+
+    for (;;) {
+        u8 *dstNext = dst + 0x400;
+        s32 skip    = *ctrl;
+
+        /* Decode (skip, run-count) pairs into pixel bytes until scratch fills. */
+        for (;;) {
+            s32 count = ctrl[1];
+            ctrl += 2;
+            wp += skip;                 /* leave `skip` pixels at their fill value */
+
+            while (count != 0) {
+                count--;
+                while (run == 0) {      /* carry: zero byte flips toggle, no emit */
+                    u8 b = *bits++;
+                    toggle = !toggle;
+                    run = b;
+                }
+                *wp = (u8)toggle;
+                run--;
+                wp++;
+            }
+
+            if (wp >= scratchEnd) {
+                break;
+            }
+            skip = *ctrl;
+        }
+
+        /* Bit-pack the 0x2000 pixel bytes -> 0x400 bytes (pixel k -> bit k). */
+        {
+            u8 *rp = scratch;
+            u8 *pk = scratch;
+            do {
+                u8 v = rp[0];
+                *pk = v;
+                v |= rp[1] << 1;  *pk = v;
+                v |= rp[2] << 2;  *pk = v;
+                v |= rp[3] << 3;  *pk = v;
+                v |= rp[4] << 4;  *pk = v;
+                v |= rp[5] << 5;  *pk = v;
+                v |= rp[6] << 6;  *pk = v;
+                v |= rp[7] << 7;  *pk = v;
+                rp += 8;
+                pk++;
+            } while (rp < scratchEnd);
+        }
+
+        CopyQwords(dst, scratch, 0x400);
+        dst = dstNext;
+        if (dstNext == dstEnd) {
+            break;
+        }
+
+        /* Carry any scratch past 0x2000 down to the start of the next band. */
+        FillMemory32(scratch, 0, 0x2000);
+        if (scratchEnd < wp) {
+            u8 *s = scratchEnd;
+            u8 *d = scratch;
+            do {
+                *d = *s;
+                s++;
+                d++;
+            } while (s < wp);
+        }
+        FillMemory32(scratchEnd, 0, 0x400);
+        wp -= 0x2000;
+    }
+}
+#endif
 
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00298308);
