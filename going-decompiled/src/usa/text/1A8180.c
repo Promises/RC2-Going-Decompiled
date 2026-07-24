@@ -4502,7 +4502,7 @@ void SpawnBoltShower(f32 zStep1, u64 sourceMoby2, long minBolts3, long maxBolts4
         f32 angle;
         f32 rnd;
 
-        Vec4ScaleVu0(&vel, 0.0009765625f, (const Vec4 *)((u8 *)moby + 0x10)); /* 0x3A800000 = 1/1024 */
+        Vec4ScaleVu0(&vel, 0.0009765625f, (const Vec4 *)moby); /* 0x3A800000 = 1/1024; src = moby base ($5=$22 @ .L002AF16C) */
         angle = GetRandomAngle();
 
         rnd = GetRandomFloatRange(0.0f, 3.0f);
