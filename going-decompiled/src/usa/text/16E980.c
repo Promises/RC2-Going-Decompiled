@@ -2403,9 +2403,104 @@ void SampleCameraFogZone(Vec4 *pos) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", SampleCameraFogZone);
 #endif
 
-/* func_00273740: collision/projectile helper. WALL: ten callee-saves at 8-byte
- * slot spacing (packed-save wall) + interleaved fp/qword math. Left INCLUDE_ASM. */
+/**
+ * func_00273740 — SpawnChildMoby: generic child / debris / pickup spawner.
+ *
+ * Spawns a moby of `classId`, binds it under `templateMoby`, and copies the
+ * template's lighting id, world position (`pos`), orientation (`rot`), relative
+ * scale and parent linkage across; flags it active (+0x34). Picks a random launch
+ * direction inside a cone whose half-angle is cos(launchAngle * k) and, for mode 1,
+ * copies+resolves the template's animation state. Hands the part index + launch
+ * velocity to func_00273988 (motion init), then installs the debris-physics update
+ * fp (func_00311A80). Returns the spawned child (0 on spawn failure).
+ *
+ * Engine #else (functional; matching arm hits a packed-save wall).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00273740);
+#else
+extern long SpawnMoby(u64 classId);
+extern long func_002AC088(long moby);
+extern void BindMobyToParent(long child, long parent);
+extern void func_002AFA80(long moby, u32 color);
+extern void func_00283DA0(void *vec);                 /* TransformVectorMicroVu0 */
+extern void func_002A1F20(long moby);
+extern void GetRandomVectorInSphere(Vec4 *out, f32 a, f32 b);
+extern f32  func_002835C0(f32 x);                     /* SqrtfVu0 */
+extern void ResolveMobyAnimFramePtrs(long moby);
+extern void UpdateMobyAnimation(long moby);
+extern void func_00311A80(void);                      /* debris-physics update fp */
+extern void func_00273988(f32 rate, void *moby, s32 mode, s32 index,
+                          void *srcPos, void *dstPos, u8 flags);
+
+long func_00273740(f32 launchAngle, f32 rate, long templateMoby, long mode,
+                   u64 classId, s32 partIdx, void *pos, void *rot, void *vel,
+                   u8 alpha) {
+    long child = SpawnMoby(classId);
+    long lightRec = func_002AC088(templateMoby);
+    u32  lightColor = 0;
+
+    if (lightRec != 0) {
+        u8 *lr = (u8 *)lightRec;
+        lightColor = ((u32)lr[6] << 16) | ((u32)lr[5] << 8) | 0x80000000 | (u32)lr[4];
+    }
+    if (child != 0) {
+        u8  *c = (u8 *)child;
+        u8  *t = (u8 *)templateMoby;
+        u16  flags34;
+        f32  radiusLo;
+        Vec4 launchVec;
+
+        BindMobyToParent(child, templateMoby);
+        if (lightColor != 0) {
+            func_002AFA80(child, lightColor);
+        }
+        *(Vec4 *)(c + 0x10) = *(Vec4 *)pos;   /* world position (16-byte lq/sq) */
+        *(Vec4 *)(c + 0xf0) = *(Vec4 *)rot;   /* orientation (16-byte lq/sq) */
+        func_00283DA0(c + 0xc0);
+        if (templateMoby != 0) {
+            *(f32 *)(c + 0x2c) =
+                *(f32 *)(*(int *)(c + 0x24) + 0x24) *
+                (*(f32 *)(t + 0x2c) / *(f32 *)(*(int *)(t + 0x24) + 0x24));
+        }
+        func_002A1F20(child);
+
+        flags34 = (u16)(*(u16 *)(c + 0x34) & 0xffdf);
+        *(u16 *)(c + 0x34) = flags34 | 0x100;
+        if (templateMoby != 0 && (*(u16 *)(t + 0x34) & 0x800) != 0) {
+            *(u16 *)(c + 0x34) = flags34 | 0x900;
+        }
+        *(s32 *)(c + 0x98) = 0;
+        *(int *)(*(int *)(c + 0x68) + 0x54) = (int)templateMoby;
+
+        {
+            const union { u32 u; f32 f; } k = { 0x3918825C };
+            radiusLo = func_00283B48(launchAngle * k.f);
+        }
+        GetRandomVectorInSphere(&launchVec, radiusLo, radiusLo);
+        launchVec.w = func_002835C0(1.0f - radiusLo * radiusLo);
+
+        if (mode == 1) {
+            if (templateMoby != 0) {
+                c[0x42] = t[0x43];
+                c[0x43] = t[0x43];
+            }
+            ResolveMobyAnimFramePtrs(child);
+            *(s32 *)(c + 0x48) = 0;
+            *(s32 *)(c + 0x44) = 0;
+            UpdateMobyAnimation(child);
+        }
+
+        func_00273988(rate, (void *)child, (s32)mode, partIdx, vel, &launchVec, alpha);
+
+        if ((*(u16 *)(c + 0x7c) & 0x8000) != 0 && (*(u16 *)(c + 0x34) & 0x10) != 0) {
+            *(u16 *)(c + 0x34) &= 0xffef;
+        }
+        *(void **)(c + 0x64) = (void *)func_00311A80;
+    }
+    return child;
+}
+#endif
 
 /**
  * func_00273988 — initialise a projectile's motion state block.
