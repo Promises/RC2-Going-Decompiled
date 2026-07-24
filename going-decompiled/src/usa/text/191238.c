@@ -4092,7 +4092,7 @@ extern s32   func_0028EDF0();          /* map/HUD tile tex lookup (2 or 5 args p
 extern u64   GetHudIconTex0(s32 iconIndex);
 extern void  Begin2dDrawBatch(s32 mode);
 extern void  End2dDrawBatch(void);
-extern void  AppendGsRegPacket(s32 reg, s32 val);
+extern void  AppendGsRegPacket(s32 reg, u64 val);   /* GS reg value is 64-bit — matches the guarded decl above (was a stale s32 copy) */
 extern void  AppendGsScissorRect(s32 x0, s32 y1, s32 x1, s32 y2);
 extern void  func_002904B0(s32 x0, s32 y0, s32 x1, s32 y1, s32 color, s32 flag); /* solid rect */
 extern u64   func_00280B48(void *box, u64 tint, s32 str, s64 mode);              /* DrawFont1TextBox */
@@ -5030,11 +5030,17 @@ void *func_002988C8(s32 idx) {
  * (func_002988C8), and writes two blended, 1/512-scaled values:
  *   *outX = (block[0] + block[1] * fa) / 512
  *   *outY = (block[2] + block[3] * fb) / 512
+ *
+ * Param order is floats-first (fa, fb, outX, outY, level) to match the callers,
+ * the twin func_00297B48, and the .s ($f12=fa, $f13=fb, $4=outX, $5=outY,
+ * $6=level). On the EE this is register-identical to any ordering (EABI keeps FP
+ * and GPR banks separate); the order only matters for the native/#else build,
+ * whose ABI is positional.
  */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00298918);
 #else
-void func_00298918(f32 *outX, f32 *outY, s32 level, f32 fa, f32 fb) {
+void func_00298918(f32 fa, f32 fb, void *outX, void *outY, s32 level) {
     f32 v0, v1, v2, v3;
 
     if (level == -1) {
@@ -5048,10 +5054,10 @@ void func_00298918(f32 *outX, f32 *outY, s32 level, f32 fa, f32 fb) {
     }
     v0 = ((f32 *)func_002988C8(level))[0];
     v1 = ((f32 *)func_002988C8(level))[1];
-    *outX = (v0 + v1 * fa) * (1.0f / 512.0f);
+    *(f32 *)outX = (v0 + v1 * fa) * (1.0f / 512.0f);
     v2 = ((f32 *)func_002988C8(level))[2];
     v3 = ((f32 *)func_002988C8(level))[3];
-    *outY = (v2 + v3 * fb) * (1.0f / 512.0f);
+    *(f32 *)outY = (v2 + v3 * fb) * (1.0f / 512.0f);
 }
 #endif
 
