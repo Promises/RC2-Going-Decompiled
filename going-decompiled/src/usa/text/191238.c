@@ -3911,7 +3911,101 @@ s32 MapUpdateLevelAvailability(void) {
 }
 #endif
 
+/*
+ * MapUpdate(): per-frame zoom/pan tick for the galactic-map screen. First runs
+ * func_00298AA0() (no-op leaf here) and MapUpdateLevelAvailability(), then:
+ *
+ *   - If any close/exit button is down (g_padButtons & 0x510) it plays the
+ *     map-close sound (PlayGlobalSound(0x13,0,0)) and returns 1 ("exit handled").
+ *   - Otherwise, if the map is inactive (g_mapCache.available == 0) or no valid
+ *     view slot is selected (g_mapCache.activeSlot < 0), it returns 0.
+ *   - Else it advances the per-slot zoom and pan for slot s = activeSlot from the
+ *     three analog inputs on controller port-0 (D_138180 +0x144/+0x148/+0x14C):
+ *       zoom[s] *= 1.0 - pad144 * 0.02;         then clamp zoom[s] to [0.65, 4.0]
+ *       panX[s] += (s32)(pad148 * (3.0e6 / zoom[s]));
+ *       panY[s] += (s32)(pad14C * (3.0e6 / zoom[s]));
+ *     and clamps panX/panY into a zoom-scaled window. The window half-extents are
+ *     derived from the fixed screen extents (0x1000 for X, 0xD00 for Y) minus the
+ *     scroll margins (D_1A95C0/D_1A95C4 << 4), divided by zoom, times 0x8000:
+ *       limX = ((0x1000 - (D_1A95C0<<4)) / zoom[s]) << 15;  loX = 0x10000000 - limX;
+ *       limY = ((0xD00  - (D_1A95C4<<4)) / zoom[s]) << 15;  loY = 0x10000000 - limY;
+ *     Clamp order matches the ROM: X-high then X-low, Y-high then Y-low. Returns 0.
+ *
+ * zoom  = g_mapCache +0xB4  (f32[], per view slot)
+ * panX  = g_mapCache +0x108 (s32[], 17.15 fixed pan X)
+ * panY  = g_mapCache +0x15C (s32[], 17.15 fixed pan Y)
+ *
+ * WALL: engine TU (later SN cc1); the FP schedule + the four `bnel`/`bc1tl`
+ * branch-likely clamps + the $8/0x10000000 reuse diverge from the pinned
+ * 2.9-ee-991111 cc1. Logic traced op-for-op from the frozen .s; portable #else. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapUpdate);
+#else
+extern u8   D_138180[];              /* controller port-0 state (0x138180) */
+extern s32  D_1A95C0;               /* map scroll-margin X (<<4 px) (0x1A95C0) */
+extern s32  D_1A95C4;               /* map scroll-margin Y (<<4 px) (0x1A95C4) */
+extern void func_00298AA0(void);
+extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+
+s32 MapUpdate(void) {
+    u8  *pad  = D_138180;
+    f32 *zoom = (f32 *)((u8 *)&g_mapCache + 0xB4);   /* per-slot zoom  */
+    s32 *panX = (s32 *)((u8 *)&g_mapCache + 0x108);  /* per-slot pan X */
+    s32 *panY = (s32 *)((u8 *)&g_mapCache + 0x15C);  /* per-slot pan Y */
+    s32 s;
+    f32 scale;
+    s32 limX, limY, loX, loY;
+
+    func_00298AA0();
+    MapUpdateLevelAvailability();
+
+    if ((*(s32 *)(pad + 0x1C4) & 0x510) != 0) {
+        PlayGlobalSound(0x13, 0, 0);
+        return 1;
+    }
+
+    if (g_mapCache.available == 0 || g_mapCache.activeSlot < 0) {
+        return 0;
+    }
+
+    s = g_mapCache.activeSlot;
+
+    /* zoom decay toward 1.0 by the left/zoom analog, then clamp to [0.65, 4.0] */
+    zoom[s] = zoom[s] * (1.0f - *(f32 *)(pad + 0x144) * 0.02f);
+    if (4.0f < zoom[s]) {
+        zoom[s] = 4.0f;
+    }
+    if (zoom[s] < 0.65f) {
+        zoom[s] = 0.65f;
+    }
+
+    /* pan velocity scales inversely with zoom */
+    scale = 3.0e6f / zoom[s];
+    panX[s] = panX[s] + (s32)(*(f32 *)(pad + 0x148) * scale);
+    panY[s] = panY[s] + (s32)(*(f32 *)(pad + 0x14C) * scale);
+
+    /* window half-extents (17.15 fixed) scaled by zoom, centred on 0x10000000 */
+    limX = (s32)((f32)(0x1000 - (D_1A95C0 << 4)) / zoom[s]) << 15;
+    limY = (s32)((f32)(0xD00  - (D_1A95C4 << 4)) / zoom[s]) << 15;
+    loX  = 0x10000000 - limX;
+    loY  = 0x10000000 - limY;
+
+    if (panX[s] >= limX) {
+        panX[s] = limX;
+    }
+    if (loX < panX[s]) {
+        panX[s] = loX;
+    }
+    if (panY[s] < limY) {
+        panY[s] = limY;
+    }
+    if (loY < panY[s]) {
+        panY[s] = loY;
+    }
+
+    return 0;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapDraw);
 
