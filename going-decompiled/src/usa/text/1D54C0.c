@@ -2589,10 +2589,99 @@ s32 func_002DCF58(MenuWidget *obj) {
  * large draw loop + multi callee-save. Bare INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DD0F8);
 
-/* Draw a scrolling text-box list keyed off a switch over obj->0x50 state (two
- * layout modes). Wall: jump-table switch + 128-bit packed text-box struct +
- * func_002DF620 header fill. Bare INCLUDE_ASM. */
+#ifdef TARGET_NATIVE
+/* Types + native-only callee decls for the func_002DD450 #else body (the
+ * matching INCLUDE_ASM build never sees them). Extracted from the Track-B
+ * gs_draw.h recovery; field offsets verified against func_002DD450.s. */
+typedef struct TextLayout2d {
+    s16 y0;        /* +0x00 top+4 inset      */  s16 y1;   /* +0x02 bottom-4        */
+    s16 x0;        /* +0x04 left             */  s16 x1;   /* +0x06 right           */
+    s16 xCenter;   /* +0x08 left+width/2     */  s16 yCursor; /* +0x0A current line Y */
+    s16 unkC;      u16 outAdvance; /* +0x0E OUT: line advance (readers (s16)-cast) */
+    s16 unk10;     s16 fontId;  /* +0x12 (9 here) */  s16 unk14; /* +0x14 (0) */
+    s16 align;     /* +0x16 align nibble     */  s16 unk18; s16 unk1A; s16 unk1C; s16 unk1E;
+} TextLayout2d; /* 0x20 */
+typedef struct IntroTextBox {
+    u8  unk0[0x18];
+    s32 x;         /* +0x18 */  s32 y; /* +0x1C */  s32 w; /* +0x20 */  s32 h; /* +0x24 */
+    u8  unk28[0xC];
+    union { s32 id; s32 *idList; } msg;  /* +0x34: single id / -1-terminated list */
+    u8  unk38[4];
+    s32 flags;     /* +0x3C: >>4 = first-line Y backoff; low byte >>4 = per-line align */
+    s32 frameTimer;/* +0x40 */
+    u8  unk44[8];
+    s32 unk4C;
+    s32 state;     /* +0x50 sequencer state (0x14-entry jump table) */
+    s32 doneFlag;  /* +0x54 set when a further line would still fit */
+} IntroTextBox; /* >= 0x58 */
+void func_002DF620(s16 *dst, void *src);   /* layout-header fill (defined below) */
+extern void func_00280B48(TextLayout2d *layout, u64 rgba, char *str, s32 len); /* text-draw core */
+#endif
+
+/* Draw an intro/dialog text box: emit the TEST_1 (0x47) + ALPHA_1 (0x42) GS
+ * register writes, open a 2D draw batch, fill the text layout from the box
+ * geometry, then render either a multi-line -1-terminated localized-string list
+ * or a single centered string per box->state (0x14-entry jump table), and set
+ * box->doneFlag when another line would still fit (yCursor+0x18 < y+h). Returns
+ * 2. Byte-match walled: jump-table switch + 8-byte-packed callee-saves + the
+ * dsll/dsrl 64-bit GS-value packing. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DD450);
+#else
+s32 func_002DD450(IntroTextBox *box) {
+    TextLayout2d layout;
+    char *str;
+
+    AppendGsRegPacket(0x47, 0x30000);
+    AppendGsRegPacket(0x42, ((u64)0x8000 << 24) | 0x44);
+    Begin2dDrawBatch(0);
+    func_002DF620((s16 *)&layout, box);
+    layout.fontId = 9;
+    layout.y0 = box->y + 4;
+    layout.y1 = box->y + box->h - 4;
+    layout.x0 = box->x;
+    layout.x1 = box->x + box->w;
+    layout.xCenter = box->x + (box->w >> 1);
+    layout.unk14 = 0;
+    layout.align = 0;
+
+    switch (box->state) {
+    case 0:
+        break;
+    case 1: case 2: case 3: case 5: case 6: case 7: case 8: case 9:
+    case 0xA: case 0xC: case 0xD: case 0xE: case 0x10: case 0x11: case 0x12: {
+        s32 i = 0;
+        s32 backoff = (box->flags >> 4) - 4;
+        s32 y = box->y - backoff;
+
+        if (*box->msg.idList != -1) {
+            do {
+                layout.yCursor = y;
+                layout.align = (u64)(*(u8 *)&box->flags) >> 4;
+                str = (char *)GetLocalizedString(box->msg.idList[i]);
+                i++;
+                func_00280B48(&layout, 0x80FFA888, str, -1);
+                y += (s16)layout.outAdvance + 0xA;
+            } while (box->msg.idList[i] != -1);
+        }
+        if (y + 0x18 < box->y + box->h) {
+            box->doneFlag = 1;
+        }
+        break;
+    }
+    case 4:
+    case 0xB:
+    case 0xF:
+    case 0x13:
+        layout.yCursor = box->y + 0x20;
+        str = (char *)GetLocalizedString(box->msg.id);
+        func_00280B48(&layout, 0x80FFA888, str, -1);
+        break;
+    }
+    End2dDrawBatch();
+    return 2;
+}
+#endif
 
 /* Draw the current level-select row label/value for the focused map screen.
  * Only renders while the area transition state permits it (area+0x15C < 3,
