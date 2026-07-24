@@ -3114,7 +3114,14 @@ void func_002AF398(Vec4 *out, u32 *colorPtr) {
  * func_00283328 -> func_00283238, cos -> func_00283A40, sin -> func_00283A58,
  * func_002A8D08 -> func_002A88B8, ProbeGroundHeight -> func_002A93C0, DistXYVu0 ->
  * func_00283740, atan2 -> func_00283B08, func_002AAFB8 -> func_002AABB8. USA g_heroPos
- * -> EU anchored (objdiff masks the anchor). Offsets verified vs func_002AF420.s. */
+ * -> EU anchored (objdiff masks the anchor). Offsets verified vs func_002AF420.s.
+ * GENUINE PAL/NTSC TIMING DIFF: the dwell-timer re-roll is func_002A8238(0x19, 0x4B)
+ * = 25..75 ticks in PAL; the USA twin uses (0x1E, 0x5A) = 30..90 -- a 60->50 Hz
+ * frame-count retime (ratio 0.8333). Verified vs func_002AF420.s (addiu $4,$0,0x19 /
+ * delay-slot addiu $5,$0,0x4B). Take these immediates from the EU .s, never from the
+ * USA body: an earlier symbol-swap port inherited the NTSC pair here. The other
+ * func_002A8238 call in this body is the register form (ctrl+0x2C / +0x2E) and is
+ * region-neutral. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AF420);
 #else
@@ -3155,7 +3162,7 @@ void func_002AF420(Moby *moby, void *ctrlPtr, f32 stepZ, f32 snapEps) {
         /* clear path or beyond leash: re-aim at the target and re-roll the timer */
         *(f32 *)(c + 0x24) = func_00283B08(*(f32 *)(c + 0x0) - *(f32 *)(m + 0x10),
                                            *(f32 *)(c + 0x4) - *(f32 *)(m + 0x14));
-        *(s16 *)(c + 0x2A) = (s16)func_002A8238(0x1E, 0x5A);
+        *(s16 *)(c + 0x2A) = (s16)func_002A8238(0x19, 0x4B);
         *(s16 *)(c + 0x28) = 1;
     } else {
         /* blocked and within leash: steer toward the hero when close enough */
