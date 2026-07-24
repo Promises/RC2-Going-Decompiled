@@ -2407,10 +2407,78 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", SampleCameraFog
  * slot spacing (packed-save wall) + interleaved fp/qword math. Left INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00273740);
 
-/* func_00273988: collision/projectile helper (Vec4Scale/Sub + func_002B0C40
- * pushout). WALL: many callee-saves at 8-byte slot spacing (packed-save wall) +
- * interleaved fp/qword math. Left INCLUDE_ASM. */
+/**
+ * func_00273988 — initialise a projectile's motion state block.
+ *
+ * Marks the moby active (flags+0x34 |= 0x100), copies the source and target
+ * positions into the state block (+0x00 / +0x10), stamps the fixed motion
+ * parameters (drag/gravity/etc. at +0x38..+0x4c, with the +0x48 term scaled from
+ * `rate`/3600), and records the mode + flags. Then, per `mode`:
+ *   - 1: homing — resolve the target point for light `index` (func_002A04D8),
+ *        aim the heading (sub-block +0x20) at it, project via func_002B0C40.
+ *   - 2: replay — seed the trail from func_002A0678(index), then aim + project.
+ *   - 0/3: ballistic — scale the moby's velocity into the heading (x1/1024) and
+ *        stash the +0x2c speed term, then aim + project.
+ *   - other: leave the block seeded but unaimed.
+ *
+ * Engine #else (functional; matching arm hits a packed-save wall).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00273988);
+#else
+extern void func_002A04D8(void *moby, s32 idx, void *out);
+extern s32  func_002A0678(void *moby, void *a, void *b, s32 arg);
+extern void func_002B0C40(s32 ctx, void *out, void *a, void *b);
+
+void func_00273988(f32 rate, void *moby, s32 mode, s32 index, void *srcPos,
+                   void *dstPos, u8 flags) {
+    u8 *m = (u8 *)moby;
+    u8 *block = *(u8 **)(m + 0x68);
+    u8 *sub = block + 0x20;
+    u8  scratch[16];
+
+    *(s32 *)(m + 0x98) = 0;
+    *(u16 *)(m + 0x34) |= 0x100;
+
+    *(Vec4 *)block          = *(Vec4 *)srcPos;   /* +0x00 source position (16-byte lq/sq) */
+    *(Vec4 *)(block + 0x10) = *(Vec4 *)dstPos;   /* +0x10 target position (16-byte lq/sq) */
+
+    *(f32 *)(block + 0x38) = 0.45f;                 /* 0x3EE66666 */
+    *(f32 *)(block + 0x3c) = 0.033333335f;          /* 0x3D088889 */
+    *(f32 *)(block + 0x40) = 0.5f;                  /* 0x3F000000 */
+    *(u32 *)(block + 0x44) = 0x3C567752;
+    *(f32 *)(block + 0x48) = rate * 0.00027777778f; /* 0x3991A2B4 = 1/3600 */
+    *(u32 *)(block + 0x4c) = 0x3AE4C38A;
+    *(u16 *)(block + 0x34) = 0xb4;
+    block[0x5e] = flags;
+    block[0x5d] = (u8)mode;
+    block[0x58] = 0;
+    block[0x5c] = 0;
+    *(s32 *)(block + 0x30) = 0;
+
+    if (mode == 1) {
+        *(s16 *)(block + 0x36) = (s16)index;
+        *(u16 *)(m + 0x7c) = (u16)((1 << (index & 0x1f)) | 0x8000);
+        func_002A04D8(moby, index, scratch);
+        Vec4SubVu0((Vec4 *)sub, (const Vec4 *)scratch, (const Vec4 *)(m + 0x10));
+        func_002B0C40((s32)moby, sub, sub, (void *)0);
+        return;
+    }
+    if (mode == 2) {
+        *(s16 *)(block + 0x36) = (s16)index;
+        *(u16 *)(m + 0x7c) = (u16)((1 << (index & 0x1f)) | 0x8000);
+        block[0x58] = (u8)func_002A0678(moby, sub, *(void **)(block + 0x30), index);
+    } else if (mode == 0 || mode == 3) {
+        Vec4ScaleVu0((Vec4 *)sub, 0.0009765625f, (const Vec4 *)moby);   /* 0x3A800000 */
+        *(f32 *)(block + 0x2c) = *(f32 *)(m + 0xc) * 0.0009765625f;
+    } else {
+        return;
+    }
+
+    Vec4SubVu0((Vec4 *)sub, (const Vec4 *)sub, (const Vec4 *)(m + 0x10));
+    func_002B0C40((s32)moby, sub, sub, (void *)0);
+}
+#endif
 
 /**
  * func_00273B80 — per-state projectile dispatcher + world-bounds despawn.
@@ -2436,7 +2504,7 @@ extern s32  func_00273EA8(void *moby);
 extern s32  func_00274128(void *moby);
 extern s32  func_00274130(void *moby);
 extern s32  func_00274CA0(void *moby, void *buf, s32 n);
-extern void func_002A0678(void *moby, void *a, void *b, s32 arg);
+extern s32  func_002A0678(void *moby, void *a, void *b, s32 arg);
 extern s32  g_gameTime;
 
 s32 func_00273B80(void *moby) {
