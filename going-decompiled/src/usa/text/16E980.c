@@ -2412,10 +2412,88 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00273740);
  * interleaved fp/qword math. Left INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00273988);
 
-/* func_00273B80: per-state moby/projectile dispatcher (state byte +0x5D, 6-way).
- * WALL: jump-table switch (jtbl_0026C510_text) + three callee-saves at 8-byte
- * slot spacing (packed-save wall). Left INCLUDE_ASM. */
+/**
+ * func_00273B80 — per-state projectile dispatcher + world-bounds despawn.
+ *
+ * Dispatches on the projectile state byte (block+0x5d, 6-way):
+ *  - state 0/2: seed the trail buffer (func_00274CA0 for state 0, else replay via
+ *    func_002A0678), point block+0x30 at it, run the collision handler
+ *    (func_00273D20), then — every 4th frame, or once the lifetime timer
+ *    (func_00283328 @block+0x34) elapses — force the result to 1; clear block+0x30.
+ *  - state 1/3: run func_00273EA8, force result to 1 when the timer elapses.
+ *  - state 4: func_00274128. state 5: func_00274130. state >= 6: no-op (result 0).
+ *
+ * Finally, despawn (return 1) if the projectile has left the [2, 1021] world box;
+ * otherwise return the per-state result.
+ *
+ * Engine #else (functional; matching arm hits a jump-table + packed-save wall).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00273B80);
+#else
+extern s32  func_00273D20(void *moby);   /* defined below (forward for the dispatch) */
+extern s32  func_00273EA8(void *moby);
+extern s32  func_00274128(void *moby);
+extern s32  func_00274130(void *moby);
+extern s32  func_00274CA0(void *moby, void *buf, s32 n);
+extern void func_002A0678(void *moby, void *a, void *b, s32 arg);
+extern s32  g_gameTime;
+
+s32 func_00273B80(void *moby) {
+    u8 *block = *(u8 **)((u8 *)moby + 0x68);
+    s32 result = 0;
+    u8  trailBuf[512];
+    u8  scratch[16];
+
+    switch (*(u8 *)(block + 0x5d)) {
+    case 0:
+    case 2:
+        if (*(u8 *)(block + 0x5d) == 0) {
+            *(u8 *)(block + 0x58) = (u8)func_00274CA0(moby, trailBuf, 0x20);
+        } else {
+            func_002A0678(moby, scratch, trailBuf, *(s16 *)(block + 0x36));
+        }
+        *(void **)(block + 0x30) = trailBuf;
+        result = func_00273D20(moby);
+        if (*(u8 *)(block + 0x5c) == 0 && (g_gameTime & 3) != 0) {
+            *(s32 *)(block + 0x30) = 0;
+        } else {
+            if (func_00283328((s16 *)(block + 0x34)) != 0) {
+                result = 1;
+            }
+            *(s32 *)(block + 0x30) = 0;
+        }
+        break;
+    case 1:
+    case 3:
+        result = func_00273EA8(moby);
+        if (func_00283328((s16 *)(block + 0x34)) != 0) {
+            result = 1;
+        }
+        break;
+    case 4:
+        result = func_00274128(moby);
+        break;
+    case 5:
+        result = func_00274130(moby);
+        break;
+    }
+
+    {
+        f32 x = *(f32 *)((u8 *)moby + 0x10);
+        f32 y = *(f32 *)((u8 *)moby + 0x14);
+        f32 z = *(f32 *)((u8 *)moby + 0x18);
+
+        /* out-of-[2,1021]-box despawn — written as the exact out-of-bounds compares
+         * (not >=/<=) to preserve the ROM's NaN behaviour (a NaN coord passes). */
+        if (x < 2.0f || 1021.0f < x || y < 2.0f || 1021.0f < y ||
+            z < 2.0f || 1021.0f < z) {
+            return 1;
+        }
+    }
+    return result;
+}
+#endif
 
 /**
  * func_00273D20 — projectile collision-response handler.
