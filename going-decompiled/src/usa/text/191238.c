@@ -3935,8 +3935,10 @@ s32 MapUpdateLevelAvailability(void) {
  * panX  = g_mapCache +0x108 (s32[], 17.15 fixed pan X)
  * panY  = g_mapCache +0x15C (s32[], 17.15 fixed pan Y)
  *
- * WALL: engine TU (later SN cc1); the FP schedule + the four `bnel`/`bc1tl`
- * branch-likely clamps + the $8/0x10000000 reuse diverge from the pinned
+ * WALL: engine TU (later SN cc1); the FP schedule + the three `bnel`
+ * branch-likely clamps (X-low, Y-high, Y-low) plus the X-high clamp's
+ * `slt;beqz` non-likely fall-through store (stores limX iff panX < limX)
+ * + the $8/0x10000000 reuse diverge from the pinned
  * 2.9-ee-991111 cc1. Logic traced op-for-op from the frozen .s; portable #else. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapUpdate);
@@ -3990,7 +3992,7 @@ s32 MapUpdate(void) {
     loX  = 0x10000000 - limX;
     loY  = 0x10000000 - limY;
 
-    if (panX[s] >= limX) {
+    if (panX[s] < limX) {
         panX[s] = limX;
     }
     if (loX < panX[s]) {
