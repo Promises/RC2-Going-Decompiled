@@ -232,7 +232,7 @@ extern s32 func_0011AFE0(void *desc, s32 count);  /* sceSifSetDma (returns id) *
 extern s32 func_0011AFC0(s32 id);      /* sceSifDmaStat (busy while >= 0) */
 extern void func_00133930(s32 len, s32 dstOfs);  /* post-transfer notify */
 /* IPU_TO channel teardown callees (func_00351F58 #else). */
-extern s32 func_00351550(s32 mode);    /* DMAC ch4 CHCR suspend write */
+extern void func_00351550(u32 chcrCmd); /* DMAC ch4 (IPU_TO) CHCR suspend write */
 extern void func_0011AC30(s32 sema);   /* DeleteSema */
 #endif
 
@@ -995,10 +995,22 @@ void func_003514E0(u32 chcrCmd) {
 }
 #endif
 
-/* TODO(hle): needs PS2 graphics/IO HLE backend — writes REG_DMAC_4_IPU_TO_CHCR
-   under the REG_DMAC_ENABLER/ENABLEW channel-suspend protocol (the companion of
-   func_003514E0). */
+/* func_00351550: write DMAC ch4 (IPU_TO) CHCR under the ENABLEW channel-suspend
+ * protocol — suspend (ENABLEW = ENABLER | 0x10000), write the CHCR command,
+ * resume (ENABLEW = ENABLER & ~0x10000), all bracketed by DI/EI. The ch4
+ * companion of func_003514E0 (which does the same for ch3/IPU_FROM at
+ * 0x1000B000). Byte-match blocked: 8-byte-packed saves. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351550);
+#else
+void func_00351550(u32 chcrCmd) {
+    func_0011F5E0();   /* DI */
+    *(volatile u32 *)0x1000F590 = *(volatile u32 *)0x1000F520 | 0x10000;
+    *(volatile u32 *)0x1000B400 = chcrCmd;
+    *(volatile u32 *)0x1000F590 = *(volatile u32 *)0x1000F520 & 0xFFFEFFFF;
+    func_0011F628();   /* EI */
+}
+#endif
 
 /**
  * Build a 64-bit IPU_TO DMA tag word: madr in the high word, the quadword
