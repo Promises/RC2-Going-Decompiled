@@ -2100,3 +2100,60 @@ __moddi3 = 0x00121450; // type:func
 __muldi3 = 0x00121AB8; // type:func
 __udivdi3 = 0x00121B20; // type:func
 __umoddi3 = 0x001220F0; // type:func
+
+// === libgcc.a (ee-gcc 2.9-ee-991111, our pinned compiler) + libsn.a runtime helpers, located by WHOLE-BODY byte identity
+// 2026-07-25. Method - each STT_FUNC symbol was carved from the archive object by st_value/st_size and required to agree
+// with the ROM over its ENTIRE length, with only linker-rewritten reloc fields masked. Names come from the object
+// .symtab, never from the filename stem. Independently re-verified - zero words differ outside a reloc for any entry.
+// The 5 already-present __divdi3/__moddi3/__muldi3/__udivdi3/__umoddi3 names were reproduced exactly by this method,
+// which is the control. EU addresses were found by searching the EU image for the same body (NOT by assuming an offset)
+// and are IDENTICAL to USA for all of these - consistent with cod/015180 being byte-identical across regions. ===
+new_eh_context = 0x001203C8; // type:func CONFIRMED libgcc.a _eh.o (whole 84B body verbatim, 3 reloc-masked words, 10 distinctive)
+eh_context_static = 0x00120498; // type:func CONFIRMED libgcc.a _eh.o (whole 104B body verbatim, 10 reloc-masked words, 7 distinctive)
+__sjthrow = 0x00120528; // type:func CONFIRMED libgcc.a _eh.o (whole 376B body verbatim, 6 reloc-masked words, 73 distinctive)
+old_find_exception_handler = 0x00120810; // type:func CONFIRMED libgcc.a _eh.o (whole 216B body verbatim, 0 reloc-masked words, 48 distinctive)
+find_exception_handler = 0x001208E8; // type:func CONFIRMED libgcc.a _eh.o (whole 324B body verbatim, 0 reloc-masked words, 60 distinctive)
+get_reg_addr = 0x00120A30; // type:func CONFIRMED libgcc.a _eh.o (whole 136B body verbatim, 1 reloc-masked words, 27 distinctive)
+copy_reg = 0x00120AB8; // type:func CONFIRMED libgcc.a _eh.o (whole 124B body verbatim, 3 reloc-masked words, 17 distinctive)
+next_stack_level = 0x00120B38; // type:func CONFIRMED libgcc.a _eh.o (whole 140B body verbatim, 2 reloc-masked words, 23 distinctive)
+throw_helper = 0x00120BD0; // type:func CONFIRMED libgcc.a _eh.o (whole 816B body verbatim, 10 reloc-masked words, 144 distinctive)
+__throw = 0x00120F00; // type:func CONFIRMED libgcc.a _eh.o (whole 476B body verbatim, 10 reloc-masked words, 82 distinctive)
+__rethrow = 0x001210E0; // type:func CONFIRMED libgcc.a _eh.o (whole 484B body verbatim, 10 reloc-masked words, 83 distinctive)
+__fixunsdfdi = 0x001212C8; // type:func CONFIRMED libgcc.a _fixunsdfdi.o (whole 236B body verbatim, 11 reloc-masked words, 36 distinctive)
+__floatdidf = 0x001213B8; // type:func CONFIRMED libgcc.a _floatdidf.o (whole 152B body verbatim, 6 reloc-masked words, 22 distinctive)
+__pack_d = 0x00122630; // type:func CONFIRMED libgcc.a dp-bit.o (whole 300B body verbatim, 0 reloc-masked words, 72 distinctive)
+__unpack_d = 0x00122760; // type:func CONFIRMED libgcc.a dp-bit.o (whole 156B body verbatim, 0 reloc-masked words, 34 distinctive)
+_fpadd_parts = 0x00122800; // type:func CONFIRMED libgcc.a dp-bit.o (whole 576B body verbatim, 2 reloc-masked words, 131 distinctive)
+dpadd = 0x00122A40; // type:func CONFIRMED libgcc.a dp-bit.o (whole 88B body verbatim, 4 reloc-masked words, 9 distinctive)
+dpsub = 0x00122A98; // type:func CONFIRMED libgcc.a dp-bit.o (whole 100B body verbatim, 4 reloc-masked words, 10 distinctive)
+dpmul = 0x00122B00; // type:func CONFIRMED libgcc.a dp-bit.o (whole 680B body verbatim, 9 reloc-masked words, 113 distinctive)
+dpdiv = 0x00122DA8; // type:func CONFIRMED libgcc.a dp-bit.o (whole 360B body verbatim, 5 reloc-masked words, 60 distinctive)
+dpcmp = 0x00123028; // type:func CONFIRMED libgcc.a dp-bit.o (whole 76B body verbatim, 3 reloc-masked words, 7 distinctive)
+litodp = 0x00123078; // type:func CONFIRMED libgcc.a dp-bit.o (whole 184B body verbatim, 1 reloc-masked words, 26 distinctive)
+dptofp = 0x00123298; // type:func CONFIRMED libgcc.a dp-bit.o (whole 84B body verbatim, 2 reloc-masked words, 9 distinctive)
+__pack_f = 0x001232F0; // type:func CONFIRMED libgcc.a fp-bit.o (whole 268B body verbatim, 0 reloc-masked words, 64 distinctive)
+__unpack_f = 0x00123400; // type:func CONFIRMED libgcc.a fp-bit.o (whole 144B body verbatim, 0 reloc-masked words, 32 distinctive)
+decode_uleb128 = 0x00123530; // type:func CONFIRMED libgcc.a frame.o (whole 68B body verbatim, 0 reloc-masked words, 16 distinctive)
+decode_sleb128 = 0x00123578; // type:func CONFIRMED libgcc.a frame.o (whole 80B body verbatim, 0 reloc-masked words, 19 distinctive)
+fde_merge = 0x001235C8; // type:func CONFIRMED libgcc.a frame.o (whole 252B body verbatim, 0 reloc-masked words, 53 distinctive)
+end_fde_sort = 0x001236C8; // type:func CONFIRMED libgcc.a frame.o (whole 612B body verbatim, 5 reloc-masked words, 126 distinctive)
+count_fdes = 0x00123930; // type:func CONFIRMED libgcc.a frame.o (whole 72B body verbatim, 0 reloc-masked words, 16 distinctive)
+add_fdes = 0x00123978; // type:func CONFIRMED libgcc.a frame.o (whole 136B body verbatim, 0 reloc-masked words, 33 distinctive)
+frame_init = 0x00123A00; // type:func CONFIRMED libgcc.a frame.o (whole 316B body verbatim, 7 reloc-masked words, 48 distinctive)
+find_fde = 0x00123B40; // type:func CONFIRMED libgcc.a frame.o (whole 228B body verbatim, 3 reloc-masked words, 40 distinctive)
+extract_cie_info = 0x00123C28; // type:func CONFIRMED libgcc.a frame.o (whole 260B body verbatim, 12 reloc-masked words, 40 distinctive)
+execute_cfa_insn = 0x00123D30; // type:func CONFIRMED libgcc.a frame.o (whole 920B body verbatim, 15 reloc-masked words, 184 distinctive)
+__frame_state_for = 0x001240C8; // type:func CONFIRMED libgcc.a frame.o (whole 472B body verbatim, 6 reloc-masked words, 81 distinctive)
+fde_split = 0x001242A0; // type:func CONFIRMED libgcc.a frame.o (whole 372B body verbatim, 0 reloc-masked words, 85 distinctive)
+// --- identity CONFIRMED by the same whole-body match, but NOT activated as a name: splat did not emit a
+// standalone glabel at these addresses (mid-body fusion, or a 0xCDCDCDCD-fill orphan head immediately
+// before the real start, the same class already documented for w_sqrt). Activating a name here would
+// pin a symbol splat cannot split. Promote only after the split is fixed.
+// __do_global_ctors = 0x0011FB98 - CONFIRMED libgcc.a __main.o (whole 176B body verbatim, 6 reloc-masked words, 27 distinctive)
+// __sjpopnthrow = 0x001206A0 - CONFIRMED libgcc.a _eh.o (whole 280B body verbatim, 5 reloc-masked words, 38 distinctive)
+// __eh_rtime_match = 0x001207B8 - CONFIRMED libgcc.a _eh.o (whole 72B body verbatim, 1 reloc-masked words, 9 distinctive)
+// __fpcmp_parts_d = 0x00122F10 - CONFIRMED libgcc.a dp-bit.o (whole 276B body verbatim, 0 reloc-masked words, 57 distinctive)
+// dptoli = 0x00123130 - CONFIRMED libgcc.a dp-bit.o (whole 148B body verbatim, 1 reloc-masked words, 24 distinctive)
+// dptoul = 0x001231C8 - CONFIRMED libgcc.a dp-bit.o (whole 160B body verbatim, 1 reloc-masked words, 26 distinctive)
+// fptodp = 0x001234F0 - CONFIRMED libgcc.a fp-bit.o (whole 64B body verbatim, 2 reloc-masked words, 5 distinctive)
+// sceGsResetPath = 0x00124418 - CONFIRMED libsn.a vu.o (whole 160B body verbatim, 4 reloc-masked words, 28 distinctive)
