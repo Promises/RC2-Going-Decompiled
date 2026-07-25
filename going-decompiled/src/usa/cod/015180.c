@@ -107,8 +107,46 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115DA8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115E28);
 
+/**
+ * func_00115E38 = AssertFail (EU names it) — the SDK assert handler. NEVER RETURNS.
+ *
+ * Prints the standard C assertion diagnostic and aborts:
+ *     assertion "%s" failed: file "%s", line %d
+ * read verbatim from the ROM at 0x13A370.
+ *
+ * IT HAS NO EPILOGUE AND NO `jr $ra`, AND THAT IS CORRECT. An assert handler does not
+ * return; the tail call to func_00115E28 (the abort) is the end of it. Do not "repair"
+ * the missing return — I previously mistook this shape for a mid-function split and was
+ * wrong. EU's disassembled copy has zero return instructions either.
+ *
+ * PARAMETER ORDER IS UNUSUAL AND IS DETERMINED BY THE REGISTER SHUFFLE, not guessed:
+ *     $4 (file) -> $7  = the format's SECOND conversion, %s "file"
+ *     $5 (line) -> $8  = the format's THIRD  conversion, %d "line"
+ *     $6 (expr) stays  = the format's FIRST  conversion, %s the assertion text
+ * so the third parameter is passed straight through into the vararg area untouched.
+ * That is why $6 appears "never written" when reading only this function: it is an
+ * INPUT, not a gap. func_00115CF0's prologue confirms the varargs shape — it spills
+ * $6..$11 to contiguous slots, re-points $6 at that area as a va_list, spills
+ * $f12/$f14/$f16/$f18 for float varargs, and tail-calls its vfprintf worker.
+ */
+#ifndef TARGET_NATIVE
 // recovered splat-dropped code (epilogue-stump mis-split): raw words, byte-exact
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115E38);
+#else
+/* 0x13A370 — "assertion \"%s\" failed: file \"%s\", line %d\n" */
+extern const char D_0013A370[];
+/* printf-like: (stream, fmt, ...) — varargs, forwards a va_list to its vfprintf. */
+extern void func_00115CF0(void *stream, const char *fmt, ...);
+/* the abort tail — never returns. */
+extern void func_00115E28(void);
+
+void AssertFail(const char *file, s32 line, const char *expr) {
+    /* stream = D_00133E74[+0xC] — the same global the accessor at the top of this
+     * unit returns; +0xC is its stderr-equivalent handle. */
+    func_00115CF0(*(void **)(D_00133E74 + 0xC), D_0013A370, expr, file, line);
+    func_00115E28();
+}
+#endif
 
 /* func_00115E68: tail-calls func_001175F0(arg0, 0, 0xA) and returns its result
  * sign-extended from 32 to 64 bits. Not matched: the original saves $31 with a
