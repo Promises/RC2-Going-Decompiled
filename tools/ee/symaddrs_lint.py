@@ -25,7 +25,6 @@ exit 0 = every file parses / 1 = at least one rejected / 2 = could not look
 """
 import subprocess
 import sys
-from pathlib import Path
 
 # Run in a child so splat's global symbol table starts empty every time.
 CHILD = r"""
@@ -123,17 +122,24 @@ def main(argv):
         print("no files given", file=sys.stderr)
         return 3
 
+    # 🔴 LABEL EACH ROW WITH THE PATH AS GIVEN, NEVER Path(f).name. Every region's
+    # map is called `symbol_addrs.txt`, and every extraction of one is usually
+    # called `<region>_symbol_addrs.txt` - so a run comparing the same file at two
+    # refs printed TWO rows reading `usa_symbol_addrs.txt`, one FAIL and one ok,
+    # with nothing to say which ref each verdict belonged to. The predicate was
+    # right and the SUBJECT was unstated. Measured 2026-07-26 while cross-checking
+    # a staged batch against the map that bricked the split.
+    width = min(max((len(f) for f in files), default=0), 60)
     rejected = cannot = 0
     for f in files:
         band, detail = check(f, python)
-        name = Path(f).name
         if band == OK:
-            print("  ok   %-24s %s" % (name, detail))
+            print("  ok   %-*s %s" % (width, f, detail))
         elif band == REJECTED:
-            print("  FAIL %-24s %s" % (name, detail))
+            print("  FAIL %-*s %s" % (width, f, detail))
             rejected += 1
         else:
-            print("  ??   %-24s could not look: %s" % (name, detail))
+            print("  ??   %-*s could not look: %s" % (width, f, detail))
             cannot += 1
 
     print("%d ok / %d rejected / %d unexaminable  (of %d)"

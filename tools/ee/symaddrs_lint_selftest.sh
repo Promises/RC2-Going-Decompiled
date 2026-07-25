@@ -87,5 +87,21 @@ else
   echo "  ok  contaminated single-process run fails ($(printf '%s' "$out" | tail -1 | cut -c1-50))"
 fi
 
+# ATTRIBUTION. Two DIFFERENT files with the SAME basename must produce two rows
+# that can be told apart. Every region's map is literally `symbol_addrs.txt`, and
+# the natural way to compare one across refs is to extract both as
+# `usa_symbol_addrs.txt` - so a report keyed on the basename prints one FAIL and
+# one ok with no way to say which ref each belonged to. The rc was right and the
+# report was unusable; a verdict you cannot attribute is not a verdict.
+mkdir -p "$T/refA" "$T/refB"
+cp "$T/clean.txt" "$T/refA/symbol_addrs.txt"
+cp "$T/semi.txt"  "$T/refB/symbol_addrs.txt"
+"$PY" "$LINT" --python "$PY" "$T/refA/symbol_addrs.txt" "$T/refB/symbol_addrs.txt" >"$T/attr" 2>&1
+if /usr/bin/grep -q 'refA/symbol_addrs.txt' "$T/attr" && /usr/bin/grep -q 'refB/symbol_addrs.txt' "$T/attr"; then
+  echo "  ok  same-basename files are attributed by full path"
+else
+  echo "FAIL same-basename rows are indistinguishable"; sed 's/^/      /' "$T/attr"; fail=1
+fi
+
 [ $fail -eq 0 ] && echo "symaddrs_lint selftest: all checks passed" || echo "symaddrs_lint selftest: FAILURES"
 exit $fail
