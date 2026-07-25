@@ -27,6 +27,12 @@
 # The target.o is used only for its SHAPE (which function, how many words) and
 # as the argument-contract check — never as the byte oracle.
 #
+# RELOCATION ADDENDS: MIPS o32 is REL, not RELA — the addend lives IN PLACE in
+# the instruction's immediate field. A resolver that overwrites the immediate
+# with the bare symbol address silently drops it, which is a FALSE DIFFERS on any
+# `sym + off` reference (measured: `%lo(func_001248B0 + 0x8)`). Each type adds its
+# own in-place addend back; GPREL16 additionally needs the per-region _gp.
+#
 # EXIT STATUS (a misuse must never look like a verdict)
 #   0  MATCH        — every word equals the ROM
 #   1  DIFFERS      — a real byte difference (this, and only this, is a failure)
@@ -104,13 +110,21 @@ docker --context colima-ee-x86 run --rm -v "$ROOT":/work -w /work ee-build sh -c
   || { echo "ARG ERROR: could not disassemble '$BASE'" >&2; exit 2; }
 [ -s "$DIS_FILE" ] || { echo "ARG ERROR: '$BASE' produced no .text disassembly" >&2; exit 2; }
 
-FN="$FN" ROM="$ROM" SYMS="$SYMS" DIS_FILE="$DIS_FILE" python3 - <<'PY'
+FN="$FN" ROM="$ROM" SYMS="$SYMS" REGION="$REGION" DIS_FILE="$DIS_FILE" python3 - <<'PY'
 import os, re, struct, sys
 
-FN   = os.environ["FN"]
-ROM  = os.environ["ROM"]
-SYMS = os.environ["SYMS"]
+FN     = os.environ["FN"]
+ROM    = os.environ["ROM"]
+SYMS   = os.environ["SYMS"]
+REGION = os.environ["REGION"]
 ROM_BASE = 0x100080          # flat .rom convention: file offset = vaddr - 0x100080
+
+# Per-region _gp (CLAUDE.md). GPREL16 resolves as `symbol + addend - _gp`,
+# sign-extended to 16 bits. These are not assumed: solving the 31 independent
+# GPREL16 slots in usa cod/015180's snd_Pump against the ROM yields exactly one
+# consistent value, 0x1AEFF0, which is the documented USA gp. A region with no
+# entry here keeps GPREL16 UNVERIFIABLE rather than guessing.
+GP = {"usa": 0x1AEFF0, "eu": 0x1AF070}.get(REGION)
 
 MATCH, DIFFERS, ARGERR, UNVERIFIABLE = 0, 1, 2, 3
 
@@ -121,11 +135,30 @@ for line in open(SYMS):
     if m:
         syms[m.group(1)] = int(m.group(2), 16)
 
+def sign16(v):
+    """Interpret a 16-bit immediate as signed (MIPS REL in-place addend)."""
+    return v - 0x10000 if v & 0x8000 else v
+
 def resolve(name):
     """Symbol -> vaddr. The map wins; otherwise fall back to the address baked
-    into splat's generated names (func_00127E48, D_00141B00, jtbl_0012ABC0)."""
+    into splat's generated names (func_00127E48, D_00141B00, jtbl_0012ABC0,
+    .L00118D6C)."""
     if name in syms:
         return syms[name]
+    # splat's local branch labels are `.L` + hex with NO underscore, so they are
+    # not matched by the underscore-separated generated-name form below. They
+    # encode their own vaddr just the same.
+    m = re.fullmatch(r"\.L([0-9A-Fa-f]{6,8})", name)
+    if m:
+        return int(m.group(1), 16)
+    # `D_<hex>` with FEWER than 6 digits is not an address at all: splat spells a
+    # bare absolute IMMEDIATE that way, and the value is the hex in the name.
+    # Verified against the ROM for every such symbol in usa cod/015180 — D_1000,
+    # D_4000, D_FFFF, D_FFFFF, D_FFFFFF each reproduce both halves of their
+    # hi/lo carry split exactly (e.g. D_FFFFF -> lui 0x0010 / addiu 0xFFFF).
+    m = re.fullmatch(r"D_([0-9A-Fa-f]{1,5})", name)
+    if m:
+        return int(m.group(1), 16)
     m = re.fullmatch(r"(?:func|D|jtbl|L)_([0-9A-Fa-f]{6,8})", name)
     if m:
         return int(m.group(1), 16)
@@ -173,15 +206,27 @@ for off, w in words:
         if S is None:
             unresolved.append(rname)
             continue
+        # MIPS o32 uses REL, not RELA: the ADDEND is stored IN PLACE in the
+        # instruction's immediate field, not in the relocation entry. Overwriting
+        # the immediate with the bare symbol address therefore DESTROYS the
+        # addend, which is how `%lo(func_001248B0 + 0x8)` was mis-resolved to
+        # func_001248B0 + 0 and reported as a byte difference against a ROM that
+        # was right all along. Every type must add its in-place addend back.
         if rtype == "R_MIPS_HI16":
-            # +0x8000 carry: the paired LO16 is sign-extended by the CPU.
-            w = (w & 0xFFFF0000) | (((S + 0x8000) >> 16) & 0xFFFF)
+            # The addend of a HI16 is its immediate scaled by 16, and it pairs
+            # with a sign-extended LO16, hence the +0x8000 carry.
+            A = sign16(w & 0xFFFF) << 16
+            w = (w & 0xFFFF0000) | (((S + A + 0x8000) >> 16) & 0xFFFF)
         elif rtype == "R_MIPS_LO16":
-            w = (w & 0xFFFF0000) | (S & 0xFFFF)
+            w = (w & 0xFFFF0000) | ((S + sign16(w & 0xFFFF)) & 0xFFFF)
         elif rtype == "R_MIPS_26":
-            w = (w & 0xFC000000) | ((S >> 2) & 0x03FFFFFF)
+            # The addend is the stored 26-bit target scaled by 4.
+            A = (w & 0x03FFFFFF) << 2
+            w = (w & 0xFC000000) | (((S + A) >> 2) & 0x03FFFFFF)
         elif rtype == "R_MIPS_PC16":
             w = (w & 0xFFFF0000) | (((S - (va + 4)) >> 2) & 0xFFFF)
+        elif rtype == "R_MIPS_GPREL16" and GP is not None:
+            w = (w & 0xFFFF0000) | ((S + sign16(w & 0xFFFF) - GP) & 0xFFFF)
         else:
             unmodelled.add(rtype)
     resolved.append((va, w))
