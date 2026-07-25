@@ -4343,7 +4343,47 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012AFC0);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012B0D8);
 
+/**
+ * func_0012B138 — saturating halfword -> byte pack (VU0 macro mode). EU twin.
+ *
+ * Converts 384 signed halfwords to 384 unsigned bytes, clamping each to [0, 255]:
+ * a clamp-and-pack blit. `dst` receives 384 bytes; `src` supplies 384 halfwords.
+ *
+ * The ROM does it 16 halfwords at a time: two `lq` loads, `pminh`/`pmaxh` against
+ * 0x00FF and zero for the saturation, `ppacb` to take the low byte of each halfword,
+ * one `sq` out. 24 iterations x 16 = 384.
+ *
+ * VERIFIED BYTE-IDENTICAL TO THE USA TWIN — all 24 words equal, checked rather than
+ * assumed. No PAL/NTSC term is involved: the function is pure data conversion with no
+ * timing or rate constant, which is exactly the class where a region twin CAN be
+ * identical. (A body carrying a Hz or frame constant would not be, and that is the
+ * standing hazard when porting an engine #else across regions.)
+ *
+ * `pmaxh` against $zero clamps the LOW end, so negative inputs become 0 rather than
+ * wrapping — the saturation is two-sided, not a mask.
+ *
+ * NOTE the clamp constant is a 128-bit value EMBEDDED IN THE INSTRUCTION STREAM at
+ * 0x12B180 (four `.word 0x00FF00FF` between the loop and the `jr ra`), loaded with
+ * `lq t3,0(t2)` where t2 is an address inside this very function — so no byte-exact
+ * C arm is possible here: part of the code is data.
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012B138);
+#else
+void func_0012B138(u8 *dst, const s16 *src) {
+    s32 i;
+
+    /* Elementwise and in order: `ppacb t2, t1, t0` places t0's eight low bytes below
+     * t1's eight, and the store lands at the pre-increment `dst`. */
+    for (i = 0; i < 384; i++) {
+        s16 v = src[i];
+
+        if (v > 255) v = 255;   /* pminh against 0x00FF */
+        if (v < 0)   v = 0;     /* pmaxh against $zero  */
+        dst[i] = (u8)v;         /* ppacb: low byte of each halfword */
+    }
+}
+#endif
 
 /**
  * Set bit 23 of the hardware register at 0x10002010 (IPU_CTRL) to the low bit of
