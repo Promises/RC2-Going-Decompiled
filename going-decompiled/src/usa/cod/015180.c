@@ -5463,8 +5463,32 @@ u8 func_00131730(u8 binary) {
  * (e.g. 0x59 -> 59). Decompiles to ~87%; the only diff is the multiply form:
  * the original emits 2-operand `mult $0,rs,rt` + `mflo`, but ee-gcc lowers `*`
  * to the 3-operand R5900 `mult rd,rs,rt`. That is a compiler-flag/codegen
- * choice, not expressible in source, so it stays INCLUDE_ASM. */
+ * choice, not expressible in source, so the ROM arm stays INCLUDE_ASM. The
+ * portable arm below is behaviourally faithful and is NOT a byte-match claim. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131760);
+#else
+/**
+ * Packed BCD byte → binary (RTC/BCD clock family, inverse of the neighbouring
+ * binary→BCD func_00131730): n - 6*(n>>4), e.g. 0x59 → 59.
+ *
+ * Written to mirror the ROM rather than as the more obvious
+ * `(n >> 4) * 10 + (n & 0xF)`: the original computes the CORRECTION term
+ * (each BCD nibble wastes 6 of its 16 codes), which is why the .s holds a
+ * single `mult ... 6` and a `subu` and never masks the low nibble.
+ *
+ * The two forms are EXACTLY equivalent, not merely equivalent on valid BCD:
+ *   n = 16h + l  ->  n - 6h = 16h + l - 6h = 10h + l
+ * Verified over all 256 byte values, 0 disagreements -- including malformed
+ * BCD (a nibble > 9), where the low nibble simply carries into the result.
+ *
+ * The u8 param/return produce the callee-side `andi 0xFF` masks -- the entry
+ * `andi $2,$4,0xFF` and the one in the jr delay slot.
+ */
+u8 func_00131760(u8 packed) {
+    return packed - (packed >> 4) * 6;
+}
+#endif
 
 extern u8 func_00131760(u8 packed);
 
