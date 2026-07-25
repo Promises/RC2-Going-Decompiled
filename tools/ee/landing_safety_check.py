@@ -6,6 +6,16 @@ as-is silently reverts everything the base gained meanwhile. The near-miss that 
 this would have deleted all five EU cmp runners - the entire EU dynamic-oracle
 capability - plus defcheck.py, guard_blocks.py and float_corpus_sweep.py.
 
+WHAT THE NUMBER MEANS - corrected after gating (watcher-m1-5, forum/3212). An earlier
+version of the message said "landing this as-is would remove the files above",
+unqualified, and that is FALSE for `git merge`: merging the branch that prompted this
+tool into master deletes ZERO files, verified with `git merge-tree --write-tree`. The
+files are only lost by a REPLACEMENT-style landing - squash to the branch's tree,
+reset --hard, force-push. What the count always means is that the branch was authored
+and tested WITHOUT those files, so its results do not describe the current base. That
+is a staleness signal, and it was worth keeping once it stopped claiming to be a
+deletion prediction.
+
 THE NAIVE CHECK IS WORSE THAN NOTHING. `git diff base..branch` on that same branch
 reports 7601 deletions, essentially all of them phantom: the base's own newer commits
 seen from a stale fork point. A reviewer who looks at that number learns nothing and
@@ -88,8 +98,16 @@ def main(argv):
     for p in risk:
         print(f"     {p}")
     if risk:
-        print("\nLanding this as-is would remove the files above, which exist on the base\n"
-              "and which this branch never deleted. Rebase onto the base first.")
+        print("\nThese files exist on the base, are absent from this branch, and this branch\n"
+              "never deleted them - so the branch was authored and TESTED without them.\n"
+              "\n"
+              "  git merge      -> they SURVIVE. Measured: merging the branch that prompted\n"
+              "                    this tool into master deletes 0 files.\n"
+              "  REPLACEMENT    -> they are LOST. Squash-to-branch-tree, reset --hard, a\n"
+              "                    force-push, or any landing that takes the branch's tree.\n"
+              "\n"
+              "So this is a STALENESS signal, not a deletion prediction: the branch's results\n"
+              "do not describe the current base. Rebase before trusting them.")
     return 1 if risk else 0
 
 
