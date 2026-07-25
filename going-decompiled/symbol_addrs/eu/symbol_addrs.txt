@@ -1337,3 +1337,12 @@ fde_split = 0x001242A0; // type:func CONFIRMED libgcc.a frame.o (whole 372B body
 // dptoul = 0x001231C8 - CONFIRMED libgcc.a dp-bit.o (whole 160B body verbatim, 1 reloc-masked words, 26 distinctive)
 // fptodp = 0x001234F0 - CONFIRMED libgcc.a fp-bit.o (whole 64B body verbatim, 2 reloc-masked words, 5 distinctive)
 // sceGsResetPath = 0x00124418 - CONFIRMED libsn.a vu.o (whole 160B body verbatim, 4 reloc-masked words, 28 distinctive)
+
+// === Track-B DATA lane (2026-07-25) - EU twins of the USA 989snd RPC / frame-counter globals. Every EU address MEASURED in the EU body at the cited instruction, never derived by adding a fixed delta. ===
+g_frameCounter = 0x001B1598; // EU twin - byte-identical lw 0x1598 / addiu +1 / sw 0x1598 idiom in CaptureScreenToVram 0x2CACD8 (USA 0x1B1518, delta +0x80 MEASURED in the EU body, not assumed)
+g_sndRpcClientCmd = 0x001A70C0; // EU twin - addiu a0,a0,0x70c0 at the sceSifBindRpc 0x123456 site in EU snd_Init 0x131EF4 (USA 0x1A7040, delta +0x80 MEASURED)
+g_sndCmdRpcSend = 0x001A7140; // EU twin - the lbu/sb command staging buffer at 0x132CD0 and the send arg at 0x132D90 in EU snd_SendCommandSync (USA 0x1A70C0, delta +0x80 MEASURED)
+g_sndCmdRpcRecv = 0x001A7100; // EU twin - recv arg with recvSize 0xc at 0x132D98, result word 0x1A7104 read at 0x132E04 (USA 0x1A7080, delta +0x80 MEASURED)
+g_sndRpcClientBank = 0x001A71C0; // EU twin - addiu a0,a0,0x71c0 at the sceSifBindRpc 0x123457 site in EU snd_Init 0x131F9C (USA 0x1A7140, delta +0x80 MEASURED)
+g_sndBankRpcSend = 0x001A7240; // EU twin - send arg a3 at the sceSifCallRpc in EU snd_BankLoadByLoc 0x132460 (USA 0x1A71C0, delta +0x80 MEASURED)
+g_sndBankRpcResult = 0x001A7200; // EU twin - recv arg t1 at 0x13246C plus the 0xFFFFFFFF sentinel poll at 0x1324D4 in EU snd_BankLoadByLoc. NB EU snd_Init also writes an unrelated 0x1A7180 - do NOT pair by bare address, that collides with the USA name (USA 0x1A7180, delta +0x80 MEASURED)
