@@ -5112,7 +5112,33 @@ u8 func_00131790(u8 binary) {
     return binary / 10 * 6 + binary;
 }
 
+/* func_001317C0: EU +0x60 twin of USA func_00131760. Packed-BCD byte ->
+ * binary. The ROM arm stays INCLUDE_ASM for the same reason as USA: the
+ * original emits 2-operand `mult $0,rs,rt` + `mflo` while ee-gcc lowers `*`
+ * to the 3-operand R5900 `mult rd,rs,rt` -- a codegen choice, not expressible
+ * in source. That is a byte-MATCHING wall and does not block a faithful
+ * portable arm. NOT a byte-match claim. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001317C0);
+#else
+/**
+ * Packed BCD byte → binary (EU +0x60 twin of USA func_00131760; inverse of
+ * the neighbouring func_00131790 above): n - 6*(n>>4), e.g. 0x59 → 59.
+ *
+ * Mirrors the ROM's correction-term form rather than the more obvious
+ * `(n >> 4) * 10 + (n & 0xF)`, because that is what the .s computes: one
+ * `mult ... 6` and a `subu`, with no mask of the low nibble. The two are
+ * EXACTLY equivalent (n = 16h + l  ->  n - 6h = 10h + l; verified over all
+ * 256 byte values, 0 disagreements), so this is a faithfulness choice and
+ * not a correctness one.
+ *
+ * The u8 param/return produce the callee-side `andi 0xFF` masks -- the entry
+ * `andi $2,$4,0xFF` and the one in the jr delay slot.
+ */
+u8 func_001317C0(u8 packed) {
+    return packed - (packed >> 4) * 6;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001317E0);
 
