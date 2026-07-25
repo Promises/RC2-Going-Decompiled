@@ -3598,7 +3598,13 @@ Moby *func_002AFFC8(Vec4 *queryVec, f32 a, f32 b, f32 c, f32 d) {
     Moby **cursor = g_mobyFlagged1000List;
     Moby *moby = *cursor;
     Moby *best = 0;
-    f32 bestScore = 99999008.0f;   /* 0x4CBEBC20 */
+    f32 bestScore = 100000000.0f;  /* 0x4CBEBC20 = 1e8 EXACTLY. NOT 99999008.0f:
+                                    * that is the decimal a float32 PRINTS as,
+                                    * and re-encoding it lands 124 ULP LOW at
+                                    * 0x4CBEBBA4. Spell the round number; never
+                                    * transcribe a printed approximation.
+                                    * Same constant as USA func_002B02C8 — this
+                                    * defect is region-independent. */
     Vec4 query;
 
     if (moby == 0) {
