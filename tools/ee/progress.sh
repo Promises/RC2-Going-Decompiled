@@ -75,15 +75,21 @@ for region in usa eu; do
     | sed -E 's/.*,[[:space:]]*([A-Za-z_][A-Za-z_0-9]*)\)/\1/' \
     | sort -u > "$TMP/$region.iasm"
 
-  # 3) guarded (#ifndef TARGET_NATIVE ... INCLUDE_ASM ... #else) names
-  $FIND "$SRC" -name '*.c' -exec awk '
-    /^[[:space:]]*#ifndef[[:space:]]+TARGET_NATIVE/ { g=1; next }
-    /^[[:space:]]*#(else|endif)/                    { g=0; next }
-    g && match($0, /INCLUDE_ASM\([^,]*,[[:space:]]*[A-Za-z_][A-Za-z_0-9]*\)/) {
-      s = substr($0, RSTART, RLENGTH)
-      sub(/.*,[[:space:]]*/, "", s); sub(/\)$/, "", s)
-      print s
-    }' {} + 2>/dev/null | sort -u > "$TMP/$region.guarded"
+  # 3) guarded = INCLUDE_ASM'd AND a portable body exists in the same guard.
+  #
+  # This was an inline awk keyed on `#ifndef TARGET_NATIVE`, which is one of the
+  # five opener spellings in the corpus. Under `#ifdef TARGET_NATIVE` the
+  # INCLUDE_ASM sits in the #else arm, so the awk never saw it. It was also
+  # counting an INCLUDE_ASM as "guarded" without checking a body exists at all.
+  # MEASURED on USA: 17 bodied functions missed, 9 counted with no body - errors
+  # in BOTH directions, which is why the total looked plausible.
+  #
+  # Shared scanner instead of a fifth re-derivation; see tools/guard_blocks.py.
+  if ! $FIND "$SRC" -name '*.c' -exec python3 "$ROOT/tools/guard_blocks.py" --bodied {} + \
+       2>/dev/null | sort -u > "$TMP/$region.guarded"; then
+    echo "progress.sh: guard scan failed for $region (python3 missing?)" >&2
+    exit 2
+  fi
 
   # 4) classify each carved fn
   awk -v iasm="$TMP/$region.iasm" -v guarded="$TMP/$region.guarded" \
