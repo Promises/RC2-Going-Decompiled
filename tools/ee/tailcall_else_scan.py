@@ -56,27 +56,53 @@ def strip_comments(text):
     return ''.join(out).splitlines()
 
 
+def _guard_polarity(s):
+    """('native'|'other', first_arm_is_native) for a preprocessor conditional.
+
+    Unlike the block-level scanner in tools/guard_blocks.py, this tool walks line
+    by line and must decide polarity AT THE OPENER, before it has seen either
+    arm - so it cannot use the "arm holding INCLUDE_ASM is the asm arm" rule and
+    has to read the condition. It therefore tests for a NEGATED mention rather
+    than matching whole spellings:
+
+        #ifndef TARGET_NATIVE                            -> first arm not native
+        #if !defined(TARGET_NATIVE) && !defined(MATCH_x) -> first arm not native
+        #ifdef TARGET_NATIVE                             -> first arm IS native
+        #if defined(MATCH_x) || defined(TARGET_NATIVE)   -> first arm IS native
+
+    Previously the two compound forms fell through to 'other' and their bodies
+    were never scanned at all - 7 blocks corpus-wide.
+
+    LIMIT, stated because it is invisible otherwise: a condition mixing a negated
+    and a non-negated TARGET_NATIVE would be classified by the negation. None
+    exists today; if one appears this returns the wrong arm rather than skipping,
+    so re-check here if the corpus grows a mixed condition.
+    """
+    if not re.search(r'\bTARGET_NATIVE\b', s):
+        return 'other', False
+    negated = (re.match(r'#\s*ifndef\s+TARGET_NATIVE\b', s)
+               or re.search(r'!\s*defined\s*\(\s*TARGET_NATIVE\s*\)', s)
+               or re.search(r'!\s*TARGET_NATIVE\b', s))
+    return 'native', not bool(negated)
+
+
 def target_native_regions(lines):
     """yield (start,end) line-index ranges where TARGET_NATIVE code is ACTIVE
        (the #else arm of #ifndef TARGET_NATIVE, or the #if arm of #ifdef TARGET_NATIVE)."""
-    stack = []        # each: ('ifndef'|'ifdef'|'other', active_bool)
+    stack = []        # each: ('native'|'other', this_arm_is_native)
     regions = []
     active_start = None
     for i, ln in enumerate(lines):
         s = ln.strip()
         if s.startswith('#if'):
-            if re.match(r'#ifndef\s+TARGET_NATIVE\b', s):
-                stack.append(['ifndef', False])           # #if arm NOT native
-            elif re.match(r'#ifdef\s+TARGET_NATIVE\b', s):
-                stack.append(['ifdef', True])             # #if arm IS native
-            else:
-                stack.append(['other', False])
+            kind, first_arm_is_native = _guard_polarity(s)
+            stack.append([kind, first_arm_is_native])
         elif s.startswith('#else') and stack:
-            stack[-1][1] = not stack[-1][1] if stack[-1][0] in ('ifndef', 'ifdef') else stack[-1][1]
+            stack[-1][1] = (not stack[-1][1]) if stack[-1][0] == 'native' else stack[-1][1]
         elif s.startswith('#endif') and stack:
             stack.pop()
         # active iff ANY frame on the stack is a TARGET_NATIVE frame currently active
-        cur_active = any(fr[0] in ('ifndef', 'ifdef') and fr[1] for fr in stack)
+        cur_active = any(fr[0] == 'native' and fr[1] for fr in stack)
         if cur_active and active_start is None:
             active_start = i
         elif not cur_active and active_start is not None:
