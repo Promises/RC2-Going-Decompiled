@@ -123,6 +123,47 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001157AC);
  * spimdisasm gains lone-word-pad splitting. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001158F4);
 
+/* func_00115AC0 = strncpy(char *dst, const char *src, size_t n).
+ * Returns $2 = the ORIGINAL dst. Identity CONFIRMED two independent ways:
+ *   1. Algorithm read of the asm - classic SIMD zero-byte detect
+ *      (~w) & (w - 0x0101..01) & 0x8080..80, done 128-bit via
+ *      pnor/psubb/pand/pcpyud on lq/sq pairs (16B/iter) when src|dst is
+ *      16-byte aligned, 64-bit via nor/dsubu/and on ld/sd (8B/iter) when only
+ *      8-byte aligned, else a plain lbu/sb byte loop.
+ *   2. tools/ee/sdk-lib/obj/strncpy.o (extracted from the vendored SCE
+ *      libc.a) is the SAME ROUTINE: its .symtab names the source file
+ *      src/newlib/libc/machine/r5900/strncpy.S, and its 444 code bytes are
+ *      instruction-for-instruction identical to this function apart from the
+ *      constant-materialization idiom noted below.
+ *
+ * NON-OBVIOUS, CALLER-VISIBLE BEHAVIOUR: this does NOT guarantee NUL
+ * termination. The beqz $6 at 0x115C38 jumps straight to jr $31 when n is
+ * exhausted before a NUL is seen, storing no terminator. The zero-fill tail at
+ * .L00115C68 only runs when the SOURCE ended early (it pads the remainder of n
+ * with 0). So on truncation the caller gets an unterminated buffer and must
+ * write its own terminator - that is why callers such as the one below pass
+ * 0x3FF into a 0x400-byte field.
+ *
+ * PARKED as INCLUDE_ASM - not matchable from C, and NOT for lack of trying.
+ * This is hand-written R5900 assembly in the SDK (a .S file, per the symtab
+ * above), so there is no C source to recover. MEASURED: compiling the 64-bit
+ * zero-detect idiom above with our ee-gcc 2.9 -O2 -G0 emits ONLY scalar
+ * ld/sd/nor/daddu/and - 0 occurrences of lq/sq/pnor/psubb/pand/pcpyld/pcpyud.
+ * ee-gcc 2.9 has no autovectorizer and no intrinsics for the 128-bit ops, so
+ * the lq/sq path is unreachable from portable C (the same wall already
+ * recorded for the 128-bit lq/sq bodies in text/1CA080.c and elsewhere).
+ *
+ * The FREE-MATCH shortcut (link the SDK object verbatim) also does NOT apply:
+ * our vendored libc.a is a DIFFERENT SDK revision than the one the game
+ * linked. Both build the same masks to the same values (verified numerically:
+ * 0x0101010101010101 and 0x8080808080808080) but by different li expansions -
+ * the ROM does ori $7,$0,0x8080 / dsll 16 / ori / dsll 16 / ori / dsll 9 /
+ * ori 0x101 (7 insns, deriving 0x0101.. from the 0x8080.. chain via dsll 9),
+ * while the vendored object does lui $7,0x101 / ori / dsll 16 / ori / dsll 16
+ * / ori (6 insns). That shifts every later branch displacement, so 97 of 111
+ * words differ. No other libc.a revision is present in the tree (searched),
+ * and no vendored object contains the ROM's dsll $7,$7,9 idiom.
+ * USA and EU are identical here (same vaddr, same instructions). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115AC0);
 
 /* func_00115C90: clears D_00133E78, calls func_0011B270(arg1); on failure
