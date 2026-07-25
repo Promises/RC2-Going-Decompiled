@@ -2588,7 +2588,7 @@ void func_002AC718(f32 queryRadius, f32 queryPower, f32 ringRadius, f32 whiteRin
 
     spawnPos.x = 0.0f;
     spawnPos.y = 0.0f;
-    spawnPos.z = scale * 0.16000001f;         /* 0x3E088889 */
+    spawnPos.z = scale * 0.16000001f;         /* 0x3E23D70B (PAL; the USA value is 0x3E088889) */
     spawnPos.w = 0.0f;
 
     /* high GPU+step time forces the reduced-detail path */
@@ -2624,7 +2624,7 @@ void func_002AC718(f32 queryRadius, f32 queryPower, f32 ringRadius, f32 whiteRin
 
             sparkCount--;
             func_002AFB68(&dir, scale * invFrameRate * mag, a1, a2);  /* SphericalAnglesToVec3 */
-            dir.z += 0.060000002f;                                   /* 0x3D4CCCCE */
+            dir.z += 0.060000002f;                                   /* 0x3D75C290 (PAL; the USA value is 0x3D4CCCCE) */
             c1 = func_002ABA08(0x4F007FFF, matFlag);
             c2 = func_002ABA08(0x1F00007F, matFlag);
             life = func_002A8238(0x32, 0x64);
@@ -2649,11 +2649,11 @@ void func_002AC718(f32 queryRadius, f32 queryPower, f32 ringRadius, f32 whiteRin
         if (camDist < 14.0f) {
             s32 life;
 
-            func_002837E0(&streak, camDist * 0.0040000002f, &streak);  /* 0x3B5A740F */
+            func_002837E0(&streak, camDist * 0.0040000002f, &streak);  /* 0x3B83126F (PAL; the USA value is 0x3B5A740F) */
             camDelta.z += camDist * 0.5f;
             func_002837E0(&camDelta, (camDist + camDist) * invFrameRate, &camDelta);
             func_00283580(&streak, &streak, &camDelta);
-            func_00283878(0.20000002f, &streak, &streak);                    /* 0x3E2AAAAB */
+            func_00283878(0.20000002f, &streak, &streak);                    /* 0x3E4CCCCE (PAL; the USA value is 0x3E2AAAAB) */
             life = func_002A8238(0x32, 0x4B);
             func_003098C8(pos, &streak, life, 0, 0);
         }
@@ -2669,7 +2669,7 @@ void func_002AC718(f32 queryRadius, f32 queryPower, f32 ringRadius, f32 whiteRin
 
                     func_002AFB68(&streak, scale * invFrameRate * mag, a1, a2);
                     i++;
-                    streak.z += 0.040000003f;                                /* 0x3D088889 */
+                    streak.z += 0.040000003f;                                /* 0x3D23D70B (PAL; the USA value is 0x3D088889) */
                     life = func_002A8238(0x32, 0x4B);
                     func_003098C8(pos, &streak, life, stagger == 0, 0);
                 } while (i < debrisCount - 1);
