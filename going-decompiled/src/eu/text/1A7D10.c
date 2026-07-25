@@ -2573,7 +2573,13 @@ void func_002AC718(f32 queryRadius, f32 queryPower, f32 ringRadius, f32 whiteRin
                    f32 ringDistGate, f32 scale, f32 cameraFxMag, long moby, u64 spawnCtx9,
                    u64 *pos, s32 sparkCount, s32 dustCount, s32 mistCount, s32 soundIdx,
                    s32 shakeEnable, s32 debrisCount, s32 lod, u8 matFlag, u32 queryTag) {
-    const f32 invFrameRate = 0.020000001f;   /* 0x3C888889 = 1/60 */
+    /* 0x3CA3D70B = 1/50, PAL. The EU .s carries 0x3CA3D70B ten times and
+     * 0x3C888889 (1/60, NTSC) zero times, and this matches the porting rule
+     * stated at the head of this body. The comment here previously named the
+     * NTSC constant while the value was the correct PAL one - i.e. it invited
+     * exactly the wrong-region edit the rule exists to prevent.
+     * Do NOT write 0.02f: that encodes 0x3CA3D70A, one ULP low. */
+    const f32 invFrameRate = 0.020000001f;
     Vec4 spawnPos;                            /* {0,0, scale*0.13333334, 0} anchor for rings/dust/mist */
     Vec4 dir;                                 /* per-particle direction scratch */
     Vec4 camDelta;                            /* g_cameraPos - pos */
