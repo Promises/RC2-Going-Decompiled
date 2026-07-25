@@ -4179,8 +4179,82 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127E48);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127F90);
 
+/**
+ * func_00127F98 — issue one libmc (memory-card) request over SIF RPC, function 16.
+ *
+ * Fills the shared 48-byte request block with the caller's two arguments and fires an
+ * asynchronous RPC at the IOP-side libmc server. Returns 0 once the call is ACCEPTED —
+ * not once it completes; the IOP posts its result into g_mcRpcResult later and McSync
+ * is what waits for it.
+ *
+ * Returns  0     the request was accepted and is in flight
+ *         -100   the RPC client is not bound yet (McInit has not run / bind failed)
+ *         -200   another libmc call already holds the serialising semaphore
+ *         other  the RPC layer's own failure code, passed through unchanged
+ *
+ * THE SEMAPHORE IS DELIBERATELY NOT RELEASED ON SUCCESS. It is taken here and stays
+ * held for the lifetime of the in-flight call; the completion path releases it. Only
+ * the FAILURE path signals it back, because on failure there is no completion coming.
+ * Reading this as a leak is the natural misreading, and it is wrong.
+ *
+ * It polls rather than waits: the guard is PollSema (syscall 0x45), NOT WaitSema
+ * (0x44), so a busy card returns -200 immediately instead of blocking the EE. A caller
+ * that treats -200 as fatal rather than "retry later" will drop requests.
+ *
+ * Naming basis: g_mcRpcClient / g_mcRpcResult / g_mcMutexSema are CONFIRMED in
+ * symbol_addrs; func_0011AC70 and func_0011AC40 are pinned by their syscall numbers
+ * (0x45 PollSema, 0x42 SignalSema), calibrated against this unit's own stubs
+ * (0x40 CreateSema, 0x41 DeleteSema, 0x44 WaitSema at func_0011AC60).
+ *
+ * The ROM arm is raw .word: this body is a RECOVERED splat-dropped function (see the
+ * marker below), so the portable arm is the only readable form of it in the tree.
+ */
+#ifndef TARGET_NATIVE
 // recovered splat-dropped code (epilogue-stump mis-split): raw words, byte-exact
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127F98);
+#else
+/* 0x141B00 — SIF RPC client handle for libmc; +0x24 is nonzero once bound. */
+extern u8  g_mcRpcClient[];
+/* 0x1430C0 — where the IOP DMAs the result code for the last call. */
+extern u32 g_mcRpcResult;
+/* 0x137E6C — semaphore serialising libmc RPC calls, created in McInit. */
+extern s32 g_mcMutexSema;
+/* 0x141B80 — the shared 48-byte request block. +4 and +8 are this call's arguments. */
+extern u8  g_mcRpcRequest[];
+/* 0x137E68 — the RPC function number of the call currently in flight. */
+extern s32 g_mcPendingCmd;
+
+extern s32 func_0011AC70(s32 sema);   /* syscall 0x45 PollSema   */
+extern void func_0011AC40(s32 sema);  /* syscall 0x42 SignalSema */
+/* func_0011D620 (sceSifCallRpc-shaped) is already declared at file scope earlier in
+ * this unit; NOT redeclared here. My first draft did redeclare it with `void *` for the
+ * trailing end-function/end-param pair and the native gate rejected it as a conflicting
+ * type — the existing declaration spells those two as s32. Reusing the unit's own
+ * declaration is both correct and the reason the conflict cannot recur. */
+
+s32 func_00127F98(s32 arg0, s32 arg1) {
+    s32 rc;
+
+    if (*(s32 *)(g_mcRpcClient + 0x24) == 0) {
+        return -100;                       /* client never bound */
+    }
+    if (func_0011AC70(g_mcMutexSema) < 0) {
+        return -200;                       /* busy — poll, not wait */
+    }
+
+    *(s32 *)(g_mcRpcRequest + 4) = arg0;
+    *(s32 *)(g_mcRpcRequest + 8) = arg1;
+
+    rc = func_0011D620(g_mcRpcClient, 16, 1,
+                       g_mcRpcRequest, 48, &g_mcRpcResult, 4, 0, 0);
+    if (rc != 0) {
+        func_0011AC40(g_mcMutexSema);      /* no completion is coming — release */
+    } else {
+        g_mcPendingCmd = 16;               /* held; the completion path releases */
+    }
+    return rc;
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128068);
 
