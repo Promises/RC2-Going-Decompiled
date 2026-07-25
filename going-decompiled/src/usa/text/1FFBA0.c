@@ -649,7 +649,7 @@ extern f32 D_1AD7FC; /* 0x1AD7FC == 2.0f, brightness multiplier */
 
 void func_00300C08(void) {
     Vec4f sp0;            /* sp+0x00 scratch scaled axis */
-    Vec4f ptA;           /* sp+0x10 = camPos + 17 * camRow0 */
+    Vec4f ptA;           /* sp+0x10 = camPos + 9 * camRow0 */
     Vec4f ptB;           /* sp+0x20 = camPos + 0.1 * camRow0 */
     Vec4f P;             /* sp+0x30 = lerp(ptB, ptA, t) */
     Vec4f *camRow0 = (Vec4f *)g_cameraMatrix;
@@ -657,7 +657,7 @@ void func_00300C08(void) {
     s32 counter = *(u8 *)(g_waterPool + 0x64);
     f32 t, bright;
 
-    Vec4ScaleVu0(sp0, 17.0f, *camRow0);   /* 0x41100000 */
+    Vec4ScaleVu0(sp0, 9.0f, *camRow0);    /* 0x41100000 */
     Vec4AddVu0(ptA, *camPos, sp0);
     Vec4ScaleVu0(sp0, 0.1f, *camRow0);    /* 0x3DCCCCCD */
     Vec4AddVu0(ptB, *camPos, sp0);
