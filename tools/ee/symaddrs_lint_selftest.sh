@@ -44,6 +44,15 @@ want "a second ';' in a comment is REJECTED" 1 "$T/semi.txt"
 printf 'g_delta = 0x00100030; // type:func size:0x40\n' > "$T/realattr.txt"
 want "a REAL attr (type:func size:0x40) is ACCEPTED" 0 "$T/realattr.txt"
 
+# A REAL duplicate inside ONE file must be caught. Not hypothetical: decomper-m1
+# pinned 12 names of which 4 were ALREADY pinned ~450 lines further down a file
+# they had only read around; their static checker passed and splat's parser
+# rejected it. That is the case this lint exists for - and it is also why the
+# isolation fixture below matters: "Duplicate symbol" can be a REAL clash or a
+# CONTAMINATION artifact, and only forking makes the message trustworthy.
+printf 'AlphaName = 0x00300000; // type:func first pin\nBetaName = 0x00300000; // type:func same address\n' > "$T/dup.txt"
+want "a REAL duplicate symbol in ONE file is REJECTED" 1 "$T/dup.txt"
+
 # Bands: a missing file is could-not-look, never a verdict about content.
 want "a missing file is could-not-look (2)" 2 "$T/does_not_exist.txt"
 
