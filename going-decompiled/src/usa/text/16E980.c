@@ -1726,7 +1726,16 @@ void ApplyCameraShakeAxis(void *channel, s32 axis) {
     }
     case 2: {
         f32 t3 = t * t * t;
-        f32 step = D_1A85B8 * 0.017453292f;              /* deg -> rad */
+        /* 0.017453294f = 0x3C8EFA36, read from this body's own .s.
+         * ⚠️ DO NOT "CORRECT" THIS TO A DERIVED pi/180. Deriving the constant
+         * ACCURATELY reproduces the defect: pi/180 rounded to f32, at any
+         * precision you care to write it, encodes 0x3C8EFA35 -- one ULP BELOW
+         * what the ROM holds. The value below looks wrong to anyone who knows
+         * deg->rad, and is the only correct spelling here. (The defective
+         * spelling is named by its BITS above and deliberately not written as
+         * a literal: a screen that does not strip comments would read it as
+         * live code -- see f8b02259.) */
+        f32 step = D_1A85B8 * 0.017453294f;              /* deg -> rad */
         f32 e60 = IntToFloat(sh->peak - sh->timer) * 0.016666668f;
         f32 ramp = e60 * 6.0f;
         f32 ang;
