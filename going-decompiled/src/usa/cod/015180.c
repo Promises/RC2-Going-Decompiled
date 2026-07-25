@@ -4254,7 +4254,7 @@ extern char *func_00115AC0(char *dst, const char *src, s32 n);  /* strncpy */
  * `name` (a path/glob) on (port, slot) into the caller's `table`, an array of up
  * to `maxent` 64-byte directory entries; `mode` selects the listing variant.
  *
- * Same RPC-wrapper pattern as the rest of the family (McClose/McChdir): returns
+ * Same RPC-wrapper pattern as the rest of the family (McClose/McSeek): returns
  * -0x64 / -100 if the RPC client is not initialised and -0xC8 / -200 if the
  * libmc mutex is already held, before touching anything. Additionally rejects a
  * null or empty `name` with -0xD2 / -210 — and that path, unlike the two guards
