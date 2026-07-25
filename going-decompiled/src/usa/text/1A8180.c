@@ -2088,7 +2088,317 @@ void func_002AA6B8(Moby *self, const Vec4 *refPos, Moby **list, s32 count,
 }
 #endif
 
+/**
+ * func_002AA808 — scatter up to `maxPoints` random world points through a moby's
+ * collision volume, weighted by each primitive's volume.
+ *
+ * Used by the FX spawners (sole caller func_002AC0B8) to distribute particles
+ * evenly *inside* a moby's body rather than at its origin.
+ *
+ * Pass 1 walks the moby's collision primitive list (class header +0x24, the
+ * primitive set at header+0x10; header word +0x2 = skin-mesh element count,
+ * +0x4 = primitive count, records start at +0x10 with stride 0x20). Primitives
+ * are kept only when bit `i` of `primMask` is set AND the record's flag word has
+ * bit 0x20000 set; for each kept primitive it computes an approximate volume
+ * into a weight table and accumulates the total. If the set carries a skinned
+ * mesh it is first posed into the SPR cache (SkinMobyCollisionMesh) since the
+ * type-2/4 records index scratchpad vectors at 0x70000000.
+ *
+ * The point count is then `min(maxPoints, (s32)(density * totalVolume + 0.5f))`,
+ * i.e. `density` is points-per-unit-volume, not a radius. Returns that count
+ * (0 when the moby has no primitive set / no primitives / a non-positive count).
+ *
+ * Pass 2 draws each point by roulette-wheel selection over the weight table
+ * (a primitive is picked with probability proportional to its volume), then
+ * samples a uniform point inside that primitive and writes it as a Vec4 into
+ * `outPoints[i]`. Sphere-ish primitives (types 0/1/2/4) sample by rejection —
+ * redraw a cube point until it lies inside the sphere — while the type-3
+ * cylinder samples analytically in polar coordinates (sqrt for a uniform disc).
+ *
+ * NON-OBVIOUS: the primitive-list walk is terminated by the sign bit of each
+ * record's flag word (last-record marker), NOT by the +0x4 count, and a
+ * primitive whose type is outside 0..4 is still counted and still consumes a
+ * weight slot — the slot is left holding whatever the previous iteration wrote
+ * (a compiled `switch` with an empty default arm). Both are transcribed as-is.
+ * NON-OBVIOUS: the roulette walk can land on index == acceptedCount when
+ * floating-point drift makes the draw exceed the running sum; reproduced
+ * verbatim so a tester sees the same (out-of-range) pick the ROM makes.
+ *
+ * Faithful coverage body — the matching build keeps the asm (save-layout wall).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AA808);
+#else
+extern void SkinMobyCollisionMesh(void *moby, s32 count, u32 flags);
+/* dst = src / d on x,y,z, dst.w = src.w (VU0 vdiv Q; canonical def in 183558.c). */
+extern void func_00283740(Vec4 *dst, f32 d, const Vec4 *src);
+/* dst = src * scale on ALL FOUR lanes (alternate entry inside func_00129120,
+ * cod/015180: lqc2/vmulx.xyzw/sqc2). Scale arrives in $f12. */
+extern void func_129148(Vec4 *dst, const Vec4 *src, f32 scale);
+/* out = m * v (3x3 rotate; canonical def in text/183558.c). */
+extern void func_00283A48(Vec4 *out, Vec4 *v, Vec4 *m);
+
+/* Collision-primitive record (stride 0x20) as this function reads it. Only the
+ * lanes each primitive type actually uses are named; the rest stays raw. */
+typedef struct CollPrim {
+    /* 0x00 */ u32 flags;      /* low byte = type; bit 0x20000 = spawnable;
+                                  sign bit = last record in the list */
+    /* 0x04 */ union {
+                   s32 sprIndex;    /* type 2: scratchpad vector index      */
+                   f32 height;      /* type 3: cylinder height (1/1024 u)   */
+                   s16 endIndex[2]; /* type 4: scratchpad indices of the
+                                       capsule's two endpoints             */
+               } a;
+    /* 0x08 */ u32 unk08;
+    /* 0x0C */ f32 radius;     /* types 2/4 only (1/1024 units) */
+    /* 0x10 */ Vec4 centre;    /* local centre; .w = radius for types 0/1/3 */
+} CollPrim;
+
+/* Scratchpad (SPR) vector array the skinned collision mesh is posed into. */
+#define COLL_SPR_VECS  ((const Vec4 *)0x70000000)
+
+/* Exact ROM encodings — 0x40860A92 is 4*pi/3 but 0x408601FE is a DISTINCT
+ * constant ~0.99975 of it, so neither may be re-derived from a decimal literal
+ * (see the unit's float-constant rule). 0x3FC90FDB is pi/2. */
+static const union { u32 u; f32 f; } kSphereVolFactor  = { 0x40860A92 };
+static const union { u32 u; f32 f; } kCapsuleVolFactor = { 0x408601FE };
+static const union { u32 u; f32 f; } kHalfPi           = { 0x3FC90FDB };
+
+/* Collision primitive units are 1/1024 of a moby-space unit.
+ * The ROM holds these as TWO distinct constants doing two different jobs, and the C
+ * keeps them apart for that reason: 0x3A800000 is loaded into a callee-saved FP
+ * register and MULTIPLIED by, while 0x44800000 is passed to the divide helper
+ * (func_00283740). Numerically 1/1024 either way - an exact power of two - but they
+ * are separate values in the binary.
+ * Spelled as a single literal rather than `1.0f / 1024.0f`: a compile-time division
+ * is two literals to a reader and to the float screen, which reported 0x3A800000 as
+ * an unaccounted ROM constant until this was written as one number. It also matches
+ * the spelling this unit already uses at its other two 1/1024 sites. */
+#define COLL_UNIT_SCALE   0.0009765625f   /* 0x3A800000 */
+#define COLL_UNITS_PER_M  1024.0f         /* 0x44800000 */
+
+/* Draw a uniform point inside the sphere of radius `radius` by rejection. */
+static void ScatterPointInSphere(Vec4 *out, f32 radius) {
+    do {
+        out->x = GetRandomFloatRange(-radius, radius);
+        out->y = GetRandomFloatRange(-radius, radius);
+        out->z = GetRandomFloatRange(-radius, radius);
+    } while (!(Vec3LengthVu0(out) <= radius));
+}
+
+s32 func_002AA808(Moby *moby, s32 maxPoints, Vec4 *outPoints, s32 primMask,
+                  f32 density) {
+    u8 *primSet = *(u8 **)((u8 *)*(u8 **)((u8 *)moby + 0x24) + 0x10);
+    f32 mobyScale;
+    f32 weights[20];
+    CollPrim *picked[20];
+    Vec4 tmpA;
+    Vec4 tmpB;
+    Vec4 tmpC;
+    Vec4 tmpD;
+    Vec4 sample;
+    CollPrim *prim;
+    s32 acceptedCount;
+    s32 primIndex;
+    f32 totalVolume;
+    s32 pointCount;
+    s32 i;
+
+    if (primSet == 0) {
+        return 0;
+    }
+    /* Pose the skinned collision mesh into the SPR cache — types 2 and 4 index
+     * it through COLL_SPR_VECS below. */
+    if (*(s16 *)(primSet + 2) != 0) {
+        SkinMobyCollisionMesh(moby, *(s16 *)(primSet + 2), 0);
+    }
+    if (*(s32 *)(primSet + 4) <= 0) {
+        return 0;
+    }
+
+    mobyScale = *(f32 *)((u8 *)moby + 0x2C);
+    prim = (CollPrim *)(primSet + 0x10);
+    totalVolume = 0.0f;
+    acceptedCount = 0;
+    primIndex = 0;
+
+    /* Pass 1 — per-primitive volume weights. */
+    do {
+        u32 flags = prim->flags;
+        s32 type = (s32)(flags & 0xFF);
+
+        if (((primMask >> primIndex) & 1) != 0 && (flags & 0x20000) != 0) {
+            f32 radius;
+
+            picked[acceptedCount] = prim;
+            switch (type) {
+            case 0:
+            case 1:
+                /* Sphere: centre.w carries the radius in collision units. */
+                tmpA = prim->centre;
+                ScaleVec4IncludingW(&tmpA, mobyScale * COLL_UNIT_SCALE, &tmpA);
+                radius = tmpA.w;
+                weights[acceptedCount] =
+                    radius * (radius * (radius * kSphereVolFactor.f));
+                break;
+
+            case 2:
+                /* Sphere attached to a skinned vertex: centre is an offset from
+                 * the posed scratchpad vector, radius lives at +0xC. */
+                tmpA = COLL_SPR_VECS[prim->a.sprIndex];
+                tmpB = prim->centre;
+                Vec4AddVu0(&tmpA, &tmpA, &tmpB);
+                Vec4ScaleVu0(&tmpA, mobyScale * COLL_UNIT_SCALE, &tmpA);
+                radius = prim->radius * mobyScale * COLL_UNIT_SCALE;
+                weights[acceptedCount] =
+                    radius * (radius * (radius * kSphereVolFactor.f));
+                break;
+
+            case 3: {
+                /* Cylinder: centre.w = radius, +0x4 = height. */
+                f32 height;
+
+                tmpA = prim->centre;
+                Vec4ScaleVu0(&tmpA, mobyScale, &tmpA);
+                radius = tmpA.w * mobyScale * COLL_UNIT_SCALE;
+                height = prim->a.height * COLL_UNIT_SCALE * mobyScale;
+                weights[acceptedCount] =
+                    radius * (radius * (radius * kCapsuleVolFactor.f)) +
+                    radius * (radius * kHalfPi.f) * height;
+                break;
+            }
+
+            case 4: {
+                /* Capsule between two posed scratchpad vertices. */
+                f32 length;
+
+                func_129148(&tmpA, &COLL_SPR_VECS[prim->a.endIndex[0]],
+                            mobyScale * COLL_UNIT_SCALE);
+                func_129148(&tmpB, &COLL_SPR_VECS[prim->a.endIndex[1]],
+                            mobyScale * COLL_UNIT_SCALE);
+                Vec4SubVu0(&tmpC, &tmpA, &tmpB);
+                length = Vec3LengthVu0(&tmpC);
+                radius = prim->radius * mobyScale * COLL_UNIT_SCALE;
+                weights[acceptedCount] =
+                    radius * (radius * kHalfPi.f) * length;
+                break;
+            }
+
+            default:
+                /* No weight written — the slot keeps its previous contents and
+                 * the primitive is still counted (verbatim from the asm). */
+                break;
+            }
+            totalVolume += weights[acceptedCount];
+            acceptedCount++;
+        }
+        primIndex++;
+        prim = (CollPrim *)((u8 *)prim + 0x20);
+    } while ((((CollPrim *)((u8 *)prim - 0x20))->flags >> 31) == 0);
+
+    pointCount = (s32)(density * totalVolume + 0.5f);
+    if (maxPoints < pointCount) {
+        pointCount = maxPoints;
+    }
+    if (pointCount <= 0) {
+        return pointCount;
+    }
+
+    /* Pass 2 — one scattered point per output slot. */
+    for (i = 0; i < pointCount; i++) {
+        f32 draw = GetRandomFloatRange(0.0f, totalVolume);
+        CollPrim *sel;
+        s32 k = 0;
+        f32 radius;
+
+        while (k < acceptedCount && !(draw < weights[k])) {
+            draw -= weights[k];
+            k++;
+        }
+        sel = picked[k];
+
+        switch ((s32)(sel->flags & 0xFF)) {
+        case 0:
+        case 1:
+            /* Sphere at the primitive's local centre. */
+            tmpA = sel->centre;
+            Vec4ScaleVu0(&tmpA, mobyScale, &tmpA);
+            radius = tmpA.w * mobyScale * COLL_UNIT_SCALE;
+            func_00283740(&tmpA, COLL_UNITS_PER_M, &tmpA);
+            ScatterPointInSphere(&tmpB, radius);
+            Vec4AddVu0(&tmpB, &tmpB, &tmpA);
+            func_00283A48(&tmpB, &tmpB, (Vec4 *)((u8 *)moby + 0xC0));
+            Vec4AddVu0(&outPoints[i], &tmpB, (Vec4 *)((u8 *)moby + 0x10));
+            break;
+
+        case 2:
+            /* Sphere offset from a posed scratchpad vertex. */
+            tmpA = COLL_SPR_VECS[sel->a.sprIndex];
+            tmpC = sel->centre;
+            Vec4AddVu0(&tmpA, &tmpA, &tmpC);
+            Vec4ScaleVu0(&tmpA, mobyScale, &tmpA);
+            radius = sel->radius * mobyScale * COLL_UNIT_SCALE;
+            func_00283740(&tmpA, COLL_UNITS_PER_M, &tmpA);
+            ScatterPointInSphere(&tmpC, radius);
+            Vec4AddVu0(&tmpC, &tmpC, &tmpA);
+            func_00283A48(&tmpC, &tmpC, (Vec4 *)((u8 *)moby + 0xC0));
+            Vec4AddVu0(&outPoints[i], &tmpC, (Vec4 *)((u8 *)moby + 0x10));
+            break;
+
+        case 3: {
+            /* Cylinder: polar sample (sqrt of a uniform r^2 gives a uniform
+             * disc) plus a uniform height offset. NOTE this arm applies the
+             * moby's translation but NOT its rotation matrix — as in the ROM. */
+            f32 height;
+            f32 angle;
+            f32 sampleRadius;
+
+            tmpA = sel->centre;
+            Vec4ScaleVu0(&tmpA, mobyScale, &tmpA);
+            radius = tmpA.w * mobyScale * COLL_UNIT_SCALE;
+            height = sel->a.height * mobyScale * COLL_UNIT_SCALE;
+            func_00283740(&tmpA, COLL_UNITS_PER_M, &tmpA);
+
+            sampleRadius = func_002835C0(
+                GetRandomFloatRange(0.0f, radius * radius));
+            tmpB.z = GetRandomFloatRange(0.0f, height);
+            angle = GetRandomAngle();
+            tmpB.x = func_00283B30(angle) * sampleRadius;
+            tmpB.y = func_00283B48(angle) * sampleRadius;
+            Vec4AddVu0(&tmpB, &tmpB, (Vec4 *)((u8 *)moby + 0x10));
+            Vec4AddVu0(&outPoints[i], &tmpA, &tmpB);
+            break;
+        }
+
+        case 4: {
+            /* Capsule: pick a uniform point along the axis, then a uniform
+             * point in the sphere of the capsule's radius around it. */
+            f32 t;
+
+            func_129148(&tmpA, &COLL_SPR_VECS[sel->a.endIndex[0]], mobyScale);
+            func_129148(&tmpB, &COLL_SPR_VECS[sel->a.endIndex[1]], mobyScale);
+            Vec4SubVu0(&tmpC, &tmpB, &tmpA);
+            t = GetRandomFloatRange(0.0f, 1.0f);
+            Vec4ScaleVu0(&tmpC, t, &tmpC);
+            Vec4AddVu0(&tmpD, &tmpC, &tmpA);
+            func_00283740(&tmpD, COLL_UNITS_PER_M, &tmpD);
+            radius = sel->radius * mobyScale * COLL_UNIT_SCALE;
+
+            ScatterPointInSphere(&sample, radius);
+            Vec4AddVu0(&sample, &sample, &tmpD);
+            func_00283A48(&sample, &sample, (Vec4 *)((u8 *)moby + 0xC0));
+            Vec4AddVu0(&outPoints[i], &sample, (Vec4 *)((u8 *)moby + 0x10));
+            break;
+        }
+
+        default:
+            /* Slot left untouched (verbatim from the asm). */
+            break;
+        }
+    }
+    return pointCount;
+}
+#endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AAF98);
@@ -2813,35 +3123,32 @@ s32 func_002AC088(Moby *moby) {
 }
 #endif
 
-/* func_002AA808: reserve up to `max` spawn slots for `owner` around `origin`
- * within `radius`, filling `outRecs` (0x10-byte records) and returning the
- * count actually granted. External (same unit, still INCLUDE_ASM). */
-extern s32 func_002AA808(void *owner, s32 max, void *outRecs, void *origin, f32 radius);
-/* SpawnParticleType04 (0x2BBD70): emit one type-04 particle from a reserved
- * record at world position `pos`. Trailing ints are lifetime/size/blend params. */
-extern void SpawnParticleType04(void *rec, Vec4 *pos, u32 color, s32 a, s32 b,
+/* SpawnParticleType04 (0x2BBD70): emit one type-04 particle whose spawn point is
+ * `origin` and whose target/offset position is `pos`. Trailing ints are
+ * lifetime/size/blend params. */
+extern void SpawnParticleType04(Vec4 *origin, Vec4 *pos, u32 color, s32 a, s32 b,
                                 s32 c, s32 d, s32 e);
 
 /**
  * func_002AC0B8 — emit a small burst of type-04 particles around a point.
  *
- * Reserves up to 20 particle slots for `owner` within radius 14 of `basePos`
- * (func_002AA808), then for each granted slot builds a jittered offset direction
- * from two random angles (func_002AFE68, magnitude 0.03), adds it to `basePos`,
- * nudges the result up in Z by 0.015, and spawns a type-04 particle there with
- * two randomised lifetime parameters (RandRangeInclusive 20..35 and 40..60).
- * `arg3` is forwarded to the reservation helper (owner-context, UNCONFIRMED).
+ * Scatters up to 20 points through the collision volume of `owner` at density
+ * 14 (func_002AA808, honouring the `primMask` primitive filter), then for each
+ * point builds a jittered offset direction from two random angles
+ * (func_002AFE68, magnitude 0.03), adds it to `basePos`, nudges the result up in
+ * Z by 0.015, and spawns a type-04 particle from that scatter point with two
+ * randomised lifetime parameters (RandRangeInclusive 20..35 and 40..60).
  */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC0B8);
 #else
-void func_002AC0B8(void *owner, Vec4 *basePos, void *arg3) {
-    u8  spawnRecs[20][0x10];   /* func_002AA808 fills up to 20 0x10-byte records */
+void func_002AC0B8(Moby *owner, Vec4 *basePos, s32 primMask) {
+    Vec4 scatterPoints[20];    /* func_002AA808 fills up to 20 Vec4 spawn points */
     Vec4 dir;
     s32 count;
     s32 i;
 
-    count = func_002AA808(owner, 20, spawnRecs, arg3, 14.0f);
+    count = func_002AA808(owner, 20, scatterPoints, primMask, 14.0f);
     if (count <= 0) {
         return;
     }
@@ -2857,7 +3164,7 @@ void func_002AC0B8(void *owner, Vec4 *basePos, void *arg3) {
 
         r1 = func_002A8688(20, 35);   /* RandRangeInclusive */
         r2 = func_002A8688(40, 60);
-        SpawnParticleType04(spawnRecs[i], &dir, 0x7000A0FFu, 0xFF, r1, 30, r2, 1);
+        SpawnParticleType04(&scatterPoints[i], &dir, 0x7000A0FFu, 0xFF, r1, 30, r2, 1);
     }
 }
 #endif
