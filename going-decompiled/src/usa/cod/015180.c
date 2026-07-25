@@ -4246,8 +4246,74 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127CC0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127E40);
 
-// recovered splat-dropped code (epilogue-stump mis-split): raw words, byte-exact
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127E48);
+extern u8    D_00141BB0[];   /* libmc GetDir send-buffer (1044 bytes) */
+extern char *func_00115AC0(char *dst, const char *src, s32 n);  /* strncpy */
+
+/**
+ * func_00127E48 = McGetDir (libmc): request a memory-card directory listing for
+ * `name` (a path/glob) on (port, slot) into the caller's `table`, an array of up
+ * to `maxent` 64-byte directory entries; `mode` selects the listing variant.
+ *
+ * Same RPC-wrapper pattern as the rest of the family (McClose/McChdir): returns
+ * -0x64 / -100 if the RPC client is not initialised and -0xC8 / -200 if the
+ * libmc mutex is already held, before touching anything. Additionally rejects a
+ * null or empty `name` with -0xD2 / -210 — and that path, unlike the two guards
+ * above, happens AFTER the mutex was taken, so it must release it first.
+ *
+ * The entry table is only cache-flushed when `maxent >= 0`; a negative maxent
+ * (a "count only, don't fill" request) skips the writeback entirely, so `table`
+ * is allowed to be garbage in that case. maxent << 6 is the byte size at 64
+ * bytes per entry.
+ *
+ * Release-or-hold: on RPC success the mutex is deliberately NOT released — the
+ * call is in flight and McSync's completion path releases it, with the pending
+ * command number (13) recorded in D_00137E68. Only an RPC submission failure
+ * releases the mutex here, since no completion will ever arrive.
+ *
+ * Note the send buffer is D_00141BB0, NOT the D_00141B80 used by the smaller
+ * calls in this family: the 1024-byte name field needs a 0x414-byte request.
+ * The name is copied with a bounded strncpy(dst, name, 1023) that does NOT
+ * guarantee termination, hence the explicit terminator store at +0x413.
+ * Returns the sceSifCallRpc result (0 = successfully submitted).
+ */
+s32 func_00127E48(s32 port, s32 slot, const char *name, s32 mode,
+                  s32 maxent, void *table) {
+    u8 *client = D_00141B00;
+    u8 *req;
+    s32 r;
+
+    if (*(s32 *)(client + 0x24) == 0) {
+        return -0x64;
+    }
+    if (func_0011AC70(D_00137E6C) < 0) {
+        return -0xC8;
+    }
+    if (name == NULL || *name == '\0') {
+        func_0011AC40(D_00137E6C);
+        return -0xD2;
+    }
+
+    req = D_00141BB0;
+    *(s32 *)(req + 0x00) = port;
+    *(s32 *)(req + 0x04) = slot;
+    *(s32 *)(req + 0x08) = mode;
+    *(s32 *)(req + 0x0C) = maxent;
+    *(void **)(req + 0x10) = table;
+    func_00115AC0((char *)(req + 0x14), name, 0x3FF);
+    req[0x413] = 0;
+
+    if (maxent >= 0) {
+        func_0011CEC8(table, maxent << 6);
+    }
+
+    r = func_0011D620(client, 13, 1, req, 0x414, D_001430C0, 4, 0, 0);
+    if (r == 0) {
+        D_00137E68 = 13;
+    } else {
+        func_0011AC40(D_00137E6C);
+    }
+    return r;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127F90);
 
