@@ -1135,7 +1135,7 @@ s32 ComputeEmitterPan(SoundEmitterSlot *slot, Vec4 *pos) {
         *(f32 *)((u8 *)slot + 0x40) = -1.0f;
     }
 
-    return FloatToInt(azimuth * 57.2958f);   /* radians -> degrees, trunc    */
+    return FloatToInt(azimuth * 57.295776f);   /* radians -> degrees, trunc    */
 }
 #endif
 

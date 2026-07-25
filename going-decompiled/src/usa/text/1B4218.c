@@ -1931,7 +1931,7 @@ void UpdateMobyMotionVelocity(Moby *moby, MobyMotionController *ctrl, Vec4 *targ
              * +/- the max turn rate off the caller heading. */
             f32 baseAngle = WrapAnglePiSum(Atan2fPoly(ctrl->wallContact[0] - mobyPos->x,
                                                       ctrl->wallContact[1] - mobyPos->y),
-                                           3.14159274f);
+                                           3.14159f);
             f32 turnErr = WrapAnglePiDiff(speed, baseAngle);
             if (g_mobyMaxTurnRate < turnErr) {
                 turnErr = g_mobyMaxTurnRate;
@@ -1966,7 +1966,7 @@ resolve:
             if (ctrl->airborneFrames < 2 && (posZ - ctrl->groundHeight) < 0.15f) {
                 /* Just left a steep-enough slope: cancel the into-slope velocity. */
                 f32 normalLen = func_002837D0((Vec4 *)ctrl->groundNormal);
-                if (0.0872502104f < Atan2fPoly(ctrl->groundNormal[2], normalLen)) {
+                if (0.087266475f < Atan2fPoly(ctrl->groundNormal[2], normalLen)) {
                     f32 intoSlope = -Vec3DotVu0((Vec4 *)&ctrl->velAccum, (Vec4 *)ctrl->groundNormal);
                     if (intoSlope < ctrl->verticalVel) {
                         ctrl->verticalVel = -Vec3DotVu0((Vec4 *)&ctrl->velAccum, (Vec4 *)ctrl->groundNormal);
@@ -1987,7 +1987,7 @@ resolve:
             }
             func_002ABAE8(&ctrl->verticalVel,
                           ctrl->groundHeight - *(f32 *)((u8 *)moby + 0x18),
-                          0.0111106029f, 0.0111106029f, 1.0f);   /* 0x3C360B61; EU 0x3C83126F */
+                          0.011111111f, 0.011111111f, 1.0f);   /* 0x3C360B61; EU 0x3C83126F */
         }
     }
 }
