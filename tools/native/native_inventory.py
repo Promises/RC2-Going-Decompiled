@@ -17,7 +17,10 @@ NOR a TARGET_NATIVE #else body, and splits them into:
 The (b) total is the honest "remaining native portable-#else work" number.
 Run from repo root:  .venv-decomp/bin/python tools/native/native_inventory.py
 """
-import os, re, glob
+import os, re, glob, sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from guard_blocks import walled_and_bodied
 
 SRC = "going-decompiled/src/usa/text"
 ASM = "going-decompiled/asm/usa/nonmatchings/text"
@@ -35,18 +38,20 @@ hw_re    = re.compile(r'\b(lq|sq|qmfc2|qmtc2|cfc2|ctc2|vcallms|vcallmsr|'
 mmio_re  = re.compile(r'lui\s+\$\w+,\s*0x1[0-3][0-9a-fA-F][0-9a-fA-F]\b')
 
 def bare_funcs(cfile):
-    """INCLUDE_ASM funcs NOT inside a #ifndef TARGET_NATIVE arm (= no #else)."""
-    out, stack = [], []
-    for line in open(cfile, errors='replace'):
-        s = line.strip()
-        if s.startswith('#if'):
-            stack.append(s.startswith('#ifndef TARGET_NATIVE'))
-        elif s.startswith('#endif'):
-            if stack: stack.pop()
-        m = inc_re.search(line)
-        if m and not any(stack):
-            out.append(m.group(1))
-    return out
+    """INCLUDE_ASM funcs with NO portable #else body in the same guard.
+
+    Delegates to the shared guard scanner. The previous version tested
+    `startswith('#ifndef TARGET_NATIVE')`, which is 1 of the 5 opener spellings
+    in use, and had no `#else` handling at all - so under `#ifdef TARGET_NATIVE`
+    (109 blocks, body in the FIRST arm and INCLUDE_ASM in the second) it read the
+    guard inside out and reported the function as BARE.
+
+    MEASURED: 17 USA functions were reported bare while having a portable body.
+    That direction is the dangerous one - it inflates work REMAINING, so the
+    error can never surface as a failure and nobody re-opens it.
+    """
+    walled, _bodied = walled_and_bodied(open(cfile, errors='replace').read())
+    return sorted(walled)
 
 def classify(unit, func):
     s = os.path.join(ASM, unit, func + ".s")
