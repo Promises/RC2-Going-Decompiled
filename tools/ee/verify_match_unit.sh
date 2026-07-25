@@ -40,6 +40,30 @@
 #   3  UNVERIFIABLE — the tool cannot decide (unresolvable symbol, reloc type it
 #                     does not model, function absent from the ROM window). NOT
 #                     a pass and NOT a fail; it is its own visible state.
+#
+# COUNTING FUNCTIONS (what a sweep's denominator must be)
+# ------------------------------------------------------
+# Sweeps of one unit disagreed (622 vs 684/685) purely by SELECTION, so measured
+# once for usa cod/015180 and recorded here. `objdump -d` on the BASE object
+# yields 794 blocks, which is NOT a function count - subtract 107 `.L` local
+# branch labels, 1 `.NON_MATCHING` object marker and 7 `D_` pre-linked word
+# blobs to get:
+#
+#   679 code functions  <-- the correct denominator
+#     482 still INCLUDE_ASM -> those match BY CONSTRUCTION (the gate re-asserts
+#         the original bytes against themselves; they are not decomp progress)
+#     197 real decompiled C bodies  <-- the number that actually means anything
+#
+# Cross-checked independently: 482 == the `^INCLUDE_ASM` line count in
+# src/usa/cod/015180.c. (A bare `grep -c INCLUDE_ASM` says 510 - 28 of those are
+# comment prose, not directives.)
+#
+# Do NOT take the denominator from the TARGET object: it lists only 666 code
+# blocks because 13 already-matched functions had their frozen `.s` DELETED, so
+# they exist as C in the base but have no target-side block at all. Its 672
+# `F .text` symtab entries are a third, also-wrong number (24 are zero-size).
+# Quoting a big MATCH total without the INCLUDE_ASM/real-C split overstates
+# progress by roughly 3.4x on this unit.
 set -u
 
 usage() {
@@ -61,15 +85,23 @@ SYMS="going-decompiled/symbol_addrs/$REGION/symbol_addrs.txt"
 
 # The flat .rom is gitignored and lives in the MAIN repo, which is not
 # necessarily this worktree. Search this root first, then sibling checkouts.
+# The boot-ELF basename is REGION-SPECIFIC: keying every region off the USA
+# name made region 'eu' permanently unfindable, so an EU invocation exited
+# UNVERIFIABLE no matter how correct the decomp was.
+case "$REGION" in
+  usa|usa_v101) ROM_NAME="SCUS_972.68.rom"; ROM_ENV="${EE_ROM_USA:-}";;
+  eu)           ROM_NAME="SCES_516.07.rom"; ROM_ENV="${EE_ROM_EU:-}";;
+  *)            echo "ARG ERROR: unknown region '$REGION' (expected usa, usa_v101 or eu)" >&2; exit 2;;
+esac
 ROM=""
 for cand in \
-  "$ROOT/extracted/$REGION/SCUS_972.68.rom" \
-  "$ROOT/../ps2-gc-re/extracted/$REGION/SCUS_972.68.rom" \
-  "${EE_ROM_USA:-}" ; do
+  "$ROOT/extracted/$REGION/$ROM_NAME" \
+  "$ROOT/../ps2-gc-re/extracted/$REGION/$ROM_NAME" \
+  "$ROM_ENV" ; do
   [ -n "$cand" ] && [ -f "$cand" ] && { ROM="$cand"; break; }
 done
 if [ -z "$ROM" ]; then
-  echo "UNVERIFIABLE: flat ROM for region '$REGION' not found (set EE_ROM_USA)" >&2
+  echo "UNVERIFIABLE: flat ROM '$ROM_NAME' for region '$REGION' not found" >&2
   exit 3
 fi
 
@@ -117,13 +149,23 @@ FN     = os.environ["FN"]
 ROM    = os.environ["ROM"]
 SYMS   = os.environ["SYMS"]
 REGION = os.environ["REGION"]
-ROM_BASE = 0x100080          # flat .rom convention: file offset = vaddr - 0x100080
+# Flat .rom convention: file offset = vaddr - 0x100080. MEASURED for BOTH
+# regions rather than assumed from USA: locating two independent known anchors
+# in the EU rom (the reloc-free prologue of the fn at 0x11D3A0, and memset's
+# 96-byte body at 0x115484) each yields a UNIQUE hit whose implied delta is
+# 0x100080. Cross-checked end-to-end - all 1524 words of eu cod/0321A0's frozen
+# asm equal the EU rom at this offset.
+ROM_BASE = 0x100080
 
-# Per-region _gp (CLAUDE.md). GPREL16 resolves as `symbol + addend - _gp`,
-# sign-extended to 16 bits. These are not assumed: solving the 31 independent
-# GPREL16 slots in usa cod/015180's snd_Pump against the ROM yields exactly one
-# consistent value, 0x1AEFF0, which is the documented USA gp. A region with no
-# entry here keeps GPREL16 UNVERIFIABLE rather than guessing.
+# Per-region _gp. GPREL16 resolves as `symbol + addend - _gp`, sign-extended to
+# 16 bits. NEITHER value is assumed from CLAUDE.md - each was SOLVED, and each
+# gp-relative slot independently implies `_gp = symbol_vaddr - signext16(imm)`,
+# so a real gp is the value every slot agrees on:
+#   usa 0x1AEFF0 - unique across all 86 GPREL16 slots in usa cod/0321A0
+#   eu  0x1AF070 - unique across all 92 GPREL16 slots in eu  cod/0321A0
+# Both solved from immediates verified equal to their region's rom bytes, so the
+# input is the binary itself. A region with no entry here keeps GPREL16
+# UNVERIFIABLE rather than guessing.
 GP = {"usa": 0x1AEFF0, "eu": 0x1AF070}.get(REGION)
 
 MATCH, DIFFERS, ARGERR, UNVERIFIABLE = 0, 1, 2, 3
