@@ -2136,7 +2136,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F0A8);
 #else
 void func_0027F0A8(const u64 *corners, u64 tex0) {
     u8 *p = (u8 *)g_frameDmaCursor[0];
-    const s32 *coords = (const s32 *)(uintptr_t)tex0; /* arg1 is used as a pointer */
+    const s32 *coords = (const s32 *)(unsigned long)tex0; /* arg1 is used as a pointer */
 
     *(u32 *)(p + 0x00) = 0x10000005; /* DMATAG cnt, 5 qwords */
     *(u32 *)(p + 0x04) = 0;
@@ -2623,7 +2623,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280120);
 void func_00280120(s32 x, s32 arg1, s32 arg2, const char *str, s32 maxChars) {
     s32 width = func_0027F818(str, maxChars);
     u64 tex0 = GetUiTextureTex0(2);
-    DrawFixedFontString(x - width, arg1, arg2, (s32)(uintptr_t)str, maxChars, tex0,
+    DrawFixedFontString(x - width, arg1, arg2, (s32)(unsigned long)str, maxChars, tex0,
                         g_debugFontGlyphTable);
 }
 #endif
@@ -2646,7 +2646,7 @@ s32 func_00280250(s32 x, s32 arg1, s32 arg2, const char *str, s32 maxChars) {
     s32 width = func_0027F818(str, maxChars);
     s32 cx = x - (width >> 1);
     u64 tex0 = GetUiTextureTex0(2);
-    DrawFixedFontString(cx, arg1, arg2, (s32)(uintptr_t)str, maxChars, tex0,
+    DrawFixedFontString(cx, arg1, arg2, (s32)(unsigned long)str, maxChars, tex0,
                         g_debugFontGlyphTable);
     return cx;
 }
@@ -2662,7 +2662,7 @@ s32 func_002802E8(s32 x, s32 arg1, s32 arg2, const char *str, s32 maxChars) {
     s32 width = func_0027F838(str, maxChars);
     s32 cx = x - (width >> 1);
     u64 tex0 = GetUiTextureTex0(3);
-    DrawFixedFontString(cx, arg1, arg2, (s32)(uintptr_t)str, maxChars, tex0, D_264250);
+    DrawFixedFontString(cx, arg1, arg2, (s32)(unsigned long)str, maxChars, tex0, D_264250);
     return cx;
 }
 #endif
