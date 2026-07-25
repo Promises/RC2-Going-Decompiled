@@ -4090,7 +4090,51 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001272A8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127340);
 
-// recovered splat-dropped code (epilogue-stump mis-split): raw words, byte-exact
+/**
+ * func_00127348 = McInit (libmc): bring up the EE-side memory-card RPC client.
+ * Takes no arguments. Returns 0 on success (the IOP-side status word), or a
+ * negative error: SignalSema's result minus 100 if releasing the mutex failed,
+ * -0x78 / -120 if mcserv.irx is older than 0x20A, -0x79 / -121 if mcman.irx is
+ * older than 0x20E.
+ *
+ * Sequence: create the libmc mutex D_00137E6C once (CreateSema with
+ * maxCount/initCount 1) if it has never been made (handle < 0); drain any
+ * in-flight call via McSync(0,0,0); take the mutex (WaitSema); sceSifInitRpc(0);
+ * then bind the libmc server (id 0x80000400) onto the client block D_00141B00.
+ *
+ * Non-obvious behaviour:
+ *  - The bind is a RETRY loop, not a single call. sceSifBindRpc only *starts* the
+ *    bind, so the code then polls the client's ready word (D_00141B00 + 0x24)
+ *    and, while it is still 0, burns a calibrated ~0x100000-iteration delay loop
+ *    (padded with nops so the timing does not depend on the pipeline) before
+ *    binding again. It only proceeds once the IOP reports the client ready.
+ *  - A bind that returns negative is NOT retried: it prints "bind error libmc"
+ *    via Kprintf and then HANGS FOREVER in a deliberate infinite loop. Losing the
+ *    memory-card server is treated as unrecoverable.
+ *  - The version handshake is the point of RPC command 0xFE: the 0xC-byte reply
+ *    is [status, mcserv version, mcman version]. Each version failure clears the
+ *    client-ready word (+0x24) so later Mc* wrappers refuse to run, which is the
+ *    same "de-initialise" store used on the mutex-release failure path.
+ *  - Unlike the per-call wrappers, McInit RELEASES the mutex itself (SignalSema)
+ *    rather than leaving it for McSync, because the 0xFE handshake is awaited
+ *    synchronously here and no completion callback will arrive for it.
+ *
+ * MATCH STATUS: NOT byte-exact - parked at 89.26% (objdiff, USA cod/015180).
+ * The C below is semantically correct and compiles to instruction-for-instruction
+ * equivalent code: both delay loops are byte-identical (lui 0x10 / nop / addiu -1
+ * / 4x nop / bnez / nop, and the 6-nop hang loop), the SemaParam stores land in
+ * the original's order and slots (20(sp), then 24(sp) in the jal delay slot), and
+ * every branch form and constant matches (bgezl, slti 522/526, -100/-120/-121).
+ * The ONLY residual is register colouring: the original allocates SEVEN
+ * callee-saved registers (s0-s6, 176-byte frame) because it keeps a redundant
+ * third %hi(0x14) base live alongside both derived pointers, whereas ee-gcc 2.9
+ * folds that base away and needs only SIX (s0-s4, 144-byte frame). That is a
+ * 6-instruction delta consisting purely of the extra sd/ld pair plus frame
+ * padding. No C phrasing controls the allocator here - measured levers, all
+ * worse or neutral: hoisting the request pointer above the loop 87.18%, hoisting
+ * the result pointer 85.22%, array-form client store in the first error arm
+ * 87.59%, in the third arm 87.44%. This is the known register-colouring wall.
+ */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127348);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127500);
