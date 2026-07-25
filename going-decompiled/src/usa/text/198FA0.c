@@ -806,8 +806,24 @@ void func_00299918(void) {
  * a single %gp_rel($gp) load in the jr delay slot, but under the unit's -G0
  * model cc1 emits the absolute lui/lw pair for a normal extern (the same
  * symbol is accessed absolutely in func_00299968) — the reload-artifact wall
- * named in the header. Left as asm. */
+ * named in the header. Left as asm for the ROM arm; the portable arm below is
+ * behaviourally faithful and is NOT a byte-match claim. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299960);
+#else
+/* Declared again here because the ROM arm's declaration + gas equate sit a few
+ * lines BELOW this guard, and the INCLUDE_ASM must not be moved (its position
+ * fixes this function's placement in .text). Scoped to the portable arm. */
+extern s32 g_savePromptLatch;
+
+/** Peek the latched save-prompt flag without consuming it.
+ *  Companion to func_00299968, which reads-and-clears the same word;
+ *  this one only reads, so repeated calls keep observing a pending prompt.
+ *  @return the raw latch value at 0x1B19BC (non-zero while a prompt is armed). */
+s32 func_00299960(void) {
+    return g_savePromptLatch;
+}
+#endif
 
 /* Latched event flag at g_pSkyShellSpinRates+0xAC (0x1B19BC): an unrelated
  * bss word splat attributes to the spin-rate symbol; aliased via a gas
