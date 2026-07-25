@@ -4440,7 +4440,45 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012AFC0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012B0D8);
 
+/**
+ * func_0012B138 — saturating halfword -> byte pack (VU0 macro mode).
+ *
+ * Converts 384 signed halfwords to 384 unsigned bytes, clamping each to [0, 255]:
+ * a clamp-and-pack blit, the classic "fixed-point accumulator -> 8-bit pixel/PCM"
+ * conversion. `dst` receives 384 bytes; `src` supplies 384 halfwords (768 bytes).
+ *
+ * The ROM does it 16 halfwords at a time with the EE's parallel ops: two `lq` loads,
+ * `pminh`/`pmaxh` against 0x00FF and zero for the saturation, `ppacb` to take the low
+ * byte of each halfword, one `sq` out. 24 iterations x 16 = 384.
+ *
+ * NOTE the clamp constant is a 128-bit value EMBEDDED IN THE INSTRUCTION STREAM at
+ * 0x12B180 (four `.word 0x00FF00FF` between the loop and the `jr ra`), loaded with
+ * `lq t3,0(t2)` where t2 is an address inside this very function. That is unusual and
+ * it is why the C arm cannot be byte-exact here: the constant is part of the code.
+ *
+ * `pmaxh` against $zero clamps the LOW end, so negative inputs become 0 rather than
+ * wrapping — the saturation is genuinely two-sided, not a mask.
+ *
+ * Present identically in USA and EU (same first word, same 24 instructions).
+ */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012B138);
+#else
+void func_0012B138(u8 *dst, const s16 *src) {
+    s32 i;
+
+    /* The ROM packs 16 at a time; the visible effect is elementwise and in order,
+     * because `ppacb t2, t1, t0` places t0's eight low bytes below t1's eight, and
+     * the store lands at the pre-increment `dst`. So a linear loop is faithful. */
+    for (i = 0; i < 384; i++) {
+        s16 v = src[i];
+
+        if (v > 255) v = 255;   /* pminh against 0x00FF */
+        if (v < 0)   v = 0;     /* pmaxh against $zero  */
+        dst[i] = (u8)v;         /* ppacb: low byte of each halfword */
+    }
+}
+#endif
 
 /**
  * Set bit 23 of the hardware register at 0x10002010 (IPU_CTRL) to the low bit of
