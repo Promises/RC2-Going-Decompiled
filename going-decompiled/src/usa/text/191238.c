@@ -3869,6 +3869,12 @@ s32 MapEvictCacheSlot(void) {
  * loop under it is genuine code, not padding, if anyone revisits the carve. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00296490);
 
+/* MapCompositeThumbnailMask: the real interior body described above.
+ * splat only emits an .s for a name it sees in an INCLUDE_ASM, so this
+ * reference is what keeps the body in the tree (and promotes its interior
+ * alabel to a real glabel). */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapCompositeThumbnailMask);
+
 /* MapSetCurrentLevel(level): set the galactic-map current level and refresh the
  * availability flag. Stores `level` into g_mapCache.currentLevel then calls
  * MapUpdateLevelAvailability.

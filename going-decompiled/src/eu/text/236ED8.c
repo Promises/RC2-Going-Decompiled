@@ -1334,6 +1334,12 @@ void *func_0033AEF8(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033AF60);
 
+/* GuiConfirmPopupInit: interior body split at the named symbol.
+ * splat only emits an .s for a name it sees in an INCLUDE_ASM, so this
+ * reference is what keeps the body in the tree (and promotes its interior
+ * alabel to a real glabel). */
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiConfirmPopupInit);
+
 /* func_0033B218 = GuiConfirmPopupTick: per-frame confirm-popup layout, then bump
  * the current cutscene unlock record. The four icon rows (+0x8/+0x54/+0xA0/+0xEC)
  * sit at the placement record origin (*(w+0x4)); the three text rows
@@ -1681,6 +1687,12 @@ void *func_0033B960(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033B9F0);
 
+/* GuiLevelInfoPanelInit: interior body split at the named symbol.
+ * splat only emits an .s for a name it sees in an INCLUDE_ASM, so this
+ * reference is what keeps the body in the tree (and promotes its interior
+ * alabel to a real glabel). */
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiLevelInfoPanelInit);
+
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033BE48);
 
 /* func_0033BE50 = GuiLevelInfoPanelTick: per-frame layout for the galactic-map
@@ -1810,6 +1822,12 @@ void *func_0033C3C8(void *p) {
 #endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033C440);
+
+/* GuiProgressBarWidgetInit: interior body split at the named symbol.
+ * splat only emits an .s for a name it sees in an INCLUDE_ASM, so this
+ * reference is what keeps the body in the tree (and promotes its interior
+ * alabel to a real glabel). */
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiProgressBarWidgetInit);
 
 /* func_0033C5B0: when the +0x21C flag is set, position the element at p+0x170
  * from the anchor vector at *(p+0x20C): x = anchor[0] + D_1ADD80; y = anchor[1]
@@ -2097,6 +2115,12 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033CFD8);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033D088);
 
+/* GuiIconListScreenInit: interior body split at the named symbol.
+ * splat only emits an .s for a name it sees in an INCLUDE_ASM, so this
+ * reference is what keeps the body in the tree (and promotes its interior
+ * alabel to a real glabel). */
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiIconListScreenInit);
+
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033D460);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033D468);
@@ -2117,6 +2141,12 @@ void *func_0033DC60(void *p) {
 #endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033DC90);
+
+/* GuiDialogBoxVariantCInit: interior body split at the named symbol.
+ * splat only emits an .s for a name it sees in an INCLUDE_ASM, so this
+ * reference is what keeps the body in the tree (and promotes its interior
+ * alabel to a real glabel). */
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiDialogBoxVariantCInit);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033DDC0);
 
@@ -2249,6 +2279,12 @@ void *func_0033E888(void *p) {
 #endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033E8B8);
+
+/* GuiDialogBoxVariantBInit: interior body split at the named symbol.
+ * splat only emits an .s for a name it sees in an INCLUDE_ASM, so this
+ * reference is what keeps the body in the tree (and promotes its interior
+ * alabel to a real glabel). */
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiDialogBoxVariantBInit);
 
 /* func_0033E9E8 (twin of USA func_0033DB60): variant-B dialog option handler.
  * Re-anchors the dialog box (+0x8) via func_0033CD50/func_0033CF40, then on L/R
@@ -2511,6 +2547,12 @@ void *func_0033F5D8(void *p) {
 #endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033F608);
+
+/* GuiQuitDialogInit: interior body split at the named symbol.
+ * splat only emits an .s for a name it sees in an INCLUDE_ASM, so this
+ * reference is what keeps the body in the tree (and promotes its interior
+ * alabel to a real glabel). */
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiQuitDialogInit);
 
 /* func_0033F738 (twin of USA func_0033E8B0): the quit-dialog option-list handler.
  * Re-lays-out the dialog box (+0x8) at its anchor (*(w+0x2DC)) via func_0033CD50/
@@ -2969,6 +3011,12 @@ void *func_00340630(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_003406B8);
 
+/* GuiStatsPanelScreenInit: interior body split at the named symbol.
+ * splat only emits an .s for a name it sees in an INCLUDE_ASM, so this
+ * reference is what keeps the body in the tree (and promotes its interior
+ * alabel to a real glabel). */
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiStatsPanelScreenInit);
+
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00340A50);
 
 /* func_00340C88: EU twin of USA func_0033FCE8. Stats-panel value-row layout.
@@ -3034,6 +3082,12 @@ void func_00341020(void *e) {
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00341090);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00341200);
+
+/* GuiQuickSelectWheelInit: interior body split at the named symbol.
+ * splat only emits an .s for a name it sees in an INCLUDE_ASM, so this
+ * reference is what keeps the body in the tree (and promotes its interior
+ * alabel to a real glabel). */
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiQuickSelectWheelInit);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00341C18);
 

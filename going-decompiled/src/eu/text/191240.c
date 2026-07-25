@@ -1081,7 +1081,19 @@ s32 func_002942C8(void) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00294368);
 
+/* UpdateLevelStagingMachine: interior body split at the named symbol.
+ * splat only emits an .s for a name it sees in an INCLUDE_ASM, so this
+ * reference is what keeps the body in the tree (and promotes its interior
+ * alabel to a real glabel). */
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", UpdateLevelStagingMachine);
+
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_002945B0);
+
+/* StreamSceneSegment: interior body split at the named symbol.
+ * splat only emits an .s for a name it sees in an INCLUDE_ASM, so this
+ * reference is what keeps the body in the tree (and promotes its interior
+ * alabel to a real glabel). */
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", StreamSceneSegment);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00294640);
 
@@ -1749,6 +1761,12 @@ s32 MapEvictCacheSlot(void) {
 #endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_002964F0);
+
+/* MapCompositeThumbnailMask: EU twin of USA 0x296498.
+ * splat only emits an .s for a name it sees in an INCLUDE_ASM, so this
+ * reference is what keeps the body in the tree (and promotes its interior
+ * alabel to a real glabel). */
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", MapCompositeThumbnailMask);
 
 /* MapSetCurrentLevel(level) — set the galactic-map current level and refresh the
  * availability flag: store `level` into the current-level slot, then call
