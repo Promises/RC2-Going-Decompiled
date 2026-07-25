@@ -68,7 +68,7 @@ set -u
 
 usage() {
   echo "usage: $(basename "$0") <func> <whole_unit_base.o> <single_func_target.o> [region]" >&2
-  exit 2
+  exit 3
 }
 
 [ $# -ge 3 ] && [ $# -le 4 ] || usage
@@ -77,11 +77,11 @@ FN="$1"; BASE="$2"; TGT="$3"; REGION="${4:-usa}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$ROOT"  # script-relative = worktree-portable
 
 for f in "$BASE" "$TGT"; do
-  [ -f "$f" ] || { echo "ARG ERROR: not a file: $f" >&2; exit 2; }
+  [ -f "$f" ] || { echo "ARG ERROR: not a file: $f" >&2; exit 3; }
 done
 
 SYMS="going-decompiled/symbol_addrs/$REGION/symbol_addrs.txt"
-[ -f "$SYMS" ] || { echo "ARG ERROR: no symbol map for region '$REGION': $SYMS" >&2; exit 2; }
+[ -f "$SYMS" ] || { echo "ARG ERROR: no symbol map for region '$REGION': $SYMS" >&2; exit 3; }
 
 # The flat .rom is gitignored and lives in the MAIN repo, which is not
 # necessarily this worktree. Search this root first, then sibling checkouts.
@@ -91,7 +91,7 @@ SYMS="going-decompiled/symbol_addrs/$REGION/symbol_addrs.txt"
 case "$REGION" in
   usa|usa_v101) ROM_NAME="SCUS_972.68.rom"; ROM_ENV="${EE_ROM_USA:-}";;
   eu)           ROM_NAME="SCES_516.07.rom"; ROM_ENV="${EE_ROM_EU:-}";;
-  *)            echo "ARG ERROR: unknown region '$REGION' (expected usa, usa_v101 or eu)" >&2; exit 2;;
+  *)            echo "ARG ERROR: unknown region '$REGION' (expected usa, usa_v101 or eu)" >&2; exit 3;;
 esac
 ROM=""
 for cand in \
@@ -102,7 +102,7 @@ for cand in \
 done
 if [ -z "$ROM" ]; then
   echo "UNVERIFIABLE: flat ROM '$ROM_NAME' for region '$REGION' not found" >&2
-  exit 3
+  exit 2
 fi
 
 # ---- ARGUMENT CONTRACT (defect class: a whole-unit .o passed where a
@@ -112,26 +112,26 @@ fi
 SHAPE="$(docker --context colima-ee-x86 run --rm -v "$ROOT":/work -w /work ee-build sh -c "
   mips-linux-gnu-objdump -t '$TGT' 2>/dev/null | awk '\$3==\"F\" && \$4==\".text\"' | wc -l
   mips-linux-gnu-objdump -h '$TGT' 2>/dev/null | awk '\$2==\".text\"{print \$3}'
-")" || { echo "ARG ERROR: could not read '$TGT' as an object file" >&2; exit 2; }
+")" || { echo "ARG ERROR: could not read '$TGT' as an object file" >&2; exit 3; }
 
 TGT_FUNCS="$(echo "$SHAPE" | sed -n 1p)"
 TGT_TEXT_HEX="$(echo "$SHAPE" | sed -n 2p)"
 TGT_TEXT="$(printf '%d' "0x${TGT_TEXT_HEX:-0}" 2>/dev/null)"
-[ -n "${TGT_FUNCS:-}" ] && [ -n "${TGT_TEXT:-}" ] || { echo "ARG ERROR: '$TGT' is not a readable ELF object" >&2; exit 2; }
+[ -n "${TGT_FUNCS:-}" ] && [ -n "${TGT_TEXT:-}" ] || { echo "ARG ERROR: '$TGT' is not a readable ELF object" >&2; exit 3; }
 
 if [ "$TGT_FUNCS" -eq 0 ]; then
   echo "ARG ERROR: '$TGT' contains no .text function symbol — not a single-function target object" >&2
-  exit 2
+  exit 3
 fi
 if [ "$TGT_FUNCS" -gt 1 ]; then
   echo "ARG ERROR: '$TGT' contains $TGT_FUNCS .text functions ($TGT_TEXT bytes) — that is a WHOLE-UNIT object." >&2
   echo "           Argument 3 must be the single-function target.o. Refusing to emit a verdict." >&2
-  exit 2
+  exit 3
 fi
 # A one-symbol object whose .text is unit-sized is also not a per-function target.
 if [ "$TGT_TEXT" -gt 65536 ]; then
   echo "ARG ERROR: '$TGT' has a ${TGT_TEXT}-byte .text — too large to be a single-function target object." >&2
-  exit 2
+  exit 3
 fi
 
 # ---- Slice + resolve + compare against the ROM.
@@ -139,8 +139,8 @@ DIS_FILE="$(mktemp -t verify_match_unit)"
 trap 'rm -f "$DIS_FILE"' EXIT
 docker --context colima-ee-x86 run --rm -v "$ROOT":/work -w /work ee-build sh -c \
   "mips-linux-gnu-objdump -dr --section=.text '$BASE' 2>/dev/null" >"$DIS_FILE" \
-  || { echo "ARG ERROR: could not disassemble '$BASE'" >&2; exit 2; }
-[ -s "$DIS_FILE" ] || { echo "ARG ERROR: '$BASE' produced no .text disassembly" >&2; exit 2; }
+  || { echo "ARG ERROR: could not disassemble '$BASE'" >&2; exit 3; }
+[ -s "$DIS_FILE" ] || { echo "ARG ERROR: '$BASE' produced no .text disassembly" >&2; exit 3; }
 
 FN="$FN" ROM="$ROM" SYMS="$SYMS" REGION="$REGION" DIS_FILE="$DIS_FILE" python3 - <<'PY'
 import os, re, struct, sys
@@ -168,7 +168,7 @@ ROM_BASE = 0x100080
 # UNVERIFIABLE rather than guessing.
 GP = {"usa": 0x1AEFF0, "eu": 0x1AF070}.get(REGION)
 
-MATCH, DIFFERS, ARGERR, UNVERIFIABLE = 0, 1, 2, 3
+MATCH, DIFFERS, UNVERIFIABLE, ARGERR = 0, 1, 2, 3
 
 # Symbol map: "name = 0xADDR; // comment"
 syms = {}
