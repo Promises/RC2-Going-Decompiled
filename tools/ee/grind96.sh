@@ -13,6 +13,16 @@
 # function base.o, and runs the RAW verify_match.sh gate against diff96's target.o.
 #
 # Exit 0 + "BYTE+RELOC IDENTICAL" = a CONFIRMED engine-2.96 match. Anything else is NOT.
+#
+# EXIT BANDS (fleet convention; the LAST line of this script is the verify_match_unit
+# call, so that tool's rc BECOMES this script's rc — the bands must be the same set):
+#   0  MATCH        — byte+reloc identical to the ROM
+#   1  DIFFERS      — a real byte difference
+#   2  COULD-NOT-LOOK — the tool cannot decide: unverifiable (missing ROM, unmodelled
+#                     reloc, unknown symbol) OR the anti-vacuous guard tripped (FUNC is
+#                     not compiled, so a slice would be VACUOUS). Not a pass, not a fail.
+#   3  USAGE/ARG    — you invoked me wrong (bad arg count, wrong object shape, unknown
+#                     region). A misuse must never look like a verdict.
 set -euo pipefail
 REGION="$1"; UNIT="$2"; FUNC="$3"; CFILE="$4"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$ROOT"
@@ -36,7 +46,12 @@ bash tools/ee/diff96.sh "$REGION" "$UNIT" "$FUNC" "$CFILE"
 if ! grep -qE "^[[:space:]]*\.(ent|globl)[[:space:]]+$FUNC([[:space:]]|\$)" "$W/base.s"; then
   echo "RAW GATE: '$FUNC' is NOT compiled in base.s (still INCLUDE_ASM / no MATCH_$FUNC arm)." >&2
   echo "  -> cannot verify: a slice would be VACUOUS (original-vs-original). Add a MATCH_$FUNC arm." >&2
-  exit 3
+  # Band 2, NOT 3: "the slice would be VACUOUS" is a COULD-NOT-LOOK, not a distinct
+  # verdict — there is nothing to compare, so the tool cannot decide. Band 3 is
+  # reserved for USAGE/ARG ("you invoked me wrong"). This matters because line 46 is
+  # the last line: verify_match_unit's rc BECOMES grind96's rc, so a bare 3 here would
+  # collapse "this function cannot be verified" onto "you invoked me wrong".
+  exit 2
 fi
 
 # RAW gate: scope FUNC out of diff96's whole-unit base.o (already built through
