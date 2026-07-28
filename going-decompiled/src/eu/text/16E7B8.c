@@ -59,7 +59,7 @@ extern u8 g_nVendorBuyQuantity[];
  * func_00285800, AppendTextureUploadBuildTex0=func_002FDB58, AppendFrameInitGsState=
  * func_0027BD40, DrawFullScreenTint=func_0027E2A8, AppendDrawEnvContext2=func_00285880,
  * func_00285BF8, func_0026E780(EU-only), KickFrameDmaChain=func_002FD2D8,
- * WaitFrameDmaFence=func_002FD418, WaitGsPathsIdle=func_001244B8,
+ * WaitFrameDmaFence=WaitFrameDmaFence, WaitGsPathsIdle=func_001244B8,
  * WaitVblankGetField=func_001261F0; arena table g_nVendorBuyQuantity+0x8C78 [5],
  * g_vramFrameBufB = D_001A7308+0x54. */
 #ifndef TARGET_NATIVE
@@ -136,7 +136,7 @@ void func_0026E838(s32 wadId) {
  * func_00285768, AppendScreenClearPacket=func_00285800, AppendTextureUploadBuildTex0=
  * func_002FDB58, AppendFrameInitGsState=func_0027BD40, AppendDrawEnvContext2=
  * func_00285880, func_00285BF8, func_0026E780(EU-only), KickFrameDmaChain=
- * func_002FD2D8, WaitFrameDmaFence=func_002FD418, WaitGsPathsIdle=func_001244B8,
+ * func_002FD2D8, WaitFrameDmaFence=WaitFrameDmaFence, WaitGsPathsIdle=func_001244B8,
  * WaitVblankGetField=func_001261F0, RemoveVif1DmacHandlers=func_002FDE00;
  * g_vramFrameBufB = D_001A7308+0x54. */
 #ifndef TARGET_NATIVE
@@ -399,7 +399,7 @@ s32 func_0026FD28(const char *fmt, ...) {
  * gets the real function below under its interior name (mirrors USA
  * func_0026FF00 -> func_0026FF18). Word-verified vs USA func_0026FF18 + EU .s:
  * g_cameraState = g_nVendorBuyQuantity + 0x2FB8 (== USA 0x1B5180 + 0x80),
- * IntToFloat = func_002845A0; FOV field offsets identical to USA. */
+ * IntToFloat = IntToFloat; FOV field offsets identical to USA. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_0026FD60);
 #else
@@ -469,7 +469,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_00270018);
  * Copies the live 0xA0-byte active-camera slot and a following 0x280-byte block
  * into save buffers, then points the save header at the copied block. Matching
  * arm stays INCLUDE_ASM (packed-save wall); #else is the structure model.
- * Word-verified vs USA func_002701C0 + EU .s: CopyQwords = func_00283410;
+ * Word-verified vs USA func_002701C0 + EU .s: CopyQwords = CopyQwords;
  * g_activeCamera = g_nVendorBuyQuantity+0x3148, g_cameraSnapshot = +0x5308,
  * g_cameraHistorySnapshot = +0x59E8 (all USA base + 0x80). */
 #ifndef TARGET_NATIVE
@@ -522,11 +522,11 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_00270128);
  * damping*vel, clamps its magnitude to maxSpeed (when nonzero) then to |delta|,
  * and returns cur + clampedVel. Matching arm stays INCLUDE_ASM; #else is the
  * structure model (not byte-exact; fp-pipeline/reload wall). Word-verified vs USA
- * func_002702D8 + EU .s: GetFloatAbs = func_00283508 (sole callee); vel* = $4. */
+ * func_002702D8 + EU .s: GetFloatAbs = GetFloatAbs (sole callee); vel* = $4. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_00270138);
 #else
-extern f32 func_00283508(f32 x);   /* GetFloatAbs */
+extern f32 GetFloatAbs(f32 x);   /* GetFloatAbs */
 f32 func_00270138(f32 cur, f32 target, f32 stiffness, f32 damping, f32 maxSpeed,
                   f32 *vel) {
     f32 delta = target - cur;
@@ -539,10 +539,10 @@ f32 func_00270138(f32 cur, f32 target, f32 stiffness, f32 damping, f32 maxSpeed,
             *vel = -maxSpeed;
         }
     }
-    if (func_00283508(delta) < *vel) {
-        *vel = func_00283508(delta);
-    } else if (-func_00283508(delta) > *vel) {
-        *vel = -func_00283508(delta);
+    if (GetFloatAbs(delta) < *vel) {
+        *vel = GetFloatAbs(delta);
+    } else if (-GetFloatAbs(delta) > *vel) {
+        *vel = -GetFloatAbs(delta);
     }
     return cur + *vel;
 }
@@ -555,13 +555,13 @@ f32 func_00270138(f32 cur, f32 target, f32 stiffness, f32 damping, f32 maxSpeed,
  * into (-pi,pi] (WrapAnglePiSum). Matching arm stays INCLUDE_ASM; #else is the
  * structure model (not byte-exact). Word-verified vs USA func_002703C0 + EU .s:
  * WrapAnglePiDiff(target,cur) = func_002844A0 (first jal), GetFloatAbs =
- * func_00283508, WrapAnglePiSum(cur,*vel) = func_00284458 (last jal); vel* = $4. */
+ * GetFloatAbs, WrapAnglePiSum(cur,*vel) = func_00284458 (last jal); vel* = $4. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_00270220);
 #else
 extern f32 func_002844A0(f32 a, f32 b);   /* WrapAnglePiDiff */
 extern f32 func_00284458(f32 a, f32 b);   /* WrapAnglePiSum */
-extern f32 func_00283508(f32 x);          /* GetFloatAbs */
+extern f32 GetFloatAbs(f32 x);          /* GetFloatAbs */
 f32 func_00270220(f32 cur, f32 target, f32 stiffness, f32 damping, f32 maxSpeed,
                   f32 *vel) {
     f32 delta = func_002844A0(target, cur);
@@ -574,10 +574,10 @@ f32 func_00270220(f32 cur, f32 target, f32 stiffness, f32 damping, f32 maxSpeed,
             *vel = -maxSpeed;
         }
     }
-    if (func_00283508(delta) < *vel) {
-        *vel = func_00283508(delta);
-    } else if (-func_00283508(delta) > *vel) {
-        *vel = -func_00283508(delta);
+    if (GetFloatAbs(delta) < *vel) {
+        *vel = GetFloatAbs(delta);
+    } else if (-GetFloatAbs(delta) > *vel) {
+        *vel = -GetFloatAbs(delta);
     }
     return func_00284458(cur, *vel);
 }
@@ -781,12 +781,12 @@ void func_00270BC0(void) {
  * the hero-relative delta (g_heroPos + 0xD0) before being saved. Matching arm
  * stays INCLUDE_ASM; #else is the structure model (not byte-exact). Word-verified
  * vs USA func_00270E40 + EU .s: transition-state base = g_nVendorBuyQuantity+0x3248,
- * g_heroPos_D0 = g_sndChannelVolumes+0x18C8, Vec4AddVu0 = func_00283580.
+ * g_heroPos_D0 = g_sndChannelVolumes+0x18C8, Vec4AddVu0 = Vec4AddVu0.
  * (Vec4 / CameraTransitionState typedefs reused from func_00270BC0's #else.) */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_00270CA0);
 #else
-extern void func_00283580(Vec4 *dst, const Vec4 *a, const Vec4 *b);   /* Vec4AddVu0 */
+extern void Vec4AddVu0(Vec4 *dst, const Vec4 *a, const Vec4 *b);   /* Vec4AddVu0 */
 extern u8 g_sndChannelVolumes[];   /* +0x18C8 = g_heroPos + 0xD0 */
 void func_00270CA0(void) {
     CameraTransitionState *t =
@@ -796,7 +796,7 @@ void func_00270CA0(void) {
         t->src0 = t->cur0;
         if (t->pendingKind == 2) {
             /* asm arg order: a = hero-relative delta, b = src0 */
-            func_00283580(&t->src0, (Vec4 *)(g_sndChannelVolumes + 0x18C8),
+            Vec4AddVu0(&t->src0, (Vec4 *)(g_sndChannelVolumes + 0x18C8),
                           &t->src0);
         }
         t->src1 = t->cur1;
@@ -846,7 +846,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_002717F8);
  * = g_sndChannelVolumes+0x1778 (g_cameraZoneType @+0x24A0, g_heroState @+0x2294,
  * g_heroOrientVec[2] @+0x98); spring func_002702D8 = func_00270138,
  * Vec3RescaleToLenVu0 = func_002837E0, Vec3DotVu0 = func_00283670, Vec4SubVu0 =
- * func_002835B0, Vec3LengthVu0 = func_002836B0, Vec4ScaleVu0 = func_002835F0.
+ * func_002835B0, Vec3LengthVu0 = func_002836B0, Vec4ScaleVu0 = Vec4ScaleVu0.
  * (Vec4 typedef reused from func_00270BC0's #else.) */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_00271A30);
@@ -856,7 +856,7 @@ extern f32  func_00270138(f32 cur, f32 target, f32 stiffness, f32 damping,
 extern f32  func_00283670(const Vec4 *a, const Vec4 *b);    /* Vec3DotVu0 */
 extern f32  func_002836B0(const Vec4 *v);                   /* Vec3LengthVu0 */
 extern void func_002835B0(Vec4 *dst, const Vec4 *a, const Vec4 *b); /* Vec4SubVu0 */
-extern void func_002835F0(Vec4 *dst, f32 s, const Vec4 *src);       /* Vec4ScaleVu0 */
+extern void Vec4ScaleVu0(Vec4 *dst, f32 s, const Vec4 *src);       /* Vec4ScaleVu0 */
 extern void func_002837E0(Vec4 *dst, f32 len, const Vec4 *src);     /* Vec3RescaleToLenVu0 */
 extern u8 g_nNanotechBonusHealTimer[];   /* +0xE4 = g_heroFacingDir */
 extern u8 g_sndChannelVolumes[];         /* +0x1778 = g_soundBankHandlesBlk */
@@ -921,7 +921,7 @@ void func_00271A30(void) {
     m->forwardProj = fwdProj;
     func_002835B0(&m->lateralDir, &m->velocity, &fwdProj);
     m->lateralSpeed = func_002836B0(&m->lateralDir);
-    func_002835F0(&m->lateralDir, 1.0f / m->lateralSpeed, &m->lateralDir);
+    Vec4ScaleVu0(&m->lateralDir, 1.0f / m->lateralSpeed, &m->lateralDir);
 
     /* remember this frame's hero position for next frame's delta */
     m->prevPos = *heroPos;
@@ -1128,7 +1128,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_002731B0);
  * the structure model. Word-verified vs USA DrawScreenSpriteFxQueue + EU .s:
  * g_heroState = g_giantClankHealth+0xA20, g_screenSpriteFxQueue =
  * g_nVendorBuyQuantity+0x53B8 (count @+0x120, entries 0x30 stride), pre-pass
- * func_00272CC0 = func_00272B50, IntToFloat = func_002845A0, ProjectWorldToScreen
+ * func_00272CC0 = func_00272B50, IntToFloat = IntToFloat, ProjectWorldToScreen
  * = func_00279FC0, DrawScreenSpriteFxEntry = func_00272840; g_screenCenterDefaultX/Y
  * = D_001A7308+0xC0/+0xC4, g_nGsPixelOffsetX/Y = D_001A7308+0xC8/+0xCC.
  * (ScreenSpriteFx typedef reused from func_00272840's #else.) */
@@ -1136,7 +1136,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_002731B0);
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_002732B8);
 #else
 extern void func_00272B50(void);                        /* screen-sprite-FX pre-pass */
-extern f32  func_002845A0(s32 x);                        /* IntToFloat */
+extern f32  IntToFloat(s32 x);                        /* IntToFloat */
 extern void func_00279FC0(f32 *out, ScreenSpriteFx *fx); /* ProjectWorldToScreen */
 extern u8   g_giantClankHealth[];                        /* +0xA20 = g_heroState */
 extern u8   D_001A7308[];                                /* +0xC0/C4 centre, +0xC8/CC gs offset */
@@ -1157,8 +1157,8 @@ void func_002732B8(void) {
         return;
     }
 
-    cx = func_002845A0(*(s32 *)(D_001A7308 + 0xC0));      /* g_screenCenterDefaultX */
-    cy = func_002845A0(*(s32 *)(D_001A7308 + 0xC4));      /* g_screenCenterDefaultY */
+    cx = IntToFloat(*(s32 *)(D_001A7308 + 0xC0));      /* g_screenCenterDefaultX */
+    cy = IntToFloat(*(s32 *)(D_001A7308 + 0xC4));      /* g_screenCenterDefaultY */
 
     for (i = 0; i < *count; i++) {
         ScreenSpriteFx *fx = &entries[i];
@@ -1173,8 +1173,8 @@ void func_002732B8(void) {
             if (fx->hasWorldPos != 0) {
                 f32 proj[2];
                 func_00279FC0(proj, fx);
-                sx = (proj[0] - func_002845A0(*(s32 *)(D_001A7308 + 0xC8))) * 0.0625f;
-                sy = (proj[1] - func_002845A0(*(s32 *)(D_001A7308 + 0xCC))) * 0.0625f;
+                sx = (proj[0] - IntToFloat(*(s32 *)(D_001A7308 + 0xC8))) * 0.0625f;
+                sy = (proj[1] - IntToFloat(*(s32 *)(D_001A7308 + 0xCC))) * 0.0625f;
             }
             func_00272840(sx, sy, fx);
         }

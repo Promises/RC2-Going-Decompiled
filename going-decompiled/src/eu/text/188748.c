@@ -2262,13 +2262,13 @@ s32 func_0028C108(void *rec, s32 *pA, s32 *pB) {
  * (clamped to [0,0x17]); flags bit 1/2 nudge Y by +0x5C (+52 bias), bit 4/8 nudge X
  * by +0x58 (+20 bias); results ADDED into the pX/pY out-params. Matching arm stays INCLUDE_ASM;
  * #else is the structure model. Word-verified vs USA func_0028C1E8: IntToFloat ->
- * func_002845A0, FloatToInt -> func_002845B0, D_255A00 -> D_255A80, D_255A60 ->
+ * IntToFloat, FloatToInt -> func_002845B0, D_255A00 -> D_255A80, D_255A60 ->
  * D_255AE0. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028C170);
 #else
 void func_0028C170(void *rec, s32 *pX, s32 *pY, s32 idxBase, s32 idxDelta) {
-    extern f32 func_002845A0(s32 v);   /* EU IntToFloat (USA 0x2846D8) */
+    extern f32 IntToFloat(s32 v);   /* EU IntToFloat (USA 0x2846D8) */
     extern s32 func_002845B0(f32 x);   /* EU FloatToInt (USA 0x2846A0) */
     extern f32 D_255A80[];             /* offset table, rec+0x7C set (USA D_255A00) */
     extern f32 D_255AE0[];             /* offset table, rec+0x7C clear (USA D_255A60) */
@@ -2294,13 +2294,13 @@ void func_0028C170(void *rec, s32 *pX, s32 *pY, s32 idxBase, s32 idxDelta) {
 
     flags = *(s32 *)(r + 0x60);
     if (flags & 0x1) {
-        dy = -func_002845B0(scale * (func_002845A0(*(s32 *)(r + 0x5C)) + 52.0f) + 0.5f);
+        dy = -func_002845B0(scale * (IntToFloat(*(s32 *)(r + 0x5C)) + 52.0f) + 0.5f);
     } else if (flags & 0x2) {
-        dy = func_002845B0(scale * (func_002845A0(*(s32 *)(r + 0x5C)) + 52.0f) + 0.5f);
+        dy = func_002845B0(scale * (IntToFloat(*(s32 *)(r + 0x5C)) + 52.0f) + 0.5f);
     } else if (flags & 0x4) {
-        dx = -func_002845B0(scale * (func_002845A0(*(s32 *)(r + 0x58)) + 20.0f) + 0.5f);
+        dx = -func_002845B0(scale * (IntToFloat(*(s32 *)(r + 0x58)) + 20.0f) + 0.5f);
     } else if (flags & 0x8) {
-        dx = func_002845B0(scale * (func_002845A0(*(s32 *)(r + 0x58)) + 20.0f) + 0.5f);
+        dx = func_002845B0(scale * (IntToFloat(*(s32 *)(r + 0x58)) + 20.0f) + 0.5f);
     }
 
     *pX += dx;
@@ -2445,7 +2445,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028C7C8);
  * Word-verified vs USA DrawWeaponSelectWheel: WrapAnglePiSum -> func_00284458,
  * func_0028C180 -> func_0028C108, func_00290FC0 -> func_00290FC8, func_0034DAB0 ->
  * func_0034EF38, func_002846E8 -> func_002845F8, IntToFloat/FloatToInt ->
- * func_002845A0/B0; D_1A8D48 -> D_1A8DF8, D_1A8C64 -> D_1A8D14, hudMobySpawnStart+0x28/
+ * IntToFloat/B0; D_1A8D48 -> D_1A8DF8, D_1A8C64 -> D_1A8D14, hudMobySpawnStart+0x28/
  * +0x2C -> g_pActiveTextTable+0x90/+0x94, g_equippedItemSlots -> D_001A7308+0x130.
  * REGION DIVERGENCES: GUI alpha slot +0x38000+0x7A8C (EU) vs +0x79DC (USA); PAL text
  * draw uses scaled renderer func_00280218 (+f32 scale) with per-line auto-fit
@@ -2454,7 +2454,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028C7C8);
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", DrawWeaponSelectWheel);
 #else
 s32 DrawWeaponSelectWheel(void *w) {
-    extern f32   func_002845A0(s32 v);        /* EU IntToFloat */
+    extern f32   IntToFloat(s32 v);        /* EU IntToFloat */
     extern s32   func_002845B0(f32 x);        /* EU FloatToInt */
     extern f32   func_00284458(f32 a, f32 b); /* EU wrap-angle (USA WrapAnglePiSum) */
     extern s32   func_00290FC8(void);         /* EU GUI state gate (USA func_00290FC0) */
@@ -2479,14 +2479,14 @@ s32 DrawWeaponSelectWheel(void *w) {
     s32    alpha, selectedIndex, n, i, off;
     void **table;
 
-    fillA = func_002845A0(*(pw + 0x70)) / func_002845A0(8);
+    fillA = IntToFloat(*(pw + 0x70)) / IntToFloat(8);
     if (1.0f < fillA) {
         fillA = 1.0f;
     } else if (fillA < 0.0f) {
         fillA = 0.0f;
     }
 
-    fillB = func_002845A0(*(pw + 0x71)) / func_002845A0(8);
+    fillB = IntToFloat(*(pw + 0x71)) / IntToFloat(8);
     if (1.0f < fillB) {
         fillB = 1.0f;
     } else if (fillB < 0.0f) {
@@ -2844,7 +2844,7 @@ void func_0028D738(void *w) {
  * walk (per-category colour + slot bg + icon), and the active slot's localized label.
  * Returns the widget status word at hud+0x58. Matching arm stays INCLUDE_ASM; #else is
  * the structure model. Word-verified vs USA func_0028DC28 (positional jal + reloc map):
- * IntToFloat->func_002845A0, GuiFontAtlasLookupGlyph->func_00338AA8, func_003017F8->
+ * IntToFloat->IntToFloat, GuiFontAtlasLookupGlyph->func_00338AA8, func_003017F8->
  * func_00301AC0, func_002AA3F0->func_002A9FA0, func_002904B0->func_002904C8,
  * WrapAnglePiSum->func_00284458, func_00283B30/B48->func_00283A40/A58, func_0028EDF0->
  * func_0028EE08, func_0028F2C0->func_0028F2D8, func_002846E8->func_002845F8,
@@ -2859,7 +2859,7 @@ extern void *g_guiInstance;                 /* GUI singleton ptr (EU 0x1A8DAC) *
 extern void *g_pActiveTextTable;            /* HUD moby/clut anchor block */
 extern s32   g_nVendorBuyQuantity;          /* yfudge at +0x160 (USA g_swapGadgetItemIndex+0x8E) */
 extern s32   D_1A8DF8;                       /* wheel cursor / spawn-table index (gp) */
-extern f32   func_002845A0(s32 v);           /* EU IntToFloat */
+extern f32   IntToFloat(s32 v);           /* EU IntToFloat */
 extern s32   func_00338AA8(void *atlas, s32 cp);                 /* EU GuiFontAtlasLookupGlyph */
 extern void  func_00301AC0(s32 glyph, s32 color, f32 *a, f32 *b,
                            f32 x, f32 y, f32 sx, f32 yf, f32 extra); /* EU draw glyph */
@@ -2898,14 +2898,14 @@ s32 func_0028DC40(void *hud) {
     s32   selectedDrawn = 0;
     s32   n, i, k;
 
-    fillA = func_002845A0(*((u8 *)hud + 0x70)) / func_002845A0(8);
+    fillA = IntToFloat(*((u8 *)hud + 0x70)) / IntToFloat(8);
     if (1.0f < fillA) {
         fillA = 1.0f;
     } else if (fillA < 0.0f) {
         fillA = 0.0f;
     }
 
-    fillB = func_002845A0(*((u8 *)hud + 0x71)) / func_002845A0(8);
+    fillB = IntToFloat(*((u8 *)hud + 0x71)) / IntToFloat(8);
     if (1.0f < fillB) {
         fillB = 1.0f;
     } else if (fillB < 0.0f) {
@@ -3785,7 +3785,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028FC88);
  * icon-map lookup). Colour is the fixed 0x807F7F7F. Matching arm stays INCLUDE_ASM;
  * #else is the structure model. Word-verified vs USA func_0028FC78 (callee cluster
  * delta -0xF0 verified by call order): sin func_00283B48 -> func_00283A58, cos
- * func_00283B30 -> func_00283A40, Vec4AddVu0 -> func_00283580, Vec4SubVu0 ->
+ * func_00283B30 -> func_00283A40, Vec4AddVu0 -> Vec4AddVu0, Vec4SubVu0 ->
  * func_002835B0; g_frameDmaCursor -> g_nVendorBuyQuantity+0x60; g_gsPixelOffsetX/Y ->
  * D_001A7308+0xC8/+0xCC; z -> g_pActiveTextTable+0x3C. */
 #ifndef TARGET_NATIVE
@@ -3798,7 +3798,7 @@ void func_0028FC90(f32 cx, f32 cy, f32 halfW, f32 halfH, f32 angle,
     extern s32   g_nVendorBuyQuantity;
     extern f32   func_00283A58(f32 angle);                            /* EU sin (USA func_00283B48) */
     extern f32   func_00283A40(f32 angle);                            /* EU cos (USA func_00283B30) */
-    extern void  func_00283580(f32 *dst, const f32 *a, const f32 *b); /* EU Vec4AddVu0 */
+    extern void  Vec4AddVu0(f32 *dst, const f32 *a, const f32 *b); /* EU Vec4AddVu0 */
     extern void  func_002835B0(f32 *dst, const f32 *a, const f32 *b); /* EU Vec4SubVu0 */
     u8 **cursor = (u8 **)((u8 *)&g_nVendorBuyQuantity + 0x60);
     u8  *p;
@@ -3817,10 +3817,10 @@ void func_0028FC90(f32 cx, f32 cy, f32 halfW, f32 halfH, f32 angle,
     center[0] = cx;
     center[1] = cy;
 
-    func_00283580(c0, center, vecV); func_002835B0(c0, c0, vecH);
-    func_00283580(c1, center, vecV); func_00283580(c1, c1, vecH);
+    Vec4AddVu0(c0, center, vecV); func_002835B0(c0, c0, vecH);
+    Vec4AddVu0(c1, center, vecV); Vec4AddVu0(c1, c1, vecH);
     func_002835B0(c2, center, vecV); func_002835B0(c2, c2, vecH);
-    func_002835B0(c3, center, vecV); func_00283580(c3, c3, vecH);
+    func_002835B0(c3, center, vecV); Vec4AddVu0(c3, c3, vecH);
 
     p = *cursor;
     *(u32 *)(p + 0x0) = 0x10000007;

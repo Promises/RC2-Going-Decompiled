@@ -186,7 +186,7 @@ void func_002A7D90(Moby *moby, s32 seq, s32 frameIdx) {
  * procedural-anim slot snapshot. Matching arm stays INCLUDE_ASM; #else is the structure model.
  * Symbol map vs USA func_002A82D8: func_002A08C0 -> func_002A0448, func_002A3288 -> func_002A2E30,
  * func_002A8200 -> func_002A7D90, ResolveMobyAnimFramePtrs (func_002A01C8) -> func_0029FD50,
- * IntToFloat (func_00284690) -> func_002845A0, g_proceduralAnimBounds -> EU g_proceduralAnimBounds.
+ * IntToFloat (func_00284690) -> IntToFloat, g_proceduralAnimBounds -> EU g_proceduralAnimBounds.
  *
  * NOT a pure symbol-swap of the USA twin. EU is 100 instrs vs USA's 92: the PAL
  * build carries an EU-ONLY conditional reset of the blend progress (+0x44) that
@@ -200,7 +200,7 @@ extern void func_0029FD50(Moby *moby);            /* resolve anim frame ptrs */
 extern s32  func_002A0448(void *obj);             /* acquire procedural-anim slot; <0 = none */
 extern void func_002A2E30(void *obj, s32 flags);  /* bind the acquired procedural-anim slot */
 extern u8   g_proceduralAnimBounds[];             /* per-slot cached pose-bounds Vec4, stride 0x10 */
-extern f32  func_002845A0(s32 x);                 /* int -> float */
+extern f32  IntToFloat(s32 x);                 /* int -> float */
 
 void func_002A7E68(Moby *obj, s32 idx, s32 arg3, s32 arg4) {
     u8 *m = (u8 *)obj;
@@ -259,7 +259,7 @@ void func_002A7E68(Moby *obj, s32 idx, s32 arg3, s32 arg4) {
     m[0x43] = (u8)idx;
     func_0029FD50(obj);
     *(f32 *)(m + 0x48) = 1.0f;
-    *(f32 *)(m + 0x4C) = 1.0f / func_002845A0(arg4);
+    *(f32 *)(m + 0x4C) = 1.0f / IntToFloat(arg4);
     *(f32 *)(m + 0x44) = 0.0f;
     m[0x60] &= 0xFD;
     m[0x6C] = *(u8 *)(seqEntry + 0x11);
@@ -272,7 +272,7 @@ void func_002A7E68(Moby *obj, s32 idx, s32 arg3, s32 arg4) {
  * Matching arm stays INCLUDE_ASM; #else is the structure model.
  * EU-lockstep of USA func_002A8448: func_002A08C0 -> func_002A0448, func_002A3288 -> func_002A2E30,
  * func_002A8200 -> func_002A7D90, ResolveMobyAnimFramePtrs (func_002A01C8) -> func_0029FD50,
- * IntToFloat (func_00284690) -> func_002845A0, g_proceduralAnimBounds -> EU g_proceduralAnimBounds. */
+ * IntToFloat (func_00284690) -> IntToFloat, g_proceduralAnimBounds -> EU g_proceduralAnimBounds. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A7FF8);
 #else
@@ -280,7 +280,7 @@ extern void func_0029FD50(Moby *moby);            /* resolve anim frame ptrs */
 extern s32  func_002A0448(void *obj);             /* acquire procedural-anim slot; <0 = none */
 extern void func_002A2E30(void *obj, s32 flags);  /* bind the acquired procedural-anim slot */
 extern u8   g_proceduralAnimBounds[];             /* per-slot cached pose-bounds Vec4, stride 0x10 */
-extern f32  func_002845A0(s32 x);                 /* int -> float */
+extern f32  IntToFloat(s32 x);                 /* int -> float */
 
 void func_002A7FF8(Moby *obj, s32 idx, s32 frame, s32 arg4, s32 flags) {
     u8 *m = (u8 *)obj;
@@ -315,7 +315,7 @@ void func_002A7FF8(Moby *obj, s32 idx, s32 frame, s32 arg4, s32 flags) {
     m[0x43] = (u8)idx;
     func_0029FD50(obj);
     *(f32 *)(m + 0x48) = 1.0f;
-    *(f32 *)(m + 0x4C) = 1.0f / func_002845A0(arg4);
+    *(f32 *)(m + 0x4C) = 1.0f / IntToFloat(arg4);
     *(f32 *)(m + 0x44) = 0.0f;
     m[0x60] &= 0xFD;
     seqEntry = *(u8 **)(*(u8 **)(m + 0x24) + 0x48 + idx * 4);
@@ -744,12 +744,12 @@ s32 func_002A92B8(f32 a, f32 b, f32 c, f32 *out1, f32 *out2)
 
 /* ProbeGroundHeight: ground height under a point - CollLine from z=0.01 up to
  * pos.z + zOffset, returns the hit z or 0. Matching arm stays INCLUDE_ASM; #else is the structure model.
- * EU-lockstep of USA ProbeGroundHeight: CollLine -> func_00276098, g_collHitPoint kept
+ * EU-lockstep of USA ProbeGroundHeight: CollLine -> CollLine, g_collHitPoint kept
  * (EU splat anchors g_collHitPoint.z off g_nVendorBuyQuantity+0x8D60, same absolute addr). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A93C0);
 #else
-extern s32 CollLine(void *to, void *from, s32 mask, void *moby, void *out);  /* func_00276098 */
+extern s32 CollLine(void *to, void *from, s32 mask, void *moby, void *out);  /* CollLine */
 
 f32 func_002A93C0(Vec4 *pos, f32 zOffset, s32 mask) {
     QVec from;
@@ -858,16 +858,16 @@ void func_002A9618(void *rec, s32 a, s32 b, f32 power, void *src) {
  * power. CollMobysSphere then gathers/broadcasts against that record within
  * radius and returns the hit count. Matching arm stays INCLUDE_ASM; #else is the structure model.
  * EU-lockstep of USA func_002A9A90: Vec3RescaleToLenVu0 -> func_002837E0,
- * Vec4AddVu0 -> func_00283580, cos -> func_00283A40, sin -> func_00283A58,
- * Vec4ScaleVu0 -> func_002835F0, func_002A9A68 -> func_002A9618,
+ * Vec4AddVu0 -> Vec4AddVu0, cos -> func_00283A40, sin -> func_00283A58,
+ * Vec4ScaleVu0 -> Vec4ScaleVu0, func_002A9A68 -> func_002A9618,
  * CollMobysSphere -> func_00277DE8. self->facingAngle -> raw +0xF8 (EU Moby
  * lacks the named field; verified lwc1 0xF8 in func_002A9640.s). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A9640);
 #else
 extern void func_002837E0(Vec4 *dst, f32 len, Vec4 *src);   /* Vec3RescaleToLenVu0 */
-extern void func_00283580(Vec4 *dst, Vec4 *a, Vec4 *b);     /* Vec4AddVu0 */
-extern void func_002835F0(Vec4 *dst, f32 s, const Vec4 *src); /* Vec4ScaleVu0 */
+extern void Vec4AddVu0(Vec4 *dst, Vec4 *a, Vec4 *b);     /* Vec4AddVu0 */
+extern void Vec4ScaleVu0(Vec4 *dst, f32 s, const Vec4 *src); /* Vec4ScaleVu0 */
 extern s32  func_00277DE8(void *targetList, void *filter, Moby *self,
                           void *hitEvent, f32 radius);       /* CollMobysSphere */
 
@@ -878,13 +878,13 @@ s32 func_002A9640(Moby *self, void *targetList, s32 arg3, s32 arg4, s32 arg5,
 
     if (self->modeBits & 0x100) {
         func_002837E0(&dir, 0.25f, (Vec4 *)((u8 *)self + 0xE0));
-        func_00283580(&dir, &dir, (Vec4 *)((u8 *)self + 0xC0));
+        Vec4AddVu0(&dir, &dir, (Vec4 *)((u8 *)self + 0xC0));
     } else {
         dir.x = func_00283A40(*(f32 *)((u8 *)self + 0xF8));   /* cos(facingAngle) */
         dir.y = func_00283A58(*(f32 *)((u8 *)self + 0xF8));   /* sin(facingAngle) */
         dir.z = 1.0f;
     }
-    func_002835F0(&dir, scale, &dir);
+    Vec4ScaleVu0(&dir, scale, &dir);
     dir.w = 5627.9248f;   /* 0x45AFDF66 */
 
     func_002A9618(hitEvent, (s32)self, arg3, power, &dir);
@@ -1173,17 +1173,17 @@ void func_002A9CA0(Moby *moby, f32 baseAlpha) {
  * to moby+0x70, 0.2 to +0x74, and flags moby+0xBD = 0xFF. No hit (or the height
  * gate) zeroes moby+0x70/+0x74. Matching arm stays INCLUDE_ASM; #else is the
  * structure model. EU-lockstep of USA ProbeMobyGroundBelow: guard D_1A8CA0 ->
- * D_1A8D50, CollLine -> func_00276098, g_collHitPoint = g_nVendorBuyQuantity+0x8D58,
- * ScaleVec4IncludingW -> func_00283620, Vec4ScaleVu0 -> func_002835F0,
- * Vec4AddVu0 -> func_00283580, Vec4SubVu0 -> func_002835B0, Vec3DotVu0 -> func_00283670. */
+ * D_1A8D50, CollLine -> CollLine, g_collHitPoint = g_nVendorBuyQuantity+0x8D58,
+ * ScaleVec4IncludingW -> ScaleVec4IncludingW, Vec4ScaleVu0 -> Vec4ScaleVu0,
+ * Vec4AddVu0 -> Vec4AddVu0, Vec4SubVu0 -> func_002835B0, Vec3DotVu0 -> func_00283670. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002A9DC8);
 #else
 extern s32  D_1A8D50;                                          /* probe-mode flag (USA D_1A8CA0) */
-extern s32  func_00276098(void *to, void *from, s32 mask, void *moby, void *out); /* CollLine */
-extern void func_00283620(Vec4 *dst, f32 scale, const Vec4 *src); /* ScaleVec4IncludingW */
-extern void func_002835F0(Vec4 *dst, f32 s, const Vec4 *src);  /* Vec4ScaleVu0 */
-extern void func_00283580(Vec4 *dst, Vec4 *a, Vec4 *b);        /* Vec4AddVu0 */
+extern s32  CollLine(void *to, void *from, s32 mask, void *moby, void *out); /* CollLine */
+extern void ScaleVec4IncludingW(Vec4 *dst, f32 scale, const Vec4 *src); /* ScaleVec4IncludingW */
+extern void Vec4ScaleVu0(Vec4 *dst, f32 s, const Vec4 *src);  /* Vec4ScaleVu0 */
+extern void Vec4AddVu0(Vec4 *dst, Vec4 *a, Vec4 *b);        /* Vec4AddVu0 */
 extern void func_002835B0(Vec4 *dst, Vec4 *a, Vec4 *b);        /* Vec4SubVu0 */
 extern f32  func_00283670(Vec4 *a, Vec4 *b);                   /* Vec3DotVu0 */
 
@@ -1207,7 +1207,7 @@ s32 func_002A9DC8(Moby *moby) {
         }
         to = *(Vec4 *)((u8 *)moby + 0x10);
         to.z = *(f32 *)((u8 *)moby + 0x18) + 0.5f;
-        if (func_00276098(&to, &from, 0x22, 0, 0) != 0) {
+        if (CollLine(&to, &from, 0x22, 0, 0) != 0) {
             zDelta = g_collHitPoint.z - *(f32 *)((u8 *)moby + 0x18);
             scale = *(f32 *)((u8 *)moby + 0xC) * 0.000244140625f;   /* 1/4096, 0x39800000 */
             *(f32 *)((u8 *)moby + 0x70) = zDelta;
@@ -1215,10 +1215,10 @@ s32 func_002A9DC8(Moby *moby) {
             return 0;
         }
     } else {
-        func_00283620(&to, 0.0009765625f, (Vec4 *)moby);   /* 1/1024, 0x3A800000 */
-        func_002835F0(&from, -8.0f, (Vec4 *)((u8 *)moby + 0xE0));   /* Vec4ScaleVu0 */
-        func_00283580(&from, &to, &from);
-        if (func_00276098(&to, &from, 0x22, 0, 0) != 0) {
+        ScaleVec4IncludingW(&to, 0.0009765625f, (Vec4 *)moby);   /* 1/1024, 0x3A800000 */
+        Vec4ScaleVu0(&from, -8.0f, (Vec4 *)((u8 *)moby + 0xE0));   /* Vec4ScaleVu0 */
+        Vec4AddVu0(&from, &to, &from);
+        if (CollLine(&to, &from, 0x22, 0, 0) != 0) {
             func_002835B0(&hitDelta, &g_collHitPoint, (Vec4 *)((u8 *)moby + 0x10));
             zDelta = func_00283670(&hitDelta, (Vec4 *)((u8 *)moby + 0xE0));
             scale = 0.200000003f;   /* 0x3E4CCCCD */
@@ -1570,7 +1570,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AAE08);
  * (returning 0). Matching arm stays INCLUDE_ASM; #else is the structure model.
  * EU-lockstep of USA func_002AB2C0: Vec4SubVu0 -> func_002835B0, Vec3LengthVu0 ->
  * func_002836B0, func_002AB000 -> func_002AAC00, Vec3RescaleToLenVu0 -> func_002837E0,
- * Vec4AddVu0 -> func_00283580, GetFloatAbs kept. b/eps in $f12/$f14, c in $f13. */
+ * Vec4AddVu0 -> Vec4AddVu0, GetFloatAbs kept. b/eps in $f12/$f14, c in $f13. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AAEC0);
 #else
@@ -1583,7 +1583,7 @@ f32 func_002AAEC0(Vec4 *cur, Vec4 *target, f32 *vel, f32 b, f32 c, f32 eps) {
     dist = func_002836B0(&dir);                           /* separation distance */
     func_002AAC00(vel, dist, b, c, eps);                  /* spring-step the speed */
     func_002837E0(&dir, *vel, &dir);                      /* rescale dir to new speed */
-    func_00283580(cur, cur, &dir);                        /* cur += dir */
+    Vec4AddVu0(cur, cur, &dir);                        /* cur += dir */
     residual = dist - *vel;
     if (GetFloatAbs(residual) < eps * 0.009999999776f) {  /* 0x3C23D70A */
         *cur = *target;
@@ -2039,7 +2039,7 @@ void func_002ABA90(f32 *mat) {
  * component `idx` of the result. Builds the rotation matrix from q (func_00283F58),
  * transforms the delta by it (func_00283980), reads out result[idx]. Matching arm
  * stays INCLUDE_ASM; #else is the structure model. EU-lockstep of USA func_002ABF50:
- * Vec4SubVu0 -> func_002835B0, func_00284048 -> func_00283F58, func_00283A70 -> func_00283980. */
+ * Vec4SubVu0 -> func_002835B0, MatrixMultiplyVu0 -> func_00283F58, func_00283A70 -> func_00283980. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002ABB50);
 #else
@@ -2064,7 +2064,7 @@ f32 func_002ABB50(const Vec4 *a, const Vec4 *q, const Vec4 *c, s32 idx) {
  * from vec into *out: out = vec - scale * dot(vec, unit(axis)) * unit(axis).
  * scale in $f12. Matching arm stays INCLUDE_ASM; #else is the structure model.
  * EU-lockstep of USA func_002ABFD0: Vec3RescaleToLenVu0 -> func_002837E0,
- * Vec3DotVu0 -> func_00283670, Vec4ScaleVu0 -> func_002835F0, Vec4SubVu0 -> func_002835B0. */
+ * Vec3DotVu0 -> func_00283670, Vec4ScaleVu0 -> Vec4ScaleVu0, Vec4SubVu0 -> func_002835B0. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002ABBD0);
 #else
@@ -2075,7 +2075,7 @@ void func_002ABBD0(Vec4 *out, Vec4 *vec, Vec4 *axis, f32 scale) {
 
     func_002837E0(&unit, 1.0f, axis);                /* Vec3RescaleToLenVu0 */
     amount = func_00283670(&unit, vec) * scale;      /* Vec3DotVu0 */
-    func_002835F0(&proj, amount, &unit);             /* Vec4ScaleVu0 */
+    Vec4ScaleVu0(&proj, amount, &unit);             /* Vec4ScaleVu0 */
     func_002835B0(out, vec, &proj);                  /* Vec4SubVu0 */
 }
 #endif
@@ -2125,7 +2125,7 @@ void *func_002ABC88(Moby *owner) {
  * (owner-context, UNCONFIRMED). Matching arm stays INCLUDE_ASM; #else is the structure
  * model. EU-lockstep of USA func_002AC0B8: func_002AA808 -> func_002AA408,
  * GetRandomAngle -> func_002A8358, func_002AFE68 -> func_002AFB68, Vec4AddVu0 ->
- * func_00283580, RandRangeInclusive -> func_002A8238, SpawnParticleType04 -> func_002BBA10.
+ * Vec4AddVu0, RandRangeInclusive -> func_002A8238, SpawnParticleType04 -> func_002BBA10.
  * GENUINE PAL/NTSC DIFF: the jitter magnitude is 0.036 (0x3D1374BD) and the Z nudge
  * 0.018 (0x3C9374BD) in PAL; the USA twin uses 0.03 / 0.015 -- 60->50 Hz per-frame
  * rate retimes (ratio 0.8333). Verified vs func_002ABCB8.s lui/ori pairs. Take these
@@ -2166,7 +2166,7 @@ void func_002ABCB8(void *owner, Vec4 *basePos, void *arg3) {
         s32 r2;
 
         func_002AFB68(&dir, 0.036000002f, angle1, angle2);  /* 0x3D1374BD (USA 0.03f) */
-        func_00283580(&dir, &dir, basePos);
+        Vec4AddVu0(&dir, &dir, basePos);
         dir.z += 0.018000001f;                              /* 0x3C9374BD (USA 0.015f) */
 
         /* PAL: .s applies the 5/6 retime as arithmetic, (ret*5+2)/6, not as a constant */
@@ -2260,14 +2260,14 @@ void func_002AC0E0(Moby *moby) {
 /* func_002AC0F8: axis-angle -> quaternion. out.xyz = axis(src) * sin(angle/2),
  * out.w = cos(angle/2). Matching arm stays INCLUDE_ASM; #else is the structure model.
  * EU-lockstep of USA func_002AC4D0: sin (func_00283B48) -> func_00283A58,
- * Vec4ScaleVu0 -> func_002835F0, cos (func_00283B30) -> func_00283A40. */
+ * Vec4ScaleVu0 -> Vec4ScaleVu0, cos (func_00283B30) -> func_00283A40. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AC0F8);
 #else
 void func_002AC0F8(Vec4 *out, const Vec4 *src, f32 angle) {
     f32 half = angle * 0.5f;
 
-    func_002835F0(out, func_00283A58(half), src);   /* Vec4ScaleVu0(out, sin(half), src) */
+    Vec4ScaleVu0(out, func_00283A58(half), src);   /* Vec4ScaleVu0(out, sin(half), src) */
     out->w = func_00283A40(half);                    /* +0xC = w = cos(half) */
 }
 #endif
@@ -2283,13 +2283,13 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AC160);
  * Matching arm stays INCLUDE_ASM; #else is the structure model.
  * EU-lockstep of USA MatrixToEulerAngles: func_00283638 -> func_00283548, atan2
  * (func_00283BF8) -> func_00283B08, func_00283DC0 -> func_00283CD0,
- * MatrixMultiplyVu0 -> func_00284048, func_00283DE0 -> func_00283CF0. */
+ * MatrixMultiplyVu0 -> MatrixMultiplyVu0, func_00283DE0 -> func_00283CF0. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AC168);
 #else
 extern void func_00283CD0(Mat4x4 *dst, Vec4 *in);   /* build a rotation matrix from a vec (VU0) */
 extern void func_00283CF0(Mat4x4 *dst, Vec4 *in);   /* sibling rotation builder */
-extern void func_00284048(Mat4x4 *dst, Mat4x4 *a, Mat4x4 *b);  /* MatrixMultiplyVu0 */
+extern void MatrixMultiplyVu0(Mat4x4 *dst, Mat4x4 *a, Mat4x4 *b);  /* MatrixMultiplyVu0 */
 
 void func_002AC168(Mat4x4 *mtx, void *out) {
     Mat4x4 m;
@@ -2307,14 +2307,14 @@ void func_002AC168(Mat4x4 *mtx, void *out) {
     axis.y = 0.0f;
     axis.z = -a1;
     func_00283CD0(&rot, &axis);
-    func_00284048(&m, &rot, &m);
+    MatrixMultiplyVu0(&m, &rot, &m);
 
     a2 = func_00283B08(*(f32 *)((u8 *)&m + 0x00), -*(f32 *)((u8 *)&m + 0x08));
     axis.x = 0.0f;
     axis.y = -a2;
     axis.z = 0.0f;
     func_00283CF0(&rot, &axis);
-    func_00284048(&m, &rot, &m);
+    MatrixMultiplyVu0(&m, &rot, &m);
 
     a3 = func_00283B08(*(f32 *)((u8 *)&m + 0x14), *(f32 *)((u8 *)&m + 0x18));
     e[2] = a1;
@@ -2330,7 +2330,7 @@ void func_002AC168(Mat4x4 *mtx, void *out) {
  * colour (func_002A0E78); counter was running -> rescale it to resetValue *
  * counter / divisor(+0xE), clamped to at least 1. Matching arm stays INCLUDE_ASM;
  * #else is the structure model. Symbol map vs USA func_002AC668: IntToFloat ->
- * func_002845A0, FloatToInt -> func_002845B0, func_002A12F0 -> func_002A0E78.
+ * IntToFloat, FloatToInt -> func_002845B0, func_002A12F0 -> func_002A0E78.
  *
  * NOT a pure symbol-swap of the USA twin. EU is 76 instrs vs USA's 48 because
  * the PAL build retimes three of the durations it reads by 5/6 (60Hz frame
@@ -2373,10 +2373,10 @@ void func_002AC290(void *src, u8 *obj) {
         obj[0x5] = (u8)g;
     } else {
         /* Site 2: the divisor read from +0xE (`0E000386` lh $3,0xE($16)) is
-         * retimed into $4 before `68110A0C` jal func_002845A0.
+         * retimed into $4 before `68110A0C` jal IntToFloat.
          * NOT retimed: `counter`, the live +0x0 value in $18, which goes
          * straight to `00089244` mtc1 $18,$f1 / cvt.s.w. */
-        f32 ratio = (f32)counter / func_002845A0(EU_PAL_RETIME(*(s16 *)(obj + 0xE)));
+        f32 ratio = (f32)counter / IntToFloat(EU_PAL_RETIME(*(s16 *)(obj + 0xE)));
         /* Site 3: the multiplicand is a fresh signed load of +0xC
          * (`0C000486` lh $4,0xC($16)), retimed into $2 before
          * `00608244` mtc1 $2,$f12 / cvt.s.w / `02630146` mul.s. */
@@ -2402,7 +2402,7 @@ void func_002AC290(void *src, u8 *obj) {
  * push the colour to target via func_002A0E48 (returns 0 when inactive). Matching arm
  * stays INCLUDE_ASM; #else is the structure model. Symbol map vs USA func_002AC728:
  * func_00283328 -> func_00283238, func_002A12C0 -> func_002A0E48, IntToFloat ->
- * func_002845A0, FloatToInt -> func_002845B0.
+ * IntToFloat, FloatToInt -> func_002845B0.
  *
  * NOT a pure symbol-swap of the USA twin. EU is 172 instrs vs USA's 147 because the
  * PAL build retimes all three of the fade DURATIONS it reads by 5/6 (60Hz frame
@@ -2463,12 +2463,12 @@ s32 func_002AC3C0(void *target, u8 *s) {
         /* Site 2: the forward duration from +0xC (`0C000386` lh $3,0xC($16), reached
          * when the likely branch `3A004054` bnel $2,$0 is NOT taken and nullifies its
          * `0E000386` lh $3,0xE delay slot) is retimed into $4 before `68110A0C`
-         * jal func_002845A0. The retimed float lands in $f0 and serves as BOTH the
+         * jal IntToFloat. The retimed float lands in $f0 and serves as BOTH the
          * minuend and the divisor (`81000146` sub.s $f2,$f0,$f1 / `03150046`
          * div.s $f20,$f2,$f0), so both uses of the duration are retimed.
          * NOT retimed: `counter`, the live +0x0 value, whose `00000286` lh $2,0x0($16)
          * feeds `00088244` mtc1 $2,$f1 / cvt.s.w directly with no div on its path. */
-        f32 dur = func_002845A0(EU_PAL_RETIME(*(s16 *)(s + 0xC)));
+        f32 dur = IntToFloat(EU_PAL_RETIME(*(s16 *)(s + 0xC)));
         frac = (dur - (f32)counter) / dur;
         r = s[0x7] ? func_002845B0((f32)s[0x4] + (f32)((s32)s[0x7] - (s32)s[0x4]) * frac) : s[0x4];
         g = s[0x8] ? func_002845B0((f32)s[0x5] + (f32)((s32)s[0x8] - (s32)s[0x5]) * frac) : s[0x5];
@@ -2477,9 +2477,9 @@ s32 func_002AC3C0(void *target, u8 *s) {
         /* Site 3: the reverse duration from +0xE, loaded in the taken delay slot of
          * `3A004054` bnel $2,$0 as `0E000386` lh $3,0xE($16), is retimed by the same
          * chain at .L002AC53C (`06000224` addiu $2,$0,0x6 ... `12200000` mflo $4)
-         * before `68110A0C` jal func_002845A0, and likewise serves as both minuend
+         * before `68110A0C` jal IntToFloat, and likewise serves as both minuend
          * and divisor via $f0. NOT retimed: `counter` (+0x0), same as site 2. */
-        f32 dur = func_002845A0(EU_PAL_RETIME(*(s16 *)(s + 0xE)));
+        f32 dur = IntToFloat(EU_PAL_RETIME(*(s16 *)(s + 0xE)));
         frac = (dur - (f32)counter) / dur;
         r = s[0x7] ? func_002845B0((f32)s[0x7] + (f32)((s32)s[0x4] - (s32)s[0x7]) * frac) : s[0x4];
         g = s[0x8] ? func_002845B0((f32)s[0x8] + (f32)((s32)s[0x5] - (s32)s[0x8]) * frac) : s[0x5];
@@ -2559,7 +2559,7 @@ extern void func_003098C8(void *spawnCtx, Vec4 *dir, s32 life, s32 flag, s32 a4)
 extern void func_00283878(f32 minLen, Vec4 *dst, Vec4 *src);                      /* Vec3NormalizeCheckedVu0 */
 extern long func_00284678(f32 range, Vec4 *pt);                                  /* ClassifyPointVsScreenBoxVu0 */
 extern void func_00313FE0(void *shakeBlock, u64 spawnCtx, s32 a2, s32 a3);
-extern s32  func_002E6AC8(s32 soundIdx, s32 flags, Moby *owner);
+extern s32  PlayMobySound(s32 soundIdx, s32 flags, Moby *owner);
 extern u64  D_1A9FA0[3];     /* particle palette A (USA D_1A9F20 +0x80) */
 extern u64  D_1A9FB8[3];     /* particle palette B (USA D_1A9F38 +0x80) */
 extern u8   D_258C80[];      /* camera-FX block, matFlag==0 (USA D_258C00 +0x80) */
@@ -2652,7 +2652,7 @@ void func_002AC718(f32 queryRadius, f32 queryPower, f32 ringRadius, f32 whiteRin
             func_002837E0(&streak, camDist * 0.0040000002f, &streak);  /* 0x3B83126F (PAL; the USA value is 0x3B5A740F) */
             camDelta.z += camDist * 0.5f;
             func_002837E0(&camDelta, (camDist + camDist) * invFrameRate, &camDelta);
-            func_00283580(&streak, &streak, &camDelta);
+            Vec4AddVu0(&streak, &streak, &camDelta);
             func_00283878(0.20000002f, &streak, &streak);                    /* 0x3E4CCCCE (PAL; the USA value is 0x3E2AAAAB) */
             life = func_002A8238(0x32, 0x4B);
             func_003098C8(pos, &streak, life, 0, 0);
@@ -2679,7 +2679,7 @@ void func_002AC718(f32 queryRadius, f32 queryPower, f32 ringRadius, f32 whiteRin
 
     /* --- Type-0B "dust" burst (count falls off with distance) --- */
     {
-        f32 dc = func_002845A0(dustCount);
+        f32 dc = IntToFloat(dustCount);
         s32 nDust = dustCount;
         f32 lifeBoost;
 
@@ -2814,7 +2814,7 @@ void func_002AC718(f32 queryRadius, f32 queryPower, f32 ringRadius, f32 whiteRin
 
     /* --- impact sound --- */
     if (moby != 0 && soundIdx != -1) {
-        func_002E6AC8(soundIdx, 0, (Moby *)moby);
+        PlayMobySound(soundIdx, 0, (Moby *)moby);
     }
 
     /* --- optional screen-space camera FX --- */
@@ -2979,7 +2979,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AD928);
 /* func_002AD948: rotate vector v by quaternion q, writing the result to out:
  * out = q * (v as a pure quaternion, w=0) * conjugate(q). The conjugate negates
  * the xyz of q and keeps its w. Matching arm stays INCLUDE_ASM; #else is the
- * structure model. EU-lockstep of USA func_002ADC50: Vec4ScaleVu0 -> func_002835F0,
+ * structure model. EU-lockstep of USA func_002ADC50: Vec4ScaleVu0 -> Vec4ScaleVu0,
  * func_00284180 (quaternion multiply) -> func_00284090. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AD948);
@@ -2987,7 +2987,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AD948);
 void func_002AD948(Vec4 *out, Vec4 *v, Vec4 *q) {
     Vec4 conj, vpure, rotated;
 
-    func_002835F0(&conj, -1.0f, q);   /* Vec4ScaleVu0: conj = -q */
+    Vec4ScaleVu0(&conj, -1.0f, q);   /* Vec4ScaleVu0: conj = -q */
     conj.w = q->w;
     vpure = *v;
     vpure.w = 0.0f;
@@ -3044,7 +3044,7 @@ void func_002ADA20(Vec4 *dst, Vec4 *src, Vec4 *axis, f32 angle) {
  * structure model. EU-lockstep of USA func_002ADDD0: Vec3CrossVu0 -> func_00283698,
  * Vec3RescaleToLenVu0 -> func_002837E0, Vec3DotVu0 -> func_00283670, Vec3LengthVu0
  * -> func_002836B0, arccos (USA func_00283B60) -> func_00283A70, sin -> func_00283A58,
- * cos -> func_00283A40, Vec4ScaleVu0 -> func_002835F0, func_002ADC50 -> func_002AD948.
+ * cos -> func_00283A40, Vec4ScaleVu0 -> Vec4ScaleVu0, func_002ADC50 -> func_002AD948.
  * pi/2 = 0x3FC90FDB, 0.5 = 0x3F000000. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002ADAC8);
@@ -3054,7 +3054,7 @@ extern void func_002837E0(Vec4 *dst, f32 len, Vec4 *src);   /* Vec3RescaleToLenV
 extern f32  func_00283670(Vec4 *a, Vec4 *b);                /* Vec3DotVu0 */
 extern f32  func_002836B0(Vec4 *v);                         /* Vec3LengthVu0 */
 extern f32  func_00283A70(f32 x);                           /* arccos */
-extern void func_002835F0(Vec4 *dst, f32 s, const Vec4 *src); /* Vec4ScaleVu0 */
+extern void Vec4ScaleVu0(Vec4 *dst, f32 s, const Vec4 *src); /* Vec4ScaleVu0 */
 
 void func_002ADAC8(Vec4 *out, Vec4 *a, Vec4 *b, s32 useRaw, f32 t) {
     Vec4 quat;
@@ -3077,7 +3077,7 @@ void func_002ADAC8(Vec4 *out, Vec4 *a, Vec4 *b, s32 useRaw, f32 t) {
 
     angle = func_00283A70(cosA);                /* arccos */
     rotAngle = (1.5707964f - angle) * (t * 0.5f);
-    func_002835F0(&quat, func_00283A58(rotAngle), &quat);  /* Vec4ScaleVu0(sin) */
+    Vec4ScaleVu0(&quat, func_00283A58(rotAngle), &quat);  /* Vec4ScaleVu0(sin) */
     quat.w = func_00283A40(rotAngle);           /* cos */
     func_002AD948(out, a, &quat);               /* rotate a by quat */
 }
@@ -3105,20 +3105,20 @@ s32 func_002ADC10(Moby *moby) {
  * +0x3C bit 0x2, else base matrix), re-add obj pos; and compose arg4's rotation
  * with the base matrix -> euler into arg6. Returns 1. Matching arm stays INCLUDE_ASM;
  * #else is the structure model. EU-lockstep of USA func_002ADF48: func_002ADF18 ->
- * func_002ADC10, func_00283DC0 -> func_00283CD0, Vec4AddVu0 -> func_00283580,
+ * func_002ADC10, func_00283DC0 -> func_00283CD0, Vec4AddVu0 -> Vec4AddVu0,
  * Vec4SubVu0 -> func_002835B0, func_00283A48 (out=m*v) -> func_00283958,
- * func_00284048 (quat->rot mtx) -> func_00283F58, MatrixMultiplyVu0 -> func_00284048,
+ * MatrixMultiplyVu0 (quat->rot mtx) -> func_00283F58, MatrixMultiplyVu0 -> MatrixMultiplyVu0,
  * MatrixToEulerAngles -> func_002AC168. src flag lw +0x3C, src pos +0x10, obj pos
  * +0x10, obj matrix +0xC0, src rot vec +0x20 (verified). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002ADC40);
 #else
 extern void func_00283CD0(Mat4x4 *dst, Vec4 *in);              /* build rot matrix from vec */
-extern void func_00283580(Vec4 *dst, Vec4 *a, Vec4 *b);       /* Vec4AddVu0 */
+extern void Vec4AddVu0(Vec4 *dst, Vec4 *a, Vec4 *b);       /* Vec4AddVu0 */
 extern void func_002835B0(Vec4 *dst, Vec4 *a, Vec4 *b);       /* Vec4SubVu0 */
 extern void func_00283958(Vec4 *out, Vec4 *v, Vec4 *m);       /* out = m * v (3x3 rotate) */
 extern void func_00283F58(Mat4x4 *dst, const Vec4 *quat);     /* quat -> rot matrix */
-extern void func_00284048(Mat4x4 *dst, Mat4x4 *a, Mat4x4 *b); /* MatrixMultiplyVu0 */
+extern void MatrixMultiplyVu0(Mat4x4 *dst, Mat4x4 *a, Mat4x4 *b); /* MatrixMultiplyVu0 */
 
 s32 func_002ADC40(void *self, Moby *obj, Vec4 *arg3, Vec4 *arg4, Vec4 *arg5, void *arg6) {
     s32 src = func_002ADC10(obj);
@@ -3132,7 +3132,7 @@ s32 func_002ADC40(void *self, Moby *obj, Vec4 *arg3, Vec4 *arg4, Vec4 *arg5, voi
         return 0;
     }
     func_00283CD0(&base, (Vec4 *)src);
-    func_00283580(arg5, arg3, (Vec4 *)(src + 0x10));            /* arg5 = arg3 + src pos */
+    Vec4AddVu0(arg5, arg3, (Vec4 *)(src + 0x10));            /* arg5 = arg3 + src pos */
     func_002835B0(arg5, arg5, (Vec4 *)((u8 *)obj + 0x10));      /* arg5 -= obj pos */
     if (*(s32 *)(src + 0x3C) & 0x2) {
         Mat4x4 rot;
@@ -3143,9 +3143,9 @@ s32 func_002ADC40(void *self, Moby *obj, Vec4 *arg3, Vec4 *arg4, Vec4 *arg5, voi
     } else {
         func_00283958(arg5, arg5, (Vec4 *)&base);
     }
-    func_00283580(arg5, arg5, (Vec4 *)((u8 *)obj + 0x10));      /* arg5 += obj pos */
+    Vec4AddVu0(arg5, arg5, (Vec4 *)((u8 *)obj + 0x10));      /* arg5 += obj pos */
     func_00283CD0(&composed, arg4);
-    func_00284048(&composed, &base, &composed);
+    MatrixMultiplyVu0(&composed, &base, &composed);
     func_002AC168(&composed, arg6);
     return 1;
 }
@@ -3158,7 +3158,7 @@ s32 func_002ADC40(void *self, Moby *obj, Vec4 *arg3, Vec4 *arg4, Vec4 *arg5, voi
  * re-applies obj's own matrix at +0xC0. Returns 1 when transformed. Matching arm
  * stays INCLUDE_ASM; #else is the structure model. EU-lockstep of USA func_002AE0B8:
  * func_002ADF18 -> func_002ADC10, func_00283DC0 -> func_00283CD0, func_00283A48
- * (out=m*v) -> func_00283958, func_00284048 (quat->rot mtx) -> func_00283F58. src
+ * (out=m*v) -> func_00283958, MatrixMultiplyVu0 (quat->rot mtx) -> func_00283F58. src
  * flag lw +0x3C; obj matrix +0xC0, src rot vec +0x20 (verified). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002ADDB0);
@@ -3198,15 +3198,15 @@ s32 func_002ADDB0(void *self, void *obj, Vec4 *in, Vec4 *out) {
  * flag +0x3C bit 0x2 is set, else the base matrix), add obj pos back, and write
  * (result - arg3) to arg4. Returns 1. Matching arm stays INCLUDE_ASM; #else is the
  * structure model. EU-lockstep of USA func_002AE198: func_002ADF18 -> func_002ADC10,
- * func_00283DC0 -> func_00283CD0, Vec4AddVu0 -> func_00283580, Vec4SubVu0 ->
- * func_002835B0, func_00283A48 (out=m*v) -> func_00283958, func_00284048 (quat->rot
+ * func_00283DC0 -> func_00283CD0, Vec4AddVu0 -> Vec4AddVu0, Vec4SubVu0 ->
+ * func_002835B0, func_00283A48 (out=m*v) -> func_00283958, MatrixMultiplyVu0 (quat->rot
  * mtx) -> func_00283F58. src flag lw +0x3C; src pos +0x10, obj pos +0x10, obj matrix
  * +0xC0, src rot vec +0x20 (verified). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002ADE90);
 #else
 extern void func_00283CD0(Mat4x4 *dst, Vec4 *in);              /* build rot matrix from vec */
-extern void func_00283580(Vec4 *dst, Vec4 *a, Vec4 *b);       /* Vec4AddVu0 */
+extern void Vec4AddVu0(Vec4 *dst, Vec4 *a, Vec4 *b);       /* Vec4AddVu0 */
 extern void func_002835B0(Vec4 *dst, Vec4 *a, Vec4 *b);       /* Vec4SubVu0 */
 extern void func_00283958(Vec4 *out, Vec4 *v, Vec4 *m);       /* out = m * v (3x3 rotate) */
 extern void func_00283F58(Mat4x4 *dst, const Vec4 *quat);     /* quat -> rot matrix */
@@ -3223,7 +3223,7 @@ s32 func_002ADE90(void *self, Moby *obj, Vec4 *arg3, Vec4 *arg4) {
         return 0;
     }
     func_00283CD0(&base, (Vec4 *)src);
-    func_00283580(&p, arg3, (Vec4 *)(src + 0x10));             /* p = arg3 + src pos */
+    Vec4AddVu0(&p, arg3, (Vec4 *)(src + 0x10));             /* p = arg3 + src pos */
     func_002835B0(&p, &p, (Vec4 *)((u8 *)obj + 0x10));         /* p -= obj pos */
     if (*(s32 *)(src + 0x3C) & 0x2) {
         Mat4x4 rot;
@@ -3235,7 +3235,7 @@ s32 func_002ADE90(void *self, Moby *obj, Vec4 *arg3, Vec4 *arg4) {
     } else {
         func_00283958(&p, &p, (Vec4 *)&base);
     }
-    func_00283580(&p, &p, (Vec4 *)((u8 *)obj + 0x10));         /* p += obj pos */
+    Vec4AddVu0(&p, &p, (Vec4 *)((u8 *)obj + 0x10));         /* p += obj pos */
     func_002835B0(arg4, &p, arg3);                            /* arg4 = p - arg3 */
     return 1;
 }
@@ -3254,8 +3254,8 @@ s32 func_002ADE90(void *self, Moby *obj, Vec4 *arg3, Vec4 *arg4) {
  * Always returns 1 once a source exists. Matching arm stays INCLUDE_ASM; #else is the
  * structure model. EU-lockstep of USA func_002AE2D8: func_002ADF18 -> func_002ADC10,
  * func_00283DC0 -> func_00283CD0, func_00284008 -> func_00283F18, func_00283A48
- * (out=m*v) -> func_00283958, Vec4AddVu0 -> func_00283580, MatrixMultiplyVu0 ->
- * func_00284048, MatrixToEulerAngles -> func_002AC168, func_002AE460 -> func_002AE158,
+ * (out=m*v) -> func_00283958, Vec4AddVu0 -> Vec4AddVu0, MatrixMultiplyVu0 ->
+ * MatrixMultiplyVu0, MatrixToEulerAngles -> func_002AC168, func_002AE460 -> func_002AE158,
  * func_002AD860 (clamp len) -> func_002AD558. g_pHeroMoby kept (EU anchored). src flag
  * lw +0x3C (bit 0x40/0x4); classSlot lbu +0x22; src pos +0x10; obj facing +0xF0, obj
  * matrix +0xC0, obj pos +0x10 (verified). */
@@ -3265,8 +3265,8 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002ADFD0);
 extern void func_00283CD0(Mat4x4 *dst, Vec4 *in);              /* build rot matrix from vec */
 extern void func_00283F18(void *dst, void *src);              /* build/convert matrix */
 extern void func_00283958(Vec4 *out, Vec4 *v, Vec4 *m);       /* out = m * v (3x3 rotate) */
-extern void func_00283580(Vec4 *dst, Vec4 *a, Vec4 *b);       /* Vec4AddVu0 */
-extern void func_00284048(Mat4x4 *dst, Mat4x4 *a, Mat4x4 *b); /* MatrixMultiplyVu0 */
+extern void Vec4AddVu0(Vec4 *dst, Vec4 *a, Vec4 *b);       /* Vec4AddVu0 */
+extern void MatrixMultiplyVu0(Mat4x4 *dst, Mat4x4 *a, Mat4x4 *b); /* MatrixMultiplyVu0 */
 extern s32  func_002AE158(void *self, Moby *obj, Vec4 *arg3, Vec4 *arg4,
                           void *arg5, void *arg6);              /* USA func_002AE460 */
 
@@ -3285,14 +3285,14 @@ s32 func_002ADFD0(Moby *self, Moby *obj, Vec4 *point, Vec4 *rotIn,
         func_00283F18(&base, (u8 *)obj + 0xC0);
     }
     func_00283958(outPos, point, (Vec4 *)&base);
-    func_00283580(outPos, outPos, (Vec4 *)((u8 *)obj + 0x10));
+    Vec4AddVu0(outPos, outPos, (Vec4 *)((u8 *)obj + 0x10));
 
     func_00283CD0(&composed, rotIn);
-    func_00284048(&composed, &base, &composed);
+    MatrixMultiplyVu0(&composed, &base, &composed);
     func_002AC168(&composed, outAngles);
 
     if (*(s32 *)(src + 0x3C) & 0x4) {
-        func_00283580(outPos, outPos, (Vec4 *)(src + 0x10));
+        Vec4AddVu0(outPos, outPos, (Vec4 *)(src + 0x10));
         func_002AE158(self, obj, outPos, outAngles, point, rotIn);
         return 1;
     }
@@ -3303,7 +3303,7 @@ s32 func_002ADFD0(Moby *self, Moby *obj, Vec4 *point, Vec4 *rotIn,
         Vec4 srcOffset = *(Vec4 *)(src + 0x10);
 
         func_002AD558(&srcOffset, 1.0f);
-        func_00283580(outPos, outPos, &srcOffset);
+        Vec4AddVu0(outPos, outPos, &srcOffset);
     }
     return 1;
 }
@@ -3316,9 +3316,9 @@ s32 func_002ADFD0(Moby *self, Moby *obj, Vec4 *point, Vec4 *rotIn,
  * arg5), then composes with arg4's rotation and writes euler angles to arg6.
  * Returns 1. Matching arm stays INCLUDE_ASM; #else is the structure model.
  * EU-lockstep of USA func_002AE460: func_002ADF18 -> func_002ADC10, func_00283DC0 ->
- * func_00283CD0, func_00284048 (quat->rot) -> func_00283F58, Vec4SubVu0 ->
+ * func_00283CD0, MatrixMultiplyVu0 (quat->rot) -> func_00283F58, Vec4SubVu0 ->
  * func_002835B0, func_00283A70 (dst=mat*vec) -> func_00283980, MatrixMultiplyVu0 ->
- * func_00284048, MatrixToEulerAngles -> func_002AC168. Offsets verified vs
+ * MatrixMultiplyVu0, MatrixToEulerAngles -> func_002AC168. Offsets verified vs
  * func_002AE158.s: src+0x3C bit0x40, obj+0xF0/+0xC0/+0x10. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AE158);
@@ -3344,7 +3344,7 @@ s32 func_002AE158(void *self, Moby *obj, Vec4 *arg3, Vec4 *arg4, void *arg5, voi
     func_002835B0(&delta, arg3, (Vec4 *)((u8 *)obj + 0x10));
     func_00283980((Vec4 *)arg5, &delta, &rot);
     func_00283CD0(&composed, arg4);
-    func_00284048(&composed, &rot, &composed);
+    MatrixMultiplyVu0(&composed, &rot, &composed);
     func_002AC168(&composed, arg6);
     return 1;
 }
@@ -3354,8 +3354,8 @@ s32 func_002AE158(void *self, Moby *obj, Vec4 *arg3, Vec4 *arg4, void *arg5, voi
  * angles written into `out`, then stash the source vectors: out+0x20 gets m1 when
  * out's flag word (+0x3C) has bit 0x2 set, and out+0x10 always gets arg2.
  * Matching arm stays INCLUDE_ASM; #else is the structure model.
- * EU-lockstep of USA func_002AE558: func_00283DC0 -> func_00283CD0, func_00284048
- * (quat->mtx) -> func_00283F58, MatrixMultiplyVu0 -> func_00284048,
+ * EU-lockstep of USA func_002AE558: func_00283DC0 -> func_00283CD0, MatrixMultiplyVu0
+ * (quat->mtx) -> func_00283F58, MatrixMultiplyVu0 -> MatrixMultiplyVu0,
  * MatrixToEulerAngles -> func_002AC168. Offsets verified vs func_002AE250.s:
  * out+0x3C bit0x2, sq m1->out+0x20, sq arg2->out+0x10. */
 #ifndef TARGET_NATIVE
@@ -3371,7 +3371,7 @@ void func_002AE250(void *out, Vec4 *arg2, Vec4 *m1, Vec4 *m2) {
     func_00283CD0(&rot1, m1);
     func_00283F58(&mtx1, (const Vec4 *)&rot1);
     func_00283CD0(&rot2, m2);
-    func_00284048(&product, &mtx1, &rot2);
+    MatrixMultiplyVu0(&product, &mtx1, &rot2);
     func_002AC168(&product, out);
     if (*(s32 *)(o + 0x3C) & 0x2) {
         *(Vec4 *)(o + 0x20) = *m1;
@@ -3535,7 +3535,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AF288);
  * 0x80 -> 0), and scale the whole vector by alpha * 1e-4. Writes to `out`. Matching
  * arm stays INCLUDE_ASM; #else is the structure model. EU-lockstep of USA func_002AF6A0:
  * func_00283AA0 -> func_002839B0, Vec4SubVu0 -> func_002835B0, Vec4ScaleVu0 ->
- * func_002835F0 (no data refs). */
+ * Vec4ScaleVu0 (no data refs). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AF398);
 #else
@@ -3553,7 +3553,7 @@ void func_002AF398(Vec4 *out, u32 *colorPtr) {
     func_002839B0(&color, *colorPtr);
     alpha = color.w * 0.0001f;
     func_002835B0(&color, &color, &offset);
-    func_002835F0(out, alpha, &color);
+    Vec4ScaleVu0(out, alpha, &color);
 }
 #endif
 
@@ -3705,7 +3705,7 @@ s32 func_002AF780(void *p, s32 rgb) {
  * stepped by func_002AB300, registered, the quat rebuilt, the weight fanned, the
  * target quad zeroed and the weight latched to 1.0. Matching arm stays INCLUDE_ASM;
  * #else is the structure model. EU-lockstep of USA func_002AFAB0: func_002A0828 ->
- * func_002A03B0, GetFloatAbs -> func_00283508, func_002AB700 -> func_002AB300,
+ * func_002A03B0, GetFloatAbs -> GetFloatAbs, func_002AB700 -> func_002AB300,
  * func_002A07B0 -> func_002A0338, func_002AA058 -> func_002A9C08, func_00283638 ->
  * func_00283548. */
 #ifndef TARGET_NATIVE
@@ -3713,7 +3713,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AF7B0);
 #else
 extern void func_002A03B0(void *owner, void *state);            /* detach state from owner */
 extern void func_002A0338(void *owner, void *arg3, void *state); /* attach state */
-extern f32  func_00283508(f32 x);                              /* GetFloatAbs (EU twin) */
+extern f32  GetFloatAbs(f32 x);                              /* GetFloatAbs (EU twin) */
 
 void func_002AF7B0(void *owner, u8 *state, void *arg3, f32 rate, f32 cap) {
     void *curOwner = *(void **)(state + 0x78);
@@ -3733,9 +3733,9 @@ void func_002AF7B0(void *owner, u8 *state, void *arg3, f32 rate, f32 cap) {
         *(f32 *)(state + 0x64) == 0.0f &&
         *(f32 *)(state + 0x68) == 0.0f &&
         *(f32 *)(state + 0x70) == 1.0f &&
-        func_00283508(*(f32 *)(state + 0x40)) < 0.005f &&
-        func_00283508(*(f32 *)(state + 0x44)) < 0.005f &&
-        func_00283508(*(f32 *)(state + 0x48)) < 0.005f) {
+        GetFloatAbs(*(f32 *)(state + 0x40)) < 0.005f &&
+        GetFloatAbs(*(f32 *)(state + 0x44)) < 0.005f &&
+        GetFloatAbs(*(f32 *)(state + 0x48)) < 0.005f) {
         if (state[1] != 0) {
             func_002A03B0(owner, state);
         }
@@ -3835,12 +3835,12 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002AFC08);
  * transform, then re-run its per-frame updates. Composes parent/srcTransform into a
  * scratch matrix (func_002A05E0), copies the translation row (m+0x30) to the child
  * pos (+0x10), optionally mirrors basis rows 0/1/2 per flags bits 1/2/4
- * (func_002835F0, scale -1.0), ticks the animation (func_002A0F68), refreshes the
+ * (Vec4ScaleVu0, scale -1.0), ticks the animation (func_002A0F68), refreshes the
  * bounding sphere/grid (func_002A1928) unless mode bit 4, installs the matrix at
  * child+0xC0 (func_00283F38/func_002ABA90) and runs func_002A1AC8. Finally mirrors
  * parent's mode bit 0 into the child's flags and forces bits 0x6. Matching arm stays
  * INCLUDE_ASM; #else is the structure model. EU-lockstep of USA func_002B0038:
- * func_002A0A58 -> func_002A05E0, Vec4ScaleVu0 -> func_002835F0, UpdateMobyAnimation
+ * func_002A0A58 -> func_002A05E0, Vec4ScaleVu0 -> Vec4ScaleVu0, UpdateMobyAnimation
  * -> func_002A0F68, UpdateMobyBSphereAndGrid -> func_002A1928, func_00284028 ->
  * func_00283F38, func_002ABE90 -> func_002ABA90, func_002A1F20 -> func_002A1AC8. */
 #ifndef TARGET_NATIVE
@@ -3858,13 +3858,13 @@ void func_002AFD38(Moby *parent, Moby *child, void *srcTransform, s32 flags) {
     func_002A05E0(parent, srcTransform, &m);
     *(Vec4 *)(c + 0x10) = *(Vec4 *)((u8 *)&m + 0x30);
     if (flags & 1) {
-        func_002835F0((Vec4 *)&m, -1.0f, (Vec4 *)&m);
+        Vec4ScaleVu0((Vec4 *)&m, -1.0f, (Vec4 *)&m);
     }
     if (flags & 2) {
-        func_002835F0((Vec4 *)((u8 *)&m + 0x10), -1.0f, (Vec4 *)((u8 *)&m + 0x10));
+        Vec4ScaleVu0((Vec4 *)((u8 *)&m + 0x10), -1.0f, (Vec4 *)((u8 *)&m + 0x10));
     }
     if (flags & 4) {
-        func_002835F0((Vec4 *)((u8 *)&m + 0x20), -1.0f, (Vec4 *)((u8 *)&m + 0x20));
+        Vec4ScaleVu0((Vec4 *)((u8 *)&m + 0x20), -1.0f, (Vec4 *)((u8 *)&m + 0x20));
     }
     func_002A0F68(child);
     if ((*(u16 *)(c + 0x34) & 4) == 0) {
@@ -3988,7 +3988,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002B08D8);
  * is supplied (b != 0) use it directly; otherwise build one from the quaternion at
  * ctx+0xC0 into a scratch matrix and transform through that. Returns 0 (callers
  * discard). Matching arm stays INCLUDE_ASM; #else is the structure model.
- * EU-lockstep of USA func_002B0C40: func_00284048 (quat->rot mtx) -> func_00283F58,
+ * EU-lockstep of USA func_002B0C40: MatrixMultiplyVu0 (quat->rot mtx) -> func_00283F58,
  * func_00283A48 (out=m*v) -> func_00283958. PIN: s32(s32,void*,void*,void*). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1A7D10", func_002B0940);

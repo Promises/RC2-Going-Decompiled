@@ -153,7 +153,7 @@ extern void func_002E4580(void);   /* BeginSkyDrawSegment */
 extern void func_00291A70(void);   /* DrawSkyShellsScaledSpin */
 extern void func_002E4318(void);   /* DrawSkyShellsFixedSpin */
 extern void func_002E45F0(void);   /* CloseSkyDrawSegment */
-extern void func_002FD5B8(s32 reg, s32 val);   /* AppendGsRegPacket */
+extern void AppendGsRegPacket(s32 reg, s32 val);   /* AppendGsRegPacket */
 extern s32  g_playerProgress;
 extern u8   D_001A7308[];          /* +0x58 = g_vramZBuffer (EU) */
 extern u8   g_nBoltCounterDisplayed[]; /* +0x48 = g_pSkyShellSpinRates (EU) */
@@ -170,8 +170,8 @@ void func_00291B80(void) {
         func_00291A70();
     }
     func_002E45F0();
-    func_002FD5B8(0x47, 0x5360B);
-    func_002FD5B8(0x4E, 0x1000000 | (*(s32 *)(D_001A7308 + 0x58) >> 13));
+    AppendGsRegPacket(0x47, 0x5360B);
+    AppendGsRegPacket(0x4E, 0x1000000 | (*(s32 *)(D_001A7308 + 0x58) >> 13));
 }
 #endif
 
@@ -192,7 +192,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00291D58);
  * 2 -> func_00292068). Matching arm stays INCLUDE_ASM.
  * Word-verified vs USA func_00291D28 (jal ORDER): WrapAnglePiSum->func_00284458,
  * cos->func_00283A40, sin->func_00283A58, func_002837F8->func_00283708,
- * GetFloatAbs->func_00283508, func_00291EB0->func_00291F50,
+ * GetFloatAbs->GetFloatAbs, func_00291EB0->func_00291F50,
  * func_00291FC8->func_00292068. dir = g_nVendorBuyQuantity+0x104F8
  * (== USA g_dirLightMatrices 0x1C26C0); g_pointLights = +0x108F8 (== USA
  * 0x1C2AC0); g_cameraRot[2] = +0x3110 (== USA 0x1B52D8); matrix-row src
@@ -206,7 +206,7 @@ extern f32  func_00284458(f32 a, f32 b);      /* WrapAnglePiSum */
 extern f32  func_00283A40(f32 x);             /* cos */
 extern f32  func_00283A58(f32 x);             /* sin */
 extern f32  func_00283708(void *light, void *req);
-extern f32  func_00283508(f32 x);             /* fabs */
+extern f32  GetFloatAbs(f32 x);             /* fabs */
 extern void func_00291F50(s32 index);
 extern void func_00292068(void *arg);
 
@@ -234,7 +234,7 @@ void func_00291DC8(void) {
             continue;
         }
         if (!(1.0f < func_00283708(light, req)) &&
-            !(1.0f < func_00283508(*(f32 *)(light + 0xC) - *(f32 *)(req + 0xC)))) {
+            !(1.0f < GetFloatAbs(*(f32 *)(light + 0xC) - *(f32 *)(req + 0xC)))) {
             continue;
         }
 
@@ -502,7 +502,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00292EF0);
  * then rebase the loaded moby class header (func_00293E08). Matching arm stays
  * INCLUDE_ASM.
  * Word-verified vs USA LoadShipDisplayModel (jal ORDER): WaitFrameDmaFence ->
- * func_002FD418, StartFileLoadPumpingVoice -> func_002B8838, FixupMobyClassHeader
+ * WaitFrameDmaFence, StartFileLoadPumpingVoice -> func_002B8838, FixupMobyClassHeader
  * -> func_00293E08. g_discToc = D_0014B5C0 (0x14B5C0, +0x80 vs USA 0x14B540);
  * g_levelDialogToc+0x13B0 = D_0014B5C0+0x76C0; g_shipModelBufferBase =
  * g_nVendorBuyQuantity+0x8CE8 (0x1BAEB0, delta 0); reg block =
@@ -514,7 +514,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00292F00);
 extern u8   D_0014B5C0[];                 /* g_discToc; +0x76C0 = g_levelDialogToc+0x13B0 */
 extern u8   g_nVendorBuyQuantity[];
 extern u8   D_1A92A0[];                   /* moby-class bounds/reloc (EU; USA D_1A91E0) */
-extern void func_002FD418(s32 mode);      /* WaitFrameDmaFence */
+extern void WaitFrameDmaFence(s32 mode);      /* WaitFrameDmaFence */
 extern void func_002B8838(void *dest, s32 startSector, s32 sectorCount);  /* StartFileLoadPumpingVoice */
 extern void func_00293E08(void *hdr, s32 instMode, void *idMap, s32 classId);  /* FixupMobyClassHeader */
 
@@ -525,7 +525,7 @@ void func_00292F00(s32 index) {
     void *shipBuf = *(void **)(g_nVendorBuyQuantity + 0x8CE8);   /* g_shipModelBufferBase */
 
     *(s32 *)(ldt + 0x18) = index;
-    func_002FD418(1);
+    WaitFrameDmaFence(1);
     func_002B8838(shipBuf,
                   entry[0x48D8 / 4] + *(s32 *)(toc + 0x3E24),
                   entry[0x48DC / 4]);
@@ -547,7 +547,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00292FC8);
  * pointers, and stage the four HUD-bank texture blocks to the IOP upload ring.
  * See USA ParseLoadedSegment for the full per-bank behaviour. Matching arm stays
  * INCLUDE_ASM.
- * Word-verified vs USA ParseLoadedSegment (jal ORDER): CopyQwords -> func_00283410,
+ * Word-verified vs USA ParseLoadedSegment (jal ORDER): CopyQwords -> CopyQwords,
  * func_002933D0 -> func_00293430, UploadDataToIopRing -> func_002EFCA8,
  * func_0028BBA0 -> func_0028BB28, func_0028B8C8 -> func_0028B850; DebugMalloc /
  * func_0011AEA0 unchanged. Strings D_1A91F0/D_1A9200/10/20/30 -> D_1A92B0/C0/D0/
@@ -563,7 +563,7 @@ extern u8   D_001A7308[];              /* +0x0 = g_pLoadedSegment */
 extern u8   g_pActiveTextTable[];      /* +0x48 = g_pHudAssetHeader; +0x70 = size table */
 extern u8   g_nVendorBuyQuantity[];    /* +0x8C78 = g_memoryArenaTable */
 extern void *DebugMalloc(s32 size, s32 arg2, void *file, s32 line);
-extern void func_00283410(void *dst, const void *src, s32 nbytes);   /* CopyQwords */
+extern void CopyQwords(void *dst, const void *src, s32 nbytes);   /* CopyQwords */
 extern s32  func_002EFCA8(void *eeAddr, s32 sizeQw, s32 arg3, void *tag);  /* UploadDataToIopRing */
 extern void func_00293430(s32 slot, u8 *dest);   /* DecompressHudBankWad */
 extern void func_0028BB28(s32 a, void *b, s32 c);
@@ -598,7 +598,7 @@ void func_00293198(void) {
     /* DebugMalloc + CopyQwords the working header copy. */
     size = (*(s32 *)(seg + 0x1C) + 0x3F) & 0xFFFFFFC0;
     header = (u8 *)DebugMalloc(size, 0, D_1A92B0, 0x2FF);
-    func_00283410(header, (void *)(*(s32 *)(seg + 0x18) + (s32)seg), size);
+    CopyQwords(header, (void *)(*(s32 *)(seg + 0x18) + (s32)seg), size);
     *(u8 **)(g_pActiveTextTable + 0x48) = header;  /* g_pHudAssetHeader */
 
     /* Resolve the header's section pointers + the fixed IOP staging base. */
@@ -811,7 +811,7 @@ void func_00293DC8(u8 *dst, u8 *src) {
  * sound/anim table rebases, bounds-vector copy, group instantiation).
  * Matching arm stays INCLUDE_ASM.
  * Word-verified vs USA FixupMobyClassHeader (jal ORDER): DebugPrintStub ->
- * func_0026FD28, CopyQwords -> func_00283410, func_00293B68 -> func_00293BC8; fmt
+ * func_0026FD28, CopyQwords -> CopyQwords, func_00293B68 -> func_00293BC8; fmt
  * string D_1A9240 -> D_1A9300 (+0xC0). g_mobyClassSlotRemap = g_mapTextureWidth
  * +0x9300 (0x1CE460, delta 0). REGION DELTA: g_mobyClassDataSizes = D_001D0C40
  * +0x1C0 (0x1D0E00) vs USA 0x1D0D80, and g_mobyClassBounds = D_001D0C40+0x940
@@ -824,7 +824,7 @@ extern s32  g_mapTextureWidth[];       /* +0x9300 = g_mobyClassSlotRemap */
 extern u8   D_001D0C40[];              /* +0x1C0 = g_mobyClassDataSizes; +0x940 = g_mobyClassBounds */
 extern u8   D_1A9300[];                /* debug fmt string (func_0026FD28 no-op) */
 extern void func_0026FD28(void *fmt, s32 classId);              /* DebugPrintStub */
-extern void func_00283410(void *dst, const void *src, s32 nbytes);  /* CopyQwords */
+extern void CopyQwords(void *dst, const void *src, s32 nbytes);  /* CopyQwords */
 extern void func_00293BC8(u8 *groups, s32 instMode, u8 *idMap, s32 groupCount);
 
 void func_00293E08(void *hdrArg, s32 instMode, void *idMapArg, s32 classId) {
@@ -886,7 +886,7 @@ void func_00293E08(void *hdrArg, s32 instMode, void *idMapArg, s32 classId) {
                             *(u16 *)(abs8 + 0xE) = 0;
                             *(u16 *)(abs8 + 0xC) = (u16)(tmp - 0x10);
                             qc = *(u8 *)(ptr + 0xC);
-                            func_00283410((void *)(abs8 + 0x10),
+                            CopyQwords((void *)(abs8 + 0x10),
                                           (void *)(abs8 + 0x20), (qc - 2) << 4);
                         }
                     }
@@ -1341,7 +1341,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00294FD0);
  * D_00180000+0x86E0 (0x1886E0, +0x80); D_1A93B0 -> D_1A9470 (+0xC0); D_1A9370 ->
  * D_1A9430 (+0xC0); D_001A7210+0x68 -> D_001A7290+0x68 (+0x80); g_frameArenaBase ->
  * g_nVendorBuyQuantity+0x58, g_sceneArenaCursor -> +0x68 (delta 0). jal ORDER:
- * WaitFrameDmaFence->func_002FD418, DebugPrintStub->func_0026FD28, func_00294E98->
+ * WaitFrameDmaFence->WaitFrameDmaFence, DebugPrintStub->func_0026FD28, func_00294E98->
  * func_00294EF8, func_0029DDE8->func_0029D948, func_00132858->func_001328B8,
  * snd_Pump/snd_BankLoadFromIOP unchanged, func_00132828->func_00132888,
  * LoadMobyClassFromWad->func_00294FD0. Record/TOC/listener offsets unchanged. */
@@ -1353,7 +1353,7 @@ extern u8   g_nVendorBuyQuantity[];     /* +0x58 g_frameArenaBase, +0x68 g_scene
 extern u8   D_001A7290[];               /* +0x68 = IOP sound-bank staging base (EU) */
 extern s32  D_1A9470;                   /* default sound-object stand-in (gp_rel; USA D_1A93B0) */
 extern u8   D_1A9430[];                 /* eviction debug fmt string (USA D_1A9370) */
-extern void func_002FD418(s32 mask);            /* WaitFrameDmaFence */
+extern void WaitFrameDmaFence(s32 mask);            /* WaitFrameDmaFence */
 extern void func_0026FD28(void *fmt, s32 classId);  /* DebugPrintStub (retail no-op) */
 extern void func_00294EF8(s32 a, s32 b);        /* func_00294E98 */
 extern s32  func_0029D948(void *dst, void *src, s32 count);  /* func_0029DDE8 */
@@ -1403,7 +1403,7 @@ void func_00295298(s32 classId) {
         }
     }
 
-    func_002FD418(1);
+    WaitFrameDmaFence(1);
     if (slot == 3) {                                 /* not resident -> evict */
         func_0026FD28(D_1A9430, classId);
         func_00294EF8(classId, 0);
@@ -1909,12 +1909,12 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00298108);
  * sixteen 32-bit words (64 bytes) and replicates that run four times (256 bytes)
  * into dst — a 4x horizontal scale. Consumes 128*16 = 2048 source bytes, writes
  * 128*256 = 32 KB. Matching arm stays INCLUDE_ASM; #else is the structure model.
- * Word-verified vs USA func_00298308: only callee CopyQwords -> func_00283410
+ * Word-verified vs USA func_00298308: only callee CopyQwords -> CopyQwords
  * (x4); region-agnostic body otherwise. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00298338);
 #else
-extern void func_00283410(void *dst, const void *src, s32 nbytes);   /* CopyQwords */
+extern void CopyQwords(void *dst, const void *src, s32 nbytes);   /* CopyQwords */
 
 void func_00298338(void *dst, u8 *src) {
     s32 lut[256];   /* bit-expand table: input byte -> nibble mask */
@@ -1941,10 +1941,10 @@ void func_00298338(void *dst, u8 *src) {
             row[k] = lut[*src];
             src++;
         }
-        func_00283410(out, row, 0x40); out += 0x40;
-        func_00283410(out, row, 0x40); out += 0x40;
-        func_00283410(out, row, 0x40); out += 0x40;
-        func_00283410(out, row, 0x40); out += 0x40;
+        CopyQwords(out, row, 0x40); out += 0x40;
+        CopyQwords(out, row, 0x40); out += 0x40;
+        CopyQwords(out, row, 0x40); out += 0x40;
+        CopyQwords(out, row, 0x40); out += 0x40;
     }
 }
 #endif

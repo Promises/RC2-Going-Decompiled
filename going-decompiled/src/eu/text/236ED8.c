@@ -1769,20 +1769,20 @@ s32 func_0033BE50(void *w) {
  * (p+0xA0, p+0xEC) and the nine text labels at +0x138 (stride 0x58).
  * Matching arm stays INCLUDE_ASM; #else is the structure model.
  * Word-verified vs USA func_0033B428: GuiSpriteElementDraw->func_00338000,
- * AppendGsRegPacket->func_002FD5B8, MapDraw KEPT, func_002DBC98->func_002DBC60,
+ * AppendGsRegPacket->AppendGsRegPacket, MapDraw KEPT, func_002DBC98->func_002DBC60,
  * GuiTextElementDraw->func_00338770; offsets identical. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033C308);
 #else
-extern void func_002FD5B8(s32 reg, s32 val);   /* USA AppendGsRegPacket */
+extern void AppendGsRegPacket(s32 reg, s32 val);   /* USA AppendGsRegPacket */
 extern void MapDraw(s32 a, s32 b);
 extern void func_002DBC60(s32 a);              /* USA func_002DBC98 */
 void func_0033C308(void *p) {
     if (*(s32 *)((char *)p + 0x490) != 0) {
         func_00338000((char *)p + 0x8);
         func_00338000((char *)p + 0x54);
-        func_002FD5B8(0x42, 0x44);
-        func_002FD5B8(0x47, 0xB);
+        AppendGsRegPacket(0x42, 0x44);
+        AppendGsRegPacket(0x47, 0xB);
         MapDraw(0, 1);
         func_002DBC60(0);
         func_00338000((char *)p + 0xA0);

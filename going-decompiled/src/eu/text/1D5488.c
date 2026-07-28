@@ -207,12 +207,12 @@ extern void func_00288798(void);          /* USA func_002888A8: overlay-owner ac
 extern void func_0029CEF8(s32 padMask);   /* USA func_0029D398 */
 extern s32  func_00343638(void *query);   /* USA func_003424C8: focused GUI list item */
 extern void *g_pGuiManager;
-extern void func_002FD5B8(s32 reg, s32 val);
+extern void AppendGsRegPacket(s32 reg, s32 val);
 extern void func_002DFF60(s32 id, s32 arg); /* menu sound player (EU; USA func_002DFFA0) */
 extern void func_0027FF28(s32 x, s32 y, u32 rgba, u8 *str, s32 wrap);
 extern s32  func_00280050(s32 x, s32 y, u32 rgba, char *str, s32 wrap);
 extern void func_0027FA40(s32 x, s32 y, u32 rgba, u8 *str, s32 wrap);
-extern char *func_002898E8(s32 id);
+extern char *GetLocalizedString(s32 id);
 extern s32 g_nSaveLoadStatusCode;
 extern void func_002DFF60(s32 id, s32 arg);
 extern void func_0027FA40(s32 x, s32 y, u32 rgba, u8 *str, s32 wrap); /* DrawStringFont1 (EU) */
@@ -221,7 +221,7 @@ extern s32 func_0028EEC0(s32 iconId); /* GetHudIconTex0 (EU) */
 extern void func_0028FC90(u32 x, f32 y, u32 z, u32 s, u32 rot, s32 w, s32 h, s32 tex); /* DrawHudSpriteRotated (EU) */
 extern u8 D_001ABC68, D_001ABC69, D_001ABC70, D_001ABC71; /* USA D_001ABBF8/BBF9/BC00/BC01 glyphs (+0x70) */
 extern s32 func_00280050(s32 cx, s32 cy, u32 rgba, char *str, s32 wrap); /* DrawFont1CenteredLabel (EU) */
-extern char *func_002898E8(s32 id); /* GetLocalizedString (EU) */
+extern char *GetLocalizedString(s32 id); /* GetLocalizedString (EU) */
 extern s32 D_00262960[]; /* USA D_00262BA0 caption table (-0x240 lane) */
 extern u8 D_001A8D38; /* USA D_001A8C88 memcard-present flag (+0xB0) */
 extern void func_002CA858(void); /* USA func_002CA980 (EU) */
@@ -400,7 +400,7 @@ s32 func_002D59D0(void) {
  * Word-verified vs USA func_002D5A48: callees GuiFontAtlasLookupGlyph->func_00338AA8,
  * func_003017F8->func_00301AC0, func_002801B8->func_00280050, func_00280090->
  * func_0027FF28, Begin/End2dDrawBatch->func_0027CA28/func_0027CB48,
- * GetLocalizedString->func_002898E8; cursor/offset globals D_1ABAD0..E4 +0x68
+ * GetLocalizedString->GetLocalizedString; cursor/offset globals D_1ABAD0..E4 +0x68
  * (->D_1ABB38..4C), float D_1B2328->D_1B23A8 (+0x80); REGION DELTA: label string IDs
  * 0x2BF8->0x0B73 and 0x2BE5->0x0B60. Colors/glyph codes NTSC/PAL-identical. */
 #ifndef TARGET_NATIVE
@@ -430,9 +430,9 @@ s32 func_002D5A08(void) {
         func_00301AC0(glyph, 0x55F0C070, (f32)D_1ABB40, (f32)D_1ABB44, 1.0f, D_1B23A8, 0.0f);
 
         func_00280050(D_1ABB40 + D_1ABB38, D_1ABB44 + D_1ABB3C, 0x80F0F0F0,
-                      func_002898E8(0x0b73), -1);
+                      GetLocalizedString(0x0b73), -1);
         func_0027FF28(D_1ABB40 + D_1ABB48, D_1ABB44 + D_1ABB4C, 0x80F0F0F0,
-                      (u8 *)func_002898E8(0x0b60), -1);
+                      (u8 *)GetLocalizedString(0x0b60), -1);
     }
     func_0027CB48();
     return 0;
@@ -515,7 +515,7 @@ s32 func_002D5C20(void *focus) {
  * INCLUDE_ASM; the #else does not reproduce the gp/abs FP-load schedule.
  * Word-verified vs USA func_002D5D10: callees GuiFontAtlasLookupGlyph->func_00338AA8,
  * func_003017F8->func_00301AC0, func_002801B8->func_00280050, Begin/End2dDrawBatch->
- * func_0027CA28/func_0027CB48, GetLocalizedString->func_002898E8; cursor/offset
+ * func_0027CA28/func_0027CB48, GetLocalizedString->GetLocalizedString; cursor/offset
  * globals D_1ABB08..1C,20 +0x68 (->D_1ABB70..84,88), float D_1B2328->D_1B23A8 (+0x80);
  * REGION DELTA: label string IDs 0x2BF7->0x0B72 and 0x2BE5->0x0B60. Colors and glyph
  * codes NTSC/PAL-identical. */
@@ -547,9 +547,9 @@ s32 func_002D5CD8(void) {
         func_00301AC0(glyph, (s32)0x80FFDE8D, (f32)D_1ABB78, (f32)D_1ABB7C, 1.0f, D_1B23A8, 0.0f);
 
         func_00280050(D_1ABB78 + D_1ABB70, D_1ABB7C + D_1ABB74, 0x80F0F0F0,
-                      func_002898E8(0x0b72), -1);
+                      GetLocalizedString(0x0b72), -1);
         func_00280050(D_1ABB78 + D_1ABB80, D_1ABB7C + D_1ABB84, 0x80F0F0F0,
-                      func_002898E8(0x0b60), -1);
+                      GetLocalizedString(0x0b60), -1);
     }
     func_0027CB48();
     return 0;
@@ -1639,7 +1639,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002DA450);
  * save exists, g_playerProgress[0]!=0), left-align the column at >=2px, and draw
  * the rows evenly down the widget (step = obj->0x24 / rowCount). Returns 2.
  * Matching arm stays INCLUDE_ASM; #else is the structure model. Word-verified vs USA
- * func_002DA4F0: AppendGsRegPacket->func_002FD5B8, Begin2dDrawBatch->func_0027CA28,
+ * func_002DA4F0: AppendGsRegPacket->AppendGsRegPacket, Begin2dDrawBatch->func_0027CA28,
  * MeasureFont2Text->func_0027F680, func_0027F7A0->func_0027F608, DrawDebugString->
  * func_0027FAC0, EnableInlineColorCodes->func_0027F5F8, End2dDrawBatch->func_0027CB48;
  * GetLocalizedString stays named. REGION DELTA: localized-string IDs differ USA->EU
@@ -1661,8 +1661,8 @@ s32 func_002DA4B8(MenuWidget *obj) {
     static const s32 ids[] = {0xB6E, 0xB7A, 0xB7B, 0xB7C, 0xB60};
     s32 i, w;
 
-    func_002FD5B8(0x42, 0x44);
-    func_002FD5B8(0x47, 0xB);
+    AppendGsRegPacket(0x42, 0x44);
+    AppendGsRegPacket(0x47, 0xB);
     func_0027CA28(0);
     maxw = func_0027F680(GetLocalizedString(0xB6E), -1);
     { s32 t = func_0027F680(GetLocalizedString(0xB7A), -1); if (maxw <= t) maxw = t; }
@@ -1889,7 +1889,7 @@ s32 func_002DBB88(void *obj) {
  * frame counter and a layout that differs for the save-screen vs map-screen instances.
  * Returns 4 when drawn, else 0. Matching arm stays INCLUDE_ASM; #else is the structure
  * model (USA is tagged non-byte-exact; carried verbatim to stay in lockstep).
- * Word-verified vs USA func_002DBC98: AppendGsRegPacket->func_002FD5B8,
+ * Word-verified vs USA func_002DBC98: AppendGsRegPacket->AppendGsRegPacket,
  * DrawHudSpriteTex0->func_0028FAF8; kind table D_00261978->D_261720; phase base
  * D_001B1518->D_001B1380+0x218; screen instance D_25E660->D_25E420; current level /
  * active slot READ via g_mapVertexData+0x230/+0x234; sprite tex handles D_001C5188/
@@ -1922,8 +1922,8 @@ s32 func_002DBC60(void) {
     phase = *(s32 *)(D_001B1380 + 0x218) + slot * 0x2ab;
     phaseFix = (phase < 0) ? (phase + 0x7ff) : phase;
     off = box[kind];
-    func_002FD5B8(0x47, 0);
-    func_002FD5B8(8, 0);
+    AppendGsRegPacket(0x47, 0);
+    AppendGsRegPacket(8, 0);
     if (kind == 0) {
         func_0028FAF8(*(s64 *)(g_mapVertexData + 0x268), x << 4, y << 4, 7, 7,
                       w << 4, h << 4, 0);
@@ -1931,11 +1931,11 @@ s32 func_002DBC60(void) {
         func_0028FAF8(*(s64 *)(g_mapVertexData + 0x268), (x + off) * 0x10,
                       (y + off) * 0x10, 7, 7, (w + off * -2) * 0x10,
                       (h + off * -2) * 0x10, phase + (phaseFix >> 0xb) * -0x800);
-        func_002FD5B8(8, 5);
+        AppendGsRegPacket(8, 5);
         func_0028FAF8(*(s64 *)(g_mapVertexData + 0x278), x << 4, y << 4, 7, 7,
                       w << 4, h << 4, 0);
     }
-    func_002FD5B8(0x47, 0x360b);
+    AppendGsRegPacket(0x47, 0x360b);
     return 4;
 }
 #endif
@@ -2047,8 +2047,8 @@ s32 func_002DBEA8(MenuWidget *obj) {
  * chosen by the value-pointer's first byte (nonzero -> row[2], else row[3]). The
  * selected row (+0x38) is highlighted 0x8020FFFF, others 0x80FFA888. Returns 2.
  * Matching arm stays INCLUDE_ASM; #else is the structure model. Word-verified vs
- * USA (call-site order): AppendGsRegPacket->func_002FD5B8,
- * Begin2dDrawBatch->func_0027CA28, GetLocalizedString->func_002898E8,
+ * USA (call-site order): AppendGsRegPacket->AppendGsRegPacket,
+ * Begin2dDrawBatch->func_0027CA28, GetLocalizedString->GetLocalizedString,
  * DrawStringFont1->func_0027FA40, DrawFont1RightJustifiedLabel->func_0027FF28,
  * End2dDrawBatch->func_0027CB48. REGION DELTA: empty-list placeholder localized-
  * string ID is 0x2CA2 (USA) -> 0x0C1C (EU). No struct-offset/other const deltas. */
@@ -2059,12 +2059,12 @@ s32 func_002DC0B8(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
     s32 *rows;
     s32 n, step, y, i;
-    func_002FD5B8(0x47, 0x2004b);
+    AppendGsRegPacket(0x47, 0x2004b);
     func_0027CA28(0);
     rows = *(s32 **)(o + 0x34);
     if ((*(u32 *)(o + 0x30) & 1) && rows[0] == 0) {
         /* empty-list placeholder text box drawn here in the original */
-        func_002898E8(0x0c1c);
+        GetLocalizedString(0x0c1c);
         rows = *(s32 **)(o + 0x34);
     }
     n = 0;
@@ -2078,9 +2078,9 @@ s32 func_002DC0B8(MenuWidget *obj) {
             s32 col = (i == *(s32 *)(o + 0x38)) ? 0x8020ffff : 0x80ffa888;
             u8 *vp = *(u8 **)(row + 1);
             s32 valId = (vp && *vp) ? row[2] : row[3];
-            func_0027FA40(0xc, y, col, (u8 *)func_002898E8(row[0]), -1);
+            func_0027FA40(0xc, y, col, (u8 *)GetLocalizedString(row[0]), -1);
             func_0027FF28(*(s32 *)(o + 0x20) - 0xc, y, 0x80ffa888,
-                          (u8 *)func_002898E8(valId), -1);
+                          (u8 *)GetLocalizedString(valId), -1);
             i++;
             y += step;
         } while (*(s32 *)((u8 *)*(s32 **)(o + 0x34) + i * 0x14) != 0);
@@ -2165,10 +2165,10 @@ s32 func_002DC340(MenuWidget *obj) {
  * space them evenly over obj->0x24, and for each row draw the left label and a
  * right-justified value string (selected row highlighted 0x8020FFFF, else
  * 0x80FFA888). Returns 2. Matching arm stays INCLUDE_ASM; #else is the structure
- * model. Word-verified vs USA (call-site order): AppendGsRegPacket->func_002FD5B8,
+ * model. Word-verified vs USA (call-site order): AppendGsRegPacket->AppendGsRegPacket,
  * Begin2dDrawBatch->func_0027CA28, DrawStringFont1->func_0027FA40,
  * DrawFont1RightJustifiedLabel->func_0027FF28, End2dDrawBatch->func_0027CB48,
- * GetLocalizedString->func_002898E8; no data-global/struct deltas (all obj-relative). */
+ * GetLocalizedString->GetLocalizedString; no data-global/struct deltas (all obj-relative). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002DC4E8);
 #else
@@ -2177,7 +2177,7 @@ s32 func_002DC4E8(MenuWidget *obj) {
     s32 *rows = *(s32 **)(o + 0x34);
     s32 n = 0;
     s32 step, y, i;
-    func_002FD5B8(0x47, 0x2004b);
+    AppendGsRegPacket(0x47, 0x2004b);
     func_0027CA28(0);
     while (rows[n * 6] != 0) n++;
     step = *(s32 *)(o + 0x24) / (n + 1);
@@ -2187,9 +2187,9 @@ s32 func_002DC4E8(MenuWidget *obj) {
             s32 *row = (s32 *)((u8 *)*(s32 **)(o + 0x34) + i * 0x18);
             u32 col = (i == *(s32 *)(o + 0x38)) ? 0x8020ffff : 0x80ffa888;
             u8 *optByte = *(u8 **)(row + 1);
-            func_0027FA40(0xc, y, col, (u8 *)func_002898E8(row[0]), -1);
+            func_0027FA40(0xc, y, col, (u8 *)GetLocalizedString(row[0]), -1);
             func_0027FF28(*(s32 *)(o + 0x20) - 0xc, y, 0x80ffa888,
-                          (u8 *)func_002898E8(row[*optByte + 2]), -1);
+                          (u8 *)GetLocalizedString(row[*optByte + 2]), -1);
             if (*(s32 *)((u8 *)*(s32 **)(o + 0x34) + (i + 1) * 0x18) == 0) break;
             y += step;
         }
@@ -2521,7 +2521,7 @@ s32 func_002DCD88(MenuWidget *obj) {
  * the D_00262960 table (idx*3 / idx*3+1). Returns 2. Matching arm stays
  * INCLUDE_ASM; #else is the structure-exact model. Word-verified vs USA
  * func_002DCF58: callee retargets (Begin/End2dDrawBatch, DrawFont1CenteredLabel
- * func_002801B8->func_00280050, GetLocalizedString func_002899F8->func_002898E8)
+ * func_002801B8->func_00280050, GetLocalizedString func_002899F8->GetLocalizedString)
  * and data relocs (g_pCurrentMenuScreen +0x80; table D_00262BA0->D_00262960,
  * -0x240 lane). REGION CONSTANT DELTA: the "no info" string id is USA 0x2CFB /
  * EU 0xC75 (localized-string table differs per region) — ported as 0xC75. */
@@ -2536,14 +2536,14 @@ s32 func_002DCF20(MenuWidget *obj) {
     func_0027CA28(0);
     if (idx == -1) {
         func_00280050(*(s32 *)(o + 0x20) / 2, *(s32 *)(o + 0x24) / 2 - 8,
-                      0x80ffa888, func_002898E8(0xc75), -1);
+                      0x80ffa888, GetLocalizedString(0xc75), -1);
     } else {
         s32 w = *(s32 *)(o + 0x20);
         s32 h = *(s32 *)(o + 0x24);
         func_00280050(w / 2, h / 3 - 8, 0x80ffa888,
-                      func_002898E8(D_00262960[idx * 3]), -1);
+                      GetLocalizedString(D_00262960[idx * 3]), -1);
         func_00280050(w / 2, (h << 1) / 3 - 8, 0x80ffa888,
-                      func_002898E8(D_00262960[idx * 3 + 1]), -1);
+                      GetLocalizedString(D_00262960[idx * 3 + 1]), -1);
     }
     func_0027CB48();
     return 2;
@@ -2563,7 +2563,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002DD418);
  * Returns 2. Matching arm stays INCLUDE_ASM; the #else does not model the
  * alternate-entry sp adjust or the div-by-0x1C guard. Word-verified vs USA
  * func_002DD630: callees func_002E0010->func_002DFFC8, func_002801B8->func_00280050,
- * Begin/End2dDrawBatch->func_0027CA28/func_0027CB48, GetLocalizedString->func_002898E8;
+ * Begin/End2dDrawBatch->func_0027CA28/func_0027CB48, GetLocalizedString->GetLocalizedString;
  * globals g_areaTable->D_139460 (+0x80), g_menuScreenBlock->D_001F0000+0x2840,
  * D_1ABC54->D_1ABCC4 (+0x70, gp-rel), g_levelSelectEntries named both regions;
  * REGION DELTA: placeholder string ID 0x2DAA->0x0E39. */
@@ -2593,7 +2593,7 @@ s32 func_002DD5F8(void *screenArg) {
         baseY = *(s32 *)(obj + 0x1C);
         if (lvlIdx == -1) {
             func_00280050(x, baseY + D_1ABCC4 / 2, 0x80F0F0F0,
-                          func_002898E8(0x0e39), -1);
+                          GetLocalizedString(0x0e39), -1);
         } else {
             s32 valStrId = *(s32 *)(g_levelSelectEntries + lvlIdx * 8 + 4);
             s32 labelY = (valStrId >= 0) ? baseY : baseY + (D_1ABCC4 >> 1);
@@ -2602,7 +2602,7 @@ s32 func_002DD5F8(void *screenArg) {
             func_00280050(x, labelY, 0x80F0F0F0, func_002DFFC8(buf, lvlIdx), -1);
             if (valStrId >= 0) {
                 func_00280050(x, baseY + D_1ABCC4, 0x80F0F0F0,
-                              func_002898E8(valStrId), -1);
+                              GetLocalizedString(valStrId), -1);
             }
         }
     }

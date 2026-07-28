@@ -124,9 +124,9 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002CA2C0);
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002CA4F0);
 #else
 extern s32  func_002845B0(f32 v);                         /* FloatToInt */
-extern f32  func_002845A0(s32 v);                         /* IntToFloat */
+extern f32  IntToFloat(s32 v);                         /* IntToFloat */
 extern void func_002835B0(void *dst, void *a, void *b);   /* Vec4SubVu0 */
-extern void func_00283580(void *dst, void *a, void *b);   /* Vec4AddVu0 */
+extern void Vec4AddVu0(void *dst, void *a, void *b);   /* Vec4AddVu0 */
 extern void func_002837E0(void *dst, void *src, f32 len); /* Vec3RescaleToLenVu0 */
 void func_002CA4F0(u8 *path, s32 *outSeg, f32 *outFrac, Vec4 *outVec, f32 dist,
                    f32 segLen) {
@@ -138,14 +138,14 @@ void func_002CA4F0(u8 *path, s32 *outSeg, f32 *outFrac, Vec4 *outVec, f32 dist,
         if (seg >= 0) {
             Vec4 *start = (Vec4 *)(path + seg * 0x10 + 0x10);
             Vec4 *next  = (Vec4 *)(path + seg * 0x10 + 0x20);
-            f32 frac = dist - func_002845A0(seg) * segLen;
+            f32 frac = dist - IntToFloat(seg) * segLen;
             Vec4 tmp;
 
             *outFrac = frac;
             func_002835B0(&tmp, start, next);
             *outVec = tmp;
             func_002837E0(outVec, outVec, frac);
-            func_00283580(&tmp, outVec, start);
+            Vec4AddVu0(&tmp, outVec, start);
             *outVec = tmp;
             return;
         }
@@ -1103,14 +1103,14 @@ s32 func_002CE218(void) {
  * (PAL id 0xB60) at (D_1ABA40, D_1ABA44) in 0x80F0F0F0; then, if the GUI is up and its museum
  * widget handle (g_guiInstance+0x38000 .+0x7A9C) is non-null, renders that moby model
  * (func_002A0C10 begin .. func_002A0D40 finish + the func_00350Dxx/Exx/F98 model-setup chain),
- * waits one DMA fence (func_002FD418(0x10)) and patches the moby packet's TEX0 (func_002A08A0).
+ * waits one DMA fence (WaitFrameDmaFence(0x10)) and patches the moby packet's TEX0 (func_002A08A0).
  * Matching arm stays INCLUDE_ASM (beql branch-likely null guard + 64-bit daddu handle-copy not
  * reproduced by cc1); #else is the structure model. Word-verified vs USA func_002CE3A0: overlay
  * func_0029CFE0->func_0029CB40; string id 0x2BE5->0xB60 (PAL localized-table index, genuine
  * region diff); label pos D_1AB9D8/DC->D_1ABA40/44 (+0x68); text draw func_002801B8->func_0027FF28;
  * GUI field 0x79EC->0x7A9C (+0xB0); moby chain func_002A1000/1028/1058->func_002A0B88/0BB0/0BE0,
  * BeginMobyDrawSegment->func_002A0C10, FinishMobyRenderChain->func_002A0D40, func_0034F928/9B8/9F8/
- * AF8->func_00350DC8/E58/E98/F98, WaitFrameDmaFence->func_002FD418, PatchMobyPacketTex0->func_002A08A0. */
+ * AF8->func_00350DC8/E58/E98/F98, WaitFrameDmaFence->WaitFrameDmaFence, PatchMobyPacketTex0->func_002A08A0. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002CE388);
 #else
@@ -1124,7 +1124,7 @@ s32 func_002CE388(void) {
     extern void func_002A0BE0(void);
     extern void func_002A0D40(void);
     extern void func_002A08A0(void);
-    extern void func_002FD418(s32 mask);
+    extern void WaitFrameDmaFence(s32 mask);
     extern void func_00350DC8(s32 handle);
     extern void func_00350E58(s32 handle);
     extern void func_00350E98(s32 handle);
@@ -1148,7 +1148,7 @@ s32 func_002CE388(void) {
         func_00350F98(handle, handle + 0xC00);
         func_002A0BE0();
         func_002A0D40();
-        func_002FD418(0x10);
+        WaitFrameDmaFence(0x10);
         func_002A08A0();
     }
     return 0;
