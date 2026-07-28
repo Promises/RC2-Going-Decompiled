@@ -368,13 +368,14 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_002925B0);
 #else
 extern u8   D_001F0000[];                 /* particle pool base (EU +0x80 vs USA) */
 extern u8   g_nBoltCounterDisplayed[];    /* +0x45C = g_particleTexCount */
-extern void func_00283370(void *dst, void *src);   /* copy blob body */
+extern void *func_00283370(void *dst, const void *src, s32 nbytes); /* EU byte memcpy */
 extern s32  func_002832D8(s32 x);                  /* Log2Floor */
 
 void func_002925B0(void *hdrArg, s32 texBase, s32 *texRecords, s32 texCount) {
     u8  *hdr       = (u8 *)hdrArg;
     s32  defCount  = *(s32 *)(hdr + 0);
     s32  blobField = *(s32 *)(hdr + 8);
+    s32  blobLen   = *(s32 *)(hdr + 0xC);            /* asm: lw $6,0xC($4) @0x2925F8 */
     s32 *blob      = (s32 *)(D_001F0000 + 0x2740);   /* g_particleFxBlob */
     s32 *defs      = (s32 *)(D_001F0000 + 0x2540);   /* g_particleEffectDefs */
     s32 *texTable  = (s32 *)(D_001F0000 + 0x1F40);   /* g_particleTexTable */
@@ -392,7 +393,7 @@ void func_002925B0(void *hdrArg, s32 texBase, s32 *texRecords, s32 texCount) {
         }
     }
 
-    func_00283370(blob, hdr + blobField);
+    func_00283370(blob, hdr + blobField, blobLen);
 
     if (texCount > 0) {
         s32 *rec = texRecords;

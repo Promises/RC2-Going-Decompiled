@@ -902,7 +902,7 @@ extern u8   g_particleFxBlob[];       /* 0x1F26C0  relocated per-level blob */
 extern s32  g_particleEffectDefs[];   /* 0x1F24C0  128 effect-def ptrs into blob */
 extern s32  g_particleTexTable[];     /* 0x1F1EC0  8 bytes/tex: VRAM + CLUT addr */
 extern s32  g_particleTexCount;       /* 0x1B1D24 */
-extern void func_00283460(void *dst, void *src);
+extern void *func_00283460(void *dst, const void *src, s32 nbytes); /* memcpy */
 extern s32  Log2Floor(s32 x);
 #endif
 
@@ -913,6 +913,7 @@ void BindParticleFxAssets(void *hdrArg, s32 texBase, s32 *texRecords, s32 texCou
     u8 *hdr       = (u8 *)hdrArg;
     s32 defCount  = *(s32 *)(hdr + 0);
     s32 blobField = *(s32 *)(hdr + 8);
+    s32 blobLen   = *(s32 *)(hdr + 0xC);   /* asm: lw $6,0xC($4) @0x292558 (delay slot) */
 
     if (defCount > 0) {
         s32 *entry = (s32 *)(hdr + 0x10);
@@ -927,7 +928,7 @@ void BindParticleFxAssets(void *hdrArg, s32 texBase, s32 *texRecords, s32 texCou
         }
     }
 
-    func_00283460(g_particleFxBlob, hdr + blobField);
+    func_00283460(g_particleFxBlob, hdr + blobField, blobLen);
 
     if (texCount > 0) {
         s32 *rec = texRecords;
