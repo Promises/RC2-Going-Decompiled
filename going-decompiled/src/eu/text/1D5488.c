@@ -225,7 +225,6 @@ extern char *func_002898E8(s32 id); /* GetLocalizedString (EU) */
 extern s32 D_00262960[]; /* USA D_00262BA0 caption table (-0x240 lane) */
 extern u8 D_001A8D38; /* USA D_001A8C88 memcard-present flag (+0xB0) */
 extern void func_002CA858(void); /* USA func_002CA980 (EU) */
-extern void func_00287988(void); /* USA func_002888A8 (EU) */
 extern void func_0033B688(void *guiField); /* USA func_0033A7A8 (EU) */
 extern s32 CountSkillPointsCompleted(void);
 extern s32 func_002B19A0(void); /* USA func_002B1D40 misc-progress count (EU) */
@@ -2619,7 +2618,7 @@ s32 func_002DD5F8(void *screenArg) {
  * a memory card is present and the GUI exists show its panel. Returns 0. Matching
  * arm stays INCLUDE_ASM; #else is the structure-exact model. Word-verified vs USA
  * func_002DD7E8: callee retargets (func_002DF1B8->func_002DF178, func_002DF368->
- * func_002DF328, func_002CA980->func_002CA858, func_002888A8->func_00287988,
+ * func_002DF328, func_002CA980->func_002CA858, func_002888A8->func_00288798,
  * func_0033A7A8->func_0033B688), D_001A8C88->D_001A8D38 (+0xB0), g_pGuiManager
  * gp-rel (per-region). REGION STRUCT-OFFSET DELTA: the GUI panel field offset is
  * USA 0x3CEA0 / EU 0x3CF50 (+0xB0, the known EU GUI-struct shift) — ported EU. */
@@ -2633,7 +2632,7 @@ s32 func_002DD7B0(MenuWidget *obj) {
     *(s32 *)(o + 0x4C) = 0;
     *(s32 *)(o + 0x48) = func_002DF328(0);
     func_002CA858();
-    func_00287988();
+    func_00288798();
     if (D_001A8D38 != 0 && g_pGuiManager != 0) {
         func_0033B688((u8 *)g_pGuiManager + 0x3CF50);
     }
