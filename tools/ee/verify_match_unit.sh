@@ -36,10 +36,25 @@
 # EXIT STATUS (a misuse must never look like a verdict)
 #   0  MATCH        — every word equals the ROM
 #   1  DIFFERS      — a real byte difference (this, and only this, is a failure)
-#   2  USAGE/ARG    — bad arguments; e.g. a whole-unit .o passed as the target
-#   3  UNVERIFIABLE — the tool cannot decide (unresolvable symbol, reloc type it
+#   2  UNVERIFIABLE — the tool cannot decide (unresolvable symbol, reloc type it
 #                     does not model, function absent from the ROM window). NOT
 #                     a pass and NOT a fail; it is its own visible state.
+#   3  USAGE/ARG    — bad arguments; e.g. a whole-unit .o passed as the target
+#
+# ⚠️ THESE BANDS ARE COMMIT-KEYED — CHECK YOUR CHECKOUT BEFORE TRUSTING THEM.
+# The 2/3 assignment above holds only from `8b2c0190` onward. BEFORE that commit
+# the code used the OPPOSITE mapping (ARG ERROR→2, UNVERIFIABLE→3) *and* carried a
+# header agreeing with it — so a pre-8b2c0190 tree is INTERNALLY SELF-CONSISTENT
+# and the difference is invisible from inside it. Two seats therefore return
+# OPPOSITE answers to the same band screen and both look correct. A harness that
+# retries on 2 and aborts on 3 does the right thing in one tree and the wrong
+# thing in BOTH directions in the other.
+#   Verify with:  git merge-base --is-ancestor 8b2c0190 HEAD   (rc=0 ⇒ bands above)
+#   Measured 2026-07-28: 5 of 8 live seats LACKED 8b2c0190 (rate over live seats;
+#   the ~120-worktree agent-* pool was NOT swept, so this is not a fleet total).
+# 📌 Do NOT re-key this note to `7b6972a9`: that SHA is NOT an ancestor of master
+# (it is a pre-rebase copy with an identical patch-id), so any lock keyed to it
+# never binds and reads as satisfied.
 #
 # COUNTING FUNCTIONS (what a sweep's denominator must be)
 # ------------------------------------------------------
