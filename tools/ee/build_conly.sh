@@ -80,6 +80,16 @@ for s in $(find $ASM -name '*.s' -not -path '*/nonmatchings/*' -not -path '*/mat
   # anywhere in the emission path. Relative arg -> relative incbin, absolute arg ->
   # absolute. scripts/configure.py:57 already passes it relative and says why in a
   # comment; the committed USA file predates that and came from another machine.
+  # POSITIVE RECORD, not an impossibility argument: 4ce49fc5 (2026-06-04) has USA and EU
+  # both RELATIVE; 9b68f19c (2026-06-05) has USA ABSOLUTE and EU UNCHANGED. A USA-only
+  # re-split from a machine whose home was ~. EU across those two
+  # commits is a built-in control.
+  # ⛔ A RE-SPLIT DOES NOT REPAIR IT. Measured (tester-m1): SPLAT NEVER OVERWRITES AN
+  # EXISTING TEXTBIN .s -- it only creates a missing one. With the file present,
+  # `configure.py --no-cache` left its mtime untouched while writing 1,965 other .s in
+  # the same run. DELETE THE .s FIRST, then regenerate; it comes back RELATIVE.
+  # configure.py's relative-path defence is correct prophylaxis for NEW files and does
+  # nothing for this one.
   # => ONLY build.sh and build_conly.sh carry this rewrite (2 of 22 scripts under
   #    tools/ee). Anything else assembling that .s fails naming a stranger's home.
   sed -f "$VU0FIX" "$s" | sed 's|"/[^"]*/going-decompiled/|"going-decompiled/|g' \
