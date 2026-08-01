@@ -69,6 +69,19 @@ n=0
 for s in $(find $ASM -name '*.s' -not -path '*/nonmatchings/*' -not -path '*/matchings/*'); do
   o="$BUILD/${s%.s}.o"
   mkdir -p "$(dirname "$o")"
+  # The second sed is LOAD-BEARING FOR EXACTLY ONE FILE and must not be dropped as
+  # cosmetic. Measured 2026-08-01: asm/usa/data/cod/000000.s is the ONLY .incbin in
+  # asm/usa (2723 .s scanned) and its path is ABSOLUTE into a home that exists on no
+  # machine here -- `~/...` while this box has only `<user>`.
+  # It is TRACKED, so every clone gets it. The EU twin is relative and correct.
+  # CAUSE (decomper-2-m1, verified by experiment): splat inherits absoluteness wholesale
+  # from the CONFIG PATH ARGUMENT -- options.py:402 base_path = normpath(
+  # config_paths[0].parent / <yaml base_path>), and there is no resolve()/abspath/cwd
+  # anywhere in the emission path. Relative arg -> relative incbin, absolute arg ->
+  # absolute. scripts/configure.py:57 already passes it relative and says why in a
+  # comment; the committed USA file predates that and came from another machine.
+  # => ONLY build.sh and build_conly.sh carry this rewrite (2 of 22 scripts under
+  #    tools/ee). Anything else assembling that .s fails naming a stranger's home.
   sed -f "$VU0FIX" "$s" | sed 's|"/[^"]*/going-decompiled/|"going-decompiled/|g' \
     | mips-linux-gnu-as $ASFLAGS -o "$o" - 2> "$o.log" || { echo "AS FAIL $s:"; tail -5 "$o.log"; exit 1; }
   n=$((n+1))
