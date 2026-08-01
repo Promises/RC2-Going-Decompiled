@@ -423,10 +423,24 @@ echo "   defined $(wc -l < "$ALLSYMS") address symbols"
 # CROPPED". I did not learn it for hours, and had already cited those artifacts in
 # a published gate verdict.
 #
-# NEITHER ARM ABORTS MID-SCRIPT. Attempt A is the documentation arm; its failure is
-# informative, not blocking, and aborting there would stop Attempt B -- the arm that
-# matters -- from running at all in any under-equipped tree. Both are RECORDED and
-# the script exits non-zero at the END, naming every arm that failed.
+# NEITHER ARM ABORTS MID-SCRIPT. Attempt A is the documentation arm, and aborting
+# there would stop Attempt B -- the arm that matters -- from running at all in any
+# under-equipped tree. Both are RECORDED and the script exits non-zero at the END,
+# naming every arm that failed.
+#
+# ⚠️ "NOT BLOCKING" MEANS NOT ABORTING MID-SCRIPT. IT DOES NOT MEAN NOT FAILING.
+# An earlier draft of this comment said Attempt A's failure is "informative, not
+# blocking", which is true of the control flow and FALSE of the exit code: A failing
+# DOES make this script exit non-zero. decomper-2-m1's gate finding, and it is the
+# same comment-vs-behaviour class this file catalogues elsewhere.
+#
+# ⇒ CONSEQUENCE FOR ANY CALLER, and it is not a defect but it is a trap:
+#   $? != 0  means "SOME arm failed". It does NOT mean "there is no image".
+#   Attempt A can fail in an under-equipped tree while Attempt B links a good ELF,
+#   and this script will still exit 1. A consumer asking "did the C-only build
+#   produce an image?" must test [ -s "$ELF" ] or read the per-arm lines above --
+#   NOT $?. Wiring this into automation without that distinction will report a
+#   working image as a failed build.
 #
 # WHY GATING IS SAFE TO ADD ONLY NOW: a gate on an UNCLEARED artifact passes on the
 # PREVIOUS run's output. Every artifact these gates read is already cleared by this
