@@ -654,6 +654,19 @@ if not os.path.exists(mp):
     raise SystemExit(0)
 sec = re.compile(r'^\.calt_rodata\s+0x([0-9a-fA-F]+)\s+0x([0-9a-fA-F]+)')
 nxt = re.compile(r'^\S')
+# A CONTRIBUTOR ROW, NOT MERELY A ROW MENTIONING .calt.o. `ld` echoes the input
+# section SPEC from our own linker script into the map, one line below the header:
+#     .calt_rodata    0x01820000      0x870 load address 0x001d61c0
+#      *.calt.o(.rodata*)          <- OUR SCRIPT, ECHOED BACK. NOT A CONTRIBUTOR.
+#      .rodata        0x01820000    0x124  .../cod/015180.calt.o   <- a contributor
+# A substring test for '.calt.o' matches the echo, which (a) inflates every count
+# by exactly 1 and (b) makes the "no contributors" half of the check VACUOUS: the
+# echo is present even when the section received nothing, so the list can never be
+# empty while the section is declared. Requiring VMA + SIZE + a path ending in
+# `.calt.o` is what separates what ld DID from what our script ASKED FOR -- the
+# same input-vs-output distinction this whole guard exists to enforce, one level
+# down, where I got it wrong once already.
+row_re = re.compile(r'^\s+\S+\s+0x[0-9a-fA-F]+\s+0x[0-9a-fA-F]+\s+(\S+\.calt\.o)\s*$')
 vma = size = None
 contributors = []
 lines = open(mp, errors='replace').read().splitlines()
@@ -665,8 +678,9 @@ for i, ln in enumerate(lines):
     for row in lines[i + 1:]:
         if nxt.match(row):
             break
-        if '.calt.o' in row:
-            contributors.append(row.split()[-1])
+        r = row_re.match(row)
+        if r:
+            contributors.append(r.group(1))
     break
 if vma is None:
     sys.stderr.write(
@@ -675,10 +689,12 @@ if vma is None:
         "       are still going to /DISCARD/ and the 111 reloc errors stand.\n" % mp)
     raise SystemExit(5)
 if size == 0 or not contributors:
+    why = ("size is 0" if size == 0 else
+           "size is %d but NO .calt.o object contributed a row" % size)
     sys.stderr.write(
-        "FATAL: .calt_rodata at 0x%08x is EMPTY (size=%d, contributors=%d).\n"
-        "       A syntactically perfect section that received NO BYTES is the\n"
-        "       failure the input-side check cannot see.\n" % (vma, size, len(contributors)))
+        "FATAL: .calt_rodata at 0x%08x received nothing -- %s (contributors=%d).\n"
+        "       A syntactically perfect section that took no bytes is exactly the\n"
+        "       failure the input-side check cannot see.\n" % (vma, why, len(contributors)))
     raise SystemExit(5)
 print("   .calt_rodata VERIFIED IN THE MAP: 0x%08x size 0x%x, %d .calt.o contributors"
       % (vma, size, len(contributors)))
