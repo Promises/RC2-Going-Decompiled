@@ -90,6 +90,17 @@ for s in $(find $ASM -name '*.s' -not -path '*/nonmatchings/*' -not -path '*/mat
   #     absent        not created      CREATED      <- the ONLY working cell
   # => `rm` the .s AND pass --no-cache. EITHER ONE ALONE EXITS 0, REPORTS SUCCESS, AND
   #    LEAVES THE STALE PATH IN PLACE. Regenerated content is relative.
+  # WHY BOTH -- TWO INDEPENDENT BLOCKERS, ONE PER AXIS, both verified in-tree:
+  #   default column   configure.py:60-61 appends --use-cache; :79 use_cache=not
+  #                    args.no_cache. The config has not changed, so NO segment is
+  #                    re-split and the textbin segment never runs at all.
+  #                    (going-decompiled/build/{usa,eu}/.splache both EXIST.)
+  #   present row      splat textbin.py:153  `if s_path.exists(): return`
+  #                    -- the segment runs and returns BEFORE writing.
+  # Neither gate can mask the other: they sit on orthogonal axes. THAT is why every
+  # single-variable diagnosis of this in the thread came out CONFIDENT AND WRONG,
+  # including two of mine -- with two independent blockers, varying one variable always
+  # leaves the other in force, so the experiment reports "no effect" for a real cause.
   # ⚠️ TWO WRONG REMEDIES WERE COMMITTED HERE BEFORE THIS ONE, an hour apart:
   #    "re-split via configure.py"  -- no-op, file is never rewritten when present
   #    "delete the .s first"        -- no-op, delete alone does not recreate it
