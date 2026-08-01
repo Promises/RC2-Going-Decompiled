@@ -426,8 +426,52 @@ echo "   --- Attempt A ld.log (head) ---"; head -30 "$BUILD/ld.conlyA.log" || tr
 #      in the .ld so the C-alts are placed first and WIN. This is what actually
 #      exercises the C-alts at the pinned addresses.
 echo "== [$REGION] building C-alt-overlay .ld (Attempt B) =="
+
+# ---- P1 WIRING: give the C arm's constant pools a home BEFORE injecting -------
+# conly_rodata_experiment.py adds a `.calt_rodata` output section immediately
+# before the catch-all `/DISCARD/ : { *(*); }`. Without it every `.rodata` the
+# C arm emits is swallowed by the catch-all, and each reloc into it becomes a
+# "defined in discarded section" error: 111 of them, measured, in two trees.
+#
+# WHY THE GENERATOR RUNS ON THE **BASE** SCRIPT AND ITS OUTPUT IS FED IN AS THE
+# INJECTOR'S `src` -- this ordering is load-bearing, not stylistic:
+# the byte-identical guard below (:~530) derives ALL of its discriminating power
+# from `dst` differing from `src` ONLY BY INJECTIONS. Running the generator on
+# the injector's OUTPUT instead would leave `dst` differing from `src` by the
+# `.calt_rodata` block as well, so a totally-failed injection would still produce
+# a differing file and the guard would pass on a build that injected nothing.
+# Generating a modified BASE and diffing against THAT keeps the guard exact.
+#
+# ATTEMPT A DELIBERATELY KEEPS THE UNMODIFIED `$LD`. A is the control that
+# documents why cmdline-only C-alts are discarded; giving it the rescue section
+# would destroy the contrast the two attempts exist to show.
+LDR="$BUILD/$BASENAME.conly.base.ld"
+python3 tools/ee/conly_rodata_experiment.py "$LD" "$LDR"
+
+# ---- POINT-OF-USE GUARD: exactly ONE .calt_rodata block in the script ---------
+# The generator is NOT IDEMPOTENT -- reproduced independently by decomper-2-m1 and
+# by me: over the same file, block count goes base=0 once=1 twice=2, and it exits
+# 0 EVERY TIME. Two blocks at the same VMA is a silent overlap, not an error.
+# `$LDR` is derived from `$LD` on every run so a double-apply cannot happen today;
+# this guard is what keeps that true if the pipeline is ever reordered or the
+# generator is ever pointed at its own output. 0 = the wiring is dead (generator
+# skipped / wrong path) and the 111 come back; both directions are failures.
+#
+# NOT keyed on the generator's exit status: it returns 0 in exactly the case this
+# catches, so its status provably cannot separate the good run from the bad one.
+# Demonstrated firing on a twice-generated script before this was requested for
+# gate -- a guard never observed failing is not a guard.
+nblk=$(grep -c '\.calt_rodata ' "$LDR" || true)
+if [ "$nblk" != "1" ]; then
+  echo "FATAL: $LDR has $nblk .calt_rodata blocks, expected exactly 1." >&2
+  echo "       0 = wiring dead, the 111 discarded-section errors return." >&2
+  echo "       >1 = generator applied twice; blocks silently overlap at the same VMA." >&2
+  exit 3
+fi
+echo "   .calt_rodata blocks in $LDR: $nblk (guard: must be exactly 1)"
+
 LDB="$BUILD/$BASENAME.conly.ld"
-python3 - "$LD" "$LDB" "$CALT_LIST" "$BUILD" <<'PY'
+python3 - "$LDR" "$LDB" "$CALT_LIST" "$BUILD" <<'PY'
 import sys, re, os
 src, dst, listf, build = sys.argv[1:5]
 units = set()
@@ -483,6 +527,27 @@ print("   injected %d calt placement lines for %d units" % (ins, len(units)))
 # neither is the question. The question is what it does ON A CORRECT BUILD. The
 # 3.00 is the base script's section coverage, and section coverage is a thing
 # that may change on purpose.
+#
+# THE P1 WIRING IS THE FIRST CONCRETE INSTANCE, AND IT WENT THE OTHER WAY.
+# I (orch-m1) predicted the rate would go 3.00 -> 4.00 once `.calt_rodata` was
+# wired in, and committed to treating a still-3.00 rate as a FINDING. decomper-2-m1
+# front-loaded the objection; I measured it, and I was wrong:
+#
+#     === the lines the remedy ADDS ===
+#     >     .calt_rodata 0x01820000 :
+#     >     {
+#     >         *.calt.o(.rodata*)
+#     >     }
+#     added lines: 2   MATCHING the injector regex: 0
+#     CONTROL: base lines matching the same regex: 78  (must be >0, else regex dead)
+#
+# The remedy is a GLOB OUTPUT SECTION (`*.calt.o(.rodata*)`), not a per-unit
+# `<path>/src/<unit>.o(.rodata*);` placement line: no `/src/` path, no trailing
+# `;`, so `pat` cannot match it. The control at 78 proves the regex is live, so
+# the 0 is a real zero and not a dead instrument. THE RATE STAYS 3.00 AFTER A
+# CORRECT WIRING. Had my tripwire shipped it would have failed a correct build --
+# the exact failure mode this block was written to prevent, aimed at its author.
+# The `.calt_rodata` count guard above is the check that actually discriminates.
 if units:
     print("   per-section: " + " ".join(
         "%s=%d" % (s.split()[0], by_spec.get(s, 0))
