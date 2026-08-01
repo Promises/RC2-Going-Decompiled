@@ -185,6 +185,14 @@ for s in $(find $ASM -name '*.s' -not -path '*/nonmatchings/*' -not -path '*/mat
   #        is confined to the half it can settle.
   #    (b) it requires both writes to come from the SAME invocation for the SAME segment. Two
   #        segments' artifacts would void it silently -- the mtimes would still look right.
+  #        ✅ DISCHARGED FOR TEXTBIN SEGMENTS (tester-m1 /5552): same-invocation is by
+  #        construction (both mtimes read either side of one configure.py call), and
+  #        same-segment needs no argument because THE `.s` NAMES ITS OWN `.bin` -- the
+  #        `.incbin` argument in the .s IS the pairing. So the silent-void case is
+  #        DETECTABLE here, by the very line whose path started this thread.
+  #        ⚠️ Detectable for THIS segment type only. A bracket over two writes that do NOT
+  #        cross-reference each other still carries the limit in full, so keep (b) written
+  #        down rather than deleting it as solved.
   #    That is what makes the empty cells explicable rather than merely
   #    empty. NOTE: neither cell has been run by the author of this comment.
   # configure.py's relative-path defence is correct prophylaxis for NEW files and does
