@@ -78,8 +78,17 @@ for s in $(find $ASM -name '*.s' -not -path '*/nonmatchings/*' -not -path '*/mat
   # from the CONFIG PATH ARGUMENT -- options.py:402 base_path = normpath(
   # config_paths[0].parent / <yaml base_path>), and there is no resolve()/abspath/cwd
   # anywhere in the emission path. Relative arg -> relative incbin, absolute arg ->
-  # absolute. scripts/configure.py:57 already passes it relative and says why in a
-  # comment; the committed USA file predates that and came from another machine.
+  # absolute. scripts/configure.py already passes it relative and says why, in the comment
+  # beginning "Pass the config path RELATIVE to ROOT so splat's base_path stays relative";
+  # the committed USA file predates that and came from another machine.
+  # ⚠️ EVERY LINE NUMBER BELOW IS QUOTED WITH ITS LINE CONTENT ON PURPOSE. A bare :NNN is
+  # ambiguous across COPIES *and* across TIME WITHIN ONE COPY -- the second is the worse
+  # one, because the file "is" the same file so nothing prompts you to ask WHEN. Measured
+  # instance: tester-m1 cited build_conly.sh:139; at that moment the sed was at :72 in
+  # EVERY lineage. It sits at :133 only at this branch tip, moved there by the very commits
+  # that added these comments -- so a citation got reconciled against a file that did not
+  # exist when it was written. Quote the CONTENT and the number moving costs nothing.
+  # splat pins below are against the vendored splat64 0.41.0 in .venv-decomp.
   # POSITIVE RECORD, not an impossibility argument: 4ce49fc5 (2026-06-04) has USA and EU
   # both RELATIVE; 9b68f19c (2026-06-05) has USA ABSOLUTE and EU UNCHANGED. A USA-only
   # re-split from a machine whose home was ~. EU across those two
