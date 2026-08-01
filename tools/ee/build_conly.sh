@@ -175,6 +175,7 @@ out = []
 # match a placement line: <obj>.o(<secspec>);  where <obj> is a src unit path
 pat = re.compile(r'^(\s*)(\S+/src/\S+?)\.o\((\.text\*|\.data\*|\.rodata\*|\.bss COMMON \.scommon)\);\s*$')
 ins = 0
+by_spec = {}
 for line in open(src):
     m = pat.match(line)
     if m:
@@ -183,9 +184,27 @@ for line in open(src):
         if calt in units:
             out.append("%s%s.calt.o(%s);\n" % (indent, obj, sec))
             ins += 1
+            by_spec[sec] = by_spec.get(sec, 0) + 1
     out.append(line)
 open(dst, 'w').write(''.join(out))
 print("   injected %d calt placement lines for %d units" % (ins, len(units)))
+
+# ---- DIAGNOSTIC, NOT AN ASSERTION -------------------------------------------
+# Per-section breakdown and the per-unit rate. Measured 2026-08-01 in two
+# independent trees: 3.00 in both (25/25/0/25 over 25 units; 26/26/0/26 over 26).
+# The regex admits FOUR section specs and exactly THREE fire, because the base
+# .ld carries no src `.rodata` placement line for the injector to insert before.
+# So 3.00 is the BASE SCRIPT'S SECTION COVERAGE, not a property of either tree.
+#
+# DELIBERATELY NOT ASSERTED. If the base .ld ever gains a src `.rodata` line the
+# rate legitimately becomes 4.00, and a hard `rate == 3` check would fail a
+# correct build -- the manufacture-a-false-finding direction. Printed so a reader
+# or a gate can notice a change; not enforced, so it cannot invent one.
+if units:
+    print("   per-section: " + " ".join(
+        "%s=%d" % (s.split()[0], by_spec.get(s, 0))
+        for s in ('.text*', '.data*', '.rodata*', '.bss COMMON .scommon')))
+    print("   rate: %.2f placement lines per unit" % (float(ins) / len(units)))
 
 # ---- STRUCTURAL GUARD: the emitted .ld MUST DIFFER from the base .ld ----------
 # Keys on the HARM, not on a cause. An identical .ld makes "Attempt B" link the
