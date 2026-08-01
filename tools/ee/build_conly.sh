@@ -178,11 +178,29 @@ for s in $(find $ASM -name '*.s' -not -path '*/nonmatchings/*' -not -path '*/mat
   #    writes more than once, and it costs two stat calls. Neither of us reached for it
   #    because we had already read the code and felt done.
   # ⚠️ WHAT THE BRACKET STILL DOES NOT SETTLE, so the next reader does not over-credit it:
-  #    (a) that :153 is the ONLY exit between the two writes is still READ off the source --
-  #        but that is a claim about WHICH STATEMENTS EXIST, which is exactly what reading is
-  #        valid for. The bracket works by SPLITTING the question: reading answers what is in
-  #        the interval, the mtimes answer which end executed. Reading is not banned here, it
-  #        is confined to the half it can settle.
+  #    (a) that :153 is the ONLY exit between the two writes was READ off the source -- a
+  #        claim about WHICH STATEMENTS EXIST, which is what reading is valid for. The
+  #        bracket SPLITS the question: reading answers what is in the interval, the mtimes
+  #        answer which end executed.
+  #        ✅ AND THE READING STEP IS NOW ELIMINATED (tester-m1 /5558): the exits are
+  #        enumerated from the BYTECODE OF THE LOADED CODE OBJECT, not from anyone's eyes --
+  #        strictly between write_bin and open there are exactly two, :151 RAISE_VARARGS
+  #        (the assert) and :154 RETURN_CONST (the :153 return). Control: 4 exits in the
+  #        whole function, so the scan is live rather than vacuously empty. exit 0 + a clean
+  #        log kills the assert, leaving :153. ⇒ "the source I READ is the source that RAN"
+  #        is retired as a premise; the code object IS the thing that ran.
+  #    ⚠️ SCOPE ON THAT ENUMERATION, measured here rather than assumed: `CommonSegTextbin`
+  #        HAS TWO SUBCLASSES -- `CommonSegDatabin`, `CommonSegRodatabin` -- AND BOTH
+  #        OVERRIDE `split()`. So the bytecode enumerated above is the right code object
+  #        ONLY for segments whose runtime type is literally textbin; reuse on a databin
+  #        segment enumerates a DIFFERENT split() and the mtimes look identical either way.
+  #        ✅ Type is witnessed by the artifact, not assumed: `bin_path()` composes the
+  #        filename as f"{name}.{self.type}.bin" from the RUNTIME type, so the `.textbin.bin`
+  #        suffix IS the class witness. (A databin would be named `.databin.bin`.)
+  #    📌 A FALSE ALARM I RAISED AND KILLED IN ONE READ, recorded so it is not re-raised:
+  #        the tracked .s lives under `asm/usa/DATA/cod/`, which reads like a databin
+  #        indicator. It is not -- `out_path()` returns `options.opts.data_path / ...` for
+  #        these segments regardless of type. The directory says nothing about the class.
   #    (b) it requires both writes to come from the SAME invocation for the SAME segment. Two
   #        segments' artifacts would void it silently -- the mtimes would still look right.
   #        ✅ DISCHARGED FOR TEXTBIN SEGMENTS (tester-m1 /5552): same-invocation is by
