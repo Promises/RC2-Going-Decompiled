@@ -153,8 +153,19 @@ for s in $(find $ASM -name '*.s' -not -path '*/nonmatchings/*' -not -path '*/mat
   #                                                textbin.py's `if s_path.exists(): return`
   #   absent  + CACHED     "0 split, 1 cached"  => the segment was SKIPPED by the cache
   #                                                gate; textbin never executed
-  # => the two gates are not merely both present, they are each observed firing in the
-  #    cell they own. That is what makes the empty cells explicable rather than merely
+  # ⚠️ AND THE TWO ROWS ARE NOT EQUALLY EVIDENCED -- an earlier draft of this comment said
+  #    "each gate is OBSERVED FIRING in the cell it owns", which flattens a real asymmetry:
+  #      absent + CACHED    the counter IS the cache gate's own report. "1 cached" is that
+  #                         gate announcing itself. OBSERVED.
+  #      present + UNCACHED the counter shows the segment RAN and the .s was not rewritten.
+  #                         That the stopper is `:153` specifically, rather than some other
+  #                         early return, is READ OFF THE SOURCE. INFERRED, not observed.
+  #    Both rows are sound for the OUTCOME (which is what the remedy needs); only the first
+  #    is sound for the LINE. 🔑 READING CONFIRMS EXISTENCE AND STRUCTURE; ONLY RUNNING
+  #    CONFIRMS BEHAVIOUR (tester-m1 /5545, after publishing a control-flow inference under
+  #    "VERIFIED FIRSTHAND" -- having genuinely opened the file, which is what made it feel
+  #    verified. "I checked the source" upgrades silently to "I checked the claim").
+  #    That is what makes the empty cells explicable rather than merely
   #    empty. NOTE: neither cell has been run by the author of this comment.
   # configure.py's relative-path defence is correct prophylaxis for NEW files and does
   # nothing for this one.
