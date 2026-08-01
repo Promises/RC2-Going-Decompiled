@@ -702,10 +702,36 @@ for i, ln in enumerate(lines):
             contributors.append(r.group(1))
     break
 if vma is None:
-    sys.stderr.write(
-        "FATAL: no .calt_rodata section row in %s.\n"
-        "       The rescue section was never PLACED, so the C arm's constant pools\n"
-        "       are still going to /DISCARD/ and the 111 reloc errors stand.\n" % mp)
+    # THREE DISTINCT STATES, AND SAYING "no section row" FOR ALL OF THEM IS A LIE IN
+    # THE COMMONEST ONE. Measured independently by decomper-3-m1 (real rescue .ld,
+    # one token changed so the glob matches nothing, real objects) and by me (toy
+    # link, same section body). A DEAD GLOB DOES NOT PRODUCE `size 0x0`:
+    #
+    #     .calt_rodata                      <- BARE HEADER: no VMA, no size columns
+    #      *.nonexistent.o(.rodata*)
+    #
+    #     /DISCARD/
+    #
+    # d3's run also confirmed the harm is real: the 111 "defined in discarded
+    # section" errors came back in that link. All three of us had modelled this as
+    # `size == 0` because every derivation read a map of a link that SUCCEEDED.
+    #
+    # So distinguish, or the next person greps the map, finds `.calt_rodata`, and
+    # concludes the guard is lying to them - in the exact scenario that is now
+    # demonstrated to occur AND to restore the 111.
+    declared = any(ln.startswith('.calt_rodata') for ln in lines)
+    if declared:
+        sys.stderr.write(
+            "FATAL: .calt_rodata is DECLARED BUT UNPLACED in %s.\n"
+            "       The header is there with NO VMA and NO SIZE columns, which is what\n"
+            "       ld emits when the input glob matched nothing. The C arm's constant\n"
+            "       pools are still going to /DISCARD/ and the 111 reloc errors stand.\n"
+            "       Look at the glob in the generated .ld, not at the section name.\n" % mp)
+    else:
+        sys.stderr.write(
+            "FATAL: .calt_rodata is ABSENT from %s -- not even a header.\n"
+            "       The output section was never emitted, so the generator's block did\n"
+            "       not reach the linker script this link used.\n" % mp)
     raise SystemExit(5)
 if size == 0 or not contributors:
     why = ("size is 0" if size == 0 else
