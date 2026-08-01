@@ -415,16 +415,58 @@ echo "   defined $(wc -l < "$ALLSYMS") address symbols"
 # ---- Attempt A: literal task recipe — same .ld, .calt.o passed on the ld
 #      command line BEFORE everything, --allow-multiple-definition. Expected:
 #      orphan -> /DISCARD/ -> no-op (documents WHY it cannot work as stated).
+# ---- FAIL-LOUD: RECORD EACH ARM, NAME WHICH FAILED AND WHY -------------------
+# THE DEFECT THIS CLOSES: a failed link -- EITHER ARM -- used to return 0. Attempt
+# B's failure was an `echo` with EOF on the next line; Attempt A had no status
+# check at all. An 83-minute build could end in "success" with no image, and did:
+# my own run had Attempt A fail outright and report only "head 30 of 1833 lines --
+# CROPPED". I did not learn it for hours, and had already cited those artifacts in
+# a published gate verdict.
+#
+# NEITHER ARM ABORTS MID-SCRIPT. Attempt A is the documentation arm; its failure is
+# informative, not blocking, and aborting there would stop Attempt B -- the arm that
+# matters -- from running at all in any under-equipped tree. Both are RECORDED and
+# the script exits non-zero at the END, naming every arm that failed.
+#
+# WHY GATING IS SAFE TO ADD ONLY NOW: a gate on an UNCLEARED artifact passes on the
+# PREVIOUS run's output. Every artifact these gates read is already cleared by this
+# script before its own link -- :~423 (conlyA.elf, conlyA.map) and :~639 ($ELF,
+# .rom, .map). Gating without that clearing would have manufactured a fresh
+# stale-artifact defect; the clearing landed first, so this commit does not.
+ARM_FAILURES=""
+
+# record_arm <arm-name> <elf-path> <ld-rc> <log-path>
+# Distinguishes the three failures the charter asks to be named separately:
+# no ELF at all / an ELF that exists but is empty / ld itself exited non-zero.
+record_arm() {
+  _arm=$1; _elf=$2; _rc=$3; _log=$4
+  if   [ ! -f "$_elf" ]; then _why="no ELF was produced"
+  elif [ ! -s "$_elf" ]; then _why="ELF exists but is EMPTY (0 bytes)"
+  elif [ "$_rc" != "0" ]; then _why="ld exited $_rc despite writing an ELF"
+  else
+    echo "   $_arm: OK -- $(wc -c < "$_elf") byte ELF"
+    return 0
+  fi
+  echo "   [FAIL] $_arm FAILED: $_why (ld rc=$_rc)" >&2
+  echo "          full log: $_log" >&2
+  ARM_FAILURES="$ARM_FAILURES $_arm"
+}
+
 echo "== [$REGION] LINK Attempt A: unmodified .ld + .calt.o on cmdline =="
 CALT_OBJS="$(cat "$CALT_LIST" 2>/dev/null | tr '\n' ' ')"
 # Same stale-artifact treatment as Attempt B (:~625). A's map is read by the A/B
 # drift measurements, so a stale one silently makes a before/after compare two
 # different runs -- the same defect as the guard reading last night's map.
 rm -f "$BUILD/$BASENAME.conlyA.elf" "$BUILD/$BASENAME.conlyA.map"
+# `|| true` DISCARDS ld's exit code. Capture it instead: "ld exited non-zero" is
+# one of the three distinguishable failures below, and `|| true` is why a failed
+# link could reach the end of this script and return 0.
+A_LDRC=0
 mips-linux-gnu-ld -EL --allow-multiple-definition -T "$LD" -T "$SYMS" -T "$ALLSYMS" \
   -Map "$BUILD/$BASENAME.conlyA.map" -o "$BUILD/$BASENAME.conlyA.elf" $CALT_OBJS \
-  2> "$BUILD/ld.conlyA.log" || true
+  2> "$BUILD/ld.conlyA.log" || A_LDRC=$?
 echo "   --- Attempt A ld.log (head) ---"; head -30 "$BUILD/ld.conlyA.log" || true
+record_arm "Attempt A" "$BUILD/$BASENAME.conlyA.elf" "$A_LDRC" "$BUILD/ld.conlyA.log"
 
 # ---- Attempt B: inject `<unit>.calt.o(<sec>)` BEFORE each `<unit>.o(<sec>)`
 #      in the .ld so the C-alts are placed first and WIN. This is what actually
@@ -637,8 +679,9 @@ echo "== [$REGION] LINK Attempt B: C-alt-overlay .ld =="
 # treatment. (Attempt A's map is cleared at ITS OWN link, :~420 -- clearing it here
 # would delete the map Attempt A wrote 200 lines earlier. I nearly did exactly that.)
 rm -f "$ELF" "$BUILD/$BASENAME.conly.rom" "$BUILD/$BASENAME.conly.map"
+B_LDRC=0
 mips-linux-gnu-ld -EL --allow-multiple-definition -T "$LDB" -T "$SYMS" -T "$ALLSYMS" \
-  -Map "$BUILD/$BASENAME.conly.map" -o "$ELF" 2> "$BUILD/ld.conly.log" || true
+  -Map "$BUILD/$BASENAME.conly.map" -o "$ELF" 2> "$BUILD/ld.conly.log" || B_LDRC=$?
 echo "   --- Attempt B ld.log (head) ---"; head -40 "$BUILD/ld.conly.log" || true
 
 # ---- THE REAL .calt_rodata CHECK: READ THE **OUTPUT**, NOT THE INPUT ----------
@@ -754,3 +797,18 @@ if [ -s "$ELF" ]; then
 else
   echo "== [$REGION] Attempt B produced NO ELF (link failed) =="
 fi
+record_arm "Attempt B" "$ELF" "$B_LDRC" "$BUILD/ld.conly.log"
+
+# ---- THE EXIT A CALLER CAN ACTUALLY SEE ---------------------------------------
+# Everything above this line reports to STDOUT, which no automated consumer reads.
+# Before this, THREE different outcomes all exited 0: Attempt A clean with no live
+# C, Attempt B succeeding, and Attempt B failing outright. The exit code carried no
+# information about the build at all.
+if [ -n "$ARM_FAILURES" ]; then
+  echo "" >&2
+  echo "FATAL: [$REGION] C-only build FAILED. Arms that failed:$ARM_FAILURES" >&2
+  echo "       Each arm's reason is printed above, next to its name." >&2
+  echo "       This build previously returned 0 in exactly this state." >&2
+  exit 1
+fi
+echo "== [$REGION] C-only build OK: every linked arm produced a non-empty ELF =="
