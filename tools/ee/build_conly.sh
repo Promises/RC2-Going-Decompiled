@@ -128,7 +128,7 @@ for s in $(find $ASM -name '*.s' -not -path '*/nonmatchings/*' -not -path '*/mat
   #        bare splat   --use-cache is action="store_true"  -> default CACHE OFF
   #        configure.py use_cache=True by default           -> default CACHE ON
   #      So this column is "CACHED", named by state, not by whose default it is.
-  #   present row      splat textbin.py:153  `if s_path.exists(): return`
+  #   present row      splat textbin.py:153-154  `if s_path.exists():` / `return`
   #                    -- the segment runs and returns BEFORE writing.
   # Neither gate can mask the other: they sit on orthogonal axes. THAT is why every
   # single-variable diagnosis of this in the thread came out CONFIDENT AND WRONG,
@@ -158,7 +158,7 @@ for s in $(find $ASM -name '*.s' -not -path '*/nonmatchings/*' -not -path '*/mat
   #      absent + CACHED    the counter IS the cache gate's own report. "1 cached" is that
   #                         gate announcing itself. OBSERVED.
   #      present + UNCACHED the counter shows only that the segment RAN and the .s was not
-  #                         rewritten. It CANNOT return "stopped at :153" vs "stopped
+  #                         rewritten. It CANNOT return "stopped at :154" vs "stopped
   #                         elsewhere", so it was never evidence between them.
   #    🔑 READING CONFIRMS EXISTENCE AND STRUCTURE; ONLY RUNNING CONFIRMS BEHAVIOUR
   #    (tester-m1 /5545, after publishing a control-flow inference under "VERIFIED
@@ -169,25 +169,33 @@ for s in $(find $ASM -name '*.s' -not -path '*/nonmatchings/*' -not -path '*/mat
   #    exit 0, no traceback:
   #      :148 write_bin(rom_bytes)        .bin mtime MOVED   => REACHED
   #      :151 assert s_path is not None   excluded by exit 0 + clean log
-  #      :153 if s_path.exists(): return  <- the only remaining exit in the interval
+  #      :153 if s_path.exists():         the TEST
+  #      :154     return                  the EXIT  <- the only other exit in the interval
   #      :158 s_path.open("w", ...)       .s mtime FROZEN    => NOT REACHED
-  #    Execution passed :148 and did not reach :158, so the stopper is `:153`. Read off
-  #    ARTIFACTS, not off source.
+  #    Execution passed :148 and did not reach :158, so the stopper is the guard at
+  #    `:153-154`, and the PINNED EXIT is `:154`. Read off ARTIFACTS, not off source.
+  # ⚠️ SAY `:153-154` FOR THE GUARD AND `:154` FOR THE EXIT, NEVER A BARE `:153` -- `:153`
+  #    is the TEST; the bytecode pins RETURN_CONST at `:154`. The distinction is the whole
+  #    subject of this block, and three of us still wrote the bare form (d2 /5562 caught it;
+  #    tester's own instrument PRINTED L154 while its prose said :153, in one post). An
+  #    instrument can be more precise than its author, and the precision is lost in
+  #    TRANSCRIPTION, not in measurement.
   # 📐 GENERAL, and worth more than this cell: TWO WRITES STRADDLING A SUSPECTED RETURN
   #    CONVERT A CONTROL-FLOW ARGUMENT INTO AN OBSERVATION -- available whenever a function
   #    writes more than once, and it costs two stat calls. Neither of us reached for it
   #    because we had already read the code and felt done.
   # ⚠️ WHAT THE BRACKET STILL DOES NOT SETTLE, so the next reader does not over-credit it:
-  #    (a) that :153 is the ONLY exit between the two writes was READ off the source -- a
+  #    (a) that `:154` is the ONLY other exit between the two writes was READ off the source -- a
   #        claim about WHICH STATEMENTS EXIST, which is what reading is valid for. The
   #        bracket SPLITS the question: reading answers what is in the interval, the mtimes
   #        answer which end executed.
   #        ✅ AND THE READING STEP IS NOW ELIMINATED (tester-m1 /5558): the exits are
   #        enumerated from the BYTECODE OF THE LOADED CODE OBJECT, not from anyone's eyes --
   #        strictly between write_bin and open there are exactly two, :151 RAISE_VARARGS
-  #        (the assert) and :154 RETURN_CONST (the :153 return). Control: 4 exits in the
-  #        whole function, so the scan is live rather than vacuously empty. exit 0 + a clean
-  #        log kills the assert, leaving :153. ⇒ "the source I READ is the source that RAN"
+  #        (the assert) and :154 RETURN_CONST (the return under the :153 test). Control: 4
+  #        exits in the whole function, so the scan is live rather than vacuously empty.
+  #        exit 0 + a clean log kills the assert, leaving `:154`. ⇒ "the source I READ is
+  #        the source that RAN"
   #        is retired as a premise; the code object IS the thing that ran.
   #    ⚠️ SCOPE ON THAT ENUMERATION, measured here rather than assumed: `CommonSegTextbin`
   #        HAS TWO SUBCLASSES -- `CommonSegDatabin`, `CommonSegRodatabin` -- AND BOTH
