@@ -200,6 +200,17 @@ print("   injected %d calt placement lines for %d units" % (ins, len(units)))
 # rate legitimately becomes 4.00, and a hard `rate == 3` check would fail a
 # correct build -- the manufacture-a-false-finding direction. Printed so a reader
 # or a gate can notice a change; not enforced, so it cannot invent one.
+#
+# THE GENERAL TEST, for whoever is next tempted to tighten this (tester-m1, /5459,
+# correcting its own suggestion to enforce it):
+#
+#   AN INVARIANT THAT IS TRUE TODAY AND CONTINGENT ON A DESIGN CHOICE IS A
+#   DIAGNOSTIC, NOT A GATE.
+#
+# "Cheap" and "stronger than the raw count" are both true of a rate check and
+# neither is the question. The question is what it does ON A CORRECT BUILD. The
+# 3.00 is the base script's section coverage, and section coverage is a thing
+# that may change on purpose.
 if units:
     print("   per-section: " + " ".join(
         "%s=%d" % (s.split()[0], by_spec.get(s, 0))
