@@ -477,7 +477,33 @@ python3 tools/ee/conly_rodata_experiment.py "$LD" "$LDR"
 # catches, so its status provably cannot separate the good run from the bad one.
 # Demonstrated firing on a twice-generated script before this was requested for
 # gate -- a guard never observed failing is not a guard.
-nblk=$(grep -c '\.calt_rodata ' "$LDR" || true)
+# ⚠️ THIS PREDICATE READS THE **INPUT**. IT IS THE WEAKER OF THE TWO CHECKS AND IT
+# IS HERE ONLY TO CATCH A DEAD/DOUBLED GENERATOR EARLY. The check that actually
+# closes the class is the MAP check after the Attempt B link (:~600) -- see the
+# input-vs-output note there before trusting this line for anything.
+#
+# ANCHORED FORM, from decomper-3-m1's gate. My first predicate was
+# `grep -c '\.calt_rodata '` and it was wrong on 2 of 4 constructed inputs:
+#
+#   input                                   naive  anchored  want
+#   real generated .ld                        1       1       1
+#   comment + real block                      2       1       1   <- naive FALSE FATAL
+#   ".calt_rodata:"  no space before colon    0       1*      1   <- naive FALSE FATAL
+#   comment alone, NO section at all          1       0       0   <- naive FALSE PASS
+#   generator applied twice                   2       2       2
+#
+# * CAVEAT d3 DISCLOSED AGAINST ITS OWN REMEDY: the anchored form requires the
+#   address, so a hand-written `.calt_rodata:` with no `0xADDR` still counts 0.
+#   The generator always emits the address, so that is unreachable from THIS
+#   pipeline -- right for every input the pipeline can produce, NOT universally
+#   right. LATENT, not live. It becomes live the moment a hand-edited script is
+#   accepted.
+#
+# The FALSE PASS row is the one that mattered: a comment mentioning `.calt_rodata`
+# and NO section satisfied the naive grep. And note what that costs -- this commit
+# adds ~53 comment lines of rationale, so the moment any of that prose moves INTO
+# the .ld, the naive form breaks a CORRECT build.
+nblk=$(grep -cE '^[[:space:]]*\.calt_rodata[[:space:]]+0x[0-9a-fA-F]+[[:space:]]*:' "$LDR" || true)
 if [ "$nblk" != "1" ]; then
   echo "FATAL: $LDR has $nblk .calt_rodata blocks, expected exactly 1." >&2
   echo "       0 = wiring dead, the 111 discarded-section errors return." >&2
@@ -595,6 +621,68 @@ rm -f "$ELF" "$BUILD/$BASENAME.conly.rom"
 mips-linux-gnu-ld -EL --allow-multiple-definition -T "$LDB" -T "$SYMS" -T "$ALLSYMS" \
   -Map "$BUILD/$BASENAME.conly.map" -o "$ELF" 2> "$BUILD/ld.conly.log" || true
 echo "   --- Attempt B ld.log (head) ---"; head -40 "$BUILD/ld.conly.log" || true
+
+# ---- THE REAL .calt_rodata CHECK: READ THE **OUTPUT**, NOT THE INPUT ----------
+# tester-m1's gate finding, and it is the general form, not a grep tip:
+#
+#   THE SCRIPT CHECK READS AN ARTIFACT SOMEBODY WROTE. THIS ONE READS AN ARTIFACT
+#   `ld` EMITTED AS A CONSEQUENCE OF THE LINK ACTUALLY HAPPENING.
+#   An input artifact is forgeable by anyone who can type. An output artifact is
+#   forgeable only by producing the effect.
+#
+# Demonstrated: a .ld containing nothing but a COMMENT mentioning `.calt_rodata`
+# satisfied the input check (1) while the map-shaped criterion returned 0 section
+# rows and 0 contributors; the genuine link map returned 1 and 8.
+#
+# ⚠️ AND TIGHTENING THE INPUT REGEX DOES NOT CLOSE THE CLASS. It kills the comment
+# forgery and leaves the next one standing: a `.calt_rodata` section that is
+# syntactically perfect and EMPTY. The anchored regex accepts that too. Only the
+# SIZE and the CONTRIBUTOR LIST reject it, and both exist only downstream.
+# This is also exactly what conly_rodata_experiment.py's own docstring warns:
+# "ZERO discarded-section errors is ALSO what 'the calt objects were never linked'
+# produces ... a zero is only evidence if the section RECEIVED BYTES."
+#
+# A CHECK THAT CANNOT RUN SAYS SO. If the link died before writing a map, this
+# prints NOT VERIFIED and does not exit non-zero -- the no-ELF path below already
+# reports that failure, and a check that silently passes when it never ran is
+# worse than no check.
+python3 - "$BUILD/$BASENAME.conly.map" <<'PY' || exit 5
+import re, sys, os
+mp = sys.argv[1]
+if not os.path.exists(mp):
+    print("   .calt_rodata: NOT VERIFIED -- no map at %s (link died before -Map)" % mp)
+    raise SystemExit(0)
+sec = re.compile(r'^\.calt_rodata\s+0x([0-9a-fA-F]+)\s+0x([0-9a-fA-F]+)')
+nxt = re.compile(r'^\S')
+vma = size = None
+contributors = []
+lines = open(mp, errors='replace').read().splitlines()
+for i, ln in enumerate(lines):
+    m = sec.match(ln)
+    if not m:
+        continue
+    vma, size = int(m.group(1), 16), int(m.group(2), 16)
+    for row in lines[i + 1:]:
+        if nxt.match(row):
+            break
+        if '.calt.o' in row:
+            contributors.append(row.split()[-1])
+    break
+if vma is None:
+    sys.stderr.write(
+        "FATAL: no .calt_rodata section row in %s.\n"
+        "       The rescue section was never PLACED, so the C arm's constant pools\n"
+        "       are still going to /DISCARD/ and the 111 reloc errors stand.\n" % mp)
+    raise SystemExit(5)
+if size == 0 or not contributors:
+    sys.stderr.write(
+        "FATAL: .calt_rodata at 0x%08x is EMPTY (size=%d, contributors=%d).\n"
+        "       A syntactically perfect section that received NO BYTES is the\n"
+        "       failure the input-side check cannot see.\n" % (vma, size, len(contributors)))
+    raise SystemExit(5)
+print("   .calt_rodata VERIFIED IN THE MAP: 0x%08x size 0x%x, %d .calt.o contributors"
+      % (vma, size, len(contributors)))
+PY
 
 if [ -s "$ELF" ]; then
   echo "== [$REGION] Attempt B produced an ELF: $ELF =="
