@@ -28,6 +28,24 @@ THE FOUR CLAUSES (forum/6168, consolidated)
                 by 0 of that unit's 78 INCLUDE_ASM lines, while the live monolithic body
                 declares 0x18.  A checker reading `asm/**` sees both and cannot tell which
                 is real -- this clause is what tells it.
+5 IS A POINTER  Clauses 1-4 all ask WHICH SYMBOL OWNS THE VALUE.  None asks whether the
+                value is an ADDRESS at all -- and a packed pair of 16-bit fields read as a
+                word passes every one of them, because it really does land inside a real
+                function.  Measured at the gated SHA 9ae6cf33: 35 such rows were EMITTED,
+                e.g. `0x00120000 -> __divdi3 + 0x398`, which relocates into the middle of a
+                division helper for an integer that was never a pointer.
+                DISCRIMINATOR: how many DISTINCT addresses share one low half.  A genuine
+                popular jump target appears many times as ONE address (low half 0x9248: 37
+                rows, 1 distinct); a packed `(counter, constant)` table appears as MANY
+                addresses sharing a constant low short (0x0000: 35 rows, 15 distinct;
+                0x206C: 6 rows, 6 distinct, values 0x0030206C..0x0035206C, stride 0x10000).
+                NOT "low half == 0" -- that catches 0x0000 and misses 0x206C entirely.
+                NOT "64KB-aligned" -- 0x206C is not, and concentration alone is no evidence
+                (the MOST concentrated low half in the set is an ordinary jump target).
+                THIS CLAUSE RUNS LAST, over the rows that survived 1-4.  Position is part of
+                the definition, not an implementation detail: computed before containment the
+                same threshold flags 7 classes instead of 2, one of which (0x001C) has zero
+                surviving members -- a refusal pointing at nothing.
 
 FALSE-ZERO POLICY: every population prints a count that must be non-zero, and the
 emit/refuse split must sum to the input.  A generator that emits nothing looks identical
@@ -41,6 +59,23 @@ import os
 import re
 import subprocess
 import sys
+
+# Clause 5 threshold.  A LITERAL, deliberately: deriving it as `null_max + 1` makes it a
+# function of the simulation's trial count -- measured, the null max walks 4 -> 5 -> 6 at
+# 3k / 30k / 100k trials on fixed data, and at 100k that rule would discard 0x206C by one.
+#
+# Calibrated on the POST-containment emitted population (748 distinct targets, 16,384
+# four-aligned low-half bins).  Chance of ANY bin reaching k distinct addresses:
+#     k=4  2.8e-03      k=5  2.6e-05      k=6  2.0e-07     (Poisson over uniform bins)
+# The exact figure is ~0.6x those: real addresses are DISTINCT, so a bin of s slots fills
+# C(s,k) ways rather than s^k/k!.  Poisson is therefore the CONSERVATIVE model -- it
+# over-states chance collisions, so using it errs toward emitting.  Measured agreement:
+# distinct-slot model 1.997e-03 vs 200k-trial simulation 1.875e-03 at k=4.
+#
+# Observed post-containment class sizes are [15, 6, 3, 3, 2 x18] -- there is a GAP between
+# 6 and 3, so any threshold in [4, 6] selects the same two classes.  The value is not
+# load-bearing; the region is, and the null is what places it.
+LOWHALF_MIN_DISTINCT = 5
 
 GLABEL = re.compile(r"^glabel\s+(\S+)")
 ENDLABEL = re.compile(r"^endlabel\s+(\S+)")
@@ -210,6 +245,8 @@ def main() -> int:
     incode = [t for t in targets
               if t[1] % 4 == 0 and code_lo <= t[1] < code_hi]
     print("  in-code-region, 4-aligned            : %d" % len(incode))
+    # ---- clauses 1-4: per-ROW soundness --------------------------------------
+    survivors = []
     for rom, tgt, path, kind in incode:
         sym = container(iv, lo, tgt)
         if sym is None:
@@ -222,19 +259,54 @@ def main() -> int:
         if decl != span:
             refuse["declared != spanned (clause 1 cross-check)"] += 1
             continue
+        survivors.append((rom, tgt, sym, start, decl, kind))
+
+    # ---- clause 5: a POPULATION statistic, over the rows that survived 1-4 ----
+    # Keyed on DISTINCT addresses, not rows: one jump target referenced 37 times is one
+    # address and must not look like a table.
+    by_lowhalf = collections.defaultdict(set)
+    for _, tgt, _, _, _, _ in survivors:
+        by_lowhalf[tgt & 0xFFFF].add(tgt)
+    packed = {h for h, s in by_lowhalf.items() if len(s) >= LOWHALF_MIN_DISTINCT}
+    undet = {h: len(s) for h, s in by_lowhalf.items()
+             if 2 < len(s) < LOWHALF_MIN_DISTINCT}
+
+    for rom, tgt, sym, start, decl, kind in survivors:
+        if (tgt & 0xFFFF) in packed:
+            refuse["NOT PROVABLY A POINTER (clause 5)"] += 1
+            continue
         addend = tgt - start
         assert 0 <= addend < decl, "clause 2 violated"
         emit.append((rom, sym, addend, kind))
         rows_out.append("rom:0x%X reloc:MIPS_32 symbol:%s addend:0x%X" % (rom, sym, addend))
 
-    code = len(emit) + sum(refuse.values())
-    print("code-address literals (4-aligned, in a symbol) : %d" % code)
-    print("  EMITTED   : %d" % len(emit))
-    print("  REFUSED   : %d" % sum(refuse.values()))
+    print("\nsurvived clauses 1-4                  : %d" % len(survivors))
+    print("clause 5, DISTINCT addresses per low half (threshold %d)"
+          % LOWHALF_MIN_DISTINCT)
+    for h in sorted(packed, key=lambda x: -len(by_lowhalf[x])):
+        vals = sorted(by_lowhalf[h])
+        print("    REFUSED 0x%04X  %2d distinct  %s%s"
+              % (h, len(vals), " ".join("0x%08X" % v for v in vals[:4]),
+                 " ..." if len(vals) > 4 else ""))
+    # Recorded, not refused: below threshold and indistinguishable from chance.  Named so
+    # that a later reader sees a decision rather than an oversight.
+    print("    UNDETERMINED (3..%d distinct, NOT refused) : %s"
+          % (LOWHALF_MIN_DISTINCT - 1,
+             ", ".join("0x%04X(%d)" % (h, n) for h, n in sorted(undet.items())) or "none"))
+
+    print("\nEMITTED   : %d" % len(emit))
+    print("REFUSED   : %d" % sum(refuse.values()))
     for k, v in refuse.most_common():
         print("      %-45s %d" % (k, v))
-    print("  CONTROL sum %d == %d  %s" % (len(emit) + sum(refuse.values()), code,
-                                          "OK" if len(emit) + sum(refuse.values()) == code else "MISMATCH"))
+    # CONTROL against the INPUT, not against a total derived from the outputs: comparing
+    # emit+refuse to a variable *defined* as emit+refuse is an identity and cannot fail.
+    total = len(emit) + sum(refuse.values())
+    ok = total == len(incode)
+    print("CONTROL   emit + refuse == candidates : %d == %d  %s"
+          % (total, len(incode), "OK" if ok else "MISMATCH"))
+    if not ok:
+        sys.stderr.write("REFUSING: rows lost between candidate scan and emission.\n")
+        return 2
     if a.emit:
         with open(a.emit, "w") as fh:
             fh.write("# generated by reloc_addrs_gen.py -- do not hand-edit\n")
