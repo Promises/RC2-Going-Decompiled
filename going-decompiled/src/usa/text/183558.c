@@ -536,27 +536,63 @@ s32 func_00283B00(const u8 *data, s32 count) {
 #endif
 
 /*
- * Sine via VU microprogram upload (vcallms 0xC80). Genuinely hardware: the value
- * goes through a uploaded VU0 microcode routine, not portable VU macro-mode math.
+ * COSINE via VU microprogram upload (vcallms 0xC80). Genuinely hardware: the value
+ * goes through an uploaded VU0 microcode routine, not portable VU macro-mode math.
+ *
+ * The sin/cos assignment of this pair is READ FROM THE MICROCODE, not inferred. The
+ * VIF MPG upload at offset 0x00E96C of assets/cod/000000.textbin.bin loads 94 VU
+ * instructions to micro-memory address 400 -- and vcallms 0xC80 / 8 == 400, so this
+ * pair's two entry points sit at the very start of that upload:
+ *
+ *   instr 400  LOI  1.57079625  (PI/2)   <- vcallms 0xC80 enters HERE
+ *   instr 401  (consumes I)
+ *   instr 402  LOI  3.1415925   (PI)     <- vcallms 0xC90 enters HERE
+ *   instr 403  LOI -3.1415925   (-PI)      [shared range reduction from here on]
+ *   instr 414..417  LOI -1/6, +1/120, -1/5040, +1/362880, E-bit terminator
+ *
+ * There is ONE program with ONE terminator and ONE polynomial -- and that polynomial
+ * is the odd (SINE) series. The only thing 0xC80 does that 0xC90 does not is take on
+ * a PI/2 phase first. sin(x + PI/2) == cos(x), so:
+ *
+ *   vcallms 0xC80 (this function) = COS      vcallms 0xC90 = SIN
+ *
+ * Corroboration: those four coefficients match the EE-side trig table at vaddr
+ * 0x1AC420 to every printed digit, and there is no cosine series anywhere in the
+ * image -- because cos is this phase shift into the shared sine kernel.
+ *
+ * This corrects a long-standing inversion: the bodies below and both plate comments
+ * previously asserted the opposite pairing, as do ~14 `extern` comments elsewhere in
+ * src/usa and the names SinfVu0/CosfVu0 (which are swapped and are NOT pinned here).
  */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283B30);
 #else
-/* TODO(hle): VU0 microprogram (vcallms 0xC80) - sine; needs VU backend. Scalar stand-in. */
+/* TODO(hle): VU0 microprogram (vcallms 0xC80) - cosine; needs VU backend. Scalar stand-in.
+ * DIVERGENCE, UNCONDITIONAL: this is a scalar libm call, NOT the VU0 microprogram. Even
+ * with the pairing correct, precision and rounding differ from the hardware -- the VU
+ * runs a 4-term minimax polynomial in 32-bit float with its own range reduction, while
+ * __builtin_cosf is the host libm. This is not a latent concern: build_conly.sh compiles
+ * the #else arm into <unit>.calt.o and Attempt B injects it BEFORE <unit>.o, so on the
+ * C-only shipping path THIS body is what runs. Results will not be bit-identical to the
+ * ROM; anything comparing against captured hardware output must expect that. */
 f32 func_00283B30(f32 x) {
-    return __builtin_sinf(x);
+    return __builtin_cosf(x);
 }
 #endif
 
 /*
- * Cosine via VU microprogram upload (vcallms 0xC90). Hardware VU0 microcode.
+ * SINE via VU microprogram upload (vcallms 0xC90). Hardware VU0 microcode. This is the
+ * bare entry into the shared kernel described above: 0xC90 skips the PI/2 phase that
+ * 0xC80 applies, so it evaluates the sine series directly.
  */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283B48);
 #else
-/* TODO(hle): VU0 microprogram (vcallms 0xC90) - cosine; needs VU backend. Scalar stand-in. */
+/* TODO(hle): VU0 microprogram (vcallms 0xC90) - sine; needs VU backend. Scalar stand-in.
+ * DIVERGENCE, UNCONDITIONAL: see func_00283B30 above -- a scalar libm call is not the VU0
+ * microprogram, and this body is the one that runs on the C-only path. */
 f32 func_00283B48(f32 x) {
-    return __builtin_cosf(x);
+    return __builtin_sinf(x);
 }
 #endif
 
