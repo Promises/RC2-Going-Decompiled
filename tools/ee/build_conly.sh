@@ -178,8 +178,25 @@ for c in $(find "$SRC" -name '*.c'); do
   # cached content to the subsequent `as` read, so a shared _unit.s let one
   # unit's cc1 output be assembled into ANOTHER unit's object (proven: linked
   # 183178.o held 1EFFC0's code, 1EFFC0.o held cod/0321A0's, etc -> PC16
-  # branch truncations). A unique path per unit is never rewritten, so the 9p
-  # cache cannot alias across units.
+  # branch truncations). A unique path per unit closes the CROSS-UNIT alias:
+  # no two units share a path, so no unit's cc1 output can reach another's `as`.
+  # ⚠️ THAT IS THE ONLY THING PATH-UNIQUENESS BUYS. The earlier wording here said
+  # "a unique path per unit is NEVER REWRITTEN" -- false, and false in the
+  # direction that matters: these paths ARE rewritten on every subsequent
+  # invocation of this script (and twice per invocation, Attempt A and B). So the
+  # CROSS-RUN alias -- run N's `as` served run N-1's cached content for the SAME
+  # unit -- is not excluded by uniqueness at all. It is excluded by the line
+  # `rm -f "$o" "$ui" "$us"` below, which is why that rm is LOAD-BEARING against
+  # a correctness hazard, not the hygiene its own comment calls it.
+  # A cross-run alias would also be the QUIET one: it serves the same unit's
+  # previous output, identical unless the .c changed -- i.e. invisible except in
+  # exactly the case where you edited a source and are checking whether it took.
+  # 🔑 BOTH FACTS WERE ALREADY IN THIS FILE, FIVE LINES APART AT THE TIME (this
+  # comment and the `rm -f` line; writing this pushed them further apart), and I
+  # composed neither -- I credited uniqueness with work the rm actually does.
+  # PROXIMITY IS NOT COMPOSITION (tester-m1, /5542, on its own comment at a
+  # distance of TWO lines). Found only because that class was published; no seat
+  # would have hit this, because nothing here fails until a rebuild goes stale.
   ui="${o%.o}._u.i"; us="${o%.o}._u.s"
   # FAIL-LOUD: clear stale object+intermediates, abort on ANY step error, verify
   # the object materialized — a silent stale .o = false 'byte-exact'/boot result.
