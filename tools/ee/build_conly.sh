@@ -1,5 +1,5 @@
 #!/bin/sh
-# build_conly.sh — ONE-OFF "C-only boot" probe build (do NOT edit; copy of
+# build_conly.sh — ONE-OFF "C-only boot" probe build (EDITED 2026-08-01 under direct human authorisation; was "do NOT edit". Copy of
 # build.sh + a TARGET_NATIVE C-alt overlay). Runs INSIDE the ee-build container:
 #
 #   tools/ee/vm.sh 'sh tools/ee/build_conly.sh usa'
@@ -173,13 +173,35 @@ for line in open(src):
     m = pat.match(line)
     if m:
         indent, obj, sec = m.group(1), m.group(2), m.group(3)
-        calt = obj + '.calt.o'
-        if calt in units:
+        # `units` holds STEMS: line 132 appends "$BUILD/${c%.c}.calt.o" and the
+        # loader above strips the ".calt.o" suffix, leaving "$BUILD/${c%.c}".
+        # The .ld placement line names "$BUILD/${c%.c}.o", so regex group 2 is
+        # the SAME stem. Comparing obj+'.calt.o' against a set of stems is
+        # therefore ALWAYS FALSE -- that is the master defect, and it made `ins`
+        # unable to be anything but 0. Compare stem to stem.
+        if obj in units:
             out.append("%s%s.calt.o(%s);\n" % (indent, obj, sec))
             ins += 1
     out.append(line)
 open(dst, 'w').write(''.join(out))
 print("   injected %d calt placement lines for %d units" % (ins, len(units)))
+
+# ---- STRUCTURAL GUARD: the emitted .ld MUST DIFFER from the base .ld ----------
+# Keys on the HARM, not on a cause. An identical .ld makes "Attempt B" link the
+# RETAIL IMAGE under the C-only name and exit 0 -- a clean-looking build that did
+# nothing. Empty CALT_LIST, a wrong glob, silent injector failure, and a stem/path
+# key mismatch ALL fail this one check; enumerating those causes is not required.
+#
+# Deliberately NOT keyed on `ins == 0`: `ins` is a SIGNATURE shared by the benign
+# and the harmful case. Measured (decomper-2-m1): an empty list and a broken key
+# both yield ins == 0 AND a byte-identical .ld, from different causes -- so a
+# guard on `ins` provably cannot separate them and one on the OUTPUT provably can.
+if open(dst, 'rb').read() == open(src, 'rb').read():
+    sys.stderr.write(
+        "FATAL: emitted %s is BYTE-IDENTICAL to base %s\n"
+        "       Attempt B would link the RETAIL IMAGE under the C-only name.\n"
+        "       injected=%d units=%d\n" % (dst, src, ins, len(units)))
+    sys.exit(3)
 PY
 
 echo "== [$REGION] LINK Attempt B: C-alt-overlay .ld =="
