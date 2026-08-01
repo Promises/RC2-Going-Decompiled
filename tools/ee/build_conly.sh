@@ -93,7 +93,17 @@ for s in $(find $ASM -name '*.s' -not -path '*/nonmatchings/*' -not -path '*/mat
   # both RELATIVE; 9b68f19c (2026-06-05) has USA ABSOLUTE and EU UNCHANGED. A USA-only
   # re-split from a machine whose home was ~. EU across those two
   # commits is a built-in control.
-  # ⛔ REPAIRING IT NEEDS *BOTH* CONDITIONS. Full 2x2, measured by tester-m1 (/5498):
+  # ⛔ REPAIRING IT NEEDS *BOTH* CONDITIONS. Full 2x2, measured by tester-m1 (/5498).
+  # ⚠️ THIS TABLE IS ABOUT A *PER-SEGMENT* ARTIFACT -- the textbin's own `.s`. It does NOT
+  #    generalise to everything splat writes. BOTH gates are per-segment: split.py skips a
+  #    SEGMENT, textbin.py refuses to overwrite a SEGMENT's .s. WHOLE-RUN outputs are
+  #    emitted after the segment loop and are therefore UNGATED --
+  #    undefined_syms_auto.txt, undefined_funcs_auto.txt, the .ld, the cache itself are
+  #    all CREATED even in the `absent + CACHED` cell. Measured (decomper-2-m1, /5539):
+  #    a cached run reported "0 split, 1 cached" AND still produced
+  #    undefined_syms_auto.txt. So "absent + CACHED -> not created" is true of the .s and
+  #    FALSE of the run's own outputs; read the row label as PER-SEGMENT or it is a true
+  #    statement about the wrong subject.
   #                   CACHED           UNCACHED
   #     present       NOT rewritten    NOT rewritten
   #     absent        not created      CREATED            <- the ONLY working cell
