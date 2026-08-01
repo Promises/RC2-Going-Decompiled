@@ -124,17 +124,22 @@ for s in $(find $ASM -name '*.s' -not -path '*/nonmatchings/*' -not -path '*/mat
   #    Each was published by a seat that had just been right about the mechanism, and
   #    adopted by the other without testing. A REMEDY IS A SEPARATE CLAIM FROM THE
   #    DIAGNOSIS AND NEEDS ITS OWN MEASUREMENT.
-  # COVERAGE, PER COLUMN -- the blanket "measured-by-one-seat" caveat was too coarse and
-  # is replaced by this. A rig with no `.splache` measures the --no-cache column BY
-  # CONSTRUCTION (gate 1 is unconditionally clear there, whatever flag is passed):
-  #   --no-cache column   TWO SEATS. tester-m1 in the real tree; decomper-2-m1 in a
-  #                       cache-free /tmp rig, both cells, with controls printed
-  #                       ("Splitting cod" proving the stage RAN; an ls proving the
-  #                       file was really absent). => THE REMEDY CELL IS TWO-SEAT.
-  #   default column      ONE SEAT (tester-m1 only). This column establishes the
-  #                       NECESSITY of --no-cache, not the sufficiency of the remedy.
-  # => the fix itself is corroborated; what rests on a single seat is the claim that
-  #    omitting --no-cache breaks it. Neither cell has been run by the author here.
+  # COVERAGE: ALL FOUR CELLS ARE NOW TWO-SEAT. tester-m1 in the real tree; decomper-2-m1
+  # independently in a /tmp rig with a REAL .splache present, one tree, one state, all
+  # four cells matching. Controls printed on every run: the "N split, M cached" line, an
+  # `ls` proving absence, and mtimes either side. (The earlier "measured-by-one-seat" note
+  # is retired: its cause was that rig writing no cache, which turned out to be a config
+  # gap -- adding .data/.rodata/.bss to section_order let the run reach the cache save --
+  # NOT a limit of the rig. A stated limitation can itself be wrong.)
+  # PER-CELL GATE ATTRIBUTION, which neither earlier run could give. splat's own
+  # "N split, M cached" counter says WHICH gate fired, not merely the outcome:
+  #   present + UNCACHED   "1 split, 0 cached"  => the segment RAN and was stopped by
+  #                                                textbin.py's `if s_path.exists(): return`
+  #   absent  + CACHED     "0 split, 1 cached"  => the segment was SKIPPED by the cache
+  #                                                gate; textbin never executed
+  # => the two gates are not merely both present, they are each observed firing in the
+  #    cell they own. That is what makes the empty cells explicable rather than merely
+  #    empty. NOTE: neither cell has been run by the author of this comment.
   # configure.py's relative-path defence is correct prophylaxis for NEW files and does
   # nothing for this one.
   # => ONLY build.sh and build_conly.sh carry this rewrite (2 of 22 scripts under
