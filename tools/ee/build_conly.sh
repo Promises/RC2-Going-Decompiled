@@ -151,6 +151,29 @@ for s in $(find $ASM -name '*.s' -not -path '*/nonmatchings/*' -not -path '*/mat
   #    `configure.py` FROM DESTROYING EVERY DECOMPILED FUNCTION IN THE REPO. The remedy here
   #    stays `rm` + `--no-cache` on ONE textbin .s, deliberately narrow -- do not "fix"
   #    write-once.
+  # 📋 GUARD MAP FOR THIS CONFIG. Four rows MEASURED across a single uncached re-split
+  #    (tester-m1 /5574 /5578, d2 /5575), each with a firing control and textbin as an
+  #    independently-known reference row:
+  #      c        26   FROZEN      guard in c.py itself (:225 :346 :384) -- protects
+  #                                every matched function in the repo from configure.py
+  #      textbin   1   FROZEN      guard at textbin.py:153-154 -- the stale .incbin case;
+  #                                needs BOTH `rm` and `--no-cache`
+  #      data      7   REWRITTEN   no guard -> `--no-cache` alone suffices
+  #      rodata    4   REWRITTEN   no guard -> `--no-cache` alone suffices
+  #      databin   0   REWRITTEN   (scratch config; zero exposure here)
+  #      asm      14   PREDICTED REWRITTEN -- **NOT MEASURED BY ANYONE**
+  #    ⚠️ THE `asm` ROW IS A PREDICTION AND MUST NOT BE READ AS A MEASUREMENT. It is a
+  #    STRUCTURAL read, but a CALIBRATED one, which is why it is written down at all:
+  #      CommonSegAsm.split (asm.py:23) has no `exists()` and delegates to
+  #      split_as_asm_file (codesubsegment.py:237), whose write at :248 is
+  #      `out_path.open("w")` -- UNCONDITIONAL, no guard anywhere on the path.
+  #    Calibration: "guard in the class's own module" predicts all FOUR measured rows
+  #    correctly (c YES->FROZEN, textbin YES->FROZEN, data NO->REWRITTEN, rodata
+  #    NO->REWRITTEN). `asm` has NO guard, so the predictor says REWRITTEN. 4/4 is a
+  #    calibration, not a proof -- absence of the call is not absence of the behaviour, which
+  #    is the error this whole block documents. PRE-REGISTERED so it can be shown wrong.
+  #    ⛔ Why it is unmeasured HERE specifically: the run mutates tracked `.s` files, and
+  #    this worktree is a branch currently out for gate. Measure it in a SCRATCH tree.
   # WHY BOTH -- TWO INDEPENDENT BLOCKERS, ONE PER AXIS, both verified in-tree:
   #   cached column    THE GATE IS  splat/scripts/split.py:349
   #                      if cache.check_cache_hit(segment, True): continue
