@@ -164,7 +164,13 @@ if os.path.exists(listf):
         ln = ln.strip()
         if not ln: continue
         # $BUILD/<srcpath>.calt.o  ->  <srcpath> stem (region/unit)
-        units.add(ln[:-len('.calt.o')] if ln.endswith('.calt.o') else ln)
+        # Store the line VERBATIM. It is already "$BUILD/<stem>.calt.o", which is
+        # exactly what the placement loop constructs below. Master stripped the
+        # ".calt.o" here and then compared against obj+".calt.o" -> stem vs path,
+        # never equal, so `ins` could not be anything but 0.
+        # CONVERGED with 36007293 and 9869358c, which fix it this way and are the
+        # only variants exercised by a real build. Not re-fixed a second way.
+        units.add(ln)
 out = []
 # match a placement line: <obj>.o(<secspec>);  where <obj> is a src unit path
 pat = re.compile(r'^(\s*)(\S+/src/\S+?)\.o\((\.text\*|\.data\*|\.rodata\*|\.bss COMMON \.scommon)\);\s*$')
@@ -173,13 +179,8 @@ for line in open(src):
     m = pat.match(line)
     if m:
         indent, obj, sec = m.group(1), m.group(2), m.group(3)
-        # `units` holds STEMS: line 132 appends "$BUILD/${c%.c}.calt.o" and the
-        # loader above strips the ".calt.o" suffix, leaving "$BUILD/${c%.c}".
-        # The .ld placement line names "$BUILD/${c%.c}.o", so regex group 2 is
-        # the SAME stem. Comparing obj+'.calt.o' against a set of stems is
-        # therefore ALWAYS FALSE -- that is the master defect, and it made `ins`
-        # unable to be anything but 0. Compare stem to stem.
-        if obj in units:
+        calt = obj + '.calt.o'
+        if calt in units:
             out.append("%s%s.calt.o(%s);\n" % (indent, obj, sec))
             ins += 1
     out.append(line)
