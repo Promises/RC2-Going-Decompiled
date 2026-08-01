@@ -89,10 +89,23 @@ def main() -> int:
     # but that protects ONE caller; this protects the tool, for anyone invoking it by
     # hand or from a future script.
     #
-    # ANCHORED ON THE SECTION DEFINITION, NOT THE STRING. A linker script comment
-    # mentioning `.calt_rodata` must not trigger a false refusal -- counting bare
-    # occurrences is the exact defect that made build_conly.sh's first input guard
-    # satisfiable by prose, and this file is where the anchored form was worked out.
+    # ANCHORED ON THE SECTION DEFINITION, NOT THE STRING. Counting bare occurrences
+    # is the exact defect that made build_conly.sh's first input guard satisfiable by
+    # prose, and this file is where the anchored form was worked out.
+    #
+    # ⚠️ WHAT THE ANCHORING DOES AND DOES NOT BUY, corrected after a gate finding.
+    # An earlier version of this comment said "a comment mentioning .calt_rodata must
+    # not trigger a false refusal". MEASURED FALSE as stated:
+    #   inline prose ...  see .calt_rodata below ...      NOT matched   <- anchoring works
+    #   a BLOCK comment whose body starts a line with
+    #        .calt_rodata 0x01820000 :                    MATCHED -> refuses
+    # The regex has NO COMMENT AWARENESS and nothing short of a linker-script parser
+    # would give it one. So the true claim is narrower: it defeats a MENTION, not a
+    # transcription that happens to sit at column 0 inside /* */.
+    # ⇒ NOT FIXED ON PURPOSE. The failure mode is OVER-refusal: rc 2, nothing written,
+    # and a message naming the remedy. A half-parser would trade a safe, loud, rare
+    # false refusal for a new class of silent misjudgement, which is the wrong trade
+    # for a guard.
     already = ALREADY_PRESENT.findall(text)
     if already:
         print(f"REFUSING: {src} already declares {len(already)} .calt_rodata section(s).",
