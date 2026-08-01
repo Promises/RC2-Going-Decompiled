@@ -85,16 +85,24 @@ for s in $(find $ASM -name '*.s' -not -path '*/nonmatchings/*' -not -path '*/mat
   # re-split from a machine whose home was ~. EU across those two
   # commits is a built-in control.
   # ⛔ REPAIRING IT NEEDS *BOTH* CONDITIONS. Full 2x2, measured by tester-m1 (/5498):
-  #                   default          --no-cache
+  #                   CACHED           UNCACHED
   #     present       NOT rewritten    NOT rewritten
-  #     absent        not created      CREATED      <- the ONLY working cell
+  #     absent        not created      CREATED            <- the ONLY working cell
   # => `rm` the .s AND pass --no-cache. EITHER ONE ALONE EXITS 0, REPORTS SUCCESS, AND
   #    LEAVES THE STALE PATH IN PLACE. Regenerated content is relative.
   # WHY BOTH -- TWO INDEPENDENT BLOCKERS, ONE PER AXIS, both verified in-tree:
-  #   default column   configure.py:60-61 appends --use-cache; :79 use_cache=not
-  #                    args.no_cache. The config has not changed, so NO segment is
-  #                    re-split and the textbin segment never runs at all.
+  #   cached column    THE GATE IS  splat/scripts/split.py:349
+  #                      if cache.check_cache_hit(segment, True): continue
+  #                    -- the segment is skipped entirely, so textbin never runs.
+  #                    configure.py:60-61/:79 only SELECT it (flag plumbing); a direct
+  #                    `python -m splat split ...` bypasses configure.py and still hits
+  #                    :349. Pin the GATE, not the wrapper -- the invocation that created
+  #                    this defect did not go through the wrapper.
   #                    (going-decompiled/build/{usa,eu}/.splache both EXIST.)
+  #   ⚠️ DO NOT SAY "DEFAULT" HERE. It is INVERTED between the two layers:
+  #        bare splat   --use-cache is action="store_true"  -> default CACHE OFF
+  #        configure.py use_cache=True by default           -> default CACHE ON
+  #      So this column is "CACHED", named by state, not by whose default it is.
   #   present row      splat textbin.py:153  `if s_path.exists(): return`
   #                    -- the segment runs and returns BEFORE writing.
   # Neither gate can mask the other: they sit on orthogonal axes. THAT is why every
