@@ -128,10 +128,29 @@ for s in $(find $ASM -name '*.s' -not -path '*/nonmatchings/*' -not -path '*/mat
   #    ⇒ INFERRED, one step past the enumeration and NOT separately measured: for a databin
   #      or rodatabin .s the `present` row should read REWRITTEN under --no-cache, so
   #      `--no-cache` ALONE would suffice there and the `rm` is only load-bearing for
-  #      textbin. Confirm before relying on it: stat a data/rodata .s across an uncached
-  #      re-split. ⚠️ The dangerous reading is the other direction -- anyone treating
-  #      write-once as blanket protection for hand-edited .s files is protected ONLY on
-  #      textbin segments.
+  #      textbin.
+  # 🔴 CORRECTION TO MY OWN HAZARD SENTENCE ABOVE, AND IT WAS WORSE THAN THE THING IT WARNED
+  #    ABOUT. I wrote "data and rodata .s files have NO such guard". That names the segment
+  #    types `data` and `rodata` -- which this config USES -- while every piece of evidence
+  #    I had was about the classes `CommonSegDatabin`/`CommonSegRodatabin`, which are
+  #    DIFFERENT classes and which this config uses ZERO times. Census over
+  #    going-decompiled/config/ (control: textbin returns non-zero, so the scan is live):
+  #      textbin 2 (1 per region)   databin 0   rodatabin 0   hasm 0   bin 0
+  #    ⇒ my alarm was VACUOUS as evidenced (empty population) and UNSUPPORTED as read (it
+  #      pointed at `data`/`rodata`, 11 uses, which I had not measured at all). One sentence,
+  #      wrong in both directions at once, because two similar TYPE TOKENS name unrelated
+  #      classes. ⚠️ UNMEASURED and left open rather than guessed: `data.py` defines its own
+  #      `split()` and contains no `exists()` call, but ABSENCE OF THE CALL IS NOT ABSENCE OF
+  #      THE BEHAVIOUR -- that inference is the exact error this whole block documents.
+  #      Discriminator is one command: stat a `data` .s across an uncached re-split.
+  # ✅ AND THE FRAME IS WRONG TOO -- write-once is NOT a bug with a scope, it is a DESIGN
+  #    WITH ONE BAD CASE (tester-m1 /5574, MEASURED not inferred): `CommonSegC.split` calls
+  #    `exists()`, and a --no-cache re-split over src/usa/text/1A8180.c (6,841 lines) left
+  #    the file's SHA and mtime unchanged, with 1,965 .s written in the same window as a
+  #    firing control. ⇒ THE SAME BEHAVIOUR THAT FROZE THIS `.incbin` IS WHAT STOPS
+  #    `configure.py` FROM DESTROYING EVERY DECOMPILED FUNCTION IN THE REPO. The remedy here
+  #    stays `rm` + `--no-cache` on ONE textbin .s, deliberately narrow -- do not "fix"
+  #    write-once.
   # WHY BOTH -- TWO INDEPENDENT BLOCKERS, ONE PER AXIS, both verified in-tree:
   #   cached column    THE GATE IS  splat/scripts/split.py:349
   #                      if cache.check_cache_hit(segment, True): continue
