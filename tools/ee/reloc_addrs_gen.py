@@ -200,9 +200,17 @@ def main() -> int:
     # Without this the "refused" list is dominated by zeros and small data words,
     # which were never code addresses and are not refusals - they are non-candidates.
     code_lo, code_hi = allsyms[0][0], max(e for _, e, _ in allsyms)
-    for rom, tgt, path, kind in targets:
-        if tgt % 4 or not (code_lo <= tgt < code_hi):
-            continue
+    # NOTE: a RUN-membership filter was tried here and REVERTED. It looked principled
+    # (/6022 measured 54 of 55 runs homogeneous by owner) and it is refuted by this
+    # lane's own partition: of the 595 `.word` targets, 81 are ISOLATED single
+    # code-pointing words under ordinary `D_` labels - callback slots and stored
+    # handlers, not table entries (/5892). Filtering to runs discarded those 81 AND
+    # silently removed every clause-4 refusal, because the shadow-container hits are
+    # themselves isolated. A discriminator that deletes the findings is not a filter.
+    incode = [t for t in targets
+              if t[1] % 4 == 0 and code_lo <= t[1] < code_hi]
+    print("  in-code-region, 4-aligned            : %d" % len(incode))
+    for rom, tgt, path, kind in incode:
         sym = container(iv, lo, tgt)
         if sym is None:
             if container(allsyms, alllo, tgt) is not None:
