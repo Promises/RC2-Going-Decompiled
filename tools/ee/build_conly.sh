@@ -99,9 +99,15 @@ for s in $(find $ASM -name '*.s' -not -path '*/nonmatchings/*' -not -path '*/mat
   #    SEGMENT, textbin.py refuses to overwrite a SEGMENT's .s. WHOLE-RUN outputs are
   #    emitted after the segment loop and are therefore UNGATED --
   #    undefined_syms_auto.txt, undefined_funcs_auto.txt, the .ld, the cache itself are
-  #    all CREATED even in the `absent + CACHED` cell. Measured (decomper-2-m1, /5539):
-  #    a cached run reported "0 split, 1 cached" AND still produced
-  #    undefined_syms_auto.txt. So "absent + CACHED -> not created" is true of the .s and
+  #    all CREATED even in the `absent + CACHED` cell. TWO SEATS, and the second design is
+  #    confound-free: decomper-2-m1 (/5539) got "0 split, 1 cached" AND the file; tester-m1
+  #    (/5540) then put BOTH artifacts in ONE invocation --
+  #        one DEFAULT run:  000000.s NOT created (.s written: 0)
+  #                          undefined_syms_auto.txt CREATED
+  #        one --no-cache:   both created, 1,966 .s written
+  #    OPPOSITE OUTCOMES FROM THE SAME RUN, so "the gate is per-class" cannot be confused
+  #    with "something about that run differed". So "absent + CACHED -> not created" is
+  #    true of the .s and
   #    FALSE of the run's own outputs; read the row label as PER-SEGMENT or it is a true
   #    statement about the wrong subject.
   #                   CACHED           UNCACHED
