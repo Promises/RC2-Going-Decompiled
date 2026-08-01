@@ -417,6 +417,10 @@ echo "   defined $(wc -l < "$ALLSYMS") address symbols"
 #      orphan -> /DISCARD/ -> no-op (documents WHY it cannot work as stated).
 echo "== [$REGION] LINK Attempt A: unmodified .ld + .calt.o on cmdline =="
 CALT_OBJS="$(cat "$CALT_LIST" 2>/dev/null | tr '\n' ' ')"
+# Same stale-artifact treatment as Attempt B (:~625). A's map is read by the A/B
+# drift measurements, so a stale one silently makes a before/after compare two
+# different runs -- the same defect as the guard reading last night's map.
+rm -f "$BUILD/$BASENAME.conlyA.elf" "$BUILD/$BASENAME.conlyA.map"
 mips-linux-gnu-ld -EL --allow-multiple-definition -T "$LD" -T "$SYMS" -T "$ALLSYMS" \
   -Map "$BUILD/$BASENAME.conlyA.map" -o "$BUILD/$BASENAME.conlyA.elf" $CALT_OBJS \
   2> "$BUILD/ld.conlyA.log" || true
@@ -617,7 +621,22 @@ PY
 echo "== [$REGION] LINK Attempt B: C-alt-overlay .ld =="
 # FAIL-LOUD: clear stale ELF/rom so the `[ -s "$ELF" ]` gate below can NEVER pass
 # on a previous run's image when THIS link fails.
-rm -f "$ELF" "$BUILD/$BASENAME.conly.rom"
+#
+# ⛔ THE MAP BELONGS IN THIS LIST AND I LEFT IT OUT -- tester-m1's finding, and it is
+# the FIRST REACHABLE FALSE PASS in the .calt_rodata guard. Demonstrated, not argued:
+# it ran the guard (extracted verbatim from a08ec1a4) against a real map that was
+# 13h 16m old, with NO link having run since, and got VERIFIED. If THIS link dies
+# before writing a map, the guard reads THE PREVIOUS RUN'S map and certifies a
+# section the current build never placed.
+#
+# 🔑 THE REMEDY WAS ALREADY IN THIS FILE, ON THE LINE ABOVE, FOR THE ELF. I wrote the
+# guard's "no map -> NOT VERIFIED" branch believing absence was the failure mode; a
+# stale map means that branch cannot be reached, so the honest label for it was never
+# "a check that cannot run says so" but "a check that runs on last time's artifact".
+# The `-Map` output is a build product exactly like `$ELF` and gets the same
+# treatment. (Attempt A's map is cleared at ITS OWN link, :~420 -- clearing it here
+# would delete the map Attempt A wrote 200 lines earlier. I nearly did exactly that.)
+rm -f "$ELF" "$BUILD/$BASENAME.conly.rom" "$BUILD/$BASENAME.conly.map"
 mips-linux-gnu-ld -EL --allow-multiple-definition -T "$LDB" -T "$SYMS" -T "$ALLSYMS" \
   -Map "$BUILD/$BASENAME.conly.map" -o "$ELF" 2> "$BUILD/ld.conly.log" || true
 echo "   --- Attempt B ld.log (head) ---"; head -40 "$BUILD/ld.conly.log" || true
