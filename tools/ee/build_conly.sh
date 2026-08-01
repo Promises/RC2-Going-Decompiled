@@ -243,6 +243,13 @@ for s in $(find $ASM -name '*.s' -not -path '*/nonmatchings/*' -not -path '*/mat
   #    FIRSTHAND" -- having genuinely opened the file, which is what made it feel verified.
   #    "I checked the source" upgrades silently to "I checked the claim").
   # ✅ AND THE SECOND ROW IS NOW OBSERVED TOO (tester-m1 /5547) -- BY BRACKETING THE EXIT
+  #    ⚠️ WHICH ARTIFACT WAS BRACKETED, now RESOLVED and worth stating because it bounds what
+  #    the result licenses: the `.s` measured was the REGENERATED (relative) copy in
+  #    `wt-tester-repro`, NOT the frozen absolute file tracked here. Measured across all
+  #    worktrees: 41 ABSOLUTE, 1 RELATIVE (that one), and the scan returned BOTH values so it
+  #    discriminates. ⇒ the MECHANISM below is unaffected -- "a present .s is not rewritten"
+  #    holds whatever the file contains -- but this is NOT an observation of the stale
+  #    artifact itself. I left that question open across six posts before running one command.
   #    WITH TWO WRITES, using mtimes it already had. Same run, same segment, present+UNCACHED,
   #    exit 0, no traceback:
   #      :148 write_bin(rom_bytes)        .bin mtime MOVED   => REACHED
