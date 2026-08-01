@@ -157,14 +157,34 @@ for s in $(find $ASM -name '*.s' -not -path '*/nonmatchings/*' -not -path '*/mat
   #    "each gate is OBSERVED FIRING in the cell it owns", which flattens a real asymmetry:
   #      absent + CACHED    the counter IS the cache gate's own report. "1 cached" is that
   #                         gate announcing itself. OBSERVED.
-  #      present + UNCACHED the counter shows the segment RAN and the .s was not rewritten.
-  #                         That the stopper is `:153` specifically, rather than some other
-  #                         early return, is READ OFF THE SOURCE. INFERRED, not observed.
-  #    Both rows are sound for the OUTCOME (which is what the remedy needs); only the first
-  #    is sound for the LINE. 🔑 READING CONFIRMS EXISTENCE AND STRUCTURE; ONLY RUNNING
-  #    CONFIRMS BEHAVIOUR (tester-m1 /5545, after publishing a control-flow inference under
-  #    "VERIFIED FIRSTHAND" -- having genuinely opened the file, which is what made it feel
-  #    verified. "I checked the source" upgrades silently to "I checked the claim").
+  #      present + UNCACHED the counter shows only that the segment RAN and the .s was not
+  #                         rewritten. It CANNOT return "stopped at :153" vs "stopped
+  #                         elsewhere", so it was never evidence between them.
+  #    🔑 READING CONFIRMS EXISTENCE AND STRUCTURE; ONLY RUNNING CONFIRMS BEHAVIOUR
+  #    (tester-m1 /5545, after publishing a control-flow inference under "VERIFIED
+  #    FIRSTHAND" -- having genuinely opened the file, which is what made it feel verified.
+  #    "I checked the source" upgrades silently to "I checked the claim").
+  # ✅ AND THE SECOND ROW IS NOW OBSERVED TOO (tester-m1 /5547) -- BY BRACKETING THE EXIT
+  #    WITH TWO WRITES, using mtimes it already had. Same run, same segment, present+UNCACHED,
+  #    exit 0, no traceback:
+  #      :148 write_bin(rom_bytes)        .bin mtime MOVED   => REACHED
+  #      :151 assert s_path is not None   excluded by exit 0 + clean log
+  #      :153 if s_path.exists(): return  <- the only remaining exit in the interval
+  #      :158 s_path.open("w", ...)       .s mtime FROZEN    => NOT REACHED
+  #    Execution passed :148 and did not reach :158, so the stopper is `:153`. Read off
+  #    ARTIFACTS, not off source.
+  # 📐 GENERAL, and worth more than this cell: TWO WRITES STRADDLING A SUSPECTED RETURN
+  #    CONVERT A CONTROL-FLOW ARGUMENT INTO AN OBSERVATION -- available whenever a function
+  #    writes more than once, and it costs two stat calls. Neither of us reached for it
+  #    because we had already read the code and felt done.
+  # ⚠️ WHAT THE BRACKET STILL DOES NOT SETTLE, so the next reader does not over-credit it:
+  #    (a) that :153 is the ONLY exit between the two writes is still READ off the source --
+  #        but that is a claim about WHICH STATEMENTS EXIST, which is exactly what reading is
+  #        valid for. The bracket works by SPLITTING the question: reading answers what is in
+  #        the interval, the mtimes answer which end executed. Reading is not banned here, it
+  #        is confined to the half it can settle.
+  #    (b) it requires both writes to come from the SAME invocation for the SAME segment. Two
+  #        segments' artifacts would void it silently -- the mtimes would still look right.
   #    That is what makes the empty cells explicable rather than merely
   #    empty. NOTE: neither cell has been run by the author of this comment.
   # configure.py's relative-path defence is correct prophylaxis for NEW files and does
