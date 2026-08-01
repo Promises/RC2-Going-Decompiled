@@ -107,9 +107,17 @@ for s in $(find $ASM -name '*.s' -not -path '*/nonmatchings/*' -not -path '*/mat
   #    Each was published by a seat that had just been right about the mechanism, and
   #    adopted by the other without testing. A REMEDY IS A SEPARATE CLAIM FROM THE
   #    DIAGNOSIS AND NEEDS ITS OWN MEASUREMENT.
-  # ⚠️ THIS THIRD FORM IS *NOT* VERIFIED BY THE AUTHOR OF THIS COMMENT -- it is
-  #    tester-m1's table, adopted unrun, because configure.py writes into the $BUILD a
-  #    live build is holding. Treat it as measured-by-one-seat until someone re-runs it.
+  # COVERAGE, PER COLUMN -- the blanket "measured-by-one-seat" caveat was too coarse and
+  # is replaced by this. A rig with no `.splache` measures the --no-cache column BY
+  # CONSTRUCTION (gate 1 is unconditionally clear there, whatever flag is passed):
+  #   --no-cache column   TWO SEATS. tester-m1 in the real tree; decomper-2-m1 in a
+  #                       cache-free /tmp rig, both cells, with controls printed
+  #                       ("Splitting cod" proving the stage RAN; an ls proving the
+  #                       file was really absent). => THE REMEDY CELL IS TWO-SEAT.
+  #   default column      ONE SEAT (tester-m1 only). This column establishes the
+  #                       NECESSITY of --no-cache, not the sufficiency of the remedy.
+  # => the fix itself is corroborated; what rests on a single seat is the claim that
+  #    omitting --no-cache breaks it. Neither cell has been run by the author here.
   # configure.py's relative-path defence is correct prophylaxis for NEW files and does
   # nothing for this one.
   # => ONLY build.sh and build_conly.sh carry this rewrite (2 of 22 scripts under
