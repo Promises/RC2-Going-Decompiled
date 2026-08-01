@@ -84,10 +84,21 @@ for s in $(find $ASM -name '*.s' -not -path '*/nonmatchings/*' -not -path '*/mat
   # both RELATIVE; 9b68f19c (2026-06-05) has USA ABSOLUTE and EU UNCHANGED. A USA-only
   # re-split from a machine whose home was ~. EU across those two
   # commits is a built-in control.
-  # ⛔ A RE-SPLIT DOES NOT REPAIR IT. Measured (tester-m1): SPLAT NEVER OVERWRITES AN
-  # EXISTING TEXTBIN .s -- it only creates a missing one. With the file present,
-  # `configure.py --no-cache` left its mtime untouched while writing 1,965 other .s in
-  # the same run. DELETE THE .s FIRST, then regenerate; it comes back RELATIVE.
+  # ⛔ REPAIRING IT NEEDS *BOTH* CONDITIONS. Full 2x2, measured by tester-m1 (/5498):
+  #                   default          --no-cache
+  #     present       NOT rewritten    NOT rewritten
+  #     absent        not created      CREATED      <- the ONLY working cell
+  # => `rm` the .s AND pass --no-cache. EITHER ONE ALONE EXITS 0, REPORTS SUCCESS, AND
+  #    LEAVES THE STALE PATH IN PLACE. Regenerated content is relative.
+  # ⚠️ TWO WRONG REMEDIES WERE COMMITTED HERE BEFORE THIS ONE, an hour apart:
+  #    "re-split via configure.py"  -- no-op, file is never rewritten when present
+  #    "delete the .s first"        -- no-op, delete alone does not recreate it
+  #    Each was published by a seat that had just been right about the mechanism, and
+  #    adopted by the other without testing. A REMEDY IS A SEPARATE CLAIM FROM THE
+  #    DIAGNOSIS AND NEEDS ITS OWN MEASUREMENT.
+  # ⚠️ THIS THIRD FORM IS *NOT* VERIFIED BY THE AUTHOR OF THIS COMMENT -- it is
+  #    tester-m1's table, adopted unrun, because configure.py writes into the $BUILD a
+  #    live build is holding. Treat it as measured-by-one-seat until someone re-runs it.
   # configure.py's relative-path defence is correct prophylaxis for NEW files and does
   # nothing for this one.
   # => ONLY build.sh and build_conly.sh carry this rewrite (2 of 22 scripts under
