@@ -222,14 +222,35 @@ def main() -> int:
     print("  SHADOW (no INCLUDE_ASM cites them)  : %d  %s"
           % (len(shadow), sorted(shadow)[:4]))
 
+    # Reported, not enforced, and the count is 0 by CONSTRUCTION rather than by luck: the
+    # one known disagreement (func_002835C0, declared 0x18 vs spanned 0x20) lives in a
+    # SHADOW fragment, and clause 4 removes shadows before this runs.  An earlier revision
+    # annotated this "expected exactly 1" and printed 0 on every run -- a stated expectation
+    # contradicted by its own output, which nothing noticed because nothing checked it.
+    # A non-zero here now means a LIVE symbol disagrees, which clause 1's cross-check refuses
+    # per row below; it is a signal to read, not a stop condition.
     dis = [(n, v[1], v[2]) for n, v in live.items() if v[1] != v[2]]
-    print("declared-vs-spanned disagreements     : %d  (expected exactly 1)" % len(dis))
+    print("declared-vs-spanned disagreements     : %d  (0 expected: the known one is a "
+          "shadow, removed by clause 4)" % len(dis))
     for n, d, s in sorted(dis):
         print("    %-24s declared 0x%X  spanned 0x%X" % (n, d, s))
 
+    # ENFORCED, not printed.  Clause 1 says SYM is the UNIQUE symbol containing the target,
+    # and `container()` implements that as "greatest start <= v, then check v < end" -- which
+    # is only equivalent to uniqueness if the intervals do not overlap.  If two live symbols
+    # overlap, bisect silently picks one and every addend derived from the other is wrong in
+    # exactly the way this tool exists to prevent.  Printing "must be 0" while continuing
+    # anyway states the premise without testing it.
     iv = sorted((v[0], v[0] + v[1], n) for n, v in live.items())
-    ov = sum(1 for x, y in zip(iv, iv[1:]) if x[1] > y[0])
-    print("overlapping intervals                 : %d  (must be 0 for uniqueness)" % ov)
+    overlaps = [(x[2], y[2]) for x, y in zip(iv, iv[1:]) if x[1] > y[0]]
+    print("overlapping intervals                 : %d  (0 required -- clause 1 uniqueness)"
+          % len(overlaps))
+    if overlaps:
+        for a, b in overlaps[:8]:
+            sys.stderr.write("  OVERLAP %s / %s\n" % (a, b))
+        sys.stderr.write("REFUSING: live symbol intervals overlap, so containment is not "
+                         "unique and every addend is unsafe.\n")
+        return 2
 
     # ---- targets: baked code addresses in the data segments ------------------
     lo = [x[0] for x in iv]
