@@ -434,13 +434,29 @@ echo "== [$REGION] building C-alt-overlay .ld (Attempt B) =="
 # "defined in discarded section" error: 111 of them, measured, in two trees.
 #
 # WHY THE GENERATOR RUNS ON THE **BASE** SCRIPT AND ITS OUTPUT IS FED IN AS THE
-# INJECTOR'S `src` -- this ordering is load-bearing, not stylistic:
-# the byte-identical guard below (:~530) derives ALL of its discriminating power
-# from `dst` differing from `src` ONLY BY INJECTIONS. Running the generator on
-# the injector's OUTPUT instead would leave `dst` differing from `src` by the
-# `.calt_rodata` block as well, so a totally-failed injection would still produce
-# a differing file and the guard would pass on a build that injected nothing.
-# Generating a modified BASE and diffing against THAT keeps the guard exact.
+# INJECTOR'S `src`. A WEAK PREFERENCE, NOT A REQUIREMENT -- and the strong claim
+# that used to be written here is RETRACTED.
+#
+# I (orch-m1) wrote that the other ordering "would DESTROY the byte-identical
+# guard", on the reasoning that `dst` would then differ from `src` by the rescue
+# block as well as by injections. decomper-3-m1 REFUTED it by building both
+# orderings and measuring, rather than arguing:
+#
+#     ORDERING A (this one):  generator on BASE   -> inject      -> final .ld
+#     ORDERING B:             inject -> generator on OUTPUT      -> final .ld
+#     cmp A_final B_final                                  -> IDENTICAL
+#     harmful case (stem keys, 0 injections): BOTH orderings -> FATAL rc=3
+#
+# My error is visible once stated: THE BYTE-IDENTICAL GUARD FIRES *INSIDE* THE
+# INJECTOR STEP, where `src` is whatever was handed in and `dst` is the injector's
+# own output. A generator that runs AFTER the injector never touches the compared
+# pair at all. I was reasoning about a third ordering nobody proposed.
+#
+# THE REAL, SMALLER REASON to keep ordering A: the generator's own precondition
+# (exactly one `    /DISCARD/ :` marker) is then checked against the PRISTINE base
+# script rather than against a file the injector has just rewritten -- so a future
+# change to the injector cannot silently invalidate the generator's control. That
+# is worth something and it is not "load-bearing". Either ordering is correct.
 #
 # ATTEMPT A DELIBERATELY KEEPS THE UNMODIFIED `$LD`. A is the control that
 # documents why cmdline-only C-alts are discarded; giving it the rescue section
