@@ -115,6 +115,23 @@ for s in $(find $ASM -name '*.s' -not -path '*/nonmatchings/*' -not -path '*/mat
   #     absent        not created      CREATED            <- the ONLY working cell
   # => `rm` the .s AND pass --no-cache. EITHER ONE ALONE EXITS 0, REPORTS SUCCESS, AND
   #    LEAVES THE STALE PATH IN PLACE. Regenerated content is relative.
+  # ⛔ AND THE TABLE IS PER-SEGMENT-**TYPE**, NOT JUST PER-SEGMENT -- I scoped one axis and
+  #    silently generalised the other. The `present -> NOT rewritten` row is a property of
+  #    textbin's write-once guard, and THAT GUARD IS NOT SHARED BY ITS OWN SIBLINGS.
+  #    Enumerated from the loaded objects across all 59 segtype modules (tester-m1 /5567):
+  #      CommonSegTextbin     write_bin=True  exists()=True   <- the guard lives HERE only
+  #      CommonSegDatabin     write_bin=True  exists()=False  <- sibling, NO write-once guard
+  #      CommonSegRodatabin   write_bin=True  exists()=False  <- sibling, NO write-once guard
+  #    (control: the scan reaches CommonSegTextbin with exists()=True, i.e. it can see the
+  #    exact function pinned above -- without that row every other row is worthless.)
+  #    ⇒ "SPLAT NEVER OVERWRITES AN EXISTING .s" IS FALSE ABOUT SPLAT. True of textbin.
+  #    ⇒ INFERRED, one step past the enumeration and NOT separately measured: for a databin
+  #      or rodatabin .s the `present` row should read REWRITTEN under --no-cache, so
+  #      `--no-cache` ALONE would suffice there and the `rm` is only load-bearing for
+  #      textbin. Confirm before relying on it: stat a data/rodata .s across an uncached
+  #      re-split. ⚠️ The dangerous reading is the other direction -- anyone treating
+  #      write-once as blanket protection for hand-edited .s files is protected ONLY on
+  #      textbin segments.
   # WHY BOTH -- TWO INDEPENDENT BLOCKERS, ONE PER AXIS, both verified in-tree:
   #   cached column    THE GATE IS  splat/scripts/split.py:349
   #                      if cache.check_cache_hit(segment, True): continue
