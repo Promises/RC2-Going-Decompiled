@@ -180,8 +180,27 @@ for s in $(find $ASM -name '*.s' -not -path '*/nonmatchings/*' -not -path '*/mat
   #                    -- the segment is skipped entirely, so textbin never runs.
   #                    configure.py:60-61/:79 only SELECT it (flag plumbing); a direct
   #                    `python -m splat split ...` bypasses configure.py and still hits
-  #                    :349. Pin the GATE, not the wrapper -- the invocation that created
-  #                    this defect did not go through the wrapper.
+  #                    :349. Pin the GATE, not the wrapper.
+  # 🔴 RETRACTED, THIS LINE WAS FALSE: an earlier version added "-- the invocation that
+  #    created this defect did not go through the wrapper." REFUTED (tester-m1 /5616),
+  #    measured two ways and I re-ran both:
+  #      9b68f19c^:scripts/configure.py   :56 print(... cfg.relative_to(ROOT))  RELATIVE
+  #                                       :57 cmd = [... "split", str(cfg)]     ABSOLUTE
+  #      merge-base --is-ancestor 6de66b40 9b68f19c -> NO, the direct-splat workaround
+  #      POSTDATES the stale .s, so it cannot explain it
+  #    ⇒ THE WRAPPER ITSELF PASSED THE ABSOLUTE PATH. The stale `.incbin` was produced
+  #    THROUGH configure.py; no bypass is needed to explain it and none should be assumed.
+  #    ⚠️ WHY THE ERROR MATTERED: I used that false line to tell the human a proposed
+  #    guard in configure.py's ensure_inputs() "would not have caught the only incident
+  #    we can name". The opposite is true -- it would have. I bounded a SAFETY remedy
+  #    DOWNWARD on a claim I had never measured. An understated bound on a fix is not the
+  #    cautious direction; it argues for less protection.
+  # 🔑 AND THE ARTEFACT ITSELF IS THE BEST THING THIS LANE HAS TURNED UP: `:56` PRINTED
+  #    the relative path while `:57` RAN the absolute one. The log told every operator the
+  #    correct thing while the command did the wrong thing -- which is why this survived
+  #    two months. Not a cache, not a subclass, not a shell quirk: a print and its command
+  #    disagreeing, one line apart. Cf. the `rm`/uniqueness pair elsewhere in this file --
+  #    PROXIMITY IS NOT COMPOSITION, and here it applied to a log line and its own action.
   #                    (going-decompiled/build/{usa,eu}/.splache both EXIST.)
   #   ⚠️ DO NOT SAY "DEFAULT" HERE. It is INVERTED between the two layers:
   #        bare splat   --use-cache is action="store_true"  -> default CACHE OFF
