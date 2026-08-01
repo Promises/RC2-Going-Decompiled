@@ -51,6 +51,7 @@ identical. So a zero is only evidence if the section RECEIVED BYTES. Check the m
 fill, which the map shows as explicit *fill* rows.
 """
 from __future__ import annotations
+import re
 import sys
 
 # Above .legal_data (0x01800000 + 0x5d80). NOT a designed address -- the first free
@@ -59,6 +60,11 @@ import sys
 CALT_RODATA_VMA = "0x01820000"
 
 CATCH_ALL = "    /DISCARD/ :"
+
+# A section DEFINITION: name, a VMA, then the colon. Deliberately NOT a bare
+# `.calt_rodata` search -- that matches a comment, and a predicate satisfiable by
+# prose is how an input-side guard gets talked into passing.
+ALREADY_PRESENT = re.compile(r'^[ \t]*\.calt_rodata[ \t]+0x[0-9A-Fa-f]+[ \t]*:', re.M)
 
 BLOCK = f"""    .calt_rodata {CALT_RODATA_VMA} :
     {{
@@ -76,6 +82,26 @@ def main() -> int:
 
     src, dst = sys.argv[1], sys.argv[2]
     text = open(src).read()
+
+    # IDEMPOTENCY REFUSAL. Applying this twice emits TWO .calt_rodata sections at the
+    # SAME VMA, which silently overlap -- and the old behaviour was to do it happily
+    # and exit 0. build_conly.sh has a point-of-use guard that catches a count != 1,
+    # but that protects ONE caller; this protects the tool, for anyone invoking it by
+    # hand or from a future script.
+    #
+    # ANCHORED ON THE SECTION DEFINITION, NOT THE STRING. A linker script comment
+    # mentioning `.calt_rodata` must not trigger a false refusal -- counting bare
+    # occurrences is the exact defect that made build_conly.sh's first input guard
+    # satisfiable by prose, and this file is where the anchored form was worked out.
+    already = ALREADY_PRESENT.findall(text)
+    if already:
+        print(f"REFUSING: {src} already declares {len(already)} .calt_rodata section(s).",
+              file=sys.stderr)
+        print("          Applying this generator again would place a SECOND section at "
+              f"{CALT_RODATA_VMA}; two sections at one VMA overlap silently.",
+              file=sys.stderr)
+        print("          Run it on the BASE script, not on its own output.", file=sys.stderr)
+        return 2
 
     # Fail loudly rather than emit a script whose placement is not what the caller
     # thinks. An unmatched or duplicated marker means the generator changed shape.
