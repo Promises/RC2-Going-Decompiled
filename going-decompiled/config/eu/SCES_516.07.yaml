@@ -243,30 +243,32 @@ segments:
       - [0x24D410, asm, text/24D410] # .text gap (0x34D490..0x3515A0)
       - [0x251520, c, text/251520]   # USA 250080 twin (0x3515A0..0x355080, segment tail)
 
+  - [0x255000]
+
   - name: legal.data
     type: code
-    start: 0x255000
+    start: 0x16FFF80
     vram: 0x01800000
     bss_size: 0x0
     subalign: null
     subsegments:
-      - [0x255000, data, legal.data/255000] # legal.data
+      - [0x16FFF80, data, legal.data/255000] # legal.data
 
   - name: mc1.data
     type: code
-    start: 0x25AD80
+    start: 0x1705D00
     vram: 0x01805D80
     bss_size: 0x0
     subalign: null
     subsegments:
-      - [0x25AD80, data, mc1.data/25AD80] # mc1.data
+      - [0x1705D00, data, mc1.data/25AD80] # mc1.data
 
   - name: mc1.data_2
     type: code
-    start: 0x27FE80
+    start: 0x172AE00
     vram: 0x0182AE80
     bss_size: 0x0
     subalign: null
     subsegments:
-      - [0x27FE80, data, mc1.data_2/27FE80] # mc1.data
-  - [0x2A70A9]
+      - [0x172AE00, data, mc1.data_2/27FE80] # mc1.data
+  - [0x1752029]

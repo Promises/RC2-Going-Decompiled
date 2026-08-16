@@ -454,30 +454,32 @@ segments:
       - [0x250080, c, text/250080]   # segment-tail unit (0x350100..0x352D07)
       - [0x252C88, asm, text/252C88] # trailing nop pad (0x352D08..0x35307C)
 
+  - [0x253000]
+
   - name: legal.data
     type: code
-    start: 0x253000
+    start: 0x16FFF80
     vram: 0x01800000
     bss_size: 0x0
     subalign: null
     subsegments:
-      - [0x253000, data, legal.data/253000] # legal.data
+      - [0x16FFF80, data, legal.data/253000] # legal.data
 
   - name: mc1.data
     type: code
-    start: 0x258D80
+    start: 0x1705D00
     vram: 0x01805D80
     bss_size: 0x0
     subalign: null
     subsegments:
-      - [0x258D80, data, mc1.data/258D80] # mc1.data
+      - [0x1705D00, data, mc1.data/258D80] # mc1.data
 
   - name: mc1.data_2
     type: code
-    start: 0x260480
+    start: 0x170D400
     vram: 0x0180D480
     bss_size: 0x0
     subalign: null
     subsegments:
-      - [0x260480, data, mc1.data_2/260480] # mc1.data
-  - [0x268570]
+      - [0x170D400, data, mc1.data_2/260480] # mc1.data
+  - [0x17154F0]
