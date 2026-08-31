@@ -532,11 +532,14 @@ s32 SetMobyFlagBit0(Moby *moby) {
 }
 
 /* One-shot latch of moby anim-flag bit 1. Returns 1 if newly set, 0 otherwise.
- * WALL: register-coloring + store-scheduling. The original keeps the byte in
- * $v1 and sinks the write-back `sb` into the final `jr` delay slot with a plain
- * `andi` test (no xori, unlike bit0). cc1 here either colors the byte into $v0
- * or won't sink the store without an extra xori idiom (best 81.67%); genuine
- * reg-alloc wall, left as INCLUDE_ASM. */
+ * The original keeps the byte in $v1 and sinks the write-back `sb` into the
+ * final `jr` delay slot with a plain `andi` test (no xori, unlike bit0).
+ * NOT A GENUINE WALL: a byte-exact C for this function exists and is certified
+ * -- 36 B cmp IDENTICAL, 9/9 words, 0 relocs (audit /19066, independently
+ * re-derived /19147). It is NOT the #else body below, which measures 52.22%
+ * (21/94 in the unit); the winning body is unmerged (d2/asmfix, see /19066).
+ * The "best 81.67%" this comment used to carry was a real ceiling of a third
+ * variant that this file has never carried. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", SetMobyFlagBit1);
 #else
