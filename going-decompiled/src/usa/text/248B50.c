@@ -309,9 +309,14 @@ void func_00348DA0(GuiWidget *w, f32 *table) {
 #endif
 
 /* func_00348E10: set the +0xB8 / +0xBC field pair (a1 -> +0xB8, a2 -> +0xBC).
- * Best 96%: the original stores +0xBC first then fills the jr delay slot with
- * the +0xB8 store; the pinned cc1 schedules the two independent struct stores in
- * ascending-offset order. WALL: ascending-offset store scheduling. */
+ * The ROM stores +0xBC first, then fills the jr delay slot with the +0xB8 store.
+ * NOT A WALL: the #else body below reproduces exactly that and is byte-exact --
+ * 12 B cmp IDENTICAL, 3/3 words, 0 relocs in range (audit /19066, independently
+ * re-derived /19147). The "Best 96%" this comment used to carry was a real
+ * measurement of the DESCENDING source form, which this file has never
+ * committed; writing the two stores in ascending source order is what matches.
+ * Only the preprocessor arm differs -- the EE build still takes INCLUDE_ASM,
+ * pending an authorised arm flip (/19091). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348E10);
 #else
