@@ -531,39 +531,37 @@ s32 SetMobyFlagBit0(Moby *moby) {
     return 1;
 }
 
-/* One-shot latch of moby anim-flag bit 1. Returns 1 if newly set, 0 otherwise.
- * The original keeps the byte in $v1 and sinks the write-back `sb` into the
- * final `jr` delay slot with a plain `andi` test (no xori, unlike bit0).
- * NOT A GENUINE WALL: a byte-exact C for this function exists and is certified
- * -- 36 B cmp IDENTICAL, 9/9 words, 0 relocs (audit /19066, independently
- * re-derived /19147). It is NOT the #else body below, which measures 52.22%
- * (21/94 in the unit); the winning body is unmerged (d2/asmfix, see /19066).
- * The "best 81.67%" this comment used to carry was a real ceiling of a third
- * variant that this file has never carried. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", SetMobyFlagBit1);
-#else
 /**
- * One-shot latch of moby anim-flag bit 1.
+ * One-shot latch of moby anim-flag bit 1 (`animFlags` byte at moby+0xBE).
  *
- * @param moby moby whose animFlags byte (+0xBE) is latched
+ * @param moby moby whose animFlags byte is latched
  * @return     1 if the bit was newly set (byte rewritten), 0 if it was already
  *             set (byte left untouched)
  *
- * Faithful to the .s: tests `flags & 2`; if already set returns 0 without
- * storing, otherwise writes `flags | 2` and returns 1. Note the asm computes
- * `flags | 2` up front (in the branch delay slot) but only commits the store
- * on the not-yet-set path.
+ * The read-modify-write on `flags` is load-bearing, not style: writing
+ * `moby->animFlags = flags | 2;` instead produces a fresh value in a second
+ * register and costs the match -- that form measures 52.22% and is what this
+ * file shipped in its inert #else arm until now. Updating `flags` in place lets
+ * cc1 reuse $v1 for the OR result (`ori v1,v1,2`), which in turn frees the tail
+ * block to sink the `sb` into the final `jr` delay slot. Both differences come
+ * from the one change -- see the sibling SetMobyFlagBit0 above, which matches
+ * with the `flags | 1` form because its original tests via `xori`.
+ *
+ * Byte-exact: 36 B cmp IDENTICAL against the ROM, 9/9 words, target_relocs ==
+ * base_relocs == 0 (audit /19066; independently re-derived against the retail
+ * boot ELF and master's unmodified objdiff_build.sh in /19147). The reloc
+ * equality is trivially satisfied here -- this leaf carries no relocation at
+ * all -- so the discriminating evidence is the byte comparison, not 0 == 0.
  */
 s32 SetMobyFlagBit1(Moby *moby) {
     u8 flags = moby->animFlags;
     if ((flags & 2) != 0) {
         return 0;
     }
-    moby->animFlags = flags | 2;
+    flags |= 2;
+    moby->animFlags = flags;
     return 1;
 }
-#endif
 
 /* Test moby anim-flag bit 2. */
 s32 func_002B47D0(Moby *moby) {

@@ -2971,21 +2971,45 @@ void func_0033C060(void *p, f32 a, f32 b) {
     (*(f32 **)p)[1] = b;
 }
 
-/* GuiDialogBoxSetBounds: write six dialog-box bound floats. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiDialogBoxSetBounds);
-#else
-/* TODO(match): functional equivalent - not byte-exact; the original keeps source
-   store order; cc1 reschedules the independent stores ascending. 95% best. */
+/**
+ * GuiDialogBoxSetBounds: write six dialog-box bound floats into the contiguous
+ * f32 block at +0x2A8..+0x2BC. Args 1,2 land at +0x2A8/+0x2AC, args 3,4 at
+ * +0x2B8/+0x2BC, and args 5,6 at +0x2B0/+0x2B4 between them — the mapping is
+ * not in offset order. Seven callers pass e.g. (64,-164,10,136,10,99) and
+ * (0,-143,0,114,0,140); which pair is which quantity is not established here.
+ *
+ * The stores are in ARGUMENT order, and that is what byte-matches. Do NOT
+ * rewrite them into the order the .s listing shows: cc1 reorders within the
+ * block — it emits the last store first and sinks the second-to-last into the
+ * `jr` delay slot — so feeding it the emitted order produces a DIFFERENT
+ * emitted order. Measured by words: listing order 1 of 7, argument order 7 of 7.
+ * See docs/WORKFLOW.md, "Do not copy the emitted instruction order back into
+ * the C".
+ *
+ * MATCHED: byte-identical, confirmed by two independent instruments — a
+ * unit-level objdiff_build.sh rebuild, and a disassembly of the boot ELF at
+ * 0x0033C078. The function is 7 words (glabel..endlabel); the `nop` at
+ * 0x0033C094 is padding after endlabel, not part of it.
+ *
+ * A standalone diff.sh percentage is not sufficient evidence on its own: it
+ * over-reports, has been seen to under-report on this unit, and scored the
+ * broken listing-order form at "94.86%" when by words it is 1 of 7 — only the
+ * `jr` survives, the six stores being rotated by one.
+ *
+ * RELOC PRECONDITION: target_relocs == base_relocs == 0 (/19147). That
+ * equality is trivially satisfied -- this leaf's operands are all immediate
+ * offsets on $4, so neither side carries a relocation -- so it rules out the
+ * reloc-normalisation over-report but is not itself the evidence; the byte
+ * comparison and the ROM anchor are.
+ */
 void GuiDialogBoxSetBounds(void *p, f32 a, f32 b, f32 c, f32 d, f32 e, f32 f) {
-    *(f32 *)((char *)p + 0x2B4) = f;
     *(f32 *)((char *)p + 0x2A8) = a;
     *(f32 *)((char *)p + 0x2AC) = b;
     *(f32 *)((char *)p + 0x2B8) = c;
     *(f32 *)((char *)p + 0x2BC) = d;
     *(f32 *)((char *)p + 0x2B0) = e;
+    *(f32 *)((char *)p + 0x2B4) = f;
 }
-#endif
 
 /* GuiDialogBoxSetText3: assign the three dialog-box text labels - the title
  * (p+0x198 <- t0), the body (p+0x248 <- t1) and the prompt (p+0x1F0 <- t2). */
