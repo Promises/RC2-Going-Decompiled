@@ -242,18 +242,16 @@ void func_0034A230(GuiWidget *w, f32 *table) {
  * (a -> +0xB8, b -> +0xBC). NOT a structure model: the #else body below is
  * byte-exact. Taken verbatim with only the TARGET_NATIVE guard removed it gives
  * 12 B cmp IDENTICAL, 3/3 words, 0 relocs, 22/67 matched in the unit (/19147).
- * EU C is therefore a preprocessor-arm flip with ZERO code change; the EE build
- * still takes INCLUDE_ASM, pending an authorised arm flip (/19091).
+ * EU C is therefore a preprocessor-arm flip with ZERO code change. ARM FLIPPED
+ * (/19536, /19537): the guard is gone and the EE build now compiles this body.
+ * target_relocs == base_relocs == 0, trivially so (no operand here needs a
+ * relocation).
  * Word-verified vs USA func_00348E10: no external symbols; EU .s
  * stores $5->0xB8, $6->0xBC — offsets identical. Region-agnostic. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", func_0034A2A0);
-#else
 void func_0034A2A0(GuiWidget *w, s32 a, s32 b) {
     *(s32 *)((char *)w + 0xB8) = a;
     *(s32 *)((char *)w + 0xBC) = b;
 }
-#endif
 
 /* func_0034A2B0 (USA func_00348E20): store a1 to the +0xC8 field. */
 void func_0034A2B0(GuiWidget *w, s32 v) {

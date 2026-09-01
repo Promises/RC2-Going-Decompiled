@@ -315,16 +315,15 @@ void func_00348DA0(GuiWidget *w, f32 *table) {
  * re-derived /19147). The "Best 96%" this comment used to carry was a real
  * measurement of the DESCENDING source form, which this file has never
  * committed; writing the two stores in ascending source order is what matches.
- * Only the preprocessor arm differs -- the EE build still takes INCLUDE_ASM,
- * pending an authorised arm flip (/19091). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348E10);
-#else
+ * ARM FLIPPED (/19536, /19537): the guard is gone and the EE build now compiles
+ * this body. Zero code change -- the text below is character-for-character what
+ * the #else held. target_relocs == base_relocs == 0, trivially so (no operand
+ * here needs a relocation), which rules out reloc-normalisation over-reporting
+ * without itself being the evidence. */
 void func_00348E10(GuiWidget *w, s32 a, s32 b) {
     *(s32 *)((char *)w + 0xB8) = a;
     *(s32 *)((char *)w + 0xBC) = b;
 }
-#endif
 
 /* func_00348E20: store a1 to the +0xC8 field. */
 void func_00348E20(GuiWidget *w, s32 v) {
