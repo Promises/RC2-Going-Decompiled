@@ -4882,7 +4882,53 @@ s32 func_0012CFA0(s32 *arg0) {
     }
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012CFE8);
+struct ScrollObj {
+    char _0[0x150];
+    s32 mode;          /* 0x150: ==3 short-circuits the delta application */
+    char _a[0x1AC - 0x154];
+    s32 target;        /* 0x1AC: computed scroll target */
+    char _b[0x84C - 0x1B0];
+    s32 base;          /* 0x84C: base position */
+    s32 extent;        /* 0x850: clamped up to >= target */
+    s32 wrapFlag;      /* 0x854: cleared on any non-zero delta */
+};
+
+/**
+ * func_0012CFE8(obj, delta): advance the scroll position of obj by delta.
+ * Unless obj is in mode 3 or delta is 0, clears wrapFlag (0x854) and notes
+ * whether it had been zero on a negative delta. The target (0x1AC) becomes
+ * base+delta, bumped by 0x400 when the just-cleared wrapFlag was zero and the
+ * applied delta did not decrease. Finally extent (0x850) is clamped up to the
+ * target.
+ *
+ * Matched 2026-06-30 (was an INCLUDE_ASM give-up class: beql/bgezl/bnel
+ * branch-likely + movn). The branch-likely forms fall out naturally from the
+ * correct control flow - the keystone was that wrapFlag is zeroed on EVERY
+ * non-zero delta (the bgezl-taken delay slot), NOT only on a negative delta;
+ * placing `obj->wrapFlag = 0` outside the `delta < 0` test is what produces the
+ * annulled-delay bgezl. Solo-clean (no data global) so EU C is identical.
+ */
+void func_0012CFE8(struct ScrollObj *obj, s32 delta) {
+    s32 wasZero = 0;
+    s32 applied = 0;
+    s32 base, target, extent;
+    if (obj->mode != 3 && delta != 0) {
+        if (delta < 0) {
+            if (obj->wrapFlag == 0) wasZero = 1;
+        }
+        obj->wrapFlag = 0;
+        applied = delta;
+    }
+    base = obj->base;
+    target = base + delta;
+    obj->target = target;
+    if (wasZero != 0) {
+        if (applied >= delta) obj->target = target + 0x400;
+    }
+    extent = obj->extent;
+    if (extent < obj->target) extent = obj->target;
+    obj->extent = extent;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012D060);
 
@@ -4952,14 +4998,45 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012E538);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012E608);
 
-/* func_0012E890(arg0, arg1, arg2, arg3): initialise the record at arg0 (limit
- * arg1 at field_0x8/0xC, end arg2+arg3 at field_0x24, span arg3 at field_0x28,
- * start arg2 at field_0x20; zero field_0x0..0x4, 0x10, 0x18..0x1C) then
- * tail-call func_0012E8E8(arg0, 0, arg2, arg3). ~75% — ee-gcc schedules the
- * field stores differently around the sibling call (the original interleaves
- * the start-store into the tail-call delay slot), a codegen shape not
- * expressible in source. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012E890);
+extern void func_0012E8E8(u64 *arg0, s32 arg1);
+
+struct E890Rec {
+    u64 cleared0;      /* 0x0:  zeroed as one doubleword (sd $0) */
+    s32 limit;         /* 0x8:  = limit arg */
+    s32 limit2;        /* 0xC:  = limit arg (second slot) */
+    s32 cleared10;     /* 0x10: zeroed */
+    s32 _pad14;        /* 0x14: (layout) */
+    u64 cleared18;     /* 0x18: zeroed as one doubleword (sd $0) */
+    s32 start;         /* 0x20: = start arg */
+    s32 end;           /* 0x24: = start + span */
+    s32 span;          /* 0x28: = span arg */
+};
+
+/**
+ * func_0012E890: initialise the record at arg0 - store the limit (arg1) at
+ * field_0x8 and field_0xC, the end (start+span) at field_0x24, the span (arg3)
+ * at field_0x28, the start (arg2) at field_0x20; zero field_0x0..0x4, 0x10 and
+ * field_0x18..0x1C - then tail-call func_0012E8E8(arg0, 0).
+ *
+ * Matched 2026-06-30 (disproves the ~75% give-up that called this "a codegen
+ * shape not expressible in source"): the store SCHEDULE is the whole game.
+ * Writing the fields in ascending-offset order, but with field_0x8 emitted just
+ * before the field_0x0 doubleword-zero, reproduces ee-gcc's exact schedule -
+ * including the start-store (field_0x20 = arg2) landing in the sibling-call
+ * delay slot. The two 8-byte zero stores are doublewords (sd $0), obtained by
+ * typing field_0x0/0x18 as u64.
+ */
+void func_0012E890(struct E890Rec *rec, s32 limit, s32 start, s32 span) {
+    rec->limit    = limit;
+    rec->cleared0 = 0;
+    rec->limit2   = limit;
+    rec->cleared10 = 0;
+    rec->cleared18 = 0;
+    rec->start = start;
+    rec->end   = start + span;
+    rec->span  = span;
+    func_0012E8E8((u64 *)rec, 0);
+}
 
 /**
  * Extract the top arg1 bits of the 64-bit value at *arg0: returns
@@ -5159,15 +5236,29 @@ s32 func_0012FA18(s32 *arg0) {
     return 1;
 }
 
-/* func_0012FA70(arg0, index, arg2, arg3): in the entry table at arg0->field_0x40
- * (8-byte stride records), write arg3 into record[index]+0x10, return the old
- * value of record[index]+0xC and overwrite it with arg2. ~74%; the original
- * keeps the table base live and computes both member addresses before storing,
- * a scheduling shape ee-gcc won't reproduce here. Re-probed 2026-06-12 with
- * two separately-formed record pointers (base+idx*8 and (base+0xC)+idx*8) -
- * still 74.44%, the address-formation schedule does not budge. Left as
- * INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012FA70);
+/**
+ * func_0012FA70: in the record table at arg0->field_0x40 (8-byte stride),
+ * write arg3 into record[index]+0x10, then swap arg2 into record[index]+0xC,
+ * returning that field's previous value.
+ *
+ * Matched 2026-06-30 (disproves the earlier 74.44% give-up): the original forms
+ * the base+0xC member pointer FIRST, then advances both it and the base pointer
+ * by index*8 in place (two live induction pointers). Reproduced exactly by
+ * `member = base + 3; base += index*2; member += index*2;` - forming the +0xC
+ * pointer before the in-place increments is what fixes the address-formation
+ * schedule the prior attempt couldn't budge.
+ */
+s32 func_0012FA70(s32 *arg0, s32 index, s32 arg2, s32 arg3) {
+    s32 *base = (s32 *)arg0[0x10];   /* arg0->field_0x40 */
+    s32 *member = base + 3;          /* &record[].field_0xC */
+    s32 old;
+    base += index * 2;
+    member += index * 2;
+    base[4] = arg3;                  /* record[index] + 0x10 */
+    old = *member;                   /* record[index] + 0xC */
+    *member = arg2;
+    return old;
+}
 
 /* func_0012FA98(arg0, arg1): if arg0 and its table arg0->field_0x40 are non-null,
  * fetch the destructor at table[*arg1*2 + 3] and, if set, call
@@ -5308,15 +5399,24 @@ void func_00130088(s32 *arg0) {
  * branch-form/scheduling shape this cc1 won't reproduce. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130098);
 
-/* func_00130118: initialise subsystem 1 (func_0012B198(1)), then program the
- * four hardware DMA/GIF register pointers into arg0
- * (field_0x590=0x70000000, 0x594=0x70001800, 0x6D0=0x70001B00, 0x6D4=0x70003300)
- * and clear the busy flag at field_0x810. Body matches 90% — but the original
- * parks the use-once 0x70000000 in the callee-saved $17 (and so reserves a 0x30
- * frame saving $16/$17), whereas ee-gcc at -O2 keeps it in a caller-saved temp
- * and only saves $16 (0x20 frame). A register-allocation form this cc1 won't
- * reproduce. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130118);
+/**
+ * func_00130118: initialise subsystem 1 (func_0012B198(1)), then program the
+ * four hardware DMA/GIF register pointers into arg0 (field_0x590=0x70000000,
+ * 0x594=0x70001800, 0x6D0=0x70001B00, 0x6D4=0x70003300) and clear the busy flag
+ * at field_0x810. MATCHED. The original parks the use-once 0x70000000 in the
+ * callee-saved $17 (0x30 frame, saving $16/$17). The LEVER (disproving the
+ * earlier "cc1 won't reproduce" note): compute that constant into a LOCAL
+ * *before* the call — that makes it live across func_0012B198, so ee-gcc spills
+ * it to a callee-saved register exactly as the original. */
+void func_00130118(void *arg0) {
+    u32 gif = 0x70000000;
+    func_0012B198(1);
+    *(u32 *)((char *)arg0 + 0x590) = gif;
+    *(u32 *)((char *)arg0 + 0x594) = 0x70001800;
+    *(u32 *)((char *)arg0 + 0x6D0) = 0x70001B00;
+    *(u32 *)((char *)arg0 + 0x6D4) = 0x70003300;
+    *(u32 *)((char *)arg0 + 0x810) = 0;
+}
 
 extern s32 func_00130DB8(s32 mode, s32 arg1);
 
