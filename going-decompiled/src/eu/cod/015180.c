@@ -3838,21 +3838,24 @@ extern s32 func_00123400(u32 *src, SpParts *out);
  * widen result — the .s tail-passes func_00123268's v0/v1 through, no reload
  * before jr ra).
  *
- * NEAR-MISS WALL (75.00% via objdiff, region-co-located with USA): post-call body
- * is byte-identical; the only divergence is ee-gcc -O2 -G0 scheduling the three
- * prologue insns {save $31, &f, swc1 spill} in a different order. Shipped as a
- * portable TARGET_NATIVE #else; cmp-oracle'd (extendsfdf2, the double-bits return).
+ * NOT A NEAR-MISS WALL. This comment used to claim a 75.00% ceiling on prologue
+ * scheduling and shipped the body in an inert TARGET_NATIVE #else. The body it
+ * was guarding is BYTE-EXACT: gated at the unit level, object bytes identical
+ * (/19124, EXTRA §7), so master had been holding a matching body in the arm the
+ * EE build never compiles. This landing is a preprocessor-arm flip with ZERO
+ * code change -- the text below is character-for-character what the #else held.
+ *
+ * ⚠️ Carries the same relocation symbol-NAME skew class as McRead above: the
+ * target names `__unpack_f` where the base names `func_00123400`. Same address
+ * in symbol_addrs/eu, same inference-not-measurement caveat.
+ * Still cmp-oracle'd (extendsfdf2, the double-bits return).
  */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001234F0);
-#else
 s64 func_001234F0(float f) {
     SpParts sp;
     func_00123400((u32 *)&f, &sp);
     return func_00123268(sp.fpClass, sp.sign, sp.exponent,
                          (s64)((u64)(u32)sp.mantissa << 30));
 }
-#endif
 
 /**
  * Decode a little-endian base-128 varint from src into *out, 7 bits per byte
@@ -4097,19 +4100,121 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", McOpen);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", McBeginCreateFile);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", McClose);
+extern u8   g_mcRpcClient[]; /* libmc RPC client block (init flag @+0x24) */
+extern s32  g_mcMutexSema;   /* libmc mutex/semaphore handle */
+extern s32  D_00141C00;      /* libmc RPC send-buffer (fd marshalled @+0) */
+extern u8   g_mcRpcResult[]; /* libmc RPC receive-buffer (EU Track-B name) */
+extern s32  D_00137EE8;      /* libmc last-op status code */
+extern s32  func_0011AC70(s32 sema);
+extern void func_0011AC40(s32 sema);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", McSeek);
+/** McClose (libmc): close memory-card fd. Match harvested from USA func_00127668;
+ *  EU references the Track-B-named / EU-placed libmc globals. init-flag guard
+ *  (-0x64), mutex lock (-0xC8), RPC #3, status/unlock. KEY LEVER: local pointer
+ *  `client` reuses one base register for +0x24 + the RPC arg. */
+s32 McClose(s32 fd) {
+    u8 *client = g_mcRpcClient;
+    s32 r;
+    if (*(s32 *)(client + 0x24) == 0) {
+        return -0x64;
+    }
+    if (func_0011AC70(g_mcMutexSema) < 0) {
+        return -0xC8;
+    }
+    D_00141C00 = fd;
+    r = func_0011D620(client, 3, 1, &D_00141C00, 0x30, g_mcRpcResult, 4, 0, 0);
+    if (r == 0) {
+        D_00137EE8 = 3;
+    } else {
+        func_0011AC40(g_mcMutexSema);
+    }
+    return r;
+}
+
+/** McSeek (libmc): harvest of USA func_00127720. RPC #4; send buffer fd@+0,
+ *  offset@+0x10, whence@+0x14. EU Track-B/EU-placed globals. */
+s32 McSeek(s32 fd, s32 offset, s32 whence) {
+    u8 *client = g_mcRpcClient;
+    s32 r;
+    if (*(s32 *)(client + 0x24) == 0) {
+        return -0x64;
+    }
+    if (func_0011AC70(g_mcMutexSema) < 0) {
+        return -0xC8;
+    }
+    D_00141C00 = fd;
+    *(s32 *)((char *)&D_00141C00 + 0x10) = offset;
+    *(s32 *)((char *)&D_00141C00 + 0x14) = whence;
+    r = func_0011D620(client, 4, 1, &D_00141C00, 0x30, g_mcRpcResult, 4, 0, 0);
+    if (r == 0) {
+        D_00137EE8 = 4;
+    } else {
+        func_0011AC40(g_mcMutexSema);
+    }
+    return r;
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001277F8);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", McRead);
+extern void func_0011CEC8(void *buf, s32 size);  /* cache writeback/invalidate */
+extern u8   D_00142080[];                         /* EU libmc DMA staging buffer */
+extern void func_001277F8(void);                  /* McRead RPC end-callback */
+
+/** McRead (libmc): harvest of USA func_00127888. RPC #5; send buf fd@0/size@0xC/
+ *  buf@0x18/dma@0x1C; flush user+DMA buffers; end-callback func_001277F8.
+ *
+ *  ⚠️ CERTIFIED-QUALIFIED, NOT BARE (/19124 §6). The object bytes are identical
+ *  and all 21 relocations sit at identical offsets and types on both sides, but
+ *  TWO of them NAME A DIFFERENT SYMBOL: the target says `sceSifWriteBackDCache`
+ *  where the base says `func_0011CEC8`. `symbol_addrs/eu` maps both to the same
+ *  address, so the linked bytes are expected to agree -- but that is an
+ *  INFERENCE ABOUT THE LINKER, not something any gate here measured. Settling it
+ *  needs a resolved-relocation comparison (verify_match_unit.sh) or a link.
+ *  The skew is a pre-existing tree condition, not introduced by this body;
+ *  census: EU 2 sites, USA 2 sites (func_00127220 skews the other way). */
+s32 McRead(s32 fd, void *buf, s32 size) {
+    u8 *client = g_mcRpcClient;
+    s32 r;
+    if (*(s32 *)(client + 0x24) == 0) {
+        return -0x64;
+    }
+    if (func_0011AC70(g_mcMutexSema) < 0) {
+        return -0xC8;
+    }
+    D_00141C00 = fd;
+    *(u8 **)((char *)&D_00141C00 + 0x1C) = D_00142080;
+    *(void **)((char *)&D_00141C00 + 0x18) = buf;
+    *(s32 *)((char *)&D_00141C00 + 0xC) = size;
+    func_0011CEC8(buf, size);
+    func_0011CEC8(D_00142080, 0xC0);
+    r = func_0011D620(client, 5, 1, &D_00141C00, 0x30, g_mcRpcResult, 4,
+                      (s32)func_001277F8, (s32)D_00142080);
+    if (r == 0) {
+        D_00137EE8 = 5;
+    } else {
+        func_0011AC40(g_mcMutexSema);
+    }
+    return r;
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", McWrite);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00127B18);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", McDelayMillis);
+extern s32  func_0011AB10(void);
+extern void func_0011A9A0(s32 id, void *handler, s32 obj);
+extern void func_00127B18(void);   /* libmc timer callback */
+extern s32  func_0011AB40(void);
+
+/** McDelayMillis (libmc): harvest of USA func_00127B40. Void sibling-call to
+ *  func_0011AB40; args computed into locals before func_0011AB10 (saved-reg). */
+void McDelayMillis(s32 millis) {
+    s32 id = millis & 0xFFFF;
+    void (*cb)(void) = func_00127B18;
+    s32 obj = func_0011AB10();
+    func_0011A9A0(id, cb, obj);
+    func_0011AB40();
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", McSync);
 
@@ -4490,7 +4595,44 @@ s32 func_0012CFA0(s32 *arg0) {
     }
 }
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012CFE8);
+struct ScrollObj {
+    char _0[0x150];
+    s32 mode;          /* 0x150: ==3 short-circuits the delta application */
+    char _a[0x1AC - 0x154];
+    s32 target;        /* 0x1AC: computed scroll target */
+    char _b[0x84C - 0x1B0];
+    s32 base;          /* 0x84C: base position */
+    s32 extent;        /* 0x850: clamped up to >= target */
+    s32 wrapFlag;      /* 0x854: cleared on any non-zero delta */
+};
+
+/**
+ * func_0012CFE8(obj, delta): advance obj's scroll position by delta (see USA
+ * twin for full behaviour). Matched 2026-06-30; the keystone is that wrapFlag
+ * (0x854) is cleared on EVERY non-zero delta (the bgezl-taken delay slot), not
+ * only on a negative delta. Solo-clean (no data global) - C identical to USA.
+ */
+void func_0012CFE8(struct ScrollObj *obj, s32 delta) {
+    s32 wasZero = 0;
+    s32 applied = 0;
+    s32 base, target, extent;
+    if (obj->mode != 3 && delta != 0) {
+        if (delta < 0) {
+            if (obj->wrapFlag == 0) wasZero = 1;
+        }
+        obj->wrapFlag = 0;
+        applied = delta;
+    }
+    base = obj->base;
+    target = base + delta;
+    obj->target = target;
+    if (wasZero != 0) {
+        if (applied >= delta) obj->target = target + 0x400;
+    }
+    extent = obj->extent;
+    if (extent < obj->target) extent = obj->target;
+    obj->extent = extent;
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012D060);
 
@@ -4560,7 +4702,37 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012E538);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012E608);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012E890);
+struct E890Rec {
+    u64 cleared0;      /* 0x0:  zeroed as one doubleword (sd $0) */
+    s32 limit;         /* 0x8:  = limit arg */
+    s32 limit2;        /* 0xC:  = limit arg (second slot) */
+    s32 cleared10;     /* 0x10: zeroed */
+    s32 _pad14;        /* 0x14: (layout) */
+    u64 cleared18;     /* 0x18: zeroed as one doubleword (sd $0) */
+    s32 start;         /* 0x20: = start arg */
+    s32 end;           /* 0x24: = start + span */
+    s32 span;          /* 0x28: = span arg */
+};
+
+/**
+ * func_0012E890: initialise the record at arg0 - store the limit (arg1) at
+ * field_0x8 and field_0xC, the end (start+span) at field_0x24, the span (arg3)
+ * at field_0x28, the start (arg2) at field_0x20; zero field_0x0..0x4, 0x10 and
+ * field_0x18..0x1C - then tail-call func_0012E8E8(arg0, 0). Solo-clean (no data
+ * global) - C identical to the USA twin. Matched 2026-06-30 via the store
+ * schedule (field_0x8 emitted before the field_0x0 doubleword-zero; see USA doc).
+ */
+void func_0012E890(struct E890Rec *rec, s32 limit, s32 start, s32 span) {
+    rec->limit    = limit;
+    rec->cleared0 = 0;
+    rec->limit2   = limit;
+    rec->cleared10 = 0;
+    rec->cleared18 = 0;
+    rec->start = start;
+    rec->end   = start + span;
+    rec->span  = span;
+    func_0012E8E8((u64 *)rec, 0);
+}
 
 /**
  * Extract the top arg1 bits of the 64-bit value at *arg0: returns
@@ -4718,7 +4890,24 @@ s32 func_0012FA18(s32 *arg0) {
     return 1;
 }
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012FA70);
+/**
+ * func_0012FA70: in the record table at arg0->field_0x40 (8-byte stride),
+ * write arg3 into record[index]+0x10, then swap arg2 into record[index]+0xC,
+ * returning that field's previous value. Solo-clean (no data global) - C is
+ * identical to the USA twin. Matched 2026-06-30 via the form-+0xC-pointer-first
+ * dual-induction idiom (see USA doc).
+ */
+s32 func_0012FA70(s32 *arg0, s32 index, s32 arg2, s32 arg3) {
+    s32 *base = (s32 *)arg0[0x10];   /* arg0->field_0x40 */
+    s32 *member = base + 3;          /* &record[].field_0xC */
+    s32 old;
+    base += index * 2;
+    member += index * 2;
+    base[4] = arg3;                  /* record[index] + 0x10 */
+    old = *member;                   /* record[index] + 0xC */
+    *member = arg2;
+    return old;
+}
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012FA98);
 
@@ -4828,7 +5017,20 @@ void func_00130088(s32 *arg0) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00130098);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00130118);
+/**
+ * func_00130118: EU twin of USA func_00130118 (solo-clean, no data global →
+ * identical C). Init subsystem 1 then program the four DMA/GIF register pointers
+ * + clear the busy flag. MATCHED via the constant-before-call → callee-saved $17
+ * lever (see USA func_00130118). */
+void func_00130118(void *arg0) {
+    u32 gif = 0x70000000;
+    func_0012B198(1);
+    *(u32 *)((char *)arg0 + 0x590) = gif;
+    *(u32 *)((char *)arg0 + 0x594) = 0x70001800;
+    *(u32 *)((char *)arg0 + 0x6D0) = 0x70001B00;
+    *(u32 *)((char *)arg0 + 0x6D4) = 0x70003300;
+    *(u32 *)((char *)arg0 + 0x810) = 0;
+}
 
 /**
  * Hard-reset the DMA/GIF path attached to `obj`: flag the context busy
