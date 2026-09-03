@@ -5,7 +5,7 @@
 # For per-function bisection of the post-pad-config wild-pointer fault.
 set -u
 cd "$(dirname "$0")/../.."
-EMU="~/Library/Application Support/PCSX2/logs/emulog.txt"
+EMU="${EMU:-$HOME/Library/Application Support/PCSX2/logs/emulog.txt}"
 PRISTINE="source-isos/Ratchet & Clank - Going Commando (USA) (v2.00).iso"
 echo "== rebuild calt + relink overlay =="
 CALT_VRAM=0x017E0000 sh tools/ee/overlay_package.sh > /tmp/probe.log 2>&1

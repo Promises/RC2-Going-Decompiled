@@ -8,7 +8,7 @@ set -u
 cd "$(dirname "$0")/../.."
 EXCL="$1"
 PRISTINE="source-isos/Ratchet & Clank - Going Commando (USA) (v2.00).iso"
-EMU="~/Library/Application Support/PCSX2/logs/emulog.txt"
+EMU="${EMU:-$HOME/Library/Application Support/PCSX2/logs/emulog.txt}"
 echo "== relink excluding: $EXCL =="
 CALT_VRAM=0x017E0000 CALT_EXCLUDE="$EXCL" SKIP_CALT=1 sh tools/ee/overlay_package.sh > /tmp/bisect_pkg.log 2>&1
 grep -E 'excluded|link OK|repack:' /tmp/bisect_pkg.log | tail -3
