@@ -86,16 +86,13 @@ printf 'PROVIDE(g_guiTintEnabled = 0x1AD9CC);\nPROVIDE(g_guiTintRgb = 0x1AD9D0);
 echo "   named_prov.ld: $(wc -l < "$BUILD/named_prov.ld") PROVIDEs"
 
 echo "== (4) VM: link overlay image =="
-# Symbol scripts: prefer the comprehensive aas_conly.ld (D_/func_/ghidra-named/
-# alias-globals all-in-one) if present; else fall back to the freshly generated
-# aas_prov + named_prov + ghidra_named_funcs (alias globals may then be missing).
-if [ -s "$BUILD/aas_conly.ld" ]; then
-  SYMS_LD="-T $BUILD/aas_conly.ld"
-  echo "   using comprehensive aas_conly.ld ($(grep -c '^PROVIDE' "$BUILD/aas_conly.ld") PROVIDEs)"
-else
-  SYMS_LD="-T $BUILD/aas_prov.ld -T $BUILD/named_prov.ld -T tools/ee/eetest/ghidra_named_funcs.ld"
-  echo "   using generated aas_prov + named_prov + ghidra_named_funcs"
-fi
+# Symbol scripts: aas_conly.ld vs the freshly generated trio. The choice is a
+# FRESHNESS test against the generating inputs, NOT an existence test — the old
+# `[ -s ... ]` was satisfied by a two-month-old file and unsatisfied only by a
+# missing one. Sourced (not run) so it can set SYMS_LD; it is a separate file so
+# the three arms can be exercised without a VM or a linker.
+# See tools/ee/overlay_syms_select.sh for the defect and for what it does NOT fix.
+. tools/ee/overlay_syms_select.sh
 rm -f "$ELF"
 tools/ee/vm.sh "mips-linux-gnu-ld -EL -N --allow-multiple-definition -e 0x00131ae8 \
   -T $BUILD/overlay_lma.ld -T tools/ee/conly_provides.ld \
