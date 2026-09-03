@@ -5866,6 +5866,30 @@ void func_00131A98(void *arg0) {
     func_00131A08(arg0, r1 + t);
 }
 
+/* Inter-function padding at 0x131AE0..0x131AE7 — the two zero words retail
+ * places between func_00131A98 and _start. They exist ONLY in the trailing
+ * context of asm/usa/nonmatchings/cod/015180/func_00131A98.s, after
+ * `endlabel func_00131A98` (whose stub header declares size 0x48, ending the
+ * body at 0x131AE0). That file is not included at all once this unit supplies a
+ * C body for the function, so without this directive nothing emits them and
+ * everything from _start to the next 16-byte-aligned boundary lands 8 bytes low
+ * — putting the retail ELF entry 0x00131AE8 two instructions inside _start.
+ *
+ * Guarded because the C-alt arm is placed in the 0xC00000 overlay, which is not
+ * address-pinned to retail: there the padding buys nothing and only shifts
+ * relocations.
+ *
+ * MEASURED here (t15866, USA, ref fd032de7 + this change, flat .rom from
+ * tools/ee/build.sh's LMA link vs extracted/usa/SCUS_972.68.rom):
+ *   without it — _start 0x00131AE0 (retail e_entry 0x00131AE8), snd_Pump
+ *     0x00132020 (retail 0x00132028), 1353 differing bytes in the .cod band;
+ *   with it    — _start 0x00131AE8, snd_Pump 0x00132028, 0 differing bytes in
+ *     the .cod band.
+ * Prior art: af962ded (USA, never gated) and 4a16558b (EU twin). */
+#ifndef TARGET_NATIVE
+__asm__(".word 0\n\t.word 0");
+#endif
+
 /* _start (0x131AE8): the EE ELF entry point — hand-written crt0, NOT compilable
  * from C and not given a portable #else (it IS the machine bootstrap: a C-only
  * boot still enters through this exact assembly before any C can run). It clears
