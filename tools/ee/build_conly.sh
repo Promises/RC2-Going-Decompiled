@@ -405,6 +405,25 @@ if [ "$(grep -c '^s/' "$CALTFIX")" != 1 ] || ! grep -q '^s/.*cvt\\.w\\.s' "$CALT
   echo "BUILD FAIL: move_fixup.sed lines 12-18 are no longer exactly rule r2 (cvt.w.s)" >&2
   exit 1
 fi
+
+# ---- CALT assembler, second ACCEPTANCE fixup: li.d ---------------------------
+# cc1 emits `li.d $<GPR>, 1.0` for a soft-float double materialised before
+# `jal fptodp`; binutils 2.40 refuses the mnemonic at -march=r5900 exactly as it
+# refuses cvt.w.s, so it is acceptance-blocking for this path. The rule lives in
+# its OWN file, not in move_fixup.sed: $CALTFIX above extracts rule r2 BY LINE
+# NUMBER, so appending to move_fixup.sed would silently change which rule this
+# overlay invokes -- and ruling #20508 does not touch the byte-matching pipeline.
+#
+# ⚠️ THE RULE ENCODES 1.0 AND NOTHING ELSE (#20515 measured that constant only,
+# and the expansion is value-dependent). li.d is cc1-synthesised with no
+# source-side proxy (#20565), so nobody can enumerate in advance which constants
+# will appear. THE UNCOVERED CASE MUST THEREFORE BE LOUD: lid_guard.sh exits
+# non-zero on any li.d the fixup did not rewrite, naming file, line and constant,
+# and this build stops. That is deliberate -- a rule that silently accepted a
+# constant it cannot encode would be a new member of the silent-trap family this
+# tree already catalogues. A warning here would be exactly that trap.
+LIDFIX="tools/ee/lid_fixup.sed"
+[ -f "$LIDFIX" ] || { echo "BUILD FAIL: missing $LIDFIX" >&2; exit 1; }
 for c in $(find "$SRC" -name '*.c'); do
   grep -q '^#else' "$c" || continue
   o="$BUILD/${c%.c}.calt.o"
@@ -423,7 +442,8 @@ for c in $(find "$SRC" -name '*.c'); do
   fi
   # GNU as + r2 only (see CALTFIX above). The TARGET_NATIVE arm carries no
   # INCLUDE_ASM, so the .s is pure code and needs no macro.inc / -I mirror.
-  if ! sed -E -f "$CALTFIX" "$cs" \
+  sh tools/ee/lid_guard.sh "$LIDFIX" "$cs" || exit 1
+  if ! sed -E -f "$CALTFIX" "$cs" | sed -E -f "$LIDFIX" \
        | mips-linux-gnu-as -march=r5900 -mabi=eabi -no-pad-sections -EL "$GFLAG" -o "$o" - 2> "$o.as.log"; then
     echo "   CALT AS  FAIL  $c"; tail -5 "$o.as.log"; calt_fail=$((calt_fail+1)); continue
   fi
