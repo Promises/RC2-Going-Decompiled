@@ -2315,3 +2315,54 @@ IpuWaitReady = 0x0012C3B0; // CONFIRMED - blocks until the IPU can accept a new 
 IpuWaitCmdResult = 0x0012C458; // CONFIRMED - waits for the pending IPU command to retire and returns its result word. Reads IPU_CMD 0x10002000 - bit 31 set means still executing, so it spins on IPU_CTRL waiting for bit 0x4000 and returns as soon as IPU_CMD goes non-negative. Pumps ctx+0x858 via 0x12FAE8 every 5000 spins. Callers store the returned word into ctx+0x838, which is how IpuGetBits and IpuSkipBits obtain refilled bits
 IpuParseVideoStartCodes = 0x0012CAB0; // CONFIRMED - MPEG video start-code dispatch loop. Byte-aligns via 0x12C9C8, reads 32 bits with IpuGetBits and branches on the standard MPEG-1 and MPEG-2 start codes - 0x1B3 sequence header goes to 0x130300, 0x1B8 group-of-pictures goes to IpuParseGopHeader, 0x100 picture goes to 0x12CBC0 then posts a type-5 request to ctx+0x858 via 0x12FA98, sets ctx+0x828 and ctx+0x830 to all-ones and returns ctx+0x150, and 0x1B7 sequence end returns 0. This start-code set is what identifies the 0x12Cxxx and 0x12Dxxx cluster as the MPEG FMV decoder
 IpuParseGopHeader = 0x0012D060; // CONFIRMED - parses an MPEG group_of_pictures header, reached from IpuParseVideoStartCodes on start code 0x1B8. Consumes bits via IpuGetBits in exactly the MPEG GOP field widths in order - 1 drop_frame_flag, 5 hours, 6 minutes, 1 marker, 6 seconds, 6 pictures, then 1 closed_gop stored at ctx+0x1A4 and 1 broken_link stored at ctx+0x1A8. That 1,5,6,1,6,6 sequence is both the identity discriminator and the positive proof that IpuGetBits advances. Presets ctx+0xE8 to 0, ctx+0x854 to 1, ctx+0x84C to ctx+0x850 plus 1, then continues into the picture layer at 0x12CC88
+
+// === Track-B t20892 (2026-09-03, ps2-w3). Four #20775-deferred names - PREPARED, NOT LANDED. ===
+// WHY THESE FOUR READ DIFFERENTLY FROM THE REST OF THIS FILE. #20642 measured 1,090 of 1,092
+// ghidra_named_funcs.ld bindings carrying NO provenance at all. Each entry below therefore carries
+// BOTH halves - (a) the ROM derivation that produces the address and (b) the consumer anchor, as
+// file and line, that BINDS the name to that address - so either half can be re-checked alone.
+// Every instruction word quoted was re-decoded from extracted/usa/SCUS_972.68 with an own ELF
+// program-header mapping and an own MIPS decoder, not copied forward from the prior report.
+// The CONFIDENCE LABEL ON EACH ENTRY IS CAPPED BY ITS CONSUMER ANCHOR. Two of the four anchors
+// self-label UNCONFIRMED in the very comment that binds the name, so those two stay UNCONFIRMED
+// here. Promoting a hedge by transcribing it into a more authoritative file is the specific
+// failure this block exists to avoid.
+// TWO FORM TRAPS, BOTH MEASURED HERE AGAINST splat OWN PARSER VIA tools/ee/symaddrs_lint.py, BOTH
+// HIT ON THE FIRST DRAFT. (1) An INDENTED continuation comment line is REJECTED - splat scrapes
+// the leading word of the continuation as an attribute and aborts the whole split with "Missing
+// attribute value". (2) A SECOND SEMI-COLON ANYWHERE ON THE LINE, INCLUDING INSIDE THE COMMENT,
+// is REJECTED - "Line must contain a single semi-colon" - so quoting a C declaration in the prose
+// bricks the split. That is why every entry here is one long line with no extra semi-colon.
+
+SpawnShockwaveRingMoby = 0x00309200; // ADDRESS MEASURED, NAME ONLY AS STRONG AS ITS ANCHOR - the anchoring decl asserts the name with no hedge and no CONFIRMED marker either, and the SEMANTICS are NOT re-derived here. DERIVATION - a full-image jal census over both PT_LOAD segments finds exactly 7 call sites targeting 0x309200, namely 0x2AD31C, 0x2AD344, 0x2AD36C and 0x2AD3B0 inside func_002ACA20, 0x2AD740 and 0x2AD770 inside func_002AD590, and 0x32E25C. The word at 0x309200 is 27BDFF60 = addiu sp,sp,-0xA0, a real prologue, and the body runs to 0x3093BF - jr ra sits at 0x3093B8 with its delay slot at 0x3093BC, and the next prologue is 0x3093F8 = func_003093F8. That 0x1C0-byte extent is independently corroborated by the frozen asm, where asm/usa/text/208010.s line 1271 reads "nonmatching func_00309200, 0x1C0". CONSUMER ANCHOR - src/usa/text/1A8180.c line 3834, an extern decl carrying the literal address comment 0x309200, sitting INSIDE the #else arm of the TARGET_NATIVE guard opened at line 3823. BOUND - this function is declared TWICE in that file, and the OTHER decl at line 3522, also inside an #else arm opened at 3508, carries NO address comment and is NOT the anchor, so cite 3834
+
+g_mcRpcRequest = 0x00141B80; // ADDRESS MEASURED, NAME ONLY AS STRONG AS ITS ANCHOR, which asserts it with no hedge. DERIVATION - the hi/lo pair inside the function entered at 0x1279A0, being lui s3,0x14 at 0x1279F4 (word 3C130014) plus addiu a2,s3,0x1B80 at 0x127A04 (word 26661B80) = 0x141B80. The enclosing entry was walked back from the bytes rather than assumed - the preceding body ends jr ra at 0x127994, the word at 0x1279A0 is addiu sp,sp,-0x80, and 0x1279A0 is the target of 4 jal sites at 0x29A90C, 0x29B374, 0x29B498 and 0x29B738. The frozen asm agrees, the file being asm/usa/nonmatchings/cod/015180/func_001279A0.s. CONSUMER ANCHOR - src/usa/cod/015180.c line 4445, an extern u8 array decl under the address comment "0x141B80 - the shared 48-byte request block", sitting INSIDE the #else arm opened at line 4435. CORROBORATION FROM INSIDE THIS FILE - the McChdir entry above independently describes 0x141b80 as the SMALL 0x30-byte libmc request block, and 0x30 = 48 agrees with the anchor byte count, while contrasting it with the LARGE 0x414 request at 0x141bb0. BOUND - that contrast is also the name weakness, because there are at least TWO libmc request buffers, so this names the small one only and must not be read as "the" libmc request block
+
+// THE NEXT TWO ARE DELIBERATELY WRITTEN INERT, and in this file own established idiom - the
+// w_sqrt entry near the top of this file is recorded exactly the same way, identity captured and
+// activation deferred to whoever owns the consequence. To activate one, drop the leading slashes
+// AND restore the semi-colon after the address, which is omitted here on purpose so that an
+// accidental uncomment does not silently become a live pin.
+//
+// g_cameraTriggerLatch = 0x001B53E0 - UNCONFIRMED, and that hedge is NOT mine, it is the anchor own, carried through unchanged. ADDRESS MEASURED, NAME NOT. DERIVATION - sw v0,0xC0(a2) at 0x27213C (word ACC200C0), where a2 was formed by lui a0,0x1B at 0x271FEC (word 3C04001B) plus addiu a2,a0,0x5320 at 0x272000 (word 24865320), giving base 0x001B5320, so 0x1B5320 + 0xC0 = 0x1B53E0. The def reaches the store - a scan of 0x272004 through 0x27213C finds ZERO redefinitions of a2 and ZERO call sites, and a2 is caller-saved so an intervening jal was the hazard, the nearest jal before being 0x271FBC and the nearest after 0x272214. READ THIS BEFORE CITING #20660 - #20660 published the route as base 0x1B5314 plus 0xCC, and that arithmetic REACHES THE SAME ADDRESS, since 0x1B5314 + 0xCC = 0x1B53E0 = 0x1B5320 + 0xC0. What was corrected is the DECOMPOSITION, meaning which base the instruction pair actually forms, and NOT the address. #20660 was falsified on decomposition, not on address, and "published route FALSE" has already been misread as an address change more than once. CONSUMER ANCHOR - src/usa/text/16E980.c line 1942, an extern s32 decl with the comment "0x1B53E0 queued camera-trigger id latch (UNCONFIRMED)", and that anchor sits at UNCONDITIONAL FILE SCOPE, preprocessor nesting depth 0, NOT inside the #else arm, which opens later at line 1944. INERT BECAUSE (1) the anchor self-labels UNCONFIRMED so the name must not be promoted into a splat-authoritative pin, and (2) neither D_001B53E0 nor D_001B5320 carries any label anywhere in asm/usa, the asm reaching this word through a nearest-symbol base, so pinning a name here would introduce a NEW label mid-blob, and whether splat splits the containing data symbol on that is UNMEASURED here because no re-split was run
+//
+// g_sceneFmvStreamBase = 0x001B880C - UNCONFIRMED, again the anchor own hedge carried through unchanged, not mine. ADDRESS MEASURED, NAME NOT. DERIVATION - sw zero,0x4C(s3) at 0x2F70A4 (word AE60004C), where s3 came from lui v0,0x1C at 0x2F705C (word 3C02001C) plus addiu s3,v0,-0x7840 at 0x2F7064 (word 245387C0), giving base 0x1C0000 - 0x7840 = 0x001B87C0, so 0x1B87C0 + 0x4C = 0x1B880C. The def reaches the store - a scan of 0x2F7068 through 0x2F70A4 finds ZERO redefinitions of s3, and s3 is callee-saved so an intervening call would not have broken it either. CONSUMER ANCHOR - src/usa/text/1EFFC0.c line 771, an extern s32 decl with the comment "0x1B880C FMV stream target base (UNCONFIRMED)", and that anchor is ALSO at UNCONDITIONAL FILE SCOPE, preprocessor nesting depth 0, not in an #else arm. INERT BECAUSE (1) the anchor self-labels UNCONFIRMED, and (2) neither D_001B880C nor D_001B87C0 carries any label in asm/usa - that same C file doc block just above line 771 states that the asm reaches these through a g_cameraSlotActive+0x990 nearest-symbol base which it calls a linker artifact - so activating this would create a new mid-blob label whose effect on the containing data symbol is unmeasured
+
+// REACHABILITY OF THIS FILE, STATED FROM READING THE CONSUMERS RATHER THAN ASSUMED. This file is
+// BUILD INPUT, not documentation. splat reads it via config/usa/SCUS_972.68.yaml lines 34-35, the
+// symbol-address path list, and renames the emitted glabels. tools/ee/overlay_package.sh lines
+// 80-84 cats it, strips the slash-slash comments, and emits one PROVIDE per name-equals-address
+// line into named_prov.ld, which is handed to the linker at line 96 with -T. MEASURED by replaying
+// exactly that pipeline over this file before and after - named_prov.ld goes 1835 to 1837 PROVIDEs
+// and the delta is precisely the two ACTIVE entries at their stated addresses, while the two INERT
+// entries contribute ZERO. tools/native/runtime/arena/gen_arena.py, function load_symbol_addrs at
+// lines 29 and 84, parses it for the native arena generator, and tools/ee/symaddrs_lint.py parses
+// it with splat's own handle_sym_addrs to check the split will not abort.
+// CORRECTED, because the first draft of this block got it wrong - scripts/configure.py lines 47-48
+// does NOT read this file. ensure_inputs only mkdir-plus-touch's it so a fresh checkout works, and
+// the actual read happens inside splat, which configure.py merely invokes at line 59. Naming
+// configure.py as a reader would have been a reachability claim answered from the filename.
+// SO THE TWO ACTIVE ENTRIES ABOVE ARE WIRED-IN, NOT INERT. Landing them renames glabel
+// func_00309200 (asm/usa/text/208010.s) and D_00141B80 (asm/usa/data/cod/0013C080.bss.s) together
+// with their 7 and 4 reference sites at the next re-split, and adds two PROVIDEs to the linked
+// overlay image. Nothing here has been landed - this branch is prepare-only.
