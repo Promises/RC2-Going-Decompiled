@@ -382,6 +382,29 @@ echo "== [$REGION] compiling C-alt (TARGET_NATIVE) objects =="
 CALT_LIST="$BUILD/conly_calt_units.txt"
 : > "$CALT_LIST"
 calt_ok=0; calt_fail=0
+
+# ---- CALT assembler: GNU as, ACCEPTANCE fixup ONLY (rule r2) ----------------
+# This overlay is assembled with mips-linux-gnu-as rather than the SN as.exe so
+# GNU ld accepts the symtab (same reason conly_finish.sh:52 does). It is NOT the
+# byte-matching pipeline: the overlay lives at 0xC00000 and is "functional not
+# byte-matching" (see the -G0 note in the loop below), so only fixups that make
+# the assembly VALID belong here.
+#
+# move_fixup.sed carries three rules; exactly one is an acceptance fixup:
+#   r1  move -> daddu        byte-matching  -> NOT applied here
+#   r2  cvt.w.s -> .word     ACCEPTANCE     -> applied (binutils 2.40 refuses
+#                                              the mnemonic at -march=r5900)
+#   r3  break 7 -> break 0,7 byte-matching  -> NOT applied here
+# r2 is extracted BY LINE NUMBER so the rule invoked is literally the rule that
+# exists in move_fixup.sed, never a paraphrase of it. The assertion below fails
+# the build if an edit to move_fixup.sed ever makes that line range hold
+# something other than exactly the one cvt.w.s substitution.
+CALTFIX="$BUILD/calt_fixup_r2.sed"
+sed -n '12,18p' tools/ee/move_fixup.sed > "$CALTFIX"
+if [ "$(grep -c '^s/' "$CALTFIX")" != 1 ] || ! grep -q '^s/.*cvt\\.w\\.s' "$CALTFIX"; then
+  echo "BUILD FAIL: move_fixup.sed lines 12-18 are no longer exactly rule r2 (cvt.w.s)" >&2
+  exit 1
+fi
 for c in $(find "$SRC" -name '*.c'); do
   grep -q '^#else' "$c" || continue
   o="$BUILD/${c%.c}.calt.o"
@@ -398,7 +421,10 @@ for c in $(find "$SRC" -name '*.c'); do
   if ! "$WIBO" "$G/cc1.exe" -quiet -O2 $GFLAG $CC1EXTRA "$ci" -o "$cs" 2> "$o.cc1.log"; then
     echo "   CALT CC1 FAIL  $c"; tail -5 "$o.cc1.log"; calt_fail=$((calt_fail+1)); continue
   fi
-  if ! "$WIBO" "$SNAS" -EL "$GFLAG" -o "$o" "$cs" 2> "$o.as.log"; then
+  # GNU as + r2 only (see CALTFIX above). The TARGET_NATIVE arm carries no
+  # INCLUDE_ASM, so the .s is pure code and needs no macro.inc / -I mirror.
+  if ! sed -E -f "$CALTFIX" "$cs" \
+       | mips-linux-gnu-as -march=r5900 -mabi=eabi -no-pad-sections -EL "$GFLAG" -o "$o" - 2> "$o.as.log"; then
     echo "   CALT AS  FAIL  $c"; tail -5 "$o.as.log"; calt_fail=$((calt_fail+1)); continue
   fi
   echo "$o" >> "$CALT_LIST"
