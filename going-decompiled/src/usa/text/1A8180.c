@@ -543,7 +543,7 @@ s32 GetRandomInt(s32 n) {
  * not post-pass-fixable — [[reference_register_coloring_wall]] scheduling class).
  * Best faithful body kept as the TARGET_NATIVE #else. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8688);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", RandRangeInclusive);
 #else
 s32 func_002A8688(s32 lo, s32 hi) {
     s32 r = (func_001163B0() >> 16) & 0x7FFF;
@@ -608,7 +608,7 @@ void func_002A87F0(void *handle, f32 lo, f32 hi) {
  * straight through to the magnitude RNG. (func_00283B30 = cos, ...B48 = sin.)
  */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8868);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", GetRandomVectorInSphere);
 #else
 void func_002A8868(Vec4 *dst, f32 lo, f32 hi) {
     f32 radius = func_002A86E0(lo, hi);

@@ -611,7 +611,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CB560);
  * one-shot dialog-voice pump gated by the +0xDB flag. Matching arm stays
  * INCLUDE_ASM (128-bit lq/sq camera-vec copies); #else is structure-exact. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CB720);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", TickFrontEndScreenIdle);
 #else
 extern void func_002FCFC8(void);
 extern void func_00283460(void *dst, void *src, s32 len);
@@ -690,7 +690,7 @@ extern void func_002CBA10(void);
 extern void func_002CBA40(void);
 extern void MenuScreenCommitTransition(void);
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CB860);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", TickFrontEndScreenMachine);
 #else
 s32 func_002CB860(void) {
     u8 *mb = g_menuScreenBlock;

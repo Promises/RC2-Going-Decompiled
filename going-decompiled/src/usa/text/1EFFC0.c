@@ -557,7 +557,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6218);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", PlayLevelCinematic);
 
 /* TODO(match): functional equivalent pending - level (re)spawn/restore: camera proj + moby free loop + fade; many callee-saves + lq/sq. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6600);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", ExitCinematicSceneTeardown);
 
 /* TODO(hle): needs PS2 graphics/IO HLE backend - tie draw-pipeline frame-stack sliver (spimdisasm fragment). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6940);
@@ -715,7 +715,7 @@ extern s32 g_cinematicSceneParams[];     /* 0x1B2188 block; [5]=+0x34 voice id *
 extern u8 g_listenerPosHistory[];        /* 0x188660 listener pos ring + flags */
 
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6D50);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", EnterCinematicBeginPlayback);
 #else
 void func_002F6D50(void) {
     void (*cb)(void *);
@@ -788,7 +788,7 @@ s32  DequeueCinematic(void *queue, s32 *outId, s32 *outType);
 s32  RequestGameStateChange(s32 a, s32 b, s32 c, s32 d, s32 e);
 
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6E10);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", RunCinematicPlaybackFrame);
 #else
 void func_002F6E10(void) {
     u8  gifPacket[0x60];    /* GS GIF image-upload packet scratch (frame [0,0x60)) */
@@ -1962,7 +1962,7 @@ void EnterVendorMenu(s32 arg) {
  * Matching-walled — kept as the portable #else impl. Field offsets kept literal
  * (partial VendorUiState). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F95E8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", TeardownVendorSceneRestorePlayer);
 #else
 extern u8   g_bGlobalSceneActive;    /* global sub-scene active flag (byte) */
 extern u8   g_saveImageArea[];       /* +0x1072 = pause/save sub-state halfword */

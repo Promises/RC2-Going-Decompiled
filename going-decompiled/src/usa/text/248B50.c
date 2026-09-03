@@ -214,7 +214,7 @@ void func_00348BF8(void *w, void *pool) {
  *
  * WALL: 4 callee saves ($16,$17,$18,$31) — frame-layout divergence. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348CB8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", GuiMenuListHandleInput);
 #else
 s32 func_00348CB8(GuiWidget *w, u32 inputMask) {
     s32 *curIdx = (s32 *)((char *)w + 0x60);
@@ -282,7 +282,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348D98);
  * instruction scheduling + branch-likely loop layout.
  * Oracle: cmp_func_00348DA0 (cmp_248B50.c) — bit-exact on real R5900. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348DA0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", GuiMenuListSetRows);
 #else
 void func_00348DA0(GuiWidget *w, f32 *table) {
     f32 *end;
@@ -336,7 +336,7 @@ void func_00348E20(GuiWidget *w, s32 v) {
  * cc1 hoists the volatile reloads and reuses one register. WALL: just-in-time
  * reload register alternation. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348E28);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", GuiMenuListSetOrigin);
 #else
 void func_00348E28(GuiWidget *w, f32 x, f32 y) {
     f32 *block = *(f32 **)((char *)w + 0x5C);
@@ -378,7 +378,7 @@ s32 func_00348E68(GuiWidget *w) {
  * highlighted and +0xC8 set), then GuiTextElementDraw. PURE/PORTABLE — only the
  * draw callees touch hardware. Functional equivalent, not byte-exact. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348E70);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", GuiMenuListDraw);
 #else
 void func_00348E70(GuiWidget *self) {
     char *p = (char *)self;
