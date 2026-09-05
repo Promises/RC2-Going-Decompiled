@@ -167,6 +167,12 @@ echo "   defined $(wc -l < "$ALLSYMS") address symbols (D_/func_/jtbl_ + symbol_
 # FAIL-LOUD: clear stale link outputs so a failed/partial link can NEVER be
 # mistaken for a fresh success (the `|| {…}` below only REPORTS ld errors; the
 # `[ -f "$ELFLMA" ]` gate then operates on a guaranteed-fresh file).
+# ORDERING IS LOAD-BEARING: $ELFLMA must be assigned BEFORE this rm.
+# It used to be set ~11 lines below, so the rm expanded to an empty word and
+# the stale .lma.elf SURVIVED -- a failed re-link then reused it, printed
+# "ELF built", and reported a differing-byte count from the PREVIOUS link.
+# $ROM is regenerated from it below, so a fresh .rom mtime proves nothing.
+ELFLMA="$BUILD/$BASENAME.lma.elf"
 rm -f "$ELF" "$ELFLMA" "$ROM"
 mips-linux-gnu-ld -EL --allow-multiple-definition -T "$LD" -T "$SYMS" -T "$ALLSYMS" -Map "$BUILD/$BASENAME.map" -o "$ELF" 2> "$BUILD/ld.log" \
   || { echo "LD errors (first 20):"; head -20 "$BUILD/ld.log"; }
@@ -178,7 +184,6 @@ mips-linux-gnu-ld -EL --allow-multiple-definition -T "$LD" -T "$SYMS" -T "$ALLSY
 # clauses makes ld default LMA = VMA, so objcopy -O binary produces the
 # VMA-contiguous, zero-gap-filled image the original .rom actually is.
 LDLMA="$BUILD/$BASENAME.lma.ld"
-ELFLMA="$BUILD/$BASENAME.lma.elf"
 sed -E 's/ AT\([A-Za-z0-9_]+\)//g' "$LD" > "$LDLMA"
 mips-linux-gnu-ld -EL --allow-multiple-definition -T "$LDLMA" -T "$SYMS" -T "$ALLSYMS" -o "$ELFLMA" 2> "$BUILD/ld.lma.log" \
   || { echo "LD(LMA) errors (first 20):"; head -20 "$BUILD/ld.lma.log"; }
