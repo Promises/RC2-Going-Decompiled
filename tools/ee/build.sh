@@ -205,4 +205,10 @@ if [ -f "$ELFLMA" ]; then
   fi
 else
   echo "== no ELF produced (link incomplete) =="
+  # FAIL LOUD. Without this the script returns 0 on a DEAD LINK, so every
+  # caller reading exit status sees success and a non-linking tree can be
+  # landed with its gates green -- exactly how bb754675 reached master.
+  # DEMONSTRATED, not asserted: #22557 observed armA/runner.log exit=0 on a
+  # link that produced no ELF at all. Reported as #22826.
+  exit 1
 fi
