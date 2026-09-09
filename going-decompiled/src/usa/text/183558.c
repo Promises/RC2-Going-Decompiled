@@ -618,7 +618,7 @@ f32 func_00283B60(f32 x) {
  * Arguments: $f12 = y-like, $f13 = x-like.
  */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", Atan2fPoly);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283BF8);
 #else
 /* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
 f32 func_00283BF8(f32 y, f32 x) {
@@ -1022,7 +1022,7 @@ void func_002844F8(Vec4f dst, f32 t, const Vec4f a, const Vec4f b) {
 
 /** Sum two angles (radians) and wrap the result into [-pi, pi]. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", WrapAnglePiSum);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284548);
 #else
 /* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
 f32 func_00284548(f32 a, f32 b) {
@@ -1035,7 +1035,7 @@ f32 func_00284548(f32 a, f32 b) {
 
 /** Subtract two angles (radians) and wrap the difference into [-pi, pi]. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", WrapAnglePiDiff);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284590);
 #else
 /* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
 f32 func_00284590(f32 a, f32 b) {

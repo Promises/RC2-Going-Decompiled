@@ -728,7 +728,7 @@ extern s32 g_nGameState;
 extern void RequestGameStateChange(s32 newState, s32 argA, s32 argB, s32 argC, s32 argD);
 extern void func_00289798(void);
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", UpdateSaveTaskState);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_002997C8);
 #else
 void func_002997C8(void) {
     if (D_1393E0.mode != 2 || D_1393E0.result >= 0) {
@@ -1079,7 +1079,7 @@ s32 CalcSaveSectionsSize(SaveSection *table) {
  * sized by CalcSaveSectionsSize(g_saveSectionTableGlobal). Uses three callee-
  * saved regs ($16/$17/$31) in an 8-byte-packed 0x20 frame — the callee-save
  * frame wall (our cc1 reserves 16 bytes per saved reg), see func_0029C678. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", ComputeSaveSectionsCrc16);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029BCA0);
 
 extern s32 func_0029BCA0(void *buf, s32 len); /* save-buffer CRC */
 
@@ -1095,7 +1095,7 @@ extern s32 func_0029BCA0(void *buf, s32 len); /* save-buffer CRC */
  * project_matching_ceiling, func_0029C678). The portable #else below is
  * cmp-oracle-validated (cmp_198FA0). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", VerifySaveHeaderChecksum);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029BD48);
 #else
 s32 func_0029BD48(void *image) {
     s32 storedCrc = ((s32 *)image)[1];
@@ -1180,7 +1180,7 @@ s32 SerializeSaveSections(void *dst, s32 slot, SaveSection *table) {
  * BOTH the 8-byte-packed callee-save frame (4 saves) and the unaligned 64-bit
  * ldl/ldr/sdl/sdr field moves the original emits for the +0x13..+0x7 copy — GNU
  * cc1 won't generate those from portable C, so no #else either. Left as asm. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", FillSaveSlotInfo);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029BEA0);
 
 /* DeserializeSaveSections(image, slotMul, table): restore the section table
  * `table` from a save `image` (the inverse of SerializeSaveSections), reconciling

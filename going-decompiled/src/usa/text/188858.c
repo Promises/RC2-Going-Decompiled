@@ -2380,7 +2380,7 @@ extern u8 g_menuScreenBlock[];                /* 0x menu-screen scratch/VRAM sta
  * Banks 0 and 1 are always loaded; bank 2 only for mode 0 or 2; bank 3 only for
  * mode 1 or 2. [SEEDABLE: mode] */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", ReloadAllHudBankTextures);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028B6F0);
 #else
 void func_0028B6F0(s32 mode) {
     u8   *hdr  = (u8 *)g_pHudAssetHeader[0];
@@ -2431,7 +2431,7 @@ void func_0028B6F0(s32 mode) {
 #endif
 
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", RelocateHudBankGsSlots);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028B8C8);
 #else
 /**
  * Relocate (and mark allocated) the GS handles for one HUD asset's CLUT and
@@ -2482,7 +2482,7 @@ void func_0028B8C8(s32 assetId, s32 baseAddr) {
 #endif
 
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", InvalidateHudBankGsSlots);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028BA28);
 #else
 /**
  * Inverse of func_0028B8C8: un-relocate and free one HUD asset's CLUT and
@@ -2534,7 +2534,7 @@ extern void func_002901B0(s32 handle, s32 vramBlk, s32 fmt, s32 wLog, s32 hLog, 
 extern s32 g_vramTextureBase; /* 0x1A72E4 - VRAM static texture base */
 
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", UploadHudBankTextures);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028BBA0);
 #else
 /**
  * Upload a HUD asset's textures to GS VRAM.
@@ -5061,7 +5061,7 @@ void func_0028FFF0(s32 iconIndex, s32 x0, s32 y0, s32 x1, s32 y1,
  * KickGifImageUpload). MATCH-WALL only (callee-save/register-colouring); un-walled
  * as faithful #else (engine 2.96 = no byte-match). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", UploadTextureToGs);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_002901B0);
 #else
 extern void func_126288(void *buf, s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g);
 extern void func_0011AEA0(s32 mode);   /* FlushCache */

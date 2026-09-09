@@ -329,7 +329,7 @@ s32 func_003504F0(void) {
 }
 
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvPtsQueueInit);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350520);
 #else
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves. Revisit with the gameplay-TU compiler.
@@ -1032,7 +1032,7 @@ void func_003515C0(u64 *tag, u64 madr, u64 qwc, u64 id) {
  * u64 params match the call site (func_00352468); the body uses their low 32
  * bits (the ROM stores them with sw). Byte-match blocked: 8-byte-packed saves. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvBitstreamObjInit);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003515E8);
 #else
 s32 func_003515E8(u8 *obj, u64 a, u64 b, u64 c, u64 d, u64 e) {
     s32 semaParam[8];
@@ -1061,7 +1061,7 @@ s32 func_003515E8(u8 *obj, u64 a, u64 b, u64 c, u64 d, u64 e) {
  * sub-object embedded at FmvStream+0x48 (type not yet recovered -> raw
  * offsets). Byte-match blocked: 8-byte-packed saves. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvStreamStartDma);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351660);
 #else
 void func_00351660(u8 *stream) {
     s32 i;
@@ -1463,7 +1463,7 @@ s32 func_003521B0(void *dmaq, void *cmd) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003522C0);
 
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvStreamInit);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352468);
 #else
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves. Revisit with the gameplay-TU compiler.
@@ -1539,7 +1539,7 @@ s32 func_003525D8(FmvStream *obj) {
  * SN cc1) reuses ONE `li v0,1` for both the store and the return value; the
  * pinned cc1 always materialises two (same wall as text/1907F0
  * func_00290EE8, re-measured here at 63%). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvRequestStop);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352610);
 #else
 /* TODO(match): functional equivalent - not byte-exact; the later-SN cc1 reuses
    one `li v0,1` for both the store and the return; the pinned cc1 emits two.
@@ -1645,7 +1645,7 @@ s32 func_00352780(FmvStream *obj) {
  * g_pFmvArenaBase); the #else is the structure-exact model (the frame decode
  * itself is the deferred FMV native backend, but the loop structure is exact). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvDecodeThreadEntry);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003527C8);
 #else
 extern void func_00351660(u8 *stream);
 extern s32 func_00352868(u8 *host);
@@ -1664,7 +1664,7 @@ s32 func_003527C8(FmvStream *obj) {
 #endif
 
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvDisplayWorkerLoop);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352868);
 #else
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves (s0..s2/ra) plus a delay-slot %gp_rel read of the arena base mixed
@@ -1785,7 +1785,7 @@ s32 func_00352AE0(s32 unused, u8 *obj) {
  * different order than the original (sw a1,0x0 first vs the original's sw zero,0xC
  * first) — an instruction-scheduling wall. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvFrameQueueInit);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352B30);
 #else
 /* TODO(match): functional equivalent - not byte-exact; header-store scheduling. */
 void func_00352B30(s32 *rec, s32 arg1, s32 base, s32 count) {
@@ -1830,7 +1830,7 @@ s32 func_00352BA0(FmvFrameQueue *q) {
 /* func_00352BB8: commit the just-decoded slot (mark state 2, advance the
  * write cursor modulo capacity) under DI/EI. Blocked: 8-byte-packed saves
  * (s0@0x0, ra@0x8). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvFrameQueuePush);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352BB8);
 #else
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves (s0/ra). Revisit with the gameplay-TU compiler.
@@ -1852,7 +1852,7 @@ void func_00352BB8(u8 *fq) {
 #ifndef TARGET_NATIVE
 /* func_00352C30: writable GS frame pointer (writeIdx * 0xD0000). Blocked:
  * 8-byte-packed saves (s0@0x0, ra@0x8). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvFrameQueueGetWriteSlot);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352C30);
 #else
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves (s0/ra). Revisit with the gameplay-TU compiler.
@@ -1879,7 +1879,7 @@ s32 func_00352C70(FmvFrameQueue *q) {
 #ifndef TARGET_NATIVE
 /* func_00352C80: oldest queued decoded-frame pointer ((writeIdx - count +
  * cap) % cap slot). Blocked: 8-byte-packed saves (s0@0x0, ra@0x8). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvFrameQueueGetDisplaySlot);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352C80);
 #else
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves (s0/ra). Revisit with the gameplay-TU compiler.

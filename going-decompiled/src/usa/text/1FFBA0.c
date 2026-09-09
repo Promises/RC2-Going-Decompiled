@@ -156,7 +156,7 @@ extern u8 *g_mobyAuxBlockBase; /* 0x1B22EC -> base of 0x80-byte per-moby aux blo
  * TODO(match): lq/sq quad copies + two callee-saves + branch-likely scan loop
  * cc1 schedules differently; the C is functionally faithful. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", AcquireProjectileCurveAnchor);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_002FFC20);
 #else
 extern void func_002B0E40(void *transform, void *slot, s32 flag);
 __asm__(".extern g_soundBankHandles, 16");
@@ -208,7 +208,7 @@ void func_002FFCE0(s32 idx) {
  * TODO(hle): dominated by VU0 vector/quaternion intrinsics (Vec3CrossVu0,
  * Vec3DotVu0, QuatMultiplyVu0, ...) — tier-3 hardware math; no byte-exact path. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", AdvanceProjectileCurve);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_002FFD00);
 #else
 void func_002FFD00(s32 idx, void *dir, void *src) {
     (void)idx; (void)dir; (void)src; /* TODO(hle): VU0 quaternion steering */

@@ -1593,7 +1593,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E6D28);
  * the sq, while cc1 keeps one base and folds +0xA0 into the store displacement
  * (addressing-distribution wall). The C is faithful. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", SetSoundEmitterOffset);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E6D38);
 #else
 s32 func_002E6D38(s32 slotIndex, u_long128 *src) {
     EmitterView *slot = EMITTER_VIEW(slotIndex);

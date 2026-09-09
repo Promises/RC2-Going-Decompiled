@@ -982,7 +982,7 @@ extern s32 func_002835E0(s32 v); /* abs(s32) */
  * LoadLevelAndInitHealth and by InitLoadingSceneSystem. The matching build
  * keeps the asm (save-layout wall). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BuildUiTextureDescriptors);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00292650);
 #else
 void func_00292650(s32 *descTable, s32 count) {
     s32 i;
@@ -1586,7 +1586,7 @@ extern void DecompressWad(void *src, void *dest);
 /* TODO(match): functional equivalent - not byte-exact; save-layout wall (saves
  * s0+ra -> pinned cc1 reserves a 0x20 frame vs the original's 0x10). Body is
  * byte-identical apart from the frame size + ra slot offset. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", DecompressHudBankWad);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002933D0);
 #else
 /*
  * func_002933D0 (DecompressHudBankWad) — decompress one HUD-asset-slot WAD chunk
@@ -3307,7 +3307,7 @@ u64 func_002954F0(void *descArg) {
  * where the original emits a single `dsll`/`dsll32`, plus the gp_rel/absolute
  * divergence on g_texUploadCount (-G8 small-data vs original absolute lui/%lo).
  * Pure scalar GS-register packing; semantics verified against the asm. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", QueueGsTextureUpload);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00295630);
 #else
 /*
  * func_00295630 — build a GS texture-register word from the texel-format fields
@@ -3434,14 +3434,14 @@ s32 func_00295F30(s32 fromEnd) {
  * #else body is in the map-cache slice below (needs the MapCache type +
  * func_00296038); the INCLUDE_ASM stays here in address order. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapAllocCacheSlot);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00295F98);
 #endif
 
 /* func_00296038 (MapMoveCacheSlot) — relocate a galactic-map cache slot's
  * contents src -> dst; the portable #else body lives in the galactic-map cache
  * slice below (after the MapCache struct it depends on). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapMoveCacheSlot);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00296038);
 #endif
 
 /*

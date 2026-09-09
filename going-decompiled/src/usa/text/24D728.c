@@ -1078,7 +1078,7 @@ extern void func_003503D8(void);     /* FMV teardown */
 #endif
 
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", PlayFmvMovie);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034FCA0);
 #else
 /* Structure-exact model (cmp-oracle blocked, abs FMV globals; matching arm stays
    asm). Launch an FMV clip: record the aspect scratch (aspect) and the work-arena
@@ -1123,4 +1123,4 @@ s32 func_0034FCA0(void *a, void *b, s32 aspect, u8 *arena, void *engineCtx, void
  * (0x34FE4C beql, 0x34FE6C bnel), exactly the class where a one-shot un-verified
  * #else silently mis-computes. Model it faithfully only once the FMV HLE backend
  * makes it oracle-able. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", FmvStreamFeedLoop);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034FD90);

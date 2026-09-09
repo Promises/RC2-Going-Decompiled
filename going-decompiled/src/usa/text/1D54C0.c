@@ -780,7 +780,7 @@ s32 func_002D6240(void) {
  * before forwarding via func_002D6B00. Returns 0/1/-1.
  * Wall: deep nested branch ladder + popup-state bit mutation. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", SaveMessageWidgetTick);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D6248);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002D6248(void) {
@@ -921,7 +921,7 @@ s32 func_002D65D0(void) {
  * stays (already there) or initiates a level change / exit; otherwise forwards
  * to the planet-row handler. Returns 0/1/-1. Wall: deep branch ladder. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", GalacticMapConfirmTravelInput);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D65D8);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002D65D8(void) {
@@ -3055,7 +3055,7 @@ void func_002DF1B8(s32 param) {
  * backing memory with the 0xDEADBEEF pattern sized by func_002DF500, and return
  * the slot id. Returns 0 if none free. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", AllocMenuWorkBuffer);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF368);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DF368(s32 forceSet) {
@@ -3081,7 +3081,7 @@ s32 func_002DF368(s32 forceSet) {
  * clear its in-use bit. Returns 0. Slots are the interleaved id/flags pairs at
  * D_001B1E90+0x40/+0x44 (stride 8). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", FreeMenuWorkBuffer);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF428);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DF428(s32 id) {
@@ -3115,7 +3115,7 @@ s32 func_002DF428(s32 id) {
  * 0x4F000 if its flag bit 0 is set, else 0x11800; -1 if no slot matched.
  * Same address-base CSE near-miss as func_002DF560. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", GetMenuWorkBufferSize);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF500);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DF500(s32 id) {
