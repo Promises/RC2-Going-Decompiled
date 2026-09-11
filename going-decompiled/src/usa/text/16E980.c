@@ -487,7 +487,7 @@ s32 func_0026F7A8(void) {
  * 0x8 SHORT here and every downstream function would shift -0x8 — corrupting the
  * baked .word <func> pointer tables. Recover the pad as a raw-word INCLUDE_ASM
  * filler (06333c5 precedent) to keep the unit size==span byte-exact. NO re-split. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026F7B0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026F7B0);
 
 /* func_0026F7B8: stub-table entry — compiled-out hook, no-op. */
 void func_0026F7B8(void) {
@@ -559,7 +559,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026F820);
  * INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026F850);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026FC80);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026FC80);
 
 /* func_0026FC88: upload a palettised texture (16x16 CLUT + image) to GS VRAM
  * and emit a 3-qword TEX0 packet into descOut. The source blob is a header:
@@ -808,7 +808,7 @@ void StepCameraFovInterp(void) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", StepCameraFovInterp);
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002701B8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002701B8);
 
 /* func_002701C0: snapshot the active camera. Copies the live 0xA0-byte active
  * camera slot and a following 0x280-byte block into save buffers, then points
@@ -871,7 +871,7 @@ Camera *func_00270290(s32 type) {
 /* func_002702C8: no-return handwritten table-word fragment (see header
  * STUB-TABLE note) - not reachable compiler output. Kept permanently
  * INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002702C8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002702C8);
 
 /* func_002702D8: critically-damped spring step toward a target. Advances `cur`
  * (the velocity at *vel) by stiffness*delta - damping*vel, clamps the velocity
@@ -2221,7 +2221,7 @@ void DrawScreenSpriteFxEntry(f32 x, f32 y, ScreenSpriteFx *fx) {
  * INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00272CC0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00273320);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00273320);
 
 /* AddScreenSpriteFx(owner, color, worldPos, texId, mode, x, y, angle): queue a
  * screen-space sprite effect (cap 6 per frame; drawn by
@@ -2350,7 +2350,7 @@ void DrawScreenSpriteFxQueue(void) {
 
 /* func_002735A8: orphaned fill word (see header STUB-TABLE note) - not reachable
  * compiler output. Kept permanently INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002735A8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002735A8);
 
 /* Fog zone record: 0x80-stride entries at g_collTriBuffer+0x1540, indexed by
  * the zone id func_002A7490 returns. Two packed-RGB endpoint colours (+0x54 A,

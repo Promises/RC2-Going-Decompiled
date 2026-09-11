@@ -1456,7 +1456,7 @@ s32 func_0029C4C0(s32 arg0, s32 arg1) {
 
 /* func_0029C500: 8 bytes of dead inter-function fill (two `addiu $sp,+0x10`
  * epilogue orphans), not compiler-reachable C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029C500);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029C500);
 
 /** Post a GUI page/event id to the active screen object at
  *  g_guiInstance+0x37ED0 via GuiScreenSetEventAndReveal (no-op while the GUI
@@ -1536,7 +1536,7 @@ void func_0029C600(s32 idx) {
 
 /* func_0029C638: 16 bytes of dead inter-function fill (`li $v0,0` + epilogue
  * orphan, no jr) — not compiler-reachable C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029C638);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029C638);
 
 /** Forward to the widget at g_guiInstance+0x36F28 (method func_0034F200). */
 s32 func_0029C648(void) {
@@ -2046,7 +2046,7 @@ s32 func_0029D958(void) {
 
 /* func_0029D988: 2 orphan unreachable words (`addu $2,$3,$2; nop`) — a dead
  * code fragment between the wrapper bodies, not compiler-reachable C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029D988);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029D988);
 
 /** Tick the on-screen bolt counter (UpdateBoltCounterHud) only when the HUD
  *  render context (g_guiInstance) is present. */
@@ -2237,7 +2237,7 @@ s32 func_0029DD40(s32 arg) {
 /* func_0029DD80: 0xC bytes of dead inter-function fill (`sw $2,gp_rel(...)` +
  * `addiu $sp,0x50` epilogue orphan, no jr) — the split tail of func_0029DD90,
  * not compiler-reachable C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DD80);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DD80);
 
 /* func_0029DD90: toSPR (SPR-TO) DMA-kick helper — program the channel registers
  * at 0x1000D400 (QWC @+0x80, sadr @+0x20, madr @+0x10) and start the transfer
@@ -2655,7 +2655,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029ECE0);
 /* func_0029FDF8: a single orphan `lh $2,0x24($3)` (no prologue/jr) — dead
  * inter-function fill spilled from the tail of func_0029ECE0, not compiler-
  * reachable C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029FDF8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029FDF8);
 
 /* SpawnMoby: allocates a moby from the spawn free-list (g_mobySpawnStart..
  * g_mobyTableEnd) and initialises it. Multi callee-save; 8-byte-packed

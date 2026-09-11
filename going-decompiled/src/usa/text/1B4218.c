@@ -997,7 +997,7 @@ s32 AcquireMobyAutoTarget(Moby *moby, s32 groupIdx, Vec4 *posOverride,
 
 /* Handwritten stub-table fragment (orphaned addiu $sp / nop run) — see unit
  * header; kept INCLUDE_ASM permanently (no prologue/jr of its own). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B4F40);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B4F40);
 
 /* True if moby is the backing object of level-object slot `slot`
  * (D_2403D0[slot].mobyPtr == moby). Entry stride 0xA430, moby ptr at +0x4. */
@@ -1008,7 +1008,7 @@ s32 CheckMobyIsLevelObjectSlot(Moby *moby, s32 slot) {
 /* func_002B4F78: 8-byte zero pad between functions (splat drops all-zero
  * inter-function regions) — raw-word filler keeps the unit size==span byte-exact
  * (06333c5 precedent; NO re-split). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B4F78);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B4F78);
 
 /* Handwritten stub-table fragment (orphaned addiu $sp / nop run) — see unit
  * header; kept INCLUDE_ASM permanently. */
@@ -1058,7 +1058,7 @@ void ApplyMobyLocalTransformDelta(Moby *moby, Vec4 *posDelta, f32 rotX, f32 rotY
 
 /* Size-pinned 8-byte epilogue pad pseudo-function — see unit header; kept
  * INCLUDE_ASM permanently. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B50B8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B50B8);
 
 /* Initialise a moby's spring-follow state block (0x2B50C0).
  *
@@ -1313,7 +1313,7 @@ integrate:
 
 /* Handwritten stub-table fragment (orphaned addiu $sp / nop run) — see unit
  * header; kept INCLUDE_ASM permanently. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B58B8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B58B8);
 
 /* Arm the game-state transition timer (frames to stall before the pending switch). */
 void SetGameStateTransitionTimer(s32 frames) {
@@ -1323,7 +1323,7 @@ void SetGameStateTransitionTimer(s32 frames) {
 /* func_002B58D0: 8-byte zero pad between functions (splat drops all-zero
  * inter-function regions) — raw-word filler keeps the unit size==span byte-exact
  * (06333c5 precedent; NO re-split). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B58D0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B58D0);
 
 /* Set the game-state transition stall length. */
 void SetGameStateTransitionDelay(s32 frames) {
@@ -1741,7 +1741,7 @@ s32 DriveMobyTowardPoint(Moby *moby, Vec4 *target, f32 headingOffset) {
 #endif
 
 /* Size-pinned 8-byte epilogue pad pseudo-function — see unit header. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B5FF8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B5FF8);
 
 /* Core per-frame moby locomotion step (steer / collide / ground / lean). Driven
  * once per moby per frame by the Drive* wrappers. Returns 8 when the moby has no
@@ -1825,7 +1825,7 @@ void DriveMobyInPlace(Moby *moby, f32 speed) {
 }
 
 /* Size-pinned 8-byte epilogue pad pseudo-function — see unit header. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B61B8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B61B8);
 
 /* Integrate a moby's motion-controller velocity for the frame. Called by
  * StepMobyMotion (0x2B6000) as the steer+accelerate stage:
@@ -2476,7 +2476,7 @@ void UpdateMobyLeanFromTurn(f32 headingAngle, Moby *moby,
 #endif
 
 /* Size-pinned 8-byte epilogue pad pseudo-function — see unit header. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B6FC8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B6FC8);
 
 /* Set a moby motion-controller's velocity / accel / max-speed profile. Argument
  * order is ($f12,$f13,$f14,$f15) on the EE; mapping recovered from the swc1
@@ -2513,7 +2513,7 @@ void SetMobyMotionParams(Moby *moby, f32 accel, f32 maxSpd, f32 speed, f32 velZ)
 #endif
 
 /* Size-pinned 8-byte epilogue pad pseudo-function — see unit header. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B7038);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B7038);
 
 /* Drive a moby along its waypoint path (follow + arrival logic). No-op (returns 0) with
  * no motion controller. Binds `path` as the controller's waypoint path if it changed
@@ -2562,7 +2562,7 @@ s32 DriveMobyAlongWaypoints(Moby *moby, short *path) {
 #endif
 
 /* Size-pinned 8-byte epilogue pad pseudo-function — see unit header. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B7140);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B7140);
 
 /* Install a waypoint path into a moby's motion controller. `path` is the path
  * array (path[0] is its node count as a short, see waypointPath +0xC4). `endIdx`
@@ -2780,7 +2780,7 @@ void BindMobyClassUpdateFunc(s32 classId, s32 headerless) {
 
 /* Handwritten stub-table fragment (orphaned addiu $sp / nop run) — see unit
  * header; kept INCLUDE_ASM permanently. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B7570);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B7570);
 
 /* Per-frame driver: rebuild the active-moby chain (BuildActiveMobyChain, cached in
  * g_activeMobyChainHead) and tick every node. For each moby whose state byte (+0x20)
@@ -2923,7 +2923,7 @@ void KickLevelBankDiscLoad(s32 bankSlot) {
 
 /* Handwritten stub-table fragment (orphaned addiu $sp / nop run) — see unit
  * header; kept INCLUDE_ASM permanently. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B77E0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B77E0);
 
 extern char D_1AA198[];                    /* file-load init debug string */
 extern void InitDialogSoundChannel(void);  /* 0x2B7610 dialog sound-channel setup */

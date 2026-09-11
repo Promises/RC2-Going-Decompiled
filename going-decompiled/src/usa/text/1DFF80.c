@@ -150,7 +150,7 @@ typedef struct EmitterView {
  * address order down by func_002E6EC0, NOT here. cc1 emits functions in source
  * order, so defining them at the top would link them at the unit start and shove
  * func_002E0000..end +0x78 (the 41K C-only pointer residual). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E0000);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E0000);
 
 /* Format a level-select entry's display name into `dst`. A jump table
  * (jtbl_0026CEB0_text, 25 cases on id-2 in 0..0x18) selects the format: the
@@ -275,7 +275,7 @@ void UnhideAllMobysAndPopState(void) {
  * (Prior note mislabeled it as vector math — it's a save-snapshot builder.) */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E0210);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E0448);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E0448);
 
 /* Build a scaled orientation + a perpendicular unit axis from a direction `src`
  * (used by the glow poser): copy src to D_001B1E90[0x140], store src*scale at
@@ -736,7 +736,7 @@ void func_002E4178(u16 *idStart, u16 *idEnd, s32 mode) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E4280);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E4280);
 
 __asm__(".extern g_pSkyShellSpinRates, 16");
 extern f32 *g_pSkyShellSpinRates; /* 0x1B1910 - per-shell {x,y,z} spin rate table (stride 0xC) */
@@ -810,7 +810,7 @@ void DrawSkyShellsFixedSpin(void) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E43E8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E43E8);
 
 /* func_002E43F8: PARKED #70 (#else not confident) — sky-shell render driver (BeginSkyDrawSegment,
  * DrawSkyShell, CloseSkyDrawSegment, AppendGsRegPacket + FP). GS draw-segment + FP class;
@@ -889,7 +889,7 @@ void CloseSkyDrawSegment(void) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E4750);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E4750);
 
 extern void DrawSkyPiecesFormatA(void *piece);
 extern void DrawSkyPiecesFormatB(void *piece);
@@ -924,7 +924,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", DrawSkyPiecesFo
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", DrawSkyPiecesFormatB);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E4C68);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E4C68);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", TransformSkyPieceVerts);
 
@@ -1584,7 +1584,7 @@ s32 PlayGlobalSound(s32 soundIdx, s32 posOverride, s32 owner) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E6D28);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E6D28);
 
 /* Flag emitter slot `slotIndex` as positioned (set flags bit 0x40) and copy the
  * 16-byte spatial quad from `src` into the slot's 0xA0 field; returns 1.
@@ -1729,7 +1729,7 @@ void OnEmitterVoiceEnded(s32 handle, long slotAddr) {
  * (OnEmitterVoiceEnded ends at 0x2E6F4C; the next unit starts at 0x2E6F50). The
  * compiler does not emit it, so recover it as a raw-word filler to keep the unit
  * size==span byte-exact (06333c5 precedent). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E6F4C);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E6F4C);
 
 /* The unit tail (0x2E6F50..0x2F003F) is the spimdisasm c-mode tail-fusion blob:
  * functions reached only by j / data-ref (no jal) that spimdisasm cannot promote

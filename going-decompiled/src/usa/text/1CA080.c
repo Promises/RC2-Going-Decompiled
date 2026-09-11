@@ -244,7 +244,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA740);
 
 /* Mis-split fragment: orphaned stack-pointer adjusts (addiu $sp / nops) with
  * no jr $ra — not a real function entry; left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA960);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA960);
 
 /* Read the screen-state word stashed at g_pTextTableLoadBuf+0xD8. */
 s32 func_002CA970(void) {

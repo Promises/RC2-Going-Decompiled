@@ -896,7 +896,7 @@ s32 func_00289398(s32 size, s32 *out) {
 
 /* Handwritten no-return fragment: `sh $0,0x1C($a0); nop` with NO jr $ra (it
  * falls through). Not expressible as a returning C function — INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_002893D8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_002893D8);
 
 /* ResetCinematicQueue(q): clear the cinematic ring buffer — zero the write/read
  * cursors and count, poison the 5 slots (0x28 bytes) with 0xCD, clear the
@@ -1228,7 +1228,7 @@ s32 func_00289840(s32 textIndex, s32 voiceHandle) {
 
 /* func_002898D8: 8-byte trailing-pad fragment (addiu $sp,+0x20; nop) of the
  * preceding function, pinned as its own symbol; the real function follows. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_002898D8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_002898D8);
 
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_002898E0);
@@ -1344,7 +1344,7 @@ char *GetLocalizedString(s32 textId) {
 /* func_00289A58: mis-split 1-instruction fragment — `sh $0,0x38($2)` (the
  * trailing store of the preceding function, pinned as its own symbol); no jr
  * $ra. Not a real function; left INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_00289A58);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_00289A58);
 
 extern s32 g_bPalMode;          /* 0x1A7B98 - PAL flag (0 = NTSC) */
 extern s32 g_screenHeight;      /* 0x1A7344 - active display height */
@@ -2007,7 +2007,7 @@ void func_0028ABC0(s32 id, s32 voice) {
 /* func_0028ACB0: mis-split 1-instruction fragment — `addiu $sp,+0x10` epilogue
  * tail of the preceding function, pinned as its own symbol; no jr $ra. Not a
  * real function; left INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028ACB0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028ACB0);
 
 /* ResetBoltCounterHud(): snap the on-screen bolt counter to the true bolt total
  * (no roll animation) — seed both the shown and target values
@@ -2286,7 +2286,7 @@ void func_0028B0B0(void) {
 /* func_0028B558: mis-split 1-instruction fragment — `addiu $sp,+0x10` epilogue
  * tail, pinned as its own symbol; no jr $ra. Not a real function; left
  * INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028B558);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028B558);
 
 /* Linear-scan the HUD icon-slot table for the entry whose texture id equals
  * `name`, stopping at the 0xFFFF sentinel; return its index (or the sentinel
@@ -2821,7 +2821,7 @@ void func_0028C090(HudElement *w, s32 iconName) {
 /* func_0028C100: mis-split 1-instruction fragment — `addiu $sp,+0x20` epilogue
  * tail, pinned as its own symbol; no jr $ra. Not a real function; left
  * INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C100);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C100);
 
 /* func_0028C108(key, value): linear-search the D_2552B0 record table (13
  * entries, stride 0x90, key at +0x64) for `key`; when found within the table,
@@ -3021,7 +3021,7 @@ void func_0028C490(HudElement *p) {
  * inter-function regions, so recover it as a raw-word filler to keep the unit
  * size==span byte-exact (else downstream funcs shift, corrupting baked pointer
  * tables). 06333c5 precedent; NO re-split. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C4C0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C4C0);
 
 /* func_0028C4C8(w): per-frame smooth-roll update for a HUD counter widget.
  *
@@ -4123,7 +4123,7 @@ s32 func_0028E7D0(void) {
 /* func_0028E7D8: mis-split handwritten stub-table fragment — `addiu $sp,+0x70;
  * nop; addiu $sp,+0x80` epilogue tails with NO jr $ra. Not a real returning
  * function; left INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028E7D8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028E7D8);
 
 extern s32 GetRandomInt(s32 max);   /* uniform [0, max) */
 
@@ -4919,7 +4919,7 @@ void func_0028FAE0(s32 reg1, s32 x0, s32 y0, s32 uShift, s32 vShift, s32 w, s32 
 /* func_0028FC70: mis-split 1-instruction fragment — `addiu $sp,+0xE0` epilogue
  * tail, pinned as its own symbol; no jr $ra. Not a real function; left
  * INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028FC70);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028FC70);
 
 /* func_0028FC78: draw a rotated (oriented) HUD texture quad — a 0x70-byte
  * NLOOP=7 GIF packet whose four corners are the centre offset by two rotated

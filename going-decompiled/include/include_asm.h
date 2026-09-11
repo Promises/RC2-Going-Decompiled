@@ -40,4 +40,13 @@ __asm__(".include \"include/labels.inc\"\n");
 
 #endif /* !defined(M2CTX) && !defined(PERMUTER) */
 
+/* A splat leaf that is NOT a function: an orphaned epilogue tail, an
+ * inter-function fill word, or a dead remnant after a `jr $ra`. The image
+ * needs its bytes, so it is still pulled in exactly like INCLUDE_ASM (the two
+ * expand identically), but it is not a match target and must not be counted
+ * as one. tools/ee/fragment_census.py --lint checks that every site carrying
+ * this marker classifies as debris from its .s content, and that no small
+ * plain INCLUDE_ASM leaf does. */
+#define INCLUDE_ASM_FRAGMENT(FOLDER, NAME) INCLUDE_ASM(FOLDER, NAME)
+
 #endif /* INCLUDE_ASM_H */

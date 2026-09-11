@@ -272,7 +272,7 @@ void func_0034DB68(GuiHudManager *mgr, s32 flag) {
 
 /* func_0034DBC8: mis-split fragment (two mid-fn stores `sw $2,0x158C/0x1584($4)`,
  * no prologue/jr) - #47 resplit-pass backlog, not #else material. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034DBC8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034DBC8);
 
 /* func_0034DBD8: store the texture/frame handle into the manager at +0x2DC. */
 void func_0034DBD8(GuiHudManager *mgr, s32 value) {
@@ -305,7 +305,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034E8D8);
 
 /* func_0034ED20: mis-split fragment (positive `addiu $sp,+0x40; nop` epilogue tail,
  * no prologue/jr) - #47 resplit-pass backlog, not #else material. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034ED20);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034ED20);
 
 /* GuiManagerInitListRows: build the manager's scrollable list-row table - 26
  * contiguous 0x48-byte GuiListRow elements (GuiListRowElementInit, stride 0x48)
@@ -914,7 +914,7 @@ void func_0034F9B8(void) {
 
 /* func_0034F9F0: mis-split fragment (lone mid-fn `sh $3,0xB6($5)` store, no
  * prologue/jr) - #47 resplit-pass backlog, not #else material. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F9F0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F9F0);
 
 /* func_0034F9F8: per-frame update of the two animated HUD moby sub-objects the
  * manager owns (one at mgr+0xC00, plus a sibling region at mgr+0x600). For each

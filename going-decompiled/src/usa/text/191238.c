@@ -75,7 +75,7 @@ void func_002912B8(s32 progress) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291320);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291320);
 
 /* LoadIrxModuleFromBuffer: load an IRX module from an in-memory image. Build the
  * loadfile arg block on the stack ([0]=image, [4]=arg, [8]=size, [C]=0), request
@@ -413,7 +413,7 @@ void func_002919A0(void) {
  * stack-restore words with no `jr $31`, i.e. a shared epilogue fragment that
  * splat glabel'd from a pair of branch/jump targets into func_002919A0's tail.
  * Not portable-C expressible (no callable body); left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002919C0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_002919C0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", DrawSkyShellsScaledSpin);
 
@@ -467,7 +467,7 @@ void RenderSky(void) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291B60);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291B60);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291B70);
 
@@ -883,7 +883,7 @@ s32 func_002920C0(void *hdrArg, u64 *out) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00292510);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_00292510);
 
 /*
  * BindParticleFxAssets(hdr, texBase, texRecords, texCount) — bind a freshly
@@ -1336,7 +1336,7 @@ void LoadPlayerDisplayTextures(s32 slot) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00292E90);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_00292E90);
 
 /**
  * LoadShipDisplayModel — load the ship display model for level `index`.
@@ -2167,7 +2167,7 @@ s32 StartFrontendSegmentLoad(void) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294308);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294308);
 
 /* Per-frame level-load state machine (returns 1 while a load is in flight, else 0).
  * Pumps sound, then either (a) while a raw read is in progress, times out a stalled
@@ -2288,7 +2288,7 @@ s32 UpdateLevelStagingMachine(void) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294550);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294550);
 
 /* StreamSceneSegment: kick the streaming load of scene sub-segment `idx`. The
  * scene descriptor at g_cameraSlotActive+0x990 holds the active level's base
@@ -3868,7 +3868,7 @@ s32 MapEvictCacheSlot(void) {
  * (a bit-blit loop ending jr $31). It can't be carved as standalone C (the orphan
  * prefix + un-separately-labeled real loop), so it stays INCLUDE_ASM - but the
  * loop under it is genuine code, not padding, if anyone revisits the carve. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00296490);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_00296490);
 
 /* MapCompositeThumbnailMask: the real interior body described above.
  * splat only emits an .s for a name it sees in an INCLUDE_ASM, so this
@@ -4928,7 +4928,7 @@ void func_00298308(void *dst, u8 *src) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002984D8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_002984D8);
 
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002984E0);

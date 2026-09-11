@@ -39,7 +39,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_00282438);
 /* MIS-SPLIT fragment: a bare `addiu $29,$29,0x100; nop` stack-restore tail that
  * bled past the boundary of the preceding function — not a real function entry.
  * Leave as INCLUDE_ASM (documented mis-split). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_00282790);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_00282790);
 
 /* Initialise a UI sprite packet's texture/clamp fields. Looks up the texture
  * buffer (TEX0) for texId, sets a fixed TEX1, and builds the CLAMP register

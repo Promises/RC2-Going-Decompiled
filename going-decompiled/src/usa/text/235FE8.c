@@ -333,7 +333,7 @@ void func_00336648(void) {
     __asm__ __volatile__("");
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336668);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336668);
 
 /* func_00336678: ALWAYS install the D_1AD9A8 vtable at p+0x4, then call
  * func_00337C48() only when (flag & 1). The store sits in the delay slot of the
@@ -519,7 +519,7 @@ void func_00336988(void *self, s32 *out, s32 *aSrc, s32 *bSrc, f32 t) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336A18);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336A18);
 
 /* func_00336A28: cubic Hermite blend of t between the two control values at
  * src+0x8 and src+0xC (endpoint tangents 0 and 1), writing the result to
@@ -535,7 +535,7 @@ void func_00336A28(f32 *src, f32 t, f32 *dst) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336A68);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336A68);
 
 /* func_00336A78: install the D_1AD8C8 vtable at p+0x4, free the pooled node
  * (*(p+0x2C) is the pool, *(p+0x28) the node) via func_00337D78, then run the
@@ -646,7 +646,7 @@ s32 *GuiElementGetColor(GuiElement *e) {
     return e->color;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336C30);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336C30);
 
 /* GuiElementSetPos: write four floats into *(e+0x0), re-reading the vector
  * pointer before every store. */
@@ -659,7 +659,7 @@ void GuiElementSetPos(GuiElement *e, f32 x, f32 y, f32 z, f32 w) {
     e->pos[3] = w;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336C68);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336C68);
 
 /* GuiElementSetVisible: write the visibility scalar at *(e+0x10): 1.0 shown,
  * 0.0 hidden. */
@@ -700,7 +700,7 @@ void GuiElementShareScaleVec(GuiElement *e, f32 *newScale) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336D20);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336D20);
 
 /* func_00336D28: rebind the element's visibility-scalar vector (+0x10) to an
  * externally-owned vector. If the new pointer differs from the current one, and
@@ -782,7 +782,7 @@ void GuiElementBaseInit(GuiElement *e, s32 tag, GuiPool *pool) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336EF8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336EF8);
 
 /* func_00336F00: shared GuiElement base destructor. Reinstall the base vtable
  * at +0x30, then (only when the element owns a pool at +0x2C) free each of its
@@ -864,7 +864,7 @@ void GuiElementInit(GuiElement *e, s32 tag, GuiPool *pool) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337090);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337090);
 
 /* func_00337098: list-element ctor. Install the D_1ADA38 vtable at p+0x30; when
  * the pool at p+0x2C is live, free up to two pooled nodes back to it - the node
@@ -1007,7 +1007,7 @@ void GuiListElementInit(GuiElement *e, s32 v3C, s32 v34, s32 tag, GuiPool *pool)
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337270);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337270);
 
 /* func_00337278: install the GuiListRow vtable at p+0x30, then call
  * func_00336F00(p). */
@@ -1127,7 +1127,7 @@ void *func_003374D8(void *p) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337510);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337510);
 
 /* GuiSpriteElementInit: run the base GuiElement init (forwarding tag/pool
  * unchanged), then when a pool is present carve a zeroed 16-byte vector block
@@ -1174,7 +1174,7 @@ f32 *GuiSpriteGetTextureVec(GuiElement *e) {
     return *(f32 **)((char *)e + 0x34);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003375C8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003375C8);
 
 /* func_003375D0: install the D_1ADA18 vtable at p+0x30; if the pool at p+0x2C is
  * live and the node slot p+0x38 is still empty, free the node *(p+0x34) back to
@@ -1286,7 +1286,7 @@ void GuiElementInitTypeC(void *p) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003377A8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003377A8);
 
 /* GuiTextElementInit: run the base GuiElement init (forwarding its own tag/pool
  * arguments unchanged), then set up a text element: install the D_263B10
@@ -1351,7 +1351,7 @@ s32 GuiTextElementMeasure(GuiElement *e) {
                          *(s32 *)((char *)e + 0x34), e->scale[0]);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337898);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337898);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiTextElementDraw);
 
@@ -1528,7 +1528,7 @@ void GuiPoolInit(GuiPool *pool, s32 elemSize, void *storage, u32 byteLimit) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337CE0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337CE0);
 
 /* GuiPoolAlloc: allocate one node from a GUI fixed-size pool.
  *   +0x00 base    pointer to the backing storage
@@ -1675,7 +1675,7 @@ void func_00338AB8(void *self, GuiPool *pool) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338CD0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338CD0);
 
 /* func_00338CD8: configure a scrolling-list widget.
  *  - Store the row-count (a1) at +0x1C4 and the page-size (a2) at +0x1B8.
@@ -1720,7 +1720,7 @@ void func_00338F18(void *p, const void *src, s32 id) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338F80);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338F80);
 
 /* func_00338F88(a1, layout, color, val, font, reposFlag, drawFlag, sub, n9, n10,
  * n11): format + draw a bordered text box. Builds the caption into a 768-byte
@@ -2006,7 +2006,7 @@ void *func_0033A048(void *p) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A0B0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A0B0);
 
 /* GuiConfirmPopupInit: construct the confirm popup (4 button-icon elements + 4
  * text rows). Pool -> alloc the 0x10-byte placement record (+0x4) and zero it
@@ -2285,7 +2285,7 @@ s32 func_0033A860(void *p) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A8E8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A8E8);
 
 /* Update a pulsing list-cursor widget: place its frame sub-element (+0x8) at the
  * tracked anchor (*(w+0x324)) via func_0033C060 + func_0033BE70, tick the colour
@@ -2371,7 +2371,7 @@ void *func_0033AA80(void *p) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033AB10);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033AB10);
 
 /* GuiLevelInfoPanelInit(self, pool): construct the galactic-map level-info panel.
  * Stores the pool at +0x0, sets the +0x490 "active" flag, and (if a pool is given)
@@ -2477,7 +2477,7 @@ void GuiLevelInfoPanelInit(void *self, GuiPool *pool) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033AF68);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033AF68);
 
 /* GuiLevelInfoPanelTick: per-frame layout for the galactic-map level-info panel.
  * Scales the six "value row" elements (0x190..0x348) uniformly to
@@ -2597,7 +2597,7 @@ void *func_0033B4E8(void *p) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033B560);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033B560);
 
 /* GuiProgressBarWidgetInit: construct a progress-bar widget. Clears +0x208 and
  * records the pool at +0x210 (unconditional). If a pool is given, allocate its
@@ -2857,7 +2857,7 @@ void GuiDialogBoxInitElements(void *p) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033BC18);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033BC18);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiDialogBoxInitBorder);
 
@@ -3031,7 +3031,7 @@ void GuiDialogBoxSetScale(void *p, f32 scale) {
     *(f32 *)((char *)p + 0x2A4) = scale;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033C0F8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033C0F8);
 
 /* func_0033C100: init the screen's ten embedded sub-elements at their fixed
  * offsets (five type-B at p+0/+0x4C/+0x98/+0xE4/+0x130, three type-C at
@@ -3057,7 +3057,7 @@ void *func_0033C100(void *p) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033C1A8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033C1A8);
 
 /* GuiIconListScreenInit: construct an icon-list screen — three header buttons
  * (+0x0/+0x4C/+0x98), three list-icon elements (+0xE4/+0x130/+0x17C, a stride-0x4C
@@ -3155,7 +3155,7 @@ void GuiIconListScreenInit(void *w, GuiPool *pool) {
 
 /* func_0033C580: a bare `daddu $2,$4,$0` fall-through fragment (NO jr $31) -
  * a handwritten stub-table entry, not a real C function. WALL: stays asm. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033C580);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033C580);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033C588);
 
@@ -3252,7 +3252,7 @@ void *func_0033CD80(void *p) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033CDB0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033CDB0);
 
 /* GuiDialogBoxVariantCInit: dialog constructor (variant C, sibling of
  * GuiQuitDialogInit). Panel (+0x8) 255x195, border from D_1ADD98, text rows =
@@ -3409,7 +3409,7 @@ void *func_0033D1C0(void *p) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D1F0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D1F0);
 
 /* func_0033D1F8: construct a dialog-box screen (GuiQuitDialogInit-family). Pool ->
  * alloc the 0x10-byte placement record (+0x2DC) and zero it (+0x0 pool store
@@ -3520,7 +3520,7 @@ void *func_0033D478(void *p) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D4A8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D4A8);
 
 /* func_0033D4B0: dialog-box screen constructor (func_0033D1F8 family). Panel
  * 255x195, border D_1ADDC8, text rows localized 0x2C2E/0x2BE4/0x2BE5, bounds
@@ -3682,7 +3682,7 @@ void *func_0033DA00(void *p) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DA30);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DA30);
 
 /* GuiDialogBoxVariantBInit: dialog constructor (variant B, sibling of
  * GuiQuitDialogInit). Panel (+0x8) 255x195, border from D_1ADE10, text rows =
@@ -3808,7 +3808,7 @@ void *func_0033DDC8(void *p) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DE08);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DE08);
 
 /* func_0033DE10: dialog-box screen with TWO scrolling lists (record at +0x36C).
  * Panel 255x195, border D_1ADE20, text rows localized 0x2C2D/0x2BE4/0x2BE5, bounds
@@ -4009,7 +4009,7 @@ void *func_0033E488(void *p) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E4B8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E4B8);
 
 /* func_0033E4C0: dialog-box screen constructor (twin of func_0033D1F8). Panel
  * 255x195, border D_1ADE50, text rows localized 0x2C2F/0x2BE4/0x2BE5, bounds
@@ -4118,7 +4118,7 @@ void *GuiQuitDialogInitElements(void *p) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E780);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E780);
 
 /* GuiQuitDialogInit: construct the quit-confirmation dialog. If a pool is given,
  * allocate its 0x10-byte placement record (+0x2DC) and zero it. Seed the panel
@@ -4251,7 +4251,7 @@ void *func_0033EB20(void *p) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EB50);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EB50);
 
 /* func_0033EB58: dialog-box screen constructor (func_0033D1F8 family). Panel
  * 255x195, border D_1ADE70, text rows localized 0x2BF7/0x2BE4/0x2BE5, bounds
@@ -4349,7 +4349,7 @@ void *func_0033EDD0(void *p) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EE00);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EE00);
 
 /* func_0033EE08: dialog-box screen constructor (func_0033D1F8 family). Panel
  * 255x195, border D_1ADE80, text rows localized 0x2BF7/0x2BE4/0x2BE5, bounds
@@ -4425,7 +4425,7 @@ void *func_0033EFC8(void *p) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EFF8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EFF8);
 
 /* func_0033F000: dialog-box screen constructor (func_0033D1F8 family). Panel
  * 255x195, border D_1ADE90, text rows localized 0x2BF7/0x2BE4/0x2BE5, bounds
@@ -4502,7 +4502,7 @@ void *func_0033F1C0(void *p) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F1F8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F1F8);
 
 /* func_0033F200: dialog-box screen constructor with an embedded list (record at
  * +0x3BC). Panel 255x195, border D_1ADEA0, text rows localized 0x2C36/0x2C0B/
@@ -4639,7 +4639,7 @@ void *func_0033F4D0(void *p) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F508);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F508);
 
 /* func_0033F510: a wider dialog-box screen constructor (record at +0x2D8, panel
  * 255x208, border D_1ADEC8). Two-row text (localized 0x2CB7 title, empty middle,
@@ -4729,7 +4729,7 @@ void *func_0033F690(void *p) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F718);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F718);
 
 /* GuiStatsPanelScreenInit: construct the stats panel (a bordered dialog box, a
  * column of label/value text rows, a button element, and a sprite). Pool -> alloc
@@ -4964,7 +4964,7 @@ void *func_0033FF68(void *self) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003400D8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003400D8);
 
 /* GuiQuickSelectWheelInit(self, pool): construct the planet/level-select wheel
  * screen. Stores the pool (+0x810), allocates a size vector at +0x80C = {250, 200},
@@ -6225,7 +6225,7 @@ void *func_00342BA0(void *p) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342BE0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342BE0);
 
 /* func_00342BE8: store an int at +0x8. */
 void func_00342BE8(void *p, s32 v) {
@@ -6289,7 +6289,7 @@ void GuiHelpPromptWidgetInit(void *w, GuiPool *pool) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342D60);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342D60);
 
 /* func_00342D68: call func_00342DA0(p) to get a row index, then return the
  * row's address: base (+0xE8) + index * 0x14 (20-byte stride). */
@@ -6643,7 +6643,7 @@ void *func_003436C0(void *p) {
     return p;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003436C8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003436C8);
 
 /* func_003436D0: map four control floats to a clamped byte value (an interpolated
  * intensity/alpha, max `hi`). `a0` is passed by the sole caller (func_00343AF8) but
@@ -6767,7 +6767,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343AF8);
  * forwarder's byte-match. (Body is otherwise an integer ownership-filter loop.) */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343E80);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343F30);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343F30);
 
 /* func_00343F38: store two floats at +0x8 and +0xC. */
 void func_00343F38(void *p, f32 a, f32 b) {
@@ -6943,7 +6943,7 @@ void func_00344458(void *p) {
     __asm__ __volatile__("");
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344478);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344478);
 
 /* func_00344480: forward p+0x2C8 to func_00343AD0. */
 void func_00344480(void *p) {
@@ -7064,7 +7064,7 @@ void func_003446B8(void *w, s32 flag) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344800);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344800);
 
 /* func_00344808: draw the titled-sprite widget. Bails if hidden (*(w+0x2C0)==0).
  * Draws three sprite elements (w, +0x4C, +0x98) and the title text (+0x1B0), lays

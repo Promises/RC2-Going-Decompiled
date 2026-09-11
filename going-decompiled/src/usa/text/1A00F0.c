@@ -165,7 +165,7 @@ void UpdateMobyAnimLoopSound(Moby *moby) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0360);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0360);
 
 /* func_002A0368: compute the moby's current animation frame time (in 1/16 units).
  * Selects the active sequence descriptor (+0x5C when the +0x42 sequence id is 0xFF,
@@ -618,7 +618,7 @@ void func_002A0B80(void *obj, s32 count, void *arg2, void *dst) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0C20);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0C20);
 
 /* CloseMobyDmaSegment — close the moby texture-upload DMA segment. Reserves a
  * DMATAG qword at g_frameDmaCursor and back-patches the segment's open tag

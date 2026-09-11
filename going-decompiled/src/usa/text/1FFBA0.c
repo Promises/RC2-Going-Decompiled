@@ -723,7 +723,7 @@ void func_00300ED8(void) {
  * stack-pointer adjustments (addiu $sp) with no prologue/jr from the end of the
  * preceding function. Not an independent function; left as INCLUDE_ASM so the
  * original bytes stay intact (documented mis-split exception). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_00301010);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_00301010);
 
 /* If a hero ground-moby is bound, transform `in` through it relative to the hero
  * moby (func_002ADF48 with D_1A8BD0 config + a stack scratch quad) into `out`;

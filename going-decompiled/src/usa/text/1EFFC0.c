@@ -327,7 +327,7 @@ void BuildTieDrawSegment(void) {
 #endif
 
 /* TODO(hle): needs PS2 graphics/IO HLE backend - tie draw-pipeline frame-stack sliver (spimdisasm fragment). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F1DE8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F1DE8);
 
 /* Reset the persistent tie-texture VRAM slot table: clear the LRU bookkeeping
  * and mark every slot in [start, end) free (occupied = 0xFF, lruNext = none,
@@ -551,7 +551,7 @@ void func_002F6110(void) {
 #endif
 
 /* TODO(hle): needs PS2 graphics/IO HLE backend - tie draw-pipeline frame-stack sliver (spimdisasm fragment). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6218);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6218);
 
 /* TODO(match): functional equivalent pending - cinematic-trigger dispatch; multi callee-save frame. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", PlayLevelCinematic);
@@ -560,7 +560,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", PlayLevelCinema
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6600);
 
 /* TODO(hle): needs PS2 graphics/IO HLE backend - tie draw-pipeline frame-stack sliver (spimdisasm fragment). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6940);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6940);
 
 /* TODO(match): functional equivalent pending - per-frame cinematic-camera matrix build: lq/sq + VU0 vec helpers. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6950);
@@ -2472,7 +2472,7 @@ void ExitVendorMenu(void) {
 #endif
 
 /* TODO(hle): needs PS2 graphics/IO HLE backend - vendor-input frame-stack sliver (spimdisasm fragment). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002FA238);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002FA238);
 
 /* UpdateVendorMenuInput [SEEDABLE] — per-frame D-pad/button handler for the
  * Gadgetron vendor shop list. It reads the new-press button word (D_138180+0x1C4)
@@ -2634,7 +2634,7 @@ void func_002FA608(void) {
  * The compiler does not emit it (and splat drops the standalone pad word), so the
  * unit would be 0x4 SHORT — recover it as a raw-word filler to keep size==span
  * byte-exact (06333c5 precedent; NO re-split). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002FA624);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002FA624);
 
 /* The unit tail (0x2FA628..0x2FFC1F) is the spimdisasm c-mode tail-fusion blob:
  * functions reached only by j / data-ref (no jal) that spimdisasm cannot promote

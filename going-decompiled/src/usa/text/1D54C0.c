@@ -1254,7 +1254,7 @@ s32 func_002D8270(MenuWidget *obj) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", HandleGalacticMapPlanetSelectInput);
 
 /* Handwritten frameless stub fragment (no jr — addiu $sp run). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D8770);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D8770);
 
 /* Mark no map slot active (-1). Returns 0. (Twin of func_002D65B8.) */
 s32 func_002D8778(void) {
@@ -3212,7 +3212,7 @@ void func_002DF620(s16 *dst, void *src) {
 
 /* Splat mis-split fragment: a single `addiu $sp,0x60; nop` epilogue tail with no
  * prologue/jr — not a real function body. Left as bare INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF660);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF660);
 
 /* Build an in-progress save image for slot `slot`: timestamp it from the CD
  * RTC, snapshot the current level WAD, build the image at `dst`, and arm the
@@ -3341,7 +3341,7 @@ s32 func_002DFFC8(void) {
 
 /* Splat mis-split fragment: two `addiu $sp,0x10; nop` runs, no prologue/jr —
  * not a real function body. Left as bare INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DFFD0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DFFD0);
 
 /* Register-coloring near-miss: is the current menu screen the given fixed
  * screen instance? (pointer compare lowered to xor + sltiu). */

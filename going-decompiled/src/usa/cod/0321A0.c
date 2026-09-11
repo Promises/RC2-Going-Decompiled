@@ -229,7 +229,7 @@ void snd_BankLoadAsync(s32 arg0, s32 arg1, s32 arg2, s32 arg3) {
 /* func_001325E0: 4 bytes of inter-function fill (`addiu sp,0x20`) before the
  * unrecoverable snd_BankLoadFromEE_CB body at 0x1325E8 (reached only by
  * fallthrough/data-ref, so spimdisasm emits no .s for it — see STATUS). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_001325E0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_001325E0);
 
 /* func_001325E8 = snd_BankLoadFromEE_CB (0x1325E8): recovered splat-dropped
  * function (spimdisasm emitted no .s — reached by fallthrough/data-ref).
@@ -292,7 +292,7 @@ s32 snd_BankLoadFromIOP(s32 arg0) {
 
 /* func_00132818: 0x10 bytes of inter-function padding split off by symbol_addrs
  * size:0x10; the real wrapper begins at func_00132828. Pure padding, no C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00132818);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00132818);
 
 /**
  * Invoke snd_QueueCommandToRing with selector 8 and no payload, forwarding its
@@ -360,7 +360,7 @@ void func_00132938(s32 arg0) {
  * pairs) that splat's auto-detection grouped as a standalone symbol. The real
  * wrapper body begins at func_00132978; an explicit size:0x10 in symbol_addrs
  * keeps this padding split off so the wrapper can match. Pure padding, no C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00132968);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00132968);
 
 /**
  * Invoke snd_QueueCommandToRing with selector 0xD, count 8, and a stack record
@@ -768,7 +768,7 @@ s32 func_00133250(s32 arg0, s32 arg1, s32 arg2, s32 arg3) {
 
 /* func_00133300: 0x10 bytes of inter-function padding split off by symbol_addrs
  * size:0x10; the real wrapper begins at func_00133310. Pure padding, no C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00133300);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00133300);
 
 /**
  * Invoke snd_QueueCommandToRing with selector 0x34 and no payload, forwarding
@@ -780,7 +780,7 @@ s32 func_00133310(void) {
 
 /* func_00133340: 0x10 bytes of inter-function padding split off by symbol_addrs
  * size:0x10; the real start begins at snd_PlaySample. Pure padding, no C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00133340);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00133340);
 
 /* snd_PlaySample: 989snd EE command-ring wrapper for cmd opcode 0x2C (start
  * voice / play sample). Builds a record from a mix of register and stack
@@ -815,7 +815,7 @@ s32 snd_PlaySample(s32 a0, s32 a1, s32 a2, s32 a3, s32 a4, s32 a5,
 
 /* func_001333C0: 0x10 bytes of inter-function padding split off by symbol_addrs
  * size:0x10; the real wrapper begins at func_001333D0. Pure padding, no C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_001333C0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_001333C0);
 
 /**
  * Invoke snd_QueueCommandToRing with selector 0x2D, count 4, arg0 passed by
@@ -978,7 +978,7 @@ s32 CdGetLoadStatus(void) {
 
 /* func_001336C0: 0x10 bytes of inter-function padding split off by symbol_addrs
  * size:0x10; the real function begins at SetSndPumpCallback. Pure padding, no C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_001336C0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_001336C0);
 
 /**
  * SetSndPumpCallback - install a new snd_Pump tick callback. When the IOP
@@ -997,7 +997,7 @@ void *SetSndPumpCallback(void *callback) {
 
 /* func_00133700: 0x10 bytes of inter-function padding split off by symbol_addrs
  * size:0x10; the real wrapper begins at func_00133710. Pure padding, no C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00133700);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00133700);
 
 /**
  * Invoke snd_QueueCommandToRing with selector 0x50, count 0x14, and a 5-word
@@ -1052,7 +1052,7 @@ s32 func_001337F0(void) {
 
 /* func_00133818: 0x8 bytes of inter-function padding split off by symbol_addrs
  * size:0x8; the real wrapper begins at func_00133820. Pure padding, no C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00133818);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00133818);
 
 /**
  * Invoke snd_SendCommandSync with selector 0x4B and no payload, forwarding its
@@ -1064,7 +1064,7 @@ s32 func_00133820(void) {
 
 /* func_00133848: 0x8 bytes of inter-function padding split off by symbol_addrs
  * size:0x8; the real wrapper begins at func_00133850. Pure padding, no C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00133848);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00133848);
 
 /**
  * Invoke snd_SendCommandSync with selector 0x3B and count 0x18 (24 bytes),
@@ -1091,7 +1091,7 @@ s32 func_00133890(void) {
 
 /* func_001338B8: 0x10 bytes of inter-function padding split off by symbol_addrs
  * size:0x10; the real wrapper begins at func_001338C8. Pure padding, no C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_001338B8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_001338B8);
 
 /**
  * Invoke snd_SendCommandSync with selector 0x3C and no payload, forwarding its
@@ -1117,7 +1117,7 @@ void func_001338F0(s32 arg0, s32 arg1, s32 arg2, s32 arg3, s32 arg4) {
 
 /* func_00133928: 0x8 bytes of inter-function padding split off by symbol_addrs
  * size:0x8; the real wrapper begins at func_00133930. Pure padding, no C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00133928);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00133928);
 
 /**
  * Invoke snd_SendCommandSync with selector 0x5A and count 8, passing a 2-word

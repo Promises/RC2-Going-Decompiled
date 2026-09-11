@@ -45,7 +45,7 @@ s32 *func_00115210(void) {
     return &D_0013A308;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115220);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115220);
 
 /* func_00115228: thin wrapper -- calls func_00115210 and returns its result.
  * ROM arm kept: the original builds a 0x10 frame and saves $31 with sq/lq
@@ -174,7 +174,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115C90);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115CF0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115D38);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115D38);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115D48);
 
@@ -740,23 +740,23 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B140);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B1E8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B268);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B268);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B270);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B320);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B320);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B328);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B3D0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B450);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B450);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B458);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B500);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B580);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B580);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B588);
 
@@ -872,7 +872,7 @@ s32 func_0011B800(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B8D8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B970);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B970);
 
 extern s32 func_0011B050(s32 count, s32 *value);
 
@@ -900,7 +900,7 @@ s32 func_0011B978(u16 a, s32 b, s32 c) {
     return func_0011B050(1, msg);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B9C0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011B9C0);
 
 /**
  * Pack arg0 and the signed-byte form of arg1 into a stack record and push it
@@ -952,7 +952,7 @@ s32 func_0011BA58(s32 a, s32 b, u16 c) {
     return func_0011B050(-6, msg);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BA90);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BA90);
 
 /**
  * Push the single 32-bit value arg0 through func_0011B050 with count 0x10
@@ -963,7 +963,7 @@ void func_0011BAA0(s32 arg0) {
     func_0011B050(0x10, &value);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BAC4);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BAC4);
 
 /* Global list head initialised by func_0011BAC8: value word, entry count,
  * head/tail links and the inline first slot they initially point at. */
@@ -1011,7 +1011,7 @@ void func_0011BAF0(s32 *arg0) {
 }
 
 // recovered splat-dropped code (epilogue-stump mis-split): raw words, byte-exact
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BB30);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BB30);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BB38);
 
@@ -1019,7 +1019,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BCD0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BE20);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BEDC);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011BEDC);
 
 /**
  * Spin until the busy bit (0x8000) of the status register at 0x1000F130 clears,
@@ -1550,7 +1550,7 @@ s32 func_0011C8B0(s32 arg0) {
     return D_0013D080[arg0];
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C8C8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C8C8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C8D8);
 
@@ -1624,7 +1624,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011CDA0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceSifWriteBackDCache);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011CF74);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011CF74);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceSifInitRpc);
 
@@ -2057,7 +2057,7 @@ s32 func_0011EEA0(void) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceSifRebootIop);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011EFE8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011EFE8);
 
 /**
  * func_0011EFF0 = EE kernel syscall 0x5A. SCE library syscall stub (see
@@ -2291,7 +2291,7 @@ s32 func_0011F700(s32 a, s32 b, s32 c) {
 #endif
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F710);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F710);
 
 extern s32 D_00134DA8[4]; /* handler table: two {arg0,arg1} pairs */
 extern s32 D_00134DA0;    /* cached end-of-walk pointer (func_0011F6C0 side) */
@@ -2368,7 +2368,7 @@ void _InitSys(void) {
     func_0011F058();
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F864);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011F864);
 
 /**
  * func_0011F868 = EE kernel syscall 0x74. SCE library syscall stub (see
@@ -2494,7 +2494,7 @@ void exit(s32 code) {
     func_0011A840(code);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011FA48);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011FA48);
 
 /**
  * func_0011FA50 = EE kernel syscall 0x74 (same primitive as func_0011F868).
@@ -2764,7 +2764,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00120F00);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001210E0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001212C4);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001212C4);
 
 /**
  * func_001212C8 = truncate the non-negative double whose bits are `x` to a
@@ -2828,7 +2828,7 @@ s64 func_001212C8(s64 x) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001213B4);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001213B4);
 
 extern s64 func_00123078(s32 x);
 extern s64 func_00122B00(s64 a, s64 b);
@@ -3754,7 +3754,7 @@ void func_00123298(s64 a) {
     func_001234C0(parts.fpClass, parts.sign, parts.exponent, rounded);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001232EC);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001232EC);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001232F0);
 
@@ -3976,7 +3976,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001248B0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001248F8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00124970);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00124970);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00124980);
 
@@ -3994,7 +3994,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceCdDiskReady);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceCdMmode);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001253A4);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001253A4);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001253A8);
 
@@ -4015,7 +4015,7 @@ s32 *func_00125960(void) {
     return &D_00137E00;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012596C);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012596C);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00125970);
 
@@ -4025,7 +4025,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", BuildGsDispEnv);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00125D94);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00125E54);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00125E54);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00125E58);
 
@@ -4047,7 +4047,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126DBC);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceDmaSyncChan);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126ED0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126ED0);
 
 /**
  * Normalise a handle/id: if its top nibble (bits 31..28) equals 7, clear the
@@ -4095,7 +4095,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127040);
 /* func_00127218: 8 bytes of inter-function padding (a dead `sw $4,0($3); nop`)
  * between func_00127040 and the real func_00127220 — a splat mis-split, pinned
  * to size 0x8 in symbol_addrs so func_00127220 gets a clean .s. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127218);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127218);
 
 extern u32 func_00126ED8(u32 arg0);
 extern void sceDmaSyncChan(void *obj);
@@ -4129,7 +4129,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127288);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001272A8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127340);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127340);
 
 /**
  * func_00127348 = McInit (libmc): bring up the EE-side memory-card RPC client.
@@ -4178,7 +4178,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127340);
  */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127348);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127500);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127500);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127508);
 
@@ -4329,7 +4329,7 @@ void func_00127C68(u32 arg0) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127CC0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127E40);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127E40);
 
 extern u8    D_00141BB0[];   /* libmc GetDir send-buffer (1044 bytes) */
 extern char *func_00115AC0(char *dst, const char *src, s32 n);  /* strncpy */
@@ -4400,7 +4400,7 @@ s32 func_00127E48(s32 port, s32 slot, const char *name, s32 mode,
     return r;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127F90);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127F90);
 
 /**
  * func_00127F98 — issue one libmc (memory-card) request over SIF RPC, function 16.
@@ -4530,7 +4530,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001284B0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128578);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001286C0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001286C0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001286C8);
 
@@ -4589,7 +4589,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceDbcPortOpen);
 
 /* func_00128A48: 0x8 bytes of inter-function padding split off by symbol_addrs
  * size:0x8; the real function begins at func_00128A50. Pure padding, no C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128A48);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128A48);
 
 /* func_00128A50: real function recovered from the splat mis-split above (indexes
  * the 0x330-stride table D_00143640, dispatches to func_00128D58/DB0/E98 + a
@@ -4986,7 +4986,7 @@ void func_0012E088(u32 madr, s32 size) {
     }
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012E10C);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012E10C);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012E110);
 
@@ -5090,13 +5090,13 @@ s32 func_0012EA70(s32 *arg0, s32 arg1) {
     return pos;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012EA9C);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012EA9C);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012EAA0);
 
 /* func_0012EB28: 0x8 bytes of inter-function padding split off by symbol_addrs
  * size:0x8; the real function begins at func_0012EB30. Pure padding, no C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012EB28);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012EB28);
 
 /* func_0012EB30: real function recovered from the splat mis-split above (large
  * 0x150-frame routine iterating a 0x18-stride record list and dispatching via an
@@ -5159,7 +5159,7 @@ s32 func_0012F940(void) {
 /* func_0012F948: 8 bytes of inter-function padding (a dead `sll $6,$6,4; nop`)
  * between func_0012F940 and the real func_0012F950 — a splat mis-split, pinned
  * to size 0x8 in symbol_addrs so func_0012F950 gets a clean .s. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012F948);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012F948);
 
 /**
  * func_0012F950(arg0, arg1, arg2): seed the display/DMA sub-object at arg0->0x40
@@ -5591,7 +5591,7 @@ void func_00130AA0(void *arg0) {
     func_00130C68(*(u8 **)((u8 *)arg0 + 0x40) + 0x4C);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130AAC);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130AAC);
 
 /**
  * Kick a DMA transfer on the channel whose control word lives at 0x1000B000:
@@ -5662,7 +5662,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130E88);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001310C0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001313C4);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001313C4);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", s_isnan);
 
@@ -5678,7 +5678,7 @@ s32 func_00131400(s64 *arg0) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131424);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0013153C);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0013153C);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131540);
 
@@ -5700,7 +5700,7 @@ s32 func_001315E0(void) {
 /* func_00131620: 8 bytes of inter-function padding (a dead `sdr $3,0($7); nop`)
  * between func_001315E0 and the real func_00131628 — a splat mis-split, pinned
  * to size 0x8 in symbol_addrs so func_00131628 gets a clean .s. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131620);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131620);
 
 extern u8 D_00138152;
 
@@ -5718,11 +5718,11 @@ s32 func_00131628(void) {
     return (status >> 1) & 3;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131668);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131668);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131670);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001316C0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001316C0);
 
 /* func_001316C8: controller/port status getter — on territory 'T'
  * (func_001315E0()) return the cached byte D_00138156; else sample the pad
@@ -6030,4 +6030,4 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131DE8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", snd_Pump);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00132210);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00132210);

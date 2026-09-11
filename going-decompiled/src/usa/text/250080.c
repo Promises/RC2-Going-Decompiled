@@ -373,7 +373,7 @@ s32 func_003505E0(void) {
 
 /* func_00350600: 8 bytes of inter-function padding (addiu $sp,+0x10 / nop),
  * not compiler output — no C can produce it. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350600);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350600);
 
 #ifndef TARGET_NATIVE
 /* func_00350608: read-chunk dispatch on the stream object. Blocked:
@@ -1488,7 +1488,7 @@ s32 func_00352468(FmvStream *obj, u64 p2, u64 p3, u64 p4, u64 p5, u64 p6, u64 p7
 #endif
 
 /* func_00352568: 8 bytes of inter-function padding, no C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352568);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352568);
 
 /**
  * Stream-callback: kick the WAD streaming pump and report handled.
@@ -1602,7 +1602,7 @@ s32 func_00352680(FmvStream *obj) {
 }
 
 /* func_003526A0: 8 bytes of inter-function padding, no C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003526A0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/250080", func_003526A0);
 
 /* func_003526A8: end-of-stream flush (pads the bitstream to a 4-byte boundary).
  * Blocked (match): 8-byte-packed saves (s0@0x20, ra@0x28).

@@ -436,7 +436,7 @@ s32 func_0027A0C8(u8 *table, s32 mult, s32 index) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027A130);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027A130);
 
 /**
  * func_0027A138 — project a world position to fixed-point screen coordinates.
@@ -1170,7 +1170,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027C0C8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", RenderFrame);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027CAD8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027CAD8);
 
 /* Render a frame with every layer except the HUD: clear the screen, set the
  * layer mask to 0x7F (all engine layers, HUD bits clear), then render.
@@ -1209,7 +1209,7 @@ void func_0027CB08(void) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027CB70);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027CB70);
 
 /* Render the front-end menu widgets for screen 0.
  * Near-miss: same lone-tail-call sibcall wall as func_0027C0A8 (cc1 emits
@@ -1867,7 +1867,7 @@ void func_0027E4D0(s32 y0, s32 y1, s32 x0, s32 x1, u64 arg4) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027E690);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027E690);
 
 /* DrawGlyphQuad(x, y, w, h, u, v, uw, uh, param9, param10) — emit a textured 2D
  * sprite/glyph quad into the frame DMA packet at g_frameDmaCursor. Leaf function: writes
@@ -1928,7 +1928,7 @@ void DrawGlyphQuad(s32 x, s32 y, s32 w, s32 h, s32 u, s32 v, s32 uw, s32 uh,
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027E818);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027E818);
 
 /* DrawTexturedQuad2d(x, y, w, h, u, v, uw, vh, colors[4], tex0) — draw a float-coordinate
  * textured quad with per-vertex RGBA (gouraud) into the frame DMA packet. Screen positions are
@@ -1993,7 +1993,7 @@ void DrawTexturedQuad2d(f32 x, f32 y, f32 w, f32 h, s32 u, s32 v, s32 uw, s32 vh
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027EB20);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027EB20);
 
 /* DrawRotatedSprite2d: PARKED #70 — large (13 callee-save) rotated-sprite emitter with
  * sin/cos rotation (func_00283B30/B48), Vec4 transforms and FP rounding (FloatToInt) into
@@ -2237,7 +2237,7 @@ void func_0027F348(s32 y0, s32 y1, s32 x0, s32 x1, u64 color) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F4D0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F4D0);
 
 /* func_0027F4D8 (DrawTexturedRingSegments) — draw a textured ring/arc as 16 gouraud quads
  * (func_0027EFA0) sweeping from startAngle to endAngle about (centerX,centerY), between inner
@@ -2509,7 +2509,7 @@ void DrawDebugString(s32 a, s32 b, s32 c, s32 d, s32 e) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027FCA8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027FCA8);
 
 /* func_0027FCB0 (DrawGlyphRun) — the scaled/float twin of DrawFixedFontString: draws up to `c`
  * chars of string `b` at (f1,f2) scaled by f3, in color `a`, one DrawTexturedQuad2d per glyph. Per
@@ -2809,7 +2809,7 @@ void func_00280C98(s16 *layout, s16 clipX0, s16 clipX1, s16 left, s16 right,
     layout[11] = 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280CD0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280CD0);
 
 /* AppendVu1SphereMapContext — build the VU1 sphere-map/reflection render context and append it
  * to the frame DMA chain. Lazily uploads the sphere-map microcode (D_10ED30) the first time the
@@ -2948,7 +2948,7 @@ void func_00280FE0(void) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00281010);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00281010);
 
 /** func_00281020 — occlusion visibility ratio for a scene actor. The actor's
  *  record (g_sceneActorMobys+0x44, stride 0x30, indexed by `actorIdx`) holds the

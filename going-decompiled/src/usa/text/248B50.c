@@ -269,7 +269,7 @@ s32 func_00348CB8(GuiWidget *w, u32 inputMask) {
 /* func_00348D98: handwritten epilogue-only stump (`addiu $sp,$sp,0x10; nop`,
  * no prologue, no `jr ra`) — the trailing half of a hand-split asm routine.
  * No C body can reproduce a function with no return. WALL: split-artifact stub. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348D98);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348D98);
 
 /* func_00348DA0: store the keyframe table pointer at +0x68, then scan it to
  * count how many leading entries (stride 0x14, capped at 80) have a positive
@@ -495,7 +495,7 @@ GuiWidget *func_00349200(GuiWidget *w) {
 /* func_003492A0: handwritten epilogue-only stump (`addiu $sp,$sp,0x30; nop`,
  * no prologue, no `jr ra`) — the trailing half of a hand-split asm routine.
  * No C body can reproduce a function with no return. WALL: split-artifact stub. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_003492A0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/248B50", func_003492A0);
 
 /* SetPopupVisible: store the visibility flag at popup +0x4B8. */
 void SetPopupVisible(GuiWidget *w, s32 visible) {
@@ -641,7 +641,7 @@ void GuiScreenWithPlanetNameInit(void *screen, void *pool) {
 /* func_00349720: handwritten epilogue-only stump (`addiu $sp,$sp,0x30; nop`,
  * no prologue, no `jr ra`) — the trailing half of a hand-split asm routine.
  * No C body can reproduce a function with no return. WALL: split-artifact stub. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00349720);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00349720);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", UpdatePopupMenu);
 
@@ -747,7 +747,7 @@ GuiWidget *func_0034A210(GuiWidget *w) {
 
 /* func_0034A2C8: handwritten epilogue-only stump (`addiu $sp,$sp,0x10; nop`,
  * no prologue, no `jr ra`). WALL: split-artifact stub. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A2C8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A2C8);
 
 /* func_0034A2D0: store a1 to the +0x2C field. */
 void func_0034A2D0(GuiWidget *w, s32 v) {
@@ -757,7 +757,7 @@ void func_0034A2D0(GuiWidget *w, s32 v) {
 /* func_0034A2D8: the original is a handwritten no-return store fragment
  * (swc1 $f12,0x18(a0); nop - no jr ra), not a real leaf, so a C accessor with
  * its jr-ra epilogue can't reproduce the bytes. WALL: handwritten tail fragment. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A2D8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A2D8);
 
 /* func_0034A2E0: arm the +0x18/+0x28 pair — flag +0x28 = 1 and clear +0x18.
  * The original emits a dead lwc1 +0x18 before the li 1; under -fno-gcse the
@@ -775,7 +775,7 @@ void func_0034A2E0(GuiWidget *w) {
 
 /* func_0034A2F8: same handwritten no-return store fragment as func_0034A2D8
  * (bare swc1 $f1,0x18(a0), no jr ra). WALL: handwritten tail fragment. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A2F8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A2F8);
 
 /* func_0034A300: store a1 to the +0x80 field. */
 void func_0034A300(GuiWidget *w, s32 v) {
@@ -1044,7 +1044,7 @@ void func_0034A658(GuiWidget *w) {
 
 /* func_0034A6A8: handwritten epilogue-only stump (`addiu $sp,$sp,0x10; nop`,
  * no prologue, no `jr ra`). WALL: split-artifact stub. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A6A8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A6A8);
 
 /* func_0034A6B0: reset a 2x2 GuiWidget transform/animation record to its
  * neutral pose. It clears the integer header (+0x10 cursor, +0x1C..+0x28 state
@@ -1083,7 +1083,7 @@ void func_0034A6B0(GuiWidget *w) {
 
 /* func_0034A798: handwritten epilogue-only stump (`addiu $sp,$sp,0x10; nop`,
  * no prologue, no `jr ra`). WALL: split-artifact stub. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A798);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A798);
 
 /* func_0034A7A0: store a2 at +0x20 of the +0x4-stride index entry idx. */
 void func_0034A7A0(GuiWidget *w, s32 idx, s32 v) {
@@ -1270,7 +1270,7 @@ void *func_0034A9F8(void *widget) {
 
 /* func_0034AA90: handwritten epilogue-only stump (`addiu $sp,$sp,0x20; nop`,
  * no prologue, no `jr ra`). WALL: split-artifact stub. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034AA90);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034AA90);
 
 /* func_0034AA98: large GUI screen/menu construction routine (0x70 frame, 8+
  * callee saves). WALL: many callee saves — frame-layout divergence. */
@@ -1278,7 +1278,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034AA98);
 
 /* func_0034B1E0: handwritten epilogue-only stump (`addiu $sp,$sp,0x20; nop`,
  * no prologue, no `jr ra`). WALL: split-artifact stub. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034B1E0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034B1E0);
 
 /* func_0034B1E8: store a1 to the +0x0 field. */
 void func_0034B1E8(GuiWidget *w, s32 v) {
@@ -1471,7 +1471,7 @@ void GuiScreenSetEventAndReveal(GuiWidget *w, s32 event) {
 /* func_0034BDA8: handwritten store fragment (`sw $2,0x3F4($4); nop`, no
  * prologue, no `jr ra`, source value in an undefined $2). WALL: split-artifact
  * stub. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034BDA8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034BDA8);
 
 /* func_0034BDB0: large GUI screen construction routine — initialises the screen's
  * full sub-element tree in place and returns it. Three type-B elements + a type-C

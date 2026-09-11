@@ -111,7 +111,7 @@ extern u32  g_itemEquipSlotTable[];    /* 0x1A7398: equip-slot table written for
 /* func_00290870: 8 bytes of inter-function padding (addiu $sp,+0x90 / nop)
  * split off via symbol_addrs size:0x8; the real function begins at
  * func_00290878. Pure padding, no C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1907F0", func_00290870);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1907F0", func_00290870);
 
 /* func_00290878: fade-request entry (take ownership of the fade state slot
  * D_1A9004, register the func_00290EA0/func_00290920 pump callbacks, then
@@ -173,7 +173,7 @@ s32 func_00290EA0(void) {
 
 /* func_00290EE0: 4 bytes of inter-function fill (`addiu $sp,+0x30`), no
  * prologue/return — not compiler output, no C can produce it. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1907F0", func_00290EE0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1907F0", func_00290EE0);
 
 /* func_00290EE8: request the full-screen tint to hold/raise this frame and
  * return 1 (`D_1A9018 = 1; return 1;`). Best attempt 63% - the original
@@ -226,7 +226,7 @@ s32 func_00290EF8(void) {
 
 /* func_00290F90: 4-byte fragment (`sw $v0, %gp_rel(D_1AB2DC)($gp)` with no
  * return) — a handwritten patch-stub, not compiler output. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1907F0", func_00290F90);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1907F0", func_00290F90);
 
 /** Clear the D_1A901C flag. */
 void func_00290F98(void) {

@@ -1248,4 +1248,4 @@ void SetVideoMode(void) {
     }
 }
 #endif
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284A20);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284A20);
