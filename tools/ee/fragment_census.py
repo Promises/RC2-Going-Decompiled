@@ -22,6 +22,11 @@ Classes (a leaf gets exactly one):
   EPI_RET      has `jr $31` but restores from a frame it never built -> debris (epilogue reached by branch)
   REAL         everything else                                  -> a genuine function
 
+The predicate is validated for bodies <= 16 bytes (every member read, none
+reachable by any control-flow xref in Ghidra). ABOVE that, NO_RET / EPI_RET also
+catch live mis-split bodies whose ENTRY boundary is wrong (e.g. func_00282438,
+852 B, EPI_RET) -- those are T1.1 boundary fixes, not debris; do not mark them.
+
 DEBRIS = PAD_ZERO, PAD_CDFILL, SP_TAIL, NO_RET, JR_NO_SLOT, EPI_RET. Those sites belong under
 `INCLUDE_ASM_FRAGMENT(...)` (include/include_asm.h) instead of `INCLUDE_ASM(...)`.
 The two macros expand identically, so the marker is byte-neutral by construction;
@@ -30,6 +35,7 @@ its only effect is on counting tools, which match the `INCLUDE_ASM(` token.
 Usage (from the repo root):
   tools/ee/fragment_census.py [--region usa] [--max-bytes 16]          census TSV to stdout
   tools/ee/fragment_census.py --lint                                    exit 1 on any mismatch
+  tools/ee/fragment_census.py --summary                                 class counts + bytes
 
 --lint checks BOTH directions and can therefore fail:
   * an INCLUDE_ASM_FRAGMENT site whose .s is NOT debris   (a real function marked as debris)
@@ -124,6 +130,7 @@ def main():
     ap.add_argument('--max-bytes', type=int, default=16, help='size ceiling of the class (default 16)')
     ap.add_argument('--all-sizes', action='store_true', help='ignore --max-bytes')
     ap.add_argument('--lint', action='store_true')
+    ap.add_argument('--summary', action='store_true')
     a = ap.parse_args()
     ceiling = None if a.all_sizes else a.max_bytes
 
@@ -137,6 +144,25 @@ def main():
         cls = classify(insns) if bare else 'PORTABLE'
         body = ' ; '.join(f'{mn} {ops}'.strip() for _, mn, ops in insns)
         rows.append((unit, name, macro, cls, size, bare, cfile, ln, body))
+
+    if a.summary:
+        import collections
+        plain = sum(1 for r in rows if r[5] and r[2] == 'INCLUDE_ASM')
+        marked = sum(1 for r in rows if r[2] == 'INCLUDE_ASM_FRAGMENT')
+        print(f'bare INCLUDE_ASM sites: {plain}   INCLUDE_ASM_FRAGMENT sites: {marked}   portable (#else body): {sum(1 for r in rows if not r[5])}')
+        cnt, byt = collections.Counter(), collections.Counter()
+        for unit, name, macro, cls, size, bare, cfile, ln, body in rows:
+            if bare and size >= 0 and (ceiling is None or size <= ceiling):
+                cnt[cls] += 1
+                byt[cls] += size
+        lim = 'all sizes' if ceiling is None else f'<= {ceiling} B'
+        print(f'bare leaves {lim}: {sum(cnt.values())} sites, {sum(byt.values())} bytes')
+        for cls in sorted(cnt, key=lambda c: -cnt[c]):
+            tag = 'debris' if cls in DEBRIS else 'keep'
+            print(f'  {cls:12} {cnt[cls]:5}  {byt[cls]:6} B  {tag}')
+        d = sum(cnt[c] for c in DEBRIS)
+        print(f'  debris total {d} sites, {sum(byt[c] for c in DEBRIS)} B')
+        return 0
 
     if not a.lint:
         print('\t'.join(['unit', 'name', 'macro', 'class', 'size', 'bare', 'cfile', 'line', 'body']))
