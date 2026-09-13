@@ -510,9 +510,17 @@ void func_0034F028(u8 *base, s32 baseX, s32 baseY, s32 shade) {
  * embedded GuiHudManager's frame update (+0x7A0 via func_0034DBE0), forward the
  * HUD list (func_0034F200), tick the third (planet-name) list (+0x1FDC via
  * func_00339A88), then update the on-screen bolt counter (TickBoltCounterHud).
- * NEAR-MISS candidate: kept INCLUDE_ASM for the matching build; the #else is the
- * portable equivalent (sibling-call chain over the outer GuiInstance). */
-#ifndef TARGET_NATIVE
+ * BYTE-EXACT under the ENGINE compiler (#259): ee-gcc 2.96 + the engine
+ * pipeline reproduces all 16 ROM words and all 4 relocations, once the trailing
+ * `__asm__ __volatile__("")` suppresses the sibling call into
+ * TickBoltCounterHud. Build it with
+ * `tools/ee/diff96.sh usa text/24D728 func_0034F1C0 <this file>`.
+ *
+ * INCLUDE_ASM is retained for the ordinary ee-gcc 2.9 unit build, which differs
+ * in exactly 5 prologue/epilogue words (0x20 frame with 16-byte save slots
+ * against the ROM's 0x10 with 8-byte slots): 99.06% at the unit objdiff gate,
+ * 82.81% with the guard removed. */
+#if !defined(TARGET_NATIVE) && !defined(MATCH_func_0034F1C0)
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F1C0);
 #else
 void func_0034F1C0(GuiInstance *mgr) {
@@ -521,6 +529,7 @@ void func_0034F1C0(GuiInstance *mgr) {
     func_0034F200(mgr);
     func_00339A88(m + 0x1FDC);
     TickBoltCounterHud();
+    __asm__ __volatile__("");
 }
 #endif
 

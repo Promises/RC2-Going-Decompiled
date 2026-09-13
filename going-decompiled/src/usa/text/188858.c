@@ -995,17 +995,25 @@ void func_00289560(CinematicQueue *q) {
  * (func_00289560), clear the queue's leading word, then reset it
  * (func_00289540).
  *
- * NEAR-MISS (85%): logic exact, but cc1 allocates a 0x20-byte frame for the
- * two callee-saves where the original uses 0x10, and sibling-call-optimises the
- * tail func_00289540 into a `j`. Both are fixed cc1 codegen choices; kept as the
- * portable #else body. */
-#ifndef TARGET_NATIVE
+ * BYTE-EXACT under the ENGINE compiler (#259): ee-gcc 2.96 + the engine
+ * pipeline reproduces all 12 ROM words and both relocations, once the trailing
+ * `__asm__ __volatile__("")` suppresses the sibling call. Build it with
+ * `tools/ee/diff96.sh usa text/188858 func_002895E0 <this file>`, which defines
+ * MATCH_func_002895E0.
+ *
+ * INCLUDE_ASM is retained for the ordinary unit build, which uses ee-gcc 2.9:
+ * that compiler packs the two callee-saves into 16-byte slots in a 0x20 frame
+ * where the original uses 8-byte slots in 0x10, so its output differs from the
+ * ROM in exactly 5 prologue/epilogue words (98.75% at the unit objdiff gate).
+ * The two-compiler split, not this body, is what stops the ordinary build. */
+#if !defined(TARGET_NATIVE) && !defined(MATCH_func_002895E0)
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_002895E0);
 #else
 void func_002895E0(CinematicQueue *q) {
     func_00289560(q);
     *(s32 *)q = 0;
     func_00289540(q);
+    __asm__ __volatile__("");
 }
 #endif
 

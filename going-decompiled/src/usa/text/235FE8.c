@@ -4889,15 +4889,21 @@ void func_0033FDD8(void *w) {
  * the menu backdrop (func_002DBC98(0)), draw its three header text rows, the
  * inner panel (func_00337630 at p+0x2DC), a sprite (p+0x420), two footer text
  * rows, then the trailing builder func_0033FDD8(p).
- * NEAR-MISS 93.75%: body is exact; only the prologue/epilogue differ. The
- * original packs its two saved regs ($16,$31) into 8-byte slots in a 0x10 frame
- * (later-cc1 codegen); our pinned ee-gcc 2.9 over-allocates a 0x20 frame with
- * 16-byte slots. The 16-byte-slot-vs-8-byte-slot frame wall (whole 2-GPR-save
- * class in this unit). */
+ * BYTE-EXACT under the ENGINE compiler (#259): ee-gcc 2.96 + the engine
+ * pipeline reproduces all 28 ROM words and all 10 relocations, once the
+ * trailing `__asm__ __volatile__("")` suppresses the sibling call into
+ * func_0033FDD8. Build it with
+ * `tools/ee/diff96.sh usa text/235FE8 func_0033FEF8 <this file>`.
+ *
+ * INCLUDE_ASM is retained for the ordinary ee-gcc 2.9 unit build, which hits
+ * the 16-byte-slot-vs-8-byte-slot frame wall (the whole 2-GPR-save class in
+ * this unit): 5 prologue/epilogue words differ, 99.46% at the unit objdiff
+ * gate. Without the guard the same build folds the tail call and reads
+ * 93.75% -- the number the previous note recorded. */
 /* Draw a composite dialog widget: run its background/frame sub-draws, then draw
  * its text sub-elements (offsets 0x318/0x370/0x3C8/0x628/0x5D0), a sprite
  * (0x420) and two helper sub-draws (0x2DC frame, and the tail func_0033FDD8). */
-#ifndef TARGET_NATIVE
+#if !defined(TARGET_NATIVE) && !defined(MATCH_func_0033FEF8)
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033FEF8);
 #else
 void func_0033FEF8(void *e) {
@@ -4911,6 +4917,7 @@ void func_0033FEF8(void *e) {
     GuiTextElementDraw((char *)e + 0x628);
     GuiTextElementDraw((char *)e + 0x5D0);
     func_0033FDD8(e);
+    __asm__ __volatile__("");
 }
 #endif
 
