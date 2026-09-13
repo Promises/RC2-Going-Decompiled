@@ -33,8 +33,11 @@ INC="-Igoing-decompiled/include -Igoing-decompiled/include/rtl/ee -Igoing-decomp
 ASF="-march=r5900 -mabi=eabi -no-pad-sections -EL -G0 -Igoing-decompiled/build/$REGION/include"
 # MATCH_<func> promotes exactly the target function to real engine C (siblings stay
 # INCLUDE_ASM), so objdiff scopes the diff to this one function. See its guard in the
-# unit .c. This is the per-function grind selector; once a function is confirmed 100%
-# the guard is dropped and it becomes a plain engine-2.96 match.
+# unit .c. This is the per-function grind selector — and it STAYS after the match:
+# the unit gate (objdiff_build.sh + unit_report.sh) defines every MATCH_ guard on
+# its engine96 arm and scores exactly those functions from it, while build.sh
+# (cc1 2.9) keeps them INCLUDE_ASM. Dropping the guard would hand the function to
+# the 2.9 arm, where an engine-2.96 body cannot match (t276).
 CPPDEF="-D__GNUC__=2 -D__GNUC_MINOR__=96 -D__mips__ -D__mips=3 -D__R5900 -D__LANGUAGE_C -D_LANGUAGE_C -D__EE__ -DINCLUDE_ASM_USE_MACRO_INC=1 -DMATCH_$FUNC"
 # Engine flag string: -fno-strict-aliasing is REQUIRED — at -O2 the 001003 cc1 has
 # strict-aliasing ON, which CSEs a double-deref pointer load (self->p->x; self->p->y)

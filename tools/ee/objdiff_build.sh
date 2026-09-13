@@ -29,7 +29,43 @@
 # base still carries every marker), tools/ee/objdiff_demo.sh builds a base==target
 # variant so the unit reads 100% across all 707 functions.
 #
-# Single ops only; the one compound command is the necessary `docker run`.
+# TWO-COMPILER, FUNCTION-SELECTED. R&C2 is a two-compiler build (diff96.sh
+# header, project_cc1_subbuild_lead): the SDK/runtime below the entry point was
+# built by ee-gcc 2.9-ee-991111 (16-byte callee-save slots), the game engine
+# above it by an ee-gcc 2.96 (8-byte slots), which no 2.9 flag reproduces. The
+# base is therefore built by up to TWO arms, and the unit report
+# (tools/ee/unit_report.sh) takes each function's row from the arm that owns it:
+#   sdk29    — cc1 2.9-ee-991111 (wibo), -O2 $GFLAG $CC1EXTRA, unchanged, into
+#              obj/<unit>.o. Owns every function NOT named by a MATCH_ guard.
+#   engine96 — the diff96.sh engine pipeline: cc1 2.96-ee-001003 (native i386 via
+#              its bundled loader), -O2 -G8 -fno-schedule-insns -fno-strict-aliasing,
+#              then engine_swap_fix.py + mtc1_fixup.py on the HOST (python3 is not
+#              in the container), then asm_unit.sh at -G8, into
+#              obj/<unit>.engine96.o. Every `defined(MATCH_<fn>)` guard in the unit
+#              source is defined on this arm, so the engine C parked behind
+#              `!defined(MATCH_<fn>)` (INCLUDE_ASM for the 2.9 link in build.sh) is
+#              compiled here. Owns exactly the functions those guards name; the
+#              list is written to tools/ee/.objdiff/<region>/<unit>/engine_funcs.txt.
+# WHY per FUNCTION and not per unit: routing a whole engine-region unit through
+# the 2.96 arm was measured (t276, 2026-09-13) and it un-matches rows that are
+# byte-exact under 2.9 today (text/188858 16->12, text/235FE8 73->65,
+# cod/0321A0 34->0, text/1A8180 34->8): the 001003 pipeline and the 2.9 -fno-gcse
+# model each reproduce a different subset of the ROM's engine compiler, and a
+# unit compiles under one scheduler setting. The MATCH_ guard is the selector
+# that already exists (diff96.sh's per-function promote), so it is the routing
+# predicate here too.
+# WHICH UNITS GET AN ENGINE ARM: those whose lowest function VRAM address (from
+# the asm tree) is >= ENGINE_BOUNDARY=0x131D98, the first 8-byte-slot function
+# in the ROM (project_cc1_subbuild_lead: 16-byte slots end at 0x131A98). Measured
+# over every unit's frozen asm (tools/ee/.t276/slot_census.py): cod/015180
+# (0x115200..) is 16-byte apart from 3 members (func_00120BD0, main, snd_Pump);
+# every other unit is 8-byte only. A unit below the boundary never gets an engine
+# arm; a unit above it gets one only when it carries at least one MATCH_ guard.
+# The TARGET object is pure INCLUDE_ASM and is built once, by the 2.9 pipeline.
+# A stale obj/<unit>.engine96.o from an earlier run is deleted whenever the arm
+# is not built, so the report can never read an old arm.
+#
+# Single ops only; the compound commands are the necessary `docker run`s.
 # Requires the colima `ee-x86` VM + `ee-build` image (see CLAUDE.md).
 set -euo pipefail
 REGION="$1"; UNIT="$2"; BASECFILE="${3:-going-decompiled/src/$REGION/$UNIT.c}"
@@ -42,7 +78,8 @@ ASMDIR="going-decompiled/asm/$REGION/nonmatchings/$UNIT"
 mkdir -p "$(dirname "$EXPECTED")" "$(dirname "$OBJ")" "$W"
 
 INC="-Igoing-decompiled/include -Igoing-decompiled/include/rtl/ee -Igoing-decompiled/include/rtl/common"
-CPPDEF="-D__GNUC__=2 -D__GNUC_MINOR__=9 -D__mips__ -D__mips=3 -D__R5900 -D__LANGUAGE_C -D_LANGUAGE_C -D__EE__ -DINCLUDE_ASM_USE_MACRO_INC=1"
+CPPDEF_COMMON="-D__GNUC__=2 -D__mips__ -D__mips=3 -D__R5900 -D__LANGUAGE_C -D_LANGUAGE_C -D__EE__ -DINCLUDE_ASM_USE_MACRO_INC=1"
+CPPDEF="-D__GNUC_MINOR__=9 $CPPDEF_COMMON"
 
 # Per-unit -G override (BASE compile only; the target is pure INCLUDE_ASM so
 # -G is irrelevant there). The cod/0321A0 989snd sub-TU is an original separate
@@ -110,9 +147,9 @@ esac
 # the target must never drift).
 TGTC="$W/target_unit.c"
 printf '#include "common.h"\n' > "$TGTC"
-python3 - "$ASMDIR" >> "$TGTC" <<'PY'
+python3 - "$ASMDIR" "$W/first_addr" >> "$TGTC" <<'PY'
 import sys, re, glob, os
-asmdir = sys.argv[1]
+asmdir, first_addr_file = sys.argv[1], sys.argv[2]
 items = []
 for s in sorted(glob.glob(os.path.join(asmdir, "*.s"))):
     func = os.path.basename(s)[:-2]
@@ -126,7 +163,38 @@ for s in sorted(glob.glob(os.path.join(asmdir, "*.s"))):
     items.append((addr if addr is not None else (1 << 62), func))
 for _, func in sorted(items):
     print(f'INCLUDE_ASM("{asmdir}", {func});')
+# The region predicate's input: the unit's lowest function VRAM address. A unit
+# with no addressed .s at all writes 0 (classes as sdk — nothing to compile anyway).
+real = [a for a, _ in items if a != (1 << 62)]
+with open(first_addr_file, "w") as fh:
+    fh.write(f"0x{min(real):08X}\n" if real else "0x00000000\n")
 PY
+
+# ---- decide whether this unit gets an engine arm (see header) ----
+ENGINE_BOUNDARY=0x131D98
+FIRST_ADDR="$(cat "$W/first_addr")"
+OBJ96="going-decompiled/build/$REGION/obj/$UNIT.engine96.o"
+ENGINE_FUNCS="$W/engine_funcs.txt"
+if [ $((FIRST_ADDR)) -ge $((ENGINE_BOUNDARY)) ]; then REGION_CLASS=engine; else REGION_CLASS=sdk; fi
+MATCHDEFS=""; MATCHFUNCS=""
+if [ "$REGION_CLASS" = engine ]; then
+  # every `defined(MATCH_<fn>)` guard in the unit source, by convention naming <fn>
+  MATCHFUNCS="$(python3 -c 'import re,sys; print(" ".join(sorted(set(re.findall(r"defined\s*\(\s*MATCH_([A-Za-z0-9_]+)\s*\)", open(sys.argv[1]).read())))))' "$BASECFILE")"
+  for f in $MATCHFUNCS; do MATCHDEFS="$MATCHDEFS -DMATCH_$f"; done
+fi
+if [ -n "$MATCHFUNCS" ]; then BUILD96=1; else BUILD96=0; fi
+
+CC296="${CC296:-tools/ee/cc-296}"
+CC1_96="$CC296/lib/gcc-lib/ee/2.96-ee-001003-1/cc1"
+# The engine arm must never fall back to 2.9 silently: a missing 2.96 cc1 is a
+# hard error, not a quieter run.
+if [ "$BUILD96" = 1 ] && [ ! -f "$CC1_96" ]; then
+  echo "objdiff_build: engine arm needs $CC1_96 — run scripts/fetch_2.96.sh" >&2; exit 2
+fi
+# engine96 flags: the diff96.sh flag string (-fno-strict-aliasing is required,
+# -G8 always), and __GNUC_MINOR__=96 as diff96.sh preprocesses.
+GFLAG96="-G8"; CC1EXTRA96="-fno-schedule-insns -fno-strict-aliasing"
+CPPDEF96="-D__GNUC_MINOR__=96 $CPPDEF_COMMON $MATCHDEFS"
 
 # Compile the pristine *target* C and the *base* C (your decomp / override).
 # Each cc1 emits a .s; asm_unit.sh assembles it (with the VU0 fixup mirror) into
@@ -136,6 +204,7 @@ PY
 #   - base:   strip the ee-gcc placeholder symbols so the symbol tables line up.
 #     The base KEEPS the `.NON_MATCHING` markers for functions still on INCLUDE_ASM
 #     — that is exactly how objdiff knows they aren't decompiled yet.
+# (1) target + sdk29 base — byte-for-byte the pre-t276 gate.
 docker --context colima-ee-x86 run --rm -e ASMFIX_SHARED -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work; WIBO=/usr/local/bin/wibo; G=tools/ee/cc/lib/gcc-lib/ee/2.9-ee-991111
   \$WIBO \$G/cpp.exe $CPPDEF $INC $TGTC $W/target.i
@@ -149,5 +218,43 @@ docker --context colima-ee-x86 run --rm -e ASMFIX_SHARED -v "$ROOT":/work ee-bui
   mips-linux-gnu-strip $OBJ -N gcc2_compiled. -N __gnu_compiled_c -N dummy-symbol-name
 "
 
+# (2) engine96 base, only when the unit owns MATCH_-guarded functions.
+rm -f "$OBJ96" "$ENGINE_FUNCS"
+if [ "$BUILD96" = 1 ]; then
+  printf '%s\n' $MATCHFUNCS > "$ENGINE_FUNCS"
+  # (2a, container) preprocess with the 2.9 cpp as diff96.sh does, compile with
+  # the native 2.96 cc1 through its bundled glibc-2.3.6 loader.
+docker --context colima-ee-x86 run --rm -v "$ROOT":/work ee-build sh -c "
+  set -e; cd /work; WIBO=/usr/local/bin/wibo; G=tools/ee/cc/lib/gcc-lib/ee/2.9-ee-991111
+  LD96='$CC296/ld-2.3.6.so --library-path $CC296'
+  \$WIBO \$G/cpp.exe $CPPDEF96 $INC $BASECFILE $W/base96.i
+  \$LD96 $CC1_96 -quiet -O2 $GFLAG96 $CC1EXTRA96 $W/base96.i -o $W/base96.s
+"
+  # (2b, host) the engine post-passes, in diff96.sh's order.
+  python3 tools/ee/engine_swap_fix.py "$W/base96.s"
+  python3 tools/ee/mtc1_fixup.py "$W/base96.s"
+  # (2c, container) assemble at -G8, same placeholder strip as the sdk29 base.
+docker --context colima-ee-x86 run --rm -e ASMFIX_SHARED -v "$ROOT":/work ee-build sh -c "
+  set -e; cd /work
+  sh tools/ee/asm_unit.sh $REGION /work/$W/base96.s /work/$OBJ96 $GFLAG96
+  mips-linux-gnu-strip $OBJ96 -N gcc2_compiled. -N __gnu_compiled_c -N dummy-symbol-name
+"
+  # A MATCH_ token that names no compiled function would silently own nothing:
+  # say so (the report then has no engine row for it).
+  for f in $MATCHFUNCS; do
+    if ! /usr/bin/grep -qE "^[[:space:]]*\.ent[[:space:]]+$f([[:space:]]|\$)" "$W/base96.s"; then
+      echo "[objdiff_build] WARNING: MATCH_$f is guarded in $BASECFILE but no '.ent $f' in the engine arm" >&2
+    fi
+  done
+fi
+
+echo "[objdiff_build] region -> $REGION_CLASS (first_addr=$FIRST_ADDR, boundary=$ENGINE_BOUNDARY)"
+if [ "$BUILD96" = 1 ]; then
+  echo "[objdiff_build] engine96 -> $OBJ96 owns: $MATCHFUNCS"
+elif [ "$REGION_CLASS" = engine ]; then
+  echo "[objdiff_build] engine96 -> (not built: engine unit with no MATCH_ guard)"
+else
+  echo "[objdiff_build] engine96 -> (not built: sdk unit)"
+fi
 echo "[objdiff_build] target -> $EXPECTED"
-echo "[objdiff_build] base   -> $OBJ"
+echo "[objdiff_build] sdk29  -> $OBJ"
