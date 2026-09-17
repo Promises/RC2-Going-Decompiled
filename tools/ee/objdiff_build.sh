@@ -5,6 +5,7 @@
 #   tools/ee/objdiff_build.sh <region> <unit> [base_cfile]
 #   e.g. tools/ee/objdiff_build.sh usa cod/015180
 #        tools/ee/objdiff_build.sh usa cod/015180 some/override.c   # wrong-base test
+#        GUARD_CHECK_ONLY=1 tools/ee/objdiff_build.sh usa cod/015180  # guards only, no VM
 #
 # TARGET object (immutable original bytes) ->
 #     going-decompiled/build/<region>/expected/<unit>.o
@@ -64,6 +65,16 @@
 # The TARGET object is pure INCLUDE_ASM and is built once, by the 2.9 pipeline.
 # A stale obj/<unit>.engine96.o from an earlier run is deleted whenever the arm
 # is not built, so the report can never read an old arm.
+#
+# GUARD ENFORCEMENT (#294). The guard token IS the function symbol; both this
+# script and unit_report.sh assume it and neither used to check it, so a guard
+# that named nothing was a silent no-op that still exited 0. Three checks now
+# exit 3, each listing every offending token:
+#   1. the token names no <token>.s in this unit's asm tree (host-only, runs
+#      BEFORE any docker run — a mis-named guard costs no VM time);
+#   2. the unit is sdk-class yet carries guards, which can never be honoured
+#      because no engine arm is built below ENGINE_BOUNDARY (host-only);
+#   3. the engine arm compiled but emitted no `.ent <token>` for the guard.
 #
 # Single ops only; the compound commands are the necessary `docker run`s.
 # Requires the colima `ee-x86` VM + `ee-build` image (see CLAUDE.md).
@@ -177,12 +188,63 @@ OBJ96="going-decompiled/build/$REGION/obj/$UNIT.engine96.o"
 ENGINE_FUNCS="$W/engine_funcs.txt"
 if [ $((FIRST_ADDR)) -ge $((ENGINE_BOUNDARY)) ]; then REGION_CLASS=engine; else REGION_CLASS=sdk; fi
 MATCHDEFS=""; MATCHFUNCS=""
+# Every `defined(MATCH_<fn>)` guard in the unit source. The convention — the
+# guard TOKEN IS THE FUNCTION SYMBOL — is assumed by this script AND by
+# unit_report.sh, and until #294 nothing enforced it: a guard named differently
+# from any function in the unit owned NOTHING, its function was silently built
+# by the 2.9 arm and scored DIFFERS, and the run still exited 0. Extracted for
+# EVERY unit, not just engine-class ones, so a guard below the boundary (which
+# gets no engine arm at all) is caught too.
+# (the harvest now runs for sdk units too, where it never used to — so say
+# plainly that the base C is missing instead of raising a python traceback.)
+[ -f "$BASECFILE" ] || { echo "objdiff_build: FATAL — base C not found: $BASECFILE" >&2; exit 2; }
+GUARDS="$(python3 -c 'import re,sys; print(" ".join(sorted(set(re.findall(r"defined\s*\(\s*MATCH_([A-Za-z0-9_]+)\s*\)", open(sys.argv[1]).read())))))' "$BASECFILE")"
+
+# GUARD CHECK 1 (host-only, before any docker run): the token must name a
+# function THAT EXISTS IN THIS UNIT. The unit's function inventory is its frozen
+# asm tree — the TARGET object is generated from exactly those .s files — so a
+# token with no <token>.s can never be scored here whatever it compiles to.
+# Every offender is listed, not just the first.
+BADGUARDS=""
+for f in $GUARDS; do
+  [ -f "$ASMDIR/$f.s" ] || BADGUARDS="$BADGUARDS $f"
+done
+if [ -n "$BADGUARDS" ]; then
+  echo "objdiff_build: FATAL — MATCH_ guard names no function in $REGION/$UNIT:" >&2
+  for f in $BADGUARDS; do echo "    MATCH_$f   (no $ASMDIR/$f.s)" >&2; done
+  echo "  A guard token must equal the function symbol it promotes. This one owns nothing:" >&2
+  echo "  its function would be built by the 2.9 arm and scored DIFFERS while the run passed." >&2
+  exit 3
+fi
+
+# GUARD CHECK 2 (host-only): a guard in a unit BELOW ENGINE_BOUNDARY is inert —
+# no engine arm is ever built there, so the guard owns nothing however it is
+# spelled. Bound this makes visible rather than fixes: cod/015180 carries
+# 8-byte-slot members (func_00120BD0, main, snd_Pump) below the unit predicate;
+# they cannot be engine-gated without a per-function override, and this check
+# says so loudly instead of letting such a guard read as effective.
+if [ "$REGION_CLASS" != engine ] && [ -n "$GUARDS" ]; then
+  echo "objdiff_build: FATAL — $REGION/$UNIT is sdk-class (first_addr=$FIRST_ADDR < boundary=$ENGINE_BOUNDARY) but carries MATCH_ guards:" >&2
+  for f in $GUARDS; do echo "    MATCH_$f" >&2; done
+  echo "  No engine arm is built below the boundary, so these guards own nothing." >&2
+  exit 3
+fi
+
 if [ "$REGION_CLASS" = engine ]; then
-  # every `defined(MATCH_<fn>)` guard in the unit source, by convention naming <fn>
-  MATCHFUNCS="$(python3 -c 'import re,sys; print(" ".join(sorted(set(re.findall(r"defined\s*\(\s*MATCH_([A-Za-z0-9_]+)\s*\)", open(sys.argv[1]).read())))))' "$BASECFILE")"
+  MATCHFUNCS="$GUARDS"
   for f in $MATCHFUNCS; do MATCHDEFS="$MATCHDEFS -DMATCH_$f"; done
 fi
 if [ -n "$MATCHFUNCS" ]; then BUILD96=1; else BUILD96=0; fi
+
+# GUARD_CHECK_ONLY=1 stops here: checks 1 and 2 have run and nothing below this
+# line has been touched. No docker, no VM, ~0.2s per unit — so the guard
+# convention can be swept over every unit in the tree without an hour of build.
+# Checks 1 and 2 are the only ones reachable in this mode; check 3 needs the
+# engine arm and is therefore only exercised by a real run.
+if [ "${GUARD_CHECK_ONLY:-0}" = 1 ]; then
+  echo "[objdiff_build] guard-check-only $REGION/$UNIT ($REGION_CLASS, first_addr=$FIRST_ADDR): ${GUARDS:-(no MATCH_ guards)}"
+  exit 0
+fi
 
 CC296="${CC296:-tools/ee/cc-296}"
 CC1_96="$CC296/lib/gcc-lib/ee/2.96-ee-001003-1/cc1"
@@ -239,13 +301,21 @@ docker --context colima-ee-x86 run --rm -e ASMFIX_SHARED -v "$ROOT":/work ee-bui
   sh tools/ee/asm_unit.sh $REGION /work/$W/base96.s /work/$OBJ96 $GFLAG96
   mips-linux-gnu-strip $OBJ96 -N gcc2_compiled. -N __gnu_compiled_c -N dummy-symbol-name
 "
-  # A MATCH_ token that names no compiled function would silently own nothing:
-  # say so (the report then has no engine row for it).
+  # GUARD CHECK 3: the token names a real function of this unit (check 1 passed)
+  # but the engine arm never EMITTED it — the guarded C is missing, or the
+  # function is still INCLUDE_ASM on both arms. The engine arm would then claim
+  # a function it has no row for and unit_report.sh silently falls back to the
+  # 2.9 row. This was a WARNING at exit 0 until #294.
+  NOENT=""
   for f in $MATCHFUNCS; do
-    if ! /usr/bin/grep -qE "^[[:space:]]*\.ent[[:space:]]+$f([[:space:]]|\$)" "$W/base96.s"; then
-      echo "[objdiff_build] WARNING: MATCH_$f is guarded in $BASECFILE but no '.ent $f' in the engine arm" >&2
-    fi
+    /usr/bin/grep -qE "^[[:space:]]*\.ent[[:space:]]+$f([[:space:]]|\$)" "$W/base96.s" || NOENT="$NOENT $f"
   done
+  if [ -n "$NOENT" ]; then
+    echo "objdiff_build: FATAL — guarded in $BASECFILE but no '.ent' in the engine arm ($W/base96.s):" >&2
+    for f in $NOENT; do echo "    MATCH_$f" >&2; done
+    echo "  The guard owns a function the 2.96 arm never compiled; its row would come from the 2.9 arm." >&2
+    exit 3
+  fi
 fi
 
 echo "[objdiff_build] region -> $REGION_CLASS (first_addr=$FIRST_ADDR, boundary=$ENGINE_BOUNDARY)"
