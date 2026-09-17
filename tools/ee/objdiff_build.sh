@@ -64,7 +64,15 @@
 # arm; a unit above it gets one only when it carries at least one MATCH_ guard.
 # The TARGET object is pure INCLUDE_ASM and is built once, by the 2.9 pipeline.
 # A stale obj/<unit>.engine96.o from an earlier run is deleted whenever the arm
-# is not built, so the report can never read an old arm.
+# is not built, so the report can never read an old arm. That delete MUST run
+# INSIDE a container (it sits in the step-(1) `docker run`), never on the host:
+# $OBJ96 is written by the container, and deleting a just-container-written file
+# from the host leaves the container's view of it stale, so the NEXT container
+# write fails `Fatal error: can't create .../<unit>.engine96.o`. The script has no
+# retry loop, so that surfaces as a bare rc=1 the caller reads as their own edit
+# breaking the build. It alternates (a failed run leaves no object, so the run
+# after it succeeds) and only shows up when runs are seconds apart — a warm
+# ASMFIX_SHARED mirror — which is why a slow cold run gives a false all-clear.
 #
 # GUARD ENFORCEMENT (#294). The guard token IS the function symbol; both this
 # script and unit_report.sh assume it and neither used to check it, so a guard
@@ -269,6 +277,7 @@ CPPDEF96="-D__GNUC_MINOR__=96 $CPPDEF_COMMON $MATCHDEFS"
 # (1) target + sdk29 base — byte-for-byte the pre-t276 gate.
 docker --context colima-ee-x86 run --rm -e ASMFIX_SHARED -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work; WIBO=/usr/local/bin/wibo; G=tools/ee/cc/lib/gcc-lib/ee/2.9-ee-991111
+  rm -f $OBJ96
   \$WIBO \$G/cpp.exe $CPPDEF $INC $TGTC $W/target.i
   \$WIBO \$G/cc1.exe -quiet -O2 -G0 $W/target.i -o $W/target.s
   sh tools/ee/asm_unit.sh $REGION /work/$W/target.s /work/$EXPECTED
@@ -281,7 +290,9 @@ docker --context colima-ee-x86 run --rm -e ASMFIX_SHARED -v "$ROOT":/work ee-bui
 "
 
 # (2) engine96 base, only when the unit owns MATCH_-guarded functions.
-rm -f "$OBJ96" "$ENGINE_FUNCS"
+# $OBJ96 is NOT deleted here — the step-(1) container above does it (see header).
+# $ENGINE_FUNCS is written and read by the host only, so it is safe to drop here.
+rm -f "$ENGINE_FUNCS"
 if [ "$BUILD96" = 1 ]; then
   printf '%s\n' $MATCHFUNCS > "$ENGINE_FUNCS"
   # (2a, container) preprocess with the 2.9 cpp as diff96.sh does, compile with
