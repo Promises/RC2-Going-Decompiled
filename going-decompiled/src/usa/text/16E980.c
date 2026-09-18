@@ -2432,7 +2432,11 @@ extern long SpawnMoby(u64 classId);
 extern long func_002AC088(long moby);
 extern void BindMobyToParent(long child, long parent);
 extern void func_002AFA80(long moby, u32 color);
-extern void func_00283DA0(void *vec);                 /* TransformVectorMicroVu0 */
+/* VU0 macro-op building a 0x30-byte (3-quadword) matrix at `dst` from the quad at
+ * `src`: asm 0x283DA0 does `lqc2 vf1,0($5)` (SOURCE) then `sqc2 vf20/21/22` to
+ * 0/0x10/0x20($4) (DEST). NOT a vector transform - the old "TransformVectorMicroVu0"
+ * label is wrong and is not carried forward here. */
+extern void func_00283DA0(void *dst, const void *src);
 extern void func_002A1F20(long moby);
 extern void GetRandomVectorInSphere(Vec4 *out, f32 a, f32 b);
 extern f32  func_002835C0(f32 x);                     /* SqrtfVu0 */
@@ -2466,7 +2470,7 @@ long func_00273740(f32 launchAngle, f32 rate, long templateMoby, long mode,
         }
         *(Vec4 *)(c + 0x10) = *(Vec4 *)pos;   /* world position (16-byte lq/sq) */
         *(Vec4 *)(c + 0xf0) = *(Vec4 *)rot;   /* orientation (16-byte lq/sq) */
-        func_00283DA0(c + 0xc0);
+        func_00283DA0(c + 0xc0, c + 0xf0);   /* asm: $5 = c+0xF0, live from 0x273808 to the jal */
         if (templateMoby != 0) {
             *(f32 *)(c + 0x2c) =
                 *(f32 *)(*(int *)(c + 0x24) + 0x24) *

@@ -172,7 +172,13 @@ extern s32 func_003435D8(void *query);
 extern void func_002E6C28(s32 id, s32 a, s32 b);  /* USA PlayGlobalSound */
 extern s32  D_1ABDB8;                             /* USA D_1ABD48 (gp-rel gate) */
 extern void func_002B8898(s32 blocking);
-extern s32  func_002A0CC0(s32 handle);
+/* Takes TWO args: $4 = moby table base, $5 = count. $5 is live-in — verified in
+ * EU's own listing asm/eu/nonmatchings/text/19FC78/func_002A0CC0.s, where
+ * `daddu $16,$5,$0` at 002A0CCC reads $5 before anything writes it (the first
+ * write to $5 is the lui at 002A0CD8). The definition types the first parameter
+ * as `void *tableBase` (eu/text/19FC78.c:775) — kept as s32 here because this
+ * unit carries the value as an opaque handle. */
+extern s32  func_002A0CC0(s32 tableBase, s32 count);
 extern u8   D_001B1F10[];
 extern void FillMemory32(void *dst, u32 pattern, s32 len);
 extern void func_002B8688(void);
@@ -3249,7 +3255,8 @@ void func_002DFE20(void) {
 
 /* func_002DFF28: EU twin of USA func_002DFF68 — save-page byte accumulator:
  * when the menu block's save-page-active flag (+0x168) is set, add `amount` to
- * the running byte total (+0x16C) and commit via func_002A0CC0(handle); else
+ * the running byte total (+0x16C) and commit via func_002A0CC0(handle, amount);
+ * else
  * return 0. Matching arm stays INCLUDE_ASM; #else is the structure-exact model.
  * Word-verified vs USA func_002DFF68: identical modulo the block base (USA
  * g_menuScreenBlock -> EU D_001F0000+0x2840, +0x80) and the jal (func_002A1138
@@ -3263,7 +3270,12 @@ s32 func_002DFF28(s32 handle, s32 amount) {
         return 0;
     }
     *(s32 *)(blk + 0x16C) += amount;
-    return func_002A0CC0(handle);
+    /* EU asm 002DFF40: $5 (`amount`) is copied to $6 in the beqz delay slot and
+     * is never rewritten before the jal at 002DFF4C, so it still reaches
+     * func_002A0CC0 as the second argument. Dropping it left $5 holding
+     * garbage. ($4/`handle` is never written here either.) Derived from
+     * asm/eu/nonmatchings/text/1D5488/func_002DFF28.s, not from the USA twin. */
+    return func_002A0CC0(handle, amount);
 }
 #endif
 

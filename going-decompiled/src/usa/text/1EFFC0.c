@@ -1711,7 +1711,10 @@ extern void  func_002F85B8(void);
 extern void  func_002898E0(void);
 extern void  func_0026F750(s32, s32);
 extern void  func_0026F728(void);
-extern void  func_00132AF8(void);
+/* Takes ONE arg: the sound-command word. asm 0x132AF8 does `sw $4,0x0($29)` and
+ * hands that stack word to snd_QueueCommandToRing(0x16, 4, &word, 0, 0), so $4
+ * is consumed. Declared correctly at usa/text/1CA080.c:450. */
+extern void  func_00132AF8(s32 arg);
 extern void  SetDialogVoiceVolumesMax(s32 arg);
 extern void  snd_Pump(void);
 extern s32   PlayMobySound(s32 soundIdx, s32 flags, void *owner);
@@ -1838,7 +1841,11 @@ void EnterVendorMenu(s32 arg) {
     *(s32 *)(g_nVendorBuyQuantity + 0x3C) = 0;
     *(s32 *)(g_nVendorBuyQuantity + 0x40) = 0;
     *(s32 *)(g_nVendorBuyQuantity + 0x44) = 0;
-    func_00132AF8();
+    /* asm 002F9274 `addiu $4,$0,0x5D` is the last write to $4 before the jal at
+     * 002F92D8 -- the ROM passes the constant 0x5D. The sibling call site
+     * usa/text/1CA080.c:473 passes the same 0x5D. Dropped, $4 arrived holding
+     * %hi(D_1AD2B8), the address base left by the store two statements up. */
+    func_00132AF8(0x5D);
     SetDialogVoiceVolumesMax(0);
     snd_Pump();
 

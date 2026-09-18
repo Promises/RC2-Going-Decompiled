@@ -93,7 +93,10 @@ extern u8    D_001A71BF;  /* poll-request scratch byte (USA D_001A713F) */
 extern s32   D_001A7190;  /* EE-side load status (USA g_sndIopLoadStatus 0x1A7110, 0 = done) */
 extern s32   D_001A7514;  /* pending-read marker (USA D_001A7494) */
 extern s32   D_001A7518;  /* cached "load complete" flag (USA D_001A7498) */
-extern s32   func_001253A8(void);            /* direct libcdvd read-start fallback */
+/* sceCdRead(lbn, sectors, buf, mode) — the direct libcdvd read-start fallback.
+ * `mode` is DEREFERENCED (3 bytes: trycount/spindlctrl/datapattern), so the 4th
+ * argument must be live in $7 at the call. */
+extern s32   func_001253A8(s32 lbn, s32 sectors, s32 buf, void *mode);
 extern s32   func_00124B88(void);            /* direct-RPC load-status fallback */
 extern void  func_0011B500(void *dst, void *src); /* poll IOP load status into dst */
 
@@ -839,11 +842,16 @@ void func_001334F0(s32 arg0) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", func_00133518);
 #else
-s32 func_00133518(s32 arg0, s32 arg1, s32 arg2) {
+/* rmode is not used by the ring-command path — it exists only to be forwarded to
+ * sceCdRead. Naming it is what makes that forwarding a CONTRACT: the ROM passes
+ * $4-$7 straight through, and every caller (EU 0x002B871C / 0x002B8810 / the
+ * asm-only CdReadSync at 0x00133AA8) supplies a real sceCdRMode* in $7. */
+s32 func_00133518(s32 arg0, s32 arg1, s32 arg2, void *rmode) {
     s32 cmd[3]; /* the three command words for the 0x38 read request */
 
     if (D_001A750C == 0) {
-        return func_001253A8(); /* IOP driver down -> direct libcdvd */
+        /* IOP driver down -> direct libcdvd. Pass all four through, as the ROM does. */
+        return func_001253A8(arg0, arg1, arg2, rmode);
     }
     if (snd_CheckLoadInProgress(1) == 1) {
         return 0; /* a load is already in flight */

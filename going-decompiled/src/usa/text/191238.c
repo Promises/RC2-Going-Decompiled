@@ -2360,7 +2360,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BindSceneChunk)
 extern void func_0011AEA0(s32 mode);                      /* FlushCache */
 extern void DecompressWad(void *src, void *dest);
 extern void InitMobyFromClass(u32 *classMoby, s32 arg);
-extern u32 *SpawnMoby(void);
+/* Takes the moby CLASS ID. Definition usa/text/198FA0.c:2679
+ * `void *SpawnMoby(s32 classId)`; declared correctly at 1CA080.c:3445,
+ * 1EFFC0.c:1696 and 16E980.c:2431. */
+extern u32 *SpawnMoby(s32 classId);
 extern u16  g_nSceneTotalFrames;   /* 0x1B8800 (desc +0x40) */
 extern s32  DAT_001b8808;          /* 0x1B8808 (desc +0x48) */
 extern u16  g_nSceneCastCount;     /* 0x1B8804 (desc +0x44) */
@@ -2425,7 +2428,16 @@ void BindSceneChunk(void) {
                     flags34 = (u16)reservedMoby[0xd];
                     moby = reservedMoby;
                 } else {
-                    moby = SpawnMoby();
+                    /* asm 002946AC `lw $4,0x0($17)` loads classId, 002946D0
+                     * substitutes 0xD54, and 002946EC branches on the SAME
+                     * register into `jal SpawnMoby` at 00294708 with a nop
+                     * delay slot -- so the (possibly substituted) classId IS
+                     * the argument. It is reloaded every iteration, not
+                     * loop-carried. Dropped, cc1 emitted the guard branch under
+                     * `.set noreorder` with `move $4,$16` in the delay slot --
+                     * which executes on BOTH paths -- so SpawnMoby received the
+                     * reservedMoby POINTER where a class id belongs. */
+                    moby = SpawnMoby(classId);
                     flags34 = (u16)moby[0xd];
                 }
                 *(u16 *)((s32)moby + 0x32) = 0x1ff;
@@ -4112,7 +4124,6 @@ extern s32   func_00297B48(f32 x, f32 z, void *outX, void *outY, s32 progress); 
 extern void  func_00298918(f32 x, f32 z, void *outX, void *outY, s32 progress);  /* project hero fallback */
 extern void  func_00298AA8(f32 a, f32 b, f32 c, f32 d, f32 e);                   /* extra player marker */
 extern s32   func_00301430(void);                                               /* planet/area index */
-extern void  FUN_00115484(void *dst, s32 val, s32 len);                         /* memset */
 
 /* Angle constants are true-bit f32 (union reinterpret), NOT decimal literals or
  * integer literals — the .s carries these as floats in $f-registers. */
@@ -4188,7 +4199,7 @@ void MapDraw(int useHudPass, long applyScissor) {
         if (hudPass != 0) {
             Begin2dDrawBatch(0);
         }
-        FUN_00115484(&box, 0, 0x18);
+        memset(&box, 0, 0x18);
         box.h       = 400;
         box.x       = D_1A9600;
         box.y       = D_1A9604;
@@ -4592,7 +4603,7 @@ void MapDraw(int useHudPass, long applyScissor) {
                                 func_002904B0(lx - 2, ly, lx + lwi + 2, ly + lh + 8,
                                               0x40000000, 0);
                                 func_00298730(i, labelStr);
-                                FUN_00115484(&labelBox, 0, 0x18);
+                                memset(&labelBox, 0, 0x18);
                                 labelBox.x0 = (s16)ly;          /* +0x00 */
                                 labelBox.y0 = (s16)(ly + lh);   /* +0x02 */
                                 labelBox.x1 = (s16)lx;          /* +0x04 */

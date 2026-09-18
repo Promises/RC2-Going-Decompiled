@@ -2326,7 +2326,11 @@ extern u8  D_139638[];                /* EU 0x139638 dialog/story flag byte-arra
 extern u8  g_platinumBoltFlags[];     /* EU 0x19B2F8 per-platinum-bolt flag (case 8) */
 extern s32 g_cinematicUnlockedFlags;  /* EU 0x1397E8 cinematic bitfield (case 9) */
 extern s32 g_mapCurrentLevel;         /* EU current map level id (case 10) */
-extern s32 func_002FD068(s32 level);  /* EU map-progress predicate (case 10 callee) */
+extern s32 func_002FD068(s32 level, s32 bitIndex); /* EU map-progress predicate (case 10
+                                       * callee). EU asm 0x2FD068: `daddu $s0,$a1,$zero` in
+                                       * the delay slot of `jal LookupIdValuePair`, then
+                                       * `sllv $a0,$a0,$s0` -- $a1 IS the shift amount.
+                                       * Derived from the EU listing, not from USA. */
 #endif
 
 /* Per-weapon upgrade record (EU 0x139AA8 base; level field at +0xC). */
@@ -2382,7 +2386,10 @@ s32 EvaluateProgressCondition(s32 cond, s32 arg) {
         return (word & (1 << (arg & 0x1F))) != 0;
     }
     case 10:
-        return func_002FD068(g_mapCurrentLevel);
+        /* EU asm 0x29E49C: the call site sets only $4 (`lw $4,%lo(g_mapCurrentLevel)`),
+         * and NOTHING in EU EvaluateProgressCondition writes $a1 -- 0 writes, measured --
+         * so $a1 arrives as the incoming `arg`. */
+        return func_002FD068(g_mapCurrentLevel, arg);
     default: /* case 11 */
         return 0;
     }

@@ -143,7 +143,9 @@ extern u8  g_inventoryNewFlag[];      /* 0x1A7B38 per-item newly-acquired flag (
 extern u8  D_1395B8[];                /* 0x1395B8 dialog/story flag byte-array (case 6) */
 extern u8  g_platinumBoltFlags[];     /* 0x19B278 per-platinum-bolt collected flag (case 9) */
 extern s32 g_mapCurrentLevel;         /* 0x1C5150 current map level id (case 10) */
-extern s32 func_002FCEA0(s32 level);  /* map-progress predicate (case 10 callee) */
+extern s32 func_002FCEA0(s32 level, s32 bitIndex); /* map-progress predicate (case 10
+                                       * callee). asm 0x2FCEA0 saves $5 in the delay slot
+                                       * of the jal and uses it as the sllv SHIFT AMOUNT. */
 
 /* One per-level objective record (stride 0x28) walked by
  * UpdateLevelObjectiveStates / GatherActiveObjectives. The list is a flat array
@@ -2414,7 +2416,9 @@ s32 EvaluateProgressCondition(s32 cond, s32 arg) {
         return (word & (1 << (arg & 0x1F))) != 0;
     }
     case 10:
-        return func_002FCEA0(g_mapCurrentLevel);
+        /* asm 0x29E93C: only $4 is set in the delay slot; $5 is never written anywhere in
+         * EvaluateProgressCondition, so it reaches the callee as the incoming `arg`. */
+        return func_002FCEA0(g_mapCurrentLevel, arg);
     default: /* case 11 */
         return 0;
     }

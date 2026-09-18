@@ -236,7 +236,13 @@ typedef struct MenuState {
     s32 savePageBytes;   /* 0x16C - running byte counter for the save */
 } MenuState;
 extern MenuState D_1F27C0;
-extern s32 func_002A1138(s32 arg);
+/* Takes TWO args: $4 = moby table base, $5 = count. $5 is live-in — verified in
+ * asm/usa/nonmatchings/text/1A00F0/func_002A1138.s, where `daddu $16,$5,$0` at
+ * 002A1144 reads $5 before anything writes it. The 2-arg form is already
+ * declared correctly at usa/text/24D728.c:998; the definition types the first
+ * parameter as `void *tableBase` (usa/text/1A00F0.c:938) — kept as s32 here
+ * because this unit carries the value as an opaque handle. */
+extern s32 func_002A1138(s32 tableBase, s32 count);
 
 /* Galactic-map cache state (array-modelled for the explicit address form). */
 extern s32 D_25BA60[];        /* map upload sequence counter */
@@ -3305,7 +3311,8 @@ void func_002DFE60(void) {
 
 /* Galactic-Map save/load progress accumulator: while the save page is active
  * (D_1F27C0+0x168 != 0), advance its byte counter (+0x16C) by `amount` and
- * forward `handle` to func_002A1138; returns that result, or 0 if inactive.
+ * forward `handle` AND `amount` to func_002A1138; returns that result, or 0 if
+ * inactive.
  * Near-miss: our cc1 picks a branch-likely (bnel) shape and moves `amount`
  * differently from the original's plain-beqz + delay-slot move. */
 #ifndef TARGET_NATIVE
@@ -3317,7 +3324,11 @@ s32 func_002DFF68(s32 handle, s32 amount) {
         return 0;
     }
     D_1F27C0.savePageBytes += amount;
-    return func_002A1138(handle);
+    /* asm 002DFF80: $5 (`amount`) is copied to $6 in the beqz delay slot and is
+     * never rewritten before the jal at 002DFF8C, so it still reaches
+     * func_002A1138 as the second argument. Dropping it left $5 holding
+     * garbage. ($4/`handle` is never written here either.) */
+    return func_002A1138(handle, amount);
 }
 #endif
 
