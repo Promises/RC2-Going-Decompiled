@@ -4,7 +4,7 @@ SECTIONS
     _gp = 0x1AF070;
     cod_ROM_START = __romPos;
     cod_VRAM = ADDR(.cod);
-    .cod 0x100080 : AT(cod_ROM_START)
+    .cod 0x100080 : AT(cod_ROM_START) SUBALIGN(8)
     {
         FILL(0x00000000);
         cod_TEXT_START = .;
@@ -31,7 +31,7 @@ SECTIONS
         cod_RODATA_SIZE = ABSOLUTE(cod_RODATA_END - cod_RODATA_START);
     }
     cod_bss_VRAM = ADDR(.cod_bss);
-    .cod_bss (NOLOAD) :
+    .cod_bss (NOLOAD) : SUBALIGN(8)
     {
         FILL(0x00000000);
         cod_BSS_START = .;
@@ -170,7 +170,7 @@ SECTIONS
 
     text_ROM_START = __romPos;
     text_VRAM = ADDR(.text);
-    .text 0x26E780 : AT(text_ROM_START)
+    .text 0x26E780 : AT(text_ROM_START) SUBALIGN(8)
     {
         FILL(0x00000000);
         text_TEXT_START = .;
@@ -223,7 +223,7 @@ SECTIONS
         text_DATA_SIZE = ABSOLUTE(text_DATA_END - text_DATA_START);
     }
     text_bss_VRAM = ADDR(.text_bss);
-    .text_bss (NOLOAD) :
+    .text_bss (NOLOAD) : SUBALIGN(8)
     {
         FILL(0x00000000);
         text_BSS_START = .;

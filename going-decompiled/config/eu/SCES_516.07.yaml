@@ -68,7 +68,11 @@ segments:
     # (0x100080..0x1A7500), so core.bss infers exactly 0x6B400
     # (0x13C100..0x1A7500). bss_size here double-counts it.
     bss_size: 0x0
-    subalign: null
+    # SUBALIGN(8), not the input objects' own 16: Sony's toolchain emitted
+    # .text sh_addralign=8 (358/377 SDK objects, 19 at 4, none at 16) while
+    # mips-linux-gnu-as stamps 16, and a text/cod unit whose size is 8 mod 16
+    # (19 of USA's 40) slides every later unit +8 at 16 (#400, #405).
+    subalign: 8
     subsegments:
       - [0x000000, textbin, cod/000000] # .vutext
       # R24 EU REGION-AXIS PILOT (2026-06-13): retyped asm->c to stand up the
@@ -175,7 +179,11 @@ segments:
     start: 0x16E700
     vram: 0x0026E780
     bss_size: 0x0
-    subalign: null
+    # SUBALIGN(8), not the input objects' own 16: Sony's toolchain emitted
+    # .text sh_addralign=8 (358/377 SDK objects, 19 at 4, none at 16) while
+    # mips-linux-gnu-as stamps 16, and a text/cod unit whose size is 8 mod 16
+    # (19 of USA's 40) slides every later unit +8 at 16 (#400, #405).
+    subalign: 8
     subsegments:
       # PHASE A EU TEXT RE-TILE (2026-06-14): replicate the USA text carve tiling
       # at EU-mirror addresses so the 11 USA text c-units become objdiff-matchable
