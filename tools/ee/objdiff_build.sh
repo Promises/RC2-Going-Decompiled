@@ -72,7 +72,8 @@
 # retry loop, so that surfaces as a bare rc=1 the caller reads as their own edit
 # breaking the build. It alternates (a failed run leaves no object, so the run
 # after it succeeds) and only shows up when runs are seconds apart — a warm
-# ASMFIX_SHARED mirror — which is why a slow cold run gives a false all-clear.
+# ASMFIX_SHARED mirror, the default since #398 — which is why a slow cold run
+# used to give a false all-clear.
 #
 # GUARD ENFORCEMENT (#294). The guard token IS the function symbol; both this
 # script and unit_report.sh assume it and neither used to check it, so a guard
@@ -276,6 +277,44 @@ fi
 GFLAG96="-G8"; CC1EXTRA96="-fno-schedule-insns -fno-strict-aliasing"
 CPPDEF96="-D__GNUC_MINOR__=96 $CPPDEF_COMMON $MATCHDEFS"
 
+# WARM MIRROR BY DEFAULT (#398). asm_unit.sh rebuilds its VU0-fixed copy of the
+# whole nonmatchings tree for EVERY object unless ASMFIX_SHARED names a mirror
+# to reuse. This script forwarded the variable and never set it, so every
+# caller who did not know the trick built cold — FACT #7054: ~9.4 min cold vs
+# ~17 s warm per unit (ps2-w3-t391's numbers), a trick rediscovered by three
+# tasks and written down in none of them. When unset, default it to a
+# PER-WORKTREE mirror whose NAME carries a fingerprint of everything the mirror
+# is derived from (tools/ee/asmfix_stamp.sh: every .s in the region's
+# nonmatchings tree, vu0_fixup.sed, macro.inc, asm_unit.sh itself). A source
+# change therefore selects a new mirror path — built cold once, by asm_unit.sh,
+# and marked `.built` — instead of reusing a stale one; an unchanged tree
+# reuses the warm mirror. The path is under $ROOT, i.e. this worktree's alone
+# (mounted as /work — the CONTAINER path is what asm_unit.sh sees, #391).
+# Per-worktree, not per-machine: the VM has no enforced exclusivity and two
+# tasks' builds do run at once. Superseded mirrors of the same region are
+# pruned INSIDE the step-(1) container, never on the host (host-side deletion
+# of a container-written path is the $OBJ96 hazard above).
+# An explicitly set ASMFIX_SHARED is honoured verbatim and NOT fingerprinted:
+# the opt-in keeps its bare-`.built` behaviour, so a task's pinned mirror is
+# neither validated nor touched.
+# BOUND: the stamp covers the mirror's INPUTS, not its contents. A mirror
+# edited after `.built` is reused as-is — validating its contents costs the
+# cold build it exists to avoid. And it is safe only for SEQUENTIAL runs in one
+# worktree (asm_unit.sh's own constraint); two runs straddling an asm-tree
+# edit can prune each other's mirror.
+ASMFIX_DIR="tools/ee/.asmfix"
+if [ -z "${ASMFIX_SHARED:-}" ]; then
+  ASMFIX_STAMP="$(sh tools/ee/asmfix_stamp.sh "$REGION")"
+  ASMFIX_MIRROR="mirror-$REGION-$ASMFIX_STAMP"
+  ASMFIX_SHARED="/work/$ASMFIX_DIR/$ASMFIX_MIRROR"
+  ASMFIX_PRUNE="mkdir -p $ASMFIX_DIR; find $ASMFIX_DIR -mindepth 1 -maxdepth 1 -name 'mirror-$REGION-*' ! -name $ASMFIX_MIRROR -exec rm -rf {} +"
+  if [ -f "$ASMFIX_DIR/$ASMFIX_MIRROR/.built" ]; then ASMFIX_STATE=warm; else ASMFIX_STATE=cold; fi
+else
+  ASMFIX_PRUNE=":"
+  ASMFIX_STATE="explicit, not fingerprinted"
+fi
+export ASMFIX_SHARED
+
 # Compile the pristine *target* C and the *base* C (your decomp / override).
 # Each cc1 emits a .s; asm_unit.sh assembles it (with the VU0 fixup mirror) into
 # one object. Then:
@@ -288,6 +327,7 @@ CPPDEF96="-D__GNUC_MINOR__=96 $CPPDEF_COMMON $MATCHDEFS"
 docker --context "$EE_CTX" run --rm -e ASMFIX_SHARED -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work; WIBO=/usr/local/bin/wibo; G=tools/ee/cc/lib/gcc-lib/ee/2.9-ee-991111
   rm -f $OBJ96
+  $ASMFIX_PRUNE
   \$WIBO \$G/cpp.exe $CPPDEF $INC $TGTC $W/target.i
   \$WIBO \$G/cc1.exe -quiet -O2 -G0 $W/target.i -o $W/target.s
   sh tools/ee/asm_unit.sh $REGION /work/$W/target.s /work/$EXPECTED
@@ -347,5 +387,6 @@ elif [ "$REGION_CLASS" = engine ]; then
 else
   echo "[objdiff_build] engine96 -> (not built: sdk unit)"
 fi
+echo "[objdiff_build] asmfix mirror -> $ASMFIX_SHARED ($ASMFIX_STATE)"
 echo "[objdiff_build] target -> $EXPECTED"
 echo "[objdiff_build] sdk29  -> $OBJ"
