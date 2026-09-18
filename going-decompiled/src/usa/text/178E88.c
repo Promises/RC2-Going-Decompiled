@@ -3087,4 +3087,8 @@ void func_002810C0(void) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002812A8);
+/* func_002812A8 moved OUT of this unit by the 2026-09-15 re-split (task #314).
+ * The old boundary put this unit's end 0x80 too high, severing the handwritten
+ * routine at 0x2812A8 from the delay-slot nop of its own closing
+ * `bnez $0,func_002812A8` at 0x281324. Both halves now live together in the
+ * asm unit text/1812A8. */

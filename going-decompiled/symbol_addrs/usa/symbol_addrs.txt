@@ -2085,6 +2085,7 @@ func_0027FCB0 = 0x0027FCB0; // type:func (TILE A real next start after pad 0x002
 func_00280CD0 = 0x00280CD0; // type:func size:0x10 (TILE A epilogue pad)
 func_00281010 = 0x00281010; // type:func size:0x10 (TILE A epilogue pad)
 func_00281020 = 0x00281020; // type:func (TILE A real next start after pad 0x00281010)
+func_002823B8 = 0x002823B8; // type:func (TILE A real prologue - the 0x1823B8 to 0x182338 boundary move (task #314) starts the c unit here so func_002823B8 0x2823B8..0x28278F is one piece - without the pin splat orphans the head and emits NOTHING for 0x2823B8..0x282437 - observed 2026-09-15, same failure the 0x278EC0 pin above was added for)
 func_00282790 = 0x00282790; // type:func size:0x8 (TILE A epilogue pad)
 func_00282798 = 0x00282798; // type:func (TILE A real next start after pad 0x00282790)
 func_00282E50 = 0x00282E50; // type:func size:0x18 (TILE A epilogue pad)

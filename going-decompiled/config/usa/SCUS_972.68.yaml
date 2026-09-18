@@ -257,8 +257,27 @@ segments:
       #   Starting the c unit at the real 0x278EC0 prologue makes it whole; name
       #   pinned text/178E88 so the hand-written .c is preserved.
       - [0x178E40, c, text/178E88]   # TILE A render/draw-2D A (0x278EC0..0x2812A7)
-      - [0x1812A8, asm, text/1812A8] # TILE A VU1 sphere-map island - handwritten (0x2812A8..0x2823B7)
-      - [0x1823B8, c, text/1823B8]   # TILE A render/draw-2D B (0x2823B8..0x2831F4)
+      # RE-SPLIT (2026-09-15, task #314 SPLIT-1): both boundaries below were
+      #   0x80 too HIGH. The carve author computed the ROM offset as
+      #   vaddr - 0x100000; this segment's real delta is vaddr - 0x100080
+      #   (start 0x16E980 / vram 0x26EA00), so each start landed 0x80 past the
+      #   function it names. Both were live cuts:
+      #     0x1812A8 -> 0x181228 (vaddr 0x281328 -> 0x2812A8): the old boundary
+      #       SEVERED A BRANCH FROM ITS DELAY SLOT. func_002812A8 (0x80) ends
+      #       0x281324 `bnez $0,func_002812A8` and its delay-slot nop at
+      #       0x281328 became the next unit's whole bogus func_00281328 (0x4).
+      #     0x1823B8 -> 0x182338 (vaddr 0x282438 -> 0x2823B8): the old boundary
+      #       cut func_002823B8 in half. Three live deps crossed the seam:
+      #       $f1 written 0x282434 / consumed 0x282444, the 0x958(sp) slot
+      #       written 0x282410 / reloaded 0x282438, and 0x282414
+      #       `bnez $v0,.L00282750` branching past it.
+      #   Unit NAMES are deliberately unchanged (same convention as the
+      #   0x178E88 -> 0x178E40 move above) so the hand-written .c files and
+      #   their INCLUDE_ASM paths are preserved.
+      #   Re-derive: tools/ee/.t314/audit_carve_comments.py <config> -> the line
+      #   is reported DISAGREE iff its comment vaddr != rom + segment delta.
+      - [0x181228, asm, text/1812A8] # TILE A VU1 sphere-map island - handwritten (0x2812A8..0x2823B7)
+      - [0x182338, c, text/1823B8]   # TILE A render/draw-2D B (0x2823B8..0x2831F4)
       - [0x183178, c, text/183178]   # -G8 sub-TU (0x2831F8..0x2833C7, 12 fns)
       # RANKED-CARVE-PIPELINE TIER-1-A (2026-06-14): text/188858 -
       #   the .text mid 2 tile (vaddr 0x2888D8..0x29086F, ~108 fns) retyped

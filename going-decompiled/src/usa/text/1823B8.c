@@ -27,14 +27,29 @@ _Static_assert(__builtin_offsetof(UiSpritePacket, tex1)  == 0x80, "tex1");
 _Static_assert(__builtin_offsetof(UiSpritePacket, clamp) == 0x88, "clamp");
 #endif
 
-/* MIS-SPLIT fragment (not a real function entry): the glabel sits mid-routine,
- * on the `lw $4,0x958($29)` that follows the prologue of the large UI-sprite
- * batch builder whose stack-restore epilogue (addiu $sp,$sp,0xA00) trails just
- * past the splat boundary. The body is GS/VIF packet construction (sq/lq copies,
- * many callee-saves, div/mfhi loop) over the 0xA00-byte frame — tier-3 hardware.
- * Cannot be expressed as a standalone C function from this entry point; leave as
- * INCLUDE_ASM until the splat boundary is corrected. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_00282438);
+/* DrawMotionTrailRibbon (0x2823B8): emits a ribbon of billboard quads along a
+ * ring of recorded positions/orientations (f12 width; verts a0, count a1,
+ * positions a2, quats a3, curIdx t0, frames t1, colourStart t2, colourEnd t3).
+ * Returns early with fewer than 2 frames; otherwise walks the ring backwards
+ * (idx = (idx + frames - 1) % frames), rebuilds the model matrix per frame,
+ * lerps the vertex colour from colourStart to colourEnd, and emits each quad
+ * through ProjectAndClipBillboardQuad (0x281540) with the flag set. Callers:
+ * DrawElectricArcTrailRibbon 0x31E138 and 0x326920 (slide-enemy arc trail).
+ * Identity from NOTE #5681 (plate review against the ROM); an earlier comment
+ * here called it a "UI-sprite batch builder", which was wrong.
+ *
+ * WHOLE as of the 2026-09-15 re-split (task #314): this unit's boundary was
+ * 0x80 too high, so the entry prologue `addiu $sp,$sp,-0xA00` at 0x2823B8 sat
+ * in the PRECEDING asm unit and this unit began mid-routine at 0x282438, on
+ * the `lw $4,0x958($29)` that reloads a slot stored at 0x282410. Three live
+ * dependencies crossed that seam ($f1 written 0x282434 / consumed by
+ * `div.s $f22,$f1,$f0` at 0x282444, the 0x958(sp) slot, and
+ * `bnez $v0,.L00282750` at 0x282414 whose target is now interior to this
+ * function). The body is GS/VIF packet construction (sq/lq copies, many
+ * callee-saves, div/mfhi loop) over the 0xA00-byte frame — tier-3 hardware,
+ * so it stays INCLUDE_ASM; it is now at least a whole function rather than a
+ * fragment. */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_002823B8);
 
 /* MIS-SPLIT fragment: a bare `addiu $29,$29,0x100; nop` stack-restore tail that
  * bled past the boundary of the preceding function — not a real function entry.
