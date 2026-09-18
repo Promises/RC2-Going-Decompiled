@@ -85,10 +85,20 @@
 #   3. the engine arm compiled but emitted no `.ent <token>` for the guard.
 #
 # Single ops only; the compound commands are the necessary `docker run`s.
-# Requires the colima `ee-x86` VM + `ee-build` image (see CLAUDE.md).
+# Requires a colima VM carrying the `ee-build` image (see CLAUDE.md).
+#
+# WHICH VM (#401). Two equal build VMs exist, `ee-x86` and `ee-x86-b` (same
+# ee-build image ID, docker-save/load'd rather than rebuilt). EE_DOCKER_CONTEXT
+# selects the docker context for every `docker run` below; unset it and the
+# build goes to `colima-ee-x86` exactly as before. The context is passed
+# explicitly on every invocation, never inherited from `docker context use` or
+# docker's own DOCKER_CONTEXT, so a slot's builds cannot drift to whichever VM
+# someone last selected interactively. A context that does not exist fails the
+# first `docker run` (rc 1, "context ... not found") — there is no fallback.
 set -euo pipefail
 REGION="$1"; UNIT="$2"; BASECFILE="${3:-going-decompiled/src/$REGION/$UNIT.c}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$ROOT"
+EE_CTX="${EE_DOCKER_CONTEXT:-colima-ee-x86}"
 
 EXPECTED="going-decompiled/build/$REGION/expected/$UNIT.o"
 OBJ="going-decompiled/build/$REGION/obj/$UNIT.o"
@@ -275,7 +285,7 @@ CPPDEF96="-D__GNUC_MINOR__=96 $CPPDEF_COMMON $MATCHDEFS"
 #     The base KEEPS the `.NON_MATCHING` markers for functions still on INCLUDE_ASM
 #     — that is exactly how objdiff knows they aren't decompiled yet.
 # (1) target + sdk29 base — byte-for-byte the pre-t276 gate.
-docker --context colima-ee-x86 run --rm -e ASMFIX_SHARED -v "$ROOT":/work ee-build sh -c "
+docker --context "$EE_CTX" run --rm -e ASMFIX_SHARED -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work; WIBO=/usr/local/bin/wibo; G=tools/ee/cc/lib/gcc-lib/ee/2.9-ee-991111
   rm -f $OBJ96
   \$WIBO \$G/cpp.exe $CPPDEF $INC $TGTC $W/target.i
@@ -297,7 +307,7 @@ if [ "$BUILD96" = 1 ]; then
   printf '%s\n' $MATCHFUNCS > "$ENGINE_FUNCS"
   # (2a, container) preprocess with the 2.9 cpp as diff96.sh does, compile with
   # the native 2.96 cc1 through its bundled glibc-2.3.6 loader.
-docker --context colima-ee-x86 run --rm -v "$ROOT":/work ee-build sh -c "
+docker --context "$EE_CTX" run --rm -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work; WIBO=/usr/local/bin/wibo; G=tools/ee/cc/lib/gcc-lib/ee/2.9-ee-991111
   LD96='$CC296/ld-2.3.6.so --library-path $CC296'
   \$WIBO \$G/cpp.exe $CPPDEF96 $INC $BASECFILE $W/base96.i
@@ -307,7 +317,7 @@ docker --context colima-ee-x86 run --rm -v "$ROOT":/work ee-build sh -c "
   python3 tools/ee/engine_swap_fix.py "$W/base96.s"
   python3 tools/ee/mtc1_fixup.py "$W/base96.s"
   # (2c, container) assemble at -G8, same placeholder strip as the sdk29 base.
-docker --context colima-ee-x86 run --rm -e ASMFIX_SHARED -v "$ROOT":/work ee-build sh -c "
+docker --context "$EE_CTX" run --rm -e ASMFIX_SHARED -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work
   sh tools/ee/asm_unit.sh $REGION /work/$W/base96.s /work/$OBJ96 $GFLAG96
   mips-linux-gnu-strip $OBJ96 -N gcc2_compiled. -N __gnu_compiled_c -N dummy-symbol-name
