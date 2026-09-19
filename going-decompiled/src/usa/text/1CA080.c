@@ -1,11 +1,10 @@
 #include "common.h"
 
-#ifdef TARGET_NATIVE
 /* Local 16-byte VU-lane vector for the structure-exact #else bodies (common.h
-   doesn't pull in vec.h). Byte-neutral: a typedef emits no code and the
-   matching (INCLUDE_ASM) arm never references it. */
+   doesn't pull in vec.h). Byte-neutral: a typedef emits no code. Unconditional
+   (was #ifdef TARGET_NATIVE) so a MATCH_<fn>-promoted body can be compiled on
+   the engine96 arm (task #468). */
 typedef struct Vec4 { f32 x, y, z, w; } __attribute__((aligned(16))) Vec4;
-#endif
 
 /*
  * text/1CA080 — front-end / pause-menu screens band, part A (vaddr
@@ -29,12 +28,34 @@ typedef struct Vec4 { f32 x, y, z, w; } __attribute__((aligned(16))) Vec4;
  * callee-save wall (every function saving 2+ GPRs — the later cc1 packs save
  * slots 8-byte vs our 16-byte), switch/jtbl functions (splat jtbl reloc gap),
  * and assorted register-coloring / reload-artifact near-misses.
+ *
+ * Task #468 (2026-09-20) promotion sweep — every #else arm measured on BOTH the
+ * engine96 arm (MATCH_<fn> guards, cc1 2.96-001003-1) and, as plain C, on this
+ * unit's 2.9 arm; each arm carries its two percentages, residual class and
+ * first differing row. Unit-wide findings:
+ *  - OBJECT-SIZING is the dominant lever, not the compiler: the ROM addresses
+ *    ~30 small scalars with a compiler-split lui/%lo pair (ROM_SPLIT below)
+ *    and ~25 more with the assembler macro (`.extern X, 16` list); fixing the
+ *    declarations moved 35 arms up and produced the 4 new byte-exact matches
+ *    (func_002D3388, func_002D3B88, func_002D4370, ListScrollerSelectNext —
+ *    all on the 2.9 arm; the engine96 arm closed none).
+ *  - The 2.9 arm is the better instrument for this TU: it reproduces the ROM's
+ *    large-displacement split (& ~0x7fff), delay-slot fills, register choice
+ *    for the split high half and block layout; 39 of the 75 remaining arms
+ *    differ from the ROM on 2.9 ONLY by the 16-byte callee-save slots
+ *    (PACKED-SAVE), which no 2.9 flag reproduces. The engine96 arm packs the
+ *    slots but changes the high-half register (SPLIT-HIREG, 14 arms), the
+ *    prologue/epilogue emission order (SCHED-TIEBREAK, FACT #7345), if-converts
+ *    `if (c) r = 1` to sltu and `c ? -1 : 0` to movn where the ROM branches
+ *    (IFCONV), and emits the large-displacement macro (BIGDISP-SPLIT).
+ *  - g_guiInstance is absolute in 35 functions and gp-relative in 5 of this
+ *    band (g_swapGadgetItemIndex 14/1, g_frameCounter 3/1): the band spans more
+ *    than one original TU; one declaration cannot serve both.
  */
 
 /* cc1-small / assembler-absolute symbols (see header). */
 __asm__(".extern g_guiInstance, 16");
 __asm__(".extern g_padButtonsPressed, 16");
-__asm__(".extern D_1F27C0, 16");
 __asm__(".extern D_1A7318, 16");
 __asm__(".extern D_2617C0, 16");
 __asm__(".extern D_0025BA70, 16");
@@ -64,6 +85,82 @@ __asm__(".extern D_1ABA50, 16");
 __asm__(".extern D_1ABA54, 16");
 __asm__(".extern D_1ABA58, 16");
 __asm__(".extern D_1ABA4C, 16");
+/* Task #468 (tools/ee/.t468/05_symbol_shapes.txt): the ROM addresses these
+ * absolutely with the assembler-macro shape ($at store / destination-reuse load)
+ * while a <=8-byte extern would go gp-relative here. A few are MIXED in the ROM
+ * (gp-relative in a minority of this band's functions — g_swapGadgetItemIndex
+ * 14 abs/1 gp, g_frameCounter 3/1, g_cinematicExitPending 3/2): the band spans
+ * more than one original TU and the minority sites cannot be served by the
+ * same declaration; the majority form is taken. */
+__asm__(".extern D_1A7A10, 16");
+__asm__(".extern D_1A7BF2, 16");
+__asm__(".extern D_1A7BF4, 16");
+__asm__(".extern D_1A7BFB, 16");
+__asm__(".extern D_1A7C06, 16");
+__asm__(".extern D_1A7C07, 16");
+__asm__(".extern D_1A7C09, 16");
+__asm__(".extern D_1A7C0A, 16");
+__asm__(".extern D_1AB9DC, 16");
+__asm__(".extern g_equippedArmor, 16");
+__asm__(".extern g_nGameState, 16");
+__asm__(".extern g_screenWidth, 16");
+__asm__(".extern g_screenHeight, 16");
+__asm__(".extern g_frameCounter, 16");
+__asm__(".extern g_cinematicExitPending, 16");
+__asm__(".extern g_swapGadgetItemIndex, 16");
+__asm__(".extern D_1A7908, 16");
+__asm__(".extern D_1A790C, 16");
+__asm__(".extern D_1ABA71, 16");
+__asm__(".extern D_1ABA72, 16");
+__asm__(".extern D_1ABA73, 16");
+__asm__(".extern D_1ABA74, 16");
+__asm__(".extern D_1ABA75, 16");
+__asm__(".extern D_1ABA76, 16");
+__asm__(".extern D_1ABA77, 16");
+__asm__(".extern g_cameraCallbackCount, 16");
+__asm__(".extern g_nLevelExitRequested, 16");
+
+/* ROM-split externs (task #468, tools/ee/.t468/05_symbol_shapes.txt): in the ROM
+ * every reference to these is a compiler-split lui/%lo pair — the high half in
+ * its own register, often with other instructions scheduled between — so the
+ * ROM's compiler did not treat them as -G8 small data. For a <=8-byte extern
+ * cc1 (2.9 and 2.96 alike) instead emits the one-instruction macro, which the
+ * assembler can only expand through the destination register or $at. The
+ * attribute takes the object out of cc1's small-data class so it splits the
+ * address the way the ROM does. Declarations only: no code, no definition. */
+#define ROM_SPLIT __attribute__((section(".data")))
+extern s32 g_padButtonsPressed ROM_SPLIT;
+extern s32 g_padButtonsHeld ROM_SPLIT;
+extern s16 g_fileLoadState ROM_SPLIT;
+extern u8 g_skillPointFlags ROM_SPLIT;
+extern u8 *g_pNextMenuScreen ROM_SPLIT;
+extern u8 *g_pCurrentMenuScreen ROM_SPLIT;
+extern s32 g_nLevelSelectListCount ROM_SPLIT;
+extern f32 g_cameraProjScale ROM_SPLIT;
+extern s32 g_mapCurrentLevel ROM_SPLIT;
+extern s32 g_lastMenuScreenId ROM_SPLIT;
+extern s32 D_259E34 ROM_SPLIT;
+extern s32 D_259C24 ROM_SPLIT;
+extern s32 D_25E264 ROM_SPLIT;
+extern s32 D_25E444 ROM_SPLIT;
+extern s32 D_25C074 ROM_SPLIT;
+extern s32 D_25B5D8 ROM_SPLIT;
+extern s32 D_25C940 ROM_SPLIT;
+extern s32 D_25C8C4 ROM_SPLIT;
+extern s32 D_25CB30 ROM_SPLIT;
+extern s32 D_25CABC ROM_SPLIT;
+extern s32 D_25CCC8 ROM_SPLIT;
+extern u8 *D_25C004 ROM_SPLIT;
+extern u8 *D_25C1F0 ROM_SPLIT;
+extern u8 *D_25C388 ROM_SPLIT;
+extern u8 *D_25C520 ROM_SPLIT;
+extern u8 *D_25C6B8 ROM_SPLIT;
+extern u8 D_1395E9 ROM_SPLIT;
+extern u8 D_2617C0 ROM_SPLIT;
+extern u8 D_259CC0 ROM_SPLIT;
+extern u8 D_2615D8 ROM_SPLIT;
+extern u8 D_261678 ROM_SPLIT;
+extern u8 D_261730 ROM_SPLIT;
 
 /* Singleton GUI-manager instance (null until the GUI is up). The wrappers here
  * only ever forward `instance + fixed-widget-offset` to widget methods. */
@@ -126,9 +223,6 @@ extern s32 func_002D67A0(s32 a, void *b);
 extern s32 D_1ABA28;
 extern s32 D_1ABA2C;
 extern char D_0025BA70[];
-
-/* Front-end screen-state blob slice at D_1F27C0 (menu reciprocal/clear scratch). */
-extern u8 D_1F27C0[];
 
 /* Global input/UI flags object; the menu code reads the flag word at +0x1C4. */
 extern u8 D_138180[];
@@ -203,6 +297,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA3E8);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA618);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 36.59% -> STRUCTURAL,
+ * first differing row @1: ROM `swc1 $f21,72(sp)` vs `swc1 $f21,64(sp)`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 34.88% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-80` vs `addiu sp,sp,-112`. */
 extern s32 FloatToInt(f32 v);
 extern f32 IntToFloat(s32 v);
 extern void Vec4SubVu0(void *dst, void *a, void *b);
@@ -276,6 +374,10 @@ void func_002CA998(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", ListScrollerSelectPrev);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 78.67% -> STRUCTURAL,
+ * first differing row @3: ROM `daddu v1,v0,zero` vs `bgtz v0,L`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 85.67% -> STRUCTURAL, first differing row @3: ROM `daddu v1,v0,zero` vs `bgtz v0,L`. */
 /* TODO(match): functional equivalent - not byte-exact; EE 64-bit sign-extend
  * `daddu` copy + commutative-addu operand order not reproduced by cc1.
  * Returns the ADDRESS of the landed (non-empty) entry: the asm leaves
@@ -300,14 +402,9 @@ s32 ListScrollerSelectPrev(s32 *list) {
 /* List-scroller "select next": increment the cursor (list[1]); when it passes
  * the limit (list[0]) wrap to 0, then skip forward over empty (==0) slots in the
  * entry array (list+0xC). Returns the entry value the cursor lands on.
- * Near-miss (99.33%): single commutative-`addu` operand order differs — the
- * original forms `entries_base + idx<<2` (loop-invariant base first); cc1 emits
- * `idx<<2 + entries_base`. Preserved as portable C. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", ListScrollerSelectNext);
-#else
-/* TODO(match): functional equivalent - not byte-exact; commutative-addu operand
- * order (base-first vs index-first) not reproduced by cc1. */
+ * Byte-exact (task #468): the entry read is spelled as a byte offset
+ * (`(u8 *)entries + (idx << 2)`) so cc1 forms `addu base, idx<<2` in the
+ * ROM's operand order; the `entries[idx]` spelling swaps the operands. */
 s32 ListScrollerSelectNext(s32 *list) {
     s32 limit = list[0];
     s32 *entries = list + 3;
@@ -318,11 +415,10 @@ s32 ListScrollerSelectNext(s32 *list) {
             idx = 0;
         }
         list[1] = idx;
-        entry = entries[idx];
+        entry = *(s32 *)((u8 *)entries + (idx << 2));
     } while (entry == 0);
     return entry;
 }
-#endif
 
 /* GUI wrapper: forward the bestiary widget to its hide/show method. */
 s32 func_002CAA38(void) {
@@ -350,6 +446,10 @@ extern void func_00280120(s32 x, s32 y, u64 color, char *str, s64 wrap);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CAAA8);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 33.74% -> STRUCTURAL,
+ * first differing row @1: ROM `(none)` vs `sd ra,24(sp)`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 23.24% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-64`. */
 /* TODO(match): functional equivalent - not byte-exact; 3-GPR packed-save frame. */
 s32 func_002CAAA8(s32 *p) {
     s32 cx = p[6];   /* p[0x18] */
@@ -374,6 +474,10 @@ s32 func_002CAAA8(s32 *p) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CAB50);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 85.13% -> STRUCTURAL: `la`+offset shape and prologue order are reproduced by the index form `s32 v = -1; for (i = 0x13; i >= 0; i--) block[i + 0x5B] = v;` (tools/ee/.t468/probe/la3.c h), the residual is then the loop body `sw; addiu v1,-1` vs cc1 `addiu; sw` = ORDER-ONLY (SCHED-TIEBREAK, FACT #7345),
+ * first differing row @1: ROM `(none)` vs `addiu v1,zero,19`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 77.87% -> STRUCTURAL, first differing row @1: ROM `(none)` vs `addiu v1,zero,19`. */
 void func_002CAB50(void) {
     s32 *p = (s32 *)(g_menuScreenBlock + 0x1BC);
     s32 i = 0x13;
@@ -386,15 +490,21 @@ void func_002CAB50(void) {
 #endif
 
 /* Store a reciprocal into the menu scratch: [0x1C0]=1.0f, [0x1C8]=0, [0x1C4]=1/x.
- * Near-miss: cc1 anchors the store base at +0x1C0 (CSE) instead of keeping the
- * symbol address as the base with immediate offsets, as the original does.
- * Preserved as portable C. */
+ * Instruction-exact on both arms once the stale alias D_1F27C0 (== g_menuScreenBlock)
+ * was retired, but the ROM carries TWO nops between `addiu v0` and `div.s $f12,$f0,$f12`
+ * (0x2CABA0/A4 — a compiler-inserted mtc1->div.s hazard pad; the unit has 12 other
+ * mtc1 sites with 2 instructions between and NO pad, so it is not an assembler rule).
+ * Neither arm emits them: SCHED-NOP-PAD. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CAB90);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 81.82% -> SCHED-NOP-PAD,
+ * first differing row @4: ROM `(none)` vs `swc1 $f0,448(v0)`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 81.82% -> DSLOT-FILL, first differing row @4: ROM `sll zero,zero,0x0` vs `(none)`. */
 void func_002CAB90(float x) {
     float one = 1.0f;
-    u8 *p = D_1F27C0;
+    u8 *p = g_menuScreenBlock;
     *(float *)(p + 0x1C0) = one;
     *(s32 *)(p + 0x1C8) = 0;
     *(float *)(p + 0x1C4) = one / x;
@@ -411,6 +521,10 @@ void func_002CAB90(float x) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CABC0);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 42.42% -> STRUCTURAL,
+ * first differing row @2: ROM `lui v0,0x0  [HI16 0x001B5180]` vs `lui v0,0x0  [HI16 0x001B52C0]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 48.85% -> STRUCTURAL, first differing row @2: ROM `lui v0,0x0  [HI16 0x001B5180]` vs `lui v1,0x0  [HI16 0x001B52C0]`. */
 void func_002CABC0(void) {
     s32 i;
     g_cameraPos[0] = 256.0f;
@@ -445,6 +559,10 @@ void func_002CABC0(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", RequestMenuScreenChange);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 59.52% -> STRUCTURAL,
+ * first differing row @1: ROM `(none)` vs `lui v0,0x0  [HI16 0x001F27C0]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 65.06% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-64`. */
 extern s32 GetPrevGameState(void);
 extern s32 GetMenuOverlayMode(void);
 extern void func_00132AF8(s32 arg);
@@ -535,6 +653,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", CaptureScreenTo
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", RestoreScreenFromVram);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 57.71% -> FRAME-SIZE,
+ * first differing row @0: ROM `addiu sp,sp,-160` vs `addiu sp,sp,-144`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 78.42% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-160` vs `addiu sp,sp,-176`. */
 extern s32  g_screenHeight;
 extern s32  g_vramDynamicBase;
 extern u8   g_renderLayerMask[];
@@ -580,6 +702,10 @@ void RestoreScreenFromVram(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CAFD8);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 57.67% -> STRUCTURAL,
+ * first differing row @0: ROM `(none)` vs `lui at,0x4900`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 68.58% -> STRUCTURAL, first differing row @0: ROM `addiu sp,sp,-16` vs `(none)`. */
 void func_002CAFD8(void) {
     *(float *)(D_1B8FC0 + 0x21C) = 524288.0f;
     *(float *)(D_1B8FC0 + 0xB0) = 0.62f;
@@ -613,6 +739,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CB560);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", TickFrontEndScreenIdle);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 74.43% -> STRUCTURAL,
+ * first differing row @5: ROM `(none)` vs `jal L  [26 0x002FCFC8]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 67.27% -> SCHED-TIEBREAK, first differing row @1: ROM `sd s1,8(sp)` vs `(none)`. */
 extern void func_002FCFC8(void);
 extern void func_00283460(void *dst, void *src, s32 len);
 extern void func_0027A550(void);
@@ -692,6 +822,10 @@ extern void MenuScreenCommitTransition(void);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", TickFrontEndScreenMachine);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 70.66% -> STRUCTURAL,
+ * first differing row @3: ROM `addiu a3,v0,0  [LO16 0x001F27C0]` vs `addiu s0,v0,0  [LO16 0x001F27C0]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 79.65% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. */
 s32 TickFrontEndScreenMachine(void) {
     u8 *mb = g_menuScreenBlock;
     s32 counter;
@@ -769,15 +903,19 @@ void func_002CBA40(void) {
  * dead conditional store (p[0x4]=1 then unconditional =0) the later cc1
  * load-PRE keeps but ours eliminates — preserved as portable C. */
 extern void DrawFullScreenTint(s32 r, s32 g, s32 b, s32 a);
-#ifndef TARGET_NATIVE
 /* NEAR-MISS (91%, not byte-exact): real C reaches this far — the body (bnel
  * branch-likely dead store, address-rematerialise-after-call, final-store order)
  * all match — but cc1 schedules the callee-save `sd ra` after only ONE of the
  * three zeroed-arg `move`s for DrawFullScreenTint, where the original interleaves
  * it after two (`daddu a0; daddu a1; sd ra; daddu a2`). That frame-save
  * scheduling slot has no C-level lever, so this stays INCLUDE_ASM. */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", MenuScreenCommitTransition);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 32.17% -> STRUCTURAL,
+ * first differing row @2: ROM `(none)` vs `sd s0,0(sp)`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 32.57% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-48`. */
 /* TODO(match): functional equivalent - not byte-exact; the original keeps a dead
  * conditional store (block[0x4]=1 then unconditionally =0) the later cc1 load-PRE
  * retains but ours eliminates. The transient block[0x4]=1 has no observable effect
@@ -816,6 +954,10 @@ extern void func_00294CD0(s32 arg);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CBD68);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 56.44% -> STRUCTURAL,
+ * first differing row @3: ROM `addiu a0,v0,0  [LO16 0x001F27C0]` vs `addiu s0,v0,0  [LO16 0x001F27C0]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 68.92% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. */
 void func_002CBD68(void) {
     u8 *mb = g_menuScreenBlock;
     s32 sub;
@@ -871,6 +1013,10 @@ s32 IsLevelListEntryEnabled(s32 idx) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", LevelSelectListHandleInput);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 75.64% -> STRUCTURAL,
+ * first differing row @1: ROM `lui v0,0x0  [HI16 0x002109F0]` vs `sd s4,32(sp)`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 76.14% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-64` vs `addiu sp,sp,-128`. */
 extern s32 g_nLevelSelectListCount;
 extern u8 g_abLevelAvailableFlags[];
 extern u8 g_levelSelectEntries[];
@@ -922,6 +1068,10 @@ s32 LevelSelectListHandleInput(s32 flags) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", LevelSelectListRender);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 47.76% -> STRUCTURAL,
+ * first differing row @2: ROM `(none)` vs `sd s6,304(sp)`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 58.31% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-336` vs `addiu sp,sp,-416`. */
 extern void func_002801B8(s32 x, s32 y, u64 color, char *str, s64 sel);
 extern void func_0027F208(s32 y0, s32 y1, s32 x0, s32 x1, s32 h, s32 color);
 extern void func_00115DA8(char *dst, const char *fmt, ...); /* SDK sprintf */
@@ -987,6 +1137,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CC7D8);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CC858);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 24.55% -> STRUCTURAL,
+ * first differing row @0: ROM `(none)` vs `daddu a1,a0,zero`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 0.00% -> STRUCTURAL, first differing row @1: ROM `daddu a1,zero,zero` vs `daddu a1,a0,zero`. */
 extern s32 func_002D6AD8(void *config, void *buf);
 extern u8 D_1AA6D8[];
 extern u8 g_soundBankHandlesBlk[];
@@ -1056,6 +1210,10 @@ s32 func_002CCA18(s32 action) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", TickActiveMenuScreen);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 69.00% -> SPLIT-HIREG,
+ * first differing row @1: ROM `lui v1,0x0  [HI16 0x001F27C0]` vs `lui v0,0x0  [HI16 0x001F27C0]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 63.14% -> SCHED-TIEBREAK, first differing row @2: ROM `sd s1,8(sp)` vs `(none)`. */
 extern s32 func_0029D0C8(s32 arg);
 extern s32 func_0029D138(s32 arg);
 extern s32 func_0029DC70(void);
@@ -1110,6 +1268,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", RenderMenuScree
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CD450);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 49.43% -> STRUCTURAL,
+ * first differing row @0: ROM `lui v0,0x0  [HI16 0x001F27C0]` vs `lui v0,0x0  [HI16 0x001F26C0]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 48.22% -> STRUCTURAL, first differing row @0: ROM `lui v0,0x0  [HI16 0x001F27C0]` vs `lui v0,0x0  [HI16 0x001F26C0]`. */
 /* TODO(match): functional equivalent - not byte-exact; cc1 CSEs the global-flag
  * reload + andi the original re-emits under branch-likely. */
 s32 func_002CD450(s32 screen) {
@@ -1148,6 +1310,10 @@ s32 func_002CD450(s32 screen) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CD4E8);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 0.00% -> STRUCTURAL,
+ * first differing row @0: ROM `addiu sp,sp,96` vs `lui v0,0x0  [HI16 D_1A7318]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 0.00% -> STRUCTURAL, first differing row @0: ROM `addiu sp,sp,96` vs `lui v0,0x0  [HI16 D_1A7318]`. */
 /* TODO(match): functional equivalent - not byte-exact; anomalous +0x60 frame
  * prologue without matching restore not reproduced from clean C. The selector
  * is D_1A7318 (== g_vramTextureBase_28 + 0xC); movn picks &D_1AB648 when nonzero,
@@ -1169,7 +1335,7 @@ s32 func_002CD4E8(s32 *list) {
  * NEEDS-TESTER-ORACLE: the parallel-array wiring + record layout are modeled from the
  * asm; the contiguous buffer copy is required (the ROM lays D_1AB958/D_1AB978 0x20 apart,
  * which separate host externs don't guarantee) — the oracle should confirm faithfulness. */
-#ifdef TARGET_NATIVE
+/* Declarations only (no code); unconditional so the engine96 arm sees them. */
 typedef struct {
     s32  value;    /* +0x0 */
     u8  *label;    /* +0x4  &g_cheatFlags[entry] */
@@ -1182,11 +1348,14 @@ extern s32 D_1AB978[];   /* parallel display values */
 extern u8  D_1A7A58[];   /* per-cheat unlock flag, indexed by entry */
 extern u8  g_cheatFlags[];
 extern CheatMenuItem D_0025FC70[];
-#endif
 
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", BuildCheatMenuItemList);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 6.52% -> STRUCTURAL,
+ * first differing row @0: ROM `(none)` vs `lui t2,0x0  [HI16 D_0025FC70]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 33.86% -> STRUCTURAL, first differing row @1: ROM `lui v0,0x0  [HI16 D_1AB958]` vs `lui v0,0x0  [HI16 D_0025FC70]`. */
 void BuildCheatMenuItemList(void) {
     s32 buf[16];   /* contiguous: [0..7] entries, [8..14] parallel values */
     CheatMenuItem *rec = D_0025FC70;
@@ -1260,6 +1429,10 @@ extern s16 D_1AA5A2, D_1AA5BA, D_1AA5D2, D_1AA5EA, D_1AA602;
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CDEB0);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 64.32% -> BRANCH-SHAPE,
+ * first differing row @2: ROM `beq v0,zero,L` vs `bne v0,zero,L`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 82.70% -> STRUCTURAL, first differing row @7: ROM `(none)` vs `daddu a0,zero,zero`. */
 /* TODO(match): functional equivalent - not byte-exact; ternary move/store
  * delay-slot scheduling not reproduced by cc1. */
 void func_002CDEB0(void) {
@@ -1289,6 +1462,10 @@ extern u8 D_00259128[], D_00259178[], D_002591C8[], D_00259218[], D_00259268[], 
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CDF48);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 44.72% -> STRUCTURAL,
+ * first differing row @5: ROM `lw a0,232(v1)` vs `lw a1,232(v1)`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 63.75% -> STRUCTURAL, first differing row @9: ROM `daddu a3,v0,zero` vs `lw v1,452(v0)  [LO16 D_138180]`. */
 s32 func_002CDF48(void *item) {
     u8 *screen = g_pCurrentMenuScreen;
     s32 savedDest;
@@ -1376,6 +1553,10 @@ extern void PlayGlobalSound(s32 id, s32 a, s32 b);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE0C8);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 97.25% -> SPLIT-HIREG,
+ * first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 99.95% -> PACKED-SAVE, first differing row @1: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. */
 /* TODO(match): functional equivalent - not byte-exact; 64-bit `daddu` move idiom
  * + 1-GPR packed-save frame not reproduced by cc1. */
 s32 func_002CE0C8(void) {
@@ -1444,6 +1625,10 @@ extern s32 D_259E34;      /* ptr-to-live-object global */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE230);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 54.46% -> STRUCTURAL,
+ * first differing row @9: ROM `andi v1,a0,0x10` vs `andi v0,a0,0x10`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 59.88% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-48`. */
 s32 func_002CE230(void) {
     s32 t0 = func_00337D98();
     s32 flags = g_padButtonsPressed;
@@ -1519,6 +1704,10 @@ extern void PatchMobyPacketTex0(void);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE3A0);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 88.39% -> BIGDISP-SPLIT (0x38000 constant: 2.96 emits the large-displacement macro, the ROM and 2.9 split it & ~0x7fff),
+ * first differing row @10: ROM `daddu a3,v0,zero` vs `(none)`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 91.93% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. */
 /* TODO(match): functional equivalent - not byte-exact; `beql` branch-likely null
  * guard + 64-bit `daddu` handle-copy idiom not reproduced by cc1. */
 s32 func_002CE3A0(void) {
@@ -1568,6 +1757,10 @@ extern u8 D_00259C58[];    /* per-screen present record */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE498);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 60.84% -> FRAME-SIZE,
+ * first differing row @0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-80`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 58.47% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-96`. */
 /* TODO(match): functional equivalent - not byte-exact; 3-GPR packed-save frame +
  * branch-likely present-record fence shape. */
 s32 func_002CE498(void) {
@@ -1647,6 +1840,10 @@ extern s32 func_0029DA18(s32 padPressed);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE618);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 78.14% -> SPLIT-HIREG,
+ * first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 80.03% -> SPLIT-HIREG, first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`. */
 /* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame +
  * branch-likely confirm shape. */
 s32 func_002CE618(void) {
@@ -1699,6 +1896,10 @@ extern s32 D_25E444;
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE6D8);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 65.25% -> SCHED-TIEBREAK,
+ * first differing row @1: ROM `sd s0,0(sp)` vs `(none)`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 59.39% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-64`. */
 s32 func_002CE6D8(void) {
     s32 t0 = func_00337D98();
     s32 flags = g_padButtonsPressed;
@@ -1753,6 +1954,10 @@ extern s32 func_00345298(void *widget);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE830);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 67.35% -> STRUCTURAL,
+ * first differing row @1: ROM `lui v0,0x0  [HI16 0x001A8D04]` vs `(none)`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 99.12% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. */
 /* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame. */
 s32 func_002CE830(s32 *out) {
     if (g_guiInstance) {
@@ -1779,6 +1984,10 @@ extern s32 func_00342468(void *widget);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE8A8);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 64.12% -> STRUCTURAL,
+ * first differing row @1: ROM `lui v0,0x0  [HI16 0x001A8D04]` vs `sd s0,0(sp)`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 75.29% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-48`. */
 /* TODO(match): functional equivalent - not byte-exact; 3-GPR packed-save frame. */
 s32 func_002CE8A8(s32 *out) {
     if (g_guiInstance) {
@@ -1805,6 +2014,10 @@ extern void func_002D6B00(void *record);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE908);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 67.61% -> FRAME-SIZE,
+ * first differing row @0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-64`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 61.65% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-80`. */
 /* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame +
  * branch-likely confirm shape / single-register result threading. */
 s32 func_002CE908(void) {
@@ -1861,6 +2074,10 @@ extern u8 D_2615D8, D_261678, D_261730;
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CEA38);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 63.23% -> STRUCTURAL,
+ * first differing row @1: ROM `lui a0,0x0  [HI16 0x001A8D04]` vs `(none)`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 73.35% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. */
 /* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame. */
 s32 func_002CEA38(void) {
     if (g_guiInstance) {
@@ -1887,6 +2104,10 @@ s32 func_002CEA38(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateBestiaryMenuInput);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 48.75% -> STRUCTURAL,
+ * first differing row @3: ROM `(none)` vs `sd s1,8(sp)`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 45.98% -> PACKED-SAVE, first differing row @1: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-64`. */
 extern s32 g_bestiaryPrevEntry;
 extern s32 g_bestiaryNextEntry;
 extern u8 g_bestiaryKillCounts[];
@@ -1993,6 +2214,10 @@ s32 UpdateBestiaryMenuInput(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawBestiaryEntry);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 39.40% -> STRUCTURAL,
+ * first differing row @0: ROM `addiu sp,sp,-160` vs `lui v1,0x0  [HI16 0x001A8D04]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 49.63% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-160` vs `addiu sp,sp,-320`. */
 extern u32 func_002AA3F0(u32 color1, u32 color2, s32 period, s32 counterSel, s32 reset);
 extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
                           f32 px, f32 py, f32 sx, f32 syg, f32 v38);
@@ -2140,6 +2365,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawMenuPagingC
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawMenuItemSelectionBox);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 76.00% -> STRUCTURAL,
+ * first differing row @3: ROM `addu v0,v0,a0` vs `addu v0,a0,v0`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 74.75% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-96`. */
 extern s32 g_screenWidth;
 extern void func_002904B0(s32 x0, s32 y0, s32 x1, s32 y1, s32 color, s32 flag);
 void DrawMenuItemSelectionBox(s32 width, s32 color) {
@@ -2164,6 +2393,10 @@ extern s32 func_00342468(void *widget);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D0110);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 67.35% -> STRUCTURAL,
+ * first differing row @1: ROM `lui v0,0x0  [HI16 0x001A8D04]` vs `(none)`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 99.12% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. */
 /* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame. */
 s32 func_002D0110(s32 *out) {
     if (g_guiInstance) {
@@ -2187,6 +2420,10 @@ extern void PlayGlobalSound(s32 id, s32 a, s32 b);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D0158);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 66.89% -> FRAME-SIZE,
+ * first differing row @0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-64`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 73.84% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-80`. */
 /* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame +
  * branch-likely confirm shape / single-register result threading. */
 s32 func_002D0158(void) {
@@ -2252,6 +2489,10 @@ extern u8 D_0025C430[], D_0025C5C8[], D_0025CCD8[];  /* extras sub-page records 
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D02A0);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 38.85% -> STRUCTURAL,
+ * first differing row @0: ROM `addiu sp,sp,-64` vs `lui t6,0x0  [HI16 0x001A8D04]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 57.44% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-64` vs `addiu sp,sp,-32`. */
 s32 func_002D02A0(void) {
     u8 *record;
     s32 i;
@@ -2329,6 +2570,10 @@ s32 func_002D02A0(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateCheatMenuInput);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 40.93% -> BIGDISP-SPLIT + STRUCTURAL,
+ * first differing row @1: ROM `(none)` vs `sd s1,8(sp)`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 57.15% -> PACKED-SAVE, first differing row @2: ROM `sd s1,8(sp)` vs `sd ra,16(sp)`. */
 extern s32 CountSkillPointsCompleted(void);
 extern u8 D_138180[];
 extern u8 g_menuScreenBlock[];
@@ -2425,6 +2670,10 @@ s32 UpdateCheatMenuInput(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawCheatMenu);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 5.29% -> STRUCTURAL,
+ * first differing row @0: ROM `addiu sp,sp,-160` vs `lui v0,0x0  [HI16 0x001A7340]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 14.47% -> STRUCTURAL, first differing row @0: ROM `addiu sp,sp,-160` vs `lui v0,0x0  [HI16 0x001A7340]`. */
 extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
                           f32 px, f32 py, f32 sx, f32 syg, f32 v38);
 extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
@@ -2519,6 +2768,10 @@ s32 func_002D0B40(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateSkillPointsMenu);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 14.20% -> GPREL-vs-ABS,
+ * first differing row @1: ROM `(none)` vs `lw a1,0(gp)  [GPREL16 0x001ABA3C]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 42.36% -> PACKED-SAVE, first differing row @1: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-48`. */
 extern s32 g_nSkillPointsMenuCursor;
 extern u8 g_skillPointMetaTable[];
 extern u8 D_0025C098[];
@@ -2604,6 +2857,10 @@ s32 UpdateSkillPointsMenu(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawSkillPointsMenu);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 35.61% -> STRUCTURAL,
+ * first differing row @0: ROM `addiu sp,sp,-144` vs `lui v0,0x0  [HI16 0x001A7340]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 49.84% -> STRUCTURAL, first differing row @0: ROM `addiu sp,sp,-144` vs `lui v0,0x0  [HI16 0x001A7340]`. */
 extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
                           f32 px, f32 py, f32 sx, f32 syg, f32 v38);
 extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
@@ -2722,6 +2979,10 @@ s32 func_002D1150(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateExtrasMenuInput);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 45.39% -> FRAME-SIZE,
+ * first differing row @0: ROM `addiu sp,sp,-80` vs `addiu sp,sp,-64`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 46.13% -> STRUCTURAL, first differing row @0: ROM `addiu sp,sp,-80` vs `(none)`. */
 extern void PlayGlobalSound(s32 id, s32 a, s32 b);
 extern void CaptureScreenToVram(s32 mode);
 extern s32 EnqueueCinematic(void *queue, s32 reelId);
@@ -2856,6 +3117,10 @@ s32 UpdateExtrasMenuInput(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawExtrasMenu);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 36.23% -> STRUCTURAL,
+ * first differing row @0: ROM `addiu sp,sp,-64` vs `lui v0,0x0  [HI16 0x001A7340]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 36.41% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-64` vs `addiu sp,sp,-208`. */
 extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
                           f32 px, f32 py, f32 sx, f32 syg, f32 v38);
 extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
@@ -2935,6 +3200,10 @@ extern s32 D_1ABA50, D_1ABA54, D_1ABA58, D_1ABA4C;
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D1850);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 57.40% -> STRUCTURAL,
+ * first differing row @3: ROM `lui v1,0x0  [HI16 0x001F27C8]` vs `(none)`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 84.00% -> STRUCTURAL, first differing row @11: ROM `beq v0,zero,L` vs `(none)`. */
 /* TODO(match): functional equivalent - not byte-exact; delay-slot branch-fill +
  * commutative store order not reproduced by cc1. */
 s32 func_002D1850(void) {
@@ -2975,6 +3244,10 @@ s32 func_002D1850(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", CinematicsMenuTick);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 30.52% -> FRAME-SIZE,
+ * first differing row @0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-32`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 55.12% -> STRUCTURAL, first differing row @0: ROM `addiu sp,sp,-48` vs `lui v1,0x0  [HI16 D_138180]`. */
 extern void PlayGlobalSound(s32 id, s32 a, s32 b);
 extern void CaptureScreenToVram(s32 mode);
 extern s32 EnqueueCinematic(void *queue, s32 reelId);
@@ -3069,6 +3342,10 @@ s32 CinematicsMenuTick(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawCinematicsMenu);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 31.08% -> STRUCTURAL,
+ * first differing row @0: ROM `addiu sp,sp,-64` vs `lui v0,0x0  [HI16 0x001A7340]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 31.96% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-64` vs `addiu sp,sp,-208`. */
 extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
                           f32 px, f32 py, f32 sx, f32 syg, f32 v38);
 extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
@@ -3150,6 +3427,10 @@ extern u8 D_26183A[];                 /* cinematics-menu row table (6-byte strid
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D1E88);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 39.40% -> STRUCTURAL,
+ * first differing row @3: ROM `(none)` vs `lui v1,0x0  [HI16 D_26183A]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 34.75% -> STRUCTURAL, first differing row @3: ROM `addiu v0,zero,1` vs `lui v0,0x0  [HI16 D_26183A]`. */
 /* TODO(match): functional equivalent - not byte-exact; `bnel` branch-likely
  * delay-slot store on the extras-unlocked fast path not reproduced by cc1. */
 void func_002D1E88(void) {
@@ -3198,6 +3479,10 @@ extern u8 *D_25C520;             /* pointer to the live menu object */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdatePlanetWarpMenuInput);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 36.04% -> STRUCTURAL,
+ * first differing row @1: ROM `lui v0,0x0  [HI16 D_138180]` vs `(none)`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 51.21% -> STRUCTURAL, first differing row @0: ROM `(none)` vs `lui v1,0x0  [HI16 D_138180]`. */
 extern void PlayGlobalSound(s32 id, s32 a, s32 b);
 extern u8 g_planetWarpEnabled;   /* 0x1ABA70 - per-item enabled flags (indexed) */
 extern s32 g_playerProgress;     /* 0x1A79F8 - current save progress slot */
@@ -3293,6 +3578,10 @@ s32 UpdatePlanetWarpMenuInput(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawPlanetWarpMenu);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 33.46% -> STRUCTURAL,
+ * first differing row @0: ROM `addiu sp,sp,-64` vs `lui v0,0x0  [HI16 0x001A7340]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 38.55% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-64` vs `addiu sp,sp,-208`. */
 extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
                           f32 px, f32 py, f32 sx, f32 syg, f32 v38);
 extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
@@ -3376,6 +3665,10 @@ extern s32 g_playerProgress;     /* 0x1A79F8 - current save progress slot */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D2538);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 90.44% -> STRUCTURAL,
+ * first differing row @2: ROM `beq v0,zero,L` vs `(none)`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 90.95% -> STRUCTURAL, first differing row @2: ROM `beq v0,zero,L` vs `(none)`. */
 /* TODO(match): functional equivalent - not byte-exact; `bnel`/`beql` branch-
  * likely delay-slot value moves not reproduced by cc1. */
 void func_002D2538(void) {
@@ -3440,6 +3733,10 @@ void func_002D2538(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateInsomniacMuseumInput);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 28.88% -> STRUCTURAL,
+ * first differing row @1: ROM `lui v0,0x0  [HI16 D_138180]` vs `(none)`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 48.28% -> STRUCTURAL, first differing row @0: ROM `addiu sp,sp,-48` vs `(none)`. */
 extern void PlayGlobalSound(s32 id, s32 a, s32 b);
 extern void SwapMobyTableContext(s32 tableId);
 extern void *SpawnMoby(s32 classId);
@@ -3555,6 +3852,10 @@ s32 UpdateInsomniacMuseumInput(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawInsomniacMuseumMenu);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 23.83% -> STRUCTURAL,
+ * first differing row @0: ROM `addiu sp,sp,-80` vs `lui v0,0x0  [HI16 0x001A7340]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 47.77% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-80` vs `addiu sp,sp,-176`. */
 extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
                           f32 px, f32 py, f32 sx, f32 syg, f32 v38);
 extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
@@ -3610,6 +3911,10 @@ s32 DrawInsomniacMuseumMenu(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D2C60);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 96.43% -> DSLOT-FILL,
+ * first differing row @24: ROM `(none)` vs `sll zero,zero,0x0`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 85.71% -> ORDER-ONLY, first differing row @2: ROM `beq v0,zero,L` vs `(none)`. */
 s32 func_002D2C60(void) {
     if (g_guiInstance) {
         if (g_miscExtras) {
@@ -3643,6 +3948,10 @@ s32 func_002D2C60(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateHelpTopicMenuInput);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 62.81% -> SPLIT-HIREG,
+ * first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 73.12% -> PACKED-SAVE, first differing row @1: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. */
 extern void PlayGlobalSound(s32 id, s32 a, s32 b);
 extern s32 g_helpTopicCursor;    /* 0x1ABA98 - help topic page index 0..0x11 */
 extern s32 D_25C940;             /* active topic index mirror */
@@ -3708,6 +4017,10 @@ s32 UpdateHelpTopicMenuInput(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawHelpTopicMenu);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 20.82% -> STRUCTURAL,
+ * first differing row @0: ROM `addiu sp,sp,-32` vs `lui v0,0x0  [HI16 0x001A7340]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 12.59% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-80`. */
 extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
                           f32 px, f32 py, f32 sx, f32 syg, f32 v38);
 extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
@@ -3761,6 +4074,10 @@ extern void PlayGlobalSound(s32 id, s32 a, s32 b);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D2FC8);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 51.74% -> GPREL-vs-ABS,
+ * first differing row @1: ROM `(none)` vs `lw a1,0(gp)  [GPREL16 0x001ABAA0]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 61.23% -> PACKED-SAVE, first differing row @1: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-48`. */
 /* TODO(match): functional equivalent - not byte-exact; 3-GPR packed-save frame +
  * branch-likely / reload scheduling not reproduced by cc1. */
 s32 func_002D2FC8(void) {
@@ -3830,6 +4147,10 @@ extern u8 D_1ABDE8[];     /* per-option label string-id table, s16 on 4-byte str
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D3138);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 25.62% -> STRUCTURAL,
+ * first differing row @0: ROM `addiu sp,sp,-48` vs `lui v0,0x0  [HI16 0x001A7340]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 18.61% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-80`. */
 /* TODO(match): functional equivalent - not byte-exact; the slider endpoint ints
  * model the original's `mul; add 0.5; cvt.w.s` as round-half-up. */
 s32 func_002D3138(void) {
@@ -3862,16 +4183,12 @@ s32 func_002D3138(void) {
 #endif
 
 /* GUI null-check gate: if the GUI is up, latch error code -0x12C; return 0. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D3388);
-#else
 s32 func_002D3388(void) {
     if (g_guiInstance) {
         D_25CABC = -0x12C;
     }
     return 0;
 }
-#endif
 
 /* Help-topic sub-browser input handler. Confirm (0x10) latches the screen's
  * pending result like the other confirm polls (resets g_helpPageCursor to 0).
@@ -3885,6 +4202,10 @@ extern s32 D_25CCC8;
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D33A8);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 55.13% -> SPLIT-HIREG,
+ * first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 51.35% -> SPLIT-HIREG, first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`. */
 /* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame +
  * branch-likely / reload scheduling not reproduced by cc1. */
 s32 func_002D33A8(void) {
@@ -3956,6 +4277,10 @@ extern s32 D_1ABAAC;      /* glyph row (int, converted to float) */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D34E8);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 41.88% -> STRUCTURAL,
+ * first differing row @0: ROM `addiu sp,sp,-48` vs `lui v1,0x0  [HI16 0x001A8D04]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 43.96% -> STRUCTURAL, first differing row @0: ROM `addiu sp,sp,-48` vs `lui v0,0x0  [HI16 0x001A7340]`. */
 s32 func_002D34E8(void) {
     void *atlas = g_guiInstance + 0x8710;
     f32 centerX = (f32)(g_screenWidth / 2);
@@ -4028,6 +4353,10 @@ extern void Vec3RescaleToLenVu0(void *dst, void *src, f32 len);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D37E8);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 70.29% -> SPLIT-HIREG,
+ * first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 80.33% -> SPLIT-HIREG, first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`. */
 /* TODO(match): functional equivalent - not byte-exact; `beql` branch-likely latch
  * + VU0 float-arg scheduling not reproduced by cc1. */
 s32 func_002D37E8(void) {
@@ -4085,6 +4414,10 @@ extern char D_1ABA38[];  /* sprintf format string (right composed line) */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D38C8);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 25.33% -> STRUCTURAL,
+ * first differing row @0: ROM `addiu sp,sp,-96` vs `lui v0,0x0  [HI16 0x001A7340]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 31.36% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-96` vs `addiu sp,sp,-144`. */
 s32 func_002D38C8(void) {
     void *atlas = g_guiInstance + 0x8710;
     f32 centerX = (f32)(g_screenWidth / 2);
@@ -4120,17 +4453,13 @@ s32 func_002D38C8(void) {
 #endif
 
 /* Forward the currently-pressed pad buttons to the menu input handler; return 0.
- * Near-miss: the original hoists the %hi(g_padButtonsPressed) lui above the
- * frame-setup addiu (separate base reg), a SN-scheduling shape our cc1 won't
- * reproduce from the sized-extern macro. Preserved as portable C. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D3B88);
-#else
+ * Byte-exact (task #468) once g_padButtonsPressed is declared ROM_SPLIT: the
+ * "SN scheduling" of the old note was the compiler-split lui/%lo pair with the
+ * frame addiu between, which the sized-extern macro could never produce. */
 s32 func_002D3B88(void) {
     func_0029D478(g_padButtonsPressed);
     return 0;
 }
-#endif
 
 /* Draw-batch wrapper. */
 s32 func_002D3BB0(void) {
@@ -4150,6 +4479,10 @@ extern s32 func_0029D4E8(s32 padPressed);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D3BE0);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 70.27% -> SPLIT-HIREG,
+ * first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 70.42% -> SPLIT-HIREG, first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`. */
 /* TODO(match): functional equivalent - not byte-exact; 1-GPR packed-save frame +
  * branch-likely confirm shape / single-register result threading. */
 s32 func_002D3BE0(void) {
@@ -4198,6 +4531,10 @@ extern s32 g_playerProgress;    /* 0x1A79F8 - current progress slot (seen-mask b
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D3C98);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 32.48% -> SPLIT-HIREG,
+ * first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 33.88% -> SPLIT-HIREG, first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`. */
 /* TODO(match): functional equivalent - not byte-exact; 1-GPR packed-save frame +
  * bnel branch-likely dead stores / single-register result threading. */
 static void MenuCutsceneUnlockCurrent(void) {
@@ -4251,6 +4588,10 @@ extern s32 func_0029D598(s32 padPressed);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D3E08);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 70.27% -> SPLIT-HIREG,
+ * first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 70.42% -> SPLIT-HIREG, first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`. */
 /* TODO(match): functional equivalent - not byte-exact; 1-GPR packed-save frame. */
 s32 func_002D3E08(void) {
     s32 flags = g_padButtonsPressed;
@@ -4289,6 +4630,10 @@ extern s32 func_0029D608(s32 padPressed);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D3EC0);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 70.27% -> SPLIT-HIREG,
+ * first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 70.42% -> SPLIT-HIREG, first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`. */
 /* TODO(match): functional equivalent - not byte-exact; 1-GPR packed-save frame. */
 s32 func_002D3EC0(void) {
     s32 flags = g_padButtonsPressed;
@@ -4330,6 +4675,10 @@ extern s32 func_0029D838(s32 padPressed);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D3F78);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 70.27% -> SPLIT-HIREG,
+ * first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 70.42% -> SPLIT-HIREG, first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`. */
 /* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame. */
 s32 func_002D3F78(void) {
     s32 flags = g_padButtonsPressed;
@@ -4368,6 +4717,10 @@ extern s32 func_0029D7C8(s32 padPressed);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D4030);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 70.27% -> SPLIT-HIREG,
+ * first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 70.42% -> SPLIT-HIREG, first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`. */
 /* TODO(match): functional equivalent - not byte-exact; 1-GPR packed-save frame. */
 s32 func_002D4030(void) {
     s32 flags = g_padButtonsPressed;
@@ -4409,6 +4762,10 @@ extern s32 MenuScreenDoAction(s32 opcode, s32 arg, s32 *outFlag);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D40E8);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 68.15% -> SPLIT-HIREG,
+ * first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 74.95% -> SPLIT-HIREG, first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`. */
 /* TODO(match): functional equivalent - not byte-exact; 1-GPR packed-save frame +
  * branch-likely confirm shape. */
 s32 func_002D40E8(void) {
@@ -4451,6 +4808,10 @@ extern s32 func_0029D6E8(s32 padPressed);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D41B8);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 70.27% -> SPLIT-HIREG,
+ * first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 70.42% -> SPLIT-HIREG, first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`. */
 /* TODO(match): functional equivalent - not byte-exact; 1-GPR packed-save frame. */
 s32 func_002D41B8(void) {
     s32 flags = g_padButtonsPressed;
@@ -4496,6 +4857,10 @@ extern void func_002D6B00(void *record);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D4270);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 67.61% -> FRAME-SIZE,
+ * first differing row @0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-64`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 61.65% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-80`. */
 /* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame +
  * branch-likely confirm shape / single-register result threading. */
 s32 func_002D4270(void) {
@@ -4538,19 +4903,15 @@ s32 func_002D4340(void) {
 }
 
 /* GUI wrapper: forward a widget at instance+0x3F3F0 to func_0033F3B8(&D_2617C0).
- * Near-miss: byte-identical except cc1 schedules the addiu %lo(D_2617C0) before
- * the ori of the 0x3F3F0 offset (the two independent address builds interleave
- * in the opposite order from the original). Preserved as portable C. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D4370);
-#else
+ * Byte-exact (task #468) once D_2617C0 is declared ROM_SPLIT: the interleave of
+ * the old note is the compiler-split %lo(D_2617C0) scheduled against the
+ * 0x3F3F0 ori, which the sized-extern macro left as one late `la`. */
 s32 func_002D4370(void) {
     if (g_guiInstance) {
         func_0033F3B8(g_guiInstance + 0x3F3F0, &D_2617C0);
     }
     return 0;
 }
-#endif
 
 /* Confirm/cancel poll driven by the global input flag word (D_138180[0x1C4]).
  * Confirm (0x10) latches the active screen's pending result like the other
@@ -4561,6 +4922,10 @@ extern void func_0029D408(s32 arg);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D43B0);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 74.65% -> STRUCTURAL,
+ * first differing row @2: ROM `sd s0,0(sp)` vs `sd ra,0(sp)`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 66.26% -> STRUCTURAL, first differing row @0: ROM `(none)` vs `lui v1,0x0  [HI16 D_138180]`. */
 /* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame +
  * branch-likely confirm shape. */
 s32 func_002D43B0(void) {
@@ -4607,6 +4972,10 @@ extern u8 D_259F38, D_25D0C0, D_259CC0, D_25D268;
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D4468);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 50.16% -> STRUCTURAL,
+ * first differing row @1: ROM `lui a0,0x0  [HI16 0x001A8D04]` vs `(none)`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 66.38% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. */
 /* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame. */
 s32 func_002D4468(void) {
     if (g_guiInstance) {
@@ -4626,6 +4995,10 @@ s32 func_002D4468(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D44E8);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 53.59% -> STRUCTURAL,
+ * first differing row @1: ROM `lui a0,0x0  [HI16 0x001A8D04]` vs `(none)`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 59.19% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. */
 /* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame. */
 s32 func_002D44E8(void) {
     if (g_guiInstance) {
@@ -4657,6 +5030,10 @@ extern s32 func_003444C8(void *p);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D4568);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 43.95% -> STRUCTURAL,
+ * first differing row @1: ROM `lui v0,0x0  [HI16 0x001A8D04]` vs `daddu v0,zero,zero`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 54.23% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-112`. */
 s32 func_002D4568(void *widget) {
     u8 *gadget;
     u8 *subWidget;
@@ -4704,6 +5081,10 @@ extern u8 D_26CFD0[];    /* meter record table, stride 0x14 */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D4D38);
 #else
+/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+ * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 23.74% -> STRUCTURAL,
+ * first differing row @0: ROM `addiu v1,zero,20` vs `sll v0,a0,0x2`;
+ * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 40.03% -> STRUCTURAL, first differing row @0: ROM `addiu v1,zero,20` vs `addiu a2,zero,20`. */
 #define METER_FILL_SCALE 0x3FE8000000000000LL   /* 0.75 (built ori 0xFFA0; dsll32 14) */
 
 /* fill width for one meter segment: 0x80 - round(|256 - v| * 0.75), soft-double. */

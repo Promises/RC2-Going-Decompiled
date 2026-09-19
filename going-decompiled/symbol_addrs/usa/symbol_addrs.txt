@@ -129,6 +129,7 @@ func_0033EFF8 = 0x0033EFF8; // type:func size:0x8
 func_0033F000 = 0x0033F000; // type:func
 func_0033F1F8 = 0x0033F1F8; // type:func size:0x8
 func_0033F200 = 0x0033F200; // type:func
+func_0033F3B8 = 0x0033F3B8; // type:func
 func_0033F508 = 0x0033F508; // type:func size:0x8
 func_0033F510 = 0x0033F510; // type:func
 func_00290870 = 0x00290870; // type:func size:0x8
