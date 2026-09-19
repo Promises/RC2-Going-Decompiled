@@ -90,10 +90,10 @@ extern void func_00343E80(void *p);
 extern void func_00343F68(void *p);
 extern void func_0033BE60(void *p, s32 v);
 extern void func_0033BF90(void *p);
-extern void func_00348DA0(void *p, void *records);
+extern void GuiMenuListSetRows(void *p, void *records);
 extern s32 func_00348E60(void *p);  /* 248B50:308 - returns a state value */
 extern void func_00348E10(void *w, s32 a, s32 b); /* 248B50:269 */
-extern void func_00348E70(void *p);
+extern void GuiMenuListDraw(void *p);
 
 #ifdef TARGET_NATIVE
 /* Shared GUI sub-element init/widget callees referenced by the functional-
@@ -103,8 +103,8 @@ extern void GuiElementInitTypeB(void *p);
 extern void GuiElementInitTypeC(void *p);
 extern void GuiListRowElementInit(void *p);
 extern void func_00348BD0(void *p);
-extern void func_00348CB8(void *w, s32 inputMask); /* 248B50: selection-advance by input mask */
-extern void func_00348E28(void *w, f32 x, f32 y);
+extern void GuiMenuListHandleInput(void *w, s32 inputMask); /* 248B50: selection-advance by input mask */
+extern void GuiMenuListSetOrigin(void *w, f32 x, f32 y);
 extern void func_00348E58(void *w, s32 res);
 extern void func_00115AC0(void *dst, const void *src, s32 len); /* SDK memcpy */
 extern void func_00338D48(void *p, s32 a1, f32 x, f32 y, s32 a2);
@@ -4580,9 +4580,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F3B8);
 #else
 /* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame
    wall ($16/$17/$31 16-byte vs 8-byte slot packing). */
-extern void func_00348DA0(void *p, void *records);
+extern void GuiMenuListSetRows(void *p, void *records);
 void func_0033F3B8(void *p, void *records) {
-    func_00348DA0((char *)p + 0x2E0, records);
+    GuiMenuListSetRows((char *)p + 0x2E0, records);
     *(void **)((char *)p + 0x3B8) = records;
 }
 #endif
@@ -4590,7 +4590,7 @@ void func_0033F3B8(void *p, void *records) {
 /* Reposition two linked sub-elements to the tracked anchor (*(w+0x3BC)): run the
  * pre-step func_0033BE70 on the inner element (+0x8), place it at the anchor via
  * func_0033C060, set the outer element's (+0x2E0) value from arg1, then place it
- * at the anchor via func_00348E28. The anchor is re-read for each placement.
+ * at the anchor via GuiMenuListSetOrigin. The anchor is re-read for each placement.
  * Returns bit 6 of arg1. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F3F0);
@@ -4600,16 +4600,16 @@ s32 func_0033F3F0(void *w, s32 arg1) {
     func_0033BE70((char *)w + 0x8, arg1);   /* 2nd arg (flags) is ignored by the callee */
     anchor = *(f32 **)((char *)w + 0x3BC);
     func_0033C060((char *)w + 0x8, anchor[0], anchor[1]);
-    func_00348CB8((char *)w + 0x2E0, arg1);
+    GuiMenuListHandleInput((char *)w + 0x2E0, arg1);
     anchor = *(f32 **)((char *)w + 0x3BC);
-    func_00348E28((char *)w + 0x2E0, anchor[0], anchor[1]);
+    GuiMenuListSetOrigin((char *)w + 0x2E0, anchor[0], anchor[1]);
     return (arg1 >> 6) & 1;
 }
 #endif
 
 /* func_0033F478: tear down the embedded dialog-box (p+0x8), then reconfigure the
  * GuiWidget at p+0x2E0 with the per-language resource D_1ADEB0[g_currentLanguage]
- * (func_00348E58) and re-init it (func_00348E70). */
+ * (func_00348E58) and re-init it (GuiMenuListDraw). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F478);
 #else
@@ -4621,7 +4621,7 @@ void func_0033F478(void *p) {
     void *w = (char *)p + 0x2E0;
     func_0033BF90((char *)p + 0x8);
     func_00348E58(w, D_1ADEB0[g_currentLanguage]);
-    func_00348E70(w);
+    GuiMenuListDraw(w);
 }
 #endif
 
@@ -6036,7 +6036,7 @@ void func_00342520(void *w, s32 mode) {
     *(s32 *)((char *)w + 0x1CC) = iconId;
 
     func_00348E50((char *)w + 0x238, *(s32 *)((char *)w + mode * 4 + 0x1B8));
-    func_00348DA0((char *)w + 0x238, records);
+    GuiMenuListSetRows((char *)w + 0x238, records);
 
     GuiElementSetText((GuiElement *)((char *)w + 0x1D0), GetLocalizedString(strId));
 
@@ -6086,9 +6086,9 @@ void func_003426E0(void *w, s32 inputMask) {
     s32 idx;
     s32 oldVal;
 
-    func_00348E28(sub, anchor[0] + D_1AE0C0, anchor[1] + D_1AE0C4);
+    GuiMenuListSetOrigin(sub, anchor[0] + D_1AE0C0, anchor[1] + D_1AE0C4);
     func_00348E10(sub, (s32)D_1AE0C8, (s32)D_1AE0CC);
-    func_00348CB8(sub, inputMask);
+    GuiMenuListHandleInput(sub, inputMask);
     idx = *(s32 *)((char *)w + 0x31C);
     oldVal = table[idx];
     table[idx] = func_00348E60(sub);
@@ -6138,9 +6138,9 @@ void func_00342958(void *p) {
     __asm__ __volatile__("");
 }
 
-/* func_00342978: forward p+0x238 to func_00348E70. */
+/* func_00342978: forward p+0x238 to GuiMenuListDraw. */
 void func_00342978(void *p) {
-    func_00348E70((char *)p + 0x238);
+    GuiMenuListDraw((char *)p + 0x238);
     __asm__ __volatile__("");
 }
 
@@ -6326,14 +6326,14 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342DC0);
 /* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame
    wall. */
 void func_00342DC0(void *p, void *records) {
-    func_00348DA0((char *)p + 0x10, records);
+    GuiMenuListSetRows((char *)p + 0x10, records);
     *(void **)((char *)p + 0xE8) = records;
 }
 #endif
 
-/* func_00342DF8: advance the GuiWidget at p+0x10 by the input mask (func_00348CB8),
+/* func_00342DF8: advance the GuiWidget at p+0x10 by the input mask (GuiMenuListHandleInput),
  * then re-feed
- * it the two floats from the vector at *(p+0x0) via func_00348E28. Returns 0. */
+ * it the two floats from the vector at *(p+0x0) via GuiMenuListSetOrigin. Returns 0. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342DF8);
 #else
@@ -6341,10 +6341,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342DF8);
    wall. */
 s32 func_00342DF8(void *p, s32 inputMask) {
     void *w = (char *)p + 0x10;
-    func_00348CB8(w, inputMask);   /* forwards its own $5 (inputMask) — asm sets $5 nowhere */
+    GuiMenuListHandleInput(w, inputMask);   /* forwards its own $5 (inputMask) — asm sets $5 nowhere */
     {
         f32 *v = *(f32 **)p;
-        func_00348E28(w, v[0], v[1]);
+        GuiMenuListSetOrigin(w, v[0], v[1]);
     }
     return 0;
 }
@@ -6478,7 +6478,7 @@ void GuiIconScreenInit2(void *w, GuiPool *pool) {
 #endif
 
 /* func_00343290: cache the row-data pointer at p+0x260 then init the GuiWidget at
- * p+0x188 with it (func_00348DA0(p+0x188, records)). */
+ * p+0x188 with it (GuiMenuListSetRows(p+0x188, records)). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343290);
 #else
@@ -6487,7 +6487,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343290);
    68% best. */
 void func_00343290(void *p, void *records) {
     *(void **)((char *)p + 0x260) = records;
-    func_00348DA0((char *)p + 0x188, records);
+    GuiMenuListSetRows((char *)p + 0x188, records);
 }
 #endif
 
@@ -6534,9 +6534,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343338);
 void func_00343338(void *w, s32 inputMask) {
     void *sub = (char *)w + 0x188;
     f32 *anchor = *(f32 **)((char *)w + 0x180);
-    func_00348E28(sub, anchor[0] + D_1AE160, anchor[1] + D_1AE164);
+    GuiMenuListSetOrigin(sub, anchor[0] + D_1AE160, anchor[1] + D_1AE164);
     func_00348E10(sub, (s32)D_1AE168, (s32)D_1AE16C);
-    func_00348CB8(sub, inputMask);
+    GuiMenuListHandleInput(sub, inputMask);
     *(s32 *)((char *)w + 0x16C) = func_00348E60(sub);
 }
 #endif
@@ -6589,9 +6589,9 @@ void func_003434C8(void *w) {
 }
 #endif
 
-/* func_00343558: forward p+0x188 to func_00348E70. */
+/* func_00343558: forward p+0x188 to GuiMenuListDraw. */
 void func_00343558(void *p) {
-    func_00348E70((char *)p + 0x188);
+    GuiMenuListDraw((char *)p + 0x188);
     __asm__ __volatile__("");
 }
 

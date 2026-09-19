@@ -31,7 +31,7 @@
  * delay slot plus a non-slot access is unmatchable (func_00299040/
  * func_00299178/func_002991E8/func_00299238/func_002992B8/func_002992E8/
  * func_00299348/func_002993D8/func_00299478/func_002994B0/func_00299568/
- * func_002995E0/func_00299758/func_002997C8/func_002998D0/func_00299918/
+ * func_002995E0/func_00299758/UpdateSaveTaskState/func_002998D0/func_00299918/
  * func_00299960).
  */
 
@@ -296,7 +296,7 @@ void func_00299020(void) {
 /* func_00299040 (and the 0x299xxx save-handler family below: func_00299178/
  * func_002991E8/func_00299238/func_002992B8/func_002992E8/func_00299348/
  * func_002993D8/func_00299478/func_002994B0/func_00299568/func_002995E0/
- * func_00299758/func_002997C8/func_002998D0/func_00299918): memory-card
+ * func_00299758/UpdateSaveTaskState/func_002998D0/func_00299918): memory-card
  * save/load status handlers. WALLED by the reload-artifact described in the
  * file header — each reads a small-range save-context global both via the
  * 1-insn %gp_rel form (in a branch/jr delay slot) AND via the absolute lui/$at
@@ -730,9 +730,9 @@ extern s32 g_nGameState;
 extern void RequestGameStateChange(s32 newState, s32 argA, s32 argB, s32 argC, s32 argD);
 extern void func_00289798(void);
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_002997C8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", UpdateSaveTaskState);
 #else
-void func_002997C8(void) {
+void UpdateSaveTaskState(void) {
     if (D_1393E0.mode != 2 || D_1393E0.result >= 0) {
         return;
     }
@@ -1077,18 +1077,18 @@ s32 CalcSaveSectionsSize(SaveSection *table) {
     return size + 8;
 }
 
-/* func_0029BCA0: CRC-16 (poly 0xEDB88320, 8-bit-at-a-time) over the save buffer
+/* ComputeSaveSectionsCrc16: CRC-16 (poly 0xEDB88320, 8-bit-at-a-time) over the save buffer
  * sized by CalcSaveSectionsSize(g_saveSectionTableGlobal). Uses three callee-
  * saved regs ($16/$17/$31) in an 8-byte-packed 0x20 frame — the callee-save
  * frame wall (our cc1 reserves 16 bytes per saved reg), see func_0029C678. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029BCA0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", ComputeSaveSectionsCrc16);
 
-extern s32 func_0029BCA0(void *buf, s32 len); /* save-buffer CRC */
+extern s32 ComputeSaveSectionsCrc16(void *buf, s32 len); /* save-buffer CRC */
 
-/* func_0029BD48(image): verify a save image's stored CRC. The image header is
+/* VerifySaveHeaderChecksum(image): verify a save image's stored CRC. The image header is
  * { s32 payloadLen; s32 storedCrc; payload[payloadLen] } (the layout written by
  * SerializeSaveSections, which stores payloadLen at +0 and the CRC at +4).
- * Recomputes the CRC over the payload (func_0029BCA0 from image+8 over
+ * Recomputes the CRC over the payload (ComputeSaveSectionsCrc16 from image+8 over
  * payloadLen bytes) and returns 1 iff it equals the stored CRC. An image whose
  * stored CRC is 0 is treated as empty/invalid and returns 0.
  *
@@ -1097,14 +1097,14 @@ extern s32 func_0029BCA0(void *buf, s32 len); /* save-buffer CRC */
  * project_matching_ceiling, func_0029C678). The portable #else below is
  * cmp-oracle-validated (cmp_198FA0). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029BD48);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", VerifySaveHeaderChecksum);
 #else
-s32 func_0029BD48(void *image) {
+s32 VerifySaveHeaderChecksum(void *image) {
     s32 storedCrc = ((s32 *)image)[1];
     if (storedCrc == 0) {
         return 0;
     }
-    return func_0029BCA0((char *)image + 8, ((s32 *)image)[0]) == storedCrc;
+    return ComputeSaveSectionsCrc16((char *)image + 8, ((s32 *)image)[0]) == storedCrc;
 }
 #endif
 
@@ -1171,18 +1171,18 @@ s32 SerializeSaveSections(void *dst, s32 slot, SaveSection *table) {
     size += 8;
     cursor[1] = 0;
     cursor[0] = -1;
-    ((s32 *)dst)[1] = func_0029BCA0((char *)dst + 8, size);
+    ((s32 *)dst)[1] = ComputeSaveSectionsCrc16((char *)dst + 8, size);
     ((s32 *)dst)[0] = size;
     return size + 8;
 }
 #endif
 
-/* func_0029BEA0 / FillSaveSlotInfo: fill one save-slot info-display entry (table
+/* FillSaveSlotInfo / FillSaveSlotInfo: fill one save-slot info-display entry (table
  * 0x139410, stride slot*0xA0 + dir*0x1C) from a verified header image. WALLED by
  * BOTH the 8-byte-packed callee-save frame (4 saves) and the unaligned 64-bit
  * ldl/ldr/sdl/sdr field moves the original emits for the +0x13..+0x7 copy — GNU
  * cc1 won't generate those from portable C, so no #else either. Left as asm. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029BEA0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", FillSaveSlotInfo);
 
 /* DeserializeSaveSections(image, slotMul, table): restore the section table
  * `table` from a save `image` (the inverse of SerializeSaveSections), reconciling
@@ -1195,7 +1195,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029BEA0);
  * descriptor's srcPtr (srcPtr + slotMul*descLen), mirroring the serializer's
  * per-slot packing.
  *
- * Steps: (1) CRC-verify via func_0029BD48 — a bad image returns 1 immediately.
+ * Steps: (1) CRC-verify via VerifySaveHeaderChecksum — a bad image returns 1 immediately.
  * (2) Clear every descriptor's matchResult. (3) Walk the image sections: for each,
  * find the descriptor with the same tag; if found, record matchResult (1 / -1 /
  * -2 by length comparison), bump the global changed-section counter D_1A99A0 when
@@ -1220,7 +1220,7 @@ s32 DeserializeSaveSections(void *image, s32 slotMul, SaveSection *table) {
     s32 sentinel;
     SaveSection *entry;
 
-    if (func_0029BD48(image) == 0) {
+    if (VerifySaveHeaderChecksum(image) == 0) {
         return 1;        /* CRC invalid: nothing restored */
     }
 

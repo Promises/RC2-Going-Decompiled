@@ -27,7 +27,7 @@ _Static_assert(sizeof(Moby) == 0x100, "Moby must be 0x100 under ILP32");
  * resolve to the EU addresses via symbol_addrs).
  */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_0029FCF8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", FreeMoby);
 #else
 extern void *g_mobySpawnStart;
 extern s32 g_gameTime;
@@ -59,7 +59,7 @@ void FreeMoby(Moby *moby) {
  * EU twin of USA ResolveMobyAnimFramePtrs; region-agnostic body.
  */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_0029FD50);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", ResolveMobyAnimFramePtrs);
 #else
 extern u8 g_proceduralAnimFrames[];
 void ResolveMobyAnimFramePtrs(Moby *moby) {
@@ -95,7 +95,7 @@ void ResolveMobyAnimFramePtrs(Moby *moby) {
  * PlayMobySound(seq, 4, moby) and records the returned slot in +0x6D. Emitter slots
  * live at g_listenerPosHistory + slot*0x70. EU twin of USA UpdateMobyAnimLoopSound. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_0029FE10);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", UpdateMobyAnimLoopSound);
 #else
 extern u8 g_listenerPosHistory[];
 extern s32 PlayMobySound(s32 seq, s32 mode, Moby *moby);
@@ -471,7 +471,7 @@ void func_002A0708(void *obj, s32 count, void *arg2, void *dst) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_002A07A8);
 
-/* CloseMobyDmaSegment (EU twin func_002A07B0 of USA CloseMobyDmaSegment) — close the
+/* CloseMobyDmaSegment (EU twin CloseMobyDmaSegment of USA CloseMobyDmaSegment) — close the
  * moby texture-upload DMA segment. Reserves a DMATAG qword at g_frameDmaCursor and
  * back-patches the segment's open tag (g_mobySegmentOpenTag) into a CNT tag chaining to
  * it, uploads the moby textures (UploadMobyTextures over g_vramAllocCursor) + appends
@@ -487,7 +487,7 @@ extern void  AppendTexFlushDefaultTex0(void);
 #endif
 
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_002A07B0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", CloseMobyDmaSegment);
 #else
 void CloseMobyDmaSegment(void) {
     u32 *start = g_frameDmaCursor;
@@ -514,7 +514,7 @@ void CloseMobyDmaSegment(void) {
 }
 #endif
 
-/* PatchMobyPacketTex0 (EU twin func_002A08A0 of USA PatchMobyPacketTex0) — stamp
+/* PatchMobyPacketTex0 (EU twin PatchMobyPacketTex0 of USA PatchMobyPacketTex0) — stamp
  * texture-VRAM coordinates into every loaded moby class's GIF packets. Walks the
  * present-class-slot list at &g_mobyClassDataSizes[0xF0] (s32 slot indices, terminated
  * by a negative entry). For each slot's class header it follows the texture-binding
@@ -531,7 +531,7 @@ extern s16   g_mobyTexVramTable[];     /* 2 s16 VRAM fields per tex    */
 #endif
 
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_002A08A0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", PatchMobyPacketTex0);
 #else
 void PatchMobyPacketTex0(void) {
     s32 *classSlot = (s32 *)&g_mobyClassDataSizes[0xF0];
@@ -610,7 +610,7 @@ void func_002A0978(void) {
 }
 #endif
 
-/* CloseMobyGlowSegment (EU twin func_002A0A08) — close the deferred moby-glow draw
+/* CloseMobyGlowSegment (EU twin CloseMobyGlowSegment) — close the deferred moby-glow draw
  * segment. If no glows were queued this frame (g_mobyGlowCount == 0) it writes just an
  * END DMATAG (0x10000000) into the segment tag at *g_deferredSegment2Tag. Otherwise it
  * reserves a CNT qword, builds the glow records (BuildMobyGlowRecords) and emits their
@@ -625,7 +625,7 @@ extern void EmitMobyGlowPackets(void *workBuf);
 #endif
 
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_002A0A08);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", CloseMobyGlowSegment);
 #else
 void CloseMobyGlowSegment(void) {
     u32 *tag;
@@ -663,7 +663,7 @@ void CloseMobyGlowSegment(void) {
 }
 #endif
 
-/* RunSprRenderPipeline (EU twin func_002A0B40) — kick the sprite/moby render pass.
+/* RunSprRenderPipeline (EU twin RunSprRenderPipeline) — kick the sprite/moby render pass.
  * Flushes any pending RPC (func_0011AEA0(0)), stages the 0x800-byte DMA/GIF template
  * (D_238E80) into the render scratchpad at 0x70003800 via CopyQwords, then runs the
  * frame's render task list (RunRenderTaskList over g_renderTaskList /
@@ -678,7 +678,7 @@ extern void *g_renderTaskWorkBuf;
 #endif
 
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_002A0B40);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", RunSprRenderPipeline);
 #else
 void RunSprRenderPipeline(void) {
     func_0011AEA0(0);
@@ -722,7 +722,7 @@ void func_002A0BE0(void) {
 }
 #endif
 
-/* BeginMobyDrawSegment (EU twin func_002A0C10) — open the per-frame moby draw segment.
+/* BeginMobyDrawSegment (EU twin BeginMobyDrawSegment) — open the per-frame moby draw segment.
  * Appends the VIF code-ref tag (D_10FFC0 / D_10FFB0), selects VU1 program 6, kicks the
  * VIF0 chain (D_100080) and appends the segment's GS reg packet (reg 0x47 = SCISSOR,
  * value 0x5360B). Then opens the DMA segment: remembers the current g_frameDmaCursor as
@@ -742,7 +742,7 @@ extern void  AppendGsRegPacket(s32 reg, u32 data);
 #endif
 
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_002A0C10);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", BeginMobyDrawSegment);
 #else
 void BeginMobyDrawSegment(void) {
     AppendVifCodeRefTag(D_10FFC0, D_10FFB0);
@@ -782,24 +782,24 @@ void func_002A0CC0(void *tableBase, s32 count) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_002A0D40);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", FinishMobyRenderChain);
 
-/* RenderMobys (EU twin func_002A0D80) — per-frame moby render driver. Opens the draw
+/* RenderMobys (EU twin RenderMobys) — per-frame moby render driver. Opens the draw
  * segment (BeginMobyDrawSegment), clears the anim-bounds scratch (func_002A0B88, EU twin
  * of USA func_002A1000), builds the moby VU1 chain over the whole table
  * (BuildMobyVuChain(g_mobyTableBase, cursor, -1, 1)); if the chain overran the frame-DMA
  * budget (the limit at g_frameDmaCursor[+0x4] fell below the write cursor) it logs the
  * "mobys dropped" overflow string, then finishes the chain (FinishMobyRenderChain, EU
- * twin func_002A0D40). Faithful TARGET_NATIVE coverage arm. */
+ * twin FinishMobyRenderChain). Faithful TARGET_NATIVE coverage arm. */
 #ifdef TARGET_NATIVE
 extern void *g_mobyTableBase;        /* moby entity array base (stride 0x100) */
 extern char  D_1A9E48[];             /* "N mobys dropped" overflow log string */
 extern s32   DebugPrintStub(void *msg);
-extern void  FinishMobyRenderChain(void);   /* EU twin func_002A0D40 (still INCLUDE_ASM) */
+extern void  FinishMobyRenderChain(void);   /* EU twin FinishMobyRenderChain (still INCLUDE_ASM) */
 #endif
 
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_002A0D80);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", RenderMobys);
 #else
 void RenderMobys(void) {
     BeginMobyDrawSegment();
@@ -907,13 +907,13 @@ f32 func_002A0F18(f32 *a, f32 *b) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_002A0F68);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", UpdateMobyAnimation);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_002A1280);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", BuildActiveMobyChain);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_002A1408);
 
-/* ReleaseMobyGridBlockBits (EU twin func_002A1568)(start, count): clear `count`
+/* ReleaseMobyGridBlockBits (EU twin ReleaseMobyGridBlockBits)(start, count): clear `count`
  * allocation bits starting at bit index `start` in g_mobyGridBlockBitmap (byte start>>3,
  * bit start&7). The original asserts on double-free — clearing a bit that was already 0
  * executes an unconditional `teq` trap; the #else models that error path as an early stop
@@ -923,7 +923,7 @@ extern u8 g_mobyGridBlockBitmap[];   /* bit-per-block allocation bitmap */
 #endif
 
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_002A1568);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", ReleaseMobyGridBlockBits);
 #else
 void ReleaseMobyGridBlockBits(s32 start, s32 count) {
     for (;;) {
@@ -945,14 +945,14 @@ void ReleaseMobyGridBlockBits(s32 start, s32 count) {
 }
 #endif
 
-/* AllocMobyGridBlockBits (EU twin func_002A15C8)(width): allocate a free run of `width`
+/* AllocMobyGridBlockBits (EU twin AllocMobyGridBlockBits)(width): allocate a free run of `width`
  * consecutive bits in g_mobyGridBlockBitmap and return its global bit index. Scans 32-bit
  * words; within a non-full word it slides an aligned width-bit mask (stepping by width)
  * until the masked bits are all clear — the mask shifting fully out of the low 32 bits
  * yields position 0x20 (no fit), advancing to the next word. Sets the run and returns
  * word*0x20 + position. `width` is a power of two dividing 32. Faithful TARGET_NATIVE arm. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_002A15C8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", AllocMobyGridBlockBits);
 #else
 s32 AllocMobyGridBlockBits(s32 width) {
     u32 *p = (u32 *)g_mobyGridBlockBitmap;
@@ -996,7 +996,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_002A2118);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_002A2E30);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_002A3B08);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", SkinMobyCollisionMesh);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_002A47B0);
 
@@ -1004,11 +1004,11 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_002A4908);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_002A4A70);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_002A54D0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", UploadMobyTextures);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_002A5780);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", RunRenderTaskList);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_002A5860);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", BuildMobyVuChain);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_002A7038);
 
@@ -1016,6 +1016,6 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_002A7174);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", PickLowAmmoWeaponForDrop);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_002A74D8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", IncrementBestiaryKillCount);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_002A7650);

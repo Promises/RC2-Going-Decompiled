@@ -1082,22 +1082,22 @@ extern s32 func_0011AB10(void);      /* current thread id */
 extern void func_0011AAB0(s32 thid, s32 arg);
 extern void BuildAspectBlitStrips(void *a, void *b);
 extern s32 InitFmvPlaybackEngine(void *a, void *b, void *engineCtx);
-extern s32 func_0034FD90(void *dmaq, void *base, void *addq);   /* playback loop (parked) */
+extern s32 FmvStreamFeedLoop(void *dmaq, void *base, void *addq);   /* playback loop (parked) */
 extern void func_003503D8(void);     /* FMV teardown */
 #endif
 
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034FCA0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", PlayFmvMovie);
 #else
 /* Structure-exact model (cmp-oracle blocked, abs FMV globals; matching arm stays
    asm). Launch an FMV clip: record the aspect scratch (aspect) and the work-arena
    base (arena -> g_pFmvArenaBase), build the aspect blit strips, resume the FMV
    thread, and start the playback engine; if it armed, run the playback main loop
-   (func_0034FD90) over the arena's DMA-add queue (+0xD9048) and frame chain
+   (FmvStreamFeedLoop) over the arena's DMA-add queue (+0xD9048) and frame chain
    (+0xD9040) and keep its stop reason. Always tears down (func_003503D8) and
    clears the arena base + aspect scratch. Returns the stop reason (0 if the
    engine never armed). */
-s32 func_0034FCA0(void *a, void *b, s32 aspect, u8 *arena, void *engineCtx, void *blitCtx) {
+s32 PlayFmvMovie(void *a, void *b, s32 aspect, u8 *arena, void *engineCtx, void *blitCtx) {
     s32 result = 0;
     *(s32 *)((u8 *)&g_swapGadgetItemIndex + 0xAE) = aspect;
     g_pFmvArenaBase = arena;
@@ -1106,7 +1106,7 @@ s32 func_0034FCA0(void *a, void *b, s32 aspect, u8 *arena, void *engineCtx, void
     func_0011AAB0(func_0011AB10(), 1);
     if (InitFmvPlaybackEngine(a, b, engineCtx) != 0) {
         u8 *base = g_pFmvArenaBase;
-        result = func_0034FD90(base + 0xD9048, base, base + 0xD9040);
+        result = FmvStreamFeedLoop(base + 0xD9048, base, base + 0xD9040);
     }
     func_003503D8();
     *(s32 *)((u8 *)&g_swapGadgetItemIndex + 0xAE) = 0;
@@ -1115,7 +1115,7 @@ s32 func_0034FCA0(void *a, void *b, s32 aspect, u8 *arena, void *engineCtx, void
 }
 #endif
 
-/* func_0034FD90(playCtx, arg1, statsPtr): the FMV playback MAIN LOOP — reads the
+/* FmvStreamFeedLoop(playCtx, arg1, statsPtr): the FMV playback MAIN LOOP — reads the
  * elementary-stream length from *statsPtr, then per-vblank (WaitVblankGetField)
  * pumps the pipeline: a skip/exit decision (D_138180 pad state + g_cinematicExitPending
  * vs arg1 + D_1A7A10 + g_playerProgress + the pad's 0x800 button bit), a CD sector
@@ -1132,4 +1132,4 @@ s32 func_0034FCA0(void *a, void *b, s32 aspect, u8 *arena, void *engineCtx, void
  * (0x34FE4C beql, 0x34FE6C bnel), exactly the class where a one-shot un-verified
  * #else silently mis-computes. Model it faithfully only once the FMV HLE backend
  * makes it oracle-able. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034FD90);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", FmvStreamFeedLoop);

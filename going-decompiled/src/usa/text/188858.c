@@ -2372,10 +2372,10 @@ extern void func_002EFD28(void *dest, void *src, s32 a, s32 count, s32 b);
  * its output to the 2nd arg — see text/191238.c). Defined in text/198FA0. */
 extern void DecompressWad(void *src, void *dest);
 /* Reserve VRAM for a HUD moby-table entry (defined below). */
-void func_0028B8C8(s32 index, s32 size);
+void RelocateHudBankGsSlots(s32 index, s32 size);
 extern u8 g_menuScreenBlock[];                /* 0x menu-screen scratch/VRAM staging block */
 
-/* func_0028B6F0(mode): load and upload the HUD moby-table wads into VRAM.
+/* ReloadAllHudBankTextures(mode): load and upload the HUD moby-table wads into VRAM.
  *
  * The header (g_pHudAssetHeader[0]) holds, per sub-bank, a decompressed size
  * (+0x54/+0x5C/+0x60/+0x64) and a compressed-source pointer (+0x94/+0x9C/+0xA0/
@@ -2383,14 +2383,14 @@ extern u8 g_menuScreenBlock[];                /* 0x menu-screen scratch/VRAM sta
  * +0x14/+0x18). Each present sub-bank (size != 0) is staged into the menu-screen
  * scratch buffer (g_menuScreenBlock+0x20) via func_002EFD28, decompressed into
  * the running VRAM address (g_menuScreenBlock+0x114, advanced by each bank's
- * size) via DecompressWad, then registered with func_0028B8C8.
+ * size) via DecompressWad, then registered with RelocateHudBankGsSlots.
  *
  * Banks 0 and 1 are always loaded; bank 2 only for mode 0 or 2; bank 3 only for
  * mode 1 or 2. [SEEDABLE: mode] */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028B6F0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", ReloadAllHudBankTextures);
 #else
-void func_0028B6F0(s32 mode) {
+void ReloadAllHudBankTextures(s32 mode) {
     u8   *hdr  = (u8 *)g_pHudAssetHeader[0];
     void *dest = *(void **)(g_menuScreenBlock + 0x20);
     s32   vram = *(s32 *)(g_menuScreenBlock + 0x114);
@@ -2402,7 +2402,7 @@ void func_0028B6F0(s32 mode) {
         clen = *(s32 *)((u8 *)&g_hudMobySpawnStart + 0x8);
         func_002EFD28(dest, *(void **)(hdr + 0x94), 0, clen / 16, 0);
         DecompressWad(dest, (void *)vram);
-        func_0028B8C8(0, vram);
+        RelocateHudBankGsSlots(0, vram);
         vram += size;
     }
     /* bank 1 — always */
@@ -2411,7 +2411,7 @@ void func_0028B6F0(s32 mode) {
         clen = *(s32 *)((u8 *)&g_hudMobySpawnStart + 0x10);
         func_002EFD28(dest, *(void **)(hdr + 0x9C), 0, clen / 16, 0);
         DecompressWad(dest, (void *)vram);
-        func_0028B8C8(1, vram);
+        RelocateHudBankGsSlots(1, vram);
         vram += size;
     }
     /* bank 2 — mode 0 or 2 */
@@ -2421,7 +2421,7 @@ void func_0028B6F0(s32 mode) {
             clen = *(s32 *)((u8 *)&g_hudMobySpawnStart + 0x14);
             func_002EFD28(dest, *(void **)(hdr + 0xA0), 0, clen / 16, 0);
             DecompressWad(dest, (void *)vram);
-            func_0028B8C8(3, vram);
+            RelocateHudBankGsSlots(3, vram);
             vram += size;
         }
     }
@@ -2432,14 +2432,14 @@ void func_0028B6F0(s32 mode) {
             clen = *(s32 *)((u8 *)&g_hudMobySpawnStart + 0x18);
             func_002EFD28(dest, *(void **)(hdr + 0xA4), 0, clen / 16, 0);
             DecompressWad(dest, (void *)vram);
-            func_0028B8C8(4, vram);
+            RelocateHudBankGsSlots(4, vram);
         }
     }
 }
 #endif
 
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028B8C8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", RelocateHudBankGsSlots);
 #else
 /**
  * Relocate (and mark allocated) the GS handles for one HUD asset's CLUT and
@@ -2456,7 +2456,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028B8C8);
  *   assetId  index of the HUD asset
  *   baseAddr byte offset added to each handle (rounded up to a multiple of 16)
  */
-void func_0028B8C8(s32 assetId, s32 baseAddr) {
+void RelocateHudBankGsSlots(s32 assetId, s32 baseAddr) {
     u8 *hdr = (u8 *)g_pHudAssetHeader[0];
     s32 *relBase = (s32 *)(hdr + 0x74 + assetId * 4);
     s32 base;
@@ -2490,10 +2490,10 @@ void func_0028B8C8(s32 assetId, s32 baseAddr) {
 #endif
 
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028BA28);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", InvalidateHudBankGsSlots);
 #else
 /**
- * Inverse of func_0028B8C8: un-relocate and free one HUD asset's CLUT and
+ * Inverse of RelocateHudBankGsSlots: un-relocate and free one HUD asset's CLUT and
  * texture GS handles. For each g_hudClutSlots / g_hudTextureSlots handle in this
  * asset's [prevEnd, end) range (bounds from the header arrays at +0x14 / +0x34),
  * subtract the stored base (+0x74) and set the sign bit to mark the slot
@@ -2502,7 +2502,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028BA28);
  *
  *   assetId  index of the HUD asset to unload
  */
-void func_0028BA28(s32 assetId) {
+void InvalidateHudBankGsSlots(s32 assetId) {
     u8 *hdr = (u8 *)g_pHudAssetHeader[0];
     s32 relBase = *(s32 *)(hdr + 0x74 + assetId * 4);
     s32 start;
@@ -2538,28 +2538,28 @@ void func_0028BA28(s32 assetId) {
 }
 #endif
 
-extern void func_002901B0(s32 handle, s32 vramBlk, s32 fmt, s32 wLog, s32 hLog, s32 kickMode); /* UploadTextureToGs */
+extern void UploadTextureToGs(s32 handle, s32 vramBlk, s32 fmt, s32 wLog, s32 hLog, s32 kickMode); /* UploadTextureToGs */
 extern s32 g_vramTextureBase; /* 0x1A72E4 - VRAM static texture base */
 
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028BBA0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", UploadHudBankTextures);
 #else
 /**
  * Upload a HUD asset's textures to GS VRAM.
  *
- * Relocates the shared HUD asset once (func_0028B8C8(0, baseAddr)) if this
+ * Relocates the shared HUD asset once (RelocateHudBankGsSlots(0, baseAddr)) if this
  * asset's header +0x74 flag is not yet set. Then, walking this asset's texture
  * slot range [prevEnd, end) (header +0x34 cumulative bounds), uploads each
- * g_hudTextureSlots entry to GS at the running VRAM cursor (func_002901B0 =
+ * g_hudTextureSlots entry to GS at the running VRAM cursor (UploadTextureToGs =
  * UploadTextureToGs, fmt 0x1B, dims from the slot's +0x6/+0x7 log2 bytes),
  * records the VRAM block in the slot's +0x4 field, and advances the cursor by
  * the texture size (1 << (wLog + hLog)) << 2.
  *
  *   assetId   HUD asset index
- *   baseAddr  relocation base handed to func_0028B8C8
- *   kickMode  passed through to func_002901B0
+ *   baseAddr  relocation base handed to RelocateHudBankGsSlots
+ *   kickMode  passed through to UploadTextureToGs
  */
-void func_0028BBA0(s32 assetId, s32 baseAddr, s32 kickMode) {
+void UploadHudBankTextures(s32 assetId, s32 baseAddr, s32 kickMode) {
     u8 *hdr = (u8 *)g_pHudAssetHeader[0];
     s32 vramCursor;
     s32 start;
@@ -2567,7 +2567,7 @@ void func_0028BBA0(s32 assetId, s32 baseAddr, s32 kickMode) {
     s32 i;
 
     if (*(s32 *)(hdr + 0x74 + assetId * 4) == 0) {
-        func_0028B8C8(0, baseAddr);
+        RelocateHudBankGsSlots(0, baseAddr);
     }
 
     vramCursor = *(s32 *)((u8 *)&g_vramTextureBase + 0x24);
@@ -2580,7 +2580,7 @@ void func_0028BBA0(s32 assetId, s32 baseAddr, s32 kickMode) {
         s32 hLog = ((u8 *)tex)[0x7];
         s32 vramBlk = vramCursor >> 8;
 
-        func_002901B0(tex->handle, vramBlk, 0x1B, wLog, hLog, kickMode);
+        UploadTextureToGs(tex->handle, vramBlk, 0x1B, wLog, hLog, kickMode);
         *(s16 *)((u8 *)tex + 0x4) = vramBlk;
         vramCursor += (1 << (wLog + hLog)) << 2;
     }
@@ -3762,7 +3762,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028D720);
 extern u8   D_138180[];                /* controller port-0 state (0x138180) */
 extern u8   g_soundBankHandlesBlk[];   /* g_soundBankHandles+0x20 (0x189E20) — declared again below for func_0028EB10 */
 extern s32  g_renderLayerMask;         /* +0x4 = current render layer (0x1B1878-... adj global) */
-extern f32  func_00283BF8(f32 a, f32 b);            /* 0x283BF8 Atan2fPoly(x,y) */
+extern f32  Atan2fPoly(f32 a, f32 b);            /* 0x283BF8 Atan2fPoly(x,y) */
 extern void func_00288888(HudElement *w);           /* 0x288888 (w live at call) */
 extern void func_00288840(void);                    /* 0x288840 */
 extern s32 func_002AA3F0(s32 a, s32 b, s32 c, s32 d, s32 e); /* 0x2AA3F0 colour-pulse reset; returns the pulsed colour */
@@ -3799,7 +3799,7 @@ void func_0028D720(HudElement *w) {
         stickX = stickX / mag;
         stickY = stickY / mag;
     }
-    angle = func_00283BF8(stickX, stickY);
+    angle = Atan2fPoly(stickX, stickY);
 
     /* +0x78: top-byte state gate — arm/refresh the "selection open" latch */
     v78 = *(s32 *)(pw + 0x78);
@@ -5057,7 +5057,7 @@ void func_0028FFF0(s32 iconIndex, s32 x0, s32 y0, s32 x1, s32 y1,
 }
 #endif
 
-/* func_002901B0(src, a2, a3, logW, logH, kickNow) = UploadTextureToGs: build a GS
+/* UploadTextureToGs(src, a2, a3, logW, logH, kickNow) = UploadTextureToGs: build a GS
  * image-upload GIF packet for one texture (TRXPOS/TRXREG/TRXDIR) via
  * func_126288 (BuildGsImageUploadPacket). The transfer dimensions come from the
  * log2 dims: width = 1<<logW, height = 1<<logH, GS-buffer-width v12 =
@@ -5069,12 +5069,12 @@ void func_0028FFF0(s32 iconIndex, s32 x0, s32 y0, s32 x1, s32 y1,
  * KickGifImageUpload). MATCH-WALL only (callee-save/register-colouring); un-walled
  * as faithful #else (engine 2.96 = no byte-match). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_002901B0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", UploadTextureToGs);
 #else
 extern void func_126288(void *buf, s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g);
 extern void func_0011AEA0(s32 mode);   /* FlushCache */
 extern void KickGifImageUpload(void *packet, s32 handle);
-void func_002901B0(s32 handle, s32 vramBlk, s32 fmt, s32 wLog, s32 hLog,
+void UploadTextureToGs(s32 handle, s32 vramBlk, s32 fmt, s32 wLog, s32 hLog,
                    s32 kickMode) {
     s32 v12 = (1 << wLog) >> 6;
     s32 tag = 1 << (wLog + hLog - 4);

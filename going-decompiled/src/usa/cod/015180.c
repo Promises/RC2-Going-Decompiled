@@ -183,7 +183,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115DA8);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115E28);
 
 /**
- * func_00115E38 = AssertFail (EU names it) — the SDK assert handler. NEVER RETURNS.
+ * AssertFail (EU names it) — the SDK assert handler. NEVER RETURNS.
  *
  * Prints the standard C assertion diagnostic and aborts:
  *     assertion "%s" failed: file "%s", line %d
@@ -206,7 +206,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115E28);
  */
 #ifndef TARGET_NATIVE
 // recovered splat-dropped code (epilogue-stump mis-split): raw words, byte-exact
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115E38);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", AssertFail);
 #else
 /* 0x13A370 — "assertion \"%s\" failed: file \"%s\", line %d\n" */
 extern const char D_0013A370[];
@@ -230,7 +230,7 @@ void AssertFail(const char *file, s32 line, const char *expr) {
  * are codegen/ABI forms this compiler won't reproduce. Left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115E68);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115E90);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", exit_runAtexitHandlers);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115F28);
 
@@ -294,15 +294,15 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001185E8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00118BC0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00118CC8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", VfprintfDispatch);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00118D98);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", VfprintfFloat);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00119AC0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00119BC8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00119BF8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", VfprintfInteger);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011A7F8);
 
@@ -4017,9 +4017,9 @@ s32 *func_00125960(void) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012596C);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00125970);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", GsDefDispEnvNeedsOffsetFix);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00125A10);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", GetGsDisplayOffsets);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", BuildGsDispEnv);
 
@@ -4027,7 +4027,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00125D94);
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00125E54);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00125E58);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", CalcGsZbufferBasePtr);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", BuildGsDrawEnvPacket);
 
@@ -4132,20 +4132,20 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001272A8);
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127340);
 
 /**
- * func_00127348 = McInit (libmc): bring up the EE-side memory-card RPC client.
+ * McInit (libmc): bring up the EE-side memory-card RPC client.
  * Takes no arguments. Returns 0 on success (the IOP-side status word), or a
  * negative error: SignalSema's result minus 100 if releasing the mutex failed,
  * -0x78 / -120 if mcserv.irx is older than 0x20A, -0x79 / -121 if mcman.irx is
  * older than 0x20E.
  *
- * Sequence: create the libmc mutex D_00137E6C once (CreateSema with
+ * Sequence: create the libmc mutex g_mcMutexSema once (CreateSema with
  * maxCount/initCount 1) if it has never been made (handle < 0); drain any
  * in-flight call via McSync(0,0,0); take the mutex (WaitSema); sceSifInitRpc(0);
- * then bind the libmc server (id 0x80000400) onto the client block D_00141B00.
+ * then bind the libmc server (id 0x80000400) onto the client block g_mcRpcClient.
  *
  * Non-obvious behaviour:
  *  - The bind is a RETRY loop, not a single call. sceSifBindRpc only *starts* the
- *    bind, so the code then polls the client's ready word (D_00141B00 + 0x24)
+ *    bind, so the code then polls the client's ready word (g_mcRpcClient + 0x24)
  *    and, while it is still 0, burns a calibrated ~0x100000-iteration delay loop
  *    (padded with nops so the timing does not depend on the pipeline) before
  *    binding again. It only proceeds once the IOP reports the client ready.
@@ -4176,31 +4176,31 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00
  * the result pointer 85.22%, array-form client store in the first error arm
  * 87.59%, in the third arm 87.44%. This is the known register-colouring wall.
  */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127348);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", McInit);
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127500);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127508);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", McOpen);
 
-extern s32 func_00127508(s32 arg0, s32 arg1, s32 arg2, s32 arg3);
+extern s32 McOpen(s32 arg0, s32 arg1, s32 arg2, s32 arg3);
 extern s32 D_00137E68;
 
 /**
- * Allocate/acquire via func_00127508(arg0, arg1, arg2, 0x40). On failure (NULL
- * result) record error code 0xB in D_00137E68. Returns the func_00127508 result.
+ * Allocate/acquire via McOpen(arg0, arg1, arg2, 0x40). On failure (NULL
+ * result) record error code 0xB in D_00137E68. Returns the McOpen result.
  */
 s32 func_00127630(s32 arg0, s32 arg1, s32 arg2) {
-    s32 result = func_00127508(arg0, arg1, arg2, 0x40);
+    s32 result = McOpen(arg0, arg1, arg2, 0x40);
     if (result == 0) {
         D_00137E68 = 0xB;
     }
     return result;
 }
 
-extern u8   D_00141B00[];   /* libmc RPC client block (init flag @+0x24) */
-extern s32  D_00137E6C;     /* libmc mutex/semaphore handle */
-extern s32  D_00141B80;     /* libmc RPC send-buffer (fd marshalled @+0) */
-extern u8   D_001430C0[];   /* libmc RPC receive-buffer */
+extern u8   g_mcRpcClient[];   /* libmc RPC client block (init flag @+0x24) */
+extern s32  g_mcMutexSema;     /* libmc mutex/semaphore handle */
+extern s32  D_00141B80;        /* libmc RPC send-buffer (fd marshalled @+0) */
+extern u32  g_mcRpcResult;     /* libmc RPC receive-buffer (result code) */
 extern s32  func_0011AC70(s32 sema);
 extern void func_0011AC40(s32 sema);
 
@@ -4213,20 +4213,20 @@ extern void func_0011AC40(s32 sema);
  * RPC result.
  */
 s32 func_00127668(s32 fd) {
-    u8 *client = D_00141B00;
+    u8 *client = g_mcRpcClient;
     s32 r;
     if (*(s32 *)(client + 0x24) == 0) {
         return -0x64;
     }
-    if (func_0011AC70(D_00137E6C) < 0) {
+    if (func_0011AC70(g_mcMutexSema) < 0) {
         return -0xC8;
     }
     D_00141B80 = fd;
-    r = func_0011D620(client, 3, 1, &D_00141B80, 0x30, D_001430C0, 4, 0, 0);
+    r = func_0011D620(client, 3, 1, &D_00141B80, 0x30, &g_mcRpcResult, 4, 0, 0);
     if (r == 0) {
         D_00137E68 = 3;
     } else {
-        func_0011AC40(D_00137E6C);
+        func_0011AC40(g_mcMutexSema);
     }
     return r;
 }
@@ -4235,29 +4235,29 @@ s32 func_00127668(s32 fd) {
  *  pattern as McClose (func_00127668) — init guard, mutex, RPC #4 — with the send
  *  buffer carrying fd @+0, offset @+0x10, whence @+0x14. */
 s32 func_00127720(s32 fd, s32 offset, s32 whence) {
-    u8 *client = D_00141B00;
+    u8 *client = g_mcRpcClient;
     s32 r;
     if (*(s32 *)(client + 0x24) == 0) {
         return -0x64;
     }
-    if (func_0011AC70(D_00137E6C) < 0) {
+    if (func_0011AC70(g_mcMutexSema) < 0) {
         return -0xC8;
     }
     D_00141B80 = fd;
     *(s32 *)((char *)&D_00141B80 + 0x10) = offset;
     *(s32 *)((char *)&D_00141B80 + 0x14) = whence;
-    r = func_0011D620(client, 4, 1, &D_00141B80, 0x30, D_001430C0, 4, 0, 0);
+    r = func_0011D620(client, 4, 1, &D_00141B80, 0x30, &g_mcRpcResult, 4, 0, 0);
     if (r == 0) {
         D_00137E68 = 4;
     } else {
-        func_0011AC40(D_00137E6C);
+        func_0011AC40(g_mcMutexSema);
     }
     return r;
 }
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001277F8);
 
-extern void func_0011CEC8(void *buf, s32 size);  /* cache writeback/invalidate */
+extern void sceSifWriteBackDCache(void *buf, s32 size);  /* cache writeback/invalidate */
 extern u8   D_00142000[];                         /* libmc DMA staging buffer */
 extern void func_001277F8(void);                  /* McRead RPC end-callback */
 
@@ -4266,31 +4266,31 @@ extern void func_001277F8(void);                  /* McRead RPC end-callback */
  *  the user buffer and the DMA buffer before the RPC, which runs with the
  *  func_001277F8 end-callback (endArg = the DMA buffer). */
 s32 func_00127888(s32 fd, void *buf, s32 size) {
-    u8 *client = D_00141B00;
+    u8 *client = g_mcRpcClient;
     s32 r;
     if (*(s32 *)(client + 0x24) == 0) {
         return -0x64;
     }
-    if (func_0011AC70(D_00137E6C) < 0) {
+    if (func_0011AC70(g_mcMutexSema) < 0) {
         return -0xC8;
     }
     D_00141B80 = fd;
     *(u8 **)((char *)&D_00141B80 + 0x1C) = D_00142000;
     *(void **)((char *)&D_00141B80 + 0x18) = buf;
     *(s32 *)((char *)&D_00141B80 + 0xC) = size;
-    func_0011CEC8(buf, size);
-    func_0011CEC8(D_00142000, 0xC0);
-    r = func_0011D620(client, 5, 1, &D_00141B80, 0x30, D_001430C0, 4,
+    sceSifWriteBackDCache(buf, size);
+    sceSifWriteBackDCache(D_00142000, 0xC0);
+    r = func_0011D620(client, 5, 1, &D_00141B80, 0x30, &g_mcRpcResult, 4,
                       (s32)func_001277F8, (s32)D_00142000);
     if (r == 0) {
         D_00137E68 = 5;
     } else {
-        func_0011AC40(D_00137E6C);
+        func_0011AC40(g_mcMutexSema);
     }
     return r;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001279A0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", McWrite);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127B18);
 
@@ -4308,7 +4308,7 @@ void func_00127B40(s32 millis) {
     func_0011AB40();
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127B88);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", McSync);
 
 extern s32 *D_00141B28;
 extern s32 *D_00141B2C;
@@ -4327,7 +4327,7 @@ void func_00127C68(u32 arg0) {
     if (D_00141B30) *D_00141B30 = *(s32 *)((char *)p + 0x90);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127CC0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", McGetInfo);
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127E40);
 
@@ -4363,18 +4363,18 @@ extern char *func_00115AC0(char *dst, const char *src, s32 n);  /* strncpy */
  */
 s32 func_00127E48(s32 port, s32 slot, const char *name, s32 mode,
                   s32 maxent, void *table) {
-    u8 *client = D_00141B00;
+    u8 *client = g_mcRpcClient;
     u8 *req;
     s32 r;
 
     if (*(s32 *)(client + 0x24) == 0) {
         return -0x64;
     }
-    if (func_0011AC70(D_00137E6C) < 0) {
+    if (func_0011AC70(g_mcMutexSema) < 0) {
         return -0xC8;
     }
     if (name == NULL || *name == '\0') {
-        func_0011AC40(D_00137E6C);
+        func_0011AC40(g_mcMutexSema);
         return -0xD2;
     }
 
@@ -4388,14 +4388,14 @@ s32 func_00127E48(s32 port, s32 slot, const char *name, s32 mode,
     req[0x413] = 0;
 
     if (maxent >= 0) {
-        func_0011CEC8(table, maxent << 6);
+        sceSifWriteBackDCache(table, maxent << 6);
     }
 
-    r = func_0011D620(client, 13, 1, req, 0x414, D_001430C0, 4, 0, 0);
+    r = func_0011D620(client, 13, 1, req, 0x414, &g_mcRpcResult, 4, 0, 0);
     if (r == 0) {
         D_00137E68 = 13;
     } else {
-        func_0011AC40(D_00137E6C);
+        func_0011AC40(g_mcMutexSema);
     }
     return r;
 }
@@ -4403,7 +4403,7 @@ s32 func_00127E48(s32 port, s32 slot, const char *name, s32 mode,
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127F90);
 
 /**
- * func_00127F98 — issue one libmc (memory-card) request over SIF RPC, function 16.
+ * McChdir — issue one libmc (memory-card) request over SIF RPC, function 16.
  *
  * Fills the shared 48-byte request block with the caller's two arguments and fires an
  * asynchronous RPC at the IOP-side libmc server. Returns 0 once the call is ACCEPTED —
@@ -4434,7 +4434,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00
  */
 #ifndef TARGET_NATIVE
 // recovered splat-dropped code (epilogue-stump mis-split): raw words, byte-exact
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127F98);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", McChdir);
 #else
 /* 0x141B00 — SIF RPC client handle for libmc; +0x24 is nonzero once bound. */
 extern u8  g_mcRpcClient[];
@@ -4455,7 +4455,7 @@ extern void func_0011AC40(s32 sema);  /* syscall 0x42 SignalSema */
  * type — the existing declaration spells those two as s32. Reusing the unit's own
  * declaration is both correct and the reason the conflict cannot recur. */
 
-s32 func_00127F98(s32 arg0, s32 arg1) {
+s32 McChdir(s32 arg0, s32 arg1) {
     s32 rc;
 
     if (*(s32 *)(g_mcRpcClient + 0x24) == 0) {
@@ -4479,9 +4479,9 @@ s32 func_00127F98(s32 arg0, s32 arg1) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128068);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", McMkDir);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128180);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", McGetEntSpace);
 
 extern s32 D_00143108;
 /* Array-typed: func_00128440 stores arg0 at D_00143180[1] and the ARRAY
@@ -4829,40 +4829,40 @@ void func_0012C380(s32 *arg0, u32 cmd) {
     *(s32 *)((u8 *)arg0 + 0x818) = D_00137F10[cmd >> 28];
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012C3B0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", IpuWaitReady);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012C458);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", IpuWaitCmdResult);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012C508);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012C680);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012C788);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", IpuSkipBits);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012C878);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", IpuGetBits);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012C9C8);
 
-extern s32 func_0012C788(s32 *arg0, s32 arg1);
-extern s32 func_0012C878(s32 *arg0, s32 arg1);
+extern s32 IpuSkipBits(s32 *arg0, s32 arg1);
+extern s32 IpuGetBits(s32 *arg0, s32 arg1);
 extern s32 func_0012CFA0(s32 *arg0);
 
 /**
  * Run channel 5's transfer on arg0, recording its handle at arg0->field_0x1B4.
- * If channel 1 is ready (func_0012C878(arg0, 1) is non-zero) kick it off again,
- * fire channel 7 via func_0012C788 and flush through func_0012CFA0. Returns 0.
+ * If channel 1 is ready (IpuGetBits(arg0, 1) is non-zero) kick it off again,
+ * fire channel 7 via IpuSkipBits and flush through func_0012CFA0. Returns 0.
  */
 s32 func_0012CA48(s32 *arg0) {
-    arg0[0x6D] = func_0012C878(arg0, 5);
-    if (func_0012C878(arg0, 1) != 0) {
-        func_0012C878(arg0, 1);
-        func_0012C788(arg0, 7);
+    arg0[0x6D] = IpuGetBits(arg0, 5);
+    if (IpuGetBits(arg0, 1) != 0) {
+        IpuGetBits(arg0, 1);
+        IpuSkipBits(arg0, 7);
         func_0012CFA0(arg0);
     }
     return 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012CAB0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", IpuParseVideoStartCodes);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012CBC0);
 
@@ -4872,13 +4872,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012CDB0);
 
 /**
  * Drain object arg0: while channel 1 still reports work
- * (func_0012C878(arg0, 1) is non-zero), keep servicing channel 8 via
- * func_0012C788(arg0, 8). The trailing channel-1 poll (0 on exit) is left in
+ * (IpuGetBits(arg0, 1) is non-zero), keep servicing channel 8 via
+ * IpuSkipBits(arg0, 8). The trailing channel-1 poll (0 on exit) is left in
  * the return register; callers ignore it.
  */
 s32 func_0012CFA0(s32 *arg0) {
-    while (func_0012C878(arg0, 1) != 0) {
-        func_0012C788(arg0, 8);
+    while (IpuGetBits(arg0, 1) != 0) {
+        IpuSkipBits(arg0, 8);
     }
 }
 
@@ -4930,7 +4930,7 @@ void func_0012CFE8(struct ScrollObj *obj, s32 delta) {
     obj->extent = extent;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012D060);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", IpuParseGopHeader);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012D100);
 
@@ -5517,7 +5517,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130428);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001306D0);
 
 /* func_001307B0(obj, cmd, madr): restart the GIF/PATH3 DMA pipeline — tear down
- * sub-object 2 (func_0012FA98), flush (func_0012C3B0) and reset the GIF mode
+ * sub-object 2 (func_0012FA98), flush (IpuWaitReady) and reset the GIF mode
  * register (0x10002000=0); then with interrupts disabled program channel
  * 0x1000B400 (MADR 0x1000B410 = madr & 0x0FFFFFFF, QWC 0x1000B420 = 4, CHCR
  * 0x1000B400 = 0x101), restoring interrupts if on; finally issue IPU command
@@ -5530,21 +5530,21 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001307B0);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00130890);
 
 /**
- * Query a batch of channel/register states via func_0012C878(obj, selector):
+ * Query a batch of channel/register states via IpuGetBits(obj, selector):
  * prime selector 3, and only if selector 1 is set, sample selector 8 three
  * times (caching the last into obj+0x144). Then cache selector 0xE into
  * obj+0x148, pulse selector 1, and cache selector 0xE again into obj+0x14C.
  */
 void func_001309C0(s32 *obj) {
-    func_0012C878(obj, 3);
-    if (func_0012C878(obj, 1) != 0) {
-        func_0012C878(obj, 8);
-        func_0012C878(obj, 8);
-        *(s32 *)((u8 *)obj + 0x144) = func_0012C878(obj, 8);
+    IpuGetBits(obj, 3);
+    if (IpuGetBits(obj, 1) != 0) {
+        IpuGetBits(obj, 8);
+        IpuGetBits(obj, 8);
+        *(s32 *)((u8 *)obj + 0x144) = IpuGetBits(obj, 8);
     }
-    *(s32 *)((u8 *)obj + 0x148) = func_0012C878(obj, 0xE);
-    func_0012C878(obj, 1);
-    *(s32 *)((u8 *)obj + 0x14C) = func_0012C878(obj, 0xE);
+    *(s32 *)((u8 *)obj + 0x148) = IpuGetBits(obj, 0xE);
+    IpuGetBits(obj, 1);
+    *(s32 *)((u8 *)obj + 0x14C) = IpuGetBits(obj, 0xE);
 }
 
 extern u8 D_0013BE58[];

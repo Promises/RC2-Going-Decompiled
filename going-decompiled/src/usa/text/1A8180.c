@@ -174,27 +174,27 @@ extern void func_002B0F40(Vec4 *a, Vec4 *out, Vec4 *src, f32 t);
 extern void func_002B0C40(s32 ctx, void *out, void *a, void *b);
 extern void func_002B1270(void *a, Vec4 *b, void *c);
 /* Vec2LengthXyVu0: planar (xy) magnitude of a Vec4, returned as f32 in $f0. The
- * native #else scanners (func_002A8D08/func_002A90A8) feed it into func_00283BF8
+ * native #else scanners (func_002A8D08/func_002A90A8) feed it into Atan2fPoly
  * (atan2) and float compares, so they need the true f32 return (an s32 decl would
- * make ee-gcc insert a spurious cvt.s.w). Guarded like func_00283BF8: the sole
+ * make ee-gcc insert a spurious cvt.s.w). Guarded like Atan2fPoly: the sole
  * matched-build reference discards the value, so f32 is inert to the matched arm. */
 #ifdef TARGET_NATIVE
 extern f32 Vec2LengthXyVu0(void *vec);
 #else
 extern s32 Vec2LengthXyVu0(void *vec);
 #endif
-/* func_00283BF8 == Atan2fPoly (183558.c region): 2-arg arctangent (minimax poly
+/* Atan2fPoly (183558.c region): 2-arg arctangent (minimax poly
  * + quadrant offset, self-contained VU0 — no vcallms upload), returns the angle
  * as f32 in $f0. Native #else of func_002A8C70 needs the true f32 return so the
  * atan2 result feeds func_002A8B08's angle arg without a spurious int<->float
- * cvt (same f32-vs-s32 class as func_00284548 above). The two callers in this
+ * cvt (same f32-vs-s32 class as WrapAnglePiSum above). The two callers in this
  * unit (func_002A8C70, func_002B1348) are both #else-only, so the f32 form is
- * inert to the matched build; guarded per-build to mirror the func_00284548
- * convention. RECOVERED: $f0 return at jr ra in func_00283BF8.s -> f32. */
+ * inert to the matched build; guarded per-build to mirror the WrapAnglePiSum
+ * convention. RECOVERED: $f0 return at jr ra in Atan2fPoly.s -> f32. */
 #ifdef TARGET_NATIVE
-extern f32 func_00283BF8(f32 y, f32 x);
+extern f32 Atan2fPoly(f32 y, f32 x);
 #else
-extern s32 func_00283BF8(f32 x, f32 y);
+extern s32 Atan2fPoly(f32 x, f32 y);
 #endif
 extern s32 func_002A12C0(void *p, s32 r, s32 g, s32 b);
 extern s32 func_00283638(Moby *moby);
@@ -219,13 +219,13 @@ extern s32 func_002835E0(s32 x);
 extern f32 func_00284678(f32 *out, f32 angle);
 extern f32 func_00283B30(f32 angle);  /* cosine */
 extern f32 func_00283B48(f32 angle);  /* sine (0x18 after cosine in 183558.c) */
-extern f32 func_00284590(f32 a, f32 b);
+extern f32 WrapAnglePiDiff(f32 a, f32 b);
 /* func_002AB000: spring-style scalar step. Clamps *p to +/-|v0|, integrates
  * *p = p*(1-v2) + v1*v0, clamps to +/-v3 (when v3>0), then re-clamps to +/-|v0|.
  * v0..v3 arrive in $f12..$f15. Return is void: the asm leaves an incidental $f0
  * but all callers discard it. Defined later in this unit (#else). */
 extern void func_002AB000(f32 *p, f32 v0, f32 v1, f32 v2, f32 v3);
-/* func_00284548 == WrapAnglePiSum, which genuinely returns f32 in $f0. The
+/* WrapAnglePiSum, which genuinely returns f32 in $f0. The
  * native #else of func_002AB668 needs the true f32 return (else ee-gcc inserts a
  * spurious int->float cvt that corrupts the *p out-param, else_divergences #19).
  * BUT the matching build's func_002AAFB8 (line ~768) byte-matches ONLY with the
@@ -234,16 +234,12 @@ extern void func_002AB000(f32 *p, f32 v0, f32 v1, f32 v2, f32 v3);
  * plain f32 here regresses func_002AAFB8 from 100% to 88.24%). So guard per
  * build - matching keeps s32, native gets the correct f32. */
 #ifdef TARGET_NATIVE
-extern f32 func_00284548(f32 a, f32 b);
+extern f32 WrapAnglePiSum(f32 a, f32 b);
 #else
-extern s32 func_00284548(f32 a, f32 b);
+extern s32 WrapAnglePiSum(f32 a, f32 b);
 #endif
-/* Canonical-name angle helpers (183558.c): the func_002A8B08 .s calls these by
- * the WrapAnglePi* glabels (== func_00284548 / func_00284590). Both genuinely
- * return f32 in $f0. Declared here only for the native #else of
- * func_002A8B08 / func_002A8C70; inert to the matched build (no matched fn in
- * this unit calls them by these names). */
-extern f32 WrapAnglePiSum(f32 a, f32 b);    /* a+b wrapped into [-pi,pi] */
+/* WrapAnglePiDiff (183558.c) genuinely returns f32 in $f0; WrapAnglePiSum's
+ * per-build declaration is above (s32 on the matched arm, see func_002AAFB8). */
 extern f32 WrapAnglePiDiff(f32 a, f32 b);   /* signed (a-b) wrapped into [-pi,pi] */
 extern void Vec4SubVu0(Vec4 *dst, Vec4 *a, Vec4 *b);
 extern void Vec4ScaleVu0(Vec4 *dst, f32 s, const Vec4 *src);   /* sig: scale BEFORE src (matches the def in 183558.c) */
@@ -531,7 +527,7 @@ s32 GetRandomInt(s32 n) {
 }
 #endif
 
-/* func_002A8688: uniform random integer in [lo, hi] (inclusive) — take a 15-bit
+/* RandRangeInclusive: uniform random integer in [lo, hi] (inclusive) — take a 15-bit
  * random value from the core LCG (func_001163B0() >> 16 & 0x7FFF) and reduce it
  * modulo the span (hi - lo + 1), then bias by lo. Walled: saves $16/$17/$31
  * (save-layout wall). */
@@ -543,9 +539,9 @@ s32 GetRandomInt(s32 n) {
  * not post-pass-fixable — [[reference_register_coloring_wall]] scheduling class).
  * Best faithful body kept as the TARGET_NATIVE #else. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8688);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", RandRangeInclusive);
 #else
-s32 func_002A8688(s32 lo, s32 hi) {
+s32 RandRangeInclusive(s32 lo, s32 hi) {
     s32 r = (func_001163B0() >> 16) & 0x7FFF;
     s32 span = hi - lo + 1;
 
@@ -608,9 +604,9 @@ void func_002A87F0(void *handle, f32 lo, f32 hi) {
  * straight through to the magnitude RNG. (func_00283B30 = cos, ...B48 = sin.)
  */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8868);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", GetRandomVectorInSphere);
 #else
-void func_002A8868(Vec4 *dst, f32 lo, f32 hi) {
+void GetRandomVectorInSphere(Vec4 *dst, f32 lo, f32 hi) {
     f32 radius = func_002A86E0(lo, hi);
     f32 angle2 = func_002A87A8();
     f32 angle1 = func_002A87A8();
@@ -765,7 +761,7 @@ void func_002A8C70(Moby *moby, Moby *target, f32 *driveOut,
                    f32 gain, f32 damp, f32 clampLimit) {
     f32 dx = target->pos.x - moby->pos.x;
     f32 dy = target->pos.y - moby->pos.y;
-    f32 angle = func_00283BF8(dx, dy);
+    f32 angle = Atan2fPoly(dx, dy);
     func_002A8B08(moby, driveOut, angle, gain, damp, clampLimit);
 }
 #endif
@@ -791,7 +787,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  * and if |surface - ref.z| > snapEps run a min/max clamp (bit0 + sign select)
  * that may snap pos<-ref. (2) Build a rescaled step dir (normalize(pos-ref) *
  * radius*1.2) and a lifted origin (ref + (0,0,stepZ)); CollLine along it, and on
- * a hit whose planar angle (Vec2LengthXyVu0/func_00283BF8) passes hitEps, scale the
+ * a hit whose planar angle (Vec2LengthXyVu0/Atan2fPoly) passes hitEps, scale the
  * hit delta (func_1290E0/Vec4ScaleVu0) into pos. (3) Unless bit1 is set, iterate
  * up to 6x: CollSphere(radius) at pos, and on a hit inside hitEps snap pos to
  * g_collHitPointNudged and step z by -(stepZ+radius). (4) Re-probe + mirror the
@@ -799,7 +795,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  *
  * Helper sigs (recovered): f32 func_002A9888(Vec4 *pos) [surface sample, UNCONFIRMED];
  * void func_1290E0(void *dst, void *src) [hit-delta build, UNCONFIRMED];
- * f32 Vec2LengthXyVu0(Vec4 *v) [planar magnitude]; f32 func_00283BF8(f32,f32) [atan2];
+ * f32 Vec2LengthXyVu0(Vec4 *v) [planar magnitude]; f32 Atan2fPoly(f32,f32) [atan2];
  * Vec4ScaleVu0(dst, scale, src). Delay-slot notes: the bnel @0x2A8F14 and the two
  * bc1fl @0x2A8F98/0x2A9030 are LIKELY (delay runs only when taken) — the sphere
  * loop's i++ lives in a bc1fl delay slot.
@@ -870,7 +866,7 @@ s32 func_002A8D08(void *ent, Vec4 *ref, Vec4 *pos, s32 flags,
     if (ret != 0) {
         if (CollLine(&origin, &endpoint, (flags & 2) | 0x24, ent, (void *)0)) {
             if (*(s32 *)(cw + 0x1C) > 0) {
-                f32 ang = func_00283BF8(*(f32 *)(cw + 0x48),
+                f32 ang = Atan2fPoly(*(f32 *)(cw + 0x48),
                                         Vec2LengthXyVu0((Vec4 *)(cw + 0x40)));
                 if (hitEps <= ang) {
                     f32 det;
@@ -899,7 +895,7 @@ s32 func_002A8D08(void *ent, Vec4 *ref, Vec4 *pos, s32 flags,
             if (CollSphere(&sphereFrom, 0x24, ent, radius) == 0) {
                 break;
             }
-            ang = func_00283BF8(DistXYVu0(pos, &g_collHitPoint),
+            ang = Atan2fPoly(DistXYVu0(pos, &g_collHitPoint),
                                 g_collHitPoint.z - pos->z);
             if (*(s32 *)(cw + 0x18) == 0 && !(hitEps < ang)) {
                 continue;   /* grazing hit: keep scanning without snapping */
@@ -946,7 +942,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  * Flow: probe = moby+0x10 + dir; if |dir| > minLen, rescale dir to (minLen) and
  * CollLine along it (on hit: step z by -stepZ, flag). Then up to 6x: CollSphere
  * at the probe, snapping to g_collHitPointNudged and stepping z by -stepZ on each
- * hit. Then a final CollLine; on a hit passing the Vec2LengthXyVu0/func_00283BF8
+ * hit. Then a final CollLine; on a hit passing the Vec2LengthXyVu0/Atan2fPoly
  * planar-angle test (>0.5) and z test, nudge z by 0.3*overshoot. Ends with a
  * Vec4SubVu0 and returns the flag word. Likely branch: bc1tl @0x2A92B8 (its
  * `ori $23,0x4` delay slot runs only when taken). g_collHitPoint /
@@ -1006,7 +1002,7 @@ s32 func_002A90A8(void *moby, Vec4 *dir, s32 mask, f32 stepZ, f32 minLen, f32 sp
         if (CollLine(&from, &to, m20 | 0x2, moby, (void *)0)) {
             if (*(s32 *)(cw + 0x1C) > 0) {         /* hit-count field */
                 flags |= 2;
-                if (0.5f < func_00283BF8(*(f32 *)(cw + 0x48),
+                if (0.5f < Atan2fPoly(*(f32 *)(cw + 0x48),
                                          Vec2LengthXyVu0((Vec4 *)(cw + 0x40)))) {
                     flags |= 4;                    /* grazing / angle flag */
                 }
@@ -2071,7 +2067,7 @@ void func_002AA6B8(Moby *self, const Vec4 *refPos, Moby **list, s32 count,
         if (entry == skip) {
             continue;
         }
-        bearing = func_00283BF8(entry->pos.x - ref.x, entry->pos.y - ref.y);
+        bearing = Atan2fPoly(entry->pos.x - ref.x, entry->pos.y - ref.y);
         *(f32 *)(packet + 0x00) = func_00283B30(bearing) * magnitude;  /* cos */
         *(f32 *)(packet + 0x04) = func_00283B48(bearing) * magnitude;  /* sin */
         *(f32 *)(packet + 0x08) = zComp;
@@ -2411,8 +2407,8 @@ f32 func_002AAFA8(f32 a, f32 b, f32 t) {
 }
 
 /**
- * Two-stage scalar transform: feed (b, a) through func_00284590, scale the
- * result by c, and forward (a, scaled) to func_00284548.
+ * Two-stage scalar transform: feed (b, a) through WrapAnglePiDiff, scale the
+ * result by c, and forward (a, scaled) to WrapAnglePiSum.
  */
 /* Return type guarded like Vec2LengthXyVu0: the matching build byte-matches ONLY
  * with the s32 form (the s32 callee/return type-errors cancel into the exact $f0
@@ -2420,11 +2416,11 @@ f32 func_002AAFA8(f32 a, f32 b, f32 t) {
  * true f32 return so callers (func_002AF728) get the untruncated angle. */
 #ifndef TARGET_NATIVE
 s32 func_002AAFB8(f32 a, f32 b, f32 c) {
-    return func_00284548(a, func_00284590(b, a) * c);
+    return WrapAnglePiSum(a, WrapAnglePiDiff(b, a) * c);
 }
 #else
 f32 func_002AAFB8(f32 a, f32 b, f32 c) {
-    return func_00284548(a, func_00284590(b, a) * c);
+    return WrapAnglePiSum(a, WrapAnglePiDiff(b, a) * c);
 }
 #endif
 
@@ -2675,7 +2671,7 @@ f32 func_002AB3B0(f32 target, f32 velRate, f32 accel, f32 maxSpeed, f32 *pPos, f
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB5A0);
 #else
 f32 func_002AB5A0(f32 a, f32 b, s32 sign) {
-    f32 d = func_00284590(a, b);   /* func_00284590 == WrapAnglePiDiff(a - b) */
+    f32 d = WrapAnglePiDiff(a, b);   /* WrapAnglePiDiff(a - b) */
 
     if (sign == 0) {
         return d;
@@ -2708,7 +2704,7 @@ f32 func_002AB668(f32 a, f32 maxStep, f32 *p, s32 sign) {
     } else if (delta < -maxStep) {
         delta = -maxStep;
     }
-    p[0] = func_00284548(p[0], delta);   /* func_00284548 == WrapAnglePiSum */
+    p[0] = WrapAnglePiSum(p[0], delta);   /* WrapAnglePiSum */
     return func_002AB5A0(a, p[0], sign);
 }
 #endif
@@ -2750,7 +2746,7 @@ f32 func_002AB700(f32 *p, f32 *vel, s32 mode, f32 target, f32 b, f32 c, f32 d) {
 
     delta = func_002AB5A0(target, *p, sign);
     func_002AB000(vel, delta, b, c, d);
-    *p = func_00284548(*p, *vel);            /* func_00284548 == WrapAnglePiSum */
+    *p = WrapAnglePiSum(*p, *vel);            /* WrapAnglePiSum */
     r = func_002AB5A0(target, *p, sign);
     if (GetFloatAbs(r) < d * 0.009999999776f) {   /* 0x3C23D70A */
         *p = target;
@@ -3162,8 +3158,8 @@ void func_002AC0B8(Moby *owner, Vec4 *basePos, s32 primMask) {
         Vec4AddVu0(&dir, &dir, basePos);
         dir.z += 0.015000001f;
 
-        r1 = func_002A8688(20, 35);   /* RandRangeInclusive */
-        r2 = func_002A8688(40, 60);
+        r1 = RandRangeInclusive(20, 35);   /* RandRangeInclusive */
+        r2 = RandRangeInclusive(40, 60);
         SpawnParticleType04(&scatterPoints[i], &dir, 0x7000A0FFu, 0xFF, r1, 30, r2, 1);
     }
 }
@@ -3276,7 +3272,7 @@ extern void MatrixMultiplyVu0(Mat4x4 *dst, Mat4x4 *a, Mat4x4 *b);
 /**
  * Extract ZYX-style euler angles from a rotation matrix `mtx` into out[0..2].
  * Copies the 3x3 into a scratch matrix (translation row zeroed to {0,0,0,1}),
- * then peels the angles with three atan2 (func_00283BF8) + Givens rotations that
+ * then peels the angles with three atan2 (Atan2fPoly) + Givens rotations that
  * successively zero the off-axis terms: a1=atan2(row0.x,row0.y) about -Z, then
  * a2=atan2(row0.x,-row0.z) about -Y, then a3=atan2(row1.y,row1.z) on the residual.
  * Writes out[0]=a3, out[1]=a2, out[2]=a1.
@@ -3295,21 +3291,21 @@ void MatrixToEulerAngles(Mat4x4 *mtx, void *out) {
     func_00283638((Moby *)((u8 *)&m + 0x30));   /* zero the translation row */
     *(f32 *)((u8 *)&m + 0x3C) = 1.0f;
 
-    a1 = func_00283BF8(*(f32 *)((u8 *)&m + 0x00), *(f32 *)((u8 *)&m + 0x04));
+    a1 = Atan2fPoly(*(f32 *)((u8 *)&m + 0x00), *(f32 *)((u8 *)&m + 0x04));
     axis.x = 0.0f;
     axis.y = 0.0f;
     axis.z = -a1;
     func_00283DC0(&rot, &axis);
     MatrixMultiplyVu0(&m, &rot, &m);
 
-    a2 = func_00283BF8(*(f32 *)((u8 *)&m + 0x00), -*(f32 *)((u8 *)&m + 0x08));
+    a2 = Atan2fPoly(*(f32 *)((u8 *)&m + 0x00), -*(f32 *)((u8 *)&m + 0x08));
     axis.x = 0.0f;
     axis.y = -a2;
     axis.z = 0.0f;
     func_00283DE0(&rot, &axis);
     MatrixMultiplyVu0(&m, &rot, &m);
 
-    a3 = func_00283BF8(*(f32 *)((u8 *)&m + 0x14), *(f32 *)((u8 *)&m + 0x18));
+    a3 = Atan2fPoly(*(f32 *)((u8 *)&m + 0x14), *(f32 *)((u8 *)&m + 0x18));
     e[2] = a1;
     e[1] = a2;
     e[0] = a3;
@@ -5009,7 +5005,7 @@ void func_002AF728(Moby *moby, void *ctrlPtr, f32 stepZ, f32 snapEps) {
 
     if (blocked == 0 || *(f32 *)(c + 0x1C) < dist) {
         /* clear path or beyond leash: re-aim at the target and re-roll the timer */
-        *(f32 *)(c + 0x24) = func_00283BF8(*(f32 *)(c + 0x0) - *(f32 *)(m + 0x10),
+        *(f32 *)(c + 0x24) = Atan2fPoly(*(f32 *)(c + 0x0) - *(f32 *)(m + 0x10),
                                            *(f32 *)(c + 0x4) - *(f32 *)(m + 0x14));
         *(s16 *)(c + 0x2A) = (s16)RandRangeInclusive(0x1E, 0x5A);
         *(s16 *)(c + 0x28) = 1;
@@ -5017,7 +5013,7 @@ void func_002AF728(Moby *moby, void *ctrlPtr, f32 stepZ, f32 snapEps) {
         /* blocked and within leash: steer toward the hero when close enough */
         f32 heroDist = DistXYVu0(mpos, &g_heroPos);
         if (heroDist < *(f32 *)(c + 0x20)) {
-            f32 bearing = func_00283BF8(*(f32 *)(m + 0x10) - g_heroPos.x,
+            f32 bearing = Atan2fPoly(*(f32 *)(m + 0x10) - g_heroPos.x,
                                         *(f32 *)(m + 0x14) - g_heroPos.y);
             *(f32 *)(c + 0x24) = func_002AAFB8(*(f32 *)(c + 0x24), bearing,
                                               heroDist / *(f32 *)(c + 0x20));
@@ -5199,10 +5195,10 @@ void func_002AFCD8(void *out, f32 *p1, f32 *p2, f32 a, f32 b, f32 c) {
     f32 *offset = (f32 *)((u8 *)out + 0x18);
 
     if (c > 0.0f) {
-        *p1 = func_00284548(*p1, b);          /* WrapAnglePiSum */
+        *p1 = WrapAnglePiSum(*p1, b);          /* WrapAnglePiSum */
         *offset = func_00283B48(*p1) * a + c;
     } else {
-        *p1 = func_00284548(*p1, b);
+        *p1 = WrapAnglePiSum(*p1, b);
         *offset = *offset - *p2;
         *p2 = func_00283B48(*p1) * a;
         *offset = *offset + *p2;
@@ -5235,8 +5231,8 @@ void func_002AFD90(void *out, f32 *p1, f32 *p2, f32 scale, f32 b, f32 c) {
 
     *(f32 *)((u8 *)out + 0xF0) = scale * sinP1 * func_00283B48(*p2);
     *(f32 *)((u8 *)out + 0xF4) = scale * func_00283B48(*p1) * func_00283B30(*p2);
-    *p1 = func_00284548(*p1, b);              /* WrapAnglePiSum */
-    *p2 = func_00284548(*p2, c);
+    *p1 = WrapAnglePiSum(*p1, b);              /* WrapAnglePiSum */
+    *p2 = WrapAnglePiSum(*p2, c);
 }
 #endif
 
@@ -5344,7 +5340,7 @@ void func_002B0038(Moby *parent, Moby *child, void *srcTransform, s32 flags) {
 /* func_002B0150 (this unit): score a candidate `moby` (position at +0x10) against
  * a query point. Samples Vec3DistVu0(query, mobyPos); flags the candidate
  * (*outFlag=1) when b exceeds that sample. Then builds two drive-heading angles
- * (AngleAbsDiffPi over the planar bearing func_00283BF8(dx,dy) and over the
+ * (AngleAbsDiffPi over the planar bearing Atan2fPoly(dx,dy) and over the
  * XY-distance-vs-dz bearing) and flags again when 0<c<heading1 or 0<d<heading2.
  * Returns sample*(1+heading1), plus 8.0 when the moby is a valid class-filtered
  * entry (func_002AC9E0). (Un-parked: AngleAbsDiffPi CONFIRMED f32(f32,f32)
@@ -5364,8 +5360,8 @@ f32 func_002B0150(Vec4 *query, Moby *moby, s32 *outFlag, f32 a, f32 b, f32 c, f3
         *outFlag = 1;
     }
 
-    heading1 = AngleAbsDiffPi(func_00283BF8(mpos[0] - query->x, mpos[1] - query->y), a);
-    heading2 = AngleAbsDiffPi(func_00283BF8(DistXYVu0(query, (Vec4 *)mpos),
+    heading1 = AngleAbsDiffPi(Atan2fPoly(mpos[0] - query->x, mpos[1] - query->y), a);
+    heading2 = AngleAbsDiffPi(Atan2fPoly(DistXYVu0(query, (Vec4 *)mpos),
                                            mpos[2] - query->z), 0.0f);
 
     if (0.0f < c && c < heading1) {
@@ -5622,8 +5618,8 @@ int func_002B03E8(f32 enable1, f32 coneYaw2, f32 range3, f32 conePitch4,
                         if ((enable1 < 3.141593f) || (coneYaw2 < 3.141593f)) {
                             if (D_1A8CA0 == 0) {
                                 /* METHOD A: planar bearing via atan2 + shortest-diff */
-                                f32 a0 = func_00283BF8(candToOrigin.x, candToOrigin.y);
-                                f32 a1 = func_00283BF8(((f32 *)aimDir)[0], ((f32 *)aimDir)[1]);
+                                f32 a0 = Atan2fPoly(candToOrigin.x, candToOrigin.y);
+                                f32 a1 = Atan2fPoly(((f32 *)aimDir)[0], ((f32 *)aimDir)[1]);
                                 f32 innerN;
                                 angleH = AngleAbsDiffPi(a0, a1);
 
@@ -5632,9 +5628,9 @@ int func_002B03E8(f32 enable1, f32 coneYaw2, f32 range3, f32 conePitch4,
                                     innerN = innerAngle5 + (enable1 - innerAngle5) * t;
                                 }
                                 if (angleH < innerN) {
-                                    f32 b0 = func_00283BF8(Vec2LengthXyVu0(&candToOrigin),
+                                    f32 b0 = Atan2fPoly(Vec2LengthXyVu0(&candToOrigin),
                                                            candToOrigin.z);
-                                    f32 b1 = func_00283BF8(Vec2LengthXyVu0((Vec4 *)aimDir),
+                                    f32 b1 = Atan2fPoly(Vec2LengthXyVu0((Vec4 *)aimDir),
                                                            ((f32 *)aimDir)[2]);
                                     angleV = AngleAbsDiffPi(b0, b1);
                                     pitchWide = conePitchN < conePitch4;
@@ -6147,7 +6143,7 @@ void func_002B1348(s32 ctx, Vec4 *vec, void *b) {
 
     t.q = *(u_long128 *)vec;
     func_002B0C40(ctx, (void *)&t, (void *)&t, b);
-    func_00283BF8(t.v.x, t.v.y);
+    Atan2fPoly(t.v.x, t.v.y);
 }
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */

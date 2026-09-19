@@ -287,7 +287,7 @@ void func_002CAA58(f32 x) {
  * zeroes the matrix with 128-bit sq writes scalar C can't emit); #else is the
  * structure model. Word-verified vs USA func_002CABC0: EU splat anchors these globals
  * via g_nVendorBuyQuantity+0x2FB8 = the +0x80 twins of USA g_cameraPos/g_cameraMatrix
- * (named here to match the func_002CB5D0 #else precedent). */
+ * (named here to match the TickFrontEndScreenIdle #else precedent). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002CAA88);
 #else
@@ -397,15 +397,15 @@ void RequestMenuScreenChange(s32 screen) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002CAC90);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", CaptureScreenToVram);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002CAD98);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", RestoreScreenFromVram);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", MenuScreenLoad);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002CB410);
 
-/* func_002CB5D0: EU twin of USA func_002CB720 — enter/refresh a menu screen's
+/* TickFrontEndScreenIdle: EU twin of USA func_002CB720 — enter/refresh a menu screen's
  * render context. Resets the screen state word, publishes the screen's stored
  * camera position (two Vec4s at +0x50/+0x60) and view block to the live camera
  * globals, rebuilds the camera projection + frame view matrices, swaps to moby
@@ -420,13 +420,13 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002CB410);
  * g_menuScreenBlock), the camera globals are the standard +0x80 EU twins, and
  * the callees are the EU func_ twins (USA name in each comment). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002CB5D0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", TickFrontEndScreenIdle);
 #else
 extern void func_002FD190(void);                          /* func_002FCFC8 */
 extern void func_00283370(void *dst, void *src, s32 len); /* func_00283460 (qword copy) */
 extern void func_0027AF28(void);                          /* BuildCameraProjection */
 extern void func_0027A100(void);                          /* BuildFrameViewMatrices */
-extern void func_0028BD00(s32 tableId);                   /* SwapMobyTableContext */
+extern void SwapMobyTableContext(s32 tableId);                   /* SwapMobyTableContext */
 extern void func_0027A3D8(void);                          /* func_0027A550 */
 extern void func_0027D818(s32 frames);                    /* FadeOutToBlackBlocking */
 extern void func_00132B88(s32 id);                        /* func_00132B28 */
@@ -440,7 +440,7 @@ extern void snd_Pump(void);
 extern f32 g_cameraPos[4];
 /* Projection scale cot(fov/2) (USA g_cameraProjScale @0x1B9070; EU twin @0x1B90F0, +0x80). */
 extern f32 g_cameraProjScale;
-void func_002CB5D0(void) {
+void TickFrontEndScreenIdle(void) {
     u8 *scr = D_001F0000 + 0x2840;   /* EU menu screen-state block (USA g_menuScreenBlock) */
     s32 kind;
 
@@ -452,7 +452,7 @@ void func_002CB5D0(void) {
     g_cameraProjScale = *(f32 *)(scr + 0xF8);
     func_0027AF28();   /* BuildCameraProjection */
     func_0027A100();   /* BuildFrameViewMatrices */
-    func_0028BD00(0);  /* SwapMobyTableContext */
+    SwapMobyTableContext(0);  /* SwapMobyTableContext */
     func_0027A3D8();
     *(s32 *)(scr + 0x118) = 0;
     *(s32 *)(scr + 0x11C) = 0;
@@ -497,9 +497,9 @@ void func_002CB5D0(void) {
  * The USA-model omission of the RequestGameStateChange()==0 early-return (present in both
  * regions' asm) is preserved for lockstep parity. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002CB710);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", TickFrontEndScreenMachine);
 #else
-s32 func_002CB710(void) {
+s32 TickFrontEndScreenMachine(void) {
     extern u8   D_139460[];              /* USA g_areaTable */
     extern u8   g_nSaveLoadStatusCode[];
     extern u8   g_nLevelExitDestination[];
@@ -788,9 +788,9 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002CC7B8);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002CC8C8);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002CC950);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", TickActiveMenuScreen);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002CCAC8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", RenderMenuScreenWidgets);
 
 /* func_002CD300: EU twin of USA func_002CD450 — menu screen-state query. Only acts when
  * the active screen (ss[0x14]->[0xE8]) is the one passed in. Returns a tri-state confirm/
@@ -848,7 +848,7 @@ s32 func_002CD398(s32 *list) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002CD3C0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", BuildCheatMenuItemList);
 
 /* return 0 stub. */
 s32 func_002CD500(void) {
@@ -1102,15 +1102,15 @@ s32 func_002CE218(void) {
  * 2D batch runs the per-screen overlay (func_0029CB40) and draws the localized title string
  * (PAL id 0xB60) at (D_1ABA40, D_1ABA44) in 0x80F0F0F0; then, if the GUI is up and its museum
  * widget handle (g_guiInstance+0x38000 .+0x7A9C) is non-null, renders that moby model
- * (func_002A0C10 begin .. func_002A0D40 finish + the func_00350Dxx/Exx/F98 model-setup chain),
- * waits one DMA fence (WaitFrameDmaFence(0x10)) and patches the moby packet's TEX0 (func_002A08A0).
+ * (BeginMobyDrawSegment begin .. FinishMobyRenderChain finish + the func_00350Dxx/Exx/F98 model-setup chain),
+ * waits one DMA fence (WaitFrameDmaFence(0x10)) and patches the moby packet's TEX0 (PatchMobyPacketTex0).
  * Matching arm stays INCLUDE_ASM (beql branch-likely null guard + 64-bit daddu handle-copy not
  * reproduced by cc1); #else is the structure model. Word-verified vs USA func_002CE3A0: overlay
  * func_0029CFE0->func_0029CB40; string id 0x2BE5->0xB60 (PAL localized-table index, genuine
  * region diff); label pos D_1AB9D8/DC->D_1ABA40/44 (+0x68); text draw func_002801B8->func_0027FF28;
  * GUI field 0x79EC->0x7A9C (+0xB0); moby chain func_002A1000/1028/1058->func_002A0B88/0BB0/0BE0,
- * BeginMobyDrawSegment->func_002A0C10, FinishMobyRenderChain->func_002A0D40, func_0034F928/9B8/9F8/
- * AF8->func_00350DC8/E58/E98/F98, WaitFrameDmaFence->WaitFrameDmaFence, PatchMobyPacketTex0->func_002A08A0. */
+ * BeginMobyDrawSegment->BeginMobyDrawSegment, FinishMobyRenderChain->FinishMobyRenderChain, func_0034F928/9B8/9F8/
+ * AF8->func_00350DC8/E58/E98/F98, WaitFrameDmaFence->WaitFrameDmaFence, PatchMobyPacketTex0->PatchMobyPacketTex0. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002CE388);
 #else
@@ -1118,12 +1118,12 @@ s32 func_002CE388(void) {
     extern void func_0029CB40(void);
     extern s32  D_1ABA40;
     extern s32  D_1ABA44;
-    extern void func_002A0C10(void);
+    extern void BeginMobyDrawSegment(void);
     extern void func_002A0B88(void);
     extern void func_002A0BB0(void);
     extern void func_002A0BE0(void);
-    extern void func_002A0D40(void);
-    extern void func_002A08A0(void);
+    extern void FinishMobyRenderChain(void);
+    extern void PatchMobyPacketTex0(void);
     extern void WaitFrameDmaFence(s32 mask);
     extern void func_00350DC8(s32 handle);
     extern void func_00350E58(s32 handle);
@@ -1138,7 +1138,7 @@ s32 func_002CE388(void) {
 
     if (g_guiInstance != NULL &&
         *(s32 *)(g_guiInstance + 0x38000 + 0x7A9C) != 0) {
-        func_002A0C10();
+        BeginMobyDrawSegment();
         func_002A0B88();
         func_002A0BB0();
         handle = *(s32 *)(g_guiInstance + 0x38000 + 0x7A9C);
@@ -1147,9 +1147,9 @@ s32 func_002CE388(void) {
         func_00350E98(handle);
         func_00350F98(handle, handle + 0xC00);
         func_002A0BE0();
-        func_002A0D40();
+        FinishMobyRenderChain();
         WaitFrameDmaFence(0x10);
-        func_002A08A0();
+        PatchMobyPacketTex0();
     }
     return 0;
 }
@@ -1493,9 +1493,9 @@ s32 func_002CEA20(void) {
  * cursor/prev/next->D_1ABA50/54/58 (gp); killcounts->D_00180000+0x8590; entry table->D_2643B0;
  * D_0025ABA0->D_0025ABC0, D_0025AC08->D_0025AC28; PlayGlobalSound->func_002E6C28. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002CEAA0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", UpdateBestiaryMenuInput);
 #else
-s32 func_002CEAA0(void) {
+s32 UpdateBestiaryMenuInput(void) {
     extern s32  g_padButtonsPressed;
     extern s32  D_1ABA54;                /* USA g_bestiaryPrevEntry (gp) */
     extern s32  D_1ABA58;                /* USA g_bestiaryNextEntry (gp) */
@@ -1580,7 +1580,7 @@ s32 func_002CEAA0(void) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002CECF8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", DrawBestiaryEntry);
 
 /* Reset the bestiary cursor to entry 1. */
 s32 func_002CF530(void) {
@@ -1593,9 +1593,9 @@ s32 func_002CF540(void) {
     return 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002CF548);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", DrawBestiaryPagingArrows);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002CFB48);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", DrawMenuPagingChrome);
 
 /* DrawMenuItemSelectionBox (EU twin of USA DrawMenuItemSelectionBox): draw the four-sided
  * highlight box around a menu item, centred on screen. `width` sets the half-extent
@@ -1605,9 +1605,9 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002CFB48);
  * Word-verified vs USA DrawMenuItemSelectionBox: g_screenWidth -> *(s32*)(D_001A7308 + 0xB8)
  * (EU reaches the screen-width word off D_001A7308); func_002904B0->func_002904C8. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002D0018);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", DrawMenuItemSelectionBox);
 #else
-void func_002D0018(s32 width, s32 color) {
+void DrawMenuItemSelectionBox(s32 width, s32 color) {
     extern u8 D_001A7308[];   /* USA g_screenWidth, read at +0xB8 */
     extern void func_002904C8(s32 x0, s32 y0, s32 x1, s32 y1, s32 color, s32 flag); /* USA func_002904B0 */
     s32 half = width / 2 + 5;
@@ -1805,7 +1805,7 @@ s32 func_002D0290(void) {
  * the player model for the model cheats (2/9/10/0xB); on deny it plays reject. Matching arm stays
  * INCLUDE_ASM (packed-save wall); #else is the structure model. Word-verified vs USA
  * UpdateCheatMenuInput: D_1ABA30->D_1ABAA0 (gp); D_138180->D_138200; D_1ABD50->D_1ABDC0;
- * g_menuScreenBlock->D_001F0000+0x2840; LoadPlayerDisplayModel->func_00292CD0, PlayGlobalSound->
+ * g_menuScreenBlock->D_001F0000+0x2840; LoadPlayerDisplayModel->LoadPlayerDisplayModel, PlayGlobalSound->
  * func_002E6C28. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", UpdateCheatMenuInput);
@@ -1818,7 +1818,7 @@ s32 UpdateCheatMenuInput(void) {
     extern u8   g_cheatFlags[];
     extern u8   g_skillPointFlags;
     extern s16  g_equippedArmor;
-    extern void func_00292CD0(s16 armor); /* USA LoadPlayerDisplayModel */
+    extern void LoadPlayerDisplayModel(s16 armor); /* USA LoadPlayerDisplayModel */
     extern void func_002E6C28(s32 id, s32 a, s32 b); /* USA PlayGlobalSound */
     u8 *mb = D_001F0000 + 0x2840;
     s32 skillPts = CountSkillPointsCompleted();
@@ -1879,7 +1879,7 @@ s32 UpdateCheatMenuInput(void) {
 
     cheatId = D_1ABDC0[D_1ABAA0 * 4 + 2];
     if (cheatId == 9 || cheatId == 10 || cheatId == 2 || cheatId == 0xB) {
-        func_00292CD0(g_equippedArmor);
+        LoadPlayerDisplayModel(g_equippedArmor);
     }
     return 0;
 }
@@ -1991,8 +1991,8 @@ s32 func_002D1118(void) {
  * (comparison-tree switch + branch-likely fence); #else is the structure model. Word-verified
  * vs USA UpdateExtrasMenuInput: D_138180->D_138200; cursor->D_1ABAB4 (gp); enabled->D_1ABAB8
  * (gp); g_menuScreenBlock->D_001F0000+0x2840; D_25C298->D_25C2B8; CaptureScreenToVram->
- * func_002CAC90; g_cameraCallbackCount+0x80->D_001B1380+0x200; EnqueueCinematic->func_002893B8,
- * StartCinematicFromQueue->func_00289500; g_cinematicQueue->g_nVendorBuyQuantity+0x8AF8;
+ * CaptureScreenToVram; g_cameraCallbackCount+0x80->D_001B1380+0x200; EnqueueCinematic->func_002893B8,
+ * StartCinematicFromQueue->StartCinematicFromQueue; g_cinematicQueue->g_nVendorBuyQuantity+0x8AF8;
  * g_cinematicExitPending->D_001A74F0+0x8; PlayGlobalSound->func_002E6C28; present record
  * D_0025C230->D_0025C250; live D_25C1F0->D_25C210; g_fileLoadState->g_saveImageArea+0x1004.
  * GENUINE REGION DIFFS (EU Extras menu has ONE FEWER item, cursor [0,3] not [0,4]): (a) up
@@ -2000,19 +2000,19 @@ s32 func_002D1118(void) {
  * case2={0xBD,0xBE}, case3=0xC1); (c) present-record slot remap slot=(cursor>=2)?cursor+1:cursor
  * (USA stores raw cursor). Confirmed against the .s. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002D1120);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", UpdateExtrasMenuInput);
 #else
-s32 func_002D1120(void) {
+s32 UpdateExtrasMenuInput(void) {
     extern u8   D_138200[];
     extern s32  D_1ABAB4;
     extern s32  D_1ABAB8[];
     extern u8  *g_pNextMenuScreen;
     extern u8   D_25C2B8[];
-    extern void func_002CAC90(s32 mode);
+    extern void CaptureScreenToVram(s32 mode);
     extern u8   D_001B1380[];                 /* g_cameraCallbackCount+0x80 -> +0x200 */
     extern s32  RequestGameStateChange(s32 stateId, s32 push, s32 c, s32 d, s32 e);
     extern s32  func_002893B8(void *queue, s32 reelId);
-    extern s32  func_00289500(void *queue);
+    extern s32  StartCinematicFromQueue(void *queue);
     extern u8   g_nVendorBuyQuantity[];       /* +0x8AF8 = g_cinematicQueue */
     extern u8   D_001A74F0[];                 /* +0x8 = g_cinematicExitPending */
     extern void func_002E6C28(s32 id, s32 a, s32 b);
@@ -2065,7 +2065,7 @@ s32 func_002D1120(void) {
             if (D_1ABAB8[cursor] == 0) {
                 sound = 5;
             } else {
-                func_002CAC90(1);
+                CaptureScreenToVram(1);
                 *(s32 *)(D_001B1380 + 0x200) = 2;
                 *(s32 *)(mb + 0x100) = *(s32 *)(mb + 0x14);
                 *(s32 *)(mb + 0x104) = *(s32 *)(mb + 0x8);
@@ -2085,7 +2085,7 @@ s32 func_002D1120(void) {
     }
 
     if (reel0 != -1) {
-        func_002CAC90(0);
+        CaptureScreenToVram(0);
         *(s32 *)(mb + 0x140) = *(s32 *)(D_001A74F0 + 0x8);
         *(s32 *)(mb + 0x100) = *(s32 *)(mb + 0x14);
         *(s32 *)(mb + 0x104) = *(s32 *)(mb + 0x8);
@@ -2094,7 +2094,7 @@ s32 func_002D1120(void) {
         if (reel1 != -1) {
             func_002893B8(g_nVendorBuyQuantity + 0x8AF8, reel1);
         }
-        func_00289500(g_nVendorBuyQuantity + 0x8AF8);
+        StartCinematicFromQueue(g_nVendorBuyQuantity + 0x8AF8);
     }
     if (sound != -1) {
         func_002E6C28(sound, 0, 0);
@@ -2120,8 +2120,8 @@ s32 func_002D1120(void) {
  * strings, paging chrome) then a cursor-relative carousel. Matching arm stays INCLUDE_ASM
  * (8-byte-packed save + FP-arg scheduling); #else is the structure model. Word-verified vs USA
  * DrawExtrasMenu: func_003017F8->func_00301AC0; GuiFontAtlasLookupGlyph->func_00338AA8;
- * func_002801B8->func_00280050; DrawMenuPagingChrome->func_002CFB48; func_0027F818->func_0027F680;
- * func_00280250->func_002800E8; DrawMenuItemSelectionBox->func_002D0018; g_screenWidth->
+ * func_002801B8->func_00280050; DrawMenuPagingChrome->DrawMenuPagingChrome; func_0027F818->func_0027F680;
+ * func_00280250->func_002800E8; DrawMenuItemSelectionBox->DrawMenuItemSelectionBox; g_screenWidth->
  * *(s32*)(D_001A7308+0xB8); y-fudge->g_nVendorBuyQuantity+0x160; row D_1ABA5C->D_1ABAC8; cursor->
  * D_1ABAB4; enabled->D_1ABAB8; label ids D_1ABD80->D_1ABDF0.
  * GENUINE REGION DIFFS (EU Extras = 4 items / 3 visible slots vs USA 5/5): loop runs 3 slots
@@ -2129,18 +2129,18 @@ s32 func_002D1120(void) {
  * pitch 0x18 not 0x112 / 0x14; edge colour 0x30F0F0F0 (no 0x10/0x50 mid tier). PAL string ids:
  * header 0x3095->0x1111, 0x2BE5->0xB60, 0x2C0B->0xB86; locked-slot 0x2C56->0xBD1. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002D1488);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", DrawExtrasMenu);
 #else
-s32 func_002D1488(void) {
+s32 DrawExtrasMenu(void) {
     extern void func_00301AC0(s32 handle, s32 color0, f32 *scale, f32 *vec38,
                               f32 px, f32 py, f32 sx, f32 syg, f32 v38);
     extern s32  func_00338AA8(void *atlas, s32 codepoint);
-    extern void func_002CFB48(void);
+    extern void DrawMenuPagingChrome(void);
     extern s32  func_001157AC(const char *s);
     extern s32  func_0027F680(char *str, s32 len);
     extern void func_002800E8(s32 x, s32 y, u32 color, const char *str, s32 flag);
     extern void func_00280050(s32 x, s32 y, u64 color, char *str, s64 sel);
-    extern void func_002D0018(s32 width, s32 color);
+    extern void DrawMenuItemSelectionBox(s32 width, s32 color);
     extern s32  D_1ABAB4;                        /* cursor */
     extern s32  D_1ABAB8[];                       /* per-item enabled flags */
     extern u8   D_1ABDF0[];                       /* per-item label string ids (stride 4) */
@@ -2167,7 +2167,7 @@ s32 func_002D1488(void) {
     func_00280050(0xB3, 0x1B, 0x80F0F0F0, GetLocalizedString(0x1111), -1);
     func_00280050(0x161, 0x177, 0x80F0F0F0, GetLocalizedString(0xB60), -1);
     func_00280050(0xB5, 0x177, 0x80F0F0F0, GetLocalizedString(0xB86), -1);
-    func_002CFB48();
+    DrawMenuPagingChrome();
     cursor = D_1ABAB4;
     y = 0x122;
     for (i = 0; i < 3; i++) {
@@ -2183,7 +2183,7 @@ s32 func_002D1488(void) {
             color = 0x30F0F0F0;
         } else {
             color = 0x70F0F0F0;
-            func_002D0018(func_0027F680(str, func_001157AC(str)), 0x70F0F0F0);
+            DrawMenuItemSelectionBox(func_0027F680(str, func_001157AC(str)), 0x70F0F0F0);
         }
         func_002800E8(*(s32 *)(D_001A7308 + 0xB8) / 2, y, color, str, -1);
         y += 0x18;
@@ -2237,13 +2237,13 @@ s32 func_002D17F0(void) {
  * CinematicsMenuTick: D_138180->D_138200; cursor D_1ABA60->D_1ABACC (gp); g_menuScreenBlock->
  * D_001F0000+0x2840; g_cinematicsMenuTable->D_2615E0; g_cinematicExitPending->D_001A74F0+0x8;
  * g_cinematicQueue->g_nVendorBuyQuantity+0x8AF8; EnqueueCinematic->func_002893B8,
- * StartCinematicFromQueue->func_00289500; CaptureScreenToVram->func_002CAC90; PlayGlobalSound->
+ * StartCinematicFromQueue->StartCinematicFromQueue; CaptureScreenToVram->CaptureScreenToVram; PlayGlobalSound->
  * func_002E6C28; present record D_0025C3C8->D_0025C3E8; live D_25C388->D_25C3A8; g_fileLoadState->
  * g_saveImageArea+0x1004. Clean twin. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002D1840);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", CinematicsMenuTick);
 #else
-s32 func_002D1840(void) {
+s32 CinematicsMenuTick(void) {
     extern u8   D_138200[];
     extern s32  D_1ABACC;
     extern u8   D_2615E0[];
@@ -2253,9 +2253,9 @@ s32 func_002D1840(void) {
     extern u8  *D_25C3A8;                      /* live menu object */
     extern u8   g_saveImageArea[];            /* +0x1004 = g_fileLoadState (s16) */
     extern void func_002E6C28(s32 id, s32 a, s32 b);
-    extern void func_002CAC90(s32 mode);
+    extern void CaptureScreenToVram(s32 mode);
     extern s32  func_002893B8(void *queue, s32 reelId);
-    extern s32  func_00289500(void *queue);
+    extern s32  StartCinematicFromQueue(void *queue);
     s32 flags = *(s32 *)(D_138200 + 0x1C4);
     s32 cursor0 = D_1ABACC;
     s32 result = 0;
@@ -2293,7 +2293,7 @@ s32 func_002D1840(void) {
         if (*(s16 *)(D_2615E0 + cursor * 6 + 4) != 0) {
             s16 reelId;
             func_002E6C28(4, 0, 0);
-            func_002CAC90(0);
+            CaptureScreenToVram(0);
             cursor = D_1ABACC;
             reelId = *(s16 *)(D_2615E0 + cursor * 6 + 2);
             *(s32 *)(mb + 0x140) = *(s32 *)(D_001A74F0 + 0x8);
@@ -2301,7 +2301,7 @@ s32 func_002D1840(void) {
             *(s32 *)(mb + 0x104) = *(s32 *)(mb + 0x8);
             *(s32 *)(D_001A74F0 + 0x8) = 2;
             func_002893B8(g_nVendorBuyQuantity + 0x8AF8, reelId);
-            func_00289500(g_nVendorBuyQuantity + 0x8AF8);
+            StartCinematicFromQueue(g_nVendorBuyQuantity + 0x8AF8);
         } else {
             func_002E6C28(5, 0, 0);
         }
@@ -2329,24 +2329,24 @@ s32 func_002D1840(void) {
  * centre. Matching arm stays INCLUDE_ASM (8-byte-packed save + FP-arg scheduling); #else is the
  * structure model. Word-verified vs USA DrawCinematicsMenu: func_003017F8->func_00301AC0;
  * GuiFontAtlasLookupGlyph->func_00338AA8; func_002801B8->func_00280050; DrawMenuPagingChrome->
- * func_002CFB48; func_0027F818->func_0027F680; func_00280250->func_002800E8;
- * DrawMenuItemSelectionBox->func_002D0018; g_screenWidth->*(s32*)(D_001A7308+0xB8); y-fudge->
+ * DrawMenuPagingChrome; func_0027F818->func_0027F680; func_00280250->func_002800E8;
+ * DrawMenuItemSelectionBox->DrawMenuItemSelectionBox; g_screenWidth->*(s32*)(D_001A7308+0xB8); y-fudge->
  * g_nVendorBuyQuantity+0x160; row D_1ABA64->D_1ABAD0; cursor D_1ABA60->D_1ABACC; table->D_2615E0.
  * REGION DIFF (PAL string ids): header 0x2CA9->0xC23, 0x2BE5->0xB60, 0x2C0B->0xB86; locked-slot
  * 0x2C56->0xBD1. Structurally a clean 5-slot twin. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002D1AA8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", DrawCinematicsMenu);
 #else
-s32 func_002D1AA8(void) {
+s32 DrawCinematicsMenu(void) {
     extern void func_00301AC0(s32 handle, s32 color0, f32 *scale, f32 *vec38,
                               f32 px, f32 py, f32 sx, f32 syg, f32 v38);
     extern s32  func_00338AA8(void *atlas, s32 codepoint);
-    extern void func_002CFB48(void);
+    extern void DrawMenuPagingChrome(void);
     extern s32  func_001157AC(const char *s);
     extern s32  func_0027F680(char *str, s32 len);
     extern void func_002800E8(s32 x, s32 y, u32 color, const char *str, s32 flag);
     extern void func_00280050(s32 x, s32 y, u64 color, char *str, s64 sel);
-    extern void func_002D0018(s32 width, s32 color);
+    extern void DrawMenuItemSelectionBox(s32 width, s32 color);
     extern u8   D_2615E0[];
     extern s32  D_1ABACC;                       /* cursor */
     extern s32  D_1ABAD0;                       /* title glyph row (int -> float) */
@@ -2372,7 +2372,7 @@ s32 func_002D1AA8(void) {
     func_00280050(0xB3, 0x1B, 0x80F0F0F0, GetLocalizedString(0xC23), -1);
     func_00280050(0x161, 0x177, 0x80F0F0F0, GetLocalizedString(0xB60), -1);
     func_00280050(0xB5, 0x177, 0x80F0F0F0, GetLocalizedString(0xB86), -1);
-    func_002CFB48();
+    DrawMenuPagingChrome();
     cursor = D_1ABACC;
     y = 0x112;
     for (i = 0; i < 5; i++) {
@@ -2393,7 +2393,7 @@ s32 func_002D1AA8(void) {
             color = 0x50F0F0F0;
         } else {
             color = 0x70F0F0F0;
-            func_002D0018(func_0027F680(str, func_001157AC(str)), 0x70F0F0F0);
+            DrawMenuItemSelectionBox(func_0027F680(str, func_001157AC(str)), 0x70F0F0F0);
         }
         func_002800E8(*(s32 *)(D_001A7308 + 0xB8) / 2, y, color, str, -1);
         y += 0x14;
@@ -2452,9 +2452,9 @@ void func_002D1E10(void) {
  * RequestLevelExit kept; PlayGlobalSound->func_002E6C28; present record D_0025C560->D_0025C580;
  * live D_25C520->D_25C540; g_fileLoadState->g_saveImageArea+0x1004. Clean twin (8 items). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002D1EB0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", UpdatePlanetWarpMenuInput);
 #else
-s32 func_002D1EB0(void) {
+s32 UpdatePlanetWarpMenuInput(void) {
     extern u8   D_138200[];
     extern s32  D_1ABAD4;
     extern u8   D_1ABAD8[];                    /* per-item enabled flags */
@@ -2547,24 +2547,24 @@ s32 func_002D1EB0(void) {
  * Matching arm stays INCLUDE_ASM (8-byte-packed save + FP-arg scheduling); #else is the structure
  * model. Word-verified vs USA DrawPlanetWarpMenu: func_003017F8->func_00301AC0;
  * GuiFontAtlasLookupGlyph->func_00338AA8; func_002801B8->func_00280050; DrawMenuPagingChrome->
- * func_002CFB48; func_0027F818->func_0027F680; func_00280250->func_002800E8;
- * DrawMenuItemSelectionBox->func_002D0018; g_screenWidth->*(s32*)(D_001A7308+0xB8); y-fudge->
+ * DrawMenuPagingChrome; func_0027F818->func_0027F680; func_00280250->func_002800E8;
+ * DrawMenuItemSelectionBox->DrawMenuItemSelectionBox; g_screenWidth->*(s32*)(D_001A7308+0xB8); y-fudge->
  * g_nVendorBuyQuantity+0x160; row D_1ABA78->D_1ABAE0; cursor->D_1ABAD4; enabled->D_1ABAD8; label
  * array D_1ABD98->D_1ABE00. REGION DIFF (PAL string ids): header 0x3098->0x1114, 0x2BE5->0xB60,
  * 0x2C0B->0xB86; locked-slot 0x2C56->0xBD1. Structurally a clean 5-slot twin. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002D2158);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", DrawPlanetWarpMenu);
 #else
-s32 func_002D2158(void) {
+s32 DrawPlanetWarpMenu(void) {
     extern void func_00301AC0(s32 handle, s32 color0, f32 *scale, f32 *vec38,
                               f32 px, f32 py, f32 sx, f32 syg, f32 v38);
     extern s32  func_00338AA8(void *atlas, s32 codepoint);
-    extern void func_002CFB48(void);
+    extern void DrawMenuPagingChrome(void);
     extern s32  func_001157AC(const char *s);
     extern s32  func_0027F680(char *str, s32 len);
     extern void func_002800E8(s32 x, s32 y, u32 color, const char *str, s32 flag);
     extern void func_00280050(s32 x, s32 y, u64 color, char *str, s64 sel);
-    extern void func_002D0018(s32 width, s32 color);
+    extern void DrawMenuItemSelectionBox(s32 width, s32 color);
     extern u8   D_1ABAD8[];                      /* per-planet enabled flags */
     extern s16  D_1ABE00[];                      /* per-planet label string ids */
     extern s32  D_1ABAD4;                        /* cursor */
@@ -2591,7 +2591,7 @@ s32 func_002D2158(void) {
     func_00280050(0xB3, 0x1B, 0x80F0F0F0, GetLocalizedString(0x1114), -1);
     func_00280050(0x161, 0x177, 0x80F0F0F0, GetLocalizedString(0xB60), -1);
     func_00280050(0xB5, 0x177, 0x80F0F0F0, GetLocalizedString(0xB86), -1);
-    func_002CFB48();
+    DrawMenuPagingChrome();
     cursor = D_1ABAD4;
     y = 0x112;
     for (i = 0; i < 5; i++) {
@@ -2609,7 +2609,7 @@ s32 func_002D2158(void) {
             color = 0x50F0F0F0;
         } else {
             color = 0x70F0F0F0;
-            func_002D0018(func_0027F680(str, func_001157AC(str)), 0x70F0F0F0);
+            DrawMenuItemSelectionBox(func_0027F680(str, func_001157AC(str)), 0x70F0F0F0);
         }
         func_002800E8(*(s32 *)(D_001A7308 + 0xB8) / 2, y, color, str, -1);
         y += 0x14;
@@ -2636,7 +2636,7 @@ void func_002D24C0(void) {
     extern u8  D_139669;
     extern u8  D_139638[];
     extern s32 D_1AA4D8;
-    extern u8  D_1ABAD8[];  /* planet-warp per-item enabled flags (same array as func_002D1EB0) */
+    extern u8  D_1ABAD8[];  /* planet-warp per-item enabled flags (same array as UpdatePlanetWarpMenuInput) */
 
     if (g_guiInstance == NULL) {
         return;
@@ -2679,23 +2679,23 @@ void func_002D24C0(void) {
 }
 #endif
 
-/* func_002D2600: EU twin of USA UpdateInsomniacMuseumInput — per-frame input for the Insomniac
+/* UpdateInsomniacMuseumInput: EU twin of USA UpdateInsomniacMuseumInput — per-frame input for the Insomniac
  * Museum menu, a 5-item carousel. Back/cancel/up/down + confirm dispatch (items 1/2 spawn the
  * exhibit moby with a 128-bit hero-pos copy; 0/3/4 request sub-screens) + present-record redraw
  * fence. Matching arm stays INCLUDE_ASM (switch/jtbl + lq/sq hero-pos copy + branch-likely fence);
  * #else is the structure model. Word-verified vs USA UpdateInsomniacMuseumInput: D_138180->
  * D_138200; cursor->D_1ABAE4 (gp); enabled->D_1ABAE8 (gp); g_menuScreenBlock->D_001F0000+0x2840;
- * PlayGlobalSound->func_002E6C28; SwapMobyTableContext->func_0028BD00; SpawnMoby->func_0029F968;
+ * PlayGlobalSound->func_002E6C28; SwapMobyTableContext->SwapMobyTableContext; SpawnMoby->SpawnMoby;
  * sub-screen records D_25C760/950/B40->D_25C780/970/B60; g_heroPos->g_sndChannelVolumes+0x17F8;
  * present record D_0025C6F8->D_0025C718; live D_25C6B8->D_25C6D8; g_fileLoadState->
  * g_saveImageArea+0x1004. REGION: 5 items in BOTH builds (no divergence). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002D2600);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", UpdateInsomniacMuseumInput);
 #else
-s32 func_002D2600(void) {
+s32 UpdateInsomniacMuseumInput(void) {
     extern void  func_002E6C28(s32 id, s32 a, s32 b);   /* PlayGlobalSound */
-    extern void  func_0028BD00(s32 tableId);            /* SwapMobyTableContext */
-    extern void *func_0029F968(s32 classId);            /* SpawnMoby */
+    extern void  SwapMobyTableContext(s32 tableId);            /* SwapMobyTableContext */
+    extern void *SpawnMoby(s32 classId);            /* SpawnMoby */
     extern s32   D_1ABAE4;                 /* museum cursor 0..4 (gp) */
     extern s32   D_1ABAE8;                 /* per-item enabled flags base (gp) */
     extern u8    D_138200[];               /* global input/UI flags (+0x1C4) */
@@ -2753,9 +2753,9 @@ s32 func_002D2600(void) {
                 case 2: {
                     void *moby;
                     s32 id = ((cursor ^ 2) != 0) ? 0x1335 : 0x88D;
-                    func_0028BD00(0);
-                    moby = func_0029F968(id);
-                    func_0028BD00(1);
+                    SwapMobyTableContext(0);
+                    moby = SpawnMoby(id);
+                    SwapMobyTableContext(1);
                     if (moby != 0) {
                         u8 *m = (u8 *)moby;
                         m[0x30] = 0xFF;
@@ -2793,7 +2793,7 @@ s32 func_002D2600(void) {
 }
 #endif
 
-/* func_002D28A8: EU twin of USA DrawInsomniacMuseumMenu — renders the Insomniac Museum screen:
+/* DrawInsomniacMuseumMenu: EU twin of USA DrawInsomniacMuseumMenu — renders the Insomniac Museum screen:
  * three title glyphs (0x8B/0x8C/0x8D, v38 0.775f), three centred header strings, four framing
  * lines, then five column items (selected row highlighted 0x7000FFFF else 0x80F0F0F0; label is
  * the item's table id when enabled, else the PAL fallback). Matching arm stays INCLUDE_ASM
@@ -2804,9 +2804,9 @@ s32 func_002D2600(void) {
  * enabled->D_1ABAE8 (gp); label table D_1ABDA8->D_1ABE10. REGION: 5 items in BOTH builds. PAL
  * string ids: headers 0x30A2->0x111E, 0x2C0B->0xB86, 0x2BE5->0xB60; locked fallback 0x2C56->0xBD1. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002D28A8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", DrawInsomniacMuseumMenu);
 #else
-s32 func_002D28A8(void) {
+s32 DrawInsomniacMuseumMenu(void) {
     extern void func_00301AC0(s32 handle, s32 color0, f32 *scale, f32 *vec38,
                               f32 px, f32 py, f32 sx, f32 syg, f32 v38);
     extern s32  func_00338AA8(void *atlas, s32 codepoint);
@@ -2886,7 +2886,7 @@ s32 func_002D2BE8(void) {
 }
 #endif
 
-/* func_002D2C58: EU twin of USA UpdateHelpTopicMenuInput — per-frame input for the help-topics
+/* UpdateHelpTopicMenuInput: EU twin of USA UpdateHelpTopicMenuInput — per-frame input for the help-topics
  * screen, an 18-entry page list. Back/cancel + prev(0x8000)/next(0x2000) paging with edge sounds,
  * then stamps the active topic + its string id. Matching arm stays INCLUDE_ASM (packed-save);
  * #else is the structure model. Word-verified vs USA UpdateHelpTopicMenuInput: g_padButtonsPressed
@@ -2894,9 +2894,9 @@ s32 func_002D2BE8(void) {
  * active-topic mirror D_25C940->D_25C960; string-id table D_1ABDC0->D_1ABE28 (s16); active-topic
  * string id D_25C8C4->D_25C8E4. REGION: 18 topics (0..0x11) in both. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002D2C58);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", UpdateHelpTopicMenuInput);
 #else
-s32 func_002D2C58(void) {
+s32 UpdateHelpTopicMenuInput(void) {
     extern void func_002E6C28(s32 id, s32 a, s32 b);   /* PlayGlobalSound */
     extern s32  g_padButtonsPressed;
     extern s32  D_1ABB00;                 /* help topic cursor 0..0x11 (gp) */
@@ -2948,22 +2948,22 @@ s32 func_002D2C58(void) {
 }
 #endif
 
-/* func_002D2DA8: EU twin of USA DrawHelpTopicMenu — renders the help-topics screen chrome:
+/* DrawHelpTopicMenu: EU twin of USA DrawHelpTopicMenu — renders the help-topics screen chrome:
  * three header glyphs (0xDE/0xDF/0xE0), the left/right paging arrows (left when not on the first
  * page, right when not on the last page 0x11), and a localized footer string. Matching arm stays
  * INCLUDE_ASM (packed-save + FP-arg scheduling); #else is the structure model. Word-verified vs
  * USA DrawHelpTopicMenu: func_003017F8->func_00301AC0; GuiFontAtlasLookupGlyph->func_00338AA8;
- * DrawBestiaryPagingArrows->func_002CF548; func_002801B8->func_00280050; g_screenWidth->
+ * DrawBestiaryPagingArrows->DrawBestiaryPagingArrows; func_002801B8->func_00280050; g_screenWidth->
  * *(s32*)(D_001A7308+0xB8); row D_1ABA9C->D_1ABB04 (gp); y-fudge->g_nVendorBuyQuantity+0x160;
  * cursor->D_1ABB00 (gp). REGION: last page 0x11 in both. PAL footer 0x2BE5->0xB60. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002D2DA8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", DrawHelpTopicMenu);
 #else
-s32 func_002D2DA8(void) {
+s32 DrawHelpTopicMenu(void) {
     extern void func_00301AC0(s32 handle, s32 color0, f32 *scale, f32 *vec38,
                               f32 px, f32 py, f32 sx, f32 syg, f32 v38);
     extern s32  func_00338AA8(void *atlas, s32 codepoint);
-    extern void func_002CF548(s32 leftEnabled, s32 rightEnabled);
+    extern void DrawBestiaryPagingArrows(s32 leftEnabled, s32 rightEnabled);
     extern void func_00280050(s32 x, s32 y, u64 color, char *str, s64 sel);
     extern s32  D_1ABB00;                 /* help-topic cursor (gp) */
     extern s32  D_1ABB04;                 /* glyph row (int -> float, gp) */
@@ -2984,7 +2984,7 @@ s32 func_002D2DA8(void) {
     func_00301AC0(func_00338AA8(atlas, 0xE0), 0x55F0C070, (f32 *)0, (f32 *)0,
                   centerX, row, 1.0f, yfudge, 0.0f);
     cursor = D_1ABB00;
-    func_002CF548(cursor != 0, cursor != 0x11);
+    DrawBestiaryPagingArrows(cursor != 0, cursor != 0x11);
     text = GetLocalizedString(0xB60);
     func_00280050(0x1B0, 0x177, 0x80F0F0F0, text, -1);
     func_0027CB48();
@@ -3070,7 +3070,7 @@ s32 func_002D2F50(void) {
  * label (screen-centred) and the localized footer. Matching arm stays INCLUDE_ASM (packed-save +
  * FP-arg scheduling); #else is the structure model. Word-verified vs USA func_002D3138:
  * func_003017F8->func_00301AC0; GuiFontAtlasLookupGlyph->func_00338AA8; DrawBestiaryPagingArrows->
- * func_002CF548; func_002904B0->func_002904C8; func_002801B8->func_00280050; g_screenWidth->
+ * DrawBestiaryPagingArrows; func_002904B0->func_002904C8; func_002801B8->func_00280050; g_screenWidth->
  * *(s32*)(D_001A7308+0xB8); row D_1ABAA4->D_1ABB0C (gp); cursor->D_1ABB08 (gp); y-fudge->
  * g_nVendorBuyQuantity+0x160; slider frac->g_nVendorBuyQuantity+0x15C; option-label table
  * D_1ABDE8->D_1ABE50 (s16 stride 4). GENUINE REGION DIFF: PAL slider vertical endpoints scale by
@@ -3083,7 +3083,7 @@ s32 func_002D30C0(void) {
     extern void func_00301AC0(s32 handle, s32 color0, f32 *scale, f32 *vec38,
                               f32 px, f32 py, f32 sx, f32 syg, f32 v38);
     extern s32  func_00338AA8(void *atlas, s32 codepoint);
-    extern void func_002CF548(s32 leftEnabled, s32 rightEnabled);
+    extern void DrawBestiaryPagingArrows(s32 leftEnabled, s32 rightEnabled);
     extern void func_002904C8(s32 x0, s32 y0, s32 x1, s32 y1, s32 color, s32 flag);
     extern void func_00280050(s32 x, s32 y, u64 color, char *str, s64 sel);
     extern s32  D_1ABB08;                 /* options cursor (gp) */
@@ -3107,7 +3107,7 @@ s32 func_002D30C0(void) {
     func_00301AC0(func_00338AA8(atlas, 0xE0), 0x55F0C070, (f32 *)0, (f32 *)0,
                   centerX, row, 1.0f, yfudge, 0.0f);
     cursor = D_1ABB08;
-    func_002CF548(cursor != 0, cursor != 5);
+    DrawBestiaryPagingArrows(cursor != 0, cursor != 5);
     func_002904C8(0x42, (s32)(frac * 306.0f + 0.5f), 0x1CF,
                   (s32)(frac * 308.0f + 0.5f), 0x55F0C070, 0);
     text = GetLocalizedString(*(s16 *)(D_1ABE50 + D_1ABB08 * 4));
@@ -3967,7 +3967,7 @@ s32 func_002D4530(void *widget) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002D4618);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", UpdateShipCustomizeInput);
 
 /* Draws a two-segment horizontal gradient bar (an audio/level meter) for the D_26CD90[idx] record.
  * Each segment's fill width comes from `val` offset by +2 and +0x28: width = 0x80 - toInt(|256 -
@@ -4020,4 +4020,4 @@ void func_002D4D00(s32 idx, s32 val) {
 #undef METER_FILL_SCALE
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002D4EA0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", DrawShipCustomizeMenu);

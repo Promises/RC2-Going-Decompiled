@@ -12,7 +12,7 @@
  *   func_00348E58->func_0034A2E8  func_00348E60->func_0034A2F0
  *   func_00348E68->func_0034A2F8  func_00349E88->func_0034B310
  *   func_0034A1C8->func_0034B650  func_0034A1D0->func_0034B658
- *   func_0034A2D0->func_0034B758  func_0034A300->func_0034B788
+ *   func_0034A2D0->func_0034B758  GuiMenuListDraw->func_0034B788
  *   func_0034A308->func_0034B790  func_0034A368->func_0034B7F0
  *   func_0034A3B0->func_0034B838  func_0034A3B8->func_0034B840
  *   func_0034A7E8->func_0034BC70  func_0034A858->func_0034BCE0
@@ -66,17 +66,17 @@ typedef struct GuiWidget {
 } GuiWidget;
 
 #ifdef TARGET_NATIVE
-/* game callees used by the func_0034A300 (EU twin of USA GuiMenuListDraw)
+/* game callees used by the GuiMenuListDraw (EU twin of USA GuiMenuListDraw)
  * portable body — declared here (defined in other units / still INCLUDE_ASM /
  * runtime-stubbed natively) so the ILP32 gate sees real signatures. */
 f32 *func_0027F608(void);                                        /* scratch vec */
 f32 *func_00337AF0(void *e);                                     /* pos-vec ptr (consumed by func_0034CBF8/CDD8) */
-void func_00337C68(GuiWidget *e, f32 x, f32 y, f32 z, f32 w);    /* USA GuiElementSetScale */
+void GuiElementSetScale(GuiWidget *e, f32 x, f32 y, f32 z, f32 w);    /* USA GuiElementSetScale */
 void func_00338730(GuiWidget *e, s32 text);                      /* USA GuiElementSetText */
 char *GetLocalizedString(s32 textId);
 s32 *func_00337B00(GuiWidget *e);                                /* USA GuiElementGetColor */
 s32 func_00338738(GuiWidget *e);                                 /* USA GuiTextElementMeasure */
-void func_00338770(GuiWidget *e);                                /* USA GuiTextElementDraw */
+void GuiTextElementDraw(GuiWidget *e);                                /* USA GuiTextElementDraw */
 void func_0027EFD0(s32 x1, s32 y1, s32 x2, s32 y2, s64 z, u64 tex0); /* USA DrawFlatRect2d */
 s32 func_0027F5F8(void);                                         /* tail call (USA func_0027F790) */
 #endif
@@ -84,13 +84,13 @@ s32 func_0027F5F8(void);                                         /* tail call (U
 /* func_0034A068 (EU twin of USA func_00348BD0): run the type-C element init on
  * the widget and return it. Matching arm stays INCLUDE_ASM; #else is the
  * structure model. Word-verified vs USA func_00348BD0: GuiElementInitTypeC ->
- * EU func_00338648 (raw EU twin; jal @0034A074). */
+ * EU GuiElementInitTypeC (raw EU twin; jal @0034A074). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", func_0034A068);
 #else
-void func_00338648(void *element);              /* EU twin of GuiElementInitTypeC */
+void GuiElementInitTypeC(void *element);              /* EU twin of GuiElementInitTypeC */
 void *func_0034A068(void *w) {
-    func_00338648(w);
+    GuiElementInitTypeC(w);
     return w;
 }
 #endif
@@ -100,7 +100,7 @@ void *func_0034A068(void *w) {
  * element init, then seed the colour/style fields (+0xAC..+0xCC). Matching arm
  * stays INCLUDE_ASM; #else is the structure model.
  * Word-verified vs USA func_00348BF8: GuiPoolAlloc/GuiPlacementNew KEEP their
- * names (present verbatim in EU .s); GuiTextElementInit -> EU func_00338688
+ * names (present verbatim in EU .s); GuiTextElementInit -> EU GuiTextElementInit
  * (3rd jal); template D_1AE568 -> EU D_1AE618 (+0xB0 data-lane delta).
  * REGION DELTA (FLAGGED): EU OMITS the USA `el+0x54 = 0` store (USA .s has
  * sw $0,0x54; EU has none) — the rest of the store block (0xB8/0xC4/0xC8) and
@@ -110,7 +110,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", func_0034A090);
 #else
 void *GuiPoolAlloc(void *pool);
 void *GuiPlacementNew(s32 size, void *at);
-void func_00338688(void *element, void *tmpl, void *pool);  /* EU GuiTextElementInit */
+void GuiTextElementInit(void *element, void *tmpl, void *pool);  /* EU GuiTextElementInit */
 extern u8 D_1AE618[];                                       /* text-element init template */
 void func_0034A090(void *w, void *pool) {
     char *el = (char *)w;
@@ -128,7 +128,7 @@ void func_0034A090(void *w, void *pool) {
         *(s32 *)((char *)obj + 0x8) = 0;
         *(s32 *)((char *)obj + 0xC) = 0;
     }
-    func_00338688(el, D_1AE618, pool);
+    GuiTextElementInit(el, D_1AE618, pool);
     *(s32 *)(el + 0xCC) = -1;
     *(s32 *)(el + 0xAC) = 0x70FFFEED;
     *(s32 *)(el + 0xB0) = 0x80F0F0F0;
@@ -140,7 +140,7 @@ void func_0034A090(void *w, void *pool) {
 }
 #endif
 
-/* func_0034A148 (EU twin of USA func_00348CB8): menu selection-advance driven by
+/* GuiMenuListHandleInput (EU twin of USA func_00348CB8): menu selection-advance driven by
  * the per-frame input mask. Row index at +0x60, row-enable table at +0x6C, row
  * count at +0xC0. LEFT/PREV (0x1000): dir -1; RIGHT/NEXT (0x4000): dir +1;
  * CONFIRM (0x40, only when neither nav bit set): selectable current row returns 1
@@ -151,10 +151,10 @@ void func_0034A090(void *w, void *pool) {
  * (jal @0034A1B4, args 3,0,0); offsets (0x60/0x6C/0xC0) + masks (0x1000/0x4000/
  * 0x40) identical. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", func_0034A148);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", GuiMenuListHandleInput);
 #else
 void func_002E6C28(s32 id, s32 a, s32 b);       /* EU twin of PlayGlobalSound */
-s32 func_0034A148(GuiWidget *w, u32 inputMask) {
+s32 GuiMenuListHandleInput(GuiWidget *w, u32 inputMask) {
     s32 *curIdx = (s32 *)((char *)w + 0x60);
     s32 *rowEnable = (s32 *)((char *)w + 0x6C);   /* rowEnable[idx] != 0 => selectable */
     s32 count = *(s32 *)((char *)w + 0xC0);
@@ -203,7 +203,7 @@ s32 func_0034A148(GuiWidget *w, u32 inputMask) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", func_0034A228);
 
-/* func_0034A230 (EU twin of USA func_00348DA0): store the keyframe table pointer
+/* GuiMenuListSetRows (EU twin of USA func_00348DA0): store the keyframe table pointer
  * at +0x68, then scan it to count how many leading entries (stride 0x14, capped
  * at 80) have a positive first float; the count lands in +0xC0. Finally, if the
  * current cursor +0x60 has run past the new count, reset it to 0. Matching arm
@@ -212,9 +212,9 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", func_0034A228);
  * offsets (0x68/0xC0/0x60), stride 0x14, end = table+0x140 all identical.
  * Region-agnostic. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", func_0034A230);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", GuiMenuListSetRows);
 #else
-void func_0034A230(GuiWidget *w, f32 *table) {
+void GuiMenuListSetRows(GuiWidget *w, f32 *table) {
     f32 *end;
     s32 count;
 
@@ -258,15 +258,15 @@ void func_0034A2B0(GuiWidget *w, s32 v) {
     *(s32 *)((char *)w + 0xC8) = v;
 }
 
-/* func_0034A2B8 (EU twin of USA func_00348E28): write the two float args into the
+/* GuiMenuListSetOrigin (EU twin of USA func_00348E28): write the two float args into the
  * block at *(w+0x5C) (+0/+4) and zero +8/+0xC; the +0x5C pointer is re-read per
  * store. Matching arm stays INCLUDE_ASM; #else is the structure model.
  * Word-verified vs USA func_00348E28: no external symbols; EU .s reloads 0x5C
  * per store, offsets identical. Region-agnostic. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", func_0034A2B8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", GuiMenuListSetOrigin);
 #else
-void func_0034A2B8(GuiWidget *w, f32 x, f32 y) {
+void GuiMenuListSetOrigin(GuiWidget *w, f32 x, f32 y) {
     f32 *block = *(f32 **)((char *)w + 0x5C);
     block[0] = x;
     block[1] = y;
@@ -295,15 +295,15 @@ s32 func_0034A2F8(GuiWidget *w) {
     return *(s32 *)((char *)w + 0xC0);
 }
 
-/* func_0034A300 (EU twin of USA func_00348E70 / GuiMenuListDraw): per-frame draw
+/* GuiMenuListDraw (EU twin of USA func_00348E70 / GuiMenuListDraw): per-frame draw
  * of a vertical text-menu/list widget. Structurally identical to the USA body;
  * EU deltas: an extra leading func_00337AF0(self) call before the scratch alloc
  * (func_0027F608), the row sentinel id is 0x10FC (USA 0x307A), and the callees
  * are the EU func_ symbols. Functional equivalent, not byte-exact. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", func_0034A300);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", GuiMenuListDraw);
 #else
-void func_0034A300(void *self) {
+void GuiMenuListDraw(void *self) {
     char *p = (char *)self;
     f32 *scratch;
     s32 rowCount;
@@ -324,7 +324,7 @@ void func_0034A300(void *self) {
 
             scratch[1] = (f32)(rowYBase + rowYStep * i) + originY;
 
-            func_00337C68((GuiWidget *)self, *(f32 *)entry, 0.0f, 0.0f, 0.0f);
+            GuiElementSetScale((GuiWidget *)self, *(f32 *)entry, 0.0f, 0.0f, 0.0f);
 
             if (*(s32 *)(entry + 4) == 0x10FC) {
                 scratch[1] += 3.0f;
@@ -377,7 +377,7 @@ void func_0034A300(void *self) {
                 }
             }
 
-            func_00338770((GuiWidget *)self);
+            GuiTextElementDraw((GuiWidget *)self);
         }
     }
 
@@ -389,29 +389,29 @@ void func_0034A300(void *self) {
  * seven type-B sub-elements (at +0x0/+0x4C/+0x98/+0xE4/+0x130/+0x17C/+0x1C8) then
  * run type-C init across the seven 0x58-stride row slots starting at +0x218;
  * returns the widget. Matching arm stays INCLUDE_ASM; #else is the structure model.
- * Word-verified vs USA func_00349200: GuiElementInitTypeB -> EU func_00337E88
- * (7 jals), GuiElementInitTypeC -> EU func_00338648 (loop jal; same twin as
+ * Word-verified vs USA func_00349200: GuiElementInitTypeB -> EU GuiElementInitTypeB
+ * (7 jals), GuiElementInitTypeC -> EU GuiElementInitTypeC (loop jal; same twin as
  * func_0034A068); embed offsets and 0x58 stride identical. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", func_0034A690);
 #else
-void func_00337E88(void *element);              /* EU twin of GuiElementInitTypeB */
-void func_00338648(void *element);              /* EU twin of GuiElementInitTypeC */
+void GuiElementInitTypeB(void *element);              /* EU twin of GuiElementInitTypeB */
+void GuiElementInitTypeC(void *element);              /* EU twin of GuiElementInitTypeC */
 GuiWidget *func_0034A690(GuiWidget *w) {
     char *row;
     s32 i;
 
-    func_00337E88((char *)w + 0x0);
-    func_00337E88((char *)w + 0x4C);
-    func_00337E88((char *)w + 0x98);
-    func_00337E88((char *)w + 0xE4);
-    func_00337E88((char *)w + 0x130);
-    func_00337E88((char *)w + 0x17C);
-    func_00337E88((char *)w + 0x1C8);
+    GuiElementInitTypeB((char *)w + 0x0);
+    GuiElementInitTypeB((char *)w + 0x4C);
+    GuiElementInitTypeB((char *)w + 0x98);
+    GuiElementInitTypeB((char *)w + 0xE4);
+    GuiElementInitTypeB((char *)w + 0x130);
+    GuiElementInitTypeB((char *)w + 0x17C);
+    GuiElementInitTypeB((char *)w + 0x1C8);
 
     row = (char *)w + 0x218;
     for (i = 6; i >= 0; i--) {
-        func_00338648(row);
+        GuiElementInitTypeC(row);
         row += 0x58;
     }
     return w;
@@ -436,20 +436,20 @@ void SetPopupLayoutMode(GuiWidget *w, s32 mode) {
  * corner sub-elements (+0x130/+0x4C/+0x98/+0xE4). Each glyph is looked up in the
  * GUI instance atlas (g_guiInstance + 0x8710). Matching arm stays INCLUDE_ASM;
  * #else is the structure model.
- * Word-verified vs USA SetPopupTitleText: GuiElementSetGlyph -> EU func_00338070
+ * Word-verified vs USA SetPopupTitleText: GuiElementSetGlyph -> EU GuiElementSetGlyph
  * (5x jal); g_guiInstance KEEPS its name. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", SetPopupTitleText);
 #else
 extern u8 *g_guiInstance;
-void func_00338070(GuiWidget *e, u8 *atlas, s32 code);   /* EU GuiElementSetGlyph */
+void GuiElementSetGlyph(GuiWidget *e, u8 *atlas, s32 code);   /* EU GuiElementSetGlyph */
 void SetPopupTitleText(GuiWidget *w, s32 *src) {
     u8 *atlas = g_guiInstance + 0x8710;
-    func_00338070(w, atlas, src[0]);                                /* src+0x0  */
-    func_00338070((GuiWidget *)((char *)w + 0x130), atlas, src[2]); /* src+0x8  */
-    func_00338070((GuiWidget *)((char *)w + 0x4C),  atlas, src[4]); /* src+0x10 */
-    func_00338070((GuiWidget *)((char *)w + 0x98),  atlas, src[8]); /* src+0x20 */
-    func_00338070((GuiWidget *)((char *)w + 0xE4),  atlas, src[6]); /* src+0x18 */
+    GuiElementSetGlyph(w, atlas, src[0]);                                /* src+0x0  */
+    GuiElementSetGlyph((GuiWidget *)((char *)w + 0x130), atlas, src[2]); /* src+0x8  */
+    GuiElementSetGlyph((GuiWidget *)((char *)w + 0x4C),  atlas, src[4]); /* src+0x10 */
+    GuiElementSetGlyph((GuiWidget *)((char *)w + 0x98),  atlas, src[8]); /* src+0x20 */
+    GuiElementSetGlyph((GuiWidget *)((char *)w + 0xE4),  atlas, src[6]); /* src+0x18 */
 }
 #endif
 
@@ -486,7 +486,7 @@ void SetPopupItemText(GuiWidget *w, s32 count, s32 *ids) {
 }
 #endif
 
-/* func_0034A870 (EU twin of USA GuiScreenWithPlanetNameInit): build the planet-
+/* GuiScreenWithPlanetNameInit (EU twin of USA GuiScreenWithPlanetNameInit): build the planet-
  * name popup screen. Sets the layout mode, optionally allocs the 0x10-byte config
  * object at +0x4A4 (title position 250,190), inits seven header GuiElements from
  * fixed templates at their offsets, then a run of seven text rows (w+0x218, stride
@@ -497,27 +497,27 @@ void SetPopupItemText(GuiWidget *w, s32 count, s32 *ids) {
  * Word-verified vs USA GuiScreenWithPlanetNameInit (callees by EU jal order,
  * templates by %hi/%lo appearance order — NON-uniform deltas):
  *   SetPopupLayoutMode/GuiPoolAlloc/GuiPlacementNew/UpdatePopupMenu KEEP names;
- *   GuiElementInit    -> func_00337EC0   GuiTextElementInit -> func_00338688;
- *   GuiElementSetText -> func_00338730   GuiElementSetScale -> func_00337C68;
- *   GuiElementGetColor-> func_00337B00   GuiElementSetGlyph -> func_00338070;
+ *   GuiElementInit    -> GuiElementInit   GuiTextElementInit;
+ *   GuiElementSetText -> func_00338730   GuiElementSetScale;
+ *   GuiElementGetColor-> func_00337B00   GuiElementSetGlyph;
  *   templates D_1ADBE8/BF0/C00 -> D_1ADC88/C90/CA0 (+0xA0), D_1ADF98/FA0 ->
  *   D_1AE038/040 (+0xA0), D_1AE570/578/588 -> D_1AE620/628/638 (+0xB0).
  * REGION DELTA (FLAGGED): EU OMITS the USA per-row *(elem+0x54)=0 store in the
  * seven-row loop (same class as batch-1 func_0034A090). Modeled by omission. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", func_0034A870);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", GuiScreenWithPlanetNameInit);
 #else
 extern u8 *g_guiInstance;
 void *GuiPoolAlloc(void *pool);
 void *GuiPlacementNew(s32 size, void *at);
-void func_00337EC0(GuiWidget *elem, u8 *tmpl, void *pool);   /* EU GuiElementInit */
-void func_00338688(void *element, void *tmpl, void *pool);  /* EU GuiTextElementInit */
-void func_00338070(GuiWidget *e, u8 *atlas, s32 code);      /* EU GuiElementSetGlyph */
+void GuiElementInit(GuiWidget *elem, u8 *tmpl, void *pool);   /* EU GuiElementInit */
+void GuiTextElementInit(void *element, void *tmpl, void *pool);  /* EU GuiTextElementInit */
+void GuiElementSetGlyph(GuiWidget *e, u8 *atlas, s32 code);      /* EU GuiElementSetGlyph */
 void SetPopupLayoutMode(GuiWidget *w, s32 mode);
 void UpdatePopupMenu(GuiWidget *w, s32 arg);
 extern u8 D_1ADC88[], D_1ADC90[], D_1ADCA0[], D_1AE038[], D_1AE040[];
 extern u8 D_1AE620[], D_1AE628[], D_1AE638[];
-void func_0034A870(void *screen, void *pool) {
+void GuiScreenWithPlanetNameInit(void *screen, void *pool) {
     char *w = (char *)screen;
     char *cfg;
     void *obj;
@@ -540,22 +540,22 @@ void func_0034A870(void *screen, void *pool) {
     *(f32 *)(cfg + 0x0) = 250.0f; /* 0x437A0000 */
     *(f32 *)(cfg + 0x4) = 190.0f; /* 0x433E0000 */
 
-    func_00337EC0((GuiWidget *)(w + 0x0),   D_1ADC88, pool);
-    func_00337EC0((GuiWidget *)(w + 0x130), D_1ADC90, pool);
-    func_00337EC0((GuiWidget *)(w + 0x4C),  D_1ADCA0, pool);
-    func_00337EC0((GuiWidget *)(w + 0x98),  D_1AE038, pool);
-    func_00337EC0((GuiWidget *)(w + 0xE4),  D_1AE040, pool);
-    func_00337EC0((GuiWidget *)(w + 0x17C), D_1AE620, pool);
-    func_00337EC0((GuiWidget *)(w + 0x1C8), D_1AE628, pool);
+    GuiElementInit((GuiWidget *)(w + 0x0),   D_1ADC88, pool);
+    GuiElementInit((GuiWidget *)(w + 0x130), D_1ADC90, pool);
+    GuiElementInit((GuiWidget *)(w + 0x4C),  D_1ADCA0, pool);
+    GuiElementInit((GuiWidget *)(w + 0x98),  D_1AE038, pool);
+    GuiElementInit((GuiWidget *)(w + 0xE4),  D_1AE040, pool);
+    GuiElementInit((GuiWidget *)(w + 0x17C), D_1AE620, pool);
+    GuiElementInit((GuiWidget *)(w + 0x1C8), D_1AE628, pool);
 
     *(s32 *)(w + 0x480) = 0;
     *(s32 *)(w + 0x4B4) = 0;
 
     for (i = 0; i < 7; i++) {
         char *elem = w + 0x218 + i * 0x58;
-        func_00338688(elem, D_1AE638, pool);
+        GuiTextElementInit(elem, D_1AE638, pool);
         func_00338730((GuiWidget *)elem, 0);
-        func_00337C68((GuiWidget *)elem, 1.0f, 0.0f, 0.0f, 0.0f);
+        GuiElementSetScale((GuiWidget *)elem, 1.0f, 0.0f, 0.0f, 0.0f);
         /* REGION DELTA: EU omits the USA *(elem+0x54)=0 store here. */
         *func_00337B00((GuiWidget *)elem) = 0x80F0F0F0;
         *(s32 *)(w + 0x488 + i * 4) = 1;
@@ -569,13 +569,13 @@ void func_0034A870(void *screen, void *pool) {
     *func_00337B00((GuiWidget *)(w + 0x17C)) = 0x60442D00;
     *func_00337B00((GuiWidget *)(w + 0x1C8)) = 0x55F0C070;
 
-    func_00338070((GuiWidget *)(w + 0x0),   g_guiInstance + 0x8710, 0x1C);
-    func_00338070((GuiWidget *)(w + 0x130), g_guiInstance + 0x8710, 0x1D);
-    func_00338070((GuiWidget *)(w + 0x4C),  g_guiInstance + 0x8710, 0x1E);
-    func_00338070((GuiWidget *)(w + 0x98),  g_guiInstance + 0x8710, 0x1F);
-    func_00338070((GuiWidget *)(w + 0xE4),  g_guiInstance + 0x8710, 0x20);
-    func_00338070((GuiWidget *)(w + 0x17C), g_guiInstance + 0x8710, 0x73);
-    func_00338070((GuiWidget *)(w + 0x1C8), g_guiInstance + 0x8710, 0x74);
+    GuiElementSetGlyph((GuiWidget *)(w + 0x0),   g_guiInstance + 0x8710, 0x1C);
+    GuiElementSetGlyph((GuiWidget *)(w + 0x130), g_guiInstance + 0x8710, 0x1D);
+    GuiElementSetGlyph((GuiWidget *)(w + 0x4C),  g_guiInstance + 0x8710, 0x1E);
+    GuiElementSetGlyph((GuiWidget *)(w + 0x98),  g_guiInstance + 0x8710, 0x1F);
+    GuiElementSetGlyph((GuiWidget *)(w + 0xE4),  g_guiInstance + 0x8710, 0x20);
+    GuiElementSetGlyph((GuiWidget *)(w + 0x17C), g_guiInstance + 0x8710, 0x73);
+    GuiElementSetGlyph((GuiWidget *)(w + 0x1C8), g_guiInstance + 0x8710, 0x74);
 
     UpdatePopupMenu((GuiWidget *)w, 0);
 }
@@ -699,7 +699,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", func_0034B760);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", func_0034B780);
 
-/* func_0034B788 (USA func_0034A300): store a1 to the +0x80 field. */
+/* func_0034B788 (USA GuiMenuListDraw): store a1 to the +0x80 field. */
 void func_0034B788(GuiWidget *w, s32 v) {
     w->unk80 = v;
 }
@@ -1060,24 +1060,24 @@ void func_0034BCE8(void *anim) {
  * slots (func_003377A8 then store), and clear four more records (+0x1D4/+0x25C/
  * +0x2E4/+0x36C). Returns the widget. Matching arm stays INCLUDE_ASM; #else is the
  * structure model. Word-verified vs USA func_0034A9F8: GuiElementInitTypeB ->
- * func_00337E88, GuiListRowElementInit -> func_003380B0, func_0034A1D8 ->
+ * GuiElementInitTypeB, GuiListRowElementInit, func_0034A1D8 ->
  * func_0034B660 (file-scope), func_003368D0 -> func_003377A8; D_1AD8E8 -> D_1AD988
  * (+0xA0), D_1AD908 -> D_1AD9A8 (+0xA0). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", func_0034BE80);
 #else
-void func_00337E88(void *element);      /* EU twin of GuiElementInitTypeB */
-void func_003380B0(void *element);      /* EU twin of GuiListRowElementInit */
+void GuiElementInitTypeB(void *element);      /* EU twin of GuiElementInitTypeB */
+void GuiListRowElementInit(void *element);      /* EU twin of GuiListRowElementInit */
 void func_003377A8(void *slot);         /* EU twin of func_003368D0 */
 extern u8 D_1AD988[];                   /* list-row vtable at widget +0x1CC (EU twin D_1AD8E8) */
 extern u8 D_1AD9A8[];                   /* list-row vtable at widget +0x1D0 (EU twin D_1AD908) */
 void *func_0034BE80(void *widget) {
     char *w = (char *)widget;
 
-    func_00337E88(w + 0x10);
-    func_00337E88(w + 0x5C);
-    func_00337E88(w + 0xA8);
-    func_003380B0(w + 0xF4);
+    GuiElementInitTypeB(w + 0x10);
+    GuiElementInitTypeB(w + 0x5C);
+    GuiElementInitTypeB(w + 0xA8);
+    GuiListRowElementInit(w + 0xF4);
     func_0034B660((GuiWidget *)(w + 0x140));
     func_003377A8(w + 0x1CC);
     *(u8 **)(w + 0x1CC) = D_1AD988;
@@ -1140,7 +1140,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/249FE8", func_0034C9D0);
  * Word-verified vs USA func_0034B770: func_00336C18 (pos-vec getter) -> func_00337AF0
  * (file-scope, f32*); GuiElementSetVisible -> func_00337B48; func_0026F818 ->
  * func_0026F678; GuiListSetItemCount -> func_003388E8; GuiListSetScrollPos ->
- * func_003388F0; GuiListSetColorPair0/1 -> func_00338178/func_00338190; g_maxHealth/
+ * GuiListSetScrollPos; GuiListSetColorPair0/1 -> GuiListSetColorPair0/GuiListSetColorPair1; g_maxHealth/
  * g_nanotech KEEP names. REGION SYMBOL-BASE DELTAS (same data, follow EU .s):
  * g_soundBankHandlesBlk -> g_sndChannelVolumes+0x1778; g_swapGadgetItemIndex+0x86/
  * 0x8A -> g_nVendorBuyQuantity+0x158/0x15C; layout floats D_1AE750/754 -> D_1AE808/
@@ -1156,9 +1156,9 @@ extern f32 D_1AE808, D_1AE80C;
 void func_0026F678(void *a, void *b, void *c);           /* no-op stub (EU twin func_0026F818) */
 void func_00337B48(GuiWidget *e, s32 visible);           /* EU GuiElementSetVisible */
 void func_003388E8(GuiWidget *e, s32 count);             /* EU GuiListSetItemCount */
-void func_003388F0(GuiWidget *e, s32 pos);               /* EU GuiListSetScrollPos */
-void func_00338178(GuiWidget *e, s32 c0, s32 c1);        /* EU GuiListSetColorPair0 */
-void func_00338190(GuiWidget *e, s32 c0, s32 c1);        /* EU GuiListSetColorPair1 */
+void GuiListSetScrollPos(GuiWidget *e, s32 pos);               /* EU GuiListSetScrollPos */
+void GuiListSetColorPair0(GuiWidget *e, s32 c0, s32 c1);        /* EU GuiListSetColorPair0 */
+void GuiListSetColorPair1(GuiWidget *e, s32 c0, s32 c1);        /* EU GuiListSetColorPair1 */
 void func_0034CBF8(GuiWidget *w) {
     char *b = (char *)w;
     GuiWidget *list = (GuiWidget *)(b + 0xF4);
@@ -1183,7 +1183,7 @@ void func_0034CBF8(GuiWidget *w) {
         func_0026F678(&t0, &t1, &t2);
     }
     func_003388E8(list, t1 - t0);
-    func_003388F0(list, (g_nanotech >> 5) - t0);
+    GuiListSetScrollPos(list, (g_nanotech >> 5) - t0);
 
     obj = *(f32 **)(b + 0x8);
     vec[0] = D_1AE808 + obj[0];
@@ -1199,11 +1199,11 @@ void func_0034CBF8(GuiWidget *w) {
     vec[1] = (f32)iv;
 
     if (snd[0x22B4] == 1) {
-        func_00338178(list, 0x60808080, 0x60808080);
-        func_00338190(list, 0x40808080, 0x40808080);
+        GuiListSetColorPair0(list, 0x60808080, 0x60808080);
+        GuiListSetColorPair1(list, 0x40808080, 0x40808080);
     } else {
-        func_00338178(list, 0x8049C1FF, 0x80001EFF);
-        func_00338190(list, 0x50F0C070, 0x50F0C070);
+        GuiListSetColorPair0(list, 0x8049C1FF, 0x80001EFF);
+        GuiListSetColorPair1(list, 0x50F0C070, 0x50F0C070);
     }
 }
 #endif

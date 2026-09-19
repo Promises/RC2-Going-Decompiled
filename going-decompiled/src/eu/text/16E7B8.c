@@ -54,13 +54,13 @@ extern u8 g_nVendorBuyQuantity[];
  *
  * Matching arm stays INCLUDE_ASM (packed-save wall); #else is the structure
  * model (functional, not byte-exact). Word-verified vs USA ShowSplashImage +
- * EU .s: DecompressWad=func_0029DE68, ResetFrameArenas=func_002FD230,
+ * EU .s: DecompressWad=DecompressWad, ResetFrameArenas=func_002FD230,
  * func_002856D8, AppendDrawEnvContext1=func_00285768, AppendScreenClearPacket=
  * func_00285800, AppendTextureUploadBuildTex0=func_002FDB58, AppendFrameInitGsState=
  * func_0027BD40, DrawFullScreenTint=func_0027E2A8, AppendDrawEnvContext2=func_00285880,
  * func_00285BF8, func_0026E780(EU-only), KickFrameDmaChain=func_002FD2D8,
- * WaitFrameDmaFence=WaitFrameDmaFence, WaitGsPathsIdle=func_001244B8,
- * WaitVblankGetField=func_001261F0; arena table g_nVendorBuyQuantity+0x8C78 [5],
+ * WaitFrameDmaFence=WaitFrameDmaFence, WaitGsPathsIdle=WaitGsPathsIdle,
+ * WaitVblankGetField=WaitVblankGetField; arena table g_nVendorBuyQuantity+0x8C78 [5],
  * g_vramFrameBufB = D_001A7308+0x54. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_0026E838);
@@ -131,13 +131,13 @@ void func_0026E838(s32 wadId) {
  *
  * Matching arm stays INCLUDE_ASM (packed-save wall); #else is the structure
  * model (functional, not byte-exact). Word-verified vs USA func_0026EAC8 + EU .s:
- * DecompressWad=func_0029DE68, ResetFrameArenas=func_002FD230,
+ * DecompressWad=DecompressWad, ResetFrameArenas=func_002FD230,
  * InstallVif1DmacHandlers=func_002FDD70, func_002856D8, AppendDrawEnvContext1=
  * func_00285768, AppendScreenClearPacket=func_00285800, AppendTextureUploadBuildTex0=
  * func_002FDB58, AppendFrameInitGsState=func_0027BD40, AppendDrawEnvContext2=
  * func_00285880, func_00285BF8, func_0026E780(EU-only), KickFrameDmaChain=
- * func_002FD2D8, WaitFrameDmaFence=WaitFrameDmaFence, WaitGsPathsIdle=func_001244B8,
- * WaitVblankGetField=func_001261F0, RemoveVif1DmacHandlers=func_002FDE00;
+ * func_002FD2D8, WaitFrameDmaFence=WaitFrameDmaFence, WaitGsPathsIdle=WaitGsPathsIdle,
+ * WaitVblankGetField=WaitVblankGetField, RemoveVif1DmacHandlers=func_002FDE00;
  * g_vramFrameBufB = D_001A7308+0x54. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_0026E928);
@@ -194,7 +194,7 @@ void func_0026E928(s32 wadId) {
  * the three attract-reel slots - a 3-way random roll seeds (*a,*b,*c) with a
  * base permutation of {0,1,2}, then a coin-flip optionally swaps *b and *c.
  * Matching arm stays INCLUDE_ASM (packed-save wall); #else is the structure
- * model. Word-verified vs USA func_0026EB98 + EU .s: GetRandomInt = func_002A81F8
+ * model. Word-verified vs USA func_0026EB98 + EU .s: GetRandomInt
  * (called with 3 then 2 - exactly USA GetRandomInt(3)/GetRandomInt(2)); a=$4,
  * b=$5, c=$6. */
 #ifndef TARGET_NATIVE
@@ -461,7 +461,7 @@ void func_0026FD78(s32 frames, s32 mode, f32 fov, f32 stiffness, f32 damping,
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_0026FE88);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", StepCameraFovInterp);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_00270018);
 
@@ -609,7 +609,7 @@ void func_00270340(void) {
  * arm stays INCLUDE_ASM; #else is the structure model (not byte-exact).
  * Word-verified vs USA func_00270500 + EU .s: helper-block base =
  * g_nVendorBuyQuantity + 0x3158 (== USA g_prevCamera+0xC = 0x1B5320), helper moby
- * ptr at +0xC4; spawn = func_00303B40 (USA func_00303818), FreeMoby = func_0029FCF8.
+ * ptr at +0xC4; spawn = func_00303B40 (USA func_00303818), FreeMoby.
  * NOTE: the spawn arg is (helper-block base - 0x60), matching BOTH USA and EU .s
  * (`addiu $4,$16,-0x60`, $16 = g_prevCamera+0xC); the USA #else models it loosely
  * as (cam - 0x60), the EU #else follows the asm. */
@@ -617,7 +617,7 @@ void func_00270340(void) {
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_00270360);
 #else
 extern void *func_00303B40(void *cameraBase);   /* spawn helper moby */
-extern void func_0029FCF8(void *moby);           /* FreeMoby */
+extern void FreeMoby(void *moby);           /* FreeMoby */
 void func_00270360(Camera *cam) {
     u8 *base = g_nVendorBuyQuantity + 0x3158;
     void **helper = (void **)(base + 0xC4);
@@ -627,7 +627,7 @@ void func_00270360(Camera *cam) {
             *helper = func_00303B40(base - 0x60);
         }
     } else if (*helper != NULL) {
-        func_0029FCF8(*helper);
+        FreeMoby(*helper);
         *helper = NULL;
     }
 }
@@ -643,9 +643,9 @@ void func_002703C0(Camera *cam) {
     }
 }
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_00270408);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", SwitchActiveCamera);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_002706A8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", TestCameraTakeover);
 
 /* func_00270870 (USA CallCameraPollHandler): invoke the camera-mode vtbl
  * `poll` handler (slot +0x10) for the camera's mode id, if installed. */
@@ -657,7 +657,7 @@ void func_00270870(Camera *cam) {
     }
 }
 
-/* func_002708B8 (EU twin of USA DispatchCameraMode): per-frame camera arbitration
+/* DispatchCameraMode (EU twin of USA DispatchCameraMode): per-frame camera arbitration
  * + mode update. Polls the active camera, scans all 48 slots for a higher-priority
  * active camera (TestCameraTakeover), switches to it on a win, runs that camera's
  * mode `update` handler, records its post-update position into the prev-pos fields
@@ -666,14 +666,14 @@ void func_00270870(Camera *cam) {
  * byte-exact). Word-verified vs USA DispatchCameraMode + EU .s: activeCamera ptr =
  * g_nVendorBuyQuantity+0x3148, g_cameraSlots = +0x3508, g_cameraSlotActive =
  * +0x5C68, vtbl = D_0026E680 (update @+0xC); CallCameraPollHandler = func_00270870,
- * TestCameraTakeover = func_002706A8, SwitchActiveCamera = func_00270408,
+ * TestCameraTakeover, SwitchActiveCamera,
  * helper-moby = func_00270360, callback-dispatch = func_00270080. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_002708B8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", DispatchCameraMode);
 #else
-extern s32 func_002706A8(Camera *cand, Camera *cur);   /* TestCameraTakeover */
-extern void func_00270408(Camera *cam);                 /* SwitchActiveCamera */
-s32 func_002708B8(void) {
+extern s32 TestCameraTakeover(Camera *cand, Camera *cur);   /* TestCameraTakeover */
+extern void SwitchActiveCamera(Camera *cam);                 /* SwitchActiveCamera */
+s32 DispatchCameraMode(void) {
     Camera *chosen = *(Camera **)(g_nVendorBuyQuantity + 0x3148);
     Camera *slots = (Camera *)(g_nVendorBuyQuantity + 0x3508);
     s32 *active = (s32 *)(g_nVendorBuyQuantity + 0x5C68);
@@ -687,14 +687,14 @@ s32 func_002708B8(void) {
     for (i = 0; i < 48; i++) {
         Camera *slot = &slots[i];
         if (active[i] != 0 && slot != chosen &&
-            func_002706A8(slot, chosen) != 0) {
+            TestCameraTakeover(slot, chosen) != 0) {
             changed = 1;
             chosen = slot;
         }
     }
 
     if (changed) {
-        func_00270408(chosen);   /* SwitchActiveCamera */
+        SwitchActiveCamera(chosen);   /* SwitchActiveCamera */
     }
 
     update = D_0026E680[chosen->modeId].update;
@@ -826,17 +826,17 @@ void func_00270D18(void) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_00270D50);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", BeginCameraTransition);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_00270FC0);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_00271178);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_00271758);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", ApplyCameraTransition);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_002717F8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", ApplyCameraShakeAxis);
 
-/* func_00271A30 (EU twin of USA TrackHeroMotionForCamera): smooth the hero
+/* TrackHeroMotionForCamera (EU twin of USA TrackHeroMotionForCamera): smooth the hero
  * facing / velocity / speed / lateral direction from g_heroPos deltas for the
  * camera logic to consume. Matching arm stays INCLUDE_ASM (packed-save +
  * fp-pipeline wall); #else is the structure model (not byte-exact). Word-verified
@@ -849,7 +849,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_002717F8);
  * func_002835B0, Vec3LengthVu0 = func_002836B0, Vec4ScaleVu0 = Vec4ScaleVu0.
  * (Vec4 typedef reused from func_00270BC0's #else.) */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_00271A30);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", TrackHeroMotionForCamera);
 #else
 extern f32  func_00270138(f32 cur, f32 target, f32 stiffness, f32 damping,
                           f32 maxSpeed, f32 *vel);          /* spring (func_002702D8) */
@@ -880,7 +880,7 @@ typedef struct HeroCamMotion {
     /* 0xA8 */ f32 forwardSpeed;
     /* 0xAC */ f32 orientZRing[5];
 } HeroCamMotion;
-void func_00271A30(void) {
+void TrackHeroMotionForCamera(void) {
     HeroCamMotion *m = (HeroCamMotion *)(g_nVendorBuyQuantity + 0x3158);
     u8 *facingBase = g_nNanotechBonusHealTimer + 0xE4;   /* g_heroFacingDir */
     Vec4 *heroPos = (Vec4 *)(facingBase - 0x240);        /* g_heroPos */
@@ -945,7 +945,7 @@ void func_00271A30(void) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_00271D28);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", CheckCameraUnderwater);
 
 /* func_00271E78 (EU twin of USA func_00271FE8): per-frame camera-id / cinematic-
  * state arbiter. Reads the active cinematic key block (g_soundBankHandlesBlk) and
@@ -1025,23 +1025,23 @@ void func_00271E78(void) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_00272038);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_00272068);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", UpdateScreenFadeBlack);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_00272120);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", UpdateScreenFadeWhite);
 
-/* func_00272208 (EU twin of USA UpdateCamera): top-level per-frame camera tick.
+/* UpdateCamera (EU twin of USA UpdateCamera): top-level per-frame camera tick.
  * Same in-level driven-frame TRAP as the USA twin: it dereferences the OVERLAY-
  * resident activeCamera pointer (g_cameraState+0x190) and other relocated-band
  * camera globals, faulting on real EE headless. Modeled as the same no-op #else
  * as USA UpdateCamera (the camera transform is externally supplied from the
- * in-level seed; func_00271A30/TrackHeroMotionForCamera is driven+validated
+ * in-level seed; TrackHeroMotionForCamera/TrackHeroMotionForCamera is driven+validated
  * separately). NOT a region delta. Matching arm stays INCLUDE_ASM. Confirmed the
- * UpdateCamera twin by its EU .s call set (func_00271A30, func_00271E78,
- * func_002708B8, the transition kick/interp helpers, and the FOV interp). */
+ * UpdateCamera twin by its EU .s call set (TrackHeroMotionForCamera, func_00271E78,
+ * DispatchCameraMode, the transition kick/interp helpers, and the FOV interp). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_00272208);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", UpdateCamera);
 #else
-void func_00272208(void) {
+void UpdateCamera(void) {
 }
 #endif
 
@@ -1049,7 +1049,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_002723E0);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_00272468);
 
-/* func_00272840 (EU twin of USA DrawScreenSpriteFxEntry): render one queued
+/* DrawScreenSpriteFxEntry (EU twin of USA DrawScreenSpriteFxEntry): render one queued
  * screen-sprite effect at screen position (x,y), 40px-per-unit scale. mode 0 =
  * radial burst (repeat fx->drawFlags times, stepping the angle by fx->angle);
  * mode 1 = four mirrored quads offset along the angle; mode 2 = one centered
@@ -1059,9 +1059,9 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_00272468);
  * func_00283A58, SinfVu0 = func_00283A40, WrapAnglePiSum = func_00284458;
  * 40.0/0.5, color 0xFFFFF3; fx fields x@0x10 color@0x14 texId@0x18 y@0x1C
  * drawFlags@0x26 angle@0x28 mode@0x2C. ScreenSpriteFx typedef defined HERE
- * (earliest sprite-FX body); reused by func_002732B8. */
+ * (earliest sprite-FX body); reused by DrawScreenSpriteFxQueue. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_00272840);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", DrawScreenSpriteFxEntry);
 #else
 extern u64  func_0027CD60(s32 texId);                /* GetUiTextureTex0 */
 extern f32  func_00283A58(f32 a);                    /* CosfVu0 */
@@ -1082,7 +1082,7 @@ typedef struct ScreenSpriteFx {
     /* 0x28 */ f32  angle;           /* per-step angle */
     /* 0x2C */ s32  mode;            /* 0 burst / 1 mirrored quads / 2 single */
 } ScreenSpriteFx;
-void func_00272840(f32 x, f32 y, ScreenSpriteFx *fx) {
+void DrawScreenSpriteFxEntry(f32 x, f32 y, ScreenSpriteFx *fx) {
     u64 tex0 = func_0027CD60(fx->texId);
     s32 mode = fx->mode;
     f32 angle = fx->y;              /* +0x1C: base draw angle for this entry */
@@ -1119,28 +1119,28 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_00272B50);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_002731B0);
 
-/* func_002732B8 (EU twin of USA DrawScreenSpriteFxQueue): final fx-layer pass.
+/* DrawScreenSpriteFxQueue (EU twin of USA DrawScreenSpriteFxQueue): final fx-layer pass.
  * Runs the pre-pass, then for each queued screen-sprite effect projects world-
  * anchored entries to screen space (skipping ones whose owner moby is dead, state
- * 0xFE/0xFD) and draws via func_00272840; direct entries draw at the default
+ * 0xFE/0xFD) and draws via DrawScreenSpriteFxEntry; direct entries draw at the default
  * screen centre. Clears the queue afterwards; suppressed entirely while the hero
  * is in state 0x6F. Matching arm stays INCLUDE_ASM (packed-save wall); #else is
  * the structure model. Word-verified vs USA DrawScreenSpriteFxQueue + EU .s:
  * g_heroState = g_giantClankHealth+0xA20, g_screenSpriteFxQueue =
  * g_nVendorBuyQuantity+0x53B8 (count @+0x120, entries 0x30 stride), pre-pass
  * func_00272CC0 = func_00272B50, IntToFloat = IntToFloat, ProjectWorldToScreen
- * = func_00279FC0, DrawScreenSpriteFxEntry = func_00272840; g_screenCenterDefaultX/Y
+ * = func_00279FC0, DrawScreenSpriteFxEntry; g_screenCenterDefaultX/Y
  * = D_001A7308+0xC0/+0xC4, g_nGsPixelOffsetX/Y = D_001A7308+0xC8/+0xCC.
- * (ScreenSpriteFx typedef reused from func_00272840's #else.) */
+ * (ScreenSpriteFx typedef reused from DrawScreenSpriteFxEntry's #else.) */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_002732B8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", DrawScreenSpriteFxQueue);
 #else
 extern void func_00272B50(void);                        /* screen-sprite-FX pre-pass */
 extern f32  IntToFloat(s32 x);                        /* IntToFloat */
 extern void func_00279FC0(f32 *out, ScreenSpriteFx *fx); /* ProjectWorldToScreen */
 extern u8   g_giantClankHealth[];                        /* +0xA20 = g_heroState */
 extern u8   D_001A7308[];                                /* +0xC0/C4 centre, +0xC8/CC gs offset */
-void func_002732B8(void) {
+void DrawScreenSpriteFxQueue(void) {
     u8 *queue = g_nVendorBuyQuantity + 0x53B8;           /* g_screenSpriteFxQueue */
     ScreenSpriteFx *entries = (ScreenSpriteFx *)queue;
     s32 *count = (s32 *)(queue + 0x120);
@@ -1176,7 +1176,7 @@ void func_002732B8(void) {
                 sx = (proj[0] - IntToFloat(*(s32 *)(D_001A7308 + 0xC8))) * 0.0625f;
                 sy = (proj[1] - IntToFloat(*(s32 *)(D_001A7308 + 0xCC))) * 0.0625f;
             }
-            func_00272840(sx, sy, fx);
+            DrawScreenSpriteFxEntry(sx, sy, fx);
         }
     }
 
@@ -1186,7 +1186,7 @@ void func_002732B8(void) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_00273438);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_00273440);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", SampleCameraFogZone);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", func_002735D0);
 

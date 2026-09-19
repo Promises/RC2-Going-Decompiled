@@ -61,7 +61,7 @@ extern void BuildCameraProjection(void);
 extern void func_00283D10(Vec4f dst);  /* identity/clear quad (has #else body) */
 extern f32  func_00283B48(f32 x);       /* VU0 sine   (has #else body) */
 extern f32  func_00283B30(f32 x);       /* VU0 cosine (has #else body) */
-extern f32  func_00284548(f32 a, f32 b);/* WrapAnglePiSum (has #else body) */
+extern f32  WrapAnglePiSum(f32 a, f32 b);/* WrapAnglePiSum (has #else body) */
 extern void func_00300288(void);
 extern void func_003007F8(Moby *moby);
 extern void *func_003009F8(Moby *moby);
@@ -156,13 +156,13 @@ extern u8 *g_mobyAuxBlockBase; /* 0x1B22EC -> base of 0x80-byte per-moby aux blo
  * TODO(match): lq/sq quad copies + two callee-saves + branch-likely scan loop
  * cc1 schedules differently; the C is functionally faithful. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_002FFC20);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", AcquireProjectileCurveAnchor);
 #else
 extern void func_002B0E40(void *transform, void *slot, s32 flag);
 __asm__(".extern g_soundBankHandles, 16");
 extern u8 g_soundBankHandles[]; /* 0x18A148 sound-bank handle table (+0x20 base) */
 extern s16 D_0018A168;          /* hero-attached-sound enable flag */
-s32 func_002FFC20(void *p1, void *p2, void *p3, Moby *moby, void *src) {
+s32 AcquireProjectileCurveAnchor(void *p1, void *p2, void *p3, Moby *moby, void *src) {
     SoundPoolSlot *table = (SoundPoolSlot *)(D_00220000 + 0x1260);
     u8 *m = (u8 *)moby;
     u_long128 xform;
@@ -208,9 +208,9 @@ void func_002FFCE0(s32 idx) {
  * TODO(hle): dominated by VU0 vector/quaternion intrinsics (Vec3CrossVu0,
  * Vec3DotVu0, QuatMultiplyVu0, ...) — tier-3 hardware math; no byte-exact path. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_002FFD00);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", AdvanceProjectileCurve);
 #else
-void func_002FFD00(s32 idx, void *dir, void *src) {
+void AdvanceProjectileCurve(s32 idx, void *dir, void *src) {
     (void)idx; (void)dir; (void)src; /* TODO(hle): VU0 quaternion steering */
 }
 #endif
@@ -450,7 +450,7 @@ void func_003002E0(void) {
         if (*(u8 *)(g_waterPool + 0x65) != 0) {
             union { u32 u; f32 f; } negHalfPi = { 0xBFC90FDCu }; /* ~= -pi/2 */
             *(f32 *)((u8 *)poolMoby + 0xF4) =
-                func_00284548(*(f32 *)((u8 *)poolMoby + 0xF4), negHalfPi.f);
+                WrapAnglePiSum(*(f32 *)((u8 *)poolMoby + 0xF4), negHalfPi.f);
         }
         {
             union { u32 u; f32 f; } k = { 0x3F0FEA69u };

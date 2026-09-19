@@ -139,8 +139,8 @@ s32 func_003515C0(void) {
     return func_00351CD0((FmvPtsQueue *)(g_pFmvArenaBase + FMV_PTS_OFS));
 }
 
-/* func_003515F0 (USA OnFmvGifDmaInterrupt): handwritten `sync; ei` pair. */
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_003515F0);
+/* InitFmvPlaybackEngine (USA OnFmvGifDmaInterrupt): handwritten `sync; ei` pair. */
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", InitFmvPlaybackEngine);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00351878);
 
@@ -160,17 +160,17 @@ s32 func_00351990(void) {
     return func_00351CE0((FmvPtsQueue *)(g_pFmvArenaBase + FMV_PTS_OFS));
 }
 
-/* func_003519C0 (USA func_00350520): blocked, 8-byte-packed saves. */
-/* func_003519C0 (EU twin of USA func_00350520): construct the FMV pts-queue object — zero the
+/* FmvPtsQueueInit (USA func_00350520): blocked, 8-byte-packed saves. */
+/* FmvPtsQueueInit (EU twin of USA func_00350520): construct the FMV pts-queue object — zero the
  * 0x20-qword header, stash payload-ring/scratch bases + stream type(3) + 0x400 granularity, record
  * the decode buffer, alloc the IPU sema, report success. Matching arm stays INCLUDE_ASM; #else is
  * the structure model. Word-verified vs USA func_00350520: ZeroQwords->func_00283348 (-0xF0),
  * func_00133850->func_001338B0 (+0x60), D_1B2354->g_nVendorBuyQuantity+0x18C (+0x80 via the file's anchor). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_003519C0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", FmvPtsQueueInit);
 #else
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee saves. */
-s32 func_003519C0(s32 *obj, s32 ringBase, s32 scratchBase, u8 *decodeBuf) {
+s32 FmvPtsQueueInit(s32 *obj, s32 ringBase, s32 scratchBase, u8 *decodeBuf) {
     extern void func_00283348(s32 *dst, s32 nQwords);          /* ZeroQwords twin */
     extern s64 func_001338B0(s32, s32, s32, s32, s32, s32);    /* IPU sema alloc twin */
     s64 sema;
@@ -399,9 +399,9 @@ void func_00351DB0(s32 *st) {
 /* func_00352000 (USA func_00350B60): blocked (INCLUDE_ASM in USA too). */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00352000);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_003521A8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", OnFmvVblankFlip);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00352378);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", OnFmvGifDmaInterrupt);
 
 /* func_003523C8 (USA func_00350F28): blocked, 8-byte-packed saves +
  * delay-slot %gp_rel read. */
@@ -710,12 +710,12 @@ void func_00352A60(u64 *tag, u64 madr, u64 qwc, u64 id) {
     *tag = madr << 32 | (qwc << 32) >> 4 | (id << 32) >> 32;
 }
 
-/* func_00352A88 (USA func_003515E8): FMV bitstream/IPU-DMA stream-object
+/* FmvBitstreamObjInit (USA func_003515E8): FMV bitstream/IPU-DMA stream-object
  * constructor. Records the caller-supplied ring parameters into the object,
  * folds the ring's physical base into the DMA source-tag word (address masked
  * to 0x0FFFFFFF, OR'd with the 0x20000000 DMAtag "next"/id field), creates the
  * object's binary completion semaphore (max=1, init=1), primes the first
- * IPU_TO tag chain (func_00352B00, EU twin of USA func_00351660), then zeroes
+ * IPU_TO tag chain (FmvStreamStartDma, EU twin of USA func_00351660), then zeroes
  * the 64-bit read cursor at +0x48. Always reports success (1). Region-agnostic
  * port of the USA body: CreateSema is at the shared SDK address 0x11AC20 in
  * both builds; only the IPU-primer callee shifts (+0x14A0). The original leaves
@@ -723,14 +723,14 @@ void func_00352A60(u64 *tag, u64 madr, u64 qwc, u64 id) {
  * maxCount/initCount are written. Matching arm stays asm (8-byte-packed saves,
  * s0@0x20, ra@0x28). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00352A88);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", FmvBitstreamObjInit);
 #else
 /* EE-kernel binary-semaphore create (EU func_0011AC20, shared SDK address).
    SemaParam layout mirrors the SDK's <eekernel.h> (not included by this TU). */
 struct SemaParam { s32 currentCount, maxCount, initCount, numWaitThreads; u32 attr, option; };
 extern s32 CreateSema(struct SemaParam *p);
-extern void func_00352B00(u8 *stream); /* IPU_TO DMA tag-chain primer (defined below) */
-s32 func_00352A88(u8 *obj, u64 ringBase, u64 tagAddr, u64 qwc, u64 tadr, u64 chainId) {
+extern void FmvStreamStartDma(u8 *stream); /* IPU_TO DMA tag-chain primer (defined below) */
+s32 FmvBitstreamObjInit(u8 *obj, u64 ringBase, u64 tagAddr, u64 qwc, u64 tadr, u64 chainId) {
     struct SemaParam sema;
     sema.maxCount = 1;
     sema.initCount = 1;
@@ -741,13 +741,13 @@ s32 func_00352A88(u8 *obj, u64 ringBase, u64 tagAddr, u64 qwc, u64 tadr, u64 cha
     *(s32 *)(obj + 0x50) = (s32)tadr;
     *(s32 *)(obj + 0x54) = (s32)chainId;
     *(s32 *)(obj + 0x40) = CreateSema(&sema);
-    func_00352B00(obj);
+    FmvStreamStartDma(obj);
     *(s64 *)(obj + 0x48) = 0;
     return 1;
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00352B00);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", FmvStreamStartDma);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00352C60);
 
@@ -891,19 +891,19 @@ s32 func_00353650(void *dmaq, void *cmd) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00353760);
 
-/* func_00353908 (USA func_00352468): construct the FMV stream object. Resets
+/* FmvStreamInit (USA func_00352468): construct the FMV stream object. Resets
  * its message dispatch table (func_0012F738), registers the five stream-event
  * callbacks (frame-drop report, two DMA-add-queue pumps, retry, and the cursor
  * snapshot - func_00353EC0/EE8/F20/F50/F80 at slots 0/1/2/3/5), clears the
  * playback FSM (func_00353A70), then builds the embedded bitstream object at
- * +0x48 (func_00352A88). Always reports success. Ported from the USA body: the
+ * +0x48 (FmvBitstreamObjInit). Always reports success. Ported from the USA body: the
  * dispatch-table helpers func_0012F738/func_0012FA70 live in the shared SDK
  * region (same address in both builds); the FMV callees shift +0x14A0
  * (callbacks func_00352A20/A48/A80/AB0/AE0->func_00353EC0/EE8/F20/F50/F80,
- * func_003525D0->func_00353A70, func_003515E8->func_00352A88) - all verified
+ * func_003525D0->func_00353A70, func_003515E8->FmvBitstreamObjInit) - all verified
  * against the EU asm. Matching arm stays asm (8-byte-packed saves). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00353908);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", FmvStreamInit);
 #else
 extern void *func_0012F738(void);                              /* reset dispatch table */
 extern s32 func_0012FA70(u8 *obj, s32 slot, void *cb, s32 arg); /* register callback */
@@ -913,7 +913,7 @@ extern s32 func_00353EE8(void);                                /* callback 1 (de
 extern s32 func_00353F20(void);                                /* callback 2 (defined below) */
 extern s32 func_00353F50(void);                                /* callback 3 (defined below) */
 extern s32 func_00353F80(s32 unused, u8 *obj);                 /* callback 5 (twin func_00352AE0) */
-s32 func_00353908(FmvStream *obj, u64 p2, u64 p3, u64 p4, u64 p5, u64 p6, u64 p7,
+s32 FmvStreamInit(FmvStream *obj, u64 p2, u64 p3, u64 p4, u64 p5, u64 p6, u64 p7,
                   u64 p8) {
     func_0012F738();
     func_0012FA70((u8 *)obj, 0, (void *)func_00353EC0, 0);
@@ -922,7 +922,7 @@ s32 func_00353908(FmvStream *obj, u64 p2, u64 p3, u64 p4, u64 p5, u64 p6, u64 p7
     func_0012FA70((u8 *)obj, 3, (void *)func_00353F50, 0);
     func_0012FA70((u8 *)obj, 5, (void *)func_00353F80, 0);
     func_00353A70(obj);
-    func_00352A88((u8 *)obj + 0x48, p4, p5, p6, p7, p8);
+    FmvBitstreamObjInit((u8 *)obj + 0x48, p4, p5, p6, p7, p8);
     return 1;
 }
 #endif
@@ -966,8 +966,8 @@ void func_00353A70(FmvStream *s) {
 /* func_00353A78 (USA func_003525D8): blocked, 8-byte-packed saves. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00353A78);
 
-/* func_00353AB0 (USA func_00352610): blocked, single `li v0,1` reuse wall. */
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00353AB0);
+/* FmvRequestStop (USA func_00352610): blocked, single `li v0,1` reuse wall. */
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", FmvRequestStop);
 
 /* === func_00353AC0 (USA func_00352620) ============================== */
 /**
@@ -1032,31 +1032,31 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00353B48);
 /* func_00353C20 (USA func_00352780): blocked, 8-byte-packed saves. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00353C20);
 
-/* func_00353C68 (USA func_003527C8): the FMV decode-thread main loop. Resets
- * the embedded stream ring (func_00352B00 on obj+0x48), initialises the arena
+/* FmvDecodeThreadEntry (USA func_003527C8): the FMV decode-thread main loop. Resets
+ * the embedded stream ring (FmvStreamStartDma on obj+0x48), initialises the arena
  * frame queue (func_00354030 at g_pFmvArenaBase+0xD9168), primes the host frame
- * reader (func_00353D08), then decodes frames (func_00353AC0) as long as the
+ * reader (FmvDisplayWorkerLoop), then decodes frames (func_00353AC0) as long as the
  * arena's "more data" flag (+0xD9174) stays set and no frame reports completion
  * (returns 1), and finally drives the stream to its terminal state 3
  * (func_00353AC8). Ported from the USA body: g_pFmvArenaBase retargets to the
  * EU alias (g_nVendorBuyQuantity + 0x184) via the file-level macro, and the
- * five callees shift +0x14A0 (func_00351660->func_00352B00,
- * func_00352B90->func_00354030, func_00352868->func_00353D08,
+ * five callees shift +0x14A0 (func_00351660->FmvStreamStartDma,
+ * func_00352B90->func_00354030, func_00352868->FmvDisplayWorkerLoop,
  * func_00352620->func_00353AC0, func_00352628->func_00353AC8) - all verified
  * against the EU asm. Matching arm stays asm (8-byte-packed saves + a
  * %gp_rel/absolute reload-artifact wall on g_pFmvArenaBase); the #else is the
  * structure-exact model (the frame decode itself is the deferred FMV native
  * backend, but the loop structure is exact). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00353C68);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", FmvDecodeThreadEntry);
 #else
-extern void func_00352B00(u8 *stream);
-extern s32 func_00353D08(u8 *host);
+extern void FmvStreamStartDma(u8 *stream);
+extern s32 FmvDisplayWorkerLoop(u8 *host);
 extern void func_00354030(FmvFrameQueue *q);
-s32 func_00353C68(FmvStream *obj) {
-    func_00352B00((u8 *)obj + 0x48);
+s32 FmvDecodeThreadEntry(FmvStream *obj) {
+    FmvStreamStartDma((u8 *)obj + 0x48);
     func_00354030((FmvFrameQueue *)(g_pFmvArenaBase + 0xD9168));
-    func_00353D08((u8 *)obj);
+    FmvDisplayWorkerLoop((u8 *)obj);
     while (*(s32 *)(g_pFmvArenaBase + 0xD9174) != 0) {
         if (func_00353AC0(obj) == 1) {
             break;
@@ -1066,36 +1066,36 @@ s32 func_00353C68(FmvStream *obj) {
 }
 #endif
 
-/* func_00353D08 (USA func_00352868): the FMV frame-display worker loop. Pulls
+/* FmvDisplayWorkerLoop (USA func_00352868): the FMV frame-display worker loop. Pulls
  * the next decoded picture from the host (func_0012F9A8/func_0012F950), waits
- * (yielding via func_003515A0) for a free display slot (func_003540D0), builds
+ * (yielding via func_003515A0) for a free display slot (FmvFrameQueueGetWriteSlot), builds
  * the per-tile GIF display chain for each frame tile (func_00352000), commits
- * the slot (func_00354058), and yields. Exits when the host signals
+ * the slot (FmvFrameQueuePush), and yields. Exits when the host signals
  * end-of-stream or the FSM (func_00353AC0) reports stop. Ported from the USA
  * body: g_pFmvArenaBase retargets to the EU alias via the file-level macro; the
  * host/dispatch helpers func_0012F9A8/func_0012F950/func_0012F9C8 live in the
  * shared SDK region (same address in both builds); DebugPrintStub becomes the
  * EU real printf func_0026FD28; the FMV callees shift +0x14A0
- * (func_00352620->func_00353AC0, func_00352C30->func_003540D0,
+ * (func_00352620->func_00353AC0, func_00352C30->FmvFrameQueueGetWriteSlot,
  * func_00350100->func_003515A0, func_003504C8->func_00351968,
- * func_00350B60->func_00352000, func_00352BB8->func_00354058); and the
+ * func_00350B60->func_00352000, func_00352BB8->FmvFrameQueuePush); and the
  * diagnostic strings retarget D_1AE820->D_1AE8D8, D_1AE838->D_1AE8F0 - every
  * symbol verified against the EU asm. Matching arm stays asm (8-byte-packed
  * saves + a %gp_rel/absolute reload-artifact wall on g_pFmvArenaBase); the
  * #else is the structure-exact model (the per-tile GIF chain build is the
  * deferred FMV native backend, but the loop structure is exact). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00353D08);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", FmvDisplayWorkerLoop);
 #else
 extern s32 func_0012F9A8(u8 *obj);                 /* host end-of-stream check */
 extern s32 func_0012F950(u8 *obj, s32 ptr, s32 len); /* host frame read */
 extern void func_0012F9C8(u8 *obj);                /* host teardown */
 extern void func_00352000(void *gif, u8 *frame, u32 a, u32 b, s32 idx); /* GIF-chain build (twin func_00350B60) */
-extern s32 func_003540D0(u8 *fq);                  /* acquire display slot (twin func_00352C30) */
-extern void func_00354058(u8 *fq);                 /* commit display slot (twin func_00352BB8) */
+extern s32 FmvFrameQueueGetWriteSlot(u8 *fq);                  /* acquire display slot (twin func_00352C30) */
+extern void FmvFrameQueuePush(u8 *fq);                 /* commit display slot (twin func_00352BB8) */
 extern char D_1AE8D8[];   /* decode-thread stop diagnostic (twin D_1AE820) */
 extern char D_1AE8F0[];   /* host frame-read error string (twin D_1AE838) */
-s32 func_00353D08(u8 *host) {
+s32 FmvDisplayWorkerLoop(u8 *host) {
     s32 result = 1;
 
     for (;;) {
@@ -1110,7 +1110,7 @@ s32 func_00353D08(u8 *host) {
             func_0026FD28(D_1AE8D8);
             break;
         }
-        while ((slot = (u8 *)func_003540D0(g_pFmvArenaBase + 0xD9168)) == 0) {
+        while ((slot = (u8 *)FmvFrameQueueGetWriteSlot(g_pFmvArenaBase + 0xD9168)) == 0) {
             func_003515A0();
         }
         if (func_0012F950(host, (s32)slot, 0x340) < 0) {
@@ -1132,7 +1132,7 @@ s32 func_00353D08(u8 *host) {
                 tile++;
             }
         }
-        func_00354058(g_pFmvArenaBase + 0xD9168);
+        FmvFrameQueuePush(g_pFmvArenaBase + 0xD9168);
         func_003515A0();
     }
     func_0012F9C8(host);
@@ -1186,8 +1186,8 @@ s32 func_00353F50(void) {
  * the USA twin (src/usa/text/250080.c). */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00353F80);
 
-/* func_00353FD0 (USA func_00352B30): blocked, register-coloring wall. */
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00353FD0);
+/* FmvFrameQueueInit (USA func_00352B30): blocked, register-coloring wall. */
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", FmvFrameQueueInit);
 
 /* === func_00354028 (USA func_00352B88) ============================== */
 /**
@@ -1216,11 +1216,11 @@ s32 func_00354040(FmvFrameQueue *q) {
     return q->count == q->capacity;
 }
 
-/* func_00354058 (USA func_00352BB8): blocked, 8-byte-packed saves. */
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00354058);
+/* FmvFrameQueuePush (USA func_00352BB8): blocked, 8-byte-packed saves. */
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", FmvFrameQueuePush);
 
-/* func_003540D0 (USA func_00352C30): blocked, 8-byte-packed saves. */
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_003540D0);
+/* FmvFrameQueueGetWriteSlot (USA func_00352C30): blocked, 8-byte-packed saves. */
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", FmvFrameQueueGetWriteSlot);
 
 /* === func_00354110 (USA func_00352C70) ============================== */
 /**
@@ -1230,8 +1230,8 @@ s32 func_00354110(FmvFrameQueue *q) {
     return q->count == 0;
 }
 
-/* func_00354120 (USA func_00352C80): blocked, 8-byte-packed saves. */
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", func_00354120);
+/* FmvFrameQueueGetDisplaySlot (USA func_00352C80): blocked, 8-byte-packed saves. */
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/251520", FmvFrameQueueGetDisplaySlot);
 
 /* === func_00354188 (USA func_00352CE8) ============================== */
 /**

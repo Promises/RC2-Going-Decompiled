@@ -1522,13 +1522,13 @@ extern f32 g_screenFadeBlack;   /* 0x1B1520 black screen fade level 0..1 */
 extern s32 g_frameGpuTime;      /* 0x1B1610 per-frame GS time measure (+0x4 = travel/revive flag) */
 extern s32 D_1ABE00;            /* 0x1ABE00 default push-state mode id */
 
-extern void func_002F6D50(void);
-extern void func_002F6600(void);
+extern void EnterCinematicBeginPlayback(void);
+extern void ExitCinematicSceneTeardown(void);
 extern void func_0026FF18(s32 a0, s32 a1, f32 f0, f32 f1, f32 f2, f32 f3);  /* 0x26FF18 camera tween setup */
 extern void BuildCameraProjection(void);                 /* 0x27B0A0 rebuild projection from g_cameraProjScale */
-extern void func_002CB720(void);
+extern void TickFrontEndScreenIdle(void);
 extern void TickPauseOverlayState(void);
-extern void func_002F95E8(void);
+extern void TeardownVendorSceneRestorePlayer(void);
 extern void RunRespawnScenePlayerRestore(void);          /* 0x2E80A0 */
 extern void UnhideAllMobysAndPopState(void);             /* 0x2E0198 */
 extern void func_00300118(void);
@@ -1575,10 +1575,10 @@ void UpdateGameState(void) {
     case 0:
         break;
     case 1:
-        func_002F6D50();
+        EnterCinematicBeginPlayback();
         goto camera_setup;
     case 2:
-        func_002F6600();
+        ExitCinematicSceneTeardown();
     camera_setup:
         g_cameraProjScale = 0.62f;
         func_0026FF18(0, 3, *(f32 *)&kCameraArg, 0.005f, 0.2f, 0.0f);
@@ -1586,14 +1586,14 @@ void UpdateGameState(void) {
         break;
     case 3:
         if (g_nGameStatePending != 4 || g_gameStatePendingArgA == 8) {
-            func_002CB720();
+            TickFrontEndScreenIdle();
         }
         break;
     case 4:
         TickPauseOverlayState();
         break;
     case 5:
-        func_002F95E8();
+        TeardownVendorSceneRestorePlayer();
         break;
     case 6:
         if (g_gameStatePendingArgA != 4) {
@@ -1700,7 +1700,7 @@ void UpdateGameState(void) {
 
 /* Steer a moby toward a world point (locomotion heading helper). Returns 8 when the
  * moby has no motion controller. Otherwise computes the heading to `target` from the
- * moby position (+0x10/+0x14) via func_00283BF8 (atan2), offsets it by `headingOffset`
+ * moby position (+0x10/+0x14) via Atan2fPoly (atan2), offsets it by `headingOffset`
  * (WrapAnglePiSum), and — if the controller is wandering (wanderAmplitude != 0) — adds
  * the wander offset and, when the wander timer expires (func_00283328), flips the
  * wander sign and reseeds the timer from [wanderIntervalMin, wanderIntervalMax]. Drives
@@ -1712,7 +1712,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", DriveMobyToward
 #else
 extern s32 GetMobyMotionController(Moby *moby);    /* defined below; forward decl */
 extern f32 WrapAnglePiSum(f32 a, f32 b);           /* 0x284548 wrap a+b into [-pi,pi] */
-extern f32 func_00283BF8(f32 dx, f32 dy);          /* 0x283BF8 atan2-style heading from a planar delta */
+extern f32 Atan2fPoly(f32 dx, f32 dy);          /* 0x283BF8 atan2-style heading from a planar delta */
 extern s32 func_00283328(s16 *timer);              /* 0x283328 tick a frame timer; nonzero when it expires */
 extern s32 RandRangeInclusive(s32 min, s32 max);   /* inclusive integer RNG */
 s32 DriveMobyTowardPoint(Moby *moby, Vec4 *target, f32 headingOffset) {
@@ -1724,7 +1724,7 @@ s32 DriveMobyTowardPoint(Moby *moby, Vec4 *target, f32 headingOffset) {
     }
 
     heading = WrapAnglePiSum(
-        func_00283BF8(((f32 *)target)[0] - *(f32 *)((u8 *)moby + 0x10),
+        Atan2fPoly(((f32 *)target)[0] - *(f32 *)((u8 *)moby + 0x10),
                       ((f32 *)target)[1] - *(f32 *)((u8 *)moby + 0x14)),
         headingOffset);
 
@@ -2091,7 +2091,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ApplyMobyGround
 #else
 extern void ProbeMobyGroundLine(Moby *moby, MobyMotionController *ctrl, f32 depth);  /* below */
 extern f32  Vec2LengthXyVu0(Vec4 *v);                 /* 0x2837D0 vector magnitude */
-extern f32  func_00283BF8(f32 y, f32 x);            /* 0x283BF8 atan2-style angle from a planar delta */
+extern f32  Atan2fPoly(f32 y, f32 x);            /* 0x283BF8 atan2-style angle from a planar delta */
 extern s32  CheckMobyPathBlocked(Moby *moby);       /* below */
 extern s32  CheckMobyOverWater(void *moby, void *ctrl);  /* below */
 extern void func_002A82D8(Moby *moby, s32 animSeq, s32 a2, s32 a3);      /* 0x2A82D8 trigger a move/turn anim-seq */
@@ -2116,7 +2116,7 @@ void ApplyMobyGroundAndEvents(Moby *moby, MobyMotionController *ctrl,
     }
     if (ctrl->groundedFrames != 0) {
         f32 mag = Vec2LengthXyVu0((Vec4 *)ctrl->groundNormal);
-        f32 slope = func_00283BF8(ctrl->groundNormal[2], mag);
+        f32 slope = Atan2fPoly(ctrl->groundNormal[2], mag);
         if (ctrl->maxSlopeAngle < slope) {
             ctrl->eventFlags |= 0x4;
             eventFired = 1;
@@ -2518,7 +2518,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_0
 /* Drive a moby along its waypoint path (follow + arrival logic). No-op (returns 0) with
  * no motion controller. Binds `path` as the controller's waypoint path if it changed
  * (SetMobyWaypointPath, whole-path). Steers toward the current node (waypointCursor)
- * heading via func_00283BF8 while StepMobyMotion targets the end node (waypointEnd).
+ * heading via Atan2fPoly while StepMobyMotion targets the end node (waypointEnd).
  * On arriving within arriveRadius of the current node: returns 1 if that was the end
  * node, else advances the cursor toward the end (±1 by direction) and returns 0.
  * Waypoint nodes are vec4s at path + 0x10 + i*0x10; the count is the leading short.
@@ -2528,7 +2528,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_0
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", DriveMobyAlongWaypoints);
 #else
 s32 SetMobyWaypointPath(Moby *moby, short *path, s32 endIdx, s32 startIdx);  /* defined below */
-extern f32 func_00283BF8(f32 dx, f32 dy);   /* 0x283BF8 atan2-style heading from a planar delta */
+extern f32 Atan2fPoly(f32 dx, f32 dy);   /* 0x283BF8 atan2-style heading from a planar delta */
 s32 DriveMobyAlongWaypoints(Moby *moby, short *path) {
     MobyMotionController *ctrl = (MobyMotionController *)GetMobyMotionController(moby);
     f32 *node;
@@ -2542,7 +2542,7 @@ s32 DriveMobyAlongWaypoints(Moby *moby, short *path) {
     }
 
     node = (f32 *)((u8 *)path + ctrl->waypointCursor * 0x10 + 0x10);
-    heading = func_00283BF8(node[0] - *(f32 *)((u8 *)moby + 0x10),
+    heading = Atan2fPoly(node[0] - *(f32 *)((u8 *)moby + 0x10),
                             node[1] - *(f32 *)((u8 *)moby + 0x14));
     StepMobyMotion(moby, (Vec4 *)((u8 *)path + ctrl->waypointEnd * 0x10 + 0x10), heading);
 

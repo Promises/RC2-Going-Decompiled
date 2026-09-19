@@ -43,7 +43,7 @@ void func_002912C0(s32 progress) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00291328);
 
-/* func_00291330 (EU twin of USA LoadIrxModuleFromBuffer) — load an IRX module
+/* LoadIrxModuleFromBuffer (EU twin of USA LoadIrxModuleFromBuffer) — load an IRX module
  * from an in-memory image. Builds the loadfile arg block on the stack
  * ([0]=image, [4]=arg, [8]=size, [C]=0), requests the load (func_0011AFE0);
  * on success spins the completion poll (func_0011AFC0) until it returns
@@ -54,12 +54,12 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00291328);
  * func_0011AFE0/func_0011AFC0/func_0011ED08 are byte-identical addresses in
  * both builds (this region is shared). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00291330);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", LoadIrxModuleFromBuffer);
 #else
 extern void *func_0011AFE0(void *argBlock, s32 mode, void *arg);
 extern s32   func_0011AFC0(void *handle);
 extern s32   func_0011ED08(void *arg, s32 a1, s32 a2);
-s32 func_00291330(void *image, s32 size, void *arg) {
+s32 LoadIrxModuleFromBuffer(void *image, s32 size, void *arg) {
     s32 args[4];
     void *h;
     s32 result = 1;
@@ -81,7 +81,7 @@ s32 func_00291330(void *image, s32 size, void *arg) {
 }
 #endif
 
-/* func_002913C8 (EU twin of USA SetupMemoryArenaTable) — zero the 0x9C-byte
+/* SetupMemoryArenaTable (EU twin of USA SetupMemoryArenaTable) — zero the 0x9C-byte
  * memory-arena table then fill the EE memory-region base addresses the loaders
  * + ResetFrameArenas read (scene arena halves at 0x354000, splash/loading-WAD
  * buffers, per-asset display-model buffers, GUI/debug pools, boot-WAD/upper-RAM
@@ -92,10 +92,10 @@ s32 func_00291330(void *image, s32 size, void *arg) {
  * USA). EU cc1 builds the constants via inter-register deltas, but ALL stored
  * values decode identical to USA. jal memset unchanged. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_002913C8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", SetupMemoryArenaTable);
 #else
 extern u8 g_nVendorBuyQuantity[];
-void func_002913C8(void) {
+void SetupMemoryArenaTable(void) {
     u8 *t = g_nVendorBuyQuantity + 0x8C78;               /* g_memoryArenaTable 0x1BAE40 */
     s32 cursor = *(s32 *)(g_nVendorBuyQuantity + 0x68);  /* g_sceneArenaCursor 0x1B2230 */
     memset(t, 0, 0x9C);
@@ -121,7 +121,7 @@ void func_002913C8(void) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_002914E0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", BootSystemInit);
 
 /* Thin frame-keeping forwarder to a subsystem entry point (the original builds
  * a frame + jal rather than sibling-call; empty-asm guard suppresses cc1's
@@ -139,10 +139,10 @@ void func_00291A40(void) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00291A60);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00291A70);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", DrawSkyShellsScaledSpin);
 
 /*
- * func_00291B80 — EU twin of USA RenderSky. Draws the sky shells for the frame:
+ * RenderSky — EU twin of USA RenderSky. Draws the sky shells for the frame:
  * opens a sky segment, points the shell spin-rate table at the static rates
  * (D_255B40), draws scaled spin in the boot/title area (g_playerProgress == 0) or
  * fixed spin in-game, closes the segment, then appends SCANMSK (0x47)=0x5360B and
@@ -150,7 +150,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00291A70);
  * TU-flag/version wall (absolute vs gp-rel g_playerProgress + tail-call j); #else.
  */
 extern void func_002E4580(void);   /* BeginSkyDrawSegment */
-extern void func_00291A70(void);   /* DrawSkyShellsScaledSpin */
+extern void DrawSkyShellsScaledSpin(void);   /* DrawSkyShellsScaledSpin */
 extern void func_002E4318(void);   /* DrawSkyShellsFixedSpin */
 extern void func_002E45F0(void);   /* CloseSkyDrawSegment */
 extern void AppendGsRegPacket(s32 reg, s32 val);   /* AppendGsRegPacket */
@@ -159,15 +159,15 @@ extern u8   D_001A7308[];          /* +0x58 = g_vramZBuffer (EU) */
 extern u8   g_nBoltCounterDisplayed[]; /* +0x48 = g_pSkyShellSpinRates (EU) */
 extern s32  D_255B40[];            /* static sky shell spin rates (EU) */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00291B80);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", RenderSky);
 #else
-void func_00291B80(void) {
+void RenderSky(void) {
     func_002E4580();
     *(s32 *)(g_nBoltCounterDisplayed + 0x48) = (s32)D_255B40;
     if (g_playerProgress != 0) {
         func_002E4318();
     } else {
-        func_00291A70();
+        DrawSkyShellsScaledSpin();
     }
     func_002E45F0();
     AppendGsRegPacket(0x47, 0x5360B);
@@ -410,35 +410,35 @@ void func_002925B0(void *hdrArg, s32 texBase, s32 *texRecords, s32 texCount) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_002926F0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", BuildUiTextureDescriptors);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_002927D0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", BindSkyData);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00292988);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", LoadPlayerDisplayTextures);
 
-/* func_00292C38 (EU twin of USA BindPlayerDisplayModel) — stage the player
+/* BindPlayerDisplayModel (EU twin of USA BindPlayerDisplayModel) — stage the player
  * display model's textures and header. For each of g_playerTexCount entries,
  * writes a 3-doubleword GS texture register block into the display list at
  * g_pointLights+0x2280 (stride 0x18): the per-texture descriptor followed by two
  * fixed GS register values. Then relocates the player model chunk into place
- * (func_00293CE0 = RelocateMobyClassChunk from g_pPlayerModelBuffer) and mirrors
+ * (RelocateMobyClassChunk from g_pPlayerModelBuffer) and mirrors
  * the first moby class header's byte +0x8 into +0x9. Matching arm stays
  * INCLUDE_ASM.
  * Word-verified vs USA BindPlayerDisplayModel: RelocateMobyClassChunk ->
- * func_00293CE0; reloc table D_1A91D0 -> D_1A9290 (+0xC0). g_playerTexCount =
+ * RelocateMobyClassChunk; reloc table D_1A91D0 -> D_1A9290 (+0xC0). g_playerTexCount =
  * D_001A7308+0x10, g_playerTexDescriptors = D_001A7308+0x18, g_pPlayerModelBuffer
  * = D_001A7308+0xC; display list = g_nVendorBuyQuantity+0x12B78 (== g_pointLights
  * 0x1C2AC0 + 0x2280); g_mobyClassHeaders[0] via g_mapTextureWidth+0x89A0. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00292C38);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", BindPlayerDisplayModel);
 #else
 extern u8   g_nVendorBuyQuantity[];
 extern u8   D_001A7308[];                 /* player-model global region */
 extern s32  g_mapTextureWidth[];
 extern u8   D_1A9290[];                   /* moby-class reloc table (EU; USA D_1A91D0) */
-extern void func_00293CE0(void *buffer, s32 slot, void *reloc);  /* RelocateMobyClassChunk */
+extern void RelocateMobyClassChunk(void *buffer, s32 slot, void *reloc);  /* RelocateMobyClassChunk */
 
-void func_00292C38(void) {
+void BindPlayerDisplayModel(void) {
     s32 count = *(s32 *)(D_001A7308 + 0x10);       /* g_playerTexCount */
 
     if (count > 0) {
@@ -454,7 +454,7 @@ void func_00292C38(void) {
             dst += 3;
         }
     }
-    func_00293CE0(*(void **)(D_001A7308 + 0xC), 0, D_1A9290);  /* g_pPlayerModelBuffer */
+    RelocateMobyClassChunk(*(void **)(D_001A7308 + 0xC), 0, D_1A9290);  /* g_pPlayerModelBuffer */
     {
         u8 *hdr = *(u8 **)((u8 *)g_mapTextureWidth + 0x89A0);   /* g_mobyClassHeaders[0] */
         hdr[0x9] = hdr[0x8];
@@ -462,63 +462,63 @@ void func_00292C38(void) {
 }
 #endif
 
-/* func_00292CD0 (EU twin of USA LoadPlayerDisplayModel) — load the armor-variant
+/* LoadPlayerDisplayModel (EU twin of USA LoadPlayerDisplayModel) — load the armor-variant
  * player display model into the dedicated buffer and bind it: load the variant
- * textures (func_00292988), bind the model (func_00292C38), fix up the loaded
+ * textures (LoadPlayerDisplayTextures), bind the model (BindPlayerDisplayModel), fix up the loaded
  * header (func_00293DC8) so g_mobyClassHeaders[0] points at the rebased buffer,
  * then record the loaded armor variant. Matching arm stays INCLUDE_ASM.
  * Word-verified vs USA LoadPlayerDisplayModel (jal ORDER): LoadPlayerDisplayTextures
- * -> func_00292988, BindPlayerDisplayModel -> func_00292C38, func_00293D68 ->
+ * -> LoadPlayerDisplayTextures, BindPlayerDisplayModel, func_00293D68 ->
  * func_00293DC8. g_mobyClassHeaders[0] = g_mapTextureWidth+0x89A0 (0x1CDB00, delta
  * 0); g_playerModelBufferBase = g_nVendorBuyQuantity+0x8CF0 (0x1BAEB8, delta 0).
  * REGION DELTA: g_loadedArmorVariant = D_001A7308+0x8 (0x1A7310) vs USA 0x1A7290
  * (+0x80 D_001A73xx lane). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00292CD0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", LoadPlayerDisplayModel);
 #else
 extern u8   g_nVendorBuyQuantity[];
 extern s32  g_mapTextureWidth[];
 extern u8   D_001A7308[];                 /* +0x8 = g_loadedArmorVariant */
-extern void func_00292988(s32 variant);   /* LoadPlayerDisplayTextures */
+extern void LoadPlayerDisplayTextures(s32 variant);   /* LoadPlayerDisplayTextures */
 extern void func_00293DC8(u8 *dst, u8 *src);   /* func_00293D68 */
 
-void func_00292CD0(s32 variant) {
-    func_00292988(variant);
-    func_00292C38();
+void LoadPlayerDisplayModel(s32 variant) {
+    LoadPlayerDisplayTextures(variant);
+    BindPlayerDisplayModel();
     func_00293DC8(*(u8 **)((u8 *)g_mapTextureWidth + 0x89A0),   /* g_mobyClassHeaders[0] */
                   *(u8 **)(g_nVendorBuyQuantity + 0x8CF0));     /* g_playerModelBufferBase */
     *(s32 *)(D_001A7308 + 0x8) = variant;                       /* g_loadedArmorVariant */
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00292D18);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", LoadHeldItemDisplayModel);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00292EF0);
 
-/* func_00292F00 (EU twin of USA LoadShipDisplayModel) — load the ship display
+/* LoadShipDisplayModel (EU twin of USA LoadShipDisplayModel) — load the ship display
  * model for level `index`: record the index in the level dialog TOC, wait for the
  * frame DMA fence, kick the model disc read into g_shipModelBufferBase from the
  * level's TOC entry, set up the GS texture register block at g_pointLights+0x2280,
- * then rebase the loaded moby class header (func_00293E08). Matching arm stays
+ * then rebase the loaded moby class header (FixupMobyClassHeader). Matching arm stays
  * INCLUDE_ASM.
  * Word-verified vs USA LoadShipDisplayModel (jal ORDER): WaitFrameDmaFence ->
  * WaitFrameDmaFence, StartFileLoadPumpingVoice -> func_002B8838, FixupMobyClassHeader
- * -> func_00293E08. g_discToc = D_0014B5C0 (0x14B5C0, +0x80 vs USA 0x14B540);
+ * -> FixupMobyClassHeader. g_discToc = D_0014B5C0 (0x14B5C0, +0x80 vs USA 0x14B540);
  * g_levelDialogToc+0x13B0 = D_0014B5C0+0x76C0; g_shipModelBufferBase =
  * g_nVendorBuyQuantity+0x8CE8 (0x1BAEB0, delta 0); reg block =
  * g_nVendorBuyQuantity+0x12B78 (g_pointLights+0x2280, delta 0); reloc/bounds
  * D_1A91E0 -> D_1A92A0 (+0xC0). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00292F00);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", LoadShipDisplayModel);
 #else
 extern u8   D_0014B5C0[];                 /* g_discToc; +0x76C0 = g_levelDialogToc+0x13B0 */
 extern u8   g_nVendorBuyQuantity[];
 extern u8   D_1A92A0[];                   /* moby-class bounds/reloc (EU; USA D_1A91E0) */
 extern void WaitFrameDmaFence(s32 mode);      /* WaitFrameDmaFence */
 extern void func_002B8838(void *dest, s32 startSector, s32 sectorCount);  /* StartFileLoadPumpingVoice */
-extern void func_00293E08(void *hdr, s32 instMode, void *idMap, s32 classId);  /* FixupMobyClassHeader */
+extern void FixupMobyClassHeader(void *hdr, s32 instMode, void *idMap, s32 classId);  /* FixupMobyClassHeader */
 
-void func_00292F00(s32 index) {
+void LoadShipDisplayModel(s32 index) {
     u8  *toc   = D_0014B5C0;                 /* g_discToc */
     u8  *ldt   = D_0014B5C0 + 0x76C0;        /* g_levelDialogToc + 0x13B0 */
     s32 *entry = (s32 *)(toc + index * 8);
@@ -535,21 +535,21 @@ void func_00292F00(s32 index) {
         reg[1] = 0x0000FFA0000000E0ULL;     /* fixed GS register A */
         reg[2] = 0x0040000400004000ULL;     /* fixed GS register B */
     }
-    func_00293E08(shipBuf, 0, D_1A92A0, -1);
+    FixupMobyClassHeader(shipBuf, 0, D_1A92A0, -1);
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00292FC8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", LoadShipDisplayTexture);
 
-/* func_00293198 (EU twin of USA ParseLoadedSegment, loaders.cpp) — bind the
+/* ParseLoadedSegment (EU twin of USA ParseLoadedSegment, loaders.cpp) — bind the
  * just-loaded HUD asset segment: publish its rounded sub-segment sizes, make a
  * DebugMalloc'd working copy of its asset header, resolve the embedded section
  * pointers, and stage the four HUD-bank texture blocks to the IOP upload ring.
  * See USA ParseLoadedSegment for the full per-bank behaviour. Matching arm stays
  * INCLUDE_ASM.
  * Word-verified vs USA ParseLoadedSegment (jal ORDER): CopyQwords -> CopyQwords,
- * func_002933D0 -> func_00293430, UploadDataToIopRing -> func_002EFCA8,
- * func_0028BBA0 -> func_0028BB28, func_0028B8C8 -> func_0028B850; DebugMalloc /
+ * func_002933D0 -> DecompressHudBankWad, UploadDataToIopRing -> func_002EFCA8,
+ * func_0028BBA0 -> UploadHudBankTextures, func_0028B8C8 -> RelocateHudBankGsSlots; DebugMalloc /
  * func_0011AEA0 unchanged. Strings D_1A91F0/D_1A9200/10/20/30 -> D_1A92B0/C0/D0/
  * E0/F0 (+0xC0). g_memoryArenaTable = g_nVendorBuyQuantity+0x8C78 (delta 0);
  * g_pHudAssetHeader = g_pActiveTextTable+0x48; size-table dst = g_pActiveTextTable
@@ -557,7 +557,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00292FC8);
  * (+0x80 lane). REGION DELTA: DebugMalloc __LINE__ args are 0x2FF/0x327 in EU vs
  * USA 0x305/0x32D (PAL source-line shift, benign). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00293198);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", ParseLoadedSegment);
 #else
 extern u8   D_001A7308[];              /* +0x0 = g_pLoadedSegment */
 extern u8   g_pActiveTextTable[];      /* +0x48 = g_pHudAssetHeader; +0x70 = size table */
@@ -565,9 +565,9 @@ extern u8   g_nVendorBuyQuantity[];    /* +0x8C78 = g_memoryArenaTable */
 extern void *DebugMalloc(s32 size, s32 arg2, void *file, s32 line);
 extern void CopyQwords(void *dst, const void *src, s32 nbytes);   /* CopyQwords */
 extern s32  func_002EFCA8(void *eeAddr, s32 sizeQw, s32 arg3, void *tag);  /* UploadDataToIopRing */
-extern void func_00293430(s32 slot, u8 *dest);   /* DecompressHudBankWad */
-extern void func_0028BB28(s32 a, void *b, s32 c);
-extern void func_0028B850(s32 a, void *b);
+extern void DecompressHudBankWad(s32 slot, u8 *dest);   /* DecompressHudBankWad */
+extern void UploadHudBankTextures(s32 a, void *b, s32 c);
+extern void RelocateHudBankGsSlots(s32 a, void *b);
 extern void func_0011AEA0(s32 a);
 extern u8 D_1A92B0[];  /* "loaders.cpp" __FILE__ */
 extern u8 D_1A92C0[];  /* per-bank IOP-upload debug tags */
@@ -575,7 +575,7 @@ extern u8 D_1A92D0[];
 extern u8 D_1A92E0[];
 extern u8 D_1A92F0[];
 
-void func_00293198(void) {
+void ParseLoadedSegment(void) {
     u8 *seg = *(u8 **)D_001A7308;              /* g_pLoadedSegment */
     u8 *arenaTable = g_nVendorBuyQuantity + 0x8C78;   /* g_memoryArenaTable */
     u8 *header;
@@ -611,19 +611,19 @@ void func_00293198(void) {
     /* Bank 0. */
     if (*(s32 *)(header + 0x54) != 0) {
         sizeQw = ((*(s32 *)(seg + 0x24) + 0x3F) & 0xFFFFFFC0) >> 4;
-        func_00293430(0, iopBase);
+        DecompressHudBankWad(0, iopBase);
         *(s32 *)(*(u8 **)(g_pActiveTextTable + 0x48) + 0x94) =
             func_002EFCA8((void *)(*(s32 *)(seg + 0x20) + (s32)seg), sizeQw, sizeQw, D_1A92C0);
-        func_0028BB28(0, iopBase, 1);
+        UploadHudBankTextures(0, iopBase, 1);
     }
 
     /* Bank 1 (scratch decompress, no upload). */
     header = *(u8 **)(g_pActiveTextTable + 0x48);
     if (*(s32 *)(header + 0x58) != 0) {
         u8 *buf = (u8 *)DebugMalloc(*(s32 *)(header + 0x58), 0, D_1A92B0, 0x327);
-        func_00293430(1, buf);
+        DecompressHudBankWad(1, buf);
         func_0011AEA0(0);
-        func_0028B850(1, buf);
+        RelocateHudBankGsSlots(1, buf);
     }
 
     /* Bank 2. */
@@ -652,7 +652,7 @@ void func_00293198(void) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00293430);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", DecompressHudBankWad);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00293498);
 
@@ -734,7 +734,7 @@ void func_00293BC8(u8 *groups, s32 instMode, u8 *idMap, s32 groupCount) {
 }
 #endif
 
-/* func_00293CE0 (EU twin of USA RelocateMobyClassChunk) — fix up a freshly-loaded
+/* RelocateMobyClassChunk (EU twin of USA RelocateMobyClassChunk) — fix up a freshly-loaded
  * moby class chunk in place. Rebases the pointer table at chunk+[0x4] (words +0x0/
  * +0x8 of each 0x10-byte entry whose base is below the arena limit
  * g_memoryArenaTable+0x8), then walks the descriptor table at chunk+[0x8] until a
@@ -743,14 +743,14 @@ void func_00293BC8(u8 *groups, s32 instMode, u8 *idMap, s32 groupCount) {
  * table to func_00293BC8 for group instantiation. Matching arm stays INCLUDE_ASM.
  * Word-verified vs USA RelocateMobyClassChunk: func_00293B68 -> func_00293BC8;
  * g_memoryArenaTable = g_nVendorBuyQuantity+0x8C78 (delta 0). Signature matches
- * batch-1 decl `void func_00293CE0(void*, s32, void*)`. */
+ * batch-1 decl `void RelocateMobyClassChunk(void*, s32, void*)`. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00293CE0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", RelocateMobyClassChunk);
 #else
 extern u8   g_nVendorBuyQuantity[];   /* +0x8C78 = g_memoryArenaTable */
 extern void func_00293BC8(u8 *groups, s32 instMode, u8 *idMap, s32 groupCount);
 
-void func_00293CE0(void *chunkArg, s32 arg2, void *nameTableArg) {
+void RelocateMobyClassChunk(void *chunkArg, s32 arg2, void *nameTableArg) {
     u8 *chunk = (u8 *)chunkArg;
     u8 *nameTable = (u8 *)nameTableArg;
     s32 count = chunk[0] + chunk[1] + chunk[2];
@@ -804,7 +804,7 @@ void func_00293DC8(u8 *dst, u8 *src) {
     *(s32 *)(dst + 0x20) = (s32)(src + *(s32 *)(src + 8));
 }
 
-/* func_00293E08 (EU twin of USA FixupMobyClassHeader) — rebase a freshly-loaded
+/* FixupMobyClassHeader (EU twin of USA FixupMobyClassHeader) — rebase a freshly-loaded
  * moby class header in place: turn every embedded self-relative offset into an
  * absolute pointer, and record per-slot metadata. See USA FixupMobyClassHeader for
  * the full behaviour (special-flag data-size clamp, mesh-block band compaction,
@@ -816,9 +816,9 @@ void func_00293DC8(u8 *dst, u8 *src) {
  * +0x9300 (0x1CE460, delta 0). REGION DELTA: g_mobyClassDataSizes = D_001D0C40
  * +0x1C0 (0x1D0E00) vs USA 0x1D0D80, and g_mobyClassBounds = D_001D0C40+0x940
  * (0x1D1580) vs USA 0x1D1500 (+0x80 D_001D0xxx lane). idMap widened to void* so
- * the callers (func_00292F00, func_002941A0) pass pointers warning-free. */
+ * the callers (LoadShipDisplayModel, RegisterMobyClass) pass pointers warning-free. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00293E08);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", FixupMobyClassHeader);
 #else
 extern s32  g_mapTextureWidth[];       /* +0x9300 = g_mobyClassSlotRemap */
 extern u8   D_001D0C40[];              /* +0x1C0 = g_mobyClassDataSizes; +0x940 = g_mobyClassBounds */
@@ -827,7 +827,7 @@ extern void func_0026FD28(void *fmt, s32 classId);              /* DebugPrintStu
 extern void CopyQwords(void *dst, const void *src, s32 nbytes);  /* CopyQwords */
 extern void func_00293BC8(u8 *groups, s32 instMode, u8 *idMap, s32 groupCount);
 
-void func_00293E08(void *hdrArg, s32 instMode, void *idMapArg, s32 classId) {
+void FixupMobyClassHeader(void *hdrArg, s32 instMode, void *idMapArg, s32 classId) {
     u8  *hdr       = (u8 *)hdrArg;
     u8  *idMapPtr  = (u8 *)idMapArg;
     u8  *slotRemap = (u8 *)g_mapTextureWidth + 0x9300;   /* g_mobyClassSlotRemap */
@@ -994,31 +994,31 @@ void func_00293E08(void *hdrArg, s32 instMode, void *idMapArg, s32 classId) {
 }
 #endif
 
-/* func_002941A0 (EU twin of USA RegisterMobyClass) — assign a class slot to
+/* RegisterMobyClass (EU twin of USA RegisterMobyClass) — assign a class slot to
  * classId and fill the registry tables. Null header -> take a slot from
  * g_mobyClassCountNoHeader, bind the headerless update fn, record only the remap
  * byte. Real header -> take the next g_mobyClassCount slot, record remap /
  * reverse-map / header / data-size (byte +0x2D << 10, or 0x100000 when 0xFF), bind
- * the update fn, then func_00293E08 rebases the header. Matching arm stays
+ * the update fn, then FixupMobyClassHeader rebases the header. Matching arm stays
  * INCLUDE_ASM.
  * Word-verified vs USA RegisterMobyClass (jal ORDER): BindMobyClassUpdateFunc ->
- * func_002B7170, FixupMobyClassHeader -> func_00293E08. g_mobyClassSlotRemap =
+ * func_002B7170, FixupMobyClassHeader. g_mobyClassSlotRemap =
  * g_mapTextureWidth+0x9300 (0x1CE460); g_mobyClassSlotToId = +0x9120 (0x1CE280);
  * g_mobyClassHeaders = +0x89A0 (0x1CDB00) — all delta 0; g_mobyClassCount =
  * g_nBoltCounterDisplayed+0x1F8 (0x1B1AC0); g_mobyClassCountNoHeader = +0x1FC
  * (0x1B1AC4) — delta 0. REGION DELTA: g_mobyClassDataSizes = D_001D0C40+0x1C0
- * (0x1D0E00, +0x80). arg3 widened to void* (passed straight to func_00293E08's
+ * (0x1D0E00, +0x80). arg3 widened to void* (passed straight to FixupMobyClassHeader's
  * idMap). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_002941A0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", RegisterMobyClass);
 #else
 extern s32  g_mapTextureWidth[];
 extern u8   g_nBoltCounterDisplayed[];    /* +0x1F8 = g_mobyClassCount; +0x1FC = *NoHeader */
 extern u8   D_001D0C40[];                 /* +0x1C0 = g_mobyClassDataSizes */
 extern void func_002B7170(s32 classId, s32 headerless);   /* BindMobyClassUpdateFunc */
-extern void func_00293E08(void *hdr, s32 instMode, void *idMap, s32 classId);  /* FixupMobyClassHeader */
+extern void FixupMobyClassHeader(void *hdr, s32 instMode, void *idMap, s32 classId);  /* FixupMobyClassHeader */
 
-void func_002941A0(u8 *hdr, s32 arg2, void *arg3, s32 classId) {
+void RegisterMobyClass(u8 *hdr, s32 arg2, void *arg3, s32 classId) {
     u8   *slotRemap  = (u8 *)g_mapTextureWidth + 0x9300;          /* g_mobyClassSlotRemap */
     s16  *slotToId   = (s16 *)((u8 *)g_mapTextureWidth + 0x9120); /* g_mobyClassSlotToId */
     void **headers   = (void **)((u8 *)g_mapTextureWidth + 0x89A0);/* g_mobyClassHeaders */
@@ -1042,7 +1042,7 @@ void func_002941A0(u8 *hdr, s32 arg2, void *arg3, s32 classId) {
         }
         func_002B7170(classId, 0);
         *count = slot + 1;
-        func_00293E08(hdr, arg2, arg3, classId);
+        FixupMobyClassHeader(hdr, arg2, arg3, classId);
     }
     __asm__ __volatile__("");
 }
@@ -1096,9 +1096,9 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_002945B0);
  * alabel to a real glabel). */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", StreamSceneSegment);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00294640);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", BindSceneChunk);
 
-/* func_002948A8 (EU twin of USA LoadGlobalDialogScene) — stream a GLOBAL
+/* LoadGlobalDialogScene (EU twin of USA LoadGlobalDialogScene) — stream a GLOBAL
  * cinematic/dialog scene chunk and build its sub-chunk pointer table. Per-scene
  * {lbnOffset@+0x3E28, sectorCount@+0x3E2C} at stride 8 inside g_discToc, shared
  * base LBN @+0x3E24; scene descriptor block at g_cameraSlotActive+0x990 (+0x70
@@ -1112,14 +1112,14 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00294640);
  * ORDER StartFileLoad->func_002B86D0, PumpDialogVoiceSystem->func_002B8898,
  * FadeOutToBlackBlocking->func_0027D818. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_002948A8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", LoadGlobalDialogScene);
 #else
 extern u8   g_nVendorBuyQuantity[];     /* +0x65F8 = scene desc block (g_cameraSlotActive+0x990) */
 extern void func_002B86D0(s32 dest, s32 lbn, s32 sectors);   /* StartFileLoad */
 extern void func_002B8898(s32 blocking);                     /* PumpDialogVoiceSystem */
 extern void func_0027D818(s32 frames);                       /* FadeOutToBlackBlocking */
 
-void func_002948A8(s32 sceneIndex, s32 mode) {
+void LoadGlobalDialogScene(s32 sceneIndex, s32 mode) {
     u8  *toc  = D_0014B5C0;
     s32 *desc = (s32 *)(g_nVendorBuyQuantity + 0x65F8);
     s32  lbnOff  = *(s32 *)(toc + sceneIndex * 8 + 0x3E28);
@@ -1161,7 +1161,7 @@ void func_002948A8(s32 sceneIndex, s32 mode) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00294980);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", SelectSceneSubChunk);
 
 /* func_002949D0 (EU twin of USA func_00294970) — reset the streaming in-flight
  * slot table. Word-clears the whole table (0x35840 bytes) then arms the sentinels:
@@ -1325,7 +1325,7 @@ void func_00294EF8(s32 a, s32 b) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00294F40);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00294FD0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", LoadMobyClassFromWad);
 
 /* func_00295298 (EU twin of USA func_00295238) — (re)load a gadget moby-class into
  * one of three resident class buffers and refresh its sound bank. Looks classId up
@@ -1344,7 +1344,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00294FD0);
  * WaitFrameDmaFence->WaitFrameDmaFence, DebugPrintStub->func_0026FD28, func_00294E98->
  * func_00294EF8, func_0029DDE8->func_0029D948, func_00132858->func_001328B8,
  * snd_Pump/snd_BankLoadFromIOP unchanged, func_00132828->func_00132888,
- * LoadMobyClassFromWad->func_00294FD0. Record/TOC/listener offsets unchanged. */
+ * LoadMobyClassFromWad->LoadMobyClassFromWad. Record/TOC/listener offsets unchanged. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00295298);
 #else
@@ -1361,7 +1361,7 @@ extern void func_001328B8(s32 handle);          /* func_00132858 */
 extern void func_00132888(void);                /* func_00132828 */
 extern s32  snd_BankLoadFromIOP(void *addr);
 extern s32  snd_Pump(void);
-extern void func_00294FD0(s32 classId, s32 tocIdx, void *buf);  /* LoadMobyClassFromWad */
+extern void LoadMobyClassFromWad(s32 classId, s32 tocIdx, void *buf);  /* LoadMobyClassFromWad */
 
 void func_00295298(s32 classId) {
     u8  *toc     = D_0014B5C0;
@@ -1449,7 +1449,7 @@ void func_00295298(s32 classId) {
 
     /* 6. finalise + load the class */
     func_00132888();
-    func_00294FD0(classId, tocIdx, buf);
+    LoadMobyClassFromWad(classId, tocIdx, buf);
 }
 #endif
 
@@ -1507,7 +1507,7 @@ u64 func_00295550(void *descArg) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00295690);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", QueueGsTextureUpload);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00295758);
 
@@ -1554,9 +1554,9 @@ s32 func_00295F90(s32 fromEnd) {
     return -1;
 }
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00295FF8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", MapAllocCacheSlot);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", func_00296098);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", MapMoveCacheSlot);
 
 /* MapFindCacheSlot(levelAndFlag): scan the 5 map cache slots for an occupied
  * slot (slotState != 0) holding this level id. Returns the slot index, or -1.

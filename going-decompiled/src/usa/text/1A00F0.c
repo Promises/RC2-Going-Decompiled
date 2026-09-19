@@ -730,7 +730,7 @@ void PatchMobyPacketTex0(void) {
 #endif
 
 /* func_002A0DF0 — recompute the moby glow segment's 2D light direction from the
- * hero. func_002A1320 fills a 2-float vector from g_pHeroMoby; func_00283BF8
+ * hero. func_002A1320 fills a 2-float vector from g_pHeroMoby; Atan2fPoly
  * turns it into an angle, and the sin/cos-style pair func_00283B30 /
  * func_00283B48 is scaled by 0.14 into the glow parameter block at
  * g_deferredSegment2Tag+0x10 (cos) / +0x14 (sin), with a fixed -0.99 at +0x18.
@@ -740,7 +740,7 @@ void PatchMobyPacketTex0(void) {
 extern s32   g_deferredSegment2Tag;
 extern void *g_pHeroMoby;              /* 0x18C0B0 hero (Ratchet) moby         */
 extern void  func_002A1320(void *moby, f32 *outVec);
-extern f32   func_00283BF8(f32 a, f32 b);
+extern f32   Atan2fPoly(f32 a, f32 b);
 extern f32   func_00283B30(f32 x);
 extern f32   func_00283B48(f32 x);
 #endif
@@ -754,7 +754,7 @@ void func_002A0DF0(void) {
     f32 *glow = (f32 *)((u8 *)&g_deferredSegment2Tag + 0x10);
 
     func_002A1320(g_pHeroMoby, vec);
-    angle = func_00283BF8(vec[0], vec[1]);
+    angle = Atan2fPoly(vec[0], vec[1]);
     glow[0] = func_00283B30(angle) * 0.14f;
     glow[2] = -0.99f;
     glow[1] = func_00283B48(angle) * 0.14f;

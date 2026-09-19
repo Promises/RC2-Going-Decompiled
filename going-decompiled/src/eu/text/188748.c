@@ -735,7 +735,7 @@ void func_002894D0(CinematicQueue *q) {
 }
 #endif
 
-/* func_00289500(q): EU twin of USA StartCinematicFromQueue. If the queue has a
+/* StartCinematicFromQueue(q): EU twin of USA StartCinematicFromQueue. If the queue has a
  * pending cinematic, mark it active, dequeue {id, flag} (func_00289318, the EU
  * DequeueCinematic twin), pick a game-state mode (1 or 2 from g_nGameState) and
  * request the matching game-state transition (RequestGameStateChange). flag==0
@@ -747,9 +747,9 @@ void func_002894D0(CinematicQueue *q) {
  * DequeueCinematic -> func_00289318 (file-scope), USA func_00289540 ->
  * func_00289430, g_nGameState gp_rel + RequestGameStateChange kept named. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_00289500);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", StartCinematicFromQueue);
 #else
-s32 func_00289500(CinematicQueue *q) {
+s32 StartCinematicFromQueue(CinematicQueue *q) {
     extern s32 g_nGameState;
     extern s32 RequestGameStateChange(s32 a, s32 b, s32 c, s32 d, s32 e);
     s32 id, flag, mode, result;
@@ -1723,7 +1723,7 @@ s32 func_0028B4E8(s32 name) {
 }
 #endif
 
-/* func_0028B538: EU twin of USA InitHudMobyTable - first-time setup of the HUD
+/* InitHudMobyTable: EU twin of USA InitHudMobyTable - first-time setup of the HUD
  * moby-table context. Zeroes the two text-gen counters at g_pActiveTextTable
  * +0x30/+0x34, rebuilds all 13 D_255330 widget records (register each via
  * func_0028BD98, seed key=-1 at +0x64, +0x20=0x10000, +0x7C/+0x04/+0x24=0,
@@ -1736,9 +1736,9 @@ s32 func_0028B4E8(s32 name) {
  * / +0xA0 end / +0xA4 aux); func_0028BE10 -> func_0028BD98, func_00283438 ->
  * func_00283348, func_0028C728 -> func_0028C6B0; DebugMalloc 4-arg form. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028B538);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", InitHudMobyTable);
 #else
-void func_0028B538(void) {
+void InitHudMobyTable(void) {
     extern void *g_pActiveTextTable;
     extern u8 D_255330[];
     extern u8 D_1A8EB8[];
@@ -1781,30 +1781,30 @@ void func_0028B538(void) {
 }
 #endif
 
-/* func_0028B678: EU twin of USA func_0028B6F0 - load and upload the HUD moby-table
+/* ReloadAllHudBankTextures: EU twin of USA func_0028B6F0 - load and upload the HUD moby-table
  * wads into VRAM. Per sub-bank the HUD asset header (g_pActiveTextTable+0x48) holds
  * a decompressed size (+0x54/+0x5C/+0x60/+0x64) and a compressed-source pointer
  * (+0x94/+0x9C/+0xA0/+0xA4); compressed sizes live at g_pActiveTextTable +0x70/+0x78/
  * +0x7C/+0x80. Each present bank is staged into the menu-screen scratch (+0x20) via
- * func_002EFE20, decompressed into the running VRAM address (+0x114) via func_0029DE68,
- * then registered with func_0028B850. Banks 0/1 always; bank 2 for mode 0/2; bank 3
+ * func_002EFE20, decompressed into the running VRAM address (+0x114) via DecompressWad,
+ * then registered with RelocateHudBankGsSlots. Banks 0/1 always; bank 2 for mode 0/2; bank 3
  * for mode 1/2. Matching arm stays INCLUDE_ASM; #else is the structure model.
  * Word-verified vs USA func_0028B6F0: g_menuScreenBlock -> D_001F0000+0x2840;
  * g_pHudAssetHeader[0] -> g_pActiveTextTable+0x48; g_hudMobySpawnStart+0x8/0x10/0x14/
  * 0x18 -> g_pActiveTextTable+0x70/78/7C/80; func_002EFD28 -> func_002EFE20,
- * DecompressWad -> func_0029DE68, func_0028B8C8 -> func_0028B850.
+ * DecompressWad, func_0028B8C8 -> RelocateHudBankGsSlots.
  * NOTE: bank-1 register index is 2 (not 1) - confirmed by BOTH EU and USA asm
  * (0028B7CC: addiu $4,$0,0x2). The USA #else body writes func_0028B8C8(1,...), a
  * latent typo; modelled here per ground truth as 2. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028B678);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", ReloadAllHudBankTextures);
 #else
-void func_0028B678(s32 mode) {
+void ReloadAllHudBankTextures(s32 mode) {
     extern void *g_pActiveTextTable;
     extern u8 D_001F0000[];
     extern void func_002EFE20(void *dest, void *src, s32 a, s32 count, s32 b);
-    extern void func_0029DE68(void *src, void *dest);
-    extern void func_0028B850(s32 index, s32 baseAddr);
+    extern void DecompressWad(void *src, void *dest);
+    extern void RelocateHudBankGsSlots(s32 index, s32 baseAddr);
     u8   *scratch = D_001F0000 + 0x2840;
     u8   *hdr  = *(u8 **)((u8 *)&g_pActiveTextTable + 0x48);
     void *dest = *(void **)(scratch + 0x20);
@@ -1816,8 +1816,8 @@ void func_0028B678(s32 mode) {
     if (size != 0) {
         clen = *(s32 *)((u8 *)&g_pActiveTextTable + 0x70);
         func_002EFE20(dest, *(void **)(hdr + 0x94), 0, clen / 16, 0);
-        func_0029DE68(dest, (void *)vram);
-        func_0028B850(0, vram);
+        DecompressWad(dest, (void *)vram);
+        RelocateHudBankGsSlots(0, vram);
         vram += size;
     }
     /* bank 1 - always (register index 2, per asm) */
@@ -1825,8 +1825,8 @@ void func_0028B678(s32 mode) {
     if (size != 0) {
         clen = *(s32 *)((u8 *)&g_pActiveTextTable + 0x78);
         func_002EFE20(dest, *(void **)(hdr + 0x9C), 0, clen / 16, 0);
-        func_0029DE68(dest, (void *)vram);
-        func_0028B850(2, vram);
+        DecompressWad(dest, (void *)vram);
+        RelocateHudBankGsSlots(2, vram);
         vram += size;
     }
     /* bank 2 - mode 0 or 2 */
@@ -1835,8 +1835,8 @@ void func_0028B678(s32 mode) {
         if (size != 0) {
             clen = *(s32 *)((u8 *)&g_pActiveTextTable + 0x7C);
             func_002EFE20(dest, *(void **)(hdr + 0xA0), 0, clen / 16, 0);
-            func_0029DE68(dest, (void *)vram);
-            func_0028B850(3, vram);
+            DecompressWad(dest, (void *)vram);
+            RelocateHudBankGsSlots(3, vram);
             vram += size;
         }
     }
@@ -1846,14 +1846,14 @@ void func_0028B678(s32 mode) {
         if (size != 0) {
             clen = *(s32 *)((u8 *)&g_pActiveTextTable + 0x80);
             func_002EFE20(dest, *(void **)(hdr + 0xA4), 0, clen / 16, 0);
-            func_0029DE68(dest, (void *)vram);
-            func_0028B850(4, vram);
+            DecompressWad(dest, (void *)vram);
+            RelocateHudBankGsSlots(4, vram);
         }
     }
 }
 #endif
 
-/* func_0028B850: EU twin of USA func_0028B8C8 - relocate (and mark allocated) the
+/* RelocateHudBankGsSlots: EU twin of USA func_0028B8C8 - relocate (and mark allocated) the
  * GS handles for one HUD asset's CLUT and texture slots, biased by an aligned base.
  * The HUD asset header (g_pActiveTextTable+0x48) holds per-asset cumulative CLUT end
  * indices at +0x14, texture end indices at +0x34, and the stored relocation base at
@@ -1863,9 +1863,9 @@ void func_0028B678(s32 mode) {
  * structure model. Word-verified vs USA func_0028B8C8: g_pHudAssetHeader[0] ->
  * g_pActiveTextTable+0x48; g_hudClutSlots -> +0x58; g_hudTextureSlots -> +0x54. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028B850);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", RelocateHudBankGsSlots);
 #else
-void func_0028B850(s32 assetId, s32 baseAddr) {
+void RelocateHudBankGsSlots(s32 assetId, s32 baseAddr) {
     extern void *g_pActiveTextTable;
     u8 *hdr = *(u8 **)((u8 *)&g_pActiveTextTable + 0x48);
     s32 *relBase = (s32 *)(hdr + 0x74 + assetId * 4);
@@ -1901,7 +1901,7 @@ void func_0028B850(s32 assetId, s32 baseAddr) {
 }
 #endif
 
-/* func_0028B9B0: EU twin of USA func_0028BA28 - inverse of func_0028B850:
+/* InvalidateHudBankGsSlots: EU twin of USA func_0028BA28 - inverse of RelocateHudBankGsSlots:
  * un-relocate and free one HUD asset's CLUT and texture GS handles. For each handle
  * in this asset's [prevEnd,end) range (bounds from header +0x14/+0x34), subtract the
  * stored base (+0x74) and set the sign bit; then clear the stored base word. Asset 0
@@ -1910,9 +1910,9 @@ void func_0028B850(s32 assetId, s32 baseAddr) {
  * func_0028BA28: g_pHudAssetHeader[0] -> g_pActiveTextTable+0x48; g_hudClutSlots ->
  * +0x58; g_hudTextureSlots -> +0x54. No callees. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028B9B0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", InvalidateHudBankGsSlots);
 #else
-void func_0028B9B0(s32 assetId) {
+void InvalidateHudBankGsSlots(s32 assetId) {
     extern void *g_pActiveTextTable;
     u8 *hdr = *(u8 **)((u8 *)&g_pActiveTextTable + 0x48);
     s32 relBase = *(s32 *)(hdr + 0x74 + assetId * 4);
@@ -1951,24 +1951,24 @@ void func_0028B9B0(s32 assetId) {
 }
 #endif
 
-/* func_0028BB28: EU twin of USA func_0028BBA0 - upload a HUD asset's textures to GS
- * VRAM. Relocates the shared asset once (func_0028B850(0, baseAddr)) if header +0x74
+/* UploadHudBankTextures: EU twin of USA func_0028BBA0 - upload a HUD asset's textures to GS
+ * VRAM. Relocates the shared asset once (RelocateHudBankGsSlots(0, baseAddr)) if header +0x74
  * is unset. Then walking this asset's texture slot range [prevEnd,end) (header +0x34
  * cumulative bounds), uploads each g_hudTextureSlots entry to GS at the running VRAM
- * cursor (func_002901C8, fmt 0x1B, dims from the slot's +0x6/+0x7 log2 bytes), records
+ * cursor (UploadTextureToGs, fmt 0x1B, dims from the slot's +0x6/+0x7 log2 bytes), records
  * the VRAM block in the slot's +0x4, and advances the cursor by (1<<(wLog+hLog))<<2.
  * Matching arm stays INCLUDE_ASM; #else is the structure model. Word-verified vs USA
  * func_0028BBA0: g_pHudAssetHeader[0] -> g_pActiveTextTable+0x48; g_vramTextureBase+0x24
- * -> D_001A7308+0x80; g_hudTextureSlots -> +0x54; func_0028B8C8 -> func_0028B850,
- * func_002901B0 -> func_002901C8. */
+ * -> D_001A7308+0x80; g_hudTextureSlots -> +0x54; func_0028B8C8 -> RelocateHudBankGsSlots,
+ * func_002901B0 -> UploadTextureToGs. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028BB28);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", UploadHudBankTextures);
 #else
-void func_0028BB28(s32 assetId, s32 baseAddr, s32 kickMode) {
+void UploadHudBankTextures(s32 assetId, s32 baseAddr, s32 kickMode) {
     extern void *g_pActiveTextTable;
     extern u8 D_001A7308[];
-    extern void func_0028B850(s32 index, s32 baseAddr);
-    extern void func_002901C8(s32 handle, s32 vramBlk, s32 fmt, s32 wLog,
+    extern void RelocateHudBankGsSlots(s32 index, s32 baseAddr);
+    extern void UploadTextureToGs(s32 handle, s32 vramBlk, s32 fmt, s32 wLog,
                               s32 hLog, s32 kickMode);
     u8 *hdr = *(u8 **)((u8 *)&g_pActiveTextTable + 0x48);
     s32 vramCursor;
@@ -1977,7 +1977,7 @@ void func_0028BB28(s32 assetId, s32 baseAddr, s32 kickMode) {
     s32 i;
 
     if (*(s32 *)(hdr + 0x74 + assetId * 4) == 0) {
-        func_0028B850(0, baseAddr);
+        RelocateHudBankGsSlots(0, baseAddr);
     }
 
     vramCursor = *(s32 *)(D_001A7308 + 0x80);
@@ -1990,22 +1990,22 @@ void func_0028BB28(s32 assetId, s32 baseAddr, s32 kickMode) {
         s32 hLog = tex[0x7];
         s32 vramBlk = vramCursor >> 8;
 
-        func_002901C8(*(s32 *)(tex + 0x0), vramBlk, 0x1B, wLog, hLog, kickMode);
+        UploadTextureToGs(*(s32 *)(tex + 0x0), vramBlk, 0x1B, wLog, hLog, kickMode);
         *(s16 *)(tex + 0x4) = vramBlk;
         vramCursor += (1 << (wLog + hLog)) << 2;
     }
 }
 #endif
 
-/* func_0028BC50: EU twin of USA ResetDebugHeap - (re)initialise the DebugMalloc
+/* ResetDebugHeap: EU twin of USA ResetDebugHeap - (re)initialise the DebugMalloc
  * bump allocator: cursor back to the pool base, end at base + 0x64000. Matching arm
  * stays INCLUDE_ASM; #else is the structure model. Word-verified vs USA ResetDebugHeap:
  * g_debugMallocPoolBase -> g_nVendorBuyQuantity+0x8CF4; g_debugMallocCursor ->
  * g_pActiveTextTable+0x40; g_debugMallocEnd -> g_pActiveTextTable+0x44. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028BC50);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", ResetDebugHeap);
 #else
-void func_0028BC50(void) {
+void ResetDebugHeap(void) {
     extern s32 g_nVendorBuyQuantity;
     extern void *g_pActiveTextTable;
     u8 *base = *(u8 **)((u8 *)&g_nVendorBuyQuantity + 0x8CF4);
@@ -2016,22 +2016,22 @@ void func_0028BC50(void) {
 
 /* DebugMalloc(size, arg2, file, line): bump-allocate `size` bytes (rounded up to
  * 16) from the debug pool. Lazily (re)initialises the pool on first use (via
- * func_0028BC50, the EU ResetDebugHeap twin), returns 0 when the remaining space is
+ * ResetDebugHeap, the EU ResetDebugHeap twin), returns 0 when the remaining space is
  * smaller than `size`, else the old cursor. arg2/file/line are debug call-site
  * fields (unused by the body); the 4-arg void* form matches the cross-unit decl in
  * 191240/198B58. Matching arm stays INCLUDE_ASM; #else is the structure model.
  * Word-verified vs USA DebugMalloc: g_debugMallocCursor -> g_pActiveTextTable+0x40;
- * g_debugMallocEnd -> +0x44; ResetDebugHeap -> func_0028BC50. */
+ * g_debugMallocEnd -> +0x44; ResetDebugHeap. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", DebugMalloc);
 #else
 void *DebugMalloc(s32 size, s32 arg2, void *file, s32 line) {
     extern void *g_pActiveTextTable;
-    extern void func_0028BC50(void);
+    extern void ResetDebugHeap(void);
     u8 *result;
 
     if (*(u8 **)((u8 *)&g_pActiveTextTable + 0x40) == 0) {
-        func_0028BC50();
+        ResetDebugHeap();
     }
     if ((s32)(*(u8 **)((u8 *)&g_pActiveTextTable + 0x44) -
               *(u8 **)((u8 *)&g_pActiveTextTable + 0x40)) < size) {
@@ -2043,7 +2043,7 @@ void *DebugMalloc(s32 size, s32 arg2, void *file, s32 line) {
 }
 #endif
 
-/* func_0028BD00(newId): EU twin of USA SwapMobyTableContext - toggle the active
+/* SwapMobyTableContext(newId): EU twin of USA SwapMobyTableContext - toggle the active
  * moby-table context (live vs the HUD shadow set), swapping the base/spawn-start/
  * end/aux-block pointers between the two sets; no-op when the requested context is
  * already active. Matching arm stays INCLUDE_ASM; #else is the structure model.
@@ -2053,9 +2053,9 @@ void *DebugMalloc(s32 size, s32 arg2, void *file, s32 line) {
  * +0x214/+0x218/+0x21C/+0x224 (gap at +0x220); the shadow set g_hudMoby{...} ->
  * g_pActiveTextTable +0x98/+0x9C/+0xA0/+0xA4 (same anchor as InitHudMobyTable). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028BD00);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", SwapMobyTableContext);
 #else
-void func_0028BD00(s32 newId) {
+void SwapMobyTableContext(s32 newId) {
     extern s32   D_1A8DF4;                  /* g_activeMobyTableId (gp) */
     extern s32   g_nBoltCounterDisplayed[]; /* live moby set anchor (+0x214..) */
     extern void *g_pActiveTextTable;        /* HUD shadow set anchor (+0x98..) */
@@ -3071,14 +3071,14 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028E7F0);
  * unknown mode yields 0. Matching arm stays INCLUDE_ASM; #else is the structure model.
  * Word-verified vs USA func_0028E7E8: g_pHudAssetHeader[1] icon table ->
  * g_pActiveTextTable+0x4C; g_gameTime -> g_nLevelExitDestination+0x8; GetRandomInt ->
- * func_002A81F8. REGION DIVERGENCE (timing): mode-3 restart is 2*count + rand(0x19) + 0x8
+ * GetRandomInt. REGION DIVERGENCE (timing): mode-3 restart is 2*count + rand(0x19) + 0x8
  * (USA rand(0x1E) + 0xA). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028E800);
 #else
 extern void *g_pActiveTextTable;             /* HUD icon-slot table ptr at +0x4C */
 extern s32   g_nLevelExitDestination;        /* g_gameTime at +0x8 (EU 0x1B1688) */
-extern s32   func_002A81F8(s32 max);         /* EU GetRandomInt (uniform [0,max)) */
+extern s32   GetRandomInt(s32 max);         /* EU GetRandomInt (uniform [0,max)) */
 #define GT (*(s32 *)((u8 *)&g_nLevelExitDestination + 0x8))
 s32 func_0028E800(void *slot) {
     typedef struct HudIconSlot {
@@ -3124,7 +3124,7 @@ s32 func_0028E800(void *slot) {
                 frame = icon->baseFrame + (phase < count ? phase : 2 * count - (phase + 2));
             } else {
                 frame = icon->baseFrame;
-                *(s32 *)(w + 0xC) = 2 * count + func_002A81F8(0x19) + 0x8; /* REGION timing */
+                *(s32 *)(w + 0xC) = 2 * count + GetRandomInt(0x19) + 0x8; /* REGION timing */
             }
         } else {
             frame = *(s32 *)(w + 0x4);
@@ -3409,7 +3409,7 @@ s32 func_0028EE08(s32 name, s32 level) {
 }
 #endif
 
-/* func_0028EEC0: EU twin of USA GetHudIconTex0 - resolve one HUD icon's GS TEX0
+/* GetHudIconTex0: EU twin of USA GetHudIconTex0 - resolve one HUD icon's GS TEX0
  * register. Looks the icon up in the HUD icon map to get its CLUT and texture GS
  * slots; if either is not resident in VRAM (vramAddr == 0) it allocates a VRAM block
  * and queues an upload. Returns the assembled 64-bit GS TEX0 register. Pure leaf.
@@ -3419,9 +3419,9 @@ s32 func_0028EE08(s32 name, s32 level) {
  * D_001A7308+0x48, g_vramFrameBufB -> D_001A7308+0x54; g_texUploadCount ->
  * D_001B1380+0x27C; g_texUploadQueue -> g_nVendorBuyQuantity+0x70F8. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028EEC0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", GetHudIconTex0);
 #else
-u64 func_0028EEC0(s32 iconId) {
+u64 GetHudIconTex0(s32 iconId) {
     typedef struct HudIconMapEntry { s16 clutSlot; s16 textureSlot; } HudIconMapEntry; /* stride 0x4 */
     typedef struct HudGsSlot { s32 handle; u16 vramAddr; u8 logW; u8 logH; } HudGsSlot; /* stride 0x8 */
     typedef struct HudTexUploadEntry {         /* stride 0x10 */
@@ -3506,7 +3506,7 @@ u64 func_0028EEC0(s32 iconId) {
  * structure model. Word-verified vs USA func_0028F0D0 (data lane +0x80):
  * g_frameDmaCursor -> g_nVendorBuyQuantity+0x60; g_gsPixelOffsetX/Y ->
  * D_001A7308+0xC8/+0xCC; z -> g_pActiveTextTable+0x3C; g_hudIconMap -> +0x50;
- * g_hudTextureSlots -> +0x54; GetHudIconTex0 -> func_0028EEC0. */
+ * g_hudTextureSlots -> +0x54; GetHudIconTex0. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028F0E8);
 #else
@@ -3516,7 +3516,7 @@ void func_0028F0E8(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, s32 alpha) {
     extern void *g_pActiveTextTable;
     extern u8    D_001A7308[];
     extern s32   g_nVendorBuyQuantity;
-    extern u64   func_0028EEC0(s32 iconIndex);
+    extern u64   GetHudIconTex0(s32 iconIndex);
     u8 **cursor = (u8 **)((u8 *)&g_nVendorBuyQuantity + 0x60);
     u8  *p    = *cursor;
     s32  offX = *(s32 *)(D_001A7308 + 0xC8);
@@ -3536,7 +3536,7 @@ void func_0028F0E8(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, s32 alpha) {
 
     *(u64 *)(p + 0x10) = ((u64)0xE800 << 47) | 0x8001;
     *(u64 *)(p + 0x18) = 0x5353106;
-    *(u64 *)(p + 0x20) = func_0028EEC0(iconIndex);
+    *(u64 *)(p + 0x20) = GetHudIconTex0(iconIndex);
     *(u64 *)(p + 0x28) = 0x156;
     *(u64 *)(p + 0x30) = ((u64)(u32)alpha << 24) | 0x7F7F7F;
     *(u64 *)(p + 0x38) = 0; /* near UV (0,0) */
@@ -3560,7 +3560,7 @@ void func_0028F0E8(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, s32 alpha) {
  * structure model. Pinned cross-body signature (void, void *colorArr). Word-verified
  * vs USA func_0028F2C0 (data lane +0x80): g_frameDmaCursor -> g_nVendorBuyQuantity+0x60;
  * g_gsPixelOffsetX/Y -> D_001A7308+0xC8/+0xCC; z -> g_pActiveTextTable+0x3C;
- * g_hudIconMap -> +0x50; g_hudTextureSlots -> +0x54; GetHudIconTex0 -> func_0028EEC0.
+ * g_hudIconMap -> +0x50; g_hudTextureSlots -> +0x54; GetHudIconTex0.
  * GIFtag blob D_1AC8B0 -> EU D_1AC930, emitted here as literals (as in the USA #else). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028F2D8);
@@ -3571,7 +3571,7 @@ void func_0028F2D8(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, void *colorArr) {
     extern void *g_pActiveTextTable;
     extern u8    D_001A7308[];
     extern s32   g_nVendorBuyQuantity;
-    extern u64   func_0028EEC0(s32 iconIndex);
+    extern u64   GetHudIconTex0(s32 iconIndex);
     u8 **cursor = (u8 **)((u8 *)&g_nVendorBuyQuantity + 0x60);
     u8  *p      = *cursor;
     s32 *colors = (s32 *)colorArr;
@@ -3594,7 +3594,7 @@ void func_0028F2D8(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, void *colorArr) {
     *(u64 *)(p + 0x18) = 0x0053153153153106ULL;
     *cursor = p + 0x20;
 
-    *(u64 *)(p + 0x20) = func_0028EEC0(iconIndex);
+    *(u64 *)(p + 0x20) = GetHudIconTex0(iconIndex);
     *(u64 *)(p + 0x28) = 0x15C;
     *(u64 *)(p + 0x30) = (u64)(u32)colors[0];            /* top-left colour */
     *(u64 *)(p + 0x38) = 0;                              /* near UV (0,0) */
@@ -3627,7 +3627,7 @@ void func_0028F2D8(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, void *colorArr) {
  * texels; RGB tint 0x7F7F7F with the given alpha. Matching arm stays INCLUDE_ASM;
  * #else is the structure model. Word-verified vs USA func_0028F540 (data lane +0x80):
  * g_frameDmaCursor -> g_nVendorBuyQuantity+0x60; g_gsPixelOffsetX/Y ->
- * D_001A7308+0xC8/+0xCC; z -> g_pActiveTextTable+0x3C; GetHudIconTex0 -> func_0028EEC0.
+ * D_001A7308+0xC8/+0xCC; z -> g_pActiveTextTable+0x3C; GetHudIconTex0.
  * (No texture-size lookup: UV comes straight from w,h.) */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028F558);
@@ -3636,7 +3636,7 @@ void func_0028F558(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, s32 alpha) {
     extern void *g_pActiveTextTable;
     extern u8    D_001A7308[];
     extern s32   g_nVendorBuyQuantity;
-    extern u64   func_0028EEC0(s32 iconIndex);
+    extern u64   GetHudIconTex0(s32 iconIndex);
     u8 **cursor = (u8 **)((u8 *)&g_nVendorBuyQuantity + 0x60);
     u8  *p    = *cursor;
     s32  offX = *(s32 *)(D_001A7308 + 0xC8);
@@ -3651,7 +3651,7 @@ void func_0028F558(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, s32 alpha) {
 
     *(u64 *)(p + 0x10) = ((u64)0xE800 << 47) | 0x8001;
     *(u64 *)(p + 0x18) = 0x5353106;
-    *(u64 *)(p + 0x20) = func_0028EEC0(iconIndex);
+    *(u64 *)(p + 0x20) = GetHudIconTex0(iconIndex);
     *(u64 *)(p + 0x28) = 0x156;
     *(u64 *)(p + 0x30) = ((u64)(u32)alpha << 24) | 0x7F7F7F;
     *(u64 *)(p + 0x38) = 0; /* near UV (0,0) */
@@ -3677,7 +3677,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028F700);
  * coords). Matching arm stays INCLUDE_ASM; #else is the structure model. Word-verified
  * vs USA func_0028F8E0 (data lane +0x80): g_frameDmaCursor -> g_nVendorBuyQuantity+0x60;
  * g_gsPixelOffsetX/Y -> D_001A7308+0xC8/+0xCC; z -> g_pActiveTextTable+0x3C;
- * g_hudIconMap -> +0x50; g_hudTextureSlots -> +0x54; GetHudIconTex0 -> func_0028EEC0. */
+ * g_hudIconMap -> +0x50; g_hudTextureSlots -> +0x54; GetHudIconTex0. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028F8F8);
 #else
@@ -3687,7 +3687,7 @@ void func_0028F8F8(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, s32 alpha, s32 rgb
     extern void *g_pActiveTextTable;
     extern u8    D_001A7308[];
     extern s32   g_nVendorBuyQuantity;
-    extern u64   func_0028EEC0(s32 iconIndex);
+    extern u64   GetHudIconTex0(s32 iconIndex);
     u8 **cursor = (u8 **)((u8 *)&g_nVendorBuyQuantity + 0x60);
     u8  *p    = *cursor;
     s32  offX = *(s32 *)(D_001A7308 + 0xC8);
@@ -3711,7 +3711,7 @@ void func_0028F8F8(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, s32 alpha, s32 rgb
 
     *(u64 *)(p + 0x10) = ((u64)0xE800 << 47) | 0x8001;
     *(u64 *)(p + 0x18) = 0x5353106;
-    *(u64 *)(p + 0x20) = func_0028EEC0(iconIndex);
+    *(u64 *)(p + 0x20) = GetHudIconTex0(iconIndex);
     *(u64 *)(p + 0x28) = 0x156;
     *(u64 *)(p + 0x30) = color;
     *(u64 *)(p + 0x38) = 0; /* near UV (0,0) */
@@ -3860,7 +3860,7 @@ void func_0028FC90(f32 cx, f32 cy, f32 halfW, f32 halfH, f32 angle,
  * GIF packet (0x60-byte, NLOOP=5) with fully explicit corner AND texture coordinates
  * (caller supplies both near and far UV directly). Whole-pixel screen coords; fixed
  * RGB 0x7F7F7F + alpha. Matching arm stays INCLUDE_ASM; #else is the structure model.
- * Word-verified vs USA func_0028FFF0 (data lane +0x80): GetHudIconTex0 -> func_0028EEC0;
+ * Word-verified vs USA func_0028FFF0 (data lane +0x80): GetHudIconTex0;
  * g_frameDmaCursor -> g_nVendorBuyQuantity+0x60; g_gsPixelOffsetX/Y -> D_001A7308+0xC8/
  * +0xCC; z -> g_pActiveTextTable+0x3C. */
 #ifndef TARGET_NATIVE
@@ -3871,7 +3871,7 @@ void func_00290008(s32 iconIndex, s32 x0, s32 y0, s32 x1, s32 y1,
     extern void *g_pActiveTextTable;
     extern u8    D_001A7308[];
     extern s32   g_nVendorBuyQuantity;
-    extern u64   func_0028EEC0(s32 iconIndex);
+    extern u64   GetHudIconTex0(s32 iconIndex);
     u8 **cursor = (u8 **)((u8 *)&g_nVendorBuyQuantity + 0x60);
     u8  *p    = *cursor;
     s32  offX = *(s32 *)(D_001A7308 + 0xC8);
@@ -3886,7 +3886,7 @@ void func_00290008(s32 iconIndex, s32 x0, s32 y0, s32 x1, s32 y1,
 
     *(u64 *)(p + 0x10) = ((u64)0xE800 << 47) | 0x8001;
     *(u64 *)(p + 0x18) = 0x5353106;
-    *(u64 *)(p + 0x20) = func_0028EEC0(iconIndex);
+    *(u64 *)(p + 0x20) = GetHudIconTex0(iconIndex);
     *(u64 *)(p + 0x28) = 0x156;
     *(u64 *)(p + 0x30) = ((u64)(u32)alpha << 24) | 0x7F7F7F;
     *(u64 *)(p + 0x38) = (u64)(u32)(u0 | (v0 << 16));    /* near UV */
@@ -3903,7 +3903,7 @@ void func_00290008(s32 iconIndex, s32 x0, s32 y0, s32 x1, s32 y1,
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_002901C8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", UploadTextureToGs);
 
 /* func_00290338: EU twin of USA func_00290320 - append a GIF/DMA packet to the frame
  * render-DMA chain that programs a GS rectangle from two corner points, then advance

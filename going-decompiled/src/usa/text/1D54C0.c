@@ -90,7 +90,7 @@ extern s32  func_002B1D40();
 extern void func_002CA980();
 extern void func_002CAB90();
 extern s32  func_002D6B00();  /* locally defined below; return typed s32 to match its definition */
-extern s32  func_002DF500();
+extern s32  GetMenuWorkBufferSize();
 extern s32  func_002DFF68();  /* locally defined below; return typed s32 to match its definition */
 extern s32  func_002E0010();
 extern void func_003017F8();
@@ -271,8 +271,8 @@ extern void func_002897B0(s32 x0, s32 x1, s32 y0, s32 y1);
 /* UI/system sound trigger from the global sound-def pool. */
 extern void PlayGlobalSound(s32 id, s32 a, s32 b);
 /* Map-slot toggle/lookup helpers (defined later in this unit). */
-extern s32 func_002DF428(s32 id);
-extern s32 func_002DF368(s32 forceSet);
+extern s32 FreeMenuWorkBuffer(s32 id);
+extern s32 AllocMenuWorkBuffer(s32 forceSet);
 /* Sound-mute gate flag (nonzero => emit the menu sound). */
 __asm__(".extern D_1ABD48, 4");
 extern s32 D_1ABD48;
@@ -304,7 +304,7 @@ extern u8 *g_pTextTableLoadBuf;    /* 0x1F28D8 language text-table load buffer *
 
 /* Build the ship-customization screen's moby set. Decodes the g_shipCustomization
  * bitfield into ship model / paint / detail selectors, allocates the moby array
- * (func_002DF368(1), stored at g_menuScreenBlock+0x1CC, stride 0x100), then spawns
+ * (AllocMenuWorkBuffer(1), stored at g_menuScreenBlock+0x1CC, stride 0x100), then spawns
  * the fixed base parts (slots 0-5) plus optional detail/paint parts (slots 6+),
  * each InitMobyFromClass'd from a per-selector class-id table (D_1A8C28..58) or a
  * literal class, tagged with a per-part role byte at +0xBC and (for the mirrored
@@ -340,7 +340,7 @@ s32 func_002D5540(void) {
     func_002CAFD8();
 
     sc = g_shipCustomization;
-    base = (u8 *)func_002DF368(1);
+    base = (u8 *)AllocMenuWorkBuffer(1);
     *(void **)(mgr + 0x1CC) = base;
 
     /* --- Fixed base parts (slots 0-5). --- */
@@ -462,7 +462,7 @@ s32 func_002D5540(void) {
 }
 #endif
 
-/* Toggle the map slot at g_particleFxBlob+0x100 +0x1CC via func_002DF428 and
+/* Toggle the map slot at g_particleFxBlob+0x100 +0x1CC via FreeMenuWorkBuffer and
  * store the result back. Returns 0. Wall: 2-GPR callee-save (8-byte-packed 0x10
  * frame). */
 #ifndef TARGET_NATIVE
@@ -471,7 +471,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5A10);
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002D5A10(void) {
     u8 *blk = (u8 *)g_menuScreenBlock;
-    *(s32 *)(blk + 0x1CC) = func_002DF428(*(s32 *)(blk + 0x1CC));
+    *(s32 *)(blk + 0x1CC) = FreeMenuWorkBuffer(*(s32 *)(blk + 0x1CC));
     return 0;
 }
 #endif
@@ -786,10 +786,10 @@ s32 func_002D6240(void) {
  * before forwarding via func_002D6B00. Returns 0/1/-1.
  * Wall: deep nested branch ladder + popup-state bit mutation. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D6248);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", SaveMessageWidgetTick);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002D6248(void) {
+s32 SaveMessageWidgetTick(void) {
     extern s32 D_001A7424;
     s32 pressed = g_padButtonsPressed[0];
     D_001A7424 = (D_001A7424 & ~4) | 2;
@@ -927,10 +927,10 @@ s32 func_002D65D0(void) {
  * stays (already there) or initiates a level change / exit; otherwise forwards
  * to the planet-row handler. Returns 0/1/-1. Wall: deep branch ladder. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D65D8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", GalacticMapConfirmTravelInput);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002D65D8(void) {
+s32 GalacticMapConfirmTravelInput(void) {
     extern u8 g_abLevelVisitedMarkers[];
     s32 pressed = g_padButtonsPressed[0];
     if (pressed & 0x10) {
@@ -1774,7 +1774,7 @@ void func_002DAA50(s32 x, s32 y, s32 on) {
  * phase machine on obj->0x44 (even=kick StartFileLoad from the obj->0x30 slot
  * table with an lbn base chosen by obj->0x34 bits 0x10000/0x10; odd=wait
  * g_fileLoadState, DecompressWad(src=obj->0x48+obj->0x60, dst=obj->0x48),
- * Log2Floor tex setup, func_00295630, FlushPendingTexUploads), counter obj->0x5C
+ * Log2Floor tex setup, QueueGsTextureUpload, FlushPendingTexUploads), counter obj->0x5C
  * capped 0x100.
  * PARK (flag-not-guess, attempted-and-verified): the control flow is saturated
  * with branch-LIKELY delay-slot side effects (bnel/beql/beqz whose delay loads of
@@ -1807,9 +1807,9 @@ s32 func_002DAE70(MenuWidget *obj) {
 #endif
 
 /* Allocate / initialise the menu background-image double buffers. Clears the
- * pending flag (+0x44), then reserves two map slots (func_002DF368) passing the
+ * pending flag (+0x44), then reserves two map slots (AllocMenuWorkBuffer) passing the
  * "already-preloaded" bit (+0x34 & 0x200). When NOT preloaded, force-allocates a
- * real slot (func_002DF368(1)) for either buffer that came back empty. Finally
+ * real slot (AllocMenuWorkBuffer(1)) for either buffer that came back empty. Finally
  * resets the stream cursor (+0x5C = 0) and marks both slot-state fields
  * (+0x50/+0x54) as -1 (idle). Returns 0.
  * WALL: multi callee-save frame + buffer arithmetic + leaf alloc calls; matching
@@ -1821,15 +1821,15 @@ s32 InitMenuBgImageBuffers(void *obj) {
     s32 preloaded = *(s32 *)((u8 *)obj + 0x34) & 0x200;
 
     *(s32 *)((u8 *)obj + 0x44) = 0;
-    *(s32 *)((u8 *)obj + 0x48) = func_002DF368(preloaded);
-    *(s32 *)((u8 *)obj + 0x4C) = func_002DF368(preloaded);
+    *(s32 *)((u8 *)obj + 0x48) = AllocMenuWorkBuffer(preloaded);
+    *(s32 *)((u8 *)obj + 0x4C) = AllocMenuWorkBuffer(preloaded);
 
     if (preloaded == 0) {
         if (*(s32 *)((u8 *)obj + 0x48) == 0) {
-            *(s32 *)((u8 *)obj + 0x48) = func_002DF368(1);
+            *(s32 *)((u8 *)obj + 0x48) = AllocMenuWorkBuffer(1);
         }
         if (*(s32 *)((u8 *)obj + 0x4C) == 0) {
-            *(s32 *)((u8 *)obj + 0x4C) = func_002DF368(1);
+            *(s32 *)((u8 *)obj + 0x4C) = AllocMenuWorkBuffer(1);
         }
     }
 
@@ -1849,8 +1849,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DB028);
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DB028(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
-    *(s32 *)(o + 0x48) = func_002DF428(*(s32 *)(o + 0x48));
-    *(s32 *)(o + 0x4C) = func_002DF428(*(s32 *)(o + 0x4C));
+    *(s32 *)(o + 0x48) = FreeMenuWorkBuffer(*(s32 *)(o + 0x48));
+    *(s32 *)(o + 0x4C) = FreeMenuWorkBuffer(*(s32 *)(o + 0x4C));
     *(s32 *)(o + 0x44) = -1;
     *(s32 *)(o + 0x50) = -1;
     *(s32 *)(o + 0x54) = -1;
@@ -2350,7 +2350,7 @@ s32 func_002DC800(MenuWidget *obj) {
 }
 
 /* Clear the current screen's +0x12C field, then store the result of the
- * map-slot allocator func_002DF368(0) into obj->0x54. Returns 0.
+ * map-slot allocator AllocMenuWorkBuffer(0) into obj->0x54. Returns 0.
  * Wall: 2-GPR callee-save (8-byte-packed 0x10 frame). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC838);
@@ -2358,19 +2358,19 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC838);
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DC838(MenuWidget *obj) {
     *(s32 *)((u8 *)g_pCurrentMenuScreen[0] + 0x12C) = 0;
-    *(s32 *)((u8 *)obj + 0x54) = func_002DF368(0);
+    *(s32 *)((u8 *)obj + 0x54) = AllocMenuWorkBuffer(0);
     return 0;
 }
 #endif
 
-/* Toggle the map-slot referenced by obj->0x54 via func_002DF428 and store the
+/* Toggle the map-slot referenced by obj->0x54 via FreeMenuWorkBuffer and store the
  * result back. Returns 0. Wall: 2-GPR callee-save (8-byte-packed 0x10 frame). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC878);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DC878(MenuWidget *obj) {
-    *(s32 *)((u8 *)obj + 0x54) = func_002DF428(*(s32 *)((u8 *)obj + 0x54));
+    *(s32 *)((u8 *)obj + 0x54) = FreeMenuWorkBuffer(*(s32 *)((u8 *)obj + 0x54));
     return 0;
 }
 #endif
@@ -2758,7 +2758,7 @@ s32 func_002DD7E8(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
     func_002DF1B8(1);
     *(s32 *)(o + 0x4C) = 0;
-    *(s32 *)(o + 0x48) = func_002DF368(0);
+    *(s32 *)(o + 0x48) = AllocMenuWorkBuffer(0);
     func_002CA980();
     func_002888A8();
     if (D_001A8C88 != 0 && g_pGuiManager != 0) {
@@ -2768,14 +2768,14 @@ s32 func_002DD7E8(MenuWidget *obj) {
 }
 #endif
 
-/* Toggle the map-slot referenced by obj->0x48 via func_002DF428 and store the
+/* Toggle the map-slot referenced by obj->0x48 via FreeMenuWorkBuffer and store the
  * result back. Returns 0. Wall: 2-GPR callee-save (8-byte-packed 0x10 frame). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DD858);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DD858(MenuWidget *obj) {
-    *(s32 *)((u8 *)obj + 0x48) = func_002DF428(*(s32 *)((u8 *)obj + 0x48));
+    *(s32 *)((u8 *)obj + 0x48) = FreeMenuWorkBuffer(*(s32 *)((u8 *)obj + 0x48));
     return 0;
 }
 #endif
@@ -3058,13 +3058,13 @@ void func_002DF1B8(s32 param) {
 
 /* Acquire a free map cache slot (id != 0, not already in-use, free bit clear,
  * with `forceSet` selecting bit polarity), mark it in-use (bit 2), fill its
- * backing memory with the 0xDEADBEEF pattern sized by func_002DF500, and return
+ * backing memory with the 0xDEADBEEF pattern sized by GetMenuWorkBufferSize, and return
  * the slot id. Returns 0 if none free. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF368);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", AllocMenuWorkBuffer);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DF368(s32 forceSet) {
+s32 AllocMenuWorkBuffer(s32 forceSet) {
     s32 *ids   = (s32 *)(D_001B1E90 + 0x40);
     u32 *flags = (u32 *)(D_001B1E90 + 0x44);
     s32 i = 0;
@@ -3073,7 +3073,7 @@ s32 func_002DF368(s32 forceSet) {
         u32 raw = flags[i * 2];
         if ((polarity & 1) == 0 && ids[i * 2] != 0 && (raw & 2) == 0) {
             flags[i * 2] = raw | 2;
-            FillMemory32(ids[i * 2], 0xdeadbeef, func_002DF500(ids[i * 2]));
+            FillMemory32(ids[i * 2], 0xdeadbeef, GetMenuWorkBufferSize(ids[i * 2]));
             return ids[i * 2];
         }
         i++;
@@ -3087,10 +3087,10 @@ s32 func_002DF368(s32 forceSet) {
  * clear its in-use bit. Returns 0. Slots are the interleaved id/flags pairs at
  * D_001B1E90+0x40/+0x44 (stride 8). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF428);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", FreeMenuWorkBuffer);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DF428(s32 id) {
+s32 FreeMenuWorkBuffer(s32 id) {
     extern u8 D_001F289B;
     s32 *ids   = (s32 *)(D_001B1E90 + 0x40);
     u32 *flags = (u32 *)(D_001B1E90 + 0x44);
@@ -3121,10 +3121,10 @@ s32 func_002DF428(s32 id) {
  * 0x4F000 if its flag bit 0 is set, else 0x11800; -1 if no slot matched.
  * Same address-base CSE near-miss as func_002DF560. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF500);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", GetMenuWorkBufferSize);
 #else
     /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DF500(s32 id) {
+s32 GetMenuWorkBufferSize(s32 id) {
     s32 *pflag = (s32 *)(D_001B1E90 + 0x44);
     s32 *pid   = (s32 *)(D_001B1E90 + 0x40);
     s32 i = 0;

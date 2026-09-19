@@ -105,7 +105,7 @@ extern char *g_guiInstance;
 /* Tiled HUD-icon quad blit (EU twin; USA DrawHudIconQuadTiled / func_0028F0D0). */
 /* Textured glyph quad blit (EU twin; USA DrawGlyphQuad). */
 /* DrawGlyphQuad: the glyph callers pass 8 args; the menu-bg quad caller
- * (func_002DBB88) passes two extra 64-bit tint/texture args — variadic tail keeps
+ * (UploadMenuBgImagePair) passes two extra 64-bit tint/texture args — variadic tail keeps
  * both #else call sites gnu89-clean (the matching arm is INCLUDE_ASM regardless). */
 /* EU GS screen-context anchor (USA g_gsScreenContext); glyph dims live at +0x1238/+0x123A. */
 /* CD-clock RTC read (EU twin; USA sceCdReadClock). */
@@ -145,7 +145,7 @@ extern s32  func_002D6A70(MenuCmd *cmd);  /* USA func_002D6B00: dispatch a menu 
 /* Localized-string lookup (EU twin; USA GetLocalizedString). Defined later. */
 
 /* func_002D5508: EU twin of USA func_002D5540 — build the ship-customization preview:
- * allocate the moby scratch block (func_002DF328), spawn the fixed + optional ship
+ * allocate the moby scratch block (AllocMenuWorkBuffer), spawn the fixed + optional ship
  * parts selected by the D_1A7B78 (PlayerStats+0xF8) customization bitfield through the
  * per-selector class-id tables D_1A8CD8..D_1A8D08, run a shared render-state tuning pass
  * over every spawned moby, then seed the paint cursor (D_1ABB1C) from the D_26CD98
@@ -153,7 +153,7 @@ extern s32  func_002D6A70(MenuCmd *cmd);  /* USA func_002D6B00: dispatch a menu 
  * structure model. Word-verified vs USA func_002D5540: g_menuScreenBlock->D_001F0000+
  * 0x2840, g_shipCustomization->D_1A7B78, g_shipCustomizeCursor->D_1ABB1C, class tables
  * D_1A8C28..58->D_1A8CD8..D08 (+0xB0), match table D_26CFD8->D_26CD98, D_0025D458->
- * D_0025D478; callees func_002DF368->func_002DF328, InitMobyFromClass->func_0029FA60,
+ * D_0025D478; callees func_002DF368->AllocMenuWorkBuffer, InitMobyFromClass->InitMobyFromClass,
  * func_002A12A0->func_002A1928, UpdateMobyBSphereAndGrid->func_002A0E28. REGION DELTA:
  * EU omits the leading func_002CAFD8() call USA makes — no twin is called in the EU asm. */
 /* ===== #else-only externs (guarded) — used solely by the TARGET_NATIVE
@@ -162,8 +162,8 @@ extern s32  func_002D6A70(MenuCmd *cmd);  /* USA func_002D6B00: dispatch a menu 
  * externs into one guarded block (matched-used externs stay unguarded above). */
 #ifdef TARGET_NATIVE
 extern void *g_pCurrentMenuScreen[];
-extern s32 func_002DF328(s32 forceSet);  /* USA func_002DF368 */
-extern s32 func_002DF3E8(s32 id);        /* USA func_002DF428 */
+extern s32 AllocMenuWorkBuffer(s32 forceSet);  /* USA func_002DF368 */
+extern s32 FreeMenuWorkBuffer(s32 id);        /* USA func_002DF428 */
 extern u8 g_bPlayerMode;
 extern u8 D_001F0000[];
 extern s32 g_playerProgress[];
@@ -182,7 +182,7 @@ extern s32  func_002A0CC0(s32 tableBase, s32 count);
 extern u8   D_001B1F10[];
 extern void FillMemory32(void *dst, u32 pattern, s32 len);
 extern void func_002B8688(void);
-extern s32  func_002DF4C0(s32 id);
+extern s32  GetMenuWorkBufferSize(s32 id);
 extern s32  func_0028EE08(s32 a, s32 b);
 extern void func_002904C8(s32 x0, s32 y0, s32 x1, s32 y1, u32 color, s32 flag);
 extern void func_0028F0E8(s32 tex, s32 x, s32 y, s32 w, s32 h, s32 alpha);
@@ -223,7 +223,7 @@ extern s32 g_nSaveLoadStatusCode;
 extern void func_002DFF60(s32 id, s32 arg);
 extern void func_0027FA40(s32 x, s32 y, u32 rgba, u8 *str, s32 wrap); /* DrawStringFont1 (EU) */
 extern s32 func_0028EE08(s32 a, s32 b); /* USA func_0028EDF0 icon-id helper (EU) */
-extern s32 func_0028EEC0(s32 iconId); /* GetHudIconTex0 (EU) */
+extern s32 GetHudIconTex0(s32 iconId); /* GetHudIconTex0 (EU) */
 extern void func_0028FC90(u32 x, f32 y, u32 z, u32 s, u32 rot, s32 w, s32 h, s32 tex); /* DrawHudSpriteRotated (EU) */
 extern u8 D_001ABC68, D_001ABC69, D_001ABC70, D_001ABC71; /* USA D_001ABBF8/BBF9/BC00/BC01 glyphs (+0x70) */
 extern s32 func_00280050(s32 cx, s32 cy, u32 rgba, char *str, s32 wrap); /* DrawFont1CenteredLabel (EU) */
@@ -249,7 +249,7 @@ s32 func_002D5508(void) {
     extern s16 D_1A8CD8[], D_1A8CE0[], D_1A8CE8[], D_1A8CF0[], D_1A8CF8[], D_1A8D00[], D_1A8D08[];
     extern u8  D_26CD98[];               /* paint-match table, stride 0x14 {s32 mask, s32 value} (USA D_26CFD8) */
     extern u8  D_0025D478[];             /* USA D_0025D458 */
-    extern void func_0029FA60(void *moby, s32 classId);              /* USA InitMobyFromClass */
+    extern void InitMobyFromClass(void *moby, s32 classId);              /* USA InitMobyFromClass */
     extern void func_002A1928(void *moby, s32 color, s32 a, s32 b, s32 c); /* USA func_002A12A0 */
     extern void func_002A0E28(void *moby);                           /* USA UpdateMobyBSphereAndGrid */
     u8 *mgr = D_001F0000 + 0x2840;
@@ -259,32 +259,32 @@ s32 func_002D5508(void) {
     s16 cls;
 
     sc = D_1A7B78;
-    base = (u8 *)func_002DF328(1);
+    base = (u8 *)AllocMenuWorkBuffer(1);
     *(void **)(mgr + 0x1CC) = base;
 
     /* --- Fixed base parts (slots 0-5). --- */
-    func_0029FA60(base, 0xD54);
+    InitMobyFromClass(base, 0xD54);
     base[0xBC] = 9;
 
     m = base + 0x100;
-    func_0029FA60(m, D_1A8CD8[(sc >> 2) & 0x3]);
+    InitMobyFromClass(m, D_1A8CD8[(sc >> 2) & 0x3]);
     m[0xBC] = 8;
 
     m = base + 0x200;
-    func_0029FA60(m, D_1A8CD8[(sc >> 2) & 0x3]);
+    InitMobyFromClass(m, D_1A8CD8[(sc >> 2) & 0x3]);
     m[0xBC] = 8;
     *(u16 *)(m + 0x34) |= 0x8000;
 
     m = base + 0x300;
-    func_0029FA60(m, D_1A8CE0[(sc >> 4) & 0x1]);
+    InitMobyFromClass(m, D_1A8CE0[(sc >> 4) & 0x1]);
     m[0xBC] = 0;
 
     m = base + 0x400;
-    func_0029FA60(m, D_1A8CE8[(sc >> 6) & 0x1]);
+    InitMobyFromClass(m, D_1A8CE8[(sc >> 6) & 0x1]);
     m[0xBC] = 1;
 
     m = base + 0x500;
-    func_0029FA60(m, D_1A8CE8[(sc >> 6) & 0x1]);
+    InitMobyFromClass(m, D_1A8CE8[(sc >> 6) & 0x1]);
     m[0xBC] = 1;
     *(u16 *)(m + 0x34) |= 0x8000;
 
@@ -293,48 +293,48 @@ s32 func_002D5508(void) {
     cls = D_1A8CF0[(sc >> 7) & 0x3];
     if (cls != 0) {
         m = base + n * 0x100;
-        func_0029FA60(m, cls);
+        InitMobyFromClass(m, cls);
         m[0xBC] = 2;
         n++;
     }
 
     m = base + n * 0x100;
-    func_0029FA60(m, D_1A8CF8[(sc >> 9) & 0x1]);
+    InitMobyFromClass(m, D_1A8CF8[(sc >> 9) & 0x1]);
     m[0xBC] = 3;
     n++;
 
     m = base + n * 0x100;
-    func_0029FA60(m, D_1A8CF8[(sc >> 9) & 0x1]);
+    InitMobyFromClass(m, D_1A8CF8[(sc >> 9) & 0x1]);
     m[0xBC] = 3;
     *(u16 *)(m + 0x34) |= 0x8000;
     n++;
 
     m = base + n * 0x100;
-    func_0029FA60(m, D_1A8D00[(sc >> 10) & 0x3]);
+    InitMobyFromClass(m, D_1A8D00[(sc >> 10) & 0x3]);
     m[0xBC] = 4;
     n++;
 
     m = base + n * 0x100;
-    func_0029FA60(m, D_1A8D00[(sc >> 10) & 0x3]);
+    InitMobyFromClass(m, D_1A8D00[(sc >> 10) & 0x3]);
     m[0xBC] = 4;
     *(u16 *)(m + 0x34) |= 0x8000;
     n++;
 
     if ((sc >> 12) & 0x1) {
         m = base + n * 0x100;
-        func_0029FA60(m, 0x10E2);
+        InitMobyFromClass(m, 0x10E2);
         m[0xBC] = 5;
         n++;
     }
     if ((sc >> 13) & 0x1) {
         m = base + n * 0x100;
-        func_0029FA60(m, 0x10E4);
+        InitMobyFromClass(m, 0x10E4);
         m[0xBC] = 6;
         n++;
     }
     if ((sc >> 14) & 0x3) {
         m = base + n * 0x100;
-        func_0029FA60(m, D_1A8D08[(sc >> 14) & 0x3]);
+        InitMobyFromClass(m, D_1A8D08[(sc >> 14) & 0x3]);
         m[0xBC] = 7;
         n++;
     }
@@ -382,17 +382,17 @@ s32 func_002D5508(void) {
 #endif
 
 /* func_002D59D0: EU twin of USA func_002D5A10 — toggle the map slot at the
- * menu screen-state block +0x1CC via func_002DF3E8 and store the result back.
+ * menu screen-state block +0x1CC via FreeMenuWorkBuffer and store the result back.
  * Returns 0. Matching arm stays INCLUDE_ASM (2-GPR callee-save, 8-byte-packed
  * 0x10 frame); #else is the structure-exact model. Word-verified vs USA
  * func_002D5A10: identical modulo the block base (USA g_menuScreenBlock -> EU
- * D_001F0000+0x2840, +0x80) and the jal (func_002DF428 -> EU func_002DF3E8). */
+ * D_001F0000+0x2840, +0x80) and the jal (func_002DF428 -> EU FreeMenuWorkBuffer). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D59D0);
 #else
 s32 func_002D59D0(void) {
     u8 *blk = D_001F0000 + 0x2840;   /* EU menu screen-state block (USA g_menuScreenBlock) */
-    *(s32 *)(blk + 0x1CC) = func_002DF3E8(*(s32 *)(blk + 0x1CC));
+    *(s32 *)(blk + 0x1CC) = FreeMenuWorkBuffer(*(s32 *)(blk + 0x1CC));
     return 0;
 }
 #endif
@@ -711,7 +711,7 @@ s32 func_002D61B0(void) {
     return 0;
 }
 
-/* func_002D61B8: EU twin of USA func_002D6248 — save/load list confirm input.
+/* SaveMessageWidgetTick: EU twin of USA func_002D6248 — save/load list confirm input.
  * Sets a popup-state bit (USA D_001A7424 = the word at g_nSaveLoadStatusCode+0x4),
  * then: cancel (0x10) requests the parent; L1/R1 (0x900) returns 1; otherwise runs
  * the per-frame list tick and, on X (0x40) with the GUI up, reads the focused entry
@@ -723,9 +723,9 @@ s32 func_002D61B0(void) {
  * layout); block override field D_001F28F4->D_001F0000+0x2974; popup-state bit
  * D_001A7424 -> the word at g_nSaveLoadStatusCode+0x4 (EU .s names it off that base). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D61B8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", SaveMessageWidgetTick);
 #else
-s32 func_002D61B8(void) {
+s32 SaveMessageWidgetTick(void) {
     extern s32  g_nSaveLoadStatusCode;        /* named; +0x4 word is the popup-state bit (USA D_001A7424) */
     extern void func_0029D478(s32 padMask);   /* USA func_0029D918: per-frame list tick */
     extern s32  func_00343EC0(void *query);   /* USA func_00342D68: focused GUI list item */
@@ -877,7 +877,7 @@ s32 func_002D6540(void) {
     return 0;
 }
 
-/* func_002D6548: EU twin of USA func_002D65D8 — galactic-map level-select input.
+/* GalacticMapConfirmTravelInput: EU twin of USA func_002D65D8 — galactic-map level-select input.
  * Reads the newly-pressed pad mask: cancel (0x10) fades out, snaps the map camera,
  * then walks the current screen's 0xE0 child or the pending next-screen (returns -1
  * only when the modal gate at D_001F0000+0x2974 is clear); L1/R1 (0xd00) snaps the
@@ -893,9 +893,9 @@ s32 func_002D6540(void) {
  * two access sites). The always-true `!= 0 || .. || != 2` guard is carried verbatim
  * from the USA structure model to stay in lockstep (USA is tagged non-byte-exact). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D6548);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", GalacticMapConfirmTravelInput);
 #else
-s32 func_002D6548(void) {
+s32 GalacticMapConfirmTravelInput(void) {
     extern void func_0027D818(s32 frames);   /* USA FadeOutToBlackBlocking */
     extern void func_002CAA58(f32 x);        /* USA func_002CAB90: snap map camera */
     extern s32  func_0026F638(void);         /* USA func_0026F7D0 */
@@ -1127,7 +1127,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D6A98);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D6E30);
 
-/* func_002D74D8: EU twin of USA SetGalacticMapFadeAlpha — start a galactic-map
+/* SetGalacticMapFadeAlpha: EU twin of USA SetGalacticMapFadeAlpha — start a galactic-map
  * colour fade. Clamps a negative progress to 0, substitutes the default endpoint
  * colours (0x80FFA888 / 0x8020FFFF) for any -1 argument, and drives func_002845F8
  * (packed-RGBA colour lerp) with fade = 1 - (steps - progress)/steps, or 1.0 once
@@ -1137,9 +1137,9 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D6E30);
  * EU derives the effective step count as (D_1AA4E0*5 + 2)/6 rather than using the
  * global directly as USA does — faithful to the EU asm (0x2D74E8 sll/addu/div-by-6). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D74D8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", SetGalacticMapFadeAlpha);
 #else
-void func_002D74D8(s32 progress, s32 color1, s32 color2) {
+void SetGalacticMapFadeAlpha(s32 progress, s32 color1, s32 color2) {
     extern s32  D_1AA4E0;                                        /* USA D_1AA460: fade step base */
     extern void func_002845F8(s32 color1, s32 color2, f32 fade); /* USA func_002846E8 */
     s32 clampedProgress = (progress < 0) ? 0 : progress;
@@ -1230,7 +1230,7 @@ s32 func_002D8228(MenuWidget *obj) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D82D8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", HandleGalacticMapPlanetSelectInput);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D8700);
 
@@ -1409,7 +1409,7 @@ s32 func_002D8DF0(MenuWidget *obj) {
 }
 #endif
 
-/* func_002D8E90: EU twin of USA RestorePrevTextTable — pop side of the push/pop
+/* RestorePrevTextTable: EU twin of USA RestorePrevTextTable — pop side of the push/pop
  * text-table swap: cancel any in-flight load tied to this command (state 3), reset
  * the text-table banks via func_002DF178(1), then reinstall the saved text table
  * (cmd+0x54 base / cmd+0x38 count) into g_pActiveTextTable / g_activeTextTableCount.
@@ -1419,9 +1419,9 @@ s32 func_002D8DF0(MenuWidget *obj) {
  * (g_pActiveTextTable named both); file-load busy flag g_nFileLoadState (0x1A63AC)
  * -> s16 at g_saveImageArea+0x1004 (EU .s base). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D8E90);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", RestorePrevTextTable);
 #else
-s32 func_002D8E90(void *cmd) {
+s32 RestorePrevTextTable(void *cmd) {
     extern void *g_pActiveTextTable;      /* USA g_pActiveTextTable */
     extern s32   g_activeTextTableCount;  /* USA g_nActiveTextTableCount */
     u8 *c = (u8 *)cmd;
@@ -1545,7 +1545,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002D96F8);
  * re-lays out the cell. Matching arm stays INCLUDE_ASM; #else is the structure
  * model. Word-verified vs USA func_002D9C18: ONLY callees differ —
  * func_0034F300->func_003507A0, GuiElementSetVisible->func_00337B48,
- * GuiListSetScrollPos->func_003388F0, GuiListSetItemCount->func_003388E8,
+ * GuiListSetScrollPos->GuiListSetScrollPos, GuiListSetItemCount->func_003388E8,
  * func_0034EF68->func_00350408. All data globals (g_guiInstance/g_itemEquippedSlot/
  * g_weaponTable/g_weaponXp) are named + identical in both regions; the 0x36F28 GUI
  * offset and 0xE0/0x48 strides are NTSC/PAL-identical (asm-verified: NO +0xB0 shift).
@@ -1561,7 +1561,7 @@ void func_002D9BE0(MenuWidget *obj, void *entry, s32 col, s32 row, s32 x, s32 y)
     extern u8   g_weaponTable[];     /* per-weapon record table, stride 0xE0; USA C: D_00239B8C */
     extern s32  func_003507A0(u8 *gui);                              /* USA func_0034F300 */
     extern void func_00337B48(s32 elem, s32 visible);               /* USA GuiElementSetVisible */
-    extern void func_003388F0(s32 elem, s32 pos);                   /* USA GuiListSetScrollPos */
+    extern void GuiListSetScrollPos(s32 elem, s32 pos);                   /* USA GuiListSetScrollPos */
     extern void func_003388E8(s32 elem, s32 count);                 /* USA GuiListSetItemCount */
     extern void func_00350408(u8 *gui, s32 idx, s32 x, s32 y, s32 flags); /* USA func_0034EF68 */
     u8 *o = (u8 *)obj;
@@ -1571,7 +1571,7 @@ void func_002D9BE0(MenuWidget *obj, void *entry, s32 col, s32 row, s32 x, s32 y)
     func_00337B48(elem, 0);
     if (*(s32 *)(g_weaponTable + g_itemEquippedSlot[slot] * 0xE0) != 0) {
         func_00337B48(elem, 1);
-        func_003388F0(elem, g_weaponXp[slot] >> 5);
+        GuiListSetScrollPos(elem, g_weaponXp[slot] >> 5);
         func_003388E8(elem, *(s32 *)(g_weaponTable + g_itemEquippedSlot[slot] * 0xE0));
     }
     func_00350408((u8 *)g_guiInstance + 0x36F28, idx, x, y, 0x80);
@@ -1741,30 +1741,30 @@ s32 func_002DAE38(MenuWidget *obj) {
 }
 #endif
 
-/* func_002DAF58: EU twin of USA InitMenuBgImageBuffers — allocate / initialise the
+/* InitMenuBgImageBuffers: EU twin of USA InitMenuBgImageBuffers — allocate / initialise the
  * menu background-image double buffers. Clears the pending flag (+0x44), reserves
- * two map slots (func_002DF328) passing the "already-preloaded" bit (+0x34 & 0x200);
- * when NOT preloaded, force-allocates a real slot (func_002DF328(1)) for either
+ * two map slots (AllocMenuWorkBuffer) passing the "already-preloaded" bit (+0x34 & 0x200);
+ * when NOT preloaded, force-allocates a real slot (AllocMenuWorkBuffer(1)) for either
  * buffer that came back empty. Resets the stream cursor (+0x5C=0) and marks both
  * slot-state fields (+0x50/+0x54) idle (-1). Returns 0. Matching arm stays
  * INCLUDE_ASM; #else is the structure model. Word-verified vs USA InitMenuBgImageBuffers:
- * only callee retarget func_002DF368 -> func_002DF328 (x4); struct offsets identical. */
+ * only callee retarget func_002DF368 -> AllocMenuWorkBuffer (x4); struct offsets identical. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002DAF58);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", InitMenuBgImageBuffers);
 #else
-s32 func_002DAF58(void *obj) {
+s32 InitMenuBgImageBuffers(void *obj) {
     s32 preloaded = *(s32 *)((u8 *)obj + 0x34) & 0x200;
 
     *(s32 *)((u8 *)obj + 0x44) = 0;
-    *(s32 *)((u8 *)obj + 0x48) = func_002DF328(preloaded);
-    *(s32 *)((u8 *)obj + 0x4C) = func_002DF328(preloaded);
+    *(s32 *)((u8 *)obj + 0x48) = AllocMenuWorkBuffer(preloaded);
+    *(s32 *)((u8 *)obj + 0x4C) = AllocMenuWorkBuffer(preloaded);
 
     if (preloaded == 0) {
         if (*(s32 *)((u8 *)obj + 0x48) == 0) {
-            *(s32 *)((u8 *)obj + 0x48) = func_002DF328(1);
+            *(s32 *)((u8 *)obj + 0x48) = AllocMenuWorkBuffer(1);
         }
         if (*(s32 *)((u8 *)obj + 0x4C) == 0) {
-            *(s32 *)((u8 *)obj + 0x4C) = func_002DF328(1);
+            *(s32 *)((u8 *)obj + 0x4C) = AllocMenuWorkBuffer(1);
         }
     }
 
@@ -1776,18 +1776,18 @@ s32 func_002DAF58(void *obj) {
 #endif
 
 /* func_002DAFF0: EU twin of USA func_002DB028 — reset a galactic-map widget:
- * toggle the two map slots at obj+0x48/+0x4C via func_002DF3E8, clear the
+ * toggle the two map slots at obj+0x48/+0x4C via FreeMenuWorkBuffer, clear the
  * +0x44/+0x50/+0x54 indices to -1, then pump the dialog-voice system. Returns 0.
  * Matching arm stays INCLUDE_ASM; #else is the structure-exact model.
  * Word-verified vs USA func_002DB028: identical modulo the callee jals
- * (func_002DF428 -> EU func_002DF3E8 x2; PumpDialogVoiceSystem -> func_002B8898). */
+ * (func_002DF428 -> EU FreeMenuWorkBuffer x2; PumpDialogVoiceSystem -> func_002B8898). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002DAFF0);
 #else
 s32 func_002DAFF0(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
-    *(s32 *)(o + 0x48) = func_002DF3E8(*(s32 *)(o + 0x48));
-    *(s32 *)(o + 0x4C) = func_002DF3E8(*(s32 *)(o + 0x4C));
+    *(s32 *)(o + 0x48) = FreeMenuWorkBuffer(*(s32 *)(o + 0x48));
+    *(s32 *)(o + 0x4C) = FreeMenuWorkBuffer(*(s32 *)(o + 0x4C));
     *(s32 *)(o + 0x44) = -1;
     *(s32 *)(o + 0x50) = -1;
     *(s32 *)(o + 0x54) = -1;
@@ -1800,7 +1800,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002DB048);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002DB6C8);
 
-/* func_002DBA38: EU twin of USA LoadMenuBgImagePair — disc streamer for the menu
+/* LoadMenuBgImagePair: EU twin of USA LoadMenuBgImagePair — disc streamer for the menu
  * background-image pair. Per-tick phase machine on obj->0x44: phase 0 kicks a
  * StartFileLoad of the first buffer (obj+0x48) from the disc-TOC bg entry (base LBN
  * D_0014B5C0+0x36C + per-index offset at D_0014B5C0 + idx*8 + 0xDD0, sector count
@@ -1812,9 +1812,9 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002DB6C8);
  * g_discToc->D_0014B5C0 (+0x80), g_menuBgImageIndex->D_0025DE50; file-load flag
  * g_fileLoadState -> s16 at g_saveImageArea+0x1004. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002DBA38);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", LoadMenuBgImagePair);
 #else
-s32 func_002DBA38(void *obj) {
+s32 LoadMenuBgImagePair(void *obj) {
     extern s32 func_002B86D0(s32 dest, s32 lbn, s32 sectors); /* USA StartFileLoad */
     extern u8  D_0014B5C0[];                                  /* USA g_discToc (+0x80) */
     s32 phase = *(s32 *)((u8 *)obj + 0x44);
@@ -1854,7 +1854,7 @@ s32 func_002DBA38(void *obj) {
 }
 #endif
 
-/* func_002DBB88: EU twin of USA UploadMenuBgImagePair — draw the loaded menu
+/* UploadMenuBgImagePair: EU twin of USA UploadMenuBgImagePair — draw the loaded menu
  * background-image pair as two textured 0x100x0x100 quads. No-op (returns 0) until
  * both disc loads have completed (obj->0x44 >= 4). Opens a 2d draw batch, then for
  * each buffer resolves its GS texture handle (func_00295550(obj+0x48 / obj+0x4C))
@@ -1868,9 +1868,9 @@ s32 func_002DBA38(void *obj) {
  * func_0027E500, End2dDrawBatch->func_0027CB48, func_002954F0->func_00295550, layout
  * tables D_1ABBB0..->D_1ABC20.. / D_1ABBC0..->D_1ABC30.. (+0x70). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002DBB88);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", UploadMenuBgImagePair);
 #else
-s32 func_002DBB88(void *obj) {
+s32 UploadMenuBgImagePair(void *obj) {
     extern s32 func_00295550(s32 buffer);                /* USA func_002954F0: bg buffer -> GS tex handle */
     extern s32 D_1ABC20, D_1ABC24, D_1ABC28, D_1ABC2C;   /* front-quad layout (USA D_1ABBB0.., +0x70) */
     extern s32 D_1ABC30, D_1ABC34, D_1ABC38, D_1ABC3C;   /* back-quad layout  (USA D_1ABBC0.., +0x70) */
@@ -2285,31 +2285,31 @@ s32 func_002DC7C8(void *obj) {
 }
 
 /* func_002DC800: EU twin of USA func_002DC838 — clear the current screen's
- * +0x12C field, then store the map-slot allocator result func_002DF328(0) into
+ * +0x12C field, then store the map-slot allocator result AllocMenuWorkBuffer(0) into
  * obj->0x54. Returns 0. Matching arm stays INCLUDE_ASM (2-GPR callee-save,
  * 8-byte-packed 0x10 frame); #else is the structure-exact model. Word-verified
  * vs USA func_002DC838: identical modulo the g_pCurrentMenuScreen %lo (EU +0x80)
- * and the jal (func_002DF368 -> EU func_002DF328). */
+ * and the jal (func_002DF368 -> EU AllocMenuWorkBuffer). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002DC800);
 #else
 s32 func_002DC800(MenuWidget *obj) {
     *(s32 *)((u8 *)g_pCurrentMenuScreen[0] + 0x12C) = 0;
-    *(s32 *)((u8 *)obj + 0x54) = func_002DF328(0);
+    *(s32 *)((u8 *)obj + 0x54) = AllocMenuWorkBuffer(0);
     return 0;
 }
 #endif
 
 /* func_002DC840: EU twin of USA func_002DC878 — toggle the map-slot referenced
- * by obj->0x54 via func_002DF3E8 and store the result back. Returns 0. Matching
+ * by obj->0x54 via FreeMenuWorkBuffer and store the result back. Returns 0. Matching
  * arm stays INCLUDE_ASM (2-GPR callee-save, 8-byte-packed 0x10 frame); #else is
  * the structure-exact model. Word-verified vs USA func_002DC878: identical
- * modulo the jal (func_002DF428 -> EU func_002DF3E8). */
+ * modulo the jal (func_002DF428 -> EU FreeMenuWorkBuffer). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002DC840);
 #else
 s32 func_002DC840(MenuWidget *obj) {
-    *(s32 *)((u8 *)obj + 0x54) = func_002DF3E8(*(s32 *)((u8 *)obj + 0x54));
+    *(s32 *)((u8 *)obj + 0x54) = FreeMenuWorkBuffer(*(s32 *)((u8 *)obj + 0x54));
     return 0;
 }
 #endif
@@ -2484,7 +2484,7 @@ s32 func_002DCC90(MenuWidget *obj) {
  * sprite. Returns 2. Matching arm stays INCLUDE_ASM; #else is the structure-
  * exact model. Word-verified vs USA func_002DCDC0: callee retargets (Begin/End
  * 2dDrawBatch; DrawStringFont1 func_0027FBA8->func_0027FA40; icon-id func_0028EDF0
- * ->func_0028EE08; GetHudIconTex0 func_0028EEA8->func_0028EEC0; DrawHudSpriteRotated
+ * ->func_0028EE08; GetHudIconTex0 func_0028EEA8->GetHudIconTex0; DrawHudSpriteRotated
  * func_0028FC78->func_0028FC90) and glyph-data relocs (D_001ABBF8/BC00 -> EU
  * D_001ABC68/C70, +0x70 lane) differ; float immediates and masks identical, no
  * NTSC/PAL constant delta. */
@@ -2504,7 +2504,7 @@ s32 func_002DCD88(MenuWidget *obj) {
         func_0027FA40(*(s32 *)(o + 0x20) - 0x18, *(s32 *)(o + 0x24) / 2 - 8,
                       0x80ffa888, label, -1);
         h = *(s32 *)(o + 0x24);
-        tex = func_0028EEC0(func_0028EE08(0xe99d, 6));
+        tex = GetHudIconTex0(func_0028EE08(0xe99d, 6));
         func_0028FC90(0x43400000, (f32)(h << 3), 0x43000000, 0x43800000,
                       0x40490fdb, 0x20, 0x10, tex);
     } else {
@@ -2512,7 +2512,7 @@ s32 func_002DCD88(MenuWidget *obj) {
         label[1] = D_001ABC69;
         func_0027FA40(4, *(s32 *)(o + 0x24) / 2 - 8, 0x80ffa888, label, -1);
         h = *(s32 *)(o + 0x24);
-        tex = func_0028EEC0(func_0028EE08(0xe99d, 6));
+        tex = GetHudIconTex0(func_0028EE08(0xe99d, 6));
         func_0028FC90(0x44200000, (f32)(h << 3), 0x43000000, 0x43800000,
                       0, 0x20, 0x10, tex);
     }
@@ -2624,7 +2624,7 @@ s32 func_002DD5F8(void *screenArg) {
  * a memory card is present and the GUI exists show its panel. Returns 0. Matching
  * arm stays INCLUDE_ASM; #else is the structure-exact model. Word-verified vs USA
  * func_002DD7E8: callee retargets (func_002DF1B8->func_002DF178, func_002DF368->
- * func_002DF328, func_002CA980->func_002CA858, func_002888A8->func_00288798,
+ * AllocMenuWorkBuffer, func_002CA980->func_002CA858, func_002888A8->func_00288798,
  * func_0033A7A8->func_0033B688), D_001A8C88->D_001A8D38 (+0xB0), g_pGuiManager
  * gp-rel (per-region). REGION STRUCT-OFFSET DELTA: the GUI panel field offset is
  * USA 0x3CEA0 / EU 0x3CF50 (+0xB0, the known EU GUI-struct shift) — ported EU. */
@@ -2636,7 +2636,7 @@ s32 func_002DD7B0(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
     func_002DF178(1);
     *(s32 *)(o + 0x4C) = 0;
-    *(s32 *)(o + 0x48) = func_002DF328(0);
+    *(s32 *)(o + 0x48) = AllocMenuWorkBuffer(0);
     func_002CA858();
     func_00288798();
     if (D_001A8D38 != 0 && g_pGuiManager != 0) {
@@ -2647,15 +2647,15 @@ s32 func_002DD7B0(MenuWidget *obj) {
 #endif
 
 /* func_002DD820: EU twin of USA func_002DD858 — toggle the map-slot referenced
- * by obj->0x48 via func_002DF3E8 and store the result back. Returns 0. Matching
+ * by obj->0x48 via FreeMenuWorkBuffer and store the result back. Returns 0. Matching
  * arm stays INCLUDE_ASM (2-GPR callee-save, 8-byte-packed 0x10 frame); #else is
  * the structure-exact model. Word-verified vs USA func_002DD858: identical
- * modulo the jal (func_002DF428 -> EU func_002DF3E8). */
+ * modulo the jal (func_002DF428 -> EU FreeMenuWorkBuffer). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002DD820);
 #else
 s32 func_002DD820(MenuWidget *obj) {
-    *(s32 *)((u8 *)obj + 0x48) = func_002DF3E8(*(s32 *)((u8 *)obj + 0x48));
+    *(s32 *)((u8 *)obj + 0x48) = FreeMenuWorkBuffer(*(s32 *)((u8 *)obj + 0x48));
     return 0;
 }
 #endif
@@ -2984,18 +2984,18 @@ void func_002DF178(s32 param) {
 }
 #endif
 
-/* func_002DF328: EU twin of USA func_002DF368 — reserve the first free galactic-
+/* AllocMenuWorkBuffer: EU twin of USA func_002DF368 — reserve the first free galactic-
  * map cache slot (of 5, interleaved id/flags at D_001B1F10+0x40/+0x44 stride 8,
  * with forceSet flipping the polarity test), mark it in-use (bit 2), fill its
- * backing memory with 0xDEADBEEF sized by func_002DF4C0, and return the slot id
+ * backing memory with 0xDEADBEEF sized by GetMenuWorkBufferSize, and return the slot id
  * (0 if none free). Matching arm stays INCLUDE_ASM; #else is the structure-exact
  * model. Word-verified vs USA func_002DF368: identical modulo relocs —
- * D_001B1E90 -> EU D_001B1F10 (+0x80), jal func_002DF500 -> EU func_002DF4C0;
+ * D_001B1E90 -> EU D_001B1F10 (+0x80), jal func_002DF500 -> EU GetMenuWorkBufferSize;
  * FillMemory32 is region-neutral. No constant deltas. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002DF328);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", AllocMenuWorkBuffer);
 #else
-s32 func_002DF328(s32 forceSet) {
+s32 AllocMenuWorkBuffer(s32 forceSet) {
     s32 *ids   = (s32 *)(D_001B1F10 + 0x40);
     u32 *flags = (u32 *)(D_001B1F10 + 0x44);
     s32 i = 0;
@@ -3004,7 +3004,7 @@ s32 func_002DF328(s32 forceSet) {
         u32 raw = flags[i * 2];
         if ((polarity & 1) == 0 && ids[i * 2] != 0 && (raw & 2) == 0) {
             flags[i * 2] = raw | 2;
-            FillMemory32((void *)ids[i * 2], 0xdeadbeef, func_002DF4C0(ids[i * 2]));
+            FillMemory32((void *)ids[i * 2], 0xdeadbeef, GetMenuWorkBufferSize(ids[i * 2]));
             return ids[i * 2];
         }
         i++;
@@ -3013,7 +3013,7 @@ s32 func_002DF328(s32 forceSet) {
 }
 #endif
 
-/* func_002DF3E8: EU twin of USA func_002DF428 — release the map cache slot whose
+/* FreeMenuWorkBuffer: EU twin of USA func_002DF428 — release the map cache slot whose
  * id == `id`: if in-use (bit 1) and streaming (bit 4), cancel any pending stream
  * (the menu-block +0xDB gate + func_002B8688) then clear its bits. Returns 0.
  * Matching arm stays INCLUDE_ASM; #else is the structure-exact model.
@@ -3022,9 +3022,9 @@ s32 func_002DF328(s32 forceSet) {
  * (D_001F0000+0x291B; USA D_001F289B), jal StopFileLoad -> EU func_002B8688.
  * No constant deltas. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002DF3E8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", FreeMenuWorkBuffer);
 #else
-s32 func_002DF3E8(s32 id) {
+s32 FreeMenuWorkBuffer(s32 id) {
     s32 *ids     = (s32 *)(D_001B1F10 + 0x40);
     u32 *flags   = (u32 *)(D_001B1F10 + 0x44);
     u8  *pending = (u8 *)(D_001F0000 + 0x291B);   /* USA D_001F289B = block +0xDB */
@@ -3051,15 +3051,15 @@ s32 func_002DF3E8(s32 id) {
 }
 #endif
 
-/* func_002DF4C0: EU twin of USA func_002DF500 — scan the 5 map slots for id and
+/* GetMenuWorkBufferSize: EU twin of USA func_002DF500 — scan the 5 map slots for id and
  * return its backing size / packed value (0x4F000 if flag bit 0 set, else
  * 0x11800); -1 if no slot matched. Matching arm stays INCLUDE_ASM; #else is the
  * structure-exact model. Word-verified vs USA func_002DF500: identical modulo the
  * D_001B1E90 -> EU D_001B1F10 relocs (+0x80). No constant deltas. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002DF4C0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", GetMenuWorkBufferSize);
 #else
-s32 func_002DF4C0(s32 id) {
+s32 GetMenuWorkBufferSize(s32 id) {
     s32 *pflag = (s32 *)(D_001B1F10 + 0x44);
     s32 *pid   = (s32 *)(D_001B1F10 + 0x40);
     s32 i = 0;

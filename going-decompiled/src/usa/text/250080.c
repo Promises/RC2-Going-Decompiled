@@ -197,17 +197,17 @@ extern s64 func_00133850(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f);
 extern void *func_0012F738(void);
 extern s32 func_0012FA70(u8 *obj, s32 slot, void *cb, s32 arg);
 extern void func_003525D0(FmvStream *s);
-extern s32 func_003515E8(u8 *obj, u64 a, u64 b, u64 c, u64 d, u64 e);
+extern s32 FmvBitstreamObjInit(u8 *obj, u64 a, u64 b, u64 c, u64 d, u64 e);
 extern s32 func_0012F9A8(u8 *obj);
 extern void func_0012F9C8(u8 *obj);
 extern s32 func_0012F950(u8 *obj, s32 ptr, s32 len);
-extern s32 func_00352C30(u8 *fq);
-extern void func_00352BB8(u8 *fq);
+extern s32 FmvFrameQueueGetWriteSlot(u8 *fq);
+extern void FmvFrameQueuePush(u8 *fq);
 extern void func_00350B60(void *gif, u8 *frame, u32 a, u32 b, s32 idx);
 extern void WaitSema(s32 sema);
 extern s32 SignalSema(s32 sema);   /* SDK SignalSema returns int (eekernel.h); func_00352000 returns it */
 extern s32 func_00133960(void);
-/* Stream-event callbacks registered by func_00352468 (defined later). */
+/* Stream-event callbacks registered by FmvStreamInit (defined later). */
 s32 func_00352A20(s32 unused, s32 *frame);
 s32 func_00352A48(void);
 s32 func_00352A80(void);
@@ -221,7 +221,7 @@ extern void func_0011F628(void);   /* enable interrupts (EI) */
 extern s32 func_00351F58(u8 *obj);
 extern void func_0012F940(u8 *obj);
 extern s32 func_0012F9B8(u8 *host);
-s32 func_00352C80(FmvFrameQueue *q);
+s32 FmvFrameQueueGetDisplaySlot(FmvFrameQueue *q);
 /* Stream-commit + reset callees referenced only by the #else bodies. */
 extern s32 func_001338F0(s32 commitBase, s32 len, s32 commitArg, s32 queued, s32 arg5);
 extern void func_00133890(s32 *obj);   /* commit-path stream lock */
@@ -237,7 +237,7 @@ extern void func_0011AC30(s32 sema);   /* DeleteSema */
 extern s32 func_0011AC20(void *param); /* CreateSema (returns sema id) */
 extern s32 func_0011AC60(s32 sema);    /* WaitSema (acquire) */
 extern s32 func_0011AC40(s32 sema);    /* SignalSema (release) */
-void func_00351660(u8 *stream);        /* ring init, defined below (fwd for func_003515E8) */
+void FmvStreamStartDma(u8 *stream);        /* ring init, defined below (fwd for FmvBitstreamObjInit) */
 #endif
 
 /**
@@ -329,7 +329,7 @@ s32 func_003504F0(void) {
 }
 
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350520);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvPtsQueueInit);
 #else
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves. Revisit with the gameplay-TU compiler.
@@ -339,7 +339,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350520);
    type (3) and the 0x400-byte ring granularity, record the decode output
    buffer in D_1B2354, allocate the IPU sema (func_00133850), and report
    whether the allocation succeeded. */
-s32 func_00350520(s32 *obj, s32 ringBase, s32 scratchBase, u8 *decodeBuf) {
+s32 FmvPtsQueueInit(s32 *obj, s32 ringBase, s32 scratchBase, u8 *decodeBuf) {
     s64 sema;
 
     ZeroQwords(obj + 2, 0x20);
@@ -1024,17 +1024,17 @@ void func_003515C0(u64 *tag, u64 madr, u64 qwc, u64 id) {
     *tag = madr << 32 | (qwc << 32) >> 4 | (id << 32) >> 32;
 }
 
-/* func_003515E8: construct the IPU_TO bitstream sub-object. Stores the source
+/* FmvBitstreamObjInit: construct the IPU_TO bitstream sub-object. Stores the source
  * buffer/tag pointers and the two ring counts, builds the +0x4 DMA-tag word
  * ((b & 0x0FFFFFFF) | 0x20000000 = a "next" tag pointing at physical b), creates
  * the decode semaphore (init/max = 1) into +0x40, initialises the ring via
- * func_00351660, and clears the +0x48 pts accumulator. Always returns 1. The
- * u64 params match the call site (func_00352468); the body uses their low 32
+ * FmvStreamStartDma, and clears the +0x48 pts accumulator. Always returns 1. The
+ * u64 params match the call site (FmvStreamInit); the body uses their low 32
  * bits (the ROM stores them with sw). Byte-match blocked: 8-byte-packed saves. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003515E8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvBitstreamObjInit);
 #else
-s32 func_003515E8(u8 *obj, u64 a, u64 b, u64 c, u64 d, u64 e) {
+s32 FmvBitstreamObjInit(u8 *obj, u64 a, u64 b, u64 c, u64 d, u64 e) {
     s32 semaParam[8];
 
     *(u32 *)(obj + 0x0) = (u32)a;
@@ -1046,13 +1046,13 @@ s32 func_003515E8(u8 *obj, u64 a, u64 b, u64 c, u64 d, u64 e) {
     *(u32 *)(obj + 0x18) = (u32)c << 11;
     *(u32 *)(obj + 0x8) = (u32)c;
     *(u32 *)(obj + 0x40) = func_0011AC20(semaParam);
-    func_00351660(obj);
+    FmvStreamStartDma(obj);
     *(s64 *)(obj + 0x48) = 0;
     return 1;
 }
 #endif
 
-/* func_00351660: initialise the IPU_TO bitstream sub-object's ring state and
+/* FmvStreamStartDma: initialise the IPU_TO bitstream sub-object's ring state and
  * build its DMA source-tag chain. Clears the playback counters, resets each
  * f50-array ring slot (stride 0x18: two -1 handles + two zeroed counters),
  * emits one 0x80-qwc IPU_TO source tag per macroblock via func_003515C0
@@ -1061,9 +1061,9 @@ s32 func_003515E8(u8 *obj, u64 a, u64 b, u64 c, u64 d, u64 e) {
  * sub-object embedded at FmvStream+0x48 (type not yet recovered -> raw
  * offsets). Byte-match blocked: 8-byte-packed saves. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351660);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvStreamStartDma);
 #else
-void func_00351660(u8 *stream) {
+void FmvStreamStartDma(u8 *stream) {
     s32 i;
 
     *(s32 *)(stream + 0x44) = 1;
@@ -1293,8 +1293,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351FB0);
    saves (s0/s1/ra). Revisit with the gameplay-TU compiler.
 
    NOTE(type): `obj` is the embedded bitstream/IPU-DMA sub-object (FmvStream+0x48,
-   built by func_003515E8), the same sibling type not yet recovered for
-   func_00352058/func_00350520 — sema +0x40, retired-block count +0x10
+   built by FmvBitstreamObjInit), the same sibling type not yet recovered for
+   func_00352058/FmvPtsQueueInit — sema +0x40, retired-block count +0x10
    (in 2KB units), residual byte cursor +0x14; left u8* with raw offsets.
 
    Total elementary-stream bytes queued for the IPU, read under the object's
@@ -1349,7 +1349,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352058);
 
    NOTE(type): `obj` here is NOT a FmvStream — it is the *embedded bitstream/
    IPU-DMA sub-object* (the one a FmvStream holds at +0x48, constructed by
-   func_003515E8 and reached by the func_00352590/B0/680 forwarders via
+   FmvBitstreamObjInit and reached by the func_00352590/B0/680 forwarders via
    obj+0x48). Its own field layout (slot-ring base +0x50, ring length +0x54,
    read/write cursors +0x58/+0x5C, sector size +0x08) starts at offset 0, so it
    does not fit FmvStream (0xB8) — left u8* until that sibling type is recovered.
@@ -1463,7 +1463,7 @@ s32 func_003521B0(void *dmaq, void *cmd) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003522C0);
 
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352468);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvStreamInit);
 #else
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves. Revisit with the gameplay-TU compiler.
@@ -1472,8 +1472,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352468);
    (func_0012F738), register the five stream-event callbacks (frame-drop
    report, two DMA-add-queue pumps, retry, and the cursor snapshot), clear the
    playback FSM (func_003525D0), then build the embedded bitstream object at
-   +0x48 (func_003515E8). Always reports success. */
-s32 func_00352468(FmvStream *obj, u64 p2, u64 p3, u64 p4, u64 p5, u64 p6, u64 p7,
+   +0x48 (FmvBitstreamObjInit). Always reports success. */
+s32 FmvStreamInit(FmvStream *obj, u64 p2, u64 p3, u64 p4, u64 p5, u64 p6, u64 p7,
                   u64 p8) {
     func_0012F738();
     func_0012FA70((u8 *)obj, 0, (void *)func_00352A20, 0);
@@ -1482,7 +1482,7 @@ s32 func_00352468(FmvStream *obj, u64 p2, u64 p3, u64 p4, u64 p5, u64 p6, u64 p7
     func_0012FA70((u8 *)obj, 3, (void *)func_00352AB0, 0);
     func_0012FA70((u8 *)obj, 5, (void *)func_00352AE0, 0);
     func_003525D0(obj);
-    func_003515E8((u8 *)obj + 0x48, p4, p5, p6, p7, p8);
+    FmvBitstreamObjInit((u8 *)obj + 0x48, p4, p5, p6, p7, p8);
     return 1;
 }
 #endif
@@ -1535,16 +1535,16 @@ s32 func_003525D8(FmvStream *obj) {
 #endif
 
 #ifndef TARGET_NATIVE
-/* func_00352610: `s->state = 1; return 1;`. Blocked: the original (later
+/* FmvRequestStop: `s->state = 1; return 1;`. Blocked: the original (later
  * SN cc1) reuses ONE `li v0,1` for both the store and the return value; the
  * pinned cc1 always materialises two (same wall as text/1907F0
  * func_00290EE8, re-measured here at 63%). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352610);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvRequestStop);
 #else
 /* TODO(match): functional equivalent - not byte-exact; the later-SN cc1 reuses
    one `li v0,1` for both the store and the return; the pinned cc1 emits two.
    Request a stop: mark the playback FSM "stop" (state 1) and report accepted. */
-s32 func_00352610(FmvStream *s) {
+s32 FmvRequestStop(FmvStream *s) {
     s->state = 1;
     return 1;
 }
@@ -1635,9 +1635,9 @@ s32 func_00352780(FmvStream *obj) {
 }
 #endif
 
-/* func_003527C8: the FMV decode-thread main loop. Resets the embedded stream
- * ring (func_00351660 on obj+0x48), initialises the arena frame queue
- * (func_00352B90 at +0xD9168), primes the host frame reader (func_00352868), then
+/* FmvDecodeThreadEntry: the FMV decode-thread main loop. Resets the embedded stream
+ * ring (FmvStreamStartDma on obj+0x48), initialises the arena frame queue
+ * (func_00352B90 at +0xD9168), primes the host frame reader (FmvDisplayWorkerLoop), then
  * decodes frames (func_00352620) as long as the arena's "more data" flag
  * (+0xD9174) stays set and no frame reports completion (returns 1), and finally
  * drives the stream to its terminal state 3 (func_00352628). Matching arm stays
@@ -1645,15 +1645,15 @@ s32 func_00352780(FmvStream *obj) {
  * g_pFmvArenaBase); the #else is the structure-exact model (the frame decode
  * itself is the deferred FMV native backend, but the loop structure is exact). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003527C8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvDecodeThreadEntry);
 #else
-extern void func_00351660(u8 *stream);
-extern s32 func_00352868(u8 *host);
+extern void FmvStreamStartDma(u8 *stream);
+extern s32 FmvDisplayWorkerLoop(u8 *host);
 extern void func_00352B90(FmvFrameQueue *q);
-s32 func_003527C8(FmvStream *obj) {
-    func_00351660((u8 *)obj + 0x48);
+s32 FmvDecodeThreadEntry(FmvStream *obj) {
+    FmvStreamStartDma((u8 *)obj + 0x48);
     func_00352B90((FmvFrameQueue *)(g_pFmvArenaBase + 0xD9168));
-    func_00352868((u8 *)obj);
+    FmvDisplayWorkerLoop((u8 *)obj);
     while (*(s32 *)(g_pFmvArenaBase + 0xD9174) != 0) {
         if (func_00352620(obj) == 1) {
             break;
@@ -1664,7 +1664,7 @@ s32 func_003527C8(FmvStream *obj) {
 #endif
 
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352868);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvDisplayWorkerLoop);
 #else
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves (s0..s2/ra) plus a delay-slot %gp_rel read of the arena base mixed
@@ -1672,10 +1672,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352868);
 
    The FMV frame-display worker loop: pulls the next decoded picture from the
    host (func_0012F9A8/func_0012F950), waits (yielding) for a free display
-   slot (func_00352C30), builds the per-tile GIF display chain for each frame
-   tile (func_00350B60), commits the slot (func_00352BB8), and yields. Exits
+   slot (FmvFrameQueueGetWriteSlot), builds the per-tile GIF display chain for each frame
+   tile (func_00350B60), commits the slot (FmvFrameQueuePush), and yields. Exits
    when the host signals end-of-stream or the FSM reports stop. */
-s32 func_00352868(u8 *host) {
+s32 FmvDisplayWorkerLoop(u8 *host) {
     s32 result = 1;
 
     for (;;) {
@@ -1690,7 +1690,7 @@ s32 func_00352868(u8 *host) {
             DebugPrintStub(D_1AE820);
             break;
         }
-        while ((slot = (u8 *)func_00352C30(g_pFmvArenaBase + 0xD9168)) == 0) {
+        while ((slot = (u8 *)FmvFrameQueueGetWriteSlot(g_pFmvArenaBase + 0xD9168)) == 0) {
             func_00350100();
         }
         if (func_0012F950(host, (s32)slot, 0x340) < 0) {
@@ -1712,7 +1712,7 @@ s32 func_00352868(u8 *host) {
                 tile++;
             }
         }
-        func_00352BB8(g_pFmvArenaBase + 0xD9168);
+        FmvFrameQueuePush(g_pFmvArenaBase + 0xD9168);
         func_00350100();
     }
     func_0012F9C8(host);
@@ -1778,17 +1778,17 @@ s32 func_00352AE0(s32 unused, u8 *obj) {
 }
 #endif
 
-/* func_00352B30: initialise the decoded-frame display queue — store arg1/base/count
+/* FmvFrameQueueInit: initialise the decoded-frame display queue — store arg1/base/count
  * into the header (+0x0/+0x4/+0x10), zero +0x8/+0xC, then for each of `count`
  * 0x138C0-stride slots off `base` zero the slot's state word (+0x0) and stamp its
  * index at +0x4. Blocked: under 2.9 -G8 -fno-gcse the header stores schedule in a
  * different order than the original (sw a1,0x0 first vs the original's sw zero,0xC
  * first) — an instruction-scheduling wall. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352B30);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvFrameQueueInit);
 #else
 /* TODO(match): functional equivalent - not byte-exact; header-store scheduling. */
-void func_00352B30(s32 *rec, s32 arg1, s32 base, s32 count) {
+void FmvFrameQueueInit(s32 *rec, s32 arg1, s32 base, s32 count) {
     s32 i, off;
     rec[3] = 0;
     rec[0] = arg1;
@@ -1827,10 +1827,10 @@ s32 func_00352BA0(FmvFrameQueue *q) {
 }
 
 #ifndef TARGET_NATIVE
-/* func_00352BB8: commit the just-decoded slot (mark state 2, advance the
+/* FmvFrameQueuePush: commit the just-decoded slot (mark state 2, advance the
  * write cursor modulo capacity) under DI/EI. Blocked: 8-byte-packed saves
  * (s0@0x0, ra@0x8). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352BB8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvFrameQueuePush);
 #else
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves (s0/ra). Revisit with the gameplay-TU compiler.
@@ -1838,7 +1838,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352BB8);
    Commit the just-decoded frame slot for display, with interrupts disabled:
    mark the current write slot's state word = 2 (ready), bump the queued count,
    and advance the write cursor modulo the slot capacity. */
-void func_00352BB8(u8 *fq) {
+void FmvFrameQueuePush(u8 *fq) {
     FmvFrameQueue *q = (FmvFrameQueue *)fq;
 
     func_0011F5E0();   /* DI */
@@ -1850,16 +1850,16 @@ void func_00352BB8(u8 *fq) {
 #endif
 
 #ifndef TARGET_NATIVE
-/* func_00352C30: writable GS frame pointer (writeIdx * 0xD0000). Blocked:
+/* FmvFrameQueueGetWriteSlot: writable GS frame pointer (writeIdx * 0xD0000). Blocked:
  * 8-byte-packed saves (s0@0x0, ra@0x8). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352C30);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvFrameQueueGetWriteSlot);
 #else
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves (s0/ra). Revisit with the gameplay-TU compiler.
 
    Address of the GS frame buffer the producer may write next: 0 if the display
    queue is full, else gsFrames + writeIdx * 0xD0000 (the GS-side stride). */
-s32 func_00352C30(u8 *fq) {
+s32 FmvFrameQueueGetWriteSlot(u8 *fq) {
     FmvFrameQueue *q = (FmvFrameQueue *)fq;
 
     if (func_00352BA0(q) != 0) {
@@ -1877,9 +1877,9 @@ s32 func_00352C70(FmvFrameQueue *q) {
 }
 
 #ifndef TARGET_NATIVE
-/* func_00352C80: oldest queued decoded-frame pointer ((writeIdx - count +
+/* FmvFrameQueueGetDisplaySlot: oldest queued decoded-frame pointer ((writeIdx - count +
  * cap) % cap slot). Blocked: 8-byte-packed saves (s0@0x0, ra@0x8). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352C80);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvFrameQueueGetDisplaySlot);
 #else
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves (s0/ra). Revisit with the gameplay-TU compiler.
@@ -1887,7 +1887,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352C80);
    Address of the oldest decoded frame still queued for display: 0 if the queue
    is empty, else the frame slot at ((writeIdx - count + capacity) % capacity)
    in the 0x138C0-stride slot array. */
-s32 func_00352C80(FmvFrameQueue *q) {
+s32 FmvFrameQueueGetDisplaySlot(FmvFrameQueue *q) {
     s32 idx;
 
     if (func_00352C70(q) != 0) {

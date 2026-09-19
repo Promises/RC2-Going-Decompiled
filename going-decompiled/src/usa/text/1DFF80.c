@@ -1087,7 +1087,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", ComputeEmitterP
 #else
 extern void func_00284098(void *dst, void *mtx, void *src); /* rotate vec by mtx */
 extern void func_00283A48(void *dst, void *a, void *b);     /* vec helper        */
-extern float func_00283BF8(float x, float z);               /* atan2(x, z)       */
+extern float Atan2fPoly(float x, float z);               /* atan2(x, z)       */
 extern float Vec2LengthXyVu0(void *v);                        /* planar magnitude  */
 extern float WrapAnglePiSum(float a, float b);              /* wrap a+b to [-pi,pi]*/
 extern float WrapAnglePiDiff(float a, float b);             /* wrap a-b to [-pi,pi]*/
@@ -1105,7 +1105,7 @@ s32 ComputeEmitterPan(SoundEmitterSlot *slot, Vec4 *pos) {
     func_00284098(rot, g_cameraPos + 0x230, g_cameraPos);
     func_00283A48(dir, dir, rot);
 
-    azimuth = -func_00283BF8(dir[0], dir[1]);
+    azimuth = -Atan2fPoly(dir[0], dir[1]);
     if (azimuth < 0.0f) {
         azimuth += 6.2831855f;             /* +2pi -> [0, 2pi)              */
     }
@@ -1593,9 +1593,9 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_0
  * the sq, while cc1 keeps one base and folds +0xA0 into the store displacement
  * (addressing-distribution wall). The C is faithful. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E6D38);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", SetSoundEmitterOffset);
 #else
-s32 func_002E6D38(s32 slotIndex, u_long128 *src) {
+s32 SetSoundEmitterOffset(s32 slotIndex, u_long128 *src) {
     EmitterView *slot = EMITTER_VIEW(slotIndex);
     slot->flags |= 0x40;
     slot->quadA0 = *src;

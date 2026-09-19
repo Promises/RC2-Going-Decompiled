@@ -338,8 +338,8 @@ extern ResTableEntry D_001436C0[];
 
 extern s32 D_00137F90[];
 
-extern s32 func_0012C788(s32 *arg0, s32 arg1);
-extern s32 func_0012C878(s32 *arg0, s32 arg1);
+extern s32 IpuSkipBits(s32 *arg0, s32 arg1);
+extern s32 IpuGetBits(s32 *arg0, s32 arg1);
 extern s32 func_0012CFA0(s32 *arg0);
 
 /* func_0012E890(arg0, arg1, arg2, arg3): initialise the record at arg0 (limit
@@ -437,7 +437,7 @@ extern s32 func_0012FA98(s32 *obj, s32 *req);
 extern void func_00130240(void *buf);
 
 /* func_001307B0(obj, cmd, madr): restart the GIF/PATH3 DMA pipeline — tear down
- * sub-object 2 (func_0012FA98), flush (func_0012C3B0) and reset the GIF mode
+ * sub-object 2 (func_0012FA98), flush (IpuWaitReady) and reset the GIF mode
  * register (0x10002000=0); then with interrupts disabled program channel
  * 0x1000B400 (MADR 0x1000B410 = madr & 0x0FFFFFFF, QWC 0x1000B420 = 4, CHCR
  * 0x1000B400 = 0x101), restoring interrupts if on; finally issue IPU command
@@ -547,7 +547,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", AssertFail);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00115E68);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00115E90);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", exit_runAtexitHandlers);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00115F28);
 
@@ -611,15 +611,15 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001185E8);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00118BC0);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00118CC8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", VfprintfDispatch);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00118D98);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", VfprintfFloat);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00119AC0);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00119BC8);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00119BF8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", VfprintfInteger);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011A7F8);
 
@@ -1049,7 +1049,7 @@ void func_0011B0A0(void) {
     D_00134708 = 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011B0B0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", WaitVblankStartIntc);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011B140);
 
@@ -3924,7 +3924,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001242A0);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00124414);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001244B8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", WaitGsPathsIdle);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00124540);
 
@@ -4003,7 +4003,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001253A4);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001253A8);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00125588);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", QueryCdStatusOverRpc);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00125620);
 
@@ -4020,29 +4020,29 @@ s32 *func_00125960(void) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012596C);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00125970);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", GsDefDispEnvNeedsOffsetFix);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00125A10);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", GetGsDisplayOffsets);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00125A20);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", BuildGsDispEnv);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00125D94);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00125E54);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00125E58);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", CalcGsZbufferBasePtr);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00125F20);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", BuildGsDrawEnvPacket);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00126104);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001261F0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", WaitVblankGetField);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00126284);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012646C);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001265B0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", KickGifImageUpload);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012672C);
 
@@ -4080,7 +4080,7 @@ s32 func_00126F38(u32 arg0) {
     return 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00126F60);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", ResetDmacChannels);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00127040);
 
@@ -4546,36 +4546,36 @@ void func_0012C380(s32 *arg0, u32 cmd) {
     *(s32 *)((u8 *)arg0 + 0x818) = D_00137F90[cmd >> 28];
 }
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012C3B0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", IpuWaitReady);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012C458);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", IpuWaitCmdResult);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012C508);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012C680);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012C788);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", IpuSkipBits);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012C878);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", IpuGetBits);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012C9C8);
 
 /**
  * Run channel 5's transfer on arg0, recording its handle at arg0->field_0x1B4.
- * If channel 1 is ready (func_0012C878(arg0, 1) is non-zero) kick it off again,
- * fire channel 7 via func_0012C788 and flush through func_0012CFA0. Returns 0.
+ * If channel 1 is ready (IpuGetBits(arg0, 1) is non-zero) kick it off again,
+ * fire channel 7 via IpuSkipBits and flush through func_0012CFA0. Returns 0.
  */
 s32 func_0012CA48(s32 *arg0) {
-    arg0[0x6D] = func_0012C878(arg0, 5);
-    if (func_0012C878(arg0, 1) != 0) {
-        func_0012C878(arg0, 1);
-        func_0012C788(arg0, 7);
+    arg0[0x6D] = IpuGetBits(arg0, 5);
+    if (IpuGetBits(arg0, 1) != 0) {
+        IpuGetBits(arg0, 1);
+        IpuSkipBits(arg0, 7);
         func_0012CFA0(arg0);
     }
     return 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012CAB0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", IpuParseVideoStartCodes);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012CBC0);
 
@@ -4585,13 +4585,13 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012CDB0);
 
 /**
  * Drain object arg0: while channel 1 still reports work
- * (func_0012C878(arg0, 1) is non-zero), keep servicing channel 8 via
- * func_0012C788(arg0, 8). The trailing channel-1 poll (0 on exit) is left in
+ * (IpuGetBits(arg0, 1) is non-zero), keep servicing channel 8 via
+ * IpuSkipBits(arg0, 8). The trailing channel-1 poll (0 on exit) is left in
  * the return register; callers ignore it.
  */
 s32 func_0012CFA0(s32 *arg0) {
-    while (func_0012C878(arg0, 1) != 0) {
-        func_0012C788(arg0, 8);
+    while (IpuGetBits(arg0, 1) != 0) {
+        IpuSkipBits(arg0, 8);
     }
 }
 
@@ -4634,7 +4634,7 @@ void func_0012CFE8(struct ScrollObj *obj, s32 delta) {
     obj->extent = extent;
 }
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012D060);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", IpuParseGopHeader);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0012D100);
 
@@ -5127,21 +5127,21 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001307B0);
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00130890);
 
 /**
- * Query a batch of channel/register states via func_0012C878(obj, selector):
+ * Query a batch of channel/register states via IpuGetBits(obj, selector):
  * prime selector 3, and only if selector 1 is set, sample selector 8 three
  * times (caching the last into obj+0x144). Then cache selector 0xE into
  * obj+0x148, pulse selector 1, and cache selector 0xE again into obj+0x14C.
  */
 void func_001309C0(s32 *obj) {
-    func_0012C878(obj, 3);
-    if (func_0012C878(obj, 1) != 0) {
-        func_0012C878(obj, 8);
-        func_0012C878(obj, 8);
-        *(s32 *)((u8 *)obj + 0x144) = func_0012C878(obj, 8);
+    IpuGetBits(obj, 3);
+    if (IpuGetBits(obj, 1) != 0) {
+        IpuGetBits(obj, 8);
+        IpuGetBits(obj, 8);
+        *(s32 *)((u8 *)obj + 0x144) = IpuGetBits(obj, 8);
     }
-    *(s32 *)((u8 *)obj + 0x148) = func_0012C878(obj, 0xE);
-    func_0012C878(obj, 1);
-    *(s32 *)((u8 *)obj + 0x14C) = func_0012C878(obj, 0xE);
+    *(s32 *)((u8 *)obj + 0x148) = IpuGetBits(obj, 0xE);
+    IpuGetBits(obj, 1);
+    *(s32 *)((u8 *)obj + 0x14C) = IpuGetBits(obj, 0xE);
 }
 
 extern u8 D_0013BED8[];
@@ -5400,7 +5400,7 @@ typedef struct SectionHeader {
 
 extern u8 *g_pLoadedSegment;
 
-/* func_00131D18 = InstallLoadedOverlay (USA 0x00131CB8): relocate/install the
+/* InstallLoadedOverlay (USA 0x00131CB8): relocate/install the
  * freshly loaded overlay segment pointed to by g_pLoadedSegment (EU data symbol
  * D_001A7308). The segment's first word is the byte offset to the first section
  * header; from there it walks consecutive 16-byte section headers, copying each
@@ -5417,9 +5417,9 @@ extern u8 *g_pLoadedSegment;
  * expressible from C source. The portable #else below is the functionally-
  * faithful rendering (cmp-oracle'd against the .s on real R5900). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00131D18);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", InstallLoadedOverlay);
 #else
-s32 func_00131D18(void) {
+s32 InstallLoadedOverlay(void) {
     u8 *base = g_pLoadedSegment;
     SectionHeader *hdr = (SectionHeader *)(base + *(s32 *)base);
     s32 key = 0;
@@ -5465,18 +5465,18 @@ s32 func_00131D18(void) {
 #endif
 
 extern void LoadLevelAndInitHealth(void);
-extern s32 func_00131D18(void);
+extern s32 InstallLoadedOverlay(void);
 
 /* func_00131DF8 = main (USA 0x00131D98): the game's top-level loop. Runs the
  * one-shot init func_0011FC48 once, then loops forever: call the current stage
  * routine (initially the level loader LoadLevelAndInitHealth), install the
- * overlay segment it loaded (func_00131D18 = InstallLoadedOverlay) and adopt
+ * overlay segment it loaded (InstallLoadedOverlay) and adopt
  * that call's returned id as the next stage routine to run, then pump the frame
  * twice via func_0011AEA0 (modes 0 and 2). Never returns.
  *
  * NEAR-MISS, kept as INCLUDE_ASM for the matching build (#ifndef TARGET_NATIVE):
  * the body is otherwise byte-exact, but the original fills the first
- * func_0011AEA0(0) call's delay slot with the func_00131D18-return capture
+ * func_0011AEA0(0) call's delay slot with the InstallLoadedOverlay-return capture
  * (`move s0,v0`) and emits the `a0=0` arg setup standalone, whereas ee-gcc fills
  * that delay slot with the closest arg setup (`a0=0`). That is a delay-slot
  * filler tie-break no C statement ordering can change. The portable #else below
@@ -5495,7 +5495,7 @@ void GameMain(void) {
     stage = LoadLevelAndInitHealth;
     for (;;) {
         stage();
-        stage = (void (*)(void))func_00131D18();
+        stage = (void (*)(void))InstallLoadedOverlay();
         func_0011AEA0(0);
         func_0011AEA0(2);
     }

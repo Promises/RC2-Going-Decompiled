@@ -982,9 +982,9 @@ extern s32 func_002835E0(s32 v); /* abs(s32) */
  * LoadLevelAndInitHealth and by InitLoadingSceneSystem. The matching build
  * keeps the asm (save-layout wall). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00292650);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BuildUiTextureDescriptors);
 #else
-void func_00292650(s32 *descTable, s32 count) {
+void BuildUiTextureDescriptors(s32 *descTable, s32 count) {
     s32 i;
     g_uiTextureCount = 0;
     for (i = 0; i < count; i++) {
@@ -1462,9 +1462,9 @@ extern void *g_hudTextureSlots;
 extern void *DebugMalloc(s32 size, s32 arg2, void *file, s32 line);
 extern void CopyQwords(void *dst, const void *src, s32 nbytes);
 extern s32  UploadDataToIopRing(void *eeAddr, s32 sizeQw, s32 arg3, void *tag);
-extern void func_002933D0(s32 slot, u8 *dest);
-extern void func_0028BBA0(s32 a, void *b, s32 c);
-extern void func_0028B8C8(s32 a, void *b);
+extern void DecompressHudBankWad(s32 slot, u8 *dest);
+extern void UploadHudBankTextures(s32 a, void *b, s32 c);
+extern void RelocateHudBankGsSlots(s32 a, void *b);
 extern void func_0011AEA0(s32 a);
 extern u8 D_1A91F0[];  /* "loaders.cpp" debug __FILE__ string */
 extern u8 D_1A9200[];  /* per-bank IOP-upload debug tag strings */
@@ -1490,9 +1490,9 @@ extern u8 D_1A9230[];
  *    g_memoryArenaTable[0x10] + 0x60000 is the fixed IOP staging address.
  *  - Bank 0 (gate header[0x54]): decompress slot 0 into iopBase, DMA
  *    seg+seg[0x20] (round64(seg[0x24])/16 qwords) to the IOP ring tagged
- *    D_1A9200, record the GS handle at header+0x94, run func_0028BBA0.
+ *    D_1A9200, record the GS handle at header+0x94, run UploadHudBankTextures.
  *  - Bank 1 (gate header[0x58]): DebugMalloc a scratch buffer sized header[0x58],
- *    decompress slot 1 into it, run func_0011AEA0(0) + func_0028B8C8; no upload.
+ *    decompress slot 1 into it, run func_0011AEA0(0) + RelocateHudBankGsSlots; no upload.
  *  - Banks 2-4 (gates header[0x5C]/[0x60]/[0x64]): DMA seg sections
  *    0x30/0x34, 0x38/0x3C, 0x40/0x44 to the ring (tags D_1A9210/20/30),
  *    recording GS handles at header +0x9C/+0xA0/+0xA4.
@@ -1532,20 +1532,20 @@ void ParseLoadedSegment(void) {
     /* Bank 0. */
     if (*(s32 *)(header + 0x54) != 0) {
         sizeQw = ((*(s32 *)(seg + 0x24) + 0x3F) & 0xFFFFFFC0) >> 4;
-        func_002933D0(0, iopBase);
+        DecompressHudBankWad(0, iopBase);
         *(s32 *)(g_pHudAssetHeader + 0x94) =
             UploadDataToIopRing((void *)(*(s32 *)(seg + 0x20) + seg),
                                 sizeQw, sizeQw, D_1A9200);
-        func_0028BBA0(0, iopBase, 1);
+        UploadHudBankTextures(0, iopBase, 1);
     }
 
     /* Bank 1 (scratch decompress, no upload). */
     header = g_pHudAssetHeader;
     if (*(s32 *)(header + 0x58) != 0) {
         u8 *buf = (u8 *)DebugMalloc(*(s32 *)(header + 0x58), 0, D_1A91F0, 0x32D);
-        func_002933D0(1, buf);
+        DecompressHudBankWad(1, buf);
         func_0011AEA0(0);
-        func_0028B8C8(1, buf);
+        RelocateHudBankGsSlots(1, buf);
     }
 
     /* Bank 2. */
@@ -1586,10 +1586,10 @@ extern void DecompressWad(void *src, void *dest);
 /* TODO(match): functional equivalent - not byte-exact; save-layout wall (saves
  * s0+ra -> pinned cc1 reserves a 0x20 frame vs the original's 0x10). Body is
  * byte-identical apart from the frame size + ra slot offset. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002933D0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", DecompressHudBankWad);
 #else
 /*
- * func_002933D0 (DecompressHudBankWad) — decompress one HUD-asset-slot WAD chunk
+ * DecompressHudBankWad (DecompressHudBankWad) — decompress one HUD-asset-slot WAD chunk
  * from the loaded segment into a caller-supplied destination buffer, then clear
  * the slot's reloc-status word.
  *   slot — HUD asset slot index.
@@ -1606,7 +1606,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002933D0);
  * earlier "byteLen" reading was wrong and made the #else drop $5 -> a wild
  * decompress write that poisoned the live 0x754000 segment.)
  */
-void func_002933D0(s32 slot, u8 *dest) {
+void DecompressHudBankWad(s32 slot, u8 *dest) {
     dest = (u8 *)(((s32)dest + 0xF) & 0xFFFFFFF0);
     if (dest != 0) {
         u8 *seg = g_pLoadedSegment;
@@ -3268,7 +3268,7 @@ void func_00295478(s32 classId, void *dest) {
  *
  * Reserves a VRAM region from g_vramAllocCursor (a 0x400-byte header page plus
  * 2^(log2W+log2H) for the texel data), builds the 64-bit GS TEX0 register for it
- * (same packing as func_00295630: TBP0 = cursor2>>8, TBW/TW/TH from the log2
+ * (same packing as QueueGsTextureUpload: TBP0 = cursor2>>8, TBW/TW/TH from the log2
  * dims, plus the fixed 0x1300000 / 0x8000<<19 / sign bits), and — when the
  * upload queue has room (<0x40) — appends a descriptor to g_texUploadQueue
  * (source at desc+0x20, dest at desc+0x420, both VRAM cursors, and the log2
@@ -3319,10 +3319,10 @@ u64 func_002954F0(void *descArg) {
  * where the original emits a single `dsll`/`dsll32`, plus the gp_rel/absolute
  * divergence on g_texUploadCount (-G8 small-data vs original absolute lui/%lo).
  * Pure scalar GS-register packing; semantics verified against the asm. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00295630);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", QueueGsTextureUpload);
 #else
 /*
- * func_00295630 — build a GS texture-register word from the texel-format fields
+ * QueueGsTextureUpload — build a GS texture-register word from the texel-format fields
  * and, if the upload queue has room (< 0x40 entries), append a 0x10-byte
  * descriptor to g_texUploadQueue. The 64-bit word packs the width-log2 (clamped
  * so the shift floor is 6), the source address (a0<<26 | 0x1300000 base), the
@@ -3333,7 +3333,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00295630);
  */
 extern s32 g_texUploadQueue[];
 extern s32 g_texUploadCount;
-u64 func_00295630(s32 a0, s32 a1, s32 a2, s32 a3, s32 a4, s32 a5) {
+u64 QueueGsTextureUpload(s32 a0, s32 a1, s32 a2, s32 a3, s32 a4, s32 a5) {
     s32 shift = (a0 < 6) ? 0 : (a0 - 6);
     u64 packed = (u64)(u32)(a5 >> 8)
                | ((u64)(u32)(1 << shift) << 14)
@@ -3438,22 +3438,22 @@ s32 func_00295F30(s32 fromEnd) {
     return -1;
 }
 
-/* func_00295F98 (MapPromoteCacheSlot) — pick a usable galactic-map cache slot
+/* MapAllocCacheSlot (MapPromoteCacheSlot) — pick a usable galactic-map cache slot
  * and move it to slot 0. First tries func_00295F30(1) (a slot with state set +
  * id -1); if that returns nonzero it is the answer. Otherwise scans slots 1..4
  * for the first occupied slot (slotState != 0) whose level id lacks bit 0x1000,
- * relocates it into slot 0 (func_00296038) and returns its index (or 5 if none).
+ * relocates it into slot 0 (MapMoveCacheSlot) and returns its index (or 5 if none).
  * #else body is in the map-cache slice below (needs the MapCache type +
- * func_00296038); the INCLUDE_ASM stays here in address order. */
+ * MapMoveCacheSlot); the INCLUDE_ASM stays here in address order. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00295F98);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapAllocCacheSlot);
 #endif
 
-/* func_00296038 (MapMoveCacheSlot) — relocate a galactic-map cache slot's
+/* MapMoveCacheSlot (MapMoveCacheSlot) — relocate a galactic-map cache slot's
  * contents src -> dst; the portable #else body lives in the galactic-map cache
  * slice below (after the MapCache struct it depends on). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00296038);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapMoveCacheSlot);
 #endif
 
 /*
@@ -3524,7 +3524,7 @@ s32 MapUpdateLevelAvailability(void);
 extern s32 func_002835E0(s32 x);     /* integer abs() (text/183558) */
 
 /*
- * func_00296038(dst, src) — MapMoveCacheSlot: relocate a galactic-map cache
+ * MapMoveCacheSlot(dst, src) — MapMoveCacheSlot: relocate a galactic-map cache
  * slot's contents from `src` to `dst`. Copies the pixel-data buffer
  * (slotState[src] -> slotState[dst], slotPixelCount[src] qwords via CopyQwords),
  * carries the slot's level id and pixel-count across, and frees the source slot
@@ -3536,7 +3536,7 @@ extern s32 func_002835E0(s32 x);     /* integer abs() (text/183558) */
  * #else body (placed here so it follows the MapCache type it reads).
  */
 extern void CopyQwords(void *dst, const void *src, s32 nbytes);
-void func_00296038(s32 dst, s32 src) {
+void MapMoveCacheSlot(s32 dst, s32 src) {
     CopyQwords((void *)g_mapCache.slotState[dst],
                (const void *)g_mapCache.slotState[src],
                g_mapCache.slotPixelCount[src] << 4);
@@ -3545,9 +3545,9 @@ void func_00296038(s32 dst, s32 src) {
     g_mapCache.slotLevelId[src]    = -1;
 }
 
-/* func_00295F98 #else body — placed here so it follows the MapCache type and
- * func_00296038 it depends on (its INCLUDE_ASM stays in address order above). */
-s32 func_00295F98(void) {
+/* MapAllocCacheSlot #else body — placed here so it follows the MapCache type and
+ * MapMoveCacheSlot it depends on (its INCLUDE_ASM stays in address order above). */
+s32 MapAllocCacheSlot(void) {
     s32 slot = func_00295F30(1);
     s32 i;
 
@@ -3559,7 +3559,7 @@ s32 func_00295F98(void) {
             break;
         }
     }
-    func_00296038(0, i);
+    MapMoveCacheSlot(0, i);
     return i;
 }
 #endif

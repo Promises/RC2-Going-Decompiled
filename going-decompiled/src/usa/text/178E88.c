@@ -96,7 +96,7 @@ extern void RenderSaveLoadStatusPopup(void);
  * The real fn takes SEVEN args: the five int slots, the glyph-metrics table
  * (D_263B10, passed in $9 on the 0x280B48 path), then the f32 scale — sig
  * recovered 2026-07-06 (fable, promo-d3 @4cb6be7). The portable #else chain
- * had DROPPED the glyph-table arg (func_00348DA0 dropped-arg class), running
+ * had DROPPED the glyph-table arg (GuiMenuListSetRows dropped-arg class), running
  * native text draws through a garbage font table; the TARGET_NATIVE prototype
  * below carries it. The matching build never calls this in C (func_00280B20's
  * matching arm is INCLUDE_ASM), so its prototype text is left untouched. */

@@ -28,7 +28,7 @@
 extern s32 snd_QueueCommandToRing(s32 sel, s32 count, void *data, s32 arg3, s32 arg4);
 extern s32 snd_SendCommandSync(s32 arg0, s32 arg1, void *arg2);
 extern s32 snd_Pump(void);
-extern s32 func_00125588(void);
+extern s32 QueryCdStatusOverRpc(void);
 extern s32 func_00125620(void);
 extern void *func_001245D0(void *arg0);
 
@@ -85,7 +85,7 @@ extern char  D_0013C020[];/* RPC completion-mismatch diagnostic (USA D_0013BFA0)
 extern void  func_0011B3D0(void *start, void *end); /* writeback/flush a small range */
 
 /* CD-read / IOP-readiness globals + callees used by the EU-lockstep #else bodies
- * below (func_00133280..func_001336E8 + snd_CheckLoadInProgress). EU data = USA
+ * below (func_00133280..CdGetLoadStatus + snd_CheckLoadInProgress). EU data = USA
  * + 0x80. NB: EU D_001A7180 here (= USA D_001A7100, the IOP-polled load status)
  * is a DISTINCT symbol from D_001A7200 above (= USA D_001A7180). */
 extern s32   D_001A7180;  /* IOP-polled load status word (USA D_001A7100, 0 = done) */
@@ -833,20 +833,20 @@ void func_001334F0(s32 arg0) {
     snd_SendCommandSync(0x36, 4, &value);
 }
 
-/* func_00133518 (= USA CdStartRead): queue ring command 0x38 (start read) with a
+/* CdStartRead (= USA CdStartRead): queue ring command 0x38 (start read) with a
  * 3-word record when the IOP driver is up, else fall back to func_001253A8.
  * Blocked by the multi-callee-save save-slot wall plus the D_001A7180/D_001A7190
  * $at-macro absolute stores (cc1-small / assembler-absolute disagreement)
  * (near-miss). Portable #else body (EU lockstep with USA CdStartRead; data
  * globals +0x80). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", func_00133518);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", CdStartRead);
 #else
 /* rmode is not used by the ring-command path — it exists only to be forwarded to
  * sceCdRead. Naming it is what makes that forwarding a CONTRACT: the ROM passes
  * $4-$7 straight through, and every caller (EU 0x002B871C / 0x002B8810 / the
  * asm-only CdReadSync at 0x00133AA8) supplies a real sceCdRMode* in $7. */
-s32 func_00133518(s32 arg0, s32 arg1, s32 arg2, void *rmode) {
+s32 CdStartRead(s32 arg0, s32 arg1, s32 arg2, void *rmode) {
     s32 cmd[3]; /* the three command words for the 0x38 read request */
 
     if (D_001A750C == 0) {
@@ -915,16 +915,16 @@ s32 func_001336A0(void) {
     return func_00125620();
 }
 
-/* func_001336E8 (= USA CdGetLoadStatus): return the cached EE-side load status
- * D_001A7190 when the IOP driver is up, else fall back to func_00125588. Blocked
+/* CdGetLoadStatus (= USA CdGetLoadStatus): return the cached EE-side load status
+ * D_001A7190 when the IOP driver is up, else fall back to QueryCdStatusOverRpc. Blocked
  * by a symbolic-lw-macro absolute expansion the GNU cc1 won't schedule correctly
  * (near-miss). Portable #else body (EU lockstep with USA CdGetLoadStatus). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", func_001336E8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", CdGetLoadStatus);
 #else
-s32 func_001336E8(void) {
+s32 CdGetLoadStatus(void) {
     if (D_001A750C == 0) {
-        return func_00125588(); /* IOP driver down -> libcdvd status via RPC */
+        return QueryCdStatusOverRpc(); /* IOP driver down -> libcdvd status via RPC */
     }
     return D_001A7190;
 }
@@ -1108,7 +1108,7 @@ s32 func_001339E8(s32 x) {
 }
 #endif
 
-/* func_00133A10 (= USA OnVblankInterrupt): bumps the 64-bit tick counter and
+/* OnVblankInterrupt (= USA OnVblankInterrupt): bumps the 64-bit tick counter and
  * snapshots the T1_COUNT timer; a timer-address `ori` scheduling residue this
  * cc1 won't reproduce. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", func_00133A10);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/0321A0", OnVblankInterrupt);

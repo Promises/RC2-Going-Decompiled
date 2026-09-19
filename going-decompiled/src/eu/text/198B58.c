@@ -100,11 +100,11 @@ extern s32 func_0034B088(void *widget);
 extern s32 UpdatePopupMenu(void *popup, s32 arg);
 extern s32 func_00349AB8(void *widget);
 extern s32 func_00348728(void *widget);
-extern s32 func_00348DF8(void *widget, s32 arg);
-extern s32 func_003480C8(void *widget, s32 arg0, s32 arg1);
-extern s32 func_0033B218(void *widget, s32 arg);
-extern s32 func_0033B4B8(void *widget);
-extern s32 func_0033BE50(void *widget, s32 arg);
+extern s32 GuiWeaponGridTick(void *widget, s32 arg);
+extern s32 GuiMapScreenTick(void *widget, s32 arg0, s32 arg1);
+extern s32 GuiConfirmPopupTick(void *widget, s32 arg);
+extern s32 GuiConfirmPopupDraw(void *widget);
+extern s32 GuiLevelInfoPanelTick(void *widget, s32 arg);
 extern s32 func_0033C308(void *widget);
 extern s32 func_0033D838(void *widget);
 extern s32 func_0033D468(void *widget, s32 arg);
@@ -143,7 +143,7 @@ extern s32 func_00343FA0(void *widget);
 extern s32 UpdateBoltCounterHud(void);
 extern s32 func_0028B038(void);
 extern s32 func_0034F060(void *widget, s32 value);
-extern s32 func_00341C18(void *widget, s32 arg);
+extern s32 GuiQuickSelectWheelTick(void *widget, s32 arg);
 extern s32 func_003422D0(void *widget);
 extern s32 func_0033A4A0(void *widget, s32 arg0, s32 arg1, s32 arg2);
 extern s32 func_0033A528(void *widget, s32 arg0, s32 arg1);
@@ -936,7 +936,7 @@ s32 CalcSaveSectionsSize(SaveSection *table) {
     return size + 8;
 }
 
-/* func_0029B848 — CRC-16 over the save buffer (EU twin of USA func_0029BCA0).
+/* ComputeSaveSectionsCrc16 — CRC-16 over the save buffer (EU twin of USA func_0029BCA0).
  * Returns 0 if `len` exceeds the global save-section size. Otherwise runs a
  * bit-at-a-time CRC-16 over `len` bytes: seed 0xEDB88320, feedback poly 0x1F45 on
  * bit 15 — each byte XORed into the accumulator's high byte, then 8 shift/xor
@@ -945,10 +945,10 @@ s32 CalcSaveSectionsSize(SaveSection *table) {
  * Word-verified vs USA func_0029BCA0: CalcSaveSectionsSize + g_saveSectionTableGlobal
  * kept (named) — no region deltas. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_0029B848);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", ComputeSaveSectionsCrc16);
 #else
 extern SaveSection g_saveSectionTableGlobal[];
-s32 func_0029B848(void *buf, s32 len) {
+s32 ComputeSaveSectionsCrc16(void *buf, s32 len) {
     u8 *data = (u8 *)buf;
     u8 *end;
     u32 crc;
@@ -974,7 +974,7 @@ s32 func_0029B848(void *buf, s32 len) {
 }
 #endif
 
-extern s32 func_0029B848(void *buf, s32 len); /* EU ComputeSaveSectionsCrc16 */
+extern s32 ComputeSaveSectionsCrc16(void *buf, s32 len); /* EU ComputeSaveSectionsCrc16 */
 #ifdef TARGET_NATIVE
 extern void FillMemory32(void *dst, s32 pattern, s32 nbytes);
 #endif
@@ -982,22 +982,22 @@ extern void FillMemory32(void *dst, s32 pattern, s32 nbytes);
  * (file-scope from there onward, covering the later users); the duplicate
  * file-scope decl that stood here was removed. */
 
-/* func_0029B8F0(image): EU twin of USA func_0029BD48/VerifySaveHeaderChecksum.
+/* VerifySaveHeaderChecksum(image): EU twin of USA func_0029BD48/VerifySaveHeaderChecksum.
  * The image header is { s32 payloadLen; s32 storedCrc; payload[payloadLen] };
- * recompute the CRC (func_0029B848 from image+8 over payloadLen) and return 1
+ * recompute the CRC (ComputeSaveSectionsCrc16 from image+8 over payloadLen) and return 1
  * iff it equals the stored CRC. Stored CRC 0 -> empty/invalid -> 0.
  *
  * WALLED at the byte level by the 8-byte-packed callee-save frame (see
  * project_matching_ceiling); the portable #else mirrors the USA body. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_0029B8F0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", VerifySaveHeaderChecksum);
 #else
-s32 func_0029B8F0(void *image) {
+s32 VerifySaveHeaderChecksum(void *image) {
     s32 storedCrc = ((s32 *)image)[1];
     if (storedCrc == 0) {
         return 0;
     }
-    return func_0029B848((char *)image + 8, ((s32 *)image)[0]) == storedCrc;
+    return ComputeSaveSectionsCrc16((char *)image + 8, ((s32 *)image)[0]) == storedCrc;
 }
 #endif
 
@@ -1006,7 +1006,7 @@ s32 func_0029B8F0(void *image) {
  * emits an 8-byte header { tag, len } then `len` payload bytes (4-byte aligned);
  * tag 0x1770 zero-fills (FillMemory32), else memcpy (func_00283370) from
  * srcPtr+len*slot. Closes with a { -1, 0 } terminator and stores the payload CRC
- * (func_0029B848) in the header. Returns the total image size (payloadLen + 8).
+ * (ComputeSaveSectionsCrc16) in the header. Returns the total image size (payloadLen + 8).
  *
  * WALLED at the byte level by the 8-byte-packed callee-save frame (8 saved regs;
  * see project_matching_ceiling). Portable #else mirrors the USA body (logic +
@@ -1041,26 +1041,26 @@ s32 SerializeSaveSections(void *dst, s32 slot, SaveSection *table) {
     size += 8;
     cursor[1] = 0;
     cursor[0] = -1;
-    ((s32 *)dst)[1] = func_0029B848((char *)dst + 8, size);
+    ((s32 *)dst)[1] = ComputeSaveSectionsCrc16((char *)dst + 8, size);
     ((s32 *)dst)[0] = size;
     return size + 8;
 }
 #endif
 
-/* func_0029BA48 — fill one save-slot info-display entry (EU twin of USA
+/* FillSaveSlotInfo — fill one save-slot info-display entry (EU twin of USA
  * func_0029BEA0/FillSaveSlotInfo). Entry is D_139460 + slot*0xA0 + dir*0x1C.
  * Copies the verified header image's slot metadata (rec +0x10/+0x1C/+0x2E/+0x64 ->
  * entry +0x30/+0x34/+0x38/+0x3C) plus an unaligned 8-byte block (rec+0x70 ->
- * entry+0x40), and stores whether the image CRC is invalid (func_0029B8F0 == 0)
+ * entry+0x40), and stores whether the image CRC is invalid (VerifySaveHeaderChecksum == 0)
  * at entry+0x48. Matching arm stays INCLUDE_ASM; #else is the structure model.
- * Word-verified vs USA func_0029BEA0: func_0029BD48 -> func_0029B8F0 (CRC verify,
+ * Word-verified vs USA func_0029BEA0: func_0029BD48 -> VerifySaveHeaderChecksum (CRC verify,
  * defined above at file scope); g_areaTable -> (u8*)&D_139460. All rec/entry byte
  * offsets identical to the twin (confirmed in the EU .s). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_0029BA48);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", FillSaveSlotInfo);
 #else
-void func_0029BA48(u8 *rec, s32 slot, s32 dir) {
-    s32 crcValid = func_0029B8F0(rec);
+void FillSaveSlotInfo(u8 *rec, s32 slot, s32 dir) {
+    s32 crcValid = VerifySaveHeaderChecksum(rec);
     u8 *entry = (u8 *)&D_139460 + slot * 0xA0 + dir * 0x1C;
 
     *(s32 *)(entry + 0x48) = (crcValid == 0);
@@ -1099,7 +1099,7 @@ s32 DeserializeSaveSections(void *image, s32 slotMul, SaveSection *table) {
     s32 sentinel;
     SaveSection *entry;
 
-    if (func_0029B8F0(image) == 0) {
+    if (VerifySaveHeaderChecksum(image) == 0) {
         return 1;
     }
 
@@ -1725,47 +1725,47 @@ s32 func_0029CB70(void) {
     }
 }
 
-/** Forward `arg` to the widget at g_guiInstance+0x39620 (method func_00348DF8);
+/** Forward `arg` to the widget at g_guiInstance+0x39620 (method GuiWeaponGridTick);
  *  0 when the GUI is down. */
 s32 func_0029CBA0(s32 arg) {
     if (g_guiInstance == 0) {
         return 0;
     }
-    return func_00348DF8(g_guiInstance + 0x39620, arg);
+    return GuiWeaponGridTick(g_guiInstance + 0x39620, arg);
 }
 
 /** Forward two args to the widget at g_guiInstance+0x39AF0 (method
- *  func_003480C8); 0 when the GUI is down. */
+ *  GuiMapScreenTick); 0 when the GUI is down. */
 s32 func_0029CBE0(s32 arg0, s32 arg1) {
     if (g_guiInstance == 0) {
         return 0;
     }
-    return func_003480C8(g_guiInstance + 0x39BA0, arg0, arg1);
+    return GuiMapScreenTick(g_guiInstance + 0x39BA0, arg0, arg1);
 }
 
-/** Forward `arg` to the widget at g_guiInstance+0x3B418 (method func_0033B218);
+/** Forward `arg` to the widget at g_guiInstance+0x3B418 (method GuiConfirmPopupTick);
  *  0 when the GUI is down. */
 s32 func_0029CC28(s32 arg) {
     if (g_guiInstance == 0) {
         return 0;
     }
-    return func_0033B218(g_guiInstance + 0x3B4C8, arg);
+    return GuiConfirmPopupTick(g_guiInstance + 0x3B4C8, arg);
 }
 
-/** Forward to the widget at g_guiInstance+0x3B418 (method func_0033B4B8). */
+/** Forward to the widget at g_guiInstance+0x3B418 (method GuiConfirmPopupDraw). */
 s32 func_0029CC68(void) {
     if (g_guiInstance != 0) {
-        return func_0033B4B8(g_guiInstance + 0x3B4C8);
+        return GuiConfirmPopupDraw(g_guiInstance + 0x3B4C8);
     }
 }
 
-/** Forward `arg` to the widget at g_guiInstance+0x3AF80 (method func_0033BE50);
+/** Forward `arg` to the widget at g_guiInstance+0x3AF80 (method GuiLevelInfoPanelTick);
  *  0 when the GUI is down. */
 s32 func_0029CC98(s32 arg) {
     if (g_guiInstance == 0) {
         return 0;
     }
-    return func_0033BE50(g_guiInstance + 0x3B030, arg);
+    return GuiLevelInfoPanelTick(g_guiInstance + 0x3B030, arg);
 }
 
 /** Forward to the widget at g_guiInstance+0x3AF80 (method func_0033C308). */
@@ -2089,13 +2089,13 @@ s32 FlushHudDisplayValue(s32 value) {
     }
 }
 
-/** Forward `arg` to the widget at g_guiInstance+0x3A4C0 (method func_00341C18);
+/** Forward `arg` to the widget at g_guiInstance+0x3A4C0 (method GuiQuickSelectWheelTick);
  *  0 when the GUI is down. */
 s32 func_0029D578(s32 arg) {
     if (g_guiInstance == 0) {
         return 0;
     }
-    return func_00341C18(g_guiInstance + 0x3A570, arg);
+    return GuiQuickSelectWheelTick(g_guiInstance + 0x3A570, arg);
 }
 
 /** Forward to the widget at g_guiInstance+0x3A4C0 (method func_003422D0). */
@@ -2216,15 +2216,15 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_0029D910);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_0029D948);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_0029D9E8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", EnableDmacChannels);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_0029DA78);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", FlushPendingTexUploads);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_0029DBF0);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_0029DD30);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_0029DE68);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", DecompressWad);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_0029E138);
 
@@ -2644,25 +2644,25 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_0029E840);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_0029F958);
 
-/* func_0029F968 — EU twin of USA SpawnMoby: allocate + initialise a moby from
+/* SpawnMoby — EU twin of USA SpawnMoby: allocate + initialise a moby from
  * the spawn free-list. Scans the moby table [start..end) (stride 0x100) for a
  * free/dead slot (state +0x20 >= 0xFE) whose reuse timer (+0xA0) has elapsed
  * (g_gameTime >= it). On a hit: stamps +0x120 when fully dead (0xFF), inits it
- * from classId via func_0029FA60, binds+zero-fills its 0x80 aux block, decrements
+ * from classId via InitMobyFromClass, binds+zero-fills its 0x80 aux block, decrements
  * the spawn credit, and returns the moby. Returns NULL (debug print) when full.
  * Matching arm stays INCLUDE_ASM; #else is the structure model.
  * Word-verified vs USA SpawnMoby: g_mobySpawnStart->&g_nBoltCounterDisplayed+0x218,
  * g_mobyTableEnd->+0x21C, g_mobyAuxBlockBase->+0x224, g_mobySpawnCredit->+0x138,
  * g_gameTime->&g_nLevelExitDestination+0x8, D_1A9DC8->D_1A9E48 (+0x80),
- * InitMobyFromClass->func_0029FA60, DebugPrintStub->func_0026FD28. */
+ * InitMobyFromClass->InitMobyFromClass, DebugPrintStub->func_0026FD28. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_0029F968);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", SpawnMoby);
 #else
 extern s32  g_nLevelExitDestination;  /* g_gameTime sits at +0x8 (EU anchor) */
 extern char D_1A9E48[];               /* "moby table full" debug string (USA D_1A9DC8, +0x80) */
-extern void func_0029FA60(void *moby, s32 classId);  /* InitMobyFromClass twin */
+extern void InitMobyFromClass(void *moby, s32 classId);  /* InitMobyFromClass twin */
 
-void *func_0029F968(s32 classId) {
+void *SpawnMoby(s32 classId) {
     u8 *moby = *(u8 **)((char *)&g_nBoltCounterDisplayed + 0x218);
     u8 *end  = *(u8 **)((char *)&g_nBoltCounterDisplayed + 0x21C);
 
@@ -2673,7 +2673,7 @@ void *func_0029F968(s32 classId) {
             if (state == 0xFF) {
                 moby[0x120] = 0xFF;
             }
-            func_0029FA60(moby, classId);
+            InitMobyFromClass(moby, classId);
             {
                 s32 slot = (s32)(moby - *(u8 **)((char *)&g_nBoltCounterDisplayed + 0x218)) >> 8;
                 u8 *aux = *(u8 **)((char *)&g_nBoltCounterDisplayed + 0x224) + slot * 0x80;
@@ -2695,7 +2695,7 @@ void *func_0029F968(s32 classId) {
 }
 #endif
 
-/* func_0029FA60 — EU twin of USA InitMobyFromClass: zero-fills a moby's 0x100-byte
+/* InitMobyFromClass — EU twin of USA InitMobyFromClass: zero-fills a moby's 0x100-byte
  * state (FillMemory32) and binds it to a class. Stamps the spawn-path defaults
  * (classSlot +0x22, alpha +0x23, tint qword +0x38, uid +0xAC, classId +0xAA, the
  * 0x7F/0x80 colour bytes, 1.0 anim rates +0x48/+0x4C). Validates the slot through
@@ -2714,15 +2714,15 @@ void *func_0029F968(s32 classId) {
  * +0x9300, g_mobyClassSlotToId->+0x9120, g_mobyClassUpdateFuncs->+0x8D60,
  * g_mobyClassHeaders->+0x89A0, g_mobyClassUpdateFuncsNoHeader->&D_001D009D+0x443,
  * g_mobyTableBase->&g_nBoltCounterDisplayed+0x214, ResolveMobyAnimFramePtrs->
- * func_0029FD50, FillMemory32 kept. */
+ * ResolveMobyAnimFramePtrs, FillMemory32 kept. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", func_0029FA60);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/198B58", InitMobyFromClass);
 #else
 extern u8   g_mapTextureWidth;          /* EU anchor for the moby-class binding tables */
 extern u8   D_001D009D;                 /* EU anchor for the headerless pUpdate table */
-extern void func_0029FD50(void *moby);  /* ResolveMobyAnimFramePtrs twin */
+extern void ResolveMobyAnimFramePtrs(void *moby);  /* ResolveMobyAnimFramePtrs twin */
 
-void func_0029FA60(void *moby, s32 classId) {
+void InitMobyFromClass(void *moby, s32 classId) {
     u8   *m         = (u8 *)moby;
     u8   *slotRemap = (u8   *)((char *)&g_mapTextureWidth + 0x9300); /* classId -> slot */
     s16  *slotToId  = (s16  *)((char *)&g_mapTextureWidth + 0x9120); /* slot -> classId */
@@ -2808,7 +2808,7 @@ void func_0029FA60(void *moby, s32 classId) {
     pc = *(u8 **)(m + 0x24);
     animSet = *(void **)(pc + 0x48);
     if (animSet != 0) {
-        func_0029FD50(m);
+        ResolveMobyAnimFramePtrs(m);
         pc = *(u8 **)(m + 0x24);
         animSet = *(void **)(pc + 0x48);
         if (*(u8 *)((u8 *)animSet + 0x10) >= 2) {

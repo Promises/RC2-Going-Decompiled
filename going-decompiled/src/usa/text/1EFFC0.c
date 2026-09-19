@@ -557,7 +557,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_0
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", PlayLevelCinematic);
 
 /* TODO(match): functional equivalent pending - level (re)spawn/restore: camera proj + moby free loop + fade; many callee-saves + lq/sq. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6600);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", ExitCinematicSceneTeardown);
 
 /* TODO(hle): needs PS2 graphics/IO HLE backend - tie draw-pipeline frame-stack sliver (spimdisasm fragment). */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6940);
@@ -611,7 +611,7 @@ s32 func_002F6B68(void) {
  * instruction-identical; kept as the portable #else impl.
  *
  * ORACLE STATUS (this cinematic cluster - func_002F6B98 / func_002F6C78 /
- * func_002F6D50): OUT-OF-SCOPE, tester-classified. They drive a live-cinematic
+ * EnterCinematicBeginPlayback): OUT-OF-SCOPE, tester-classified. They drive a live-cinematic
  * scene-params block (g_cinematicSceneParams) that is not effect-diffable in the
  * tester's harness, and depend on disc-asset / queue state not seedable headless.
  * NOT a coverage gap - an explicit OOS class (live-cinematic-state dependency),
@@ -715,9 +715,9 @@ extern s32 g_cinematicSceneParams[];     /* 0x1B2188 block; [5]=+0x34 voice id *
 extern u8 g_listenerPosHistory[];        /* 0x188660 listener pos ring + flags */
 
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6D50);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", EnterCinematicBeginPlayback);
 #else
-void func_002F6D50(void) {
+void EnterCinematicBeginPlayback(void) {
     void (*cb)(void *);
     if (g_cinematicExitPending == 2) {
         g_cinematicExitPending = 0;
@@ -739,7 +739,7 @@ void func_002F6D50(void) {
 #endif
 
 /* Cinematic / FMV playback driver for game-state 1 (= RunCinematicPlaybackFrame,
- * symbol_addrs 0x2F6E10 - kept as func_002F6E10 to match the INCLUDE_ASM symbol).
+ * symbol_addrs 0x2F6E10 - kept as RunCinematicPlaybackFrame to match the INCLUDE_ASM symbol).
  * If no scene is armed (g_cinematicSceneParams[1] == 0) it tears down the queue and
  * pops back to the previous state. Otherwise it:
  *   - blits the letterbox/backdrop UI texture (g_uiTextureCache record #2) to the
@@ -788,9 +788,9 @@ s32  DequeueCinematic(void *queue, s32 *outId, s32 *outType);
 s32  RequestGameStateChange(s32 a, s32 b, s32 c, s32 d, s32 e);
 
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6E10);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", RunCinematicPlaybackFrame);
 #else
-void func_002F6E10(void) {
+void RunCinematicPlaybackFrame(void) {
     u8  gifPacket[0x60];    /* GS GIF image-upload packet scratch (frame [0,0x60)) */
     s32 arenaC, arena14, fmvUploadBase;
     s32 dequeuedCinId, dequeueResult;
@@ -1948,7 +1948,7 @@ void EnterVendorMenu(s32 arg) {
 }
 #endif
 
-/* func_002F95E8 [SEEDABLE] — tear down the vendor UI's preview widgets and hand
+/* TeardownVendorSceneRestorePlayer [SEEDABLE] — tear down the vendor UI's preview widgets and hand
  * control back to the world, optionally spawning the departing preview actor.
  *
  * Releases the two live preview handles (+0x7C, +0x78) through func_0028C108 and
@@ -1969,7 +1969,7 @@ void EnterVendorMenu(s32 arg) {
  * Matching-walled — kept as the portable #else impl. Field offsets kept literal
  * (partial VendorUiState). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F95E8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", TeardownVendorSceneRestorePlayer);
 #else
 extern u8   g_bGlobalSceneActive;    /* global sub-scene active flag (byte) */
 extern u8   g_saveImageArea[];       /* +0x1072 = pause/save sub-state halfword */
@@ -1989,7 +1989,7 @@ extern void FreeMoby(void *moby);
 extern void func_00132B28(s32);
 extern void snd_Pump(void);
 
-void func_002F95E8(void) {
+void TeardownVendorSceneRestorePlayer(void) {
     char *ui = (char *)&g_vendorUi;
     char *pv;
     u16  *subState;

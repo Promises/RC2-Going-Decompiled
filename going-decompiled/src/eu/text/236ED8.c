@@ -33,7 +33,7 @@ typedef struct GuiElement {
 } GuiElement;
 
 /* GUI fixed-size node pool (allocator at GuiPoolAlloc, initialiser at GuiPoolInit
- * below). Defined up front so the element constructor (func_00337CA8, USA
+ * below). Defined up front so the element constructor (GuiElementBaseInit, USA
  * GuiElementBaseInit) and GuiPoolInit all see the field layout regardless of
  * source order. Pure type info: byte-neutral.
  *   +0x00 base / +0x04 capacity / +0x08 elemSize / +0x0C cursor /
@@ -54,11 +54,11 @@ extern void func_00337B48(GuiElement *e, s32 show); /* USA GuiElementSetVisible 
 extern void func_00270340(void);
 extern void func_00337550(void *p, s32 flag);
 extern void func_00337DD8(void *p);
-extern void func_00338000(void *p);
+extern void GuiSpriteElementDraw(void *p);
 extern void func_0033CD40(void *p, s32 v);
 extern void func_0033CE70(void *p);
 extern void func_0034A2F0(void *p);
-extern void func_0034A300(void *p);
+extern void GuiMenuListDraw(void *p);
 extern void func_00344FD8(void *p);
 extern void func_00344C28(void *p);
 
@@ -366,7 +366,7 @@ s32 *func_00337B00(GuiElement *e) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00337B08);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00337B18);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiElementSetPos);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00337B40);
 
@@ -386,7 +386,7 @@ s32 func_00337B68(GuiElement *e) {
     return *e->visible > 0.0f;
 }
 
-/* func_00337B90: rebind the element's scale vector (+0x4) to an externally-owned
+/* GuiElementShareScaleVec: rebind the element's scale vector (+0x4) to an externally-owned
  * vector. If the new pointer differs from the current scale, and the element owns
  * a pool (+0x2C) and has not yet released its own scale node (the +0x18 latch is
  * clear), free the old scale node back to the pool (func_00338C28) and set +0x18;
@@ -395,10 +395,10 @@ s32 func_00337B68(GuiElement *e) {
 #ifndef TARGET_NATIVE
 /* TODO(match): functional equivalent - not byte-exact; beql/bnel early-out +
    8-byte-packed callee-save frame wall. */
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00337B90);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiElementShareScaleVec);
 #else
 extern void func_00338C28(void *pool, void **node);
-void func_00337B90(GuiElement *e, f32 *newScale) {
+void GuiElementShareScaleVec(GuiElement *e, f32 *newScale) {
     if (newScale == e->scale) {
         return;
     }
@@ -411,11 +411,11 @@ void func_00337B90(GuiElement *e, f32 *newScale) {
 #endif
 
 /* func_00337BF8: rebind the element's visibility-scalar vector (+0x10) to an
- * externally-owned vector. Same shape as func_00337B90 with the +0x10/+0x24
+ * externally-owned vector. Same shape as GuiElementShareScaleVec with the +0x10/+0x24
  * field/latch pair. USA twin func_00336D28. */
 #ifndef TARGET_NATIVE
 /* TODO(match): functional equivalent - not byte-exact; same beql/bnel early-out
-   + 8-byte-packed callee-save frame wall as func_00337B90. */
+   + 8-byte-packed callee-save frame wall as GuiElementShareScaleVec. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00337BF8);
 #else
 void func_00337BF8(GuiElement *e, f32 *newVisible) {
@@ -430,7 +430,7 @@ void func_00337BF8(GuiElement *e, f32 *newVisible) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00337C68);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiElementSetScale);
 
 /* func_00337C90: install the base vtable at +0x30, return e.
  * USA GuiElementInstallBaseVtable. */
@@ -439,7 +439,7 @@ GuiElement *func_00337C90(GuiElement *e) {
     return e;
 }
 
-/* func_00337CA8: construct the shared base of a GUI element (USA GuiElementBaseInit).
+/* GuiElementBaseInit: construct the shared base of a GUI element (USA GuiElementBaseInit).
  * When a pool is supplied (a2), stash it at +0x2C and carve five zeroed 16-byte
  * vector blocks from it (GuiPoolAlloc + GuiPlacementNew), wiring them into the
  * element in allocation order at +0x0 (pos), +0x8 (unk08), +0x4 (scale), +0xC
@@ -448,9 +448,9 @@ GuiElement *func_00337C90(GuiElement *e) {
 #ifndef TARGET_NATIVE
 /* TODO(match): functional equivalent - not byte-exact; the same 8-byte-packed
    callee-save frame wall + per-block store scheduling as USA GuiElementBaseInit. */
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00337CA8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiElementBaseInit);
 #else
-void func_00337CA8(GuiElement *e, s32 tag, GuiPool *pool) {
+void GuiElementBaseInit(GuiElement *e, s32 tag, GuiPool *pool) {
     *(GuiPool **)((char *)e + 0x2C) = pool;
     if (pool != 0) {
         e->pos    = GuiPlacementNew(0x10, GuiPoolAlloc(*(GuiPool **)((char *)e + 0x2C)));
@@ -478,7 +478,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00337DD0);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00337DD8);
 
-/* func_00337E88: TypeB GuiElement ctor. Install the base GuiElement vtable via
+/* GuiElementInitTypeB: TypeB GuiElement ctor. Install the base GuiElement vtable via
  * func_00337C90, then overwrite the +0x30 vtable slot with the TypeB vtable
  * D_1ADAD8. Returns the element (discarded by callers). Matching arm stays
  * INCLUDE_ASM; #else is the structure model. Word-verified vs USA
@@ -486,29 +486,29 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00337DD8);
  * D_1ADAD8; store offset +0x30. (EU .s retains the base-vtable call the USA #else
  * elided; modeled faithfully.) Fleet-pinned sig void(void*). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00337E88);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiElementInitTypeB);
 #else
 extern void *D_1ADAD8;
-void func_00337E88(void *p) {
+void GuiElementInitTypeB(void *p) {
     func_00337C90((GuiElement *)p);
     *(void **)((char *)p + 0x30) = &D_1ADAD8;
 }
 #endif
 
-/* func_00337EC0: GuiElement init. Run the base init func_00337CA8, then, when a
+/* GuiElementInit: GuiElement init. Run the base init GuiElementBaseInit, then, when a
  * pool is present (+0x2C != 0), carve two zeroed 16-byte vector blocks (GuiPoolAlloc
  * + GuiPlacementNew) into +0x34 and +0x38, and set the scale vector to {1,1,1}.
  * +0x48 is zeroed on both paths, +0x44 at the shared tail. Matching arm stays
  * INCLUDE_ASM; #else is the structure model. Word-verified vs USA GuiElementInit:
- * GuiElementBaseInit -> func_00337CA8; GuiPoolAlloc/GuiPlacementNew KEPT; offsets
+ * GuiElementBaseInit; GuiPoolAlloc/GuiPlacementNew KEPT; offsets
  * +0x2C/+0x34/+0x38/+0x44/+0x48/+0x4 + const 1.0 identical. Fleet-pinned sig
  * void(void* elem, void* tmpl, void* pool); tmpl->(s32) tag, pool->(GuiPool*). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00337EC0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiElementInit);
 #else
-void func_00337EC0(void *elem, void *tmpl, void *pool) {
+void GuiElementInit(void *elem, void *tmpl, void *pool) {
     GuiElement *e = (GuiElement *)elem;
-    func_00337CA8(e, (s32)tmpl, (GuiPool *)pool);
+    GuiElementBaseInit(e, (s32)tmpl, (GuiPool *)pool);
     if (*(GuiPool **)((char *)e + 0x2C) == 0) {
         *(s32 *)((char *)e + 0x48) = 0;
     } else {
@@ -535,7 +535,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00337F68);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00337FE8);
 
-/* func_00338000: GuiSprite element draw. If the element is visible
+/* GuiSpriteElementDraw: GuiSprite element draw. If the element is visible
  * (*(e->visible) != 0.0) and has a live texture handle (+0x40), submit the sprite
  * to the 2D blitter func_00301AC0: handle, color[0] (via *(e+0xC)), scale and the
  * +0x38 vec as pointer args, and position [0..1], scale[0], scale[1]*y-fudge
@@ -544,12 +544,12 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00337FE8);
  * func_003017F8 -> func_00301AC0; y-fudge g_swapGadgetItemIndex+0x8E ->
  * g_nVendorBuyQuantity+0x160; offsets/arg-order identical. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00338000);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiSpriteElementDraw);
 #else
 extern s32 g_nVendorBuyQuantity;
 extern void func_00301AC0(s32 handle, s32 color0, f32 *scale, f32 *vec38,
                           f32 px, f32 py, f32 sx, f32 syg, f32 v38);
-void func_00338000(void *p) {
+void GuiSpriteElementDraw(void *p) {
     GuiElement *e = (GuiElement *)p;
     s32 handle;
     f32 *pos, *scale, *vec38;
@@ -573,18 +573,18 @@ void func_00338000(void *p) {
 }
 #endif
 
-/* func_00338070: GuiElement set-glyph. Look up the glyph for (atlas, code) via
+/* GuiElementSetGlyph: GuiElement set-glyph. Look up the glyph for (atlas, code) via
  * func_00338AA8 and store the resulting handle at +0x40. Matching arm stays
  * INCLUDE_ASM; #else is the structure model. Word-verified vs USA GuiElementSetGlyph:
  * lookup GuiFontAtlasLookupGlyph -> func_00338AA8; store offset +0x40. func_00338AA8
  * defined later in-file, re-declared inline. Fleet-pinned sig void(void* e, u8* atlas,
  * s32 code). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00338070);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiElementSetGlyph);
 #else
 struct GuiFontAtlas;
 extern s32 func_00338AA8(struct GuiFontAtlas *atlas, s32 codepoint);
-void func_00338070(void *e, u8 *atlas, s32 code) {
+void GuiElementSetGlyph(void *e, u8 *atlas, s32 code) {
     *(s32 *)((char *)e + 0x40) =
         func_00338AA8((struct GuiFontAtlas *)atlas, code);
 }
@@ -596,33 +596,33 @@ void func_003380A0(GuiElement *e, f32 alpha) {
     **(f32 **)((char *)e + 0x38) = alpha;
 }
 
-/* func_003380B0: GuiListRow element ctor. Install the base GuiElement vtable via
+/* GuiListRowElementInit: GuiListRow element ctor. Install the base GuiElement vtable via
  * func_00337C90, then overwrite the +0x30 vtable slot with the GuiListRow vtable
  * D_1ADA78. Returns the element (discarded by callers). Matching arm stays
  * INCLUDE_ASM; #else is the structure model. Word-verified vs USA
  * GuiListRowElementInit: base-install -> func_00337C90; list-row vtable
  * g_GuiListRowVtable -> D_1ADA78; store offset +0x30. Fleet-pinned sig void(void*). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_003380B0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiListRowElementInit);
 #else
-void func_003380B0(void *p) {
+void GuiListRowElementInit(void *p) {
     GuiElement *e = (GuiElement *)p;
     func_00337C90(e);
     *(void **)((char *)e + 0x30) = &D_1ADA78;
 }
 #endif
 
-/* func_003380E8: run the base GuiElement init using the 4th/5th args as its
+/* GuiListElementInit: run the base GuiElement init using the 4th/5th args as its
  * tag/pool, then store the 2nd arg at +0x3C and the 3rd at +0x34, seed the
  * sentinel word +0x44 = 0x80000000 and the count/limit word +0x40 = 100.
  * Matching arm stays INCLUDE_ASM; #else is the structure model. Word-verified vs
- * USA GuiListElementInit: GuiElementBaseInit->func_00337CA8 (EU jal), offsets
+ * USA GuiListElementInit: GuiElementBaseInit->GuiElementBaseInit (EU jal), offsets
  * +0x3C/+0x34/+0x44/+0x40 and consts 0x80000000/0x64 identical (EU raw imms). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_003380E8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiListElementInit);
 #else
-void func_003380E8(GuiElement *e, s32 v3C, s32 v34, s32 tag, GuiPool *pool) {
-    func_00337CA8(e, tag, pool);
+void GuiListElementInit(GuiElement *e, s32 v3C, s32 v34, s32 tag, GuiPool *pool) {
+    GuiElementBaseInit(e, tag, pool);
     *(s32 *)((char *)e + 0x3C) = v3C;
     *(s32 *)((char *)e + 0x34) = v34;
     *(s32 *)((char *)e + 0x44) = (s32)0x80000000;
@@ -642,9 +642,9 @@ void func_00338150(void *p) {
     __asm__ __volatile__("");
 }
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00338178);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiListSetColorPair0);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00338190);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiListSetColorPair1);
 
 /* func_003381A8: write the high (alpha) byte of color words [0] and [1] of the
  * element's color block (+0xC), preserving the low 24 RGB bits.
@@ -698,21 +698,21 @@ void *func_003383B0(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_003383E8);
 
-/* func_003383F0: run the base GuiElement init (forwarding tag/pool unchanged),
+/* GuiSpriteElementInit: run the base GuiElement init (forwarding tag/pool unchanged),
  * then when a pool is present carve a zeroed 16-byte vector block from the
  * element's +0x2C pool into +0x34. Always: zero the +0x34 vec's [0],[1] words,
  * seed the position vector (e->pos) to {100.0, 100.0} and the scale vector
  * (e->scale) to {64.0, 64.0}, and clear +0x38.
  * Matching arm stays INCLUDE_ASM; #else is the structure model. Word-verified vs
- * USA GuiSpriteElementInit: GuiElementBaseInit->func_00337CA8, GuiPoolAlloc and
+ * USA GuiSpriteElementInit: GuiElementBaseInit->GuiElementBaseInit, GuiPoolAlloc and
  * GuiPlacementNew KEPT (named, EU jal), consts 0x42C80000=100.0/0x42800000=64.0,
  * offsets +0x2C/+0x34/+0x38 identical (EU raw imms). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_003383F0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiSpriteElementInit);
 #else
-void func_003383F0(GuiElement *e, s32 tag, GuiPool *pool) {
+void GuiSpriteElementInit(GuiElement *e, s32 tag, GuiPool *pool) {
     f32 *vec, *pos, *scale;
-    func_00337CA8(e, tag, pool);
+    GuiElementBaseInit(e, tag, pool);
     if (pool != 0) {
         vec = GuiPlacementNew(0x10, GuiPoolAlloc(*(GuiPool **)((char *)e + 0x2C)));
         *(f32 **)((char *)e + 0x34) = vec;
@@ -788,15 +788,15 @@ void func_00338508(GuiElement *e) {
 }
 #endif
 
-/* func_00338600: write two int->float coords (cvt.s.w) through e+0x34,
+/* GuiSpriteSetTexture: write two int->float coords (cvt.s.w) through e+0x34,
  * re-reading the +0x34 pointer per store; lands at (e+0x34)[0],[1].
  * Matching arm stays INCLUDE_ASM; #else is the structure model. Word-verified vs
  * USA GuiSpriteSetTexture: vec pointer at +0x34, stores [0]/[1]; no called
  * symbols (pure mtc1/cvt/swc1) - no retargets. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00338600);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiSpriteSetTexture);
 #else
-void func_00338600(GuiElement *e, s32 u, s32 v) {
+void GuiSpriteSetTexture(GuiElement *e, s32 u, s32 v) {
     f32 fu = (f32)u;
     f32 fv = (f32)v;
     (*(f32 **)((char *)e + 0x34))[0] = fu;
@@ -811,7 +811,7 @@ s32 func_00338630(void *p) {
     return (s32)vec[0];
 }
 
-/* func_00338648: install the base GuiElement vtable then overwrite the +0x30
+/* GuiElementInitTypeC: install the base GuiElement vtable then overwrite the +0x30
  * vtable slot with the TypeC vtable (D_1ADA98); return value (p) unused by
  * callers, so the signature is void.
  * Matching arm stays INCLUDE_ASM; #else is the structure model. Word-verified vs
@@ -820,9 +820,9 @@ s32 func_00338630(void *p) {
  * func_00337C90 (EU jal), D_1AD9F8->D_1ADA98 (EU %hi/%lo, data-lane delta), store
  * offset +0x30. FLEET-PIN signature void(void*). D_1ADA98 is file-scope. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00338648);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiElementInitTypeC);
 #else
-void func_00338648(void *p) {
+void GuiElementInitTypeC(void *p) {
     func_00337C90((GuiElement *)p);
     *(void **)((char *)p + 0x30) = &D_1ADA98;
 }
@@ -830,24 +830,24 @@ void func_00338648(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00338680);
 
-/* func_00338688: run the base GuiElement init (func_00337CA8, forwarding its own
+/* GuiTextElementInit: run the base GuiElement init (GuiElementBaseInit, forwarding its own
  * tag/pool args unchanged), then set up a text element: install the D_2638D0
  * glyph/format table at +0x34, mark active (+0x38 = (s64)1), clear text handle
  * (+0x40), reset scale vector (e->scale) to {1.0, 1.0}, and seed text params:
  * +0x4C = 0x200, +0x50 = 0.7f, +0x44 = 1, +0x48 = 0.
  * Matching arm stays INCLUDE_ASM; #else is the structure model.
- * Word-verified vs USA GuiTextElementInit: GuiElementBaseInit -> func_00337CA8
+ * Word-verified vs USA GuiTextElementInit: GuiElementBaseInit
  * (EU jal), D_263B10 -> D_2638D0 (EU %hi/%lo), offsets +0x34/+0x38/+0x40/scale/
  * +0x4C=0x200/+0x50=0.7f/+0x44=1/+0x48=0.
  * REGION DELTA: USA also writes +0x54 = 1 (sw at 0x54); the EU build OMITS the
  * +0x54 store entirely - modeled faithfully (no +0x54 write here). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00338688);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiTextElementInit);
 #else
 extern void *D_2638D0;
-void func_00338688(GuiElement *e, s32 tag, GuiPool *pool) {
+void GuiTextElementInit(GuiElement *e, s32 tag, GuiPool *pool) {
     f32 *scale;
-    func_00337CA8(e, tag, pool);
+    GuiElementBaseInit(e, tag, pool);
     *(void **)((char *)e + 0x34) = &D_2638D0;
     *(s64 *)((char *)e + 0x38) = 1;
     *(s32 *)((char *)e + 0x40) = 0;
@@ -891,25 +891,25 @@ s32 func_00338738(GuiElement *e) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00338768);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00338770);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiTextElementDraw);
 
 /* func_003388E8: store the item count at +0x40. USA GuiListSetItemCount. */
 void func_003388E8(GuiElement *e, s32 count) {
     *(s32 *)((char *)e + 0x40) = count;
 }
 
-/* func_003388F0: position the list's scroll-thumb (EU twin of USA
+/* GuiListSetScrollPos: position the list's scroll-thumb (EU twin of USA
  * GuiListSetScrollPos). Clamp the requested row `pos` to the total row count
  * (+0x40), then write through the +0x04 scale-vector pointer
  *   thumb = (clamp / totalRows) * trackLength       (trackLength = +0x3C)
  * collapsing to 0 when the list has zero rows. All int->float conversions are
  * unsigned. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_003388F0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiListSetScrollPos);
 #else
 /* WALL: functional-equivalent #else; matching arm stays INCLUDE_ASM (movz clamp,
    (f32)(u32) unsigned-conversion idiom, +0x40 materialised twice). */
-void func_003388F0(GuiElement *e, s32 pos) {
+void GuiListSetScrollPos(GuiElement *e, s32 pos) {
     s32 totalRows = *(s32 *)((char *)e + 0x40);
     s32 trackLength = *(s32 *)((char *)e + 0x3C);
     s32 clamp = totalRows;
@@ -942,7 +942,7 @@ void func_00338A38(GuiElement *e, s32 v) {
 
 /* Font atlas glyph table (EU twin of USA GuiFontAtlas): glyph count at +0x18,
  * inline {codepoint, value} pairs from +0x1C. The `value` field doubles as a
- * load-relative offset that func_00338A40 rebases to an absolute pointer. */
+ * load-relative offset that GuiFontAtlasRelocate rebases to an absolute pointer. */
 typedef struct GuiFontGlyph {
     /* 0x00 */ s32 codepoint;
     /* 0x04 */ s32 value;
@@ -953,16 +953,16 @@ typedef struct GuiFontAtlas {
     /* 0x1C */ GuiFontGlyph glyphs[1];
 } GuiFontAtlas;
 
-/* func_00338A40: rebase each glyph's `value` field from a load-relative offset
+/* GuiFontAtlasRelocate: rebase each glyph's `value` field from a load-relative offset
  * to an absolute pointer (atlas base + offset), handing each to func_00301770.
  * USA twin GuiFontAtlasRelocate. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00338A40);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiFontAtlasRelocate);
 #else
 /* WALL: functional-equivalent #else (4-GPR-save 8-byte vs 16-byte slot stride);
    matching arm stays INCLUDE_ASM. */
 extern void func_00301770(void *p);
-void func_00338A40(GuiFontAtlas *atlas) {
+void GuiFontAtlasRelocate(GuiFontAtlas *atlas) {
     s32 count = atlas->glyphCount;
     GuiFontGlyph *g = atlas->glyphs;
     s32 i;
@@ -1089,18 +1089,18 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00338C78);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00338F68);
 
-/* func_00339930: init two embedded type-B GUI elements (func_00337E88 at p+0x10
+/* func_00339930: init two embedded type-B GUI elements (GuiElementInitTypeB at p+0x10
  * and p+0x5C), return the object.
  * Matching arm stays INCLUDE_ASM; #else is the structure model.
- * Word-verified vs USA func_00338A80: GuiElementInitTypeB -> func_00337E88 (EU
- * jal), offsets +0x10/+0x5C, return p. func_00337E88 reused (defined earlier in
+ * Word-verified vs USA func_00338A80: GuiElementInitTypeB (EU
+ * jal), offsets +0x10/+0x5C, return p. GuiElementInitTypeB reused (defined earlier in
  * this unit). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00339930);
 #else
 void *func_00339930(void *p) {
-    func_00337E88((char *)p + 0x10);
-    func_00337E88((char *)p + 0x5C);
+    GuiElementInitTypeB((char *)p + 0x10);
+    GuiElementInitTypeB((char *)p + 0x5C);
     return p;
 }
 #endif
@@ -1312,22 +1312,22 @@ void func_0033AE48(void *w) {
 /* func_0033AEF8: init the screen's eight embedded sub-elements at their fixed
  * offsets (four TypeB then four TypeC), return the object. Matching arm stays
  * INCLUDE_ASM; #else is the structure model. Word-verified vs USA func_0033A048:
- * GuiElementInitTypeB -> func_00337E88 (offsets +0x8/+0x54/+0xA0/+0xEC);
- * GuiElementInitTypeC -> func_00338648 (offsets +0x138/+0x190/+0x1E8/+0x240). */
+ * GuiElementInitTypeB (offsets +0x8/+0x54/+0xA0/+0xEC);
+ * GuiElementInitTypeC (offsets +0x138/+0x190/+0x1E8/+0x240). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033AEF8);
 #else
 /* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
    wall (same as USA func_0033A048). */
 void *func_0033AEF8(void *p) {
-    func_00337E88((char *)p + 0x8);
-    func_00337E88((char *)p + 0x54);
-    func_00337E88((char *)p + 0xA0);
-    func_00337E88((char *)p + 0xEC);
-    func_00338648((char *)p + 0x138);
-    func_00338648((char *)p + 0x190);
-    func_00338648((char *)p + 0x1E8);
-    func_00338648((char *)p + 0x240);
+    GuiElementInitTypeB((char *)p + 0x8);
+    GuiElementInitTypeB((char *)p + 0x54);
+    GuiElementInitTypeB((char *)p + 0xA0);
+    GuiElementInitTypeB((char *)p + 0xEC);
+    GuiElementInitTypeC((char *)p + 0x138);
+    GuiElementInitTypeC((char *)p + 0x190);
+    GuiElementInitTypeC((char *)p + 0x1E8);
+    GuiElementInitTypeC((char *)p + 0x240);
     return p;
 }
 #endif
@@ -1340,7 +1340,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033AF60);
  * alabel to a real glabel). */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiConfirmPopupInit);
 
-/* func_0033B218 = GuiConfirmPopupTick: per-frame confirm-popup layout, then bump
+/* GuiConfirmPopupTick: per-frame confirm-popup layout, then bump
  * the current cutscene unlock record. The four icon rows (+0x8/+0x54/+0xA0/+0xEC)
  * sit at the placement record origin (*(w+0x4)); the three text rows
  * (+0x138/+0x190/+0x1E8) are offset by the fixed (x,y) pairs
@@ -1353,10 +1353,10 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiConfirmPopupI
  *
  * Matching arm stays INCLUDE_ASM; #else is the structure model. TWIN NOTE: this is
  * the EU twin of USA GuiConfirmPopupTick (USA 0x33A368, delta +0xEB0), CONFIRMED
- * by EU symbol_addrs pin (func_0033B218 = GuiConfirmPopupTick); the mnemonic-hash
+ * by EU symbol_addrs pin (GuiConfirmPopupTick); the mnemonic-hash
  * twin-map mis-swapped it with GuiConfirmPopupInit (the real EU GuiConfirmPopupInit
  * is func_0033AF60 @0x33AF68). Word-verified vs USA GuiConfirmPopupTick:
- * GuiElementSetPos -> func_00337B18; func_002E0010 -> func_002DFFC8; offset pairs
+ * GuiElementSetPos; func_002E0010 -> func_002DFFC8; offset pairs
  * D_1ADC38/40/48 -> D_1ADCD8/E0/E8; g_gameTime -> g_nLevelExitDestination+0x8;
  * g_gsPixelOffsetY+0x3C source -> D_001A7308+0x108; g_health / g_mapCurrentLevel /
  * g_playerProgress KEPT.
@@ -1367,11 +1367,11 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiConfirmPopupI
  * whereas USA NTSC uses the raw source directly (plain sltu/sw). Modeled
  * faithfully below; flagged in EU symbol_addrs line 1011. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033B218);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiConfirmPopupTick);
 #else
 /* TODO(match): functional-equivalent structure model; the sp-staged row memsets +
    the PAL (source*5+2)/6 divide are the compiler's own materialization. */
-extern void func_00337B18(void *e, f32 x, f32 y, f32 z, f32 w);
+extern void GuiElementSetPos(void *e, f32 x, f32 y, f32 z, f32 w);
 extern void func_002DFFC8(void *dst, s32 level);
 extern f32 D_1ADCD8[2], D_1ADCE0[2], D_1ADCE8[2];
 extern s32 g_health;                 /* 0x18C36C - base of per-cutscene unlock records at +0x464 */
@@ -1379,7 +1379,7 @@ extern s32 g_nLevelExitDestination;  /* 0x1B1680 - EU g_gameTime slot lives at +
 extern s32 g_mapCurrentLevel;        /* 0x1C51D0 - current map level id */
 extern s32 D_001A7308;               /* PAL frame-count source at +0x108 */
 extern s32 g_playerProgress;         /* 0x1A7A78 - current progress slot (seen-mask bit index) */
-void func_0033B218(void *w, s32 arg2) {
+void GuiConfirmPopupTick(void *w, s32 arg2) {
     void *icon0 = (char *)w + 0x8;
     void *icon1 = (char *)w + 0x54;
     void *icon2 = (char *)w + 0xA0;
@@ -1393,13 +1393,13 @@ void func_0033B218(void *w, s32 arg2) {
 
     (void)arg2;
 
-    func_00337B18(icon0, origin[0], origin[1], 0.0f, 0.0f);
-    func_00337B18(icon1, origin[0], origin[1], 0.0f, 0.0f);
-    func_00337B18(icon2, origin[0], origin[1], 0.0f, 0.0f);
-    func_00337B18(icon3, origin[0], origin[1], 0.0f, 0.0f);
-    func_00337B18(text0, D_1ADCD8[0] + origin[0], D_1ADCD8[1] + origin[1], 0.0f, 0.0f);
-    func_00337B18(text1, D_1ADCE0[0] + origin[0], D_1ADCE0[1] + origin[1], 0.0f, 0.0f);
-    func_00337B18(text2, D_1ADCE8[0] + origin[0], D_1ADCE8[1] + origin[1], 0.0f, 0.0f);
+    GuiElementSetPos(icon0, origin[0], origin[1], 0.0f, 0.0f);
+    GuiElementSetPos(icon1, origin[0], origin[1], 0.0f, 0.0f);
+    GuiElementSetPos(icon2, origin[0], origin[1], 0.0f, 0.0f);
+    GuiElementSetPos(icon3, origin[0], origin[1], 0.0f, 0.0f);
+    GuiElementSetPos(text0, D_1ADCD8[0] + origin[0], D_1ADCD8[1] + origin[1], 0.0f, 0.0f);
+    GuiElementSetPos(text1, D_1ADCE0[0] + origin[0], D_1ADCE0[1] + origin[1], 0.0f, 0.0f);
+    GuiElementSetPos(text2, D_1ADCE8[0] + origin[0], D_1ADCE8[1] + origin[1], 0.0f, 0.0f);
 
     func_002DFFC8((char *)w + 0x298, g_mapCurrentLevel);
 
@@ -1417,25 +1417,25 @@ void func_0033B218(void *w, s32 arg2) {
 }
 #endif
 
-/* func_0033B4B8 = GuiConfirmPopupDraw: draw a confirm popup when it's active
+/* GuiConfirmPopupDraw: draw a confirm popup when it's active
  * (+0x2D8 != 0): four sprite sub-elements (+0x8/+0x54/+0xA0/+0xEC) and three text
  * sub-elements (+0x138/+0x190/+0x1E8). Matching arm stays INCLUDE_ASM; #else is
  * the structure model. Word-verified vs USA GuiConfirmPopupDraw:
- * GuiSpriteElementDraw -> func_00338000; GuiTextElementDraw -> func_00338770;
+ * GuiSpriteElementDraw; GuiTextElementDraw;
  * +0x2D8 gate + offsets identical (region-shifted jal targets only). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033B4B8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiConfirmPopupDraw);
 #else
-extern void func_00338770(void *e);
-void func_0033B4B8(void *w) {
+extern void GuiTextElementDraw(void *e);
+void GuiConfirmPopupDraw(void *w) {
     if (*(s32 *)((char *)w + 0x2D8) != 0) {
-        func_00338000((char *)w + 0x8);
-        func_00338000((char *)w + 0x54);
-        func_00338000((char *)w + 0xA0);
-        func_00338000((char *)w + 0xEC);
-        func_00338770((char *)w + 0x138);
-        func_00338770((char *)w + 0x190);
-        func_00338770((char *)w + 0x1E8);
+        GuiSpriteElementDraw((char *)w + 0x8);
+        GuiSpriteElementDraw((char *)w + 0x54);
+        GuiSpriteElementDraw((char *)w + 0xA0);
+        GuiSpriteElementDraw((char *)w + 0xEC);
+        GuiTextElementDraw((char *)w + 0x138);
+        GuiTextElementDraw((char *)w + 0x190);
+        GuiTextElementDraw((char *)w + 0x1E8);
     }
 }
 #endif
@@ -1443,17 +1443,17 @@ void func_0033B4B8(void *w) {
 /* func_0033B520: init the embedded dialog-box (p+0x8) and a TypeB element
  * (p+0x2D8), return the object. Matching arm stays INCLUDE_ASM; #else is the
  * structure model. Word-verified vs USA func_0033A640: GuiDialogBoxInitElements
- * -> func_0033CA78; GuiElementInitTypeB -> func_00337E88; offsets +0x8/+0x2D8
+ * -> GuiDialogBoxInitElements; GuiElementInitTypeB; offsets +0x8/+0x2D8
  * identical. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033B520);
 #else
 /* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
    wall (same as USA func_0033A640). */
-extern void func_0033CA78(void *p);
+extern void GuiDialogBoxInitElements(void *p);
 void *func_0033B520(void *p) {
-    func_0033CA78((char *)p + 0x8);
-    func_00337E88((char *)p + 0x2D8);
+    GuiDialogBoxInitElements((char *)p + 0x8);
+    GuiElementInitTypeB((char *)p + 0x2D8);
     return p;
 }
 #endif
@@ -1466,16 +1466,16 @@ void *func_0033B520(void *p) {
  * 0x70FFFEED, and give it glyph 0xD6 from the shared atlas (g_guiInstance+0x8710).
  * Finally run func_0033B6C0 (the show hook) and clear +0x330.
  * Matching arm stays INCLUDE_ASM; #else is the structure model.
- * Word-verified vs USA func_0033A678: GuiDialogBoxInitBorder->func_0033CB00;
- * GuiDialogBoxSetBounds->func_0033CF58; GuiElementInit->func_00337EC0;
- * GuiElementGetColor->func_00337B00; GuiElementSetGlyph->func_00338070;
+ * Word-verified vs USA func_0033A678: GuiDialogBoxInitBorder->GuiDialogBoxInitBorder;
+ * GuiDialogBoxSetBounds->GuiDialogBoxSetBounds; GuiElementInit->GuiElementInit;
+ * GuiElementGetColor->func_00337B00; GuiElementSetGlyph->GuiElementSetGlyph;
  * func_0033A7E0->func_0033B6C0; GuiPlacementNew/GuiPoolAlloc KEPT.
  * DATA +0xA0 lane: D_1ADC50->D_1ADCF0, D_1ADC60->D_1ADD00; g_guiInstance KEPT. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033B558);
 #else
-extern void func_0033CB00(void *w, void *pool, void *borderCfg);
-extern void func_0033CF58(void *p, f32 a, f32 b, f32 c, f32 d, f32 e, f32 f);
+extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
+extern void GuiDialogBoxSetBounds(void *p, f32 a, f32 b, f32 c, f32 d, f32 e, f32 f);
 extern void func_0033B6C0(void *w);
 extern char *g_guiInstance;
 extern u8 D_1ADCF0[];
@@ -1500,13 +1500,13 @@ void func_0033B558(void *w, GuiPool *pool) {
     *(f32 *)((char *)obj + 0x4) = 212.0f;
 
     *(s32 *)((char *)w + 0x328) = 0;
-    func_0033CB00((char *)w + 0x8, pool, D_1ADCF0);
-    func_0033CF58((char *)w + 0x8, 64.0f, -164.0f, 10.0f, 136.0f, 10.0f, 99.0f);
+    GuiDialogBoxInitBorder((char *)w + 0x8, pool, D_1ADCF0);
+    GuiDialogBoxSetBounds((char *)w + 0x8, 64.0f, -164.0f, 10.0f, 136.0f, 10.0f, 99.0f);
 
-    func_00337EC0(icon, D_1ADD00, pool);
+    GuiElementInit(icon, D_1ADD00, pool);
     color = func_00337B00(icon);
     *color = 0x70FFFEED;
-    func_00338070(icon, (u8 *)(g_guiInstance + 0x8710), 0xD6);
+    GuiElementSetGlyph(icon, (u8 *)(g_guiInstance + 0x8710), 0xD6);
 
     func_0033B6C0(w);
     *(s32 *)((char *)w + 0x330) = 0;
@@ -1535,7 +1535,7 @@ void func_0033B6B8(void *p, s32 v) {
  * strings, zero its scale, and clear the +0x32C "text ready" flag (sibling of
  * func_0033B740, which raises that flag with the alternate title id).
  * Matching arm stays INCLUDE_ASM; #else is the structure model.
- * Word-verified vs USA func_0033A7E0: GuiDialogBoxSetText3->func_0033CF78;
+ * Word-verified vs USA func_0033A7E0: GuiDialogBoxSetText3->GuiDialogBoxSetText3;
  * GuiDialogBoxSetScale->func_0033CFD0; GetLocalizedString KEPT; offset p+0x8/+0x32C.
  * GENUINE REGION DIFF (localized string ids): title/body/footer
  * USA 0x2C34/0x2C32/0x2BE5 -> EU 0xBAF/0xBAD/0xB60. */
@@ -1543,13 +1543,13 @@ void func_0033B6B8(void *p, s32 v) {
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033B6C0);
 #else
 extern char *GetLocalizedString(s32 id);
-extern void func_0033CF78(void *p, s32 t0, s32 t1, s32 t2);
+extern void GuiDialogBoxSetText3(void *p, s32 t0, s32 t1, s32 t2);
 extern void func_0033CFD0(void *p, f32 scale);
 void func_0033B6C0(void *p) {
     s32 t0 = (s32)GetLocalizedString(0xBAF);
     s32 t1 = (s32)GetLocalizedString(0xBAD);
     s32 t2 = (s32)GetLocalizedString(0xB60);
-    func_0033CF78((char *)p + 0x8, t0, t1, t2);
+    GuiDialogBoxSetText3((char *)p + 0x8, t0, t1, t2);
     func_0033CFD0((char *)p + 0x8, 0.0f);
     *(s32 *)((char *)p + 0x32C) = 0;
 }
@@ -1559,7 +1559,7 @@ void func_0033B6C0(void *p) {
  * func_0033A860) - set the dialog box (p+0x8) title/body/footer to localized
  * strings, zero its scale, raise the +0x32C "text ready" flag, and return 1.
  * Matching arm stays INCLUDE_ASM; #else is the structure model.
- * Word-verified vs USA func_0033A860: GuiDialogBoxSetText3->func_0033CF78;
+ * Word-verified vs USA func_0033A860: GuiDialogBoxSetText3->GuiDialogBoxSetText3;
  * GuiDialogBoxSetScale->func_0033CFD0; GetLocalizedString KEPT; offset p+0x8/+0x32C.
  * GENUINE REGION DIFF (localized string ids): title/body/footer
  * USA 0x2C33/0x2C32/0x2BE5 -> EU 0xBAE/0xBAD/0xB60. */
@@ -1567,13 +1567,13 @@ void func_0033B6C0(void *p) {
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033B740);
 #else
 extern char *GetLocalizedString(s32 id);
-extern void func_0033CF78(void *p, s32 t0, s32 t1, s32 t2);
+extern void GuiDialogBoxSetText3(void *p, s32 t0, s32 t1, s32 t2);
 extern void func_0033CFD0(void *p, f32 scale);
 s32 func_0033B740(void *p) {
     s32 t0 = (s32)GetLocalizedString(0xBAE);
     s32 t1 = (s32)GetLocalizedString(0xBAD);
     s32 t2 = (s32)GetLocalizedString(0xB60);
-    func_0033CF78((char *)p + 0x8, t0, t1, t2);
+    GuiDialogBoxSetText3((char *)p + 0x8, t0, t1, t2);
     func_0033CFD0((char *)p + 0x8, 0.0f);
     *(s32 *)((char *)p + 0x32C) = 1;
     return 1;
@@ -1591,7 +1591,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033B7C8);
  * Matching arm stays INCLUDE_ASM; #else is the structure model.
  * Word-verified vs USA func_0033A8F0: func_0033C060->func_0033CF40;
  * func_0033BE70->func_0033CD50; func_002AA3F0->func_002A9FA0;
- * GuiElementGetColor->func_00337B00; GuiElementSetPos->func_00337B18.
+ * GuiElementGetColor->func_00337B00; GuiElementSetPos->GuiElementSetPos.
  * DATA +0xA0 lane: D_1ADC68->D_1ADD08, D_1ADC70->D_1ADD10, D_1ADC6C->D_1ADD0C;
  * g_padButtonsPressed KEPT. func_002A9FA0 takes 5 EABI int args (arg5 in $8). */
 #ifndef TARGET_NATIVE
@@ -1601,7 +1601,7 @@ extern s32 g_padButtonsPressed;
 extern void func_0033CF40(void *e, f32 x, f32 y);
 extern void func_0033CD50(void *e, s32 flags);
 extern s32 func_002A9FA0(s32 a, s32 b, s32 c, s32 d, s32 e);
-extern void func_00337B18(void *e, f32 x, f32 y, f32 z, f32 w);
+extern void GuiElementSetPos(void *e, f32 x, f32 y, f32 z, f32 w);
 extern f32 D_1ADD08, D_1ADD0C, D_1ADD10;
 s32 func_0033B7D0(void *w) {
     void *sub = (char *)w + 0x8;
@@ -1619,7 +1619,7 @@ s32 func_0033B7D0(void *w) {
 
     counter = *(s32 *)((char *)w + 0x328);
     a = *(f32 **)((char *)w + 0x324);
-    func_00337B18((GuiElement *)((char *)w + 0x2D8),
+    GuiElementSetPos((GuiElement *)((char *)w + 0x2D8),
                   a[0] + D_1ADD08,
                   a[1] + (f32)counter * D_1ADD10 + D_1ADD0C,
                   0.0f, 0.0f);
@@ -1634,7 +1634,7 @@ s32 func_0033B7D0(void *w) {
  * 1. Then draws the box (func_0033CE70) and the background sprite at p+0x2D8.
  * Matching arm stays INCLUDE_ASM; #else is the structure model.
  * Word-verified vs USA func_0033A9F8: func_0033BE68->func_0033CD48;
- * func_0033BF90->func_0033CE70; GuiSpriteElementDraw->func_00338000.
+ * func_0033BF90->func_0033CE70; GuiSpriteElementDraw->GuiSpriteElementDraw.
  * DATA +0xB0 lane: D_1A8C88->D_1A8D38, D_1A8C8C->D_1A8D3C. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033B8D8);
@@ -1651,7 +1651,7 @@ void func_0033B8D8(void *p) {
         func_0033CD48(box, 1);
     }
     func_0033CE70(box);
-    func_00338000((char *)p + 0x2D8);
+    GuiSpriteElementDraw((char *)p + 0x2D8);
 }
 #endif
 
@@ -1660,27 +1660,27 @@ void func_0033B8D8(void *p) {
  * p+0x8/+0x54/+0xA0/+0xEC, then nine type-C at +0x138/+0x190/+0x1E8/+0x240/+0x298/
  * +0x2F0/+0x348/+0x3A0/+0x3F8 - return the object.
  * Matching arm stays INCLUDE_ASM; #else is the structure model.
- * Word-verified vs USA func_0033AA80: GuiElementInitTypeB->func_00337E88;
- * GuiElementInitTypeC->func_00338648; offsets identical. */
+ * Word-verified vs USA func_0033AA80: GuiElementInitTypeB->GuiElementInitTypeB;
+ * GuiElementInitTypeC->GuiElementInitTypeC; offsets identical. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033B960);
 #else
 /* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
    wall (same as USA func_0033AA80). */
 void *func_0033B960(void *p) {
-    func_00337E88((char *)p + 0x8);
-    func_00337E88((char *)p + 0x54);
-    func_00337E88((char *)p + 0xA0);
-    func_00337E88((char *)p + 0xEC);
-    func_00338648((char *)p + 0x138);
-    func_00338648((char *)p + 0x190);
-    func_00338648((char *)p + 0x1E8);
-    func_00338648((char *)p + 0x240);
-    func_00338648((char *)p + 0x298);
-    func_00338648((char *)p + 0x2F0);
-    func_00338648((char *)p + 0x348);
-    func_00338648((char *)p + 0x3A0);
-    func_00338648((char *)p + 0x3F8);
+    GuiElementInitTypeB((char *)p + 0x8);
+    GuiElementInitTypeB((char *)p + 0x54);
+    GuiElementInitTypeB((char *)p + 0xA0);
+    GuiElementInitTypeB((char *)p + 0xEC);
+    GuiElementInitTypeC((char *)p + 0x138);
+    GuiElementInitTypeC((char *)p + 0x190);
+    GuiElementInitTypeC((char *)p + 0x1E8);
+    GuiElementInitTypeC((char *)p + 0x240);
+    GuiElementInitTypeC((char *)p + 0x298);
+    GuiElementInitTypeC((char *)p + 0x2F0);
+    GuiElementInitTypeC((char *)p + 0x348);
+    GuiElementInitTypeC((char *)p + 0x3A0);
+    GuiElementInitTypeC((char *)p + 0x3F8);
     return p;
 }
 #endif
@@ -1695,7 +1695,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiLevelInfoPane
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033BE48);
 
-/* func_0033BE50 = GuiLevelInfoPanelTick: per-frame layout for the galactic-map
+/* GuiLevelInfoPanelTick: per-frame layout for the galactic-map
  * level-info panel (EU twin of USA GuiLevelInfoPanelTick, pin-CONFIRMED, USA
  * 0x33AF70, delta +0xEE0). Scales the six "value row" elements (0x190..0x348)
  * uniformly to (D_1ADD78, D_1ADD7C), then positions all thirteen sub-elements
@@ -1709,46 +1709,46 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033BE48);
  * or the D_1ADD00 placeholder glyph when that id is negative. Returns 0.
  * Matching arm stays INCLUDE_ASM; #else is the structure model.
  * Word-verified vs USA GuiLevelInfoPanelTick: func_002E0010->func_002DFFC8;
- * GuiElementSetPos->func_00337B18; GuiElementSetScale->func_00337C68;
+ * GuiElementSetPos->GuiElementSetPos; GuiElementSetScale->GuiElementSetScale;
  * GuiElementSetText->func_00338730; GetLocalizedString KEPT.
  * DATA +0xA0 lane: D_1ADCB8->D_1ADD58, D_1ADCC0->D_1ADD60, D_1ADCC8->D_1ADD68,
  * D_1ADCD0->D_1ADD70, D_1ADCD8->D_1ADD78, D_1ADCDC->D_1ADD7C, D_1ADC60->D_1ADD00;
  * g_mapVertexData/g_levelSelectEntries KEPT. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033BE50);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiLevelInfoPanelTick);
 #else
 extern char *GetLocalizedString(s32 id);
-extern void func_00337B18(void *e, f32 x, f32 y, f32 z, f32 w);
-extern void func_00337C68(void *e, f32 x, f32 y, f32 z, f32 w);
+extern void GuiElementSetPos(void *e, f32 x, f32 y, f32 z, f32 w);
+extern void GuiElementSetScale(void *e, f32 x, f32 y, f32 z, f32 w);
 extern void func_002DFFC8(void *dst, s32 level);
 extern f32 D_1ADD58[2], D_1ADD60[2], D_1ADD68[2], D_1ADD70[2];
 extern f32 D_1ADD78, D_1ADD7C;
 extern u8 g_mapVertexData[], g_levelSelectEntries[], D_1ADD00[];
-s32 func_0033BE50(void *w) {
+s32 GuiLevelInfoPanelTick(void *w) {
     f32 *origin = *(f32 **)((char *)w + 0x4);
     s32 level = *(s32 *)(g_mapVertexData + 0x230);
     s32 valueStrId;
 
-    func_00337C68((GuiElement *)((char *)w + 0x190), D_1ADD78, D_1ADD7C, 0.0f, 0.0f);
-    func_00337C68((GuiElement *)((char *)w + 0x1E8), D_1ADD78, D_1ADD7C, 0.0f, 0.0f);
-    func_00337C68((GuiElement *)((char *)w + 0x240), D_1ADD78, D_1ADD7C, 0.0f, 0.0f);
-    func_00337C68((GuiElement *)((char *)w + 0x298), D_1ADD78, D_1ADD7C, 0.0f, 0.0f);
-    func_00337C68((GuiElement *)((char *)w + 0x2F0), D_1ADD78, D_1ADD7C, 0.0f, 0.0f);
-    func_00337C68((GuiElement *)((char *)w + 0x348), D_1ADD78, D_1ADD7C, 0.0f, 0.0f);
+    GuiElementSetScale((GuiElement *)((char *)w + 0x190), D_1ADD78, D_1ADD7C, 0.0f, 0.0f);
+    GuiElementSetScale((GuiElement *)((char *)w + 0x1E8), D_1ADD78, D_1ADD7C, 0.0f, 0.0f);
+    GuiElementSetScale((GuiElement *)((char *)w + 0x240), D_1ADD78, D_1ADD7C, 0.0f, 0.0f);
+    GuiElementSetScale((GuiElement *)((char *)w + 0x298), D_1ADD78, D_1ADD7C, 0.0f, 0.0f);
+    GuiElementSetScale((GuiElement *)((char *)w + 0x2F0), D_1ADD78, D_1ADD7C, 0.0f, 0.0f);
+    GuiElementSetScale((GuiElement *)((char *)w + 0x348), D_1ADD78, D_1ADD7C, 0.0f, 0.0f);
 
-    func_00337B18((GuiElement *)((char *)w + 0x8),   origin[0], origin[1], 0.0f, 0.0f);
-    func_00337B18((GuiElement *)((char *)w + 0x54),  origin[0], origin[1], 0.0f, 0.0f);
-    func_00337B18((GuiElement *)((char *)w + 0xA0),  origin[0], origin[1], 0.0f, 0.0f);
-    func_00337B18((GuiElement *)((char *)w + 0xEC),  origin[0], origin[1], 0.0f, 0.0f);
-    func_00337B18((GuiElement *)((char *)w + 0x138), D_1ADD58[0] + origin[0], D_1ADD58[1] + origin[1], 0.0f, 0.0f);
-    func_00337B18((GuiElement *)((char *)w + 0x190), D_1ADD60[0] + origin[0], D_1ADD60[1] + origin[1], 0.0f, 0.0f);
-    func_00337B18((GuiElement *)((char *)w + 0x1E8), D_1ADD60[0] + origin[0], D_1ADD60[1] + origin[1] + 18.0f, 0.0f, 0.0f);
-    func_00337B18((GuiElement *)((char *)w + 0x240), D_1ADD60[0] + origin[0], D_1ADD60[1] + origin[1] + 36.0f, 0.0f, 0.0f);
-    func_00337B18((GuiElement *)((char *)w + 0x298), D_1ADD60[0] + origin[0], D_1ADD60[1] + origin[1] + 54.0f, 0.0f, 0.0f);
-    func_00337B18((GuiElement *)((char *)w + 0x2F0), D_1ADD60[0] + origin[0], D_1ADD60[1] + origin[1] + 72.0f, 0.0f, 0.0f);
-    func_00337B18((GuiElement *)((char *)w + 0x348), D_1ADD60[0] + 8.0f + origin[0], D_1ADD60[1] + origin[1] + 90.0f, 0.0f, 0.0f);
-    func_00337B18((GuiElement *)((char *)w + 0x3A0), D_1ADD68[0] + origin[0], D_1ADD68[1] + origin[1], 0.0f, 0.0f);
-    func_00337B18((GuiElement *)((char *)w + 0x3F8), D_1ADD70[0] + origin[0], D_1ADD70[1] + origin[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x8),   origin[0], origin[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x54),  origin[0], origin[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0xA0),  origin[0], origin[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0xEC),  origin[0], origin[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x138), D_1ADD58[0] + origin[0], D_1ADD58[1] + origin[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x190), D_1ADD60[0] + origin[0], D_1ADD60[1] + origin[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x1E8), D_1ADD60[0] + origin[0], D_1ADD60[1] + origin[1] + 18.0f, 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x240), D_1ADD60[0] + origin[0], D_1ADD60[1] + origin[1] + 36.0f, 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x298), D_1ADD60[0] + origin[0], D_1ADD60[1] + origin[1] + 54.0f, 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x2F0), D_1ADD60[0] + origin[0], D_1ADD60[1] + origin[1] + 72.0f, 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x348), D_1ADD60[0] + 8.0f + origin[0], D_1ADD60[1] + origin[1] + 90.0f, 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x3A0), D_1ADD68[0] + origin[0], D_1ADD68[1] + origin[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x3F8), D_1ADD70[0] + origin[0], D_1ADD70[1] + origin[1], 0.0f, 0.0f);
 
     func_002DFFC8((char *)w + 0x450, level);
 
@@ -1768,9 +1768,9 @@ s32 func_0033BE50(void *w) {
  * layer (MapDraw(0,1) + func_002DBC60(0)), draws the two foreground sprites
  * (p+0xA0, p+0xEC) and the nine text labels at +0x138 (stride 0x58).
  * Matching arm stays INCLUDE_ASM; #else is the structure model.
- * Word-verified vs USA func_0033B428: GuiSpriteElementDraw->func_00338000,
+ * Word-verified vs USA func_0033B428: GuiSpriteElementDraw->GuiSpriteElementDraw,
  * AppendGsRegPacket->AppendGsRegPacket, MapDraw KEPT, func_002DBC98->func_002DBC60,
- * GuiTextElementDraw->func_00338770; offsets identical. */
+ * GuiTextElementDraw->GuiTextElementDraw; offsets identical. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033C308);
 #else
@@ -1779,23 +1779,23 @@ extern void MapDraw(s32 a, s32 b);
 extern void func_002DBC60(s32 a);              /* USA func_002DBC98 */
 void func_0033C308(void *p) {
     if (*(s32 *)((char *)p + 0x490) != 0) {
-        func_00338000((char *)p + 0x8);
-        func_00338000((char *)p + 0x54);
+        GuiSpriteElementDraw((char *)p + 0x8);
+        GuiSpriteElementDraw((char *)p + 0x54);
         AppendGsRegPacket(0x42, 0x44);
         AppendGsRegPacket(0x47, 0xB);
         MapDraw(0, 1);
         func_002DBC60(0);
-        func_00338000((char *)p + 0xA0);
-        func_00338000((char *)p + 0xEC);
-        func_00338770((char *)p + 0x138);
-        func_00338770((char *)p + 0x190);
-        func_00338770((char *)p + 0x1E8);
-        func_00338770((char *)p + 0x240);
-        func_00338770((char *)p + 0x298);
-        func_00338770((char *)p + 0x2F0);
-        func_00338770((char *)p + 0x348);
-        func_00338770((char *)p + 0x3A0);
-        func_00338770((char *)p + 0x3F8);
+        GuiSpriteElementDraw((char *)p + 0xA0);
+        GuiSpriteElementDraw((char *)p + 0xEC);
+        GuiTextElementDraw((char *)p + 0x138);
+        GuiTextElementDraw((char *)p + 0x190);
+        GuiTextElementDraw((char *)p + 0x1E8);
+        GuiTextElementDraw((char *)p + 0x240);
+        GuiTextElementDraw((char *)p + 0x298);
+        GuiTextElementDraw((char *)p + 0x2F0);
+        GuiTextElementDraw((char *)p + 0x348);
+        GuiTextElementDraw((char *)p + 0x3A0);
+        GuiTextElementDraw((char *)p + 0x3F8);
     }
 }
 #endif
@@ -1804,19 +1804,19 @@ void func_0033C308(void *p) {
  * type-B elements (p+0x4, stride 0x4C), the widget at +0x134, and one type-C
  * element at +0x170; return the object. Matching arm stays INCLUDE_ASM; #else is
  * the structure model.
- * Word-verified vs USA func_0033B4E8: GuiElementInitTypeB->func_00337E88,
- * func_003374D8->func_003383B0, GuiElementInitTypeC->func_00338648; offsets
+ * Word-verified vs USA func_0033B4E8: GuiElementInitTypeB->GuiElementInitTypeB,
+ * func_003374D8->func_003383B0, GuiElementInitTypeC->GuiElementInitTypeC; offsets
  * identical. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033C3C8);
 #else
 void *func_0033C3C8(void *p) {
-    func_00337E88((char *)p + 0x4);
-    func_00337E88((char *)p + 0x50);
-    func_00337E88((char *)p + 0x9C);
-    func_00337E88((char *)p + 0xE8);
+    GuiElementInitTypeB((char *)p + 0x4);
+    GuiElementInitTypeB((char *)p + 0x50);
+    GuiElementInitTypeB((char *)p + 0x9C);
+    GuiElementInitTypeB((char *)p + 0xE8);
     func_003383B0((char *)p + 0x134);
-    func_00338648((char *)p + 0x170);
+    GuiElementInitTypeC((char *)p + 0x170);
     return p;
 }
 #endif
@@ -1833,17 +1833,17 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiProgressBarWi
  * from the anchor vector at *(p+0x20C): x = anchor[0] + D_1ADD80; y = anchor[1]
  * + D_1ADD84; z = w = 0. Matching arm stays INCLUDE_ASM; #else is the structure
  * model.
- * Word-verified vs USA func_0033B6D0: GuiElementSetPos->func_00337B18;
+ * Word-verified vs USA func_0033B6D0: GuiElementSetPos->GuiElementSetPos;
  * DATA +0xA0 lane: D_1ADCE0->D_1ADD80, D_1ADCE4->D_1ADD84. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033C5B0);
 #else
-extern void func_00337B18(void *e, f32 x, f32 y, f32 z, f32 w);
+extern void GuiElementSetPos(void *e, f32 x, f32 y, f32 z, f32 w);
 extern f32 D_1ADD80, D_1ADD84;
 void func_0033C5B0(void *p) {
     if (*(s32 *)((char *)p + 0x21C) != 0) {
         f32 *anchor = *(f32 **)((char *)p + 0x20C);
-        func_00337B18((char *)p + 0x170,
+        GuiElementSetPos((char *)p + 0x170,
                       anchor[0] + D_1ADD80, anchor[1] + D_1ADD84,
                       0.0f, 0.0f);
     }
@@ -1885,8 +1885,8 @@ void func_0033C920(void *p, s32 v) {
  * entries pointer at +0x0, and count its valid entries (stride 0x18, terminator
  * field +4 == -1, capped at 0x10) into +0x208, zeroing the +0x1C8 row array as it
  * goes. Matching arm stays INCLUDE_ASM; #else is the structure model.
- * Word-verified vs USA func_0033BA48: GuiElementInit->func_00337EC0,
- * GuiElementGetColor->func_00337B00, GuiElementSetGlyph->func_00338070,
+ * Word-verified vs USA func_0033BA48: GuiElementInit->GuiElementInit,
+ * GuiElementGetColor->func_00337B00, GuiElementSetGlyph->GuiElementSetGlyph,
  * GuiElementSetVisible->func_00337B48; DATA +0xA0 lane: D_1ADC60->D_1ADD00,
  * D_1ADD08->D_1ADDA8; g_guiInstance KEPT. */
 #ifndef TARGET_NATIVE
@@ -1902,11 +1902,11 @@ void func_0033C928(void *w, s32 *srcGlyphs, void *entries) {
     for (i = 0; i <= 3; i++) {
         GuiElement *elem = (GuiElement *)((char *)w + 0x4 + i * 0x4C);
         if (srcGlyphs[i] != 0) {
-            func_00337EC0(elem, D_1ADD00, *(void **)((char *)w + 0x210));
+            GuiElementInit(elem, D_1ADD00, *(void **)((char *)w + 0x210));
             *func_00337B00(elem) = D_1ADDA8[i];
-            func_00338070(elem, (u8 *)(g_guiInstance + 0x8710), srcGlyphs[i]);
+            GuiElementSetGlyph(elem, (u8 *)(g_guiInstance + 0x8710), srcGlyphs[i]);
         } else {
-            func_00338070(elem, (u8 *)(g_guiInstance + 0x8710), 0);
+            GuiElementSetGlyph(elem, (u8 *)(g_guiInstance + 0x8710), 0);
             func_00337B48(elem, 0);
         }
     }
@@ -1936,31 +1936,31 @@ void func_0033C928(void *w, s32 *srcGlyphs, void *entries) {
 }
 #endif
 
-/* func_0033CA78 (GuiDialogBoxInitElements twin): build the dialog-box
+/* GuiDialogBoxInitElements (GuiDialogBoxInitElements twin): build the dialog-box
  * sub-elements over p - 5 TypeB border elements (p+0xC, stride 0x4C) then 3 TypeC
  * text rows (p+0x198, +0x1F0, +0x248). All field writes happen inside the
  * TypeB/TypeC ctors. Matching arm stays INCLUDE_ASM; #else is the structure model.
- * Word-verified vs USA GuiDialogBoxInitElements: GuiElementInitTypeB->func_00337E88,
- * GuiElementInitTypeC->func_00338648; offsets identical. Sig pinned void(void*)
+ * Word-verified vs USA GuiDialogBoxInitElements: GuiElementInitTypeB->GuiElementInitTypeB,
+ * GuiElementInitTypeC->GuiElementInitTypeC; offsets identical. Sig pinned void(void*)
  * (called by landed func_0033B520). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033CA78);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiDialogBoxInitElements);
 #else
-void func_0033CA78(void *p) {
+void GuiDialogBoxInitElements(void *p) {
     char *base = (char *)p;
     s32 i;
     for (i = 0; i < 5; i++) {
-        func_00337E88(base + 0xC + i * 0x4C);
+        GuiElementInitTypeB(base + 0xC + i * 0x4C);
     }
-    func_00338648(base + 0x198);
-    func_00338648(base + 0x1F0);
-    func_00338648(base + 0x248);
+    GuiElementInitTypeC(base + 0x198);
+    GuiElementInitTypeC(base + 0x1F0);
+    GuiElementInitTypeC(base + 0x248);
 }
 #endif
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033CAF8);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033CB00);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiDialogBoxInitBorder);
 
 /* func_0033CD40: store an int at +0x2C0. USA func_0033BE60. */
 void func_0033CD40(void *p, s32 v) {
@@ -1983,7 +1983,7 @@ void func_0033CD48(void *p, s32 v) {
  * The flags second argument is unused by this method. Matching arm stays
  * INCLUDE_ASM; #else is the structure model. Sig pinned void(void*, s32) (called
  * by landed func_0033B7D0).
- * Word-verified vs USA func_0033BE70: GuiElementSetPos->func_00337B18,
+ * Word-verified vs USA func_0033BE70: GuiElementSetPos->GuiElementSetPos,
  * GuiElementSetAlpha->func_003380A0; offsets identical. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033CD50);
@@ -1997,22 +1997,22 @@ void func_0033CD50(void *e, s32 flags) {
     for (i = 0; i <= 4; i++) {
         if (active[i] != 0) {
             origin = *(f32 **)e;
-            func_00337B18(row, origin[0], origin[1], 0.0f, 0.0f);
+            GuiElementSetPos(row, origin[0], origin[1], 0.0f, 0.0f);
             func_003380A0(row, *(f32 *)((char *)e + 0x2A4));
         }
         row = (GuiElement *)((char *)row + 0x4C);
     }
     if (*(s32 *)((char *)e + 0x2C0) != 0) {
         origin = *(f32 **)e;
-        func_00337B18((GuiElement *)((char *)e + 0x198),
+        GuiElementSetPos((GuiElement *)((char *)e + 0x198),
                       origin[0] + *(f32 *)((char *)e + 0x2A8),
                       origin[1] + *(f32 *)((char *)e + 0x2AC), 0.0f, 0.0f);
         origin = *(f32 **)e;
-        func_00337B18((GuiElement *)((char *)e + 0x248),
+        GuiElementSetPos((GuiElement *)((char *)e + 0x248),
                       origin[0] + *(f32 *)((char *)e + 0x2B8),
                       origin[1] + *(f32 *)((char *)e + 0x2BC), 0.0f, 0.0f);
         origin = *(f32 **)e;
-        func_00337B18((GuiElement *)((char *)e + 0x1F0),
+        GuiElementSetPos((GuiElement *)((char *)e + 0x1F0),
                       origin[0] + *(f32 *)((char *)e + 0x2B0),
                       origin[1] + *(f32 *)((char *)e + 0x2B4), 0.0f, 0.0f);
     }
@@ -2030,7 +2030,7 @@ void func_0033CD50(void *e, s32 flags) {
  *    and the footer (p+0x1F0) whenever *(p+0x2C8) is set. Matching arm stays
  *    INCLUDE_ASM; #else is the structure model. Sig pinned void(void*) (file-scope
  *    extern @59, called by landed func_0033B8D8).
- * Word-verified vs USA func_0033BF90: GuiTextElementDraw->func_00338770;
+ * Word-verified vs USA func_0033BF90: GuiTextElementDraw->GuiTextElementDraw;
  * offsets identical. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033CE70);
@@ -2051,15 +2051,15 @@ void func_0033CE70(void *p) {
         rowBase += 0x4C;
     }
     if (*(s32 *)((char *)p + 0x2C0) != 0) {
-        func_00338770((char *)p + 0x198);
+        GuiTextElementDraw((char *)p + 0x198);
         if (*(s32 *)((char *)p + 0x2C4) != 0) {
             s32 footer = *(s32 *)((char *)p + 0x2C8);
             if (*(s32 *)((char *)p + 0x2CC) != 0) {
-                func_00338770((char *)p + 0x248);
+                GuiTextElementDraw((char *)p + 0x248);
                 footer = *(s32 *)((char *)p + 0x2C8);
             }
             if (footer != 0) {
-                func_00338770((char *)p + 0x1F0);
+                GuiTextElementDraw((char *)p + 0x1F0);
             }
         }
     }
@@ -2068,7 +2068,7 @@ void func_0033CE70(void *p) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033CF40);
 
-/* func_0033CF58 (GuiDialogBoxSetBounds): write six dialog-box bound floats to the
+/* GuiDialogBoxSetBounds (GuiDialogBoxSetBounds): write six dialog-box bound floats to the
  * panel at +0x2A8..+0x2BC. Args a..f arrive in $f12..$f17; the EU store order
  * (f@+0x2B4, a@+0x2A8, b@+0x2AC, c@+0x2B8, d@+0x2BC, e@+0x2B0) is op-for-op
  * identical to the USA twin. Matching arm stays INCLUDE_ASM; #else is the
@@ -2076,9 +2076,9 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033CF40);
  * +0xEE0): pure swc1-store leaf, no data/gp/jal refs - no retargets. Sig pinned
  * void(void*,f32×6) (called by landed func_0033B558). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033CF58);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiDialogBoxSetBounds);
 #else
-void func_0033CF58(void *p, f32 a, f32 b, f32 c, f32 d, f32 e, f32 f) {
+void GuiDialogBoxSetBounds(void *p, f32 a, f32 b, f32 c, f32 d, f32 e, f32 f) {
     *(f32 *)((char *)p + 0x2B4) = f;
     *(f32 *)((char *)p + 0x2A8) = a;
     *(f32 *)((char *)p + 0x2AC) = b;
@@ -2088,7 +2088,7 @@ void func_0033CF58(void *p, f32 a, f32 b, f32 c, f32 d, f32 e, f32 f) {
 }
 #endif
 
-/* func_0033CF78 (GuiDialogBoxSetText3): assign the three dialog-box text labels -
+/* GuiDialogBoxSetText3 (GuiDialogBoxSetText3): assign the three dialog-box text labels -
  * the title (p+0x198 <- t0), the body (p+0x248 <- t1) and the footer/prompt
  * (p+0x1F0 <- t2) - each via the text setter func_00338730. Matching arm stays
  * INCLUDE_ASM; #else is the structure model. Word-verified vs USA
@@ -2096,9 +2096,9 @@ void func_0033CF58(void *p, f32 a, f32 b, f32 c, f32 d, f32 e, f32 f) {
  * (EU jal); offsets identical. Sig pinned void(void*,s32,s32,s32) (called by landed
  * func_0033B6C0/func_0033B740). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033CF78);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiDialogBoxSetText3);
 #else
-void func_0033CF78(void *p, s32 t0, s32 t1, s32 t2) {
+void GuiDialogBoxSetText3(void *p, s32 t0, s32 t1, s32 t2) {
     func_00338730((GuiElement *)((char *)p + 0x198), t0); /* title */
     func_00338730((GuiElement *)((char *)p + 0x248), t1); /* body */
     func_00338730((GuiElement *)((char *)p + 0x1F0), t2); /* footer */
@@ -2127,15 +2127,15 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033D468);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033D838);
 
-/* func_0033DC60: init the embedded dialog-box (at p+0x8) via func_0033CA78, then
+/* func_0033DC60: init the embedded dialog-box (at p+0x8) via GuiDialogBoxInitElements, then
  * return the object. Matching arm stays INCLUDE_ASM; #else is the structure model.
  * Word-verified vs USA func_0033CD80 (0x33CD80, delta +0xEE0):
- * GuiDialogBoxInitElements -> func_0033CA78 (EU jal); offset +0x8, return p. */
+ * GuiDialogBoxInitElements (EU jal); offset +0x8, return p. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033DC60);
 #else
 void *func_0033DC60(void *p) {
-    func_0033CA78((char *)p + 0x8);
+    GuiDialogBoxInitElements((char *)p + 0x8);
     return p;
 }
 #endif
@@ -2152,16 +2152,16 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033DDC0);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033DF90);
 
-/* func_0033E000: init the embedded dialog-box (at p+0x8) via func_0033CA78, then
+/* func_0033E000: init the embedded dialog-box (at p+0x8) via GuiDialogBoxInitElements, then
  * return the object (identical body to func_0033DC60). Matching arm stays
  * INCLUDE_ASM; #else is the structure model. Word-verified vs USA func_0033D1C0
- * (0x33D1C0, delta +0xEE0): GuiDialogBoxInitElements -> func_0033CA78 (EU jal);
+ * (0x33D1C0, delta +0xEE0): GuiDialogBoxInitElements (EU jal);
  * offset +0x8, return p. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033E000);
 #else
 void *func_0033E000(void *p) {
-    func_0033CA78((char *)p + 0x8);
+    GuiDialogBoxInitElements((char *)p + 0x8);
     return p;
 }
 #endif
@@ -2201,12 +2201,12 @@ void func_0033E248(void *e) {
 /* func_0033E300 (twin of USA func_0033D478): init the embedded dialog-box (at
  * p+0x8) and return the object. Matching arm stays INCLUDE_ASM; #else is the
  * structure model. Word-verified vs USA func_0033D478: GuiDialogBoxInitElements->
- * func_0033CA78 (already file-scope in this unit), offset p+0x8. */
+ * GuiDialogBoxInitElements (already file-scope in this unit), offset p+0x8. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033E300);
 #else
 void *func_0033E300(void *p) {
-    func_0033CA78((char *)p + 0x8);
+    GuiDialogBoxInitElements((char *)p + 0x8);
     return p;
 }
 #endif
@@ -2268,12 +2268,12 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033E608);
 /* func_0033E888 (twin of USA func_0033DA00): init the embedded dialog-box (at
  * p+0x8) and return the object (identical body shape to func_0033E300).
  * Matching arm stays INCLUDE_ASM; #else is the structure model. Word-verified vs
- * USA func_0033DA00: GuiDialogBoxInitElements->func_0033CA78, offset p+0x8. */
+ * USA func_0033DA00: GuiDialogBoxInitElements->GuiDialogBoxInitElements, offset p+0x8. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033E888);
 #else
 void *func_0033E888(void *p) {
-    func_0033CA78((char *)p + 0x8);
+    GuiDialogBoxInitElements((char *)p + 0x8);
     return p;
 }
 #endif
@@ -2363,15 +2363,15 @@ void func_0033EAF0(void *w) {
 /* func_0033EC50 (twin of USA func_0033DDC8): init the embedded dialog-box (at
  * p+0x8) and its two GuiListRow elements (p+0x2DC, p+0x324), return the object.
  * Matching arm stays INCLUDE_ASM; #else is the structure model. Word-verified vs
- * USA func_0033DDC8: GuiDialogBoxInitElements->func_0033CA78, GuiListRowElementInit
- * ->func_003380B0 (both already file-scope), offsets p+0x8/p+0x2DC/p+0x324. */
+ * USA func_0033DDC8: GuiDialogBoxInitElements->GuiDialogBoxInitElements, GuiListRowElementInit
+ * ->GuiListRowElementInit (both already file-scope), offsets p+0x8/p+0x2DC/p+0x324. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033EC50);
 #else
 void *func_0033EC50(void *p) {
-    func_0033CA78((char *)p + 0x8);
-    func_003380B0((char *)p + 0x2DC);
-    func_003380B0((char *)p + 0x324);
+    GuiDialogBoxInitElements((char *)p + 0x8);
+    GuiListRowElementInit((char *)p + 0x2DC);
+    GuiListRowElementInit((char *)p + 0x324);
     return p;
 }
 #endif
@@ -2389,8 +2389,8 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033EC90);
  * list scroll positions and recomputes the channel mix (func_002E5630). Returns
  * bit 6 of flags. Matching arm stays INCLUDE_ASM; #else is the structure model.
  * Word-verified vs USA func_0033E070: func_0033BE70->func_0033CD50,
- * func_0033C060->func_0033CF40, GuiElementSetPos->func_00337B18, PlayGlobalSound->
- * func_002E6C28, GuiListSetScrollPos->func_003388F0, func_002E5698->func_002E5630,
+ * func_0033C060->func_0033CF40, GuiElementSetPos->GuiElementSetPos, PlayGlobalSound->
+ * func_002E6C28, GuiListSetScrollPos->GuiListSetScrollPos, func_002E5698->func_002E5630,
  * func_00132938->func_00132998; anchor floats D_1ADE30/34/38/3C->D_1ADED0/D4/D8/DC;
  * g_musicVolume->D_1A7C28, g_sfxVolume->D_1A7C24, g_audioStereoMode->D_1A7C20. */
 #ifndef TARGET_NATIVE
@@ -2411,9 +2411,9 @@ s32 func_0033EEF8(void *w, s32 flags) {
     anchor = *(f32 **)((char *)w + 0x36C);
     func_0033CF40(box, anchor[0], anchor[1]);
     anchor = *(f32 **)((char *)w + 0x36C);
-    func_00337B18(musicList, anchor[0] + D_1ADED0, anchor[1] + D_1ADED4, 0.0f, 0.0f);
+    GuiElementSetPos(musicList, anchor[0] + D_1ADED0, anchor[1] + D_1ADED4, 0.0f, 0.0f);
     anchor = *(f32 **)((char *)w + 0x36C);
-    func_00337B18(sfxList, anchor[0] + D_1ADED8, anchor[1] + D_1ADEDC, 0.0f, 0.0f);
+    GuiElementSetPos(sfxList, anchor[0] + D_1ADED8, anchor[1] + D_1ADEDC, 0.0f, 0.0f);
 
     if (flags & 0x1000) {
         func_002E6C28(3, 0, 0);
@@ -2451,8 +2451,8 @@ s32 func_0033EEF8(void *w, s32 flags) {
         }
     }
 
-    func_003388F0(sfxList, D_1A7C24);
-    func_003388F0(musicList, D_1A7C28);
+    GuiListSetScrollPos(sfxList, D_1A7C24);
+    GuiListSetScrollPos(musicList, D_1A7C28);
     func_002E5630();
     return (flags >> 6) & 1;
 }
@@ -2465,13 +2465,13 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033F190);
  * are mnemonic-hash-mapped to USA func_0033E488; func_0033F310 is the TRUE twin -
  * its body (single GuiDialogBoxInitElements(p+8); return p) matches func_0033E488's
  * #else exactly. Matching arm stays INCLUDE_ASM; #else is the structure model.
- * Word-verified vs USA func_0033E488: GuiDialogBoxInitElements->func_0033CA78,
+ * Word-verified vs USA func_0033E488: GuiDialogBoxInitElements->GuiDialogBoxInitElements,
  * offset p+0x8. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033F310);
 #else
 void *func_0033F310(void *p) {
-    func_0033CA78((char *)p + 0x8);
+    GuiDialogBoxInitElements((char *)p + 0x8);
     return p;
 }
 #endif
@@ -2532,16 +2532,16 @@ void func_0033F508(void *w) {
 }
 #endif
 
-/* func_0033F5D8 (GuiQuitDialogInitElements, twin of USA GuiQuitDialogInitElements
+/* GuiQuitDialogInitElements (GuiQuitDialogInitElements, twin of USA GuiQuitDialogInitElements
  * @0x33E750, delta +0xE88, EU pin-CONFIRMED): init the embedded dialog-box (at
  * p+0x8) and return the object. Matching arm stays INCLUDE_ASM; #else is the
  * structure model. Word-verified vs USA GuiQuitDialogInitElements:
- * GuiDialogBoxInitElements->func_0033CA78, offset p+0x8. */
+ * GuiDialogBoxInitElements->GuiDialogBoxInitElements, offset p+0x8. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033F5D8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiQuitDialogInitElements);
 #else
-void *func_0033F5D8(void *p) {
-    func_0033CA78((char *)p + 0x8);
+void *GuiQuitDialogInitElements(void *p) {
+    GuiDialogBoxInitElements((char *)p + 0x8);
     return p;
 }
 #endif
@@ -2636,12 +2636,12 @@ void func_0033F840(void *w) {
  * func_0033E488, but landed func_0033F310 is that twin already; func_0033F9A0 is a
  * distinct EU sibling with the identical trivial InitElements-and-return body.
  * Matching arm stays INCLUDE_ASM; #else is the structure model. Word-verified vs
- * USA func_0033E488: GuiDialogBoxInitElements->func_0033CA78, offset p+0x8. */
+ * USA func_0033E488: GuiDialogBoxInitElements->GuiDialogBoxInitElements, offset p+0x8. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033F9A0);
 #else
 void *func_0033F9A0(void *p) {
-    func_0033CA78((char *)p + 0x8);
+    GuiDialogBoxInitElements((char *)p + 0x8);
     return p;
 }
 #endif
@@ -2650,7 +2650,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033F9D0);
 
 /* func_0033FB00 (EU func_0033E5E8-family handler + per-frame re-localization):
  * re-set the dialog-box's three text rows (localized 0xB72/0xB5F/0xB60) via
- * func_0033CF78, re-lay-out the box (func_0033CD50(box, flags)), re-position it at
+ * GuiDialogBoxSetText3, re-lay-out the box (func_0033CD50(box, flags)), re-position it at
  * its anchor (*(w+0x2DC) two floats) via func_0033CF40, and on the confirm bit
  * (flags & 0x40) while not already busy (*(w+0x2D8)==0) play the chime
  * func_002E6C28(4,0,0) and set the one-shot flag D_1A7C3A. Returns bit 6 of flags.
@@ -2660,7 +2660,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033F9D0);
  * func_0033C060->func_0033CF40, PlayGlobalSound->func_002E6C28, same 0x40/0x2D8
  * confirm-chime guard, anchor at +0x2DC, return (flags>>6)&1).
  * REGION DELTA (behavioural): EU adds a per-frame GuiDialogBoxSetText3
- * (func_0033CF78) that re-localizes rows 0xB72/0xB5F/0xB60 every frame; USA
+ * (GuiDialogBoxSetText3) that re-localizes rows 0xB72/0xB5F/0xB60 every frame; USA
  * func_0033E5E8 has NO SetText3 (text set once at construction). Also EU toggles
  * flag D_1A7C3A via the (x<1) idiom where USA func_0033E5E8 toggles D_1A7B9E.
  * Matching arm stays INCLUDE_ASM; #else is the structure model. */
@@ -2675,7 +2675,7 @@ s32 func_0033FB00(void *w, s32 flags) {
     t0 = (s32)GetLocalizedString(0xB72);
     t1 = (s32)GetLocalizedString(0xB5F);
     t2 = (s32)GetLocalizedString(0xB60);
-    func_0033CF78(box, t0, t1, t2);
+    GuiDialogBoxSetText3(box, t0, t1, t2);
 
     func_0033CD50(box, flags);
     anchor = *(f32 **)((char *)w + 0x2DC);
@@ -2717,12 +2717,12 @@ void func_0033FBE0(void *e) {
  * p+0x8) and return the object. (func_0033E488-family trivial body; several USA
  * siblings share it identically.) Matching arm stays INCLUDE_ASM; #else is the
  * structure model. Word-verified vs USA func_0033EDD0: GuiDialogBoxInitElements->
- * func_0033CA78, offset p+0x8. */
+ * GuiDialogBoxInitElements, offset p+0x8. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033FC98);
 #else
 void *func_0033FC98(void *p) {
-    func_0033CA78((char *)p + 0x8);
+    GuiDialogBoxInitElements((char *)p + 0x8);
     return p;
 }
 #endif
@@ -2731,7 +2731,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033FCC8);
 
 /* func_0033FDF8 (EU func_0033EF30-family handler + per-frame re-localization):
  * sibling of func_0033FB00 with an identical body. Re-set the dialog-box's three
- * text rows (localized 0xB72/0xB5F/0xB60) via func_0033CF78, re-lay-out the box
+ * text rows (localized 0xB72/0xB5F/0xB60) via GuiDialogBoxSetText3, re-lay-out the box
  * (func_0033CD50(box, flags)), re-position it at its anchor (*(w+0x2DC) two floats)
  * via func_0033CF40, and on the confirm bit (flags & 0x40) while not busy
  * (*(w+0x2D8)==0) play func_002E6C28(4,0,0) + set the one-shot flag D_1A7C3A.
@@ -2742,7 +2742,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033FCC8);
  * func_0033C060->func_0033CF40, PlayGlobalSound->func_002E6C28, 0x40/0x2D8 guard,
  * anchor +0x2DC, return (flags>>6)&1).
  * REGION DELTA (behavioural): EU adds a per-frame GuiDialogBoxSetText3
- * (func_0033CF78) re-localizing 0xB72/0xB5F/0xB60 every frame; USA func_0033EF30
+ * (GuiDialogBoxSetText3) re-localizing 0xB72/0xB5F/0xB60 every frame; USA func_0033EF30
  * has NO SetText3. EU toggles D_1A7C3A via the (x<1) idiom (USA func_0033EF30
  * toggles D_1A7BBA). Matching arm stays INCLUDE_ASM; #else is the structure model. */
 #ifndef TARGET_NATIVE
@@ -2756,7 +2756,7 @@ s32 func_0033FDF8(void *w, s32 flags) {
     t0 = (s32)GetLocalizedString(0xB72);
     t1 = (s32)GetLocalizedString(0xB5F);
     t2 = (s32)GetLocalizedString(0xB60);
-    func_0033CF78(box, t0, t1, t2);
+    GuiDialogBoxSetText3(box, t0, t1, t2);
 
     func_0033CD50(box, flags);
     anchor = *(f32 **)((char *)w + 0x2DC);
@@ -2774,12 +2774,12 @@ s32 func_0033FDF8(void *w, s32 flags) {
  * p+0x8) and return the object. Trivial InitElements-and-return body shared by
  * several USA siblings (func_0033E488/EDD0/EFC8). Matching arm stays INCLUDE_ASM;
  * #else is the structure model. Word-verified vs USA func_0033E488:
- * GuiDialogBoxInitElements->func_0033CA78, offset p+0x8. */
+ * GuiDialogBoxInitElements->GuiDialogBoxInitElements, offset p+0x8. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033FED8);
 #else
 void *func_0033FED8(void *p) {
-    func_0033CA78((char *)p + 0x8);
+    GuiDialogBoxInitElements((char *)p + 0x8);
     return p;
 }
 #endif
@@ -2788,7 +2788,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_0033FF08);
 
 /* func_00340038 (per-frame handler for the dialog-box screen constructed by EU
  * func_0033FF08 = USA func_0033F000). Re-localizes the box's three text rows every
- * frame (GetLocalizedString x3 -> GuiDialogBoxSetText3/func_0033CF78), lays out the
+ * frame (GetLocalizedString x3 -> GuiDialogBoxSetText3/GuiDialogBoxSetText3), lays out the
  * embedded box (+0x8) via func_0033CD50, re-anchors it at *(w+0x2DC) via func_0033CF40,
  * then on the confirm bit (flags & 0x40) while not busy (+0x2D8 == 0) plays confirm
  * sound 4 and toggles the global one-shot flag D_1A7C3A. Returns bit 6 of flags.
@@ -2811,7 +2811,7 @@ s32 func_00340038(void *w, s32 flags) {
     t0 = (s32)GetLocalizedString(0xB72);
     t1 = (s32)GetLocalizedString(0xB5F);
     t2 = (s32)GetLocalizedString(0xB60);
-    func_0033CF78(box, t0, t1, t2);
+    GuiDialogBoxSetText3(box, t0, t1, t2);
 
     func_0033CD50(box, flags);   /* 2nd arg (flags) ignored by the callee */
     anchor = *(f32 **)((char *)w + 0x2DC);
@@ -2826,17 +2826,17 @@ s32 func_00340038(void *w, s32 flags) {
 #endif
 
 /* func_00340118 (EU twin of USA func_0033F1C0): init the embedded dialog-box (p+0x8)
- * via func_0033CA78 (GuiDialogBoxInitElements) and the list widget at p+0x2E0 via
+ * via GuiDialogBoxInitElements (GuiDialogBoxInitElements) and the list widget at p+0x2E0 via
  * func_0034A068 (USA func_00348BD0), then return the object. Matching arm stays
  * INCLUDE_ASM; #else is the structure model. Word-verified vs USA func_0033F1C0:
- * GuiDialogBoxInitElements->func_0033CA78, func_00348BD0->func_0034A068 (out-of-TU);
+ * GuiDialogBoxInitElements->GuiDialogBoxInitElements, func_00348BD0->func_0034A068 (out-of-TU);
  * offsets p/+0x8/+0x2E0. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00340118);
 #else
 extern void func_0034A068(void *p);
 void *func_00340118(void *p) {
-    func_0033CA78((char *)p + 0x8);
+    GuiDialogBoxInitElements((char *)p + 0x8);
     func_0034A068((char *)p + 0x2E0);
     return p;
 }
@@ -2862,38 +2862,38 @@ void func_003402F0(void *p) {
 }
 
 /* func_00340310 (EU twin of USA func_0033F3B8): init the list widget at p+0x2E0 via
- * func_0034A230 (USA func_00348DA0) with the row-record table, then record that table
+ * GuiMenuListSetRows (USA func_00348DA0) with the row-record table, then record that table
  * pointer at p+0x3B8. Matching arm stays INCLUDE_ASM; #else is the structure model.
- * Word-verified vs USA func_0033F3B8: func_00348DA0->func_0034A230 (out-of-TU);
+ * Word-verified vs USA func_0033F3B8: func_00348DA0->GuiMenuListSetRows (out-of-TU);
  * offsets +0x2E0/+0x3B8. Args: p, records ($5 held live across the call). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00340310);
 #else
-extern void func_0034A230(void *p, void *records);
+extern void GuiMenuListSetRows(void *p, void *records);
 void func_00340310(void *p, void *records) {
-    func_0034A230((char *)p + 0x2E0, records);
+    GuiMenuListSetRows((char *)p + 0x2E0, records);
     *(void **)((char *)p + 0x3B8) = records;
 }
 #endif
 
 /* func_00340348 (per-frame handler for the list dialog-box). Re-localizes the box's
- * three text rows every frame (GetLocalizedString x3 -> func_0033CF78), lays out the
+ * three text rows every frame (GetLocalizedString x3 -> GuiDialogBoxSetText3), lays out the
  * box (+0x8) via func_0033CD50, re-anchors it at *(w+0x3BC) via func_0033CF40, drives
- * the list element (+0x2E0): func_0034A148 (USA func_00348CB8) with arg1, then
- * re-anchors the list at *(w+0x3BC) via func_0034A2B8 (USA func_00348E28). Returns
+ * the list element (+0x2E0): GuiMenuListHandleInput (USA func_00348CB8) with arg1, then
+ * re-anchors the list at *(w+0x3BC) via GuiMenuListSetOrigin (USA func_00348E28). Returns
  * bit 6 of arg1. Matching arm stays INCLUDE_ASM; #else is the structure model.
  * TWIN RE-DERIVATION: assigned twin USA func_0033F3B8 is a mnemonic-hash MIS-MAP (a
  * 2-line init = EU func_00340310). Correct shape twin is USA func_0033F3F0 (the
  * list-anchor handler). Modeled from the EU .s: func_0033BE70->func_0033CD50,
- * func_0033C060->func_0033CF40, func_00348CB8->func_0034A148, func_00348E28->
- * func_0034A2B8, anchor +0x3BC.
+ * func_0033C060->func_0033CF40, func_00348CB8->GuiMenuListHandleInput, func_00348E28->
+ * GuiMenuListSetOrigin, anchor +0x3BC.
  * GENUINE REGION DIFF: USA func_0033F3F0 does NOT set text - the EU handler
  * re-localizes 3 rows every frame (0xBB1/0xB86/0xB60, PAL multi-language). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00340348);
 #else
-extern void func_0034A148(void *e, s32 v);
-extern void func_0034A2B8(void *e, f32 x, f32 y);
+extern void GuiMenuListHandleInput(void *e, s32 v);
+extern void GuiMenuListSetOrigin(void *e, f32 x, f32 y);
 s32 func_00340348(void *w, s32 arg1) {
     void *box = (char *)w + 0x8;
     void *list = (char *)w + 0x2E0;
@@ -2903,15 +2903,15 @@ s32 func_00340348(void *w, s32 arg1) {
     t0 = (s32)GetLocalizedString(0xBB1);
     t1 = (s32)GetLocalizedString(0xB86);
     t2 = (s32)GetLocalizedString(0xB60);
-    func_0033CF78(box, t0, t1, t2);
+    GuiDialogBoxSetText3(box, t0, t1, t2);
 
     func_0033CD50(box, arg1);   /* 2nd arg ignored by the callee */
     anchor = *(f32 **)((char *)w + 0x3BC);
     func_0033CF40(box, anchor[0], anchor[1]);
 
-    func_0034A148(list, arg1);
+    GuiMenuListHandleInput(list, arg1);
     anchor = *(f32 **)((char *)w + 0x3BC);
-    func_0034A2B8(list, anchor[0], anchor[1]);
+    GuiMenuListSetOrigin(list, anchor[0], anchor[1]);
     return (arg1 >> 6) & 1;
 }
 #endif
@@ -2919,10 +2919,10 @@ s32 func_00340348(void *w, s32 arg1) {
 /* func_00340418 (EU twin of USA func_0033F478): tear down the embedded dialog-box
  * (p+0x8) via func_0033CE70 (func_0033BF90), then reconfigure the list widget at
  * p+0x2E0 with the per-language resource D_1ADF50[g_currentLanguage] via func_0034A2E8
- * (USA func_00348E58) and redraw it via func_0034A300 (USA GuiMenuListDraw).
+ * (USA func_00348E58) and redraw it via GuiMenuListDraw (USA GuiMenuListDraw).
  * Matching arm stays INCLUDE_ASM; #else is the structure model. Word-verified vs USA
  * func_0033F478: func_0033BF90->func_0033CE70, func_00348E58->func_0034A2E8,
- * GuiMenuListDraw->func_0034A300, gp_rel(D_1ADEB0)->gp_rel(D_1ADF50), g_currentLanguage
+ * GuiMenuListDraw->GuiMenuListDraw, gp_rel(D_1ADEB0)->gp_rel(D_1ADF50), g_currentLanguage
  * KEPT. DATA DELTA: g_currentLanguage EU 0x1A7C3C (USA 0x1A7BBC, +0x80); per-language
  * table D_1ADF50 = EU twin of USA D_1ADEB0 (gp_rel). */
 #ifndef TARGET_NATIVE
@@ -2935,22 +2935,22 @@ void func_00340418(void *p) {
     void *w = (char *)p + 0x2E0;
     func_0033CE70((char *)p + 0x8);
     func_0034A2E8(w, D_1ADF50[g_currentLanguage]);
-    func_0034A300(w);
+    GuiMenuListDraw(w);
 }
 #endif
 
 /* func_00340470 (EU twin of USA func_0033F4D0): init the embedded dialog-box (p+0x8)
- * via func_0033CA78 (GuiDialogBoxInitElements) and a type-C element (p+0x2E0) via
- * func_00338648 (GuiElementInitTypeC), then return the object. Matching arm stays
+ * via GuiDialogBoxInitElements (GuiDialogBoxInitElements) and a type-C element (p+0x2E0) via
+ * GuiElementInitTypeC (GuiElementInitTypeC), then return the object. Matching arm stays
  * INCLUDE_ASM; #else is the structure model. Word-verified vs USA func_0033F4D0:
- * GuiDialogBoxInitElements->func_0033CA78, GuiElementInitTypeC->func_00338648;
+ * GuiDialogBoxInitElements->GuiDialogBoxInitElements, GuiElementInitTypeC->GuiElementInitTypeC;
  * offsets p/+0x8/+0x2E0. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00340470);
 #else
 void *func_00340470(void *p) {
-    func_0033CA78((char *)p + 0x8);
-    func_00338648((char *)p + 0x2E0);
+    GuiDialogBoxInitElements((char *)p + 0x8);
+    GuiElementInitTypeC((char *)p + 0x2E0);
     return p;
 }
 #endif
@@ -2985,26 +2985,26 @@ void func_00340610(void *p) {
  * sub-elements (the dialog box at +0x8, the widget at +0x2DC, then the
  * type-B/type-C element run), and return the object. Matching arm stays
  * INCLUDE_ASM; #else is the structure model. Word-verified vs USA func_0033F690:
- * GuiDialogBoxInitElements->func_0033CA78, func_003374D8->func_003383B0,
- * GuiElementInitTypeC->func_00338648, GuiElementInitTypeB->func_00337E88 (jal
+ * GuiDialogBoxInitElements->GuiDialogBoxInitElements, func_003374D8->func_003383B0,
+ * GuiElementInitTypeC->GuiElementInitTypeC, GuiElementInitTypeB->GuiElementInitTypeB (jal
  * order: +0x8, +0x2DC, +0x318, +0x370, +0x3C8, +0x420 [type-B], +0x470..+0x628
  * [type-C]); all EU file-scope. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00340630);
 #else
 void *func_00340630(void *p) {
-    func_0033CA78((char *)p + 0x8);
+    GuiDialogBoxInitElements((char *)p + 0x8);
     func_003383B0((char *)p + 0x2DC);
-    func_00338648((char *)p + 0x318);
-    func_00338648((char *)p + 0x370);
-    func_00338648((char *)p + 0x3C8);
-    func_00337E88((char *)p + 0x420);
-    func_00338648((char *)p + 0x470);
-    func_00338648((char *)p + 0x4C8);
-    func_00338648((char *)p + 0x520);
-    func_00338648((char *)p + 0x578);
-    func_00338648((char *)p + 0x5D0);
-    func_00338648((char *)p + 0x628);
+    GuiElementInitTypeC((char *)p + 0x318);
+    GuiElementInitTypeC((char *)p + 0x370);
+    GuiElementInitTypeC((char *)p + 0x3C8);
+    GuiElementInitTypeB((char *)p + 0x420);
+    GuiElementInitTypeC((char *)p + 0x470);
+    GuiElementInitTypeC((char *)p + 0x4C8);
+    GuiElementInitTypeC((char *)p + 0x520);
+    GuiElementInitTypeC((char *)p + 0x578);
+    GuiElementInitTypeC((char *)p + 0x5D0);
+    GuiElementInitTypeC((char *)p + 0x628);
     return p;
 }
 #endif
@@ -3024,7 +3024,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00340A50);
  * anchor record *(w+0x2D8): +0x578 at (D_1ADFF0, D_1ADFF4), +0x470 at
  * (D_1ADFD8, D_1ADFDC), +0x4C8 at (D_1ADFE0, D_1ADFE4), +0x520 at
  * (D_1ADFE8, D_1ADFEC). Matching arm stays INCLUDE_ASM; #else is the structure
- * model. Word-verified vs USA func_0033FCE8: GuiElementSetPos->func_00337B18;
+ * model. Word-verified vs USA func_0033FCE8: GuiElementSetPos->GuiElementSetPos;
  * DATA +0xA0 lane D_1ADF38..54 -> D_1ADFD8..F4 (8 new f32 decls). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00340C88);
@@ -3034,10 +3034,10 @@ extern f32 D_1ADFE8, D_1ADFEC, D_1ADFF0, D_1ADFF4;
 void func_00340C88(void *w) {
     f32 *anchor = *(f32 **)((char *)w + 0x2D8);
 
-    func_00337B18((GuiElement *)((char *)w + 0x578), D_1ADFF0 + anchor[0], D_1ADFF4 + anchor[1], 0.0f, 0.0f);
-    func_00337B18((GuiElement *)((char *)w + 0x470), D_1ADFD8 + anchor[0], D_1ADFDC + anchor[1], 0.0f, 0.0f);
-    func_00337B18((GuiElement *)((char *)w + 0x4C8), D_1ADFE0 + anchor[0], D_1ADFE4 + anchor[1], 0.0f, 0.0f);
-    func_00337B18((GuiElement *)((char *)w + 0x520), D_1ADFE8 + anchor[0], D_1ADFEC + anchor[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x578), D_1ADFF0 + anchor[0], D_1ADFF4 + anchor[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x470), D_1ADFD8 + anchor[0], D_1ADFDC + anchor[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x4C8), D_1ADFE0 + anchor[0], D_1ADFE4 + anchor[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x520), D_1ADFE8 + anchor[0], D_1ADFEC + anchor[1], 0.0f, 0.0f);
 }
 #endif
 
@@ -3057,8 +3057,8 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00340D78);
  * (e+0x420), two footer text rows, then the trailing builder func_00340D78(e).
  * Matching arm stays INCLUDE_ASM; #else is the structure model.
  * Word-verified vs USA func_0033FEF8: func_0033BF90->func_0033CE70,
- * func_002DBC98->func_002DBC60, GuiTextElementDraw->func_00338770,
- * func_00337630->func_00338508, GuiSpriteElementDraw->func_00338000,
+ * func_002DBC98->func_002DBC60, GuiTextElementDraw->GuiTextElementDraw,
+ * func_00337630->func_00338508, GuiSpriteElementDraw->GuiSpriteElementDraw,
  * tail func_0033FDD8->func_00340D78 (the parked EU 3-row drawer, forward-declared
  * inline to match its EU .s arg shape $4=w). */
 #ifndef TARGET_NATIVE
@@ -3068,13 +3068,13 @@ void func_00340D78(void *w);
 void func_00341020(void *e) {
     func_0033CE70((char *)e + 0x8);
     func_002DBC60(0);
-    func_00338770((char *)e + 0x318);
-    func_00338770((char *)e + 0x370);
-    func_00338770((char *)e + 0x3C8);
+    GuiTextElementDraw((char *)e + 0x318);
+    GuiTextElementDraw((char *)e + 0x370);
+    GuiTextElementDraw((char *)e + 0x3C8);
     func_00338508((GuiElement *)((char *)e + 0x2DC));
-    func_00338000((char *)e + 0x420);
-    func_00338770((char *)e + 0x628);
-    func_00338770((char *)e + 0x5D0);
+    GuiSpriteElementDraw((char *)e + 0x420);
+    GuiTextElementDraw((char *)e + 0x628);
+    GuiTextElementDraw((char *)e + 0x5D0);
     func_00340D78(e);
 }
 #endif
@@ -3089,7 +3089,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00341200);
  * alabel to a real glabel). */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiQuickSelectWheelInit);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00341C18);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiQuickSelectWheelTick);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_003422D0);
 
@@ -3105,13 +3105,13 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00342BF0);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00342D98);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00342DE8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiScrollListScreenInit);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_003430B0);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00343230);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_003432A0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiIconScreenInit);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_003435C0);
 
@@ -3135,15 +3135,15 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00343838);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00343928);
 
-/* func_00343AB0: forward p+0x130 to func_00338000. USA func_00342958. */
+/* func_00343AB0: forward p+0x130 to GuiSpriteElementDraw. USA func_00342958. */
 void func_00343AB0(void *p) {
-    func_00338000((char *)p + 0x130);
+    GuiSpriteElementDraw((char *)p + 0x130);
     __asm__ __volatile__("");
 }
 
-/* func_00343AD0: forward p+0x238 to func_0034A300. USA func_00342978. */
+/* func_00343AD0: forward p+0x238 to GuiMenuListDraw. USA func_00342978. */
 void func_00343AD0(void *p) {
-    func_0034A300((char *)p + 0x238);
+    GuiMenuListDraw((char *)p + 0x238);
     __asm__ __volatile__("");
 }
 
@@ -3160,7 +3160,7 @@ void func_00343D40(void *p, s32 v) {
     *(s32 *)((char *)p + 0x8) = v;
 }
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00343D48);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiHelpPromptWidgetInit);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00343EB8);
 
@@ -3180,7 +3180,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00343FA0);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00344130);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00344180);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiIconScreenInit2);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_003443E8);
 
@@ -3206,9 +3206,9 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00344528);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00344620);
 
-/* func_003446B0: forward p+0x188 to func_0034A300. USA func_00343558. */
+/* func_003446B0: forward p+0x188 to GuiMenuListDraw. USA func_00343558. */
 void func_003446B0(void *p) {
-    func_0034A300((char *)p + 0x188);
+    GuiMenuListDraw((char *)p + 0x188);
     __asm__ __volatile__("");
 }
 
@@ -3264,7 +3264,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_003450D0);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00345268);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_003452C8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiTitledSpriteScreenInit);
 
 /* func_003455B0: forward p+0x2C8 to func_00344FD8. USA func_00344458. */
 void func_003455B0(void *p) {
@@ -3317,7 +3317,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00345940);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_003459F8);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00345A88);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiInfoPanelScreenInit);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00345F98);
 
@@ -3347,7 +3347,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00347438);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_003474E0);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00347570);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiMapScreenInit);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00347A50);
 
@@ -3355,7 +3355,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00347CD0);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00347EB0);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_003480C8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiMapScreenTick);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00348400);
 
@@ -3367,9 +3367,9 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00348728);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_003487C8);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00348868);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiWeaponGridScreenInit);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00348DF8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", GuiWeaponGridTick);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/236ED8", func_00349450);
 

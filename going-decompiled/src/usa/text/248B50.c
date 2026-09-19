@@ -110,7 +110,7 @@ void func_0034A318(GuiWidget *w, s32 idx, f32 a, f32 b, f32 c, f32 d, f32 e);
 void func_0034A350(GuiWidget *w, s32 idx, f32 a, f32 b);
 void func_0034A7B0(GuiWidget *w, s32 idx1, s32 idx2, f32 a, f32 b, f32 c, f32 d);
 
-/* game callees used by GuiMenuListDraw (func_00348E70). Declared here (not in a
+/* game callees used by GuiMenuListDraw (GuiMenuListDraw). Declared here (not in a
  * central header) with their real signatures so the ILP32 gate sees them; they
  * stay INCLUDE_ASM / runtime stubs natively. */
 f32 *func_00336C18(GuiWidget *e);                                /* scratch vec2 */
@@ -196,7 +196,7 @@ void func_00348BF8(void *w, void *pool) {
 }
 #endif
 
-/* func_00348CB8: menu selection-advance driven by the per-frame input mask.
+/* GuiMenuListHandleInput: menu selection-advance driven by the per-frame input mask.
  * The widget keeps the current row index at +0x60, the row-enable table (one
  * non-zero word per selectable row) at +0x6C, and the row count at +0xC0.
  *
@@ -214,9 +214,9 @@ void func_00348BF8(void *w, void *pool) {
  *
  * WALL: 4 callee saves ($16,$17,$18,$31) — frame-layout divergence. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348CB8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", GuiMenuListHandleInput);
 #else
-s32 func_00348CB8(GuiWidget *w, u32 inputMask) {
+s32 GuiMenuListHandleInput(GuiWidget *w, u32 inputMask) {
     s32 *curIdx = (s32 *)((char *)w + 0x60);
     s32 *rowEnable = (s32 *)((char *)w + 0x6C);   /* rowEnable[idx] != 0 => selectable */
     s32 count = *(s32 *)((char *)w + 0xC0);
@@ -271,7 +271,7 @@ s32 func_00348CB8(GuiWidget *w, u32 inputMask) {
  * No C body can reproduce a function with no return. WALL: split-artifact stub. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348D98);
 
-/* func_00348DA0: store the keyframe table pointer at +0x68, then scan it to
+/* GuiMenuListSetRows: store the keyframe table pointer at +0x68, then scan it to
  * count how many leading entries (stride 0x14, capped at 80) have a positive
  * first float; the count lands in +0xC0. Finally, if the current cursor +0x60
  * has run past the new count, reset it to 0.
@@ -282,9 +282,9 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0
  * instruction scheduling + branch-likely loop layout.
  * Oracle: cmp_func_00348DA0 (cmp_248B50.c) — bit-exact on real R5900. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348DA0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", GuiMenuListSetRows);
 #else
-void func_00348DA0(GuiWidget *w, f32 *table) {
+void GuiMenuListSetRows(GuiWidget *w, f32 *table) {
     f32 *end;
     s32 count;
 
@@ -330,15 +330,15 @@ void func_00348E20(GuiWidget *w, s32 v) {
     *(s32 *)((char *)w + 0xC8) = v;
 }
 
-/* func_00348E28: write the two float args into the block at *(w+0x5C) (+0/+4)
+/* GuiMenuListSetOrigin: write the two float args into the block at *(w+0x5C) (+0/+4)
  * and zero +8/+0xC; the +0x5C pointer is re-read per store. Best 37%: the
  * original alternates two scratch registers reloaded just-in-time; the pinned
  * cc1 hoists the volatile reloads and reuses one register. WALL: just-in-time
  * reload register alternation. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348E28);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", GuiMenuListSetOrigin);
 #else
-void func_00348E28(GuiWidget *w, f32 x, f32 y) {
+void GuiMenuListSetOrigin(GuiWidget *w, f32 x, f32 y) {
     f32 *block = *(f32 **)((char *)w + 0x5C);
     block[0] = x;
     block[1] = y;
@@ -367,7 +367,7 @@ s32 func_00348E68(GuiWidget *w) {
     return *(s32 *)((char *)w + 0xC0);
 }
 
-/* func_00348E70 / GuiMenuListDraw: per-frame draw of a vertical text-menu/list
+/* GuiMenuListDraw / GuiMenuListDraw: per-frame draw of a vertical text-menu/list
  * widget. For each of +0xC0 rows it positions a shared text element via the
  * +0x5C origin (origin[0]=x in scratch[0], origin[1]+rowYBase+rowYStep*i in
  * scratch[1]), sets its scale (+0x68 entry stride 0x14, entry[0]=scale) and text
@@ -378,9 +378,9 @@ s32 func_00348E68(GuiWidget *w) {
  * highlighted and +0xC8 set), then GuiTextElementDraw. PURE/PORTABLE — only the
  * draw callees touch hardware. Functional equivalent, not byte-exact. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348E70);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", GuiMenuListDraw);
 #else
-void func_00348E70(GuiWidget *self) {
+void GuiMenuListDraw(GuiWidget *self) {
     char *p = (char *)self;
     f32 *scratch = func_00336C18(self);
     s32 rowCount;

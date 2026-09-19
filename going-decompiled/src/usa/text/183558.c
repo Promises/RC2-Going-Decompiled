@@ -618,10 +618,10 @@ f32 func_00283B60(f32 x) {
  * Arguments: $f12 = y-like, $f13 = x-like.
  */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283BF8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", Atan2fPoly);
 #else
 /* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
-f32 func_00283BF8(f32 y, f32 x) {
+f32 Atan2fPoly(f32 y, f32 x) {
     return __builtin_atan2f(y, x);
 }
 #endif
@@ -1022,10 +1022,10 @@ void func_002844F8(Vec4f dst, f32 t, const Vec4f a, const Vec4f b) {
 
 /** Sum two angles (radians) and wrap the result into [-pi, pi]. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284548);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", WrapAnglePiSum);
 #else
 /* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
-f32 func_00284548(f32 a, f32 b) {
+f32 WrapAnglePiSum(f32 a, f32 b) {
     f32 r = a + b;
     if (r >= PR_PI) r -= 2.0f * PR_PI;
     if (r < -PR_PI) r += 2.0f * PR_PI;
@@ -1035,26 +1035,15 @@ f32 func_00284548(f32 a, f32 b) {
 
 /** Subtract two angles (radians) and wrap the difference into [-pi, pi]. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284590);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", WrapAnglePiDiff);
 #else
 /* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
-f32 func_00284590(f32 a, f32 b) {
+f32 WrapAnglePiDiff(f32 a, f32 b) {
     f32 r = a - b;
     if (r >= PR_PI) r -= 2.0f * PR_PI;
     if (r < -PR_PI) r += 2.0f * PR_PI;
     return r;
 }
-#endif
-
-#ifdef TARGET_NATIVE
-/* Native canonical-name wrappers: other #else bodies (16E980/1FFBA0) call these
- * by their canonical names (symbol_addrs WrapAnglePiSum/Diff = 0x284548/0x284590,
- * sigs verified (f32,f32)); the matched path still calls them by func_ name and
- * the proper rename is gated on a splat re-split. A forwarding wrapper (not an
- * alias - alias attrs are unsupported on darwin/clang) resolves the native link
- * to the real bodies, portable across clang+gcc, TARGET_NATIVE-only. */
-f32 WrapAnglePiSum(f32 a, f32 b)  { return func_00284548(a, b); }
-f32 WrapAnglePiDiff(f32 a, f32 b) { return func_00284590(a, b); }
 #endif
 
 /**
