@@ -277,43 +277,13 @@ fi
 GFLAG96="-G8"; CC1EXTRA96="-fno-schedule-insns -fno-strict-aliasing"
 CPPDEF96="-D__GNUC_MINOR__=96 $CPPDEF_COMMON $MATCHDEFS"
 
-# WARM MIRROR BY DEFAULT (#398). asm_unit.sh rebuilds its VU0-fixed copy of the
-# whole nonmatchings tree for EVERY object unless ASMFIX_SHARED names a mirror
-# to reuse. This script forwarded the variable and never set it, so every
-# caller who did not know the trick built cold — FACT #7054: ~9.4 min cold vs
-# ~17 s warm per unit (ps2-w3-t391's numbers), a trick rediscovered by three
-# tasks and written down in none of them. When unset, default it to a
-# PER-WORKTREE mirror whose NAME carries a fingerprint of everything the mirror
-# is derived from (tools/ee/asmfix_stamp.sh: every .s in the region's
-# nonmatchings tree, vu0_fixup.sed, macro.inc, asm_unit.sh itself). A source
-# change therefore selects a new mirror path — built cold once, by asm_unit.sh,
-# and marked `.built` — instead of reusing a stale one; an unchanged tree
-# reuses the warm mirror. The path is under $ROOT, i.e. this worktree's alone
-# (mounted as /work — the CONTAINER path is what asm_unit.sh sees, #391).
-# Per-worktree, not per-machine: the VM has no enforced exclusivity and two
-# tasks' builds do run at once. Superseded mirrors of the same region are
-# pruned INSIDE the step-(1) container, never on the host (host-side deletion
-# of a container-written path is the $OBJ96 hazard above).
-# An explicitly set ASMFIX_SHARED is honoured verbatim and NOT fingerprinted:
-# the opt-in keeps its bare-`.built` behaviour, so a task's pinned mirror is
-# neither validated nor touched.
-# BOUND: the stamp covers the mirror's INPUTS, not its contents. A mirror
-# edited after `.built` is reused as-is — validating its contents costs the
-# cold build it exists to avoid. And it is safe only for SEQUENTIAL runs in one
-# worktree (asm_unit.sh's own constraint); two runs straddling an asm-tree
-# edit can prune each other's mirror.
-ASMFIX_DIR="tools/ee/.asmfix"
-if [ -z "${ASMFIX_SHARED:-}" ]; then
-  ASMFIX_STAMP="$(sh tools/ee/asmfix_stamp.sh "$REGION")"
-  ASMFIX_MIRROR="mirror-$REGION-$ASMFIX_STAMP"
-  ASMFIX_SHARED="/work/$ASMFIX_DIR/$ASMFIX_MIRROR"
-  ASMFIX_PRUNE="mkdir -p $ASMFIX_DIR; find $ASMFIX_DIR -mindepth 1 -maxdepth 1 -name 'mirror-$REGION-*' ! -name $ASMFIX_MIRROR -exec rm -rf {} +"
-  if [ -f "$ASMFIX_DIR/$ASMFIX_MIRROR/.built" ]; then ASMFIX_STATE=warm; else ASMFIX_STATE=cold; fi
-else
-  ASMFIX_PRUNE=":"
-  ASMFIX_STATE="explicit, not fingerprinted"
-fi
-export ASMFIX_SHARED
+# WARM MIRROR BY DEFAULT (#398): ASMFIX_SHARED, when unset, is defaulted to a
+# per-worktree mirror named by tools/ee/asmfix_stamp.sh. The block lives in
+# tools/ee/asmfix_default.sh so that build.sh gets the identical default (#438:
+# it had none and built every unit cold); that file also aborts this script if
+# either consumer stops sourcing it or re-inlines the assignment. Sets
+# ASMFIX_SHARED (exported), ASMFIX_PRUNE (run in-container below), ASMFIX_STATE.
+. tools/ee/asmfix_default.sh
 
 # Compile the pristine *target* C and the *base* C (your decomp / override).
 # Each cc1 emits a .s; asm_unit.sh assembles it (with the VU0 fixup mirror) into

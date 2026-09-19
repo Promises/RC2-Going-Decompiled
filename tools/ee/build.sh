@@ -55,6 +55,19 @@ echo "   assembled $n section objects"
 #    asm_unit.sh assembles it through the VU0-fixed mirror.
 if [ -d "$SRC" ]; then
   echo "== [$REGION] compiling src/ c units =="
+  # WARM MIRROR BY DEFAULT (#398/#438). asm_unit.sh rebuilds its VU0-fixed copy
+  # of the whole nonmatchings tree for EVERY unit (~3 min each over the VM
+  # mount, ~75 min/region) unless ASMFIX_SHARED names a mirror to reuse. The
+  # default — a per-worktree mirror named by a content fingerprint of the
+  # mirror's inputs, so a re-split or an edited .s selects a NEW path instead
+  # of serving stale asm — lives in tools/ee/asmfix_default.sh, shared with
+  # objdiff_build.sh, and that file aborts the build if either script stops
+  # sourcing it. Runs here IN the container, so the prune runs directly (no
+  # host-side deletion of a container-written path, #391). A caller-supplied
+  # `-e ASMFIX_SHARED=…` is honoured verbatim and not fingerprinted.
+  . tools/ee/asmfix_default.sh
+  eval "$ASMFIX_PRUNE"
+  echo "   asmfix mirror -> $ASMFIX_SHARED ($ASMFIX_STATE)"
   m=0
   for c in $(find "$SRC" -name '*.c'); do
     o="$BUILD/${c%.c}.o"
