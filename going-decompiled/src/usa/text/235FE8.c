@@ -31,6 +31,145 @@ __asm__(".extern D_1AD9A8, 16");
 __asm__(".extern D_1AD9F8, 16");
 __asm__(".extern g_GuiListRowVtable, 16");
 
+/* Addressing-mode pins for the globals the #else / MATCH_ bodies reference
+ * (task #466). Under -G8 the assembler chooses %gp_rel for an extern whose
+ * declared size is <= 8 and the two-insn %hi/%lo macro otherwise, and the
+ * FIRST `.extern` size wins over the one cc1 appends. The ROM is consistent
+ * per symbol across this unit (tools/ee/.t466/14_symbol_addressing.txt: 285
+ * absolute-only, 181 gp-only, 4 mixed); these lines make each symbol's
+ * addressing follow the ROM regardless of how its C declaration sizes it.
+ * Re-derive: objdump -dr expected.o vs obj/<unit>.engine96.o, per symbol
+ * (tools/ee/.t466/addrmode.py). Byte-neutral on the 2.9 arm: the sdk29
+ * object's .text bytes, relocations and undefined-symbol set are unchanged
+ * (only symtab metadata moves), so no matched function is touched. */
+/* ROM addresses these absolutely (%hi/%lo) although their C declarations are
+ * sized <= 8. The opposite case (ROM gp-relative, declaration an incomplete
+ * array) is fixed at the declaration instead: cc1 itself expands %hi/%lo for
+ * an unsized extern, so those arrays are declared with their 8-byte size. */
+__asm__(".extern D_1A7B9C, 16");
+__asm__(".extern D_1A7B9D, 16");
+__asm__(".extern D_1A7B9E, 16");
+__asm__(".extern D_1A7BAC, 16");
+__asm__(".extern D_1A7BB0, 16");
+__asm__(".extern D_1A7BB4, 16");
+__asm__(".extern D_1A7BB9, 16");
+__asm__(".extern D_1A7BBA, 16");
+__asm__(".extern D_1A7BBB, 16");
+__asm__(".extern D_1A8C88, 16");
+__asm__(".extern D_1A8C8C, 16");
+__asm__(".extern D_1AA856, 16");
+__asm__(".extern D_1AD8C8, 16");
+__asm__(".extern D_1AD968, 16");
+__asm__(".extern D_1ADA18, 16");
+__asm__(".extern D_1ADA38, 16");
+__asm__(".extern D_1ADC38, 16");
+__asm__(".extern D_1ADC40, 16");
+__asm__(".extern D_1ADC48, 16");
+__asm__(".extern D_1ADC6C, 16");
+__asm__(".extern D_1ADCB8, 16");
+__asm__(".extern D_1ADCC0, 16");
+__asm__(".extern D_1ADCC8, 16");
+__asm__(".extern D_1ADCD0, 16");
+__asm__(".extern D_1ADCDC, 16");
+__asm__(".extern D_1ADCE4, 16");
+__asm__(".extern D_1ADCEC, 16");
+__asm__(".extern D_1ADCFC, 16");
+__asm__(".extern D_1ADD04, 16");
+__asm__(".extern D_1ADDDC, 16");
+__asm__(".extern D_1ADDE4, 16");
+__asm__(".extern D_1ADDEC, 16");
+__asm__(".extern D_1ADDF4, 16");
+__asm__(".extern D_1ADE34, 16");
+__asm__(".extern D_1ADE3C, 16");
+__asm__(".extern D_1ADF3C, 16");
+__asm__(".extern D_1ADF44, 16");
+__asm__(".extern D_1ADF4C, 16");
+__asm__(".extern D_1ADF54, 16");
+__asm__(".extern D_1AE020, 16");
+__asm__(".extern D_1AE028, 16");
+__asm__(".extern D_1AE030, 16");
+__asm__(".extern D_1AE038, 16");
+__asm__(".extern D_1AE040, 16");
+__asm__(".extern D_1AE048, 16");
+__asm__(".extern D_1AE0B4, 16");
+__asm__(".extern D_1AE0C4, 16");
+__asm__(".extern D_1AE0D4, 16");
+__asm__(".extern D_1AE0DC, 16");
+__asm__(".extern D_1AE0E4, 16");
+__asm__(".extern D_1AE0EC, 16");
+__asm__(".extern D_1AE0F4, 16");
+__asm__(".extern D_1AE0FC, 16");
+__asm__(".extern D_1AE154, 16");
+__asm__(".extern D_1AE164, 16");
+__asm__(".extern D_1AE174, 16");
+__asm__(".extern D_1AE17C, 16");
+__asm__(".extern D_1AE19C, 16");
+__asm__(".extern D_1AE1D4, 16");
+__asm__(".extern D_1AE1D8, 16");
+__asm__(".extern D_1AE1DC, 16");
+__asm__(".extern D_1AE1E4, 16");
+__asm__(".extern D_1AE1EC, 16");
+__asm__(".extern D_1AE1F4, 16");
+__asm__(".extern D_1AE204, 16");
+__asm__(".extern D_1AE20C, 16");
+__asm__(".extern D_1AE214, 16");
+__asm__(".extern D_1AE21C, 16");
+__asm__(".extern D_1AE224, 16");
+__asm__(".extern D_1AE25C, 16");
+__asm__(".extern D_1AE264, 16");
+__asm__(".extern D_1AE26C, 16");
+__asm__(".extern D_1AE274, 16");
+__asm__(".extern D_1AE27C, 16");
+__asm__(".extern D_1AE28C, 16");
+__asm__(".extern D_1AE294, 16");
+__asm__(".extern D_1AE29C, 16");
+__asm__(".extern D_1AE2A4, 16");
+__asm__(".extern D_1AE2AC, 16");
+__asm__(".extern D_1AE2B4, 16");
+__asm__(".extern D_1AE3DC, 16");
+__asm__(".extern D_1AE3E4, 16");
+__asm__(".extern D_1AE3EC, 16");
+__asm__(".extern D_1AE3F4, 16");
+__asm__(".extern D_1AE3FC, 16");
+__asm__(".extern D_1AE404, 16");
+__asm__(".extern D_1AE40C, 16");
+__asm__(".extern D_1AE414, 16");
+__asm__(".extern D_1AE41C, 16");
+__asm__(".extern D_1AE424, 16");
+__asm__(".extern D_1AE4D0, 16");
+__asm__(".extern D_1AE4D8, 16");
+__asm__(".extern D_1AE4E0, 16");
+__asm__(".extern D_1AE4E8, 16");
+__asm__(".extern D_1AE518, 16");
+__asm__(".extern D_1AE524, 16");
+__asm__(".extern D_1AE52C, 16");
+__asm__(".extern D_1AE53C, 16");
+__asm__(".extern D_1AE544, 16");
+__asm__(".extern D_1AE548, 16");
+__asm__(".extern D_1AE550, 16");
+__asm__(".extern D_1AE558, 16");
+__asm__(".extern D_1AE560, 16");
+__asm__(".extern D_1AE700, 16");
+__asm__(".extern D_1AE704, 16");
+__asm__(".extern D_1AE708, 16");
+__asm__(".extern D_1AE70C, 16");
+__asm__(".extern D_1AE710, 16");
+__asm__(".extern D_1AE714, 16");
+__asm__(".extern D_263B10, 16");
+__asm__(".extern g_activeCamera, 16");
+__asm__(".extern g_audioStereoMode, 16");
+__asm__(".extern g_bProgressiveScan, 16");
+__asm__(".extern g_currentLanguage, 16");
+__asm__(".extern g_equippedArmor, 16");
+__asm__(".extern g_gameTime, 16");
+__asm__(".extern g_mapCurrentLevel, 16");
+__asm__(".extern g_miscExtras, 16");
+__asm__(".extern g_musicVolume, 16");
+__asm__(".extern g_padButtonsHeld, 16");
+__asm__(".extern g_padButtonsPressed, 16");
+__asm__(".extern g_playerProgress, 16");
+__asm__(".extern g_sfxVolume, 16");
+
 extern void *g_GuiElementVtable; /* base GuiElement vtable installed at +0x30 */
 extern void *D_1AD988;           /* vtable installed by func_003368D0 / func_003368E8 */
 extern void *D_1AD9A8;           /* vtable installed by func_00336678 */
@@ -95,10 +234,12 @@ extern s32 func_00348E60(void *p);  /* 248B50:308 - returns a state value */
 extern void func_00348E10(void *w, s32 a, s32 b); /* 248B50:269 */
 extern void GuiMenuListDraw(void *p);
 
-#ifdef TARGET_NATIVE
 /* Shared GUI sub-element init/widget callees referenced by the functional-
  * equivalent #else bodies below (declared up front so each body sees a
- * consistent prototype regardless of source order). */
+ * consistent prototype regardless of source order). Unconditional since #466:
+ * the engine96 arm (objdiff_build.sh, MATCH_<fn> guards) compiles those bodies
+ * too, and the declarations are byte-neutral on the 2.9 arm (sdk29 object
+ * md5 unchanged with the block visible). */
 extern void GuiElementInitTypeB(void *p);
 extern void GuiElementInitTypeC(void *p);
 extern void GuiListRowElementInit(void *p);
@@ -154,7 +295,6 @@ extern void func_0033BE70(void *p, s32 flags);
 extern u32 func_002AA3F0(u32 color1, u32 color2, s32 period, s32 counterSel, s32 reset);
 /* func_00338CD8 (void*,s32,f32,f32,s32) + func_0033BE70 (void*,s32) are defined
  * later in this unit, before their #else callers below — no extern needed. */
-#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336068);
 
@@ -165,6 +305,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336068);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336168);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00336168, unit objdiff): 9.23%,
+   27/34 insns differ. Residual: UNKNOWN-addiu + lq/sq (first differing insn: '' vs 'addiu v0, zero, 0x5').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; sq/lq 128-bit copy +
    branch wall. */
 /* A 16-byte (128-bit) quadword record. func_00336168/func_003361C0 copy it with
@@ -189,6 +333,10 @@ void func_00336168(GuiQword *src) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003361C0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003361C0, unit objdiff): 9.23%,
+   27/34 insns differ. Residual: UNKNOWN-addiu + lq/sq (first differing insn: '' vs 'addiu v0, zero, 0x5').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; sq/lq 128-bit copy +
    branch wall. */
 void func_003361C0(GuiQword *src) {
@@ -213,6 +361,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336218);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336230);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00336230, unit objdiff): 0.00%,
+   169/176 insns differ. Residual: UNKNOWN-addiu + lq/sq (first differing insn: 'addiu sp, sp, -0xa0' vs 'addiu sp, sp, -0x90').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern u8   g_cameraPos[];
 extern u8   g_heroPos[];
 extern void SwitchActiveCamera(void *cam);
@@ -268,6 +420,10 @@ void func_00336230(void *a, void *b, s32 mode, s32 arg3, s32 arg4) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003363A0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003363A0, unit objdiff): 85.19%,
+   37/84 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x90' vs 'addiu sp, sp, -0x80').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern s32  g_cameraState[];       /* +0x190 = active camera obj ptr */
 extern u8   g_heroOrientVec[];
 extern void func_00283DC0(void *dst, void *src);
@@ -341,6 +497,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336678);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00336678, unit objdiff): 83.33%,
+   2/13 insns differ. Residual: UNKNOWN-andi (first differing insn: '' vs 'andi a1, a1, 0x1').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; the original hoists the
    %hi/%lo address computation above the branch and stores in the branch delay
    slot, a form cc1 won't reproduce here. */
@@ -367,6 +527,10 @@ void func_00336678(void *p, s32 flag) {
    bit-identical. 99.62% best. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiComputeBlendWeights);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiComputeBlendWeights, unit objdiff): 78.24%,
+   13/31 insns differ. Residual: UNKNOWN-swc1 (first differing insn: 'swc1 fs0, 0x10(sp)' vs '').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern void AssertFail(const char *file, s32 line, const char *expr);
 extern const char D_1AD890[]; /* assert source-file path */
 extern const char D_1AD8A8[]; /* assert predicate text ("out") */
@@ -391,6 +555,10 @@ void GuiComputeBlendWeights(void *self, f32 t, f32 *out) {
    func_00336B88. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336720);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00336720, unit objdiff): 52.94%,
+   8/17 insns differ. Residual: UNKNOWN-sw (first differing insn: 'sw zero, 0x118(a0)' vs '').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern void *D_1AD968;
 void func_00336720(void *p, s32 flag) {
     *(void **)((char *)p + 0x4) = &D_1AD968;
@@ -409,6 +577,10 @@ void func_00336720(void *p, s32 flag) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336768);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00336768, unit objdiff): 55.56%,
+   78/106 insns differ. Residual: UNKNOWN-lw (first differing insn: 'lw a2, 0x8(a0)' vs 'lw a4, 0x8(a0)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_00336768(void *arg0, void *out, f32 t) {
     u8 *o   = (u8 *)out;
     u8 *obj = *(u8 **)((u8 *)arg0 + 8);
@@ -476,6 +648,10 @@ void *func_003368D0(void *p) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003368E8);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003368E8, unit objdiff): 49.58%,
+   7/15 insns differ. Residual: UNKNOWN-lui (first differing insn: 'lui v0, %hi(D_1AD988)' vs '').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; the original hoists the
    %hi/%lo address computation above the branch; cc1 sinks it into the
    conditional store. 50% best. */
@@ -510,6 +686,10 @@ void func_00336918(void *self, f32 t, f32 *dst, f32 *a, f32 *b) {
    87.5% best. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336988);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00336988, unit objdiff): 60.14%,
+   22/43 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a2, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern s32 ColorLerpPacked(f32 t, s32 a, s32 b);
 void func_00336988(void *self, s32 *out, s32 *aSrc, s32 *bSrc, f32 t) {
     out[0] = ColorLerpPacked(t, aSrc[0], bSrc[0]);
@@ -527,6 +707,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336A28);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00336A28, unit objdiff): 85.07%,
+   6/16 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd ra, 0x8(sp)' vs '').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; single-callee-save plus
    the float-constant setup hoist the original interleaves differently. */
 extern f32 GuiHermiteInterp(f32 t, f32 c0, f32 c1, f32 c2, f32 c3);
@@ -543,6 +727,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336A78);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00336A78, unit objdiff): 89.50%,
+   3/21 insns differ. Residual: SCHED (prologue/epilogue or delay-slot order only; sched1 ON/OFF and sched2 OFF RUN, none reproduce it).
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame
    wall. */
 extern void *D_1AD8C8;
@@ -576,6 +764,10 @@ void func_00336B68(void *p, s32 flag) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336B88);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00336B88, unit objdiff): 76.75%,
+   4/9 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x10' vs 'addiu v0, gp, %gp_rel(D_1AD908)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; the original fills the
    jal delay slot with the field store; cc1 fills it with a nop and stores
    before the call. 77% best. */
@@ -589,6 +781,10 @@ void func_00336B88(void *p, s32 flag) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336BA8);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00336BA8, unit objdiff): 76.75%,
+   4/9 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x10' vs 'addiu v0, gp, %gp_rel(D_1AD8E8)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; same delay-slot fill
    wall as func_00336B88. */
 void func_00336BA8(void *p, s32 flag) {
@@ -604,6 +800,10 @@ void func_00336BA8(void *p, s32 flag) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336BC8);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00336BC8, unit objdiff): 21.89%,
+   19/27 insns differ. Residual: UNKNOWN-lui + gp/abs-mixed symbol (first differing insn: 'lui at, 0x3f89' vs 'addiu v0, gp, %gp_rel(g_swapGadgetItemIndex)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; same-symbol gp_rel /
    absolute reload wall - the original reaches +0x86 and +0x8E through the one-
    insn %gp_rel($28) form but +0x8A through the two-insn absolute %hi/%lo macro;
@@ -622,6 +822,10 @@ void func_00336BC8(s32 flag) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336C10);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00336C10, unit objdiff): 45.00%,
+   2/3 insns differ. Residual: UNKNOWN-lui + gp/abs-mixed symbol (first differing insn: '' vs 'lui v1, %hi(g_waterPool+0xc0)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; g_waterPool (0x1B2260)
    is outside the -G8 small-data window, so cc1 emits the two-insn absolute
    %hi/%lo macro instead of the original's one-insn %gp_rel($28). */
@@ -688,6 +892,10 @@ s32 GuiElementIsVisible(GuiElement *e) {
    frame at 0x0/0x8/0x10; cc1 emits -0x30 at 0x0/0x10/0x20). 95% best. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementShareScaleVec);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiElementShareScaleVec, unit objdiff): 91.60%,
+   3/26 insns differ. Residual: SCHED (prologue/epilogue or delay-slot order only; sched1 ON/OFF and sched2 OFF RUN, none reproduce it).
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void GuiElementShareScaleVec(GuiElement *e, f32 *newScale) {
     if (newScale == e->scale) {
         return;
@@ -714,6 +922,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
    + 8-byte-packed callee-save frame wall as GuiElementShareScaleVec. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336D28);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00336D28, unit objdiff): 91.60%,
+   3/26 insns differ. Residual: SCHED (prologue/epilogue or delay-slot order only; sched1 ON/OFF and sched2 OFF RUN, none reproduce it).
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_00336D28(GuiElement *e, f32 *newVisible) {
     if (newVisible == e->visible) {
         return;
@@ -758,6 +970,10 @@ GuiElement *GuiElementInstallBaseVtable(GuiElement *e) {
    differently. 95.9% best. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementBaseInit);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiElementBaseInit, unit objdiff): 53.08%,
+   46/95 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu a0, a2, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void GuiElementBaseInit(GuiElement *e, s32 tag, GuiPool *pool) {
     *(GuiPool **)((char *)e + 0x2C) = pool;
     if (pool != 0) {
@@ -804,6 +1020,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336F00);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementInitTypeB);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiElementInitTypeB, unit objdiff): 24.23%,
+   13/13 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x10' vs '').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame wall
    (the GuiElementInstallBaseVtable call holds p across $16/$31 in a -0x10 frame).
    cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
@@ -827,6 +1047,10 @@ void GuiElementInitTypeB(void *p) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementInit);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiElementInit, unit objdiff): 78.90%,
+   20/45 insns differ. Residual: UNKNOWN-daddu (first differing insn: 'daddu a1, v0, zero' vs 'addiu a0, zero, 0x10').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame wall
    ($16/$31 16-byte vs 8-byte slot packing) + the trailing per-block zero stores
    sunk into the GuiPoolAlloc/GuiPlacementNew jal delay slots.
@@ -874,6 +1098,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337098);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00337098, unit objdiff): 93.33%,
+   2/31 insns differ. Residual: SCHED (prologue/epilogue or delay-slot order only; sched1 ON/OFF and sched2 OFF RUN, none reproduce it).
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame +
    branch-likely (bnel) guard wall. */
 extern void *D_1ADA38;
@@ -903,6 +1131,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337110);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiSpriteElementDraw);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiSpriteElementDraw, unit objdiff): 77.14%,
+   19/30 insns differ. Residual: UNKNOWN-daddu (first differing insn: 'daddu a1, a0, zero' vs 'mtc1 zero, fv0').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 92.7%. Structure, frame
    (asm barrier defeats the tail-call), branches and reloc all match; the only
    delta is -O2 instruction scheduling of the independent argument loads - the
@@ -941,6 +1173,10 @@ void GuiSpriteElementDraw(void *p) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementSetGlyph);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiElementSetGlyph, unit objdiff): 82.33%,
+   4/13 insns differ. Residual: SCHED (prologue/epilogue or delay-slot order only; sched1 ON/OFF and sched2 OFF RUN, none reproduce it).
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame wall
    ($16/$31 16-byte vs 8-byte slot packing).
    cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
@@ -971,6 +1207,10 @@ void GuiElementSetAlpha(GuiElement *e, f32 alpha) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiListRowElementInit);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiListRowElementInit, unit objdiff): 87.69%,
+   2/13 insns differ. Residual: SCHED (prologue/epilogue or delay-slot order only; sched1 ON/OFF and sched2 OFF RUN, none reproduce it).
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed two-save
    frame wall - holding the object across the GuiElementInstallBaseVtable call
    needs s0 saved alongside ra, and this cc1 lays the two saves out in a -0x20
@@ -992,6 +1232,10 @@ void GuiListRowElementInit(void *p) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiListElementInit);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiListElementInit, unit objdiff): 76.96%,
+   14/25 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd s0, 0x0(sp)' vs 'sd s1, 0x8(sp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 4-callee-save frame wall
    ($16/$17/$18/$31 16-byte vs 8-byte slot packing) - the four held arg values
    force the deeper save frame.
@@ -1039,6 +1283,10 @@ void GuiListSetColorPair1(GuiElement *e, s32 c0, s32 c1) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003372D0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003372D0, unit objdiff): 99.00%,
+   3/15 insns differ. Residual: REGNUM-COLORING (instruction-identical, only the register number differs; 2 phrasings each RUN).
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; the original reloads
    e->color before the second word and interleaves the two halves; cc1 CSEs the
    pointer and batches the masks. ~24% best. */
@@ -1055,6 +1303,10 @@ void func_003372D0(GuiElement *e, s32 a0, s32 a1) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337310);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00337310, unit objdiff): 99.00%,
+   3/15 insns differ. Residual: REGNUM-COLORING (instruction-identical, only the register number differs; 2 phrasings each RUN).
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; same reloaded-pointer /
    interleave mismatch as func_003372D0. ~24% best. */
 void func_00337310(GuiElement *e, s32 a0, s32 a1) {
@@ -1076,6 +1328,10 @@ void func_00337310(GuiElement *e, s32 a0, s32 a1) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337350);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00337350, unit objdiff): 50.44%,
+   87/112 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd s1, 0x18(sp)' vs 'sd s3, 0x28(sp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern void *D_1AD9C8;
 extern void func_0027F168(s32 x0, s32 y0, s32 x1, s32 y1, void *colour, void *params);
 
@@ -1117,6 +1373,10 @@ void func_00337350(void *self) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003374D8);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003374D8, unit objdiff): 84.62%,
+   2/14 insns differ. Residual: SCHED (prologue/epilogue or delay-slot order only; sched1 ON/OFF and sched2 OFF RUN, none reproduce it).
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
    wall ($16/$31 16-byte vs 8-byte slot packing). */
 extern void *D_1ADA18;
@@ -1139,6 +1399,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiSpriteElementInit);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiSpriteElementInit, unit objdiff): 73.27%,
+   17/46 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a2, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame wall
    ($16/$17/$31 16-byte vs 8-byte slot packing) + the float-const loads scheduled
    across the reloaded +0x34/+0x0/+0x4 pointer reads.
@@ -1182,6 +1446,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003375D0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003375D0, unit objdiff): 91.67%,
+   2/25 insns differ. Residual: SCHED (prologue/epilogue or delay-slot order only; sched1 ON/OFF and sched2 OFF RUN, none reproduce it).
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame +
    branch-likely wall. */
 void func_003375D0(void *p, s32 flag) {
@@ -1206,6 +1474,10 @@ void func_003375D0(void *p, s32 flag) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337630);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00337630, unit objdiff): 74.58%,
+   39/70 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a0, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* WALL + LIVE-STATE: functional-equivalent #else routed to tester-EE (cannot be
    standalone cmp-oracle'd - it drives the live GS quad-emit path through
    func_0028EDF0/func_0028F2C0 and reads the g_guiTint* render globals). cc1
@@ -1249,6 +1521,10 @@ void func_00337630(GuiElement *e) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiSpriteSetTexture);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiSpriteSetTexture, unit objdiff): 98.18%,
+   4/11 insns differ. Residual: REGNUM-COLORING (instruction-identical, only the register number differs; 2 phrasings each RUN).
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; reloaded-pointer CSE wall
    (cc1 collapses the two *(e+0x34) reloads). 90% best.
    cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
@@ -1275,6 +1551,10 @@ s32 func_00337758(void *p) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementInitTypeC);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiElementInitTypeC, unit objdiff): 24.23%,
+   13/13 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x10' vs '').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame wall
    (same install-then-overwrite shape as GuiElementInitTypeB).
    cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
@@ -1298,6 +1578,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiTextElementInit);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiTextElementInit, unit objdiff): 62.26%,
+   19/36 insns differ. Residual: UNKNOWN-lw (first differing insn: 'lw a1, 0x4(s0)' vs 'addiu v0, v0, %lo(D_263B10)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed two-save
    frame wall (target uses a -0x10 frame with s0@0x0/ra@0x8; this cc1 emits a
    -0x20 frame) plus the -fno-gcse double-reload of *(e+0x4) collapses. 49%.
@@ -1369,6 +1653,10 @@ void GuiListSetItemCount(GuiElement *e, s32 count) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiListSetScrollPos);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiListSetScrollPos, unit objdiff): 76.01%,
+   30/78 insns differ. Residual: UNKNOWN-lw + movn/movz (first differing insn: '' vs 'lw a3, 0x3c(a0)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* WALL: functional-equivalent #else; matching arm stays INCLUDE_ASM. cc1 walls:
    the clamp lowers to a `movz` conditional-move, every widening is the
    (f32)(u32) unsigned-conversion idiom, and the +0x40 load is materialised
@@ -1427,6 +1715,10 @@ typedef struct GuiFontAtlas {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiFontAtlasRelocate);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiFontAtlasRelocate, unit objdiff): 72.31%,
+   10/29 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s2, a0, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* WALL: functional-equivalent #else (body assembles instruction-for-instruction
    identical, verified via tools/ee/match.sh). The matching arm stays
    INCLUDE_ASM because this 4-GPR-save method hits the later-cc1 8-byte callee-
@@ -1507,6 +1799,10 @@ extern const char D_1ADAC0[];
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiPoolInit);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiPoolInit, unit objdiff): 59.42%,
+   18/37 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd s0, 0x0(sp)' vs '').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* WALL: functional-equivalent #else; matching arm stays INCLUDE_ASM (4-GPR-save
    8-byte vs 16-byte callee-save slot stride - same later-cc1 frame wall as the
    other GUI methods in this TU).
@@ -1578,6 +1874,10 @@ s32 func_00337D98(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337DA0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00337DA0, unit objdiff): 52.11%,
+   7/11 insns differ. Residual: UNKNOWN-beqz + gp/abs-mixed symbol (first differing insn: 'beqz v0, 0x1d54' vs 'beqz v0, 0x1dec').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; the original takes the
    table base via one-insn %gp_rel($28); cc1 emits the two-insn absolute %hi/%lo
    for the indexed array base under -G8. 88% best. */
@@ -1596,16 +1896,17 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003380B8);
 
 /* func_00338A80: init two embedded type-B GUI elements (at p+0x10 and p+0x5C),
  * return the object. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338A80);
-#else
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
-   wall. */
+#if defined(MATCH_func_00338A80) || defined(TARGET_NATIVE)
+/* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_00338A80; task #466):
+ * unit objdiff 100.00% and verify_match_unit.sh 13/13 words + 2 relocs against the ROM.
+ * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
 void *func_00338A80(void *p) {
     GuiElementInitTypeB((char *)p + 0x10);
     GuiElementInitTypeB((char *)p + 0x5C);
     return p;
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338A80);
 #endif
 
 /* func_00338AB8(self, pool): construct a two-glyph GUI widget (an on/off toggle
@@ -1622,6 +1923,10 @@ void *func_00338A80(void *p) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338AB8);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00338AB8, unit objdiff): 57.99%,
+   122/159 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x40' vs 'addiu sp, sp, -0x30').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern u8 D_1ADB20[], D_1ADB30[];
 extern char *g_guiInstance;
 void func_00338AB8(void *self, GuiPool *pool) {
@@ -1687,6 +1992,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338CD8);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00338CD8, unit objdiff): 50.30%,
+   20/33 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd ra, 0x8(sp)' vs '').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; reloaded-pointer CSE
    (the original reloads *(p+0x0) before each pos store) + jal-delay-slot store
    scheduling wall. */
@@ -1713,6 +2022,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338D48);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338F18);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00338F18, unit objdiff): 60.12%,
+   15/29 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: '' vs 'addiu s0, zero, 0x168').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_00338F18(void *p, const void *src, s32 id) {
     s32 kind = (id != -1) ? id : 0x168;
     func_00115AC0((char *)p + 0x2084, src, 0xFF);
@@ -1739,6 +2052,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338F88);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00338F88, unit objdiff): 50.33%,
+   217/303 insns differ. Residual: UNKNOWN-daddu + gp/abs-mixed symbol (first differing insn: '' vs 'daddu s0, a5, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern void func_00280B48(void *layout, u32 color, const char *text, s32 flag);
 extern void func_00280BB8(void *layout, u32 color, const char *text, s32 flag);
 extern void func_00280C28(void *layout, u32 color, const char *text, s32 flag);
@@ -1831,6 +2148,10 @@ void func_00338F88(void *a1, void *layout, u32 color, s32 val, s32 font,
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00339398);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00339398, unit objdiff): 61.12%,
+   134/174 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x80' vs 'addiu sp, sp, -0x70').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 typedef void (*DrawQuad7)(s32 handle, s32 color0, f32 px, f32 py, f32 sx, f32 syg,
                           f32 v38);
 extern char *g_guiInstance;
@@ -1873,6 +2194,10 @@ void func_00339398(f32 x0, f32 y0, f32 x1, f32 y1, s32 base, s32 packByte,
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003395F0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003395F0, unit objdiff): 62.82%,
+   28/37 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: 'addiu sp, sp, -0x30' vs 'addiu sp, sp, -0x20').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_003395F0(void *p, s32 strId, s32 fmtArg, s32 id) {
     s32 kind = (id != -1) ? id : 0x78;
     func_00115DA8((char *)p + 0x1E34, (const char *)GetLocalizedString(strId), fmtArg);
@@ -1886,6 +2211,10 @@ void func_003395F0(void *p, s32 strId, s32 fmtArg, s32 id) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00339678);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00339678, unit objdiff): 60.12%,
+   15/29 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: '' vs 'addiu s0, zero, 0xb4').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_00339678(void *p, const void *src, s32 id) {
     s32 kind = (id != -1) ? id : 0xB4;
     func_00115AC0((char *)p + 0x1E34, src, 0xFE);
@@ -1902,6 +2231,10 @@ void func_003396E0(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003396E8);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003396E8, unit objdiff): 10.71%,
+   21/27 insns differ. Residual: UNKNOWN-lui (first differing insn: '' vs 'lui at, 0x3f4c').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; multi-way branch +
    float-constant materialization wall. */
 f32 func_003396E8(s32 unused, s32 sel) {
@@ -1927,6 +2260,10 @@ void func_00339A80(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00339A88);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00339A88, unit objdiff): 73.47%,
+   13/32 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu v1, a0, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_00339A88(void *w) {
     f32 *p = *(f32 **)((char *)w + 0x4);
     if (p[0] == 0.0f) {
@@ -1958,6 +2295,10 @@ void func_00339F90(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00339F98);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00339F98, unit objdiff): 68.45%,
+   26/47 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x30' vs 'addiu sp, sp, -0x20').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern u8 g_sceneActorMobys[];
 extern void func_00339B00(void *w);
 extern void BuildCameraProjection(void);
@@ -1988,11 +2329,10 @@ void func_00339F98(void *w) {
 
 /* func_0033A048: init the screen's eight embedded sub-elements at their fixed
  * offsets (four type-B then four type-C), return the object. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A048);
-#else
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
-   wall. */
+#if defined(MATCH_func_0033A048) || defined(TARGET_NATIVE)
+/* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_0033A048; task #466):
+ * unit objdiff 100.00% and verify_match_unit.sh 26/26 words + 8 relocs against the ROM.
+ * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
 void *func_0033A048(void *p) {
     GuiElementInitTypeB((char *)p + 0x8);
     GuiElementInitTypeB((char *)p + 0x54);
@@ -2004,6 +2344,8 @@ void *func_0033A048(void *p) {
     GuiElementInitTypeC((char *)p + 0x240);
     return p;
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A048);
 #endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A0B0);
@@ -2020,6 +2362,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiConfirmPopupInit);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiConfirmPopupInit, unit objdiff): 49.55%,
+   143/207 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu v0, zero, 0x1' vs '').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void GuiConfirmPopupTick(void *w, s32 arg2);
 extern char *g_guiInstance;
 extern u8 D_1ADBE8[], D_1ADBF0[], D_1ADBF8[], D_1ADC00[];
@@ -2096,6 +2442,10 @@ void GuiConfirmPopupInit(void *w, GuiPool *pool) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiConfirmPopupTick);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiConfirmPopupTick, unit objdiff): 26.00%,
+   177/193 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x90' vs 'addiu sp, sp, -0x60').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern void func_002E0010(void *dst, s32 level);
 extern f32 D_1ADC38[2], D_1ADC40[2], D_1ADC48[2];
 extern s32 g_health;            /* 0x18C2EC - base of the per-cutscene unlock records at +0x464 */
@@ -2143,6 +2493,10 @@ void GuiConfirmPopupTick(void *w, s32 arg2) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiConfirmPopupDraw);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiConfirmPopupDraw, unit objdiff): 87.20%,
+   4/26 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd ra, 0x8(sp)' vs '').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void GuiConfirmPopupDraw(void *w) {
     if (*(s32 *)((char *)w + 0x2D8) != 0) {
         GuiSpriteElementDraw((char *)w + 0x8);
@@ -2158,16 +2512,17 @@ void GuiConfirmPopupDraw(void *w) {
 
 /* func_0033A640: init the embedded dialog-box (p+0x8) and a type-B element
  * (p+0x2D8), return the object. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A640);
-#else
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
-   wall. */
+#if defined(MATCH_func_0033A640) || defined(TARGET_NATIVE)
+/* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_0033A640; task #466):
+ * unit objdiff 100.00% and verify_match_unit.sh 13/13 words + 2 relocs against the ROM.
+ * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
 void *func_0033A640(void *p) {
     GuiDialogBoxInitElements((char *)p + 0x8);
     GuiElementInitTypeB((char *)p + 0x2D8);
     return p;
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A640);
 #endif
 
 /* func_0033A678: construct a bordered dialog/popup widget. If a pool is given,
@@ -2180,13 +2535,17 @@ void *func_0033A640(void *p) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A678);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033A678, unit objdiff): 68.55%,
+   43/84 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s2, 0x10(sp)' vs 'sd s1, 0x8(sp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* GuiElementInit / GuiElementGetColor / GuiElementSetGlyph are defined earlier
  * in this unit; only the not-yet-defined callees need forward decls here. */
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
 void GuiDialogBoxSetBounds(void *p, f32 a, f32 b, f32 c, f32 d, f32 e, f32 f);
 extern void func_0033A7E0(void *w);
 extern char *g_guiInstance;
-extern u8 D_1ADC50[];
+extern u8 D_1ADC50[8];
 extern u8 D_1ADC60[];
 void func_0033A678(void *w, GuiPool *pool) {
     GuiElement *icon = (GuiElement *)((char *)w + 0x2D8);
@@ -2248,6 +2607,10 @@ void func_0033A7D8(void *p, s32 v) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A7E0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033A7E0, unit objdiff): 73.28%,
+   16/36 insns differ. Residual: UNKNOWN-addiu (first differing insn: '' vs 'addiu a0, zero, 0x2c34').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 4-callee-save frame
    wall. */
 extern s32 GetLocalizedString(s32 id);
@@ -2269,6 +2632,10 @@ void func_0033A7E0(void *p) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A860);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033A860, unit objdiff): 67.30%,
+   22/38 insns differ. Residual: UNKNOWN-addiu (first differing insn: '' vs 'addiu a0, zero, 0x2c33').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 4-callee-save frame
    wall. */
 extern s32 GetLocalizedString(s32 id);
@@ -2295,6 +2662,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A8F0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033A8F0, unit objdiff): 80.11%,
+   33/71 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s1, 0x8(sp)' vs '').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 s32 func_0033A8F0(void *w) {
     void *sub = (char *)w + 0x8;
     f32 *anchor = *(f32 **)((char *)w + 0x324);
@@ -2327,6 +2698,10 @@ s32 func_0033A8F0(void *w) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A9F8);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033A9F8, unit objdiff): 85.82%,
+   15/36 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd s1, 0x8(sp)' vs 'sd s0, 0x0(sp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; branch-likely (beql)
    guard + reloaded-flag CSE wall. */
 extern s32 D_1A8C88, D_1A8C8C;
@@ -2348,11 +2723,10 @@ void func_0033A9F8(void *p) {
  * their fixed offsets (four type-B at p+0x8/+0x54/+0xA0/+0xEC, then nine type-C
  * at +0x138/+0x190/+0x1E8/+0x240/+0x298/+0x2F0/+0x348/+0x3A0/+0x3F8), return the
  * object. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033AA80);
-#else
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
-   wall. */
+#if defined(MATCH_func_0033AA80) || defined(TARGET_NATIVE)
+/* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_0033AA80; task #466):
+ * unit objdiff 100.00% and verify_match_unit.sh 36/36 words + 13 relocs against the ROM.
+ * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
 void *func_0033AA80(void *p) {
     GuiElementInitTypeB((char *)p + 0x8);
     GuiElementInitTypeB((char *)p + 0x54);
@@ -2369,6 +2743,8 @@ void *func_0033AA80(void *p) {
     GuiElementInitTypeC((char *)p + 0x3F8);
     return p;
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033AA80);
 #endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033AB10);
@@ -2387,10 +2763,14 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiLevelInfoPanelInit);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiLevelInfoPanelInit, unit objdiff): 46.36%,
+   237/336 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu v0, zero, 0x1' vs '').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern char *g_guiInstance;
 extern u8 D_1ADBE8[], D_1ADBF0[], D_1ADBF8[], D_1ADC00[], D_1ADC08[], D_1ADC80[],
           D_1ADC90[], D_1ADC98[], D_1ADCA0[], D_1ADCA8[], D_1ADC10[], D_1ADC18[],
-          D_1ADC28[], D_1ADC78[];
+          D_1ADC28[], D_1ADC78[8];
 s32 GuiLevelInfoPanelTick(void *w);
 void GuiLevelInfoPanelInit(void *self, GuiPool *pool) {
     u8 *s = (u8 *)self;
@@ -2493,6 +2873,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiLevelInfoPanelTick);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiLevelInfoPanelTick, unit objdiff): 48.12%,
+   271/340 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0xe0' vs 'addiu sp, sp, -0x70').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern f32 D_1ADCB8[2], D_1ADCC0[2], D_1ADCC8[2], D_1ADCD0[2];
 extern f32 D_1ADCD8, D_1ADCDC;
 extern u8 g_mapVertexData[], g_levelSelectEntries[], D_1ADC60[];
@@ -2542,6 +2926,10 @@ s32 GuiLevelInfoPanelTick(void *w) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033B428);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033B428, unit objdiff): 85.00%,
+   8/51 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a0, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame +
    branch-likely (beql) guard wall. */
 /* GS A+D reg-write: the DATA is a 64-bit register value. Widen it to u64 for the
@@ -2584,6 +2972,10 @@ void func_0033B428(void *p) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033B4E8);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033B4E8, unit objdiff): 58.34%,
+   26/30 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x30' vs 'addiu sp, sp, -0x10').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 4-callee-save frame
    wall. */
 void *func_0033B4E8(void *p) {
@@ -2609,6 +3001,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiProgressBarWidgetInit);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiProgressBarWidgetInit, unit objdiff): 51.24%,
+   77/110 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s3, 0x18(sp)' vs 'sd s1, 0x8(sp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern s32 g_swapGadgetItemIndex;
 extern u8 D_1ADC60[];
 void GuiProgressBarWidgetInit(void *w, GuiPool *pool) {
@@ -2654,6 +3050,10 @@ void GuiProgressBarWidgetInit(void *w, GuiPool *pool) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033B6D0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033B6D0, unit objdiff): 88.05%,
+   6/20 insns differ. Residual: UNKNOWN-lwc1 (first differing insn: 'lwc1 fv0, %gp_rel(D_1ADCE0)(gp)' vs 'lwc1 fa0, %gp_rel(D_1ADCE0)(gp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; gp_rel/absolute float
    constant addressing mix wall. */
 extern f32 D_1ADCE0, D_1ADCE4;
@@ -2684,6 +3084,10 @@ void func_0033B6D0(void *p) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033B720);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033B720, unit objdiff): 66.28%,
+   153/210 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s2, 0x10(sp)' vs 'sd s0, 0x0(sp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern f32 func_00283B30(f32 x);   /* SinfVu0 */
 extern f32 func_00283B48(f32 x);   /* CosfVu0 */
 extern s32 D_1ADCE8, D_1ADCEC;     /* int, converted to float */
@@ -2796,8 +3200,12 @@ void func_0033BA40(void *p, s32 v) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033BA48);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033BA48, unit objdiff): 66.12%,
+   60/98 insns differ. Residual: UNKNOWN-daddu + gp/abs-mixed symbol (first differing insn: '' vs 'daddu s2, a0, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern u8 D_1ADC60[];
-extern s32 D_1ADD08[];
+extern s32 D_1ADD08[2];
 void func_0033BA48(void *w, s32 *srcGlyphs, void *entries) {
     s32 i, idx, off;
     s32 *row;
@@ -2845,6 +3253,10 @@ void func_0033BA48(void *w, s32 *srcGlyphs, void *entries) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiDialogBoxInitElements);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiDialogBoxInitElements, unit objdiff): 66.52%,
+   23/33 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x30' vs 'addiu sp, sp, -0x20').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void GuiDialogBoxInitElements(void *p) {
     char *base = (char *)p;
     s32 i;
@@ -2883,6 +3295,10 @@ void func_0033BE68(void *p, s32 v) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033BE70);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033BE70, unit objdiff): 73.47%,
+   37/81 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x40' vs 'addiu sp, sp, -0x30').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 4-callee-save + $f20
    saved-FPR frame wall. */
 void func_0033BE70(void *p, s32 flags) {
@@ -2928,6 +3344,10 @@ void func_0033BE70(void *p, s32 flags) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033BF90);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033BF90, unit objdiff): 89.90%,
+   22/51 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd s1, 0x8(sp)' vs 'sd ra, 0x28(sp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 5-callee-save frame +
    branch-likely (beql) guard chain + vtable-dispatch loop wall. */
 extern void GuiTextElementDraw(void *e);
@@ -3016,6 +3436,10 @@ void GuiDialogBoxSetBounds(void *p, f32 a, f32 b, f32 c, f32 d, f32 e, f32 f) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiDialogBoxSetText3);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiDialogBoxSetText3, unit objdiff): 63.14%,
+   10/26 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a0, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame
    wall. */
 extern void GuiElementSetText(GuiElement *e, s32 text);
@@ -3040,6 +3464,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033C100);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033C100, unit objdiff): 64.46%,
+   22/41 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x30' vs 'addiu sp, sp, -0x10').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 4-callee-save frame
    wall. */
 void *func_0033C100(void *p) {
@@ -3073,6 +3501,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiIconListScreenInit);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiIconListScreenInit, unit objdiff): 44.85%,
+   209/301 insns differ. Residual: UNKNOWN-daddu + gp/abs-mixed symbol (first differing insn: '' vs 'daddu s2, a0, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_0033C588(void *w, s32 flag);
 extern char *g_guiInstance;
 extern u8 D_1ADBE8[], D_1ADBF0[], D_1ADBF8[], D_1ADC00[], D_1ADD30[];
@@ -3175,6 +3607,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033C588);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033C958);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033C958, unit objdiff): 52.80%,
+   231/298 insns differ. Residual: UNKNOWN-sd + movn/movz (first differing insn: 'sd s2, 0x10(sp)' vs '').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern void func_00290320(s32 x0, s32 y0, s32 x1, s32 y1, u32 color, s32 flag);
 extern u8 D_265100[], g_levelVisitedMarkers[], g_abLevelAvailableFlags[],
           g_mapVertexData[];
@@ -3240,16 +3676,16 @@ void func_0033C958(void *self) {
 #endif
 
 /* func_0033CD80: init the embedded dialog-box (at p+0x8), return the object. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033CD80);
-#else
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame wall
-   (the body matches but the pinned cc1 lays the $16/$31 saves in 16-byte slots
-   vs the original's 8-byte packing). 99.64% best. */
+#if defined(MATCH_func_0033CD80) || defined(TARGET_NATIVE)
+/* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_0033CD80; task #466):
+ * unit objdiff 100.00% and verify_match_unit.sh 11/11 words + 1 relocs against the ROM.
+ * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
 void *func_0033CD80(void *p) {
     GuiDialogBoxInitElements((char *)p + 0x8);
     return p;
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033CD80);
 #endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033CDB0);
@@ -3261,9 +3697,13 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiDialogBoxVariantCInit);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiDialogBoxVariantCInit, unit objdiff): 68.04%,
+   30/85 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a1, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
 extern s32 func_0033CEE0(void *w, s32 flag);
-extern u8 D_1ADD98[];
+extern u8 D_1ADD98[8];
 void GuiDialogBoxVariantCInit(void *w, GuiPool *pool) {
     void *obj;
     s32 t0, t1, t2;
@@ -3308,6 +3748,10 @@ void GuiDialogBoxVariantCInit(void *w, GuiPool *pool) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033CEE0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033CEE0, unit objdiff): 25.09%,
+   113/137 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x20' vs 'addiu sp, sp, -0x30').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern u8 g_gsScreenContext[];
 extern void func_002857F0(void);
 extern void PlayGlobalSound(s32 id, s32 a, s32 b);
@@ -3370,6 +3814,10 @@ s32 func_0033CEE0(void *w, s32 flags) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D070);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033D070, unit objdiff): 30.48%,
+   83/104 insns differ. Residual: UNKNOWN-addiu + movn/movz, gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0xa0' vs 'addiu sp, sp, -0x80').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern void func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
 extern void func_00280C98(void *layout, s32 x, s32 y, s32 a, s32 b, s32 c, s32 d,
                           s32 e, s32 f);
@@ -3398,15 +3846,16 @@ void func_0033D070(void *e) {
 
 /* func_0033D1C0: init the embedded dialog-box (at p+0x8), return the object
  * (identical body to func_0033CD80). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D1C0);
-#else
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
-   wall. 99.64% best. */
+#if defined(MATCH_func_0033D1C0) || defined(TARGET_NATIVE)
+/* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_0033D1C0; task #466):
+ * unit objdiff 100.00% and verify_match_unit.sh 12/12 words + 1 relocs against the ROM.
+ * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
 void *func_0033D1C0(void *p) {
     GuiDialogBoxInitElements((char *)p + 0x8);
     return p;
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D1C0);
 #endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D1F0);
@@ -3419,9 +3868,13 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D1F8);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033D1F8, unit objdiff): 70.34%,
+   28/83 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a1, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 s32 func_0033D320(void *p, s32 flags);
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
-extern u8 D_1ADDB8[];
+extern u8 D_1ADDB8[8];
 void func_0033D1F8(void *w, GuiPool *pool) {
     void *obj;
     s32 t0, t1, t2;
@@ -3464,6 +3917,10 @@ void func_0033D1F8(void *w, GuiPool *pool) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D320);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033D320, unit objdiff): 89.45%,
+   13/42 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd s0, 0x0(sp)' vs '').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame +
    branch-likely (beql) guard wall. */
 extern void PlayGlobalSound(s32 id, s32 a, s32 b);
@@ -3492,6 +3949,10 @@ s32 func_0033D320(void *p, s32 flags) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D3C0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033D3C0, unit objdiff): 50.07%,
+   36/49 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: 'addiu sp, sp, -0xb0' vs 'addiu sp, sp, -0x90').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern void func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
 extern u8 D_1ADDA8[], D_1ADDB0[], D_1A7BB9;
 void func_0033D3C0(void *e) {
@@ -3509,15 +3970,16 @@ void func_0033D3C0(void *e) {
 
 /* func_0033D478: init the embedded dialog-box (at p+0x8), return the object
  * (byte-identical body to func_0033CD80). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D478);
-#else
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
-   wall ($16/$31 16-byte vs 8-byte slot packing). */
+#if defined(MATCH_func_0033D478) || defined(TARGET_NATIVE)
+/* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_0033D478; task #466):
+ * unit objdiff 100.00% and verify_match_unit.sh 12/12 words + 1 relocs against the ROM.
+ * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
 void *func_0033D478(void *p) {
     GuiDialogBoxInitElements((char *)p + 0x8);
     return p;
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D478);
 #endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D4A8);
@@ -3528,9 +3990,13 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D4B0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033D4B0, unit objdiff): 70.34%,
+   28/83 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a1, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 s32 func_0033D5D8(void *w, s32 flags);
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
-extern u8 D_1ADDC8[];
+extern u8 D_1ADDC8[8];
 void func_0033D4B0(void *w, GuiPool *pool) {
     void *obj;
     s32 t0, t1, t2;
@@ -3572,6 +4038,10 @@ void func_0033D4B0(void *w, GuiPool *pool) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D5D8);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033D5D8, unit objdiff): 73.80%,
+   49/112 insns differ. Residual: UNKNOWN-sd + movn/movz (first differing insn: 'sd s0, 0x0(sp)' vs '').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern void BuildCameraProjection(void);
 extern s32 D_1A7BAC, D_1A7BB0, D_1A7BB4;
 extern u8 D_1A7BB9;
@@ -3618,6 +4088,10 @@ s32 func_0033D5D8(void *w, s32 flags) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D780);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033D780, unit objdiff): 55.36%,
+   162/189 insns differ. Residual: UNKNOWN-addiu + movn/movz, gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x110' vs 'addiu sp, sp, -0x100').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern u8   D_1ADDF8[], D_1ADE00[], D_1ADE08[], D_1ADDA8[], D_1ADDB0[];
 extern s32  D_1A7BAC, D_1A7BB0, D_1A7BB4;
 extern u8   D_1A7BB9;
@@ -3671,15 +4145,16 @@ void func_0033D780(void *self) {
 
 /* func_0033DA00: init the embedded dialog-box (at p+0x8), return the object
  * (byte-identical body to func_0033CD80). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DA00);
-#else
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
-   wall. */
+#if defined(MATCH_func_0033DA00) || defined(TARGET_NATIVE)
+/* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_0033DA00; task #466):
+ * unit objdiff 100.00% and verify_match_unit.sh 11/11 words + 1 relocs against the ROM.
+ * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
 void *func_0033DA00(void *p) {
     GuiDialogBoxInitElements((char *)p + 0x8);
     return p;
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DA00);
 #endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DA30);
@@ -3691,9 +4166,13 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiDialogBoxVariantBInit);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiDialogBoxVariantBInit, unit objdiff): 70.33%,
+   29/83 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a1, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
 extern s32 func_0033DB60(void *w, s32 flag);
-extern u8 D_1ADE10[];
+extern u8 D_1ADE10[8];
 void GuiDialogBoxVariantBInit(void *w, GuiPool *pool) {
     void *obj;
     s32 t0, t1, t2;
@@ -3734,6 +4213,10 @@ void GuiDialogBoxVariantBInit(void *w, GuiPool *pool) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DB60);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033DB60, unit objdiff): 78.65%,
+   25/69 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd s0, 0x0(sp)' vs '').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern u8 D_1A7B9C, D_1A7B9D;
 s32 func_0033DB60(void *w, s32 flags) {
     void *box = (char *)w + 0x8;
@@ -3769,6 +4252,10 @@ s32 func_0033DB60(void *w, s32 flags) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DC68);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033DC68, unit objdiff): 41.15%,
+   94/104 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: 'addiu sp, sp, -0xe0' vs 'addiu sp, sp, -0xd0').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern void func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
 extern u8 D_1ADDA8[], D_1ADDB0[], D_1A7B9C, D_1A7B9D;
 void func_0033DC68(void *w) {
@@ -3795,17 +4282,18 @@ void func_0033DC68(void *w) {
 
 /* func_0033DDC8: init the embedded dialog-box (p+0x8) and two list-row elements
  * (p+0x2DC, p+0x324), return the object. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DDC8);
-#else
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
-   wall. */
+#if defined(MATCH_func_0033DDC8) || defined(TARGET_NATIVE)
+/* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_0033DDC8; task #466):
+ * unit objdiff 100.00% and verify_match_unit.sh 15/15 words + 3 relocs against the ROM.
+ * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
 void *func_0033DDC8(void *p) {
     GuiDialogBoxInitElements((char *)p + 0x8);
     GuiListRowElementInit((char *)p + 0x2DC);
     GuiListRowElementInit((char *)p + 0x324);
     return p;
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DDC8);
 #endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DE08);
@@ -3819,9 +4307,13 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DE10);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033DE10, unit objdiff): 70.90%,
+   75/170 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s5, a0, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 s32 func_0033E070(void *w, s32 flags);
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
-extern u8 D_1ADE20[], D_1ADC60[];
+extern u8 D_1ADE20[8], D_1ADC60[];
 void func_0033DE10(void *w, GuiPool *pool) {
     GuiElement *list1 = (GuiElement *)((char *)w + 0x2DC);
     GuiElement *list2 = (GuiElement *)((char *)w + 0x324);
@@ -3886,6 +4378,10 @@ void func_0033DE10(void *w, GuiPool *pool) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E070);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033E070, unit objdiff): 47.20%,
+   139/206 insns differ. Residual: UNKNOWN-addiu + movn/movz, gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x30' vs 'addiu sp, sp, -0x40').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern void func_00132938(s32 stereoOff);
 extern void func_002E5698(void);
 extern s32 g_padButtonsHeld, g_musicVolume, g_sfxVolume, g_audioStereoMode;
@@ -3958,6 +4454,10 @@ s32 func_0033E070(void *w, s32 flags) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E308);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033E308, unit objdiff): 50.65%,
+   89/115 insns differ. Residual: UNKNOWN-sd + movn/movz (first differing insn: 'sd s1, 0x98(sp)' vs 'sd s0, 0x90(sp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern void func_00280120(s32 x, s32 y, u32 colour, void *str, s32 flag); /* draw right-aligned */
 extern void func_00280250(s32 x, s32 y, u32 colour, void *str, s32 flag); /* draw centred */
 extern u8   D_1ADE40[], D_1ADE48[];
@@ -3998,15 +4498,16 @@ void func_0033E308(void *self) {
 
 /* func_0033E488: init the embedded dialog-box (at p+0x8), return the object
  * (byte-identical body to func_0033CD80). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E488);
-#else
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
-   wall. */
+#if defined(MATCH_func_0033E488) || defined(TARGET_NATIVE)
+/* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_0033E488; task #466):
+ * unit objdiff 100.00% and verify_match_unit.sh 11/11 words + 1 relocs against the ROM.
+ * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
 void *func_0033E488(void *p) {
     GuiDialogBoxInitElements((char *)p + 0x8);
     return p;
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E488);
 #endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E4B8);
@@ -4017,9 +4518,13 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E4C0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033E4C0, unit objdiff): 70.33%,
+   29/83 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a1, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 s32 func_0033E5E8(void *p, s32 flags);
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
-extern u8 D_1ADE50[];
+extern u8 D_1ADE50[8];
 void func_0033E4C0(void *w, GuiPool *pool) {
     void *obj;
     s32 t0, t1, t2;
@@ -4062,6 +4567,10 @@ void func_0033E4C0(void *w, GuiPool *pool) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E5E8);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033E5E8, unit objdiff): 90.74%,
+   16/39 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd s0, 0x0(sp)' vs '').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame +
    branch-likely (beql) guard wall. */
 extern void PlayGlobalSound(s32 id, s32 a, s32 b);
@@ -4088,6 +4597,10 @@ s32 func_0033E5E8(void *p, s32 flags) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E680);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033E680, unit objdiff): 50.77%,
+   45/57 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: 'addiu sp, sp, -0xc0' vs 'addiu sp, sp, -0xa0').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern void func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
 extern u8 D_1ADDA8[], D_1ADDB0[];
 void func_0033E680(void *w) {
@@ -4107,15 +4620,16 @@ void func_0033E680(void *w) {
 
 /* GuiQuitDialogInitElements: init the embedded dialog-box (at p+0x8), return the
  * object (identical body to func_0033CD80). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiQuitDialogInitElements);
-#else
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
-   wall. 99.64% best. */
+#if defined(MATCH_GuiQuitDialogInitElements) || defined(TARGET_NATIVE)
+/* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_GuiQuitDialogInitElements; task #466):
+ * unit objdiff 100.00% and verify_match_unit.sh 12/12 words + 1 relocs against the ROM.
+ * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
 void *GuiQuitDialogInitElements(void *p) {
     GuiDialogBoxInitElements((char *)p + 0x8);
     return p;
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiQuitDialogInitElements);
 #endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E780);
@@ -4128,9 +4642,13 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiQuitDialogInit);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiQuitDialogInit, unit objdiff): 70.33%,
+   29/83 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a1, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
 extern s32 func_0033E8B0(void *w, s32 flag);
-extern u8 D_1ADE60[];
+extern u8 D_1ADE60[8];
 void GuiQuitDialogInit(void *w, GuiPool *pool) {
     void *obj;
     s32 t0, t1, t2;
@@ -4172,6 +4690,10 @@ void GuiQuitDialogInit(void *w, GuiPool *pool) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E8B0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033E8B0, unit objdiff): 78.65%,
+   25/69 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd s0, 0x0(sp)' vs '').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern u8 D_1A7BBB;
 s32 func_0033E8B0(void *w, s32 flags) {
     void *box = (char *)w + 0x8;
@@ -4209,6 +4731,10 @@ s32 func_0033E8B0(void *w, s32 flags) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E9B8);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033E9B8, unit objdiff): 33.26%,
+   101/112 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: 'addiu sp, sp, -0xe0' vs 'addiu sp, sp, -0xd0').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern void func_0027F7A0(void);
 extern void func_0027F790(void);
 void func_0033E9B8(void *w) {
@@ -4240,15 +4766,16 @@ void func_0033E9B8(void *w) {
 
 /* func_0033EB20: init the embedded dialog-box (at p+0x8), return the object
  * (byte-identical body to func_0033CD80). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EB20);
-#else
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
-   wall. */
+#if defined(MATCH_func_0033EB20) || defined(TARGET_NATIVE)
+/* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_0033EB20; task #466):
+ * unit objdiff 100.00% and verify_match_unit.sh 12/12 words + 1 relocs against the ROM.
+ * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
 void *func_0033EB20(void *p) {
     GuiDialogBoxInitElements((char *)p + 0x8);
     return p;
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EB20);
 #endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EB50);
@@ -4259,9 +4786,13 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EB58);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033EB58, unit objdiff): 70.33%,
+   29/83 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a1, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 s32 func_0033EC80(void *w, s32 flags);
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
-extern u8 D_1ADE70[];
+extern u8 D_1ADE70[8];
 void func_0033EB58(void *w, GuiPool *pool) {
     void *obj;
     s32 t0, t1, t2;
@@ -4300,6 +4831,10 @@ void func_0033EB58(void *w, GuiPool *pool) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EC80);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033EC80, unit objdiff): 90.74%,
+   16/39 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd s0, 0x0(sp)' vs '').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 s32 func_0033EC80(void *w, s32 flags) {
     void *sub = (char *)w + 0x8;
     f32 *anchor;
@@ -4321,6 +4856,10 @@ s32 func_0033EC80(void *w, s32 flags) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033ED18);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033ED18, unit objdiff): 50.07%,
+   36/49 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: 'addiu sp, sp, -0xb0' vs 'addiu sp, sp, -0x90').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern void func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
 extern u8 D_1ADDA8[], D_1ADDB0[];
 void func_0033ED18(void *e) {
@@ -4338,15 +4877,16 @@ void func_0033ED18(void *e) {
 
 /* func_0033EDD0: init the embedded dialog-box (at p+0x8), return the object
  * (byte-identical body to func_0033CD80). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EDD0);
-#else
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
-   wall. */
+#if defined(MATCH_func_0033EDD0) || defined(TARGET_NATIVE)
+/* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_0033EDD0; task #466):
+ * unit objdiff 100.00% and verify_match_unit.sh 12/12 words + 1 relocs against the ROM.
+ * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
 void *func_0033EDD0(void *p) {
     GuiDialogBoxInitElements((char *)p + 0x8);
     return p;
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EDD0);
 #endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EE00);
@@ -4357,9 +4897,13 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EE08);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033EE08, unit objdiff): 70.33%,
+   29/83 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a1, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 s32 func_0033EF30(void *w, s32 flags);
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
-extern u8 D_1ADE80[];
+extern u8 D_1ADE80[8];
 void func_0033EE08(void *w, GuiPool *pool) {
     void *obj;
     s32 t0, t1, t2;
@@ -4397,6 +4941,10 @@ void func_0033EE08(void *w, GuiPool *pool) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EF30);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033EF30, unit objdiff): 90.74%,
+   16/39 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd s0, 0x0(sp)' vs '').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 s32 func_0033EF30(void *w, s32 flags) {
     void *sub = (char *)w + 0x8;
     f32 *anchor;
@@ -4414,15 +4962,16 @@ s32 func_0033EF30(void *w, s32 flags) {
 
 /* func_0033EFC8: init the embedded dialog-box (at p+0x8), return the object
  * (byte-identical body to func_0033CD80). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EFC8);
-#else
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
-   wall. */
+#if defined(MATCH_func_0033EFC8) || defined(TARGET_NATIVE)
+/* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_0033EFC8; task #466):
+ * unit objdiff 100.00% and verify_match_unit.sh 12/12 words + 1 relocs against the ROM.
+ * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
 void *func_0033EFC8(void *p) {
     GuiDialogBoxInitElements((char *)p + 0x8);
     return p;
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EFC8);
 #endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EFF8);
@@ -4433,9 +4982,13 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F000);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033F000, unit objdiff): 70.33%,
+   29/83 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a1, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 s32 func_0033F128(void *w, s32 flags);
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
-extern u8 D_1ADE90[];
+extern u8 D_1ADE90[8];
 void func_0033F000(void *w, GuiPool *pool) {
     void *obj;
     s32 t0, t1, t2;
@@ -4473,6 +5026,10 @@ void func_0033F000(void *w, GuiPool *pool) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F128);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033F128, unit objdiff): 90.74%,
+   16/39 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd s0, 0x0(sp)' vs '').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 s32 func_0033F128(void *w, s32 flags) {
     void *sub = (char *)w + 0x8;
     f32 *anchor;
@@ -4490,16 +5047,17 @@ s32 func_0033F128(void *w, s32 flags) {
 
 /* func_0033F1C0: init the embedded dialog-box (p+0x8) and the GuiWidget at
  * p+0x2E0 (func_00348BD0), return the object. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F1C0);
-#else
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
-   wall. */
+#if defined(MATCH_func_0033F1C0) || defined(TARGET_NATIVE)
+/* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_0033F1C0; task #466):
+ * unit objdiff 100.00% and verify_match_unit.sh 14/14 words + 2 relocs against the ROM.
+ * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
 void *func_0033F1C0(void *p) {
     GuiDialogBoxInitElements((char *)p + 0x8);
     func_00348BD0((char *)p + 0x2E0);
     return p;
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F1C0);
 #endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F1F8);
@@ -4512,11 +5070,15 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F200);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033F200, unit objdiff): 73.73%,
+   46/98 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd s4, 0x20(sp)' vs 'sd s3, 0x18(sp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 s32 func_0033F3F0(void *w, s32 arg1);
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
 extern void func_00348BF8(void *w, void *pool);
 extern void func_00348E20(void *w, s32 v);
-extern u8 D_1ADEA0[];
+extern u8 D_1ADEA0[8];
 void func_0033F200(void *w, GuiPool *pool) {
     void *obj;
     void *list = (char *)w + 0x2E0;
@@ -4558,6 +5120,10 @@ void func_0033F200(void *w, GuiPool *pool) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F360);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033F360, unit objdiff): 66.08%,
+   8/15 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu v1, zero, 0x14' vs 'sll v1, v0, 2').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
    wall. */
 void func_0033F398(void *p);
@@ -4578,6 +5144,10 @@ void func_0033F398(void *p) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F3B8);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033F3B8, unit objdiff): 64.79%,
+   10/16 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a0, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame
    wall ($16/$17/$31 16-byte vs 8-byte slot packing). */
 extern void GuiMenuListSetRows(void *p, void *records);
@@ -4595,6 +5165,10 @@ void func_0033F3B8(void *p, void *records) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F3F0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033F3F0, unit objdiff): 53.50%,
+   35/40 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x30' vs 'addiu sp, sp, -0x20').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 s32 func_0033F3F0(void *w, s32 arg1) {
     f32 *anchor;
     func_0033BE70((char *)w + 0x8, arg1);   /* 2nd arg (flags) is ignored by the callee */
@@ -4613,10 +5187,14 @@ s32 func_0033F3F0(void *w, s32 arg1) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F478);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033F478, unit objdiff): 64.67%,
+   11/23 insns differ. Residual: UNKNOWN-daddu (first differing insn: 'daddu s0, a0, zero' vs 'addiu s0, a0, 0x2e0').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; gp_rel(D_1ADEB0) vs
    absolute(g_currentLanguage) addressing mix + 2-callee-save frame wall. */
 extern u8 g_currentLanguage;
-extern s32 D_1ADEB0[];
+extern s32 D_1ADEB0[2];
 void func_0033F478(void *p) {
     void *w = (char *)p + 0x2E0;
     func_0033BF90((char *)p + 0x8);
@@ -4627,16 +5205,17 @@ void func_0033F478(void *p) {
 
 /* func_0033F4D0: init the embedded dialog-box (p+0x8) and a type-C element
  * (p+0x2E0), return the object. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F4D0);
-#else
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
-   wall. */
+#if defined(MATCH_func_0033F4D0) || defined(TARGET_NATIVE)
+/* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_0033F4D0; task #466):
+ * unit objdiff 100.00% and verify_match_unit.sh 14/14 words + 2 relocs against the ROM.
+ * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
 void *func_0033F4D0(void *p) {
     GuiDialogBoxInitElements((char *)p + 0x8);
     GuiElementInitTypeC((char *)p + 0x2E0);
     return p;
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F4D0);
 #endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F508);
@@ -4648,9 +5227,13 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F510);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033F510, unit objdiff): 68.88%,
+   32/73 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd s0, 0x0(sp)' vs 'sd s1, 0x8(sp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 s32 func_0033F610(void *p, s32 flags);
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
-extern u8 D_1ADEC8[];
+extern u8 D_1ADEC8[8];
 void func_0033F510(void *w, GuiPool *pool) {
     void *obj;
     s32 t0, t2;
@@ -4685,6 +5268,10 @@ void func_0033F510(void *w, GuiPool *pool) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F610);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033F610, unit objdiff): 52.52%,
+   15/28 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s2, a0, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame
    wall. */
 extern void func_0033BE70(void *p, s32 flags);
@@ -4707,11 +5294,10 @@ void func_0033F670(void *p) {
 /* func_0033F690: init the screen's thirteen embedded sub-elements (the dialog
  * box at +0x8, the D_1ADA18 widget at +0x2DC, three type-C, one type-B, then
  * seven more type-C), return the object. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F690);
-#else
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
-   wall. */
+#if defined(MATCH_func_0033F690) || defined(TARGET_NATIVE)
+/* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_0033F690; task #466):
+ * unit objdiff 100.00% and verify_match_unit.sh 33/33 words + 12 relocs against the ROM.
+ * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
 void *func_0033F690(void *p) {
     GuiDialogBoxInitElements((char *)p + 0x8);
     func_003374D8((char *)p + 0x2DC);
@@ -4727,6 +5313,8 @@ void *func_0033F690(void *p) {
     GuiElementInitTypeC((char *)p + 0x628);
     return p;
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F690);
 #endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F718);
@@ -4744,10 +5332,14 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiStatsPanelScreenInit);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiStatsPanelScreenInit, unit objdiff): 61.44%,
+   166/264 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s7, 0x58(sp)' vs 'sd s2, 0x30(sp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_0033FAB0(void *w, s32 flag);
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
 extern char *g_guiInstance;
-extern u8 D_1ADED8[], D_1ADC60[], D_1ADEE8[], D_1ADEF0[], D_1ADEF8[];
+extern u8 D_1ADED8[8], D_1ADC60[], D_1ADEE8[], D_1ADEF0[], D_1ADEF8[];
 void GuiStatsPanelScreenInit(void *w, GuiPool *pool) {
     GuiElement *t318 = (GuiElement *)((char *)w + 0x318);
     GuiElement *t370 = (GuiElement *)((char *)w + 0x370);
@@ -4833,6 +5425,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033FAB0);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033FCE8);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033FCE8, unit objdiff): 54.53%,
+   49/70 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s0, 0x0(sp)' vs 'sd s1, 0x8(sp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern f32 D_1ADF38, D_1ADF3C, D_1ADF40, D_1ADF44;
 extern f32 D_1ADF48, D_1ADF4C, D_1ADF50, D_1ADF54;
 void func_0033FCE8(void *w) {
@@ -4855,6 +5451,10 @@ void func_0033FCE8(void *w) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033FDD8);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033FDD8, unit objdiff): 57.83%,
+   56/82 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x40' vs 'addiu sp, sp, -0x30').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern s32 CountPlatinumBolts(s32 group);
 extern s32 func_002B1D18(s32 idx);
 extern u8 g_mapVertexData[], D_1ADBA8[], D_1ADF70[];
@@ -4930,6 +5530,10 @@ void func_0033FEF8(void *e) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033FF68);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033FF68, unit objdiff): 63.50%,
+   72/94 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x60' vs 'addiu sp, sp, -0x30').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void *func_0033FF68(void *self) {
     u8 *s = (u8 *)self;
     u8 *p;
@@ -4991,6 +5595,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiQuickSelectWheelInit);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiQuickSelectWheelInit, unit objdiff): 53.04%,
+   520/720 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x100' vs 'addiu sp, sp, -0xb0').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern char *g_guiInstance;
 extern f32 func_00283B30(f32 x);   /* SinfVu0 */
 extern f32 func_00283B48(f32 x);   /* CosfVu0 */
@@ -4998,7 +5606,7 @@ extern f32 WrapAnglePiSum(f32 angle, f32 halfPi);
 extern u8 D_1ADBE8[], D_1ADBF0[], D_1ADBF8[], D_1ADC00[], D_1ADF78[], D_1ADF80[],
           D_1ADD38[], D_1ADF88[], D_1ADF90[], D_1ADF98[], D_1ADFA0[], D_1ADFA8[],
           D_1ADFB0[], D_1ADFB8[], D_1ADFC8[], D_1ADFD8[], D_1ADFE8[], D_1ADFF8[],
-          D_1ADD30[], D_1AE008[], D_1AE018[], D_1ADB14[], D_1ADB1C[];
+          D_1ADD30[], D_1AE008[], D_1AE018[], D_1ADB14[8], D_1ADB1C[8];
 s32 GuiQuickSelectWheelTick(void *w, s32 flag);
 void GuiQuickSelectWheelInit(void *self, GuiPool *pool) {
     u8 *p = (u8 *)self;
@@ -5167,6 +5775,10 @@ void GuiQuickSelectWheelInit(void *self, GuiPool *pool) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiQuickSelectWheelTick);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiQuickSelectWheelTick, unit objdiff): 46.91%,
+   401/486 insns differ. Residual: UNKNOWN-addiu + movn/movz, gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x120' vs 'addiu sp, sp, -0x80').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern char *g_guiInstance;
 extern u8 g_hudMobySpawnStart[];        /* +0x2C -> quick-select entry table ptr */
 extern s32 g_weaponXp[];                /* itemId -> accumulated weapon XP */
@@ -5301,6 +5913,10 @@ s32 GuiQuickSelectWheelTick(void *w, s32 flag) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341160);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00341160, unit objdiff): 61.92%,
+   112/167 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x50' vs 'addiu sp, sp, -0x30').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern void func_0034F028(s32 atlas, s32 x, s32 y, s32 code);
 void func_003413A8(void *self);
 void func_00341548(void *self);
@@ -5383,6 +5999,10 @@ void func_00341160(void *self) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003413A8);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003413A8, unit objdiff): 23.67%,
+   127/129 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0xf0' vs 'addiu sp, sp, -0xa0').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern u8   D_1AE050[], D_1AE058[], D_1AE060[], D_1AE068[];
 extern u8   D_00259F38[];
 extern char *g_guiInstance;
@@ -5441,6 +6061,10 @@ void func_003413A8(void *self) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341548);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00341548, unit objdiff): 0.00%,
+   153/157 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x100' vs 'addiu sp, sp, -0xa0').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern u8   D_1AE068[], D_1AE070[], D_1AE078[], D_1AE080[], D_1AE088[];
 extern u8   D_259CC0[];
 void func_00341548(void *self) {
@@ -5499,6 +6123,10 @@ void func_00341548(void *self) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341708);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00341708, unit objdiff): 31.22%,
+   139/146 insns differ. Residual: UNKNOWN-addiu + movn/movz, gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x10' vs 'addiu sp, sp, -0x20').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern u8 g_hudMobySpawnStart[];        /* +0x2C -> quick-select slot-table ptr */
 extern void PlayGlobalSound(s32 id, s32 a, s32 b);
 
@@ -5561,6 +6189,10 @@ void func_00341708(void *w, void *table, s32 rowStride) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003418D8);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003418D8, unit objdiff): 51.89%,
+   102/125 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: 'addiu sp, sp, -0x20' vs 'addiu sp, sp, -0x10').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern u8 D_00259F38[];
 extern void PlayGlobalSound(s32 id, s32 a, s32 b);
 extern void func_00341708(void *w, void *table, s32 mult);
@@ -5629,6 +6261,10 @@ void func_003418D8(void *w, s32 flags) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341A80);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00341A80, unit objdiff): 48.39%,
+   97/121 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: 'addiu sp, sp, -0x20' vs 'addiu sp, sp, -0x10').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern u8 D_259CC0[];
 extern void PlayGlobalSound(s32 id, s32 a, s32 b);
 extern void func_00341708(void *w, void *table, s32 mult);
@@ -5685,11 +6321,10 @@ void func_00341A80(void *w, s32 flags) {
 /* func_00341C28: init the screen's six embedded sub-elements at their fixed
  * offsets (two type-B, one type-C, one type-B, a list-row, and the D_1ADA18
  * widget), return the object. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341C28);
-#else
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
-   wall. */
+#if defined(MATCH_func_00341C28) || defined(TARGET_NATIVE)
+/* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_00341C28; task #466):
+ * unit objdiff 100.00% and verify_match_unit.sh 20/20 words + 6 relocs against the ROM.
+ * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
 void *func_00341C28(void *p) {
     GuiElementInitTypeB(p);
     GuiElementInitTypeB((char *)p + 0x4C);
@@ -5699,6 +6334,8 @@ void *func_00341C28(void *p) {
     func_003374D8((char *)p + 0x184);
     return p;
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341C28);
 #endif
 
 /* GuiScrollListScreenInit: construct a scroll-list screen (a header button, two
@@ -5715,6 +6352,10 @@ void *func_00341C28(void *p) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiScrollListScreenInit);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiScrollListScreenInit, unit objdiff): 67.42%,
+   114/197 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s4, 0x20(sp)' vs 'sd s1, 0x8(sp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_00341F40(void *w, s32 a, s32 b);
 extern char *g_guiInstance;
 extern u8 D_1ADF78[], D_1ADF98[], D_1ADFA0[], D_1AE008[], D_1ADFB0[], D_1AE018[];
@@ -5795,6 +6436,10 @@ void GuiScrollListScreenInit(void *w, GuiPool *pool) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341F40);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00341F40, unit objdiff): 75.61%,
+   53/102 insns differ. Residual: UNKNOWN-sd + movn/movz (first differing insn: 'sd s0, 0x10(sp)' vs 'sd s2, 0x20(sp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_00341F40(void *w, s32 flags, s32 table) {
     f32 offset[2];
     GuiElement *cursor;
@@ -5869,6 +6514,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003420C0);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiIconScreenInit);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiIconScreenInit, unit objdiff): 61.77%,
+   148/228 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x70' vs 'addiu sp, sp, -0x60').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern void func_00348BF8(void *w, void *pool);
 extern char *g_guiInstance;
 extern u8 D_1ADBE8[], D_1ADBF0[], D_1ADBF8[], D_1ADC00[], D_1ADF98[];
@@ -5936,16 +6585,17 @@ void GuiIconScreenInit(void *w, GuiPool *pool) {
 #endif
 
 /* func_00342450: write three ints at +0x318/+0x310/+0x314 in that source order. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342450);
-#else
-/* TODO(match): functional equivalent - not byte-exact; cc1 reorders the three
-   independent stores ascending. 95% best. */
+#if defined(MATCH_func_00342450) || defined(TARGET_NATIVE)
+/* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_00342450; task #466):
+ * unit objdiff 100.00% and verify_match_unit.sh 4/4 words + 0 relocs against the ROM.
+ * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
 void func_00342450(void *p, s32 a, s32 b, s32 c) {
     *(s32 *)((char *)p + 0x318) = c;
     *(s32 *)((char *)p + 0x310) = a;
     *(s32 *)((char *)p + 0x314) = b;
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342450);
 #endif
 
 /* func_00342460: store an int at +0x230. */
@@ -5960,6 +6610,10 @@ void func_00342460(void *p, s32 v) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342468);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00342468, unit objdiff): 62.61%,
+   20/26 insns differ. Residual: UNKNOWN-daddu + movn/movz (first differing insn: 'daddu a4, a0, zero' vs 'daddu a2, a0, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; movz conditional-move +
    absolute table addressing wall. */
 extern s32 D_265250[];
@@ -5982,6 +6636,10 @@ s32 func_00342468(void *p) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003424C8);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003424C8, unit objdiff): 11.77%,
+   29/32 insns differ. Residual: UNKNOWN-bnezl (first differing insn: 'bnezl v1, 0xc484' vs 'bnezl v1, 0xbb8c').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; switch-style multi-way
    branch wall. */
 s32 func_003424C8(void *p) {
@@ -6008,7 +6666,11 @@ s32 func_003424C8(void *p) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342520);
 #else
-extern s32 D_1AE0A0[];
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00342520, unit objdiff): 14.15%,
+   103/112 insns differ. Residual: UNKNOWN-addiu + movn/movz, gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x30' vs 'addiu sp, sp, -0x40').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
+extern s32 D_1AE0A0[2];
 extern u8 D_2652B0[];
 extern void func_00348E50(void *w, s32 v);
 void func_00342520(void *w, s32 mode) {
@@ -6055,6 +6717,10 @@ void func_00342520(void *w, s32 mode) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342670);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00342670, unit objdiff): 41.88%,
+   20/32 insns differ. Residual: UNKNOWN-daddu (first differing insn: 'daddu v1, a0, zero' vs 'lwc1 fv0, %gp_rel(D_1AE0B8)(gp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; gp_rel/absolute float
    constant addressing mix wall. */
 extern f32 D_1AE0B0, D_1AE0B4, D_1AE0B8;
@@ -6079,6 +6745,10 @@ void func_003426D8(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003426E0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003426E0, unit objdiff): 75.29%,
+   42/65 insns differ. Residual: UNKNOWN-lwc1 (first differing insn: 'lwc1 fv0f, %gp_rel(D_1AE0C0)(gp)' vs 'lwc1 fa0, %gp_rel(D_1AE0C0)(gp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_003426E0(void *w, s32 inputMask) {
     void *sub = (char *)w + 0x238;
     s32 *table = (s32 *)((char *)w + 0x1B8);
@@ -6108,6 +6778,10 @@ void func_003426E0(void *w, s32 inputMask) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003427D0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003427D0, unit objdiff): 74.21%,
+   53/109 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s1, 0x8(sp)' vs '').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 s32 func_003427D0(void *w, s32 inputMask) {
     f32 *anchor;
 
@@ -6155,6 +6829,10 @@ void func_00342978(void *p) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342998);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00342998, unit objdiff): 55.38%,
+   91/121 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: 'addiu sp, sp, -0x40' vs 'addiu sp, sp, -0x50').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern f32 D_1AE0F8, D_1AE0FC, D_1AE100;
 void func_00342998(void *w) {
     GuiElement *icon = (GuiElement *)((char *)w + 0x17C);
@@ -6203,6 +6881,10 @@ void func_00342998(void *w) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342B30);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00342B30, unit objdiff): 88.15%,
+   4/28 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a0, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_00342B30(void *w) {
     if (*(s32 *)((char *)w + 0x230) != 0) {
         GuiSpriteElementDraw(w);
@@ -6219,17 +6901,18 @@ void func_00342B30(void *w) {
 
 /* func_00342BA0: init the GuiWidget at p+0x10 and two type-B elements
  * (p+0xEC, p+0x138), return the object. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342BA0);
-#else
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
-   wall. */
+#if defined(MATCH_func_00342BA0) || defined(TARGET_NATIVE)
+/* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_00342BA0; task #466):
+ * unit objdiff 100.00% and verify_match_unit.sh 15/15 words + 3 relocs against the ROM.
+ * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
 void *func_00342BA0(void *p) {
     func_00348BD0((char *)p + 0x10);
     GuiElementInitTypeB((char *)p + 0xEC);
     GuiElementInitTypeB((char *)p + 0x138);
     return p;
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342BA0);
 #endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342BE0);
@@ -6250,6 +6933,10 @@ void func_00342BE8(void *p, s32 v) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiHelpPromptWidgetInit);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiHelpPromptWidgetInit, unit objdiff): 66.35%,
+   72/102 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x40' vs 'addiu sp, sp, -0x30').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern void func_00348BF8(void *w, void *pool);
 extern u8 D_1ADBE8[];
 extern u8 D_1ADBF0[];
@@ -6303,6 +6990,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342D68);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00342D68, unit objdiff): 66.08%,
+   8/15 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu v1, zero, 0x14' vs 'sll v1, v0, 2').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
    wall. */
 void func_00342DA0(void *p);
@@ -6323,6 +7014,10 @@ void func_00342DA0(void *p) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342DC0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00342DC0, unit objdiff): 64.79%,
+   10/16 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a0, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame
    wall. */
 void func_00342DC0(void *p, void *records) {
@@ -6337,6 +7032,10 @@ void func_00342DC0(void *p, void *records) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342DF8);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00342DF8, unit objdiff): 75.05%,
+   14/21 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd s1, 0x8(sp)' vs 'sd s0, 0x0(sp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame
    wall. */
 s32 func_00342DF8(void *p, s32 inputMask) {
@@ -6358,6 +7057,10 @@ s32 func_00342DF8(void *p, s32 inputMask) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342E48);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00342E48, unit objdiff): 71.59%,
+   66/113 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x50' vs 'addiu sp, sp, -0x60').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_00342E48(void *w) {
     void *list = (char *)w + 0x10;
     s32 count = func_00348E68(list);
@@ -6391,11 +7094,10 @@ void func_00342E48(void *w) {
 
 /* func_00342FD8: init the screen's six embedded sub-elements (four type-B, the
  * D_1ADA18 widget at +0x130, and the GuiWidget at +0x188), return the object. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342FD8);
-#else
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
-   wall. */
+#if defined(MATCH_func_00342FD8) || defined(TARGET_NATIVE)
+/* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_00342FD8; task #466):
+ * unit objdiff 100.00% and verify_match_unit.sh 20/20 words + 6 relocs against the ROM.
+ * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
 void *func_00342FD8(void *p) {
     GuiElementInitTypeB(p);
     GuiElementInitTypeB((char *)p + 0x4C);
@@ -6405,6 +7107,8 @@ void *func_00342FD8(void *p) {
     func_00348BD0((char *)p + 0x188);
     return p;
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342FD8);
 #endif
 
 /* GuiIconScreenInit2: construct an icon screen (two button-glyph elements, a
@@ -6420,9 +7124,13 @@ void *func_00342FD8(void *p) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiIconScreenInit2);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiIconScreenInit2, unit objdiff): 54.75%,
+   133/182 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s5, 0x28(sp)' vs 'sd s0, 0x0(sp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern void func_00348BF8(void *w, void *pool);
 extern void func_00348E50(void *w, s32 v);
-extern u8 D_1ADBE8[], D_1ADBF8[], D_1ADF98[], D_1AE098[], D_1AE110[];
+extern u8 D_1ADBE8[], D_1ADBF8[], D_1ADF98[], D_1AE098[], D_1AE110[8];
 void GuiIconScreenInit2(void *w, GuiPool *pool) {
     GuiElement *e0 = (GuiElement *)((char *)w + 0x0);
     GuiElement *e1 = (GuiElement *)((char *)w + 0x4C);
@@ -6482,6 +7190,10 @@ void GuiIconScreenInit2(void *w, GuiPool *pool) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343290);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00343290, unit objdiff): 67.50%,
+   5/10 insns differ. Residual: UNKNOWN-daddu (first differing insn: 'daddu v1, a0, zero' vs '').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; the original keeps a $a0
    copy and fills the jal delay slot with the store; cc1 stores before the call.
    68% best. */
@@ -6508,6 +7220,10 @@ s32 func_003432C0(void *p) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003432D8);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003432D8, unit objdiff): 80.36%,
+   8/24 insns differ. Residual: UNKNOWN-lwc1 (first differing insn: 'lwc1 fv1f, 0x4(v0)' vs 'lwc1 fa0, 0x0(v0)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; gp_rel/absolute float
    constant addressing mix wall. */
 extern f32 D_1AE150, D_1AE154, D_1AE158;
@@ -6531,6 +7247,10 @@ void func_00343330(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343338);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00343338, unit objdiff): 88.50%,
+   21/40 insns differ. Residual: UNKNOWN-lwc1 (first differing insn: 'lwc1 fv0f, %gp_rel(D_1AE160)(gp)' vs 'lwc1 fa0, %gp_rel(D_1AE160)(gp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_00343338(void *w, s32 inputMask) {
     void *sub = (char *)w + 0x188;
     f32 *anchor = *(f32 **)((char *)w + 0x180);
@@ -6550,8 +7270,12 @@ void func_00343338(void *w, s32 inputMask) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003433D0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003433D0, unit objdiff): 65.39%,
+   46/70 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x40' vs 'addiu sp, sp, -0x30').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern f32 D_1AE170, D_1AE174, D_1AE178, D_1AE17C;
-extern f32 D_1AE180[];
+extern f32 D_1AE180[2];
 s32 func_003433D0(void *w, s32 inputMask) {
     f32 *anchor = *(f32 **)((char *)w + 0x180);
     f32 alpha;
@@ -6579,6 +7303,10 @@ s32 func_003433D0(void *w, s32 inputMask) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003434C8);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003434C8, unit objdiff): 74.40%,
+   14/39 insns differ. Residual: UNKNOWN-lui (first differing insn: 'lui v1, %hi(g_padButtonsPressed)' vs 'lui v0, %hi(g_padButtonsPressed)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_003434C8(void *w) {
     if (g_padButtonsPressed & 0x5000) {
         func_002AA3F0(0, 0, 1, 0, 1);
@@ -6603,6 +7331,10 @@ void func_00343558(void *p) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343578);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00343578, unit objdiff): 18.24%,
+   76/85 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: 'addiu sp, sp, -0x40' vs 'addiu sp, sp, -0x50').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern f32 D_1AE198, D_1AE19C, D_1AE1A0;
 void func_00343578(void *w) {
     GuiElement *e = (GuiElement *)((char *)w + 0x130);
@@ -6629,6 +7361,10 @@ void func_00343578(void *w) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343668);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00343668, unit objdiff): 84.76%,
+   4/22 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a0, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame +
    branch-likely guard wall. */
 extern void func_003434C8(void *p);
@@ -6664,6 +7400,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003436D0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003436D0, unit objdiff): 75.32%,
+   46/77 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: 'addiu sp, sp, -0x40' vs 'addiu sp, sp, -0x30').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern s32   func_001234F0(f32 x);
 extern s32   func_00123028(s32 a, s32 b);
 extern s32   func_00122A98(s32 a, s32 b);
@@ -6714,6 +7454,10 @@ s32 func_003436D0(void *a0, s32 hi, f32 a, f32 b, f32 c, f32 d) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003437F0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003437F0, unit objdiff): 78.53%,
+   14/42 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu a0, a1, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_003437F0(void *w, GuiPool *pool) {
     /* +0x8C = pool is written UNCONDITIONALLY: the original's `sw $4,0x8C($16)`
        sits in the beqz delay slot, so it runs even on the pool==0 reset path
@@ -6748,6 +7492,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343888);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343AD0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00343AD0, unit objdiff): 41.67%,
+   7/11 insns differ. Residual: UNKNOWN-lw (first differing insn: 'lw v0, 0x10(a0)' vs 'lw v1, 0x10(a0)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; the original lowers the
    guard as a branch-likely (bnel + nullified load in the delay slot); cc1 emits
    beqz + a separate load. 38% best. */
@@ -6816,6 +7564,10 @@ s32 func_00343F70(void *p) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343F78);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00343F78, unit objdiff): 36.02%,
+   116/124 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x30' vs 'addiu sp, sp, -0x20').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern s32 g_screenWidth, g_screenHeight;
 extern s32 D_1AE1D0, D_1AE1D4, D_1AE1D8, D_1AE1DC, D_1AE1E0, D_1AE1E4;
 extern void func_00285EF8(s32 x0, s32 y0, s32 x1, s32 y1, s32 sw, s32 sh, u32 color);
@@ -6845,11 +7597,10 @@ void func_00343F78(void *w) {
 /* func_00344110: init the screen's eight embedded sub-elements at their fixed
  * offsets (three type-B, the D_1ADA18 widget, three type-C, and the identity
  * widget func_003436C0), return the object. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344110);
-#else
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
-   wall. */
+#if defined(MATCH_func_00344110) || defined(TARGET_NATIVE)
+/* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_00344110; task #466):
+ * unit objdiff 100.00% and verify_match_unit.sh 24/24 words + 8 relocs against the ROM.
+ * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
 extern void *func_003436C0(void *p);
 void *func_00344110(void *p) {
     GuiElementInitTypeB(p);
@@ -6862,6 +7613,8 @@ void *func_00344110(void *p) {
     func_003436C0((char *)p + 0x2C8);
     return p;
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344110);
 #endif
 
 /* GuiTitledSpriteScreenInit: construct a titled-sprite screen (three button
@@ -6877,6 +7630,10 @@ void *func_00344110(void *p) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiTitledSpriteScreenInit);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiTitledSpriteScreenInit, unit objdiff): 59.83%,
+   128/214 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s7, 0x48(sp)' vs 'sd s1, 0x18(sp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_003444D0(void *p, u32 idx);
 extern void func_003446B8(void *w, s32 flag);
 extern char *g_guiInstance;
@@ -6989,6 +7746,10 @@ void func_003444D0(void *p, u32 idx) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003444E8);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003444E8, unit objdiff): 82.64%,
+   9/30 insns differ. Residual: UNKNOWN-b (first differing insn: 'b 0xe4e4' vs 'b 0xdb34').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_003444E8(void *w) {
     if (func_00343F70((char *)w + 0x2C8) == 0) {
         GuiElementSetVisible((GuiElement *)((char *)w + 0x208), 0);
@@ -7010,6 +7771,10 @@ void func_003444E8(void *w) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344558);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00344558, unit objdiff): 12.55%,
+   99/113 insns differ. Residual: UNKNOWN-sd + movn/movz, gp/abs-mixed symbol (first differing insn: 'sd s2, 0x110(sp)' vs 'sd s1, 0x108(sp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern s32 func_001157AC(const char *s); /* SDK strlen */
 extern u8 D_1AE1F8[], D_1ADBA8[];
 extern f32 D_1AE1F0, D_1AE1F4;
@@ -7051,6 +7816,10 @@ void func_00344558(void *w) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003446B8);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003446B8, unit objdiff): 53.67%,
+   73/98 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s0, 0x0(sp)' vs 'sd s1, 0x8(sp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern void func_00344558(void *w);
 extern s32 func_00343888(void *w, s32 flags);
 extern f32 D_1AE200, D_1AE204, D_1AE208, D_1AE20C, D_1AE210, D_1AE214;
@@ -7082,6 +7851,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344808);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00344808, unit objdiff): 78.85%,
+   23/50 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s2, a0, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern void func_00343AF8(void *w);
 void func_00344808(void *w) {
     s32 slot;
@@ -7109,11 +7882,10 @@ void func_00344808(void *w) {
  * their fixed offsets (six type-B at p+0x0/+0x4C/+0x98/+0xE4/+0x130/+0x17C, two
  * type-C at +0x1C8/+0x220, the D_1ADA18 widget at +0x278, then five more type-C
  * at +0x2B8/+0x310/+0x368/+0x3C0/+0x418), return the object. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003448C0);
-#else
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
-   wall. */
+#if defined(MATCH_func_003448C0) || defined(TARGET_NATIVE)
+/* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_003448C0; task #466):
+ * unit objdiff 100.00% and verify_match_unit.sh 36/36 words + 14 relocs against the ROM.
+ * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
 void *func_003448C0(void *p) {
     GuiElementInitTypeB(p);
     GuiElementInitTypeB((char *)p + 0x4C);
@@ -7131,6 +7903,8 @@ void *func_003448C0(void *p) {
     GuiElementInitTypeC((char *)p + 0x418);
     return p;
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003448C0);
 #endif
 
 /* GuiInfoPanelScreenInit: construct the info panel — six button-glyph elements
@@ -7146,6 +7920,10 @@ void *func_003448C0(void *p) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiInfoPanelScreenInit);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiInfoPanelScreenInit, unit objdiff): 46.67%,
+   281/369 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x90' vs 'addiu sp, sp, -0x80').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_003453D0(void *w, void *arg1);
 extern char *g_guiInstance;
 extern u8 D_1ADBE8[], D_1ADBF0[], D_1ADBF8[], D_1ADC00[], D_1ADF98[], D_1ADFA0[];
@@ -7258,6 +8036,10 @@ void GuiInfoPanelScreenInit(void *w, GuiPool *pool) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344E08);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00344E08, unit objdiff): 64.16%,
+   41/76 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd ra, 0x8(sp)' vs '').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern u8 D_1AA830[];
 void func_00344E08(void *w, void *a) {
     s32 flags = (s32)a;
@@ -7302,6 +8084,10 @@ void func_00344E08(void *w, void *a) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344F18);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00344F18, unit objdiff): 38.98%,
+   82/119 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd ra, 0x8(sp)' vs 'daddu s0, a0, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern u8 D_25E308[];
 void func_00344F18(void *w, void *a) {
     s32 flags = (s32)a;
@@ -7375,6 +8161,10 @@ void func_00344F18(void *w, void *a) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00345080);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00345080, unit objdiff): 69.62%,
+   54/91 insns differ. Residual: UNKNOWN-sd + movn/movz (first differing insn: 'sd ra, 0x8(sp)' vs '').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_00345080(void *w, void *a) {
     s32 flags = (s32)a;
     s32 col, row;
@@ -7431,6 +8221,10 @@ void func_00345080(void *w, void *a) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003451B8);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003451B8, unit objdiff): 81.20%,
+   27/60 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd ra, 0x8(sp)' vs 'daddu s0, a0, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern s16 D_1AA856;
 void func_003451B8(void *w, void *a) {
     s32 flags = (s32)a;
@@ -7474,6 +8268,10 @@ void func_003451B8(void *w, void *a) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00345298);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00345298, unit objdiff): 11.86%,
+   97/101 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x10' vs '').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern s32 D_1AE238[];
 s32 func_00345298(void *w) {
     s32 mode = *(s32 *)((char *)w + 0x4B8);
@@ -7517,6 +8315,10 @@ s32 func_00345298(void *w) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003453D0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003453D0, unit objdiff): 52.79%,
+   201/277 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x40' vs 'addiu sp, sp, -0x20').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_003453D0(void *w, void *arg1) {
     s32 mode, result, idx;
     f32 *anchor;
@@ -7576,6 +8378,10 @@ void func_003453D0(void *w, void *arg1) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003457A0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003457A0, unit objdiff): 54.53%,
+   49/70 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s0, 0x0(sp)' vs 'sd s1, 0x8(sp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern f32 D_1AE298, D_1AE29C, D_1AE2A0, D_1AE2A4;
 extern f32 D_1AE2A8, D_1AE2AC, D_1AE2B0, D_1AE2B4;
 void func_003457A0(void *w) {
@@ -7636,10 +8442,10 @@ extern void func_003380B8(void *desc);   /* GUI screen populator (consumer) */
 /* per-builder label consts (address-taken) */
 extern u8 D_25E308[], D_1AA850[], D_1AA890[], D_1AA830[];
 /* per-builder 7-global layout blocks: first two read by VALUE, last five by ADDRESS */
-extern s32 D_1AE2F0, D_1AE2F4; extern u8 D_1AE2F8[], D_1AE300[], D_1AE308[], D_1AE310[], D_1AE318[];
-extern s32 D_1AE320, D_1AE324; extern u8 D_1AE328[], D_1AE330[], D_1AE338[], D_1AE340[], D_1AE348[];
-extern s32 D_1AE350, D_1AE354; extern u8 D_1AE358[], D_1AE360[], D_1AE368[], D_1AE370[], D_1AE378[];
-extern s32 D_1AE380, D_1AE384; extern u8 D_1AE388[], D_1AE390[], D_1AE398[], D_1AE3A0[], D_1AE3A8[];
+extern s32 D_1AE2F0, D_1AE2F4; extern u8 D_1AE2F8[8], D_1AE300[8], D_1AE308[8], D_1AE310[8], D_1AE318[8];
+extern s32 D_1AE320, D_1AE324; extern u8 D_1AE328[8], D_1AE330[8], D_1AE338[8], D_1AE340[8], D_1AE348[8];
+extern s32 D_1AE350, D_1AE354; extern u8 D_1AE358[8], D_1AE360[8], D_1AE368[8], D_1AE370[8], D_1AE378[8];
+extern s32 D_1AE380, D_1AE384; extern u8 D_1AE388[8], D_1AE390[8], D_1AE398[8], D_1AE3A0[8], D_1AE3A8[8];
 
 #ifdef TARGET_NATIVE
 /* Shared descriptor builder (the four siblings are one shape; see doc above). */
@@ -7673,6 +8479,10 @@ static void GuiBuildScreenDesc(u8 *obj, void *label, s32 cfg0, s32 cfg1,
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00345F00);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00345F00, unit objdiff): 25.22%,
+   58/60 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x90' vs 'lw a2, %gp_rel(D_1AE2F0)(gp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_00345F00(void *obj) {
     GuiBuildScreenDesc((u8 *)obj, D_25E308, D_1AE2F0, D_1AE2F4,
                        D_1AE2F8, D_1AE300, D_1AE308, D_1AE310, D_1AE318, 2);
@@ -7682,6 +8492,10 @@ void func_00345F00(void *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00345FF0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00345FF0, unit objdiff): 25.22%,
+   58/60 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x90' vs 'lw a2, %gp_rel(D_1AE320)(gp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_00345FF0(void *obj) {
     GuiBuildScreenDesc((u8 *)obj, D_1AA850, D_1AE320, D_1AE324,
                        D_1AE328, D_1AE330, D_1AE338, D_1AE340, D_1AE348, 1);
@@ -7691,6 +8505,10 @@ void func_00345FF0(void *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003460E0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003460E0, unit objdiff): 25.22%,
+   58/60 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x90' vs 'lw a2, %gp_rel(D_1AE350)(gp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_003460E0(void *obj) {
     GuiBuildScreenDesc((u8 *)obj, D_1AA890, D_1AE350, D_1AE354,
                        D_1AE358, D_1AE360, D_1AE368, D_1AE370, D_1AE378, 3);
@@ -7700,6 +8518,10 @@ void func_003460E0(void *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003461D0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003461D0, unit objdiff): 25.05%,
+   57/59 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x90' vs 'lw a2, %gp_rel(D_1AE380)(gp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_003461D0(void *obj) {
     GuiBuildScreenDesc((u8 *)obj, D_1AA830, D_1AE380, D_1AE384,
                        D_1AE388, D_1AE390, D_1AE398, D_1AE3A0, D_1AE3A8, 0);
@@ -7713,6 +8535,10 @@ void func_003461D0(void *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003462C0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003462C0, unit objdiff): 85.71%,
+   6/45 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s1, a0, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_003461D0(void *w);
 void func_00345FF0(void *w);
 void func_00345F00(void *w);
@@ -7742,9 +8568,10 @@ void func_003462C0(void *w) {
 /* Construct a composite widget: init six TypeB sub-elements (base, +0x4C, +0x98,
  * +0xE4, +0x130, +0x17C), two TypeC (+0x1C8, +0x220), a sub-list (+0x278), then
  * five more TypeC (+0x2B8, +0x310, +0x368, +0x3C0, +0x418); returns the widget. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00346368);
-#else
+#if defined(MATCH_func_00346368) || defined(TARGET_NATIVE)
+/* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_00346368; task #466):
+ * unit objdiff 100.00% and verify_match_unit.sh 36/36 words + 14 relocs against the ROM.
+ * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
 void *func_00346368(void *w) {
     GuiElementInitTypeB(w);
     GuiElementInitTypeB((char *)w + 0x4C);
@@ -7762,6 +8589,8 @@ void *func_00346368(void *w) {
     GuiElementInitTypeC((char *)w + 0x418);
     return w;
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00346368);
 #endif
 
 /* GuiMapScreenInit: construct the map screen — six button-glyph elements
@@ -7779,6 +8608,10 @@ void *func_00346368(void *w) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiMapScreenInit);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiMapScreenInit, unit objdiff): 49.94%,
+   225/349 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s7, 0x68(sp)' vs 'sd s2, 0x40(sp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void GuiMapScreenTick(void *w, s32 mode, s32 *out);
 extern char *g_guiInstance;
 extern u8 D_1ADBE8[], D_1ADBF0[], D_1ADBF8[], D_1ADC00[], D_1ADF98[], D_1ADFA0[];
@@ -7880,6 +8713,10 @@ void GuiMapScreenInit(void *w, GuiPool *pool) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00346878);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00346878, unit objdiff): 34.25%,
+   164/206 insns differ. Residual: UNKNOWN-daddu + movn/movz (first differing insn: '' vs 'daddu s0, a0, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern u8   D_259CC0[];              /* 2D grid entry table, stride 0xA, +6 = s16 item id */
 extern u8   g_menuTransitionMode[];  /* 0x1F27DC - +0x24 receives the activated item id */
 extern void PlayGlobalSound(s32 id, s32 a, s32 b);
@@ -7970,6 +8807,10 @@ void func_00346878(void *w, s32 flags) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00346AF8);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00346AF8, unit objdiff): 31.61%,
+   120/156 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s0, 0x0(sp)' vs 'sd s1, 0x8(sp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern u8   D_1AA7F8[];              /* select-screen entry table, stride 0xA, +6 = s16 item id */
 extern u8   g_menuTransitionMode[];  /* 0x1F27DC - +0x30 receives the activated item id */
 extern void PlayGlobalSound(s32 id, s32 a, s32 b);
@@ -8049,6 +8890,10 @@ void func_00346AF8(void *w, s32 flags) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00346CD8);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00346CD8, unit objdiff): 13.55%,
+   162/186 insns differ. Residual: UNKNOWN-addiu + movn/movz, gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x20' vs 'addiu sp, sp, -0x30').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern u8 D_1AA8B8[];
 extern u8 g_menuScreenBlock[];
 extern void PlayGlobalSound(s32 id, s32 a, s32 b);
@@ -8123,6 +8968,10 @@ void func_00346CD8(void *w, s32 flags) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiMapScreenTick);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiMapScreenTick, unit objdiff): 59.50%,
+   166/241 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x40' vs 'addiu sp, sp, -0x20').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern void func_00346878(void *w, s32 flags);   /* mode-0 sub-builder */
 extern void func_00346AF8(void *w, s32 flags);   /* mode-3 sub-builder */
 extern f32 D_1AE3D8, D_1AE3DC, D_1AE3E0, D_1AE3E4, D_1AE3E8, D_1AE3EC;
@@ -8222,11 +9071,15 @@ _Static_assert(sizeof(GuiScreenDesc2) == 0x5C, "GuiScreenDesc2 must be 0x5C unde
 extern u8 D_1AE088[];               /* 8-byte scratch source */
 extern u8 D_259CC0[];               /* family-2 label const for the index-0 screen */
 extern s32 D_1AE428, D_1AE42C;      /* cfg0, cfg1 (read by value) */
-extern u8 D_1AE430[], D_1AE438[], D_1AE440[], D_1AE448[], D_1AE450[];  /* layout0..4 */
+extern u8 D_1AE430[8], D_1AE438[8], D_1AE440[8], D_1AE448[8], D_1AE450[8];  /* layout0..4 */
 
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00347228);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00347228, unit objdiff): 0.00%,
+   103/105 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0xb0' vs 'addiu sp, sp, -0x80').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_00347228(void *obj_) {
     u8 *obj = (u8 *)obj_;
     GuiScreenDesc2 d;
@@ -8275,8 +9128,8 @@ void func_00347228(void *obj_) {
 
 /* family-2 label consts (absolute) + 7-global blocks (first two read by value) */
 extern u8 D_1AA7F8[], D_1AA8B8[];
-extern s32 D_1AE458, D_1AE45C; extern u8 D_1AE460[], D_1AE468[], D_1AE470[], D_1AE478[], D_1AE480[];
-extern s32 D_1AE488, D_1AE48C; extern u8 D_1AE490[], D_1AE498[], D_1AE4A0[], D_1AE4A8[], D_1AE4B0[];
+extern s32 D_1AE458, D_1AE45C; extern u8 D_1AE460[8], D_1AE468[8], D_1AE470[8], D_1AE478[8], D_1AE480[8];
+extern s32 D_1AE488, D_1AE48C; extern u8 D_1AE490[8], D_1AE498[8], D_1AE4A0[8], D_1AE4A8[8], D_1AE4B0[8];
 
 #ifdef TARGET_NATIVE
 static void GuiBuildScreenDesc2(u8 *obj, void *label, s32 cfg0, s32 cfg1,
@@ -8309,6 +9162,10 @@ static void GuiBuildScreenDesc2(u8 *obj, void *label, s32 cfg0, s32 cfg1,
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00347348);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00347348, unit objdiff): 22.83%,
+   64/66 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0xa0' vs 'lw a2, %gp_rel(D_1AE458)(gp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_00347348(void *obj) {
     GuiBuildScreenDesc2((u8 *)obj, D_1AA7F8, D_1AE458, D_1AE45C,
                         D_1AE460, D_1AE468, D_1AE470, D_1AE478, D_1AE480, 3);
@@ -8318,6 +9175,10 @@ void func_00347348(void *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00347450);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00347450, unit objdiff): 23.95%,
+   61/63 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x90' vs 'lw a2, %gp_rel(D_1AE488)(gp)').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_00347450(void *obj) {
     GuiBuildScreenDesc2((u8 *)obj, D_1AA8B8, D_1AE488, D_1AE48C,
                         D_1AE490, D_1AE498, D_1AE4A0, D_1AE4A8, D_1AE4B0, 1);
@@ -8332,6 +9193,10 @@ void func_00347450(void *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00347550);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00347550, unit objdiff): 94.87%,
+   2/40 insns differ. Residual: SCHED (prologue/epilogue or delay-slot order only; sched1 ON/OFF and sched2 OFF RUN, none reproduce it).
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 void func_00347550(void *w) {
     if (*(s32 *)((char *)w + 0x4F8) == 0) {
         return;
@@ -8356,9 +9221,10 @@ void func_00347550(void *w) {
 /* Construct a list-style composite widget: six TypeB sub-elements (base..+0x17C),
  * a list-row (+0x1C8), three TypeC (+0x210, +0x268, +0x2C0), a sub-list (+0x318),
  * then three more TypeB (+0x354, +0x3A0, +0x3EC); returns the widget. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003475F0);
-#else
+#if defined(MATCH_func_003475F0) || defined(TARGET_NATIVE)
+/* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_003475F0; task #466):
+ * unit objdiff 100.00% and verify_match_unit.sh 36/36 words + 14 relocs against the ROM.
+ * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
 void *func_003475F0(void *w) {
     GuiElementInitTypeB(w);
     GuiElementInitTypeB((char *)w + 0x4C);
@@ -8376,6 +9242,8 @@ void *func_003475F0(void *w) {
     GuiElementInitTypeB((char *)w + 0x3EC);
     return w;
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003475F0);
 #endif
 
 /* GuiWeaponGridScreenInit: construct the weapon-grid screen — eight header/detail
@@ -8392,6 +9260,10 @@ void *func_003475F0(void *w) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiWeaponGridScreenInit);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiWeaponGridScreenInit, unit objdiff): 46.59%,
+   282/391 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x90' vs 'addiu sp, sp, -0x80').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 s32 GuiWeaponGridTick(void *w, s32 flag);
 extern char *g_guiInstance;
 extern u8 D_1ADBE8[], D_1ADBF0[], D_1ADFA0[], D_1ADC00[], D_1ADFA8[], D_1AE4B8[];
@@ -8513,6 +9385,10 @@ void GuiWeaponGridScreenInit(void *w, GuiPool *pool) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiWeaponGridTick);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiWeaponGridTick, unit objdiff): 39.99%,
+   396/479 insns differ. Residual: UNKNOWN-addiu + movn/movz, gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x100' vs 'addiu sp, sp, -0x70').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern s32 g_weaponAmmo[];              /* 0x139688 - s32 current ammo per item id */
 extern u8 g_inventoryNewFlag[];         /* 0x1A7B38 - per-item "newly acquired" flag */
 extern u8 g_menuTransitionMode[];       /* 0x1F27DC - +0x24 receives the activated item id */
@@ -8642,6 +9518,10 @@ s32 GuiWeaponGridTick(void *w, s32 flag) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003481E0);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003481E0, unit objdiff): 49.74%,
+   249/330 insns differ. Residual: UNKNOWN-lui + gp/abs-mixed symbol (first differing insn: 'lui a3, %hi(D_1AE518)' vs 'daddu a1, zero, zero').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern void func_00280440(f32 scale, s32 x, s32 y, u32 color, const char *text,
                           s32 flag, s32 maxWidth);
 extern s32 D_1AE518, D_1AE51C;
@@ -8736,6 +9616,10 @@ void func_003481E0(void *p) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00348628);
 #else
+/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00348628, unit objdiff): 49.86%,
+   328/410 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0xe0' vs 'addiu sp, sp, -0x90').
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
+   not byte-exact, so the arm stays #else. */
 extern void func_00337DC8(s32 itemId, s32 *petalRgb, s32 *listC0, s32 *listC1);
 extern s16 func_0026F7A8(s32 activatedId);
 extern s32 g_weaponXp[], g_weaponAmmo[];
