@@ -27,15 +27,38 @@
 #            undefined set — every name the tree spells two ways and holds
 #            together only by PROVIDE — may shrink against
 #            tools/ee/landing_baseline/noprovide_<region>.txt, never grow.
+#   ORPHAN   tools/ee/blanket_orphans.sh (task #457, FACT #7301): D_/func_
+#            tokens compiled C references whose only definer is build.sh's
+#            blanket grep of asm/. ORPHAN = no holder at all (undefined at link
+#            now; landing_baseline/orphans_<region>.txt, 0 on USA, EU's 7 are
+#            the D_/func_ members of its ld.log set); ORPHAN_LATENT = every
+#            holder is a nonmatchings/**/func_*.s a rename deletes (#452 deleted
+#            278 and the USA link lost four tokens; orphans_latent_<region>.txt).
+#            Both member sets may shrink, never grow.
+#   TREE     the ROW is tied to the tree it was built from (task #457, #451 gap
+#            1): do_build records HEAD^{tree}, a hash of the WHOLE working tree
+#            (tracked + modified + untracked, .gitignore honoured) and the dirty
+#            count in .gate_landing/<region>/built_tree.txt; --no-build re-hashes
+#            and FAILS on any mismatch. RULING #7208 condition 1 is discharged
+#            ONLY by the BUILDING form on a 0-dirty tree at the SHA-named landing
+#            — the summary says so whenever this run is not that.
 #
-#   tools/ee/landing_gate.sh <region>            all of the above; exit 0 = PASS
+#   tools/ee/landing_gate.sh <region> [--strict]  all of the above; exit 0 = PASS
 #   tools/ee/landing_gate.sh <region> --no-build  reuse the outputs of an earlier
-#                                                 build (row mtime check still
-#                                                 applies to the reused ld.log)
+#                                                 build — only if the working
+#                                                 tree still hashes to the one
+#                                                 that build recorded (row mtime
+#                                                 check still applies)
 #   tools/ee/landing_gate.sh --selftest [region]  seed every check's failing arm
 #                                                 and require it to fire, then
 #                                                 run the real gate and require
 #                                                 PASS (default region usa)
+#
+# A baseline HIGHER than the observation (a count, or a member no longer
+# observed) is a WARN naming the exact value/member to set (#451 gap 2: the
+# never-grow rule let baselines drift high silently). WARNs are counted in the
+# summary and exit 0; --strict turns every WARN into a FAIL so a landing brief
+# can require the baselines be lowered in the same landing.
 #
 # Exit 0 PASS / 1 a check failed (every failing member printed) / 2 could not
 # run (missing input, VM, baseline). Output files: tools/ee/.gate_landing/<region>/
@@ -59,11 +82,13 @@ EE_CTX="${EE_DOCKER_CONTEXT:-colima-ee-x86}"
 BASE_DIR="$HERE/landing_baseline"
 SHADOW_BASELINE="$HERE/shadow_baseline.txt"
 
-usage() { sed -n '2,45p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { sed -n '2,68p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 say()  { printf '%s\n' "$*"; }
 fail() { say "FAIL $*"; FAILED=$((FAILED+1)); }
 ok()   { say "OK   $*"; }
-FAILED=0
+# warn: a baseline that is stale-HIGH. Counted; a FAIL under --strict.
+warn() { if [ "$STRICT" = 1 ]; then say "FAIL(strict) $*"; FAILED=$((FAILED+1)); else say "WARN $*"; fi; WARNED=$((WARNED+1)); }
+FAILED=0; WARNED=0; STRICT=${LANDING_GATE_STRICT:-0}
 
 region_vars() {
   REGION="$1"
@@ -79,7 +104,7 @@ region_vars() {
   RETAIL_ROM="extracted/$REGION/$BASENAME.rom"
   YAML="going-decompiled/config/$REGION/$BASENAME.yaml"
   LDSCRIPT="going-decompiled/linker_scripts/$BASENAME.ld"
-  for f in "$RETAIL_ELF" "$RETAIL_ROM" "$YAML" "$LDSCRIPT" "$SHADOW_BASELINE" "$BASE_DIR/noprovide_$REGION.txt"; do
+  for f in "$RETAIL_ELF" "$RETAIL_ROM" "$YAML" "$LDSCRIPT" "$SHADOW_BASELINE" "$BASE_DIR/noprovide_$REGION.txt" "$BASE_DIR/orphans_$REGION.txt" "$BASE_DIR/orphans_latent_$REGION.txt"; do
     [ -f "$f" ] || { say "landing_gate: missing input $f"; exit 2; }
   done
 }
@@ -125,7 +150,7 @@ shadow_compare() {
     if [ "$n" -gt "$base" ]; then
       fail "$cls [$region]: $n rows, baseline $base — GREW by $((n-base)); a landing may lower this, never raise it"
     elif [ "$n" -lt "$base" ]; then
-      ok "$cls [$region]: $n rows, baseline $base (lower — update the baseline in the same landing)"
+      warn "$cls [$region]: baseline $base > observed $n — set baseline to $n in this landing ($baseline)"
     else
       ok "$cls [$region]: $n rows == baseline"
     fi
@@ -140,10 +165,73 @@ check_shadow() {  # check_shadow REGION [TREE] [BASELINE]
   shadow_compare "$region" "$scan" "$baseline"
 }
 
+# --------------------------------------------------------------- ORPHAN ----
+# member_compare LABEL OBSERVED_FILE BASELINE_FILE — a sorted member set may
+# shrink against its baseline, never grow; a baseline member no longer observed
+# is a WARN naming it (stale-high).
+member_compare() {
+  local label=$1 obs=$2 base=$3
+  local grew; grew=$(LC_ALL=C comm -23 <(LC_ALL=C sort -u "$obs") <(LC_ALL=C sort -u "$base"))
+  local gone; gone=$(LC_ALL=C comm -13 <(LC_ALL=C sort -u "$obs") <(LC_ALL=C sort -u "$base"))
+  local n; n=$(wc -l < "$obs" | tr -d ' '); local b; b=$(wc -l < "$base" | tr -d ' ')
+  if [ -n "$grew" ]; then fail "$label GREW ($n vs baseline $b): NEW $(printf '%s ' $grew)"; else ok "$label within baseline ($n of $b)"; fi
+  [ -n "$gone" ] && warn "$label baseline has $(printf '%s\n' $gone | wc -l | tr -d ' ') member(s) no longer observed — remove from $base: $(printf '%s ' $gone)"
+  return 0
+}
+
+check_orphans() {  # check_orphans REGION [TREE] [BASEDIR]
+  local region=$1 tree=${2:-.} basedir=${3:-$BASE_DIR}
+  local scan="$OUT/orphan_scan.txt"
+  say "== ORPHAN [$region]: blanket-only tokens (scan: $scan)"
+  bash "$HERE/blanket_orphans.sh" "$region" --root "$tree" > "$scan" 2> "$scan.err" || { fail "blanket_orphans.sh could not run: $(head -c 300 "$scan.err")"; return; }
+  /usr/bin/grep -E '^ORPHAN ' "$scan" | awk '{print $2}' > "$scan.live"
+  /usr/bin/grep -E '^ORPHAN_LATENT ' "$scan" | awk '{print $2}' > "$scan.latent"
+  member_compare "ORPHAN [$region] (no holder — undefined at link)" "$scan.live" "$basedir/orphans_$region.txt"
+  member_compare "ORPHAN_LATENT [$region] (held only by nonmatchings func_*.s)" "$scan.latent" "$basedir/orphans_latent_$region.txt"
+  say "     members:"; sed 's/^/       /' "$scan"
+}
+
+# ----------------------------------------------------------------- TREE ----
+# worktree_hash [OVERLAY_PATH OVERLAY_FILE] — one hash for the WHOLE working
+# tree: a copy of the index with `git add -A` applied (modified + untracked,
+# .gitignore honoured, so .gate_landing/ outputs do not move it), written as a
+# tree object. The optional overlay substitutes OVERLAY_FILE's content at
+# OVERLAY_PATH without touching the working tree (the selftest's #451 edit).
+worktree_hash() {
+  local idx; idx=$(mktemp); cp "$(git rev-parse --git-path index)" "$idx"
+  GIT_INDEX_FILE="$idx" git add -A >/dev/null 2>&1
+  if [ -n "${1:-}" ]; then
+    local blob; blob=$(git hash-object -w "$2")
+    GIT_INDEX_FILE="$idx" git update-index --add --cacheinfo "100644,$blob,$1"
+  fi
+  GIT_INDEX_FILE="$idx" git write-tree; rm -f "$idx"
+}
+
+record_tree() {  # record_tree OUTFILE — what the build about to run is built from
+  printf 'head=%s\nhead_tree=%s\nwork_tree=%s\ndirty=%s\n' "$(git rev-parse HEAD)" "$(git rev-parse 'HEAD^{tree}')" "$(worktree_hash)" "$(git status --porcelain --no-renames | wc -l | tr -d ' ')" > "$1"
+}
+
+# check_tree RECORD [OVERLAY_PATH OVERLAY_FILE] — the working tree now must
+# hash to the one RECORD was written from, or the ROW measures another tree.
+check_tree() {
+  local rec=$1; shift
+  say "== TREE [$REGION]: the ROW must be for THIS tree ($rec)"
+  [ -f "$rec" ] || { fail "no built_tree record at $rec — the outputs were not built by this gate's building form; run without --no-build"; return; }
+  local want; want=$(rowval work_tree "$rec"); local wanth; wanth=$(rowval head_tree "$rec"); local wantd; wantd=$(rowval dirty "$rec")
+  local now; now=$(worktree_hash "$@"); local nowh; nowh=$(git rev-parse 'HEAD^{tree}'); local nowd; nowd=$(git status --porcelain --no-renames | wc -l | tr -d ' ')
+  if [ "$now" = "$want" ] && [ "$nowh" = "$wanth" ]; then
+    ok "tree: worktree $now (HEAD^{tree} $nowh, $nowd dirty) == the built tree"
+  else
+    fail "ROW is for tree $want (HEAD^{tree} $wanth, +$wantd dirty), worktree is tree $now (HEAD^{tree} $nowh, +$nowd dirty) — rebuild (drop --no-build)"
+  fi
+}
+
 # ---------------------------------------------------------------- BUILD ----
 do_build() {
   say "== BUILD [$REGION]: build.sh in $EE_CTX, objects and link outputs wiped first"
   date +%s > "$OUT/build_start"
+  record_tree "$OUT/built_tree.txt"
+  say "     built from: $(tr '\n' ' ' < "$OUT/built_tree.txt")"
   in_vm "B=$BUILD; rm -rf \$B/going-decompiled \$B/$BASENAME.elf \$B/$BASENAME.lma.elf \$B/$BASENAME.rom \$B/ld.log \$B/ld.lma.log \$B/$BASENAME.map \$B/all_addr_syms.ld; sh tools/ee/build.sh $REGION" > "$OUT/build.log" 2>&1
   say "     build.sh rc=$? ($(wc -l < "$OUT/build.log" | tr -d ' ') log lines -> $OUT/build.log)"
   tail -4 "$OUT/build.log" | sed 's/^/     /'
@@ -197,6 +285,8 @@ check_row() {  # check_row ROWFILE START_EPOCH [EU_LDUNDEF_BASELINE]
       local grew; grew=$(LC_ALL=C comm -23 "$row.undefined" <(LC_ALL=C sort -u "$ldbase"))
       local n; n=$(wc -l < "$row.undefined" | tr -d ' ')
       if [ -n "$grew" ]; then fail "EU ld.log undefined set GREW ($n vs baseline $(wc -l < "$ldbase" | tr -d ' ')): $(printf '%s ' $grew)"; else ok "EU ld.log undefined set within baseline ($n members: $(tr '\n' ' ' < "$row.undefined"))"; fi
+      local gone; gone=$(LC_ALL=C comm -13 "$row.undefined" <(LC_ALL=C sort -u "$ldbase"))
+      [ -n "$gone" ] && warn "EU ld.log baseline has $(printf '%s\n' $gone | wc -l | tr -d ' ') member(s) no longer undefined — remove from $ldbase: $(printf '%s ' $gone)"
     else fail "no $ldbase"; fi
   fi
   v=$(rowval ldlog_mtime "$row")
@@ -227,23 +317,37 @@ check_noprovide() {  # check_noprovide [BASELINE]
   if [ "$rc" != rc=0 ] && [ "$n" -gt 0 ]; then ok "relink without PROVIDE fails ($rc): $n names held only by PROVIDE"; else fail "relink without PROVIDE did not fail ($rc, $n undefined) — PROVIDE holds nothing, or the relink did not run"; fi
   local grew; grew=$(LC_ALL=C comm -23 "$OUT/noprovide.held" <(LC_ALL=C sort -u "$baseline"))
   local gone; gone=$(LC_ALL=C comm -13 "$OUT/noprovide.held" <(LC_ALL=C sort -u "$baseline"))
-  if [ -n "$grew" ]; then fail "PROVIDE-held set GREW vs $baseline ($(wc -l < "$baseline" | tr -d ' ')): NEW $(printf '%s ' $grew)"; else ok "PROVIDE-held set within baseline ($(wc -l < "$baseline" | tr -d ' '))$( [ -n "$gone" ] && printf ' — %s no longer held: %s (lower the baseline in the same landing)' "$(printf '%s\n' $gone | wc -l | tr -d ' ')" "$(printf '%s ' $gone)")"; fi
+  if [ -n "$grew" ]; then fail "PROVIDE-held set GREW vs $baseline ($(wc -l < "$baseline" | tr -d ' ')): NEW $(printf '%s ' $grew)"; else ok "PROVIDE-held set within baseline ($n of $(wc -l < "$baseline" | tr -d ' '))"; fi
+  [ -n "$gone" ] && warn "PROVIDE-held baseline has $(printf '%s\n' $gone | wc -l | tr -d ' ') member(s) no longer held — remove from $baseline: $(printf '%s ' $gone)"
   say "     members -> $OUT/noprovide.held"
 }
 
 # ----------------------------------------------------------------- GATE ----
-run_gate() {  # run_gate REGION [--no-build]
-  region_vars "$1"; local build=1; [ "${2:-}" = --no-build ] && build=0
-  FAILED=0
-  say "#### landing_gate $REGION at $(git rev-parse --short HEAD) ($(git status --porcelain --no-renames | wc -l | tr -d ' ') dirty paths), VM $EE_CTX, $(date -u +%FT%TZ)"
+run_gate() {  # run_gate REGION [--no-build] [--strict]
+  region_vars "$1"; shift; local build=1
+  while [ $# -gt 0 ]; do case "$1" in --no-build) build=0 ;; --strict) STRICT=1 ;; '') ;; *) say "unknown option $1"; exit 2 ;; esac; shift; done
+  FAILED=0; WARNED=0
+  local dirty; dirty=$(git status --porcelain --no-renames | wc -l | tr -d ' ')
+  say "#### landing_gate $REGION at $(git rev-parse --short HEAD) ($dirty dirty paths), VM $EE_CTX, $(date -u +%FT%TZ)$([ "$STRICT" = 1 ] && echo ', --strict')"
+  say "     RULING #7208 condition 1 is discharged only by the BUILDING form on a 0-dirty tree at the SHA-named landing; this run is $([ $build = 1 ] && echo building || echo '--no-build'), $dirty dirty"
   check_flags
   check_shadow "$REGION"
-  if [ $build = 1 ]; then do_build; else say "== BUILD [$REGION]: skipped (--no-build), start epoch taken from $OUT/build_start"; fi
+  check_orphans "$REGION"
+  if [ $build = 1 ]; then
+    do_build
+    check_tree "$OUT/built_tree.txt"   # the tree did not move during the build
+  else
+    say "== BUILD [$REGION]: skipped (--no-build), start epoch taken from $OUT/build_start"
+    check_tree "$OUT/built_tree.txt"
+  fi
   local start; start=$(cat "$OUT/build_start" 2>/dev/null || echo 0)
   measure_row "$BUILD/$BASENAME.rom" "$BUILD/$BASENAME.elf" "$BUILD/ld.log" "$OUT/row.txt"
   check_row "$OUT/row.txt" "$start"
   check_noprovide
-  say "#### landing_gate $REGION: $([ $FAILED = 0 ] && echo PASS || echo "FAIL ($FAILED)")"
+  local verdict; verdict=$([ $FAILED = 0 ] && echo PASS || echo "FAIL ($FAILED)")
+  [ $WARNED -gt 0 ] && verdict="$verdict ($WARNED warning$([ $WARNED = 1 ] || echo s)$([ "$STRICT" = 1 ] && echo ', counted as FAIL under --strict'))"
+  say "#### landing_gate $REGION: $verdict"
+  if [ $build = 0 ] || [ "$dirty" != 0 ]; then say "#### NOTE: RULING #7208 condition 1 is NOT discharged by this run ($([ $build = 0 ] && echo '--no-build')$([ $build = 0 ] && [ "$dirty" != 0 ] && echo ', ')$([ "$dirty" != 0 ] && echo "$dirty dirty paths")) — it needs the building form on a 0-dirty tree"; fi
   [ $FAILED = 0 ]
 }
 
@@ -315,7 +419,45 @@ selftest() {
   local dropped; dropped=$(head -1 "$BASE_DIR/noprovide_$REGION.txt")
   if /usr/bin/grep -q "GREW.*NEW.*$dropped" "$T/np_short.txt"; then ok "fired: baseline minus '$dropped' -> $(/usr/bin/grep -oE 'GREW[^:]*' "$T/np_short.txt" | head -1)"; else say "SELFTEST-FAIL noprovide baseline arm did not fire"; cat "$T/np_short.txt"; bad=1; fi
 
-  say "-- (7) the real gate on this tree (--no-build, the build above) must PASS"
+  say "-- (7) TREE: the #451 reproduction — one C function appended to a src/$REGION .c as an OVERLAY (the working tree is untouched) -> the --no-build tree check must FAIL naming both trees; without the overlay it must pass"
+  local V; V=$(git ls-files "going-decompiled/src/$REGION" | /usr/bin/grep '\.c$' | LC_ALL=C sort | head -1)
+  { cat "$V"; printf '\nvoid T457Probe(void) { volatile int x = 457; x++; }\n'; } > "$T/tree_overlay.c"
+  cmp -s "$V" "$T/tree_overlay.c" && { say "SELFTEST-BROKEN: overlay identical to $V"; bad=1; }
+  FAILED=0; check_tree "$OUT/built_tree.txt" "$V" "$T/tree_overlay.c" > "$T/tree_dirty.txt"
+  if [ "$FAILED" = 1 ] && /usr/bin/grep -q '^FAIL ROW is for tree [0-9a-f]* .*, worktree is tree [0-9a-f]* ' "$T/tree_dirty.txt"; then ok "fired: $(/usr/bin/grep '^FAIL ROW' "$T/tree_dirty.txt" | sed -E 's/ \(HEAD[^)]*\)//g; s/ — rebuild.*//')"; else say "SELFTEST-FAIL tree check did not fire on the overlaid edit ($V):"; cat "$T/tree_dirty.txt"; bad=1; fi
+  FAILED=0; check_tree "$OUT/built_tree.txt" > "$T/tree_clean.txt"
+  if [ "$FAILED" = 0 ] && /usr/bin/grep -q '^OK   tree:' "$T/tree_clean.txt"; then ok "control: the unchanged tree passes ($(/usr/bin/grep -oE 'worktree [0-9a-f]{12}' "$T/tree_clean.txt" | head -1)...)"; else say "SELFTEST-FAIL the unchanged tree does not pass the tree check:"; cat "$T/tree_clean.txt"; bad=1; fi
+
+  say "-- (8) STALE-HIGH: shadow CLASS1 baseline +1, and one extra member in a copy of noprovide_$REGION.txt -> WARN naming the value/member (rc 0); under --strict -> FAIL"
+  shadow_scan "$REGION" . "$T/shadow_real.txt" || { say "SELFTEST-BROKEN: shadow_scan on the real tree failed"; bad=1; }
+  local obs; obs=$(/usr/bin/grep -c '^CLASS1 ' "$T/shadow_real.txt" || true)
+  awk -v r="$REGION" '$1==r && $2=="CLASS1" {$3=$3+1} {print}' "$SHADOW_BASELINE" > "$T/shadow_high.txt"
+  FAILED=0; WARNED=0; STRICT=0; shadow_compare "$REGION" "$T/shadow_real.txt" "$T/shadow_high.txt" > "$T/high_warn.txt"
+  if [ "$FAILED" = 0 ] && [ "$WARNED" = 1 ] && /usr/bin/grep -q "^WARN CLASS1 \[$REGION\]: baseline $((obs+1)) > observed $obs — set baseline to $obs " "$T/high_warn.txt"; then ok "fired: $(/usr/bin/grep '^WARN' "$T/high_warn.txt" | sed -E 's/ \(.*//') (FAILED=$FAILED WARNED=$WARNED)"; else say "SELFTEST-FAIL stale-high shadow baseline did not WARN (FAILED=$FAILED WARNED=$WARNED):"; /usr/bin/grep -E '^(OK|FAIL|WARN)' "$T/high_warn.txt"; bad=1; fi
+  FAILED=0; WARNED=0; STRICT=1; shadow_compare "$REGION" "$T/shadow_real.txt" "$T/shadow_high.txt" > "$T/high_strict.txt"; STRICT=0
+  if [ "$FAILED" = 1 ] && /usr/bin/grep -q "^FAIL(strict) CLASS1 \[$REGION\]: baseline $((obs+1)) > observed $obs" "$T/high_strict.txt"; then ok "fired: under --strict the same line is FAIL (FAILED=$FAILED)"; else say "SELFTEST-FAIL --strict did not turn the stale-high WARN into a FAIL (FAILED=$FAILED):"; /usr/bin/grep -E '^(OK|FAIL|WARN)' "$T/high_strict.txt"; bad=1; fi
+  { cat "$BASE_DIR/noprovide_$REGION.txt"; echo T457ExtraMember; } | LC_ALL=C sort -u > "$T/np_high.txt"
+  FAILED=0; WARNED=0; STRICT=0; check_noprovide "$T/np_high.txt" > "$T/np_high_warn.txt"
+  if [ "$FAILED" = 0 ] && [ "$WARNED" = 1 ] && /usr/bin/grep -q '^WARN PROVIDE-held baseline has 1 member(s) no longer held — remove from .*: T457ExtraMember' "$T/np_high_warn.txt"; then ok "fired: $(/usr/bin/grep '^WARN' "$T/np_high_warn.txt" | sed -E 's/ — remove from [^:]*:/ — remove:/')"; else say "SELFTEST-FAIL extra noprovide member did not WARN (FAILED=$FAILED WARNED=$WARNED):"; /usr/bin/grep -E '^(OK|FAIL|WARN)' "$T/np_high_warn.txt"; bad=1; fi
+  FAILED=0; WARNED=0; STRICT=1; check_noprovide "$T/np_high.txt" > "$T/np_high_strict.txt"; STRICT=0
+  if [ "$FAILED" = 1 ] && /usr/bin/grep -q '^FAIL(strict) PROVIDE-held baseline has 1 member(s) no longer held' "$T/np_high_strict.txt"; then ok "fired: under --strict the extra member is a FAIL (FAILED=$FAILED)"; else say "SELFTEST-FAIL --strict did not fail on the extra noprovide member (FAILED=$FAILED):"; /usr/bin/grep -E '^(OK|FAIL|WARN)' "$T/np_high_strict.txt"; bad=1; fi
+
+  say "-- (9) ORPHAN: one single-holder ORPHAN_LATENT token's func_*.s deleted in a scratch copy of asm/$REGION -> ORPHAN must GROW naming the token"
+  local OT="$T/otree"; rm -rf "$OT"; mkdir -p "$OT/going-decompiled/asm" "$OT/going-decompiled/symbol_addrs"
+  cp -R going-decompiled/src "$OT/going-decompiled/src"; cp -R "going-decompiled/symbol_addrs/$REGION" "$OT/going-decompiled/symbol_addrs/$REGION"; cp -R "going-decompiled/asm/$REGION" "$OT/going-decompiled/asm/$REGION"
+  bash "$HERE/blanket_orphans.sh" "$REGION" > "$T/orphan_real.txt" 2>/dev/null
+  local vrow; vrow=$(/usr/bin/grep '^ORPHAN_LATENT ' "$T/orphan_real.txt" | /usr/bin/grep -vE 'holders=.*,' | head -1)
+  [ -n "$vrow" ] || { say "SELFTEST-BROKEN: no single-holder ORPHAN_LATENT row on this tree to seed from"; bad=1; }
+  local vtok; vtok=$(printf '%s' "$vrow" | awk '{print $2}'); local vholder; vholder=$(printf '%s' "$vrow" | sed 's/.*holders=//')
+  local vpaths; vpaths=$(/usr/bin/find "$OT/going-decompiled/asm/$REGION/nonmatchings" -name "$vholder")
+  [ -n "$vpaths" ] && printf '%s\n' "$vpaths" | while read -r f; do rm -f "$f"; done
+  [ -n "$vpaths" ] || { say "SELFTEST-BROKEN: holder $vholder not found in the scratch copy"; bad=1; }
+  FAILED=0; WARNED=0; STRICT=0; check_orphans "$REGION" "$OT" > "$T/orphan_seeded.txt"
+  if [ "$FAILED" = 1 ] && /usr/bin/grep -q "^FAIL ORPHAN \[$REGION\] .*GREW .*: NEW $vtok " "$T/orphan_seeded.txt"; then ok "fired: deleting $vholder -> $(/usr/bin/grep -oE "ORPHAN \[$REGION\] \([^)]*\) GREW \([^)]*\): NEW $vtok" "$T/orphan_seeded.txt")"; else say "SELFTEST-FAIL orphan control did not fire for $vtok / $vholder (FAILED=$FAILED):"; /usr/bin/grep -E '^(OK|FAIL|WARN)' "$T/orphan_seeded.txt"; bad=1; fi
+  /usr/bin/grep -q "^WARN ORPHAN_LATENT \[$REGION\] .* no longer observed — remove from .*: $vtok" "$T/orphan_seeded.txt" && ok "and the LATENT baseline reports $vtok stale-high (WARN)" || { say "SELFTEST-FAIL the LATENT set did not report $vtok as no longer observed"; bad=1; }
+
+  say "-- (10) the real gate on this tree (--no-build, the build above) must PASS"
+  STRICT=0
   if run_gate "$REGION" --no-build > "$T/gate.txt"; then ok "real gate PASS"; else say "SELFTEST-FAIL the real gate does not pass on this tree:"; /usr/bin/grep -E '^FAIL' "$T/gate.txt"; bad=1; fi
   say "     full gate output -> $T/gate.txt"
   say "#### landing_gate --selftest [$REGION]: $([ $bad = 0 ] && echo PASS || echo FAIL)"
@@ -326,7 +468,7 @@ selftest() {
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   case "${1:-}" in
     --selftest) selftest "${2:-usa}" ;;
-    usa|eu) run_gate "$1" "${2:-}" ;;
+    usa|eu) run_gate "$@" ;;
     *) usage ;;
   esac
 fi
