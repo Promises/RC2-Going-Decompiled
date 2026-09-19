@@ -28,6 +28,31 @@
  * is blocked on that wall and stays INCLUDE_ASM (not annotated per
  * function - check the prologue: two+ sd of s-regs/$ra at 8-byte spacing).
  *
+ * ENGINE-2.96 ARM SWEEP (task #467, 2026-09-19): every `#else` arm below was
+ * promoted once through the MATCH_ engine96 arm (objdiff_build.sh: cc1
+ * 2.96-ee-001003-1, -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) —
+ * 116 measured, 0 reached 100.00%, all reverted to `#else`; each arm carries
+ * a `t467 engine96 arm` line with its % and residual class. Three unit-wide
+ * facts from that sweep, so nobody re-derives them per function:
+ *   1. cc1 2.96 SIBLING-CALLS every tail call and the ROM never does; the
+ *      `__asm__ __volatile__("")` guard (apply_tailcall_guards.py) removes it
+ *      only as the function-scope LAST statement of a VOID path — a
+ *      `return f(...)` needs `T r = f(...); __asm__ __volatile__(""); return r;`.
+ *      The guards are now in place in the arms that needed them.
+ *   2. cc1 2.96-001003-1 emits every float literal 1 ULP BELOW nearest
+ *      (3.1415927f -> 0x40490FDA, even 3.14159274101257324f -> ...FDA); the
+ *      ROM bits come out only from the +1 ULP spelling (3.1415929794311523f
+ *      -> ...FDB, measured on func_002B1710 / func_002B17F8). Such a
+ *      spelling is WRONG for the native arm, so it cannot live in a shared
+ *      `#else` body — an engine promotion needs its own literal.
+ *   3. The dominant residual is SCHED-TIEBREAK: instruction-identical code
+ *      whose same-cycle-ready instructions are emitted in the opposite order
+ *      (the ROM keeps RTL/luid order — prologue `sd` before the body's first
+ *      `move`, `sra` before `subu` after a call — cc1 001003-1 inverts it).
+ *      8 arms are ORDER-ONLY (same instruction multiset). Not C-controllable:
+ *      statement/temp/expression re-phrasings RUN on 5 of them changed
+ *      nothing; sched-ON and -fno-schedule-insns2 both make it worse.
+ *
  * PADDING/FRAGMENT PSEUDO-FUNCTIONS: 36 of the unit's 190 splat symbols are
  * pure inter-function fill (orphaned `addiu $sp,+N / nop` pairs, e.g.
  * func_002A8B00) or unreachable code fragments (e.g. func_002A8628,
@@ -176,13 +201,10 @@ extern void func_002B1270(void *a, Vec4 *b, void *c);
 /* Vec2LengthXyVu0: planar (xy) magnitude of a Vec4, returned as f32 in $f0. The
  * native #else scanners (func_002A8D08/func_002A90A8) feed it into Atan2fPoly
  * (atan2) and float compares, so they need the true f32 return (an s32 decl would
- * make ee-gcc insert a spurious cvt.s.w). Guarded like Atan2fPoly: the sole
- * matched-build reference discards the value, so f32 is inert to the matched arm. */
-#ifdef TARGET_NATIVE
+ * make ee-gcc insert a spurious cvt.s.w). The sole 2.9-matched reference
+ * (func_002B0D70) discards the value, so the f32 form is inert to that arm and
+ * the engine (MATCH_) arms need it — one declaration for every build. */
 extern f32 Vec2LengthXyVu0(void *vec);
-#else
-extern s32 Vec2LengthXyVu0(void *vec);
-#endif
 /* Atan2fPoly (183558.c region): 2-arg arctangent (minimax poly
  * + quadrant offset, self-contained VU0 — no vcallms upload), returns the angle
  * as f32 in $f0. Native #else of func_002A8C70 needs the true f32 return so the
@@ -307,6 +329,8 @@ extern void ResolveMobyAnimFramePtrs(Moby *moby);
  * Then resolves the frame pointers, seeds animRate2 from the resolved frame,
  * clears the anim-event byte's bit 1, and caches the loop-sound index.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 36.40%
+   -> UNKNOWN-@1: ROM `daddu a3,a1,zero` vs `sll v0,a1,0x2` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8200);
 #else
@@ -358,6 +382,8 @@ extern f32 IntToFloat(s32 x);
  * blend: animRate=1, animRate2=1/arg4, animTime=0, clears animEventByte bit 1,
  * caches loopSoundIdx.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 54.11%
+   -> UNKNOWN-@2: ROM `(none)` vs `daddu s0,a0,zero` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A82D8);
 #else
@@ -370,6 +396,7 @@ void func_002A82D8(Moby *obj, s32 idx, s32 arg3, s32 arg4) {
 
     if (arg4 <= 0) {
         func_002A8200(obj, idx, clampedFrame);
+        __asm__ __volatile__(""); /* cc1 2.96 sibling-call suppression (the ROM never sibcalls) */
         return;
     }
 
@@ -417,6 +444,8 @@ void func_002A82D8(Moby *obj, s32 idx, s32 arg3, s32 arg4) {
  * pointers, and blend seed (animRate=1, animRate2=1/arg4, animTime=0, clear
  * animEventByte bit 1, cache loopSoundIdx) are set — identical to func_002A82D8.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 56.03%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-80` vs `addiu sp,sp,-64` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8448);
 #else
@@ -426,6 +455,7 @@ void func_002A8448(Moby *obj, s32 idx, s32 frame, s32 arg4, s32 flags) {
 
     if (arg4 <= 0) {
         func_002A8200(obj, idx, frame);
+        __asm__ __volatile__(""); /* cc1 2.96 sibling-call suppression (the ROM never sibcalls) */
         return;
     }
 
@@ -538,6 +568,8 @@ s32 GetRandomInt(s32 n) {
  * identical. This is the 001003-vs-exact-2.96 scheduler gap (not C-controllable,
  * not post-pass-fixable — [[reference_register_coloring_wall]] scheduling class).
  * Best faithful body kept as the TARGET_NATIVE #else. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 80.95%
+   -> SCHED-TIEBREAK (prologue interleave + sra/subu order after the call), ORDER-ONLY */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", RandRangeInclusive);
 #else
@@ -586,6 +618,8 @@ extern void func_002AFE68(void *handle, f32 value, f32 angle1, f32 angle2);
 
 /** func_002A87F0 — spawn/place helper: draw two random angles and a random value
  *  in [lo, hi], then hand them to func_002AFE68 for `handle`. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 64.60%
+   -> SCHED-TIEBREAK, ORDER-ONLY (same instruction multiset, 18 rows displaced) */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A87F0);
 #else
@@ -594,6 +628,7 @@ void func_002A87F0(void *handle, f32 lo, f32 hi) {
     f32 angle2 = GetRandomAngle();
     f32 value = GetRandomFloatRange(lo, hi);
     func_002AFE68(handle, value, angle1, angle2);
+    __asm__ __volatile__("");
 }
 #endif
 
@@ -603,6 +638,9 @@ void func_002A87F0(void *handle, f32 lo, f32 hi) {
  * x = r·cos(a2)·sin(a1), y = r·sin(a2)·sin(a1), z = r·cos(a1). The lo/hi pass
  * straight through to the magnitude RNG. (func_00283B30 = cos, ...B48 = sin.)
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 92.95%
+   -> 90.33% with ROM-order muls (cos*sin*r), then ORDER-ONLY: SCHED-TIEBREAK in the epilogue
+   restores */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", GetRandomVectorInSphere);
 #else
@@ -610,9 +648,9 @@ void GetRandomVectorInSphere(Vec4 *dst, f32 lo, f32 hi) {
     f32 radius = func_002A86E0(lo, hi);
     f32 angle2 = func_002A87A8();
     f32 angle1 = func_002A87A8();
-    dst->x = radius * func_00283B30(angle2) * func_00283B48(angle1);
-    dst->y = radius * func_00283B48(angle2) * func_00283B48(angle1);
-    dst->z = radius * func_00283B30(angle1);
+    dst->x = func_00283B30(angle2) * func_00283B48(angle1) * radius;
+    dst->y = func_00283B48(angle2) * func_00283B48(angle1) * radius;
+    dst->z = func_00283B30(angle1) * radius;
 }
 #endif
 
@@ -639,6 +677,8 @@ f32 func_002A8910(f32 a1, f32 a0, f32 b0, f32 b1, f32 t) {
  * slot earlier - the register-coloring + store-scheduling wall. Re-derived from
  * func_002A8910 (the matched scalar twin); not byte-reachable with the pinned
  * cc1. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 7.06% ->
+   UNKNOWN-@0: ROM `mtc1 zero,$f8` vs `addiu sp,sp,-64` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8948);
 #else
@@ -663,12 +703,14 @@ void func_002A8948(Vec4 *out, Vec4 *p1, Vec4 *p2, Vec4 *p3, Vec4 *p4, f32 t) {
  * Cosine ("smootherstep"-style) ease between a and b by t in [0,1]: shortcut
  * the endpoints (t==0 -> a, t==1 -> b), otherwise blend by (1 - cos(t*pi))/2.
  */
-#ifndef TARGET_NATIVE
 /* TODO(match): functional equivalent - 95.7%. The two endpoint c.eq.s shortcuts
    and the (1 - cos(t*pi))*0.5 blend reproduce, but the later cc1 schedules the
    compare's zero/one constant materialisation differently from the pinned cc1
    (operand/const-scheduling wall). Revisit once the gameplay-TU compiler is
    available. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 78.84%
+   -> UNKNOWN-@0: ROM `mtc1 zero,$f0` vs `mtc1 zero,$f1` */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8A68);
 #else
 f32 func_002A8A68(f32 a, f32 b, f32 t) {
@@ -703,6 +745,8 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  * band. gain/damp/clampLimit arrive in $f12/$f13/$f14 (the moby ptr in $a0, the
  * drive-accumulator pointer in $a1).
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 80.69%
+   -> UNKNOWN-@2: ROM `(none)` vs `daddu s0,a1,zero` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8B08);
 #else
@@ -754,6 +798,8 @@ void func_002A8B08(Moby *moby, f32 *driveOut, f32 targetAngle,
  * Pure forwarder; the three trailing floats (gain/damp/clampLimit) pass through
  * in $f12/$f13/$f14.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 78.35%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-64` vs `addiu sp,sp,-48` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8C70);
 #else
@@ -763,6 +809,7 @@ void func_002A8C70(Moby *moby, Moby *target, f32 *driveOut,
     f32 dy = target->pos.y - moby->pos.y;
     f32 angle = Atan2fPoly(dx, dy);
     func_002A8B08(moby, driveOut, angle, gain, damp, clampLimit);
+    __asm__ __volatile__("");
 }
 #endif
 
@@ -805,6 +852,8 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  * in the headless cmp harness. The #else below is FAITHFUL-STRUCTURE (traced
  * store-for-store from the .s) but NOT oracle-verified; bit-trust needs the
  * tester full-game effect-diff. Sibling func_002A90A8 is the same class. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 44.54%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-224` vs `addiu sp,sp,-240` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8D08);
 #else
@@ -951,6 +1000,8 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  * ORACLE CAVEAT: VU0-microprogram-dependent, not headless ULP-oracleable — the
  * #else below is FAITHFUL-STRUCTURE (traced store-for-store from the .s) but NOT
  * oracle-verified; bit-trust needs the tester full-game effect-diff. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 34.31%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-192` vs `addiu sp,sp,-176` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A90A8);
 #else
@@ -1028,6 +1079,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9348);
  * attempt 82%: byte-identical except the list pointer colours v1 (reusing
  * the address temp) where the original loads it into v0 with a later move
  * into a0 - the register-coloring wall. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 54.29%
+   -> UNKNOWN-@0: ROM `addiu v0,zero,-1` vs `addiu v1,zero,-1` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9370);
 #else
@@ -1096,7 +1149,6 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  * iterator-advance helper. Returns -1 for an empty/invalid group, 0 when the
  * first moby is filtered out, else the advance helper's result.
  */
-#ifndef TARGET_NATIVE
 /* TODO(match): functional equivalent - 85%. The filter lattice and the
    size-12 %hi/%lo-vs-%gp_rel reload of g_pMobyGroupIterMoby reproduce, but the
    later cc1 schedules the wantActive-path reload straight-line (absolute
@@ -1104,6 +1156,9 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
    fills that delay slot with the reload itself (forced %gp_rel form) and folds
    the two return paths - register-coloring + delay-slot wall (same family as
    func_002AC9E0). Revisit once the gameplay-TU compiler is available. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 54.83%
+   -> UNKNOWN-@1: ROM `daddu t0,a0,zero` vs `(none)` */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9468);
 #else
 s32 func_002A9468(Moby **out, s32 group, s32 wantInactive, s32 wantActive) {
@@ -1139,7 +1194,11 @@ s32 func_002A9468(Moby **out, s32 group, s32 wantInactive, s32 wantActive) {
             return 0;
         }
     }
-    return func_002A9550(out, g_pMobyGroupIterMoby, wantInactive, wantActive);
+    {
+        s32 r = func_002A9550(out, g_pMobyGroupIterMoby, wantInactive, wantActive);
+        __asm__ __volatile__(""); /* cc1 2.96 sibling-call suppression (the ROM never sibcalls) */
+        return r;
+    }
 }
 #endif
 
@@ -1172,6 +1231,8 @@ s32 func_002A9468(Moby **out, s32 group, s32 wantInactive, s32 wantActive) {
  * (the .s sign-extends then srl 31). All iterator state lives in the named
  * globals; no float, no vcallms -> standalone integer/pointer oracle.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 36.93%
+   -> UNKNOWN-@0: ROM `daddu t2,a0,zero` vs `sw zero,0(a0)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9550);
 #else
@@ -1282,6 +1343,8 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
 
 extern f32 func_002835C0(f32 x); /* sqrtf */
 
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 73.05%
+   -> UNKNOWN-@3: ROM `swc1 $f21,40(sp)` vs `swc1 $f21,32(sp)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9708);
 #else
@@ -1326,6 +1389,8 @@ s32 func_002A9708(f32 a, f32 b, f32 c, f32 *out1, f32 *out2)
  * an asm scheduling barrier recover the copy/const order): the pinned cc1
  * still hoists the call-argument moves above the second source copy where
  * the later cc1 keeps them below - prologue-scheduling wall. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 33.52%
+   -> UNKNOWN-@1: ROM `daddu v1,a0,zero` vs `(none)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", ProbeGroundHeight);
 #else
@@ -1360,6 +1425,8 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  * div-by-zero check of the i%%n twice (one hoisted to the loop top) around
  * a single CSEd div - the div-expansion-scheduling wall (same family as
  * func_00351328). */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 44.77%
+   -> UNKNOWN-@0: ROM `(none)` vs `lwc1 $f7,0(a0)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A98B8);
 #else
@@ -1399,6 +1466,8 @@ s32 func_002A98B8(f32 *pt, f32 *verts, s32 n) {
  * Matching build stays INCLUDE_ASM: the branch-likely toggle idioms
  * (bc1tl/bc1fl nullified delay slots) around the crossing test are an
  * engine-2.96 schedule this C won't reproduce. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 54.12%
+   -> UNKNOWN-@0: ROM `daddu t0,zero,zero` vs `daddu t2,zero,zero` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9958);
 #else
@@ -1452,6 +1521,9 @@ s32 func_002A9A38(f32 power, Moby *moby, s32 a, s32 b) {
  * live flag). Best attempt 58%: the pinned cc1 materialises the li 1 after
  * the first store (original: first insn, in v1) and insists on filling the
  * jr delay slot with the volatile sq - register-coloring + slot-fill wall. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 82.22%
+   -> REORG-DSLOT (ROM leaves the jr delay slot empty, cc1 fills it with the sq); Vec4 struct-
+   copy phrasing RUN -> ldl/ldr (worse) */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9A68);
 #else
@@ -1482,6 +1554,8 @@ extern s32 CollMobysSphere(void *targetList, void *filter, Moby *self,
  * `power`. CollMobysSphere then gathers/broadcasts against that record within
  * `radius` and returns the hit count.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 75.22%
+   -> UNKNOWN-@2: ROM `(none)` vs `daddu s1,a0,zero` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9A90);
 #else
@@ -1525,6 +1599,8 @@ extern void func_002A0AF8(Moby *self, s32 attachId, void *outPoint);
  * radius/power/scale floats unchanged. Returns the collision hit count.
  * (func_002A9A90's second parameter is this computed origin point.)
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 61.71%
+   -> UNKNOWN-@1: ROM `(none)` vs `sd s1,24(sp)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9BD8);
 #else
@@ -1550,6 +1626,8 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  * (|carried), material/normal fields, depth, and the owning moby; the moby's
  * hitEventSlot is pointed at it and the cursor advances.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 58.64%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-80` vs `addiu sp,sp,-64` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9C88);
 #else
@@ -1601,6 +1679,8 @@ void func_002A9C88(Moby *moby, void *hitInfo) {
  * +0x2C dist, +0x30 hasDir (|vecB| > 1e-4), +0x34 dist, +0x38 moby, +0x3C 0.
  * Return is incidental in the original (merge path leaves the merged flags, alloc
  * path leaves &g_pCollWorldData); callers discard it — we return the record flags. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 59.79%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-80` vs `addiu sp,sp,-64` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", PostMobyHitEvent);
 #else
@@ -1661,6 +1741,8 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  * Walled: saves $16/$17/$31 (save-layout wall, see unit header). The VU0
  * reductions DistXYVu0/GetFloatAbs and SampleWaterHeightfield all return f32 in
  * $f0 / via the out-pointer; declared accordingly so this body is faithful. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 65.23%
+   -> UNKNOWN-@0: ROM `(none)` vs `lw v0,0(gp)  [GPREL16 0x001B2258]` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", GetWaterSurfaceHeight);
 #else
@@ -1700,6 +1782,8 @@ f32 GetWaterSurfaceHeight(Vec4 *pos, Vec4 *outNormal) {
  * harness, so this body CANNOT be ULP/bit-oracled there. Verification is via the
  * tester's full-game EE effect-diff (the sin/cos microprograms ARE loaded in the
  * full-game context), same path as func_002AFCD8/func_002AFD90. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 63.54%
+   -> UNKNOWN-@2: ROM `sd s1,56(sp)` vs `(none)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AA058);
 #else
@@ -1726,6 +1810,8 @@ void func_002AA058(Vec4 *outQuat, Vec4 *eulerAngles) {
  *
  * Walled: saves $16/$17/$31 + $f20/$f21 (save-layout wall). baseAlpha arrives
  * in $f12 (preserved across the probe in $f21); groundZ is kept in $f20. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 50.22%
+   -> UNKNOWN-@2: ROM `swc1 $f21,40(sp)` vs `(none)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", QueueMobyBlobShadow);
 #else
@@ -1774,6 +1860,8 @@ void QueueMobyBlobShadow(Moby *moby, f32 baseAlpha) {
  *
  * Walled: saves $16-$18/$31 (save-layout wall). The 1/1024, -8.0, 1/4096 and
  * 0.2 constants come straight from the asm immediates. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 50.42%
+   -> UNKNOWN-@0: ROM `(none)` vs `lw v0,0(gp)  [GPREL16 D_1A8CA0]` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", ProbeMobyGroundBelow);
 #else
@@ -1950,6 +2038,8 @@ extern s32 func_002AC088(Moby *moby);
  * UNCONFIRMED: state/event field meanings inferred from access pattern; owner is
  * a Moby, target/candidate are Mobys (func_002AE7E8 reads their class).
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 90.11%
+   -> UNKNOWN-@1: ROM `(none)` vs `sd s0,0(sp)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AA508);
 #else
@@ -2050,6 +2140,8 @@ f32 func_002AA508(Moby *owner, void *event) {
  * `power` float (fa0) — and posts it to that moby via PostMobyDamagePacket
  * (func_002A9C88). Same packet layout as func_002A9A90's sphere-query record.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 24.20%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-192` vs `addiu sp,sp,-176` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AA6B8);
 #else
@@ -2122,6 +2214,8 @@ void func_002AA6B8(Moby *self, const Vec4 *refPos, Moby **list, s32 count,
  *
  * Faithful coverage body — the matching build keeps the asm (save-layout wall).
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 33.92%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-416` vs `addiu sp,sp,-384` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AA808);
 #else
@@ -2430,6 +2524,8 @@ f32 func_002AAFB8(f32 a, f32 b, f32 c) {
  * (i.e. v*(1-c) + b*maxDelta) and clamps to [-bound, bound] when bound > 0;
  * finally re-clamps to [-|maxDelta|, |maxDelta|].
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 53.13%
+   -> UNKNOWN-@1: ROM `(none)` vs `sd s0,0(sp)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB000);
 #else
@@ -2487,6 +2583,8 @@ f32 func_002AB150(f32 target, f32 rate, f32 *p) {
  * target by at most rate, store it back, and return the remaining signed
  * delta mapped to a float through func_002835E0.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 85.00%
+   -> UNKNOWN-@1: ROM `daddu t0,a0,zero` vs `daddu a3,a0,zero` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB1A8);
 #else
@@ -2522,6 +2620,8 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
 /* PARKED (engine-2.96): 65% — regalloc/structural gap (frame -48 vs -64, s0/s1
  * hold p/vel swapped, commutative operand order); not save-layout. NOT crackable
  * with 001003 vs exact-2.96. Faithful body kept as #else. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 65.77%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-64` vs `addiu sp,sp,-48` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB210);
 #else
@@ -2552,6 +2652,8 @@ f32 func_002AB210(f32 *p, f32 *vel, f32 target, f32 b, f32 c, f32 d) {
  * $f12/$f14, c in $f13. */
 /* PARKED (engine-2.96): Vec4 spring twin of func_002AB210 — same regalloc/
  * structural wall class. Faithful body kept as #else. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 69.80%
+   -> UNKNOWN-@1: ROM `(none)` vs `sd s1,24(sp)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB2C0);
 #else
@@ -2575,6 +2677,8 @@ f32 func_002AB2C0(Vec4 *cur, Vec4 *target, f32 *vel, f32 b, f32 c, f32 eps) {
 }
 #endif
 
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 31.89%
+   -> UNKNOWN-@1: ROM `mtc1 zero,$f2` vs `sd s1,8(sp)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB3B0);
 #else
@@ -2667,6 +2771,8 @@ f32 func_002AB3B0(f32 target, f32 velRate, f32 accel, f32 maxSpeed, f32 *pPos, f
  * if the wrapped delta already agrees with the sign (delta*sign > 0) keep it; an
  * almost-zero delta collapses to 0; otherwise add/subtract a full 2*pi turn so
  * the result rotates the requested way. Walled: $f20/$f21 + $16/$31 saves. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 69.68%
+   -> UNKNOWN-@2: ROM `(none)` vs `daddu s0,a0,zero` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB5A0);
 #else
@@ -2693,6 +2799,8 @@ f32 func_002AB5A0(f32 a, f32 b, s32 sign) {
  * (clamped both ways), wrapping the sum into (-pi, pi], and return the residual
  * signed angle difference after the step. `sign` forces the rotation side (see
  * func_002AB5A0). Walled: $f20/$f21 + $16/$17/$31 saves (save-layout wall). */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 65.71%
+   -> UNKNOWN-@2: ROM `(none)` vs `daddu s0,a0,zero` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB668);
 #else
@@ -2705,7 +2813,11 @@ f32 func_002AB668(f32 a, f32 maxStep, f32 *p, s32 sign) {
         delta = -maxStep;
     }
     p[0] = WrapAnglePiSum(p[0], delta);   /* WrapAnglePiSum */
-    return func_002AB5A0(a, p[0], sign);
+    {
+        f32 r = func_002AB5A0(a, p[0], sign);
+        __asm__ __volatile__(""); /* cc1 2.96 sibling-call suppression (the ROM never sibcalls) */
+        return r;
+    }
 }
 #endif
 
@@ -2724,6 +2836,8 @@ f32 func_002AB668(f32 a, f32 maxStep, f32 *p, s32 sign) {
  *
  * Returns the residual signed angle error (0 when snapped). Walled: saves
  * $16-$18/$31 + $f20-$f23 (save-layout wall). b/c/d are $f13/$f14/$f15. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 65.75%
+   -> UNKNOWN-@3: ROM `(none)` vs `daddu s0,a0,zero` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB700);
 #else
@@ -2757,6 +2871,8 @@ f32 func_002AB700(f32 *p, f32 *vel, s32 mode, f32 target, f32 b, f32 c, f32 d) {
 }
 #endif
 
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 64.64%
+   -> UNKNOWN-@3: ROM `(none)` vs `daddu s1,a0,zero` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB868);
 #else
@@ -2853,6 +2969,8 @@ f32 func_002AB868(f32 target, f32 maxStep, f32 accel, f32 maxSpeed, f32 *pAngle,
 }
 #endif
 
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 66.83%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-64` vs `addiu sp,sp,-80` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ABAE8);
 #else
@@ -2944,6 +3062,8 @@ void func_002ABAE8(f32 dist, f32 velRate, f32 accel, f32 maxSpeed, f32 *pVel)
 /* PARKED (engine-2.96): correct C, but the 4-channel mul/FloatToInt/mask
  * sequence + fp-save ordering schedules differently than the original
  * (fine-scheduling, 001003-vs-exact-2.96 gap). Faithful body kept as #else. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 66.63%
+   -> SCHED-TIEBREAK, ORDER-ONLY (same instruction multiset, 23 rows displaced) */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ABD00);
 #else
@@ -2989,6 +3109,8 @@ void func_002ABDA8(s32 *a, s32 *b, s32 *c, s32 bits) {
  * R/G/B bytes are unpacked and swapped per func_002ABDA8's bit mask (bit0 R<->G,
  * bit1 G<->B, bit2 R<->B), with the alpha (top) byte preserved. Walled: $16/$31
  * saves (save-layout wall). */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 52.82%
+   -> UNKNOWN-@3: ROM `(none)` vs `daddu v0,a0,zero` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ABE08);
 #else
@@ -3015,6 +3137,8 @@ u32 func_002ABE08(u32 word, s32 bits) {
  * stride 0x10) into a scratch Vec3 (w zeroed), normalise it to unit length via
  * Vec3RescaleToLenVu0(len 1.0), then scatter it back into column i.
  * Walled: $16/$17/$18 + $31 saves (save-layout wall). */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 76.32%
+   -> UNKNOWN-@1: ROM `daddu v1,zero,zero` vs `sd s0,16(sp)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ABE90);
 #else
@@ -3048,6 +3172,8 @@ void func_002ABE90(Mat4x4 *mat) {
  * q and return component `idx` of the result. Builds the rotation matrix from q
  * (func_00284048), transforms the delta vector by it (func_00283A70), and reads
  * out result[idx]. Args: a, q, c, idx. Walled: $16-$19 + $31 saves. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 55.10%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-144` vs `addiu sp,sp,-128` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ABF50);
 #else
@@ -3069,6 +3195,8 @@ f32 func_002ABF50(const Vec4 *a, const Vec4 *q, const Vec4 *c, s32 idx) {
  * amount and subtracts it from vec, writing the result into *out.
  *   out = vec - scale * dot(vec, unit(axis)) * unit(axis)
  * Args: out, vec, axis, scale ($f12). Walled: $f20 + $16-$18 + $31 saves. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 62.39%
+   -> UNKNOWN-@2: ROM `sd s0,32(sp)` vs `(none)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ABFD0);
 #else
@@ -3089,6 +3217,9 @@ void func_002ABFD0(Vec4 *out, Vec4 *vec, Vec4 *axis, f32 scale) {
  * return-0) but the later cc1 emits two scheduler nops between the andi
  * and its beqz that the pinned cc1 never produces (same wall as
  * func_002AC088/func_002AC9E0). */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 26.67%
+   -> IDIOM-branch-layout (ROM: bnel to the main path, shared return-0 block first); lever-10
+   goto layout RUN, no change */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC058);
 #else
@@ -3105,6 +3236,8 @@ s32 func_002AC058(Moby *moby) {
 
 /* func_002AC088: read word 4 of a moby's extra/pvar block. Same two-
  * scheduler-nops wall as func_002AC058 (best attempt 66%). */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 26.67%
+   -> IDIOM-branch-layout, twin of func_002AC058; lever-10 goto layout RUN, no change */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC088);
 #else
@@ -3124,6 +3257,9 @@ s32 func_002AC088(Moby *moby) {
  * lifetime/size/blend params. */
 extern void SpawnParticleType04(Vec4 *origin, Vec4 *pos, u32 color, s32 a, s32 b,
                                 s32 c, s32 d, s32 e);
+/* Defined later in this unit (its own #else arm); declared here so the f32 arg
+ * is not default-promoted to double when the callee is still INCLUDE_ASM. */
+s32 func_002AA808(Moby *moby, s32 maxPoints, Vec4 *outPoints, s32 primMask, f32 density);
 
 /**
  * func_002AC0B8 — emit a small burst of type-04 particles around a point.
@@ -3135,6 +3271,8 @@ extern void SpawnParticleType04(Vec4 *origin, Vec4 *pos, u32 color, s32 a, s32 b
  * Z by 0.015, and spawns a type-04 particle from that scatter point with two
  * randomised lifetime parameters (RandRangeInclusive 20..35 and 40..60).
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 83.52%
+   -> UNKNOWN-@1: ROM `daddu a3,a2,zero` vs `(none)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC0B8);
 #else
@@ -3171,6 +3309,8 @@ void func_002AC0B8(Moby *owner, Vec4 *basePos, s32 primMask) {
  * the largest diagonal element as the pivot p (with j,k the cyclic successors
  * from the {1,2,0} table D_1A9EA0) and build the quaternion around out[p].
  * func_002835C0 = sqrtf. (Identity MatrixToQuaternion — UNCONFIRMED name.) */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 49.45%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-144` vs `addiu sp,sp,-80` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC1E0);
 #else
@@ -3218,6 +3358,8 @@ void func_002AC1E0(void *out, void *matrix) {
  * feed it through func_002AC1E0 with `out`, then resolve `in` against it
  * (func_00284028). The 0x40-byte scratch is a 4x4 matrix shared by all three
  * helpers. Walled: $16/$17/$31 saves (save-layout wall). */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 87.32%
+   -> REGNUM-COLORING (s0/s1 swapped) + SCHED-TIEBREAK (prologue interleave) */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC468);
 #else
@@ -3248,6 +3390,9 @@ void func_002AC4B8(Moby *moby) {
 /* PARKED (engine-2.96): correct C, but frame is -0x30 vs my -0x20 + $ra/save
  * ordering differs (frame/regalloc, 001003-vs-exact-2.96 gap; possibly a missing
  * stack temp in the source). Faithful body kept as #else. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 90.28%
+   -> UNKNOWN-frame: ROM frame -48 with $f20 at 32, cc1 -32 with $f20 at 24 (a missing 8-16 B
+   stack object), rest SCHED-TIEBREAK */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC4D0);
 #else
@@ -3277,6 +3422,8 @@ extern void MatrixMultiplyVu0(Mat4x4 *dst, Mat4x4 *a, Mat4x4 *b);
  * a2=atan2(row0.x,-row0.z) about -Y, then a3=atan2(row1.y,row1.z) on the residual.
  * Writes out[0]=a3, out[1]=a2, out[2]=a1.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 20.34%
+   -> UNKNOWN-@1: ROM `daddu v0,a0,zero` vs `(none)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", MatrixToEulerAngles);
 #else
@@ -3324,6 +3471,8 @@ extern void func_002A12F0(void *src, s32 *r, s32 *g, s32 *b);
  *   - counter was running: rescales it to resetValue * counter / divisor(+0xE),
  *     clamped to at least 1.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 8.19% ->
+   UNKNOWN-@2: ROM `sd ra,32(sp)` vs `(none)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC668);
 #else
@@ -3356,6 +3505,8 @@ void func_002AC668(void *src, u8 *obj) {
 
 extern s32 func_00283328(void *state); /* tick countdown: ret 0=counting, 1=already 0, 2=just hit 0; decrements state[0] */
 
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 77.58%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-64` vs `addiu sp,sp,-48` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC728);
 #else
@@ -3393,7 +3544,11 @@ s32 func_002AC728(void *target, u8 *s)
         /* countdown expired this frame */
         if (*(s16 *)(s + 0x2) != 0) {
             /* latch the destination colour and stop */
-            return func_002A12C0(target, s[0x4], s[0x5], s[0x6]);
+            {
+                s32 r = func_002A12C0(target, s[0x4], s[0x5], s[0x6]);
+                __asm__ __volatile__(""); /* cc1 2.96 sibling-call suppression (the ROM never sibcalls) */
+                return r;
+            }
         }
         /* restart the fade running in reverse */
         *(s16 *)(s + 0x2) = 1;
@@ -3414,7 +3569,11 @@ s32 func_002AC728(void *target, u8 *s)
         g = s[0x8] ? FloatToInt((f32)s[0x8] + (f32)((s32)s[0x5] - (s32)s[0x8]) * frac) : s[0x5];
         b = s[0x9] ? FloatToInt((f32)s[0x9] + (f32)((s32)s[0x6] - (s32)s[0x9]) * frac) : s[0x6];
     }
-    return func_002A12C0(target, r, g, b);
+    {
+        s32 result = func_002A12C0(target, r, g, b);
+        __asm__ __volatile__(""); /* cc1 2.96 sibling-call suppression (the ROM never sibcalls) */
+        return result;
+    }
 }
 #endif
 
@@ -3430,6 +3589,8 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  * func_002AB5A0's 2pi (6.28318596f / 0x40C90FDC, 1 ULP higher) - the two
  * functions legitimately use different roundings. cmp-oracle-confirmed.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 66.77%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-32` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC980);
 #else
@@ -3450,6 +3611,8 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  * g_mobyTableBase/End reproduce (size-12 class), but the later cc1 lays the
  * shared return-0 out early with backward branches and pads the first
  * compare with two scheduler nops (same wall as func_002AC058). */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 37.19%
+   -> UNKNOWN-@0: ROM `bne a0,zero,L` vs `beq a0,zero,L` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC9E0);
 #else
@@ -3501,6 +3664,8 @@ s32 func_002AC9E0(Moby *m) {
  * @param matFlag       material flag selecting particle tints + ring colors.
  * @param queryTag      tag stamped into the hit-event record.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 56.31%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-368` vs `addiu sp,sp,-432` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ACA20);
 #else
@@ -3816,6 +3981,8 @@ void func_002ACA20(f32 queryRadius, f32 queryPower, f32 ringRadius, f32 whiteRin
  * class ids suppress the impact sound). Faithful #else transcription — the
  * matching build uses the INCLUDE_ASM arm above.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 54.53%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-224` vs `addiu sp,sp,-208` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AD590);
 #else
@@ -3902,6 +4069,8 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
 
 /** func_002AD860 — clamp a vector's length: if `vec`'s 3-component length exceeds
  *  `maxLen`, rescale it in place down to maxLen (else leave it unchanged). */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 89.47%
+   -> SCHED-TIEBREAK (move s0,a0 vs swc1 $f20 order in the prologue), ORDER-ONLY */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AD860);
 #else
@@ -3909,6 +4078,7 @@ void func_002AD860(Vec4 *vec, f32 maxLen) {
     if (maxLen < Vec3LengthVu0(vec)) {
         Vec3RescaleToLenVu0(vec, maxLen, vec);
     }
+    __asm__ __volatile__("");
 }
 #endif
 
@@ -3919,6 +4089,8 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  * if absent and below cap. Best attempt 69%: the later cc1 derives the
  * loop bound from a register copy of the count and pads the scan loop -
  * scan-loop scheduling wall (sibling of func_002AD938). */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 63.39%
+   -> UNKNOWN-@2: ROM `sll a2,a2,0x10` vs `lh t1,0(a1)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AD8B8);
 #else
@@ -3947,6 +4119,8 @@ void func_002AD8B8(Moby *moby, s16 *list, s32 cap) {
  * the last entry into its slot. Best attempt 57%: the original keeps the
  * raw count in a register across the scan with branch-likely reloads the
  * pinned cc1 will not produce - scan-loop scheduling wall. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 2.55% ->
+   UNKNOWN-@0: ROM `lh v0,0(a1)` vs `lh a3,0(a1)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AD938);
 #else
@@ -3972,6 +4146,8 @@ void func_002AD938(Moby *moby, s16 *list) {
 /* func_002AD9B0: jitter a Vec3 in place — add an independent uniform random
  * offset in [-amt, amt) to each of x/y/z. Walled: $f20/$f21 + $16/$31 saves
  * (save-layout wall). */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 92.12%
+   -> REGNUM-COLORING ($f20/$f21 swapped) + SCHED-TIEBREAK; hoisting -amt RUN, no change */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AD9B0);
 #else
@@ -3988,6 +4164,8 @@ void func_002AD9B0(Vec4 *p, f32 amt) {
  * frame by the segment's 3x3 rotation matrix (at seg+0x40) via func_00283A48
  * (out = m * local), and return 1 only if all of x/y/z land in [-1, 1].
  * segIdx == -1 returns 0. Walled: $16/$31 saves (save-layout wall). */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 56.28%
+   -> UNKNOWN-@1: ROM `addiu v0,zero,-1` vs `addiu v1,zero,-1` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADA30);
 #else
@@ -4031,6 +4209,8 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  * (pos - origin) into the segment's local frame and returns 1 if the resulting
  * length is < 1.0, else 0. A negative segIdx returns 0.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 63.18%
+   -> UNKNOWN-@1: ROM `(none)` vs `daddu a2,a0,zero` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADB10);
 #else
@@ -4063,6 +4243,8 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  * head field (mgr+0x0) — i.e. the top-most entry was the match. */
 extern u8 g_pointLights[];
 extern s32 func_00284730(void *subject, void *entry, void *entryHi);
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 35.61%
+   -> UNKNOWN-@3: ROM `(none)` vs `addiu s2,v0,9216  [LO16 0x001C2AC0]` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADBA0);
 #else
@@ -4090,6 +4272,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADC30);
  * out = q * (v as a pure quaternion, w=0) * conjugate(q). The conjugate negates
  * the xyz of q and keeps its w.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 65.57%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-96` vs `addiu sp,sp,-80` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADC50);
 #else
@@ -4109,6 +4293,8 @@ extern f32 func_002835C0(f32 x);   /* sqrtf */
 
 /** func_002ADCE0 — rescale `src`'s vec3 to length `t` into `dst`, then set dst->w
  *  to sqrt(1 - t*t) (the w that keeps a unit quaternion / normal). */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 49.33%
+   -> UNKNOWN-@1: ROM `(none)` vs `swc1 $f20,16(sp)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADCE0);
 #else
@@ -4124,6 +4310,8 @@ void func_002ADCE0(Vec4 *dst, f32 t, Vec4 *src) {
  * builds the axis-angle quaternion (func_002AC4D0), and rotates src by it
  * (func_002ADC50).
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 40.21%
+   -> UNKNOWN-@1: ROM `(none)` vs `sd s0,16(sp)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADD28);
 #else
@@ -4149,6 +4337,8 @@ extern f32 func_00283B60(f32 x);                          /* arccos */
  * quaternion by ((π/2 − acos(cosθ))·t·0.5) about the axis and rotates a by it
  * (func_002ADC50).
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 61.26%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-96` vs `addiu sp,sp,-80` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADDD0);
 #else
@@ -4203,6 +4393,8 @@ s32 func_002ADF18(Moby *moby) {
  * base matrix), re-add obj pos; and compose arg4's rotation with the base matrix
  * → euler into arg6. Returns 1.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 67.07%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-272` vs `addiu sp,sp,-256` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADF48);
 #else
@@ -4246,6 +4438,8 @@ extern void func_00283DC0(Mat4x4 *dst, Vec4 *in);   /* build rotation matrix fro
  * has bit 0x2, it composes an extra rotation from the source's +0x20 vec and
  * re-applies obj's own matrix at +0xC0. Returns 1 when transformed.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 73.45%
+   -> UNKNOWN-@2: ROM `(none)` vs `daddu s4,a1,zero` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE0B8);
 #else
@@ -4281,6 +4475,8 @@ s32 func_002AE0B8(void *self, void *obj, Vec4 *in, Vec4 *out) {
  * +0x3C bit 0x2 is set, else the base matrix), add obj pos back, and write
  * (result − arg3) to arg4. Returns 1.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 62.64%
+   -> UNKNOWN-@1: ROM `sd s4,240(sp)` vs `sd s3,248(sp)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE198);
 #else
@@ -4335,6 +4531,8 @@ extern s32  func_002AE460(void *self, Moby *obj, Vec4 *arg3, Vec4 *arg4,
  * (+0x22), adds the source offset clamped to unit length (func_002AD860). Always
  * returns 1 once a source exists.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 76.16%
+   -> UNKNOWN-@1: ROM `(none)` vs `sd s2,160(sp)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE2D8);
 #else
@@ -4385,6 +4583,8 @@ s32 func_002AE2D8(Moby *self, Moby *obj, Vec4 *point, Vec4 *rotIn,
  * (out arg5), then composes with arg4's rotation (MatrixMultiplyVu0) and writes
  * the euler angles to arg6. Returns 1.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 84.51%
+   -> UNKNOWN-@3: ROM `(none)` vs `daddu a0,s1,zero` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE460);
 #else
@@ -4423,6 +4623,8 @@ extern void MatrixToEulerAngles(Mat4x4 *mtx, void *outAngles);
  * angles written into `out`, then stash the source vectors: out+0x10 always gets
  * arg2, and out+0x20 gets m1 when out's flag word (+0x3C) has bit 0x2 set.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 51.55%
+   -> UNKNOWN-@1: ROM `(none)` vs `sd s4,288(sp)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE558);
 #else
@@ -4450,6 +4652,8 @@ void func_002AE558(void *out, Vec4 *arg2, Vec4 *m1, Vec4 *m2) {
  * 75%: the original contains an EMPTY 28-iteration delay loop padded with
  * four scheduler nops per iteration (later-cc1 emission that the pinned cc1
  * collapses), plus the trailing free-slot scan - not reproducible. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 52.76%
+   -> UNKNOWN-@0: ROM `lui v0,0x0  [HI16 0x001A7BD0]` vs `lui v1,0x0  [HI16 0x001A7BD0]` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", MarkLevelAvailable);
 #else
@@ -4494,6 +4698,8 @@ extern s32 func_00294CD0(s32 fileId);   /* kick the item's resource load */
  * label is context-dependent or slightly off — the #else is faithful to the asm
  * (it forwards +0x14 to those two calls regardless); flagged for a Ghidra recheck.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 38.18%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-32` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE6C8);
 #else
@@ -4535,6 +4741,8 @@ s32 func_002AE6C8(s32 itemId) {
  * (g_itemEquippedSlot, 0x38 entries) matching the class id (or the moby's linked
  * +0xB8 moby's class) against g_weaponTable[slot].+0x14, returning the slot index
  * or 0xFF. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 48.22%
+   -> UNKNOWN-@0: ROM `lh v1,170(a0)` vs `lh a1,170(a0)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE7E8);
 #else
@@ -4589,6 +4797,10 @@ s32 func_002AE7E8(Moby *moby) {
 }
 #endif
 
+/* t467 engine96 arm: NOT MEASURED — the #else body is named SpawnBoltShower while the
+   asm/symbol is func_002AE9E0 (the bb754675 name-skew class, FACT #6402 defect 1), so a
+   MATCH_func_002AE9E0 guard fails objdiff_build.sh's check 3 (no `.ent func_002AE9E0`).
+   Rename the body (not the asm) before promoting. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE9E0);
 #else
@@ -4892,6 +5104,8 @@ extern s32 func_00283AB8(Vec4 *v);   /* pack a float {x,y,z,scale} vec into a wo
  * each component by 1/(scale*1e-4) and biases by 127, then packs {x',y',z',scale}
  * via func_00283AB8.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 52.27%
+   -> UNKNOWN-@2: ROM `(none)` vs `daddu s0,a0,zero` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AF598);
 #else
@@ -4930,6 +5144,8 @@ extern void func_00283AA0(Vec4 *dst, u32 packed);
  * offset vector scaled by its alpha: unpack to floats, recentre RGB around 127
  * (so 0x80 -> 0), and scale the whole vector by alpha * 1e-4. Writes to `out`.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 76.27%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-64` vs `(none)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AF6A0);
 #else
@@ -4961,6 +5177,8 @@ void func_002AF6A0(Vec4 *out, u32 *colorPtr) {
  * else, when within hero range (ctrl+0x20), steer the heading toward the hero
  * (func_002AAFB8 over the hero bearing, weighted by the normalized hero
  * distance). Uses func_002AAFB8's guarded f32 return (see above). */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 60.01%
+   -> UNKNOWN-@2: ROM `(none)` vs `daddu s1,a1,zero` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AF728);
 #else
@@ -5026,6 +5244,8 @@ void func_002AF728(Moby *moby, void *ctrlPtr, f32 stepZ, f32 snapEps) {
  * 10^digits (digits<=0 -> 1), adds the half-ulp rounding bias 1/(2*scale),
  * truncates (FloatToInt) the scaled value, and divides back. Walled: $f20 +
  * $31 saves (save-layout wall). */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 73.00%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-16` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AF948);
 #else
@@ -5050,6 +5270,8 @@ f32 func_002AF948(s32 digits, f32 x) {
  * round(obj->field48 * 0.5, 4); otherwise 0. Both quantities are rounded to 4
  * decimal places via func_002AF948. refValue = func_002A0368(obj).
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 78.42%
+   -> UNKNOWN-@2: ROM `swc1 $f21,24(sp)` vs `(none)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AF9C8);
 #else
@@ -5109,6 +5331,8 @@ s32 func_002AFA80(void *p, s32 rgb) {
  * owner/arg3 are opaque controller handles (UNCONFIRMED — passed straight to the
  * register/deregister helpers in the 1A00F0 unit).
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 76.91%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-80` vs `addiu sp,sp,-64` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFAB0);
 #else
@@ -5143,6 +5367,7 @@ void func_002AFAB0(void *owner, u8 *state, void *arg3, f32 rate, f32 cap) {
         if (state[1] != 0) {
             func_002A0828(owner, state);
         }
+        __asm__ __volatile__(""); /* cc1 2.96 sibling-call suppression (the ROM never sibcalls) */
         return;
     }
 
@@ -5188,6 +5413,8 @@ void func_002AFAB0(void *owner, u8 *state, void *arg3, f32 rate, f32 cap) {
  * func_00283B48 is a VU0 *microprogram* (vcallms 0xC90) that cannot run headless
  * - but the tester runs it for real (the microprograms ARE loaded in full-game
  * context). Covered by the tester-EE path, not the standalone cmp-oracle. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 68.33%
+   -> UNKNOWN-@4: ROM `(none)` vs `c.lt.s $f0,$f20` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFCD8);
 #else
@@ -5223,6 +5450,8 @@ void func_002AFCD8(void *out, f32 *p1, f32 *p2, f32 a, f32 b, f32 c) {
  * func_00283B48/func_00283B30 are VU0 *microprograms* (vcallms 0xC80/0xC90) that
  * cannot run headless - but the tester runs them for real (microprograms loaded
  * in full-game context). Covered by the tester-EE path, not the cmp-oracle. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 52.78%
+   -> UNKNOWN-@2: ROM `(none)` vs `daddu s0,a1,zero` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFD90);
 #else
@@ -5244,6 +5473,8 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  * vector in `dst`: x = r·cos(az)·cos(el), y = r·sin(az)·cos(el), z = r·sin(el).
  * (func_00283B30 = cosine, func_00283B48 = sine.)
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 73.79%
+   -> UNKNOWN-@2: ROM `(none)` vs `mov.s $f23,$f13` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFE68);
 #else
@@ -5268,6 +5499,8 @@ extern s32 func_002B1B48(void *subject, s32 stringId, s32 arg2);
  * table+0xC (func_002B1880), otherwise runs the notice/prompt setup with the
  * string id at table+sel*4 (func_002B1B48). Returns the dispatched call's result.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 67.55%
+   -> UNKNOWN-@0: ROM `lui v0,0x0  [HI16 D_26CB10]` vs `lui v1,0x0  [HI16 D_26CB10]` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFF10);
 #else
@@ -5303,6 +5536,8 @@ extern void func_002A1F20(Moby *moby);
  * func_002A1F20. Finally mirrors parent's mode bit 0 into the child's flags
  * (set 0x40|0x01 / clear 0x41) and forces the 0x6 dirty bits.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 81.33%
+   -> UNKNOWN-@2: ROM `(none)` vs `daddu s1,a1,zero` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0038);
 #else
@@ -5345,6 +5580,8 @@ void func_002B0038(Moby *parent, Moby *child, void *srcTransform, s32 flags) {
  * Returns sample*(1+heading1), plus 8.0 when the moby is a valid class-filtered
  * entry (func_002AC9E0). (Un-parked: AngleAbsDiffPi CONFIRMED f32(f32,f32)
  * drive-heading helper — decompiled in 183558.c, used by 1B4218.c.) */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 78.04%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-96` vs `addiu sp,sp,-80` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0150);
 #else
@@ -5389,6 +5626,8 @@ extern Moby *g_mobyFlagged1000List[];   /* null-terminated array of flagged moby
  * entry re-reads the same slot (func_002B0150 consumes/compacts it), mirroring
  * the original's loop exactly. Returns the best moby, or NULL if none.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 62.45%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-128` vs `addiu sp,sp,-112` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B02C8);
 #else
@@ -5472,10 +5711,11 @@ Moby *func_002B02C8(Vec4 *queryVec, f32 a, f32 b, f32 c, f32 d) {
  * NOTE: not byte-matched (engine ee-gcc 2.96 region) — this is the faithful
  * op-for-op #else coverage body; the matching arm above keeps its asm include.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 57.22%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-384` vs `(none)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B03E8);
 #else
-extern f32 Vec2LengthXyVu0(void *vec);           /* Vec2LengthVu0: planar xy magnitude */
 extern f32 func_00283B60(f32 x);               /* acos */
 extern f32 AngleAbsDiffPi(f32 a, f32 b);        /* AngleShortestDiff */
 extern s32 func_002AC9E0(Moby *m);             /* gate predicate (class filter) */
@@ -5799,6 +6039,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0BD8);
 
 /** func_002B0BF0 — transform the local vector (x,y,z) by obj's matrix (at +0xC0)
  *  and accumulate it into `out` (out += M * (x,y,z)). */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 88.42%
+   -> SCHED-TIEBREAK (prologue interleave), ORDER-ONLY */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0BF0);
 #else
@@ -5817,6 +6059,8 @@ void func_002B0BF0(void *obj, Vec4 *out, f32 x, f32 y, f32 z) {
  * (b != 0) use it directly; otherwise build one from the quaternion at ctx+0xC0
  * into a scratch matrix and transform through that.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 61.56%
+   -> UNKNOWN-@1: ROM `(none)` vs `daddu v0,a0,zero` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0C40);
 #else
@@ -5838,6 +6082,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0CA8);
  * Resolve `a` into `out` via func_002B0C40, rescale out's XY to horizontal
  * length `len`, then transform out in place by the object's matrix at ctx+0xC0.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 51.96%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-32` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0CC0);
 #else
@@ -5845,6 +6091,7 @@ void func_002B0CC0(s32 ctx, Vec4 *out, void *a, void *b, f32 len) {
     func_002B0C40(ctx, out, a, b);
     func_00283920(out, out, len);
     func_00283A48(out, out, (Vec4 *)(ctx + 0xC0));
+    __asm__ __volatile__("");
 }
 #endif
 
@@ -5852,6 +6099,8 @@ void func_002B0CC0(s32 ctx, Vec4 *out, void *a, void *b, f32 len) {
  * Resolve `a` into `out` via func_002B0C40, override out.z with the supplied
  * height t, then transform out in place by the object's matrix at ctx+0xC0.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 39.80%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-32` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0D20);
 #else
@@ -5859,6 +6108,7 @@ void func_002B0D20(s32 ctx, Vec4 *out, void *a, void *b, f32 t) {
     func_002B0C40(ctx, out, a, b);
     out->z = t;
     func_00283A48(out, out, (Vec4 *)(ctx + 0xC0));
+    __asm__ __volatile__("");
 }
 #endif
 
@@ -5887,11 +6137,13 @@ f32 func_002B0DA0(s32 ctx, void *a, void *b) {
  * Build a unit "to-camera" direction in out: out = D_1A8CB0 - src, flatten z to
  * 0, normalise to length 1, and flip it when the flag is clear.
  */
-#ifndef TARGET_NATIVE
 /* TODO(match): functional equivalent - save-layout wall ($16/$17/$31 packed
    8-byte by the later cc1 vs 16-byte by the pinned cc1). The Sub/flatten/
    rescale/conditional-negate sequence is otherwise straightforward. Revisit
    once the gameplay-TU compiler is available. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 75.77%
+   -> UNKNOWN-@2: ROM `(none)` vs `sd s1,8(sp)` */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0DC8);
 #else
 void func_002B0DC8(Vec4 *src, Vec4 *out, s32 keepSign) {
@@ -5901,6 +6153,7 @@ void func_002B0DC8(Vec4 *src, Vec4 *out, s32 keepSign) {
     if (keepSign == 0) {
         Vec4ScaleVu0(out, -1.0f, out);   /* sig is (dst, f32 scale, src); negate in place */
     }
+    __asm__ __volatile__("");
 }
 #endif
 
@@ -5913,6 +6166,8 @@ void func_002B0DC8(Vec4 *src, Vec4 *out, s32 keepSign) {
  *    length ±1 (negative when the +0xBC selector is positive).
  * Finally, when flag == 0 the result is negated in place.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 81.74%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-48` vs `lw v0,0(gp)  [GPREL16 D_1A8CA0]` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0E40);
 #else
@@ -5932,6 +6187,7 @@ void func_002B0E40(Vec4 *a, Vec4 *out, s32 flag) {
     if (flag == 0) {
         Vec4ScaleVu0(out, -1.0f, out);
     }
+    __asm__ __volatile__("");
 }
 #endif
 
@@ -5963,6 +6219,8 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  *  - else: build a direction from `a` (func_002B0E40 with flag=0), rescale it to
  *    length t, and add it to src: out = src + t*dir.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 67.41%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-64` vs `lw v0,0(gp)  [GPREL16 D_1A8CA0]` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0F40);
 #else
@@ -6001,6 +6259,8 @@ s32 func_002B0FC0(u8 *p) {
  *    and on a hit return the pos->hit distance, negated when pos is nearer the ray
  *    origin than the hit is; else return the pos→reference distance.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 30.56%
+   -> UNKNOWN-@0: ROM `(none)` vs `lw v0,0(gp)  [GPREL16 D_1A8CA0]` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0FE0);
 #else
@@ -6084,6 +6344,8 @@ f32 func_002B11C8(Vec4 *p) {
  * gravDir param is likewise $5. Arg3/$6 is outMtxOpt (an output pointer); negating
  * it would be meaningless.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 77.26%
+   -> UNKNOWN-@3: ROM `(none)` vs `sd s0,16(sp)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1220);
 #else
@@ -6108,6 +6370,8 @@ extern void func_00283460(void *dst, void *src, s32 n);/* byte copy */
  * 3x4 matrix (QuatToMatrix3) and multiplies it into mtx3x4 (func_002840E8). If
  * outMtxOpt != 0, the 0x30-byte delta matrix is also copied out.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 66.87%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-144` vs `addiu sp,sp,-128` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1270);
 #else
@@ -6170,6 +6434,8 @@ extern s32  D_1A91C0;                      /* 0x1A91C0: light-pass validity toke
  * Matching build stays INCLUDE_ASM: the qword pos copy + Vu0 subtract and the
  * gp/absolute-mixed heightmap globals are an engine-2.96 layout this C won't
  * reproduce. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 43.28%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-48` vs `lw v0,0(gp)  [GPREL16 0x001B19A0]` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", SampleRainHeightmap);
 #else
@@ -6222,6 +6488,8 @@ f32 SampleRainHeightmap(Vec4 *pos) {
  * gp/absolute-mixed globals are an engine-2.96 layout this C won't reproduce byte
  * for byte. The #else below is a faithful op-for-op transcription for the native
  * cmp/coverage harness. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 47.92%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-96` vs `addiu sp,sp,-80` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", SpawnRaindropImpactFx);
 #else
@@ -6292,6 +6560,9 @@ extern f32 IntToFloat(s32 x);
 
 /** func_002B1710 — map the integer index (a mod b) onto an angle in [-PI, PI):
  *  returns 2*PI*(a%b)/b - PI. (a%b traps on b==0, like the original's div guard.) */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 84.58%
+   -> 84.62% with the +1 ULP literal spelling (0x40490FDB); rest SCHED-TIEBREAK (div hoisted
+   one slot) */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1710);
 #else
@@ -6305,12 +6576,15 @@ f32 func_002B1710(s32 a, s32 b) {
 /** func_002B1778 — sample the sine of the (a mod b) index angle, remap it from
  *  [-1,1] to [0,1], and drive the packed-vec4 2-colour blend by that weight:
  *  LerpByteVec4Packed(sin(func_002B1710(a,b))*0.5+0.5, dst, src). */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 90.48%
+   -> SCHED-TIEBREAK (move s0,a2 vs sd s1 order in the prologue), ORDER-ONLY */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1778);
 #else
 void func_002B1778(s32 a, s32 b, void *dst, void *src) {
     f32 s = func_00283B48(func_002B1710(a, b));
     LerpByteVec4PackedVu0(s * 0.5f + 0.5f, dst, src);
+    __asm__ __volatile__("");
 }
 #endif
 
@@ -6323,12 +6597,17 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B17D0);
  * the caller asks to settle (settle != 0) and the weight has not yet reached
  * the moby's base value at +0x20, kick the shared eased-approach helper.
  */
-#ifndef TARGET_NATIVE
+/* Defined later in this unit; declared so the f32 args keep their type. */
+void func_002AFAB0(void *owner, u8 *state, void *arg3, f32 rate, f32 cap);
 /* TODO(match): functional equivalent - 99.67%, a single c.eq.s operand-order
    instruction. The later cc1 loads the +0x70 weight first AND uses it as the
    compare's fs; the pinned cc1 ties fs to the != LHS while loading the RHS
    first, so it can never produce both at once (operand-scheduling wall).
    Revisit once the gameplay-TU compiler is available. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 90.97%
+   -> 91.00% with the +1 ULP literal spelling (0x3E99999A); rest SCHED-TIEBREAK (addiu sp
+   placement) + REORG-DSLOT (ROM copies `ld ra` into the beq delay slot) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B17F8);
 #else
 void func_002B17F8(f32 value, s32 a1, u8 *p, s32 a3, s32 settle) {
@@ -6340,6 +6619,7 @@ void func_002B17F8(f32 value, s32 a1, u8 *p, s32 a3, s32 settle) {
     if (settle != 0 && *(f32 *)(p + 0x70) != *(f32 *)(p + 0x20)) {
         func_002AFAB0((void *)a1, p, (void *)a3, 0.03f, 0.3f);
     }
+    __asm__ __volatile__("");
 }
 #endif
 
@@ -6350,14 +6630,19 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  * Look up a localized string by id and hand it (with the caller's second arg)
  * to the GUI text helper func_0029DAD0.
  */
-#ifndef TARGET_NATIVE
 /* TODO(match): functional equivalent - save-layout wall ($16/$31 packed
    8-byte by the later cc1 vs 16-byte by the pinned cc1). Body is a plain
    two-call forward. Revisit once the gameplay-TU compiler is available. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 98.33%
+   -> SCHED-TIEBREAK (only the 2 arg moves before the 2nd jal swap: same-cycle emission order;
+   value-return temp phrasing RUN, no change) */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1880);
 #else
 s32 func_002B1880(s32 stringId, s32 arg) {
-    return func_0029DAD0(GetLocalizedString(stringId), arg);
+    s32 r = func_0029DAD0(GetLocalizedString(stringId), arg);
+    __asm__ __volatile__(""); /* cc1 2.96 sibling-call suppression (the ROM never sibcalls) */
+    return r;
 }
 #endif
 
@@ -6388,6 +6673,8 @@ extern void func_00273740(Moby *owner, s32 arg1, s32 classId, s32 index,
  * bit index, `kind` (low byte), and two more random parameters (a bearing in
  * [90,270] and a value in [10,20]).
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 48.26%
+   -> UNKNOWN-@2: ROM `sd s0,16(sp)` vs `(none)` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B18D0);
 #else
@@ -6443,6 +6730,8 @@ extern void  func_0029DB10(char *text, s32 arg);
  * return 0. Otherwise claim it (latch D_1A8C64 = subject) and return 1. In the
  * claim/refresh cases it localizes stringId (when set) through func_0029DB10,
  * writes D_1A8C60 = 2, and records the stringId at &g_pMobyGroupIterMoby+0x8. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 81.26%
+   -> UNKNOWN-@1: ROM `lui v0,0x0  [HI16 D_1A8C64]` vs `lw v1,0(gp)  [GPREL16 D_1A8C64]` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1A90);
 #else
@@ -6476,6 +6765,8 @@ s32 func_002B1A90(void *subject, s32 stringId, s32 arg2) {
  * and the subject-slot's stringId at &g_pMobyGroupIterMoby+0x8) and returns 3.
  * (D_1A8C60/D_1A8C64/func_0029DB10 declared above the pair; func_002B1A90 is
  * defined just above so needs no forward decl in the TARGET_NATIVE build.) */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 84.84%
+   -> UNKNOWN-@2: ROM `(none)` vs `daddu s0,a1,zero` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1B48);
 #else
@@ -6505,11 +6796,13 @@ s32 func_002B1BC8(void) {
  * Remaining platinum bolts: total collected (func_002B1C20) minus the
  * palette-cycle base counter (func_002B1BC8), clamped to [0, 40].
  */
-#ifndef TARGET_NATIVE
 /* TODO(match): functional equivalent - save-layout wall ($16/$31 packed 8-byte
    by the later cc1 vs 16-byte by the pinned cc1); the subtract and [0,40]
    movz/movn clamp are otherwise exact. Revisit once the gameplay-TU compiler
    is available. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 59.94%
+   -> UNKNOWN-@8: ROM `addiu v1,zero,-1` vs `ld ra,8(sp)` */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1BD8);
 #else
 s32 func_002B1BD8(void) {
@@ -6529,11 +6822,13 @@ s32 func_002B1BD8(void) {
  * Total collected platinum bolts across all levels (sum of CountPlatinumBolts
  * over levels 0..0x1B, skipping the unused level 0x1A), clamped to [0, 40].
  */
-#ifndef TARGET_NATIVE
 /* TODO(match): functional equivalent - save-layout wall ($16/$17/$18/$31, the
    later cc1 packs the four callee-save slots 8-byte where the pinned cc1
    reserves 16). The level-skip beql loop and the [0,40] movz/movn clamp are
    otherwise exact. Revisit once the gameplay-TU compiler is available. */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 71.21%
+   -> UNKNOWN-@1: ROM `(none)` vs `sd ra,24(sp)` */
+#ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1C20);
 #else
 extern s32 CountPlatinumBolts(s32 level);
@@ -6562,6 +6857,8 @@ s32 func_002B1C20(void) {
  * [0, 40]. Best attempt 94%: byte-identical except a single later-cc1
  * scheduler nop before each counting loop's bottom branch (the movn-in-
  * delay-slot loops themselves reproduce). */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 0.00% ->
+   UNKNOWN-@0: ROM `(none)` vs `daddu t0,a0,zero` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", CountPlatinumBolts);
 #else
@@ -6671,6 +6968,8 @@ s32 CountSkillPointsCompleted(void) {
  *
  * Faithful #else transcription — the matching build uses the INCLUDE_ASM arm above.
  */
+/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 66.98%
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-96` vs `addiu sp,sp,-128` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1DF0);
 #else
