@@ -442,19 +442,23 @@ selftest() {
   FAILED=0; WARNED=0; STRICT=1; check_noprovide "$T/np_high.txt" > "$T/np_high_strict.txt"; STRICT=0
   if [ "$FAILED" = 1 ] && /usr/bin/grep -q '^FAIL(strict) PROVIDE-held baseline has 1 member(s) no longer held' "$T/np_high_strict.txt"; then ok "fired: under --strict the extra member is a FAIL (FAILED=$FAILED)"; else say "SELFTEST-FAIL --strict did not fail on the extra noprovide member (FAILED=$FAILED):"; /usr/bin/grep -E '^(OK|FAIL|WARN)' "$T/np_high_strict.txt"; bad=1; fi
 
-  say "-- (9) ORPHAN: one single-holder ORPHAN_LATENT token's func_*.s deleted in a scratch copy of asm/$REGION -> ORPHAN must GROW naming the token"
+  say "-- (9) ORPHAN: the ORPHAN_LATENT token with the fewest holders has every holder func_*.s deleted in a scratch copy of asm/$REGION -> ORPHAN must GROW naming the token"
   local OT="$T/otree"; rm -rf "$OT"; mkdir -p "$OT/going-decompiled/asm" "$OT/going-decompiled/symbol_addrs"
   cp -R going-decompiled/src "$OT/going-decompiled/src"; cp -R "going-decompiled/symbol_addrs/$REGION" "$OT/going-decompiled/symbol_addrs/$REGION"; cp -R "going-decompiled/asm/$REGION" "$OT/going-decompiled/asm/$REGION"
   bash "$HERE/blanket_orphans.sh" "$REGION" > "$T/orphan_real.txt" 2>/dev/null
-  local vrow; vrow=$(/usr/bin/grep '^ORPHAN_LATENT ' "$T/orphan_real.txt" | /usr/bin/grep -vE 'holders=.*,' | head -1)
-  [ -n "$vrow" ] || { say "SELFTEST-BROKEN: no single-holder ORPHAN_LATENT row on this tree to seed from"; bad=1; }
-  local vtok; vtok=$(printf '%s' "$vrow" | awk '{print $2}'); local vholder; vholder=$(printf '%s' "$vrow" | sed 's/.*holders=//')
-  local vpaths; vpaths=$(/usr/bin/find "$OT/going-decompiled/asm/$REGION/nonmatchings" -name "$vholder")
-  [ -n "$vpaths" ] && printf '%s\n' "$vpaths" | while read -r f; do rm -f "$f"; done
-  [ -n "$vpaths" ] || { say "SELFTEST-BROKEN: holder $vholder not found in the scratch copy"; bad=1; }
-  FAILED=0; WARNED=0; STRICT=0; check_orphans "$REGION" "$OT" > "$T/orphan_seeded.txt"
-  if [ "$FAILED" = 1 ] && /usr/bin/grep -q "^FAIL ORPHAN \[$REGION\] .*GREW .*: NEW $vtok " "$T/orphan_seeded.txt"; then ok "fired: deleting $vholder -> $(/usr/bin/grep -oE "ORPHAN \[$REGION\] \([^)]*\) GREW \([^)]*\): NEW $vtok" "$T/orphan_seeded.txt")"; else say "SELFTEST-FAIL orphan control did not fire for $vtok / $vholder (FAILED=$FAILED):"; /usr/bin/grep -E '^(OK|FAIL|WARN)' "$T/orphan_seeded.txt"; bad=1; fi
-  /usr/bin/grep -q "^WARN ORPHAN_LATENT \[$REGION\] .* no longer observed — remove from .*: $vtok" "$T/orphan_seeded.txt" && ok "and the LATENT baseline reports $vtok stale-high (WARN)" || { say "SELFTEST-FAIL the LATENT set did not report $vtok as no longer observed"; bad=1; }
+  # fewest holders first (holders=a.s,b.s -> count the commas), then by token
+  local vrow; vrow=$(/usr/bin/grep '^ORPHAN_LATENT ' "$T/orphan_real.txt" | awk '{h=$NF; n=gsub(/,/,",",h); print n, $0}' | LC_ALL=C sort -k1,1n -k3,3 | head -1 | cut -d' ' -f2-)
+  if [ -z "$vrow" ]; then say "SELFTEST-BROKEN: no ORPHAN_LATENT row on this tree to seed from"; bad=1; else
+    local vtok; vtok=$(printf '%s' "$vrow" | awk '{print $2}'); local vholders; vholders=$(printf '%s' "$vrow" | sed 's/.*holders=//' | tr ',' ' ')
+    local h vpaths=0
+    for h in $vholders; do
+      local f; for f in $(/usr/bin/find "$OT/going-decompiled/asm/$REGION/nonmatchings" -name "$h"); do rm -f "$f"; vpaths=$((vpaths+1)); done
+    done
+    [ "$vpaths" -gt 0 ] || { say "SELFTEST-BROKEN: none of '$vholders' found in the scratch copy"; bad=1; }
+    FAILED=0; WARNED=0; STRICT=0; check_orphans "$REGION" "$OT" > "$T/orphan_seeded.txt"
+    if [ "$FAILED" = 1 ] && /usr/bin/grep -q "^FAIL ORPHAN \\[$REGION\\] .*GREW .*: NEW $vtok " "$T/orphan_seeded.txt"; then ok "fired: deleting $vpaths holder(s) [$vholders] -> $(/usr/bin/grep -oE "ORPHAN \\[$REGION\\] \\([^)]*\\) GREW \\([^)]*\\): NEW $vtok" "$T/orphan_seeded.txt")"; else say "SELFTEST-FAIL orphan control did not fire for $vtok / $vholders (FAILED=$FAILED):"; /usr/bin/grep -E '^(OK|FAIL|WARN)' "$T/orphan_seeded.txt"; bad=1; fi
+    /usr/bin/grep -q "^WARN ORPHAN_LATENT \\[$REGION\\] .* no longer observed — remove from .*: $vtok" "$T/orphan_seeded.txt" && ok "and the LATENT baseline reports $vtok stale-high (WARN)" || { say "SELFTEST-FAIL the LATENT set did not report $vtok as no longer observed"; bad=1; }
+  fi
 
   say "-- (10) the real gate on this tree (--no-build, the build above) must PASS"
   STRICT=0
