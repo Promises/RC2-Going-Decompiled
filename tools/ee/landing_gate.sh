@@ -7,12 +7,33 @@
 #   FLAGS    tools/ee/flagdiff.py — the per-unit cc1 flag tables of build.sh,
 #            objdiff_build.sh, diff.sh and unit_flags.sh agree (FACT #7164:
 #            lever 2 and WARM-1 drifted under a "keep in sync" comment).
+#   SPLIT    (building form only, task #464 ENFORCE-3) scripts/configure.py
+#            --region <r> — a FULL split from the committed tree — regenerates
+#            the two link inputs that live under the gitignored build/<r>/:
+#            undefined_syms_auto.txt (build.sh `-T`) and include/{macro,labels}.inc
+#            + include_asm.h (`-I`). FACT #7324: they ride under the TREE hash,
+#            so a hybrid file copied from another tree (CLAUDE.md's trap) or a
+#            0 B one left by a cached configure.py (FACT #7150) was invisible.
+#            Now the gate makes them from the tree (~8 s a region, measured
+#            7.8 s usa / 8.9 s eu at c06bd392), FAILS if the split rewrote any
+#            tracked path (RULING #7208 condition 5's fixed point, executed —
+#            every later check then measures the re-split tree, and this line
+#            says whether that is the committed one), FAILS on a 0 B
+#            undefined_syms_auto.txt, and records each input's size + sha256
+#            in built_tree.txt so --no-build FAILS naming the file when one has
+#            changed since the link. Needs .venv-decomp (exit 2 without it).
 #   SHADOW   tools/ee/shadow_scan2.sh — CLASS1 INCLUDE_ASM leftovers, CLASS2
 #            compiled C definitions under func_ names, CLASS3 interior labels
 #            (FACT #7249, #7291, #7294), counted and LISTED, plus NOTARGET: the
 #            CLASS2 members with no nonmatchings/<unit>/*.s under either name,
 #            which the unit objdiff gate has never scored (FACT #7295). Each
-#            count may go DOWN against tools/ee/shadow_baseline.txt, never up.
+#            class is a MEMBER set (the row minus its line number) compared
+#            with comm against tools/ee/landing_baseline/shadow_<class>_<r>.txt:
+#            a NEW member FAILS naming it, a member no longer observed WARNs
+#            "lower the baseline in this landing" (RULING #7317). The count is
+#            printed as a summary only — FACT #7303 (#453, #458): the count
+#            ratchet passed a same-count swap with the new member printed, not
+#            flagged.
 #   BUILD    tools/ee/build.sh <region> in the ee-build container, objects and
 #            link outputs wiped first so nothing stale can be measured.
 #   ROW      cmp vs retail .rom (count), sha1 == the yaml's, e_entry == the
@@ -47,8 +68,11 @@
 #   tools/ee/landing_gate.sh <region> --no-build  reuse the outputs of an earlier
 #                                                 build — only if the working
 #                                                 tree still hashes to the one
-#                                                 that build recorded (row mtime
-#                                                 check still applies)
+#                                                 that build recorded AND the
+#                                                 gitignored link inputs still
+#                                                 hash to what it linked with
+#                                                 (no split; row mtime check
+#                                                 still applies)
 #   tools/ee/landing_gate.sh --selftest [region]  seed every check's failing arm
 #                                                 and require it to fire, then
 #                                                 run the real gate and require
@@ -69,9 +93,9 @@
 #   - a data re-attribution that is byte-identical after assembly (NOTE #7245
 #     P5; FACT #7248: `.word Name+off` → raw word) — cmp 0 on both sides;
 #   - a boot regression — no emulator is run here;
-#   - a stale splat cache — configure.py's default is now a full split and
-#     tools/ee/splache_selftest.sh proves the invalidation, but this script does
-#     not re-split; it measures the asm that is committed;
+#   - a --use-cache split's damage (FACT #7248): the building form re-splits
+#     WITHOUT the cache and requires the fixed point, but --no-build measures
+#     whatever asm the working tree holds;
 #   - the unit objdiff gate's fuzzy rows (objdiff_build.sh + unit_report.sh) —
 #     a byte-exact ROM makes them redundant for USA and they are not run here;
 #   - EU bytes — EU has no link, so its row is a link-property, not a cmp.
@@ -80,9 +104,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"; cd "$ROOT"
 HERE="tools/ee"
 EE_CTX="${EE_DOCKER_CONTEXT:-colima-ee-x86}"
 BASE_DIR="$HERE/landing_baseline"
-SHADOW_BASELINE="$HERE/shadow_baseline.txt"
+SHADOW_CLASSES="CLASS1 CLASS2 CLASS3 NOTARGET"
+PYTHON=".venv-decomp/bin/python"
 
-usage() { sed -n '2,68p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { sed -n '2,101p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 say()  { printf '%s\n' "$*"; }
 fail() { say "FAIL $*"; FAILED=$((FAILED+1)); }
 ok()   { say "OK   $*"; }
@@ -104,10 +129,14 @@ region_vars() {
   RETAIL_ROM="extracted/$REGION/$BASENAME.rom"
   YAML="going-decompiled/config/$REGION/$BASENAME.yaml"
   LDSCRIPT="going-decompiled/linker_scripts/$BASENAME.ld"
-  for f in "$RETAIL_ELF" "$RETAIL_ROM" "$YAML" "$LDSCRIPT" "$SHADOW_BASELINE" "$BASE_DIR/noprovide_$REGION.txt" "$BASE_DIR/orphans_$REGION.txt" "$BASE_DIR/orphans_latent_$REGION.txt"; do
+  for f in "$RETAIL_ELF" "$RETAIL_ROM" "$YAML" "$LDSCRIPT" "$BASE_DIR/noprovide_$REGION.txt" "$BASE_DIR/orphans_$REGION.txt" "$BASE_DIR/orphans_latent_$REGION.txt" $(for c in $SHADOW_CLASSES; do shadow_baseline_file "$c" "$REGION" "$BASE_DIR"; done); do
     [ -f "$f" ] || { say "landing_gate: missing input $f"; exit 2; }
   done
 }
+
+# The gitignored link inputs the SPLIT step regenerates and the TREE record
+# ties the ROW to (relative to $BUILD): build.sh `-T` and `-I` consumers.
+GATE_INPUTS="undefined_syms_auto.txt include/macro.inc include/labels.inc include/include_asm.h"
 
 in_vm() {  # in_vm '<sh script>' — one docker run, repo mounted at /work
   docker --context "$EE_CTX" run --rm -v "$ROOT":/work -w /work ee-build sh -c "$1"
@@ -139,30 +168,45 @@ shadow_scan() {
   done >> "$outfile"
 }
 
-# shadow_compare REGION SCANFILE BASELINE — counts vs baseline, never up.
+# shadow_baseline_file CLASS REGION BASEDIR — the committed member file.
+shadow_baseline_file() { printf '%s/shadow_%s_%s.txt\n' "$3" "$(printf '%s' "$1" | tr 'A-Z' 'a-z')" "$2"; }
+
+# shadow_members SCANFILE CLASS — the class's rows as MEMBERS: the location's
+# :<line> dropped (an edit above a site moves the line, not the duality), the
+# class word dropped (one file per class), LC_ALL=C sorted, unique. Measured at
+# c06bd392: members == rows in every class of both regions (t464, P2).
+shadow_members() { /usr/bin/grep "^$2 " "$1" | cut -d' ' -f2- | sed -E 's/^([^ ]+):[0-9]+ /\1 /' | LC_ALL=C sort -u; }
+
+# shadow_compare REGION SCANFILE BASEDIR — per class, the observed member set vs
+# landing_baseline/shadow_<class>_<region>.txt: a NEW member is a FAIL naming
+# it, a member no longer observed a WARN naming it (lower the baseline in this
+# landing, RULING #7317); the row count is a summary only.
 shadow_compare() {
-  local region=$1 scan=$2 baseline=$3 cls n base
-  say "== SHADOW [$region]: name dualities (scan: $scan)"
-  for cls in CLASS1 CLASS2 CLASS3 NOTARGET; do
+  local region=$1 scan=$2 basedir=$3 cls n b base obs grew gone
+  say "== SHADOW [$region]: name dualities (scan: $scan; member files: $basedir/shadow_<class>_$region.txt)"
+  for cls in $SHADOW_CLASSES; do
     n=$(/usr/bin/grep -c "^$cls " "$scan" || true)
-    base=$(awk -v r="$region" -v c="$cls" '$1==r && $2==c {print $3}' "$baseline")
-    if [ -z "$base" ]; then fail "$cls [$region]: no baseline row in $baseline"; continue; fi
-    if [ "$n" -gt "$base" ]; then
-      fail "$cls [$region]: $n rows, baseline $base — GREW by $((n-base)); a landing may lower this, never raise it"
-    elif [ "$n" -lt "$base" ]; then
-      warn "$cls [$region]: baseline $base > observed $n — set baseline to $n in this landing ($baseline)"
+    base=$(shadow_baseline_file "$cls" "$region" "$basedir")
+    obs="$OUT/shadow_$(printf '%s' "$cls" | tr 'A-Z' 'a-z').txt"; shadow_members "$scan" "$cls" > "$obs"
+    if [ ! -f "$base" ]; then fail "$cls [$region]: no member baseline $base"; continue; fi
+    b=$(wc -l < "$base" | tr -d ' ')
+    grew=$(LC_ALL=C comm -23 "$obs" <(LC_ALL=C sort -u "$base"))
+    gone=$(LC_ALL=C comm -13 "$obs" <(LC_ALL=C sort -u "$base"))
+    if [ -n "$grew" ]; then
+      fail "$cls [$region]: NEW $(printf '%s\n' "$grew" | wc -l | tr -d ' ') member(s) not in $base ($n rows observed, $b baselined — a landing may lower this set, never grow it): $(printf '%s' "$grew" | tr '\n' ';' | sed 's/;$//; s/;/ ; /g')"
     else
-      ok "$cls [$region]: $n rows == baseline"
+      ok "$cls [$region]: $n rows, $(wc -l < "$obs" | tr -d ' ') members within baseline ($b)"
     fi
+    [ -n "$gone" ] && warn "$cls [$region]: $(printf '%s\n' "$gone" | wc -l | tr -d ' ') baseline member(s) no longer observed — lower the baseline in this landing, remove from $base: $(printf '%s' "$gone" | tr '\n' ';' | sed 's/;$//; s/;/ ; /g')"
   done
   say "     members:"; sed 's/^/       /' "$scan"
 }
 
-check_shadow() {  # check_shadow REGION [TREE] [BASELINE]
-  local region=$1 tree=${2:-.} baseline=${3:-$SHADOW_BASELINE}
+check_shadow() {  # check_shadow REGION [TREE] [BASEDIR]
+  local region=$1 tree=${2:-.} basedir=${3:-$BASE_DIR}
   local scan="$OUT/shadow_scan.txt"
   shadow_scan "$region" "$tree" "$scan" || { fail "shadow_scan2.sh could not run"; return; }
-  shadow_compare "$region" "$scan" "$baseline"
+  shadow_compare "$region" "$scan" "$basedir"
 }
 
 # --------------------------------------------------------------- ORPHAN ----
@@ -207,8 +251,64 @@ worktree_hash() {
   GIT_INDEX_FILE="$idx" git write-tree; rm -f "$idx"
 }
 
+# inputs_rows — one `input <name> <bytes> <sha256>` row per gitignored link
+# input of $BUILD (absent -> `input <name> absent -`), the members the TREE
+# hash cannot see (FACT #7324).
+inputs_rows() {
+  local f
+  for f in $GATE_INPUTS; do
+    if [ -f "$BUILD/$f" ]; then printf 'input %s %s %s\n' "$f" "$(wc -c < "$BUILD/$f" | tr -d ' ')" "$(shasum -a 256 "$BUILD/$f" | cut -d' ' -f1)"; else printf 'input %s absent -\n' "$f"; fi
+  done
+}
+
 record_tree() {  # record_tree OUTFILE — what the build about to run is built from
-  printf 'head=%s\nhead_tree=%s\nwork_tree=%s\ndirty=%s\n' "$(git rev-parse HEAD)" "$(git rev-parse 'HEAD^{tree}')" "$(worktree_hash)" "$(git status --porcelain --no-renames | wc -l | tr -d ' ')" > "$1"
+  { printf 'head=%s\nhead_tree=%s\nwork_tree=%s\ndirty=%s\n' "$(git rev-parse HEAD)" "$(git rev-parse 'HEAD^{tree}')" "$(worktree_hash)" "$(git status --porcelain --no-renames | wc -l | tr -d ' ')"; inputs_rows; } > "$1"
+}
+
+# check_inputs RECORD — the gitignored link inputs now must be the ones the
+# recorded build linked with (size + sha256 per file, named on mismatch).
+check_inputs() {
+  local rec=$1 f want now
+  for f in $GATE_INPUTS; do
+    want=$(awk -v f="$f" '$1=="input" && $2==f {print $3, $4}' "$rec")
+    now=$(inputs_rows | awk -v f="$f" '$2==f {print $3, $4}')
+    if [ -z "$want" ]; then fail "inputs: $rec has no row for $BUILD/$f — the outputs were built by a gate that did not record its link inputs; rebuild (drop --no-build)"
+    elif [ "$now" = "$want" ]; then ok "inputs: $BUILD/$f ${now% *} B sha256 $(printf '%s' "${now#* }" | cut -c1-12)… == the built record"
+    else fail "inputs: ROW was linked with $BUILD/$f ${want% *} B sha256 $(printf '%s' "${want#* }" | cut -c1-12)…, the file now is ${now% *} B sha256 $(printf '%s' "${now#* }" | cut -c1-12)… — a stale or hybrid gitignored input (FACT #7324); rebuild (drop --no-build)"; fi
+  done
+}
+
+# check_syms_nonempty FILE — FACT #7150: a 0 B undefined_syms_auto.txt is what a
+# cached configure.py leaves after a split; the link then has no undefined-
+# symbol script and may still succeed — silently, with different bytes.
+check_syms_nonempty() {
+  local f=$1 n
+  [ -f "$f" ] || { fail "$f absent after the split"; return; }
+  n=$(wc -c < "$f" | tr -d ' ')
+  if [ "$n" -gt 0 ]; then ok "$f is $n B (non-empty)"; else fail "$f is 0 B after the split (FACT #7150: a cached configure.py ran after a split, or the split wrote nothing) — the link would run without its undefined-symbol script"; fi
+}
+
+# split_inputs — the building form's SPLIT step: configure.py --region $REGION
+# (full split, no cache) regenerates $BUILD/undefined_syms_auto.txt and
+# $BUILD/include/* from the committed inputs. It must be a FIXED POINT of the
+# working tree (RULING #7208 condition 5): the whole-worktree hash before ==
+# after, else FAIL naming every rewritten tracked path. Outputs after this step
+# are measured on the RE-SPLIT tree, so a non-fixed-point tree is also dirty.
+split_inputs() {
+  say "== SPLIT [$REGION]: $PYTHON scripts/configure.py --region $REGION (full split) regenerates the gitignored link inputs; must be a fixed point of the tree"
+  [ -x "$PYTHON" ] || { say "landing_gate: no $PYTHON — provision .venv-decomp (CLAUDE.md, Build) before the building form can regenerate the link inputs"; exit 2; }
+  local before; before=$(worktree_hash); local t0; t0=$(date +%s)
+  "$PYTHON" scripts/configure.py --region "$REGION" > "$OUT/split.log" 2>&1; local rc=$?
+  local after; after=$(worktree_hash); local dt=$(( $(date +%s) - t0 ))
+  [ $rc = 0 ] || { fail "SPLIT [$REGION]: configure.py rc=$rc ($OUT/split.log): $(tail -3 "$OUT/split.log" | tr '\n' ' ')"; }
+  if [ "$after" = "$before" ]; then
+    ok "SPLIT [$REGION]: fixed point — the split rewrote 0 tracked or untracked paths (worktree $before, ${dt}s)"
+  else
+    local paths; paths=$(git diff-tree -r --name-only "$before" "$after")
+    fail "SPLIT [$REGION]: NOT a fixed point of the tree — the split rewrote $(printf '%s\n' "$paths" | wc -l | tr -d ' ') path(s) (worktree $before -> $after, ${dt}s): $(printf '%s' "$paths" | tr '\n' ' ')"
+  fi
+  check_syms_nonempty "$BUILD/undefined_syms_auto.txt"
+  say "     inputs: $(inputs_rows | awk '{printf "%s %s B sha256 %s… · ", $2, $3, substr($4,1,12)}' | sed 's/ · $//')"
 }
 
 # check_tree RECORD [OVERLAY_PATH OVERLAY_FILE] — the working tree now must
@@ -224,6 +324,7 @@ check_tree() {
   else
     fail "ROW is for tree $want (HEAD^{tree} $wanth, +$wantd dirty), worktree is tree $now (HEAD^{tree} $nowh, +$nowd dirty) — rebuild (drop --no-build)"
   fi
+  check_inputs "$rec"
 }
 
 # ---------------------------------------------------------------- BUILD ----
@@ -330,6 +431,7 @@ run_gate() {  # run_gate REGION [--no-build] [--strict]
   local dirty; dirty=$(git status --porcelain --no-renames | wc -l | tr -d ' ')
   say "#### landing_gate $REGION at $(git rev-parse --short HEAD) ($dirty dirty paths), VM $EE_CTX, $(date -u +%FT%TZ)$([ "$STRICT" = 1 ] && echo ', --strict')"
   say "     RULING #7208 condition 1 is discharged only by the BUILDING form on a 0-dirty tree at the SHA-named landing; this run is $([ $build = 1 ] && echo building || echo '--no-build'), $dirty dirty"
+  [ $build = 1 ] && split_inputs   # first: every check below measures the re-split tree
   check_flags
   check_shadow "$REGION"
   check_orphans "$REGION"
@@ -375,11 +477,13 @@ selftest() {
   printf 'alabel func_00DEAD08\n' >> "$SC/$S"
   printf 'T449SeedC1 = 0x00DEAD00; // type:func\nT449SeedC2 = 0x00DEAD04; // type:func\nT449SeedC3 = 0x00DEAD08; // type:func\n' >> "$SC/going-decompiled/symbol_addrs/$REGION/symbol_addrs.txt"
   FAILED=0; check_shadow "$REGION" "$SC" > "$T/shadow.txt"; cp "$OUT/shadow_scan.txt" "$T/shadow_scan_seeded.txt"
-  local fired; fired=$(/usr/bin/grep -cE '^FAIL (CLASS1|CLASS2|CLASS3|NOTARGET) .*GREW' "$T/shadow.txt" || true)
+  local fired; fired=$(/usr/bin/grep -cE '^FAIL (CLASS1|CLASS2|CLASS3|NOTARGET) \[[a-z]+\]: NEW 1 member' "$T/shadow.txt" || true)
   # the planted C definition has no .s under either name -> NOTARGET grows too: 4 classes
-  if [ "$fired" = 4 ] && /usr/bin/grep -q 'func_00DEAD04 -> T449SeedC2' "$T/shadow.txt"; then ok "fired: $(/usr/bin/grep -E '^FAIL' "$T/shadow.txt" | sed -E 's/ — .*//' | tr '\n' ';')"; else say "SELFTEST-FAIL shadow controls: $fired of 4 classes GREW"; /usr/bin/grep -E '^(OK|FAIL)' "$T/shadow.txt"; bad=1; fi
+  if [ "$fired" = 4 ] && /usr/bin/grep -q '^FAIL CLASS2 .*: .*func_00DEAD04 -> T449SeedC2' "$T/shadow.txt"; then ok "fired: $(/usr/bin/grep -E '^FAIL' "$T/shadow.txt" | sed -E 's/ not in .*: / NEW: /' | tr '\n' ';')"; else say "SELFTEST-FAIL shadow controls: $fired of 4 classes reported a NEW member"; /usr/bin/grep -E '^(OK|FAIL)' "$T/shadow.txt"; bad=1; fi
 
-  say "-- (3) BUILD once (real arm; the PROVIDE and ROW controls relink/measure against its objects)"
+  say "-- (3) SPLIT + BUILD once (real arms; the PROVIDE and ROW controls relink/measure against its objects)"
+  FAILED=0; split_inputs > "$T/split_real.txt"; /usr/bin/grep -E '^(OK|FAIL)' "$T/split_real.txt" | sed 's/^/     /'
+  [ "$FAILED" = 0 ] || { say "SELFTEST-BROKEN: the real split is not a fixed point of this tree — fix the tree before trusting any arm below"; bad=1; }
   do_build; local start; start=$(cat "$OUT/build_start")
   measure_row "$BUILD/$BASENAME.rom" "$BUILD/$BASENAME.elf" "$BUILD/ld.log" "$OUT/row.txt"
 
@@ -428,14 +532,15 @@ selftest() {
   FAILED=0; check_tree "$OUT/built_tree.txt" > "$T/tree_clean.txt"
   if [ "$FAILED" = 0 ] && /usr/bin/grep -q '^OK   tree:' "$T/tree_clean.txt"; then ok "control: the unchanged tree passes ($(/usr/bin/grep -oE 'worktree [0-9a-f]{12}' "$T/tree_clean.txt" | head -1)...)"; else say "SELFTEST-FAIL the unchanged tree does not pass the tree check:"; cat "$T/tree_clean.txt"; bad=1; fi
 
-  say "-- (8) STALE-HIGH: shadow CLASS1 baseline +1, and one extra member in a copy of noprovide_$REGION.txt -> WARN naming the value/member (rc 0); under --strict -> FAIL"
+  say "-- (8) STALE-HIGH: one extra member in a copy of shadow_class1_$REGION.txt, and one extra member in a copy of noprovide_$REGION.txt -> WARN naming the member (rc 0); under --strict -> FAIL"
   shadow_scan "$REGION" . "$T/shadow_real.txt" || { say "SELFTEST-BROKEN: shadow_scan on the real tree failed"; bad=1; }
-  local obs; obs=$(/usr/bin/grep -c '^CLASS1 ' "$T/shadow_real.txt" || true)
-  awk -v r="$REGION" '$1==r && $2=="CLASS1" {$3=$3+1} {print}' "$SHADOW_BASELINE" > "$T/shadow_high.txt"
-  FAILED=0; WARNED=0; STRICT=0; shadow_compare "$REGION" "$T/shadow_real.txt" "$T/shadow_high.txt" > "$T/high_warn.txt"
-  if [ "$FAILED" = 0 ] && [ "$WARNED" = 1 ] && /usr/bin/grep -q "^WARN CLASS1 \[$REGION\]: baseline $((obs+1)) > observed $obs — set baseline to $obs " "$T/high_warn.txt"; then ok "fired: $(/usr/bin/grep '^WARN' "$T/high_warn.txt" | sed -E 's/ \(.*//') (FAILED=$FAILED WARNED=$WARNED)"; else say "SELFTEST-FAIL stale-high shadow baseline did not WARN (FAILED=$FAILED WARNED=$WARNED):"; /usr/bin/grep -E '^(OK|FAIL|WARN)' "$T/high_warn.txt"; bad=1; fi
-  FAILED=0; WARNED=0; STRICT=1; shadow_compare "$REGION" "$T/shadow_real.txt" "$T/shadow_high.txt" > "$T/high_strict.txt"; STRICT=0
-  if [ "$FAILED" = 1 ] && /usr/bin/grep -q "^FAIL(strict) CLASS1 \[$REGION\]: baseline $((obs+1)) > observed $obs" "$T/high_strict.txt"; then ok "fired: under --strict the same line is FAIL (FAILED=$FAILED)"; else say "SELFTEST-FAIL --strict did not turn the stale-high WARN into a FAIL (FAILED=$FAILED):"; /usr/bin/grep -E '^(OK|FAIL|WARN)' "$T/high_strict.txt"; bad=1; fi
+  local HB="$T/base_high"; rm -rf "$HB"; cp -R "$BASE_DIR" "$HB"
+  local extra="going-decompiled/src/$REGION/cod/015180.c func_00DEAD10 -> T464StaleHighMember"
+  { cat "$(shadow_baseline_file CLASS1 "$REGION" "$BASE_DIR")"; printf '%s\n' "$extra"; } | LC_ALL=C sort -u > "$(shadow_baseline_file CLASS1 "$REGION" "$HB")"
+  FAILED=0; WARNED=0; STRICT=0; shadow_compare "$REGION" "$T/shadow_real.txt" "$HB" > "$T/high_warn.txt"
+  if [ "$FAILED" = 0 ] && [ "$WARNED" = 1 ] && /usr/bin/grep -q "^WARN CLASS1 \[$REGION\]: 1 baseline member(s) no longer observed — lower the baseline in this landing, remove from $HB/shadow_class1_$REGION.txt: $extra\$" "$T/high_warn.txt"; then ok "fired: $(/usr/bin/grep '^WARN' "$T/high_warn.txt" | sed -E 's/ remove from [^:]*:/ remove:/') (FAILED=$FAILED WARNED=$WARNED)"; else say "SELFTEST-FAIL stale-high shadow member did not WARN (FAILED=$FAILED WARNED=$WARNED):"; /usr/bin/grep -E '^(OK|FAIL|WARN)' "$T/high_warn.txt"; bad=1; fi
+  FAILED=0; WARNED=0; STRICT=1; shadow_compare "$REGION" "$T/shadow_real.txt" "$HB" > "$T/high_strict.txt"; STRICT=0
+  if [ "$FAILED" = 1 ] && /usr/bin/grep -q "^FAIL(strict) CLASS1 \[$REGION\]: 1 baseline member(s) no longer observed — lower the baseline" "$T/high_strict.txt"; then ok "fired: under --strict the same line is FAIL (FAILED=$FAILED)"; else say "SELFTEST-FAIL --strict did not turn the stale-high WARN into a FAIL (FAILED=$FAILED):"; /usr/bin/grep -E '^(OK|FAIL|WARN)' "$T/high_strict.txt"; bad=1; fi
   { cat "$BASE_DIR/noprovide_$REGION.txt"; echo T457ExtraMember; } | LC_ALL=C sort -u > "$T/np_high.txt"
   FAILED=0; WARNED=0; STRICT=0; check_noprovide "$T/np_high.txt" > "$T/np_high_warn.txt"
   if [ "$FAILED" = 0 ] && [ "$WARNED" = 1 ] && /usr/bin/grep -q '^WARN PROVIDE-held baseline has 1 member(s) no longer held — remove from .*: T457ExtraMember' "$T/np_high_warn.txt"; then ok "fired: $(/usr/bin/grep '^WARN' "$T/np_high_warn.txt" | sed -E 's/ — remove from [^:]*:/ — remove:/')"; else say "SELFTEST-FAIL extra noprovide member did not WARN (FAILED=$FAILED WARNED=$WARNED):"; /usr/bin/grep -E '^(OK|FAIL|WARN)' "$T/np_high_warn.txt"; bad=1; fi
@@ -460,7 +565,45 @@ selftest() {
     /usr/bin/grep -q "^WARN ORPHAN_LATENT \\[$REGION\\] .* no longer observed — remove from .*: $vtok" "$T/orphan_seeded.txt" && ok "and the LATENT baseline reports $vtok stale-high (WARN)" || { say "SELFTEST-FAIL the LATENT set did not report $vtok as no longer observed"; bad=1; }
   fi
 
-  say "-- (10) the real gate on this tree (--no-build, the build above) must PASS"
+  say "-- (11) SWAP (FACT #7303): in a scratch tree one real CLASS1 shadow is FIXED (its INCLUDE_ASM arg renamed to the symbol_addrs name) and one NEW one planted — same count — the member check must FAIL naming ONLY the planted member and WARN the fixed one"
+  local SW="$T/swaptree"; rm -rf "$SW"; mkdir -p "$SW/going-decompiled/asm/$REGION"
+  cp -R going-decompiled/src "$SW/going-decompiled/src"; cp -R going-decompiled/symbol_addrs "$SW/going-decompiled/symbol_addrs"
+  cp -R "going-decompiled/asm/$REGION/nonmatchings" "$SW/going-decompiled/asm/$REGION/nonmatchings"
+  local vrow1; vrow1=$(/usr/bin/grep '^CLASS1 ' "$T/shadow_real.txt" | LC_ALL=C sort | head -1)
+  local vfile vline vold vnew; vfile=$(printf '%s' "$vrow1" | awk '{print $2}' | cut -d: -f1); vline=$(printf '%s' "$vrow1" | awk '{print $2}' | cut -d: -f2); vold=$(printf '%s' "$vrow1" | awk '{print $3}'); vnew=$(printf '%s' "$vrow1" | awk '{print $5}')
+  local vdir; vdir=$(sed -n "${vline}p" "$SW/$vfile" | sed -E 's/.*INCLUDE_ASM\("([^"]+)".*/\1/')
+  if [ -z "$vrow1" ] || [ -z "$vdir" ]; then say "SELFTEST-BROKEN: no CLASS1 row to swap from ($vrow1)"; bad=1; else
+    sed -i.bak "${vline}s/${vold})/${vnew})/" "$SW/$vfile"; rm -f "$SW/$vfile.bak"
+    /usr/bin/grep -q "INCLUDE_ASM(\"$vdir\", $vold)" "$SW/$vfile" && { say "SELFTEST-BROKEN: $vold still INCLUDE_ASM'd in the scratch $vfile:$vline"; bad=1; }
+    printf '\n/* t464 selftest swap seed */\nINCLUDE_ASM("%s", func_00DEAD00);\n' "$vdir" >> "$SW/$vfile"
+    printf 'T464SwapSeed = 0x00DEAD00; // type:func\n' >> "$SW/going-decompiled/symbol_addrs/$REGION/symbol_addrs.txt"
+    FAILED=0; WARNED=0; STRICT=0; check_shadow "$REGION" "$SW" > "$T/swap.txt"; cp "$OUT/shadow_scan.txt" "$T/shadow_scan_swapped.txt"
+    local nreal nswap; nreal=$(/usr/bin/grep -c '^CLASS1 ' "$T/shadow_real.txt" || true); nswap=$(/usr/bin/grep -c '^CLASS1 ' "$T/shadow_scan_swapped.txt" || true)
+    [ "$nreal" = "$nswap" ] || { say "SELFTEST-BROKEN: swap changed the CLASS1 count ($nreal -> $nswap) — not a same-count swap"; bad=1; }
+    if [ "$FAILED" = 1 ] && [ "$WARNED" = 1 ] && /usr/bin/grep -q "^FAIL CLASS1 \[$REGION\]: NEW 1 member(s) not in .*: $vfile func_00DEAD00 -> T464SwapSeed\$" "$T/swap.txt" && ! /usr/bin/grep -q "^FAIL.*$vold" "$T/swap.txt" && /usr/bin/grep -q "^WARN CLASS1 \[$REGION\]: 1 baseline member(s) no longer observed — lower the baseline in this landing, remove from .*: $vfile $vold -> $vnew\$" "$T/swap.txt"; then ok "fired: same count ($nswap == $nreal) and $(/usr/bin/grep '^FAIL CLASS1' "$T/swap.txt" | sed -E 's/ not in [^(]*\(/ (/') ; WARN gone: $vfile $vold -> $vnew"; else say "SELFTEST-FAIL swap arm (FAILED=$FAILED WARNED=$WARNED, count $nreal -> $nswap):"; /usr/bin/grep -E '^(OK|FAIL|WARN)' "$T/swap.txt"; bad=1; fi
+  fi
+
+  say "-- (12) INPUTS (FACT #7324/#7150): $BUILD/undefined_syms_auto.txt truncated to 0 B after the build -> the --no-build tree check must FAIL naming it and the non-empty check must FAIL; the SPLIT step must regenerate it to the recorded sha256"
+  local SY="$BUILD/undefined_syms_auto.txt"; cp "$SY" "$T/syms_saved.txt"; : > "$SY"
+  FAILED=0; WARNED=0; STRICT=0; check_tree "$OUT/built_tree.txt" > "$T/inputs_zero.txt"
+  if [ "$FAILED" = 1 ] && /usr/bin/grep -q "^FAIL inputs: ROW was linked with $SY [1-9][0-9]* B sha256 [0-9a-f]*…, the file now is 0 B sha256 e3b0c44298fc…" "$T/inputs_zero.txt"; then ok "fired: $(/usr/bin/grep '^FAIL inputs' "$T/inputs_zero.txt" | sed -E 's/ — a stale.*//')"; else say "SELFTEST-FAIL the 0 B undefined_syms_auto.txt did not fail the inputs check (FAILED=$FAILED):"; /usr/bin/grep -E '^(OK|FAIL)' "$T/inputs_zero.txt"; bad=1; fi
+  FAILED=0; check_syms_nonempty "$SY" > "$T/inputs_nonempty.txt"
+  if [ "$FAILED" = 1 ] && /usr/bin/grep -q "^FAIL $SY is 0 B after the split" "$T/inputs_nonempty.txt"; then ok "fired: $(/usr/bin/grep '^FAIL' "$T/inputs_nonempty.txt" | sed -E 's/ \(FACT.*//')"; else say "SELFTEST-FAIL the 0 B file passed check_syms_nonempty (FAILED=$FAILED):"; cat "$T/inputs_nonempty.txt"; bad=1; fi
+  FAILED=0; WARNED=0; split_inputs > "$T/inputs_regen.txt"
+  if [ "$FAILED" = 0 ] && cmp -s "$SY" "$T/syms_saved.txt" && /usr/bin/grep -q '^OK   SPLIT .*fixed point' "$T/inputs_regen.txt"; then ok "regenerated: $(/usr/bin/grep -oE "^OK   $SY is [0-9]+ B" "$T/inputs_regen.txt") — byte-identical to the file the build linked with (cmp); $(/usr/bin/grep -oE 'fixed point[^,]*, [0-9]+s' "$T/inputs_regen.txt" | sed 's/fixed point — //')"; else say "SELFTEST-FAIL the split did not regenerate $SY to the linked bytes (FAILED=$FAILED):"; /usr/bin/grep -E '^(OK|FAIL)' "$T/inputs_regen.txt"; cp "$T/syms_saved.txt" "$SY"; bad=1; fi
+  FAILED=0; WARNED=0; check_tree "$OUT/built_tree.txt" > "$T/inputs_restored.txt"
+  if [ "$FAILED" = 0 ] && /usr/bin/grep -q "^OK   inputs: $SY .* == the built record" "$T/inputs_restored.txt"; then ok "control: after the regeneration the inputs check passes again"; else say "SELFTEST-FAIL inputs check does not pass on the regenerated file (FAILED=$FAILED):"; /usr/bin/grep -E '^(OK|FAIL)' "$T/inputs_restored.txt"; bad=1; fi
+
+  say "-- (13) SPLIT fixed point: a marker line appended to a tracked asm/$REGION .s the split owns -> split_inputs must FAIL naming the path; the split itself restores the file (the tree is clean again, checked)"
+  local SF; SF=$(git ls-files "going-decompiled/asm/$REGION/data/cod" | /usr/bin/grep '\.s$' | LC_ALL=C sort | head -1)
+  if [ -z "$SF" ] || [ -n "$(git status --porcelain --no-renames -- "$SF")" ]; then say "SELFTEST-BROKEN: no clean tracked .s to seed the split arm ($SF)"; bad=1; else
+    printf '\n# t464 selftest marker\n' >> "$SF"
+    FAILED=0; WARNED=0; split_inputs > "$T/split_seeded.txt"
+    if /usr/bin/grep -q '# t464 selftest marker' "$SF"; then say "SELFTEST-BROKEN: the split did not rewrite $SF — restoring it with git checkout"; git checkout -q -- "$SF"; bad=1; fi
+    if [ "$FAILED" = 1 ] && /usr/bin/grep -q "^FAIL SPLIT \[$REGION\]: NOT a fixed point of the tree — the split rewrote 1 path(s) .*: $SF *\$" "$T/split_seeded.txt" && [ -z "$(git status --porcelain --no-renames -- "$SF")" ]; then ok "fired: $(/usr/bin/grep '^FAIL SPLIT' "$T/split_seeded.txt" | sed -E 's/ \(worktree [^)]*\)//') ; $SF is clean again"; else say "SELFTEST-FAIL split fixed-point arm (FAILED=$FAILED, $SF status '$(git status --porcelain --no-renames -- "$SF")'):"; /usr/bin/grep -E '^(OK|FAIL)' "$T/split_seeded.txt"; bad=1; fi
+  fi
+
+  say "-- (14) the real gate on this tree (--no-build, the build above) must PASS"
   STRICT=0
   if run_gate "$REGION" --no-build > "$T/gate.txt"; then ok "real gate PASS"; else say "SELFTEST-FAIL the real gate does not pass on this tree:"; /usr/bin/grep -E '^FAIL' "$T/gate.txt"; bad=1; fi
   say "     full gate output -> $T/gate.txt"
