@@ -176,7 +176,7 @@ measure_row() {
 rowval() { awk -F= -v k="$1" '$1==k{print $2}' "$2"; }
 
 # check_row ROWFILE START_EPOCH — evaluate a measured row for $REGION.
-check_row() {
+check_row() {  # check_row ROWFILE START_EPOCH [EU_LDUNDEF_BASELINE]
   local row=$1 start=$2 v
   say "== ROW [$REGION]: link outputs ($row)"
   local want_sha1; want_sha1=$(awk '/^sha1:/{print $2}' "$YAML")
@@ -192,7 +192,7 @@ check_row() {
   else
     # EU does not link today (FACT #22173). Its row is a link property.
     v=$(rowval elf_present "$row"); [ "$v" = no ] && ok "EU: no ELF (expected while EU does not link; a linking EU retires this arm — re-argue the row)" || fail "EU produced an ELF — the EU row must be rewritten, this gate has no byte check for it"
-    local ldbase="$BASE_DIR/ldundef_eu.txt"
+    local ldbase="${3:-$BASE_DIR/ldundef_eu.txt}"
     if [ -f "$ldbase" ]; then
       local grew; grew=$(LC_ALL=C comm -23 "$row.undefined" <(LC_ALL=C sort -u "$ldbase"))
       local n; n=$(wc -l < "$row.undefined" | tr -d ' ')
@@ -279,15 +279,19 @@ selftest() {
   do_build; local start; start=$(cat "$OUT/build_start")
   measure_row "$BUILD/$BASENAME.rom" "$BUILD/$BASENAME.elf" "$BUILD/ld.log" "$OUT/row.txt"
 
-  say "-- (4) ROW: one byte flipped in a rom copy (in-run negative control) + a stale-log arm"
-  FAILED=0; check_row "$OUT/row.txt" "$start" > "$T/row_clean.txt"
-  /usr/bin/grep -q '^OK   negative control: 4 bytes flipped' "$T/row_clean.txt" && ok "fired: $(/usr/bin/grep '^OK   negative control' "$T/row_clean.txt")" || { say "SELFTEST-FAIL flipped-copy control absent"; cat "$T/row_clean.txt"; bad=1; }
+  say "-- (4) ROW: the row's failing arms (usa: flipped rom copy, cmp 4 / wrong sha1; eu: one member dropped from the ld.log baseline) + a stale-log arm"
   FAILED=0; check_row "$OUT/row.txt" $((start + 100000)) > "$T/row_stale.txt"
   /usr/bin/grep -q 'STALE log' "$T/row_stale.txt" && ok "fired: stale-mtime arm -> $(/usr/bin/grep -c '^FAIL' "$T/row_stale.txt") FAIL row(s)" || { say "SELFTEST-FAIL stale-log arm did not fire"; bad=1; }
   if [ "$REGION" = usa ]; then
+    FAILED=0; check_row "$OUT/row.txt" "$start" > "$T/row_clean.txt"
+    /usr/bin/grep -q '^OK   negative control: 4 bytes flipped' "$T/row_clean.txt" && ok "fired: $(/usr/bin/grep '^OK   negative control' "$T/row_clean.txt" | sed 's/^OK   //')" || { say "SELFTEST-FAIL flipped-copy control absent"; cat "$T/row_clean.txt"; bad=1; }
     sed 's/^cmp_count=.*/cmp_count=4/; s/^sha1_built=.*/sha1_built=deadbeef/' "$OUT/row.txt" > "$T/row_bad.txt"; cp "$OUT/row.txt.undefined" "$T/row_bad.txt.undefined"
     FAILED=0; check_row "$T/row_bad.txt" "$start" > "$T/row_bad_eval.txt"
     [ "$FAILED" -ge 2 ] && ok "fired: a row with cmp 4 / wrong sha1 -> $FAILED FAIL rows" || { say "SELFTEST-FAIL bad-row arm: $FAILED"; cat "$T/row_bad_eval.txt"; bad=1; }
+  else
+    sed '1d' "$BASE_DIR/ldundef_eu.txt" > "$T/ldundef_short.txt"; local dropped1; dropped1=$(head -1 "$BASE_DIR/ldundef_eu.txt")
+    FAILED=0; check_row "$OUT/row.txt" "$start" "$T/ldundef_short.txt" > "$T/row_ldundef.txt"
+    /usr/bin/grep -q "GREW.*$dropped1" "$T/row_ldundef.txt" && ok "fired: EU ld.log baseline minus '$dropped1' -> $(/usr/bin/grep -oE 'undefined set GREW \([^)]*\)' "$T/row_ldundef.txt")" || { say "SELFTEST-FAIL EU ld.log baseline arm did not fire"; cat "$T/row_ldundef.txt"; bad=1; }
   fi
 
   say "-- (5) PROVIDE: one PROVIDE line removed from all_addr_syms.ld -> the full link must fail (undefined name, no ELF)"
