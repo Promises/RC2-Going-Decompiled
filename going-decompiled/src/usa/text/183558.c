@@ -1441,6 +1441,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284860);
 s32 func_00284860(u8 *dst, u8 *dstEnd, const u8 *src, const u8 *table);
 #endif
 
+/* func_002848A0: handwritten routine (jal'd from 0x298004) that splat used to
+ * fuse onto func_00284860 (which ends `jr $25` at 0x28488C/0x284894 + a pad
+ * nop); carved apart in task #472. */
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002848A0);
+
 /*
  * Stack-frame epilogue fragment surfaced by the disassembler as a standalone
  * label (only `addiu $sp` ops, no real body). Not a callable function; kept as
@@ -1461,7 +1466,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284998);
 #endif
 extern s32  g_bPalMode ROM_SMALL;         /* 0x1A7B98 PAL flag (USA build clears it -> NTSC) */
 extern s32  g_bProgressiveScan ROM_SMALL; /* 0x1A7BC0 NTSC 480p progressive-scan flag */
-extern void func_124418(void);  /* GS/DMA reset preamble (sceGsResetPath+4, inside func_00124414) */
+extern void func_00124418(void);  /* GS/DMA reset preamble (sceGsResetPath+4 per FACT #5892; its own glabel since task #472 carved it off the 4-byte CD fill func_00124414) */
 extern void sceGsResetGraph(short mode, short inter, short omode, short ffmode);
 
 /** SetVideoMode — reset the GS into the correct scan mode for the current
@@ -1483,7 +1488,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", SetVideoMode);
  * gives 100.00% and verify_match_unit.sh BYTE IDENTICAL 28/28 words. engine96 arm: IFCONV (movn
  * store speculation) + -G8 gp_rel loads. */
 void SetVideoMode(void) {
-    func_124418();
+    func_00124418();
     if (g_bPalMode != 0) {
         g_bProgressiveScan = 0;
     }

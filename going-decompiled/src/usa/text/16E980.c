@@ -633,13 +633,13 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0
  * +0x8 width, +0xC height, +0x14 CLUT pixel mode (0 = CT32 -> 0x400-byte CLUT,
  * else CT16 -> 0x200), CLUT data at +0x20, image data right after the CLUT.
  * Uploads the CLUT (16x16, clutVram>>8) then the image (PSM 0x1B, imageVram>>8,
- * buffer width max(1,w/64)), each via func_126288 descriptor + GIF-path image
+ * buffer width max(1,w/64)), each via func_00126288 descriptor + GIF-path image
  * kick + path idle; then packs TEX0: TBP/TBW/PSM 0x1B/TW/TH/TCC/CBP/CPSM +
  * bit 63, and descOut = { TEX0, 1, 0 }. */
 #ifdef TARGET_NATIVE
 extern void FillMemory32(void *dst, s32 val, s32 nbytes);
 extern s32 Log2Floor(s32 x);
-extern void func_126288(void *ctx, s32 bp, s32 bw, s32 psm, s32 x, s32 y,
+extern void func_00126288(void *ctx, s32 bp, s32 bw, s32 psm, s32 x, s32 y,
                         s32 w, s32 h);
 extern void KickGifImageUpload(void *ctx, void *data);
 typedef struct GsTexUploadBlk {
@@ -680,7 +680,7 @@ void func_0026FC88(void *src, void *descOut, s32 imageVram, s32 clutVram) {
     blk.log2H = Log2Floor(tex->height);
     blk.imageData = (u8 *)tex + blk.clutBytes + 0x20;
     blk.pixelCount = tex->width * tex->height;
-    func_126288(ctx, (s16)clutBp, 1, (s16)tex->clutPsm, 0, 0, 0x10, 0x10);
+    func_00126288(ctx, (s16)clutBp, 1, (s16)tex->clutPsm, 0, 0, 0x10, 0x10);
     func_0011AEA0(0);
     KickGifImageUpload(ctx, blk.clutData);
     WaitGsPathsIdle(0, 0);
@@ -689,7 +689,7 @@ void func_0026FC88(void *src, void *descOut, s32 imageVram, s32 clutVram) {
         blk.bufWidth = 1;
     }
     blk.imageBp = imageVram >> 8;
-    func_126288(ctx, (s16)blk.imageBp, (s16)blk.bufWidth, 0x1B, 0, 0,
+    func_00126288(ctx, (s16)blk.imageBp, (s16)blk.bufWidth, 0x1B, 0, 0,
                 (s16)tex->width, (s16)tex->height);
     func_0011AEA0(0);
     KickGifImageUpload(ctx, blk.imageData);
@@ -757,14 +757,13 @@ s32 DebugPrintStub(const char *fmt, ...) {
 }
 #endif
 
-/* func_0026FF00: MIS-SPLIT fragment. The .s opens with six words
- * (sw $2,0x38($4) / nop / addiu $sp,0x10 / nop / addiu $sp,0x20 / nop) that are
- * the TAIL of the preceding function, then `alabel func_0026FF18` — the real
- * entry. The matching build keeps the whole tile INCLUDE_ASM (dropping the
- * head words would shift the layout); the native build gets the REAL function
- * below under its interior name. */
+/* func_0026FF00: 0x18 bytes of dead inter-function debris (sw $2,0x38($4) /
+ * nop / addiu $sp,0x10 / nop / addiu $sp,0x20 / nop) that splat used to fuse
+ * onto the real function func_0026FF18 below; carved apart in task #472. */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026FF00);
+
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026FF00);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026FF18);
 #else
 /* func_0026FF18: start a camera-FOV ease — the setter feeding
  * StepCameraFovInterp. mode 0 = snap to `fov` next tick; modes 1/2 = timed
@@ -2246,13 +2245,12 @@ void UpdateCamera(void) {
 }
 #endif
 
-/* func_00272550: MIS-SPLIT fragment. The .s opens with four words
- * (daddu $2,$5,$0 / nop / addiu $sp,0x10 / nop) that are the TAIL of the
- * preceding function (its return path), followed by `alabel func_00272560` —
- * the real entry. A clean C #else body would only emit the real function and
- * drop the leading tail words, shifting the segment layout. Kept permanently
- * INCLUDE_ASM so the orphaned tail words stay in place. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00272550);
+/* func_00272550: 0x10 bytes of dead inter-function debris (daddu $2,$5,$0 /
+ * nop / addiu $sp,0x10 / nop) carved off the real entry func_00272560 in
+ * task #472. */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00272550);
+
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00272560);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002725D8);
 

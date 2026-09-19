@@ -336,9 +336,12 @@ void func_002CA618(u8 *path, s32 *outSeg, f32 *outFrac, Vec4 *outVec, f32 dist,
 }
 #endif
 
-/* menu helper: uses 128-bit sq/lq (vector) loads/stores — left as INCLUDE_ASM
- * (the EE quadword ops are not emitted from scalar C). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA740);
+/* func_002CA740: 8 bytes of dead pad (addiu $sp,0x10; nop) carved off the real
+ * entry func_002CA748 in task #472. func_002CA748: menu helper using 128-bit
+ * sq/lq (vector) loads/stores (the EE quadword ops are not emitted from scalar C). */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA740);
+
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA748);
 
 /* Mis-split fragment: orphaned stack-pointer adjusts (addiu $sp / nops) with
  * no jr $ra — not a real function entry; left as INCLUDE_ASM. */
@@ -647,7 +650,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", CaptureScreenTo
  * frame DMA + waits a vblank field, bumps the render-layer counter, then blits the
  * screen (g_screenHeight * 0x600 bytes) in 0x40x0x40 tiles: for the two-buffer case
  * (menuScreenBlock[0xD0] >= 2) the source starts at 0x3FB000 - size, else at
- * g_vramDynamicBase; each tile is uploaded via func_126470 + kicked via func_126730
+ * g_vramDynamicBase; each tile is uploaded via func_00126470 + kicked via func_00126730
  * to the dest at menuScreenBlock[0x20], advancing both by 0x4000. Engine-2.96
  * (8-byte-packed saves) -> faithful #else; matching arm INCLUDE_ASM. NEEDS-ORACLE. */
 #ifndef TARGET_NATIVE
@@ -662,9 +665,9 @@ extern s32  g_vramDynamicBase;
 extern u8   g_renderLayerMask[];
 extern void WaitFrameDmaFence(s32 mask);
 extern s32  WaitVblankGetField(s32 arg);
-extern void func_126470(void *dst, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h);
+extern void func_00126470(void *dst, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h);
 extern void func_0011AEA0(s32 a);
-extern void func_126730(void *packet, s32 addr);
+extern void func_00126730(void *packet, s32 addr);
 extern void WaitGsPathsIdle(s32 arg);
 
 void RestoreScreenFromVram(void) {
@@ -682,11 +685,11 @@ void RestoreScreenFromVram(void) {
     }
     if (remaining >= 0) {
         do {
-            func_126470(packet, (src << 8) >> 16, 1, 0, 0, 0, 0x40, 0x40);
+            func_00126470(packet, (src << 8) >> 16, 1, 0, 0, 0, 0x40, 0x40);
             src += 0x4000;
             remaining -= 0x4000;
             func_0011AEA0(0);
-            func_126730(packet, dst);
+            func_00126730(packet, dst);
             dst += 0x4000;
             WaitGsPathsIdle(0);
         } while (remaining >= 0);

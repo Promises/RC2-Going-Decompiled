@@ -835,13 +835,13 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  * that may snap pos<-ref. (2) Build a rescaled step dir (normalize(pos-ref) *
  * radius*1.2) and a lifted origin (ref + (0,0,stepZ)); CollLine along it, and on
  * a hit whose planar angle (Vec2LengthXyVu0/Atan2fPoly) passes hitEps, scale the
- * hit delta (func_1290E0/Vec4ScaleVu0) into pos. (3) Unless bit1 is set, iterate
+ * hit delta (func_001290E0/Vec4ScaleVu0) into pos. (3) Unless bit1 is set, iterate
  * up to 6x: CollSphere(radius) at pos, and on a hit inside hitEps snap pos to
  * g_collHitPointNudged and step z by -(stepZ+radius). (4) Re-probe + mirror the
  * step-1 clamp, then write pos.xy back into ref.
  *
  * Helper sigs (recovered): f32 func_002A9888(Vec4 *pos) [surface sample, UNCONFIRMED];
- * void func_1290E0(void *dst, void *src) [hit-delta build, UNCONFIRMED];
+ * void func_001290E0(void *dst, void *src) [hit-delta build, UNCONFIRMED];
  * f32 Vec2LengthXyVu0(Vec4 *v) [planar magnitude]; f32 Atan2fPoly(f32,f32) [atan2];
  * Vec4ScaleVu0(dst, scale, src). Delay-slot notes: the bnel @0x2A8F14 and the two
  * bc1fl @0x2A8F98/0x2A9030 are LIKELY (delay runs only when taken) — the sphere
@@ -858,7 +858,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8D08);
 #else
 extern f32 func_002A9888(Vec4 *pos);            /* surface-height sample (defined below) */
-extern void func_1290E0(void *dst, void *src);  /* 0x1290E0 hit-delta build (UNCONFIRMED) */
+extern void func_001290E0(void *dst, void *src);  /* 0x1290E0 hit-delta build (UNCONFIRMED) */
 
 /* Shared by steps 1 and 4: if the sampled surface is more than snapEps off ref->z,
  * snap pos to ref. The direction test is gated by flags bit0 (one-sided when set,
@@ -920,7 +920,7 @@ s32 func_002A8D08(void *ent, Vec4 *ref, Vec4 *pos, s32 flags,
                 if (hitEps <= ang) {
                     f32 det;
                     *(s32 *)(cw + 0x48) = 0;
-                    func_1290E0((Vec4 *)(cw + 0x40), (Vec4 *)(cw + 0x40));
+                    func_001290E0((Vec4 *)(cw + 0x40), (Vec4 *)(cw + 0x40));
                     det = -diff.x * *(f32 *)(cw + 0x40)
                         -  diff.y * *(f32 *)(cw + 0x44);
                     if (0.0f < det) {
@@ -2224,7 +2224,7 @@ extern void SkinMobyCollisionMesh(void *moby, s32 count, u32 flags);
 extern void func_00283740(Vec4 *dst, f32 d, const Vec4 *src);
 /* dst = src * scale on ALL FOUR lanes (alternate entry inside func_00129120,
  * cod/015180: lqc2/vmulx.xyzw/sqc2). Scale arrives in $f12. */
-extern void func_129148(Vec4 *dst, const Vec4 *src, f32 scale);
+extern void func_00129148(Vec4 *dst, const Vec4 *src, f32 scale);
 /* out = m * v (3x3 rotate; canonical def in text/183558.c). */
 extern void func_00283A48(Vec4 *out, Vec4 *v, Vec4 *m);
 
@@ -2362,9 +2362,9 @@ s32 func_002AA808(Moby *moby, s32 maxPoints, Vec4 *outPoints, s32 primMask,
                 /* Capsule between two posed scratchpad vertices. */
                 f32 length;
 
-                func_129148(&tmpA, &COLL_SPR_VECS[prim->a.endIndex[0]],
+                func_00129148(&tmpA, &COLL_SPR_VECS[prim->a.endIndex[0]],
                             mobyScale * COLL_UNIT_SCALE);
-                func_129148(&tmpB, &COLL_SPR_VECS[prim->a.endIndex[1]],
+                func_00129148(&tmpB, &COLL_SPR_VECS[prim->a.endIndex[1]],
                             mobyScale * COLL_UNIT_SCALE);
                 Vec4SubVu0(&tmpC, &tmpA, &tmpB);
                 length = Vec3LengthVu0(&tmpC);
@@ -2465,8 +2465,8 @@ s32 func_002AA808(Moby *moby, s32 maxPoints, Vec4 *outPoints, s32 primMask,
              * point in the sphere of the capsule's radius around it. */
             f32 t;
 
-            func_129148(&tmpA, &COLL_SPR_VECS[sel->a.endIndex[0]], mobyScale);
-            func_129148(&tmpB, &COLL_SPR_VECS[sel->a.endIndex[1]], mobyScale);
+            func_00129148(&tmpA, &COLL_SPR_VECS[sel->a.endIndex[0]], mobyScale);
+            func_00129148(&tmpB, &COLL_SPR_VECS[sel->a.endIndex[1]], mobyScale);
             Vec4SubVu0(&tmpC, &tmpB, &tmpA);
             t = GetRandomFloatRange(0.0f, 1.0f);
             Vec4ScaleVu0(&tmpC, t, &tmpC);

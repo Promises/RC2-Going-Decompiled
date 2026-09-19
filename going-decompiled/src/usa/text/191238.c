@@ -204,13 +204,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BootSystemInit)
 #else
 /* Phase 1-5 HW/IOP/subsystem callees (declared below BootSystemInit in-unit or
  * in sibling TUs; block-scope externs keep the #else self-contained). */
-extern void func_124418(void);                 /* ResetVif1AndGif */
+extern void func_00124418(void);                 /* ResetVif1AndGif */
 extern void ResetDmacChannels(s32 mode);
 extern void SetVideoMode(void);
 extern void EnableDmacChannels(void);
 extern void SetupGsDisplayBuffers(s32 mode);
 extern void func_0011AE70(s32 mode);           /* EnableCache */
-extern void func_126DC0(void *handler);        /* SetVblankStartHandler */
+extern void func_00126DC0(void *handler);        /* SetVblankStartHandler */
 extern void func_002FCFC8(void);
 extern void ResetFrameArenas(void);
 extern void InstallVif1DmacHandlers(void);
@@ -247,7 +247,7 @@ extern void InitFileLoadSystem(void);
 extern void func_00294970(void);
 extern s32  func_00131628(void);               /* read OSD screen type */
 extern void FillMemory32(void *dst, u32 word, s32 nbytes);
-extern void func_126288(void *dst, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h);
+extern void func_00126288(void *dst, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h);
 extern void KickGifImageUpload(void *packet, void *src);
 extern void WaitGsPathsIdle(s32 arg);
 extern void func_0026FE58(void);
@@ -289,7 +289,7 @@ void BootSystemInit(void) {
     u8 *dstBuf;
 
     /* --- phase 1: HW bring-up --- */
-    func_124418();
+    func_00124418();
     ResetDmacChannels(1);
     g_bProgressiveScan = 0;
     D_1A7BB9 = 0;
@@ -297,7 +297,7 @@ void BootSystemInit(void) {
     EnableDmacChannels();
     SetupGsDisplayBuffers(1);
     func_0011AE70(3);
-    func_126DC0(&OnVblankInterrupt);
+    func_00126DC0(&OnVblankInterrupt);
     func_002FCFC8();
     SetupMemoryArenaTable();
     func_002FCFC8();
@@ -402,7 +402,7 @@ after_screen_type:
 
     /* --- phase 8: boot texture + HW regs --- */
     FillMemory32(g_collHitTriVert2 + 0x10, 0x80808080, 0x100);
-    func_126288(scratch, 0x3FFB, 1, 0, 0, 0, 8, 8);
+    func_00126288(scratch, 0x3FFB, 1, 0, 0, 0, 8, 8);
     func_0011AEA0(0);
     KickGifImageUpload(scratch, g_collHitTriVert2 + 0x10);
     WaitGsPathsIdle(0);
@@ -496,9 +496,15 @@ void RenderSky(void) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291B60);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291B70);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291B68);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291CB8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291B70);
+
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291B78);
+
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291CB8);
+
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291CC0);
 
 /*
  * func_00291D28 — per-frame refresh of the directional + point light set.
@@ -740,7 +746,7 @@ void func_00291FF8(s32 index) {
  * For the CLUT/paletted formats (0x13, 0x14) it first reserves a VRAM block and
  * uploads the palette (KickGifImageUpload of the sc[0] CLUT source). It then
  * derives each level's texel byte-size (format-dependent) and source pointer,
- * and walks mipLevelCount levels, uploading each via func_126288
+ * and walks mipLevelCount levels, uploading each via func_00126288
  * (BuildGsImageUploadPacket) + FlushCache + KickGifImageUpload, advancing
  * g_vramAllocCursor per level. Finally packs the three descriptors.
  *
@@ -759,7 +765,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002920C0);
 #ifdef TARGET_NATIVE
 extern void FillMemory32(void *dst, u32 val, s32 len);
 extern s32  Log2Floor(s32 v);
-extern void func_126288(void *dst, s32 tbp, s32 a, s32 b, s32 c, s32 d,
+extern void func_00126288(void *dst, s32 tbp, s32 a, s32 b, s32 c, s32 d,
                         s32 w, s32 h);
 extern void func_0011AEA0(s32 a);             /* FlushCache */
 extern void KickGifImageUpload(void *packet, void *src);
@@ -785,7 +791,7 @@ s32 func_002920C0(void *hdrArg, u64 *out) {
      * srcPtr[level] = sc[1 + level]  (0x04 + level*4); size[level] = sc[6 + level].
      */
     u32 sc[21];
-    u8  packet[0xA0];       /* func_126288 GIF-packet scratch (sp+0x60) */
+    u8  packet[0xA0];       /* func_00126288 GIF-packet scratch (sp+0x60) */
     s32 w = *(s32 *)(hdr + 0x8);
     s32 h = *(s32 *)(hdr + 0xC);
     s32 mipCount = *(s32 *)(hdr + 0x1C);
@@ -844,10 +850,10 @@ s32 func_002920C0(void *hdrArg, u64 *out) {
         sc[10] = (u32)(cursor >> 8);            /* base CLUT tbp */
         if (fmt == 0x14) {
             g_vramAllocCursor = cursor + 0x100;
-            func_126288(packet, (s16)sc[10], 1, (s16)clut, 0, 0, 8, 2);
+            func_00126288(packet, (s16)sc[10], 1, (s16)clut, 0, 0, 8, 2);
         } else {                                /* fmt 0x13 */
             g_vramAllocCursor = cursor + (s32)sc[5];
-            func_126288(packet, (s16)sc[10], 1, (s16)clut, 0, 0, 0x10, 0x10);
+            func_00126288(packet, (s16)sc[10], 1, (s16)clut, 0, 0, 0x10, 0x10);
         }
         func_0011AEA0(0);
         KickGifImageUpload(packet, (void *)(s32)sc[0]);
@@ -891,7 +897,7 @@ s32 func_002920C0(void *hdrArg, u64 *out) {
             levelW = (s32)(s16)(u16)(w >> level);   /* sign-extend low 16 bits */
             levelH = (s32)(s16)(u16)(h >> level);
 
-            func_126288(packet, (s16)sc[11 + level], (s16)sc[15 + level],
+            func_00126288(packet, (s16)sc[11 + level], (s16)sc[15 + level],
                         (s16)fmt, 0, 0, (s16)levelW, (s16)levelH);
             func_0011AEA0(0);
             KickGifImageUpload(packet, (void *)(s32)sc[1 + level]);
@@ -1266,7 +1272,7 @@ extern s32  g_discToc[];
 extern u8   g_vramTextureBase[];
 extern u8  *g_heldItemModelBufferBase;    /* loaded model/texture buffer ptr */
 extern u64  g_heldItemTexDescriptor;      /* cached packed GS texture register */
-extern void func_126288(void *dst, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h);
+extern void func_00126288(void *dst, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h);
 extern void KickGifImageUpload(void *packet, void *src);
 extern void WaitGsPathsIdle(s32 arg);
 
@@ -1289,7 +1295,7 @@ void LoadHeldItemDisplayModel(s32 itemId) {
         *(s32 *)(disc + off + 0x4FA4));
 
     /* level 0: 16x16 base image */
-    func_126288(packet, (*(s32 *)(g_vramTextureBase + 0x8) << 8) >> 16,
+    func_00126288(packet, (*(s32 *)(g_vramTextureBase + 0x8) << 8) >> 16,
                 1, 0, 0, 0, 0x10, 0x10);
     func_0011AEA0(0);
     KickGifImageUpload(packet, buffer + 0x30);
@@ -1304,7 +1310,7 @@ void LoadHeldItemDisplayModel(s32 itemId) {
     }
     w = *(s16 *)(hdr + 0x8);
     h = *(s16 *)(hdr + 0xC);
-    func_126288(packet, (*(s32 *)(g_vramTextureBase + 0x18) << 8) >> 16,
+    func_00126288(packet, (*(s32 *)(g_vramTextureBase + 0x18) << 8) >> 16,
                 (s16)clampW, 0x1B, 0, 0, w, h);
     func_0011AEA0(0);
     KickGifImageUpload(packet, buffer + 0x430);
@@ -1331,7 +1337,7 @@ void LoadHeldItemDisplayModel(s32 itemId) {
  * two fixed levels). Picks the texture-set index from the alt-texture flags
  * (D_1A7A51->6 / D_1A7A4A->8 / D_1A7A53->7 / D_1A7A52->5, else `slot`), kicks that
  * set's disc read into g_pPlayerModelBuffer, then for each of the buffer's
- * *(s32*)buffer textures uploads a 16x16 base image + a mip (two func_126288 /
+ * *(s32*)buffer textures uploads a 16x16 base image + a mip (two func_00126288 /
  * KickGifImageUpload GIF packets) and packs the 64-bit GS TEX0 descriptor into
  * g_playerTexDescriptors[i], advancing the two VRAM cursors (base +0x4 by 0x400,
  * base +0x14 by w*h*4); finally kicks the model-geometry disc read. Register pack
@@ -1378,7 +1384,7 @@ void LoadPlayerDisplayTextures(s32 slot) {
         u64  reg;
 
         /* level 0: 16x16 base image */
-        func_126288(packet, (s16)(vram4 >> 8), 1, 0, 0, 0, 0x10, 0x10);
+        func_00126288(packet, (s16)(vram4 >> 8), 1, 0, 0, 0, 0x10, 0x10);
         func_0011AEA0(0);
         KickGifImageUpload(packet, texData + 0x20);
         WaitGsPathsIdle(0);
@@ -1391,7 +1397,7 @@ void LoadPlayerDisplayTextures(s32 slot) {
         }
         w = *(s16 *)(texData + 0x8);
         h = *(s16 *)(texData + 0xC);
-        func_126288(packet, (s16)(vram14 >> 8), (s16)clampW, 0x1B, 0, 0, w, h);
+        func_00126288(packet, (s16)(vram14 >> 8), (s16)clampW, 0x1B, 0, 0, w, h);
         func_0011AEA0(0);
         KickGifImageUpload(packet, texData + 0x420);
         WaitGsPathsIdle(0);
@@ -1483,7 +1489,7 @@ extern s32  g_frameArenaBase;             /* per-frame arena base (declared late
 extern u8   g_vramTextureBase[];          /* VRAM texture-slot descriptor (+0xC/+0x1C = level TBPs) */
 extern void PumpDialogVoiceSystem(s32 blocking);   /* declared later in-unit */
 extern void func_0011AEA0(s32 a);                  /* declared later in-unit */
-extern void func_126288(void *dst, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h);
+extern void func_00126288(void *dst, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h);
 extern void KickGifImageUpload(void *packet, void *src);
 extern void WaitGsPathsIdle(s32 arg);
 
@@ -1506,7 +1512,7 @@ void LoadShipDisplayTexture(s32 shipId) {
         *(s32 *)(disc + shipId * 8 + 0x48F4));
 
     /* level 0: 16x16 base image */
-    func_126288(packet, (*(s32 *)(g_vramTextureBase + 0xC) << 8) >> 16,
+    func_00126288(packet, (*(s32 *)(g_vramTextureBase + 0xC) << 8) >> 16,
                 1, 0, 0, 0, 0x10, 0x10);
     func_0011AEA0(0);
     KickGifImageUpload(packet, (u8 *)arena + 0x20);
@@ -1520,7 +1526,7 @@ void LoadShipDisplayTexture(s32 shipId) {
     }
     w = *(s16 *)((u8 *)arena + 0x8);
     h = *(s16 *)((u8 *)arena + 0xC);
-    func_126288(packet, (*(s32 *)(g_vramTextureBase + 0x1C) << 8) >> 16,
+    func_00126288(packet, (*(s32 *)(g_vramTextureBase + 0x1C) << 8) >> 16,
                 (s16)clampW, 0x1B, 0, 0, w, h);
     func_0011AEA0(0);
     KickGifImageUpload(packet, (u8 *)arena + 0x420);
@@ -1743,7 +1749,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00293760);
  * (stride 0x10) dispatches on the entry's format word (+0x0): 0x13 = a full
  * mip (tbp, width/64 rounded up, w/h from +0x4, cursor += max(w*h,0x100)),
  * 0x2 = a 16x16 (cursor += 0x200), 0x0 = a 16x16 (cursor += 0x400); any other
- * format skips the packet build. Each builds a GIF upload packet (func_126288),
+ * format skips the packet build. Each builds a GIF upload packet (func_00126288),
  * kicks it (KickGifImageUpload to base+entry[+0xC]) and waits. A second loop
  * uploads `count2` entries as format 0x1B from the g_vramTextureBase[0x20] tbp
  * base (advancing it by w*h*4), to base+entry[+0x8]. Engine-2.96 -> faithful
@@ -1777,14 +1783,14 @@ void func_002938B0(u8 *base, s32 count1, s32 count2, u8 *list) {
             s32  tbp = (g_vramAllocCursor << 8) >> 16;
             if (fmt == 0x13) {
                 s32 sz;
-                func_126288(packet, tbp, (w >> 6) ? (w >> 6) : 1, 0x13, 0, 0, (s16)w, h);
+                func_00126288(packet, tbp, (w >> 6) ? (w >> 6) : 1, 0x13, 0, 0, (s16)w, h);
                 sz = w * h;
                 g_vramAllocCursor += (sz > 0xFF) ? sz : 0x100;
             } else if (fmt == 0x2) {
-                func_126288(packet, tbp, 1, 2, 0, 0, 0x10, 0x10);
+                func_00126288(packet, tbp, 1, 2, 0, 0, 0x10, 0x10);
                 g_vramAllocCursor += 0x200;
             } else if (fmt == 0x0) {
-                func_126288(packet, tbp, 1, 0, 0, 0, 0x10, 0x10);
+                func_00126288(packet, tbp, 1, 0, 0, 0, 0x10, 0x10);
                 g_vramAllocCursor += 0x400;
             }
             func_0011AEA0(0);
@@ -1804,7 +1810,7 @@ void func_002938B0(u8 *base, s32 count1, s32 count2, u8 *list) {
                 s32  h   = wh >> 16;
                 s32  w   = wh & 0xFFFF;
                 s32  tbp = (tbpBase << 8) >> 16;
-                func_126288(packet, tbp, (w >> 6) ? (w >> 6) : 1, 0x1B, 0, 0, (s16)w, h);
+                func_00126288(packet, tbp, (w >> 6) ? (w >> 6) : 1, 0x1B, 0, 0, (s16)w, h);
                 func_0011AEA0(0);
                 e += 0x10;
                 tbpBase += (w * h) << 2;
@@ -3147,7 +3153,7 @@ s32 func_00294EE0(s32 classId) {
  * WAD into the SRAM scratch (g_gadgetClassSramBase+0x25800); if the decompressor
  * reports success (result word == 1) it uploads two GS image levels — a 16x16 base
  * and the mip whose dimensions come from the reused texParam block
- * (g_respawnPlayerYaw+0x48) — via BuildGsImageUploadPacket (func_126288) +
+ * (g_respawnPlayerYaw+0x48) — via BuildGsImageUploadPacket (func_00126288) +
  * KickGifImageUpload, waiting for the GS paths to idle between them. It then
  * decompresses the moby WAD into the same SRAM scratch and hands it to
  * RegisterMobyClass, bumping g_mobyClassCount to the texParam +0x12 count across the
@@ -3179,7 +3185,7 @@ extern s32  g_mobyClassCount;             /* 0x1B1AC0 loaded-header class count 
 extern char D_1A9340[];                   /* "*AFTER GADGET* - free sram" debug fmt      */
 extern void DecompressWad(void *src, void *dest);
 extern void func_0011AEA0(s32 mode);      /* FlushCache / DMA-arm sync                   */
-extern void func_126288(void *dst, s32 tbp, s32 a, s32 b,
+extern void func_00126288(void *dst, s32 tbp, s32 a, s32 b,
                         s32 c, s32 d, s32 w, s32 h);   /* build GS image-upload packet   */
 extern void KickGifImageUpload(void *packet, void *vramDest);
 extern void WaitGsPathsIdle(s32 mode);    /* $5=0 extra sync arg is unused (see .s)      */
@@ -3206,7 +3212,7 @@ void LoadMobyClassFromWad(s32 classId, s32 index, void *descArg) {
 
         if (*(s32 *)sram == 1) {                       /* decompress succeeded */
             /* level 0: 16x16 base image */
-            func_126288(packet,
+            func_00126288(packet,
                 (s16)((*(s32 *)(g_vramTextureBase + 0x10) >> 8) +
                       *(u16 *)((u8 *)texParam + 0xA)),
                 1, 0, 0, 0, 0x10, 0x10);
@@ -3218,7 +3224,7 @@ void LoadMobyClassFromWad(s32 classId, s32 index, void *descArg) {
             {
                 s32 texdim = *(s32 *)&g_gadgetClassSramBase[0x25818];
                 s32 clampW = texdim >> 6;
-                func_126288(packet,
+                func_00126288(packet,
                     (((*(s32 *)(g_vramTextureBase + 0x20) +
                        (*(s32 *)texParam << 2)) << 8) >> 16),
                     (s16)((clampW > 0) ? clampW : *(s32 *)sram),
@@ -4983,7 +4989,9 @@ void MapBuildBitmapFrom4bpp(void *destArg, void *srcA, void *srcB) {
  * reproduce exactly. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00297E80);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00297F98);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_00297F98);
+
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00297FA0);
 
 #ifndef TARGET_NATIVE
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
@@ -5353,7 +5361,9 @@ void func_00298918(f32 fa, f32 fb, void *outX, void *outY, s32 level) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002989F8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_002989F8);
+
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00298A00);
 
 /* func_00298AA0: empty/no-op leaf (jr ra; nop). */
 void func_00298AA0(void) {

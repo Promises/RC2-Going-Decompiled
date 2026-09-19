@@ -743,7 +743,7 @@ void EnterCinematicBeginPlayback(void) {
  * If no scene is armed (g_cinematicSceneParams[1] == 0) it tears down the queue and
  * pops back to the previous state. Otherwise it:
  *   - blits the letterbox/backdrop UI texture (g_uiTextureCache record #2) to the
- *     GS: two GIF image-upload packets (func_126288 = BuildGsImageUploadPacket, then
+ *     GS: two GIF image-upload packets (func_00126288 = BuildGsImageUploadPacket, then
  *     KickGifImageUpload) plus a packed TEX0 register latched into the record,
  *   - stops all sound / dialog voices and pumps the save-load state machine until
  *     the active area's load settles,
@@ -773,8 +773,8 @@ extern s32 g_pendingDialogVoiceId;     /* 0x1A63CC queued dialog voice id (-1 = 
 extern u8  D_1AD1F8[];                  /* 0x1AD1F8 caption/string blob */
 void func_0029DAD0(void *str, s32 arg);
 void func_002895E0(void *queue);       /* cinematic-queue helper */
-void func_126288(void *dest, s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g); /* BuildGsImageUploadPacket */
-void func_126DC0(void (*isr)(void), s32 arg);
+void func_00126288(void *dest, s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g); /* BuildGsImageUploadPacket */
+void func_00126DC0(void (*isr)(void), s32 arg);
 void OnVblankInterrupt(void);
 void PopGameState(s32 a, s32 b);
 void WaitFrameDmaFence(s32 mask);
@@ -816,14 +816,14 @@ void RunCinematicPlaybackFrame(void) {
     {
         s32 w = 1 << tc[0xC];   /* 1 << log2Width  */
         s32 h = 1 << tc[0xD];   /* 1 << log2Height */
-        func_126288(gifPacket, 0x3F70, (s32)(w << 10) >> 16,
+        func_00126288(gifPacket, 0x3F70, (s32)(w << 10) >> 16,
                     *(s16 *)(tc + 0xE), 0, 0, (s16)w, (s16)h);
         func_0011AEA0(0);
         KickGifImageUpload(gifPacket,
                            g_uiTextureDataBase + ((u16)*(u16 *)(tc + 8) << 4));
         WaitGsPathsIdle(0, 0);
 
-        func_126288(gifPacket, 0x3F6C, 1, 0, 0, 0, 0x10, 0x10);
+        func_00126288(gifPacket, 0x3F6C, 1, 0, 0, 0, 0x10, 0x10);
         func_0011AEA0(0);
         KickGifImageUpload(gifPacket,
                            g_uiTextureDataBase + ((u16)*(u16 *)(tc + 0xA) << 4));
@@ -917,7 +917,7 @@ void RunCinematicPlaybackFrame(void) {
 
     /* --- Teardown: final upload, reset VRAM/arenas, chain to the next state. --- */
     snd_CheckLoadInProgress(0);
-    func_126DC0(OnVblankInterrupt, 0);
+    func_00126DC0(OnVblankInterrupt, 0);
     WaitGsPathsIdle(0, 0);
     KickGifImageUpload(gifPacket,
                        g_uiTextureDataBase + ((u16)*(u16 *)(tc + 0xA) << 4));

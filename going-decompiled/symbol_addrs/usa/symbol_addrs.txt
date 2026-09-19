@@ -59,6 +59,80 @@ func_001338B8 = 0x001338B8; // type:func size:0x10
 func_001338C8 = 0x001338C8; // type:func
 func_00133928 = 0x00133928; // type:func size:0x8
 func_00133930 = 0x00133930; // type:func
+// === task #472 SPLIT-HYGIENE-38 (FACT #7359 re-screen at 7bbfa351) - the 36 jal-target
+// alabels tree-wide. Each real start below is a jal target in the retail ROM and the
+// preceding function ends jr-ra/delay-slot before the blob, so the blob is inter-function
+// debris (a 0xCDCDCDCD fill word, dead addiu-sp/nop pairs, or a stray store) and not code.
+// Blobs that begin with or contain the 0xCD fill word get NO size pin (see func_001253A8
+// above - a size attr on a CD-fill symbol demotes the unit to a word dump); the real start
+// alone is pinned and the fill splits off as its own fragment. Valid-instruction blobs
+// are pinned to their size as in the cod/015180 block above.
+// cod/015180 - CD-fill heads (start-only pins)
+func_001158F8 = 0x001158F8; // type:func
+func_00124418 = 0x00124418; // type:func
+func_00125D98 = 0x00125D98; // type:func
+func_00126108 = 0x00126108; // type:func
+func_00126288 = 0x00126288; // type:func
+func_00126470 = 0x00126470; // type:func
+func_00126730 = 0x00126730; // type:func
+func_00126DC0 = 0x00126DC0; // type:func
+func_00128F50 = 0x00128F50; // type:func
+func_001290E0 = 0x001290E0; // type:func
+// cod/015180 - valid-instruction debris (dead sq/sqc2/nop and addiu-sp/nop runs)
+func_00129120 = 0x00129120; // type:func size:0x28
+func_00129148 = 0x00129148; // type:func
+func_00129160 = 0x00129160; // type:func size:0x18
+func_00129178 = 0x00129178; // type:func
+func_0012F998 = 0x0012F998; // type:func size:0x10
+func_0012F9A8 = 0x0012F9A8; // type:func
+// text units - dead epilogue-pad pairs (addiu-sp/nop, a lone store/nop) before a jal'd prologue
+func_0026FF00 = 0x0026FF00; // type:func size:0x18
+func_0026FF18 = 0x0026FF18; // type:func
+func_00272550 = 0x00272550; // type:func size:0x10
+func_00272560 = 0x00272560; // type:func
+func_0027A0C8 = 0x0027A0C8; // type:func size:0x8
+func_0027A0D0 = 0x0027A0D0; // type:func
+func_00280080 = 0x00280080; // type:func size:0x10
+func_00280090 = 0x00280090; // type:func
+func_002801B0 = 0x002801B0; // type:func size:0x8
+func_002801B8 = 0x002801B8; // type:func
+func_00282838 = 0x00282838; // type:func size:0x30
+func_00282868 = 0x00282868; // type:func
+func_00282A48 = 0x00282A48; // type:func size:0x8
+func_00282A50 = 0x00282A50; // type:func
+func_00291B60 = 0x00291B60; // type:func size:0x8
+func_00291B68 = 0x00291B68; // type:func
+func_00291B70 = 0x00291B70; // type:func size:0x8
+func_00291B78 = 0x00291B78; // type:func
+func_00291CB8 = 0x00291CB8; // type:func size:0x8
+func_00291CC0 = 0x00291CC0; // type:func
+func_00297F98 = 0x00297F98; // type:func size:0x8
+func_00297FA0 = 0x00297FA0; // type:func
+func_002989F8 = 0x002989F8; // type:func size:0x8
+func_00298A00 = 0x00298A00; // type:func
+func_0029DCB0 = 0x0029DCB0; // type:func size:0x8
+func_0029DCB8 = 0x0029DCB8; // type:func
+func_0029DD08 = 0x0029DD08; // type:func size:0x8
+func_0029DD10 = 0x0029DD10; // type:func
+func_002CA740 = 0x002CA740; // type:func size:0x8
+func_002CA748 = 0x002CA748; // type:func
+func_002E6D70 = 0x002E6D70; // type:func size:0x8
+func_002E6D78 = 0x002E6D78; // type:func
+func_00337110 = 0x00337110; // type:func size:0x10
+func_00337120 = 0x00337120; // type:func
+func_003420C0 = 0x003420C0; // type:func size:0x10
+func_003420D0 = 0x003420D0; // type:func
+// text/183558 - two REAL handwritten routines fused (0x284860 ends jr $25 at 0x28488C
+// and 0x284894 with a pad nop at 0x28489C; 0x2848A0 is jal'd from 0x298004) - start-only
+func_002848A0 = 0x002848A0; // type:func
+// raw units (whole-unit .s, no INCLUDE_ASM) - same debris shape
+func_002EE3C8 = 0x002EE3C8; // type:func size:0x8
+func_002FE030 = 0x002FE030; // type:func size:0x18
+func_002FE048 = 0x002FE048; // type:func
+func_002FE9D0 = 0x002FE9D0; // type:func size:0x98
+func_002FEA68 = 0x002FEA68; // type:func
+func_00301338 = 0x00301338; // type:func size:0x8
+func_00301340 = 0x00301340; // type:func
 // text/183178 sub-TU head: 0x38 bytes of handwritten 8-byte stub-table entries
 // (paired addiu-sp/nop words, no prologue) that splat lumped into the first
 // accessor of the carve. Pin the table to its size and the real accessor
@@ -2554,7 +2628,7 @@ InitTrailParticlePool = 0x002EE0B8; // CONFIRMED - stores the pool base into g_p
 AllocTrailParticle = 0x002EE110; // CONFIRMED (all refs agree) - first-fit allocator over the 512-entry x 0x50 pool at g_pTrailPool - scans for a record whose +0x48 owner key is 0, copies the caller's 0x50-byte template from a1 (two lq/sq plus the scalar fields 0x20..0x4C), stamps a0 as the owner key at +0x48 and returns. 5 in-tile call sites, each building the template on the stack first
 DrawTrailParticles = 0x002EE310; // CONFIRMED - walks all 512 pool records, skips free ones (+0x48 == 0), and for each live record calls the billboard/sprite packet builder func_00282868 (src/usa/text/1823B8.c - Vec4SubVu0 against g_cameraPos, Vec3CrossVu0, GS packet emit) with a0=record, a1=+0x4C, a2=(+0x30 | (int)(+0x38 * g_trailParticleScale) << 24), a3=((+0x3C >> 1) != 1), f12=+0x28, f14=+0x24. DECIDED over UpdateTrailParticles - the loop body contains NO store to any record (the only stores in the function are the prologue sd of s0/s1/ra to the stack), so nothing is updated - the per-record ageing (+0x38/+0x2C/+0x24/+0x10/+0x48 stores) lives in AgeTrailParticlesForOwner 0x2EE1C0
 FreeSceneVehicleMobys = 0x002E6F58; // CONFIRMED - walks the 20-entry pointer array at g_shrubRelightList+0x800, FreeMoby on each non-NULL entry and NULLs the slot
-SplitFrameCountToMinSecHundredths = 0x002EE3C8; // type:func CONFIRMED - USA twin of EU 0x2EE490 (RULING 7232, NOTE 7277, task 442) - takes a 60 Hz FRAME count in arg0 and writes THREE out-params through arg1..arg3 - minutes = frames*1/3600 then -3600.0, seconds = rem*1/60 then -60.0, hundredths = rem*5/3 with a 99 clamp (movn to 0 when >0x63). No hours and no formatting - the two callers 0x327924 and 0x330314 sprintf the three fields themselves. Was FormatTimeHmsc (adj 3a1f1150), which misdescribed the body on all three points. NB the splat glabel 0x2EE3C8 covers a 2-insn debris fragment (lw $v0,0x24($v1), nop), the real entry is alabel 0x2EE3D0 and both jal sites target 0x2EE3D0 - the glabel/alabel split is a separate splat-config question, deliberately not moved here
+SplitFrameCountToMinSecHundredths = 0x002EE3D0; // type:func CONFIRMED - MOVED 0x2EE3C8 to the real entry 0x2EE3D0 by task 472 (the 2-insn debris at 0x2EE3C8 is now func_002EE3C8, pinned size 8 in the task 472 block) - USA twin of EU 0x2EE490 (RULING 7232, NOTE 7277, task 442) - takes a 60 Hz FRAME count in arg0 and writes THREE out-params through arg1..arg3 - minutes = frames*1/3600 then -3600.0, seconds = rem*1/60 then -60.0, hundredths = rem*5/3 with a 99 clamp (movn to 0 when >0x63). No hours and no formatting - the two callers 0x327924 and 0x330314 sprintf the three fields themselves. Was FormatTimeHmsc (adj 3a1f1150), which misdescribed the body on all three points. NB the splat glabel 0x2EE3C8 covers a 2-insn debris fragment (lw $v0,0x24($v1), nop), the real entry is alabel 0x2EE3D0 and both jal sites target 0x2EE3D0 - the glabel/alabel split is a separate splat-config question, deliberately not moved here
 DrawExitSceneFrame = 0x002EB740; // CONFIRMED - switches on the g_exitSceneMode halfword - mode 1 sets g_renderLayerMask 0x7F then RenderFrame, mode 2 calls func_002E9A00, modes 0 and 3 call DrawFrameWithoutHud
 LoadSoundBankBlocking = 0x002EB900; // CONFIRMED - seeds *arg1 = -1, snd_BankLoadFromEE_CB with completion callback func_002E6EC0, then spins on WaitVblankGetField + snd_Pump until *arg1 leaves -1
 DrawLoadingProgressBar = 0x002E9120; // CONFIRMED - AppendGsRegPacket 0x47 (TEST) 0x31801, 0x42 (ALPHA), then DrawGlyphQuad of a 0x100x0x20 quad at y = g_screenHeight-0x58 tinted (arg0<<24 | 0x808080), restoring TEST 0x5360B afterwards

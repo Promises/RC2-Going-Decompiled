@@ -1603,14 +1603,16 @@ s32 SetSoundEmitterOffset(s32 slotIndex, u_long128 *src) {
 }
 #endif
 
-/* Set the pitch field of emitter slot `slotIndex`; returns 1.
- * NEAR-MISS (~80%): the original carries a second entry point (alabel
- * func_002E6D78) with a leading dead `li v0,1; nop` pair that single-function
- * C cannot reproduce. */
+/* func_002E6D70: 8 bytes of dead debris (li v0,1; nop) carved off the real
+ * entry func_002E6D78 in task #472 (the pre-carve NEAR-MISS ~80% of the fused
+ * tile was this pair, which single-function C cannot reproduce).
+ * func_002E6D78: set the pitch field of emitter slot `slotIndex`; returns 1. */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E6D70);
+
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E6D70);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E6D78);
 #else
-s32 func_002E6D70(s32 slotIndex, s32 pitch) {
+s32 func_002E6D78(s32 slotIndex, s32 pitch) {
     EmitterView *slot = EMITTER_VIEW(slotIndex);
     slot->pitch = pitch;
     return 1;

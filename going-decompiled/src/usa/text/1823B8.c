@@ -84,21 +84,22 @@ void func_00282798(UiSpritePacket *p, s32 texId, s32 idx, u64 wrapMode) {
 }
 #endif
 
-/* MIS-SPLIT head + tier-3 body: the glabel covers six bare `addiu $sp` /nop
- * stack-restore fragments (debris trailing the previous routine), then the real
- * function begins at alabel func_00282868. That real body is a billboard/sprite
- * packet builder — sq/lq 0x10-byte copies, 5 callee-saved regs incl. $f20-$f23,
- * VU0 vector ops (Vec4SubVu0/Vec3CrossVu0/Vec4ScaleVu0/Vec4AddVu0), and a
- * GS-register append loop. Tier-3 hardware (GS/VIF/VU0) and not a clean function
- * entry; leave as INCLUDE_ASM. TODO(hle): needs the platform render backend. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_00282838);
+/* func_00282838: 0x30 bytes of dead debris (six bare `addiu $sp` / nop pairs
+ * trailing the previous routine) carved off the real function func_00282868 in
+ * task #472. func_00282868 is a billboard/sprite packet builder — sq/lq
+ * 0x10-byte copies, 5 callee-saved regs incl. $f20-$f23, VU0 vector ops
+ * (Vec4SubVu0/Vec3CrossVu0/Vec4ScaleVu0/Vec4AddVu0), and a GS-register append
+ * loop. Tier-3 hardware (GS/VIF/VU0); TODO(hle): needs the platform render backend. */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_00282838);
 
-/* MIS-SPLIT head: the glabel covers a bare `addiu $29,$29,0xD0; nop` restore
- * fragment, then the real one-call routine starts at alabel func_00282A50
- * (jal AppendGsRegPacket with mode 0x513F1 / kind 0x47). Because the glabel is
- * not the real entry, it cannot be one standalone C function; leave as
- * INCLUDE_ASM (documented mis-split). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_00282A48);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_00282868);
+
+/* func_00282A48: 8 bytes of dead pad (addiu $29,$29,0xD0; nop) carved off the
+ * real one-call routine func_00282A50 (jal AppendGsRegPacket with mode
+ * 0x513F1 / kind 0x47) in task #472. */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_00282A48);
+
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_00282A50);
 
 /* func_00282A78: empty/no-op leaf (original compiles to jr ra; nop). */
 void func_00282A78(void) {

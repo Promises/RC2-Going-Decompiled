@@ -267,7 +267,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", InitFmvPlayback
 /* func_003503D8: FMV engine shutdown — flat teardown: quiesce (func_00124B88),
  * stop the IPU/decode helpers (func_003512F0/func_00352B88), kill+delete the FMV
  * thread (func_0011AA70/func_0011AA30 over g_fmvThreadId), disable DMAC ch2, close
- * the vblank handler (func_0011A950 + func_126DC0(OnVblankInterrupt)), tear down the
+ * the vblank handler (func_0011A950 + func_00126DC0(OnVblankInterrupt)), tear down the
  * DMA queues (func_003525D8/func_003505E0/func_003513F0 over the arena sub-objects),
  * quiesce again, and clear bit 1 of the INTC-mask reg 0x1000E000.
  * Blocked (match): the original mixes %gp_rel and absolute %hi/%lo accesses to
@@ -281,7 +281,7 @@ extern void func_0011AA70(s32 threadId);   /* kill thread */
 extern void func_0011AA30(s32 threadId);   /* delete thread */
 extern void DisableDmac(s32 channel);
 extern void func_0011A950(s32 a, s32 b);
-extern void func_126DC0(void *handler);    /* remove vblank handler */
+extern void func_00126DC0(void *handler);    /* remove vblank handler */
 extern s32  g_fmvThreadId;
 extern void OnVblankInterrupt(void);
 /* forward decls — these are declared/defined later in this file */
@@ -304,7 +304,7 @@ void func_003503D8(void) {
     func_0011AA30(g_fmvThreadId);
     DisableDmac(2);
     func_0011A950(2, *(s32 *)(g_pFmvArenaBase + 0xD90F8));
-    func_126DC0((void *)OnVblankInterrupt);
+    func_00126DC0((void *)OnVblankInterrupt);
     func_003525D8((FmvStream *)(g_pFmvArenaBase + 0xD9048));
     func_003505E0();
     func_003513F0();

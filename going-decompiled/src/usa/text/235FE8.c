@@ -1121,7 +1121,9 @@ void func_00337098(void *p, s32 flag) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337110);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337110);
+
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337120);
 
 /* GuiSpriteElementDraw: if the element is visible (*(e+0x10) scalar != 0) and
  * has a live texture handle (+0x40), submit the sprite to the 2D blitter
@@ -6500,7 +6502,9 @@ void func_00341F40(void *w, s32 flags, s32 table) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003420C0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003420C0);
+
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003420D0);
 
 /* GuiIconScreenInit: construct an icon screen (five button-glyph elements, a
  * text row, and a sprite). Pool -> alloc the 0x10-byte placement record (+0x228)

@@ -97,31 +97,27 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115690);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001157AC);
 
-/* 0xCDCDCDCD inter-function-fill class (func_001158F4, func_0011F364,
- * func_0011FB8C, func_00124414, func_00125D94, func_00126104, func_00126284,
- * func_0012646C, func_0012672C, func_00126DBC, func_00130A8C). Each of these
- * symbols begins with one or more leading 0xCDCDCDCD debug-fill words emitted
- * between functions; spimdisasm folds the fill into the symbol's body.
+/* 0xCDCDCDCD inter-function-fill class. Each of these symbols is one or more
+ * leading 0xCDCDCDCD debug-fill words (sometimes with dead stores/nops) emitted
+ * between functions; spimdisasm folds the fill into the FOLLOWING symbol and
+ * demotes the real prologue to an interior `alabel`.
  *
- * UNRECOVERABLE with the current splat/spimdisasm (1.41.0): unlike the
- * `addiu sp,+0xN; nop` padding mis-splits (which were fixed via symbol_addrs
- * boundary pins), these do NOT cleanly split:
- *   - The fill is most often a SINGLE word (0x4). spimdisasm's function-end
- *     detection only looks one symbol-pair (currentVram+8) ahead and its
- *     userDeclaredSize end-check requires instructionOffset+8 == start+size,
- *     which is unsatisfiable for a 4-byte function — so a lone CD word can
- *     never terminate as its own function (pinning size:0x4 balloons the file).
- *   - The real bodies are reached only by `j`/data-reference (e.g. the
- *     func_00130A8C j-thunk to func_00130B80), never by `jal`, so `_findCalls`
- *     never promotes them to function starts.
- *   - Several bodies are handwritten VU0/GS code (func_0011F364 sq-context save,
- *     func_00124414 cfc2/ctc2 GS sync) flagged as unimplemented instructions,
- *     which spimdisasm emits as a symbol, not a function.
- * Declaring the real-start symbol truncates the pad correctly but DROPS the body
- * from the nonmatchings tree (a coverage hole), so the boundaries are left at
- * the spimdisasm default (fill attached to the body). Re-evaluate if splat/
- * spimdisasm gains lone-word-pad splitting. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001158F4);
+ * Task #472 (FACT #7359): where the real start is a `jal` target in the ROM
+ * (func_001158F8, func_00124418, func_00125D98, func_00126108, func_00126288,
+ * func_00126470, func_00126730, func_00126DC0, func_00128F50, func_001290E0)
+ * a `type:func` pin on the real start alone makes splat carve the fill off as
+ * its own fragment (a lone CD word terminates fine as a 0x4 symbol — see
+ * func_001253A4) and the body gets its own .s AS LONG AS an INCLUDE_ASM names
+ * it: splat writes nonmatchings/<unit>/<fn>.s only for names the .c references
+ * (segtypes/common/c.py global_asm_funcs), which is the "coverage hole" an
+ * earlier attempt hit. The pad fragments below are INCLUDE_ASM_FRAGMENT.
+ *
+ * Still fused: func_0011F364, func_0011FB8C, func_00130A8C — their real bodies
+ * are reached only by `j`/data reference, never by `jal`, so they are the
+ * j-target class of task #471, not a carve defect of this class. */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001158F4);
+
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001158F8);
 
 /* func_00115AC0 = strncpy(char *dst, const char *src, size_t n).
  * Returns $2 = the ORIGINAL dst. Identity CONFIRMED two independent ways:
@@ -3901,7 +3897,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001240C8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001242A0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00124414);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00124414);
+
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00124418);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", WaitGsPathsIdle);
 
@@ -4023,7 +4021,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", GetGsDisplayOffs
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", BuildGsDispEnv);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00125D94);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00125D94);
+
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00125D98);
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00125E54);
 
@@ -4031,19 +4031,29 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", CalcGsZbufferBas
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", BuildGsDrawEnvPacket);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126104);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126104);
+
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126108);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", WaitVblankGetField);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126284);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126284);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012646C);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126288);
+
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012646C);
+
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126470);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", KickGifImageUpload);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012672C);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012672C);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126DBC);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126730);
+
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126DBC);
+
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00126DC0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceDmaSyncChan);
 
@@ -4675,15 +4685,23 @@ s32 func_00128E18(s32 index) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128E98);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128F48);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128F48);
+
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128F50);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00128FD0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001290BC);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001290BC);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00129120);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001290E0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00129160);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00129120);
+
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00129148);
+
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00129160);
+
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00129178);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001291A0);
 
@@ -5185,7 +5203,9 @@ s32 func_0012F950(u8 *arg0, u32 arg1, s32 arg2) {
     return func_0012FBF0(arg0);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012F998);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012F998);
+
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0012F9A8);
 
 /**
  * Predicate: follow arg0->field_0x40 (arg0[0x10]) to a sub-object and return 1

@@ -826,12 +826,12 @@ extern void WaitFrameDmaFence(s32 mask);
 extern void WaitGsPathsIdle(s32 a, s32 b);
 extern void func_0011AEA0(s32 arg);                       /* pre-RPC flush/sync */
 extern void KickGifImageUpload(void *packet, void *vramDest);
-extern void func_126288(void *dst, s32 texId, s32 a, s32 b, s32 c,
+extern void func_00126288(void *dst, s32 texId, s32 a, s32 b, s32 c,
                         s32 d, s32 width, s32 height);    /* build a GS image-upload GIF packet */
 
 /** func_0034F868 — flush the queued texture image-uploads for this manager. Wait
  *  one frame-DMA fence, then for each of the base->+0x2E20 queued entries build a
- *  16x16 GS image-upload GIF packet (func_126288) for the entry's texture id (the
+ *  16x16 GS image-upload GIF packet (func_00126288) for the entry's texture id (the
  *  low halfword of the stride-4 id list at base+0x2E00) into a stack scratch,
  *  issue it to the entry's VRAM slot (base+0xE00, stride 0x400) via
  *  KickGifImageUpload, and wait for the GS paths to idle between uploads. Clears
@@ -854,7 +854,7 @@ void func_0034F868(u8 *base) {
     vramDest = base + 0xE00;
     i = 0;
     do {
-        func_126288(packet, *(s16 *)idCursor, 1, 0, 0, 0, 0x10, 0x10);
+        func_00126288(packet, *(s16 *)idCursor, 1, 0, 0, 0, 0x10, 0x10);
         i++;
         func_0011AEA0(0);
         idCursor += 4;

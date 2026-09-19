@@ -2213,19 +2213,19 @@ s32 func_0029DC70(void) {
 }
 #endif
 
-/* func_0029DCB0: MIS-SPLIT — splat began the symbol one instruction early, so
- * the body carries the leaked `addiu $sp,0x10; nop` epilogue of the preceding
- * func_0029DC70 before the real entry (the internal `alabel func_0029DCB8`).
- * The real body maps g_playerProgress (0x16->9, 0x17->0x12, else 0) and calls
- * RequestLevelExit(.,1); but the prepended dead prologue can't be expressed as
- * one C function. Left as asm until the split boundary is corrected. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DCB0);
+/* func_0029DCB0: 8 bytes of dead pad (addiu $sp,0x10; nop) carved off the real
+ * entry func_0029DCB8 in task #472. func_0029DCB8 maps g_playerProgress
+ * (0x16->9, 0x17->0x12, else 0) and calls RequestLevelExit(.,1). */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DCB0);
 
-/* func_0029DD08: MIS-SPLIT (same shape as func_0029DCB0) — leaked `addiu
- * $sp,0x10; nop` epilogue of func_0029DCB0 prepended; the real body (internal
- * `alabel func_0029DD10`) is the g_guiInstance+0x3CEA0 wrapper to func_0033A9F8.
- * Not expressible as one C function with the dead prologue. Left as asm. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DD08);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DCB8);
+
+/* func_0029DD08: 8 bytes of dead pad (addiu $sp,0x10; nop) carved off the real
+ * body func_0029DD10 in task #472; func_0029DD10 is the g_guiInstance+0x3CEA0
+ * wrapper to func_0033A9F8. */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DD08);
+
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DD10);
 
 /** Forward `arg` to the widget at g_guiInstance+0x3CEA0 (method func_0033A8F0);
  *  0 when the GUI is down. */

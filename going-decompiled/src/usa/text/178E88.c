@@ -445,11 +445,15 @@ s32 func_00279F08(void) {
 }
 #endif
 
-/* func_0027A0C8 globals (declared for the TARGET_NATIVE #else only). */
+/* func_0027A0C8: 8 bytes of dead pad (addiu $sp,0x20; nop) carved off the real
+ * entry func_0027A0D0 in task #472. */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027A0C8);
+
+/* func_0027A0D0 globals (declared for the TARGET_NATIVE #else only). */
 extern s32 g_playerProgress;      /* 0x1A79F8 story progress counter */
 extern u8  g_platinumBoltFlags[]; /* 0x19B278; +0x230 (0x19B4A8) = per-progress 3-bit nibble-counter table, stride 0x400 */
 
-/** func_0027A0C8 — read a progress-gated nibble counter and scale it. Index the
+/** func_0027A0D0 — read a progress-gated nibble counter and scale it. Index the
  *  per-progress nibble table (g_platinumBoltFlags+0x230, stride 0x400 keyed by
  *  g_playerProgress) at index>>1; take the selected byte's low nibble (even index)
  *  or high nibble (odd index), mask it to 0..7, and use THAT to index `table` — both
@@ -459,11 +463,15 @@ extern u8  g_platinumBoltFlags[]; /* 0x19B278; +0x230 (0x19B4A8) = per-progress 
  * every other remaining arm). Residual on the better arm (engine96): GPREL-FORM (first differing
  * insn: ROM `addiu sp,sp,32` vs built `lw v0,0(gp)  [GPREL16 0x001A79F8]`). Levers:
  * cc1-small/absolute globals model RUN: 33.20% (sdk29); engine96 with sched1 MEASURED (flag not
- * landed): 44.60%. */
+ * landed): 44.60%.
+ * (t527 merge note: measured before task #472's carve, against the fused blob func_0027A0C8 =
+ * the 8-byte pad + this body; the `addiu sp,sp,32` row named above is the pad's first word,
+ * the %s are for the 0x64-byte blob. The GPREL-FORM residual — ROM lui/lw %hi/%lo of
+ * g_playerProgress vs gp-relative — is in the body itself and remains at func_0027A0D0, 0x5C.) */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027A0C8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027A0D0);
 #else
-s32 func_0027A0C8(u8 *table, s32 mult, s32 index) {
+s32 func_0027A0D0(u8 *table, s32 mult, s32 index) {
     u8 *entry = g_platinumBoltFlags + 0x230 + g_playerProgress * 0x400 + (index >> 1);
     s32 value;
     if (index & 1) {
@@ -1253,7 +1261,7 @@ void func_0027C0A8(void) {
  * + func_002A1000/1028; set/clear draw-flag bit0 at handle+0x34 around func_002A1138(g_mobyTableBase,-1);
  * SAVE camera matrix (CopyQwords g_cameraMatrix→stack, 0x40) + g_flCameraPos qword (g_cameraMatrix-0x230)
  * + the g_sceneActorMobys+0x674+0xB0 proj scale; SetupViewModelDepthRange(1.0f,8,8); build a 4-stage
- * view-model matrix chain (func_129178 identity → func_001292C0/00129368/00129218 with the held+0x10/
+ * view-model matrix chain (func_00129178 identity → func_001292C0/00129368/00129218 with the held+0x10/
  * +0x14/+0x18 FLOAT euler angles) and install it as the camera matrix; copy held[0] qword into
  * g_flCameraPos; BuildFrameViewMatrices; func_002A12A0(handle,0x404040,0xe,0,0); install a 4-light block
  * (g_dirLightMatrices+0x380 ← D_1A8820/8830/8840/8850 qwords at dest offsets 0,+0x20,+0x10,+0x30 —
@@ -2870,14 +2878,14 @@ void func_0027FFF0(s32 a, s32 b, s32 c, f32 f1, f32 f2, f32 f3) {
 }
 #endif
 
-/* func_00280080: MERGED pad-fragment case — the .s is two mis-split epilogue-pad frags
- * (addiu $sp,0x40; nop x2) at glabel func_00280080, with the REAL body at alabel
- * func_00280090. PARKED #70 (needs a symbol_addrs size-pin re-split to separate the body
- * from the dead pad before a clean #else, same as the 19FC78 fused-frag cases).
- * Body logic (func_00280090, ready for post-resplit #else — a right-justified fixed-font
- * string draw): w = func_0027F7F8(d, e); tex0 = GetUiTextureTex0(1);
+/* func_00280080: 0x10 bytes of dead epilogue pad (addiu $sp,0x40; nop x2) carved
+ * off the real body func_00280090 in task #472 (was PARKED #70 pending exactly
+ * this re-split). func_00280090 body logic (right-justified fixed-font string
+ * draw): w = func_0027F7F8(d, e); tex0 = GetUiTextureTex0(1);
  * DrawFixedFontString(a - w, b, c, d, e, (s32)tex0, D_263B10). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280080);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280080);
+
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280090);
 
 /** func_00280120 — draw a right-aligned debug-font string. Measures the string's
  *  rendered width (func_0027F818(str, maxChars)), shifts the anchor x left by that
@@ -2900,12 +2908,13 @@ void func_00280120(s32 x, s32 arg1, s32 arg2, const char *str, s32 maxChars) {
 }
 #endif
 
-/* func_002801B0: MERGED pad-fragment case (twin of func_00280080) — mis-split
- * epilogue-pad frags at the glabel + the real body at an alabel. PARKED #70 (needs a
- * symbol_addrs size-pin re-split to separate the body from the dead pad before a clean
- * #else; a right-justified fixed-font string draw of the same func_0027F7F8 / GetUiTextureTex0
- * / DrawFixedFontString shape as func_00280080). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002801B0);
+/* func_002801B0: 8 bytes of dead epilogue pad (addiu $sp,0x30; nop) carved off
+ * the real body func_002801B8 in task #472 (twin of func_00280080, was PARKED
+ * #70). func_002801B8: a right-justified fixed-font string draw of the same
+ * func_0027F7F8 / GetUiTextureTex0 / DrawFixedFontString shape as func_00280090. */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002801B0);
+
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002801B8);
 
 /** func_00280250 — draw a horizontally-centered debug-font string. Measures the
  *  rendered width (func_0027F818), centers the anchor (x - width/2), draws via

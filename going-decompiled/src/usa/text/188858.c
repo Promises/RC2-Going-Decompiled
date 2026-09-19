@@ -5109,7 +5109,7 @@ void func_0028FFF0(s32 iconIndex, s32 x0, s32 y0, s32 x1, s32 y1,
 
 /* UploadTextureToGs(src, a2, a3, logW, logH, kickNow) = UploadTextureToGs: build a GS
  * image-upload GIF packet for one texture (TRXPOS/TRXREG/TRXDIR) via
- * func_126288 (BuildGsImageUploadPacket). The transfer dimensions come from the
+ * func_00126288 (BuildGsImageUploadPacket). The transfer dimensions come from the
  * log2 dims: width = 1<<logW, height = 1<<logH, GS-buffer-width v12 =
  * max((1<<logW)>>6, 1), and the qword count tag = 1<<(logW+logH-4). When kickNow==0
  * it splices a DMA tag chain into g_frameDmaCursor for deferred upload (DMAtag
@@ -5121,7 +5121,7 @@ void func_0028FFF0(s32 iconIndex, s32 x0, s32 y0, s32 x1, s32 y1,
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", UploadTextureToGs);
 #else
-extern void func_126288(void *buf, s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g);
+extern void func_00126288(void *buf, s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g);
 extern void func_0011AEA0(s32 mode);   /* FlushCache */
 extern void KickGifImageUpload(void *packet, s32 handle);
 void UploadTextureToGs(s32 handle, s32 vramBlk, s32 fmt, s32 wLog, s32 hLog,
@@ -5147,7 +5147,7 @@ void UploadTextureToGs(s32 handle, s32 vramBlk, s32 fmt, s32 wLog, s32 hLog,
         buf = packet;
     }
 
-    func_126288(buf, (s16)vramBlk, (s16)v12, (s16)fmt, 0, 0, (s16)(1 << wLog),
+    func_00126288(buf, (s16)vramBlk, (s16)v12, (s16)fmt, 0, 0, (s16)(1 << wLog),
                 (s16)(1 << hLog));
 
     if (kickMode == 0) {
