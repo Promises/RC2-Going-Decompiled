@@ -174,7 +174,14 @@ echo "   defined $(wc -l < "$ALLSYMS") address symbols (D_/func_/jtbl_ + symbol_
 # $ROM is regenerated from it below, so a fresh .rom mtime proves nothing.
 ELFLMA="$BUILD/$BASENAME.lma.elf"
 rm -f "$ELF" "$ELFLMA" "$ROM"
-mips-linux-gnu-ld -EL --allow-multiple-definition -T "$LD" -T "$SYMS" -T "$ALLSYMS" -Map "$BUILD/$BASENAME.map" -o "$ELF" 2> "$BUILD/ld.log" \
+# ENTRY POINT: the splat-generated .ld carries no ENTRY() (splat 0.41 has no
+# option for one), so without -e ld defaulted to the first .text section
+# (e_entry 0x0026EA00, the start of text/16E980) and the BIOS would have
+# jumped into the middle of the engine. The retail header says 0x00131AE8 =
+# _start (crt0), link-defined in cod/015180 for USA and PROVIDEd from
+# symbol_addrs for EU. This lives in the ELF header only: the .rom (a flat
+# objcopy of the LMA==VMA link below) is unaffected, so cmp vs retail stays 0.
+mips-linux-gnu-ld -EL --allow-multiple-definition -e _start -T "$LD" -T "$SYMS" -T "$ALLSYMS" -Map "$BUILD/$BASENAME.map" -o "$ELF" 2> "$BUILD/ld.log" \
   || { echo "LD errors (first 20):"; head -20 "$BUILD/ld.log"; }
 
 # Second link for .rom flattening: identical, but with a linker script whose
@@ -185,7 +192,7 @@ mips-linux-gnu-ld -EL --allow-multiple-definition -T "$LD" -T "$SYMS" -T "$ALLSY
 # VMA-contiguous, zero-gap-filled image the original .rom actually is.
 LDLMA="$BUILD/$BASENAME.lma.ld"
 sed -E 's/ AT\([A-Za-z0-9_]+\)//g' "$LD" > "$LDLMA"
-mips-linux-gnu-ld -EL --allow-multiple-definition -T "$LDLMA" -T "$SYMS" -T "$ALLSYMS" -o "$ELFLMA" 2> "$BUILD/ld.lma.log" \
+mips-linux-gnu-ld -EL --allow-multiple-definition -e _start -T "$LDLMA" -T "$SYMS" -T "$ALLSYMS" -o "$ELFLMA" 2> "$BUILD/ld.lma.log" \
   || { echo "LD(LMA) errors (first 20):"; head -20 "$BUILD/ld.lma.log"; }
 
 if [ -f "$ELFLMA" ]; then
