@@ -595,7 +595,8 @@ selftest() {
   if [ "$FAILED" = 0 ] && /usr/bin/grep -q "^OK   inputs: $SY .* == the built record" "$T/inputs_restored.txt"; then ok "control: after the regeneration the inputs check passes again"; else say "SELFTEST-FAIL inputs check does not pass on the regenerated file (FAILED=$FAILED):"; /usr/bin/grep -E '^(OK|FAIL)' "$T/inputs_restored.txt"; bad=1; fi
 
   say "-- (13) SPLIT fixed point: a marker line appended to a tracked asm/$REGION .s the split owns -> split_inputs must FAIL naming the path; the split itself restores the file (the tree is clean again, checked)"
-  local SF; SF=$(git ls-files "going-decompiled/asm/$REGION/data/cod" | /usr/bin/grep '\.s$' | LC_ALL=C sort | head -1)
+  # a code segment's .s: the split rewrites those every run (data/cod/000000.s, a textbin wrapper, it does NOT — first USA selftest, t464)
+  local SF; SF=$(git ls-files "going-decompiled/asm/$REGION/text" | /usr/bin/grep '\.s$' | LC_ALL=C sort | head -1)
   if [ -z "$SF" ] || [ -n "$(git status --porcelain --no-renames -- "$SF")" ]; then say "SELFTEST-BROKEN: no clean tracked .s to seed the split arm ($SF)"; bad=1; else
     printf '\n# t464 selftest marker\n' >> "$SF"
     FAILED=0; WARNED=0; split_inputs > "$T/split_seeded.txt"
