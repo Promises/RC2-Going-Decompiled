@@ -905,7 +905,9 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_0
  * NEAR-MISS: logic exact, but the memset call forces `q` into the callee-saved
  * $16 and cc1 schedules the trailing cursor/flag stores in a different order
  * than the original's interleave with the jal. Kept as the portable #else
- * body. */
+ * body. engine96 arm (task #469): 88.28% with `mode = 1` hoisted before the
+ * stores + a trailing asm barrier; residual SCHED — the ROM's sched2 hoists
+ * `addiu $6,$0,0x28` into the prologue, this cc1 hoists only the 0xCD arg. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", ResetCinematicQueue);
 #else
@@ -1333,7 +1335,10 @@ s32 FindTextTableEntry(s32 textId) {
  * NEAR-MISS: logic exact, but the FindTextTableEntry call forces `textId` into
  * the callee-saved $16 (0x10 frame) and the gp-relative &D_1A8D28 tail address
  * is computed in a branch-delay slot that cc1 schedules differently. Kept as the
- * portable #else body. */
+ * portable #else body. engine96 arm (task #469): 82.83%; residual IDIOM-movz —
+ * this cc1's if-conversion speculates the gp-rel load of D_1A8D18 and selects
+ * with movz, the ROM keeps `beq $16,$2` + an out-of-line lw block with its own
+ * epilogue; no non-volatile phrasing tried defeats the conversion. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", GetLocalizedString);
 #else
@@ -1961,8 +1966,11 @@ append:
 /* Subtitle-event dispatch: for area-transition event 0x17 queue subtitle line
  * (0x9F3, voice 0x4A); for event 0x19 queue line (0xA35, voice 0x8C).
  *
- * NEAR-MISS (73%): logic exact, but cc1 uses a 0x20-byte frame (orig 0x10) and
- * sibling-call-optimises the second func_0028ABC0 into a `j`. Kept as #else. */
+ * NEAR-MISS (73% on the 2.9 arm; 94.47% on the engine96 arm with the
+ * `__asm__ __volatile__("")` sibling-call guard, task #469): the one residual
+ * is REORG — the ROM keeps the epilogue `ld $16` after the second jal although
+ * the `bne` delay slot already restored it; this cc1 deletes the redundant
+ * copy (else-if / switch phrasings do not change it). Kept as #else. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028AB70);
 #else
@@ -2302,7 +2310,11 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_0
  *
  * NEAR-MISS (89%): frameless leaf, logic + the peeled first iteration match,
  * but the original schedules two padding `nop`s between the two loop-exit
- * branches that cc1 doesn't emit. Fixed scheduling difference; kept as #else. */
+ * branches that cc1 doesn't emit. Fixed scheduling difference; kept as #else.
+ * engine96 arm (task #469): 74.47% (single `&&` condition, pointer+counter,
+ * `for` forms tried); residual REGNUM + loop shape — the ROM peels with the
+ * value in $2 and walks a copy of the table pointer in $3 with a plain `bne`
+ * loop-back; this cc1 walks $5 in place, copies the value, and emits `bnel`. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028B560);
 #else
@@ -2595,6 +2607,10 @@ void UploadHudBankTextures(s32 assetId, s32 baseAddr, s32 kickMode) {
  * constant-materialisation of 0x64000 ABOVE the pool-base load (and colours the
  * base into $a0); our cc1 schedules the constant after the load. A fixed
  * instruction-scheduling difference. Left INCLUDE_ASM.
+ * engine96 arm (task #469): 38.18% (75.45% under -fno-schedule-insns2);
+ * residual UNKNOWN-`la` — this cc1 lowers `base + 0x64000` (pointer, s32 or
+ * u32 arithmetic, folded or via a local) as the `la` macro (lui $at; ori;
+ * daddu) where the ROM has `li $3,0x64000; addu $3,$4,$3`.
  */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", ResetDebugHeap);
@@ -2727,9 +2743,13 @@ s32 func_0028BE10(s32 typeAndSlot, s32 a2, s32 a3, s32 a4, s32 a5, s32 a6, s32 a
  * +0x34/+0x38) into their live slots, run the widget's init callback (+0x30)
  * when present, and clear the dirty flag (+0x68).
  *
- * NEAR-MISS (99.4%): logic byte-identical except cc1's epilogue restores
- * $31 before $16 where the original restores $16 first. A fixed cc1 epilogue
- * register-restore ordering; kept as the portable #else body. */
+ * NEAR-MISS (99.4% on the 2.9 arm; 92.31% on the engine96 arm, task #469):
+ * on ee-gcc 2.9 the only residual is the 0x20-vs-0x10 frame. On the engine
+ * arm (loads hoisted into locals + trailing asm barrier tried) the residual
+ * is SCHED: sched2 emits the prologue as `sd $16; daddu $16,$4; sd $31`
+ * where the ROM keeps `sd $16; sd $31; daddu` — a post-reload tie-break this
+ * cc1 revision makes differently (it matches under -fno-schedule-insns2,
+ * which the engine arm does not offer). Kept as the portable #else body. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028BF18);
 #else
@@ -2784,6 +2804,9 @@ void func_0028BF80(void) {
  * the key argument into a saved register up-front and advances its scan pointer
  * to base+0x64 (reading 0x0(ptr)) where our cc1 keeps the key in $a0 and reads
  * 0x64(base) — an induction-variable / arg-colouring choice. Left INCLUDE_ASM.
+ * engine96 arm (task #469): 78.88% as a `for (i<13)` loop; residual
+ * UNKNOWN-`slti` — this cc1 folds the post-loop `i >= 0xD` re-test to a
+ * constant (`addiu $3,$0,1; beqz $3`) where the ROM re-emits `slti; bnez`.
  */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C010);
@@ -2873,6 +2896,11 @@ void func_0028C108(s32 key, s32 value) {
  * test as `xori;andi;beqz` + a branch-likely (bnezl) and keeps the +0x58 extent
  * live in a saved register; our cc1 emits `andi;bnez`, no branch-likely, and
  * re-reads the extent — a fixed branch/colouring heuristic. Left INCLUDE_ASM.
+ * engine96 arm (task #469): 96.15% with nested `!` tests, a value-form
+ * `notHidden = !(flags & 1)` (recovers the xori;andi;beqz) and a re-read of
+ * +0x60 after the *pB store; the one residual is REORG — the ROM fills the
+ * `bnez $2` delay slot with `andi $2,$4,8` (an insn that sets the tested
+ * register), which stock gcc reorg refuses and pads with a nop.
  */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C180);
@@ -3226,25 +3254,42 @@ void func_0028C7A8(void) {
 #endif
 
 /* Build the weapon-select wheel widget `w`: rebuild its icon list
- * (func_0028C728), then seed the wheel geometry/state (half-extents 0xD2/0xC8,
- * type tag -2, mode 0x1E, cleared cursors).
+ * (func_0028C728), then seed the wheel geometry/state (half-extents 0xD2/0xC8
+ * at +0x58/+0x5C, type tag -2 at +0x74, mode 0x1E at +0x78, cleared +0x70 word
+ * and the two +0x48/+0x4A cursor halves).
  *
- * NEAR-MISS (89%): logic exact, but cc1 uses a 0x20-byte frame (orig 0x10) for
- * the two callee-saves and schedules the trailing zero-stores in a different
- * order. Fixed cc1 codegen; kept as the portable #else body. */
-#ifndef TARGET_NATIVE
+ * BYTE-EXACT under the ENGINE compiler (task #469): 100.00% on the engine96 arm
+ * of objdiff_build.sh + unit_report.sh (cc1 2.96-ee-001003, -O2 -G8
+ * -fno-schedule-insns -fno-strict-aliasing). Two phrasings carry the match and
+ * are not cosmetic: the four constants are materialised into locals BEFORE the
+ * stores (the ROM builds $v0/$v1/$a0/$a1 first, then stores them — under
+ * -fno-schedule-insns the RTL order is the source order, so constant-then-store
+ * pairs come out interleaved), and the trailing `__asm__ __volatile__("")`
+ * pins the epilogue order ($16 restored before $31): without the barrier sched2
+ * hoists `ld $31` above the last store that still reads $16.
+ *
+ * INCLUDE_ASM is retained for the ordinary (ee-gcc 2.9) unit build, which packs
+ * the callee-saves into a 0x20 frame where the ROM uses 0x10; build.sh never
+ * defines MATCH_*, so the linked image is unchanged by this promotion. */
+#if !defined(TARGET_NATIVE) && !defined(MATCH_func_0028C7F0)
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C7F0);
 #else
 void func_0028C7F0(HudElement *w) {
     u8 *b = (u8 *)w;
+    s32 halfW, halfH, typeTag, mode;
     func_0028C728();
-    *(s32 *)(b + 0x58) = 0xD2;
-    *(s32 *)(b + 0x5C) = 0xC8;
-    *(s32 *)(b + 0x74) = -2;
-    *(s32 *)(b + 0x78) = 0x1E;
+    halfW = 0xD2;
+    halfH = 0xC8;
+    typeTag = -2;
+    mode = 0x1E;
+    *(s32 *)(b + 0x58) = halfW;
+    *(s32 *)(b + 0x5C) = halfH;
+    *(s32 *)(b + 0x74) = typeTag;
+    *(s32 *)(b + 0x78) = mode;
     *(s32 *)(b + 0x70) = 0;
     *(s16 *)(b + 0x48) = 0;
     *(s16 *)(b + 0x4A) = 0;
+    __asm__ __volatile__("");
 }
 #endif
 
@@ -3721,7 +3766,12 @@ s32 DrawWeaponSelectWheel(HudElement *w) {
  * NEAR-MISS: frameless and straight-line, but the +0x28/+0x2C descriptor writes
  * use the named-sub-object (g_hudMobySpawnStart+0x28) %hi/%lo form while
  * D_1A8DD8/D_1A8D48 are %gp_rel; cc1 schedules the trailing zero-stores in a
- * different order. Kept as the portable #else body. */
+ * different order. Kept as the portable #else body. engine96 arm (task #469):
+ * 73.78% with the four constants hoisted in the ROM's order (d2, -2, c8, 1e);
+ * residual SUB-OBJECT ADDRESS — the ROM writes +0x28 and +0x2C as two separate
+ * `lui $at; sw %lo(sym+off)($at)` absolute accesses (two objects, 0x1B1858 and
+ * 0x1B185C, a symbol_addrs lead), this cc1 CSEs the two addresses into one
+ * base register. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028D6D8);
 #else
