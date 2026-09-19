@@ -633,9 +633,9 @@ void func_00270360(Camera *cam) {
 }
 #endif
 
-/* func_002703C0 (USA CallCameraEnterHandler): invoke the camera-mode vtbl
+/* CallCameraEnterHandler (same name in USA): invoke the camera-mode vtbl
  * `enter` handler (slot +0x8) for the camera's mode id, if installed. */
-void func_002703C0(Camera *cam) {
+void CallCameraEnterHandler(Camera *cam) {
     s32 (*handler)() = D_0026E680[cam->modeId].enter;
 
     if (handler != NULL) {
@@ -647,9 +647,9 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", SwitchActiveCame
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/16E7B8", TestCameraTakeover);
 
-/* func_00270870 (USA CallCameraPollHandler): invoke the camera-mode vtbl
+/* CallCameraPollHandler (same name in USA): invoke the camera-mode vtbl
  * `poll` handler (slot +0x10) for the camera's mode id, if installed. */
-void func_00270870(Camera *cam) {
+void CallCameraPollHandler(Camera *cam) {
     s32 (*handler)() = D_0026E680[cam->modeId].poll;
 
     if (handler != NULL) {
@@ -665,7 +665,7 @@ void func_00270870(Camera *cam) {
  * returns -1. Matching arm stays INCLUDE_ASM; #else is the structure model (not
  * byte-exact). Word-verified vs USA DispatchCameraMode + EU .s: activeCamera ptr =
  * g_nVendorBuyQuantity+0x3148, g_cameraSlots = +0x3508, g_cameraSlotActive =
- * +0x5C68, vtbl = D_0026E680 (update @+0xC); CallCameraPollHandler = func_00270870,
+ * +0x5C68, vtbl = D_0026E680 (update @+0xC); CallCameraPollHandler,
  * TestCameraTakeover, SwitchActiveCamera,
  * helper-moby = func_00270360, callback-dispatch = func_00270080. */
 #ifndef TARGET_NATIVE
@@ -682,7 +682,7 @@ s32 DispatchCameraMode(void) {
     s32 (*update)();
     f32 *pos;
 
-    func_00270870(chosen);   /* CallCameraPollHandler */
+    CallCameraPollHandler(chosen);
 
     for (i = 0; i < 48; i++) {
         Camera *slot = &slots[i];

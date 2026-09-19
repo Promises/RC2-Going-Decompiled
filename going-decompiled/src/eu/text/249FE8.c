@@ -75,7 +75,7 @@ void GuiElementSetScale(GuiWidget *e, f32 x, f32 y, f32 z, f32 w);    /* USA Gui
 void func_00338730(GuiWidget *e, s32 text);                      /* USA GuiElementSetText */
 char *GetLocalizedString(s32 textId);
 s32 *func_00337B00(GuiWidget *e);                                /* USA GuiElementGetColor */
-s32 func_00338738(GuiWidget *e);                                 /* USA GuiTextElementMeasure */
+s32 GuiTextElementMeasure(GuiWidget *e);                            /* same name in USA */
 void GuiTextElementDraw(GuiWidget *e);                                /* USA GuiTextElementDraw */
 void func_0027EFD0(s32 x1, s32 y1, s32 x2, s32 y2, s64 z, u64 tex0); /* USA DrawFlatRect2d */
 s32 func_0027F5F8(void);                                         /* tail call (USA func_0027F790) */
@@ -348,10 +348,10 @@ void GuiMenuListDraw(void *self) {
                     /* left underline rect (selected colour fill) */
                     u32 fill = (*(u32 *)(p + 0xAC) & 0x00FFFFFF) | 0x20000000;
                     u64 packed = ((u64)fill << 32) | fill;
-                    s32 w1 = func_00338738((GuiWidget *)self) >> 1;
+                    s32 w1 = GuiTextElementMeasure((GuiWidget *)self) >> 1;
                     s32 y1 = (s32)(rowY + 2.0f);
                     s32 x1 = (s32)(originX - (f32)w1 - 2.0f - 16.0f);
-                    s32 w2 = func_00338738((GuiWidget *)self) >> 1;
+                    s32 w2 = GuiTextElementMeasure((GuiWidget *)self) >> 1;
                     s32 y2 = (s32)(rowY - 2.0f + 16.0f);
                     s32 x2 = (s32)(originX - (f32)w2 - 2.0f - 16.0f + 8.0f);
                     func_0027EFD0(x1, y1, x2, y2, 0, (u64)(unsigned long)&packed);
@@ -366,10 +366,10 @@ void GuiMenuListDraw(void *self) {
                     if (*(s32 *)(p + 0xC8)) {
                         u32 fill = (*(u32 *)(p + 0xAC) & 0x00FFFFFF) | 0x20000000;
                         u64 packed = ((u64)fill << 32) | fill;
-                        s32 w1 = func_00338738((GuiWidget *)self) >> 1;
+                        s32 w1 = GuiTextElementMeasure((GuiWidget *)self) >> 1;
                         s32 y1 = (s32)(rowY - 2.0f);
                         s32 x1 = (s32)(originX - (f32)w1 - 8.0f);
-                        s32 w2 = func_00338738((GuiWidget *)self) >> 1;
+                        s32 w2 = GuiTextElementMeasure((GuiWidget *)self) >> 1;
                         s32 y2 = (s32)(rowY + 2.0f + 16.0f);
                         s32 x2 = (s32)(originX + (f32)w2 + 9.0f);
                         func_0027EFD0(x1, y1, x2, y2, 0, (u64)(unsigned long)&packed);

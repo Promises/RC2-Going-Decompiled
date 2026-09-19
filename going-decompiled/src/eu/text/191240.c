@@ -1531,14 +1531,14 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", MapInit);
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/191240", MapBeginUpload);
 
 /*
- * func_00295F90 — scan the 5 map cache slots for the entry whose state word
+ * MapFindReadyCacheSlot — scan the 5 map cache slots for the entry whose state word
  * (table at g_mapTextureWidth+0x48) is set and whose id word
  * (table at g_mapTextureWidth+0x5C) is still -1 (unassigned). With param==0 it
  * scans forward (slot i); otherwise it probes from the end (slot 4-i). Returns
  * the matching slot index, or -1 if none qualifies. (USA func_00295F30.)
  */
 extern s32 g_mapTextureWidth[];
-s32 func_00295F90(s32 fromEnd) {
+s32 MapFindReadyCacheSlot(s32 fromEnd) {
     s32 *state = &g_mapTextureWidth[0x12];   /* +0x48 */
     s32 *id    = &g_mapTextureWidth[0x17];   /* +0x5C */
     s32 i;

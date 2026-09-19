@@ -491,7 +491,7 @@ void TickFrontEndScreenIdle(void) {
  * states, runs the shared moby + sound-emitter tick and optional post-hook. Matching arm
  * stays INCLUDE_ASM (cc1 jtbl reloc layout); #else is the structure model. Word-verified vs
  * USA func_002CB860: g_areaTable->D_139460, func_002DECE0->func_002DECA0, case handlers
- * func_002CBA10/A40/BD68->func_002CB8C0/8F0/BC18, UpdateSoundEmitters->func_002E5898,
+ * func_002CBA10/A40/BD68->MenuScreenBeginLoad/func_002CB8F0/func_002CBC18, UpdateSoundEmitters->func_002E5898,
  * UpdateActiveMobys->func_002B7210, func_002CB560->func_002CB410, g_hudClutSlots+0x10->
  * g_pActiveTextTable+0x68. GENUINE region diff: case-5 heal-timer 0xA(60Hz)->0x8(50Hz).
  * The USA-model omission of the RequestGameStateChange()==0 early-return (present in both
@@ -508,7 +508,7 @@ s32 TickFrontEndScreenMachine(void) {
     extern s32  RequestGameStateChange(s32 stateId, s32 push, s32 c, s32 d, s32 e);
     extern void func_002DECA0(void);     /* USA func_002DECE0 */
     extern void func_002B7210(void);     /* USA UpdateActiveMobys */
-    extern void func_002CB8C0(void);     /* USA func_002CBA10 (defined later, file scope) */
+    extern void MenuScreenBeginLoad(void);     /* same name in USA (defined later, file scope) */
     extern void func_002CB8F0(void);     /* USA func_002CBA40 (defined later, file scope) */
     extern void func_002CBC18(void);     /* USA func_002CBD68 */
     extern void func_002CB410(void);     /* USA func_002CB560 */
@@ -538,7 +538,7 @@ s32 TickFrontEndScreenMachine(void) {
 
     switch (*(s32 *)mb) {
     case 1:
-        func_002CB8C0();
+        MenuScreenBeginLoad();
         break;
     case 2:
         func_002CB8F0();
@@ -568,7 +568,7 @@ s32 TickFrontEndScreenMachine(void) {
 #endif
 
 /* MenuScreenLoad then mark the screen-state scratch ready (state=2). */
-void func_002CB8C0(void) {
+void MenuScreenBeginLoad(void) {
     u8 *p;
     MenuScreenLoad();
     p = D_001F0000 + 0x2840;

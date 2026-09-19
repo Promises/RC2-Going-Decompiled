@@ -4297,10 +4297,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00127B18);
 extern void func_00127B18(void);   /* libmc timer callback */
 extern s32  func_0011AB40(void);   /* start/arm the timer (void tail call) */
 
-/** func_00127B40 = McDelayMillis (libmc): arm a `millis`-ms timer whose expiry
+/** McDelayMillis (libmc): arm a `millis`-ms timer whose expiry
  *  runs func_00127B18. Registers the handler (func_0011A9A0) with a fresh timer
  *  object (func_0011AB10) then tail-calls func_0011AB40 to start it. */
-void func_00127B40(s32 millis) {
+void McDelayMillis(s32 millis) {
     s32 id = millis & 0xFFFF;
     void (*cb)(void) = func_00127B18;
     s32 obj = func_0011AB10();
@@ -5900,7 +5900,7 @@ __asm__(".word 0\n\t.word 0");
  * main(argc,argv) before tail-jumping to exit. Left as INCLUDE_ASM by nature. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", _start);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131CA8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", _exitThunk);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131CB0);
 

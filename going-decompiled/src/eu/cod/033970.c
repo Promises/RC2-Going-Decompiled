@@ -9,7 +9,7 @@
  * EU<->USA function map (delta +0x60):
  *   func_00133A50 = USA func_001339F0  (indexed byte copy)
  *   CdReadSync = USA CdReadSync     (sync CdStartRead descriptor)
- *   func_00133AD8 = USA LoadDiscToc    (MATCHED — region-agnostic body)
+ *   LoadDiscToc = USA LoadDiscToc    (same name; MATCHED — region-agnostic body)
  *   LoadLevelToc = USA LoadLevelToc   (3-operand mult wall)
  * g_discToc is at EU 0x0014B5C0 (USA 0x0014B540, delta +0x80).
  */
@@ -27,13 +27,13 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/033970", func_00133A50);
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/033970", CdReadSync);
 
 /**
- * LoadDiscToc (USA name; EU func_00133AD8) - synchronously read the global disc
+ * LoadDiscToc (same name in USA) - synchronously read the global disc
  * TOC: 0xB sectors from LBA 0x3E9 into g_discToc (EU D_0014B5C0) via CdReadSync,
  * forwarding its return value. The value-return keeps ee-gcc from
  * sibling-call-optimising into a tail jump. Region-agnostic body, byte-exact in
  * both builds.
  */
-s32 func_00133AD8(void) {
+s32 LoadDiscToc(void) {
     return CdReadSync(0x3E9, 0xB, D_0014B5C0);
 }
 

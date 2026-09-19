@@ -3415,14 +3415,14 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapBeginUpload)
 #endif
 
 /*
- * func_00295F30 — scan the 5 map cache slots for the entry whose state word
+ * MapFindReadyCacheSlot — scan the 5 map cache slots for the entry whose state word
  * (table at g_mapTextureWidth+0x48) is set and whose id word
  * (table at g_mapTextureWidth+0x5C) is still -1 (unassigned). With param==0 it
  * scans forward (slot i); otherwise it probes from the end (slot 4-i). Returns
  * the matching slot index, or -1 if none qualifies.
  */
 extern s32 g_mapTextureWidth[];
-s32 func_00295F30(s32 fromEnd) {
+s32 MapFindReadyCacheSlot(s32 fromEnd) {
     s32 *state = &g_mapTextureWidth[0x12];   /* +0x48 */
     s32 *id    = &g_mapTextureWidth[0x17];   /* +0x5C */
     s32 i;
@@ -3439,7 +3439,7 @@ s32 func_00295F30(s32 fromEnd) {
 }
 
 /* MapAllocCacheSlot (MapPromoteCacheSlot) — pick a usable galactic-map cache slot
- * and move it to slot 0. First tries func_00295F30(1) (a slot with state set +
+ * and move it to slot 0. First tries MapFindReadyCacheSlot(1) (a slot with state set +
  * id -1); if that returns nonzero it is the answer. Otherwise scans slots 1..4
  * for the first occupied slot (slotState != 0) whose level id lacks bit 0x1000,
  * relocates it into slot 0 (MapMoveCacheSlot) and returns its index (or 5 if none).
@@ -3548,7 +3548,7 @@ void MapMoveCacheSlot(s32 dst, s32 src) {
 /* MapAllocCacheSlot #else body — placed here so it follows the MapCache type and
  * MapMoveCacheSlot it depends on (its INCLUDE_ASM stays in address order above). */
 s32 MapAllocCacheSlot(void) {
-    s32 slot = func_00295F30(1);
+    s32 slot = MapFindReadyCacheSlot(1);
     s32 i;
 
     if (slot != 0) {

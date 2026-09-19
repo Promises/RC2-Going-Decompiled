@@ -686,7 +686,7 @@ extern void UpdateActiveMobys(void);
 extern void MenuScreenUpdate(void);
 extern void func_002CBD68(void);
 extern void func_002CB560(void);
-extern void func_002CBA10(void);
+extern void MenuScreenBeginLoad(void);
 extern void func_002CBA40(void);
 extern void MenuScreenCommitTransition(void);
 #ifndef TARGET_NATIVE
@@ -719,7 +719,7 @@ s32 TickFrontEndScreenMachine(void) {
 
     switch (*(s32 *)mb) {
     case 1:
-        func_002CBA10();
+        MenuScreenBeginLoad();
         break;
     case 2:
         func_002CBA40();
@@ -749,7 +749,7 @@ s32 TickFrontEndScreenMachine(void) {
 #endif
 
 /* MenuScreenLoad then mark the screen-state scratch ready (state=2). */
-void func_002CBA10(void) {
+void MenuScreenBeginLoad(void) {
     u8 *p;
     MenuScreenLoad();
     p = g_particleFxBlob + 0x100;

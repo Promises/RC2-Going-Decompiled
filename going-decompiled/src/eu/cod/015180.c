@@ -2167,7 +2167,7 @@ s32 func_0011E828(s32 arg0, s32 arg1, s32 arg2) {
     return 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011E8A8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", sceSifFreeSysMemory);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_0011E920);
 
@@ -3993,11 +3993,11 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00124C28);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00124C98);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00124E08);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", sceCdInit);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001250E8);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", sceCdDiskReady);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001252E0);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", sceCdMmode);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_001253A4);
 
@@ -5385,7 +5385,7 @@ void func_00131AF8(void *arg0) {
  * INCLUDE_ASM by nature. */
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00131B48);
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00131D08);
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", _exitThunk);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", func_00131D10);
 

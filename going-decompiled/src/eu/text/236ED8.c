@@ -880,11 +880,11 @@ void func_00338730(GuiElement *e, s32 text) {
     *(s32 *)((char *)e + 0x40) = text;
 }
 
-/* func_00338738: measure the text element's string - forwards the text handle
+/* GuiTextElementMeasure: measure the text element's string - forwards the text handle
  * (+0x40), a -1 max-width sentinel, the +0x34 field, and the scale.x (*(scale+0))
- * to the shared text-measure helper func_0027F6C0. USA GuiTextElementMeasure. */
+ * to the shared text-measure helper func_0027F6C0. Same name in USA. */
 extern s32 func_0027F6C0(s32 text, s32 maxWidth, s32 arg2, f32 scaleX);
-s32 func_00338738(GuiElement *e) {
+s32 GuiTextElementMeasure(GuiElement *e) {
     return func_0027F6C0(*(s32 *)((char *)e + 0x40), -1,
                          *(s32 *)((char *)e + 0x34), e->scale[0]);
 }

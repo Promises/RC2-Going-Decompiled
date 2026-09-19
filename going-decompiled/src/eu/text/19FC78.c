@@ -982,7 +982,12 @@ s32 AllocMobyGridBlockBits(s32 width) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_002A1648);
+/* UpdateMobyGridCells (0x2A1648) and UpdateMobyBSphereAndGrid (0x2A1928, USA
+ * 0x2A1D80) were one fused func_002A1648 leftover; splat splits them at the
+ * type:func pin, so both need an include site or 416 bytes leave the unit. */
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", UpdateMobyGridCells);
+
+INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", UpdateMobyBSphereAndGrid);
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/19FC78", func_002A1AC8);
 
