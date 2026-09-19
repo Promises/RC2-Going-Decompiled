@@ -276,19 +276,19 @@ f32 Vec3LengthVu0(const Vec4f v) {
 #endif
 /** Return the 2D length sqrt(v.x*v.x + v.y*v.y) of the xy components (VU0 vmul/vaddy/vsqrt). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002837D0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", Vec2LengthXyVu0);
 #else
 /* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
-f32 func_002837D0(const Vec4f v) {
+f32 Vec2LengthXyVu0(const Vec4f v) {
     return __builtin_sqrtf(v[0] * v[0] + v[1] * v[1]);
 }
 #endif
 /** Return the 3D distance sqrt(|a-b|^2) between points a and b (VU0 vsub/vmul/vmadd/vsqrt). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002837F8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", Vec3DistVu0);
 #else
 /* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
-f32 func_002837F8(const Vec4f a, const Vec4f b) {
+f32 Vec3DistVu0(const Vec4f a, const Vec4f b) {
     f32 dx = a[0] - b[0];
     f32 dy = a[1] - b[1];
     f32 dz = a[2] - b[2];
@@ -916,10 +916,10 @@ void func_00284248(Vec4f dst, f32 angle, s32 mode);
 
 /** Build the 3x3 rotation matrix (rows 0..2) for the quaternion at src; store at dst. VU0 quat->matrix. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284308);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", QuatToMatrix3);
 #else
 /* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
-void func_00284308(const Vec4f src, Vec4f dst) {
+void QuatToMatrix3(const Vec4f src, Vec4f dst) {
     f32 x = src[0], y = src[1], z = src[2], w = src[3];
     f32 xx = 2*x*x, yy = 2*y*y, zz = 2*z*z;
     f32 xy = 2*x*y, xz = 2*x*z, yz = 2*y*z;
@@ -1083,10 +1083,10 @@ f32 func_002845D8(f32 x) {
 
 /** Shortest absolute angular distance between angles a and b (radians): result in [0, pi]. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284630);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", AngleAbsDiffPi);
 #else
 /* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
-f32 func_00284630(f32 a, f32 b) {
+f32 AngleAbsDiffPi(f32 a, f32 b) {
     f32 d = a - b;
     d = (d < 0.0f) ? -d : d;
     if (d >= PR_PI) d = 2.0f * PR_PI - d;
@@ -1159,10 +1159,10 @@ f32 func_002846B0(f32 a, f32 b) {
  * VU0 unpack (vitof0) + vmulaw/vmaddx + vftoi0 + ppach/ppacb.
  */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002846E8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", ColorLerpPacked);
 #else
 /* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
-u32 func_002846E8(u32 c0, u32 c1, f32 t) {
+u32 ColorLerpPacked(u32 c0, u32 c1, f32 t) {
     f32 w0 = 1.0f - t;
     u32 out = 0;
     int i;

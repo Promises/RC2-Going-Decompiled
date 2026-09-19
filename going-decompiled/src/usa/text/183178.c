@@ -104,16 +104,16 @@ f32 func_002832E8(f32 x) {
     return D_1A7920 * x;
 }
 
-/* func_002832F8: hand-written s32 countdown step (pmaxw + addi, "handwritten
+/* TickCountdownTimer: hand-written s32 countdown step (pmaxw + addi, "handwritten
  * instruction" forms this compiler never emits from C). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183178", func_002832F8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183178", TickCountdownTimer);
 #else
 /* TODO(match): functional equivalent - not byte-exact; handwritten pmaxw +
  * `addi` countdown form. Steps an s32 timer at *p: if already 0 -> 1 (idle);
  * else clamp to >=1, decrement, store; -> 0 while still running, 2 on the
  * frame it hits 0. */
-s32 func_002832F8(s32 *p) {
+s32 TickCountdownTimer(s32 *p) {
     s32 v = *p;
     if (v == 0) {
         return 1;
@@ -135,7 +135,7 @@ s32 func_002832F8(s32 *p) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183178", func_00283328);
 #else
 /* TODO(match): functional equivalent - not byte-exact; handwritten pmaxw +
- * `addi` countdown form. s16 twin of func_002832F8: same idle/run/expire
+ * `addi` countdown form. s16 twin of TickCountdownTimer: same idle/run/expire
  * return triple (1 idle, 0 running, 2 on expiry). */
 s32 func_00283328(s16 *p) {
     s32 v = *p;
@@ -159,7 +159,7 @@ s32 func_00283328(s16 *p) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183178", func_00283358);
 #else
 /* TODO(match): functional equivalent - not byte-exact; handwritten pmaxw +
- * `addi` countdown form. u8 twin of func_002832F8: value is zero-extended
+ * `addi` countdown form. u8 twin of TickCountdownTimer: value is zero-extended
  * (lbu) so the pmaxw clamp only matters when v==0 -> idle return 1; otherwise
  * decrement, store, return 0 while running / 2 on expiry. */
 s32 func_00283358(u8 *p) {

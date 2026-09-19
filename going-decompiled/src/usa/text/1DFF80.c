@@ -993,7 +993,7 @@ void CastEmitterOcclusionRay(SoundEmitterSlot *emitter, void *outHit) {
 }
 #endif
 
-extern float func_002837F8(void *a, void *b);
+extern float Vec3DistVu0(void *a, void *b);
 extern s32 ComputeVolumeFalloff(SoundDef *def, float dist, float lo, float hi);
 extern u8 g_cameraPos[]; /* 0x1B52C0 - listener / camera world position */
 
@@ -1057,7 +1057,7 @@ s32 ComputeVolumeFalloff(SoundDef *def, float dist, float near, float far) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", ComputeEmitterVolume);
 #else
 s32 ComputeEmitterVolume(SoundEmitterSlot *slot, Vec4 *pos) {
-    float dist = func_002837F8(pos, g_cameraPos);
+    float dist = Vec3DistVu0(pos, g_cameraPos);
     float *curve = *(float **)((u8 *)slot + 0x8);
     return ComputeVolumeFalloff((SoundDef *)curve, dist, curve[0], curve[1]);
 }
@@ -1088,7 +1088,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", ComputeEmitterP
 extern void func_00284098(void *dst, void *mtx, void *src); /* rotate vec by mtx */
 extern void func_00283A48(void *dst, void *a, void *b);     /* vec helper        */
 extern float func_00283BF8(float x, float z);               /* atan2(x, z)       */
-extern float func_002837D0(void *v);                        /* planar magnitude  */
+extern float Vec2LengthXyVu0(void *v);                        /* planar magnitude  */
 extern float WrapAnglePiSum(float a, float b);              /* wrap a+b to [-pi,pi]*/
 extern float WrapAnglePiDiff(float a, float b);             /* wrap a-b to [-pi,pi]*/
 extern s32   FloatToInt(float v);
@@ -1110,7 +1110,7 @@ s32 ComputeEmitterPan(SoundEmitterSlot *slot, Vec4 *pos) {
         azimuth += 6.2831855f;             /* +2pi -> [0, 2pi)              */
     }
 
-    planar = func_002837D0(dir);
+    planar = Vec2LengthXyVu0(dir);
     if (planar < 2.0f) {
         lastAngle = *(f32 *)((u8 *)slot + 0x40);
         if (lastAngle < 0.0f) {

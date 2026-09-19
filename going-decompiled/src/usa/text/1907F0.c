@@ -41,7 +41,7 @@ __asm__(".extern g_nGameState, 16");
 
 /* Small-data globals (gp-relative; complete <=8-byte declarations so -G8
  * places them in small data). */
-extern s32 D_1A9000;  /* fade/transition frame countdown (stepped by func_002832F8) */
+extern s32 D_1A9000;  /* fade/transition frame countdown (stepped by TickCountdownTimer) */
 extern s32 D_1A9004;  /* fade mode/owner id (2 = level-transition fade) */
 extern f32 D_1A9008;  /* fade progress/intensity captured at request time */
 extern s32 D_1A900C;  /* fade colour A (0xRRGGBB) */
@@ -55,7 +55,7 @@ extern s32 D_1A8D40;  /* shared status value returned by the pump callbacks */
 /* cc1-small / assembler-absolute scalar (paired with the override above). */
 extern s32 g_nGameState;     /* top-level game state id (0 = in-game) */
 
-extern s32 func_002832F8(s32 *counter);   /* shared countdown step (text/183178) */
+extern s32 TickCountdownTimer(s32 *counter);   /* shared countdown step (text/183178) */
 extern void func_0029C600(s32 arg0);
 extern s32 DrawFullScreenTint(s32 r, s32 g, s32 b, s32 a);
 
@@ -147,7 +147,7 @@ void func_00290878(s32 owner, s32 colourA, s32 colourB, f32 progress) {
 
 /* func_00290920: the fade draw callback (rebuilds the camera projection with
  * a pinched FOV, draws the letterbox/fade rectangles via func_0027E4D0 and
- * the two colour overlays via func_002846E8/func_003017F8). Blocked by the
+ * the two colour overlays via ColorLerpPacked/func_003017F8). Blocked by the
  * 8-byte-packed callee-save layout (s0..s5+ra+f20..f25 packed at sp+0x0..,
  * see header).
  * NO #else: this is 0x57C bytes of dense, opaque letterbox/bar interpolation
@@ -164,7 +164,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1907F0", func_00290920);
  */
 s32 func_00290EA0(void) {
     if (g_nGameState == 0) {
-        if (func_002832F8(&D_1A9000)) {
+        if (TickCountdownTimer(&D_1A9000)) {
             func_0029C600(1);
         }
     }

@@ -105,11 +105,11 @@ typedef struct CameraSysState {
     /* 0x198 */ u8 pad198[0xD0];
     /* 0x268 */ f32 fadeBlackRate;    /* per-tick fade step = 1/duration */
     /* 0x26C */ f32 fadeBlackTarget;  /* fade-to level */
-    /* 0x270 */ u8 fadeBlackTimer[4]; /* func_002832F8 re-arm timer */
+    /* 0x270 */ u8 fadeBlackTimer[4]; /* TickCountdownTimer re-arm timer */
     /* 0x274 */ f32 fadeWhiteRate;    /* white-flash per-tick step */
     /* 0x278 */ f32 fadeWhiteOutRate; /* alternate step clamp used while fadeWhiteTarget==0 (fade-out) */
     /* 0x27C */ f32 fadeWhiteTarget;  /* white flash-to level */
-    /* 0x280 */ u8 fadeWhiteTimer[4]; /* func_002832F8 re-arm timer */
+    /* 0x280 */ u8 fadeWhiteTimer[4]; /* TickCountdownTimer re-arm timer */
     /* 0x284 */ u8 pad284[0x14C];
     /* 0x3D0 */ f32 fovSpringVel;     /* spring-ease state (func_002703C0) */
     /* 0x3D4 */ f32 fovTarget;
@@ -1477,13 +1477,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00271140);
  *  - eases sphYaw/sphPitch by WrapAnglePiSum(old, WrapAnglePiDiff(new,old)
  *    * f24), dist linearly; rebuilds pos = anchor + rotate(rotate(fwd*dist,
  *    up, yaw), right, pitch); pos -> st+0x50 AND g_cameraPos.
- *  - orientation band (UNCERTAIN OPERANDS): oriB -> matrix (func_00284308
+ *  - orientation band (UNCERTAIN OPERANDS): oriB -> matrix (QuatToMatrix3
  *    at sp+0x80), roll delta = (PI/2 - acos-form) signed by row1 dot,
  *    >PI/2 wrap-correction with 2PI(0x40C90FDC) adjust, <1e-5(0x3727C5AC)
  *    fast-path copies rows, else func_002AC4D0 quat + func_002ADC50
  *    applications; final rows renormalized (row1 = cross with
  *    g_heroFacingDir, len -1.0!), func_002AC468 captures into src1 AND oriB,
- *    func_002832F8 ticks blendTarget; return 0. */
+ *    TickCountdownTimer ticks blendTarget; return 0. */
 /* WALL:
  * fourteen callee-saves at 8-byte slot spacing (packed-save wall); 0x410 bytes
  * of interleaved fp/qword math. Left INCLUDE_ASM. */
@@ -1492,9 +1492,9 @@ extern void Vec3CrossVu0(Vec4 *dst, const Vec4 *a, const Vec4 *b);
 extern void Vec4ScaleVu0(Vec4 *dst, f32 s, const Vec4 *src);
 extern void func_002AC4D0(void *dstQuat, const Vec4 *axis, f32 ang);
 extern void func_002ADC50(void *dst, const Vec4 *v, const void *quat);
-extern void func_00284308(void *rot, void *mtx); /* rotation -> 3-row matrix */
+extern void QuatToMatrix3(void *rot, void *mtx); /* rotation -> 3-row matrix */
 extern void func_002AC468(void *dstOri, Camera *cam);
-extern s32 func_002832F8(void *timer);
+extern s32 TickCountdownTimer(void *timer);
 extern f32 IntToFloat(s32 x);
 extern f32 GetFloatAbs(f32 x);
 extern f32 WrapAnglePiDiff(f32 a, f32 b);
@@ -1570,7 +1570,7 @@ s32 func_002712E8(Vec4 *out, void *state) {
     g_cameraPos = st->posOut;
     /* orientation: decompose the target basis (out rows) against the current
      * blend orientation (oriB as a 3-row matrix) */
-    func_00284308(&st->oriB, mtxRows);
+    QuatToMatrix3(&st->oriB, mtxRows);
     Vec4ScaleVu0(&proj, Vec3DotVu0(&mtxRows[2], out), &mtxRows[2]);
     Vec4SubVu0(&flat, out, &proj);
     roll = kPiO2.f - func_00283B60(Vec3DotVu0(&mtxRows[0], &flat) /
@@ -1626,7 +1626,7 @@ s32 func_002712E8(Vec4 *out, void *state) {
     Vec3CrossVu0(&(&g_cameraMatrix)[2], &(&g_cameraMatrix)[1], &g_cameraMatrix);
     func_002AC468(&st->oriOut, (Camera *)&g_cameraMatrix);
     func_002AC468(&st->oriB, (Camera *)&g_cameraMatrix);
-    func_002832F8(&st->target);
+    TickCountdownTimer(&st->target);
     return 0;
 }
 #else
@@ -1686,10 +1686,10 @@ typedef struct CamShakeChannel {
 #ifdef TARGET_NATIVE
 extern Camera *g_activeCamera;      /* aliases g_cameraState+0x190 */
 extern f32 D_1A85B8;                /* shake roll speed (degrees/tick) */
-extern s32 func_002832F8(void *timer);
+extern s32 TickCountdownTimer(void *timer);
 extern f32 func_002845D8(f32 x);    /* wrap angle */
 extern void func_002ADCE0(void *dst, f32 ang, void *src); /* build roll rotation about src */
-extern void func_00284308(void *rot, void *mtx); /* rotation -> 3-row matrix */
+extern void QuatToMatrix3(void *rot, void *mtx); /* rotation -> 3-row matrix */
 extern void func_002840E8(void *dst, void *a, void *b); /* mtx multiply */
 void ApplyCameraShakeAxis(void *channel, s32 axis) {
     CamShakeChannel *sh = channel;
@@ -1710,7 +1710,7 @@ void ApplyCameraShakeAxis(void *channel, s32 axis) {
     if (sh->peak < sh->timer) {
         sh->peak = sh->timer;
     }
-    func_002832F8(&sh->timer);
+    TickCountdownTimer(&sh->timer);
     t = IntToFloat(sh->timer) / IntToFloat(sh->peak);
     switch (axis) {
     case 0:
@@ -1748,7 +1748,7 @@ void ApplyCameraShakeAxis(void *channel, s32 axis) {
               t3 * ramp;
         sh->current = ang;
         func_002ADCE0(&ofs, ang, &g_cameraMatrix);
-        func_00284308(&ofs, mtx);
+        QuatToMatrix3(&ofs, mtx);
         func_002840E8(&g_cameraMatrix, mtx, &g_cameraMatrix);
         break;
     }
@@ -2022,7 +2022,7 @@ void func_002721A8(f32 duration) {
 
 /* UpdateScreenFadeBlack: per-frame driver that eases g_screenFadeBlack toward
  * fadeBlackTarget at fadeBlackRate (no-op while the rate is 0). When the level
- * reaches the target a follow-up timer (func_002832F8 on the +0x270 field) may
+ * reaches the target a follow-up timer (TickCountdownTimer on the +0x270 field) may
  * re-arm the target to 0; once both target and current level have settled at
  * (or below) 0 the rate is cleared so the driver idles. */
 #if !defined(TARGET_NATIVE) && !defined(MATCH_UpdateScreenFadeBlack)
@@ -2033,7 +2033,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", UpdateScreenFad
  * The old 2-arg decl here DROPPED it (caught 2026-07-02, engine lane);
  * cmp-oracle is STALE for this body until re-run with the 3-arg call. */
 extern f32 func_002AB150(f32 target, f32 rate, f32 *level);
-extern s32 func_002832F8(void *timer);
+extern s32 TickCountdownTimer(void *timer);
 /* TODO(match): functional equivalent - not byte-exact. Engine-2.96 pipeline
    (fable 2026-07-02) reproduces the whole body shape (direct g_cameraState
    accesses give the %hi-in-s1 + per-arm lo_sum re-derivation), but walls on
@@ -2049,7 +2049,7 @@ void UpdateScreenFadeBlack(void) {
     func_002AB150(g_cameraState.fadeBlackTarget, g_cameraState.fadeBlackRate,
                   &g_screenFadeBlack);
     if (g_screenFadeBlack == g_cameraState.fadeBlackTarget) {
-        if (func_002832F8((char *)&g_cameraState + 0x270) == 1) {
+        if (TickCountdownTimer((char *)&g_cameraState + 0x270) == 1) {
             g_cameraState.fadeBlackTarget = 0.0f;
         }
     }
@@ -2062,7 +2062,7 @@ void UpdateScreenFadeBlack(void) {
 /* UpdateScreenFadeWhite: white-flash twin of UpdateScreenFadeBlack. Eases
  * g_screenFadeWhite toward fadeWhiteTarget (+0x27C) at fadeWhiteRate (+0x274);
  * idles while the rate is 0. Eases toward the target via func_002AB150, then
- * the settle/re-arm (func_002832F8 on the +0x280 timer) and rate-clear mirror
+ * the settle/re-arm (TickCountdownTimer on the +0x280 timer) and rate-clear mirror
  * the black-fade path. */
 /* Engine-2.96 candidate (fable 2026-07-02): the target==0 branch passes a
  * THIRD-arg rate slot from +0x278 (the fade-out step clamp) — settled as a
@@ -2080,7 +2080,7 @@ __asm__(".extern g_screenFadeWhite, 12");
  * real step clamp, CSE-satisfied at the call sites by the preceding compare
  * loads (which is why the asm LOOKS 2-arg). */
 extern f32 func_002AB150(f32 target, f32 rate, f32 *level);
-extern s32 func_002832F8();
+extern s32 TickCountdownTimer();
 void UpdateScreenFadeWhite(void) {
     if (g_cameraState.fadeWhiteRate == 0.0f) {
         return;
@@ -2093,7 +2093,7 @@ void UpdateScreenFadeWhite(void) {
                       g_cameraState.fadeWhiteRate, &g_screenFadeWhite);
     }
     if (g_screenFadeWhite == g_cameraState.fadeWhiteTarget) {
-        if (func_002832F8(g_cameraState.fadeWhiteTimer) == 1) {
+        if (TickCountdownTimer(g_cameraState.fadeWhiteTimer) == 1) {
             g_cameraState.fadeWhiteTarget = 0.0f;
         }
     }

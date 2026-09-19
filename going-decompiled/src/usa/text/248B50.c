@@ -60,7 +60,7 @@ typedef struct GuiWidget {
  *   +0x1C active     non-zero while the transition is running
  *   +0x20 sink       optional s32* the blended colour word is written through
  *   +0x24 keyframe table base — records the per-channel lerp endpoints walk
- *   +0x8C colorA / +0x90 colorB   packed colour words blended by func_002846E8 */
+ *   +0x8C colorA / +0x90 colorB   packed colour words blended by ColorLerpPacked */
 typedef struct GuiAnim {
     /* 0x00 */ f32 c0;
     /* 0x04 */ f32 c1;
@@ -134,9 +134,9 @@ void PlayGlobalSound(s32 id, s32 a, s32 b);
 /* callees used by the GuiAnim transition family (func_0034A860 / func_0034A3C0). */
 /* GuiHermiteInterp(t, c0, c1, c2, c3): cubic Hermite blend (0x34FBC0). */
 f32 GuiHermiteInterp(f32 t, f32 c0, f32 c1, f32 c2, f32 c3);
-/* func_002846E8(colorA, colorB, t): per-channel byte lerp of two packed colour
+/* ColorLerpPacked(colorA, colorB, t): per-channel byte lerp of two packed colour
  * words by phase t (0x2846E8); returns the blended word. */
-u32 func_002846E8(u32 colorA, u32 colorB, f32 t);
+u32 ColorLerpPacked(u32 colorA, u32 colorB, f32 t);
 #endif
 
 /* func_00348BD0: run the type-C element init on the widget and return it.
@@ -1175,7 +1175,7 @@ void func_0034A858(GuiWidget *w, f32 v) {
  *     dst pointer is non-null, lerp the 4-vector  dst[k] = (1-t)*from[k] + t*to[k]
  *     where  from = anim + 0x3C + i*0x10  and  to = anim + 0x6C + i*0x10.
  *  4. If the colour sink (+0x20) is non-null, blend the two packed colour words
- *     (+0x8C,+0x90) by a SECOND Hermite ease (over c2,c3) via func_002846E8 and
+ *     (+0x8C,+0x90) by a SECOND Hermite ease (over c2,c3) via ColorLerpPacked and
  *     store the result through the sink.
  *
  * WALL: 99.x near-miss — the original keeps the saved $f20 (1.0) live across the
@@ -1225,7 +1225,7 @@ void func_0034A860(GuiAnim *a) {
 
     if (a->sink != 0) {
         f32 ct = GuiHermiteInterp(clamped, 0.0f, a->c2, a->c3, 1.0f);
-        *a->sink = (s32)func_002846E8(a->colorA, a->colorB, ct);
+        *a->sink = (s32)ColorLerpPacked(a->colorA, a->colorB, ct);
     }
 }
 #endif

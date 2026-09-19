@@ -481,7 +481,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291CB8);
  * sin(angle)*0.866, +0x358 = -0.5, +0x35C = 0.
  * Then walks the 8 point-light request slots (g_pointLights: light data +0x10
  * stride 0x20, request record +0x110 stride 0x30). A slot with type 0 is skipped.
- * Otherwise, if the slot is relevant (func_002837F8(light, req) > 1.0) OR its
+ * Otherwise, if the slot is relevant (Vec3DistVu0(light, req) > 1.0) OR its
  * radius moved by more than 1.0 (|light[0xC] - req[0xC]|), the light data is
  * copied into the request record and, by request type, dispatched: type 1 builds
  * a relight request (func_00291EB0) and is promoted to type 2; type 2 resets +
@@ -497,7 +497,7 @@ extern u8  D_1A9190[];                 /* default directional-matrix row (16B) *
 extern f32 WrapAnglePiSum(f32 a, f32 b);
 extern f32 func_00283B30(f32 x);       /* cos */
 extern f32 func_00283B48(f32 x);       /* sin */
-extern f32 func_002837F8(void *light, void *req);
+extern f32 Vec3DistVu0(void *light, void *req);
 extern f32 GetFloatAbs(f32 x);         /* fabsf */
 extern void func_00291EB0(s32 index);
 extern void func_00291FC8(void *arg);
@@ -524,7 +524,7 @@ void func_00291D28(void) {
         if (*(s32 *)(req - 0x10) == 0) {
             continue;                                   /* empty slot */
         }
-        if (!(1.0f < func_002837F8(light, req)) &&
+        if (!(1.0f < Vec3DistVu0(light, req)) &&
             !(1.0f < GetFloatAbs(*(f32 *)(light + 0xC) - *(f32 *)(req + 0xC)))) {
             continue;                                   /* unchanged - keep as is */
         }

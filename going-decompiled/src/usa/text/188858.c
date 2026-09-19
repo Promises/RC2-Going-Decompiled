@@ -1450,7 +1450,7 @@ extern s32 g_pendingDialogVoiceId, g_pendingVoiceAux;
 extern void BeginSubtitleDisplay(void);
 extern void StopDialogVoice(void);
 extern void func_0028AA70(s32 id);
-extern s32 func_002832F8(s32 p);
+extern s32 TickCountdownTimer(s32 p);
 extern void func_002B1B48(s32 a, s32 b, s32 c);
 void UpdateSubtitleStateMachine(void) {
     u8  *ss = (u8 *)&g_subtitleState;
@@ -1640,7 +1640,7 @@ gate:
         if (*(s32 *)(ss + 0x38) == 0) {
             if (g_subtitleState.entryIndex >= 0) {
                 if (*(s16 *)(ss + 0x3A) == 0) {
-                    if (func_002832F8((s32)(ss + 0x3C)) == 0) {
+                    if (TickCountdownTimer((s32)(ss + 0x3C)) == 0) {
                         return;
                     }
                     BeginSubtitleDisplay();
@@ -2188,7 +2188,7 @@ void UpdateBoltCounterHud(void) {
  * shared with UpdateBoltCounterHud). For a slot in phase 1/2/3 it derives an
  * interpolation factor from the slot timers (arming ramp tick/14, hold ramp
  * holdTimer/14, roll fade 1-(holdTimer-7)/7), lerps the two glyph tints and the
- * number tint (func_002846E8; the sign of targetDelta selects the palette),
+ * number tint (ColorLerpPacked; the sign of targetDelta selects the palette),
  * formats targetDelta into a string, then draws the two "±" glyphs (font
  * codepoints 0xB2/0xB3) and the number. Phase 0 and phase >3 draw nothing.
  *
@@ -2204,7 +2204,7 @@ extern void *g_guiInstance;            /* GUI singleton ptr (0x1A8D04) */
 extern s16   g_swapGadgetItemIndex;    /* base whose +0x8A holds the HUD sprite y-scale (0x1B229A) */
 extern f32   D_1A8DE0[];               /* per-digit-count x-scale table, 7 entries (0x1A8DE0) */
 extern char  D_1A8E00[];               /* printf format for the bolt-delta number (0x1A8E00) */
-extern s32   func_002846E8(s32 colorA, s32 colorB, f32 t);        /* 0x2846E8 packed-RGBA lerp */
+extern s32   ColorLerpPacked(s32 colorA, s32 colorB, f32 t);        /* 0x2846E8 packed-RGBA lerp */
 extern void  func_00115DA8(char *dst, const char *fmt, ...);      /* 0x115DA8 SDK sprintf */
 extern s32   GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint); /* 0x337BF8 */
 /* 0x3017F8 glyph/sprite draw. Callee (text/2012B8) confirms the ABI: color0's
@@ -2234,31 +2234,31 @@ void func_0028B0B0(void) {
             color1 = 0x55F0C070;
             color2 = 0x60442D00;
             if (slot->targetDelta >= 0) {
-                textColor = func_002846E8(0x8000FFFF, 0x6029A1FF, t);
+                textColor = ColorLerpPacked(0x8000FFFF, 0x6029A1FF, t);
             } else {
-                textColor = func_002846E8(0x001010F0, 0x801010F0, t);
+                textColor = ColorLerpPacked(0x001010F0, 0x801010F0, t);
             }
             doDraw = 0x1F3;
         } else if (phase == 1) {
             t = (f32)slot->tick * (1.0f / 14.0f);
-            color1 = func_002846E8(0x00F0C070, 0x55F0C070, t);
-            color2 = func_002846E8(0x00442D00, 0x60442D00, t);
+            color1 = ColorLerpPacked(0x00F0C070, 0x55F0C070, t);
+            color2 = ColorLerpPacked(0x00442D00, 0x60442D00, t);
             if (slot->targetDelta >= 0) {
-                textColor = func_002846E8(0x0029A1FF, 0x6029A1FF, t);
+                textColor = ColorLerpPacked(0x0029A1FF, 0x6029A1FF, t);
             } else {
-                textColor = func_002846E8(0x001010F0, 0x801010F0, t);
+                textColor = ColorLerpPacked(0x001010F0, 0x801010F0, t);
             }
             doDraw = 0x1F3;
         } else if (phase == 3) {
             s32 hold = slot->holdTimer;
             t = (hold < 7) ? 1.0f
                            : 1.0f - ((f32)hold - 7.0f) * (1.0f / 7.0f);
-            color1 = func_002846E8(0x00F0C070, 0x55F0C070, t);
-            color2 = func_002846E8(0x00442D00, 0x60442D00, t);
+            color1 = ColorLerpPacked(0x00F0C070, 0x55F0C070, t);
+            color2 = ColorLerpPacked(0x00442D00, 0x60442D00, t);
             if (slot->targetDelta >= 0) {
-                textColor = func_002846E8(0x0029A1FF, 0x6029A1FF, t);
+                textColor = ColorLerpPacked(0x0029A1FF, 0x6029A1FF, t);
             } else {
-                textColor = func_002846E8(0x001010F0, 0x801010F0, t);
+                textColor = ColorLerpPacked(0x001010F0, 0x801010F0, t);
             }
             doDraw = 0x1F3;
         }
@@ -3620,9 +3620,9 @@ s32 DrawWeaponSelectWheel(HudElement *w) {
 
             func_00115DA8(buf, g_szAmmoFraction, curAmmo, capacity);
             if (curAmmo == 0) {
-                color = func_002846E8(0x004040FF, 0x804040FF, combined);   /* out of ammo: red */
+                color = ColorLerpPacked(0x004040FF, 0x804040FF, combined);   /* out of ammo: red */
             } else {
-                color = func_002846E8(0x00F0F0F0, 0x80F0F0F0, combined);   /* white gradient */
+                color = ColorLerpPacked(0x00F0F0F0, 0x80F0F0F0, combined);   /* white gradient */
             }
             func_002801B8(posX + 0x69, posY + 0x70, color, buf, -1);
         }
@@ -3630,7 +3630,7 @@ s32 DrawWeaponSelectWheel(HudElement *w) {
 
     /* localized weapon name, from the wheel record's item id at +0x18 */
     {
-        s32 textColor = func_002846E8(0x00F0F0F0, 0x80F0F0F0, combined);
+        s32 textColor = ColorLerpPacked(0x00F0F0F0, 0x80F0F0F0, combined);
         u8 *rec = (u8 *)table[D_1A8D48] + selectedIndex * 0x1C;
         s32 itemId2 = *(s32 *)(rec + 0x18);
         s16 nameId = *(s16 *)((u8 *)&g_weaponTable[g_itemEquippedSlot[itemId2]] + 0x48);
@@ -4094,8 +4094,8 @@ s32 func_0028DC28(HudElement *hud) {
         str = GetLocalizedString(textId);
         if (str != 0 && func_001157AC(str) != 0) {
             f32 t = fillB * fillA;
-            s32 colorMain   = func_002846E8(0x00E0C0A0, (s32)0x80E0C0A0, t);
-            s32 colorShadow = func_002846E8(0x00000000, (s32)0x80000000, t);
+            s32 colorMain   = ColorLerpPacked(0x00E0C0A0, (s32)0x80E0C0A0, t);
+            s32 colorShadow = ColorLerpPacked(0x00000000, (s32)0x80000000, t);
             func_002801B8(0x80, 0xC8, (u32)colorShadow, str, -1);
             func_002801B8(0x81, 0xC9, (u32)colorMain, str, -1);
         }

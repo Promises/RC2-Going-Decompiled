@@ -1151,14 +1151,14 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D6E98);
  * Clamps progress to >= 0, substitutes the two default packed RGBA colours when a
  * colour arg is -1 (0x80FFA888 / 0x8020FFFF), computes the fade fraction
  * progress/limit (limit = D_1AA460; saturated to 1.0 once progress exceeds it) and
- * hands the two colours + fraction to the colour-lerp leaf func_002846E8.
+ * hands the two colours + fraction to the colour-lerp leaf ColorLerpPacked.
  * WALL: ACC-madd / FP-heavy leaf the cc1 schedules differently; matching arm stays
  * INCLUDE_ASM, portable #else below. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", SetGalacticMapFadeAlpha);
 #else
 extern s32  D_1AA460;                                          /* galactic-map fade step count */
-extern void func_002846E8(s32 color1, s32 color2, f32 fade);   /* 0x2846E8 packed-RGBA colour lerp */
+extern void ColorLerpPacked(s32 color1, s32 color2, f32 fade);   /* 0x2846E8 packed-RGBA colour lerp */
 
 void SetGalacticMapFadeAlpha(s32 progress, s32 color1, s32 color2) {
     s32 clampedProgress = (progress < 0) ? 0 : progress;
@@ -1176,7 +1176,7 @@ void SetGalacticMapFadeAlpha(s32 progress, s32 color1, s32 color2) {
     } else {
         fade = 1.0f - (f32)(D_1AA460 - clampedProgress) / (f32)D_1AA460;
     }
-    func_002846E8(color1, color2, fade);
+    ColorLerpPacked(color1, color2, fade);
 }
 #endif
 

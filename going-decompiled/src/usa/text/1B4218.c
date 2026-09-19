@@ -1163,7 +1163,7 @@ void InitMobySpringFollowState(Moby *moby, void *state,
  * When `target` is NULL the follow anchor comes from the camera-key block
  * (g_soundBankHandlesBlk): if this moby is the active key holder (+0x33C) and the
  * key has been held >= 2 frames (+0x340) it springs toward g_heroPos, otherwise it
- * ticks the first-frame arm-counter (func_002832F8, state+0xAC) and skips straight
+ * ticks the first-frame arm-counter (TickCountdownTimer, state+0xAC) and skips straight
  * to the integrator without refreshing the delta. The drive
  * accel is (-delta.y, delta.x, -1) scaled by state+0x6C; on the first frame the
  * velocity is seeded by state+0x78 and the counter is armed to 10. The integrator
@@ -1238,7 +1238,7 @@ void StepMobySpringFollow(u8 *moby, Vec4 *state, Vec4 *target)
            state+0xAC and run the integrator without refreshing the delta. */
         if (*(u8 **)(g_soundBankHandlesBlk + 0x33C) != moby ||
             *(s32 *)(g_soundBankHandlesBlk + 0x340) < 2) {
-            func_002832F8(st + 0xAC);
+            TickCountdownTimer(st + 0xAC);
             goto integrate;
         }
         Vec4SubVu0(&delta, &g_heroPos, (Vec4 *)(moby + 0x10));
@@ -1868,7 +1868,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", UpdateMobyMotio
 extern f32  g_mobyMaxTurnRate;                                 /* 0x1AA108 per-step yaw clamp (rad) */
 extern void func_002AB868(f32 *mobyYaw, f32 *turnDeltaOut, f32 speed,
                           f32 velX, f32 velY, f32 velZ);        /* 0x2AB868 steer yaw toward velocity */
-extern f32  func_00284630(f32 mobyYaw, f32 speed);             /* 0x284630 drive-heading angle helper */
+extern f32  AngleAbsDiffPi(f32 mobyYaw, f32 speed);             /* 0x284630 drive-heading angle helper */
 extern f32  func_002835C0(f32 x);                              /* 0x2835C0 sqrtf */
 extern void func_002AD860(Vec4 *v, f32 maxLen);                /* 0x2AD860 clamp v planar length to maxLen */
 extern void func_002ABAE8(f32 *value, f32 delta, f32 rate1,
@@ -1876,7 +1876,7 @@ extern void func_002ABAE8(f32 *value, f32 delta, f32 rate1,
 extern f32  func_00283B30(f32 angle);                          /* 0x283B30 cos-like trig leaf (VU0) */
 extern f32  func_00283B48(f32 angle);                          /* 0x283B48 sin-like trig leaf (VU0) */
 extern f32  Vec3DotVu0(Vec4 *a, Vec4 *b);                      /* 0x283760 3-component dot (VU0) */
-extern f32  func_002837D0(Vec4 *v);                            /* 0x2837D0 planar/vector magnitude */
+extern f32  Vec2LengthXyVu0(Vec4 *v);                            /* 0x2837D0 planar/vector magnitude */
 extern f32  WrapAnglePiDiff(f32 a, f32 b);                     /* 0x284590 wrap a-b into [-pi,pi] */
 
 void UpdateMobyMotionVelocity(Moby *moby, MobyMotionController *ctrl, Vec4 *target,
@@ -1897,7 +1897,7 @@ void UpdateMobyMotionVelocity(Moby *moby, MobyMotionController *ctrl, Vec4 *targ
         func_002AB868(mobyYaw, &ctrl->turnDelta, speed, ctrl->velX, ctrl->velY, ctrl->velZ);
     }
 
-    steerAngle = func_00284630(*mobyYaw, speed);
+    steerAngle = AngleAbsDiffPi(*mobyYaw, speed);
 
     /* Inside the heading dead-band: drive a zero command (and flag steer-blocked
      * when the residual heading error outruns the max turn). */
@@ -1957,7 +1957,7 @@ resolve:
         func_002AD860(&velCmd, ctrl->accelArrive);
     }
     Vec4AddVu0((Vec4 *)&ctrl->velAccum, (Vec4 *)&ctrl->velAccum, &velCmd);
-    ctrl->speed = func_002837D0((Vec4 *)&ctrl->velAccum);
+    ctrl->speed = Vec2LengthXyVu0((Vec4 *)&ctrl->velAccum);
 
     /* 5. Vertical / ground step. */
     if ((ctrl->modeFlags & MOBY_MOTION_MODE_NO_VERTICAL) == 0) {
@@ -1966,7 +1966,7 @@ resolve:
             /* Above ground. */
             if (ctrl->airborneFrames < 2 && (posZ - ctrl->groundHeight) < 0.15f) {
                 /* Just left a steep-enough slope: cancel the into-slope velocity. */
-                f32 normalLen = func_002837D0((Vec4 *)ctrl->groundNormal);
+                f32 normalLen = Vec2LengthXyVu0((Vec4 *)ctrl->groundNormal);
                 if (0.087266475f < Atan2fPoly(ctrl->groundNormal[2], normalLen)) {
                     f32 intoSlope = -Vec3DotVu0((Vec4 *)&ctrl->velAccum, (Vec4 *)ctrl->groundNormal);
                     if (intoSlope < ctrl->verticalVel) {
@@ -2010,9 +2010,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ResolveMobyMoti
 #else
 extern void Vec4AddVu0(Vec4 *dst, Vec4 *a, Vec4 *b);   /* dst = a + b (VU0) */
 extern void Vec4SubVu0(Vec4 *dst, Vec4 *a, Vec4 *b);   /* dst = a - b (VU0) */
-extern f32  func_002837D0(Vec4 *v);                    /* 0x2837D0 planar/vector magnitude */
+extern f32  Vec2LengthXyVu0(Vec4 *v);                    /* 0x2837D0 planar/vector magnitude */
 extern void func_00283920(Vec4 *dst, Vec4 *src, f32 len);  /* 0x283920 rescale src to length len */
-extern s32  func_002832F8(void *counter);              /* 0x2832F8 tick a countdown at *p; returns nonzero while still armed (#61 uses it as void to decay the wall-contact counter, #59 branches on the gate) */
+extern s32  TickCountdownTimer(void *counter);              /* 0x2832F8 tick a countdown at *p; returns nonzero while still armed (#61 uses it as void to decay the wall-contact counter, #59 branches on the gate) */
 extern s32  ResolveMobySphereCollision(Moby *moby, MobyMotionController *ctrl);  /* defined below */
 extern s32  ResolveMobyEdgeConstraint(void *moby, void *ec);                     /* defined below */
 
@@ -2045,7 +2045,7 @@ void ResolveMobyMotionCollision(Moby *moby, MobyMotionController *ctrl,
     if (anyHit != 0) {
         f32 len;
         Vec4SubVu0((Vec4 *)ctrl->velAccum, (Vec4 *)((u8 *)moby + 0x10), entryPos);
-        len = func_002837D0((Vec4 *)ctrl->velAccum);
+        len = Vec2LengthXyVu0((Vec4 *)ctrl->velAccum);
         if (ctrl->speed < len) {
             func_00283920((Vec4 *)ctrl->velAccum, (Vec4 *)ctrl->velAccum, ctrl->speed);
         } else {
@@ -2064,10 +2064,10 @@ void ResolveMobyMotionCollision(Moby *moby, MobyMotionController *ctrl,
         if (ctrl->speed < ctrl->maxSpeed * 0.5f) {
             ctrl->wallContactCount++;
         } else {
-            func_002832F8(&ctrl->wallContactCount);
+            TickCountdownTimer(&ctrl->wallContactCount);
         }
     } else {
-        func_002832F8(&ctrl->wallContactCount);
+        TickCountdownTimer(&ctrl->wallContactCount);
     }
 
     Vec4SubVu0((Vec4 *)ctrl->posDelta, (Vec4 *)((u8 *)moby + 0x10), &savedPos);
@@ -2090,7 +2090,7 @@ void ResolveMobyMotionCollision(Moby *moby, MobyMotionController *ctrl,
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ApplyMobyGroundAndEvents);
 #else
 extern void ProbeMobyGroundLine(Moby *moby, MobyMotionController *ctrl, f32 depth);  /* below */
-extern f32  func_002837D0(Vec4 *v);                 /* 0x2837D0 vector magnitude */
+extern f32  Vec2LengthXyVu0(Vec4 *v);                 /* 0x2837D0 vector magnitude */
 extern f32  func_00283BF8(f32 y, f32 x);            /* 0x283BF8 atan2-style angle from a planar delta */
 extern s32  CheckMobyPathBlocked(Moby *moby);       /* below */
 extern s32  CheckMobyOverWater(void *moby, void *ctrl);  /* below */
@@ -2115,7 +2115,7 @@ void ApplyMobyGroundAndEvents(Moby *moby, MobyMotionController *ctrl,
         eventFired = 1;
     }
     if (ctrl->groundedFrames != 0) {
-        f32 mag = func_002837D0((Vec4 *)ctrl->groundNormal);
+        f32 mag = Vec2LengthXyVu0((Vec4 *)ctrl->groundNormal);
         f32 slope = func_00283BF8(ctrl->groundNormal[2], mag);
         if (ctrl->maxSlopeAngle < slope) {
             ctrl->eventFlags |= 0x4;
@@ -3555,7 +3555,7 @@ finalize:
  *      queued (+0x4C bit0), start it (StartSecondaryVoice); else chain onto an
  *      in-flight secondary (ChainSecondaryVoice) when +0x44 is armed and +0x4E==8.
  *   2. Primary-voice progress: when the aux slot at +0x38 is armed
- *      (func_002832F8), either finish the primary voice (latch the next state +
+ *      (TickCountdownTimer), either finish the primary voice (latch the next state +
  *      arm the +0x38 timer) or kick the tertiary voice (StartTertiaryVoice); and
  *      launch the queued dialog voice (StartDialogVoice) once its bank handle
  *      (+0x24) is ready.
@@ -3630,7 +3630,7 @@ L8534:
 L8564:
 L8568:
     /* --- 2. primary-voice progress (aux slot at +0x38) --- */
-    if (func_002832F8(m + 0x38) == 0) goto L8608;
+    if (TickCountdownTimer(m + 0x38) == 0) goto L8608;
     dvid = *(s16 *)(m + 0x3C);
     if (dvid == -1) goto L860C;
     if (*(s16 *)(m + 0x2C) != 0) goto L860C;
@@ -3695,7 +3695,7 @@ L8704: /* state 6: crossfade by (+0x4A * +0xA4) / +0x34, then play + advance */
     *(s32 *)(m + 0x44) = -1;
     v6 = prod / *(s32 *)(m + 0x34);
     func_00132BC0(old44, 5, v6, 0, 0, 0, (void *)&OnTertiaryVoiceStarted, m + 0x44);
-    if (func_002832F8(m + 0xA4) == 0) goto L8914;
+    if (TickCountdownTimer(m + 0xA4) == 0) goto L8914;
     *(s16 *)(m + 0x4E) = 5;
     *(s16 *)(m + 0x2C) = 3;
     goto L8914;

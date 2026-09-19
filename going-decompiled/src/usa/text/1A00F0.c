@@ -237,8 +237,8 @@ void func_002A0480(Moby *moby, s32 *out1, s32 *out2) {
  * the per-frame scratchpad vectors at 0x70000000 + count*64 (func_00283A70),
  * scales each by (obj+0x2C)/1024, applies the moby's 3x3 rotation (func_00283A48
  * over obj+0xC0) and translation (Vec4AddVu0 obj+0x10), averages the two into dst
- * (add then *0.5), and stores the func_002837F8 scalar into dst.w. Callee roles
- * func_00283A48/func_00283AE0/func_002837F8 UNCONFIRMED (named by shape); helper
+ * (add then *0.5), and stores the Vec3DistVu0 scalar into dst.w. Callee roles
+ * func_00283A48/func_00283AE0/Vec3DistVu0 UNCONFIRMED (named by shape); helper
  * signatures cross-referenced to text/183558.c (scale families take f32 2nd).
  * The matching build keeps the asm; faithful TARGET_NATIVE coverage arm. */
 #ifdef TARGET_NATIVE
@@ -247,7 +247,7 @@ extern void Vec4ScaleVu0(void *dst, f32 s, void *src);
 extern void func_00283A48(void *out, void *v, void *m);
 extern void func_00283A70(void *out, void *v, void *m);
 extern void func_00283AE0(void *dst, u64 packed);
-extern f32  func_002837F8(void *a, void *b);
+extern f32  Vec3DistVu0(void *a, void *b);
 extern void SkinMobyCollisionMesh(void *entry, s32 count, u32 flags);
 #endif
 
@@ -283,7 +283,7 @@ void func_002A04D8(void *obj, s32 arg1, void *dst) {
     Vec4AddVu0(vecB, vecB, o + 0x10);
     Vec4AddVu0(dst, vecA, vecB);
     Vec4ScaleVu0(dst, 0.5f, dst);
-    *(f32 *)((u8 *)dst + 0xC) = func_002837F8(dst, vecA);
+    *(f32 *)((u8 *)dst + 0xC) = Vec3DistVu0(dst, vecA);
 }
 #endif
 

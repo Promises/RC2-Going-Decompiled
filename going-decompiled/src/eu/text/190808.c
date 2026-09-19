@@ -33,7 +33,7 @@ extern s32 D_1A90D0;  /* USA D_1A9020 — small state machine 0..3 (3 = done) */
 __asm__(".extern g_nGameState, 16");
 extern s32 g_nGameState;
 
-extern s32 func_00283208(s32 *counter);   /* EU twin of USA func_002832F8 (shared countdown step) */
+extern s32 TickCountdownTimer(s32 *counter);   /* EU twin of USA func_002832F8 (shared countdown step) */
 extern void func_0029C1A8(s32 arg0);       /* EU twin of USA func_0029C600 */
 extern s32 func_0027E2A8(s32 r, s32 g, s32 b, s32 a);  /* EU twin of USA DrawFullScreenTint */
 
@@ -52,7 +52,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/190808", func_00290938);
  */
 s32 func_00290EA8(void) {
     if (g_nGameState == 0) {
-        if (func_00283208(&D_1A90B0)) {
+        if (TickCountdownTimer(&D_1A90B0)) {
             func_0029C1A8(1);
         }
     }

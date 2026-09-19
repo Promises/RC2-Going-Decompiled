@@ -499,7 +499,7 @@ void func_00336918(void *self, f32 t, f32 *dst, f32 *a, f32 *b) {
 }
 
 /* func_00336988: per-channel blend of a 4-int vector. For each component i in
- * {0,1,2,3}, out[i] = func_002846E8(t, aSrc[i], bSrc[i]) - the shared scalar
+ * {0,1,2,3}, out[i] = ColorLerpPacked(t, aSrc[i], bSrc[i]) - the shared scalar
  * color/alpha interpolation helper applied component-wise. The leading object
  * pointer (a0) carries no state into the blend and is unused by the body. */
 #ifndef TARGET_NATIVE
@@ -510,12 +510,12 @@ void func_00336918(void *self, f32 t, f32 *dst, f32 *a, f32 *b) {
    87.5% best. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336988);
 #else
-extern s32 func_002846E8(f32 t, s32 a, s32 b);
+extern s32 ColorLerpPacked(f32 t, s32 a, s32 b);
 void func_00336988(void *self, s32 *out, s32 *aSrc, s32 *bSrc, f32 t) {
-    out[0] = func_002846E8(t, aSrc[0], bSrc[0]);
-    out[1] = func_002846E8(t, aSrc[1], bSrc[1]);
-    out[2] = func_002846E8(t, aSrc[2], bSrc[2]);
-    out[3] = func_002846E8(t, aSrc[3], bSrc[3]);
+    out[0] = ColorLerpPacked(t, aSrc[0], bSrc[0]);
+    out[1] = ColorLerpPacked(t, aSrc[1], bSrc[1]);
+    out[2] = ColorLerpPacked(t, aSrc[2], bSrc[2]);
+    out[3] = ColorLerpPacked(t, aSrc[3], bSrc[3]);
 }
 #endif
 

@@ -62,7 +62,7 @@ extern f32  Vec3LengthVu0(const Vec4f v);
 extern void Vec3RescaleToLenVu0(Vec4f dst, f32 len, const Vec4f src);
 extern void func_00283DA0(Vec4f dst, const Vec4f src);   /* matrix-row builder */
 extern void func_002840E8(Vec4f dst, const Vec4f a, const Vec4f b); /* 3x3 a*b */
-extern void func_00284308(const Vec4f src, Vec4f dst);   /* quat -> 3x3 matrix */
+extern void QuatToMatrix3(const Vec4f src, Vec4f dst);   /* quat -> 3x3 matrix */
 extern void func_002ADCE0(Vec4f dst, const Vec4f axis, f32 len); /* axis -> quat */
 extern void func_002ABAE8(const f32 *p, f32 a, f32 b, f32 c, f32 d);
 
@@ -81,7 +81,7 @@ static __inline__ f32 bits_to_f32(u32 bits) {
  *   - cross   = forward x right; len = |cross|
  *   - flag!=0: roll quat from cross by -(len*0.5)         [func_002ADCE0]
  *   - flag==0: roll via func_002ABAE8(target, len*0.5, k0, k0, k1)
- *   - quat -> 3x3 (func_00284308); g_cameraMatrix = roll3x3 * g_cameraMatrix
+ *   - quat -> 3x3 (QuatToMatrix3); g_cameraMatrix = roll3x3 * g_cameraMatrix
  */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188580", func_00288600);
@@ -115,7 +115,7 @@ void func_00288600(const Vec4f target, s32 flag) {
         func_002ADCE0(cross, cross, -target[0]);   /* build the roll quat (both paths) */
     }
 
-    func_00284308(cross, quat);
+    QuatToMatrix3(cross, quat);
     func_002840E8(g_cameraMatrix, quat, g_cameraMatrix);
 }
 #endif
@@ -136,7 +136,7 @@ void func_00288748(const Vec4f p) {
     f32 angle = p[0] * bits_to_f32(0x3998825C) * D_1A8A80;
 
     func_002ADCE0(quat, g_cameraMatrix, angle);
-    func_00284308(quat, mat);
+    QuatToMatrix3(quat, mat);
     func_002840E8(g_cameraMatrix, mat, g_cameraMatrix);
 }
 #endif

@@ -18,7 +18,7 @@ extern void AppendScreenClearPacket(s32 mode);
 extern void RenderFrame(void);
 extern void RenderMenuScreenWidgets(s32 which);
 extern void func_0027B988(void);
-extern void func_002832F8(void *arg);
+extern void TickCountdownTimer(void *arg);
 
 /* Per-camera-slot flag table base (0x1B7E30). func_00279EE8 passes the slot at
  * +0xF8 (0x1B7F28); modelled as a byte base so the offset stays absolute.
@@ -329,15 +329,15 @@ s32 func_00279E00(s32 scroll, s32 *pIndex, s32 *pCursor) {
 #endif
 
 /* func_00279EE8 - forward the camera slot at g_cameraSlotActive+0xF8 to
- * func_002832F8.
+ * TickCountdownTimer.
  * Near-miss: the pinned cc1 sibling-call-optimizes the lone tail call to
- * `j func_002832F8`, but the original keeps a full call+return frame. Correct C
+ * `j TickCountdownTimer`, but the original keeps a full call+return frame. Correct C
  * preserved as the portable body. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00279EE8);
 #else
 void func_00279EE8(void) {
-    func_002832F8(g_cameraSlotActive + 0xF8);
+    TickCountdownTimer(g_cameraSlotActive + 0xF8);
 }
 #endif
 
@@ -1588,7 +1588,7 @@ void FadeOutToBlackBlocking(s32 frames)
  *
  * Drives a 100-frame triangle wave from g_sceneFrame (frame%100 mapped to
  * [-1,1]), shapes it with cos(t·pi) into a 0..1 pulse, and blends two packed
- * colors (0x7FE0E0E0 / 0x5FF0C070, func_002846E8) by that pulse. Draws the
+ * colors (0x7FE0E0E0 / 0x5FF0C070, ColorLerpPacked) by that pulse. Draws the
  * localized string 0x2DB6 (DrawDebugString) at x=0x3C with a y that depends on
  * the fade-suppress flag D_1A7BB9 (0x17C when set, else 0x148).
  */
@@ -1598,7 +1598,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027DB38);
 extern s32 g_sceneFrame;
 extern u8 D_1A7BB9;
 extern f32 func_00283B30(f32 angle);                        /* cosine */
-extern s32 func_002846E8(f32 t, s32 colorA, s32 colorB);    /* blend packed colors by t */
+extern s32 ColorLerpPacked(f32 t, s32 colorA, s32 colorB);    /* blend packed colors by t */
 extern char *GetLocalizedString(s32 id);
 extern void DrawDebugString(s32 a, s32 b, s32 c, s32 d, s32 e);
 
@@ -1615,7 +1615,7 @@ void func_0027DB38(void) {
         t = 1.0f;
     }
     pulse = (func_00283B30(t * 3.1415927f) + 1.0f) * 0.5f;
-    color = func_002846E8(pulse, 0x7FE0E0E0, 0x5FF0C070);
+    color = ColorLerpPacked(pulse, 0x7FE0E0E0, 0x5FF0C070);
     DrawDebugString(0x3C, param, color, (s32)GetLocalizedString(0x2DB6), -1);
 }
 #endif

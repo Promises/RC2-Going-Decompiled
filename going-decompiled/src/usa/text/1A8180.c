@@ -160,12 +160,12 @@ extern f32 ProbeGroundHeight(Vec4 *pos, f32 zOffset, s32 mask);
 extern s32 CollSphere(void *center, s32 mask, void *moby, f32 radius); /* radius in $f12, clamped to 10.0 (CONFIRMED per symbol_addrs + func_002A90A8 asm) */
 extern s32 func_001163B0(void);        /* core random-state step */
 extern s32 ProbeMobyGroundBelow(Moby *moby);
-extern s32 func_002846E8(void *a, void *b, void *c);
-/* func_002846E8's real prototype: blend vec4 dst from src by phase t (t in
+extern s32 ColorLerpPacked(void *a, void *b, void *c);
+/* ColorLerpPacked's real prototype: blend vec4 dst from src by phase t (t in
  * $f12). The (void*,void*,void*) form above is only used by the pure
  * register-passthrough forwarder func_002AA3D0. */
 typedef void (*LerpByteVec4PackedFn)(f32 t, void *dst, void *src);
-#define LerpByteVec4PackedVu0 ((LerpByteVec4PackedFn)func_002846E8)
+#define LerpByteVec4PackedVu0 ((LerpByteVec4PackedFn)ColorLerpPacked)
 extern s32 func_0029DA88(s32 a);
 extern char *GetLocalizedString(s32 stringId);
 extern s32 func_0029DAD0(char *text, s32 arg);
@@ -173,15 +173,15 @@ extern void func_002B0E40(Vec4 *a, Vec4 *out, s32 flag);
 extern void func_002B0F40(Vec4 *a, Vec4 *out, Vec4 *src, f32 t);
 extern void func_002B0C40(s32 ctx, void *out, void *a, void *b);
 extern void func_002B1270(void *a, Vec4 *b, void *c);
-/* func_002837D0: planar (xy) magnitude of a Vec4, returned as f32 in $f0. The
+/* Vec2LengthXyVu0: planar (xy) magnitude of a Vec4, returned as f32 in $f0. The
  * native #else scanners (func_002A8D08/func_002A90A8) feed it into func_00283BF8
  * (atan2) and float compares, so they need the true f32 return (an s32 decl would
  * make ee-gcc insert a spurious cvt.s.w). Guarded like func_00283BF8: the sole
  * matched-build reference discards the value, so f32 is inert to the matched arm. */
 #ifdef TARGET_NATIVE
-extern f32 func_002837D0(void *vec);
+extern f32 Vec2LengthXyVu0(void *vec);
 #else
-extern s32 func_002837D0(void *vec);
+extern s32 Vec2LengthXyVu0(void *vec);
 #endif
 /* func_00283BF8 == Atan2fPoly (183558.c region): 2-arg arctangent (minimax poly
  * + quadrant offset, self-contained VU0 — no vcallms upload), returns the angle
@@ -210,7 +210,7 @@ extern s32 func_002B1C20(void);
  * filter args were dropped by an earlier 2-arg guess. Defined later in this
  * unit (#else); declared here for func_002A9468's #else call. */
 extern s32 func_002A9550(Moby **out, Moby *moby, s32 wantInactive, s32 wantActive);
-extern f32 func_002837F8(void *p, f32 *src);
+extern f32 Vec3DistVu0(void *p, f32 *src);
 /* func_002A0368: read a reference value from an object (1A00F0 unit); takes the
  * object pointer in $4 (not a float), returns the value as f32 in $f0. */
 extern f32 func_002A0368(void *obj);
@@ -791,7 +791,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  * and if |surface - ref.z| > snapEps run a min/max clamp (bit0 + sign select)
  * that may snap pos<-ref. (2) Build a rescaled step dir (normalize(pos-ref) *
  * radius*1.2) and a lifted origin (ref + (0,0,stepZ)); CollLine along it, and on
- * a hit whose planar angle (func_002837D0/func_00283BF8) passes hitEps, scale the
+ * a hit whose planar angle (Vec2LengthXyVu0/func_00283BF8) passes hitEps, scale the
  * hit delta (func_1290E0/Vec4ScaleVu0) into pos. (3) Unless bit1 is set, iterate
  * up to 6x: CollSphere(radius) at pos, and on a hit inside hitEps snap pos to
  * g_collHitPointNudged and step z by -(stepZ+radius). (4) Re-probe + mirror the
@@ -799,7 +799,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  *
  * Helper sigs (recovered): f32 func_002A9888(Vec4 *pos) [surface sample, UNCONFIRMED];
  * void func_1290E0(void *dst, void *src) [hit-delta build, UNCONFIRMED];
- * f32 func_002837D0(Vec4 *v) [planar magnitude]; f32 func_00283BF8(f32,f32) [atan2];
+ * f32 Vec2LengthXyVu0(Vec4 *v) [planar magnitude]; f32 func_00283BF8(f32,f32) [atan2];
  * Vec4ScaleVu0(dst, scale, src). Delay-slot notes: the bnel @0x2A8F14 and the two
  * bc1fl @0x2A8F98/0x2A9030 are LIKELY (delay runs only when taken) — the sphere
  * loop's i++ lives in a bc1fl delay slot.
@@ -871,7 +871,7 @@ s32 func_002A8D08(void *ent, Vec4 *ref, Vec4 *pos, s32 flags,
         if (CollLine(&origin, &endpoint, (flags & 2) | 0x24, ent, (void *)0)) {
             if (*(s32 *)(cw + 0x1C) > 0) {
                 f32 ang = func_00283BF8(*(f32 *)(cw + 0x48),
-                                        func_002837D0((Vec4 *)(cw + 0x40)));
+                                        Vec2LengthXyVu0((Vec4 *)(cw + 0x40)));
                 if (hitEps <= ang) {
                     f32 det;
                     *(s32 *)(cw + 0x48) = 0;
@@ -946,7 +946,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  * Flow: probe = moby+0x10 + dir; if |dir| > minLen, rescale dir to (minLen) and
  * CollLine along it (on hit: step z by -stepZ, flag). Then up to 6x: CollSphere
  * at the probe, snapping to g_collHitPointNudged and stepping z by -stepZ on each
- * hit. Then a final CollLine; on a hit passing the func_002837D0/func_00283BF8
+ * hit. Then a final CollLine; on a hit passing the Vec2LengthXyVu0/func_00283BF8
  * planar-angle test (>0.5) and z test, nudge z by 0.3*overshoot. Ends with a
  * Vec4SubVu0 and returns the flag word. Likely branch: bc1tl @0x2A92B8 (its
  * `ori $23,0x4` delay slot runs only when taken). g_collHitPoint /
@@ -1007,7 +1007,7 @@ s32 func_002A90A8(void *moby, Vec4 *dir, s32 mask, f32 stepZ, f32 minLen, f32 sp
             if (*(s32 *)(cw + 0x1C) > 0) {         /* hit-count field */
                 flags |= 2;
                 if (0.5f < func_00283BF8(*(f32 *)(cw + 0x48),
-                                         func_002837D0((Vec4 *)(cw + 0x40)))) {
+                                         Vec2LengthXyVu0((Vec4 *)(cw + 0x40)))) {
                     flags |= 4;                    /* grazing / angle flag */
                 }
                 if (lowZ < *(f32 *)(cw + 0x28)) {
@@ -1841,15 +1841,15 @@ s32 func_002AA3B0(Moby *moby) {
 }
 
 /**
- * Forward to the shared 2-colour blend helper func_002846E8.
+ * Forward to the shared 2-colour blend helper ColorLerpPacked.
  *
- * TYPE NOTE: a/b/c stay void* on purpose. func_002846E8 reads its GPR args by
+ * TYPE NOTE: a/b/c stay void* on purpose. ColorLerpPacked reads its GPR args by
  * VALUE via pextlb/pextlh (they ARE packed 32-bit RGBA colour words, not
  * pointers) and never dereferences them; c is unused by the callee. So these
  * are not Vec4* (the earlier "vector op" hypothesis is disproven by the asm).
  */
 s32 func_002AA3D0(void *a, void *b, void *c) {
-    return func_002846E8(a, b, c);
+    return ColorLerpPacked(a, b, c);
 }
 
 /* Two free-running phase counters for the ping-pong colour ramp; the selector
@@ -1857,7 +1857,7 @@ s32 func_002AA3D0(void *a, void *b, void *c) {
 extern s32 D_1A9E94;
 extern s32 D_1A9E98;
 
-/* func_002846E8 as a packed-colour lerp that RETURNS the blended colour word:
+/* ColorLerpPacked as a packed-colour lerp that RETURNS the blended colour word:
  * t in $f12, the two colour words by value in $4/$5, result in $2. */
 typedef u32 (*LerpColorPackedFn)(f32 t, u32 colorA, u32 colorB);
 
@@ -1866,11 +1866,11 @@ typedef u32 (*LerpColorPackedFn)(f32 t, u32 colorA, u32 colorB);
  * the current blended colour. Bumps (or resets) one of two free-running phase
  * counters — counterSel picks D_1A9E94 (0) vs D_1A9E98 — folds it into a
  * triangle wave over [0, 2*period) giving a 0..1 blend factor, and returns
- * color1/color2 blended by that factor (func_002846E8).
+ * color1/color2 blended by that factor (ColorLerpPacked).
  *
  * SIGNATURE (verified from asm, corrects an earlier void ptr-copier guess):
  *   returns u32 (packed RGBA in $2); color1=$4, color2=$5 are packed colour
- *   words passed BY VALUE (func_002846E8 consumes them via pextlb/pextlh, no
+ *   words passed BY VALUE (ColorLerpPacked consumes them via pextlb/pextlh, no
  *   memory load); period=$6, counterSel=$7, reset=$8 are s32.
  *
  * reset is the 5th arg in $8 — that is normal EABI (-mabi=eabi passes integer
@@ -1896,7 +1896,7 @@ u32 func_002AA3F0(u32 color1, u32 color2, s32 period, s32 counterSel, s32 reset)
     } else {
         t = (f32)pos / (f32)period;
     }
-    return ((LerpColorPackedFn)func_002846E8)(t, color2, color1);
+    return ((LerpColorPackedFn)ColorLerpPacked)(t, color2, color1);
 }
 
 /**
@@ -2414,7 +2414,7 @@ f32 func_002AAFA8(f32 a, f32 b, f32 t) {
  * Two-stage scalar transform: feed (b, a) through func_00284590, scale the
  * result by c, and forward (a, scaled) to func_00284548.
  */
-/* Return type guarded like func_002837D0: the matching build byte-matches ONLY
+/* Return type guarded like Vec2LengthXyVu0: the matching build byte-matches ONLY
  * with the s32 form (the s32 callee/return type-errors cancel into the exact $f0
  * passthrough — 100% vs 88.24% with plain f32), while the native #else needs the
  * true f32 return so callers (func_002AF728) get the untruncated angle. */
@@ -5342,21 +5342,21 @@ void func_002B0038(Moby *parent, Moby *child, void *srcTransform, s32 flags) {
 #endif
 
 /* func_002B0150 (this unit): score a candidate `moby` (position at +0x10) against
- * a query point. Samples func_002837F8(query, mobyPos); flags the candidate
+ * a query point. Samples Vec3DistVu0(query, mobyPos); flags the candidate
  * (*outFlag=1) when b exceeds that sample. Then builds two drive-heading angles
- * (func_00284630 over the planar bearing func_00283BF8(dx,dy) and over the
+ * (AngleAbsDiffPi over the planar bearing func_00283BF8(dx,dy) and over the
  * XY-distance-vs-dz bearing) and flags again when 0<c<heading1 or 0<d<heading2.
  * Returns sample*(1+heading1), plus 8.0 when the moby is a valid class-filtered
- * entry (func_002AC9E0). (Un-parked: func_00284630 CONFIRMED f32(f32,f32)
+ * entry (func_002AC9E0). (Un-parked: AngleAbsDiffPi CONFIRMED f32(f32,f32)
  * drive-heading helper — decompiled in 183558.c, used by 1B4218.c.) */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0150);
 #else
-extern f32 func_00284630(f32 a, f32 b);   /* 0x284630 drive-heading angle helper (CONFIRMED) */
+extern f32 AngleAbsDiffPi(f32 a, f32 b);   /* 0x284630 drive-heading angle helper (CONFIRMED) */
 
 f32 func_002B0150(Vec4 *query, Moby *moby, s32 *outFlag, f32 a, f32 b, f32 c, f32 d) {
     f32 *mpos = (f32 *)((u8 *)moby + 0x10);   /* moby position Vec4 */
-    f32 sample = func_002837F8(query, mpos);
+    f32 sample = Vec3DistVu0(query, mpos);
     f32 heading1, heading2, base;
 
     *outFlag = 0;
@@ -5364,8 +5364,8 @@ f32 func_002B0150(Vec4 *query, Moby *moby, s32 *outFlag, f32 a, f32 b, f32 c, f3
         *outFlag = 1;
     }
 
-    heading1 = func_00284630(func_00283BF8(mpos[0] - query->x, mpos[1] - query->y), a);
-    heading2 = func_00284630(func_00283BF8(DistXYVu0(query, (Vec4 *)mpos),
+    heading1 = AngleAbsDiffPi(func_00283BF8(mpos[0] - query->x, mpos[1] - query->y), a);
+    heading2 = AngleAbsDiffPi(func_00283BF8(DistXYVu0(query, (Vec4 *)mpos),
                                            mpos[2] - query->z), 0.0f);
 
     if (0.0f < c && c < heading1) {
@@ -5479,9 +5479,9 @@ Moby *func_002B02C8(Vec4 *queryVec, f32 a, f32 b, f32 c, f32 d) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B03E8);
 #else
-extern f32 func_002837D0(void *vec);           /* Vec2LengthVu0: planar xy magnitude */
+extern f32 Vec2LengthXyVu0(void *vec);           /* Vec2LengthVu0: planar xy magnitude */
 extern f32 func_00283B60(f32 x);               /* acos */
-extern f32 func_00284630(f32 a, f32 b);        /* AngleShortestDiff */
+extern f32 AngleAbsDiffPi(f32 a, f32 b);        /* AngleShortestDiff */
 extern s32 func_002AC9E0(Moby *m);             /* gate predicate (class filter) */
 extern s32 func_00301370(s32 classId);         /* class-id accept filter */
 extern s32 g_playerProgress;                   /* persistent progress counter */
@@ -5625,18 +5625,18 @@ int func_002B03E8(f32 enable1, f32 coneYaw2, f32 range3, f32 conePitch4,
                                 f32 a0 = func_00283BF8(candToOrigin.x, candToOrigin.y);
                                 f32 a1 = func_00283BF8(((f32 *)aimDir)[0], ((f32 *)aimDir)[1]);
                                 f32 innerN;
-                                angleH = func_00284630(a0, a1);
+                                angleH = AngleAbsDiffPi(a0, a1);
 
                                 innerN = enable1;
                                 if (angleV < innerAngle5) {
                                     innerN = innerAngle5 + (enable1 - innerAngle5) * t;
                                 }
                                 if (angleH < innerN) {
-                                    f32 b0 = func_00283BF8(func_002837D0(&candToOrigin),
+                                    f32 b0 = func_00283BF8(Vec2LengthXyVu0(&candToOrigin),
                                                            candToOrigin.z);
-                                    f32 b1 = func_00283BF8(func_002837D0((Vec4 *)aimDir),
+                                    f32 b1 = func_00283BF8(Vec2LengthXyVu0((Vec4 *)aimDir),
                                                            ((f32 *)aimDir)[2]);
-                                    angleV = func_00284630(b0, b1);
+                                    angleV = AngleAbsDiffPi(b0, b1);
                                     pitchWide = conePitchN < conePitch4;
                                     coneYawBase = coneYaw2;   /* $f1 = coneYaw2 */
                                     goto join097c;
@@ -5874,7 +5874,7 @@ void func_002B0D70(s32 ctx, void *a, void *b) {
     Vec4 out;
 
     func_002B0C40(ctx, &out, a, b);
-    func_002837D0(&out);
+    Vec2LengthXyVu0(&out);
 }
 
 /**
@@ -6036,14 +6036,14 @@ f32 func_002B0FE0(Vec4 *pos, void *moby, Vec4 *out) {
     }
     func_002B0F40(pos, &b, pos, -0.5f);
     {
-        f32 dist = func_002837F8(pos, (f32 *)&a);
+        f32 dist = Vec3DistVu0(pos, (f32 *)&a);
         if (CollLine(&b, &a, 2, moby, (void *)0) != 0) {
             f32 hitDist;
             if (out != 0) {
                 *out = g_collHitPoint;
             }
-            hitDist = func_002837F8(pos, (f32 *)&g_collHitPoint);
-            if (dist < func_002837F8(&g_collHitPoint, (f32 *)&a)) {
+            hitDist = Vec3DistVu0(pos, (f32 *)&g_collHitPoint);
+            if (dist < Vec3DistVu0(&g_collHitPoint, (f32 *)&a)) {
                 hitDist = -hitDist;
             }
             return hitDist;
@@ -6063,15 +6063,15 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  * Sample the breath/oxygen meter value; when the HUD inversion flag is set
  * the meter counts down from 100 instead.
  *
- * `p` is read directly as an offset-0 16-byte vector by func_002837F8 (lqc2),
+ * `p` is read directly as an offset-0 16-byte vector by Vec3DistVu0 (lqc2),
  * so it is a Vec4* (a world position point); callers pass moby+0x10, i.e. the
  * moby's position vec (verified in CheckMobyOverWater @ 0x2B7334).
  */
 f32 func_002B11C8(Vec4 *p) {
     if (D_1A8CA4 == 0) {
-        return func_002837F8(p, &D_001B1750);
+        return Vec3DistVu0(p, &D_001B1750);
     }
-    return 100.0f - func_002837F8(p, &D_1A8CB0);
+    return 100.0f - Vec3DistVu0(p, &D_1A8CB0);
 }
 
 /**
@@ -6100,7 +6100,7 @@ void func_002B1220(void *mtx3x4, Vec4 *gravDir, void *outMtxOpt) {
 
 /* Callees for func_002B1270's #else (sigs traced from its call registers). */
 extern void Vec3CrossVu0(Vec4 *dst, Vec4 *a, Vec4 *b);
-extern void func_00284308(Vec4 *quat, void *outMtx);   /* quaternion -> 3x4 matrix */
+extern void QuatToMatrix3(Vec4 *quat, void *outMtx);   /* quaternion -> 3x4 matrix */
 extern void func_002840E8(void *dst, void *a, void *b);/* 3x3 matrix multiply (a*b -> dst) */
 extern void func_00283460(void *dst, void *src, s32 n);/* byte copy */
 
@@ -6109,7 +6109,7 @@ extern void func_00283460(void *dst, void *src, s32 n);/* byte copy */
  * +0x20 axis aligns toward the gravity direction, in place. Builds the shortest-
  * arc half-angle quaternion from cross(normalize(gravDir), mtx+0x20): the xyz is
  * that cross scaled by 0.5, w = -sqrt(1 - |xyz|^2). Converts the quaternion to a
- * 3x4 matrix (func_00284308) and multiplies it into mtx3x4 (func_002840E8). If
+ * 3x4 matrix (QuatToMatrix3) and multiplies it into mtx3x4 (func_002840E8). If
  * outMtxOpt != 0, the 0x30-byte delta matrix is also copied out.
  */
 #ifndef TARGET_NATIVE
@@ -6127,7 +6127,7 @@ void func_002B1270(void *mtx3x4, Vec4 *gravDir, void *outMtxOpt) {
     lenSq = Vec3LengthVu0(&quat);
     lenSq = lenSq * lenSq;
     quat.w = -func_002835C0(1.0f - lenSq);
-    func_00284308(&quat, quatMtx);
+    QuatToMatrix3(&quat, quatMtx);
     func_002840E8(mtx3x4, quatMtx, mtx3x4);
     if (outMtxOpt != 0) {
         func_00283460(outMtxOpt, quatMtx, 0x30);
@@ -6282,7 +6282,7 @@ done:
         } else {
             f32 dist;
             Vec4SubVu0(&camDelta, &g_collHitPoint, &g_cameraPos);
-            dist = func_002837D0(&camDelta);
+            dist = Vec2LengthXyVu0(&camDelta);
             SpawnRainSplashParticle(&g_collHitPoint, (s32)(dist * 3.1833334f + 64.0f) & 0xff, 0);
         }
     }
@@ -6790,10 +6790,10 @@ u32 func_002B1DF0(void *moby, long hit, long param_3) {
         f32   horizLen;
         Vec4  resolved;
 
-        /* inline of func_002B0D70: it resolves `dir` and calls func_002837D0, but is
-         * byte-matched as void so it cannot hand back func_002837D0's planar length */
+        /* inline of func_002B0D70: it resolves `dir` and calls Vec2LengthXyVu0, but is
+         * byte-matched as void so it cannot hand back Vec2LengthXyVu0's planar length */
         func_002B0C40((s32)moby, &resolved, dir, (void *)0);
-        horizLen = func_002837D0(&resolved);
+        horizLen = Vec2LengthXyVu0(&resolved);
 
         Vec4SubVu0(dir, (Vec4 *)(m + 0x10), &g_heroPos);
         func_002B0CC0((s32)moby, dir, dir, (void *)0, horizLen);
