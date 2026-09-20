@@ -15,10 +15,14 @@
  * small PLUS a file-scope `.extern sym,16` override so cc1 emits the one-insn
  * symbolic macro while GNU as expands it absolutely.
  *
- * SAVE-LAYOUT WALL: every function that saves 2+ callee registers is blocked —
- * the later cc1 packs save slots 8-byte where the pinned 2.9-ee-991111 cc1
- * reserves 16 bytes per save. Functions whose only callee save is $ra are
- * unaffected; pure leaves match freely.
+ * SAVE-LAYOUT WALL: every function that saves 2+ callee registers is blocked
+ * on the 2.9 arm — the later cc1 packs save slots 8-byte where the pinned
+ * 2.9-ee-991111 cc1 reserves 16 bytes per save. Functions whose only callee
+ * save is $ra are unaffected; pure leaves match freely. The engine96 arm
+ * (per-function `MATCH_<fn>` guard, see tools/ee/objdiff_build.sh) packs the
+ * slots like the ROM and is the route for those functions (func_00291FC8,
+ * MapSetCurrentLevel, task #496); its own residuals are recorded per arm in the
+ * `TODO(match): t496 probe` comments below.
  */
 
 extern void func_00278EC0(void);
@@ -38,16 +42,15 @@ extern u8 D_1395B8[];
  * with this 2.9-ee-991111 cc1; the later SN cc1 that built this gameplay TU
  * differs systematically):
  *
- *   MapSetCurrentLevel (0x296500, 66.9%) — the store of the level id must land
- *     in the jal-MapUpdateLevelAvailability delay slot; our cc1 sinks it into
- *     straight-line code and the empty-asm tail-call guard then occupies the
- *     slot (store-into-jal-delay scheduling wall).
+ *   [MATCHED in task #496 — entries kept for the record of what the 2.9 cc1
+ *     could not do: MapSetCurrentLevel (0x296500) matches on the engine96 arm
+ *     (MATCH_ guard; cc1 2.96 sinks the store into the jal delay slot);
+ *     func_00293B10 (0x293B10) matches on the 2.9 arm once the chunk table is
+ *     typed `u8 **` and `i` is declared before `p` — the "register-coloring"
+ *     reading was a spelling artefact.]
  *   func_002949E0 (0x2949E0, 89.7%) — the gp_rel D_1A933C reload is scheduled
  *     before its store, and the equality test lowers to `bnel` (branch-likely)
  *     where the original uses a plain `bne`.
- *   func_00293B10 (0x293B10, 90.0%) — register-coloring (the table base lands in
- *     $5 not $4) plus the `daddu $r,$0,$0` zero-idiom the later cc1 emits where
- *     ours emits `move` (= addu).
  *   MapDataExistsForLevel (0x296120, 70.9%) — the early-return `if` lowers to
  *     `beql` (branch-likely) where the original uses a plain `beqz` with the
  *     level mask computed once in the delay slot.
@@ -63,6 +66,12 @@ extern u8 D_1395B8[];
  * the given story progress (id 0 excluded), appends it via AddItemToInventoryOrder
  * (which owns the g_inventoryOrder writes). The matching build keeps the asm. */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 98.08% PACKED-SAVE /
+ * engine96 85.68% IDIOM-LIKELY; best arm sdk29, first differing insn there: 'addiu sp, sp,
+ * -0x20' vs 'addiu sp, sp, -0x30'. Iterated: engine96 85.68% SCHED-PROEPI — save order sd
+ * s0/s1/ra vs ra/s0/s1, a ROM `nop` before the first jal, beqz vs beqzl (not iterated:
+ * prologue order is the #7345 class) */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002912B8);
 #else
 void func_002912B8(s32 progress) {
@@ -87,6 +96,10 @@ extern void *func_0011AFE0(void *argBlock, s32 mode, void *arg);
 extern s32 func_0011AFC0(void *handle);
 extern s32 func_0011ED08(void *arg, s32 a1, s32 a2);
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 84.39% PACKED-SAVE /
+ * engine96 69.92% UNKNOWN-daddu; best arm sdk29, first differing insn there: 'addiu sp, sp,
+ * -0x30' vs 'addiu sp, sp, -0x50' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadIrxModuleFromBuffer);
 #else
 s32 LoadIrxModuleFromBuffer(void *image, s32 size, void *arg) {
@@ -124,6 +137,10 @@ extern s32  g_sceneArenaCursor;   /* 0x1B2230 */
  * pools, and the boot-WAD / upper-RAM region tops. Called per level by
  * RebootIopAndInitEngine + InitLoadingSceneSystem. */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 61.20% PACKED-SAVE /
+ * engine96 29.27% CONST-LI; best arm sdk29, first differing insn there: 'addiu sp, sp, -0x30'
+ * vs 'addiu sp, sp, -0x40' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", SetupMemoryArenaTable);
 #else
 void SetupMemoryArenaTable(void) {
@@ -179,6 +196,10 @@ void SetupMemoryArenaTable(void) {
  * void, no params. Sole ELF writer of g_bPalMode (region anchor; EU differs here).
  */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 72.43% PACKED-SAVE /
+ * engine96 66.15% CONST-LI; best arm sdk29, first differing insn there: 'addiu sp, sp, -0x820'
+ * vs 'addiu sp, sp, -0x840' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BootSystemInit);
 #else
 /* Phase 1-5 HW/IOP/subsystem callees (declared below BootSystemInit in-unit or
@@ -450,6 +471,12 @@ extern s32  g_vramZBuffer;
 extern void *g_pSkyShellSpinRates;
 extern s32  g_skyShellSpinTableStatic[];
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 90.94% GPREL-DECL /
+ * engine96 90.94% GPREL-DECL; best arm sdk29, first differing insn there: 'lui v1,
+ * %hi(g_playerProgress)' vs ''. Iterated: engine96 98.75% REGNUM-COLORING — after non-small
+ * decls for g_playerProgress/g_vramZBuffer + progress read before the store (s3): 6 rows
+ * differ only by register number */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", RenderSky);
 #else
 void RenderSky(void) {
@@ -488,6 +515,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291CB8);
  * re-dispatches (func_00291FC8).
  */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 68.20% PACKED-SAVE /
+ * engine96 63.16% GPREL-DECL; best arm sdk29, first differing insn there: 'addiu sp, sp,
+ * -0x50' vs 'addiu sp, sp, -0x70' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291D28);
 #else
 extern u8  g_dirLightMatrices[];       /* 0x1C26C0 - 0x40-stride light matrices */
@@ -555,6 +586,10 @@ void func_00291D28(void) {
  * total, +0xA = stage-3 delta. Stops early if any builder hits the limit.
  */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 80.07% PACKED-SAVE /
+ * engine96 62.24% CONST-MULT; best arm sdk29, first differing insn there: 'addiu sp, sp,
+ * -0x40' vs 'addiu sp, sp, -0x50' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291EB0);
 #else
 extern u8 g_pointLights[];
@@ -595,16 +630,22 @@ void func_00291EB0(s32 index) {
 }
 #endif
 
-#ifndef TARGET_NATIVE
-/* TODO(match): functional equivalent - not byte-exact; save-layout wall (saves
- * s0+ra -> the pinned 2.9-ee-991111 cc1 reserves a 0x20 frame, the original's
- * later cc1 packs it to 0x10). */
+/*
+ * func_00291FC8(arg) — re-dispatch a point-light relight request: flush the
+ * light's pending request spans (func_00291FF8) then rebuild the request record
+ * (func_00291EB0) for the same light index. `arg` is the light index passed
+ * through a pointer-typed slot; no return value.
+ *
+ * MATCHED on the engine96 arm (MATCH_ guard: cc1 2.96-ee-001003-1, the unit
+ * objdiff report via objdiff_build.sh + unit_report.sh, 100.00%, verify_match_unit
+ * BYTE IDENTICAL 12/12 words; task #496). The 2.9 arm reads 98.64% on the same
+ * body — the 0x20-vs-0x10 frame (16-byte callee-save slots), FACT #7358's
+ * PACKED-SAVE class. The empty asm keeps the second call from becoming a
+ * sibling call (the ROM has jal + epilogue).
+ */
+#if !defined(TARGET_NATIVE) && !defined(MATCH_func_00291FC8)
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291FC8);
 #else
-/*
- * func_00291FC8 — thin wrapper: run the subsystem reset (func_00291FF8) then
- * dispatch the kept argument to func_00291EB0.
- */
 extern void func_00291FF8(s32 index);
 extern void func_00291EB0(s32 index);
 void func_00291FC8(void *arg) {
@@ -615,6 +656,10 @@ void func_00291FC8(void *arg) {
 #endif
 
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 98.39% PACKED-SAVE /
+ * engine96 53.43% CONST-MULT; best arm sdk29, first differing insn there: 'addiu sp, sp,
+ * -0x20' vs 'addiu sp, sp, -0x30' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291FF8);
 #else
 /*
@@ -705,6 +750,10 @@ void func_00291FF8(s32 index) {
  * the original frame does), modelled here as one word-indexed scratch buffer.
  */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 42.27% PACKED-SAVE /
+ * engine96 32.24% CONST-MULT; best arm sdk29, first differing insn there: 'addiu sp, sp,
+ * -0x100' vs 'addiu sp, sp, -0x1b0' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002920C0);
 #else
 #ifdef TARGET_NATIVE
@@ -907,6 +956,10 @@ extern s32  Log2Floor(s32 x);
 #endif
 
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 49.88% PACKED-SAVE /
+ * engine96 48.88% IDIOM-LIKELY; best arm sdk29, first differing insn there: 'addiu sp, sp,
+ * -0x40' vs 'addiu sp, sp, -0x60' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BindParticleFxAssets);
 #else
 void BindParticleFxAssets(void *hdrArg, s32 texBase, s32 *texRecords, s32 texCount) {
@@ -982,6 +1035,10 @@ extern s32 func_002835E0(s32 v); /* abs(s32) */
  * LoadLevelAndInitHealth and by InitLoadingSceneSystem. The matching build
  * keeps the asm (save-layout wall). */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 43.22% PACKED-SAVE /
+ * engine96 52.83% GPREL-DECL; best arm engine96, first differing insn there: 'addiu sp, sp,
+ * -0x40' vs 'addiu sp, sp, -0x50' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BuildUiTextureDescriptors);
 #else
 void BuildUiTextureDescriptors(s32 *descTable, s32 count) {
@@ -1032,6 +1089,10 @@ void BuildUiTextureDescriptors(s32 *descTable, s32 count) {
  * TODO(match): functional equivalent - not byte-exact. Preserved as portable C;
  * the matching arm stays INCLUDE_ASM, #else is byte-neutral. */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 49.32% PACKED-SAVE /
+ * engine96 30.14% GPREL-DECL; best arm sdk29, first differing insn there: 'addiu sp, sp,
+ * -0x30' vs 'addiu sp, sp, -0x50' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BindSkyData);
 #else
 extern s32 Log2Floor(s32 x);
@@ -1086,6 +1147,10 @@ void BindSkyData(u8 *skyData) {
  * below (after the g_vramTextureBase/g_pPlayerModelBuffer decls + its twin
  * LoadHeldItemDisplayModel); the INCLUDE_ASM stays here in address order. */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 47.38% PACKED-SAVE /
+ * engine96 50.95% CONST-MULT; best arm engine96, first differing insn there: 'lui v0,
+ * %hi(g_pPlayerModelBuffer)' vs '' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadPlayerDisplayTextures);
 #endif
 
@@ -1100,6 +1165,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadPlayerDispl
  * class header's byte +0x8 into +0x9.
  */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 73.00% GPREL-DECL /
+ * engine96 53.24% GPREL-DECL; best arm sdk29, first differing insn there: 'lui v1,
+ * %hi(g_playerTexCount)' vs '' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BindPlayerDisplayModel);
 #else
 extern s32 g_playerTexCount;
@@ -1157,6 +1226,13 @@ extern void  BindPlayerDisplayModel(void);   /* ignores any arg (reads g_playerT
 void func_00293D68(u8 *dst, u8 *src);
 #endif
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 82.50% PACKED-SAVE /
+ * engine96 83.78% GPREL-DECL; best arm engine96, first differing insn there: 'daddu a0, s0,
+ * zero' vs 'nop '. Iterated: engine96 98.78% SCHED-PROEPI — after
+ * BindPlayerDisplayModel(variant), g_memoryArenaTable+0x78, .extern g_loadedArmorVariant,16
+ * (s1): only `ld s0;ld ra` order; 99.44% = reloc-name only at -fno-schedule-insns2 (per-unit
+ * flag question, not landed) */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadPlayerDisplayModel);
 #else
 void LoadPlayerDisplayModel(s32 variant) {
@@ -1176,6 +1252,10 @@ void LoadPlayerDisplayModel(s32 variant) {
  * the model geometry (+0x4F98 / +0x4F9C). Engine-2.96 (save-slot walled) ->
  * faithful #else; register pack transcribed op-for-op. NEEDS-ORACLE. */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 48.60% PACKED-SAVE /
+ * engine96 53.36% GPREL-DECL; best arm engine96, first differing insn there: 'addiu sp, sp,
+ * -0xa0' vs 'addiu sp, sp, -0xb0' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadHeldItemDisplayModel);
 #else
 extern void WaitFrameDmaFence(s32 mode);
@@ -1350,6 +1430,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_0
  * the loaded moby class header (FixupMobyClassHeader).
  */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 39.88% PACKED-SAVE /
+ * engine96 53.94% SIBCALL; best arm engine96, first differing insn there: 'sd s1, 0x8(sp)' vs
+ * 'sd s2, 0x10(sp)' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadShipDisplayModel);
 #else
 extern s32 g_discToc[];
@@ -1388,6 +1472,10 @@ void LoadShipDisplayModel(s32 index) {
  * -> save-slot walled, canonical-2.9 can't byte-match; faithful #else, with the
  * trailing dsll/dsra/or register pack transcribed op-for-op. NEEDS-ORACLE. */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 53.92% PACKED-SAVE /
+ * engine96 56.37% GPREL-DECL; best arm engine96, first differing insn there: 'addiu sp, sp,
+ * -0x90' vs 'addiu sp, sp, -0xa0' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadShipDisplayTexture);
 #else
 extern s32  g_frameArenaFlip;             /* double-buffer index (0/1) */
@@ -1450,6 +1538,10 @@ void LoadShipDisplayTexture(s32 shipId) {
 #endif
 
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 73.42% PACKED-SAVE /
+ * engine96 71.28% CONST-LI; best arm sdk29, first differing insn there: 'addiu sp, sp, -0x40'
+ * vs 'addiu sp, sp, -0x70' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", ParseLoadedSegment);
 #else
 extern u8 *g_pLoadedSegment;
@@ -1583,6 +1675,10 @@ extern u8 *g_pLoadedSegment;
 extern u8 *g_pHudAssetHeader;
 extern void DecompressWad(void *src, void *dest);
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 97.80% PACKED-SAVE /
+ * engine96 64.48% CONST-LI; best arm sdk29, first differing insn there: 'addiu sp, sp, -0x10'
+ * vs 'addiu sp, sp, -0x20' */
 /* TODO(match): functional equivalent - not byte-exact; save-layout wall (saves
  * s0+ra -> pinned cc1 reserves a 0x20 frame vs the original's 0x10). Body is
  * byte-identical apart from the frame size + ra slot offset. */
@@ -1653,6 +1749,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00293760);
  * base (advancing it by w*h*4), to base+entry[+0x8]. Engine-2.96 -> faithful
  * #else; matching arm INCLUDE_ASM. NEEDS-ORACLE (GS upload / vram-cursor). */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 66.23% CONST-MULT /
+ * engine96 55.98% CONST-MULT; best arm sdk29, first differing insn there: '' vs 'lui v0,
+ * %hi(g_vramTextureBase+0x10)' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002938B0);
 #else
 extern s32 g_vramDynamicBase;
@@ -1718,29 +1818,29 @@ void func_002938B0(u8 *base, s32 count1, s32 count2, u8 *list) {
 
 /*
  * func_00293B10(table, idx) — relocate the embedded pointers of a freshly
- * loaded class chunk to absolute addresses. `table` is a base-pointer array at
- * +0x48; entry idx is the chunk base `chunk`. Field +0x14 holds a chunk-relative
- * pointer (rebased to chunk + value when non-zero), +0x10 is a byte count, and
- * +0x1C[count] is an array of chunk-relative pointers each rebased to chunk +
- * value. This converts the stored file-relative offsets into live pointers.
+ * loaded class chunk to absolute addresses. `table` holds a chunk-pointer array
+ * at +0x48; entry idx is the chunk base `chunk`. Field +0x14 holds a
+ * chunk-relative pointer (rebased to chunk + value when non-zero), +0x10 is a
+ * count, and +0x1C[count] is an array of chunk-relative pointers each rebased
+ * to chunk + value. This converts the stored file-relative offsets into live
+ * pointers. No return value.
  *
- * WALL: instruction-for-instruction identical EXCEPT the loop-counter zero-init
- * the original's later cc1 emits as 64-bit `daddu $5,$0,$0` which the pinned
- * 2.9-ee-991111 cc1 lowers to 32-bit `move $5,$0`. Single-instruction version
- * delta; kept as the portable #else.
+ * MATCHED on the 2.9 arm (cc1 2.9-ee-991111 -O2 -G8 -fno-gcse, the unit objdiff
+ * report via objdiff_build.sh + unit_report.sh, 100.00%, verify_match_unit BYTE
+ * IDENTICAL 22/22 words; task #496). The two spellings that mattered: the chunk
+ * table as a typed `u8 **` pointer (puts `table` first in the index `addu`),
+ * and `i` declared before `p` (the zero-init lands in the branch delay slot).
  */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00293B10);
-#else
 void func_00293B10(s32 *table, s32 idx) {
-    u8 *chunk = (u8 *)((s32 *)((u8 *)table + 0x48))[idx];
+    u8 **entries = (u8 **)((u8 *)table + 0x48);
+    u8 *chunk = entries[idx];
     s32 *relPtr = (s32 *)(chunk + 0x14);
     if (*relPtr != 0) {
         *relPtr = (s32)(chunk + *relPtr);
     }
     if (*(u8 *)(chunk + 0x10) != 0) {
-        s32 *p = (s32 *)(chunk + 0x1C);
         s32 i = 0;
+        s32 *p = (s32 *)(chunk + 0x1C);
         do {
             *p = (s32)(chunk + *p);
             i++;
@@ -1748,7 +1848,6 @@ void func_00293B10(s32 *table, s32 idx) {
         } while (i < *(u8 *)(chunk + 0x10));
     }
 }
-#endif
 
 /*
  * func_00293B68(groups, instMode, idMap, groupCount) — walk a table of
@@ -1770,6 +1869,10 @@ extern void func_00293760(void *inst, s32 a1, s32 a2, s32 a3, s32 a4, s32 matId)
 #endif
 
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 83.45% PACKED-SAVE /
+ * engine96 76.84% UNKNOWN-addiu; best arm sdk29, first differing insn there: 'addiu sp, sp,
+ * -0x50' vs 'addiu sp, sp, -0x80' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00293B68);
 #else
 void func_00293B68(u8 *groups, s32 instMode, u8 *idMap, s32 groupCount) {
@@ -1816,6 +1919,10 @@ void func_00293B68(u8 *groups, s32 instMode, u8 *idMap, s32 groupCount) {
  * func_00293B68 for group instantiation.
  */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 56.95% PACKED-SAVE /
+ * engine96 58.09% SIBCALL; best arm engine96, first differing insn there: 'daddu t5, a1, zero'
+ * vs '' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", RelocateMobyClassChunk);
 #else
 void RelocateMobyClassChunk(void *chunkArg, s32 arg2, void *nameTableArg) {
@@ -1911,6 +2018,10 @@ extern char D_1A9240[];               /* debug fmt string (DebugPrintStub no-op)
 #endif
 
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 56.64% PACKED-SAVE /
+ * engine96 58.79% SIBCALL; best arm engine96, first differing insn there: 'sd s0, 0x0(sp)' vs
+ * 'sd s1, 0x8(sp)' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", FixupMobyClassHeader);
 #else
 void FixupMobyClassHeader(void *hdrArg, s32 instMode, s32 idMap, s32 classId) {
@@ -2107,6 +2218,10 @@ extern void  FixupMobyClassHeader(void *hdr, s32 arg2, s32 arg3, s32 classId);
  * FixupMobyClassHeader rebases the header offsets. The matching build keeps the
  * asm (save-layout wall). */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 58.11% PACKED-SAVE /
+ * engine96 48.81% IDIOM-LIKELY; best arm sdk29, first differing insn there: 'addiu sp, sp,
+ * -0x30' vs 'addiu sp, sp, -0x60' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", RegisterMobyClass);
 #else
 void RegisterMobyClass(u8 *hdr, s32 arg2, s32 arg3, s32 classId) {
@@ -2148,6 +2263,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294268);
  * @return always 1 (load kicked).
  */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 74.88% CONST-LI / engine96
+ * 61.25% CONST-LI; best arm sdk29, first differing insn there: 'lui a3, %hi(g_discToc)' vs
+ * 'lui a4, %hi(g_discToc)' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", StartFrontendSegmentLoad);
 #else
 extern s32 g_discToc[];  /* 0x14B540 master disc asset directory */
@@ -2179,6 +2298,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_0
  * Engine-2.96 (jtbl reloc) -> faithful #else switch; matching arm INCLUDE_ASM.
  * NEEDS-ORACLE (jtbl + disc-sector chunk-align math). */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 72.96% PACKED-SAVE /
+ * engine96 70.60% CONST-LI; best arm sdk29, first differing insn there: 'addiu sp, sp, -0x10'
+ * vs 'addiu sp, sp, -0x20' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", UpdateLevelStagingMachine);
 #else
 extern void func_00133230(void);
@@ -2301,6 +2424,10 @@ extern s32 g_discToc[];
 extern s32 StartFileLoad(s32 dest, s32 lbn, s32 sectors);
 extern void PumpDialogVoiceSystem(s32 blocking);
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 70.82% CONST-MULT /
+ * engine96 68.85% CONST-MULT; best arm sdk29, first differing insn there: 'lui a1,
+ * %hi(g_cameraSlotActive+0x990)' vs 'lui v0, %hi(g_cameraSlotActive+0x990)' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", StreamSceneSegment);
 #else
 s32 StreamSceneSegment(s32 idx) {
@@ -2355,6 +2482,10 @@ s32 StreamSceneSegment(s32 idx) {
  * portable-C transcription (op-for-op from the frozen .s).
  */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 53.27% PACKED-SAVE /
+ * engine96 57.27% GPREL-DECL; best arm engine96, first differing insn there: 'addiu sp, sp,
+ * -0x50' vs 'addiu sp, sp, -0x40' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BindSceneChunk);
 #else
 extern void func_0011AEA0(s32 mode);                      /* FlushCache */
@@ -2513,6 +2644,10 @@ extern void PumpDialogVoiceSystem(s32 blocking);
 #endif
 
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 72.24% PACKED-SAVE /
+ * engine96 50.19% UNKNOWN-lui; best arm sdk29, first differing insn there: 'addiu sp, sp,
+ * -0x20' vs 'addiu sp, sp, -0x40' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadGlobalDialogScene);
 #else
 void LoadGlobalDialogScene(s32 sceneIndex, s32 mode) {
@@ -2558,6 +2693,11 @@ void LoadGlobalDialogScene(s32 sceneIndex, s32 mode) {
 #endif
 
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 87.55% PACKED-SAVE /
+ * engine96 88.25% GPREL-DECL; best arm engine96, first differing insn there: 'lui v1,
+ * %hi(g_sceneArenaBase)' vs ''. Iterated: engine96 98.00% REGNUM-COLORING — after non-small
+ * decls for g_sceneArenaBase/Cursor (s1): 5 rows, hi-part registers v1/a0 vs a0/a1 */
 /* TODO(match): functional equivalent - not byte-exact (87.5%); save-layout wall
  * (saves s0+ra -> the pinned 2.9-ee-991111 cc1 reserves a 0x20 frame where the
  * original's later cc1 packs the two 8-byte slots into 0x10) plus a gp_rel/
@@ -2591,6 +2731,10 @@ void SelectSceneSubChunk(s32 which) {
 extern void FillMemory32(void *dst, u32 val, s32 len);
 extern s32 g_respawnPlayerYaw[];
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 94.63% PACKED-SAVE /
+ * engine96 69.26% UNKNOWN-empty; best arm sdk29, first differing insn there: 'addiu sp, sp,
+ * -0x10' vs 'addiu sp, sp, -0x20' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294970);
 #else
 void func_00294970(void) {
@@ -2634,6 +2778,13 @@ void func_00294970(void) {
  */
 extern s32 g_respawnPlayerYaw[];
 extern s32 D_1A933C;
+/* TODO(match): t496 — the engine96 gate row (objdiff_build.sh + unit_report.sh, the
+ * tree's -fno-schedule-insns arm) reads 45.37% on this body: the slot-table store
+ * is emitted as the `sw v1,g_respawnPlayerYaw+0x7c(at)` assembler macro and the
+ * bltzl/-1 early-out is reordered; the same body in the all-promoted probe file
+ * (tools/ee/.t496/07_all96_report.txt) reads 76.26% with an explicit lui/addiu/addu
+ * — the difference is the declaration environment of the TU, not the body
+ * (GPREL-DECL / ORDER-#7369 class; not iterated in #496). */
 #if !defined(TARGET_NATIVE) && !defined(MATCH_func_002949E0)
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002949E0);
 #else
@@ -2661,6 +2812,10 @@ void func_002949E0(s32 *rec, s32 enable) {
  * TODO(match): functional equivalent - not byte-exact. Matching arm stays
  * INCLUDE_ASM; #else byte-neutral. NEEDS-ORACLE. */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 58.83% PACKED-SAVE /
+ * engine96 58.18% CONST-MULT; best arm sdk29, first differing insn there: 'addiu sp, sp,
+ * -0x40' vs 'addiu sp, sp, -0x50' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294A30);
 #else
 extern s32 StartFileLoadWithCallback(void *dest, s32 startSector, s32 count,
@@ -2712,6 +2867,9 @@ void func_00294A30(s32 *rec, s32 flag) {
  * g_discToc[+0x4B3C]. Returns StartFileLoadWithCallback's result.
  */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 41.64% SIBCALL / engine96
+ * 34.44% SIBCALL; best arm sdk29, first differing insn there: '' vs 'daddu a5, a0, zero' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294B50);
 #else
 extern s32 g_discToc[];
@@ -2767,6 +2925,10 @@ extern s32 g_discToc[];
 extern s32 g_respawnPlayerYaw[];
 extern void func_00294B50(s32 idx, s32 slot, void *dest, s32 a3);
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 81.26% UNKNOWN-empty /
+ * engine96 62.71% CONST-MULT; best arm sdk29, first differing insn there: '' vs 'lw v0,
+ * 0x4b54(v1)' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294C48);
 #else
 void func_00294C48(s32 classId, s32 slot) {
@@ -2808,6 +2970,10 @@ void func_00294C48(s32 classId, s32 slot) {
  * TODO(match): functional equivalent - not byte-exact. Matching arm stays
  * INCLUDE_ASM; #else byte-neutral. NEEDS-ORACLE. */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 54.27% PACKED-SAVE /
+ * engine96 41.61% SIBCALL; best arm sdk29, first differing insn there: 'addiu sp, sp, -0x10'
+ * vs 'addiu sp, sp, -0x20' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294CD0);
 #else
 extern s32  func_00294EE0(s32 id);            /* load-in-flight gate (nonzero = busy) */
@@ -2879,6 +3045,12 @@ void func_00294CD0(s32 id) {
 #endif
 
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 87.39% PACKED-SAVE /
+ * engine96 87.39% UNKNOWN-sd; best arm sdk29, first differing insn there: 'addiu sp, sp,
+ * -0x20' vs 'addiu sp, sp, -0x30'. Iterated: engine96 87.39% REGNUM-COLORING — a->s1/b->s0 in
+ * the ROM (a1 moved before a0), ours a->s0/b->s1; temp-copy phrasing is copy-propagated away
+ * (s1) */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294E98);
 #else
 /*
@@ -2904,6 +3076,10 @@ void func_00294E98(s32 a, s32 b) {
 #endif
 
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 56.39% IDIOM-LIKELY /
+ * engine96 47.53% IDIOM-LIKELY; best arm sdk29, first differing insn there: 'lui v0,
+ * %hi(g_discToc)' vs 'lui v1, %hi(g_discToc)' */
 /* TODO(match): functional equivalent - not byte-exact (52%); loop-peel wall -
  * same as func_00295478: the pinned cc1 lowers the peeled first TOC-search
  * iteration to `bnel`/branch-likely where the original uses a plain `beq` then
@@ -2986,6 +3162,10 @@ s32 func_00294EE0(s32 classId) {
  * likely-branch loop). NEEDS-ORACLE.
  */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 64.90% PACKED-SAVE /
+ * engine96 47.09% CONST-MULT; best arm sdk29, first differing insn there: 'addiu sp, sp,
+ * -0xb0' vs 'addiu sp, sp, -0xf0' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadMobyClassFromWad);
 #else
 extern s32  g_discToc[];                  /* 0x150084 disc TOC, stride 0x14 entries */
@@ -3111,6 +3291,10 @@ void LoadMobyClassFromWad(s32 classId, s32 index, void *descArg) {
  * 6. Finalise (func_00132828) and load the class (LoadMobyClassFromWad).
  */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 63.59% PACKED-SAVE /
+ * engine96 54.45% SIBCALL; best arm sdk29, first differing insn there: 'addiu sp, sp, -0x40'
+ * vs 'addiu sp, sp, -0x60' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00295238);
 #else
 extern s32 g_discToc[];
@@ -3231,6 +3415,10 @@ extern s32 g_discToc[];
 extern u8 g_loadingScenesPlayed[];
 extern void func_00294B50(s32 idx, s32 a1, void *dest, s32 a3);
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 78.38% UNKNOWN-empty /
+ * engine96 50.79% UNKNOWN-addiu; best arm sdk29, first differing insn there: '' vs 'lw v0,
+ * 0x4b54(a3)' */
 /* TODO(match): functional equivalent - not byte-exact (78.7%); loop-peel wall -
  * the pinned cc1 peels the first search iteration (folding base+0x4B54 as a
  * constant offset) where the original's later cc1 keeps the clean rotated loop.
@@ -3275,6 +3463,10 @@ void func_00295478(s32 classId, void *dest) {
  * dims). Returns the packed GS TEX0 register.
  */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 27.06% PACKED-SAVE /
+ * engine96 38.38% GPREL-DECL; best arm engine96, first differing insn there: 'addiu sp, sp,
+ * -0x70' vs 'addiu sp, sp, -0x20' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002954F0);
 #else
 extern s32 g_vramAllocCursor;
@@ -3314,6 +3506,10 @@ u64 func_002954F0(void *descArg) {
 #endif
 
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 22.29% GPREL-DECL /
+ * engine96 43.94% GPREL-DECL; best arm engine96, first differing insn there: 'daddu a7, a0,
+ * zero' vs 'daddu a6, a0, zero' */
 /* TODO(match): functional equivalent - not byte-exact (22%); 64-bit shift wall -
  * the pinned cc1 lowers each `(u64)x << n` field shift to a `dsll32`+`dsrl` pair
  * where the original emits a single `dsll`/`dsll32`, plus the gp_rel/absolute
@@ -3357,23 +3553,22 @@ u64 QueueGsTextureUpload(s32 a0, s32 a1, s32 a2, s32 a3, s32 a4, s32 a5) {
 }
 #endif
 
-#ifndef TARGET_NATIVE
-/* TODO(match): functional equivalent - not byte-exact (95.97%); register-color
- * wall - the original's later cc1 lands the level/8 quotient in a temp then
- * `move`s it to the index register (a redundant daddu copy our pinned cc1
- * elides); the body is otherwise byte-identical. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002956F8);
-#else
 /*
- * func_002956F8 — mark a level discovered on the galactic map and return its
- * previous revealed bit. Sets bit (level%8) of byte (level/8) in the revealed-
- * area bitmap (g_mapRevealedFlags, the +0xA7 slice of D_1395B8). The signed
- * div/mod uses the shift-with-bias idiom; the (always-true) bounds guard yields
- * 0 for the degenerate case. Companion setter to MapIsLevelRevealed.
+ * func_002956F8(level) — mark a level discovered on the galactic map and return
+ * its previous revealed bit (0/1). Sets bit (level%8) of byte (level/8) in the
+ * revealed-area bitmap (g_mapRevealedFlags, the +0xA7 slice of D_1395B8). The
+ * signed div/mod uses the shift-with-bias idiom; the (always-true) bounds guard
+ * yields 0 for the degenerate case. Companion setter to MapIsLevelRevealed.
+ *
+ * MATCHED on the 2.9 arm (cc1 2.9-ee-991111 -O2 -G8 -fno-gcse, the unit objdiff
+ * report via objdiff_build.sh + unit_report.sh, 100.00%, verify_match_unit BYTE
+ * IDENTICAL 32/32 words; task #496). The former "register-colour wall" was the
+ * spelling of the remainder: `level % 8` reproduces the ROM's quotient copy
+ * (`daddu a2,a1`), `level - byteIndex * 8` folds it away.
  */
 s32 func_002956F8(s32 level) {
     s32 byteIndex = level / 8;
-    s32 bit = level - byteIndex * 8;
+    s32 bit = level % 8;
     s32 prev;
     if ((u32)bit < 8) {
         prev = (D_1395B8[0xA7 + byteIndex] >> bit) & 1;
@@ -3385,7 +3580,6 @@ s32 func_002956F8(s32 level) {
     }
     return prev;
 }
-#endif
 
 /*
  * MapIsLevelRevealed (0x295778) — returns the per-level "map discovered" bit
@@ -3411,6 +3605,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapInit);
  * map-cache slice below (after the MapCache type + g_discToc/g_mapDataSet it
  * depends on); the INCLUDE_ASM stays here in address order. */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 50.33% PACKED-SAVE /
+ * engine96 33.43% SIBCALL; best arm sdk29, first differing insn there: 'addiu sp, sp, -0x20'
+ * vs 'addiu sp, sp, -0x50' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapBeginUpload);
 #endif
 
@@ -3446,6 +3644,11 @@ s32 MapFindReadyCacheSlot(s32 fromEnd) {
  * #else body is in the map-cache slice below (needs the MapCache type +
  * MapMoveCacheSlot); the INCLUDE_ASM stays here in address order. */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 87.10% PACKED-SAVE /
+ * engine96 87.62% IDIOM-LIKELY; best arm engine96, first differing insn there: 'daddu s0, v0,
+ * zero' vs ''. Iterated: engine96 89.00% IDIOM-LIKELY — single-exit `i` form (s2):
+ * beqzl/likely-slot loop tail + hi-part copy differ */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapAllocCacheSlot);
 #endif
 
@@ -3453,6 +3656,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapAllocCacheSl
  * contents src -> dst; the portable #else body lives in the galactic-map cache
  * slice below (after the MapCache struct it depends on). */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 93.26% PACKED-SAVE /
+ * engine96 56.77% UNKNOWN-lui; best arm sdk29, first differing insn there: 'addiu sp, sp,
+ * -0x30' vs 'addiu sp, sp, -0x60'. Iterated: engine96 63.38% REGNUM-COLORING — explicit per-
+ * array pointer form (s4) reproduces the address formation; register assignment + order differ */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapMoveCacheSlot);
 #endif
 
@@ -3606,6 +3814,11 @@ s32 MapFindCacheSlot(s32 levelAndFlag) {
  * validated (cmp_191238_mapdata). (Earlier note blamed beql vs beqz — wrong:
  * both original and our build emit beqz; the real wall is allocation order.) */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 26.12% UNKNOWN-andi /
+ * engine96 40.47% IDIOM-LIKELY; best arm engine96, first differing insn there: 'andi v0, a0,
+ * 0x100' vs 'andi v0, a0, 0xff'. Iterated: sdk29 73.24% REGNUM-COLORING — per-branch index
+ * computation (r4) reproduces the shape; `la` split around the sll + register numbers differ */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapDataExistsForLevel);
 #else
 s32 MapDataExistsForLevel(s32 levelAndFlag) {
@@ -3735,6 +3948,10 @@ void MapBeginUpload(void) {
  * (the unit-wide save-layout wall), and the spiral's movz/negu step is coloured
  * differently. Logic traced op-for-op; kept as the portable #else body. */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 56.58% PACKED-SAVE /
+ * engine96 60.14% GPREL-DECL; best arm engine96, first differing insn there: 'lui v0,
+ * %hi(g_mapVertexData)' vs '' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapFindNearestAvailableLevel);
 #else
 s32 MapFindNearestAvailableLevel(void) {
@@ -3782,6 +3999,10 @@ s32 MapFindNearestAvailableLevel(void) {
  * across $3/$6, the pinned cc1 keeps it in one register. Logic exact; kept as
  * the portable #else body. */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 65.86% GPREL-DECL /
+ * engine96 43.57% IDIOM-LIKELY; best arm sdk29, first differing insn there: 'lui v1,
+ * %hi(g_pLevelOrder)' vs '' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapGetLevelOrderIndex);
 #else
 s32 MapGetLevelOrderIndex(s32 level) {
@@ -3826,6 +4047,10 @@ s32 MapGetLevelOrderIndex(s32 level) {
  * cc1's plain-branch / save-layout shapes. Logic traced op-for-op; kept as the
  * portable #else body. */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 81.90% PACKED-SAVE /
+ * engine96 51.27% UNKNOWN-empty; best arm sdk29, first differing insn there: 'addiu sp, sp,
+ * -0x50' vs 'addiu sp, sp, -0x80' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapEvictCacheSlot);
 #else
 s32 MapEvictCacheSlot(void) {
@@ -3888,21 +4113,26 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_0
  * alabel to a real glabel). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapCompositeThumbnailMask);
 
-/* MapSetCurrentLevel(level): set the galactic-map current level and refresh the
- * availability flag. Stores `level` into g_mapCache.currentLevel then calls
- * MapUpdateLevelAvailability.
+/*
+ * MapSetCurrentLevel(level) — set the galactic-map current level
+ * (g_mapCurrentLevel, the +0x230 field of the map cache at g_mapVertexData) and
+ * refresh the availability flag via MapUpdateLevelAvailability. No return value.
  *
- * WALL (66.9%): the level store must land in the jal-MapUpdateLevelAvailability
- * delay slot; the pinned cc1 either tail-calls (when MapUpdateLevelAvailability
- * is visible in-unit) or, with the empty-asm tail-call guard, emits the store in
- * straight-line code and a `nop` in the delay slot — it will not sink the
- * independent store into the slot the way the original's later cc1 did. Logic
- * exact; kept as the #else body. */
-#ifndef TARGET_NATIVE
+ * MATCHED on the engine96 arm (MATCH_ guard: cc1 2.96-ee-001003-1, the unit
+ * objdiff report via objdiff_build.sh + unit_report.sh, 100.00%, verify_match_unit
+ * BYTE IDENTICAL 8/8 words; task #496). cc1 2.96 sinks the store into the jal
+ * delay slot exactly as the ROM has it; the 2.9 arm reads 55.00% (store in
+ * straight-line code, nop in the slot). The field is written through
+ * g_mapVertexData (the linkable symbol at the cache base): the ROM word is
+ * %hi/%lo(g_mapCurrentLevel) = g_mapVertexData + 0x230, the same address. The
+ * empty asm keeps the call from becoming a sibling call.
+ */
+s32 MapUpdateLevelAvailability(void);
+#if !defined(TARGET_NATIVE) && !defined(MATCH_MapSetCurrentLevel)
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapSetCurrentLevel);
 #else
 void MapSetCurrentLevel(s32 level) {
-    g_mapCache.currentLevel = level;
+    g_mapVertexData.currentLevel = level;
     MapUpdateLevelAvailability();
     __asm__ __volatile__("");
 }
@@ -3916,6 +4146,10 @@ void MapSetCurrentLevel(s32 level) {
  * test diverge from the pinned cc1's plain branches and slot scheduling. Logic
  * traced op-for-op; kept as the portable #else body. */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 67.17% GPREL-DECL /
+ * engine96 64.77% GPREL-DECL; best arm sdk29, first differing insn there: 'lui v1,
+ * %hi(g_mapVertexData)' vs 'lui v1, %hi(g_mapCache)' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapUpdateLevelAvailability);
 #else
 s32 MapUpdateLevelAvailability(void) {
@@ -3960,6 +4194,10 @@ s32 MapUpdateLevelAvailability(void) {
  * + the $8/0x10000000 reuse diverge from the pinned
  * 2.9-ee-991111 cc1. Logic traced op-for-op from the frozen .s; portable #else. */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 42.76% PACKED-SAVE /
+ * engine96 32.89% GPREL-DECL; best arm sdk29, first differing insn there: 'addiu sp, sp,
+ * -0x10' vs 'addiu sp, sp, -0x50' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapUpdate);
 #else
 extern u8   D_138180[];              /* controller port-0 state (0x138180) */
@@ -4057,6 +4295,10 @@ s32 MapUpdate(void) {
  * use s64/u64 to avoid 32-bit overflow. Angle constants are bit-exact via unions.
  */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 33.90% PACKED-SAVE /
+ * engine96 32.87% CONST-LI; best arm sdk29, first differing insn there: 'addiu sp, sp, -0x140'
+ * vs 'addiu sp, sp, -0x11b0' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapDraw);
 #else
 extern s32   D_1A95F0;                 /* 0x1A95F0 map-draw suppress gate */
@@ -4693,6 +4935,10 @@ extern void func_00297E80(void *scratchpad, s32 row, void *srcA, void *srcB);
 #endif
 
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 56.23% PACKED-SAVE /
+ * engine96 40.65% IDIOM-LIKELY; best arm sdk29, first differing insn there: 'addiu sp, sp,
+ * -0x50' vs 'addiu sp, sp, -0x80' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapBuildBitmapFrom4bpp);
 #else
 void MapBuildBitmapFrom4bpp(void *destArg, void *srcA, void *srcB) {
@@ -4740,6 +4986,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00297E80);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00297F98);
 
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 88.03% PACKED-SAVE /
+ * engine96 79.67% IDIOM-LIKELY; best arm sdk29, first differing insn there: 'addiu sp, sp,
+ * -0x20' vs 'addiu sp, sp, -0x40'. Iterated: engine96 86.83% IDIOM-LIKELY — non-small
+ * g_mapHasData + s32 flags (s2): beqzl with `ld s0` in the likely slot + prologue arg-copy
+ * interleave */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapBuildBitmap);
 #else
 /*
@@ -4806,6 +5058,10 @@ extern void FillMemory32(void *dst, u32 word, s32 nbytes);
 extern void CopyQwords(void *dst, const void *src, s32 nbytes);
 #endif
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 39.02% PACKED-SAVE /
+ * engine96 52.71% IDIOM-LIKELY; best arm engine96, first differing insn there: 'ori v0, zero,
+ * 0x8000' vs '' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002980D8);
 #else
 void func_002980D8(void *dstArg, u8 *src, s32 ctrlArg) {
@@ -4895,6 +5151,10 @@ void func_002980D8(void *dstArg, u8 *src, s32 ctrlArg) {
 #endif
 
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 88.03% PACKED-SAVE /
+ * engine96 78.06% UNKNOWN-addiu; best arm sdk29, first differing insn there: 'addiu sp, sp,
+ * -0x480' vs 'addiu sp, sp, -0x490' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00298308);
 #else
 extern void CopyQwords(void *dst, const void *src, s32 nbytes);
@@ -4942,6 +5202,10 @@ void func_00298308(void *dst, u8 *src) {
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_002984D8);
 
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 55.24% PACKED-SAVE /
+ * engine96 46.14% IDIOM-LIKELY; best arm sdk29, first differing insn there: 'addiu sp, sp,
+ * -0x270' vs 'addiu sp, sp, -0x290' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002984E0);
 #else
 extern u8   *g_mapBitmapBuffer;
@@ -5029,6 +5293,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00298730);
 extern s32 D_1A9428;      /* gp-relative UI-slot base */
 extern u8  D_255E50[];    /* per-index UI element table (0x10 stride) */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 50.50% GPREL-DECL /
+ * engine96 37.75% GPREL-DECL; best arm sdk29, first differing insn there: 'lui v1,
+ * %hi(g_playerProgress)' vs ''. Iterated: sdk29 90.75% IDIOM-LIKELY — branch sense inverted +
+ * non-small g_playerProgress (r4): ROM `beql` with `lui a0` in the likely slot, ours `beq`;
+ * plus a `daddu a1,a0` copy */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002988C8);
 #else
 void *func_002988C8(s32 idx) {
@@ -5056,6 +5326,10 @@ void *func_002988C8(s32 idx) {
  * whose ABI is positional.
  */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 66.89% PACKED-SAVE /
+ * engine96 32.48% GPREL-DECL; best arm sdk29, first differing insn there: 'addiu sp, sp,
+ * -0x50' vs 'addiu sp, sp, -0x60' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00298918);
 #else
 void func_00298918(f32 fa, f32 fb, void *outX, void *outY, s32 level) {
@@ -5099,6 +5373,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00298AA8);
  * (g_pRainHeightmap+0x18) — or resets it to 0 if the handler changed the state.
  */
 #ifndef TARGET_NATIVE
+/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+ * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 56.30% PACKED-SAVE /
+ * engine96 58.75% GPREL-DECL; best arm engine96, first differing insn there: 'addiu sp, sp,
+ * -0x10' vs 'addiu sp, sp, -0x20' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00298F20);
 #else
 extern u8 g_areaTable[];
