@@ -6,13 +6,17 @@
  * This translation unit is hand-written R5900 / VU0 macro-mode assembly: the
  * vector ops are COP2 instructions (lqc2/sqc2/vadd/vmul/vdiv/vsqrt/vopmula...)
  * and the scalar helpers use R5900-native FPU ops (min.s/max.s/abs.s) plus
- * delay-slot-packed schedules that ee-gcc 2.9 (-O2) never emits. The handful of
- * genuinely *compiled* functions in the band (e.g. SetVideoMode, func_00283B60)
- * use %gp_rel small-data access, which needs -G8 — but this unit is pinned at
- * -G0 — so NONE of them byte-match here. The unit therefore stays INCLUDE_ASM
- * for the matching build (verified instruction-by-instruction via objdiff: the
- * scalar conversions miss on scheduling/coloring, the min/max/abs miss because
- * the patterns don't exist, the vector ops are pure COP2).
+ * delay-slot-packed schedules that ee-gcc 2.9 (-O2) never emits. Measured on
+ * both gate arms (task #494, 2026-09-20; tools/ee/.t494/20_member_table.md): of
+ * the 71 #else bodies, 63 fail a lever-independent screen (COP2 macro-mode ops,
+ * MMI parallel ops, $at used as a GPR, min.s/max.s/abs.s/madda, non-u add/addi)
+ * that no C phrasing reaches on either cc1; the 8 compiler-shaped ones miss on
+ * xfer/delay-slot/coloring properties of the two held cc1s (see each arm's
+ * TODO(match)). The one genuinely compiled function, SetVideoMode, is 25/27
+ * words on the 2.9 arm at this unit's -O2 -G0 with the two flags in cc1's
+ * small-data class (ROM_SMALL below); the ROM's single %gp_rel word is the
+ * store cc1 sinks into the bnel delay slot, which the tree's assembler expands
+ * to two words. Everything stays INCLUDE_ASM for the matching build.
  *
  * Per docs/PORTING.md these are tier-2 "pure-computation" functions: each VU0
  * math op has an exact portable C equivalent, kept in the #else branch so the
@@ -34,6 +38,10 @@ typedef f32 Vec4f[4] __attribute__((aligned(16)));
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002835D8);
 #else
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 20.00% / engine96 arm 20.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `` vs `mtc1 a0,$f0`. Residual
+ * DSLOT-XFER: the ROM fills the jr slot with `mtc1 $4,$f0`; neither cc1 puts an xfer in a delay
+ * slot (both emit mtc1 then jr). */
 f32 func_002835D8(s32 bits) {
     return *(f32 *)&bits;
 }
@@ -45,7 +53,9 @@ f32 func_002835D8(s32 bits) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002835E0);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 53.33% / engine96 arm 53.33% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 1: ROM `sll zero,zero,0x0` vs `daddu
+ * v0,a0,zero`. Residual HANDWRITTEN-ADDI: non-u add/addi/sub forms cc1 never emits [screen: HW=2]. */
 s32 func_002835E0(s32 x) {
     return (x < 0) ? -x : x;
 }
@@ -59,6 +69,9 @@ s32 func_002835E0(s32 x) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", GetFloatAbs);
 #else
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `` vs `mtc1 zero,$f0`. Residual
+ * HANDWRITTEN-FPUX: R5900 FPU ops with no cc1 pattern (min.s/max.s/abs.s/madda) [screen: FPUX=1]. */
 f32 GetFloatAbs(f32 x) {
     return (x < 0.0f) ? -x : x;
 }
@@ -72,6 +85,9 @@ f32 GetFloatAbs(f32 x) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283600);
 #else
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `` vs `c.lt.s $f12,$f13`. Residual
+ * HANDWRITTEN-FPUX: R5900 FPU ops with no cc1 pattern (min.s/max.s/abs.s/madda) [screen: FPUX=1]. */
 f32 func_00283600(f32 a, f32 b) {
     return (a < b) ? a : b;
 }
@@ -83,7 +99,10 @@ f32 func_00283600(f32 a, f32 b) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283608);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 5.00% / engine96 arm 5.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `pminw v0,a0,a1` vs `slt
+ * v0,a0,a1`. Residual HANDWRITTEN-MMI: R5900 parallel ops (p*), no C route in either cc1 [screen:
+ * MMI=2]. */
 s32 func_00283608(s32 a, s32 b, s32 c) {
     s32 m = (a < b) ? a : b;
     return (m < c) ? m : c;
@@ -97,6 +116,10 @@ s32 func_00283608(s32 a, s32 b, s32 c) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283618);
 #else
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `max.s $f0,$f12,$f13` vs `c.lt.s
+ * $f13,$f12`. Residual HANDWRITTEN-FPUX: R5900 FPU ops with no cc1 pattern
+ * (min.s/max.s/abs.s/madda) [screen: FPUX=2]. */
 f32 func_00283618(f32 x, f32 lo, f32 hi) {
     f32 t = (x > lo) ? x : lo;
     return (t < hi) ? t : hi;
@@ -106,6 +129,10 @@ f32 func_00283618(f32 x, f32 lo, f32 hi) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283628);
 #else
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf1,0(a1)` vs `mtc1
+ * zero,$f1`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: COP2=3]. */
 void func_00283628(Vec4f dst, const Vec4f src) {
     int i;
     for (i = 0; i < 4; i++) dst[i] = (src[i] < 0.0f) ? -src[i] : src[i];
@@ -116,6 +143,10 @@ void func_00283628(Vec4f dst, const Vec4f src) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283638);
 #else
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `` vs `mtc1 zero,$f0`. Residual
+ * CONST-TI-ZERO: the ROM stores $0 with `sq $0,0($4)`; both cc1s (TImode via
+ * __attribute__((mode(TI)))) materialise the zero first (`por $2,$0,$0; sq $2`). */
 void func_00283638(Vec4f dst) {
     dst[0] = dst[1] = dst[2] = dst[3] = 0.0f;
 }
@@ -126,6 +157,9 @@ void func_00283638(Vec4f dst) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283640);
 #else
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `` vs `lui at,0x3f80`. Residual
+ * HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either cc1 [screen: COP2=1]. */
 void func_00283640(Vec4f dst) {
     dst[0] = 0.0f; dst[1] = 0.0f; dst[2] = 0.0f; dst[3] = 1.0f;
 }
@@ -135,6 +169,10 @@ void func_00283640(Vec4f dst) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", SetVec4UnitZ);
 #else
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `vmr32.xyzw $vf1xyzw,$vf0xyzw` vs
+ * `lui at,0x3f80`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in
+ * either cc1 [screen: COP2=2]. */
 void SetVec4UnitZ(Vec4f dst) {
     /* vmr32 rotates the lanes of vf0=(0,0,0,1) up by one: -> (0,0,1,0). */
     dst[0] = 0.0f; dst[1] = 0.0f; dst[2] = 1.0f; dst[3] = 0.0f;
@@ -145,6 +183,10 @@ void SetVec4UnitZ(Vec4f dst) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283658);
 #else
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf1,0(a1)` vs `addiu
+ * v0,zero,3`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: COP2=4]. */
 void func_00283658(Vec4f dst, const Vec4f a, const Vec4f b) {
     int i;
     for (i = 0; i < 4; i++) dst[i] = a[i] + b[i];
@@ -155,6 +197,10 @@ void func_00283658(Vec4f dst, const Vec4f a, const Vec4f b) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", Vec4AddVu0);
 #else
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf1,0(a1)` vs `lwc1
+ * $f0,0(a2)`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: COP2=4]. */
 void Vec4AddVu0(Vec4f dst, const Vec4f a, const Vec4f b) {
     dst[0] = a[0] + b[0]; dst[1] = a[1] + b[1]; dst[2] = a[2] + b[2];
     dst[3] = a[3];
@@ -165,6 +211,10 @@ void Vec4AddVu0(Vec4f dst, const Vec4f a, const Vec4f b) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283688);
 #else
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf1,0(a1)` vs `lwc1
+ * $f1,0(a2)`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: COP2=4]. */
 void func_00283688(Vec4f unused, Vec4f a, const Vec4f b) {
     (void)unused;
     a[0] = a[0] + b[0]; a[1] = a[1] + b[1]; a[2] = a[2] + b[2];
@@ -175,6 +225,10 @@ void func_00283688(Vec4f unused, Vec4f a, const Vec4f b) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", Vec4SubVu0);
 #else
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf1,0(a1)` vs `lwc1
+ * $f0,0(a2)`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: COP2=4]. */
 void Vec4SubVu0(Vec4f dst, const Vec4f a, const Vec4f b) {
     dst[0] = a[0] - b[0]; dst[1] = a[1] - b[1]; dst[2] = a[2] - b[2];
     dst[3] = a[3];
@@ -185,6 +239,10 @@ void Vec4SubVu0(Vec4f dst, const Vec4f a, const Vec4f b) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002836B8);
 #else
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `mfc1 at,$f12` vs `lwc1
+ * $f2,0(a1)`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: AT=2 COP2=7]. */
 void func_002836B8(Vec4f dst, f32 t, const Vec4f a, const Vec4f b) {
     dst[0] = a[0] + (b[0] - a[0]) * t;
     dst[1] = a[1] + (b[1] - a[1]) * t;
@@ -197,6 +255,10 @@ void func_002836B8(Vec4f dst, f32 t, const Vec4f a, const Vec4f b) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", Vec4ScaleVu0);
 #else
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `mfc1 at,$f12` vs `lwc1
+ * $f1,0(a1)`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: AT=2 COP2=4]. */
 void Vec4ScaleVu0(Vec4f dst, f32 s, const Vec4f src) {
     dst[0] = src[0] * s; dst[1] = src[1] * s; dst[2] = src[2] * s;
     dst[3] = src[3];
@@ -207,6 +269,10 @@ void Vec4ScaleVu0(Vec4f dst, f32 s, const Vec4f src) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002836F8);
 #else
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `mfc1 at,$f12` vs `lwc1
+ * $f0,0(a1)`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: AT=2 COP2=4]. */
 void func_002836F8(Vec4f unused, f32 s, Vec4f src) {
     (void)unused;
     src[0] = src[0] * s; src[1] = src[1] * s; src[2] = src[2] * s;
@@ -217,6 +283,10 @@ void func_002836F8(Vec4f unused, f32 s, Vec4f src) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", ScaleVec4IncludingW);
 #else
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `mfc1 at,$f12` vs `addiu
+ * v0,zero,3`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: AT=2 COP2=4]. */
 void ScaleVec4IncludingW(Vec4f dst, f32 s, const Vec4f src) {
     int i;
     for (i = 0; i < 4; i++) dst[i] = src[i] * s;
@@ -227,6 +297,10 @@ void ScaleVec4IncludingW(Vec4f dst, f32 s, const Vec4f src) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283728);
 #else
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf1,0(a1)` vs `addiu
+ * v0,zero,3`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: COP2=4]. */
 void func_00283728(Vec4f dst, const Vec4f a, const Vec4f b) {
     int i;
     for (i = 0; i < 4; i++) dst[i] = a[i] * b[i];
@@ -237,6 +311,10 @@ void func_00283728(Vec4f dst, const Vec4f a, const Vec4f b) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283740);
 #else
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `mfc1 at,$f12` vs `lui at,0x3f80`.
+ * Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either cc1 [screen:
+ * AT=2 COP2=6]. */
 void func_00283740(Vec4f dst, f32 d, const Vec4f src) {
     f32 q = 1.0f / d;
     dst[0] = src[0] * q; dst[1] = src[1] * q; dst[2] = src[2] * q;
@@ -248,6 +326,10 @@ void func_00283740(Vec4f dst, f32 d, const Vec4f src) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", Vec3DotVu0);
 #else
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 26.00% / engine96 arm 26.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf1,0(a0)` vs `lwc1
+ * $f0,0(a1)`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: COP2=7]. */
 f32 Vec3DotVu0(const Vec4f a, const Vec4f b) {
     return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
@@ -259,6 +341,10 @@ f32 Vec3DotVu0(const Vec4f a, const Vec4f b) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", Vec3CrossVu0);
 #else
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf1,0(a1)` vs `lwc1
+ * $f3,4(a2)`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: COP2=5]. */
 void Vec3CrossVu0(Vec4f dst, const Vec4f a, const Vec4f b) {
     dst[0] = a[2] * b[1] - a[1] * b[2];
     dst[1] = a[0] * b[2] - a[2] * b[0];
@@ -270,6 +356,10 @@ void Vec3CrossVu0(Vec4f dst, const Vec4f a, const Vec4f b) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", Vec3LengthVu0);
 #else
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf1,0(a0)` vs `addiu
+ * sp,sp,-16`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: COP2=10]. */
 f32 Vec3LengthVu0(const Vec4f v) {
     return __builtin_sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
 }
@@ -278,7 +368,10 @@ f32 Vec3LengthVu0(const Vec4f v) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", Vec2LengthXyVu0);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf1,0(a0)` vs `addiu
+ * sp,sp,-16`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: COP2=8]. */
 f32 Vec2LengthXyVu0(const Vec4f v) {
     return __builtin_sqrtf(v[0] * v[0] + v[1] * v[1]);
 }
@@ -287,7 +380,10 @@ f32 Vec2LengthXyVu0(const Vec4f v) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", Vec3DistVu0);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf1,0(a0)` vs `addiu
+ * sp,sp,-16`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: COP2=12]. */
 f32 Vec3DistVu0(const Vec4f a, const Vec4f b) {
     f32 dx = a[0] - b[0];
     f32 dy = a[1] - b[1];
@@ -299,6 +395,10 @@ f32 Vec3DistVu0(const Vec4f a, const Vec4f b) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", DistXYVu0);
 #else
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf1,0(a0)` vs `addiu
+ * sp,sp,-16`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: COP2=10]. */
 f32 DistXYVu0(const Vec4f a, const Vec4f b) {
     f32 dx = a[0] - b[0];
     f32 dy = a[1] - b[1];
@@ -309,7 +409,10 @@ f32 DistXYVu0(const Vec4f a, const Vec4f b) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283860);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf1,0(a0)` vs `lwc1
+ * $f3,0(a1)`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: COP2=8]. */
 f32 func_00283860(const Vec4f a, const Vec4f b) {
     f32 dx = a[0] - b[0];
     f32 dy = a[1] - b[1];
@@ -327,7 +430,10 @@ f32 func_00283860(const Vec4f a, const Vec4f b) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283888);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf1,0(a0)` vs `lwc1
+ * $f1,0(a1)`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: COP2=11 HW=2]. */
 s32 func_00283888(const Vec4f a, const Vec4f b) {
     f32 dx = a[0] - b[0];
     f32 dy = a[1] - b[1];
@@ -346,7 +452,10 @@ s32 func_00283888(const Vec4f a, const Vec4f b) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", Vec3RescaleToLenVu0);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf1,0(a1)` vs `addiu
+ * sp,sp,-64`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: AT=5 COP2=13]. */
 void Vec3RescaleToLenVu0(Vec4f dst, f32 len, const Vec4f src) {
     f32 len2 = src[0] * src[0] + src[1] * src[1] + src[2] * src[2];
     if (len2 != 0.0f) {
@@ -366,7 +475,10 @@ void Vec3RescaleToLenVu0(Vec4f dst, f32 len, const Vec4f src) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283920);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf1,0(a1)` vs `addiu
+ * sp,sp,-64`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: AT=5 COP2=11]. */
 void func_00283920(Vec4f dst, f32 len, const Vec4f src) {
     f32 len2 = src[0] * src[0] + src[1] * src[1];
     if (len2 != 0.0f) {
@@ -392,7 +504,10 @@ void func_00283920(Vec4f dst, f32 len, const Vec4f src) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283968);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf1,0(a1)` vs `addiu
+ * sp,sp,-64`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: AT=4 COP2=17 HW=2]. */
 s32 func_00283968(Vec4f dst, f32 minLen, const Vec4f src) {
     f32 len = __builtin_sqrtf(src[0] * src[0] + src[1] * src[1] + src[2] * src[2]);
     if (len != 0.0f && (minLen - len) <= 0.0f) {
@@ -417,7 +532,10 @@ s32 func_00283968(Vec4f dst, f32 minLen, const Vec4f src) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002839D8);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf1,0(a1)` vs `addiu
+ * sp,sp,-96`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: AT=3 COP2=19]. */
 void func_002839D8(Vec4f dst, const Vec4f src, const Vec4f dir) {
     f32 vx = -src[0], vy = -src[1], vz = -src[2];
     f32 dlen2 = dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2];
@@ -452,7 +570,10 @@ void func_002839D8(Vec4f dst, const Vec4f src, const Vec4f dir) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283A48);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf5,0(a1)` vs `daddu
+ * v0,a0,zero`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: COP2=9]. */
 void func_00283A48(Vec4f out, const Vec4f v, const Vec4f m) {
     const Vec4f *r = (const Vec4f *)m;
     int i;
@@ -469,7 +590,10 @@ void func_00283A48(Vec4f out, const Vec4f v, const Vec4f m) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283A70);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf5,0(a1)` vs `addiu
+ * v0,zero,3`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: COP2=10]. */
 void func_00283A70(Vec4f out, const Vec4f v, const Vec4f m) {
     const Vec4f *r = (const Vec4f *)m;
     int i;
@@ -482,7 +606,10 @@ void func_00283A70(Vec4f out, const Vec4f v, const Vec4f m) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283AA0);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `pextlb a1,zero,a1` vs `andi
+ * v0,a1,0xff`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: COP2=3 MMI=2]. */
 void func_00283AA0(Vec4f dst, u32 packed) {
     dst[0] = (f32)(packed & 0xFF);
     dst[1] = (f32)((packed >> 8) & 0xFF);
@@ -495,7 +622,10 @@ void func_00283AA0(Vec4f dst, u32 packed) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283AB8);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf1,0(a0)` vs `lwc1
+ * $f0,4(a0)`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: AT=2 COP2=4 MMI=2]. */
 u32 func_00283AB8(const Vec4f src) {
     u32 b0 = (u32)(s32)src[0] & 0xFF;
     u32 b1 = (u32)(s32)src[1] & 0xFF;
@@ -512,7 +642,10 @@ u32 func_00283AB8(const Vec4f src) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283AE0);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `pextlh a1,a1,zero` vs `dsrl
+ * v0,a1,0x10`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: COP2=3 MMI=2]. */
 void func_00283AE0(Vec4f dst, u64 packed4) {
     dst[0] = (f32)(s16)( packed4        & 0xFFFF);
     dst[1] = (f32)(s16)((packed4 >> 16) & 0xFFFF);
@@ -525,7 +658,10 @@ void func_00283AE0(Vec4f dst, u64 packed4) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283B00);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 7.50% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `addi v0,zero,0` vs `daddu
+ * a2,zero,zero`. Residual HANDWRITTEN-ADDI: non-u add/addi/sub forms cc1 never emits [screen:
+ * HW=5]. */
 s32 func_00283B00(const u8 *data, s32 count) {
     s32 sum = 0;
     s32 i;
@@ -567,6 +703,10 @@ s32 func_00283B00(const u8 *data, s32 count) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283B30);
 #else
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 33.33% / engine96 arm 33.33% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `mfc1 at,$f12` vs `addiu
+ * sp,sp,-16`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: AT=3 COP2=3]. */
 /* TODO(hle): VU0 microprogram (vcallms 0xC80) - cosine; needs VU backend. Scalar stand-in.
  * DIVERGENCE, UNCONDITIONAL: this is a scalar libm call, NOT the VU0 microprogram. Even
  * with the pairing correct, precision and rounding differ from the hardware -- the VU
@@ -588,6 +728,10 @@ f32 func_00283B30(f32 x) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283B48);
 #else
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 33.33% / engine96 arm 33.33% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `mfc1 at,$f12` vs `addiu
+ * sp,sp,-16`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: AT=3 COP2=3]. */
 /* TODO(hle): VU0 microprogram (vcallms 0xC90) - sine; needs VU backend. Scalar stand-in.
  * DIVERGENCE, UNCONDITIONAL: see func_00283B30 above -- a scalar libm call is not the VU0
  * microprogram, and this body is the one that runs on the C-only path. */
@@ -605,7 +749,10 @@ f32 func_00283B48(f32 x) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283B60);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 15.00% / engine96 arm 15.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lui at,0x3f80` vs `addiu
+ * sp,sp,-16`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: AT=1 COP2=5 FPUX=5]. */
 f32 func_00283B60(f32 x) {
     return __builtin_asinf(x);
 }
@@ -620,7 +767,10 @@ f32 func_00283B60(f32 x) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", Atan2fPoly);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 7.20% / engine96 arm 7.20% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lui t7,0x0  [HI16 D_1AC460]` vs
+ * `addiu sp,sp,-48`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in
+ * either cc1 [screen: AT=7 COP2=23 FPUX=4 HW=3]. */
 f32 Atan2fPoly(f32 y, f32 x) {
     return __builtin_atan2f(y, x);
 }
@@ -630,7 +780,10 @@ f32 Atan2fPoly(f32 y, f32 x) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283D10);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `vmulx.xyzw
+ * $vf1xyzw,$vf0xyzw,$vf0x` vs `lui at,0x3f80`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops
+ * (lqc2/sqc2/v*), no C route in either cc1 [screen: COP2=8]. */
 void func_00283D10(Vec4f dst) {
     Vec4f *r = (Vec4f *)dst;
     int i, j;
@@ -644,7 +797,10 @@ void func_00283D10(Vec4f dst) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", MatrixIdentityVu0);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `vmulx.xyzw
+ * $vf1xyzw,$vf0xyzw,$vf0x` vs `lui at,0x3f80`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops
+ * (lqc2/sqc2/v*), no C route in either cc1 [screen: COP2=10]. */
 void MatrixIdentityVu0(Vec4f dst) {
     Vec4f *r = (Vec4f *)dst;
     int i, j;
@@ -661,7 +817,10 @@ void MatrixIdentityVu0(Vec4f dst) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283D68);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `mfc1 at,$f12` vs `daddu
+ * v1,zero,zero`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in
+ * either cc1 [screen: AT=2 COP2=12]. */
 void func_00283D68(Vec4f dst, f32 s) {
     Vec4f *r = (Vec4f *)dst;
     int i, j;
@@ -708,7 +867,10 @@ void func_00283DC0(Vec4f dst, const Vec4f src);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283DE0);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lui at,0x4049` vs `addiu
+ * sp,sp,-352`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: AT=8 COP2=50 FPUX=10 HW=5]. */
 void func_00283DE0(Vec4f dst, const f32 *angles) {
     Vec4f *r = (Vec4f *)dst;
     f32 az = angles[2], ay = angles[1], ax = angles[0];
@@ -761,7 +923,10 @@ void func_00283DE0(Vec4f dst, const f32 *angles) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284008);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lq at,0(a1)` vs `daddu
+ * v1,zero,zero`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in
+ * either cc1 [screen: COP2=1]. */
 void func_00284008(Vec4f dst, const Vec4f src) {
     int i, j;
     for (i = 0; i < 3; i++)
@@ -775,7 +940,9 @@ void func_00284008(Vec4f dst, const Vec4f src) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284028);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lq at,0(a1)` vs `daddu
+ * v1,zero,zero`. Residual UNKNOWN [screen: -]. */
 void func_00284028(Vec4f dst, const Vec4f src) {
     int i, j;
     for (i = 0; i < 3; i++)
@@ -788,7 +955,10 @@ void func_00284028(Vec4f dst, const Vec4f src) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284048);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 3.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf1,0(a1)` vs `daddu
+ * a2,zero,zero`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in
+ * either cc1 [screen: COP2=19]. */
 void func_00284048(Vec4f dst, const Vec4f src) {
     int i, j;
     for (i = 0; i < 3; i++)
@@ -803,7 +973,10 @@ void func_00284048(Vec4f dst, const Vec4f src) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284098);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 28.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf1,0(a1)` vs `daddu
+ * a2,zero,zero`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in
+ * either cc1 [screen: COP2=18]. */
 void func_00284098(Vec4f dst, const Vec4f src) {
     int i, j;
     for (i = 0; i < 3; i++)
@@ -817,7 +990,10 @@ void func_00284098(Vec4f dst, const Vec4f src) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002840E8);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf4,0(a1)` vs `daddu
+ * v1,zero,zero`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in
+ * either cc1 [screen: COP2=18]. */
 void func_002840E8(Vec4f dst, const Vec4f a, const Vec4f b) {
     const Vec4f *ar = (const Vec4f *)a;
     const Vec4f *br = (const Vec4f *)b;
@@ -833,7 +1009,10 @@ void func_002840E8(Vec4f dst, const Vec4f a, const Vec4f b) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", MatrixMultiplyVu0);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf4,0(a1)` vs `daddu
+ * v1,zero,zero`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in
+ * either cc1 [screen: COP2=10 HW=3]. */
 void MatrixMultiplyVu0(Vec4f dst, const Vec4f a, const Vec4f b) {
     const Vec4f *ar = (const Vec4f *)a;
     const Vec4f *br = (const Vec4f *)b;
@@ -854,7 +1033,10 @@ void MatrixMultiplyVu0(Vec4f dst, const Vec4f a, const Vec4f b) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284180);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf1,0(a1)` vs `lwc1
+ * $f2,0(a1)`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: COP2=15]. */
 void func_00284180(Vec4f dst, const Vec4f a, const Vec4f b) {
     f32 ax = a[0], ay = a[1], az = a[2], aw = a[3];
     f32 bx = b[0], by = b[1], bz = b[2], bw = b[3];
@@ -874,7 +1056,10 @@ void func_00284180(Vec4f dst, const Vec4f a, const Vec4f b) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002841C0);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `mfc1 at,$f12` vs `lui at,0x3f80`.
+ * Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either cc1 [screen:
+ * AT=2 COP2=26]. */
 void func_002841C0(Vec4f dst, f32 t, const Vec4f a, const Vec4f b) {
     f32 wa = 1.0f - t;
     f32 q[4];
@@ -918,7 +1103,10 @@ void func_00284248(Vec4f dst, f32 angle, s32 mode);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", QuatToMatrix3);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf8,0(a0)` vs `lwc1
+ * $f6,4(a0)`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: COP2=29]. */
 void QuatToMatrix3(const Vec4f src, Vec4f dst) {
     f32 x = src[0], y = src[1], z = src[2], w = src[3];
     f32 xx = 2*x*x, yy = 2*y*y, zz = 2*z*z;
@@ -936,7 +1124,10 @@ void QuatToMatrix3(const Vec4f src, Vec4f dst) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284380);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.59% / engine96 arm 0.59% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf8,0(a0)` vs `lwc1
+ * $f7,4(a0)`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: COP2=31]. */
 void func_00284380(const Vec4f src, Vec4f dst) {
     f32 x = src[0], y = src[1], z = src[2], w = src[3];
     f32 xx = 2*x*x, yy = 2*y*y, zz = 2*z*z;
@@ -962,7 +1153,10 @@ void func_00284380(const Vec4f src, Vec4f dst) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284408);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf8,0(a0)` vs `lwc1
+ * $f7,4(a0)`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: COP2=36]. */
 void func_00284408(const Vec4f src, const Vec4f scale, const Vec4f translation, Vec4f out) {
     f32 x = src[0], y = src[1], z = src[2], w = src[3];
     f32 xx = 2*x*x, yy = 2*y*y, zz = 2*z*z;
@@ -989,7 +1183,10 @@ void func_00284408(const Vec4f src, const Vec4f scale, const Vec4f translation, 
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002844A0);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `ld at,0(a0)` vs `lhu t0,14(a0)`.
+ * Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either cc1 [screen:
+ * AT=3 COP2=10 MMI=6]. */
 void func_002844A0(const s16 *src, Vec4f dst) {
     int i;
     const f32 inv15 = 1.0f / 32768.0f;
@@ -1011,7 +1208,10 @@ void func_002844A0(const s16 *src, Vec4f dst) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002844F8);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 37.00% / engine96 arm 43.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `mfc1 at,$f12` vs `lui at,0x3f80`.
+ * Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either cc1 [screen:
+ * AT=2 COP2=17]. */
 void func_002844F8(Vec4f dst, f32 t, const Vec4f a, const Vec4f b) {
     f32 wa = 1.0f - t;
     int i;
@@ -1024,7 +1224,11 @@ void func_002844F8(Vec4f dst, f32 t, const Vec4f a, const Vec4f b) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", WrapAnglePiSum);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 11.06% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `add.s $f0,$f12,$f13` vs `add.s
+ * $f12,$f12,$f13`. Residual HANDWRITTEN-SCHED: two li.s expansions interleaved through $1 and $2
+ * into $f14/$f15, `sub.s pi` applied twice (a compiler folds 2*pi), second c.lt.s in the bc1t
+ * slot. */
 f32 WrapAnglePiSum(f32 a, f32 b) {
     f32 r = a + b;
     if (r >= PR_PI) r -= 2.0f * PR_PI;
@@ -1037,7 +1241,11 @@ f32 WrapAnglePiSum(f32 a, f32 b) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", WrapAnglePiDiff);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 11.06% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `sub.s $f0,$f12,$f13` vs `sub.s
+ * $f12,$f12,$f13`. Residual HANDWRITTEN-SCHED: two li.s expansions interleaved through $1 and $2
+ * into $f14/$f15, `sub.s pi` applied twice (a compiler folds 2*pi), second c.lt.s in the bc1t
+ * slot. */
 f32 WrapAnglePiDiff(f32 a, f32 b) {
     f32 r = a - b;
     if (r >= PR_PI) r -= 2.0f * PR_PI;
@@ -1054,7 +1262,9 @@ f32 WrapAnglePiDiff(f32 a, f32 b) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002845D8);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 54.09% / engine96 arm 48.09% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 2: ROM `mtc1 at,$f1` vs `mtc1 at,$f0`.
+ * Residual HANDWRITTEN-AT: `mfc1 $1,$f12; sra $1,$1,31; add $1,$1,$2` uses $at as a GPR. */
 f32 func_002845D8(f32 x) {
     f32 two_pi = 6.28318548202514648f;       /* 0x40C90FDB */
     f32 inv_two_pi = 0.159154936671257019f;  /* 0x3E22F983 */
@@ -1074,7 +1284,10 @@ f32 func_002845D8(f32 x) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", AngleAbsDiffPi);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `sub.s $f0,$f12,$f13` vs `sub.s
+ * $f12,$f12,$f13`. Residual HANDWRITTEN-FPUX: `abs.s` (no cc1 pattern) and `add.s $f1,$f14,$f14`
+ * for 2*pi. */
 f32 AngleAbsDiffPi(f32 a, f32 b) {
     f32 d = a - b;
     d = (d < 0.0f) ? -d : d;
@@ -1087,7 +1300,10 @@ f32 AngleAbsDiffPi(f32 a, f32 b) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284668);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 1: ROM `` vs `mfc1 v0,$f0`. Residual
+ * FPRT: the ROM keeps the int in the FPU (`cvt.w.s $f0; cvt.s.w $f0`); both cc1s round-trip it
+ * through a GPR (mfc1/mtc1 + hazard nop). */
 f32 func_00284668(f32 x) {
     return x - (f32)(s32)x;
 }
@@ -1097,7 +1313,10 @@ f32 func_00284668(f32 x) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284678);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 4.17% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 1: ROM `cvt.s.w $f0,$f0` vs `mfc1
+ * v0,$f0`. Residual FPRT: the ROM keeps the int in the FPU (`cvt.w.s $f0; cvt.s.w $f0`); both cc1s
+ * round-trip it through a GPR (mfc1/mtc1 + hazard nop). */
 f32 func_00284678(f32 *intPart, f32 x) {
     f32 ip = (f32)(s32)x;
     *intPart = ip;
@@ -1113,6 +1332,10 @@ f32 func_00284678(f32 *intPart, f32 x) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", IntToFloat);
 #else
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 1: ROM `` vs `sll zero,zero,0x0`.
+ * Residual XFER-HAZARD-NOP: the ROM has `mtc1; cvt.s.w; jr; nop`; both cc1s insert the mtc1 hazard
+ * nop and sink the cvt into the jr slot. */
 f32 IntToFloat(s32 x) {
     return (f32)x;
 }
@@ -1127,6 +1350,10 @@ f32 IntToFloat(s32 x) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", FloatToInt);
 #else
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 97.50% / engine96 arm 97.50% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `trunc.w.s $f12,$f12` vs
+ * `trunc.w.s $f0,$f12`. Residual REGNUM-COLORING: the ROM converts in place (`cvt.w.s $f12,$f12;
+ * mfc1 $2,$f12`); both cc1s allocate $f0 for the result. */
 s32 FloatToInt(f32 x) {
     return (s32)x;
 }
@@ -1135,7 +1362,10 @@ s32 FloatToInt(f32 x) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002846B0);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 26.79% / engine96 arm 2.14% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `mfc1 at,$f12` vs `div.s
+ * $f0,$f12,$f13`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in
+ * either cc1 [screen: AT=3 COP2=10]. */
 f32 func_002846B0(f32 a, f32 b) {
     f32 q = a / b;
     return (q - (f32)(s32)q) * b;
@@ -1150,7 +1380,10 @@ f32 func_002846B0(f32 a, f32 b) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", ColorLerpPacked);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `pextlb a0,zero,a0` vs `lui
+ * at,0x3f80`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: AT=2 COP2=10 MMI=6]. */
 u32 ColorLerpPacked(u32 c0, u32 c1, f32 t) {
     f32 w0 = 1.0f - t;
     u32 out = 0;
@@ -1173,7 +1406,10 @@ u32 ColorLerpPacked(u32 c0, u32 c1, f32 t) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284730);
 #else
-/* TODO(match): functional equivalent (VU0 math) - not byte-exact; portable scalar form. */
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `lqc2 $vf1,0(a0)` vs `lwc1
+ * $f4,0(a1)`. Residual HANDWRITTEN-COP2: VU0 macro-mode ops (lqc2/sqc2/v*), no C route in either
+ * cc1 [screen: AT=2 COP2=9 HW=2]. */
 s32 func_00284730(const Vec4f p, const Vec4f q, const Vec4f n) {
     f32 d = (p[0] - q[0]) * n[0] + (p[1] - q[1]) * n[1] + (p[2] - q[2]) * n[2];
     return (d < 0.0f) ? 0 : 1;
@@ -1212,10 +1448,20 @@ s32 func_00284860(u8 *dst, u8 *dstEnd, const u8 *src, const u8 *table);
  */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284998);
 
-/* SetVideoMode globals/callees (declared for the TARGET_NATIVE #else only). */
-extern s32  g_bPalMode;         /* 0x1A7B98 PAL flag (USA build clears it -> NTSC) */
-extern s32  g_bProgressiveScan; /* NTSC 480p progressive-scan flag */
-extern void func_124418(void);  /* GS/DMA reset preamble */
+/* SetVideoMode globals/callees (declared for the TARGET_NATIVE #else only).
+ * ROM_SMALL: the ROM addresses both flags as cc1 small data (bare `lw/sw $r,sym`
+ * macros: the assembler expands them to the dest-reuse `lui $r; lw $r,%lo($r)`
+ * pair, and the store cc1 sank into the `bnel` delay slot to a single
+ * `%gp_rel` op). This unit is pinned -G0, so the only way to put a symbol in
+ * cc1's small-data class here is the .sdata section attribute. */
+#ifdef TARGET_NATIVE
+#define ROM_SMALL
+#else
+#define ROM_SMALL __attribute__((section(".sdata")))
+#endif
+extern s32  g_bPalMode ROM_SMALL;         /* 0x1A7B98 PAL flag (USA build clears it -> NTSC) */
+extern s32  g_bProgressiveScan ROM_SMALL; /* 0x1A7BC0 NTSC 480p progressive-scan flag */
+extern void func_124418(void);  /* GS/DMA reset preamble (sceGsResetPath+4, inside func_00124414) */
 extern void sceGsResetGraph(short mode, short inter, short omode, short ffmode);
 
 /** SetVideoMode — reset the GS into the correct scan mode for the current
@@ -1225,6 +1471,17 @@ extern void sceGsResetGraph(short mode, short inter, short omode, short ffmode);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", SetVideoMode);
 #else
+/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 95.93% / engine96 arm 63.70% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh); 2.9 first diff row 7: ROM `sw zero,0(gp)  [GPREL16
+ * g_bProgressiveScan]` vs `lui at,0x0  [HI16 g_bProgressiveScan]` (this body,
+ * tools/ee/.t494/15_svm29_report.txt). Residual DSLOT-GPREL: the one store cc1 2.9 sinks into the
+ * `bnel` slot (`sw $0,g_bProgressiveScan`, a bare small-data macro) is expanded by the tree's GAS
+ * to lui/sw (2 words, "macro instruction expanded into multiple instructions in a branch delay
+ * slot"), where the ROM has the single `sw $0,%gp_rel(g_bProgressiveScan)($28)`; every other word
+ * of the 2.9 arm is equal (25/27 rows). Rewriting that one operand to the %gp_rel form in base.s
+ * (tools/ee/.t494/gprel_dslot_fixup.py, an assembler-emulation post-pass NOT in the pipeline)
+ * gives 100.00% and verify_match_unit.sh BYTE IDENTICAL 28/28 words. engine96 arm: IFCONV (movn
+ * store speculation) + -G8 gp_rel loads. */
 void SetVideoMode(void) {
     func_124418();
     if (g_bPalMode != 0) {
@@ -1232,8 +1489,10 @@ void SetVideoMode(void) {
     }
     if (g_bProgressiveScan != 0) {
         sceGsResetGraph(0, 0, 0x50, 1);
+        __asm__ __volatile__(""); /* the ROM calls and returns; cc1 would sibcall */
     } else {
-        sceGsResetGraph(0, 1, (g_bPalMode == 0) ? 2 : 3, 0);
+        sceGsResetGraph(0, 1, (g_bPalMode != 0) ? 3 : 2, 0); /* `!= 0 ? 3 : 2` = the ROM's movz */
+        __asm__ __volatile__("");
     }
 }
 #endif
