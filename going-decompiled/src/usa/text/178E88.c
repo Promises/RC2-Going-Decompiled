@@ -1,12 +1,23 @@
 #include "common.h"
 
-/* Blob-shadow subsystem state at 0x1B15BC. The queue count is at +0, the
- * pending screen-grab query count at +0x1C, and the enable flag at +0x2C.
- * Declared as an incomplete array so accesses stay absolute %hi/%lo under -G8
- * (the original never reaches this cluster gp-relative). */
+/* Blob-shadow subsystem state at 0x1B15BC (0x2C bytes): the queue count is at
+ * +0 and the pending screen-grab query count at +0x1C. Declared as an
+ * incomplete array so accesses stay absolute %hi/%lo under -G8. */
 extern s32 g_blobShadowCount[];
-#define g_blobShadowEnabled (g_blobShadowCount[0xB])
-#define g_screenGrabQueryCount (g_blobShadowCount[7])
+/* cc1-small / assembler-absolute view of the same cluster (the text/198FA0
+ * model): an 8-byte alias makes cc1 emit the one-insn symbolic `sw $r, sym+off`
+ * macro, and the .extern size override makes GNU as expand it absolutely
+ * (`lui $at; sw %lo($at)`) — the original's form where func_00280FE0 clears
+ * the pending query count. */
+__asm__(".extern g_blobShadowCount, 16");
+extern s32 g_blobShadowState[2] __asm__("g_blobShadowCount");
+#define g_screenGrabQueryCount (g_blobShadowState[7])
+/* The two fixed-font text flags that follow the cluster (FACT #5649; they are
+ * NOT blob-shadow state): the inline colour-code enable at 0x1B15E8, written
+ * by func_0027F790 / func_0027F7A0 and read by the text drawers, and the
+ * "inside a wrapped text box" flag at 0x1B15EC. Both are gp-small scalars. */
+extern s32 g_textColorCodeEnabled;
+extern s32 g_bInWrappedTextBox;
 
 /* Render-layer enable bitmask (gp-relative under -G8). */
 extern s32 g_renderLayerMask;
@@ -17,7 +28,7 @@ extern void AppendDrawEnvContext1(void);
 extern void AppendScreenClearPacket(s32 mode);
 extern void RenderFrame(void);
 extern void RenderMenuScreenWidgets(s32 which);
-extern void func_0027B988(void);
+extern void RecomputeScreenViewportFromGsContext(void);
 extern void TickCountdownTimer(void *arg);
 
 /* Per-camera-slot flag table base (0x1B7E30). func_00279EE8 passes the slot at
@@ -45,7 +56,7 @@ extern u8 D_263B10[];
 extern u8 D_264250[];
 
 /* Word-fill of `len` bytes at `dst` with a 32-bit `pattern` (SDK helper). */
-extern void FillMemory32(void *dst, u32 pattern, s32 len);
+extern void FillMemory32(void *dst, s32 pattern, s32 len);
 
 /* Draw-hook callback queues. Each subsystem keeps three parallel globals: a
  * count, a function-pointer table, and an argument table (registered by the
@@ -84,12 +95,15 @@ extern s32 g_bWaterPoolActive;
 /* Per-frame occlusion visibility state. g_occlusionMode: 0 = no data (all
  * visible), 2 = resolve from the level occlusion grid. g_occlusionVisMask is a
  * 0x80-byte (1024-bit) vis-group mask consumed by the tfrag/tie/moby culls. */
-extern s32 g_occlusionMode[];
+/* cc1-small / assembler-absolute (see g_blobShadowState): the original reads
+ * the mode with the one-insn symbolic `lw $r, sym` macro. */
+__asm__(".extern g_occlusionMode, 16");
+extern s32 g_occlusionMode[1];
 extern u8 g_occlusionVisMask[];
 extern void ResolveOcclusionVisMask(void);
 
 /* Pause/menu render-mode query (1 = world behind pause, 0 = menu widgets). */
-extern s32 func_00286200(void);
+extern s32 IsMenuOverlayActive(void);
 extern void RenderSaveLoadStatusPopup(void);
 
 /* Wrapped text-box renderer (the scaled core behind DrawTextBoxDefault).
@@ -125,7 +139,7 @@ extern s32 g_gsPixelOffsetX[];
 extern s32 g_gsPixelOffsetY[];
 
 /* Active display geometry + the GS screen context the viewport is derived from
- * (func_0027B988). g_screenHeight is the base of {height, halfW, halfH}. */
+ * (RecomputeScreenViewportFromGsContext). g_screenHeight is the base of {height, halfW, halfH}. */
 extern u8  g_gsScreenContext[]; /* 0x1A6480 - dims at +0x150 (w) / +0x152 (h) */
 extern s32 g_screenWidth[];     /* 0x1A7340 */
 extern s32 g_screenHeight[];    /* 0x1A7344 */
@@ -158,6 +172,11 @@ extern void func_002FCFC8(void);            /* text/1FCF48 SelectSceneArenaRegio
  * the work span +0xD0800, the old scene cursor -0x60000), reserve 0x2000
  * (D_1A8BC0), reset the scene cursor to 0x60000 + the frame arenas, stop all
  * sound emitters, stash g_vramDynamicBase, and force the black fade fully on. */
+/* TODO(match) t493: sdk29 34.59% / engine96 54.82% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (engine96): MACRO-AT (first differing
+ * insn: ROM `sd s0,0(sp)` vs built `addiu a0,zero,1`). Levers: cc1-small/absolute globals model
+ * RUN: 56.98% (engine96); engine96 with sched1 MEASURED (flag not landed): 39.20%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00278EC0);
 #else
@@ -182,20 +201,20 @@ void func_00278EC0(void) {
 }
 #endif
 
-/* SceneTransitionFadeOut: fence wait, reselect the scene-arena region + reset
- * the frame arenas, save the camera-slot VRAM dynamic base into g_vramDynamicBase,
- * then run the 30-frame blocking fade to black. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00278F90);
-#else
+/** func_00278F90 (SceneTransitionFadeOut) — fence wait, reselect the
+ *  scene-arena region + reset the frame arenas, save the camera-slot VRAM
+ *  dynamic base into g_vramDynamicBase, then run the 30-frame blocking fade to
+ *  black. No params, no return. The empty asm statement after the last call
+ *  keeps cc1 from sibcalling it; the original keeps the call + return frame.
+ *  MATCHED (task #493): 100.00% unit objdiff, sdk29 arm. */
 void func_00278F90(void) {
     WaitFrameDmaFence(1);
     func_002FCFC8();
     ResetFrameArenas();
     g_vramDynamicBase = *(s32 *)(g_cameraSlotActive + 0xE8);
     FadeOutToBlackBlocking(0x1E);
+    __asm__ __volatile__("");
 }
-#endif
 
 /* func_00278FD0: PARKED #70 — a large (~840-instruction) game-state/frame driver (PopGameState,
  * StartFileLoad, UpdateSoundEmitters, func_00279xxx sub-steps, func_002AB150). Far too large +
@@ -211,6 +230,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00278FD0);
  * aliased registers and store through them in a rotating pattern; the single
  * struct-array access here keeps one base register. Correct C preserved as the
  * portable body. */
+/* TODO(match) t493: sdk29 61.45% / engine96 63.97% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (engine96): CONST-MULT (first differing
+ * insn: ROM `lw t7,16(sp)` vs built `lw t4,16(sp)`). Levers: engine96 with sched1 MEASURED (flag
+ * not landed): 40.86%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00279CF0);
 #else
@@ -246,6 +270,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00279D68);
  * the blez delay slot); when N <= 0 no records are relocated.
  * Near-miss: cc1 keeps the loop bound and the record cursor live across a
  * branch-likely (bnel) reload of +0xC each iteration; expressed straight here. */
+/* TODO(match) t493: sdk29 68.59% / engine96 40.76% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): GPREL-FORM (first differing
+ * insn: ROM `lui v0,0x0  [HI16 0x001B7E30]` vs built `lui a0,0x0  [HI16 0x001B7E30]`). Levers:
+ * cc1-small/absolute globals model RUN: 53.69% (sdk29). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00279D88);
 #else
@@ -283,6 +312,10 @@ void func_00279D88(void) {
  * and cursor left at their last values.
  * Near-miss: cc1 threads the record cursor and reloaded count through
  * branch-likely (bnel) tails; expressed as a straight loop here. */
+/* TODO(match) t493: sdk29 73.30% / engine96 52.79% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-lui (first differing
+ * insn: ROM `lui a3,0x0  [HI16 0x001B7E30]` vs built `lui v0,0x0  [HI16 0x001B7E30]`). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00279E00);
 #else
@@ -328,18 +361,14 @@ s32 func_00279E00(s32 scroll, s32 *pIndex, s32 *pCursor) {
 }
 #endif
 
-/* func_00279EE8 - forward the camera slot at g_cameraSlotActive+0xF8 to
- * TickCountdownTimer.
- * Near-miss: the pinned cc1 sibling-call-optimizes the lone tail call to
- * `j TickCountdownTimer`, but the original keeps a full call+return frame. Correct C
- * preserved as the portable body. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00279EE8);
-#else
+/** func_00279EE8 — forward the camera slot at g_cameraSlotActive+0xF8 to
+ *  TickCountdownTimer. No params, no return. The empty asm statement keeps cc1
+ *  from sibcalling the lone tail call (the original keeps the call frame).
+ *  MATCHED (task #493): 100.00% unit objdiff, sdk29 arm. */
 void func_00279EE8(void) {
     TickCountdownTimer(g_cameraSlotActive + 0xF8);
+    __asm__ __volatile__("");
 }
-#endif
 
 /* func_00279F08 - advance a table-driven sequence cursor one step and report whether the
  * step "settled". State lives at g_cameraSlotActive: a s16 cursor (+0xF0) + sub-position
@@ -357,6 +386,10 @@ void func_00279EE8(void) {
  * trace" - done here, cross-checked Ghidra against the .s (real body @ this glabel) branch by
  * branch. Engine region - faithful #else, not a byte match. FORMER-PARK: dual-gated (tester
  * oracle) + d2 heads-up per the un-park guardrails. */
+/* TODO(match) t493: sdk29 46.37% / engine96 0.00% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): MACRO-AT (first differing insn:
+ * ROM `addiu sp,sp,-64` vs built `addiu sp,sp,-128`). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00279F08);
 #else
@@ -421,6 +454,12 @@ extern u8  g_platinumBoltFlags[]; /* 0x19B278; +0x230 (0x19B4A8) = per-progress 
  *  g_playerProgress) at index>>1; take the selected byte's low nibble (even index)
  *  or high nibble (odd index), mask it to 0..7, and use THAT to index `table` — both
  *  parities index table[nibble & 7]. Return (table[nibble & 7] * mult) / 100. */
+/* TODO(match) t493: sdk29 23.60% / engine96 45.20% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (engine96): GPREL-FORM (first differing
+ * insn: ROM `addiu sp,sp,32` vs built `lw v0,0(gp)  [GPREL16 0x001A79F8]`). Levers:
+ * cc1-small/absolute globals model RUN: 33.20% (sdk29); engine96 with sched1 MEASURED (flag not
+ * landed): 44.60%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027A0C8);
 #else
@@ -448,6 +487,11 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0
  * screen point in the 12.4 fixed-point convention: out[0]/out[1] =
  * (proj + 2048)*16 for x/y, out[2] = z/1024.
  */
+/* TODO(match) t493: sdk29 76.57% / engine96 54.05% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
+ * insn: ROM `addiu sp,sp,-224` vs built `addiu sp,sp,-256`). Levers: engine96 with sched1 MEASURED
+ * (flag not landed): 74.61%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027A138);
 #else
@@ -511,6 +555,11 @@ void func_0027A138(f32 *out, void *worldPos) {
  * $17 = g_cameraProjScale+0x10 = 0x1B9080; $20 = +0x90 = 0x1B9100);
  * g_sceneActorMobys=0x1B894C ($19 = +0x674 = 0x1B8FC0 = g_cameraProjScale-0xB0);
  * g_fogColorRed=0x1B91F0 (second $17 = g_fogColorRed+0x50 = 0x1B9240). */
+/* TODO(match) t493: sdk29 31.15% / engine96 22.92% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
+ * insn: ROM `addiu sp,sp,-160` vs built `addiu sp,sp,-176`). Levers: engine96 with sched1 MEASURED
+ * (flag not landed): 27.51%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", BuildFrameViewMatrices);
 #else
@@ -611,6 +660,11 @@ extern u8  D_1AD564[];            /* 0x1AD564 underwater fog params {b,b,b,_, f,
  * fade 0x40000 when g_bCameraUnderwater, else the normal block (g_blobShadowCount
  * +0x4) + fade 0x1F4000 - then rebuild the camera projection and clear the
  * screen-grab pending word (g_blobShadowCount+0x18). */
+/* TODO(match) t493: sdk29 28.42% / engine96 24.12% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): MACRO-AT (first differing insn:
+ * ROM `lui v0,0x0  [HI16 0x001B5580]` vs built `addiu sp,sp,-16`). Levers: cc1-small/absolute
+ * globals model RUN: 24.12% (engine96); engine96 with sched1 MEASURED (flag not landed): 24.51%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027A550);
 #else
@@ -654,6 +708,12 @@ extern s32 g_renderTaskWorkBuf[];
  * present" test as a branch-likely (`bnezl`), an asymmetric codegen shape that
  * clean structured C with three uniform if-returns does not reproduce. Correct
  * C preserved as the portable body. */
+/* TODO(match) t493: sdk29 69.72% / engine96 41.47% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-lui (first differing
+ * insn: ROM `lui t0,0x0  [HI16 0x001B1634]` vs built `lui v0,0x0  [HI16 0x001B1634]`). Levers:
+ * cc1-small/absolute globals model RUN: 69.72% (sdk29); engine96 with sched1 MEASURED (flag not
+ * landed): 75.64%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", LookupOcclusionGridCell);
 #else
@@ -687,6 +747,11 @@ void *LookupOcclusionGridCell(s32 x, s32 y, s32 z) {
  *  cells, preferring by `bias`. When bias < 0.5 cell A (ax,ay,az) is tried first,
  *  otherwise cell B (bx,by,bz); the other cell is the fallback. Returns the first
  *  cell that resolves to a non-null occlusion mask (or the fallback's result). */
+/* TODO(match) t493: sdk29 86.04% / engine96 85.33% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
+ * insn: ROM `addiu sp,sp,-64` vs built `addiu sp,sp,-112`). Levers: engine96 with sched1 MEASURED
+ * (flag not landed): 79.78%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", LookupNeighborOcclusionCell);
 #else
@@ -710,34 +775,39 @@ void *LookupNeighborOcclusionCell(s32 ax, s32 ay, s32 az,
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", ResolveOcclusionVisMask);
 
-/* RenderFrame pre-layer pass that produces the per-frame visibility bitmask:
- * mode 0 sets every bit (no occlusion data), mode 2 resolves it from the level
- * occlusion grid, any other mode leaves the previous mask.
- * Near-miss: the pinned cc1 sibling-call-optimizes both tail calls
- * (`j FillMemory32` / `j ResolveOcclusionVisMask`) instead of keeping the
- * original's call+return frame. Correct C preserved as the portable body. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", UpdateOcclusionVisMask);
-#else
+/** UpdateOcclusionVisMask — RenderFrame pre-layer pass that produces the
+ *  per-frame visibility bitmask: mode 0 sets every bit (no occlusion data),
+ *  mode 2 resolves it from the level occlusion grid, any other mode leaves the
+ *  previous mask. No params, no return. The fill pattern is the signed -1 the
+ *  original materialises with one addiu (an unsigned prototype spells it
+ *  lui/ori); the empty asm statements keep cc1 from sibcalling either call.
+ *  MATCHED (task #493): 100.00% unit objdiff, sdk29 arm. */
 void UpdateOcclusionVisMask(void) {
     if (g_occlusionMode[0] == 0) {
         FillMemory32(g_occlusionVisMask, -1, 0x80);
+        __asm__ __volatile__("");
     } else if (g_occlusionMode[0] == 2) {
         ResolveOcclusionVisMask();
+        __asm__ __volatile__("");
     }
 }
-#endif
 
 /* InitScreenGeometry: one-time screen-geometry + projection-viewport init from
  * the GS screen context pixel dims (g_gsScreenContext +0x150 width / +0x152
- * height). Sibling of func_0027B988 (same idioms): publishes width/height + the
+ * height). Sibling of RecomputeScreenViewportFromGsContext (same idioms): publishes width/height + the
  * two half-extents to g_screenWidth / g_screenHeight[0..2], the four 12.4
  * fixed-point GS-window offsets (centred on 0x800) to g_gsPixelOffsetX[0] /
  * g_gsPixelOffsetY[0..2], and the float viewport scale + half-extents into the
  * camera/projection scratch (g_sceneActorMobys+0x674 = D_1B8FC0). Unlike
- * func_0027B988 it also seeds the fixed projection constants (+0xA0 32, +0xA4
+ * RecomputeScreenViewportFromGsContext it also seeds the fixed projection constants (+0xA0 32, +0xA4
  * 2^20, +0x1DC 2^19, +0x1E8 255) and does NOT call func_0027A550. The matching
  * build keeps the asm. */
+/* TODO(match) t493: sdk29 0.00% / engine96 26.37% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (engine96): MACRO-AT (first differing
+ * insn: ROM `addiu a2,zero,2048` vs built `lui v0,0x0  [HI16 0x001A6480]`). Levers:
+ * cc1-small/absolute globals model RUN: 34.69% (engine96); engine96 with sched1 MEASURED (flag not
+ * landed): 0.00%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", InitScreenGeometry);
 #else
@@ -787,6 +857,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", BuildCameraProj
  * IntToFloat(dim)*0.5 and *4, plus the five floats) into the camera scratch at
  * g_sceneActorMobys+0x674 (+0xB0/+0x200..+0x22C), then rebuilds the projection.
  */
+/* TODO(match) t493: sdk29 29.47% / engine96 20.12% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
+ * ROM `addiu sp,sp,-80` vs built `addiu sp,sp,-160`). Levers: sibcall guard RUN: sdk29 23.95% /
+ * engine96 24.70%; cc1-small/absolute globals model RUN: 25.33% (engine96); engine96 with sched1
+ * MEASURED (flag not landed): 15.67%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027B858);
 #else
@@ -827,10 +903,16 @@ void func_0027B858(s32 width, s32 height, f32 fa, f32 fb, f32 fc, f32 fd, f32 fe
  * camera/projection scratch (g_sceneActorMobys+0x674 == D_1B8FC0: +0xB0 aspect
  * 0.62, +0x200/+0x204 half-extents, +0x208/+0x20C ×4), then runs func_0027A550.
  * The matching build keeps the asm. */
+/* TODO(match) t493: sdk29 42.90% / engine96 34.53% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
+ * ROM `addiu sp,sp,-48` vs built `addiu sp,sp,-64`). Levers: sibcall guard RUN: sdk29 41.37% /
+ * engine96 40.71%; cc1-small/absolute globals model RUN: 45.53% (engine96); engine96 with sched1
+ * MEASURED (flag not landed): 46.63%. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027B988);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", RecomputeScreenViewportFromGsContext);
 #else
-void func_0027B988(void) {
+void RecomputeScreenViewportFromGsContext(void) {
     u8 *vp = g_sceneActorMobys + 0x674; /* D_1B8FC0 camera/projection scratch */
     s32 w16 = *(s16 *)(g_gsScreenContext + 0x150);
     s32 h16 = *(s16 *)(g_gsScreenContext + 0x152);
@@ -884,6 +966,11 @@ void func_0027B988(void) {
  * Engine region — faithful #else, whole-.s traced (Ghidra-complete; 0 lq/sq, all
  * 64-bit register images built in s64 so the <<0x10/<<0x20/<<0x30 packs don't
  * overflow native 32-bit long). The matching arm keeps the shipped bytes. */
+/* TODO(match) t493: sdk29 52.08% / engine96 46.83% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): GPREL-FORM (first differing
+ * insn: ROM `addiu sp,sp,-160` vs built `addiu sp,sp,-272`). Levers: cc1-small/absolute globals
+ * model RUN: 43.94% (engine96); engine96 with sched1 MEASURED (flag not landed): 45.56%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", SetupGsDisplayBuffers);
 #else
@@ -1031,6 +1118,12 @@ void SetupGsDisplayBuffers(long clearVram) {
  * `sw $0, sym` ($at-macro) form, re-materialising %hi per store; the pinned cc1
  * instead allocates a pool of GP registers and hoists/reorders the %hi
  * computations. Correct C preserved as the portable body. */
+/* TODO(match) t493: sdk29 49.83% / engine96 61.55% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (engine96): MACRO-AT (first differing
+ * insn: ROM `lui at,0x0  [HI16 0x001B1588]` vs built `lui v0,0x0  [HI16 0x001B1588]`). Levers:
+ * cc1-small/absolute globals model RUN: 64.31% (sdk29); engine96 with sched1 MEASURED (flag not
+ * landed): 20.00%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", ResetPerFrameDrawQueues);
 #else
@@ -1057,6 +1150,13 @@ void ResetPerFrameDrawQueues(void) {
 extern u8 D_1391D0[]; /* prebuilt GS init packet A */
 extern u8 D_139120[]; /* prebuilt GS init packet B */
 
+/* TODO(match) t493: sdk29 33.27% / engine96 20.83% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
+ * ROM `lui a0,0x0  [HI16 0x001B2228]` vs built `lui t2,0x0  [HI16 0x001B2228]`). Levers: sibcall
+ * guard RUN: sdk29 42.44% / engine96 39.32%; cc1-small/absolute globals model RUN: 38.80% (sdk29);
+ * -fno-strict-aliasing MEASURED (flag not landed): 35.32% sdk29; engine96 with sched1 MEASURED
+ * (flag not landed): 18.31%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", AppendFrameInitGsState);
 #else
@@ -1115,6 +1215,13 @@ void func_0027BFA8(void) {
  * call+return frame, and builds the 0x8000000044 constant via dsll32 rather
  * than the original's `ori 0x8000; dsll 24`. Correct C preserved as the
  * portable body. */
+/* TODO(match) t493: sdk29 63.62% / engine96 55.82% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): CONST-DLI — with the sibcall
+ * guard 92.94% sdk29; the 4-row residual is the synthesis of the 64-bit constant 0x8000000044: the
+ * original spells it `ori 0x8000; dsll 24; ori 0x44`, cc1 2.9 `addiu 128; dsll32 0; ori 0x44`
+ * (companion of FACT #7379, constant-synthesis is not a phrasing). Levers: sibcall guard RUN:
+ * sdk29 92.94% / engine96 79.09%; engine96 with sched1 MEASURED (flag not landed): 57.59%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027C020);
 #else
@@ -1131,17 +1238,14 @@ void func_0027C020(s32 zNearBits, s32 lo) {
 }
 #endif
 
-/* Thin wrapper: queue the ctx1 (FRAME_1 / FB A) draw-env REF packet.
- * Near-miss: the pinned cc1 sibling-call-optimizes the lone tail call to
- * `j AppendDrawEnvContext1`, but the original keeps a full call+return frame
- * (no sibcall). Correct C preserved as the portable body. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027C0A8);
-#else
+/** func_0027C0A8 — thin wrapper: queue the ctx1 (FRAME_1 / FB A) draw-env REF
+ *  packet. No params, no return. The empty asm statement keeps cc1 from
+ *  sibcalling the lone tail call (the original keeps the call frame).
+ *  MATCHED (task #493): 100.00% unit objdiff, sdk29 arm. */
 void func_0027C0A8(void) {
     AppendDrawEnvContext1();
+    __asm__ __volatile__("");
 }
-#endif
 
 /* func_0027C0C8 (RenderHeldItemViewModel): PARKED #70 — TRACED, re-walled on a genuine blocker.
  * Held-item/view-model render pass. If the held item (*(void**)(g_sceneCastCount+0xC)) is null →
@@ -1172,55 +1276,48 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", RenderFrame);
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027CAD8);
 
-/* Render a frame with every layer except the HUD: clear the screen, set the
- * layer mask to 0x7F (all engine layers, HUD bits clear), then render.
- * Near-miss: cc1 sibling-call-optimizes the final RenderFrame() to
- * `j RenderFrame`, whereas the original keeps the call+return frame. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawFrameWithoutHud);
-#else
+/** DrawFrameWithoutHud — render a frame with every layer except the HUD: clear
+ *  the screen, set the layer mask to 0x7F (all engine layers, HUD bits clear),
+ *  then render. No params, no return. The empty asm statement keeps cc1 from
+ *  sibcalling RenderFrame (the original keeps the call frame).
+ *  MATCHED (task #493): 100.00% unit objdiff, sdk29 arm. */
 void DrawFrameWithoutHud(void) {
     AppendScreenClearPacket(0);
     g_renderLayerMask = 0x7F;
     RenderFrame();
+    __asm__ __volatile__("");
 }
-#endif
 
-/* RenderPauseMenuOverlay - when the render-mode query returns 1, clear the
- * screen, force the layer mask to 0x100FF (full world + HUD) and re-render the
- * world behind the pause menu; when it returns 0, draw menu-screen widgets for
- * screen 1. Always finishes with the save/load status popup.
- * Near-miss: the pinned cc1 sibling-call-optimizes the trailing
- * RenderSaveLoadStatusPopup() to `j RenderSaveLoadStatusPopup` and reschedules
- * the $ra restore into the earlier branch delay slots; the original keeps the
- * call+return frame. Correct C preserved as the portable body. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027CB08);
-#else
+/** func_0027CB08 (RenderPauseMenuOverlay) — when the render-mode query
+ *  returns 1, clear the screen, force the layer mask to 0x100FF (full world +
+ *  HUD) and re-render the world behind the pause menu; when it returns 0, draw
+ *  menu-screen widgets for screen 1. Always finishes with the save/load status
+ *  popup. No params, no return. The empty asm statement keeps cc1 from
+ *  sibcalling the trailing call, which is also what keeps the single shared
+ *  epilogue (the sibcall variant duplicates the $ra restore into the branch
+ *  delay slots). MATCHED (task #493): 100.00% unit objdiff, sdk29 arm. */
 void func_0027CB08(void) {
-    if (func_00286200() == 1) {
+    if (IsMenuOverlayActive() == 1) {
         AppendScreenClearPacket(0);
         g_renderLayerMask = 0x100FF;
         RenderFrame();
-    } else if (func_00286200() == 0) {
+    } else if (IsMenuOverlayActive() == 0) {
         RenderMenuScreenWidgets(1);
     }
     RenderSaveLoadStatusPopup();
+    __asm__ __volatile__("");
 }
-#endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027CB70);
 
-/* Render the front-end menu widgets for screen 0.
- * Near-miss: same lone-tail-call sibcall wall as func_0027C0A8 (cc1 emits
- * `j RenderMenuScreenWidgets`; the original keeps the call+return frame). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027CB80);
-#else
+/** func_0027CB80 — render the front-end menu widgets for screen 0. No params,
+ *  no return. The empty asm statement keeps cc1 from sibcalling the lone tail
+ *  call (the original keeps the call frame).
+ *  MATCHED (task #493): 100.00% unit objdiff, sdk29 arm. */
 void func_0027CB80(void) {
     RenderMenuScreenWidgets(0);
+    __asm__ __volatile__("");
 }
-#endif
 
 /* 2D draw-batch / HUD texture-cache state (absolute %hi/%lo + a few gp scalars). */
 extern void *g_2dBatchOpenTag;    /* saved DMA cursor at batch open */
@@ -1236,6 +1333,12 @@ extern u8 *g_hudTextureSlots;     /* 8-byte slots; +0x4 = VRAM block */
 extern u8 *g_hudClutSlots;
 extern void *g_pHudAssetHeader[]; /* [0] = header base (+0x24 clut count, +0x44 tex count) */
 
+/* TODO(match) t493: sdk29 43.99% / engine96 57.57% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (engine96): GPREL-FORM (first differing
+ * insn: ROM `lw v0,0(v0)  [LO16 0x001B2228]` vs built `daddu a3,a0,zero`). Levers:
+ * cc1-small/absolute globals model RUN: 55.58% (sdk29); -fno-strict-aliasing MEASURED (flag not
+ * landed): 65.14% sdk29; engine96 with sched1 MEASURED (flag not landed): 59.44%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", Begin2dDrawBatch);
 #else
@@ -1292,6 +1395,12 @@ extern void *g_2dBatchCloseTag; /* saved DMA cursor at batch close */
 extern void FlushPendingTexUploads(void);
 extern void AppendTexFlushDefaultTex0(void);
 
+/* TODO(match) t493: sdk29 35.71% / engine96 32.45% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): GPREL-FORM (first differing
+ * insn: ROM `lui v0,0x0  [HI16 0x001B2228]` vs built `addiu sp,sp,-64`). Levers:
+ * cc1-small/absolute globals model RUN: 47.45% (engine96); engine96 with sched1 MEASURED (flag not
+ * landed): 32.98%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", End2dDrawBatch);
 #else
@@ -1347,6 +1456,11 @@ void End2dDrawBatch(void) {
  * extent) and normalizes by the full screen dimension, writing x to *outX and y
  * to *outY (both in [0,1] across the viewport).
  */
+/* TODO(match) t493: sdk29 44.33% / engine96 54.76% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (engine96): MACRO-AT (first differing
+ * insn: ROM `sd s0,16(sp)` vs built `daddu v0,a0,zero`). Levers: cc1-small/absolute globals model
+ * RUN: 56.59% (engine96); engine96 with sched1 MEASURED (flag not landed): 66.12%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027CDC8);
 #else
@@ -1380,6 +1494,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", GetUiTextureTex
  * cc1 keeps the %hi in a second register across the body and reuses it (a
  * register-allocation choice -fno-gcse does not suppress). Correct C preserved
  * as the portable body. */
+/* TODO(match) t493: sdk29 73.50% / engine96 41.00% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): SCHED — with the cc1-small count
+ * model (see g_blobShadowState) 90.00%/97.50% on sdk29; the 2-row residual is the position of
+ * `addiu a1,a2,1` (n+1) among the two address computations, a scheduler tie-break no phrasing of
+ * 20 tried moves (tools/ee/.t493/probe/hook*.c). Levers: engine96 with sched1 MEASURED (flag not
+ * landed): 43.25%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", AddFxDrawHookPreParticles);
 #else
@@ -1399,6 +1520,10 @@ void AddFxDrawHookPreParticles(DrawHookFn func, void *arg) {
  * Near-miss: the three-deep packed callee-save block (sd $16/$17/$18) + the
  * branch-likely re-test loop is a register/save-layout wall. Correct C
  * preserved as the portable body. */
+/* TODO(match) t493: sdk29 78.17% / engine96 57.90% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
+ * insn: ROM `addiu sp,sp,-32` vs built `addiu sp,sp,-80`). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", RunFxDrawHooksPreParticles);
 #else
@@ -1413,6 +1538,11 @@ void RunFxDrawHooksPreParticles(void) {
  * by RunDrawHooksAfterTies. No-op when the queue is full.
  * Near-miss: same count-%hi register-allocation wall as
  * AddFxDrawHookPreParticles. */
+/* TODO(match) t493: sdk29 73.50% / engine96 41.00% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): SCHED — same as
+ * AddFxDrawHookPreParticles (90.00%/97.50% sdk29 with the cc1-small count model). Levers: engine96
+ * with sched1 MEASURED (flag not landed): 43.25%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027D500);
 #else
@@ -1430,6 +1560,10 @@ void func_0027D500(DrawHookFn func, void *arg) {
  * re-read each iteration. Driver for func_0027D500 (AddDrawHookAfterTies).
  * Near-miss: same packed-save / branch-likely loop wall as
  * RunFxDrawHooksPreParticles. Correct C preserved as the portable body. */
+/* TODO(match) t493: sdk29 78.17% / engine96 57.90% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
+ * insn: ROM `addiu sp,sp,-32` vs built `addiu sp,sp,-80`). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", RunDrawHooksAfterTies);
 #else
@@ -1444,6 +1578,10 @@ void RunDrawHooksAfterTies(void) {
  * is re-read each iteration.
  * Near-miss: same packed-save / branch-likely loop wall as
  * RunFxDrawHooksPreParticles. Correct C preserved as the portable body. */
+/* TODO(match) t493: sdk29 78.17% / engine96 57.90% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
+ * insn: ROM `addiu sp,sp,-32` vs built `addiu sp,sp,-80`). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", RunDrawHooksAfterShrubs);
 #else
@@ -1458,6 +1596,11 @@ void RunDrawHooksAfterShrubs(void) {
  * run by RunFxDrawHooksPostParticles. No-op when the queue is full.
  * Near-miss: same count-%hi register-allocation wall as
  * AddFxDrawHookPreParticles. */
+/* TODO(match) t493: sdk29 73.50% / engine96 41.00% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): SCHED — same as
+ * AddFxDrawHookPreParticles (90.00%/97.50% sdk29 with the cc1-small count model). Levers: engine96
+ * with sched1 MEASURED (flag not landed): 43.25%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", AddFxDrawHookPostParticles);
 #else
@@ -1475,6 +1618,10 @@ void AddFxDrawHookPostParticles(DrawHookFn func, void *arg) {
  * count is re-read each iteration. Driver for AddFxDrawHookPostParticles.
  * Near-miss: same packed-save / branch-likely loop wall as
  * RunFxDrawHooksPreParticles. Correct C preserved as the portable body. */
+/* TODO(match) t493: sdk29 78.17% / engine96 57.90% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
+ * insn: ROM `addiu sp,sp,-32` vs built `addiu sp,sp,-80`). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", RunFxDrawHooksPostParticles);
 #else
@@ -1490,6 +1637,12 @@ void RunFxDrawHooksPostParticles(void) {
  * full.
  * Near-miss: same count-%hi register-allocation wall as
  * AddFxDrawHookPreParticles. */
+/* TODO(match) t493: sdk29 51.75% / engine96 44.25% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): SCHED — with the cc1-small count
+ * model 68.25%/77.00% sdk29; the original computes the Funcs slot address, stores, then the Args
+ * address (cap 4 variant), cc1 hoists both address computations. Levers: engine96 with sched1
+ * MEASURED (flag not landed): 43.25%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", AddFxDrawHookLate);
 #else
@@ -1507,6 +1660,10 @@ void AddFxDrawHookLate(DrawHookFn func, void *arg) {
  * re-read each iteration. Driver for AddFxDrawHookLate (small cap-4 queue).
  * Near-miss: same packed-save / branch-likely loop wall as
  * RunFxDrawHooksPreParticles. Correct C preserved as the portable body. */
+/* TODO(match) t493: sdk29 71.00% / engine96 50.87% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
+ * insn: ROM `addiu sp,sp,-32` vs built `addiu sp,sp,-80`). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", RunFxDrawHooksLate);
 #else
@@ -1537,6 +1694,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawBlobShadows
  * Engine region (ee-gcc 2.96) - faithful #else. The alpha ramp integer-divides by the
  * decreasing remaining-frame count (i+1); the original's break-on-div-zero guard is
  * implicit in C since the divisor is always >= 1. */
+/* TODO(match) t493: sdk29 73.11% / engine96 65.00% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
+ * ROM `addiu sp,sp,-48` vs built `addiu sp,sp,-112`). Levers: cc1-small/absolute globals model
+ * RUN: 66.84% (engine96); engine96 with sched1 MEASURED (flag not landed): 65.10%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", FadeOutToBlackBlocking);
 #else
@@ -1592,6 +1754,12 @@ void FadeOutToBlackBlocking(s32 frames)
  * localized string 0x2DB6 (DrawDebugString) at x=0x3C with a y that depends on
  * the fade-suppress flag D_1A7BB9 (0x17C when set, else 0x148).
  */
+/* TODO(match) t493: sdk29 63.17% / engine96 44.76% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
+ * ROM `lui v0,0x0  [HI16 0x001B87F4]` vs built `lw v1,0(gp)  [GPREL16 0x001B87F4]`). Levers:
+ * sibcall guard RUN: sdk29 74.68% / engine96 49.36%; cc1-small/absolute globals model RUN: 68.08%
+ * (sdk29); engine96 with sched1 MEASURED (flag not landed): 57.05%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027DB38);
 #else
@@ -1637,6 +1805,12 @@ extern u8 D_1AC870[]; /* GIFtag template B (16 bytes) */
  *  vertices spanning the GS pixel-offset screen extents), with the top/bottom
  *  edges pulled inward by counter*16 for the wipe animation. Advances
  *  g_frameDmaCursor by 0x80. */
+/* TODO(match) t493: sdk29 17.01% / engine96 31.42% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (engine96): MACRO-AT (first differing
+ * insn: ROM `lui v0,0x0  [HI16 0x001B1524]` vs built `lui a1,0x0  [HI16 0x001B1524]`). Levers:
+ * cc1-small/absolute globals model RUN: 31.25% (engine96); engine96 with sched1 MEASURED (flag not
+ * landed): 11.82%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027DF80);
 #else
@@ -1711,6 +1885,11 @@ void func_0027DF80(void) {
  * +0x24) — emitting each band's scissor packet and a colour fill clamped to the
  * screen bottom, until the cursor passes the screen height.
  */
+/* TODO(match) t493: sdk29 66.35% / engine96 54.94% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
+ * insn: ROM `addiu sp,sp,-48` vs built `addiu sp,sp,-128`). Levers: engine96 with sched1 MEASURED
+ * (flag not landed): 67.19%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027E1E8);
 #else
@@ -1772,6 +1951,11 @@ void func_0027E1E8(void) {
  * and a second ZBUF variant. Finally re-appends reg 0x42 (0x44 variant) when
  * +0x8 is set.
  */
+/* TODO(match) t493: sdk29 70.35% / engine96 62.24% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
+ * ROM `addiu sp,sp,-32` vs built `addiu sp,sp,-64`). Levers: cc1-small/absolute globals model RUN:
+ * 66.63% (engine96). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027E368);
 #else
@@ -1805,6 +1989,15 @@ void func_0027E368(void *ctx) {
  * four chain-word stores, whereas the original reloads it absolute for each
  * write (no-load-PRE). No declaration reproduces the per-store reload here.
  * Correct C preserved as the portable body. */
+/* TODO(match) t493: sdk29 38.97% / engine96 54.28% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (engine96): RELOAD — the original reloads
+ * g_frameDmaCursor before each of the 4 packet stores (no type-based alias analysis); cc1 2.9 -O2
+ * keeps it in a register. MEASURED, not landed: with -fno-strict-aliasing on this unit (a per-unit
+ * flag = landing-gate question) plus the cc1-small model and left-to-right `or`s it reads 91.11%
+ * sdk29, residual SCHED (jal / last `or` order). Levers: cc1-small/absolute globals model RUN:
+ * 38.69% (sdk29); -fno-strict-aliasing MEASURED (flag not landed): 91.11% sdk29; engine96 with
+ * sched1 MEASURED (flag not landed): 51.25%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawFullScreenTint);
 #else
@@ -1825,6 +2018,12 @@ void DrawFullScreenTint(u64 r, s64 g, s64 b, s64 a) {
  *  x in {x0,x1}, y in {y0,y1}: each coord is scaled x16, offset by the GS pixel
  *  origin, biased -8 (subpixel), with a fixed far-Z of 0x00FFFFF000000000.
  *  Advances g_frameDmaCursor by 0x60. */
+/* TODO(match) t493: sdk29 11.56% / engine96 14.67% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (engine96): GPREL-FORM (first differing
+ * insn: ROM `lui v1,0x0  [HI16 0x001B2228]` vs built `lui t4,0x0  [HI16 0x001B2228]`). Levers:
+ * cc1-small/absolute globals model RUN: 18.44% (sdk29); -fno-strict-aliasing MEASURED (flag not
+ * landed): 19.21% sdk29; engine96 with sched1 MEASURED (flag not landed): 20.87%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027E4D0);
 #else
@@ -1885,6 +2084,12 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0
  * so no Option-D needed. Engine region — faithful #else. FAITHFULNESS (GS-pack/silent-render):
  * XYZ pack built in s64 (native long is 32-bit, overflows the <<16 + z-field). FORMER-PARK:
  * dual-gate (tester oracle) + d2 heads-up. */
+/* TODO(match) t493: sdk29 13.13% / engine96 28.17% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (engine96): MACRO-AT (first differing
+ * insn: ROM `addiu sp,sp,-16` vs built `addiu sp,sp,-32`). Levers: cc1-small/absolute globals
+ * model RUN: 27.24% (sdk29); -fno-strict-aliasing MEASURED (flag not landed): 41.44% sdk29;
+ * engine96 with sched1 MEASURED (flag not landed): 34.96%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawGlyphQuad);
 #else
@@ -1941,6 +2146,11 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0
  * Engine region — faithful #else, whole-.s traced (Ghidra-complete; 0 lq/sq so all copies are 8-byte
  * sd/4-byte sw). GS-pack safeguard: all 64-bit packs (XYZ, ST, descriptor) built in s64 — native long
  * is 32-bit and would overflow the <<16/<<20/<<0x22 fields + the z-field. */
+/* TODO(match) t493: sdk29 46.59% / engine96 41.15% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): MACRO-AT (first differing insn:
+ * ROM `addiu sp,sp,-144` vs built `addiu sp,sp,-224`). Levers: cc1-small/absolute globals model
+ * RUN: 36.10% (engine96); engine96 with sched1 MEASURED (flag not landed): 32.70%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawTexturedQuad2d);
 #else
@@ -2009,6 +2219,11 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0
  *
  * Engine region — faithful #else, whole-.s traced (Ghidra-complete, 0 lq/sq → all 8-byte sd). GS-pack
  * safeguard: all 64-bit packs (UV, XYZ, z-field) in s64. */
+/* TODO(match) t493: sdk29 45.85% / engine96 48.00% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (engine96): MACRO-AT (first differing
+ * insn: ROM `andi t1,t1,0xff` vs built `sll t2,t2,0x18`). Levers: cc1-small/absolute globals model
+ * RUN: 47.19% (engine96); engine96 with sched1 MEASURED (flag not landed): 46.06%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawRotatedSprite2d);
 #else
@@ -2084,6 +2299,12 @@ extern u8 D_1AC930[]; /* prebuilt GIFtag template (16 bytes) */
  *  vertices each packed as [st, uv, xyz2] (the two attribute arrays are s32[4]
  *  read stride-4; positions are u64[4] XYZ2). Advances g_frameDmaCursor by 0xA0.
  *  (st/uv naming inferred from the GS vertex layout.) */
+/* TODO(match) t493: sdk29 41.06% / engine96 61.38% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (engine96): GPREL-FORM (first differing
+ * insn: ROM `lui v1,0x0  [HI16 0x001B2228]` vs built `lui t4,0x0  [HI16 0x001B2228]`). Levers:
+ * cc1-small/absolute globals model RUN: 39.74% (sdk29); -fno-strict-aliasing MEASURED (flag not
+ * landed): 66.38% sdk29; engine96 with sched1 MEASURED (flag not landed): 60.35%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027EFA0);
 #else
@@ -2131,6 +2352,12 @@ extern u8 D_1AC900[]; /* prebuilt GIFtag template (16 bytes) */
  *  reconstruction misnomer — see the forward decl above), arg1 is actually a
  *  POINTER: the callers (e.g. func_0027F168) pass an address in it and this
  *  function dereferences its low/high words. Advances g_frameDmaCursor by 0x60. */
+/* TODO(match) t493: sdk29 31.71% / engine96 53.31% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (engine96): GPREL-FORM (first differing
+ * insn: ROM `lui v1,0x0  [HI16 0x001B2228]` vs built `lui t1,0x0  [HI16 0x001B2228]`). Levers:
+ * cc1-small/absolute globals model RUN: 35.83% (sdk29); -fno-strict-aliasing MEASURED (flag not
+ * landed): 56.88% sdk29; engine96 with sched1 MEASURED (flag not landed): 41.69%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F0A8);
 #else
@@ -2167,6 +2394,12 @@ void func_0027F0A8(const u64 *corners, u64 tex0) {
  * but the pinned cc1 schedules the four corner builds and their stack stores in
  * a different order / register assignment than the original. Correct C
  * preserved as the portable body. */
+/* TODO(match) t493: sdk29 74.79% / engine96 57.72% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): SCHED+REGNUM (first differing
+ * insn: ROM `lw v0,0(v0)  [LO16 0x001A7354]` vs built `lui v1,0x0  [HI16 0x001A7350]`). Levers:
+ * sibcall guard RUN: sdk29 64.72% / engine96 57.72%; cc1-small/absolute globals model RUN: 76.33%
+ * (sdk29); engine96 with sched1 MEASURED (flag not landed): 50.44%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F168);
 #else
@@ -2194,6 +2427,11 @@ void func_0027F168(s32 x1, s32 y1, s32 x2, s32 y2, s64 z, u64 tex0) {
  * x1+3..x1+4) sides, three progressively-inset strips whose y-range shrinks by
  * 1/2/4. The color is packed as (colorHi<<24) | colorLo.
  */
+/* TODO(match) t493: sdk29 94.06% / engine96 57.77% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
+ * ROM `addiu sp,sp,-96` vs built `addiu sp,sp,-176`). Levers: sibcall guard RUN: sdk29 88.00% /
+ * engine96 61.05%; engine96 with sched1 MEASURED (flag not landed): 52.05%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F208);
 #else
@@ -2221,6 +2459,11 @@ void func_0027F208(s32 y0, s32 y1, s32 x0, s32 x1, s32 colorHi, s32 colorLo) {
  * declared line 1363 as (y0,y1,x0,x1,color)) - this body is just nine calls with plain
  * int offsets. Ghidra dropped the first (fill) call's args; recovered from the .s:
  * func_0027E4D0(y0,y1,x0,x1,(color & 0xFF000000) | 4). Engine region - faithful #else. */
+/* TODO(match) t493: sdk29 56.19% / engine96 38.44% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
+ * ROM `addiu sp,sp,-96` vs built `addiu sp,sp,-176`). Levers: sibcall guard RUN: sdk29 58.12% /
+ * engine96 45.98%; engine96 with sched1 MEASURED (flag not landed): 42.05%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F348);
 #else
@@ -2253,6 +2496,11 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0
  * pack is built in s64 (native `long` is 32-bit and would overflow the <<16 + z-field); the
  * WrapAnglePiSum seed uses the EXACT bit pattern 0x3FC90FDC (a decimal pi/2 literal can round to
  * a different ULP). FORMER-PARK (silent-render class): dual-gate (tester oracle) + d2 heads-up. */
+/* TODO(match) t493: sdk29 48.06% / engine96 26.34% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
+ * insn: ROM `addiu sp,sp,-192` vs built `addiu sp,sp,-240`). Levers: engine96 with sched1 MEASURED
+ * (flag not landed): 27.99%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F4D8);
 #else
@@ -2299,39 +2547,29 @@ void func_0027F4D8(f32 startAngle, f32 endAngle, s32 centerX, s32 centerY,
 }
 #endif
 
-/* Enable blob shadows: set the enable flag and return 1 (success).
- * Wall (re-checked 2026-06-25): the enable flag lives at 0x1B15E8 and the
- * original stores it %gp_rel(g_blobShadowCount + 0x2C) - a GPREL16 reloc against
- * the g_blobShadowCount base + addend 0x2C. The rest of g_blobShadowCount (the
- * queue at +0x0/+0x4../+0x18) is accessed absolute %hi/%lo in this same unit, so
- * a single C declaration of g_blobShadowCount cannot be both gp-small (for the
- * flag) and large/absolute (for the queue) - and a separate gp-small symbol for
- * the flag emits a GPREL16 reloc against the WRONG symbol name (objdiff matches
- * relocs by symbol+addend, not resolved address). The original split the flag
- * into a distinct gp-small global that the linker happened to place at
- * g_blobShadowCount+0x2C; we cannot reproduce that reloc naming. (Secondary: cc1
- * also materialises the constant 1 twice here, one reg per use.) Genuine wall. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F790);
-#else
+/** func_0027F790 (EnableInlineColorCodes) — enable the fixed-font text
+ *  drawers' inline colour-code escapes (control bytes 8..15 select a palette
+ *  entry) and return 1. No params. The flag is the gp-small
+ *  g_textColorCodeEnabled (0x1B15E8), a global of its own — the tree used to
+ *  spell it g_blobShadowCount+0x2C and call it a blob-shadow enable, which the
+ *  ROM contradicts (FACT #5649); as its own symbol the store is the one-insn
+ *  gp-relative form the original packs into the jr delay slot.
+ *  MATCHED (task #493): 100.00% unit objdiff, sdk29 arm. */
 s32 func_0027F790(void) {
-    return (g_blobShadowEnabled = 1);
+    s32 enabled = 1;
+    /* Without the barrier cc1 2.9 materialises the constant twice (one register
+     * for the store, one for the return); the original uses a single one. */
+    __asm__ __volatile__("");
+    g_textColorCodeEnabled = enabled;
+    return enabled;
 }
-#endif
 
-/* Disable blob shadows: clear the enable flag.
- * Wall (re-checked 2026-06-25): cc1 DOES pack the store into the jr delay slot
- * (`jr $31; sw $0,...`) exactly like the original - the delay-slot claim in the
- * old note was wrong. The genuine wall is the same gp_rel/symbol-naming split as
- * func_0027F790: the flag store is %gp_rel(g_blobShadowCount + 0x2C) but the
- * queue base is accessed absolute, unsplittable under one C symbol. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F7A0);
-#else
+/** func_0027F7A0 (DisableInlineColorCodes) — clear the inline colour-code
+ *  enable flag (see func_0027F790). No params, no return.
+ *  MATCHED (task #493): 100.00% unit objdiff, sdk29 arm. */
 void func_0027F7A0(void) {
-    g_blobShadowEnabled = 0;
+    g_textColorCodeEnabled = 0;
 }
-#endif
 
 /* func_0027F7A8 (MeasureTextByGlyphTable): sum the signed per-glyph advance
  * widths of `str` - each glyph is 4 bytes in `glyphTable`, signed advance at +3 -
@@ -2384,6 +2622,10 @@ s32 func_0027F838(const char *str, s32 maxChars) {
  * Near-miss: the four packed GPR saves ($16-$19) + two FPR saves ($f20/$f21)
  * and the IntToFloat-per-glyph call shape are a save-layout wall. Correct C
  * preserved as the portable body. */
+/* TODO(match) t493: sdk29 91.88% / engine96 77.38% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
+ * insn: ROM `addiu sp,sp,-64` vs built `addiu sp,sp,-96`). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F858);
 #else
@@ -2426,6 +2668,11 @@ s32 func_0027F900(const char *str, s32 maxChars, f32 scale) {
  * Engine region — faithful #else, .s-traced (Ghidra's decompile OMITS the color-escape state machine).
  * Plain 10-arg DrawGlyphQuad calls: param9=active color (grayscale for the <0x20 case), param10=tex0
  * (the two are pushed as stack args; NO Option-D). */
+/* TODO(match) t493: sdk29 37.17% / engine96 31.48% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
+ * insn: ROM `addiu sp,sp,-96` vs built `addiu sp,sp,-192`). Levers: engine96 with sched1 MEASURED
+ * (flag not landed): 34.88%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawFixedFontString);
 #else
@@ -2436,7 +2683,7 @@ void DrawFixedFontString(s32 x, s32 y, s32 color, s32 str, s32 maxLen,
     const u8 *s = (const u8 *)str;   /* str param carries the pointer as an integer */
     s32 i;
 
-    if (*(s32 *)((u8 *)&g_blobShadowCount + 0x30) == 0) {
+    if (g_bInWrappedTextBox == 0) {
         D_1A89B0[0] = color;
     }
     AppendGsRegPacket(0x47, 0x33001);
@@ -2448,7 +2695,7 @@ void DrawFixedFontString(s32 x, s32 y, s32 color, s32 str, s32 maxLen,
         u8 c = *s;
         if ((u8)(c - 8) < 8) {
             /* control code 8..15: swap the active color's low 24 bits from the escape table */
-            if (*(s32 *)((u8 *)&g_blobShadowCount + 0x2C) != 0) {
+            if (g_textColorCodeEnabled != 0) {
                 color = (color & 0xFF000000) | (D_1A89B0[c - 8] & 0x00FFFFFF);
             }
         } else {
@@ -2480,6 +2727,11 @@ void DrawFixedFontString(s32 x, s32 y, s32 color, s32 str, s32 maxLen,
 extern u64 GetUiTextureTex0(s32 slot);
 extern void DrawFixedFontString(s32 a, s32 b, s32 c, s32 d, s32 e, u64 tex0, u8 *glyphTable);
 
+/* TODO(match) t493: sdk29 43.45% / engine96 44.52% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (engine96): SIBCALL (first differing
+ * insn: ROM `sd s1,8(sp)` vs built `daddu s0,a0,zero`). Levers: sibcall guard RUN: sdk29 71.55% /
+ * engine96 84.19%; engine96 with sched1 MEASURED (flag not landed): 43.13%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027FBA8);
 #else
@@ -2495,6 +2747,11 @@ void func_0027FBA8(s32 a, s32 b, s32 c, s32 d, s32 e) {
 }
 #endif
 
+/* TODO(match) t493: sdk29 43.45% / engine96 44.52% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (engine96): SIBCALL (first differing
+ * insn: ROM `sd s1,8(sp)` vs built `daddu s0,a0,zero`). Levers: sibcall guard RUN: sdk29 71.55% /
+ * engine96 84.19%; engine96 with sched1 MEASURED (flag not landed): 43.13%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawDebugString);
 #else
@@ -2524,6 +2781,11 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0
  * Engine region — faithful #else, whole-.s traced. Metric yofs/advance are SIGNED (lb→IntToFloat),
  * u/v unsigned (lbu); grayscale = (color&0xFF000000) + (avgRGB)*0x10101. Calls the in-file
  * DrawTexturedQuad2d (10-arg, 4-color array + tex0). */
+/* TODO(match) t493: sdk29 53.57% / engine96 51.10% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
+ * insn: ROM `addiu sp,sp,-144` vs built `addiu sp,sp,-240`). Levers: engine96 with sched1 MEASURED
+ * (flag not landed): 46.16%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027FCB0);
 #else
@@ -2537,7 +2799,7 @@ void func_0027FCB0(s32 a, s32 b, s32 c, u64 tex0, u8 *glyphTable, f32 f1, f32 f2
     f32 sz16 = scale * 16.0f;
     s32 i;
 
-    if (*(s32 *)((u8 *)&g_blobShadowCount + 0x30) == 0) {
+    if (g_bInWrappedTextBox == 0) {
         D_1A89B0[0] = color;
     }
     AppendGsRegPacket(0x47, 0x33001);
@@ -2548,7 +2810,7 @@ void func_0027FCB0(s32 a, s32 b, s32 c, u64 tex0, u8 *glyphTable, f32 f1, f32 f2
     for (i = 0; ; ) {
         u8 ch = *s;
         if ((u8)(ch - 8) < 8) {
-            if (*(s32 *)((u8 *)&g_blobShadowCount + 0x2C) != 0) {
+            if (g_textColorCodeEnabled != 0) {
                 color = (color & 0xFF000000) | (D_1A89B0[ch - 8] & 0x00FFFFFF);
             }
         } else {
@@ -2588,6 +2850,11 @@ void func_0027FCB0(s32 a, s32 b, s32 c, u64 tex0, u8 *glyphTable, f32 f1, f32 f2
 
 extern void func_0027FCB0(s32 a, s32 b, s32 c, u64 tex0, u8 *glyphTable, f32 f1, f32 f2, f32 f3); /* scaled/positioned font draw */
 
+/* TODO(match) t493: sdk29 36.60% / engine96 30.94% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
+ * ROM `addiu sp,sp,-64` vs built `addiu sp,sp,-96`). Levers: sibcall guard RUN: sdk29 63.29% /
+ * engine96 64.20%; engine96 with sched1 MEASURED (flag not landed): 30.97%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027FFF0);
 #else
@@ -2617,6 +2884,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280080);
  *  width, resolves the UI font texture (GetUiTextureTex0 slot 2), and forwards to
  *  DrawFixedFontString with the debug glyph table. (DrawFixedFontString's d/e
  *  params carry the string/maxChars — its committed decl types them s32.) */
+/* TODO(match) t493: sdk29 50.60% / engine96 23.00% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
+ * ROM `addiu sp,sp,-48` vs built `addiu sp,sp,-112`). Levers: engine96 with sched1 MEASURED (flag
+ * not landed): 22.20%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280120);
 #else
@@ -2639,6 +2911,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002801B0);
  *  rendered width (func_0027F818), centers the anchor (x - width/2), draws via
  *  DrawFixedFontString (UI font slot 2, debug glyph table), and returns the
  *  centered x. */
+/* TODO(match) t493: sdk29 89.68% / engine96 86.00% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): SCHED+REGNUM (first differing
+ * insn: ROM `addiu sp,sp,-48` vs built `addiu sp,sp,-96`). Levers: engine96 with sched1 MEASURED
+ * (flag not landed): 86.38%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280250);
 #else
@@ -2655,6 +2932,11 @@ s32 func_00280250(s32 x, s32 arg1, s32 arg2, const char *str, s32 maxChars) {
 /** func_002802E8 — draw a horizontally-centered string in the alternate UI font
  *  (glyph table D_264250, UI texture slot 3). Same centering as func_00280250:
  *  measure width (func_0027F838), center (x - width/2), draw, return centered x. */
+/* TODO(match) t493: sdk29 89.68% / engine96 86.00% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): SCHED+REGNUM (first differing
+ * insn: ROM `addiu sp,sp,-48` vs built `addiu sp,sp,-96`). Levers: engine96 with sched1 MEASURED
+ * (flag not landed): 86.38%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002802E8);
 #else
@@ -2674,6 +2956,11 @@ s32 func_002802E8(s32 x, s32 arg1, s32 arg2, const char *str, s32 maxChars) {
  * glyph metrics. The centered variant of func_0027FFF0.
  *
  * Engine region (ee-gcc 2.96) - faithful #else. */
+/* TODO(match) t493: sdk29 40.65% / engine96 11.90% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
+ * ROM `addiu sp,sp,-80` vs built `addiu sp,sp,-128`). Levers: engine96 with sched1 MEASURED (flag
+ * not landed): 12.25%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280380);
 #else
@@ -2688,6 +2975,11 @@ void func_00280380(s32 a, s32 b, s32 c, const char *str, s32 maxChars, f32 scale
 extern f32 func_002804C0(f32 inputScale, const char *str, s32 maxChars, s32 count); /* text auto-scale (below) */
 extern void func_00280380(s32 a, s32 b, s32 c, const char *str, s32 maxChars, f32 scale); /* scaled text draw */
 
+/* TODO(match) t493: sdk29 76.13% / engine96 50.65% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
+ * ROM `addiu sp,sp,-48` vs built `addiu sp,sp,-96`). Levers: sibcall guard RUN: sdk29 89.26% /
+ * engine96 84.35%; engine96 with sched1 MEASURED (flag not landed): 50.61%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280440);
 #else
@@ -2702,6 +2994,11 @@ void func_00280440(f32 inputScale, s32 a, s32 b, s32 c, const char *str, s32 max
 }
 #endif
 
+/* TODO(match) t493: sdk29 73.86% / engine96 63.61% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
+ * insn: ROM `addiu sp,sp,-32` vs built `addiu sp,sp,-48`). Levers: engine96 with sched1 MEASURED
+ * (flag not landed): 74.58%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002804C0);
 #else
@@ -2738,6 +3035,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280550);
  * Near-miss (matching arm): the pinned cc1 sibling-call-optimizes the lone tail
  * call to `j func_00280550`; the original keeps a full call+return frame.
  * Correct C preserved as the portable body. */
+/* TODO(match) t493: NOT COMPILED on either arm — this portable body calls func_00280550 with 7
+ * args while the non-native prototype above has 6 (the arm is native-only until the prototype is
+ * unified). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280B20);
 #else
@@ -2753,6 +3053,11 @@ void func_00280B20(s32 a, s32 b, s32 c, s32 d, s32 e, u8 *glyphTable) {
  * @4cb6be7). Matching arm stays INCLUDE_ASM (byte-exact is walled by the
  * tier-wide 8-packed-callee-save frame fingerprint); the #else supplies the
  * portable body that passes the glyph table down the chain. */
+/* TODO(match) t493: sdk29 28.56% / engine96 55.48% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (engine96): SIBCALL (first differing
+ * insn: ROM `sd s1,8(sp)` vs built `daddu s0,a0,zero`). Levers: sibcall guard RUN: sdk29 76.70% /
+ * engine96 76.30%; engine96 with sched1 MEASURED (flag not landed): 54.44%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280B48);
 #else
@@ -2767,6 +3072,11 @@ void func_00280B48(s32 a, s32 b, s32 c, s32 d) {
  * args plus that tex0 and the g_debugFontGlyphTable glyph-metrics table to the text core
  * func_00280B20. Matching arm stays INCLUDE_ASM (byte-exact walled by the tier-wide
  * 8-packed-callee-save frame fingerprint); the #else supplies the portable body. */
+/* TODO(match) t493: sdk29 28.56% / engine96 55.48% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (engine96): SIBCALL (first differing
+ * insn: ROM `sd s1,8(sp)` vs built `daddu s0,a0,zero`). Levers: sibcall guard RUN: sdk29 76.70% /
+ * engine96 76.30%; engine96 with sched1 MEASURED (flag not landed): 54.44%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280BB8);
 #else
@@ -2780,6 +3090,11 @@ void func_00280BB8(s32 a, s32 b, s32 c, s32 d) {
  * func_00280BB8): resolve the GS TEX0 (GetUiTextureTex0 slot 3) and forward the four
  * caller args plus that tex0 and the D_264250 glyph-metrics table to the text core
  * func_00280B20. Matching arm stays INCLUDE_ASM (8-packed-callee-save frame wall). */
+/* TODO(match) t493: sdk29 28.56% / engine96 55.48% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (engine96): SIBCALL (first differing
+ * insn: ROM `sd s1,8(sp)` vs built `daddu s0,a0,zero`). Levers: sibcall guard RUN: sdk29 76.70% /
+ * engine96 76.30%; engine96 with sched1 MEASURED (flag not landed): 54.44%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280C28);
 #else
@@ -2825,6 +3140,12 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0
  * the packet size, no opaque consumer of an inferred struct), so faithfully transcribable. Engine
  * region — faithful #else. Consts 1024/-1024/1.0 are exactly representable (no ULP concern). FORMER-
  * PARK (VU1/VIF silent-render class): dual-gate (tester oracle) + d2 heads-up. */
+/* TODO(match) t493: sdk29 47.89% / engine96 50.38% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (engine96): MACRO-AT (first differing
+ * insn: ROM `sd s0,64(sp)` vs built `daddu a0,sp,zero`). Levers: sibcall guard RUN: sdk29 43.11% /
+ * engine96 50.47%; cc1-small/absolute globals model RUN: 51.98% (engine96); engine96 with sched1
+ * MEASURED (flag not landed): 47.25%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", AppendVu1SphereMapContext);
 #else
@@ -2900,6 +3221,11 @@ void AppendVu1SphereMapContext(void) {
  * emits the GS TEST (0x47, alpha ref 0x30000 when mode==0) and SCISSOR (0x42)
  * register packets.
  */
+/* TODO(match) t493: sdk29 59.72% / engine96 57.27% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
+ * ROM `addiu sp,sp,-48` vs built `addiu sp,sp,-80`). Levers: sibcall guard RUN: sdk29 78.40% /
+ * engine96 61.18%; engine96 with sched1 MEASURED (flag not landed): 54.98%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280EC8);
 #else
@@ -2920,33 +3246,27 @@ void func_00280EC8(s32 zNearBits, s32 lo, s32 mode, f32 fa) {
 }
 #endif
 
-/* Queue the ctx1 draw-env packet, then recompute the GS screen geometry.
- * Near-miss: cc1 sibling-call-optimizes the final func_0027B988() to
- * `j func_0027B988`, whereas the original keeps the call+return frame. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280FB8);
-#else
+/** func_00280FB8 — queue the ctx1 draw-env packet, then recompute the GS
+ *  screen geometry. No params, no return. The empty asm statement keeps cc1
+ *  from sibcalling the final call (the original keeps the call frame).
+ *  MATCHED (task #493): 100.00% unit objdiff, sdk29 arm. */
 void func_00280FB8(void) {
     AppendDrawEnvContext1();
-    func_0027B988();
+    RecomputeScreenViewportFromGsContext();
+    __asm__ __volatile__("");
 }
-#endif
 
-/* func_00280FE0 - per-frame reset of the offscreen-probe subsystem: zero the
- * 0x600-byte screen-grab/occlusion query descriptor table at 0x1B8990 and clear
- * the pending query count at 0x1B15D8.
- * Near-miss: the original clears the count via the assembler `sw $0, sym`
- * ($at-macro) absolute form and computes its %hi after restoring $ra, whereas
- * the pinned cc1 allocates a GP register for the count address and hoists the
- * %hi before the restore. Correct C preserved as the portable body. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280FE0);
-#else
+/** func_00280FE0 — per-frame reset of the offscreen-probe subsystem: zero the
+ *  0x600-byte screen-grab/occlusion query descriptor table at 0x1B8990 and
+ *  clear the pending query count at 0x1B15D8. No params, no return. The count
+ *  is cleared through the cc1-small / assembler-absolute alias
+ *  g_blobShadowState so the store is the one-insn `sw $0, sym+0x1C` macro that
+ *  GNU as expands to `lui $at; sw` after the $ra restore, as in the original.
+ *  MATCHED (task #493): 100.00% unit objdiff, sdk29 arm. */
 void func_00280FE0(void) {
     FillMemory32(g_sceneActorMobys + 0x44, 0, 0x600);
     g_screenGrabQueryCount = 0;
 }
-#endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00281010);
 
@@ -2956,6 +3276,11 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0
  *  pointer at +0x10. Count how many of the w*h read-back pixels have their 24-bit
  *  depth above the threshold, then store the *un*-exceeded fraction
  *  (total - count)/total to the result float. */
+/* TODO(match) t493: sdk29 62.50% / engine96 65.95% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (engine96): UNKNOWN-addiu (first
+ * differing insn: ROM `addiu v1,zero,48` vs built `sll v0,a1,0x1`). Levers: engine96 with sched1
+ * MEASURED (flag not landed): 67.08%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00281020);
 #else
@@ -3011,6 +3336,11 @@ void func_00281020(u32 *pixels, s32 actorIdx) {
  * } while (counter >= 0)` is faithful. The loop back-edges are non-likely
  * `bgez`, so their pointer-step delay slots always run. `lastPending` (iVar5)
  * captures the PRE-decrement index and is only assigned inside the bit-2 body. */
+/* TODO(match) t493: sdk29 71.59% / engine96 31.64% (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
+ * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
+ * insn: ROM `addiu sp,sp,-96` vs built `addiu sp,sp,-176`). Levers: cc1-small/absolute globals
+ * model RUN: 31.64% (engine96); engine96 with sched1 MEASURED (flag not landed): 62.72%. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002810C0);
 #else

@@ -539,6 +539,7 @@ UpdateMenuOverlayStateMachine = 0x00287140; // CONFIRMED - per-frame driver of t
 EnterMenuOverlayMode = 0x00286270; // CONFIRMED - enter the in-game pause/menu overlay (g_nGameState==4 enter-action) stores modeId into g_nMenuOverlayMode/Live, sets g_nMenuOverlayActive = (gameStateStackTop != 3), lowers dialog voice. Called by UpdateGameState. EU anchor
 TickPauseOverlayState = 0x00286210; // CONFIRMED - UpdateGameState case-3 per-frame hook while a pause overlay is pending mutes voice, pumps sound, clears g_nMenuOverlayModeLive for the frame. NOT the menu logic (that is UpdateMenuOverlayStateMachine)
 IsMenuOverlayActive = 0x00286200; // CONFIRMED - returns g_nMenuOverlayActive, true when the pause/menu overlay is up over a non-gameplay state-stack top. Read by RenderPauseMenuOverlay to choose world-redraw vs widget-draw
+RecomputeScreenViewportFromGsContext = 0x0027B988; // CONFIRMED (NOTE 5680) - reads g_gsScreenContext+0x150/+0x152, publishes g_screenWidth/Height, g_screenCenterDefaultX/Y, g_gsPixelOffsetX/Y, D_1A7358/5C, sets g_cameraProjScale 0.62 and the viewport block, then func_0027A550 - sole caller func_00280FB8
 GetMenuOverlayMode = 0x00286160; // CONFIRMED - returns g_nMenuOverlayMode (stored mode id), DrawActiveGuiScreens early-outs when g_nGameState==4 && mode==8 (the in-game audio-options sub-screen)
 GetMenuOverlayModeLive = 0x002861F0; // CONFIRMED - returns g_nMenuOverlayModeLive (per-frame-live mode id), read by RenderSaveLoadStatusPopup and the inventory-overlay (mode==7) checks
 ApplyVideoScanModeAndRebuildScreenPackets = 0x00286168; // CONFIRMED (asm) - waits one frame DMA fence (WaitFrameDmaFence(1)) then re-applies the GS video mode (SetVideoMode) and rebuilds the screen blit packets via BuildScreenDrawPackets - on g_bProgressiveScan it uses 0x200x0x1A0 src - 0x280x0x1C0 dst (480p) - else the interlaced 0x1A0x0x200 - 0x1C0 layout. Called only intra-tile (3 sites in text/1849B0), notably right after the progressive-scan toggle in func_002884xx. EU twin func_00286078 @0x00286078 delta -0xF0 (full-body match - only g_bProgressiveScan ref +0x80 region shift and -0xF0 jals - dimension immediates IDENTICAL - pure address-shift twin no PAL code diff)
@@ -1565,6 +1566,8 @@ g_fxHooksLateCount = 0x001B15B8; // CONFIRMED mechanism - late hook count (cap 4
 g_fxHooksLateFuncs = 0x001B1598; // CONFIRMED mechanism - late hook funcs
 g_fxHooksLateArgs = 0x001B15A8; // CONFIRMED mechanism - late hook args
 g_blobShadowCount = 0x001B15BC; // CONFIRMED mechanism - blob shadow queue count
+g_textColorCodeEnabled = 0x001B15E8; // type:s32 size:4 CONFIRMED - inline text colour-code enable flag (FACT 5649) - written only by func_0027F790 (=1) and func_0027F7A0 (=0), read by DrawFixedFontString, func_0027FCB0 and func_00280550 - the original addresses it gp-relative as its own small global, not as g_blobShadowCount+0x2C
+g_bInWrappedTextBox = 0x001B15EC; // type:s32 size:4 CONFIRMED - inside-a-wrapped-text-box flag (FACT 5649) - set to 1 at func_00280550 entry and 0 at its exit, read by DrawFixedFontString and func_0027FCB0 to decide whether to preload the colour palette slot 0
 g_blobShadowQueue = 0x001BA5C0; // CONFIRMED mechanism - 32 x 0x20 blob shadow records
 g_fxQuadCornerOffsets = 0x001A87A0; // PARTIAL - shared quad corner offset table
 g_glowSpriteSlots = 0x001BA9C0; // PARTIAL - 16 glow sprite slots
