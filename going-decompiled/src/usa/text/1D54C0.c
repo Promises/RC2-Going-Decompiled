@@ -91,7 +91,7 @@ extern void func_002CA980();
 extern void func_002CAB90();
 extern s32  func_002D6B00();  /* locally defined below; return typed s32 to match its definition */
 extern s32  GetMenuWorkBufferSize();
-extern s32  func_002DFF68();  /* locally defined below; return typed s32 to match its definition */
+extern void func_002DFF68();  /* locally defined below */
 extern s32  func_002E0010();
 extern void func_003017F8();
 extern void func_0033A7A8();
@@ -215,8 +215,15 @@ extern s32 g_padButtonsPressed[];
 /* Galactic-map planet-select input handler in the preceding asm band. */
 extern void func_0029DD40(s32 buttons);
 
-/* Player character/control mode: 0=Ratchet, 1=Clank-solo, 2=Giant Clank. */
-extern u8 g_bPlayerMode;
+/* An object the original addresses with a COMPILER-split lui/%lo pair (the high
+ * half in its own register, other instructions scheduled between): a named
+ * section other than .sdata/.sbss takes it out of cc1's -G8 small-data class so
+ * cc1 splits the address itself instead of emitting the one-insn macro. */
+#define ROM_SPLIT __attribute__((section(".data")))
+
+/* Player character/control mode: 0=Ratchet, 1=Clank-solo, 2=Giant Clank.
+ * Read with the compiler-split form (func_002DA330: lui $2; lw; lbu %lo($2)). */
+extern u8 g_bPlayerMode ROM_SPLIT;
 
 /* Map state block. The galactic-map slot table is 5 interleaved {id,flags}
  * pairs (stride 8) starting at +0x40 (id) / +0x44 (flags). */
@@ -228,14 +235,14 @@ extern void *g_pCurrentMenuScreen[];  /* active screen instance */
 extern void *g_pNextMenuScreen[];     /* requested next screen instance */
 extern u8 D_25E660[];                 /* a specific menu-screen instance */
 
-/* Menu-subsystem state block. Only the Galactic-Map save-page fields are
- * modelled here; the rest is opaque padding. */
+/* Menu-subsystem state block — a view of g_menuScreenBlock (0x1F27C0; the
+ * only symbol the link holds for that address). Only the Galactic-Map
+ * save-page fields are modelled here; the rest is opaque padding. */
 typedef struct MenuState {
     u8  _pad0[0x168];
     s32 savePageActive;  /* 0x168 - nonzero while the save page is up */
     s32 savePageBytes;   /* 0x16C - running byte counter for the save */
 } MenuState;
-extern MenuState D_1F27C0;
 /* Takes TWO args: $4 = moby table base, $5 = count. $5 is live-in — verified in
  * asm/usa/nonmatchings/text/1A00F0/func_002A1138.s, where `daddu $16,$5,$0` at
  * 002A1144 reads $5 before anything writes it. The 2-arg form is already
@@ -248,12 +255,17 @@ extern s32 func_002A1138(s32 tableBase, s32 count);
 extern s32 D_25BA60[];        /* map upload sequence counter */
 extern s32 g_mapActiveSlot[]; /* active map cache slot index */
 
-/* Persistent save block; its first word seeds a few rotating lookups. */
-extern s32 g_playerProgress[];
+/* Persistent save block; its first word seeds a few rotating lookups. Only the
+ * first word is read here, with the adjacent lui/%lo macro shape (cc1-small /
+ * assembler-absolute, see the part-A header) — hence a scalar plus the size
+ * override. */
+__asm__(".extern g_playerProgress, 16");
+extern s32 g_playerProgress;
 extern s32 D_260570[];        /* 19-entry lookup table */
 
 /* Galactic-map planet-row builder state. */
-extern s32 D_1A7C0C[];        /* number of active planet rows */
+__asm__(".extern D_1A7C0C, 16");   /* read with the adjacent lui/%lo macro shape */
+extern s32 D_1A7C0C;          /* number of active planet rows */
 extern u8  D_18D0E8[];        /* per-row source index (reversed) */
 extern u32 D_254E48[];        /* index -> 4-byte record (icon id in low half) */
 typedef struct MapPlanetRow { /* 12-byte display record */
@@ -296,6 +308,7 @@ extern s32 D_001F28F4;             /* menu transition-pending override flag */
 extern s32 D_001F28DC;             /* text-table second-bank base address */
 extern s32 D_001F28A4;             /* memory-card status code */
 extern u8  D_001ABD48;             /* (same as D_1ABD48, byte view) */
+__asm__(".extern g_nSaveLoadStatusCode, 16");   /* adjacent lui/%lo macro shape in the ROM */
 extern s32 g_nSaveLoadStatusCode;  /* 0x1A7420 save/load popup status code */
 extern u8  g_menuScreenBlock[];    /* g_particleFxBlob+0x100 menu-screen mgr block */
 extern s32 g_playerProgress2;      /* alias for the persistent save block first word */
@@ -320,6 +333,10 @@ extern u8 *g_pTextTableLoadBuf;    /* 0x1F28D8 language text-table load buffer *
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5540);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 43.34% / engine96 34.45%; better arm sdk29; 367 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-128` vs `addiu sp,sp,-160`. Not iterated in t495. */
 s32 func_002D5540(void) {
     extern s32 g_shipCustomization;      /* PlayerStats+0xF8 ship-customize bitfield */
     extern s32 g_shipCustomizeCursor;    /* selected paint index (gp-rel) */
@@ -468,6 +485,10 @@ s32 func_002D5540(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5A10);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 98.85% / engine96 68.77%; better arm sdk29; 7 differing rows
+ * on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing insn:
+ * ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002D5A10(void) {
     u8 *blk = (u8 *)g_menuScreenBlock;
@@ -488,6 +509,10 @@ s32 func_002D5A10(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5A48);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 54.99% / engine96 47.12%; better arm sdk29; 115 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-64`. Not iterated in t495. */
 s32 func_002D5A48(void) {
     /* GUI singleton; the font atlas lives at g_guiInstance + 0x8710. */
     extern char *g_guiInstance;
@@ -555,6 +580,10 @@ s32 func_002D5C48(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5C58);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 39.93% / engine96 43.20%; better arm engine96; 55 differing
+ * rows on it, class STRUCTURAL; first differing insn: ROM `lui v0,0x0  [HI16
+ * 0x001A7BBC]` vs `lbu v0,0(gp)  [GPREL16 0x001A7BBC]`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002D5C58(void *focus) {
     extern s32 D_1ABAF0[];           /* per-language bg image index table */
@@ -602,6 +631,10 @@ s32 func_002D5C58(void *focus) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5D10);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 55.10% / engine96 43.66%; better arm sdk29; 75 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-64`. Not iterated in t495. */
 s32 func_002D5D10(void) {
     /* GUI singleton; the font atlas lives at g_guiInstance + 0x8710. */
     extern char *g_guiInstance;
@@ -638,6 +671,10 @@ s32 func_002D5D10(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5EC8);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 92.65% / engine96 69.71%; better arm sdk29; 9 differing rows
+ * on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing insn:
+ * ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002D5EC8(MenuWidget *obj) {
     if (g_pGuiManager != 0) {
@@ -653,6 +690,10 @@ s32 func_002D5EC8(MenuWidget *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5F10);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 61.57% / engine96 37.17%; better arm sdk29; 36 differing
+ * rows on it, class STRUCTURAL; first differing insn: ROM `sd s1,24(sp)` vs
+ * `lui v0,0x0  [HI16 0x00138344]`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002D5F10(void) {
     s32 pressed = g_padButtonsPressed[0];
@@ -693,6 +734,10 @@ s32 func_002D5F10(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D6028);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 70.72% / engine96 59.17%; better arm sdk29; 29 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
 /* Matching arm stays INCLUDE_ASM; #else is the structure model (faithful vs asm:
  * value*329+0.5, -36 when D_001B2320==1, GetLocalizedString(0x2BE5) label draw).
  * D_001B2324/D_001B2320 == g_swapGadgetItemIndex+0x8A/+0x86. */
@@ -719,6 +764,11 @@ s32 func_002D6028(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D60E8);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 73.54% / engine96 85.18%; better arm engine96; 10 differing
+ * rows on it, class STRUCTURAL; first differing insn: ROM `lui a0,0x0  [HI16
+ * 0x001A8D04]` vs `lw a0,0(gp)  [GPREL16 g_pGuiManager]`. Not iterated in
+ * t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002D60E8(void) {
     func_002888A8();
@@ -788,6 +838,10 @@ s32 func_002D6240(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", SaveMessageWidgetTick);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 59.25% / engine96 52.86%; better arm sdk29; 65 differing
+ * rows on it, class STRUCTURAL; first differing insn: ROM `lui v1,0x0  [HI16
+ * 0x001A7424]` vs `lw a0,0(gp)  [GPREL16 D_001A7424]`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 SaveMessageWidgetTick(void) {
     extern s32 D_001A7424;
@@ -833,6 +887,10 @@ s32 func_002D6380(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D63B0);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 85.86% / engine96 62.50%; better arm sdk29; 15 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002D63B0(void) {
     if (g_pGuiManager != 0) {
@@ -849,6 +907,10 @@ s32 func_002D63B0(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D6408);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 49.86% / engine96 10.69%; better arm sdk29; 36 differing
+ * rows on it, class STRUCTURAL; first differing insn: ROM `lui v0,0x0  [HI16
+ * D_138180]` vs `lui v0,0x0  [HI16 0x00138344]`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002D6408(void) {
     s32 pressed = g_padButtonsPressed[0];
@@ -887,6 +949,10 @@ s32 func_002D64D8(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D6508);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 85.86% / engine96 62.50%; better arm sdk29; 15 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002D6508(void) {
     if (g_pGuiManager != 0) {
@@ -929,6 +995,10 @@ s32 func_002D65D0(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", GalacticMapConfirmTravelInput);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 38.29% / engine96 5.65%; better arm sdk29; 86 differing rows
+ * on it, class STRUCTURAL; first differing insn: ROM `lui v1,0x0  [HI16
+ * 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 GalacticMapConfirmTravelInput(void) {
     extern u8 g_abLevelVisitedMarkers[];
@@ -944,14 +1014,14 @@ s32 GalacticMapConfirmTravelInput(void) {
         return 0;
     }
     if (pressed & 0xd00) {
-        g_nMapCurrentLevel = g_playerProgress[0];
+        g_nMapCurrentLevel = g_playerProgress;
         return 1;
     }
     if ((pressed & 0x40) == 0) {
         func_0029D248();
         return 0;
     }
-    if (g_playerProgress[0] == g_nMapCurrentLevel) {
+    if (g_playerProgress == g_nMapCurrentLevel) {
         PlayGlobalSound(4, 0, 0);
         FadeOutToBlackBlocking(4);
         return 1;
@@ -1001,6 +1071,10 @@ s32 func_002D67A0(s32 op, s32 arg) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", MenuScreenDoAction);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 45.51% / engine96 37.61%; better arm sdk29; 133 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-112`. Not iterated in t495. */
 s32 MenuScreenDoAction(s32 op, s32 arg, void *outFlag) {
     extern u8 g_currentLanguage;
     extern u8 g_collTriBuffer[];
@@ -1111,20 +1185,18 @@ s32 MenuScreenDoAction(s32 op, s32 arg, void *outFlag) {
 }
 #endif
 
-/* Register-coloring near-miss (97%): list-entry screen-action forwarder.
- * Dispatch op `op` with the arg pulled from the selected row of the widget's
- * command table (row = widget->0x40, stride 0xc, arg at +4). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D6AA0);
-#else
-    /* TODO(match): functional equivalent - not byte-exact. */
+/* List-entry screen-action forwarder: dispatch `op` with the arg pulled from
+ * the selected row of the widget's command table (row = widget+0x40, stride
+ * 0xC, arg at +4) and return MenuScreenDoAction's result.
+ * MATCHED 100.00% on the sdk29 arm (unit objdiff, objdiff_build.sh +
+ * unit_report.sh; verify_match_unit.sh BYTE IDENTICAL, t495). The old
+ * "97% register-coloring" note described the diff.sh instrument. */
 s32 func_002D6AA0(void *widget, s32 op, void *outFlag) {
     u8 *w = (u8 *)widget;
     s32 row = *(s32 *)(w + 0x40);
     s32 arg = *(s32 *)(row * 0xc + *(s32 *)(w + 0x34) + 4);
     return MenuScreenDoAction(op, arg, outFlag);
 }
-#endif
 
 /* Command-record wrapper: MenuScreenDoAction(cmd->op, cmd->arg, out). */
 s32 func_002D6AD8(MenuCmd *cmd, void *out) {
@@ -1152,16 +1224,16 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D6E98);
  * colour arg is -1 (0x80FFA888 / 0x8020FFFF), computes the fade fraction
  * progress/limit (limit = D_1AA460; saturated to 1.0 once progress exceeds it) and
  * hands the two colours + fraction to the colour-lerp leaf ColorLerpPacked.
- * WALL: ACC-madd / FP-heavy leaf the cc1 schedules differently; matching arm stays
- * INCLUDE_ASM, portable #else below. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", SetGalacticMapFadeAlpha);
-#else
+ * MATCHED 100.00% on the sdk29 arm (unit objdiff; verify_match_unit.sh BYTE
+ * IDENTICAL, t495). Three spellings carry the match: the clamp as a ?: (an
+ * `if (progress > -1)` is canonicalised to slti/movz; the ?: keeps the
+ * original's li -1 / slt / movn), the divide path first with fade = 1.0 in the
+ * else, and the asm barrier that keeps the jal + $ra frame. */
 extern s32  D_1AA460;                                          /* galactic-map fade step count */
 extern void ColorLerpPacked(s32 color1, s32 color2, f32 fade);   /* 0x2846E8 packed-RGBA colour lerp */
 
 void SetGalacticMapFadeAlpha(s32 progress, s32 color1, s32 color2) {
-    s32 clampedProgress = (progress < 0) ? 0 : progress;
+    s32 clampedProgress = (progress > -1) ? progress : 0;
     f32 fade;
 
     if (color1 == -1) {
@@ -1171,14 +1243,14 @@ void SetGalacticMapFadeAlpha(s32 progress, s32 color1, s32 color2) {
         color2 = (s32)0x8020FFFF;
     }
 
-    if (D_1AA460 < clampedProgress) {
-        fade = 1.0f;
-    } else {
+    if (clampedProgress <= D_1AA460) {
         fade = 1.0f - (f32)(D_1AA460 - clampedProgress) / (f32)D_1AA460;
+    } else {
+        fade = 1.0f;
     }
     ColorLerpPacked(color1, color2, fade);
+    __asm__ __volatile__("");   /* keep the jal + ra frame; cc1 would tail-jump */
 }
-#endif
 
 /* Galactic-map grid cursor input (paged Up/Down/Left/Right with edge wrap into
  * linked sibling screens). Wall: very large nested branch graph + divide traps.
@@ -1195,6 +1267,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D75D8);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D7AE0);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 73.15% / engine96 70.40%; better arm sdk29; 37 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
 s32 func_002D7AE0(void) {
     extern u8  g_mapVertexData[];       /* MapCache base */
     extern s16 g_fileLoadState;         /* 0x1A63AC: 0 idle / nonzero CD-read busy */
@@ -1236,6 +1312,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", GalacticMapScre
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D8270);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 83.52% / engine96 65.66%; better arm sdk29; 30 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002D8270(MenuWidget *obj) {
     extern s32 D_0025A6FC, D_0025A6F4, D_0025A600;
@@ -1289,6 +1369,10 @@ s32 func_002D87B0(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D87C8);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 63.85% / engine96 55.96%; better arm sdk29; 144 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-48`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002D87C8(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
@@ -1367,6 +1451,10 @@ s32 func_002D87C8(MenuWidget *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D8A68);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 41.09% / engine96 41.28%; better arm engine96; 207 differing
+ * rows on it, class STRUCTURAL; first differing insn: ROM `addiu sp,sp,-144`
+ * vs `addiu sp,sp,-112`. Not iterated in t495. */
 extern s32 g_musicVolume;
 extern s32 g_sfxVolume;
 extern s32 g_audioStereoMode;
@@ -1430,15 +1518,26 @@ s32 func_002D8A68(u8 *screen) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D8DD0);
 #else
-    /* TODO(match): functional equivalent - not byte-exact. */
+/* TODO(match): t495 — sdk29 arm 63.09% / engine96 arm 55.29% (unit objdiff,
+ * objdiff_build.sh + unit_report.sh; committed body measured on the 2.9 arm).
+ * Residual LOOP-GIV: cc1 2.9 strength-reduces the D_18D0E8[n - i] index into a
+ * decrementing pointer (addiu a1,a1,-1) where the original recomputes
+ * subu/addu per pass, and hoists la D_25AD90 above the blez (first differing
+ * insn: lui v0,%hi(D_25AD90) vs ROM lui t0,%hi(D_1A7C0C)). Levers RUN: .extern
+ * D_1A7C0C,16 (macro shape now equal), 2 loop phrasings. */
 s32 func_002D8DD0(void) {
-    s32 n = D_1A7C0C[0];
-    s32 i;
-    for (i = 0; i < n; i++) {
-        D_25AD90[i].flag = 1;
-        D_25AD90[i].icon = (u16)D_254E48[D_18D0E8[n - 1 - i]];
+    s32 n = D_1A7C0C;
+    MapPlanetRow *row = D_25AD90;
+    s32 i = 0;
+    if (n > 0) {
+        do {
+            row->flag = 1;
+            i++;
+            row->icon = (u16)D_254E48[D_18D0E8[n - i]];
+            row++;
+        } while (i < n);
     }
-    D_25AD90[D_1A7C0C[0]].icon = 0;
+    D_25AD90[D_1A7C0C].icon = 0;
     return 0;
 }
 #endif
@@ -1456,6 +1555,10 @@ s32 func_002D8E58(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D8E60);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 67.00% / engine96 45.69%; better arm sdk29; 33 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-48`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002D8E60(MenuWidget *obj) {
     s32 *ids   = (s32 *)(D_001B1E90 + 0x40);
@@ -1481,6 +1584,10 @@ s32 func_002D8E60(MenuWidget *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", RestorePrevTextTable);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 72.44% / engine96 75.74%; better arm engine96; 10 differing
+ * rows on it, class STRUCTURAL; first differing insn: ROM `(none)` vs `lw
+ * v0,0(gp)  [GPREL16 g_nFileLoadState]`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 RestorePrevTextTable(void *cmd) {
     extern s32 g_nActiveTextTableCount;
@@ -1513,6 +1620,10 @@ s32 RestorePrevTextTable(void *cmd) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", StreamTextTable);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 64.78% / engine96 50.75%; better arm sdk29; 118 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-64`. Not iterated in t495. */
 s32 StreamTextTable(void *cmdArg) {
     extern s16   g_fileLoadState;      /* 0x1A63AC: 0 idle / nonzero CD-read busy */
     extern u8    g_discToc[];          /* master disc asset directory */
@@ -1609,6 +1720,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D9718);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D9C18);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 55.57% / engine96 44.62%; better arm sdk29; 81 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-80` vs `addiu sp,sp,-160`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 void func_002D9C18(MenuWidget *obj, void *entry, s32 col, s32 row, s32 x, s32 y) {
     extern u8  g_itemEquippedSlot[];
@@ -1640,10 +1755,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D9D60);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DA330);
 #else
-    /* TODO(match): functional equivalent - not byte-exact. */
+/* TODO(match): t495 — sdk29 arm 90.00% / engine96 arm 55.00% (unit objdiff).
+ * Residual REORG-DSLOT: one row — the beq delay slot; the original fills it
+ * with the taken path's return-0 (daddu v0,zero,zero copied from the target),
+ * cc1 2.9 with the fall-through addiu v0,3. Levers RUN: ROM_SPLIT on
+ * g_bPlayerMode (closes the lui/lw/lbu split rows), early-return shape
+ * (23.00%, worse). The old ?: body also stored 0 when mode == 1, which the
+ * original does not. */
 s32 func_002DA330(MenuWidget *obj) {
-    s16 *rec = *(s16 **)((u8 *)obj + 0x34);
-    rec[1] = (g_bPlayerMode == 1) ? 0 : 3;
+    MenuCmd *cmd = *(MenuCmd **)((u8 *)obj + 0x34);
+    if (g_bPlayerMode != 1) {
+        cmd->op = 3;
+    }
     return 0;
 }
 #endif
@@ -1656,6 +1779,10 @@ s32 func_002DA330(MenuWidget *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DA358);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 70.59% / engine96 64.00%; better arm sdk29; 49 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-48`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DA358(MenuWidget *obj) {
     extern s32 D_00261900[];
@@ -1705,10 +1832,14 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DA488);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DA4F0);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 34.30% / engine96 48.37%; better arm engine96; 127 differing
+ * rows on it, class STRUCTURAL; first differing insn: ROM `addiu sp,sp,-32` vs
+ * `lui v0,0x0  [HI16 0x001A79F8]`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DA4F0(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
-    s32 hasSave = (g_playerProgress[0] != 0);
+    s32 hasSave = (g_playerProgress != 0);
     s32 w, x, step, rowY;
     s32 maxw;
     static const s32 ids[] = {0x2bf3, 0x2bff, 0x2c00, 0x2c01, 0x2be5};
@@ -1757,6 +1888,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DA740);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DAA50);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 73.46% / engine96 68.98%; better arm sdk29; 27 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-64`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 void func_002DAA50(s32 x, s32 y, s32 on) {
     extern s32 D_1ABB6C;  /* %gp inner-rect colour */
@@ -1792,6 +1927,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DAAF8);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DAE70);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 29.79% / engine96 29.04%; better arm sdk29; 65 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-16`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DAE70(MenuWidget *obj) {
     extern s16 D_001A65E0;
@@ -1817,6 +1956,10 @@ s32 func_002DAE70(MenuWidget *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", InitMenuBgImageBuffers);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 76.54% / engine96 56.11%; better arm sdk29; 28 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-48`. Not iterated in t495. */
 s32 InitMenuBgImageBuffers(void *obj) {
     s32 preloaded = *(s32 *)((u8 *)obj + 0x34) & 0x200;
 
@@ -1846,6 +1989,10 @@ s32 InitMenuBgImageBuffers(void *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DB028);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 99.14% / engine96 70.14%; better arm sdk29; 10 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DB028(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
@@ -1889,6 +2036,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DB700);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", LoadMenuBgImagePair);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 46.72% / engine96 33.70%; better arm sdk29; 72 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
 extern u8  g_discToc[];                    /* 0x14B540 master disc asset directory */
 extern s16 g_fileLoadState;                /* 0x1A63AC 0 idle / nonzero busy */
 extern s32 g_menuBgImageIndex;             /* active-language bg image index */
@@ -1946,6 +2097,10 @@ s32 LoadMenuBgImagePair(void *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", UploadMenuBgImagePair);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 51.38% / engine96 59.92%; better arm engine96; 46 differing
+ * rows on it, class STRUCTURAL; first differing insn: ROM `(none)` vs `sd
+ * s0,16(sp)`. Not iterated in t495. */
 extern s32  func_002954F0(s32 buffer);   /* 0x2954F0 resolve a bg buffer to its GS texture handle */
 /* DrawGlyphQuad (0x27E698) is used unprototyped elsewhere in this unit (C89
  * implicit decl); the (s64) casts on the trailing tint/texture args force the
@@ -1985,6 +2140,10 @@ s32 UploadMenuBgImagePair(void *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DBC98);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 47.90% / engine96 37.83%; better arm sdk29; 96 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-112` vs `addiu sp,sp,-160`. Not iterated in t495. */
 /* Matching arm stays INCLUDE_ASM; #else is the structure model (faithful vs asm,
  * cross-checked against the EU twin func_002DBC60). */
 s32 func_002DBC98(void) {
@@ -2051,6 +2210,10 @@ s32 func_002DBC98(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DBEE0);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 79.76% / engine96 66.50%; better arm sdk29; 67 differing
+ * rows on it, class STRUCTURAL; first differing insn: ROM `addiu sp,sp,144` vs
+ * `addiu sp,sp,-80`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DBEE0(MenuWidget *obj) {
     extern float g_screenFadeBlack;
@@ -2140,6 +2303,10 @@ s32 func_002DBEE0(MenuWidget *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC0F0);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 39.81% / engine96 39.76%; better arm sdk29; 144 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-160` vs `addiu sp,sp,-144`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DC0F0(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
@@ -2182,6 +2349,10 @@ s32 func_002DC0F0(MenuWidget *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC378);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 66.57% / engine96 52.82%; better arm sdk29; 81 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-64`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DC378(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
@@ -2244,6 +2415,10 @@ s32 func_002DC378(MenuWidget *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC520);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 60.70% / engine96 59.09%; better arm sdk29; 99 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-80` vs `addiu sp,sp,-160`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DC520(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
@@ -2283,6 +2458,10 @@ s32 func_002DC520(MenuWidget *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC6B8);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 35.88% / engine96 24.88%; better arm sdk29; 67 differing
+ * rows on it, class STRUCTURAL; first differing insn: ROM `sw t3,64(v1)` vs
+ * `lui t0,0x0  [HI16 0x00139948]`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DC6B8(MenuWidget *obj) {
     extern s32 g_anAvailableLevelOrder[];
@@ -2355,6 +2534,10 @@ s32 func_002DC800(MenuWidget *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC838);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 99.00% / engine96 69.33%; better arm sdk29; 7 differing rows
+ * on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing insn:
+ * ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DC838(MenuWidget *obj) {
     *(s32 *)((u8 *)g_pCurrentMenuScreen[0] + 0x12C) = 0;
@@ -2368,6 +2551,10 @@ s32 func_002DC838(MenuWidget *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC878);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 98.75% / engine96 66.67%; better arm sdk29; 7 differing rows
+ * on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing insn:
+ * ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DC878(MenuWidget *obj) {
     *(s32 *)((u8 *)obj + 0x54) = FreeMenuWorkBuffer(*(s32 *)((u8 *)obj + 0x54));
@@ -2382,21 +2569,34 @@ s32 func_002DC878(MenuWidget *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC8A8);
 #else
-    /* TODO(match): functional equivalent - not byte-exact. */
+/* TODO(match): t495 — engine96 arm 81.89% (MATCH_ guard tried and reverted) /
+ * sdk29 arm 65.11% (unit objdiff). Residual SCHED1-HOIST: the original hoists
+ * the first branch's return-0 (daddu v0,zero,zero between lui/addiu of the
+ * base) and the next block's lui %hi(g_padButtonsPressed) into the beq delay
+ * slot; with -fschedule-insns on the engine arm (per-unit flag, measured only)
+ * the first branch is exact and the row reads 82.81% with the two andi masks
+ * hoisted instead. Also a0/a1 swap in the confirm branch. Levers RUN: .extern
+ * g_nSaveLoadStatusCode,16 (macro shape equal), per-branch base local (2.96
+ * keeps base+offset and re-materialises la per block like the original; 61.59
+ * -> 81.89), source-order store, early return pseudo (no change), -fno-gcse
+ * engine (same). */
 s32 func_002DC8A8(void) {
-    u8 *blk = (u8 *)g_menuScreenBlock;   /* g_particleFxBlob + 0x100 */
     s32 status = g_nSaveLoadStatusCode;
     if (status != 0x10 && status != 1) {
+        u8 *blk = g_menuScreenBlock;
         u8 *obj = *(u8 **)(blk + 0x14);
         *(s32 *)(blk + 0x18) = *(s32 *)(obj + 0xE0);
         return 0;
     }
     if (g_padButtonsPressed[0] & 0x20) {
-        u8 *obj = *(u8 **)(blk + 0x14);
+        u8 *blk = g_menuScreenBlock;
+        u8 *obj;
         *(s32 *)(blk + 0xE4) = 0;
+        obj = *(u8 **)(blk + 0x14);
         *(s32 *)(blk + 0x18) = *(s32 *)(obj + 0xE0);
         *(s32 *)(obj + 0x12C) = 1;
     } else if (g_padButtonsPressed[0] & 0x10) {
+        u8 *blk = g_menuScreenBlock;
         u8 *obj = *(u8 **)(blk + 0x14);
         *(s32 *)(blk + 0x18) = *(s32 *)(obj + 0xE0);
         *(s32 *)(obj + 0x12C) = 0;
@@ -2415,6 +2615,10 @@ s32 func_002DC8A8(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC940);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 25.99% / engine96 27.69%; better arm engine96; 136 differing
+ * rows on it, class STRUCTURAL; first differing insn: ROM `addiu sp,sp,-96` vs
+ * `addiu sp,sp,-32`. Not iterated in t495. */
 /* Matching arm stays INCLUDE_ASM; #else is the structure model — faithful at the
  * call level (cross-checked vs EU twin func_002DC908); the exact stack text-box
  * rect packing + flat backing-rect pass are abstracted (see note below). */
@@ -2444,17 +2648,13 @@ s32 func_002DC940(MenuWidget *obj) {
 
 /* Seed obj->0x34 with a rotating entry from D_260570, indexed by the save
  * block's first word modulo 19. Returns 0.
- * Near-miss: the original delays the D_260570 %lo address add past the divu
- * trap to fill scheduling slots; our cc1 emits it earlier. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DCBB0);
-#else
-    /* TODO(match): functional equivalent - not byte-exact. */
+ * MATCHED 100.00% on the sdk29 arm (unit objdiff; verify_match_unit.sh BYTE
+ * IDENTICAL, t495) once g_playerProgress was declared as the scalar the
+ * original reads (cc1-small / assembler-absolute macro shape, `.extern ,16`). */
 s32 func_002DCBB0(MenuWidget *obj) {
-    *(s32 *)((u8 *)obj + 0x34) = D_260570[(u32)g_playerProgress[0] % 19];
+    *(s32 *)((u8 *)obj + 0x34) = D_260570[(u32)g_playerProgress % 19];
     return 0;
 }
-#endif
 
 /* 30-entry wrap-around selector input. L1/R1 (0x900) blocks unless override.
  * Cancel(0x10) requests the parent screen. X(0x40) advances, square(0x20)
@@ -2462,6 +2662,10 @@ s32 func_002DCBB0(MenuWidget *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DCBF0);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 60.17% / engine96 59.54%; better arm sdk29; 31 differing
+ * rows on it, class STRUCTURAL; first differing insn: ROM `lui v1,0x0  [HI16
+ * D_138180]` vs `lui v1,0x0  [HI16 0x00138344]`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DCBF0(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
@@ -2498,6 +2702,10 @@ s32 func_002DCBF0(MenuWidget *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DCCC8);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 65.31% / engine96 49.56%; better arm sdk29; 31 differing
+ * rows on it, class STRUCTURAL; first differing insn: ROM `lui v1,0x0  [HI16
+ * D_138180]` vs `lui v1,0x0  [HI16 0x00138344]`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DCCC8(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
@@ -2531,6 +2739,10 @@ s32 func_002DCCC8(MenuWidget *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DCDC0);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 45.50% / engine96 39.67%; better arm sdk29; 99 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-64`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DCDC0(MenuWidget *obj) {
     extern u8 D_001ABC00, D_001ABC01, D_001ABBF8, D_001ABBF9;
@@ -2568,6 +2780,10 @@ s32 func_002DCDC0(MenuWidget *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DCF58);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 70.09% / engine96 30.60%; better arm sdk29; 83 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-64` vs `addiu sp,sp,-112`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DCF58(MenuWidget *obj) {
     extern s32 D_00262BA0[];
@@ -2634,6 +2850,10 @@ extern void func_00280B48(TextLayout2d *layout, u64 rgba, char *str, s32 len); /
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DD450);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 80.91% / engine96 47.57%; better arm sdk29; 64 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-80` vs `addiu sp,sp,-112`. Not iterated in t495. */
 s32 func_002DD450(IntroTextBox *box) {
     TextLayout2d layout;
     char *str;
@@ -2704,6 +2924,10 @@ s32 func_002DD450(IntroTextBox *box) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DD630);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 72.72% / engine96 57.70%; better arm sdk29; 73 differing
+ * rows on it, class STRUCTURAL; first differing insn: ROM `addiu sp,sp,144` vs
+ * `addiu sp,sp,-160`. Not iterated in t495. */
 s32 func_002DD630(void *screenArg) {
     extern u8  g_areaTable[];
     extern u8  g_levelSelectEntries[];  /* (labelStrId, valueStrId) pairs, stride 8 */
@@ -2752,6 +2976,10 @@ s32 func_002DD630(void *screenArg) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DD7E8);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 86.39% / engine96 82.14%; better arm sdk29; 13 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DD7E8(MenuWidget *obj) {
     extern u8 D_001A8C88;
@@ -2773,6 +3001,10 @@ s32 func_002DD7E8(MenuWidget *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DD858);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 98.75% / engine96 66.67%; better arm sdk29; 7 differing rows
+ * on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing insn:
+ * ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DD858(MenuWidget *obj) {
     *(s32 *)((u8 *)obj + 0x48) = FreeMenuWorkBuffer(*(s32 *)((u8 *)obj + 0x48));
@@ -2803,6 +3035,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DD888);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DDD30);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 55.35% / engine96 38.59%; better arm sdk29; 240 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-64` vs `addiu sp,sp,-80`. Not iterated in t495. */
 /* Matching arm stays INCLUDE_ASM; #else is the structure model — call-level
  * faithful, cross-checked against the thoroughly-asm-verified EU twin func_002DDCE8
  * (the EU form navigates the menu block directly; this USA form uses the
@@ -2833,10 +3069,10 @@ s32 func_002DDD30(MenuWidget *obj) {
             ComputeAudioChannelMix();
             PumpDialogVoiceSystem(1);
             func_00132938(g_nAudioStereoMode == 0);
-            if (g_playerProgress[0] < 1 && g_abLevelVisitedMarkers[0] == 0) {
+            if (g_playerProgress < 1 && g_abLevelVisitedMarkers[0] == 0) {
                 func_002F7328();
             } else {
-                RequestGameStateChange(6, 2, 5, g_playerProgress[0], 0);
+                RequestGameStateChange(6, 2, 5, g_playerProgress, 0);
             }
             D_00152C28 = 0;
             return 0;
@@ -2927,6 +3163,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DECC8);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DECE0);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 64.75% / engine96 50.32%; better arm sdk29; 87 differing
+ * rows on it, class STRUCTURAL; first differing insn: ROM `(none)` vs `lw
+ * v0,0(gp)  [GPREL16 0x00138340]`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 void func_002DECE0(void) {
     extern u16 D_001B1FA8[];   /* entered-symbol ring buffer */
@@ -3010,6 +3250,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DEEE8);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF1B8);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 47.10% / engine96 0.00%; better arm sdk29; 152 differing
+ * rows on it, class STRUCTURAL; first differing insn: ROM `lui v0,0x0  [HI16
+ * 0x001F27C0]` vs `sltu a0,zero,a0`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 void func_002DF1B8(s32 param) {
     s32 *ids   = (s32 *)(D_001B1E90 + 0x40);
@@ -3063,6 +3307,10 @@ void func_002DF1B8(s32 param) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", AllocMenuWorkBuffer);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 71.70% / engine96 71.70%; better arm equal; 23 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 AllocMenuWorkBuffer(s32 forceSet) {
     s32 *ids   = (s32 *)(D_001B1E90 + 0x40);
@@ -3089,6 +3337,10 @@ s32 AllocMenuWorkBuffer(s32 forceSet) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", FreeMenuWorkBuffer);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 63.85% / engine96 63.68%; better arm sdk29; 38 differing
+ * rows on it, class STRUCTURAL; first differing insn: ROM `lui t0,0x0  [HI16
+ * 0x001F27C0]` vs `lui v0,0x0  [HI16 D_001B1E90]`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 s32 FreeMenuWorkBuffer(s32 id) {
     extern u8 D_001F289B;
@@ -3123,7 +3375,11 @@ s32 FreeMenuWorkBuffer(s32 id) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", GetMenuWorkBufferSize);
 #else
-    /* TODO(match): functional equivalent - not byte-exact. */
+/* TODO(match): t495 — sdk29 arm 69.13% / engine96 arm 58.26% (unit objdiff).
+ * Residual LA-CSE: the original materialises D_001B1E90+0x44 and +0x40 with
+ * two independent lui/addiu pairs; both cc1s share one lui and derive the
+ * second address (+4 / -4). Not phrased around; -fno-gcse does not affect it
+ * (local CSE). */
 s32 GetMenuWorkBufferSize(s32 id) {
     s32 *pflag = (s32 *)(D_001B1E90 + 0x44);
     s32 *pid   = (s32 *)(D_001B1E90 + 0x40);
@@ -3149,7 +3405,9 @@ s32 GetMenuWorkBufferSize(s32 id) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF560);
 #else
-    /* TODO(match): functional equivalent - not byte-exact. */
+/* TODO(match): t495 — sdk29 arm 79.00% / engine96 arm 53.50% (unit objdiff).
+ * Residual LA-CSE (see GetMenuWorkBufferSize); the rest of the loop is row-
+ * equal on the 2.9 arm. */
 s32 func_002DF560(s32 id) {
     s32 *pid   = (s32 *)(D_001B1E90 + 0x40);
     s32 *pflag = (s32 *)(D_001B1E90 + 0x44);
@@ -3173,7 +3431,9 @@ s32 func_002DF560(s32 id) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF5B0);
 #else
-    /* TODO(match): functional equivalent - not byte-exact. */
+/* TODO(match): t495 — sdk29 arm 78.25% / engine96 arm 57.75% (unit objdiff).
+ * Residual LA-CSE (see GetMenuWorkBufferSize); the rest of the loop is row-
+ * equal on the 2.9 arm. */
 s32 func_002DF5B0(s32 id) {
     s32 *pid   = (s32 *)(D_001B1E90 + 0x40);
     s32 *pflag = (s32 *)(D_001B1E90 + 0x44);
@@ -3203,7 +3463,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF600);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF620);
 #else
-    /* TODO(match): functional equivalent - not byte-exact. */
+/* TODO(match): t495 — sdk29 arm 46.88% / engine96 arm 31.75% (unit objdiff).
+ * Residual REGNUM+SCHED: the original materialises the 16 constant into a2
+ * first and keeps the two s16 stores in source order; cc1 2.9 reorders the
+ * loads (lw before lhu) and colours a3/a2; engine96 keeps the order but
+ * numbers v1/v0 (ORDER-ONLY class after the constant). */
 void func_002DF620(s16 *dst, void *src) {
     dst[0] = 0;
     dst[1] = *(u16 *)((u8 *)src + 0x24);
@@ -3226,6 +3490,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF668);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 66.56% / engine96 64.95%; better arm sdk29; 34 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-64`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 void func_002DF668(void *dst, s16 slot) {
     extern u8  D_001A7360[];
@@ -3234,7 +3502,7 @@ void func_002DF668(void *dst, s16 slot) {
     sceCdReadClock((void *)D_001A7360);
     func_00131A98((void *)D_001A7360);
     func_00298A00();
-    func_00297FA0(g_playerProgress[0] * 0x800 + 0x18d278);
+    func_00297FA0(g_playerProgress * 0x800 + 0x18d278);
     BuildSaveImage(dst);
     D_00139554 = (s32)dst;
     D_001393F8 = slot;
@@ -3252,6 +3520,10 @@ void func_002DF668(void *dst, s16 slot) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF710);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 59.25% / engine96 48.28%; better arm sdk29; 35 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-64`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 void func_002DF710(void *dst, s32 slot) {
     extern u8  D_001A7360[];
@@ -3286,6 +3558,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", RestorePlayerPr
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DFE60);
 #else
+/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
+ * objdiff): sdk29 49.82% / engine96 41.23%; better arm sdk29; 62 differing
+ * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
+ * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-48`. Not iterated in t495. */
     /* TODO(match): functional equivalent - not byte-exact. */
 void func_002DFE60(void) {
     extern s16 D_0025EBEE, D_0025EBFA, D_0025EC06, D_0025EC12, D_0025EC10;
@@ -3310,40 +3586,33 @@ void func_002DFE60(void) {
 #endif
 
 /* Galactic-Map save/load progress accumulator: while the save page is active
- * (D_1F27C0+0x168 != 0), advance its byte counter (+0x16C) by `amount` and
- * forward `handle` AND `amount` to func_002A1138; returns that result, or 0 if
- * inactive.
- * Near-miss: our cc1 picks a branch-likely (bnel) shape and moves `amount`
- * differently from the original's plain-beqz + delay-slot move. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DFF68);
-#else
-    /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002DFF68(s32 handle, s32 amount) {
-    if (D_1F27C0.savePageActive == 0) {
-        return 0;
+ * (g_menuScreenBlock+0x168 != 0), advance its byte counter (+0x16C) by `amount` and
+ * forward `handle` and `amount` to func_002A1138. No return value: the
+ * original never materialises one (the inactive path leaves the loaded flag
+ * in $v0), so the function is void; its one caller (func_002DA358) ignores it.
+ * MATCHED 100.00% on the sdk29 arm (unit objdiff; verify_match_unit.sh BYTE
+ * IDENTICAL, t495). The asm barrier keeps the jal + $ra frame — cc1 2.9 would
+ * otherwise tail-jump to func_002A1138 (FACT #7343's void shape). */
+void func_002DFF68(s32 handle, s32 amount) {
+    MenuState *menu = (MenuState *)g_menuScreenBlock;
+    if (menu->savePageActive != 0) {
+        menu->savePageBytes += amount;
+        func_002A1138(handle, amount);
+        __asm__ __volatile__("");   /* keep the jal + ra frame; cc1 would tail-jump */
     }
-    D_1F27C0.savePageBytes += amount;
-    /* asm 002DFF80: $5 (`amount`) is copied to $6 in the beqz delay slot and is
-     * never rewritten before the jal at 002DFF8C, so it still reaches
-     * func_002A1138 as the second argument. Dropping it left $5 holding
-     * garbage. ($4/`handle` is never written here either.) */
-    return func_002A1138(handle, amount);
 }
-#endif
 
-/* Play a menu/system sound (id,arg) only when the menu-sound gate is enabled.
- * Near-miss: our cc1 reorders the $31 save out of the guard's delay slot. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DFFA0);
-#else
-    /* TODO(match): functional equivalent - not byte-exact. */
+/* Play a menu/system sound (id,arg) only when the menu-sound gate D_1ABD48 is
+ * enabled.
+ * MATCHED 100.00% on the sdk29 arm (unit objdiff; verify_match_unit.sh BYTE
+ * IDENTICAL, t495). The asm barrier keeps the jal + $ra frame — cc1 2.9 would
+ * otherwise tail-jump to PlayGlobalSound. */
 void func_002DFFA0(s32 id, s32 arg) {
     if (D_1ABD48 != 0) {
         PlayGlobalSound(id, arg, 0);
+        __asm__ __volatile__("");   /* keep the jal + ra frame; cc1 would tail-jump */
     }
 }
-#endif
 
 /* Always-ready gate: return 1. */
 s32 func_002DFFC8(void) {
@@ -3354,14 +3623,11 @@ s32 func_002DFFC8(void) {
  * not a real function body. Left as bare INCLUDE_ASM. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DFFD0);
 
-/* Register-coloring near-miss: is the current menu screen the given fixed
- * screen instance? (pointer compare lowered to xor + sltiu). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DFFE0);
-#else
-    /* TODO(match): functional equivalent - not byte-exact. */
+/* Is the current menu screen the fixed screen instance D_00259438? (pointer
+ * compare lowered to xor + sltiu).
+ * MATCHED 100.00% on the sdk29 arm as written (unit objdiff;
+ * verify_match_unit.sh BYTE IDENTICAL, t495). */
 s32 func_002DFFE0(void) {
     extern u8 D_00259438[];
     return g_pCurrentMenuScreen[0] == (void *)D_00259438;
 }
-#endif
