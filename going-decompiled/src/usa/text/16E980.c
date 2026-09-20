@@ -20,9 +20,66 @@
  * (%gp_rel); `.extern sym,16` = cc1-small / assembler-absolute one-insn
  * macro; large/struct externs = ordinary two-insn absolute %hi/%lo.
  *
- * SAVE-LAYOUT WALL: every function below that saves two or more GPRs
- * (incl. $ra) at 8-byte slot spacing is blocked on the 8-byte-packed-save
- * wall and stays INCLUDE_ASM (the pinned cc1 reserves 16 bytes per save).
+ * SAVE-LAYOUT WALL (PACKED-SAVE), MEASURED (task #512, 2026-09-20, master
+ * f5fad751): of the 37 unguarded #else arms, 32 save >= 2 GPRs at 8-byte
+ * stride in the ROM (tools/ee/.t512/18_gpr_saves.txt, from the frozen .s), and
+ * cc1 2.9 reserves 16 bytes per GPR save, so those 32 cannot reach 100 on the
+ * sdk29 arm whatever the C says. The other 5 (DebugPrintStub func_002704E0
+ * func_00270EB8 func_00271FE8 AddScreenSpriteFx) are the only 2.9-eligible arms.
+ * The engine96 arm (cc1 2.96-001003-1, -fno-schedule-insns -fno-strict-aliasing)
+ * has 8-byte slots but differs in prologue/epilogue emission order
+ * (SCHED-PROEPI), same-cycle emission order (SCHED-TIEBREAK: the ROM sets up
+ * constant call args a1,a2,... and a0 LAST, filling the jal delay slot with a0;
+ * both held compilers set a0 first) and sibling-calls every void tail call.
+ *
+ * WHOLE-UNIT BOTH-ARMS SCREEN (task #512): every #else arm promoted at once on
+ * each arm, unit objdiff report over objdiff_build.sh (fuzzy %; tools/ee/.t512/
+ * 05_all29_report.txt, 07_all96_report.txt, classes 08/09_classify*.txt). None
+ * reached 100 on either arm; sdk29 >= engine96 on 31 of 40, but 32 of those are
+ * PACKED-SAVE-walled there, so engine96 is the only route for them.
+ *   arm                        sdk29%  e96%   saves   residual class (sdk29 arm)
+ *   ShowSplashImage             88.84  86.76  3g/0f   PACKED-SAVE,GPREL
+ *   func_0026EAC8               91.96  88.10  2g/0f   PACKED-SAVE,SIBCALL,GPREL
+ *   func_0026EB98               67.51  56.13  4g/0f   PACKED-SAVE,LIKELY-
+ *   BuildAttractReelPlaylist    70.34  68.39  7g/0f   PACKED-SAVE,MULT
+ *   func_0026FC88               64.78  29.62  6g/0f   PACKED-SAVE,MULT
+ *   func_0026FE58                5.19   5.19  2g/0f   PACKED-SAVE,-
+ *   DebugPrintStub              64.29  62.29  0g/0f   -
+ *   StepCameraFovInterp         28.68  19.80  3g/2f   PACKED-SAVE,SIBCALL,GPREL
+ *   func_002701C0               57.65  54.96  3g/0f   PACKED-SAVE,GPREL
+ *   func_00270220                5.19   5.19  3g/0f   PACKED-SAVE,LIKELY-
+ *   func_002702D8               94.07  49.89  2g/2f   PACKED-SAVE,-
+ *   func_002703C0               99.65  68.85  2g/5f   PACKED-SAVE,-
+ *   func_00270500               53.92  73.92  2g/0f   PACKED-SAVE,GPREL
+ *   TestCameraTakeover          81.03  59.97  4g/0f   PACKED-SAVE,GPREL
+ *   DispatchCameraMode          79.93  54.15  6g/0f   PACKED-SAVE,-
+ *   func_00270B68               88.16  76.58  8g/4f   PACKED-SAVE,LIKELY+
+ *   func_00270D60               31.69  56.55  5g/1f   PACKED-SAVE,-
+ *   func_00270E40               62.14  50.45  2g/0f   PACKED-SAVE,LIKELY-
+ *   func_00270EB8               58.57  57.86  0g/0f   -
+ *   BeginCameraTransition       54.37  51.32  7g/1f   PACKED-SAVE,LIKELY-
+ *   func_00271140               85.11  69.03  5g/3f   PACKED-SAVE,-
+ *   func_002712E8               59.27  53.15  10g/6f  PACKED-SAVE,GPREL
+ *   ApplyCameraTransition       52.30  54.60  3g/0f   PACKED-SAVE,-
+ *   ApplyCameraShakeAxis        77.87  60.29  3g/3f   PACKED-SAVE,GPREL
+ *   TrackHeroMotionForCamera    55.33  42.81  9g/4f   PACKED-SAVE,LIKELY-,GPREL
+ *   func_00271FE8               75.86  60.38  0g/0f   GPREL
+ *   UpdateCamera                 1.19   1.19  4g/1f   PACKED-SAVE,-
+ *   DrawScreenSpriteFxEntry      4.74   7.33  4g/5f   PACKED-SAVE,SIBCALL,LIKELY-
+ *   AddScreenSpriteFx           57.48  48.89  0g/0f   MULT,GPREL
+ *   DrawScreenSpriteFxQueue     46.64  44.15  8g/1f   PACKED-SAVE,GPREL
+ *   SampleCameraFogZone         75.16  14.12  2g/1f   PACKED-SAVE,MULT,LIKELY-,GPREL
+ *   func_00273740               65.50  70.46  10g/2f  PACKED-SAVE,-
+ *   func_00273988               15.17  16.16  4g/1f   PACKED-SAVE,LIKELY-
+ *   func_00273B80               72.83  72.35  4g/0f   PACKED-SAVE,GPREL
+ *   func_00273D20               87.95  84.24  8g/0f   PACKED-SAVE,LIKELY+
+ *   func_00273EA8               80.64  74.47  6g/3f   PACKED-SAVE,GPREL
+ *   CheckCameraUnderwater       39.33  39.33  -g/-f   -
+ *   func_002721A8               65.83  65.83  -g/-f   -
+ *   UpdateScreenFadeBlack       86.52  86.52  -g/-f   -
+ *   UpdateScreenFadeWhite       77.96  77.96  -g/-f   -
+ * Per-arm levers RUN and their result are in each arm's TODO(match) comment
+ * where the number changed; unlisted arms carry the screen number above.
  *
  * STUB TABLE at 0x26F718: a run of 32 eight-byte stubs (empty `return;` /
  * `return 0;` bodies — debug/profiling hooks compiled out of the retail
@@ -97,10 +154,20 @@ typedef struct CameraSysState {
     /* 0x000 */ u8 pad0[0x140];
     /* 0x140 */ Vec4 camPos;         /* live camera position (z at +0x148) */
     /* 0x150 */ u8 pad150[0x40];
-    /* 0x190 */ volatile Camera *volatile activeCamera; /* fully volatile: the
-                                                * original re-reads the pointer
-                                                * between dereferences and keeps
-                                                * the store order interleaved */
+    /* 0x190 */ union { Camera *p; } activeCamera; /* read as a UNION MEMBER, not
+                                                * volatile: the original (built
+                                                * without strict aliasing) re-reads
+                                                * this pointer after every store
+                                                * through it. cc1 2.9 -O2 applies
+                                                * type-based aliasing, so a plain
+                                                * `Camera *` field is CSE'd across
+                                                * the `sh`; a union member access
+                                                * has alias set 0 and forces the
+                                                * same reload WITHOUT volatile's
+                                                * side effect of pinning the store
+                                                * out of the jr delay slot (t512:
+                                                * func_002704E0 80% volatile ->
+                                                * 100% union, sdk29 arm). */
     /* 0x194 */ Camera *prevCamera;
     /* 0x198 */ u8 pad198[0xD0];
     /* 0x268 */ f32 fadeBlackRate;    /* per-tick fade step = 1/duration */
@@ -824,7 +891,7 @@ extern void *g_cameraSnapshotPtr;        /* snapshot header + 0x70 (0x1B7540) */
 /* TODO(match): functional equivalent - not byte-exact; three callee-saves at
    8-byte slot spacing (the 0x20-vs-0x10 packed-save wall). */
 void func_002701C0(void) {
-    CopyQwords(g_cameraSnapshot, (const void *)g_cameraState.activeCamera, 0xA0);
+    CopyQwords(g_cameraSnapshot, (const void *)g_cameraState.activeCamera.p, 0xA0);
     CopyQwords(g_cameraHistorySnapshot, g_cameraHistory, 0x280);
     g_cameraSnapshotPtr = g_cameraHistorySnapshot;
 }
@@ -839,8 +906,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00270220);
 #else
 extern s32 g_cameraCallbackCount;          /* D_001B1300 + 0x180 */
 extern void (*g_cameraCallbacks[])(void);  /* D_001B1300 + 0x140 */
-/* TODO(match): functional equivalent - not byte-exact; three callee-saves at
-   8-byte slot spacing (the 0x20-vs-0x10 packed-save wall). */
+/* TODO(match): NOT byte-exact; this no-op stub is the native trap (below). The
+   real body (git 1fd00c0: `i = 0; if (count > 0) do { i++; (*slot)(); slot++; }
+   while (i < count); count = 0;`) was measured in t512 with g_cameraCallbackCount
+   modelled cc1-small/assembler-absolute (`__asm__(".extern g_cameraCallbackCount,
+   16")`, which the ROM's `lui v0,%hi; lw v0,%lo(v0)` / `lui at; sw zero,%lo(at)`
+   one-insn-macro expansions require — a plain -G8 extern reads %gp_rel, an
+   incomplete-array decl keeps %hi in s2 across the loop): sdk29 97.11% =
+   PACKED-SAVE (3 GPR saves, frame 0x30 vs 0x20) + REGNUM (i/slot get s1/s0, ROM
+   s0/s1; declaration order, if-scoping and an indexed for-loop do not flip it);
+   engine96 85.11% = SCHED-PROEPI (addiu sp after the first lw) + the same REGNUM
+   swap + a missing load-delay nop before jalr (the ROM emits the nop, as 2.9
+   does). Not promoted: neither arm closes. */
 void func_00270220(void) {
     /* IN-LEVEL native frame-path: out-of-scope driven-frame TRAP (tester
      * inlevel_trap_list.md). It calls every g_cameraCallbacks[] slot, which
@@ -913,8 +990,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002703C0);
 #else
 extern f32 WrapAnglePiDiff(f32 a, f32 b);
 extern f32 WrapAnglePiSum(f32 a, f32 b);
-/* TODO(match): functional equivalent - not byte-exact; five fp callee-saves
-   ($f20-$f24) + the GetFloatAbs reload pattern (same wall as func_002702D8). */
+/* TODO(match): functional equivalent - not byte-exact. t512: sdk29 99.65% —
+   every body instruction identical, only the frame differs (ROM s0@0/ra@8/f20..
+   @0x10.. frame 0x40; 2.9 puts ra@0x10 and the FP saves 0x10 higher, frame 0x50:
+   PACKED-SAVE, 2 GPR saves); engine96 68.85% — SCHED-PROEPI (the arg mov.s/
+   store interleave) + SIBCALL (`j WrapAnglePiSum`) + operand-order scheduling
+   in the body. The ROM is "2.9 order with 8-byte slots"; neither arm has it. */
 f32 func_002703C0(f32 cur, f32 target, f32 stiffness, f32 damping, f32 maxSpeed,
                   f32 *vel) {
     f32 delta = WrapAnglePiDiff(target, cur);
@@ -936,25 +1017,19 @@ f32 func_002703C0(f32 cur, f32 target, f32 stiffness, f32 damping, f32 maxSpeed,
 }
 #endif
 
-/* func_002704E0: flag the active camera slot as freshly (re)activated — sets
- * the activation halfword (+0x7E = 1) and clears the settle byte (+0x7D = 0)
- * on g_cameraState.activeCamera. The original RE-READS the active-camera
- * pointer for the second store (lw v1,400; sh; lw a0,400; sb in the jr delay
- * slot). Cc1 either CSEs the reload (plain field) or, made volatile to force
- * the reload, pins the stores in noreorder brackets so the second store can't
- * fill the jr delay slot — neither reproduces the original interleave.
- * Best 80%. WALL: volatile-reload vs delay-slot scheduling. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002704E0);
-#else
-/* TODO(match): functional equivalent - not byte-exact; volatile-reload vs
-   delay-slot scheduling (the original re-reads activeCamera for the second
-   store and fills the jr delay slot with it). */
+/* func_002704E0 (0x002704E0): flag the active camera slot as freshly
+ * (re)activated — sets the activation halfword (+0x7E = 1) and clears the
+ * settle byte (+0x7D = 0) on g_cameraState.activeCamera. No params, no return.
+ * The pointer is re-read for the second store (lw; sh; lw; jr; sb in the delay
+ * slot): that is the union-member (alias-set-0) read of `activeCamera`, see the
+ * CameraSysState comment — a volatile field forced the reload but kept the sb
+ * out of the delay slot (80%), a plain field CSE'd it away.
+ * MATCHED 100.00% on the sdk29 arm (unit objdiff report, objdiff_build.sh, clean;
+ * verify_match_unit.sh BYTE IDENTICAL, task #512). */
 void func_002704E0(void) {
-    g_cameraState.activeCamera->unk7E = 1;
-    g_cameraState.activeCamera->unk7D = 0;
+    g_cameraState.activeCamera.p->unk7E = 1;
+    g_cameraState.activeCamera.p->unk7D = 0;
 }
-#endif
 
 /* func_00270500: maintain a helper moby tied to a camera slot. When the slot's
  * type field (+0x86) is zero, lazily spawn the helper moby (func_00303818 with
@@ -966,8 +1041,14 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00270500);
 #else
 extern void *func_00303818(void *cameraBase);
 extern void *g_cameraHelperMoby;
-/* TODO(match): functional equivalent - not byte-exact; two callee-saves at
-   8-byte slot spacing (the 0x20-vs-0x10 packed-save wall). */
+/* TODO(match): functional equivalent - not byte-exact; t512: sdk29 53.92%
+   (PACKED-SAVE: s0+ra), engine96 73.92%. Beyond the frame, the ROM anchors a
+   callee-saved base at 0x1B5320 (= g_prevCamera+0xc = g_cameraState+0x1A0),
+   reaches g_cameraHelperMoby as 0xC4(s0) and passes s0-0x60 = &g_cameraState.
+   camPos (0x1B52C0) to func_00303818 — a FIXED address, not `cam - 0x60`
+   (FACT #5824 / #5426; this arm's argument is wrong). Reproducing it needs a
+   symbol at 0x1B5320 (the same anchor func_00271FE8 uses) — a symbol_addrs pin
+   + re-split, not done here. */
 void func_00270500(Camera *cam) {
     extern void FreeMoby(void *moby);
     if (cam->type == 0) {
@@ -1131,13 +1212,13 @@ extern void SwitchActiveCamera(Camera *cam);
 /* TODO(match): functional equivalent - not byte-exact; many callee-saves at
    8-byte slot spacing + the unnamed-vtbl base access (packed-save wall). */
 s32 DispatchCameraMode(void) {
-    Camera *chosen = (Camera *)g_cameraState.activeCamera;
+    Camera *chosen = g_cameraState.activeCamera.p;
     s32 changed = 0;
     s32 i;
     s32 (*update)();
     f32 *pos;
 
-    CallCameraPollHandler((Camera *)g_cameraState.activeCamera);
+    CallCameraPollHandler(g_cameraState.activeCamera.p);
 
     for (i = 0; i < 48; i++) {
         Camera *slot = &g_cameraSlots[i];
@@ -1308,9 +1389,16 @@ void func_00270E40(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00270EB8);
 #else
-/* TODO(match): functional equivalent - not byte-exact; the original uses
-   per-block address registers + interleaved lq/sq, cc1 emits offset-form
-   lq/sq off the base register (qword block-copy addressing form). */
+/* TODO(match): functional equivalent - not byte-exact. Class BLOCKMOVE-LQ,
+   both arms (t512: sdk29 58.57%, engine96 57.86%): the ROM's shape (address
+   regs forced, lq/sq at offset 0) is a 16-byte movstrsi block move whose
+   piece size is 128 bits. Levers run: Vec4 struct copy -> ld/sd x4 offset
+   form on both arms; u_long128 (mode TI) copy -> offset-form `lq v0,0xc0(a0)`
+   on both arms (TImode scalar move, not a block move); unaligned struct ->
+   ldl/ldr; aligned(8) struct -> ld/sd; a 32-byte pair copy DOES enter the
+   block-move path on both arms and emits ld/sd pairs, never lq/sq. So neither
+   cc1 2.9-991111 nor cc1 2.96-001003-1 has the 128-bit block move the ROM's
+   compiler used: a compiler-revision wall, not a phrasing. */
 void func_00270EB8(void) {
     if (g_cameraTransitionState.kind != 0) {
         g_cameraTransitionState.cur0 = g_cameraTransitionState.src0;
@@ -1893,7 +1981,7 @@ void CheckCameraUnderwater(void) {
     Vec4 bottom; /* probe segment end (camera z - 0.75) */
     s32 i;
 
-    if (g_cameraState.activeCamera->type == 6 || g_nGameState[0] != 0) {
+    if (g_cameraState.activeCamera.p->type == 6 || g_nGameState[0] != 0) {
         g_cameraState.underwater = 0;
         return;
     }
@@ -2009,7 +2097,14 @@ void func_00271FE8(void) {
  * latency" nops are the mtc1->div.s hazard pads the fixup restores — the old
  * wall note was a misdiagnosis). Guard: MATCH_func_002721A8 promotes the real
  * C for the per-function engine build; the regular 2.9 unit build keeps
- * INCLUDE_ASM (two-compiler build). Pending tester's authoritative verify. */
+ * INCLUDE_ASM (two-compiler build). Pending tester's authoritative verify.
+ * t512 (2026-09-20): under the tree's engine arm flags (-fno-schedule-insns
+ * -fno-strict-aliasing) this row reads 65.83% — the div.s is issued after the
+ * g_screenFadeBlack store and lands in fv0 not fa0. With scheduling ON
+ * (engine_arm.sh, -O2 -G8 -fno-strict-aliasing, tools/ee/.t512/17_classify96
+ * sched.txt) it reads 100.00% (classify.py fuzzy, not raw-verified) while 33
+ * other rows of the unit move (19 up, 14 down, none to 100) — a per-UNIT flag
+ * choice, i.e. a landing-gate/watcher question, not a body edit; left as is. */
 #if !defined(TARGET_NATIVE) && !defined(MATCH_func_002721A8)
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002721A8);
 #else
