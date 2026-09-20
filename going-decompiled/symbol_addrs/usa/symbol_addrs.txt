@@ -706,6 +706,7 @@ CdReadSync = 0x00133A28; // type:func
 LoadDiscToc = 0x00133A78; // type:func
 LoadLevelToc = 0x00133AA0; // type:func
 DecompressWad = 0x0029E308; // type:func
+g_fileLoadVoiceState = 0x001A63A8; // type:u32 size:4 base of the file-load + dialog-voice manager block (text/1B4218 FileLoadVoiceState, 0x9C bytes of individually named fields follow) - the ROM relocates 20 sites in 5 units against this base (was the auto label D_1A63A8)
 g_fileLoadState = 0x001A63AC; // CONFIRMED - CD file-load state - 0 idle, 1 requested, 2 transfer in progress - the busy flag polled by all streaming users (StreamTextTable, MapInit, GUI, cinematics, dialog voice) - Ghidra alias g_nFileLoadState
 g_bFileLoadAborted = 0x001A63AE; // CONFIRMED - set by StopFileLoad on cancel - completion pump passes its inverse to the callback as the success flag then clears it
 g_fileLoadLbn = 0x001A63B0; // CONFIRMED - LBA of the current in-flight CD file load - written by StartFileLoad - Ghidra alias g_nFileLoadLbn

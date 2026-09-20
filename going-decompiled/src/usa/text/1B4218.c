@@ -27,7 +27,14 @@
  *   - size <= 8: true small data, %gp_rel everywhere;
  *   - size >= 16: cc1-small / assembler-absolute (lui/$at macro everywhere);
  *   - size 9..15 (we use 12): gp-addressable / assembler-absolute (absolute
- *     macro in straight-line code, 1-insn %gp_rel only in a branch delay slot).
+ *     macro in straight-line code, 1-insn %gp_rel only in a branch delay slot);
+ *   - ABSOLUTE_GLOBAL (a <=8-byte extern in a named section): cc1 does not
+ *     class it as small and splits the address itself — `lui $r,%hi(sym)` in a
+ *     compiler register, hoistable, `op %lo(sym)($r)` — the form the ROM has
+ *     for g_fileLoadState, g_health, g_cdReadMode, g_rawReadSpindleCtrl
+ *     (tools/ee/.t510/06_store_forms.tsv lists which model each symbol takes:
+ *     a `$at` store = cc1-small model, a compiler-register store or a hoisted
+ *     lui = ABSOLUTE_GLOBAL).
  *
  * SAVE-LAYOUT WALL: this TU was built by the later SN cc1 that packs callee-save
  * slots 8-byte; the pinned cc1 reserves 16 bytes per save. Every function below
@@ -73,6 +80,20 @@ typedef struct Moby {
 _Static_assert(sizeof(Moby) == 0x100, "Moby must be 0x100 under ILP32");
 #endif
 
+/* Globals the original TU did NOT class as gp-small although they are <= 8
+ * bytes: the ROM addresses them through a compiler-allocated register
+ * (`lui $r,%hi(sym); op %lo(sym)($r)`, hoistable/schedulable), not the
+ * assembler's `$at` macro that the `.extern sym, 16` (cc1-small /
+ * assembler-absolute) model yields. Declaring the extern in a named section
+ * is the smallest thing that makes cc1 2.9 treat it as non-small (probe:
+ * tools/ee/.t510/probe/split.c). No section is emitted for an extern; the
+ * native build ignores it. */
+#ifdef TARGET_NATIVE
+#define ABSOLUTE_GLOBAL
+#else
+#define ABSOLUTE_GLOBAL __attribute__((section(".data")))
+#endif
+
 /* True small / gp-addressable globals (complete <=8-byte declarations -> %gp_rel). */
 extern s32 g_gameStateStackDepth;          /* 0x1AA100 game-state stack depth (gated <8) */
 extern s32 g_gameStatePendingArgA;         /* 0x1AA0F8 pending-transition arg A */
@@ -91,10 +112,9 @@ extern f32 g_mobyMotionProfileTicks;       /* 0x1AA10C accumulated RCNT0 ticks *
  * it absolutely, so it must be sized out of small-data. */
 __asm__(".extern g_nGameStatePending, 16");
 __asm__(".extern g_gameStateStack, 32");
-__asm__(".extern g_health, 16");
 extern s32 g_nGameStatePending;            /* 0x1A8BB8 pending state (-2 = none) */
 extern s32 g_gameStateStack[8];            /* 0x1B1CD0 int[8] saved game-state ids */
-extern s32 g_health;                       /* 0x18C2EC current health (0 = dead) */
+extern s32 g_health ABSOLUTE_GLOBAL;  /* 0x18C2EC current health (0 = dead); non-small: the ROM splits its address in a compiler register */
 
 /* The file-load + dialog-voice manager state block lives at g_saveImageArea +
  * 0x1000 (a fixed RAM scratch area past the per-area save image). Only the
@@ -136,7 +156,7 @@ typedef struct FileLoadVoiceState {
     /* 0x41 */ u8 dialogFlag1;            /* init 0 */
     /* 0x42 */ u8 dialogFlag2;            /* init 0 */
     /* 0x43 */ u8 dialogFlag3;            /* init 0 */
-    /* 0x44 */ s32 ambientState;          /* ambient-voice state word, init 0 */
+    /* 0x44 */ u32 ambientState;          /* ambient-voice state word, init 0 */
     /* 0x48 */ s16 ambientArg0;           /* queued ambient-voice params */
     /* 0x4A */ s16 ambientArg2;
     /* 0x4C */ s16 ambientArg1;
@@ -147,7 +167,7 @@ typedef struct FileLoadVoiceState {
     /* 0x58 */ s32 ambientVolume;         /* ambient-voice volume (10) */
     /* 0x5C */ s32 ambientSampleRate;     /* ambient-voice sample rate (48000) */
     /* 0x60 */ u8 pad60[0x8];
-    /* 0x68 */ s32 secondaryState;        /* secondary-voice state word, init 0 */
+    /* 0x68 */ u32 secondaryState;        /* secondary-voice state word, init 0 */
     /* 0x6C */ s16 dialogArg1;            /* queued dialog-voice params */
     /* 0x6E */ s16 dialogArg0;
     /* 0x70 */ s16 dialogArg2;
@@ -156,14 +176,14 @@ typedef struct FileLoadVoiceState {
     /* 0x78 */ u8 pad78[0xC];
     /* 0x84 */ s32 dialogArg3;
     /* 0x88 */ u8 pad88[0x4];
-    /* 0x8C */ s32 tertiaryState;         /* tertiary-voice state word, init 0 */
+    /* 0x8C */ u32 tertiaryState;         /* tertiary-voice state word, init 0 */
     /* 0x90 */ u8 pad90[0x4];
     /* 0x94 */ s16 tertiaryArg1;          /* queued tertiary-voice param, reset to 0 */
     /* 0x96 */ s16 tertiaryFlag;          /* init 0 */
     /* 0x98 */ DialogVoiceChannel ch2;    /* tertiary voice channel */
 } FileLoadVoiceState;
 
-#define g_fileLoadVoiceState (*(FileLoadVoiceState *)(g_saveImageArea + 0x1000))
+extern FileLoadVoiceState g_fileLoadVoiceState;   /* 0x1A63A8 */
 
 /* Callees (value-returning declarations keep cc1 from sibling-call optimising
  * forwarding tails — see text/198FA0). */
@@ -171,9 +191,8 @@ extern void SetSndPumpCallback(void *cb);  /* 0x1336D0 */
 extern void PumpFileLoadCompletion(s32 phase);  /* 0x2B8CA8 snd-pump tick */
 extern void CdStopRead(void);              /* 0x133640 */
 extern s32 CdGetLoadStatus(void);          /* 0x133688 */
-extern void FlushCache(s32 mode);          /* 0x0011AEA0 */
-__asm__(".extern g_fileLoadState, 16");
-extern s16 g_fileLoadState;                /* 0x1A63AC 0 idle / 1 requested / 2 in progress */
+extern void func_0011AEA0(s32 mode);       /* 0x0011AEA0 FlushCache (EE kernel syscall 0x64); raw-asm glabel name */
+extern s16 g_fileLoadState ABSOLUTE_GLOBAL;  /* 0x1A63AC 0 idle / 1 requested / 2 in progress */
 extern void DebugPrintStub(const char *s); /* 0x26FEC8 retail debug no-op */
 extern char D_1AA220[];                    /* tertiary-voice debug string */
 extern void OnSoundBankLoaded(s32 bankId, long pOut);  /* 0x2B7690 forward decl */
@@ -182,15 +201,30 @@ extern void snd_BankLoadAsync(s32 bankAddr, s32 a1, void *cb, long pStatus);  /*
 __asm__(".extern g_discToc, 16");
 extern u8 g_discToc[];                      /* 0x14B540 master disc asset directory */
 
-/* The sound-bank load-status slots live at g_listenerPosHistory + 0x17A0 (s32
- * per bank id); the loader writes -1 there and lets OnSoundBankLoaded fill it. */
+/* The sound-bank load-status slots live at g_listenerPosHistory + 0x17A0 (u32
+ * per bank id: slot 0 = the global bank, 1.. = the level banks); the loader
+ * writes -1 there and lets OnSoundBankLoaded fill it. The loaders below take
+ * the block through a local pointer so cc1 keeps the +0x17A0 field offset as a
+ * displacement off the materialised base (the ROM's form) instead of folding
+ * it into the symbol's %lo. */
+typedef struct ListenerBlock {
+    /* 0x0000 */ u8 slots[0x17A0];              /* per-emitter listener-position ring */
+    union {
+        /* 0x17A0 */ u32 all[4];                /* every bank slot, indexed by bank id */
+        struct {
+            /* 0x17A0 */ u32 global;
+            /* 0x17A4 */ u32 level[3];
+        } by;
+    } bankLoadStatus;
+} ListenerBlock;
 #define g_soundBankLoadStatus ((s32 *)(g_listenerPosHistory + 0x17A0))
 extern s32 StepMobyMotion(Moby *moby, Vec4 *target, f32 speed);   /* 0x2B6000 returns eventFlags (+0x94) */
 extern s32 StartDialogVoice(s32 a0, s32 a1, s32 a2, s32 a3);      /* 0x2B7878 */
-extern s32 StartAmbientVoice(s32 idx, s16 flags, s16 pan);       /* 0x2B7CA0 */
-extern s32 StartSecondaryVoice(s32 idx, s16 flags, s16 pan);     /* 0x2B7D98 */
+extern s32 StartAmbientVoice(s32 idx, s32 flags, s32 pan);       /* 0x2B7CA0 */
+extern s32 StartSecondaryVoice(s32 idx, s32 flags, s32 pan);     /* 0x2B7D98 */
 extern s32 snd_PlaySample(s64 sampleStart, s64 sampleEnd, s32 a2, s32 a3,
-                          s32 pan, s32 a5, void *startCb, long context);  /* 0x133350 */
+                          s32 pan, s32 a5, s32 a6, s32 a7, s32 a8, s32 a9,
+                          void *startCb, long context);  /* 0x133350 (12 args, cod/0321A0) */
 extern void func_002B8ED0(s32 voiceId, long handle);  /* secondary-voice start cb */
 extern void func_002B8E78(s32 voiceId, long handle);  /* chained-voice start cb */
 extern void OnAmbientVoiceStarted(s32 voiceId, long handle);  /* 0x2B8DC8 */
@@ -1458,32 +1492,36 @@ s32 RequestGameStateChange(s32 stateId, s32 push, s32 argA, s32 argB, s8 *outDon
  * non-empty, and the player is alive (g_health != 0). Returns 0 on a successful
  * pop, 1 when there is nothing to pop (empty stack / transition already pending),
  * and -1 when the player is dead.
- * WALL: boolean-materialise idiom. The original lowers the first gate
- * (pending != -2) with a preset-1 / movz-zero idiom (matching the movz chain
- * used for the depth and health gates); this cc1 lowers the same `!=` with
- * sltu, which cascades into a different register coloring (best 63.10%).
- * Genuine codegen-idiom wall — functional equivalent only. */
+ * WALL: boolean-materialise idiom (IDIOM class). The original lowers the first
+ * gate as preset-1 / movz-zero (the same movz chain as the depth and health
+ * gates); cc1 2.9 folds `status = 1; if (pending == -2) status = 0;` back into
+ * sltu whatever the spelling. Task #510: g_health as ABSOLUTE_GLOBAL (the ROM
+ * hoists its lui) and the single-exit pop block lift the rest — sdk29 70.86% /
+ * engine96 49.31% (unit objdiff report, objdiff_build.sh + unit_report.sh). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", PopGameState);
 #else
-/* TODO(match): functional equivalent - not byte-exact; boolean-materialise idiom wall. */
+/* TODO(match): functional equivalent - not byte-exact; IDIOM (sltu vs li/movz), sdk29 70.86% / engine96 49.31%. */
 s32 PopGameState(s32 argA, s32 argB) {
     s32 depth = g_gameStateStackDepth;
-    s32 status = (g_nGameStatePending != -2);
+    s32 blocked = 1;
+    s32 status = blocked;
+    if (g_nGameStatePending == -2) {
+        status = 0;
+    }
     if (depth == 0) {
-        status = 1;
+        status = blocked;
     }
     if (g_health == 0) {
         status = -1;
     }
-    if (status != 0) {
-        return status;
+    if (status == 0) {
+        g_gameStatePendingArgA = argA;
+        g_gameStatePendingArgB = argB;
+        g_gameStateStackDepth = depth - 1;
+        g_nGameStatePending = g_gameStateStack[depth - 1];
+        g_gameStateTransitionDoneFlag = 0;
     }
-    g_gameStatePendingArgA = argA;
-    g_gameStatePendingArgB = argB;
-    g_gameStateStackDepth = depth - 1;
-    g_nGameStatePending = g_gameStateStack[depth - 1];
-    g_gameStateTransitionDoneFlag = 0;
     return status;
 }
 #endif
@@ -2491,14 +2529,9 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_0
  * a plain overwrite, so the final state is order-independent; the C groups them
  * by source param for readability.)
  *
- * NATIVE SHIM (no byte target; matching build uses INCLUDE_ASM above).
- *
- * WALL (matching build): float register save-layout — saves $f20..$f23 (swc1)
- * plus the GetMobyMotionController call forces the original's 0x30 fp-save frame,
- * which the pinned cc1's fp-save packing does not reproduce. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", SetMobyMotionParams);
-#else
+ * MATCHED 100.00% on the sdk29 arm (unit objdiff report, objdiff_build.sh +
+ * unit_report.sh, clean; task #510). The earlier "fp-save frame" wall note was
+ * a stale claim: the pinned cc1 reproduces the four swc1 saves as-is. */
 void SetMobyMotionParams(Moby *moby, f32 accel, f32 maxSpd, f32 speed, f32 velZ) {
     MobyMotionController *ctrl = (MobyMotionController *)GetMobyMotionController(moby);
     if (ctrl != 0) {
@@ -2510,7 +2543,6 @@ void SetMobyMotionParams(Moby *moby, f32 accel, f32 maxSpd, f32 speed, f32 velZ)
         ctrl->velZ = velZ;
     }
 }
-#endif
 
 /* Size-pinned 8-byte epilogue pad pseudo-function — see unit header. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B7038);
@@ -2835,7 +2867,7 @@ extern u8 D_001A7210[];                     /* dialog sound-channel config block
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", InitDialogSoundChannel);
 #else
-/* TODO(match): functional equivalent - not byte-exact; address-CSE wall. */
+/* TODO(match): functional equivalent - not byte-exact; SCHED-TIEBREAK, sdk29 90.91% / engine96 75.82%. */
 void InitDialogSoundChannel(void) {
     func_0011D620((s32)(D_001A7210 + 0x38), 3, 0, 0, 0, 0, 0, 0, 0);
     func_00133250(7, 0xA000, 0, 1);
@@ -2856,18 +2888,23 @@ void OnSoundBankLoaded(s32 bankId, long pOut) {
  * Resets that slot to -1 (loading) and registers OnSoundBankLoaded as the
  * completion callback (the status-slot pointer is zero-extended to 64 bits for
  * the RPC). The bank's EE address is the global-WAD base plus its TOC offset.
- * WALL: address-fold (same family as LoadLevelSoundBank / OnDialogVoiceStarted).
- * The original keeps %lo(g_listenerPosHistory) in a base register and adds
- * 0x17A0 with a separate `addiu` (two-step base); this cc1 folds 0x17A0 into the
- * symbol's %lo reloc. Functional equivalent only. */
+ * The address shape is reproduced (task #510): the listener block and the disc
+ * TOC are taken through local pointers so cc1 keeps +0x17A0 / +0x52B0 as
+ * displacements, the status slot is cleared with the unsigned spelling
+ * (lui/ori) and the tail call is guarded. Residual SCHED-TIEBREAK: the ROM
+ * issues both TOC loads before `addiu $7,$5,0x17A0`, cc1 2.9 interleaves them
+ * — sdk29 90.91% / engine96 75.82% (unit objdiff report). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", LoadGlobalSoundBank);
 #else
 /* TODO(match): functional equivalent - not byte-exact; address-fold wall. */
 void LoadGlobalSoundBank(void) {
-    g_soundBankLoadStatus[0] = -1;
-    snd_BankLoadAsync(*(s32 *)(g_discToc + 0x52B0) + *(s32 *)(g_discToc + 0x529C),
-                      0, OnSoundBankLoaded, (long)(u32)&g_soundBankLoadStatus[0]);
+    ListenerBlock *listener = (ListenerBlock *)g_listenerPosHistory;
+    u8 *toc = g_discToc;
+    s32 bankAddr = *(s32 *)(toc + 0x52B0) + *(s32 *)(toc + 0x529C);
+    listener->bankLoadStatus.all[0] = 0xFFFFFFFF;
+    snd_BankLoadAsync(bankAddr, 0, OnSoundBankLoaded, (long)(u32)listener->bankLoadStatus.all);
+    __asm__ __volatile__("");
 }
 #endif
 
@@ -2880,20 +2917,22 @@ void LoadGlobalSoundBank(void) {
  * NATIVE SHIM (no byte target; matching build uses INCLUDE_ASM above). Derived
  * register-exact from LoadLevelSoundBank.s @0x2B7700.
  *
- * WALL (matching build): address-fold. The original materialises
- * `%lo(g_listenerPosHistory)` then adds 0x17A0 with a separate `addiu` (two-step
- * base); this cc1 folds the 0x17A0 into the symbol's %lo reloc (one addiu), so
- * the status-slot address computation diverges (measured 53.28%, both two-step
- * and base-pointer phrasings). Same fold artifact as OnDialogVoiceStarted /
- * LoadGlobalSoundBank. Functional equivalent only. */
+ * The address shape is reproduced (task #510: `table = listener->bankLoadStatus.all`
+ * as its own local keeps (base + 0x17A0) + slot*4 in the ROM's association).
+ * Residual SCHED-TIEBREAK: the prologue (`addiu $sp` / `sd $31`) and the
+ * `sll`/`ori` are interleaved differently — sdk29 55.56% / engine96 55.83%
+ * (unit objdiff report; the fuzzy score punishes order heavily). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", LoadLevelSoundBank);
 #else
-/* TODO(match): functional equivalent - not byte-exact; address-fold wall. */
+/* TODO(match): functional equivalent - not byte-exact; SCHED-TIEBREAK (prologue interleave), sdk29 55.56% / engine96 55.83%. */
 void LoadLevelSoundBank(s32 bankAddr, s32 bankSlot) {
-    g_soundBankLoadStatus[bankSlot] = -1;
-    snd_BankLoadFromEE_CB(bankAddr, OnSoundBankLoaded,
-                          (long)(u32)&g_soundBankLoadStatus[bankSlot]);
+    ListenerBlock *listener = (ListenerBlock *)g_listenerPosHistory;
+    u32 *table = listener->bankLoadStatus.all;
+    u32 *status = table + bankSlot;
+    *status = 0xFFFFFFFF;
+    snd_BankLoadFromEE_CB(bankAddr, OnSoundBankLoaded, (long)(u32)status);
+    __asm__ __volatile__("");
 }
 #endif
 
@@ -2901,22 +2940,32 @@ void LoadLevelSoundBank(s32 bankAddr, s32 bankSlot) {
  * resets the bank's load-status slot to -1 (loading) and registers
  * OnSoundBankLoaded; when the TOC entry is empty, clears the status slot to 0
  * (no bank). The bank's EE address is the global-WAD base plus its TOC offset.
- * WALL: address-fold (same family as LoadLevelSoundBank / OnDialogVoiceStarted)
- * — the original adds 0x17A4/0x17A0 to %lo(g_listenerPosHistory) with a separate
- * addiu; this cc1 folds it into the %lo reloc. Functional equivalent only. */
+ * The address shapes are reproduced (task #510): the store indexes the
+ * bankLoadStatus array through the listener pointer (mult first, +0x17A0 as
+ * the displacement), the callee argument is the decayed `by.level` array plus
+ * the slot ((base + 0x17A4) + slot*4). Two residual rows: OPERAND-ORDER — the
+ * ROM adds `toc + (slot << 3)` as `addu $2,$6,$2`, cc1 2.9 always emits the
+ * shifted index first (4 spellings tried) — and one SCHED-TIEBREAK row (the
+ * status store vs the callback `lui`). sdk29 94.47% / engine96 68.26% (unit
+ * objdiff report). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", KickLevelBankDiscLoad);
 #else
-/* TODO(match): functional equivalent - not byte-exact; address-fold wall. */
+/* TODO(match): functional equivalent - not byte-exact; OPERAND-ORDER + SCHED-TIEBREAK, sdk29 94.47% / engine96 68.26%. */
 void KickLevelBankDiscLoad(s32 bankSlot) {
-    s32 tocOffset = *(s32 *)(g_discToc + 0x52E0 + bankSlot * 8);
+    u8 *toc = g_discToc;
+    u8 *tocEntry = toc + bankSlot * 8;
+    s32 tocOffset = *(s32 *)(tocEntry + 0x52E0);
     if (tocOffset != 0) {
-        g_soundBankLoadStatus[bankSlot + 1] = -1;
-        snd_BankLoadAsync(tocOffset + *(s32 *)(g_discToc + 0x529C),
-                          0, OnSoundBankLoaded,
-                          (long)(u32)&g_soundBankLoadStatus[bankSlot + 1]);
+        ListenerBlock *listener = (ListenerBlock *)g_listenerPosHistory;
+        u32 *levelTable = listener->bankLoadStatus.by.level;
+        listener->bankLoadStatus.all[bankSlot + 1] = 0xFFFFFFFF;
+        snd_BankLoadAsync(tocOffset + *(s32 *)(toc + 0x529C),
+                          0, OnSoundBankLoaded, (long)(u32)(levelTable + bankSlot));
+        __asm__ __volatile__("");
     } else {
-        g_soundBankLoadStatus[bankSlot + 1] = 0;
+        ListenerBlock *listener = (ListenerBlock *)g_listenerPosHistory;
+        listener->bankLoadStatus.all[bankSlot + 1] = 0;
     }
 }
 #endif
@@ -2933,18 +2982,20 @@ extern void InstallFileLoadPump(void);     /* 0x2B7E... installs the snd-pump ca
  * every per-channel state/flag word, reset the primary dialog voice id (-1) and
  * its state byte (0x20), reset the global sound-bank id (-1), then (re)initialise
  * the dialog sound channel and install the per-snd-pump file-load pump.
- * WALL: delay-slot-fill + constant-sharing. The original sinks the soundBankId
- * (+0x24) = -1 store into the InitDialogSoundChannel call's delay slot and shares
- * the single `li -1` between it and the dialogVoiceId (+0x3C) store; this cc1
- * materialises a second -1 and schedules the +0x24 store inline (best 86.30%).
- * Genuine scheduler/coloring wall — functional equivalent only. */
+ * The shared `li -1` is reproduced (task #510: cc1 2.9's cse keys constants by
+ * mode, so an s32 local `none` feeds both the s16 and the s32 store). Residual
+ * SCHED: cc1 2.9 hoists the soundBankId store to the top of the store run while
+ * the ROM keeps it last (in the InitDialogSoundChannel delay slot) — sdk29
+ * 88.15% / engine96 84.26% (unit objdiff report). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", InitFileLoadSystem);
 #else
-/* TODO(match): functional equivalent - not byte-exact; delay-slot-fill + const-share wall. */
+/* TODO(match): functional equivalent - not byte-exact; SCHED (store order), sdk29 88.15% / engine96 84.26%. */
 void InitFileLoadSystem(void) {
+    s32 none;
     DebugPrintStub(D_1AA198);
-    g_fileLoadVoiceState.dialogVoiceId = -1;
+    none = -1;
+    g_fileLoadVoiceState.dialogVoiceId = none;
     g_fileLoadVoiceState.dialogState = 0x20;
     g_fileLoadVoiceState.dialogFlag1 = 0;
     g_fileLoadVoiceState.dialogFlag2 = 0;
@@ -2955,7 +3006,7 @@ void InitFileLoadSystem(void) {
     g_fileLoadVoiceState.secondaryFlag = 0;
     g_fileLoadVoiceState.tertiaryState = 0;
     g_fileLoadVoiceState.tertiaryFlag = 0;
-    g_fileLoadVoiceState.soundBankId = -1;
+    g_fileLoadVoiceState.soundBankId = none;
     InitDialogSoundChannel();
     InstallFileLoadPump();
     __asm__ __volatile__("");
@@ -2991,17 +3042,18 @@ void InstallFileLoadPump(void) {
  * where adjLang = (lang == 0) ? 0 : lang-1 for the language-adjusted bands.
  * No-op if the channel is busy (m+0x68 != 0) or no sample resolves.
  *
- * WALL (matching build, INCLUDE_ASM frozen): save-layout — 8 callee-saves + $ra
- * at 8-byte spacing; the deeply-nested id-band tree; sq/lq 128-bit handle
- * copies; and the snd_PlaySample 64-bit arg marshal. The #else is a coverage
- * shim: it uses the shared 8-arg snd_PlaySample form, so the original's extra
- * args — the `code` category (2, or 6 for the >=6000 band) in $10 and the 0/1
- * sentinels + start-cb pushed on the stack — are dropped at the marshal wall. */
+ * WALL (matching build, INCLUDE_ASM frozen): PACKED-SAVE — 8 callee-saves + $ra
+ * at 8-byte spacing (cc1 2.9 reserves 16 per save); the deeply-nested id-band
+ * tree; sq/lq 128-bit handle copies. The snd_PlaySample call now uses the real
+ * 12-argument signature (task #510): the `code` category (2, or 6 for the
+ * >=6000 band), the 0/1 sentinels and the start-cb/context stack words are
+ * passed as the ROM passes them (the old 8-arg shim put the callback in $10).
+ * sdk29 55.54% / engine96 48.62% (unit objdiff report). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StartDialogVoice);
 #else
-/* TODO(match): functional equivalent - not byte-exact; save-layout + id-band
-   tree + 128-bit handle copies + snd_PlaySample arg-marshal wall. */
+/* TODO(match): functional equivalent - not byte-exact; PACKED-SAVE + id-band
+   tree + 128-bit handle copies, sdk29 55.54% / engine96 48.62%. */
 extern u8   g_currentLanguage;             /* current language id (0 = default) */
 extern u8   D_00147CC0[];                  /* 0x147CC0 master language-keyed dialog TOC (>=6000 band) */
 extern u8   D_B038[];                      /* 0xFFB038 per-level dialog sample-pair table (D_B03C = +4) */
@@ -3018,6 +3070,7 @@ s32 StartDialogVoice(s32 a0, s32 a1, s32 a2, s32 a3) {
     s32 sampleEnd = 0;     /* $19: resolved sample end address (0 if none) */
     s32 adjLang;
     s32 handle;
+    s32 code = 2;          /* $22: sample category handed to snd_PlaySample (6 for the >=6000 band) */
 
     if (*(s32 *)(m + 0x68) != 0) {    /* secondary/dialog channel already busy */
         return 0;
@@ -3026,6 +3079,7 @@ s32 StartDialogVoice(s32 a0, s32 a1, s32 a2, s32 a3) {
     if (a0 >= 0x1770) {
         /* >= 6000: master language-keyed dialog table (category code = 6) */
         s32 e;
+        code = 6;
         adjLang = g_currentLanguage ? (s32)g_currentLanguage - 1 : 0;
         e = *(s32 *)(D_00147CC0 + 0x4E0 + a0 * 4 + (adjLang << 10));
         if (e != 0) {
@@ -3139,10 +3193,10 @@ s32 StartDialogVoice(s32 a0, s32 a1, s32 a2, s32 a3) {
         *(s32 *)(slot + 0x84) = 0;
     }
 
-    /* fire the sample; snd_PlaySample 64-bit arg-marshal wall (coverage only) */
+    /* fire the sample (pan re-read from the just-armed dialogArg0 field) */
     snd_PlaySample((s64)sampleStart, (s64)sampleEnd, 0, 0,
-                   (s16)a3, 0, OnDialogVoiceStarted,
-                   (long)(u32)(m + 0x68));
+                   g_fileLoadVoiceState.dialogArg0, 0, code, 0, 0, 1,
+                   OnDialogVoiceStarted, (long)(u32)(m + 0x68));
     return 0;
 }
 #endif
@@ -3177,19 +3231,28 @@ s32 StopDialogVoice(void) {
  * is empty. Arms the ambient state machine (state -1, flag 1, volume 10, sample
  * rate 48000) and plays the sample pair via snd_PlaySample with
  * OnAmbientVoiceStarted as the start callback.
- * WALL: snd_PlaySample 64-bit arg marshal. The two sample addresses are passed
- * sign-extended (dsll32/dsra32) and the callback as a zero-extended 64-bit stack
- * arg; cc1 won't reproduce the exact register/stack-slot marshaling of this 8+
- * arg call from C. Functional equivalent only. */
+ * The 12-argument snd_PlaySample marshal (sign-extended s64 sample addresses,
+ * the 0/1 sentinels, the callback and context on the stack) is reproduced from
+ * C with the real prototype (task #510); flags/pan are word arguments (the ROM
+ * stores them with sh and sign-extends pan only for the call), the sample
+ * table is reached through a local g_discToc pointer, and the -1 state is the
+ * unsigned lui/ori spelling. Residual SCHED-TIEBREAK: the order of the ~30
+ * independent arg-setup / state-store instructions (the ROM computes the
+ * callback address first, cc1 2.9 last) — sdk29 48.46% / engine96 9.11% (unit
+ * objdiff report; order-heavy, the shape is otherwise identical). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StartAmbientVoice);
 #else
-/* TODO(match): functional equivalent - not byte-exact; snd_PlaySample arg-marshal wall. */
-s32 StartAmbientVoice(s32 idx, s16 flags, s16 pan) {
+/* TODO(match): functional equivalent - not byte-exact; SCHED-TIEBREAK, sdk29 48.46% / engine96 9.11%. */
+s32 StartAmbientVoice(s32 idx, s32 flags, s32 pan) {
+    u8 *toc;
+    s32 *sampleTable;
     if (g_fileLoadVoiceState.ambientState != 0) {
         return 0;
     }
-    if (g_dialogSampleTable[idx * 2] == 0) {
+    toc = g_discToc;
+    sampleTable = (s32 *)(toc + 0x5300);
+    if (sampleTable[idx * 2] == 0) {
         return 0;
     }
     g_fileLoadVoiceState.ambientVolume = 10;
@@ -3198,11 +3261,11 @@ s32 StartAmbientVoice(s32 idx, s16 flags, s16 pan) {
     g_fileLoadVoiceState.ambientArg0 = idx;
     g_fileLoadVoiceState.ambientArg2 = pan;
     g_fileLoadVoiceState.ambientArg1 = flags;
-    g_fileLoadVoiceState.ambientState = -1;
+    g_fileLoadVoiceState.ambientState = 0xFFFFFFFF;
     g_fileLoadVoiceState.ambientCursor = 0;
-    snd_PlaySample(g_dialogSampleBase + g_dialogSampleTable[idx * 2],
-                   g_dialogSampleBase + g_dialogSampleTable[(idx + 1) * 2],
-                   0, 0, pan, 0, OnAmbientVoiceStarted,
+    snd_PlaySample(*(s32 *)(toc + 0x52FC) + sampleTable[idx * 2],
+                   *(s32 *)(toc + 0x52FC) + sampleTable[(idx + 1) * 2],
+                   0, 0, (s16)pan, 0, 1, 0, 0, 1, OnAmbientVoiceStarted,
                    (long)(u32)&g_fileLoadVoiceState.ambientState);
     return 0;
 }
@@ -3211,32 +3274,37 @@ s32 StartAmbientVoice(s32 idx, s16 flags, s16 pan) {
 /* Like StartAmbientVoice but gated on idx >= 0 and uses func_002B8ED0 as the
  * voice-start callback (the secondary-channel variant). No-op if the ambient
  * channel is busy or the sample-table entry is empty.
- * WALL: snd_PlaySample 64-bit arg marshal (same as StartAmbientVoice). */
+ * Same shape and residual as StartAmbientVoice (SCHED-TIEBREAK): sdk29 48.31% /
+ * engine96 18.00% (unit objdiff report, task #510). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StartSecondaryVoice);
 #else
-/* TODO(match): functional equivalent - not byte-exact; snd_PlaySample arg-marshal wall. */
-s32 StartSecondaryVoice(s32 idx, s16 flags, s16 pan) {
+/* TODO(match): functional equivalent - not byte-exact; SCHED-TIEBREAK, sdk29 48.31% / engine96 18.00%. */
+s32 StartSecondaryVoice(s32 idx, s32 flags, s32 pan) {
+    u8 *toc;
+    s32 *sampleTable;
     if (idx < 0) {
         return 0;
     }
     if (g_fileLoadVoiceState.ambientState != 0) {
         return 0;
     }
-    if (g_dialogSampleTable[idx * 2] == 0) {
+    toc = g_discToc;
+    sampleTable = (s32 *)(toc + 0x5300);
+    if (sampleTable[idx * 2] == 0) {
         return 0;
     }
     g_fileLoadVoiceState.ambientFlag = 1;
     g_fileLoadVoiceState.ambientVolume = 10;
     g_fileLoadVoiceState.ambientSampleRate = 48000;
     g_fileLoadVoiceState.ambientArg0 = idx;
-    g_fileLoadVoiceState.ambientState = -1;
+    g_fileLoadVoiceState.ambientState = 0xFFFFFFFF;
     g_fileLoadVoiceState.ambientArg2 = pan;
     g_fileLoadVoiceState.ambientArg1 = flags;
     g_fileLoadVoiceState.ambientCursor = 0;
-    snd_PlaySample(g_dialogSampleBase + g_dialogSampleTable[idx * 2],
-                   g_dialogSampleBase + g_dialogSampleTable[(idx + 1) * 2],
-                   0, 0, pan, 0, func_002B8ED0,
+    snd_PlaySample(*(s32 *)(toc + 0x52FC) + sampleTable[idx * 2],
+                   *(s32 *)(toc + 0x52FC) + sampleTable[(idx + 1) * 2],
+                   0, 0, (s16)pan, 0, 1, 0, 0, 0, func_002B8ED0,
                    (long)(u32)&g_fileLoadVoiceState.ambientState);
     return 0;
 }
@@ -3247,20 +3315,26 @@ s32 StartSecondaryVoice(s32 idx, s16 flags, s16 pan) {
  * chainable state (ambientFlag != 9, ambientState allocated and not -1) and the
  * next sample-table entry exists. Arms ambientFlag 9 and plays the continuation
  * sample pair via snd_PlaySample with func_002B8E78 as the start callback.
- * WALL: snd_PlaySample 64-bit arg marshal (same as StartAmbientVoice). */
+ * Same shape and residual as StartAmbientVoice (SCHED-TIEBREAK); the 10th
+ * argument is (flags & 1) << 2. sdk29 52.78% / engine96 28.99% (unit objdiff
+ * report, task #510). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ChainSecondaryVoice);
 #else
-/* TODO(match): functional equivalent - not byte-exact; snd_PlaySample arg-marshal wall. */
-s32 ChainSecondaryVoice(s32 idx, s16 flags, s16 pan) {
+/* TODO(match): functional equivalent - not byte-exact; SCHED-TIEBREAK, sdk29 52.78% / engine96 28.99%. */
+s32 ChainSecondaryVoice(s32 idx, s32 flags, s32 pan) {
+    u8 *toc;
+    s32 *sampleTable;
     if (g_fileLoadVoiceState.ambientFlag == 9) {
         return 0;
     }
     if (g_fileLoadVoiceState.ambientState == 0 ||
-        g_fileLoadVoiceState.ambientState == -1) {
+        g_fileLoadVoiceState.ambientState == 0xFFFFFFFF) {
         return 0;
     }
-    if (g_dialogSampleTable[(idx + 1) * 2] == 0) {
+    toc = g_discToc;
+    sampleTable = (s32 *)(toc + 0x5300);
+    if (sampleTable[(idx + 1) * 2] == 0) {
         return 0;
     }
     g_fileLoadVoiceState.ambientSampleRate = 48000;
@@ -3272,9 +3346,9 @@ s32 ChainSecondaryVoice(s32 idx, s16 flags, s16 pan) {
     g_fileLoadVoiceState.ambientCursor = 0;
     /* start = entry[idx+3], end = entry[idx+2] (the original at 0x2B7E90 passes
        them in this order - the continuation sample plays from +3 to +2). */
-    snd_PlaySample(g_dialogSampleBase + g_dialogSampleTable[(idx + 3) * 2],
-                   g_dialogSampleBase + g_dialogSampleTable[(idx + 2) * 2],
-                   0, 0, pan, 0, func_002B8E78,
+    snd_PlaySample(*(s32 *)(toc + 0x52FC) + sampleTable[(idx + 3) * 2],
+                   *(s32 *)(toc + 0x52FC) + sampleTable[(idx + 2) * 2],
+                   0, 0, (s16)pan, 0, 1, 0, 0, (flags & 1) << 2, func_002B8E78,
                    (long)(u32)&g_fileLoadVoiceState.ambientState);
     return 0;
 }
@@ -3284,42 +3358,42 @@ s32 ChainSecondaryVoice(s32 idx, s16 flags, s16 pan) {
  * `idx` if its TOC bank exists. Arms the tertiary state block (state 1, volume
  * 10, sample rate 48000) and plays via snd_PlaySample with func_002B8E28 as the
  * start callback; returns 1 on a started voice, 0 otherwise.
- * WALL: snd_PlaySample 64-bit arg marshal (same as StartAmbientVoice) — the
- * sample addresses are passed sign-extended and the callback as a zero-extended
- * 64-bit stack arg. Functional equivalent only.
+ * Same shape and residual as StartAmbientVoice (SCHED-TIEBREAK); the nested
+ * ifs reproduce the ROM's shared return-0 block at the end. sdk29 72.81% /
+ * engine96 29.30% (unit objdiff report, task #510).
  *
  * a1 is the sample-table index (stride-8 g_dialogSampleTable); a0/a2/a3 are
  * stashed to the tertiary state block (+0x90/+0x94/+0x92) with volume 10 and rate
  * 48000. Uses raw offsets for the unnamed tertiary fields (+0x90/+0x92/+0x9C/
- * +0xA0/+0xA4) and struct names for tertiaryState/tertiaryArg1/tertiaryFlag. Like
- * its siblings the snd_PlaySample call is the 8-arg approximation of the wider
- * marshalled signature; tertiary passes sampleEnd=0, pan=(s16)a3, func_002B8E28
- * as the start callback, and &tertiaryState as the context. */
+ * +0xA0/+0xA4) and struct names for tertiaryState/tertiaryArg1/tertiaryFlag.
+ * Tertiary passes sampleEnd=0, pan=(s16)a3, 0x20 as the 10th argument,
+ * func_002B8E28 as the start callback, and &tertiaryState as the context. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StartTertiaryVoice);
 #else
-/* TODO(match): functional equivalent - not byte-exact; snd_PlaySample arg-marshal wall. */
+/* TODO(match): functional equivalent - not byte-exact; SCHED-TIEBREAK, sdk29 72.81% / engine96 29.30%. */
 extern void func_002B8E28(s32 voiceId, long handle);   /* 0x2B8E28 tertiary voice-start callback (defined below) */
 s32 StartTertiaryVoice(s32 a0, s32 a1, s32 a2, s32 a3) {
     u8 *m = (u8 *)&g_fileLoadVoiceState;
-    if (g_fileLoadVoiceState.tertiaryState != 0) {
-        return 0;                          /* channel busy */
-    }
-    if (g_dialogSampleTable[a1 * 2] == 0) {
-        return 0;                          /* no sample bank for this id */
-    }
+    u8 *toc;
+    if (g_fileLoadVoiceState.tertiaryState == 0) {  /* channel free */
+        toc = g_discToc;
+        if (*(s32 *)(toc + a1 * 8 + 0x5300) != 0) {  /* sample bank exists for this id */
     g_fileLoadVoiceState.tertiaryArg1 = (s16)a2;
     *(s32 *)(m + 0xA0) = 10;                /* volume */
     *(s32 *)(m + 0xA4) = 48000;            /* sample rate (0xBB80) */
-    g_fileLoadVoiceState.tertiaryState = -1;
+    g_fileLoadVoiceState.tertiaryState = 0xFFFFFFFF;
     *(s16 *)(m + 0x90) = (s16)a0;
     *(s16 *)(m + 0x9C) = 1;
     g_fileLoadVoiceState.tertiaryFlag = 1;
     *(s16 *)(m + 0x92) = (s16)a3;
-    snd_PlaySample(g_dialogSampleBase + g_dialogSampleTable[a1 * 2],
-                   0, 0, 0, (s16)a3, 0, func_002B8E28,
+    snd_PlaySample(*(s32 *)(toc + 0x52FC) + *(s32 *)(toc + a1 * 8 + 0x5300),
+                   0, 0, 0, (s16)a3, 0, 1, 0, 0, 0x20, func_002B8E28,
                    (long)(u32)&g_fileLoadVoiceState.tertiaryState);
-    return 1;
+            return 1;
+        }
+    }
+    return 0;
 }
 #endif
 
@@ -3386,7 +3460,10 @@ void ResetDialogVoiceChannels(void) {
  * WALL (matching build): independent-store rescheduling. The original emits the
  * unconditional ch2(+0x98)/ch0(+0x50) block in descending-offset order; this cc1's
  * scheduler always sorts the two independent same-base stores ascending (ch0 then
- * ch2), regardless of source order or an inter-store barrier (best 87.23%). */
+ * ch2), regardless of source order or an inter-store barrier; the ROM also
+ * keeps `lui %hi` in a register shared by both blocks, which only the engine
+ * arm does — sdk29 87.38% / engine96 97.31% (REGNUM $5 vs $4 for the shared
+ * hi plus one SCHED row; unit objdiff report, task #510). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", SetDialogVoiceVolumesMax);
 #else
@@ -3405,20 +3482,17 @@ void SetDialogVoiceVolumesMax(s32 includeSecondary) {
 
 /* Mute all three dialog-voice channels (volume state = 4). Only each channel's
  * volume word is written; the fade target is left untouched.
- * WALL (matching build): same independent-store rescheduling as
- * SetDialogVoiceVolumesMax — the original stores ch1(+0x74)/ch0(+0x50)/ch2(+0x98)
- * in that order; this cc1 reschedules the three same-base stores (best 99.71%,
- * only ordering differs). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", SetDialogVoiceVolumesMute);
-#else
-/* TODO(match): functional equivalent - not byte-exact; store-rescheduling wall. */
+ *
+ * MATCHED 100.00% on the sdk29 arm (unit objdiff report, objdiff_build.sh +
+ * unit_report.sh, clean; task #510). The three stores are independent and cc1
+ * 2.9's scheduler emits the source-LAST of them first, then the rest in source
+ * order; the ROM's order is ch1, ch0, ch2 (ch2 in the jr delay slot), so the
+ * source lists them as ch0, ch2, ch1. */
 void SetDialogVoiceVolumesMute(void) {
-    g_fileLoadVoiceState.ch1.volume = 4;
     g_fileLoadVoiceState.ch0.volume = 4;
     g_fileLoadVoiceState.ch2.volume = 4;
+    g_fileLoadVoiceState.ch1.volume = 4;
 }
-#endif
 
 /* Set the fade target on each currently-active dialog-voice channel (a channel
  * is active when its volume state has the high bit set). */
@@ -3878,27 +3952,36 @@ s32 StartFileLoadWithCallback(s32 dest, s32 lbn, s32 sectorCount,
  * request record: builds a local sceCdRMode from the global read mode with the
  * spindle-speed byte overridden, clears the retry counters, then pumps snd. Used
  * by the frontend/level-staging machine that polls completion itself.
- * WALL: builds a stack-local sceCdRMode via packed byte/half stores
- * (CONCAT11 idiom) that this cc1 lowers with a different store/merge sequence;
- * also reads several un-named CD-mode globals. Tier-3 hardware glue: the matching
- * arm stays INCLUDE_ASM (store/merge wall); portable #else arm below for coverage. */
+ * The lwl/lwr/swl/swr template copy, the compiler-split `lui/%lo` accesses to
+ * g_cdReadMode and g_rawReadSpindleCtrl (ABSOLUTE_GLOBAL), the `$at`-macro
+ * store to g_rawReadStallTimer and the gp store to g_bRawReadFellBack are all
+ * reproduced (task #510). Residual SCHED-TIEBREAK: cc1 2.9 hoists the spindle
+ * byte load and the stall-timer store above the template copy; the ROM keeps
+ * source order — sdk29 66.96% / engine96 53.04% (unit objdiff report). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", KickRawFileRead);
 #else
-extern u8 g_cdReadMode[4];          /* sceCdRMode template: [0]trycount [1]spindlctrl [2]datapattern [3]pad */
-extern u8 g_rawReadSpindleCtrl;     /* spindle/speed override applied to the local read mode */
-extern s32 g_rawReadStallTimer;     /* raw-read stall watchdog, reset per kick */
-extern s32 g_bRawReadFellBack;      /* "read fell back to slow path" flag, reset per kick */
+typedef struct CdReadMode {         /* sceCdRMode */
+    u8 tryCount;
+    u8 spindleCtrl;
+    u8 dataPattern;
+    u8 pad;
+} CdReadMode;
+extern CdReadMode g_cdReadMode ABSOLUTE_GLOBAL;   /* 0x1A63E8 read-mode template */
+extern u8 g_rawReadSpindleCtrl ABSOLUTE_GLOBAL;  /* 0x1A7900 spindle/speed override applied to the local read mode */
+__asm__(".extern g_rawReadStallTimer, 16");
+extern s32 g_rawReadStallTimer;     /* 0x1A7430 raw-read stall watchdog, reset per kick */
+extern s32 g_bRawReadFellBack;      /* 0x1A7434 "read fell back to slow path" flag, reset per kick */
 extern s32 CdStartRead(s32 lbn, s32 sectors, s32 dest, void *rmode);  /* 0x133398 */
 extern void func_00133230(void);    /* 0x133230 snd RPC tick */
 extern s32 snd_Pump(void);          /* 0x133280 snd queue pump */
 s32 KickRawFileRead(s32 dest, s32 lbn, s32 sectors) {
-    u8 rmode[4];
-    *(u32 *)rmode = *(u32 *)g_cdReadMode;   /* copy the 4-byte read-mode template */
-    rmode[1] = g_rawReadSpindleCtrl;        /* override the spindle/speed field */
+    CdReadMode rmode;
+    rmode = g_cdReadMode;                   /* copy the read-mode template */
+    rmode.spindleCtrl = g_rawReadSpindleCtrl;
     g_rawReadStallTimer = 0;
     g_bRawReadFellBack = 0;
-    CdStartRead(lbn, sectors, dest, rmode);
+    CdStartRead(lbn, sectors, dest, &rmode);
     func_00133230();
     snd_Pump();
     return 1;
@@ -3937,8 +4020,12 @@ s32 StartFileLoadPumpingVoice(s32 dest, s32 lbn, s32 sectorCount) {
  * func_00133220). When `waitForIdle` is nonzero it repeats that cycle, spinning
  * (func_002833E8 delay) between iterations, until the file-load is no longer in
  * flight (fileLoadActive == 0). Returns the final fileLoadActive.
- * WALL: save-layout — 2 callee-saves + $ra at 8-byte spacing; matching arm stays
- * INCLUDE_ASM, portable #else below. */
+ * WALL: PACKED-SAVE — 2 callee-saves + $ra at 8-byte spacing (sdk29 82.56%);
+ * on the engine arm the residual is SCHED-PROEPI (`sd $16` before `sd $17`, the
+ * hoisted `lui $17`) — engine96 90.49% (unit objdiff report, task #510). The
+ * busy-wait callee 0x2833E8 is a `.L` label swallowed inside func_002833D8
+ * (text/183348.s) — a Phase-1 split-hygiene pin, not a C call, is what a
+ * promotion here needs. Matching arm stays INCLUDE_ASM, portable #else below. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", PumpDialogVoiceSystem);
 #else
@@ -3976,17 +4063,17 @@ s16 PumpDialogVoiceSystem(s32 waitForIdle) {
  * the cache, clears the manager's active/abort flags, and fires the registered
  * completion callback fn(arg, success) where success is false iff StopFileLoad
  * aborted the read (readStopped set).
- * WALL: g_fileLoadState materialise. The whole FlushCache/callback tail is
- * byte-exact (96%); the only delta is the `g_fileLoadState = 2` store. The
- * original splits the address into an explicit GPR (lui $3,%hi hoisted into the
- * CdGetLoadStatus beqz delay slot, sh $2,%lo($3) sunk into the b delay slot);
- * this cc1 emits it either gp_rel (1-insn, size<=15) or via the $at assembler
- * macro (size>=16) — never a hoisted cc1-allocated base reg. Genuine
- * gp/absolute-mix + delay-slot-hoist wall — functional equivalent only. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", PumpFileLoadCompletion);
-#else
-/* TODO(match): functional equivalent - not byte-exact; g_fileLoadState materialise wall. */
+ *
+ * MATCHED 100.00% on the sdk29 arm (unit objdiff report, objdiff_build.sh +
+ * unit_report.sh, clean; task #510; verify_match_unit.sh BYTE IDENTICAL).
+ * Two things had to be spelled the ROM's way: g_fileLoadState is declared
+ * ABSOLUTE_GLOBAL (the ROM hoists `lui $3,%hi` into the CdGetLoadStatus beqz
+ * delay slot and sinks `sh $2,%lo($3)` into the b delay slot — a compiler-
+ * allocated base register, which cc1 only emits for a global it does not class
+ * as gp-small), and the callback slot is cleared before its argument word so
+ * cc1's "source-last store first" scheduling leaves `sw $0,0x18` in the jalr
+ * delay slot. FlushCache is called by its raw-asm glabel name func_0011AEA0
+ * (the link binds the glabel, not the SDK header name). */
 void PumpFileLoadCompletion(s32 phase) {
     void *callback;
     s32 arg;
@@ -3999,19 +4086,18 @@ void PumpFileLoadCompletion(s32 phase) {
         g_fileLoadState = 2;
         return;
     }
-    FlushCache(0);
+    func_0011AEA0(0);
     success = (g_fileLoadVoiceState.readStopped == 0);
     callback = g_fileLoadVoiceState.pLoadCallback;
     g_fileLoadVoiceState.fileLoadActive = 0;
     g_fileLoadVoiceState.readStopped = 0;
     if (callback != NULL) {
         arg = g_fileLoadVoiceState.loadCallbackArg;
-        g_fileLoadVoiceState.loadCallbackArg = 0;
         g_fileLoadVoiceState.pLoadCallback = NULL;
+        g_fileLoadVoiceState.loadCallbackArg = 0;
         ((void (*)(void *, s32))callback)((void *)arg, success);
     }
 }
-#endif
 
 /* Voice-playback callback: on a non-null handle with a set flag, advance the
  * voice state 2 -> 3. */
@@ -4032,14 +4118,13 @@ void func_002B8D18(s32 flag, long handleAddr) {
  * emitter's listener block at +0x70 when the handle has a valid sample slot),
  * advance state 1 -> 2, or (when the id is zero) kick the queued dialog voice
  * from the manager's stashed parameters.
- * WALL (matching build): address-fold vs displacement. The mirror write
- * `g_listenerPosHistory[slot*0x70 + 0x70]` matches to 99.97%, but the original
- * keeps +0x70 as the store displacement (`sw $4,0x70($3)`) while this cc1 folds
- * it into the materialised base address (one instruction / reg differs). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", OnDialogVoiceStarted);
-#else
-/* TODO(match): functional equivalent - not byte-exact; address-fold wall. */
+ *
+ * MATCHED 100.00% on the sdk29 arm (unit objdiff report, objdiff_build.sh +
+ * unit_report.sh, clean; task #510; verify_match_unit.sh BYTE IDENTICAL). The
+ * mirror write keeps +0x70 as the store displacement (`sw $4,0x70($3)`): the
+ * slot block pointer is materialised in a local first — written inline,
+ * `g_listenerPosHistory + slot*0x70 + 0x70` has cc1 fold the +0x70 into the
+ * symbol's %lo. */
 void OnDialogVoiceStarted(s32 voiceId, long handleAddr) {
     VoiceHandle *handle = (VoiceHandle *)handleAddr;
     if (handle == NULL) {
@@ -4047,7 +4132,8 @@ void OnDialogVoiceStarted(s32 voiceId, long handleAddr) {
     }
     handle->voiceId = voiceId;
     if (handle->sampleSlot >= 0) {
-        *(s32 *)(g_listenerPosHistory + handle->sampleSlot * 0x70 + 0x70) = voiceId;
+        s32 *slotBlock = (s32 *)(g_listenerPosHistory + handle->sampleSlot * 0x70);
+        slotBlock[0x70 / 4] = voiceId;
     }
     if (voiceId != 0) {
         if (handle->state == 1) {
@@ -4060,7 +4146,6 @@ void OnDialogVoiceStarted(s32 voiceId, long handleAddr) {
                          g_fileLoadVoiceState.dialogArg0);
     }
 }
-#endif
 
 /* Ambient-voice start callback: record the id and advance state 1 -> 2, or (when
  * the id is zero) kick the queued ambient voice from the manager's parameters. */
