@@ -296,6 +296,7 @@ extern s32  func_003513F0(void);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003503D8);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 75.25% / engine96 61.41%. Residual: GPREL-DELAY-SLOT: with the dead-passed arena args restored and func_126DC0 declared s32 the sdk29 arm reads 95.59% and the ONLY residual is the `lw a0,%gp_rel(g_pFmvArenaBase)($gp)` in the jal func_003512F0 delay slot, which GNU as expands as lui/lw+nop; rewriting that one line of base.s to the %gp_rel form assembles to 100.00% (tools/ee/.t513/probe/base_gprel.s) — a toolchain post-pass question, not a C one. */
 void func_003503D8(void) {
     func_00124B88(0);
     func_003512F0();
@@ -331,6 +332,7 @@ s32 func_003504F0(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvPtsQueueInit);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 71.55% / engine96 69.85%. Residual: PACKED-SAVE (5 callee saves) + 29 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves. Revisit with the gameplay-TU compiler.
 
@@ -380,6 +382,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/250080", func_0
  * 8-byte-packed saves (s0@0x0, ra@0x8; see header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350608);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 52.05% / engine96 33.50%. Residual: PACKED-SAVE (2 callee saves) + 16 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves (s0@0x0, ra@0x8). Revisit with the gameplay-TU compiler.
 
@@ -409,6 +412,7 @@ s32 func_00350608(FmvPtsQueue *q) {
 /* func_00350660: stream-state reset. Blocked: 8-byte-packed saves. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350660);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 98.65% / engine96 87.88%. Residual: PACKED-SAVE (2 callee saves) + 8 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves (s0@0x0, ra@0x8). Revisit with the gameplay-TU compiler.
 
@@ -442,6 +446,7 @@ void func_00350660(FmvPtsQueue *q) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003506A8);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 40.29% / engine96 5.87%. Residual: REGALLOC on sdk29 (a5-relative loads coloured v0/a0, beql/bnel inversion); not iterated (72 insns). */
 /* TODO(match): functional equivalent - not byte-exact; the original schedules
    the started/mode tests as branch-likely (bnel/beql) pairs the pinned cc1
    won't emit (40% best). Revisit with the gameplay-TU compiler. */
@@ -522,6 +527,7 @@ s32 func_00350840(FmvPtsQueue *q) {
  * 8-byte-packed saves (s0/s1/s2/s3/ra). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350868);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 81.88% / engine96 66.19%. Residual: PACKED-SAVE (5 callee saves) + 12 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves (s0/s1/s2/s3/ra).
 
@@ -558,6 +564,7 @@ void func_00350868(u8 *obj, u8 *src, s32 len, s32 dstOfs) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350910);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 30.39% / engine96 34.69%. Residual: PACKED-SAVE (4 callee saves) + 152 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves (s0..s2/ra) plus several branch-likely div-by-zero guards. Revisit
    with the gameplay-TU compiler.
@@ -672,6 +679,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", OnFmvGifDmaInte
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350F28);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 84.05% / engine96 76.10%. Residual: PACKED-SAVE (2 callee saves) + 9 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee saves. */
 extern s32 WaitVblankGetField(s32 mode);
 extern s32 g_bProgressiveScan;
@@ -694,6 +702,7 @@ void func_00350F78(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350F88);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 72.19% / engine96 53.51%. Residual: PACKED-SAVE (7 callee saves) + 35 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves (s0..s4/ra). Revisit with the gameplay-TU compiler.
 
@@ -736,6 +745,7 @@ s32 func_00350F88(u8 *unused, u8 *desc, u8 *ringBase) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003510C0);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 79.61% / engine96 54.65%. Residual: PACKED-SAVE (6 callee saves) + 24 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves (s0..s4/ra). Revisit with the gameplay-TU compiler.
 
@@ -777,6 +787,7 @@ s32 func_003510C0(u8 *unused, u8 *desc, u8 *ringBase) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003511A8);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 66.32% / engine96 51.71%. Residual: PACKED-SAVE (9 callee saves) + 50 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves (s0..s7/ra). Revisit with the gameplay-TU compiler.
 
@@ -844,9 +855,6 @@ s32 func_003512F8(u8 *base, u8 **out) {
  * six insns BEFORE the div, while the pinned cc1 keeps the check after the
  * div (with the fill store between) and swaps the size/fill registers.
  * Same div-expansion-scheduling family as GetRandomInt. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351328);
-#else
 /**
  * Commit up to @n bytes into the pts ring: clamps the request to the free
  * space (size - fill), advances both the fill count and the wrapped read
@@ -856,11 +864,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351328);
  * @param n    bytes the caller wishes to commit
  * @return     bytes committed (= min(n, size - fill))
  *
- * Faithful to the .s: reads size/fill/readOfs; take = (n < size-fill) ? n :
- * (size-fill) via slt+movn; readOfs = (readOfs + take) % size (the div whose
- * quotient is discarded and remainder mfhi'd back); fill += take stored
- * unconditionally before the readOfs store; $v0 (the return) is left holding
- * `take` from the movn and never reloaded.
+ * readOfs = (readOfs + take) % size (the div whose quotient is discarded and
+ * remainder mfhi'd back); fill += take is stored before the readOfs store;
+ * the return is `take` from the movn.
+ *
+ * Byte-exact on the sdk29 arm (cc1 2.9-ee-991111 -O2 -G8 -fno-gcse; task
+ * #513): unit objdiff 100.00% (objdiff_build.sh + unit_report.sh). Two
+ * spellings matter: the clamp is `if (n < space) space = n` on the SAME
+ * variable (gives the ROM's `slt; movn` with space as the default operand,
+ * see func_003513B8), and `size` is loaded before `fill` so the register
+ * allocator colours size=a3 / fill=a4 and the div-by-zero `beqzl a3; break`
+ * is scheduled right after the loads, as in the ROM. The ternary spelling
+ * with fill loaded first scored 74.12% (sdk29) / 20.59% (engine96).
  */
 s32 func_00351328(u8 *base, s32 n) {
     FmvPtsRing *ring = (FmvPtsRing *)base;
@@ -868,13 +883,16 @@ s32 func_00351328(u8 *base, s32 n) {
     s32 fill = ring->fill;
     s32 readOfs = ring->readOfs;
     s32 space = size - fill;
-    s32 take = (n < space) ? n : space;
 
-    ring->fill = fill + take;
-    ring->readOfs = (readOfs + take) % size;
-    return take;
+    if (n < space) {
+        space = n;
+    }
+    readOfs += space;
+    fill += space;
+    ring->readOfs = readOfs % size;
+    ring->fill = fill;
+    return space;
 }
-#endif
 
 /**
  * Peek the queued region of the pts ring: returns the queued byte count and
@@ -893,9 +911,6 @@ s32 func_00351370(u8 *base, u8 **out) {
  * fill)). Best attempt 95.6%: instruction-identical (incl. the fill-copy /
  * movn clamp shape) but the copy/condition temporaries colour v1/a2 where
  * the original has a2/v1 - the register-coloring wall. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003513B8);
-#else
 /**
  * Consume up to @n bytes from the pts ring: drops min(n, fill) bytes off the
  * queued count, leaving the read offset untouched (the caller wraps it), and
@@ -905,22 +920,29 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003513B8);
  * @param n    bytes the caller wishes to drop
  * @return     bytes dropped (= min(n, fill))
  *
- * Faithful to the .s: only the fill field (base+0x50004) is read; take =
- * (n < fill) ? n : fill via slt+movn. The STORED-back value is `fill - take`
- * (held in $6) but the RETURN ($v0) is `take` itself — the movn result is
- * never overwritten, so the function reports the consumed count, not the
- * remainder. (The cmp oracle caught an earlier version that returned the
- * remainder.)
+ * Only the fill field (base+0x50004) is read. The STORED-back value is
+ * `fill - take` but the RETURN is `take` itself — the function reports the
+ * consumed count, not the remainder. (The cmp oracle caught an earlier
+ * version that returned the remainder.)
+ *
+ * Byte-exact on the sdk29 arm (cc1 2.9-ee-991111 -O2 -G8 -fno-gcse; task
+ * #513): unit objdiff 100.00% (objdiff_build.sh + unit_report.sh). The
+ * clamp is written as `if (n < fill) fill = n` on the SAME variable so cc1
+ * emits the ROM's `slt; movn` with fill as the default operand — the
+ * `take = (n < fill) ? n : fill` spelling gives `movz` with n as default
+ * (66.11% on both arms).
  */
 s32 func_003513B8(u8 *base, s32 n) {
     FmvPtsRing *ring = (FmvPtsRing *)base;
     s32 fill = ring->fill;
-    s32 take = (n < fill) ? n : fill;
+    s32 rem = fill;
 
-    ring->fill = fill - take;
-    return take;
+    if (n < fill) {
+        fill = n;
+    }
+    ring->fill = rem - fill;
+    return fill;
 }
-#endif
 
 /**
  * Arm a stream request: store destination + length and report accepted.
@@ -950,6 +972,7 @@ s32 func_003513F0(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003513F8);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 64.74% / engine96 77.79%. Residual: PACKED-SAVE (6 callee saves) + 19 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 extern s32 func_001253A8(u32 lbn, u32 sectors, void *buf, void *mode); /* sceCdRead */
 extern s32 func_00124B88(s32 mode);                                    /* sceCdSync */
 s32 func_003513F8(u8 *obj, void *buf, s32 byteLen, s32 flag) {
@@ -990,6 +1013,7 @@ u32 func_00351498(u32 *s, u32 addr) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003514E0);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 75.44% / engine96 56.11%. Residual: PACKED-SAVE (2 callee saves) + 7 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 void func_003514E0(u32 chcrCmd) {
     func_0011F5E0();   /* DI */
     *(volatile u32 *)0x1000F590 = *(volatile u32 *)0x1000F520 | 0x10000;
@@ -1007,6 +1031,7 @@ void func_003514E0(u32 chcrCmd) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351550);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 75.44% / engine96 56.11%. Residual: PACKED-SAVE (2 callee saves) + 7 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 void func_00351550(u32 chcrCmd) {
     func_0011F5E0();   /* DI */
     *(volatile u32 *)0x1000F590 = *(volatile u32 *)0x1000F520 | 0x10000;
@@ -1034,6 +1059,7 @@ void func_003515C0(u64 *tag, u64 madr, u64 qwc, u64 id) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvBitstreamObjInit);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 38.57% / engine96 0.00%. Residual: PACKED-SAVE (2 callee saves) + 25 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 s32 FmvBitstreamObjInit(u8 *obj, u64 a, u64 b, u64 c, u64 d, u64 e) {
     s32 semaParam[8];
 
@@ -1063,6 +1089,7 @@ s32 FmvBitstreamObjInit(u8 *obj, u64 a, u64 b, u64 c, u64 d, u64 e) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvStreamStartDma);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 67.90% / engine96 63.94%. Residual: PACKED-SAVE (4 callee saves) + 61 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 void FmvStreamStartDma(u8 *stream) {
     s32 i;
 
@@ -1140,6 +1167,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003518B8);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351910);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 78.06% / engine96 70.31%. Residual: PACKED-SAVE (9 callee saves) + 72 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 s32 func_00351910(void *dmaq) {
     extern char D_1AE800[];   /* FMV "IPU_TO ring not armed" error string */
     s32 *obj = (s32 *)dmaq;
@@ -1227,6 +1255,7 @@ s32 func_00351910(void *dmaq) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351B10);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 91.84% / engine96 60.10%. Residual: PACKED-SAVE (2 callee saves) + 18 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 s32 func_00351B10(void *dmaq) {
     u8 *obj = dmaq;
 
@@ -1263,6 +1292,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351C20);
  * 8-byte-packed saves (s0@0x0, ra@0x8). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351F58);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 99.32% / engine96 62.64%. Residual: PACKED-SAVE only on sdk29 (2 callee saves at 16-byte stride, every non-save word equal); SCHED on engine96 (8-byte slots right, instruction set identical, order differs under -fno-schedule-insns; -fno-gcse+scheduling probed on the engine arm, no better). */
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves (s0@0x0, ra@0x8).
 
@@ -1289,6 +1319,7 @@ s32 func_00351F58(u8 *obj) {
  * 8-byte-packed saves (s0/s1/ra). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351FB0);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 76.58% / engine96 89.47%. Residual: PACKED-SAVE (3 callee saves) + 9 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves (s0/s1/ra). Revisit with the gameplay-TU compiler.
 
@@ -1315,6 +1346,7 @@ s32 func_00351FB0(void *stream) {
  * 8-byte-packed saves (s0@0x0, ra@0x8). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352000);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 75.67% / engine96 58.62%. Residual: PACKED-SAVE (2 callee saves) + 12 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves (s0/ra). Revisit with the gameplay-TU compiler.
 
@@ -1342,6 +1374,7 @@ s32 func_00352000(u8 *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352058);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 83.40% / engine96 59.19%. Residual: REGALLOC+BRANCH-SHAPE on sdk29 (a2/a3 colouring, `beqz t6`/`bnez` inversion, div-guard placement); not iterated (99 insns). */
 /* TODO(match): functional equivalent - not byte-exact; multiple div ops each
    guarded by a branch-likely beql/break div-by-zero check (the div-expansion-
    scheduling + branch-likely wall, same family as func_00351328). Revisit with
@@ -1432,6 +1465,7 @@ s32 func_00352058(u8 *obj, u8 *req) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003521B0);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 71.46% / engine96 67.53%. Residual: PACKED-SAVE (4 callee saves) + 40 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 s32 func_003521B0(void *dmaq, void *cmd) {
     u8 *q = (u8 *)dmaq;
     u8 *c = (u8 *)cmd;
@@ -1465,6 +1499,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003522C0);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvStreamInit);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 94.22% / engine96 85.55%. Residual: PACKED-SAVE (7 callee saves) + 11 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves. Revisit with the gameplay-TU compiler.
 
@@ -1526,6 +1561,7 @@ void func_003525D0(FmvStream *s) {
  * a 16-byte-slot 0x20 frame; the original packs 8-byte in 0x10. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003525D8);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 98.85% / engine96 84.62%. Residual: PACKED-SAVE only on sdk29 (2 callee saves at 16-byte stride, every non-save word equal); SCHED on engine96 (8-byte slots right, instruction set identical, order differs under -fno-schedule-insns; -fno-gcse+scheduling probed on the engine arm, no better). */
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee saves. */
 s32 func_003525D8(FmvStream *obj) {
     func_00351F58((u8 *)obj + 0x48);
@@ -1534,20 +1570,23 @@ s32 func_003525D8(FmvStream *obj) {
 }
 #endif
 
-#ifndef TARGET_NATIVE
-/* FmvRequestStop: `s->state = 1; return 1;`. Blocked: the original (later
- * SN cc1) reuses ONE `li v0,1` for both the store and the return value; the
- * pinned cc1 always materialises two (same wall as text/1907F0
- * func_00290EE8, re-measured here at 63%). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvRequestStop);
-#else
-/* TODO(match): functional equivalent - not byte-exact; the later-SN cc1 reuses
-   one `li v0,1` for both the store and the return; the pinned cc1 emits two.
-   Request a stop: mark the playback FSM "stop" (state 1) and report accepted. */
+#if defined(MATCH_FmvRequestStop) || defined(TARGET_NATIVE)
+/**
+ * Request a stop: mark the playback FSM "stop" (state 1) and report accepted.
+ *
+ * Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_FmvRequestStop;
+ * task #513): unit objdiff 100.00% (objdiff_build.sh + unit_report.sh) — the
+ * 2.96 cc1 reuses the one `li v0,1` for both the store and the return value,
+ * where the 2.9 arm materialises two (63.33% there, #6521's ARTIFACT class).
+ * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines
+ * no MATCH_.
+ */
 s32 FmvRequestStop(FmvStream *s) {
     s->state = 1;
     return 1;
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvRequestStop);
 #endif
 
 /**
@@ -1578,6 +1617,7 @@ s32 func_00352628(FmvStream *s, s32 state) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352638);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 54.39% / engine96 27.50%. Residual: SCHED on sdk29 (the obj+0x48 load and the tag store are placed early; 3 statement orders probed, none moves them). */
 s32 func_00352638(u8 *obj, u64 addr, u64 size, s32 pos, s32 tag) {
     struct {
         u64 addr;
@@ -1621,6 +1661,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003526A8);
  * 8-byte-packed saves (s0/s1/ra). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352780);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 75.39% / engine96 75.61%. Residual: PACKED-SAVE (3 callee saves) + 8 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves (s0/s1/ra). Revisit with the gameplay-TU compiler.
 
@@ -1647,6 +1688,7 @@ s32 func_00352780(FmvStream *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvDecodeThreadEntry);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 92.38% / engine96 64.59%. Residual: PACKED-SAVE (4 callee saves) + 5 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 extern void FmvStreamStartDma(u8 *stream);
 extern s32 FmvDisplayWorkerLoop(u8 *host);
 extern void func_00352B90(FmvFrameQueue *q);
@@ -1666,6 +1708,7 @@ s32 FmvDecodeThreadEntry(FmvStream *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvDisplayWorkerLoop);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 85.53% / engine96 55.33%. Residual: PACKED-SAVE (10 callee saves) + 43 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves (s0..s2/ra) plus a delay-slot %gp_rel read of the arena base mixed
    with its absolute form. Revisit with the gameplay-TU compiler.
@@ -1760,6 +1803,7 @@ s32 func_00352AB0(void) {
  * Blocked: 8-byte-packed saves (s0@0x20, ra@0x28). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352AE0);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 99.35% / engine96 54.25%. Residual: PACKED-SAVE only on sdk29 (2 callee saves at 16-byte stride, every non-save word equal); SCHED on engine96 (8-byte slots right, instruction set identical, order differs under -fno-schedule-insns; -fno-gcse+scheduling probed on the engine arm, no better). */
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves (s0@0x20, ra@0x28). Revisit with the gameplay-TU compiler.
 
@@ -1787,6 +1831,7 @@ s32 func_00352AE0(s32 unused, u8 *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvFrameQueueInit);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 84.82% / engine96 83.68%. Residual: SCHED-PROLOGUE-STORES on sdk29 (loop body exact with `off=0; do{...}while(i<count)`; the 5 header stores come out a1-first on both arms, ROM stores count=0 first and puts the `lui` in the blez delay slot). */
 /* TODO(match): functional equivalent - not byte-exact; header-store scheduling. */
 void FmvFrameQueueInit(s32 *rec, s32 arg1, s32 base, s32 count) {
     s32 i, off;
@@ -1832,6 +1877,7 @@ s32 func_00352BA0(FmvFrameQueue *q) {
  * (s0@0x0, ra@0x8). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvFrameQueuePush);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 66.50% / engine96 68.10%. Residual: PACKED-SAVE (2 callee saves) + 21 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves (s0/ra). Revisit with the gameplay-TU compiler.
 
@@ -1854,6 +1900,7 @@ void FmvFrameQueuePush(u8 *fq) {
  * 8-byte-packed saves (s0@0x0, ra@0x8). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvFrameQueueGetWriteSlot);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 95.31% / engine96 69.06%. Residual: PACKED-SAVE (2 callee saves) + 1 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves (s0/ra). Revisit with the gameplay-TU compiler.
 
@@ -1881,6 +1928,7 @@ s32 func_00352C70(FmvFrameQueue *q) {
  * cap) % cap slot). Blocked: 8-byte-packed saves (s0@0x0, ra@0x8). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvFrameQueueGetDisplaySlot);
 #else
+/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 96.52% / engine96 78.12%. Residual: PACKED-SAVE (2 callee saves) + 4 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves (s0/ra). Revisit with the gameplay-TU compiler.
 
