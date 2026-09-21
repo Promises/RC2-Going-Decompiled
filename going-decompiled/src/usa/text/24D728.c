@@ -63,6 +63,61 @@ typedef struct GuiInstance { u8 _bytes[0x2238]; } GuiInstance;
 _Static_assert(sizeof(GuiInstance) == 0x2238, "GuiInstance occupies game-state[0x36F28..0x39160)");
 #endif
 
+/* ---------------------------------------------------------------------------
+ * text/24D728 - Phase 4 promotion sweep, task #566 (round 4), 2026-09-21.
+ * Base: origin/master e3f50d43. Instrument for every % below: the unit objdiff
+ * report (tools/ee/unit_report.sh) over tools/ee/objdiff_build.sh, clean tree.
+ *
+ * RESULT: 18 #else arms measured on BOTH arms; 0 reached 100.00%; all 18 stay
+ * #else. Unit stays 7/31 and the NAME list is identical to the base (no
+ * untouched row moved, #7369). Per-arm % and residual class are in the
+ * TODO(match) block above each arm.
+ *
+ * THREE UNIT-WIDE FINDINGS
+ * 1. ARM ELIGIBILITY IS THE SAVE STRIDE, NOT THE %. Every function in this unit
+ *    saves its callee GPRs at 8-byte stride (the 2.96 engine layout). cc1 2.9
+ *    emits 16-byte stride as soon as the function saves >= 1 callee GPR, so its
+ *    frame is larger and it can never match. Measured: the 3 arms whose ROM
+ *    frame the sdk29 arm reproduces (func_0034D7D0, func_0034F9B8,
+ *    GuiHermiteInterp) are exactly the 3 with nGPR == 0 in the frozen .s -
+ *    3/3 and 15/15, no exceptions. The fuzzy % ranks sdk29 above engine96 on
+ *    14 of 18 arms and is MISLEADING for all 15 of those: % is not eligibility.
+ *    This CORROBORATES FACT #7422 (text/16E980) on a second unit rather than
+ *    narrowing it: #7422's ">= 2 callee saves" counts ra, so ">= 2 saves
+ *    including ra" and "nGPR >= 1 excluding ra" are the same predicate, and it
+ *    called all 18 arms here correctly.
+ * 2. THE UNIT SPANS >= 2 ORIGINAL TUs WITH DIFFERENT SCHEDULING. Adding
+ *    -fno-schedule-insns2 to the engine arm takes func_0034DB68 from 91.67% to
+ *    100.00% and simultaneously takes func_0034F1C0 - already byte-exact and
+ *    landed - from 100.00% to 87.50%. Both are in this carve unit, both on the
+ *    engine arm. No single per-unit flag matches both, so 24D728 cannot be a
+ *    single original translation unit. (Flag NOT landed: a per-unit flag change
+ *    is a landing-gate question, and this one regresses a landed match.)
+ * 3. THE DOMINANT RESIDUAL IS PROLOGUE STORE ORDER. Under both scheduler
+ *    settings the difference is where `sd ra` / the incoming-argument copy sit
+ *    among the register saves; neither setting reproduces the ROM across the
+ *    unit.
+ *
+ * SOURCE FIXES KEPT (they make these arms faithful; none of them promoted):
+ *  - Sibling-call guards on the 8 arms whose tail call cc1 2.96 turns into a
+ *    `j <callee>` the ROM never has (#7343): func_0034D828, func_0034DB68,
+ *    func_0034D8C8, func_0034DAB0, GuiManagerInitHudLists, func_0034F240,
+ *    func_0034F928, func_0034F9F8. func_0034D828 83.50 -> 95.00 and
+ *    func_0034DB68 76.46 -> 91.67 (engine96) on the guard alone.
+ *  - Six float literals respelled to the ROM's exact bits. cc1 2.96 converts a
+ *    decimal 1 ULP low (#7342), so the plain spelling is wrong in the bytes:
+ *    func_0034F028 pi x2 (0x40490FDB), func_0034F928 0.4/0.8/1.2
+ *    (0x3ECCCCCD/0x3F4CCCCD/0x3F99999A), func_0034F240 0.62 (0x3F1EB852). The
+ *    replacement decimals were read off a direct cc1 2.96 probe
+ *    (tools/ee/.t566/probe/ulp.c), not guessed - a +1 ULP decimal overshoots as
+ *    often as it lands. Both pi uses must be spelled identically or cc1 stops
+ *    CSE-ing them and materialises pi twice.
+ *  - GuiHermiteInterp now computes a*(2t^3-3t^2) + a in the ROM's operand
+ *    order, which is what the ROM's instruction stream does; the folded
+ *    "+ 1.0f" coefficient was a different expression. Score unchanged (85.59%),
+ *    residual is FP register colouring.
+ * --------------------------------------------------------------------------- */
+
 extern s32 *GuiElementGetColor(GuiElement *e);
 extern void GuiSpriteSetTexture(void *sprite, s32 textureId, s32 frame);
 extern void func_00339A88(void *p);
@@ -115,10 +170,15 @@ s32 func_0034D7A8(GuiHudManager *mgr) {
 
 /* func_0034D7D0: select the HUD frame sprite texture by mode (stored at
  * +0x15A4): mode 0 -> texture 0x7567, mode 1 -> 0xEAA2, else no change.
- * NEAR-MISS (89.55%): the C is structurally exact, but the original folds the
+ * NEAR-MISS (see the TODO(match) block below for the measured %): the C is
+ * structurally exact, but the original folds the
  * epilogue `ld $ra` into the case-exit branch delay slots (a cc1 epilogue-
  * scheduling artifact this toolchain won't reproduce). Kept as the portable
  * #else body; the matching build keeps the original bytes. */
+/* TODO(match) func_0034D7D0 - task #566 (round 4), measured on the COMMITTED tree (this file,
+ * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
+ * tools/ee/objdiff_build.sh, clean): sdk29 89.55%, engine96 86.82%. Eligible arm: sdk29+e96.
+ * Residual: EPILOGUE-ORDER (ROM folds `ld ra` into both case-exit branch delay slots) */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034D7D0);
 #else
@@ -150,6 +210,10 @@ void func_0034D7D0(GuiHudManager *mgr, s32 mode) {
  * frame-layout ceiling for any function saving 2+ GPRs across calls. The trailing
  * asm barrier already defeats the tail-call; only the save stride differs. Kept
  * as the portable #else; the matching build keeps the original bytes. */
+/* TODO(match) func_0034D828 - task #566 (round 4), measured on the COMMITTED tree (this file,
+ * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
+ * tools/ee/objdiff_build.sh, clean): sdk29 94.33%, engine96 95.00%. Eligible arm: e96.
+ * Residual: PRO-ORDER (one insn: `daddu s0,a0` emitted before `sd s1` instead of after) */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034D828);
 #else
@@ -168,6 +232,7 @@ void func_0034D828(GuiHudManager *mgr, s32 tex, s32 activeFlag) {
     if (*(s32 *)(m + 0x159C) != 0) {
         GuiSpriteSetTexture(m + 0x158, tex, 0);
     }
+    __asm__ __volatile__("");
 }
 #endif
 
@@ -186,6 +251,10 @@ void func_0034D828(GuiHudManager *mgr, s32 tex, s32 activeFlag) {
  * is identical every iteration, so the portable #else computes it once. `flag` is
  * the new active-state value; `tex` is unused on this path (it is the shared
  * sibling signature with func_0034D828). */
+/* TODO(match) func_0034D8C8 - task #566 (round 4), measured on the COMMITTED tree (this file,
+ * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
+ * tools/ee/objdiff_build.sh, clean): sdk29 53.65%, engine96 35.90%. Eligible arm: none.
+ * Residual: PACKED-SAVE both arms (ROM 0x40; sdk29 0x80, e96 0x50) + ORDER */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034D8C8);
 #else
@@ -211,6 +280,7 @@ void func_0034D8C8(GuiHudManager *mgr, s32 flag) {
         func_0034A3B8(m + 0xE2C, step.f);
         func_0034A3B8(m + 0xEB4, step.f);
     }
+    __asm__ __volatile__("");
 }
 #endif
 
@@ -228,6 +298,10 @@ extern u32 func_002AA3F0(u32 color1, u32 color2, s32 period, s32 counterSel, s32
 extern f32 *func_00337120(GuiElement *e);   /* -> element primary vec (float[0]) */
 #endif
 
+/* TODO(match) func_0034DAB0 - task #566 (round 4), measured on the COMMITTED tree (this file,
+ * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
+ * tools/ee/objdiff_build.sh, clean): sdk29 82.07%, engine96 58.98%. Eligible arm: e96.
+ * Residual: ORDER + ADDRESSING */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034DAB0);
 #else
@@ -246,6 +320,7 @@ void func_0034DAB0(GuiHudManager *mgr, s32 visible, f32 alpha) {
     color[0] = func_002AA3F0(0x60442D00, 0x70FFFEED, 0x14, 0, 0);
     *func_00337120(elem) = alpha;
     GuiElementSetVisible(elem, visible);
+    __asm__ __volatile__("");
 }
 #endif
 
@@ -254,6 +329,10 @@ void func_0034DAB0(GuiHudManager *mgr, s32 visible, f32 alpha) {
  * needs-reset latch is set, clear it and reset that region's four sub-list slots
  * (+0x1214/+0x12A8/+0x133C/+0x13D0 via func_0034A7F8, flag 0). `flag` is the new
  * active state. */
+/* TODO(match) func_0034DB68 - task #566 (round 4), measured on the COMMITTED tree (this file,
+ * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
+ * tools/ee/objdiff_build.sh, clean): sdk29 99.38%, engine96 91.67%. Eligible arm: e96.
+ * Residual: sdk29: PACKED-SAVE, frame only (ra@0x10 vs ROM 0x8). e96: SCHED-INSNS2 - reaches 100.00 under -fno-schedule-insns2, which regresses func_0034F1C0 100->87.50 */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034DB68);
 #else
@@ -267,6 +346,7 @@ void func_0034DB68(GuiHudManager *mgr, s32 flag) {
         func_0034A7F8(m + 0x133C, 0);
         func_0034A7F8(m + 0x13D0, 0);
     }
+    __asm__ __volatile__("");
 }
 #endif
 
@@ -328,6 +408,10 @@ extern void func_003374D8(void *listHead);
 extern void func_00338A80(void *listHead);
 #endif
 
+/* TODO(match) GuiManagerInitListRows - task #566 (round 4), measured on the COMMITTED tree (this file,
+ * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
+ * tools/ee/objdiff_build.sh, clean): sdk29 85.23%, engine96 76.97%. Eligible arm: e96.
+ * Residual: BNEL (ROM `bne`+2 nops, built `bnel`) + PRO-ORDER */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", GuiManagerInitListRows);
 #else
@@ -372,6 +456,10 @@ extern f32 *GuiSpriteGetTextureVec(GuiElement *e);
 extern void func_00338AB8(void *listHead, void *pool);
 #endif
 
+/* TODO(match) GuiManagerInitHudLists - task #566 (round 4), measured on the COMMITTED tree (this file,
+ * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
+ * tools/ee/objdiff_build.sh, clean): sdk29 67.93%, engine96 66.73%. Eligible arm: e96.
+ * Residual: ORDER + const-materialisation regalloc (at vs v1) */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", GuiManagerInitHudLists);
 #else
@@ -420,6 +508,7 @@ void GuiManagerInitHudLists(void *inst, void *gui, void *pool) {
     *(void **)((u8 *)inst + 0x798) = pool;
     func_00338AB8((u8 *)inst + 0x1D8C, pool);
     func_00338AB8((u8 *)inst + 0x1FDC, pool);
+    __asm__ __volatile__("");
 }
 #endif
 
@@ -436,6 +525,10 @@ void func_0034EF60(void) {
  * element-offset at vtable+0x8 and the function pointer at vtable+0xC and calls
  * it on (row + offset). `x`/`y` are integer pixel coords; `shade` an 8-bit
  * intensity. */
+/* TODO(match) func_0034EF68 - task #566 (round 4), measured on the COMMITTED tree (this file,
+ * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
+ * tools/ee/objdiff_build.sh, clean): sdk29 89.02%, engine96 83.91%. Eligible arm: e96.
+ * Residual: ORDER */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034EF68);
 #else
@@ -472,6 +565,10 @@ extern s32 D_1AE6EC;   /* highlighted-slot vertical bump */
 extern void *g_hudMobySpawnStart;   /* HUD record base; +0x28 = slot count */
 #endif
 
+/* TODO(match) func_0034F028 - task #566 (round 4), measured on the COMMITTED tree (this file,
+ * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
+ * tools/ee/objdiff_build.sh, clean): sdk29 77.83%, engine96 70.34%. Eligible arm: e96.
+ * Residual: ORDER (both pi literals now bit-exact) */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F028);
 #else
@@ -491,9 +588,9 @@ void func_0034F028(u8 *base, s32 baseX, s32 baseY, s32 shade) {
         f32 count = (f32)*(s32 *)((u8 *)&g_hudMobySpawnStart + 0x28);
         f32 angle = 2.0f * (f32)i;
         s32 x, y;
-        angle = angle * 3.14159265f;   /* 0x40490FDB pi   */
+        angle = angle * 3.1415929f;    /* 0x40490FDB pi - spelled +1 ULP (cc1 rounds 1 ULP low) */
         angle = angle / count;
-        angle = angle - 3.14159265f;
+        angle = angle - 3.1415929f;    /* same spelling as the multiply so cc1 CSEs one pi */
         angle = angle + 1.5707964f;    /* 0x3FC90FDB pi/2 */
         x = baseX + (s32)(func_00283B30(angle) * (D_1AE6E4 * 74.0f)) + 0x69;
         y = baseY + (s32)(func_00283B48(angle) * (D_1AE6E8 * 74.0f)) + 0x64;
@@ -574,6 +671,10 @@ extern s32  D_1AE6F4;                 /* gp-global passed to func_0034F028 */
 extern s32  D_1AE6F8;                 /* gp-global passed to func_0034F028 */
 #endif
 
+/* TODO(match) func_0034F240 - task #566 (round 4), measured on the COMMITTED tree (this file,
+ * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
+ * tools/ee/objdiff_build.sh, clean): sdk29 59.21%, engine96 38.21%. Eligible arm: e96.
+ * Residual: REGNUM (extra callee s2 once the sibcall is guarded) */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F240);
 #else
@@ -582,7 +683,7 @@ void func_0034F240(void *guiArg) {
     u8  *cam = g_sceneActorMobys + 0x674;   /* scene camera params */
     f32  saved = *(f32 *)(cam + 0xB0);
 
-    *(f32 *)(cam + 0xB0) = 0.62f;           /* 0x3F1EB852 */
+    *(f32 *)(cam + 0xB0) = 0.62000003f;     /* 0x3F1EB852 (0.62f); cc1 2.96 spells 0.62f 1 ULP low */
     BuildCameraProjection();
 
     if (D_1A8C64 == 0) {
@@ -604,6 +705,7 @@ void func_0034F240(void *guiArg) {
 
     *(f32 *)(cam + 0xB0) = saved;
     BuildCameraProjection();
+    __asm__ __volatile__("");
 }
 #endif
 
@@ -706,6 +808,10 @@ extern void  func_0033F000(void *s, void *ctx);
 extern void  func_0033F200(void *s, void *ctx);
 #endif
 
+/* TODO(match) GuiSystemInit - task #566 (round 4), measured on the COMMITTED tree (this file,
+ * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
+ * tools/ee/objdiff_build.sh, clean): sdk29 81.91%, engine96 52.60%. Eligible arm: e96.
+ * Residual: ORDER, 351 body rows */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", GuiSystemInit);
 #else
@@ -836,6 +942,10 @@ extern void func_00126288(void *dst, s32 texId, s32 a, s32 b, s32 c,
  *  issue it to the entry's VRAM slot (base+0xE00, stride 0x400) via
  *  KickGifImageUpload, and wait for the GS paths to idle between uploads. Clears
  *  the queue count when done. */
+/* TODO(match) func_0034F868 - task #566 (round 4), measured on the COMMITTED tree (this file,
+ * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
+ * tools/ee/objdiff_build.sh, clean): sdk29 90.89%, engine96 79.87%. Eligible arm: e96.
+ * Residual: REGNUM (s0/s1/s2/s3 rotated) + ORDER */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F868);
 #else
@@ -877,6 +987,10 @@ extern void func_00283638(void *dst);/* zero a 16-byte quadword at dst */
  *  16-byte matrix-blend blocks at +0x3A0 and +0x3B0. Called with the light-setup
  *  context (its sibling F9B8/F9F8/FAF8 use it), but this one writes only the
  *  global directional light, so ctx is unused here. */
+/* TODO(match) func_0034F928 - task #566 (round 4), measured on the COMMITTED tree (this file,
+ * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
+ * tools/ee/objdiff_build.sh, clean): sdk29 56.94%, engine96 49.47%. Eligible arm: none.
+ * Residual: PACKED-SAVE on e96 (ROM 0x10 vs 0x20) + ORDER (3 float literals now bit-exact) */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F928);
 #else
@@ -884,9 +998,9 @@ void func_0034F928(void *ctx) {
     union { u32 u; f32 f; } dir;
     (void)ctx;
 
-    *(f32 *)(g_dirLightMatrices + 0x380) = 0.4f; /* 0x3ECCCCCD */
-    *(f32 *)(g_dirLightMatrices + 0x384) = 0.8f; /* 0x3F4CCCCD */
-    *(f32 *)(g_dirLightMatrices + 0x388) = 1.2f; /* 0x3F99999A */
+    *(f32 *)(g_dirLightMatrices + 0x380) = 0.40000001f; /* 0x3ECCCCCD (0.4f); cc1 2.96 spells 0.4f 1 ULP low */
+    *(f32 *)(g_dirLightMatrices + 0x384) = 0.80000003f; /* 0x3F4CCCCD (0.8f); ditto */
+    *(f32 *)(g_dirLightMatrices + 0x388) = 1.2000001f;  /* 0x3F99999A (1.2f); ditto */
     *(s32 *)(g_dirLightMatrices + 0x38C) = 0;
     dir.u = 0x3F13B646u; /* ~0.577 direction component */
     *(f32 *)(g_dirLightMatrices + 0x390) = dir.f;
@@ -896,16 +1010,22 @@ void func_0034F928(void *ctx) {
     *(s32 *)(g_dirLightMatrices + 0x39C) = 0;
     func_00283638(g_dirLightMatrices + 0x3A0);
     func_00283638(g_dirLightMatrices + 0x3B0);
+    __asm__ __volatile__("");
 }
 #endif
 
 /* func_0034F9B8: reset the camera-state HUD sub-block (clear the three ints at
  * +0x140/+0x144/+0x148), run func_00283D10 on its +0x370 sub-object, then
  * rebuild the frame view matrices.
- * NEAR-MISS (85.00%): the C reproduces every instruction except the position of
+ * NEAR-MISS (see the TODO(match) block below for the measured %): the C
+ * reproduces every instruction except the position of
  * the `sd $ra` prologue save, which the original schedules between the `lui` and
  * the `%lo` addiu of the global address (a cc1 prologue-scheduling artifact).
  * Kept as the portable #else; the matching build keeps the original bytes. */
+/* TODO(match) func_0034F9B8 - task #566 (round 4), measured on the COMMITTED tree (this file,
+ * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
+ * tools/ee/objdiff_build.sh, clean): sdk29 85.00%, engine96 41.07%. Eligible arm: sdk29.
+ * Residual: PRO-ORDER (ROM schedules `sd ra` between the lui and the %lo addiu) */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F9B8);
 #else
@@ -939,6 +1059,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0
  *   framePtr = (u8*)seqDef + (seqDef[0x10]<<2) + 0x1C + (seqDef[0x13]<<2);
  *   frame0Ptr = *(seqDef + frame0*4 + 0x1C); classFlag = cls[0x8].
  * Kept INCLUDE_ASM for the matching build; #else is the portable equivalent. */
+/* TODO(match) func_0034F9F8 - task #566 (round 4), measured on the COMMITTED tree (this file,
+ * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
+ * tools/ee/objdiff_build.sh, clean): sdk29 53.50%, engine96 48.86%. Eligible arm: e96.
+ * Residual: ORDER */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F9F8);
 #else
@@ -995,6 +1119,7 @@ void func_0034F9F8(void *mgr) {
         m2->framePtr1 = base;
     }
     UpdateMobyBSphereAndGrid(m2);
+    __asm__ __volatile__("");
 }
 #endif
 
@@ -1014,6 +1139,10 @@ extern void func_002A1138(void *rec, s32 flag);
  *  specific packet body, then a second packet at the plain screen origin
  *  (g_gsPixelOffset{X,Y}) is emitted and the cursor advances 0x30 again. The
  *  ctx (arg0) is the shared light/render context, unused here. */
+/* TODO(match) func_0034FAF8 - task #566 (round 4), measured on the COMMITTED tree (this file,
+ * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
+ * tools/ee/objdiff_build.sh, clean): sdk29 52.10%, engine96 36.78%. Eligible arm: none.
+ * Residual: PACKED-SAVE on e96 (ROM 0x20 vs 0x40) + ORDER */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034FAF8);
 #else
@@ -1038,6 +1167,10 @@ void func_0034FAF8(void *ctx, u8 *rec) {
  *   a*(2t^3-3t^2+1) + b*(t^3-2t^2+t) + c*(t^3-t^2) + d*(3t^2-2t^3).
  * The matching build keeps the original (FPU instruction scheduling differs);
  * the #else is the portable equivalent. */
+/* TODO(match) GuiHermiteInterp - task #566 (round 4), measured on the COMMITTED tree (this file,
+ * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
+ * tools/ee/objdiff_build.sh, clean): sdk29 85.59%, engine96 76.23%. Eligible arm: sdk29.
+ * Residual: REGNUM-COLORING (FP allocation shifted throughout; instruction multiset near-identical) */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", GuiHermiteInterp);
 #else
@@ -1066,7 +1199,7 @@ f32 GuiHermiteInterp(f32 t, f32 a, f32 b, f32 c, f32 d) {
     }
     t2 = t * t;
     t3 = t2 * t;
-    return a * (2.0f * t3 - 3.0f * t2 + 1.0f)
+    return (2.0f * t3 - 3.0f * t2) * a + a
          + b * (t3 - 2.0f * t2 + t)
          + c * (t3 - t2)
          + d * (3.0f * t2 - 2.0f * t3);
@@ -1086,6 +1219,10 @@ extern s32 FmvStreamFeedLoop(void *dmaq, void *base, void *addq);   /* playback 
 extern void func_003503D8(void);     /* FMV teardown */
 #endif
 
+/* TODO(match) PlayFmvMovie - task #566 (round 4), measured on the COMMITTED tree (this file,
+ * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
+ * tools/ee/objdiff_build.sh, clean): sdk29 91.12%, engine96 59.05%. Eligible arm: none.
+ * Residual: PACKED-SAVE on e96 (ROM 0x30 vs 0x40) + ORDER */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", PlayFmvMovie);
 #else
