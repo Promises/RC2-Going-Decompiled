@@ -16,7 +16,19 @@ __asm__(".extern g_nGameState, 16");
 extern s32 g_nGameStatePending; /* 0x1A8BB8 pending top-level state (-2 = none) */
 extern s32 g_nGameState;        /* 0x1A8BB0 current top-level game/screen state */
 
+/* g_vramAllocCursor is reached TWO ways inside this one TU: %gp_rel in
+ * CloseTfragDrawSegment and BuildTieDrawSegment, absolute %hi/%lo in
+ * BuildTfragDrawSegment and FlushTieTextureUploads -- all four at 0x1A72D0.
+ * One `.extern` size cannot serve both, so the size is chosen PER ARM, which
+ * the MATCH_ guard already partitions: the sdk29 arm (which owns and matches
+ * FlushTieTextureUploads) keeps the absolute size-16 class, the engine96 arm
+ * (which owns BuildTieDrawSegment) takes the small-data class that yields
+ * gp_rel. build.sh defines no MATCH_, so the IMAGE always takes the 16. */
+#if defined(MATCH_BuildTieDrawSegment)
+__asm__(".extern g_vramAllocCursor, 4");
+#else
 __asm__(".extern g_vramAllocCursor, 16");
+#endif
 extern u8 *g_vramAllocCursor;   /* 0x1A72D0 byte-addressed VRAM bump cursor */
 
 void UploadTieTextures(u8 *vramCursor);
@@ -28,13 +40,14 @@ void CullAndBinTieInstances(void);
 void AllocateTieTextureVram(void);
 void EmitTieDrawPackets(void);
 void EmitTieLodMorphPackets(void);
-void CopyQwords(void *dst, const void *src, s32 qwordCount);
+/* NOTE: the third argument is a BYTE count despite the name (FACT #5479). */
+void CopyQwords(void *dst, const void *src, s32 byteCount);
 
 __asm__(".extern g_vramDynamicBase, 16");
 __asm__(".extern g_frameDmaCursor, 16");
 extern u8 *g_vramDynamicBase; /* 0x1A72D4 VRAM dynamic region base */
 extern u8 *g_frameDmaCursor;  /* 0x1B2228 frame VIF1 chain write cursor */
-extern u8 g_tieDrawTemplate[];/* 0x1ACAE0 32-qword tie draw-segment template */
+extern u8 g_tieDrawTemplate[];/* 0x1ACAE0 tie draw-segment template, 0x20 bytes = 2 qwords (FACT #5479) */
 
 /* One persistent tie-texture VRAM slot (stride 0x20). */
 typedef struct VramSlot {
@@ -95,6 +108,13 @@ extern TfragTexPatch g_tfragTexPatchList[];
 /* Per-texture VRAM block table: two u16 TBP values per texture index. */
 extern u16 g_tfragTexVramTable[];
 
+/* RESIDUAL CLASS (task #576): UNDIAGNOSED
+ *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
+ *   whole-unit blanket screen, clean tree): sdk29 76.03%, engine96 61.38%
+ *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
+ *   and the #else below remains the portable impl.
+ *   SCREENED ONLY. Both arms were measured; the residual was not diagnosed to a
+ *   mechanism. This is an open arm, not a wall -- do not read it as one. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", PatchTfragPacketTex0);
 #else
@@ -145,6 +165,15 @@ void PatchTfragPacketTex0(void) {
  * is written %gp_rel here but read absolute (the same gp/abs-split reload artifact
  * documented on BuildTieDrawSegment). Body is otherwise instruction-equivalent;
  * kept as the portable #else impl. */
+/* RESIDUAL CLASS (task #576): SPLIT-WITHIN-FUNCTION -- g_frameDmaCursor
+ *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
+ *   whole-unit blanket screen, clean tree): sdk29 73.33%, engine96 73.60%
+ *   (better arm: engine96). Neither reaches 100.00%, so this stays INCLUDE_ASM
+ *   and the #else below remains the portable impl.
+ *   the named symbol is reached BOTH ways inside this one function -- absolute
+ *   %hi/%lo AND %gp_rel, same address, plain loads/stores on both sides. cc1
+ *   picks the addressing from the symbol's size class, which is one value per
+ *   TU, so no source form and no per-arm `.extern` size can emit both. HARD. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", BuildTfragDrawSegment);
 #else
@@ -205,6 +234,13 @@ extern u8 *g_pTfragArray;   /* 0x1B20F0 -> base of the 0x40-byte tfrag headers *
  *  (the "retired" level). When every nibble has retired (word == 0xFFFF) the
  *  tfrag's +0x35 byte is set to 1 (fully culled). Tfrags matching no position are
  *  left untouched. Pure integer bookkeeping over the already-VU0-culled array. */
+/* RESIDUAL CLASS (task #576): UNDIAGNOSED
+ *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
+ *   whole-unit blanket screen, clean tree): sdk29 22.00%, engine96 32.14%
+ *   (better arm: engine96). Neither reaches 100.00%, so this stays INCLUDE_ASM
+ *   and the #else below remains the portable impl.
+ *   SCREENED ONLY. Both arms were measured; the residual was not diagnosed to a
+ *   mechanism. This is an open arm, not a wall -- do not read it as one. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F1B58);
 #else
@@ -258,6 +294,13 @@ extern s32 g_tieVisibleClassList[]; /* negative-terminated list of visible TIE c
 extern void *g_tieClassQueue[];     /* per-class record pointers (record: +0xF count, +0x1C packets) */
 extern u16 g_tieTexVramTable[];     /* two u16 VRAM block values per texture index */
 
+/* RESIDUAL CLASS (task #576): UNDIAGNOSED
+ *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
+ *   whole-unit blanket screen, clean tree): sdk29 64.17%, engine96 60.42%
+ *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
+ *   and the #else below remains the portable impl.
+ *   SCREENED ONLY. Both arms were measured; the residual was not diagnosed to a
+ *   mechanism. This is an open arm, not a wall -- do not read it as one. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", PatchTiePacketTex0);
 #else
@@ -302,15 +345,29 @@ void PatchTiePacketTex0(void) {
  * persistent VRAM slots, emit the per-class draw + LOD-morph packets, then
  * splice the 32-qword draw-segment template and advance the chain cursor.
  *
- * NOT byte-matched: the original TU reaches g_vramAllocCursor with %gp_rel HERE
- * but with absolute %hi/%lo in FlushTieTextureUploads (the same symbol, two
- * different addressings within one TU - the reload artifact). We size it for
- * FlushTieTextureUploads (which matches), so this store comes out absolute
- * instead of gp_rel. Body is otherwise instruction-identical; kept as the
- * portable #else impl (see docs/PORTING.md). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", BuildTieDrawSegment);
-#else
+ * Takes and returns nothing; operates entirely on the frame DMA chain globals.
+ * The template splice copies 0x20 BYTES (2 qwords, FACT #5479 -- CopyQwords'
+ * third argument is a byte count, corroborated here by g_frameDmaCursor, a u8*,
+ * advancing by the same 0x20), NOT 0x20 qwords.
+ *
+ * BYTE-EXACT on the engine96 arm (cc1 2.96-ee-001003 via MATCH_BuildTieDrawSegment,
+ * task #576): unit objdiff 100.00% (objdiff_build.sh + unit_report.sh, clean
+ * tree) and verify_match_unit.sh BYTE IDENTICAL TO ROM, 38/38 words, 20 relocs
+ * resolved.
+ *
+ * The lever is the per-arm `.extern g_vramAllocCursor` size at the top of this
+ * file, and it is the WHOLE residual -- the previous comment named the mechanism
+ * correctly. That store is the original's only %gp_rel reference here; under the
+ * absolute size-16 class it expands to a lui/sw PAIR, which cannot sit in the
+ * jal delay slot and shifts the tail. Isolated A/B, one line apart, same arm:
+ *   .extern g_vramAllocCursor, 16  -> 92.97%, verify_match_unit rc=1 DIFFERS
+ *   .extern g_vramAllocCursor, 4   -> 100.00%, rc=0 BYTE IDENTICAL
+ * Sizing it small for the WHOLE TU is not available: FlushTieTextureUploads
+ * reaches the same address absolutely and is already byte-exact on sdk29, so a
+ * TU-wide flip would trade one match for another. Splitting the size by arm
+ * costs nothing because the guard already routes each function to one arm, and
+ * build.sh defines no MATCH_, so the shipped image is untouched either way. */
+#if defined(MATCH_BuildTieDrawSegment) || defined(TARGET_NATIVE)
 void BuildTieDrawSegment(void) {
     AppendGsRegPacket(0x47, 0x5180B);
     g_vramAllocCursor = g_vramDynamicBase;
@@ -324,6 +381,8 @@ void BuildTieDrawSegment(void) {
     CopyQwords(g_frameDmaCursor, g_tieDrawTemplate, 0x20);
     g_frameDmaCursor += 0x20;
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", BuildTieDrawSegment);
 #endif
 
 /* TODO(hle): needs PS2 graphics/IO HLE backend - tie draw-pipeline frame-stack sliver (spimdisasm fragment). */
@@ -337,6 +396,13 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_0
  * branch-likely (the next slot's occupied byte is written in the loop's delay
  * slot); this cc1 lowers the do/while to a plain `bne`. Functionally identical;
  * kept as the portable #else impl (see docs/PORTING.md). */
+/* RESIDUAL CLASS (task #576): UNDIAGNOSED
+ *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
+ *   whole-unit blanket screen, clean tree): sdk29 68.70%, engine96 55.70%
+ *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
+ *   and the #else below remains the portable impl.
+ *   SCREENED ONLY. Both arms were measured; the residual was not diagnosed to a
+ *   mechanism. This is an open arm, not a wall -- do not read it as one. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", ResetVramSlotTable);
 #else
@@ -420,6 +486,15 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F5DF8);
  *  +0x1E byte gets bit 0 set (OR 1, preserving the other status bits — unlike
  *  func_002F1B58 which overwrites its mark byte). Slots matching no position are
  *  left untouched. Pure integer bit-packing over the VRAM slot table. */
+/* RESIDUAL CLASS (task #576): GPREL-MISMATCH-UNTESTED -- g_vramSlotTableStart
+ *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
+ *   whole-unit blanket screen, clean tree): sdk29 25.62%, engine96 32.00%
+ *   (better arm: engine96). Neither reaches 100.00%, so this stays INCLUDE_ASM
+ *   and the #else below remains the portable impl.
+ *   this arm reads the named symbol %gp_rel while the TU sizes it 16 (absolute).
+ *   The per-arm sizing lever that closed BuildTieDrawSegment is therefore a
+ *   CANDIDATE here and has NOT been tried -- the gap is far too wide for
+ *   addressing to be the whole residual, but it was not measured either way. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F5F70);
 #else
@@ -482,6 +557,12 @@ extern u8  g_bPlayerMode;                /* 0x18C0D4 0=Ratchet 1=Clank-solo 2=Gi
 extern u32 D_138320;                     /* 0x138320 pad/input state word */
 extern s16 g_hudClutSlots[];             /* 0x1B1818 HUD CLUT slot table */
 
+/* RESIDUAL CLASS (task #576): GPREL-MISMATCH-INSUFFICIENT -- g_nGameState + g_nGameStatePending; per-arm size 4 measured 46.89 -> 55.81 on engine96, still DIFFERS
+ *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
+ *   whole-unit blanket screen, clean tree): sdk29 46.89%, engine96 46.89%
+ *   (better arm: tie). Neither reaches 100.00%, so this stays INCLUDE_ASM
+ *   and the #else below remains the portable impl.
+ *   addressing is A residual but NOT the only one -- measured, not assumed: */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", ResetFxDrawQueues);
 #else
@@ -523,6 +604,15 @@ extern s32 D_1A9E70;            /* set to -1 when the frame counter desyncs */
  *  first 0x384 idle frames, bumps the current player's idle stat; and flags
  *  D_1A9E70 = -1 if the deferred-segment counter mirror has fallen out of step
  *  with the previous frame's value. */
+/* RESIDUAL CLASS (task #576): SPLIT-WITHIN-FUNCTION -- D_1A7390
+ *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
+ *   whole-unit blanket screen, clean tree): sdk29 81.32%, engine96 72.23%
+ *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
+ *   and the #else below remains the portable impl.
+ *   the named symbol is reached BOTH ways inside this one function -- absolute
+ *   %hi/%lo AND %gp_rel, same address, plain loads/stores on both sides. cc1
+ *   picks the addressing from the symbol's size class, which is one value per
+ *   TU, so no source form and no per-arm `.extern` size can emit both. HARD. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6110);
 #else
@@ -625,6 +715,13 @@ extern u8  g_currentLanguage;          /* 0x1A7BBC language index */
 /* Cinematic-scene start param block at g_tieVramLruSize + 0x20 (0x1B2188). */
 extern s32 g_cinematicSceneParams[];   /* [0]=+0x20 .. [4]=+0x30, [5]=+0x34 */
 
+/* RESIDUAL CLASS (task #576): UNDIAGNOSED
+ *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
+ *   whole-unit blanket screen, clean tree): sdk29 38.21%, engine96 19.39%
+ *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
+ *   and the #else below remains the portable impl.
+ *   SCREENED ONLY. Both arms were measured; the residual was not diagnosed to a
+ *   mechanism. This is an open arm, not a wall -- do not read it as one. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6B98);
 #else
@@ -675,6 +772,13 @@ extern u8 g_listenerPosHistory[];    /* 0x188660 listener pos ring + flags */
 /* Cinematic-scene start param block at g_tieVramLruSize + 0x20 (0x1B2188). */
 extern s32 g_cinematicSceneParams[];  /* [0]=+0x20 .. [4]=+0x30, [5]=+0x34 */
 
+/* RESIDUAL CLASS (task #576): UNDIAGNOSED
+ *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
+ *   whole-unit blanket screen, clean tree): sdk29 81.96%, engine96 75.65%
+ *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
+ *   and the #else below remains the portable impl.
+ *   SCREENED ONLY. Both arms were measured; the residual was not diagnosed to a
+ *   mechanism. This is an open arm, not a wall -- do not read it as one. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6C78);
 #else
@@ -714,6 +818,15 @@ void ResetFrameArenas(void);
 extern s32 g_cinematicSceneParams[];     /* 0x1B2188 block; [5]=+0x34 voice id */
 extern u8 g_listenerPosHistory[];        /* 0x188660 listener pos ring + flags */
 
+/* RESIDUAL CLASS (task #576): SPLIT-WITHIN-FUNCTION -- g_exitCinematicCallbackArg
+ *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
+ *   whole-unit blanket screen, clean tree): sdk29 75.15%, engine96 70.45%
+ *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
+ *   and the #else below remains the portable impl.
+ *   the named symbol is reached BOTH ways inside this one function -- absolute
+ *   %hi/%lo AND %gp_rel, same address, plain loads/stores on both sides. cc1
+ *   picks the addressing from the symbol's size class, which is one value per
+ *   TU, so no source form and no per-arm `.extern` size can emit both. HARD. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", EnterCinematicBeginPlayback);
 #else
@@ -787,6 +900,13 @@ s32  PlayFmvMovie(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f);
 s32  DequeueCinematic(void *queue, s32 *outId, s32 *outType);
 s32  RequestGameStateChange(s32 a, s32 b, s32 c, s32 d, s32 e);
 
+/* RESIDUAL CLASS (task #576): UNDIAGNOSED
+ *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
+ *   whole-unit blanket screen, clean tree): sdk29 70.59%, engine96 58.87%
+ *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
+ *   and the #else below remains the portable impl.
+ *   SCREENED ONLY. Both arms were measured; the residual was not diagnosed to a
+ *   mechanism. This is an open arm, not a wall -- do not read it as one. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", RunCinematicPlaybackFrame);
 #else
@@ -955,6 +1075,13 @@ void func_002F72D8(void) {
  * the original packs the save slots 8-byte (frame 0x20) while this cc1 emits
  * 16-byte spacing (frame 0x30). Body is otherwise instruction-identical; kept
  * as the portable #else impl (see docs/PORTING.md). */
+/* RESIDUAL CLASS (task #576): UNDIAGNOSED
+ *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
+ *   whole-unit blanket screen, clean tree): sdk29 77.27%, engine96 74.96%
+ *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
+ *   and the #else below remains the portable impl.
+ *   SCREENED ONLY. Both arms were measured; the residual was not diagnosed to a
+ *   mechanism. This is an open arm, not a wall -- do not read it as one. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F7328);
 #else
@@ -999,6 +1126,13 @@ extern s32 GetWeaponStatsAtLevel(void *outStatBlock, s32 itemId, s32 level);
  *   - +0x154 == 0 && +0x150 == 0 (a plain item): return g_weaponTable's +0x80
  *     price for the item's currently-equipped variant slot.
  *  The +0x154 == 0 && +0x150 != 0 case (and any failed lookup) returns 0. */
+/* RESIDUAL CLASS (task #576): UNDIAGNOSED
+ *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
+ *   whole-unit blanket screen, clean tree): sdk29 46.50%, engine96 34.16%
+ *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
+ *   and the #else below remains the portable impl.
+ *   SCREENED ONLY. Both arms were measured; the residual was not diagnosed to a
+ *   mechanism. This is an open arm, not a wall -- do not read it as one. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", GetVendorItemPrice);
 #else
@@ -1061,6 +1195,13 @@ s32 GetVendorItemPrice(void) {
  *
  * Engine-region (ee-gcc 2.96) — matching-walled; portable #else body. Field
  * offsets kept literal (partial VendorUiState). */
+/* RESIDUAL CLASS (task #576): UNDIAGNOSED
+ *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
+ *   whole-unit blanket screen, clean tree): sdk29 30.48%, engine96 28.42%
+ *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
+ *   and the #else below remains the portable impl.
+ *   SCREENED ONLY. Both arms were measured; the residual was not diagnosed to a
+ *   mechanism. This is an open arm, not a wall -- do not read it as one. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", BuildVendorItemList);
 #else
@@ -1373,6 +1514,13 @@ extern s32 IsVendorUpgradesUnlocked(void);
  *  stores (i + 0xEA92) at +0x0, the slot's source word D_1AD2E8[i] at +0x4, and the
  *  slot index i at +0x8; the running count lives at +0x740. Resets the count and
  *  the D_1AD238 latch first. Note the flagged path SKIPS the unlock call. */
+/* RESIDUAL CLASS (task #576): UNDIAGNOSED
+ *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
+ *   whole-unit blanket screen, clean tree): sdk29 42.54%, engine96 48.78%
+ *   (better arm: engine96). Neither reaches 100.00%, so this stays INCLUDE_ASM
+ *   and the #else below remains the portable impl.
+ *   SCREENED ONLY. Both arms were measured; the residual was not diagnosed to a
+ *   mechanism. This is an open arm, not a wall -- do not read it as one. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F8038);
 #else
@@ -1414,6 +1562,13 @@ void func_002F8038(void) {
  * the portable #else impl. */
 extern u32 D_264E40[][4]; /* 0x264E40 record table (stride 0x10, <=0x38 rows) */
 
+/* RESIDUAL CLASS (task #576): UNDIAGNOSED
+ *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
+ *   whole-unit blanket screen, clean tree): sdk29 31.48%, engine96 59.70%
+ *   (better arm: engine96). Neither reaches 100.00%, so this stays INCLUDE_ASM
+ *   and the #else below remains the portable impl.
+ *   SCREENED ONLY. Both arms were measured; the residual was not diagnosed to a
+ *   mechanism. This is an open arm, not a wall -- do not read it as one. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F81A0);
 #else
@@ -1459,6 +1614,15 @@ s32 func_002F81A0(s32 expected, s32 key, s32 col) {
  *           skipped. (The compiler expanded the tier-word offset into a 3-way
  *           branch; it is just +0x98 + tier*4.) Engine-region (ee-gcc 2.96) —
  *           matching-walled; portable #else body. Field offsets kept literal. */
+/* RESIDUAL CLASS (task #576): SPLIT-WITHIN-FUNCTION -- g_playerProgress
+ *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
+ *   whole-unit blanket screen, clean tree): sdk29 33.56%, engine96 34.91%
+ *   (better arm: engine96). Neither reaches 100.00%, so this stays INCLUDE_ASM
+ *   and the #else below remains the portable impl.
+ *   the named symbol is reached BOTH ways inside this one function -- absolute
+ *   %hi/%lo AND %gp_rel, same address, plain loads/stores on both sides. cc1
+ *   picks the addressing from the symbol's size class, which is one value per
+ *   TU, so no source form and no per-arm `.extern` size can emit both. HARD. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F8228);
 #else
@@ -1552,6 +1716,15 @@ void func_002F8228(void) {
  *
  * Engine-region (ee-gcc 2.96) — matching-walled; portable #else body. Field offsets
  * kept literal (partial VendorUiState). */
+/* RESIDUAL CLASS (task #576): SPLIT-WITHIN-FUNCTION -- g_shipCustomization
+ *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
+ *   whole-unit blanket screen, clean tree): sdk29 20.46%, engine96 18.09%
+ *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
+ *   and the #else below remains the portable impl.
+ *   the named symbol is reached BOTH ways inside this one function -- absolute
+ *   %hi/%lo AND %gp_rel, same address, plain loads/stores on both sides. cc1
+ *   picks the addressing from the symbol's size class, which is one value per
+ *   TU, so no source form and no per-arm `.extern` size can emit both. HARD. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F85B8);
 #else
@@ -1666,6 +1839,13 @@ void func_002F85B8(void) {
  * The `g_nVendorPurchaseState+0x4C` reference in the original is a linker
  * nearest-symbol artifact for g_vendorUi+0xD0 (delta 0x84) — kept ui-relative here.
  * Matching-walled — kept as the portable #else impl. Field offsets kept literal. */
+/* RESIDUAL CLASS (task #576): UNDIAGNOSED
+ *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
+ *   whole-unit blanket screen, clean tree): sdk29 52.85%, engine96 51.02%
+ *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
+ *   and the #else below remains the portable impl.
+ *   SCREENED ONLY. Both arms were measured; the residual was not diagnosed to a
+ *   mechanism. This is an open arm, not a wall -- do not read it as one. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", EnterVendorMenu);
 #else
@@ -1968,6 +2148,12 @@ void EnterVendorMenu(s32 arg) {
  * VU0/angle math is done by callees, so the body ports faithfully as portable C.
  * Matching-walled — kept as the portable #else impl. Field offsets kept literal
  * (partial VendorUiState). */
+/* RESIDUAL CLASS (task #576): GPREL-MISMATCH-INSUFFICIENT -- g_nGameState; per-arm size 4 measured 65.58 -> 68.62 on engine96, still DIFFERS and still below its own sdk29 arm
+ *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
+ *   whole-unit blanket screen, clean tree): sdk29 75.63%, engine96 65.58%
+ *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
+ *   and the #else below remains the portable impl.
+ *   addressing is A residual but NOT the only one -- measured, not assumed: */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", TeardownVendorSceneRestorePlayer);
 #else
@@ -2054,15 +2240,38 @@ void TeardownVendorSceneRestorePlayer(void) {
 
 /* VendorUiState + g_vendorUi are declared above (moved up for func_002F8038). */
 extern u8 g_vendorCaptionFmt[];      /* 0x1AD338 caption format/template string */
+/* 0x00115DA8 IS sprintf (symbol_addrs: `sprintf = 0x00115DA8`), and the ROM's jal
+ * at 0x2F9788 spells it that way. It is nevertheless declared here under its
+ * legacy auto-name: introducing `sprintf` as a second live C name for 0x115DA8
+ * GROWS the ORPHAN_LATENT never-grow set (106 -> 107, NEW func_00115DA8) and
+ * landing_gate.sh usa --strict FAILS on it -- func_00115DA8 is still the spelling
+ * used by text/188858.c and text/1CA080.c, so the two names would coexist. Under
+ * RULING #7317 a baseline is never raised to admit a landing, so the rename is a
+ * separate tree-wide cleanup, not this landing. Measured here: the spelling is
+ * NOT a matching lever -- SetVendorCaption scores 99.00% either way. */
 void func_00115DA8(s32 widget, void *fmt, s32 captionId);
 
 /* Bind a caption string to the vendor UI's caption text widget (formatting it
- * through the shared text formatter) and reset the caption refresh counter.
+ * through sprintf at 0x115DA8) and reset the caption refresh counter.
  *
- * NOT byte-matched: 2 GPR saves (s0/ra) hit the 8-byte-packed-save wall - the
- * original packs both slots 8-byte (frame 0x10: sd s0,0x0 / sd ra,0x8) while
- * this cc1 emits 16-byte spacing (frame 0x20). Body is otherwise
- * instruction-identical; kept as the portable #else impl. */
+ * RESIDUAL CLASS: compiler-revision codegen, on BOTH arms and for a DIFFERENT
+ * reason on each -- measured task #576 (unit objdiff, objdiff_build.sh +
+ * unit_report.sh, clean tree, each arm built alone):
+ *   sdk29    99.00%  callee-save STRIDE only. Scheduling is already exact; the
+ *                    original packs the two slots 8-byte (frame 0x10,
+ *                    sd s0,0x0 / sd ra,0x8), this cc1 emits 16-byte spacing
+ *                    (frame 0x20, ra at +0x10).
+ *   engine96 77.20%  the packing is CORRECT here (frame 0x10, ra at +0x8) but
+ *                    the schedule is not: 2.96 hoists lui/addiu %hi(g_vendorUi)
+ *                    ahead of %hi(g_vendorCaptionFmt) and fills the jal delay
+ *                    slot with `addiu $5` instead of the original `lw $4,0x3C`.
+ * The former comment called the 8-byte packing a wall; the MECHANISM is right
+ * and is kept. What it did not say is that the packing is an ARM CHOICE (#565,
+ * func_002A0480) which here does NOT pay: the engine arm buys the stride and
+ * loses the schedule, so neither arm closes. Additionally NEITHER arm
+ * reproduces the original restore ORDER -- the ROM does ld s0,0x0 then
+ * ld ra,0x8, both held compilers do ra first. Not reachable by source form;
+ * left INCLUDE_ASM as the portable #else impl. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", SetVendorCaption);
 #else
@@ -2098,6 +2307,15 @@ void SetVendorCaption(s32 captionId) {
  * otherwise — the same set GetVendorItemPrice uses (a distinct table with the
  * same mapping). Engine-region (ee-gcc 2.96) — matching-walled; portable #else
  * body. Field offsets kept literal (partial VendorUiState). */
+/* RESIDUAL CLASS (task #576): SPLIT-WITHIN-FUNCTION -- g_boltCount, g_nVendorBuyQuantity
+ *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
+ *   whole-unit blanket screen, clean tree): sdk29 45.67%, engine96 36.16%
+ *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
+ *   and the #else below remains the portable impl.
+ *   the named symbol is reached BOTH ways inside this one function -- absolute
+ *   %hi/%lo AND %gp_rel, same address, plain loads/stores on both sides. cc1
+ *   picks the addressing from the symbol's size class, which is one value per
+ *   TU, so no source form and no per-arm `.extern` size can emit both. HARD. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", VendorPurchaseStateMachine);
 #else
@@ -2393,6 +2611,13 @@ void VendorPurchaseStateMachine(s32 *pConfirm, s32 *pAdjustable) {
  * Engine-region (ee-gcc 2.96): the lq/sq and ldl/ldr are plain block copies and
  * every model/texture load is a callee, so the body ports faithfully as portable
  * C. Matching-walled — kept as the portable #else impl. Field offsets kept literal. */
+/* RESIDUAL CLASS (task #576): UNDIAGNOSED
+ *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
+ *   whole-unit blanket screen, clean tree): sdk29 41.61%, engine96 45.37%
+ *   (better arm: engine96). Neither reaches 100.00%, so this stays INCLUDE_ASM
+ *   and the #else below remains the portable impl.
+ *   SCREENED ONLY. Both arms were measured; the residual was not diagnosed to a
+ *   mechanism. This is an open arm, not a wall -- do not read it as one. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", ExitVendorMenu);
 #else
@@ -2494,6 +2719,15 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_0
  * passed 0x10 and lands on (timer % 10) == 1. Early-outs if a purchase is already
  * latched this frame (+0x84). Engine-region (ee-gcc 2.96) — matching-walled;
  * portable #else body. Field offsets kept literal (partial VendorUiState). */
+/* RESIDUAL CLASS (task #576): SPLIT-WITHIN-FUNCTION -- g_boltCount
+ *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
+ *   whole-unit blanket screen, clean tree): sdk29 25.74%, engine96 28.07%
+ *   (better arm: engine96). Neither reaches 100.00%, so this stays INCLUDE_ASM
+ *   and the #else below remains the portable impl.
+ *   the named symbol is reached BOTH ways inside this one function -- absolute
+ *   %hi/%lo AND %gp_rel, same address, plain loads/stores on both sides. cc1
+ *   picks the addressing from the symbol's size class, which is one value per
+ *   TU, so no source form and no per-arm `.extern` size can emit both. HARD. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", UpdateVendorMenuInput);
 #else
