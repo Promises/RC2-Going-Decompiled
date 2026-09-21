@@ -245,7 +245,7 @@ typedef struct VoiceHandle {
     /* 0x0C */ u8 pad0C[0x4];
     /* 0x10 */ s16 gate;
     /* 0x12 */ u8 pad12[0x6];
-    /* 0x18 */ s32 sampleCursor;
+    /* 0x18 */ union { s32 v; } sampleCursor;
     /* 0x1C */ u8 pad1C[0x4];
     /* 0x20 */ s32 sampleSlot;     /* index into g_listenerPosHistory (stride 0x70) */
 } VoiceHandle;
@@ -4320,20 +4320,22 @@ void OnTertiaryVoiceStarted(s32 voiceId, long handleAddr) {
  * cursor is non-zero) advance the phase to "reading" and publish the cursor and
  * its word count (cursor / 4) into the file-load voice manager. The handle
  * arrives as a 64-bit value whose low 32 bits hold the address.
- * WALL: reloaded-ptr CSE. The original re-loads handle->sampleCursor from memory
- * for both the +0x30 publish and the +0x34 word-count divide; this cc1 CSEs the
- * load away to the just-stored byteCursor register (best 87.04%). Genuine
- * reload-vs-CSE wall — functional equivalent only. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B8F68);
-#else
-/* TODO(match): functional equivalent - not byte-exact; reloaded-ptr CSE wall. */
+ * Non-obvious: the original re-loads handle->sampleCursor from memory for both
+ * the +0x30 publish and the +0x34 word-count divide rather than reusing the
+ * just-stored register. Reproducing those two reloads is what makes this
+ * byte-exact, and it needs the STORE to be alias set 0 as well as the loads:
+ * with the store left plain, cc1's CSE hash entry for the address survives the
+ * s16 write to fileLoadPhase and only the second reload appears (90.19%).
+ * t562 @e3f50d43: the former "WALL: reloaded-ptr CSE ... Genuine reload-vs-CSE
+ * wall - functional equivalent only" (dated to before 2026-09-21) is FALSE.
+ * -> UNION-RELOAD, 100.00% (unit objdiff report, objdiff_build.sh, clean),
+ * verify_match_unit.sh BYTE IDENTICAL 28/28 words. */
 void func_002B8F68(s32 byteCursor, long handleAddr) {
     VoiceHandle *handle = (VoiceHandle *)handleAddr;
     if (handle == NULL) {
         return;
     }
-    handle->sampleCursor = byteCursor;
+    handle->sampleCursor.v = byteCursor;
     if (handle->gate == 0) {
         return;
     }
@@ -4344,10 +4346,9 @@ void func_002B8F68(s32 byteCursor, long handleAddr) {
         return;
     }
     g_fileLoadVoiceState.fileLoadPhase = 2;
-    g_fileLoadVoiceState.fileLoadByteCursor = handle->sampleCursor;
-    g_fileLoadVoiceState.fileLoadWordCount = handle->sampleCursor / 4;
+    g_fileLoadVoiceState.fileLoadByteCursor = handle->sampleCursor.v;
+    g_fileLoadVoiceState.fileLoadWordCount = handle->sampleCursor.v / 4;
 }
-#endif
 
 /* Handwritten stub-table fragment (orphaned addiu $sp / nop run) — see unit
  * header; kept INCLUDE_ASM permanently. */

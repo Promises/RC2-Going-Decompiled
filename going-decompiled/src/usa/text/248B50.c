@@ -29,14 +29,18 @@
  * named/typed). */
 typedef struct GuiWidget {
     /* 0x00 */ f32 unk00;
-    /* 0x04 */ u8 pad04[0x14];
+    /* 0x04 */ u8 pad04[0x4];
+    /* 0x08 */ union { f32 *p; } extentVec;
+    /* 0x0C */ u8 pad0C[0xC];
     /* 0x18 */ f32 unk18;
     /* 0x1C */ s32 unk1C;
     /* 0x20 */ s32 unk20;
     /* 0x24 */ f32 unk24;
     /* 0x28 */ s32 unk28;
     /* 0x2C */ s32 unk2C;
-    /* 0x30 */ u8 pad30[0x50];
+    /* 0x30 */ u8 pad30[0x2C];
+    /* 0x5C */ union { f32 *p; } originVec;
+    /* 0x60 */ u8 pad60[0x20];
     /* 0x80 */ s32 unk80;
     /* 0x84 */ s32 unk84;
     /* 0x88 */ u8 pad88[0xB8];
@@ -45,6 +49,18 @@ typedef struct GuiWidget {
     /* 0x148 */ u8 pad148[8];
     /* 0x150 */ s32 unk150;
 } GuiWidget;
+
+/* Compile-time layout verification, same convention as include/gui.h: ACTIVE ONLY
+ * under a 4-byte-pointer compile (native -m32 linter). ee-gcc 2.9 predates
+ * __SIZEOF_POINTER__, so these are INERT in the matching build and are NOT what
+ * holds the offsets there — the byte-exact verify is: a wrong displacement lands
+ * in the emitted lw/sw and verify_match_unit.sh reports DIFFERS. */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+_Static_assert(__builtin_offsetof(GuiWidget, extentVec) == 0x08, "GuiWidget.extentVec @ +0x08");
+_Static_assert(__builtin_offsetof(GuiWidget, originVec) == 0x5C, "GuiWidget.originVec @ +0x5C");
+_Static_assert(__builtin_offsetof(GuiWidget, unk80)     == 0x80, "GuiWidget.unk80 @ +0x80");
+_Static_assert(sizeof(GuiWidget) == 0x154, "GuiWidget size unchanged");
+#endif
 
 /* GuiAnim — the animated sub-widget the func_0034A7F8 / func_0034A860 / func_0034A3C0
  * family drives (a SEPARATE field layout from GuiWidget: its progress lives at
@@ -330,22 +346,25 @@ void func_00348E20(GuiWidget *w, s32 v) {
     *(s32 *)((char *)w + 0xC8) = v;
 }
 
-/* GuiMenuListSetOrigin: write the two float args into the block at *(w+0x5C) (+0/+4)
- * and zero +8/+0xC; the +0x5C pointer is re-read per store. Best 37%: the
- * original alternates two scratch registers reloaded just-in-time; the pinned
- * cc1 hoists the volatile reloads and reuses one register. WALL: just-in-time
- * reload register alternation. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", GuiMenuListSetOrigin);
-#else
+/* GuiMenuListSetOrigin: set the menu list's layout origin.
+ *   w - the menu-list widget; x, y - the new origin in 2D screen units.
+ * Returns nothing. Writes x,y into [0],[1] of the vec4 the widget points at
+ * from +0x5C and zeroes [2],[3] (the z/w lanes), so the whole vec4 is defined.
+ * Non-obvious: the origin pointer is RE-READ from +0x5C before each of the four
+ * stores, alternating two scratch registers. That is not redundancy to optimise
+ * away -- it is what the ROM's no-strict-aliasing compiler emitted, and
+ * reproducing it is what makes this byte-exact. The union-typed field gives the
+ * access alias set 0 so this cc1 cannot CSE the reload away.
+ * t562 @e3f50d43: the former "WALL: just-in-time reload register alternation"
+ * (dated to before 2026-09-21) is FALSE -- the wall was the reload, not the
+ * register alternation. -> UNION-RELOAD, 100.00% (unit objdiff report,
+ * objdiff_build.sh, clean), verify_match_unit.sh BYTE IDENTICAL 10/10 words. */
 void GuiMenuListSetOrigin(GuiWidget *w, f32 x, f32 y) {
-    f32 *block = *(f32 **)((char *)w + 0x5C);
-    block[0] = x;
-    block[1] = y;
-    *(s32 *)(block + 2) = 0;
-    *(s32 *)(block + 3) = 0;
+    w->originVec.p[0] = x;
+    w->originVec.p[1] = y;
+    ((s32 *)w->originVec.p)[2] = 0;
+    ((s32 *)w->originVec.p)[3] = 0;
 }
-#endif
 
 /* func_00348E50: store a1 to the +0x60 field. */
 void func_00348E50(GuiWidget *w, s32 v) {
@@ -1433,19 +1452,20 @@ void func_0034B950(GuiWidget *w) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034BA50);
 
-/* func_0034BD28: write the two float args into +0/+4 of the block at widget
- * +0x8 (pointer re-read per store). Best 60%: the original alternates two
- * scratch registers reloaded just-in-time; the pinned cc1 hoists/reuses one.
- * WALL: just-in-time reload register alternation. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034BD28);
-#else
+/* func_0034BD28: set the widget's extent/size vector.
+ *   w - the widget; x, y - the new extent in 2D screen units.
+ * Returns nothing. Writes x,y into [0],[1] of the vec4 the widget points at
+ * from +0x8 (the embedded GuiElement's third transform vec), leaving [2],[3]
+ * untouched -- unlike GuiMenuListSetOrigin, which zeroes them.
+ * Non-obvious: the pointer is RE-READ from +0x8 between the two stores; see
+ * GuiMenuListSetOrigin for why that is load-bearing.
+ * t562 @e3f50d43: the former "WALL: just-in-time reload register alternation"
+ * (dated to before 2026-09-21) is FALSE. -> UNION-RELOAD, 100.00% (unit objdiff
+ * report, objdiff_build.sh, clean), verify_match_unit.sh BYTE IDENTICAL 6/6. */
 void func_0034BD28(GuiWidget *w, f32 x, f32 y) {
-    f32 *block = *(f32 **)((char *)w + 0x8);
-    block[0] = x;
-    block[1] = y;
+    w->extentVec.p[0] = x;
+    w->extentVec.p[1] = y;
 }
-#endif
 
 /* GuiScreenSetEventAndReveal: stash the pending event id at +0x3F4. If the screen
  * is currently armed-for-reveal (+0x400 set), consume that flag (+0x400=0), raise
