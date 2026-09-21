@@ -163,6 +163,13 @@ u32 ColorLerpPacked(u32 colorA, u32 colorB, f32 t);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348BD0);
 #else
+/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
+ * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
+ * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
+ * cc1 2.96-ee-001003-1): sdk29 99.60% / engine96 80.00%.
+ * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 4/10 words differ;
+ * frozen-.s census: 2 callee GPR saves, 0 fp saves.
+ * Residual: PACKED-SAVE ONLY — all 4 differing words are frame/save-slot (addiu sp -0x20 vs -0x10, sd/ld ra 0x10 vs 0x8); every other word is identical, so this function is byte-exact the moment the 8-byte callee-save slot model is available. */
 extern void GuiElementInitTypeC(void *element);
 void *func_00348BD0(void *w) {
     GuiElementInitTypeC(w);
@@ -179,6 +186,13 @@ void *func_00348BD0(void *w) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348BF8);
 #else
+/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
+ * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
+ * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
+ * cc1 2.96-ee-001003-1): sdk29 92.60% / engine96 67.17%.
+ * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 31/48 words differ;
+ * frozen-.s census: 3 callee GPR saves, 0 fp saves.
+ * Residual: PACKED-SAVE (3 callee GPR saves) + REGALLOC: 8 frame/save-slot words incl. save ORDER (s0/s1 swapped), plus s0/s1-vs-a0/a1 colouring. */
 extern void *GuiPoolAlloc(void *pool);
 extern void *GuiPlacementNew(s32 size, void *at);
 extern void GuiTextElementInit(void *element, void *tmpl, void *pool);
@@ -232,6 +246,13 @@ void func_00348BF8(void *w, void *pool) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", GuiMenuListHandleInput);
 #else
+/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
+ * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
+ * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
+ * cc1 2.96-ee-001003-1): sdk29 37.52% / engine96 63.52%.
+ * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 49/56 words differ;
+ * frozen-.s census: 4 callee GPR saves, 0 fp saves.
+ * Residual: PACKED-SAVE (4 callee GPR saves) — 5 of the 49 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated. */
 s32 GuiMenuListHandleInput(GuiWidget *w, u32 inputMask) {
     s32 *curIdx = (s32 *)((char *)w + 0x60);
     s32 *rowEnable = (s32 *)((char *)w + 0x6C);   /* rowEnable[idx] != 0 => selectable */
@@ -300,6 +321,13 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", GuiMenuListSetRows);
 #else
+/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
+ * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
+ * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
+ * cc1 2.96-ee-001003-1): sdk29 47.33% / engine96 72.30%.
+ * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 28/30 words differ;
+ * frozen-.s census: 0 callee GPR saves, 0 fp saves.
+ * Residual: no callee saves and no frame/save-slot words in the diff — residual is REGALLOC/SCHED on the 28 differing words; not iterated. */
 void GuiMenuListSetRows(GuiWidget *w, f32 *table) {
     f32 *end;
     s32 count;
@@ -399,6 +427,13 @@ s32 func_00348E68(GuiWidget *w) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", GuiMenuListDraw);
 #else
+/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
+ * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
+ * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
+ * cc1 2.96-ee-001003-1): sdk29 28.20% / engine96 24.17%.
+ * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 210/216 words differ;
+ * frozen-.s census: 8 callee GPR saves, 4 fp saves.
+ * Residual: PACKED-SAVE (8 callee GPR saves, 4 fp) — 12 of the 210 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated. */
 void GuiMenuListDraw(GuiWidget *self) {
     char *p = (char *)self;
     f32 *scratch = func_00336C18(self);
@@ -490,6 +525,13 @@ void GuiMenuListDraw(GuiWidget *self) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00349200);
 #else
+/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
+ * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
+ * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
+ * cc1 2.96-ee-001003-1): sdk29 81.67% / engine96 76.00%.
+ * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 17/36 words differ;
+ * frozen-.s census: 5 callee GPR saves, 0 fp saves.
+ * Residual: PACKED-SAVE (5 callee GPR saves) — 4 of the 17 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated. */
 GuiWidget *func_00349200(GuiWidget *w) {
     char *row;
     s32 i;
@@ -535,6 +577,13 @@ void SetPopupLayoutMode(GuiWidget *w, s32 mode) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", SetPopupTitleText);
 #else
+/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
+ * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
+ * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
+ * cc1 2.96-ee-001003-1): sdk29 38.14% / engine96 48.98%.
+ * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 32/34 words differ;
+ * frozen-.s census: 4 callee GPR saves, 0 fp saves.
+ * Residual: PACKED-SAVE (4 callee GPR saves) — 4 of the 32 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated. */
 void SetPopupTitleText(GuiWidget *w, s32 *src) {
     u8 *atlas = g_guiInstance + 0x8710;
     GuiElementSetGlyph(w, atlas, src[0]);            /* src+0x0  */
@@ -562,6 +611,13 @@ void SetPopupItemEnabled(GuiWidget *w, s32 idx, s32 enabled) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", SetPopupItemText);
 #else
+/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
+ * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
+ * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
+ * cc1 2.96-ee-001003-1): sdk29 90.08% / engine96 76.00%.
+ * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 13/26 words differ;
+ * frozen-.s census: 4 callee GPR saves, 0 fp saves.
+ * Residual: PACKED-SAVE (4 callee GPR saves) + REGALLOC: 9 frame/save-slot words (frame 0x40 vs 0x20, save layout reordered). */
 void SetPopupItemText(GuiWidget *w, s32 count, s32 *ids) {
     char *row;
     s32 i;
@@ -590,6 +646,13 @@ void SetPopupItemText(GuiWidget *w, s32 count, s32 *ids) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", GuiScreenWithPlanetNameInit);
 #else
+/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
+ * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
+ * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
+ * cc1 2.96-ee-001003-1): sdk29 59.04% / engine96 57.26%.
+ * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 179/194 words differ;
+ * frozen-.s census: 9 callee GPR saves, 1 fp saves.
+ * Residual: PACKED-SAVE (9 callee GPR saves, 1 fp) — 10 of the 179 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated. */
 extern void UpdatePopupMenu(GuiWidget *w, s32 arg);
 extern u8 D_1ADBE8[], D_1ADBF0[], D_1ADC00[], D_1ADF98[], D_1ADFA0[];
 extern u8 D_1AE570[], D_1AE578[], D_1AE588[];
@@ -682,6 +745,13 @@ GuiWidget *func_00349E88(GuiWidget *w) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00349E90);
 #else
+/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
+ * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
+ * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
+ * cc1 2.96-ee-001003-1): sdk29 88.81% / engine96 79.31%.
+ * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 14/18 words differ;
+ * frozen-.s census: 0 callee GPR saves, 0 fp saves.
+ * Residual: BASE-REGISTER SPLIT (no callee saves): the ROM drives one induction pointer at w+0x50 with negative store offsets (-0xC/-0x8/-0x4/0x0) and fills the bgez delay slot with the increment; cc1 2.9 splits the base into two registers. REFUTED LEVER (task #564): spelling the ROM's shape literally in C (p = w+0x50; p[-3..0]) is WORSE, 88.81% -> 86.75% sdk29, measured against a control differing by nothing else (tools/ee/.t564/src/23_* vs 24_*). */
 void func_00349E90(GuiWidget *w) {
     s32 *p;
     s32 i;
@@ -719,6 +789,13 @@ void func_0034A1D0(GuiWidget *w, s32 v) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A1D8);
 #else
+/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
+ * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
+ * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
+ * cc1 2.96-ee-001003-1): sdk29 57.23% / engine96 75.23%.
+ * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 12/12 words differ;
+ * frozen-.s census: 0 callee GPR saves, 0 fp saves.
+ * Residual: no callee saves and no frame/save-slot words in the diff — residual is REGALLOC/SCHED on the 12 differing words; not iterated. */
 void func_0034A1D8(GuiWidget *w) {
     s32 *p = (s32 *)((char *)w + 0x30);
     s32 i;
@@ -742,6 +819,13 @@ void func_0034A1D8(GuiWidget *w) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A210);
 #else
+/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
+ * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
+ * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
+ * cc1 2.96-ee-001003-1): sdk29 96.58% / engine96 72.40%.
+ * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 16/46 words differ;
+ * frozen-.s census: 2 callee GPR saves, 1 fp saves.
+ * Residual: PACKED-SAVE (2 callee GPR + 1 fp save) + FP REGNUM: 4 frame/save-slot words, remainder is $f-register numbering (46006346 vs 46006386) — REGNUM-COLORING. */
 GuiWidget *func_0034A210(GuiWidget *w) {
     f32 zero;
 
@@ -786,6 +870,13 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A2E0);
 #else
+/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
+ * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
+ * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
+ * cc1 2.96-ee-001003-1): sdk29 77.60% / engine96 77.60%.
+ * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 4/4 words differ;
+ * frozen-.s census: 0 callee GPR saves, 0 fp saves.
+ * Residual: no callee saves and no frame/save-slot words in the diff — residual is REGALLOC/SCHED on the 4 differing words; not iterated. */
 void func_0034A2E0(GuiWidget *w) {
     w->unk28 = 1;
     *(s32 *)((char *)w + 0x18) = 0;
@@ -817,6 +908,13 @@ s32 func_0034A308(GuiWidget *w, s32 v) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A318);
 #else
+/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
+ * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
+ * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
+ * cc1 2.96-ee-001003-1): sdk29 57.77% / engine96 43.85%.
+ * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 8/10 words differ;
+ * frozen-.s census: 0 callee GPR saves, 0 fp saves.
+ * Residual: no callee saves and no frame/save-slot words in the diff — residual is REGALLOC/SCHED on the 8 differing words; not iterated. */
 void func_0034A318(GuiWidget *w, s32 idx, f32 a, f32 b, f32 c, f32 d, f32 e) {
     f32 *rec = (f32 *)((char *)w + idx * 0x10);
     rec[0xC] = b;
@@ -834,6 +932,13 @@ void func_0034A318(GuiWidget *w, s32 idx, f32 a, f32 b, f32 c, f32 d, f32 e) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A350);
 #else
+/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
+ * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
+ * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
+ * cc1 2.96-ee-001003-1): sdk29 79.67% / engine96 81.67%.
+ * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 5/6 words differ;
+ * frozen-.s census: 0 callee GPR saves, 0 fp saves.
+ * Residual: no callee saves and no frame/save-slot words in the diff — residual is REGALLOC/SCHED on the 5 differing words; not iterated. */
 void func_0034A350(GuiWidget *w, s32 idx, f32 a, f32 b) {
     char *entry = (char *)w + (idx << 2);
     *(f32 *)(entry + 0x0) = a;
@@ -846,15 +951,29 @@ void func_0034A368(GuiWidget *w, s32 v) {
     w->unk84 = v;
 }
 
-/* func_0034A370: always latch +0x1C to a1; then, only while +0x28 is still 0,
- * arm the widget: set +0x18 (integer 0 when a1==1, float 1.0 otherwise) and
- * set the armed flag +0x28 = 1. NOTE the polarity — a1==1 stores 0, any other
- * value stores 1.0f (asm: bne $5,1 -> swc1 1.0; fallthrough -> sw $0). Best 62%:
- * branch-likely block layout + register-allocation deltas. WALL: branch-likely
- * block layout. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A370);
-#else
+/**
+ * func_0034A370: latch the widget's target value and arm its transition once.
+ *
+ * @param w  GUI widget whose transition/animation block is being armed.
+ * @param v  new target value; stored unconditionally at +0x1C.
+ *
+ * +0x1C is always written. Only while the armed flag +0x28 is still 0 are the
+ * start value +0x18 seeded and +0x28 set to 1, so a widget arms exactly once
+ * per disarm cycle.
+ *
+ * NOTE the polarity, and that the two stores to +0x18 have DIFFERENT TYPES:
+ * v == 1 stores the INTEGER 0, any other value stores the FLOAT 1.0f
+ * (asm: bne $5,1 -> swc1 1.0; fallthrough -> sw $0). The integer arm is
+ * therefore written through an explicit s32 lvalue rather than w->unk18.
+ *
+ * Byte-exact on the sdk29 arm (cc1 2.9-ee-991111, -O2 -G8 -fno-gcse; task
+ * #564): unit objdiff 100.00% (objdiff_build.sh + unit_report.sh) and
+ * verify_match_unit.sh BYTE IDENTICAL, 16/16 words, 0 relocs. The engine96 arm
+ * also reads 100.00%, so no MATCH_ guard is needed and the plain-C form serves
+ * both. RETIRED CLAIM: the previous "Best 62%: branch-likely block layout +
+ * register-allocation deltas. WALL: branch-likely block layout" note described
+ * a body this file does not carry — task #564's screen measures 100.00%.
+ */
 void func_0034A370(GuiWidget *w, s32 v) {
     w->unk1C = v;
     if (w->unk28 == 0) {
@@ -866,7 +985,6 @@ void func_0034A370(GuiWidget *w, s32 v) {
         w->unk28 = 1;
     }
 }
-#endif
 
 /* func_0034A3B0: store a1 to the +0x20 field. */
 void func_0034A3B0(GuiWidget *w, s32 v) {
@@ -913,6 +1031,13 @@ void func_0034A3B8(GuiWidget *w, f32 v) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A3C0);
 #else
+/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
+ * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
+ * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
+ * cc1 2.96-ee-001003-1): sdk29 55.98% / engine96 37.84%.
+ * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 176/186 words differ;
+ * frozen-.s census: 4 callee GPR saves, 0 fp saves.
+ * Residual: PACKED-SAVE (4 callee GPR saves) — 4 of the 176 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated. */
 /* keyframe-callback target vtable (obj at w->unk80): the dispatch reads a
  * half-word field offset at +0x10 and the method pointer at +0x14. */
 typedef struct GuiKeyframeTargetVtbl {
@@ -1036,6 +1161,13 @@ void func_0034A3C0(GuiWidget *w, s32 applyStep) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A658);
 #else
+/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
+ * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
+ * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
+ * cc1 2.96-ee-001003-1): sdk29 71.90% / engine96 69.10%.
+ * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 16/20 words differ;
+ * frozen-.s census: 0 callee GPR saves, 0 fp saves.
+ * Residual: no callee saves and no frame/save-slot words in the diff — residual is REGALLOC/SCHED on the 16 differing words; not iterated. */
 void func_0034A658(GuiWidget *w) {
     u32 *p;
     u32 *row;
@@ -1078,6 +1210,13 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A6B0);
 #else
+/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
+ * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
+ * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
+ * cc1 2.96-ee-001003-1): sdk29 69.19% / engine96 73.28%.
+ * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 45/56 words differ;
+ * frozen-.s census: 2 callee GPR saves, 1 fp saves.
+ * Residual: PACKED-SAVE (2 callee GPR saves, 1 fp) — 2 of the 45 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated. */
 void func_0034A6B0(GuiWidget *w) {
     union { u32 u; f32 f; } step;
     step.u = 0x3D88882Fu;   /* per-frame animation step, exact bits from the .s */
@@ -1117,6 +1256,13 @@ void func_0034A7A0(GuiWidget *w, s32 idx, s32 v) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A7B0);
 #else
+/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
+ * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
+ * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
+ * cc1 2.96-ee-001003-1): sdk29 64.31% / engine96 0.00%.
+ * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 9/12 words differ;
+ * frozen-.s census: 0 callee GPR saves, 0 fp saves.
+ * Residual: no callee saves and no frame/save-slot words in the diff — residual is REGALLOC/SCHED on the 9 differing words; not iterated. */
 void func_0034A7B0(GuiWidget *w, s32 idx1, s32 idx2, f32 a, f32 b, f32 c, f32 d) {
     f32 *rec = (f32 *)((char *)w + (idx1 << 4) + idx2 * 0x30 + 0x2C);
     rec[0] = a;
@@ -1146,6 +1292,13 @@ void func_0034A7E8(GuiWidget *w, s32 idx, s32 v) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A7F8);
 #else
+/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
+ * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
+ * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
+ * cc1 2.96-ee-001003-1): sdk29 73.80% / engine96 74.00%.
+ * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 11/12 words differ;
+ * frozen-.s census: 0 callee GPR saves, 0 fp saves.
+ * Residual: no callee saves and no frame/save-slot words in the diff — residual is REGALLOC/SCHED on the 11 differing words; not iterated. */
 void func_0034A7F8(GuiAnim *a, s32 flag) {
     if (flag == 0) {
         *(s32 *)((char *)a + 0x10) = 0;
@@ -1163,6 +1316,13 @@ void func_0034A7F8(GuiAnim *a, s32 flag) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A820);
 #else
+/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
+ * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
+ * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
+ * cc1 2.96-ee-001003-1): sdk29 79.69% / engine96 79.08%.
+ * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 12/12 words differ;
+ * frozen-.s census: 0 callee GPR saves, 0 fp saves.
+ * Residual: no callee saves and no frame/save-slot words in the diff — residual is REGALLOC/SCHED on the 12 differing words; not iterated. */
 void func_0034A820(GuiWidget *w, s32 flag) {
     if (flag == 0) {
         *(f32 *)((char *)w + 0x10) = 1.0f;
@@ -1204,6 +1364,13 @@ void func_0034A858(GuiWidget *w, f32 v) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A860);
 #else
+/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
+ * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
+ * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
+ * cc1 2.96-ee-001003-1): sdk29 81.26% / engine96 59.26%.
+ * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 89/104 words differ;
+ * frozen-.s census: 2 callee GPR saves, 1 fp saves.
+ * Residual: PACKED-SAVE (2 callee GPR saves, 1 fp) — 3 of the 89 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated. */
 void func_0034A860(GuiAnim *a) {
     f32 phase;
     f32 clamped;
@@ -1265,6 +1432,13 @@ void func_0034A860(GuiAnim *a) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A9F8);
 #else
+/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
+ * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
+ * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
+ * cc1 2.96-ee-001003-1): sdk29 98.54% / engine96 75.62%.
+ * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 8/38 words differ;
+ * frozen-.s census: 2 callee GPR saves, 0 fp saves.
+ * Residual: PACKED-SAVE (2 callee GPR saves) + operand ORDER: 4 frame/save-slot words, plus the &D_1AD8E8/&D_1AD908 addiu pairs emitted in the opposite order from the ROM (SCHED). */
 extern u8 D_1AD8E8[]; /* list-row vtable installed at widget +0x1CC */
 extern u8 D_1AD908[]; /* list-row vtable installed at widget +0x1D0 */
 void *func_0034A9F8(void *widget) {
@@ -1314,6 +1488,13 @@ void func_0034B1E8(GuiWidget *w, s32 v) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034B1F0);
 #else
+/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
+ * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
+ * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
+ * cc1 2.96-ee-001003-1): sdk29 90.00% / engine96 71.50%.
+ * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 11/12 words differ;
+ * frozen-.s census: 0 callee GPR saves, 0 fp saves.
+ * Residual: DSLOT-ABS (the #7420/#7441 delay-slot addressing class, ruled on in #525) — NOT a C-level wall. Every word matches except the g_bPlayerMode load: the ROM splits the macro across the beq delay slot (lui %hi in the slot, lbu %lo after), while cc1 2.9 emits the whole one-insn macro INTO the slot. REFUTED LEVER (task #564): the FACT #7435 assembler-absolute model, __asm__(".extern g_bPlayerMode, 16"), makes it WORSE — 90.00% -> 74.17% sdk29 (tools/ee/.t564/src/22_a370_b1f0_abs.c). NOTE the fuzzy/raw gap: 90.00% fuzzy but 11/12 words differ raw. */
 void func_0034B1F0(GuiWidget *w, s32 v) {
     s32 old = *(s32 *)((char *)w + 0x4);
     if (old != v && g_bPlayerMode == 0) {
@@ -1342,6 +1523,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034B548);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034B770);
 #else
+/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
+ * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
+ * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
+ * cc1 2.96-ee-001003-1): sdk29 72.40% / engine96 59.83%.
+ * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 105/112 words differ;
+ * frozen-.s census: 5 callee GPR saves, 0 fp saves.
+ * Residual: PACKED-SAVE (5 callee GPR saves) — 4 of the 105 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated. */
 extern s32 g_maxHealth;
 extern s32 g_nanotech;
 extern u8 g_soundBankHandlesBlk[];
@@ -1412,6 +1600,13 @@ void func_0034B770(GuiWidget *w) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034B950);
 #else
+/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
+ * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
+ * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
+ * cc1 2.96-ee-001003-1): sdk29 69.91% / engine96 74.02%.
+ * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 55/60 words differ;
+ * frozen-.s census: 2 callee GPR saves, 0 fp saves.
+ * Residual: PACKED-SAVE (2 callee GPR saves) — 2 of the 55 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated. */
 extern void func_0034B770(GuiWidget *w);
 extern f32 D_1AE740, D_1AE744, D_1AE748, D_1AE74C;
 void func_0034B950(GuiWidget *w) {
@@ -1475,6 +1670,13 @@ void func_0034BD28(GuiWidget *w, f32 x, f32 y) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", GuiScreenSetEventAndReveal);
 #else
+/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
+ * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
+ * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
+ * cc1 2.96-ee-001003-1): sdk29 69.58% / engine96 78.04%.
+ * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 24/30 words differ;
+ * frozen-.s census: 2 callee GPR saves, 0 fp saves.
+ * Residual: PACKED-SAVE (2 callee GPR saves) — 4 of the 24 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated. */
 void GuiScreenSetEventAndReveal(GuiWidget *w, s32 event) {
     *(s32 *)((char *)w + 0x3F4) = event;
     if (*(s32 *)((char *)w + 0x400) != 0) {
@@ -1505,6 +1707,13 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034BDB0);
 #else
+/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
+ * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
+ * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
+ * cc1 2.96-ee-001003-1): sdk29 51.70% / engine96 44.13%.
+ * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 100/101 words differ;
+ * frozen-.s census: 9 callee GPR saves, 0 fp saves.
+ * Residual: PACKED-SAVE (9 callee GPR saves) — 6 of the 100 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated. */
 extern u8 D_1AD908[]; /* vtable installed at +0x1464 */
 extern u8 D_1AD8E8[]; /* vtable installed at +0x1468 */
 void *func_0034BDB0(void *widget) {
