@@ -206,14 +206,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0460);
  * power-of-two bucket for that dimension). When the count is zero both outs are
  * cleared. Used when sizing/allocating the moby's anim working buffer.
  *
- * Save-wall blocked for matching (saves $16+$31 at 8-byte spacing under the later
- * cc1 model); provided as the TARGET_NATIVE #else arm, cmp-oracle-ready.
+ * Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_002A0480,
+ * task #565): unit objdiff 100.00% (objdiff_build.sh + unit_report.sh, clean
+ * tree), raw-verified byte-identical. The residual on the 2.9 arm is the
+ * callee-save stride and nothing else: 2.9 spills $16+$31 at 16-byte spacing,
+ * the ROM at 8 (98.81% there). That is the PACKED-SAVE revision difference, so
+ * it is an ARM CHOICE, not a wall -- the engine arm reproduces it exactly.
+ * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines
+ * no MATCH_.
  */
 extern s32 Log2Floor(s32 value);
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0480);
-#else
+#if defined(MATCH_func_002A0480) || defined(TARGET_NATIVE)
 void func_002A0480(Moby *moby, s32 *out1, s32 *out2) {
     u8 *anim = *(u8 **)((u8 *)moby + 0x24);
     u8 count = anim[0x2C];
@@ -226,6 +230,8 @@ void func_002A0480(Moby *moby, s32 *out1, s32 *out2) {
         *out2 = 0;
     }
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0480);
 #endif
 
 /* func_002A04D8 — pose and average two collision-mesh keyframe vectors for a
@@ -446,19 +452,19 @@ void func_002A0828(struct A0828List *list, struct A0828Node *node) {
  * owned by `moby`, or claims the first free (==0) slot, storing `moby` as the owner
  * and resetting that slot's frame counter (g_proceduralAnimSlotTimer); returns the
  * slot index, or -1 if all 16 slots are taken by other mobys.
- * WALL (~67%): the original lowers the two slot tests (==0 and ==moby) as a pair of
- * branch-LIKELY forms (beqzl/bnel) that put the `sw moby` store and the `slot++`
- * increment in the (nullified) delay slots; this cc1 always emits a plain bnez
- * skip-forward with a separate beql tail and never the branch-likely store pattern.
- * A fixed branch-shape / branch-likely lowering, not reachable by source form.
- * Left INCLUDE_ASM.
+ * Byte-exact on the sdk29 arm (cc1 2.9-ee-991111 at -O2 -G8 -fno-gcse, this
+ * unit's flags; task #565): unit objdiff 100.00% (objdiff_build.sh +
+ * unit_report.sh, clean tree), raw-verified byte-identical. No guard: the 2.9
+ * arm owns it, and the engine96 arm reaches only 48.81%.
+ *
+ * Supersedes this comment's former "WALL (~67%) ... branch-LIKELY (beqzl/bnel)
+ * ... not reachable by source form" claim, which re-measures at 100.00% from
+ * the same source. The cc1 does emit the branch-likely pair; the ~67% predates
+ * this unit's per-unit -G8 -fno-gcse model in objdiff_build.sh.
  */
 extern u32 g_proceduralAnimSlotOwners[];
 extern u32 g_proceduralAnimSlotTimer[];
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A08C0);
-#else
 s32 func_002A08C0(u32 moby) {
     s32 slot;
     for (slot = 0; slot < 0x10; slot++) {
@@ -471,7 +477,6 @@ s32 func_002A08C0(u32 moby) {
     }
     return -1;
 }
-#endif
 
 /* Clears the two 16-word moby spawn-credit sub-tables at g_mobySpawnCredit
  * +0x40 and +0x80 (e.g. on level reset).
