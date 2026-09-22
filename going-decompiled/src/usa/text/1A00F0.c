@@ -208,10 +208,17 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0460);
  *
  * Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_002A0480,
  * task #565): unit objdiff 100.00% (objdiff_build.sh + unit_report.sh, clean
- * tree), raw-verified byte-identical. The residual on the 2.9 arm is the
- * callee-save stride and nothing else: 2.9 spills $16+$31 at 16-byte spacing,
- * the ROM at 8 (98.81% there). That is the PACKED-SAVE revision difference, so
- * it is an ARM CHOICE, not a wall -- the engine arm reproduces it exactly.
+ * tree), raw-verified byte-identical. The 2.9 arm differs from the ROM in
+ * 6 of its 22 words, in THREE classes (word-by-word audit, task #577):
+ *   - callee-save stride/frame, words 0/2/20: the ROM uses a 0x10 frame with
+ *     $31 at +0x8; 2.9 uses 0x20 with $31 at +0x10.
+ *   - `addu` operand order, word 8: ROM `addu $2,$3,$2`, 2.9 `addu $2,$2,$3`.
+ *   - restore order, words 17/18: the ROM restores $16 then $31, 2.9 the
+ *     reverse.
+ * Fixing the stride alone leaves words 8, 17 and 18 differing, so the stride
+ * is NOT the only residual -- an earlier version of this comment claimed it
+ * was, and that was measured false. The engine96 arm reproduces all three,
+ * which is why it is the arm here: an ARM CHOICE, not a wall.
  * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines
  * no MATCH_.
  */
