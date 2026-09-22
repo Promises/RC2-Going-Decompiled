@@ -73,8 +73,12 @@ python3 "$(dirname "$0")/engine_swap_fix.py" "$W/base.s"
 # func_0034A7F8 90->100, generalizes to the float-store class, no corpus regression
 # (correctly skips non-hazard cases). Assembler-compat, same class as move_fixup.sed.
 python3 "$(dirname "$0")/mtc1_fixup.py" "$W/base.s"
+# MOUNT-SYNC (#542): base.s was container-written in (1) and host-rewritten in
+# (2) — the sshfs stale-read shape (FACT #7449). asm_unit.sh verifies the
+# container's read against this host md5 before assembling (rc 9 names the file).
+S_MD5="$(sh "$(dirname "$0")/mount_sync.sh" md5 "$W/base.s")"
 # (3) assemble the post-passed .s.
-docker --context colima-ee-x86 run --rm -v "$ROOT":/work ee-build sh -c "
+docker --context colima-ee-x86 run --rm -e ASM_UNIT_S_MD5="$S_MD5" -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work; sh tools/ee/asm_unit.sh $REGION /work/$W/base.s /work/$W/base.o $GFLAG
 "
 

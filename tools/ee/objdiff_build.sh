@@ -88,6 +88,24 @@
 # Single ops only; the compound commands are the necessary `docker run`s.
 # Requires a colima VM carrying the `ee-build` image (see CLAUDE.md).
 #
+# MOUNT-SYNC (#542; FACT #7449, NOTE #7430). The worktree reaches the container
+# over the VM's fuse.sshfs mount, and a file the HOST rewrote LONGER is read
+# TRUNCATED at its old length by a container started while the VM's cached
+# size of it is under ~20 s old (measured: 224/225 grows stale at Δ 0..5 s,
+# 18/20 at 10 s, 0/40 at 20 and 30 s; shrinks and same-length rewrites read
+# the current bytes; the view heals
+# on the next open — tools/ee/.t542/summary*.txt). Every host-write ->
+# container-read edge below is therefore guarded by tools/ee/mount_sync.sh: the
+# host takes the md5, the container re-reads until its md5sum agrees, and
+# aborts rc 9 naming the file after MOUNT_SYNC_TRIES (20) x MOUNT_SYNC_SLEEP
+# (0.5 s). The guarded reads: $TGTC and $BASECFILE before the step-(1) cpp,
+# $BASECFILE again before (2a), and $W/base96.s — rewritten on the host by the
+# (2b) post-passes, and GROWN by every nop mtc1_fixup.py inserts — before the
+# (2c) assemble (asm_unit.sh, via ASM_UNIT_S_MD5). NOT guarded: the include
+# tree and the frozen asm .s files (git-written, read through the stamped
+# mirror), and the container-write -> host-read edge of (2a)->(2b), which
+# sshfs flushes on close before `docker run` returns.
+#
 # WHICH VM (#401). Two equal build VMs exist, `ee-x86` and `ee-x86-b` (same
 # ee-build image ID, docker-save/load'd rather than rebuilt). EE_DOCKER_CONTEXT
 # selects the docker context for every `docker run` below; unset it and the
@@ -294,8 +312,14 @@ CPPDEF96="-D__GNUC_MINOR__=96 $CPPDEF_COMMON $MATCHDEFS"
 #     The base KEEPS the `.NON_MATCHING` markers for functions still on INCLUDE_ASM
 #     — that is exactly how objdiff knows they aren't decompiled yet.
 # (1) target + sdk29 base — byte-for-byte the pre-t276 gate.
+# MOUNT-SYNC: $TGTC was just written on the host; $BASECFILE is the worker's
+# edit. Both digests are taken here and verified in the container first.
+TGTC_MD5="$(sh tools/ee/mount_sync.sh md5 "$TGTC")"
+BASE_MD5="$(sh tools/ee/mount_sync.sh md5 "$BASECFILE")"
 docker --context "$EE_CTX" run --rm -e ASMFIX_SHARED -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work; WIBO=/usr/local/bin/wibo; G=tools/ee/cc/lib/gcc-lib/ee/2.9-ee-991111
+  sh tools/ee/mount_sync.sh check $TGTC $TGTC_MD5
+  sh tools/ee/mount_sync.sh check $BASECFILE $BASE_MD5
   rm -f $OBJ96
   $ASMFIX_PRUNE
   \$WIBO \$G/cpp.exe $CPPDEF $INC $TGTC $W/target.i
@@ -317,17 +341,28 @@ if [ "$BUILD96" = 1 ]; then
   printf '%s\n' $MATCHFUNCS > "$ENGINE_FUNCS"
   # (2a, container) preprocess with the 2.9 cpp as diff96.sh does, compile with
   # the native 2.96 cc1 through its bundled glibc-2.3.6 loader.
+  # MOUNT-SYNC: the base C is read a second time; it must still be the file
+  # step (1) compiled (an edit mid-run would score two different sources).
+  BASE_MD5_2A="$(sh tools/ee/mount_sync.sh md5 "$BASECFILE")"
+  if [ "$BASE_MD5_2A" != "$BASE_MD5" ]; then
+    echo "objdiff_build: FATAL — $BASECFILE changed on the host between step (1) and (2a) (md5 $BASE_MD5 -> $BASE_MD5_2A); rerun" >&2; exit 2
+  fi
 docker --context "$EE_CTX" run --rm -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work; WIBO=/usr/local/bin/wibo; G=tools/ee/cc/lib/gcc-lib/ee/2.9-ee-991111
   LD96='$CC296/ld-2.3.6.so --library-path $CC296'
+  sh tools/ee/mount_sync.sh check $BASECFILE $BASE_MD5
   \$WIBO \$G/cpp.exe $CPPDEF96 $INC $BASECFILE $W/base96.i
   \$LD96 $CC1_96 -quiet -O2 $GFLAG96 $CC1EXTRA96 $W/base96.i -o $W/base96.s
 "
   # (2b, host) the engine post-passes, in diff96.sh's order.
   python3 tools/ee/engine_swap_fix.py "$W/base96.s"
   python3 tools/ee/mtc1_fixup.py "$W/base96.s"
+  # MOUNT-SYNC: base96.s was written by the (2a) container a moment ago and has
+  # just been rewritten on the host — the exact stale-read shape. Its digest
+  # goes to asm_unit.sh, which verifies the container's read before assembling.
+  S96_MD5="$(sh tools/ee/mount_sync.sh md5 "$W/base96.s")"
   # (2c, container) assemble at -G8, same placeholder strip as the sdk29 base.
-docker --context "$EE_CTX" run --rm -e ASMFIX_SHARED -v "$ROOT":/work ee-build sh -c "
+docker --context "$EE_CTX" run --rm -e ASMFIX_SHARED -e ASM_UNIT_S_MD5="$S96_MD5" -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work
   sh tools/ee/asm_unit.sh $REGION /work/$W/base96.s /work/$OBJ96 $GFLAG96
   mips-linux-gnu-strip $OBJ96 -N gcc2_compiled. -N __gnu_compiled_c -N dummy-symbol-name

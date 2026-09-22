@@ -56,6 +56,14 @@
 #            holder is a nonmatchings/**/func_*.s a rename deletes (#452 deleted
 #            278 and the USA link lost four tokens; orphans_latent_<region>.txt).
 #            Both member sets may shrink, never grow.
+#   SYNC     (building form, task #542 MOUNT-SYNC-1) the four link inputs the
+#            SPLIT step just rewrote on the host are read by the BUILD container
+#            over the VM's fuse.sshfs mount, which can serve a STALE or TRUNCATED
+#            view of a just-rewritten file (FACT #7449, NOTE #7430). do_build
+#            takes their host md5s and tools/ee/mount_sync.sh verifies each in
+#            the container (retrying) before build.sh runs; a file that never
+#            agrees aborts the build rc 9 naming it. The same helper guards
+#            objdiff_build.sh's own host-write -> container-read edges.
 #   TREE     the ROW is tied to the tree it was built from (task #457, #451 gap
 #            1): do_build records HEAD^{tree}, a hash of the WHOLE working tree
 #            (tracked + modified + untracked, .gitignore honoured) and the dirty
@@ -333,7 +341,13 @@ do_build() {
   date +%s > "$OUT/build_start"
   record_tree "$OUT/built_tree.txt"
   say "     built from: $(tr '\n' ' ' < "$OUT/built_tree.txt")"
-  in_vm "B=$BUILD; rm -rf \$B/going-decompiled \$B/$BASENAME.elf \$B/$BASENAME.lma.elf \$B/$BASENAME.rom \$B/ld.log \$B/ld.lma.log \$B/$BASENAME.map \$B/all_addr_syms.ld; sh tools/ee/build.sh $REGION" > "$OUT/build.log" 2>&1
+  # SYNC: the split-regenerated link inputs, host md5 -> verified in-container
+  # first (mount_sync.sh check retries a stale sshfs view, rc 9 names the file).
+  local f sync=""
+  for f in $GATE_INPUTS; do
+    [ -f "$BUILD/$f" ] && sync="$sync sh tools/ee/mount_sync.sh check $BUILD/$f $(sh "$HERE/mount_sync.sh" md5 "$BUILD/$f") &&"
+  done
+  in_vm "B=$BUILD; rm -rf \$B/going-decompiled \$B/$BASENAME.elf \$B/$BASENAME.lma.elf \$B/$BASENAME.rom \$B/ld.log \$B/ld.lma.log \$B/$BASENAME.map \$B/all_addr_syms.ld;$sync sh tools/ee/build.sh $REGION" > "$OUT/build.log" 2>&1
   say "     build.sh rc=$? ($(wc -l < "$OUT/build.log" | tr -d ' ') log lines -> $OUT/build.log)"
   tail -4 "$OUT/build.log" | sed 's/^/     /'
 }
@@ -604,11 +618,47 @@ selftest() {
     if [ "$FAILED" = 1 ] && /usr/bin/grep -q "^FAIL SPLIT \[$REGION\]: NOT a fixed point of the tree — the split rewrote 1 path(s) .*: $SF *\$" "$T/split_seeded.txt" && [ -z "$(git status --porcelain --no-renames -- "$SF")" ]; then ok "fired: $(/usr/bin/grep '^FAIL SPLIT' "$T/split_seeded.txt" | sed -E 's/ \(worktree [^)]*\)//') ; $SF is clean again"; else say "SELFTEST-FAIL split fixed-point arm (FAILED=$FAILED, $SF status '$(git status --porcelain --no-renames -- "$SF")'):"; /usr/bin/grep -E '^(OK|FAIL)' "$T/split_seeded.txt"; bad=1; fi
   fi
 
+  selftest_mount_sync "${MOUNT_SYNC_SH:-$HERE/mount_sync.sh}" "$T" || bad=1
+
   say "-- (14) the real gate on this tree (--no-build, the build above) must PASS"
   STRICT=0
   if run_gate "$REGION" --no-build > "$T/gate.txt"; then ok "real gate PASS"; else say "SELFTEST-FAIL the real gate does not pass on this tree:"; /usr/bin/grep -E '^FAIL' "$T/gate.txt"; bad=1; fi
   say "     full gate output -> $T/gate.txt"
   say "#### landing_gate --selftest [$REGION]: $([ $bad = 0 ] && echo PASS || echo FAIL)"
+  return $bad
+}
+
+# selftest_mount_sync HELPER OUTDIR — arm (15), callable on its own after
+# sourcing this file (`. tools/ee/landing_gate.sh; region_vars usa;
+# selftest_mount_sync tools/ee/mount_sync.sh /tmp/x`). Seeds the trap the
+# helper exists for: the host md5 is taken, THEN the file is shortened (what a
+# stale sshfs view hands the container) -> `check` must FAIL rc 9 naming the
+# file; the unshortened file must pass rc 0; and a file that is repaired after
+# the first read must pass on a LATER try (the retry path). Run against a
+# blinded copy of the helper (MOUNT_SYNC_SH=<copy> with the comparison removed)
+# every arm here reads SELFTEST-FAIL and the function returns 1.
+selftest_mount_sync() {
+  local helper=$1 T=$2 bad=0 rc out
+  say "-- (15) SYNC (#542): $helper — md5 taken, file truncated afterwards -> check must FAIL rc 9 naming the file; intact -> rc 0; repaired mid-retry -> rc 0 on a later try"
+  local F="$T/sync_probe.txt"; local FD="$T/sync_probe_rel"
+  printf 'landing_gate selftest 15: %s\n' "$(date +%s)" > "$F"; head -c 3000 /dev/urandom | base64 >> "$F"
+  local want; want=$(sh "$helper" md5 "$F")
+  [ -n "$want" ] || { say "SELFTEST-BROKEN: $helper md5 printed nothing for $F"; return 1; }
+  # (a) intact: the container's md5sum of the same bytes must agree on try 1
+  out=$(in_vm "MOUNT_SYNC_TRIES=3 MOUNT_SYNC_SLEEP=0.2 sh $helper check $F $want" 2>&1); rc=$?
+  if [ $rc = 0 ] && [ -z "$out" ]; then ok "control: intact file agrees with the host md5 (rc 0, silent)"; else say "SELFTEST-FAIL intact file did not pass silently (rc $rc): $out"; bad=1; fi
+  # (b) truncated AFTER the md5: what the stale mount serves. Shortened on the
+  # host, so the container's every read is the short file -> FAIL naming it.
+  head -c 1000 "$F" > "$F.short"; mv "$F.short" "$F"
+  out=$(in_vm "MOUNT_SYNC_TRIES=3 MOUNT_SYNC_SLEEP=0.2 sh $helper check $F $want" 2>&1); rc=$?
+  if [ $rc = 9 ] && printf '%s' "$out" | /usr/bin/grep -q "^MOUNT-SYNC FAIL: $F — container md5 [0-9a-f]* (1000 B) != host md5 $want after 3 tries"; then ok "fired: $(printf '%s' "$out" | /usr/bin/grep '^MOUNT-SYNC FAIL' | sed -E 's/; the VM.*//')"; else say "SELFTEST-FAIL truncated file did not FAIL rc 9 naming it (rc $rc): $out"; bad=1; fi
+  # (c) the retry path: the check starts on the short file and the file is
+  # restored 1.5 s later (inside the same container, so the timing is not at
+  # the mercy of docker's start-up latency) -> it must agree on a try > 1, rc 0,
+  # and SAY so on stderr.
+  local want2; want2=$(printf 'landing_gate selftest 15: restored\n' | { command -v md5 >/dev/null 2>&1 && md5 -q || md5sum | cut -d' ' -f1; })
+  out=$(in_vm "( sleep 1.5; printf 'landing_gate selftest 15: restored\\n' > $F ) & MOUNT_SYNC_TRIES=20 MOUNT_SYNC_SLEEP=0.5 sh $helper check $F $want2; rc=\$?; wait; exit \$rc" 2>&1); rc=$?
+  if [ $rc = 0 ] && printf '%s' "$out" | /usr/bin/grep -q "^mount_sync: $F agreed with the host on try [2-9][0-9]* of 20"; then ok "fired: $(printf '%s' "$out" | /usr/bin/grep '^mount_sync:' | sed -E 's/ \(the mount.*//')"; else say "SELFTEST-FAIL retry path: rc $rc, output: $out"; bad=1; fi
   return $bad
 }
 

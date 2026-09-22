@@ -26,6 +26,15 @@ REGION="$1"; UNIT_S="$2"; OUT_O="$3"; GFLAG="${4:--G0}"
 # also be ASSEMBLED at -G8 or the gp_rel accesses macro-expand to lui/lw.
 # Explicit %gp_rel/%hi/%lo in the included original asm is unaffected by -G.
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# MOUNT-SYNC (#542): a caller that wrote $UNIT_S on the HOST (objdiff_build.sh's
+# engine arm rewrites base96.s with python there) passes its md5 as
+# ASM_UNIT_S_MD5. The container's read of the file is then verified — retried
+# while the VM's sshfs view is stale, rc 9 naming the file if it never agrees —
+# BEFORE anything is assembled; a stale .s would assemble to a wrong object with
+# no error. Unset (a container-written .s, as in build.sh) it checks nothing.
+if [ -n "${ASM_UNIT_S_MD5:-}" ]; then
+  sh "$ROOT/tools/ee/mount_sync.sh" check "$UNIT_S" "$ASM_UNIT_S_MD5"
+fi
 VU0FIX="$ROOT/tools/ee/vu0_fixup.sed"
 MOVEFIX="$ROOT/tools/ee/move_fixup.sed"   # cc1 `move` pseudo -> `daddu` (0x2d) for EE
 ASMSRC="$ROOT/going-decompiled/asm/$REGION/nonmatchings"
