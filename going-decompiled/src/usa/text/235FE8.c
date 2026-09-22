@@ -22,6 +22,27 @@
  *  - switch functions: blocked by the splat jtbl reloc-identity gap.
  *  - the handwritten 8-byte stub-table fragments (func_00336068/00336218/...
  *    = bare addiu-sp/nop runs that are their own functions) stay INCLUDE_ASM.
+ *
+ * ⚠ READ BEFORE TRUSTING ANY PER-FUNCTION `engine96 probe (...): NN%` COMMENT
+ * BELOW. Those 175 numbers are task #466/#497-era SCREEN values and they do NOT
+ * describe what this tree compiles to. Re-measured on the committed file by
+ * task #583 (all 175 #else arms guarded onto the engine96 arm at the gate's own
+ * flags, cc1 2.96-ee-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing):
+ * only 51 of the 175 still reproduce to 0.01. 57 differ by under a point and 67
+ * differ by a point or more, the worst by 42 points (func_00336678 83.33 -> 41.25).
+ * The multi-point class is the defect FACT #7375 named: the comments quote the
+ * state with the sibcall barrier applied, and the barrier was reverted with the
+ * arms, so the committed bodies compile to a different residual — and for the
+ * 69 sibcall-shaped bodies the CLASS is wrong too (they read SIBCALL on the
+ * tree, not the SCHED/UNKNOWN the comment states).
+ *
+ * So: triage from a fresh measurement, never from these numbers. They are left
+ * in place rather than rewritten because the replacement values available today
+ * are blanket-screen values (all arms compiled on one arm at once), which t276
+ * forbids as a landing configuration and which must not be written into the .c
+ * as if they were landing measurements — that conflation is how the stale set
+ * arose. Members and the full comparison: FACT filed by task #583; the earlier
+ * census is FACT #7375, narrowed by #7484.
  */
 
 /* Keep the absolute-addressed globals on the two-insn %hi/%lo macro under -G8. */
