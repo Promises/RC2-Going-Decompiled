@@ -1280,44 +1280,47 @@ void GuiListSetColorPair1(GuiElement *e, s32 c0, s32 c1) {
     e->color[3] = c1;
 }
 
-/* func_003372D0: write the high (alpha) byte of color words [0] and [1] of the
- * element's color block (+0xC), preserving the low 24 RGB bits. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003372D0);
-#else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003372D0, unit objdiff): 99.00%,
-   3/15 insns differ. Residual: REGNUM-COLORING (instruction-identical, only the register number differs; 2 phrasings each RUN).
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; the original reloads
-   e->color before the second word and interleaves the two halves; cc1 CSEs the
-   pointer and batches the masks. ~24% best. */
-void func_003372D0(GuiElement *e, s32 a0, s32 a1) {
-    s32 *c = e->color;
-    c[0] = (c[0] & 0xFFFFFF) | (a0 << 24);
-    c = e->color;
-    c[1] = (c[1] & 0xFFFFFF) | (a1 << 24);
+/* func_003372D0(e, alpha0, alpha1): set the alpha (high) byte of colour words
+ * [0] and [1] of the element's colour block (+0xC), preserving each word's low
+ * 24 RGB bits. The alpha-only counterpart of GuiListSetColorPair0, which
+ * replaces the same two words outright. No return.
+ *
+ * Two details are load-bearing for the byte match and must survive any
+ * refactor (re-run the unit gate after touching either):
+ *  - the colour-block pointer is RE-READ from e->color between the two stores,
+ *    as the ROM does; a single hoisted load is a different instruction stream;
+ *  - the two reads are held in TWO SEPARATE locals. Reusing one local gives
+ *    cc1 2.9 one pseudo and therefore one hard register ($7 twice); the ROM
+ *    carries the second pointer in $5, and two locals are what let the
+ *    allocator colour them apart. (Identity: func_003372D0, 0x003372D0 — the
+ *    name is the frozen .s glabel objdiff matches on, so it is not renamed.) */
+void func_003372D0(GuiElement *e, s32 alpha0, s32 alpha1) {
+    s32 *block0 = e->color;
+    s32 *block1;
+    block0[0] = (block0[0] & 0xFFFFFF) | (alpha0 << 24);
+    block1 = e->color;
+    block1[1] = (block1[1] & 0xFFFFFF) | (alpha1 << 24);
 }
-#endif
 
-/* func_00337310: write the high (alpha) byte of color words [2] and [3] of the
- * element's color block (+0xC), preserving the low 24 RGB bits. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337310);
-#else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00337310, unit objdiff): 99.00%,
-   3/15 insns differ. Residual: REGNUM-COLORING (instruction-identical, only the register number differs; 2 phrasings each RUN).
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; same reloaded-pointer /
-   interleave mismatch as func_003372D0. ~24% best. */
-void func_00337310(GuiElement *e, s32 a0, s32 a1) {
-    s32 *c = e->color;
-    c[2] = (c[2] & 0xFFFFFF) | (a0 << 24);
-    c = e->color;
-    c[3] = (c[3] & 0xFFFFFF) | (a1 << 24);
+/* func_00337310(e, alpha0, alpha1): as func_003372D0, on colour words [2] and
+ * [3] — the alpha-only counterpart of GuiListSetColorPair1. No return.
+ *
+ * Same two load-bearing details as func_003372D0 (re-read of e->color between
+ * the stores; two separate pointer locals so cc1 2.9 colours them into two
+ * registers). The shifted alphas are additionally hoisted into locals here,
+ * mirroring the ROM's two early `sll ..,24`; that phrasing was measured
+ * byte-exact and func_003372D0's un-hoisted one was too, so the hoist is not
+ * itself required — it is kept because it is what was gated.
+ * (Identity: func_00337310, 0x00337310; name frozen by the .s glabel.) */
+void func_00337310(GuiElement *e, s32 alpha0, s32 alpha1) {
+    s32 *block0 = e->color;
+    s32 shifted0 = alpha0 << 24;
+    s32 shifted1 = alpha1 << 24;
+    s32 *block1;
+    block0[2] = (block0[2] & 0xFFFFFF) | shifted0;
+    block1 = e->color;
+    block1[3] = (block1[3] & 0xFFFFFF) | shifted1;
 }
-#endif
 
 /* func_00337350(self): draw a two-bar progress/meter widget. When the gate float
  * at *(self[+0x10]) is non-zero, draws a background bar (func_0027F168 =
@@ -6632,31 +6635,35 @@ s32 func_00342468(void *p) {
 }
 #endif
 
-/* func_003424C8: resolve a row address for the selected column (*(p+0x31C)).
- * Column 0 -> base(+0x310) + count(+0x1B8)*0x14; column 1 -> base(+0x314) +
- * count(+0x1BC)*0x14; otherwise -> base(+0x318) + count(+sel*4+0x1B8)*0x14
- * (the +0x1B8 array runs parallel to the column index). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003424C8);
-#else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003424C8, unit objdiff): 11.77%,
-   29/32 insns differ. Residual: UNKNOWN-bnezl (first differing insn: 'bnezl v1, 0xc484' vs 'bnezl v1, 0xbb8c').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; switch-style multi-way
-   branch wall. */
-s32 func_003424C8(void *p) {
-    s32 sel = *(s32 *)((char *)p + 0x31C);
+/* func_003424C8(screen): one-past-the-end row address for the currently
+ * selected column of a multi-column screen. The selected column index lives at
+ * +0x31C; each column has a record base pointer (+0x310 / +0x314 / +0x318) and
+ * a parallel row count (+0x1B8 / +0x1BC / +sel*4+0x1B8). Returns
+ * base + count * 0x14 (0x14 = the record stride). Columns 0 and 1 are spelled
+ * out because the ROM special-cases them with constant offsets; any other
+ * index goes through the parallel +0x1B8 array.
+ *
+ * Load-bearing for the byte match: `sel * 4` is computed into its own
+ * statement temp rather than written inline in the address expression. Folded
+ * back inline, cc1 2.9's expander evaluates the complex operand first and
+ * emits `addu $3,$3,$4` where the ROM has `addu $3,$4,$3` — the operand-order
+ * (expand-swap) tax, and the only word that differed before the hoist.
+ * (Identity: func_003424C8, 0x003424C8; name frozen by the .s glabel.) */
+s32 func_003424C8(void *screen) {
+    s32 sel = *(s32 *)((char *)screen + 0x31C);
+    s32 selOfs;
     if (sel == 0) {
-        return *(s32 *)((char *)p + 0x310) + *(s32 *)((char *)p + 0x1B8) * 0x14;
+        return *(s32 *)((char *)screen + 0x310) +
+               *(s32 *)((char *)screen + 0x1B8) * 0x14;
     }
     if (sel == 1) {
-        return *(s32 *)((char *)p + 0x314) + *(s32 *)((char *)p + 0x1BC) * 0x14;
+        return *(s32 *)((char *)screen + 0x314) +
+               *(s32 *)((char *)screen + 0x1BC) * 0x14;
     }
-    return *(s32 *)((char *)p + 0x318) +
-           *(s32 *)((char *)p + sel * 4 + 0x1B8) * 0x14;
+    selOfs = sel * 4;
+    return *(s32 *)((char *)screen + 0x318) +
+           *(s32 *)((char *)screen + selOfs + 0x1B8) * 0x14;
 }
-#endif
 
 /* func_00342520: select active column `mode` (0..2) on the multi-column screen
  * `w`. Loads the column's config value (D_1AE0A0[mode] -> +0x1C4) and table row
@@ -7490,25 +7497,25 @@ void func_003437F0(void *w, GuiPool *pool) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343888);
 
-/* func_00343AD0: indexed +0x28 lookup gated on the +0x10 flag: if (p[0x10]==0)
- * return 0; else return *(p + p[0x14]*4 + 0x28). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343AD0);
-#else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00343AD0, unit objdiff): 41.67%,
-   7/11 insns differ. Residual: UNKNOWN-lw (first differing insn: 'lw v0, 0x10(a0)' vs 'lw v1, 0x10(a0)').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; the original lowers the
-   guard as a branch-likely (bnel + nullified load in the delay slot); cc1 emits
-   beqz + a separate load. 38% best. */
-s32 func_00343AD0(void *p) {
-    if (*(s32 *)((char *)p + 0x10) == 0) {
+/* func_00343AD0(view): the currently highlighted row id of a list view, or 0
+ * when the view is empty. +0x10 is the live row count and +0x14 the highlighted
+ * row index into the row-id array at +0x28; an empty view (count == 0) returns
+ * 0 without reading the index. Returns the row id (an s32).
+ *
+ * Load-bearing for the byte match: the scaled index is computed into its own
+ * statement temp. Written inline as `p + p[0x14]*4 + 0x28` the cc1 2.9 expander
+ * evaluates the complex operand first and emits `addu $3,$3,$4` against the
+ * ROM's `addu $3,$4,$3` — the same expand-swap tax as func_003424C8, and the
+ * only differing word before the hoist.
+ * (Identity: func_00343AD0, 0x00343AD0; name frozen by the .s glabel.) */
+s32 func_00343AD0(void *view) {
+    s32 rowOfs;
+    if (*(s32 *)((char *)view + 0x10) == 0) {
         return 0;
     }
-    return *(s32 *)((char *)p + *(s32 *)((char *)p + 0x14) * 4 + 0x28);
+    rowOfs = *(s32 *)((char *)view + 0x14) * 4;
+    return *(s32 *)((char *)view + rowOfs + 0x28);
 }
-#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343AF8);
 
