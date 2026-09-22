@@ -897,10 +897,21 @@ extern void DrawSkyPiecesFormatB(void *piece);
 /* Draw sky shell `shellIdx`: look up its piece list (g_pSkyData+0x20 pointer
  * array) and dispatch to format B if the piece carries a +0x4 sub-list,
  * otherwise format A.  Shell indices past the count (+0x6) are ignored.
- * NEAR-MISS (~97%): the empty-asm guard correctly suppresses cc1's sibling
- * call, but cc1 shares one `ld $ra` epilogue where the original duplicates it
- * (one in the post-call branch delay, one on the early-return path) - a fixed
- * branch-scheduling difference.  The C is faithful. */
+ * TODO(match): not byte-exact; ONE instruction short on the better arm
+ * (measured task #563, unit objdiff on the committed body).
+ *   engine96 97.05% via MATCH_DrawSkyShell, 22/22 insns, 1 differs - DSLOT-FILL.
+ *            The ROM fills the post-FormatB `b` delay slot with a DUPLICATED
+ *            `ld ra,0(sp)` and branches straight to `jr ra`; cc1 emits `nop`
+ *            there and shares the single `ld ra` epilogue.  Everything else,
+ *            including the `addu v0,v1,v0` operand order, is exact.
+ *   sdk29    96.59%, 22/22 insns, 2 differ - the same DSLOT-FILL plus an
+ *            `addu v0,v0,v1` operand-order flip the 2.96 arm does not have
+ *            (REGNUM class); rewriting the index as `((void **)(sky+0x20))[i]`
+ *            was RUN and is inert (96.59% unchanged, byte-identical output).
+ * The trailing `__asm__ __volatile__("")` is load-bearing but is ALSO what
+ * blocks the delay-slot hoist - all three positions were measured on engine96:
+ * at function end 97.05% (this one), removed 70.45% (2.96 sibcalls both calls),
+ * duplicated inside each branch 92.73%.  No position gets both. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", DrawSkyShell);
 #else
@@ -1049,17 +1060,31 @@ s32 ComputeVolumeFalloff(SoundDef *def, float dist, float near, float far) {
  * measure the distance from `pos` to the camera, then evaluate the slot's
  * distance-falloff curve (curve params live at *(slot+0x8): near at +0x0, far at
  * +0x4). Returns the resulting volume level.
- * TODO(match): functional equivalent - not byte-exact; structurally exact (only
- * delta is the prologue frame size) - the original packs the two 8-byte saves
- * (s0,ra) into a 0x10 frame with ra at +0x8, while this cc1 rounds to a 0x20
- * frame with ra at +0x10 (the frame-rounding / outgoing-arg-reserve wall). */
+ * TODO(match): not byte-exact on either arm; each arm gets a different half of
+ * the ROM right (measured task #563, unit objdiff on the committed body).
+ *   sdk29    99.12%, 17/17 insns, 5 differ - PACKED-SAVE: the ROM packs the two
+ *            8-byte saves (s0,ra) into a 0x10 frame with ra at +0x8, cc1 2.9
+ *            rounds to 0x20 with ra at +0x10 and swaps the epilogue restore
+ *            order.  This is the 2.9 16-byte callee-save stride; no flag or C
+ *            phrasing reproduces it (same class as FACT #7470's 9 FRAME rows).
+ *   engine96 88.24% via MATCH_ComputeEmitterVolume, 17/17 insns, 2 differ -
+ *            the 2.96 arm gets the ROM's 0x10 frame and slot offsets EXACTLY.
+ *            Its residual is SCHED-PROEPI: the ROM orders `sd ra,8(sp)` before
+ *            `daddu a0,a1,zero`, cc1 2.96 emits the two transposed.
+ * The `s32 vol = ...; __asm__ __volatile__(""); return vol;` shape below is the
+ * FACT #7343 value-returning tail-call barrier and is LOAD-BEARING on the
+ * engine96 arm: without it 2.96 sibcalls (`j ComputeVolumeFalloff` with the
+ * teardown in the delay slot) and the arm reads 67.06%.  The bare temp without
+ * the barrier is inert (byte-identical output) - the asm is what blocks it. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", ComputeEmitterVolume);
 #else
 s32 ComputeEmitterVolume(SoundEmitterSlot *slot, Vec4 *pos) {
     float dist = Vec3DistVu0(pos, g_cameraPos);
     float *curve = *(float **)((u8 *)slot + 0x8);
-    return ComputeVolumeFalloff((SoundDef *)curve, dist, curve[0], curve[1]);
+    s32 vol = ComputeVolumeFalloff((SoundDef *)curve, dist, curve[0], curve[1]);
+    __asm__ __volatile__("");
+    return vol;
 }
 #endif
 
@@ -1588,10 +1613,21 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_0
 
 /* Flag emitter slot `slotIndex` as positioned (set flags bit 0x40) and copy the
  * 16-byte spatial quad from `src` into the slot's 0xA0 field; returns 1.
- * NEAR-MISS (~80%): the original materializes the quad destination base
- * (g_listenerPosHistory+0xA0) into its own register and uses displacement 0 for
- * the sq, while cc1 keeps one base and folds +0xA0 into the store displacement
- * (addressing-distribution wall). The C is faithful. */
+ * TODO(match): not byte-exact - ADDR-DISTRIB (measured task #563, unit objdiff
+ * on the committed body).
+ *   sdk29    79.57%, ROM 14 insns vs 12 - the ROM materializes the quad
+ *            destination base (g_listenerPosHistory+0xA0) into its own register
+ *            and stores at displacement 0 (`addiu v0,a2,160; addu a0,a0,v0;
+ *            sq v0,0(a0)`); cc1 2.9 keeps one base and folds +0xA0 into the
+ *            store displacement (`sq a2,160(a0)`), which is 2 insns shorter.
+ *   engine96 49.21% - worse, and additionally strength-reduces the 0x70 stride
+ *            to `sll;subu;sll` where the ROM has `li 112; mult` (FACT #7379),
+ *            so the 2.9 arm is the right one here.
+ * LEVER RUN AND FAILED: writing the two bases explicitly in the source
+ * (`u_long128 *dst = (u_long128 *)((g_listenerPosHistory + 0xA0) + idx*0x70)`)
+ * does NOT survive - cc1 2.9 reassociates them back to one base and still emits
+ * `sq a0,160(a2)`, scoring 74.86%, BELOW the single-slot form kept here.  The
+ * fold is the compiler's, not the source's. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", SetSoundEmitterOffset);
 #else
@@ -1605,19 +1641,23 @@ s32 SetSoundEmitterOffset(s32 slotIndex, u_long128 *src) {
 
 /* func_002E6D70: 8 bytes of dead debris (li v0,1; nop) carved off the real
  * entry func_002E6D78 in task #472 (the pre-carve NEAR-MISS ~80% of the fused
- * tile was this pair, which single-function C cannot reproduce).
- * func_002E6D78: set the pitch field of emitter slot `slotIndex`; returns 1. */
+ * tile was this pair, which single-function C cannot reproduce). */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E6D70);
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E6D78);
-#else
+/* Set the pitch field of sound-emitter slot `slotIndex` (the slot's +0x84 word,
+ * reached as g_listenerPosHistory + idx*0x70 + 0x84 -- see the pool note at the
+ * top of this file).  Returns 1 unconditionally; no slot-index bound check, so
+ * callers must pass a live slot.
+ * MATCHED 100.00% on the sdk29 arm (plain C, unit objdiff via objdiff_build.sh +
+ * unit_report.sh; verify_match_unit.sh BYTE IDENTICAL, 8/8 words, 2 relocs
+ * resolved; task #563).  The slot stride is spelled `idx * 0x70` so cc1 2.9
+ * emits the ROM's `li 112; mult` rather than the 2.96 arm's `sll;subu;sll`
+ * strength-reduction (FACT #7379). */
 s32 func_002E6D78(s32 slotIndex, s32 pitch) {
     EmitterView *slot = EMITTER_VIEW(slotIndex);
     slot->pitch = pitch;
     return 1;
 }
-#endif
 
 /* Hook table anchored at g_listenerPosHistory+0x1730: a count followed by a
  * pointer to `count` entries of 0x90 bytes, each with a callback at +0x4. */
