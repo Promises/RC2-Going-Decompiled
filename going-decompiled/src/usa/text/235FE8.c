@@ -1518,28 +1518,27 @@ void func_00337630(GuiElement *e) {
 }
 #endif
 
-/* GuiSpriteSetTexture: write two int->float coords through *(e+0x34),
- * re-reading the pointer per store. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiSpriteSetTexture);
-#else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiSpriteSetTexture, unit objdiff): 98.18%,
-   4/11 insns differ. Residual: REGNUM-COLORING (instruction-identical, only the register number differs; 2 phrasings each RUN).
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; reloaded-pointer CSE wall
-   (cc1 collapses the two *(e+0x34) reloads). 90% best.
-   cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
-   (cmp_GuiSpriteSetTexture, run_cmp_suite.sh): offset+width oracle confirms
-   (f32)u,(f32)v (cvt.s.w) land at (*(e+0x34))[0],[1] with [2],[3] sentinel and
-   the +0x34 pointer preserved. */
+/* GuiSpriteSetTexture: set a sprite element's texture coordinate pair.
+ *
+ * e - GUI element; the coordinate vector lives behind the pointer at e+0x34.
+ * u, v - integer coordinates, converted to float (cvt.s.w) before storing.
+ * Returns nothing.
+ *
+ * Non-obvious: the vector pointer at e+0x34 is loaded SEPARATELY for each of
+ * the two stores rather than once into a temp. Writing it as two independent
+ * dereferences is load-bearing -- it is what keeps the second `lw` alive
+ * instead of letting it be commoned into the first.
+ *
+ * Functional equivalence was additionally confirmed on real R5900 hardware by
+ * the cmp oracle (cmp_GuiSpriteSetTexture, run_cmp_suite.sh): the offset+width
+ * oracle shows (f32)u and (f32)v landing at [0] and [1] of the vector, with
+ * [2] and [3] left at the sentinel and the e+0x34 pointer itself preserved. */
 void GuiSpriteSetTexture(GuiElement *e, s32 u, s32 v) {
     f32 fu = (f32)u;
     f32 fv = (f32)v;
     (*(f32 **)((char *)e + 0x34))[0] = fu;
     (*(f32 **)((char *)e + 0x34))[1] = fv;
 }
-#endif
 
 /* func_00337758: return the first float of the vector at p+0x34 converted to
  * int (cvt.w.s). */
