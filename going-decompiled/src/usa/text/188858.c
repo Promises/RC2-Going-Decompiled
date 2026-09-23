@@ -427,14 +427,24 @@ s32 SetWeaponUpgradeSlot(s32 itemId, s32 level) {
 
 extern u8 D_1A8B10[]; /* 0x30-byte, zero-terminated s32 key table */
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_00288B08);
-#else
 /**
  * Copy the 0x30-byte key table at D_1A8B10 onto the stack and linear-scan it for
  * `key`, returning 1 when `key` is present (before the zero terminator) and 0
  * otherwise (empty table or terminator reached). The terminator itself is never
  * matched against `key`.
+ *
+ *   key  the s32 key to look for
+ *   ->   1 if present before the terminator, 0 if absent or the table is empty
+ *
+ * The whole table is copied to the stack first (an `ldl`/`ldr` unaligned-pair
+ * sequence) even though the scan stops at the first hit — the copy is
+ * unconditional, not lazy.
+ *
+ * Non-obvious: the comparison is written `key == *p`, NOT `*p == key`. The two
+ * are semantically identical, but cc1 evaluates the LEFT operand first, and only
+ * the key-first order both loads the operands in the original's order and lets
+ * the loop's exit branch keep its annulling `bnel` form. Reversing the two
+ * operands is the single-instruction difference between this body and the ROM.
  */
 s32 func_00288B08(s32 key) {
     s32 table[12];
@@ -446,7 +456,7 @@ s32 func_00288B08(s32 key) {
         return 0;
     }
     for (p = table;;) {
-        if (*p == key) {
+        if (key == *p) {
             return 1;
         }
         p++;
@@ -455,7 +465,6 @@ s32 func_00288B08(s32 key) {
         }
     }
 }
-#endif
 
 /*
  * func_00288BB0(key): return 1 if `key` is present (as the first s16 of any
