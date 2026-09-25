@@ -61,7 +61,6 @@ __asm__(".extern D_2617C0, 16");
 __asm__(".extern D_0025BA70, 16");
 __asm__(".extern D_1ABA2C, 16");
 __asm__(".extern D_1AB9E4, 16");
-__asm__(".extern D_1B8FC0, 16");
 __asm__(".extern g_miscExtras, 16");
 __asm__(".extern D_1ABA84, 16");
 __asm__(".extern D_1ABA88, 16");
@@ -235,8 +234,9 @@ extern u8 D_1AB648[];
 /* Widget-data blob forwarded by the func_002D4370 GUI wrapper. */
 extern u8 D_2617C0;
 
-/* Camera/projection scratch blob + frame-matrix builders (func_002CAFD8). */
-extern u8 D_1B8FC0[];
+/* Camera/projection scratch (g_sceneActorMobys + 0x674) + frame-matrix builders
+ * (func_002CAFD8). */
+extern u8 g_sceneActorMobys[];
 extern void BuildCameraProjection(void);
 extern void BuildFrameViewMatrices(void);
 extern void func_002CABC0(void);
@@ -689,28 +689,38 @@ void RestoreScreenFromVram(void) {
 }
 #endif
 
-/* Seed the camera/projection scratch (near/aspect/scale + clears) then rebuild
- * the camera projection, the front-end matrix block, and the frame view mats.
- * Near-miss: cc1 tail-calls the final BuildFrameViewMatrices (j) and anchors the
- * store base differently than the original (jal + symbol-base). Preserved as C. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CAFD8);
-#else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 57.67% -> STRUCTURAL,
- * first differing row @0: ROM `(none)` vs `lui at,0x4900`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 68.58% -> STRUCTURAL, first differing row @0: ROM `addiu sp,sp,-16` vs `(none)`. */
-void func_002CAFD8(void) {
-    *(float *)(D_1B8FC0 + 0x21C) = 524288.0f;
-    *(float *)(D_1B8FC0 + 0xB0) = 0.62f;
-    *(float *)(D_1B8FC0 + 0x228) = 255.0f;
-    *(s32 *)(D_1B8FC0 + 0x218) = 0;
-    *(s32 *)(D_1B8FC0 + 0x22C) = 0;
+/* Reset the front-end camera: seed the camera/projection scratch at
+ * g_sceneActorMobys + 0x674 (the old D_1B8FC0 alias; +0x21C = 524288.0,
+ * +0xB0 aspect = 0.62, +0x228 = 255.0, +0x218 / +0x22C cleared), then rebuild
+ * the camera projection (BuildCameraProjection), the default camera pose
+ * (func_002CABC0) and the frame view matrices (BuildFrameViewMatrices).
+ *
+ * Returns: nothing meaningful. Callers treat this as void (1D54C0.c declares it
+ * so); v0 is whatever BuildFrameViewMatrices leaves behind, exactly as in the ROM.
+ *
+ * MATCH (task #641), three spellings the bytes depend on:
+ * - The s32 return through a cast call on the function NAME. cc1 2.9 turns
+ *   EVERY trailing void call into a sibling call (`ld ra; j callee`), but it
+ *   never does so for a value-returning `return f();`. The ROM ends
+ *   `jal; nop; ld ra; jr`. A trailing `__asm__ __volatile__("")` (the 188858.c
+ *   / 1EFFC0.c guard) also stops the tail call. Measured here, it moves
+ *   `li.s $f1` above the `addiu sp` and misses by that one word.
+ * - The three float constants as locals declared 524288, 255, 0.62. That gives
+ *   the ROM's $f1/$f2/$f0 assignment.
+ * - The +0x22C store written BEFORE the +0x218 store. The 2.9 scheduler swaps
+ *   the pair, so +0x218 lands before the jal and +0x22C lands in its delay slot. */
+s32 func_002CAFD8(void) {
+    u8 *scratch = g_sceneActorMobys + 0x674;
+    f32 farScale = 524288.0f, colorMax = 255.0f, aspect = 0.62f;
+    *(f32 *)(scratch + 0x21C) = farScale;
+    *(f32 *)(scratch + 0xB0) = aspect;
+    *(f32 *)(scratch + 0x228) = colorMax;
+    *(s32 *)(scratch + 0x22C) = 0;
+    *(s32 *)(scratch + 0x218) = 0;
     BuildCameraProjection();
     func_002CABC0();
-    BuildFrameViewMatrices();
+    return ((s32 (*)(void))BuildFrameViewMatrices)();
 }
-#endif
 
 /* menu-screen lifecycle routine: switch/jump-table dispatch (splat jtbl reloc gap) — left as
  * INCLUDE_ASM (cc1 jtbl layout not reproduced). */
