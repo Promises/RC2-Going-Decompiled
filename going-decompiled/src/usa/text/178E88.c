@@ -111,15 +111,11 @@ extern void RenderSaveLoadStatusPopup(void);
  * (D_263B10, passed in $9 on the 0x280B48 path), then the f32 scale — sig
  * recovered 2026-07-06 (fable, promo-d3 @4cb6be7). The portable #else chain
  * had DROPPED the glyph-table arg (GuiMenuListSetRows dropped-arg class), running
- * native text draws through a garbage font table; the TARGET_NATIVE prototype
- * below carries it. The matching build never calls this in C (func_00280B20's
- * matching arm is INCLUDE_ASM), so its prototype text is left untouched. */
-#ifdef TARGET_NATIVE
+ * native text draws through a garbage font table. One prototype serves both
+ * builds: under EABI the six integer args go in $4..$9 and `scale` in $f12,
+ * which is how the ROM's func_00280B20 calls it. */
 extern void func_00280550(s32 a, s32 b, s32 c, s32 d, s32 e, u8 *glyphTable,
                           f32 scale);
-#else
-extern void func_00280550(s32 a, s32 b, s32 c, s32 d, s32 e, f32 scale);
-#endif
 
 /* GS depth-range / register-packet helpers. AppendGsRegPacket takes a 64-bit
  * value (so the constants need the ori/dsll/ori zero-extend) plus a reg id. */
@@ -3034,26 +3030,28 @@ f32 func_002804C0(f32 inputScale, const char *str, s32 maxChars, s32 count) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280550);
 
-/* DrawTextBoxDefault - the unscaled text-box entry: forward to the scaled core
- * with scale 1.0f. The real fn takes SIX args (layout, rgba, str, len, tex0,
- * glyphTable); it passes all six through and appends scale 1.0f into the SEVEN-
- * arg func_00280550. The portable #else had been 5-arg and silently DROPPED the
- * glyph-metrics table (the func_00280B48 path passes &D_263B10 in $9) — native
- * text drew with a garbage font table. #else sig corrected 2026-07-06 (fable
- * recovery, promo-d3 @4cb6be7); the arg is now forwarded.
- * Near-miss (matching arm): the pinned cc1 sibling-call-optimizes the lone tail
- * call to `j func_00280550`; the original keeps a full call+return frame.
- * Correct C preserved as the portable body. */
-/* TODO(match) t493: NOT COMPILED on either arm — this portable body calls func_00280550 with 7
- * args while the non-native prototype above has 6 (the arm is native-only until the prototype is
- * unified). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280B20);
-#else
+/**
+ * DrawTextBoxDefault - the unscaled text-box entry: forward to the scaled core
+ * func_00280550 with scale 1.0f.
+ *
+ *   a..e        the five int slots (layout, rgba, str, len, tex0), passed through
+ *   glyphTable  the glyph-metrics table (the func_00280B48 path passes &D_263B10)
+ *   ->          nothing
+ *
+ * The six args arrive in $4..$9 and are forwarded untouched in the same
+ * registers; the only work is loading 1.0f into $f12. The portable body had once
+ * been 5-arg and silently DROPPED the glyph-metrics table (sig recovered
+ * 2026-07-06, fable, promo-d3 @4cb6be7).
+ *
+ * Non-obvious: the original keeps a full call+return frame (`jal`, then restore
+ * $ra) rather than tail-jumping to func_00280550. cc1 would sibling-call-optimise
+ * the lone tail call to `j func_00280550`; the empty volatile asm after the call
+ * is the barrier that keeps the call a call.
+ */
 void func_00280B20(s32 a, s32 b, s32 c, s32 d, s32 e, u8 *glyphTable) {
     func_00280550(a, b, c, d, e, glyphTable, 1.0f);
+    __asm__ __volatile__("");
 }
-#endif
 
 /* func_00280B48 - draw a string with the default UI font: resolve the font
  * page's GS TEX0 (GetUiTextureTex0 slot 1) and forward the four caller args
