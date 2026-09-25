@@ -2982,20 +2982,25 @@ extern void InstallFileLoadPump(void);     /* 0x2B7E... installs the snd-pump ca
  * every per-channel state/flag word, reset the primary dialog voice id (-1) and
  * its state byte (0x20), reset the global sound-bank id (-1), then (re)initialise
  * the dialog sound channel and install the per-snd-pump file-load pump.
- * The shared `li -1` is reproduced (task #510: cc1 2.9's cse keys constants by
- * mode, so an s32 local `none` feeds both the s16 and the s32 store). Residual
- * SCHED: cc1 2.9 hoists the soundBankId store to the top of the store run while
- * the ROM keeps it last (in the InitDialogSoundChannel delay slot) — sdk29
- * 88.15% / engine96 84.26% (unit objdiff report). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", InitFileLoadSystem);
-#else
-/* TODO(match): functional equivalent - not byte-exact; SCHED (store order), sdk29 88.15% / engine96 84.26%. */
+ * No params, no return. Prints the D_1AA198 debug banner first.
+ *
+ * MATCHED 100.00% on the sdk29 arm (unit objdiff report, objdiff_build.sh +
+ * unit_report.sh, clean, VM colima-ee-x86-b; task #650). Two orderings carry the
+ * match:
+ *   - the shared `li -1`: cc1 2.9's cse keys constants by mode, so one s32 local
+ *     `none` feeds both the s16 dialogVoiceId and the s32 soundBankId store
+ *     (task #510);
+ *   - the store run: the twelve stores are independent and cc1 2.9's scheduler
+ *     emits the source-LAST of them first, then the rest in source order (FACT
+ *     #7436). The ROM opens with dialogVoiceId and closes with soundBankId (in the
+ *     InitDialogSoundChannel delay slot), so dialogVoiceId is written LAST here.
+ *     Task #510 had it first, which put soundBankId at the top (88.15%).
+ * The empty asm after the last call keeps InstallFileLoadPump a jal + epilogue
+ * (the ROM form) instead of cc1's sibling-call `j`. */
 void InitFileLoadSystem(void) {
     s32 none;
     DebugPrintStub(D_1AA198);
     none = -1;
-    g_fileLoadVoiceState.dialogVoiceId = none;
     g_fileLoadVoiceState.dialogState = 0x20;
     g_fileLoadVoiceState.dialogFlag1 = 0;
     g_fileLoadVoiceState.dialogFlag2 = 0;
@@ -3007,11 +3012,11 @@ void InitFileLoadSystem(void) {
     g_fileLoadVoiceState.tertiaryState = 0;
     g_fileLoadVoiceState.tertiaryFlag = 0;
     g_fileLoadVoiceState.soundBankId = none;
+    g_fileLoadVoiceState.dialogVoiceId = none;
     InitDialogSoundChannel();
     InstallFileLoadPump();
     __asm__ __volatile__("");
 }
-#endif
 
 /* Register the file-load completion handler as the per-snd-pump tick callback.
  * The empty asm guard blocks cc1's sibling-call (`j`) so the original jal+frame
