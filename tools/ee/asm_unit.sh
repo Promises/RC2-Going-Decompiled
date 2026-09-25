@@ -144,6 +144,16 @@ cd "$FIXROOT"
 # directive is emitted commented-out and ignored). We pin the branch in a
 # noreorder/nop wrapper exactly when the directly preceding instruction
 # carried the novolatile marker.
+#
+# At -G8 also keep a 128-bit lq/sq out of a reorder-mode `j $31` slot
+# (proven by the original bytes of text/1A8180 func_002A9A68 / func_002A8948,
+# text/183558 func_00284028 / func_002839D8, text/16E980 func_00270EB8 and
+# cod/015180 func_0012B0D8: `sq; jr $31; nop` in all seven such return tails
+# in the USA asm tree, versus two `jr $31; lq/sq` slots, both in hand-written
+# asm). cc1 leaves the return unfilled and in reorder mode after an lq/sq;
+# the SN ee-as left the slot empty, while GNU as 2.40 swaps the lq/sq into
+# it. We pin the return in a noreorder/nop wrapper exactly when the directly
+# preceding instruction is an lq/sq.
 # (cc1 is a Win32 PE - its .s lines end in CRLF, hence the \r-stripping.)
 if [ "$GFLAG" = "-G8" ]; then
   sed -E -f "$MOVEFIX" "$UNIT_S" | tr -d '\r' | awk '
@@ -215,6 +225,13 @@ if [ "$GFLAG" = "-G8" ]; then
         volpend = 0; prevcop = 0
         next
       }
+      # 128-bit store/load pin (see header): SN-as never swapped an lq/sq
+      # into a reorder-mode return slot.
+      if (qpend && $0 ~ /^\tj\t\$31[ \t]*$/) {
+        print "\t.set\tnoreorder"; print; print "\tnop"; print "\t.set\treorder"
+        qpend = 0; prevcop = 0
+        next
+      }
     }
     /^[ \t]*#\.set[ \t]+novolatile/ { print; volpend = 1; next }
     # GNU as 2.40 refuses to fill a reorder-mode delay slot with a MIPS4
@@ -270,7 +287,10 @@ if [ "$GFLAG" = "-G8" ]; then
       }
     }
     /^\tmov[nz]\t\$/ { pendmov = $0; pmst = 0; next }
-    /^\t/ { if ($0 !~ /^\t\.|^\t#/) volpend = 0 }
+    /^\t/ {
+      if ($0 !~ /^\t\.|^\t#/) volpend = 0
+      if ($0 !~ /^\t\.|^\t#|^\t[ \t]*$/) qpend = ($0 ~ /^\t(lq|sq)[ \t]/)
+    }
     # SN-as mtc1 write-back hazard (proven by the original bytes of
     # text/1A8180 func_002A8600 / func_002A87A8): an mtc1 directly followed
     # by an FPU op that READS the just-written register gets one padding nop

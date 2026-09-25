@@ -1517,23 +1517,36 @@ s32 func_002A9A38(f32 power, Moby *moby, s32 a, s32 b) {
     return func_00283638(moby);
 }
 
-/* func_002A9A68: fill a hit-event record (params + 128-bit source vector +
- * live flag). Best attempt 58%: the pinned cc1 materialises the li 1 after
- * the first store (original: first insn, in v1) and insists on filling the
- * jr delay slot with the volatile sq - register-coloring + slot-fill wall. */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 82.22%
-   -> REORG-DSLOT (ROM leaves the jr delay slot empty, cc1 fills it with the sq); Vec4 struct-
-   copy phrasing RUN -> ldl/ldr (worse) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9A68);
-#else
-void func_002A9A68(void *rec, s32 a, s32 b, f32 power, void *src) {
-    *(s32 *)((u8 *)rec + 0x10) = a;
-    *(s32 *)((u8 *)rec + 0x14) = b;
-    *(f32 *)((u8 *)rec + 0x1C) = power;
-    *(s32 *)((u8 *)rec + 0x20) = 1;          /* live flag */
-    *(u_long128 *)rec = *(u_long128 *)src;    /* 128-bit source vector at +0x00 */
+/*
+ * func_002A9A68(packet, a, b, power, dir): fill a 0x28-byte damage packet
+ * WITH a direction — the directional twin of func_002A9A38 (FACT #5761).
+ *   packet +0x10 = a, +0x14 = b (s32 parameters), +0x1C = power (f32),
+ *   +0x20 = 1 (hasDirection), +0x00..0x0F = the 128-bit direction vector
+ *   copied from *dir with one lq/sq pair.
+ * No return value.
+ *
+ * Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_002A9A68,
+ * task #632): unit objdiff 100.00% (objdiff_build.sh + unit_report.sh). The
+ * ROM leaves the return's delay slot EMPTY after the sq (`sq; jr $31; nop`).
+ * Two things reproduce that, and both are needed:
+ *   - the trailing empty asm stops cc1 2.96's reorg from filling the return
+ *     slot with the sq itself (without it: `jr $31; sq` in noreorder);
+ *   - asm_unit.sh's lq/sq return-slot pin stops GNU as from then swapping the
+ *     sq into the reorder-mode `j $31` the way SN ee-as never did.
+ * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines
+ * no MATCH_.
+ */
+#if defined(MATCH_func_002A9A68) || defined(TARGET_NATIVE)
+void func_002A9A68(void *packet, s32 a, s32 b, f32 power, void *dir) {
+    *(s32 *)((u8 *)packet + 0x10) = a;
+    *(s32 *)((u8 *)packet + 0x14) = b;
+    *(f32 *)((u8 *)packet + 0x1C) = power;
+    *(s32 *)((u8 *)packet + 0x20) = 1;              /* hasDirection */
+    *(u_long128 *)packet = *(u_long128 *)dir;
+    __asm__ __volatile__("");
 }
+#else
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9A68);
 #endif
 
 /* Ghidra alias CollMobysSphere / QueryMobysInSphere @ 0x00277F58: moby-only
