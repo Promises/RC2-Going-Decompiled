@@ -44,18 +44,33 @@
  * BYTE IDENTICAL to the ROM (verify_match_unit.sh) and lifts 13 more of the
  * family. func_00299960 needs no such thing: its only access IS the delay-slot
  * one, and -G8 small data gives the %gp_rel form directly (matched, #511).
+ *
+ * Task #525 then found that emulation ALREADY in the tree for one class:
+ * asm_unit.sh's -G8 awk rewrites a bare small-data macro that sits directly
+ * after a branch in a noreorder block to one `%gp_rel(sym)($28)` word when the
+ * symbol's `.extern` size is in the 9..15 band (the text/1A8180 "we use 12"
+ * class: absolute in straight-line code, %gp_rel in a delay slot). This file
+ * had marked its mixed symbols 16 (the hoist class), which that rule skips.
+ * Task #656 moves g_nSaveLoadStatusCode to 12, which makes func_002991E8 /
+ * func_002992B8 / func_002993D8 byte-exact under the tree's own asm step.
+ * Still open on this lever: func_0029CCB8 (also needs g_guiInstance at 12, and
+ * its callee func_0033B720 has no name, so promoting it grows the gate's
+ * ORPHAN_LATENT set) and func_002992E8 (its slot store is scheduled BEFORE the
+ * branch — #525's "rule 2", which asm_unit.sh does not implement).
  * Every #else arm below carries its measured state on BOTH gate arms
  * (`t511 promotion sweep` block): the sdk29 arm is the better instrument for
  * this TU on 29 of the 43 arms.
  */
 
-/* Original cc1-small / assembler-absolute symbols (see header). */
+/* Original cc1-small / assembler-absolute symbols (see header). Size 16 =
+ * absolute everywhere (hoisted out of delay slots); size 12 = absolute in
+ * straight-line code, one-word %gp_rel when the access fills a delay slot. */
 __asm__(".extern g_guiInstance, 16");
 __asm__(".extern g_bPalMode, 16");
 __asm__(".extern g_loadedArmorVariant, 16");
 __asm__(".extern g_loadedHeldItemModelId, 16");
 __asm__(".extern g_levelDialogToc, 16");
-__asm__(".extern g_nSaveLoadStatusCode, 16");
+__asm__(".extern g_nSaveLoadStatusCode, 12");
 __asm__(".extern D_1A8C64, 16");
 __asm__(".extern D_1A8C88, 16");
 
@@ -311,14 +326,14 @@ void func_00299020(void) {
 }
 
 /* func_00299040 (and the 0x299xxx save-handler family below: func_00299178/
- * func_002991E8/func_00299238/func_002992B8/func_002992E8/func_00299348/
- * func_002993D8/func_00299478/func_002994B0/func_00299568/func_002995E0/
- * func_00299758/UpdateSaveTaskState/func_002998D0/func_00299918): memory-card
- * save/load status handlers. WALLED by the reload-artifact described in the
- * file header — each reads a small-range save-context global both via the
- * 1-insn %gp_rel form (in a branch/jr delay slot) AND via the absolute lui/$at
- * macro elsewhere in the same function; GNU as picks one form per symbol, so
- * the unit-wide extern model cannot reproduce both. Left as asm. */
+ * func_00299238/func_002992E8/func_00299348/func_00299478/func_002994B0/
+ * func_00299568/func_002995E0/func_00299758/UpdateSaveTaskState/func_002998D0/
+ * func_00299918): memory-card save/load status handlers. Each reads a
+ * small-range save-context global both via the 1-insn %gp_rel form (in a
+ * branch/jr delay slot) AND via the absolute lui/$at macro elsewhere in the
+ * same function — the delay-slot form described in the file header. Members of
+ * the family that closed under the size-12 marker (func_002991E8,
+ * func_002992B8, func_002993D8) are compiled C; the rest are left as asm. */
 /** Save/load top-level status arbiter. Always consumes the pending-flag's 0x2
  *  and 0x4 bits first. Then: if no save is pending (areaTable/dirty +0x17C == 0)
  *  -> status 3. Otherwise route the original flags: bit 0x80 (or secondary-path
@@ -414,13 +429,11 @@ void func_00299178(void) {
 /** Card-removal step: if no abort is in flight (busy != -2) show status 3
  *  (idle). Otherwise, if a hard card error is latched (D_1A8C8C set) show
  *  status 6; if the pending-flag's 0x2 bit is set show status 6.
- *  (Walled by the reload-artifact named in the file header.) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_002991E8);
-#else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 86.32% -> DSLOT-GPREL, first differing row @6: ROM `(nothing)` vs `lui at, %hi(g_nSaveLoadStatusCode)`; 100.00% + verify_match_unit BYTE IDENTICAL under the delay-slot %gp_rel assembler emulation (tools/ee/.t511/gprel_dslot_fixup2.py, NOT a tree tool - RULING pending);
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 37.89% -> ADDR-BASEREG, first differing row @1: ROM `addiu a0, zero, -0x2` vs `addiu v1, zero, -0x2`. */
+ *  Byte-exact on the sdk29 arm (task #656): the ROM stores
+ *  g_nSaveLoadStatusCode as one %gp_rel word in a branch delay slot, which
+ *  asm_unit.sh reproduces because the symbol's .extern size is 12; at
+ *  size 16 the store is hoisted as lui/sw and the function reads 86.32%
+ *  (unit objdiff). */
 void func_002991E8(void) {
     if (D_1393F0[0] != -2) {
         g_nSaveLoadStatusCode[0] = 3;
@@ -432,7 +445,6 @@ void func_002991E8(void) {
         g_nSaveLoadStatusCode[0] = 6;
     }
 }
-#endif
 
 /** Card-abort step: if no abort is in flight (busy != -2) show status 3 (idle).
  *  Otherwise dispatch on the pending-flag word: bit 0x20 -> if a hard card
@@ -472,13 +484,11 @@ void func_00299238(void) {
 /** Result-timeout step: always clear the transaction busy flag; then if the
  *  libmc result is still pending (result < 0) force result 3 + subResult 0.
  *  Always show status 8 (formatting/working).
- *  (Walled by the reload-artifact named in the file header.) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_002992B8);
-#else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 76.36% -> DSLOT-GPREL, first differing row @9: ROM `(nothing)` vs `lui at, %hi(g_nSaveLoadStatusCode)`; 100.00% + verify_match_unit BYTE IDENTICAL under the delay-slot %gp_rel assembler emulation (tools/ee/.t511/gprel_dslot_fixup2.py, NOT a tree tool - RULING pending);
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 73.18% -> ADDR-BASEREG, first differing row @1: ROM `addiu a0, v0, %lo(g_areaTable)` vs `addiu v1, v0, %lo(D_1393E0)`. */
+ *  Byte-exact on the sdk29 arm (task #656): the ROM stores
+ *  g_nSaveLoadStatusCode as one %gp_rel word in a branch delay slot, which
+ *  asm_unit.sh reproduces because the symbol's .extern size is 12; at
+ *  size 16 the store is hoisted as lui/sw and the function reads 76.36%
+ *  (unit objdiff). */
 void func_002992B8(void) {
     D_1393E0.busy = 0;
     if (D_1393E0.result < 0) {
@@ -487,7 +497,6 @@ void func_002992B8(void) {
     }
     g_nSaveLoadStatusCode[0] = 8;
 }
-#endif
 
 /** Format-confirm step: when a format request (mode 2) is still pending
  *  (result < 0): if the secondary/format path flag (unk16C) is set, show
@@ -551,13 +560,11 @@ void func_00299398(void) {
  *  abort (busy < -1) -> status 3; else if the active slot is the sentinel -2,
  *  pick status 0x13 (or 0xC when the unkC + 0x20 byte total reaches 0x1DB);
  *  else (slot >= -1) -> status 0x10.
- *  (Walled for matching by the reload-artifact named in the file header.) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_002993D8);
-#else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 79.87% -> DSLOT-GPREL, first differing row @13: ROM `(nothing)` vs `lui at, %hi(g_nSaveLoadStatusCode)`; 100.00% + verify_match_unit BYTE IDENTICAL under the delay-slot %gp_rel assembler emulation (tools/ee/.t511/gprel_dslot_fixup2.py, NOT a tree tool - RULING pending);
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 63.92% -> ADDR-BASEREG, first differing row @1: ROM `addiu a0, zero, 0x2` vs `addiu a0, v0, %lo(D_1393E0)`. */
+ *  Byte-exact on the sdk29 arm (task #656): the ROM stores
+ *  g_nSaveLoadStatusCode as one %gp_rel word in a branch delay slot, which
+ *  asm_unit.sh reproduces because the symbol's .extern size is 12; at
+ *  size 16 the store is hoisted as lui/sw and the function reads 79.87%
+ *  (unit objdiff). */
 void func_002993D8(void) {
     if (D_1393E0.mode != 2 || D_1393E0.result >= 0) {
         return;
@@ -580,7 +587,6 @@ void func_002993D8(void) {
         g_nSaveLoadStatusCode[0] = 0x10;
     }
 }
-#endif
 
 /** Save/load status predicate: while a card transaction is active
  *  (D_1393F0/busy != 0) show popup status 3 (idle/none); otherwise, if the
@@ -1716,9 +1722,11 @@ void func_0029CC48(void) {
  * barrier and D_18A000 declared as the ROM addresses it (compiler-split
  * lui/%lo, out of gp range) the sdk29 arm is 88.70% (#511) and the ONLY
  * residue is the g_guiInstance read the ROM has as a one-insn %gp_rel in the
- * beqz delay slot — the delay-slot assembler wall in the file header; it is
- * BYTE IDENTICAL under the header's emulation. Left as asm until that is a
- * tree instrument. */
+ * beqz delay slot. With g_guiInstance's .extern at 12 the tree's asm_unit.sh
+ * emits that word and the body is BYTE IDENTICAL (task #656, unit objdiff +
+ * verify_match_unit), but promoting it adds func_0033B720 — referenced here
+ * by its placeholder name, held only by its nonmatchings .s — to the gate's
+ * never-grow ORPHAN_LATENT set. Left as asm until that callee is named. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029CCB8);
 #else
