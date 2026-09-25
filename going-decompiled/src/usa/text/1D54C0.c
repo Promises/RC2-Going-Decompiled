@@ -226,8 +226,16 @@ extern void func_0029DD40(s32 buttons);
 extern u8 g_bPlayerMode ROM_SPLIT;
 
 /* Map state block. The galactic-map slot table is 5 interleaved {id,flags}
- * pairs (stride 8) starting at +0x40 (id) / +0x44 (flags). */
-extern u8 D_001B1E90[];
+ * pairs (stride 8) starting at +0x40 (id) / +0x44 (flags).
+ * Modelled cc1-small / assembler-absolute (see g_playerProgress): the 8-byte
+ * extent puts it in cc1's -G8 small-data class, so cc1 emits each slot-table
+ * address as one `la` macro instead of splitting (and CSE-ing) a lui/%lo pair,
+ * and the `.extern ,16` makes the assembler expand that macro to the absolute
+ * lui/addiu pair the ROM carries (GetMenuWorkBufferSize, func_002DF560,
+ * func_002DF5B0). The 8 is NOT the object's size - the block runs to at least
+ * +0x170 (text/1DFF80) - so never take sizeof() of it. */
+__asm__(".extern D_001B1E90, 16");
+extern u8 D_001B1E90[8];
 
 /* Front-end / pause-menu screen-manager pointers (array-modelled for the
  * explicit lui/lw address form). */
@@ -3357,87 +3365,76 @@ s32 FreeMenuWorkBuffer(s32 id) {
 }
 #endif
 
-/* Look up the map slot with id == arg and return a packed display colour:
- * 0x4F000 if its flag bit 0 is set, else 0x11800; -1 if no slot matched.
- * Same address-base CSE near-miss as func_002DF560. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", GetMenuWorkBufferSize);
-#else
-/* TODO(match): t495 — sdk29 arm 69.13% / engine96 arm 58.26% (unit objdiff).
- * Residual LA-CSE: the original materialises D_001B1E90+0x44 and +0x40 with
- * two independent lui/addiu pairs; both cc1s share one lui and derive the
- * second address (+4 / -4). Not phrased around; -fno-gcse does not affect it
- * (local CSE). */
+/* Map work-buffer size for the cache slot whose id == `id`: 0x4F000 bytes if
+ * the slot's flag bit 0 (large buffer) is set, else 0x11800; -1 if none of the
+ * 5 slots holds that id. AllocMenuWorkBuffer sizes its 0xDEADBEEF fill with it.
+ * id: slot id to look up. Returns the byte size, or -1.
+ * Byte-exact on this unit's 2.9 arm (task #644). The slot table is 5
+ * interleaved {id, flags} words (stride 8) at D_001B1E90+0x40 / +0x44, and the
+ * ROM loads the two cursors with two independent lui/addiu pairs, each in its
+ * own register: that is the one-insn `la` macro that cc1 emits for a symbol it
+ * believes is small data, expanded by an assembler that knows it is not (see
+ * the D_001B1E90 declaration). Declaration order carries the prologue order:
+ * the 0x4F000 constant, then i, then flags before ids. */
 s32 GetMenuWorkBufferSize(s32 id) {
-    s32 *pflag = (s32 *)(D_001B1E90 + 0x44);
-    s32 *pid   = (s32 *)(D_001B1E90 + 0x40);
+    s32 large = 0x4F000;
     s32 i = 0;
+    s32 *flags = (s32 *)(D_001B1E90 + 0x44);
+    s32 *ids   = (s32 *)(D_001B1E90 + 0x40);
     do {
         i++;
-        if (*pid == id) {
-            return (*pflag & 1) ? 0x4F000 : 0x11800;
+        if (*ids == id) {
+            return (*flags & 1) ? large : 0x11800;
         }
-        pflag += 2;
-        pid += 2;
+        flags += 2;
+        ids += 2;
     } while (i < 5);
     return -1;
 }
-#endif
 
-/* Find the map slot whose id == arg among the 5 slots and OR 0x4 into its
- * flags; returns 0 on hit, 1 if no slot matched. The id/flags arrays are
- * interleaved (stride 8 bytes) starting at D_001B1E90+0x40/+0x44.
- * Near-miss: the original sets up the two pointers with two independent
- * lui/addiu pairs; our cc1 derives the second from the first (+4) via local
- * CSE of the address base (cannot be disabled with -fno-gcse). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF560);
-#else
-/* TODO(match): t495 — sdk29 arm 79.00% / engine96 arm 53.50% (unit objdiff).
- * Residual LA-CSE (see GetMenuWorkBufferSize); the rest of the loop is row-
- * equal on the 2.9 arm. */
+/* Set the 0x4 (stream pending) flag on the map cache slot whose id == `id`.
+ * id: slot id. Returns 0 on hit, 1 if none of the 5 slots holds that id.
+ * Byte-exact on this unit's 2.9 arm (task #644); same slot-table addressing
+ * and declaration-order notes as GetMenuWorkBufferSize. */
 s32 func_002DF560(s32 id) {
-    s32 *pid   = (s32 *)(D_001B1E90 + 0x40);
-    s32 *pflag = (s32 *)(D_001B1E90 + 0x44);
     s32 i = 0;
+    s32 *flags = (s32 *)(D_001B1E90 + 0x44);
+    s32 *ids   = (s32 *)(D_001B1E90 + 0x40);
     do {
         i++;
-        if (*pid == id) {
-            *pflag |= 4;
+        if (*ids == id) {
+            *flags |= 4;
             return 0;
         }
-        pflag += 2;
-        pid += 2;
+        flags += 2;
+        ids += 2;
     } while (i < 5);
     return 1;
 }
-#endif
 
-/* Mirror of func_002DF560 that CLEARS the 0x4 flag on the matching slot;
- * returns 0 on hit, 1 if no slot matched.
- * Same address-base CSE near-miss as func_002DF560. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF5B0);
-#else
-/* TODO(match): t495 — sdk29 arm 78.25% / engine96 arm 57.75% (unit objdiff).
- * Residual LA-CSE (see GetMenuWorkBufferSize); the rest of the loop is row-
- * equal on the 2.9 arm. */
+/* Clear the 0x4 (stream pending) flag on the map cache slot whose id == `id`;
+ * the mirror of func_002DF560.
+ * id: slot id. Returns 0 on hit, 1 if none of the 5 slots holds that id.
+ * Byte-exact on this unit's 2.9 arm (task #644). The mask lives in its own
+ * local declared right after i, which places the ROM's `addiu $7,$0,-5` second
+ * in the prologue; written as a literal `&= ~4`, cc1 hoists it out of the loop
+ * and schedules it after the two `la`. */
 s32 func_002DF5B0(s32 id) {
-    s32 *pid   = (s32 *)(D_001B1E90 + 0x40);
-    s32 *pflag = (s32 *)(D_001B1E90 + 0x44);
     s32 i = 0;
+    s32 keep = ~4;
+    s32 *flags = (s32 *)(D_001B1E90 + 0x44);
+    s32 *ids   = (s32 *)(D_001B1E90 + 0x40);
     do {
         i++;
-        if (*pid == id) {
-            *pflag &= ~4;
+        if (*ids == id) {
+            *flags &= keep;
             return 0;
         }
-        pflag += 2;
-        pid += 2;
+        flags += 2;
+        ids += 2;
     } while (i < 5);
     return 1;
 }
-#endif
 
 /* Splat mis-split fragment: `addiu $sp` runs around a lone gp store with no
  * prologue/jr — not a real function body. Left as bare INCLUDE_ASM. */
