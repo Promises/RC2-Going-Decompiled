@@ -368,39 +368,30 @@ void func_002CA998(void) {
 
 /* List-scroller "select previous": decrement the cursor (list[1]); when it drops
  * to 0 or below, wrap to the limit (list[0]). Then skip backwards over empty
- * (==0) slots in the entry array (list+0xC, one s32 per row). Returns the entry
- * value the cursor lands on.
- * Near-miss (~91%): the original emits a 64-bit sign-extension `daddu` copy of
- * the decremented index for the `> 0` test (stored vs tested registers differ)
- * plus a base-first commutative `addu`; our cc1 reuses one register and emits
- * the addu operands swapped. Preserved as portable C. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", ListScrollerSelectPrev);
-#else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 78.67% -> STRUCTURAL,
- * first differing row @3: ROM `daddu v1,v0,zero` vs `bgtz v0,L`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 85.67% -> STRUCTURAL, first differing row @3: ROM `daddu v1,v0,zero` vs `bgtz v0,L`. */
-/* TODO(match): functional equivalent - not byte-exact; EE 64-bit sign-extend
- * `daddu` copy + commutative-addu operand order not reproduced by cc1.
- * Returns the ADDRESS of the landed (non-empty) entry: the asm leaves
- * v0 = &entries[idx] at jr ra (not the entry value; sibling SelectNext returns
- * the value). The caller discards the result, so the game is unaffected. */
-s32 ListScrollerSelectPrev(s32 *list) {
+ * (==0) slots in the entry array (list+0xC, one s32 per row), leaving the cursor
+ * on the first non-empty slot.
+ * list: scroller record {limit, cursor, pad, entries[]}. Returns nothing: the
+ * ROM leaves v0 = &entries[cursor] at jr ra only as a by-product of the address
+ * computation — spelling that as a pointer return makes cc1 move it into v0 in
+ * the epilogue, which the ROM does not do. The one caller discards it.
+ * Byte-exact (task #633) on this unit's 2.9 arm. Two spellings carry it:
+ *  - `decremented = --list[1]; idx = decremented;` keeps the value that is
+ *    STORED and the value that is TESTED in two pseudos, which gives the ROM's
+ *    `daddu v1,v0,zero` copy ahead of `bgtz v1` (one variable folds them);
+ *  - the byte-offset entry read `(u8 *)entries + (idx << 2)` gives the ROM's
+ *    base-first `addu`, as in ListScrollerSelectNext. */
+void ListScrollerSelectPrev(s32 *list) {
     s32 *entries = list + 3;
-    s32 entry;
+    s32 idx;
     do {
-        s32 idx = list[1] - 1;
-        list[1] = idx;
+        s32 decremented = --list[1];
+        idx = decremented;
         if (idx <= 0) {
             idx = list[0];
         }
         list[1] = idx;
-        entry = entries[idx];
-    } while (entry == 0);
-    return (s32)&entries[list[1]];   /* list[1] holds the final idx */
+    } while (*(s32 *)((u8 *)entries + (idx << 2)) == 0);
 }
-#endif
 
 /* List-scroller "select next": increment the cursor (list[1]); when it passes
  * the limit (list[0]) wrap to 0, then skip forward over empty (==0) slots in the
