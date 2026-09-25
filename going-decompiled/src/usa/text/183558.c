@@ -16,12 +16,16 @@
  * words on the 2.9 arm at this unit's -O2 -G0 with the two flags in cc1's
  * small-data class (ROM_SMALL below); the ROM's single %gp_rel word is the
  * store cc1 sinks into the bnel delay slot, which the tree's assembler expands
- * to two words. Everything stays INCLUDE_ASM for the matching build.
+ * to two words.
+ *
+ * The screen's abs.s member was wrong: `__builtin_fabsf` emits `abs.s` on
+ * both cc1s, and GetFloatAbs is compiled from C on the matching build (task
+ * #634). Everything else stays INCLUDE_ASM for the matching build.
  *
  * Per docs/PORTING.md these are tier-2 "pure-computation" functions: each VU0
  * math op has an exact portable C equivalent, kept in the #else branch so the
  * native (TARGET_NATIVE) build has a working implementation and a future
- * match-seed. The matching build always takes the INCLUDE_ASM branch.
+ * match-seed. The matching build takes the INCLUDE_ASM branch of each of them.
  */
 
 #ifdef TARGET_NATIVE
@@ -60,22 +64,25 @@ s32 func_002835E0(s32 x) {
     return (x < 0) ? -x : x;
 }
 #endif
-/*
- * Absolute value of a float. Hand-written: the original is a single R5900
- * `abs.s` in the jr delay slot; ee-gcc 2.9 has no abssf2 pattern (it lowers to
- * a compare + branch + neg), so it cannot reproduce these bytes. #else is the
- * portable equivalent.
+/**
+ * GetFloatAbs — absolute value of a float.
+ *
+ *   x   the value
+ *   ->  |x|
+ *
+ * The whole body is one R5900 `abs.s $f0,$f12` in the `jr` delay slot.
+ *
+ * Non-obvious: it must be written `__builtin_fabsf(x)`. ee-gcc 2.9 DOES have
+ * an abssf2 pattern, but only the builtin reaches it: the conditional form
+ * `(x < 0.0f) ? -x : x` is not recognised as abs and lowers to
+ * `mtc1 $0; c.lt.s; bc1tl; neg.s; mov.s`. The double-precision
+ * `__builtin_fabs` goes through the soft-float libcalls. This body was filed
+ * as hand-written ("no abssf2 pattern") on the evidence of the conditional
+ * form alone.
  */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", GetFloatAbs);
-#else
-/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
- * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `` vs `mtc1 zero,$f0`. Residual
- * HANDWRITTEN-FPUX: R5900 FPU ops with no cc1 pattern (min.s/max.s/abs.s/madda) [screen: FPUX=1]. */
 f32 GetFloatAbs(f32 x) {
-    return (x < 0.0f) ? -x : x;
+    return __builtin_fabsf(x);
 }
-#endif
 
 /*
  * Smaller of two floats. Hand-written: the original is a single R5900 `min.s`
