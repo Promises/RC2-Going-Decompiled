@@ -3922,7 +3922,14 @@ s32 MapFindCacheSlot(s32 levelAndFlag) {
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 26.12% UNKNOWN-andi /
  * engine96 40.47% IDIOM-LIKELY; best arm engine96, first differing insn there: 'andi v0, a0,
  * 0x100' vs 'andi v0, a0, 0xff'. Iterated: sdk29 73.24% REGNUM-COLORING — per-branch index
- * computation (r4) reproduces the shape; `la` split around the sll + register numbers differ */
+ * computation (r4) reproduces the shape; `la` split around the sll + register numbers differ.
+ * Task #700 best: 98.82% (sdk29, unit objdiff report, VM b) — the coloring IS reachable: per
+ * arm, bind the table base to $3 (`register u8 *entry __asm__("$3") = (u8 *)g_discToc`) and
+ * the loaded count to $4, compute `off = (levelAndFlag & 0xFF) * 8` before the base (so the
+ * sll schedules between lui and addiu), then `entry = entry + off` followed by an empty
+ * `__asm__("" : "+r"(entry))` so the load stays off $3 [97.65 without it]. Only residual:
+ * `addu v1,v0,v1` where the ROM has `addu v1,v1,v0`; swapping the source operands, binding
+ * `off` to $2, `entry += off`, and an 8-byte-row struct index do not flip it. Not landed. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapDataExistsForLevel);
 #else
 s32 MapDataExistsForLevel(s32 levelAndFlag) {
