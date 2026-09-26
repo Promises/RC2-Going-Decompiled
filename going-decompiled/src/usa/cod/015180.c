@@ -1084,8 +1084,10 @@ void func_0011BFC8(s32 ch) {
  *
  * Non-obvious: the ROM updates the exponent and significand IN PLACE
  * (`exp -= 0x433`, `exp = -exp`, `x = (x << 12) >> 12`). Folding them into one
- * expression per value (the earlier C, 81.11% solo on the sdk29 arm by the
- * unit objdiff report) makes cc1 thread them through $2 and extra temporaries
+ * expression per value (the earlier C, the #else arm at edb1aa7b: 81.11% solo
+ * on the sdk29 arm by the unit objdiff report, objdiff_build.sh, measured at
+ * 6235db84 and 1a06cc63, FACT #7958/#8021, and again on master fe247108 plus
+ * this unit by task #753) makes cc1 thread them through $2 and extra temporaries
  * instead of keeping exp in $6 and the significand in $5. The rounding test must also be written with
  * `== 3` as the then-branch, which gives the ROM's `bnel` with the plain
  * shift in the likely slot.
