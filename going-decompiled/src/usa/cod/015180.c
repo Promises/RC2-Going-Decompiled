@@ -1125,10 +1125,13 @@ s32 func_0011C000(s64 bits) {
  * [0.1, 1.0) while tracking a decimal exponent: when >= 0.1 (D_0013A9D8) it
  * divides by 10 (func_00122DA8) until < 1.0, counting the exponent up; when
  * < 0.1 it multiplies by 10 (func_00122B00) until >= 0.1 (D_0013A9E0), counting
- * down. The normalised mantissa is scaled by 1e6 (D_0013A9E8), truncated to an
- * integer (func_001212C8) and clamped to four digits (func_0011C000), printed as
- * "0.dddd" (D_0013A9C0). Finally appends the exponent as "e+NN" (D_0013A9C8) or
- * "e%d"/"e-NN" (D_0013A9D0).
+ * down. The normalised mantissa is scaled by 1e6 (D_0013A9E8) and truncated to an
+ * integer in [100000, 999999] (func_001212C8), and that INTEGER is passed to
+ * func_0011C000, which reads its argument as the raw bits of a double. Its
+ * exponent field is 0 for any integer below 2^52, so func_0011C000 always returns
+ * 0 here (no clamping takes place) and the mantissa always prints as "0.0" through
+ * "0.%d" (D_0013A9C0) — the digits are lost in the ROM itself. Finally appends the
+ * exponent as "e+NN" (D_0013A9C8) or "e%d"/"e-NN" (D_0013A9D0).
  *
  * MATCHING WALL (FP-constant-pool / li.d toolchain ceiling). A byte-exact rebuild
  * reaches only ~50% because the original loads its three non-trivial double
@@ -1158,7 +1161,7 @@ extern s64 func_00122A98(s64 a, s64 b);   /* soft-float subtract a - b          
 extern s64 func_00122B00(s64 a, s64 b);   /* soft-float multiply a * b          */
 extern s64 func_00122DA8(s64 a, s64 b);   /* soft-float divide a / b            */
 extern s64 func_001212C8(s64 x);          /* truncate non-negative double -> u64 */
-extern s32 func_0011C000(s64 bits);       /* scaled mantissa -> clamped digits   */
+extern s32 func_0011C000(s64 bits);       /* double bits -> int; 0 for the int passed here */
 extern s32 func_0011C7E8(void *fmt, ...);  /* the printf-style formatter sink     */
 extern void (*D_00134698)(s32 ch);        /* single-character output hook        */
 extern char D_0013A9C0[];                  /* "0.%d" */
@@ -1191,10 +1194,11 @@ s32 func_0011C090(s64 value) {
             exp++;
         }
     }
-    /* mantissa now in [0.1, 1.0): scale to six digits, truncate, clamp, print */
+    /* mantissa now in [0.1, 1.0): scale to six digits and truncate; the integer
+     * is then read as double bits by func_0011C000, so digits is always 0 */
     scaled = func_00122B00(value, DBL_1E6);
     digits = func_0011C000(func_001212C8(scaled));
-    func_0011C7E8(D_0013A9C0, digits);            /* "0.dddd" */
+    func_0011C7E8(D_0013A9C0, digits);            /* "0.%d", always "0.0" */
     if (exp < 0) {
         return func_0011C7E8(D_0013A9D0, exp);    /* "e-NN" (sign carried by %d) */
     }
