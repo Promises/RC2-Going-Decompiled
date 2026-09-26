@@ -514,26 +514,32 @@ s32 func_002A08C0(u32 moby) {
     return -1;
 }
 
-/* Clears the two 16-word moby spawn-credit sub-tables at g_mobySpawnCredit
- * +0x40 and +0x80 (e.g. on level reset).
- * WALL (~77%): the original materialises both loop base addresses independently
- * (two lui/addiu pairs) and fills the branch delay with the second pointer
- * increment; cc1 strength-reduces the second base to `addu b,a,64` and schedules
- * the loop body differently. Reduced-strength + loop-scheduling. Left INCLUDE_ASM. */
-extern u32 g_mobySpawnCredit[];
-
+/* func_002A0918 (ResetProceduralAnimSlots in symbol_addrs) — clear all 16
+ * procedural-animation slots: zero g_proceduralAnimSlotOwners[0..15] and
+ * g_proceduralAnimSlotTimer[0..15] (e.g. on level reset).
+ *
+ * The earlier note on this arm named the wrong subject ("g_mobySpawnCredit
+ * +0x40/+0x80"). The ROM addresses the two slot arrays by their own symbols
+ * (0x1B1A40 / 0x1B1A80), so there is no shared base for cc1 to strength-reduce;
+ * that wall was an artefact of the old #else spelling. Task #671 measured this
+ * arm on the sdk29 arm at 75.33% (unit objdiff report, VM a). The array loop
+ * below gives the ROM's lui/addiu pairs and registers exactly, and #659's
+ * R5900 short-loop pad gives the loop's one pad `nop`. The remaining residual
+ * is the backward `bgez` delay slot: the ROM fills it with the timer-pointer
+ * increment, but cc1 2.9's reorg leaves it empty whenever the branch tests the
+ * live loop counter. That held in every form tried: do/for, count-up, the
+ * counter hidden in an asm decrement, and "+r" pads. It is the same residual as
+ * #659's MarkLevelAvailable (FACT #7937). Stays INCLUDE_ASM. FACT #7957. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0918);
 #else
 void func_002A0918(void) {
-    u32 *a = &g_mobySpawnCredit[0x10];
-    u32 *b = &g_mobySpawnCredit[0x20];
-    s32 i = 0xF;
-    do {
-        *a++ = 0;
-        *b++ = 0;
-        i--;
-    } while (i >= 0);
+    s32 i;
+
+    for (i = 0; i < 16; i++) {
+        g_proceduralAnimSlotOwners[i] = 0;
+        g_proceduralAnimSlotTimer[i] = 0;
+    }
 }
 #endif
 
@@ -1098,11 +1104,15 @@ void func_002A12A0(s64 *moby, s64 hi, s64 b1, s64 b2, s64 b3) {
  * packed 3-byte tuple (b0 in bits 32..39, b1 in 40..47, b2 in 48..55), preserving
  * the existing low 32 bits. Inverse of func_002A12F0 which reads the three bytes
  * back out.
- * WALL (~83%): the original masks the low half with `ld` + `dsll32 0/dsrl32 0` and
- * folds the OR tree strictly left-to-right (low|a1|a2|a3); this cc1 lowers the
- * low-half mask to a `lwu` word-load and reassociates the OR tree (building an
- * a2|a1 sub-tree, a3<<16 first) — the same commutative-OR canonicalisation +
- * 64-bit narrowing artifact seen in func_002A12A0/func_002A12F0. Left INCLUDE_ASM.
+ * Stays INCLUDE_ASM. The plain spelling below reads 64.58% (sdk29, unit objdiff
+ * report, task #671). The OR association and the `lwu` narrowing are NOT the wall
+ * any more: the register-variable and empty-asm fences that closed its siblings
+ * func_002A12A0 / func_002A12F0 (task #671) also reproduce this body's
+ * `ld; dsll32 x3; dsll32/dsrl32; or x3; jr; sd` sequence (checked in cc1's .s output,
+ * match.sh, -O2 -G8 -fno-gcse). What is left is a lone `nop`
+ * directly before `jr $ra`, with the `sd` in the delay slot. No cc1 or
+ * assembler mechanism for emitting it has been found (FACT #7957), and it is
+ * not written as inline asm here.
  */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A12C0);
