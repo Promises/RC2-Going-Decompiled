@@ -3225,45 +3225,89 @@ void func_002ABFD0(Vec4 *out, Vec4 *vec, Vec4 *axis, f32 scale) {
 }
 #endif
 
-/* func_002AC058: read word 0 of a moby's extra/pvar block (mode bit 0x20
- * gates the block). Best attempt 66%: structure identical (bnezl + shared
- * return-0) but the later cc1 emits two scheduler nops between the andi
- * and its beqz that the pinned cc1 never produces (same wall as
- * func_002AC088/func_002AC9E0). */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 26.67%
-   -> IDIOM-branch-layout (ROM: bnel to the main path, shared return-0 block first); lever-10
-   goto layout RUN, no change */
+/*
+ * R5900 SHORT-LOOP PAD. The ROM's assembler padded every backward branch
+ * whose loop (branch target .. branch, inclusive) is shorter than 6
+ * instructions with `nop`s up to 6 - the R5900 short-loop erratum
+ * workaround. Across the engine-region USA asm no backward branch closes a
+ * loop shorter than 6 (task #659 census). cc1 never emits the pad and
+ * neither assembler we run inserts it (GNU as 2.40 does not, even with
+ * -mfix-r5900; SN's bundled as.exe does not either), so it is written here,
+ * directly before the branch it pads:
+ *   - `.set noreorder` stops GNU as from swapping the last pad `nop` into
+ *     the branch delay slot (without it one pad word becomes the slot
+ *     filler and the function comes out one word short);
+ *   - the "+r" operand is the value the branch tests, which pins the pad
+ *     between that value's computation and the branch;
+ *   - PAD1's `next` input is the register the ROM updates in the delay
+ *     slot: reading it here keeps that update after the pad, where reorg
+ *     can move it into the slot (without it the scheduler hoists the update
+ *     above the pad and reorg fills the slot from the loop head instead).
+ * The pad is a no-op on the native build.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC058);
+#define R5900_SHORT_LOOP_PAD1(v, next) \
+    __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
+#define R5900_SHORT_LOOP_PAD2(v) \
+    __asm__(".set noreorder\n\tnop\n\tnop\n\t.set reorder" : "+r"(v))
 #else
-s32 func_002AC058(Moby *moby) {
-    if (moby == 0) {
-        return 0;
-    }
-    if ((moby->modeBits & 0x20) != 0) {
-        return moby->pExtra[0];
-    }
-    return 0;
-}
+#define R5900_SHORT_LOOP_PAD1(v, next) ((void)0)
+#define R5900_SHORT_LOOP_PAD2(v) ((void)0)
 #endif
 
-/* func_002AC088: read word 4 of a moby's extra/pvar block. Same two-
- * scheduler-nops wall as func_002AC058 (best attempt 66%). */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 26.67%
-   -> IDIOM-branch-layout, twin of func_002AC058; lever-10 goto layout RUN, no change */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC088);
-#else
-s32 func_002AC088(Moby *moby) {
+/**
+ * func_002AC058 — return word 0 of a moby's extra/pvar block.
+ * Track-B identity GetMobyCombatState (CONFIRMED, symbol_addrs.txt comment
+ * block): word 0 is the moby's damageable-state block (+0x00 health f32,
+ * +0x04 typeCategory s16). Kept under its splat name, which objdiff
+ * matches against the frozen glabel.
+ *
+ * @param moby  moby to read; may be NULL.
+ * @return      moby->pExtra[0] when the moby exists and has an extra block
+ *              (modeBits & 0x20), else 0.
+ *
+ * The NULL test and the missing-block test share one `return 0` block that
+ * the ROM places first: `bnezl` over it, then a BACKWARD `beqz` into it.
+ * Only the early-return phrasing gives that layout under cc1 2.9 (-O2 -G8
+ * -fno-gcse); `if (bits) return x; return 0;` and its &&/goto/nested
+ * spellings all give a forward branch and a duplicated tail (FACT #7911).
+ * The backward branch closes a 4-instruction loop, so the two ROM `nop`s
+ * before it are the short-loop pad above, not scheduler output.
+ */
+s32 func_002AC058(Moby *moby) {
+    u32 hasExtra;
+
     if (moby == 0) {
         return 0;
     }
-    if ((moby->modeBits & 0x20) != 0) {
-        return moby->pExtra[4];
+    hasExtra = moby->modeBits & 0x20;
+    R5900_SHORT_LOOP_PAD2(hasExtra);
+    if (hasExtra == 0) {
+        return 0;
     }
-    return 0;
+    return moby->pExtra[0];
 }
-#endif
+
+/**
+ * func_002AC088 — return word 4 (byte offset 0x10) of a moby's extra/pvar
+ * block. Twin of func_002AC058; same layout and the same short-loop pad.
+ *
+ * @param moby  moby to read; may be NULL.
+ * @return      moby->pExtra[4] when the moby has an extra block, else 0.
+ */
+s32 func_002AC088(Moby *moby) {
+    u32 hasExtra;
+
+    if (moby == 0) {
+        return 0;
+    }
+    hasExtra = moby->modeBits & 0x20;
+    R5900_SHORT_LOOP_PAD2(hasExtra);
+    if (hasExtra == 0) {
+        return 0;
+    }
+    return moby->pExtra[4];
+}
 
 /* SpawnParticleType04 (0x2BBD70): emit one type-04 particle whose spawn point is
  * `origin` and whose target/offset position is `pos`. Trailing ints are
@@ -3619,29 +3663,39 @@ f32 func_002AC980(f32 angle) {
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC9D8);
 
-/* func_002AC9E0: true when m is a valid moby-table entry with class id in
- * [500, 540]. Best attempt 46%: the %gp_rel delay-slot loads of
- * g_mobyTableBase/End reproduce (size-12 class), but the later cc1 lays the
- * shared return-0 out early with backward branches and pads the first
- * compare with two scheduler nops (same wall as func_002AC058). */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 37.19%
-   -> UNKNOWN-@0: ROM `bne a0,zero,L` vs `beq a0,zero,L` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC9E0);
-#else
+/**
+ * func_002AC9E0 — test whether a pointer is a live moby-table entry whose
+ * class id is in [500, 540].
+ *
+ * @param m  candidate moby; may be NULL or outside the table.
+ * @return   1 when g_mobyTableBase <= m <= g_mobyTableEnd and
+ *           500 <= m->oClass <= 540, else 0.
+ *
+ * All three rejections branch BACKWARD into one `return 0` block that the
+ * ROM places right after the NULL test; the `goto` into that block is the
+ * phrasing that gives cc1 2.9 this layout (plain early returns put the
+ * block last). The first backward branch closes a 4-instruction loop, so the
+ * ROM pads it with two `nop`s (R5900_SHORT_LOOP_PAD2); the second closes 9
+ * and is not padded. The table-bound loads are the size-12 %gp_rel
+ * delay-slot class (unit header).
+ */
 s32 func_002AC9E0(Moby *m) {
+    u32 belowTable;
+
     if (m == 0) {
+invalid:
         return 0;
     }
-    if ((u32)m < (u32)g_mobyTableBase) {
-        return 0;
+    belowTable = (u32)m < (u32)g_mobyTableBase;
+    R5900_SHORT_LOOP_PAD2(belowTable);
+    if (belowTable != 0) {
+        goto invalid;
     }
     if ((u32)g_mobyTableEnd < (u32)m) {
-        return 0;
+        goto invalid;
     }
     return (u32)(m->oClass - 500) < 0x29;
 }
-#endif
 
 /**
  * func_002ACA20 — surface-impact FX dispatcher. Emits the full effect for a
@@ -4098,35 +4152,50 @@ void func_002AD860(Vec4 *vec, f32 maxLen) {
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AD8B0);
 
-/* func_002AD8B8: append a moby's table slot to an i16 count-prefixed list
- * if absent and below cap. Best attempt 69%: the later cc1 derives the
- * loop bound from a register copy of the count and pads the scan loop -
- * scan-loop scheduling wall (sibling of func_002AD938). */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 63.39%
-   -> UNKNOWN-@2: ROM `sll a2,a2,0x10` vs `lh t1,0(a1)` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AD8B8);
-#else
-void func_002AD8B8(Moby *moby, s16 *list, s32 cap) {
+/**
+ * func_002AD8B8 — append a moby's table slot to an s16 count-prefixed list
+ * (list[0] = count, list[1..count] = slots) unless it is already present or
+ * the list is full.
+ *
+ * @param moby  moby whose slot index ((moby - g_mobyTableBase) / 0x100) is
+ *              appended.
+ * @param list  count-prefixed slot list.
+ * @param cap   maximum entry count; the append happens only while
+ *              list[0] < cap.
+ *
+ * The scan loop is the ROM's: a pointer walk with the bound in a copy of
+ * the count (only a loop-local copy gives the `daddu $8,$3`), `i++` in the
+ * match-branch slot and `p++` in the loop-branch slot. The loop is 5
+ * instructions, so the ROM pads it with one `nop` (R5900_SHORT_LOOP_PAD1).
+ * `++list[0]` gives the ROM's single lhu/addiu feeding both the count store
+ * and the (s16) index.
+ */
+void func_002AD8B8(Moby *moby, s16 *list, s16 cap) {
     s16 slot = (s16)(((u8 *)moby - (u8 *)g_mobyTableBase) >> 8);
-    s16 count = list[0];
-    s16 i;
+    s32 i = 1;
+    s16 *p;
 
-    if (count > 0) {
-        for (i = 1; i <= count; i++) {
-            if (list[i] == slot) {
-                return;   /* already present */
+    if (list[0] > 0) {
+        s32 count = list[0];
+        s32 scanned;
+
+        p = &list[1];
+        do {
+            if (*p == slot) {
+                return;
             }
-        }
+            i++;
+            scanned = count < i;
+            R5900_SHORT_LOOP_PAD1(scanned, p);
+            p++;
+        } while (scanned == 0);
     }
-    if ((s32)list[0] < (s32)(s16)cap) {
-        s16 n = (s16)((u16)list[0] + 1);
+    if (list[0] < cap) {
+        s16 n = ++list[0];
 
-        list[0] = n;
-        list[n] = slot;   /* append after the live entries */
+        list[n] = slot;
     }
 }
-#endif
 
 /* func_002AD938: remove a moby from an i16 count-prefixed list by swapping
  * the last entry into its slot. Best attempt 57%: the original keeps the
