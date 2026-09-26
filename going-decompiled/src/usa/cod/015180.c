@@ -1071,20 +1071,22 @@ void func_0011BFC8(s32 ch) {
 }
 
 /**
- * func_0011C000 = convert the IEEE-754 double whose raw bits are `bits` into a
- * clamped integer in [0, 9999]. The sign bit is ignored. The 11-bit exponent
- * field is rebiased to exp = field - 0x433, the power of two that scales the
- * 53-bit significand (implicit leading 1 restored). Values below 2^-53 give 0;
- * values needing a shift of 13 or more saturate to 9999 (0x270F). Otherwise the
- * significand is shifted left by exp (exp >= 0), or right by (-exp - 2) and
- * then by 2 more, rounding up when those last two dropped bits are both set.
- * Returns the low 32 bits.
+ * func_0011C000 = convert the IEEE-754 double whose raw bits are `bits` into an
+ * integer. The sign bit is ignored. The 11-bit exponent field is rebiased to
+ * exp = field - 0x433, the power of two that scales the 53-bit significand
+ * (implicit leading 1 restored). exp < -0x35, i.e. |x| < 0.5, gives 0; exp >= 13,
+ * i.e. |x| >= 2^65, saturates to 9999 (0x270F). That is the only clamp: in
+ * between, the result is NOT bounded to [0, 9999] (100000.0 gives 100000, and
+ * above 2^31 the low word can read negative). Otherwise the significand is
+ * shifted left by exp (exp >= 0), or right by (-exp - 2) and then by 2 more,
+ * rounding up only when those last two dropped bits are both set (a fraction of
+ * .75 or more; 2.5 gives 2). Returns the low 32 bits.
  *
  * Non-obvious: the ROM updates the exponent and significand IN PLACE
  * (`exp -= 0x433`, `exp = -exp`, `x = (x << 12) >> 12`). Folding them into one
- * expression per value (the earlier C, 95.56% by the unit objdiff report) makes
- * cc1 thread them through $2 and extra temporaries instead of keeping exp in
- * $6 and the significand in $5. The rounding test must also be written with
+ * expression per value (the earlier C, 81.11% solo on the sdk29 arm by the
+ * unit objdiff report) makes cc1 thread them through $2 and extra temporaries
+ * instead of keeping exp in $6 and the significand in $5. The rounding test must also be written with
  * `== 3` as the then-branch, which gives the ROM's `bnel` with the plain
  * shift in the likely slot.
  */
