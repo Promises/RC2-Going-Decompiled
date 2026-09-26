@@ -2317,6 +2317,17 @@ s32 StartFrontendSegmentLoad(void) {
     return 1;
 }
 
+/* Inter-function padding at 0x294300..0x294307: the two zero words retail
+ * places between StartFrontendSegmentLoad and func_00294308. They exist only
+ * after `endlabel StartFrontendSegmentLoad` in its nonmatchings .s, which is no
+ * longer included now that this unit supplies the C body, so without this
+ * directive every later function in the unit lands 8 bytes low (landing_gate
+ * cmp 643692 at task #679's first gate run). Same construct as
+ * cod/015180.c's padding before _start. */
+#ifndef TARGET_NATIVE
+__asm__(".word 0\n\t.word 0");
+#endif
+
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294308);
 
 /* Per-frame level-load state machine (returns 1 while a load is in flight, else 0).
@@ -2960,9 +2971,10 @@ void func_00294B50(s32 level, s32 arg2, void *dest, s32 variant) {
  * FACT #5762); kept under its splat name, which objdiff matches by glabel.
  * Looks classId up in the gadget-class TOC (g_discToc+0x4B40, stride 5 ints, up
  * to 0x30 entries). If absent (idx == 0x30) it does nothing. Otherwise, unless
- * the slot's pending-class word (D_152CD0+0x34 + slot*4) already equals the
- * found index, it kicks the class load via func_00294B50 into the slot's
- * buffer (D_152CD0+0x40 + slot*0xC800).
+ * the slot's pending-class word (D_152CD0+0x34 + slot*4, i.e.
+ * g_residentGadgetClassCache) already equals the found index, it kicks the
+ * class load via func_00294B50 into the slot's buffer (D_152CD0+0x40 +
+ * slot*0xC800, i.e. g_gadgetClassSramBase).
  *
  * @param classId  gadget moby-class id to look up.
  * @param slot     gadget cache slot to load it into.
@@ -3486,7 +3498,11 @@ __asm__(".extern g_discToc, 16");
 __asm__(".extern g_loadingScenesPlayed, 16");
 extern s32 g_discToc[];
 extern u8 g_loadingScenesPlayed[];
+#ifndef TARGET_NATIVE
 extern s16 D_152CE4 __attribute__((section(".data")));  /* == g_loadingScenesPlayed + 0x7C */
+#else
+extern s16 D_152CE4;
+#endif
 extern void func_00294B50(s32 idx, s32 a1, void *dest, s32 a3);
 void func_00295478(s32 classId, void *dest) {
     s32 *base = g_discToc;
