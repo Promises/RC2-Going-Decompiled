@@ -25,13 +25,16 @@
  *
  * -G8 extern-sizing rules (same model as text/1A8180 / text/198FA0):
  *   - size <= 8: true small data, %gp_rel everywhere;
- *   - size >= 16: cc1-small / assembler-absolute (lui/$at macro everywhere);
+ *   - size >= 16: cc1-small / assembler-absolute (lui/%lo macro everywhere; GNU
+ *     as uses $at for a store but a load's own destination register for its
+ *     %hi, so a same-register `lui $r / lX $r,%lo($r)` is this model, not a
+ *     compiler split — task #744, g_rawReadSpindleCtrl);
  *   - size 9..15 (we use 12): gp-addressable / assembler-absolute (absolute
  *     macro in straight-line code, 1-insn %gp_rel only in a branch delay slot);
  *   - ABSOLUTE_GLOBAL (a <=8-byte extern in a named section): cc1 does not
  *     class it as small and splits the address itself — `lui $r,%hi(sym)` in a
  *     compiler register, hoistable, `op %lo(sym)($r)` — the form the ROM has
- *     for g_fileLoadState, g_health, g_cdReadMode, g_rawReadSpindleCtrl
+ *     for g_fileLoadState, g_health, g_cdReadMode
  *     (tools/ee/.t510/06_store_forms.tsv lists which model each symbol takes:
  *     a `$at` store = cc1-small model, a compiler-register store or a hoisted
  *     lui = ABSOLUTE_GLOBAL).
@@ -83,8 +86,10 @@ _Static_assert(sizeof(Moby) == 0x100, "Moby must be 0x100 under ILP32");
 /* Globals the original TU did NOT class as gp-small although they are <= 8
  * bytes: the ROM addresses them through a compiler-allocated register
  * (`lui $r,%hi(sym); op %lo(sym)($r)`, hoistable/schedulable), not the
- * assembler's `$at` macro that the `.extern sym, 16` (cc1-small /
- * assembler-absolute) model yields. Declaring the extern in a named section
+ * assembler macro that the `.extern sym, 16` (cc1-small / assembler-absolute)
+ * model yields (`$at` for a store; for a load the macro reuses the destination,
+ * so a load whose %hi and result share one register is the macro, not this
+ * model). Declaring the extern in a named section
  * is the smallest thing that makes cc1 2.9 treat it as non-small (probe:
  * tools/ee/.t510/probe/split.c). No section is emitted for an extern; the
  * native build ignores it. */
@@ -3953,19 +3958,44 @@ s32 StartFileLoadWithCallback(s32 dest, s32 lbn, s32 sectorCount,
 }
 #endif
 
-/* Kick a raw CD read directly via CdStartRead, bypassing the g_fileLoadState
- * request record: builds a local sceCdRMode from the global read mode with the
- * spindle-speed byte overridden, clears the retry counters, then pumps snd. Used
- * by the frontend/level-staging machine that polls completion itself.
- * The lwl/lwr/swl/swr template copy, the compiler-split `lui/%lo` accesses to
- * g_cdReadMode and g_rawReadSpindleCtrl (ABSOLUTE_GLOBAL), the `$at`-macro
- * store to g_rawReadStallTimer and the gp store to g_bRawReadFellBack are all
- * reproduced (task #510). Residual SCHED-TIEBREAK: cc1 2.9 hoists the spindle
- * byte load and the stall-timer store above the template copy; the ROM keeps
- * source order — sdk29 66.96% / engine96 53.04% (unit objdiff report). */
+/*
+ * KickRawFileRead(dest, lbn, sectors) — kick a raw CD read straight through
+ * CdStartRead, bypassing the g_fileLoadState request record. Builds a local
+ * sceCdRMode from the g_cdReadMode template with the spindle byte overridden by
+ * g_rawReadSpindleCtrl, clears the stall watchdog and the fell-back flag, starts
+ * the read, then runs one snd RPC tick and one snd queue pump. Used by the
+ * level-staging machine (0x294280/0x294310), which polls completion itself.
+ *
+ * Params: dest — destination buffer; lbn — first sector (logical block number);
+ *         sectors — sector count.
+ * Returns: always 1. CdStartRead's result is discarded.
+ *
+ * g_rawReadSpindleCtrl is a word (text/191238 reads it with `lw` and stores it
+ * %gp_rel); this function reads only its low byte, as the ROM's `lbu` does.
+ *
+ * MATCHED 100.00% on the sdk29 arm (unit objdiff report, objdiff_build.sh +
+ * unit_report.sh, clean, VM colima-ee-x86-b; task #744). The bracket is the row
+ * with that one lever removed:
+ *  - g_rawReadSpindleCtrl is modelled `.extern ,16`, not ABSOLUTE_GLOBAL. The
+ *    ROM's same-register `lui $7 / lbu $7,%lo($7)` is GNU as expanding a load
+ *    macro through its own destination, not a compiler-split %hi [98.75];
+ *  - an empty asm with lbn and sectors as "+r" operands at entry: cc1 moves them
+ *    into $4/$5 at the top, as the ROM does [75.36];
+ *  - dest is held in $2 (`destCopy`) and passed through $6 (`destArg`), and the
+ *    spindle byte in $7, as in the ROM
+ *    [99.29 / 84.64 / 98.57 with the $2 / $6 / $7 pin removed];
+ *  - one barrier after the spindle store keeps the template copy ahead of the
+ *    stall-timer store [92.68];
+ *  - `destArg` and `modeArg` are set between the two barriers and pinned by the
+ *    second, so the $6/$7 argument moves come before the two clears, and the
+ *    $7 copy is not a sched2 successor of the `sb` (which would otherwise put
+ *    the `lbu` above `lui %hi(g_cdReadMode)`) [90.71].
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", KickRawFileRead);
+#define RAW_READ_REG(r) __asm__(r)
 #else
+#define RAW_READ_REG(r)
+#endif
 typedef struct CdReadMode {         /* sceCdRMode */
     u8 tryCount;
     u8 spindleCtrl;
@@ -3973,7 +4003,8 @@ typedef struct CdReadMode {         /* sceCdRMode */
     u8 pad;
 } CdReadMode;
 extern CdReadMode g_cdReadMode ABSOLUTE_GLOBAL;   /* 0x1A63E8 read-mode template */
-extern u8 g_rawReadSpindleCtrl ABSOLUTE_GLOBAL;  /* 0x1A7900 spindle/speed override applied to the local read mode */
+__asm__(".extern g_rawReadSpindleCtrl, 16");
+extern u8 g_rawReadSpindleCtrl;     /* 0x1A7900 spindle/speed override (low byte of a word) */
 __asm__(".extern g_rawReadStallTimer, 16");
 extern s32 g_rawReadStallTimer;     /* 0x1A7430 raw-read stall watchdog, reset per kick */
 extern s32 g_bRawReadFellBack;      /* 0x1A7434 "read fell back to slow path" flag, reset per kick */
@@ -3982,16 +4013,26 @@ extern void func_00133230(void);    /* 0x133230 snd RPC tick */
 extern s32 snd_Pump(void);          /* 0x133280 snd queue pump */
 s32 KickRawFileRead(s32 dest, s32 lbn, s32 sectors) {
     CdReadMode rmode;
+    register s32 destCopy RAW_READ_REG("$2") = dest;
+    register u8 spindle RAW_READ_REG("$7");
+    register s32 destArg RAW_READ_REG("$6");
+    CdReadMode *modeArg;
+
+    __asm__ __volatile__("" : "+r"(lbn), "+r"(sectors));
     rmode = g_cdReadMode;                   /* copy the read-mode template */
-    rmode.spindleCtrl = g_rawReadSpindleCtrl;
+    spindle = g_rawReadSpindleCtrl;
+    rmode.spindleCtrl = spindle;
+    __asm__ __volatile__("");
+    destArg = destCopy;
+    modeArg = &rmode;
+    __asm__ __volatile__("" : "+r"(modeArg), "+r"(destArg));
     g_rawReadStallTimer = 0;
     g_bRawReadFellBack = 0;
-    CdStartRead(lbn, sectors, dest, &rmode);
+    CdStartRead(lbn, sectors, destArg, modeArg);
     func_00133230();
     snd_Pump();
     return 1;
 }
-#endif
 
 /* Start a file load while keeping the dialog-voice system pumping (the variant
  * used during streamed-cinematic loads): pumps the dialog-voice system once,
