@@ -54,8 +54,8 @@ extern u8 D_1395B8[];
  *   MapDataExistsForLevel (0x296120, 70.9%) — the early-return `if` lowers to
  *     `beql` (branch-likely) where the original uses a plain `beqz` with the
  *     level mask computed once in the delay slot.
- *   MapGetLevelOrderIndex (0x2962C0, 75.0%) — register-coloring (the table
- *     pointer is split $3/$6 in the original, kept in $6 by ours).
+ *   [MapGetLevelOrderIndex (0x2962C0) MATCHED in task #700 — the $3/$6
+ *     table-pointer split is reproduced by binding the loop pointer to $6.]
  *   MapFindCacheSlot (0x2960D8, 87.9%) — cc1 folds `&g_mapVertexData + 0x29C`
  *     into one reloc (2-insn `la`) where the original keeps the base and adds
  *     0x29C separately (3 insns); plus the same `daddu` zero-idiom.
@@ -4094,43 +4094,67 @@ s32 MapFindNearestAvailableLevel(void) {
 }
 #endif
 
-/* MapGetLevelOrderIndex(level): index of `level` in the level-order array
- * (g_pLevelOrder[28]). Returns 0 if it's the first entry, the matching index up
- * to 0x1B, or -1 if not found / the resolved entry is empty while the player
- * has any story progress.
+/*
+ * MapGetLevelOrderIndex(level) — index of `level` in the galactic-map
+ * level-order array (g_pLevelOrder[28]).
  *
- * WALL (75.0%): register-coloring — the original splits the table pointer
- * across $3/$6, the pinned cc1 keeps it in one register. Logic exact; kept as
- * the portable #else body. */
+ * Params: level — level id to look up.
+ * Returns: 0 for the first entry, the matching index up to 0x1B, else -1. The
+ * resolved entry is then re-read (order[-1] when not found — the ROM does the
+ * same load); if it is 0 while the player has any story progress, -1.
+ *
+ * MATCHED on the sdk29 arm (plain C; unit objdiff report via objdiff_build.sh +
+ * unit_report.sh, 100.00%; task #700). The old "register-coloring" wall was the
+ * table pointer living in two registers: the ROM loads g_pLevelOrder into $3,
+ * reads entry 0 through it, and copies it to $6 (a2) in the bne delay slot for
+ * the loop and the final read. The bracket is the row with that one lever
+ * removed:
+ *  - `order` is a register variable bound to $6 (empty on native), which also
+ *    keeps the search loop in the ROM's index form (sll/addu per iteration)
+ *    instead of a strength-reduced pointer walk [81.43];
+ *  - entry 0 is read through the plain local `tbl` BEFORE `order` is assigned,
+ *    so the load targets $3 and the copy survives [91.79 when `order` is
+ *    assigned first];
+ *  - the search is a do-while whose head is `i++`, leaving through `goto done`
+ *    on the bound so only a hit writes idx (the bnel likely-slot is the head)
+ *    [78.39 as a for loop];
+ *  - g_pLevelOrder is sized with `.extern ,16`, so GNU as expands the load
+ *    absolute (lui/lw) rather than %gp_rel [92.50].
+ */
 #ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 65.86% GPREL-DECL /
- * engine96 43.57% IDIOM-LIKELY; best arm sdk29, first differing insn there: 'lui v1,
- * %hi(g_pLevelOrder)' vs '' */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapGetLevelOrderIndex);
+#define LEVEL_ORDER_IN_A2 __asm__("$6")
 #else
+#define LEVEL_ORDER_IN_A2
+#endif
+__asm__(".extern g_pLevelOrder, 16");
+extern s32 *g_pLevelOrder;
 s32 MapGetLevelOrderIndex(s32 level) {
-    s32 *order = g_pLevelOrder;
-    s32 idx;
-    if (order[0] == level) {
+    s32 *tbl = g_pLevelOrder;
+    register s32 *order LEVEL_ORDER_IN_A2;
+    s32 idx = -1;
+    s32 i = 0;
+    s32 first = tbl[0];
+
+    order = tbl;
+    if (first == level) {
         idx = 0;
     } else {
-        s32 i;
-        idx = -1;
-        for (i = 1; i < 0x1C; i++) {
-            idx = i;
-            if (order[i] == level) {
-                break;
+        s32 entry;
+        do {
+            i++;
+            if (i >= 0x1C) {
+                goto done;
             }
-            idx = -1;
-        }
+            entry = order[i];
+        } while (entry != level);
+        idx = i;
     }
+done:
     if (order[idx] == 0 && g_playerProgress != 0) {
         idx = -1;
     }
     return idx;
 }
-#endif
 
 /* MapEvictCacheSlot(): choose a cache slot to reuse and mark it free, returning
  * its index.
