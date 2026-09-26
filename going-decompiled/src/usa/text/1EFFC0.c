@@ -98,58 +98,70 @@ void FadeOutToBlackBlocking(s32 mode);
 /* TODO(hle): needs PS2 graphics/IO HLE backend - closes a tfrag DMA draw segment (writes the 0x20000000 GIF tag into the chain). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", CloseTfragDrawSegment);
 
+/* One tfrag GIF packet (0x50 bytes). Two TEX0 low words carry a GS TBP field
+ * in bits 0..13. */
+typedef struct TfragPacket {
+    u32 tex0;        /* +0x00 first TEX0 low word */
+    u8  _pad04[0x1F];
+    u8  texIndex;    /* +0x23 index into g_tfragTexVramTable */
+    u8  _pad24[0xC];
+    u32 tex0Second;  /* +0x30 second TEX0 low word */
+    u8  _pad34[0x1C];
+} TfragPacket;
+
 /* Tfrag texture-patch registry: a 0-terminated array of {packet array, count}
- * entries; each packet is 0x50 bytes with a texture index at +0x23. */
+ * entries. */
 typedef struct TfragTexPatch {
-    u32 *packets; /* +0x00 */
-    s32  count;   /* +0x04 */
+    TfragPacket *packets; /* +0x00 */
+    s32          count;   /* +0x04 */
 } TfragTexPatch;
 extern TfragTexPatch g_tfragTexPatchList[];
-/* Per-texture VRAM block table: two u16 TBP values per texture index. */
-extern u16 g_tfragTexVramTable[];
+/* Per-texture VRAM block table: two TBP values per texture index. The ROM
+ * reads them with `lh`, so they are declared signed. */
+extern s16 g_tfragTexVramTable[];
 
-/* RESIDUAL CLASS (task #576): UNDIAGNOSED
- *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
- *   whole-unit blanket screen, clean tree): sdk29 76.03%, engine96 61.38%
- *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
- *   and the #else below remains the portable impl.
- *   SCREENED ONLY. Both arms were measured; the residual was not diagnosed to a
- *   mechanism. This is an open arm, not a wall -- do not read it as one. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", PatchTfragPacketTex0);
-#else
+/* GS TEX0 low word: everything above the 14-bit TBP field. */
+#define TEX0_TBP_KEEP_MASK 0xFFFFC000
+
 /**
- * Relocate the texture pointers in every registered tfrag GIF packet.
+ * PatchTfragPacketTex0 — point every registered tfrag packet at its texture's
+ * current VRAM block.
  *
- * Walks g_tfragTexPatchList (until a null packet array); for each of the entry's
- * `count` packets (0x50-byte stride) it looks up the packet's texture index
- * (byte +0x23) in g_tfragTexVramTable and, when non-zero, rewrites the low 14
- * bits (the GS TBP field) of the packet words at +0x00 and +0x30 with the two
- * VRAM block values.
+ * Walks g_tfragTexPatchList until an entry with a null packet array. For each
+ * of the entry's `count` packets it looks up the packet's texture index in
+ * g_tfragTexVramTable and, for each of the two TBP values that is non-zero,
+ * replaces the TBP field (bits 0..13) of the matching TEX0 word.
+ *
+ * Byte-exact on the sdk29 arm (task #675). Two things are non-obvious:
+ *  - The TBP pair is read through an `s16` pointer. The ROM loads each value
+ *    with `lh` and re-reads the second one after the first store; u16 values
+ *    in locals give `lhu`, both loads hoisted.
+ *  - `next` is taken at the top of the outer loop. The ROM computes the next
+ *    entry's address before the packet loop reuses the entry register.
  */
 void PatchTfragPacketTex0(void) {
     TfragTexPatch *entry;
+    TfragTexPatch *next;
 
-    for (entry = g_tfragTexPatchList; entry->packets != 0; entry++) {
+    for (entry = g_tfragTexPatchList; entry->packets != 0; entry = next) {
         s32 count = entry->count;
-        u8 *packet = (u8 *)entry->packets;
+        TfragPacket *packet;
         s32 i;
 
-        for (i = 0; i < count; i++, packet += 0x50) {
-            s32 texIndex = packet[0x23];
-            u16 tbp0 = g_tfragTexVramTable[texIndex * 2];
-            u16 tbp1 = g_tfragTexVramTable[texIndex * 2 + 1];
+        next = entry + 1;
+        packet = entry->packets;
+        for (i = 0; i < count; i++, packet++) {
+            s16 *tbp = &g_tfragTexVramTable[packet->texIndex * 2];
 
-            if (tbp0 != 0) {
-                *(u32 *)(packet + 0x00) = (*(u32 *)(packet + 0x00) & 0xFFFFC000) | tbp0;
+            if (tbp[0] != 0) {
+                packet->tex0 = (packet->tex0 & TEX0_TBP_KEEP_MASK) | tbp[0];
             }
-            if (tbp1 != 0) {
-                *(u32 *)(packet + 0x30) = (*(u32 *)(packet + 0x30) & 0xFFFFC000) | tbp1;
+            if (tbp[1] != 0) {
+                packet->tex0Second = (packet->tex0Second & TEX0_TBP_KEEP_MASK) | tbp[1];
             }
         }
     }
 }
-#endif
 
 /* Opens/builds the tfrag draw segment into the frame's VIF1 chain. Snapshots
  * the frame DMA cursor as the segment head tag, advances the cursor by one
@@ -290,54 +302,69 @@ void FlushTieTextureUploads(void) {
     __asm__ __volatile__("");
 }
 
-extern s32 g_tieVisibleClassList[]; /* negative-terminated list of visible TIE class indices */
-extern void *g_tieClassQueue[];     /* per-class record pointers (record: +0xF count, +0x1C packets) */
-extern u16 g_tieTexVramTable[];     /* two u16 VRAM block values per texture index */
+/* One TIE GIF packet (0x50 bytes). Two TEX0 low words carry a GS TBP field
+ * in bits 0..13. */
+typedef struct TiePacket {
+    u32 tex0;        /* +0x00 first TEX0 low word */
+    u8  _pad04[0x1C];
+    u32 tex0Second;  /* +0x20 second TEX0 low word */
+    u8  _pad24[0xF];
+    u8  texIndex;    /* +0x33 index into g_tieTexVramTable */
+    u8  _pad34[0x1C];
+} TiePacket;
 
-/* RESIDUAL CLASS (task #576): UNDIAGNOSED
- *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
- *   whole-unit blanket screen, clean tree): sdk29 64.17%, engine96 60.42%
- *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
- *   and the #else below remains the portable impl.
- *   SCREENED ONLY. Both arms were measured; the residual was not diagnosed to a
- *   mechanism. This is an open arm, not a wall -- do not read it as one. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", PatchTiePacketTex0);
-#else
+/* Per-class TIE draw record, reached through g_tieClassQueue. */
+typedef struct TieClassRecord {
+    u8         _pad00[0xF];
+    u8         packetCount; /* +0x0F */
+    u8         _pad10[0xC];
+    TiePacket *packets;     /* +0x1C */
+} TieClassRecord;
+
+extern s32 g_tieVisibleClassList[];        /* negative-terminated list of visible TIE class indices */
+extern TieClassRecord *g_tieClassQueue[];  /* per-class record pointers */
+extern s16 g_tieTexVramTable[];            /* two TBP values per texture index, read with `lh` */
+
 /**
- * Relocate the texture pointers in every visible TIE class's GIF packets (the
- * TIE analogue of PatchTfragPacketTex0).
+ * PatchTiePacketTex0 — point every visible TIE class's packets at their
+ * textures' current VRAM blocks. The TIE counterpart of PatchTfragPacketTex0.
  *
- * For each class index in g_tieVisibleClassList (until a negative terminator),
- * takes its record from g_tieClassQueue and, for each of the record's `count`
- * (+0xF) packets (+0x1C, 0x50-byte stride), looks up the packet's texture index
- * (byte +0x33) in g_tieTexVramTable and, when non-zero, rewrites the low 14 bits
- * (GS TBP field) of the packet words at +0x00 and +0x20 with the two VRAM blocks.
+ * For each class index in g_tieVisibleClassList, up to a negative terminator,
+ * takes the class record from g_tieClassQueue and walks its packets. Each
+ * packet's texture index selects a TBP pair in g_tieTexVramTable; each
+ * non-zero value replaces the TBP field (bits 0..13) of the matching TEX0 word.
+ *
+ * Byte-exact on the sdk29 arm (task #675). Non-obvious:
+ *  - The loop bound is the record's packetCount re-read on every iteration,
+ *    not cached. The packet stores may alias the record as far as the
+ *    compiler knows, and the ROM reloads it (`lbu 0xF`) each time round.
+ *  - The TBP pair is read through an `s16` pointer (`lh`, second value
+ *    re-read after the first store), as in PatchTfragPacketTex0.
+ *  - `next` is taken at the top of the outer loop, before the record lookup.
  */
 void PatchTiePacketTex0(void) {
     s32 *visible;
+    s32 *next;
 
-    for (visible = g_tieVisibleClassList; *visible >= 0; visible++) {
-        u8 *record = (u8 *)g_tieClassQueue[*visible];
-        s32 count = *(u8 *)(record + 0xF);
-        u8 *packet = *(u8 **)(record + 0x1C);
+    for (visible = g_tieVisibleClassList; *visible >= 0; visible = next) {
+        TieClassRecord *record = g_tieClassQueue[*visible];
+        TiePacket *packet;
         s32 i;
 
-        for (i = 0; i < count; i++, packet += 0x50) {
-            s32 texIndex = packet[0x33];
-            u16 tbp0 = g_tieTexVramTable[texIndex * 2];
-            u16 tbp1 = g_tieTexVramTable[texIndex * 2 + 1];
+        next = visible + 1;
+        packet = record->packets;
+        for (i = 0; i < record->packetCount; i++, packet++) {
+            s16 *tbp = &g_tieTexVramTable[packet->texIndex * 2];
 
-            if (tbp0 != 0) {
-                *(u32 *)(packet + 0x00) = (*(u32 *)(packet + 0x00) & 0xFFFFC000) | tbp0;
+            if (tbp[0] != 0) {
+                packet->tex0 = (packet->tex0 & TEX0_TBP_KEEP_MASK) | tbp[0];
             }
-            if (tbp1 != 0) {
-                *(u32 *)(packet + 0x20) = (*(u32 *)(packet + 0x20) & 0xFFFFC000) | tbp1;
+            if (tbp[1] != 0) {
+                packet->tex0Second = (packet->tex0Second & TEX0_TBP_KEEP_MASK) | tbp[1];
             }
         }
     }
 }
-#endif
 
 /* Build a full tie (instanced static geometry) draw segment into the frame's
  * VIF1 chain: emit the GS scissor/setup reg packet, reset the dynamic VRAM
