@@ -438,61 +438,71 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_0
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", DrawSkyShellsScaledSpin);
 
-/*
- * RenderSky — draw the sky shells for the current frame. Opens a sky draw
- * segment, points the shell spin-rate table at the static rates, then draws the
- * shells with scaled spin in the boot/title area (g_playerProgress == 0) or with
- * fixed spin in-game. Closes the segment and appends two GS register packets:
- * SCANMSK (0x47) = 0x5360B and the Z-buffer base (reg 0x4E) packed as
- * 0x1000000 | (g_vramZBuffer >> 13).
- *
- * WALL: compiles op-for-op identical EXCEPT (a) the ROM reads g_playerProgress /
- * g_vramZBuffer with the absolute lui/%lo macro, but those symbols are small
- * (<=8) and gp-rel-accessed by 11 OTHER functions in this -G8 TU, so a TU-wide
- * `.extern ...,16` absolute override would regress them; and (b) the final
- * AppendGsRegPacket is a tail position which our cc1 lowers to a sibling-call `j`
- * where the ROM keeps `jal`+epilogue. Both are TU-flag/version artifacts, not
- * source-controllable here; kept as the portable #else.
- */
 extern void BeginSkyDrawSegment(void);
 extern void DrawSkyShellsScaledSpin(void);
 extern void DrawSkyShellsFixedSpin(void);
 extern void CloseSkyDrawSegment(void);
-/* GS A+D reg-write: the DATA is a 64-bit register value. Widen it to u64 for the
- * native/#else build (prevents silent truncation of bits >=32); matching-build
- * decl kept verbatim (byte-neutral). */
-#ifdef TARGET_NATIVE
+/* GS A+D reg-write: the DATA is a 64-bit GS register value. The u64 prototype is
+ * also what the ROM's call sites were compiled against: with an s32 value the 2.9
+ * cc1 loads a0 before a1 at RenderSky's first call, where the ROM builds a1
+ * (lui/ori 0x5360B) first and puts `li a0` in the jal delay slot (task #645). */
 extern void AppendGsRegPacket(s32 reg, u64 val);
-#else
-extern void AppendGsRegPacket(s32 reg, s32 val);
-#endif
 extern s32  g_playerProgress;
 extern s32  g_vramZBuffer;
 extern void *g_pSkyShellSpinRates;
 extern s32  g_skyShellSpinTableStatic[];
+
+/* Absolute-access aliases, used by RenderSky ONLY (task #741). The ROM reads
+ * g_playerProgress and g_vramZBuffer here with the assembler-macro shape
+ * (`lui rX; lw rX,%lo(rX)`), so cc1 must still emit the one-insn macro `lw` while
+ * GNU as expands it absolutely. GNU as sizes a SYMBOL once per file, so the
+ * obvious `.extern g_playerProgress, 16` (task #645) also turned
+ * MapGetLevelOrderIndex's gp-relative delay-slot read absolute (100.00 -> 90.71,
+ * FACT #8028). A distinct assembler symbol equated to the real one carries its
+ * own size instead: only code naming the alias expands absolutely, and gas
+ * resolves the equate in the emitted relocations, which name g_playerProgress /
+ * g_vramZBuffer exactly as the ROM's do — the aliases never reach the symbol
+ * table or the link. */
 #ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 90.94% GPREL-DECL /
- * engine96 90.94% GPREL-DECL; best arm sdk29, first differing insn there: 'lui v1,
- * %hi(g_playerProgress)' vs ''. Iterated: engine96 98.75% REGNUM-COLORING — after non-small
- * decls for g_playerProgress/g_vramZBuffer + progress read before the store (s3): 6 rows
- * differ only by register number */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", RenderSky);
+__asm__(".extern g_playerProgressAbs, 16\n\tg_playerProgressAbs = g_playerProgress");
+__asm__(".extern g_vramZBufferAbs, 16\n\tg_vramZBufferAbs = g_vramZBuffer");
+extern s32 g_playerProgressAbs;
+extern s32 g_vramZBufferAbs;
 #else
+#define g_playerProgressAbs g_playerProgress
+#define g_vramZBufferAbs    g_vramZBuffer
+#endif
+
+/*
+ * RenderSky — draw the sky shells for the current frame. Opens a sky draw
+ * segment, points the shell spin-rate table (g_pSkyShellSpinRates) at the static
+ * rates, then draws the shells with scaled spin in the boot/title area
+ * (g_playerProgress == 0) or with fixed spin in-game. Closes the segment and
+ * appends two GS register packets: TEST_1 (0x47) = 0x5360B and ZBUF_1 (0x4E) =
+ * 0x1000000 | (g_vramZBuffer >> 13), the Z-buffer base page. No params, no
+ * return value.
+ *
+ * MATCHED on the sdk29 arm (plain C, cc1 2.9-ee-991111): unit objdiff report via
+ * objdiff_build.sh + unit_report.sh 100.00%, MapGetLevelOrderIndex still 100.00%
+ * in the same report (task #741). Load-bearing spellings: the *Abs aliases above
+ * (absolute reads without a file-wide size override), the u64 AppendGsRegPacket
+ * prototype (argument order at the first call), the `== 0` branch sense (the ROM
+ * falls through to the scaled-spin call), and the empty asm, which keeps the last
+ * AppendGsRegPacket a jal + epilogue rather than a sibling-call `j`.
+ */
 void RenderSky(void) {
     BeginSkyDrawSegment();
     g_pSkyShellSpinRates = g_skyShellSpinTableStatic;
-    if (g_playerProgress != 0) {
-        DrawSkyShellsFixedSpin();
-    } else {
+    if (g_playerProgressAbs == 0) {
         DrawSkyShellsScaledSpin();
+    } else {
+        DrawSkyShellsFixedSpin();
     }
     CloseSkyDrawSegment();
     AppendGsRegPacket(0x47, 0x5360B);
-    AppendGsRegPacket(0x4E, 0x1000000 | (g_vramZBuffer >> 13));
+    AppendGsRegPacket(0x4E, 0x1000000 | (g_vramZBufferAbs >> 13));
     __asm__ __volatile__("");
 }
-#endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291B60);
 
