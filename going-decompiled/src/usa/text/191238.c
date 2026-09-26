@@ -2939,51 +2939,80 @@ void func_00294B50(s32 level, s32 arg2, void *dest, s32 variant) {
 #endif
 
 /*
+ * R5900 short-loop pad. The ROM pads every backward branch that closes a loop
+ * of fewer than 6 instructions (target..branch) with nops up to 6 (FACT #7937,
+ * #659's construct in text/1A8180). The gadget-class TOC searches below close a
+ * 5-instruction loop, so the ROM carries one nop between the entry load and the
+ * backward `bnel`. `.set noreorder` keeps the assembler from moving the nop into
+ * the branch delay slot; the "+r" operand pins it between the load and the
+ * compare. A no-op on the native build.
+ */
+#ifndef TARGET_NATIVE
+#define R5900_SHORT_LOOP_PAD1(v) \
+    __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v))
+#else
+#define R5900_SHORT_LOOP_PAD1(v) ((void)0)
+#endif
+
+/*
  * func_00294C48(classId, slot) — request the gadget moby-class load for `slot`.
+ * Track-B identity LoadGadgetClassIntoCacheSlot (comment-only in symbol_addrs,
+ * FACT #5762); kept under its splat name, which objdiff matches by glabel.
  * Looks classId up in the gadget-class TOC (g_discToc+0x4B40, stride 5 ints, up
  * to 0x30 entries). If absent (idx == 0x30) it does nothing. Otherwise, unless
- * the per-slot in-flight record (g_respawnPlayerYaw+0x48 + slot, field +0x34)
- * already equals the found index, it kicks the class load via func_00294B50 with
- * the per-slot destination buffer (slot*0xC800 + g_respawnPlayerYaw+0x88).
+ * the slot's pending-class word (D_152CD0+0x34 + slot*4) already equals the
+ * found index, it kicks the class load via func_00294B50 into the slot's
+ * buffer (D_152CD0+0x40 + slot*0xC800).
  *
- * WALL: instruction-for-instruction identical to the original EXCEPT the
- * register-to-register copies the original's later cc1 emits as 64-bit `daddu
- * $r,$0,$0`/`daddu $6,$4,$0` (zero/arg-move idiom) which the pinned 2.9-ee-991111
- * cc1 lowers to 32-bit `move`/`addu`. Not source-controllable; kept as the
- * portable #else (verified op-for-op, the only deltas are addu<->daddu).
+ * @param classId  gadget moby-class id to look up.
+ * @param slot     gadget cache slot to load it into.
+ *
+ * Byte-exact on the sdk29 arm as plain C (task #679, colima-ee-x86). Levers,
+ * each shown necessary by removing it and watching the unit objdiff row fall
+ * (row value without the lever in brackets):
+ *  - R5900_SHORT_LOOP_PAD1 on the loaded entry [97.06].
+ *  - the search is a do-while whose head is `idx++`: the ROM increments the
+ *    zeroed idx (`addiu $4,$4,1`), and its `bnel` likely-slot is a copy of
+ *    that head. A `for (idx = 1; ...)` loop folds it to `li 1` [96.44].
+ *  - `toc += 5` precedes the bound test, so reorg fills the exit `beqz` slot
+ *    with it rather than stealing `li 48` from the exit target [96.59].
+ *  - the pending word is read through a named `pending` pointer: indexing
+ *    rec + 0x34 directly expands as (slot*4 + rec), giving `addu $3,$3,$7`
+ *    where the ROM has `addu $3,$7,$3` [99.71].
+ * The trailing empty asm keeps cc1 from sibling-call lowering the tail call
+ * (FACT #5330).
  */
 extern s32 g_discToc[];
 extern s32 g_respawnPlayerYaw[];
+extern u8 D_152CD0[];  /* gadget cache slot table: +0x34 pending class per slot, +0x40 slot buffers */
 extern void func_00294B50(s32 idx, s32 slot, void *dest, s32 a3);
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 81.26% UNKNOWN-empty /
- * engine96 62.71% CONST-MULT; best arm sdk29, first differing insn there: '' vs 'lw v0,
- * 0x4b54(v1)' */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294C48);
-#else
 void func_00294C48(s32 classId, s32 slot) {
     s32 *toc = g_discToc;
     s32 idx = 0;
+
     if (toc[0x12D0] != classId) {            /* g_discToc + 0x4B40 */
         s32 *p = toc + 0x12D0;
-        for (idx = 1; idx < 0x30; idx++) {
+        s32 entry;
+        do {
+            idx++;
             p += 5;
-            if (p[0] == classId) {
+            if (idx >= 0x30) {
                 break;
             }
-        }
+            entry = *p;
+            R5900_SHORT_LOOP_PAD1(entry);
+        } while (entry != classId);
     }
     if (idx != 0x30) {
-        s32 *rec = &g_respawnPlayerYaw[0x12] + slot;   /* g_respawnPlayerYaw+0x48 */
-        if (rec[0xD] != idx) {                          /* field +0x34 */
-            void *dest = (void *)(slot * 0xC800 + (s32)&g_respawnPlayerYaw[0x22]);
-            func_00294B50(idx, slot, dest, 0);          /* +0x88 == [0x12]+0x40 */
+        u8 *rec = D_152CD0;
+        s32 *pending = (s32 *)(rec + 0x34);
+        if (pending[slot] != idx) {
+            u8 *dest = rec + 0x40;
+            func_00294B50(idx, slot, dest + slot * 0xC800, 0);
         }
     }
     __asm__ __volatile__("");
 }
-#endif
 
 /* func_00294CD0(id): resolve + commit the gadget/weapon equip-slot for weapon key
  * `id`. Early-outs while a load is in flight (func_00294EE0 busy, or
@@ -3437,51 +3466,51 @@ void func_00295238(s32 classId) {
 /*
  * func_00295478 — look up a gadget moby-class id in the gadget-class TOC
  * (g_gadgetClassToc == g_discToc+0x4B40, stride 5 ints, up to 0x30 entries). On
- * a hit, record the found index in the staging halfword (g_loadingScenesPlayed
- * +0x7C) and request the class load via func_00294B50(idx, -1, dest, 1).
+ * a hit, record the found index in the staging halfword D_152CE4
+ * (g_loadingScenesPlayed+0x7C) and request the class load via
+ * func_00294B50(idx, -1, dest, 1).
+ *
+ * @param classId  gadget moby-class id to look up.
+ * @param dest     destination buffer handed to func_00294B50.
+ *
+ * Byte-exact on the sdk29 arm as plain C (task #679, colima-ee-x86). Same
+ * search as func_00294C48 (do-while with `idx++` at its head, `toc += 5` before
+ * the bound test, R5900_SHORT_LOOP_PAD1 on the loaded entry), plus the staging
+ * halfword stored through its own symbol placed in .data, so cc1 splits it into
+ * the ROM's `lui` (in the beq delay slot) and `sh %lo`. Unit objdiff row with
+ * each lever removed in turn: pad 96.55, `for (idx = 1; ...)` 95.83, bound test
+ * before `toc += 5` 96.00, no .data placement 96.21. The trailing empty asm
+ * keeps the tail call from being sibling-lowered (FACT #5330).
  */
 __asm__(".extern g_discToc, 16");
 __asm__(".extern g_loadingScenesPlayed, 16");
 extern s32 g_discToc[];
 extern u8 g_loadingScenesPlayed[];
+extern s16 D_152CE4 __attribute__((section(".data")));  /* == g_loadingScenesPlayed + 0x7C */
 extern void func_00294B50(s32 idx, s32 a1, void *dest, s32 a3);
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 78.38% UNKNOWN-empty /
- * engine96 50.79% UNKNOWN-addiu; best arm sdk29, first differing insn there: '' vs 'lw v0,
- * 0x4b54(a3)' */
-/* TODO(match): functional equivalent - not byte-exact (78.7%); loop-peel wall -
- * the pinned cc1 peels the first search iteration (folding base+0x4B54 as a
- * constant offset) where the original's later cc1 keeps the clean rotated loop.
- * Prologue/registers/tail otherwise match. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00295478);
-#else
-/*
- * func_00295478 — look up a gadget moby-class id in the gadget-class TOC
- * (g_gadgetClassToc == g_discToc+0x4B40, stride 5 ints, up to 0x30 entries). On
- * a hit, record the found index in the staging halfword (g_loadingScenesPlayed
- * +0x7C) and request the class load via func_00294B50(idx, -1, dest, 1).
- */
 void func_00295478(s32 classId, void *dest) {
     s32 *base = g_discToc;
     s32 idx = 0;
+
     if (base[0x12D0] != classId) {       /* g_discToc + 0x4B40 */
         s32 *toc = base + 0x12D0;
-        for (idx = 1; idx < 0x30; idx++) {
+        s32 entry;
+        do {
+            idx++;
             toc += 5;
-            if (toc[0] == classId) {
+            if (idx >= 0x30) {
                 break;
             }
-        }
+            entry = *toc;
+            R5900_SHORT_LOOP_PAD1(entry);
+        } while (entry != classId);
     }
     if (idx != 0x30) {
-        *(s16 *)(g_loadingScenesPlayed + 0x7C) = (s16)idx;
+        D_152CE4 = idx;
         func_00294B50(idx, -1, dest, 1);
     }
     __asm__ __volatile__("");
 }
-#endif
-
 /**
  * func_002954F0 — allocate VRAM for a texture and queue its upload.
  *
