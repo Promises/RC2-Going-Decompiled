@@ -62,6 +62,26 @@ typedef struct { unsigned long long _q[2]; } __attribute__((aligned(16))) u_long
 typedef unsigned long u_long128 __attribute__((mode(TI)));
 #endif
 
+/* Codegen steering for the matching build (task #667). Only the pad emits
+ * an instruction (its `nop`), and both are no-ops natively.
+ *   EE_REG(r)     binds a local register variable to EE GPR `r`
+ *                 (`register u32 x EE_REG("$3");`) where cc1 2.9's allocator
+ *                 colours a temp differently from the ROM. The host build has
+ *                 no MIPS registers, so it gets a plain local.
+ *   R5900_SHORT_LOOP_PAD1(v, next)
+ *                 the R5900 short-loop pad, one `nop` before a loop's closing
+ *                 branch (same macro as text/1A8180.c, task #659; see there).
+ *                 `v` is the value the branch tests; `next` is the register
+ *                 reorg moves into the branch's delay slot. */
+#ifndef TARGET_NATIVE
+#define EE_REG(r) __asm__(r)
+#define R5900_SHORT_LOOP_PAD1(v, next) \
+    __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
+#else
+#define EE_REG(r)
+#define R5900_SHORT_LOOP_PAD1(v, next) ((void)0)
+#endif
+
 extern u8 g_listenerPosHistory[]; /* 0x188660 - ring of 4 listener vec4 */
 
 /* GS/VIF frame-build + sky/shrub render globals (large absolute addresses, so
@@ -894,42 +914,40 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_0
 extern void DrawSkyPiecesFormatA(void *piece);
 extern void DrawSkyPiecesFormatB(void *piece);
 
-/* Draw sky shell `shellIdx`: look up its piece list (g_pSkyData+0x20 pointer
- * array) and dispatch to format B if the piece carries a +0x4 sub-list,
- * otherwise format A.  Shell indices past the count (+0x6) are ignored.
- * TODO(match): not byte-exact; ONE instruction short on the better arm
- * (measured task #563, unit objdiff on the committed body).
- *   engine96 97.05% via MATCH_DrawSkyShell, 22/22 insns, 1 differs - DSLOT-FILL.
- *            The ROM fills the post-FormatB `b` delay slot with a DUPLICATED
- *            `ld ra,0(sp)` and branches straight to `jr ra`; cc1 emits `nop`
- *            there and shares the single `ld ra` epilogue.  Everything else,
- *            including the `addu v0,v1,v0` operand order, is exact.
- *   sdk29    96.59%, 22/22 insns, 2 differ - the same DSLOT-FILL plus an
- *            `addu v0,v0,v1` operand-order flip the 2.96 arm does not have
- *            (REGNUM class); rewriting the index as `((void **)(sky+0x20))[i]`
- *            was RUN and is inert (96.59% unchanged, byte-identical output).
- * The trailing `__asm__ __volatile__("")` is load-bearing but is ALSO what
- * blocks the delay-slot hoist - all three positions were measured on engine96:
- * at function end 97.05% (this one), removed 70.45% (2.96 sibcalls both calls),
- * duplicated inside each branch 92.73%.  No position gets both. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", DrawSkyShell);
-#else
+/**
+ * DrawSkyShell — draw one sky shell.
+ *
+ * @param shellIdx  shell index; indices at or past the shell count
+ *                  (g_pSkyData+0x6, s16) are ignored.
+ *
+ * Looks the shell's piece up in the pointer array at g_pSkyData+0x20 and
+ * draws it with format B when the piece carries a +0x4 sub-list, otherwise
+ * format A.
+ *
+ * Byte-exact on the sdk29 arm (task #667). Two things are non-obvious:
+ *  - Both draw calls go through a cast function pointer. That stops cc1 2.9
+ *    from turning them into sibling calls (`j`) without an asm barrier after
+ *    them. With no barrier in the way, reorg fills the FormatB `b` delay
+ *    slot with a copy of `ld ra,0(sp)`, as the ROM does. The earlier
+ *    trailing `__asm__ __volatile__("")` blocked that copy (FACT #7511).
+ *  - The scaled index is its own statement. Folded into the address, cc1
+ *    emits `addu v0,v0,v1`, the reverse of the ROM's operand order.
+ */
 void DrawSkyShell(s32 shellIdx) {
     u8 *sky = g_pSkyData;
     void *piece;
+    s32 offset;
 
     if (shellIdx < *(s16 *)(sky + 0x6)) {
-        piece = *(void **)(sky + 0x20 + shellIdx * 4);
+        offset = shellIdx * 4;
+        piece = *(void **)(sky + offset + 0x20);
         if (*(s32 *)((u8 *)piece + 0x4) != 0) {
-            DrawSkyPiecesFormatB(piece);
+            ((s32 (*)(void *))DrawSkyPiecesFormatB)(piece);
         } else {
-            DrawSkyPiecesFormatA(piece);
+            ((s32 (*)(void *))DrawSkyPiecesFormatA)(piece);
         }
     }
-    __asm__ __volatile__("");
 }
-#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", DrawSkyPiecesFormatA);
 
@@ -1287,25 +1305,38 @@ void StartLevelMusicStream(void) {
  * dense to model confidently; a multi-pass Ghidra decomposition job. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", UpdateSoundEmitters);
 
-/* True if emitter slot `slotIndex` is currently owned by `owner` and in a
- * keyed-on/playing state (state 1 or 2).  A negative index means "no slot".
- * NEAR-MISS (~68%): functionally exact but cc1 stages the owner move + the
- * zero return into different branch delay slots and lowers the final boolean
- * via explicit branches (register-coloring / branch-lowering wall). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", IsMobySoundActive);
-#else
+/**
+ * IsMobySoundActive — is an emitter slot still sounding for a given moby?
+ *
+ * @param owner      moby the caller believes owns the slot.
+ * @param slotIndex  emitter slot; negative means "no slot".
+ * @return           1 if the slot is owned by `owner` and its state is
+ *                   keyed-on or playing (1 or 2), else 0.
+ *
+ * Byte-exact on the sdk29 arm (task #667). The ROM keeps the answer in a
+ * variable and branches on each test instead of computing a boolean:
+ * `bne` owner to the shared return with `move v0,zero` in its slot, then
+ * `bnez` playing to the return with `li v0,1` in its slot, falling into
+ * the `return 0` block. `if (c) return 1; return 0;` gives an `sltiu`
+ * store-flag instead. The explicit `result` with gotos gives the branches.
+ * Binding `result` to $2 lets reorg use a plain `bne` for the owner test.
+ * Otherwise `result` lands in $3, which is still live on the fall-through,
+ * and reorg has to use `bnel`.
+ */
 s32 IsMobySoundActive(s32 owner, s32 slotIndex) {
     EmitterView *slot;
-    if (slotIndex >= 0) {
-        slot = EMITTER_VIEW(slotIndex);
-        if (slot->owner == owner && (u8)(slot->state - 1) < 2) {
-            return 1;
-        }
-    }
-    return 0;
+    register s32 result EE_REG("$2");
+
+    if (slotIndex < 0) goto inactive;
+    slot = EMITTER_VIEW(slotIndex);
+    if (slot->owner != owner) goto inactive;
+    result = 1;
+    if ((u8)(slot->state - 1) < 2) goto done;
+inactive:
+    result = 0;
+done:
+    return result;
 }
-#endif
 
 /* Request that emitter slot `slotIndex` stop.  If it is already pending-free
  * (state 7) it is freed immediately (state 0, owner/link cleared); states 0
@@ -1331,42 +1362,63 @@ void StopSoundEmitter(s32 slotIndex) {
     slot->state = 4;
 }
 
-extern u8 g_soundBankHandles[]; /* 0x189E00 - loaded 989snd bank handle array */
+extern u8 g_soundBankHandlesBlk[]; /* 0x189E20 - g_soundBankHandles + 0x20 */
 
-/* Find a free emitter slot (state byte == 0) for the moby `owner`.  Mobys that
- * match one of the two priority pointers (g_soundBankHandles+0x22B0 / +0x1240)
- * may use the full slot range (0x34); everything else is limited to 0x2A.
- * Returns the first free slot index, or 0x34 if none is free.
- * NEAR-MISS (~55%, functionally exact): the original folds the +0x20 base
- * offset into the %lo reloc addend and stages the limit constant in the beqz
- * delay slot (reloc-addend-fold + delay-slot scheduling walls).  The C is
- * faithful. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", AllocVoiceHandleSlot);
-#else
+/**
+ * AllocVoiceHandleSlot — find a free emitter slot for a moby.
+ *
+ * @param owner  moby that wants a voice; may be NULL.
+ * @return       index of the first slot whose state byte is 0, or 0x34 if
+ *               none is free in the allowed range.
+ *
+ * Two priority mobys, the pointers at g_soundBankHandlesBlk+0x2290 (the
+ * hero, g_pHeroMoby) and +0x1220, may use all 0x34 slots. Every other
+ * moby, and NULL, is limited to the first 0x2A.
+ *
+ * Byte-exact on the sdk29 arm (task #667):
+ *  - The ROM reaches the priority pointers from the CONFIRMED symbol
+ *    g_soundBankHandlesBlk. The old body used g_soundBankHandles + 0x20,
+ *    which relocates against the wrong symbol.
+ *  - The priority tests are gotos into a shared `limit = 0x2A`. Written
+ *    with || and &&, cc1 folds +0x2290 into the %lo and turns the second
+ *    test into a `bnel`.
+ *  - The scan is the ROM's do-while. `idx++` at the loop head is what
+ *    reorg copies into the `bnel` delay slot. With the pad before the
+ *    back-branch, cc1 also emits the `nop` in front of the loop label that
+ *    the ROM has.
+ */
 s32 AllocVoiceHandleSlot(Moby *owner) {
-    u8 *bankBase = g_soundBankHandles + 0x20;
     s32 limit;
     s32 idx;
+    u8 *bank;
+    u8 *hist;
+    u8 *state;
+    u32 cur;
 
     limit = 0x34;
-    if (owner == NULL ||
-        (*(void **)(bankBase + 0x2290) != owner &&
-         *(void **)(bankBase + 0x1220) != owner)) {
-        limit = 0x2A;
-    }
-
+    if (owner == NULL) goto restricted;
+    bank = g_soundBankHandlesBlk;
+    if (*(Moby **)(bank + 0x2290) == owner) goto chosen;
+    if (*(Moby **)(bank + 0x1220) == owner) goto chosen;
+restricted:
+    limit = 0x2A;
+chosen:
     idx = 0;
-    if (limit != 0 && g_soundEmitterTable[0].state != 0) {
-        for (idx = 1; idx < limit; idx++) {
-            if (g_soundEmitterTable[idx].state == 0) {
-                break;
-            }
+    if (limit != 0) {
+        hist = g_listenerPosHistory;
+        if (hist[0x74] != 0) {         /* slot 0 state byte */
+            state = hist + 0x74;
+            do {
+                idx++;
+                if (idx >= limit) break;
+                state += 0x70;
+                cur = *state;
+                R5900_SHORT_LOOP_PAD1(cur, idx);
+            } while (cur != 0);
         }
     }
     return (idx != limit) ? idx : 0x34;
 }
-#endif
 
 /* Allocate and arm a 3D sound emitter for sound definition `pSoundDef`.
  *
@@ -1611,33 +1663,45 @@ s32 PlayGlobalSound(s32 soundIdx, s32 posOverride, s32 owner) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E6D28);
 
-/* Flag emitter slot `slotIndex` as positioned (set flags bit 0x40) and copy the
- * 16-byte spatial quad from `src` into the slot's 0xA0 field; returns 1.
- * TODO(match): not byte-exact - ADDR-DISTRIB (measured task #563, unit objdiff
- * on the committed body).
- *   sdk29    79.57%, ROM 14 insns vs 12 - the ROM materializes the quad
- *            destination base (g_listenerPosHistory+0xA0) into its own register
- *            and stores at displacement 0 (`addiu v0,a2,160; addu a0,a0,v0;
- *            sq v0,0(a0)`); cc1 2.9 keeps one base and folds +0xA0 into the
- *            store displacement (`sq a2,160(a0)`), which is 2 insns shorter.
- *   engine96 49.21% - worse, and additionally strength-reduces the 0x70 stride
- *            to `sll;subu;sll` where the ROM has `li 112; mult` (FACT #7379),
- *            so the 2.9 arm is the right one here.
- * LEVER RUN AND FAILED: writing the two bases explicitly in the source
- * (`u_long128 *dst = (u_long128 *)((g_listenerPosHistory + 0xA0) + idx*0x70)`)
- * does NOT survive - cc1 2.9 reassociates them back to one base and still emits
- * `sq a0,160(a2)`, scoring 74.86%, BELOW the single-slot form kept here.  The
- * fold is the compiler's, not the source's. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", SetSoundEmitterOffset);
-#else
+/**
+ * SetSoundEmitterOffset — mark an emitter slot as positioned and store its
+ * spatial quad.
+ *
+ * @param slotIndex  emitter slot.
+ * @param src        16-byte spatial quad, copied into the slot's quadA0
+ *                   field (emitter +0x30, g_listenerPosHistory + 0xA0 +
+ *                   slotIndex*0x70).
+ * @return           always 1.
+ *
+ * Sets flags bit 0x40 (positioned) on the slot.
+ *
+ * Byte-exact on the sdk29 arm (task #667). The ROM uses two bases: `hist`
+ * for the flag byte and `hist+0xA0` for the quad, so it stores at
+ * displacement 0. The old single-slot body let cc1 2.9 fold the second
+ * base into `sq ...,0xA0(reg)` (79.57%). What makes it hold, each measured
+ * by removing it from this body:
+ *  - `quad` added into the integer `offset`, which reuses the index
+ *    register for the store address as the ROM does. The pointer spelling
+ *    `quad += offset` scores 90.29%.
+ *  - The volatile barrier keeps `li v0,1` for the `jr` delay slot. Without
+ *    it the scheduler hoists the return value, `v0` is not free as a temp,
+ *    and the row reads 70.00%.
+ *  - Binding the flag byte to $3 matches the ROM's register colouring;
+ *    unbound, cc1 swaps it with `hist` (95.71%).
+ */
 s32 SetSoundEmitterOffset(s32 slotIndex, u_long128 *src) {
-    EmitterView *slot = EMITTER_VIEW(slotIndex);
-    slot->flags |= 0x40;
-    slot->quadA0 = *src;
+    u8 *hist = g_listenerPosHistory;
+    s32 offset = slotIndex * 0x70;
+    u8 *quad = hist + 0xA0;
+    register u32 flags EE_REG("$3");
+
+    flags = ((EmitterView *)(offset + hist))->flags;
+    ((EmitterView *)(offset + hist))->flags = flags | 0x40;
+    offset += (s32)quad;
+    *(u_long128 *)offset = *src;
+    __asm__ __volatile__("");
     return 1;
 }
-#endif
 
 /* func_002E6D70: 8 bytes of dead debris (li v0,1; nop) carved off the real
  * entry func_002E6D78 in task #472 (the pre-carve NEAR-MISS ~80% of the fused
