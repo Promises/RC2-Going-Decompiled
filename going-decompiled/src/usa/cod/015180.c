@@ -5764,18 +5764,12 @@ u8 func_00131730(u8 binary) {
     return binary / 10 * 6 + binary;
 }
 
-/* func_00131760: packed-BCD byte -> binary, n - (n>>4)*6 masked to a byte
- * (e.g. 0x59 -> 59). Decompiles to ~87%; the only diff is the multiply form:
- * the original emits 2-operand `mult $0,rs,rt` + `mflo`, but ee-gcc lowers `*`
- * to the 3-operand R5900 `mult rd,rs,rt`. That is a compiler-flag/codegen
- * choice, not expressible in source, so the ROM arm stays INCLUDE_ASM. The
- * portable arm below is behaviourally faithful and is NOT a byte-match claim. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131760);
-#else
 /**
  * Packed BCD byte → binary (RTC/BCD clock family, inverse of the neighbouring
  * binary→BCD func_00131730): n - 6*(n>>4), e.g. 0x59 → 59.
+ *
+ *   packed  a packed-BCD byte (high nibble tens, low nibble units)
+ *   ->      the binary value, truncated to a byte
  *
  * Written to mirror the ROM rather than as the more obvious
  * `(n >> 4) * 10 + (n & 0xF)`: the original computes the CORRECTION term
@@ -5789,11 +5783,25 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00131760);
  *
  * The u8 param/return produce the callee-side `andi 0xFF` masks -- the entry
  * `andi $2,$4,0xFF` and the one in the jr delay slot.
+ *
+ * Non-obvious: the correction term is a GNU C local register variable bound
+ * to LO. The ROM multiplies with the 2-operand `mult $3,$4` (rd = $0, product
+ * left in LO) followed by `mflo $3`; a plain `(n >> 4) * 6` makes this cc1
+ * pick the 3-operand R5900 `mult $3,$3,$4` alternative of its mulsi3 pattern
+ * instead. Binding the product to LO selects the pattern's LO-output
+ * alternative, and the read back out of LO is the `mflo`. The host build has
+ * no LO register, so it gets an ordinary local.
  */
 u8 func_00131760(u8 packed) {
-    return packed - (packed >> 4) * 6;
-}
+#ifndef TARGET_NATIVE
+    register u32 correction asm("lo");
+#else
+    u32 correction;
 #endif
+
+    correction = (packed >> 4) * 6;
+    return packed - correction;
+}
 
 extern u8 func_00131760(u8 packed);
 
