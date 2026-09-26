@@ -3165,61 +3165,71 @@ void func_00294E98(s32 a, s32 b) {
 }
 #endif
 
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 56.39% IDIOM-LIKELY /
- * engine96 47.53% IDIOM-LIKELY; best arm sdk29, first differing insn there: 'lui v0,
- * %hi(g_discToc)' vs 'lui v1, %hi(g_discToc)' */
-/* TODO(match): functional equivalent - not byte-exact (52%); loop-peel wall -
- * same as func_00295478: the pinned cc1 lowers the peeled first TOC-search
- * iteration to `bnel`/branch-likely where the original uses a plain `beq` then
- * a rotated do-while. Body/registers otherwise track the original. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294EE0);
-#else
 /*
- * func_00294EE0 — query a gadget moby-class id's load state.
+ * func_00294EE0(classId) — is gadget moby class `classId` busy (absent from the
+ * disc, or already queued in a cache slot)?
+ *
  * Looks the class id up in the gadget-class TOC (g_discToc+0x4B40, stride 5
- * ints, up to 0x30 entries). If the id isn't in the TOC at all, returns 1.
- * Otherwise checks the 3-entry in-flight request list (g_respawnPlayerYaw+0x7C)
- * for the found index and returns 1 if it IS present (already in-flight), else 0
- * (asm: xori j,0x3 / sltu 0,_ at 0x294F6C). Companion query to func_00295478
- * (which enqueues the load).
+ * ints, 0x30 entries). If it is not there, returns 1. Otherwise scans the three
+ * per-slot pending-class entries of the gadget cache slot table (D_152CD0+0x34,
+ * the array func_00294C48 compares against) for the TOC index and returns 1 when
+ * one holds it (a load is queued), 0 when none does. Companion query to
+ * func_00294C48 / func_00295478, which queue the load.
+ *
+ * Params: classId — gadget moby-class id.
+ * Returns: 1 = not on the disc or already pending, 0 = free to request.
+ *
+ * MATCHED on the sdk29 arm (plain C; unit objdiff report via objdiff_build.sh +
+ * unit_report.sh, 100.00%; task #700), with #679's two func_00294C48 levers
+ * applied to BOTH searches; the bracket is the row with that one removed:
+ *  - each search is a do-while whose head is `++`, so the ROM's first compare
+ *    is a plain beq and the bnel likely-slot is a copy of the head [99.86 with
+ *    the pending scan alone written as a for loop];
+ *  - R5900_SHORT_LOOP_PAD1 on each loaded entry [91.67 with both removed];
+ *  - the pending scan walks ONE pointer from D_152CD0 itself (`p[0x34/4]`,
+ *    then `p += 0x34/4`), so the table base is materialised once and +0x34 is
+ *    an addiu on that register [90.28 as `D_152CD0 + 0x34`, folded into %lo].
  */
-extern s32 g_discToc[];
-extern s32 g_respawnPlayerYaw[];
 s32 func_00294EE0(s32 classId) {
     s32 *toc = g_discToc;
-    s32 idx;
-    if (toc[0x12D0] == classId) {               /* g_discToc + 0x4B40 */
-        idx = 0;
-    } else {
+    s32 idx = 0;
+
+    if (toc[0x12D0] != classId) {            /* g_discToc + 0x4B40 */
         s32 *p = toc + 0x12D0;
-        for (idx = 1; idx < 0x30; idx++) {
+        s32 entry;
+        do {
+            idx++;
             p += 5;
-            if (p[0] == classId) {
+            if (idx >= 0x30) {
                 break;
             }
-        }
+            entry = *p;
+            R5900_SHORT_LOOP_PAD1(entry);
+        } while (entry != classId);
     }
     if (idx == 0x30) {
-        return 1;                               /* not in the gadget TOC */
+        return 1;                            /* not in the gadget TOC */
     }
     {
-        s32 *req = &g_respawnPlayerYaw[0x1F];    /* g_respawnPlayerYaw + 0x7C */
-        s32 j;
-        if (req[0] == idx) {
-            j = 0;
-        } else {
-            for (j = 1; j < 3; j++) {
-                if (req[j] == idx) {
+        s32 *pending = (s32 *)D_152CD0;
+        s32 slot = 0;
+
+        if (pending[0x34 / 4] != idx) {
+            s32 cur;
+            pending += 0x34 / 4;
+            do {
+                slot++;
+                pending++;
+                if (slot >= 3) {
                     break;
                 }
-            }
+                cur = *pending;
+                R5900_SHORT_LOOP_PAD1(cur);
+            } while (cur != idx);
         }
-        return (j ^ 3) != 0;                      /* found -> nonzero, else 0 */
+        return (slot ^ 3) != 0;              /* found -> 1, else 0 */
     }
 }
-#endif
 
 /*
  * LoadMobyClassFromWad(classId, index, desc) — on-demand load of a single moby
