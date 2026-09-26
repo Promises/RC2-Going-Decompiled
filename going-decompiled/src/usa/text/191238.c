@@ -1184,8 +1184,10 @@ extern void *g_mobyClassHeaders[];
 extern u8 D_1A91D0[];
 extern void RelocateMobyClassChunk(void *buffer, s32 slot, void *reloc);
 
-void BindPlayerDisplayModel(void) {
+void BindPlayerDisplayModel(s32 variant) {
     s32 count = g_playerTexCount;
+
+    (void)variant;  /* passed by LoadPlayerDisplayModel; the ROM body never reads a0 */
 
     if (count > 0) {
         u64 *dst = (u64 *)(g_pointLights + 0x2280);
@@ -1217,35 +1219,47 @@ void BindPlayerDisplayModel(void) {
  * against g_bEquippedArmor at level exit to trigger a reload). Callers:
  * ExitVendorMenu, RefreshVendorSelection, UpdateCheatMenuInput.
  *
- * WALL: saves s0+ra across three jal sites — the pinned 2.9-ee-991111 cc1
- * reserves a 0x20 frame (16-byte save slots) where the original's later cc1
- * packs the two 8-byte slots into a 0x10 frame; it also colours the
- * g_mobyClassHeaders / g_playerModelBufferBase loads into $4/$3 vs our $4/$5,
- * shuffling the jal-delay-slot load. Body byte-identical apart from frame size +
- * load order; kept as the portable #else body. */
+ * @param variant  armor variant to load; also passed to BindPlayerDisplayModel,
+ *                 which ignores it (the ROM moves s0 into a0 for that call).
+ *
+ * Byte-exact on the engine96 arm (guarded below; task #679, colima-ee-x86).
+ * The sdk29 arm is walled: 2.9 reserves 16-byte save slots, a 0x20 frame
+ * against the ROM's 0x10. Four levers, each shown necessary by removing it and
+ * watching the unit objdiff row fall (row value without the lever in brackets):
+ *  - g_loadedArmorVariant is sized with `.extern ,16`: the ROM stores it with
+ *    the assembler-macro shape `lui $1; sw` [93.89].
+ *  - g_playerModelBufferBase is placed in .data so cc1 splits its load into an
+ *    explicit %hi/%lo pair [93.89].
+ *  - BindPlayerDisplayModel is called with `variant` [96.67].
+ *  - an empty volatile asm after the final store: cc1 2.96-001003-1 dual-issues
+ *    that store with the independent `ld ra`, giving `ld ra; ld s0`. The barrier
+ *    makes both restores ready together, and the tie then goes to RTL order,
+ *    `ld s0; ld ra` as in the ROM [99.33]. It emits no code.
+ */
 #ifdef TARGET_NATIVE
 extern void *g_mobyClassHeaders[];        /* 0x1CDB00 loaded header ptr per slot */
 extern u8   *g_playerModelBufferBase;     /* 0x1BAEB8 */
 extern s32   g_loadedArmorVariant;        /* 0x1A7290 */
-extern void  LoadPlayerDisplayTextures(s32 variant);
-extern void  BindPlayerDisplayModel(void);   /* ignores any arg (reads g_playerTexCount) */
-void func_00293D68(u8 *dst, u8 *src);
+#define EPILOGUE_SCHED_BARRIER() ((void)0)
+#else
+__asm__(".extern g_loadedArmorVariant, 16");
+extern void *g_mobyClassHeaders[];        /* 0x1CDB00 loaded header ptr per slot */
+extern u8   *g_playerModelBufferBase __attribute__((section(".data")));  /* 0x1BAEB8 */
+extern s32   g_loadedArmorVariant;        /* 0x1A7290 */
+#define EPILOGUE_SCHED_BARRIER() __asm__ __volatile__("")
 #endif
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 82.50% PACKED-SAVE /
- * engine96 83.78% GPREL-DECL; best arm engine96, first differing insn there: 'daddu a0, s0,
- * zero' vs 'nop '. Iterated: engine96 98.78% SCHED-PROEPI — after
- * BindPlayerDisplayModel(variant), g_memoryArenaTable+0x78, .extern g_loadedArmorVariant,16
- * (s1): only `ld s0;ld ra` order; 99.44% = reloc-name only at -fno-schedule-insns2 (per-unit
- * flag question, not landed) */
+extern void  LoadPlayerDisplayTextures(s32 variant);
+extern void  BindPlayerDisplayModel(s32 variant);
+void func_00293D68(u8 *dst, u8 *src);
+#if !defined(TARGET_NATIVE) && !defined(MATCH_LoadPlayerDisplayModel)
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadPlayerDisplayModel);
 #else
 void LoadPlayerDisplayModel(s32 variant) {
     LoadPlayerDisplayTextures(variant);
-    BindPlayerDisplayModel();
+    BindPlayerDisplayModel(variant);
     func_00293D68((u8 *)g_mobyClassHeaders[0], g_playerModelBufferBase);
     g_loadedArmorVariant = variant;
+    EPILOGUE_SCHED_BARRIER();
 }
 #endif
 
