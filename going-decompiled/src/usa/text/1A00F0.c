@@ -33,6 +33,23 @@
 
 extern void FillMemory32(void *dst, u32 pattern, s32 len);
 
+/* Absolute-addressing overrides (task #671). Each of these globals is 4 bytes,
+ * so under -G8 cc1 and the assembler would reach it gp-relative; the ROM loads
+ * them with lui/%lo instead. Declaring a larger size to the assembler makes it
+ * expand the `lw`/`sw` macros absolutely. Size 16 = absolute everywhere; size 12
+ * = absolute in straight-line code but gp-relative in a branch delay slot (the
+ * SN-parity rule in tools/ee/asm_unit.sh), which is exactly how the ROM reaches
+ * g_mobyVuChainCursor in RenderMobys. These are directives to the EE assembler
+ * only, so the native build does not see them. */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_mobySpawnStart, 16");
+__asm__(".extern g_gameTime, 16");
+__asm__(".extern g_renderTaskList, 16");
+__asm__(".extern g_mobyTableBase, 16");
+__asm__(".extern g_frameDmaCursor, 16");
+__asm__(".extern g_mobyVuChainCursor, 12");
+#endif
+
 /* Canonical Moby entity record (full field layout in include/moby.h, sizeof
  * 0x100). The moby lifecycle helpers in this unit forward an opaque moby handle;
  * the bodies do their own (u8*)moby offset arithmetic, so a full-size opaque view
@@ -44,35 +61,47 @@ _Static_assert(sizeof(Moby) == 0x100, "Moby must be 0x100 under ILP32");
 #endif
 
 /*
- * Releases a moby slot: marks its state byte (+0x20) 0xFD for a static slot
- * (below the dynamic-spawn region) or 0xFE for a dynamic slot, schedules its
- * release time (+0xA0) two frames out, then removes it from the spatial grid by
- * re-bucketing with the 0x80807F7F "off-grid" sentinel range.
- * WALL (~57%): with the empty-asm guard restoring the jal+frame, the body still
- * misses — the original lowers `(moby < start) ? 0xFD : 0xFE` as a two-way
- * branch (`b`-skip into $v0 with two `addiu`s), while this cc1 if-converts it to
- * a default-then-conditional-override in $a0. A fixed if-conversion / branch-
- * shape difference, not reachable by source form. Left INCLUDE_ASM.
+ * FreeMoby — release a moby slot.
+ *
+ *   moby  the moby to release
+ *
+ * Marks the state byte (+0x20) 0xFD for a static slot (below the dynamic-spawn
+ * region, g_mobySpawnStart) or 0xFE for a dynamic one, schedules the release time
+ * (+0xA0) two frames out (g_gameTime + 2), then removes the moby from the spatial
+ * grid by re-bucketing it with the 0x80807F7F "off-grid" sentinel range.
+ *
+ * Non-obvious (task #671; the old "if-conversion wall, not reachable by source
+ * form" note had tried the guard construct only):
+ *  - g_mobySpawnStart and g_gameTime are loaded absolute (lui/lw) although both
+ *    are 4-byte, gp-sized under -G8: the `.extern ..., 16` overrides at the top
+ *    of this file make the assembler expand them absolutely.
+ *  - The empty asm at the head of the static arm keeps cc1 from if-converting
+ *    the 0xFD/0xFE choice into `movn`, and the one after the if/else keeps the
+ *    state store out of both arms, so the ROM's `beq`/`b` diamond comes out with
+ *    0xFD in the `b` delay slot.
+ *  - The empty asm after the state store holds the g_gameTime load ahead of the
+ *    call's argument setup, where the ROM issues it.
+ *  - The call goes through a value-returning cast, which keeps cc1 from turning
+ *    the void tail call into a sibling `j` (the ROM keeps jal + epilogue).
  */
 extern void *g_mobySpawnStart;
 extern s32 g_gameTime;
 extern void UpdateMobyGridCells(void *moby, u32 sentinelRange);
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", FreeMoby);
-#else
 void FreeMoby(Moby *moby) {
     u8 state;
     if ((u32)moby < (u32)g_mobySpawnStart) {
+        __asm__ __volatile__("");
         state = 0xFD;
     } else {
         state = 0xFE;
     }
+    __asm__ __volatile__("");
     *(u8 *)((u8 *)moby + 0x20) = state;
+    __asm__ __volatile__("");
     *(s32 *)((u8 *)moby + 0xA0) = g_gameTime + 2;
-    UpdateMobyGridCells(moby, 0x80807F7F);
+    ((s32 (*)(void *, u32))UpdateMobyGridCells)(moby, 0x80807F7F);
 }
-#endif
 
 /*
  * ResolveMobyAnimFramePtrs(moby): resolve the moby's primary + secondary anim
@@ -831,25 +860,24 @@ void CloseMobyGlowSegment(void) {
  * RPC (func_0011AEA0(0)), stages the 0x800-byte DMA/GIF template (D_238E80) into
  * the render scratchpad at 0x70003800 via CopyQwords, then runs the frame's
  * render task list (RunRenderTaskList over g_renderTaskList / g_renderTaskWorkBuf).
- * The matching build keeps the asm (engine save-layout wall). */
-#ifdef TARGET_NATIVE
+ *
+ * Non-obvious (task #671): g_renderTaskList is loaded absolute (the `.extern`
+ * override at the top of this file) while g_renderTaskWorkBuf stays gp-relative
+ * in the jal delay slot, and the final call goes through a value-returning cast
+ * so cc1 keeps the ROM's jal + epilogue instead of a sibling `j`. The older
+ * "engine save-layout wall" note was wrong: the function saves only $ra. */
 extern void  func_0011AEA0(s32 arg);
 extern void  CopyQwords(void *dst, void *src, s32 len);
 extern void  RunRenderTaskList(void *taskList, void *workBuf);
 extern u8    D_238E80[];              /* 0x238E80  0x800-byte SPR render template */
 extern void *g_renderTaskList;        /* 0x1B1630 */
 extern void *g_renderTaskWorkBuf;     /* 0x1B1634 */
-#endif
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", RunSprRenderPipeline);
-#else
 void RunSprRenderPipeline(void) {
     func_0011AEA0(0);
     CopyQwords((void *)0x70003800, D_238E80, 0x800);
-    RunRenderTaskList(g_renderTaskList, g_renderTaskWorkBuf);
+    ((s32 (*)(void *, void *))RunRenderTaskList)(g_renderTaskList, g_renderTaskWorkBuf);
 }
-#endif
 
 /* Clears 0x3C0 bytes of the moby scratchpad block at 0x70003A00 to 0x40000000.
  * The empty-asm guard suppresses cc1's sibling-call (tail-jump) so the original
@@ -859,33 +887,27 @@ void func_002A1000(void) {
     __asm__ __volatile__("");
 }
 
-/* Saves the procedural-anim bounds scratch (0x3C0 bytes at 0x70003A00) back to
- * g_proceduralAnimBounds[0x280] via CopyQwords.
- * WALL (81.82%): the empty-asm guard restores the jal+frame, but cc1 schedules
- * the `sd $ra` one slot later than the original (which interleaves it between
- * the two address `lui`s). A fixed prologue-scheduling artifact; left INCLUDE_ASM. */
+/* func_002A1028 — save the procedural-anim bounds scratch (0x3C0 bytes at
+ * scratchpad 0x70003A00) back to g_proceduralAnimBounds[0x280] via CopyQwords.
+ *
+ * Non-obvious (task #671): the call goes through a value-returning cast. That
+ * stops cc1 turning the void tail call into a sibling `j`, and unlike the older
+ * empty-asm guard it leaves the prologue schedule alone, so `sd $ra` lands
+ * between the two address `lui`s as in the ROM. The previous "prologue-
+ * scheduling wall (81.82%)" was the guard's own side effect. */
 extern u8 g_proceduralAnimBounds[];
 extern void CopyQwords(void *dst, void *src, s32 len);
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A1028);
-#else
 void func_002A1028(void) {
-    CopyQwords(&g_proceduralAnimBounds[0x280], (void *)0x70003A00, 0x3C0);
+    ((s32 (*)(void *, void *, s32))CopyQwords)(&g_proceduralAnimBounds[0x280], (void *)0x70003A00, 0x3C0);
 }
-#endif
 
-/* Loads the procedural-anim bounds (g_proceduralAnimBounds[0x280]) into the
- * scratch block at 0x70003A00 via CopyQwords.
- * WALL (81.82%): same prologue-scheduling artifact as func_002A1028 (cc1 sinks
- * the `sd $ra` one slot past the original interleave). Left INCLUDE_ASM. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A1058);
-#else
+/* func_002A1058 — load the procedural-anim bounds (g_proceduralAnimBounds[0x280])
+ * into the scratchpad block at 0x70003A00 via CopyQwords. The inverse of
+ * func_002A1028, written with the same value-returning cast for the same reason. */
 void func_002A1058(void) {
-    CopyQwords((void *)0x70003A00, &g_proceduralAnimBounds[0x280], 0x3C0);
+    ((s32 (*)(void *, void *, s32))CopyQwords)((void *)0x70003A00, &g_proceduralAnimBounds[0x280], 0x3C0);
 }
-#endif
 
 /* BeginMobyDrawSegment — open the per-frame moby draw segment. Appends the VIF
  * code-ref tag (D_10FFC0 / D_10FFB0), selects VU1 program 6, kicks the VIF0
@@ -987,27 +1009,34 @@ void FinishMobyRenderChain(void) {
  * the moby VU1 chain over the whole table (BuildMobyVuChain(g_mobyTableBase,
  * cursor, -1, 1)); if the chain overran the frame-DMA budget (the limit at
  * g_frameDmaCursor[+0x4] fell below the write cursor) it logs the "mobys dropped"
- * overflow string, then finishes the chain (FinishMobyRenderChain). Faithful
- * TARGET_NATIVE coverage arm; the matching build keeps the asm. */
-#ifdef TARGET_NATIVE
+ * overflow string, then finishes the chain (FinishMobyRenderChain).
+ *
+ * Non-obvious (task #671):
+ *  - Every global here is loaded absolute (the `.extern` overrides at the top of
+ *    this file), yet the store of the new chain cursor is gp-relative: it sits in
+ *    a branch delay slot, and g_mobyVuChainCursor's size-12 override is the class
+ *    that expands absolute in straight-line code and gp-relative in a slot.
+ *  - The budget test is written `cursor > limit` so that cc1 loads the cursor
+ *    word before the limit word, in the ROM's order.
+ *  - FinishMobyRenderChain is called through a value-returning cast so cc1
+ *    keeps jal + epilogue instead of a sibling `j`. */
+extern void  BeginMobyDrawSegment(void);
+extern void *BuildMobyVuChain(void *tableBase, void *cursor, s32 count, s32 flag);
+extern u32  *g_frameDmaCursor;       /* 0x1B2228 per-frame DMA write pointer; +0x4 = budget limit */
+extern void *g_mobyVuChainCursor;    /* 0x1B1AD8 moby VU/DMA chain cursor */
 extern void *g_mobyTableBase;        /* 0x1B1ADC moby entity array base (stride 0x100) */
 extern char  D_1A9E48[];             /* "N mobys dropped" overflow log string */
 extern s32   DebugPrintStub(void *msg);
-#endif
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", RenderMobys);
-#else
 void RenderMobys(void) {
     BeginMobyDrawSegment();
     func_002A1000();
     g_mobyVuChainCursor = BuildMobyVuChain(g_mobyTableBase, g_mobyVuChainCursor, -1, 1);
-    if (*(s32 *)((u8 *)&g_frameDmaCursor + 0x4) < (s32)g_frameDmaCursor) {
+    if ((s32)g_frameDmaCursor > *(s32 *)((u8 *)&g_frameDmaCursor + 0x4)) {
         DebugPrintStub(D_1A9E48);   /* VU chain budget exceeded — mobys dropped */
     }
-    FinishMobyRenderChain();
+    ((s32 (*)(void))FinishMobyRenderChain)();
 }
-#endif
 
 /*
  * Marks a platinum-bolt slot as collected: sets bit 0x80 in
@@ -1029,21 +1058,40 @@ void func_002A1268(s32 slot) {
 }
 
 /*
- * Packs a 4-byte tuple (hi,b1,b2,b3) into the 64-bit field at +0x38 of a moby:
- * the high 32 bits hold hi, the low 32 bits pack b1 | b2<<8 | b3<<16. Used to
- * stash a render/anim parameter word into the moby record.
- * WALL (90.62%): the shifts + sd all reproduce, but cc1 associates the OR tree
- * differently from the original — original folds `(hi|b1) | b2<<8 | b3<<16` left
- * to right into $v0, cc1 builds `(b2<<8 | b1)` as a sub-tree first. A fixed
- * commutative-OR canonicalisation, not reachable by reassociation. INCLUDE_ASM.
+ * func_002A12A0 — pack a 4-part tuple into the moby's 64-bit field at +0x38:
+ * the high word holds hi, the low word packs b1 | b2<<8 | b3<<16. Stashes the
+ * render/anim parameter word that func_002A12F0 / func_002A1320 read back.
+ *
+ *   moby       the moby record, viewed as s64[]
+ *   hi         the value for bits 32..63
+ *   b1,b2,b3   byte lanes for bits 0..7, 8..15, 16..23
+ *
+ * Non-obvious (task #671): the ROM shifts all three operands first, in place
+ * (hi in $a1), then folds the OR chain strictly left to right into $v0. A plain
+ * expression gets cc1's own association and register choice (90.62%, the old
+ * "commutative-OR canonicalisation, not reachable" wall). Binding the result to
+ * $v0 and hi to $a1 as local register variables, plus two empty asm statements
+ * that fence the shifts from each other and from the ORs, gives the ROM order.
+ * The native build has no MIPS registers and gets plain locals.
  */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A12A0);
-#else
 void func_002A12A0(s64 *moby, s64 hi, s64 b1, s64 b2, s64 b3) {
-    moby[7] = (((hi << 32) | b1) | (b2 << 8)) | (b3 << 16);
-}
+#ifndef TARGET_NATIVE
+    register s64 packed asm("$2");
+    register s64 high asm("$5") = hi;
+#else
+    s64 packed;
+    s64 high = hi;
 #endif
+    high <<= 32;
+    __asm__ __volatile__("");
+    b2 <<= 8;
+    b3 <<= 16;
+    __asm__ __volatile__("");
+    packed = high | b1;
+    packed |= b2;
+    packed |= b3;
+    moby[7] = packed;
+}
 
 /*
  * func_002A12C0: writes the high 32 bits of the moby's 64-bit field at +0x38 as a
@@ -1066,24 +1114,57 @@ void func_002A12C0(u64 *moby, u64 b0, u64 b1, u64 b2) {
 #endif
 
 /*
- * Unpacks 3 bytes out of the high half of the +0x38 field of a moby into three
- * separate s32 out-params (inverse of the high-half writer func_002A12C0).
- * WALL: the original loads the full u64 (`ld`) and extracts via 3 independent
- * `dsrl32` + `andi` with NO sign-extension; this cc1 byte-loads the first lane
- * (`lbu +0x3C`) and sign-extends each `(v>>n)&0xFF` result (dsll32/dsra32)
- * before the `sw`. Its 64-bit narrowing/sub-word lowering differs from the
- * later SN cc1 that built the original. Left INCLUDE_ASM.
+ * func_002A12F0 — unpack the three bytes in the high word of the moby's 64-bit
+ * field at +0x38 into three u32 out-params. The inverse of func_002A12C0.
+ *
+ *   moby        the moby record, viewed as u64[]
+ *   out0..out2  receive bits 32..39, 40..47 and 48..55
+ *
+ * Non-obvious (task #671). The ROM body is register-for-register fixed: one `ld`,
+ * three `dsrl32` into $at/$v0/$v1, three `andi`, three `sw`, and a `nop` in the
+ * `jr` slot. The old wall note ("byte-loads the first lane and sign-extends
+ * each lane") came from a plain C spelling. Reproduced here by:
+ *  - local register variables on $a0/$at/$v0/$v1. cc1 accepts $at as a register
+ *    variable, and the GNU-as "used $at" warning it causes is harmless;
+ *  - a u64 view for the shifts and a (u8) narrowing for the masks. That gives
+ *    `dsrl32 + andi` with no dsll32/dsra32 sign-extension, which a u32 shift
+ *    would add, and `dsrl32 0` rather than `dsra32 0` for the first lane;
+ *  - empty asm statements that fence each instruction into the ROM order;
+ *  - volatile out-params: cc1 then declines to move the last store into the
+ *    `jr` slot, and the SN assembler left that slot a `nop` (asm_unit.sh's
+ *    `.set volatile` rule).
+ * The native build gets plain locals.
  */
+void func_002A12F0(u64 *moby, volatile u32 *out0, volatile u32 *out1, volatile u32 *out2) {
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A12F0);
+    register u64 packed asm("$4") = moby[7];
+    register u64 w0 asm("$1");
+    register u64 w1 asm("$2");
+    register u64 w2 asm("$3");
+    register u32 b0 asm("$1");
+    register u32 b1 asm("$2");
+    register u32 b2 asm("$3");
 #else
-void func_002A12F0(u64 *moby, u32 *out0, u32 *out1, u32 *out2) {
     u64 packed = moby[7];
-    *out0 = (packed >> 32) & 0xFF;
-    *out1 = (packed >> 40) & 0xFF;
-    *out2 = (packed >> 48) & 0xFF;
-}
+    u64 w0, w1, w2;
+    u32 b0, b1, b2;
 #endif
+    w0 = packed >> 32;
+    __asm__ __volatile__("");
+    w1 = packed >> 40;
+    __asm__ __volatile__("");
+    w2 = packed >> 48;
+    __asm__ __volatile__("");
+    b0 = (u8)w0;
+    __asm__ __volatile__("");
+    b1 = (u8)w1;
+    __asm__ __volatile__("");
+    b2 = (u8)w2;
+    __asm__ __volatile__("");
+    *out0 = b0;
+    *out1 = b1;
+    *out2 = b2;
+}
 
 /* func_002A1320(obj, out): resolve the object's packed directional-light field
  * at obj+0x38 (bytes idx0/idx1/blend, written by func_002A12A0/func_002A12C0)
