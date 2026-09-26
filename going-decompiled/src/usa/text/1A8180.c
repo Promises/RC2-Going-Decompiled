@@ -4731,9 +4731,13 @@ void func_002AE558(void *out, Vec4 *arg2, Vec4 *m1, Vec4 *m2) {
 
 /* MarkLevelAvailable: set a level's available flag and append it to the
  * ordered level list (regular levels < 0x15, plus level 0x18). Best attempt
- * 75%: the original contains an EMPTY 28-iteration delay loop padded with
- * four scheduler nops per iteration (later-cc1 emission that the pinned cc1
- * collapses), plus the trailing free-slot scan - not reproducible. */
+ * 75%: the original contains an EMPTY 28-iteration delay loop. Its four
+ * nops are the R5900 short-loop pad (a 2-instruction loop padded to 6), not
+ * scheduler output. A pad asm with a "+r" operand keeps the empty loop alive
+ * under cc1 2.9, but reorg then does not move the loop's i++ into the bnez
+ * slot the way the ROM does. The scan loop is the CountPlatinumBolts shape
+ * (5 + 1 pad, movn in the slot). Task #659 best: 63.29% (sdk29, unit
+ * objdiff report, VM b). Not landed. FACT #7937. */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 52.76%
    -> UNKNOWN-@0: ROM `lui v0,0x0  [HI16 0x001A7BD0]` vs `lui v1,0x0  [HI16 0x001A7BD0]` */
 #ifndef TARGET_NATIVE
@@ -6936,9 +6940,13 @@ s32 func_002B1C20(void) {
 
 /* CountPlatinumBolts: count one level's collected platinum bolts (4 flags
  * at level*4, plus the 4 extra flags at +0x68 for level 2), clamped to
- * [0, 40]. Best attempt 94%: byte-identical except a single later-cc1
- * scheduler nop before each counting loop's bottom branch (the movn-in-
- * delay-slot loops themselves reproduce). */
+ * [0, 40]. The `nop` before the first loop's bgez is not a scheduler nop:
+ * it is the R5900 short-loop pad (5-instruction loop padded to 6; see
+ * R5900_SHORT_LOOP_PAD1). The second loop is 6 long and unpadded. Task #659
+ * reached 97.65% (sdk29, unit objdiff report, VM b) with an explicit
+ * countdown do-while and a PAD1 asm that also reads flags/next/count/set to
+ * keep the movn in the slot; the residual is count in $7 where the ROM has
+ * $6 (and the loop-2 base in $6 vs $7). Not landed. FACT #7937. */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 0.00% ->
    UNKNOWN-@0: ROM `(none)` vs `daddu t0,a0,zero` */
 #ifndef TARGET_NATIVE
