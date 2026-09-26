@@ -2455,40 +2455,58 @@ s32 UpdateLevelStagingMachine(void) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294550);
 
-/* StreamSceneSegment: kick the streaming load of scene sub-segment `idx`. The
- * scene descriptor at g_cameraSlotActive+0x990 holds the active level's base
- * index (+0x30) and load-buffer handle (+0x70). The per-segment LBN table sits at
- * g_discToc+0x6348 + base*0x14C; segment `idx` spans [toc[idx], toc[idx+1]). When
- * that span is non-empty, start the file read (dest, toc[idx]+baseLbn, sectors)
- * and pump one dialog-voice service pass. Always returns 1. */
+/*
+ * StreamSceneSegment(idx) — kick the streaming load of scene sub-segment `idx`.
+ *
+ * The scene descriptor at g_cameraSlotActive+0x990 holds the active level's row
+ * in the per-level segment table (+0x30) and the load-buffer handle (+0x70). The
+ * table sits at g_discToc+0x6348 (0x151888), one 0x14C-byte row of s32 sector
+ * offsets per level; segment `idx` spans [row[idx], row[idx+1]). When that span
+ * is non-empty, start the file read (dest, row[idx] + g_discToc[0x6314/4] base
+ * LBN, sectors) and pump one dialog-voice service pass.
+ *
+ * Params: idx — segment index within the active level's row.
+ * Returns: always 1.
+ *
+ * MATCHED on the sdk29 arm (plain C; unit objdiff report via objdiff_build.sh +
+ * unit_report.sh, 100.00%; task #700). Four spellings are load-bearing; the
+ * bracket is the row with that one removed:
+ *  - both table reads go through SceneTocEntry, so each address is built on its
+ *    own as (row*0x14C + i*4) + table — the ROM computes idx+1 with addiu/sll
+ *    instead of folding it into a 4(reg) displacement [70.39 indexing a row
+ *    pointer directly];
+ *  - `row * 0x14C` is the first addend; `i * 4 + row * 0x14C` flips the addu
+ *    operand order [82.73];
+ *  - the load-buffer handle is read into `dest` before the span test, so its
+ *    load is scheduled up front with the row load [84.70];
+ *  - g_discToc is held in the local `toc`, so its address is materialised once
+ *    and +0x6348 / +0x6314 are displacements from it [88.45].
+ */
 extern u8  g_cameraSlotActive[];
 extern s32 g_discToc[];
 extern s32 StartFileLoad(s32 dest, s32 lbn, s32 sectors);
 extern void PumpDialogVoiceSystem(s32 blocking);
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 70.82% CONST-MULT /
- * engine96 68.85% CONST-MULT; best arm sdk29, first differing insn there: 'lui a1,
- * %hi(g_cameraSlotActive+0x990)' vs 'lui v0, %hi(g_cameraSlotActive+0x990)' */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", StreamSceneSegment);
-#else
+
+/* Sector offset `i` of level row `row` in the segment table at `table`. */
+static inline s32 SceneTocEntry(u8 *table, s32 row, s32 i) {
+    return *(s32 *)(row * 0x14C + i * 4 + table);
+}
+
 s32 StreamSceneSegment(s32 idx) {
     s32 *desc = (s32 *)&g_cameraSlotActive[0x990];
-    s32 base = desc[0x30 / 4];
-    s32 *toc = (s32 *)((u8 *)g_discToc + 0x6348 + base * 0x14C);
-    s32 thisOff = toc[idx];
-    s32 sectors = toc[idx + 1] - thisOff;
+    s32 row = desc[0x30 / 4];
+    s32 dest = desc[0x70 / 4];
+    s32 *toc = g_discToc;
+    u8 *table = (u8 *)toc + 0x6348;
+    s32 thisOff = SceneTocEntry(table, row, idx);
+    s32 sectors = SceneTocEntry(table, row, idx + 1) - thisOff;
 
     if (sectors > 0) {
-        StartFileLoad(desc[0x70 / 4], thisOff + g_discToc[0x6314 / 4], sectors);
+        StartFileLoad(dest, thisOff + toc[0x6314 / 4], sectors);
         PumpDialogVoiceSystem(0);
     }
     return 1;
 }
-/* byte-walled 71%: GPR coloring + schedule (the descriptor/dest loads and the
- * toc-base register assignment differ from the original's). Correct C kept as the
- * portable #else; cmp-oracle'd (StartFileLoad/PumpDialogVoiceSystem mocked). */
-#endif
 
 /*
  * BindSceneChunk — decompress the current scene WAD and (re)build its actor cast.
