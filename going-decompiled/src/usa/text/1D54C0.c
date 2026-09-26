@@ -1748,28 +1748,18 @@ void func_002D9C18(MenuWidget *obj, void *entry, s32 col, s32 row, s32 x, s32 y)
  * highlight + many indexed inventory tables. Bare INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D9D60);
 
-/* Set a draw record's mode field (+0x2 of the object at obj->0x34): in
- * Clank-solo (g_bPlayerMode==1) use 0, otherwise 3. Always returns 0.
- * Near-miss: register-coloring (original reuses $2 for the value + return;
- * our cc1 colours the value into $5). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DA330);
-#else
-/* TODO(match): t495 — sdk29 arm 90.00% / engine96 arm 55.00% (unit objdiff).
- * Residual REORG-DSLOT: one row — the beq delay slot; the original fills it
- * with the taken path's return-0 (daddu v0,zero,zero copied from the target),
- * cc1 2.9 with the fall-through addiu v0,3. Levers RUN: ROM_SPLIT on
- * g_bPlayerMode (closes the lui/lw/lbu split rows), early-return shape
- * (23.00%, worse). The old ?: body also stored 0 when mode == 1, which the
- * original does not. */
+/* Set the mode (op) field of the menu command at obj->0x34: 0 in Clank-solo
+ * (g_bPlayerMode == 1), otherwise 3. The store is unconditional.
+ * obj: the widget whose +0x34 holds the MenuCmd. Always returns 0.
+ * Byte-exact on this unit's 2.9 arm (task #681). The ROM seeds v0 = 0 in the
+ * beq delay slot, overwrites it with 3 on the fall-through and stores v0 on
+ * both paths, so mode 1 DOES store 0. That is the ?: body: t495's guarded
+ * "store only when mode != 1" body scored 90.00% and was not the ROM. */
 s32 func_002DA330(MenuWidget *obj) {
     MenuCmd *cmd = *(MenuCmd **)((u8 *)obj + 0x34);
-    if (g_bPlayerMode != 1) {
-        cmd->op = 3;
-    }
+    cmd->op = (g_bPlayerMode == 1) ? 0 : 3;
     return 0;
 }
-#endif
 
 /* Per-frame scan of the 24 galactic-map level entries (obj +0x44 stride 4):
  * for each populated, not-yet-handled level whose level-order word (D_00261900)
@@ -2562,24 +2552,23 @@ s32 func_002DC878(MenuWidget *obj) {
 }
 #endif
 
-/* Save/load list confirm/cancel handler. Mirror the active screen object's
- * +0xE0 field into the manager block's +0x18 and drive the +0x12C commit flag
- * from the just-pressed confirm(0x20)/cancel(0x10) buttons. Returns 0.
- * Wall: multi-target branch ladder on the status code. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC8A8);
-#else
-/* TODO(match): t495 — engine96 arm 81.89% (MATCH_ guard tried and reverted) /
- * sdk29 arm 65.11% (unit objdiff). Residual SCHED1-HOIST: the original hoists
- * the first branch's return-0 (daddu v0,zero,zero between lui/addiu of the
- * base) and the next block's lui %hi(g_padButtonsPressed) into the beq delay
- * slot; with -fschedule-insns on the engine arm (per-unit flag, measured only)
- * the first branch is exact and the row reads 82.81% with the two andi masks
- * hoisted instead. Also a0/a1 swap in the confirm branch. Levers RUN: .extern
- * g_nSaveLoadStatusCode,16 (macro shape equal), per-branch base local (2.96
- * keeps base+offset and re-materialises la per block like the original; 61.59
- * -> 81.89), source-order store, early return pseudo (no change), -fno-gcse
- * engine (same). */
+/* Save/load list confirm/cancel handler. Unless the save/load status code is
+ * 0x10 or 1, just mirror the active screen object's +0xE0 field into the
+ * manager block's +0x18. Otherwise do the same mirror on a just-pressed
+ * confirm (0x20), also clearing the block's +0xE4 and setting the object's
+ * +0x12C commit flag to 1, or on cancel (0x10) with the commit flag set to 0.
+ * Takes no arguments. Always returns 0.
+ * blk = g_menuScreenBlock: +0x14 is g_pCurrentMenuScreen, +0x18 is
+ * g_pNextMenuScreen. obj = the current screen: +0xE0 is its next-screen link,
+ * +0x12C its commit flag.
+ * Byte-exact on this unit's 2.9 arm (task #681), as t495 committed it. The
+ * raw s32 offsets are load-bearing. Typed pointer/s32 struct fields put the
+ * stores in different alias sets (this arm is -fstrict-aliasing): cc1 then
+ * reorders the commit store and cross-jumps the +0x18 store, 90.30% (unit
+ * objdiff, t681). The per-branch base local keeps g_menuScreenBlock as `la base` + field offsets
+ * in each block, as in the ROM (FACT #7407). t495 recorded "sdk29 65.11%"
+ * from its all-arms screen and iterated this body on the engine96 arm only;
+ * solo on the 2.9 arm it is 100%. */
 s32 func_002DC8A8(void) {
     s32 status = g_nSaveLoadStatusCode;
     if (status != 0x10 && status != 1) {
@@ -2603,7 +2592,6 @@ s32 func_002DC8A8(void) {
     }
     return 0;
 }
-#endif
 
 /* Draw the memory-card system-message text box three times (shadow / shadow /
  * face) plus a flat backing rect, choosing the message string from the current
@@ -3455,30 +3443,42 @@ s32 func_002DF5B0(s32 id) {
  * prologue/jr — not a real function body. Left as bare INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF600);
 
-/* Fill a 16-bit sprite/quad header (dst) from a source rect (src): copies
- * src width(+0x24)/height(+0x20) into the size fields and their halves into
- * the centre fields, with fixed framing constants.
- * Near-miss: instruction scheduling + temp-register choice differ from the
- * original (store-heavy leaf schedule wall). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF620);
-#else
-/* TODO(match): t495 — sdk29 arm 46.88% / engine96 arm 31.75% (unit objdiff).
- * Residual REGNUM+SCHED: the original materialises the 16 constant into a2
- * first and keeps the two s16 stores in source order; cc1 2.9 reorders the
- * loads (lw before lhu) and colours a3/a2; engine96 keeps the order but
- * numbers v1/v0 (ORDER-ONLY class after the constant). */
+/* Source rect for func_002DF620: height at +0x20, width at +0x24. Each word
+ * is read both as its low u16 (lhu) and as a full s32 (lw), so it is modelled
+ * as a union. That is load-bearing: this unit's 2.9 arm alias-types
+ * (-fstrict-aliasing), and a plain `*(s32 *)` read gets a separate alias set
+ * from the s16 stores into dst, so cc1 hoists both lw above the stores.
+ * Reading through a union member gives alias set 0, which keeps the ROM's
+ * source-order loads. */
+typedef union RectWord {
+    s32 i;
+    u16 h;
+} RectWord;
+typedef struct RectSrc {
+    u8       _pad0[0x20];
+    RectWord height;  /* 0x20 */
+    RectWord width;   /* 0x24 */
+} RectSrc;
+
+/* Fill a 16-bit sprite/quad layout header from a source rect: size fields
+ * from the rect's width/height, centre fields from their halves, and fixed
+ * framing (+0/+2 words zero, [8] = 0x10, [9] = 0).
+ * dst: the s16[10] header. src: the rect (RectSrc). No return value.
+ * Byte-exact on this unit's 2.9 arm (task #681). This needs the RectSrc union
+ * (above) and this store order: [5] before [8]/[9]. With the union,
+ * [8]/[9] before [5] reads 71.19% and t495's order ([8] between [4] and [5])
+ * reads 87.12% (unit objdiff). Without it, t495's order reads 46.88%. */
 void func_002DF620(s16 *dst, void *src) {
+    RectSrc *rect = (RectSrc *)src;
     dst[0] = 0;
-    dst[1] = *(u16 *)((u8 *)src + 0x24);
+    dst[1] = rect->width.h;
     dst[2] = 0;
-    dst[3] = *(u16 *)((u8 *)src + 0x20);
-    dst[4] = (s16)(*(s32 *)((u8 *)src + 0x20) >> 1);
+    dst[3] = rect->height.h;
+    dst[4] = rect->height.i >> 1;
+    dst[5] = rect->width.i >> 1;
     dst[8] = 0x10;
-    dst[5] = (s16)(*(s32 *)((u8 *)src + 0x24) >> 1);
     dst[9] = 0;
 }
-#endif
 
 /* Splat mis-split fragment: a single `addiu $sp,0x60; nop` epilogue tail with no
  * prologue/jr — not a real function body. Left as bare INCLUDE_ASM. */
