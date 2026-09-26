@@ -514,34 +514,48 @@ s32 func_002A08C0(u32 moby) {
     return -1;
 }
 
-/* func_002A0918 (ResetProceduralAnimSlots in symbol_addrs) — clear all 16
+/*
+ * func_002A0918 (ResetProceduralAnimSlots in symbol_addrs) — clear all 16
  * procedural-animation slots: zero g_proceduralAnimSlotOwners[0..15] and
- * g_proceduralAnimSlotTimer[0..15] (e.g. on level reset).
+ * g_proceduralAnimSlotTimer[0..15] (e.g. on level reset). No params, no return.
  *
- * The earlier note on this arm named the wrong subject ("g_mobySpawnCredit
- * +0x40/+0x80"). The ROM addresses the two slot arrays by their own symbols
- * (0x1B1A40 / 0x1B1A80), so there is no shared base for cc1 to strength-reduce;
- * that wall was an artefact of the old #else spelling. Task #671 measured this
- * arm on the sdk29 arm at 75.33% (unit objdiff report, VM a). The array loop
- * below gives the ROM's lui/addiu pairs and registers exactly, and #659's
- * R5900 short-loop pad gives the loop's one pad `nop`. The remaining residual
- * is the backward `bgez` delay slot: the ROM fills it with the timer-pointer
- * increment, but cc1 2.9's reorg leaves it empty whenever the branch tests the
- * live loop counter. That held in every form tried: do/for, count-up, the
- * counter hidden in an asm decrement, and "+r" pads. It is the same residual as
- * #659's MarkLevelAvailable (FACT #7937). Stays INCLUDE_ASM. FACT #7957. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0918);
-#else
+ * Non-obvious (task #689; FACT #7957 had this walled on the `bgez` slot):
+ *  - The array loop gives the ROM's prologue (lui owners, lui timers, then the
+ *    two addiu in the opposite order), the down-counting $a0 and the loop
+ *    alignment `nop`.
+ *  - The ROM's loop is 5 real instructions plus one R5900 short-loop pad `nop`
+ *    before `bgez`, with the timer-pointer increment in the delay slot. This
+ *    cc1 refuses to fill a backward branch's slot when the filled loop would be
+ *    that short, and it counts an inline asm by its template lines. The pad
+ *    asm's three lines lift the count over the limit, so reorg fills the slot.
+ *  - The pad is a NON-volatile asm: it reads the timer pointer (so the timer
+ *    increment stays after it and lands in the slot) and clobbers memory (so it
+ *    stays after both stores), but the counter and owner-pointer increments may
+ *    still schedule above it, as in the ROM. A non-volatile asm needs an output;
+ *    `padOut` is it, pinned to $a1 so it does not take the counter's $a0, and
+ *    the empty asm at the loop head consumes it so the pad is not deleted.
+ * The native build has no delay slots and gets the plain loop.
+ */
 void func_002A0918(void) {
     s32 i;
+#ifndef TARGET_NATIVE
+    register s32 padOut asm("$5");
+#endif
 
     for (i = 0; i < 16; i++) {
+#ifndef TARGET_NATIVE
+        __asm__ __volatile__("" : : "r"(padOut));
+#endif
         g_proceduralAnimSlotOwners[i] = 0;
         g_proceduralAnimSlotTimer[i] = 0;
+#ifndef TARGET_NATIVE
+        __asm__(".set noreorder\n\tnop\n\t.set reorder"
+                : "=r"(padOut)
+                : "r"(&g_proceduralAnimSlotTimer[i])
+                : "memory");
+#endif
     }
 }
-#endif
 
 /* func_002A0958: service the 16 procedural-animation slots. For each slot with an
  * owner moby: release the slot (clear the owner) if the owner is being torn down
@@ -720,34 +734,37 @@ void CloseMobyDmaSegment(void) {
  * an inline tex-index byte list (from node+0, terminated by 0xFF); per index it
  * looks up g_mobyTexVramTable[idx] (two s16 VRAM fields) and OR's each non-zero
  * field into the low 14 bits of the packet's +0x30 / +0x40 TEX0 words (packet
- * stride 0x40). The matching build keeps the asm; this is the faithful
- * TARGET_NATIVE coverage arm. */
-#ifdef TARGET_NATIVE
+ * stride 0x40). No params, no return.
+ *
+ * Non-obvious (task #689):
+ *  - The node's link word is read twice, once for the packet pointer at the top
+ *    and again for the "has next node" test at the bottom. The inner loop's u32
+ *    stores may alias it, so cc1 must reload, as the ROM does.
+ *  - The packet pointer and the cursor are set before the empty-list test, so
+ *    the mask lands in that branch's delay slot.
+ *  - The class-slot walk keeps a separate next-slot pointer. That gives the
+ *    ROM's two registers ($a0 for the slot being read, $t4 for the next one)
+ *    and the `move` at the loop bottom. A plain `classSlot++` folds them into
+ *    one register.
+ */
 extern u32   g_mobyClassDataSizes[];   /* 0x1D0D80  &[0xF0] = present-slot list */
 extern void *g_mobyClassHeaders[];     /* 0x1CDB00  class header ptr per slot   */
 extern s16   g_mobyTexVramTable[];     /* 0x1D0980  2 s16 VRAM fields per tex    */
-#endif
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", PatchMobyPacketTex0);
-#else
 void PatchMobyPacketTex0(void) {
     s32 *classSlot = (s32 *)&g_mobyClassDataSizes[0xF0];
+    s32 *nextSlot;
 
-    if (*classSlot < 0) {
-        return;
-    }
-    for (;;) {
-        u8 *header = (u8 *)g_mobyClassHeaders[*classSlot];
-        u8 *node = *(u8 **)(header + 0x20);
+    while (*classSlot >= 0) {
+        u8 *node = *(u8 **)((u8 *)g_mobyClassHeaders[*classSlot] + 0x20);
+        s32 nodeLink;
 
-        for (;;) {
-            s32 nodeLink = *(s32 *)(node + 0xC);
+        nextSlot = classSlot + 1;
+        do {
+            u8 *packet = (u8 *)(*(u32 *)(node + 0xC) & 0x7FFFFFFF);
+            u8 *cursor = node;
 
             if (*node != 0xFF) {
-                u8 *packet = (u8 *)(nodeLink & 0x7FFFFFFF);
-                u8 *cursor = node;
-
                 do {
                     s16 *vram = &g_mobyTexVramTable[*cursor * 2];
 
@@ -763,18 +780,12 @@ void PatchMobyPacketTex0(void) {
                     packet += 0x40;
                 } while (*cursor != 0xFF);
             }
+            nodeLink = *(s32 *)(node + 0xC);
             node += 0x10;
-            if (nodeLink < 0) {
-                break;
-            }
-        }
-        classSlot++;
-        if (*classSlot < 0) {
-            break;
-        }
+        } while (nodeLink >= 0);
+        classSlot = nextSlot;
     }
 }
-#endif
 
 /* func_002A0DF0 — recompute the moby glow segment's 2D light direction from the
  * hero. func_002A1320 fills a 2-float vector from g_pHeroMoby; Atan2fPoly
@@ -1100,28 +1111,46 @@ void func_002A12A0(s64 *moby, s64 hi, s64 b1, s64 b2, s64 b3) {
 }
 
 /*
- * func_002A12C0: writes the high 32 bits of the moby's 64-bit field at +0x38 as a
- * packed 3-byte tuple (b0 in bits 32..39, b1 in 40..47, b2 in 48..55), preserving
- * the existing low 32 bits. Inverse of func_002A12F0 which reads the three bytes
- * back out.
- * Stays INCLUDE_ASM. The plain spelling below reads 64.58% (sdk29, unit objdiff
- * report, task #671). The OR association and the `lwu` narrowing are NOT the wall
- * any more: the register-variable and empty-asm fences that closed its siblings
- * func_002A12A0 / func_002A12F0 (task #671) also reproduce this body's
- * `ld; dsll32 x3; dsll32/dsrl32; or x3; jr; sd` sequence (checked in cc1's .s output,
- * match.sh, -O2 -G8 -fno-gcse). What is left is a lone `nop`
- * directly before `jr $ra`, with the `sd` in the delay slot. No cc1 or
- * assembler mechanism for emitting it has been found (FACT #7957), and it is
- * not written as inline asm here.
+ * func_002A12C0 — write a packed 3-byte tuple into the high word of the moby's
+ * 64-bit field at +0x38, keeping the low word. The inverse of func_002A12F0.
+ *
+ *   moby        the moby record, viewed as u64[]
+ *   b0, b1, b2  bytes for bits 32..39, 40..47 and 48..55
+ *
+ * Non-obvious (task #689; FACT #7957 had this walled on the pad `nop`):
+ *  - $v0 holds the field from the `ld` on, and the fence straight after the load
+ *    stops cc1 narrowing it to `lwu`, so the low word is kept by the ROM's
+ *    `dsll32`/`dsrl32` pair.
+ *  - Empty asm statements fence the three argument shifts into ROM order,
+ *    ahead of the mask.
+ *  - The ROM has a lone `nop` directly before `jr $ra`, with the store in the
+ *    delay slot. It is written here as an inline `nop`. cc1 cannot move the
+ *    store above that asm, so reorg puts it in the `jr` slot.
+ * The native build gets plain locals and no `nop`.
  */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A12C0);
-#else
 void func_002A12C0(u64 *moby, u64 b0, u64 b1, u64 b2) {
-    u64 lo = (u32)moby[7];
-    moby[7] = lo | (b0 << 32) | (b1 << 40) | (b2 << 48);
-}
+#ifndef TARGET_NATIVE
+    register u64 packed asm("$2") = moby[7];
+    __asm__ __volatile__("" : "+r"(packed));
+#else
+    u64 packed = moby[7];
 #endif
+    b0 <<= 32;
+    __asm__ __volatile__("");
+    b1 <<= 40;
+    __asm__ __volatile__("");
+    b2 <<= 48;
+    __asm__ __volatile__("");
+    packed = (packed << 32) >> 32;
+    __asm__ __volatile__("");
+    packed |= b0;
+    packed |= b1;
+    packed |= b2;
+#ifndef TARGET_NATIVE
+    __asm__ __volatile__("nop");
+#endif
+    moby[7] = packed;
+}
 
 /*
  * func_002A12F0 — unpack the three bytes in the high word of the moby's 64-bit
