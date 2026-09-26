@@ -2281,30 +2281,41 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294268);
  * base +0x32C, count = toc +0x34C) into the buffer just past the header.
  *
  * @return always 1 (load kicked).
+ *
+ * Byte-exact on the sdk29 arm as plain C (task #679, colima-ee-x86). Three
+ * levers, each shown necessary by removing it and watching the unit objdiff
+ * row fall (row value without the lever in brackets):
+ *  - the TOC base is bound to $7 (a3): the ROM keeps it in the fourth-argument
+ *    register from the first `lui`, where cc1 otherwise colours it $8 and
+ *    copies it into a3 before the call [94.31].
+ *  - the buffer is re-read from g_pLoadedSegment through a volatile access
+ *    after the header store: the ROM reloads it, and under strict aliasing
+ *    cc1 would reuse the stored value instead [84.94].
+ *  - the 16-byte alignment is a signed `& -16`, which the ROM loads with
+ *    `li -16`; an unsigned 0xFFFFFFF0 costs a lui/ori pair [93.53].
  */
 #ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 74.88% CONST-LI / engine96
- * 61.25% CONST-LI; best arm sdk29, first differing insn there: 'lui a3, %hi(g_discToc)' vs
- * 'lui a4, %hi(g_discToc)' */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", StartFrontendSegmentLoad);
+#define TOC_IN_A3 __asm__("$7")
 #else
+#define TOC_IN_A3
+#endif
 extern s32 g_discToc[];  /* 0x14B540 master disc asset directory */
 extern u8 D_1FF7FF0[];   /* top-of-memory marker; segment buffers grow downward from here */
 extern s32 KickRawFileRead(void *dest, s32 startSector, s32 sectorCount, void *toc);
 
 s32 StartFrontendSegmentLoad(void) {
-    u32 size = (((u32)g_discToc[0x34C / 4] << 11) + 0x1057) & 0xFFFFF000;
-    u8 *seg = (u8 *)(((u32)D_1FF7FF0 - size) & 0xFFFFFFF0);
+    register s32 *toc TOC_IN_A3 = g_discToc;
+    u32 size = (((u32)toc[0x34C / 4] << 11) + 0x1057) & 0xFFFFF000;
+    u8 *seg;
 
-    g_pLoadedSegment = seg;
-    *(s32 *)seg = 0x60;
+    g_pLoadedSegment = (u8 *)((s32)(D_1FF7FF0 - size) & -16);
+    *(s32 *)g_pLoadedSegment = 0x60;
+    seg = *(u8 *volatile *)&g_pLoadedSegment;
     KickRawFileRead(seg + *(s32 *)seg,
-                    g_discToc[0x348 / 4] + g_discToc[0x32C / 4],
-                    g_discToc[0x34C / 4], g_discToc);
+                    toc[0x348 / 4] + toc[0x32C / 4],
+                    toc[0x34C / 4], toc);
     return 1;
 }
-#endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294308);
 
