@@ -1072,62 +1072,49 @@ void func_0011BFC8(s32 ch) {
 
 /**
  * func_0011C000 = convert the IEEE-754 double whose raw bits are `bits` into a
- * clamped integer in [0, 9999]. Extracts the 11-bit exponent field and rebiases
- * it to exp = field - 0x433 (the power-of-two that scales the 53-bit
- * significand, including the implicit leading 1). Values below 2^-53 round to 0;
- * values needing >= 2^13 saturate to 9999 (0x270F). Otherwise the significand is
- * shifted left by exp (exp >= 0) or right by (-exp - 2) with a round-up when the
- * two dropped low bits are both set, and the low 32 bits are returned.
+ * clamped integer in [0, 9999]. The sign bit is ignored. The 11-bit exponent
+ * field is rebiased to exp = field - 0x433, the power of two that scales the
+ * 53-bit significand (implicit leading 1 restored). Values below 2^-53 give 0;
+ * values needing a shift of 13 or more saturate to 9999 (0x270F). Otherwise the
+ * significand is shifted left by exp (exp >= 0), or right by (-exp - 2) and
+ * then by 2 more, rounding up when those last two dropped bits are both set.
+ * Returns the low 32 bits.
  *
- * NEAR-MISS WALL (95.56% via objdiff, not byte-exact). Functionally-correct C
- * that compiles to nearly the right code:
- *
- *   s32 func_0011C000(s64 bits) {
- *       s64 x = bits;
- *       s64 exp = (s64)(((u64)(x << 1)) >> 53) - 0x433;
- *       if (exp < -0x35) return 0;
- *       if (exp >= 0xD)  return 0x270F;
- *       x = (s64)((((u64)x) << 12) >> 12 | 0x10000000000000ULL);
- *       if (exp < 0) {
- *           u64 v = ((u64)x) >> (s32)(-exp - 2);
- *           x = (s64)((v & 3) == 3 ? (v >> 2) + 1 : v >> 2);
- *       } else {
- *           x = x << (s32)exp;
- *       }
- *       return (s32)x;
- *   }
- *
- * Two residual diffs ee-gcc -O2 -G0 won't reproduce from source: (1) the
- * exp<0 rounding block's register threading (the original keeps the significand
- * in the arg reg $5/a1 through the >>12 and dsrlv; ours bounces it via v0), and
- * (2) the rounding compare is emitted by the original as a branch-LIKELY
- * (bnel) with the != case in the likely slot, while ee-gcc emits a plain bne.
- * Neither is controllable from C here. Seedable leaf (bits -> int): shipped as a
- * cmp-oracle'd portable #else below (asm-vs-C proven bit-identical on real R5900
- * by tools/ee/eetest/cmp/isolated/run_cmp_015180_iso.sh).
+ * Non-obvious: the ROM updates the exponent and significand IN PLACE
+ * (`exp -= 0x433`, `exp = -exp`, `x = (x << 12) >> 12`). Folding them into one
+ * expression per value (the earlier C, 95.56% by the unit objdiff report) makes
+ * cc1 thread them through $2 and extra temporaries instead of keeping exp in
+ * $6 and the significand in $5. The rounding test must also be written with
+ * `== 3` as the then-branch, which gives the ROM's `bnel` with the plain
+ * shift in the likely slot.
  */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C000);
-#else
 s32 func_0011C000(s64 bits) {
-    s64 x = bits;
-    s64 exp = (s64)(((u64)(x << 1)) >> 53) - 0x433;
+    u64 x = bits;
+    s64 exp;
+
+    exp = (x << 1) >> 53;
+    exp -= 0x433;
     if (exp < -0x35) {
         return 0;
     }
     if (exp >= 0xD) {
         return 0x270F;
     }
-    x = (s64)((((u64)x) << 12) >> 12 | 0x10000000000000ULL);
+    x = (x << 12) >> 12;
+    x |= 0x10000000000000ULL;
     if (exp < 0) {
-        u64 v = ((u64)x) >> (s32)(-exp - 2);
-        x = (s64)((v & 3) == 3 ? (v >> 2) + 1 : v >> 2);
+        exp = -exp;
+        x >>= exp - 2;
+        if ((x & 3) == 3) {
+            x = (x >> 2) + 1;
+        } else {
+            x >>= 2;
+        }
     } else {
-        x = x << (s32)exp;
+        x <<= exp;
     }
-    return (s32)x;
+    return x;
 }
-#endif
 
 /**
  * func_0011C090 = print the double whose bits are `value` in scientific notation
@@ -2888,35 +2875,56 @@ s64 __moddi3(s64 a, s64 b) {
 }
 #endif
 
+/* libgcc2's DIunion: a 64-bit value viewed as its two 32-bit halves
+ * (little-endian: low word first). */
+typedef union {
+    struct {
+        s32 low;
+        s32 high;
+    } s;
+    s64 ll;
+} DIunion;
+
+/* longlong.h's umul_ppmm for MIPS: the full 32x32->64 unsigned product of u
+ * and v, high word to w1 and low word to w0. On the EE it is a bare `multu`
+ * whose LO/HI results are bound straight to the outputs, which is what makes
+ * cc1 read them back with `mflo`/`mfhi` rather than expanding a 64-bit
+ * multiply. */
+#ifndef TARGET_NATIVE
+#define umul_ppmm(w1, w0, u, v)                                              \
+    __asm__("multu %2,%3"                                                    \
+            : "=l"((u32)(w0)), "=h"((u32)(w1))                               \
+            : "d"((u32)(u)), "d"((u32)(v)))
+#else
+#define umul_ppmm(w1, w0, u, v)                                              \
+    do {                                                                     \
+        u64 umul_product_ = (u64)(u32)(u) * (u32)(v);                        \
+        (w1) = (u32)(umul_product_ >> 32);                                   \
+        (w0) = (u32)umul_product_;                                           \
+    } while (0)
+#endif
+
 /**
  * __muldi3 = 64-bit integer multiply (low 64 bits of the product), a*b,
- * i.e. libgcc __muldi3. ee-gcc expands the 64x64 product from the 32-bit
- * half-products (mult / mult1 / multu) in the libgcc union form: the unsigned
- * low*low product is kept whole and only its high word is incremented by the
- * two cross-products.
+ * i.e. libgcc2's __muldi3, in its own source form: the unsigned low*low
+ * product is formed whole by umul_ppmm (__umulsidi3), and the two
+ * cross-products are added into its high word.
  *
- * NEAR-MISS WALL (72.29% via objdiff). The instruction SET matches but ee-gcc
- * -O2 -G0 allocates the half-product registers differently and materialises the
- * 0xFFFFFFFF low-word mask via `dli` (one pseudo, scheduled early) where the
- * original emits `lui;dsrl32` (two real insns, scheduled late into a freed
- * register) — a register-allocation/constant-materialisation divergence not
- * steerable from C. Shipped as a portable TARGET_NATIVE #else; this leaf is
- * standalone-seedable (pure a*b) so it is a HARD-GATE cmp-oracle candidate —
- * routed to tester-EE to run on the real R5900 (the #else `return a*b` is
- * trivially correct).
+ * Non-obvious: the low*low product has to come from the umul_ppmm `multu`
+ * with LO/HI outputs. Written as a plain `(u64)(u32)a * (u32)b` it scored
+ * 72.29% (unit objdiff report): cc1 allocated the half-products differently
+ * and hoisted the 0xFFFFFFFF mask.
  */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", __muldi3);
-#else
-s64 __muldi3(s64 a, s64 b) {
-    union { struct { s32 low; s32 high; } s; s64 ll; } w, uu, vv;
-    uu.ll = a;
-    vv.ll = b;
-    w.ll = (s64)((u64)(u32)uu.s.low * (u32)vv.s.low);
-    w.s.high += uu.s.low * vv.s.high + uu.s.high * vv.s.low;
+s64 __muldi3(s64 u, s64 v) {
+    DIunion w;
+    DIunion uu, vv;
+
+    uu.ll = u;
+    vv.ll = v;
+    umul_ppmm(w.s.high, w.s.low, uu.s.low, vv.s.low);
+    w.s.high += (u32)uu.s.low * (u32)vv.s.high + (u32)uu.s.high * (u32)vv.s.low;
     return w.ll;
 }
-#endif
 
 /**
  * Frameless tail-call thunk: forward to func_00120368 (which dispatches the
