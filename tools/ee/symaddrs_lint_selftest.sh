@@ -38,6 +38,21 @@ want "'Note:' in a comment is REJECTED (empty attr value)" 1 "$T/bareattr.txt"
 printf 'g_gamma = 0x00100020; // one; two semicolons\n' > "$T/semi.txt"
 want "a second ';' in a comment is REJECTED" 1 "$T/semi.txt"
 
+# BLINDNESS PAST A NON-SPLAT TYPE. A lowercase type outside splat's own four
+# (func/jtbl/jtbl_label/label) makes splat ask the disassembler instance for its
+# known C types; a child that never created that instance raises on the first
+# `type:u32` and the whole file bands ?? - everything after it goes unexamined
+# (USA line 712 on, task #715). Every other fixture here uses only type:func, so
+# without this one the suite passed on the blind lint too. The defect must be
+# REJECTED and located at line 2, not banded could-not-look.
+printf 'g_eta = 0x00100060; // type:u32 size:4\ng_theta = 0x00100064; // one; two semicolons\n' > "$T/pasttype.txt"
+want "a defect AFTER a type:u32 line is REJECTED (lint not blind past it)" 1 "$T/pasttype.txt"
+if /usr/bin/grep -qE 'line 2([^0-9]|$)' "$T/out"; then
+  echo "  ok  ...and the rejection names line 2"
+else
+  echo "FAIL the rejection past type:u32 does not name line 2"; sed 's/^/      /' "$T/out"; fail=1
+fi
+
 # The look-alike NEGATIVE control: a REAL splat attribute also contains a colon
 # and MUST NOT be flagged. Without this, "reject anything with a colon" passes
 # every other case here and is completely wrong.
