@@ -141,6 +141,7 @@ func_00301340 = 0x00301340; // type:func
 // prologue after it.
 func_002831F8 = 0x002831F8; // type:func size:0x38
 func_00283230 = 0x00283230; // type:func
+func_00284678 = 0x00284678; // type:func - splat name kept, no identity claimed. Float integer/fraction split helper in text/183558, called by func_002AC980, which is compiled C since task 758. This line holds the token outside its nonmatchings .s (landing_gate ORPHAN_LATENT)
 // text/16E980 carve (2026-06-13, pick #6): one absorbed mis-split - 0x30
 // bytes of handwritten 8-byte stub-table words (addiu-sp/nop pairs, one
 // sltu/nop pair, no prologue) that splat lumped into the function whose real
