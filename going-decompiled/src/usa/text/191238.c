@@ -5138,7 +5138,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00297FA0);
  * engine96 79.67% IDIOM-LIKELY; best arm sdk29, first differing insn there: 'addiu sp, sp,
  * -0x20' vs 'addiu sp, sp, -0x40'. Iterated: engine96 86.83% IDIOM-LIKELY — non-small
  * g_mapHasData + s32 flags (s2): beqzl with `ld s0` in the likely slot + prologue arg-copy
- * interleave */
+ * interleave.
+ * t768/t791: engine96 93.00% SOLO (unit objdiff report, objdiff_build.sh, VM b) with
+ * g_mapHasData in section(".data"), a `u32 flags = src[0]` temp and a dead-store
+ * `noTailCall = 0` in both arms instead of the empty asm (FACT #8068). The beql/ld-s0
+ * slots then match; the ONLY residual is the prologue: ROM `sd s0; sd s1; move s0,a1;
+ * sd s2; move s1,a0; sd ra` vs ours `sd s0; move s0,a1; sd s1; move s1,a0; sd s2; sd ra`
+ * (0x298068/0x298070). WALL under both held compilers: 2.96-001003's sched2 puts a copy
+ * freed by its own sd's anti-dependence straight into the SAME cycle's ready list and
+ * issues it on the free alu (-fsched-verbose: "dependences resolved: insn 6 into ready"
+ * -> scheduled at t=1 beside sd s0); the ROM compiler issues it no earlier than the next
+ * cycle, ordered by priority (LoadPlayerDisplayTextures' critical copy precedes the next
+ * sd). No C form changes which cycle the copy becomes ready in. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapBuildBitmap);
 #else
 /*
@@ -5148,9 +5159,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapBuildBitmap)
  * path func_002980D8(dst, src, arg3); bit0 clear selects the plain path
  * func_00298308(dst, src).
  *
- * WALL: two callee-saves (src, arg3) across the gate + the branch-likely
- * (beql) early-out on g_mapHasData that the pinned cc1 does not reproduce. Kept
- * as the portable #else body.
+ * WALL: the prologue arg-copy/sd interleave (see the TODO above); the beql
+ * early-out IS reproducible on engine96 (FACT #8068). Kept as the portable
+ * #else body.
  */
 extern s32  g_mapHasData;
 extern void func_00298AA0(void);
