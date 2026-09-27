@@ -168,21 +168,25 @@ s32 func_0034D7A8(GuiHudManager *mgr) {
     return color[0] & 0xFF000000;
 }
 
-/* func_0034D7D0: select the HUD frame sprite texture by mode (stored at
- * +0x15A4): mode 0 -> texture 0x7567, mode 1 -> 0xEAA2, else no change.
- * NEAR-MISS (see the TODO(match) block below for the measured %): the C is
- * structurally exact, but the original folds the
- * epilogue `ld $ra` into the case-exit branch delay slots (a cc1 epilogue-
- * scheduling artifact this toolchain won't reproduce). Kept as the portable
- * #else body; the matching build keeps the original bytes. */
-/* TODO(match) func_0034D7D0 - task #566 (round 4), measured on the COMMITTED tree (this file,
- * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
- * tools/ee/objdiff_build.sh, clean): sdk29 89.55%, engine96 86.82%. Eligible arm: sdk29+e96.
- * Residual: EPILOGUE-ORDER (ROM folds `ld ra` into both case-exit branch delay slots) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034D7D0);
-#else
+/*
+ * func_0034D7D0 — select the HUD frame sprite's texture by mode.
+ *
+ *   mgr   the HUD manager; the mode is stored at +0x15A4
+ *   mode  0 -> texture 0x7567, 1 -> texture 0xEAA2, anything else stores the
+ *         mode and leaves the frame sprite (+0x2A0) unchanged
+ * No return value.
+ *
+ * Non-obvious (task #763; replaces a "NEAR-MISS 89.55%" note):
+ *  - Both GuiSpriteSetTexture calls are real `jal`s in the ROM, not sibling
+ *    calls, so something must stop cc1 turning them into `j`. The dead store
+ *    `noTailCall = 0` does that at expand time and flow deletes it before
+ *    either scheduler runs (#756's lever). The earlier empty volatile asm also
+ *    blocked the sibcall, but it stayed in the block as a scheduling barrier
+ *    and kept `ld ra` out of the two case-exit branch delay slots, where the
+ *    ROM has it.
+ */
 void func_0034D7D0(GuiHudManager *mgr, s32 mode) {
+    s32 noTailCall;
     *(s32 *)((u8 *)mgr + 0x15A4) = mode;
     switch (mode) {
     case 0:
@@ -192,9 +196,8 @@ void func_0034D7D0(GuiHudManager *mgr, s32 mode) {
         GuiSpriteSetTexture((u8 *)mgr + 0x2A0, 0xEAA2, 0);
         break;
     }
-    __asm__ __volatile__("");
+    noTailCall = 0;
 }
-#endif
 
 /* func_0034D828: (re)assign the HUD frame-sprite texture and, on the first
  * activation after the manager's row state was torn down, reset the five
