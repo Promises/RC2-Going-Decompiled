@@ -2805,29 +2805,49 @@ void func_0028BF80(void) {
 #endif
 
 /*
- * func_0028C010(key): search the D_2552B0 record table (13 entries, stride
- * 0x90, key at +0x64) for `key`; when present rebuild a HUD list via
- * func_0028BE10 and return 1, else 0.
- *
- * WALL (83.06%): logic + the displacement form match, but the original copies
- * the key argument into a saved register up-front and advances its scan pointer
- * to base+0x64 (reading 0x0(ptr)) where our cc1 keeps the key in $a0 and reads
- * 0x64(base) — an induction-variable / arg-colouring choice. Left INCLUDE_ASM.
- * engine96 arm (task #469): 78.88% as a `for (i<13)` loop; residual
- * UNKNOWN-`slti` — this cc1 folds the post-loop `i >= 0xD` re-test to a
- * constant (`addiu $3,$0,1; beqz $3`) where the ROM re-emits `slti; bnez`.
+ * R5900 SHORT-LOOP PAD (the same construct as text/1A8180.c, FACT #7937). The
+ * ROM's assembler padded every backward branch closing a loop shorter than 6
+ * instructions with `nop`s up to 6 - the R5900 short-loop erratum workaround.
+ * cc1 never emits the pad and neither assembler we run inserts it, so it is
+ * written directly before the branch it pads:
+ *   - `.set noreorder` stops the assembler swapping the pad `nop` into the
+ *     branch delay slot;
+ *   - the "+r" operand is the value the branch tests, which pins the pad
+ *     between that value's load and the branch;
+ *   - `next` is the register the ROM updates in the delay slot: reading it
+ *     keeps that update after the pad, where reorg moves it into the slot.
+ * A no-op on the native build.
  */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C010);
+#define R5900_SHORT_LOOP_PAD1(v, next) \
+    __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
 #else
+#define R5900_SHORT_LOOP_PAD1(v, next) ((void)0)
+#endif
+
+/**
+ * Find the D_2552B0 HUD widget record whose key equals `key` and, if found,
+ * rebuild its element list via func_0028BE10(index, 0xFFFF, 0, 0, 0, 0, 0).
+ *
+ *   key  the record key to look for (Rec2552B0.key, +0x64 in a 0x90-byte record)
+ *   ->   1 if a record among the 13 matched (and was rebuilt), else 0
+ *
+ * Record 0 is tested before the loop, so the scan loop starts at index 1 and
+ * walks a pointer to the key field. That loop is 5 instructions, so the ROM
+ * carries one short-loop pad `nop` between the key load and its `bnel`
+ * (R5900_SHORT_LOOP_PAD1); without it this body is the ROM less that one word.
+ */
 s32 func_0028C010(s32 key) {
     s32 i = 0;
     if (D_2552B0[0].key != key) {
+        s32 recKey;
         do {
             if (++i >= 0xD) {
                 return 0;
             }
-        } while (D_2552B0[i].key != key);
+            recKey = D_2552B0[i].key;
+            R5900_SHORT_LOOP_PAD1(recKey, i);
+        } while (recKey != key);
     }
     if (i >= 0xD) {
         return 0;
@@ -2835,7 +2855,6 @@ s32 func_0028C010(s32 key) {
     func_0028BE10(i, 0xFFFF, 0, 0, 0, 0, 0);
     return 1;
 }
-#endif
 
 /* Resolve the HUD icon slot for `iconName` (via func_0028B560), then copy its
  * texture id, palette id and base-frame field out of the icon-slot table into
