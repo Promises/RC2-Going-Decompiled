@@ -3184,92 +3184,162 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DE768);
  * a real function body, cannot be expressed as C. Left as bare INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DECC8);
 
-/* Cheat-code entry detector: while the player holds the L1+R1-ish combo
- * (held&0xf==6), record each fresh d-pad/face direction into a 0x14-entry
- * buffer; once full, scan code ids 2..0x92 of the cheat table D_00261BE8 —
- * symbol k of code c is byte ((k+1)*c) & 0xFF, not a fixed 0x14 stride — for a
- * matching 20-symbol sequence and apply the corresponding unlock.
- * Not matched. Best measured body 96.77% (unit objdiff, solo, sdk29 -O2 -G8
- * -fno-gcse, 13 of 130 rows). It needs the loop bound 0x93 in a local (the ROM
- * holds it in a register), a goto inner loop over an EE_REG-bound index (the ROM
- * does not strength-reduce it), and the pad block D_138180 as an ordinary array.
- * Residual: the prediction for two branches in the skill-point path, and three
- * register/order choices. Body and rows: NOTE #8228. */
+/*
+ * func_002DECE0 declarations. The cheat input buffer is 20 s16 symbols at
+ * D_001B1E90+0x118; D_1ABD20 counts the symbols entered; D_261BE8 is the cheat
+ * byte table; D_1395B8 is a 6-entry unlock-flag array; D_1A8CEC is set once a
+ * skill-point cheat fires. D_138180 is the pad state block (+0x1C0 held mask as
+ * a doubleword = g_padButtonsHeld, +0x1C4 pressed mask = g_padButtonsPressed),
+ * declared as an ordinary array so cc1 splits its address and the prologue's
+ * `sd $31` schedules between the halves, as in the ROM.
+ * The three *Abs names are assembler aliases (the #8036 construct, as in
+ * text/188858.c): 8 bytes to cc1 so it emits one `la` macro per use, 16 to gas
+ * so the macro expands absolutely. The ROM reads those three tables as adjacent
+ * lui/addiu pairs; as a two-word macro the address cannot go into a delay slot,
+ * which is what makes the skill-point path's branches fill as the ROM's do.
+ * EE_REG(r) binds a local register variable to EE GPR `r` where cc1 2.9's
+ * allocator colours a value differently from the ROM; natively a plain local.
+ */
+extern u8  D_138180[];
+extern s32 D_1ABD20;
+extern u8  D_261BE8[];
+extern u8  D_1395B8[];
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DECE0);
+#define EE_REG(r) __asm__(r)
+__asm__(".extern D_1A8CEC, 16");
+__asm__(".extern g_inventoryNewFlagAbs, 16\n\tg_inventoryNewFlagAbs = g_inventoryNewFlag");
+__asm__(".extern g_inventoryOwnedAbs, 16\n\tg_inventoryOwnedAbs = g_inventoryOwned");
+__asm__(".extern g_skillPointFlagsAbs, 16\n\tg_skillPointFlagsAbs = g_skillPointFlags");
+extern u8 g_inventoryNewFlagAbs[8];
+extern u8 g_inventoryOwnedAbs[8];
+extern u8 g_skillPointFlagsAbs[8];
 #else
-/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
- * objdiff): sdk29 64.75% / engine96 50.32%; better arm sdk29; 87 differing
- * rows on it, class STRUCTURAL; first differing insn: ROM `(none)` vs `lw
- * v0,0(gp)  [GPREL16 0x00138340]`. Not iterated in t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
+#define EE_REG(r)
+extern u8 g_inventoryNewFlag[];
+#define g_inventoryNewFlagAbs g_inventoryNewFlag
+#define g_inventoryOwnedAbs   g_inventoryOwned
+#define g_skillPointFlagsAbs  g_skillPointFlags
+#endif
+extern s32 D_1A8CEC;
+#define CHEAT_INPUT ((s16 *)(D_001B1E90 + 0x118))
+
+/**
+ * Cheat-code entry detector, run from the pause menu. While the held pad mask
+ * has the 0x6 pattern in its low nibble, each newly pressed d-pad/face button
+ * appends one symbol to a 20-entry input buffer (0x1000 -> 0, 0x4000 -> 1,
+ * 0x8000 -> 2, 0x2000 -> 3, 0x80 -> 4, any other 0xF0A0 bit -> 5); releasing
+ * the pattern clears the count. When the 20th symbol lands, code ids 2..0x92
+ * are tested against it: symbol k of code c is table byte ((k + 1) * c) & 0xFF.
+ * The first hit, as found = c - 2, unlocks:
+ *   0x00..0x37  inventory item `found` (owned + new flag),
+ *   0x38..0x49  level `found - 0x37` (MarkLevelAvailable),
+ *   0x4A..0x4F  flag D_1395B8[found - 0x4A],
+ *   0x50..0x6D  skill point `found - 0x50`, once: sets its flag, plays sound 1,
+ *               raises message 0x1233 (func_002B1880) and sets D_1A8CEC.
+ *
+ * Matching notes (sdk29 arm, -O2 -G8 -fno-gcse):
+ *  - the code loop's bound is a local: the ROM compares against 0x93 held in a
+ *    register, which cc1 emits only when the constant cannot be propagated
+ *    into the loop block;
+ *  - the symbol loop is a goto loop over a register-bound index: the ROM
+ *    recomputes k * code and k * 2 each pass, and any loop.c-visible index gets
+ *    strength-reduced;
+ *  - the tied empty asm copies the loaded count into `entered` without cc1
+ *    seeing the equivalence, so the bound test reads the loaded register and
+ *    the copy survives, as in the ROM;
+ *  - the first symbol, the loop bound and the post-call constant are bound to
+ *    the registers the ROM uses.
+ */
 void func_002DECE0(void) {
-    extern u16 D_001B1FA8[];   /* entered-symbol ring buffer */
-    extern s32 D_001ABD20;     /* number of symbols entered so far */
-    extern u8  D_00261BE8[];   /* cheat code table (stride 0x14) */
-    extern u8  g_inventoryNewFlag[];
-    extern u8  D_0013956E[];
-    extern u8  g_nPendingNanotechXp;
-    extern s32 D_001A8CEC;
-    s32 pressed = g_padButtonsPressed[0];
-    if ((g_padButtonsHeld & 0xf) != 6) {
-        D_001ABD20 = 0;
-        return;
-    }
-    if ((pressed & 0xf0a0) == 0 || D_001ABD20 >= 0x14) {
-        return;
-    }
-    {
-        u16 sym = 0;
-        if ((pressed & 0x1000) == 0) {
-            sym = 1;
-            if ((pressed & 0x4000) == 0) {
-                sym = 2;
-                if ((pressed & 0x8000) == 0) {
-                    sym = 3;
-                    if ((pressed & 0x2000) == 0) {
-                        sym = 5;
-                        if (pressed & 0x80) sym = 4;
+    u8 *pad = D_138180;
+    s32 pressed;
+    s32 count;
+    s32 entered;
+    s32 symbol;
+
+    if ((*(u64 *)(pad + 0x1C0) & 0xF) == 6) {
+        pressed = *(s32 *)(pad + 0x1C4);
+        if ((pressed & 0xF0A0) == 0) {
+            return;
+        }
+        count = D_1ABD20;
+        __asm__("" : "=r"(entered) : "0"(count));
+        if (count >= 0x14) {
+            return;
+        }
+        if (pressed & 0x1000) {
+            symbol = 0;
+        } else if (pressed & 0x4000) {
+            symbol = 1;
+        } else if (pressed & 0x8000) {
+            symbol = 2;
+        } else if (pressed & 0x2000) {
+            symbol = 3;
+        } else {
+            symbol = (pressed & 0x80) ? 4 : 5;
+        }
+        CHEAT_INPUT[entered] = symbol;
+        entered++;
+        D_1ABD20 = entered;
+        if (entered == 0x14) {
+            s32 found = -1;
+            s32 code;
+            register s32 firstSymbol EE_REG("$11") = CHEAT_INPUT[0];
+            register s32 codeEnd EE_REG("$12");
+
+            for (code = 2, codeEnd = 0x93; code < codeEnd; code++) {
+                s32 match = 1;
+                register s32 pos EE_REG("$5") = 0;
+
+                if (firstSymbol != D_261BE8[code & 0xFF]) {
+                    goto mismatch;
+                }
+            next:
+                pos++;
+                if (pos < 0x14) {
+                    if (CHEAT_INPUT[pos] == D_261BE8[(pos * code + code) & 0xFF]) {
+                        goto next;
+                    }
+                mismatch:
+                    match = 0;
+                }
+                if (match) {
+                    found = code - 2;
+                    break;
+                }
+            }
+            if (found != -1) {
+                s32 level = found - 0x37;
+                s32 flagIndex = found - 0x4A;
+                s32 skill = found - 0x50;
+
+                if (found < 0x38) {
+                    g_inventoryOwnedAbs[found] = 1;
+                    g_inventoryNewFlagAbs[found] = 1;
+                } else if ((u32)(found - 0x38) < 0x12) {
+                    MarkLevelAvailable(level);
+                } else if ((u32)flagIndex < 6) {
+                    D_1395B8[flagIndex] = 1;
+                } else if ((u32)skill < 0x1E) {
+                    u8 *flag = &g_skillPointFlagsAbs[skill];
+
+                    if (*flag == 0) {
+                        *flag = 1;
+                        PlayGlobalSound(1, 0, 0);
+                        func_002B1880(0x1233, -1);
+                        {
+                            register s32 one EE_REG("$2") = 1;
+
+                            D_1A8CEC = one;
+                        }
                     }
                 }
             }
         }
-        D_001B1FA8[D_001ABD20] = sym;
-        D_001ABD20++;
-    }
-    if (D_001ABD20 == 0x14) {
-        s32 found = -1;
-        s32 code;
-        for (code = 2; code < 0x93; code++) {
-            s32 ci = code & 0xff;
-            s32 ok = (D_001B1FA8[0] == D_00261BE8[ci]);
-            if (ok) {
-                s32 k;
-                for (k = 1; k < 0x14; k++) {
-                    if (D_001B1FA8[k] != D_00261BE8[(k * code + code) & 0xff]) { ok = 0; break; }
-                }
-            }
-            if (ok) { found = code - 2; break; }
-        }
-        if (found != -1) {
-            if (found < 0x38) {
-                g_inventoryNewFlag[found] = 1;
-                g_inventoryOwned[found] = 1;
-            } else if ((u32)(found - 0x38) < 0x12) {
-                MarkLevelAvailable(found - 0x37);
-            } else if ((u32)(found - 0x4a) < 6) {
-                D_0013956E[found] = 1;
-            } else if ((u32)(found - 0x50) < 0x1e &&
-                       *((u8 *)&g_nPendingNanotechXp + found) == 0) {
-                *((u8 *)&g_nPendingNanotechXp + found) = 1;
-                PlayGlobalSound(1, 0, 0);
-                func_002B1880(0x1233, -1);
-                D_001A8CEC = 1;
-            }
-        }
+    } else {
+        D_1ABD20 = 0;
     }
 }
-#endif
 
 /* Save-image WAD streaming/decompress state machine (obj->0x34 state 0..3),
  * driving DecompressWad on the save preview. Wall: the splat splice prepends an
