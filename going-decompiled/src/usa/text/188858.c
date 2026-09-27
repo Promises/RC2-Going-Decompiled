@@ -2334,13 +2334,19 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_0
  *   - PAD1's `next` is the register the ROM updates in the delay slot: reading
  *     it keeps that update after the pad, where reorg moves it into the slot.
  * A no-op on the native build.
+ *
+ * EE_REG(r) binds a local register variable to EE GPR `r`
+ * (`register u32 x EE_REG("$3");`, as in text/1DFF80.c) where cc1 2.9's
+ * allocator colours a value differently from the ROM; natively a plain local.
  */
 #ifndef TARGET_NATIVE
+#define EE_REG(r) __asm__(r)
 #define R5900_SHORT_LOOP_PAD1(v, next) \
     __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
 #define R5900_SHORT_LOOP_PAD2(v) \
     __asm__(".set noreorder\n\tnop\n\tnop\n\t.set reorder" : "+r"(v))
 #else
+#define EE_REG(r)
 #define R5900_SHORT_LOOP_PAD1(v, next) ((void)0)
 #define R5900_SHORT_LOOP_PAD2(v) ((void)0)
 #endif
@@ -2721,42 +2727,71 @@ void *DebugMalloc(s32 size) {
 #endif
 
 /*
- * SwapMobyTableContext(newId): toggle the active moby-table context (live vs
- * the 40-slot HUD shadow set), exchanging the base/spawn-start/end/aux-block
- * pointers between the two sets; no-op when the requested context is active.
- *
- * WALL (78.51%): the original reads the FIRST g_mobyTableBase via %gp_rel in
- * the beq branch-delay slot but WRITES the same symbol via %hi/%lo later — the
- * mixed gp_rel/absolute reload artifact (only one addressing form is
- * expressible per declaration, and the gp_rel-in-delay-slot form is fixed
- * SN-cc1 behaviour). Left INCLUDE_ASM.
+ * g_mobyTableBaseGp: an ASSEMBLER alias of g_mobyTableBase sized 4, the
+ * mirror image of g_pHudAssetHeaderAbs. The file-scope `.extern g_mobyTableBase,
+ * 16` makes every access to the real name absolute; SwapMobyTableContext's
+ * first read in the ROM is %gp_rel (and its write absolute), so that one read
+ * goes through this alias, which gas sizes small and addresses off $gp. The
+ * relocation names g_mobyTableBase.
  */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", SwapMobyTableContext);
+__asm__(".extern g_mobyTableBaseGp, 4\n\tg_mobyTableBaseGp = g_mobyTableBase");
+extern void *g_mobyTableBaseGp;
 #else
+#define g_mobyTableBaseGp g_mobyTableBase
+#endif
+
+/* A volatile access to a pointer global: keeps the swap's loads and stores in
+ * source order, which is the order the ROM issues them in. */
+#define SWAP_VOLATILE(x) (*(void * volatile *)&(x))
+
+/**
+ * Toggle the active moby-table context between the live set and the 40-slot
+ * HUD shadow set: flip g_activeMobyTableId and exchange the base, spawn-start,
+ * end and aux-block pointers of the two sets. A no-op when `newId` is already
+ * the active context.
+ *
+ *   newId  the context requested (0 or 1)
+ *
+ * Matching notes. The first g_mobyTableBase read is %gp_rel and sits in the
+ * early-out branch's delay slot, so it is read through g_mobyTableBaseGp and is
+ * the one non-volatile access (a volatile load cannot fill a delay slot). Every
+ * other access is volatile, which pins the ROM's interleaving of loads and
+ * stores; cc1 otherwise reorders the independent globals. The locals are bound
+ * to the ROM's registers with EE_REG ($8 is reused for base, spawn and end).
+ */
 void SwapMobyTableContext(s32 newId) {
-    void *base, *spawn, *end, *aux;
-    if (newId == g_activeMobyTableId) {
+    register s32 id EE_REG("$6") = g_activeMobyTableId;
+    register void *base EE_REG("$8");
+    register void *hudBase EE_REG("$7");
+    register void *spawn EE_REG("$8");
+    register void *hudSpawn EE_REG("$4");
+    register void *end EE_REG("$8");
+    register void *hudEnd EE_REG("$2");
+    register void *aux EE_REG("$5");
+    register void *hudAux EE_REG("$3");
+
+    if (newId == id) {
         return;
     }
-    base  = g_mobyTableBase;
-    spawn = g_mobySpawnStart;
-    end   = g_mobyTableEnd;
-    aux   = g_mobyAuxBlockBase;
-
-    g_activeMobyTableId = g_activeMobyTableId ^ 1;
-
-    g_mobyTableBase    = g_hudMobyTableBase;
-    g_mobySpawnStart   = g_hudMobySpawnStart;
-    g_mobyTableEnd     = g_hudMobyTableEnd;
-    g_mobyAuxBlockBase = g_hudMobyAuxBlockBase;
-
-    g_hudMobyTableBase    = base;
-    g_hudMobySpawnStart   = spawn;
-    g_hudMobyTableEnd     = end;
-    g_hudMobyAuxBlockBase = aux;
+    base = g_mobyTableBaseGp;
+    hudBase = SWAP_VOLATILE(g_hudMobyTableBase);
+    SWAP_VOLATILE(g_hudMobyTableBase) = base;
+    spawn = SWAP_VOLATILE(g_mobySpawnStart);
+    hudSpawn = SWAP_VOLATILE(g_hudMobySpawnStart);
+    SWAP_VOLATILE(g_hudMobySpawnStart) = spawn;
+    end = SWAP_VOLATILE(g_mobyTableEnd);
+    hudEnd = SWAP_VOLATILE(g_hudMobyTableEnd);
+    aux = SWAP_VOLATILE(g_mobyAuxBlockBase);
+    hudAux = SWAP_VOLATILE(g_hudMobyAuxBlockBase);
+    *(volatile s32 *)&g_activeMobyTableId = id ^ 1;
+    SWAP_VOLATILE(g_mobyTableBase) = hudBase;
+    SWAP_VOLATILE(g_mobySpawnStart) = hudSpawn;
+    SWAP_VOLATILE(g_mobyTableEnd) = hudEnd;
+    SWAP_VOLATILE(g_hudMobyTableEnd) = end;
+    SWAP_VOLATILE(g_mobyAuxBlockBase) = hudAux;
+    SWAP_VOLATILE(g_hudMobyAuxBlockBase) = aux;
 }
-#endif
 
 /* func_0028BE10(packed, b, c, d, e, f, g): update HUD widget list slot
  * `packed & 0xF` of the D_2552B0 table (stride 0x90). Compares the slot's stored
