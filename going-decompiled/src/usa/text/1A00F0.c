@@ -104,50 +104,57 @@ void FreeMoby(Moby *moby) {
 }
 
 /*
- * ResolveMobyAnimFramePtrs(moby): resolve the moby's primary + secondary anim
- * frame-data pointers from its animation set table. The table lives at
- * `animBase(moby+0x24) + 0x48` and is indexed by a 1-byte frame id; each entry
- * points at an "anim set" record. From the PRIMARY frame (moby+0x42, sub-index
- * moby+0x40) it caches the frame-data pointer (set[+idx*4+0x1C]) at moby+0x58 and
- * two set bytes at moby+0x6E (set[0x12]) and moby+0x6C (set[0x11]). When the
- * primary frame id is the 0xFF sentinel ("procedural"), it instead points moby+0x58
- * straight into the procedural frame pool (g_proceduralAnimFrames + idx*0x800),
- * stamps moby+0x6C=0xFF and moby+0x6E=0. The SECONDARY frame (moby+0x43, sub-index
- * moby+0x41) always caches its frame-data pointer at moby+0x5C.
+ * ResolveMobyAnimFramePtrs — cache a moby's current animation frame pointers.
  *
- * Leaf, no callee-saves -> not blocked by this unit's save-slot wall. MATCH-FIRST
- * PROBED on the R5900 toolchain (2026-06-29): best 63.60% (cached-local 57.72% ->
- * inline no-cache 63.60%). WALLED - this cc1's instruction scheduling + the repeated
- * reload of table[frame]/moby[0x42] don't reproduce from source form. Kept as the
- * TARGET_NATIVE #else arm, cmp-oracle-ready.
+ *   moby  the moby whose primary (+0x42 sequence, +0x40 frame) and secondary
+ *         (+0x43 sequence, +0x41 frame) animation state is resolved
+ *
+ * The moby's class record (+0x24) holds a sequence table at +0x48, indexed by
+ * a sequence byte. Each sequence's frame-data pointer array starts at +0x1C.
+ *  - Primary sequence != 0xFF: +0x58 = that sequence's frame-data pointer for
+ *    frame +0x40; +0x6E = seq[0x12]; +0x6C = seq[0x11] (the loop-sound index).
+ *  - Primary sequence 0xFF ("procedural"): +0x58 points into the procedural
+ *    frame pool (g_proceduralAnimFrames + frame * 0x800), +0x6C = 0xFF and
+ *    +0x6E = 0.
+ *  - Secondary: +0x5C = the frame-data pointer for (+0x43, +0x41), always.
+ * No return value.
+ *
+ * Non-obvious (task #759; replaces a "WALLED at 63.60%" note):
+ *  - The ROM reloads the primary sequence byte and its table entry in each of
+ *    the three statements. The sequence reads are still hoisted above the +0x58
+ *    store. A volatile read (MOBY_PRIMARY_SEQ) keeps cse from merging them
+ *    but lets sched hoist them past the non-volatile store. The class-pointer
+ *    load is volatile too, so the two volatile loads keep their source order,
+ *    which is the ROM's `lw` before `lbu`.
+ *  - The table entry is read as `void *`, the same type as the +0x58 store.
+ *    The store then aliases the later entry loads and they stay below it.
+ *  - `table - -(i * 4)` keeps the base first in `addu` (#756's operand-order
+ *    lever). The `+` form puts the shifted index first.
+ *  - The test reads the sequence into a `u32`, not a `u8`. With a `u8`, cc1
+ *    copies it into a second register for the 0xFF arm's store and loses the
+ *    `beql`.
  */
 extern u8 g_proceduralAnimFrames[];
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", ResolveMobyAnimFramePtrs);
-#else
+#define MOBY_PRIMARY_SEQ(m)       (*(volatile u8 *)((m) + 0x42))
+#define ANIM_SEQ_AT(table, seq)   ((u8 *)*(void **)((table) - -((seq) * 4)))
+
 void ResolveMobyAnimFramePtrs(Moby *moby) {
     u8 *m = (u8 *)moby;
-    void **table = (void **)(*(u8 **)(m + 0x24) + 0x48);
-    u8 frame = m[0x42];
+    u32 seq = m[0x42];
 
-    if (frame != 0xFF) {
-        u8 *set = (u8 *)table[frame];
-        *(void **)(m + 0x58) = *(void **)(set + m[0x40] * 4 + 0x1C);
-        m[0x6E] = set[0x12];
-        m[0x6C] = set[0x11];
+    if (seq != 0xFF) {
+        u8 *seqTable = *(u8 *volatile *)(m + 0x24) + 0x48;
+        *(void **)(m + 0x58) = *(void **)(ANIM_SEQ_AT(seqTable, MOBY_PRIMARY_SEQ(m)) - -(m[0x40] * 4) + 0x1C);
+        m[0x6E] = ANIM_SEQ_AT(seqTable, MOBY_PRIMARY_SEQ(m))[0x12];
+        m[0x6C] = ANIM_SEQ_AT(seqTable, MOBY_PRIMARY_SEQ(m))[0x11];
     } else {
-        m[0x6C] = frame;          /* 0xFF sentinel */
+        m[0x6C] = seq;
         m[0x6E] = 0;
         *(void **)(m + 0x58) = g_proceduralAnimFrames + (m[0x40] << 11);
     }
-
-    {
-        u8 *set2 = (u8 *)table[m[0x43]];
-        *(void **)(m + 0x5C) = *(void **)(set2 + m[0x41] * 4 + 0x1C);
-    }
+    *(void **)(m + 0x5C) = *(void **)(ANIM_SEQ_AT(*(u8 **)(m + 0x24) + 0x48, m[0x43]) - -(m[0x41] * 4) + 0x1C);
 }
-#endif
 
 /* UpdateMobyAnimLoopSound: maintain the moby's looping sequence sound. The active
  * emitter slot is held in +0x6D (0xFF = none) and the current sequence id in +0x6C.
