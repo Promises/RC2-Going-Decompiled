@@ -36,6 +36,7 @@ unit_flags() {
     */usa/text/1823B8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
     */usa/text/1DFF80.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
     */usa/text/1EFFC0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
+    */usa/text/1FCF48.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
     */usa/text/1FFBA0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
     */usa/text/24D728.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
     */eu/text/16E7B8.c) GFLAG="-G8";;

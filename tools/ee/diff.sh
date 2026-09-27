@@ -51,6 +51,7 @@ case "$REGION/$UNIT" in
   usa/text/1823B8) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # TILE A render/draw-2D B
   usa/text/1DFF80) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # TILE B moby-glow/shrub/sky/sound-emit/cinematic
   usa/text/1EFFC0) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # TILE B tfrag/tie draw + vendor shop + GS/VIF
+  usa/text/1FCF48) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # frame-arena/render-task-list sub-TU: the ROM stores g_sceneArenaCursor, g_frameArenaFlip and g_renderTaskWorkBuf %gp_rel, which cc1 cannot emit at -G0 (task #889)
   usa/text/1FFBA0) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # TILE B bolt economy + turret weapon
   usa/text/24D728) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # TILE D GUI/camera helpers
   # usa/text/183558 stays -G0 (TILE C math C-helper band; default, no case)
