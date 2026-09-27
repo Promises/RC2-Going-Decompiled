@@ -349,9 +349,9 @@ void func_00299020(void) {
  * spelling the pending-flag word as g_gameStateFlags at size 12 (func_00299178,
  * func_00299238, func_002992E8, func_00299478, func_002994B0, func_002995E0,
  * func_002998D0, func_00299918), plus func_00299348 with its flag read moved
- * after the busy test, and func_00299758 with its 0x15-branch stores reordered.
- * func_00299040, func_00299568 and UpdateSaveTaskState are still asm, each
- * with its own residue recorded at the function. */
+ * after the busy test, and func_00299758 and func_00299568 with their branch stores reordered.
+ * func_00299040 and UpdateSaveTaskState are still asm, each with its own
+ * residue recorded at the function. */
 /** Save/load top-level status arbiter. Always consumes the pending-flag's 0x2
  *  and 0x4 bits first. Then: if no save is pending (areaTable/dirty +0x17C == 0)
  *  -> status 3. Otherwise route the original flags: bit 0x80 (or secondary-path
@@ -663,29 +663,28 @@ void func_00299528(void) {
  *  show status 0x12 and set the pending-flag's 0x40 bit; otherwise commit
  *  result 7 / subResult 0, show status 0x16, and reset the transaction
  *  (unk148 + slot cleared).
- *  (Walled for matching by the reload-artifact named in the file header.) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299568);
-#else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 81.86% -> DSLOT-GPREL, first differing row @18: ROM `(nothing)` vs `lui at, %hi(g_nSaveLoadStatusCode+0x4)`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 78.14% -> ADDR-BASEREG, first differing row @1: ROM `addiu a0, zero, 0x2` vs `addiu a0, v0, %lo(D_1393E0)`. */
+ *  Byte-exact on sdk29 (-O2 -G8 -fno-gcse, task #888). It needs two things:
+ *  the flag word spelled g_gameStateFlags (see its declaration), and this
+ *  statement order in the else branch. cc1 2.9's scheduler emits the five
+ *  stores in an order that depends on the source order. The committed order is
+ *  one of 2 found closing among the first 77 of the 120 orders tried solo; the
+ *  documented order reads 85.86% (unit objdiff). The reload-artifact wall this
+ *  comment used to name was KNOWN-FALSE for it. */
 void func_00299568(void) {
     if (D_1393E0.mode != 2 || D_1393E0.result >= 0) {
         return;
     }
     if (D_1393E0.unk16C != 0) {
         g_nSaveLoadStatusCode[0] = 0x12;
-        g_nSaveLoadStatusCode[1] |= 0x40;
+        g_gameStateFlags |= 0x40;
     } else {
         D_1393E0.result = 7;
-        D_1393E0.subResult = 0;
-        g_nSaveLoadStatusCode[0] = 0x16;
         D_1393E0.unk148 = 0;
         D_1393E0.slot = 0;
+        D_1393E0.subResult = 0;
+        g_nSaveLoadStatusCode[0] = 0x16;
     }
 }
-#endif
 
 /** Save/load status: first consume the pending-flag's 0x4 and 0x2 bits if set.
  *  Then route on the remaining flags: bit 0x80 -> status 0x15 (consume 0x80, set
