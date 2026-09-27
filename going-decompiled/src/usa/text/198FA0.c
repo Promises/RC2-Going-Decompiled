@@ -348,9 +348,10 @@ void func_00299020(void) {
  * func_002992B8, func_002993D8) are compiled C. Task #888 closed eight more by
  * spelling the pending-flag word as g_gameStateFlags at size 12 (func_00299178,
  * func_00299238, func_002992E8, func_00299478, func_002994B0, func_002995E0,
- * func_002998D0, func_00299918). func_00299040, func_00299348, func_00299568,
- * func_00299758 and UpdateSaveTaskState are still asm, each with its own
- * residue recorded at the function. */
+ * func_002998D0, func_00299918), plus func_00299348 with its flag read moved
+ * after the busy test. func_00299040, func_00299568, func_00299758 and
+ * UpdateSaveTaskState are still asm, each with its own residue recorded at
+ * the function. */
 /** Save/load top-level status arbiter. Always consumes the pending-flag's 0x2
  *  and 0x4 bits first. Then: if no save is pending (areaTable/dirty +0x17C == 0)
  *  -> status 3. Otherwise route the original flags: bit 0x80 (or secondary-path
@@ -535,29 +536,28 @@ void func_002992E8(void) {
     }
 }
 
-/** Load-prompt step: if no transaction is active (busy==0) dispatch on the
- *  pending-flag word: bits 0x6 -> status 0xA; else bit 0x200 -> status 0x19.
- *  If a transaction is active (busy != 0) show status 3 (idle).
- *  (Walled by the reload-artifact named in the file header.) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299348);
-#else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 58.95% -> DSLOT-GPREL, first differing row @0: ROM `lui v0, %hi(D_1393F0)` vs `lui v1, %hi(D_1393F0)`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 70.79% -> ADDR-BASEREG, first differing row @1: ROM `(nothing)` vs `lui a1, %hi(g_nSaveLoadStatusCode+0x4)`. */
+/** Load-prompt step: if a transaction is active (busy != 0) show status 3
+ *  (idle). Otherwise dispatch on the pending-flag word: bits 0x6 -> status
+ *  0xA; else bit 0x200 -> status 0x19.
+ *  Byte-exact on sdk29 (-O2 -G8 -fno-gcse, task #888). It needs two things:
+ *  the flag word spelled g_gameStateFlags (see its declaration), and the flag
+ *  read placed AFTER the busy test. Reading it into a local first gives the
+ *  same instructions with $v0/$v1/$a0 coloured differently (98.16%, unit
+ *  objdiff). The reload-artifact wall this comment used to name was KNOWN-FALSE
+ *  for it. */
 void func_00299348(void) {
-    s32 flags = g_nSaveLoadStatusCode[1];
+    s32 flags;
     if (D_1393F0[0] != 0) {
         g_nSaveLoadStatusCode[0] = 3;
         return;
     }
+    flags = g_gameStateFlags;
     if (flags & 0x6) {
         g_nSaveLoadStatusCode[0] = 0xA;
     } else if (flags & 0x200) {
         g_nSaveLoadStatusCode[0] = 0x19;
     }
 }
-#endif
 
 /** If a card transaction finished selecting (mode 2) with no result yet
  *  (result < 0), force result 7 and show popup status 0xB. Mirror of
