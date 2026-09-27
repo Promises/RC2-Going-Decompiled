@@ -563,55 +563,117 @@ void func_002F5F70(u16 *list, u16 *listEnd, s32 selector) {
 }
 #endif
 
-/* Per-frame reset of the FX / draw-hook queue counters. Zeroes all five hook
- * counts (pre/post/late particle + after-ties/after-shrubs draw) and the blob
- * shadow count. Then, only while the player is in Clank-solo mode
- * (g_bPlayerMode == 1) and not in a pad-suppressed / menu-overlay state
- * (D_138320 bit 0x10 clear, and neither the committed nor pending top-level
- * state is the in-game pause overlay 4), clears HUD CLUT slot halfwords
- * [+4,+6,+8,+0xA,+0xC].
- *
- * NOT byte-matched: the original TU reaches g_nGameState / g_nGameStatePending
- * with %gp_rel HERE, but func_002F6B68 (already matched) reaches the SAME two
- * symbols with absolute %hi/%lo - one symbol, two addressings in one TU (the
- * reload artifact). Sizing them to match func_002F6B68 forces this read
- * absolute, so the encodings here diverge. Body is otherwise
- * instruction-identical; kept as the portable #else impl. */
+/* ROM-split externs (the 1CA080.c construct): the ROM reaches g_bPlayerMode and
+ * D_138320 through a compiler-split lui/%lo pair with the high half in its own
+ * register, which cc1 only emits for an object outside its -G8 small-data
+ * class. Declarations only. Empty on TARGET_NATIVE: Mach-O rejects a section
+ * name without a segment. */
+#ifndef TARGET_NATIVE
+#define ROM_SPLIT __attribute__((section(".data")))
+#else
+#define ROM_SPLIT
+#endif
 extern s32 g_fxHooksPreCount;            /* 0x1B1588 */
 extern s32 g_fxHooksPostCount;           /* 0x1B158C */
 extern s32 g_fxHooksLateCount;           /* 0x1B15B8 */
 extern s32 g_drawHooksAfterTiesCount;    /* 0x1B1590 */
 extern s32 g_drawHooksAfterShrubsCount;  /* 0x1B1594 */
 extern s32 g_blobShadowCount;            /* 0x1B15BC gp_rel */
-extern u8  g_bPlayerMode;                /* 0x18C0D4 0=Ratchet 1=Clank-solo 2=Giant */
-extern u32 D_138320;                     /* 0x138320 pad/input state word */
+extern u8  g_bPlayerMode ROM_SPLIT;      /* 0x18C0D4 0=Ratchet 1=Clank-solo 2=Giant */
+extern u32 D_138320 ROM_SPLIT;           /* 0x138320 pad/input state word */
 extern s16 g_hudClutSlots[];             /* 0x1B1818 HUD CLUT slot table */
 
-/* RESIDUAL CLASS (task #576): GPREL-MISMATCH-INSUFFICIENT -- g_nGameState + g_nGameStatePending; per-arm size 4 measured 46.89 -> 55.81 on engine96, still DIFFERS
- *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
- *   whole-unit blanket screen, clean tree): sdk29 46.89%, engine96 46.89%
- *   (better arm: tie). Neither reaches 100.00%, so this stays INCLUDE_ASM
- *   and the #else below remains the portable impl.
- *   addressing is A residual but NOT the only one -- measured, not assumed: */
+/* Addressing, per symbol, as the ROM has it (FACT #7697):
+ *  - the five hook counters are absolute (lui $at + store). ResetFxDrawQueues
+ *    is their only reader in this TU, so they are sized 16 file-wide.
+ *  - g_nGameState / g_nGameStatePending are %gp_rel here, but the file-scope
+ *    `.extern ..., 16` above keeps func_002F6B68's accesses absolute. These two
+ *    reads therefore go through ASSEMBLER aliases sized 4, equated BEFORE use
+ *    (the g_mobyTableBaseGp construct in 188858.c): gas resolves the equate at
+ *    the use and addresses it off $gp. The relocation names the real symbol.
+ *  - the five g_hudClutSlots halfwords each get their own `lui $at` + `sh`, so
+ *    the original named five objects rather than indexing an array (an array
+ *    hoists one base register). They go through five aliases sized 16 whose
+ *    equates are emitted AFTER the function: gas cannot resolve an equate that
+ *    is not yet defined, so it takes the alias's own 16 and expands absolute.
+ *    Equated before use instead, gas resolves g_hudClutSlots+N and picks
+ *    %gp_rel for N < 8 (+4/+6/+8 measured gp_rel, +0xA/+0xC absolute).
+ *    The C type is s16 so cc1 keeps the one-instruction store macro. The
+ *    relocations name g_hudClutSlots+N, as the ROM's do, so no symbol_addrs
+ *    entry and no re-split of 0x1B181C..0x1B1825 is needed. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", ResetFxDrawQueues);
+__asm__(".extern g_fxHooksPreCount, 16");
+__asm__(".extern g_fxHooksPostCount, 16");
+__asm__(".extern g_fxHooksLateCount, 16");
+__asm__(".extern g_drawHooksAfterTiesCount, 16");
+__asm__(".extern g_drawHooksAfterShrubsCount, 16");
+__asm__(".extern g_nGameStateGp, 4\n\tg_nGameStateGp = g_nGameState");
+__asm__(".extern g_nGameStatePendingGp, 4\n\tg_nGameStatePendingGp = g_nGameStatePending");
+__asm__(".extern g_hudClutSlot4Abs, 16");
+__asm__(".extern g_hudClutSlot6Abs, 16");
+__asm__(".extern g_hudClutSlot8Abs, 16");
+__asm__(".extern g_hudClutSlotAAbs, 16");
+__asm__(".extern g_hudClutSlotCAbs, 16");
+extern s32 g_nGameStateGp;
+extern s32 g_nGameStatePendingGp;
+extern s16 g_hudClutSlot4Abs;
+extern s16 g_hudClutSlot6Abs;
+extern s16 g_hudClutSlot8Abs;
+extern s16 g_hudClutSlotAAbs;
+extern s16 g_hudClutSlotCAbs;
 #else
+#define g_nGameStateGp g_nGameState
+#define g_nGameStatePendingGp g_nGameStatePending
+#define g_hudClutSlot4Abs (g_hudClutSlots[2])
+#define g_hudClutSlot6Abs (g_hudClutSlots[3])
+#define g_hudClutSlot8Abs (g_hudClutSlots[4])
+#define g_hudClutSlotAAbs (g_hudClutSlots[5])
+#define g_hudClutSlotCAbs (g_hudClutSlots[6])
+#endif
+
+/*
+ * ResetFxDrawQueues - per-frame reset of the FX / draw-hook queue counters.
+ *
+ * Zeroes all five hook counts (pre/post/late particle + after-ties/after-shrubs
+ * draw) and the blob shadow count. Then, only while the player is in Clank-solo
+ * mode (g_bPlayerMode == 1) and not in a pad-suppressed / menu-overlay state
+ * (D_138320 bit 0x10 clear, and neither the committed nor the pending top-level
+ * state is the in-game pause overlay 4), clears the HUD CLUT slot halfwords at
+ * g_hudClutSlots +0x4, +0x6, +0x8, +0xA and +0xC.
+ *
+ * Takes and returns nothing.
+ *
+ * BYTE-EXACT on the sdk29 arm (cc1 2.9-ee-991111, -O2 -G8 -fno-gcse), task #865.
+ * Codegen notes: g_bPlayerMode is read into a local BEFORE the counter stores,
+ * which gives the ROM's first block (lui, store, lbu $4, li $3,1). cc1 2.96
+ * (engine96 arm) issues the li in the first cycle instead and does not match.
+ * The addressing is carried by the declarations above.
+ */
 void ResetFxDrawQueues(void) {
+    u8 mode = g_bPlayerMode;
+
     g_fxHooksPreCount = 0;
     g_drawHooksAfterTiesCount = 0;
     g_drawHooksAfterShrubsCount = 0;
     g_fxHooksPostCount = 0;
     g_fxHooksLateCount = 0;
     g_blobShadowCount = 0;
-    if (g_bPlayerMode == 1 && !(D_138320 & 0x10) &&
-        g_nGameState != 4 && g_nGameStatePending != 4) {
-        g_hudClutSlots[2] = 0;  /* +0x4 */
-        g_hudClutSlots[3] = 0;  /* +0x6 */
-        g_hudClutSlots[4] = 0;  /* +0x8 */
-        g_hudClutSlots[5] = 0;  /* +0xA */
-        g_hudClutSlots[6] = 0;  /* +0xC */
+    if (mode == 1 && !(D_138320 & 0x10) &&
+        g_nGameStateGp != 4 && g_nGameStatePendingGp != 4) {
+        g_hudClutSlot4Abs = 0;
+        g_hudClutSlot6Abs = 0;
+        g_hudClutSlot8Abs = 0;
+        g_hudClutSlotAAbs = 0;
+        g_hudClutSlotCAbs = 0;
     }
 }
+
+#ifndef TARGET_NATIVE
+__asm__("g_hudClutSlot4Abs = g_hudClutSlots + 0x4");
+__asm__("g_hudClutSlot6Abs = g_hudClutSlots + 0x6");
+__asm__("g_hudClutSlot8Abs = g_hudClutSlots + 0x8");
+__asm__("g_hudClutSlotAAbs = g_hudClutSlots + 0xA");
+__asm__("g_hudClutSlotCAbs = g_hudClutSlots + 0xC");
 #endif
 
 /* func_002F6110 globals (declared for the TARGET_NATIVE #else only; all resolve
