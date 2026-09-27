@@ -848,15 +848,32 @@ extern u8 g_listenerPosHistory[];    /* 0x188660 listener pos ring + flags */
  *   barrier at the start of the body (93.33), a sized array (97.04), sched1 ON
  *   (96.30, diagnostic only). sched2 OFF gives 57.04, so sched2 is what
  *   places it.
- *   WALL under 2.96-001003 (task #807, from its -fsched-verbose=6 -dR dump):
- *   sched2 issues two insns per cycle, and the anti dependence of `move sN,aN`
- *   on `sd sN` costs 0, so each move is freed onto the top of the ready list
- *   and issued right after its sd, ahead of the higher-priority addiu. The
- *   ROM's order needs each move to wait one cycle. cc1 2.9 does that (it
- *   issues one insn per cycle) and gives the ROM's lagged order, but with
- *   16-byte save slots. No C spelling changes that dependence: unsigned
- *   params, a u8 temp, local copies of the params and a local pointer all
- *   give the same prologue. */
+ *   WALL under 2.96-001003 sched2 (tasks #807/#810/#817, read from the
+ *   -fsched-verbose=6 -dR dump at diff96.sh's flags): sched2 issues two insns
+ *   per cycle (memory + alu), and the anti dependence of `move sN,aN` on
+ *   `sd sN` costs 0 (the move goes `into ready`, not `into queue with cost`).
+ *   Each move is issued in the same cycle as its sd, ahead of the addiu that
+ *   is already on the ready list with priority 15 against the move's 10. So
+ *   insertion order decides here, not priority, and the other ready alu insns
+ *   do not help. That the freed insn is put at the top of the list without a
+ *   re-sort is read from this behaviour, not from gcc source. The ROM's order
+ *   needs each move to wait one cycle.
+ *   2.9-991111 sched2, at this unit's flags (-O2 -G8 -fno-gcse, sched1 on),
+ *   is NOT different in issue width or in cost: it also issues two insns per
+ *   cycle and also frees each move `into ready` at cost 0. What differs is
+ *   the pick. 2.9 never issues the move in the cycle that frees it. The
+ *   second slot goes to an insn already on the list at the start of the
+ *   cycle: the addiu (priority 23 against 20) in the first save cycle, then the
+ *   move freed one cycle earlier. That is the ROM's lagged pattern
+ *   (`sd; addiu; sd; move`). 2.9 still misses the ROM in the layout: a
+ *   96-byte frame with 16-byte save slots, and saves in reverse order
+ *   (s4 first). Its param->sN mapping is the ROM's (s0<-a0 .. s4<-a4) at
+ *   these flags. Only at -G0 with sched1 on does the mapping differ too.
+ *   Under 2.96, the six C spellings tried all give the same prologue:
+ *   unsigned params, a u8 temp, local copies of the params and a local
+ *   pointer (#807), and register-asm pins plus a u8 * read-modify-write
+ *   (#810). "No C lever" is argued from the dependence graph. Nobody has
+ *   enumerated the spellings. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6C78);
 #else
