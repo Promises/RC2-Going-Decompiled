@@ -158,7 +158,10 @@ fi
 #    it never compares the ROM against those words. If a real instruction was
 #    zeroed next to a nop pair, it reads BYTE IDENTICAL with a SHORT word count
 #    (FACT #7936: a zeroed `andi` gave rc 0, 9/9 on a 12-word function). A
-#    LEADING run moves `unit_off` and gives a false DIFFERS instead (FACT #6381).
+#    LEADING run moves `unit_off` (`unit_off = words[0][0]` below is the first
+#    PRINTED word) and gives a false DIFFERS instead (doc #6381,
+#    `verify-match-unit-zero-run-elision-blindspot`; read it with cv_doc_get,
+#    because cv_fact_get 6381 returns an unrelated post).
 #    Check: `N/N words` must equal splat's `nonmatching <fn>, 0x<size>` / 4.
 #    Adding `-z` here is HUMAN-ONLY (fleet-control/19734). It is NOT applied.
 #
@@ -166,12 +169,17 @@ fi
 #    ROM vaddr from symbol_addrs, plus its offset from the start of its own
 #    block. The function's position in the built unit is never used. So if a
 #    promotion drops post-`endlabel` pad words (FACT #7982) and every later
-#    function lands 8 bytes low, every function still reads BYTE IDENTICAL.
+#    function lands 8 bytes low, no function's verdict changes.
 #    `-z` would NOT fix this: the dropped words are not in the base object at
 #    all, so there is nothing for it to stop eliding. Measured at task #765 on
 #    text/191238 with the pad removed (.text 0x7d68 -> 0x7d60):
 #    StartFrontendSegmentLoad 32/32 and MapGetLevelOrderIndex (0x5008 -> 0x5000)
-#    28/28 both read BYTE IDENTICAL. Only a unit-level check sees this:
+#    28/28 both read BYTE IDENTICAL. Task #780 swept all 16 real-C functions of
+#    the unit: verdicts are the same with and without the pad (FACT #8082).
+#    The exception to "BYTE IDENTICAL" is StreamSceneSegment, which reads DIFFERS
+#    1/34 at 0x29455c both ways. That is not a pad effect. It is this tool's
+#    HI16 carry bug (FACT #8027: the paired LO16 addend is dropped, so the lui
+#    immediate comes out 1 low). Only a unit-level check sees the pad drop:
 #    tools/ee/text_size_check.sh (same seed: off 56, rc 1; master: off 0,
 #    rc 0) or the whole-image cmp in landing_gate.sh.
 DIS_FILE="$(mktemp -t verify_match_unit)"
