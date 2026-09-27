@@ -21,6 +21,8 @@ options:
   undefined_syms_auto_path: going-decompiled/build/usa/undefined_syms_auto.txt
 
   ld_script_path: going-decompiled/linker_scripts/SCUS_972.68.ld
+  # libgcc.a built from going-decompiled/libgcc/ by tools/ee/build_libgcc.sh
+  lib_path: going-decompiled/build/usa/lib
   ld_dependencies: True
   ld_wildcard_sections: True
   ld_bss_contains_common: True
@@ -74,6 +76,9 @@ segments:
     # mips-linux-gnu-as stamps 16, and a text/cod unit whose size is 8 mod 16
     # (19 of USA's 40) slides every later unit +8 at 16 (#400, #405).
     subalign: 8
+    # The SN linker filled inter-object alignment gaps with 0xCDCDCDCD. Needed
+    # since the libgcc carve (#879) leaves a real gap at 0x120354.
+    ld_fill_value: 0xCDCDCDCD
     subsegments:
       - [0x000000, textbin, cod/000000] # .vutext
       # SND SUB-TU CARVE (2026-06-10): the 989snd/CD-bridge cluster
@@ -87,11 +92,27 @@ segments:
       # cod/033970 (0x1339F0..0x133B7F: func_001339F0, CdReadSync,
       # LoadDiscToc, LoadLevelToc) stays at -G0. fileoff -> vaddr is the
       # constant +0x100080 delta.
-      - [0x015180, c, cod/015180] # core.text head (0x115200..0x13221F)
+      # LIBGCC CARVE (task #879, RULING #8206, PROCEDURE #8224 phase 1): the
+      # libgcc.a members __divdi3 (_divdi3.o, 0x11FC68..0x120354) and __muldi3
+      # (_muldi3.o, 0x121AB8..0x121B18) are LINKED from the verbatim GCC source
+      # in going-decompiled/libgcc/ (built by tools/ee/build_libgcc.sh), never
+      # transcribed into a game .c. The C units around them are the old
+      # cod/015180 cut at the members' object boundaries, all 8-aligned as
+      # SUBALIGN(8) requires. The ROM's 4-byte pad at 0x120354 (after _divdi3.o)
+      # is the SN linker's 0xCDCDCDCD fill, reproduced by this segment's
+      # ld_fill_value (measured: FILL 0xCDCDCDCD on the uncarved master was
+      # cmp 0, so no earlier gap depends on the fill).
+      - [0x015180, c, cod/015180] # core.text head (0x115200..0x11FC67)
+      - [0x01FBE8, lib, libgcc, _divdi3] # libgcc.a _divdi3.o .text (0x11FC68..0x120353), pad 0x120354
+      - [0x0202D8, c, cod/0202D8] # core.text: libgcc _eh.o _fixunsdfdi.o _floatdidf.o _moddi3.o as asm/C (0x120358..0x121AB7)
+      - [0x021A38, lib, libgcc, _muldi3] # libgcc.a _muldi3.o .text (0x121AB8..0x121B17)
+      - [0x021A98, c, cod/021A98] # core.text: libgcc _pure.o.. frame.o, then libsn/SDK (0x121B18..0x13221F)
       - [0x0321A0, c, cod/0321A0] # snd sub-TU, built at -G8 (0x132220..0x1339EF)
       - [0x033970, c, cod/033970] # core.text tail (0x1339F0..0x133B7F)
       - [0x033B00, data, cod/033B00] # core.data
       - [0x03A180, rodata, cod/03A180] # core.rdata
+      - [0x03ABD8, lib, libgcc, _divdi3, .rodata] # libgcc.a _divdi3.o .rodata (__clz_tab, 0x13AC58..0x13AD57)
+      - [0x03ACD8, rodata, cod/03ACD8] # core.rdata (0x13AD58..)
       # ROM-anchor the bss at 0x3C000 (= vram 0x13C080) so splat BOUNDS the rodata
       # there instead of over-extending it across the bss region to the next
       # ROM-backed subsegment (core.lit @ 0xA7400). Without this anchor the rodata

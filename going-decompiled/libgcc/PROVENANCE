@@ -1,0 +1,71 @@
+libgcc — GCC's own runtime source, linked into the game as a library
+=====================================================================
+
+Why this directory exists
+-------------------------
+Some of the game binary is GCC's runtime library (libgcc.a), linked in by the
+original toolchain. That code is GCC source under the GNU GPL, and its runtime
+exception covers LINKING a compiled library into a program, not copying its
+source text into this project's own .c files. So it lives here, verbatim and
+under its own licence, and the build compiles it and links it as a library
+(operator decision, claudiverse RULING #8206; design: PROCEDURE #8224; member
+list by address: NOTE #8217). It is never transcribed into a game .c file.
+
+Nothing in the GCC files below is edited. If a member's verbatim source does
+not compile to the ROM's bytes, that member stays INCLUDE_ASM in its game unit;
+the source is never changed to make it match.
+
+Files taken from GCC (unmodified)
+---------------------------------
+Upstream: the GCC repository, via its GitHub mirror
+  https://raw.githubusercontent.com/gcc-mirror/gcc/<revision>/<path>
+Revision: bf279c4e1a96684c650fcbf34db4b78b2b94dce6 (trunk, 1999-11-02), the
+  last revision before the 2.9-ee-991111 snapshot the game's SDK compiler was
+  built from.
+
+  file        upstream path    sha1
+  libgcc2.c   gcc/libgcc2.c    df72c899e710ef83b5cc9f641a437fd29174c5c9
+  longlong.h  gcc/longlong.h   031fdc4d962a7a24c6e015d869bd280c8c4e3fc9
+  COPYING     gcc/COPYING      74a8a6531a42e124df07ab5599aad63870fa0bd4
+
+Re-derive: curl -sSf <upstream URL> | shasum   — each must print the sha1 above,
+and `cmp` against the file here must be silent.
+
+Licences, as found in the files
+-------------------------------
+- libgcc2.c: GPL version 2 or later, PLUS the libgcc special exception ("if you
+  link this library with other files, some of which are compiled with GCC, to
+  produce an executable, this library does not by itself cause the resulting
+  executable to be covered by the GNU General Public License").
+- longlong.h: GPL version 2 or later. At this revision its header carries NO
+  exception text of its own. libgcc2.c includes it, so it is compiled into
+  every libgcc2 member. What that means for the linking exception is recorded
+  as an open question for the project owner, not decided here.
+- COPYING: the GNU General Public License, version 2, from the same revision.
+
+Project-written files (NOT GCC source)
+--------------------------------------
+- shim/tconfig.h, shim/machmode.h, shim/defaults.h, shim/stddef.h: stand-ins
+  for the headers libgcc2.c reads from a GCC build tree, which does not exist
+  here. Each says so in its first line. They carry target facts only
+  (mips/R5900, little-endian, 32-bit size_t).
+- MEMBERS: which archive members are built, from which file, with GCC's own
+  module selection (-DFINE_GRAINED_LIBRARIES -DL_<module>).
+- PROVENANCE: this file.
+
+How it is built and linked
+--------------------------
+tools/ee/build_libgcc.sh <region> (called by tools/ee/build.sh) builds each
+member the region's linker script names — a splat `lib` subsegment,
+`libgcc.a:<member>.o` in going-decompiled/config/<region>/*.yaml — with the
+SDK's own compiler, 2.9-ee-991111 cpp.exe + cc1.exe at -O2 -G0, and archives
+them into going-decompiled/build/<region>/lib/libgcc.a. The ee-gcc driver
+segfaults under wibo, so its predefines are passed by hand; the cc1 output goes
+through tools/ee/move_fixup.sed like every unit's (an assembler-input rewrite,
+not a source edit).
+
+Members linked today (USA): _divdi3 (__divdi3 at 0x11FC68, __clz_tab at
+0x13AC58) and _muldi3 (__muldi3 at 0x121AB8). Each was checked against the
+SDK's own libgcc.a member (tools/ee/cc/lib/gcc-lib/ee/2.95.2/libgcc.a, used
+only as an identity oracle, never linked): .text, .rodata and .data bytes and
+the relocation lists are identical. The whole-image check is landing_gate.sh.

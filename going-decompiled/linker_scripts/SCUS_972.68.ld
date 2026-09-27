@@ -6,10 +6,14 @@ SECTIONS
     cod_VRAM = ADDR(.cod);
     .cod 0x100080 : AT(cod_ROM_START) SUBALIGN(8)
     {
-        FILL(0x00000000);
+        FILL(0xCDCDCDCD);
         cod_TEXT_START = .;
         going-decompiled/build/usa/going-decompiled/asm/usa/data/cod/000000.o(.text*);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/015180.o(.text*);
+        going-decompiled/build/usa/lib/libgcc.a:_divdi3.o(.text*);
+        going-decompiled/build/usa/going-decompiled/src/usa/cod/0202D8.o(.text*);
+        going-decompiled/build/usa/lib/libgcc.a:_muldi3.o(.text*);
+        going-decompiled/build/usa/going-decompiled/src/usa/cod/021A98.o(.text*);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/0321A0.o(.text*);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/033970.o(.text*);
         . = ALIGN(., 16);
@@ -18,6 +22,8 @@ SECTIONS
         cod_DATA_START = .;
         going-decompiled/build/usa/going-decompiled/asm/usa/data/cod/000000.o(.data*);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/015180.o(.data*);
+        going-decompiled/build/usa/going-decompiled/src/usa/cod/0202D8.o(.data*);
+        going-decompiled/build/usa/going-decompiled/src/usa/cod/021A98.o(.data*);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/0321A0.o(.data*);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/033970.o(.data*);
         going-decompiled/build/usa/going-decompiled/asm/usa/data/cod/033B00.data.o(.data*);
@@ -26,6 +32,8 @@ SECTIONS
         cod_DATA_SIZE = ABSOLUTE(cod_DATA_END - cod_DATA_START);
         cod_RODATA_START = .;
         going-decompiled/build/usa/going-decompiled/asm/usa/data/cod/03A180.rodata.o(.rodata*);
+        going-decompiled/build/usa/lib/libgcc.a:_divdi3.o(.rodata*);
+        going-decompiled/build/usa/going-decompiled/asm/usa/data/cod/03ACD8.rodata.o(.rodata*);
         . = ALIGN(., 16);
         cod_RODATA_END = .;
         cod_RODATA_SIZE = ABSOLUTE(cod_RODATA_END - cod_RODATA_START);
@@ -33,10 +41,12 @@ SECTIONS
     cod_bss_VRAM = ADDR(.cod_bss);
     .cod_bss (NOLOAD) : SUBALIGN(8)
     {
-        FILL(0x00000000);
+        FILL(0xCDCDCDCD);
         cod_BSS_START = .;
         going-decompiled/build/usa/going-decompiled/asm/usa/data/cod/000000.o(.bss COMMON .scommon);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/015180.o(.bss COMMON .scommon);
+        going-decompiled/build/usa/going-decompiled/src/usa/cod/0202D8.o(.bss COMMON .scommon);
+        going-decompiled/build/usa/going-decompiled/src/usa/cod/021A98.o(.bss COMMON .scommon);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/0321A0.o(.bss COMMON .scommon);
         going-decompiled/build/usa/going-decompiled/src/usa/cod/033970.o(.bss COMMON .scommon);
         going-decompiled/build/usa/going-decompiled/asm/usa/data/cod/0013C080.bss.o(.bss COMMON .scommon);

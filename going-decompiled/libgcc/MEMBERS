@@ -1,0 +1,8 @@
+# libgcc.a members built from the verbatim GCC source in this directory.
+# One row per archive member: <member> <source file> <cpp defines...>
+# tools/ee/build_libgcc.sh builds the members a region's linker script names
+# (a splat `lib` subsegment, `libgcc.a:<member>.o`) from these rows, and fails
+# on a named member with no row here. Rows are exactly GCC's own module
+# selection (FINE_GRAINED_LIBRARIES + L_<module>), never a source edit.
+_divdi3  libgcc2.c  -DIN_LIBGCC2 -DFINE_GRAINED_LIBRARIES -DL_divdi3
+_muldi3  libgcc2.c  -DIN_LIBGCC2 -DFINE_GRAINED_LIBRARIES -DL_muldi3

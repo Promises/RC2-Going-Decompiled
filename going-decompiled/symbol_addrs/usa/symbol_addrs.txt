@@ -15,6 +15,7 @@ e_sqrt = 0x001310C0; // libm.a __ieee754_sqrt (verbatim, full 193w-verified vs e
 // emits a clean per-function .s. (The matching INCLUDE_ASM/C lives in
 // src/usa/cod/015180.c.)
 func_0011E740 = 0x0011E740; // type:func size:0x60
+func_00115E68 = 0x00115E68; // type:func (real prologue - its only jal caller GsDefDispEnvNeedsOffsetFix moved into the cod/021A98 unit with the libgcc carve of task #879, so without this pin spimdisasm no longer auto-detects the start and the preceding AssertFail absorbs the body)
 sceSifInitIopHeap = 0x0011E7A0; // type:func
 func_001253A8 = 0x001253A8; // type:func (real prologue - its sole same-unit jal caller CdStartRead moved into the cod/0321A0 sub-TU with the snd carve, so without this pin spimdisasm no longer auto-detects the start and the preceding 0xCDCDCDCD fill word func_001253A4 absorbs the body. Do NOT pin func_001253A4 itself or give either symbol an explicit byte-size attr - both demote the rest of the unit to a raw word dump. CAUTION - splat scrapes attr tokens out of comment prose too, never quote an attr literally in a comment. The lone fill word splits off correctly on its own once this start is pinned.)
 func_00127218 = 0x00127218; // type:func size:0x8

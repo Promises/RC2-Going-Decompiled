@@ -145,6 +145,11 @@ if [ -d "$SRC" ]; then
   echo "   compiled $m c units"
 fi
 
+# 3) libgcc.a: the members the .ld links as splat `lib` subsegments, built from
+#    GCC's own verbatim source in going-decompiled/libgcc/ (RULING #8206). A
+#    region whose .ld names none (EU today) builds nothing and links as before.
+sh tools/ee/build_libgcc.sh "$REGION"
+
 echo "== [$REGION] linking with $LD =="
 SYMS="$BUILD/undefined_syms_auto.txt"
 # Blanket-define every D_<hex> symbol to its absolute address (spimdisasm names
@@ -171,13 +176,33 @@ grep -rhoE '%(hi|lo)\(\.L[0-9A-Fa-f]+\)|\.word[[:space:]]+\.L[0-9A-Fa-f]+' "$ASM
 grep -rhoE '[[:space:],]\.L[0-9A-Fa-f]{6,8}([[:space:]]|$)' "$ASM" \
   | grep -oE '\.L[0-9A-Fa-f]+' | sort -u \
   | sed -E 's/^\.L([0-9A-Fa-f]+)$/.L\1 = 0x\1;/' >> "$ALLSYMS"
+# libgcc.a (step 3): the archive the .ld's `libgcc.a:<member>.o(...)` lines pick
+# sections from. An `archive:member` pattern only matches an archive that is an
+# input, so it is INPUT here, and EXTERN makes each member's global symbols
+# undefined up front so the member is pulled out of the archive whatever
+# references it. Written into this file, not onto the ld command line, so every
+# relink of it (landing_gate.sh's PROVIDE check) links the same library.
+LIBGCC="$BUILD/lib/libgcc.a"
+LIBSYMS=""
+if [ -f "$LIBGCC" ]; then
+  for m in $(cat "$BUILD/lib/members.txt"); do
+    LIBSYMS="$LIBSYMS $(mips-linux-gnu-nm -g --defined-only "$BUILD/lib/$m.o" | awk '{print $3}')"
+  done
+  echo "INPUT($LIBGCC)" >> "$ALLSYMS"
+  for sym in $LIBSYMS; do echo "EXTERN($sym);" >> "$ALLSYMS"; done
+fi
 # Track-B NAMED symbols (snd_PrintError, AssertFail, Mc*, WrapAngle*, rand, ...)
 # from symbol_addrs: matched C calls these by name, but they are not address-named
 # so the blanket misses them. PROVIDE name=addr (first-wins/only-if-undefined, so
 # it never clashes with a real definition). Mirrors run_state_suite.sh.
 SYMADDR="going-decompiled/symbol_addrs/$REGION/symbol_addrs.txt"
-[ -f "$SYMADDR" ] && sed -nE 's@^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=[[:space:]]*(0x[0-9A-Fa-f]+).*@PROVIDE(\1 = \2);@p' "$SYMADDR" >> "$ALLSYMS"
-echo "   defined $(wc -l < "$ALLSYMS") address symbols (D_/func_/jtbl_ + symbol_addrs PROVIDE)"
+# A library-defined name gets NO PROVIDE: ld resolves a PROVIDE before it
+# searches the archive, so a PROVIDE(__divdi3 = 0x11FC68) left the member
+# unextracted and the lib's .text/.rodata placed nothing (measured, task #879).
+LIBSYMS_RE=$(printf '%s\n' $LIBSYMS | sed '/^$/d' | paste -sd'|' -)
+[ -f "$SYMADDR" ] && sed -nE 's@^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=[[:space:]]*(0x[0-9A-Fa-f]+).*@PROVIDE(\1 = \2);@p' "$SYMADDR" \
+  | { if [ -n "$LIBSYMS_RE" ]; then grep -v -E "^PROVIDE\(($LIBSYMS_RE) = "; else cat; fi; } >> "$ALLSYMS"
+echo "   defined $(wc -l < "$ALLSYMS") address symbols (D_/func_/jtbl_ + symbol_addrs PROVIDE + libgcc INPUT/EXTERN)"
 # FAIL-LOUD: clear stale link outputs so a failed/partial link can NEVER be
 # mistaken for a fresh success (the `|| {…}` below only REPORTS ld errors; the
 # `[ -f "$ELFLMA" ]` gate then operates on a guaranteed-fresh file).
