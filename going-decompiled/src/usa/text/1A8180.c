@@ -2592,32 +2592,38 @@ f32 func_002AB150(f32 target, f32 rate, f32 *p) {
 }
 
 /**
- * Integer approach-by-rate step (int twin of func_002AB150): move *p toward
- * target by at most rate, store it back, and return the remaining signed
- * delta mapped to a float through func_002835E0.
+ * func_002AB1A8 — integer approach-by-rate step (the int twin of
+ * func_002AB150).
+ *
+ * Params: p — the stored value, stepped in place toward `target`.
+ *         target — the value to approach.
+ *         rate — the largest step allowed in either direction.
+ * Returns the remaining signed distance (target - *p after the step), converted
+ * to float by func_002835E0.
+ *
+ * MATCHED on the sdk29 arm (plain C; unit objdiff report via objdiff_build.sh +
+ * unit_report.sh, 100.00%; task #758). The lower bound -rate lives in its own
+ * local: the ROM negates it into a spare register in the plain `beq` delay
+ * slot, so `rate` survives for the upper-bound arm. Writing `rate = -rate`
+ * instead reuses rate's register, which forces a branch-likely (`beql`) and
+ * shifts the whole allocation [94.57].
  */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 85.00%
-   -> UNKNOWN-@1: ROM `daddu t0,a0,zero` vs `daddu a3,a0,zero` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB1A8);
-#else
 f32 func_002AB1A8(s32 *p, s32 target, s32 rate) {
-    s32 d = target - *p;
-    s32 nv;
+    s32 step = target - *p;
+    s32 stepped;
 
-    if (rate < d) {
-        d = rate;
+    if (rate < step) {
+        step = rate;
     } else {
-        rate = -rate;
-        if (d < rate) {
-            d = rate;
+        s32 minStep = -rate;
+        if (step < minStep) {
+            step = minStep;
         }
     }
-    nv = *p + d;
-    *p = nv;
-    return (f32)func_002835E0(target - nv);
+    stepped = *p + step;
+    *p = stepped;
+    return (f32)func_002835E0(target - stepped);
 }
-#endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB208);
