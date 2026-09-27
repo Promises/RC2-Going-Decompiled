@@ -3346,36 +3346,59 @@ typedef struct WheelRecord {
 extern WheelRecord D_002550F0[];              /* wheel icon-list record array (0x2550F0) */
 extern u8 D_1A8DD0;                            /* wheel record header base (0x1A8DD0) */
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C728);
-#else
-void func_0028C728(void) {
-    s32 i;
-    /* header: slot count 8, record-array pointer, cleared wheel cursor */
-    *(s32 *)((u8 *)&g_hudMobySpawnStart + 0x28) = 8;
-    *(void **)((u8 *)&g_hudMobySpawnStart + 0x2C) = &D_1A8DD0;
-    D_1A8D48 = 0;
-    /* one record per equipped slot: id + its weapon's display-name string id */
-    for (i = 0; i < 8; i++) {
-        s32 id = g_equippedItemSlots[i];
-        D_002550F0[i].itemId       = id;
-        D_002550F0[i].nameStringId = g_weaponTable[g_itemEquippedSlot[id]].nameStringId;
-    }
-}
-#endif
-
-/* WheelRecord + g_equippedItemSlots already declared by func_0028C728's block above. */
-
 /* g_equippedItemSlotsAbs: an assembler alias of g_equippedItemSlots (the #8036
  * construct). Declared 8 bytes so cc1 -G8 emits one `la` macro, sized 16 for gas
  * so that macro expands absolutely with the destination as its own %hi temp
- * (`lui $4; addiu $4,$4`), the ROM's form in func_0028C7A8. */
+ * (`lui $4; addiu $4,$4`), the ROM's form in func_0028C728 and func_0028C7A8. */
 #ifndef TARGET_NATIVE
 __asm__(".extern g_equippedItemSlotsAbs, 16\n\tg_equippedItemSlotsAbs = g_equippedItemSlots");
 extern s32 g_equippedItemSlotsAbs[2];
 #else
 #define g_equippedItemSlotsAbs g_equippedItemSlots
 #endif
+
+/**
+ * Build the weapon-select wheel's icon list: publish the list header (8 slots,
+ * record array &D_1A8DD0) at g_hudMobySpawnStart+0x28/+0x2C, clear the wheel
+ * cursor D_1A8D48, then fill one D_002550F0 record per equipped slot with the
+ * slot's item id (+0x18) and that item's active variant's display-name string
+ * id (+0x00).
+ *
+ * Matching notes. The loop is the ROM's: a count-down from 7 with the source,
+ * record and table pointers stepping in place. The slot and table bases and
+ * the 0xE0 stride are named locals so their loop-invariant loads are placed
+ * as the ROM places them; `id + (s32)slots` gives the ROM's id-first `addu`,
+ * and g_equippedItemSlotsAbs its `la` macro pair.
+ */
+void func_0028C728(void) {
+    s32 n;
+    s32 *src;
+    WheelRecord *rec;
+    u8 *slots;
+    WeaponDef *table;
+    s32 stride;
+
+    *(s32 *)((u8 *)&g_hudMobySpawnStart + 0x28) = 8;
+    *(void **)((u8 *)&g_hudMobySpawnStart + 0x2C) = &D_1A8DD0;
+    slots = g_itemEquippedSlot;
+    table = g_weaponTable;
+    rec = D_002550F0;
+    D_1A8D48 = 0;
+    stride = 0xE0;
+    src = g_equippedItemSlotsAbs;
+    n = 7;
+    do {
+        s32 id = *src;
+
+        n--;
+        src++;
+        rec->itemId = id;
+        rec->nameStringId = *(u16 *)((u8 *)table + *(u8 *)(id + (s32)slots) * stride + 0x3C);
+        rec++;
+    } while (n >= 0);
+}
+
+/* WheelRecord + g_equippedItemSlots already declared by func_0028C728's block above. */
 
 /**
  * SyncEquippedItemSlots: refresh the 8-entry equipped-item cache
