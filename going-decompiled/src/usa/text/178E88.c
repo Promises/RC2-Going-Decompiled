@@ -1113,43 +1113,70 @@ void SetupGsDisplayBuffers(long clearVram) {
 }
 #endif
 
-/* Zero every per-frame draw-callback queue and one-shot fx slot: the fx
- * pre/post/late hook counts, the after-ties/after-shrubs draw-hook counts, the
- * blob-shadow count, the two screen-fade request words, three render-frame
- * one-shot slots, the occlusion override mode, the water wave/pool state and
- * its flags. Called at the top of each frame.
- * Near-miss: the original zeroes each absolute global via the assembler
- * `sw $0, sym` ($at-macro) form, re-materialising %hi per store; the pinned cc1
- * instead allocates a pool of GP registers and hoists/reorders the %hi
- * computations. Correct C preserved as the portable body. */
-/* TODO(match) t493: sdk29 49.83% / engine96 61.55% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (engine96): MACRO-AT (first differing
- * insn: ROM `lui at,0x0  [HI16 0x001B1588]` vs built `lui v0,0x0  [HI16 0x001B1588]`). Levers:
- * cc1-small/absolute globals model RUN: 64.31% (sdk29); engine96 with sched1 MEASURED (flag not
- * landed): 20.00%. */
+/* ResetPerFrameDrawQueues: zero every per-frame draw-callback queue and
+ * one-shot fx slot: the fx pre/post/late hook counts, the after-ties /
+ * after-shrubs draw-hook counts, the blob-shadow count, the two screen-fade
+ * request words (g_screenFadeWhite+4/+8), three render-frame one-shot slots,
+ * the occlusion override mode, the water wave-grid pair and its flags, and the
+ * water-pool flag. Called at the top of each frame. No params, no return.
+ * Addressing: the ROM zeroes each absolute word with the assembler's
+ * `lui $at; sw $0,%lo` macro pair, and D_1A86F4/D_1A8760/D_1A8770 and
+ * g_bWaterPoolActive with one %gp_rel store. So every absolute word goes
+ * through an assembler alias sized 16 that cc1 sees as small data (the #8036
+ * construct; relocations name the real symbols). An alias must be equated at
+ * offset 0: GAS sizes `alias = sym + off` as small whatever its .extern says,
+ * so the +4/+8 words are reached through small (<= 8-byte) offset-0 views.
+ * t493's "cc1-small/absolute globals model 64.31%" (blanket) predates that.
+ * MATCHED (task #889): 100.00% sdk29 (unit objdiff, objdiff_build.sh), solo. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", ResetPerFrameDrawQueues);
+__asm__(".extern g_fxHooksPreCountAbs, 16\n\tg_fxHooksPreCountAbs = g_fxHooksPreCount");
+__asm__(".extern g_drawHooksAfterTiesCountAbs, 16\n\tg_drawHooksAfterTiesCountAbs = g_drawHooksAfterTiesCount");
+__asm__(".extern g_drawHooksAfterShrubsCountAbs, 16\n\tg_drawHooksAfterShrubsCountAbs = g_drawHooksAfterShrubsCount");
+__asm__(".extern g_fxHooksPostCountAbs, 16\n\tg_fxHooksPostCountAbs = g_fxHooksPostCount");
+__asm__(".extern g_fxHooksLateCountAbs, 16\n\tg_fxHooksLateCountAbs = g_fxHooksLateCount");
+__asm__(".extern g_blobShadowCountAbs, 16\n\tg_blobShadowCountAbs = g_blobShadowCount");
+__asm__(".extern g_screenFadeWhiteAbs, 16\n\tg_screenFadeWhiteAbs = g_screenFadeWhite");
+__asm__(".extern g_occlusionOverrideModeAbs, 16\n\tg_occlusionOverrideModeAbs = g_occlusionOverrideMode");
+__asm__(".extern g_pWaterWaveGridsAbs, 16\n\tg_pWaterWaveGridsAbs = g_pWaterWaveGrids");
+__asm__(".extern g_bWaterWavesActiveAbs, 16\n\tg_bWaterWavesActiveAbs = g_bWaterWavesActive");
+extern s32 g_fxHooksPreCountAbs, g_drawHooksAfterTiesCountAbs, g_drawHooksAfterShrubsCountAbs;
+extern s32 g_fxHooksPostCountAbs, g_fxHooksLateCountAbs, g_blobShadowCountAbs;
+/* 4-byte view (cc1-small) whose zero-length tail reaches the +4/+8 words */
+typedef struct { s32 level; s32 word[0]; } ScreenFadeWhiteHead;
+extern ScreenFadeWhiteHead g_screenFadeWhiteAbs;
+extern s32 g_occlusionOverrideModeAbs;
+extern s32 g_pWaterWaveGridsAbs[2], g_bWaterWavesActiveAbs;
 #else
+#define g_fxHooksPreCountAbs            g_fxHooksPreCount[0]
+#define g_drawHooksAfterTiesCountAbs    g_drawHooksAfterTiesCount[0]
+#define g_drawHooksAfterShrubsCountAbs  g_drawHooksAfterShrubsCount[0]
+#define g_fxHooksPostCountAbs           g_fxHooksPostCount[0]
+#define g_fxHooksLateCountAbs           g_fxHooksLateCount[0]
+#define g_blobShadowCountAbs            g_blobShadowCount[0]
+#define g_screenFadeWhiteAbs            (*(struct { s32 level; s32 word[2]; } *)g_screenFadeWhite)
+#define g_occlusionOverrideModeAbs      g_occlusionOverrideMode[0]
+#define g_pWaterWaveGridsAbs            g_pWaterWaveGrids
+#define g_bWaterWavesActiveAbs          g_bWaterWavesActive[0]
+#endif
+
 void ResetPerFrameDrawQueues(void) {
-    g_fxHooksPreCount[0] = 0;
-    g_drawHooksAfterTiesCount[0] = 0;
-    g_drawHooksAfterShrubsCount[0] = 0;
-    g_fxHooksPostCount[0] = 0;
-    g_fxHooksLateCount[0] = 0;
-    g_blobShadowCount[0] = 0;
-    g_screenFadeWhite[1] = 0;
-    g_screenFadeWhite[2] = 0;
+    g_fxHooksPreCountAbs = 0;
+    g_drawHooksAfterTiesCountAbs = 0;
+    g_drawHooksAfterShrubsCountAbs = 0;
+    g_fxHooksPostCountAbs = 0;
+    g_fxHooksLateCountAbs = 0;
+    g_blobShadowCountAbs = 0;
+    g_screenFadeWhiteAbs.word[0] = 0;
+    g_screenFadeWhiteAbs.word[1] = 0;
     D_1A86F4 = 0;
     D_1A8760 = 0;
     D_1A8770 = 0;
-    g_occlusionOverrideMode[0] = 0;
-    g_pWaterWaveGrids[0] = 0;
-    g_pWaterWaveGrids[1] = 0;
-    g_bWaterWavesActive[0] = 0;
+    g_occlusionOverrideModeAbs = 0;
+    g_pWaterWaveGridsAbs[0] = 0;
+    g_pWaterWaveGridsAbs[1] = 0;
+    g_bWaterWavesActiveAbs = 0;
     g_bWaterPoolActive = 0;
 }
-#endif
 
 extern u8 D_1391D0[]; /* prebuilt GS init packet A */
 extern u8 D_139120[]; /* prebuilt GS init packet B */
