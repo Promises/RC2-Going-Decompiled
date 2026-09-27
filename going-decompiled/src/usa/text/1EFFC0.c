@@ -183,9 +183,12 @@ void PatchTfragPacketTex0(void) {
  *   (better arm: engine96). Neither reaches 100.00%, so this stays INCLUDE_ASM
  *   and the #else below remains the portable impl.
  *   the named symbol is reached BOTH ways inside this one function -- absolute
- *   %hi/%lo AND %gp_rel, same address, plain loads/stores on both sides. cc1
- *   picks the addressing from the symbol's size class, which is one value per
- *   TU, so no source form and no per-arm `.extern` size can emit both. HARD. */
+ *   %hi/%lo AND %gp_rel, same address. The split is POSITIONAL, not a size
+ *   class (FACT #8058): every %gp_rel ref sits in a branch delay slot and every
+ *   absolute ref outside one, 0 exceptions over all 122 compiled USA functions
+ *   that split a symbol this way. No `.extern` size can express that; an
+ *   assembler-side delay-slot rule could, and tools/ee has none yet.
+ *   Unreachable today, but not proven a wall. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", BuildTfragDrawSegment);
 #else
@@ -637,9 +640,12 @@ extern s32 D_1A9E70;            /* set to -1 when the frame counter desyncs */
  *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
  *   and the #else below remains the portable impl.
  *   the named symbol is reached BOTH ways inside this one function -- absolute
- *   %hi/%lo AND %gp_rel, same address, plain loads/stores on both sides. cc1
- *   picks the addressing from the symbol's size class, which is one value per
- *   TU, so no source form and no per-arm `.extern` size can emit both. HARD. */
+ *   %hi/%lo AND %gp_rel, same address. The split is POSITIONAL, not a size
+ *   class (FACT #8058): every %gp_rel ref sits in a branch delay slot and every
+ *   absolute ref outside one, 0 exceptions over all 122 compiled USA functions
+ *   that split a symbol this way. No `.extern` size can express that; an
+ *   assembler-side delay-slot rule could, and tools/ee has none yet.
+ *   Unreachable today, but not proven a wall. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6110);
 #else
@@ -851,9 +857,12 @@ extern u8 g_listenerPosHistory[];        /* 0x188660 listener pos ring + flags *
  *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
  *   and the #else below remains the portable impl.
  *   the named symbol is reached BOTH ways inside this one function -- absolute
- *   %hi/%lo AND %gp_rel, same address, plain loads/stores on both sides. cc1
- *   picks the addressing from the symbol's size class, which is one value per
- *   TU, so no source form and no per-arm `.extern` size can emit both. HARD. */
+ *   %hi/%lo AND %gp_rel, same address. The split is POSITIONAL, not a size
+ *   class (FACT #8058): every %gp_rel ref sits in a branch delay slot and every
+ *   absolute ref outside one, 0 exceptions over all 122 compiled USA functions
+ *   that split a symbol this way. No `.extern` size can express that; an
+ *   assembler-side delay-slot rule could, and tools/ee has none yet.
+ *   Unreachable today, but not proven a wall. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", EnterCinematicBeginPlayback);
 #else
@@ -1647,9 +1656,12 @@ s32 func_002F81A0(s32 expected, s32 key, s32 col) {
  *   (better arm: engine96). Neither reaches 100.00%, so this stays INCLUDE_ASM
  *   and the #else below remains the portable impl.
  *   the named symbol is reached BOTH ways inside this one function -- absolute
- *   %hi/%lo AND %gp_rel, same address, plain loads/stores on both sides. cc1
- *   picks the addressing from the symbol's size class, which is one value per
- *   TU, so no source form and no per-arm `.extern` size can emit both. HARD. */
+ *   %hi/%lo AND %gp_rel, same address. The split is POSITIONAL, not a size
+ *   class (FACT #8058): every %gp_rel ref sits in a branch delay slot and every
+ *   absolute ref outside one, 0 exceptions over all 122 compiled USA functions
+ *   that split a symbol this way. No `.extern` size can express that; an
+ *   assembler-side delay-slot rule could, and tools/ee has none yet.
+ *   Unreachable today, but not proven a wall. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F8228);
 #else
@@ -1749,9 +1761,12 @@ void func_002F8228(void) {
  *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
  *   and the #else below remains the portable impl.
  *   the named symbol is reached BOTH ways inside this one function -- absolute
- *   %hi/%lo AND %gp_rel, same address, plain loads/stores on both sides. cc1
- *   picks the addressing from the symbol's size class, which is one value per
- *   TU, so no source form and no per-arm `.extern` size can emit both. HARD. */
+ *   %hi/%lo AND %gp_rel, same address. The split is POSITIONAL, not a size
+ *   class (FACT #8058): every %gp_rel ref sits in a branch delay slot and every
+ *   absolute ref outside one, 0 exceptions over all 122 compiled USA functions
+ *   that split a symbol this way. No `.extern` size can express that; an
+ *   assembler-side delay-slot rule could, and tools/ee has none yet.
+ *   Unreachable today, but not proven a wall. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F85B8);
 #else
@@ -2295,10 +2310,16 @@ void func_00115DA8(s32 widget, void *fmt, s32 captionId);
  * The former comment called the 8-byte packing a wall; the MECHANISM is right
  * and is kept. What it did not say is that the packing is an ARM CHOICE (#565,
  * func_002A0480) which here does NOT pay: the engine arm buys the stride and
- * loses the schedule, so neither arm closes. Additionally NEITHER arm
- * reproduces the original restore ORDER -- the ROM does ld s0,0x0 then
- * ld ra,0x8, both held compilers do ra first. Not reachable by source form;
- * left INCLUDE_ASM as the portable #else impl. */
+ * loses the schedule, so neither arm closes.
+ * The restore ORDER (ROM: ld s0,0x0 then ld ra,0x8) IS reachable on engine96:
+ * a trailing __asm__ __volatile__("") after the last store gives it (task #749,
+ * diff96.sh per-function probe 76.20% -> 77.00%, re-derived by task #762).
+ * What remains is argument-setup order: 2.96-001003 materialises %hi(g_vendorUi)
+ * into s0 before %hi(g_vendorCaptionFmt). Task #762 got the IDENTICAL listing
+ * (diff96.sh 77.00%) from five variants: sprintf's variadic prototype, fmt and
+ * dst hoisted into locals, a VendorUiState * alias, the assignment inside the
+ * argument, and sched1 ON. So this is not a source-order lever. Left
+ * INCLUDE_ASM as the portable #else impl. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", SetVendorCaption);
 #else
@@ -2340,9 +2361,12 @@ void SetVendorCaption(s32 captionId) {
  *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
  *   and the #else below remains the portable impl.
  *   the named symbol is reached BOTH ways inside this one function -- absolute
- *   %hi/%lo AND %gp_rel, same address, plain loads/stores on both sides. cc1
- *   picks the addressing from the symbol's size class, which is one value per
- *   TU, so no source form and no per-arm `.extern` size can emit both. HARD. */
+ *   %hi/%lo AND %gp_rel, same address. The split is POSITIONAL, not a size
+ *   class (FACT #8058): every %gp_rel ref sits in a branch delay slot and every
+ *   absolute ref outside one, 0 exceptions over all 122 compiled USA functions
+ *   that split a symbol this way. No `.extern` size can express that; an
+ *   assembler-side delay-slot rule could, and tools/ee has none yet.
+ *   Unreachable today, but not proven a wall. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", VendorPurchaseStateMachine);
 #else
@@ -2752,9 +2776,12 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_0
  *   (better arm: engine96). Neither reaches 100.00%, so this stays INCLUDE_ASM
  *   and the #else below remains the portable impl.
  *   the named symbol is reached BOTH ways inside this one function -- absolute
- *   %hi/%lo AND %gp_rel, same address, plain loads/stores on both sides. cc1
- *   picks the addressing from the symbol's size class, which is one value per
- *   TU, so no source form and no per-arm `.extern` size can emit both. HARD. */
+ *   %hi/%lo AND %gp_rel, same address. The split is POSITIONAL, not a size
+ *   class (FACT #8058): every %gp_rel ref sits in a branch delay slot and every
+ *   absolute ref outside one, 0 exceptions over all 122 compiled USA functions
+ *   that split a symbol this way. No `.extern` size can express that; an
+ *   assembler-side delay-slot rule could, and tools/ee has none yet.
+ *   Unreachable today, but not proven a wall. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", UpdateVendorMenuInput);
 #else
