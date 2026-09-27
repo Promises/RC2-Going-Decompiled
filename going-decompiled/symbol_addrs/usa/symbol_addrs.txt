@@ -142,6 +142,7 @@ func_00301340 = 0x00301340; // type:func
 func_002831F8 = 0x002831F8; // type:func size:0x38
 func_00283230 = 0x00283230; // type:func
 func_00284678 = 0x00284678; // type:func - splat name kept, no identity claimed. Float integer/fraction split helper in text/183558, called by func_002AC980, which is compiled C since task 758. This line holds the token outside its nonmatchings .s (landing_gate ORPHAN_LATENT)
+func_002B1880 = 0x002B1880; // type:func - splat name kept, no identity claimed. Called with (0x1233, -1) by func_002DECE0 (text/1D54C0), which is compiled C since task 880. This line holds the token outside its nonmatchings .s (landing_gate ORPHAN_LATENT)
 // text/16E980 carve (2026-06-13, pick #6): one absorbed mis-split - 0x30
 // bytes of handwritten 8-byte stub-table words (addiu-sp/nop pairs, one
 // sltu/nop pair, no prologue) that splat lumped into the function whose real
@@ -2172,6 +2173,7 @@ GuiManagerInitHudLists = 0x0034EDB8; // CONFIRMED - configure 0x1a HUD lists + b
 g_GuiElementVtable = 0x001ADA58; // CONFIRMED - base GuiElement vtable (installed at elem +0x30)
 g_GuiListRowVtable = 0x001AD9D8; // CONFIRMED - GuiListRow element vtable
 D_1AD9A8 = 0x001AD9A8; // vtable func_00336678 installs at obj +0x4 - listed so compiled C's reference has a symbol_addrs holder, not only the nonmatchings .s (task #851)
+D_261BE8 = 0x00261BE8; // cheat-code symbol table read by func_002DECE0 (byte ((k+1)*code) & 0xFF) - listed so compiled C's reference has a symbol_addrs holder, not only the nonmatchings .s (task #880)
 // TypeB/TypeC variant vtables are referenced in code as D_1ADA38 / D_1AD9F8
 // (installed at elem +0x30 by GuiElementInitTypeB/C). Descriptive g_ rename is a
 // future Track-B cleanup (would touch the existing D_1ADA38/D_1AD9F8 #else refs).
