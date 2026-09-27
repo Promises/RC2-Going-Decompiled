@@ -349,9 +349,9 @@ void func_00299020(void) {
  * spelling the pending-flag word as g_gameStateFlags at size 12 (func_00299178,
  * func_00299238, func_002992E8, func_00299478, func_002994B0, func_002995E0,
  * func_002998D0, func_00299918), plus func_00299348 with its flag read moved
- * after the busy test. func_00299040, func_00299568, func_00299758 and
- * UpdateSaveTaskState are still asm, each with its own residue recorded at
- * the function. */
+ * after the busy test, and func_00299758 with its 0x15-branch stores reordered.
+ * func_00299040, func_00299568 and UpdateSaveTaskState are still asm, each
+ * with its own residue recorded at the function. */
 /** Save/load top-level status arbiter. Always consumes the pending-flag's 0x2
  *  and 0x4 bits first. Then: if no save is pending (areaTable/dirty +0x17C == 0)
  *  -> status 3. Otherwise route the original flags: bit 0x80 (or secondary-path
@@ -762,27 +762,25 @@ void func_00299730(void) {
  *  is set, clear the save-pending flag (+0x17C), show status 0x15 and set the
  *  pending-flag's 0x440 bits; otherwise mark save-pending (+0x17C = 1) and show
  *  status 1.
- *  (Walled for matching by the reload-artifact named in the file header.) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299758);
-#else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 74.29% -> DSLOT-GPREL, first differing row @11: ROM `lw v0, %gp_rel(g_gameStateFlags)(gp)` vs `nop`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 56.89% -> ADDR-BASEREG, first differing row @1: ROM `addiu a0, zero, 0x2` vs `addiu a0, v0, %lo(D_1393E0)`. */
+ *  Byte-exact on sdk29 (-O2 -G8 -fno-gcse, task #888). It needs two things:
+ *  the flag word spelled g_gameStateFlags (see its declaration), and the
+ *  save-pending clear written BEFORE the status store. In the old order
+ *  (status, clear, flags) the flag word lands in $v1 instead of $v0, and the
+ *  beqz slot is filled from the other path (80.32%, unit objdiff). The
+ *  reload-artifact wall this comment used to name was KNOWN-FALSE for it. */
 void func_00299758(void) {
     if (D_1393E0.mode != 2 || D_1393E0.result >= 0) {
         return;
     }
     if (D_1393E0.unk16C != 0 || D_1393E0.unk1C[2] != 0) {
-        g_nSaveLoadStatusCode[0] = 0x15;
         D_1393E0.dirty = 0;
-        g_nSaveLoadStatusCode[1] |= 0x440;
+        g_nSaveLoadStatusCode[0] = 0x15;
+        g_gameStateFlags |= 0x440;
     } else {
         g_nSaveLoadStatusCode[0] = 1;
         D_1393E0.dirty = 1;
     }
 }
-#endif
 
 /** Save-complete handler (only while a card transaction finished, mode 2,
  *  result < 0). Nothing pending (secondary-path +0x16C == 0 and not busy) ->
