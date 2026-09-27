@@ -3364,40 +3364,56 @@ void func_0028C728(void) {
 }
 #endif
 
-/* SyncEquippedItemSlots / func_0028C7A8(): refresh the 8-entry equipped-item
- * cache (g_equippedItemSlots[0..7]) from the live weapon-select wheel records.
- * The wheel-record array base is the pointer stored at g_hudMobySpawnStart+0x2C
- * (== &D_002550F0, stride 0x1C); each record's +0x18 holds the resolved item id.
- * For each slot whose cached id differs from the wheel record's +0x18 id, write
- * the record id into g_equippedItemSlots[i].
- *
- * WALL (54%, LICM / reloaded-ptr): the original RE-READS the record-array base
- * pointer (*(g_hudMobySpawnStart+0x2C)) from memory on every iteration, treating
- * it as if the g_equippedItemSlots store could alias it; this cc1 proves the two
- * objects disjoint and hoists the invariant base load out of the loop (loop-
- * invariant code motion, independent of -fno-gcse). The same reloaded-ptr idiom
- * walls the sibling func_0028C728. Left INCLUDE_ASM for the matching build; the
- * #else is the cmp-oracle'd portable body (cmp_188858_wheel.c, 32/32 on real
- * R5900). EU twin func_0028C730 (188748) is byte-identical logic — region-
- * agnostic, no divergence. */
 /* WheelRecord + g_equippedItemSlots already declared by func_0028C728's block above. */
 
+/* g_equippedItemSlotsAbs: an assembler alias of g_equippedItemSlots (the #8036
+ * construct). Declared 8 bytes so cc1 -G8 emits one `la` macro, sized 16 for gas
+ * so that macro expands absolutely with the destination as its own %hi temp
+ * (`lui $4; addiu $4,$4`), the ROM's form in func_0028C7A8. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C7A8);
+__asm__(".extern g_equippedItemSlotsAbs, 16\n\tg_equippedItemSlotsAbs = g_equippedItemSlots");
+extern s32 g_equippedItemSlotsAbs[2];
 #else
-void func_0028C7A8(void) {
-    WheelRecord **pRec = *(WheelRecord ***)((u8 *)&g_hudMobySpawnStart + 0x2C);
-    s32 *slot = g_equippedItemSlots;
-    s32  i;
-
-    for (i = 0; i < 8; i++) {
-        s32 id = pRec[0][i].itemId;
-        if (slot[i] != id) {
-            slot[i] = id;
-        }
-    }
-}
+#define g_equippedItemSlotsAbs g_equippedItemSlots
 #endif
+
+/**
+ * SyncEquippedItemSlots: refresh the 8-entry equipped-item cache
+ * (g_equippedItemSlots[0..7]) from the weapon-select wheel records. The record
+ * array base is the pointer stored at g_hudMobySpawnStart+0x2C (== &D_002550F0,
+ * stride 0x1C) and each record's +0x18 holds the resolved item id; every slot
+ * whose cached id differs is overwritten with the record's.
+ *
+ * Matching notes. The ROM re-reads the record-array base on every iteration,
+ * as if the slot store could alias it; cc1 would hoist it (type-based aliasing),
+ * so the read is volatile. The loop is the ROM's: a byte offset stepping by
+ * 0x1C, a count-down from 7 and a post-incremented slot pointer. The record
+ * address is spelled `off - -(s32)base` because the ROM's `addu` takes the
+ * offset as its first operand and only the negated form puts it there (the
+ * #804 operand-order lever). The slot array is read through
+ * g_equippedItemSlotsAbs for the ROM's `la` macro pair.
+ */
+void func_0028C7A8(void) {
+    WheelRecord *volatile *pRec = *(WheelRecord * volatile **)((u8 *)&g_hudMobySpawnStart + 0x2C);
+    s32 off = 0;
+    s32 *slot = g_equippedItemSlotsAbs;
+    s32 n = 7;
+
+    do {
+        WheelRecord *base = *pRec;
+        s32 cur;
+        s32 id;
+
+        n--;
+        cur = *slot;
+        id = *(s32 *)(off - -(s32)base + 0x18);
+        off += 0x1C;
+        if (cur != id) {
+            *slot = id;
+        }
+        slot++;
+    } while (n >= 0);
+}
 
 /* Build the weapon-select wheel widget `w`: rebuild its icon list
  * (func_0028C728), then seed the wheel geometry/state (half-extents 0xD2/0xC8
