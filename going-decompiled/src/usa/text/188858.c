@@ -2665,27 +2665,35 @@ void UploadHudBankTextures(s32 assetId, s32 baseAddr, s32 kickMode) {
 #endif
 
 /*
- * ResetDebugHeap(): (re)initialise the DebugMalloc bump allocator — cursor back
- * to the pool base, end at base + 0x64000 (the 0x64000-byte debug pool).
- *
- * WALL (77.27%): logic identical, but the original hoists the `lui 0x6`
- * constant-materialisation of 0x64000 ABOVE the pool-base load (and colours the
- * base into $a0); our cc1 schedules the constant after the load. A fixed
- * instruction-scheduling difference. Left INCLUDE_ASM.
- * engine96 arm (task #469): 38.18% (75.45% under -fno-schedule-insns2);
- * residual UNKNOWN-`la` — this cc1 lowers `base + 0x64000` (pointer, s32 or
- * u32 arithmetic, folded or via a local) as the `la` macro (lui $at; ori;
- * daddu) where the ROM has `li $3,0x64000; addu $3,$4,$3`.
+ * g_debugMallocPoolBaseSplit: a second C name for g_debugMallocPoolBase (same
+ * assembler symbol via the asm label). The file-scope `.extern ,16` above makes
+ * every plain read of the real name an assembler-expanded `lui rX; lw rX` macro;
+ * `section(".data")` tells cc1 -G8 this spelling is NOT small data, so cc1 splits
+ * the address itself (`lui $2` ... `lw $4,%lo($2)`) and can schedule other work
+ * between the two halves, which is the ROM's shape in ResetDebugHeap. No new
+ * symbol reaches the object: the relocation names g_debugMallocPoolBase.
  */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", ResetDebugHeap);
+extern u8 *g_debugMallocPoolBaseSplit __asm__("g_debugMallocPoolBase") __attribute__((section(".data")));
 #else
+#define g_debugMallocPoolBaseSplit g_debugMallocPoolBase
+#endif
+
+/**
+ * (Re)initialise the DebugMalloc bump allocator: cursor back to the pool base,
+ * end at base + 0x64000 (the 0x64000-byte debug pool).
+ *
+ * The pool base is read through g_debugMallocPoolBaseSplit so cc1 splits its
+ * address; the scheduler then materialises the 0x64000 (`lui $3,6`) between the
+ * %hi and the load, and the base lands in $a0, as in the ROM. Read through the
+ * real name it is one `lw` macro, the constant follows the load, and the
+ * function differs in 7 of 11 words.
+ */
 void ResetDebugHeap(void) {
-    u8 *base = g_debugMallocPoolBase;
+    u8 *base = g_debugMallocPoolBaseSplit;
     g_debugMallocCursor = base;
     g_debugMallocEnd = base + 0x64000;
 }
-#endif
 
 /* DebugMalloc(size): bump-allocate `size` bytes (rounded up to 16) from the
  * debug pool. Lazily (re)initialises the pool on first use, and returns 0 when
