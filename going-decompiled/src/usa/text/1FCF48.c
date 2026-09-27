@@ -70,16 +70,21 @@ void func_002FD020(void) {
 /* ResetFrameArenas: reset the double-buffered per-frame arena pair from the
  * memory-region table (half0 = table[+0xC], half1 = table[+0x10]), point the
  * frame DMA cursor at half0, clear the flip to 0, then rederive the render-task
- * list (func_002FD020). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FCF48", ResetFrameArenas);
-#else
+ * list (func_002FD020). No params, no return.
+ * The table goes through a pointer temporary: the ROM materialises the table
+ * base once and loads +0x10 then +0xC from it, where the direct
+ * `g_memoryArenaTable + 0xC` spelling folds the offset into the %hi/%lo pair.
+ * The empty asm after the final call keeps the ROM's call + return frame (cc1
+ * would otherwise tail-jump; FACT #8177).
+ * MATCHED (task #889): 100.00% sdk29 (unit objdiff, objdiff_build.sh), unit
+ * built -G8 -fno-gcse. */
 void ResetFrameArenas(void) {
-    s32 half0 = *(s32 *)(g_memoryArenaTable + 0xC);
-    g_frameArenaBase[1] = *(s32 *)(g_memoryArenaTable + 0x10);
+    u8 *table = g_memoryArenaTable;
+    s32 half0 = *(s32 *)(table + 0xC);
+    g_frameArenaBase[1] = *(s32 *)(table + 0x10);
     g_frameArenaBase[0] = half0;
     g_frameDmaCursor = (u8 *)half0;
     g_frameArenaFlip = 0;
     func_002FD020();
+    __asm__ __volatile__("");
 }
-#endif
