@@ -159,7 +159,8 @@ case "$REGION/$UNIT" in
   usa/text/1B4218) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # moby-bind band (carve pick #5/moby-bind; later-cc1 TU model, sized externs under -G8)
   # USA CARVE MEGA-BATCH PHASE A (2026-06-14): 7 new c-units carved from the
   # TILE A/B/C/D asm tiles. 6 are later-cc1 gameplay/UI TUs (-G8 -fno-gcse);
-  # text/183558 is the math C-helper band built at the default -O2 -G0.
+  # text/183558 is the math C-helper band; it was built at the default -O2 -G0
+  # until task #889 moved it (and text/1FCF48) to -G8.
   usa/text/178E88) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # TILE A render/draw-2D A
   usa/text/1823B8) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # TILE A render/draw-2D B
   usa/text/1DFF80) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # TILE B moby-glow/shrub/sky/sound-emit/cinematic
