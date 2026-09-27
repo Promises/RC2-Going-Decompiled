@@ -2762,35 +2762,58 @@ void LoadGlobalDialogScene(s32 sceneIndex, s32 mode) {
 }
 #endif
 
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 87.55% PACKED-SAVE /
- * engine96 88.25% GPREL-DECL; best arm engine96, first differing insn there: 'lui v1,
- * %hi(g_sceneArenaBase)' vs ''. Iterated: engine96 98.00% REGNUM-COLORING — after non-small
- * decls for g_sceneArenaBase/Cursor (s1): 5 rows, hi-part registers v1/a0 vs a0/a1 */
-/* TODO(match): functional equivalent - not byte-exact (87.5%); save-layout wall
- * (saves s0+ra -> the pinned 2.9-ee-991111 cc1 reserves a 0x20 frame where the
- * original's later cc1 packs the two 8-byte slots into 0x10) plus a gp_rel/
- * absolute divergence: g_sceneArenaBase/g_sceneArenaCursor lower to %gp_rel
- * under -G8 where the original reloads them with absolute lui/%lo. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", SelectSceneSubChunk);
-#else
 /*
  * SelectSceneSubChunk — repoint the scene streaming buffer at sub-chunk `which`,
  * bind that scene chunk, then restore the buffer to the live arena allocation.
  * The sub-chunk descriptor block lives at g_cameraSlotActive+0x990: +0x70 holds
  * the active streaming-buffer pointer (g_pSceneLoadBuffer), and +0x74[which] the
  * per-sub-chunk saved pointer. After BindSceneChunk consumes the temporary the
- * buffer is reset to g_sceneArenaBase + g_sceneArenaCursor.
+ * buffer is reset to g_sceneArenaBase + g_sceneArenaCursor. No return value.
+ *
+ * MATCHED on the engine96 arm only (MATCH_ guard; cc1 2.96-ee-001003-1, unit
+ * objdiff report 100.00%, task #881), and the raw cc1 output already carries the
+ * ROM's words: engine_swap_fix.py changes nothing in this function. The shipped
+ * image still links the asm. The 2.9 arm cannot match: the ROM saves s0+ra in a
+ * packed 0x10 frame, and 2.9 gives each save a 16-byte slot. Three levers:
+ *  - g_sceneArenaBase is compiler-split in the ROM (`lui v1` ... `lw v0,%lo(v1)`),
+ *    so it is taken out of cc1's small-data class with section(".data").
+ *  - g_sceneArenaCursor is the assembler-macro shape (`lui a0; lw a0,%lo(a0)`), so
+ *    cc1 must keep it small while gas expands it absolutely. That size rides on a
+ *    local alias (the RenderSky form above), so the other readers of
+ *    g_sceneArenaCursor in this file keep their gp-relative access.
+ *  - The slot address is formed through a pointer temporary. It gives the ROM's
+ *    `addu a0,s0,a0` straight from cc1. Every direct spelling tried gives
+ *    `addu a0,a0,s0` raw: `t + which*4 + 0x74`, `t - -(which*4) + 0x74`,
+ *    `((s32 *)(t + 0x74))[which]`, a u32 sum, `t - (-which << 2)`, and
+ *    `off + t + 0x74`. For those, only engine_swap_fix.py's swap reaches the ROM
+ *    word (FACT #8037).
  */
-extern u8 g_cameraSlotActive[];
+#if !defined(TARGET_NATIVE) && !defined(MATCH_SelectSceneSubChunk)
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", SelectSceneSubChunk);
+#else
+#ifndef TARGET_NATIVE
+__asm__(".extern g_sceneArenaCursorAbs, 16\n\tg_sceneArenaCursorAbs = g_sceneArenaCursor");
+extern s32 g_sceneArenaCursorAbs;
+extern s32 g_sceneArenaBase __attribute__((section(".data")));
+#else
+#define g_sceneArenaCursorAbs g_sceneArenaCursor
 extern s32 g_sceneArenaBase;
+#endif
+extern u8 g_cameraSlotActive[];
 extern void BindSceneChunk(void);
 void SelectSceneSubChunk(s32 which) {
     u8 *t = &g_cameraSlotActive[0x990];
-    *(s32 *)(t + 0x70) = *(s32 *)(t + which * 4 + 0x74);
+    {
+        s32 *slot = (s32 *)(t + 0x74);
+        slot += which;
+        *(s32 *)(t + 0x70) = *slot;
+    }
     BindSceneChunk();
-    *(s32 *)(t + 0x70) = g_sceneArenaBase + g_sceneArenaCursor;
+    {
+        s32 *base = &g_sceneArenaBase;
+        s32 cursor = g_sceneArenaCursorAbs;
+        *(s32 *)(t + 0x70) = *base + cursor;
+    }
 }
 #endif
 
