@@ -39,6 +39,9 @@ s32 LoadDiscToc(void) {
 /* LoadLevelToc(level, mode): refreshes the per-level TOC blocks - indexes the
  * disc TOC entry at g_discToc + level*0x18 (+0x4FF8/+0x5000/+0x5008) and
  * CdReadSync-loads three blocks into g_discToc+0x5298/+0x52F8/+0x6310, running
- * func_001339F0 over each. Blocked by the 3-operand `mult $18,$4,$2` (R5900
- * mult-rd form) this cc1 never emits - a documented codegen wall. INCLUDE_ASM. */
+ * func_001339F0 over each. The 3-operand `mult $18,$4,$2` is NOT a wall:
+ * ee-gcc 2.9 emits the R5900 mult-rd form for exactly this `level*0x18` shape
+ * (FACT #6218). The binding constraint is the save layout. The ROM saves
+ * s0,s1,s2,ra at 0/8/16/24, stride 8 (FACT #8163), and held cc1 2.9 emits
+ * 16-byte slots for a multi-register save. INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/033970", LoadLevelToc);

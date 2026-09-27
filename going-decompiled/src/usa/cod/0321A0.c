@@ -33,24 +33,34 @@ extern s32 D_001A74C0;   /* active ring buffer index (0/1) */
 extern s32 g_sndIopReady; /* nonzero when the IOP sound/loader driver is up */
 extern void *D_001A7490; /* snd_Pump tick callback (set by SetSndPumpCallback) */
 
-/* snd_ServiceRpcCompletion: polls the cmd-channel RPC result buffer
- * (D_001A7480/D_001A7484) after func_0011AEA0/sceSifCheckStatRpc, prints
- * D_0013BFA0 via snd_PrintError on stall. Best attempt 78% — ee-gcc lays the
- * early-return-1 branch out as `b`+`li` (or a branch-likely `bnel`) instead of
- * the original's `beqz` straight to the epilogue with the return value in the
- * delay slot. A branch-layout shape this cc1 won't reproduce (near-miss).
- * Portable #else body. */
 extern void func_0011AEA0(s32 arg);            /* pre-RPC flush/sync */
 extern s32  sceSifCheckStatRpc(void *rpc);     /* nonzero while the RPC is busy */
 extern void snd_PrintError(const char *msg, ...); /* printf-style; some call sites pass %d args */
-extern u8   D_001A7040[];  /* sceSif RPC data block */
+/* D_001A7040 is g_sndRpcClientCmd, the command-channel sceSif RPC client. The
+ * original compiler treated it as small data while the assembler placed it
+ * absolutely, so its address is loaded with an unsplit `la` macro: lui/addiu
+ * ahead of the jal, and a nop left in the delay slot. The complete <=8-byte
+ * declaration makes cc1 emit that `la`; the `.extern ,16` override (first
+ * directive wins) makes the assembler expand it absolutely. Same model as
+ * text/198FA0's g_guiInstance. */
+__asm__(".extern D_001A7040, 16");
+extern u8   D_001A7040[8];
 extern s32  D_001A74F8;    /* suppresses the completion-mismatch error print */
 extern char D_0013BFA0[];  /* "RPC completion mismatch" error string */
 extern u8  *D_001A7480;    /* active DMA-transfer buffer */
 extern s32  D_001A7484;    /* active DMA-transfer entry count */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", snd_ServiceRpcCompletion);
-#else
+
+/**
+ * snd_ServiceRpcCompletion - poll the 989snd command channel's in-flight DMA
+ * transfer.
+ *
+ * Returns 1 when no transfer is in flight, or when the reply is complete: the
+ * IOP has written the 0xFFFFFFFF terminator both to the buffer's first word and
+ * to the word after the D_001A7484 entries, in which case the in-flight pointer
+ * is cleared. Returns 0 while the RPC is still busy, or when it has finished
+ * without both terminators; the latter prints the mismatch diagnostic unless
+ * D_001A74F8 suppresses it.
+ */
 s32 snd_ServiceRpcCompletion(void) {
     u32 *buf;
 
@@ -62,8 +72,7 @@ s32 snd_ServiceRpcCompletion(void) {
         return 0; /* RPC still running */
     }
     buf = (u32 *)D_001A7480;
-    if (buf[0] == 0xFFFFFFFF &&
-        *(u32 *)((u8 *)buf + D_001A7484 * 4 + 4) == 0xFFFFFFFF) {
+    if (buf[0] == 0xFFFFFFFF && buf[D_001A7484 + 1] == 0xFFFFFFFF) {
         D_001A7480 = 0; /* both terminators consumed -> transfer done */
         return 1;
     }
@@ -72,7 +81,6 @@ s32 snd_ServiceRpcCompletion(void) {
     }
     return 0;
 }
-#endif
 
 /* snd_SetupDmaTransfer: body reproduces 1:1 (89%), but the function saves
  * s0+s1+ra and this cc1 reserves a 16-byte stack slot per callee save (frame
@@ -718,8 +726,12 @@ void snd_FlushCommandRing(void) {
  * (reusing the same register for the store and the return). Not matched even
  * at -G8: ee-gcc materialises the constant twice (`li $3,1; li $2,1; sw $3`)
  * for every store-constant-and-return-it formulation tried, while the original
- * stores the return register itself. A register-allocation shape this cc1
- * won't reproduce from natural C (near-miss). Portable #else body. */
+ * stores the return register itself (sdk29 63.33%, unit objdiff, -O2 -G8).
+ * Task #855 measured that THIS body reads 100.00% on the engine96 arm (cc1
+ * 2.96-ee-001003 raw output `li $2,1; j $31; sw $2,D_001A74C4`). Those bytes
+ * are identical to the ROM, and engine_swap_fix/mtc1_fixup do not touch the
+ * function. That is an arm-scored candidate only: it is not guarded here, and
+ * the shipped image keeps the asm. Portable #else body. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00133220);
 #else
@@ -784,36 +796,45 @@ s32 func_00133310(void) {
  * size:0x10; the real start begins at snd_PlaySample. Pure padding, no C. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00133340);
 
-/* snd_PlaySample: 989snd EE command-ring wrapper for cmd opcode 0x2C (start
- * voice / play sample). Builds a record from a mix of register and stack
- * arguments (16-bit fields packed via andi/sll/or, plus four words pulled from
- * the caller's stack) for snd_QueueCommandToRing count 0x20. The stack-argument
- * loads (lw 0x30/0x38/0x40($sp), ld 0x48($sp)) come from an 8+ argument calling
- * convention this cc1 won't reproduce from natural C (near-miss). Portable #else
- * body.
+/* snd_QueueCommandToRing as the ROM really takes it: arg4 is a 64-bit qword
+ * (the ring stores it with `sd`). The shared declaration above keeps arg4 at
+ * s32 because the other callers in this unit pass 32-bit values with no
+ * widening, and an s64 prototype would sign-extend them (it un-matches
+ * func_00132B58, func_00133430 and func_00133460). */
+typedef s32 (*SndQueueCommand64Fn)(s32 sel, s32 count, void *data, s32 arg3, s64 arg4);
+
+/**
+ * snd_PlaySample - 989snd EE command-ring wrapper for opcode 0x2C (start voice
+ * / play sample). Queues a 0x20-byte record through snd_QueueCommandToRing.
  *
- * Args a0..a11: a0/a1 stored as-is; a2/a3 are 16-bit low halves paired with the
- * 16-bit high halves a4/a5 into two packed words; a6..a9 fill the record tail.
- * a10/a11 are forwarded to snd_QueueCommandToRing as its ring-slot fields (a11
- * is a 64-bit qword in the original; the shared ring decl narrows it to 32-bit,
- * which is inconsequential to the portable build). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", snd_PlaySample);
-#else
+ * Twelve arguments, eight in a0..a7 and four on the caller's stack (FACT #7455):
+ * a0/a1 are stored as-is; a2/a3 are 16-bit low halves packed with the 16-bit
+ * high halves a4/a5 into two words; a6..a9 fill the record tail. a10 and the
+ * 64-bit a11 are forwarded as the ring entry's two descriptor fields. a11 is
+ * passed through unnarrowed, via SndQueueCommand64Fn. Returns the ring's
+ * result.
+ *
+ * rec[3]'s halves are computed into locals, low half first: that source order
+ * reproduces the ROM's `andi a3` ahead of `sll t1`. rec[2] is computed inline.
+ */
 s32 snd_PlaySample(s32 a0, s32 a1, s32 a2, s32 a3, s32 a4, s32 a5,
                    s32 a6, s32 a7, s32 a8, s32 a9, s32 a10, s64 a11) {
     s32 rec[8]; /* the 0x20-byte command record handed to the ring */
+    s32 low3;
+    s32 high3;
+
     rec[0] = a0;
     rec[1] = a1;
     rec[2] = (a4 << 16) | (a2 & 0xFFFF); /* two 16-bit fields packed hi | lo */
-    rec[3] = (a5 << 16) | (a3 & 0xFFFF);
+    low3 = a3 & 0xFFFF;
+    high3 = a5 << 16;
+    rec[3] = high3 | low3;
     rec[4] = a6;
     rec[5] = a7;
     rec[6] = a8;
     rec[7] = a9;
-    return snd_QueueCommandToRing(0x2C, 0x20, rec, a10, a11);
+    return ((SndQueueCommand64Fn)snd_QueueCommandToRing)(0x2C, 0x20, rec, a10, a11);
 }
-#endif
 
 /* func_001333C0: 0x10 bytes of inter-function padding split off by symbol_addrs
  * size:0x10; the real wrapper begins at func_001333D0. Pure padding, no C. */
@@ -883,7 +904,7 @@ extern s32 D_001A7494;                     /* pending-read marker */
 extern s32 D_001A7100;                     /* IOP-polled load status word */
 extern u8  D_001A713F;                     /* poll-request scratch byte */
 extern s32 D_001A7498;                     /* cached "load complete" flag */
-extern s32 g_sndIopLoadStatus;             /* EE-side load status (0 = done) */
+extern volatile s32 g_sndIopLoadStatus;    /* EE-side load status (0 = done); see CdGetLoadStatus */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", CdStartRead);
 #else
@@ -966,25 +987,31 @@ s32 CdStopRead(void) {
     return func_00125620();
 }
 
-/* CdGetLoadStatus: returns the cached g_sndIopLoadStatus when g_sndIopReady,
- * else falls back to func_00125588. Best attempt 77% — the original reads
- * g_sndIopLoadStatus through a symbolic `lw` macro (cc1 considered it small,
- * the SN assembler expanded it absolutely as lui/lw); reproducing that with a
- * file-scope `.extern sym,16` override makes GNU cc1 schedule the 2-insn
- * macro into a branch delay slot, corrupting the expansion (near-miss).
- * Portable #else body. */
-extern s32 g_sndIopLoadStatus;        /* 0x1A7110 EE-side load status (0 = done) */
+/* g_sndIopLoadStatus (0x1A7110) is written asynchronously on the IOP's behalf,
+ * so it is volatile. The original compiler treated it as small data while the
+ * assembler placed it absolutely, so its load is an unsplit `lw` macro that
+ * expands to lui/lw. The `.extern ,16` override reproduces that (first
+ * directive wins). `volatile` also keeps cc1 from scheduling the load into the
+ * `b` delay slot, which leaves that slot free for the epilogue's `ld ra`, as in
+ * the ROM. */
+__asm__(".extern g_sndIopLoadStatus, 16");
+extern volatile s32 g_sndIopLoadStatus;
 extern s32 QueryCdStatusOverRpc(void);/* 0x125588 libcdvd status via RPC fallback */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", CdGetLoadStatus);
-#else
+
+/**
+ * CdGetLoadStatus - the current CD/bank load status (0 = done).
+ *
+ * With the IOP sound/loader driver up (g_sndIopReady), returns the status word
+ * the IOP maintains in g_sndIopLoadStatus. Otherwise asks libcdvd directly over
+ * RPC (QueryCdStatusOverRpc). The ready path is tested first because the ROM
+ * lays it out as the fall-through block.
+ */
 s32 CdGetLoadStatus(void) {
-    if (g_sndIopReady == 0) {
-        return QueryCdStatusOverRpc();
+    if (g_sndIopReady != 0) {
+        return g_sndIopLoadStatus;
     }
-    return g_sndIopLoadStatus;
+    return QueryCdStatusOverRpc();
 }
-#endif
 
 /* func_001336C0: 0x10 bytes of inter-function padding split off by symbol_addrs
  * size:0x10; the real function begins at SetSndPumpCallback. Pure padding, no C. */
@@ -1148,10 +1175,18 @@ s32 func_00133960(void) {
     return snd_SendCommandSync(0x5B, 0, 0);
 }
 
-/* func_00133988: scale arg0 by 1524/741, i.e. (arg0 * 0x5F4) / 0x2E5. ~82%; the
- * only diff is that ee-gcc fills the `jr ra` delay slot with the `mflo`, while
- * the original keeps `mflo` before the return and leaves a nop in the slot — a
- * scheduling choice not expressible in source (near-miss). Portable #else body. */
+/* func_00133988: scale arg0 by 1524/741, i.e. (arg0 * 0x5F4) / 0x2E5. The C is
+ * right: cc1 2.9's output for it assembles to all 9 ROM words under the SN
+ * as.exe that shipped with it (FACT #6219). It scores 82.22% (unit objdiff,
+ * sdk29, -O2 -G8, task #855) because the gate assembles with
+ * mips-linux-gnu-as, which hoists `mflo` into the `.set reorder` jr slot and
+ * drops the trailing nop (8 words, where the ROM has 9). That is the only
+ * difference, and it comes from the assembler, not from ee-gcc scheduling.
+ * The `break 7` word is NOT a gate difference: bare GNU as would encode it as
+ * 0x0007000D, but tools/ee/move_fixup.sed rewrites it to `break 0,7` before
+ * assembly, so the gate emits the ROM's 0x000001CD (FACT #6462, re-measured in
+ * task #866). The engine96 arm's 35.56% is task #855's figure and has not been
+ * re-measured. Portable #else body. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00133988);
 #else
