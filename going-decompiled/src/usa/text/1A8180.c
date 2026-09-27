@@ -6678,36 +6678,44 @@ void func_002B1778(s32 a, s32 b, void *dst, void *src) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B17D0);
 
 /**
- * Set a moby's "freeze fade" weight at +0x70: while the palette-cycle freeze
- * flag is set it tracks the supplied value, otherwise it snaps to 1.0. When
- * the caller asks to settle (settle != 0) and the weight has not yet reached
- * the moby's base value at +0x20, kick the shared eased-approach helper.
+ * func_002B17F8 — set an eased-rotation driver's blend weight and optionally
+ * settle it.
+ *
+ * Params: value — the weight to track while the "freeze palette cycling" flag
+ *         (D_1A7A4F) is set; otherwise the weight snaps to 1.0.
+ *         owner, arg3 — opaque controller handles, forwarded to func_002AFAB0.
+ *         state — the driver block (+0x70 blend weight, +0x20 base weight).
+ *         settle — when nonzero and the weight differs from the base weight,
+ *         step the driver once via func_002AFAB0(owner, state, arg3, 0.03, 0.3).
+ * Returns nothing.
+ *
+ * MATCHED on the sdk29 arm (plain C; unit objdiff report via objdiff_build.sh +
+ * unit_report.sh, 100.00%; task #758). The ROM keeps `jal` + a 16-byte frame
+ * and hoists `ld ra` into the `beqz settle` delay slot. Two sibcall guards
+ * compared, one build each:
+ *  - `noTailCall = 0;` (a dead local store) after the call blocks the sibling
+ *    `j` at expand time and is deleted by flow before scheduling, so reorg is
+ *    free to fill the delay slot with `ld ra` — the ROM's shape (task #756's
+ *    lever, forum/promotion-grind/27489);
+ *  - a trailing `__asm__ __volatile__("")` also keeps `jal`, but stays in the
+ *    block as a barrier and the slot is left as a `nop` [97.67];
+ *  - no guard at all: cc1 2.9 sibcalls func_002AFAB0 [85.33].
  */
 /* Defined later in this unit; declared so the f32 args keep their type. */
 void func_002AFAB0(void *owner, u8 *state, void *arg3, f32 rate, f32 cap);
-/* TODO(match): functional equivalent - 99.67%, a single c.eq.s operand-order
-   instruction. The later cc1 loads the +0x70 weight first AND uses it as the
-   compare's fs; the pinned cc1 ties fs to the != LHS while loading the RHS
-   first, so it can never produce both at once (operand-scheduling wall).
-   Revisit once the gameplay-TU compiler is available. */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 90.97%
-   -> 91.00% with the +1 ULP literal spelling (0x3E99999A); rest SCHED-TIEBREAK (addiu sp
-   placement) + REORG-DSLOT (ROM copies `ld ra` into the beq delay slot) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B17F8);
-#else
-void func_002B17F8(f32 value, s32 a1, u8 *p, s32 a3, s32 settle) {
+void func_002B17F8(f32 value, void *owner, u8 *state, void *arg3, s32 settle) {
+    s32 noTailCall;
+
     if (D_1A7A4F != 0) {
-        *(f32 *)(p + 0x70) = value;
+        *(f32 *)(state + 0x70) = value;
     } else {
-        *(f32 *)(p + 0x70) = 1.0f;
+        *(f32 *)(state + 0x70) = 1.0f;
     }
-    if (settle != 0 && *(f32 *)(p + 0x70) != *(f32 *)(p + 0x20)) {
-        func_002AFAB0((void *)a1, p, (void *)a3, 0.03f, 0.3f);
+    if (settle != 0 && *(f32 *)(state + 0x70) != *(f32 *)(state + 0x20)) {
+        func_002AFAB0(owner, state, arg3, 0.03f, 0.3f);
+        noTailCall = 0;
     }
-    __asm__ __volatile__("");
 }
-#endif
 
 /* unreachable code fragment (stray sh + $sp tail from splat over-split), not C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1870);
