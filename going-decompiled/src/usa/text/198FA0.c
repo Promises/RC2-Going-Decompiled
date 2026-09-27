@@ -78,7 +78,8 @@ __asm__(".extern g_levelDialogToc, 16");
 __asm__(".extern g_nSaveLoadStatusCode, 12");
 __asm__(".extern g_gameStateFlags, 12");
 __asm__(".extern D_1A8C64, 16");
-__asm__(".extern D_1A8C88, 16");
+__asm__(".extern D_1A8C88, 12");
+__asm__(".extern D_1A8C8C, 12");
 
 /* Singleton GUI-manager instance (0x3FB20-byte object allocated by
  * GuiManagerCreate; null until the GUI is up). Declared as a plain byte
@@ -108,8 +109,9 @@ extern s32 D_1A8C64;  /* GUI popup-busy gate (also read by the walled func_0029C
  * "card removed / fatal" and "retry" message paths.
  *   D_1A8C88 : set when the active card slot reported a hard/unrecoverable error
  *   D_1A8C8C : set when a card-removal abort is in progress
- * (Widths follow the original lw opcodes; declared for the TARGET_NATIVE #else
- * arms only — they emit no code so the matching build is unaffected.) */
+ * Widths follow the original lw opcodes. Both carry .extern 12 (task #888):
+ * the ROM reads each as one %gp_rel word when the access fills a delay slot
+ * and absolutely everywhere else (func_00299040 shows both forms of each). */
 extern s32 D_1A8C88;
 extern s32 D_1A8C8C;
 
@@ -349,8 +351,8 @@ void func_00299020(void) {
  * spelling the pending-flag word as g_gameStateFlags at size 12 (func_00299178,
  * func_00299238, func_002992E8, func_00299478, func_002994B0, func_002995E0,
  * func_002998D0, func_00299918), plus func_00299348 with its flag read moved
- * after the busy test, and func_00299758 and func_00299568 with their branch stores reordered.
- * func_00299040 and UpdateSaveTaskState are still asm, each with its own
+ * after the busy test, and func_00299758 and func_00299568 with their branch stores reordered, and
+ * func_00299040 (see its comment). UpdateSaveTaskState is still asm, with its
  * residue recorded at the function. */
 /** Save/load top-level status arbiter. Always consumes the pending-flag's 0x2
  *  and 0x4 bits first. Then: if no save is pending (areaTable/dirty +0x17C == 0)
@@ -360,29 +362,34 @@ void func_00299020(void) {
  *  clear the pending flag and, on a hard/abort card error (D_1A8C88/D_1A8C8C)
  *  show status 3, else show status 2 (set bit 0x1); else (idle) bit 0x200 ->
  *  status 0x19 (consume 0x200).
- *  (Walled for matching by the reload-artifact named in the file header.) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299040);
-#else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 70.24% -> DSLOT-GPREL, first differing row @0: ROM `lui a1, %hi(g_gameStateFlags)` vs `lui a0, %hi(g_nSaveLoadStatusCode+0x4)`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 54.55% -> ADDR-BASEREG, first differing row @0: ROM `lui a1, %hi(g_gameStateFlags)` vs `lui a2, %hi(g_nSaveLoadStatusCode+0x4)`. */
+ *  Byte-exact on sdk29 (-O2 -G8 -fno-gcse, task #888). Four things carry it:
+ *   - the flag word is spelled g_gameStateFlags (see its declaration);
+ *   - D_1A8C88 and D_1A8C8C are at .extern 12, so the delay-slot read of
+ *     D_1A8C88 is %gp_rel while D_1A8C8C's straight-line read stays absolute;
+ *   - the 0x2/0x4 clear goes through a separate temporary. The ROM keeps two
+ *     `and`s (with -5, then -3). One `& ~0x6` folds to a single and, and a
+ *     `cleared &= ~0x2` on the same variable colours $v0/$a0 the other way;
+ *   - in the two branches that end with the same pair of stores (tail-merged
+ *     by cc1), the flag word is stored before the status code.
+ *  The reload-artifact wall this comment used to name was KNOWN-FALSE for
+ *  it. */
 void func_00299040(void) {
-    s32 flags = g_nSaveLoadStatusCode[1];
-    s32 cleared = flags & ~0x6;
-    g_nSaveLoadStatusCode[1] = cleared;
+    s32 flags = g_gameStateFlags;
+    s32 t = flags & ~0x4;
+    s32 cleared = t & ~0x2;
+    g_gameStateFlags = cleared;
     if (D_1393E0.dirty == 0) {
         g_nSaveLoadStatusCode[0] = 3;
         return;
     }
     if ((flags & 0x80) || D_1393E0.unk16C != 0) {
         g_nSaveLoadStatusCode[0] = 0x15;
-        g_nSaveLoadStatusCode[1] = (cleared & ~0x80) | 0x40;
+        g_gameStateFlags = (cleared & ~0x80) | 0x40;
         return;
     }
     if (flags & 0x100) {
         g_nSaveLoadStatusCode[0] = 0x14;
-        g_nSaveLoadStatusCode[1] = (cleared ^ 0x100) | 0x40;
+        g_gameStateFlags = (cleared ^ 0x100) | 0x40;
         return;
     }
     if (D_1393E0.busy != 0) {
@@ -390,15 +397,14 @@ void func_00299040(void) {
         if (D_1A8C88 != 0 || D_1A8C8C != 0) {
             g_nSaveLoadStatusCode[0] = 3;
         } else {
+            g_gameStateFlags = cleared | 0x1;
             g_nSaveLoadStatusCode[0] = 2;
-            g_nSaveLoadStatusCode[1] = cleared | 0x1;
         }
     } else if (flags & 0x200) {
+        g_gameStateFlags = cleared ^ 0x200;
         g_nSaveLoadStatusCode[0] = 0x19;
-        g_nSaveLoadStatusCode[1] = cleared ^ 0x200;
     }
 }
-#endif
 
 /** If no save/load action is pending (flag bit 0 clear), reset the popup
  *  status to 3 (idle). */
