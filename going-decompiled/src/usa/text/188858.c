@@ -3025,37 +3025,44 @@ void func_0028C108(s32 key, s32 value) {
 }
 #endif
 
-/*
- * func_0028C180(rec, pA, pB): apply a layout record's edge/centre alignment
- * flags (+0x60) to an X (*pA) and Y (*pB) coordinate, using its half-extents at
- * +0x58 (X) / +0x5C (Y): bit 1 / bit 2 gate the Y shift by half the +0x5C
- * extent; bit 4 / bit 8 gate the X shift by the full / half +0x58 extent.
- * Always returns 0.
+/**
+ * Apply a layout record's alignment flags (+0x60) to an X (*pA) and Y (*pB)
+ * coordinate using its extents (+0x58 X, +0x5C Y). Unless bit 0 or bit 1 is
+ * set, Y moves up by half the Y extent. Unless bit 2 is set, X moves left by
+ * the full X extent (bit 3 set) or by half of it (bit 3 clear).
  *
- * WALL (85.69%): logic exact, but the original lowers the `(flags & 1) == 0`
- * test as `xori;andi;beqz` + a branch-likely (bnezl) and keeps the +0x58 extent
- * live in a saved register; our cc1 emits `andi;bnez`, no branch-likely, and
- * re-reads the extent — a fixed branch/colouring heuristic. Left INCLUDE_ASM.
- * engine96 arm (task #469): 96.15% with nested `!` tests, a value-form
- * `notHidden = !(flags & 1)` (recovers the xori;andi;beqz) and a re-read of
- * +0x60 after the *pB store; the one residual is REORG — the ROM fills the
- * `bnez $2` delay slot with `andi $2,$4,8` (an insn that sets the tested
- * register), which stock gcc reorg refuses and pads with a nop.
+ *   rec  the layout record
+ *   pA   X coordinate, adjusted in place
+ *   pB   Y coordinate, adjusted in place
+ *   ->   always 0
+ *
+ * The flags are read again after the *pB update (that store may alias the
+ * record), on every path: the ROM reloads them in the second test's branch-
+ * likely delay slot as well as at the join. The empty `"+r"` asm on the record
+ * pointer stops cc1 proving the reload redundant on the skip paths, and splits
+ * the Y-extent load from the first two so it lands in the first branch's delay
+ * slot. Bit 0 is tested in value form (`!(flags & 1)`, the ROM's xori/andi).
+ * The reloaded flags and the bit-3 test are EE_REG-bound to the ROM's $4/$2.
  */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C180);
-#else
 s32 func_0028C180(HudElement *rec, s32 *pA, s32 *pB) {
     u8  *b = (u8 *)rec;
     s32  flags = *(s32 *)(b + 0x60);
     s32  xExtent = *(s32 *)(b + 0x58);
-    s32  yExtent = *(s32 *)(b + 0x5C);
+    s32  yExtent;
+    s32  notHidden;
+    register s32 flagsAgain EE_REG("$4");
 
-    if ((flags & 1) == 0 && (flags & 2) == 0) {
+    __asm__("" : "+r"(b));
+    yExtent = *(s32 *)(b + 0x5C);
+    notHidden = !(flags & 1);
+    if (notHidden && (flags & 2) == 0) {
         *pB = *pB - (yExtent >> 1);
     }
-    if ((flags & 4) == 0) {
-        if ((flags & 8) != 0) {
+    flagsAgain = *(s32 *)(b + 0x60);
+    if ((flagsAgain & 4) == 0) {
+        register s32 fullShift EE_REG("$2") = flagsAgain & 8;
+
+        if (fullShift != 0) {
             *pA = *pA - xExtent;
         } else {
             *pA = *pA - (xExtent >> 1);
@@ -3063,7 +3070,6 @@ s32 func_0028C180(HudElement *rec, s32 *pA, s32 *pB) {
     }
     return 0;
 }
-#endif
 
 /* func_0028C1E8(rec, pX, pY, ...): apply a HUD layout record's alignment flags
  * (+0x60) to an (*pX,*pY) coordinate using fractional offset tables
