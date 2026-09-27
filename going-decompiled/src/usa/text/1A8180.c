@@ -1075,49 +1075,67 @@ s32 func_002A90A8(void *moby, Vec4 *dir, s32 mask, f32 stepZ, f32 minLen, f32 sp
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9348);
 
-/* func_002A9370: count a group's active mobys filtered by anim state. When
- * state == -1 every active (state byte >= 0) moby in the group is counted;
- * otherwise the count is of the active mobys whose state byte differs from
- * `state` (the equal-state ones are skipped). group == -1 returns 0. Best
- * attempt 82%: byte-identical except the list pointer colours v1 (reusing
- * the address temp) where the original loads it into v0 with a later move
- * into a0 - the register-coloring wall. */
+/**
+ * func_002A9370 — count a group's active mobys, optionally filtered by state.
+ *
+ * Params: group — moby group index; -1 returns 0.
+ *         state — -1 counts every active moby (state byte >= 0); otherwise
+ *         only the active mobys whose state byte DIFFERS from `state` are
+ *         counted (FACT #5781: the plate's "equals" has the polarity inverted).
+ * Returns the count; 0 for group -1 or an empty (NULL) group list. The group
+ * list is a run of u16 slot indices whose last entry has bit 15 set.
+ *
+ * MATCHED on the sdk29 arm (plain C; unit objdiff report via objdiff_build.sh +
+ * unit_report.sh, 100.00%; task #758). The bracket is the row with ONLY that
+ * lever reverted, everything else as written (same instrument, task #758):
+ *  - one `||` condition feeding a single increment; nested if / else-if lets
+ *    cc1 if-convert the second test into a movn [85.29];
+ *  - the loaded list head copied into `list` (the ROM loads it into v0 and
+ *    moves it to a0 after the table-base load) [91.29 walking head itself];
+ *  - the entry read into `raw` for the index and copied into `entry` for the
+ *    end-of-list test AFTER the moby address is formed, so the two stay in
+ *    separate registers (v0/a2) as in the ROM [95.86 with the copy first];
+ *  - the moby address summed as integers: pointer + int is canonicalised
+ *    base-first, and the ROM's addu has the shifted index first [99.71];
+ *  - the head bound to $2 (empty on native): cc1 otherwise loads it into the
+ *    dying address temp v1 [99.57].
+ */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 54.29%
-   -> UNKNOWN-@0: ROM `addiu v0,zero,-1` vs `addiu v1,zero,-1` */
+   -> UNKNOWN-@0: ROM `addiu v0,zero,-1` vs `addiu v1,zero,-1` (measured on the earlier body) */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9370);
+#define A9370_IN_V0 __asm__("$2")
 #else
+#define A9370_IN_V0
+#endif
 s32 func_002A9370(s32 group, s32 state) {
+    register u16 *head A9370_IN_V0;
     u16 *list;
     s32 count;
+    u16 entry;
 
     if (group == -1) {
         return 0;
     }
-    list = g_mobyGroupLists[group];
-    if (list == 0) {
+    head = g_mobyGroupLists[group];
+    count = 0;
+    if (head == 0) {
         return 0;
     }
-    count = 0;
+    list = head;
     do {
-        u16 entry = *list;
-        Moby *moby = (Moby *)((u8 *)g_mobyTableBase + (entry & 0x7FFF) * 0x100);
+        Moby *moby;
+        u16 raw = *list;
 
-        if (moby->state >= 0) {
-            if (state == -1) {
-                count = count + 1;
-            } else if ((u8)moby->state != state) {
-                count = count + 1;
-            }
+        moby = (Moby *)((raw & 0x7FFF) * 0x100 + (u32)g_mobyTableBase);
+        entry = raw;
+        if (moby->state >= 0 && (state == -1 || (u8)moby->state != state)) {
+            count = count + 1;
         }
         list = list + 1;
-        if ((s16)entry < 0) {
-            break;
-        }
-    } while (1);
+    } while ((s16)entry >= 0);
     return count;
 }
-#endif
+#undef A9370_IN_V0
 
 /**
  * Set the light-mode byte of every moby in a group.
