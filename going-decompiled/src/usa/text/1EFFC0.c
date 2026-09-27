@@ -847,7 +847,16 @@ extern u8 g_listenerPosHistory[];    /* 0x188660 listener pos ring + flags */
  *   the barriers), a "+r" pin on it (86.22), a volatile access (91.26), a
  *   barrier at the start of the body (93.33), a sized array (97.04), sched1 ON
  *   (96.30, diagnostic only). sched2 OFF gives 57.04, so sched2 is what
- *   places it. Open arm, not a wall. */
+ *   places it.
+ *   WALL under 2.96-001003 (task #807, from its -fsched-verbose=6 -dR dump):
+ *   sched2 issues two insns per cycle, and the anti dependence of `move sN,aN`
+ *   on `sd sN` costs 0, so each move is freed onto the top of the ready list
+ *   and issued right after its sd, ahead of the higher-priority addiu. The
+ *   ROM's order needs each move to wait one cycle. cc1 2.9 does that (it
+ *   issues one insn per cycle) and gives the ROM's lagged order, but with
+ *   16-byte save slots. No C spelling changes that dependence: unsigned
+ *   params, a u8 temp, local copies of the params and a local pointer all
+ *   give the same prologue. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6C78);
 #else
