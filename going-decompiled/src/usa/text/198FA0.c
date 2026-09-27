@@ -345,7 +345,12 @@ void func_00299020(void) {
  * branch/jr delay slot) AND via the absolute lui/$at macro elsewhere in the
  * same function — the delay-slot form described in the file header. Members of
  * the family that closed under the size-12 marker (func_002991E8,
- * func_002992B8, func_002993D8) are compiled C; the rest are left as asm. */
+ * func_002992B8, func_002993D8) are compiled C. Task #888 closed eight more by
+ * spelling the pending-flag word as g_gameStateFlags at size 12 (func_00299178,
+ * func_00299238, func_002992E8, func_00299478, func_002994B0, func_002995E0,
+ * func_002998D0, func_00299918). func_00299040, func_00299348, func_00299568,
+ * func_00299758 and UpdateSaveTaskState are still asm, each with its own
+ * residue recorded at the function. */
 /** Save/load top-level status arbiter. Always consumes the pending-flag's 0x2
  *  and 0x4 bits first. Then: if no save is pending (areaTable/dirty +0x17C == 0)
  *  -> status 3. Otherwise route the original flags: bit 0x80 (or secondary-path
@@ -415,15 +420,13 @@ void func_00299150(void) {
  *  transaction is in flight (phase==2) translate the libmc busy-result into a
  *  popup status. busy 0 -> status 9 (busy); busy -1 -> ack (busy=0) + status 9;
  *  busy -2 -> status 5. No transaction (phase!=2) or other busy values: no-op.
- *  (Walled by the reload-artifact named in the file header.) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299178);
-#else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 72.14% -> DSLOT-GPREL, first differing row @7: ROM `(nothing)` vs `lui at, %hi(g_nSaveLoadStatusCode+0x4)`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 67.14% -> ADDR-BASEREG, first differing row @0: ROM `lui a0, %hi(g_gameStateFlags)` vs `lui a1, %hi(g_nSaveLoadStatusCode+0x4)`. */
+ *  Byte-exact on sdk29 (-O2 -G8 -fno-gcse, task #888): the pending-flag word
+ *  is spelled g_gameStateFlags, the ROM's own symbol, so its delay-slot
+ *  access is one %gp_rel word and every other access is absolute (see
+ *  g_gameStateFlags' declaration). The reload-artifact wall this comment
+ *  used to name was KNOWN-FALSE for it. */
 void func_00299178(void) {
-    g_nSaveLoadStatusCode[1] &= ~0x20;
+    g_gameStateFlags &= ~0x20;
     if (D_1393E0.phase == 2) {
         s32 busy = D_1393E0.busy;
         if (busy == 0) {
@@ -436,7 +439,6 @@ void func_00299178(void) {
         }
     }
 }
-#endif
 
 /** Card-removal step: if no abort is in flight (busy != -2) show status 3
  *  (idle). Otherwise, if a hard card error is latched (D_1A8C8C set) show
@@ -462,36 +464,33 @@ void func_002991E8(void) {
  *  Otherwise dispatch on the pending-flag word: bit 0x20 -> if a hard card
  *  error is latched (D_1A8C88) clear it and show status 0x17, else show status
  *  5; bit 0x8 -> clear it and show status 7.
- *  (Walled by the reload-artifact named in the file header.) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299238);
-#else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 45.42% -> DSLOT-GPREL, first differing row @4: ROM `lw v1, %gp_rel(g_gameStateFlags)(gp)` vs `(nothing)`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 63.71% -> ADDR-BASEREG, first differing row @1: ROM `addiu a0, zero, -0x2` vs `addiu v1, zero, -0x2`. */
+ *  Byte-exact on sdk29 (-O2 -G8 -fno-gcse, task #888): the pending-flag word
+ *  is spelled g_gameStateFlags, the ROM's own symbol, so its delay-slot
+ *  access is one %gp_rel word and every other access is absolute (see
+ *  g_gameStateFlags' declaration). The reload-artifact wall this comment
+ *  used to name was KNOWN-FALSE for it. */
 void func_00299238(void) {
     s32 flags;
     if (D_1393F0[0] != -2) {
         g_nSaveLoadStatusCode[0] = 3;
         return;
     }
-    flags = g_nSaveLoadStatusCode[1];
+    flags = g_gameStateFlags;
     if (flags & 0x20) {
         /* The 0x20 bit is cleared on BOTH the error and no-error paths: the
          * original writes it back in the branch delay slot before testing
          * D_1A8C88, so the clear happens regardless of the error result. */
-        g_nSaveLoadStatusCode[1] = flags ^ 0x20;
+        g_gameStateFlags = flags ^ 0x20;
         if (D_1A8C88 != 0) {
             g_nSaveLoadStatusCode[0] = 0x17;
         } else {
             g_nSaveLoadStatusCode[0] = 5;
         }
     } else if (flags & 0x8) {
-        g_nSaveLoadStatusCode[1] = flags ^ 0x8;
+        g_gameStateFlags = flags ^ 0x8;
         g_nSaveLoadStatusCode[0] = 7;
     }
 }
-#endif
 
 /** Result-timeout step: always clear the transaction busy flag; then if the
  *  libmc result is still pending (result < 0) force result 3 + subResult 0.
@@ -606,54 +605,48 @@ void func_002993D8(void) {
 
 /** Save/load status predicate: while a card transaction is active
  *  (D_1393F0/busy != 0) show popup status 3 (idle/none); otherwise, if the
- *  pending-flag's 0x2 bit is set, show status 0xD. (Walled for matching by the
- *  reload-artifact named in the file header — kept as asm + a typed #else.) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299478);
-#else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 59.64% -> DSLOT-GPREL, first differing row @3: ROM `lw v0, %gp_rel(g_gameStateFlags)(gp)` vs `(nothing)`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 44.64% -> ADDR-BASEREG, first differing row @3: ROM `lw v0, %gp_rel(g_gameStateFlags)(gp)` vs `(nothing)`. */
+ *  pending-flag's 0x2 bit is set, show status 0xD.
+ *  Byte-exact on sdk29 (-O2 -G8 -fno-gcse, task #888): the pending-flag word
+ *  is spelled g_gameStateFlags, the ROM's own symbol, so its delay-slot
+ *  access is one %gp_rel word and every other access is absolute (see
+ *  g_gameStateFlags' declaration). The reload-artifact wall this comment
+ *  used to name was KNOWN-FALSE for it. */
 void func_00299478(void) {
     if (D_1393F0[0] != 0) {
         g_nSaveLoadStatusCode[0] = 3;
-    } else if (g_nSaveLoadStatusCode[1] & 0x2) {
+    } else if (g_gameStateFlags & 0x2) {
         g_nSaveLoadStatusCode[0] = 0xD;
     }
 }
-#endif
 
 /** Save/load status dispatch: while a card transaction is active
  *  (D_1393F0/busy != 0) show status 3. Otherwise route on the pending-flag word:
  *  bit 0x20 -> clear it, then if a hard card error is latched (D_1A8C88) show
  *  status 0x18 else status 0xC; bit 0x10 -> clear it and show status 0xE.
- *  (Walled for matching by the reload-artifact named in the file header.) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_002994B0);
-#else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 43.60% -> DSLOT-GPREL, first differing row @3: ROM `lw v1, %gp_rel(g_gameStateFlags)(gp)` vs `(nothing)`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 63.17% -> ADDR-BASEREG, first differing row @3: ROM `lw v1, %gp_rel(g_gameStateFlags)(gp)` vs `(nothing)`. */
+ *  Byte-exact on sdk29 (-O2 -G8 -fno-gcse, task #888): the pending-flag word
+ *  is spelled g_gameStateFlags, the ROM's own symbol, so its delay-slot
+ *  access is one %gp_rel word and every other access is absolute (see
+ *  g_gameStateFlags' declaration). The reload-artifact wall this comment
+ *  used to name was KNOWN-FALSE for it. */
 void func_002994B0(void) {
     s32 flags;
     if (D_1393F0[0] != 0) {
         g_nSaveLoadStatusCode[0] = 3;
         return;
     }
-    flags = g_nSaveLoadStatusCode[1];
+    flags = g_gameStateFlags;
     if (flags & 0x20) {
-        g_nSaveLoadStatusCode[1] = flags ^ 0x20;   /* consume bit 0x20 */
+        g_gameStateFlags = flags ^ 0x20;   /* consume bit 0x20 */
         if (D_1A8C88 != 0) {
             g_nSaveLoadStatusCode[0] = 0x18;
         } else {
             g_nSaveLoadStatusCode[0] = 0xC;
         }
     } else if (flags & 0x10) {
-        g_nSaveLoadStatusCode[1] = flags ^ 0x10;   /* consume bit 0x10 */
+        g_gameStateFlags = flags ^ 0x10;   /* consume bit 0x10 */
         g_nSaveLoadStatusCode[0] = 0xE;
     }
 }
-#endif
 
 /** If a card transaction finished selecting (mode 2) with no result yet,
  *  force result 9 (cancelled) and show popup status 0xF. */
@@ -699,36 +692,33 @@ void func_00299568(void) {
  *  0x40); bit 0x100 -> status 0x14 (consume 0x100, set 0x40); else if a card
  *  transaction is active (g_areaTable/busy != 0) -> status 3; else if the
  *  save-pending flag (+0x17C) is set -> status 1.
- *  (Walled for matching by the reload-artifact named in the file header.) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_002995E0);
-#else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 85.11% -> DSLOT-GPREL, first differing row @25: ROM `(nothing)` vs `lui at, %hi(g_nSaveLoadStatusCode+0x4)`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 60.91% -> ADDR-BASEREG, first differing row @0: ROM `lui v1, %hi(g_gameStateFlags)` vs `lui a1, %hi(g_nSaveLoadStatusCode+0x4)`. */
+ *  Byte-exact on sdk29 (-O2 -G8 -fno-gcse, task #888): the pending-flag word
+ *  is spelled g_gameStateFlags, the ROM's own symbol, so its delay-slot
+ *  access is one %gp_rel word and every other access is absolute (see
+ *  g_gameStateFlags' declaration). The reload-artifact wall this comment
+ *  used to name was KNOWN-FALSE for it. */
 void func_002995E0(void) {
-    s32 flags = g_nSaveLoadStatusCode[1];
+    s32 flags = g_gameStateFlags;
     if (flags & 0x4) {
-        g_nSaveLoadStatusCode[1] = flags & ~0x4;
+        g_gameStateFlags = flags & ~0x4;
     }
-    flags = g_nSaveLoadStatusCode[1];
+    flags = g_gameStateFlags;
     if (flags & 0x2) {
-        g_nSaveLoadStatusCode[1] = flags & ~0x2;
+        g_gameStateFlags = flags & ~0x2;
     }
-    flags = g_nSaveLoadStatusCode[1];
+    flags = g_gameStateFlags;
     if (flags & 0x80) {
         g_nSaveLoadStatusCode[0] = 0x15;
-        g_nSaveLoadStatusCode[1] = (flags ^ 0x80) | 0x40;
+        g_gameStateFlags = (flags ^ 0x80) | 0x40;
     } else if (flags & 0x100) {
         g_nSaveLoadStatusCode[0] = 0x14;
-        g_nSaveLoadStatusCode[1] = (flags ^ 0x100) | 0x40;
+        g_gameStateFlags = (flags ^ 0x100) | 0x40;
     } else if (D_1393E0.busy != 0) {
         g_nSaveLoadStatusCode[0] = 3;
     } else if (D_1393E0.dirty != 0) {
         g_nSaveLoadStatusCode[0] = 1;
     }
 }
-#endif
 
 /** If no save/load confirmation is pending (flag bit 6 clear), reset the popup
  *  status to 3 (idle). First of four identical per-call-site stubs. */
@@ -845,50 +835,44 @@ void UpdateSaveTaskState(void) {
 /** Save/load status: while a card-removal abort is NOT in flight
  *  (D_1393F0/busy != -2) show status 3; otherwise, if the pending-flag's 0x20
  *  bit is set, consume it and show status 5.
- *  (Walled for matching by the reload-artifact named in the file header.) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_002998D0);
-#else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 68.61% -> DSLOT-GPREL, first differing row @4: ROM `lw v1, %gp_rel(g_gameStateFlags)(gp)` vs `(nothing)`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 49.72% -> ADDR-BASEREG, first differing row @1: ROM `addiu a0, zero, -0x2` vs `addiu v1, zero, -0x2`. */
+ *  Byte-exact on sdk29 (-O2 -G8 -fno-gcse, task #888): the pending-flag word
+ *  is spelled g_gameStateFlags, the ROM's own symbol, so its delay-slot
+ *  access is one %gp_rel word and every other access is absolute (see
+ *  g_gameStateFlags' declaration). The reload-artifact wall this comment
+ *  used to name was KNOWN-FALSE for it. */
 void func_002998D0(void) {
     s32 flags;
     if (D_1393F0[0] != -2) {
         g_nSaveLoadStatusCode[0] = 3;
         return;
     }
-    flags = g_nSaveLoadStatusCode[1];
+    flags = g_gameStateFlags;
     if (flags & 0x20) {
-        g_nSaveLoadStatusCode[1] = flags ^ 0x20;   /* consume bit 0x20 */
+        g_gameStateFlags = flags ^ 0x20;   /* consume bit 0x20 */
         g_nSaveLoadStatusCode[0] = 5;
     }
 }
-#endif
 
 /** Save/load status: while a card transaction is active (D_1393F0/busy != 0)
  *  show status 3; otherwise, if the pending-flag's 0x20 bit is set, consume it
  *  and show status 0xC.
- *  (Walled for matching by the reload-artifact named in the file header.) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299918);
-#else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 66.76% -> DSLOT-GPREL, first differing row @3: ROM `lw v1, %gp_rel(g_gameStateFlags)(gp)` vs `(nothing)`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 47.94% -> ADDR-BASEREG, first differing row @3: ROM `lw v1, %gp_rel(g_gameStateFlags)(gp)` vs `(nothing)`. */
+ *  Byte-exact on sdk29 (-O2 -G8 -fno-gcse, task #888): the pending-flag word
+ *  is spelled g_gameStateFlags, the ROM's own symbol, so its delay-slot
+ *  access is one %gp_rel word and every other access is absolute (see
+ *  g_gameStateFlags' declaration). The reload-artifact wall this comment
+ *  used to name was KNOWN-FALSE for it. */
 void func_00299918(void) {
     s32 flags;
     if (D_1393F0[0] != 0) {
         g_nSaveLoadStatusCode[0] = 3;
         return;
     }
-    flags = g_nSaveLoadStatusCode[1];
+    flags = g_gameStateFlags;
     if (flags & 0x20) {
-        g_nSaveLoadStatusCode[1] = flags ^ 0x20;   /* consume bit 0x20 */
+        g_gameStateFlags = flags ^ 0x20;   /* consume bit 0x20 */
         g_nSaveLoadStatusCode[0] = 0xC;
     }
 }
-#endif
 
 /* Declared here because the gas equate that aliases the latch word sits a few
  * lines below (with func_00299968); the definition order fixes this function's
