@@ -48,9 +48,9 @@ extern u8 D_1395B8[];
  *     func_00293B10 (0x293B10) matches on the 2.9 arm once the chunk table is
  *     typed `u8 **` and `i` is declared before `p` — the "register-coloring"
  *     reading was a spelling artefact.]
- *   func_002949E0 (0x2949E0, 89.7%) — the gp_rel D_1A933C reload is scheduled
- *     before its store, and the equality test lowers to `bnel` (branch-likely)
- *     where the original uses a plain `bne`.
+ *   [MATCHED in task #804: func_002949E0 (0x2949E0) on the 2.9 arm via
+ *     `row - -(slot * 4)`; the old "bnel vs bne" entry here was false — the
+ *     ROM itself has `bnel` at 0x294A10.]
  *   MapDataExistsForLevel (0x296120, 70.9%) — the early-return `if` lowers to
  *     `beql` (branch-likely) where the original uses a plain `beqz` with the
  *     level mask computed once in the delay slot.
@@ -2828,46 +2828,42 @@ void func_00294970(void) {
 /*
  * func_002949E0(rec, enable) — commit a pending streaming-slot record. When
  * enable is set and the record's slot index rec[1] is non-negative, stores the
- * record's class id rec[0] into the per-slot in-flight table
- * (g_respawnPlayerYaw+0x48, field +0x34, stride 4 by slot). If the slot index
- * also equals the currently-armed slot D_1A933C, that latch is toggled to
- * rec[1] ^ 1. The record's word rec[0] is ALWAYS stamped -1 on return (the latch
- * toggle is the only externally visible effect of the equal case). The disabled /
- * negative-slot path just stamps rec[0] = -1. (Verified bit-exact against the asm
- * on real R5900 via cmp-oracle: the equal branch sets D_1A933C then falls into
- * the shared `result = -1` tail, so rec[0] is never the toggled value.)
+ * record's class id rec[0] into the slot table's pending-class word
+ * (D_152CD0 + slot*4 + 0x34; D_152CD0 is g_respawnPlayerYaw+0x48). If the slot
+ * index also equals the currently-armed slot D_1A933C, that latch is toggled to
+ * rec[1] ^ 1. rec[0] is ALWAYS stamped -1 on return: the equal branch sets
+ * D_1A933C and falls into the shared `result = -1` tail, so the latch toggle is
+ * the only visible effect of the equal case.
  *
- * ENGINE-2.96 MATCH under per-function sched-ON (Validation A confirmed): the
- * body is byte-exact with the engine cc1 + sched-ON (`-fno-strict-aliasing
- * -fno-builtin`, no `-fno-schedule-insns`) + move_fixup for the daddu-vs-move.
- * TU CAVEAT: NOT co-committable with sched-OFF siblings in 191238 — a TU compiles
- * with ONE scheduler setting. Provable per-fn; commit only if 191238 goes
- * sched-ON-uniform. Under the pinned 2.9 cc1 (sched-OFF) it is instruction-
- * identical EXCEPT the pointer-arg copy emitted as 64-bit `daddu $6,$4,$0` vs the
- * 2.9 32-bit `move` (a single-instruction version delta).
+ * Params: rec    — pending record {class id, slot index}
+ *         enable — 0 skips the commit (rec[0] is still reset)
+ * No return value.
+ *
+ * Byte-exact on the sdk29 arm (task #804). Two spellings carry the match:
+ *   - the slot address is formed from the untouched table base and the store
+ *     carries the +0x34, so the ROM's `la D_152CD0; addu; sw 0x34(v0)` shape
+ *     holds (indexing a +0x34-biased table folds the bias into the `la`);
+ *   - `row - -(slot * 4)` rather than `row + slot * 4`: cc1 2.9's combine
+ *     rewrites `(plus row (mult slot 4))` shift-first and emits
+ *     `addu v0,v1,v0`, where the ROM has the table base first
+ *     (`addu v0,v0,v1`). Subtracting the negated offset keeps the base first
+ *     (the same lever as KickLevelBankDiscLoad, task #756).
+ * The engine96 arm cannot form this address: cc1 2.96-ee-001003 always emits
+ * the indexed `sw v1,sym+off(at)` macro here (FACT #8102).
  */
-extern s32 g_respawnPlayerYaw[];
+extern u8 D_152CD0[];  /* gadget cache slot table (g_respawnPlayerYaw+0x48) */
 extern s32 D_1A933C;
-/* TODO(match): t496 — the engine96 gate row (objdiff_build.sh + unit_report.sh, the
- * tree's -fno-schedule-insns arm) reads 45.37% on this body: the slot-table store
- * is emitted as the `sw v1,g_respawnPlayerYaw+0x7c(at)` assembler macro and the
- * bltzl/-1 early-out is reordered; the same body in the all-promoted probe file
- * (tools/ee/.t496/07_all96_report.txt) reads 76.26% with an explicit lui/addiu/addu
- * — the difference is the declaration environment of the TU, not the body
- * (GPREL-DECL / ORDER-#7369 class; not iterated in #496). */
-#if !defined(TARGET_NATIVE) && !defined(MATCH_func_002949E0)
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002949E0);
-#else
 void func_002949E0(s32 *rec, s32 enable) {
     if (enable != 0 && rec[1] >= 0) {
-        g_respawnPlayerYaw[0x1F + rec[1]] = rec[0];   /* +0x48 + slot*4 + 0x34 */
+        u8 *row = D_152CD0;
+        row -= -(rec[1] * 4);
+        *(s32 *)(row + 0x34) = rec[0];
         if (rec[1] == D_1A933C) {
             D_1A933C = rec[1] ^ 1;
         }
     }
     rec[0] = -1;
 }
-#endif
 
 /* func_00294A30(rec, flag): one step of a chained disc-load, used as the load
  * callback. On flag==0 it ends the chain (rec[0] = -1). Otherwise it looks up the
