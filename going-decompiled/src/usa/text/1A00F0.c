@@ -451,36 +451,33 @@ void func_002A07B0(u8 *moby, u8 sub, u8 *rec) {
  * Left INCLUDE_ASM.
  */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0828);
+#define A0828_LOOP_PAD() ({ __asm__ __volatile__(".set noreorder\n\tnop\n\tnop\n\t.set reorder"); })
 #else
+#define A0828_LOOP_PAD() ((void)0)
+#endif
 struct A0828Node { u8 _pad[8]; struct A0828Node *next; };
 struct A0828List { u8 _pad[0x54]; struct A0828Node *head; };
 void func_002A0828(struct A0828List *list, struct A0828Node *node) {
+    struct A0828Node *prev;
+    s32 noTailCall;
     if (node != 0) {
         if (list->head == node) {
             list->head = node->next;
-        } else {
-            struct A0828Node *prev = list->head;
-            if (prev != 0) {
-                struct A0828Node *cur = prev->next;
-                if (cur != 0) {
-                    while (cur != node) {
-                        prev = cur;
-                        cur = prev->next;
-                        if (cur == 0) {
-                            break;
-                        }
-                    }
-                    if (cur == node) {
-                        prev->next = node->next;
-                    }
-                }
+        } else if (list->head != 0) {
+            prev = list->head;
+            if (prev->next != 0 && prev->next != node) {
+                do {
+                    prev = prev->next;
+                } while (prev->next != 0 && (A0828_LOOP_PAD(), prev->next != node));
+            }
+            if (prev->next == node) {
+                prev->next = node->next;
             }
         }
         FillMemory32(node, 0, 0x40);
+        noTailCall = 0;
     }
 }
-#endif
 
 /*
  * AcquireProceduralAnimSlot (func_002A08C0): first-fit/reuse a procedural-anim-frame
