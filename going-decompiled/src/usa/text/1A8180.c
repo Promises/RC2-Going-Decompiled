@@ -3665,12 +3665,25 @@ s32 func_002AC728(void *target, u8 *s)
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC978);
 
 /**
- * func_002AC980 — wrap an angle into [-pi, pi) via the shared frac helper.
+ * func_002AC980 — wrap an angle toward [-pi, pi) via the shared frac helper;
+ * the wrap holds only for angle >= -pi (see RANGE).
  *
- * Params: angle — radians, any range.
+ * Params: angle — radians.
  * Returns frac((angle + pi) / 2pi) * 2pi - pi, where func_00284678(out, x)
  * stores the truncated integer part (float)(int)x to *out and returns
  * x - *out (the scratch out-parameter is unused here).
+ *
+ * RANGE (do NOT "fix" by editing the range or the body): func_00284678
+ * TRUNCATES toward zero - its ROM body is cvt.w.s / cvt.s.w / sub.s, and
+ * the EE FPU's cvt.w.s rounds toward zero - it does not floor. So its
+ * fraction has the sign of x:
+ *  - angle >= -pi: x >= 0, frac in [0, 1), result in [-pi, pi) - wrapped;
+ *  - angle <  -pi: x <  0, frac in (-1, 0], result in (-3pi, -pi] - NOT
+ *    wrapped; it can sit up to 2pi below the range.
+ * A caller needing [-pi, pi) for arbitrary input cannot rely on this alone.
+ * ROM callers (jal sites, tree-wide over asm/usa; a jalr cannot be seen
+ * this way): UpdateLightningBeamArcAndDamage x3, BuildGadgetBeamArcPolyline
+ * x3 - 2 functions, 6 sites, all in the bulk asm/usa/text/208010.s.
  *
  * LITERAL NOTE (do NOT "fix"): this body's 2pi is 6.28318548f (0x40C90FDB) -
  * that is the byte-correct value its own .s loads. It is DISTINCT from
