@@ -2942,38 +2942,44 @@ void LoadLevelSoundBank(s32 bankAddr, s32 bankSlot) {
 #endif
 
 /* Kick the disc load of level sound-bank `bankSlot` if its TOC entry exists:
- * resets the bank's load-status slot to -1 (loading) and registers
- * OnSoundBankLoaded; when the TOC entry is empty, clears the status slot to 0
- * (no bank). The bank's EE address is the global-WAD base plus its TOC offset.
- * The address shapes are reproduced (task #510): the store indexes the
- * bankLoadStatus array through the listener pointer (mult first, +0x17A0 as
- * the displacement), the callee argument is the decayed `by.level` array plus
- * the slot ((base + 0x17A4) + slot*4). Two residual rows: OPERAND-ORDER — the
- * ROM adds `toc + (slot << 3)` as `addu $2,$6,$2`, cc1 2.9 always emits the
- * shifted index first (4 spellings tried) — and one SCHED-TIEBREAK row (the
- * status store vs the callback `lui`). sdk29 94.47% / engine96 68.26% (unit
- * objdiff report). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", KickLevelBankDiscLoad);
-#else
-/* TODO(match): functional equivalent - not byte-exact; OPERAND-ORDER + SCHED-TIEBREAK, sdk29 94.47% / engine96 68.26%. */
+ * resets the bank's load-status slot to -1 (loading) and starts an async load
+ * with OnSoundBankLoaded as the completion callback; when the TOC entry is
+ * empty, clears the status slot to 0 (no bank). The bank's EE address is the
+ * global-WAD base (TOC +0x529C) plus the level bank's TOC offset (TOC +0x52E0,
+ * 8-byte entries). The status pointer handed to the callback is the decayed
+ * `by.level` array plus the slot, zero-extended to 64 bits for the RPC.
+ *
+ * Params: bankSlot — level sound-bank index (0-based; its status word is
+ *         bankLoadStatus.all[bankSlot + 1], slot 0 being the global bank).
+ * No return value.
+ *
+ * Two spellings carry the match (task #756):
+ *   - `toc - -(bankSlot * 8)`: cc1 2.9 emits `toc + bankSlot * 8` with the
+ *     shifted index as the first addu operand; the ROM has the TOC base first
+ *     (`addu $2,$6,$2`). Subtracting the negated offset keeps the base first.
+ *   - `noTailCall = 0` after the call instead of an empty volatile asm. Both
+ *     stop cc1 turning the call into a sibling `j` (the ROM keeps jal + frame),
+ *     but the asm stays in the block as a scheduling barrier that every insn
+ *     depends on, which tips sched2's tie between the callback `lui` and the
+ *     status store the wrong way. A dead store to a local is enough to keep the
+ *     call out of tail position at expand time and is deleted by flow before
+ *     either scheduler runs. */
 void KickLevelBankDiscLoad(s32 bankSlot) {
     u8 *toc = g_discToc;
-    u8 *tocEntry = toc + bankSlot * 8;
-    s32 tocOffset = *(s32 *)(tocEntry + 0x52E0);
+    s32 tocOffset = *(s32 *)(toc - -(bankSlot * 8) + 0x52E0);
+    s32 noTailCall;
     if (tocOffset != 0) {
         ListenerBlock *listener = (ListenerBlock *)g_listenerPosHistory;
         u32 *levelTable = listener->bankLoadStatus.by.level;
         listener->bankLoadStatus.all[bankSlot + 1] = 0xFFFFFFFF;
         snd_BankLoadAsync(tocOffset + *(s32 *)(toc + 0x529C),
                           0, OnSoundBankLoaded, (long)(u32)(levelTable + bankSlot));
-        __asm__ __volatile__("");
+        noTailCall = 0;
     } else {
         ListenerBlock *listener = (ListenerBlock *)g_listenerPosHistory;
         listener->bankLoadStatus.all[bankSlot + 1] = 0;
     }
 }
-#endif
 
 /* Handwritten stub-table fragment (orphaned addiu $sp / nop run) — see unit
  * header; kept INCLUDE_ASM permanently. */
