@@ -3647,27 +3647,47 @@ s32 func_002AC728(void *target, u8 *s)
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC978);
 
 /**
- * Wrap an angle into [-pi, pi) via the shared frac helper: take the fractional
- * part of (angle + pi) * (1/2pi), scale it back by 2pi and recentre by -pi.
+ * func_002AC980 — wrap an angle into [-pi, pi) via the shared frac helper.
+ *
+ * Params: angle — radians, any range.
+ * Returns frac((angle + pi) / 2pi) * 2pi - pi, where func_00284678(out, x)
+ * stores the truncated integer part (float)(int)x to *out and returns
+ * x - *out (the scratch out-parameter is unused here).
  *
  * LITERAL NOTE (do NOT "fix"): this body's 2pi is 6.28318548f (0x40C90FDB) -
  * that is the byte-correct value its own .s loads. It is DISTINCT from
  * func_002AB5A0's 2pi (6.28318596f / 0x40C90FDC, 1 ULP higher) - the two
  * functions legitimately use different roundings. cmp-oracle-confirmed.
+ *
+ * MATCHED on the sdk29 arm (plain C; unit objdiff report via objdiff_build.sh +
+ * unit_report.sh, 100.00%; task #758). The ROM loads 2pi into $f1 and puts the
+ * product in $f12 (the dead argument register); the pinned cc1 colours the
+ * product into $f0 and nothing in the expression moves it (task #597 ran three
+ * phrasings, and reusing `angle` for the product is a fourth [99.55]). Both
+ * registers are therefore bound explicitly (empty on native):
+ *  - `turn` in $f12 alone makes cc1 load the constant into $f12 too [99.55];
+ *  - `twoPi` in $f1 with it gives the ROM's pair.
  */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 66.77%
-   -> UNKNOWN-@0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-32` */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC980);
+#define AC980_IN_F1 __asm__("$f1")
+#define AC980_IN_F12 __asm__("$f12")
 #else
+#define AC980_IN_F1
+#define AC980_IN_F12
+#endif
 f32 func_002AC980(f32 angle) {
     f32 frac;
     f32 scratch;
+    register f32 twoPi AC980_IN_F1;
+    register f32 turn AC980_IN_F12;
 
     frac = func_00284678(&scratch, (angle + 3.14159274f) * 0.159154937f);
-    return frac * 6.28318548f - 3.14159274f;
+    twoPi = 6.28318548f;
+    turn = frac * twoPi;
+    return turn - 3.14159274f;
 }
-#endif
+#undef AC980_IN_F1
+#undef AC980_IN_F12
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC9D8);
