@@ -1511,9 +1511,14 @@ s32 RequestGameStateChange(s32 stateId, s32 push, s32 argA, s32 argB, s8 *outDon
  * Residual, measured, not a spelling question: the empty asm is an insn of its
  * own. sched2 gives it an issue slot and puts it on the dependence path between
  * the copy and the first movz. The ROM has no such insn, so the head schedule
- * stays one cycle off. The rest is register choice: $2/$3 are swapped in the head
- * and in the pop block, `status` lives in a3 rather than t0, and argA is copied to
- * a2 rather than a3. Moving the copy into the asm (`"=r"(status) : "0"(blocked)`)
+ * stays one cycle off. The rest, read word by word against the ROM (task #808):
+ * the head re-materialises the constant (`li v0,1` as the depth movz source)
+ * where the ROM copies it (`daddu $8,$7,$0`) and reuses a3; the -1 goes to $3
+ * where the ROM uses $2, while the head's other $2/$3 uses (pending, -2,
+ * %hi(g_health)) match. The pop block has $2/$3 swapped throughout and issues two
+ * pairs in the other order (addu / sw argA, lw / sw argB). `status` lives in a3
+ * rather than t0, depth in t0 rather than t1, and argA is copied to a2 rather
+ * than a3. Moving the copy into the asm (`"=r"(status) : "0"(blocked)`)
  * gives the ROM's colouring for the whole chain (a3/t0/t1/a2) but scores 78.03,
  * because of that same asm slot. A `register ... asm("$7")` pin (task #756, 81.72)
  * is not needed for this score. */
