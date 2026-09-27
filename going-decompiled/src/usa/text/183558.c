@@ -12,11 +12,11 @@
  * MMI parallel ops, $at used as a GPR, min.s/max.s/abs.s/madda, non-u add/addi)
  * that no C phrasing reaches on either cc1; the 8 compiler-shaped ones miss on
  * xfer/delay-slot/coloring properties of the two held cc1s (see each arm's
- * TODO(match)). The one genuinely compiled function, SetVideoMode, is 25/27
- * words on the 2.9 arm at this unit's -O2 -G0 with the two flags in cc1's
- * small-data class (ROM_SMALL below); the ROM's single %gp_rel word is the
- * store cc1 sinks into the bnel delay slot, which the tree's assembler expands
- * to two words.
+ * TODO(match)). The one genuinely compiled function, SetVideoMode, is matched
+ * on the 2.9 arm since task #889 moved this unit from -G0 to -G8: its ROM
+ * stores g_bProgressiveScan %gp_rel in the bnel delay slot, which cc1 cannot
+ * emit at -G0. Measured before the move: -G8 leaves the unit object
+ * byte-identical with nothing new promoted.
  *
  * The screen's abs.s member was wrong: `__builtin_fabsf` emits `abs.s` on
  * both cc1s, and GetFloatAbs is compiled from C on the matching build (task
@@ -1460,46 +1460,40 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002848A0);
  */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284998);
 
-/* SetVideoMode globals/callees (declared for the TARGET_NATIVE #else only).
- * ROM_SMALL: the ROM addresses both flags as cc1 small data (bare `lw/sw $r,sym`
- * macros: the assembler expands them to the dest-reuse `lui $r; lw $r,%lo($r)`
- * pair, and the store cc1 sank into the `bnel` delay slot to a single
- * `%gp_rel` op). This unit is pinned -G0, so the only way to put a symbol in
- * cc1's small-data class here is the .sdata section attribute. */
-#ifdef TARGET_NATIVE
-#define ROM_SMALL
+/* SetVideoMode globals/callees. Addressing (unit built -G8, task #889): cc1
+ * sees both flags as small data; the ROM reads g_bPalMode and
+ * g_bProgressiveScan with the assembler's absolute `lui $r; lw $r,%lo($r)`
+ * pair but stores g_bProgressiveScan with one %gp_rel op in the bnel delay
+ * slot. So g_bPalMode is sized 16 before cc1's own directive and the
+ * g_bProgressiveScan load goes through an assembler alias sized 16 (the #8036
+ * construct; relocations name the real symbol). */
+extern s32  g_bPalMode;         /* 0x1A7B98 PAL flag (USA build clears it -> NTSC) */
+extern s32  g_bProgressiveScan; /* 0x1A7BC0 NTSC 480p progressive-scan flag */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_bPalMode, 16");
+__asm__(".extern g_bProgressiveScanAbs, 16\n\tg_bProgressiveScanAbs = g_bProgressiveScan");
+extern s32  g_bProgressiveScanAbs;
 #else
-#define ROM_SMALL __attribute__((section(".sdata")))
+#define g_bProgressiveScanAbs g_bProgressiveScan
 #endif
-extern s32  g_bPalMode ROM_SMALL;         /* 0x1A7B98 PAL flag (USA build clears it -> NTSC) */
-extern s32  g_bProgressiveScan ROM_SMALL; /* 0x1A7BC0 NTSC 480p progressive-scan flag */
 extern void func_00124418(void);  /* GS/DMA reset preamble (sceGsResetPath+4 per FACT #5892; its own glabel since task #472 carved it off the 4-byte CD fill func_00124414) */
 extern void sceGsResetGraph(short mode, short inter, short omode, short ffmode);
 
 /** SetVideoMode — reset the GS into the correct scan mode for the current
  *  region/user setting. PAL always forces interlaced (clears progressive), then:
  *  progressive -> sceGsResetGraph(0,0,0x50,1) (NTSC 480p); otherwise interlaced
- *  sceGsResetGraph(0,1,omode,0) with omode = NTSC(2) / PAL(3). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", SetVideoMode);
-#else
-/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 95.93% / engine96 arm 63.70% (unit objdiff,
- * objdiff_build.sh + unit_report.sh); 2.9 first diff row 7: ROM `sw zero,0(gp)  [GPREL16
- * g_bProgressiveScan]` vs `lui at,0x0  [HI16 g_bProgressiveScan]` (this body,
- * tools/ee/.t494/15_svm29_report.txt). Residual DSLOT-GPREL: the one store cc1 2.9 sinks into the
- * `bnel` slot (`sw $0,g_bProgressiveScan`, a bare small-data macro) is expanded by the tree's GAS
- * to lui/sw (2 words, "macro instruction expanded into multiple instructions in a branch delay
- * slot"), where the ROM has the single `sw $0,%gp_rel(g_bProgressiveScan)($28)`; every other word
- * of the 2.9 arm is equal (25/27 rows). Rewriting that one operand to the %gp_rel form in base.s
- * (tools/ee/.t494/gprel_dslot_fixup.py, an assembler-emulation post-pass NOT in the pipeline)
- * gives 100.00% and verify_match_unit.sh BYTE IDENTICAL 28/28 words. engine96 arm: IFCONV (movn
- * store speculation) + -G8 gp_rel loads. */
+ *  sceGsResetGraph(0,1,omode,0) with omode = NTSC(2) / PAL(3). No params, no
+ *  return. The empty asm after each call keeps the ROM's call + return frame.
+ *  MATCHED (task #889): 100.00% sdk29 (unit objdiff, objdiff_build.sh), solo,
+ *  with the unit built -G8. t494's 95.93% at -G0 was the bnel-slot store,
+ *  which the assembler expands to lui/sw at -G0 and which needed no post-pass
+ *  once the unit could emit %gp_rel. */
 void SetVideoMode(void) {
     func_00124418();
     if (g_bPalMode != 0) {
         g_bProgressiveScan = 0;
     }
-    if (g_bProgressiveScan != 0) {
+    if (g_bProgressiveScanAbs != 0) {
         sceGsResetGraph(0, 0, 0x50, 1);
         __asm__ __volatile__(""); /* the ROM calls and returns; cc1 would sibcall */
     } else {
@@ -1507,5 +1501,4 @@ void SetVideoMode(void) {
         __asm__ __volatile__("");
     }
 }
-#endif
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284A20);
