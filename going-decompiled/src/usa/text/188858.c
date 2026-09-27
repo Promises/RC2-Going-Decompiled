@@ -1192,58 +1192,66 @@ s32 func_002897B8(void) {
 }
 #endif
 
-/* func_00289840(textIndex, voiceHandle): arm a pending subtitle line — only when
- * the subtitle state machine is idle (g_subtitleState[0]==0), no line is already
- * pending (+0x24 == -1), the area save image's current clip is free and matches,
- * the resolved health/clip entry isn't 0xFFFF, the game isn't in state 6 and the
- * game timer has advanced past 6 — stores textIndex/voiceHandle into
- * g_subtitleState +0x24/+0x28 and clears +0x40/+0x44. Returns 1 when armed, else
- * 0.
- *
- * WALL (81.58%): the C below is op-for-op faithful and reproduces every load,
- * guard branch, the g_saveImageArea+0x1000 / g_health+0x66C absolute-displacement
- * folds and the combined `state==6 || time<6` exit exactly — the SOLE residual
- * difference is the EE 3-operand `mult`: the original schedules it between the
- * table-base `lui` and `addiu` and reuses the constant-12 register (v0) for the
- * product, whereas this cc1 emits the `addiu` first and allocates a fresh temp
- * (a0). That is a pure instruction-scheduling / register-allocation artifact of
- * the multiply, not expressible from semantically-equivalent C. Left INCLUDE_ASM
- * for the matching build; the #else is the cmp-oracle'd portable body
- * (cmp_188858_text.c, 95/95 on real R5900). EU twin func_00289730 (188748) is
- * byte-identical logic — region-agnostic, no divergence. */
+/* The per-line subtitle/voice timing table at g_health+0x66C, by the name the
+ * ROM addresses it with. An unsized array is not small data to cc1 -G8, so the
+ * address is compiler-split into lui/addiu and the scheduler can place the
+ * index multiply between them as the ROM does (spelled g_health+0x66C it is
+ * one `la` macro that nothing can be scheduled into). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_00289840);
+extern u16 D_18C958[];
 #else
+#define D_18C958 ((u16 *)((u8 *)&g_health + 0x66C))
+#endif
+
+/**
+ * Arm a pending subtitle line: when the subtitle state machine is idle
+ * (state 0), no line is already pending (showingIndex == -1), the area's voice
+ * clip slot (g_saveImageArea+0x1000) is not busy and its current clip matches,
+ * the line's timing entry is not 0xFFFF, the game is not in state 6 and the
+ * game timer has reached 6, store the line and clear the phase fields.
+ *
+ *   textIndex    subtitle text index, stored at showingIndex (+0x24)
+ *   voiceHandle  voice handle, stored at showingHandle (+0x28); also indexes the
+ *                0xC-stride timing table D_18C958
+ *   ->           1 when armed, 0 otherwise
+ *
+ * Every failing test branches to one shared `return 0` at the end (the goto
+ * form); a `return 0` per test lets cc1 invert the clip test around an inline
+ * return block. The empty volatile asm with a memory clobber before the clip
+ * test keeps its load out of the busy test's delay slot, which the ROM leaves
+ * as a `nop`.
+ */
 s32 func_00289840(s32 textIndex, s32 voiceHandle) {
-    u16 *lineTable = (u16 *)((u8 *)&g_health + 0x66C);
     s32 pending;
 
     if (g_subtitleState.state != 0) {
-        return 0;
+        goto fail;
     }
     pending = g_subtitleState.showingIndex;
     if (pending != -1) {
-        return 0;
+        goto fail;
     }
     if (((AreaClipState *)&g_saveImageArea[0x1000])->voiceBusy != 0) {
-        return 0;
+        goto fail;
     }
+    __asm__ __volatile__("" ::: "memory");
     if (((AreaClipState *)&g_saveImageArea[0x1000])->currentClip != pending) {
-        return 0;
+        goto fail;
     }
-    if (lineTable[voiceHandle * 6] == 0xFFFF) {
-        return 0;
+    if (D_18C958[voiceHandle * 6] == 0xFFFF) {
+        goto fail;
     }
     if (g_nGameState == 6 || g_gameTime < 6) {
-        return 0;
+        goto fail;
     }
     g_subtitleState.showingIndex = textIndex;
     g_subtitleState.showingHandle = voiceHandle;
     g_subtitleState.phaseTimer = 0;
     g_subtitleState.phaseFlag = 0;
     return 1;
+fail:
+    return 0;
 }
-#endif
 
 /* func_002898D8: 8-byte trailing-pad fragment (addiu $sp,+0x20; nop) of the
  * preceding function, pinned as its own symbol; the real function follows. */
