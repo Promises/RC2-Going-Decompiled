@@ -2591,25 +2591,348 @@ void func_0011FC48(void) {
     }
 }
 
-/**
- * __divdi3 = libgcc `__divdi3` (signed 64-bit division, a / b). ee-gcc
- * inlines libgcc2.c's signed wrapper around `__udivmoddi4`: it takes the
- * magnitudes of both operands (the bgez/negu sign-strip sequences at entry),
- * runs the unsigned long-division core (count_leading_zeros normalisation via
- * the 256-byte `__clz_tab` D_0013AC58, then 16-bit-digit `udiv_qrnnd` with the
- * host `divu` — hence the `break 0,7` divide-by-zero traps), and negates the
- * quotient when exactly one operand was negative.
- *
- * NOT GAME CODE: compiler runtime emitted by ee-gcc itself; the
- * `udiv_qrnnd`/`count_leading_zeros` macros are arch-specific compiler internals
- * not reconstructable as clean hand C that matches byte-exact, so the MATCHING
- * arm stays INCLUDE_ASM (links verbatim like the other SDK/runtime routines in
- * this unit). The portable #else is the faithful behaviour (`a / b`), cmp-oracle'd
- * asm-vs-C bit-identical on the real R5900 by run_cmp_015180_iso.sh. Excluded
- * domains (the asm traps `break 0,7` / the host raises on overflow): b == 0 and
- * INT64_MIN / -1 — the caller (func_0011C1F8's %d, always b == 10) never hits them. */
+/* ---- libgcc2 runtime scaffolding (shared by __divdi3 and __muldi3) ---- */
+
+/* libgcc2's DIunion: a 64-bit value viewed as its two 32-bit halves
+ * (little-endian: low word first). */
+typedef union {
+    struct {
+        s32 low;
+        s32 high;
+    } s;
+    s64 ll;
+} DIunion;
+
+/* longlong.h's umul_ppmm for MIPS: the full 32x32->64 unsigned product of u
+ * and v, high word to w1 and low word to w0. On the EE it is a bare `multu`
+ * whose LO/HI results are bound straight to the outputs, which is what makes
+ * cc1 read them back with `mflo`/`mfhi` rather than expanding a 64-bit
+ * multiply. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", __divdi3);
+#define umul_ppmm(w1, w0, u, v)                                              \
+    __asm__("multu %2,%3"                                                    \
+            : "=l"((u32)(w0)), "=h"((u32)(w1))                               \
+            : "d"((u32)(u)), "d"((u32)(v)))
+#else
+#define umul_ppmm(w1, w0, u, v)                                              \
+    do {                                                                     \
+        u64 umul_product_ = (u64)(u32)(u) * (u32)(v);                        \
+        (w1) = (u32)(umul_product_ >> 32);                                   \
+        (w0) = (u32)umul_product_;                                           \
+    } while (0)
+#endif
+
+#ifndef TARGET_NATIVE
+/* The rest of the L_divdi3 module of libgcc2.c + longlong.h, GCC trunk
+ * bf279c4e1a (1999-11-02, the revision before the 2.9-ee-991111 snapshot),
+ * Copyright (C) 1989, 92-98, 1999 Free Software Foundation, Inc., GPL v2 or
+ * later with the libgcc linking exception. The function bodies and macro
+ * bodies are GCC's text; only the mode-attribute type names are spelled with
+ * this tree's typedefs, which have the same modes.
+ *
+ * On MIPS longlong.h supplies only umul_ppmm (above), so the division uses its
+ * generic C fallbacks: udiv_qrnnd is __udiv_qrnnd_c (UDIV_NEEDS_NORMALIZATION
+ * = 1) and count_leading_zeros reads __clz_tab. `long` is 64-bit on the EE,
+ * which makes `__ll_B` a 64-bit constant, and that is what gives the ROM its
+ * dsll32/dsra32 sequences. Each libgcc.a member carries its own static
+ * __clz_tab; this module's copy is the rodata table D_0013AC58, and it is
+ * referenced here as an extern so the table stays where the ROM has it. */
+typedef unsigned char UQItype;
+typedef s32 SItype;
+typedef u32 USItype;
+typedef s64 DItype;
+typedef u64 UDItype;
+typedef int word_type __attribute__((mode(__word__)));
+
+#define SI_TYPE_SIZE (sizeof(SItype) * 8)
+#define __BITS4 (SI_TYPE_SIZE / 4)
+#define __ll_B (1L << (SI_TYPE_SIZE / 2))
+#define __ll_lowpart(t) ((USItype)(t) % __ll_B)
+#define __ll_highpart(t) ((USItype)(t) / __ll_B)
+
+#define sub_ddmmss(sh, sl, ah, al, bh, bl)                                   \
+    do {                                                                     \
+        USItype __x;                                                         \
+        __x = (al) - (bl);                                                   \
+        (sh) = (ah) - (bh) - (__x > (al));                                   \
+        (sl) = __x;                                                          \
+    } while (0)
+
+#define __udiv_qrnnd_c(q, r, n1, n0, d)                                      \
+    do {                                                                     \
+        USItype __d1, __d0, __q1, __q0;                                      \
+        USItype __r1, __r0, __m;                                             \
+        __d1 = __ll_highpart(d);                                             \
+        __d0 = __ll_lowpart(d);                                              \
+                                                                             \
+        __r1 = (n1) % __d1;                                                  \
+        __q1 = (n1) / __d1;                                                  \
+        __m = (USItype)__q1 * __d0;                                          \
+        __r1 = __r1 * __ll_B | __ll_highpart(n0);                            \
+        if (__r1 < __m) {                                                    \
+            __q1--, __r1 += (d);                                             \
+            if (__r1 >= (d)) /* i.e. we didn't get carry when adding to __r1 */ \
+                if (__r1 < __m)                                              \
+                    __q1--, __r1 += (d);                                     \
+        }                                                                    \
+        __r1 -= __m;                                                         \
+                                                                             \
+        __r0 = __r1 % __d1;                                                  \
+        __q0 = __r1 / __d1;                                                  \
+        __m = (USItype)__q0 * __d0;                                          \
+        __r0 = __r0 * __ll_B | __ll_lowpart(n0);                             \
+        if (__r0 < __m) {                                                    \
+            __q0--, __r0 += (d);                                             \
+            if (__r0 >= (d))                                                 \
+                if (__r0 < __m)                                              \
+                    __q0--, __r0 += (d);                                     \
+        }                                                                    \
+        __r0 -= __m;                                                         \
+                                                                             \
+        (q) = (USItype)__q1 * __ll_B | __q0;                                 \
+        (r) = __r0;                                                          \
+    } while (0)
+
+#define UDIV_NEEDS_NORMALIZATION 1
+#define udiv_qrnnd __udiv_qrnnd_c
+
+#define count_leading_zeros(count, x)                                        \
+    do {                                                                     \
+        USItype __xr = (x);                                                  \
+        USItype __a;                                                         \
+                                                                             \
+        if (SI_TYPE_SIZE <= 32) {                                            \
+            __a = __xr < ((USItype)1 << 2 * __BITS4)                         \
+                ? (__xr < ((USItype)1 << __BITS4) ? 0 : __BITS4)             \
+                : (__xr < ((USItype)1 << 3 * __BITS4) ? 2 * __BITS4 : 3 * __BITS4); \
+        } else {                                                             \
+            for (__a = SI_TYPE_SIZE - 8; __a > 0; __a -= 8)                  \
+                if (((__xr >> __a) & 0xff) != 0)                             \
+                    break;                                                   \
+        }                                                                    \
+                                                                             \
+        (count) = SI_TYPE_SIZE - (__clz_tab[__xr >> __a] + __a);             \
+    } while (0)
+
+/* The L_divdi3 module's private __clz_tab (0,1,2,2,3,3,3,3,4,...: 1 + the
+ * index of the highest set bit of each byte value, 0 for 0). */
+extern const UQItype D_0013AC58[256];
+#define __clz_tab D_0013AC58
+
+/* libgcc2 __negdi2, static inline in the L_divdi3/L_moddi3 modules: 64-bit
+ * negation done on the two 32-bit halves, borrowing from the high word. */
+static inline DItype __negdi2(DItype u) {
+    DIunion w;
+    DIunion uu;
+
+    uu.ll = u;
+
+    w.s.low = -uu.s.low;
+    w.s.high = -uu.s.high - ((USItype)w.s.low > 0);
+
+    return w.ll;
+}
+
+/* libgcc2 __udivmoddi4: unsigned 64 / 64 -> 64 long division on 32-bit limbs,
+ * quotient returned and remainder stored through rp when rp is non-null.
+ * Normalises the divisor with count_leading_zeros and divides one 32-bit digit
+ * at a time with udiv_qrnnd. `d0 = 1 / d0` divides by zero on purpose, so a
+ * zero divisor traps (`break 0,7`) as the hardware divide would. */
+static inline UDItype __udivmoddi4(UDItype n, UDItype d, UDItype *rp) {
+    DIunion ww;
+    DIunion nn, dd;
+    DIunion rr;
+    USItype d0, d1, n0, n1, n2;
+    USItype q0, q1;
+    USItype b, bm;
+
+    nn.ll = n;
+    dd.ll = d;
+
+    d0 = dd.s.low;
+    d1 = dd.s.high;
+    n0 = nn.s.low;
+    n1 = nn.s.high;
+
+    if (d1 == 0) {
+        if (d0 > n1) {
+            /* 0q = nn / 0D */
+
+            count_leading_zeros(bm, d0);
+
+            if (bm != 0) {
+                /* Normalize, i.e. make the most significant bit of the
+                   denominator set.  */
+
+                d0 = d0 << bm;
+                n1 = (n1 << bm) | (n0 >> (SI_TYPE_SIZE - bm));
+                n0 = n0 << bm;
+            }
+
+            udiv_qrnnd(q0, n0, n1, n0, d0);
+            q1 = 0;
+
+            /* Remainder in n0 >> bm.  */
+        } else {
+            /* qq = NN / 0d */
+
+            if (d0 == 0)
+                d0 = 1 / d0; /* Divide intentionally by zero.  */
+
+            count_leading_zeros(bm, d0);
+
+            if (bm == 0) {
+                /* From (n1 >= d0) /\ (the most significant bit of d0 is set),
+                   conclude (the most significant bit of n1 is set) /\ (the
+                   leading quotient digit q1 = 1).
+
+                   This special case is necessary, not an optimization.
+                   (Shifts counts of SI_TYPE_SIZE are undefined.)  */
+
+                n1 -= d0;
+                q1 = 1;
+            } else {
+                /* Normalize.  */
+
+                b = SI_TYPE_SIZE - bm;
+
+                d0 = d0 << bm;
+                n2 = n1 >> b;
+                n1 = (n1 << bm) | (n0 >> b);
+                n0 = n0 << bm;
+
+                udiv_qrnnd(q1, n1, n2, n1, d0);
+            }
+
+            /* n1 != d0...  */
+
+            udiv_qrnnd(q0, n0, n1, n0, d0);
+
+            /* Remainder in n0 >> bm.  */
+        }
+
+        if (rp != 0) {
+            rr.s.low = n0 >> bm;
+            rr.s.high = 0;
+            *rp = rr.ll;
+        }
+    } else {
+        if (d1 > n1) {
+            /* 00 = nn / DD */
+
+            q0 = 0;
+            q1 = 0;
+
+            /* Remainder in n1n0.  */
+            if (rp != 0) {
+                rr.s.low = n0;
+                rr.s.high = n1;
+                *rp = rr.ll;
+            }
+        } else {
+            /* 0q = NN / dd */
+
+            count_leading_zeros(bm, d1);
+            if (bm == 0) {
+                /* From (n1 >= d1) /\ (the most significant bit of d1 is set),
+                   conclude (the most significant bit of n1 is set) /\ (the
+                   quotient digit q0 = 0 or 1).
+
+                   This special case is necessary, not an optimization.  */
+
+                /* The condition on the next line takes advantage of that
+                   n1 >= d1 (true due to program flow).  */
+                if (n1 > d1 || n0 >= d0) {
+                    q0 = 1;
+                    sub_ddmmss(n1, n0, n1, n0, d1, d0);
+                } else
+                    q0 = 0;
+
+                q1 = 0;
+
+                if (rp != 0) {
+                    rr.s.low = n0;
+                    rr.s.high = n1;
+                    *rp = rr.ll;
+                }
+            } else {
+                USItype m1, m0;
+                /* Normalize.  */
+
+                b = SI_TYPE_SIZE - bm;
+
+                d1 = (d1 << bm) | (d0 >> b);
+                d0 = d0 << bm;
+                n2 = n1 >> b;
+                n1 = (n1 << bm) | (n0 >> b);
+                n0 = n0 << bm;
+
+                udiv_qrnnd(q0, n1, n2, n1, d1);
+                umul_ppmm(m1, m0, q0, d0);
+
+                if (m1 > n1 || (m1 == n1 && m0 > n0)) {
+                    q0--;
+                    sub_ddmmss(m1, m0, m1, m0, d1, d0);
+                }
+
+                q1 = 0;
+
+                /* Remainder in (n1n0 - m1m0) >> bm.  */
+                if (rp != 0) {
+                    sub_ddmmss(n1, n0, n1, n0, m1, m0);
+                    rr.s.low = (n1 << b) | (n0 >> bm);
+                    rr.s.high = n1 >> bm;
+                    *rp = rr.ll;
+                }
+            }
+        }
+    }
+
+    ww.s.low = q0;
+    ww.s.high = q1;
+    return ww.ll;
+}
+#endif /* !TARGET_NATIVE */
+
+/**
+ * __divdi3 = libgcc `__divdi3` (signed 64-bit division, a / b), built from
+ * GCC's own libgcc2.c (L_divdi3 module, trunk bf279c4e1a) by the compiler it
+ * shipped with: it strips both signs with the inlined __negdi2 (the bgez/negu
+ * sequences at entry), divides the magnitudes with the inlined __udivmoddi4
+ * (count_leading_zeros through this module's __clz_tab D_0013AC58, then
+ * 16-bit-digit __udiv_qrnnd_c on the host `divu`, hence the `break 0,7`
+ * divide-by-zero traps), and negates the quotient when exactly one operand was
+ * negative (`c` is flipped once per negative operand).
+ *
+ * The portable #else is the same behaviour (`a / b`), cmp-oracle'd asm-vs-C
+ * bit-identical on the real R5900 by run_cmp_015180_iso.sh. Excluded domains
+ * (the asm traps `break 0,7` / the host raises on overflow): b == 0 and
+ * INT64_MIN / -1 — the caller (func_0011C1F8's %d, always b == 10) never hits
+ * them. */
+#ifndef TARGET_NATIVE
+UDItype __udivmoddi4();
+
+DItype __divdi3(DItype u, DItype v) {
+    word_type c = 0;
+    DIunion uu, vv;
+    DItype w;
+
+    uu.ll = u;
+    vv.ll = v;
+
+    if (uu.s.high < 0)
+        c = ~c,
+        uu.ll = __negdi2(uu.ll);
+    if (vv.s.high < 0)
+        c = ~c,
+        vv.ll = __negdi2(vv.ll);
+
+    w = __udivmoddi4(uu.ll, vv.ll, (UDItype *)0);
+    if (c)
+        w = __negdi2(w);
+
+    return w;
+}
 #else
 s64 __divdi3(s64 a, s64 b) {
     return a / b;
@@ -2881,35 +3204,6 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", __moddi3);
 s64 __moddi3(s64 a, s64 b) {
     return a % b;
 }
-#endif
-
-/* libgcc2's DIunion: a 64-bit value viewed as its two 32-bit halves
- * (little-endian: low word first). */
-typedef union {
-    struct {
-        s32 low;
-        s32 high;
-    } s;
-    s64 ll;
-} DIunion;
-
-/* longlong.h's umul_ppmm for MIPS: the full 32x32->64 unsigned product of u
- * and v, high word to w1 and low word to w0. On the EE it is a bare `multu`
- * whose LO/HI results are bound straight to the outputs, which is what makes
- * cc1 read them back with `mflo`/`mfhi` rather than expanding a 64-bit
- * multiply. */
-#ifndef TARGET_NATIVE
-#define umul_ppmm(w1, w0, u, v)                                              \
-    __asm__("multu %2,%3"                                                    \
-            : "=l"((u32)(w0)), "=h"((u32)(w1))                               \
-            : "d"((u32)(u)), "d"((u32)(v)))
-#else
-#define umul_ppmm(w1, w0, u, v)                                              \
-    do {                                                                     \
-        u64 umul_product_ = (u64)(u32)(u) * (u32)(v);                        \
-        (w1) = (u32)(umul_product_ >> 32);                                   \
-        (w0) = (u32)umul_product_;                                           \
-    } while (0)
 #endif
 
 /**
