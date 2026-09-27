@@ -56,8 +56,9 @@
  * Task #888 closes func_0029CCB8 on the same lever: g_guiInstance goes to 12,
  * and its callee func_0033B720 gets a symbol_addrs line under its existing
  * name, so ORPHAN_LATENT does not grow.
- * Still open on this lever: func_002992E8 (its slot store is scheduled BEFORE
- * the branch — #525's "rule 2", which asm_unit.sh does not implement).
+ * func_002992E8 was listed here as needing #525's "rule 2" (a slot store
+ * scheduled BEFORE the branch). It does not: with the flag word declared as
+ * its own g_gameStateFlags scalar at 12, cc1 fills the slot itself (#888).
  * Every #else arm below carries its measured state on BOTH gate arms
  * (`t511 promotion sweep` block): the sdk29 arm is the better instrument for
  * this TU on 29 of the 43 arms.
@@ -75,6 +76,7 @@ __asm__(".extern g_loadedArmorVariant, 16");
 __asm__(".extern g_loadedHeldItemModelId, 16");
 __asm__(".extern g_levelDialogToc, 16");
 __asm__(".extern g_nSaveLoadStatusCode, 12");
+__asm__(".extern g_gameStateFlags, 12");
 __asm__(".extern D_1A8C64, 16");
 __asm__(".extern D_1A8C88, 16");
 
@@ -93,6 +95,12 @@ extern s32 D_1A9A90;                          /* small-data GUI state, set to -1
 /* Save/load status pair at 0x1A7420: [0] = popup status code (enum selecting
  * the on-screen save/load message body), [1] = pending-action flag word. */
 extern s32 g_nSaveLoadStatusCode[2];
+/* The same pending-flag word as g_nSaveLoadStatusCode[1] (0x1A7424), under the
+ * name the ROM's relocations use. A function whose ROM stores it as one
+ * %gp_rel word in a delay slot uses this name: cc1 sees a separate 4-byte
+ * scalar, fills the slot with the store, and the .extern 12 above keeps its
+ * straight-line reads absolute (task #888, func_002992E8). */
+extern s32 g_gameStateFlags;
 extern s32 D_1A8C64;  /* GUI popup-busy gate (also read by the walled func_0029CCB8) */
 
 /* Two card-error gate words in the save-prompt small-data block adjacent to
@@ -502,27 +510,31 @@ void func_002992B8(void) {
     g_nSaveLoadStatusCode[0] = 8;
 }
 
-/** Format-confirm step: when a format request (mode 2) is still pending
- *  (result < 0): if the secondary/format path flag (unk16C) is set, show
- *  status 0x11 and set pending-flag bit 0x40; otherwise show status 0xE.
- *  (Walled by the reload-artifact named in the file header.) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_002992E8);
-#else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 95.42% -> DSLOT-GPREL, first differing row @18: ROM `(nothing)` vs `lui at, %hi(g_nSaveLoadStatusCode+0x4)`; 100.00% + verify_match_unit BYTE IDENTICAL under the delay-slot %gp_rel assembler emulation (tools/ee/.t511/gprel_dslot_fixup2.py, NOT a tree tool - RULING pending);
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 75.38% -> ADDR-BASEREG, first differing row @1: ROM `addiu a0, zero, 0x2` vs `addiu a0, v0, %lo(D_1393E0)`. */
+/*
+ * func_002992E8 — format-confirm step of the save/load status machine. Only
+ * while a format request (mode 2) is still pending (result < 0): if the
+ * secondary/format path flag (unk16C) is set, show status 0x11 and set
+ * pending-flag bit 0x40; otherwise show status 0xE. No params, no return.
+ *
+ * Byte-exact on sdk29 (-O2 -G8 -fno-gcse, task #888). The ROM reads the flag
+ * word absolutely (lui/lw) BEFORE the status store and writes it back as one
+ * %gp_rel word in the jr delay slot, under the symbol g_gameStateFlags. With
+ * the flag word spelled g_nSaveLoadStatusCode[1], cc1 2.9 kept the store out
+ * of the slot and the body read 95.42% (unit objdiff, #686). #525/#656 read
+ * that as a missing assembler rule ("rule 2"). Spelling the flag word as its
+ * own g_gameStateFlags scalar at .extern 12 closes it with the tree's asm step
+ * unchanged, so that explanation was KNOWN-FALSE for this function.
+ */
 void func_002992E8(void) {
     if (D_1393E0.mode == 2 && D_1393E0.result < 0) {
         if (D_1393E0.unk16C != 0) {
             g_nSaveLoadStatusCode[0] = 0x11;
-            g_nSaveLoadStatusCode[1] |= 0x40;
+            g_gameStateFlags |= 0x40;
         } else {
             g_nSaveLoadStatusCode[0] = 0xE;
         }
     }
 }
-#endif
 
 /** Load-prompt step: if no transaction is active (busy==0) dispatch on the
  *  pending-flag word: bits 0x6 -> status 0xA; else bit 0x200 -> status 0x19.
