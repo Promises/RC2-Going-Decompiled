@@ -325,27 +325,29 @@ void func_00132888(s32 arg0, s32 arg1) {
     snd_QueueCommandToRing(9, 8, args, 0, 0);
 }
 
-/* func_001328C0: builds a 0x1C-byte record for snd_QueueCommandToRing (selector
- * 0x60) — word 0 = arg0, then either a 24-byte copy of *arg1 or a -1 sentinel.
- * Not matched: the 24-byte payload sits at a *misaligned* offset 4 and the
- * source is itself unaligned, so the original copies it with unaligned
- * ldl/ldr/sdl/sdr. Reproducing that requires a packed (alignment-1) struct copy
- * that ee-gcc 2.9 won't emit from natural C — an aligned struct lands the
- * payload at offset 8 with aligned ld/sd instead (near-miss). Portable #else. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_001328C0);
-#else
+/**
+ * Queue 989snd command 0x60 with a 0x1C-byte record: word 0 is cmd, followed
+ * by either a copy of the 0x18-byte *payload or, when payload is NULL, a single
+ * -1 sentinel word (the rest of the record is left uninitialised).
+ *
+ * payload: 0x18 bytes, no alignment assumed. Returns snd_QueueCommandToRing's
+ * result.
+ *
+ * The payload lands at record offset 4, which is not doubleword-aligned, so
+ * the ROM copies it with three unaligned ldl/ldr + sdl/sdr pairs. ee-gcc 2.9
+ * emits exactly that from the constant-size memcpy below: this body is the
+ * shipped one, byte-exact at -O2 -G8 (the unit's flags).
+ */
 s32 func_001328C0(s32 cmd, const void *payload) {
-    s32 buf[8];
-    buf[0] = cmd;
+    s32 record[8];
+    record[0] = cmd;
     if (payload != 0) {
-        memcpy((u8 *)buf + 4, payload, 0x18); /* copy the 0x18-byte payload */
+        memcpy((u8 *)record + 4, payload, 0x18);
     } else {
-        *(s32 *)((u8 *)buf + 4) = -1;         /* no payload -> -1 sentinel */
+        record[1] = -1;
     }
-    return snd_QueueCommandToRing(0x60, 0x1C, buf, 0, 0);
+    return snd_QueueCommandToRing(0x60, 0x1C, record, 0, 0);
 }
-#endif
 
 /**
  * Invoke snd_QueueCommandToRing with selector 0xB, count 4, arg0 passed by
