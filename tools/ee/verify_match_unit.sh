@@ -150,6 +150,30 @@ if [ "$TGT_TEXT" -gt 65536 ]; then
 fi
 
 # ---- Slice + resolve + compare against the ROM.
+#
+# ⚠️ TWO THINGS THIS COMPARE CANNOT SEE. Neither is fixed here.
+#
+# 1. ZERO WORDS THAT objdump ELIDES. Without `-z`, objdump prints a run of zero
+#    words as one `...` line. The slicer below only reads instruction lines, so
+#    it never compares the ROM against those words. If a real instruction was
+#    zeroed next to a nop pair, it reads BYTE IDENTICAL with a SHORT word count
+#    (FACT #7936: a zeroed `andi` gave rc 0, 9/9 on a 12-word function). A
+#    LEADING run moves `unit_off` and gives a false DIFFERS instead (FACT #6381).
+#    Check: `N/N words` must equal splat's `nonmatching <fn>, 0x<size>` / 4.
+#    Adding `-z` here is HUMAN-ONLY (fleet-control/19734). It is NOT applied.
+#
+# 2. WHERE THE FUNCTION IS IN THE UNIT. Each word is compared at the function's
+#    ROM vaddr from symbol_addrs, plus its offset from the start of its own
+#    block. The function's position in the built unit is never used. So if a
+#    promotion drops post-`endlabel` pad words (FACT #7982) and every later
+#    function lands 8 bytes low, every function still reads BYTE IDENTICAL.
+#    `-z` would NOT fix this: the dropped words are not in the base object at
+#    all, so there is nothing for it to stop eliding. Measured at task #765 on
+#    text/191238 with the pad removed (.text 0x7d68 -> 0x7d60):
+#    StartFrontendSegmentLoad 32/32 and MapGetLevelOrderIndex (0x5008 -> 0x5000)
+#    28/28 both read BYTE IDENTICAL. Only a unit-level check sees this:
+#    tools/ee/text_size_check.sh (same seed: off 56, rc 1; master: off 0,
+#    rc 0) or the whole-image cmp in landing_gate.sh.
 DIS_FILE="$(mktemp -t verify_match_unit)"
 trap 'rm -f "$DIS_FILE"' EXIT
 docker --context colima-ee-x86 run --rm -v "$ROOT":/work -w /work ee-build sh -c \
