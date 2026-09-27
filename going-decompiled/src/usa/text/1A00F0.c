@@ -411,11 +411,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0798);
  * +0x1C/+0x20/+0x24/+0x28, derives a 0x70000000-based scratchpad packet pointer
  * at +0x4 by walking moby's descriptor table (moby+0x24 -> +0x1C -> [rec[0]<<2 +4]
  * -> +idx), then push-links rec at the head of moby's +0x54 list.
- * WALL (~15%): all instructions reproduce but this cc1 software-pipelines the
- * descriptor-table loads up early and reschedules the four 1.0f swc1 stores
- * (emits +0x24 first), while the original keeps the float block grouped and the
- * pointer chain at the tail. A fixed instruction-scheduling artifact, not
- * reachable by source statement order. Left INCLUDE_ASM.
+ * Left INCLUDE_ASM, but not a wall. Task #759 brought it to one swapped pair
+ * of adjacent instructions: the ROM has `sb` (rec[1] = 1) before
+ * `lui a1,0x7000`. The float grouping and the late pointer chain do come out
+ * of C, using volatile float stores and volatile rec[0]/class-pointer reads.
+ * The C that gets there and the variants tried are in FACT #8055.
  */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A07B0);
@@ -952,7 +952,10 @@ void func_002A1058(void) {
  * g_vramDynamicBase, reserves a qword, points the frame-DMA scratch at
  * g_renderTaskWorkBuf-0x10000, seeds the VU-chain cursor from g_renderTaskList,
  * and clears g_deferredSegment2Tag. The matching build keeps the asm; this is
- * the faithful TARGET_NATIVE coverage arm. */
+ * the faithful TARGET_NATIVE coverage arm. Task #759 closed all but one
+ * residual in an EE arm: the prologue issues `lui a0` before `lhu a1`, where
+ * the ROM has them the other way round. The C, its .externs and the variants
+ * tried are in FACT #8055. */
 #ifdef TARGET_NATIVE
 extern u16   D_10FFB0;                  /* VIF code-ref tag qword count         */
 extern u8    D_10FFC0[];                /* VIF code-ref tag template            */
