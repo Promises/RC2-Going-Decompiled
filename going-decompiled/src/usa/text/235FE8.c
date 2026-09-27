@@ -512,26 +512,26 @@ void func_00336648(void) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336668);
 
-/* func_00336678: ALWAYS install the D_1AD9A8 vtable at p+0x4, then call
- * func_00337C48() only when (flag & 1). The store sits in the delay slot of the
- * `beqz flag&1` branch, so it is unconditional; the call is the fall-through. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336678);
-#else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00336678, unit objdiff): 83.33%,
-   2/13 insns differ. Residual: UNKNOWN-andi (first differing insn: '' vs 'andi a1, a1, 0x1').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; the original hoists the
-   %hi/%lo address computation above the branch and stores in the branch delay
-   slot, a form cc1 won't reproduce here. */
+/**
+ * Install the D_1AD9A8 vtable at p+0x4, then call func_00337C48() when bit 0 of
+ * `flag` is set.
+ *
+ * p: object whose +0x4 slot receives the vtable pointer. flag: bit 0 selects
+ * the follow-up call. No return value.
+ *
+ * The store sits in the delay slot of the `beqz flag&1` branch, so it is
+ * unconditional; the call is the fall-through. Matched byte-exact on sdk29
+ * (cc1 2.9, -O2 -G8 -fno-gcse -fno-strict-aliasing, task #851): the empty asm
+ * after the call suppresses cc1's sibling call, so the ROM's jal + frame is
+ * reproduced (without it cc1 emits `j func_00337C48` and the arm is 65.00%).
+ */
 void func_00336678(void *p, s32 flag) {
-    *(void **)((char *)p + 0x4) = &D_1AD9A8;   /* delay-slot store: unconditional */
+    *(void **)((char *)p + 0x4) = &D_1AD9A8;
     if (flag & 1) {
         func_00337C48();
     }
+    __asm__ __volatile__("");
 }
-#endif
 
 /* GuiComputeBlendWeights: from a single blend factor t, fill a 4-float weight
  * vector for a two-control-point blend: out[0]=t, out[1]=t*0.5, out[2]=1-t,
@@ -3069,19 +3069,20 @@ void GuiProgressBarWidgetInit(void *w, GuiPool *pool) {
 }
 #endif
 
-/* func_0033B6D0: when the +0x21C flag is set, position the element at p+0x170
- * from the anchor vector at *(p+0x20C): x = anchor[0] + D_1ADCE0; y = anchor[1]
- * + D_1ADCE4; z = w = 0. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033B6D0);
-#else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033B6D0, unit objdiff): 88.05%,
-   6/20 insns differ. Residual: UNKNOWN-lwc1 (first differing insn: 'lwc1 fv0, %gp_rel(D_1ADCE0)(gp)' vs 'lwc1 fa0, %gp_rel(D_1ADCE0)(gp)').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; gp_rel/absolute float
-   constant addressing mix wall. */
 extern f32 D_1ADCE0, D_1ADCE4;
+
+/**
+ * When the widget's +0x21C flag is set, position its embedded element at
+ * p+0x170 relative to the anchor vector *(p+0x20C):
+ * x = anchor[0] + D_1ADCE0, y = anchor[1] + D_1ADCE4, z = w = 0.
+ *
+ * p: owning widget. No return value.
+ *
+ * Matched byte-exact on sdk29 (cc1 2.9, -O2 -G8 -fno-gcse -fno-strict-aliasing,
+ * task #851). The empty asm after GuiElementSetPos suppresses cc1's sibling
+ * call so the ROM's jal + frame is reproduced; without it the arm is 77.89%
+ * and one word short.
+ */
 void func_0033B6D0(void *p) {
     if (*(s32 *)((char *)p + 0x21C) != 0) {
         f32 *anchor = *(f32 **)((char *)p + 0x20C);
@@ -3089,8 +3090,8 @@ void func_0033B6D0(void *p) {
                          anchor[0] + D_1ADCE0, anchor[1] + D_1ADCE4,
                          0.0f, 0.0f);
     }
+    __asm__ __volatile__("");
 }
-#endif
 
 /* func_0033B720(w): render a radial/carousel item selector. No-op unless
  * w[0x87] is set. First lays out the two static frame elements (w+0x50, w+0x9C)
@@ -7245,27 +7246,28 @@ s32 func_003432C0(void *p) {
     return *(s32 *)((char *)p + 0x260) + *(s32 *)((char *)p + 0x16C) * 0x14;
 }
 
-/* func_003432D8: position the embedded element at p+0xE4. Reads the anchor
- * vector at *(p+0x180): x = D_1AE150 + anchor[0]; y = D_1AE154 +
- * D_1AE158*(float)(*(p+0x16C)) + anchor[1]; z = w = 0. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003432D8);
-#else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003432D8, unit objdiff): 80.36%,
-   8/24 insns differ. Residual: UNKNOWN-lwc1 (first differing insn: 'lwc1 fv1f, 0x4(v0)' vs 'lwc1 fa0, 0x0(v0)').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; gp_rel/absolute float
-   constant addressing mix wall. */
 extern f32 D_1AE150, D_1AE154, D_1AE158;
+
+/**
+ * Position the list's embedded element at p+0xE4 for the current row, relative
+ * to the anchor vector *(p+0x180): x = D_1AE150 + anchor[0],
+ * y = D_1AE154 + D_1AE158 * (float)row + anchor[1] with row = *(s32 *)(p+0x16C),
+ * z = w = 0.
+ *
+ * p: owning list widget. No return value.
+ *
+ * Matched byte-exact on sdk29 (cc1 2.9, -O2 -G8 -fno-gcse -fno-strict-aliasing,
+ * task #851). The empty asm after GuiElementSetPos suppresses cc1's sibling
+ * call so the ROM's jal + frame is reproduced; without it the arm is 18.64%.
+ */
 void func_003432D8(void *p) {
     f32 *anchor = *(f32 **)((char *)p + 0x180);
-    f32 idx = (f32)*(s32 *)((char *)p + 0x16C);
+    f32 row = (f32)*(s32 *)((char *)p + 0x16C);
     f32 x = D_1AE150 + anchor[0];
-    f32 y = (D_1AE154 + D_1AE158 * idx) + anchor[1];
+    f32 y = (D_1AE154 + D_1AE158 * row) + anchor[1];
     GuiElementSetPos((GuiElement *)((char *)p + 0xE4), x, y, 0.0f, 0.0f);
+    __asm__ __volatile__("");
 }
-#endif
 
 /* func_00343330: no-op stub (empty body - registered/overridable hook). */
 void func_00343330(void) {
