@@ -53,10 +53,11 @@
  * had marked its mixed symbols 16 (the hoist class), which that rule skips.
  * Task #656 moves g_nSaveLoadStatusCode to 12, which makes func_002991E8 /
  * func_002992B8 / func_002993D8 byte-exact under the tree's own asm step.
- * Still open on this lever: func_0029CCB8 (also needs g_guiInstance at 12, and
- * its callee func_0033B720 has no name, so promoting it grows the gate's
- * ORPHAN_LATENT set) and func_002992E8 (its slot store is scheduled BEFORE the
- * branch — #525's "rule 2", which asm_unit.sh does not implement).
+ * Task #888 closes func_0029CCB8 on the same lever: g_guiInstance goes to 12,
+ * and its callee func_0033B720 gets a symbol_addrs line under its existing
+ * name, so ORPHAN_LATENT does not grow.
+ * Still open on this lever: func_002992E8 (its slot store is scheduled BEFORE
+ * the branch — #525's "rule 2", which asm_unit.sh does not implement).
  * Every #else arm below carries its measured state on BOTH gate arms
  * (`t511 promotion sweep` block): the sdk29 arm is the better instrument for
  * this TU on 29 of the 43 arms.
@@ -65,7 +66,10 @@
 /* Original cc1-small / assembler-absolute symbols (see header). Size 16 =
  * absolute everywhere (hoisted out of delay slots); size 12 = absolute in
  * straight-line code, one-word %gp_rel when the access fills a delay slot. */
-__asm__(".extern g_guiInstance, 16");
+/* g_guiInstance is 12: its delay-slot read in func_0029CCB8 must assemble to
+ * the ROM's one-insn %gp_rel word (asm_unit.sh -G8 awk, FACT #7461); the other
+ * compiled readers are unchanged, measured by object compare in task #888. */
+__asm__(".extern g_guiInstance, 12");
 __asm__(".extern g_bPalMode, 16");
 __asm__(".extern g_loadedArmorVariant, 16");
 __asm__(".extern g_loadedHeldItemModelId, 16");
@@ -1716,23 +1720,24 @@ void func_0029CC48(void) {
 }
 #endif
 
-/* func_0029CCB8: if the GUI is up and several gating flags (D_1A9A88, D_18A000
- * = g_nNanotechBonusHealTimer+4, D_1A8C64, D_1A9A8C) permit, forward to the
- * widget at g_guiInstance+0x3F7B0 (func_0033B720). With the sibling-call
- * barrier and D_18A000 declared as the ROM addresses it (compiler-split
- * lui/%lo, out of gp range) the sdk29 arm is 88.70% (#511) and the ONLY
- * residue is the g_guiInstance read the ROM has as a one-insn %gp_rel in the
- * beqz delay slot. With g_guiInstance's .extern at 12 the tree's asm_unit.sh
- * emits that word and the body is BYTE IDENTICAL (task #656, unit objdiff +
- * verify_match_unit), but promoting it adds func_0033B720 — referenced here
- * by its placeholder name, held only by its nonmatchings .s — to the gate's
- * never-grow ORPHAN_LATENT set. Left as asm until that callee is named. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029CCB8);
-#else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 88.70% -> DSLOT-GPREL, first differing row @12: ROM `(nothing)` vs `lui v0, %hi(g_guiInstance)`; 100.00% + verify_match_unit BYTE IDENTICAL under the delay-slot %gp_rel assembler emulation (tools/ee/.t511/gprel_dslot_fixup2.py, NOT a tree tool - RULING pending);
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 66.30% -> DSLOT-GPREL, first differing row @0: ROM `(nothing)` vs `lw v0, %gp_rel(D_1A9A88)(gp)`. */
+/*
+ * func_0029CCB8 — GUI popup-poll gate. When the GUI is up and every gating
+ * flag permits (D_1A9A88 set, D_18A000 = the s16 sub-state half at
+ * g_nNanotechBonusHealTimer+4 clear, the popup-busy gate D_1A8C64 clear,
+ * D_1A9A8C set, g_guiInstance non-null), forwards the widget at
+ * g_guiInstance+0x3F7B0 to func_0033B720. No params, no return value.
+ *
+ * Byte-exact on sdk29 (-O2 -G8 -fno-gcse, task #888). Two things carry it:
+ *  - the empty asm after the call keeps cc1 2.9 from turning it into a
+ *    sibling jump (the ROM's compiled code never tail-jumps, FACT #8177);
+ *  - g_guiInstance's `.extern` marker is 12, not 16. The ROM reads it as a
+ *    one-insn %gp_rel in the last beqz's delay slot, and asm_unit.sh's -G8
+ *    awk has rewritten a delay-slot access in the 9..15 band to exactly that
+ *    since 2026-06-12 (FACT #7461). #511's comment here called that a
+ *    missing tree instrument; it was not missing, the marker was 16. #656
+ *    then held it back because func_0033B720 would enter ORPHAN_LATENT; the
+ *    symbol_addrs line for func_0033B720 settles that.
+ */
 void func_0029CCB8(void) {
     /* All five gates must permit before the popup-poll runs:
      *  D_1A9A88 set, the nanotech sub-state half at +0x4 clear, the popup-busy
@@ -1755,7 +1760,6 @@ void func_0029CCB8(void) {
     func_0033B720(g_guiInstance + 0x3F7B0);
     __asm__ __volatile__(""); /* sibling-call suppression (the ROM never sibcalls) */
 }
-#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029CD18);
 

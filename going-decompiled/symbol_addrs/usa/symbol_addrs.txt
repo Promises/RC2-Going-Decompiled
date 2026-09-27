@@ -2175,6 +2175,7 @@ g_GuiElementVtable = 0x001ADA58; // CONFIRMED - base GuiElement vtable (installe
 g_GuiListRowVtable = 0x001AD9D8; // CONFIRMED - GuiListRow element vtable
 D_1AD9A8 = 0x001AD9A8; // vtable func_00336678 installs at obj +0x4 - listed so compiled C's reference has a symbol_addrs holder, not only the nonmatchings .s (task #851)
 D_261BE8 = 0x00261BE8; // cheat-code symbol table read by func_002DECE0 (byte ((k+1)*code) & 0xFF) - listed so compiled C's reference has a symbol_addrs holder, not only the nonmatchings .s (task #880)
+func_0033B720 = 0x0033B720; // type:func - GUI popup-poll method func_0029CCB8 forwards g_guiInstance+0x3F7B0 to - listed so compiled C's reference has a symbol_addrs holder, not only the nonmatchings .s (task #888)
 // TypeB/TypeC variant vtables are referenced in code as D_1ADA38 / D_1AD9F8
 // (installed at elem +0x30 by GuiElementInitTypeB/C). Descriptive g_ rename is a
 // future Track-B cleanup (would touch the existing D_1ADA38/D_1AD9F8 #else refs).
