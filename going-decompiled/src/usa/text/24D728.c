@@ -112,10 +112,10 @@ _Static_assert(sizeof(GuiInstance) == 0x2238, "GuiInstance occupies game-state[0
  *    (tools/ee/.t566/probe/ulp.c), not guessed - a +1 ULP decimal overshoots as
  *    often as it lands. Both pi uses must be spelled identically or cc1 stops
  *    CSE-ing them and materialises pi twice.
- *  - GuiHermiteInterp now computes a*(2t^3-3t^2) + a in the ROM's operand
- *    order, which is what the ROM's instruction stream does; the folded
- *    "+ 1.0f" coefficient was a different expression. Score unchanged (85.59%),
- *    residual is FP register colouring.
+ *  - GuiHermiteInterp computes a*(2t^3-3t^2) + a in the ROM's operand order;
+ *    the folded "+ 1.0f" coefficient was a different expression. The FP
+ *    register colouring left after that (85.59%) was closed by task #894 -
+ *    see the function's own comment.
  * --------------------------------------------------------------------------- */
 
 extern s32 *GuiElementGetColor(GuiElement *e);
@@ -1165,49 +1165,62 @@ void func_0034FAF8(void *ctx, u8 *rec) {
 }
 #endif
 
-/* GuiHermiteInterp: cubic-Hermite blend of the four controls a,b,c,d by t
- * (clamped to [0,1] with an assert) - mathUtil.cpp line 36. Returns
- *   a*(2t^3-3t^2+1) + b*(t^3-2t^2+t) + c*(t^3-t^2) + d*(3t^2-2t^3).
- * The matching build keeps the original (FPU instruction scheduling differs);
- * the #else is the portable equivalent. */
-/* TODO(match) GuiHermiteInterp - task #566 (round 4), measured on the COMMITTED tree (this file,
- * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
- * tools/ee/objdiff_build.sh, clean): sdk29 85.59%, engine96 76.23%. Eligible arm: sdk29.
- * Residual: REGNUM-COLORING (FP allocation shifted throughout; instruction multiset near-identical) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", GuiHermiteInterp);
-#else
 extern void AssertFail(const char *file, s32 line, const char *expr);
 /* rodata assert strings (bytes verified in Ghidra, USA SCUS_972.68):
  *   D_1AE758 = "gui/mathUtil.cpp"        (source file)
  *   D_1AE770 = "t>=0.0f && t<= 1.0f"     (clamp predicate) */
 extern const char D_1AE758[];
 extern const char D_1AE770[];
-/* WEAK: when this unit is co-linked into the eetest cmp suite alongside
- * text/235FE8 (whose cmp_235FE8.c supplies a strong deterministic GuiHermiteInterp
- * stand-in for its func_00336A28 oracle), both objects would otherwise define
- * the cross-unit symbol GuiHermiteInterp -> multiple-definition link error. The
- * weak attribute (TARGET_NATIVE arm only) lets that test stand-in win the link.
- * NOTE: cmp_235FE8.c's stand-in is a DETERMINISTIC NON-Hermite fake, NOT
- * equivalent to this real cubic-Hermite body - but that is harmless: its only
- * consumer (cmp_func_00336A28) jal's the same GuiHermiteInterp symbol on BOTH the
- * asm-oracle and c_ sides, so the fake cancels; no cmp test checks real Hermite
- * output, and no function under test calls it (gc-sections drops this weak body).
- * In the matching build this arm is the INCLUDE_ASM original, so weak is inert. */
+
+/*
+ * GuiHermiteInterp - cubic-Hermite blend of the four controls a, b, c, d by t
+ * (mathUtil.cpp line 36).
+ *
+ *   t           blend parameter; asserted to lie in [0, 1] (AssertFail on
+ *               failure, then the blend is computed anyway)
+ *   a, b, c, d  the four controls
+ * Returns a*(2t^3-3t^2+1) + b*(t^3-2t^2+t) + c*(t^3-t^2) + d*(3t^2-2t^3).
+ *
+ * Byte-exact on the sdk29 arm (task #894). The ROM saves ra and f20-f24 and
+ * cc1 2.9 lays that frame out identically (0x40, f20..f24 at 0x10..0x30), so
+ * the FP-save edge of NOTE #8218 is no wall here. What had to be spelled:
+ *  - each coefficient product lands in its control's own register in the ROM
+ *    (`mul.s $f22,$f22,$f1` for c, $f24 for b, $f23 for d), which cc1 does
+ *    only when the product is assigned back to that control (b = b * ...);
+ *  - the `a` term is `add.s $f21,$f2,$f21` in the ROM, product first. Written
+ *    as `a = X * a + a` cc1 always emits `add.s $f21,$f21,$f2`, whatever the
+ *    source operand order (3 spellings measured); assigning the sum to a block
+ *    temporary first and then to `a` gives the ROM's order. The copy costs no
+ *    instruction.
+ *
+ * WEAK (TARGET_NATIVE only): when this unit is co-linked into the eetest cmp
+ * suite alongside text/235FE8, cmp_235FE8.c supplies a strong deterministic
+ * GuiHermiteInterp stand-in for its func_00336A28 oracle; weak lets that
+ * stand-in win the link instead of a multiple-definition error. The stand-in
+ * is a NON-Hermite fake, which is harmless: its only consumer
+ * (cmp_func_00336A28) jal's the same symbol on both the asm-oracle and c_
+ * sides, so the fake cancels, and no cmp test checks real Hermite output.
+ */
+#ifdef TARGET_NATIVE
 __attribute__((weak))
+#endif
 f32 GuiHermiteInterp(f32 t, f32 a, f32 b, f32 c, f32 d) {
     f32 t2, t3;
+
     if (!(t >= 0.0f && t <= 1.0f)) {
         AssertFail(D_1AE758, 0x24, D_1AE770);
     }
     t2 = t * t;
     t3 = t2 * t;
-    return (2.0f * t3 - 3.0f * t2) * a + a
-         + b * (t3 - 2.0f * t2 + t)
-         + c * (t3 - t2)
-         + d * (3.0f * t2 - 2.0f * t3);
+    {
+        f32 blend = (2.0f * t3 - 3.0f * t2) * a + a;
+        a = blend;
+    }
+    b = b * (t3 - 2.0f * t2 + t);
+    c = c * (t3 - t2);
+    d = d * (3.0f * t2 - 2.0f * t3);
+    return a + b + c + d;
 }
-#endif
 
 #ifdef TARGET_NATIVE
 extern s32 g_swapGadgetItemIndex;    /* +0xAE = FMV aspect/letterbox scratch */
