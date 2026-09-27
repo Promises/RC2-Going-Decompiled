@@ -41,6 +41,16 @@ extern s32 g_frameArenaFlipAbs;
  * story progress. Index the two per-progress tables by g_playerProgress (or 0
  * when it is past the 0x19-entry tables), publish the reserve (D_1A8BC0) and the
  * scene-arena cursor, then rederive the render-task list (func_002FD020). */
+/* TODO(match) t889: sdk29 75.91% solo (unit objdiff, objdiff_build.sh; unit
+ * -G8 -fno-gcse, this body respelled `if ((u32)idx >= 0x19) idx = 0;` + the
+ * empty-asm guard after the call). The respelling gives the ROM's
+ * `sltiu/movz`, registers and length (22 = 22); the ternary below gives
+ * `li 24; sltu; movn`. Residual: a 5-row permutation in the first 11 words.
+ * The ROM issues `addiu sp` and `sd ra` earlier and delays both table %lo
+ * addius, where cc1 pairs each %lo with its lui. 16 C shapes did not move it
+ * (task #889 store NOTE: comparison spelling, pointer temporaries,
+ * sized tables, split load, statement order). Without the guard cc1 tail-jumps,
+ * which the ROM never does (FACT #8177). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FCF48", func_002FCFC8);
 #else
