@@ -3863,37 +3863,47 @@ s32 DrawWeaponSelectWheel(HudElement *w) {
 }
 #endif
 
-/* func_0028D6D8(w): seed a HUD list widget `w` — register the list descriptor
- * (8 entries, callback &D_1A8DD8) in g_hudMobySpawnStart+0x28/+0x2C, set the
- * widget geometry (+0x58=0xD2, +0x5C=0xC8, type tag +0x74=-2, mode +0x78=0x1E),
- * clear its two 16-bit cursors (+0x48/+0x4A) and reset the wheel cursor
- * (D_1A8D48=0).
+/**
+ * Seed a HUD list widget `w`: register the list descriptor (8 entries,
+ * callback &D_1A8DD8) in g_hudMobySpawnStart+0x28/+0x2C, set the widget
+ * geometry (+0x58 = 0xD2, +0x5C = 0xC8), type tag (+0x74 = -2) and mode
+ * (+0x78 = 0x1E), clear its two 16-bit cursors (+0x48/+0x4A) and reset the
+ * wheel cursor D_1A8D48.
  *
- * NEAR-MISS: frameless and straight-line, but the +0x28/+0x2C descriptor writes
- * use the named-sub-object (g_hudMobySpawnStart+0x28) %hi/%lo form while
- * D_1A8DD8/D_1A8D48 are %gp_rel; cc1 schedules the trailing zero-stores in a
- * different order. Kept as the portable #else body. engine96 arm (task #469):
- * 73.78% with the four constants hoisted in the ROM's order (d2, -2, c8, 1e);
- * residual SUB-OBJECT ADDRESS — the ROM writes +0x28 and +0x2C as two separate
- * `lui $at; sw %lo(sym+off)($at)` absolute accesses (two objects, 0x1B1858 and
- * 0x1B185C, a symbol_addrs lead), this cc1 CSEs the two addresses into one
- * base register. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028D6D8);
-#else
+ *   w  the widget record being initialised
+ *
+ * Matching notes. Every store is volatile so the stores issue in source order,
+ * which is the ROM's; the constants are EE_REG-bound locals assigned in the
+ * ROM's order (two of them reuse $2/$3 after the descriptor stores), and the
+ * empty volatile asm stops the scheduler sinking the last three constant loads
+ * in between the widget stores.
+ */
 void func_0028D6D8(HudElement *w) {
-    u8 *b = (u8 *)w;
-    *(s32 *)((u8 *)&g_hudMobySpawnStart + 0x28) = 8;
-    *(void **)((u8 *)&g_hudMobySpawnStart + 0x2C) = &D_1A8DD8;
-    *(s32 *)(b + 0x58) = 0xD2;
-    *(s32 *)(b + 0x78) = 0x1E;
-    *(s32 *)(b + 0x5C) = 0xC8;
-    *(s32 *)(b + 0x74) = -2;
-    *(s16 *)(b + 0x48) = 0;
-    *(s16 *)(b + 0x4A) = 0;
+    volatile u8 *b = (volatile u8 *)w;
+    register s32 count EE_REG("$2");
+    register void *callback EE_REG("$3");
+    register s32 width EE_REG("$5");
+    register s32 tag EE_REG("$6");
+    register s32 height EE_REG("$3");
+    register s32 mode EE_REG("$2");
+
+    count = 8;
+    callback = &D_1A8DD8;
+    *(volatile s32 *)((u8 *)&g_hudMobySpawnStart + 0x28) = count;
+    width = 0xD2;
+    *(void *volatile *)((u8 *)&g_hudMobySpawnStart + 0x2C) = callback;
+    tag = -2;
+    height = 0xC8;
+    mode = 0x1E;
+    __asm__ __volatile__("");
+    *(volatile s32 *)(b + 0x58) = width;
+    *(volatile s32 *)(b + 0x78) = mode;
+    *(volatile s32 *)(b + 0x5C) = height;
+    *(volatile s32 *)(b + 0x74) = tag;
+    *(volatile s16 *)(b + 0x48) = 0;
+    *(volatile s16 *)(b + 0x4A) = 0;
     D_1A8D48 = 0;
 }
-#endif
 
 /* func_0028D720(w): per-frame input + selection update for the weapon/quick-select
  * wheel (w = the HUD widget). Reads controller port-0 (D_138180): normalises the
