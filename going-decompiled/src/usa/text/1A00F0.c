@@ -445,7 +445,22 @@ void func_002A07B0(u8 *moby, u8 sub, u8 *rec) {
 
 /*
  * func_002A0828(list, node) — unlink `node` from `list`'s singly-linked chain
- * and wipe it. Caller: FreeWeaponEffectSlot (releasing a weapon-effect slot).
+ * and wipe it.
+ *
+ * Callers (measured on the USA ROM image, task #783): 2 distinct caller
+ * functions, 3 call sites, all direct `jal` (word 0x0C0A820A):
+ *   - FreeWeaponEffectSlot (0x2FFBB8), releasing a weapon-effect slot:
+ *     1 site, 0x2FFBE4
+ *   - func_002AFAB0 (0x2AFAB0): 2 sites, 0x2AFB14 and 0x2AFBE8
+ * Method: every word of extracted/usa/SCUS_972.68.rom was checked for that
+ * jal, for `j`, for the raw pointer 0x002A0828, and for a lui 0x2A +
+ * addiu/ori 0x0828 pair. Only the 3 jal sites were found. The scan does not
+ * cover overlays loaded at run time or pointers built by arithmetic.
+ * Grepping the source undercounts. FreeWeaponEffectSlot's site is in the
+ * bulk asm/usa/text/1FD030.s, not under nonmatchings/. A caller that has
+ * been promoted to C has no .s file at all. And no grep can find a `jalr`.
+ * func_002AFAB0 has both a nonmatchings .s and a C arm in text/1A8180.c,
+ * so taking the union of those two greps counts it twice.
  *
  *   list  owner record; its chain head is at +0x54
  *   node  0x40-byte node, linked through +0x8; NULL is a no-op
