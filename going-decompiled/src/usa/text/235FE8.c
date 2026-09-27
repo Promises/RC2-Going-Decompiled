@@ -664,25 +664,27 @@ void *func_003368D0(void *p) {
     return p;
 }
 
-/* func_003368E8: if (flag & 1) install the D_1AD988 vtable at p+0x0, then call
- * func_00337C48(). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003368E8);
-#else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003368E8, unit objdiff): 49.58%,
-   7/15 insns differ. Residual: UNKNOWN-lui (first differing insn: 'lui v0, %hi(D_1AD988)' vs '').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; the original hoists the
-   %hi/%lo address computation above the branch; cc1 sinks it into the
-   conditional store. 50% best. */
+/**
+ * Install the D_1AD988 vtable at p+0x0, then call func_00337C48() when bit 0 of
+ * `flag` is set.
+ *
+ * p: object whose +0x0 slot receives the vtable pointer. flag: bit 0 selects
+ * the follow-up call. No return value.
+ *
+ * The store sits in the delay slot of the `beqz flag&1` branch, so it is
+ * UNCONDITIONAL and only the call is conditional - the same shape as
+ * func_00336678. (The earlier C had it inverted: a conditional store and an
+ * unconditional call.) Matched byte-exact on sdk29 (cc1 2.9, -O2 -G8 -fno-gcse
+ * -fno-strict-aliasing, task #858): the empty asm after the call suppresses
+ * cc1's sibling call, so the ROM's jal + frame is reproduced.
+ */
 void func_003368E8(void *p, s32 flag) {
+    *(void **)p = &D_1AD988;
     if (flag & 1) {
-        *(void **)p = &D_1AD988;
+        func_00337C48();
     }
-    func_00337C48();
+    __asm__ __volatile__("");
 }
-#endif
 
 /* func_00336918: 4-component linear interpolation dst = (1-t)*a + t*b. The
  * leading object pointer (a0) is unused by the body - this is a widget method
@@ -6742,29 +6744,35 @@ void func_00342520(void *w, s32 mode) {
 }
 #endif
 
-/* func_00342670: position the embedded element at p+0x130 from the anchor
- * vector at *(p+0x228) and the per-column index *(p+sel*4+0x1B8) where
- * sel=*(p+0x31C): x = D_1AE0B0 + anchor[0]; y = D_1AE0B4 + D_1AE0B8*idx +
- * anchor[1]; z = w = 0. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342670);
-#else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00342670, unit objdiff): 41.88%,
-   20/32 insns differ. Residual: UNKNOWN-daddu (first differing insn: 'daddu v1, a0, zero' vs 'lwc1 fv0, %gp_rel(D_1AE0B8)(gp)').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; gp_rel/absolute float
-   constant addressing mix wall. */
 extern f32 D_1AE0B0, D_1AE0B4, D_1AE0B8;
+
+/**
+ * Position the embedded element at p+0x130 for the selected column, relative
+ * to the anchor vector *(p+0x228): with sel = *(s32 *)(p+0x31C) and
+ * col = *(s32 *)(p+0x1B8+sel*4), x = D_1AE0B0 + anchor[0],
+ * y = D_1AE0B4 + D_1AE0B8 * (float)col + anchor[1], z = w = 0.
+ *
+ * p: owning widget. No return value.
+ *
+ * Matched byte-exact on sdk29 (cc1 2.9, -O2 -G8 -fno-gcse -fno-strict-aliasing,
+ * task #858). The empty asm after GuiElementSetPos suppresses cc1's sibling
+ * call so the ROM's jal + frame is reproduced; without it the arm is 57.12%
+ * and four words short. The column slot is formed as p + sel*4 FIRST
+ * (`addu v1,v1,v0`); indexing from p+0x1B8 instead gives `addu v0,v0,v1` and a
+ * different load order (86.92%, 6/26 words).
+ */
 void func_00342670(void *p) {
-    s32 sel = *(s32 *)((char *)p + 0x31C);
-    f32 *anchor = *(f32 **)((char *)p + 0x228);
-    f32 idx = (f32)*(s32 *)((char *)p + sel * 4 + 0x1B8);
-    f32 x = D_1AE0B0 + anchor[0];
-    f32 y = (D_1AE0B4 + D_1AE0B8 * idx) + anchor[1];
-    GuiElementSetPos((GuiElement *)((char *)p + 0x130), x, y, 0.0f, 0.0f);
+    char *col = (char *)p;
+    f32 *anchor;
+    f32 colValue;
+
+    col += *(s32 *)((char *)p + 0x31C) * 4;
+    anchor = *(f32 **)((char *)p + 0x228);
+    colValue = (f32)*(s32 *)(col + 0x1B8);
+    GuiElementSetPos((GuiElement *)((char *)p + 0x130), D_1AE0B0 + anchor[0],
+                     (D_1AE0B4 + D_1AE0B8 * colValue) + anchor[1], 0.0f, 0.0f);
+    __asm__ __volatile__("");
 }
-#endif
 
 /* func_003426D8: no-op stub (empty body - registered/overridable hook). */
 void func_003426D8(void) {
