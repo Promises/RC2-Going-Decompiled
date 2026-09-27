@@ -1497,20 +1497,35 @@ s32 RequestGameStateChange(s32 stateId, s32 push, s32 argA, s32 argB, s8 *outDon
  * non-empty, and the player is alive (g_health != 0). Returns 0 on a successful
  * pop, 1 when there is nothing to pop (empty stack / transition already pending),
  * and -1 when the player is dead.
- * WALL: boolean-materialise idiom (IDIOM class). The original lowers the first
- * gate as preset-1 / movz-zero (the same movz chain as the depth and health
- * gates); cc1 2.9 folds `status = 1; if (pending == -2) status = 0;` back into
- * sltu whatever the spelling. Task #510: g_health as ABSOLUTE_GLOBAL (the ROM
- * hoists its lui) and the single-exit pop block lift the rest — sdk29 70.86% /
- * engine96 49.31% (unit objdiff report, objdiff_build.sh + unit_report.sh). */
+ * The original builds the status as a movz chain off a register copy of the
+ * constant 1: `li a3,1; move t0,a3; movz t0,$0,<pending^-2>; movz t0,a3,<depth>;
+ * movz t0,<-1>,<health>`. Plain C does not get there with cc1 2.9: cse folds the
+ * copy to the constant and combine then merges the preset into the first gate,
+ * which gives `sltu` (task #655). An empty "+r" asm on `status` right after the
+ * copy hides the preset value, and the chain comes out as movz/movz/movz. Loading
+ * the stack top into `top` before the stores puts the depth store ahead of the
+ * pending store, as in the ROM. sdk29 82.07% solo (unit objdiff report,
+ * objdiff_build.sh + unit_report.sh, VM colima-ee-x86, task #792). Without `top`
+ * 81.90, without the asm 71.03. The body before #792 scored 70.86 (sdk29) and
+ * 49.31 (engine96).
+ * Residual, measured, not a spelling question: the empty asm is an insn of its
+ * own. sched2 gives it an issue slot and puts it on the dependence path between
+ * the copy and the first movz. The ROM has no such insn, so the head schedule
+ * stays one cycle off. The rest is register choice: $2/$3 are swapped in the head
+ * and in the pop block, `status` lives in a3 rather than t0, and argA is copied to
+ * a2 rather than a3. Moving the copy into the asm (`"=r"(status) : "0"(blocked)`)
+ * gives the ROM's colouring for the whole chain (a3/t0/t1/a2) but scores 78.03,
+ * because of that same asm slot. A `register ... asm("$7")` pin (task #756, 81.72)
+ * is not needed for this score. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", PopGameState);
 #else
-/* TODO(match): functional equivalent - not byte-exact; IDIOM (sltu vs li/movz), sdk29 70.86% / engine96 49.31%. */
+/* TODO(match): functional equivalent - not byte-exact; SCHED/REGALLOC (asm-link issue slot + $2/$3 colouring), sdk29 82.07% solo. */
 s32 PopGameState(s32 argA, s32 argB) {
     s32 depth = g_gameStateStackDepth;
     s32 blocked = 1;
     s32 status = blocked;
+    __asm__("" : "+r"(status));
     if (g_nGameStatePending == -2) {
         status = 0;
     }
@@ -1521,10 +1536,11 @@ s32 PopGameState(s32 argA, s32 argB) {
         status = -1;
     }
     if (status == 0) {
+        s32 top = g_gameStateStack[depth - 1];
         g_gameStatePendingArgA = argA;
         g_gameStatePendingArgB = argB;
         g_gameStateStackDepth = depth - 1;
-        g_nGameStatePending = g_gameStateStack[depth - 1];
+        g_nGameStatePending = top;
         g_gameStateTransitionDoneFlag = 0;
     }
     return status;
@@ -2898,7 +2914,25 @@ void OnSoundBankLoaded(s32 bankId, long pOut) {
  * displacements, the status slot is cleared with the unsigned spelling
  * (lui/ori) and the tail call is guarded. Residual SCHED-TIEBREAK: the ROM
  * issues both TOC loads before `addiu $7,$5,0x17A0`, cc1 2.9 interleaves them
- * — sdk29 90.91% / engine96 75.82% (unit objdiff report). */
+ * — sdk29 90.91% / engine96 75.82% (unit objdiff report).
+ * Two sched2 ties, each read from -fsched-verbose-9 ready lists (task #792),
+ * and each settled by what sched1 hands sched2:
+ *  (i)  `lw 0x52B0` against `addiu 0x17A0`. Equal priority and equal dependents
+ *       in sched2, so the lower luid wins, i.e. sched1's order. In sched1 the
+ *       addiu takes the second slot of the cycle in which the 0x529C load uses
+ *       the memory unit. Two things let it: `listener` dies there, so its
+ *       register weight is 0 against the constant's `lui`, and with the asm
+ *       guard it has 3 dependents against the `lui`'s 1.
+ *  (ii) the status `sw` against `lui %hi(OnSoundBankLoaded)`. The asm guard
+ *       gives the store one more sched2 dependent, so the store wins.
+ * Putting the constant in an early local, computing the zero-extended status
+ * argument before the store (so `listener` stays live), and guarding with a
+ * dead local store closes (i): the call is then the sched1 block tail, every
+ * insn depends on it, and the `lui` wins on luid. But it loses (ii): the store
+ * has sched1 priority 2 against the callback `lui`'s 3, so the `lui` comes out
+ * first and wins the sched2 luid tie. 90.91 either way (2 of 22 lines). A
+ * volatile asm between the store and the call raises the store chain too far
+ * (41.36). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", LoadGlobalSoundBank);
 #else
