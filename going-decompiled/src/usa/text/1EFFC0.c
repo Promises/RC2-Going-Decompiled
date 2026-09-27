@@ -848,7 +848,7 @@ extern u8 g_listenerPosHistory[];    /* 0x188660 listener pos ring + flags */
  *   barrier at the start of the body (93.33), a sized array (97.04), sched1 ON
  *   (96.30, diagnostic only). sched2 OFF gives 57.04, so sched2 is what
  *   places it.
- *   WALL under 2.96-001003 sched2 (tasks #807/#810/#817, read from the
+ *   ARGUED WALL under 2.96-001003 sched2 (tasks #807/#810/#817, read from the
  *   -fsched-verbose=6 -dR dump at diff96.sh's flags): sched2 issues two insns
  *   per cycle (memory + alu), and the anti dependence of `move sN,aN` on
  *   `sd sN` costs 0 (the move goes `into ready`, not `into queue with cost`).
