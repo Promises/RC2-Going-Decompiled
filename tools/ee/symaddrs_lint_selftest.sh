@@ -10,10 +10,16 @@
 # files pass when isolated and that the contaminated form is NOT what we ship.
 set -u
 D="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$D/../.." && pwd)"
 LINT="$D/symaddrs_lint.py"
-PY="${SYMLINT_PY:-~/Documents/projects/ps2-gc-re/.venv-decomp/bin/python}"
-[ -x "$PY" ] || { echo "no splat python at $PY: could not look" >&2; exit 2; }
+# The lint under test is always this tree's ($D); the interpreter defaults to
+# this tree's venv too. It used to default to an absolute path into one
+# machine's main checkout, so a worktree without a venv silently borrowed
+# another tree's splat. Override with SYMLINT_PY.
+PY="${SYMLINT_PY:-$ROOT/.venv-decomp/bin/python}"
+[ -x "$PY" ] || { echo "no splat python at $PY (set SYMLINT_PY): could not look" >&2; exit 2; }
 "$PY" -c 'import splat' 2>/dev/null || { echo "$PY cannot import splat: could not look" >&2; exit 2; }
+echo "testing $LINT with $PY"
 
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 fail=0
@@ -51,6 +57,35 @@ if /usr/bin/grep -qE 'line 2([^0-9]|$)' "$T/out"; then
   echo "  ok  ...and the rejection names line 2"
 else
   echo "FAIL the rejection past type:u32 does not name line 2"; sed 's/^/      /' "$T/out"; fail=1
+fi
+
+# THE SAME BLINDNESS ON THE REAL MAP (RULING #8000). The two-line fixture above
+# proves the mechanism; this one proves the lint speaks past the horizon of the
+# map it is actually run on. The horizon is DERIVED - the first comment type
+# outside splat's four - because it moves as lines are added (708, then 712,
+# then 713). A seed at EOF must be rejected at its own line. If the map ever has
+# no such type, or the seed does not land past it, the fixture is inert: FAIL.
+USA_MAP="$ROOT/going-decompiled/symbol_addrs/usa/symbol_addrs.txt"
+if [ ! -f "$USA_MAP" ]; then
+  echo "FAIL no USA map at $USA_MAP: the real-map horizon fixture could not look"; fail=1
+else
+  horizon=$(awk '/\/\/.*type:[a-z_0-9]+/ { if (match($0, /type:[a-z_0-9]+/)) {
+    t = substr($0, RSTART + 5, RLENGTH - 5)
+    if (t != "func" && t != "jtbl" && t != "jtbl_label" && t != "label") { print NR; exit } } }' "$USA_MAP")
+  cp "$USA_MAP" "$T/usa_seeded.txt"
+  printf 'g_selftestSeed = 0x00FFFFF0; // one; two semicolons\n' >> "$T/usa_seeded.txt"
+  seed=$(wc -l < "$T/usa_seeded.txt" | tr -d ' ')
+  if [ -z "$horizon" ] || [ "$seed" -le "$horizon" ]; then
+    echo "FAIL the USA map has no non-splat type before line $seed (horizon '${horizon}'): fixture is inert"; fail=1
+  else
+    want "a seed at USA map line $seed, past the type:u32 horizon at $horizon, is REJECTED" 1 "$T/usa_seeded.txt"
+    if /usr/bin/grep -qE "line ${seed}([^0-9]|\$)" "$T/out"; then
+      echo "  ok  ...and the rejection names line $seed"
+    else
+      echo "FAIL the rejection does not name the seeded line $seed: see the lint output below"
+      sed 's/^/      /' "$T/out"; fail=1
+    fi
+  fi
 fi
 
 # The look-alike NEGATIVE control: a REAL splat attribute also contains a colon
