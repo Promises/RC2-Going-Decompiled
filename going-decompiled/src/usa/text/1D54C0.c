@@ -1919,27 +1919,56 @@ void func_002DAA50(s32 x, s32 y, s32 on) {
  * class). Bare INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DAAF8);
 
-/* Draw the streamed full-screen image widget once it has loaded (state>=2 and
- * not error): blit the decoded glyph quad at the configured uv (+0x38/0x3C);
- * returns 0x10 when drawn, else 0. Wall: redundant branch (both arms equal). */
+/* Draw the streamed full-screen image widget once it has loaded (state >= 2 and
+ * +0x58 not negative): blit the decoded glyph quad over the whole screen
+ * (g_gsScreenContext +0x160/+0x162) at the configured uv (+0x38/+0x3C) with the
+ * texture word at g_mapTextureWidth+0x28. With flag 0x40000 set in +0x34 the
+ * quad fades: alpha = counter(+0x5C)*32 capped at 0x80 in state 2 (fade in),
+ * else (4 - counter)*32 floored at 0 (fade out); otherwise it is drawn with the
+ * fixed colour 0x80808080. Returns 0x10 when drawn, else 0.
+ * Not matched: the ROM saves no s-register (ra-only 32-byte frame with two
+ * outgoing 64-bit stack args, which 2.9 lays out the same), so sdk29 is the arm.
+ * The two paths are NOT equal (an earlier "redundant branch" note was wrong).
+ * Best measured body 77.61% (unit objdiff, solo, sdk29 -O2 -G8 -fno-gcse, 26 of
+ * 72 rows): a cc1-small/gas-absolute alias for g_gsScreenContext bound to $2,
+ * a u8 * parameter and an empty asm after the first call; the residual is the
+ * object pointer's register ($10 vs the ROM's $9). Bodies and levers: NOTE #8228. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DAE70);
 #else
-/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
- * objdiff): sdk29 29.79% / engine96 29.04%; better arm sdk29; 65 differing
- * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-16`. Not iterated in t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
+/* Portable body (the previous one dropped the fade path and both 64-bit stack
+ * arguments). DrawGlyphQuad reads its two trailing args as 64-bit, hence the
+ * s64 colour and texture word. */
 s32 func_002DAE70(MenuWidget *obj) {
-    extern s16 D_001A65E0;
-    extern s16 D_001A65E2;
+    extern u8  g_gsScreenContext[];
+    extern s32 g_mapTextureWidth[];
     u8 *o = (u8 *)obj;
-    if (*(s32 *)(o + 0x44) > 1 && *(s32 *)(o + 0x58) >= 0) {
-        DrawGlyphQuad(0, 0, D_001A65E0, D_001A65E2, 0, 0,
-                      *(s32 *)(o + 0x38), *(s32 *)(o + 0x3C));
-        return 0x10;
+    s32 state = *(s32 *)(o + 0x44);
+    s64 color = (s64)0x80808080U;
+    s32 alpha;
+
+    if (state < 2 || *(s32 *)(o + 0x58) < 0) {
+        return 0;
     }
-    return 0;
+    if (*(s32 *)(o + 0x34) & 0x40000) {
+        if (state == 2) {
+            alpha = *(s32 *)(o + 0x5C) << 5;
+            if (alpha > 0x80) {
+                alpha = 0x80;
+            }
+        } else {
+            alpha = (4 - *(s32 *)(o + 0x5C)) << 5;
+            if (alpha < 0) {
+                alpha = 0;
+            }
+        }
+        color = (s64)((alpha << 24) | 0x808080);
+    }
+    DrawGlyphQuad(0, 0, *(s16 *)(g_gsScreenContext + 0x160),
+                  *(s16 *)(g_gsScreenContext + 0x162), 0, 0,
+                  *(s32 *)(o + 0x38), *(s32 *)(o + 0x3C), color,
+                  *(s64 *)((u8 *)g_mapTextureWidth + 0x28));
+    return 0x10;
 }
 #endif
 
@@ -2803,8 +2832,12 @@ s32 func_002DCF58(MenuWidget *obj) {
 }
 #endif
 
-/* Menu screen draw helper (Ghidra merges its boundary with a neighbour). Wall:
- * large draw loop + multi callee-save. Bare INCLUDE_ASM. */
+/* Menu screen draw helper (Ghidra merges its boundary with a neighbour). The
+ * body saves no callee register: it is a frameless leaf with a `jr $4` jump
+ * table (an earlier "multi callee-save" note was wrong). What blocks C is the
+ * splat split: the .s opens with a stray two-word fragment (`sw $0,0x50($4);
+ * nop`) ahead of the real entry at 0x2DD100, the same shape as func_002DA488.
+ * It needs a re-split before C can sit at the symbol. Bare INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DD0F8);
 
 #ifdef TARGET_NATIVE
@@ -3153,9 +3186,15 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DECC8);
 
 /* Cheat-code entry detector: while the player holds the L1+R1-ish combo
  * (held&0xf==6), record each fresh d-pad/face direction into a 0x14-entry
- * buffer; once full, scan the cheat table (D_00261BE8, stride 0x14) for a
+ * buffer; once full, scan code ids 2..0x92 of the cheat table D_00261BE8 —
+ * symbol k of code c is byte ((k+1)*c) & 0xFF, not a fixed 0x14 stride — for a
  * matching 20-symbol sequence and apply the corresponding unlock.
- * Wall: large nested branch ladder + table scan. */
+ * Not matched. Best measured body 96.77% (unit objdiff, solo, sdk29 -O2 -G8
+ * -fno-gcse, 13 of 130 rows). It needs the loop bound 0x93 in a local (the ROM
+ * holds it in a register), a goto inner loop over an EE_REG-bound index (the ROM
+ * does not strength-reduce it), and the pad block D_138180 as an ordinary array.
+ * Residual: the prediction for two branches in the skill-point path, and three
+ * register/order choices. Body and rows: NOTE #8228. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DECE0);
 #else
@@ -3240,9 +3279,17 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DEEE8);
 
 /* (Re)assign the 5 map cache slots' backing addresses and flags for a text
  * table swap. `param` selects whether the secondary banks are included: the
- * first uVar8 slots point into the load buffer, the next group into the
- * second-bank base, then alternating 0x4F00/0x11800-strided ranges; any unused
- * slots are zeroed. Wall: gp-relative slot array + branch-heavy banking. */
+ * first 1 (2 with `param`) slots point into the load buffer (+0x118) stepping
+ * 0x11800, the next 0 (1) into the second-bank base (+0x11C) stepping 0x11800,
+ * then 0 (2) buffer and 0 (1) second-bank slots stepping 0x4F000 with flags 1;
+ * any unused slots are zeroed.
+ * Not matched. The slot table is addressed absolutely (lui/addiu of
+ * D_001B1E90+0x40), not gp-relative as an earlier note said. Best measured body
+ * 77.57% (unit objdiff, solo, sdk29 -O2 -G8 -fno-gcse, 34 of 107 rows): four
+ * `for` loops over cumulative ends, with first+second computed before loop 1.
+ * Residual: every loop needs the R5900 short-loop pad nop with the pointer step
+ * in the delay slot, and five mode constants take different registers. Body:
+ * NOTE #8228. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF1B8);
 #else
