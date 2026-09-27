@@ -1561,8 +1561,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE0C8);
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 97.25% -> SPLIT-HIREG,
  * first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 99.95% -> PACKED-SAVE, first differing row @1: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. */
-/* TODO(match): functional equivalent - not byte-exact; 64-bit `daddu` move idiom
- * + 1-GPR packed-save frame not reproduced by cc1. */
+/* TODO(match): functional equivalent - not byte-exact. On the sdk29 arm (-O2 -G8
+ * -fno-gcse, solo) the whole residual is 4 words, all save-stride: 0x2CE0CC/0x2CE1F8
+ * frame -16/+16 vs -32/+32, 0x2CE0D8/0x2CE1EC `sd/ld ra` at 8 vs 16; the daddu
+ * moves and every other word already match (task #823). The 16-byte GPR slot is
+ * fixed in cc1 2.9-ee-991111 (19 -m/-mabi/-mcpu variants, -mgp32 included, all keep
+ * it; the held 2.95.3/2.95.2 cc1s save with sq), so no C or unit flag reaches it. */
 s32 func_002CE0C8(void) {
     s32 buttons = g_padButtonsPressed;
     s32 result = 0;
