@@ -2313,32 +2313,80 @@ void func_0028B0B0(void) {
  * INCLUDE_ASM. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028B558);
 
-/* Linear-scan the HUD icon-slot table for the entry whose texture id equals
- * `name`, stopping at the 0xFFFF sentinel; return its index (or the sentinel
- * index when not found).
- *
- * NEAR-MISS (89%): frameless leaf, logic + the peeled first iteration match,
- * but the original schedules two padding `nop`s between the two loop-exit
- * branches that cc1 doesn't emit. Fixed scheduling difference; kept as #else.
- * engine96 arm (task #469): 74.47% (single `&&` condition, pointer+counter,
- * `for` forms tried); residual REGNUM + loop shape — the ROM peels with the
- * value in $2 and walks a copy of the table pointer in $3 with a plain `bne`
- * loop-back; this cc1 walks $5 in place, copies the value, and emits `bnel`. */
+/*
+ * R5900 SHORT-LOOP PAD (the same construct as text/1A8180.c, FACT #7937). The
+ * ROM's assembler padded every backward branch closing a loop shorter than 6
+ * instructions with `nop`s up to 6 - the R5900 short-loop erratum workaround.
+ * cc1 never emits the pad and neither assembler we run inserts it, so it is
+ * written directly before the branch it pads:
+ *   - `.set noreorder` stops the assembler swapping the last pad `nop` into
+ *     the branch delay slot;
+ *   - the "+r" operand is the value the branch tests, which pins the pad
+ *     between that value's load and the branch;
+ *   - PAD1's `next` is the register the ROM updates in the delay slot: reading
+ *     it keeps that update after the pad, where reorg moves it into the slot.
+ * A no-op on the native build.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028B560);
+#define R5900_SHORT_LOOP_PAD1(v, next) \
+    __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
+#define R5900_SHORT_LOOP_PAD2(v) \
+    __asm__(".set noreorder\n\tnop\n\tnop\n\t.set reorder" : "+r"(v))
 #else
+#define R5900_SHORT_LOOP_PAD1(v, next) ((void)0)
+#define R5900_SHORT_LOOP_PAD2(v) ((void)0)
+#endif
+
+/*
+ * g_pHudAssetHeaderAbs: an ASSEMBLER alias of g_pHudAssetHeader (the #8036
+ * construct, as for g_playerProgressAbs in text/191238.c). Declared 8 bytes so
+ * cc1 -G8 treats it as small and emits one unsplit macro `lw rX, sym+4`; the
+ * `.extern ,16` makes gas size the alias non-small, so it expands that macro
+ * absolutely with the destination as its own %hi temp (`lui rX; lw rX,%lo(rX)`),
+ * which is the ROM's form here. The relocation lands on g_pHudAssetHeader
+ * itself, and every other reader of the real symbol is unaffected (gas decides
+ * gp-rel vs absolute per symbol, per file).
+ */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_pHudAssetHeaderAbs, 16\n\tg_pHudAssetHeaderAbs = g_pHudAssetHeader");
+extern void *g_pHudAssetHeaderAbs[2];
+#else
+#define g_pHudAssetHeaderAbs g_pHudAssetHeader
+#endif
+
+/**
+ * Linear-scan the HUD icon-slot table (g_pHudAssetHeader[1]) for the entry
+ * whose texture id equals `name`, stopping at the 0xFFFF sentinel.
+ *
+ *   name  the texture id to look for
+ *   ->    its slot index, or the sentinel's index when absent
+ *
+ * The first entry is tested before the loop (both the sentinel and the name),
+ * and the loop then walks a copy of the table pointer with the index
+ * incremented in the sentinel branch's delay slot. That loop is 4
+ * instructions, so the ROM carries two short-loop pad `nop`s between its two
+ * exit tests (R5900_SHORT_LOOP_PAD2). The table pointer is read through
+ * g_pHudAssetHeaderAbs for the ROM's `lui $5; lw $5` pair.
+ */
 s32 func_0028B560(s32 name) {
-    HudIconSlot *table = (HudIconSlot *)g_pHudAssetHeader[1];
+    HudIconSlot *table = (HudIconSlot *)g_pHudAssetHeaderAbs[1];
+    HudIconSlot *p;
     s32 i = 0;
-    while (table[i].texId != 0xFFFF) {
-        if (table[i].texId == name) {
-            break;
-        }
-        i++;
+    s32 id;
+    if (table[0].texId != 0xFFFF && table[0].texId != name) {
+        p = table;
+        do {
+            p++;
+            i++;
+            id = p->texId;
+            if (id == 0xFFFF) {
+                break;
+            }
+            R5900_SHORT_LOOP_PAD2(id);
+        } while (id != name);
     }
     return i;
 }
-#endif
 
 extern void func_00283438(void *base, s32 size); /* clear/init a memory block */
 
@@ -2802,27 +2850,6 @@ void func_0028BF80(void) {
         rec += 0x90;
     }
 }
-#endif
-
-/*
- * R5900 SHORT-LOOP PAD (the same construct as text/1A8180.c, FACT #7937). The
- * ROM's assembler padded every backward branch closing a loop shorter than 6
- * instructions with `nop`s up to 6 - the R5900 short-loop erratum workaround.
- * cc1 never emits the pad and neither assembler we run inserts it, so it is
- * written directly before the branch it pads:
- *   - `.set noreorder` stops the assembler swapping the pad `nop` into the
- *     branch delay slot;
- *   - the "+r" operand is the value the branch tests, which pins the pad
- *     between that value's load and the branch;
- *   - `next` is the register the ROM updates in the delay slot: reading it
- *     keeps that update after the pad, where reorg moves it into the slot.
- * A no-op on the native build.
- */
-#ifndef TARGET_NATIVE
-#define R5900_SHORT_LOOP_PAD1(v, next) \
-    __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
-#else
-#define R5900_SHORT_LOOP_PAD1(v, next) ((void)0)
 #endif
 
 /**
