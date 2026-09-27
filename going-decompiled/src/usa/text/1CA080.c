@@ -1561,12 +1561,26 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE0C8);
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 97.25% -> SPLIT-HIREG,
  * first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 99.95% -> PACKED-SAVE, first differing row @1: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. */
-/* TODO(match): functional equivalent - not byte-exact. On the sdk29 arm (-O2 -G8
- * -fno-gcse, solo) the whole residual is 4 words, all save-stride: 0x2CE0CC/0x2CE1F8
- * frame -16/+16 vs -32/+32, 0x2CE0D8/0x2CE1EC `sd/ld ra` at 8 vs 16; the daddu
- * moves and every other word already match (task #823). The 16-byte GPR slot is
- * fixed in cc1 2.9-ee-991111 (19 -m/-mabi/-mcpu variants, -mgp32 included, all keep
- * it; the held 2.95.3/2.95.2 cc1s save with sq), so no C or unit flag reaches it. */
+/* TODO(match): functional equivalent - not byte-exact. Each held compiler
+ * reproduces what the other misses, and neither reproduces all of it.
+ * sdk29 arm (cc1 2.9-ee-991111 -O2 -G8 -fno-gcse, solo) 99.95%: the whole residual
+ * is 4 words, all save-stride: 0x2CE0CC/0x2CE1F8 frame -16/+16 vs -32/+32,
+ * 0x2CE0D8/0x2CE1EC `sd/ld ra` at 8 vs 16; the daddu moves and every other word
+ * already match (task #823).
+ * engine96 arm (cc1 2.96-ee-001003 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing,
+ * solo) 97.25%: DOES emit the ROM's stride (`addiu sp,sp,-16`, `sd s0,0(sp)`,
+ * `sd/ld ra,8(sp)`), but misses the body: `lui v0` for the ROM's `lui v1` on
+ * g_padButtonsPressed, `sd ra` scheduled after `move s0,zero`, the 0x31/0x1C test
+ * inverted (`beq` for `bne`) with the func_002CC788/func_002CC858 blocks swapped,
+ * the epilogue `ld ra`/`ld s0` order, and one trailing nop (tasks #825, #829).
+ * cc1 2.9 kept the 16-byte slot in all 17 of the 19 target variants screened that
+ * compiled (-mabi=eabi/64/o64/n32, -mgp32/64, -mlong32/64, -mint64, -mfp32/64,
+ * -msingle-float, -mips3/4, -mcpu=r5900/r4000, -m4650; -mabi=32 and -meabi exit
+ * 33); the held 2.95.3/2.95.2 cc1s save with sq. Only target (-m) flags were screened: a -f/-O flag reaching
+ * the 8-byte slot on 2.9 is untested, not ruled out. So this function's original
+ * was built by an 8-byte-slot compiler, as objdiff_build.sh's two-compiler header
+ * places every function above 0x131D98, and not by cc1 2.9 under any flag
+ * screened; its body is nonetheless closer to our 2.9 than to our 2.96-001003. */
 s32 func_002CE0C8(void) {
     s32 buttons = g_padButtonsPressed;
     s32 result = 0;
