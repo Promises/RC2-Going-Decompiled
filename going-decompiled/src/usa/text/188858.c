@@ -1079,37 +1079,101 @@ extern u8   g_nSaveLoadStatusCode[];   /* 0x1A7420 save/load popup status block 
 extern void CommitProgressCheckpoint(s32 a, s32 destination);
 void ClearSavePromptPending(void);     /* defined below in this unit */
 
-/* RequestLevelExit(destination, doSave): raise the in-level exit flag
- * (g_nLevelExitRequested) and record the destination; when destination == -1
- * (the "no explicit destination" sentinel) also resets a transition latch
- * (D_1393E0+0x17C/+0x18) and clears a save/load status bit
- * (g_nSaveLoadStatusCode+0x4 & ~0x200). When doSave is set, clears
- * the save-prompt gate and commits a progress checkpoint.
+/*
+ * R5900 SHORT-LOOP PAD (the same construct as text/1A8180.c, FACT #7937). The
+ * ROM's assembler padded every backward branch closing a loop shorter than 6
+ * instructions with `nop`s up to 6 - the R5900 short-loop erratum workaround.
+ * cc1 never emits the pad and neither assembler we run inserts it, so it is
+ * written directly before the branch it pads:
+ *   - `.set noreorder` stops the assembler swapping the last pad `nop` into
+ *     the branch delay slot;
+ *   - the "+r" operand is the value the branch tests, which pins the pad
+ *     between that value's load and the branch;
+ *   - PAD1's `next` is the register the ROM updates in the delay slot: reading
+ *     it keeps that update after the pad, where reorg moves it into the slot.
+ * A no-op on the native build.
  *
- * The matching build stays INCLUDE_ASM (a single-$31 frame, but mixed %gp_rel
- * (exit flag / destination) + %hi/%lo (status code, latch) addressing and two
- * tail jal gates whose branch colouring cc1 does not reproduce). */
+ * EE_REG(r) binds a local register variable to EE GPR `r`
+ * (`register u32 x EE_REG("$3");`, as in text/1DFF80.c) where cc1 2.9's
+ * allocator colours a value differently from the ROM; natively a plain local.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", RequestLevelExit);
+#define EE_REG(r) __asm__(r)
+#define R5900_SHORT_LOOP_PAD1(v, next) \
+    __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
+#define R5900_SHORT_LOOP_PAD2(v) \
+    __asm__(".set noreorder\n\tnop\n\tnop\n\t.set reorder" : "+r"(v))
 #else
+#define EE_REG(r)
+#define R5900_SHORT_LOOP_PAD1(v, next) ((void)0)
+#define R5900_SHORT_LOOP_PAD2(v) ((void)0)
+#endif
+
+/*
+ * RequestLevelExit's absolute accesses. The ROM re-reads g_nLevelExitDestination
+ * (stored %gp_rel just before) and read-modify-writes g_gameStateFlags
+ * (0x1A7424, the word at g_nSaveLoadStatusCode+0x4) with the assembler's
+ * absolute macro pairs (`lui rX; lw rX,%lo(rX)`, `lui $at; sw`), so both go
+ * through assembler aliases sized 16 (the #8036 construct; relocations name the
+ * real symbols). g_areaTable is the ROM's name for D_1393E0 (symbol_addrs).
+ */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_gameStateFlagsAbs, 16\n\tg_gameStateFlagsAbs = g_gameStateFlags");
+extern s32 g_gameStateFlagsAbs;
+__asm__(".extern g_nLevelExitDestinationAbs, 16\n\tg_nLevelExitDestinationAbs = g_nLevelExitDestination");
+extern s32 g_nLevelExitDestinationAbs;
+extern u8 g_areaTable[];
+#else
+#define g_gameStateFlagsAbs (*(s32 *)(g_nSaveLoadStatusCode + 0x4))
+#define g_nLevelExitDestinationAbs g_nLevelExitDestination
+#define g_areaTable D_1393E0
+#endif
+
+/**
+ * Raise the in-level exit flag and record the exit destination. For the "no
+ * explicit destination" sentinel (-1) also clear the area record's exit latch
+ * (g_areaTable+0x17C), store -1 into its status half-word (+0x18) unless that
+ * is already negative, and clear bit 0x200 of g_gameStateFlags. With `doSave`
+ * set, clear the save-prompt gate and commit a progress checkpoint for the
+ * destination.
+ *
+ *   destination  next level/scene id, or -1
+ *   doSave       non-zero to clear the save prompt and commit a checkpoint
+ *
+ * Matching notes. The area base goes through an empty tied asm so cc1 keeps
+ * &g_areaTable in a register and addresses +0x17C/+0x18 by displacement
+ * (otherwise it folds the offsets into %lo); it and the latch are EE_REG-bound
+ * to the ROM's $6/$3. The mask is a signed ~0x200 so it loads as one addiu.
+ * The checkpoint's destination read is volatile: it must stay after
+ * ClearSavePromptPending, not be hoisted into that call's delay slot, where
+ * the two-word absolute macro cannot go. The empty volatile asm after the last
+ * call stops cc1 turning it into a tail jump.
+ */
 void RequestLevelExit(s32 destination, s32 doSave) {
     g_nLevelExitRequested = 1;
     g_nLevelExitDestination = destination;
     if (destination == -1) {
-        if (*(s32 *)(D_1393E0 + 0x17C) != 0) {
-            *(s32 *)(D_1393E0 + 0x17C) = 0;
+        u8 *areaBase;
+        register u8 *area EE_REG("$6");
+        register s32 latch EE_REG("$3");
+
+        __asm__("" : "=r"(areaBase) : "0"(g_areaTable));
+        area = areaBase;
+        latch = *(s32 *)(area + 0x17C);
+        if (latch != 0) {
+            *(s32 *)(area + 0x17C) = 0;
         }
-        if (*(s16 *)(D_1393E0 + 0x18) >= 0) {
-            *(s16 *)(D_1393E0 + 0x18) = (s16)destination;
+        if (*(s16 *)(area + 0x18) >= 0) {
+            *(s16 *)(area + 0x18) = (s16)destination;
         }
-        *(s32 *)(g_nSaveLoadStatusCode + 0x4) &= ~0x200;
+        g_gameStateFlagsAbs &= ~0x200;
     }
     if (doSave != 0) {
         ClearSavePromptPending();
-        CommitProgressCheckpoint(0, g_nLevelExitDestination);
+        CommitProgressCheckpoint(0, *(volatile s32 *)&g_nLevelExitDestinationAbs);
+        __asm__ __volatile__("");
     }
 }
-#endif
 
 /* Non-zero while the main in-level frame loop has been asked to exit. */
 s32 IsLevelExitRequested(void) {
@@ -2320,36 +2384,6 @@ void func_0028B0B0(void) {
  * tail, pinned as its own symbol; no jr $ra. Not a real function; left
  * INCLUDE_ASM. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028B558);
-
-/*
- * R5900 SHORT-LOOP PAD (the same construct as text/1A8180.c, FACT #7937). The
- * ROM's assembler padded every backward branch closing a loop shorter than 6
- * instructions with `nop`s up to 6 - the R5900 short-loop erratum workaround.
- * cc1 never emits the pad and neither assembler we run inserts it, so it is
- * written directly before the branch it pads:
- *   - `.set noreorder` stops the assembler swapping the last pad `nop` into
- *     the branch delay slot;
- *   - the "+r" operand is the value the branch tests, which pins the pad
- *     between that value's load and the branch;
- *   - PAD1's `next` is the register the ROM updates in the delay slot: reading
- *     it keeps that update after the pad, where reorg moves it into the slot.
- * A no-op on the native build.
- *
- * EE_REG(r) binds a local register variable to EE GPR `r`
- * (`register u32 x EE_REG("$3");`, as in text/1DFF80.c) where cc1 2.9's
- * allocator colours a value differently from the ROM; natively a plain local.
- */
-#ifndef TARGET_NATIVE
-#define EE_REG(r) __asm__(r)
-#define R5900_SHORT_LOOP_PAD1(v, next) \
-    __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
-#define R5900_SHORT_LOOP_PAD2(v) \
-    __asm__(".set noreorder\n\tnop\n\tnop\n\t.set reorder" : "+r"(v))
-#else
-#define EE_REG(r)
-#define R5900_SHORT_LOOP_PAD1(v, next) ((void)0)
-#define R5900_SHORT_LOOP_PAD2(v) ((void)0)
-#endif
 
 /*
  * g_pHudAssetHeaderAbs: an ASSEMBLER alias of g_pHudAssetHeader (the #8036
