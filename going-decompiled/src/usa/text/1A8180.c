@@ -168,7 +168,10 @@ extern u8 g_itemEquippedSlot[0x38];
 typedef struct WeaponVariant {
     /* 0x00 */ s32 exists;
     /* 0x04 */ u8 upgradeLevel;
-    /* 0x05 */ u8 pad[0xDB];
+    /* 0x05 */ u8 pad05[0x0F];
+    /* 0x14 */ s32 mobyClass;     /* moby class id this variant spawns/answers to
+                                     (matched against Moby.oClass by func_002AE7E8) */
+    /* 0x18 */ u8 pad18[0xC8];
 } WeaponVariant;
 extern WeaponVariant g_weaponTable[];  /* 0xE0-stride weapon-variant table */
 extern u8 g_abLevelAvailableFlags[8]; /* really u8[0x1C]; same cc1-small address model as g_skillPointFlags */
@@ -4826,44 +4829,64 @@ s32 func_002AE6C8(s32 itemId) {
 }
 #endif
 
-/* func_002AE7E8: map a moby's class id (+0xAA) to an announcer/category code.
- * A direct class-id -> code table for the known classes; any other class falls
- * through to a lookup against the equipped-weapon block (g_soundBankHandlesBlk
- * +0x1220/+0x1248) and then a linear scan of the equipped-slot list
- * (g_itemEquippedSlot, 0x38 entries) matching the class id (or the moby's linked
- * +0xB8 moby's class) against g_weaponTable[slot].+0x14, returning the slot index
- * or 0xFF. */
+/**
+ * func_002AE7E8 — map a moby to an announcer/category code by its class id.
+ *
+ * Params: moby — the moby to classify (reads oClass at +0xAA and the linked
+ *         moby pointer at +0xB8).
+ * Returns: a fixed code for the known class ids in the switch; otherwise the
+ * equipped-weapon code (g_soundBankHandlesBlk +0x1248) when the moby, or its
+ * linked moby, is the equipped-weapon moby (+0x1220); otherwise the first slot
+ * i (0..0x37) whose weapon variant g_weaponTable[g_itemEquippedSlot[i]] has a
+ * mobyClass equal to the moby's class or the linked moby's class; else 0xFF.
+ *
+ * MATCHED on the sdk29 arm (plain C; unit objdiff report via objdiff_build.sh +
+ * unit_report.sh, 100.00%; task #758). The bracket is the row with ONLY that
+ * lever reverted, everything else as written (same instrument, task #758):
+ *  - the loop re-reads moby->oClass instead of reusing a cached class, so the
+ *    switch value dies after the switch rather than living in a1 across the
+ *    loop [96.88];
+ *  - cases in the ROM's return-block order (0x29, 0x2A, 0x16, ... 0xE) [99.27
+ *    in the earlier body's case order, 0xB2E first];
+ *  - the switch on `(s16)moby->oClass`: the ROM sign-extends (lh, not lhu)
+ *    [99.52];
+ *  - the linked pointer is tested through its own copy (linkedTest) and read
+ *    through the original: the ROM keeps both, a3 for the test and a2 for the
+ *    read [98.08 with no copy; 99.92 with the roles reversed];
+ *  - the 0xE0 stride is an explicit local set in the loop init ahead of that
+ *    copy, the one spelling found that orders the stride load before the copy
+ *    [98.40 as `&g_weaponTable[slot]`].
+ * The mobyClass field is for readability only: reading +0x14 through a raw
+ * offset is also 100.00.
+ */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 48.22%
-   -> UNKNOWN-@0: ROM `lh v1,170(a0)` vs `lh a1,170(a0)` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE7E8);
-#else
+   -> UNKNOWN-@0: ROM `lh v1,170(a0)` vs `lh a1,170(a0)` (measured on the earlier body) */
 s32 func_002AE7E8(Moby *moby) {
-    s16 cls = *(s16 *)((u8 *)moby + 0xAA);
     u8 *blk;
     void *equipped;
-    void *linked;
+    Moby *linked;
+    Moby *linkedTest;
+    s32 stride;
     s32 i;
 
-    switch (cls) {
-    case 0xB2E: return 0x1D;
-    case 0x87A: return 0x16;
-    case 0xAC:  return 0xE;
-    case 0x79:  return 0xC;
-    case 0x5DA: return 0x1B;
+    switch ((s16)moby->oClass) {
     case 0xA66:
     case 0xA82: return 0x29;
+    case 0xC07:
+    case 0xCE4:
+    case 0xCE5: return 0x2A;
+    case 0x87A: return 0x16;
+    case 0xD01: return 0x18;
+    case 0xB2E: return 0x1D;
+    case 0xE64:
+    case 0xECE: return 0x25;
+    case 0x5DA: return 0x1B;
     case 0x9A9:
     case 0xA9B: return 0x1C;
     case 0xB58:
     case 0xE79: return 0x20;
-    case 0xC07:
-    case 0xCE4:
-    case 0xCE5: return 0x2A;
-    case 0xE64:
-    case 0xECE: return 0x25;
-    case 0xD01: return 0x18;
-    default:    break;
+    case 0x79:  return 0xC;
+    case 0xAC:  return 0xE;
     }
 
     blk = g_soundBankHandlesBlk;
@@ -4871,23 +4894,25 @@ s32 func_002AE7E8(Moby *moby) {
     if ((void *)moby == equipped) {
         return *(s32 *)(blk + 0x1248);
     }
-    linked = *(void **)((u8 *)moby + 0xB8);
-    if (linked != 0 && linked == equipped) {
+    linked = *(Moby **)((u8 *)moby + 0xB8);
+    if (linked != 0 && (void *)linked == equipped) {
         return *(s32 *)(blk + 0x1248);
     }
 
-    for (i = 0; i < 0x38; i++) {
-        s32 f14 = *(s32 *)((u8 *)&g_weaponTable[g_itemEquippedSlot[i]] + 0x14);
-        if (cls == f14) {
+    for (i = 0, stride = 0xE0, linkedTest = linked; i < 0x38; i++) {
+        WeaponVariant *variant =
+            (WeaponVariant *)((u8 *)g_weaponTable + g_itemEquippedSlot[i] * stride);
+        s32 weaponClass = variant->mobyClass;
+
+        if ((s16)moby->oClass == weaponClass) {
             return i;
         }
-        if (linked != 0 && *(s16 *)((u8 *)linked + 0xAA) == f14) {
+        if (linkedTest != 0 && (s16)linked->oClass == weaponClass) {
             return i;
         }
     }
     return 0xFF;
 }
-#endif
 
 /* t467 engine96 arm: NOT MEASURED — the #else body is named SpawnBoltShower while the
    asm/symbol is func_002AE9E0 (the bb754675 name-skew class, FACT #6402 defect 1), so a
