@@ -437,28 +437,42 @@ void func_002A07B0(u8 *moby, u8 sub, u8 *rec) {
 #endif
 
 /*
- * func_002A0828(list, node): unlink `node` from `list`'s singly-linked free/active
- * chain (head at list+0x54, nodes linked through +0x8) and then wipe the removed
- * node with FillMemory32(node, 0, 0x40). A null `node` is a no-op. Walks from the
- * head to find `node`'s predecessor, splices it out (prev->next = node->next or
- * head = node->next when it was first), then zeroes the node's 0x40-byte record.
- * WALL: the original lowers the search loop and the head-vs-body tests as a chain
- * of branch-LIKELY forms (bne/beql/bnel) that reload the head from memory and put
- * the `prev = prev->next` advance in nullified delay slots, and tail-calls
- * FillMemory32 sharing the epilogue; this cc1 produces a plain-branch loop shape
- * with extra reloads and a different beql/bnel placement (~41%). A fixed
- * branch-likely / loop-scheduling artifact, not reachable by source form.
- * Left INCLUDE_ASM.
+ * func_002A0828(list, node) — unlink `node` from `list`'s singly-linked chain
+ * and wipe it. Caller: FreeWeaponEffectSlot (releasing a weapon-effect slot).
+ *
+ *   list  owner record; its chain head is at +0x54
+ *   node  0x40-byte node, linked through +0x8; NULL is a no-op
+ *
+ * If `node` is the head, the head moves to node->next. Otherwise the walk
+ * finds node's predecessor and splices node out; a node that is not on the
+ * chain is left alone. Either way, a non-NULL node is then zeroed with
+ * FillMemory32(node, 0, 0x40). No return value.
+ *
+ * Non-obvious (task #759; this replaces an old "~41% branch-likely wall" note,
+ * which had not tried the constructs below):
+ *  - The head test comes before `prev = list->head`. That leaves the ROM's
+ *    `bne`/`nop` and puts the copy in the next `beqz`'s delay slot. Assigning
+ *    prev inside the test moves the copy into a `bnel` slot instead.
+ *  - The loop entry test is written out as an `if` around a do/while. The ROM
+ *    tests the first link without the pad, then loops with it. A plain
+ *    `while` makes cc1 copy the whole condition, pad included, to the loop
+ *    entry.
+ *  - A0828_LOOP_PAD is the R5900 short-loop pad: two `nop`s that bring the
+ *    4-instruction loop up to 6 (see the note in text/1A8180.c). No compiler
+ *    or assembler that the project runs emits it.
+ *  - `noTailCall = 0` is a dead store that stops cc1 turning the trailing void
+ *    call into a sibling `j`. The ROM keeps jal + epilogue. Here the value-
+ *    returning cast and the empty volatile asm give the same bytes.
  */
 #ifndef TARGET_NATIVE
 #define A0828_LOOP_PAD() ({ __asm__ __volatile__(".set noreorder\n\tnop\n\tnop\n\t.set reorder"); })
 #else
 #define A0828_LOOP_PAD() ((void)0)
 #endif
-struct A0828Node { u8 _pad[8]; struct A0828Node *next; };
-struct A0828List { u8 _pad[0x54]; struct A0828Node *head; };
-void func_002A0828(struct A0828List *list, struct A0828Node *node) {
-    struct A0828Node *prev;
+struct LinkedNode { u8 _pad[8]; struct LinkedNode *next; };
+struct NodeChainOwner { u8 _pad[0x54]; struct LinkedNode *head; };
+void func_002A0828(struct NodeChainOwner *list, struct LinkedNode *node) {
+    struct LinkedNode *prev;
     s32 noTailCall;
     if (node != 0) {
         if (list->head == node) {
