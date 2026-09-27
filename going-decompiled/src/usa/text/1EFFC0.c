@@ -729,13 +729,13 @@ s32 func_002F6B68(void) {
  * forced to 0 while a queued cinematic is already busy.
  *
  * NOT byte-matched: 4 GPR saves (s0-s2 + ra) hit the 8-byte-packed-save wall,
- * and g_cinematicSceneParams (g_tieVramLruSize + 0x24) is reached %gp_rel here
- * vs absolute elsewhere - the same-symbol reload artifact. Body is otherwise
+ * and g_cinematicFmvSize (0x1B218C) is reached %gp_rel here, in a delay slot,
+ * vs absolute elsewhere - the delay-slot rule of FACT #8058. Body is otherwise
  * instruction-identical; kept as the portable #else impl.
  *
  * ORACLE STATUS (this cinematic cluster - func_002F6B98 / func_002F6C78 /
  * EnterCinematicBeginPlayback): OUT-OF-SCOPE, tester-classified. They drive a live-cinematic
- * scene-params block (g_cinematicSceneParams) that is not effect-diffable in the
+ * scene-param scalars (g_cinematicSceneParams..g_cinematicResumeVoiceId) that are not effect-diffable in the
  * tester's harness, and depend on disc-asset / queue state not seedable headless.
  * NOT a coverage gap - an explicit OOS class (live-cinematic-state dependency),
  * distinct from the standalone-cmp-oracle and tester-EE-effect-diff classes. */
@@ -745,8 +745,28 @@ void func_002F6C78(s32 p0, s32 p1, s32 p2, s32 p3, s32 p4);
 extern u32 g_cinematicUnlockedFlags[]; /* 0x139768 watched-cinematics bitfield */
 extern u8  g_discToc[];                /* 0x14B540 master disc asset directory */
 extern u8  g_currentLanguage;          /* 0x1A7BBC language index */
-/* Cinematic-scene start param block at g_tieVramLruSize + 0x20 (0x1B2188). */
-extern s32 g_cinematicSceneParams[];   /* [0]=+0x20 .. [4]=+0x30, [5]=+0x34 */
+/* The cinematic scene-start parameters: six SEPARATE scalar globals at
+ * 0x1B2188..0x1B219C (g_tieVramLruSize + 0x20..0x34), not one array.
+ * func_002F6C78 stores each through its own `lui $1` and one through %gp_rel,
+ * which cc1 only emits for distinct small-data symbols - one array symbol
+ * gets a shared CSE'd base (task #749 probe, task #790 re-split).
+ * The ROM reaches every one of them both ways, and every %gp_rel ref sits in a
+ * branch delay slot (FACT #8058). Our gas decides by size, one size per
+ * symbol per TU, so all six are declared large (absolute) here. The one
+ * delay-slot %gp_rel store in func_002F6C78 needs g_cinematicFmvFlag small
+ * (size 4) on that function's engine96 arm only - see its comment. */
+__asm__(".extern g_cinematicSceneParams, 16");
+__asm__(".extern g_cinematicFmvSize, 16");
+__asm__(".extern g_cinematicReelEntry, 16");
+__asm__(".extern g_cinematicLanguage, 16");
+__asm__(".extern g_cinematicFmvFlag, 16");
+__asm__(".extern g_cinematicResumeVoiceId, 16");
+extern s32 g_cinematicSceneParams;   /* 0x1B2188 FMV disc offset (PlayFmvMovie arg 1) */
+extern s32 g_cinematicFmvSize;       /* 0x1B218C FMV size, 0 = nothing armed */
+extern s32 g_cinematicReelEntry;     /* 0x1B2190 -> TOC entry +0x8, reel descriptor */
+extern s32 g_cinematicLanguage;      /* 0x1B2194 language index */
+extern s32 g_cinematicFmvFlag;       /* 0x1B2198 1 only for cinematic id 0xBF */
+extern s32 g_cinematicResumeVoiceId; /* 0x1B219C secondary-voice sample id to restart */
 
 /* RESIDUAL CLASS (task #576): UNDIAGNOSED
  *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
@@ -765,7 +785,7 @@ void func_002F6B98(s32 cinId) {
     u8 *entry;
 
     if (cinId < 0) {
-        g_cinematicSceneParams[1] = 0; /* +0x24 */
+        g_cinematicFmvSize = 0;
         return;
     }
     idx = MapCinematicIdToIndex(cinId);
@@ -788,47 +808,74 @@ void func_002F6B98(s32 cinId) {
 
 /* Begin a cinematic scene: set the listener flag bit, run the scene-prep
  * callbacks (func_00133710 / func_0011AEA0), tear down all sound emitters and
- * the dialog voice channels, latch the five caller-supplied scene-start params
- * (plus the saved CD read-mode field) into the cinematic-scene param block,
- * fade to black, and clear the active subtitle.
+ * the dialog voice channels, then latch the five caller-supplied scene-start
+ * params plus the secondary voice's current sample id into the six cinematic
+ * scalars, fade to black, and clear the active subtitle (func_002898E0).
  *
- * NOT byte-matched: 5 GPR saves (s0-s4 + ra) hit the 8-byte-packed-save wall,
- * and the param block is reached with mixed absolute %hi/%lo and %gp_rel
- * (g_tieVramLruSize + 0x30) - the same-symbol reload artifact. Body is
- * otherwise instruction-identical; kept as the portable #else impl. */
+ * fmvOffset  FMV disc offset (TOC entry +0x10 plus the TOC base)
+ * fmvSize    FMV size (TOC entry +0x14); 0 means nothing is armed
+ * reelEntry  pointer to the cinematic's TOC entry +0x8 (reel descriptor)
+ * language   language index
+ * flag       1 only for cinematic id 0xBF
+ *
+ * Its one direct caller is func_002F6B98 (the only reference to this symbol
+ * anywhere in asm/usa; an indirect jalr would not show there). */
 void func_00133710(s32 a, s32 b, s32 c, s32 d, s32 e);
 void StopAllSoundEmitters(void);
 void ResetDialogVoiceChannels(void);
 void func_002898E0(void);
-extern s16 g_cdReadMode;              /* 0x1A63E8 sceCdRMode (+0x8 = datapattern hw) */
+/* 0x1A63F0: the secondary voice channel's current sample id, +0x4 into the
+ * StartSecondaryVoice state block at 0x1A63EC (unnamed in symbol_addrs). The ROM
+ * splits its `lh` into lui/%lo, which cc1 emits only for a non-small (array)
+ * declaration. */
+extern s16 D_1A63F0[];
 extern u8 g_listenerPosHistory[];    /* 0x188660 listener pos ring + flags */
-/* Cinematic-scene start param block at g_tieVramLruSize + 0x20 (0x1B2188). */
-extern s32 g_cinematicSceneParams[];  /* [0]=+0x20 .. [4]=+0x30, [5]=+0x34 */
 
-/* RESIDUAL CLASS (task #576): UNDIAGNOSED
- *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
- *   whole-unit blanket screen, clean tree): sdk29 81.96%, engine96 75.65%
- *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
- *   and the #else below remains the portable impl.
- *   SCREENED ONLY. Both arms were measured; the residual was not diagnosed to a
- *   mechanism. This is an open arm, not a wall -- do not read it as one. */
+/* RESIDUAL CLASS (task #790): ONE PROLOGUE SCHEDULING SLOT, engine96 arm.
+ *   97.04% on diff96.sh (per-function fuzzy, engine96 arm) for the body below,
+ *   with this function under an engine96 per-function guard and
+ *   g_cinematicFmvFlag declared `.extern ..., 4` on that arm only. Not the unit
+ *   gate, not 100.00%, so this stays INCLUDE_ASM with no guard.
+ *   Everything but the prologue is instruction-identical to the ROM: the six
+ *   per-store lui/%lo and the delay-slot %gp_rel store come from the task
+ *   #790 re-split (six real scalars), the jal+epilogue from the trailing
+ *   barrier, the `li $4,4` above the `lh` from the barrier after
+ *   ResetDialogVoiceChannels.
+ *   Residual: the ROM issues `addiu $3,%lo(g_listenerPosHistory)` right after
+ *   `sd $16`, and 2.96-001003's sched2 issues it after the five parameter moves
+ *   (5 words shifted). Measured and not moved by: a local pointer (93.33 before
+ *   the barriers), a "+r" pin on it (86.22), a volatile access (91.26), a
+ *   barrier at the start of the body (93.33), a sized array (97.04), sched1 ON
+ *   (96.30, diagnostic only). sched2 OFF gives 57.04, so sched2 is what
+ *   places it. Open arm, not a wall. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6C78);
 #else
-void func_002F6C78(s32 p0, s32 p1, s32 p2, s32 p3, s32 p4) {
+void func_002F6C78(s32 fmvOffset, s32 fmvSize, s32 reelEntry, s32 language,
+                   s32 flag) {
+    s32 voiceId;
+
     g_listenerPosHistory[0x6B] |= 0x8;
     func_00133710(2, 0, 0, 0, 0);
     func_0011AEA0(0);
     StopAllSoundEmitters();
     ResetDialogVoiceChannels();
-    g_cinematicSceneParams[0] = p0;                              /* +0x20 */
-    g_cinematicSceneParams[5] = *(s16 *)((u8 *)&g_cdReadMode + 8); /* +0x34 */
-    g_cinematicSceneParams[1] = p1;                              /* +0x24 */
-    g_cinematicSceneParams[2] = p2;                              /* +0x28 */
-    g_cinematicSceneParams[3] = p3;                              /* +0x2C */
-    g_cinematicSceneParams[4] = p4;                              /* +0x30 */
+    /* barrier: keeps reorg from pulling the first param store into this
+     * call's delay slot (the ROM leaves a nop there), and lets sched2 hoist
+     * the `li $4,4` above the `lh` as the ROM does */
+    __asm__ __volatile__("");
+    voiceId = D_1A63F0[0];
+    g_cinematicSceneParams = fmvOffset;
+    g_cinematicResumeVoiceId = voiceId;
+    g_cinematicFmvSize = fmvSize;
+    g_cinematicReelEntry = reelEntry;
+    g_cinematicLanguage = language;
+    g_cinematicFmvFlag = flag;
     FadeOutToBlackBlocking(4);
     func_002898E0();
+    /* the ROM calls func_002898E0 with a jal and a full epilogue, not a
+     * sibcall; the barrier keeps cc1 from turning it into a tail jump */
+    __asm__ __volatile__("");
 }
 #endif
 
@@ -848,7 +895,6 @@ void func_002F6C78(s32 p0, s32 p1, s32 p2, s32 p3, s32 p4) {
 void StartSecondaryVoice(s32 sampleId, s32 chan, s32 volume);
 void SetDialogVoiceVolumesMute(void);
 void ResetFrameArenas(void);
-extern s32 g_cinematicSceneParams[];     /* 0x1B2188 block; [5]=+0x34 voice id */
 extern u8 g_listenerPosHistory[];        /* 0x188660 listener pos ring + flags */
 
 /* RESIDUAL CLASS (task #576): SPLIT-WITHIN-FUNCTION -- g_exitCinematicCallbackArg
@@ -872,7 +918,7 @@ void EnterCinematicBeginPlayback(void) {
         g_cinematicExitPending = 0;
     }
     FadeOutToBlackBlocking(4);
-    StartSecondaryVoice(g_cinematicSceneParams[5], 1, 0x400);
+    StartSecondaryVoice(g_cinematicResumeVoiceId, 1, 0x400);
     SetDialogVoiceVolumesMute();
     g_listenerPosHistory[0x6B] |= 0x10;
     ResetFrameArenas();
@@ -889,7 +935,7 @@ void EnterCinematicBeginPlayback(void) {
 
 /* Cinematic / FMV playback driver for game-state 1 (= RunCinematicPlaybackFrame,
  * symbol_addrs 0x2F6E10 - kept as RunCinematicPlaybackFrame to match the INCLUDE_ASM symbol).
- * If no scene is armed (g_cinematicSceneParams[1] == 0) it tears down the queue and
+ * If no scene is armed (g_cinematicFmvSize == 0) it tears down the queue and
  * pops back to the previous state. Otherwise it:
  *   - blits the letterbox/backdrop UI texture (g_uiTextureCache record #2) to the
  *     GS: two GIF image-upload packets (func_00126288 = BuildGsImageUploadPacket, then
@@ -954,7 +1000,7 @@ void RunCinematicPlaybackFrame(void) {
     s32 idx, p2;
     u8 *tc;
 
-    if (g_cinematicSceneParams[1] == 0) {   /* +0x24: nothing armed */
+    if (g_cinematicFmvSize == 0) {   /* nothing armed */
         func_0029DAD0(D_1AD1F8, -1);
         func_002895E0(g_cinematicQueue);
         PopGameState(0, 0);
@@ -1018,7 +1064,7 @@ void RunCinematicPlaybackFrame(void) {
     dequeueResult = -1;
     done = 0;
     do {
-        p2 = g_cinematicSceneParams[2];   /* +0x28: current reel descriptor */
+        p2 = g_cinematicReelEntry;   /* current reel descriptor */
         if (p2 == 0 || *(s32 *)p2 == 0) {
             g_sceneFmvStreamBase = 0;
             g_sceneFrame = 0;
@@ -1033,10 +1079,10 @@ void RunCinematicPlaybackFrame(void) {
             g_sceneFmvStreamBase = fmvUploadBase;
         }
 
-        skip = PlayFmvMovie(g_cinematicSceneParams[0], g_cinematicSceneParams[1],
+        skip = PlayFmvMovie(g_cinematicSceneParams, g_cinematicFmvSize,
                             (arenaC + 0x3F) & ~0x3F, (arena14 + 0x3F) & ~0x3F,
-                            g_cinematicSceneParams[3],
-                            (g_cinematicSceneParams[4] != 0) ? 1 : 0);
+                            g_cinematicLanguage,
+                            (g_cinematicFmvFlag != 0) ? 1 : 0);
 
         if (skip != 0) {
             *(s32 *)((u8 *)g_cinematicQueue + 0x3C) = 1;
@@ -1051,9 +1097,9 @@ void RunCinematicPlaybackFrame(void) {
             base = *(s32 *)((u8 *)g_cinematicQueue + 4);
             nextId = *(s16 *)(base + *(s32 *)g_cinematicQueue * 2);
             idx = MapCinematicIdToIndex(nextId);
-            g_cinematicSceneParams[0] = *(s32 *)((u8 *)g_discToc + idx * 0x10 + 0x10)
+            g_cinematicSceneParams = *(s32 *)((u8 *)g_discToc + idx * 0x10 + 0x10)
                                         + *(s32 *)((u8 *)g_discToc + 4);
-            g_cinematicSceneParams[1] = *(s32 *)((u8 *)g_discToc + idx * 0x10 + 0x14);
+            g_cinematicFmvSize = *(s32 *)((u8 *)g_discToc + idx * 0x10 + 0x14);
         } else if (*(s32 *)((u8 *)g_cinematicQueue + 0x38) == 0) {
             done = 1;
         } else {
@@ -1064,9 +1110,9 @@ void RunCinematicPlaybackFrame(void) {
                 }
             } else {
                 idx = MapCinematicIdToIndex(dequeuedCinId);
-                g_cinematicSceneParams[0] = *(s32 *)((u8 *)g_discToc + idx * 0x10 + 0x10)
+                g_cinematicSceneParams = *(s32 *)((u8 *)g_discToc + idx * 0x10 + 0x10)
                                             + *(s32 *)((u8 *)g_discToc + 4);
-                g_cinematicSceneParams[1] = *(s32 *)((u8 *)g_discToc + idx * 0x10 + 0x14);
+                g_cinematicFmvSize = *(s32 *)((u8 *)g_discToc + idx * 0x10 + 0x14);
             }
         }
     } while (done == 0);
