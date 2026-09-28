@@ -2994,24 +2994,19 @@ s64 __moddi3(s64 a, s64 b) {
 }
 #endif
 
-/**
- * __muldi3 = 64-bit integer multiply (low 64 bits), a*b (libgcc __muldi3).
- * NEAR-MISS WALL (72.29% via objdiff, region-co-located with USA): correct
- * instruction set, but ee-gcc -O2 -G0 differs in half-product register
- * allocation and materialises the 0xFFFFFFFF mask via `dli` vs the original
- * `lui;dsrl32`. Standalone-seedable (pure a*b) -> HARD-GATE cmp-oracle candidate,
- * routed to tester-EE for the real-R5900 run.
+/*
+ * __muldi3 (libgcc `__muldi3`, 0x121AB8) = 64-bit integer multiply, low 64 bits
+ * of a * b. Compiler runtime, NOT game code: it is GCC's libgcc2.c, which lives
+ * verbatim in going-decompiled/libgcc/ and is never transcribed into a game .c
+ * (RULING #8206). USA links it from there as the libgcc.a member _muldi3.o; EU
+ * does not link libgcc members yet, so the EE arm here stays the ROM's own asm.
+ * The portable build keeps the behavioural equivalent, a * b.
  */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/cod/015180", __muldi3);
 #else
 s64 __muldi3(s64 a, s64 b) {
-    union { struct { s32 low; s32 high; } s; s64 ll; } w, uu, vv;
-    uu.ll = a;
-    vv.ll = b;
-    w.ll = (s64)((u64)(u32)uu.s.low * (u32)vv.s.low);
-    w.s.high += uu.s.low * vv.s.high + uu.s.high * vv.s.low;
-    return w.ll;
+    return a * b;
 }
 #endif
 
