@@ -106,8 +106,10 @@
 #            message of base..HEAD names it with a non-empty reason; excused
 #            units are listed with their reason and source commit. A RENAME is
 #            not a departure (task #963): a base-only unit is paired with a
-#            tip-only unit of IDENTICAL bytes, so a pure `git mv` passes; an
-#            edited rename still needs the trailer (git's -M pairing is printed
+#            tip-only unit of IDENTICAL bytes in the SAME region, so a pure
+#            in-region `git mv` passes; a move to another region is a shrink of
+#            the region it left and needs the trailer (task #984, RULING #5339);
+#            an edited rename still needs it too (git's -M pairing is printed
 #            as a hint, never trusted — it would excuse a partial carve).
 #            $LANDING_GATE_NATIVE_LEFT is honoured ONLY by --selftest's scratch
 #            arms; set on a real run it excuses nothing and is a WARN (a FAIL
@@ -132,7 +134,11 @@
 #   tools/ee/landing_gate.sh --selftest [region]  seed every check's failing arm
 #                                                 and require it to fire, then
 #                                                 run the real gate and require
-#                                                 PASS (default region usa)
+#                                                 PASS (default region usa). It
+#                                                 can NEVER print a landing
+#                                                 verdict line (`#### landing_gate
+#                                                 usa|eu ...`): say() exits 3 if
+#                                                 anything tries (task #984)
 #
 # A baseline HIGHER than the observation (a count, or a member no longer
 # observed) is a WARN naming the exact value/member to set (#451 gap 2: the
@@ -165,8 +171,19 @@ BASE_DIR="$HERE/landing_baseline"
 SHADOW_CLASSES="CLASS1 CLASS2 CLASS3 NOTARGET"
 PYTHON=".venv-decomp/bin/python"
 
-usage() { sed -n '2,145p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
-say()  { printf '%s\n' "$*"; }
+usage() { sed -n '2,151p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+# IN_SELFTEST: set only by selftest(), never from the environment. While it is
+# 1, say() refuses to print a line of the landing-verdict form a landing is
+# read from (task #984, watcher-2): a selftest arm must not be able to forge
+# the fleet's trust anchor, even into a file, even through a future edit.
+IN_SELFTEST=0
+LANDING_LINE_RE='^#### landing_gate (usa|eu)[ :]'
+say()  {
+  if [ "$IN_SELFTEST" = 1 ] && printf '%s\n' "$*" | /usr/bin/grep -qE "$LANDING_LINE_RE"; then
+    printf 'SELFTEST-BROKEN: --selftest tried to print a landing verdict line, refused and aborted (task #984): %s\n' "$*" >&2; exit 3
+  fi
+  printf '%s\n' "$*"
+}
 fail() { say "FAIL $*"; FAILED=$((FAILED+1)); }
 ok()   { say "OK   $*"; }
 # warn: a baseline that is stale-HIGH. Counted; a FAIL under --strict.
@@ -372,25 +389,33 @@ native_left_overrides() {
            sub(/^Native-Left:[ \t]+/, "") { u = $1; r = $0; sub(/^[^ \t]+[ \t]*/, "", r); sub(/[ \t]+$/, "", r); print u "\t" r "\t" src }'
 }
 
-# native_renames BASE_TREE TIP_TREE "LEFT" "ARRIVED" — one `<old> <new>` row
+# native_renames BASE_TREE TIP_TREE "LEFT" "ARRIVED" — one `= <old> <new>` row
 # per unit that left the base's population and arrived in the tip's with
-# IDENTICAL bytes (units are region-qualified paths under going-decompiled/src).
-# One-to-one: each arrival pairs at most one departure.
+# IDENTICAL bytes IN THE SAME REGION (units are region-qualified paths under
+# going-decompiled/src; the region is the first component). One-to-one: each
+# arrival pairs at most one departure. An arrival identical to a departure of
+# ANOTHER region is not paired (task #984, watcher-2: a unit leaving src/usa is
+# a USA shrink whatever lands in src/eu, RULING #5339); it is emitted as an
+# `x <old> <new>` row, a hint for the FAIL message only.
 native_renames() {
   [ -n "$3" ] && [ -n "$4" ] || return 0
   # shellcheck disable=SC2086  # one unit per word; no unit path holds a space
   { (cd "$1/going-decompiled/src" && shasum $3) | sed 's/^/L /'
     (cd "$2/going-decompiled/src" && shasum $4) | sed 's/^/A /'
-  } | awk '$1 == "L" { l[$2] = l[$2] " " $3; next }
-           $1 == "A" && ($2 in l) && l[$2] != "" { o = l[$2]; sub(/^ /, "", o); split(o, v, " "); print v[1], $3
-                                                  sub(/^ [^ ]+/, "", l[$2]) }'
+  } | awk 'function region(p) { sub(/\/.*/, "", p); return p }
+           $1 == "L" { k = $2 SUBSEP region($3); l[k] = l[k] " " $3; x[$2] = x[$2] " " $3; next }
+           $1 != "A" { next }
+           { k = $2 SUBSEP region($3) }
+           (k in l) && l[k] != "" { o = l[k]; sub(/^ /, "", o); split(o, v, " "); print "=", v[1], $3
+                                    sub(/^ [^ ]+/, "", l[k]); next }
+           ($2 in x) { o = x[$2]; sub(/^ /, "", o); split(o, v, " "); print "x", v[1], $3 }'
 }
 
 # check_native [TIP_TREE] [BASE_TREE] — the NATIVE row (task #923). Defaults:
 # the tip is this working tree, the base is extracted from the merge-base.
 check_native() {
   local tip=${1:-$ROOT} basetree=${2:-} baseref="(given tree ${2:-})"
-  say "== NATIVE: tools/native/check.sh over every TARGET_NATIVE unit, base-relative — FAIL on a unit failing at the tip that passed at (or is absent from) the base, and on a unit that LEFT the population (in the base's, not the tip's; a byte-identical rename is paired, not a departure) unless a Native-Left commit trailer names it and a reason. COMPILE-ONLY: green does NOT mean the native build links"
+  say "== NATIVE: tools/native/check.sh over every TARGET_NATIVE unit, base-relative — FAIL on a unit failing at the tip that passed at (or is absent from) the base, and on a unit that LEFT the population (in the base's, not the tip's; a byte-identical rename WITHIN a region is paired, not a departure) unless a Native-Left commit trailer names it and a reason. COMPILE-ONLY: green does NOT mean the native build links"
   if [ "$NATIVE_LEFT_FROM_ENV" != 1 ] && [ -n "${LANDING_GATE_NATIVE_LEFT:-}" ]; then
     warn "NATIVE: \$LANDING_GATE_NATIVE_LEFT is set and IGNORED — it is honoured only by --selftest's scratch arms (task #963); excuse a departure with a \`Native-Left: <region>/<path>.c <reason>\` trailer in a commit of the landing, which is reviewable and permanent"
   fi
@@ -428,9 +453,13 @@ check_native() {
   # similarity pairing would excuse a unit whose remaining <=50% left the
   # population with it; an edited rename here stays a departure and needs the
   # trailer, and git's own pairing is shown beside it as a hint only.
-  local left ovr="$OUT/native_left_overrides.txt" u excused="" unexcused="" unused pairs
+  # Pairing is per REGION (task #984): an identical arrival in another region
+  # does not pair, because the unit still left its own region's population.
+  local left ovr="$OUT/native_left_overrides.txt" u excused="" unexcused="" unused pairs renames cross
   left=$(LC_ALL=C comm -23 "$b.all" "$t.all")
-  pairs=$(native_renames "$basetree" "$tip" "$left" "$(LC_ALL=C comm -13 "$b.all" "$t.all")")
+  renames=$(native_renames "$basetree" "$tip" "$left" "$(LC_ALL=C comm -13 "$b.all" "$t.all")")
+  pairs=$(printf '%s\n' "$renames" | awk '$1 == "=" { print $2, $3 }')
+  cross=$(printf '%s\n' "$renames" | awk '$1 == "x" { print $2, $3 }')
   if [ -n "$pairs" ]; then
     say "     renamed, byte-identical (paired, not a departure): $(printf '%s\n' "$pairs" | awk '{ printf "%s -> %s  ", $1, $2 }')"
     left=$(printf '%s\n' $left | LC_ALL=C comm -23 - <(printf '%s\n' "$pairs" | awk '{ print $1 }' | LC_ALL=C sort))
@@ -440,12 +469,13 @@ check_native() {
     if awk -F'\t' -v u="$u" '$1 == u && $2 != "" { f = 1 } END { exit !f }' "$ovr"; then excused="$excused $u"; else unexcused="$unexcused $u"; fi
   done
   if [ -n "$unexcused" ]; then
-    fail "NATIVE: $(printf '%s\n' $unexcused | wc -l | tr -d ' ') unit(s) LEFT the TARGET_NATIVE population (in the base's population, absent from the tip's, not renamed byte-identical) with no Native-Left override naming unit + reason:$unexcused — if intended, add \`Native-Left: <region>/<path>.c <reason>\` to a commit message in the landing"
+    fail "NATIVE: $(printf '%s\n' $unexcused | wc -l | tr -d ' ') unit(s) LEFT the TARGET_NATIVE population (in the base's population, absent from the tip's, not renamed byte-identical within its region) with no Native-Left override naming unit + reason:$unexcused — if intended, add \`Native-Left: <region>/<path>.c <reason>\` to a commit message in the landing"
+    [ -n "$cross" ] && say "     byte-identical in ANOTHER region (not paired — a unit leaving src/<region> is that region's shrink whatever lands elsewhere, RULING #5339; task #984): $(printf '%s\n' "$cross" | awk '{ printf "%s -> %s  ", $1, $2 }')"
     if [ -z "${2:-}" ]; then
       local hint; hint=$(git diff -M --name-status "$baseref" -- going-decompiled/src 2>/dev/null \
         | awk -F'\t' -v l="$unexcused" 'BEGIN { n = split(l, a, " "); for (i = 1; i <= n; i++) x["going-decompiled/src/" a[i]] = 1 }
                                          $1 ~ /^R/ && ($2 in x) { sub(/^going-decompiled\/src\//, "", $2); sub(/^going-decompiled\/src\//, "", $3); printf "%s -> %s (%s)  ", $2, $3, $1 }')
-      [ -n "$hint" ] && say "     git diff -M pairs these as EDITED renames (hint only — an edited rename is not paired; name it in a Native-Left trailer): $hint"
+      [ -n "$hint" ] && say "     git diff -M pairs these as renames (hint only — an EDITED or CROSS-REGION rename is not paired; name it in a Native-Left trailer): $hint"
     fi
   else
     ok "NATIVE: no unit left the population unexcused ($(printf '%s\n' $left | /usr/bin/grep -c . || true) left, each named by a Native-Left override with a reason; base $((bp+bf)) -> tip $((tp+tf)) units)"
@@ -656,8 +686,10 @@ run_gate() {  # run_gate REGION [--no-build] [--strict]
   region_vars "$1"; shift; local build=1
   while [ $# -gt 0 ]; do case "$1" in --no-build) build=0 ;; --strict) STRICT=1 ;; '') ;; *) say "unknown option $1"; exit 2 ;; esac; shift; done
   FAILED=0; WARNED=0
+  # inside --selftest (arm 14) the run is tagged so it cannot read as a landing
+  local tag="#### landing_gate $REGION"; [ "$IN_SELFTEST" = 1 ] && tag="==== selftest inner gate [$REGION] (NOT a landing verdict)"
   local dirty; dirty=$(git status --porcelain --no-renames | wc -l | tr -d ' ')
-  say "#### landing_gate $REGION at $(git rev-parse --short HEAD) ($dirty dirty paths), VM $EE_CTX, $(date -u +%FT%TZ)$([ "$STRICT" = 1 ] && echo ', --strict')"
+  say "$tag at $(git rev-parse --short HEAD) ($dirty dirty paths), VM $EE_CTX, $(date -u +%FT%TZ)$([ "$STRICT" = 1 ] && echo ', --strict')"
   say "     RULING #7208 condition 1 is discharged only by the BUILDING form on a 0-dirty tree at the SHA-named landing; this run is $([ $build = 1 ] && echo building || echo '--no-build'), $dirty dirty"
   [ $build = 1 ] && split_inputs   # first: every check below measures the re-split tree
   check_flags
@@ -679,7 +711,7 @@ run_gate() {  # run_gate REGION [--no-build] [--strict]
   check_noprovide
   local verdict; verdict=$([ $FAILED = 0 ] && echo PASS || echo "FAIL ($FAILED)")
   [ $WARNED -gt 0 ] && verdict="$verdict ($WARNED warning$([ $WARNED = 1 ] || echo s)$([ "$STRICT" = 1 ] && echo ', counted as FAIL under --strict'))"
-  say "#### landing_gate $REGION: $verdict"
+  say "$tag: $verdict"
   if [ $build = 0 ] || [ "$dirty" != 0 ]; then say "#### NOTE: RULING #7208 condition 1 is NOT discharged by this run ($([ $build = 0 ] && echo '--no-build')$([ $build = 0 ] && [ "$dirty" != 0 ] && echo ', ')$([ "$dirty" != 0 ] && echo "$dirty dirty paths")) — it needs the building form on a 0-dirty tree"; fi
   [ $FAILED = 0 ]
 }
@@ -687,9 +719,13 @@ run_gate() {  # run_gate REGION [--no-build] [--strict]
 # ------------------------------------------------------------- SELFTEST ----
 # Every check's failing arm, seeded and required to fire, before the real run.
 selftest() {
+  IN_SELFTEST=1
   region_vars "${1:-usa}"
   local T="$OUT/selftest"; rm -rf "$T"; mkdir -p "$T"; local bad=0
   say "#### landing_gate --selftest [$REGION]: seeded failing arms"
+  say "-- (0) VERDICT GUARD (#984): a landing verdict line forged through say() inside --selftest -> must be refused (exit 3, nothing on stdout); an ordinary line must print"
+  local fo fr; fo=$(say "#### landing_gate $REGION: PASS" 2>/dev/null); fr=$?
+  if [ "$fr" = 3 ] && [ -z "$fo" ] && [ "$(say 'landing_gate selftest 0 control')" = 'landing_gate selftest 0 control' ]; then ok "fired: forged '#### landing_gate $REGION: PASS' refused (exit $fr, 0 B on stdout); control line printed"; else say "SELFTEST-FAIL the verdict guard let a forged landing line through (exit $fr, stdout '$fo')"; bad=1; fi
 
   say "-- (1) FLAGS: one flag perturbed in a copy of build.sh"
   sed 's/usa\/text\/235FE8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse -fno-strict-aliasing"/usa\/text\/235FE8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse"/' "$HERE/build.sh" > "$T/build_pert.sh"
@@ -845,6 +881,7 @@ selftest() {
   say "-- (14) the real gate on this tree (--no-build, the build above) must PASS"
   STRICT=0
   if run_gate "$REGION" --no-build > "$T/gate.txt"; then ok "real gate PASS"; else say "SELFTEST-FAIL the real gate does not pass on this tree:"; /usr/bin/grep -E '^FAIL' "$T/gate.txt"; bad=1; fi
+  if /usr/bin/grep -qE "$LANDING_LINE_RE" "$T/gate.txt" || ! /usr/bin/grep -q "^==== selftest inner gate \[$REGION\] (NOT a landing verdict): " "$T/gate.txt"; then say "SELFTEST-FAIL the inner gate run wrote a landing verdict line, or no tagged verdict:"; /usr/bin/grep -E '^(####|====)' "$T/gate.txt"; bad=1; else ok "and it is tagged, not a landing line: $(/usr/bin/grep '^==== selftest inner gate .*: ' "$T/gate.txt" | tail -1)"; fi
   say "     full gate output -> $T/gate.txt"
   say "#### landing_gate --selftest [$REGION]: $([ $bad = 0 ] && echo PASS || echo FAIL)"
   return $bad
@@ -939,7 +976,7 @@ selftest_gmodel() {
 # basename-keyed row reads {015180} on both arms and passes.
 selftest_native() {
   local T="$1" b=0; local N="$T/native"; rm -rf "$N"; mkdir -p "$N"
-  say "-- (18) NATIVE (#923): scratch tip/base trees — a seeded C error, A2's removed 198B58 guard, a usa-vs-eu basename collision, a new failing unit, and a unit leaving the population (deleted, override without reason, token removed, renamed WITH an edit) must each FAIL naming the unit; a failure on both arms, a departure with a Native-Left override + reason, a byte-identical rename, and the clean pair must pass; the env override outside a scratch arm must excuse nothing and WARN (FAIL under --strict); then the real tree against its real base"
+  say "-- (18) NATIVE (#923): scratch tip/base trees — a seeded C error, A2's removed 198B58 guard, a usa-vs-eu basename collision, a new failing unit, and a unit leaving the population (deleted, override without reason, token removed, renamed WITH an edit, moved byte-identical to ANOTHER region) must each FAIL naming the unit; a failure on both arms, a departure with a Native-Left override + reason, a byte-identical rename within its region, a cross-region move with a Native-Left override + reason, and the clean pair must pass; the env override outside a scratch arm must excuse nothing and WARN (FAIL under --strict); then the real tree against its real base"
   native_tree() {  # native_tree DIR — a fresh scratch copy of the check.sh inputs
     rm -rf "$1"; mkdir -p "$1/going-decompiled" "$1/tools"
     cp -R going-decompiled/src going-decompiled/include "$1/going-decompiled/"; cp -R tools/native "$1/tools/"
@@ -997,6 +1034,15 @@ selftest_native() {
     native_arm "control (l) $lu renamed byte-identical" "$N/tip_l" "$N/base" 0 "^     renamed, byte-identical \\(paired, not a departure\\): $lre -> $mre " '^FAIL'
     native_tree "$N/tip_m"; mv "$N/tip_m/going-decompiled/src/$lu" "$N/tip_m/going-decompiled/src/$mu"; printf '\n/* t963 selftest edit */\n' >> "$N/tip_m/going-decompiled/src/$mu"
     native_arm "fired (m) $lu renamed with an edit" "$N/tip_m" "$N/base" 1 "^FAIL NATIVE: 1 unit\\(s\\) LEFT .*: $lre — " '^     renamed, byte-identical'
+    # (o)-(p) task #984: the same byte-identical move into ANOTHER region is
+    # not paired — the unit left usa's population — so it FAILS without a
+    # trailer and passes with one; (l) above is the in-region case, unchanged
+    local xu="eu/${lu#usa/}"; xu="${xu%.c}_t984_from_usa.c"; local xre; xre=$(printf '%s' "$xu" | sed 's/[.]/\\./g')
+    native_tree "$N/tip_o"; mv "$N/tip_o/going-decompiled/src/$lu" "$N/tip_o/going-decompiled/src/$xu"
+    native_arm "fired (o) $lu moved byte-identical to $xu" "$N/tip_o" "$N/base" 1 "^     byte-identical in ANOTHER region \\(not paired .*: $lre -> $xre " '^     renamed, byte-identical'
+    /usr/bin/grep -qE "^FAIL NATIVE: 1 unit\\(s\\) LEFT .*: $lre — " "$NATIVE_ARM_OUT" && ok "  ... and the FAIL names $lu as having LEFT" || { say "SELFTEST-FAIL (o) did not name $lu as LEFT"; b=1; }
+    LANDING_GATE_NATIVE_LEFT="Native-Left: $lu t984 selftest: moved to eu" \
+      native_arm "control (p) $lu moved to $xu, Native-Left names it + reason" "$N/tip_o" "$N/base" 0 "^     left the population, overridden: $lre — t984 selftest: moved to eu \\[env\\]\$" '^FAIL'
     local st
     for st in 1 0; do
       FAILED=0; WARNED=0; STRICT=$st; LANDING_GATE_NATIVE_LEFT="Native-Left: $lu t963 selftest: env excuse" check_native "$N/tip_h" "$N/base" > "$N/env_real_$st.txt"; STRICT=0
