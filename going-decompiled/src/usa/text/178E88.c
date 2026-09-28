@@ -1518,32 +1518,29 @@ void func_0027CDC8(void *worldPos, f32 *outX, f32 *outY) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", GetUiTextureTex0);
 
-/* Register a (func,arg) callback in the pre-particle fx draw queue (cap 0x40),
- * run by RunFxDrawHooksPreParticles. No-op when the queue is full.
- * Near-miss: the original loads the count's %hi into the value register and
- * re-materialises it ($at-macro store) for the final count update; the pinned
- * cc1 keeps the %hi in a second register across the body and reuses it (a
- * register-allocation choice -fno-gcse does not suppress). Correct C preserved
- * as the portable body. */
-/* TODO(match) t493: sdk29 73.50% / engine96 41.00% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): SCHED — with the cc1-small count
- * model (see g_blobShadowState) 90.00%/97.50% on sdk29; the 2-row residual is the position of
- * `addiu a1,a2,1` (n+1) among the two address computations, a scheduler tie-break no phrasing of
- * 20 tried moves (tools/ee/.t493/probe/hook*.c). Levers: engine96 with sched1 MEASURED (flag not
- * landed): 43.25%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", AddFxDrawHookPreParticles);
-#else
+/* AddFxDrawHookPreParticles: register a (func,arg) callback in the
+ * pre-particle fx draw queue (cap 0x40), run by RunFxDrawHooksPreParticles.
+ * No-op when the queue is full. No return.
+ * The count is read and written through the absolute alias
+ * g_fxHooksPreCountAbs (the ROM's `lui; lw` / `lui $at; sw` macro pairs).
+ * The two slot stores go through s32 views: that puts them in the count's
+ * alias set, so cc1 keeps them ahead of the count store and schedules `n + 1`
+ * after both slot addresses, as the ROM does. With the natural DrawHookFn /
+ * void * stores, strict aliasing frees the count store and the order differs
+ * by two rows. That residual was earlier read as a sched1 tie-break
+ * (t493, FACT #7413); it is alias analysis. Pointers are 32-bit on both
+ * targets, so the s32 views lose nothing.
+ * MATCHED (task #946): sdk29 (-O2 -G8 -fno-gcse), solo. */
 void AddFxDrawHookPreParticles(DrawHookFn func, void *arg) {
-    s32 n = g_fxHooksPreCount[0];
+    s32 n = g_fxHooksPreCountAbs;
     if (n < 0x40) {
-        g_fxHooksPreFuncs[n] = func;
-        g_fxHooksPreArgs[n] = arg;
-        g_fxHooksPreCount[0] = n + 1;
+        s32 *funcSlot = (s32 *)&g_fxHooksPreFuncs[n];
+        s32 *argSlot = (s32 *)&g_fxHooksPreArgs[n];
+        *funcSlot = (s32)func;
+        *argSlot = (s32)arg;
+        g_fxHooksPreCountAbs = n + 1;
     }
 }
-#endif
 
 /* Run every registered pre-particle fx draw hook in order, each as
  * func(arg). The count is re-read each iteration so a hook may extend the
@@ -1565,27 +1562,22 @@ void RunFxDrawHooksPreParticles(void) {
 }
 #endif
 
-/* Register a (func,arg) callback in the after-ties draw queue (cap 0x40), run
- * by RunDrawHooksAfterTies. No-op when the queue is full.
- * Near-miss: same count-%hi register-allocation wall as
- * AddFxDrawHookPreParticles. */
-/* TODO(match) t493: sdk29 73.50% / engine96 41.00% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): SCHED — same as
- * AddFxDrawHookPreParticles (90.00%/97.50% sdk29 with the cc1-small count model). Levers: engine96
- * with sched1 MEASURED (flag not landed): 43.25%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027D500);
-#else
+/* func_0027D500 (AddDrawHookAfterTies): register a (func,arg) callback in the
+ * after-ties draw queue (cap 0x40), run by RunDrawHooksAfterTies. No-op when
+ * the queue is full. No return. Same shape and the same levers as
+ * AddFxDrawHookPreParticles: the absolute count alias, and s32 slot views
+ * that keep the slot stores ahead of the count store.
+ * MATCHED (task #946): sdk29 (-O2 -G8 -fno-gcse), solo. */
 void func_0027D500(DrawHookFn func, void *arg) {
-    s32 n = g_drawHooksAfterTiesCount[0];
+    s32 n = g_drawHooksAfterTiesCountAbs;
     if (n < 0x40) {
-        g_drawHooksAfterTiesFuncs[n] = func;
-        g_drawHooksAfterTiesArgs[n] = arg;
-        g_drawHooksAfterTiesCount[0] = n + 1;
+        s32 *funcSlot = (s32 *)&g_drawHooksAfterTiesFuncs[n];
+        s32 *argSlot = (s32 *)&g_drawHooksAfterTiesArgs[n];
+        *funcSlot = (s32)func;
+        *argSlot = (s32)arg;
+        g_drawHooksAfterTiesCountAbs = n + 1;
     }
 }
-#endif
 
 /* Run every registered after-ties draw hook in order as func(arg); the count is
  * re-read each iteration. Driver for func_0027D500 (AddDrawHookAfterTies).
@@ -1623,27 +1615,21 @@ void RunDrawHooksAfterShrubs(void) {
 }
 #endif
 
-/* Register a (func,arg) callback in the post-particle fx draw queue (cap 0x40),
- * run by RunFxDrawHooksPostParticles. No-op when the queue is full.
- * Near-miss: same count-%hi register-allocation wall as
- * AddFxDrawHookPreParticles. */
-/* TODO(match) t493: sdk29 73.50% / engine96 41.00% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): SCHED — same as
- * AddFxDrawHookPreParticles (90.00%/97.50% sdk29 with the cc1-small count model). Levers: engine96
- * with sched1 MEASURED (flag not landed): 43.25%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", AddFxDrawHookPostParticles);
-#else
+/* AddFxDrawHookPostParticles: register a (func,arg) callback in the
+ * post-particle fx draw queue (cap 0x40), run by RunFxDrawHooksPostParticles.
+ * No-op when the queue is full. No return. Same shape and the same levers as
+ * AddFxDrawHookPreParticles.
+ * MATCHED (task #946): sdk29 (-O2 -G8 -fno-gcse), solo. */
 void AddFxDrawHookPostParticles(DrawHookFn func, void *arg) {
-    s32 n = g_fxHooksPostCount[0];
+    s32 n = g_fxHooksPostCountAbs;
     if (n < 0x40) {
-        g_fxHooksPostFuncs[n] = func;
-        g_fxHooksPostArgs[n] = arg;
-        g_fxHooksPostCount[0] = n + 1;
+        s32 *funcSlot = (s32 *)&g_fxHooksPostFuncs[n];
+        s32 *argSlot = (s32 *)&g_fxHooksPostArgs[n];
+        *funcSlot = (s32)func;
+        *argSlot = (s32)arg;
+        g_fxHooksPostCountAbs = n + 1;
     }
 }
-#endif
 
 /* Run every registered post-particle fx draw hook in order as func(arg); the
  * count is re-read each iteration. Driver for AddFxDrawHookPostParticles.
