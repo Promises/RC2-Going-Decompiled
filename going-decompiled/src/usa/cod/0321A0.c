@@ -1188,9 +1188,11 @@ s32 func_00133960(void) {
  * in a scratch build. Bare mips-linux-gnu-as encodes cc1's `break 7` as
  * 0x0007000D, with the code in the high field. tools/ee/move_fixup.sed
  * rewrites it to `break 0,7` before assembly, so the gate emits 0x000001CD,
- * which is the ROM's word (FACT #6462, re-measured in task #866, narrowed by
- * FACT #8203). Do not "fix" a 0x0007000D seen outside the asm_unit.sh
- * pipeline. cod/022FA8.c's func_00131730 relies on the same rewrite.
+ * which is the ROM's word (FACT #6462, re-measured in task #866 as
+ * FACT #8203). The rule's own comment in move_fixup.sed records that every
+ * compiler-emitted break in both regions is 0x000001CD. Do not "fix" a
+ * 0x0007000D seen outside the asm_unit.sh pipeline. cod/022FA8.c's
+ * func_00131730 relies on the same rewrite.
  *
  * This C body was already correct before promotion: cc1 2.9's output for it
  * matches all 9 ROM words under SN as.exe (FACT #6219). It had scored 82.22%
