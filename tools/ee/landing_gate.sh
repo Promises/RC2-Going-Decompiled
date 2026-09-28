@@ -87,6 +87,15 @@
 #            origin/master` (override LANDING_GATE_NATIVE_BASE=<rev>), its
 #            src/ + include/ + tools/native/ extracted with git archive and
 #            compiled by THIS tree's check.sh, so both arms are one instrument.
+#            VACUOUS (task #992, watcher-2's ruling on FACT ledger-28525): once
+#            origin/master has reached the tip, that merge-base IS HEAD, both
+#            arms compile one tree and neither rule below can fire. When the
+#            DEFAULT base resolves to HEAD and no NATIVE input (src/, include/,
+#            tools/native/) is dirty, the row prints `NATIVE: base == tip,
+#            VACUOUS` as a WARN — a FAIL under --strict. A post-landing
+#            validator pins the landing's parent (LANDING_GATE_NATIVE_BASE=
+#            <sha>); an explicit pin is never failed, and a pin equal to HEAD
+#            is still reported VACUOUS, uncounted.
 #            FAILS naming each unit that fails at the tip and passed at the
 #            base, or is absent at the base; a unit failing on BOTH arms is
 #            tolerated and listed (a pre-existing failure must not turn the row
@@ -411,18 +420,34 @@ native_renames() {
            ($2 in x) { o = x[$2]; sub(/^ /, "", o); split(o, v, " "); print "x", v[1], $3 }'
 }
 
-# check_native [TIP_TREE] [BASE_TREE] — the NATIVE row (task #923). Defaults:
-# the tip is this working tree, the base is extracted from the merge-base.
+# check_native [TIP_TREE] [BASE_TREE] [UPSTREAM] — the NATIVE row (task #923).
+# Defaults: the tip is this working tree, the base is extracted from
+# merge-base(HEAD, UPSTREAM), UPSTREAM defaulting to origin/master (an argument,
+# not an env var: only --selftest's vacuous arm passes it, to reach the
+# base == HEAD case through the same default resolution a real run takes).
 check_native() {
-  local tip=${1:-$ROOT} basetree=${2:-} baseref="(given tree ${2:-})"
+  local tip=${1:-$ROOT} basetree=${2:-} baseref="(given tree ${2:-})" upstream=${3:-origin/master} vacuous=""
   say "== NATIVE: tools/native/check.sh over every TARGET_NATIVE unit, base-relative — FAIL on a unit failing at the tip that passed at (or is absent from) the base, and on a unit that LEFT the population (in the base's, not the tip's; a byte-identical rename WITHIN a region is paired, not a departure) unless a Native-Left commit trailer names it and a reason. COMPILE-ONLY: green does NOT mean the native build links"
   if [ "$NATIVE_LEFT_FROM_ENV" != 1 ] && [ -n "${LANDING_GATE_NATIVE_LEFT:-}" ]; then
     warn "NATIVE: \$LANDING_GATE_NATIVE_LEFT is set and IGNORED — it is honoured only by --selftest's scratch arms (task #963); excuse a departure with a \`Native-Left: <region>/<path>.c <reason>\` trailer in a commit of the landing, which is reviewable and permanent"
   fi
   if [ -z "$basetree" ]; then
-    baseref=${LANDING_GATE_NATIVE_BASE:-$(git merge-base HEAD origin/master 2>/dev/null)}
+    baseref=${LANDING_GATE_NATIVE_BASE:-$(git merge-base HEAD "$upstream" 2>/dev/null)}
     [ -n "$baseref" ] && baseref=$(git rev-parse --verify -q "$baseref^{commit}")
-    [ -n "$baseref" ] || { fail "NATIVE: no base commit (git merge-base HEAD origin/master failed and LANDING_GATE_NATIVE_BASE is unset or not a commit) — the row cannot be base-relative"; return; }
+    [ -n "$baseref" ] || { fail "NATIVE: no base commit (git merge-base HEAD $upstream failed and LANDING_GATE_NATIVE_BASE is unset or not a commit) — the row cannot be base-relative"; return; }
+    # task #992: a base that IS the tip is a control that cannot fire. Only a
+    # clean tree is a self-comparison — uncommitted NATIVE inputs are still
+    # compared against HEAD, and say so.
+    if [ "$baseref" = "$(git rev-parse HEAD)" ]; then
+      local nd; nd=$(git status --porcelain --no-renames -- going-decompiled/src going-decompiled/include tools/native | wc -l | tr -d ' ')
+      if [ "$nd" != 0 ]; then
+        say "     base == HEAD ($baseref): the row compares only the $nd uncommitted path(s) under going-decompiled/src, going-decompiled/include, tools/native"
+      elif [ -n "${LANDING_GATE_NATIVE_BASE:-}" ]; then
+        vacuous=1; say "     NATIVE: base == tip, VACUOUS — LANDING_GATE_NATIVE_BASE=$LANDING_GATE_NATIVE_BASE pins the base to HEAD itself; both arms are one tree and nothing below can fire (pinned explicitly: reported, not counted)"
+      else
+        vacuous=1; warn "NATIVE: base == tip, VACUOUS — the default base merge-base(HEAD, $upstream) is HEAD $baseref itself (the tip has already reached $upstream), so both arms compile one tree and neither the regression rule nor the shrink rule can fire; a post-landing validator pins the landing's parent: LANDING_GATE_NATIVE_BASE=<parent sha> (task #992)"
+      fi
+    fi
     basetree="$OUT/native_base"; rm -rf "$basetree"; mkdir -p "$basetree"
     git archive "$baseref" going-decompiled/src going-decompiled/include tools/native | tar -x -C "$basetree" \
       || { fail "NATIVE: git archive of the base $baseref failed"; return; }
@@ -440,7 +465,7 @@ check_native() {
     fail "NATIVE: $(printf '%s\n' "$regress" | wc -l | tr -d ' ') unit(s) fail to compile at the tip and passed at (or are absent from) the base: $(printf '%s ' $regress)"
     local u; for u in $regress; do say "       $u:"; /usr/bin/grep -A3 "^FAIL: going-decompiled/src/$u\$" "$t.log" | sed -n '2,4s/^ */         /p'; done
   else
-    ok "NATIVE: no unit fails at the tip that passed at the base ($tp of $((tp+tf)) compile; compile-only, not a link)"
+    ok "NATIVE: no unit fails at the tip that passed at the base ($tp of $((tp+tf)) compile; compile-only, not a link)${vacuous:+ — VACUOUS: base == tip, this measured nothing}"
   fi
   [ -n "$tolerated" ] && say "     failing on BOTH arms (pre-existing, tolerated): $(printf '%s ' $tolerated)"
   [ -n "$fixed" ] && say "     failing at the base only (fixed or removed at the tip): $(printf '%s ' $fixed)"
@@ -478,7 +503,7 @@ check_native() {
       [ -n "$hint" ] && say "     git diff -M pairs these as renames (hint only — an EDITED or CROSS-REGION rename is not paired; name it in a Native-Left trailer): $hint"
     fi
   else
-    ok "NATIVE: no unit left the population unexcused ($(printf '%s\n' $left | /usr/bin/grep -c . || true) left, each named by a Native-Left override with a reason; base $((bp+bf)) -> tip $((tp+tf)) units)"
+    ok "NATIVE: no unit left the population unexcused ($(printf '%s\n' $left | /usr/bin/grep -c . || true) left, each named by a Native-Left override with a reason; base $((bp+bf)) -> tip $((tp+tf)) units)${vacuous:+ — VACUOUS: base == tip, this measured nothing}"
   fi
   for u in $excused; do say "     left the population, overridden: $(awk -F'\t' -v u="$u" '$1 == u && $2 != "" { printf "%s — %s [%s]", $1, $2, $3; exit }' "$ovr")"; done
   unused=$(awk -F'\t' '{ print $1 }' "$ovr" | LC_ALL=C sort -u | LC_ALL=C comm -23 - <(printf '%s\n' $left | LC_ALL=C sort -u))
@@ -976,7 +1001,7 @@ selftest_gmodel() {
 # basename-keyed row reads {015180} on both arms and passes.
 selftest_native() {
   local T="$1" b=0; local N="$T/native"; rm -rf "$N"; mkdir -p "$N"
-  say "-- (18) NATIVE (#923): scratch tip/base trees — a seeded C error, A2's removed 198B58 guard, a usa-vs-eu basename collision, a new failing unit, and a unit leaving the population (deleted, override without reason, token removed, renamed WITH an edit, moved byte-identical to ANOTHER region) must each FAIL naming the unit; a failure on both arms, a departure with a Native-Left override + reason, a byte-identical rename within its region, a cross-region move with a Native-Left override + reason, and the clean pair must pass; the env override outside a scratch arm must excuse nothing and WARN (FAIL under --strict); then the real tree against its real base"
+  say "-- (18) NATIVE (#923): scratch tip/base trees — a seeded C error, A2's removed 198B58 guard, a usa-vs-eu basename collision, a new failing unit, and a unit leaving the population (deleted, override without reason, token removed, renamed WITH an edit, moved byte-identical to ANOTHER region) must each FAIL naming the unit; a failure on both arms, a departure with a Native-Left override + reason, a byte-identical rename within its region, a cross-region move with a Native-Left override + reason, and the clean pair must pass; the env override outside a scratch arm must excuse nothing and WARN (FAIL under --strict); the default base resolving to HEAD must print 'NATIVE: base == tip, VACUOUS' as a WARN (FAIL under --strict) unless pinned explicitly; then the real tree against its real base"
   native_tree() {  # native_tree DIR — a fresh scratch copy of the check.sh inputs
     rm -rf "$1"; mkdir -p "$1/going-decompiled" "$1/tools"
     cp -R going-decompiled/src going-decompiled/include "$1/going-decompiled/"; cp -R tools/native "$1/tools/"
@@ -1051,6 +1076,32 @@ selftest_native() {
         ok "fired (n) env override outside a scratch arm, STRICT=$st: excuses nothing, $(/usr/bin/grep -E '^(WARN|FAIL\(strict\)) NATIVE' "$N/env_real_$st.txt" | cut -c1-80)... (FAILED=$FAILED)"
       else say "SELFTEST-FAIL (n) env override outside a scratch arm, STRICT=$st (FAILED=$FAILED WARNED=$WARNED):"; cat "$N/env_real_$st.txt"; b=1; fi
     done
+  fi
+  # (q)-(r) task #992: the DEFAULT base resolving to HEAD, reached through the
+  # real resolution (merge-base(HEAD, HEAD) stands in for origin/master having
+  # reached the tip) -> `NATIVE: base == tip, VACUOUS`, a WARN / strict FAIL;
+  # the same base pinned explicitly is reported and not counted. With NATIVE
+  # inputs dirty the comparison is not a self-comparison: the arm then requires
+  # the uncommitted-paths note and no VACUOUS line instead.
+  local vst vnd; vnd=$(git status --porcelain --no-renames -- going-decompiled/src going-decompiled/include tools/native | wc -l | tr -d ' ')
+  for vst in 1 0; do
+    FAILED=0; WARNED=0; STRICT=$vst; LANDING_GATE_NATIVE_LEFT= LANDING_GATE_NATIVE_BASE= check_native "" "" HEAD > "$N/vacuous_$vst.txt"; STRICT=0
+    if [ "$vnd" = 0 ]; then
+      if [ "$FAILED" = "$vst" ] && [ "$WARNED" = 1 ] && /usr/bin/grep -qE "^$([ $vst = 1 ] && echo 'FAIL\(strict\)' || echo WARN) NATIVE: base == tip, VACUOUS — the default base merge-base\(HEAD, HEAD\) is HEAD $(git rev-parse HEAD) itself" "$N/vacuous_$vst.txt" \
+         && [ "$(/usr/bin/grep -c 'VACUOUS: base == tip, this measured nothing' "$N/vacuous_$vst.txt" || true)" = 2 ]; then
+        ok "fired (q) default base == HEAD, STRICT=$vst: $(/usr/bin/grep -E '^(WARN|FAIL\(strict\)) NATIVE' "$N/vacuous_$vst.txt" | cut -c1-60)... (FAILED=$FAILED)"
+      else say "SELFTEST-FAIL (q) default base == HEAD, STRICT=$vst (FAILED=$FAILED WARNED=$WARNED):"; cat "$N/vacuous_$vst.txt"; b=1; fi
+    else
+      if [ "$FAILED" = 0 ] && [ "$WARNED" = 0 ] && /usr/bin/grep -q "^     base == HEAD ([0-9a-f]*): the row compares only the $vnd uncommitted path" "$N/vacuous_$vst.txt" && ! /usr/bin/grep -q VACUOUS "$N/vacuous_$vst.txt"; then
+        ok "control (q') default base == HEAD with $vnd dirty NATIVE input(s), STRICT=$vst: not a self-comparison, noted, not counted"
+      else say "SELFTEST-FAIL (q') default base == HEAD with $vnd dirty NATIVE input(s), STRICT=$vst (FAILED=$FAILED WARNED=$WARNED):"; cat "$N/vacuous_$vst.txt"; b=1; fi
+    fi
+  done
+  if [ "$vnd" = 0 ]; then
+    FAILED=0; WARNED=0; STRICT=1; LANDING_GATE_NATIVE_LEFT= LANDING_GATE_NATIVE_BASE=HEAD check_native > "$N/vacuous_pinned.txt"; STRICT=0
+    if [ "$FAILED" = 0 ] && [ "$WARNED" = 0 ] && /usr/bin/grep -q '^     NATIVE: base == tip, VACUOUS — LANDING_GATE_NATIVE_BASE=HEAD pins the base to HEAD itself' "$N/vacuous_pinned.txt"; then
+      ok "control (r) base pinned explicitly to HEAD, STRICT=1: reported VACUOUS, not counted (FAILED=0)"
+    else say "SELFTEST-FAIL (r) base pinned explicitly to HEAD (FAILED=$FAILED WARNED=$WARNED):"; cat "$N/vacuous_pinned.txt"; b=1; fi
   fi
   # (f) clean pair; (g) the real tree against its real base
   native_arm "control (f) clean pair" "$N/base" "$N/base" 0 '^OK   NATIVE: no unit fails'
