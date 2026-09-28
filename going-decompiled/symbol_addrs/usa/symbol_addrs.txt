@@ -476,7 +476,7 @@ TeardownVendorSceneRestorePlayer = 0x002F95E8; // CONFIRMED - current-state acti
 
 // === Track-B weapon/inventory system (backing store the Gadgetron vendor reads, cheat-pnach-anchored). ===
 GiveInventoryItem = 0x00288D30; // CONFIRMED - grants a weapon/gadget/item, sets g_inventoryOwned[id]=1 (cheat 0x1a7b00) + g_inventoryNewFlag[id], seeds g_weaponAmmo from ammoStartGrant. WRITER of inventory have-flags. EU anchor
-GetWeaponUpgradeLevel = 0x00288988; // CONFIRMED - returns current upgrade level by walking g_weaponTable next/prev links, read by BuildVendorItemList and the vendor upgrade-cost path
+GetWeaponUpgradeLevel = 0x00288988; // name-only - code counts chain hops (NOTE #8426) by walking g_weaponTable next/prev links - rewinds +0x4C to the chain root, then counts +0x4A hops, so the result does not depend on where the argument sits in its chain. Read by BuildVendorItemList and the vendor upgrade-cost path
 SetWeaponUpgradeSlot = 0x00288A20; // CONFIRMED - retargets g_itemEquippedSlot[id] to the variant slot for a requested level. The apply-upgrade primitive
 UpgradeWeaponToMax = 0x002891D8; // CONFIRMED - bumps a weapon to its max variant via SetWeaponUpgradeSlot, clears g_weaponXp[id]
 GetWeaponStatsAtLevel = 0x00289298; // CONFIRMED - copies a weapon 0xe0-stride stat block at a given upgrade level into an out buffer (vendor preview/cost)
