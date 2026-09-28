@@ -1512,27 +1512,26 @@ void func_0029C418(void) {
     D_1A790C = 0;
 }
 
-/* func_0029C448(a,b): forward two args to the widget at g_guiInstance+0x36F28
- * (method func_00339398) — same shape as the matched func_0029DAD0. Best
- * attempt 97.67% (sdk29 arm; every insn/reloc exact): the residue is a pure $v0/$v1
- * register-coloring swap — the original (later SN) cc1 colours the gui load
- * $v0 and the arg copy $v1 HERE while colouring the identical shape the other
- * way in func_0029DAD0/func_0029DB10; no source shape found that flips it
- * (local-gui, copy-first, bare-return variants all probed). Same coloring
- * wall as func_002911F0. Left as asm. */
+/*
+ * func_0029C448 — forward two args to the widget at g_guiInstance+0x36F28
+ * (method func_00339398) when the GUI is up; same shape as func_0029DAD0.
+ * Params: a, b — forwarded unchanged. Returns the method's result; when the
+ * GUI is down the ROM falls off the end without setting $v0, as this does.
+ *
+ * Byte-exact on sdk29 (-O2 -G8 -fno-gcse, task #888) with the gui pointer
+ * pinned to $v0. Unpinned, cc1 2.9 emits the ROM's instructions with the gui
+ * load in $v1 and the copy of `a` in $v0 (97.67%, unit objdiff), while the
+ * ROM colours this function the other way round from func_0029DAD0. The old
+ * comment's "no source shape flips it" was UNTESTED against a register pin;
+ * the pin flips it.
+ */
 extern s32 func_00339398(char *widget, s32 a, s32 b);
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029C448);
-#else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 97.67% -> REGNUM-COLORING, first differing row @1: ROM `lui v0, %hi(g_guiInstance)` vs `lui v1, %hi(g_guiInstance)`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 28.67% -> SCHED-PROEPI, first differing row @0: ROM `addiu sp, sp, -0x10` vs `daddu v0, a0, zero`. */
 s32 func_0029C448(s32 a, s32 b) {
-    if (g_guiInstance != 0) {
-        return func_00339398(g_guiInstance + 0x36F28, a, b);
+    register char *gui __asm__("$2") = g_guiInstance;
+    if (gui != 0) {
+        return func_00339398(gui + 0x36F28, a, b);
     }
 }
-#endif
 
 /** Forward `arg` to the HUD render object at g_guiInstance+0x376C8 (method
  *  func_0034DB68). */
