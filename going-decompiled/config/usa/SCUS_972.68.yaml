@@ -175,7 +175,14 @@ segments:
     bss_size: 0x0
     subalign: null
     subsegments:
-      - [0x138B80, data, data/138B80] # .data
+      # Task #947: EvaluateProgressCondition's 12-entry switch table (0x26CA70..
+      # 0x26CA9F) is text/198FA0's own compiled .rodata, linked here in place of
+      # the data asm; the rest of .data resumes at 0x26CAA0 as data/16CA20.
+      # linker_section_order .data keeps it between the two data halves: splat
+      # otherwise groups a segment's .rodata after ALL its .data, at the end.
+      - [0x138B80, data, data/138B80] # .data (0x238C00..0x26CA6F)
+      - { start: 0x16C9F0, type: .rodata, name: text/198FA0, linker_section_order: .data } # text/198FA0.o .rodata (0x26CA70..0x26CA9F)
+      - [0x16CA20, data, data/16CA20] # .data (0x26CAA0..)
 
   - name: lvl.vtbl
     type: code

@@ -2502,31 +2502,23 @@ s32 UpdateLevelObjectiveStates(void) {
 }
 #endif
 
-/* EvaluateProgressCondition(cond, arg): 12-case switch (0=always, 1=level
- * available, 2=item owned, 3=item NEW, 4=objective active, 5=objective
- * complete, 6=dialog state byte, 7=call arg as predicate fn, 8=platinum
- * bolt, 9=cinematic bit, 10=map predicate on g_mapCurrentLevel).
- * The #else body below reads 100.00% on the unit objdiff (sdk29, -O2 -G8
- * -fno-gcse, VM b, task #888). It needs three shapes: a 12-entry switch with
- * an explicit case 11 and case 9 before case 8, case 9's mask in its own
- * variable, and g_mapCurrentLevel declared ROM_SPLIT. The old "no source shape
- * found" for case 9 (srav/andi vs sllv/and/sltu) was KNOWN-FALSE: the mask
- * variable gives the ROM's sllv/and/sltu.
- * STILL NOT LANDABLE, for a reason that is not about the C. The compiled
- * function brings its jump table as a 0x30-byte section-local .rodata in this
- * unit's object, while the ROM's table is jtbl_0026CA70_text inside
- * asm/usa/data/data/138B80.data.s. Promoting it needs that table migrated so
- * the unit's .rodata links at 0x26CA70 (splat/linker config). verify_match_unit
- * returns UNVERIFIABLE (2) on the .rodata reloc and the whole-image gate was
- * not run on it. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", EvaluateProgressCondition);
-#else
 /* EvaluateProgressCondition(cond, arg): evaluate one progress/unlock predicate.
  * `cond` is a 16-bit selector (sign-extended); `arg` is the per-case operand
  * (an index, a function pointer for case 7, or a packed level/bit field). Each
  * case returns a 0/1 truth value (case 10 returns the map predicate verbatim).
- * Any cond outside [0,11] returns 0. See the jump-table block decode above. */
+ * Any cond outside [0,11] returns 0.
+ * Cases: 0 always, 1 level available, 2 item owned, 3 item NEW, 4 weapon
+ * upgrade started, 5 weapon upgrade complete, 6 dialog/story flag byte, 7 call
+ * arg as a predicate function, 8 platinum bolt, 9 cinematic bit, 10 map
+ * predicate on g_mapCurrentLevel, 11 never.
+ * Matching shape (cc1 2.9, -O2 -G8 -fno-gcse, task #888): a 12-entry switch
+ * with an explicit case 11 and case 9 written before case 8, case 9's mask in
+ * its own variable (gives the ROM's sllv/and/sltu), and g_mapCurrentLevel
+ * declared ROM_SPLIT.
+ * The switch's 0x30-byte jump table is this unit's .rodata. The ROM keeps it
+ * at 0x26CA70, inside .data, so the yaml links text/198FA0.o(.rodata) between
+ * data/138B80 and data/16CA20 (task #947). Any other .rodata this unit grows
+ * lands at that same spot and moves the table. */
 s32 EvaluateProgressCondition(s32 cond, s32 arg) {
     switch ((s16)cond) {
     case 0:
@@ -2565,7 +2557,6 @@ s32 EvaluateProgressCondition(s32 cond, s32 arg) {
         return 0;
     }
 }
-#endif
 
 /* GatherActiveObjectives(outIds, outMask, outVals, wantValues): walks the
  * 0x28-stride objective list (head pointer parked at the unnamed bss word

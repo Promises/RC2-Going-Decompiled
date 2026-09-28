@@ -129,6 +129,8 @@ SECTIONS
         FILL(0x00000000);
         data_DATA_START = .;
         going-decompiled/build/usa/going-decompiled/asm/usa/data/data/138B80.data.o(.data*);
+        going-decompiled/build/usa/going-decompiled/src/usa/text/198FA0.o(.rodata*);
+        going-decompiled/build/usa/going-decompiled/asm/usa/data/data/16CA20.data.o(.data*);
         . = ALIGN(., 16);
         data_DATA_END = .;
         data_DATA_SIZE = ABSOLUTE(data_DATA_END - data_DATA_START);
