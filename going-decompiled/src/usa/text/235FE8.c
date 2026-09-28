@@ -2343,16 +2343,42 @@ void func_003396E0(void) {
 }
 
 /* func_003396E8: map a small selector to a scale constant - selector 0 -> 0.7,
- * 1 -> 0.8, anything else -> 1.0. The first argument is ignored. */
+ * 1 -> 0.8, anything else -> 1.0. The first argument is ignored.
+ *   unused - ignored
+ *   sel    - selector
+ *   returns the scale in $f0
+ *
+ * Byte-exact on sdk29 (task #1025), EE arm below. The ROM is a two-case switch
+ * lowered as `sel == 1`, then `sel < 2` (slti), then `sel != 0`, with each case
+ * returning on its own. The gotos spell that tree; a C `switch` makes cc1 2.9
+ * test 0 first. Each return carries a tied empty volatile asm on the result, a
+ * SCHEDULING DEVICE (emits nothing): without it cc1 puts the li.s into the
+ * `j $31` slot, where the ROM leaves `jr $31; nop` after each lui/ori/mtc1.
+ * The same asm without `volatile` does not hold (measured). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003396E8);
+f32 func_003396E8(s32 unused, s32 sel) {
+    f32 r;
+    if (sel == 1) goto one;
+    if (sel >= 2) goto other;
+    if (sel != 0) goto other;
+    r = 0.7f;
+    __asm__ __volatile__("" : "+f"(r));  /* scheduling device, see above */
+    return r;
+one:
+    r = 0.8f;
+    __asm__ __volatile__("" : "+f"(r));  /* scheduling device, see above */
+    return r;
+other:
+    r = 1.0f;
+    __asm__ __volatile__("" : "+f"(r));  /* scheduling device, see above */
+    return r;
+}
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_003396E8, unit objdiff): 10.71%,
    21/27 insns differ. Residual: UNKNOWN-lui (first differing insn: '' vs 'lui at, 0x3f4c').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; multi-way branch +
-   float-constant materialization wall. */
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier.
+   That was the engine96 arm; the sdk29 EE arm above is byte-exact (task #1025). */
+/* Portable arm: same mapping, without the EE scheduling device. */
 f32 func_003396E8(s32 unused, s32 sel) {
     if (sel == 1) {
         return 0.8f;
