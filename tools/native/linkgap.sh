@@ -27,6 +27,14 @@ SHIM="$ROOT/tools/native/mips_callees.h"
 SYMS="$ROOT/going-decompiled/symbol_addrs/usa/symbol_addrs.txt"
 MANIFEST="$ROOT/tools/ee/eetest/cmp/manifest.txt"
 ASMDIR="$ROOT/going-decompiled/asm/usa"
+# Same default as check.sh: the units are ELF-targeted C, and on a Mac plain
+# `clang` targets Mach-O, which rejects their ELF `section` attributes and
+# underscore-mangles symbols, so the object set measures the HOST. Default to
+# an i386 ELF target there, borrowing the SDK's libc headers. An explicit CC
+# still wins.
+if [ -z "${CC:-}" ] && [ "$(uname -s)" = "Darwin" ]; then
+  CC="clang --target=i386-pc-linux-gnu -isystem $(xcrun --show-sdk-path)/usr/include"
+fi
 CC="${CC:-clang}"
 OUT="$(mktemp -d)"
 trap 'rm -rf "$OUT"' EXIT
