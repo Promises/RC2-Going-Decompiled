@@ -127,6 +127,18 @@
 #            $LANDING_GATE_NATIVE_LEFT is honoured ONLY by --selftest's scratch
 #            arms; set on a real run it excuses nothing and is a WARN (a FAIL
 #            under --strict), because an env excuse leaves no git record.
+#            ⛔ INTENDED, NOT A BUG: the population is BOTH regions whichever
+#            region the run is for, so `landing_gate.sh usa` FAILS on an EU
+#            unit leaving it. RULING #5339 DEFERS EU work; it does not license
+#            EU regression (watcher-2, 21:45 on task #995): nothing may
+#            silently shrink the EU native population, and the Native-Left
+#            trailer is the escape if one ever must. Do not scope this row to
+#            the run's region.
+#            The counts are printed PER REGION beside the old total (task
+#            #1006, FACT ledger-28603): `tip usa 29/29, eu 15/15 = 44/44`
+#            (pass/units). A total alone read 44 -> 44 while USA went 29 -> 28
+#            and EU 15 -> 16; the shrink rule still FAILED that unit, but the
+#            count hid it. The per-region line is a readout, not a verdict.
 #   TREE     the ROW is tied to the tree it was built from (task #457, #451 gap
 #            1): do_build records HEAD^{tree}, a hash of the WHOLE working tree
 #            (tracked + modified + untracked, .gitignore honoured) and the dirty
@@ -160,7 +172,13 @@
 #                                                 anything tries (task #984). Its
 #                                                 own summary is `#### SELFTEST
 #                                                 <region>: PASS|FAIL`, with no
-#                                                 `landing_gate` in it (#997)
+#                                                 `landing_gate` in it (#997).
+#                                                 Its stdout AND stderr go
+#                                                 through one guard that stops
+#                                                 the run (exit 3) on a verdict
+#                                                 line from ANY emitter, not
+#                                                 only say() (task #1006)
+#:usage-end — usage() prints the header down to this line (task #1006)
 #
 # A baseline HIGHER than the observation (a count, or a member no longer
 # observed) is a WARN naming the exact value/member to set (#451 gap 2: the
@@ -193,7 +211,9 @@ BASE_DIR="$HERE/landing_baseline"
 SHADOW_CLASSES="CLASS1 CLASS2 CLASS3 NOTARGET"
 PYTHON=".venv-decomp/bin/python"
 
-usage() { sed -n '2,164p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+# the header down to the `#:usage-end` marker — a marker, not a line range
+# (task #1006: '2,154p' silently truncated whenever the header grew)
+usage() { awk 'NR > 1 && /^#:usage-end/ { exit } NR > 1' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 # IN_SELFTEST: set only by selftest(), never from the environment. While it is
 # 1, say() refuses to print a line of the landing-verdict form a landing is
 # read from (task #984, watcher-2): a selftest arm must not be able to forge
@@ -205,6 +225,64 @@ say()  {
     printf 'SELFTEST-BROKEN: --selftest tried to print a landing verdict line, refused and aborted (task #984): %s\n' "$*" >&2; exit 3
   fi
   printf '%s\n' "$*"
+}
+# show — print stdin line by line through say(), so a file or command output
+# the selftest echoes meets the same guard as its own lines (task #1006: #997's
+# arm (0) OK line quoted a forged verdict, and arm (14)'s raw `grep '^####'`
+# would have re-emitted one). Feed it by redirection or process substitution
+# (`show < f`, `show < <(cmd)`), never by a pipe: a pipe runs it in a subshell,
+# where say()'s exit 3 would end only the subshell.
+show() { local l; while IFS= read -r l || [ -n "$l" ]; do say "$l"; done; }
+# selftest_stdout_guard — the chokepoint for everything --selftest writes,
+# whatever the emitter (say() only sees what is routed through it; a raw
+# printf, a heredoc or a python one-liner is not). A landing verdict line is
+# replaced by a SELFTEST-BROKEN line and the guard exits 3 at once, so nothing
+# after it — the forger's own `#### SELFTEST <region>: PASS` included — reaches
+# the output; the selftest dies of SIGPIPE on its next write.
+selftest_stdout_guard() {
+  awk -v re="$LANDING_LINE_RE" '$0 ~ re { print "SELFTEST-BROKEN: a landing verdict line reached --selftest'"'"'s output without say() and was suppressed; the run is aborted (task #1006)"; fflush(); exit 3 }
+                                { print; fflush() }'
+}
+# print_path_scan FILE — the static half of the guard (task #1006, watcher-2
+# 22:10): one `<line>: <verb> | <line text>` row per statement in a selftest*
+# function body of FILE (selftest_stdout_guard excepted — it IS the output)
+# whose output reaches stdout from ANY emitter verb (cat, grep, sed, awk,
+# head, tail, printf, echo, tr, sort, cut, paste, comm, column, python, perl;
+# a heredoc is `cat <<`), rather than through say()/show(). Not a row: a
+# statement inside $( ) or <( ), redirected to a file (a brace group's redirect
+# included), grep -q, sed -i, or a pipeline ending in a line-prefixing
+# `sed 's/^/<text not starting with #>/'`. `>&2` IS a row: stderr joins the
+# guarded output. A line scan: blind to a verb reached by indirection ($cmd),
+# to verbs not listed (tee, dd, git), and to functions that print — the runtime
+# guard is what covers those.
+print_path_scan() {
+  perl -ne '
+    BEGIN { ($in, $buf, $start) = (0, "", 0) }
+    chomp; my $l = $_;
+    if ($l =~ /^(?!selftest_stdout_guard)(selftest[a-z_]*)\(\) \{/) { $in = 1; next }
+    if ($in && $l =~ /^\}/) { $in = 0; next }
+    next unless $in;
+    $start = $. if $buf eq "";
+    if ($l =~ /\\$/) { $buf .= substr($l, 0, -1) . " "; next }
+    my $s = $buf . $l; $buf = "";
+    next if $s =~ /^\s*#/;
+    $s =~ s{sed (?:-n )?\x27[0-9,]*s/\^ ?\*?/[^#\x27/][^\x27/]*/p?\x27}{__PREFIX__}g;
+    $s =~ s/\x27[^\x27]*\x27/Q/g;
+    $s =~ s/\$\(\([^()]*\)\)/N/g;
+    1 while $s =~ s/[\$<]\([^()]*\)/C/g;
+    $s =~ s/\\"/E/g;
+    $s =~ s/"[^"]*"/D/g;
+    $s =~ s/\{[^{}]*\}[^;{}]*?(?<![0-9&])>{1,2}\s*[^&\s]/G/g;
+    for my $seg (split /;|&&|\|\|/, $s) {
+      my @st = split /\|/, $seg; my $last = $st[-1];
+      $last =~ s/^\s*(?:(?:\{|\}|\(|then|else|do|if|while|until|!)\s+)*//;
+      my ($verb) = $last =~ /^\s*(\S+)/; next unless defined $verb;
+      next unless $verb =~ m{^(?:/usr/bin/)?(?:cat|grep|egrep|sed|awk|head|tail|printf|echo|tr|sort|cut|paste|comm|column|python3?|perl)$};
+      next if $seg =~ /(?:^|[^0-9&])>{1,2}\s*[^&\s]/;
+      next if $verb =~ /sed$/ && $last =~ /\s-i/;
+      next if $verb =~ /grep$/ && $last =~ /\s-[A-Za-z]*q/;
+      print "$start: $verb | $l\n";
+    }' "$1"
 }
 fail() { say "FAIL $*"; FAILED=$((FAILED+1)); }
 ok()   { say "OK   $*"; }
@@ -395,6 +473,33 @@ native_scan() {
     && [ -z "$(LC_ALL=C comm -23 "$out.fail" "$out.all")" ] || return 2
 }
 
+# native_region_counts ROWS — `usa P/N, eu P/N` from native_scan's rows: per
+# region (the first path component), units passing / units in the population.
+# Every region with a unit is printed, so a region emptied at one arm shows as
+# absent there rather than as a smaller total.
+native_region_counts() {
+  awk '{ r = $2; sub(/\/.*/, "", r); n[r]++; if ($1 == "PASS") p[r]++ }
+       END { for (r in n) printf "%s %d/%d\n", r, p[r], n[r] }' "$1" | LC_ALL=C sort | paste -sd, - | sed 's/,/, /g'
+}
+# Readers of check_native's `NATIVE per region` line, for --selftest (task
+# #1006). ARM is tip|base. native_region_units OUT ARM REGION -> that region's
+# unit count; native_total_units OUT ARM -> the arm's total unit count;
+# native_region_sums_close OUT -> rc 0 iff both arms are present and each
+# arm's per-region pass and unit counts sum to its printed total.
+native_region_arm() { sed -n 's/^     NATIVE per region (pass\/units): //p' "$1" | tr ';' '\n' | sed 's/^ *//' | /usr/bin/grep "^$2 " | sed "s/^$2 //"; }
+native_region_units() { native_region_arm "$1" "$2" | sed 's/ = .*//' | tr ',' '\n' | awk -v r="$3" '$1 == r { split($2, v, "/"); print v[2] }'; }
+native_total_units() { native_region_arm "$1" "$2" | sed -n 's#.* = [0-9]*/\([0-9]*\)$#\1#p'; }
+native_region_sums_close() {
+  local arm n=0 body tot
+  for arm in tip base; do
+    body=$(native_region_arm "$1" $arm); [ -n "$body" ] || return 1
+    tot=${body##* = }
+    [ "$(printf '%s\n' "${body% = *}" | tr ',' '\n' | awk '{ split($2, v, "/"); p += v[1]; u += v[2] } END { print p "/" u }')" = "$tot" ] || return 1
+    n=$((n+1))
+  done
+  [ $n = 2 ]
+}
+
 # native_left_overrides [BASEREF] — the Native-Left overrides in force, one
 # `<unit>\t<reason>\t<source>` row each: every `Native-Left: <region>/<path>.c
 # <reason>` line in the commit messages of BASEREF..HEAD (source = the commit),
@@ -474,6 +579,9 @@ check_native() {
   local tp tf bp bf; tp=$(/usr/bin/grep -c '^PASS ' "$t" || true); tf=$(/usr/bin/grep -c '^FAIL ' "$t" || true)
   bp=$(/usr/bin/grep -c '^PASS ' "$b" || true); bf=$(/usr/bin/grep -c '^FAIL ' "$b" || true)
   say "     tip pass=$tp fail=$tf; base $baseref pass=$bp fail=$bf"
+  # per region beside the total (task #1006, FACT ledger-28603): a total can
+  # hold still while one region shrinks and the other grows
+  say "     NATIVE per region (pass/units): tip $(native_region_counts "$t") = $tp/$((tp+tf)); base $(native_region_counts "$b") = $bp/$((bp+bf))"
   [ "$bp" -gt 0 ] || { fail "NATIVE: the base arm passes 0 of $bf units — every tip failure would read as pre-existing, the row cannot fire"; return; }
   local regress tolerated fixed
   regress=$(LC_ALL=C comm -23 "$t.fail" "$b.fail"); tolerated=$(LC_ALL=C comm -12 "$t.fail" "$b.fail"); fixed=$(LC_ALL=C comm -13 "$t.fail" "$b.fail")
@@ -519,7 +627,7 @@ check_native() {
       [ -n "$hint" ] && say "     git diff -M pairs these as renames (hint only — an EDITED or CROSS-REGION rename is not paired; name it in a Native-Left trailer): $hint"
     fi
   else
-    ok "NATIVE: no unit left the population unexcused ($(printf '%s\n' $left | /usr/bin/grep -c . || true) left, each named by a Native-Left override with a reason; base $((bp+bf)) -> tip $((tp+tf)) units)${vacuous:+ — VACUOUS: base == tip, this measured nothing}"
+    ok "NATIVE: no unit left the population unexcused ($(printf '%s\n' $left | /usr/bin/grep -c . || true) left, each named by a Native-Left override with a reason; base $((bp+bf)) -> tip $((tp+tf)) units; per region, pass/units: base $(native_region_counts "$b") -> tip $(native_region_counts "$t"))${vacuous:+ — VACUOUS: base == tip, this measured nothing}"
   fi
   for u in $excused; do say "     left the population, overridden: $(awk -F'\t' -v u="$u" '$1 == u && $2 != "" { printf "%s — %s [%s]", $1, $2, $3; exit }' "$ovr")"; done
   unused=$(awk -F'\t' '{ print $1 }' "$ovr" | LC_ALL=C sort -u | LC_ALL=C comm -23 - <(printf '%s\n' $left | LC_ALL=C sort -u))
@@ -794,12 +902,33 @@ selftest() {
   say "-- (0) VERDICT GUARD (#984): a landing verdict line forged through say() inside --selftest -> must be refused (exit 3, nothing on stdout); an ordinary line must print"
   local fo fr; fo=$(say "#### landing_gate $REGION: PASS" 2>/dev/null); fr=$?
   if [ "$fr" = 3 ] && [ -z "$fo" ] && [ "$(say 'landing_gate selftest 0 control')" = 'landing_gate selftest 0 control' ]; then ok "fired: a forged $REGION landing verdict line was refused (exit $fr, 0 B on stdout); control line printed"; else say "SELFTEST-FAIL the verdict guard let a forged landing line through (exit $fr, stdout '$fo')"; bad=1; fi
+  say "-- (0b) PRINT PATHS (#1006): a forged line in a FILE echoed through show() -> refused (exit 3); the same line from a raw printf fed to the --selftest output guard -> suppressed, guard exit 3, nothing after it passes; ordinary lines pass both"
+  printf 'selftest 0b ordinary line\n#### landing_gate %s: PASS\nselftest 0b after the forgery\n' "$REGION" > "$T/forged.txt"
+  fo=$(show < "$T/forged.txt" 2>/dev/null); fr=$?
+  if [ "$fr" = 3 ] && [ "$fo" = 'selftest 0b ordinary line' ]; then ok "fired: show() printed the ordinary line and refused the forged one (exit $fr)"; else say "SELFTEST-FAIL show() let a forged line from a file through (exit $fr)"; bad=1; fi
+  fo=$(printf 'selftest 0b ordinary line\n#### landing_gate %s: PASS\nselftest 0b after the forgery\n' "$REGION" | selftest_stdout_guard); fr=$?
+  if [ "$fr" = 3 ] && [ "$(printf '%s\n' "$fo" | head -1)" = 'selftest 0b ordinary line' ] && [ "$(printf '%s\n' "$fo" | wc -l | tr -d ' ')" = 2 ] \
+     && printf '%s\n' "$fo" | tail -1 | /usr/bin/grep -q '^SELFTEST-BROKEN: a landing verdict line reached' && ! printf '%s\n' "$fo" | /usr/bin/grep -qE "$LANDING_LINE_RE"; then
+    ok "fired: the output guard suppressed a raw landing line, exit $fr, and dropped everything after it"
+  else say "SELFTEST-FAIL the --selftest output guard let a raw landing line through, or passed lines after it (exit $fr, $(printf '%s\n' "$fo" | wc -l | tr -d ' ') lines)"; bad=1; fi
+  # rows are reported by line number and verb only: a seeded row's text holds
+  # the forged verdict, and #997 took quoted forgeries out of this output
+  say "-- (0c) PRINT-PATH SCAN (#1006): this script's selftest bodies -> 0 raw stdout emitters; a copy seeded with arm (14)'s old unprefixed '^(####|====)' re-emit (FACT #8444), a raw printf and a heredoc, plus a say() control -> exactly the 3 seeds"
+  local me="$ROOT/$HERE/$(basename "${BASH_SOURCE[0]}")" pr; pr=$(print_path_scan "$me")
+  if [ -z "$pr" ]; then ok "control: $me has 0 raw stdout emitters in its selftest bodies"
+  else say "SELFTEST-FAIL $(printf '%s\n' "$pr" | wc -l | tr -d ' ') raw stdout emitter(s) in the selftest bodies, route them through say()/show() or prefix them: $(printf '%s\n' "$pr" | awk -F' [|] ' '{ printf "%s ", $1 }')"; bad=1; fi
+  local sl; sl=$(/usr/bin/grep -n '^selftest() {$' "$me" | cut -d: -f1)
+  printf '  %s\n' "/usr/bin/grep -E '^(####|====)' \"\$T/gate.txt\"" "printf '#### landing_gate %s: PASS\\n' \"\$REGION\"" 'cat <<T1006' 'T1006' 'say "t1006 control: a line through say() is not a row"' > "$T/print_path_seeds.txt"
+  sed "${sl}r $T/print_path_seeds.txt" "$me" > "$T/print_path_seeded.sh"
+  local ps; ps=$(print_path_scan "$T/print_path_seeded.sh" | awk -F' [|] ' '{ printf "%s ", $1 }')
+  if [ "$ps" = "$((sl+1)): /usr/bin/grep $((sl+2)): printf $((sl+3)): cat " ]; then ok "fired: the seeded copy's 3 raw emitters found, and only they: $ps"
+  else say "SELFTEST-FAIL the print-path scan on the seeded copy found '$ps', want '$((sl+1)): /usr/bin/grep $((sl+2)): printf $((sl+3)): cat '"; bad=1; fi
 
   say "-- (1) FLAGS: one flag perturbed in a copy of build.sh"
   sed 's/usa\/text\/235FE8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse -fno-strict-aliasing"/usa\/text\/235FE8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse"/' "$HERE/build.sh" > "$T/build_pert.sh"
   cmp -s "$HERE/build.sh" "$T/build_pert.sh" && { say "SELFTEST-BROKEN: perturbation did not change build.sh"; bad=1; }
   FAILED=0; check_flags "$T/build_pert.sh" "$HERE/objdiff_build.sh" > "$T/flags.txt"
-  if [ $FAILED -gt 0 ] && /usr/bin/grep -q 'DRIFT usa/text/235FE8' "$T/flags.txt"; then ok "fired: $(/usr/bin/grep -E '^ +DRIFT' "$T/flags.txt" | sed 's/^ *//')"; else say "SELFTEST-FAIL flags control did not fire"; cat "$T/flags.txt"; bad=1; fi
+  if [ $FAILED -gt 0 ] && /usr/bin/grep -q 'DRIFT usa/text/235FE8' "$T/flags.txt"; then ok "fired: $(/usr/bin/grep -E '^ +DRIFT' "$T/flags.txt" | sed 's/^ *//')"; else say "SELFTEST-FAIL flags control did not fire"; show < "$T/flags.txt"; bad=1; fi
 
   say "-- (2) SHADOW: planted INCLUDE_ASM + planted C definition + planted interior label in a scratch tree; counts must GROW vs baseline"
   local SC="$T/tree"; mkdir -p "$SC/going-decompiled/asm/$REGION"
@@ -814,7 +943,7 @@ selftest() {
   FAILED=0; check_shadow "$REGION" "$SC" > "$T/shadow.txt"; cp "$OUT/shadow_scan.txt" "$T/shadow_scan_seeded.txt"
   local fired; fired=$(/usr/bin/grep -cE '^FAIL (CLASS1|CLASS2|CLASS3|NOTARGET) \[[a-z]+\]: NEW 1 member' "$T/shadow.txt" || true)
   # the planted C definition has no .s under either name -> NOTARGET grows too: 4 classes
-  if [ "$fired" = 4 ] && /usr/bin/grep -q '^FAIL CLASS2 .*: .*func_00DEAD04 -> T449SeedC2' "$T/shadow.txt"; then ok "fired: $(/usr/bin/grep -E '^FAIL' "$T/shadow.txt" | sed -E 's/ not in .*: / NEW: /' | tr '\n' ';')"; else say "SELFTEST-FAIL shadow controls: $fired of 4 classes reported a NEW member"; /usr/bin/grep -E '^(OK|FAIL)' "$T/shadow.txt"; bad=1; fi
+  if [ "$fired" = 4 ] && /usr/bin/grep -q '^FAIL CLASS2 .*: .*func_00DEAD04 -> T449SeedC2' "$T/shadow.txt"; then ok "fired: $(/usr/bin/grep -E '^FAIL' "$T/shadow.txt" | sed -E 's/ not in .*: / NEW: /' | tr '\n' ';')"; else say "SELFTEST-FAIL shadow controls: $fired of 4 classes reported a NEW member"; show < <(/usr/bin/grep -E '^(OK|FAIL)' "$T/shadow.txt"); bad=1; fi
 
   say "-- (3) SPLIT + BUILD once (real arms; the PROVIDE and ROW controls relink/measure against its objects)"
   FAILED=0; split_inputs > "$T/split_real.txt"; /usr/bin/grep -E '^(OK|FAIL)' "$T/split_real.txt" | sed 's/^/     /'
@@ -827,14 +956,14 @@ selftest() {
   /usr/bin/grep -q 'STALE log' "$T/row_stale.txt" && ok "fired: stale-mtime arm -> $(/usr/bin/grep -c '^FAIL' "$T/row_stale.txt") FAIL row(s)" || { say "SELFTEST-FAIL stale-log arm did not fire"; bad=1; }
   if [ "$REGION" = usa ]; then
     FAILED=0; check_row "$OUT/row.txt" "$start" > "$T/row_clean.txt"
-    /usr/bin/grep -q '^OK   negative control: 4 bytes flipped' "$T/row_clean.txt" && ok "fired: $(/usr/bin/grep '^OK   negative control' "$T/row_clean.txt" | sed 's/^OK   //')" || { say "SELFTEST-FAIL flipped-copy control absent"; cat "$T/row_clean.txt"; bad=1; }
+    /usr/bin/grep -q '^OK   negative control: 4 bytes flipped' "$T/row_clean.txt" && ok "fired: $(/usr/bin/grep '^OK   negative control' "$T/row_clean.txt" | sed 's/^OK   //')" || { say "SELFTEST-FAIL flipped-copy control absent"; show < "$T/row_clean.txt"; bad=1; }
     sed 's/^cmp_count=.*/cmp_count=4/; s/^sha1_built=.*/sha1_built=deadbeef/' "$OUT/row.txt" > "$T/row_bad.txt"; cp "$OUT/row.txt.undefined" "$T/row_bad.txt.undefined"
     FAILED=0; check_row "$T/row_bad.txt" "$start" > "$T/row_bad_eval.txt"
-    [ "$FAILED" -ge 2 ] && ok "fired: a row with cmp 4 / wrong sha1 -> $FAILED FAIL rows" || { say "SELFTEST-FAIL bad-row arm: $FAILED"; cat "$T/row_bad_eval.txt"; bad=1; }
+    [ "$FAILED" -ge 2 ] && ok "fired: a row with cmp 4 / wrong sha1 -> $FAILED FAIL rows" || { say "SELFTEST-FAIL bad-row arm: $FAILED"; show < "$T/row_bad_eval.txt"; bad=1; }
   else
     sed '1d' "$BASE_DIR/ldundef_eu.txt" > "$T/ldundef_short.txt"; local dropped1; dropped1=$(head -1 "$BASE_DIR/ldundef_eu.txt")
     FAILED=0; check_row "$OUT/row.txt" "$start" "$T/ldundef_short.txt" > "$T/row_ldundef.txt"
-    /usr/bin/grep -q "GREW.*$dropped1" "$T/row_ldundef.txt" && ok "fired: EU ld.log baseline minus '$dropped1' -> $(/usr/bin/grep -oE 'undefined set GREW \([^)]*\)' "$T/row_ldundef.txt")" || { say "SELFTEST-FAIL EU ld.log baseline arm did not fire"; cat "$T/row_ldundef.txt"; bad=1; }
+    /usr/bin/grep -q "GREW.*$dropped1" "$T/row_ldundef.txt" && ok "fired: EU ld.log baseline minus '$dropped1' -> $(/usr/bin/grep -oE 'undefined set GREW \([^)]*\)' "$T/row_ldundef.txt")" || { say "SELFTEST-FAIL EU ld.log baseline arm did not fire"; show < "$T/row_ldundef.txt"; bad=1; }
   fi
 
   say "-- (5) PROVIDE: one PROVIDE line removed from all_addr_syms.ld -> the full link must fail (undefined name, no ELF)"
@@ -856,16 +985,16 @@ selftest() {
   local held="$OUT/noprovide.held"; sed '1d' "$BASE_DIR/noprovide_$REGION.txt" > "$T/np_baseline_short.txt"
   FAILED=0; check_noprovide "$T/np_baseline_short.txt" > "$T/np_short.txt"
   local dropped; dropped=$(head -1 "$BASE_DIR/noprovide_$REGION.txt")
-  if /usr/bin/grep -q "GREW.*NEW.*$dropped" "$T/np_short.txt"; then ok "fired: baseline minus '$dropped' -> $(/usr/bin/grep -oE 'GREW[^:]*' "$T/np_short.txt" | head -1)"; else say "SELFTEST-FAIL noprovide baseline arm did not fire"; cat "$T/np_short.txt"; bad=1; fi
+  if /usr/bin/grep -q "GREW.*NEW.*$dropped" "$T/np_short.txt"; then ok "fired: baseline minus '$dropped' -> $(/usr/bin/grep -oE 'GREW[^:]*' "$T/np_short.txt" | head -1)"; else say "SELFTEST-FAIL noprovide baseline arm did not fire"; show < "$T/np_short.txt"; bad=1; fi
 
   say "-- (7) TREE: the #451 reproduction — one C function appended to a src/$REGION .c as an OVERLAY (the working tree is untouched) -> the --no-build tree check must FAIL naming both trees; without the overlay it must pass"
   local V; V=$(git ls-files "going-decompiled/src/$REGION" | /usr/bin/grep '\.c$' | LC_ALL=C sort | head -1)
   { cat "$V"; printf '\nvoid T457Probe(void) { volatile int x = 457; x++; }\n'; } > "$T/tree_overlay.c"
   cmp -s "$V" "$T/tree_overlay.c" && { say "SELFTEST-BROKEN: overlay identical to $V"; bad=1; }
   FAILED=0; check_tree "$OUT/built_tree.txt" "$V" "$T/tree_overlay.c" > "$T/tree_dirty.txt"
-  if [ "$FAILED" = 1 ] && /usr/bin/grep -q '^FAIL ROW is for tree [0-9a-f]* .*, worktree is tree [0-9a-f]* ' "$T/tree_dirty.txt"; then ok "fired: $(/usr/bin/grep '^FAIL ROW' "$T/tree_dirty.txt" | sed -E 's/ \(HEAD[^)]*\)//g; s/ — rebuild.*//')"; else say "SELFTEST-FAIL tree check did not fire on the overlaid edit ($V):"; cat "$T/tree_dirty.txt"; bad=1; fi
+  if [ "$FAILED" = 1 ] && /usr/bin/grep -q '^FAIL ROW is for tree [0-9a-f]* .*, worktree is tree [0-9a-f]* ' "$T/tree_dirty.txt"; then ok "fired: $(/usr/bin/grep '^FAIL ROW' "$T/tree_dirty.txt" | sed -E 's/ \(HEAD[^)]*\)//g; s/ — rebuild.*//')"; else say "SELFTEST-FAIL tree check did not fire on the overlaid edit ($V):"; show < "$T/tree_dirty.txt"; bad=1; fi
   FAILED=0; check_tree "$OUT/built_tree.txt" > "$T/tree_clean.txt"
-  if [ "$FAILED" = 0 ] && /usr/bin/grep -q '^OK   tree:' "$T/tree_clean.txt"; then ok "control: the unchanged tree passes ($(/usr/bin/grep -oE 'worktree [0-9a-f]{12}' "$T/tree_clean.txt" | head -1)...)"; else say "SELFTEST-FAIL the unchanged tree does not pass the tree check:"; cat "$T/tree_clean.txt"; bad=1; fi
+  if [ "$FAILED" = 0 ] && /usr/bin/grep -q '^OK   tree:' "$T/tree_clean.txt"; then ok "control: the unchanged tree passes ($(/usr/bin/grep -oE 'worktree [0-9a-f]{12}' "$T/tree_clean.txt" | head -1)...)"; else say "SELFTEST-FAIL the unchanged tree does not pass the tree check:"; show < "$T/tree_clean.txt"; bad=1; fi
 
   say "-- (8) STALE-HIGH: one extra member in a copy of shadow_class1_$REGION.txt, and one extra member in a copy of noprovide_$REGION.txt -> WARN naming the member (rc 0); under --strict -> FAIL"
   shadow_scan "$REGION" . "$T/shadow_real.txt" || { say "SELFTEST-BROKEN: shadow_scan on the real tree failed"; bad=1; }
@@ -873,14 +1002,14 @@ selftest() {
   local extra="going-decompiled/src/$REGION/cod/015180.c func_00DEAD10 -> T464StaleHighMember"
   { cat "$(shadow_baseline_file CLASS1 "$REGION" "$BASE_DIR")"; printf '%s\n' "$extra"; } | LC_ALL=C sort -u > "$(shadow_baseline_file CLASS1 "$REGION" "$HB")"
   FAILED=0; WARNED=0; STRICT=0; shadow_compare "$REGION" "$T/shadow_real.txt" "$HB" > "$T/high_warn.txt"
-  if [ "$FAILED" = 0 ] && [ "$WARNED" = 1 ] && /usr/bin/grep -q "^WARN CLASS1 \[$REGION\]: 1 baseline member(s) no longer observed — lower the baseline in this landing, remove from $HB/shadow_class1_$REGION.txt: $extra\$" "$T/high_warn.txt"; then ok "fired: $(/usr/bin/grep '^WARN' "$T/high_warn.txt" | sed -E 's/ remove from [^:]*:/ remove:/') (FAILED=$FAILED WARNED=$WARNED)"; else say "SELFTEST-FAIL stale-high shadow member did not WARN (FAILED=$FAILED WARNED=$WARNED):"; /usr/bin/grep -E '^(OK|FAIL|WARN)' "$T/high_warn.txt"; bad=1; fi
+  if [ "$FAILED" = 0 ] && [ "$WARNED" = 1 ] && /usr/bin/grep -q "^WARN CLASS1 \[$REGION\]: 1 baseline member(s) no longer observed — lower the baseline in this landing, remove from $HB/shadow_class1_$REGION.txt: $extra\$" "$T/high_warn.txt"; then ok "fired: $(/usr/bin/grep '^WARN' "$T/high_warn.txt" | sed -E 's/ remove from [^:]*:/ remove:/') (FAILED=$FAILED WARNED=$WARNED)"; else say "SELFTEST-FAIL stale-high shadow member did not WARN (FAILED=$FAILED WARNED=$WARNED):"; show < <(/usr/bin/grep -E '^(OK|FAIL|WARN)' "$T/high_warn.txt"); bad=1; fi
   FAILED=0; WARNED=0; STRICT=1; shadow_compare "$REGION" "$T/shadow_real.txt" "$HB" > "$T/high_strict.txt"; STRICT=0
-  if [ "$FAILED" = 1 ] && /usr/bin/grep -q "^FAIL(strict) CLASS1 \[$REGION\]: 1 baseline member(s) no longer observed — lower the baseline" "$T/high_strict.txt"; then ok "fired: under --strict the same line is FAIL (FAILED=$FAILED)"; else say "SELFTEST-FAIL --strict did not turn the stale-high WARN into a FAIL (FAILED=$FAILED):"; /usr/bin/grep -E '^(OK|FAIL|WARN)' "$T/high_strict.txt"; bad=1; fi
+  if [ "$FAILED" = 1 ] && /usr/bin/grep -q "^FAIL(strict) CLASS1 \[$REGION\]: 1 baseline member(s) no longer observed — lower the baseline" "$T/high_strict.txt"; then ok "fired: under --strict the same line is FAIL (FAILED=$FAILED)"; else say "SELFTEST-FAIL --strict did not turn the stale-high WARN into a FAIL (FAILED=$FAILED):"; show < <(/usr/bin/grep -E '^(OK|FAIL|WARN)' "$T/high_strict.txt"); bad=1; fi
   { cat "$BASE_DIR/noprovide_$REGION.txt"; echo T457ExtraMember; } | LC_ALL=C sort -u > "$T/np_high.txt"
   FAILED=0; WARNED=0; STRICT=0; check_noprovide "$T/np_high.txt" > "$T/np_high_warn.txt"
-  if [ "$FAILED" = 0 ] && [ "$WARNED" = 1 ] && /usr/bin/grep -q '^WARN PROVIDE-held baseline has 1 member(s) no longer held — remove from .*: T457ExtraMember' "$T/np_high_warn.txt"; then ok "fired: $(/usr/bin/grep '^WARN' "$T/np_high_warn.txt" | sed -E 's/ — remove from [^:]*:/ — remove:/')"; else say "SELFTEST-FAIL extra noprovide member did not WARN (FAILED=$FAILED WARNED=$WARNED):"; /usr/bin/grep -E '^(OK|FAIL|WARN)' "$T/np_high_warn.txt"; bad=1; fi
+  if [ "$FAILED" = 0 ] && [ "$WARNED" = 1 ] && /usr/bin/grep -q '^WARN PROVIDE-held baseline has 1 member(s) no longer held — remove from .*: T457ExtraMember' "$T/np_high_warn.txt"; then ok "fired: $(/usr/bin/grep '^WARN' "$T/np_high_warn.txt" | sed -E 's/ — remove from [^:]*:/ — remove:/')"; else say "SELFTEST-FAIL extra noprovide member did not WARN (FAILED=$FAILED WARNED=$WARNED):"; show < <(/usr/bin/grep -E '^(OK|FAIL|WARN)' "$T/np_high_warn.txt"); bad=1; fi
   FAILED=0; WARNED=0; STRICT=1; check_noprovide "$T/np_high.txt" > "$T/np_high_strict.txt"; STRICT=0
-  if [ "$FAILED" = 1 ] && /usr/bin/grep -q '^FAIL(strict) PROVIDE-held baseline has 1 member(s) no longer held' "$T/np_high_strict.txt"; then ok "fired: under --strict the extra member is a FAIL (FAILED=$FAILED)"; else say "SELFTEST-FAIL --strict did not fail on the extra noprovide member (FAILED=$FAILED):"; /usr/bin/grep -E '^(OK|FAIL|WARN)' "$T/np_high_strict.txt"; bad=1; fi
+  if [ "$FAILED" = 1 ] && /usr/bin/grep -q '^FAIL(strict) PROVIDE-held baseline has 1 member(s) no longer held' "$T/np_high_strict.txt"; then ok "fired: under --strict the extra member is a FAIL (FAILED=$FAILED)"; else say "SELFTEST-FAIL --strict did not fail on the extra noprovide member (FAILED=$FAILED):"; show < <(/usr/bin/grep -E '^(OK|FAIL|WARN)' "$T/np_high_strict.txt"); bad=1; fi
 
   say "-- (9) ORPHAN: the ORPHAN_LATENT token with the fewest holders has every holder func_*.s deleted in a scratch copy of asm/$REGION -> ORPHAN must GROW naming the token"
   local OT="$T/otree"; rm -rf "$OT"; mkdir -p "$OT/going-decompiled/asm" "$OT/going-decompiled/symbol_addrs"
@@ -896,7 +1025,7 @@ selftest() {
     done
     [ "$vpaths" -gt 0 ] || { say "SELFTEST-BROKEN: none of '$vholders' found in the scratch copy"; bad=1; }
     FAILED=0; WARNED=0; STRICT=0; check_orphans "$REGION" "$OT" > "$T/orphan_seeded.txt"
-    if [ "$FAILED" = 1 ] && /usr/bin/grep -q "^FAIL ORPHAN \\[$REGION\\] .*GREW .*: NEW $vtok " "$T/orphan_seeded.txt"; then ok "fired: deleting $vpaths holder(s) [$vholders] -> $(/usr/bin/grep -oE "ORPHAN \\[$REGION\\] \\([^)]*\\) GREW \\([^)]*\\): NEW $vtok" "$T/orphan_seeded.txt")"; else say "SELFTEST-FAIL orphan control did not fire for $vtok / $vholders (FAILED=$FAILED):"; /usr/bin/grep -E '^(OK|FAIL|WARN)' "$T/orphan_seeded.txt"; bad=1; fi
+    if [ "$FAILED" = 1 ] && /usr/bin/grep -q "^FAIL ORPHAN \\[$REGION\\] .*GREW .*: NEW $vtok " "$T/orphan_seeded.txt"; then ok "fired: deleting $vpaths holder(s) [$vholders] -> $(/usr/bin/grep -oE "ORPHAN \\[$REGION\\] \\([^)]*\\) GREW \\([^)]*\\): NEW $vtok" "$T/orphan_seeded.txt")"; else say "SELFTEST-FAIL orphan control did not fire for $vtok / $vholders (FAILED=$FAILED):"; show < <(/usr/bin/grep -E '^(OK|FAIL|WARN)' "$T/orphan_seeded.txt"); bad=1; fi
     /usr/bin/grep -q "^WARN ORPHAN_LATENT \\[$REGION\\] .* no longer observed — remove from .*: $vtok" "$T/orphan_seeded.txt" && ok "and the LATENT baseline reports $vtok stale-high (WARN)" || { say "SELFTEST-FAIL the LATENT set did not report $vtok as no longer observed"; bad=1; }
   fi
 
@@ -915,19 +1044,19 @@ selftest() {
     FAILED=0; WARNED=0; STRICT=0; check_shadow "$REGION" "$SW" > "$T/swap.txt"; cp "$OUT/shadow_scan.txt" "$T/shadow_scan_swapped.txt"
     local nreal nswap; nreal=$(/usr/bin/grep -c '^CLASS1 ' "$T/shadow_real.txt" || true); nswap=$(/usr/bin/grep -c '^CLASS1 ' "$T/shadow_scan_swapped.txt" || true)
     [ "$nreal" = "$nswap" ] || { say "SELFTEST-BROKEN: swap changed the CLASS1 count ($nreal -> $nswap) — not a same-count swap"; bad=1; }
-    if [ "$FAILED" = 1 ] && [ "$WARNED" = 1 ] && /usr/bin/grep -q "^FAIL CLASS1 \[$REGION\]: NEW 1 member(s) not in .*: $vfile func_00DEAD00 -> T464SwapSeed\$" "$T/swap.txt" && ! /usr/bin/grep -q "^FAIL.*$vold" "$T/swap.txt" && /usr/bin/grep -q "^WARN CLASS1 \[$REGION\]: 1 baseline member(s) no longer observed — lower the baseline in this landing, remove from .*: $vfile $vold -> $vnew\$" "$T/swap.txt"; then ok "fired: same count ($nswap == $nreal) and $(/usr/bin/grep '^FAIL CLASS1' "$T/swap.txt" | sed -E 's/ not in [^(]*\(/ (/') ; WARN gone: $vfile $vold -> $vnew"; else say "SELFTEST-FAIL swap arm (FAILED=$FAILED WARNED=$WARNED, count $nreal -> $nswap):"; /usr/bin/grep -E '^(OK|FAIL|WARN)' "$T/swap.txt"; bad=1; fi
+    if [ "$FAILED" = 1 ] && [ "$WARNED" = 1 ] && /usr/bin/grep -q "^FAIL CLASS1 \[$REGION\]: NEW 1 member(s) not in .*: $vfile func_00DEAD00 -> T464SwapSeed\$" "$T/swap.txt" && ! /usr/bin/grep -q "^FAIL.*$vold" "$T/swap.txt" && /usr/bin/grep -q "^WARN CLASS1 \[$REGION\]: 1 baseline member(s) no longer observed — lower the baseline in this landing, remove from .*: $vfile $vold -> $vnew\$" "$T/swap.txt"; then ok "fired: same count ($nswap == $nreal) and $(/usr/bin/grep '^FAIL CLASS1' "$T/swap.txt" | sed -E 's/ not in [^(]*\(/ (/') ; WARN gone: $vfile $vold -> $vnew"; else say "SELFTEST-FAIL swap arm (FAILED=$FAILED WARNED=$WARNED, count $nreal -> $nswap):"; show < <(/usr/bin/grep -E '^(OK|FAIL|WARN)' "$T/swap.txt"); bad=1; fi
   fi
 
   say "-- (12) INPUTS (FACT #7324/#7150): $BUILD/undefined_syms_auto.txt truncated to 0 B after the build -> the --no-build tree check must FAIL naming it and the non-empty check must FAIL; the SPLIT step must regenerate it to the recorded sha256"
   local SY="$BUILD/undefined_syms_auto.txt"; cp "$SY" "$T/syms_saved.txt"; : > "$SY"
   FAILED=0; WARNED=0; STRICT=0; check_tree "$OUT/built_tree.txt" > "$T/inputs_zero.txt"
-  if [ "$FAILED" = 1 ] && /usr/bin/grep -q "^FAIL inputs: ROW was linked with $SY [1-9][0-9]* B sha256 [0-9a-f]*…, the file now is 0 B sha256 e3b0c44298fc…" "$T/inputs_zero.txt"; then ok "fired: $(/usr/bin/grep '^FAIL inputs' "$T/inputs_zero.txt" | sed -E 's/ — a stale.*//')"; else say "SELFTEST-FAIL the 0 B undefined_syms_auto.txt did not fail the inputs check (FAILED=$FAILED):"; /usr/bin/grep -E '^(OK|FAIL)' "$T/inputs_zero.txt"; bad=1; fi
+  if [ "$FAILED" = 1 ] && /usr/bin/grep -q "^FAIL inputs: ROW was linked with $SY [1-9][0-9]* B sha256 [0-9a-f]*…, the file now is 0 B sha256 e3b0c44298fc…" "$T/inputs_zero.txt"; then ok "fired: $(/usr/bin/grep '^FAIL inputs' "$T/inputs_zero.txt" | sed -E 's/ — a stale.*//')"; else say "SELFTEST-FAIL the 0 B undefined_syms_auto.txt did not fail the inputs check (FAILED=$FAILED):"; show < <(/usr/bin/grep -E '^(OK|FAIL)' "$T/inputs_zero.txt"); bad=1; fi
   FAILED=0; check_syms_nonempty "$SY" > "$T/inputs_nonempty.txt"
-  if [ "$FAILED" = 1 ] && /usr/bin/grep -q "^FAIL $SY is 0 B after the split" "$T/inputs_nonempty.txt"; then ok "fired: $(/usr/bin/grep '^FAIL' "$T/inputs_nonempty.txt" | sed -E 's/ \(FACT.*//')"; else say "SELFTEST-FAIL the 0 B file passed check_syms_nonempty (FAILED=$FAILED):"; cat "$T/inputs_nonempty.txt"; bad=1; fi
+  if [ "$FAILED" = 1 ] && /usr/bin/grep -q "^FAIL $SY is 0 B after the split" "$T/inputs_nonempty.txt"; then ok "fired: $(/usr/bin/grep '^FAIL' "$T/inputs_nonempty.txt" | sed -E 's/ \(FACT.*//')"; else say "SELFTEST-FAIL the 0 B file passed check_syms_nonempty (FAILED=$FAILED):"; show < "$T/inputs_nonempty.txt"; bad=1; fi
   FAILED=0; WARNED=0; split_inputs > "$T/inputs_regen.txt"
-  if [ "$FAILED" = 0 ] && cmp -s "$SY" "$T/syms_saved.txt" && /usr/bin/grep -q '^OK   SPLIT .*fixed point' "$T/inputs_regen.txt"; then ok "regenerated: $(/usr/bin/grep -oE "^OK   $SY is [0-9]+ B" "$T/inputs_regen.txt") — byte-identical to the file the build linked with (cmp); $(/usr/bin/grep -oE 'fixed point[^,]*, [0-9]+s' "$T/inputs_regen.txt" | sed 's/fixed point — //')"; else say "SELFTEST-FAIL the split did not regenerate $SY to the linked bytes (FAILED=$FAILED):"; /usr/bin/grep -E '^(OK|FAIL)' "$T/inputs_regen.txt"; cp "$T/syms_saved.txt" "$SY"; bad=1; fi
+  if [ "$FAILED" = 0 ] && cmp -s "$SY" "$T/syms_saved.txt" && /usr/bin/grep -q '^OK   SPLIT .*fixed point' "$T/inputs_regen.txt"; then ok "regenerated: $(/usr/bin/grep -oE "^OK   $SY is [0-9]+ B" "$T/inputs_regen.txt") — byte-identical to the file the build linked with (cmp); $(/usr/bin/grep -oE 'fixed point[^,]*, [0-9]+s' "$T/inputs_regen.txt" | sed 's/fixed point — //')"; else say "SELFTEST-FAIL the split did not regenerate $SY to the linked bytes (FAILED=$FAILED):"; show < <(/usr/bin/grep -E '^(OK|FAIL)' "$T/inputs_regen.txt"); cp "$T/syms_saved.txt" "$SY"; bad=1; fi
   FAILED=0; WARNED=0; check_tree "$OUT/built_tree.txt" > "$T/inputs_restored.txt"
-  if [ "$FAILED" = 0 ] && /usr/bin/grep -q "^OK   inputs: $SY .* == the built record" "$T/inputs_restored.txt"; then ok "control: after the regeneration the inputs check passes again"; else say "SELFTEST-FAIL inputs check does not pass on the regenerated file (FAILED=$FAILED):"; /usr/bin/grep -E '^(OK|FAIL)' "$T/inputs_restored.txt"; bad=1; fi
+  if [ "$FAILED" = 0 ] && /usr/bin/grep -q "^OK   inputs: $SY .* == the built record" "$T/inputs_restored.txt"; then ok "control: after the regeneration the inputs check passes again"; else say "SELFTEST-FAIL inputs check does not pass on the regenerated file (FAILED=$FAILED):"; show < <(/usr/bin/grep -E '^(OK|FAIL)' "$T/inputs_restored.txt"); bad=1; fi
 
   say "-- (13) SPLIT fixed point: a marker line appended to a tracked asm/$REGION .s the split owns -> split_inputs must FAIL naming the path; the split itself restores the file (the tree is clean again, checked)"
   # a code segment's .s: the split rewrites those every run (data/cod/000000.s, a textbin wrapper, it does NOT — first USA selftest, t464)
@@ -936,7 +1065,7 @@ selftest() {
     printf '\n# t464 selftest marker\n' >> "$SF"
     FAILED=0; WARNED=0; split_inputs > "$T/split_seeded.txt"
     if /usr/bin/grep -q '# t464 selftest marker' "$SF"; then say "SELFTEST-BROKEN: the split did not rewrite $SF — restoring it with git checkout"; git checkout -q -- "$SF"; bad=1; fi
-    if [ "$FAILED" = 1 ] && /usr/bin/grep -q "^FAIL SPLIT \[$REGION\]: NOT a fixed point of the tree — the split rewrote 1 path(s) .*: $SF *\$" "$T/split_seeded.txt" && [ -z "$(git status --porcelain --no-renames -- "$SF")" ]; then ok "fired: $(/usr/bin/grep '^FAIL SPLIT' "$T/split_seeded.txt" | sed -E 's/ \(worktree [^)]*\)//') ; $SF is clean again"; else say "SELFTEST-FAIL split fixed-point arm (FAILED=$FAILED, $SF status '$(git status --porcelain --no-renames -- "$SF")'):"; /usr/bin/grep -E '^(OK|FAIL)' "$T/split_seeded.txt"; bad=1; fi
+    if [ "$FAILED" = 1 ] && /usr/bin/grep -q "^FAIL SPLIT \[$REGION\]: NOT a fixed point of the tree — the split rewrote 1 path(s) .*: $SF *\$" "$T/split_seeded.txt" && [ -z "$(git status --porcelain --no-renames -- "$SF")" ]; then ok "fired: $(/usr/bin/grep '^FAIL SPLIT' "$T/split_seeded.txt" | sed -E 's/ \(worktree [^)]*\)//') ; $SF is clean again"; else say "SELFTEST-FAIL split fixed-point arm (FAILED=$FAILED, $SF status '$(git status --porcelain --no-renames -- "$SF")'):"; show < <(/usr/bin/grep -E '^(OK|FAIL)' "$T/split_seeded.txt"); bad=1; fi
   fi
 
   selftest_mount_sync "${MOUNT_SYNC_SH:-$HERE/mount_sync.sh}" "$T" || bad=1
@@ -949,8 +1078,8 @@ selftest() {
 
   say "-- (14) the real gate on this tree (--no-build, the build above) must PASS"
   STRICT=0
-  if run_gate "$REGION" --no-build > "$T/gate.txt"; then ok "real gate PASS"; else say "SELFTEST-FAIL the real gate does not pass on this tree:"; /usr/bin/grep -E '^FAIL' "$T/gate.txt"; bad=1; fi
-  if /usr/bin/grep -qE "$LANDING_LINE_RE" "$T/gate.txt" || ! /usr/bin/grep -q "^==== selftest inner gate \[$REGION\] (NOT a landing verdict): " "$T/gate.txt"; then say "SELFTEST-FAIL the inner gate run wrote a landing verdict line, or no tagged verdict:"; /usr/bin/grep -E '^(####|====)' "$T/gate.txt"; bad=1; else ok "and it is tagged, not a landing line: $(/usr/bin/grep '^==== selftest inner gate .*: ' "$T/gate.txt" | tail -1)"; fi
+  if run_gate "$REGION" --no-build > "$T/gate.txt"; then ok "real gate PASS"; else say "SELFTEST-FAIL the real gate does not pass on this tree:"; show < <(/usr/bin/grep -E '^FAIL' "$T/gate.txt" | sed 's/^/  inner| /'); bad=1; fi
+  if /usr/bin/grep -qE "$LANDING_LINE_RE" "$T/gate.txt" || ! /usr/bin/grep -q "^==== selftest inner gate \[$REGION\] (NOT a landing verdict): " "$T/gate.txt"; then say "SELFTEST-FAIL the inner gate run wrote a landing verdict line, or no tagged verdict:"; show < <(/usr/bin/grep -E '^(####|====)' "$T/gate.txt" | sed 's/^/  inner| /'); bad=1; else ok "and it is tagged, not a landing line: $(/usr/bin/grep '^==== selftest inner gate .*: ' "$T/gate.txt" | tail -1)"; fi
   say "     full gate output -> $T/gate.txt"
   # its own summary carries no 'landing_gate' substring (task #997): a loose
   # `landing_gate.*PASS` grep must never mistake a selftest for a landing
@@ -982,9 +1111,9 @@ s64 __muldi3(s64 a, s64 b) {
 SEED
   local b=0
   FAILED=0; check_libgcc "$REGION" "$L" > "$T/libgcc_seeded.txt"
-  if [ "$FAILED" = 1 ] && /usr/bin/grep -q '^       DEF libgcc_seed.c:2 __muldi3 (not-a-spec-one-liner)$' "$T/libgcc_seeded.txt"; then ok "fired: $(/usr/bin/grep '^FAIL LIBGCC' "$T/libgcc_seeded.txt")"; else say "SELFTEST-FAIL the seeded DIunion __muldi3 did not fail LIBGCC (FAILED=$FAILED):"; cat "$T/libgcc_seeded.txt"; b=1; fi
+  if [ "$FAILED" = 1 ] && /usr/bin/grep -q '^       DEF libgcc_seed.c:2 __muldi3 (not-a-spec-one-liner)$' "$T/libgcc_seeded.txt"; then ok "fired: $(/usr/bin/grep '^FAIL LIBGCC' "$T/libgcc_seeded.txt")"; else say "SELFTEST-FAIL the seeded DIunion __muldi3 did not fail LIBGCC (FAILED=$FAILED):"; show < "$T/libgcc_seeded.txt"; b=1; fi
   FAILED=0; check_libgcc "$REGION" > "$T/libgcc_clean.txt"
-  if [ "$FAILED" = 0 ]; then ok "control: the real src/$REGION passes LIBGCC"; else say "SELFTEST-FAIL the real src/$REGION fails LIBGCC:"; cat "$T/libgcc_clean.txt"; b=1; fi
+  if [ "$FAILED" = 0 ]; then ok "control: the real src/$REGION passes LIBGCC"; else say "SELFTEST-FAIL the real src/$REGION fails LIBGCC:"; show < "$T/libgcc_clean.txt"; b=1; fi
   return $b
 }
 
@@ -1004,7 +1133,7 @@ selftest_gmodel() {
   local T="$1" b=0 unit line fl got
   say "-- (17) GMODEL (#919): (a) a -G8 unit's case line removed from a copy of unit_flags.sh -> must FAIL naming its compiled gp-word functions; (b) a LATENT member's INCLUDE_ASM removed in a scratch src copy -> must FAIL naming it; the real tree must pass"
   FAILED=0; check_gmodel "$REGION" > "$T/gmodel_real.txt"; cp "$OUT/gmodel_scan.txt" "$T/gmodel_scan_real.txt"
-  if [ "$FAILED" = 0 ]; then ok "control: the real tree passes GMODEL"; else say "SELFTEST-FAIL the real tree fails GMODEL:"; cat "$T/gmodel_real.txt"; b=1; fi
+  if [ "$FAILED" = 0 ]; then ok "control: the real tree passes GMODEL"; else say "SELFTEST-FAIL the real tree fails GMODEL:"; show < "$T/gmodel_real.txt"; b=1; fi
   # (a)
   local cands; if [ "$REGION" = usa ]; then cands="text/1FCF48"; else cands=$(awk '$1=="UNIT" && $3!="-G0" && $4>0 {print $2}' "$T/gmodel_scan_real.txt"); fi
   local seeded=""
@@ -1019,7 +1148,7 @@ selftest_gmodel() {
   done
   if [ -z "$seeded" ]; then say "SELFTEST-FAIL no -G8 unit's removed case line made GMODEL fail (candidates: $(printf '%s' "$cands" | tr '\n' ' '))"; b=1
   elif /usr/bin/grep -q "^       MISMATCH " "$T/gmodel_seed_flags.txt" && [ -z "$(/usr/bin/grep '^       MISMATCH ' "$T/gmodel_seed_flags.txt" | /usr/bin/grep -v "^       MISMATCH $seeded -G0 ")" ] && { [ "$REGION" != usa ] || [ "$got" = "ResetFrameArenas func_002FD020 " ]; }; then ok "fired (a): $seeded's case line removed -> $(/usr/bin/grep '^FAIL GMODEL' "$T/gmodel_seed_flags.txt" | sed 's/ — move the unit.*: / : /')"
-  else say "SELFTEST-FAIL (a) seeded $seeded: wrong members ($got):"; cat "$T/gmodel_seed_flags.txt"; b=1; fi
+  else say "SELFTEST-FAIL (a) seeded $seeded: wrong members ($got):"; show < "$T/gmodel_seed_flags.txt"; b=1; fi
   # (b)
   local lat; lat=$(/usr/bin/grep '^LATENT ' "$T/gmodel_scan_real.txt" | head -1)
   if [ -z "$lat" ]; then say "SELFTEST-BROKEN: no LATENT member on this tree to seed (b) from"; b=1; else
@@ -1030,7 +1159,7 @@ selftest_gmodel() {
     local cf="$G/going-decompiled/src/$REGION/$unit.c"
     /usr/bin/grep -vE "^[[:space:]]*INCLUDE_ASM\(\"[^\"]*\",[[:space:]]*$fn[[:space:]]*\)" "$cf" > "$cf.new"; mv "$cf.new" "$cf"
     FAILED=0; check_gmodel "$REGION" "$G" > "$T/gmodel_seed_promo.txt"
-    if [ "$FAILED" = 1 ] && [ "$(/usr/bin/grep '^       MISMATCH ' "$T/gmodel_seed_promo.txt" | awk '{print $2, $4}')" = "$unit $fn" ]; then ok "fired (b): $fn's INCLUDE_ASM removed from $unit.c -> $(/usr/bin/grep '^FAIL GMODEL' "$T/gmodel_seed_promo.txt" | sed 's/ — move the unit.*: / : /')"; else say "SELFTEST-FAIL (b) removing $fn's INCLUDE_ASM did not fail GMODEL naming only it (FAILED=$FAILED):"; cat "$T/gmodel_seed_promo.txt"; b=1; fi
+    if [ "$FAILED" = 1 ] && [ "$(/usr/bin/grep '^       MISMATCH ' "$T/gmodel_seed_promo.txt" | awk '{print $2, $4}')" = "$unit $fn" ]; then ok "fired (b): $fn's INCLUDE_ASM removed from $unit.c -> $(/usr/bin/grep '^FAIL GMODEL' "$T/gmodel_seed_promo.txt" | sed 's/ — move the unit.*: / : /')"; else say "SELFTEST-FAIL (b) removing $fn's INCLUDE_ASM did not fail GMODEL naming only it (FAILED=$FAILED):"; show < "$T/gmodel_seed_promo.txt"; b=1; fi
   fi
   FAILED=0
   return $b
@@ -1077,7 +1206,7 @@ selftest_dirty() {
 # basename-keyed row reads {015180} on both arms and passes.
 selftest_native() {
   local T="$1" b=0; local N="$T/native"; rm -rf "$N"; mkdir -p "$N"
-  say "-- (18) NATIVE (#923): scratch tip/base trees — a seeded C error, A2's removed 198B58 guard, a usa-vs-eu basename collision, a new failing unit, and a unit leaving the population (deleted, override without reason, token removed, renamed WITH an edit, moved byte-identical to ANOTHER region) must each FAIL naming the unit; a failure on both arms, a departure with a Native-Left override + reason, a byte-identical rename within its region, a cross-region move with a Native-Left override + reason, and the clean pair must pass; the env override outside a scratch arm must excuse nothing and WARN (FAIL under --strict); the default base resolving to HEAD must print 'NATIVE: base == tip, VACUOUS' as a WARN (FAIL under --strict), and so must a base pinned explicitly to HEAD (#1011); then the real tree against its real base"
+  say "-- (18) NATIVE (#923): scratch tip/base trees — a seeded C error, A2's removed 198B58 guard, a usa-vs-eu basename collision, a new failing unit, and a unit leaving the population (deleted, override without reason, token removed, renamed WITH an edit, moved byte-identical to ANOTHER region) must each FAIL naming the unit; a failure on both arms, a departure with a Native-Left override + reason, a byte-identical rename within its region, a cross-region move with a Native-Left override + reason, and the clean pair must pass; the env override outside a scratch arm must excuse nothing and WARN (FAIL under --strict); the default base resolving to HEAD must print 'NATIVE: base == tip, VACUOUS' as a WARN (FAIL under --strict), and so must a base pinned explicitly to HEAD (#1011); the per-region counts must show a usa -1 / eu +1 move under an unchanged total, and sum to the totals on the real tree (task #1006); then the real tree against its real base"
   native_tree() {  # native_tree DIR — a fresh scratch copy of the check.sh inputs
     rm -rf "$1"; mkdir -p "$1/going-decompiled" "$1/tools"
     cp -R going-decompiled/src going-decompiled/include "$1/going-decompiled/"; cp -R tools/native "$1/tools/"
@@ -1087,7 +1216,7 @@ selftest_native() {
     local out NATIVE_LEFT_FROM_ENV=1; out="$N/$(printf '%s' "$1" | tr -c 'A-Za-z0-9' _).txt"; NATIVE_ARM_OUT=$out; FAILED=0; check_native "$2" "$3" > "$out"
     if [ "$FAILED" = "$4" ] && /usr/bin/grep -qE "$5" "$out" && { [ -z "${6:-}" ] || ! /usr/bin/grep -qE "$6" "$out"; }; then
       ok "$1: $(/usr/bin/grep -E '^(OK|FAIL) ' "$out" | tr '\n' ' ')$(/usr/bin/grep -E '^     (failing|tip)' "$out" | sed 's/^ *//' | tr '\n' ' ')"
-    else say "SELFTEST-FAIL native arm $1 (FAILED=$FAILED, want $4):"; cat "$out"; b=1; fi
+    else say "SELFTEST-FAIL native arm $1 (FAILED=$FAILED, want $4):"; show < "$out"; b=1; fi
   }
   native_tree "$N/base"
   # (a) synthetic: one C error appended to usa/cod/015180.c
@@ -1144,13 +1273,22 @@ selftest_native() {
     /usr/bin/grep -qE "^FAIL NATIVE: 1 unit\\(s\\) LEFT .*: $lre — " "$NATIVE_ARM_OUT" && ok "  ... and the FAIL names $lu as having LEFT" || { say "SELFTEST-FAIL (o) did not name $lu as LEFT"; b=1; }
     LANDING_GATE_NATIVE_LEFT="Native-Left: $lu t984 selftest: moved to eu" \
       native_arm "control (p) $lu moved to $xu, Native-Left names it + reason" "$N/tip_o" "$N/base" 0 "^     left the population, overridden: $lre — t984 selftest: moved to eu \\[env\\]\$" '^FAIL'
+    # (s) task #1006, FACT ledger-28603: (p) is the masking case — usa -1, eu
+    # +1, an excused PASS, and the total identical on both arms. The per-region
+    # line must show both moves while the total reads unchanged.
+    local ub ut eb et totb tott; ub=$(native_region_units "$NATIVE_ARM_OUT" base usa); ut=$(native_region_units "$NATIVE_ARM_OUT" tip usa)
+    eb=$(native_region_units "$NATIVE_ARM_OUT" base eu); et=$(native_region_units "$NATIVE_ARM_OUT" tip eu)
+    totb=$(native_total_units "$NATIVE_ARM_OUT" base); tott=$(native_total_units "$NATIVE_ARM_OUT" tip)
+    if [ -n "$ub" ] && [ -n "$ut" ] && [ -n "$eb" ] && [ -n "$et" ] && [ -n "$totb" ] && [ "$totb" = "$tott" ] && [ "$ut" = $((ub-1)) ] && [ "$et" = $((eb+1)) ]; then
+      ok "fired (s) the masking case is visible: total $totb -> $tott units (unchanged) while usa $ub -> $ut and eu $eb -> $et"
+    else say "SELFTEST-FAIL (s) the per-region line does not show (p)'s usa -1 / eu +1 under an unchanged total (usa '$ub' -> '$ut', eu '$eb' -> '$et', total '$totb' -> '$tott'):"; show < "$NATIVE_ARM_OUT"; b=1; fi
     local st
     for st in 1 0; do
       FAILED=0; WARNED=0; STRICT=$st; LANDING_GATE_NATIVE_LEFT="Native-Left: $lu t963 selftest: env excuse" check_native "$N/tip_h" "$N/base" > "$N/env_real_$st.txt"; STRICT=0
       if [ "$FAILED" = $((1+st)) ] && [ "$WARNED" = 1 ] && /usr/bin/grep -qE "^$([ $st = 1 ] && echo 'FAIL\(strict\)' || echo WARN) NATIVE: \\\$LANDING_GATE_NATIVE_LEFT is set and IGNORED" "$N/env_real_$st.txt" \
          && /usr/bin/grep -qE "^FAIL NATIVE: 1 unit\\(s\\) LEFT .*: $lre — " "$N/env_real_$st.txt" && ! /usr/bin/grep -q 'overridden' "$N/env_real_$st.txt"; then
         ok "fired (n) env override outside a scratch arm, STRICT=$st: excuses nothing, $(/usr/bin/grep -E '^(WARN|FAIL\(strict\)) NATIVE' "$N/env_real_$st.txt" | cut -c1-80)... (FAILED=$FAILED)"
-      else say "SELFTEST-FAIL (n) env override outside a scratch arm, STRICT=$st (FAILED=$FAILED WARNED=$WARNED):"; cat "$N/env_real_$st.txt"; b=1; fi
+      else say "SELFTEST-FAIL (n) env override outside a scratch arm, STRICT=$st (FAILED=$FAILED WARNED=$WARNED):"; show < "$N/env_real_$st.txt"; b=1; fi
     done
   fi
   # (q)-(r) task #992: the DEFAULT base resolving to HEAD, reached through the
@@ -1166,11 +1304,11 @@ selftest_native() {
       if [ "$FAILED" = "$vst" ] && [ "$WARNED" = 1 ] && /usr/bin/grep -qE "^$([ $vst = 1 ] && echo 'FAIL\(strict\)' || echo WARN) NATIVE: base == tip, VACUOUS — the default base merge-base\(HEAD, HEAD\) is HEAD $(git rev-parse HEAD) itself" "$N/vacuous_$vst.txt" \
          && [ "$(/usr/bin/grep -c 'VACUOUS: base == tip, this measured nothing' "$N/vacuous_$vst.txt" || true)" = 2 ]; then
         ok "fired (q) default base == HEAD, STRICT=$vst: $(/usr/bin/grep -E '^(WARN|FAIL\(strict\)) NATIVE' "$N/vacuous_$vst.txt" | cut -c1-60)... (FAILED=$FAILED)"
-      else say "SELFTEST-FAIL (q) default base == HEAD, STRICT=$vst (FAILED=$FAILED WARNED=$WARNED):"; cat "$N/vacuous_$vst.txt"; b=1; fi
+      else say "SELFTEST-FAIL (q) default base == HEAD, STRICT=$vst (FAILED=$FAILED WARNED=$WARNED):"; show < "$N/vacuous_$vst.txt"; b=1; fi
     else
       if [ "$FAILED" = 0 ] && [ "$WARNED" = 0 ] && /usr/bin/grep -q "^     base == HEAD ([0-9a-f]*): the row compares only the $vnd uncommitted path" "$N/vacuous_$vst.txt" && ! /usr/bin/grep -q VACUOUS "$N/vacuous_$vst.txt"; then
         ok "control (q') default base == HEAD with $vnd dirty NATIVE input(s), STRICT=$vst: not a self-comparison, noted, not counted"
-      else say "SELFTEST-FAIL (q') default base == HEAD with $vnd dirty NATIVE input(s), STRICT=$vst (FAILED=$FAILED WARNED=$WARNED):"; cat "$N/vacuous_$vst.txt"; b=1; fi
+      else say "SELFTEST-FAIL (q') default base == HEAD with $vnd dirty NATIVE input(s), STRICT=$vst (FAILED=$FAILED WARNED=$WARNED):"; show < "$N/vacuous_$vst.txt"; b=1; fi
     fi
   done
   # (r) task #1011: a pin EQUAL to HEAD behaves exactly like the unpinned case
@@ -1181,13 +1319,21 @@ selftest_native() {
       if [ "$FAILED" = "$vst" ] && [ "$WARNED" = 1 ] && /usr/bin/grep -qE "^$([ $vst = 1 ] && echo 'FAIL\(strict\)' || echo WARN) NATIVE: base == tip, VACUOUS — LANDING_GATE_NATIVE_BASE=HEAD pins the base to HEAD $(git rev-parse HEAD) itself" "$N/vacuous_pinned_$vst.txt" \
          && [ "$(/usr/bin/grep -c 'VACUOUS: base == tip, this measured nothing' "$N/vacuous_pinned_$vst.txt" || true)" = 2 ]; then
         ok "fired (r) base pinned explicitly to HEAD, STRICT=$vst: $(/usr/bin/grep -E '^(WARN|FAIL\(strict\)) NATIVE' "$N/vacuous_pinned_$vst.txt" | cut -c1-60)... (FAILED=$FAILED)"
-      else say "SELFTEST-FAIL (r) base pinned explicitly to HEAD, STRICT=$vst (FAILED=$FAILED WARNED=$WARNED):"; cat "$N/vacuous_pinned_$vst.txt"; b=1; fi
+      else say "SELFTEST-FAIL (r) base pinned explicitly to HEAD, STRICT=$vst (FAILED=$FAILED WARNED=$WARNED):"; show < "$N/vacuous_pinned_$vst.txt"; b=1; fi
     done
   fi
   # (f) clean pair; (g) the real tree against its real base
   native_arm "control (f) clean pair" "$N/base" "$N/base" 0 '^OK   NATIVE: no unit fails'
   FAILED=0; check_native > "$N/real.txt"
-  if [ "$FAILED" = 0 ]; then ok "control (g) real tree: $(/usr/bin/grep -E '^     tip ' "$N/real.txt" | sed 's/^ *//')"; else say "SELFTEST-FAIL the real tree fails NATIVE:"; cat "$N/real.txt"; b=1; fi
+  # (t) task #1006: the per-region counts are a re-presentation, not a
+  # re-measurement — on the real tree they sum to the old total on both arms;
+  # and the sum check itself fires on a copy whose tip total is altered
+  if native_region_sums_close "$N/real.txt"; then ok "control (t) real tree: per-region counts sum to the totals on both arms: $(sed -n 's/^     NATIVE per region (pass\/units): //p' "$N/real.txt")"
+  else say "SELFTEST-FAIL (t) the real tree's per-region counts do not sum to its totals (or the line is missing):"; show < <(/usr/bin/grep -E '^     (tip|NATIVE per region)' "$N/real.txt"); b=1; fi
+  sed 's#^\(     NATIVE per region (pass/units): tip [^=]*\) = \([0-9]*\)/#\1 = 9\2/#' "$N/real.txt" > "$N/real_sum_seeded.txt"
+  if ! cmp -s "$N/real.txt" "$N/real_sum_seeded.txt" && ! native_region_sums_close "$N/real_sum_seeded.txt"; then ok "fired (t') the sum check rejects a tip total altered to $(sed -n 's/^     NATIVE per region.*: tip .* = \([0-9]*\/[0-9]*\);.*/\1/p' "$N/real_sum_seeded.txt")"
+  else say "SELFTEST-FAIL (t') the sum check accepted an altered tip total (or the seed did not apply)"; b=1; fi
+  if [ "$FAILED" = 0 ]; then ok "control (g) real tree: $(/usr/bin/grep -E '^     tip ' "$N/real.txt" | sed 's/^ *//')"; else say "SELFTEST-FAIL the real tree fails NATIVE:"; show < "$N/real.txt"; b=1; fi
   return $b
 }
 
@@ -1228,7 +1374,9 @@ selftest_mount_sync() {
 # sourceable (`. tools/ee/landing_gate.sh`) for the individual check functions
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   case "${1:-}" in
-    --selftest) selftest "${2:-usa}" ;;
+    # stderr joins stdout so the guard sees both; the guard's exit 3 wins
+    --selftest) selftest "${2:-usa}" 2>&1 | selftest_stdout_guard; st=("${PIPESTATUS[@]}")
+                [ "${st[1]}" = 0 ] || exit "${st[1]}"; exit "${st[0]}" ;;
     usa|eu) run_gate "$@" ;;
     *) usage ;;
   esac
