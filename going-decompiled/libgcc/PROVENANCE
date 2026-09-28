@@ -51,6 +51,8 @@ Project-written files (NOT GCC source)
   (mips/R5900, little-endian, 32-bit size_t).
 - MEMBERS: which archive members are built, from which file, with GCC's own
   module selection (-DFINE_GRAINED_LIBRARIES -DL_<module>).
+- LINK_ALIASES: names a member references that the game defines under its
+  splat name (link-only; the file says why they are not symbol_addrs rows).
 - PROVENANCE: this file.
 
 How it is built and linked
@@ -65,7 +67,10 @@ through tools/ee/move_fixup.sed like every unit's (an assembler-input rewrite,
 not a source edit).
 
 Members linked today (USA): _divdi3 (__divdi3 at 0x11FC68, __clz_tab at
-0x13AC58) and _muldi3 (__muldi3 at 0x121AB8). Each was checked against the
+0x13AC58), _fixunsdfdi (__fixunsdfdi at 0x1212C8), _floatdidf (__floatdidf at
+0x1213B8) and _muldi3 (__muldi3 at 0x121AB8). _fixunsdfdi and _floatdidf need
+the li.d -> dli rewrite of cc1's output (tools/ee/libgcc_lid_dli.pl) and, for
+_fixunsdfdi's call to dptoul, the link-only alias in LINK_ALIASES. Each was checked against the
 SDK's own libgcc.a member (tools/ee/cc/lib/gcc-lib/ee/2.95.2/libgcc.a, used
 only as an identity oracle, never linked): .text, .rodata and .data bytes and
 the relocation lists are identical. The whole-image check is landing_gate.sh.

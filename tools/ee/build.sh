@@ -190,6 +190,10 @@ if [ -f "$LIBGCC" ]; then
   done
   echo "INPUT($LIBGCC)" >> "$ALLSYMS"
   for sym in $LIBSYMS; do echo "EXTERN($sym);" >> "$ALLSYMS"; done
+  # Names a member references that the game defines under another name
+  # (going-decompiled/libgcc/LINK_ALIASES says why they are not symbol_addrs rows).
+  grep -vE '^[[:space:]]*(#|$)' going-decompiled/libgcc/LINK_ALIASES \
+    | awk 'NF == 2 { print $1 " = " $2 ";" }' >> "$ALLSYMS"
 fi
 # Track-B NAMED symbols (snd_PrintError, AssertFail, Mc*, WrapAngle*, rand, ...)
 # from symbol_addrs: matched C calls these by name, but they are not address-named

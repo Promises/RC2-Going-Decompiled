@@ -14,8 +14,9 @@
 # archive has 0 GPREL16 relocs in all 58 members, NOTE #8217). The ee-gcc
 # driver segfaults under wibo, so its predefines are passed by hand; what must
 # hold is that longlong.h sees __mips__/__R5900__ and picks the MIPS umul_ppmm.
-# The cc1 OUTPUT goes through the same move_fixup.sed every unit's does; the
-# GCC source is never edited.
+# The cc1 OUTPUT goes through the same move_fixup.sed every unit's does, then
+# tools/ee/libgcc_lid_dli.pl (li.d -> dli, which binutils refuses at r5900; a
+# libgcc-only rule, see its header); the GCC source is never edited.
 # Output: going-decompiled/build/<region>/lib/libgcc.a (the yaml's lib_path) and
 # lib/members.txt (one member per line) for build.sh's INPUT/EXTERN lines.
 set -e
@@ -52,7 +53,7 @@ for m in $MEMBERS; do
     || { echo "BUILD FAIL (libgcc cpp): $m" >&2; exit 1; }
   "$WIBO" "$G/cc1.exe" -quiet -O2 -G0 "$i" -o "$s" \
     || { echo "BUILD FAIL (libgcc cc1): $m" >&2; exit 1; }
-  sed -E -f tools/ee/move_fixup.sed "$s" | tr -d '\r' \
+  sed -E -f tools/ee/move_fixup.sed "$s" | tr -d '\r' | perl tools/ee/libgcc_lid_dli.pl \
     | mips-linux-gnu-as -march=r5900 -mabi=eabi -no-pad-sections -EL -G0 -o "$o" - \
     || { echo "BUILD FAIL (libgcc as): $m" >&2; exit 1; }
   [ -s "$o" ] || { echo "BUILD FAIL (libgcc: no object): $m" >&2; exit 1; }

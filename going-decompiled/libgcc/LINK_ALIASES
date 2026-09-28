@@ -1,0 +1,9 @@
+# Link-only aliases: a name a libgcc.a member references, bound to the game
+# symbol that already defines that address. One row: <libgcc name> <game symbol>.
+# tools/ee/build.sh writes each row as a plain `name = symbol;` assignment into
+# the link's symbol file (only when a libgcc.a is linked). It is not a
+# symbol_addrs row, because activating one there makes splat rename the game
+# symbol, and a matched function must keep its name (objdiff matches by name).
+# A plain assignment, not PROVIDE, so landing_gate.sh's PROVIDE-stripped relink
+# still resolves it. Written for task #893 (PROCEDURE #8224 §3d).
+dptoul  func_001231C8

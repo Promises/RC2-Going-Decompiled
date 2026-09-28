@@ -1,9 +1,11 @@
 /*
- * cod/0202D8 (0x120358..0x121AB7): the part of the old cod/015180 unit between
- * the libgcc.a members _divdi3.o and _muldi3.o, which the build links from GCC's
- * own source (going-decompiled/libgcc/, RULING #8206; carve: task #879). It
- * holds libgcc's _eh.o, _fixunsdfdi.o, _floatdidf.o and _moddi3.o as the ROM's
- * asm plus this project's own C, which is decompilation, not GCC source text.
+ * cod/0202D8 (0x120358..0x1212C7): the part of the old cod/015180 unit between
+ * the libgcc.a members _divdi3.o and _fixunsdfdi.o, which the build links from
+ * GCC's own source (going-decompiled/libgcc/, RULING #8206; carve: tasks #879,
+ * #893). It holds libgcc's _eh.o as the ROM's asm plus this project's own C,
+ * which is decompilation, not GCC source text. The TARGET_NATIVE build also
+ * keeps here the portable C for _fixunsdfdi.o and _floatdidf.o, which the EE
+ * build links from the library.
  */
 #include "common.h"
 
@@ -159,22 +161,14 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0202D8", func_00
  * residual to an unsigned 32-bit limb (func_001231C8) and adds it back onto
  * hi<<32 (subtracting when the residual went slightly negative). Returns
  * hi*2^32 +/- low. The 2^-32 scale (0x3DF0000000000000) is cheap so it builds
- * inline (ori+dsll32), avoiding the constant-pool/li.d wall of func_0011C090.
+ * inline (ori+dsll32).
  *
- * NEAR-MATCH WALL (78.59% via objdiff). The faithful C below is functionally
- * exact but loses byte-equality the same way as its soft-float siblings
- * (func_001213B8 85%, func_001231C8 68%): ee-gcc -O2 -G0 (1) keeps the double
- * constant 0.0 used by the residual compare AND the residual negate in a
- * callee-saved register ($18) across the intervening func_00123028 call (3 saved
- * regs vs the 2 a literal 0 / $0 yields), and (2) lays out the inlined
- * unsigned-64->double `if (limb<0)` block (func_001213B8 + func_00122A40 self-
- * add) with different branch placement / register threading than clean C emits.
- * Neither is steerable from C. Seedable (double bits -> u64): now that its
- * multiply dependency func_00122B00 ships a #else, it ships a faithful portable
- * TARGET_NATIVE #else, cmp-oracle'd asm-vs-C bit-identical on the real R5900. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0202D8", func_001212C8);
-#else
+ * The EE build does not compile this: 0x1212C8 is libgcc's __fixunsdfdi, and the
+ * build links it from GCC's own libgcc2.c as the libgcc.a member _fixunsdfdi.o
+ * (going-decompiled/libgcc/, RULING #8206, task #893), byte-exact. This is the
+ * project's own portable C for the TARGET_NATIVE build, cmp-oracle'd asm-vs-C
+ * bit-identical on the real R5900. */
+#ifdef TARGET_NATIVE
 extern s32 func_00123028(s64 a, s64 b);
 extern u32 func_001231C8(s64 a);
 extern s64 func_001213B8(s64 value);
@@ -210,11 +204,7 @@ s64 func_001212C8(s64 x) {
 }
 #endif
 
-INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0202D8", func_001213B4);
-
 extern s64 func_00123078(s32 x);
-extern s64 func_00122B00(s64 a, s64 b);
-extern s64 func_00122A40(s64 a, s64 b);
 
 /**
  * func_001213B8 = convert a 64-bit signed integer to a double (packed bits),
@@ -224,20 +214,14 @@ extern s64 func_00122A40(s64 a, s64 b);
  * unsigned 32-bit limb. The partial results are summed:
  * result = (double)hi * 2^32 + (unsigned)lo.
  *
- * NEAR-MISS WALL (85.92% via objdiff). The body is functionally faithful and
- * compiles to a byte-identical instruction stream EXCEPT for one ee-gcc -O2 -G0
- * codegen quirk: the original keeps the 65536.0 multiplier constant
- * (0x40F0000000000000) live in the callee-saved register $17 across both
- * func_00122B00 calls (then reuses $17 for the high partial), whereas ee-gcc
- * here rematerialises the 2-instruction constant before each multiply rather
- * than allocating a callee-saved register for it (a reload/rematerialisation
- * policy decision not controllable from C). Shipped as a portable TARGET_NATIVE
- * #else; verification is routed to tester-EE (the #else calls sibling soft-float
- * #else bodies, so it is not standalone cmp-oracle'able here).
+ * The EE build does not compile this: 0x1213B8 is libgcc's __floatdidf, and the
+ * build links it from GCC's own libgcc2.c as the libgcc.a member _floatdidf.o
+ * (going-decompiled/libgcc/, RULING #8206, task #893), byte-exact. This is the
+ * project's own portable C for the TARGET_NATIVE build; its verification is
+ * routed to tester-EE (it calls sibling soft-float #else bodies, so it is not
+ * standalone cmp-oracle'able here).
  */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0202D8", func_001213B8);
-#else
+#ifdef TARGET_NATIVE
 s64 func_001213B8(s64 value) {
     s64 scale = 0x40F0000000000000LL;
     s32 hi = (s32)(value >> 32);
@@ -248,41 +232,5 @@ s64 func_001213B8(s64 value) {
         loDouble = func_00122A40(loDouble, 0x41F0000000000000LL);
     }
     return func_00122A40(loDouble, hiDouble);
-}
-#endif
-
-/**
- * __moddi3 = libgcc `__moddi3` (signed 64-bit modulo, a % b). ee-gcc inlines
- * libgcc2.c's signed wrapper around `__udivmoddi4`: it takes the magnitudes of
- * both operands (the bgez/negu sign-strip sequences at entry), runs the unsigned
- * long-division core (count_leading_zeros via the 256-byte `__clz_tab` D_0013AD58,
- * then 16-bit-digit `udiv_qrnnd` with `divu`/`break 0,7`), captures the remainder
- * through the inlined `&w` slot (sp+0), and gives it the sign of the dividend a.
- *
- * NOT GAME CODE: compiler runtime emitted by ee-gcc itself; not reconstructable
- * as clean hand C that matches byte-exact, so the MATCHING arm stays INCLUDE_ASM
- * (links verbatim). The portable #else is the faithful behaviour (`a % b`),
- * cmp-oracle'd asm-vs-C bit-identical on the real R5900. Excluded domains (the
- * asm traps `break 0,7` / overflow): b == 0 and INT64_MIN / -1. Paired siblings:
- * __divdi3 = `__divdi3`, __udivdi3 = `__udivdi3`, __umoddi3 =
- * `__umoddi3`. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0202D8", __moddi3);
-#else
-s64 __moddi3(s64 a, s64 b) {
-    return a % b;
-}
-#endif
-
-/*
- * __muldi3 (libgcc `__muldi3`, 0x121AB8) is not in this unit: the EE build links
- * it from GCC's own libgcc2.c as the libgcc.a member _muldi3.o
- * (going-decompiled/libgcc/, RULING #8206), placed between this unit and
- * cod/021A98. The portable build keeps the behavioural equivalent: the low 64
- * bits of the product, a * b.
- */
-#ifdef TARGET_NATIVE
-s64 __muldi3(s64 a, s64 b) {
-    return a * b;
 }
 #endif

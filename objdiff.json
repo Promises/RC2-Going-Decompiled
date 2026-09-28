@@ -233,6 +233,17 @@
       }
     },
     {
+      "name": "usa/cod/0213D0",
+      "target_path": "going-decompiled/build/usa/expected/cod/0213D0.o",
+      "base_path": "going-decompiled/build/usa/obj/cod/0213D0.o",
+      "metadata": {
+        "source_path": "going-decompiled/src/usa/cod/0213D0.c",
+        "progress_categories": [
+          "cod"
+        ]
+      }
+    },
+    {
       "name": "usa/cod/021A98",
       "target_path": "going-decompiled/build/usa/expected/cod/021A98.o",
       "base_path": "going-decompiled/build/usa/obj/cod/021A98.o",

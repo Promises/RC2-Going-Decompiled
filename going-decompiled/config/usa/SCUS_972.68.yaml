@@ -101,10 +101,15 @@ segments:
       # SUBALIGN(8) requires. The ROM's 4-byte pad at 0x120354 (after _divdi3.o)
       # is the SN linker's 0xCDCDCDCD fill, reproduced by this segment's
       # ld_fill_value (measured: FILL 0xCDCDCDCD on the uncarved master was
-      # cmp 0, so no earlier gap depends on the fill).
+      # cmp 0, so no earlier gap depends on the fill). Phase 2 (task #893) adds
+      # _fixunsdfdi.o and _floatdidf.o the same way; the ROM's pad at 0x1213B4
+      # between them is that same CDCD fill.
       - [0x015180, c, cod/015180] # core.text head (0x115200..0x11FC67)
       - [0x01FBE8, lib, libgcc, _divdi3] # libgcc.a _divdi3.o .text (0x11FC68..0x120353), pad 0x120354
-      - [0x0202D8, c, cod/0202D8] # core.text: libgcc _eh.o _fixunsdfdi.o _floatdidf.o _moddi3.o as asm/C (0x120358..0x121AB7)
+      - [0x0202D8, c, cod/0202D8] # core.text: libgcc _eh.o as asm/C, pad 0x1212C4 as a tail fragment (0x120358..0x1212C7)
+      - [0x021248, lib, libgcc, _fixunsdfdi] # libgcc.a _fixunsdfdi.o .text (0x1212C8..0x1213B3), pad 0x1213B4
+      - [0x021338, lib, libgcc, _floatdidf] # libgcc.a _floatdidf.o .text (0x1213B8..0x12144F)
+      - [0x0213D0, c, cod/0213D0] # core.text: libgcc _moddi3.o as asm (0x121450..0x121AB7)
       - [0x021A38, lib, libgcc, _muldi3] # libgcc.a _muldi3.o .text (0x121AB8..0x121B17)
       - [0x021A98, c, cod/021A98] # core.text: libgcc _pure.o.. frame.o, then libsn/SDK (0x121B18..0x13221F)
       - [0x0321A0, c, cod/0321A0] # snd sub-TU, built at -G8 (0x132220..0x1339EF)

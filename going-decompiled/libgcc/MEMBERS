@@ -6,3 +6,5 @@
 # selection (FINE_GRAINED_LIBRARIES + L_<module>), never a source edit.
 _divdi3  libgcc2.c  -DIN_LIBGCC2 -DFINE_GRAINED_LIBRARIES -DL_divdi3
 _muldi3  libgcc2.c  -DIN_LIBGCC2 -DFINE_GRAINED_LIBRARIES -DL_muldi3
+_fixunsdfdi  libgcc2.c  -DIN_LIBGCC2 -DFINE_GRAINED_LIBRARIES -DL_fixunsdfdi
+_floatdidf  libgcc2.c  -DIN_LIBGCC2 -DFINE_GRAINED_LIBRARIES -DL_floatdidf
