@@ -214,9 +214,22 @@ if [ "$GFLAG" = "-G8" ]; then
       if (m == 8388608) { m = 0; e++ }
       return s * 2147483648 + (e + 127) * 8388608 + m
     }
+    # `$name` -> `$number` for a GPR operand, so one register spelled two ways
+    # compares equal (FACT #8471); anything else comes back unchanged. The
+    # o32 names GNU as uses under -mabi=eabi: $t0-$t7 are $8-$15, and $fp and
+    # $s8 are both $30.
+    function gprnum(s,    i, nm) {
+      if (!gprinit) {
+        split("zero at v0 v1 a0 a1 a2 a3 t0 t1 t2 t3 t4 t5 t6 t7 s0 s1 s2 s3 s4 s5 s6 s7 t8 t9 k0 k1 gp sp fp ra", nm, " ")
+        for (i = 1; i <= 32; i++) gpr["$" nm[i]] = "$" (i - 1)
+        gpr["$s8"] = "$30"; gprinit = 1
+      }
+      return (s in gpr) ? gpr[s] : s
+    }
     # why hoisting slot insn `ins` above branch `br` would change the program
-    # (see header, #979): "" when it is a legal reordering.
-    function dslot_hazard(br, ins,    mn, ops, reads, link, n, r, reg) {
+    # (see header, #979): "" when it is a legal reordering. Registers are
+    # compared by number; the caller quotes the operands as written.
+    function dslot_hazard(br, ins,    mn, ops, reads, link, n, r, reg, i) {
       mn = br; sub(/^\t/, "", mn); sub(/\t.*/, "", mn)
       ops = br; sub(/^\t[a-z0-9.]+\t/, "", ops)
       if (ops ~ /\$(1|at)([^0-9a-z]|$)/) return "at"
@@ -231,14 +244,16 @@ if [ "$GFLAG" = "-G8" ]; then
         n = split(ops, r, ",")
         reads = r[n]; link = (n >= 2) ? r[1] : "$31"
       } else if (mn ~ /^(jal|bgezal|bltzal)$/) link = "$31"
-      if (link == "$ra") link = "$31"
-      if (link == "$0" || link == "$zero") link = ""
-      reg = ins; sub(/^\t[a-z]+\t/, "", reg); sub(/,.*/, "", reg)
+      link = gprnum(link)
+      if (link == "$0") link = ""
+      n = split(reads, r, ","); reads = gprnum(r[1])
+      for (i = 2; i <= n; i++) reads = reads "," gprnum(r[i])
+      reg = ins; sub(/^\t[a-z]+\t/, "", reg); sub(/,.*/, "", reg); reg = gprnum(reg)
       if (ins ~ /^\tl/) {
         if (reg == "$0") return ""
         if (("," reads ",") ~ ("," "\\" reg ",")) return "load writes a register the branch reads"
-        if (link != "" && (reg == link || (reg == "$ra" && link == "$31"))) return "load writes the link register"
-      } else if (link != "" && (reg == link || (reg == "$ra" && link == "$31"))) {
+        if (link != "" && reg == link) return "load writes the link register"
+      } else if (link != "" && reg == link) {
         return "store reads the link register"
       }
       return ""
