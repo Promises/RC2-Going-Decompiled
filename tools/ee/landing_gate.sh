@@ -99,6 +99,13 @@
 #            TARGET_NATIVE unit still COMPILES natively — NOT that the native
 #            build links (A2/#917's g_savePromptLatch has no native storage and
 #            this row is green on it). ~2 s per arm, host-only, no VM.
+#            SHRINK (FACT #8359, watcher-2's ruling for #945): also FAILS naming
+#            each unit in the base's population and absent from the tip's
+#            (deleted, carved away, or its TARGET_NATIVE token removed) unless
+#            a `Native-Left: <region>/<path>.c <reason>` line in a commit
+#            message of base..HEAD (or $LANDING_GATE_NATIVE_LEFT, for scratch
+#            runs) names it with a non-empty reason; excused units are listed
+#            with their reason and source commit.
 #   TREE     the ROW is tied to the tree it was built from (task #457, #451 gap
 #            1): do_build records HEAD^{tree}, a hash of the WHOLE working tree
 #            (tracked + modified + untracked, .gitignore honoured) and the dirty
@@ -152,7 +159,7 @@ BASE_DIR="$HERE/landing_baseline"
 SHADOW_CLASSES="CLASS1 CLASS2 CLASS3 NOTARGET"
 PYTHON=".venv-decomp/bin/python"
 
-usage() { sed -n '2,138p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { sed -n '2,145p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 say()  { printf '%s\n' "$*"; }
 fail() { say "FAIL $*"; FAILED=$((FAILED+1)); }
 ok()   { say "OK   $*"; }
@@ -342,11 +349,24 @@ native_scan() {
     && [ -z "$(LC_ALL=C comm -23 "$out.fail" "$out.all")" ] || return 2
 }
 
+# native_left_overrides [BASEREF] — the Native-Left overrides in force, one
+# `<unit>\t<reason>\t<source>` row each: every `Native-Left: <region>/<path>.c
+# <reason>` line in the commit messages of BASEREF..HEAD (source = the commit),
+# then every such line in $LANDING_GATE_NATIVE_LEFT (source = env; scratch runs
+# and the selftest). A line with no reason is emitted with an empty reason and
+# does not excuse its unit.
+native_left_overrides() {
+  { if [ -n "${1:-}" ]; then git log --format='@@%h%n%B' "$1..HEAD" 2>/dev/null; fi
+    if [ -n "${LANDING_GATE_NATIVE_LEFT:-}" ]; then printf '@@env\n%s\n' "$LANDING_GATE_NATIVE_LEFT"; fi
+  } | awk '/^@@/ { src = substr($0, 3); next }
+           sub(/^Native-Left:[ \t]+/, "") { u = $1; r = $0; sub(/^[^ \t]+[ \t]*/, "", r); sub(/[ \t]+$/, "", r); print u "\t" r "\t" src }'
+}
+
 # check_native [TIP_TREE] [BASE_TREE] — the NATIVE row (task #923). Defaults:
 # the tip is this working tree, the base is extracted from the merge-base.
 check_native() {
   local tip=${1:-$ROOT} basetree=${2:-} baseref="(given tree ${2:-})"
-  say "== NATIVE: tools/native/check.sh over every TARGET_NATIVE unit, base-relative — FAIL on a unit failing at the tip that passed at (or is absent from) the base. COMPILE-ONLY: green does NOT mean the native build links"
+  say "== NATIVE: tools/native/check.sh over every TARGET_NATIVE unit, base-relative — FAIL on a unit failing at the tip that passed at (or is absent from) the base, and on a unit that LEFT the population (in the base's, not the tip's) unless a Native-Left override names it and a reason. COMPILE-ONLY: green does NOT mean the native build links"
   if [ -z "$basetree" ]; then
     baseref=${LANDING_GATE_NATIVE_BASE:-$(git merge-base HEAD origin/master 2>/dev/null)}
     [ -n "$baseref" ] && baseref=$(git rev-parse --verify -q "$baseref^{commit}")
@@ -372,6 +392,24 @@ check_native() {
   fi
   [ -n "$tolerated" ] && say "     failing on BOTH arms (pre-existing, tolerated): $(printf '%s ' $tolerated)"
   [ -n "$fixed" ] && say "     failing at the base only (fixed or removed at the tip): $(printf '%s ' $fixed)"
+  # population shrink (FACT #8359; watcher-2's gate-owner ruling for #945): a
+  # unit in the base's population and absent from the tip's is never compiled
+  # at the tip, so it FAILS unless a Native-Left override names it and a reason
+  local left ovr="$OUT/native_left_overrides.txt" u excused="" unexcused="" unused
+  left=$(LC_ALL=C comm -23 "$b.all" "$t.all")
+  native_left_overrides "$([ -z "${2:-}" ] && printf '%s' "$baseref")" > "$ovr"
+  for u in $left; do
+    if awk -F'\t' -v u="$u" '$1 == u && $2 != "" { f = 1 } END { exit !f }' "$ovr"; then excused="$excused $u"; else unexcused="$unexcused $u"; fi
+  done
+  if [ -n "$unexcused" ]; then
+    fail "NATIVE: $(printf '%s\n' $unexcused | wc -l | tr -d ' ') unit(s) LEFT the TARGET_NATIVE population (in the base's population, absent from the tip's) with no Native-Left override naming unit + reason:$unexcused — if intended, add \`Native-Left: <region>/<path>.c <reason>\` to a commit message in the landing"
+  else
+    ok "NATIVE: no unit left the population unexcused ($(printf '%s\n' $left | /usr/bin/grep -c . || true) left, each named by a Native-Left override with a reason; base $((bp+bf)) -> tip $((tp+tf)) units)"
+  fi
+  for u in $excused; do say "     left the population, overridden: $(awk -F'\t' -v u="$u" '$1 == u && $2 != "" { printf "%s — %s [%s]", $1, $2, $3; exit }' "$ovr")"; done
+  unused=$(awk -F'\t' '{ print $1 }' "$ovr" | LC_ALL=C sort -u | LC_ALL=C comm -23 - <(printf '%s\n' $left | LC_ALL=C sort -u))
+  [ -n "$unused" ] && say "     Native-Left override(s) naming a unit that did not leave (no effect): $(printf '%s ' $unused)"
+  /usr/bin/grep -q $'^[^\t]*\t\t' "$ovr" && say "     Native-Left line(s) with NO reason (ignored — they excuse nothing): $(awk -F'\t' '$2 == "" { printf "%s [%s] ", $1, $3 }' "$ovr")"
   say "     members: $t (tip), $b (base); check.sh output: $t.log, $b.log"
 }
 
@@ -857,7 +895,7 @@ selftest_gmodel() {
 # basename-keyed row reads {015180} on both arms and passes.
 selftest_native() {
   local T="$1" b=0; local N="$T/native"; rm -rf "$N"; mkdir -p "$N"
-  say "-- (18) NATIVE (#923): scratch tip/base trees — a seeded C error, A2's removed 198B58 guard, a usa-vs-eu basename collision and a new failing unit must each FAIL naming the unit; a failure on both arms and the clean pair must pass; then the real tree against its real base"
+  say "-- (18) NATIVE (#923): scratch tip/base trees — a seeded C error, A2's removed 198B58 guard, a usa-vs-eu basename collision, a new failing unit, and a unit leaving the population (deleted, override without reason, token removed) must each FAIL naming the unit; a failure on both arms, a departure with a Native-Left override + reason, and the clean pair must pass; then the real tree against its real base"
   native_tree() {  # native_tree DIR — a fresh scratch copy of the check.sh inputs
     rm -rf "$1"; mkdir -p "$1/going-decompiled" "$1/tools"
     cp -R going-decompiled/src going-decompiled/include "$1/going-decompiled/"; cp -R tools/native "$1/tools/"
@@ -866,7 +904,7 @@ selftest_native() {
   native_arm() {  # native_arm NAME TIP BASE WANT_FAILED WANT_REGEX [MUST_NOT_REGEX]
     local out; out="$N/$(printf '%s' "$1" | tr -c 'A-Za-z0-9' _).txt"; NATIVE_ARM_OUT=$out; FAILED=0; check_native "$2" "$3" > "$out"
     if [ "$FAILED" = "$4" ] && /usr/bin/grep -qE "$5" "$out" && { [ -z "${6:-}" ] || ! /usr/bin/grep -qE "$6" "$out"; }; then
-      ok "$1: $(/usr/bin/grep -E '^(OK|FAIL) ' "$out" | head -1) $(/usr/bin/grep -E '^     (failing|tip)' "$out" | sed 's/^ *//' | tr '\n' ' ')"
+      ok "$1: $(/usr/bin/grep -E '^(OK|FAIL) ' "$out" | tr '\n' ' ')$(/usr/bin/grep -E '^     (failing|tip)' "$out" | sed 's/^ *//' | tr '\n' ' ')"
     else say "SELFTEST-FAIL native arm $1 (FAILED=$FAILED, want $4):"; cat "$out"; b=1; fi
   }
   native_tree "$N/base"
@@ -894,6 +932,20 @@ selftest_native() {
   native_arm "fired (d) new failing unit" "$N/tip_d" "$N/base" 1 '^FAIL NATIVE: 1 unit\(s\) .*: usa/t923_new_unit\.c $'
   # (e) base-relative: the same unit failing on both arms is tolerated
   native_arm "control (e) failing on both arms" "$N/base_c" "$N/base_c" 0 '^     failing on BOTH arms .*: usa/cod/015180\.c $'
+  # (h)-(k) population shrink (FACT #8359, #945): the first usa unit of the
+  # population, deleted at the tip or with its TARGET_NATIVE token removed
+  local lu; lu=$(cd going-decompiled/src && /usr/bin/grep -rl TARGET_NATIVE usa | LC_ALL=C sort | head -1)
+  if [ -z "$lu" ]; then say "SELFTEST-BROKEN: no usa TARGET_NATIVE unit to remove for the shrink arms"; b=1; else
+    local lre; lre=$(printf '%s' "$lu" | sed 's/[.]/\\./g')
+    native_tree "$N/tip_h"; rm "$N/tip_h/going-decompiled/src/$lu"
+    native_arm "fired (h) $lu deleted, no override" "$N/tip_h" "$N/base" 1 "^FAIL NATIVE: 1 unit\\(s\\) LEFT the TARGET_NATIVE population .*: $lre — "
+    LANDING_GATE_NATIVE_LEFT="Native-Left: $lu t945 selftest: carved away" \
+      native_arm "control (i) $lu deleted, Native-Left names it + reason" "$N/tip_h" "$N/base" 0 "^     left the population, overridden: $lre — t945 selftest: carved away \\[env\\]\$"
+    LANDING_GATE_NATIVE_LEFT="Native-Left: $lu" \
+      native_arm "fired (j) $lu deleted, Native-Left names it with NO reason" "$N/tip_h" "$N/base" 1 "^FAIL NATIVE: 1 unit\\(s\\) LEFT .*: $lre — " '^     left the population, overridden'
+    native_tree "$N/tip_k"; sed 's/TARGET_NATIVE/T945_NO_NATIVE/g' "going-decompiled/src/$lu" > "$N/tip_k/going-decompiled/src/$lu"
+    native_arm "fired (k) $lu's TARGET_NATIVE token removed" "$N/tip_k" "$N/base" 1 "^FAIL NATIVE: 1 unit\\(s\\) LEFT .*: $lre — "
+  fi
   # (f) clean pair; (g) the real tree against its real base
   native_arm "control (f) clean pair" "$N/base" "$N/base" 0 '^OK   NATIVE: no unit fails'
   FAILED=0; check_native > "$N/real.txt"
