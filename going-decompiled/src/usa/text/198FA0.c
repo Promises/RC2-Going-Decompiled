@@ -188,7 +188,7 @@ extern u8  g_inventoryOwned[];        /* 0x1A7B00 per-item have-flag (case 2) */
 extern u8  g_inventoryNewFlag[];      /* 0x1A7B38 per-item newly-acquired flag (case 3) */
 extern u8  D_1395B8[];                /* 0x1395B8 dialog/story flag byte-array (case 6) */
 extern u8  g_platinumBoltFlags[];     /* 0x19B278 per-platinum-bolt collected flag (case 9) */
-extern s32 g_mapCurrentLevel;         /* 0x1C5150 current map level id (case 10) */
+extern s32 g_mapCurrentLevel ROM_SPLIT; /* 0x1C5150 current map level id (case 10) */
 extern s32 func_002FCEA0(s32 level, s32 bitIndex); /* map-progress predicate (case 10
                                        * callee). asm 0x2FCEA0 saves $5 in the delay slot
                                        * of the jal and uses it as the sllv SHIFT AMOUNT. */
@@ -2494,33 +2494,30 @@ s32 UpdateLevelObjectiveStates(void) {
 /* EvaluateProgressCondition(cond, arg): 12-case switch (0=always, 1=level
  * available, 2=item owned, 3=item NEW, 4=objective active, 5=objective
  * complete, 6=dialog state byte, 7=call arg as predicate fn, 8=platinum
- * bolt, 9=cinematic bit, 10=map predicate on g_mapCurrentLevel). RE-PROBED
- * under the unit recipe 2026-06-12: the jump table itself NOW REPRODUCES
- * exactly (12 entries incl. explicit case 11, sltiu 0xC, original block
- * order with case 9 before case 8) - the old "prologue scheduling" wall is
- * gone. Best 95.06%; two residues: (a) case 9's bit test - the pinned cc1
- * lowers `(w & (1 << (n & 0x1F))) != 0` to srav/andi-extract while the
- * original (later SN cc1) keeps sllv/and/sltu, no source shape found;
- * (b) the base object emits its jump table as a section-local .rodata label
- * while the split target references named jtbl_0026CA70_text (objdiff reloc
- * identity - needs splat rodata migration for the carved units). */
+ * bolt, 9=cinematic bit, 10=map predicate on g_mapCurrentLevel).
+ * The #else body below reads 100.00% on the unit objdiff (sdk29, -O2 -G8
+ * -fno-gcse, VM b, task #888). It needs three shapes: a 12-entry switch with
+ * an explicit case 11 and case 9 before case 8, case 9's mask in its own
+ * variable, and g_mapCurrentLevel declared ROM_SPLIT. The old "no source shape
+ * found" for case 9 (srav/andi vs sllv/and/sltu) was KNOWN-FALSE: the mask
+ * variable gives the ROM's sllv/and/sltu.
+ * STILL NOT LANDABLE, for a reason that is not about the C. The compiled
+ * function brings its jump table as a 0x30-byte section-local .rodata in this
+ * unit's object, while the ROM's table is jtbl_0026CA70_text inside
+ * asm/usa/data/data/138B80.data.s. Promoting it needs that table migrated so
+ * the unit's .rodata links at 0x26CA70 (splat/linker config). verify_match_unit
+ * returns UNVERIFIABLE (2) on the .rodata reloc and the whole-image gate was
+ * not run on it. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", EvaluateProgressCondition);
 #else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 72.82% -> JTBL, first differing row @6: ROM `(nothing)` vs `sltiu v0, v1, 0xb`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 51.00% -> JTBL, first differing row @2: ROM `sra v1, a0, 16` vs `sra a0, a0, 16`. */
 /* EvaluateProgressCondition(cond, arg): evaluate one progress/unlock predicate.
  * `cond` is a 16-bit selector (sign-extended); `arg` is the per-case operand
  * (an index, a function pointer for case 7, or a packed level/bit field). Each
  * case returns a 0/1 truth value (case 10 returns the map predicate verbatim).
  * Any cond outside [0,11] returns 0. See the jump-table block decode above. */
 s32 EvaluateProgressCondition(s32 cond, s32 arg) {
-    cond = (s32)(s16)cond;
-    if ((u32)cond >= 0xC) {
-        return 0;
-    }
-    switch (cond) {
+    switch ((s16)cond) {
     case 0:
         return 1;
     case 1:
@@ -2543,17 +2540,17 @@ s32 EvaluateProgressCondition(s32 cond, s32 arg) {
         return D_1395B8[arg] != 0;
     case 7: /* call `arg` as a predicate function pointer */
         return ((s32 (*)(void))arg)() != 0;
+    case 9: { /* cinematic bit: arg>>2 selects the word, arg&0x1F the bit */
+        s32 word = *(s32 *)((char *)&g_cinematicUnlockedFlags + (((u32)arg >> 2) << 2));
+        s32 bit = 1 << (arg & 0x1F);
+        return (word & bit) != 0;
+    }
     case 8: /* platinum bolt: arg packs group (high 16) and slot (low 16) */
         return g_platinumBoltFlags[(arg & 0xFFFF) + ((arg >> 16) * 4)] != 0;
-    case 9: { /* cinematic bit: arg>>2 selects the word, arg&0x1F the bit */
-        s32 word = *(s32 *)((char *)&g_cinematicUnlockedFlags + ((arg >> 2) << 2));
-        return (word & (1 << (arg & 0x1F))) != 0;
-    }
     case 10:
-        /* asm 0x29E93C: only $4 is set in the delay slot; $5 is never written anywhere in
-         * EvaluateProgressCondition, so it reaches the callee as the incoming `arg`. */
         return func_002FCEA0(g_mapCurrentLevel, arg);
-    default: /* case 11 */
+    case 11:
+    default:
         return 0;
     }
 }
