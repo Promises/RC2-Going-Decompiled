@@ -522,9 +522,14 @@ void func_002CAB50(void) {
  *
  * Byte-exact on sdk29 (task #978), EE arm below. The pad is written as a
  * noreorder asm tied to the divisor and the block pointer, so it sits after
- * `addiu v0` and before `div.s`. #948 measured it on 335 USA `div.s` sites:
- * 158 carry exactly this 2-nop pad (NOTE #8391), so it is common in the ROM
- * and not specific to this function. The volatile fence on `one` orders `li.s`
+ * `addiu v0` and before `div.s`. That asm is a scheduling device, not a
+ * statement about the machine: it reproduces the ROM's pad bytes, which
+ * cc1 2.9 does not emit from plain C (FACT #8434), and says nothing about what
+ * put the pad there. Allowed, on the EE arm only, by RULING #8435.
+ * #948 measured it on 335 USA `div.s` sites: 158 carry a pad of at least two
+ * nops (NOTE #8391) - 157 exactly this 2-nop pad and 1 (0x30BBD8) three,
+ * the first being a `jal` delay slot (FACT ledger-28612) - so it is common in
+ * the ROM and not specific to this function. The volatile fence on `one` orders `li.s`
  * before the %hi/%lo pair. The fence before the last store keeps the
  * reciprocal's store for the `jr` slot, as in the ROM. */
 #ifndef TARGET_NATIVE
