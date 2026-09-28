@@ -308,49 +308,52 @@ s32 GuiMenuListHandleInput(GuiWidget *w, u32 inputMask) {
  * No C body can reproduce a function with no return. WALL: split-artifact stub. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348D98);
 
-/* GuiMenuListSetRows: store the keyframe table pointer at +0x68, then scan it to
- * count how many leading entries (stride 0x14, capped at 80) have a positive
- * first float; the count lands in +0xC0. Finally, if the current cursor +0x60
- * has run past the new count, reset it to 0.
- * Best 47%: the original emits the two prologue stores (+0x68,+0xC0) first and
- * computes the loop-end pointer in the bc1f delay slot, then keeps the float
- * compare result live across the loop; the pinned cc1 hoists the float setup
- * above the stores and re-shapes the loop entry with an extra branch. WALL:
- * instruction scheduling + branch-likely loop layout.
- * Oracle: cmp_func_00348DA0 (cmp_248B50.c) — bit-exact on real R5900. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", GuiMenuListSetRows);
-#else
-/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
- * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
- * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
- * cc1 2.96-ee-001003-1): sdk29 47.33% / engine96 72.30%.
- * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 28/30 words differ;
- * frozen-.s census: 0 callee GPR saves, 0 fp saves.
- * Residual: no callee saves and no frame/save-slot words in the diff — residual is REGALLOC/SCHED on the 28 differing words; not iterated. */
+/* A float read with alias set 0 (see GuiMenuListSetOrigin): the union type
+ * stops cc1's strict-aliasing scheduler from moving the read across an
+ * integer store, the way the ROM's no-strict-aliasing compiler never did. */
+typedef union {
+    f32 f;
+    s32 i;
+} GuiAliasWord;
+
+/*
+ * GuiMenuListSetRows - point the menu list at a keyframe table and count its
+ * rows.
+ *
+ *   w      the menu-list widget
+ *   table  keyframe table, stride 5 floats (0x14 bytes); a row counts while
+ *          its first float is > 0, at most 80 floats' worth
+ * Stores table at +0x68 and the row count at +0xC0 (bumped in place while
+ * scanning). If the cursor at +0x60 is no longer below the count, it is reset
+ * to 0. No return. A NaN first float ends the scan, as `0 < x` fails for NaN.
+ *
+ * Byte-exact on the sdk29 arm (task #894; was 47.33% solo). The ROM is the
+ * rotated loop of the do-while below, in near source order:
+ *  - the empty asm keeps the two leading stores ahead of the float setup;
+ *  - the count increment is written before `table += 5`, so the count load
+ *    heads the body and reorg steals it into the annulled `bnezl` slot;
+ *  - the loop-test read of *table goes through GuiAliasWord, so it stays
+ *    after the count store;
+ *  - the final test is written `cursor >= count`, which loads +0x60 first.
+ * Oracle: cmp_func_00348DA0 (cmp_248B50.c), bit-exact on real R5900.
+ */
 void GuiMenuListSetRows(GuiWidget *w, f32 *table) {
     f32 *end;
-    s32 count;
 
     *(f32 **)((char *)w + 0x68) = table;
     *(s32 *)((char *)w + 0xC0) = 0;
+    __asm__ __volatile__("");
     end = table + 0x50;
     if (0.0f < *table) {
-        count = *(s32 *)((char *)w + 0xC0);
-        while (1) {
+        do {
+            *(s32 *)((char *)w + 0xC0) += 1;
             table += 5;
-            *(s32 *)((char *)w + 0xC0) = count + 1;
-            if (*table <= 0.0f || (s32)end <= (s32)table) {
-                break;
-            }
-            count = *(s32 *)((char *)w + 0xC0);
-        }
+        } while (0.0f < ((GuiAliasWord *)table)->f && (s32)table < (s32)end);
     }
-    if (*(s32 *)((char *)w + 0xC0) <= *(s32 *)((char *)w + 0x60)) {
+    if (*(s32 *)((char *)w + 0x60) >= *(s32 *)((char *)w + 0xC0)) {
         *(s32 *)((char *)w + 0x60) = 0;
     }
 }
-#endif
 
 /* func_00348E10: set the +0xB8 / +0xBC field pair (a1 -> +0xB8, a2 -> +0xBC).
  * The ROM stores +0xBC first, then fills the jr delay slot with the +0xB8 store.
@@ -1483,33 +1486,44 @@ void func_0034B1E8(GuiWidget *w, s32 v) {
     *(s32 *)((char *)w + 0x0) = v;
 }
 
-/* func_0034B1F0: set the +0x4 target value; when it actually changes and the
- * player is in normal (Ratchet) mode, latch the previous value at +0x3FC and
- * arm the transition timers (+0x3F8 = 180, +0x3F4 = 300).
- * Best 90%: every instruction matches except the g_bPlayerMode load — the
- * original uses absolute `lui %hi / lbu %lo`, but under this unit's -G8 build the
- * pinned cc1 emits a gp-relative `lbu 0(gp)`. WALL: gp-relative vs absolute
- * global addressing. */
+/* g_bPlayerMode seen by cc1 as a 16-byte object. At -G8 cc1 then addresses it
+ * with a split %hi/%lo pair of its own instead of %gp_rel, and the scheduler
+ * can place the %hi half in a branch delay slot, as the ROM does in
+ * func_0034B1F0. The native build reads the scalar directly. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034B1F0);
+extern u8 g_bPlayerModeAbs[16] __asm__("g_bPlayerMode");
 #else
-/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
- * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
- * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
- * cc1 2.96-ee-001003-1): sdk29 90.00% / engine96 71.50%.
- * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 11/12 words differ;
- * frozen-.s census: 0 callee GPR saves, 0 fp saves.
- * Residual: DSLOT-ABS (the #7420/#7441 delay-slot addressing class, ruled on in #525) — NOT a C-level wall. Every word matches except the g_bPlayerMode load: the ROM splits the macro across the beq delay slot (lui %hi in the slot, lbu %lo after), while cc1 2.9 emits the whole one-insn macro INTO the slot. REFUTED LEVER (task #564): the FACT #7435 assembler-absolute model, __asm__(".extern g_bPlayerMode, 16"), makes it WORSE — 90.00% -> 74.17% sdk29 (tools/ee/.t564/src/22_a370_b1f0_abs.c). NOTE the fuzzy/raw gap: 90.00% fuzzy but 11/12 words differ raw. */
+#define g_bPlayerModeAbs (&g_bPlayerMode)
+#endif
+
+/*
+ * func_0034B1F0 - set a widget's +0x4 target value, arming a transition when
+ * it changes.
+ *
+ *   w  the widget
+ *   v  the new target value
+ * When v differs from the current +0x4 value and the player is in normal
+ * (Ratchet) mode (g_bPlayerMode == 0), the previous value is latched at +0x3FC
+ * and the transition timers are armed (+0x3F8 = 180, +0x3F4 = 300). +0x4 = v
+ * either way. No return.
+ *
+ * Byte-exact on the sdk29 arm (task #894; was 90.00% solo). The ROM splits the
+ * g_bPlayerMode load across the `beq`: `lui v0,%hi` in the delay slot, `lbu
+ * v1,%lo(v0)` after it. Through the gp-small declaration cc1 2.9 emits one
+ * `%gp_rel` lbu instead. The assembler-only `.extern g_bPlayerMode, 16`
+ * (#564) was worse, 74.17%, because cc1 still emits one macro insn. Only the
+ * C-level 16-byte view (g_bPlayerModeAbs) makes cc1 emit the split pair.
+ */
 void func_0034B1F0(GuiWidget *w, s32 v) {
     s32 old = *(s32 *)((char *)w + 0x4);
-    if (old != v && g_bPlayerMode == 0) {
+
+    if (old != v && g_bPlayerModeAbs[0] == 0) {
         *(s32 *)((char *)w + 0x3FC) = old;
         *(s32 *)((char *)w + 0x3F8) = 0xB4;
         *(s32 *)((char *)w + 0x3F4) = 0x12C;
     }
     *(s32 *)((char *)w + 0x4) = v;
 }
-#endif
 
 /* func_0034B220: GUI value/gauge update routine reading the D_1AE5E8/D_1AE5F8
  * tables (0x80 frame, 5 GPR + 2 fp callee saves). WALL: many callee saves —
