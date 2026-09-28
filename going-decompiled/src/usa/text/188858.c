@@ -759,39 +759,33 @@ s32 IsItemUnlockedAtProgress(s32 itemId, s32 progress) {
 /*
  * func_00289190(key): return 1 if `key` appears as the first word of any
  * {key,_} pair in D_240340 (stride 8, -2 sentinel), else 0.
+ *   key - item id to look for (NOTE #5658: D_240340 is the vendor-progress
+ *         {itemId, minProgress} table IsItemUnlockedAtProgress also scans)
+ *   returns 1 on a hit, 0 when the table is empty or the key is absent
  *
- * WALL (93.12%, register-colouring + sentinel CSE): with the explicit
- * pre-loop-load / do-while / re-load form
- *     s32 *p = D_240340; s32 cur = *p;
- *     if (cur != -2) do { cur = *p; p += 2; if (key==cur) return 1; cur = *p; }
- *                    while (cur != -2);
- *     return 0;
- * cc1 reproduces the original's exact branch/instruction layout. The only
- * residual delta is register allocation: the original keeps the loaded value in
- * $2 and materialises the -2 sentinel TWICE (once in $2 for the first-element
- * compare, once in $5 for the loop test), whereas -O2 CSEs the sentinel into a
- * single $2 and colours the loaded value into $5. The original is effectively
- * *less* optimised here (un-CSE'd constant) — not reachable from clean C at -O2.
- * Left INCLUDE_ASM. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_00289190);
-#else
+ * Byte-exact on sdk29 (task #1009), plain C, no device. The old WALL note here
+ * (93.12%; 98.44% with register pins in task #978) called the ROM's register
+ * choice unreachable from clean C: the ROM keeps the first-entry load AND the
+ * scan pointer both in $3, and materialises -2 twice ($2 for the first-entry
+ * compare, $5 for the loop test). Measured: writing the scan as an INDEX, not
+ * a pointer, gives both. The likely mechanism (inferred from the output, not
+ * traced in cc1): loop.c strength-reduces `D_240340[i * 2]` into a pointer
+ * whose initialisation is born in the loop preheader, after the first-entry
+ * value has died, so the two can share $3. Every pointer-form spelling tried
+ * (#978, #1009) left the scan pointer in $6.
+ */
 s32 func_00289190(s32 key) {
-    s32 *p = D_240340;
-    s32 cur = *p;
-    if (cur != -2) {
+    if (D_240340[0] != -2) {
+        s32 i = 0;
         do {
-            cur = *p;
-            p += 2;
-            if (key == cur) {
+            if (key == D_240340[i * 2]) {
                 return 1;
             }
-            cur = *p;
-        } while (cur != -2);
+            i++;
+        } while (D_240340[i * 2] != -2);
     }
     return 0;
 }
-#endif
 
 /* UpgradeWeaponToMax(itemId): select the item's "fully upgraded" weapon variant
  * and zero its accumulated XP. Returns 0 (no change) when the item's currently
