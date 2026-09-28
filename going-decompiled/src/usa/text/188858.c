@@ -229,8 +229,9 @@ extern s32 g_cinematicUnlockedFlags[];        /* cinematics-watched bitfield (0x
 /* Tables in other text/data segments. */
 extern s32 D_240340[];   /* {key, _} pairs (stride 8), -2 sentinel (0x240340) */
 extern s16 D_254E48[];   /* 0xAA rows of two s16 columns (bidirectional key<->value lookup, 0x254E48) */
-extern u8  D_259F38[];   /* 6-byte header + 0xA-stride {s16 key,...} records, -1 sentinel */
-extern u8  D_259CC0[];   /* same layout as D_259F38 */
+extern u8  D_00259F38[]; /* 0xA-stride records, s16 key at +6, -1 sentinel (0x259F38; the
+                            linker and the data label spell it D_00259F38) */
+extern u8  D_259CC0[];   /* same layout as D_00259F38 */
 typedef struct Rec2552B0 {
     s32 field00;         /* +0x00 */
     s32 field04;         /* +0x04 */
@@ -467,33 +468,77 @@ s32 func_00288B08(s32 key) {
 }
 
 /*
- * func_00288BB0(key): return 1 if `key` is present (as the first s16 of any
- * 0xA-stride record after a 6-byte header, -1 sentinel) in either D_259F38 or
- * D_259CC0, else 0.
- *
- * WALL (69.84%): logic exact, but the original materialises &D_259F38 /
- * &D_259CC0 once and reaches the +6 records by a displacement (lh 0x6(base) /
- * addiu base,0x6); our cc1 folds the +6 into the %lo relocation (one symbolic
- * address per access). The address-fold-vs-displacement wall. Left INCLUDE_ASM.
+ * One record of the D_00259F38 / D_259CC0 tables: 0xA bytes with the s16 key
+ * at +6. What the other 8 bytes hold is not established here.
+ */
+typedef struct ItemKeyRecord {
+    u8 unk0[6];
+    s16 key; /* +0x06, -1 terminates the table */
+    u8 unk8[2];
+} ItemKeyRecord;
+
+/*
+ * R5900_SHORT_LOOP_PAD_IN(v, p): a SCHEDULING DEVICE, not a statement about
+ * the machine (RULING #8435; same construct as R5900_SHORT_LOOP_PAD1 below,
+ * FACT #7937). It emits the one short-loop pad `nop` the ROM's assembler put
+ * before a backward branch closing a loop shorter than 6 instructions, which
+ * cc1 2.9 never emits. It ties by INPUT operands only: `v` is the value the
+ * branch tests and `p` the loop pointer. The `"+r"` form of PAD1 makes cc1
+ * reuse the tested value at the loop head and turn the branch into a `bnel`
+ * (measured on func_00288BB0, 83.87%). A no-op on the native build.
  */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_00288BB0);
+#define R5900_SHORT_LOOP_PAD_IN(v, p) \
+    __asm__ __volatile__(".set noreorder\n\tnop\n\t.set reorder" : : "r"(v), "r"(p))
 #else
+#define R5900_SHORT_LOOP_PAD_IN(v, p) ((void)0)
+#endif
+
+/*
+ * func_00288BB0(key): return 1 if `key` is the key of any record in
+ * D_00259F38 or, failing that, in D_259CC0 (see ItemKeyRecord), else 0.
+ *   key - item id to look for (compared against the sign-extended s16 key)
+ *   returns 1 on a hit, 0 when neither table holds it
+ *
+ * Byte-exact on sdk29 (task #1009). The old WALL note here (69.84%, and
+ * 89.00% in task #850) said the ROM materialises each table's address once and
+ * reaches the keys by displacement (`lh 0x6(base)`, `addiu base,0x6`), where
+ * cc1 folds the +6 into the %lo relocation. Writing the first test as
+ * `t->key` and starting the scan at `&t->key` gives exactly that. A separate
+ * pointer for each table gives the ROM's registers (base in $4, key moved to
+ * $5, the second base in $2). The second loop is 5 instructions, so the ROM
+ * carries one short-loop pad `nop` before its closing `bne`
+ * (R5900_SHORT_LOOP_PAD_IN, the scheduling device above). The first loop is 7
+ * instructions and has none.
+ */
 s32 func_00288BB0(s32 key) {
-    s16 *p;
-    for (p = (s16 *)(D_259F38 + 6); *p != -1; p = (s16 *)((u8 *)p + 0xA)) {
-        if ((s32)*p == key) {
-            return 1;
-        }
+    ItemKeyRecord *table = (ItemKeyRecord *)D_00259F38;
+    if (table->key != -1) {
+        s16 *p = &table->key;
+        do {
+            if (key == *p) {
+                return 1;
+            }
+            p += sizeof(ItemKeyRecord) / sizeof(s16);
+        } while (*p != -1);
     }
-    for (p = (s16 *)(D_259CC0 + 6); *p != -1; p = (s16 *)((u8 *)p + 0xA)) {
-        if ((s32)*p == key) {
-            return 1;
+    {
+        ItemKeyRecord *table2 = (ItemKeyRecord *)D_259CC0;
+        if (table2->key != -1) {
+            s16 *p = &table2->key;
+            s32 cur;
+            do {
+                if (key == *p) {
+                    return 1;
+                }
+                p += sizeof(ItemKeyRecord) / sizeof(s16);
+                cur = *p;
+                R5900_SHORT_LOOP_PAD_IN(cur, p);
+            } while (cur != -1);
         }
     }
     return 0;
 }
-#endif
 
 extern s32 func_00288BB0(s32 id); /* item-validity check (D_00259F38 lookup) */
 extern u8 D_25E308[];             /* stride-0xA record table, s16 id at +0x6, -1 terminated */
