@@ -100,6 +100,14 @@
 #            steps, and pinning the tip is the easiest mistake a seat told to
 #            "pin the base" can make — if it passed, the instruction would
 #            manufacture false confidence.
+#            NO C CHANGE (task #1034, watcher-2's ruling Q1 on FACT ledger-
+#            28740): a base with ANOTHER sha whose NATIVE inputs (src/,
+#            include/, tools/native/ but check.sh, which both arms take from
+#            the tip) equal HEAD's, on a tree with none of them dirty, prints
+#            `WARN NATIVE: no C change` — NOT counted and NOT a FAIL under
+#            --strict (a tools-only landing has nothing native to regress), but
+#            its row proves nothing and must not be quoted as a control. A base
+#            == HEAD by sha stays the WARN/strict FAIL above.
 #            FAILS naming each unit that fails at the tip and passed at the
 #            base, or is absent at the base; a unit failing on BOTH arms is
 #            tolerated and listed (a pre-existing failure must not turn the row
@@ -544,7 +552,7 @@ native_renames() {
 # not an env var: only --selftest's vacuous arm passes it, to reach the
 # base == HEAD case through the same default resolution a real run takes).
 check_native() {
-  local tip=${1:-$ROOT} basetree=${2:-} baseref="(given tree ${2:-})" upstream=${3:-origin/master} vacuous=""
+  local tip=${1:-$ROOT} basetree=${2:-} baseref="(given tree ${2:-})" upstream=${3:-origin/master} vacuous="" samein=""
   say "== NATIVE: tools/native/check.sh over every TARGET_NATIVE unit, base-relative — FAIL on a unit failing at the tip that passed at (or is absent from) the base, and on a unit that LEFT the population (in the base's, not the tip's; a byte-identical rename WITHIN a region is paired, not a departure) unless a Native-Left commit trailer names it and a reason. COMPILE-ONLY: green does NOT mean the native build links"
   if [ "$NATIVE_LEFT_FROM_ENV" != 1 ] && [ -n "${LANDING_GATE_NATIVE_LEFT:-}" ]; then
     warn "NATIVE: \$LANDING_GATE_NATIVE_LEFT is set and IGNORED — it is honoured only by --selftest's scratch arms (task #963); excuse a departure with a \`Native-Left: <region>/<path>.c <reason>\` trailer in a commit of the landing, which is reviewable and permanent"
@@ -559,8 +567,8 @@ check_native() {
     # --strict, task #1011). A pin equal to HEAD is NOT exempt (task #1011):
     # an explicit pin to the tip is the same self-comparison with extra steps,
     # and it is the easiest mistake a seat told to "pin the base" can make.
+    local nd; nd=$(git status --porcelain --no-renames -- going-decompiled/src going-decompiled/include tools/native | wc -l | tr -d ' ')
     if [ "$baseref" = "$(git rev-parse HEAD)" ]; then
-      local nd; nd=$(git status --porcelain --no-renames -- going-decompiled/src going-decompiled/include tools/native | wc -l | tr -d ' ')
       if [ "$nd" != 0 ]; then
         say "     base == HEAD ($baseref): the row compares only the $nd uncommitted path(s) under going-decompiled/src, going-decompiled/include, tools/native"
       elif [ -n "${LANDING_GATE_NATIVE_BASE:-}" ]; then
@@ -568,6 +576,14 @@ check_native() {
       else
         vacuous=1; warn "NATIVE: base == tip, VACUOUS — the default base merge-base(HEAD, $upstream) is HEAD $baseref itself (the tip has already reached $upstream), so both arms compile one tree and neither the regression rule nor the shrink rule can fire; a post-landing validator pins the landing's parent: LANDING_GATE_NATIVE_BASE=<parent sha> (task #992)"
       fi
+    # task #1034 (watcher-2's ruling Q1 on FACT ledger-28740): a base with a
+    # different sha but the same NATIVE inputs is the same self-comparison. The
+    # inputs are what the base arm reads — src/, include/, tools/native/ minus
+    # check.sh, which native_scan takes from the tip for both arms. A WARN that
+    # is not counted: a tools-only landing has nothing native to regress, so it
+    # must pass --strict; the line only stops its row being quoted as a control.
+    elif [ "$nd" = 0 ] && git diff --quiet "$baseref" HEAD -- going-decompiled/src going-decompiled/include tools/native ':(exclude)tools/native/check.sh'; then
+      samein=1; say "WARN NATIVE: no C change — the base $baseref and HEAD have identical NATIVE inputs (going-decompiled/src, going-decompiled/include, tools/native but check.sh, which both arms take from the tip), so both arms compile the same C and this row proves nothing; not counted, and not a FAIL under --strict (task #1034, ruling Q1 on FACT ledger-28740) — to exercise the row, pin a base whose C differs"
     fi
     basetree="$OUT/native_base"; rm -rf "$basetree"; mkdir -p "$basetree"
     git archive "$baseref" going-decompiled/src going-decompiled/include tools/native | tar -x -C "$basetree" \
@@ -589,7 +605,7 @@ check_native() {
     fail "NATIVE: $(printf '%s\n' "$regress" | wc -l | tr -d ' ') unit(s) fail to compile at the tip and passed at (or are absent from) the base: $(printf '%s ' $regress)"
     local u; for u in $regress; do say "       $u:"; /usr/bin/grep -A3 "^FAIL: going-decompiled/src/$u\$" "$t.log" | sed -n '2,4s/^ */         /p'; done
   else
-    ok "NATIVE: no unit fails at the tip that passed at the base ($tp of $((tp+tf)) compile; compile-only, not a link)${vacuous:+ — VACUOUS: base == tip, this measured nothing}"
+    ok "NATIVE: no unit fails at the tip that passed at the base ($tp of $((tp+tf)) compile; compile-only, not a link)${vacuous:+ — VACUOUS: base == tip, this measured nothing}${samein:+ — NO C CHANGE: base and tip NATIVE inputs identical, this row proves nothing}"
   fi
   [ -n "$tolerated" ] && say "     failing on BOTH arms (pre-existing, tolerated): $(printf '%s ' $tolerated)"
   [ -n "$fixed" ] && say "     failing at the base only (fixed or removed at the tip): $(printf '%s ' $fixed)"
@@ -627,7 +643,7 @@ check_native() {
       [ -n "$hint" ] && say "     git diff -M pairs these as renames (hint only — an EDITED or CROSS-REGION rename is not paired; name it in a Native-Left trailer): $hint"
     fi
   else
-    ok "NATIVE: no unit left the population unexcused ($(printf '%s\n' $left | /usr/bin/grep -c . || true) left, each named by a Native-Left override with a reason; base $((bp+bf)) -> tip $((tp+tf)) units; per region, pass/units: base $(native_region_counts "$b") -> tip $(native_region_counts "$t"))${vacuous:+ — VACUOUS: base == tip, this measured nothing}"
+    ok "NATIVE: no unit left the population unexcused ($(printf '%s\n' $left | /usr/bin/grep -c . || true) left, each named by a Native-Left override with a reason; base $((bp+bf)) -> tip $((tp+tf)) units; per region, pass/units: base $(native_region_counts "$b") -> tip $(native_region_counts "$t"))${vacuous:+ — VACUOUS: base == tip, this measured nothing}${samein:+ — NO C CHANGE: base and tip NATIVE inputs identical, this row proves nothing}"
   fi
   for u in $excused; do say "     left the population, overridden: $(awk -F'\t' -v u="$u" '$1 == u && $2 != "" { printf "%s — %s [%s]", $1, $2, $3; exit }' "$ovr")"; done
   unused=$(awk -F'\t' '{ print $1 }' "$ovr" | LC_ALL=C sort -u | LC_ALL=C comm -23 - <(printf '%s\n' $left | LC_ALL=C sort -u))
@@ -1075,6 +1091,7 @@ selftest() {
   selftest_gmodel "$T" || bad=1
   selftest_native "$T" || bad=1
   selftest_dirty "$T" || bad=1
+  selftest_dirty_gate "$T" || bad=1
 
   say "-- (14) the real gate on this tree (--no-build, the build above) must PASS"
   STRICT=0
@@ -1195,6 +1212,48 @@ selftest_dirty() {
   return $b
 }
 
+# selftest_dirty_gate OUTDIR — arm (20), callable on its own after sourcing
+# this file (`. tools/ee/landing_gate.sh; region_vars usa; selftest_dirty_gate
+# /tmp/x`). Task #1034, watcher-2's ruling Q2 on FACT ledger-28741: arm (19)
+# tests check_dirty and gate_verdict in isolation, so deleting the check_dirty
+# call from run_gate (mutant M5) passes it. This arm runs the REAL run_gate,
+# check_dirty and gate_verdict --strict inside a scratch git repo under OUTDIR
+# seeded with a modified tracked file and an untracked one, and requires the
+# verdict `FAIL (dirty)` naming both; the same repo clean must PASS. Every
+# other row is stubbed in the subshell (it needs extracted/, a build and the
+# VM; arm (14) runs those for real) — so `FAIL (dirty)` must be the WHOLE
+# verdict, and the clean control proves the stubs cannot fail it on their own.
+selftest_dirty_gate() {
+  local T="$1" b=0 rc; local D="$T/dirty_gate"; rm -rf "$D"; mkdir -p "$D/repo"
+  say "-- (20) DIRTY WIRING (#1034): the real run_gate --strict in a scratch repo seeded with 2 dirty paths (other rows stubbed) -> verdict 'FAIL (dirty)' naming both, rc 1; the same repo clean -> 'PASS', rc 0"
+  git -C "$D/repo" init -q && printf 't1034 tracked\n' > "$D/repo/tracked.txt" && git -C "$D/repo" add tracked.txt \
+    && git -C "$D/repo" -c user.name=landing_gate -c user.email=selftest@invalid commit -q -m 'selftest (20) scratch' \
+    || { say "SELFTEST-BROKEN: (20) could not create its scratch repo in $D/repo"; return 1; }
+  dirty_gate_run() {  # dirty_gate_run OUTFILE — the real run_gate in $D/repo, rows other than DIRTY stubbed
+    ( cd "$D/repo" || exit 2
+      for f in check_flags split_inputs check_shadow check_orphans check_libgcc check_gmodel check_native do_build check_tree measure_row check_row check_noprovide; do
+        eval "$f() { say \"     (arm 20 stub: $f)\"; }"
+      done
+      region_vars() { REGION=$1; OUT="$D/out"; mkdir -p "$OUT"; }
+      FAILED=0; WARNED=0; DIRTY_FAILED=0; STRICT=0
+      run_gate "$REGION" --no-build --strict ) > "$1" 2>&1
+  }
+  printf 't1034 modified\n' >> "$D/repo/tracked.txt"; printf 'x\n' > "$D/repo/t1034_untracked.txt"
+  dirty_gate_run "$D/dirty.txt"; rc=$?
+  if [ "$rc" = 1 ] && /usr/bin/grep -qx "==== selftest inner gate \[$REGION\] (NOT a landing verdict): FAIL (dirty)" "$D/dirty.txt" \
+     && /usr/bin/grep -q '^FAIL DIRTY: 2 uncommitted path(s)' "$D/dirty.txt" && /usr/bin/grep -qx '        M tracked.txt' "$D/dirty.txt" && /usr/bin/grep -qx '       ?? t1034_untracked.txt' "$D/dirty.txt"; then
+    ok "fired (20) real run_gate --strict, 2 dirty paths: rc $rc, '$(/usr/bin/grep "^==== selftest inner gate \\[$REGION\\] (NOT a landing verdict): " "$D/dirty.txt" | sed 's/.*verdict): //')', both paths named"
+  else say "SELFTEST-FAIL (20) the real run_gate on a dirty scratch repo did not read 'FAIL (dirty)' (rc $rc):"; show < <(/usr/bin/grep -E '^(OK|FAIL|WARN|====)' "$D/dirty.txt" | sed 's/^/  inner| /'); b=1; fi
+  git -C "$D/repo" checkout -q -- tracked.txt; rm -f "$D/repo/t1034_untracked.txt"
+  dirty_gate_run "$D/clean.txt"; rc=$?
+  if [ "$rc" = 0 ] && /usr/bin/grep -qx "==== selftest inner gate \[$REGION\] (NOT a landing verdict): PASS" "$D/clean.txt" && /usr/bin/grep -q '^OK   DIRTY: 0 uncommitted paths' "$D/clean.txt"; then
+    ok "control (20) the same scratch repo clean: rc $rc, 'PASS' — the stubs fail nothing on their own"
+  else say "SELFTEST-FAIL (20) the clean scratch repo did not PASS (rc $rc):"; show < <(/usr/bin/grep -E '^(OK|FAIL|WARN|====)' "$D/clean.txt" | sed 's/^/  inner| /'); b=1; fi
+  rm -rf "$D"
+  FAILED=0; WARNED=0; DIRTY_FAILED=0; STRICT=0
+  return $b
+}
+
 # selftest_native OUTDIR — arm (18), callable on its own after sourcing this
 # file (`. tools/ee/landing_gate.sh; region_vars usa; selftest_native /tmp/x`).
 # Every arm runs check_native on scratch copies (src/ + include/ +
@@ -1206,7 +1265,7 @@ selftest_dirty() {
 # basename-keyed row reads {015180} on both arms and passes.
 selftest_native() {
   local T="$1" b=0; local N="$T/native"; rm -rf "$N"; mkdir -p "$N"
-  say "-- (18) NATIVE (#923): scratch tip/base trees — a seeded C error, A2's removed 198B58 guard, a usa-vs-eu basename collision, a new failing unit, and a unit leaving the population (deleted, override without reason, token removed, renamed WITH an edit, moved byte-identical to ANOTHER region) must each FAIL naming the unit; a failure on both arms, a departure with a Native-Left override + reason, a byte-identical rename within its region, a cross-region move with a Native-Left override + reason, and the clean pair must pass; the env override outside a scratch arm must excuse nothing and WARN (FAIL under --strict); the default base resolving to HEAD must print 'NATIVE: base == tip, VACUOUS' as a WARN (FAIL under --strict), and so must a base pinned explicitly to HEAD (#1011); the per-region counts must show a usa -1 / eu +1 move under an unchanged total, and sum to the totals on the real tree (task #1006); then the real tree against its real base"
+  say "-- (18) NATIVE (#923): scratch tip/base trees — a seeded C error, A2's removed 198B58 guard, a usa-vs-eu basename collision, a new failing unit, and a unit leaving the population (deleted, override without reason, token removed, renamed WITH an edit, moved byte-identical to ANOTHER region) must each FAIL naming the unit; a failure on both arms, a departure with a Native-Left override + reason, a byte-identical rename within its region, a cross-region move with a Native-Left override + reason, and the clean pair must pass; the env override outside a scratch arm must excuse nothing and WARN (FAIL under --strict); the default base resolving to HEAD must print 'NATIVE: base == tip, VACUOUS' as a WARN (FAIL under --strict), and so must a base pinned explicitly to HEAD (#1011); a base pinned to ANOTHER sha with HEAD's NATIVE inputs must print 'WARN NATIVE: no C change', counted nowhere, while a base whose C differs must stay a normal row (#1034); the per-region counts must show a usa -1 / eu +1 move under an unchanged total, and sum to the totals on the real tree (task #1006); then the real tree against its real base"
   native_tree() {  # native_tree DIR — a fresh scratch copy of the check.sh inputs
     rm -rf "$1"; mkdir -p "$1/going-decompiled" "$1/tools"
     cp -R going-decompiled/src going-decompiled/include "$1/going-decompiled/"; cp -R tools/native "$1/tools/"
@@ -1321,6 +1380,31 @@ selftest_native() {
         ok "fired (r) base pinned explicitly to HEAD, STRICT=$vst: $(/usr/bin/grep -E '^(WARN|FAIL\(strict\)) NATIVE' "$N/vacuous_pinned_$vst.txt" | cut -c1-60)... (FAILED=$FAILED)"
       else say "SELFTEST-FAIL (r) base pinned explicitly to HEAD, STRICT=$vst (FAILED=$FAILED WARNED=$WARNED):"; show < "$N/vacuous_pinned_$vst.txt"; b=1; fi
     done
+    # (u) task #1034, ruling Q1: a pin to ANOTHER sha with HEAD's tree (#1022's
+    # probe) is the same self-comparison -> `WARN NATIVE: no C change`, counted
+    # nowhere, so it passes --strict; (u') the anti-overreach control: a pin
+    # whose C differs by one appended comment line is a normal row, no such line.
+    # Both bases are commit objects only — no ref, no index, no working-tree edit.
+    local syn cre ublob idx="$N/u_index"
+    syn=$(git commit-tree 'HEAD^{tree}' -p HEAD -m 'landing_gate selftest (u): HEAD tree, another sha')
+    ublob=$({ git cat-file blob "HEAD:going-decompiled/src/usa/cod/015180.c"; printf '\n/* t1034 selftest (u) */\n'; } | git hash-object -w --stdin)
+    rm -f "$idx"; GIT_INDEX_FILE="$idx" git read-tree HEAD && GIT_INDEX_FILE="$idx" git update-index --cacheinfo "100644,$ublob,going-decompiled/src/usa/cod/015180.c" \
+      && cre=$(git commit-tree "$(GIT_INDEX_FILE="$idx" git write-tree)" -p HEAD -m 'landing_gate selftest (u): one C comment line appended'); rm -f "$idx"
+    if [ -z "$syn" ] || [ -z "$cre" ] || [ "$(git rev-parse "$syn^{tree}")" != "$(git rev-parse 'HEAD^{tree}')" ] || git diff --quiet "$cre" HEAD -- going-decompiled/src; then
+      say "SELFTEST-BROKEN: (u) could not build its two probe bases (syn '$syn', C-change '$cre')"; b=1
+    else
+      for vst in 1 0; do
+        FAILED=0; WARNED=0; STRICT=$vst; LANDING_GATE_NATIVE_LEFT= LANDING_GATE_NATIVE_BASE=$syn check_native > "$N/samein_$vst.txt"; STRICT=0
+        if [ "$FAILED" = 0 ] && [ "$WARNED" = 0 ] && /usr/bin/grep -q "^WARN NATIVE: no C change — the base $syn and HEAD have identical NATIVE inputs" "$N/samein_$vst.txt" \
+           && [ "$(/usr/bin/grep -c 'NO C CHANGE: base and tip NATIVE inputs identical' "$N/samein_$vst.txt" || true)" = 2 ] && ! /usr/bin/grep -q VACUOUS "$N/samein_$vst.txt"; then
+          ok "fired (u) base pinned to $(git rev-parse --short "$syn") (another sha, HEAD's tree), STRICT=$vst: 'WARN NATIVE: no C change', not counted (FAILED=0 WARNED=0)"
+        else say "SELFTEST-FAIL (u) base pinned to a tree-identical sha, STRICT=$vst (FAILED=$FAILED WARNED=$WARNED):"; show < "$N/samein_$vst.txt"; b=1; fi
+      done
+      FAILED=0; WARNED=0; STRICT=1; LANDING_GATE_NATIVE_LEFT= LANDING_GATE_NATIVE_BASE=$cre check_native > "$N/cchange.txt"; STRICT=0
+      if [ "$FAILED" = 0 ] && [ "$WARNED" = 0 ] && /usr/bin/grep -q "^     tip pass=[0-9]* fail=0; base $cre pass=[1-9]" "$N/cchange.txt" && ! /usr/bin/grep -qE 'no C change|NO C CHANGE|VACUOUS' "$N/cchange.txt"; then
+        ok "control (u') base pinned to $(git rev-parse --short "$cre") (usa/cod/015180.c differs by one comment line), STRICT=1: a normal row, no 'no C change' line: $(/usr/bin/grep -E '^     tip ' "$N/cchange.txt" | sed 's/^ *//')"
+      else say "SELFTEST-FAIL (u') a base whose C differs was not a normal row (FAILED=$FAILED WARNED=$WARNED):"; show < "$N/cchange.txt"; b=1; fi
+    fi
   fi
   # (f) clean pair; (g) the real tree against its real base
   native_arm "control (f) clean pair" "$N/base" "$N/base" 0 '^OK   NATIVE: no unit fails'
