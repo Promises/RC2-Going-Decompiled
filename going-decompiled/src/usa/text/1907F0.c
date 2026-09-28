@@ -175,23 +175,29 @@ s32 func_00290EA0(void) {
  * prologue/return — not compiler output, no C can produce it. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1907F0", func_00290EE0);
 
-/* func_00290EE8: request the full-screen tint to hold/raise this frame and
- * return 1 (`D_1A9018 = 1; return 1;`). Best attempt 63% - the original
- * (later SN) cc1 reuses ONE `li v0,1` for both the store and the return
- * value; the pinned cc1 always materialises two (no source shape or flag
- * found that shares them; a volatile re-read shape adds an lw instead).
- * Left as INCLUDE_ASM. */
+/**
+ * func_00290EE8 - request the full-screen tint to hold/raise this frame.
+ *
+ * Sets the tint hold-this-frame flag D_1A9018 to 1 and returns 1.
+ *
+ * Byte-exact on the sdk29 arm (task #895). The ROM materialises ONE
+ * `li v0,1` for both the store and the return value; cc1 2.9 left to itself
+ * loads the constant twice (li v1 for the store, li v0 for the return). Binding
+ * the value to $2 (empty on native) makes the store read the return register,
+ * which gives the ROM's `li v0,1; jr ra; sw v0,%gp_rel(D_1A9018)`. The old note
+ * here ("no source shape shares them") was a lever that had not been tried.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1907F0", func_00290EE8);
+#define EE8_IN_V0 __asm__("$2")
 #else
-/* TODO(match): functional equivalent - not byte-exact; the original cc1
- * shares one `li v0,1` for both the store and the return value, the pinned
- * cc1 materialises two. */
-s32 func_00290EE8(void) {
-    D_1A9018 = 1;
-    return 1;
-}
+#define EE8_IN_V0
 #endif
+s32 func_00290EE8(void) {
+    register s32 result EE8_IN_V0 = 1;
+
+    D_1A9018 = result;
+    return result;
+}
 
 /**
  * Per-frame full-screen tint pump: raise the tint level toward 10 while
