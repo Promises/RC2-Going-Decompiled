@@ -154,6 +154,15 @@ cd "$FIXROOT"
 # the SN ee-as left the slot empty, while GNU as 2.40 swaps the lq/sq into
 # it. We pin the return in a noreorder/nop wrapper exactly when the directly
 # preceding instruction is an lq/sq.
+#
+# The same pin holds a `mflo`/`mfhi` out of the return slot (task #919, FACT
+# #8243, FACT #8203): cc1 emits `mflo $2; #nop; j $31` in reorder mode and GNU
+# as 2.40 swaps the mflo into the slot, while the ROM keeps `mflo; jr $31; nop`
+# in all three such tails (USA text/178E88 func_0027A0D0, cod/0321A0
+# func_00133988; EU cod/0321A0 func_001339E8) and has no `jr $31; mflo/mfhi`
+# anywhere (0 in USA and EU, counted on the decoded ROM words). Not extended
+# to other branches or to mflo1/mfhi1: the ROM has no mf* in any branch slot
+# either, but only the return tail has a measured function behind it.
 # (cc1 is a Win32 PE - its .s lines end in CRLF, hence the \r-stripping.)
 if [ "$GFLAG" = "-G8" ]; then
   sed -E -f "$MOVEFIX" "$UNIT_S" | tr -d '\r' | awk '
@@ -225,8 +234,8 @@ if [ "$GFLAG" = "-G8" ]; then
         volpend = 0; prevcop = 0
         next
       }
-      # 128-bit store/load pin (see header): SN-as never swapped an lq/sq
-      # into a reorder-mode return slot.
+      # 128-bit store/load and mflo/mfhi pin (see header): SN-as never
+      # swapped an lq/sq or an mflo/mfhi into a reorder-mode return slot.
       if (qpend && $0 ~ /^\tj\t\$31[ \t]*$/) {
         print "\t.set\tnoreorder"; print; print "\tnop"; print "\t.set\treorder"
         qpend = 0; prevcop = 0
@@ -289,7 +298,7 @@ if [ "$GFLAG" = "-G8" ]; then
     /^\tmov[nz]\t\$/ { pendmov = $0; pmst = 0; next }
     /^\t/ {
       if ($0 !~ /^\t\.|^\t#/) volpend = 0
-      if ($0 !~ /^\t\.|^\t#|^\t[ \t]*$/) qpend = ($0 ~ /^\t(lq|sq)[ \t]/)
+      if ($0 !~ /^\t\.|^\t#|^\t[ \t]*$/) qpend = ($0 ~ /^\t(lq|sq|mflo|mfhi)[ \t]/)
     }
     # SN-as mtc1 write-back hazard (proven by the original bytes of
     # text/1A8180 func_002A8600 / func_002A87A8): an mtc1 directly followed
