@@ -4280,8 +4280,9 @@ void func_002AD8B8(Moby *moby, s16 *list, s16 cap) {
  * re-reading list[0] in the loop test gives the branch-likely count reload.
  * The earlier "scan-loop scheduling wall" note was wrong on both counts.
  * The volatile is a codegen device, not a claim that g_mobyTableBase changes
- * asynchronously under this loop (FACT #8380; kept as is by watcher-2's ruling
- * on task #946). Its job is the per-iteration reload. #8380 found three
+ * asynchronously under this loop (FACT #8380; RULING #8404, retired by a
+ * non-volatile byte-exact spelling or by a concurrent writer). Its job is the
+ * per-iteration reload. #8380 found three
  * non-volatile spellings that all hoist the load and do not match; it does not
  * establish why the ROM compiler did not hoist. The object is genuinely
  * mutable: SwapMobyTableContext (188858.c) stores the HUD base into it through

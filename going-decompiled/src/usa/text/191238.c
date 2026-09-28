@@ -4515,7 +4515,9 @@ extern s32  *g_pMapBlipList;           /* 0x1C4F40 blip records, 0x28 bytes each
 extern s32  *g_pMapBitmapBuffer;       /* 0x1C4F28 discovered-area bitmap */
 extern void *g_pHudIconMap;            /* 0x1B1810 */
 extern void *g_pHudTextureSlots;       /* 0x1B1814 */
-extern u32   g_weaponUpgradeLevel[];   /* 0x139A34 per-weapon upgrade level, stride 0x10 (word view) */
+extern u32   g_weaponUpgradeLevel[];   /* 0x139A34 misnamed: per-level map-blip table, not weapon
+                                        * upgrades (FACT #8397). State word of each stride-0x10
+                                        * blip record (word view), indexed by g_pMapBlipList. */
 extern f32   g_flHeroPos[];            /* 0x189EA0 hero world pos (== g_soundBankHandlesBlk + 0x80) */
 
 extern s32   func_0028EDF0();          /* map/HUD tile tex lookup (2 or 5 args per callsite) */

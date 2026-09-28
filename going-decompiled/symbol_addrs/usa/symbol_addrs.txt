@@ -420,13 +420,13 @@ g_saveFileFmt = 0x001A79D8; // CONFIRMED - "/<dir>/save%d.bin" per-slot save fil
 // === Track-B cinematics/bonus-unlock + progress-condition + cheats menu (USA, cheat-pnach-anchored, strong EU anchors). ===
 g_cinematicUnlockedFlags = 0x00139768; // CONFIRMED - cinematics-watched/unlocked bitfield (256 bits, id lt 0xb1), set by PlayCinematic/PlayBonusMovie, read by EvaluateProgressCondition case 9. Cheat "Unlock All Cinematics" writes 0x139768..0x139784
 g_bonusUnlockFlags = 0x00139780; // CONFIRMED - bonus-content unlock flag words (making-of/credits/sketchbook), bits set by OnCinematicComplete for reel ids 0xab/0xad/0xaf
-g_weaponUpgradeLevel = 0x00139A34; // CONFIRMED - per-weapon upgrade-level array (stride 0x10, index le 0x71), read by EvaluateProgressCondition case4 have / case5 upgraded. Distinct from the 0x13988C weapon-XP array
+g_weaponUpgradeLevel = 0x00139A34; // misnamed - per-level map-blip table, not weapon upgrades (FACT #8397). The state word at +0xC of the stride-0x10 record at 0x139A28 (index le 0x71), read by EvaluateProgressCondition case4 (nonzero) / case5 (>= 2), MapDraw and func_0029ECE0. Name kept, bound in committed asm. Distinct from the 0x13988C weapon-XP array
 PlayCinematic = 0x002EC640; // CONFIRMED - sets g_cinematicUnlockedFlags bit id (id lt 0xb1) then streams+plays the cinematic reel. Primary unlock writer, EU anchor
 PlayBonusMovie = 0x002ECC48; // CONFIRMED - secondary unlock writer (same bit-set) for bonus/credits reels via table 0x14b544 + GS texture transfer
 PlayBonusReelWithGameLoop = 0x002ECAC8; // CONFIRMED - PlayCinematic(id) then runs the in-game frame loop until state DAT_001a8bb0 leaves 2
 OnCinematicComplete = 0x002ED018; // CONFIRMED - writer of g_bonusUnlockFlags 0x139780/0x139784 + counters, dispatches on finished reel id, chains next reel
 MapCinematicIdToIndex = 0x002EFE68; // CONFIRMED - remaps a cinematic id to a packed asset-table index (table 0x1ad0b0), used by PlayCinematic/PlayBonusMovie
-EvaluateProgressCondition = 0x0029E808; // CONFIRMED - generic unlock-condition evaluator, reads platinum-bolt 0x19B278 / cinematics 0x139768 / weapon-upgrade 0x139A34 flags plus the map path. High-value EU anchor
+EvaluateProgressCondition = 0x0029E808; // CONFIRMED - generic unlock-condition evaluator, reads platinum-bolt 0x19B278 / cinematics 0x139768 / map-blip state 0x139A34 (misnamed g_weaponUpgradeLevel, FACT #8397) plus the map path. High-value EU anchor
 UpdateLevelObjectiveStates = 0x0029E668; // CONFIRMED - walks the current-level objective list (head table D_258B20 indexed by MapCache.currentLevel - LevelObjective stride 0x28) scoring each via EvaluateProgressCondition, stores state at +0x24 (asm-proven 2026-06-25, prior 0x14/+0x12 was a guess)
 GatherActiveObjectives = 0x0029E960; // CONFIRMED - collects active (state nonzero) objective ids/labels from the same table for the on-screen objectives list
 g_platinumBoltFlags = 0x0019B278; // CONFIRMED - per-platinum-bolt collected flags (40 total), read by CountPlatinumBolts + EvaluateProgressCondition case8. Cheat "All Platinum Bolts" writes here

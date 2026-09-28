@@ -193,11 +193,16 @@ extern s32 func_0033B720(void *widget); /* GUI popup-poll method */
 extern u8  g_abLevelAvailableFlags[]; /* 0x1A7BD0 per-level available flag (case 1) */
 extern u8  g_inventoryOwned[];        /* 0x1A7B00 per-item have-flag (case 2) */
 extern u8  g_inventoryNewFlag[];      /* 0x1A7B38 per-item newly-acquired flag (case 3) */
-extern u8  D_1395B8[];                /* 0x1395B8 dialog/story flag byte-array (case 6) */
+extern u8  D_1395B8[];                /* 0x1395B8 progress flag byte-array (cases 6 and 10;
+                                       * what the flags mean is undetermined) */
 extern u8  g_platinumBoltFlags[];     /* 0x19B278 per-platinum-bolt collected flag (case 9) */
 extern s32 g_mapCurrentLevel ROM_SPLIT; /* 0x1C5150 current map level id (case 10) */
-extern s32 func_002FCEA0(s32 level, s32 bitIndex); /* map-progress predicate (case 10
-                                       * callee). asm 0x2FCEA0 saves $5 in the delay slot
+extern s32 func_002FCEA0(s32 level, s32 bitIndex); /* case 10 callee: tests bit
+                                       * `bitIndex` of D_1395B8[the byte its level keys to
+                                       * via the table at 0x264F30] and WRITES THE MASKED
+                                       * BYTE BACK, clearing the other bits, so it is not a
+                                       * pure predicate (FACT #8398).
+                                       * asm 0x2FCEA0 saves $5 in the delay slot
                                        * of the jal and uses it as the sllv SHIFT AMOUNT. */
 
 /* One per-level objective record (stride 0x28) walked by
@@ -239,14 +244,23 @@ extern u8 g_pRainHeightmap[]; /* 0x1B19A0 (byte-addressed for the +0x34 scratch)
 
 extern u8 g_levelVisitedMarkers[]; /* 0x1A7BF0 per-level visited byte markers */
 
-/* Per-weapon upgrade record: EvaluateProgressCondition cases 4/5 index a stride-
- * 0x10 table based at 0x139A28 and read the upgrade-level field at +0xC (that
- * field's symbol is g_weaponUpgradeLevel = 0x139A34). */
+/* MISNAMED: this is a per-level MAP-BLIP record, not a weapon-upgrade record
+ * (FACT #8397). The names are kept because EvaluateProgressCondition is matched
+ * and g_weaponUpgradeLevel is bound in committed asm; a rename would break both.
+ * EvaluateProgressCondition cases 4/5 index this stride-0x10 table at 0x139A28
+ * (114 entries) and read the s32 state at +0xC (symbol g_weaponUpgradeLevel =
+ * 0x139A34). func_00298A00 fills the current level's slice of indices (bounds
+ * from D_264DD0): +0/+4 get an object's +0x10/+0x14 floats, the x/y pair the
+ * map projects, and +8 gets a copy of its +0xF8 float, which is not z
+ * (NOTE #8405). MapDraw bumps the icon's sprite variant when state bit 1 is
+ * set, and func_0029ECE0 zeroes the icon's +0x24 when state bit 0 is clear. What the blips are, and who writes the state, is
+ * undetermined. The game's real weapon-upgrade level is GetWeaponUpgradeLevel
+ * (g_weaponTable). */
 typedef struct WeaponUpgradeRecord {
-    s32 _pad0[3];   /* 0x0 */
-    s32 upgradeLevel; /* 0xC - level; 0 = not started, >=2 = fully upgraded */
+    s32 _pad0[3];   /* 0x0 map x/y at +0/+4, a copy of an object's +0xF8 at +8 */
+    s32 upgradeLevel; /* 0xC - blip state (misnamed), not an upgrade level */
 } WeaponUpgradeRecord;
-extern WeaponUpgradeRecord D_139A28[]; /* 0x139A28 per-weapon upgrade table (stride 0x10) */
+extern WeaponUpgradeRecord D_139A28[]; /* 0x139A28 per-level map-blip table (stride 0x10) */
 
 /* One entry of a save-section descriptor table. The serialized layout each
  * entry contributes is an 8-byte header { tag, len } followed by `len` payload
@@ -2505,12 +2519,19 @@ s32 UpdateLevelObjectiveStates(void) {
 /* EvaluateProgressCondition(cond, arg): evaluate one progress/unlock predicate.
  * `cond` is a 16-bit selector (sign-extended); `arg` is the per-case operand
  * (an index, a function pointer for case 7, or a packed level/bit field). Each
- * case returns a 0/1 truth value (case 10 returns the map predicate verbatim).
+ * case returns a 0/1 truth value (case 10 returns func_002FCEA0's verbatim).
  * Any cond outside [0,11] returns 0.
- * Cases: 0 always, 1 level available, 2 item owned, 3 item NEW, 4 weapon
- * upgrade started, 5 weapon upgrade complete, 6 dialog/story flag byte, 7 call
- * arg as a predicate function, 8 platinum bolt, 9 cinematic bit, 10 map
- * predicate on g_mapCurrentLevel, 11 never.
+ * Cases: 0 always; 1 level available, 2 item owned, 3 item NEW, 8 platinum
+ * bolt, 9 cinematic bit (the flag addresses are read from the ROM; these
+ * meanings come from the symbol names and are not verified); 4 map-blip record
+ * `arg` has a nonzero state, 5 that state is >= 2 (D_139A28 below; NOT weapon
+ * upgrades, FACT #8397; the older "objective active/complete" is unsupported
+ * too, since the case reads D_139A28 and not LevelObjective.state); 6 flag
+ * byte D_1395B8[arg] (what the flags mean, "dialog" included, is
+ * undetermined, NOTE #8400); 7 call arg as a predicate function; 10 bit `arg`
+ * of the current level's D_1395B8 byte, through func_002FCEA0, which also
+ * writes the masked byte back (FACT #8398); 11 never (the same return-0 target
+ * as an out-of-range cond).
  * Matching shape (cc1 2.9, -O2 -G8 -fno-gcse, task #888): a 12-entry switch
  * with an explicit case 11 and case 9 written before case 8, case 9's mask in
  * its own variable (gives the ROM's sllv/and/sltu), and g_mapCurrentLevel
@@ -2529,12 +2550,12 @@ s32 EvaluateProgressCondition(s32 cond, s32 arg) {
         return g_inventoryOwned[arg] != 0;
     case 3:
         return g_inventoryNewFlag[arg] != 0;
-    case 4: /* objective/weapon "started" - level field nonzero */
+    case 4: /* map-blip record's state field nonzero */
         if (arg >= 0x72) {
             return 0;
         }
         return D_139A28[arg].upgradeLevel != 0;
-    case 5: /* objective/weapon "complete" - level field >= 2 */
+    case 5: /* map-blip record's state field >= 2 */
         if (arg >= 0x72) {
             return 0;
         }
