@@ -352,8 +352,7 @@ void func_00299020(void) {
  * func_00299238, func_002992E8, func_00299478, func_002994B0, func_002995E0,
  * func_002998D0, func_00299918), plus func_00299348 with its flag read moved
  * after the busy test, and func_00299758 and func_00299568 with their branch stores reordered, and
- * func_00299040 (see its comment). UpdateSaveTaskState is still asm, with its
- * residue recorded at the function. */
+ * func_00299040 and UpdateSaveTaskState (see their comments). */
 /** Save/load top-level status arbiter. Always consumes the pending-flag's 0x2
  *  and 0x4 bits first. Then: if no save is pending (areaTable/dirty +0x17C == 0)
  *  -> status 3. Otherwise route the original flags: bit 0x80 (or secondary-path
@@ -790,50 +789,59 @@ void func_00299758(void) {
 /** Save-complete handler (only while a card transaction finished, mode 2,
  *  result < 0). Nothing pending (secondary-path +0x16C == 0 and not busy) ->
  *  mark save-pending (+0x17C = 1) and show status 1. Secondary path
- *  (+0x16C != 0) -> clear the pending flag, show status 0x15, then drive a
- *  game-state change to the save/load screen (RequestGameStateChange(4,
- *  g_nGameState == 0 ? 1 : 2, 1, 0, 0)); if already in the level-exit state
- *  (g_nGameState == 6) flush the pending cinematic (func_00289798); finally show
- *  status 2. Else (busy, no secondary path) -> consume the pending-flag's 0x40
- *  bit, set bit 0x1, show status 2.
- *  (Walled for matching by the reload-artifact named in the file header.) */
+ *  (+0x16C != 0) -> clear the pending flag, show status 0x15, set the
+ *  pending-flag word to 0x40, then drive a game-state change to the save/load
+ *  screen (RequestGameStateChange(4, g_nGameState == 0 ? 1 : 2, 1, 0, 0)); if
+ *  already in the level-exit state (g_nGameState == 6) call
+ *  SetSavePromptPending (0x289798, which sets g_nSavePromptPending = 1; this
+ *  comment used to call it a cinematic flush); finally show status 2. Else
+ *  (busy, no secondary path) -> clear the pending-flag's 0x40 bit, set
+ *  bit 0x1, show status 2.
+ *  Byte-exact on sdk29 (-O2 -G8 -fno-gcse, task #888). Three things carry it:
+ *   - the flag word is spelled g_gameStateFlags, and g_nGameState is at
+ *     .extern 12 (the ROM reads it as %gp_rel in a `b` delay slot and
+ *     absolutely elsewhere; without the marker it reads 96.62%, unit objdiff);
+ *   - unk16C is read once into a local and tested twice, as the ROM keeps it
+ *     in $v1;
+ *   - one status store at the bottom, fed by a local. The ROM tail-merges it
+ *     with the `status = 1` path, which it places last, so the test is written
+ *     `secondary || busy` with that path in the else arm.
+ *  The reload-artifact wall this comment used to name was KNOWN-FALSE for
+ *  it. */
+__asm__(".extern g_nGameState, 12");
 extern s32 g_nGameState;
 extern void RequestGameStateChange(s32 newState, s32 argA, s32 argB, s32 argC, s32 argD);
-extern void func_00289798(void);
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", UpdateSaveTaskState);
-#else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 55.77% -> DSLOT-GPREL, first differing row @11: ROM `lw v1, 0x16c(a1)` vs `lw v0, 0x16c(a1)`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 46.46% -> ADDR-BASEREG, first differing row @1: ROM `lui v0, %hi(g_areaTable)` vs `lui a1, %hi(D_1393E0)`. */
+extern void SetSavePromptPending(void);
 void UpdateSaveTaskState(void) {
+    s32 secondary;
+    s32 status;
     if (D_1393E0.mode != 2 || D_1393E0.result >= 0) {
         return;
     }
-    if (D_1393E0.unk16C == 0 && D_1393E0.busy == 0) {
-        D_1393E0.dirty = 1;
-        g_nSaveLoadStatusCode[0] = 1;
-        return;
-    }
-    D_1393E0.dirty = 0;
-    if (D_1393E0.unk16C != 0) {
-        g_nSaveLoadStatusCode[0] = 0x15;
-        g_nSaveLoadStatusCode[1] = 0x40;
-        if (g_nGameState == 0) {
-            RequestGameStateChange(4, 1, 1, 0, 0);
+    secondary = D_1393E0.unk16C;
+    if (secondary != 0 || D_1393E0.busy != 0) {
+        D_1393E0.dirty = 0;
+        if (secondary != 0) {
+            g_nSaveLoadStatusCode[0] = 0x15;
+            g_gameStateFlags = 0x40;
+            if (g_nGameState == 0) {
+                RequestGameStateChange(4, 1, 1, 0, 0);
+            } else {
+                RequestGameStateChange(4, 2, 1, 0, 0);
+            }
+            if (g_nGameState == 6) {
+                SetSavePromptPending();
+            }
         } else {
-            RequestGameStateChange(4, 2, 1, 0, 0);
+            g_gameStateFlags = (g_gameStateFlags & ~0x40) | 0x1;
         }
-        if (g_nGameState == 6) {
-            func_00289798();
-        }
-        g_nSaveLoadStatusCode[0] = 2;
+        status = 2;
     } else {
-        g_nSaveLoadStatusCode[1] = (g_nSaveLoadStatusCode[1] & ~0x40) | 0x1;
-        g_nSaveLoadStatusCode[0] = 2;
+        status = 1;
+        D_1393E0.dirty = status;
     }
+    g_nSaveLoadStatusCode[0] = status;
 }
-#endif
 
 /** Save/load status: while a card-removal abort is NOT in flight
  *  (D_1393F0/busy != -2) show status 3; otherwise, if the pending-flag's 0x20
