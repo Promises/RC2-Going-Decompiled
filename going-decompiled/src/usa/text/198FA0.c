@@ -911,9 +911,13 @@ s32 func_00299960(void) {
 /* Latched event flag at g_pSkyShellSpinRates+0xAC (0x1B19BC): an unrelated
  * bss word splat attributes to the spin-rate symbol; aliased via a gas
  * symbol equate because no symbol exists at that address (a symbol_addrs pin
- * + re-split would name it properly). */
+ * + re-split would name it properly). The equate is EE-only: under native PIC
+ * the GOT load of an undefined-symbol-plus-offset alias cannot be relocated,
+ * and the native link must give the latch its own storage instead. */
 extern s32 g_savePromptLatch;
+#ifndef TARGET_NATIVE
 __asm__("g_savePromptLatch = g_pSkyShellSpinRates+0xAC");
+#endif
 
 /** Consume the latched flag: read it, clear it, return whether it was set. */
 s32 func_00299968(void) {

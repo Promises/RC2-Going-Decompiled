@@ -713,9 +713,14 @@ s32 func_00299518(void) {
 
 /* Latched event flag at g_nBoltCounterDisplayed+0xF4 (EU equivalent of the
  * USA g_pSkyShellSpinRates+0xAC latch): an unrelated bss word; aliased via a
- * gas symbol equate because no symbol exists at that address. */
+ * gas symbol equate because no symbol exists at that address. The equate is
+ * EE-only: under native PIC the GOT load of an undefined-symbol-plus-offset
+ * alias cannot be relocated, and the native link must give the latch its own
+ * storage instead. */
 extern s32 g_savePromptLatch;
+#ifndef TARGET_NATIVE
 __asm__("g_savePromptLatch = g_nBoltCounterDisplayed+0xF4");
+#endif
 
 /** Consume the latched flag: read it, clear it, return whether it was set. */
 s32 func_00299520(void) {
