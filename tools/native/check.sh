@@ -14,6 +14,15 @@ set -u
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 INC="$ROOT/going-decompiled/include"
 SHIM="$ROOT/tools/native/mips_callees.h"
+# The units are ELF-targeted C: 198FA0.c and others carry `section` attributes
+# in ELF syntax. On a Mac, plain `clang` targets Mach-O and rejects them, so
+# EVERY such unit fails for a reason that measures the HOST, not the code —
+# and a validator reading "fail" everywhere learns nothing (2026-09-28: a real
+# native regression in 198FA0.c went unseen that way). Default to an i386 ELF
+# target there, borrowing the SDK's libc headers. An explicit CC still wins.
+if [ -z "${CC:-}" ] && [ "$(uname -s)" = "Darwin" ]; then
+  CC="clang --target=i386-pc-linux-gnu -isystem $(xcrun --show-sdk-path)/usr/include"
+fi
 CC="${CC:-clang}"
 OUT="$(mktemp -d)"
 trap 'rm -rf "$OUT"' EXIT
