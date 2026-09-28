@@ -12,8 +12,9 @@
 # filled in by the linker, not the assembler). This tool slices the target
 # function's `objdump -dr` block out of base.o, RESOLVES those relocations with
 # the real symbol addresses (symbol_addrs/<region>/symbol_addrs.txt plus the
-# address encoded in func_/D_ names), and compares the resulting WORDS against
-# the flat ROM at `file offset = vaddr - 0x100080`.
+# address encoded in func_/D_ names; a unit's own `.text`/`.rodata`/... section
+# symbol is placed as described at SECTION SYMBOLS below), and compares the
+# resulting WORDS against the flat ROM at `file offset = vaddr - 0x100080`.
 #
 # The ROM is ground truth, so this is immune to two things that made the older
 # reloc-LINE diff report false DIFFERS:
@@ -189,7 +190,7 @@ docker --context colima-ee-x86 run --rm -v "$ROOT":/work -w /work ee-build sh -c
   || { echo "ARG ERROR: could not disassemble '$BASE'" >&2; exit 3; }
 [ -s "$DIS_FILE" ] || { echo "ARG ERROR: '$BASE' produced no .text disassembly" >&2; exit 3; }
 
-FN="$FN" ROM="$ROM" SYMS="$SYMS" REGION="$REGION" DIS_FILE="$DIS_FILE" python3 - <<'PY'
+FN="$FN" BASE="$BASE" ROM="$ROM" SYMS="$SYMS" REGION="$REGION" DIS_FILE="$DIS_FILE" python3 - <<'PY'
 import os, re, struct, sys
 
 FN     = os.environ["FN"]
@@ -285,6 +286,105 @@ if not words:
 
 unit_off = words[0][0]                       # the fn's offset inside the unit .text
 
+# SECTION SYMBOLS. GAS rewrites a relocation against a LOCAL symbol (a switch
+# table, a float literal, a `static`) as one against the SECTION, with the
+# offset left in place as the addend. objdump then names the section: `.rodata`,
+# `.data`, `.text`. That name is per-unit, so symbol_addrs cannot carry it, and
+# naming the table there (`jtbl_0026CA70`) changes nothing because the relocation
+# never mentions it. Before this, every such function was UNVERIFIABLE, and
+# stayed so with a seeded base. Measured on the usa build of 2433bb02 (task
+# #966): 34 functions, 5 of them real C - EvaluateProgressCondition (.rodata),
+# func_002A1DB8, func_002F2E58, func_002F33E8 (.text), __divdi3 (.rodata).
+# All but __divdi3 now decide, and a base seed makes each of those 4 real-C
+# functions DIFFER. __divdi3 stays UNVERIFIABLE: its __clz_tab is in the ROM
+# four times.
+#
+# Placement, all from the base object and the ROM, never from a link map:
+#   .text  - the unit's own .text starts at fn_va - unit_off. The same position
+#            assumption every word compare below already makes.
+#   other  - the section's bytes, with their own R_MIPS_32 relocations resolved,
+#            must occur EXACTLY ONCE in the ROM, at any byte offset. That hit is
+#            the section's address. The object's sh_addralign is NOT used: the
+#            linker script places sections, and libgcc's __divdi3 .rodata
+#            (__clz_tab, 2**4 in the object) is linked at 0x13AC58, 8-aligned.
+#            Searching every offset only adds candidates, so it is the stricter
+#            uniqueness test. No hit, several hits, a NOBITS section
+#            (.bss/.sbss) or a relocation inside it that cannot be resolved all
+#            leave the symbol unresolved: UNVERIFIABLE, with the reason printed.
+# This cannot make a wrong function MATCH: a word is still compared against the
+# ROM, and a placement at a wrong address gives a wrong immediate. A defect in
+# the section's own bytes makes the search miss, so it reads UNVERIFIABLE, not
+# MATCH; the whole-image cmp in landing_gate.sh is what judges those bytes.
+def load_elf(path):
+    d = open(path, "rb").read()
+    if d[:4] != b"\x7fELF" or d[4] != 1 or d[5] != 1:
+        return None                          # not ELF32 little-endian
+    shoff, = struct.unpack_from("<I", d, 0x20)
+    shentsize, shnum, shstrndx = struct.unpack_from("<HHH", d, 0x2E)
+    secs = []
+    for i in range(shnum):
+        nm, typ, _, _, off, size, link, info, _, _ = struct.unpack_from("<10I", d, shoff + i * shentsize)
+        secs.append({"nm": nm, "type": typ, "off": off, "size": size,
+                     "link": link, "info": info})
+    strtab = secs[shstrndx]
+    for s in secs:
+        e = d.index(b"\0", strtab["off"] + s["nm"])
+        s["name"] = d[strtab["off"] + s["nm"]:e].decode()
+    return d, secs
+
+def elf_symbol(d, secs, symtab, idx):
+    """(name, is_section_symbol) for symbol `idx` of `symtab`."""
+    st_name, _, _, st_info, _, st_shndx = struct.unpack_from("<IIIBBH", d, symtab["off"] + idx * 16)
+    if st_info & 0xF == 3:                   # STT_SECTION
+        return secs[st_shndx]["name"], True
+    strs = secs[symtab["link"]]
+    e = d.index(b"\0", strs["off"] + st_name)
+    return d[strs["off"] + st_name:e].decode(), False
+
+ELF = load_elf(os.environ["BASE"])
+text_base = fn_va - unit_off
+section_addr, section_why = {}, {}
+
+def resolve_section(name, rom):
+    """Vaddr of the unit's own section `name`, or None (reason in section_why)."""
+    if name in section_addr or name in section_why:
+        return section_addr.get(name)
+    if name == ".text":
+        section_addr[name] = text_base
+        return text_base
+    if ELF is None:
+        section_why[name] = "base is not an ELF32 LE object"; return None
+    d, secs = ELF
+    sec = next((s for s in secs if s["name"] == name), None)
+    if sec is None:
+        section_why[name] = "no such section in the base object"; return None
+    if sec["type"] == 8:                     # SHT_NOBITS: nothing to search for
+        section_why[name] = "NOBITS section, no content to place"; return None
+    body = bytearray(d[sec["off"]:sec["off"] + sec["size"]])
+    for rel in secs:
+        if rel["type"] != 9 or secs[rel["info"]] is not sec:   # SHT_REL for it
+            continue
+        for k in range(rel["size"] // 8):
+            r_off, r_info = struct.unpack_from("<II", d, rel["off"] + k * 8)
+            sym, is_sec = elf_symbol(d, secs, secs[rel["link"]], r_info >> 8)
+            S = text_base if is_sec and sym == ".text" else (None if is_sec else resolve(sym))
+            if r_info & 0xFF != 2 or S is None:                 # R_MIPS_32 only
+                section_why[name] = f"relocation in {name} at +0x{r_off:x} not resolvable"
+                return None
+            A, = struct.unpack_from("<I", body, r_off)
+            struct.pack_into("<I", body, r_off, (S + A) & 0xFFFFFFFF)
+    hits, pos = [], rom.find(bytes(body))
+    while pos != -1 and len(hits) < 2:
+        hits.append(pos)
+        pos = rom.find(bytes(body), pos + 1)
+    if len(hits) != 1:
+        section_why[name] = f"{len(body)}-byte content found {'more than once' if hits else 'nowhere'} in the ROM"
+        return None
+    section_addr[name] = hits[0] + ROM_BASE
+    return section_addr[name]
+
+rom = open(ROM, "rb").read()
+
 # Resolve relocations into the instruction words.
 unresolved, unmodelled = [], set()
 resolved = []
@@ -292,6 +392,8 @@ for off, w in words:
     va = fn_va + (off - unit_off)
     for rtype, rname in relocs.get(off, []):
         S = resolve(rname)
+        if S is None and rname.startswith("."):
+            S = resolve_section(rname, rom)
         if S is None:
             unresolved.append(rname)
             continue
@@ -327,10 +429,10 @@ if unmodelled:
     sys.exit(UNVERIFIABLE)
 if unresolved:
     uniq = sorted(set(unresolved))
-    print(f"{FN}: UNVERIFIABLE — {len(uniq)} symbol(s) have no known address: {', '.join(uniq[:8])}")
+    print(f"{FN}: UNVERIFIABLE — {len(uniq)} symbol(s) have no known address: "
+          + ", ".join(f"{n} ({section_why[n]})" if n in section_why else n for n in uniq[:8]))
     sys.exit(UNVERIFIABLE)
 
-rom = open(ROM, "rb").read()
 lo, hi = resolved[0][0] - ROM_BASE, resolved[-1][0] - ROM_BASE + 4
 if lo < 0 or hi > len(rom):
     print(f"{FN}: UNVERIFIABLE — vaddr range 0x{resolved[0][0]:08x}..0x{resolved[-1][0]:08x} outside the flat ROM")
@@ -344,7 +446,8 @@ for va, w in resolved:
 
 nrel = sum(len(v) for v in relocs.values())
 if not bad:
-    print(f"{FN}: BYTE IDENTICAL TO ROM ✅ ({len(resolved)}/{len(resolved)} words, {nrel} relocs resolved)")
+    placed = "".join(f"; {n} at 0x{a:08x}" for n, a in sorted(section_addr.items()))
+    print(f"{FN}: BYTE IDENTICAL TO ROM ✅ ({len(resolved)}/{len(resolved)} words, {nrel} relocs resolved{placed})")
     sys.exit(MATCH)
 
 print(f"{FN}: DIFFERS ❌ — {len(bad)}/{len(resolved)} words differ from the ROM")
