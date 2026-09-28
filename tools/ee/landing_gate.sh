@@ -94,8 +94,12 @@
 #            tools/native/) is dirty, the row prints `NATIVE: base == tip,
 #            VACUOUS` as a WARN — a FAIL under --strict. A post-landing
 #            validator pins the landing's parent (LANDING_GATE_NATIVE_BASE=
-#            <sha>); an explicit pin is never failed, and a pin equal to HEAD
-#            is still reported VACUOUS, uncounted.
+#            <sha>). A pin EQUAL TO HEAD is treated exactly as the unpinned
+#            case (task #1011, watcher-2's ruling on FACT ledger-28625): an
+#            explicit pin to the tip is the same self-comparison with extra
+#            steps, and pinning the tip is the easiest mistake a seat told to
+#            "pin the base" can make — if it passed, the instruction would
+#            manufacture false confidence.
 #            FAILS naming each unit that fails at the tip and passed at the
 #            base, or is absent at the base; a unit failing on BOTH arms is
 #            tolerated and listed (a pre-existing failure must not turn the row
@@ -130,6 +134,12 @@
 #            and FAILS on any mismatch. RULING #7208 condition 1 is discharged
 #            ONLY by the BUILDING form on a 0-dirty tree at the SHA-named landing
 #            — the summary says so whenever this run is not that.
+#   DIRTY    (task #1011, FACT ledger-28624) the gate ENFORCES the 0-dirty half
+#            of that sentence instead of only printing it: any path in `git
+#            status --porcelain` (tracked + modified + untracked, .gitignore
+#            honoured) is listed, a WARN, and under --strict a FAIL whose
+#            verdict reads `#### landing_gate <region>: FAIL (dirty)`. Until
+#            this row, "0 dirty" was enforced only by seats quoting the header.
 #
 #   tools/ee/landing_gate.sh <region> [--strict]  all of the above; exit 0 = PASS
 #   tools/ee/landing_gate.sh <region> --no-build  reuse the outputs of an earlier
@@ -180,7 +190,7 @@ BASE_DIR="$HERE/landing_baseline"
 SHADOW_CLASSES="CLASS1 CLASS2 CLASS3 NOTARGET"
 PYTHON=".venv-decomp/bin/python"
 
-usage() { sed -n '2,151p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { sed -n '2,161p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 # IN_SELFTEST: set only by selftest(), never from the environment. While it is
 # 1, say() refuses to print a line of the landing-verdict form a landing is
 # read from (task #984, watcher-2): a selftest arm must not be able to forge
@@ -437,13 +447,16 @@ check_native() {
     [ -n "$baseref" ] || { fail "NATIVE: no base commit (git merge-base HEAD $upstream failed and LANDING_GATE_NATIVE_BASE is unset or not a commit) — the row cannot be base-relative"; return; }
     # task #992: a base that IS the tip is a control that cannot fire. Only a
     # clean tree is a self-comparison — uncommitted NATIVE inputs are still
-    # compared against HEAD, and say so.
+    # compared against HEAD, and say so (the DIRTY row fails that tree under
+    # --strict, task #1011). A pin equal to HEAD is NOT exempt (task #1011):
+    # an explicit pin to the tip is the same self-comparison with extra steps,
+    # and it is the easiest mistake a seat told to "pin the base" can make.
     if [ "$baseref" = "$(git rev-parse HEAD)" ]; then
       local nd; nd=$(git status --porcelain --no-renames -- going-decompiled/src going-decompiled/include tools/native | wc -l | tr -d ' ')
       if [ "$nd" != 0 ]; then
         say "     base == HEAD ($baseref): the row compares only the $nd uncommitted path(s) under going-decompiled/src, going-decompiled/include, tools/native"
       elif [ -n "${LANDING_GATE_NATIVE_BASE:-}" ]; then
-        vacuous=1; say "     NATIVE: base == tip, VACUOUS — LANDING_GATE_NATIVE_BASE=$LANDING_GATE_NATIVE_BASE pins the base to HEAD itself; both arms are one tree and nothing below can fire (pinned explicitly: reported, not counted)"
+        vacuous=1; warn "NATIVE: base == tip, VACUOUS — LANDING_GATE_NATIVE_BASE=$LANDING_GATE_NATIVE_BASE pins the base to HEAD $baseref itself, so both arms compile one tree and neither the regression rule nor the shrink rule can fire; an explicit pin to the tip is the same self-comparison with extra steps — pin the landing's PARENT: LANDING_GATE_NATIVE_BASE=<parent sha> (task #1011)"
       else
         vacuous=1; warn "NATIVE: base == tip, VACUOUS — the default base merge-base(HEAD, $upstream) is HEAD $baseref itself (the tip has already reached $upstream), so both arms compile one tree and neither the regression rule nor the shrink rule can fire; a post-landing validator pins the landing's parent: LANDING_GATE_NATIVE_BASE=<parent sha> (task #992)"
       fi
@@ -707,6 +720,34 @@ check_noprovide() {  # check_noprovide [BASELINE]
 }
 
 # ----------------------------------------------------------------- GATE ----
+# check_dirty [STATUS_FILE] — the DIRTY row (task #1011): every path of `git
+# status --porcelain --no-renames` (or of STATUS_FILE, --selftest's seed) is
+# listed; any is a WARN, and under --strict a FAIL that sets DIRTY_FAILED so
+# the verdict reads `FAIL (dirty)`. Not warn(): the strict FAIL is the ruling
+# itself, not a stale baseline, so it must not also count as a warning.
+DIRTY_FAILED=0
+check_dirty() {
+  local st; if [ -n "${1:-}" ]; then st=$(cat "$1"); else st=$(git status --porcelain --no-renames); fi
+  local n; n=$(printf '%s' "$st" | /usr/bin/grep -c . || true)
+  DIRTY_FAILED=0
+  say "== DIRTY: RULING #7208 condition 1 needs a 0-dirty tree — any uncommitted path (tracked, modified or untracked) is a WARN, a FAIL under --strict"
+  if [ "$n" = 0 ]; then ok "DIRTY: 0 uncommitted paths"; return; fi
+  if [ "$STRICT" = 1 ]; then fail "DIRTY: $n uncommitted path(s) — a landing is gated on a 0-dirty tree at the SHA-named commit; commit or remove them and re-run"; DIRTY_FAILED=1
+  else say "WARN DIRTY: $n uncommitted path(s) — this run cannot discharge RULING #7208 condition 1 (FAIL under --strict)"; WARNED=$((WARNED+1)); fi
+  local l; while IFS= read -r l; do [ -n "$l" ] && say "       $l"; done <<< "$st"
+}
+
+# gate_verdict FAILED WARNED DIRTY_FAILED — the text after `#### landing_gate
+# <region>: `. A dirty strict run leads with `FAIL (dirty)` whatever else failed.
+gate_verdict() {
+  local f=$1 w=$2 d=$3 v
+  if [ "$f" = 0 ]; then v=PASS
+  elif [ "$d" = 1 ]; then v="FAIL (dirty$([ "$f" -gt 1 ] && echo " + $((f-1)) more"))"
+  else v="FAIL ($f)"; fi
+  [ "$w" -gt 0 ] && v="$v ($w warning$([ "$w" = 1 ] || echo s)$([ "$STRICT" = 1 ] && echo ', counted as FAIL under --strict'))"
+  printf '%s\n' "$v"
+}
+
 run_gate() {  # run_gate REGION [--no-build] [--strict]
   region_vars "$1"; shift; local build=1
   while [ $# -gt 0 ]; do case "$1" in --no-build) build=0 ;; --strict) STRICT=1 ;; '') ;; *) say "unknown option $1"; exit 2 ;; esac; shift; done
@@ -716,6 +757,7 @@ run_gate() {  # run_gate REGION [--no-build] [--strict]
   local dirty; dirty=$(git status --porcelain --no-renames | wc -l | tr -d ' ')
   say "$tag at $(git rev-parse --short HEAD) ($dirty dirty paths), VM $EE_CTX, $(date -u +%FT%TZ)$([ "$STRICT" = 1 ] && echo ', --strict')"
   say "     RULING #7208 condition 1 is discharged only by the BUILDING form on a 0-dirty tree at the SHA-named landing; this run is $([ $build = 1 ] && echo building || echo '--no-build'), $dirty dirty"
+  check_dirty
   [ $build = 1 ] && split_inputs   # first: every check below measures the re-split tree
   check_flags
   check_shadow "$REGION"
@@ -734,9 +776,7 @@ run_gate() {  # run_gate REGION [--no-build] [--strict]
   measure_row "$BUILD/$BASENAME.rom" "$BUILD/$BASENAME.elf" "$BUILD/ld.log" "$OUT/row.txt"
   check_row "$OUT/row.txt" "$start"
   check_noprovide
-  local verdict; verdict=$([ $FAILED = 0 ] && echo PASS || echo "FAIL ($FAILED)")
-  [ $WARNED -gt 0 ] && verdict="$verdict ($WARNED warning$([ $WARNED = 1 ] || echo s)$([ "$STRICT" = 1 ] && echo ', counted as FAIL under --strict'))"
-  say "$tag: $verdict"
+  say "$tag: $(gate_verdict "$FAILED" "$WARNED" "$DIRTY_FAILED")"
   if [ $build = 0 ] || [ "$dirty" != 0 ]; then say "#### NOTE: RULING #7208 condition 1 is NOT discharged by this run ($([ $build = 0 ] && echo '--no-build')$([ $build = 0 ] && [ "$dirty" != 0 ] && echo ', ')$([ "$dirty" != 0 ] && echo "$dirty dirty paths")) — it needs the building form on a 0-dirty tree"; fi
   [ $FAILED = 0 ]
 }
@@ -902,6 +942,7 @@ selftest() {
 
   selftest_gmodel "$T" || bad=1
   selftest_native "$T" || bad=1
+  selftest_dirty "$T" || bad=1
 
   say "-- (14) the real gate on this tree (--no-build, the build above) must PASS"
   STRICT=0
@@ -990,6 +1031,36 @@ selftest_gmodel() {
   return $b
 }
 
+# selftest_dirty OUTDIR — arm (19), callable on its own after sourcing this
+# file (`. tools/ee/landing_gate.sh; region_vars usa; selftest_dirty /tmp/x`).
+# check_dirty on a seeded 2-path porcelain listing (a modified tracked file and
+# an untracked one): under --strict it must FAIL naming both and the verdict
+# must lead `FAIL (dirty)`; without --strict it must WARN and not fail; an
+# empty listing must pass. The verdict is checked as gate_verdict's text, never
+# as a `#### landing_gate` line, which say() refuses here.
+selftest_dirty() {
+  local T="$1" b=0 v
+  say "-- (19) DIRTY (#1011): a seeded 2-path porcelain listing -> --strict must FAIL naming both paths with verdict 'FAIL (dirty)'; without --strict a WARN that fails nothing; an empty listing must pass"
+  printf ' M going-decompiled/src/usa/cod/015180.c\n?? t1011_selftest_untracked.txt\n' > "$T/dirty_seed.txt"; : > "$T/dirty_empty.txt"
+  FAILED=0; WARNED=0; STRICT=1; check_dirty "$T/dirty_seed.txt" > "$T/dirty_strict.txt"; v=$(gate_verdict "$FAILED" "$WARNED" "$DIRTY_FAILED"); STRICT=0
+  if [ "$FAILED" = 1 ] && [ "$DIRTY_FAILED" = 1 ] && [ "$v" = "FAIL (dirty)" ] && /usr/bin/grep -q '^FAIL DIRTY: 2 uncommitted path(s)' "$T/dirty_strict.txt" \
+     && /usr/bin/grep -qx '        M going-decompiled/src/usa/cod/015180.c' "$T/dirty_strict.txt" && /usr/bin/grep -qx '       ?? t1011_selftest_untracked.txt' "$T/dirty_strict.txt"; then
+    ok "fired: STRICT=1 $(/usr/bin/grep '^FAIL DIRTY' "$T/dirty_strict.txt" | cut -c1-40)... both paths listed, verdict '$v'"
+  else say "SELFTEST-FAIL (19) dirty STRICT=1 (FAILED=$FAILED DIRTY_FAILED=$DIRTY_FAILED verdict '$v'):"; cat "$T/dirty_strict.txt"; b=1; fi
+  FAILED=3; WARNED=0; DIRTY_FAILED=1; STRICT=1; v=$(gate_verdict "$FAILED" "$WARNED" "$DIRTY_FAILED"); STRICT=0
+  if [ "$v" = "FAIL (dirty + 2 more)" ]; then ok "fired: dirty plus two other failures reads '$v'"; else say "SELFTEST-FAIL (19) dirty + 2 other failures read '$v'"; b=1; fi
+  FAILED=0; WARNED=0; STRICT=0; check_dirty "$T/dirty_seed.txt" > "$T/dirty_warn.txt"; v=$(gate_verdict "$FAILED" "$WARNED" "$DIRTY_FAILED")
+  if [ "$FAILED" = 0 ] && [ "$WARNED" = 1 ] && [ "$DIRTY_FAILED" = 0 ] && [ "$v" = "PASS (1 warning)" ] && /usr/bin/grep -q '^WARN DIRTY: 2 uncommitted path(s)' "$T/dirty_warn.txt"; then
+    ok "control: STRICT=0 warns, fails nothing, verdict '$v'"
+  else say "SELFTEST-FAIL (19) dirty STRICT=0 (FAILED=$FAILED WARNED=$WARNED verdict '$v'):"; cat "$T/dirty_warn.txt"; b=1; fi
+  FAILED=0; WARNED=0; STRICT=1; check_dirty "$T/dirty_empty.txt" > "$T/dirty_clean.txt"; v=$(gate_verdict "$FAILED" "$WARNED" "$DIRTY_FAILED"); STRICT=0
+  if [ "$FAILED" = 0 ] && [ "$WARNED" = 0 ] && [ "$v" = PASS ] && /usr/bin/grep -q '^OK   DIRTY: 0 uncommitted paths' "$T/dirty_clean.txt"; then
+    ok "control: STRICT=1 empty listing passes, verdict '$v'"
+  else say "SELFTEST-FAIL (19) empty listing STRICT=1 (FAILED=$FAILED verdict '$v'):"; cat "$T/dirty_clean.txt"; b=1; fi
+  FAILED=0; WARNED=0; DIRTY_FAILED=0
+  return $b
+}
+
 # selftest_native OUTDIR — arm (18), callable on its own after sourcing this
 # file (`. tools/ee/landing_gate.sh; region_vars usa; selftest_native /tmp/x`).
 # Every arm runs check_native on scratch copies (src/ + include/ +
@@ -1001,7 +1072,7 @@ selftest_gmodel() {
 # basename-keyed row reads {015180} on both arms and passes.
 selftest_native() {
   local T="$1" b=0; local N="$T/native"; rm -rf "$N"; mkdir -p "$N"
-  say "-- (18) NATIVE (#923): scratch tip/base trees — a seeded C error, A2's removed 198B58 guard, a usa-vs-eu basename collision, a new failing unit, and a unit leaving the population (deleted, override without reason, token removed, renamed WITH an edit, moved byte-identical to ANOTHER region) must each FAIL naming the unit; a failure on both arms, a departure with a Native-Left override + reason, a byte-identical rename within its region, a cross-region move with a Native-Left override + reason, and the clean pair must pass; the env override outside a scratch arm must excuse nothing and WARN (FAIL under --strict); the default base resolving to HEAD must print 'NATIVE: base == tip, VACUOUS' as a WARN (FAIL under --strict) unless pinned explicitly; then the real tree against its real base"
+  say "-- (18) NATIVE (#923): scratch tip/base trees — a seeded C error, A2's removed 198B58 guard, a usa-vs-eu basename collision, a new failing unit, and a unit leaving the population (deleted, override without reason, token removed, renamed WITH an edit, moved byte-identical to ANOTHER region) must each FAIL naming the unit; a failure on both arms, a departure with a Native-Left override + reason, a byte-identical rename within its region, a cross-region move with a Native-Left override + reason, and the clean pair must pass; the env override outside a scratch arm must excuse nothing and WARN (FAIL under --strict); the default base resolving to HEAD must print 'NATIVE: base == tip, VACUOUS' as a WARN (FAIL under --strict), and so must a base pinned explicitly to HEAD (#1011); then the real tree against its real base"
   native_tree() {  # native_tree DIR — a fresh scratch copy of the check.sh inputs
     rm -rf "$1"; mkdir -p "$1/going-decompiled" "$1/tools"
     cp -R going-decompiled/src going-decompiled/include "$1/going-decompiled/"; cp -R tools/native "$1/tools/"
@@ -1097,11 +1168,16 @@ selftest_native() {
       else say "SELFTEST-FAIL (q') default base == HEAD with $vnd dirty NATIVE input(s), STRICT=$vst (FAILED=$FAILED WARNED=$WARNED):"; cat "$N/vacuous_$vst.txt"; b=1; fi
     fi
   done
+  # (r) task #1011: a pin EQUAL to HEAD behaves exactly like the unpinned case
+  # (this arm used to require FAILED=0 there — it certified the bug).
   if [ "$vnd" = 0 ]; then
-    FAILED=0; WARNED=0; STRICT=1; LANDING_GATE_NATIVE_LEFT= LANDING_GATE_NATIVE_BASE=HEAD check_native > "$N/vacuous_pinned.txt"; STRICT=0
-    if [ "$FAILED" = 0 ] && [ "$WARNED" = 0 ] && /usr/bin/grep -q '^     NATIVE: base == tip, VACUOUS — LANDING_GATE_NATIVE_BASE=HEAD pins the base to HEAD itself' "$N/vacuous_pinned.txt"; then
-      ok "control (r) base pinned explicitly to HEAD, STRICT=1: reported VACUOUS, not counted (FAILED=0)"
-    else say "SELFTEST-FAIL (r) base pinned explicitly to HEAD (FAILED=$FAILED WARNED=$WARNED):"; cat "$N/vacuous_pinned.txt"; b=1; fi
+    for vst in 1 0; do
+      FAILED=0; WARNED=0; STRICT=$vst; LANDING_GATE_NATIVE_LEFT= LANDING_GATE_NATIVE_BASE=HEAD check_native > "$N/vacuous_pinned_$vst.txt"; STRICT=0
+      if [ "$FAILED" = "$vst" ] && [ "$WARNED" = 1 ] && /usr/bin/grep -qE "^$([ $vst = 1 ] && echo 'FAIL\(strict\)' || echo WARN) NATIVE: base == tip, VACUOUS — LANDING_GATE_NATIVE_BASE=HEAD pins the base to HEAD $(git rev-parse HEAD) itself" "$N/vacuous_pinned_$vst.txt" \
+         && [ "$(/usr/bin/grep -c 'VACUOUS: base == tip, this measured nothing' "$N/vacuous_pinned_$vst.txt" || true)" = 2 ]; then
+        ok "fired (r) base pinned explicitly to HEAD, STRICT=$vst: $(/usr/bin/grep -E '^(WARN|FAIL\(strict\)) NATIVE' "$N/vacuous_pinned_$vst.txt" | cut -c1-60)... (FAILED=$FAILED)"
+      else say "SELFTEST-FAIL (r) base pinned explicitly to HEAD, STRICT=$vst (FAILED=$FAILED WARNED=$WARNED):"; cat "$N/vacuous_pinned_$vst.txt"; b=1; fi
+    done
   fi
   # (f) clean pair; (g) the real tree against its real base
   native_arm "control (f) clean pair" "$N/base" "$N/base" 0 '^OK   NATIVE: no unit fails'
