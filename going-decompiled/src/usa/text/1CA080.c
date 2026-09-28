@@ -957,37 +957,44 @@ void func_002CBA40(void) {
 }
 
 /* Commit a menu transition: full-screen tint then latch the screen-state
- * scratch (state=4, capture pending sub-state). Near-miss: the original emits a
- * dead conditional store (p[0x4]=1 then unconditional =0) the later cc1
- * load-PRE keeps but ours eliminates — preserved as portable C. */
+ * scratch (state=4, capture pending sub-state). The original emits a dead
+ * conditional store (block[0x4]=1 when it was 0, then unconditionally 0); the
+ * transient 1 has no observable effect (no intervening call). */
 extern void DrawFullScreenTint(s32 r, s32 g, s32 b, s32 a);
-/* NEAR-MISS (91%, not byte-exact): real C reaches this far — the body (bnel
- * branch-likely dead store, address-rematerialise-after-call, final-store order)
- * all match — but cc1 schedules the callee-save `sd ra` after only ONE of the
- * three zeroed-arg `move`s for DrawFullScreenTint, where the original interleaves
- * it after two (`daddu a0; daddu a1; sd ra; daddu a2`). That frame-save
- * scheduling slot has no C-level lever, so this stays INCLUDE_ASM. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", MenuScreenCommitTransition);
-#else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 32.17% -> STRUCTURAL,
- * first differing row @2: ROM `(none)` vs `sd s0,0(sp)`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 32.57% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-48`. */
-/* TODO(match): functional equivalent - not byte-exact; the original keeps a dead
- * conditional store (block[0x4]=1 then unconditionally =0) the later cc1 load-PRE
- * retains but ours eliminates. The transient block[0x4]=1 has no observable effect
- * (no intervening call), so the captured block[0x18] -> block[0x14] latch and the
- * state=4 store are byte-faithful. */
+/*
+ * MenuScreenCommitTransition(): no params, no return.
+ *
+ * Byte-exact on sdk29 (task #1025). The old NEAR-MISS note (91%) said the
+ * callee-save `sd ra` sits after only ONE of the zeroed-arg moves where the ROM
+ * has it after two (`daddu a0; daddu a1; sd ra; daddu a2`) and that no C lever
+ * reaches it. Two separate tied empty asms, one per zero argument, do. They are
+ * a SCHEDULING DEVICE (established tied-empty-asm form, emits no instruction).
+ * Measured spellings: one asm tying both args, or $4/$5 register pins, give the
+ * interleave but move `li a3` out of the jal slot; tying only one arg gives the
+ * one-move interleave. The dead store is kept by writing it as the
+ * conditional it is. The last two zero stores are written 0x18 first: cc1
+ * emits them reversed, giving the ROM's 0x4-then-0x18.
+ */
 void MenuScreenCommitTransition(void) {
-    s32 *block = (s32 *)g_menuScreenBlock;
-    DrawFullScreenTint(0, 0, 0, 0x38);
-    block[0x14 / 4] = block[0x18 / 4]; /* latch pending sub-state */
-    block[0]        = 4;               /* state = commit */
-    block[0x4 / 4]  = 0;
-    block[0x18 / 4] = 0;
+    s32 *block;
+    s32 pending;
+    {
+        s32 red = 0;
+        s32 green = 0;
+        __asm__("" : "+r"(red));    /* scheduling device, see above */
+        __asm__("" : "+r"(green));  /* scheduling device, see above */
+        DrawFullScreenTint(red, green, 0, 0x38);
+    }
+    block = (s32 *)g_menuScreenBlock;
+    if (block[0x4 / 4] == 0) {
+        block[0x4 / 4] = 1;
+    }
+    pending = block[0x18 / 4];
+    block[0] = 4;                   /* state = commit */
+    block[0x14 / 4] = pending;      /* latch pending sub-state */
+    block[0x18 / 4] = 0;            /* this source order emits the ROM's 0x4-then-0x18 */
+    block[0x4 / 4] = 0;
 }
-#endif
 
 /* menu-screen lifecycle routine: 8-byte-packed-save wall (saves 8 GPRs incl $31; later cc1
  * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
