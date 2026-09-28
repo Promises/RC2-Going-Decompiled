@@ -157,7 +157,10 @@
 #                                                 can NEVER print a landing
 #                                                 verdict line (`#### landing_gate
 #                                                 usa|eu ...`): say() exits 3 if
-#                                                 anything tries (task #984)
+#                                                 anything tries (task #984). Its
+#                                                 own summary is `#### SELFTEST
+#                                                 <region>: PASS|FAIL`, with no
+#                                                 `landing_gate` in it (#997)
 #
 # A baseline HIGHER than the observation (a count, or a member no longer
 # observed) is a WARN naming the exact value/member to set (#451 gap 2: the
@@ -190,7 +193,7 @@ BASE_DIR="$HERE/landing_baseline"
 SHADOW_CLASSES="CLASS1 CLASS2 CLASS3 NOTARGET"
 PYTHON=".venv-decomp/bin/python"
 
-usage() { sed -n '2,161p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { sed -n '2,164p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 # IN_SELFTEST: set only by selftest(), never from the environment. While it is
 # 1, say() refuses to print a line of the landing-verdict form a landing is
 # read from (task #984, watcher-2): a selftest arm must not be able to forge
@@ -787,10 +790,10 @@ selftest() {
   IN_SELFTEST=1
   region_vars "${1:-usa}"
   local T="$OUT/selftest"; rm -rf "$T"; mkdir -p "$T"; local bad=0
-  say "#### landing_gate --selftest [$REGION]: seeded failing arms"
+  say "#### SELFTEST $REGION: seeded failing arms"
   say "-- (0) VERDICT GUARD (#984): a landing verdict line forged through say() inside --selftest -> must be refused (exit 3, nothing on stdout); an ordinary line must print"
   local fo fr; fo=$(say "#### landing_gate $REGION: PASS" 2>/dev/null); fr=$?
-  if [ "$fr" = 3 ] && [ -z "$fo" ] && [ "$(say 'landing_gate selftest 0 control')" = 'landing_gate selftest 0 control' ]; then ok "fired: forged '#### landing_gate $REGION: PASS' refused (exit $fr, 0 B on stdout); control line printed"; else say "SELFTEST-FAIL the verdict guard let a forged landing line through (exit $fr, stdout '$fo')"; bad=1; fi
+  if [ "$fr" = 3 ] && [ -z "$fo" ] && [ "$(say 'landing_gate selftest 0 control')" = 'landing_gate selftest 0 control' ]; then ok "fired: a forged $REGION landing verdict line was refused (exit $fr, 0 B on stdout); control line printed"; else say "SELFTEST-FAIL the verdict guard let a forged landing line through (exit $fr, stdout '$fo')"; bad=1; fi
 
   say "-- (1) FLAGS: one flag perturbed in a copy of build.sh"
   sed 's/usa\/text\/235FE8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse -fno-strict-aliasing"/usa\/text\/235FE8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse"/' "$HERE/build.sh" > "$T/build_pert.sh"
@@ -949,7 +952,9 @@ selftest() {
   if run_gate "$REGION" --no-build > "$T/gate.txt"; then ok "real gate PASS"; else say "SELFTEST-FAIL the real gate does not pass on this tree:"; /usr/bin/grep -E '^FAIL' "$T/gate.txt"; bad=1; fi
   if /usr/bin/grep -qE "$LANDING_LINE_RE" "$T/gate.txt" || ! /usr/bin/grep -q "^==== selftest inner gate \[$REGION\] (NOT a landing verdict): " "$T/gate.txt"; then say "SELFTEST-FAIL the inner gate run wrote a landing verdict line, or no tagged verdict:"; /usr/bin/grep -E '^(####|====)' "$T/gate.txt"; bad=1; else ok "and it is tagged, not a landing line: $(/usr/bin/grep '^==== selftest inner gate .*: ' "$T/gate.txt" | tail -1)"; fi
   say "     full gate output -> $T/gate.txt"
-  say "#### landing_gate --selftest [$REGION]: $([ $bad = 0 ] && echo PASS || echo FAIL)"
+  # its own summary carries no 'landing_gate' substring (task #997): a loose
+  # `landing_gate.*PASS` grep must never mistake a selftest for a landing
+  say "#### SELFTEST $REGION: $([ $bad = 0 ] && echo PASS || echo FAIL)"
   return $bad
 }
 
