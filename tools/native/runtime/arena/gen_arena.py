@@ -19,6 +19,9 @@
 #
 # Usage: gen_arena.py <names.txt> <symbol_addrs.txt> <outdir>
 #   names.txt = the data-global gap list (linkgap.sh runtime-global bucket).
+#   linkgap.sh inventories USA units only by default. An EU arena needs
+#   `linkgap.sh --with-eu`, which adds the src/eu units (the gap list is then
+#   USA+EU) while its classifier still reads USA's tables.
 
 import sys, os, re
 

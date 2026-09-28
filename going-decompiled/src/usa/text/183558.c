@@ -1365,7 +1365,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", FloatToInt);
  * cc1 2.9's fix_trunc scratch never takes the input register: with $f0-$f11 all held live by
  * empty-asm register variables it picks $f13, skipping the dying $f12. In the ROM, in-place
  * cvt.w.s appears only here and in the 183178 madd/adda bodies, which are from a later
- * compiler. So no C spelling reaches it under cc1 2.9. */
+ * compiler. So no C spelling reaches it under cc1 2.9.
+ * Task #962 (FACT #8381): "only here and in 183178" undercounts, and the ROM word at 0x2846A0
+ * is 0x46006324 = cvt.w.s $f12,$f12, not the `trunc.w.s` of the first-diff line. A scan of the ELF's
+ * main segment finds 7 in-place cvt.w.s words out of 264 cvt.w.s words, in 6 functions:
+ * FloatToInt 0x2846A0; func_00283240/func_00283278/func_002832B0 (183178); UpdateMobyAnimation
+ * 0x2A1628 and 0x2A1630 (1A00F0); BuildParticleDrawPackets 0x2BAB68 (1B8FA8, beside
+ * splat-flagged handwritten adds). The cc1 2.9 measurement above does not depend on this list. */
 s32 FloatToInt(f32 x) {
     return (s32)x;
 }
