@@ -339,50 +339,83 @@ s32 func_00291148(void) {
 }
 #endif
 
-/* func_002911F0: grant the always-owned starting items if missing (0x1E
- * Heli-Pack with its order entry + equip slot, 0x2A with its order entry,
- * 0x2F with its equip slot, the 0x06 flag pair), then re-validate the
- * display order (func_00291148) and re-insert everything unlocked at
- * g_playerProgress (func_002912B8 — read via %gp_rel, the small side of the
- * header's mixed-attribution caveat). Best attempt 99.40% (volatile
- * condition bytes pin the delay slots, the value-returning tail fixes the
- * sibling call — every insn/reloc exact) — the residue is pure register
- * COLORING: the original (later SN) cc1 colours the three single-use
- * byte-store temps (0x5E/0x6A) v1-then-v0, the pinned cc1 v0-then-v1; no
- * source shape found that flips it. Left as INCLUDE_ASM. */
+/**
+ * func_002911F0 - grant the always-owned starting items the save is missing
+ * (GrantDefaultGadgetLoadout), then re-validate and rebuild the display order.
+ *
+ * - 0x1E Heli-Pack: give + equip, display-order slot 0 = 0x5E (0x1E | 0x40
+ *   owned), equip-slot[0] = 0x1E;
+ * - 0x2A: give + equip, display-order slot 1 = 0x6A;
+ * - 0x2F: give, equip-slot[2] = 0x2F;
+ * - 0x06: set its owned and newly-acquired flags.
+ * Then func_00291148 re-validates the order and func_002912B8 re-inserts
+ * everything unlocked at g_playerProgress (read via %gp_rel, the small side of
+ * the header's mixed-attribution caveat).
+ *
+ * Byte-exact on the sdk29 arm (task #895). The ROM reaches every byte with the
+ * one-insn assembler macro (`lbu v0,sym+N` / `sb v1,sym+N` through $at), so
+ * each table is indexed from a cc1-SMALL scalar alias of its symbol (the
+ * #889 offset-0 construct): cc1 emits the macro and the file's
+ * `.extern sym, 16` makes GNU as expand it absolutely. Indexing the unsized `u8[]` instead made
+ * cc1 keep the table base in s0 (a 32-byte frame). The "pure register
+ * colouring" residual of the earlier 99.40 attempt is fixed by binding the
+ * byte-store constants to $3 and the equip-slot value to $2. The +6 flag pair
+ * is written owned-first so cc1 issues the newly-acquired store first, as the
+ * ROM does. The empty asm after the final call keeps it a `jal` (FACT #8177).
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1907F0", func_002911F0);
+__asm__(".extern g_inventoryOwned, 16");
+__asm__(".extern g_inventoryOrder, 16");
+__asm__(".extern g_inventoryNewFlag, 16");
+__asm__(".extern g_itemEquipSlotTable, 16");
+extern u8  g_inventoryOwnedSmall __asm__("g_inventoryOwned");
+extern u8  g_inventoryOrderSmall __asm__("g_inventoryOrder");
+extern u8  g_inventoryNewFlagSmall __asm__("g_inventoryNewFlag");
+extern u32 g_itemEquipSlotSmall __asm__("g_itemEquipSlotTable");
+#define OWNED_AT(i)      ((&g_inventoryOwnedSmall)[i])
+#define ORDER_AT(i)      ((&g_inventoryOrderSmall)[i])
+#define NEW_FLAG_AT(i)   ((&g_inventoryNewFlagSmall)[i])
+#define EQUIP_SLOT_AT(i) ((&g_itemEquipSlotSmall)[i])
+#define F1F0_IN_V0 __asm__("$2")
+#define F1F0_IN_V1 __asm__("$3")
 #else
-/* TODO(match): functional equivalent - not byte-exact; 99.40% wall is pure
- * register-coloring of the three byte-store temps (see above).
- * GrantDefaultGadgetLoadout: grant the always-owned starting items that the
- * save is missing, then re-validate and rebuild the display order. */
+#define OWNED_AT(i)      g_inventoryOwned[i]
+#define ORDER_AT(i)      g_inventoryOrder[i]
+#define NEW_FLAG_AT(i)   g_inventoryNewFlag[i]
+#define EQUIP_SLOT_AT(i) g_itemEquipSlotTable[i]
+#define F1F0_IN_V0
+#define F1F0_IN_V1
+#endif
 void func_002911F0(void) {
-    /* 0x1E Heli-Pack: owned bit in display-order slot 0, equip-slot[0]. */
-    if (g_inventoryOwned[0x1E] == 0) {
+    if (OWNED_AT(0x1E) == 0) {
+        register s32 orderEntry F1F0_IN_V1;
+        register s32 equipItem F1F0_IN_V0;
+
         GiveInventoryItem(0x1E);
         func_002AE6C8(0x1E);
-        g_inventoryOrder[0]      = 0x5E;   /* 0x1E | 0x40 (owned) */
-        g_itemEquipSlotTable[0]  = 0x1E;
+        orderEntry = 0x5E; /* 0x1E | 0x40 (owned) */
+        equipItem = 0x1E;
+        ORDER_AT(0) = orderEntry;
+        EQUIP_SLOT_AT(0) = equipItem;
     }
-    /* 0x2A: owned bit in display-order slot 1. */
-    if (g_inventoryOwned[0x2A] == 0) {
+    if (OWNED_AT(0x2A) == 0) {
+        register s32 orderEntry F1F0_IN_V1;
+
         GiveInventoryItem(0x2A);
         func_002AE6C8(0x2A);
-        g_inventoryOrder[1]      = 0x6A;   /* 0x2A | 0x40 (owned) */
+        orderEntry = 0x6A; /* 0x2A | 0x40 (owned) */
+        ORDER_AT(1) = orderEntry;
     }
-    /* 0x2F: equip-slot[2]. */
-    if (g_inventoryOwned[0x2F] == 0) {
+    if (OWNED_AT(0x2F) == 0) {
         GiveInventoryItem(0x2F);
-        g_itemEquipSlotTable[2]  = 0x2F;
+        EQUIP_SLOT_AT(2) = 0x2F;
     }
-    /* 0x06: ensure the owned + newly-acquired flag pair is set. */
-    if (g_inventoryOwned[0x06] == 0) {
-        g_inventoryNewFlag[0x06] = 1;
-        g_inventoryOwned[0x06]   = 1;
+    if (OWNED_AT(0x06) == 0) {
+        OWNED_AT(0x06) = 1;
+        NEW_FLAG_AT(0x06) = 1;
     }
 
     func_00291148();
     func_002912B8(g_playerProgress);
+    __asm__ __volatile__(""); /* sibling-call guard: the ROM keeps the jal */
 }
-#endif
