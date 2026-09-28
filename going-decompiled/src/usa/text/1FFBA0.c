@@ -725,23 +725,52 @@ void func_00300ED8(void) {
  * original bytes stay intact (documented mis-split exception). */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_00301010);
 
-/* If a hero ground-moby is bound, transform `in` through it relative to the hero
- * moby (func_002ADF48 with D_1A8BD0 config + a stack scratch quad) into `out`;
- * otherwise copy `in` straight to `out`.
- * Near-miss (objdiff ~90%): register-allocation / branch-scheduling differences
- * this cc1 won't reproduce; the C is faithful. */
+/* HERO_MOBY_ABS: g_pHeroMoby read through a C-level 16-byte view of the same
+ * symbol (EE only). cc1 then emits its own `lui %hi / lw %lo` pair and can
+ * schedule the halves apart, as the ROM does. A plain `extern void *` read is
+ * one assembler `lw` macro that cc1 cannot split. Plain g_pHeroMoby on native. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", AdjustPointForHeroGroundMoby);
+extern void *g_pHeroMobyAbs[4] __asm__("g_pHeroMoby");
+#define HERO_MOBY_ABS (g_pHeroMobyAbs[0])
 #else
+#define HERO_MOBY_ABS g_pHeroMoby
+#endif
+
+/**
+ * AdjustPointForHeroGroundMoby - transform a point into the hero ground moby's
+ * frame.
+ *
+ * If a hero ground-moby is bound, transforms `in` through it relative to the
+ * hero moby (func_002ADF48 with the D_1A8BD0 config and a stack scratch quad)
+ * into `out`; otherwise copies `in` straight to `out`.
+ *
+ * Byte-exact on the sdk29 arm (task #895). The plain body differed in 6 words,
+ * all register choice and order around the two absolute addresses (the old
+ * "register-allocation / branch-scheduling" note). Two spellings fix it:
+ *  - HERO_MOBY_ABS lets cc1 place `lui v0,%hi(g_pHeroMoby)` itself, which
+ *    leaves the ground moby in v1 as in the ROM;
+ *  - D_1A8BD0 is passed through a SMALL alias of the same symbol, so cc1 emits
+ *    one `la` macro (the assembler expands it absolute, per the file's
+ *    `.extern D_1A8BD0, 16`) that stays a single lui/addiu unit after the
+ *    `lw`. Through the unsized array cc1 splits it into %hi/%lo and hoists the
+ *    `lui` above the `move a1,v1`.
+ * Both are plain symbol names on native.
+ */
+#ifndef TARGET_NATIVE
+extern u8 D_1A8BD0_macro __asm__("D_1A8BD0");
+#define PROJ_CONFIG_MACRO (&D_1A8BD0_macro)
+#else
+#define PROJ_CONFIG_MACRO D_1A8BD0
+#endif
 void AdjustPointForHeroGroundMoby(u_long128 *out, u_long128 *in) {
     u_long128 scratch;
+
     if (g_pHeroGroundMoby != 0) {
-        func_002ADF48(g_pHeroMoby, g_pHeroGroundMoby, in, D_1A8BD0, out, &scratch);
+        func_002ADF48(HERO_MOBY_ABS, g_pHeroGroundMoby, in, PROJ_CONFIG_MACRO, out, &scratch);
     } else {
         *out = *in;
     }
 }
-#endif
 
 /* Project point `in` through the hero ground-moby (relative to point `ref`) into
  * `out`: when a ground moby is bound, transform via func_002AE198 into a stack
@@ -763,19 +792,29 @@ void func_00301070(u_long128 *out, u_long128 *in, void *ref) {
 }
 #endif
 
-/* If a hero ground-moby exists, project a point through it relative to the hero
- * moby (forwards to func_002AE0B8). a0/a1 are the in/out point pair.
- * Near-miss (objdiff ~90%): the original schedules the g_pHeroMoby load into the
- * jal delay slot, which this cc1 won't reproduce; the C is faithful. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_003010D8);
-#else
+/**
+ * func_003010D8 - project a point through the hero's ground moby.
+ *
+ * If a hero ground-moby is bound (g_pHeroGroundMoby), forwards to
+ * func_002AE0B8(g_pHeroMoby, g_pHeroGroundMoby, a1, a0); otherwise does
+ * nothing. a0/a1 are the in/out point pair.
+ *
+ * Byte-exact on the sdk29 arm (task #895), with two levers:
+ *  - the empty-asm sibling-call guard after the call: without it cc1 2.9 turns
+ *    the call into a frameless `j`, and the ROM never tail-jumps (FACT #8177);
+ *  - g_pHeroMoby read through a C-level 16-byte view bound to the same symbol,
+ *    so cc1 emits its own `lui v0,%hi / lw a0,%lo(v0)` pair and schedules the
+ *    `lw` into the jal delay slot, with the ground moby left in v1 as in the
+ *    ROM. The plain `extern void *` read is an assembler `lw` macro that cc1
+ *    cannot split. The old note ("this cc1 won't reproduce the delay-slot
+ *    load") was this lever not yet tried.
+ */
 void func_003010D8(void *a0, void *a1) {
     if (g_pHeroGroundMoby != 0) {
-        func_002AE0B8(g_pHeroMoby, g_pHeroGroundMoby, a1, a0);
+        func_002AE0B8(HERO_MOBY_ABS, g_pHeroGroundMoby, a1, a0);
+        __asm__ __volatile__(""); /* sibling-call guard: the ROM keeps the jal */
     }
 }
-#endif
 
 /* Allocate a tracer slot in turret state block `state`: scan entries
  * state[0..0x3F] for the first free (zero) one, store `value` there, set the
@@ -812,27 +851,48 @@ s32 func_00301110(s32 *state, s32 value) {
 }
 #endif
 
-/* Clear tracer slot `slot` of turret state block `state` (entry at state[slot],
- * plus its parallel +0x100 flag word); decrement the active-tracer count at
- * +0x220 and, when it hits 0, clear the +0x224 "any active" flag.
- * Near-miss (objdiff ~91%): the original emits the two zero-stores in the
- * opposite order (+0 before +0x100) via a copied pointer; cc1's scheduler picks
- * the other order here. The C is faithful. */
+/**
+ * func_00301190 - release tracer slot `slot` of turret state block `state`.
+ *
+ * Zeroes the slot's entry (state[slot]) and its parallel +0x100 flag word,
+ * decrements the active-tracer count at +0x220 and, when it reaches 0, clears
+ * the +0x224 "any active" flag. Inverse of func_00301110.
+ *
+ * Byte-exact on the sdk29 arm (task #895). The ROM forms the entry address in
+ * v0 from the pre-shifted slot in a1, stores +0 through v0, then COPIES the
+ * pointer back into a1 (`move a1,v0`) for the +0x100 store. cc1 2.9 coalesces
+ * any plain copy into one register and schedules the +0x100 store first; the
+ * old "scheduler picks the other order" note was that coalescing. Here:
+ *  - the byte offset is bound to $5 and the entry pointer to $2, so the sll
+ *    stays in a1 and the addu lands in v0;
+ *  - a memory barrier after the first store keeps +0 before +0x100;
+ *  - the copy into $5 goes through an empty "+r" asm, so it is not coalesced.
+ * The pins are empty on native.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_00301190);
+#define B1190_IN_A1 __asm__("$5")
+#define B1190_IN_V0 __asm__("$2")
 #else
+#define B1190_IN_A1
+#define B1190_IN_V0
+#endif
 void func_00301190(s32 *state, s32 slot) {
-    s32 *entry = &state[slot];
+    register s32 byteOffset B1190_IN_A1 = slot << 2;
+    register s32 *entry B1190_IN_V0 = (s32 *)((u8 *)state + byteOffset);
+    register s32 *flagEntry B1190_IN_A1;
     s32 count;
+
     entry[0] = 0;
-    entry[0x40] = 0;
+    __asm__ __volatile__("" ::: "memory");
+    flagEntry = entry;
+    __asm__("" : "+r"(flagEntry));
+    flagEntry[0x40] = 0;
     count = state[0x88] - 1;
     state[0x88] = count;
     if (count == 0) {
         state[0x89] = 0;
     }
 }
-#endif
 
 /* Re-rank the turret's active tracer targets: for each occupied slot (entry !=
  * 0, +0x100 flag cleared) compute its squared distance to g_heroPos, then pick
