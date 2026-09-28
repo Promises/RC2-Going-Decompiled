@@ -679,7 +679,19 @@ f32 func_002A8910(f32 a1, f32 a0, f32 b0, f32 b1, f32 t) {
  * different physical registers than the original and the endpoint sq lands a
  * slot earlier - the register-coloring + store-scheduling wall. Re-derived from
  * func_002A8910 (the matched scalar twin); not byte-reachable with the pinned
- * cc1. */
+ * cc1.
+ * Task #946 narrows this. Two of the colouring rows are source shape:
+ *  - `c` (db - da) is ONE variable shared by the three axes. cc1 then gives
+ *    it its own register ($f7) instead of tying it to db, as the ROM does.
+ *  - `out->w = 0` is stored after the z axis's loads, and the zero from the
+ *    t == 0 test stays live in $f8, as in the ROM.
+ * With both (body in task #946's NOTE), 65 = 65 non-nop words with the ROM's
+ * instruction order in the x block. What differs is FP register numbering:
+ * t*t / t*t*t / the p1 component get $f6/$f3/$f5 against the ROM's
+ * $f5/$f2/$f6, the per-axis temporaries shift with them, and the y/z blocks
+ * issue their loads in a different order (6 rows ignoring register numbers).
+ * 358 generated source variants over t2/t3 placement, `register`, declaration
+ * order and expression shape all gave the same allocation. */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 7.06% ->
    UNKNOWN-@0: ROM `mtc1 zero,$f8` vs `addiu sp,sp,-64` */
 #ifndef TARGET_NATIVE
@@ -4257,33 +4269,30 @@ void func_002AD8B8(Moby *moby, s16 *list, s16 cap) {
     }
 }
 
-/* func_002AD938: remove a moby from an i16 count-prefixed list by swapping
- * the last entry into its slot. Best attempt 57%: the original keeps the
- * raw count in a register across the scan with branch-likely reloads the
- * pinned cc1 will not produce - scan-loop scheduling wall. */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 2.55% ->
-   UNKNOWN-@0: ROM `lh v0,0(a1)` vs `lh a3,0(a1)` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AD938);
-#else
+/* func_002AD938: remove a moby from an s16 count-prefixed slot list.
+ * list[0] is the count and list[1..count] are moby-table slot indices. Scans
+ * for the entry whose moby (g_mobyTableBase + slot * 0x100) is `moby`, moves
+ * the last entry into its place and decrements the count. No-op if absent.
+ * No return.
+ * The ROM re-reads list[0] and g_mobyTableBase on every iteration (the base
+ * through the assembler's absolute `lui; lw` macro, from `.extern ..., 12`
+ * above). The volatile read of the base keeps loop.c from hoisting it, and
+ * re-reading list[0] in the loop test gives the branch-likely count reload.
+ * The earlier "scan-loop scheduling wall" note was wrong on both counts.
+ * MATCHED (task #946): sdk29 (-O2 -G8 -fno-gcse), solo. */
 void func_002AD938(Moby *moby, s16 *list) {
-    s16 count = list[0];
-    s16 i;
+    s32 i;
 
-    if (count <= 0) {
-        return;
-    }
-    for (i = 1; i <= count; i++) {
-        Moby *entry = (Moby *)((u8 *)g_mobyTableBase + (s16)list[i] * 0x100);
+    for (i = 1; i <= list[0]; i++) {
+        u8 *base = *(u8 *volatile *)&g_mobyTableBase;
 
-        if (entry == moby) {
-            list[i] = list[(u16)list[0]];   /* swap last entry into this slot */
+        if ((Moby *)(base + list[i] * 0x100) == moby) {
+            list[i] = list[(s16)(u16)list[0]];   /* last entry into this slot */
             list[0] = (u16)list[0] - 1;
             return;
         }
     }
 }
-#endif
 
 /* func_002AD9B0: jitter a Vec3 in place — add an independent uniform random
  * offset in [-amt, amt) to each of x/y/z. Walled: $f20/$f21 + $16/$31 saves
@@ -5410,8 +5419,17 @@ void func_002AF728(Moby *moby, void *ctrlPtr, f32 stepZ, f32 snapEps) {
 
 /* func_002AF948: round a float to `digits` decimal places. Builds the scale
  * 10^digits (digits<=0 -> 1), adds the half-ulp rounding bias 1/(2*scale),
- * truncates (FloatToInt) the scaled value, and divides back. Walled: $f20 +
- * $31 saves (save-layout wall). */
+ * truncates (FloatToInt) the scaled value, and divides back.
+ * Not a save-layout wall: cc1 2.9 emits the ROM's ra + $f20 frame word for
+ * word (FACT #8260). Best sdk29 body (t894, 85.62%) is in NOTE #8262. Two
+ * residuals remain (task #946):
+ *  - Loop: the ROM's `addiu; nop x4; bnez; mult` is the R5900 short-loop pad
+ *    to 6 insns, with `mult` moved into the slot first. cc1 2.9 pads first
+ *    with `.set noreorder` nops, and those block delay-slot filling, so its
+ *    `mult` stays in the body and the slot stays empty. That holds with or
+ *    without a pad asm, in the 3 loop shapes whose output was read.
+ *  - Tail: the ROM has a nop between `ld $31` and `div.s` (after cvt.s.w
+ *    $f12), a hazard neither cc1 2.9 nor asm_unit.sh emits. */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 73.00%
    -> UNKNOWN-@0: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-16` */
 #ifndef TARGET_NATIVE
