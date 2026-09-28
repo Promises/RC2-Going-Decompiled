@@ -74,6 +74,13 @@
 #            allowed and LISTED as KEEP-SPEC; in the EE arm every definition
 #            fails. Blind to a transcription under a func_<addr> name that uses
 #            no listed identifier (the script header says so).
+#   GMODEL   (task #919, FACT #8246) tools/ee/gmodel_scan.sh: FAILS when a unit
+#            unit_flags.sh compiles at -G0 has a function compiled from C (no
+#            INCLUDE_ASM line for it) whose ROM words are gp-relative (base
+#            $28, decoded from the word, so raw `.word` functions count too).
+#            cc1 cannot emit those at -G0, and GP differs by region, so such a
+#            body can pass one region's cmp by luck. INCLUDE_ASM members with
+#            gp words are listed as LATENT, never a failure.
 #   TREE     the ROW is tied to the tree it was built from (task #457, #451 gap
 #            1): do_build records HEAD^{tree}, a hash of the WHOLE working tree
 #            (tracked + modified + untracked, .gitignore honoured) and the dirty
@@ -125,7 +132,7 @@ BASE_DIR="$HERE/landing_baseline"
 SHADOW_CLASSES="CLASS1 CLASS2 CLASS3 NOTARGET"
 PYTHON=".venv-decomp/bin/python"
 
-usage() { sed -n '2,111p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { sed -n '2,118p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 say()  { printf '%s\n' "$*"; }
 fail() { say "FAIL $*"; FAILED=$((FAILED+1)); }
 ok()   { say "OK   $*"; }
@@ -267,6 +274,23 @@ check_libgcc() {
     *) fail "libgcc_transcription_scan.py could not run (rc $rc): $(head -c 300 "$scan")" ;;
   esac
   say "     members:"; sed 's/^/       /' "$scan"
+}
+
+# --------------------------------------------------------------- GMODEL ----
+# check_gmodel REGION [TREE] [UNIT_FLAGS] — no C-compiled function in a -G0
+# unit whose ROM words are gp-relative (task #919, FACT #8246).
+check_gmodel() {
+  local region=$1 tree=${2:-.} flags=${3:-$HERE/unit_flags.sh}
+  local scan="$OUT/gmodel_scan.txt"
+  say "== GMODEL [$region]: no -G0 unit compiles a function whose ROM words are gp-relative (scan: $scan)"
+  bash "$HERE/gmodel_scan.sh" "$region" --root "$tree" --flags "$flags" > "$scan" 2>&1; local rc=$?
+  local nl ng8; nl=$(/usr/bin/grep -c '^LATENT ' "$scan" || true); ng8=$(/usr/bin/grep -cE '^UNIT [^ ]+ -G[1-9][0-9]* [1-9]' "$scan" || true)
+  case $rc in
+    0) ok "no -G0 unit compiles a gp-word function ($ng8 nonzero -G unit(s) show gp words; $nl INCLUDE_ASM member(s) LATENT, listed)" ;;
+    1) fail "GMODEL [$region]: $(/usr/bin/grep -c '^MISMATCH ' "$scan" || true) function(s) compiled at -G0 whose ROM words are gp-relative — move the unit to -G8 or keep them INCLUDE_ASM: $(/usr/bin/grep '^MISMATCH ' "$scan" | cut -d' ' -f2- | tr '\n' ';' | sed 's/;$//; s/;/ ; /g')" ;;
+    *) fail "gmodel_scan.sh could not run (rc $rc): $(head -c 300 "$scan")" ;;
+  esac
+  say "     members:"; /usr/bin/grep -vE '^UNIT [^ ]+ -G[^ ]+ 0$' "$scan" | sed 's/^/       /'
 }
 
 # ----------------------------------------------------------------- TREE ----
@@ -476,6 +500,7 @@ run_gate() {  # run_gate REGION [--no-build] [--strict]
   check_shadow "$REGION"
   check_orphans "$REGION"
   check_libgcc "$REGION"
+  check_gmodel "$REGION"
   if [ $build = 1 ]; then
     do_build
     check_tree "$OUT/built_tree.txt"   # the tree did not move during the build
@@ -649,6 +674,8 @@ selftest() {
 
   selftest_libgcc "$T" || bad=1
 
+  selftest_gmodel "$T" || bad=1
+
   say "-- (14) the real gate on this tree (--no-build, the build above) must PASS"
   STRICT=0
   if run_gate "$REGION" --no-build > "$T/gate.txt"; then ok "real gate PASS"; else say "SELFTEST-FAIL the real gate does not pass on this tree:"; /usr/bin/grep -E '^FAIL' "$T/gate.txt"; bad=1; fi
@@ -684,6 +711,54 @@ SEED
   if [ "$FAILED" = 1 ] && /usr/bin/grep -q '^       DEF libgcc_seed.c:2 __muldi3 (not-a-spec-one-liner)$' "$T/libgcc_seeded.txt"; then ok "fired: $(/usr/bin/grep '^FAIL LIBGCC' "$T/libgcc_seeded.txt")"; else say "SELFTEST-FAIL the seeded DIunion __muldi3 did not fail LIBGCC (FAILED=$FAILED):"; cat "$T/libgcc_seeded.txt"; b=1; fi
   FAILED=0; check_libgcc "$REGION" > "$T/libgcc_clean.txt"
   if [ "$FAILED" = 0 ]; then ok "control: the real src/$REGION passes LIBGCC"; else say "SELFTEST-FAIL the real src/$REGION fails LIBGCC:"; cat "$T/libgcc_clean.txt"; b=1; fi
+  return $b
+}
+
+# selftest_gmodel OUTDIR — arm (17), callable on its own after sourcing this
+# file (`. tools/ee/landing_gate.sh; region_vars usa; selftest_gmodel /tmp/x`).
+# Seeds the DANGEROUS class both ways it has happened or can happen, on real
+# units and real ROM words:
+#   (a) a unit's case line deleted from a copy of unit_flags.sh, so it falls
+#       back to -G0 — exactly how 1FCF48 sat before #889. USA seeds text/1FCF48
+#       and must name its two compiled gp-word functions (func_002FD020,
+#       ResetFrameArenas: the #889 known answer); EU seeds the first -G8 unit
+#       with its own case line whose seeded scan names a MISMATCH in it.
+#   (b) the first LATENT member's INCLUDE_ASM line deleted from a scratch copy
+#       of its .c (a promotion at -G0) -> MISMATCH naming it.
+# Then the real tree must pass.
+selftest_gmodel() {
+  local T="$1" b=0 unit line fl got
+  say "-- (17) GMODEL (#919): (a) a -G8 unit's case line removed from a copy of unit_flags.sh -> must FAIL naming its compiled gp-word functions; (b) a LATENT member's INCLUDE_ASM removed in a scratch src copy -> must FAIL naming it; the real tree must pass"
+  FAILED=0; check_gmodel "$REGION" > "$T/gmodel_real.txt"; cp "$OUT/gmodel_scan.txt" "$T/gmodel_scan_real.txt"
+  if [ "$FAILED" = 0 ]; then ok "control: the real tree passes GMODEL"; else say "SELFTEST-FAIL the real tree fails GMODEL:"; cat "$T/gmodel_real.txt"; b=1; fi
+  # (a)
+  local cands; if [ "$REGION" = usa ]; then cands="text/1FCF48"; else cands=$(awk '$1=="UNIT" && $3!="-G0" && $4>0 {print $2}' "$T/gmodel_scan_real.txt"); fi
+  local seeded=""
+  for unit in $cands; do
+    fl="$T/unit_flags_seed.sh"
+    /usr/bin/grep -vF "*/$REGION/$unit.c)" "$HERE/unit_flags.sh" > "$fl"
+    [ "$(( $(wc -l < "$HERE/unit_flags.sh") - $(wc -l < "$fl") ))" = 1 ] || continue
+    FAILED=0; check_gmodel "$REGION" . "$fl" > "$T/gmodel_seed_flags.txt"
+    got=$(/usr/bin/grep "^       MISMATCH $unit -G0 " "$T/gmodel_seed_flags.txt" | awk '{print $4}' | LC_ALL=C sort | tr '\n' ' ')
+    [ "$FAILED" = 1 ] && [ -n "$got" ] || continue
+    seeded=$unit; break
+  done
+  if [ -z "$seeded" ]; then say "SELFTEST-FAIL no -G8 unit's removed case line made GMODEL fail (candidates: $(printf '%s' "$cands" | tr '\n' ' '))"; b=1
+  elif /usr/bin/grep -q "^       MISMATCH " "$T/gmodel_seed_flags.txt" && [ -z "$(/usr/bin/grep '^       MISMATCH ' "$T/gmodel_seed_flags.txt" | /usr/bin/grep -v "^       MISMATCH $seeded -G0 ")" ] && { [ "$REGION" != usa ] || [ "$got" = "ResetFrameArenas func_002FD020 " ]; }; then ok "fired (a): $seeded's case line removed -> $(/usr/bin/grep '^FAIL GMODEL' "$T/gmodel_seed_flags.txt" | sed 's/ — move the unit.*: / : /')"
+  else say "SELFTEST-FAIL (a) seeded $seeded: wrong members ($got):"; cat "$T/gmodel_seed_flags.txt"; b=1; fi
+  # (b)
+  local lat; lat=$(/usr/bin/grep '^LATENT ' "$T/gmodel_scan_real.txt" | head -1)
+  if [ -z "$lat" ]; then say "SELFTEST-BROKEN: no LATENT member on this tree to seed (b) from"; b=1; else
+    unit=$(printf '%s' "$lat" | awk '{print $2}'); local fn; fn=$(printf '%s' "$lat" | awk '{print $4}')
+    local G="$T/gmodel_tree"; rm -rf "$G"; mkdir -p "$G/going-decompiled/asm/$REGION"
+    cp -R "going-decompiled/src" "$G/going-decompiled/src"
+    ln -s "$ROOT/going-decompiled/asm/$REGION/nonmatchings" "$G/going-decompiled/asm/$REGION/nonmatchings"
+    local cf="$G/going-decompiled/src/$REGION/$unit.c"
+    /usr/bin/grep -vE "^[[:space:]]*INCLUDE_ASM\(\"[^\"]*\",[[:space:]]*$fn[[:space:]]*\)" "$cf" > "$cf.new"; mv "$cf.new" "$cf"
+    FAILED=0; check_gmodel "$REGION" "$G" > "$T/gmodel_seed_promo.txt"
+    if [ "$FAILED" = 1 ] && [ "$(/usr/bin/grep '^       MISMATCH ' "$T/gmodel_seed_promo.txt" | awk '{print $2, $4}')" = "$unit $fn" ]; then ok "fired (b): $fn's INCLUDE_ASM removed from $unit.c -> $(/usr/bin/grep '^FAIL GMODEL' "$T/gmodel_seed_promo.txt" | sed 's/ — move the unit.*: / : /')"; else say "SELFTEST-FAIL (b) removing $fn's INCLUDE_ASM did not fail GMODEL naming only it (FAILED=$FAILED):"; cat "$T/gmodel_seed_promo.txt"; b=1; fi
+  fi
+  FAILED=0
   return $b
 }
 
