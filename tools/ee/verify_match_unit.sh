@@ -177,10 +177,9 @@ fi
 #    StartFrontendSegmentLoad 32/32 and MapGetLevelOrderIndex (0x5008 -> 0x5000)
 #    28/28 both read BYTE IDENTICAL. Task #780 swept all 16 real-C functions of
 #    the unit: verdicts are the same with and without the pad (FACT #8082).
-#    The exception to "BYTE IDENTICAL" is StreamSceneSegment, which reads DIFFERS
-#    1/34 at 0x29455c both ways. That is not a pad effect. It is this tool's
-#    HI16 carry bug (FACT #8027: the paired LO16 addend is dropped, so the lui
-#    immediate comes out 1 low). Only a unit-level check sees the pad drop:
+#    (StreamSceneSegment read DIFFERS 1/34 at 0x29455c both ways then: the HI16
+#    carry bug of FACT #8027, fixed at HI16/LO16 PAIRING below, not a pad
+#    effect.) Only a unit-level check sees the pad drop:
 #    tools/ee/text_size_check.sh (same seed: off 56, rc 1; master: off 0,
 #    rc 0) or the whole-image cmp in landing_gate.sh.
 DIS_FILE="$(mktemp -t verify_match_unit)"
@@ -385,6 +384,51 @@ def resolve_section(name, rom):
 
 rom = open(ROM, "rb").read()
 
+# HI16/LO16 PAIRING. A REL HI16's addend is not its own immediate alone: it is
+# AHL = (hi_imm << 16) + sign16(lo_imm) of the LO16 it pairs with. Resolving
+# the HI16 from hi_imm alone loses the carry whenever the low half of the
+# addend pushes %lo past 0x7FFF: `lui %hi(g_cameraSlotActive + 0x990)` carries
+# its whole 0x990 in the addiu, so it came out 0x1B where the ROM has 0x1C
+# (FACT #8027, RULING #8014; 32 USA functions read a false DIFFERS on their own
+# ROM asm, task #977).
+# The pairing is the linker's, taken from the object's own .rel.text in TABLE
+# order, not from the instruction stream: GNU ld pairs a HI16 with the NEXT
+# LO16 relocation in the table carrying the same symbol index
+# (mips_elf_next_relocation in elfxx-mips.c). That covers a LO16 that is not
+# the next instruction, several HI16s sharing one LO16, and a LO16 past the end
+# of the function, and it is the rule whose output landing_gate.sh's whole-image
+# cmp 0 measures against the ROM. A HI16 with no such LO16 is refused as
+# UNVERIFIABLE below: ld refuses to link it too, so there is no value to check.
+def hi16_pairs():
+    """{HI16 r_offset: sign16(paired lo_imm) or None if unpaired}, or a reason
+    string when the object's .text relocations cannot be read."""
+    if ELF is None:
+        return "base is not an ELF32 LE object"
+    d, secs = ELF
+    texts = [s for s in secs if s["name"] == ".text"]
+    if len(texts) != 1:
+        return f"{len(texts)} sections named .text in the base object"
+    text = texts[0]
+    rels = [s for s in secs if s["type"] == 9 and secs[s["info"]] is text]
+    if len(rels) != 1:
+        return f"{len(rels)} SHT_REL sections for .text in the base object"
+    rel = rels[0]
+    table = [struct.unpack_from("<II", d, rel["off"] + k * 8) for k in range(rel["size"] // 8)]
+    pairs = {}
+    for i, (r_off, r_info) in enumerate(table):
+        if r_info & 0xFF != 5:                 # R_MIPS_HI16
+            continue
+        pairs[r_off] = None
+        for lo_off, lo_info in table[i + 1:]:
+            if lo_info & 0xFF == 6 and lo_info >> 8 == r_info >> 8:   # LO16, same symbol
+                lo_w, = struct.unpack_from("<I", d, text["off"] + lo_off)
+                pairs[r_off] = sign16(lo_w & 0xFFFF)
+                break
+    return pairs
+
+HI16_PAIRS = hi16_pairs()
+unpaired = []
+
 # Resolve relocations into the instruction words.
 unresolved, unmodelled = [], set()
 resolved = []
@@ -404,9 +448,15 @@ for off, w in words:
         # func_001248B0 + 0 and reported as a byte difference against a ROM that
         # was right all along. Every type must add its in-place addend back.
         if rtype == "R_MIPS_HI16":
-            # The addend of a HI16 is its immediate scaled by 16, and it pairs
-            # with a sign-extended LO16, hence the +0x8000 carry.
-            A = sign16(w & 0xFFFF) << 16
+            # AHL = own immediate << 16 plus the paired LO16's sign-extended
+            # immediate (HI16/LO16 PAIRING above); the +0x8000 is the carry the
+            # sign-extended %lo needs.
+            lo = HI16_PAIRS.get(off) if isinstance(HI16_PAIRS, dict) else None
+            if lo is None:
+                why = HI16_PAIRS if isinstance(HI16_PAIRS, str) else "no later LO16 on the same symbol in .rel.text"
+                unpaired.append(f"0x{va:08x} {rname} ({why})")
+                continue
+            A = (sign16(w & 0xFFFF) << 16) + lo
             w = (w & 0xFFFF0000) | (((S + A + 0x8000) >> 16) & 0xFFFF)
         elif rtype == "R_MIPS_LO16":
             w = (w & 0xFFFF0000) | ((S + sign16(w & 0xFFFF)) & 0xFFFF)
@@ -426,6 +476,10 @@ for off, w in words:
 # Say so; never fold it into a pass or a fail.
 if unmodelled:
     print(f"{FN}: UNVERIFIABLE — unmodelled relocation type(s): {', '.join(sorted(unmodelled))}")
+    sys.exit(UNVERIFIABLE)
+if unpaired:
+    print(f"{FN}: UNVERIFIABLE — unresolvable HI16/LO16 pairing at {len(unpaired)} HI16(s): "
+          + ", ".join(unpaired[:8]))
     sys.exit(UNVERIFIABLE)
 if unresolved:
     uniq = sorted(set(unresolved))
