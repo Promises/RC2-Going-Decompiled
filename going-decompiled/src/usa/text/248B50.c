@@ -782,32 +782,36 @@ void func_0034A1D0(GuiWidget *w, s32 v) {
     w->unk144 = v;
 }
 
-/* func_0034A1D8: zero four 4-word (0x10-byte) records starting at widget +0x30
- * (counter 3 down to -1). Instructions match, but the original preserves the
- * base pointer in a fresh register (move v0,a0) while the pinned cc1 reuses a0
- * as the cursor. Best 67%. WALL: base-pointer preservation / register alloc. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A1D8);
-#else
-/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
- * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
- * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
- * cc1 2.96-ee-001003-1): sdk29 57.23% / engine96 75.23%.
- * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 12/12 words differ;
- * frozen-.s census: 0 callee GPR saves, 0 fp saves.
- * Residual: no callee saves and no frame/save-slot words in the diff — residual is REGALLOC/SCHED on the 12 differing words; not iterated. */
-void func_0034A1D8(GuiWidget *w) {
+/*
+ * func_0034A1D8 - zero the four 4-word (0x10-byte) records at widget +0x30.
+ *
+ *   w  the widget
+ * Returns w. The ROM's first instruction is `move v0,a0`, i.e. the widget is
+ * the return value (its sibling func_0034A210 returns w the same way); the old
+ * "base pointer preserved in a fresh register" wall was that return value.
+ *
+ * Byte-exact on the sdk29 arm (task #894). The counter runs 3 down to -1 and
+ * the loop closes `bne i,-1` with the pointer step in the delay slot. Without
+ * the empty asm reading `p`, cc1 2.9 schedules the step before the branch and
+ * reorg leaves the slot as a `nop`; the asm is a scheduling barrier, which is
+ * why the decrement is written before it, right after the first store, where
+ * the ROM has it. The asm emits no instruction.
+ */
+GuiWidget *func_0034A1D8(GuiWidget *w) {
     s32 *p = (s32 *)((char *)w + 0x30);
-    s32 i;
-    for (i = 3; i >= 0; i--) {
+    s32 i = 3;
+
+    do {
         p[0] = 0;
+        i--;
         p[1] = 0;
         p[2] = 0;
         p[3] = 0;
+        __asm__ __volatile__("" : : "r"(p));
         p += 4;
-    }
+    } while (i != -1);
+    return w;
 }
-#endif
 
 /* func_0034A210: reset a slider/animation widget to its rest state — clear the
  * value/flag fields (+0x18,+0x28,+0x2C,+0x80), seed the step constant at +0x24
@@ -1155,33 +1159,34 @@ void func_0034A3C0(GuiWidget *w, s32 applyStep) {
 }
 #endif
 
-/* func_0034A658: zero a 2x12-word block at widget +0x2C (two outer passes, each
- * three inner passes of four words).
- * Best 72%: the original preserves the widget base in a fresh register and fills
- * both bne delay slots with the pointer advances; the pinned cc1 folds the base
- * into the cursor and emits the advances before the branches. WALL: base
- * preservation + delay-slot fill.
- * Oracle: cmp_func_0034A658 (cmp_248B50.c) — bit-exact on real R5900. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A658);
-#else
-/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
- * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
- * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
- * cc1 2.96-ee-001003-1): sdk29 71.90% / engine96 69.10%.
- * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 16/20 words differ;
- * frozen-.s census: 0 callee GPR saves, 0 fp saves.
- * Residual: no callee saves and no frame/save-slot words in the diff — residual is REGALLOC/SCHED on the 16 differing words; not iterated. */
-void func_0034A658(GuiWidget *w) {
+/*
+ * func_0034A658 - zero a 2 x 12-word block at widget +0x2C (two outer passes,
+ * each three inner passes of four words).
+ *
+ *   w  the widget
+ * Returns w (the ROM opens with `move v0,a0`, as func_0034A1D8 does).
+ *
+ * Byte-exact on the sdk29 arm (task #894). Two things had to be spelled:
+ *  - the inner step `p += 4` sits in the `bne` delay slot in the ROM; the empty
+ *    asm reading `p` keeps cc1 2.9 from scheduling it before the branch, where
+ *    reorg would leave a `nop` (see func_0034A1D8);
+ *  - the ROM computes outer-1 into $7 at the top of the pass, reuses $5 for the
+ *    inner counter, and copies $7 back (`move $5,$7`) right before the outer
+ *    test. That is the decremented count held in its own variable (`left`) and
+ *    assigned back to `outer` after the inner loop.
+ * Oracle: cmp_func_0034A658 (cmp_248B50.c), bit-exact on real R5900.
+ */
+GuiWidget *func_0034A658(GuiWidget *w) {
     u32 *p;
     u32 *row;
     s32 outer;
+    s32 left;
     s32 inner;
 
     outer = 1;
     p = (u32 *)((char *)w + 0x2C);
     do {
-        outer--;
+        left = outer - 1;
         row = p + 0xC;
         inner = 2;
         do {
@@ -1190,12 +1195,14 @@ void func_0034A658(GuiWidget *w) {
             p[1] = 0;
             p[2] = 0;
             p[3] = 0;
+            __asm__ __volatile__("" : : "r"(p));
             p += 4;
         } while (inner != -1);
         p = row;
+        outer = left;
     } while (outer != -1);
+    return w;
 }
-#endif
 
 /* func_0034A6A8: handwritten epilogue-only stump (`addiu $sp,$sp,0x10; nop`,
  * no prologue, no `jr ra`). WALL: split-artifact stub. */
