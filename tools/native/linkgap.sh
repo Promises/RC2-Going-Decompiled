@@ -54,12 +54,30 @@ for f in $units; do
 done
 
 # 2. defined / undefined symbol sets across the whole object set.
-#    Mach-O nm prefixes a leading '_' on C symbols; strip it. Undefined rows
-#    have type 'U'; everything else is a definition.
+#    Mach-O prefixes a '_' on every C symbol, so strip exactly one there. ELF
+#    adds none, so a leading '_' is part of the real name (__builtin_next_arg,
+#    _GLOBAL_OFFSET_TABLE_) and must survive. Decide from the objects' magic,
+#    not from $CC: an explicit CC can target either format.
+prefix=""
+fmt=""
+for o in "$OUT"/*.o; do
+  [ -e "$o" ] || continue
+  case "$(od -An -tx1 -N4 "$o" | tr -d ' \n')" in
+    7f454c46)                            f=elf ;;
+    cefaedfe|cffaedfe|feedface|feedfacf) f=macho ;;
+    *) echo "linkgap: $o is neither ELF nor Mach-O" >&2; exit 2 ;;
+  esac
+  if [ -n "$fmt" ] && [ "$f" != "$fmt" ]; then
+    echo "linkgap: object set mixes $fmt and $f" >&2; exit 2
+  fi
+  fmt="$f"
+done
+[ "$fmt" = macho ] && prefix="_"
+# Undefined rows have type 'U'; everything else is a definition.
 # nm rows: defined = "<addr> <type> <name>" (NF==3); undefined = "U <name>"
 # (NF==2, leading whitespace collapsed so $1=="U").
-nm "$OUT"/*.o 2>/dev/null | awk 'NF==3 {print $3}' | sed 's/^_//' | sort -u > "$OUT/defined.txt"
-nm "$OUT"/*.o 2>/dev/null | awk 'NF==2 && $1=="U" {print $2}' | sed 's/^_//' | sort -u > "$OUT/undef.txt"
+nm "$OUT"/*.o 2>/dev/null | awk 'NF==3 {print $3}' | sed "s/^$prefix//" | sort -u > "$OUT/defined.txt"
+nm "$OUT"/*.o 2>/dev/null | awk 'NF==2 && $1=="U" {print $2}' | sed "s/^$prefix//" | sort -u > "$OUT/undef.txt"
 # GAP = referenced-undefined that is defined by no native unit.
 comm -23 "$OUT/undef.txt" "$OUT/defined.txt" > "$OUT/gap.txt"
 
