@@ -195,7 +195,7 @@ extern u8  g_inventoryOwned[];        /* 0x1A7B00 per-item have-flag (case 2) */
 extern u8  g_inventoryNewFlag[];      /* 0x1A7B38 per-item newly-acquired flag (case 3) */
 extern u8  D_1395B8[];                /* 0x1395B8 progress flag byte-array (cases 6 and 10;
                                        * what the flags mean is undetermined) */
-extern u8  g_platinumBoltFlags[];     /* 0x19B278 per-platinum-bolt collected flag (case 9) */
+extern u8  g_platinumBoltFlags[];     /* 0x19B278 per-platinum-bolt collected flag (case 8) */
 extern s32 g_mapCurrentLevel ROM_SPLIT; /* 0x1C5150 current map level id (case 10) */
 extern s32 func_002FCEA0(s32 level, s32 bitIndex); /* case 10 callee: tests bit
                                        * `bitIndex` of D_1395B8[the byte its level keys to
@@ -249,13 +249,28 @@ extern u8 g_levelVisitedMarkers[]; /* 0x1A7BF0 per-level visited byte markers */
  * and g_weaponUpgradeLevel is bound in committed asm; a rename would break both.
  * EvaluateProgressCondition cases 4/5 index this stride-0x10 table at 0x139A28
  * (114 entries) and read the s32 state at +0xC (symbol g_weaponUpgradeLevel =
- * 0x139A34). func_00298A00 fills the current level's slice of indices (bounds
- * from D_264DD0): +0/+4 get an object's +0x10/+0x14 floats, the x/y pair the
- * map projects, and +8 gets a copy of its +0xF8 float, which is not z
- * (NOTE #8405). MapDraw bumps the icon's sprite variant when state bit 1 is
- * set, and func_0029ECE0 zeroes the icon's +0x24 when state bit 0 is clear. What the blips are, and who writes the state, is
- * undetermined. The game's real weapon-upgrade level is GetWeaponUpgradeLevel
- * (g_weaponTable). */
+ * 0x139A34). func_00298A00 fills one slice of indices (bounds from D_264DD0,
+ * keyed by g_playerProgress 0x1A79F8; that the key is the current level rests
+ * on names and uses elsewhere, not on a measurement here): +0/+4 get an
+ * object's +0x10/+0x14 floats, the x/y pair the map projects, and +8 gets a
+ * copy of its +0xF8 float, which is not z (NOTE #8405). MapDraw bumps the
+ * icon's sprite variant when state bit 1 is set. func_0029ECE0 zeroes the
+ * icon's (g_pMapBlipList entry's) +0x24 only when the icon's own +4 halfword
+ * has bit 0x1000 set AND state bit 0 is clear; without 0x1000 it keeps the
+ * +0x24 value the same loop stored just before. What the blips are, and who
+ * writes the state, is undetermined.
+ * Those readers are the ones a static lui/%lo scan of the asm finds, which is
+ * not exhaustive: it cannot see computed-pointer access. One such path exists:
+ * the whole table (0x720 = 114 x 0x10 bytes) is entry 16 of
+ * g_saveSectionTableGlobal (tag 0xF), so the save-section code reaches it
+ * through srcPtr; whether that path writes the state was not traced.
+ * Weapon upgrades: the only lead is a name. GetWeaponUpgradeLevel (0x288988,
+ * g_weaponTable) is the upgrade level by its symbol name alone, UNCONFIRMED.
+ * Its code follows its argument's +0x4C links to the chain root, then returns
+ * the number of +0x4A hops from there to the chain's end, so its result does
+ * not depend on where in the chain the argument sits (NOTE #5654; its static
+ * xref scan found no writer of the links, which cannot rule out a
+ * computed-pointer one). */
 typedef struct WeaponUpgradeRecord {
     s32 _pad0[3];   /* 0x0 map x/y at +0/+4, a copy of an object's +0xF8 at +8 */
     s32 upgradeLevel; /* 0xC - blip state (misnamed), not an upgrade level */
@@ -2529,7 +2544,9 @@ s32 UpdateLevelObjectiveStates(void) {
  * too, since the case reads D_139A28 and not LevelObjective.state); 6 flag
  * byte D_1395B8[arg] (what the flags mean, "dialog" included, is
  * undetermined, NOTE #8400); 7 call arg as a predicate function; 10 bit `arg`
- * of the current level's D_1395B8 byte, through func_002FCEA0, which also
+ * of the D_1395B8 byte keyed by g_mapCurrentLevel (0x1C5150; "current level"
+ * is that symbol's name, and whether it holds the same id as func_00298A00's
+ * g_playerProgress key is not established), through func_002FCEA0, which also
  * writes the masked byte back (FACT #8398); 11 never (the same return-0 target
  * as an out-of-range cond).
  * Matching shape (cc1 2.9, -O2 -G8 -fno-gcse, task #888): a 12-entry switch
@@ -2539,7 +2556,11 @@ s32 UpdateLevelObjectiveStates(void) {
  * The switch's 0x30-byte jump table is this unit's .rodata. The ROM keeps it
  * at 0x26CA70, inside .data, so the yaml links text/198FA0.o(.rodata) between
  * data/138B80 and data/16CA20 (task #947). Any other .rodata this unit grows
- * lands at that same spot and moves the table. */
+ * lands at that same spot and moves the table.
+ * verify_match_unit.sh reads the function byte-identical, the table included
+ * (rc 0, .rodata placed at 0x26CA70). It was UNVERIFIABLE (rc 2) on that
+ * .rodata reloc until task #966 taught the tool to place a unit's own section
+ * symbols. */
 s32 EvaluateProgressCondition(s32 cond, s32 arg) {
     switch ((s16)cond) {
     case 0:
