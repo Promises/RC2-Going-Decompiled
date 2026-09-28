@@ -881,27 +881,45 @@ s32 GetWeaponStatsAtLevel(WeaponDef *out, s32 itemId, s32 level) {
 #endif
 
 /*
+ * g_sceneDecompressBaseSplit: a second C name for g_sceneDecompressBase (same
+ * assembler symbol via the asm label). `section(".data")` tells cc1 -G8 this
+ * spelling is NOT small data, so cc1 splits the address itself
+ * (`lui $2` ... `lw $3,%lo($2)`) and can schedule the g_sceneArenaCursor load
+ * between the two halves (the ResetDebugHeap lever, task #850). No new symbol
+ * reaches the object: the relocation names g_sceneDecompressBase.
+ */
+#ifndef TARGET_NATIVE
+extern s32 g_sceneDecompressBaseSplit __asm__("g_sceneDecompressBase") __attribute__((section(".data")));
+#else
+#define g_sceneDecompressBaseSplit g_sceneDecompressBase
+#endif
+
+/*
  * Compute the scene-arena address that would remain after carving `size`
  * bytes off the decompressed-scene region, written to *out. Refuses sizes over
  * 0x40000 (writes 0, returns -1); otherwise returns 0.
+ *   size - bytes to carve (compared unsigned)
+ *   out  - receives the resulting address, or 0 on refusal
  *
- * WALL (74.69%): logic + the bnezl branch-likely form match exactly, but the
- * original interleaves the two global loads (lui base; lui cursor; lw cursor;
- * lw base) where our cc1 schedules each lui/lw pair together — a fixed
- * load-scheduling difference unaffected by operand order. Left INCLUDE_ASM.
+ * Byte-exact on sdk29 (task #978). The old WALL note here (74.69%) had the
+ * branch-likely form matching, with only the load interleave left ("cc1
+ * schedules each lui/lw pair together"). Reading the base through the split
+ * name above gives the ROM's `lui base; lui cursor; lw cursor; lw base`. The refusal
+ * path is written last, behind a `goto`, so it lands after the success path
+ * and the `*out = 0` store fills the `bnel` slot as in the ROM. With the
+ * refusal inline, cc1 puts a load in a plain `beq` slot instead (the FACT #8385
+ * probe shape).
  */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_00289398);
-#else
 s32 func_00289398(s32 size, s32 *out) {
     if ((u32)0x40000 < (u32)size) {
-        *out = 0;
-        return -1;
+        goto refuse;
     }
-    *out = (g_sceneDecompressBase + g_sceneArenaCursor) - size;
+    *out = (g_sceneDecompressBaseSplit + g_sceneArenaCursor) - size;
     return 0;
+refuse:
+    *out = 0;
+    return -1;
 }
-#endif
 
 /* Handwritten no-return fragment: `sh $0,0x1C($a0); nop` with NO jr $ra (it
  * falls through). Not expressible as a returning C function — INCLUDE_ASM. */
@@ -3164,14 +3182,74 @@ void func_0028C1E8(HudElement *rec, s32 *pX, s32 *pY, s32 idxBase, s32 idxDelta)
  * working width, clamped against rec+0x8, else seeds 0x1869F; counts the decimal
  * digits of rec+0x8 (loop dividing by 10) and applies the rec+0x60 alignment
  * flags to derive the rec+0x5C/+0x58 half-extents (12 px per digit / 14 px caps).
+ *   rec - the HudElement record; no return value
  *
- * MATCH-WALL: the digit-count/modulo lower as `div`/`mflo` with break-on-div-by-
- * zero scaffolding + branch-likely guards cc1 won't reproduce from C `/`, so the
- * #ifndef arm stays INCLUDE_ASM; the #else arm is the faithful functional model
- * (engine 2.96 = no byte-match anyway). */
+ * Byte-exact on sdk29 (task #978), EE arm below. cc1 2.9 does emit the ROM's
+ * `div`/`beql`/`break 7`/`mflo` sequence from C `/`. The levers:
+ *   - volatile else-path stores keep the 0x1869F seed stores in their
+ *     own block (#948);
+ *   - three counted empty asms at the head of the digit loop lift it over
+ *     cc1's short-loop threshold, so reorg fills the loop branch's slot with
+ *     `digits++` (FACT #8384, #948);
+ *   - f60 pinned to $8. Unpinned, it takes $7 and the div-by-zero guard's
+ *     zero takes $8, the ROM's pair swapped. The use at the very end keeps f60
+ *     live, so the `andi` tests go to v0 instead of reusing $8, which keeps
+ *     the duplicated `slti v0,t1,12` the ROM carries at 0x28C45C.
+ * The ROM's `bnel`/`beql` slots hold plain register stores and `break`, not
+ * the symbolic macros asm_unit.sh hoists (FACT #8385). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C390);
+void func_0028C390(void *rec) {
+    u8 *p = (u8 *)rec;
+    s32 valPtr = *(s32 *)(p + 0xC);
+    s32 n, f5C, digits;
+    register s32 f60 __asm__("$8");
+
+    if (valPtr != 0 && (valPtr & 3) == 0) {
+        s32 value = *(s32 *)valPtr;
+        s32 cap = *(s32 *)(p + 0x8);
+        *(s32 *)(p + 0x78) = value;
+        if (cap < value) {
+            *(s32 *)(p + 0x78) = cap;
+        }
+        *(s32 *)(p + 0x74) = *(s32 *)(p + 0x78);
+    } else {
+        *(volatile s32 *)(p + 0x74) = 0x1869F;
+        *(volatile s32 *)(p + 0x78) = 0x1869F;
+    }
+
+    n = *(s32 *)(p + 0x8);
+    f60 = *(s32 *)(p + 0x60);
+    f5C = *(s32 *)(p + 0x5C);
+    digits = 0;
+    if (n >= 0xA) {
+        s32 t = n;
+        do {
+            __asm__ __volatile__("");
+            __asm__ __volatile__("");
+            __asm__ __volatile__("");
+            t = t / 0xA;
+            digits++;
+        } while (t >= 0xA);
+    }
+
+    if ((f60 & 3) == 0 && (f60 & 0xC) != 0) {
+        *(s32 *)(p + 0x5C) = (digits + 1) * 0xC + f5C;
+        if (*(s32 *)(p + 0x58) < 0xE) {
+            *(s32 *)(p + 0x58) = 0xE;
+        }
+        return;
+    }
+
+    if (f5C < 0xC) {
+        *(s32 *)(p + 0x5C) = 0xC;
+    }
+    *(s32 *)(p + 0x58) += (digits + 1) * 0xE;
+    __asm__("" : : "r"(f60));
+}
 #else
+/* Native arm: the plain model of the EE arm above. The old MATCH-WALL note here
+ * ("cc1 won't reproduce the div/break scaffolding from C `/`") was wrong: cc1
+ * 2.9 does emit it (task #978). */
 void func_0028C390(void *rec) {
     u8 *p = (u8 *)rec;
     s32 valPtr = *(s32 *)(p + 0xC);

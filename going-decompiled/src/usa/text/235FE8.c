@@ -814,21 +814,68 @@ void func_00336BA8(void *p, s32 flag) {
     __asm__ __volatile__("");
 }
 
-/* func_00336BC8: seed the gadget-swap zoom animation. Store the swap flag/index
+/*
+ * Assembler aliases into the gadget-swap block at g_swapGadgetItemIndex
+ * (0x1B229A):
+ *   g_swapGadgetWord86 = +0x86 (0x1B2320) the swap flag word
+ *   g_timerHudYScale   = +0x8A (0x1B2324) the Y scale DrawVehicleRaceTimerHud
+ *                        reads (FACT #6124)
+ *   g_spriteYFudge     = +0x8E (0x1B2328) the sprite y-fudge
+ *                        GuiSpriteElementDraw reads
+ * func_00336BC8 writes all three. cc1 2.9 fills a delay slot with a small
+ * symbol's load or store only when it carries no offset (FACT #8386), so these
+ * are offset-free names for cc1; gas resolves them back to
+ * g_swapGadgetItemIndex plus the addend, the ROM's own relocations. Their
+ * .extern size decides how gas addresses them: 4 is small, so gas uses
+ * %gp_rel($28). 16 is not, so +0x8A gets the absolute `lui $at; swc1 %lo($at)`
+ * form the ROM uses there (tasks #948, #978).
+ */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_swapGadgetWord86, 4\n\tg_swapGadgetWord86 = g_swapGadgetItemIndex + 0x86");
+__asm__(".extern g_timerHudYScale, 16\n\tg_timerHudYScale = g_swapGadgetItemIndex + 0x8A");
+__asm__(".extern g_spriteYFudge, 4\n\tg_spriteYFudge = g_swapGadgetItemIndex + 0x8E");
+extern s32 g_swapGadgetWord86;
+extern f32 g_timerHudYScale;
+extern f32 g_spriteYFudge;
+#endif
+
+/*
+ * func_00336BC8: seed the gadget-swap zoom animation. Store the swap flag/index
  * (a0) as a word at g_swapGadgetItemIndex+0x86, then two zoom factors: at +0x8A
  * the start scale (1.0 when a0==0, else 1.0769) and at +0x8E the end scale (1.0
- * when a0==0, else 0.9). */
+ * when a0==0, else 0.9).
+ *   flag - swap flag/index; zero selects the 1.0 scales
+ *
+ * Byte-exact on sdk29 (task #978). The ROM mixes addressing modes per field:
+ * +0x86 and +0x8E through %gp_rel($28), +0x8A through the absolute %hi/%lo
+ * macro. The aliases above give each field its own mode. Each scale is written
+ * as a default then an override on flag == 0, which is the ROM's
+ * `li.s; bnez; <slot>; li.s 1.0` shape.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336BC8);
+void func_00336BC8(s32 flag) {
+    f32 start = 1.076923f;
+    f32 end;
+    g_swapGadgetWord86 = flag;
+    if (flag == 0) {
+        start = 1.0f;
+    }
+    g_timerHudYScale = start;
+    end = 0.9f;
+    if (flag == 0) {
+        end = 1.0f;
+    }
+    g_spriteYFudge = end;
+}
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_00336BC8, unit objdiff): 21.89%,
    19/27 insns differ. Residual: UNKNOWN-lui + gp/abs-mixed symbol (first differing insn: 'lui at, 0x3f89' vs 'addiu v0, gp, %gp_rel(g_swapGadgetItemIndex)').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; same-symbol gp_rel /
-   absolute reload wall - the original reaches +0x86 and +0x8E through the one-
-   insn %gp_rel($28) form but +0x8A through the two-insn absolute %hi/%lo macro;
-   cc1 cannot reproduce that asymmetric per-field addressing mode mix. */
+/* Native arm. The original reaches +0x86 and +0x8E through the one-insn
+   %gp_rel($28) form but +0x8A through the two-insn absolute %hi/%lo macro;
+   this plain spelling cannot express that mix (34.67% on sdk29, NOTE #8391).
+   The per-field aliases in the EE arm above do (task #978). */
 extern s32 g_swapGadgetItemIndex;
 void func_00336BC8(s32 flag) {
     char *base = (char *)&g_swapGadgetItemIndex;
@@ -851,8 +898,6 @@ void func_00336BC8(s32 flag) {
  * build keeps the g_waterPool spelling.
  */
 #ifndef TARGET_NATIVE
-__asm__(".extern g_swapGadgetWord86, 4\n\tg_swapGadgetWord86 = g_swapGadgetItemIndex + 0x86");
-extern s32 g_swapGadgetWord86;
 s32 func_00336C10(void) {
     return g_swapGadgetWord86;
 }
@@ -1157,20 +1202,56 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337120);
  * has a live texture handle (+0x40), submit the sprite to the 2D blitter
  * func_003017F8 - position (*(e+0x0)), scale (*(e+0x4)) with y pre-scaled by the
  * global sprite y-fudge (g_swapGadgetItemIndex+0x8E), color (*(e+0xC)), the
- * +0x38 vec and the +0x40 handle. */
+ * +0x38 vec and the +0x40 handle.
+ *
+ * Byte-exact on sdk29 (task #978). The y-fudge is read through
+ * g_spriteYFudge, the assembler alias of g_swapGadgetItemIndex + 0x8E defined
+ * above func_00336BC8: cc1 fills the `beqz` slot only with an offset-free small
+ * symbol (FACT #8386), and the relocation still lands on
+ * g_swapGadgetItemIndex + 0x8E. Pinning the
+ * fudge to $f0 gives the ROM's `mul.s $f15,$f15,$f0`. The volatile read of
+ * vec38[0] keeps cc1 from choosing it for the jal slot. The ROM puts pos[0]
+ * ($f12) there, after $f14 and $f16. The trailing empty asm keeps the call
+ * from becoming a sibling-call `j`. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiSpriteElementDraw);
+extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
+                          f32 px, f32 py, f32 sx, f32 syg, f32 v38);
+void GuiSpriteElementDraw(void *p) {
+    GuiElement *e = (GuiElement *)p;
+    s32 handle;
+    f32 *pos, *scale, *vec38;
+    s32 *color;
+    if (e->visible[0] == 0.0f) {
+        return;
+    }
+    handle = *(s32 *)((char *)e + 0x40);
+    if (handle == 0) {
+        return;
+    }
+    pos = e->pos;
+    scale = e->scale;
+    color = *(s32 **)((char *)e + 0xC);
+    vec38 = *(f32 **)((char *)e + 0x38);
+    {
+        register f32 fudge __asm__("$f0") = g_spriteYFudge;
+        func_003017F8(handle, color[0], scale, vec38,
+                      pos[0], pos[1], scale[0], scale[1] * fudge,
+                      *(volatile f32 *)&vec38[0]);
+    }
+    __asm__ __volatile__("");
+}
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_GuiSpriteElementDraw, unit objdiff): 77.14%,
    19/30 insns differ. Residual: UNKNOWN-daddu (first differing insn: 'daddu a1, a0, zero' vs 'mtc1 zero, fv0').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; 92.7%. Structure, frame
+/* Native arm. This plain spelling measured 92.7% on sdk29: structure, frame
    (asm barrier defeats the tail-call), branches and reloc all match; the only
    delta is -O2 instruction scheduling of the independent argument loads - the
    original loads the gp_rel y-fudge into fv0 first then scale[1] into fa3
    (mul.s fa3,fa3,fv0) and fills the jal delay slot with pos[0]; this cc1
-   schedules the global load late and hoists pos[0]. Pure scheduler artifact. */
+   schedules the global load late and hoists pos[0]. The EE arm above closes
+   both (task #978). */
 extern s32 g_swapGadgetItemIndex;
 extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
                           f32 px, f32 py, f32 sx, f32 syg, f32 v38);
@@ -7229,23 +7310,30 @@ void GuiIconScreenInit2(void *w, GuiPool *pool) {
 }
 #endif
 
-/* func_00343290: cache the row-data pointer at p+0x260 then init the GuiWidget at
- * p+0x188 with it (GuiMenuListSetRows(p+0x188, records)). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343290);
-#else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00343290, unit objdiff): 67.50%,
-   5/10 insns differ. Residual: UNKNOWN-daddu (first differing insn: 'daddu v1, a0, zero' vs '').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; the original keeps a $a0
-   copy and fills the jal delay slot with the store; cc1 stores before the call.
-   68% best. */
+/*
+ * func_00343290: cache the row-data pointer at p+0x260 then init the GuiWidget
+ * at p+0x188 with it (GuiMenuListSetRows(p+0x188, records)).
+ *   p       - the owning menu widget
+ *   records - row-data array, stored and passed through unchanged
+ *
+ * Byte-exact on sdk29 (task #978). The ROM interleaves its prologue with the
+ * two argument copies: `addiu sp; move v1,a0; sd ra; move v0,a1`. Plain C
+ * gives cc1 both copies ahead of `sd ra` (FACT #8195, the "prologue sd ra vs
+ * arg copy" residual). A volatile asm that reads `self` pins the $a0 copy
+ * before the barrier and the laundered `rows` copy after it, which is the
+ * ROM's order; the store then lands in the jal slot. The trailing empty asm
+ * keeps the call from becoming a sibling-call `j`.
+ */
 void func_00343290(void *p, void *records) {
-    *(void **)((char *)p + 0x260) = records;
-    GuiMenuListSetRows((char *)p + 0x188, records);
+    char *self = p;
+    void *rows;
+    __asm__ __volatile__("" : : "r"(self));
+    rows = records;
+    __asm__("" : "+r"(rows));
+    *(void **)(self + 0x260) = rows;
+    GuiMenuListSetRows(self + 0x188, records);
+    __asm__ __volatile__("");
 }
-#endif
 
 /* func_003432B8: store an int at +0x170. */
 void func_003432B8(void *p, s32 v) {

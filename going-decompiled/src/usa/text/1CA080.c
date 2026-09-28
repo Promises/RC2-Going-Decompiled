@@ -513,13 +513,33 @@ void func_002CAB50(void) {
 }
 
 /* Store a reciprocal into the menu scratch: [0x1C0]=1.0f, [0x1C8]=0, [0x1C4]=1/x.
+ *   x - divisor; the ROM divides in place ($f12 = 1.0 / $f12)
  * Instruction-exact on both arms once the stale alias D_1F27C0 (== g_menuScreenBlock)
  * was retired, but the ROM carries TWO nops between `addiu v0` and `div.s $f12,$f0,$f12`
  * (0x2CABA0/A4 — a compiler-inserted mtc1->div.s hazard pad; the unit has 12 other
  * mtc1 sites with 2 instructions between and NO pad, so it is not an assembler rule).
- * Neither arm emits them: SCHED-NOP-PAD. */
+ * Neither arm emits them from plain C: SCHED-NOP-PAD (FACT #7918).
+ *
+ * Byte-exact on sdk29 (task #978), EE arm below. The pad is written as a
+ * noreorder asm tied to the divisor and the block pointer, so it sits after
+ * `addiu v0` and before `div.s`. #948 measured it on 335 USA `div.s` sites:
+ * 158 carry exactly this 2-nop pad (NOTE #8391), so it is common in the ROM
+ * and not specific to this function. The volatile fence on `one` orders `li.s`
+ * before the %hi/%lo pair. The fence before the last store keeps the
+ * reciprocal's store for the `jr` slot, as in the ROM. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CAB90);
+void func_002CAB90(float x) {
+    float one = 1.0f;
+    u8 *p;
+    __asm__ __volatile__("" : "+f"(one));
+    p = g_menuScreenBlock;
+    __asm__ __volatile__(".set noreorder\n\tnop\n\tnop\n\t.set reorder" : "+f"(x) : "r"(p));
+    x = one / x;
+    *(float *)(p + 0x1C0) = one;
+    *(s32 *)(p + 0x1C8) = 0;
+    __asm__ __volatile__("");
+    *(float *)(p + 0x1C4) = x;
+}
 #else
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 81.82% -> SCHED-NOP-PAD,
