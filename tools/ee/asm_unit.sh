@@ -141,7 +141,10 @@ cd "$FIXROOT"
 # assembles a different program from cc1's: a BRANCH-LIKELY slot (annulled
 # when the branch falls through; hoisted, it runs unconditionally) and a slot
 # LOAD whose destination the branch reads or links into (hoisted, it replaces
-# the value the branch tests). The ROM has neither next to an absolute macro,
+# the value the branch tests). A linking branch writes its link register
+# before the slot runs, so a slot load into it or a slot store of it is the
+# same class (#993, FACT #8423); for `jalr` that register is the rd operand,
+# $31 only by default. The ROM has neither next to an absolute macro,
 # in either placement (USA SCUS_972.68, all branches: 0 of the 61 `lui $at;
 # op; branch; nop` sites and 0 of the 3 `lui $at; branch; op` sites), so what
 # the SN ee-as did there is unobservable and a function carrying one cannot
@@ -200,16 +203,30 @@ if [ "$GFLAG" = "-G8" ]; then
     }
     # why hoisting slot insn `ins` above branch `br` would change the program
     # (see header, #979): "" when it is a legal reordering.
-    function dslot_hazard(br, ins,    mn, ops, dst) {
+    function dslot_hazard(br, ins,    mn, ops, reads, link, n, r, reg) {
       mn = br; sub(/^\t/, "", mn); sub(/\t.*/, "", mn)
       ops = br; sub(/^\t[a-z0-9.]+\t/, "", ops)
       if (ops ~ /\$(1|at)([^0-9a-z]|$)/) return "at"
-      if (mn ~ /^(beql|bnel|blezl|bgezl|bgtzl|bltzl)$/) return "branch-likely"
+      if (mn ~ /^(beql|bnel|blezl|bgezl|bgtzl|bltzl|bgezall|bltzall)$/) return "branch-likely"
+      # The link register is written before the slot runs, so a slot insn
+      # touching it sees the return address in place and the old value when
+      # hoisted (#993, FACT #8423). It is an OPERAND of the register forms:
+      # `jalr $rs` / `jal $rs` link $31, `jalr $rd,$rs` / `jal $rd,$rs` link
+      # $rd (and read only $rs); every other linking branch links $31.
+      reads = ops; link = ""
+      if (mn == "jalr" || (mn == "jal" && ops ~ /^\$/)) {
+        n = split(ops, r, ",")
+        reads = r[n]; link = (n >= 2) ? r[1] : "$31"
+      } else if (mn ~ /^(jal|bgezal|bltzal)$/) link = "$31"
+      if (link == "$ra") link = "$31"
+      if (link == "$0" || link == "$zero") link = ""
+      reg = ins; sub(/^\t[a-z]+\t/, "", reg); sub(/,.*/, "", reg)
       if (ins ~ /^\tl/) {
-        dst = ins; sub(/^\t[a-z]+\t/, "", dst); sub(/,.*/, "", dst)
-        if (dst == "$0") return ""
-        if (("," ops ",") ~ ("," "\\" dst ",")) return "load writes a register the branch reads"
-        if (mn ~ /^(jal|bgezal|bltzal)$/ && (dst == "$31" || dst == "$ra")) return "load writes the link register"
+        if (reg == "$0") return ""
+        if (("," reads ",") ~ ("," "\\" reg ",")) return "load writes a register the branch reads"
+        if (link != "" && (reg == link || (reg == "$ra" && link == "$31"))) return "load writes the link register"
+      } else if (link != "" && (reg == link || (reg == "$ra" && link == "$31"))) {
+        return "store reads the link register"
       }
       return ""
     }
@@ -267,6 +284,11 @@ if [ "$GFLAG" = "-G8" ]; then
         print pendbr; pendbr = ""
       }
     }
+    # The branch-likely-and-link pair is held for the slot-macro check only
+    # (#993): outside this rule nothing sees it, so GNU as split an absolute
+    # slot macro across it with no asm_unit.sh line. The reorder-mode pins
+    # below are measured on other branches and are not extended to it.
+    /^\t(bgezall|bltzall)\t/ { if (nore && pendmov == "") { pendbr = $0; next } }
     /^\t(j|jal|jalr|b|beq|bne|beql|bnel|blez|bgez|bgtz|bltz|blezl|bgezl|bgtzl|bltzl|bgezal|bltzal|bc1f|bc1t)\t/ {
       if (nore && pendmov == "") { pendbr = $0; next }
       # volatile-marker pin (see header): the insn directly before this
