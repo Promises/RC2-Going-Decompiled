@@ -2676,7 +2676,8 @@ extern s32 g_hudTextureSlotsAbs;
  * Both keep cc1 from folding `(id - 1) * 4 + off` into the `id * 4` it already
  * holds. The _HDR form also reads `hdr`, which keeps the header load ahead of
  * the `id - 1` (the ROM's order in the CLUT arm; the texture arm has the plain
- * form's order). */
+ * form's order). InvalidateHudBankGsSlots also applies the plain form to a
+ * known-zero `id`, so cc1 cannot fold it into the constant it tests. */
 #define HUD_PREV_FENCE(prev) __asm__("" : "+r"(prev))
 #define HUD_PREV_FENCE_HDR(prev, hdr) __asm__("" : "+r"(prev) : "r"(hdr))
 #else
@@ -2785,9 +2786,6 @@ void RelocateHudBankGsSlots(s32 assetId, s32 baseAddr) {
     }
 }
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", InvalidateHudBankGsSlots);
-#else
 /**
  * Inverse of RelocateHudBankGsSlots: un-relocate and free one HUD asset's CLUT and
  * texture GS handles. For each g_hudClutSlots / g_hudTextureSlots handle in this
@@ -2797,42 +2795,84 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", InvalidateHudBa
  * +0x4 halfword of each of its texture slots up front.
  *
  *   assetId  index of the HUD asset to unload
+ *
+ * Byte-exact on sdk29 (task #1024), with RelocateHudBankGsSlots's levers plus:
+ *   - asset 0's clear loop re-reads the header pointer in its test and the code
+ *     after it uses that last read, so `hdr` is reassigned there. Its two reads
+ *     and the halfword store are volatile: a SCHEDULING DEVICE (RULING #8404),
+ *     not a statement about the machine. The ROM re-reads both pointers after the
+ *     halfword store, which cc1's type-based aliasing would not, and a volatile
+ *     final header read keeps reorg from pulling it into the texture loop's
+ *     entry-branch slot;
+ *   - HUD_PREV_FENCE(id) in the asset-0 path stops cc1 turning the loop's entry
+ *     test on the known-zero id into a `blez` (the ROM keeps `slt v0,t1,v0`);
+ *   - EE_REG pins for `assetId * 4` ($12, shared by the three later address
+ *     sums), the clear loop's index ($4), its texture base ($3) and its test ($2).
  */
+#define HUD_ASSET_HEADER_V ((u8 *)*(volatile s32 *)&g_pHudAssetHeaderAbs[0])
+#define HUD_TEXTURE_SLOTS_V (*(volatile s32 *)&g_hudTextureSlotsAbs)
 void InvalidateHudBankGsSlots(s32 assetId) {
-    u8 *hdr = (u8 *)g_pHudAssetHeader[0];
-    s32 relBase = *(s32 *)(hdr + 0x74 + assetId * 4);
+    s32 id = assetId;
+    u8 *hdr = HUD_ASSET_HEADER;
+    register s32 off EE_REG("$12");
+    s32 relBase;
     s32 start;
     s32 end;
     s32 i;
 
-    if (assetId == 0) {
+    relBase = *(s32 *)((s32)hdr - -(id * 4) + 0x74);
+    if (id == 0) {
         /* asset 0 only: clear the +0x4 halfword of every one of its texture slots */
-        end = *(s32 *)(hdr + 0x34);
-        for (i = 0; i < end; i++) {
-            *(s16 *)((u8 *)&g_hudTextureSlots[i] + 0x4) = 0;
+        register s32 slot EE_REG("$4") = 0;
+        HUD_PREV_FENCE(id);
+        off = 0;
+        if (id < *(s32 *)(hdr + 0x34)) {
+            register s32 more EE_REG("$2");
+            do {
+                register s32 tex EE_REG("$3") = HUD_TEXTURE_SLOTS_V;
+                *(volatile s16 *)(tex + slot * 8 + 4) = 0;
+                slot++;
+                more = slot < *(s32 *)((hdr = HUD_ASSET_HEADER_V) + 0x34);
+            } while (more);
         }
     }
 
     /* CLUT slots [prevEnd, end): remove the base and mark unallocated */
-    start = (assetId == 0) ? 0 : *(s32 *)(hdr + 0x14 + (assetId - 1) * 4);
-    end = *(s32 *)(hdr + 0x14 + assetId * 4);
+    if (id != 0) {
+        s32 prev = id - 1;
+        HUD_PREV_FENCE(prev);
+        off = id * 4;
+        start = *(s32 *)((s32)hdr - -(prev * 4) + 0x14);
+    } else {
+        start = 0;
+    }
+    end = *(s32 *)(hdr + off + 0x14);
     for (i = start; i < end; i++) {
-        g_hudClutSlots[i].handle -= relBase;
-        g_hudClutSlots[i].handle |= (s32)0x80000000;
+        *(s32 *)(g_hudClutSlotsAbs + i * 8) -= relBase;
+        *(s32 *)(g_hudClutSlotsAbs + i * 8) |= 0x80000000;
     }
 
     /* texture slots [prevEnd, end): remove the base and mark unallocated */
-    start = (assetId == 0) ? 0 : *(s32 *)(hdr + 0x34 + (assetId - 1) * 4);
-    end = *(s32 *)(hdr + 0x34 + assetId * 4);
+    if (id != 0) {
+        s32 prev = id - 1;
+        hdr = HUD_ASSET_HEADER;
+        HUD_PREV_FENCE(prev);
+        start = *(s32 *)((s32)hdr - -(prev * 4) + 0x34);
+    } else {
+        hdr = HUD_ASSET_HEADER;
+        start = 0;
+    }
+    end = *(s32 *)(hdr + off + 0x34);
     for (i = start; i < end; i++) {
-        g_hudTextureSlots[i].handle -= relBase;
-        g_hudTextureSlots[i].handle |= (s32)0x80000000;
+        *(s32 *)(g_hudTextureSlotsAbs + i * 8) -= relBase;
+        *(s32 *)(g_hudTextureSlotsAbs + i * 8) |= 0x80000000;
     }
 
     /* clear the stored relocation base */
-    *(s32 *)(hdr + 0x74 + assetId * 4) = 0;
+    *(s32 *)(HUD_ASSET_HEADER_V + off + 0x74) = 0;
 }
-#endif
+#undef HUD_ASSET_HEADER_V
+#undef HUD_TEXTURE_SLOTS_V
 
 extern void UploadTextureToGs(s32 handle, s32 vramBlk, s32 fmt, s32 wLog, s32 hLog, s32 kickMode); /* UploadTextureToGs */
 extern s32 g_vramTextureBase; /* 0x1A72E4 - VRAM static texture base */
