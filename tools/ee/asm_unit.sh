@@ -136,6 +136,20 @@ cd "$FIXROOT"
 # then a nop in the slot. Only inside `.set noreorder` regions and only for
 # symbols the .extern size map does NOT class as small.
 #
+# The hoist is only a legal reordering when the slot insn is independent of
+# the branch (task #979, FACT #8385). Two shapes are not, and hoisting them
+# assembles a different program from cc1's: a BRANCH-LIKELY slot (annulled
+# when the branch falls through; hoisted, it runs unconditionally) and a slot
+# LOAD whose destination the branch reads or links into (hoisted, it replaces
+# the value the branch tests). The ROM has neither next to an absolute macro,
+# in either placement (USA SCUS_972.68, all branches: 0 of the 61 `lui $at;
+# op; branch; nop` sites and 0 of the 3 `lui $at; branch; op` sites), so what
+# the SN ee-as did there is unobservable and a function carrying one cannot
+# match as written. For those we emit cc1's semantics instead - `lui $at`
+# before the branch, the %lo access in the slot - and say so on stderr naming
+# the function. A branch that reads $at itself has no correct placement for
+# a $at expansion: that is refused with an `.error`, so the unit fails loudly.
+#
 # At -G8 also honor cc1's `#.set volatile` markers at branch boundaries
 # (proven by the original bytes in text/250080 func_00352B90): when cc1
 # declines to fill a delay slot itself (volatile memop directly before a
@@ -184,6 +198,22 @@ if [ "$GFLAG" = "-G8" ]; then
       if (m == 8388608) { m = 0; e++ }
       return s * 2147483648 + (e + 127) * 8388608 + m
     }
+    # why hoisting slot insn `ins` above branch `br` would change the program
+    # (see header, #979): "" when it is a legal reordering.
+    function dslot_hazard(br, ins,    mn, ops, dst) {
+      mn = br; sub(/^\t/, "", mn); sub(/\t.*/, "", mn)
+      ops = br; sub(/^\t[a-z0-9.]+\t/, "", ops)
+      if (ops ~ /\$(1|at)([^0-9a-z]|$)/) return "at"
+      if (mn ~ /^(beql|bnel|blezl|bgezl|bgtzl|bltzl)$/) return "branch-likely"
+      if (ins ~ /^\tl/) {
+        dst = ins; sub(/^\t[a-z]+\t/, "", dst); sub(/,.*/, "", dst)
+        if (dst == "$0") return ""
+        if (("," ops ",") ~ ("," "\\" dst ",")) return "load writes a register the branch reads"
+        if (mn ~ /^(jal|bgezal|bltzal)$/ && (dst == "$31" || dst == "$ra")) return "load writes the link register"
+      }
+      return ""
+    }
+    /^[ \t]*\.ent[ \t]/ { curfn = $2 }
     # flush a held mfc1 unless the next line opens a noreorder region (or is
     # a comment-only line, which we let pass while still holding)
     {
@@ -216,6 +246,18 @@ if [ "$GFLAG" = "-G8" ]; then
             line = $0
             sub(/,[A-Za-z_][A-Za-z0-9_+]*$/, ",%gp_rel(" mfull ")($28)", line)
             print pendbr; print line
+          } else if ((why = dslot_hazard(pendbr, $0)) == "at") {
+            printf "asm_unit.sh: REFUSED: %s: `%s` in the delay slot of `%s`, which reads $at - no placement of the $at expansion keeps the program\n", curfn, substr($0, 2), substr(pendbr, 2) | "cat 1>&2"
+            print "\t.error \"asm_unit.sh: absolute macro in the slot of a branch reading $at (" curfn ")\""
+          } else if (why != "") {
+            printf "asm_unit.sh: WARNING: %s: `%s` in the delay slot of `%s` NOT hoisted (%s); emitted as lui $at before the branch + the %%lo access in the slot. The ROM has no such site: this function cannot match as written (#979, FACT #8385)\n", curfn, substr($0, 2), substr(pendbr, 2), why | "cat 1>&2"
+            op = $0; sub(/^\t/, "", op); sub(/\t.*/, "", op)
+            reg = $0; sub(/^\t[a-z]+\t/, "", reg); sub(/,.*/, "", reg)
+            print "\t.set\tnoat"
+            print "\tlui\t$1,%hi(" mfull ")"
+            print pendbr
+            print "\t" op "\t" reg ",%lo(" mfull ")($1)"
+            print "\t.set\tat"
           } else {
             print $0; print pendbr; print "\tnop"
           }
