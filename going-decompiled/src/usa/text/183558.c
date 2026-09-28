@@ -1360,7 +1360,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", FloatToInt);
 /* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 97.50% / engine96 arm 97.50% (unit objdiff,
  * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `trunc.w.s $f12,$f12` vs
  * `trunc.w.s $f0,$f12`. Residual REGNUM-COLORING: the ROM converts in place (`cvt.w.s $f12,$f12;
- * mfc1 $2,$f12`); both cc1s allocate $f0 for the result. */
+ * mfc1 $2,$f12`); both cc1s allocate $f0 for the result.
+ * Task #946 (cc1 2.9 probe, match.sh): the ROM word is `cvt.w.s` (funct 0x24), not trunc.w.s.
+ * cc1 2.9's fix_trunc scratch never takes the input register: with $f0-$f11 all held live by
+ * empty-asm register variables it picks $f13, skipping the dying $f12. In the ROM, in-place
+ * cvt.w.s appears only here and in the 183178 madd/adda bodies, which are from a later
+ * compiler. So no C spelling reaches it under cc1 2.9. */
 s32 FloatToInt(f32 x) {
     return (s32)x;
 }

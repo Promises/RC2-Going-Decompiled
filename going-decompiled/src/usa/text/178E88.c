@@ -2014,7 +2014,19 @@ void func_0027E368(void *ctx) {
  * flag = landing-gate question) plus the cc1-small model and left-to-right `or`s it reads 91.11%
  * sdk29, residual SCHED (jal / last `or` order). Levers: cc1-small/absolute globals model RUN:
  * 38.69% (sdk29); -fno-strict-aliasing MEASURED (flag not landed): 91.11% sdk29; engine96 with
- * sched1 MEASURED (flag not landed): 51.25%. */
+ * sched1 MEASURED (flag not landed): 51.25%.
+ * Task #946 (cc1 2.9 probes, match.sh): the "no declaration" line above is false. The per-store
+ * reload is pure C under strict aliasing: read the cursor through a 1-element s32/u32 array view
+ * that cc1 sees as small, e.g. `extern u32 curAbs[1]` equated to g_frameDmaCursor at offset 0
+ * with `.extern ,16` (the ResetPerFrameDrawQueues construct). Store through
+ * `((u32 *)curAbs[0])[k]` and bump with `curAbs[0] += 0x10`. With that, the whole tail after the
+ * jal is word-for-word the ROM's. A u32 scalar view reloads only once: cc1 2.9's fixed-scalar /
+ * varying-struct rule lets the indexed stores skip it, and the array view is itself an
+ * in-struct access. Head: `u64 v = r | g << 8; v |= b << 16; v |= a << 24;` then
+ * `__asm__ __volatile__("" : "+r"(v));` before the call gives the ROM's or-chain and
+ * `li a0,1` in the jal slot. What remains is 1 adjacent swap: the ROM issues `sd ra` between
+ * `dsll a3,24` and the last `or`, cc1 after it. 384 non-volatile barrier variants (barrier
+ * subsets x shift orders x a pinned first argument) did not move it. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawFullScreenTint);
 #else
@@ -2416,7 +2428,15 @@ void func_0027F0A8(const u64 *corners, u64 tex0) {
  * every other remaining arm). Residual on the better arm (sdk29): SCHED+REGNUM (first differing
  * insn: ROM `lw v0,0(v0)  [LO16 0x001A7354]` vs built `lui v1,0x0  [HI16 0x001A7350]`). Levers:
  * sibcall guard RUN: sdk29 64.72% / engine96 57.72%; cc1-small/absolute globals model RUN: 76.33%
- * (sdk29); engine96 with sched1 MEASURED (flag not landed): 50.44%. */
+ * (sdk29); engine96 with sched1 MEASURED (flag not landed): 50.44%.
+ * Task #946 (cc1 2.9 probes, match.sh): non-volatile dataflow barriers `__asm__("" : "+r"(v))`
+ * take t889's 6-row floor (3,888 barrier-free variants, NOTE #8245) to 2 rows. The barriers
+ * go on the final vx1 / vx2 / vy2 and on y1*16 + offY (before the -8). Coordinates are computed
+ * in the order x1, y1, x2, y2, then the corners in index order (body in task #946's NOTE).
+ * Remaining is 1 adjacent swap: the ROM ORs vz into corner 0 before starting corner 1 (x2|vy1),
+ * cc1 the reverse. The 2-row form came from 6,144 barrier-placement variants. A further 2,304
+ * corner-order / OR-form / barrier variants on top of it did not move it, and volatile barriers
+ * between the corner statements scored worse (11+ rows). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F168);
 #else
