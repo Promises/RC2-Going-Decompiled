@@ -28,6 +28,20 @@ Revision: bf279c4e1a96684c650fcbf34db4b78b2b94dce6 (trunk, 1999-11-02), the
   longlong.h  gcc/longlong.h   031fdc4d962a7a24c6e015d869bd280c8c4e3fc9
   COPYING     gcc/COPYING      74a8a6531a42e124df07ab5599aad63870fa0bd4
 
+Revision: releases/gcc-2.95.3 (the fp-bit.c revision NOTE #7038 §7 / FACT
+  #7042 pin; PROCEDURE #8224 §4), for the soft-float files:
+
+  file               upstream path            sha1
+  fp-bit.c           gcc/config/fp-bit.c      d5bac6c0bf82faf8716b69d8db783e03053cdd84
+  config/mips/t-elf  gcc/config/mips/t-elf    687ce6c9efdc4cfc60056084f9a6d26257be432c
+
+  t-elf is here as the provenance of the dp-bit.c recipe (its `dp-bit.c:`
+  rule: a 4-line prelude, then fp-bit.c). NO member is built from fp-bit.c
+  yet (task #893, FACT #8255): __fpcmp_parts_d (0x122F10) compiles byte-exact
+  from it alone, but a one-function member cannot reproduce the ROM's zero
+  pad at 0x123024, and the whole dp-bit.o is blocked on __unpack_d, whose
+  source revision is not 2.95.3.
+
 Re-derive: curl -sSf <upstream URL> | shasum   — each must print the sha1 above,
 and `cmp` against the file here must be silent.
 
@@ -41,6 +55,8 @@ Licences, as found in the files
   exception text of its own. libgcc2.c includes it, so it is compiled into
   every libgcc2 member. What that means for the linking exception is recorded
   as an open question for the project owner, not decided here.
+- fp-bit.c: GPL version 2 or later, PLUS the same special exception.
+- config/mips/t-elf: a makefile fragment with no licence header of its own.
 - COPYING: the GNU General Public License, version 2, from the same revision.
 
 Project-written files (NOT GCC source)
