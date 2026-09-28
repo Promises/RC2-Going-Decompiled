@@ -2658,9 +2658,37 @@ void ReloadAllHudBankTextures(s32 mode) {
 }
 #endif
 
+/*
+ * g_hudClutSlotsAbs / g_hudTextureSlotsAbs: ASSEMBLER aliases of the two slot-
+ * array pointers (the #8036 construct, as g_pHudAssetHeaderAbs above), giving
+ * the ROM's `lui rX; lw rX,%lo(rX)` read. They are declared as s32 rather than
+ * as pointers: the ROM re-reads each pointer after every handle store, which is
+ * what cc1 does when a word store may alias the word it read the pointer from.
+ * Natively (-m32) they are the pointers' own storage, read as words.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", RelocateHudBankGsSlots);
+__asm__(".extern g_hudClutSlotsAbs, 16\n\tg_hudClutSlotsAbs = g_hudClutSlots");
+extern s32 g_hudClutSlotsAbs;
+__asm__(".extern g_hudTextureSlotsAbs, 16\n\tg_hudTextureSlotsAbs = g_hudTextureSlots");
+extern s32 g_hudTextureSlotsAbs;
+/* HUD_PREV_FENCE(prev) / HUD_PREV_FENCE_HDR(prev, hdr): SCHEDULING DEVICES, not
+ * statements about the machine — the tied empty asm (as RequestLevelExit's).
+ * Both keep cc1 from folding `(id - 1) * 4 + off` into the `id * 4` it already
+ * holds. The _HDR form also reads `hdr`, which keeps the header load ahead of
+ * the `id - 1` (the ROM's order in the CLUT arm; the texture arm has the plain
+ * form's order). */
+#define HUD_PREV_FENCE(prev) __asm__("" : "+r"(prev))
+#define HUD_PREV_FENCE_HDR(prev, hdr) __asm__("" : "+r"(prev) : "r"(hdr))
 #else
+#define g_hudClutSlotsAbs (*(s32 *)&g_hudClutSlots)
+#define g_hudTextureSlotsAbs (*(s32 *)&g_hudTextureSlots)
+#define HUD_PREV_FENCE(prev) ((void)0)
+#define HUD_PREV_FENCE_HDR(prev, hdr) ((void)0)
+#endif
+
+/* The HUD asset header base (g_pHudAssetHeader[0]), read as a word. */
+#define HUD_ASSET_HEADER ((u8 *)*(s32 *)&g_pHudAssetHeaderAbs[0])
+
 /**
  * Relocate (and mark allocated) the GS handles for one HUD asset's CLUT and
  * texture slots, biasing them by an aligned base address.
@@ -2675,11 +2703,27 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", RelocateHudBank
  *
  *   assetId  index of the HUD asset
  *   baseAddr byte offset added to each handle (rounded up to a multiple of 16)
+ *
+ * Byte-exact on sdk29 (task #1024). Matching notes:
+ *   - the header pointer is re-read after the +0x74 store and in both arms of
+ *     the prevEnd test, and each slot-array pointer before each of its two
+ *     handle updates, because the ROM treats those words as aliased by the
+ *     stores (see g_hudClutSlotsAbs above);
+ *   - the rounding goes through $3, and `assetId * 4` is kept in $12 for the
+ *     texture half after being used from $2 (EE_REG). The ROM holds a copy
+ *     there rather than recomputing it;
+ *   - the prevEnd index is `hdr - -(prev * 4)`, the #804 operand-order spelling,
+ *     so `addu` takes the header as its first operand;
+ *   - the CLUT loop's entry test is a named local in $3 before a do-while, which
+ *     is the register the ROM tests; the texture loop needs neither.
  */
 void RelocateHudBankGsSlots(s32 assetId, s32 baseAddr) {
-    u8 *hdr = (u8 *)g_pHudAssetHeader[0];
-    s32 *relBase = (s32 *)(hdr + 0x74 + assetId * 4);
-    s32 base;
+    register s32 base EE_REG("$10") = baseAddr;
+    s32 id = assetId;
+    s32 *relTable = (s32 *)(HUD_ASSET_HEADER + 0x74);
+    s32 *relBase = &relTable[id];
+    s32 texOff;
+    u8 *hdr;
     s32 start;
     s32 end;
     s32 i;
@@ -2687,27 +2731,59 @@ void RelocateHudBankGsSlots(s32 assetId, s32 baseAddr) {
     if (*relBase != 0) {
         return; /* asset already relocated */
     }
-
-    base = (baseAddr + 0xF) & ~0xF;
+    {
+        register s32 rounded EE_REG("$3") = base + 0xF;
+        base = rounded & 0xFFFFFFF0u;
+    }
     *relBase = base;
 
     /* CLUT slots owned by this asset: the range [prevEnd, end) */
-    start = (assetId == 0) ? 0 : *(s32 *)(hdr + 0x14 + (assetId - 1) * 4);
-    end = *(s32 *)(hdr + 0x14 + assetId * 4);
-    for (i = start; i < end; i++) {
-        g_hudClutSlots[i].handle &= 0x7FFFFFFF;
-        g_hudClutSlots[i].handle += base;
+    if (id != 0) {
+        s32 prev;
+        hdr = HUD_ASSET_HEADER;
+        prev = id - 1;
+        HUD_PREV_FENCE_HDR(prev, hdr);
+        start = *(s32 *)((s32)hdr - -(prev * 4) + 0x14);
+    } else {
+        hdr = HUD_ASSET_HEADER;
+        start = 0;
+    }
+    {
+        register s32 off EE_REG("$2") = id * 4;
+        register s32 keep EE_REG("$12");
+        end = *(s32 *)(hdr + off + 0x14);
+        keep = off;
+        texOff = keep;
+    }
+    i = start;
+    {
+        register s32 more EE_REG("$3") = i < end;
+        if (more) {
+            do {
+                *(s32 *)(g_hudClutSlotsAbs + i * 8) &= 0x7FFFFFFF;
+                *(s32 *)(g_hudClutSlotsAbs + i * 8) += base;
+                i++;
+            } while (i < end);
+        }
     }
 
     /* texture slots owned by this asset: the range [prevEnd, end) */
-    start = (assetId == 0) ? 0 : *(s32 *)(hdr + 0x34 + (assetId - 1) * 4);
-    end = *(s32 *)(hdr + 0x34 + assetId * 4);
+    if (id != 0) {
+        s32 prev;
+        hdr = HUD_ASSET_HEADER;
+        prev = id - 1;
+        HUD_PREV_FENCE(prev);
+        start = *(s32 *)((s32)hdr - -(prev * 4) + 0x34);
+    } else {
+        hdr = HUD_ASSET_HEADER;
+        start = 0;
+    }
+    end = *(s32 *)(hdr + texOff + 0x34);
     for (i = start; i < end; i++) {
-        g_hudTextureSlots[i].handle &= 0x7FFFFFFF;
-        g_hudTextureSlots[i].handle += base;
+        *(s32 *)(g_hudTextureSlotsAbs + i * 8) &= 0x7FFFFFFF;
+        *(s32 *)(g_hudTextureSlotsAbs + i * 8) += base;
     }
 }
-#endif
 
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", InvalidateHudBankGsSlots);
