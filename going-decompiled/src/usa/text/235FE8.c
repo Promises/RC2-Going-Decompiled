@@ -783,38 +783,36 @@ void func_00336B68(void *p, s32 flag) {
     __asm__ __volatile__("");
 }
 
-/* func_00336B88: install &D_1AD908 at p+0x0 then forward to func_003368E8. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336B88);
-#else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00336B88, unit objdiff): 76.75%,
-   4/9 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x10' vs 'addiu v0, gp, %gp_rel(D_1AD908)').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; the original fills the
-   jal delay slot with the field store; cc1 fills it with a nop and stores
-   before the call. 77% best. */
+/*
+ * func_00336B88: install the vtable &D_1AD908 at p+0x0, then forward
+ * (p, flag) to func_003368E8.
+ *
+ *   p     the GUI object being initialised; word 0 receives the vtable
+ *   flag  passed through unchanged
+ *
+ * The ROM stores the vtable in the jal delay slot, after the prologue's
+ * `sd ra`. cc1 2.9 treats an incoming-argument pointer as unable to alias the
+ * frame, so it hoists the store above `sd ra` and reorg can no longer move it
+ * into the slot. Passing `p` through a tied empty asm hides its origin: the
+ * store stays after `sd ra` and reorg fills the slot with it (task #948). The
+ * trailing empty asm keeps cc1 from turning the call into a sibling `j` (the
+ * ROM's compiled code never tail-jumps, FACT #8177).
+ */
 void func_00336B88(void *p, s32 flag) {
+    __asm__("" : "+r"(p));
     *(void **)p = &D_1AD908;
     func_003368E8(p, flag);
+    __asm__ __volatile__("");
 }
-#endif
 
-/* func_00336BA8: as func_00336B88 with &D_1AD8E8. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336BA8);
-#else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00336BA8, unit objdiff): 76.75%,
-   4/9 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x10' vs 'addiu v0, gp, %gp_rel(D_1AD8E8)').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; same delay-slot fill
-   wall as func_00336B88. */
+/* func_00336BA8: as func_00336B88, installing the vtable &D_1AD8E8; the same
+ * tied asm on `p` puts the store in the jal delay slot. */
 void func_00336BA8(void *p, s32 flag) {
+    __asm__("" : "+r"(p));
     *(void **)p = &D_1AD8E8;
     func_003368E8(p, flag);
+    __asm__ __volatile__("");
 }
-#endif
 
 /* func_00336BC8: seed the gadget-swap zoom animation. Store the swap flag/index
  * (a0) as a word at g_swapGadgetItemIndex+0x86, then two zoom factors: at +0x8A
@@ -840,18 +838,25 @@ void func_00336BC8(s32 flag) {
 }
 #endif
 
-/* func_00336C10: return the word at g_waterPool + 0xC0, reached via a one-insn
- * %gp_rel load. */
+/*
+ * func_00336C10: return the word at 0x1B2320 (g_waterPool + 0xC0).
+ *
+ * The ROM reads it as `lw $2, %gp_rel(g_swapGadgetItemIndex + 0x86)($28)` in
+ * the `jr` delay slot. cc1 2.9 costs a small symbol's load as one instruction
+ * (slot-eligible) only when it carries no offset; symbol+offset is costed as
+ * two and left out of the slot. g_swapGadgetWord86 is an ASSEMBLER alias of
+ * g_swapGadgetItemIndex + 0x86 sized 4: cc1 sees a plain small symbol and fills
+ * the slot, gas addresses it off $gp, and the relocation lands on
+ * g_swapGadgetItemIndex with addend 0x86, the ROM's own (task #948). The native
+ * build keeps the g_waterPool spelling.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336C10);
+__asm__(".extern g_swapGadgetWord86, 4\n\tg_swapGadgetWord86 = g_swapGadgetItemIndex + 0x86");
+extern s32 g_swapGadgetWord86;
+s32 func_00336C10(void) {
+    return g_swapGadgetWord86;
+}
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00336C10, unit objdiff): 45.00%,
-   2/3 insns differ. Residual: UNKNOWN-lui + gp/abs-mixed symbol (first differing insn: '' vs 'lui v1, %hi(g_waterPool+0xc0)').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; g_waterPool (0x1B2260)
-   is outside the -G8 small-data window, so cc1 emits the two-insn absolute
-   %hi/%lo macro instead of the original's one-insn %gp_rel($28). */
 extern s32 g_waterPool[];
 s32 func_00336C10(void) {
     return g_waterPool[0xC0 / 4];
@@ -1896,26 +1901,29 @@ s32 func_00337D98(void) {
     return D_1ADAF0;
 }
 
-/* func_00337DA0: bounds-checked lookup into the 4-entry small-data table
- * D_1ADAD8 (idx<4 ? D_1ADAD8[idx] : 0). */
+/*
+ * func_00337DA0: bounds-checked lookup into the 4-entry table D_1ADAD8.
+ *
+ *   idx  table index
+ *   ->   D_1ADAD8[idx] when idx < 4, else 0
+ *
+ * The ROM takes the table base with one `addiu $2, $gp, %gp_rel(D_1ADAD8)`,
+ * i.e. its compiler held the table as -G8 small data. A 16-byte declaration is
+ * not small to cc1, which then splits the address into %hi/%lo; declaring it
+ * 8 bytes on the EE arm reproduces the ROM (task #948). D_1ADAD8 is referenced
+ * nowhere else in this unit.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337DA0);
+extern s32 D_1ADAD8[2];
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00337DA0, unit objdiff): 52.11%,
-   7/11 insns differ. Residual: UNKNOWN-beqz + gp/abs-mixed symbol (first differing insn: 'beqz v0, 0x1d54' vs 'beqz v0, 0x1dec').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; the original takes the
-   table base via one-insn %gp_rel($28); cc1 emits the two-insn absolute %hi/%lo
-   for the indexed array base under -G8. 88% best. */
 extern s32 D_1ADAD8[4];
+#endif
 s32 func_00337DA0(u32 idx) {
     if (idx < 4) {
         return D_1ADAD8[idx];
     }
     return 0;
 }
-#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337DC8);
 
@@ -6637,27 +6645,23 @@ void func_00342460(void *p, s32 v) {
  * sel=*(p+0x31C): table[sel*8 + count] where count=*(p+sel*4+0x1B8). For the
  * special column 2, when the extras flag is clear and the +0x1C0 counter has
  * reached 3+, the entry is suppressed (returns 0). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342468);
-#else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00342468, unit objdiff): 62.61%,
-   20/26 insns differ. Residual: UNKNOWN-daddu + movn/movz (first differing insn: 'daddu a4, a0, zero' vs 'daddu a2, a0, zero').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; movz conditional-move +
-   absolute table addressing wall. */
-extern s32 D_265250[];
+/*
+ * Byte-exact on sdk29 (task #948). The table is 8 entries per column, and the
+ * ROM computes `table + count*4 + sel*32` with `p` as the FIRST addu operand of
+ * `p + sel*4`: indexing a [][8] table by (sel, counts[sel]) gives exactly that.
+ * The movz and the absolute table address were never walls.
+ */
+extern s32 D_265250[][8];
 extern u8 g_miscExtras;
 s32 func_00342468(void *p) {
     s32 sel = *(s32 *)((char *)p + 0x31C);
-    s32 count = *(s32 *)((char *)p + sel * 4 + 0x1B8);
-    s32 result = D_265250[sel * 8 + count];
+    s32 *counts = (s32 *)((char *)p + 0x1B8);
+    s32 result = D_265250[sel][counts[sel]];
     if (sel == 2 && g_miscExtras == 0 && *(s32 *)((char *)p + 0x1C0) >= 3) {
         result = 0;
     }
     return result;
 }
-#endif
 
 /* func_003424C8(screen): one-past-the-end row address for the currently
  * selected column of a multi-column screen. The selected column index lives at

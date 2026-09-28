@@ -460,28 +460,57 @@ s32 func_002CAAA8(s32 *p) {
 }
 #endif
 
-/* Clear a 20-entry s32 array (g_menuScreenBlock+0x16C..+0x1BC) to -1, back to
- * front. Wall: cc1 folds %lo(g_menuScreenBlock)+0x1BC into one addiu, but the
- * original keeps the symbol-%lo and the +0x1BC offset as two separate addiu (the
- * SN assembler-absolute macro shape). Preserved as portable C. (g_menuScreenBlock
- * 0x1F27C0 == the old D_1F27C0 - same address, named here.) */
+/*
+ * EE-only scheduling fences for short loops (no-ops on the native build).
+ *
+ * cc1 2.9-ee applies its own R5900 short-loop rule: a loop whose counted length
+ * is under about eight instructions gets `nop` pads before its branch and the
+ * branch delay slot left EMPTY. The ROM's compiler instead filled the slot
+ * (with the pointer step) and padded ahead of the branch. Every asm statement
+ * counts toward cc1's length, even one that emits nothing, so explicit pads
+ * written as asm lift the loop over the threshold: cc1 then adds no pad of its
+ * own and reorg fills the slot (task #948).
+ *   SHORT_LOOP_NOP(v, next)  one explicit pad `nop`, pinned after the update of
+ *                            the loop test `v`; `next` (the value stepped in the
+ *                            delay slot) is read so that step stays after it.
+ *   LOOP_FENCE(v)            a counted, empty statement that also keeps the
+ *                            preceding store ahead of the update of `v`.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CAB50);
+#define SHORT_LOOP_NOP(v, next) \
+    __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
+#define LOOP_FENCE(v) __asm__("" : "+r"(v) : : "memory")
 #else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 85.13% -> STRUCTURAL: `la`+offset shape and prologue order are reproduced by the index form `s32 v = -1; for (i = 0x13; i >= 0; i--) block[i + 0x5B] = v;` (tools/ee/.t468/probe/la3.c h), the residual is then the loop body `sw; addiu v1,-1` vs cc1 `addiu; sw` = ORDER-ONLY (SCHED-TIEBREAK, FACT #7345),
- * first differing row @1: ROM `(none)` vs `addiu v1,zero,19`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 77.87% -> STRUCTURAL, first differing row @1: ROM `(none)` vs `addiu v1,zero,19`. */
+#define SHORT_LOOP_NOP(v, next) ((void)0)
+#define LOOP_FENCE(v) ((void)0)
+#endif
+
+/*
+ * func_002CAB50: fill the 20-entry s32 array at g_menuScreenBlock+0x16C..+0x1BC
+ * with -1, walking back from the last entry.
+ *
+ * Byte-exact on sdk29 (task #948). The ROM keeps %lo(g_menuScreenBlock) and the
+ * +0x1BC offset as two addiu: a tied empty asm on the base stops cc1 folding
+ * them. The loop is `sw; addiu i; nop x3; bgez; addiu p` (step in the slot),
+ * reproduced with three SHORT_LOOP_NOPs and a LOOP_FENCE (see above).
+ */
 void func_002CAB50(void) {
-    s32 *p = (s32 *)(g_menuScreenBlock + 0x1BC);
+    s32 v = -1;
+    u8 *base = g_menuScreenBlock;
+    s32 *p;
     s32 i = 0x13;
+    __asm__("" : "=r"(base) : "0"(base));
+    p = (s32 *)(base + 0x1BC);
     do {
-        *p = -1;
+        *p = v;
+        LOOP_FENCE(i);
         i--;
+        SHORT_LOOP_NOP(i, i);
+        SHORT_LOOP_NOP(i, i);
+        SHORT_LOOP_NOP(i, p);
         p--;
     } while (i >= 0);
 }
-#endif
 
 /* Store a reciprocal into the menu scratch: [0x1C0]=1.0f, [0x1C8]=0, [0x1C4]=1/x.
  * Instruction-exact on both arms once the stale alias D_1F27C0 (== g_menuScreenBlock)
@@ -3210,24 +3239,20 @@ s32 DrawExtrasMenu(void) {
 /* When the GUI is up, latch the extras-menu availability flags: always mark the
  * last screen id (=1), then set the per-feature "new" flags for each unlocked
  * extras feature (D_1AA450/D_1AA458) and, if any extras are unlocked
- * (g_miscExtras), the museum + master flags. Leaf.
- * Near-miss (~69%): the original fills each beqz delay slot with the next flag
- * store (and emits the museum/master pair in the opposite commutative order);
- * our cc1 leaves nops in the delay slots and stores in source order — the
- * later-cc1 branch-fill scheduling we can't reproduce from clean C. Preserved
- * as portable C. */
+ * (g_miscExtras), the museum + master flags. Leaf. Returns 0.
+ *
+ * Byte-exact on sdk29 (task #948). The ROM leaves the D_1AA458 test as a plain
+ * `beqz; nop` with its store after it. cc1 2.9 instead turns that `if` into a
+ * branch-likely with the (cc1-small, assembler-absolute) store in the annulled
+ * slot; the empty volatile asm heading the then-block leaves reorg nothing to
+ * steal there, and reading g_miscExtras volatile stops it stealing that load
+ * from the next test instead. The museum/master stores are written in the
+ * order cc1 needs to emit the ROM's D_1ABA58-then-D_1ABA4C sequence. The old
+ * "~69% near-miss" note measured a different body; the committed one read 84.00.
+ */
 extern s32 g_lastMenuScreenId;
 extern s32 D_1ABA50, D_1ABA54, D_1ABA58, D_1ABA4C;
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D1850);
-#else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 57.40% -> STRUCTURAL,
- * first differing row @3: ROM `lui v1,0x0  [HI16 0x001F27C8]` vs `(none)`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 84.00% -> STRUCTURAL, first differing row @11: ROM `beq v0,zero,L` vs `(none)`. */
-/* TODO(match): functional equivalent - not byte-exact; delay-slot branch-fill +
- * commutative store order not reproduced by cc1. */
 s32 func_002D1850(void) {
     if (g_guiInstance) {
         g_lastMenuScreenId = 1;
@@ -3235,16 +3260,16 @@ s32 func_002D1850(void) {
             D_1ABA50 = 1;
         }
         if (D_1AA458) {
+            __asm__ __volatile__("");
             D_1ABA54 = 1;
         }
-        if (g_miscExtras) {
-            D_1ABA58 = 1;
+        if (*(volatile u8 *)&g_miscExtras) {
             D_1ABA4C = 1;
+            D_1ABA58 = 1;
         }
     }
     return 0;
 }
-#endif
 
 /* CinematicsMenuTick: per-frame input for the Goodies "Cinematics" screen, a
  * 33-reel carousel over g_cinematicsMenuTable (6-byte entries: u16 nameStringId,
@@ -3927,21 +3952,20 @@ s32 DrawInsomniacMuseumMenu(void) {
 #endif
 
 /* When the GUI is up, latch the "new content" flags for each extras-menu entry.
- * Near-miss: cc1 hoists the g_miscExtras load above (and CSEs it into) the
- * g_guiInstance short-circuit test, reordering the two guard loads vs the
- * original's separate guiInstance check. Preserved as portable C. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D2C60);
-#else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 96.43% -> DSLOT-FILL,
- * first differing row @24: ROM `(none)` vs `sll zero,zero,0x0`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 85.71% -> ORDER-ONLY, first differing row @2: ROM `beq v0,zero,L` vs `(none)`. */
+ * Returns 0.
+ *
+ * Byte-exact on sdk29 (task #948). The earlier note here blamed cc1 for
+ * hoisting the g_miscExtras load above the g_guiInstance test. cc1 did not: it
+ * put the one-insn (to it) `lbu $2,g_miscExtras` in the `beq` delay slot, and
+ * asm_unit.sh's delay-slot macro hoist, expanding that assembler-absolute load,
+ * moved it above the branch, overwriting the register the branch tests. Reading
+ * g_miscExtras volatile keeps cc1 from putting it in the slot. The two stores
+ * are written in the order that makes cc1 emit the ROM's D_1ABA8C-then-D_1ABA88. */
 s32 func_002D2C60(void) {
     if (g_guiInstance) {
-        if (g_miscExtras) {
-            D_1ABA8C = 1;
+        if (*(volatile u8 *)&g_miscExtras) {
             D_1ABA88 = 1;
+            D_1ABA8C = 1;
         }
         if (D_1AA450) {
             D_1ABA84 = 1;
@@ -3955,7 +3979,6 @@ s32 func_002D2C60(void) {
     }
     return 0;
 }
-#endif
 
 /* UpdateHelpTopicMenuInput: per-frame input for the help-topics screen, an
  * 18-entry page list (g_helpTopicCursor in [0,0x11]). Back (0x10) resets the

@@ -722,23 +722,27 @@ void snd_FlushCommandRing(void) {
 }
 #endif
 
-/* func_00133220: sets the gp-relative flag D_001A74C4 to 1 and returns 1
- * (reusing the same register for the store and the return). Not matched even
- * at -G8: ee-gcc materialises the constant twice (`li $3,1; li $2,1; sw $3`)
- * for every store-constant-and-return-it formulation tried, while the original
- * stores the return register itself (sdk29 63.33%, unit objdiff, -O2 -G8).
- * Task #855 measured that THIS body reads 100.00% on the engine96 arm (cc1
- * 2.96-ee-001003 raw output `li $2,1; j $31; sw $2,D_001A74C4`). Those bytes
- * are identical to the ROM, and engine_swap_fix/mtc1_fixup do not touch the
- * function. That is an arm-scored candidate only: it is not guarded here, and
- * the shipped image keeps the asm. Portable #else body. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00133220);
-#else
+/*
+ * func_00133220: raise the command-ring service-pending flag D_001A74C4 and
+ * return 1.
+ *
+ * The ROM stores the return register itself (`li $2,1; jr $31; sw $2,...`).
+ * Written plainly, cc1 2.9 materialises the constant twice (`li $3,1; li $2,1`)
+ * and scored 63.33 (#855; engine96 read 100.00 but would need a MATCH_ guard).
+ * Holding the value in $2 behind a tied empty asm makes it a single non-constant
+ * value used by both the store and the return: byte-exact on sdk29, so the
+ * function is in the shipped image (task #948).
+ */
 s32 func_00133220(void) {
-    return D_001A74C4 = 1; /* raise the command-ring service-pending flag */
-}
+#ifndef TARGET_NATIVE
+    register s32 raised __asm__("$2") = 1;
+    __asm__("" : "+r"(raised));
+#else
+    s32 raised = 1;
 #endif
+    D_001A74C4 = raised;
+    return raised;
+}
 
 /**
  * Clear the command-ring service-pending flag D_001A74C4 (set by

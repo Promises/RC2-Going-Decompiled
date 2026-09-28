@@ -2177,6 +2177,9 @@ GuiManagerInitHudLists = 0x0034EDB8; // CONFIRMED - configure 0x1a HUD lists + b
 g_GuiElementVtable = 0x001ADA58; // CONFIRMED - base GuiElement vtable (installed at elem +0x30)
 g_GuiListRowVtable = 0x001AD9D8; // CONFIRMED - GuiListRow element vtable
 D_1AD9A8 = 0x001AD9A8; // vtable func_00336678 installs at obj +0x4 - listed so compiled C's reference has a symbol_addrs holder, not only the nonmatchings .s (task #851)
+D_1AD8E8 = 0x001AD8E8; // vtable func_00336BA8 installs at obj +0x0 (slot 3 = func_00336BA8, slot 5 = 0x336988) - listed so compiled C's reference has a symbol_addrs holder (task #948)
+D_1AD908 = 0x001AD908; // vtable func_00336B88 installs at obj +0x0 (slot 3 = func_00336B88, slot 5 = 0x336918) - listed so compiled C's reference has a symbol_addrs holder (task #948)
+D_265250 = 0x00265250; // s32 [][8] string-id table indexed [column][count] by func_00342468 - listed so compiled C's reference has a symbol_addrs holder (task #948)
 D_261BE8 = 0x00261BE8; // cheat-code symbol table read by func_002DECE0 (byte ((k+1)*code) & 0xFF) - listed so compiled C's reference has a symbol_addrs holder, not only the nonmatchings .s (task #880)
 func_0033B720 = 0x0033B720; // type:func - GUI popup-poll method func_0029CCB8 forwards g_guiInstance+0x3F7B0 to - listed so compiled C's reference has a symbol_addrs holder, not only the nonmatchings .s (task #888)
 func_00339398 = 0x00339398; // type:func - GUI widget method func_0029C448 forwards g_guiInstance+0x36F28 to - listed so compiled C's reference has a symbol_addrs holder, not only the nonmatchings .s (task #888)

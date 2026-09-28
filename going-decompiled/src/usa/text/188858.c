@@ -2112,30 +2112,58 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_0
  * ([2]) and dirty index ([4]), set the pending flag ([3]) to -1, flush the HUD
  * value, and clear the two bolt-icon records at g_hudMobyAuxBlockBase+0x44.
  *
- * NEAR-MISS: logic exact, but the FlushHudDisplayValue call (0x10 frame, $31
- * save) and the trailing record-clear loop's per-iteration nops/branch colouring
- * cc1 schedules differently. Kept as the portable #else body. */
+ * Byte-exact on sdk29 (task #948):
+ *   - g_boltCountAbs / g_boltHudAbs are ASSEMBLER aliases (the #8036 construct,
+ *     as g_pHudAssetHeaderAbs below): cc1-small, gas-absolute, giving the ROM's
+ *     `lui v0; lw v0,%lo(v0)` load and its `lui $at; sw` stores;
+ *   - the three stores before the call are volatile, which keeps them in ROM
+ *     order and out of the jal delay slot (the ROM leaves it a nop);
+ *   - the -1, the counter and the record pointer are held in the ROM's $2/$3;
+ *   - the record-clear loop is `sh; addiu i; sw; nop; nop; bgez; addiu rec`:
+ *     cc1 2.9 leaves a short loop's branch slot empty and pads it itself unless
+ *     the loop counts about eight instructions, so the pads are written as
+ *     counted asm statements and reorg then puts the pointer step in the slot
+ *     (the same rule as 1CA080's func_002CAB50).
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", ResetBoltCounterHud);
+__asm__(".extern g_boltCountAbs, 16\n\tg_boltCountAbs = g_boltCount");
+extern s32 g_boltCountAbs;
+__asm__(".extern g_boltHudAbs, 16\n\tg_boltHudAbs = g_nBoltCounterDisplayed");
+extern s32 g_boltHudAbs[2];
+#define BOLT_LOOP_FENCE(v) __asm__("" : "+r"(v) : : "memory")
+#define BOLT_LOOP_NOP(v, next) \
+    __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
 #else
+#define g_boltCountAbs g_boltCount
+#define g_boltHudAbs g_nBoltCounterDisplayed
+#define BOLT_LOOP_FENCE(v) ((void)0)
+#define BOLT_LOOP_NOP(v, next) ((void)0)
+#endif
 void ResetBoltCounterHud(void) {
-    s32 bolts = g_boltCount;
-    s32 i;
-    u8 *rec;
-    g_nBoltCounterDisplayed[1] = bolts;
-    g_nBoltCounterDisplayed[0] = bolts;
-    g_nBoltCounterDisplayed[2] = 0;
-    FlushHudDisplayValue((s32)(u32)g_nBoltCounterDisplayed);
-    g_nBoltCounterDisplayed[4] = 0;
-    g_nBoltCounterDisplayed[3] = -1;
-    rec = (u8 *)&g_hudMobyAuxBlockBase + 0x44;
-    for (i = 1; i >= 0; i--) {
-        *(s16 *)(rec + 0xE) = 0;
-        *(s32 *)(rec + 0x0) = 0;
-        rec += 0x10;
+    s32 bolts = g_boltCountAbs;
+    ((volatile s32 *)g_boltHudAbs)[1] = bolts;
+    ((volatile s32 *)g_boltHudAbs)[0] = bolts;
+    ((volatile s32 *)g_boltHudAbs)[2] = 0;
+    FlushHudDisplayValue((s32)(u32)g_boltHudAbs);
+    {
+        register s32 pending EE_REG("$2") = -1;
+        register s32 i EE_REG("$3");
+        register u8 *rec EE_REG("$2");
+        g_boltHudAbs[4] = 0;
+        g_boltHudAbs[3] = pending;
+        rec = (u8 *)&g_hudMobyAuxBlockBase + 0x44;
+        i = 1;
+        do {
+            *(s16 *)(rec + 0xE) = 0;
+            i--;
+            *(s32 *)(rec + 0x0) = 0;
+            BOLT_LOOP_FENCE(i);
+            BOLT_LOOP_NOP(i, i);
+            BOLT_LOOP_NOP(i, rec);
+            rec += 0x10;
+        } while (i >= 0);
     }
 }
-#endif
 
 /* UpdateBoltCounterHud(): per-frame animation of the on-screen bolt counter. Rolls
  * the displayed value (g_nBoltCounterDisplayed[0]) toward the live g_boltCount using
