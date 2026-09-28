@@ -64,6 +64,16 @@
 #            the container (retrying) before build.sh runs; a file that never
 #            agrees aborts the build rc 9 naming it. The same helper guards
 #            objdiff_build.sh's own host-write -> container-read edges.
+#   LIBGCC   (task #893, RULING #8206) tools/ee/libgcc_transcription_scan.py
+#            over going-decompiled/src/<region>, comments and string literals
+#            stripped first (doc comments DESCRIBE GCC's algorithm; that is not
+#            a transcription): FAILS on a definition of a libgcc.a entry point
+#            by its libgcc name, or on any GCC-only identifier (DIunion,
+#            umul_ppmm, USItype, tfraction ...) in code. `extern` declarations
+#            pass. The TARGET_NATIVE spec one-liners (`return a * b;` class) are
+#            allowed and LISTED as KEEP-SPEC; in the EE arm every definition
+#            fails. Blind to a transcription under a func_<addr> name that uses
+#            no listed identifier (the script header says so).
 #   TREE     the ROW is tied to the tree it was built from (task #457, #451 gap
 #            1): do_build records HEAD^{tree}, a hash of the WHOLE working tree
 #            (tracked + modified + untracked, .gitignore honoured) and the dirty
@@ -115,7 +125,7 @@ BASE_DIR="$HERE/landing_baseline"
 SHADOW_CLASSES="CLASS1 CLASS2 CLASS3 NOTARGET"
 PYTHON=".venv-decomp/bin/python"
 
-usage() { sed -n '2,101p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { sed -n '2,111p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 say()  { printf '%s\n' "$*"; }
 fail() { say "FAIL $*"; FAILED=$((FAILED+1)); }
 ok()   { say "OK   $*"; }
@@ -240,6 +250,22 @@ check_orphans() {  # check_orphans REGION [TREE] [BASEDIR]
   /usr/bin/grep -E '^ORPHAN_LATENT ' "$scan" | awk '{print $2}' > "$scan.latent"
   member_compare "ORPHAN [$region] (no holder — undefined at link)" "$scan.live" "$basedir/orphans_$region.txt"
   member_compare "ORPHAN_LATENT [$region] (held only by nonmatchings func_*.s)" "$scan.latent" "$basedir/orphans_latent_$region.txt"
+  say "     members:"; sed 's/^/       /' "$scan"
+}
+
+# --------------------------------------------------------------- LIBGCC ----
+# check_libgcc REGION [SRCDIR] — no GCC runtime source text in game C (#893).
+check_libgcc() {
+  local region=$1 src=${2:-going-decompiled/src/$1}
+  local scan="$OUT/libgcc_scan.txt"
+  say "== LIBGCC [$region]: no libgcc source in game C, RULING #8206 (scan: $scan)"
+  python3 "$HERE/libgcc_transcription_scan.py" "$src" > "$scan" 2>&1; local rc=$?
+  local nk nf; nk=$(/usr/bin/grep -c '^KEEP-SPEC ' "$scan" || true); nf=$(/usr/bin/grep -cE '^(DEF|IDENT) ' "$scan" || true)
+  case $rc in
+    0) ok "no libgcc definition or GCC-only identifier in code under $src ($nk TARGET_NATIVE spec one-liner(s) allowed, listed)" ;;
+    1) fail "LIBGCC [$region]: $nf member(s) in code under $src: $(/usr/bin/grep -E '^(DEF|IDENT) ' "$scan" | head -20 | tr '\n' ';')" ;;
+    *) fail "libgcc_transcription_scan.py could not run (rc $rc): $(head -c 300 "$scan")" ;;
+  esac
   say "     members:"; sed 's/^/       /' "$scan"
 }
 
@@ -449,6 +475,7 @@ run_gate() {  # run_gate REGION [--no-build] [--strict]
   check_flags
   check_shadow "$REGION"
   check_orphans "$REGION"
+  check_libgcc "$REGION"
   if [ $build = 1 ]; then
     do_build
     check_tree "$OUT/built_tree.txt"   # the tree did not move during the build
@@ -620,12 +647,44 @@ selftest() {
 
   selftest_mount_sync "${MOUNT_SYNC_SH:-$HERE/mount_sync.sh}" "$T" || bad=1
 
+  selftest_libgcc "$T" || bad=1
+
   say "-- (14) the real gate on this tree (--no-build, the build above) must PASS"
   STRICT=0
   if run_gate "$REGION" --no-build > "$T/gate.txt"; then ok "real gate PASS"; else say "SELFTEST-FAIL the real gate does not pass on this tree:"; /usr/bin/grep -E '^FAIL' "$T/gate.txt"; bad=1; fi
   say "     full gate output -> $T/gate.txt"
   say "#### landing_gate --selftest [$REGION]: $([ $bad = 0 ] && echo PASS || echo FAIL)"
   return $bad
+}
+
+# selftest_libgcc OUTDIR — arm (16), callable on its own after sourcing this
+# file (`. tools/ee/landing_gate.sh; region_vars eu; selftest_libgcc /tmp/x`).
+# Seeds the DANGEROUS class, not a stand-in: the libgcc2 `DIunion` __muldi3 body
+# EU carried in its TARGET_NATIVE arm until #893 removed it, appended to a
+# scratch copy of the region's src/. A seed in a comment would prove nothing —
+# comments are stripped. Then the clean tree must pass.
+selftest_libgcc() {
+  local T="$1"; local L="$T/libgcc_src"; rm -rf "$L"; mkdir -p "$L"
+  say "-- (16) LIBGCC (#893): the libgcc2 DIunion __muldi3 body EU removed in #893, re-inserted in a TARGET_NATIVE arm of a scratch src/$REGION copy -> must FAIL naming DEF __muldi3; the real tree must pass"
+  cp -R "going-decompiled/src/$REGION/." "$L/"
+  cat >> "$L/libgcc_seed.c" <<'SEED'
+#ifdef TARGET_NATIVE
+s64 __muldi3(s64 a, s64 b) {
+    union { struct { s32 low; s32 high; } s; s64 ll; } w, uu, vv;
+    uu.ll = a;
+    vv.ll = b;
+    w.ll = (s64)((u64)(u32)uu.s.low * (u32)vv.s.low);
+    w.s.high += uu.s.low * vv.s.high + uu.s.high * vv.s.low;
+    return w.ll;
+}
+#endif
+SEED
+  local b=0
+  FAILED=0; check_libgcc "$REGION" "$L" > "$T/libgcc_seeded.txt"
+  if [ "$FAILED" = 1 ] && /usr/bin/grep -q '^       DEF libgcc_seed.c:2 __muldi3 (not-a-spec-one-liner)$' "$T/libgcc_seeded.txt"; then ok "fired: $(/usr/bin/grep '^FAIL LIBGCC' "$T/libgcc_seeded.txt")"; else say "SELFTEST-FAIL the seeded DIunion __muldi3 did not fail LIBGCC (FAILED=$FAILED):"; cat "$T/libgcc_seeded.txt"; b=1; fi
+  FAILED=0; check_libgcc "$REGION" > "$T/libgcc_clean.txt"
+  if [ "$FAILED" = 0 ]; then ok "control: the real src/$REGION passes LIBGCC"; else say "SELFTEST-FAIL the real src/$REGION fails LIBGCC:"; cat "$T/libgcc_clean.txt"; b=1; fi
+  return $b
 }
 
 # selftest_mount_sync HELPER OUTDIR — arm (15), callable on its own after
