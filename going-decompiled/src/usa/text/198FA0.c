@@ -157,6 +157,13 @@ extern void func_0028E9A0(s32 arg);
 extern s32 func_0029CA98(void);
 extern s32 func_0033A8F0(void *widget, s32 arg);
 
+/* EE register pin; a no-op on the native build, where "$2" is not a register name. */
+#ifndef TARGET_NATIVE
+#define EE_REG(r) __asm__(r)
+#else
+#define EE_REG(r)
+#endif
+
 /* Progress/dialog flag globals read by the 0x29EAxx predicate family below.
  * Widths follow the original load opcodes (lbu = u8, lw = s32). Declared here
  * for the TARGET_NATIVE #else arms; the #ifndef arms stay INCLUDE_ASM (these
@@ -1535,7 +1542,7 @@ void func_0029C418(void) {
  */
 extern s32 func_00339398(char *widget, s32 a, s32 b);
 s32 func_0029C448(s32 a, s32 b) {
-    register char *gui __asm__("$2") = g_guiInstance;
+    register char *gui EE_REG("$2") = g_guiInstance;
     if (gui != 0) {
         return func_00339398(gui + 0x36F28, a, b);
     }
