@@ -3929,47 +3929,52 @@ s32 MapFindCacheSlot(s32 levelAndFlag) {
     return -1;
 }
 
-/* MapDataExistsForLevel(levelAndFlag): does map data exist for the given level?
- * The 0x100 flag bit selects the primary map-data TOC when set, the secondary
- * when clear; the low byte is the level. Reads the per-level sector count from
- * g_discToc and returns 1 if > 0.
+/**
+ * MapDataExistsForLevel - does map data exist for the given level?
  *
- * WALL (register coloring, best 73.2%): the control-flow shape is reproduced
- * exactly with `if (levelAndFlag & 0x100) return 0 < g_discToc[(levelAndFlag &
- * 0xFF)*2 + 0x14F4/4]; else ...0x15D4/4` — flag tested first, low-byte mask in
- * the branch delay slot, the `lui %hi(g_discToc)`/`addiu`/`sll`/`addu` address
- * arithmetic duplicated (NOT CSE'd) in both arms. The ONLY residual delta is
- * the pinned cc1's register assignment: the original reuses $2 for the dead
- * flag reg as the level mask and lands the loaded word in $4 (the dead arg
- * reg); our cc1 picks v1/v0 instead. Six source phrasings (inline, hoisted
- * level, pointer-cast, inverted arms) all hold the structure but none flips the
- * coloring. Logic byte-faithful; kept as the portable #else body, cmp-oracle
- * validated (cmp_191238_mapdata). (Earlier note blamed beql vs beqz — wrong:
- * both original and our build emit beqz; the real wall is allocation order.) */
+ * @param levelAndFlag  low byte = level; bit 0x100 selects the primary
+ *                      map-data TOC (entry +0x14F4) when set, the secondary
+ *                      (+0x15D4) when clear
+ * @return 1 if that TOC's per-level sector count in g_discToc is > 0, else 0
+ *
+ * Byte-exact on the sdk29 arm (task #895), from #700's 98.82 body. Each arm
+ * forms its own entry address (the ROM duplicates the lui/addiu/sll/addu in
+ * both arms, with the low-byte mask in the branch delay slot):
+ *  - the table base is bound to $3 and the loaded count to $4, as in the ROM;
+ *  - the empty asm keeps the load off $3 after the add (#700);
+ *  - #700's last residual was operand order, `addu v1,v0,v1` against the
+ *    ROM's `addu v1,v1,v0`. Writing the add as `entry - -offset` keeps the
+ *    base as the first operand: the lever #804 used for KickLevelBankDiscLoad.
+ * The pins are empty on native.
+ */
 #ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 26.12% UNKNOWN-andi /
- * engine96 40.47% IDIOM-LIKELY; best arm engine96, first differing insn there: 'andi v0, a0,
- * 0x100' vs 'andi v0, a0, 0xff'. Iterated: sdk29 73.24% REGNUM-COLORING — per-branch index
- * computation (r4) reproduces the shape; `la` split around the sll + register numbers differ.
- * Task #700 best: 98.82% (sdk29, unit objdiff report, VM b) — the coloring IS reachable: per
- * arm, bind the table base to $3 (`register u8 *entry __asm__("$3") = (u8 *)g_discToc`) and
- * the loaded count to $4, compute `off = (levelAndFlag & 0xFF) * 8` before the base (so the
- * sll schedules between lui and addiu), then `entry = entry + off` followed by an empty
- * `__asm__("" : "+r"(entry))` so the load stays off $3 [97.65 without it]. Only residual:
- * `addu v1,v0,v1` where the ROM has `addu v1,v1,v0`; swapping the source operands, binding
- * `off` to $2, `entry += off`, and an 8-byte-row struct index do not flip it. Not landed. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapDataExistsForLevel);
+#define MDE_ENTRY_IN_V1 __asm__("$3")
+#define MDE_COUNT_IN_A0 __asm__("$4")
 #else
-s32 MapDataExistsForLevel(s32 levelAndFlag) {
-    s32 level = levelAndFlag & 0xFF;
-    s32 *toc = g_discToc + level * 2;         /* stride 8 bytes */
-    if (levelAndFlag & 0x100) {
-        return 0 < toc[0x14F4 / 4];           /* primary set sector count */
-    }
-    return 0 < toc[0x15D4 / 4];               /* secondary set sector count */
-}
+#define MDE_ENTRY_IN_V1
+#define MDE_COUNT_IN_A0
 #endif
+s32 MapDataExistsForLevel(s32 levelAndFlag) {
+    if (levelAndFlag & 0x100) {
+        register u8 *entry MDE_ENTRY_IN_V1 = (u8 *)g_discToc;
+        register s32 count MDE_COUNT_IN_A0;
+        s32 offset = (levelAndFlag & 0xFF) * 8; /* 8-byte TOC rows */
+
+        entry = entry - -offset;
+        __asm__("" : "+r"(entry));
+        count = *(s32 *)(entry + 0x14F4); /* primary set sector count */
+        return 0 < count;
+    } else {
+        register u8 *entry MDE_ENTRY_IN_V1 = (u8 *)g_discToc;
+        register s32 count MDE_COUNT_IN_A0;
+        s32 offset = (levelAndFlag & 0xFF) * 8;
+
+        entry = entry - -offset;
+        __asm__("" : "+r"(entry));
+        count = *(s32 *)(entry + 0x15D4); /* secondary set sector count */
+        return 0 < count;
+    }
+}
 
 /*
  * MapBeginUpload (0x295D70) — kick off streaming the current level's galactic-
