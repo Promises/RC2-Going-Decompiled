@@ -36,11 +36,15 @@ Revision: releases/gcc-2.95.3 (the fp-bit.c revision NOTE #7038 §7 / FACT
   config/mips/t-elf  gcc/config/mips/t-elf    687ce6c9efdc4cfc60056084f9a6d26257be432c
 
   t-elf is here as the provenance of the dp-bit.c recipe (its `dp-bit.c:`
-  rule: a 4-line prelude, then fp-bit.c). NO member is built from fp-bit.c
-  yet (task #893, FACT #8255): __fpcmp_parts_d (0x122F10) compiles byte-exact
-  from it alone, but a one-function member cannot reproduce the ROM's zero
-  pad at 0x123024, and the whole dp-bit.o is blocked on __unpack_d, whose
-  source revision is not 2.95.3.
+  rule: a 4-line prelude, then fp-bit.c). The MEMBERS row for fp-bit.c passes
+  that prelude as cpp defines instead (-DFLOAT_BIT_ORDER_MISMATCH, which the
+  prelude sets under __MIPSEL__, always defined here, and -DUS_SOFTWARE_GOFAST;
+  fp-bit.c tests both only with #ifdef/#ifndef), so no dp-bit.c is generated.
+  One member is built from it: _fpcmp_parts_df.o (__fpcmp_parts_d, 0x122F10,
+  task #918; byte-exact per FACT #8255/#8281/#8285). The ROM's zero pad after
+  it (0x123024, the whole dp-bit.o's own alignment) is placed by the link
+  (a `zeropad` subsegment in the yaml), not by the member. The whole dp-bit.o
+  is blocked on __unpack_d, whose source revision is not 2.95.3.
 
 Re-derive: curl -sSf <upstream URL> | shasum   — each must print the sha1 above,
 and `cmp` against the file here must be silent.

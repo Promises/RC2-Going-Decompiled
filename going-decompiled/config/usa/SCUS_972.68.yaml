@@ -111,7 +111,16 @@ segments:
       - [0x021338, lib, libgcc, _floatdidf] # libgcc.a _floatdidf.o .text (0x1213B8..0x12144F)
       - [0x0213D0, c, cod/0213D0] # core.text: libgcc _moddi3.o as asm (0x121450..0x121AB7)
       - [0x021A38, lib, libgcc, _muldi3] # libgcc.a _muldi3.o .text (0x121AB8..0x121B17)
-      - [0x021A98, c, cod/021A98] # core.text: libgcc _pure.o.. frame.o, then libsn/SDK (0x121B18..0x13221F)
+      # Task #918 adds dp-bit.o's __fpcmp_parts_d the same way (_fpcmp_parts_df.o,
+      # 0x122F10..0x123023). Its object ends 4 mod 8, and the ROM's pad word at
+      # 0x123024 is 0, not CDCD: it is the SDK's whole dp-bit.o's own assembler
+      # alignment before dpcmp. A lone member has no such tail and SUBALIGN(8)
+      # places nothing at 4 mod 8, so the word is a `zeropad` subsegment
+      # (tools/splat_ext/zeropad.py): FILL 0 for that gap only, then CDCD again.
+      - [0x021A98, c, cod/021A98] # core.text: libgcc _pure.o, _udivdi3.o, _umoddi3.o, dp-bit.o head (0x121B18..0x122F0F)
+      - [0x022E90, lib, libgcc, _fpcmp_parts_df] # libgcc.a _fpcmp_parts_df.o .text (0x122F10..0x123023)
+      - [0x022FA4, zeropad] # dp-bit.o's own alignment pad before dpcmp (0x123024..0x123027), zero in the ROM
+      - [0x022FA8, c, cod/022FA8] # core.text: dp-bit.o tail, fp-bit.o, frame.o, then libsn/SDK (0x123028..0x13221F)
       - [0x0321A0, c, cod/0321A0] # snd sub-TU, built at -G8 (0x132220..0x1339EF)
       - [0x033970, c, cod/033970] # core.text tail (0x1339F0..0x133B7F)
       - [0x033B00, data, cod/033B00] # core.data

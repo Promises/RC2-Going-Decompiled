@@ -8,3 +8,4 @@ _divdi3  libgcc2.c  -DIN_LIBGCC2 -DFINE_GRAINED_LIBRARIES -DL_divdi3
 _muldi3  libgcc2.c  -DIN_LIBGCC2 -DFINE_GRAINED_LIBRARIES -DL_muldi3
 _fixunsdfdi  libgcc2.c  -DIN_LIBGCC2 -DFINE_GRAINED_LIBRARIES -DL_fixunsdfdi
 _floatdidf  libgcc2.c  -DIN_LIBGCC2 -DFINE_GRAINED_LIBRARIES -DL_floatdidf
+_fpcmp_parts_df  fp-bit.c  -DFLOAT_BIT_ORDER_MISMATCH -DUS_SOFTWARE_GOFAST -DFINE_GRAINED_LIBRARIES -DL_fpcmp_parts_df

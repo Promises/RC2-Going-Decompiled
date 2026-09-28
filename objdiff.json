@@ -255,6 +255,17 @@
       }
     },
     {
+      "name": "usa/cod/022FA8",
+      "target_path": "going-decompiled/build/usa/expected/cod/022FA8.o",
+      "base_path": "going-decompiled/build/usa/obj/cod/022FA8.o",
+      "metadata": {
+        "source_path": "going-decompiled/src/usa/cod/022FA8.c",
+        "progress_categories": [
+          "cod"
+        ]
+      }
+    },
+    {
       "name": "usa/cod/0321A0",
       "target_path": "going-decompiled/build/usa/expected/cod/0321A0.o",
       "base_path": "going-decompiled/build/usa/obj/cod/0321A0.o",

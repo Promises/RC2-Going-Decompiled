@@ -2552,6 +2552,7 @@ fde_split = 0x001242A0; // type:func CONFIRMED libgcc.a frame.o (whole 372B body
 // __sjpopnthrow = 0x001206A0 - CONFIRMED libgcc.a _eh.o (whole 280B body verbatim, 5 reloc-masked words, 38 distinctive)
 // __eh_rtime_match = 0x001207B8 - CONFIRMED libgcc.a _eh.o (whole 72B body verbatim, 1 reloc-masked words, 9 distinctive)
 // __fpcmp_parts_d = 0x00122F10 - CONFIRMED libgcc.a dp-bit.o (whole 276B body verbatim, 0 reloc-masked words, 57 distinctive)
+func_00122F10 = 0x00122F10; // type:func - splat name kept for __fpcmp_parts_d (line above), whose body is now the linked libgcc.a member _fpcmp_parts_df.o (task #918), not game C. func_00123028 (dpcmp, cod/022FA8) is compiled C and calls it by this name. This line holds the token outside its nonmatchings .s (landing_gate ORPHAN_LATENT)
 // dptoli = 0x00123130 - CONFIRMED libgcc.a dp-bit.o (whole 148B body verbatim, 1 reloc-masked words, 24 distinctive)
 // dptoul = 0x001231C8 - CONFIRMED libgcc.a dp-bit.o (whole 160B body verbatim, 1 reloc-masked words, 26 distinctive)
 // fptodp = 0x001234F0 - CONFIRMED libgcc.a fp-bit.o (whole 64B body verbatim, 2 reloc-masked words, 5 distinctive)
