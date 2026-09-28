@@ -207,7 +207,7 @@ if [ "$GFLAG" = "-G8" ]; then
       mn = br; sub(/^\t/, "", mn); sub(/\t.*/, "", mn)
       ops = br; sub(/^\t[a-z0-9.]+\t/, "", ops)
       if (ops ~ /\$(1|at)([^0-9a-z]|$)/) return "at"
-      if (mn ~ /^(beql|bnel|blezl|bgezl|bgtzl|bltzl|bgezall|bltzall)$/) return "branch-likely"
+      if (mn ~ /^(beql|bnel|blezl|bgezl|bgtzl|bltzl|bgezall|bltzall|bc1fl|bc1tl)$/) return "branch-likely"
       # The link register is written before the slot runs, so a slot insn
       # touching it sees the return address in place and the old value when
       # hoisted (#993, FACT #8423). It is an OPERAND of the register forms:
@@ -284,11 +284,13 @@ if [ "$GFLAG" = "-G8" ]; then
         print pendbr; pendbr = ""
       }
     }
-    # The branch-likely-and-link pair is held for the slot-macro check only
-    # (#993): outside this rule nothing sees it, so GNU as split an absolute
-    # slot macro across it with no asm_unit.sh line. The reorder-mode pins
-    # below are measured on other branches and are not extended to it.
-    /^\t(bgezall|bltzall)\t/ { if (nore && pendmov == "") { pendbr = $0; next } }
+    # The likely branches missing from the list below are held for the
+    # slot-macro check only (#993): nothing else sees them, so GNU as split an
+    # absolute slot macro across them with no asm_unit.sh line. cc1 emits
+    # bc1fl/bc1tl; bgezall/bltzall only reach here from hand-written asm. The
+    # reorder-mode pins below are measured on other branches and are not
+    # extended to these.
+    /^\t(bgezall|bltzall|bc1fl|bc1tl)\t/ { if (nore && pendmov == "") { pendbr = $0; next } }
     /^\t(j|jal|jalr|b|beq|bne|beql|bnel|blez|bgez|bgtz|bltz|blezl|bgezl|bgtzl|bltzl|bgezal|bltzal|bc1f|bc1t)\t/ {
       if (nore && pendmov == "") { pendbr = $0; next }
       # volatile-marker pin (see header): the insn directly before this
