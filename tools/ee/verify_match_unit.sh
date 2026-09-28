@@ -37,7 +37,7 @@
 # SELFTEST (task #1004; until then it had none, as task #1000 recorded here).
 #   verify_match_unit.sh --selftest
 # runs THIS script's normal mode on committed subjects with BASE (arg 2) seeds,
-# and then on 15 one-line mutants of its own normal-mode code, and prints
+# a crash probe, and then 18 one-line mutants of its own normal-mode code, and prints
 # `#### VMU-SELFTEST usa: PASS|FAIL`. Exit 0 PASS, 1 FAIL, 2 CANNOT RUN (fixture
 # assembly failed, or the usa flat ROM is unreachable). It never prints a
 # `<fn>: BYTE IDENTICAL|DIFFERS|UNVERIFIABLE` line: those are verdicts on a
@@ -80,7 +80,18 @@
 # unit-position blind spots below (the tool cannot see them, so no seed can
 # move its verdict), symbol_addrs lookup (subjects use address-encoded names),
 # EU (no EU subject). A wrong rule not in the mutant list has not been tried.
-# ⚠️ A normal-mode python crash exits 1, which is the DIFFERS band.
+# Added by task #1016: fixture camera_slot_straddle.s (func_00279E00, two
+# same-symbol HI16s whose LO16s straddle the carry: row E0; M16 = HI16 pairs with
+# the FIRST same-symbol LO16 in the table, FACT #8468's V7), row A11 (a word
+# differing only in bits 16-31; M17 = compare ignores the upper half, V1b), and a
+# CRASH PROBE: rows X0/X1 run a copy of the normal mode with an exception raised
+# before the ROM read, on A0's unseeded and A1's SEEDED base, and demand rc 2 plus
+# a `CRASH:` line and no DIFFERS line (M18 = the crash hook not installed, the
+# pre-#1016 rc 1). Mutant and probe copies are written as tools/ee/.vmu_selftest.
+# <pid>.*.sh (the script finds the repo from its own path, so they must sit here):
+# removed on exit, on SIGTERM/SIGHUP/SIGINT too, and .gitignore'd for SIGKILL.
+# A normal-mode python crash exits 2 UNVERIFIABLE with a `CRASH:` line (task
+# #1016; it used to exit 1, the DIFFERS band, FACT #8453).
 # Seed the BASE (arg 2), never the target (arg 3): arg 3's bytes are never
 # compared (FACT ledger-26262), so a target-seeded control cannot fail.
 #
@@ -88,7 +99,8 @@
 #   0  MATCH        — every word equals the ROM
 #   1  DIFFERS      — a real byte difference (this, and only this, is a failure)
 #   2  UNVERIFIABLE — the tool cannot decide (unresolvable symbol, reloc type it
-#                     does not model, function absent from the ROM window). NOT
+#                     does not model, function absent from the ROM window, or
+#                     its own python crashed: a `CRASH:` line). NOT
 #                     a pass and NOT a fail; it is its own visible state.
 #   3  USAGE/ARG    — bad arguments; e.g. a whole-unit .o passed as the target
 #
@@ -145,9 +157,17 @@ if [ "${1:-}" = "--selftest" ]; then
   SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
   ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$ROOT"
   SELF="$SELF" python3 - <<'SELFTEST_PY'
-import os, re, struct, subprocess, sys
+import os, re, signal, struct, subprocess, sys
 
 SELF = os.environ["SELF"]
+# A killed run must not leave its mutant copies in tools/ee/ (a dirty-tree gate
+# sees them). SIGTERM/SIGHUP/SIGINT become SystemExit so every `finally` below
+# runs; SIGKILL cannot be caught, which is why .gitignore also covers them.
+def stop(signum, frame):
+    print("SELFTEST INTERRUPTED by signal %d: cleaning up, no verdict" % signum, file=sys.stderr, flush=True)
+    raise SystemExit(2)
+for s in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
+    signal.signal(s, stop)
 FIX = "tools/ee/verify_match_unit_selftest"
 OUT = "going-decompiled/build/vmu_selftest.%d" % os.getpid()   # gitignored, inside the docker mount
 DOCKER = ["docker", "--context", "colima-ee-x86", "run", "--rm", "-v", os.getcwd() + ":/work",
@@ -169,8 +189,10 @@ def say(s=""):
 # be = EvaluateProgressCondition alone        (target for b's first function)
 # bg = GetSavePromptPending alone             (target for b's second function)
 # c  = the __divdi3 slice + __clz_tab         (its own target)
+# e  = func_00279E00's first 12 words         (its own target)
 OBJS = {"a": ["select_scene_sub_chunk"], "b": ["evaluate_progress_condition", "get_save_prompt_pending"],
-        "be": ["evaluate_progress_condition"], "bg": ["get_save_prompt_pending"], "c": ["divdi3_clz_slice"]}
+        "be": ["evaluate_progress_condition"], "bg": ["get_save_prompt_pending"], "c": ["divdi3_clz_slice"],
+        "e": ["camera_slot_straddle"]}
 
 def obj(k):
     return "%s/%s.o" % (OUT, k)
@@ -333,10 +355,35 @@ def carries(fn, hi_off, lo_off):
         return None
     return check
 
+def straddles(fn, hi_a, hi_b):
+    """Guard for the E rows: the HI16s at fn+hi_a and fn+hi_b are on ONE symbol,
+    their ld-paired LO16s resolve on opposite sides of the 0x8000 carry, and the
+    FIRST same-symbol LO16 in the table gives HI(b) a different %hi than ld's
+    pairing. Without all three, a first-LO16 rule is invisible here."""
+    def check(e):
+        v = e.fn_value(fn)
+        _, t = e.rel(".text")
+        ia = next((i for i, r in enumerate(t) if r[0] == v + hi_a and r[1] == 5), None)
+        ib = next((i for i, r in enumerate(t) if r[0] == v + hi_b and r[1] == 5), None)
+        if None in (ia, ib) or t[ia][2] != t[ib][2]:
+            return "the HI16s at +0x%x and +0x%x are not on one symbol" % (hi_a, hi_b)
+        ja, jb = ld_pair(t, ia), ld_pair(t, ib)
+        if None in (ja, jb) or ja == jb:
+            return "the two HI16s are not ld-paired with two different LO16s"
+        S = int(e.syms[t[ia][2]][0][-8:], 16)
+        lo = [(S + s16(e.word(".text", t[j][0]) & 0xFFFF)) & 0xFFFF for j in (ja, jb)]
+        if (lo[0] >= 0x8000) == (lo[1] >= 0x8000):
+            return "both %%lo are on the same side of the carry (0x%04x, 0x%04x): every rule agrees" % tuple(lo)
+        first = next(j for j, r in enumerate(t) if r[1] == 6 and r[2] == t[ib][2])
+        if hi_of(e, t, ib, first) == hi_of(e, t, ib, jb):
+            return "the first same-symbol LO16 gives HI(b) the same %hi"
+        return None
+    return check
+
 # ---- THE SEED TABLE. (id, fn, base, target, seed or None, guard or None,
 #      expected rc, expected detail). Detail: rc 0 -> (words, substring or None);
 #      rc 1 -> the EXACT tuple of differing vaddrs; rc 2/3 -> a substring.
-A, B, C, D = "func_00294920", "func_0029E808", "func_002897A8", "func_0011FD98"
+A, B, C, D, E = "func_00294920", "func_0029E808", "func_002897A8", "func_0011FD98", "func_00279E00"
 ROWS = [
     # SelectSceneSubChunk: HI16/LO16 pairing, both directions of the carry defect.
     ("A0", A, "a", "a", None, carries(A, 0x0C, 0x14), 0, (20, None),
@@ -361,6 +408,8 @@ ROWS = [
      "+0x20 jal in-place target +1 (the R_MIPS_26 addend)"),
     ("A10", A, "a", "b", None, None, 3, "WHOLE-UNIT object",
      "argument 3 is a two-function object"),
+    ("A11", A, "a", "a", w_seed(A, 0x00, lambda w: w ^ 0x00010000), None, 1, (0x294920,),
+     "+0x00 bit 16 flipped: the word differs ONLY in bits 16-31 (task #1016)"),
     # EvaluateProgressCondition: a unit-local .rodata section symbol (task #966).
     ("B0", B, "b", "be", None, None, 0, (86, ".rodata at 0x0026ca70"),
      "unseeded: %hi/%lo(.rodata) placed by content"),
@@ -377,6 +426,12 @@ ROWS = [
     # The __divdi3 slice: genuinely undecidable, must STAY rc 2.
     ("D0", D, "c", "c", None, None, 2, "found more than once in the ROM",
      "unseeded: __clz_tab is in the ROM 4 times"),
+    # func_00279E00: two HI16s on g_cameraSlotActive, LO16s straddling the carry
+    # (+0x08 %lo 0x7F00, lui 0x1B; +0x2C %lo 0x8288, lui 0x1C). Task #1016.
+    ("E0", E, "e", "e", None, straddles(E, 0x00, 0x28), 0, (12, None),
+     "unseeded: same-symbol HI16s, LO16s either side of the carry, lui 1B/1C"),
+    ("E1", E, "e", "e", w_seed(E, 0x28, lambda w: w + 1, ("R_MIPS_HI16", "D_001B7E30")), straddles(E, 0x00, 0x28),
+     1, (0x279E28,), "+0x28 lui immediate +1 (a first-LO16 rule computes 1C: false MATCH)"),
 ]
 
 def run(script, row, base):
@@ -404,7 +459,11 @@ def show(got):
         return "rc 0, %s/%s words" % (words, words)
     if rc == 1 and diffs:
         return "rc 1 at " + ",".join("0x%08x" % d for d in diffs)
-    return "rc %d, %s" % (rc, out.splitlines()[0].split(" — ", 1)[-1][:90] if out else "")
+    lines = out.splitlines()
+    line = next((l for l in lines if l.startswith("CRASH:")), None)
+    if line is None and lines:
+        line = lines[-1] if lines[0].startswith("Traceback") else lines[0].split(" — ", 1)[-1]
+    return "rc %d, %s" % (rc, (line or "")[:90])
 
 bases = {}
 
@@ -464,7 +523,49 @@ MUTANTS = [
      "if len(hits) != 1:", "if not hits:", ["D0"], []),
     ("M15", "DIFFERS printed but exit status 0",
      "sys.exit(DIFFERS)", "sys.exit(MATCH)", ["A1"], []),
+    ("M16", "HI16 pairs with the FIRST same-symbol LO16 in the table (FACT #8468 V7)",
+     "for lo_off, lo_info in table[i + 1:]:", "for lo_off, lo_info in table:", ["E0", "E1"],
+     [("E0", 1, (0x279E28,), "built 3c03001b   rom 3c03001c"), ("E1", 0, None, None)]),
+    ("M17", "the compare ignores bits 16-31 (FACT #8468 V1b)",
+     '    rw = struct.unpack_from("<I", rom, va - ROM_BASE)[0]\n',
+     '    rw = struct.unpack_from("<I", rom, va - ROM_BASE)[0]\n    rw = (rw & 0xFFFF) | (w & 0xFFFF0000)\n',
+     ["A11"], [("A11", 0, None, None)]),
+    ("M18", "crash hook not installed: a crash exits 1, the DIFFERS band (pre-#1016)",
+     "sys.excepthook = crash", "pass", ["X1"], [("X1", 1, None, None)]),
 ]
+
+# ---- CRASH PROBE (task #1016). A copy of the normal mode that raises before the
+# ROM read, run on A0's unseeded and A1's SEEDED base. It must exit 2 with a
+# `CRASH:` line and no verdict line. X1 is the case that matters: at rc 1 a
+# crash on a seeded base reads as "the control fired" when nothing was compared.
+PROBE_AT = 'rom = open(ROM, "rb").read()\n'
+PROBE = 'raise RuntimeError("vmu selftest crash probe")\n'
+PROBES = [("X0", "A0", "crash probe on A0's unseeded base: rc 2 + CRASH:, no verdict line"),
+          ("X1", "A1", "crash probe on A1's SEEDED base: must not read as the control firing")]
+
+def probe_holds(got):
+    rc, out = got[0], got[1]
+    return (rc == 2 and re.search(r"^CRASH: \S+: RuntimeError: vmu selftest crash probe", out, re.M) is not None
+            and not any(VERDICT_RE.match(l) for l in out.splitlines()))
+
+def crash_probe(text, tag):
+    """{xid: run() result} of the crash probe on `text`, or a reason string."""
+    ptext, why = mutate(text, PROBE_AT, PROBE + PROBE_AT)
+    if ptext is None:
+        return "probe point: " + why
+    ppath = os.path.join(os.path.dirname(SELF), ".vmu_selftest.%d.%s.probe.sh" % (os.getpid(), tag))
+    open(ppath, "w").write(ptext)
+    try:
+        res = {}
+        for xid, rid, _ in PROBES:
+            row = next(r for r in ROWS if r[0] == rid)
+            path, why = bases[rid]
+            if path is None:
+                return "%s's base is invalid: %s" % (rid, why)
+            res[xid] = run(ppath, row, path)
+        return res
+    finally:
+        os.remove(ppath)
 
 def main_span(text):
     start = text.rfind("python3 - <<'" + "PY'\n")
@@ -517,6 +618,20 @@ try:
     invariance = [r[0] for r in ROWS if r[4] is not None and r[1] in unseeded
                   and (r[6], r[7]) == (unseeded[r[1]][6], unseeded[r[1]][7])]
 
+    say("-- crash probe: an exception raised inside the normal mode must exit 2 with a CRASH: line")
+    pr = crash_probe(open(SELF).read(), "self")
+    if isinstance(pr, str):
+        say("  FAIL  CRASH PROBE INAPPLICABLE: " + pr)
+        ok = False
+    else:
+        for xid, rid, desc in PROBES:
+            good = probe_holds(pr[xid])
+            ok &= good
+            say("  %-5s %-4s %-72s -> %s" % ("ok" if good else "FAIL", xid, desc[:72], show(pr[xid])))
+            if not good:
+                for l in pr[xid][1].splitlines()[:6]:
+                    say("    | " + l)
+
     say("-- meta-control: %d mutants of this script's own normal-mode code; each must be REJECTED" % len(MUTANTS))
     text = open(SELF).read()
     caught_by = {}
@@ -530,8 +645,18 @@ try:
         open(mpath, "w").write(mtext)
         try:
             dev, mres = [], {}
+            if any(p.startswith("X") for p in prio):
+                pr = crash_probe(mtext, mid)
+                if isinstance(pr, str):
+                    say("  FAIL  %-4s CRASH PROBE INAPPLICABLE: %s" % (mid, pr))
+                    ok = False
+                    continue
+                mres.update(pr)
+                dev += [x for x in sorted(pr) if not probe_holds(pr[x])]
             order = [r for r in ROWS if r[0] in prio] + [r for r in ROWS if r[0] not in prio]
             for row in order:
+                if dev and all(p in mres for p in prio) and all(m[0] in mres for m in must):
+                    break
                 path, why = bases[row[0]]
                 if path is None:
                     continue
@@ -577,6 +702,10 @@ try:
     else:
         say("  ok    output guard: no line above has the shape '<fn>: BYTE IDENTICAL|DIFFERS|UNVERIFIABLE'")
 finally:
+    mine = ".vmu_selftest.%d." % os.getpid()
+    for f in os.listdir(os.path.dirname(SELF)):
+        if f.startswith(mine):
+            os.remove(os.path.join(os.path.dirname(SELF), f))
     for f in os.listdir(OUT) if os.path.isdir(OUT) else []:
         os.remove(os.path.join(OUT, f))
     if os.path.isdir(OUT):
@@ -690,6 +819,27 @@ docker --context colima-ee-x86 run --rm -v "$ROOT":/work -w /work ee-build sh -c
 [ -s "$DIS_FILE" ] || { echo "ARG ERROR: '$BASE' produced no .text disassembly" >&2; exit 3; }
 
 FN="$FN" BASE="$BASE" ROM="$ROM" SYMS="$SYMS" REGION="$REGION" DIS_FILE="$DIS_FILE" python3 - <<'PY'
+import os, sys, traceback
+
+# CRASH -> UNVERIFIABLE (task #1016, FACT #8453). An uncaught exception would
+# exit 1, the DIFFERS band, with no verdict line — so a crash on a base-seeded
+# control reads as "the control fired" and a broken tool certifies itself. A
+# crash measured nothing: print the traceback and a `CRASH:` line naming what
+# failed, and exit 2. os._exit, because an excepthook cannot change the status
+# by raising SystemExit. Installed FIRST, before any other statement. NOT
+# covered: a SyntaxError anywhere in this heredoc (raised at compile time,
+# before the hook exists) still exits 1, as does a failure of the stdlib import
+# on the first line. A signal kills python3 with 128+N, which is not 1.
+def crash(etype, value, tb):
+    sys.stdout.flush()
+    traceback.print_exception(etype, value, tb)
+    last = traceback.extract_tb(tb)[-1] if tb else None
+    print(f"CRASH: {os.environ.get('FN', '?')}: {etype.__name__}: {value}"
+          + (f" (normal-mode python line {last.lineno}, in {last.name})" if last else "")
+          + " — nothing was compared; this is UNVERIFIABLE, not DIFFERS", flush=True)
+    sys.stderr.flush()
+    os._exit(2)
+sys.excepthook = crash
 import os, re, struct, sys
 
 FN     = os.environ["FN"]
