@@ -34,16 +34,55 @@
 # `sym + off` reference (measured: `%lo(func_001248B0 + 0x8)`). Each type adds its
 # own in-place addend back; GPREL16 additionally needs the per-region _gp.
 #
-# ⚠️ NO SELFTEST, AS OF TASK #1000. This script has no --selftest and no
-# built-in control of any kind: nothing in it checks that it CAN return DIFFERS.
-# Every control run on it so far was an external base seed that a caller chose
-# to run by hand (tasks #983, #994). A run with no seed beside it has not shown
-# this tool can fail on the input it was given, so "no DIFFERS" is not "checked".
+# SELFTEST (task #1004; until then it had none, as task #1000 recorded here).
+#   verify_match_unit.sh --selftest
+# runs THIS script's normal mode on committed subjects with BASE (arg 2) seeds,
+# and then on 15 one-line mutants of its own normal-mode code, and prints
+# `#### VMU-SELFTEST usa: PASS|FAIL`. Exit 0 PASS, 1 FAIL, 2 CANNOT RUN (fixture
+# assembly failed, or the usa flat ROM is unreachable). It never prints a
+# `<fn>: BYTE IDENTICAL|DIFFERS|UNVERIFIABLE` line: those are verdicts on a
+# function and a selftest is not one (checked by its own output guard).
+# Needs the colima-ee-x86 VM and the usa flat ROM, as the normal mode does.
+#
+# Subjects: tools/ee/verify_match_unit_selftest/*.s — ROM words written as
+# `.word`, relocated words as instructions with address-encoded names (D_/func_),
+# assembled into gitignored build/ at run time. What keeps them from rotting:
+# they depend on no symbol_addrs row, no splat .s, no src/ C and no build
+# object, only on the ROM (CRC-pinned) and GAS. What would break them: a change
+# to how resolve() reads an address-encoded name, a new ee-build GAS that orders
+# or encodes REL relocations differently, or a different ROM. Each breaks a row
+# loudly (FAIL or CONTROL INVALID), not silently: every unseeded row demands
+# an exact word count, every seeded row an exact set of differing addresses.
+#
+# Seed table (every seed is guarded: it must sit on the relocation it names,
+# must change the word, and the carry subject must really carry):
+#   SelectSceneSubChunk 0x294920   unseeded rc 0 20/20 (RULING #8014 known
+#     answer, the LO16 is not the next instruction); w0 bit flip, lui+1 (FACT
+#     #8414), LO16^0x100, LO16=0x01D0 (%lo exactly 0x8000), LO16=0x8990
+#     (negative addend) and jal+1 each rc 1 at the exact word(s); .rel.text
+#     nested pair rc 0 (an INVARIANCE row: kept only because mutant M4 moves it);
+#     HI16 re-pointed at a symbol with no later LO16 rc 2 "unresolvable
+#     HI16/LO16 pairing"; R_MIPS_26 retyped GOT16 rc 2; a two-function arg 3 rc 3
+#   EvaluateProgressCondition 0x29E808   rc 0 86/86 `.rodata at 0x0026ca70`
+#     (task #966); w0 and w8 (%lo(.rodata)) rc 1; jump-table word +4 rc 2
+#   GetSavePromptPending 0x2897A8   GPREL16 rc 0 2/2; %gp_rel+4 rc 1
+#   __divdi3 slice 0x11FD98   rc 2: its .rodata (__clz_tab) is in the ROM 4 times
+# Mutants it must reject (measured, each by the row named): M1 HI16 ignores the
+# paired LO16 (the pre-#977 rule; must reproduce BOTH known answers: A0 rc 1
+# `built 3c10001b rom 3c10001c`, and A2 rc 0, the #8414 false MATCH), M2 LO16
+# addend unsigned, M3 section symbols unplaced (pre-#966), M4 pairing on any
+# symbol, M5 +0x7FFF rounding, M6 unpaired HI16 given lo 0, M7 unmodelled type
+# skipped, M8 compare blinded, M9 R_MIPS_26 addend dropped, M10 GPREL16 addend
+# dropped, M11 _gp off by 4, M12 LO16 addend dropped, M13 section R_MIPS_32 left
+# unresolved, M14 first-of-several ROM hits taken, M15 DIFFERS exiting 0.
+# A mutant whose text is no longer in the code is a FAIL, not a skip.
+# NOT covered: R_MIPS_PC16 (no subject carries one), the zero-run elision and
+# unit-position blind spots below (the tool cannot see them, so no seed can
+# move its verdict), symbol_addrs lookup (subjects use address-encoded names),
+# EU (no EU subject). A wrong rule not in the mutant list has not been tried.
+# ⚠️ A normal-mode python crash exits 1, which is the DIFFERS band.
 # Seed the BASE (arg 2), never the target (arg 3): arg 3's bytes are never
-# compared (FACT ledger-26262). symtab_extent_compare.py --selftest seeds the same
-# relocation arithmetic and lists which wrong rules it can reject, but it runs
-# ITS copy of that arithmetic, not this one. When this script gains a selftest,
-# replace this paragraph with what it rejects.
+# compared (FACT ledger-26262), so a target-seeded control cannot fail.
 #
 # EXIT STATUS (a misuse must never look like a verdict)
 #   0  MATCH        — every word equals the ROM
@@ -95,8 +134,458 @@ set -u
 
 usage() {
   echo "usage: $(basename "$0") <func> <whole_unit_base.o> <single_func_target.o> [region]" >&2
+  echo "       $(basename "$0") --selftest" >&2
   exit 3
 }
+
+# ---- --selftest (task #1004). Everything the normal mode does is below this
+# block and untouched by it; this block only runs on a lone `--selftest`.
+if [ "${1:-}" = "--selftest" ]; then
+  [ $# -eq 1 ] || usage
+  SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+  ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$ROOT"
+  SELF="$SELF" python3 - <<'SELFTEST_PY'
+import os, re, struct, subprocess, sys
+
+SELF = os.environ["SELF"]
+FIX = "tools/ee/verify_match_unit_selftest"
+OUT = "going-decompiled/build/vmu_selftest.%d" % os.getpid()   # gitignored, inside the docker mount
+DOCKER = ["docker", "--context", "colima-ee-x86", "run", "--rm", "-v", os.getcwd() + ":/work",
+          "-w", "/work", "ee-build", "sh", "-c"]
+AS = "mips-linux-gnu-as -march=r5900 -mabi=eabi -no-pad-sections -EL -G0"
+# A line this tool's normal mode prints as a per-function verdict. The selftest
+# prints NONE of these (checked at the end); the inner runs' lines are parsed,
+# never echoed except behind "    | ".
+VERDICT_RE = re.compile(r"^[A-Za-z_.$][\w.$]*: (BYTE IDENTICAL|DIFFERS|UNVERIFIABLE|NOT FOUND)")
+printed = []
+
+def say(s=""):
+    printed.append(s)
+    print(s, flush=True)
+
+# ---- the base objects, assembled from the committed fixtures ----------------
+# a  = SelectSceneSubChunk alone              (its own target)
+# b  = EvaluateProgressCondition + GetSavePromptPending, one .text, one .rodata
+# be = EvaluateProgressCondition alone        (target for b's first function)
+# bg = GetSavePromptPending alone             (target for b's second function)
+# c  = the __divdi3 slice + __clz_tab         (its own target)
+OBJS = {"a": ["select_scene_sub_chunk"], "b": ["evaluate_progress_condition", "get_save_prompt_pending"],
+        "be": ["evaluate_progress_condition"], "bg": ["get_save_prompt_pending"], "c": ["divdi3_clz_slice"]}
+
+def obj(k):
+    return "%s/%s.o" % (OUT, k)
+
+def build():
+    os.makedirs(OUT, exist_ok=True)
+    cmds = []
+    for k, parts in OBJS.items():
+        with open("%s/%s.s" % (OUT, k), "w") as f:
+            for p in parts:
+                f.write(open("%s/%s.s" % (FIX, p)).read() + "\n")
+        cmds.append("%s -o %s %s/%s.s" % (AS, obj(k), OUT, k))
+    p = subprocess.run(DOCKER + [" && ".join(cmds)], capture_output=True, text=True)
+    return p.returncode == 0 and all(os.path.isfile(obj(k)) for k in OBJS), p.stderr.strip()[-400:]
+
+# ---- a minimal ELF32 LE reader, independent of the tool's own ---------------
+# Written separately on purpose: a defect in the tool's load_elf/hi16_pairs
+# must not also disable the guard that checks the seed is what it claims.
+class Elf:
+    def __init__(self, data):
+        self.d = bytearray(data)
+        shoff, = struct.unpack_from("<I", self.d, 0x20)
+        n, shstr = struct.unpack_from("<HH", self.d, 0x30)
+        self.secs = [struct.unpack_from("<10I", self.d, shoff + i * 40) for i in range(n)]
+        so = self.secs[shstr][4]
+        self.names = [self.d[so + s[0]:self.d.index(b"\0", so + s[0])].decode() for s in self.secs]
+        st = next(i for i, s in enumerate(self.secs) if s[1] == 2)          # SHT_SYMTAB
+        self.syms = []
+        for k in range(self.secs[st][5] // 16):
+            nm, val, size, info, _, shndx = struct.unpack_from("<IIIBBH", self.d, self.secs[st][4] + k * 16)
+            stro = self.secs[self.secs[st][6]][4]
+            name = self.names[shndx] if info & 0xF == 3 else self.d[stro + nm:self.d.index(b"\0", stro + nm)].decode()
+            self.syms.append((name, val, info & 0xF))
+    def sec(self, name):
+        return self.names.index(name)
+    def fn_value(self, fn):
+        return next(v for n, v, t in self.syms if n == fn and t == 2)
+    def rel(self, secname):
+        """(file offset of the table, [(r_offset, type, symbol index)]) of SHT_REL for secname."""
+        i = self.sec(secname)
+        r = next(s for s in self.secs if s[1] == 9 and s[7] == i)
+        return r[4], [(o, inf & 0xFF, inf >> 8) for o, inf in
+                      (struct.unpack_from("<II", self.d, r[4] + k * 8) for k in range(r[5] // 8))]
+    def write_rel(self, secname, table):
+        base, _ = self.rel(secname)
+        for k, (o, t, s) in enumerate(table):
+            struct.pack_into("<II", self.d, base + k * 8, o, (s << 8) | t)
+    def word(self, secname, off):
+        return struct.unpack_from("<I", self.d, self.secs[self.sec(secname)][4] + off)[0]
+    def put(self, secname, off, w):
+        struct.pack_into("<I", self.d, self.secs[self.sec(secname)][4] + off, w & 0xFFFFFFFF)
+
+TYPES = {"R_MIPS_32": 2, "R_MIPS_26": 4, "R_MIPS_HI16": 5, "R_MIPS_LO16": 6, "R_MIPS_GPREL16": 7}
+
+def reloc_at(e, off, rtype, sym):
+    return any(o == off and t == TYPES[rtype] and e.syms[s][0] == sym for o, t, s in e.rel(".text")[1])
+
+def s16(v):
+    return v - 0x10000 if v & 0x8000 else v
+
+# ---- seeds. Each returns (Elf, None) or (None, why the seed is not a valid control)
+def w_seed(fn, off, how, need=None):
+    """Rewrite the .text word at fn+off. `need` = (type, symbol) the word must
+    carry, or None = it must carry no relocation (so the flip is a plain word)."""
+    def seed(e):
+        at = e.fn_value(fn) + off
+        here = [(t, e.syms[s][0]) for o, t, s in e.rel(".text")[1] if o == at]
+        if need is None and here:
+            return None, "+0x%x carries a relocation" % off
+        if need is not None and not reloc_at(e, at, *need):
+            return None, "+0x%x does not carry %s %s" % (off, need[0], need[1])
+        old = e.word(".text", at)
+        e.put(".text", at, how(old))
+        if e.word(".text", at) == old:
+            return None, "the seed leaves +0x%x unchanged" % off
+        return e, None
+    return seed
+
+def rodata_seed(off, how):
+    def seed(e):
+        old = e.word(".rodata", off)
+        e.put(".rodata", off, how(old))
+        return (e, None) if e.word(".rodata", off) != old else (None, "unchanged")
+    return seed
+
+def lo_imm(v):
+    return lambda w: (w & 0xFFFF0000) | v
+
+def ld_pair(table, i):
+    """Index of the LO16 GNU ld pairs with the HI16 at table[i] (next LO16, same symbol)."""
+    return next((j for j in range(i + 1, len(table)) if table[j][1] == 6 and table[j][2] == table[i][2]), None)
+
+def hi_of(e, table, i, j):
+    S = int(e.syms[table[i][2]][0][-8:], 16)            # fixtures use address-encoded names
+    return (S + (s16(e.word(".text", table[i][0]) & 0xFFFF) << 16)
+            + s16(e.word(".text", table[j][0]) & 0xFFFF) + 0x8000) >> 16 & 0xFFFF
+
+def nest_seed(fn, hi_a, hi_b):
+    """.rel.text only: move the HI16 at fn+hi_b and its LO16 to sit right after
+    the HI16 at fn+hi_a, giving HI(a) HI(b) LO(b) LO(a). ld pairs by symbol, so
+    the linked bytes do not change; a rule pairing with the next LO16 on ANY
+    symbol does. Valid only if that wrong LO16 gives HI(a) a different %hi."""
+    def seed(e):
+        v = e.fn_value(fn)
+        _, t = e.rel(".text")
+        ia = next(i for i, r in enumerate(t) if r[0] == v + hi_a and r[1] == 5)
+        ib = next(i for i, r in enumerate(t) if r[0] == v + hi_b and r[1] == 5)
+        ja, jb = ld_pair(t, ia), ld_pair(t, ib)
+        if None in (ja, jb) or t[ia][2] == t[ib][2]:
+            return None, "no two HI16/LO16 pairs on different symbols"
+        if hi_of(e, t, ia, ja) == hi_of(e, t, ia, jb):
+            return None, "LO(b) gives HI(a) the same %hi, so a wrong pairing is invisible"
+        moved = [t[ib], t[jb]]
+        rest = [r for k, r in enumerate(t) if k not in (ib, jb)]
+        k = rest.index(t[ia]) + 1
+        e.write_rel(".text", rest[:k] + moved + rest[k:])
+        return e, None
+    return seed
+
+def repoint_seed(fn, hi_off, to_sym):
+    """.rel.text only: point the HI16 at fn+hi_off at `to_sym`, which must have no
+    later LO16 in the table, so ld would have no addend to pair it with."""
+    def seed(e):
+        v = e.fn_value(fn)
+        _, t = e.rel(".text")
+        i = next(i for i, r in enumerate(t) if r[0] == v + hi_off and r[1] == 5)
+        s = next(k for k, sy in enumerate(e.syms) if sy[0] == to_sym)
+        t[i] = (t[i][0], 5, s)
+        if ld_pair(t, i) is not None:
+            return None, "%s has a later LO16, so the HI16 is still paired" % to_sym
+        e.write_rel(".text", t)
+        return e, None
+    return seed
+
+def retype_seed(fn, off, frm, to):
+    def seed(e):
+        v = e.fn_value(fn)
+        _, t = e.rel(".text")
+        hit = [i for i, r in enumerate(t) if r[0] == v + off and r[1] == frm]
+        if len(hit) != 1:
+            return None, "no single relocation of type %d at +0x%x" % (frm, off)
+        t[hit[0]] = (t[hit[0]][0], to, t[hit[0]][2])
+        e.write_rel(".text", t)
+        return e, None
+    return seed
+
+def carries(fn, hi_off, lo_off):
+    """Guard for the unseeded carry row: the HI16 at fn+hi_off really needs the
+    addend of the LO16 at fn+lo_off, i.e. dropping it gives a different %hi."""
+    def check(e):
+        v = e.fn_value(fn)
+        _, t = e.rel(".text")
+        i = next((i for i, r in enumerate(t) if r[0] == v + hi_off and r[1] == 5), None)
+        j = ld_pair(t, i) if i is not None else None
+        if j is None or t[j][0] != v + lo_off:
+            return "the HI16 at +0x%x is not ld-paired with the LO16 at +0x%x" % (hi_off, lo_off)
+        S = int(e.syms[t[i][2]][0][-8:], 16)
+        if hi_of(e, t, i, j) == (S + (s16(e.word(".text", t[i][0]) & 0xFFFF) << 16) + 0x8000) >> 16 & 0xFFFF:
+            return "the HI16 at +0x%x does not carry" % hi_off
+        return None
+    return check
+
+# ---- THE SEED TABLE. (id, fn, base, target, seed or None, guard or None,
+#      expected rc, expected detail). Detail: rc 0 -> (words, substring or None);
+#      rc 1 -> the EXACT tuple of differing vaddrs; rc 2/3 -> a substring.
+A, B, C, D = "func_00294920", "func_0029E808", "func_002897A8", "func_0011FD98"
+ROWS = [
+    # SelectSceneSubChunk: HI16/LO16 pairing, both directions of the carry defect.
+    ("A0", A, "a", "a", None, carries(A, 0x0C, 0x14), 0, (20, None),
+     "unseeded: %hi carries through the paired LO16 (RULING #8014 known answer)"),
+    ("A1", A, "a", "a", w_seed(A, 0x00, lambda w: w ^ 1), None, 1, (0x294920,),
+     "+0x00 bit 0 flipped (plain word)"),
+    ("A2", A, "a", "a", w_seed(A, 0x0C, lambda w: w + 1, ("R_MIPS_HI16", "D_001B7E30")), None, 1, (0x29492C,),
+     "+0x0c lui immediate +1 (FACT #8414: the old rule said MATCH)"),
+    ("A3", A, "a", "a", w_seed(A, 0x14, lambda w: w ^ 0x100, ("R_MIPS_LO16", "D_001B7E30")), None, 1, (0x294934,),
+     "+0x14 paired LO16 immediate ^ 0x100"),
+    ("A4", A, "a", "a", w_seed(A, 0x14, lo_imm(0x01D0), ("R_MIPS_LO16", "D_001B7E30")), None, 1, (0x294934,),
+     "+0x14 LO16 -> 0x01D0: %lo is exactly 0x8000, %hi still 0x1C"),
+    ("A5", A, "a", "a", w_seed(A, 0x14, lo_imm(0x8990), ("R_MIPS_LO16", "D_001B7E30")), None, 1,
+     (0x29492C, 0x294934), "+0x14 LO16 -> 0x8990: a NEGATIVE addend, %hi drops to 0x1B"),
+    ("A6", A, "a", "a", nest_seed(A, 0x0C, 0x2C), None, 0, (20, None),
+     ".rel.text: D_001B2230 pair nested inside the D_001B7E30 pair (ld: no change)"),
+    ("A7", A, "a", "a", repoint_seed(A, 0x0C, "func_002945E0"), None, 2, "unresolvable HI16/LO16 pairing",
+     ".rel.text: HI16 at +0x0c re-pointed at a symbol with no later LO16"),
+    ("A8", A, "a", "a", retype_seed(A, 0x20, 4, 9), None, 2, "unmodelled relocation type(s): R_MIPS_GOT16",
+     ".rel.text: the jal's R_MIPS_26 retyped R_MIPS_GOT16"),
+    ("A9", A, "a", "a", w_seed(A, 0x20, lambda w: w + 1, ("R_MIPS_26", "func_002945E0")), None, 1, (0x294940,),
+     "+0x20 jal in-place target +1 (the R_MIPS_26 addend)"),
+    ("A10", A, "a", "b", None, None, 3, "WHOLE-UNIT object",
+     "argument 3 is a two-function object"),
+    # EvaluateProgressCondition: a unit-local .rodata section symbol (task #966).
+    ("B0", B, "b", "be", None, None, 0, (86, ".rodata at 0x0026ca70"),
+     "unseeded: %hi/%lo(.rodata) placed by content"),
+    ("B1", B, "b", "be", w_seed(B, 0x00, lambda w: w ^ 1), None, 1, (0x29E808,),
+     "+0x00 (w0) bit 0 flipped"),
+    ("B2", B, "b", "be", w_seed(B, 0x20, lambda w: w + 1, ("R_MIPS_LO16", ".rodata")), None, 1, (0x29E828,),
+     "+0x20 (w8) %lo(.rodata) immediate +1"),
+    ("B3", B, "b", "be", rodata_seed(0x00, lambda w: w + 4), None, 2, "found nowhere in the ROM",
+     ".rodata jump-table entry 0 +4: placement must refuse, not guess"),
+    # GetSavePromptPending: GPREL16 against the usa _gp.
+    ("C0", C, "b", "bg", None, None, 0, (2, None), "unseeded: %gp_rel with _gp 0x1AEFF0"),
+    ("C1", C, "b", "bg", w_seed(C, 0x04, lambda w: w + 4, ("R_MIPS_GPREL16", "D_001A7B94")), None, 1,
+     (0x2897AC,), "+0x04 %gp_rel immediate +4"),
+    # The __divdi3 slice: genuinely undecidable, must STAY rc 2.
+    ("D0", D, "c", "c", None, None, 2, "found more than once in the ROM",
+     "unseeded: __clz_tab is in the ROM 4 times"),
+]
+
+def run(script, row, base):
+    rid, fn, _b, tgt = row[:4]
+    p = subprocess.run(["bash", script, fn, base, obj(tgt), "usa"], capture_output=True, text=True, timeout=600)
+    out = (p.stdout + p.stderr).strip()
+    diffs = tuple(int(m, 16) for m in re.findall(r"^  0x([0-9a-f]{8}): built", out, re.M))
+    m = re.search(r"\((\d+)/(\d+) words", out)
+    return p.returncode, out, diffs, (int(m.group(1)) if m and m.group(1) == m.group(2) else None)
+
+def holds(row, got):
+    rc, out, diffs, words = got
+    want_rc, want = row[6], row[7]
+    if rc != want_rc:
+        return False
+    if rc == 0:
+        return words == want[0] and (want[1] is None or want[1] in out)
+    if rc == 1:
+        return diffs == want
+    return want in out
+
+def show(got):
+    rc, out, diffs, words = got
+    if rc == 0 and words is not None:
+        return "rc 0, %s/%s words" % (words, words)
+    if rc == 1 and diffs:
+        return "rc 1 at " + ",".join("0x%08x" % d for d in diffs)
+    return "rc %d, %s" % (rc, out.splitlines()[0].split(" — ", 1)[-1][:90] if out else "")
+
+bases = {}
+
+def base_for(row):
+    rid, seed, guard = row[0], row[4], row[5]
+    if rid in bases:
+        return bases[rid]
+    e = Elf(open(obj(row[2]), "rb").read())
+    why = guard(e) if guard else None
+    if why is None and seed is not None:
+        e, why = seed(e)
+    if why is not None:
+        bases[rid] = (None, why)
+        return bases[rid]
+    path = obj(row[2]) if seed is None else "%s/seed_%s.o" % (OUT, rid)
+    if seed is not None:
+        open(path, "wb").write(bytes(e.d))
+    bases[rid] = (path, None)
+    return bases[rid]
+
+# ---- MUTANTS: the meta-control. Each is a one-line change to THIS script's
+# normal-mode code (the `python3 - <<'PY'` block), written to a copy beside it.
+# The seed table must reject every one: some row must deviate. A mutant whose
+# text is no longer found is a FAIL (MUTANT INAPPLICABLE), so a refactor of the
+# tool cannot silently retire a control. `must` = exact outcomes a mutant has
+# to produce (the historical known answers), beyond "some row deviates".
+MUTANTS = [
+    ("M1", "HI16 ignores the paired LO16 addend (the rule before task #977)",
+     "A = (sign16(w & 0xFFFF) << 16) + lo", "A = (sign16(w & 0xFFFF) << 16)", ["A0", "A2"],
+     [("A0", 1, (0x29492C,), "built 3c10001b   rom 3c10001c"), ("A2", 0, None, None)]),
+    ("M2", "paired LO16 addend read unsigned",
+     "pairs[r_off] = sign16(lo_w & 0xFFFF)", "pairs[r_off] = lo_w & 0xFFFF", ["A5"], []),
+    ("M3", "section symbols not placed (the rule before task #966)",
+     "S = resolve_section(rname, rom)", "S = None", ["B0"], []),
+    ("M4", "HI16 pairs with the next LO16 on ANY symbol",
+     "if lo_info & 0xFF == 6 and lo_info >> 8 == r_info >> 8:", "if lo_info & 0xFF == 6:", ["A6"], []),
+    ("M5", "%hi rounded with +0x7FFF, not +0x8000",
+     "(((S + A + 0x8000) >> 16) & 0xFFFF)", "(((S + A + 0x7FFF) >> 16) & 0xFFFF)", ["A4"], []),
+    ("M6", "an unpaired HI16 resolved with a zero LO16 instead of refused",
+     "lo = HI16_PAIRS.get(off) if isinstance(HI16_PAIRS, dict) else None",
+     "lo = (HI16_PAIRS.get(off) if isinstance(HI16_PAIRS, dict) else None) or 0", ["A7"], []),
+    ("M7", "an unmodelled relocation type skipped silently",
+     "unmodelled.add(rtype)", "pass", ["A8"], []),
+    ("M8", "the ROM compare blinded",
+     "if rw != w:", "if rw != w and False:", ["A1"], []),
+    ("M9", "R_MIPS_26 in-place addend dropped",
+     "A = (w & 0x03FFFFFF) << 2", "A = 0", ["A9"], []),
+    ("M10", "GPREL16 in-place addend dropped",
+     "((S + sign16(w & 0xFFFF) - GP) & 0xFFFF)", "((S - GP) & 0xFFFF)", ["C1"], []),
+    ("M11", "the usa _gp off by 4",
+     '"usa": 0x1AEFF0', '"usa": 0x1AEFF4', ["C0"], []),
+    ("M12", "LO16 in-place addend dropped",
+     "((S + sign16(w & 0xFFFF)) & 0xFFFF)", "((S) & 0xFFFF)", ["A0"], []),
+    ("M13", "a section's own R_MIPS_32 relocations left unresolved before the ROM search",
+     "(S + A) & 0xFFFFFFFF)", "(A) & 0xFFFFFFFF)", ["B0"], []),
+    ("M14", "section placement takes the FIRST of several ROM hits",
+     "if len(hits) != 1:", "if not hits:", ["D0"], []),
+    ("M15", "DIFFERS printed but exit status 0",
+     "sys.exit(DIFFERS)", "sys.exit(MATCH)", ["A1"], []),
+]
+
+def main_span(text):
+    start = text.rfind("python3 - <<'" + "PY'\n")
+    end = text.find("\n" + "PY\n", start)
+    return start, end
+
+def mutate(text, old, new):
+    s, e = main_span(text)
+    if s < 0 or e < 0:
+        return None, "normal-mode heredoc not found"
+    n = text[s:e].count(old)
+    if n != 1:
+        return None, "text found %d times in the normal-mode code, expected once" % n
+    return text[:s] + text[s:e].replace(old, new) + text[e:], None
+
+# ---- run ------------------------------------------------------------------
+say("== verify_match_unit --selftest: an INSTRUMENT check, NOT a function verdict")
+say("== subjects: %s/*.s assembled now; ROM words from the flat usa ROM" % FIX)
+ok = True
+try:
+    built, err = build()
+    if not built:
+        say("SELFTEST CANNOT RUN: fixture assembly failed in the ee-build container: " + err)
+        sys.exit(2)
+    say("-- seed table (BASE = arg 2 seeded, never the target), %d rows" % len(ROWS))
+    result, first = {}, {}
+    for row in ROWS:
+        path, why = base_for(row)
+        if path is None:
+            say("  CONTROL INVALID  %-4s %s: %s" % (row[0], row[8], why))
+            ok = False
+            continue
+        got = run(SELF, row, path)
+        if row[0] == "A0" and got[0] == 2 and "flat ROM" in got[1]:
+            say("SELFTEST CANNOT RUN: the usa flat ROM is not reachable from this checkout")
+            sys.exit(2)
+        result[row[0]] = got
+        good = holds(row, got)
+        ok &= good
+        say("  %-5s %-4s %-72s -> %s" % ("ok" if good else "FAIL", row[0], row[8][:72], show(got)))
+        if not good:
+            for l in got[1].splitlines()[:6]:
+                say("    | " + l)
+    # every seeded row must MOVE its subject's verdict away from the unseeded
+    # row's, unless a mutant is shown below to move it (an invariance row).
+    unseeded = {}
+    for r in ROWS:
+        if r[4] is None:
+            unseeded.setdefault(r[1], r)            # a subject's first unseeded row
+    invariance = [r[0] for r in ROWS if r[4] is not None and r[1] in unseeded
+                  and (r[6], r[7]) == (unseeded[r[1]][6], unseeded[r[1]][7])]
+
+    say("-- meta-control: %d mutants of this script's own normal-mode code; each must be REJECTED" % len(MUTANTS))
+    text = open(SELF).read()
+    caught_by = {}
+    for mid, desc, old, new, prio, must in MUTANTS:
+        mtext, why = mutate(text, old, new)
+        if mtext is None:
+            say("  FAIL  %-4s MUTANT INAPPLICABLE (%s): %s" % (mid, desc, why))
+            ok = False
+            continue
+        mpath = os.path.join(os.path.dirname(SELF), ".vmu_selftest.%d.%s.sh" % (os.getpid(), mid))
+        open(mpath, "w").write(mtext)
+        try:
+            dev, mres = [], {}
+            order = [r for r in ROWS if r[0] in prio] + [r for r in ROWS if r[0] not in prio]
+            for row in order:
+                path, why = bases[row[0]]
+                if path is None:
+                    continue
+                g = run(mpath, row, path)
+                mres[row[0]] = g
+                if not holds(row, g):
+                    dev.append(row[0])
+                    caught_by.setdefault(row[0], []).append(mid)
+                if dev and all(p in mres for p in prio) and all(m[0] in mres for m in must):
+                    break
+            bad_must = []
+            for rid, rc, diffs, sub in must:
+                g = mres.get(rid)
+                if g is None or g[0] != rc or (diffs is not None and g[2] != diffs) or (sub and sub not in g[1]):
+                    bad_must.append("%s gave %s" % (rid, show(g) if g else "not run"))
+            good = bool(dev) and not bad_must
+            ok &= good
+            say("  %-5s %-4s %-60s -> %s" % ("ok" if good else "FAIL", mid, desc[:60],
+                ("rejected by " + ", ".join("%s (%s)" % (r, show(mres[r])) for r in dev[:3])) if dev
+                else "PASSED EVERY ROW: the seed table cannot see this class"))
+            for b in bad_must:
+                say("        known answer not reproduced: " + b)
+            for rid, rc, diffs, sub in must:
+                if rid in mres and not bad_must:
+                    say("        known answer: %s -> %s" % (rid, show(mres[rid])))
+        finally:
+            os.remove(mpath)
+    for rid in invariance:
+        if rid in caught_by:
+            say("  ok    %-4s does not move the verdict by design; it rejects %s" % (rid, ", ".join(caught_by[rid])))
+        else:
+            say("  FAIL  %-4s moves no verdict and rejects no mutant: decoration, not a control" % rid)
+            ok = False
+    # the output guard: the selftest must not print a per-function verdict line.
+    a0 = result.get("A0")
+    if not (a0 and VERDICT_RE.match(a0[1].splitlines()[0])):
+        say("  FAIL  output guard: its pattern does not match a real verdict line (A0), so it checks nothing")
+        ok = False
+    leaked = [l for l in printed if VERDICT_RE.match(l) or "landing_gate" in l]
+    if leaked:
+        say("  FAIL  output guard: the selftest printed %d verdict-shaped line(s)" % len(leaked))
+        ok = False
+    else:
+        say("  ok    output guard: no line above has the shape '<fn>: BYTE IDENTICAL|DIFFERS|UNVERIFIABLE'")
+finally:
+    for f in os.listdir(OUT) if os.path.isdir(OUT) else []:
+        os.remove(os.path.join(OUT, f))
+    if os.path.isdir(OUT):
+        os.rmdir(OUT)
+print("#### VMU-SELFTEST usa: %s (instrument check, not a function verdict)" % ("PASS" if ok else "FAIL"))
+sys.exit(0 if ok else 1)
+SELFTEST_PY
+  exit $?
+fi
 
 [ $# -ge 3 ] && [ $# -le 4 ] || usage
 FN="$1"; BASE="$2"; TGT="$3"; REGION="${4:-usa}"
