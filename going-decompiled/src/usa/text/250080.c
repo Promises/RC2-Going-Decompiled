@@ -1822,30 +1822,55 @@ s32 func_00352AE0(s32 unused, u8 *obj) {
 }
 #endif
 
-/* FmvFrameQueueInit: initialise the decoded-frame display queue — store arg1/base/count
- * into the header (+0x0/+0x4/+0x10), zero +0x8/+0xC, then for each of `count`
- * 0x138C0-stride slots off `base` zero the slot's state word (+0x0) and stamp its
- * index at +0x4. Blocked: under 2.9 -G8 -fno-gcse the header stores schedule in a
- * different order than the original (sw a1,0x0 first vs the original's sw zero,0xC
- * first) — an instruction-scheduling wall. */
+/**
+ * FmvFrameQueueInit - initialise the decoded-frame display queue.
+ *
+ * @param rec   queue header: +0x0 arg1, +0x4 slot base, +0x8/+0xC cleared,
+ *              +0x10 slot count
+ * @param arg1  stored at +0x0
+ * @param base  address of slot 0 (slots are 0x138C0 bytes apart)
+ * @param count number of slots
+ *
+ * Zeroes each slot's state word (+0x0) and stamps its index at +0x4. The slot
+ * base is re-read from the header for every store, as in the ROM.
+ *
+ * Byte-exact on the sdk29 arm (task #895). #513 measured 84.82 and named the
+ * header-store order as a scheduling wall; it is reachable:
+ *  - a memory barrier after the +0xC store, with `i = 0` between them, keeps
+ *    the ROM's `sw zero,12; move t0,zero` first;
+ *  - a second barrier after the last header store keeps `sw zero,8` out of
+ *    the blez delay slot, which then takes the `lui` of the stride;
+ *  - the loop is an `if (count > 0) do {} while` with `off = 0` inside the
+ *    guard, so its `move a1,zero` issues after the branch as in the ROM;
+ *  - i is bound to $8 (t0), the ROM's counter register (empty on native).
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvFrameQueueInit);
+#define FQ_INDEX_IN_T0 __asm__("$8")
 #else
-/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 84.82% / engine96 83.68%. Residual: SCHED-PROLOGUE-STORES on sdk29 (loop body exact with `off=0; do{...}while(i<count)`; the 5 header stores come out a1-first on both arms, ROM stores count=0 first and puts the `lui` in the blez delay slot). */
-/* TODO(match): functional equivalent - not byte-exact; header-store scheduling. */
+#define FQ_INDEX_IN_T0
+#endif
 void FmvFrameQueueInit(s32 *rec, s32 arg1, s32 base, s32 count) {
-    s32 i, off;
+    register s32 i FQ_INDEX_IN_T0;
+    s32 off;
+
     rec[3] = 0;
+    i = 0;
+    __asm__ __volatile__("" ::: "memory");
     rec[0] = arg1;
     rec[1] = base;
     rec[4] = count;
     rec[2] = 0;
-    for (i = 0, off = 0; i < count; i++, off += 0x138C0) {
-        *(s32 *)(rec[1] + off) = 0;
-        *(s32 *)(rec[1] + off + 4) = i;
+    __asm__ __volatile__("" ::: "memory");
+    if (count > 0) {
+        off = 0;
+        do {
+            *(s32 *)(off + rec[1]) = 0;
+            *(s32 *)(off + rec[1] + 4) = i;
+            i++;
+            off += 0x138C0;
+        } while (i < count);
     }
 }
-#endif
 
 /**
  * FMV idle hook (frame-queue variant) — does nothing.
