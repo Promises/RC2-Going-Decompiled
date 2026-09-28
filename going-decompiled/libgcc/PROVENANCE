@@ -52,10 +52,24 @@ Licences, as found in the files
   produce an executable, this library does not by itself cause the resulting
   executable to be covered by the GNU General Public License").
 - longlong.h: GPL version 2 or later. At this revision its header carries NO
-  exception text of its own. libgcc2.c includes it, so it is compiled into
-  every libgcc2 member. What that means for the linking exception is recorded
-  as an open question for the project owner, not decided here.
-- fp-bit.c: GPL version 2 or later, PLUS the same special exception.
+  exception text of its own. It is a header of arithmetic macros (umul_ppmm,
+  udiv_qrnnd, count_leading_zeros, ...) whose only use here is as an include
+  of libgcc2.c, so its macros are compiled into the libgcc2 members.
+  PROJECT OWNER'S DECISION (2026-09-28): it is treated as covered by the
+  libgcc special exception carried by libgcc2.c, the library it is compiled
+  into. The reasons: longlong.h is used only inside that library, never by
+  game code; this is the combination GCC itself shipped as libgcc.a at this
+  revision; and the retail game binary already contains exactly this compiled
+  code, linked from the SDK's libgcc.a. The file is kept verbatim, so read on
+  its own it still says plain GPL: this paragraph records the project's
+  reading, not a change to the file. Later GCC revisions of longlong.h (LGPL
+  2.1 plus unlimited permission to link its compiled form) state the
+  permission explicitly; adopting one is possible only if __divdi3 and
+  __muldi3 stay byte-exact, and has not been tried. Recorded as a RULING in
+  the claudiverse store (revoked if legal advice or the project's own licence
+  says otherwise).
+- fp-bit.c: GPL version 2 or later, PLUS an explicit "unlimited permission to
+  link the compiled version of this file", PLUS the same special exception.
 - config/mips/t-elf: a makefile fragment with no licence header of its own.
 - COPYING: the GNU General Public License, version 2, from the same revision.
 
