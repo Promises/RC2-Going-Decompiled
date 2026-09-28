@@ -862,26 +862,30 @@ void func_0034A2D0(GuiWidget *w, s32 v) {
  * its jr-ra epilogue can't reproduce the bytes. WALL: handwritten tail fragment. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A2D8);
 
-/* func_0034A2E0: arm the +0x18/+0x28 pair — flag +0x28 = 1 and clear +0x18.
- * The original emits a dead lwc1 +0x18 before the li 1; under -fno-gcse the
- * pinned cc1 swaps that order. Best 60%. WALL: dead-load vs immediate
- * scheduling order. (+0x18 is stored as integer 0 — the dead load is read as
- * float but discarded, so the only functional effect is +0x28=1, +0x18=0.) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A2E0);
-#else
-/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
- * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
- * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
- * cc1 2.96-ee-001003-1): sdk29 77.60% / engine96 77.60%.
- * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 4/4 words differ;
- * frozen-.s census: 0 callee GPR saves, 0 fp saves.
- * Residual: no callee saves and no frame/save-slot words in the diff — residual is REGALLOC/SCHED on the 4 differing words; not iterated. */
-void func_0034A2E0(GuiWidget *w) {
-    w->unk28 = 1;
+/*
+ * func_0034A2E0 - arm the +0x18/+0x28 pair: flag +0x28 = 1 and clear +0x18.
+ *
+ *   w  the widget
+ * Returns the float that was at +0x18 before it was cleared. The ROM loads it
+ * into $f0 (`lwc1 $f0,0x18(a0)`) and never touches $f0 again, so the old value
+ * IS the return value. The callers seen (func_0034DBE0) ignore it. The earlier
+ * "dead load" reading came from declaring the function void.
+ *
+ * Byte-exact on the sdk29 arm (task #894). The ROM is plain source order: the
+ * load, `li v0,1`, the +0x28 store, and the +0x18 store in the jr slot. Left
+ * alone, cc1 2.9's second scheduler hoists the `li` above the load. The empty
+ * volatile asm keeps it below (it emits no instruction), and with the two
+ * stores written in this order reorg puts the +0x18 store in the slot, as in
+ * the ROM. +0x18 is cleared with an integer 0 store (`sw zero`).
+ */
+f32 func_0034A2E0(GuiWidget *w) {
+    f32 old = *(f32 *)((char *)w + 0x18);
+
+    __asm__ __volatile__("");
     *(s32 *)((char *)w + 0x18) = 0;
+    w->unk28 = 1;
+    return old;
 }
-#endif
 
 /* func_0034A2F8: same handwritten no-return store fragment as func_0034A2D8
  * (bare swc1 $f1,0x18(a0), no jr ra). WALL: handwritten tail fragment. */
@@ -1277,62 +1281,56 @@ void func_0034A7E8(GuiWidget *w, s32 idx, s32 v) {
     *(s32 *)((char *)w + (idx << 2) + 0x8C) = v;
 }
 
-/* func_0034A7F8: arm the GuiAnim transition forward. Set the progress field
- * +0x10 (integer 0 when flag is 0, else 1.0f), then mark it active (+0x1C = 1)
- * and forward-playing (+0x14 = 1). The polarity is the mirror of func_0034A820
- * (which stores 1.0 when flag clear and sets dir = -1).
+/*
+ * func_0034A7F8 - arm a GuiAnim transition forward. The mirror of
+ * func_0034A820.
  *
- * The flag test is a branch-likely (`beql $5,$0`): the int-0 store sits in the
- * taken delay slot, so flag==0 stores an *integer* 0 and flag!=0 stores 1.0f.
+ *   a     the transition
+ *   flag  0 -> progress (+0x10) = integer 0; nonzero -> progress = 1.0f
+ * Then marks it active (+0x1C = 1) and forward-playing (+0x14 = 1). No return.
  *
- * Best 99.8% byte-match: every instruction matches; the original fills the jr
- * delay slot with the +0x14 store (+0x1C stored first), but this unit's cc1
- * always emits +0x14 first and sinks +0x1C into the delay slot regardless of C
- * statement order. WALL: trailing-store delay-slot fill. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A7F8);
-#else
-/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
- * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
- * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
- * cc1 2.96-ee-001003-1): sdk29 73.80% / engine96 74.00%.
- * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 11/12 words differ;
- * frozen-.s census: 0 callee GPR saves, 0 fp saves.
- * Residual: no callee saves and no frame/save-slot words in the diff — residual is REGALLOC/SCHED on the 11 differing words; not iterated. */
+ * Byte-exact on the sdk29 arm (task #894). The ROM tests with a branch-likely,
+ * `beqzl a1` with the integer-0 store in the annulled slot, and falls through
+ * to the 1.0f store. cc1 2.9 gives that shape only with the nonzero case
+ * written first. With the flag==0 case first it emits bnez/nop/b and a
+ * non-annulled slot. The two trailing stores are written dir-then-active,
+ * which is what puts +0x1C first and +0x14 in the jr slot, as in the ROM. (The
+ * old wall note, "+0x14 first regardless of statement order", held only for
+ * the other branch sense.)
+ */
 void func_0034A7F8(GuiAnim *a, s32 flag) {
-    if (flag == 0) {
-        *(s32 *)((char *)a + 0x10) = 0;
-    } else {
+    if (flag != 0) {
         a->progress = 1.0f;
-    }
-    a->active = 1;
-    a->dir = 1;
-}
-#endif
-
-/* func_0034A820: set +0x10 enable float (1.0 when flag clear else integer 0),
- * then +0x1C = 1 and +0x14 = -1. Best 80%: same trailing-store slot fill plus a
- * constant-load schedule delta. WALL: trailing-store delay-slot fill. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A820);
-#else
-/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
- * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
- * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
- * cc1 2.96-ee-001003-1): sdk29 79.69% / engine96 79.08%.
- * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 12/12 words differ;
- * frozen-.s census: 0 callee GPR saves, 0 fp saves.
- * Residual: no callee saves and no frame/save-slot words in the diff — residual is REGALLOC/SCHED on the 12 differing words; not iterated. */
-void func_0034A820(GuiWidget *w, s32 flag) {
-    if (flag == 0) {
-        *(f32 *)((char *)w + 0x10) = 1.0f;
     } else {
-        *(s32 *)((char *)w + 0x10) = 0;
+        *(s32 *)((char *)a + 0x10) = 0;
     }
-    *(s32 *)((char *)w + 0x1C) = 1;
-    *(s32 *)((char *)w + 0x14) = -1;
+    a->dir = 1;
+    a->active = 1;
 }
-#endif
+
+/*
+ * func_0034A820 - arm a GuiAnim-style transition backward. The mirror of
+ * func_0034A7F8.
+ *
+ *   w     the widget holding the transition at +0x10..+0x1C
+ *   flag  0 -> +0x10 = 1.0f; nonzero -> +0x10 = integer 0
+ * Then +0x1C = 1 (active) and +0x14 = -1 (reverse). No return.
+ *
+ * Byte-exact on the sdk29 arm (task #894). The ROM branches `beqz a1` to the
+ * 1.0f store and runs the integer-0 store in the delay slot of the fall-through
+ * `b`. cc1 2.9 gives that layout with the nonzero case written first; with the
+ * flag==0 case first it emits `bnezl`. As in func_0034A7F8, the trailing
+ * stores are written in the reverse of the ROM's issue order.
+ */
+void func_0034A820(GuiWidget *w, s32 flag) {
+    if (flag != 0) {
+        *(s32 *)((char *)w + 0x10) = 0;
+    } else {
+        *(f32 *)((char *)w + 0x10) = 1.0f;
+    }
+    *(s32 *)((char *)w + 0x14) = -1;
+    *(s32 *)((char *)w + 0x1C) = 1;
+}
 
 /* func_0034A858: store the float arg to the +0x18 field. */
 void func_0034A858(GuiWidget *w, f32 v) {
