@@ -44,11 +44,19 @@ CFLAGS="$CFLAGS -Wno-error=implicit-function-declaration -Wno-int-conversion"
 
 # 1. compile all TARGET_NATIVE units to objects (best-effort; a unit that fails
 #    check.sh just contributes no symbols — linkgap is not the compile gate).
+#    Name each object by its path under src/, not its basename: both regions
+#    carry units of the same name (usa/cod/015180.c and eu/cod/015180.c), and a
+#    basename object lets the second compile silently replace the first, so its
+#    symbols vanish from every set below while the unit count still includes it.
 units="$(cd "$ROOT" && /usr/bin/grep -rl TARGET_NATIVE going-decompiled/src | sed "s#^#$ROOT/#")"
 nunits=0
 for f in $units; do
-  base="$(basename "$f" .c)"
-  if $CC $CFLAGS "$f" -o "$OUT/$base.o" 2>/dev/null; then
+  rel="${f#"$ROOT/going-decompiled/src/"}"
+  obj="$OUT/$(printf '%s' "${rel%.c}" | sed 's#/#__#g').o"
+  if [ -e "$obj" ]; then
+    echo "linkgap: object name $obj is not unique ($f)" >&2; exit 2
+  fi
+  if $CC $CFLAGS "$f" -o "$obj" 2>/dev/null; then
     nunits=$((nunits+1))
   fi
 done
