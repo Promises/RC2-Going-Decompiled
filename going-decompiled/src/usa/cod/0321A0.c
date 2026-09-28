@@ -1175,25 +1175,22 @@ s32 func_00133960(void) {
     return snd_SendCommandSync(0x5B, 0, 0);
 }
 
-/* func_00133988: scale arg0 by 1524/741, i.e. (arg0 * 0x5F4) / 0x2E5. The C is
- * right: cc1 2.9's output for it assembles to all 9 ROM words under the SN
- * as.exe that shipped with it (FACT #6219). It scores 82.22% (unit objdiff,
- * sdk29, -O2 -G8, task #855) because the gate assembles with
- * mips-linux-gnu-as, which hoists `mflo` into the `.set reorder` jr slot and
- * drops the trailing nop (8 words, where the ROM has 9). That is the only
- * difference, and it comes from the assembler, not from ee-gcc scheduling.
- * The `break 7` word is NOT a gate difference: bare GNU as would encode it as
- * 0x0007000D, but tools/ee/move_fixup.sed rewrites it to `break 0,7` before
- * assembly, so the gate emits the ROM's 0x000001CD (FACT #6462, re-measured in
- * task #866). The engine96 arm's 35.56% is task #855's figure and has not been
- * re-measured. Portable #else body. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00133988);
-#else
+/**
+ * Scale arg0 by 1524/741, i.e. (arg0 * 0x5F4) / 0x2E5, with signed division.
+ * The divide-by-zero trap (`beqzl` + `break 7`) is emitted by cc1 for the
+ * constant divisor anyway.
+ *
+ * This C body was already correct before promotion: cc1 2.9's output for it
+ * matches all 9 ROM words under SN as.exe (FACT #6219). It had scored 82.22%
+ * only because mips-linux-gnu-as, under `.set reorder`, moved `mflo` into
+ * the `jr` delay slot and dropped the trailing nop. That was assembler
+ * reorder-slot noise, not a C or ee-gcc scheduling wall. It was fixed by the
+ * mflo/mfhi return-slot rule in tools/ee/asm_unit.sh (A4, task #919,
+ * FACT #8339), with no change to the C. Promoted in task #942.
+ */
 s32 func_00133988(s32 x) {
     return x * 0x5F4 / 0x2E5;
 }
-#endif
 
 /* OnVblankInterrupt: bumps the 64-bit tick counter D_001A7208 and snapshots
  * D_001A7210 = D_001A7200 + T1_COUNT (0x10000800). Best attempt 75% (15/16
