@@ -153,7 +153,7 @@ typedef struct WeaponDef {
     u8  _pad4E[0x1E];
     s32 xpThreshold;     /* +0x6C: variant XP threshold (<<5); negative = no clamp */
     u8  _pad70[0x18];
-    s16 sellsAmmoFlag;   /* +0x88 */
+    u16 sellsAmmoFlag;   /* +0x88: every ROM reader uses lhu */
     u8  _pad8A[0x4];
     u16 ammoCapacity;    /* +0x8E */
     u16 ammoStartGrant;  /* +0x90 */
@@ -165,9 +165,9 @@ extern WeaponDef g_weaponTable[];             /* per-variant def/state table (0x
 extern s32 g_weaponXp[0x38];                  /* per-item XP/upgrade accumulator (0x139868) */
 extern s32 g_weaponAmmo[0x38];                /* per-item current ammo (0x139688) */
 
-/* Sound-bank / weapon-context block accessed by func_0028EAC8 at base+0x20.
- * +0x1268 holds the active weapon's item id; +0x22D4 is a "no ammo sale" gate. */
-extern u8 g_soundBankHandles[];               /* 0x18FC60 (base) */
+/* g_soundBankHandles+0x20 (0x189E20), the block func_0028EAC8 reads:
+ * +0x1248 holds the active weapon's item id; +0x22B4 is a "no ammo sale" gate. */
+extern u8 g_soundBankHandlesBlk[];
 
 /* Localized text table + subtitle state machine. */
 typedef struct TextEntry {
@@ -4691,26 +4691,33 @@ s32 func_0028E9A0(s32 runTickCallbacks) {
 /* func_0028EAC8(): return the active weapon's item id when that weapon sells
  * ammo (g_weaponTable[slot].sellsAmmoFlag != 0) and the "no ammo sale" gate is
  * clear, else 0.
+ *   returns the item id held at g_soundBankHandlesBlk+0x1248, or 0
  *
- * WALL (gp/absolute-fold): the original addresses the sound-bank block as the
- * named sub-object g_soundBankHandles+0x20 with +0x1248/+0x22B4 displacements,
- * and finishes with a movz/movn conditional-move pair; cc1 folds the +0x20 into
- * the %lo relocation (losing the displacement split) and lowers the ?: as a
- * branch. Kept as the portable #else body. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028EAC8);
-#else
+ * Byte-exact on sdk29 (task #1025), plain C, no device. The old WALL note here
+ * said cc1 folds the block's +0x20 into the %lo relocation and lowers the test
+ * as a branch. Measured: reading the block through a local pointer keeps the
+ * ROM's lui/addiu base with +0x1248/+0x22B4 displacements, and two separate
+ * `result = 0` assignments become the ROM's movz/movn pair (one `||` test
+ * compiles to branches). Spelling the base as `g_soundBankHandlesBlk + 0x1248`
+ * directly folds it; laundering the pointer through an empty asm issues three
+ * adjacent pairs in reverse order, the residual shape task #978 recorded.
+ * sellsAmmoFlag must be u16: as s16 the load is `lh`, the ROM's is `lhu`.
+ */
 s32 func_0028EAC8(void) {
-    s32 itemId = *(s32 *)(g_soundBankHandles + 0x1268);
-    u8  noSale = g_soundBankHandles[0x22D4];
-    u8  equippedSlot = g_itemEquippedSlot[itemId];
-    u16 sellsAmmo = g_weaponTable[equippedSlot].sellsAmmoFlag;
-    if (sellsAmmo == 0 || noSale != 0) {
-        return 0;
+    u8 *blk = g_soundBankHandlesBlk;
+    s32 itemId = *(s32 *)(blk + 0x1248);
+    u8  noSale = blk[0x22B4];
+    s32 result = itemId;
+    u8  slot = g_itemEquippedSlot[itemId];
+
+    if (g_weaponTable[slot].sellsAmmoFlag == 0) {
+        result = 0;
     }
-    return itemId;
+    if (noSale != 0) {
+        result = 0;
+    }
+    return result;
 }
-#endif
 
 /* func_0028EB10(): one-shot ammo-vendor HUD-widget (re)bind pass, run at the top
  * of func_0028E9A0's per-frame update. No-op while the hard-disable gate D_1A8FBC
