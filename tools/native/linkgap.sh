@@ -16,10 +16,26 @@
 #        decomp-asm    - a still-INCLUDE_ASM game function (no #else body yet)
 #
 # It writes NOTHING into the tree and mutates no build. Output goes to stdout;
-# pass a path as $1 to also tee the full categorized listing there.
+# pass a path to also tee the full categorized listing there.
 #
-# Usage: tools/native/linkgap.sh [report-out.txt]
+# Scope is USA by default: EU work is queued behind a byte-exact USA (RULING
+# #5339), so EU units do not belong in the default inventory. --with-eu adds
+# the src/eu units to the object set. The classifier inputs below (asm glabels,
+# symbol_addrs) stay USA's either way, so an EU-only name is bucketed by its
+# shape, not by EU's own tables.
+#
+# Usage: tools/native/linkgap.sh [--with-eu] [report-out.txt]
 set -u
+
+with_eu=0
+report=""
+for a in "$@"; do
+  case "$a" in
+    --with-eu) with_eu=1 ;;
+    -*) echo "linkgap: unknown option $a" >&2; exit 2 ;;
+    *) report="$a" ;;
+  esac
+done
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 INC="$ROOT/going-decompiled/include"
@@ -48,7 +64,11 @@ CFLAGS="$CFLAGS -Wno-error=implicit-function-declaration -Wno-int-conversion"
 #    carry units of the same name (usa/cod/015180.c and eu/cod/015180.c), and a
 #    basename object lets the second compile silently replace the first, so its
 #    symbols vanish from every set below while the unit count still includes it.
-units="$(cd "$ROOT" && /usr/bin/grep -rl TARGET_NATIVE going-decompiled/src | sed "s#^#$ROOT/#")"
+regions="usa"
+[ "$with_eu" = 1 ] && regions="usa eu"
+srcdirs=""
+for r in $regions; do srcdirs="$srcdirs going-decompiled/src/$r"; done
+units="$(cd "$ROOT" && /usr/bin/grep -rl TARGET_NATIVE $srcdirs | sed "s#^#$ROOT/#")"
 nunits=0
 for f in $units; do
   rel="${f#"$ROOT/going-decompiled/src/"}"
@@ -144,6 +164,7 @@ c_gap=$(wc -l  < "$OUT/gap.txt"        | tr -d ' ')
 
 emit() {
   echo "=== native link-gap inventory (M0) ==="
+  echo "regions        : $regions"
   echo "units compiled : $nunits"
   echo "link gaps total: $c_gap  (symbols referenced but defined by no native unit)"
   echo
@@ -161,8 +182,8 @@ emit() {
   done
 }
 
-if [ "$#" -ge 1 ]; then
-  emit | tee "$1"
+if [ -n "$report" ]; then
+  emit | tee "$report"
 else
   emit
 fi
