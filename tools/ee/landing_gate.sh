@@ -81,6 +81,24 @@
 #            cc1 cannot emit those at -G0, and GP differs by region, so such a
 #            body can pass one region's cmp by luck. INCLUDE_ASM members with
 #            gp words are listed as LATENT, never a failure.
+#   NATIVE   (task #923) tools/native/check.sh over EVERY TARGET_NATIVE unit
+#            under going-decompiled/src (both regions, whichever region this
+#            run is for), BASE-RELATIVE: the base is `git merge-base HEAD
+#            origin/master` (override LANDING_GATE_NATIVE_BASE=<rev>), its
+#            src/ + include/ + tools/native/ extracted with git archive and
+#            compiled by THIS tree's check.sh, so both arms are one instrument.
+#            FAILS naming each unit that fails at the tip and passed at the
+#            base, or is absent at the base; a unit failing on BOTH arms is
+#            tolerated and listed (a pre-existing failure must not turn the row
+#            permanently red). Recomputed every run — there is no checked-in
+#            baseline to raise. Units are keyed by region-qualified path
+#            (usa/cod/015180.c): usa and eu share basenames. FAILS as could-not-
+#            run on an empty population, a count that does not partition it, or
+#            a base arm passing 0 units (the row could not fire). ⛔ COMPILE-
+#            ONLY: check.sh runs `-c`, it never links. A PASS proves every
+#            TARGET_NATIVE unit still COMPILES natively — NOT that the native
+#            build links (A2/#917's g_savePromptLatch has no native storage and
+#            this row is green on it). ~2 s per arm, host-only, no VM.
 #   TREE     the ROW is tied to the tree it was built from (task #457, #451 gap
 #            1): do_build records HEAD^{tree}, a hash of the WHOLE working tree
 #            (tracked + modified + untracked, .gitignore honoured) and the dirty
@@ -123,7 +141,9 @@
 #     whatever asm the working tree holds;
 #   - the unit objdiff gate's fuzzy rows (objdiff_build.sh + unit_report.sh) —
 #     a byte-exact ROM makes them redundant for USA and they are not run here;
-#   - EU bytes — EU has no link, so its row is a link-property, not a cmp.
+#   - EU bytes — EU has no link, so its row is a link-property, not a cmp;
+#   - the NATIVE LINK — the NATIVE row is compile-only (check.sh -c); an
+#     undefined or storage-less symbol natively is invisible to it.
 set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"; cd "$ROOT"
 HERE="tools/ee"
@@ -132,7 +152,7 @@ BASE_DIR="$HERE/landing_baseline"
 SHADOW_CLASSES="CLASS1 CLASS2 CLASS3 NOTARGET"
 PYTHON=".venv-decomp/bin/python"
 
-usage() { sed -n '2,118p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { sed -n '2,138p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 say()  { printf '%s\n' "$*"; }
 fail() { say "FAIL $*"; FAILED=$((FAILED+1)); }
 ok()   { say "OK   $*"; }
@@ -291,6 +311,68 @@ check_gmodel() {
     *) fail "gmodel_scan.sh could not run (rc $rc): $(head -c 300 "$scan")" ;;
   esac
   say "     members:"; /usr/bin/grep -vE '^UNIT [^ ]+ -G[^ ]+ 0$' "$scan" | sed 's/^/       /'
+}
+
+# --------------------------------------------------------------- NATIVE ----
+# native_scan TREE OUTFILE — compile every TARGET_NATIVE unit under TREE's
+# going-decompiled/src with THIS tree's tools/native/check.sh (copied into a
+# TREE that is not this one, so base and tip are one instrument; check.sh takes
+# include/ and mips_callees.h from the tree it sits in). Writes one
+# `PASS|FAIL <region>/<path>` row per unit to OUTFILE and check.sh's output to
+# OUTFILE.log. Keys come from check.sh's `FAIL: <full path>` lines, never from
+# its `failed units:` summary. rc 0, or 2 = could not run (empty population, or
+# the rows do not partition it).
+native_scan() {
+  local tree=$1 out=$2 units n np nf
+  if [ "$(cd "$tree" && pwd -P)" != "$(cd "$ROOT" && pwd -P)" ]; then
+    mkdir -p "$tree/tools/native"; cp "$ROOT/tools/native/check.sh" "$tree/tools/native/check.sh"
+  fi
+  units=$(cd "$tree" && /usr/bin/grep -rl TARGET_NATIVE going-decompiled/src | LC_ALL=C sort)
+  n=$(printf '%s\n' "$units" | /usr/bin/grep -c . || true)
+  [ "$n" -gt 0 ] || { printf 'no TARGET_NATIVE unit under %s/going-decompiled/src\n' "$tree" > "$out.log"; : > "$out"; return 2; }
+  # shellcheck disable=SC2086  # one unit per word; no unit path holds a space
+  (cd "$tree" && bash tools/native/check.sh $units) > "$out.log" 2>&1
+  sed -n 's#^FAIL: going-decompiled/src/##p' "$out.log" | LC_ALL=C sort -u > "$out.fail"
+  printf '%s\n' "$units" | sed 's#^going-decompiled/src/##' > "$out.all"
+  { LC_ALL=C comm -23 "$out.all" "$out.fail" | sed 's/^/PASS /'; sed 's/^/FAIL /' "$out.fail"; } > "$out"
+  np=$(/usr/bin/grep -c '^PASS ' "$out" || true); nf=$(/usr/bin/grep -c '^FAIL ' "$out" || true)
+  # the partition must close three ways: rows == population, check.sh's own
+  # summary == the rows, and every FAIL key is a member of the population
+  /usr/bin/grep -q "^--- native compile-check: pass=$np fail=$nf ---\$" "$out.log" && [ $((np+nf)) = "$n" ] \
+    && [ -z "$(LC_ALL=C comm -23 "$out.fail" "$out.all")" ] || return 2
+}
+
+# check_native [TIP_TREE] [BASE_TREE] — the NATIVE row (task #923). Defaults:
+# the tip is this working tree, the base is extracted from the merge-base.
+check_native() {
+  local tip=${1:-$ROOT} basetree=${2:-} baseref="(given tree ${2:-})"
+  say "== NATIVE: tools/native/check.sh over every TARGET_NATIVE unit, base-relative — FAIL on a unit failing at the tip that passed at (or is absent from) the base. COMPILE-ONLY: green does NOT mean the native build links"
+  if [ -z "$basetree" ]; then
+    baseref=${LANDING_GATE_NATIVE_BASE:-$(git merge-base HEAD origin/master 2>/dev/null)}
+    [ -n "$baseref" ] && baseref=$(git rev-parse --verify -q "$baseref^{commit}")
+    [ -n "$baseref" ] || { fail "NATIVE: no base commit (git merge-base HEAD origin/master failed and LANDING_GATE_NATIVE_BASE is unset or not a commit) — the row cannot be base-relative"; return; }
+    basetree="$OUT/native_base"; rm -rf "$basetree"; mkdir -p "$basetree"
+    git archive "$baseref" going-decompiled/src going-decompiled/include tools/native | tar -x -C "$basetree" \
+      || { fail "NATIVE: git archive of the base $baseref failed"; return; }
+  fi
+  local t="$OUT/native_tip.txt" b="$OUT/native_base.txt"
+  native_scan "$tip" "$t" || { fail "NATIVE: check.sh could not run on the tip ($tip): $(tail -3 "$t.log" | tr '\n' ' ')"; return; }
+  native_scan "$basetree" "$b" || { fail "NATIVE: check.sh could not run on the base $baseref: $(tail -3 "$b.log" | tr '\n' ' ')"; return; }
+  local tp tf bp bf; tp=$(/usr/bin/grep -c '^PASS ' "$t" || true); tf=$(/usr/bin/grep -c '^FAIL ' "$t" || true)
+  bp=$(/usr/bin/grep -c '^PASS ' "$b" || true); bf=$(/usr/bin/grep -c '^FAIL ' "$b" || true)
+  say "     tip pass=$tp fail=$tf; base $baseref pass=$bp fail=$bf"
+  [ "$bp" -gt 0 ] || { fail "NATIVE: the base arm passes 0 of $bf units — every tip failure would read as pre-existing, the row cannot fire"; return; }
+  local regress tolerated fixed
+  regress=$(LC_ALL=C comm -23 "$t.fail" "$b.fail"); tolerated=$(LC_ALL=C comm -12 "$t.fail" "$b.fail"); fixed=$(LC_ALL=C comm -13 "$t.fail" "$b.fail")
+  if [ -n "$regress" ]; then
+    fail "NATIVE: $(printf '%s\n' "$regress" | wc -l | tr -d ' ') unit(s) fail to compile at the tip and passed at (or are absent from) the base: $(printf '%s ' $regress)"
+    local u; for u in $regress; do say "       $u:"; /usr/bin/grep -A3 "^FAIL: going-decompiled/src/$u\$" "$t.log" | sed -n '2,4s/^ */         /p'; done
+  else
+    ok "NATIVE: no unit fails at the tip that passed at the base ($tp of $((tp+tf)) compile; compile-only, not a link)"
+  fi
+  [ -n "$tolerated" ] && say "     failing on BOTH arms (pre-existing, tolerated): $(printf '%s ' $tolerated)"
+  [ -n "$fixed" ] && say "     failing at the base only (fixed or removed at the tip): $(printf '%s ' $fixed)"
+  say "     members: $t (tip), $b (base); check.sh output: $t.log, $b.log"
 }
 
 # ----------------------------------------------------------------- TREE ----
@@ -501,6 +583,7 @@ run_gate() {  # run_gate REGION [--no-build] [--strict]
   check_orphans "$REGION"
   check_libgcc "$REGION"
   check_gmodel "$REGION"
+  check_native
   if [ $build = 1 ]; then
     do_build
     check_tree "$OUT/built_tree.txt"   # the tree did not move during the build
@@ -675,6 +758,7 @@ selftest() {
   selftest_libgcc "$T" || bad=1
 
   selftest_gmodel "$T" || bad=1
+  selftest_native "$T" || bad=1
 
   say "-- (14) the real gate on this tree (--no-build, the build above) must PASS"
   STRICT=0
@@ -759,6 +843,61 @@ selftest_gmodel() {
     if [ "$FAILED" = 1 ] && [ "$(/usr/bin/grep '^       MISMATCH ' "$T/gmodel_seed_promo.txt" | awk '{print $2, $4}')" = "$unit $fn" ]; then ok "fired (b): $fn's INCLUDE_ASM removed from $unit.c -> $(/usr/bin/grep '^FAIL GMODEL' "$T/gmodel_seed_promo.txt" | sed 's/ — move the unit.*: / : /')"; else say "SELFTEST-FAIL (b) removing $fn's INCLUDE_ASM did not fail GMODEL naming only it (FAILED=$FAILED):"; cat "$T/gmodel_seed_promo.txt"; b=1; fi
   fi
   FAILED=0
+  return $b
+}
+
+# selftest_native OUTDIR — arm (18), callable on its own after sourcing this
+# file (`. tools/ee/landing_gate.sh; region_vars usa; selftest_native /tmp/x`).
+# Every arm runs check_native on scratch copies (src/ + include/ +
+# tools/native/) of THIS tree, one as tip and one as base, and seeds one or
+# both. (b) is the dangerous class: A2/#917's `#ifndef TARGET_NATIVE` guard
+# around the eu/198B58 g_savePromptLatch equate removed — the regression that
+# reported rc 0 under the old Mach-O default. (c) is the basename collision:
+# usa/cod/015180 failing at the base and eu/cod/015180 at the tip, where a
+# basename-keyed row reads {015180} on both arms and passes.
+selftest_native() {
+  local T="$1" b=0; local N="$T/native"; rm -rf "$N"; mkdir -p "$N"
+  say "-- (18) NATIVE (#923): scratch tip/base trees — a seeded C error, A2's removed 198B58 guard, a usa-vs-eu basename collision and a new failing unit must each FAIL naming the unit; a failure on both arms and the clean pair must pass; then the real tree against its real base"
+  native_tree() {  # native_tree DIR — a fresh scratch copy of the check.sh inputs
+    rm -rf "$1"; mkdir -p "$1/going-decompiled" "$1/tools"
+    cp -R going-decompiled/src going-decompiled/include "$1/going-decompiled/"; cp -R tools/native "$1/tools/"
+  }
+  native_seed() { printf '\n/* t923 selftest seed */\nint t923_seeded_error = ;\n' >> "$1/going-decompiled/src/$2"; }
+  native_arm() {  # native_arm NAME TIP BASE WANT_FAILED WANT_REGEX [MUST_NOT_REGEX]
+    local out; out="$N/$(printf '%s' "$1" | tr -c 'A-Za-z0-9' _).txt"; NATIVE_ARM_OUT=$out; FAILED=0; check_native "$2" "$3" > "$out"
+    if [ "$FAILED" = "$4" ] && /usr/bin/grep -qE "$5" "$out" && { [ -z "${6:-}" ] || ! /usr/bin/grep -qE "$6" "$out"; }; then
+      ok "$1: $(/usr/bin/grep -E '^(OK|FAIL) ' "$out" | head -1) $(/usr/bin/grep -E '^     (failing|tip)' "$out" | sed 's/^ *//' | tr '\n' ' ')"
+    else say "SELFTEST-FAIL native arm $1 (FAILED=$FAILED, want $4):"; cat "$out"; b=1; fi
+  }
+  native_tree "$N/base"
+  # (a) synthetic: one C error appended to usa/cod/015180.c
+  native_tree "$N/tip_a"; native_seed "$N/tip_a" usa/cod/015180.c
+  native_arm "fired (a) seeded C error" "$N/tip_a" "$N/base" 1 '^FAIL NATIVE: 1 unit\(s\) .*: usa/cod/015180\.c $' 'eu/cod/015180'
+  # (b) the dangerous class: A2's guard removed around the 198B58 equate
+  native_tree "$N/tip_b"; local G="$N/tip_b/going-decompiled/src/eu/text/198B58.c"
+  local E="going-decompiled/src/eu/text/198B58.c" L
+  L=$(/usr/bin/grep -n '^__asm__("g_savePromptLatch = ' "$E" | head -1 | cut -d: -f1)
+  if [ -n "$L" ] && [ "$(sed -n "$((L-1))p" "$E")" = '#ifndef TARGET_NATIVE' ] && [ "$(sed -n "$((L+1))p" "$E")" = '#endif' ]; then
+    sed "$((L-1))d; $((L+1))d" "$E" > "$G"
+  fi
+  if /usr/bin/grep -q '^__asm__("g_savePromptLatch = ' "$G" && [ "$(( $(wc -l < "$E") - $(wc -l < "$G") ))" = 2 ]; then
+    native_arm "fired (b) A2 guard removed from eu/198B58" "$N/tip_b" "$N/base" 1 '^FAIL NATIVE: 1 unit\(s\) .*: eu/text/198B58\.c $'
+    /usr/bin/grep -q 'expected relocatable expression' "$NATIVE_ARM_OUT" && ok "  ... and its error is A2's: expected relocatable expression" || { say "SELFTEST-FAIL (b) fired for a different error"; b=1; }
+  else say "SELFTEST-BROKEN: the 198B58 guard was not removed (2 lines) — has A2's guard moved?"; b=1; fi
+  # (c) basename collision: usa/cod/015180 fails at the base, eu/cod/015180 at the tip
+  native_tree "$N/base_c"; native_seed "$N/base_c" usa/cod/015180.c
+  native_tree "$N/tip_c"; native_seed "$N/tip_c" eu/cod/015180.c
+  native_arm "fired (c) usa-vs-eu collision" "$N/tip_c" "$N/base_c" 1 '^FAIL NATIVE: 1 unit\(s\) .*: eu/cod/015180\.c $' '^     failing on BOTH'
+  /usr/bin/grep -q '^     failing at the base only .*: usa/cod/015180\.c $' "$NATIVE_ARM_OUT" && ok "  ... and usa/cod/015180.c is reported fixed at the tip, not conflated" || { say "SELFTEST-FAIL (c) did not report usa/cod/015180.c as base-only"; b=1; }
+  # (d) a NEW unit that fails: absent at the base is not a pass at the base
+  native_tree "$N/tip_d"; printf '#ifdef TARGET_NATIVE\nint t923_new_unit = ;\n#endif\n' > "$N/tip_d/going-decompiled/src/usa/t923_new_unit.c"
+  native_arm "fired (d) new failing unit" "$N/tip_d" "$N/base" 1 '^FAIL NATIVE: 1 unit\(s\) .*: usa/t923_new_unit\.c $'
+  # (e) base-relative: the same unit failing on both arms is tolerated
+  native_arm "control (e) failing on both arms" "$N/base_c" "$N/base_c" 0 '^     failing on BOTH arms .*: usa/cod/015180\.c $'
+  # (f) clean pair; (g) the real tree against its real base
+  native_arm "control (f) clean pair" "$N/base" "$N/base" 0 '^OK   NATIVE: no unit fails'
+  FAILED=0; check_native > "$N/real.txt"
+  if [ "$FAILED" = 0 ]; then ok "control (g) real tree: $(/usr/bin/grep -E '^     tip ' "$N/real.txt" | sed 's/^ *//')"; else say "SELFTEST-FAIL the real tree fails NATIVE:"; cat "$N/real.txt"; b=1; fi
   return $b
 }
 

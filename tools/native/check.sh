@@ -7,6 +7,12 @@
 # gate that runs on the host (no VM needed). It does NOT run anything; see
 # run_test.sh for the functional (Tier 2) harness.
 #
+# ⚠️ GATE INSTRUMENT (task #923): tools/ee/landing_gate.sh's NATIVE row runs
+# THIS script on both the tip and the base and parses its `FAIL: <path>` lines
+# and its `--- native compile-check: pass=N fail=M ---` summary. A change here
+# changes the landing gate: validate it with `landing_gate.sh --selftest`
+# (arm 17), not as a loose script. It never links — see the row's bound.
+#
 # Usage: tools/native/check.sh           # check all units
 #        tools/native/check.sh <file.c>  # check one unit
 set -u
@@ -40,15 +46,20 @@ else
   units="$(cd "$ROOT" && grep -rl TARGET_NATIVE going-decompiled/src | sed "s#^#$ROOT/#")"
 fi
 
+# Each unit is labelled by its path under going-decompiled/src, REGION
+# INCLUDED (usa/cod/015180, not 015180): usa and eu share basenames
+# (cod/015180.c, cod/0321A0.c), and a bare basename made a usa failure and an
+# eu failure print the same `failed` member (task #923).
 pass=0; fail=0; failed=""
 for f in $units; do
-  base="$(basename "$f" .c)"
-  if $CC $CFLAGS "$f" -o "$OUT/$base.o" 2>"$OUT/$base.err"; then
+  label="${f#"$ROOT"/}"; label="${label#going-decompiled/src/}"; label="${label%.c}"
+  obj="$(printf '%s' "$label" | tr '/' '_')"
+  if $CC $CFLAGS "$f" -o "$OUT/$obj.o" 2>"$OUT/$obj.err"; then
     pass=$((pass+1))
   else
-    fail=$((fail+1)); failed="$failed $base"
+    fail=$((fail+1)); failed="$failed $label"
     echo "FAIL: $f"
-    sed 's/^/    /' "$OUT/$base.err" | grep -m3 'error:'
+    sed 's/^/    /' "$OUT/$obj.err" | grep -m3 'error:'
   fi
 done
 
