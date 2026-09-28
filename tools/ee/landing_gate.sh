@@ -1180,17 +1180,17 @@ selftest_dirty() {
   if [ "$FAILED" = 1 ] && [ "$DIRTY_FAILED" = 1 ] && [ "$v" = "FAIL (dirty)" ] && /usr/bin/grep -q '^FAIL DIRTY: 2 uncommitted path(s)' "$T/dirty_strict.txt" \
      && /usr/bin/grep -qx '        M going-decompiled/src/usa/cod/015180.c' "$T/dirty_strict.txt" && /usr/bin/grep -qx '       ?? t1011_selftest_untracked.txt' "$T/dirty_strict.txt"; then
     ok "fired: STRICT=1 $(/usr/bin/grep '^FAIL DIRTY' "$T/dirty_strict.txt" | cut -c1-40)... both paths listed, verdict '$v'"
-  else say "SELFTEST-FAIL (19) dirty STRICT=1 (FAILED=$FAILED DIRTY_FAILED=$DIRTY_FAILED verdict '$v'):"; cat "$T/dirty_strict.txt"; b=1; fi
+  else say "SELFTEST-FAIL (19) dirty STRICT=1 (FAILED=$FAILED DIRTY_FAILED=$DIRTY_FAILED verdict '$v'):"; show < "$T/dirty_strict.txt"; b=1; fi
   FAILED=3; WARNED=0; DIRTY_FAILED=1; STRICT=1; v=$(gate_verdict "$FAILED" "$WARNED" "$DIRTY_FAILED"); STRICT=0
   if [ "$v" = "FAIL (dirty + 2 more)" ]; then ok "fired: dirty plus two other failures reads '$v'"; else say "SELFTEST-FAIL (19) dirty + 2 other failures read '$v'"; b=1; fi
   FAILED=0; WARNED=0; STRICT=0; check_dirty "$T/dirty_seed.txt" > "$T/dirty_warn.txt"; v=$(gate_verdict "$FAILED" "$WARNED" "$DIRTY_FAILED")
   if [ "$FAILED" = 0 ] && [ "$WARNED" = 1 ] && [ "$DIRTY_FAILED" = 0 ] && [ "$v" = "PASS (1 warning)" ] && /usr/bin/grep -q '^WARN DIRTY: 2 uncommitted path(s)' "$T/dirty_warn.txt"; then
     ok "control: STRICT=0 warns, fails nothing, verdict '$v'"
-  else say "SELFTEST-FAIL (19) dirty STRICT=0 (FAILED=$FAILED WARNED=$WARNED verdict '$v'):"; cat "$T/dirty_warn.txt"; b=1; fi
+  else say "SELFTEST-FAIL (19) dirty STRICT=0 (FAILED=$FAILED WARNED=$WARNED verdict '$v'):"; show < "$T/dirty_warn.txt"; b=1; fi
   FAILED=0; WARNED=0; STRICT=1; check_dirty "$T/dirty_empty.txt" > "$T/dirty_clean.txt"; v=$(gate_verdict "$FAILED" "$WARNED" "$DIRTY_FAILED"); STRICT=0
   if [ "$FAILED" = 0 ] && [ "$WARNED" = 0 ] && [ "$v" = PASS ] && /usr/bin/grep -q '^OK   DIRTY: 0 uncommitted paths' "$T/dirty_clean.txt"; then
     ok "control: STRICT=1 empty listing passes, verdict '$v'"
-  else say "SELFTEST-FAIL (19) empty listing STRICT=1 (FAILED=$FAILED verdict '$v'):"; cat "$T/dirty_clean.txt"; b=1; fi
+  else say "SELFTEST-FAIL (19) empty listing STRICT=1 (FAILED=$FAILED verdict '$v'):"; show < "$T/dirty_clean.txt"; b=1; fi
   FAILED=0; WARNED=0; DIRTY_FAILED=0
   return $b
 }
