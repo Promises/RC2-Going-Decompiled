@@ -832,6 +832,18 @@ s32 func_00289190(s32 key) {
     return 0;
 }
 
+/* Inter-function padding at 0x2891D0..0x2891D7: the two zero words retail
+ * places between func_00289190 and UpgradeWeaponToMax. They exist only after
+ * `endlabel func_00289190` in its nonmatchings .s, which is no longer included
+ * now that this unit supplies the C body, so without this directive every later
+ * function in the unit lands 8 bytes low (landing_gate cmp 681225 at task
+ * #1009's first gate run; UpgradeWeaponToMax linked at 0x2891D0, retail
+ * 0x2891D8). Not a codegen device: layout data. Same construct as
+ * text/191238.c's padding after StartFrontendSegmentLoad. */
+#ifndef TARGET_NATIVE
+__asm__(".word 0\n\t.word 0");
+#endif
+
 /* UpgradeWeaponToMax(itemId): select the item's "fully upgraded" weapon variant
  * and zero its accumulated XP. Returns 0 (no change) when the item's currently
  * equipped variant does not exist; otherwise picks an upgrade level by item id
