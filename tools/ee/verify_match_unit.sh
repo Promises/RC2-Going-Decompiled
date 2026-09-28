@@ -34,6 +34,17 @@
 # `sym + off` reference (measured: `%lo(func_001248B0 + 0x8)`). Each type adds its
 # own in-place addend back; GPREL16 additionally needs the per-region _gp.
 #
+# ⚠️ NO SELFTEST, AS OF TASK #1000. This script has no --selftest and no
+# built-in control of any kind: nothing in it checks that it CAN return DIFFERS.
+# Every control run on it so far was an external base seed that a caller chose
+# to run by hand (tasks #983, #994). A run with no seed beside it has not shown
+# this tool can fail on the input it was given, so "no DIFFERS" is not "checked".
+# Seed the BASE (arg 2), never the target (arg 3): arg 3's bytes are never
+# compared (FACT ledger-26262). symtab_extent_compare.py --selftest seeds the same
+# relocation arithmetic and lists which wrong rules it can reject, but it runs
+# ITS copy of that arithmetic, not this one. When this script gains a selftest,
+# replace this paragraph with what it rejects.
+#
 # EXIT STATUS (a misuse must never look like a verdict)
 #   0  MATCH        — every word equals the ROM
 #   1  DIFFERS      — a real byte difference (this, and only this, is a failure)

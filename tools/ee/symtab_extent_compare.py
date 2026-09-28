@@ -114,18 +114,43 @@ arithmetic (FACT #8103). Two more subjects cover it:
                                                      (FACT #8414)
   +0xc paired LO16 ^ 0x100  -> DIFFERS at 0x294564
   +0xc paired LO16 -> 0x150 -> DIFFERS at 0x29455c   %lo just short of the carry
+  +0xc paired LO16 -> 0x01D0-> DIFFERS at 0x294564   seed A (FACT #8431): %lo is
+                                only                 exactly 0x8000, lui unchanged
+  +0xc paired LO16 -> 0x8990-> DIFFERS at 0x29455c,  seed C (FACT #8431): negative
+                                0x294564 exactly     addend, %hi drops to 0x1B
+  .rel.text: the g_discToc  -> MATCH                 seed N: HI(a) HI(b) LO(b)
+  pair (+0x1c/+0x2c) moved                           LO(a); ld pairs by symbol,
+  between +0x4 and its LO16                          so nothing changes
   EvaluateProgressCondition (text/198FA0, real C), section symbol `.rodata`:
   unseeded                  -> MATCH                 the old tool: UNVERIFIABLE
   +0x20 %lo(.rodata) +1     -> DIFFERS at 0x29e828   (FACT #8410)
 It exits 0 only if every expectation holds, 1 if any does not. Needs
 `objdiff_build.sh usa text/1A8180` (and text/191238, text/198FA0) to have run.
 
+WHAT THE CONTROL CAN REJECT (task #1000). Five wrong relocation rules, each a
+one-line change to this file, each measured to give SELFTEST FAIL:
+  M1  HI16 ignores the paired LO16 addend        unseeded carry, +0x4, ^0x100,
+      (the pre-#990 rule)                         seed A, seed N
+  M2  paired LO16 addend read unsigned            seed C
+  M3  section symbols not placed                  both EvaluateProgressCondition
+  M4  HI16 pairs with the next LO16 on ANY symbol seed N
+  M5  %hi rounded with +0x7FFF, not +0x8000       seed A
+      (in apply_relocs; carries() is a guard, not the rule under test)
+Before task #1000, M2, M4 and M5 each gave SELFTEST PASS (FACT #8431): this
+control was blind to them. The 822-row usa census was blind to them too, and
+M4 has 0 instances in the 60 USA link objects (FACT #8439), so seed N is its
+only detector. FACT #8439 found a second seed for M4 (a LO16 retargeted to
+another symbol plus a word seed); N needs only the table reordered. A rule not
+in this list has not been tried against the control; do not read a PASS as
+covering it.
+
 ⚠️ THE TRAP INSIDE A ZERO SEED. Zeroing a word that is already zero changes
 nothing, so the comparator reports MATCH and the control has not fired — which
 looks exactly like a clean subject. The selftest therefore checks the ORIGINAL
 word of every seed (+0x10 must be non-zero, +0x14 must be zero, the flips must
 not touch a relocated offset, a relocation seed must sit on the relocation it
-names, and the carry subject must really carry) and fails as "CONTROL INVALID"
+names, the carry subject must really carry, and seed N's wrong LO16 must give
+the HI16 a different %hi than its own) and fails as "CONTROL INVALID"
 if it is not what the seed assumes. Prefer a non-zero seed, or a word confirmed
 to be printed.
 
@@ -537,6 +562,46 @@ def lo16_imm_plus(n):
     return lambda w: (w & 0xFFFF0000) | ((w + n) & 0xFFFF)
 
 
+def nest_pair(hi_off, other_hi_off):
+    """A .rel.text seed: move the HI16 at fn+other_hi_off and its LO16 to sit
+    right after the HI16 at fn+hi_off, giving HI(a) HI(b) LO(b) LO(a). Returns
+    seed(elf, value) -> (object bytes, None), or (None, why it is not a valid
+    control). Valid only if a != b and LO(b)'s addend gives HI(a) a different
+    %hi than LO(a)'s, i.e. only if pairing with the wrong LO16 is visible."""
+    def seed(elf, value):
+        rels = [s for s in elf.secs if s[1] == 9 and s[7] == elf.text_idx]
+        if len(rels) != 1:
+            return None, "%d SHT_REL sections for .text" % len(rels)
+        base, n = rels[0][4], rels[0][5] // 8
+        table = [struct.unpack_from("<II", elf.data, base + k * 8) for k in range(n)]
+
+        def pair(off):
+            hi = [i for i, (o, info) in enumerate(table) if o == value + off and info & 0xFF == 5]
+            if not hi:
+                return None
+            lo = [i for i in range(hi[0] + 1, n)
+                  if table[i][1] & 0xFF == 6 and table[i][1] >> 8 == table[hi[0]][1] >> 8]
+            return (hi[0], lo[0]) if lo else None
+        a, b = pair(hi_off), pair(other_hi_off)
+        if a is None or b is None:
+            return None, "no HI16/LO16 pair at +0x%x and +0x%x" % (hi_off, other_hi_off)
+        sym_a = elf.symbols[table[a[0]][1] >> 8][0]
+        if table[a[0]][1] >> 8 == table[b[0]][1] >> 8 or resolve(sym_a) is None:
+            return None, "both HI16s are on %s, or it has no address" % sym_a
+        S, A = resolve(sym_a), sign16(elf.word(table[a[0]][0]) & 0xFFFF) << 16
+        right = (S + A + sign16(elf.word(table[a[1]][0]) & 0xFFFF) + 0x8000) >> 16
+        wrong = (S + A + sign16(elf.word(table[b[1]][0]) & 0xFFFF) + 0x8000) >> 16
+        if right == wrong:
+            return None, "the LO16 at +0x%x gives %s the same %%hi" % (table[b[1]][0] - value, sym_a)
+        rest = [e for i, e in enumerate(table) if i not in b]
+        k = sum(1 for i in range(a[0] + 1) if i not in b)
+        d = bytearray(elf.data)
+        for i, (o, info) in enumerate(rest[:k] + [table[b[0]], table[b[1]]] + rest[k:]):
+            struct.pack_into("<II", d, base + i * 8, o, info)
+        return d, None
+    return seed
+
+
 # The relocation subjects. Each seed names the relocation (type, symbol) that
 # must sit on the seeded word; the unseeded row of the carry subject names the
 # (HI16, LO16) offsets that must really carry (see carries()).
@@ -553,6 +618,25 @@ SELFTEST_RELOC = [
         # whose addend is too high by 0x80..0x807F carries and misses it there.
         ("+0xc paired LO16 immediate -> 0x150", 0xC, lambda w: (w & 0xFFFF0000) | 0x150,
          ("R_MIPS_LO16", "g_cameraSlotActive"), "DIFFERS", 0x29455C),
+        # FACT #8431's seeds (task #994). A tuple as the expected va is the EXACT
+        # set of differing words, not just the first.
+        # A: %lo(g_cameraSlotActive + 0x1D0) is exactly 0x8000, so the LO16 is
+        # negative and %hi must round up to 0x1C, which the ROM's lui already
+        # holds: only the LO16 word differs. Rounding with +0x7FFF (M5) gives
+        # 0x1B and flags the lui too.
+        ("+0xc paired LO16 immediate -> 0x01D0 (seed A)", 0xC, lambda w: (w & 0xFFFF0000) | 0x01D0,
+         ("R_MIPS_LO16", "g_cameraSlotActive"), "DIFFERS", (0x294564,)),
+        # C: 0x8990 is a NEGATIVE addend (-0x7670), so %hi is 0x1B and both words
+        # differ. Reading the addend unsigned (M2) gives 0x1C, the ROM's lui.
+        ("+0xc paired LO16 immediate -> 0x8990 (seed C)", 0xC, lambda w: (w & 0xFFFF0000) | 0x8990,
+         ("R_MIPS_LO16", "g_cameraSlotActive"), "DIFFERS", (0x29455C, 0x294564)),
+        # N: .rel.text reordered, not .text. The g_discToc pair (+0x1c/+0x2c) is
+        # moved between the g_cameraSlotActive HI16 at +0x4 and its LO16 at +0xc:
+        # HI(cam) HI(toc) LO(toc) LO(cam). ld pairs by symbol, so nothing changes
+        # and the function still MATCHES; pairing with the next LO16 on ANY
+        # symbol (M4) gives the lui LO(toc)'s addend 0, which drops the carry.
+        ("rel.text: nested g_discToc pair (seed N)", None, nest_pair(0x4, 0x1C),
+         None, "MATCH", None),
     ]),
     ("going-decompiled/build/usa/obj/text/198FA0.o", "EvaluateProgressCondition", [
         ("unseeded (.rodata section symbol, FACT #8410)", None, None, None, "MATCH", None),
@@ -599,11 +683,22 @@ def selftest_relocs(rom):
                     ok = False
                     continue
                 subject = Elf(seeded(elf, value, off, how))
+            elif how is not None:                   # a .rel.text seed
+                data, why = how(elf, value)
+                if data is None:
+                    print("CONTROL INVALID  %-42s %s" % (label, why))
+                    ok = False
+                    continue
+                subject = Elf(data)
             got, bad = extent_compare(rom, subject, value, size, fn_va)
-            hit = got == want and (want_va is None or (bad and bad[0] == want_va))
+            if isinstance(want_va, tuple):
+                hit = got == want and tuple(bad) == want_va
+                where = " @" + ",".join("0x%x" % v for v in bad) if bad else ""
+            else:
+                hit = got == want and (want_va is None or (bad and bad[0] == want_va))
+                where = " @0x%x" % bad[0] if bad else ""
             ok &= hit
-            print("%-5s %-42s -> %s%s" % ("ok" if hit else "FAIL", "%s %s" % (fn, label), got,
-                                           " @0x%x" % bad[0] if bad else ""))
+            print("%-5s %-42s -> %s%s" % ("ok" if hit else "FAIL", "%s %s" % (fn, label), got, where))
     return ok
 
 
