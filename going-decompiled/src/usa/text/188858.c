@@ -2022,34 +2022,40 @@ void func_0028A4E8(void) {
  * +0; column==0 -> col1 at +2) through `outValue` (as a u16), and return the
  * matched row index. With no match across all 0xAA rows, return -1.
  *
- * WALL (frameless leaf, but the column*2 row-base striding + an i*4-vs-2 movn
- * output-offset selection that cc1's `?:` does not reproduce, plus the D_254E48
- * %hi/%lo displacement fold). Left INCLUDE_ASM for the matching build; the
- * #else below is the op-for-op faithful portable form (cmp_188858_text.c). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028AA08);
-#else
+ * Byte-exact on sdk29 (task #1009), plain C, no device. The old WALL note here
+ * named the column*2 row-base striding and the i*4-vs-2 `movn` output-offset
+ * selection. Task #978 reached both with the byte-offset `off` (2, +4 per row)
+ * and `if (column) off = rowOff` ahead of the outValue test, leaving a pure
+ * register residual at 97.00% (base/i/cell in t1/t0/v1, ROM t2/t1/t0). Computing
+ * `rowOff = i * 4` at the TOP of each iteration, before the compare, closes
+ * it. The ROM's `sll v1,i,2` in the bne delay slot then runs on every
+ * iteration. The #978 `__asm__ volatile("")` at the head of the no-match path
+ * is no longer needed.
+ */
 s32 func_0028AA08(s32 key, s32 column, s16 *outValue) {
     s16 keyHalf = (s16)key;
-    s16 *base = D_254E48;
-    s16 *cell = base + column;   /* &row[0].col[column]; advances by 2 s16 (4 bytes) per row */
+    u8 *base = (u8 *)D_254E48;
+    s16 *cell = (s16 *)(base + column * 2); /* &row[0].col[column] */
     s32 i = 0;
+    s32 off = 2; /* byte offset of row i's column 1 */
 
     do {
+        s32 rowOff = i * 4; /* byte offset of row i's column 0 */
         if (*cell == keyHalf) {
+            if (column != 0) {
+                off = rowOff;
+            }
             if (outValue != 0) {
-                /* searched col0 -> return col1 (+1 s16); searched col!=0 -> col0 (+0) */
-                s16 *out = base + (column != 0 ? (i * 2) : (i * 2 + 1));
-                *outValue = (s16)(u16)*out;
+                *outValue = *(u16 *)(off + (s32)base);
             }
             return i;
         }
         i++;
+        off += 4;
         cell += 2;
     } while (i < 0xAA);
     return -1;
 }
-#endif
 
 /* Recently-used area-id list: a byte ring at g_health+0xDFC; D_1A7C0C tracks the
  * live length. Touched only by func_0028AA70 (USA addr referenced both %gp_rel
