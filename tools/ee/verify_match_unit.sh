@@ -37,7 +37,7 @@
 # SELFTEST (task #1004; until then it had none, as task #1000 recorded here).
 #   verify_match_unit.sh --selftest
 # runs THIS script's normal mode on committed subjects with BASE (arg 2) seeds,
-# a crash probe, and then 18 one-line mutants of its own normal-mode code, and prints
+# crash and no-verdict probes, and then 20 one-line mutants of its own code, and prints
 # `#### VMU-SELFTEST usa: PASS|FAIL`. Exit 0 PASS, 1 FAIL, 2 CANNOT RUN (fixture
 # assembly failed, or the usa flat ROM is unreachable). It never prints a
 # `<fn>: BYTE IDENTICAL|DIFFERS|UNVERIFIABLE` line: those are verdicts on a
@@ -92,6 +92,13 @@
 # removed on exit, on SIGTERM/SIGHUP/SIGINT too, and .gitignore'd for SIGKILL.
 # A normal-mode python crash exits 2 UNVERIFIABLE with a `CRASH:` line (task
 # #1016; it used to exit 1, the DIFFERS band, FACT #8453).
+# Added by task #1048: the VMU_RESULT sentinel and its shell BACKSTOP (see
+# BACKSTOP at the end). Probes X2-X5, all on A1's SEEDED base, leave python
+# without a sentinel naming its rc (SyntaxError; an exception inside the crash
+# hook, FACT #8509; a silent sys.exit(0); sentinel 0 with exit 1) and demand
+# rc 2 plus a `NO VERDICT:` line. M19 = backstop removed (X2 rc 1, X4 rc 0),
+# M20 = backstop checks presence only (X5 rc 1). M18's known answer is now
+# X1 rc 2 `NO VERDICT:`: without the hook the backstop still refuses a verdict.
 # Seed the BASE (arg 2), never the target (arg 3): arg 3's bytes are never
 # compared (FACT ledger-26262), so a target-seeded control cannot fail.
 #
@@ -100,7 +107,9 @@
 #   1  DIFFERS      — a real byte difference (this, and only this, is a failure)
 #   2  UNVERIFIABLE — the tool cannot decide (unresolvable symbol, reloc type it
 #                     does not model, function absent from the ROM window, or
-#                     its own python crashed: a `CRASH:` line). NOT
+#                     its own python crashed: a `CRASH:` line, or exited
+#                     without a VMU_RESULT sentinel naming its rc: a
+#                     `NO VERDICT:` line, task #1048). NOT
 #                     a pass and NOT a fail; it is its own visible state.
 #   3  USAGE/ARG    — bad arguments; e.g. a whole-unit .o passed as the target
 #
@@ -460,7 +469,7 @@ def show(got):
     if rc == 1 and diffs:
         return "rc 1 at " + ",".join("0x%08x" % d for d in diffs)
     lines = out.splitlines()
-    line = next((l for l in lines if l.startswith("CRASH:")), None)
+    line = next((l for l in lines if l.startswith(("CRASH:", "NO VERDICT:"))), None)
     if line is None and lines:
         line = lines[-1] if lines[0].startswith("Traceback") else lines[0].split(" — ", 1)[-1]
     return "rc %d, %s" % (rc, (line or "")[:90])
@@ -522,7 +531,7 @@ MUTANTS = [
     ("M14", "section placement takes the FIRST of several ROM hits",
      "if len(hits) != 1:", "if not hits:", ["D0"], []),
     ("M15", "DIFFERS printed but exit status 0",
-     "sys.exit(DIFFERS)", "sys.exit(MATCH)", ["A1"], []),
+     "verdict(DIFFERS)", "verdict(MATCH)", ["A1"], []),
     ("M16", "HI16 pairs with the FIRST same-symbol LO16 in the table (FACT #8468 V7)",
      "for lo_off, lo_info in table[i + 1:]:", "for lo_off, lo_info in table:", ["E0", "E1"],
      [("E0", 1, (0x279E28,), "built 3c03001b   rom 3c03001c"), ("E1", 0, None, None)]),
@@ -530,42 +539,70 @@ MUTANTS = [
      '    rw = struct.unpack_from("<I", rom, va - ROM_BASE)[0]\n',
      '    rw = struct.unpack_from("<I", rom, va - ROM_BASE)[0]\n    rw = (rw & 0xFFFF) | (w & 0xFFFF0000)\n',
      ["A11"], [("A11", 0, None, None)]),
-    ("M18", "crash hook not installed: a crash exits 1, the DIFFERS band (pre-#1016)",
-     "sys.excepthook = crash", "pass", ["X1"], [("X1", 1, None, None)]),
+    ("M18", "crash hook not installed: no CRASH: line (the backstop still gives rc 2)",
+     "sys.excepthook = crash", "pass", ["X1"], [("X1", 2, None, "NO VERDICT:")]),
+    # M19/M20 change the shell BACKSTOP after the heredoc, not the python (TAIL).
+    ("M19", "backstop removed: python's rc passed on with no sentinel (pre-#1048)",
+     'if [ "$SENTINEL" = "VMU_RESULT $PY_RC" ]; then', "if true; then", ["X2", "X4"],
+     [("X2", 1, None, None), ("X4", 0, None, None)]),
+    ("M20", "backstop checks the sentinel is present, not that it names the rc",
+     'if [ "$SENTINEL" = "VMU_RESULT $PY_RC" ]; then', 'if [ -n "$SENTINEL" ]; then', ["X5"],
+     [("X5", 1, None, None)]),
 ]
+TAIL = {"M19", "M20"}
 
 # ---- CRASH PROBE (task #1016). A copy of the normal mode that raises before the
 # ROM read, run on A0's unseeded and A1's SEEDED base. It must exit 2 with a
 # `CRASH:` line and no verdict line. X1 is the case that matters: at rc 1 a
 # crash on a seeded base reads as "the control fired" when nothing was compared.
+# NO-VERDICT PROBES (task #1048). X2-X5 leave python without a sentinel naming
+# its rc, all on A1's SEEDED base (where rc 1 would pass for the control):
+# X2 a SyntaxError (compile time, before the hook), X3 an exception inside the
+# crash hook (FACT #8509), X4 a silent sys.exit(0) (the false-MATCH direction),
+# X5 a sentinel of 0 with an exit of 1. Each must exit 2 with a `NO VERDICT:`
+# line and no verdict line.
 PROBE_AT = 'rom = open(ROM, "rb").read()\n'
-PROBE = 'raise RuntimeError("vmu selftest crash probe")\n'
-PROBES = [("X0", "A0", "crash probe on A0's unseeded base: rc 2 + CRASH:, no verdict line"),
-          ("X1", "A1", "crash probe on A1's SEEDED base: must not read as the control firing")]
+HOOK_CRASH = ('class _E(Exception):\n    def __str__(self): raise ValueError("vmu selftest hook probe")\n'
+              'raise _E()\n')
+PROBES = [("X0", "A0", 'raise RuntimeError("vmu selftest crash probe")\n', "CRASH",
+           "crash probe on A0's unseeded base: rc 2 + CRASH:, no verdict line"),
+          ("X1", "A1", 'raise RuntimeError("vmu selftest crash probe")\n', "CRASH",
+           "crash probe on A1's SEEDED base: must not read as the control firing"),
+          ("X2", "A1", "def (:\n", "NOVERDICT",
+           "SyntaxError, SEEDED base: python exits 1 with no sentinel -> rc 2"),
+          ("X3", "A1", HOOK_CRASH, "NOVERDICT",
+           "exception inside the crash hook, SEEDED base: exits 1, no sentinel -> rc 2"),
+          ("X4", "A1", "sys.exit(0)\n", "NOVERDICT",
+           "silent sys.exit(0), SEEDED base: no sentinel -> rc 2, not MATCH"),
+          ("X5", "A1", "record(0)\nsys.exit(1)\n", "NOVERDICT",
+           "sentinel says 0, python exits 1, SEEDED base: mismatch -> rc 2"),
+]
 
-def probe_holds(got):
+def probe_holds(got, kind):
     rc, out = got[0], got[1]
-    return (rc == 2 and re.search(r"^CRASH: \S+: RuntimeError: vmu selftest crash probe", out, re.M) is not None
+    want = (r"^CRASH: \S+: RuntimeError: vmu selftest crash probe" if kind == "CRASH"
+            else r"^NO VERDICT: \S+: the normal-mode python exited")
+    return (rc == 2 and re.search(want, out, re.M) is not None
             and not any(VERDICT_RE.match(l) for l in out.splitlines()))
 
 def crash_probe(text, tag):
-    """{xid: run() result} of the crash probe on `text`, or a reason string."""
-    ptext, why = mutate(text, PROBE_AT, PROBE + PROBE_AT)
-    if ptext is None:
-        return "probe point: " + why
-    ppath = os.path.join(os.path.dirname(SELF), ".vmu_selftest.%d.%s.probe.sh" % (os.getpid(), tag))
-    open(ppath, "w").write(ptext)
-    try:
-        res = {}
-        for xid, rid, _ in PROBES:
-            row = next(r for r in ROWS if r[0] == rid)
-            path, why = bases[rid]
-            if path is None:
-                return "%s's base is invalid: %s" % (rid, why)
+    """{xid: run() result} of every probe on `text`, or a reason string."""
+    res = {}
+    for xid, rid, inject, _, _ in PROBES:
+        ptext, why = mutate(text, PROBE_AT, inject + PROBE_AT)
+        if ptext is None:
+            return "probe point: " + why
+        row = next(r for r in ROWS if r[0] == rid)
+        path, why = bases[rid]
+        if path is None:
+            return "%s's base is invalid: %s" % (rid, why)
+        ppath = os.path.join(os.path.dirname(SELF), ".vmu_selftest.%d.%s.%s.sh" % (os.getpid(), tag, xid))
+        open(ppath, "w").write(ptext)
+        try:
             res[xid] = run(ppath, row, path)
-        return res
-    finally:
-        os.remove(ppath)
+        finally:
+            os.remove(ppath)
+    return res
 
 def main_span(text):
     start = text.rfind("python3 - <<'" + "PY'\n")
@@ -580,6 +617,16 @@ def mutate(text, old, new):
     if n != 1:
         return None, "text found %d times in the normal-mode code, expected once" % n
     return text[:s] + text[s:e].replace(old, new) + text[e:], None
+
+def mutate_tail(text, old, new):
+    """mutate(), on the shell code AFTER the normal-mode heredoc (the backstop)."""
+    s, e = main_span(text)
+    if s < 0 or e < 0:
+        return None, "normal-mode heredoc not found"
+    n = text[e:].count(old)
+    if n != 1:
+        return None, "text found %d times after the normal-mode heredoc, expected once" % n
+    return text[:e] + text[e:].replace(old, new), None
 
 # ---- run ------------------------------------------------------------------
 say("== verify_match_unit --selftest: an INSTRUMENT check, NOT a function verdict")
@@ -618,14 +665,14 @@ try:
     invariance = [r[0] for r in ROWS if r[4] is not None and r[1] in unseeded
                   and (r[6], r[7]) == (unseeded[r[1]][6], unseeded[r[1]][7])]
 
-    say("-- crash probe: an exception raised inside the normal mode must exit 2 with a CRASH: line")
+    say("-- crash and no-verdict probes: a normal mode that reaches no verdict must exit 2")
     pr = crash_probe(open(SELF).read(), "self")
     if isinstance(pr, str):
         say("  FAIL  CRASH PROBE INAPPLICABLE: " + pr)
         ok = False
     else:
-        for xid, rid, desc in PROBES:
-            good = probe_holds(pr[xid])
+        for xid, rid, _, kind, desc in PROBES:
+            good = probe_holds(pr[xid], kind)
             ok &= good
             say("  %-5s %-4s %-72s -> %s" % ("ok" if good else "FAIL", xid, desc[:72], show(pr[xid])))
             if not good:
@@ -636,7 +683,7 @@ try:
     text = open(SELF).read()
     caught_by = {}
     for mid, desc, old, new, prio, must in MUTANTS:
-        mtext, why = mutate(text, old, new)
+        mtext, why = (mutate_tail if mid in TAIL else mutate)(text, old, new)
         if mtext is None:
             say("  FAIL  %-4s MUTANT INAPPLICABLE (%s): %s" % (mid, desc, why))
             ok = False
@@ -652,7 +699,7 @@ try:
                     ok = False
                     continue
                 mres.update(pr)
-                dev += [x for x in sorted(pr) if not probe_holds(pr[x])]
+                dev += [x for x, _, _, kind, _ in PROBES if not probe_holds(pr[x], kind)]
             order = [r for r in ROWS if r[0] in prio] + [r for r in ROWS if r[0] not in prio]
             for row in order:
                 if dev and all(p in mres for p in prio) and all(m[0] in mres for m in must):
@@ -812,13 +859,15 @@ fi
 #    tools/ee/text_size_check.sh (same seed: off 56, rc 1; master: off 0,
 #    rc 0) or the whole-image cmp in landing_gate.sh.
 DIS_FILE="$(mktemp -t verify_match_unit)"
-trap 'rm -f "$DIS_FILE"' EXIT
+RESULT_FILE="$(mktemp -t verify_match_unit_result)"
+trap 'rm -f "$DIS_FILE" "$RESULT_FILE"' EXIT
 docker --context colima-ee-x86 run --rm -v "$ROOT":/work -w /work ee-build sh -c \
   "mips-linux-gnu-objdump -dr --section=.text '$BASE' 2>/dev/null" >"$DIS_FILE" \
   || { echo "ARG ERROR: could not disassemble '$BASE'" >&2; exit 3; }
 [ -s "$DIS_FILE" ] || { echo "ARG ERROR: '$BASE' produced no .text disassembly" >&2; exit 3; }
 
-FN="$FN" BASE="$BASE" ROM="$ROM" SYMS="$SYMS" REGION="$REGION" DIS_FILE="$DIS_FILE" python3 - <<'PY'
+FN="$FN" BASE="$BASE" ROM="$ROM" SYMS="$SYMS" REGION="$REGION" DIS_FILE="$DIS_FILE" \
+  VMU_RESULT_FILE="$RESULT_FILE" python3 - <<'PY'
 import os, sys, traceback
 
 # CRASH -> UNVERIFIABLE (task #1016, FACT #8453). An uncaught exception would
@@ -826,10 +875,20 @@ import os, sys, traceback
 # control reads as "the control fired" and a broken tool certifies itself. A
 # crash measured nothing: print the traceback and a `CRASH:` line naming what
 # failed, and exit 2. os._exit, because an excepthook cannot change the status
-# by raising SystemExit. Installed FIRST, before any other statement. NOT
-# covered: a SyntaxError anywhere in this heredoc (raised at compile time,
-# before the hook exists) still exits 1, as does a failure of the stdlib import
-# on the first line. A signal kills python3 with 128+N, which is not 1.
+# by raising SystemExit. Installed before any statement that can raise. What
+# the hook cannot reach (a SyntaxError anywhere in this heredoc, raised at
+# compile time before the hook exists; a failure of the first line's import;
+# an exception inside crash() itself, FACT #8509; a signal) never writes the
+# VMU_RESULT sentinel, and the backstop after this heredoc turns it into rc 2.
+#
+# VMU_RESULT SENTINEL (task #1048). Every deliberate exit goes through
+# verdict(), which writes `VMU_RESULT <rc>` to $VMU_RESULT_FILE (a private
+# temp file, not stdout, so no verdict line changes) and then exits with that
+# rc. The shell passes python's rc on only when the file holds exactly that
+# line; anything else is `NO VERDICT:` and rc 2.
+def record(code):
+    with open(os.environ["VMU_RESULT_FILE"], "w") as f:
+        f.write(f"VMU_RESULT {code}\n")
 def crash(etype, value, tb):
     sys.stdout.flush()
     traceback.print_exception(etype, value, tb)
@@ -838,9 +897,15 @@ def crash(etype, value, tb):
           + (f" (normal-mode python line {last.lineno}, in {last.name})" if last else "")
           + " — nothing was compared; this is UNVERIFIABLE, not DIFFERS", flush=True)
     sys.stderr.flush()
+    record(2)
     os._exit(2)
 sys.excepthook = crash
 import os, re, struct, sys
+
+def verdict(code):
+    """Record the sentinel for `code`, then exit with it. The only way out."""
+    record(code)
+    sys.exit(code)
 
 FN     = os.environ["FN"]
 ROM    = os.environ["ROM"]
@@ -907,7 +972,7 @@ def resolve(name):
 fn_va = resolve(FN)
 if fn_va is None:
     print(f"{FN}: UNVERIFIABLE — no address for '{FN}' in {SYMS} and none encoded in the name")
-    sys.exit(UNVERIFIABLE)
+    verdict(UNVERIFIABLE)
 
 # Slice the function's block out of `objdump -dr`.
 words, relocs = [], {}
@@ -931,7 +996,7 @@ for line in open(os.environ["DIS_FILE"]).read().splitlines():
 
 if not words:
     print(f"{FN}: NOT FOUND in base.o (still INCLUDE_ASM?)")
-    sys.exit(ARGERR)
+    verdict(ARGERR)
 
 unit_off = words[0][0]                       # the fn's offset inside the unit .text
 
@@ -1126,21 +1191,21 @@ for off, w in words:
 # Say so; never fold it into a pass or a fail.
 if unmodelled:
     print(f"{FN}: UNVERIFIABLE — unmodelled relocation type(s): {', '.join(sorted(unmodelled))}")
-    sys.exit(UNVERIFIABLE)
+    verdict(UNVERIFIABLE)
 if unpaired:
     print(f"{FN}: UNVERIFIABLE — unresolvable HI16/LO16 pairing at {len(unpaired)} HI16(s): "
           + ", ".join(unpaired[:8]))
-    sys.exit(UNVERIFIABLE)
+    verdict(UNVERIFIABLE)
 if unresolved:
     uniq = sorted(set(unresolved))
     print(f"{FN}: UNVERIFIABLE — {len(uniq)} symbol(s) have no known address: "
           + ", ".join(f"{n} ({section_why[n]})" if n in section_why else n for n in uniq[:8]))
-    sys.exit(UNVERIFIABLE)
+    verdict(UNVERIFIABLE)
 
 lo, hi = resolved[0][0] - ROM_BASE, resolved[-1][0] - ROM_BASE + 4
 if lo < 0 or hi > len(rom):
     print(f"{FN}: UNVERIFIABLE — vaddr range 0x{resolved[0][0]:08x}..0x{resolved[-1][0]:08x} outside the flat ROM")
-    sys.exit(UNVERIFIABLE)
+    verdict(UNVERIFIABLE)
 
 bad = []
 for va, w in resolved:
@@ -1152,12 +1217,38 @@ nrel = sum(len(v) for v in relocs.values())
 if not bad:
     placed = "".join(f"; {n} at 0x{a:08x}" for n, a in sorted(section_addr.items()))
     print(f"{FN}: BYTE IDENTICAL TO ROM ✅ ({len(resolved)}/{len(resolved)} words, {nrel} relocs resolved{placed})")
-    sys.exit(MATCH)
+    verdict(MATCH)
 
 print(f"{FN}: DIFFERS ❌ — {len(bad)}/{len(resolved)} words differ from the ROM")
 for va, w, rw in bad[:40]:
     print(f"  0x{va:08x}: built {w:08x}   rom {rw:08x}")
 if len(bad) > 40:
     print(f"  ... and {len(bad)-40} more")
-sys.exit(DIFFERS)
+verdict(DIFFERS)
 PY
+PY_RC=$?
+
+# ---- BACKSTOP (task #1048, FACT #8453/#8509). Python's rc is passed on only
+# when its VMU_RESULT sentinel names that same rc. With no sentinel, python
+# never reached a verdict: a SyntaxError, a failed import, a crash inside the
+# crash hook, a signal, or an early exit. Without this, those land wherever
+# python happens to exit: rc 1 reads as DIFFERS, which on a base-seeded control
+# is "the control fired", and rc 0 on the subject is a false MATCH. A sentinel
+# naming a different rc means something failed after the verdict (e.g. a
+# stdout flush at exit). Both are rc 2, never 0 or 1.
+SENTINEL="$(cat "$RESULT_FILE" 2>/dev/null)"
+if [ "$SENTINEL" = "VMU_RESULT $PY_RC" ]; then
+  exit "$PY_RC"
+fi
+case "$PY_RC" in
+  0) BAND=", not MATCH";;
+  1) BAND=", not DIFFERS";;
+  *) BAND="";;
+esac
+if [ -z "$SENTINEL" ]; then
+  WHY="exited $PY_RC without writing its VMU_RESULT sentinel"
+else
+  WHY="exited $PY_RC but its sentinel reads '$SENTINEL'"
+fi
+echo "NO VERDICT: $FN: the normal-mode python $WHY — it did not reach a verdict; this is UNVERIFIABLE$BAND"
+exit 2
