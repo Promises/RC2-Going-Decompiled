@@ -7054,35 +7054,71 @@ s32 func_002B1C20(void) {
 }
 #endif
 
-/* CountPlatinumBolts: count one level's collected platinum bolts (4 flags
- * at level*4, plus the 4 extra flags at +0x68 for level 2), clamped to
- * [0, 40]. The `nop` before the first loop's bgez is not a scheduler nop:
- * it is the R5900 short-loop pad (5-instruction loop padded to 6; see
- * R5900_SHORT_LOOP_PAD1). The second loop is 6 long and unpadded. Task #659
- * reached 97.65% (sdk29, unit objdiff report, VM b) with an explicit
- * countdown do-while and a PAD1 asm that also reads flags/next/count/set to
- * keep the movn in the slot; the residual is count in $7 where the ROM has
- * $6 (and the loop-2 base in $6 vs $7). Not landed. FACT #7937. */
+/* CountPlatinumBolts: count one level's collected platinum bolts, clamped to
+ * [0, 40].
+ *   level - level index; its 4 bolt flags are g_platinumBoltFlags[level*4..+3]
+ *   returns the number of non-zero flags, plus (for level 2 only) the 4 extra
+ *   flags kept at g_platinumBoltFlags+0x68 - the slot of level 0x1A, which
+ *   TotalPlatinumBolts skips for exactly that reason.
+ *
+ * Byte-exact on sdk29 (task #1026; FACT #7937's 97.65% residual closed). The
+ * body carries four EE codegen devices, none of which changes the semantics:
+ *   - the first loop is written as the ROM's countdown do-while with the
+ *     R5900 short-loop pad (R5900_SHORT_LOOP_PAD1, see its comment) before
+ *     the bgez; the pad reads `count` so the movn stays after it and reorg
+ *     moves it into the delay slot, as in the ROM;
+ *   - an EMPTY fence tying the counter to the stepped pointer (emits nothing;
+ *     RULING #8483) keeps the ROM's lbu / count+1 / p++ / i-- order;
+ *   - CPB_COUNTER_IN_A3 is a REGISTER-PIN DEVICE (EE arm only, empty on
+ *     native): it binds the countdown to $7, which leaves `count` in $6 as the
+ *     ROM has it - without the pin cc1 2.9 gives count $7 and the loop-2
+ *     base $6 (FACT #7937);
+ *   - the second loop scans g_platinumBoltExtraFlags, an assembler alias for
+ *     g_platinumBoltFlags+0x68 (the FACT #8386 zero-offset alias pattern), by
+ *     index with an EMPTY operand-tied fence on the index: the ROM keeps the
+ *     +0x68 in the %hi/%lo pair and counts the index up (slti); indexing
+ *     g_platinumBoltFlags[0x68 + j] folds 0x68 into the lbu, and without the
+ *     fence cc1 reverses the loop into a pointer countdown.
+ * History: task #659 reached 97.65% (sdk29, unit objdiff report, VM b) with
+ * the countdown do-while and a PAD1 asm reading flags/next/count/set; its
+ * residual was count in $7 where the ROM has $6 (and the loop-2 base in $6
+ * vs $7). The first loop is 5 instructions padded to 6 by the one `nop`; the
+ * second is 6 long and unpadded.
+ */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 0.00% ->
    UNKNOWN-@0: ROM `(none)` vs `daddu t0,a0,zero` */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", CountPlatinumBolts);
+#define CPB_COUNTER_IN_A3 __asm__("$7")
+__asm__("g_platinumBoltExtraFlags = g_platinumBoltFlags + 0x68");
+extern u8 g_platinumBoltExtraFlags[];
 #else
+#define CPB_COUNTER_IN_A3
+#define g_platinumBoltExtraFlags (g_platinumBoltFlags + 0x68)
+#endif
 s32 CountPlatinumBolts(s32 level) {
     u8 *flags = &g_platinumBoltFlags[level * 4];
     s32 count = 0;
-    s32 i;
+    register s32 i CPB_COUNTER_IN_A3;
+    s32 j;
 
-    for (i = 0; i < 4; i++) {
-        if (flags[i] != 0) {
-            count = count + 1;
+    i = 3;
+    do {
+        s32 set = *flags;
+        s32 next = count + 1;
+        flags++;
+        __asm__("" : "+r"(i) : "r"(flags));
+        i--;
+        R5900_SHORT_LOOP_PAD1(i, count);
+        if (set != 0) {
+            count = next;
         }
-    }
+    } while (i >= 0);
     if (level == 2) {
-        for (i = 0; i < 4; i++) {
-            if (g_platinumBoltFlags[0x68 + i] != 0) {
+        for (j = 0; j < 4; j++) {
+            if (g_platinumBoltExtraFlags[j] != 0) {
                 count = count + 1;
             }
+            __asm__("" : "+r"(j));
         }
     }
     if (count < 0) {
@@ -7093,7 +7129,6 @@ s32 CountPlatinumBolts(s32 level) {
     }
     return count;
 }
-#endif
 
 /**
  * Bounds-checked read of the per-level lookup table (21 levels).
