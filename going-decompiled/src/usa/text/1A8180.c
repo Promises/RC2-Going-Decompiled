@@ -5428,35 +5428,55 @@ void func_002AF728(Moby *moby, void *ctrlPtr, f32 stepZ, f32 snapEps) {
 /* func_002AF948: round a float to `digits` decimal places. Builds the scale
  * 10^digits (digits<=0 -> 1), adds the half-ulp rounding bias 1/(2*scale),
  * truncates (FloatToInt) the scaled value, and divides back.
+ *   digits - decimal places (<= 0 means round to an integer)
+ *   x      - value to round
+ *   returns trunc((x + 1/(2*scale)) * scale) / scale
  * Not a save-layout wall: cc1 2.9 emits the ROM's ra + $f20 frame word for
- * word (FACT #8260). Best sdk29 body (t894, 85.62%) is in NOTE #8262. Two
- * residuals remain (task #946):
+ * word (FACT #8260). Best sdk29 body before task #1026 was t894's 85.62%
+ * (NOTE #8262); task #946 left two residuals, both now closed:
  *  - Loop: the ROM's `addiu; nop x4; bnez; mult` is the R5900 short-loop pad
- *    to 6 insns, with `mult` moved into the slot first. cc1 2.9 pads first
- *    with `.set noreorder` nops, and those block delay-slot filling, so its
- *    `mult` stays in the body and the slot stays empty. That holds with or
- *    without a pad asm, in the 3 loop shapes whose output was read.
- *  - Tail: the ROM has a nop between `ld $31` and `div.s` (after cvt.s.w
- *    $f12), a hazard neither cc1 2.9 nor asm_unit.sh emits. */
+ *    with `mult` in the slot. cc1 2.9 pads a short loop itself and those
+ *    pads block slot filling; written as four counted pad statements plus an
+ *    EMPTY operand-tied fence (emits nothing, RULING #8483) the loop crosses
+ *    cc1's short-loop threshold, cc1 adds no pad of its own and reorg puts
+ *    the `mult` in the slot (FACT #8384). Each pad reads pow10, so the
+ *    multiply stays after the pads.
+ *  - Tail: the ROM's nop between `ld $31` and `div.s` is written as
+ *    AF948_FPU_PAD, an explicit `noreorder` nop tied to the converted value
+ *    (a SCHEDULING DEVICE under RULING #8435: EE arm only, empty natively).
+ * The two mtc1 -> cvt.s.w nops are asm_unit.sh's SN-as mtc1 hazard rule.
+ * Reusing `x` for the truncated value puts it in $f12 as the ROM has it, and
+ * the literal 10 lets loop.c hoist it into the guarded preheader. */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 73.00%
    -> UNKNOWN-@0: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-16` */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AF948);
+#define AF948_FPU_PAD(v) __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+f"(v))
 #else
+#define AF948_FPU_PAD(v) ((void)0)
+#endif
 extern s32 FloatToInt(f32 x);
 
 f32 func_002AF948(s32 digits, f32 x) {
     s32 pow10 = 1;
     f32 scale;
 
-    while (digits > 0) {
-        pow10 = pow10 * 10;
-        digits = digits - 1;
+    if (digits > 0) {
+        do {
+            digits = digits - 1;
+            __asm__("" : "+r"(digits));
+            R5900_SHORT_LOOP_PAD1(digits, pow10);
+            R5900_SHORT_LOOP_PAD1(digits, pow10);
+            R5900_SHORT_LOOP_PAD1(digits, pow10);
+            R5900_SHORT_LOOP_PAD1(digits, pow10);
+            pow10 = pow10 * 10;
+        } while (digits != 0);
     }
     scale = (f32)pow10;
-    return (f32)FloatToInt((x + 1.0f / (scale + scale)) * scale) / scale;
+    x = x + 1.0f / (scale + scale);
+    x = (f32)FloatToInt(x * scale);
+    AF948_FPU_PAD(x);
+    return x / scale;
 }
-#endif
 
 /**
  * Test whether `x` sits just below the object's reference value: returns 1 when
