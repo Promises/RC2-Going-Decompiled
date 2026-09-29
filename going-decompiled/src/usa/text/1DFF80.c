@@ -1778,31 +1778,81 @@ extern void func_00132AC8(void);
 extern s32  snd_Pump(void);
 
 /* StopAllSoundEmitters: level-teardown audio flush. Drain the 989snd ring
- * (func_00133230 + func_00132AC8 + snd_Pump until idle), then zero the listener
- * position ring (4 vec4 + the count word at +0x40) and reset all 52 voice slots
- * (stride 0x70) by clearing each slot's state word (+0x70) and flag byte (+0x74),
- * all based at g_listenerPosHistory. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", StopAllSoundEmitters);
-#else
+ * (func_00133230 + func_00132AC8, then snd_Pump until it reports idle), zero
+ * the listener position ring (4 quadwords + the count word at +0x40) and reset
+ * all 52 voice slots (0x16C0 / stride 0x70) by clearing each slot's state word
+ * (+0x70) and flag byte (+0x74), all based at g_listenerPosHistory. No params,
+ * no return value.
+ *
+ * Matching notes (sdk29 arm, cc1 2.9 -O2 -G8 -fno-gcse; task #1075):
+ *   - every R5900_SHORT_LOOP_PAD1 is a SCHEDULING DEVICE (RULING #8435): the
+ *     ROM's pre-branch nops (3 in the wait loop, 3 in the ring loop, 2 in the
+ *     slot loop). Written as separate asm statements they carry each loop past
+ *     cc1's short-loop threshold (FACT #8384), so reorg fills the slots as the
+ *     ROM does (`lui` in the bnez slot, the `addiu` step in the bgez slot, and
+ *     the slot loop's head `sw` stolen into a `bnel`);
+ *   - `zeroQuad` is a REGISTER-PIN DEVICE (RULING #8479, ledger-28754; EE arm
+ *     only): a 128-bit local bound to $0 and NEVER assigned, so that cc1 itself
+ *     emits the ROM's `sq $0` ring clear. The native arm stores the zeros in
+ *     plain C;
+ *   - the empty tied asm on `slot` keeps the ROM's `daddu $3,$2` copy of the
+ *     re-materialised base (the +0x40 store goes through the base, the slot
+ *     walk through the copy); the slot bound is compared SIGNED (`slt`), as
+ *     the ROM does. The remaining empty asms only order/fence and emit nothing
+ *     (RULING #8483). */
 void StopAllSoundEmitters(void) {
-    u8 *p;
+#ifndef TARGET_NATIVE
+    register u_long128 zeroQuad EE_REG("$0");   /* read-only: never assigned */
+#endif
+    u8 *ring;
+    u8 *base;
+    u8 *slot;
+    u8 *end;
     s32 i;
+    s32 busy;
+    s32 more;
+
     func_00133230();
     snd_Pump();
     func_00132AC8();
-    while (snd_Pump() != 0) {
-    }
-    for (i = 0; i < 0x40; i += 4) {
-        *(s32 *)(g_listenerPosHistory + i) = 0;
-    }
-    *(s32 *)(g_listenerPosHistory + 0x40) = 0;
-    for (p = g_listenerPosHistory; p < g_listenerPosHistory + 0x16C0; p += 0x70) {
-        *(s32 *)(p + 0x70) = 0;
-        *(u8 *)(p + 0x74) = 0;
-    }
-}
+    do {
+        busy = snd_Pump();
+        R5900_SHORT_LOOP_PAD1(busy, busy);
+        R5900_SHORT_LOOP_PAD1(busy, busy);
+        R5900_SHORT_LOOP_PAD1(busy, busy);
+    } while (busy != 0);
+
+    ring = g_listenerPosHistory;
+    i = 3;
+    do {
+#ifndef TARGET_NATIVE
+        *(u_long128 *)ring = zeroQuad;
+#else
+        ((u64 *)ring)[0] = 0;
+        ((u64 *)ring)[1] = 0;
 #endif
+        __asm__("" : "+r"(i) : : "memory");
+        i--;
+        R5900_SHORT_LOOP_PAD1(i, i);
+        R5900_SHORT_LOOP_PAD1(i, i);
+        R5900_SHORT_LOOP_PAD1(i, ring);
+        ring += 0x10;
+    } while (i >= 0);
+
+    base = g_listenerPosHistory;
+    __asm__("" : "=r"(slot) : "0"(base));
+    *(s32 *)(base + 0x40) = 0;
+    end = slot + 0x16C0;
+    do {
+        *(s32 *)(slot + 0x70) = 0;
+        *(u8 *)(slot + 0x74) = 0;
+        slot += 0x70;
+        more = (s32)slot < (s32)end;
+        __asm__("" : "+r"(more));
+        R5900_SHORT_LOOP_PAD1(more, slot);
+        R5900_SHORT_LOOP_PAD1(more, slot);
+    } while (more);
+}
 
 /* Store `handle` into the voice-handle word of the emitter slot, if non-NULL.
  * The slot arrives as a 32-bit value sign-extended into a 64-bit register. */
