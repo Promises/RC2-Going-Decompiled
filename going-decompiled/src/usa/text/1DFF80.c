@@ -265,26 +265,46 @@ extern void func_002857C8(s32 a, s32 b, s32 c);
 /* Pop the game-state stack and un-hide every moby: clear the "hidden" flag bit
  * (0x80 at moby+0x34) across the whole moby table.  Also re-runs the scene-cast
  * helper func_002857C8 with the three words at g_sceneActorMobys+0x8B0..
- * NEAR-MISS (~85%, structurally identical): cc1 lowers the table-walk to a plain
- * `bnez` where the original uses a branch-likely (`bnel`) that hoists the moby
- * flag load into the delay slot (the branch-likely lowering wall).  The C is
- * faithful. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", UnhideAllMobysAndPopState);
-#else
+ *
+ * Byte-exact on sdk29 (task #1026). An earlier note recorded this as a
+ * NEAR-MISS (~85%) blamed on a "branch-likely lowering wall"; it is not a
+ * wall. The ROM loop is `andi; sh; addiu; sltu; nop; bnel; lhu(slot)`: the
+ * R5900 short-loop pad before the branch, and the loop-head lhu stolen into a
+ * branch-likely slot, which is what reorg does once cc1 counts the loop past
+ * its short-loop threshold (FACT #8384). Codegen devices, none semantic:
+ *   - the loop is the guarded do-while the ROM has; R5900_SHORT_LOOP_PAD1
+ *     pads the tested flag, and an EMPTY operand-tied fence (emits nothing,
+ *     RULING #8483) is the statement that lifts the loop over the threshold;
+ *   - castArgs is REGISTER-PINNED to $3 by EE_REG (a pin device, empty
+ *     natively): the ROM's base register, where cc1 2.9 otherwise uses $2;
+ *   - an EMPTY fence on the first argument keeps the ROM's load order:
+ *     +0x23C, then +0x244, then +0x240 in the jal delay slot.
+ */
 void UnhideAllMobysAndPopState(void) {
-    s32 *castArgs;
+    register s32 *castArgs EE_REG("$3");
     u8 *moby;
+    u8 *end;
+    s32 more;
+    s32 first;
 
     PopGameState(0, 0);
     castArgs = (s32 *)(g_sceneActorMobys + 0x674);
-    func_002857C8(castArgs[0x23C / 4], castArgs[0x240 / 4], castArgs[0x244 / 4]);
+    first = castArgs[0x23C / 4];
+    __asm__("" : "+r"(first));
+    func_002857C8(first, castArgs[0x240 / 4], castArgs[0x244 / 4]);
 
-    for (moby = g_mobyTableBase; moby < g_mobyTableEnd; moby += 0x100) {
-        *(u16 *)(moby + 0x34) &= 0xFF7F;
+    end = g_mobyTableEnd;
+    moby = g_mobyTableBase;
+    if (moby < end) {
+        do {
+            *(u16 *)(moby + 0x34) &= 0xFF7F;
+            moby += 0x100;
+            more = moby < end;
+            __asm__("" : "+r"(more));
+            R5900_SHORT_LOOP_PAD1(more, moby);
+        } while (more);
     }
 }
-#endif
 
 /* func_002E0210: build a save-state snapshot into g_pLevelSelectListEntries[0xF68..]
  * (early-out when g_soundBankHandlesBlk[0x22B4]==4). PARKED #70 (#else not confident):
