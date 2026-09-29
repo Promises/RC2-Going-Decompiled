@@ -649,45 +649,77 @@ void GiveInventoryItem(s32 itemId)
 }
 #endif
 
-/* AddItemToInventoryOrder(itemId): place `itemId` into the inventory quick-select
- * order list (g_inventoryOrder, bounded by D_1A7B90). The item must exist, be at
- * upgrade level 0, and either have its +0x80 flag set or sell ammo. Scans the
- * order list for an existing entry of this item (low 6 bits) or the first free
- * (0xFF) slot and writes `itemId | (owned ? 0x40 : 0)` there. Returns 1 when a
- * slot was written, else 0.
- *
- * WALL: frameless leaf, but the duplicate/free-slot scan uses branch-likely
- * (beql/bnel) and a movz to fold the owned-flag into bit 6, neither of which cc1
- * reproduces from the equivalent C. Kept as the portable #else body. */
+/*
+ * AddItemToInventoryOrder's absolute accesses. The ROM forms the three
+ * inventory addresses with the assembler's `lui; addiu` pair (D_1A7B90 is a
+ * 1-byte symbol, so it would otherwise go %gp_rel), so they go through
+ * assembler aliases sized 16 (the #8036 construct; relocations name the real
+ * symbols). Natively they are the arrays themselves.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", AddItemToInventoryOrder);
+__asm__(".extern g_inventoryOwnedAbs, 16\n\tg_inventoryOwnedAbs = g_inventoryOwned");
+extern u8 g_inventoryOwnedAbs[8];
+__asm__(".extern g_inventoryOrderAbs, 16\n\tg_inventoryOrderAbs = g_inventoryOrder");
+extern u8 g_inventoryOrderAbs[8];
+__asm__(".extern g_inventoryOrderEndAbs, 16\n\tg_inventoryOrderEndAbs = D_1A7B90");
+extern u8 g_inventoryOrderEndAbs[8];
 #else
+#define g_inventoryOwnedAbs g_inventoryOwned
+#define g_inventoryOrderAbs g_inventoryOrder
+#define g_inventoryOrderEndAbs (&D_1A7B90)
+#endif
+
+/**
+ * Place an item into the inventory quick-select order list (g_inventoryOrder,
+ * ending at D_1A7B90).
+ *
+ * The item's active variant must exist, be at upgrade level 0, and have either
+ * its +0x80 word or its sellsAmmoFlag set. The list is scanned for the first
+ * entry that already names this item (low 6 bits) or is free (0xFF); that entry
+ * is overwritten with `itemId | 0x40` when the item is owned, else `itemId`.
+ *
+ *   itemId  inventory item id (0..0x37)
+ *   returns 1 when an entry was written, 0 otherwise (item not eligible, or
+ *           the list is full of other items)
+ *
+ * Byte-exact on sdk29 (task #1076). Matching notes:
+ *   - owned pointer, 0xFF, 0x40, list start and list end are named locals set
+ *     in that order before the loop: that is the ROM's preheader order, which
+ *     cc1 does not reach when it hoists them out of the loop itself;
+ *   - the owned flag is selected with `flag = 0x40; if (!owned) flag = 0`
+ *     around an empty tied asm (RULING #8483: a SCHEDULING/REGISTER DEVICE, it
+ *     emits nothing). Without it cc1 ties the result to the zero arm and emits
+ *     `movn`; the ROM ties it to the 0x40 copy and emits `movz $2,$0,$3`.
+ */
 s32 AddItemToInventoryOrder(s32 itemId) {
     WeaponDef *w = &g_weaponTable[g_itemEquippedSlot[itemId]];
-    u8 *order;
-    u8  owned;
-    if (w->exists == 0 || w->upgradeLevel != 0) {
-        return 0;
+    s32 added = 0;
+
+    if (w->exists != 0 && w->upgradeLevel == 0
+        && (*(s32 *)((u8 *)w + 0x80) != 0 || w->sellsAmmoFlag != 0)) {
+        u8 *owned = &g_inventoryOwnedAbs[itemId];
+        s32 freeEntry = 0xFF;
+        s32 ownedBit = 0x40;
+        u8 *entryPtr = g_inventoryOrderAbs;
+        u8 *end = g_inventoryOrderEndAbs;
+        do {
+            u8 entry = *entryPtr;
+            if ((entry & 0x3F) == itemId || entry == freeEntry) {
+                u8 isOwned = *owned;
+                s32 flag = ownedBit;
+                added = 1;
+                __asm__ __volatile__("" : "+r"(flag) : "r"(isOwned));
+                if (isOwned == 0) {
+                    flag = 0;
+                }
+                *entryPtr = itemId | flag;
+                break;
+            }
+            entryPtr++;
+        } while ((s32)entryPtr < (s32)end);
     }
-    if (*(s32 *)((u8 *)w + 0x80) == 0 && w->sellsAmmoFlag == 0) {
-        return 0;
-    }
-    owned = g_inventoryOwned[itemId];
-    for (order = g_inventoryOrder; order < &D_1A7B90; order++) {
-        u8 entry = *order;
-        if ((entry & 0x3F) == itemId) {
-            *order = (u8)(itemId | (owned != 0 ? 0x40 : 0));
-            return 1;
-        }
-        if (entry == 0xFF) {
-            /* both paths converge to itemId | (owned ? 0x40 : 0) in the asm */
-            *order = (u8)(itemId | (owned != 0 ? 0x40 : 0));
-            return 1;
-        }
-    }
-    return 0;
+    return added;
 }
-#endif
 
 /* Linear-scan the 0x38 inventory item slots for the weapon variant whose
  * nameStringId matches `name`; return that variant's `exists` field, else 0. */
