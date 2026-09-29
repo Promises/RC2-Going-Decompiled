@@ -107,7 +107,20 @@
 #            `WARN NATIVE: no C change` — NOT counted and NOT a FAIL under
 #            --strict (a tools-only landing has nothing native to regress), but
 #            its row proves nothing and must not be quoted as a control. A base
-#            == HEAD by sha stays the WARN/strict FAIL above.
+#            == HEAD by sha stays the WARN/strict FAIL above. The run_gate
+#            verdict line then ends ` (native: no C change)` (task #1065), on
+#            the $tag line, never inside gate_verdict.
+#            WRONG BASE (task #1065, #1073's spec gap): a PINNED base must be an
+#            ancestor of HEAD AND ancestor-or-equal of merge-base(HEAD,
+#            origin/master) — on the mainline at or before the fork point.
+#            Else a WARN naming it, a FAIL under --strict. A pin != HEAD is not
+#            enough: an unrelated commit, or one on the branch's own line, is
+#            non-vacuous and still the wrong base.
+#            FALSE NO C CHANGE (task #1065): when the row reads `no C change`,
+#            every commit of origin/master..HEAD is checked for a touched NATIVE
+#            input (the same set, check.sh excluded); any is a WARN naming path
+#            and commit, a FAIL under --strict — the WARN must be true of the
+#            landing, not only of the two trees compared.
 #            FAILS naming each unit that fails at the tip and passed at the
 #            base, or is absent at the base; a unit failing on BOTH arms is
 #            tolerated and listed (a pre-existing failure must not turn the row
@@ -298,6 +311,15 @@ ok()   { say "OK   $*"; }
 warn() { if [ "$STRICT" = 1 ]; then say "FAIL(strict) $*"; FAILED=$((FAILED+1)); else say "WARN $*"; fi; WARNED=$((WARNED+1)); }
 FAILED=0; WARNED=0; STRICT=${LANDING_GATE_STRICT:-0}
 NATIVE_LEFT_FROM_ENV=0   # never from the environment: only native_arm sets it
+# NATIVE_TIP_REV: the commit check_native treats as the tip for its git-side
+# predicates (base == tip, no C change, the pin's ancestry, the Native-Left and
+# touched-input logs). Never from the environment: only --selftest's probe arms
+# set it, to a commit object whose tree IS HEAD's tree (so the working tree the
+# tip arm compiles is that commit's content) and whose history they built.
+NATIVE_TIP_REV=""
+# NATIVE_NO_C_CHANGE: set to 1 by check_native when its row is the
+# `WARN NATIVE: no C change` row; run_gate annotates its verdict line with it.
+NATIVE_NO_C_CHANGE=0
 
 region_vars() {
   REGION="$1"
@@ -508,9 +530,10 @@ native_region_sums_close() {
   [ $n = 2 ]
 }
 
-# native_left_overrides [BASEREF] — the Native-Left overrides in force, one
-# `<unit>\t<reason>\t<source>` row each: every `Native-Left: <region>/<path>.c
-# <reason>` line in the commit messages of BASEREF..HEAD (source = the commit),
+# native_left_overrides [BASEREF [TIPREV]] — the Native-Left overrides in force,
+# one `<unit>\t<reason>\t<source>` row each: every `Native-Left: <region>/<path>.c
+# <reason>` line in the commit messages of BASEREF..TIPREV (TIPREV defaults to
+# HEAD; source = the commit),
 # then — ONLY inside --selftest's scratch arms (NATIVE_LEFT_FROM_ENV=1, set by
 # selftest_native's native_arm) — every such line in $LANDING_GATE_NATIVE_LEFT
 # (source = env). Everywhere else the env var is ignored and check_native
@@ -518,7 +541,7 @@ native_region_sums_close() {
 # A line with no reason is emitted with an empty reason and does not excuse
 # its unit.
 native_left_overrides() {
-  { if [ -n "${1:-}" ]; then git log --format='@@%h%n%B' "$1..HEAD" 2>/dev/null; fi
+  { if [ -n "${1:-}" ]; then git log --format='@@%h%n%B' "$1..${2:-HEAD}" 2>/dev/null; fi
     if [ "$NATIVE_LEFT_FROM_ENV" = 1 ] && [ -n "${LANDING_GATE_NATIVE_LEFT:-}" ]; then printf '@@env\n%s\n' "$LANDING_GATE_NATIVE_LEFT"; fi
   } | awk '/^@@/ { src = substr($0, 3); next }
            sub(/^Native-Left:[ \t]+/, "") { u = $1; r = $0; sub(/^[^ \t]+[ \t]*/, "", r); sub(/[ \t]+$/, "", r); print u "\t" r "\t" src }'
@@ -552,7 +575,8 @@ native_renames() {
 # not an env var: only --selftest's vacuous arm passes it, to reach the
 # base == HEAD case through the same default resolution a real run takes).
 check_native() {
-  local tip=${1:-$ROOT} basetree=${2:-} baseref="(given tree ${2:-})" upstream=${3:-origin/master} vacuous="" samein=""
+  local tip=${1:-$ROOT} basetree=${2:-} baseref="(given tree ${2:-})" upstream=${3:-origin/master} vacuous="" samein="" tiprev=""
+  NATIVE_NO_C_CHANGE=0
   say "== NATIVE: tools/native/check.sh over every TARGET_NATIVE unit, base-relative — FAIL on a unit failing at the tip that passed at (or is absent from) the base, and on a unit that LEFT the population (in the base's, not the tip's; a byte-identical rename WITHIN a region is paired, not a departure) unless a Native-Left commit trailer names it and a reason. COMPILE-ONLY: green does NOT mean the native build links"
   if [ "$NATIVE_LEFT_FROM_ENV" != 1 ] && [ -n "${LANDING_GATE_NATIVE_LEFT:-}" ]; then
     warn "NATIVE: \$LANDING_GATE_NATIVE_LEFT is set and IGNORED — it is honoured only by --selftest's scratch arms (task #963); excuse a departure with a \`Native-Left: <region>/<path>.c <reason>\` trailer in a commit of the landing, which is reviewable and permanent"
@@ -561,6 +585,8 @@ check_native() {
     baseref=${LANDING_GATE_NATIVE_BASE:-$(git merge-base HEAD "$upstream" 2>/dev/null)}
     [ -n "$baseref" ] && baseref=$(git rev-parse --verify -q "$baseref^{commit}")
     [ -n "$baseref" ] || { fail "NATIVE: no base commit (git merge-base HEAD $upstream failed and LANDING_GATE_NATIVE_BASE is unset or not a commit) — the row cannot be base-relative"; return; }
+    tiprev=$(git rev-parse --verify -q "${NATIVE_TIP_REV:-HEAD}^{commit}")
+    [ -n "$tiprev" ] || { fail "NATIVE: the tip commit ${NATIVE_TIP_REV:-HEAD} does not resolve"; return; }
     # task #992: a base that IS the tip is a control that cannot fire. Only a
     # clean tree is a self-comparison — uncommitted NATIVE inputs are still
     # compared against HEAD, and say so (the DIRTY row fails that tree under
@@ -568,7 +594,7 @@ check_native() {
     # an explicit pin to the tip is the same self-comparison with extra steps,
     # and it is the easiest mistake a seat told to "pin the base" can make.
     local nd; nd=$(git status --porcelain --no-renames -- going-decompiled/src going-decompiled/include tools/native | wc -l | tr -d ' ')
-    if [ "$baseref" = "$(git rev-parse HEAD)" ]; then
+    if [ "$baseref" = "$tiprev" ]; then
       if [ "$nd" != 0 ]; then
         say "     base == HEAD ($baseref): the row compares only the $nd uncommitted path(s) under going-decompiled/src, going-decompiled/include, tools/native"
       elif [ -n "${LANDING_GATE_NATIVE_BASE:-}" ]; then
@@ -582,8 +608,42 @@ check_native() {
     # check.sh, which native_scan takes from the tip for both arms. A WARN that
     # is not counted: a tools-only landing has nothing native to regress, so it
     # must pass --strict; the line only stops its row being quoted as a control.
-    elif [ "$nd" = 0 ] && git diff --quiet "$baseref" HEAD -- going-decompiled/src going-decompiled/include tools/native ':(exclude)tools/native/check.sh'; then
-      samein=1; say "WARN NATIVE: no C change — the base $baseref and HEAD have identical NATIVE inputs (going-decompiled/src, going-decompiled/include, tools/native but check.sh, which both arms take from the tip), so both arms compile the same C and this row proves nothing; not counted, and not a FAIL under --strict (task #1034, ruling Q1 on FACT ledger-28740) — to exercise the row, pin a base whose C differs"
+    elif [ "$nd" = 0 ] && git diff --quiet "$baseref" "$tiprev" -- going-decompiled/src going-decompiled/include tools/native ':(exclude)tools/native/check.sh'; then
+      samein=1; NATIVE_NO_C_CHANGE=1; say "WARN NATIVE: no C change — the base $baseref and HEAD have identical NATIVE inputs (going-decompiled/src, going-decompiled/include, tools/native but check.sh, which both arms take from the tip), so both arms compile the same C and this row proves nothing; not counted, and not a FAIL under --strict (task #1034, ruling Q1 on FACT ledger-28740) — to exercise the row, pin a base whose C differs"
+    fi
+    # task #1065 (#1073's spec gap): a pin that is not HEAD can still be the
+    # WRONG base. It must be an ancestor of HEAD AND ancestor-or-equal of
+    # merge-base(HEAD, upstream) — on the mainline, at or before the fork point,
+    # not on the branch's own line and not on an unrelated one. The default
+    # base IS that merge-base, so only a pin is checked.
+    if [ -n "${LANDING_GATE_NATIVE_BASE:-}" ] && [ "$baseref" != "$tiprev" ]; then
+      local mb; mb=$(git merge-base "$tiprev" "$upstream" 2>/dev/null)
+      if ! git merge-base --is-ancestor "$baseref" "$tiprev" 2>/dev/null; then
+        warn "NATIVE: WRONG BASE — the pinned base $baseref is NOT an ancestor of HEAD $tiprev, so the row compares against an unrelated commit; pin the landing's parent or merge-base(HEAD, $upstream) (task #1065)"
+      elif [ -z "$mb" ]; then
+        warn "NATIVE: WRONG BASE unverifiable — no merge-base(HEAD, $upstream), so the pinned base $baseref cannot be shown to sit at or before the fork point (task #1065)"
+      elif ! git merge-base --is-ancestor "$baseref" "$mb"; then
+        warn "NATIVE: WRONG BASE — the pinned base $baseref is an ancestor of HEAD but NOT ancestor-or-equal of merge-base(HEAD, $upstream) $mb: it sits on the branch's own line, so the branch's earlier commits are in neither arm's difference; pin $mb or an ancestor of it (task #1065)"
+      else
+        say "     pinned base $baseref: an ancestor of HEAD $tiprev and ancestor-or-equal of merge-base(HEAD, $upstream) $mb (task #1065)"
+      fi
+    fi
+    # task #1065: a `no C change` row must be TRUE of the landing, not only of
+    # the two trees compared. Any commit of upstream..HEAD touching a NATIVE
+    # input (the predicate's own set: check.sh excluded, both arms take it from
+    # the tip) means the landing changed C that this row does not see.
+    if [ -n "$samein" ]; then
+      if ! git rev-parse --verify -q "$upstream^{commit}" >/dev/null; then
+        warn "NATIVE: the row says 'no C change' and $upstream does not resolve, so $upstream..HEAD cannot be checked for NATIVE inputs (task #1065)"
+      else
+        local touched; touched=$(git log --format='@@%h' --name-only "$upstream..$tiprev" -- going-decompiled/src going-decompiled/include tools/native ':(exclude)tools/native/check.sh' \
+          | awk '/^@@/ { c = substr($0, 3); next } NF { print $0 " [" c "]" }')
+        if [ -n "$touched" ]; then
+          warn "NATIVE: FALSE 'no C change' — the row compares identical NATIVE inputs but $upstream..HEAD touches $(printf '%s\n' "$touched" | wc -l | tr -d ' ') NATIVE input path(s), so the landing changed C this row never compiled on both sides: $(printf '%s' "$touched" | tr '\n' ';' | sed 's/;$//; s/;/ ; /g') (task #1065)"
+        else
+          say "     'no C change' confirmed: $upstream..HEAD touches no NATIVE input (task #1065)"
+        fi
+      fi
     fi
     basetree="$OUT/native_base"; rm -rf "$basetree"; mkdir -p "$basetree"
     git archive "$baseref" going-decompiled/src going-decompiled/include tools/native | tar -x -C "$basetree" \
@@ -629,7 +689,7 @@ check_native() {
     say "     renamed, byte-identical (paired, not a departure): $(printf '%s\n' "$pairs" | awk '{ printf "%s -> %s  ", $1, $2 }')"
     left=$(printf '%s\n' $left | LC_ALL=C comm -23 - <(printf '%s\n' "$pairs" | awk '{ print $1 }' | LC_ALL=C sort))
   fi
-  native_left_overrides "$([ -z "${2:-}" ] && printf '%s' "$baseref")" > "$ovr"
+  native_left_overrides "$([ -z "${2:-}" ] && printf '%s' "$baseref")" "$tiprev" > "$ovr"
   for u in $left; do
     if awk -F'\t' -v u="$u" '$1 == u && $2 != "" { f = 1 } END { exit !f }' "$ovr"; then excused="$excused $u"; else unexcused="$unexcused $u"; fi
   done
@@ -878,7 +938,7 @@ gate_verdict() {
 run_gate() {  # run_gate REGION [--no-build] [--strict]
   region_vars "$1"; shift; local build=1
   while [ $# -gt 0 ]; do case "$1" in --no-build) build=0 ;; --strict) STRICT=1 ;; '') ;; *) say "unknown option $1"; exit 2 ;; esac; shift; done
-  FAILED=0; WARNED=0
+  FAILED=0; WARNED=0; NATIVE_NO_C_CHANGE=0
   # inside --selftest (arm 14) the run is tagged so it cannot read as a landing
   local tag="#### landing_gate $REGION"; [ "$IN_SELFTEST" = 1 ] && tag="==== selftest inner gate [$REGION] (NOT a landing verdict)"
   local dirty; dirty=$(git status --porcelain --no-renames | wc -l | tr -d ' ')
@@ -903,7 +963,10 @@ run_gate() {  # run_gate REGION [--no-build] [--strict]
   measure_row "$BUILD/$BASENAME.rom" "$BUILD/$BASENAME.elf" "$BUILD/ld.log" "$OUT/row.txt"
   check_row "$OUT/row.txt" "$start"
   check_noprovide
-  say "$tag: $(gate_verdict "$FAILED" "$WARNED" "$DIRTY_FAILED")"
+  # task #1065 (watcher-2 03:31): the no-C-change annotation rides HERE, on
+  # the $tag line, never inside gate_verdict — arms (19)/(20) match that text
+  # exactly. LANDING_LINE_RE is prefix-anchored, so the suffix still matches.
+  say "$tag: $(gate_verdict "$FAILED" "$WARNED" "$DIRTY_FAILED")$([ "$NATIVE_NO_C_CHANGE" = 1 ] && echo ' (native: no C change)')"
   if [ $build = 0 ] || [ "$dirty" != 0 ]; then say "#### NOTE: RULING #7208 condition 1 is NOT discharged by this run ($([ $build = 0 ] && echo '--no-build')$([ $build = 0 ] && [ "$dirty" != 0 ] && echo ', ')$([ "$dirty" != 0 ] && echo "$dirty dirty paths")) — it needs the building form on a 0-dirty tree"; fi
   [ $FAILED = 0 ]
 }
@@ -1092,6 +1155,7 @@ selftest() {
   selftest_native "$T" || bad=1
   selftest_dirty "$T" || bad=1
   selftest_dirty_gate "$T" || bad=1
+  selftest_verdict_annotation "$T" || bad=1
 
   say "-- (14) the real gate on this tree (--no-build, the build above) must PASS"
   STRICT=0
@@ -1265,7 +1329,7 @@ selftest_dirty_gate() {
 # basename-keyed row reads {015180} on both arms and passes.
 selftest_native() {
   local T="$1" b=0; local N="$T/native"; rm -rf "$N"; mkdir -p "$N"
-  say "-- (18) NATIVE (#923): scratch tip/base trees — a seeded C error, A2's removed 198B58 guard, a usa-vs-eu basename collision, a new failing unit, and a unit leaving the population (deleted, override without reason, token removed, renamed WITH an edit, moved byte-identical to ANOTHER region) must each FAIL naming the unit; a failure on both arms, a departure with a Native-Left override + reason, a byte-identical rename within its region, a cross-region move with a Native-Left override + reason, and the clean pair must pass; the env override outside a scratch arm must excuse nothing and WARN (FAIL under --strict); the default base resolving to HEAD must print 'NATIVE: base == tip, VACUOUS' as a WARN (FAIL under --strict), and so must a base pinned explicitly to HEAD (#1011); a base pinned to ANOTHER sha with HEAD's NATIVE inputs must print 'WARN NATIVE: no C change', counted nowhere, while a base whose C differs must stay a normal row (#1034); the per-region counts must show a usa -1 / eu +1 move under an unchanged total, and sum to the totals on the real tree (task #1006); then the real tree against its real base"
+  say "-- (18) NATIVE (#923): scratch tip/base trees — a seeded C error, A2's removed 198B58 guard, a usa-vs-eu basename collision, a new failing unit, and a unit leaving the population (deleted, override without reason, token removed, renamed WITH an edit, moved byte-identical to ANOTHER region) must each FAIL naming the unit; a failure on both arms, a departure with a Native-Left override + reason, a byte-identical rename within its region, a cross-region move with a Native-Left override + reason, and the clean pair must pass; the env override outside a scratch arm must excuse nothing and WARN (FAIL under --strict); the default base resolving to HEAD must print 'NATIVE: base == tip, VACUOUS' as a WARN (FAIL under --strict), and so must a base pinned explicitly to HEAD (#1011); a base pinned to ANOTHER sha with HEAD's NATIVE inputs must print 'WARN NATIVE: no C change', counted nowhere, while a base whose C differs must stay a normal row (#1034), and so must a base differing ONLY in a tools path read 'no C change' (u'', V10); a pin on the branch's own line or off the tip's history must WARN 'WRONG BASE' (FAIL under --strict) while the fork point passes, and a 'no C change' row over a branch that touches a NATIVE input must WARN 'FALSE no C change' (FAIL under --strict) (#1065); the per-region counts must show a usa -1 / eu +1 move under an unchanged total, and sum to the totals on the real tree (task #1006); then the real tree against its real base"
   native_tree() {  # native_tree DIR — a fresh scratch copy of the check.sh inputs
     rm -rf "$1"; mkdir -p "$1/going-decompiled" "$1/tools"
     cp -R going-decompiled/src going-decompiled/include "$1/going-decompiled/"; cp -R tools/native "$1/tools/"
@@ -1380,30 +1444,85 @@ selftest_native() {
         ok "fired (r) base pinned explicitly to HEAD, STRICT=$vst: $(/usr/bin/grep -E '^(WARN|FAIL\(strict\)) NATIVE' "$N/vacuous_pinned_$vst.txt" | cut -c1-60)... (FAILED=$FAILED)"
       else say "SELFTEST-FAIL (r) base pinned explicitly to HEAD, STRICT=$vst (FAILED=$FAILED WARNED=$WARNED):"; show < "$N/vacuous_pinned_$vst.txt"; b=1; fi
     done
+    # (u)-(w): every probe is a CHAIN of commit objects — no ref, no index, no
+    # working-tree edit — `P` with HEAD as parent and one path replaced, then a
+    # tip `T` with P as parent and HEAD's own tree, set as NATIVE_TIP_REV. The
+    # working tree the tip arm compiles is therefore T's content, and the pin
+    # is a genuine ancestor of the tip, which task #1065's ancestry rule needs
+    # (a probe hanging off HEAD is not an ancestor of HEAD and would fire it).
     # (u) task #1034, ruling Q1: a pin to ANOTHER sha with HEAD's tree (#1022's
     # probe) is the same self-comparison -> `WARN NATIVE: no C change`, counted
     # nowhere, so it passes --strict; (u') the anti-overreach control: a pin
     # whose C differs by one appended comment line is a normal row, no such line.
-    # Both bases are commit objects only — no ref, no index, no working-tree edit.
-    local syn cre ublob idx="$N/u_index"
-    syn=$(git commit-tree 'HEAD^{tree}' -p HEAD -m 'landing_gate selftest (u): HEAD tree, another sha')
-    ublob=$({ git cat-file blob "HEAD:going-decompiled/src/usa/cod/015180.c"; printf '\n/* t1034 selftest (u) */\n'; } | git hash-object -w --stdin)
-    rm -f "$idx"; GIT_INDEX_FILE="$idx" git read-tree HEAD && GIT_INDEX_FILE="$idx" git update-index --cacheinfo "100644,$ublob,going-decompiled/src/usa/cod/015180.c" \
-      && cre=$(git commit-tree "$(GIT_INDEX_FILE="$idx" git write-tree)" -p HEAD -m 'landing_gate selftest (u): one C comment line appended'); rm -f "$idx"
-    if [ -z "$syn" ] || [ -z "$cre" ] || [ "$(git rev-parse "$syn^{tree}")" != "$(git rev-parse 'HEAD^{tree}')" ] || git diff --quiet "$cre" HEAD -- going-decompiled/src; then
-      say "SELFTEST-BROKEN: (u) could not build its two probe bases (syn '$syn', C-change '$cre')"; b=1
+    # (u'') task #1065, V10 / FACT ledger-28835: a pin differing from the tip
+    # ONLY in a tools path (tools/ee/landing_gate.sh) must ALSO read `no C
+    # change` — the predicate compares NATIVE-INPUT trees. A whole-tree compare
+    # (mutant V10) sees the tools difference, prints no WARN, and fails here;
+    # (u) cannot tell the two apart because its probe is whole-tree identical.
+    local syn synt cre cret too toot cblob tblob
+    cblob=$({ git cat-file blob "HEAD:going-decompiled/src/usa/cod/015180.c"; printf '\n/* t1034 selftest (u) */\n'; } | git hash-object -w --stdin)
+    tblob=$({ git cat-file blob "HEAD:$HERE/landing_gate.sh"; printf '\n# t1065 selftest (u2) tools-only probe\n'; } | git hash-object -w --stdin)
+    syn=$(native_probe_commit HEAD "$N/probe_index"); synt=$(native_probe_commit "$syn" "$N/probe_index")
+    cre=$(native_probe_commit HEAD "$N/probe_index" going-decompiled/src/usa/cod/015180.c "$cblob"); cret=$(native_probe_commit "$cre" "$N/probe_index")
+    too=$(native_probe_commit HEAD "$N/probe_index" "$HERE/landing_gate.sh" "$tblob"); toot=$(native_probe_commit "$too" "$N/probe_index")
+    if [ -z "$syn" ] || [ -z "$synt" ] || [ -z "$cre" ] || [ -z "$cret" ] || [ -z "$too" ] || [ -z "$toot" ] \
+       || [ "$(git rev-parse "$syn^{tree}")" != "$(git rev-parse 'HEAD^{tree}')" ] || git diff --quiet "$cre" HEAD -- going-decompiled/src \
+       || git diff --quiet "$too" HEAD || ! git diff --quiet "$too" HEAD -- going-decompiled/src going-decompiled/include tools/native; then
+      say "SELFTEST-BROKEN: (u) could not build its probe chains (syn '$syn', C-change '$cre', tools-only '$too')"; b=1
     else
       for vst in 1 0; do
-        FAILED=0; WARNED=0; STRICT=$vst; LANDING_GATE_NATIVE_LEFT= LANDING_GATE_NATIVE_BASE=$syn check_native > "$N/samein_$vst.txt"; STRICT=0
+        FAILED=0; WARNED=0; STRICT=$vst; NATIVE_TIP_REV=$synt LANDING_GATE_NATIVE_LEFT= LANDING_GATE_NATIVE_BASE=$syn check_native "" "" "$syn" > "$N/samein_$vst.txt"; STRICT=0
         if [ "$FAILED" = 0 ] && [ "$WARNED" = 0 ] && /usr/bin/grep -q "^WARN NATIVE: no C change — the base $syn and HEAD have identical NATIVE inputs" "$N/samein_$vst.txt" \
-           && [ "$(/usr/bin/grep -c 'NO C CHANGE: base and tip NATIVE inputs identical' "$N/samein_$vst.txt" || true)" = 2 ] && ! /usr/bin/grep -q VACUOUS "$N/samein_$vst.txt"; then
+           && [ "$(/usr/bin/grep -c 'NO C CHANGE: base and tip NATIVE inputs identical' "$N/samein_$vst.txt" || true)" = 2 ] && ! /usr/bin/grep -qE 'VACUOUS|WRONG BASE|FALSE' "$N/samein_$vst.txt"; then
           ok "fired (u) base pinned to $(git rev-parse --short "$syn") (another sha, HEAD's tree), STRICT=$vst: 'WARN NATIVE: no C change', not counted (FAILED=0 WARNED=0)"
         else say "SELFTEST-FAIL (u) base pinned to a tree-identical sha, STRICT=$vst (FAILED=$FAILED WARNED=$WARNED):"; show < "$N/samein_$vst.txt"; b=1; fi
       done
-      FAILED=0; WARNED=0; STRICT=1; LANDING_GATE_NATIVE_LEFT= LANDING_GATE_NATIVE_BASE=$cre check_native > "$N/cchange.txt"; STRICT=0
-      if [ "$FAILED" = 0 ] && [ "$WARNED" = 0 ] && /usr/bin/grep -q "^     tip pass=[0-9]* fail=0; base $cre pass=[1-9]" "$N/cchange.txt" && ! /usr/bin/grep -qE 'no C change|NO C CHANGE|VACUOUS' "$N/cchange.txt"; then
+      FAILED=0; WARNED=0; STRICT=1; NATIVE_TIP_REV=$cret LANDING_GATE_NATIVE_LEFT= LANDING_GATE_NATIVE_BASE=$cre check_native "" "" "$cre" > "$N/cchange.txt"; STRICT=0
+      if [ "$FAILED" = 0 ] && [ "$WARNED" = 0 ] && /usr/bin/grep -q "^     tip pass=[0-9]* fail=0; base $cre pass=[1-9]" "$N/cchange.txt" && ! /usr/bin/grep -qE 'no C change|NO C CHANGE|VACUOUS|WRONG BASE' "$N/cchange.txt"; then
         ok "control (u') base pinned to $(git rev-parse --short "$cre") (usa/cod/015180.c differs by one comment line), STRICT=1: a normal row, no 'no C change' line: $(/usr/bin/grep -E '^     tip ' "$N/cchange.txt" | sed 's/^ *//')"
       else say "SELFTEST-FAIL (u') a base whose C differs was not a normal row (FAILED=$FAILED WARNED=$WARNED):"; show < "$N/cchange.txt"; b=1; fi
+      FAILED=0; WARNED=0; STRICT=1; NATIVE_TIP_REV=$toot LANDING_GATE_NATIVE_LEFT= LANDING_GATE_NATIVE_BASE=$too check_native "" "" "$too" > "$N/toolsonly.txt"; STRICT=0
+      if [ "$FAILED" = 0 ] && [ "$WARNED" = 0 ] && /usr/bin/grep -q "^WARN NATIVE: no C change — the base $too and HEAD have identical NATIVE inputs" "$N/toolsonly.txt" \
+         && [ "$(/usr/bin/grep -c 'NO C CHANGE: base and tip NATIVE inputs identical' "$N/toolsonly.txt" || true)" = 2 ] && ! /usr/bin/grep -qE 'VACUOUS|WRONG BASE|FALSE' "$N/toolsonly.txt"; then
+        ok "fired (u'') base pinned to $(git rev-parse --short "$too") (differs from the tip ONLY in $HERE/landing_gate.sh), STRICT=1: 'WARN NATIVE: no C change' — the predicate compares NATIVE inputs, not the whole tree (V10, FACT ledger-28835)"
+      else say "SELFTEST-FAIL (u'') a base differing only in a tools path did not read 'no C change' — the predicate is comparing more than the NATIVE inputs (V10, FACT ledger-28835) (FAILED=$FAILED WARNED=$WARNED):"; show < "$N/toolsonly.txt"; b=1; fi
+      # (v) task #1065 item 3: the pin must be an ancestor of HEAD AND at or
+      # below merge-base(HEAD, upstream). Tip = toot, upstream = HEAD, so the
+      # fork point is HEAD. (v) a pin ON the branch's own line (too: an
+      # ancestor of the tip, above the fork point) and (v') a pin that is no
+      # ancestor at all (syn, off HEAD) must each WARN / FAIL under --strict,
+      # naming WRONG BASE; (v'') HEAD itself — the fork point — passes. Every
+      # probe here is tools-only against the tip, so (w)'s rule cannot fire.
+      for vst in 1 0; do
+        FAILED=0; WARNED=0; STRICT=$vst; NATIVE_TIP_REV=$toot LANDING_GATE_NATIVE_LEFT= LANDING_GATE_NATIVE_BASE=$too check_native "" "" HEAD > "$N/wrongbase_$vst.txt"; STRICT=0
+        if [ "$FAILED" = "$vst" ] && [ "$WARNED" = 1 ] && /usr/bin/grep -qE "^$([ $vst = 1 ] && echo 'FAIL\(strict\)' || echo WARN) NATIVE: WRONG BASE — the pinned base $too is an ancestor of HEAD but NOT ancestor-or-equal of merge-base\(HEAD, HEAD\) $(git rev-parse HEAD)" "$N/wrongbase_$vst.txt"; then
+          ok "fired (v) base pinned on the branch's own line ($(git rev-parse --short "$too"), above the fork point), STRICT=$vst: WRONG BASE (FAILED=$FAILED WARNED=$WARNED)"
+        else say "SELFTEST-FAIL (v) a pin above the fork point was accepted, STRICT=$vst (FAILED=$FAILED WARNED=$WARNED):"; show < "$N/wrongbase_$vst.txt"; b=1; fi
+      done
+      FAILED=0; WARNED=0; STRICT=1; NATIVE_TIP_REV=$toot LANDING_GATE_NATIVE_LEFT= LANDING_GATE_NATIVE_BASE=$syn check_native "" "" HEAD > "$N/unrelated.txt"; STRICT=0
+      if [ "$FAILED" = 1 ] && [ "$WARNED" = 1 ] && /usr/bin/grep -q "^FAIL(strict) NATIVE: WRONG BASE — the pinned base $syn is NOT an ancestor of HEAD $toot" "$N/unrelated.txt"; then
+        ok "fired (v') base pinned to $(git rev-parse --short "$syn"), not an ancestor of the tip, STRICT=1: WRONG BASE (FAILED=$FAILED)"
+      else say "SELFTEST-FAIL (v') a pin that is no ancestor of the tip was accepted (FAILED=$FAILED WARNED=$WARNED):"; show < "$N/unrelated.txt"; b=1; fi
+      FAILED=0; WARNED=0; STRICT=1; NATIVE_TIP_REV=$toot LANDING_GATE_NATIVE_LEFT= LANDING_GATE_NATIVE_BASE=HEAD check_native "" "" HEAD > "$N/rightbase.txt"; STRICT=0
+      if [ "$FAILED" = 0 ] && [ "$WARNED" = 0 ] && /usr/bin/grep -q "^     pinned base $(git rev-parse HEAD): an ancestor of HEAD $toot and ancestor-or-equal of merge-base(HEAD, HEAD)" "$N/rightbase.txt" \
+         && /usr/bin/grep -q "^     'no C change' confirmed: HEAD\.\.HEAD touches no NATIVE input" "$N/rightbase.txt" && ! /usr/bin/grep -qE 'WRONG BASE|FALSE' "$N/rightbase.txt"; then
+        ok "control (v'') base pinned to the fork point HEAD, tools-only branch, STRICT=1: accepted, and its 'no C change' confirmed (FAILED=0 WARNED=0)"
+      else say "SELFTEST-FAIL (v'') the fork point itself was rejected as a base, or its tools-only branch read as a C change (FAILED=$FAILED WARNED=$WARNED):"; show < "$N/rightbase.txt"; b=1; fi
+      # (w) task #1065 item 4: the branch HEAD -> cre (C comment appended) ->
+      # cret (HEAD's tree again) nets to no C change, so the row honestly reads
+      # `no C change` — but HEAD..tip TOUCHES usa/cod/015180.c twice, and the
+      # claim is false of the landing. It must WARN / FAIL under --strict
+      # naming the path and both commits. (v'') is its control: the same
+      # shape with a tools-only branch is confirmed, not flagged.
+      for vst in 1 0; do
+        FAILED=0; WARNED=0; STRICT=$vst; NATIVE_TIP_REV=$cret LANDING_GATE_NATIVE_LEFT= LANDING_GATE_NATIVE_BASE=HEAD check_native "" "" HEAD > "$N/falsenoc_$vst.txt"; STRICT=0
+        if [ "$FAILED" = "$vst" ] && [ "$WARNED" = 1 ] && /usr/bin/grep -q '^WARN NATIVE: no C change' "$N/falsenoc_$vst.txt" \
+           && /usr/bin/grep -qE "^$([ $vst = 1 ] && echo 'FAIL\(strict\)' || echo WARN) NATIVE: FALSE 'no C change' — .* touches 2 NATIVE input path\(s\).*going-decompiled/src/usa/cod/015180\.c \[$(git rev-parse --short "$cret")\] ; going-decompiled/src/usa/cod/015180\.c \[$(git rev-parse --short "$cre")\]" "$N/falsenoc_$vst.txt" \
+           && ! /usr/bin/grep -q 'WRONG BASE' "$N/falsenoc_$vst.txt"; then
+          ok "fired (w) row 'no C change' while HEAD..tip touches usa/cod/015180.c, STRICT=$vst: FALSE 'no C change' naming both commits (FAILED=$FAILED WARNED=$WARNED)"
+        else say "SELFTEST-FAIL (w) a 'no C change' row over a branch that touches a NATIVE input was not flagged, STRICT=$vst (FAILED=$FAILED WARNED=$WARNED):"; show < "$N/falsenoc_$vst.txt"; b=1; fi
+      done
+      NATIVE_PROBE_TOOLS="$too $toot"; NATIVE_PROBE_C="$cre $cret"
     fi
   fi
   # (f) clean pair; (g) the real tree against its real base
@@ -1418,6 +1537,54 @@ selftest_native() {
   if ! cmp -s "$N/real.txt" "$N/real_sum_seeded.txt" && ! native_region_sums_close "$N/real_sum_seeded.txt"; then ok "fired (t') the sum check rejects a tip total altered to $(sed -n 's/^     NATIVE per region.*: tip .* = \([0-9]*\/[0-9]*\);.*/\1/p' "$N/real_sum_seeded.txt")"
   else say "SELFTEST-FAIL (t') the sum check accepted an altered tip total (or the seed did not apply)"; b=1; fi
   if [ "$FAILED" = 0 ]; then ok "control (g) real tree: $(/usr/bin/grep -E '^     tip ' "$N/real.txt" | sed 's/^ *//')"; else say "SELFTEST-FAIL the real tree fails NATIVE:"; show < "$N/real.txt"; b=1; fi
+  return $b
+}
+
+# native_probe_commit PARENT INDEXFILE [PATH BLOB] — a commit object (no ref,
+# no real index, no working-tree edit) whose tree is HEAD's tree with PATH
+# replaced by BLOB, and whose one parent is PARENT. Prints its sha.
+native_probe_commit() {
+  local t; rm -f "$2"
+  GIT_INDEX_FILE="$2" git read-tree HEAD || return 1
+  if [ -n "${3:-}" ]; then GIT_INDEX_FILE="$2" git update-index --cacheinfo "100644,$4,$3" || { rm -f "$2"; return 1; }; fi
+  t=$(GIT_INDEX_FILE="$2" git write-tree); rm -f "$2"; [ -n "$t" ] || return 1
+  git commit-tree "$t" -p "$1" -m 'landing_gate selftest probe (task #1034/#1065)'
+}
+
+# selftest_verdict_annotation OUTDIR — arm (21), run after selftest_native
+# (it reuses (u')/(u'')'s probe chains, NATIVE_PROBE_C / NATIVE_PROBE_TOOLS).
+# Task #1065 item 2: the REAL run_gate --strict, every row but NATIVE stubbed
+# and NATIVE the real check_native pinned to a probe, must end its $tag
+# verdict line in ` (native: no C change)` when the base differs from the tip
+# only in a tools path, and must NOT when the base's C differs. Both
+# directions: an annotation that always appears is as bad as one that never
+# does. The inner tag is the selftest's, never a landing line.
+NATIVE_PROBE_C=""; NATIVE_PROBE_TOOLS=""
+selftest_verdict_annotation() {
+  local T="$1" b=0 rc; local D="$T/annot"; rm -rf "$D"; mkdir -p "$D"
+  say "-- (21) VERDICT ANNOTATION (#1065): the real run_gate --strict (rows other than NATIVE stubbed) -> a tools-only base ends the verdict line ' (native: no C change)'; a base whose C differs -> the bare verdict, no annotation"
+  if [ -z "$NATIVE_PROBE_C" ] || [ -z "$NATIVE_PROBE_TOOLS" ]; then say "SELFTEST-BROKEN: (21) needs (u')/(u'')'s probe chains, which arm (18) did not build (NATIVE inputs dirty?)"; return 1; fi
+  eval "$(declare -f check_native | sed '1s/^check_native/annot_real_check_native/')"
+  annot_run() {  # annot_run OUTFILE BASE TIP — the real run_gate, NATIVE pinned to BASE, tip TIP, upstream BASE
+    ( for f in check_dirty check_flags split_inputs check_shadow check_orphans check_libgcc check_gmodel do_build check_tree measure_row check_row check_noprovide; do
+        eval "$f() { say \"     (arm 21 stub: $f)\"; }"
+      done
+      region_vars() { REGION=$1; OUT="$D/out"; mkdir -p "$OUT"; }
+      check_native() { annot_real_check_native "" "" "$ANNOT_UP"; }
+      FAILED=0; WARNED=0; DIRTY_FAILED=0; STRICT=0
+      ANNOT_UP=$2 NATIVE_TIP_REV=$3 LANDING_GATE_NATIVE_LEFT= LANDING_GATE_NATIVE_BASE=$2 run_gate "$REGION" --no-build --strict ) > "$1" 2>&1
+  }
+  local tag="==== selftest inner gate \[$REGION\] (NOT a landing verdict): "
+  set -- $NATIVE_PROBE_TOOLS; annot_run "$D/tools.txt" "$1" "$2"; rc=$?
+  if [ "$rc" = 0 ] && /usr/bin/grep -qx "${tag}PASS (native: no C change)" "$D/tools.txt" && /usr/bin/grep -q '^WARN NATIVE: no C change' "$D/tools.txt"; then
+    ok "fired (21) tools-only base $(git rev-parse --short "$1"): rc $rc, verdict '$(/usr/bin/grep "^$tag" "$D/tools.txt" | sed 's/.*verdict): //')'"
+  else say "SELFTEST-FAIL (21) a tools-only base did not annotate the verdict line (rc $rc):"; show < <(/usr/bin/grep -E '^(OK|FAIL|WARN|====)' "$D/tools.txt" | sed 's/^/  inner| /'); b=1; fi
+  set -- $NATIVE_PROBE_C; annot_run "$D/cchange.txt" "$1" "$2"; rc=$?
+  if [ "$rc" = 0 ] && /usr/bin/grep -qx "${tag}PASS" "$D/cchange.txt" && ! /usr/bin/grep -qE 'no C change|NO C CHANGE' "$D/cchange.txt"; then
+    ok "control (21) base $(git rev-parse --short "$1") whose C differs: rc $rc, verdict 'PASS' with no annotation"
+  else say "SELFTEST-FAIL (21) a base whose C differs still annotated the verdict, or did not PASS (rc $rc):"; show < <(/usr/bin/grep -E '^(OK|FAIL|WARN|====)' "$D/cchange.txt" | sed 's/^/  inner| /'); b=1; fi
+  unset -f annot_real_check_native annot_run
+  rm -rf "$D"; FAILED=0; WARNED=0; DIRTY_FAILED=0; STRICT=0; NATIVE_NO_C_CHANGE=0
   return $b
 }
 
