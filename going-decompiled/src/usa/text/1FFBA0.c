@@ -820,36 +820,65 @@ void func_003010D8(void *a0, void *a1) {
  * state[0..0x3F] for the first free (zero) one, store `value` there, set the
  * "any active" flag (+0x224), bump the active count (+0x220), clear the slot's
  * parallel +0x100 flag word, and return the slot index (-1 if all 0x40 full).
- * TODO(match): the scan loop + branch-likely + delayed return-value move cc1
- * schedules differently; the C is functionally faithful. */
+ *   state - turret state block (s32 words)
+ *   value - tracer handle to store in the free slot
+ *
+ * Byte-exact on sdk29 (task #1026). The earlier TODO blamed the scan loop,
+ * the branch-likely and the delayed return move on scheduling; they are the
+ * source shape plus two devices:
+ *   - one exit: `result` is returned from a single `jr`, slot 0 is tested
+ *     before the loop, and the loop starts with `i++` (a join point, so cc1
+ *     keeps i live from 0 instead of folding it to 1). reorg later steals
+ *     that i++ into the bnel slot, which is the ROM's `bnel; addiu i`;
+ *   - the loop is the R5900 short loop `lw; nop; bnel`: TRACER_SLOT_PAD is
+ *     that pad (a SCHEDULING DEVICE under RULING #8435: EE arm only,
+ *     operand-tied) and the EMPTY fence beside it (emits nothing, RULING
+ *     #8483) lifts the loop over cc1's short-loop threshold (FACT #8384);
+ *   - `one` is REGISTER-PINNED to $7 by TRACER_ONE_IN_A3 (a pin device,
+ *     empty natively): cc1 2.9 otherwise gives the -1/index result $7 and
+ *     the constant $8, the reverse of the ROM.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_00301110);
+#define TRACER_ONE_IN_A3 __asm__("$7")
+#define TRACER_SLOT_PAD(v, i) \
+    __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(i))
 #else
+#define TRACER_ONE_IN_A3
+#define TRACER_SLOT_PAD(v, i) ((void)0)
+#endif
 s32 func_00301110(s32 *state, s32 value) {
-    s32 i;
-    s32 result = -1;
     s32 *entry = state;
+    register s32 one TRACER_ONE_IN_A3;
+    s32 result = -1;
+    s32 i = 0;
+
+    one = 1;
     if (*entry == 0) {
-        *entry = value;
-        state[0x89] = 1;
-        state[0x88]++;
         result = 0;
-        entry[0x40] = 0;
-        return result;
+        *entry = value;
+        entry[0x89] = one;
+        entry[0x88]++;
+    } else {
+        s32 used;
+        do {
+            i++;
+            if (i >= 0x40) {
+                goto done;
+            }
+            entry++;
+            used = *entry;
+            __asm__("" : "+r"(used));
+            TRACER_SLOT_PAD(used, i);
+        } while (used != 0);
+        *entry = value;
+        result = i;
+        state[0x89] = one;
+        state[0x88]++;
     }
-    for (i = 1; ++entry, i < 0x40; i++) {
-        if (*entry == 0) {
-            *entry = value;
-            state[0x89] = 1;
-            state[0x88]++;
-            result = i;
-            entry[0x40] = 0;
-            return result;
-        }
-    }
+    entry[0x40] = 0;
+done:
     return result;
 }
-#endif
 
 /**
  * func_00301190 - release tracer slot `slot` of turret state block `state`.
