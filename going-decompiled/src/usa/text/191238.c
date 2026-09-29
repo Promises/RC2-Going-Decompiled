@@ -1947,51 +1947,80 @@ void func_00293B68(u8 *groups, s32 instMode, u8 *idMap, s32 groupCount) {
  * relocating that word and translating each descriptor's 0xFF-terminated name
  * string through the `nameTable` lookup. Finally hands the pointer table to
  * func_00293B68 for group instantiation.
+ *
+ * Matching notes (sdk29 arm, cc1 2.9 -O2 -G8 -fno-gcse):
+ *   - `e` is copied from table1 before the count test and the arena base is
+ *     held in a local, as the ROM does (`daddu $5,$4` ahead of the beqz; full
+ *     lui/addiu address, then lw 8(base) each iteration);
+ *   - the name-translation loop is a do-while under an explicit `!= 0xFF`
+ *     test with the byte and the table address sharing one variable;
+ *     RMCC_BYTE_IN_V0 is a REGISTER-PIN DEVICE (EE arm only, empty on native)
+ *     binding it to $2 - without it cc1 commutes the addu to `addu $2,$2,$6`
+ *     where the ROM has `addu $2,$6,$2` (measured, both occurrences);
+ *   - RMCC_SHORT_LOOP_PAD is a SCHEDULING DEVICE (RULING #8435; EE arm only,
+ *     operand-tied to the reloaded byte): the ROM's `lbu; nop; bne` pad. With
+ *     it the loop crosses cc1's short-loop threshold (FACT #8384) and reorg
+ *     steals the head addu into the bne slot exactly as the ROM has it;
+ *   - the empty volatile asm after the call keeps cc1 from turning it into a
+ *     frame-dropping `j` sibcall (the ROM keeps `jal` + ra restore).
  */
 #ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 56.95% PACKED-SAVE /
- * engine96 58.09% SIBCALL; best arm engine96, first differing insn there: 'daddu t5, a1, zero'
- * vs '' */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", RelocateMobyClassChunk);
+#define RMCC_BYTE_IN_V0 __asm__("$2")
+#define RMCC_SHORT_LOOP_PAD(v) \
+    __asm__(".set noreorder\n\tnop\n\t.set reorder" : : "r"(v))
 #else
+#define RMCC_BYTE_IN_V0
+#define RMCC_SHORT_LOOP_PAD(v) ((void)0)
+#endif
+extern void func_00293B68(u8 *groups, s32 instMode, u8 *idMap, s32 groupCount);
 void RelocateMobyClassChunk(void *chunkArg, s32 arg2, void *nameTableArg) {
     u8 *chunk = (u8 *)chunkArg;
     u8 *nameTable = (u8 *)nameTableArg;
     s32 count = chunk[0] + chunk[1] + chunk[2];
     s32 *table1 = (s32 *)(chunk + *(s32 *)(chunk + 0x4));
-    u8 *entry = chunk + *(s32 *)(chunk + 0x8);
+    u8 *descs = chunk + *(s32 *)(chunk + 0x8);
+    s32 *e = table1;
+    u8 *d;
     s32 cont;
 
+    /* Rebase words +0x0/+0x8 of every table1 entry below the arena limit. */
     if (count != 0) {
-        s32 *e = table1;
-        s32 i;
-        for (i = count; i != 0; i--) {
-            if (e[0] < *(s32 *)(g_memoryArenaTable + 0x8)) {
+        s32 i = count;
+        u8 *arena = g_memoryArenaTable;
+        do {
+            if (e[0] < *(s32 *)(arena + 0x8)) {
                 e[0] += (s32)chunk;
-                e[2] += (s32)chunk;      /* word at +0x8 */
+                e[2] += (s32)chunk;
             }
-            e = (s32 *)((u8 *)e + 0x10);
-        }
+            i--;
+            e += 4;
+        } while (i != 0);
     }
 
+    /* Rebase each descriptor's +0xC word and remap its 0xFF-terminated name
+     * bytes through nameTable, until a rebased +0xC word is negative. */
+    d = descs;
     do {
-        s32 *offsetWord = (s32 *)(entry + 0xC);
-        *offsetWord += (s32)chunk;
-        if (entry[0] != 0xFF) {
-            u8 *p = entry;
-            while (*p != 0xFF) {
-                *p = nameTable[*p];
+        u8 *p = d;
+        *(s32 *)(d + 0xC) += (s32)chunk;
+        if (d[0] != 0xFF) {
+            register u32 b RMCC_BYTE_IN_V0;   /* byte, then its table address */
+            do {
+                b = *p;
+                b = (u32)nameTable + b;
+                *p = *(u8 *)b;
                 p++;
-            }
+                b = *p;
+                RMCC_SHORT_LOOP_PAD(b);
+            } while (b != 0xFF);
         }
-        cont = (*offsetWord >= 0);
-        entry += 0x10;
+        cont = *(s32 *)(d + 0xC) >= 0;
+        d += 0x10;
     } while (cont);
 
     func_00293B68((u8 *)table1, arg2, nameTable, count);
+    __asm__ __volatile__("");   /* keep the jal: no sibcall */
 }
-#endif
 
 /*
  * func_00293D68(dst, src) — fix up a freshly-loaded display-model header in
