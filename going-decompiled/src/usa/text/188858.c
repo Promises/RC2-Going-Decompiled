@@ -2182,11 +2182,16 @@ void func_0028AB70(s32 event) {
  *
  * NEAR-MISS: logic exact. The `div`/`mfhi` + `beql;break` divide-by-zero
  * scaffolding is NOT the obstacle: cc1 2.9 emits the same shape from the C `%`
- * (measured, task #1024). The residual is the ROM's absolute re-reads of the
- * count/head bytes, its loop-entry register copies of head, count and the id
- * ring, and the colouring through the scan loop. The best body measured (76.17%
- * solo on sdk29, 60/60 words) is in task #1024's store note. Kept as the
- * portable #else body. */
+ * (measured, task #1024). The best body measured is 94.67% (unit objdiff
+ * report, solo sdk29; task #1076, NOTE #8535, replacing #1024's 76.17%). It
+ * re-reads the count/head bytes absolutely and gets the loop-entry copies as
+ * loop.c movables, so with two EE_REG pins everything through the scan loop is
+ * the ROM instruction for instruction (#8535's normalised opcode+register
+ * compare: 46 of 51 equal over the whole function). The residual is the tail
+ * only: the
+ * ROM's dead `li $7,7` is missing (one word short) and the voice-ring base
+ * lands in $7, not $8. The body is in NOTE #8535. Kept as the portable #else
+ * body. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028ABC0);
 #else
@@ -5692,10 +5697,13 @@ void UploadTextureToGs(s32 handle, s32 vramBlk, s32 fmt, s32 wLog, s32 hLog,
  * (FACT #8518; GNU and SN as.exe 2.9 differ, #8524):
  * `ori 0x8800; dsll32 15; ori 0x8001` and `ori 0xFFFF; dsll 16; ori 0xF000;
  * dsll 24`, where GNU as picks another (`lui 0x4400; dsll32 0; ori`,
- * `li -1; dsll32 12; dsrl 8`). cc1 2.9 has no DImode `ori` (FACT #8524), so C
- * cannot spell the ROM's form. The lever is an assembler-side expansion rule,
- * not C: tested end to end for these three functions on sdk29 (FACT #8544);
- * the in-tree build path is unruled and not implemented. The bodies are in
+ * `li -1; dsll32 12; dsrl 8`). cc1 2.9 has no DImode `ori` (FACT #8524), so
+ * ordinary and fenced C cannot spell the ROM's form (#8524's bound: the
+ * spellings it tried; mode punning and inline-asm devices were not tried, and
+ * an emitting asm is forbidden by RULING #8549). The lever is an
+ * assembler-side expansion rule, not C: tested end to end for these three
+ * functions on sdk29 (FACT #8544); the in-tree build path is permitted as a
+ * per-site allowlist (RULING #8549) and not implemented. The bodies are in
  * task #1024's store note. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_00290320);
