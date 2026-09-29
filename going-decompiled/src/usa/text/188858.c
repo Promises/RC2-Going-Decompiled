@@ -2180,10 +2180,13 @@ void func_0028AB70(s32 event) {
  * forward from head, modulo 7). On insert the new entry goes at slot
  * (head+count)%7 and count is incremented.
  *
- * NEAR-MISS: logic exact, but the original lowers the (head+i)%7 indexing with
- * `div`/`mfhi` + break-on-div-by-zero scaffolding and a peeled register
- * colouring that cc1 doesn't reproduce from the C `%`. Kept as the portable
- * #else body. */
+ * NEAR-MISS: logic exact. The `div`/`mfhi` + `beql;break` divide-by-zero
+ * scaffolding is NOT the obstacle: cc1 2.9 emits the same shape from the C `%`
+ * (measured, task #1024). The residual is the ROM's absolute re-reads of the
+ * count/head bytes, its loop-entry register copies of head, count and the id
+ * ring, and the colouring through the scan loop. The best body measured (76.17%
+ * solo on sdk29, 60/60 words) is in task #1024's store note. Kept as the
+ * portable #else body. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028ABC0);
 #else
@@ -2291,8 +2294,14 @@ void ResetBoltCounterHud(void) {
  * disp[]: [0] displayed value, [1] roll base snapshot, [2] roll magnitude,
  * [3] active-slot index (-1 = none), [4] count-down direction flag.
  *
- * WALL (matching build): callee-saves + the FP roll schedule + branch colouring cc1
- * does not reproduce. Matching arm stays INCLUDE_ASM; #else is the portable body. */
+ * NOT MATCHED (task #1024, 90.88% solo on sdk29, 221/222 words). The ROM frame saves
+ * only $ra; there are no callee-saves. A ROM-shaped body reached that figure; its
+ * listing is in task #1024's store note. The one residual C cannot reach is an
+ * assembler difference: after `mfc1 a0,$f2` (the roll delta) the ROM uses a0 at
+ * once, while cc1 marks the hazard `#nop` and GNU as 2.40 turns it into a real
+ * `nop`. The rest is register colouring in the arm/hold blocks and the shape of
+ * the roll-clamp branches. Matching arm stays INCLUDE_ASM; #else is the
+ * portable body. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", UpdateBoltCounterHud);
 #else
@@ -5677,6 +5686,17 @@ void UploadTextureToGs(s32 handle, s32 vramBlk, s32 fmt, s32 wLog, s32 hLog,
 }
 #endif
 
+/* func_00290320 / func_002904B0 / func_00290640 (task #1024): C bodies exist
+ * whose words equal the ROM's everywhere except the 64-bit constant loads (3, 3
+ * and 1 blocks). The ROM carries the `dli` expansion of SN's Ps2EeAs.exe
+ * (FACT #8518; GNU and SN as.exe 2.9 differ, #8524):
+ * `ori 0x8800; dsll32 15; ori 0x8001` and `ori 0xFFFF; dsll 16; ori 0xF000;
+ * dsll 24`, where GNU as picks another (`lui 0x4400; dsll32 0; ori`,
+ * `li -1; dsll32 12; dsrl 8`). cc1 2.9 has no DImode `ori` (FACT #8524), so C
+ * cannot spell the ROM's form. The lever is an assembler-side expansion rule,
+ * not C: tested end to end for these three functions on sdk29 (FACT #8544);
+ * the in-tree build path is unruled and not implemented. The bodies are in
+ * task #1024's store note. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_00290320);
 #else
