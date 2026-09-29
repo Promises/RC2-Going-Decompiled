@@ -180,6 +180,19 @@ cd "$FIXROOT"
 # anywhere (0 in USA and EU, counted on the decoded ROM words). Not extended
 # to other branches or to mflo1/mfhi1: the ROM has no mf* in any branch slot
 # either, but only the return tail has a measured function behind it.
+#
+# And a `cvt.s.w` out of ANY reorder-mode branch slot (task #1053, FACT #8499,
+# FACT #8507): cc1 emits `mtc1; cvt.s.w; <branch>` with the slot unfilled and
+# GNU as 2.40 swaps the cvt.s.w into it, while the ROM has 0 cvt.s.w in any
+# branch delay slot (0 of 598 USA, 0 of 602 EU, every branch kind, against an
+# 18-28% slot rate for mov.s/mul.s/add.s/sub.s) and keeps `cvt.s.w; <branch>;
+# nop` at 9 USA / 7 EU sites (b, jal, jr - e.g. text/235FE8
+# GuiListSetScrollPos). We pin the branch in a noreorder/nop wrapper exactly
+# when the directly preceding instruction is a cvt.s.w with no label between
+# them. Where GNU as could not have swapped (a label between), the wrapper
+# would assemble the same bytes; the reset only keeps the rule's scope exact.
+# Not extended to div.s/cvt.w.s: the ROM keeps those out of slots too, but
+# that is observed, not tested as a rule.
 # (cc1 is a Win32 PE - its .s lines end in CRLF, hence the \r-stripping.)
 if [ "$GFLAG" = "-G8" ]; then
   sed -E -f "$MOVEFIX" "$UNIT_S" | tr -d '\r' | awk '
@@ -307,6 +320,13 @@ if [ "$GFLAG" = "-G8" ]; then
         qpend = 0; prevcop = 0
         next
       }
+      # cvt.s.w pin (see header): SN-as never swapped a cvt.s.w into any
+      # reorder-mode branch slot.
+      if (cvtpend) {
+        print "\t.set\tnoreorder"; print; print "\tnop"; print "\t.set\treorder"
+        cvtpend = 0; prevcop = 0
+        next
+      }
     }
     /^[ \t]*#\.set[ \t]+novolatile/ { print; volpend = 1; next }
     # GNU as 2.40 refuses to fill a reorder-mode delay slot with a MIPS4
@@ -364,8 +384,13 @@ if [ "$GFLAG" = "-G8" ]; then
     /^\tmov[nz]\t\$/ { pendmov = $0; pmst = 0; next }
     /^\t/ {
       if ($0 !~ /^\t\.|^\t#/) volpend = 0
-      if ($0 !~ /^\t\.|^\t#|^\t[ \t]*$/) qpend = ($0 ~ /^\t(lq|sq|mflo|mfhi)[ \t]/)
+      if ($0 !~ /^\t\.|^\t#|^\t[ \t]*$/) {
+        qpend = ($0 ~ /^\t(lq|sq|mflo|mfhi)[ \t]/)
+        cvtpend = ($0 ~ /^\tcvt\.s\.w[ \t]/)
+      }
     }
+    # a label ends the cvt.s.w pin: GNU as never swaps across one
+    /^[A-Za-z0-9_$.]+:/ { cvtpend = 0 }
     # SN-as mtc1 write-back hazard (proven by the original bytes of
     # text/1A8180 func_002A8600 / func_002A87A8): an mtc1 directly followed
     # by an FPU op that READS the just-written register gets one padding nop
