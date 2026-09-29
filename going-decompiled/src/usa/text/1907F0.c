@@ -23,10 +23,12 @@
  * noise): g_playerProgress (0x1A79F8) is read via %gp_rel in func_002911F0
  * but via an absolute %hi/%lo pair in func_00290FD0 — the same 4-byte
  * global, both ways, inside one original TU (the proven reload-artifact
- * wall). Only one side is expressible per declaration; g_playerProgress is
- * declared small here (favouring func_002911F0), so func_00290FD0 stays
- * INCLUDE_ASM (it is additionally blocked by the `break 0,7` div-by-28
- * encoding this toolchain cannot reproduce).
+ * wall). One declaration expresses only one side: g_playerProgress is
+ * declared small here (favouring func_002911F0), and func_00290FD0 reads it
+ * through a 16-byte-sized zero-offset assembler alias (g_playerProgressAbs)
+ * that gas expands absolutely. (func_00290FD0's div-by-28 `break 0,7` is not a
+ * wall: cc1 2.9 emits the ROM's guard shape and tools/ee/move_fixup.sed
+ * spells the trap as SN ee-as encoded it.)
  *
  * SAVE-LAYOUT WALL (measured 2026-06-11, blocks every multi-save function
  * here): this gameplay-text TU was built by a later SN cc1 that packs
@@ -256,25 +258,42 @@ s32 func_00290FC0(void) {
     return D_1A9020 == 3;
 }
 
-/* func_00290FD0: one-shot render/moby-table init (fills the moby class
- * tables, vram bases, screen geometry, then MarkLevelAvailable(progress %
- * 28)). Blocked twice over: the `break 0,7` div-guard encoding (documented
- * toolchain wall) AND the absolute %hi/%lo read of g_playerProgress that
- * this TU's small declaration cannot express (see header). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1907F0", func_00290FD0);
-#else
-/* TODO(match): functional equivalent - not byte-exact; blocked by the
- * `break 0,7` div-by-28 guard encoding and the gp/absolute-mixed
- * g_playerProgress read. */
+/*
+ * func_00290FD0 — per-level render / moby-table init. Sole caller is
+ * LoadLevelAndInitHealth (FACT #5672), so it runs on every level load, not
+ * only at boot. Installs the file-load pump, sets up the memory-arena table,
+ * points the dynamic-texture VRAM cursor at the static-texture base, fills
+ * the moby-class / tie / shrub lookup tables with their empty patterns
+ * (-1 = unused slot, 0 = no size / no VRAM), rebuilds screen geometry and the
+ * camera projection, then grants the default gadget loadout. When the player
+ * has progress, re-marks level (progress % 28) as available. Clears
+ * D_1A9A88 last. No params, no return value.
+ *
+ * Symbol views (see the header's -G8 rules): the four scalars are read and
+ * written with the adjacent lui/%lo macro shape, so they carry `.extern ,16`
+ * overrides; g_playerProgress is read ABSOLUTELY here but %gp_rel in
+ * func_002911F0 (the mixed-attribution caveat), so this function reads it
+ * through g_playerProgressAbs, a zero-offset assembler alias sized 16 bytes
+ * (the #8386 alias pattern; relocations still name g_playerProgress). The
+ * div-by-28 guard is cc1's own `div; beql; break 7` — move_fixup.sed spells
+ * the trap `break 0,7` as SN ee-as did. The two VRAM-cursor stores are
+ * written in reverse of the ROM's order because cc1 swaps them back.
+ */
+__asm__(".extern g_vramTextureBase, 16");
+__asm__(".extern g_vramDynamicBase, 16");
+__asm__(".extern g_vramAllocCursor, 16");
+__asm__(".extern D_1A9A88, 16");
+__asm__(".extern g_playerProgressAbs, 16\n\tg_playerProgressAbs = g_playerProgress");
+extern s32 g_playerProgressAbs;         /* absolute view of g_playerProgress */
+
 void func_00290FD0(void) {
     InstallFileLoadPump();
     func_002FCFC8();
     SetupMemoryArenaTable();
 
     /* Reset the dynamic-texture VRAM cursor to the static-texture base. */
-    g_vramDynamicBase = g_vramTextureBase;
     g_vramAllocCursor = g_vramTextureBase;
+    g_vramDynamicBase = g_vramTextureBase;
 
     FillMemory32(&g_pLastOcclusionMask[0x28], 0x87654321, 0x10);
     FillMemory32(g_mobyClassSlotRemap,        -1, 0x2000);
@@ -295,12 +314,11 @@ void func_00290FD0(void) {
     InstallVif1DmacHandlers();
     func_002911F0();
 
-    if (g_playerProgress != 0) {
-        MarkLevelAvailable(g_playerProgress % 0x1C);
+    if (g_playerProgressAbs != 0) {
+        MarkLevelAvailable(g_playerProgressAbs % 0x1C);
     }
     D_1A9A88 = 0;
 }
-#endif
 
 /* func_00291148: validate the inventory display order (0xff-out entries no
  * longer ownable per func_00289190, Heli-Pack 0x1E exempt; returns 1 when
