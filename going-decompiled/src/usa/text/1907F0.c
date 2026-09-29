@@ -279,12 +279,16 @@ s32 func_00290FC0(void) {
  * the trap `break 0,7` as SN ee-as did. The two VRAM-cursor stores are
  * written in reverse of the ROM's order because cc1 swaps them back.
  */
+#ifndef TARGET_NATIVE
 __asm__(".extern g_vramTextureBase, 16");
 __asm__(".extern g_vramDynamicBase, 16");
 __asm__(".extern g_vramAllocCursor, 16");
 __asm__(".extern D_1A9A88, 16");
 __asm__(".extern g_playerProgressAbs, 16\n\tg_playerProgressAbs = g_playerProgress");
 extern s32 g_playerProgressAbs;         /* absolute view of g_playerProgress */
+#else
+#define g_playerProgressAbs g_playerProgress
+#endif
 
 void func_00290FD0(void) {
     InstallFileLoadPump();
