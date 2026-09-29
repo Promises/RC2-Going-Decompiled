@@ -1762,19 +1762,64 @@ void GuiListSetItemCount(GuiElement *e, s32 count) {
  * position through the +0x04 scale-vector pointer as
  *   thumb = (clamp / totalRows) * trackLength       (trackLength = +0x3C)
  * If the list has zero rows the thumb collapses to 0. All four int->float
- * conversions are unsigned (the original emits the (u32) widening idiom). */
+ * conversions are unsigned (the original emits the (u32) widening idiom).
+ *   e   - the list element (+0x3C track length, +0x40 total rows)
+ *   pos - requested row
+ *
+ * Byte-exact on sdk29 (task #1053), EE arm below. It depends on asm_unit.sh's
+ * cvt.s.w pin (task #1053): cc1 leaves the first `b` slot empty and GNU as
+ * would move the cvt.s.w into it; the ROM keeps `cvt.s.w; b; nop`. Levers
+ * (task #1025):
+ *   - the clamp is an if/else, which gives the ROM's `daddu; movz`;
+ *   - the row count is re-read in place, as the ROM reloads +0x40 for the
+ *     divide;
+ *   - the unsigned->float widening of the row count is spelt by hand, with an
+ *     empty volatile asm heading the negative arm (a SCHEDULING DEVICE, emits
+ *     nothing) so cc1 does not hoist the `srl` into the `b` slot;
+ *   - the ROM's two-nop pad before the div.s is an inline noreorder asm tied
+ *     to the divisor and the track length;
+ *   - an empty volatile asm after the divide keeps div.s out of the bltz slot
+ *     and keeps the ratio in $f1. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiListSetScrollPos);
+void GuiListSetScrollPos(GuiElement *e, s32 pos) {
+    u32 totalRows = *(u32 *)((char *)e + 0x40);
+    u32 clamp;
+    f32 rowsF, clampF, rowsDivisor, ratio;
+    f32 *thumb;
+    u32 trackLength;
+
+    if (totalRows < (u32)pos) {
+        clamp = totalRows;
+    } else {
+        clamp = pos;
+    }
+    if ((s32)totalRows >= 0) {
+        rowsF = (f32)(s32)totalRows;
+    } else {
+        __asm__ __volatile__("");  /* scheduling device, see above */
+        rowsF = (f32)(s32)((totalRows & 1) | (totalRows >> 1));
+        rowsF = rowsF + rowsF;
+    }
+    if (rowsF == 0.0f) {
+        e->scale[0] = 0.0f;
+        return;
+    }
+    thumb = e->scale;
+    clampF = (f32)clamp;
+    rowsDivisor = (f32)*(u32 *)((char *)e + 0x40);
+    trackLength = *(u32 *)((char *)e + 0x3C);
+    __asm__ __volatile__(".set noreorder\n\tnop\n\tnop\n\t.set reorder"
+                         : "+f"(rowsDivisor) : "r"(trackLength));  /* ROM's pad, see above */
+    ratio = clampF / rowsDivisor;
+    __asm__ __volatile__("");  /* scheduling device, see above */
+    thumb[0] = ratio * (f32)trackLength;
+}
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_GuiListSetScrollPos, unit objdiff): 76.01%,
    30/78 insns differ. Residual: UNKNOWN-lw + movn/movz (first differing insn: '' vs 'lw a3, 0x3c(a0)').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* WALL: functional-equivalent #else; matching arm stays INCLUDE_ASM. cc1 walls:
-   the clamp lowers to a `movz` conditional-move, every widening is the
-   (f32)(u32) unsigned-conversion idiom, and the +0x40 load is materialised
-   twice (once for the ==0 test, once for the divide) - load scheduling our cc1
-   does not reproduce. */
+   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier.
+   That was the engine96 arm; the sdk29 EE arm above is byte-exact (task #1053). */
+/* Portable arm: same computation, without the EE scheduling devices. */
 void GuiListSetScrollPos(GuiElement *e, s32 pos) {
     s32 totalRows = *(s32 *)((char *)e + 0x40);
     s32 trackLength = *(s32 *)((char *)e + 0x3C);
