@@ -47,15 +47,40 @@ if [ ! -d "$GD" ]; then
   exit 1
 fi
 
+# The coverage column comes only from the shared scanner. If it cannot run,
+# the guarded set is empty, coverage reads 0 and every guarded function lands
+# in "bare walls" -- and the reconcile line still says OK, because the sum is
+# right over the wrong predicate (FACT #8475). A 0 there is also a legitimate
+# reading for a tree with no #else bodies, so the reader cannot tell "measured
+# 0" from "could not measure". Refuse instead. Do NOT fall back to an inline
+# re-derivation: guard_blocks.py exists to replace five of them.
+SCANNER="$ROOT/tools/guard_blocks.py"
+scan_fail() {
+  echo "progress.sh: FAIL: $1" >&2
+  echo "  scanner      : $SCANNER" >&2
+  echo "  PROGRESS_ROOT: ${PROGRESS_ROOT:-<unset; ROOT derived from $0>}" >&2
+  echo "  No readout printed: without the scanner, coverage would read 0 and" >&2
+  echo "  every guarded function would be counted as a bare wall." >&2
+  exit 2
+}
+[ -f "$SCANNER" ] && [ -r "$SCANNER" ] \
+  || scan_fail "guard scanner missing or unreadable"
+command -v python3 >/dev/null 2>&1 \
+  || scan_fail "python3 not on PATH; the guard scanner cannot run"
+
+TMP="$(mktemp -d /tmp/gcprogress.XXXXXX)" || exit 1
+trap 'rm -rf "$TMP"' EXIT
+
+# Buffer the whole readout and print it only once every region has scanned,
+# so a scanner failure mid-run cannot leave a partial readout above the error.
+exec 3>&1 >"$TMP/report"
+
 echo "=== Going Commando decomp progress — STATIC ESTIMATE ($(date +%F)) ==="
 echo "tree: $ROOT"
 echo "CAVEAT: 'matched-by-C' means the INCLUDE_ASM was removed and real C"
 echo "stands in its place. It is NOT an objdiff-verified byte-exact claim —"
 echo "byte-exact status is gated per-fn by the tester (raw words+relocs)."
 echo
-
-TMP="$(mktemp -d /tmp/gcprogress.XXXXXX)" || exit 1
-trap 'rm -rf "$TMP"' EXIT
 
 tot_all=0; mat_all=0; cov_all=0; wall_all=0; only_all=0
 
@@ -85,11 +110,15 @@ for region in usa eu; do
   # in BOTH directions, which is why the total looked plausible.
   #
   # Shared scanner instead of a fifth re-derivation; see tools/guard_blocks.py.
-  if ! $FIND "$SRC" -name '*.c' -exec python3 "$ROOT/tools/guard_blocks.py" --bodied {} + \
-       2>/dev/null | sort -u > "$TMP/$region.guarded"; then
-    echo "progress.sh: guard scan failed for $region (python3 missing?)" >&2
-    exit 2
+  #
+  # The status tested is find's, which is non-zero when any batch of the -exec
+  # fails. It used to be the pipeline's, i.e. sort's, which is always 0.
+  if ! $FIND "$SRC" -name '*.c' -exec python3 "$SCANNER" --bodied {} + \
+       > "$TMP/$region.guarded.raw" 2> "$TMP/$region.scan.err"; then
+    sed 's/^/  scanner stderr: /' "$TMP/$region.scan.err" >&2
+    scan_fail "guard scan exited non-zero for region $region"
   fi
+  sort -u "$TMP/$region.guarded.raw" > "$TMP/$region.guarded"
 
   # 4) classify each carved fn
   awk -v iasm="$TMP/$region.iasm" -v guarded="$TMP/$region.guarded" \
@@ -146,3 +175,6 @@ printf "  carved %d | matched-by-C %d (%s) | coverage %d (%s) | walls %d (%s) | 
   "$only_all" "$(pct "$only_all" "$tot_all")"
 echo
 echo "(--verify for TRUE byte-exact counts is a documented TODO stub; see -h text in the header.)"
+
+exec 1>&3 3>&-
+cat "$TMP/report"
