@@ -1270,96 +1270,133 @@ s32 func_002A9468(Moby **out, s32 group, s32 wantInactive, s32 wantActive) {
  * moby->group is lbu at +0x21 -> u8 group; moby->state is lb at +0x20 -> s8 state
  * (the .s sign-extends then srl 31). All iterator state lives in the named
  * globals; no float, no vcallms -> standalone integer/pointer oracle.
+ *
+ * Byte-exact on sdk29 (task #1100). What reproduces the ROM:
+ *   - the unit's -fno-strict-aliasing (see the header): every list read is
+ *     ordered after the cursor store and re-read after the slot/moby stores;
+ *   - list entries are read through the plain `next` pointer, never as
+ *     `cursor[1]`: gcc 2.x marks `p[i]` in-struct and assumes it cannot alias
+ *     a fixed scalar store, so the terminator test would reuse the slot load;
+ *   - the seek loop copies `next` into `cursor` inside the loop (the ROM's
+ *     `daddu $8,$3,$0`), so the filter loop needs no copy on entry and reorg
+ *     turns the exit into `b; addiu` into the loop's second instruction;
+ *   - one `return -1` sits at the null check and the other failure paths jump
+ *     to it, so the resume path falls into the filter loop;
+ *   - the filter is written as its branch lattice (accept/reject), which is
+ *     the ROM's block order: `beqz sign -> accept; b reject` then the
+ *     wantInactive arm, with accept falling through;
+ *   - the filter loop's moby is formed as `entry = base; entry += offset`,
+ *     which puts the sum in the table base's $4 (a one-expression sum lands
+ *     in the offset's $3);
+ *   - two EE-only register pins (A9550_* below; each measured necessary:
+ *     without it 99.66 / 97.81): `next` in $3, and the cursor re-read in $2,
+ *     which frees $3 for `sign` so reorg fills the wantActive branch's slot
+ *     with a plain `bne`, not `bnel`.
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 36.93%
-   -> UNKNOWN-@0: ROM `daddu t2,a0,zero` vs `sw zero,0(a0)` */
+   -> UNKNOWN-@0: ROM `daddu t2,a0,zero` vs `sw zero,0(a0)` (measured on the earlier body) */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9550);
+#define A9550_NEXT_IN_V1 __asm__("$3")
+#define A9550_RELOAD_IN_V0 __asm__("$2")
 #else
+#define A9550_NEXT_IN_V1
+#define A9550_RELOAD_IN_V0
+#endif
 s32 func_002A9550(Moby **out, Moby *moby, s32 wantInactive, s32 wantActive) {
+    register u16 *next A9550_NEXT_IN_V1;
     u16 *cursor;
+    Moby *m;
     s32 slot;
     s32 sign;
-    s32 accept;
 
     *out = 0;
-    if (moby == g_pMobyGroupIterMoby) {
-        /* resume from the saved cursor */
-        cursor = g_pMobyGroupIterCursor;
-        if ((s16)*cursor < 0) {
-            return -1;
-        }
-    } else {
+    if (moby != g_pMobyGroupIterMoby) {
         /* re-seed the iterator for this moby's own group */
+        u16 *list;
+
         if (g_mobyGroupCount < moby->group) {
-            return -1;
+            goto fail;
         }
         g_pMobyGroupIterMoby = 0;
-        cursor = g_mobyGroupLists[moby->group];
-        g_pMobyGroupIterCursor = cursor;
-        if (cursor == 0) {
+        list = g_mobyGroupLists[moby->group];
+        g_pMobyGroupIterCursor = list;
+        if (list == 0) {
+        fail:
             return -1;
         }
         /* one entry before the head; the seek loop pre-increments */
-        cursor = cursor - 1;
-        g_pMobyGroupIterCursor = cursor;
-        for (;;) {
-            Moby *m;
+        g_pMobyGroupIterCursor = list - 1;
+        do {
+            u16 *prev = g_pMobyGroupIterCursor;
 
-            cursor = cursor + 1;
-            g_pMobyGroupIterCursor = cursor;
-            slot = *cursor & 0x7FFF;
+            next = prev + 1;
+            g_pMobyGroupIterCursor = next;
+            cursor = next;
+            slot = *next & 0x7FFF;
             g_mobyGroupIterSlot = slot;
             m = (Moby *)((u8 *)g_mobyTableBase + slot * 0x100);
             g_pMobyGroupIterMoby = m;
-            if ((s16)*cursor < 0) {
+            if ((s16)*next < 0) {
                 return -1;
             }
-            if (moby == m) {
-                break;   /* found it; the filter loop starts on the NEXT entry */
-            }
-            cursor = g_pMobyGroupIterCursor;
+        } while (moby != m);   /* found it: filtering starts on the NEXT entry */
+    } else {
+        /* resume from the saved cursor */
+        register u16 *saved A9550_RELOAD_IN_V0 = g_pMobyGroupIterCursor;
+
+        if ((s16)*saved < 0) {
+            goto fail;
         }
+        cursor = saved;
     }
 
     /* advance one entry at a time, applying the active/inactive filter */
     for (;;) {
-        Moby *m;
-
-        cursor = cursor + 1;
-        g_pMobyGroupIterCursor = cursor;
-        slot = *cursor & 0x7FFF;
+        next = cursor + 1;
+        g_pMobyGroupIterCursor = next;
+        slot = *next & 0x7FFF;
         g_mobyGroupIterSlot = slot;
-        m = (Moby *)((u8 *)g_mobyTableBase + slot * 0x100);
-        g_pMobyGroupIterMoby = m;
-        *out = m;
-        sign = (u32)(s32)g_pMobyGroupIterMoby->state >> 31;
+        {
+            /* loaded first, then offset: the sum lands in the base's $4 */
+            Moby *entry = g_mobyTableBase;
 
+            entry = (Moby *)((u8 *)entry + slot * 0x100);
+            g_pMobyGroupIterMoby = entry;
+            *out = entry;
+        }
+        sign = (u32)(s32)g_pMobyGroupIterMoby->state >> 31;
         if (wantInactive == 0) {
             if (wantActive != 0) {
-                accept = 0;                 /* always advance */
-            } else {
-                accept = (sign == 0);       /* accept active */
+                goto reject;           /* accept none */
             }
+            if (sign == 0) {
+                goto accept;           /* the active moby */
+            }
+            goto reject;
         } else {
             if (wantActive == 0) {
-                accept = 1;                 /* accept unconditionally */
-            } else {
-                accept = (sign != 0);       /* accept inactive */
+                goto accept;           /* unconditionally */
+            }
+            if (sign == 0) {
+                goto reject;           /* only the inactive moby */
             }
         }
-        if (accept) {
-            return 0;
-        }
-        /* rejected: keep scanning unless the current entry terminates the list */
-        cursor = g_pMobyGroupIterCursor;
-        if ((s16)*cursor < 0) {
-            *out = 0;
-            return -1;
+    accept:
+        return 0;
+    reject:
+        /* keep scanning unless the current entry terminates the list */
+        {
+            register u16 *saved A9550_RELOAD_IN_V0 = g_pMobyGroupIterCursor;
+
+            if ((s16)*saved < 0) {
+                break;
+            }
+            cursor = saved;
         }
     }
+    *out = 0;
+    return -1;
 }
-#endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A96B8);
