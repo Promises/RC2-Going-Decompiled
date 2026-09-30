@@ -37,7 +37,7 @@
 # SELFTEST (task #1004; until then it had none, as task #1000 recorded here).
 #   verify_match_unit.sh --selftest
 # runs THIS script's normal mode on committed subjects with BASE (arg 2) seeds,
-# crash and no-verdict probes, and then 20 one-line mutants of its own code, and prints
+# crash, no-verdict, quarantine and mktemp probes, and then 26 one-line mutants of its own code, and prints
 # `#### VMU-SELFTEST usa: PASS|FAIL`. Exit 0 PASS, 1 FAIL, 2 CANNOT RUN (fixture
 # assembly failed, or the usa flat ROM is unreachable). It never prints a
 # `<fn>: BYTE IDENTICAL|DIFFERS|UNVERIFIABLE` line: those are verdicts on a
@@ -99,17 +99,34 @@
 # rc 2 plus a `NO VERDICT:` line. M19 = backstop removed (X2 rc 1, X4 rc 0),
 # M20 = backstop checks presence only (X5 rc 1). M18's known answer is now
 # X1 rc 2 `NO VERDICT:`: without the hook the backstop still refuses a verdict.
+# Added by task #1121: fixture elided_zero_run.s (func_002AC058, a two-word
+# zero run objdump prints as `...`). F0 unseeded must name both counts and both
+# addresses (10 of 12); F1 zeroes +0x10 into the run (FACT #8103's false-MATCH
+# class, still rc 0) and must name 3 of 12; F2 sets st_size 0 and must say the
+# length is unknown. EVERY other row must print no WARN / NOT COMPARED: that is
+# the silent direction, and M23 (warn on every function) is what shows it can
+# fail. M21 = no elision check (the old `10/10`), M22 = the compared count as
+# denominator, M26 = size 0 read as an empty extent. Probes X6/X7 print a real
+# verdict line and exit without the sentinel: NO VERDICT and no verdict-shaped
+# line (M24 = replay unquarantined). X8 (a failing mktemp first on PATH) and X9
+# (RESULT_FILE empty) must give one `INFRASTRUCTURE ERROR:` line, rc 2, no
+# CRASH:/NO VERDICT: (M25 = guard removed: X8 rc 3 "could not disassemble",
+# X9 a CRASH quoted under NO VERDICT).
 # Seed the BASE (arg 2), never the target (arg 3): arg 3's bytes are never
 # compared (FACT ledger-26262), so a target-seeded control cannot fail.
 #
 # EXIT STATUS (a misuse must never look like a verdict)
-#   0  MATCH        — every word equals the ROM
+#   0  MATCH        — every COMPARED word equals the ROM. If objdump elided
+#                     words of the symbol, or its length is unknown, the line
+#                     reads `... ON COMPARED WORDS ONLY ⚠️` with a `WARN:` line
+#                     (task #1121): still rc 0, never quote it as a full match.
 #   1  DIFFERS      — a real byte difference (this, and only this, is a failure)
 #   2  UNVERIFIABLE — the tool cannot decide (unresolvable symbol, reloc type it
 #                     does not model, function absent from the ROM window, or
 #                     its own python crashed: a `CRASH:` line, or exited
 #                     without a VMU_RESULT sentinel naming its rc: a
-#                     `NO VERDICT:` line, task #1048). NOT
+#                     `NO VERDICT:` line, task #1048; or mktemp failed:
+#                     an `INFRASTRUCTURE ERROR:` line, task #1121). NOT
 #                     a pass and NOT a fail; it is its own visible state.
 #   3  USAGE/ARG    — bad arguments; e.g. a whole-unit .o passed as the target
 #
@@ -257,6 +274,11 @@ class Elf:
         base, _ = self.rel(secname)
         for k, (o, t, s) in enumerate(table):
             struct.pack_into("<II", self.d, base + k * 8, o, (s << 8) | t)
+    def set_size(self, fn, size):
+        """Rewrite st_size of the FUNC symbol `fn` (row F2, task #1121)."""
+        st = next(s for s in self.secs if s[1] == 2)
+        k = next(i for i, (n, v, t) in enumerate(self.syms) if n == fn and t == 2)
+        struct.pack_into("<I", self.d, st[4] + k * 16 + 8, size)
     def word(self, secname, off):
         return struct.unpack_from("<I", self.d, self.secs[self.sec(secname)][4] + off)[0]
     def put(self, secname, off, w):
@@ -285,6 +307,13 @@ def w_seed(fn, off, how, need=None):
         e.put(".text", at, how(old))
         if e.word(".text", at) == old:
             return None, "the seed leaves +0x%x unchanged" % off
+        return e, None
+    return seed
+
+def size_seed(fn, size):
+    """st_size of fn's symbol -> size: an alabel-like symbol with no length."""
+    def seed(e):
+        e.set_size(fn, size)
         return e, None
     return seed
 
@@ -458,6 +487,10 @@ ROWS = [
      "unseeded: 10 of 12 words compared, the two elided nops named"),
     ("F1", F, "f", "f", w_seed(F, 0x10, lambda w: 0), None, 0, ((9, 12, (0x2AC068, 0x2AC06C, 0x2AC070)), None),
      "+0x10 andi zeroed: joins the run, still rc 0 (#8103) but 3 of 12 named"),
+    # 26 real USA rows have st_size 0 (splat `alabel` entries, `D_` labels in
+    # .text): the tool cannot know their length and must say so, not print N/N.
+    ("F2", F, "f", "f", size_seed(F, 0), None, 0, ("UNKNOWN", None),
+     "symtab: st_size 0 -> 'the symbol's length is unknown', never a bare N/N"),
 ]
 
 def coverage(out):
@@ -492,6 +525,10 @@ def holds(row, got):
     want_rc, want = row[6], row[7]
     if rc != want_rc:
         return False
+    if rc == 0 and want[0] == "UNKNOWN":
+        return (words is None and cover == ("MALFORMED",)
+                and re.search(r"^WARN: \S+: the symbol's length is unknown \(", out, re.M) is not None
+                and "words compared of the symbol's unknown length" in out)
     if rc == 0 and isinstance(want[0], tuple):
         return words is None and cover == want[0] and (want[1] is None or want[1] in out)
     if cover is not None:                    # the SILENT direction: no row but F0/F1 may warn
@@ -505,6 +542,7 @@ def holds(row, got):
 def show(got):
     rc, out, diffs, words, cover = got
     warned = "" if cover is None else ", WARN %s" % (
+        "length unknown" if "the symbol's length is unknown" in out else
         "MALFORMED" if cover == ("MALFORMED",) else "%d of %d compared, not %s" % (
             cover[0], cover[1], ",".join("0x%08x" % v for v in cover[2])))
     if rc == 0 and words is not None:
@@ -609,6 +647,9 @@ MUTANTS = [
     ("M25", "mktemp results unchecked (pre-#1121: the failure blamed on the base or the compare)",
      'if [ -z "$t" ] || [ ! -f "$t" ] || [ ! -w "$t" ]; then', "if false; then", ["X8", "X9"],
      [("X8", 3, None, "could not disassemble"), ("X9", 2, None, "the compare ran but no verdict was recorded")]),
+    ("M26", "a size-0 symbol taken as an empty extent: silent N/N on a symbol of unknown length",
+     'return (value, size) if size else f"{FN} has st_size 0 in the base object"', "return (value, size)",
+     ["F2"], [("F2", 0, None, "(10/10 words")]),
 ]
 TAIL = {"M19", "M20", "M24"}
 HEAD = {"M25"}
