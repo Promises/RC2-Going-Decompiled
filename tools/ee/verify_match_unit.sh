@@ -37,7 +37,7 @@
 # SELFTEST (task #1004; until then it had none, as task #1000 recorded here).
 #   verify_match_unit.sh --selftest
 # runs THIS script's normal mode on committed subjects with BASE (arg 2) seeds,
-# crash, no-verdict, quarantine and mktemp probes, and then 26 one-line mutants of its own code, and prints
+# crash, no-verdict, quarantine and mktemp probes, and then 27 one-line mutants of its own code, and prints
 # `#### VMU-SELFTEST usa: PASS|FAIL`. Exit 0 PASS, 1 FAIL, 2 CANNOT RUN (fixture
 # assembly failed, or the usa flat ROM is unreachable). It never prints a
 # `<fn>: BYTE IDENTICAL|DIFFERS|UNVERIFIABLE` line: those are verdicts on a
@@ -112,14 +112,28 @@
 # (RESULT_FILE empty) must give one `INFRASTRUCTURE ERROR:` line, rc 2, no
 # CRASH:/NO VERDICT: (M25 = guard removed: X8 rc 3 "could not disassemble",
 # X9 a CRASH quoted under NO VERDICT).
+# Added by task #1157: the NOT COMPARED words are split into a ZERO band (read
+# as 0 in the base, no relocation) and a NONZERO band, each with its own WARN
+# naming INCLUSIVE address ranges. Fixture inner_label_truncation.s
+# (func_002907B8, one of FACT #8656's 7 rows: `alabel D_002907C0` at +0x08
+# ends the slice after 2 of 46 words). F3 unseeded must name 1 zero word
+# (the trailing nop at 0x0029086c) and 43 NONZERO (0x002907c0-0x00290868),
+# and NO line may call a NONZERO word zero (the lie check; on
+# b7b8f7d9 F3 fails it: every one of the 44 was "elided ... as zero words").
+# F4 flips a word past the label (+0x10, nonzero to nonzero): still rc 0, same
+# bands. That pins the rc as it stands; whether it should FAIL is watcher-2's
+# ruling. M27 = every NOT COMPARED word put in the ZERO band (the b7b8f7d9
+# text). NOT covered: a relocated word that is 0 in the base (no fixture has
+# one missing), and the cause sentence when no inner header is found.
 # Seed the BASE (arg 2), never the target (arg 3): arg 3's bytes are never
 # compared (FACT ledger-26262), so a target-seeded control cannot fail.
 #
 # EXIT STATUS (a misuse must never look like a verdict)
-#   0  MATCH        — every COMPARED word equals the ROM. If objdump elided
-#                     words of the symbol, or its length is unknown, the line
-#                     reads `... ON COMPARED WORDS ONLY ⚠️` with a `WARN:` line
-#                     (task #1121): still rc 0, never quote it as a full match.
+#   0  MATCH        — every COMPARED word equals the ROM. If words of the
+#                     symbol were not compared, or its length is unknown, the
+#                     line reads `... ON COMPARED WORDS ONLY ⚠️` with `WARN:`
+#                     line(s) (task #1121), one per band, ZERO and NONZERO
+#                     (task #1157): still rc 0, never quote it as a full match.
 #   1  DIFFERS      — a real byte difference (this, and only this, is a failure)
 #   2  UNVERIFIABLE — the tool cannot decide (unresolvable symbol, reloc type it
 #                     does not model, function absent from the ROM window, or
@@ -218,9 +232,15 @@ def say(s=""):
 # c  = the __divdi3 slice + __clz_tab         (its own target)
 # e  = func_00279E00's first 12 words         (its own target)
 # f  = func_002AC058, a two-word zero run     (its own target; task #1121)
+# g  = func_002907B8 + inner alabel D_002907C0 (task #1157)
+# gt = the same without the alabel's .type    (target for g)
 OBJS = {"a": ["select_scene_sub_chunk"], "b": ["evaluate_progress_condition", "get_save_prompt_pending"],
         "be": ["evaluate_progress_condition"], "bg": ["get_save_prompt_pending"], "c": ["divdi3_clz_slice"],
-        "e": ["camera_slot_straddle"], "f": ["elided_zero_run"]}
+        "e": ["camera_slot_straddle"], "f": ["elided_zero_run"], "g": ["inner_label_truncation"],
+        "gt": ["inner_label_truncation"]}
+# Fixture lines marked `# base only` are dropped from these (target-only) objects:
+# arg 3 must hold ONE `F .text` symbol, and an inner alabel is a second one.
+TARGET_ONLY = {"gt"}
 
 def obj(k):
     return "%s/%s.o" % (OUT, k)
@@ -231,7 +251,8 @@ def build():
     for k, parts in OBJS.items():
         with open("%s/%s.s" % (OUT, k), "w") as f:
             for p in parts:
-                f.write(open("%s/%s.s" % (FIX, p)).read() + "\n")
+                f.write("".join(l for l in open("%s/%s.s" % (FIX, p))
+                                if k not in TARGET_ONLY or "# base only" not in l) + "\n")
         cmds.append("%s -o %s %s/%s.s" % (AS, obj(k), OUT, k))
     # X8's failing mktemp: first on PATH, prints nothing, exits 1 (task #1121).
     with open(FAKE_MKTEMP, "w") as f:
@@ -279,6 +300,10 @@ class Elf:
         st = next(s for s in self.secs if s[1] == 2)
         k = next(i for i, (n, v, t) in enumerate(self.syms) if n == fn and t == 2)
         struct.pack_into("<I", self.d, st[4] + k * 16 + 8, size)
+    def fn_size(self, fn):
+        st = next(s for s in self.secs if s[1] == 2)
+        k = next(i for i, (n, v, t) in enumerate(self.syms) if n == fn and t == 2)
+        return struct.unpack_from("<I", self.d, st[4] + k * 16 + 8)[0]
     def word(self, secname, off):
         return struct.unpack_from("<I", self.d, self.secs[self.sec(secname)][4] + off)[0]
     def put(self, secname, off, w):
@@ -426,11 +451,31 @@ def straddles(fn, hi_a, hi_b):
         return None
     return check
 
+def inner_label(fn, label, fn_va, zero, nonzero):
+    """Guard for the G rows (task #1157): `label` lies strictly inside fn's
+    extent, and the words the row expects in each band really are 0 / nonzero
+    in the base, read by this reader, not the tool's."""
+    def check(e):
+        v, size = e.fn_value(fn), e.fn_size(fn)
+        lab = next((val for n, val, t in e.syms if n == label), None)
+        if lab is None or not v < lab < v + size:
+            return "%s is not inside %s's extent" % (label, fn)
+        for va in zero:
+            if e.word(".text", v + va - fn_va) != 0:
+                return "0x%08x is not zero in the base" % va
+        for va in nonzero:
+            if e.word(".text", v + va - fn_va) == 0:
+                return "0x%08x is zero in the base" % va
+        return None
+    return check
+
 # ---- THE SEED TABLE. (id, fn, base, target, seed or None, guard or None,
 #      expected rc, expected detail). Detail: rc 0 -> (words, substring or None);
 #      rc 1 -> the EXACT tuple of differing vaddrs; rc 2/3 -> a substring.
-A, B, C, D, E, F = ("func_00294920", "func_0029E808", "func_002897A8", "func_0011FD98", "func_00279E00",
-                    "func_002AC058")
+A, B, C, D, E, F, G = ("func_00294920", "func_0029E808", "func_002897A8", "func_0011FD98", "func_00279E00",
+                       "func_002AC058", "func_002907B8")
+G_ZERO = (0x29086C,)                             # the trailing `jr` delay-slot nop
+G_NONZERO = tuple(range(0x2907C0, 0x29086C, 4))  # 43 words of code after D_002907C0
 ROWS = [
     # SelectSceneSubChunk: HI16/LO16 pairing, both directions of the carry defect.
     ("A0", A, "a", "a", None, carries(A, 0x0C, 0x14), 0, (20, None),
@@ -481,34 +526,68 @@ ROWS = [
      1, (0x279E28,), "+0x28 lui immediate +1 (a first-LO16 rule computes 1C: false MATCH)"),
     # func_002AC058: objdump elides its +0x14/+0x18 zero run (task #1121). An
     # rc 0 detail whose first item is a TUPLE is (compared, symbol words,
-    # uncompared vaddrs): the verdict must name both counts and every address.
+    # ZERO-band vaddrs, NONZERO-band vaddrs; task #1157): the verdict must name
+    # every count and every address, and no line may call a NONZERO word zero.
     # Every OTHER row must print no WARN / NOT COMPARED at all (holds()).
-    ("F0", F, "f", "f", None, None, 0, ((10, 12, (0x2AC06C, 0x2AC070)), None),
+    ("F0", F, "f", "f", None, None, 0, ((10, 12, (0x2AC06C, 0x2AC070), ()), None),
      "unseeded: 10 of 12 words compared, the two elided nops named"),
-    ("F1", F, "f", "f", w_seed(F, 0x10, lambda w: 0), None, 0, ((9, 12, (0x2AC068, 0x2AC06C, 0x2AC070)), None),
+    ("F1", F, "f", "f", w_seed(F, 0x10, lambda w: 0), None, 0, ((9, 12, (0x2AC068, 0x2AC06C, 0x2AC070), ()), None),
      "+0x10 andi zeroed: joins the run, still rc 0 (#8103) but 3 of 12 named"),
     # 26 real USA rows have st_size 0 (splat `alabel` entries, `D_` labels in
     # .text): the tool cannot know their length and must say so, not print N/N.
     ("F2", F, "f", "f", size_seed(F, 0), None, 0, ("UNKNOWN", None),
      "symtab: st_size 0 -> 'the symbol's length is unknown', never a bare N/N"),
+    # func_002907B8: an inner label ends the slice after 2 words (task #1157,
+    # FACT #8656). 43 NONZERO words and 1 zero word are NOT COMPARED.
+    ("F3", G, "g", "gt", None, inner_label(G, "D_002907C0", 0x2907B8, G_ZERO, G_NONZERO), 0,
+     ((2, 46, G_ZERO, G_NONZERO), None),
+     "unseeded: 2 of 46 compared, 43 NONZERO past D_002907C0 never called zero"),
+    ("F4", G, "g", "gt", w_seed(G, 0x10, lambda w: w ^ 0x00010000),
+     inner_label(G, "D_002907C0", 0x2907B8, G_ZERO, G_NONZERO), 0, ((2, 46, G_ZERO, G_NONZERO), None),
+     "+0x10 past the label, nonzero->nonzero: rc 0 as it stands, named NONZERO"),
 ]
+
+ADDR_RE = r"0x([0-9a-f]{8})(?:-0x([0-9a-f]{8}))?"          # one address or an inclusive range
+ADDRS_RE = r"(?:0x[0-9a-f]{8}(?:-0x[0-9a-f]{8})?(?:, )?)+"  # a list of them, no groups
+
+def expand(text):
+    """Every vaddr named in `text`, an inclusive `0xA-0xB` range expanded."""
+    vas = []
+    for a, b in re.findall(ADDR_RE, text):
+        vas += range(int(a, 16), int(b or a, 16) + 4, 4)
+    return tuple(vas)
 
 def coverage(out):
     """None if the run says nothing about uncompared words; else (compared,
-    symbol words, uncompared vaddrs) when the verdict line and the WARN line
-    agree, or ("MALFORMED",) when they do not (task #1121)."""
+    symbol words, ZERO-band vaddrs, NONZERO-band vaddrs) when the verdict line
+    and the WARN lines agree, or ("MALFORMED",) when they do not (tasks #1121,
+    #1157). A band with a count of 0 must have no WARN line, and vice versa."""
     if "NOT COMPARED" not in out and "WARN:" not in out:
         return None
-    mv = re.search(r"\((\d+) of the symbol's (\d+) words compared: (\d+) NOT COMPARED", out)
-    mw = re.search(r"^WARN: \S+: (\d+) of the symbol's (\d+) words NOT COMPARED — [^:\n]*: "
-                   r"((?:0x[0-9a-f]{8}(?:, )?)+)\.", out, re.M)
-    if not (mv and mw):
+    mv = re.search(r"\((\d+) of the symbol's (\d+) words compared: (\d+) NOT COMPARED, "
+                   r"(\d+) read as zero and (\d+) NONZERO in the base", out)
+    if not mv:
         return ("MALFORMED",)
-    vas = tuple(int(v, 16) for v in re.findall(r"0x([0-9a-f]{8})", mw.group(3)))
-    if not (mv.group(2) == mw.group(2) and int(mv.group(3)) == int(mw.group(1)) == len(vas)
-            and int(mv.group(1)) + len(vas) == int(mv.group(2))):
+    got, sym, total = int(mv.group(1)), mv.group(2), int(mv.group(3))
+    bands = []
+    for title, n in (("READ AS ZERO", int(mv.group(4))), ("NONZERO or relocated", int(mv.group(5)))):
+        mw = re.findall(r"^WARN: \S+: (\d+) of the symbol's (\d+) words NOT COMPARED and " + title
+                        + r" in the base [^:\n]*: (" + ADDRS_RE + r")\.", out, re.M)
+        if len(mw) > 1 or (len(mw) == 0) != (n == 0):
+            return ("MALFORMED",)
+        vas = expand(mw[0][2]) if mw else ()
+        if mw and not (mw[0][1] == sym and int(mw[0][0]) == n == len(vas)):
+            return ("MALFORMED",)
+        bands.append(vas)
+    if not (len(bands[0]) + len(bands[1]) == total and got + total == int(sym)):
         return ("MALFORMED",)
-    return (int(mv.group(1)), int(mv.group(2)), vas)
+    return (got, int(sym), bands[0], bands[1])
+
+def calls_zero(out, nonzero):
+    """The NONZERO-band vaddrs that some line names while calling words zero
+    (task #1157: b7b8f7d9 said "elided them as zero words" of all of them)."""
+    return sorted({v for l in out.splitlines() if re.search(r"\bzero\b", l, re.I)
+                   for v in expand(l)} & set(nonzero))
 
 def run(script, row, base, env=None):
     rid, fn, _b, tgt = row[:4]
@@ -530,7 +609,8 @@ def holds(row, got):
                 and re.search(r"^WARN: \S+: the symbol's length is unknown \(", out, re.M) is not None
                 and "words compared of the symbol's unknown length" in out)
     if rc == 0 and isinstance(want[0], tuple):
-        return words is None and cover == want[0] and (want[1] is None or want[1] in out)
+        return (words is None and cover == want[0] and not calls_zero(out, want[0][3])
+                and (want[1] is None or want[1] in out))
     if cover is not None:                    # the SILENT direction: no row but F0/F1 may warn
         return False
     if rc == 0:
@@ -539,12 +619,21 @@ def holds(row, got):
         return diffs == want
     return want in out
 
+def brief(vas):
+    """A band's vaddrs for a result line: all of them up to 4, else count and ends."""
+    if len(vas) <= 4:
+        return ",".join("0x%08x" % v for v in vas) or "-"
+    return "%d words 0x%08x..0x%08x" % (len(vas), vas[0], vas[-1])
+
 def show(got):
     rc, out, diffs, words, cover = got
+    lie = calls_zero(out, G_NONZERO)
     warned = "" if cover is None else ", WARN %s" % (
         "length unknown" if "the symbol's length is unknown" in out else
-        "MALFORMED" if cover == ("MALFORMED",) else "%d of %d compared, not %s" % (
-            cover[0], cover[1], ",".join("0x%08x" % v for v in cover[2])))
+        "MALFORMED" if cover == ("MALFORMED",) else "%d of %d compared, zero %s, NONZERO %s" % (
+            cover[0], cover[1], brief(cover[2]), brief(cover[3])))
+    if lie:
+        warned += ", CALLS %d NONZERO word(s) zero (e.g. 0x%08x)" % (len(lie), lie[0])
     if rc == 0 and words is not None:
         return "rc 0, %s/%s words%s" % (words, words, warned)
     if rc == 0 and cover is not None:
@@ -650,6 +739,9 @@ MUTANTS = [
     ("M26", "a size-0 symbol taken as an empty extent: silent N/N on a symbol of unknown length",
      'return (value, size) if size else f"{FN} has st_size 0 in the base object"', "return (value, size)",
      ["F2"], [("F2", 0, None, "(10/10 words")]),
+    ("M27", "every NOT COMPARED word put in the ZERO band without reading it (the b7b8f7d9 text)",
+     "if w == 0 and o not in rel_offs:", "if True:", ["F3", "F4"],
+     [("F3", 0, None, "READ AS ZERO")]),
 ]
 TAIL = {"M19", "M20", "M24"}
 HEAD = {"M25"}
@@ -984,8 +1076,9 @@ fi
 #
 # ⚠️ TWO THINGS THIS COMPARE CANNOT SEE. Neither is fixed here.
 #
-# 1. ZERO WORDS THAT objdump ELIDES. Without `-z`, objdump prints a run of zero
-#    words as one `...` line. The slicer below only reads instruction lines, so
+# 1. WORDS objdump DOES NOT PRINT IN THE FUNCTION'S BLOCK: zero runs, and (the
+#    NONZERO band below) code after an inner label. Without `-z`, objdump
+#    prints a run of zero words as one `...` line. The slicer below only reads instruction lines, so
 #    it never compares the ROM against those words. If a real instruction was
 #    zeroed next to a nop pair, it reads BYTE IDENTICAL with a SHORT word count
 #    (FACT #7936: a zeroed `andi` gave rc 0, 9/9 on a 12-word function). A
@@ -1000,16 +1093,31 @@ fi
 #    (st_value, st_size in the base object) and, if any are missing, the
 #    verdict line loses its N/N ratio and reads `BYTE IDENTICAL TO ROM ON
 #    COMPARED WORDS ONLY ⚠️ (34 of the symbol's 42 words compared: 8 NOT
-#    COMPARED; ...)`, followed by a `WARN:` line naming every uncompared
-#    address. It stays rc 0 — a WARN, not a FAIL — because the skipped words
-#    are zero in the base by objdump's own rule (a nonzero seed there IS
-#    compared, FACT #8520), so the only blind case is a base zero where the
-#    ROM is nonzero; making every nop pair rc 2 would un-decide correct
-#    matches (FACT #8098: 7 of 791 real-C rows), and comparing the skipped
-#    words is -z by another name. What stops the MATCH being quoted as a full
-#    one: there is no `N/N` in the line to quote, and the denominator printed
-#    is the symbol's. A symbol with no size prints `the symbol's length is
-#    unknown` instead. Full extent: tools/ee/symtab_extent_compare.py.
+#    COMPARED, 8 read as zero and 0 NONZERO in the base; ...)`, followed by
+#    a `WARN:` line per band naming every uncompared address (task #1157).
+#    Each uncompared word is READ from the base to place it in a band; it is
+#    never compared with the ROM.
+#    ZERO BAND (read as 0x00000000, no relocation). A WARN, not a FAIL, rc 0,
+#    because these words were read as zero in the base, so the only blind
+#    case is a base zero where the ROM is nonzero (in an elided run a nonzero
+#    base word IS printed and compared, FACT #8520; a zero word cut off by an
+#    inner label, below, would instead move to the NONZERO band, uncompared);
+#    making every nop pair rc 2 would un-decide correct matches (FACT #8098:
+#    7 of 791 real-C rows), and comparing the skipped words is -z by another
+#    name. ⚠️ THAT ARGUMENT IS FOR THE ZERO BAND ONLY.
+#    NONZERO BAND (nonzero or relocated in the base). NOT covered by the
+#    argument above: these are ordinary code the slice never reached, because
+#    splat's size-0 inner labels (`alabel`) start a new objdump block inside
+#    the extent (FACT #8656: 7 of 35 real USA NOT COMPARED rows, e.g.
+#    func_002907B8 44 of 46 words behind `D_002907C0`). ANY change to them is
+#    invisible here, not only a zero one. It is still rc 0 with a WARN only
+#    because whether it should FAIL is a ruling not yet made (task #1157
+#    reports the census to watcher-2); the WARN says the blind spot is
+#    unbounded, and nothing above justifies its rc.
+#    What stops the MATCH being quoted as a full one: there is no `N/N` in the
+#    line to quote, and the denominator printed is the symbol's. A symbol with
+#    no size prints `the symbol's length is unknown` instead. Full extent:
+#    tools/ee/symtab_extent_compare.py.
 #
 # 2. WHERE THE FUNCTION IS IN THE UNIT. Each word is compared at the function's
 #    ROM vaddr from symbol_addrs, plus its offset from the start of its own
@@ -1383,6 +1491,17 @@ if lo < 0 or hi > len(rom):
 # offset in that extent that objdump did not print is NOT COMPARED, and the
 # verdict below says how many of how many, and where. A WARN, not a FAIL: see
 # "TWO THINGS THIS COMPARE CANNOT SEE" in the shell above for why.
+# TWO BANDS (task #1157, FACT #8656). "Not printed in this block" is not
+# "zero": splat's size-0 inner labels (`alabel D_002907C0`) start a new objdump
+# block inside another symbol's extent, so the slice stops there and the
+# ordinary NONZERO code after it is not compared either. #1121 called every
+# such word "elided ... as zero words of the base" without reading one (7 of
+# 35 real USA rows). Each NOT COMPARED word is now READ from the base's .text:
+# 0x00000000 with no relocation is the ZERO band, anything else (nonzero, a
+# relocation on it, or outside the section) the NONZERO band, and the two are
+# counted and named separately. Reading the base word decides only which
+# sentence is printed; it is never compared with the ROM (that would be -z by
+# another name) and the verdict and rc do not change with the band.
 def fn_extent():
     """(st_value, st_size) of FN's one symbol in the base's .text, or a reason."""
     if ELF is None:
@@ -1410,17 +1529,68 @@ if isinstance(EXTENT, tuple):
 else:
     sym_words, missing = None, []
 
+def text_reloc_offsets():
+    """Every r_offset in the base's .rel.text (the whole table, not the slice)."""
+    d, secs = ELF
+    text = next(s for s in secs if s["name"] == ".text")
+    return {struct.unpack_from("<I", d, rel["off"] + k * 8)[0]
+            for rel in secs if rel["type"] == 9 and secs[rel["info"]] is text
+            for k in range(rel["size"] // 8)}
+
+# ZERO / NONZERO bands of the NOT COMPARED words (task #1157): see TWO BANDS.
+zero_missing, nonzero_missing = [], []
+if missing:
+    d, secs = ELF                            # fn_extent() read the extent from it
+    text = next(s for s in secs if s["name"] == ".text")
+    rel_offs = text_reloc_offsets()
+    for va in missing:
+        o = EXTENT[0] + (va - fn_va)
+        w = struct.unpack_from("<I", d, text["off"] + o)[0] if o + 4 <= text["size"] else None
+        if w == 0 and o not in rel_offs:
+            zero_missing.append(va)
+        else:
+            nonzero_missing.append(va)
+# objdump block headers strictly inside the extent: where the slice stopped.
+inner = []
+if isinstance(EXTENT, tuple):
+    for line in open(os.environ["DIS_FILE"]).read().splitlines():
+        m = re.match(r"^([0-9a-f]+) <(\S+)>:", line)
+        if m and EXTENT[0] < int(m.group(1), 16) < EXTENT[0] + EXTENT[1]:
+            inner.append(f"{m.group(2)} at 0x{fn_va + int(m.group(1), 16) - EXTENT[0]:08x}")
+
+def spans(vas):
+    """0x..., 0x...-0x... : consecutive words folded into one INCLUSIVE range."""
+    out, i = [], 0
+    while i < len(vas):
+        j = i
+        while j + 1 < len(vas) and vas[j + 1] == vas[j] + 4:
+            j += 1
+        out.append(f"0x{vas[i]:08x}" if i == j else f"0x{vas[i]:08x}-0x{vas[j]:08x}")
+        i = j + 1
+    return ", ".join(out)
+
 def coverage_warning():
-    """The WARN line for words this compare did not see, or None."""
+    """The WARN line(s) for words this compare did not see, or None."""
     if sym_words is None:
         return (f"WARN: {FN}: the symbol's length is unknown ({EXTENT}), so whether objdump "
                 f"elided any word cannot be told; {len(resolved)} words compared")
     if not missing:
         return None
-    return (f"WARN: {FN}: {len(missing)} of the symbol's {sym_words} words NOT COMPARED — objdump "
-            f"elided them as zero words of the base: " + ", ".join(f"0x{va:08x}" for va in missing)
-            + ". A base word of 0 where the ROM is nonzero reads as identical here (FACT #7936, "
-            f"#8103). Full extent: python3 tools/ee/symtab_extent_compare.py <base.o> --fn {FN}")
+    lines = []
+    if zero_missing:
+        lines.append(f"WARN: {FN}: {len(zero_missing)} of the symbol's {sym_words} words NOT COMPARED and "
+                     f"READ AS ZERO in the base (0x00000000, no relocation): {spans(zero_missing)}. A base word of 0 where the ROM is nonzero reads as "
+                     f"identical here (FACT #7936, #8103).")
+    if nonzero_missing:
+        why = (f"objdump starts a new block at {len(inner)} symbol(s) inside this symbol's extent and the "
+               f"slice ends at the first ({', '.join(inner[:4])}{', ...' if len(inner) > 4 else ''})"
+               if inner else "this tool did not identify why objdump left them out of this block")
+        lines.append(f"WARN: {FN}: {len(nonzero_missing)} of the symbol's {sym_words} words NOT COMPARED and "
+                     f"NONZERO or relocated in the base — {why}: {spans(nonzero_missing)}. ANY difference "
+                     f"from the ROM in these words is invisible to this verdict (FACT #8656); the "
+                     f"landing gate's whole-image cmp compares them.")
+    lines[-1] += f" Full extent: python3 tools/ee/symtab_extent_compare.py <base.o> --fn {FN}"
+    return "\n".join(lines)
 
 compared = True
 bad = []
@@ -1444,7 +1614,8 @@ if not bad:
             # compared but are not the symbol's.
             inside = sym_words - len(missing)
             past = len(resolved) - inside
-            of = (f"{inside} of the symbol's {sym_words} words compared: {len(missing)} NOT COMPARED"
+            of = (f"{inside} of the symbol's {sym_words} words compared: {len(missing)} NOT COMPARED, "
+                  f"{len(zero_missing)} read as zero and {len(nonzero_missing)} NONZERO in the base"
                   + (f"; {past} word(s) past the symbol's end also compared" if past > 0 else ""))
         print(f"{FN}: BYTE IDENTICAL TO ROM ON COMPARED WORDS ONLY ⚠️ ({of}; {nrel} relocs resolved{placed})")
         print(warn)
