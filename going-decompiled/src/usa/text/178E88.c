@@ -1364,15 +1364,51 @@ extern u8 *g_hudTextureSlots;     /* 8-byte slots; +0x4 = VRAM block */
 extern u8 *g_hudClutSlots;
 extern void *g_pHudAssetHeader[]; /* [0] = header base (+0x24 clut count, +0x44 tex count) */
 
-/* TODO(match) t493: sdk29 43.99% / engine96 57.57% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (engine96): GPREL-FORM (first differing
- * insn: ROM `lw v0,0(v0)  [LO16 0x001B2228]` vs built `daddu a3,a0,zero`). Levers:
- * cc1-small/absolute globals model RUN: 55.58% (sdk29); -fno-strict-aliasing MEASURED (flag not
- * landed): 65.14% sdk29; engine96 with sched1 MEASURED (flag not landed): 59.44%. */
+/* Begin2dDrawBatch's absolute accesses. The ROM reads and writes every one of
+ * these words with the assembler's `lui; lw/sw %lo` macro pair, so each goes
+ * through an offset-0 alias sized 16 that cc1 sees as small data (the #8036
+ * construct, as ResetPerFrameDrawQueues above; relocations name the real
+ * symbols). The HUD pointers and the back-buffer base are read through
+ * one-member struct views: cc1 2.9 lets a union store alias a varying struct
+ * but not a fixed scalar, and the ROM re-reads these after each slot store. */
+typedef struct { u8 *p; } HudPtrWord;
+typedef struct { s32 v; } HudIntWord;
+/* 8-byte HUD VRAM slot: +0 id, +4 VRAM block (halfword) */
+typedef union { s16 vram; s32 word; } HudSlotWord;
+typedef struct { s32 id; HudSlotWord block; } HudVramSlot;
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", Begin2dDrawBatch);
+__asm__(".extern g_frameDmaCursorAbs, 16\n\tg_frameDmaCursorAbs = g_frameDmaCursor");
+__asm__(".extern g_vramDynamicBaseAbs, 16\n\tg_vramDynamicBaseAbs = g_vramDynamicBase");
+__asm__(".extern g_2dBatchOpenTagAbs, 16\n\tg_2dBatchOpenTagAbs = g_2dBatchOpenTag");
+__asm__(".extern g_uiTextureCountAbs, 16\n\tg_uiTextureCountAbs = g_uiTextureCount");
+__asm__(".extern g_vramAllocCursorAbs, 16\n\tg_vramAllocCursorAbs = g_vramAllocCursor");
+__asm__(".extern g_pHudAssetHeaderAbs, 16\n\tg_pHudAssetHeaderAbs = g_pHudAssetHeader");
+__asm__(".extern g_hudTextureSlotsAbs, 16\n\tg_hudTextureSlotsAbs = g_hudTextureSlots");
+__asm__(".extern g_vramFrameBufBAbs, 16\n\tg_vramFrameBufBAbs = g_vramFrameBufB");
+__asm__(".extern g_hudClutSlotsAbs, 16\n\tg_hudClutSlotsAbs = g_hudClutSlots");
+extern s32 g_frameDmaCursorAbs, g_2dBatchOpenTagAbs;
+extern s32 g_vramDynamicBaseAbs, g_uiTextureCountAbs, g_vramAllocCursorAbs;
+extern HudPtrWord g_pHudAssetHeaderAbs, g_hudTextureSlotsAbs, g_hudClutSlotsAbs;
+extern HudIntWord g_vramFrameBufBAbs;
+/* R5900_SHORT_LOOP_PAD1(v, next): SCHEDULING DEVICE (RULING #8435), one `nop`
+ * before a short loop's closing branch, as text/1A8180.c (task #659). `v` is
+ * the value the branch tests; `next` is the register reorg moves into the
+ * branch's delay slot. Natively nothing. */
+#define R5900_SHORT_LOOP_PAD1(v, next) \
+    __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
 #else
+#define g_frameDmaCursorAbs   (*(s32 *)&g_frameDmaCursor[0])
+#define g_vramDynamicBaseAbs  g_vramDynamicBase
+#define g_2dBatchOpenTagAbs   (*(s32 *)&g_2dBatchOpenTag)
+#define g_uiTextureCountAbs   g_uiTextureCount
+#define g_vramAllocCursorAbs  g_vramAllocCursor
+#define g_pHudAssetHeaderAbs  (*(HudPtrWord *)&g_pHudAssetHeader[0])
+#define g_hudTextureSlotsAbs  (*(HudPtrWord *)&g_hudTextureSlots)
+#define g_hudClutSlotsAbs     (*(HudPtrWord *)&g_hudClutSlots)
+#define g_vramFrameBufBAbs    (*(HudIntWord *)&g_vramFrameBufB)
+#define R5900_SHORT_LOOP_PAD1(v, next) ((void)0)
+#endif
+
 /**
  * Open a 2D draw batch: stash the current frame DMA cursor as the batch open tag,
  * reserve a tag qword, reset the VRAM alloc cursor to the dynamic base, and clear
@@ -1382,21 +1418,67 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", Begin2dDrawBatc
  * Unless `skipHudReset` is set, also evicts stale HUD textures: every
  * g_hudTextureSlots entry whose VRAM block is at/above the back framebuffer has
  * its +0x4 address cleared, and all g_hudClutSlots VRAM addresses are cleared
- * (counts from the HUD asset header +0x44 / +0x24).
+ * (counts from the HUD asset header +0x44 / +0x24, re-read every iteration).
+ *
+ * Match notes (every device below emits no instruction; NO register pin is
+ * used - RULING #8598's pin was tried and dropped, see NOTE for task #1110).
+ * Percentages are the unit objdiff row for the named variant, solo, sdk29:
+ *  - The VOLATILE empty fence on `cursor` (RULING #8483) keeps the head in
+ *    source order; with a plain (non-volatile) fence sched1 hoists the
+ *    texture-count load above the `+0x10` and swaps the cursor/alloc stores
+ *    (97.08%). The dynamic base is read before the fence because the ROM
+ *    loads it second (reading it after the fence: 94.38%).
+ *  - Loop 1 is the ROM's count-down loop: the count stays in $5 and `left`
+ *    is a copy of it (`move $3,$5`). One variable for both: 97.01%. The empty
+ *    "+r" fence on `left` is needed too (without it 93.54%); three SHORT_LOOP
+ *    pads give the ROM's `nop x3` before the `bnez`.
+ *  - Loop 2 loads the header into `load` and copies it to `hdr` only AFTER
+ *    reading +0x44 through `load`. The ROM keeps the header in its own
+ *    register (`move $4,$2` / `move $4,$3` in the branch slots) and loop 3's
+ *    first count read uses it. Copying first (`hdr = load` then the read)
+ *    lets cse re-point the read at `hdr` and the copy disappears (82.50%, as
+ *    NOTE #8596's body; seen in cc1's -ds dump). The slot address is spelled
+ *    `i * 8 + base` in integer arithmetic for the ROM's `addu $4,$4,$5`
+ *    operand order (the pointer spelling gives `addu $5,$5,$4`: 99.65%).
+ *  - Loop 3 has its own counter (the ROM keeps it in $4, `hdr`'s register once
+ *    `hdr` is dead; sharing `i`: 99.65%). The volatile empty fence at its
+ *    head (RULING #8483) keeps reorg from moving the loop-top g_hudClutSlots
+ *    load into the latch's delay slot, which the ROM leaves a `nop` (cc1
+ *    sizes the aliased load as one instruction; without the fence 94.44%).
+ * MATCHED (task #1110): 100.00% sdk29 (unit objdiff, objdiff_build.sh +
+ * unit_report.sh), solo; verify_match_unit BYTE IDENTICAL. Was 43.99% (t493
+ * #else, plain-promoted) / 82.50% (NOTE #8596 body).
  */
 void Begin2dDrawBatch(s32 skipHudReset) {
-    u32 *cursor = g_frameDmaCursor[0];
-    s32 n;
+    s32 cursor = g_frameDmaCursorAbs;
+    s32 base = g_vramDynamicBaseAbs;
+    s32 cacheCount;
+    s32 left;
+    s32 texCount;
     s32 i;
+    s32 clut;
+    u8 *load;
+    u8 *hdr;
 
-    g_2dBatchOpenTag = cursor;
-    g_frameDmaCursor[0] = (u32 *)((u8 *)cursor + 0x10);
-    g_vramAllocCursor = g_vramDynamicBase;
+    g_2dBatchOpenTagAbs = cursor;
+    __asm__ volatile("" : "+r"(cursor));
+    g_frameDmaCursorAbs = cursor + 0x10;
+    g_vramAllocCursorAbs = base;
     g_texUploadCount = 0;
 
-    n = g_uiTextureCount;
-    for (i = 0; i < n; i++) {
-        *(u64 *)(g_uiTextureCache + i * 0x10) = 0;
+    cacheCount = g_uiTextureCountAbs;
+    if (cacheCount > 0) {
+        u8 *p = g_uiTextureCache;
+        left = cacheCount;
+        do {
+            *(u64 *)p = 0;
+            __asm__("" : "+r"(left));
+            left--;
+            R5900_SHORT_LOOP_PAD1(left, left);
+            R5900_SHORT_LOOP_PAD1(left, left);
+            R5900_SHORT_LOOP_PAD1(left, p);
+            p += 0x10;
+        } while (left != 0);
     }
 
     g_screenGrabTex0Full = 0;
@@ -1407,20 +1489,24 @@ void Begin2dDrawBatch(s32 skipHudReset) {
         return;
     }
 
-    n = *(s32 *)((u8 *)g_pHudAssetHeader[0] + 0x44);
-    for (i = 0; i < n; i++) {
-        u8 *slot = g_hudTextureSlots + i * 8;
-        if (*(u16 *)(slot + 0x4) >= (g_vramFrameBufB >> 8)) {
-            *(s16 *)(slot + 0x4) = 0;
+    for (i = 0;
+         i < (texCount = *(s32 *)((load = g_pHudAssetHeaderAbs.p) + 0x44), hdr = load, texCount);
+         i++) {
+        HudVramSlot *slot = (HudVramSlot *)(i * 8 + (u32)g_hudTextureSlotsAbs.p);
+        if ((u16)slot->block.vram >= (g_vramFrameBufBAbs.v >> 8)) {
+            slot->block.vram = 0;
         }
     }
 
-    n = *(s32 *)((u8 *)g_pHudAssetHeader[0] + 0x24);
-    for (i = 0; i < n; i++) {
-        *(s16 *)(g_hudClutSlots + i * 8 + 0x4) = 0;
+    if (*(s32 *)(hdr + 0x24) > 0) {
+        clut = 0;
+        do {
+            __asm__ volatile("" : "+r"(clut));
+            ((HudVramSlot *)g_hudClutSlotsAbs.p)[clut].block.vram = 0;
+            clut++;
+        } while (clut < *(s32 *)(g_pHudAssetHeaderAbs.p + 0x24));
     }
 }
-#endif
 
 extern void *g_2dBatchCloseTag; /* saved DMA cursor at batch close */
 extern void FlushPendingTexUploads(void);
