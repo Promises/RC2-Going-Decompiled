@@ -23,10 +23,17 @@ A row FAILS when any of these holds:
   PS2EEAS  (with --ps2eeas) the words Ps2EeAs.exe emits for `dli <operands>`
            differ from the row. Needs the VM and tools/ee/cc/ee/bin/Ps2EeAs.exe.
 
+With --ps2eeas, a row whose site is ABSENT from Ps2EeAs's output is neither a
+FAIL nor a pass: it prints `CNR  line N` (could not run), the summary becomes
+`..., C could not run (Ps2EeAs INCOMPLETE)` and the exit is 2 (1 if another
+row FAILs). No emission is not a different emission (FACT #8645).
+
 Prints one line per row and a final `ps2eeas_dli_sites: N rows, F failed`.
-Exits 0 only when F is 0. Exit 2 means an input could not be read.
+Exits 0 only when F is 0. Exit 2 means an input could not be read, Ps2EeAs
+could not be run, or a site went unchecked.
 """
 import glob
+import hashlib
 import os
 import re
 import struct
@@ -107,22 +114,49 @@ def splat_words(region, fn, addr, count):
     return [have[a] for a in want], ''
 
 
+def ps2eeas_source(rows):
+    """The file Ps2EeAs.exe assembles: one labelled `dli` per row."""
+    return '\t.text\n\t.set\tnoreorder\n' + ''.join(
+        'site_%d:\n\tdli\t%s\n' % (n, r['ops']) for n, r, _ in rows)
+
+
+def run_vm(cmd):
+    """tools/ee/vm.sh <cmd>, output captured as text."""
+    return subprocess.run([os.path.join(ROOT, 'tools/ee/vm.sh'), cmd],
+                          capture_output=True, text=True)
+
+
 def ps2eeas_words(rows):
-    """Assemble every row's dli with Ps2EeAs.exe in the VM: {row line: [words]}."""
-    tmp = os.path.join(ROOT, 'tools/ee/.ps2eeas_dli')
-    os.makedirs(tmp, exist_ok=True)
-    with open(os.path.join(tmp, 'sites.s'), 'w') as fh:
-        fh.write('\t.text\n\t.set\tnoreorder\n')
-        for n, r, _ in rows:
-            fh.write('site_%d:\n\tdli\t%s\n' % (n, r['ops']))
-    cmd = ('cd tools/ee/.ps2eeas_dli && rm -f sites.o && '
-           'wibo /work/tools/ee/cc/ee/bin/Ps2EeAs.exe -o sites.o sites.s && '
-           'mips-linux-gnu-objdump -d -z sites.o')
-    out = subprocess.run([os.path.join(ROOT, 'tools/ee/vm.sh'), cmd],
-                         capture_output=True, text=True)
+    """Assemble every row's dli with Ps2EeAs.exe in the VM: {row line: [words]}.
+
+    The source travels INSIDE the command, as a quoted here-document written
+    to a container-local mktemp dir, and never through the worktree mount.
+    The old route (a host-written tools/ee/.ps2eeas_dli/sites.s read over the
+    VM's sshfs mount) handed Ps2EeAs a stale, truncated view in 2 of 4 runs
+    under build load, silently dropping trailing sites (FACT #8645, the
+    FACT #7464 trap). parse() admits only `$N,0x<hex>` operands, so no row can
+    end the here-document or expand inside it. The container prints the md5 of
+    the file it assembled; unless that equals the host's md5 of the source,
+    Ps2EeAs did not see the rows being checked and the run is could-not-run.
+    """
+    src = ps2eeas_source(rows)
+    want = hashlib.md5(src.encode()).hexdigest()
+    cmd = ("d=$(mktemp -d) && cd \"$d\" && cat > sites.s <<'PS2EEAS_DLI_EOF'\n%s"
+           "PS2EEAS_DLI_EOF\n"
+           "echo \"SITES-MD5 $(md5sum < sites.s | cut -d' ' -f1)\" && "
+           "wibo /work/tools/ee/cc/ee/bin/Ps2EeAs.exe -o sites.o sites.s && "
+           "mips-linux-gnu-objdump -d -z sites.o" % src)
+    out = run_vm(cmd)
     if out.returncode != 0:
-        sys.exit('ps2eeas_dli_sites: Ps2EeAs run failed rc %d\n%s%s'
-                 % (out.returncode, out.stdout, out.stderr))
+        print('ps2eeas_dli_sites: could not run: Ps2EeAs run failed rc %d\n%s%s'
+              % (out.returncode, out.stdout, out.stderr), file=sys.stderr)
+        sys.exit(2)
+    got_md5 = re.search(r'^SITES-MD5 ([0-9a-f]{32})$', out.stdout, re.M)
+    if not got_md5 or got_md5.group(1) != want:
+        print('ps2eeas_dli_sites: could not run: the container assembled a sites.s with md5 %s, '
+              'the host wrote one with md5 %s (%d B), so Ps2EeAs did not see the rows being checked'
+              % (got_md5.group(1) if got_md5 else 'none', want, len(src)), file=sys.stderr)
+        sys.exit(2)
     got, cur = {}, None
     for line in out.stdout.splitlines():
         m = re.match(r'[0-9a-f]+ <site_(\d+)>:', line)
@@ -147,9 +181,9 @@ def main():
     roms = {}
     good = [(n, r, raw) for n, r, raw in rows if r]
     asm = ps2eeas_words(good) if use_ps2eeas and good else {}
-    seen, failed = {}, 0
+    seen, failed, cnr = {}, 0, 0
     for n, r, raw in rows:
-        why = []
+        why, unrun = [], []
         if r is None:
             why.append('FORMAT row does not parse')
         else:
@@ -181,11 +215,20 @@ def main():
                 if [w for _, w in sw] != romw:
                     why.append('ROM splat transcription %s differs from the ROM'
                                % ' '.join('%08x' % w for _, w in sw))
-            if use_ps2eeas and asm.get(n) != r['words']:
-                why.append('PS2EEAS emits %s' % ' '.join('%08x' % w for w in asm.get(n, [])))
+            if use_ps2eeas and not asm.get(n):
+                unrun.append("PS2EEAS site_%d is absent from Ps2EeAs's output: not checked" % n)
+            elif use_ps2eeas and asm[n] != r['words']:
+                why.append('PS2EEAS emits %s' % ' '.join('%08x' % w for w in asm[n]))
         failed += bool(why)
-        print('%s line %d: %s%s' % ('FAIL' if why else 'ok  ', n, raw.split('#')[0].strip(),
-                                     ''.join('\n      ' + w for w in why)))
+        cnr += bool(unrun) and not why
+        print('%s line %d: %s%s' % ('FAIL' if why else 'CNR ' if unrun else 'ok  ', n,
+                                     raw.split('#')[0].strip(),
+                                     ''.join('\n      ' + w for w in why + unrun)))
+    if cnr:
+        # a FAIL row stays a FAIL (rc 1); an unchecked row alone is rc 2
+        print('ps2eeas_dli_sites: %d rows, %d failed, %d could not run (Ps2EeAs INCOMPLETE)'
+              % (len(rows), failed, cnr))
+        sys.exit(1 if failed else 2)
     print('ps2eeas_dli_sites: %d rows, %d failed%s'
           % (len(rows), failed, ' (Ps2EeAs checked)' if use_ps2eeas else ' (Ps2EeAs NOT run)'))
     sys.exit(1 if failed else 0)

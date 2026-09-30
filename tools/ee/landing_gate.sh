@@ -168,13 +168,19 @@
 #            (64-bit simulation), sit inside its function's splat file, equal
 #            the ROM AND equal what Ps2EeAs.exe itself emits. FAILS naming each
 #            failing row, and as could-not-run on no summary, 0 rows, or a
-#            summary without `(Ps2EeAs checked)`. The Ps2EeAs arm is the point:
+#            summary without `(Ps2EeAs checked)` — which includes a row whose
+#            site is ABSENT from Ps2EeAs's output (`CNR` line, task #1142):
+#            no emission is not a different emission (FACT #8645).
+#            The Ps2EeAs arm is the point:
 #            the host-only checks PASS a ROM-true row Ps2EeAs does not emit
 #            (func_002E5074@0x2E50E4, #1105), which --selftest arm (22) seeds.
 #            ⚠️ The checker reaches Ps2EeAs through tools/ee/vm.sh, which is
 #            hardcoded to colima-ee-x86 (VM a) — this row runs on VM a whatever
-#            EE_DOCKER_CONTEXT says, and prints so. It writes only under
-#            tools/ee/.ps2eeas_dli/ (gitignored) in THIS worktree.
+#            EE_DOCKER_CONTEXT says, and prints so. The assembly source goes
+#            INSIDE the vm.sh command, not over the sshfs mount (FACT #8645
+#            saw that mount hand Ps2EeAs a stale sites.s), and the container's
+#            md5 of it must equal the host's or the row is could-not-run. It
+#            writes nothing in the worktree.
 #   ASMUNIT  (task #1116 GATE-F item b, FACT #8610) the BUILD's build.log
 #            carries no `asm_unit.sh: WARNING:`, `REFUSED:` or `FAIL:` line.
 #            FACT #8610 observed such a line reach build.log and no row read it:
@@ -514,7 +520,7 @@ check_dlisites() {
   elif [ "$rc" = 1 ] && [ "${nfail:-0}" -gt 0 ]; then
     fail "DLISITES: $nfail of $nrows allowlist row(s) fail — asm_unit.sh would expand them as written: $(awk '/^FAIL line /{ if (m) { printf "%s%s", sep, m; sep = " ; " } m = $0; next } /^      / && m { sub(/^ +/, ""); m = m " | " $0; next } { if (m) { printf "%s%s", sep, m; sep = " ; " } m = "" } END { if (m) printf "%s%s", sep, m }' "$scan")"
   else
-    fail "ps2eeas_dli_sites.py could not run, or printed no Ps2EeAs-checked summary with at least one row (rc $rc, summary '${sum:-none}'): $(head -c 300 "$scan" | tr '\n' ' ')"
+    fail "ps2eeas_dli_sites.py could not run, or printed no Ps2EeAs-checked summary with at least one row (rc $rc, summary '${sum:-none}'): $(if /usr/bin/grep -q '^CNR  line ' "$scan"; then awk '/^CNR  line /{ if (m) { printf "%s%s", sep, m; sep = " ; " } m = $0; next } /^      / && m { sub(/^ +/, ""); m = m " | " $0; next } { if (m) { printf "%s%s", sep, m; sep = " ; " } m = "" } END { if (m) printf "%s%s", sep, m }' "$scan"; else head -c 300 "$scan" | tr '\n' ' '; fi)"
   fi
   say "     members:"; sed 's/^/       /' "$scan"
 }
@@ -1382,6 +1388,13 @@ selftest_dirty_gate() {
   if [ "$rc" = 0 ] && /usr/bin/grep -qx "==== selftest inner gate \[$REGION\] (NOT a landing verdict): PASS" "$D/clean.txt" && /usr/bin/grep -q '^OK   DIRTY: 0 uncommitted paths' "$D/clean.txt"; then
     ok "control (20) the same scratch repo clean: rc $rc, 'PASS' — the stubs fail nothing on their own"
   else say "SELFTEST-FAIL (20) the clean scratch repo did not PASS (rc $rc):"; show < <(/usr/bin/grep -E '^(OK|FAIL|WARN|====)' "$D/clean.txt" | sed 's/^/  inner| /'); b=1; fi
+  # stub-list completeness (task #1142): a row missing from the list above runs
+  # for real and prints its own verdict line, which may well PASS — measured:
+  # check_dlisites unstubbed in arm (21) ran the VM twice and both arms still
+  # passed. So no row but DIRTY may print a verdict line here.
+  local unstubbed; unstubbed=$(cat "$D/dirty.txt" "$D/clean.txt" | /usr/bin/grep -E '^(OK|FAIL|WARN) ' | /usr/bin/grep -vE '^(OK|FAIL|WARN) +DIRTY' || true)
+  if [ -z "$unstubbed" ]; then ok "stubs (20): no row but DIRTY printed a verdict line"
+  else say "SELFTEST-FAIL (20) a row missing from the stub list ran for real — add it to BOTH stub lists, (20) and (21):"; show < <(printf '%s\n' "$unstubbed" | sed 's/^/  inner| /'); b=1; fi
   rm -rf "$D"
   FAILED=0; WARNED=0; DIRTY_FAILED=0; STRICT=0
   return $b
@@ -1652,6 +1665,11 @@ selftest_verdict_annotation() {
   if [ "$rc" = 0 ] && /usr/bin/grep -qx "${tag}PASS" "$D/cchange.txt" && ! /usr/bin/grep -qE 'no C change|NO C CHANGE' "$D/cchange.txt"; then
     ok "control (21) base $(git rev-parse --short "$1") whose C differs: rc $rc, verdict 'PASS' with no annotation"
   else say "SELFTEST-FAIL (21) a base whose C differs still annotated the verdict, or did not PASS (rc $rc):"; show < <(/usr/bin/grep -E '^(OK|FAIL|WARN|====)' "$D/cchange.txt" | sed 's/^/  inner| /'); b=1; fi
+  # stub-list completeness (task #1142), as in (20): no row but NATIVE may
+  # print a verdict line, or a row missing from the list ran unnoticed
+  local unstubbed; unstubbed=$(cat "$D/tools.txt" "$D/cchange.txt" | /usr/bin/grep -E '^(OK|FAIL|WARN) ' | /usr/bin/grep -vE '^(OK|FAIL|WARN) +NATIVE' || true)
+  if [ -z "$unstubbed" ]; then ok "stubs (21): no row but NATIVE printed a verdict line"
+  else say "SELFTEST-FAIL (21) a row missing from the stub list ran for real — add it to BOTH stub lists, (20) and (21):"; show < <(printf '%s\n' "$unstubbed" | sed 's/^/  inner| /'); b=1; fi
   unset -f annot_real_check_native annot_run
   rm -rf "$D"; FAILED=0; WARNED=0; DIRTY_FAILED=0; STRICT=0; NATIVE_NO_C_CHANGE=0
   return $b
@@ -1697,19 +1715,73 @@ selftest_mount_sync() {
 # simulation-true, so ONLY the Ps2EeAs arm can fail it. The host-only checker
 # must pass the same copy — if it ever stops doing so, the seed no longer
 # isolates the Ps2EeAs arm and the arm says so instead of passing.
+#
+# The seed's "fired" predicate requires a HEX WORD after `PS2EEAS emits`
+# (task #1142): FACT #8645 saw the old predicate, which ended at `emits `,
+# pass on an EMPTY emission — the seed's site had been lost from a stale
+# sites.s, so the arm fired for a reason unrelated to the Ps2EeAs expansion
+# it exists to show. The predicate is known-answer checked on both forms
+# before it is used.
+#
+# Two fault arms (task #1142) run the REAL check_dlisites and the REAL VM
+# path with one fault injected by a wrapper around ps2eeas_dli_sites.run_vm
+# (written to OUTDIR, never to the tree), and each must read could-not-run,
+# neither OK nor a row FAIL:
+#   truncate  the last site is cut from the source the container receives —
+#             FACT #8645's stale-view shape. The md5 transport check must fire.
+#   drop      the last site is removed from Ps2EeAs's objdump output. That
+#             row must print `CNR`, not `FAIL ... PS2EEAS emits`.
+# The wrapper exits 3 when its fault matched nothing, so a fault that stops
+# applying reads SELFTEST-BROKEN rather than passing.
+DLISITES_SEED_FIRED_RE='^FAIL DLISITES: 1 of [0-9]+ allowlist row\(s\) fail — .*: FAIL line [0-9]+: usa +func_002E5074 +0x002E50E4 .* \| PS2EEAS emits [0-9a-f]{8}( [0-9a-f]{8})*( ;|$)'
 selftest_dlisites() {
   local T="$1" b=0 rc
   local seed='usa      func_002E5074  0x002E50E4  $8,0x1300000             24080013 00084538'
-  say "-- (22) DLISITES (#1116): the real allowlist must pass; a copy with #1105's ROM-true row func_002E5074@0x2E50E4 appended must FAIL naming ONLY that row with PS2EEAS; the host-only checker must PASS that copy (the arm it isolates)"
+  say "-- (22) DLISITES (#1116, #1142): the real allowlist must pass; a copy with #1105's ROM-true row func_002E5074@0x2E50E4 appended must FAIL naming ONLY that row with PS2EEAS and a hex word; the host-only checker must PASS that copy (the arm it isolates); a source cut in transit and a site absent from Ps2EeAs's output must each be could-not-run"
+  local kfail="FAIL DLISITES: 1 of 8 allowlist row(s) fail — asm_unit.sh would expand them as written: FAIL line 50: $seed | PS2EEAS emits "
+  if printf '%s\n' "$kfail" | /usr/bin/grep -qE "$DLISITES_SEED_FIRED_RE"; then say "SELFTEST-BROKEN the fired predicate accepts an EMPTY 'PS2EEAS emits' (FACT #8645)"; b=1
+  elif ! printf '%s\n' "${kfail}3c080130" | /usr/bin/grep -qE "$DLISITES_SEED_FIRED_RE"; then say "SELFTEST-BROKEN the fired predicate rejects the genuine 'PS2EEAS emits 3c080130'"; b=1
+  else ok "predicate: rejects an empty 'PS2EEAS emits', accepts 'PS2EEAS emits 3c080130'"; fi
   FAILED=0; check_dlisites > "$T/dlisites_real.txt"
   if [ "$FAILED" = 0 ] && /usr/bin/grep -q '^OK   DLISITES: all [1-9][0-9]* allowlist row(s)' "$T/dlisites_real.txt"; then ok "control: $(/usr/bin/grep '^OK   DLISITES' "$T/dlisites_real.txt" | sed 's/^OK   //')"; else say "SELFTEST-FAIL the real allowlist does not pass DLISITES:"; show < "$T/dlisites_real.txt"; b=1; fi
   { cat "$HERE/ps2eeas_dli_sites.txt"; printf '%s\n' "$seed"; } > "$T/dlisites_seed.txt"
   FAILED=0; check_dlisites "$T/dlisites_seed.txt" > "$T/dlisites_seeded.txt"
-  if [ "$FAILED" = 1 ] && /usr/bin/grep -qE '^FAIL DLISITES: 1 of [0-9]+ allowlist row\(s\) fail — .*: FAIL line [0-9]+: usa +func_002E5074 +0x002E50E4 .* \| PS2EEAS emits ' "$T/dlisites_seeded.txt"; then ok "fired: $(/usr/bin/grep '^FAIL DLISITES' "$T/dlisites_seeded.txt" | sed 's/ — asm_unit.sh would expand them as written//')"
-  else say "SELFTEST-FAIL the seeded func_002E5074 row did not fail DLISITES alone with PS2EEAS (FAILED=$FAILED):"; show < "$T/dlisites_seeded.txt"; b=1; fi
+  if [ "$FAILED" = 1 ] && /usr/bin/grep -qE "$DLISITES_SEED_FIRED_RE" "$T/dlisites_seeded.txt"; then ok "fired: $(/usr/bin/grep '^FAIL DLISITES' "$T/dlisites_seeded.txt" | sed 's/ — asm_unit.sh would expand them as written//')"
+  else say "SELFTEST-FAIL the seeded func_002E5074 row did not fail DLISITES alone with PS2EEAS and a hex word (FAILED=$FAILED):"; show < "$T/dlisites_seeded.txt"; b=1; fi
   python3 "$HERE/ps2eeas_dli_sites.py" "$T/dlisites_seed.txt" > "$T/dlisites_hostonly.txt" 2>&1; rc=$?
   if [ "$rc" = 0 ] && /usr/bin/grep -qE '^ps2eeas_dli_sites: [0-9]+ rows, 0 failed \(Ps2EeAs NOT run\)$' "$T/dlisites_hostonly.txt"; then ok "isolation: the host-only checker passes the same seeded copy (rc 0, $(tail -1 "$T/dlisites_hostonly.txt" | sed 's/^ps2eeas_dli_sites: //')) — only the Ps2EeAs arm sees it"
   else say "SELFTEST-BROKEN the host-only checker no longer passes the func_002E5074 seed (rc $rc) — it no longer isolates the Ps2EeAs arm; choose a seed only Ps2EeAs rejects:"; show < "$T/dlisites_hostonly.txt"; b=1; fi
+  cat > "$T/dlisites_fault.py" <<'PYEOF'
+# landing_gate --selftest (22) fault wrapper: argv = checker path, then its args
+import os, re, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(sys.argv[1])))
+import ps2eeas_dli_sites as m
+mode, real = os.environ['DLISITES_FAULT'], m.run_vm
+def run_vm(cmd):
+    if mode == 'truncate':
+        cut, k = re.subn(r'site_\d+:\n\tdli\t[^\n]*\n(PS2EEAS_DLI_EOF\n)', r'\1', cmd)
+        if k != 1: sys.exit(3)
+        return real(cut)
+    out = real(cmd)
+    last = re.findall(r'^[0-9a-f]+ <(site_\d+)>:$', out.stdout, re.M)
+    if mode != 'drop' or not last: sys.exit(3)
+    out.stdout = re.sub(r'^[0-9a-f]+ <%s>:\n(?:\s+[0-9a-f]+:.*\n?)*' % last[-1], '', out.stdout, flags=re.M)
+    return out
+m.run_vm = run_vm
+sys.argv = sys.argv[1:]
+m.main()
+PYEOF
+  local mode want
+  for mode in truncate drop; do
+    case $mode in
+      truncate) want='^FAIL ps2eeas_dli_sites.py could not run.*\(rc 2, summary .none.\): ps2eeas_dli_sites: could not run: the container assembled a sites.s with md5 [0-9a-f]{32}, the host wrote one with md5 [0-9a-f]{32}' ;;
+      drop)     want='^FAIL ps2eeas_dli_sites.py could not run.*\(rc 2, summary .ps2eeas_dli_sites: [0-9]+ rows, 0 failed, 1 could not run \(Ps2EeAs INCOMPLETE\).\): CNR  line [0-9]+: .* \| PS2EEAS site_[0-9]+ is absent from Ps2EeAs.s output: not checked$' ;;
+    esac
+    FAILED=0; ( python3() { DLISITES_FAULT=$mode command python3 "$T/dlisites_fault.py" "$@"; }; check_dlisites; exit "$FAILED" ) > "$T/dlisites_$mode.txt"; rc=$?
+    if /usr/bin/grep -qE '\(rc 3,' "$T/dlisites_$mode.txt"; then say "SELFTEST-BROKEN (22) the $mode fault matched nothing — the arm no longer injects it:"; show < "$T/dlisites_$mode.txt"; b=1
+    elif [ "$rc" = 1 ] && /usr/bin/grep -qE "$want" "$T/dlisites_$mode.txt" && ! /usr/bin/grep -qE '^(OK   DLISITES|FAIL DLISITES)' "$T/dlisites_$mode.txt"; then ok "fired ($mode): $(/usr/bin/grep '^FAIL ps2eeas_dli_sites.py' "$T/dlisites_$mode.txt" | cut -c1-260)"
+    else say "SELFTEST-FAIL (22) the $mode fault did not read could-not-run (neither OK nor a row FAIL) (rc $rc):"; show < "$T/dlisites_$mode.txt"; b=1; fi
+  done
   FAILED=0
   return $b
 }
