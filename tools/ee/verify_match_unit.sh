@@ -466,13 +466,14 @@ def coverage(out):
     agree, or ("MALFORMED",) when they do not (task #1121)."""
     if "NOT COMPARED" not in out and "WARN:" not in out:
         return None
-    mv = re.search(r"\((\d+) words compared of the symbol's (\d+): (\d+) NOT COMPARED", out)
+    mv = re.search(r"\((\d+) of the symbol's (\d+) words compared: (\d+) NOT COMPARED", out)
     mw = re.search(r"^WARN: \S+: (\d+) of the symbol's (\d+) words NOT COMPARED — [^:\n]*: "
                    r"((?:0x[0-9a-f]{8}(?:, )?)+)\.", out, re.M)
     if not (mv and mw):
         return ("MALFORMED",)
     vas = tuple(int(v, 16) for v in re.findall(r"0x([0-9a-f]{8})", mw.group(3)))
-    if not (mv.group(2) == mw.group(2) and int(mv.group(3)) == int(mw.group(1)) == len(vas)):
+    if not (mv.group(2) == mw.group(2) and int(mv.group(3)) == int(mw.group(1)) == len(vas)
+            and int(mv.group(1)) + len(vas) == int(mv.group(2))):
         return ("MALFORMED",)
     return (int(mv.group(1)), int(mv.group(2)), vas)
 
@@ -957,7 +958,7 @@ fi
 #    words it printed are checked against the function symbol's own extent
 #    (st_value, st_size in the base object) and, if any are missing, the
 #    verdict line loses its N/N ratio and reads `BYTE IDENTICAL TO ROM ON
-#    COMPARED WORDS ONLY ⚠️ (34 words compared of the symbol's 42: 8 NOT
+#    COMPARED WORDS ONLY ⚠️ (34 of the symbol's 42 words compared: 8 NOT
 #    COMPARED; ...)`, followed by a `WARN:` line naming every uncompared
 #    address. It stays rc 0 — a WARN, not a FAIL — because the skipped words
 #    are zero in the base by objdump's own rule (a nonzero seed there IS
@@ -1394,10 +1395,17 @@ if not bad:
     if warn is None:
         print(f"{FN}: BYTE IDENTICAL TO ROM ✅ ({len(resolved)}/{len(resolved)} words, {nrel} relocs resolved{placed})")
     else:
-        of = (f"the symbol's {sym_words}: {len(missing)} NOT COMPARED" if sym_words is not None
-              else "the symbol's unknown length")
-        print(f"{FN}: BYTE IDENTICAL TO ROM ON COMPARED WORDS ONLY ⚠️ ({len(resolved)} words compared "
-              f"of {of}; {nrel} relocs resolved{placed})")
+        if sym_words is None:
+            of = f"{len(resolved)} words compared of the symbol's unknown length"
+        else:
+            # Count inside the extent only: objdump's block can run past the
+            # symbol's end (trailing pad words, FACT #8469), and those are
+            # compared but are not the symbol's.
+            inside = sym_words - len(missing)
+            past = len(resolved) - inside
+            of = (f"{inside} of the symbol's {sym_words} words compared: {len(missing)} NOT COMPARED"
+                  + (f"; {past} word(s) past the symbol's end also compared" if past > 0 else ""))
+        print(f"{FN}: BYTE IDENTICAL TO ROM ON COMPARED WORDS ONLY ⚠️ ({of}; {nrel} relocs resolved{placed})")
         print(warn)
     verdict(MATCH)
 
