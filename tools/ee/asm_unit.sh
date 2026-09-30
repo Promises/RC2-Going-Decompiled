@@ -264,6 +264,24 @@ cd "$FIXROOT"
 # Not extended to div.s/cvt.w.s: the ROM keeps those out of slots too, but
 # that is observed, not tested as a rule.
 # (cc1 is a Win32 PE - its .s lines end in CRLF, hence the \r-stripping.)
+#
+# Last, at every -G, the scoped Ps2EeAs `dli` expansion (RULING #8549, task
+# #1105). It runs as tools/ee/ps2eeas_dli.awk, the final pass before `as`. A cc1
+# `dli` is replaced by SN Ps2EeAs.exe's expansion only at a site listed in
+# tools/ee/ps2eeas_dli_sites.txt: same region, same enclosing `.ent` function,
+# same operands. The expansion comes from the row's words, which the ROM carries
+# at that address; tools/ee/ps2eeas_dli_sites.py re-derives every row. Every
+# other `dli` stays GNU as's: tree-wide, Ps2EeAs's form is wrong in at least 11
+# engine chains per region (FACT #8518). Splat's asm carries no `dli`, so an
+# INCLUDE_ASM body is never touched. A malformed allowlist row emits an `.error`,
+# and a failure of the pass itself fails the unit (the status is checked below):
+# as fed an empty stream still writes a valid-looking object.
+DLIAWK="$ROOT/tools/ee/ps2eeas_dli.awk"
+DLISITES="$ROOT/tools/ee/ps2eeas_dli_sites.txt"
+for f in "$DLIAWK" "$DLISITES"; do
+  [ -r "$f" ] || { echo "asm_unit.sh: REFUSED: cannot read $f (RULING #8549)" >&2; exit 2; }
+done
+DLIRC="$(mktemp)"
 if [ "$GFLAG" = "-G8" ]; then
   sed -E -f "$MOVEFIX" "$UNIT_S" | tr -d '\r' | awk '
     NR==FNR {
@@ -547,8 +565,15 @@ if [ "$GFLAG" = "-G8" ]; then
       if (pend != "") print pend
     }
   ' "$UNIT_S" - \
+    | { awk -v region="$REGION" -f "$DLIAWK" "$DLISITES" -; echo $? > "$DLIRC"; } \
     | mips-linux-gnu-as -march=r5900 -mabi=eabi -no-pad-sections -EL "$GFLAG" -I. -o "$OUT_O" -
 else
   sed -E -f "$MOVEFIX" "$UNIT_S" \
+    | { awk -v region="$REGION" -f "$DLIAWK" "$DLISITES" -; echo $? > "$DLIRC"; } \
     | mips-linux-gnu-as -march=r5900 -mabi=eabi -no-pad-sections -EL "$GFLAG" -I. -o "$OUT_O" -
 fi
+if [ "$(cat "$DLIRC")" != 0 ]; then
+  echo "asm_unit.sh: REFUSED: ps2eeas_dli.awk exited $(cat "$DLIRC") on $UNIT_S; $OUT_O removed (RULING #8549)" >&2
+  rm -f "$DLIRC" "$OUT_O"; exit 2
+fi
+rm -f "$DLIRC"

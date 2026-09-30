@@ -1,0 +1,49 @@
+# ps2eeas_dli_sites.txt: the per-site allowlist of RULING #8549.
+#
+# SN Ps2EeAs.exe (sha1 b49b032e8fe0) and GNU as 2.40 expand some 64-bit `dli`
+# constants differently, and the ROM carries Ps2EeAs's form at the sites below.
+# tools/ee/asm_unit.sh (via tools/ee/ps2eeas_dli.awk) replaces a cc1 `dli` with
+# the words on its row ONLY when the region, the enclosing function (cc1's
+# `.ent`) and the dli operands all equal a row here. Every other `dli` in the
+# tree is left to GNU as. The rule is not tree-wide on purpose: FACT #8518 counts
+# at least 11 engine chains per region where Ps2EeAs's form is NOT the ROM's.
+#
+# Columns (whitespace separated, `#` starts a comment):
+#   region    usa | eu. A row only applies to units assembled for that region.
+#   function  the function cc1 compiles the dli in: its `.ent` name, the same
+#             name as its splat file nonmatchings/<unit>/<function>.s.
+#   rom_addr  the ROM vaddr of the first expanded word. It is not part of the
+#             match key. The checker uses it to read the ROM and to prove the
+#             site lies inside <function>.
+#   operands  the dli operands exactly as cc1 writes them: `$<n>,0x<hex>`, with
+#             the register number and the value in lowercase hex.
+#   words     Ps2EeAs.exe's expansion of that dli, one 8-digit hex word per
+#             instruction. These must equal the ROM words at rom_addr.
+#
+# ADDING A SITE. Each row needs its own evidence, per RULING #8549:
+#   1. Measure the words. Run Ps2EeAs.exe on `dli <operands>`, then check that
+#      they equal the ROM at rom_addr:
+#          python3 tools/ee/ps2eeas_dli_sites.py --ps2eeas
+#   2. The same checker, run without --ps2eeas, needs no VM and REFUSES a row
+#      when any of these fails:
+#        - the words do not load exactly <value> into <reg>;
+#        - the words differ from the ROM, or from splat's transcription of it;
+#        - rom_addr is not inside <function>'s splat file (so a rename or a
+#          re-split breaks it loudly);
+#        - the same (region, function, operands) key appears twice.
+#      With --ps2eeas it also REFUSES a row whose words Ps2EeAs does not emit.
+#   3. A promotion that uses a site still passes its own byte gate
+#      (verify_match_unit.sh + image cmp). The allowlist permits the expansion.
+#      It is not evidence that the function matches.
+# An EU site is its own row with region `eu`, its own EU name and EU address.
+# RULING #8549's scope is USA, so no EU row exists yet. The EU bytes at the
+# twins of the sites below are the same words (FACT #8544).
+#
+# region function       rom_addr    operands                 words
+usa      func_00290320  0x0029033C  $12,0x4400000000008001   340c8800 000c63fc 358c8001
+usa      func_00290320  0x002903AC  $4,0xfffff000000000      3404ffff 00042438 3484f000 00042638
+usa      func_00290320  0x00290434  $6,0xfffff000000000      3406ffff 00063438 34c6f000 00063638
+usa      func_002904B0  0x002904CC  $12,0x4400000000008001   340c8800 000c63fc 358c8001
+usa      func_002904B0  0x0029053C  $4,0xfffff000000000      3404ffff 00042438 3484f000 00042638
+usa      func_002904B0  0x002905C4  $6,0xfffff000000000      3406ffff 00063438 34c6f000 00063638
+usa      func_00290640  0x0029065C  $13,0x4400000000008001   340d8800 000d6bfc 35ad8001
