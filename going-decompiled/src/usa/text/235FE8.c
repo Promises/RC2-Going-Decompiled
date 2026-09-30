@@ -1763,7 +1763,8 @@ void GuiListSetItemCount(GuiElement *e, s32 count) {
  *   thumb = (clamp / totalRows) * trackLength       (trackLength = +0x3C)
  * If the list has zero rows the thumb collapses to 0. All four int->float
  * conversions are unsigned (the original emits the (u32) widening idiom).
- *   e   - the list element (+0x3C track length, +0x40 total rows)
+ *   e   - the list element, read through GuiListView (trackLength +0x3C,
+ *         rowCount +0x40)
  *   pos - requested row
  *
  * Byte-exact on sdk29 (task #1053), EE arm below. It depends on asm_unit.sh's
@@ -1771,18 +1772,33 @@ void GuiListSetItemCount(GuiElement *e, s32 count) {
  * would move the cvt.s.w into it; the ROM keeps `cvt.s.w; b; nop`. Levers
  * (task #1025):
  *   - the clamp is an if/else, which gives the ROM's `daddu; movz`;
- *   - the row count is re-read in place, as the ROM reloads +0x40 for the
- *     divide;
+ *   - the row count is re-read (rowCount again, not totalRows), as the ROM
+ *     reloads +0x40 for the divide. Load-bearing: reusing totalRows there
+ *     differs from the ROM in 36/72 words (task #1129);
+ *   - the fields are reached by casting `e` at each access. The named fields
+ *     are sha-identical to the raw-offset spelling, but a `GuiListView *list`
+ *     local is NOT: cc1 keeps it in its own register (`move t0,a0`, +1 word)
+ *     because `e` is still live for e->scale (task #1129);
  *   - the unsigned->float widening of the row count is spelt by hand, with an
- *     empty volatile asm heading the negative arm (a SCHEDULING DEVICE, emits
- *     nothing) so cc1 does not hoist the `srl` into the `b` slot;
+ *     empty volatile asm heading the negative arm (a SCHEDULING DEVICE, empty
+ *     template, emits nothing: RULING #8483's class) so cc1 does not hoist the
+ *     `srl` into the `b` slot;
  *   - the ROM's two-nop pad before the div.s is an inline noreorder asm tied
- *     to the divisor and the track length;
- *   - an empty volatile asm after the divide keeps div.s out of the bltz slot
- *     and keeps the ratio in $f1. */
+ *     to the divisor and the track length (a SCHEDULING DEVICE, RULING #8435);
+ *   - an empty volatile asm after the divide (a SCHEDULING DEVICE, RULING
+ *     #8483's class) keeps div.s out of the bltz slot and keeps the ratio in
+ *     $f1. */
+/* The list subtype's view of a GuiElement: only the two fields the scroll
+ * code reads are named (include/gui.h: ext3C / textOrCount40). Pure type info. */
+typedef struct GuiListView {
+    GuiElement base;
+    u8 pad14[0x3C - sizeof(GuiElement)];
+    /* 0x3C */ u32 trackLength;  /* scroll-track length */
+    /* 0x40 */ u32 rowCount;     /* total rows (GuiListSetItemCount) */
+} GuiListView;
 #ifndef TARGET_NATIVE
 void GuiListSetScrollPos(GuiElement *e, s32 pos) {
-    u32 totalRows = *(u32 *)((char *)e + 0x40);
+    u32 totalRows = ((GuiListView *)e)->rowCount;
     u32 clamp;
     f32 rowsF, clampF, rowsDivisor, ratio;
     f32 *thumb;
@@ -1796,7 +1812,7 @@ void GuiListSetScrollPos(GuiElement *e, s32 pos) {
     if ((s32)totalRows >= 0) {
         rowsF = (f32)(s32)totalRows;
     } else {
-        __asm__ __volatile__("");  /* scheduling device, see above */
+        __asm__ __volatile__("");  /* SCHEDULING DEVICE (#8483 class), see above */
         rowsF = (f32)(s32)((totalRows & 1) | (totalRows >> 1));
         rowsF = rowsF + rowsF;
     }
@@ -1806,12 +1822,12 @@ void GuiListSetScrollPos(GuiElement *e, s32 pos) {
     }
     thumb = e->scale;
     clampF = (f32)clamp;
-    rowsDivisor = (f32)*(u32 *)((char *)e + 0x40);
-    trackLength = *(u32 *)((char *)e + 0x3C);
+    rowsDivisor = (f32)((GuiListView *)e)->rowCount;  /* re-read, see above */
+    trackLength = ((GuiListView *)e)->trackLength;
     __asm__ __volatile__(".set noreorder\n\tnop\n\tnop\n\t.set reorder"
-                         : "+f"(rowsDivisor) : "r"(trackLength));  /* ROM's pad, see above */
+                         : "+f"(rowsDivisor) : "r"(trackLength));  /* SCHEDULING DEVICE (#8435): ROM's pad */
     ratio = clampF / rowsDivisor;
-    __asm__ __volatile__("");  /* scheduling device, see above */
+    __asm__ __volatile__("");  /* SCHEDULING DEVICE (#8483 class), see above */
     thumb[0] = ratio * (f32)trackLength;
 }
 #else
@@ -1821,8 +1837,9 @@ void GuiListSetScrollPos(GuiElement *e, s32 pos) {
    That was the engine96 arm; the sdk29 EE arm above is byte-exact (task #1053). */
 /* Portable arm: same computation, without the EE scheduling devices. */
 void GuiListSetScrollPos(GuiElement *e, s32 pos) {
-    s32 totalRows = *(s32 *)((char *)e + 0x40);
-    s32 trackLength = *(s32 *)((char *)e + 0x3C);
+    GuiListView *list = (GuiListView *)e;
+    s32 totalRows = (s32)list->rowCount;
+    s32 trackLength = (s32)list->trackLength;
     s32 clamp = totalRows;
     if ((u32)totalRows >= (u32)pos) {
         clamp = pos; /* clamp = min(totalRows, pos), unsigned */
