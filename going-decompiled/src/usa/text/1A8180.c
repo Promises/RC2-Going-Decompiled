@@ -7,9 +7,16 @@
  * progress counters (CountPlatinumBolts / CountSkillPointsCompleted /
  * MarkLevelAvailable and friends).
  *
- * The matcher builds THIS unit at -O2 -G8 -fno-gcse (per-unit GFLAG/CC1EXTRA
- * override in tools/ee/objdiff_build.sh / diff.sh / build.sh) — the same
- * later-SN-cc1 TU model as the other gameplay-text units.
+ * The matcher builds THIS unit at -O2 -G8 -fno-gcse -fno-strict-aliasing
+ * (per-unit GFLAG/CC1EXTRA override in tools/ee/objdiff_build.sh / diff.sh /
+ * build.sh / unit_flags.sh) — the same later-SN-cc1 TU model as the other
+ * gameplay-text units. -fno-strict-aliasing (as text/235FE8): cc1 2.9 turns
+ * type-based aliasing on at -O2, so a u16 load is scheduled above a store to
+ * a pointer-typed global and CSE'd across it; the ROM orders func_002A9550's
+ * slot-list reads after the g_pMobyGroupIterCursor store and re-reads them
+ * after the slot/moby stores, which only the no-TBAA model reproduces. Adding
+ * the flag left every function already at 100.00% in this unit unchanged
+ * (task #1100).
  *
  * -G8 extern-sizing rules (see text/1907F0 / text/198FA0), EXTENDED here
  * with the third symbol class proven by this unit's bytes:

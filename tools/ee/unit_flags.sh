@@ -24,7 +24,7 @@ unit_flags() {
     */usa/text/191238.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
     */usa/text/198FA0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
     */usa/text/1A00F0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
-    */usa/text/1A8180.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
+    */usa/text/1A8180.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse -fno-strict-aliasing";;
     */usa/text/250080.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
     */usa/text/16E980.c) GFLAG="-G8";;
     */usa/text/248B50.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
