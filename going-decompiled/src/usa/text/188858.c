@@ -2188,10 +2188,26 @@ void func_0028AB70(s32 event) {
  * loop.c movables, so with two EE_REG pins everything through the scan loop is
  * the ROM instruction for instruction (#8535's normalised opcode+register
  * compare: 46 of 51 equal over the whole function). The residual is the tail
- * only: the
- * ROM's dead `li $7,7` is missing (one word short) and the voice-ring base
- * lands in $7, not $8. The body is in NOTE #8535. Kept as the portable #else
- * body. */
+ * only: the ROM's dead `li $7,7` is missing (one word short), the shared 7's
+ * `li $3,7` is emitted BEFORE the tail's `addu $2,$7,$11` where the ROM has
+ * it after, and the voice-ring base lands in $7, not $8. The body is in NOTE
+ * #8535.
+ *
+ * Why the two literal `% 7`s (which do give the dead li, in the ROM's slot)
+ * still miss on registers (task #1100, cc1 .lreg dump): at local-alloc the
+ * second li's pseudo is live only to its not-yet-folded div trap, because
+ * cse's rerun after loop has already pointed div#2 at the FIRST 7. The short
+ * pseudo out-ranks the first 7, takes $3, and pushes the first 7 to $4.
+ * The ROM's allocation (first 7 in $3, dead li in $7, voice base in $8,
+ * second remainder in $4) needs div#2 to still read the second li at
+ * allocation and be retargeted to $3 afterwards. This cc1 never does that
+ * retarget: with both 7s pinned ($3, $7), div#2 keeps reading $7.
+ * -fno-rerun-cse-after-loop (diagnostic only; flags are per unit) restores
+ * the first 7 in $3 and the second remainder in $4. That is consistent with
+ * the compiler-revision class (RULING #7371), not a C spelling. 96 tail
+ * spellings, register pins on every tail value, and an empty tied fence
+ * (#8483) on a named second 7 were measured; none beats 94.67. Kept as the
+ * portable #else body. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028ABC0);
 #else
