@@ -1914,6 +1914,19 @@ extern u8 D_1AC870[]; /* GIFtag template B (16 bytes) */
  * insn: ROM `lui v0,0x0  [HI16 0x001B1524]` vs built `lui a1,0x0  [HI16 0x001B1524]`). Levers:
  * cc1-small/absolute globals model RUN: 31.25% (engine96); engine96 with sched1 MEASURED (flag not
  * landed): 11.82%. */
+/* NEAR-MISS t1101: sdk29 69.68% (unit objdiff, objdiff_build.sh + unit_report.sh, solo,
+ * VM b, unit flags unchanged), up from this #else's 17.01%. Body in NOTE #8596. The reload
+ * structure matches the ROM, with no unit flag: an integer-typed struct view of the cursor
+ * (re-read after every DMA-tag word and at every block start, since only the u32 stores
+ * conflict with it), packet stores through a union, struct views of the pixel offsets
+ * (re-read per vertex), and a `.extern ,4` gp alias for the delay-slot %gp_rel reads of
+ * g_screenFadeWhite+8 and the first g_frameDmaCursor. -fno-strict-aliasing is neutral on
+ * this body: it compiles byte-identical with and without the flag (FACT #8613).
+ * Residual: cc1's sched1 hoists every constant (0x8001, 0x104, 0x80000000, 0x8008, the mask,
+ * count<<4) to the head, where the ROM places them near their use (-fno-schedule-insns does
+ * not reproduce the ROM either). The mask's `ori;dsll 16;ori;dsll 24` is the SN assembler's
+ * dli expansion (RULING #8549 class). D_1A7358/D_1A735C are the screen's far X/Y edges
+ * (g_gsPixelOffsetX+8/+0xC); the #else below reads them as g_gsPixelOffsetY[1]/[2]. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027DF80);
 #else
