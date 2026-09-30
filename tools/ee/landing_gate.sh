@@ -93,8 +93,10 @@
 #            DEFAULT base resolves to HEAD and no NATIVE input (src/, include/,
 #            tools/native/) is dirty, the row prints `NATIVE: base == tip,
 #            VACUOUS` as a WARN — a FAIL under --strict. A post-landing
-#            validator pins the landing's parent (LANDING_GATE_NATIVE_BASE=
-#            <sha>). A pin EQUAL TO HEAD is treated exactly as the unpinned
+#            validator pins the master the landing was cut from — the parent
+#            of the landing's FIRST commit (LANDING_GATE_NATIVE_BASE=<sha>);
+#            the tip's own parent is that commit only for a one-commit landing
+#            (task #1116). A pin EQUAL TO HEAD is treated exactly as the unpinned
 #            case (task #1011, watcher-2's ruling on FACT ledger-28625): an
 #            explicit pin to the tip is the same self-comparison with extra
 #            steps, and pinning the tip is the easiest mistake a seat told to
@@ -160,6 +162,28 @@
 #            (pass/units). A total alone read 44 -> 44 while USA went 29 -> 28
 #            and EU 15 -> 16; the shrink rule still FAILED that unit, but the
 #            count hid it. The per-region line is a readout, not a verdict.
+#   DLISITES (task #1116 GATE-F item a, RULING #8549 rev 2/3) tools/ee/
+#            ps2eeas_dli_sites.py --ps2eeas over tools/ee/ps2eeas_dli_sites.txt,
+#            the allowlist asm_unit.sh trusts: every row must load its value
+#            (64-bit simulation), sit inside its function's splat file, equal
+#            the ROM AND equal what Ps2EeAs.exe itself emits. FAILS naming each
+#            failing row, and as could-not-run on no summary, 0 rows, or a
+#            summary without `(Ps2EeAs checked)`. The Ps2EeAs arm is the point:
+#            the host-only checks PASS a ROM-true row Ps2EeAs does not emit
+#            (func_002E5074@0x2E50E4, #1105), which --selftest arm (22) seeds.
+#            ⚠️ The checker reaches Ps2EeAs through tools/ee/vm.sh, which is
+#            hardcoded to colima-ee-x86 (VM a) — this row runs on VM a whatever
+#            EE_DOCKER_CONTEXT says, and prints so. It writes only under
+#            tools/ee/.ps2eeas_dli/ (gitignored) in THIS worktree.
+#   ASMUNIT  (task #1116 GATE-F item b, FACT #8610) the BUILD's build.log
+#            carries no `asm_unit.sh: WARNING:`, `REFUSED:` or `FAIL:` line.
+#            FACT #8610 observed such a line reach build.log and no row read it:
+#            on USA the image cmp is the backstop (a WARNING site emits code the
+#            ROM lacks), on EU there is no cmp at all. FAILS listing each line;
+#            an `asm_unit.sh:` line with none of the three verbs is a WARN (a
+#            FAIL under --strict), so a new diagnostic kind is not read as 0.
+#            --no-build reads the recorded build's log (the TREE row ties it
+#            to this tree).
 #   TREE     the ROW is tied to the tree it was built from (task #457, #451 gap
 #            1): do_build records HEAD^{tree}, a hash of the WHOLE working tree
 #            (tracked + modified + untracked, .gitignore honoured) and the dirty
@@ -474,6 +498,47 @@ check_gmodel() {
   say "     members:"; /usr/bin/grep -vE '^UNIT [^ ]+ -G[^ ]+ 0$' "$scan" | sed 's/^/       /'
 }
 
+# ------------------------------------------------------------- DLISITES ----
+# check_dlisites [SITES_FILE] — every allowlist row re-derived with Ps2EeAs.exe
+# itself (task #1116, RULING #8549). A failing row is a FAIL, not a WARN: it is
+# a wrong build input, not a stale baseline.
+check_dlisites() {
+  local sites=${1:-$HERE/ps2eeas_dli_sites.txt} scan="$OUT/dlisites_scan.txt"
+  say "== DLISITES: every row of $sites re-derived by ps2eeas_dli_sites.py --ps2eeas — 64-bit simulation, splat file, ROM words AND Ps2EeAs.exe's own emission, RULING #8549 (scan: $scan). Ps2EeAs runs via tools/ee/vm.sh = colima-ee-x86 (VM a), not $EE_CTX"
+  python3 "$HERE/ps2eeas_dli_sites.py" --ps2eeas "$sites" > "$scan" 2>&1; local rc=$?
+  local sum nrows nfail
+  sum=$(/usr/bin/grep -E '^ps2eeas_dli_sites: [0-9]+ rows, [0-9]+ failed' "$scan" | tail -1)
+  nrows=$(printf '%s' "$sum" | awk '{print $2}'); nfail=$(printf '%s' "$sum" | awk '{print $4}')
+  if [ "$rc" = 0 ] && [ "${nfail:-x}" = 0 ] && [ "${nrows:-0}" -gt 0 ] && printf '%s' "$sum" | /usr/bin/grep -q '(Ps2EeAs checked)$'; then
+    ok "DLISITES: all $nrows allowlist row(s) equal the ROM and Ps2EeAs.exe's emission"
+  elif [ "$rc" = 1 ] && [ "${nfail:-0}" -gt 0 ]; then
+    fail "DLISITES: $nfail of $nrows allowlist row(s) fail — asm_unit.sh would expand them as written: $(awk '/^FAIL line /{ if (m) { printf "%s%s", sep, m; sep = " ; " } m = $0; next } /^      / && m { sub(/^ +/, ""); m = m " | " $0; next } { if (m) { printf "%s%s", sep, m; sep = " ; " } m = "" } END { if (m) printf "%s%s", sep, m }' "$scan")"
+  else
+    fail "ps2eeas_dli_sites.py could not run, or printed no Ps2EeAs-checked summary with at least one row (rc $rc, summary '${sum:-none}'): $(head -c 300 "$scan" | tr '\n' ' ')"
+  fi
+  say "     members:"; sed 's/^/       /' "$scan"
+}
+
+# -------------------------------------------------------------- ASMUNIT ----
+# check_asmunit [BUILD_LOG] — no asm_unit.sh WARNING/REFUSED/FAIL line in the
+# build's log (task #1116, FACT #8610).
+check_asmunit() {
+  local log=${1:-$OUT/build.log} n na
+  say "== ASMUNIT [$REGION]: no asm_unit.sh WARNING/REFUSED/FAIL line in $log — a WARNING site emits code the ROM lacks (EU has no cmp to catch it), a REFUSED/FAIL writes no object (FACT #8610)"
+  [ -f "$log" ] || { fail "ASMUNIT [$REGION]: no $log — the build did not run, the row cannot read it"; return; }
+  n=$(/usr/bin/grep -cE 'asm_unit\.sh: (WARNING|REFUSED|FAIL):' "$log" || true)
+  na=$(/usr/bin/grep -c 'asm_unit\.sh:' "$log" || true)
+  if [ "$n" = 0 ]; then
+    ok "ASMUNIT [$REGION]: 0 asm_unit.sh WARNING/REFUSED/FAIL lines in $(wc -l < "$log" | tr -d ' ') log lines"
+  else
+    fail "ASMUNIT [$REGION]: $n asm_unit.sh WARNING/REFUSED/FAIL line(s) in $log: $(/usr/bin/grep -noE 'asm_unit\.sh: (WARNING|REFUSED|FAIL): [^ ]*' "$log" | tr '\n' ';' | sed 's/;$//; s/;/ ; /g')"
+    show < <(/usr/bin/grep -nE 'asm_unit\.sh: (WARNING|REFUSED|FAIL):' "$log" | cut -c1-400 | sed 's/^/       /')
+  fi
+  if [ "$na" != "$n" ]; then
+    warn "ASMUNIT [$REGION]: $((na - n)) asm_unit.sh: line(s) with none of WARNING/REFUSED/FAIL in $log — a diagnostic kind this row does not know; read it and extend the row: $(/usr/bin/grep -n 'asm_unit\.sh:' "$log" | /usr/bin/grep -vE 'asm_unit\.sh: (WARNING|REFUSED|FAIL):' | cut -c1-200 | tr '\n' ';')"
+  fi
+}
+
 # --------------------------------------------------------------- NATIVE ----
 # native_scan TREE OUTFILE — compile every TARGET_NATIVE unit under TREE's
 # going-decompiled/src with THIS tree's tools/native/check.sh (copied into a
@@ -598,9 +663,9 @@ check_native() {
       if [ "$nd" != 0 ]; then
         say "     base == HEAD ($baseref): the row compares only the $nd uncommitted path(s) under going-decompiled/src, going-decompiled/include, tools/native"
       elif [ -n "${LANDING_GATE_NATIVE_BASE:-}" ]; then
-        vacuous=1; warn "NATIVE: base == tip, VACUOUS — LANDING_GATE_NATIVE_BASE=$LANDING_GATE_NATIVE_BASE pins the base to HEAD $baseref itself, so both arms compile one tree and neither the regression rule nor the shrink rule can fire; an explicit pin to the tip is the same self-comparison with extra steps — pin the landing's PARENT: LANDING_GATE_NATIVE_BASE=<parent sha> (task #1011)"
+        vacuous=1; warn "NATIVE: base == tip, VACUOUS — LANDING_GATE_NATIVE_BASE=$LANDING_GATE_NATIVE_BASE pins the base to HEAD $baseref itself, so both arms compile one tree and neither the regression rule nor the shrink rule can fire; an explicit pin to the tip is the same self-comparison with extra steps — pin the fork point, merge-base(HEAD, $upstream), or on a tip $upstream has already reached, the master the landing was cut from: the parent of the landing's FIRST commit, which is the tip's parent only for a one-commit landing (task #1011, #1116)"
       else
-        vacuous=1; warn "NATIVE: base == tip, VACUOUS — the default base merge-base(HEAD, $upstream) is HEAD $baseref itself (the tip has already reached $upstream), so both arms compile one tree and neither the regression rule nor the shrink rule can fire; a post-landing validator pins the landing's parent: LANDING_GATE_NATIVE_BASE=<parent sha> (task #992)"
+        vacuous=1; warn "NATIVE: base == tip, VACUOUS — the default base merge-base(HEAD, $upstream) is HEAD $baseref itself (the tip has already reached $upstream), so both arms compile one tree and neither the regression rule nor the shrink rule can fire; a post-landing validator pins the master the landing was cut from: LANDING_GATE_NATIVE_BASE=<parent of the landing's FIRST commit> — the tip's parent only for a one-commit landing (task #992, #1116)"
       fi
     # task #1034 (watcher-2's ruling Q1 on FACT ledger-28740): a base with a
     # different sha but the same NATIVE inputs is the same self-comparison. The
@@ -619,7 +684,7 @@ check_native() {
     if [ -n "${LANDING_GATE_NATIVE_BASE:-}" ] && [ "$baseref" != "$tiprev" ]; then
       local mb; mb=$(git merge-base "$tiprev" "$upstream" 2>/dev/null)
       if ! git merge-base --is-ancestor "$baseref" "$tiprev" 2>/dev/null; then
-        warn "NATIVE: WRONG BASE — the pinned base $baseref is NOT an ancestor of HEAD $tiprev, so the row compares against an unrelated commit; pin the landing's parent or merge-base(HEAD, $upstream) (task #1065)"
+        warn "NATIVE: WRONG BASE — the pinned base $baseref is NOT an ancestor of HEAD $tiprev, so the row compares against an unrelated commit; pin the fork point merge-base(HEAD, $upstream)${mb:+ = $mb} or an ancestor of it — NOT the landing's parent, which on a multi-commit branch sits on the branch's own line and fails the fork-point test below (task #1065, #1116)"
       elif [ -z "$mb" ]; then
         warn "NATIVE: WRONG BASE unverifiable — no merge-base(HEAD, $upstream), so the pinned base $baseref cannot be shown to sit at or before the fork point (task #1065)"
       elif ! git merge-base --is-ancestor "$baseref" "$mb"; then
@@ -952,6 +1017,7 @@ run_gate() {  # run_gate REGION [--no-build] [--strict]
   check_libgcc "$REGION"
   check_gmodel "$REGION"
   check_native
+  check_dlisites
   if [ $build = 1 ]; then
     do_build
     check_tree "$OUT/built_tree.txt"   # the tree did not move during the build
@@ -959,6 +1025,7 @@ run_gate() {  # run_gate REGION [--no-build] [--strict]
     say "== BUILD [$REGION]: skipped (--no-build), start epoch taken from $OUT/build_start"
     check_tree "$OUT/built_tree.txt"
   fi
+  check_asmunit
   local start; start=$(cat "$OUT/build_start" 2>/dev/null || echo 0)
   measure_row "$BUILD/$BASENAME.rom" "$BUILD/$BASENAME.elf" "$BUILD/ld.log" "$OUT/row.txt"
   check_row "$OUT/row.txt" "$start"
@@ -1156,6 +1223,8 @@ selftest() {
   selftest_dirty "$T" || bad=1
   selftest_dirty_gate "$T" || bad=1
   selftest_verdict_annotation "$T" || bad=1
+  selftest_dlisites "$T" || bad=1
+  selftest_asmunit "$T" || bad=1
 
   say "-- (14) the real gate on this tree (--no-build, the build above) must PASS"
   STRICT=0
@@ -1295,7 +1364,7 @@ selftest_dirty_gate() {
     || { say "SELFTEST-BROKEN: (20) could not create its scratch repo in $D/repo"; return 1; }
   dirty_gate_run() {  # dirty_gate_run OUTFILE — the real run_gate in $D/repo, rows other than DIRTY stubbed
     ( cd "$D/repo" || exit 2
-      for f in check_flags split_inputs check_shadow check_orphans check_libgcc check_gmodel check_native do_build check_tree measure_row check_row check_noprovide; do
+      for f in check_flags split_inputs check_shadow check_orphans check_libgcc check_gmodel check_native check_dlisites do_build check_tree check_asmunit measure_row check_row check_noprovide; do
         eval "$f() { say \"     (arm 20 stub: $f)\"; }"
       done
       region_vars() { REGION=$1; OUT="$D/out"; mkdir -p "$OUT"; }
@@ -1566,7 +1635,7 @@ selftest_verdict_annotation() {
   if [ -z "$NATIVE_PROBE_C" ] || [ -z "$NATIVE_PROBE_TOOLS" ]; then say "SELFTEST-BROKEN: (21) needs (u')/(u'')'s probe chains, which arm (18) did not build (NATIVE inputs dirty?)"; return 1; fi
   eval "$(declare -f check_native | sed '1s/^check_native/annot_real_check_native/')"
   annot_run() {  # annot_run OUTFILE BASE TIP — the real run_gate, NATIVE pinned to BASE, tip TIP, upstream BASE
-    ( for f in check_dirty check_flags split_inputs check_shadow check_orphans check_libgcc check_gmodel do_build check_tree measure_row check_row check_noprovide; do
+    ( for f in check_dirty check_flags split_inputs check_shadow check_orphans check_libgcc check_gmodel check_dlisites do_build check_tree check_asmunit measure_row check_row check_noprovide; do
         eval "$f() { say \"     (arm 21 stub: $f)\"; }"
       done
       region_vars() { REGION=$1; OUT="$D/out"; mkdir -p "$OUT"; }
@@ -1620,6 +1689,56 @@ selftest_mount_sync() {
   out=$(in_vm "( sleep 1.5; printf 'landing_gate selftest 15: restored\\n' > $F ) & MOUNT_SYNC_TRIES=20 MOUNT_SYNC_SLEEP=0.5 sh $helper check $F $want2; rc=\$?; wait; exit \$rc" 2>&1); rc=$?
   if [ $rc = 0 ] && printf '%s' "$out" | /usr/bin/grep -q "^mount_sync: $F agreed with the host on try [2-9][0-9]* of 20"; then ok "fired: $(printf '%s' "$out" | /usr/bin/grep '^mount_sync:' | sed -E 's/ \(the mount.*//')"; else say "SELFTEST-FAIL retry path: rc $rc, output: $out"; bad=1; fi
   return $bad
+}
+
+# selftest_dlisites OUTDIR — arm (22), callable on its own after sourcing this
+# file (`. tools/ee/landing_gate.sh; region_vars usa; selftest_dlisites /tmp/x`).
+# The seed is #1105's func_002E5074@0x2E50E4 row: ROM-true, splat-true and
+# simulation-true, so ONLY the Ps2EeAs arm can fail it. The host-only checker
+# must pass the same copy — if it ever stops doing so, the seed no longer
+# isolates the Ps2EeAs arm and the arm says so instead of passing.
+selftest_dlisites() {
+  local T="$1" b=0 rc
+  local seed='usa      func_002E5074  0x002E50E4  $8,0x1300000             24080013 00084538'
+  say "-- (22) DLISITES (#1116): the real allowlist must pass; a copy with #1105's ROM-true row func_002E5074@0x2E50E4 appended must FAIL naming ONLY that row with PS2EEAS; the host-only checker must PASS that copy (the arm it isolates)"
+  FAILED=0; check_dlisites > "$T/dlisites_real.txt"
+  if [ "$FAILED" = 0 ] && /usr/bin/grep -q '^OK   DLISITES: all [1-9][0-9]* allowlist row(s)' "$T/dlisites_real.txt"; then ok "control: $(/usr/bin/grep '^OK   DLISITES' "$T/dlisites_real.txt" | sed 's/^OK   //')"; else say "SELFTEST-FAIL the real allowlist does not pass DLISITES:"; show < "$T/dlisites_real.txt"; b=1; fi
+  { cat "$HERE/ps2eeas_dli_sites.txt"; printf '%s\n' "$seed"; } > "$T/dlisites_seed.txt"
+  FAILED=0; check_dlisites "$T/dlisites_seed.txt" > "$T/dlisites_seeded.txt"
+  if [ "$FAILED" = 1 ] && /usr/bin/grep -qE '^FAIL DLISITES: 1 of [0-9]+ allowlist row\(s\) fail — .*: FAIL line [0-9]+: usa +func_002E5074 +0x002E50E4 .* \| PS2EEAS emits ' "$T/dlisites_seeded.txt"; then ok "fired: $(/usr/bin/grep '^FAIL DLISITES' "$T/dlisites_seeded.txt" | sed 's/ — asm_unit.sh would expand them as written//')"
+  else say "SELFTEST-FAIL the seeded func_002E5074 row did not fail DLISITES alone with PS2EEAS (FAILED=$FAILED):"; show < "$T/dlisites_seeded.txt"; b=1; fi
+  python3 "$HERE/ps2eeas_dli_sites.py" "$T/dlisites_seed.txt" > "$T/dlisites_hostonly.txt" 2>&1; rc=$?
+  if [ "$rc" = 0 ] && /usr/bin/grep -qE '^ps2eeas_dli_sites: [0-9]+ rows, 0 failed \(Ps2EeAs NOT run\)$' "$T/dlisites_hostonly.txt"; then ok "isolation: the host-only checker passes the same seeded copy (rc 0, $(tail -1 "$T/dlisites_hostonly.txt" | sed 's/^ps2eeas_dli_sites: //')) — only the Ps2EeAs arm sees it"
+  else say "SELFTEST-BROKEN the host-only checker no longer passes the func_002E5074 seed (rc $rc) — it no longer isolates the Ps2EeAs arm; choose a seed only Ps2EeAs rejects:"; show < "$T/dlisites_hostonly.txt"; b=1; fi
+  FAILED=0
+  return $b
+}
+
+# selftest_asmunit OUTDIR [BUILD_LOG] — arm (23). Seeds are copies of the
+# selftest build's own log with one line appended, so the query form is the one
+# the real row runs on: FACT #8610's WARNING line (the one it observed reach a
+# gate build.log), a REFUSED line and an unknown `asm_unit.sh:` kind.
+selftest_asmunit() {
+  local T="$1" log=${2:-$OUT/build.log} b=0 s
+  say "-- (23) ASMUNIT (#1116): this build's log must pass; copies with FACT #8610's WARNING line, or a REFUSED line, appended must FAIL naming it; an unknown asm_unit.sh: kind must WARN (FAIL under --strict); a missing log must FAIL"
+  FAILED=0; WARNED=0; STRICT=0; check_asmunit "$log" > "$T/asmunit_real.txt"
+  if [ "$FAILED" = 0 ] && [ "$WARNED" = 0 ]; then ok "control: $(/usr/bin/grep '^OK   ASMUNIT' "$T/asmunit_real.txt" | sed 's/^OK   //')"; else say "SELFTEST-FAIL this build's log does not pass ASMUNIT:"; show < "$T/asmunit_real.txt"; b=1; fi
+  { cat "$log"; printf 'asm_unit.sh: WARNING: func_00352CE8: `sw\t$2,g_pHeroMoby` in the delay slot of `beql\t$4,$0,1f` NOT hoisted (branch-likely); emitted as lui $at before the branch + the %%lo access in the slot. The ROM has no such site: this function cannot match as written (#979, FACT #8385)\n'; } > "$T/asmunit_warn.log"
+  { cat "$log"; printf 'asm_unit.sh: REFUSED: ps2eeas_dli.awk exited 1 on t1116.s; t1116.o removed (RULING #8549)\n'; } > "$T/asmunit_refused.log"
+  { cat "$log"; printf 'asm_unit.sh: NOTICE: t1116 selftest, a kind the row does not know\n'; } > "$T/asmunit_unknown.log"
+  for s in WARNING:func_00352CE8:warn REFUSED:ps2eeas_dli.awk:refused; do
+    FAILED=0; WARNED=0; check_asmunit "$T/asmunit_${s##*:}.log" > "$T/asmunit_${s##*:}.txt"
+    if [ "$FAILED" = 1 ] && [ "$WARNED" = 0 ] && /usr/bin/grep -qE "^FAIL ASMUNIT \[$REGION\]: 1 asm_unit.sh WARNING/REFUSED/FAIL line\(s\) in .*: [0-9]+:asm_unit\.sh: $(printf '%s' "$s" | cut -d: -f1): $(printf '%s' "$s" | cut -d: -f2)" "$T/asmunit_${s##*:}.txt"; then ok "fired: $(/usr/bin/grep '^FAIL ASMUNIT' "$T/asmunit_${s##*:}.txt" | sed -E 's/ in [^ ]*: / : /')"
+    else say "SELFTEST-FAIL the appended $(printf '%s' "$s" | cut -d: -f1) line did not FAIL ASMUNIT naming it (FAILED=$FAILED WARNED=$WARNED):"; show < "$T/asmunit_${s##*:}.txt"; b=1; fi
+  done
+  FAILED=0; WARNED=0; STRICT=0; check_asmunit "$T/asmunit_unknown.log" > "$T/asmunit_unknown_warn.txt"
+  if [ "$FAILED" = 0 ] && [ "$WARNED" = 1 ] && /usr/bin/grep -q '^WARN ASMUNIT .*: 1 asm_unit.sh: line(s) with none of WARNING/REFUSED/FAIL' "$T/asmunit_unknown_warn.txt"; then ok "fired: an unknown kind WARNs (FAILED=$FAILED WARNED=$WARNED)"; else say "SELFTEST-FAIL an unknown asm_unit.sh: kind did not WARN (FAILED=$FAILED WARNED=$WARNED):"; show < "$T/asmunit_unknown_warn.txt"; b=1; fi
+  FAILED=0; WARNED=0; STRICT=1; check_asmunit "$T/asmunit_unknown.log" > "$T/asmunit_unknown_strict.txt"; STRICT=0
+  if [ "$FAILED" = 1 ] && /usr/bin/grep -q '^FAIL(strict) ASMUNIT' "$T/asmunit_unknown_strict.txt"; then ok "fired: under --strict the unknown kind is a FAIL"; else say "SELFTEST-FAIL --strict did not fail the unknown asm_unit.sh: kind (FAILED=$FAILED)"; b=1; fi
+  FAILED=0; WARNED=0; check_asmunit "$T/asmunit_absent.log" > "$T/asmunit_absent.txt"
+  if [ "$FAILED" = 1 ] && /usr/bin/grep -q '^FAIL ASMUNIT .*: no .*asmunit_absent.log' "$T/asmunit_absent.txt"; then ok "fired: a missing log is a FAIL"; else say "SELFTEST-FAIL a missing build.log did not FAIL ASMUNIT (FAILED=$FAILED)"; b=1; fi
+  FAILED=0; WARNED=0
+  return $b
 }
 
 # sourceable (`. tools/ee/landing_gate.sh`) for the individual check functions
