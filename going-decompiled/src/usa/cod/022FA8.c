@@ -2413,73 +2413,122 @@ typedef struct SectionHeader {
 
 extern u8 *g_pLoadedSegment;
 
+/* InstallLoadedOverlay's EE-arm match devices (task #1123). None of them emits an
+ * instruction cc1 would not; natively each is empty or a plain spelling.
+ *
+ *   g_pLoadedSegmentAbs
+ *     ADDRESSING-MODEL DEVICE (RULING #8620). The ROM reads the segment pointer
+ *     with the GAS `lw $3,g_pLoadedSegment` macro expansion, `lui $3,%hi(sym);
+ *     lw $3,%lo(sym)($3)` (the destination register reused for the %hi). cc1 at
+ *     this unit's -G0 instead splits HIGH/LO_SUM and colours the %hi temp $4. The
+ *     `.sdata` section attribute on this EXTERN DECLARATION (no definition, no
+ *     data moved) makes cc1 treat the symbol as small and print the one-line
+ *     macro; the #8036 assembler alias `.extern g_pLoadedSegmentAbs,16` makes
+ *     GAS expand it absolutely rather than %gp_rel. The alias is an equate of
+ *     g_pLoadedSegment, so the relocation names the real symbol and no alias
+ *     symbol reaches the object or the image. g_pLoadedSegment has no other user
+ *     in this unit. Without the attribute (or the alias): 96.18% (diff.sh fuzzy,
+ *     task #1123), the split `lui $4` head.
+ *   EE_REG(r)
+ *     REGISTER-PIN DEVICE (RULING #8598) on a live local; see the two pins in
+ *     the body for the residual each closes.
+ *   R5900_SHORT_LOOP_PAD1(v, next)
+ *     the R5900 short-loop pad (RULING #8435 SCHEDULING DEVICE): one `nop`
+ *     before a copy loop's closing branch, tied to the pointer the branch tests
+ *     (`v`) and the one reorg moves into its delay slot (`next`), as in
+ *     text/188858.c and text/1DFF80.c. */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_pLoadedSegmentAbs, 16\n\tg_pLoadedSegmentAbs = g_pLoadedSegment");
+extern u8 *g_pLoadedSegmentAbs __attribute__((section(".sdata")));
+#define EE_REG(r) __asm__(r)
+#define R5900_SHORT_LOOP_PAD1(v, next) \
+    __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
+#else
+#define g_pLoadedSegmentAbs g_pLoadedSegment
+#define EE_REG(r)
+#define R5900_SHORT_LOOP_PAD1(v, next) ((void)0)
+#endif
+
+/* One 64-bit copy unit of the aligned payload path (ld/sd). */
+typedef union CopyDword {
+    u64 d;
+    s32 w;
+} CopyDword;
+
 /* InstallLoadedOverlay (0x131CB8): relocate/install the freshly loaded overlay
  * segment pointed to by g_pLoadedSegment. The segment's first word is the byte
  * offset to the first section header; from there it walks consecutive 16-byte
  * section headers, copying each section's payload (which immediately follows its
- * header) to the header's dest VA — 64 bits at a time when dest, src and size
+ * header) to the header's dest VA — 64 bits at a time when size, src and dest
  * are all 8-byte aligned, else 32 bits at a time. It installs the run of
  * sections that share the first section's group id (key) and returns that id,
  * stopping at the first section whose id differs.
  *
- * NEAR-MISS, kept as INCLUDE_ASM for the matching build (#ifndef TARGET_NATIVE):
- * this is pure memory-relocation C (no hardware), and a faithful rotated
- * single-running-pointer rendering reproduces the original instruction-for-
- * instruction EXCEPT that ee-gcc's delay-slot filler emits the three payload-
- * alignment tests as ordinary `bne` (filling the delay from before the branch)
- * whereas the original uses annulling `bnel` branches that lazily recompute
- * `dest + size` only on the taken (4-byte) path. That is a filler decision, not
- * expressible from C source; -fno-gcse only makes it worse (frame spill) and the
- * unit is fixed at -O2 -G0, so the branch form cannot be coerced. ~50%
- * byte-match; honest effort exhausted. The portable #else below is the
- * functionally-faithful rendering (cmp-oracle'd against the .s on real R5900). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", InstallLoadedOverlay);
-#else
+ * Returns: the group id of the installed run (the caller, main, adopts it as the
+ * next stage routine's address).
+ *
+ * Non-obvious behaviour: a zero-size section is skipped without copying, and the
+ * walk has no terminator of its own — it relies on the segment ending with a
+ * header whose key differs from the first one.
+ *
+ * MATCHED, byte-exact (task #1123; body from NOTE #8618, t1110). Load-bearing
+ * spellings (each measured by removal in NOTE #8618):
+ *   - the cursor as `*(s32 *)seg + (u32)seg` gives the ROM's `addu t0,v0,v1`
+ *     operand order; `key == hdr->key` gives its `beql t1,v0`;
+ *   - `(low = raw & 7, size = raw, low)` makes the andi read the load temp
+ *     before the copy (otherwise regmove rewrites the andi onto the copy);
+ *   - the empty `"+r"` fences (RULING #8483) keep each store before its
+ *     pointer increment. */
 s32 InstallLoadedOverlay(void) {
-    u8 *base = g_pLoadedSegment;
-    SectionHeader *hdr = (SectionHeader *)(base + *(s32 *)base);
+    u8 *seg = g_pLoadedSegmentAbs;
     s32 key = 0;
+    u8 *cur = (u8 *)(*(s32 *)seg + (u32)seg);
+    SectionHeader *hdr;
+    u8 *dst;
+    /* REGISTER-PIN DEVICE (#8598): the payload read pointer in $4, the ROM's
+     * `daddu a0,t0,zero`. Unpinned, cc1 colours it differently: 97.00% (diff.sh
+     * fuzzy, task #1123). */
+    register u8 *src EE_REG("$4");
 
-    for (;;) {
-        u8 *src = (u8 *)hdr + 0x10;
-        u8 *dst = (u8 *)hdr->dest;
+    while (hdr = (SectionHeader *)cur, cur = (u8 *)(hdr + 1), dst = (u8 *)hdr->dest, src = cur,
+           key == 0 ? (key = hdr->key, 1) : key == hdr->key) {
+        /* REGISTER-PIN DEVICE (#8598): the loaded hdr->size in $2, the ROM's
+         * `lw v0,4(a3)` feeding both `daddu v1,v0,zero` and `andi v0,v0,7`.
+         * Unpinned, regmove loads it straight into the copy's register:
+         * 79.55% (diff.sh fuzzy, task #1123). */
+        register s32 raw EE_REG("$2") = hdr->size;
         s32 size;
+        s32 low;
 
-        if (key != 0) {
-            if (hdr->key != key) {
-                return key;
-            }
-        } else {
-            key = hdr->key;
-        }
-        size = hdr->size;
-
-        if (((size & 7) == 0) && (((u32)src & 7) == 0) && (((u32)dst & 7) == 0)) {
-            /* dest, src and size all 8-byte aligned: copy 64 bits at a time */
-            u64 *d = (u64 *)dst;
-            u64 *s = (u64 *)src;
-            u64 *end = (u64 *)(dst + size);
+        if ((low = raw & 7, size = raw, low) == 0 && ((u32)cur & 7) == 0 && ((u32)dst & 7) == 0) {
+            /* size, src and dest all 8-byte aligned: copy 64 bits at a time */
+            CopyDword *d = (CopyDword *)dst;
+            CopyDword *s = (CopyDword *)cur;
+            CopyDword *end = (CopyDword *)(dst + size);
             while (d != end) {
-                *d = *s;
+                d->d = s->d;
+                __asm__("" : "+r"(d));
                 d++;
+                R5900_SHORT_LOOP_PAD1(d, s);
+                R5900_SHORT_LOOP_PAD1(d, s);
                 s++;
             }
         } else {
             /* otherwise copy 32 bits at a time */
-            s32 *d = (s32 *)dst;
-            s32 *s = (s32 *)src;
-            s32 *end = (s32 *)(dst + size);
-            while (d != end) {
-                *d = *s;
-                d++;
-                s++;
+            u8 *end = dst + size;
+            while (dst != end) {
+                *(u32 *)dst = *(u32 *)src;
+                __asm__("" : "+r"(dst));
+                dst += 4;
+                R5900_SHORT_LOOP_PAD1(dst, src);
+                R5900_SHORT_LOOP_PAD1(dst, src);
+                src += 4;
             }
         }
-        hdr = (SectionHeader *)(src + size);
+        cur += hdr->size;
     }
+    return key;
 }
-#endif
 
 extern void LoadLevelAndInitHealth(void);
 extern s32 InstallLoadedOverlay(void);
