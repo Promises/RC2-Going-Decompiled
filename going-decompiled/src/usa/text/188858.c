@@ -5707,171 +5707,270 @@ void UploadTextureToGs(s32 handle, s32 vramBlk, s32 fmt, s32 wLog, s32 hLog,
 }
 #endif
 
-/* func_00290320 / func_002904B0 / func_00290640 (task #1024): C bodies exist
- * whose words equal the ROM's everywhere except the 64-bit constant loads (3, 3
- * and 1 blocks). The ROM's words there equal the `dli` expansion SN's
- * Ps2EeAs.exe produces (FACT #8518, which does not show that Ps2EeAs produced
- * the ROM; GNU and SN as.exe 2.9 differ, #8524):
+/*
+ * The GS-rectangle GIF-packet builders func_00290320, func_002904B0 and
+ * func_00290640. All three are byte-exact on sdk29, promoted under RULING
+ * #8549's per-site `dli` allowlist (task #1127; C bodies from task #1024's
+ * NOTE #8489).
+ *
+ * Each builds 64-bit constants with cc1's `dli` (0x4400000000008001, and in the
+ * first two also 0x00FFFFF000000000). cc1 2.9 has no DImode `ori`, so C cannot
+ * spell the ROM's form of those constants (FACT #8524). The ROM's words there
+ * equal the `dli` expansion SN's Ps2EeAs.exe produces (FACT #8518, which does
+ * not show that Ps2EeAs produced the ROM; GNU and SN as.exe 2.9 differ, #8524):
  * `ori 0x8800; dsll32 15; ori 0x8001` and `ori 0xFFFF; dsll 16; ori 0xF000;
  * dsll 24`, where GNU as picks another (`lui 0x4400; dsll32 0; ori`,
- * `li -1; dsll32 12; dsrl 8`). cc1 2.9 has no DImode `ori` (FACT #8524), so
- * ordinary and fenced C cannot spell the ROM's form (#8524's bound: the
- * spellings it tried; mode punning and emitting inline-asm devices were not
- * tried, and an emitting asm is forbidden by RULING #8549). The lever is an
- * assembler-side expansion rule, not C: tested end to end for these three
- * functions on sdk29 (FACT #8544). The in-tree build path is RULING #8549's
- * per-site allowlist, implemented as tooling (tools/ee/ps2eeas_dli_sites.txt,
- * task #1105); no function is promoted under it yet. The bodies are in task
- * #1024's store note. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_00290320);
-#else
-/**
- * Near-twin of func_00290640 (and func_002904B0): append a GIF/DMA packet to the
- * frame render-DMA chain (g_frameDmaCursor) that programs a GS rectangle from
- * two corner points, then advance the cursor by 0x40. Identical layout to
- * func_00290640 except the register at p+0x20 is 0x41 (vs 0x46) and the packed
- * Z field is the fixed constant 0x00FFFFF000000000 rather than a caller value.
+ * `li -1; dsll32 12; dsrl 8`). In this build that expansion comes from the
+ * ASSEMBLER step: tools/ee/asm_unit.sh (tools/ee/ps2eeas_dli.awk) rewrites a
+ * cc1 `dli` into those words only at the (region, function, operands) rows of
+ * tools/ee/ps2eeas_dli_sites.txt (task #1105). These three functions are the
+ * only ones promoted under that allowlist, and its 7 rows are exactly their 7
+ * `dli` sites (3 + 3 + 1). RULING #8549 rev 3 freezes the list at those rows. No C
+ * here writes an `ori`/`dsll`, and no asm below emits an instruction: the
+ * fences have empty templates and the alias directive only defines an
+ * assembler symbol.
  *
- * `mode` picks the coordinate convention: mode != 0 = whole pixels (-8 bias);
- * mode == 0 = 1/16-pixel subpixel (coord<<4, -0x10 bias). off = g_gsPixelOffset.
+ * Devices (EE arm only unless marked; the native arm is plain C). Each one was
+ * removed alone and re-measured (task #1127, verify_match_unit): every removal
+ * breaks the match, so none is redundant.
+ *   - GS_RECT_CURSOR, GS_RECT_PIX_X/Y and GS_RECT_VOL are `volatile` CODEGEN
+ *     DEVICES (RULING #8404), not a claim that the cursor or the pixel offsets
+ *     change asynchronously. The ROM re-loads g_frameDmaCursor (`lui; lw`)
+ *     before each header store and before taking `p`, re-loads
+ *     g_gsPixelOffsetX/Y for each corner, and keeps the packet stores in source
+ *     order. Without the cursor volatile 90/92 words differ, without the offset
+ *     volatile 75/92, without the store volatile 93/100 (func_00290320).
+ *     Writers: g_frameDmaCursor is stored by 65 asm functions, all draw-list,
+ *     packet or texture-upload builders (e.g. BeginFrameDrawList,
+ *     BuildShrubDrawSegment, UploadTextureToGs). g_gsPixelOffsetX/Y are stored
+ *     by InitScreenGeometry, SetupGsDisplayBuffers,
+ *     RecomputeScreenViewportFromGsContext and func_0027B858. None of those is
+ *     named as an interrupt or DMA handler. That census is by name, not a
+ *     call-graph trace.
+ *   - g_frameDmaCursorGp is an ASSEMBLER ALIAS of g_frameDmaCursor (FACT #8036's
+ *     construct, sized 4 so gas makes it %gp_rel). It gives the ROM's final
+ *     `jr $31; sw $2,%gp_rel(g_frameDmaCursor)($28)`, while every other cursor
+ *     access is absolute. Without it the final store is `lui $1; sw %lo` and the
+ *     function is 2 words longer. The relocation names g_frameDmaCursor and the
+ *     object has no g_frameDmaCursorGp symbol.
+ *   - the `reg4` fence is an EMPTY operand-tied asm (RULING #8483, both arms): a
+ *     SCHEDULING FENCE. It keeps the store of `reg4` (`sd $8,0x28`) after the
+ *     cursor write-back, in the `beqz` delay slot. Without it cc1 hoists that
+ *     store above the write-back and 74/100 words differ.
+ *   - func_00290640 carries one EE_REG pin (RULING #8598), see its comment.
+ */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_frameDmaCursorGp, 4\n\tg_frameDmaCursorGp = g_frameDmaCursor");
+extern u32 *g_frameDmaCursorGp; // alias
+#define GS_RECT_VOL volatile
+#define GS_RECT_CURSOR (*(u32 *volatile *)&g_frameDmaCursor)
+#define GS_RECT_PIX_X (*(volatile s32 *)&g_gsPixelOffsetX)
+#define GS_RECT_PIX_Y (*(volatile s32 *)&g_gsPixelOffsetY)
+#else
+#define g_frameDmaCursorGp g_frameDmaCursor
+#define GS_RECT_VOL
+#define GS_RECT_CURSOR g_frameDmaCursor
+#define GS_RECT_PIX_X g_gsPixelOffsetX
+#define GS_RECT_PIX_Y g_gsPixelOffsetY
+#endif
+
+/**
+ * Append a GIF/DMA packet to the frame render-DMA chain (g_frameDmaCursor)
+ * that programs a GS rectangle from two corner points.
+ *
+ * Packet at the cursor `p`:
+ *   p+0x00  DMA/GIF chain tags 0x10000003, 0, 0, 0x50000003; the cursor moves to
+ *           p+0x10 here
+ *   p+0x10  GIFtag 0x4400000000008001, then the register data 0x4410, 0x41, reg4
+ *   p+0x30  corner 0: x | y << 16 | 0x00FFFFF000000000 (fixed Z)
+ *   p+0x38  corner 1, packed the same way
+ * The cursor is then advanced by another 0x30, to p+0x40.
+ *
+ *   x0,y0,x1,y1  the corners
+ *   reg4         the fourth register-data qword, stored as is
+ *   mode         != 0: whole pixels, coord + g_gsPixelOffset - 8;
+ *                == 0: 1/16-pixel, (coord << 4) + g_gsPixelOffset - 0x10
+ *
+ * Each coordinate is a 32-bit sum, sign-extended to 64 bits before the shift
+ * and OR, as the ROM's `addiu; dsll 16; or` does. The two corners re-read the
+ * pixel offsets.
+ * Byte-exact on sdk29 (task #1127): devices and dli expansion above.
  */
 void func_00290320(s32 x0, s32 y0, s32 x1, s32 y1, u64 reg4, s32 mode) {
-    u8 *p = (u8 *)g_frameDmaCursor;
-    u64 z = (u64)0xFFFFF000u << 24; /* fixed Z = 0x00FFFFF000000000 */
+    u8 *p;
 
-    *(u32 *)(p + 0x0) = 0x10000003;
-    *(u32 *)(p + 0x4) = 0;
-    *(u32 *)(p + 0x8) = 0;
-    *(u32 *)(p + 0xC) = 0x50000003;
-    g_frameDmaCursor = (u32 *)(p + 0x10);
-
-    *(u64 *)(p + 0x10) = ((u64)0x8800 << 47) | 0x8001;
-    *(u64 *)(p + 0x18) = 0x4410;
-    *(u64 *)(p + 0x20) = 0x41;
+    ((GS_RECT_VOL u32 *)GS_RECT_CURSOR)[0] = 0x10000003;
+    ((GS_RECT_VOL u32 *)GS_RECT_CURSOR)[1] = 0;
+    ((GS_RECT_VOL u32 *)GS_RECT_CURSOR)[2] = 0;
+    ((GS_RECT_VOL u32 *)GS_RECT_CURSOR)[3] = 0x50000003;
+    p = (u8 *)GS_RECT_CURSOR;
+    GS_RECT_CURSOR = (u32 *)(p + 0x10);
+    *(GS_RECT_VOL u64 *)(p + 0x10) = ((u64)0x8800 << 47) | 0x8001;
+    *(GS_RECT_VOL u64 *)(p + 0x18) = 0x4410;
+    *(GS_RECT_VOL u64 *)(p + 0x20) = 0x41;
+    __asm__ __volatile__("" : "+r"(reg4));
     *(u64 *)(p + 0x28) = reg4;
 
-    if (mode == 0) {
-        *(u64 *)(p + 0x30) = (u64)(u32)((x0 << 4) + g_gsPixelOffsetX - 0x10)
-                           | ((u64)(u32)((y0 << 4) + g_gsPixelOffsetY - 0x10) << 16)
-                           | z;
-        *(u64 *)(p + 0x38) = (u64)(u32)((x1 << 4) + g_gsPixelOffsetX - 0x10)
-                           | ((u64)(u32)((y1 << 4) + g_gsPixelOffsetY - 0x10) << 16)
-                           | z;
+    if (mode != 0) {
+        {
+            s32 oy = GS_RECT_PIX_Y;
+            s32 ox = GS_RECT_PIX_X;
+            *(GS_RECT_VOL s64 *)(p + 0x30) = (s64)(x0 + ox - 8)
+                                           | ((s64)(y0 + oy - 8) << 16)
+                                           | ((s64)0xFFFFF000u << 24);
+        }
+        {
+            s32 oy = GS_RECT_PIX_Y;
+            s32 ox = GS_RECT_PIX_X;
+            *(s64 *)(p + 0x38) = (s64)(x1 + ox - 8) | ((s64)(y1 + oy - 8) << 16)
+                               | ((s64)0xFFFFF000u << 24);
+        }
     } else {
-        *(u64 *)(p + 0x30) = (u64)(u32)(x0 + g_gsPixelOffsetX - 8)
-                           | ((u64)(u32)(y0 + g_gsPixelOffsetY - 8) << 16)
-                           | z;
-        *(u64 *)(p + 0x38) = (u64)(u32)(x1 + g_gsPixelOffsetX - 8)
-                           | ((u64)(u32)(y1 + g_gsPixelOffsetY - 8) << 16)
-                           | z;
+        {
+            s32 oy = GS_RECT_PIX_Y;
+            s32 ox = GS_RECT_PIX_X;
+            *(GS_RECT_VOL s64 *)(p + 0x30) = (s64)((x0 << 4) + ox - 0x10)
+                                           | ((s64)((y0 << 4) + oy - 0x10) << 16)
+                                           | ((s64)0xFFFFF000u << 24);
+        }
+        {
+            s32 oy = GS_RECT_PIX_Y;
+            s32 ox = GS_RECT_PIX_X;
+            *(s64 *)(p + 0x38) = (s64)((x1 << 4) + ox - 0x10)
+                               | ((s64)((y1 << 4) + oy - 0x10) << 16)
+                               | ((s64)0xFFFFF000u << 24);
+        }
     }
-
-    g_frameDmaCursor = (u32 *)((u8 *)g_frameDmaCursor + 0x30);
+    g_frameDmaCursorGp = (u32 *)((u8 *)GS_RECT_CURSOR + 0x30);
 }
-#endif
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_002904B0);
-#else
 /**
- * GS rectangle GIF-packet builder, twin of func_00290320: identical to it
- * (fixed Z 0x00FFFFF000000000, 6 args, both coordinate modes) except the
- * register written at p+0x20 is 0x46 rather than 0x41. Appends the packet to the
- * frame render-DMA chain (g_frameDmaCursor) and advances the cursor by 0x40.
+ * Twin of func_00290320: the same GS-rectangle packet and fixed Z, except the
+ * register data at p+0x20 is 0x46 rather than 0x41.
  *
- * `mode` picks the coordinate convention: mode != 0 = whole pixels (-8 bias);
- * mode == 0 = 1/16-pixel subpixel (coord<<4, -0x10 bias). off = g_gsPixelOffset.
+ *   x0,y0,x1,y1, reg4, mode  as func_00290320
+ *
+ * Byte-exact on sdk29 (task #1127): devices and dli expansion above.
  */
 void func_002904B0(s32 x0, s32 y0, s32 x1, s32 y1, u64 reg4, s32 mode) {
-    u8 *p = (u8 *)g_frameDmaCursor;
-    u64 z = (u64)0xFFFFF000u << 24; /* fixed Z = 0x00FFFFF000000000 */
+    u8 *p;
 
-    *(u32 *)(p + 0x0) = 0x10000003;
-    *(u32 *)(p + 0x4) = 0;
-    *(u32 *)(p + 0x8) = 0;
-    *(u32 *)(p + 0xC) = 0x50000003;
-    g_frameDmaCursor = (u32 *)(p + 0x10);
-
-    *(u64 *)(p + 0x10) = ((u64)0x8800 << 47) | 0x8001;
-    *(u64 *)(p + 0x18) = 0x4410;
-    *(u64 *)(p + 0x20) = 0x46;
+    ((GS_RECT_VOL u32 *)GS_RECT_CURSOR)[0] = 0x10000003;
+    ((GS_RECT_VOL u32 *)GS_RECT_CURSOR)[1] = 0;
+    ((GS_RECT_VOL u32 *)GS_RECT_CURSOR)[2] = 0;
+    ((GS_RECT_VOL u32 *)GS_RECT_CURSOR)[3] = 0x50000003;
+    p = (u8 *)GS_RECT_CURSOR;
+    GS_RECT_CURSOR = (u32 *)(p + 0x10);
+    *(GS_RECT_VOL u64 *)(p + 0x10) = ((u64)0x8800 << 47) | 0x8001;
+    *(GS_RECT_VOL u64 *)(p + 0x18) = 0x4410;
+    *(GS_RECT_VOL u64 *)(p + 0x20) = 0x46;
+    __asm__ __volatile__("" : "+r"(reg4));
     *(u64 *)(p + 0x28) = reg4;
 
-    if (mode == 0) {
-        *(u64 *)(p + 0x30) = (u64)(u32)((x0 << 4) + g_gsPixelOffsetX - 0x10)
-                           | ((u64)(u32)((y0 << 4) + g_gsPixelOffsetY - 0x10) << 16)
-                           | z;
-        *(u64 *)(p + 0x38) = (u64)(u32)((x1 << 4) + g_gsPixelOffsetX - 0x10)
-                           | ((u64)(u32)((y1 << 4) + g_gsPixelOffsetY - 0x10) << 16)
-                           | z;
+    if (mode != 0) {
+        {
+            s32 oy = GS_RECT_PIX_Y;
+            s32 ox = GS_RECT_PIX_X;
+            *(GS_RECT_VOL s64 *)(p + 0x30) = (s64)(x0 + ox - 8)
+                                           | ((s64)(y0 + oy - 8) << 16)
+                                           | ((s64)0xFFFFF000u << 24);
+        }
+        {
+            s32 oy = GS_RECT_PIX_Y;
+            s32 ox = GS_RECT_PIX_X;
+            *(s64 *)(p + 0x38) = (s64)(x1 + ox - 8) | ((s64)(y1 + oy - 8) << 16)
+                               | ((s64)0xFFFFF000u << 24);
+        }
     } else {
-        *(u64 *)(p + 0x30) = (u64)(u32)(x0 + g_gsPixelOffsetX - 8)
-                           | ((u64)(u32)(y0 + g_gsPixelOffsetY - 8) << 16)
-                           | z;
-        *(u64 *)(p + 0x38) = (u64)(u32)(x1 + g_gsPixelOffsetX - 8)
-                           | ((u64)(u32)(y1 + g_gsPixelOffsetY - 8) << 16)
-                           | z;
+        {
+            s32 oy = GS_RECT_PIX_Y;
+            s32 ox = GS_RECT_PIX_X;
+            *(GS_RECT_VOL s64 *)(p + 0x30) = (s64)((x0 << 4) + ox - 0x10)
+                                           | ((s64)((y0 << 4) + oy - 0x10) << 16)
+                                           | ((s64)0xFFFFF000u << 24);
+        }
+        {
+            s32 oy = GS_RECT_PIX_Y;
+            s32 ox = GS_RECT_PIX_X;
+            *(s64 *)(p + 0x38) = (s64)((x1 << 4) + ox - 0x10)
+                               | ((s64)((y1 << 4) + oy - 0x10) << 16)
+                               | ((s64)0xFFFFF000u << 24);
+        }
     }
-
-    g_frameDmaCursor = (u32 *)((u8 *)g_frameDmaCursor + 0x30);
+    g_frameDmaCursorGp = (u32 *)((u8 *)GS_RECT_CURSOR + 0x30);
 }
-#endif
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_00290640);
-#else
 /**
- * Append a GIF/DMA packet to the frame render-DMA chain (g_frameDmaCursor) that
- * sets a GS scissor/region rectangle from two corner points, then advance the
- * write cursor.
+ * The same GS-rectangle packet as func_00290320, with register data 0x46 at
+ * p+0x20 and a caller-supplied Z: each corner packs as
+ * x | y << 16 | zHigh << 32.
  *
- * Layout written at the cursor `p`:
- *   p+0x00 : DMA/GIF chain tags (0x10000003, 0, 0, 0x50000003) - cursor bumped +0x10
- *   p+0x10 : GIFtag (REGLIST) + the register data qwords 0x4410, 0x46, reg4
- *   p+0x30 : point 0 packed as (x0+off | (y0+off)<<16 | zHigh<<32)
- *   p+0x38 : point 1 packed the same way from (x1,y1)
- * then the cursor is advanced to p+0x40.
+ *   x0,y0,x1,y1, reg4, mode  as func_00290320
+ *   zHigh                    the corners' upper 32 bits
  *
- * `mode` selects the coordinate fixed-point convention: mode != 0 uses whole
- * pixels biased by -8; mode == 0 shifts each coord left by 4 (1/16-pixel
- * subpixel) and biases by -0x10. off = g_gsPixelOffset{X,Y}.
+ * Byte-exact on sdk29 (task #1127): devices and dli expansion above, plus one
+ * EE_REG REGISTER-PIN DEVICE (RULING #8598). The ROM re-loads the cursor into
+ * $2 for the p[2] store and into $3 for the p[3] store. Unpinned, cc1 swaps the
+ * two (6/94 words differ). `c` is the live cursor copy the p[3] store uses;
+ * pinning it to $3 is enough, and cc1 then picks $2 for p[2] itself. A second
+ * pin on the p[2] copy was measured and bought nothing, so it was dropped.
  */
 void func_00290640(s32 x0, s32 y0, s32 x1, s32 y1, u64 reg4, s32 zHigh, s32 mode) {
-    u8 *p = (u8 *)g_frameDmaCursor;
-    u64 z = (u64)(u32)zHigh << 32;
+    u8 *p;
 
-    /* DMA/GIF chain header tags */
-    *(u32 *)(p + 0x0) = 0x10000003;
-    *(u32 *)(p + 0x4) = 0;
-    *(u32 *)(p + 0x8) = 0;
-    *(u32 *)(p + 0xC) = 0x50000003;
-    g_frameDmaCursor = (u32 *)(p + 0x10);
-
-    /* GIFtag + register data qwords */
-    *(u64 *)(p + 0x10) = ((u64)0x8800 << 47) | 0x8001;
-    *(u64 *)(p + 0x18) = 0x4410;
-    *(u64 *)(p + 0x20) = 0x46;
+    ((GS_RECT_VOL u32 *)GS_RECT_CURSOR)[0] = 0x10000003;
+    ((GS_RECT_VOL u32 *)GS_RECT_CURSOR)[1] = 0;
+    ((GS_RECT_VOL u32 *)GS_RECT_CURSOR)[2] = 0;
+    {
+        register u32 *c EE_REG("$3") = GS_RECT_CURSOR;
+        ((GS_RECT_VOL u32 *)c)[3] = 0x50000003;
+    }
+    p = (u8 *)GS_RECT_CURSOR;
+    GS_RECT_CURSOR = (u32 *)(p + 0x10);
+    *(GS_RECT_VOL u64 *)(p + 0x10) = ((u64)0x8800 << 47) | 0x8001;
+    *(GS_RECT_VOL u64 *)(p + 0x18) = 0x4410;
+    *(GS_RECT_VOL u64 *)(p + 0x20) = 0x46;
+    __asm__ __volatile__("" : "+r"(reg4));
     *(u64 *)(p + 0x28) = reg4;
 
-    if (mode == 0) {
-        *(u64 *)(p + 0x30) = (u64)(u32)((x0 << 4) + g_gsPixelOffsetX - 0x10)
-                           | ((u64)(u32)((y0 << 4) + g_gsPixelOffsetY - 0x10) << 16)
-                           | z;
-        *(u64 *)(p + 0x38) = (u64)(u32)((x1 << 4) + g_gsPixelOffsetX - 0x10)
-                           | ((u64)(u32)((y1 << 4) + g_gsPixelOffsetY - 0x10) << 16)
-                           | z;
+    if (mode != 0) {
+        {
+            s32 oy = GS_RECT_PIX_Y;
+            s32 ox = GS_RECT_PIX_X;
+            *(GS_RECT_VOL s64 *)(p + 0x30) = (s64)(x0 + ox - 8)
+                                           | ((s64)(y0 + oy - 8) << 16)
+                                           | ((s64)zHigh << 32);
+        }
+        {
+            s32 oy = GS_RECT_PIX_Y;
+            s32 ox = GS_RECT_PIX_X;
+            *(s64 *)(p + 0x38) = (s64)(x1 + ox - 8) | ((s64)(y1 + oy - 8) << 16)
+                               | ((s64)zHigh << 32);
+        }
     } else {
-        *(u64 *)(p + 0x30) = (u64)(u32)(x0 + g_gsPixelOffsetX - 8)
-                           | ((u64)(u32)(y0 + g_gsPixelOffsetY - 8) << 16)
-                           | z;
-        *(u64 *)(p + 0x38) = (u64)(u32)(x1 + g_gsPixelOffsetX - 8)
-                           | ((u64)(u32)(y1 + g_gsPixelOffsetY - 8) << 16)
-                           | z;
+        {
+            s32 oy = GS_RECT_PIX_Y;
+            s32 ox = GS_RECT_PIX_X;
+            *(GS_RECT_VOL s64 *)(p + 0x30) = (s64)((x0 << 4) + ox - 0x10)
+                                           | ((s64)((y0 << 4) + oy - 0x10) << 16)
+                                           | ((s64)zHigh << 32);
+        }
+        {
+            s32 oy = GS_RECT_PIX_Y;
+            s32 ox = GS_RECT_PIX_X;
+            *(s64 *)(p + 0x38) = (s64)((x1 << 4) + ox - 0x10)
+                               | ((s64)((y1 << 4) + oy - 0x10) << 16)
+                               | ((s64)zHigh << 32);
+        }
     }
-
-    g_frameDmaCursor = (u32 *)((u8 *)g_frameDmaCursor + 0x30);
+    g_frameDmaCursorGp = (u32 *)((u8 *)GS_RECT_CURSOR + 0x30);
 }
+#undef GS_RECT_VOL
+#undef GS_RECT_CURSOR
+#undef GS_RECT_PIX_X
+#undef GS_RECT_PIX_Y
+#ifdef TARGET_NATIVE
+#undef g_frameDmaCursorGp
 #endif
 
 /* func_002907B8(...): HUD element helper / unit tail (~0xB8 bytes).
