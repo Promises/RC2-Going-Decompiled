@@ -5727,7 +5727,10 @@ void UploadTextureToGs(s32 handle, s32 vramBlk, s32 fmt, s32 wLog, s32 hLog,
  * cc1 `dli` into those words only at the (region, function, operands) rows of
  * tools/ee/ps2eeas_dli_sites.txt (task #1105). These three functions are the
  * only ones promoted under that allowlist, and its 7 rows are exactly their 7
- * `dli` sites (3 + 3 + 1). RULING #8549 rev 3 freezes the list at those rows. No C
+ * `dli` sites (3 + 3 + 1). RULING #8549 rev 3 froze the list at those rows until
+ * landing_gate checked every row (DLISITES, a919f3a9, task #1116) and asm_unit.sh
+ * refused a listed `dli` directly before a reorder-mode branch (f6c2bae9, task
+ * #1124). Both have landed; a new row needs its own `--ps2eeas` evidence. No C
  * here writes an `ori`/`dsll`, and no asm below emits an instruction: the
  * fences have empty templates and the alias directive only defines an
  * assembler symbol.
