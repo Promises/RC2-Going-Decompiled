@@ -77,14 +77,15 @@
  *   GuiSpriteElementInit     0x337518  sprite: +0x34 uv vec, +0x38 color, +0x40 tex
  *   GuiTextElementInit       0x3377B0  text:   +0x34..+0x54 (see below)
  *   GuiTextElementDraw/Measure 0x3378A0/0x337868  read text fields
- *   GuiListElementInit       0x337210  list:   +0x3C cap, +0x40 count, +0x44 sentinel
+ *   GuiListElementInit       0x337210  list:   +0x3C bar width (px), +0x40 count, +0x44 bg RGBA
  *   FUN_00336F00 (dtor slot) reads +0x2C pool, +0x14..+0x20 share flags
  *
  * NOTE on the +0x34/+0x38/+0x40 OVERLAP: these bytes are a UNION reused per
  * element subtype. For a BASE element (GuiElementInit) +0x34 and +0x38 are
  * POINTERS to pooled vec4s (texture-uv vec, alpha vec). For a TEXT element they
  * are a direct string ptr (+0x34) and a small-int (+0x38). For a LIST element
- * +0x34 is a backing ptr and +0x3C/+0x40/+0x44 are capacity/count/sentinel. The
+ * +0x34 is a backing ptr and +0x3C/+0x40/+0x44 are bar pixel width/count/background
+ * RGBA (FACT #8658: the LIST element draws as a horizontal fill bar). The
  * struct below models the BASE/SPRITE form and documents the text/list overlays
  * in comments; bind the right view per subtype.
  */
@@ -113,12 +114,19 @@ typedef struct GuiElement {                 /* === base 0x4C, text variant 0x58 
                            LIST: backing ptr (GuiListElementInit param_3).           CONFIRMED */
     void *ext38;        /* +0x38 SPRITE: ptr to alpha vec4 (GuiElementSetAlpha writes [0]).
                            TEXT: small int (init 1).                                 CONFIRMED */
-    u32  ext3C;         /* +0x3C LIST: row capacity (GuiListElementInit). list-row draw reads as
-                           clamp width. Other subtypes: unused/0.                    PROBABLE */
+    u32  ext3C;         /* +0x3C LIST: full bar width in screen pixels (GuiListElementInit $a1;
+                           ROM callers pass 150/150/32/32/32/146/32). The list-row draw
+                           0x337350 draws the background bar from pos.x to pos.x+ext3C and
+                           clamps the fill (scale.x) to it; GuiListSetScrollPos sets the
+                           fill to value/max * ext3C (FACT #8658; reader set is complete only
+                           over the 98 GUI-core .s files 0x336xxx-0x337xxx). Other
+                           subtypes: unused/0.                                       CONFIRMED */
     u32  textOrCount40; /* +0x40 TEXT/GLYPH: text/glyph handle (GuiElementSetText/SetGlyph).
                            LIST: item count (GuiListSetItemCount, init 100).         CONFIRMED */
     u32  flag44;        /* +0x44 TEXT: horiz align/flag (GuiElementSetTextFlag; 0=L,1=C,2=R read by
-                           GuiTextElementDraw). LIST: 0x80000000 sentinel.           CONFIRMED */
+                           GuiTextElementDraw). LIST: background bar RGBA, init 0x80000000
+                           by GuiListElementInit (colour pair of the 0x337350 background
+                           DrawFlatRect2d, FACT #8658).                              CONFIRMED */
     u32  field48;       /* +0x48 TEXT: auto-fit enable flag (GuiTextElementDraw elem[0x12]); cleared
                            by GuiElementInit.                                        PROBABLE */
     /* ---- TEXT-variant tail (present only when sizeof==0x58) ------------------ */

@@ -1757,15 +1757,18 @@ void GuiListSetItemCount(GuiElement *e, s32 count) {
     *(s32 *)((char *)e + 0x40) = count;
 }
 
-/* GuiListSetScrollPos: position the list's scroll-thumb. Given a requested row
- * `pos`, clamp it to the list's total row count (+0x40), then write the thumb
- * position through the +0x04 scale-vector pointer as
- *   thumb = (clamp / totalRows) * trackLength       (trackLength = +0x3C)
- * If the list has zero rows the thumb collapses to 0. All four int->float
+/* GuiListSetScrollPos: set the bar's fill length. Given a value `pos`, clamp it
+ * to the maximum at +0x40, then write the fill length through the +0x04
+ * scale-vector pointer as
+ *   fill = (clamp / totalRows) * trackLength        (trackLength = +0x3C)
+ * The element is a horizontal fill/meter bar, not a scrolling list (FACT
+ * #8658): +0x3C is the bar's full width in pixels and callers pass values such
+ * as g_sfxVolume / g_musicVolume; the "row" names below are historical.
+ * If the maximum is zero the fill collapses to 0. All four int->float
  * conversions are unsigned (the original emits the (u32) widening idiom).
  *   e   - the list element, read through GuiListView (trackLength +0x3C,
  *         rowCount +0x40)
- *   pos - requested row
+ *   pos - the value to show (clamped to +0x40)
  *
  * Byte-exact on sdk29 (task #1053), EE arm below. It depends on asm_unit.sh's
  * cvt.s.w pin (task #1053): cc1 leaves the first `b` slot empty and GNU as
@@ -1793,7 +1796,7 @@ void GuiListSetItemCount(GuiElement *e, s32 count) {
 typedef struct GuiListView {
     GuiElement base;
     u8 pad14[0x3C - sizeof(GuiElement)];
-    /* 0x3C */ u32 trackLength;  /* scroll-track length */
+    /* 0x3C */ u32 trackLength;  /* full bar width in pixels */
     /* 0x40 */ u32 rowCount;     /* total rows (GuiListSetItemCount) */
 } GuiListView;
 #ifndef TARGET_NATIVE
@@ -1801,7 +1804,7 @@ void GuiListSetScrollPos(GuiElement *e, s32 pos) {
     u32 totalRows = ((GuiListView *)e)->rowCount;
     u32 clamp;
     f32 rowsF, clampF, rowsDivisor, ratio;
-    f32 *thumb;
+    f32 *fill;
     u32 trackLength;
 
     if (totalRows < (u32)pos) {
@@ -1820,7 +1823,7 @@ void GuiListSetScrollPos(GuiElement *e, s32 pos) {
         e->scale[0] = 0.0f;
         return;
     }
-    thumb = e->scale;
+    fill = e->scale;
     clampF = (f32)clamp;
     rowsDivisor = (f32)((GuiListView *)e)->rowCount;  /* re-read, see above */
     trackLength = ((GuiListView *)e)->trackLength;
@@ -1828,7 +1831,7 @@ void GuiListSetScrollPos(GuiElement *e, s32 pos) {
                          : "+f"(rowsDivisor) : "r"(trackLength));  /* SCHEDULING DEVICE (#8435): ROM's pad */
     ratio = clampF / rowsDivisor;
     __asm__ __volatile__("");  /* SCHEDULING DEVICE (#8483 class), see above */
-    thumb[0] = ratio * (f32)trackLength;
+    fill[0] = ratio * (f32)trackLength;
 }
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_GuiListSetScrollPos, unit objdiff): 76.01%,

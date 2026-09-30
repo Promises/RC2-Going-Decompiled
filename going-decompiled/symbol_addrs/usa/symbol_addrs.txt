@@ -2121,7 +2121,7 @@ GuiElementSetText = 0x00337860; // CONFIRMED - elem +0x40 = text handle
 GuiElementSetTextFlag = 0x00337858; // CONFIRMED - elem +0x44 = text align/flag
 GuiTextElementInit = 0x003377B0; // CONFIRMED - text element ctor (text vtable, default 0.2 box)
 GuiSpriteElementInit = 0x00337518; // CONFIRMED - sprite/image element ctor
-GuiListElementInit = 0x00337210; // CONFIRMED - scroll-list element ctor (capacity +0x3c, count +0x40)
+GuiListElementInit = 0x00337210; // CONFIRMED - fill-bar (list) element ctor (bar pixel width +0x3c, count +0x40, background RGBA +0x44, FACT #8658)
 GuiListRowElementInit = 0x003371D8; // CONFIRMED - list-row element ctor (g_GuiListRowVtable)
 GuiElementInitTypeB = 0x00336FB0; // CONFIRMED - element variant ctor (vtable 0x1ada38)
 GuiElementInitTypeC = 0x00337770; // CONFIRMED - element variant ctor (vtable 0x1ad9f8)
