@@ -52,8 +52,9 @@ fi
 #   - -G8, any branch the delay-slot guard holds, or any integer load/store of
 #     a bare symbol, written outside cc1 layout (that line is dead even when
 #     the rest of the seed is live). Inline asm reaches the unit .s verbatim
-#     and outside cc1 layout, but in the image it is only lq/sq/la/cvt.w.s and
-#     -G0 syscall shims (every USA/EU image, objdiff base and base96 .s, #1103).
+#     and outside cc1 layout, but none of it is a held branch or a bare-symbol
+#     memop: lq/sq/cvt.w.s in -G8 units, `la` in the 2.96 arm, syscall/COP0
+#     shims in -G0 cod/015180 (every USA/EU image and objdiff .s, #1103).
 # Exit 2 and the `asm_unit.sh: FAIL:` prefix are deliberately NOT the delay-slot
 # guard's `REFUSED` (rc 1 from `.error`): a control that counts WARNING/REFUSED
 # lines must not read this refusal as its seed firing.
@@ -61,8 +62,11 @@ layout_fail() {
   echo "asm_unit.sh: FAIL: $1" >&2
   echo "  input: $UNIT_S (-G: $GFLAG)" >&2
   [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/  dead line: /' >&2
-  echo "  No object written. cc1 layout is: TAB, mnemonic, TAB, operands with no" >&2
-  echo "  whitespace (e.g. '\\tbnel\\t\$4,\$0,\$L1' then '\\tlw\\t\$3,g_hx')." >&2
+  echo "  No object written." >&2
+  [ "${3:-}" = layout ] && {
+    echo "  cc1 layout is: TAB, mnemonic, TAB, operands with no whitespace" >&2
+    echo "  (e.g. '\\tbnel\\t\$4,\$0,\$L1' then '\\tlw\\t\$3,g_hx')." >&2
+  }
   rm -f "$OUT_O"
   exit 2
 }
@@ -96,8 +100,8 @@ if [ "$GFLAG" = "-G8" ]; then
   case "$LAYOUT" in
     OK) ;;
     KEY*) layout_fail "$(printf '%s\n' "$LAYOUT" | sed -n '1s/^KEY //p') branch/symbolic-memop line(s) outside cc1 layout; the -G8 delay-slot guard cannot see them" \
-                      "$(printf '%s\n' "$LAYOUT" | sed 1d)" ;;
-    ALLDEAD*) layout_fail "no instruction line in cc1 layout ($(printf '%s' "$LAYOUT" | sed 's/^ALLDEAD //') in another layout); no -G8 rule can match this input" ;;
+                      "$(printf '%s\n' "$LAYOUT" | sed 1d)" layout ;;
+    ALLDEAD*) layout_fail "no instruction line in cc1 layout ($(printf '%s' "$LAYOUT" | sed 's/^ALLDEAD //') in another layout); no -G8 rule can match this input" "" layout ;;
     *) layout_fail "layout scan produced no verdict ('$LAYOUT')" ;;
   esac
 fi
