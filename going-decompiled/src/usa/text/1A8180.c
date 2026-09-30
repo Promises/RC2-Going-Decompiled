@@ -1595,36 +1595,51 @@ s32 func_002A9A38(f32 power, Moby *moby, s32 a, s32 b) {
 }
 
 /*
- * func_002A9A68(packet, a, b, power, dir): fill a 0x28-byte damage packet
+ * func_002A9A68(packet, source, arg, power, dir): fill a 0x28-byte damage packet
  * WITH a direction — the directional twin of func_002A9A38 (FACT #5761).
- *   packet +0x10 = a, +0x14 = b (s32 parameters), +0x1C = power (f32),
+ *   packet +0x10 = source, +0x14 = arg (s32 parameters), +0x1C = power (f32),
  *   +0x20 = 1 (hasDirection), +0x00..0x0F = the 128-bit direction vector
  *   copied from *dir with one lq/sq pair.
  * No return value.
  *
- * Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_002A9A68,
- * task #632): unit objdiff 100.00% (objdiff_build.sh + unit_report.sh). The
- * ROM leaves the return's delay slot EMPTY after the sq (`sq; jr $31; nop`).
- * Two things reproduce that, and both are needed:
- *   - the trailing empty asm stops cc1 2.96's reorg from filling the return
- *     slot with the sq itself (without it: `jr $31; sq` in noreorder);
- *   - asm_unit.sh's lq/sq return-slot pin stops GNU as from then swapping the
- *     sq into the reorder-mode `j $31` the way SN ee-as never did.
- * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines
- * no MATCH_.
+ * Byte-exact on the default sdk29 arm (cc1 2.9-ee-991111, -O2 -G8 -fno-gcse
+ * -fno-strict-aliasing; task #1114): unit objdiff 100.00% (objdiff_build.sh +
+ * unit_report.sh). It was previously byte-exact only on the engine96 arm
+ * behind a MATCH_ guard (task #632); the unit's -fno-strict-aliasing model
+ * (task #1100, RULING #8602) is what lets 2.9 reproduce it. Two things matter:
+ *   - no type-based aliasing: with it, cc1 2.9 hoists the lq of *dir above the
+ *     four s32/f32 stores (a u_long128 load "cannot alias" them) and the row
+ *     scores 0.00%; the ROM keeps source order;
+ *   - the trailing EMPTY asm (emits nothing) stops reorg from filling the
+ *     return's delay slot with the sq (without it: `jr $31; sq`, 82.22%); the
+ *     ROM leaves the slot empty (`sq; jr $31; nop`). asm_unit.sh's lq/sq
+ *     return-slot pin then keeps GNU as from swapping the sq back in.
  */
-#if defined(MATCH_func_002A9A68) || defined(TARGET_NATIVE)
-void func_002A9A68(void *packet, s32 a, s32 b, f32 power, void *dir) {
-    *(s32 *)((u8 *)packet + 0x10) = a;
-    *(s32 *)((u8 *)packet + 0x14) = b;
-    *(f32 *)((u8 *)packet + 0x1C) = power;
-    *(s32 *)((u8 *)packet + 0x20) = 1;              /* hasDirection */
-    *(u_long128 *)packet = *(u_long128 *)dir;
-    __asm__ __volatile__("");
+/* Damage packet filled by func_002A9A68 (and, without a direction, by
+ * func_002A9A38). Layout from its two writers: func_002A9A68 stamps dir,
+ * source, arg, power and hasDirection; func_002A9A90 then adds the two byte
+ * tags and the source moby's class id before handing it to CollMobysSphere. */
+typedef struct MobyDamagePacket {
+    u_long128 dir;          /* 0x00 direction (xyz) + magnitude (w)        */
+    s32 source;             /* 0x10 source moby (as an integer)            */
+    s32 arg;                /* 0x14 caller parameter                       */
+    u8  tagA;               /* 0x18                                        */
+    u8  tagB;               /* 0x19                                        */
+    u16 sourceClass;        /* 0x1A source moby oClass                     */
+    f32 power;              /* 0x1C impact power                           */
+    s32 hasDirection;       /* 0x20 1 = dir is valid                       */
+} MobyDamagePacket;
+
+void func_002A9A68(void *packet, s32 source, s32 arg, f32 power, void *dir) {
+    MobyDamagePacket *p = (MobyDamagePacket *)packet;
+
+    p->source = source;
+    p->arg = arg;
+    p->power = power;
+    p->hasDirection = 1;
+    p->dir = *(u_long128 *)dir;
+    __asm__ __volatile__(""); /* empty: keeps reorg out of the return delay slot */
 }
-#else
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9A68);
-#endif
 
 /* Ghidra alias CollMobysSphere / QueryMobysInSphere @ 0x00277F58: moby-only
  * sphere gather + damage-event broadcast into g_collHitEventRing (see
