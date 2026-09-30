@@ -21,6 +21,21 @@
 #        a non-memop line is still accepted.
 #   LAY  (#1103) the C2-A layout refusals still fire (8 dead seeds) and the
 #        healthy seeds (directives-only, CRLF) are still accepted.
+#   EMPTY (FACT #8640, task #1147) the dli pass is refused (rc 2, FAIL naming
+#        its condition, no object) at -G0 and -G8 when the allowlist has no
+#        valid row (0 bytes, comments only, every row malformed), when the pass
+#        exits non-zero, prints nothing, or prints fewer lines than it read, and
+#        for a relative <unit.s> path. Each runs on a copy of $AU's tools/ee
+#        with the one file changed, so the real allowlist is never touched.
+#   STATIC (FACT #8652) at -G8, cc1's own `name.N` function-static memops,
+#        one in a `j $31` slot, assemble with no WARNING and the slot store as
+#        a 1-insn %gp_rel `sw`; with a trailing comment one is still refused.
+#   LIKELY (FACT #8653) a listed `dli` directly before each of the 14 likely
+#        branch forms assembles, in the dli's order (GNU as does not swap into
+#        an annulled slot). SWAP: before each of the 19 measured swapping forms
+#        (jal, jalr, jr, bc1f among them) it is still refused.
+#   SPELL the memop mnemonic list is spelled once in $AU, so the layout scan
+#        and the slot rule cannot drift apart (FACT #8616).
 #
 # The seeds are written in cc1 layout (TAB, mnemonic, TAB, operands) into the
 # container's own /tmp, so no VM mount sits between writing and assembling
@@ -29,7 +44,11 @@
 # The optional argument is the asm_unit.sh under test (default: this tree's).
 # It must sit in a tree with tools/ee/{ps2eeas_dli.awk,ps2eeas_dli_sites.txt,
 # move_fixup.sed}. Run against master's copy, the ADJ and TAIL refusal arms
-# must FAIL: that is the check that this selftest can fail.
+# must FAIL: that is the check that this selftest can fail. Against
+# f6c2bae9e's copy, EMPTY, STATIC st_cc1, LIKELY and SPELL must FAIL (task
+# #1147). EMPTY's exit-5 arm fails there on its message alone: f6c2bae9e
+# already refused a failing pass, as `REFUSED:`. SWAP and the rest pass there
+# too, since they pin what already held.
 #
 # Prints one line per arm and `asm_unit_selftest: N arms, F failed`.
 # Exit 0 only when F is 0.
@@ -44,11 +63,12 @@ trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/mirror/include"; : > "$T/mirror/include/macro.inc"; : > "$T/mirror/.built"
 N=0; F=0
 
-# run <seed> <-G> : sets RC, FAILS (count of `asm_unit.sh: FAIL:`), WARNS
-# (WARNING lines), OBJ (1 when an object exists) and WORDS (the .text words).
+# run <seed> <-G> [asm_unit.sh] : sets RC, FAILS (count of `asm_unit.sh:
+# FAIL:`), WARNS (WARNING lines), OBJ (1 when an object exists) and WORDS (the
+# .text words).
 run() {
   rm -f "$T/o.o"
-  RC=0; env ASMFIX_SHARED="$T/mirror" sh "$AU" usa "$T/$1.s" "$T/o.o" "$2" > "$T/err" 2>&1 || RC=$?
+  RC=0; env ASMFIX_SHARED="$T/mirror" sh "${3:-$AU}" usa "$T/$1.s" "$T/o.o" "$2" > "$T/err" 2>&1 || RC=$?
   FAILS=$(grep -c 'asm_unit\.sh: FAIL:' "$T/err" || true)
   WARNS=$(grep -c 'asm_unit\.sh: WARNING' "$T/err" || true)
   OBJ=0; WORDS=""
@@ -158,6 +178,88 @@ verdict "LAY lay_dirs -G8" "$(accepted)" "accepted (no instruction lines)"
 run lay_crlf -G8
 ok=$(accepted); [ "$WARNS" = 1 ] || ok=0
 verdict "LAY lay_crlf -G8" "$ok" "accepted, 1 WARNING (CRLF cc1 layout is live)"
+
+# --- EMPTY: the dli pass must not be disabled with a green exit --------------
+# tree <name> : a copy of $AU with its tools/ee siblings, at $T/<name>; prints
+# the copy's asm_unit.sh. The arm then changes one file in it.
+AUDIR="$(cd "$(dirname "$AU")" && pwd)"
+tree() {
+  mkdir -p "$T/$1/tools/ee"
+  for f in ps2eeas_dli.awk ps2eeas_dli_sites.txt move_fixup.sed vu0_fixup.sed mount_sync.sh; do
+    cp "$AUDIR/$f" "$T/$1/tools/ee/$f"
+  done
+  cp "$AU" "$T/$1/tools/ee/asm_unit.sh"
+  echo "$T/$1/tools/ee/asm_unit.sh"
+}
+# a named condition of the dli pass fired, and no object is left
+dlifail() {
+  [ "$(refused)" = 1 ] && grep -q "asm_unit\.sh: FAIL: RULING #8549 dli pass, condition $1" "$T/err" && echo 1 || echo 0
+}
+seed nadj_bnel "$FN0$DLI\tbnel\t\$5,\$0,\$L9\n\taddu\t\$2,\$2,\$5\n\$L9:\n\tj\t\$31\n$FN1"
+E0=$(tree e0);  : > "${E0%/asm_unit.sh}/ps2eeas_dli_sites.txt"
+EC=$(tree ec);  printf '# comments only\n\n   # indented\n' > "${EC%/asm_unit.sh}/ps2eeas_dli_sites.txt"
+EM=$(tree em);  printf 'usa func_00290320 0x0029033C $12,0x4400000000008001 3c0c440\neu x 0x1 bad 00000000 00000000\n' > "${EM%/asm_unit.sh}/ps2eeas_dli_sites.txt"
+# (mawk runs END after a BEGIN exit, so the count mode must be spared)
+EB=$(tree eb);  printf 'END { if (!count) exit 5 }\n' >> "${EB%/asm_unit.sh}/ps2eeas_dli.awk"
+# a pass that honours the count mode but prints nothing / drops lines: only the
+# outside check can see these
+EN=$(tree en);  printf 'BEGIN { if (count) { print "7 7 0 0"; exit 0 } }\n' > "${EN%/asm_unit.sh}/ps2eeas_dli.awk"
+ED=$(tree ed);  printf 'BEGIN { if (count) { print "7 7 0 0"; exit 0 } }\nNR %% 2 { print }\n' > "${ED%/asm_unit.sh}/ps2eeas_dli.awk"
+for G in -G0 -G8; do
+  run nadj_addu $G "$E0"; verdict "EMPTY 0-byte allowlist $G" "$(dlifail '(a)')" "refused, condition (a), no object"
+  run nadj_addu $G "$EC"; verdict "EMPTY comments-only allowlist $G" "$(dlifail '(a)')" "refused, condition (a), no object"
+  run nadj_addu $G "$EM"; verdict "EMPTY all-malformed allowlist $G" "$(dlifail '(a)')" "refused, condition (a), no object"
+  run nadj_addu $G "$EB"; ok=$(refused); grep -q 'exited 5' "$T/err" || ok=0
+  verdict "EMPTY pass exits 5 $G" "$ok" "refused (rc 2, FAIL naming exit 5, no object)"
+  run nadj_addu $G "$EN"; verdict "EMPTY pass prints nothing $G" "$(dlifail '(c)')" "refused, condition (c), no object"
+  run nadj_addu $G "$ED"; verdict "EMPTY pass drops lines $G" "$(dlifail '(c)')" "refused, condition (c), no object"
+  # a relative path is read after asm_unit.sh's cd into the mirror
+  rm -f "$T/o.o"; RC=0
+  (cd "$T" && env ASMFIX_SHARED="$T/mirror" sh "$AU" usa nadj_addu.s "$T/o.o" $G) > "$T/err" 2>&1 || RC=$?
+  FAILS=$(grep -c 'asm_unit\.sh: FAIL:' "$T/err" || true); WARNS=0; OBJ=0; WORDS=""; [ -s "$T/o.o" ] && OBJ=1
+  verdict "EMPTY relative input path $G" "$(dlifail '(b)')" "refused, condition (b), no object"
+done
+# the real allowlist, same seed: the must-not direction of every arm above
+for G in -G0 -G8; do
+  run nadj_addu $G; ok=$(accepted); [ "$ok" = 1 ] && ok=$(has "$PS2")
+  verdict "EMPTY real allowlist $G (control)" "$ok" "assembled, Ps2EeAs words [$PS2]"
+done
+
+# --- STATIC: cc1's function-static spelling (FACT #8652) ---------------------
+# cc1 2.9 -O2 -G8 output for `static int s_count; static short s_small; static
+# struct { int a, b; } s_pair; static int s_init = 3;` (the #1147 probes),
+# trimmed: bare `name.N` and `name.N+off`, the last one in the `j $31` slot.
+# The slot store must stay the 1-insn gp_rel `sw $8,..($28)`.
+SB='\t.section\t.sbss\ns_count.3:\n\t.align\t2\n\t.space\t4\n\t.previous\n\t.section\t.sbss\ns_small.4:\n\t.align\t1\n\t.space\t2\n\t.previous\n\t.section\t.sbss\ns_pair.5:\n\t.align\t2\n\t.space\t8\n\t.previous\n\t.sdata\n\t.align\t2\ns_init.6:\n\t.word\t3\n\t.text\n\t.ent\tF\nF:\n'
+SE='\tsh\t$4,s_small.4\n\t.set\tnoreorder\n\t.set\tnomacro\n\tj\t$31\n\tsw\t$8,s_init.6\n\t.set\tmacro\n\t.set\treorder\n\t.end\tF\n'
+seed st_cc1 "$SB\tlw\t\$7,s_count.3\n\tlw\t\$8,s_init.6\n\taddu\t\$7,\$7,\$4\n\tsw\t\$7,s_count.3\n\tsw\t\$4,s_pair.5+4\n$SE"
+seed st_cmt "$SB\tlw\t\$7,s_count.3\t# c\n\tlw\t\$8,s_init.6\n$SE"
+run st_cc1 -G8; ok=$(accepted); [ "$WARNS" = 0 ] || ok=0
+case " $WORDS " in *" 03e00008 af88"*) ;; *) ok=0 ;; esac
+verdict "STATIC st_cc1 -G8" "$ok" "assembled, 0 WARNING, \`jr ra; sw \$8,..(\$gp)\` (03e00008 af88....)"
+run st_cmt -G8
+verdict "STATIC st_cmt -G8" "$(refused)" "refused (rc 2, FAIL, no object): a trailing comment is outside MEMOP_RE"
+
+# --- LIKELY / SWAP: the adjacency refusal by measured branch class -----------
+for B in 'beql $5,$0,$L9' 'bnel $5,$0,$L9' 'beqzl $5,$L9' 'bnezl $5,$L9' 'blezl $5,$L9' 'bgezl $5,$L9' 'bgtzl $5,$L9' 'bltzl $5,$L9' 'bgezall $5,$L9' 'bltzall $5,$L9' 'bc0fl $L9' 'bc0tl $L9' 'bc1fl $L9' 'bc1tl $L9'; do
+  printf "$FN0$DLI\t${B%% *}\t${B#* }\n\taddu\t\$2,\$2,\$5\n\$L9:\n\tj\t\$31\n$FN1" > "$T/lk.s"
+  for G in -G0 -G8; do
+    run lk $G; ok=$(accepted); [ "$ok" = 1 ] && ok=$(has "$PS2")
+    verdict "LIKELY ${B%% *} $G" "$ok" "assembled, Ps2EeAs words [$PS2] then the branch"
+  done
+done
+for B in 'j $31' 'j $L9' 'jal foo' 'jalr $25' 'jalr $31,$25' 'jr $5' 'b $L9' 'beq $5,$0,$L9' 'bne $5,$0,$L9' 'beqz $5,$L9' 'bnez $5,$L9' 'blez $5,$L9' 'bgez $5,$L9' 'bgtz $5,$L9' 'bltz $5,$L9' 'bgezal $5,$L9' 'bltzal $5,$L9' 'bc0f $L9' 'bc0t $L9' 'bc1f $L9' 'bc1t $L9'; do
+  printf "$FN0$DLI\t${B%% *}\t${B#* }\n\taddu\t\$2,\$2,\$5\n\$L9:\n\tj\t\$31\n$FN1" > "$T/sw.s"
+  for G in -G0 -G8; do
+    run sw $G; ok=$(refused); grep -q 'FACT #8623' "$T/err" || ok=0
+    verdict "SWAP ${B%% *} ${B#* } $G" "$ok" "refused (rc 2, FAIL naming FACT #8623, no object)"
+  done
+done
+
+# --- SPELL: one list of memop mnemonics (FACT #8616) -------------------------
+N=$((N + 1)); c=$(grep -c 'sw|sh|sb|sd|lw|lh|lhu|lb|lbu|ld' "$AU" || true)
+if [ "$c" = 1 ]; then echo "PASS SPELL: the memop mnemonic list is spelled once in \$AU"
+else F=$((F + 1)); echo "FAIL SPELL: expected the memop mnemonic list spelled once in \$AU; got $c lines"; fi
 
 echo "asm_unit_selftest: $N arms, $F failed ($AU)"
 [ "$F" = 0 ]
