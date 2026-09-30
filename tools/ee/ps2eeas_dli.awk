@@ -18,13 +18,25 @@
 # The words are decoded back to mnemonics (addiu, ori, lui, dsll, dsll32) rather
 # than emitted as `.word`. Plain `ori`/`dsll`/`dsll32` lines are what the t1077
 # probe substituted and measured byte-identical (NOTE #8543). As instructions,
-# GNU as keeps its normal hazard and reorder bookkeeping around them. A `.word`,
-# or a `.set noreorder` bracket, is a directive boundary, where GNU as can pad
+# GNU as keeps its normal hazard and reorder bookkeeping around them - GNU's
+# bookkeeping, which is not Ps2EeAs's (see ADJACENCY below). A `.word`, or a
+# `.set noreorder` bracket, is a directive boundary, where GNU as can pad
 # differently (see the mfc1 rule in asm_unit.sh). A word outside that opcode set
 # cannot be spelled, and neither can a malformed or duplicate row. Either one
 # emits an `.error`, so the unit fails to assemble. It is never silently skipped.
-# Not measured: a listed dli directly before a reorder-mode branch. None of the
-# current sites has one, and a promotion's own byte gate would show a difference.
+#
+# ADJACENCY REFUSAL (RULING #8549 rev 3, FACT #8623). When the first instruction
+# after a listed dli is a branch in reorder mode, GNU as moves the expansion's
+# last word into the branch delay slot; Ps2EeAs keeps the order and puts a nop
+# in the slot. The expansion is then not Ps2EeAs's, so the pass refuses: it
+# prints `asm_unit.sh: FAIL:` naming the site on stderr and exits 3, and
+# asm_unit.sh removes the object and exits 2. Blank lines, comments (cc1's
+# empty #APP/#NO_APP block is the measured case, ledger-29240) and directives
+# other than `.set [no]reorder` do not end the adjacency; a label does, since
+# GNU as never swaps an instruction across a branch target. Every branch
+# mnemonic counts, likely ones included, although only `j $31` and `bne` were
+# measured to swap: an unmeasured branch is refused rather than trusted. Not
+# covered: a listed dli inside a `.set noreorder` region (e.g. in a delay slot).
 #
 # Only a TAB-laid `\tdli\t` line matches, which is cc1's layout. Splat's asm
 # carries no `dli` at all (it prints the expanded words), so INCLUDE_ASM code
@@ -92,6 +104,22 @@ NR == FNR {
 }
 {
   line = $0; sub(/\r$/, "", line)
+  if (line ~ /^[ \t]*\.set[ \t]+noreorder([ \t#]|$)/) nore = 1
+  else if (line ~ /^[ \t]*\.set[ \t]+reorder([ \t#]|$)/) nore = 0
+  # ADJACENCY (see header): `held` is the listed site printed last, until the
+  # next instruction or label shows whether a reorder-mode branch follows it.
+  if (held != "") {
+    if (line ~ /^[ \t]*[A-Za-z0-9_$.]+:/) held = ""
+    else if (line ~ /^[ \t]*[a-z][a-z0-9.]*([ \t]|$)/) {
+      mn = line; sub(/^[ \t]+/, "", mn); sub(/[ \t].*$/, "", mn)
+      if (!nore && mn != "break" && mn ~ /^(j|jal|jalr|jr|b[a-z0-9]*)$/) {
+        br = line; sub(/^[ \t]+/, "", br); gsub(/\t/, " ", br)
+        printf "asm_unit.sh: FAIL: %s, directly before the reorder-mode branch `%s`: GNU as would move the expansion's last word into the delay slot, where Ps2EeAs keeps the order and pads a nop (FACT #8623, RULING #8549 rev 3)\n", held, br | "cat 1>&2"
+        refused++
+      }
+      held = ""
+    }
+  }
   if (line ~ /^[ \t]*\.ent[ \t]/) {
     fn = line; sub(/^[ \t]*\.ent[ \t]+/, "", fn); sub(/[ \t,].*$/, "", fn)
   } else if (line ~ /^[ \t]*\.end[ \t]/) {
@@ -102,8 +130,15 @@ NR == FNR {
     if (key in sites) {
       printf "\t# ps2eeas_dli_sites.txt %s: dli %s (ROM %s, RULING #8549)\n", fn, ops, addr[key]
       printf "%s", sites[key]
+      held = "listed dli " ops " in " fn " (ROM " addr[key] ", line " FNR ")"
       next
     }
   }
   print
+}
+
+# The whole unit is still printed, so `as` reads a complete file and its own
+# diagnostics stay meaningful; the non-zero status is what fails the unit.
+END {
+  if (refused) { close("cat 1>&2"); exit 3 }
 }

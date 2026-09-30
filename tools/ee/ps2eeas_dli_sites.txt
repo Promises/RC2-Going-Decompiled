@@ -35,6 +35,11 @@
 #   3. A promotion that uses a site still passes its own byte gate
 #      (verify_match_unit.sh + image cmp). The allowlist permits the expansion.
 #      It is not evidence that the function matches.
+#   4. asm_unit.sh REFUSES a listed dli whose next instruction is a branch in
+#      reorder mode (`asm_unit.sh: FAIL:`, exit 2, no object): GNU as would
+#      move the expansion's last word into the delay slot, where Ps2EeAs does
+#      not (FACT #8623, RULING #8549 rev 3). A site in that position cannot be
+#      listed as it stands. tools/ee/asm_unit_selftest.sh shows it firing.
 # An EU site is its own row with region `eu`, its own EU name and EU address.
 # RULING #8549's scope is USA, so no EU row exists yet. The EU bytes at the
 # twins of the sites below are the same words (FACT #8544).

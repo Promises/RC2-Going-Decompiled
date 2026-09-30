@@ -51,10 +51,13 @@ fi
 #     whose every function is INCLUDE_ASM is exactly that (usa cod/0213D0);
 #   - -G8, any branch the delay-slot guard holds, or any integer load/store of
 #     a bare symbol, written outside cc1 layout (that line is dead even when
-#     the rest of the seed is live). Inline asm reaches the unit .s verbatim
-#     and outside cc1 layout, but none of it is a held branch or a bare-symbol
-#     memop: lq/sq/cvt.w.s in -G8 units, `la` in the 2.96 arm, syscall/COP0
-#     shims in -G0 cod/015180 (every USA/EU image and objdiff .s, #1103).
+#     the rest of the seed is live). A bare-symbol memop is in cc1 layout only
+#     in MEMOP_RE's exact spelling, so a trailing comment or space on one is
+#     refused too (FACT #8616): the slot rule cannot see it. Inline asm
+#     reaches the unit .s verbatim and outside cc1 layout, but none of it is a
+#     held branch or a bare-symbol memop: lq/sq/cvt.w.s in -G8 units, `la` in
+#     the 2.96 arm, syscall/COP0 shims in -G0 cod/015180 (every USA/EU image
+#     and objdiff .s, #1103).
 # Exit 2 and the `asm_unit.sh: FAIL:` prefix are deliberately NOT the delay-slot
 # guard's `REFUSED` (rc 1 from `.error`): a control that counts WARNING/REFUSED
 # lines must not read this refusal as its seed firing.
@@ -70,10 +73,17 @@ layout_fail() {
   rm -f "$OUT_O"
   exit 2
 }
+# The one spelling of a bare-symbol integer memop that the -G8 delay-slot rule
+# below can see (`\tlw\t$3,g_hx`, `\tsw\t$0,sym+4`). The layout scan keys such
+# memops on this SAME regex, so a line the scan counts as live is a line the
+# matcher matches (FACT #8616: a scan wider than the matcher passed a slot memop
+# with a trailing comment or space, and the rule then silently skipped it).
+# `[$]`/`[+]`, not `\$`/`\+`: it reaches awk as a dynamic regex through -v.
+MEMOP_RE='^\t(sw|sh|sb|sd|lw|lh|lhu|lb|lbu|ld)\t[$][a-z0-9]+,[A-Za-z_][A-Za-z0-9_]*([+][0-9]+)?$'
 [ -f "$UNIT_S" ] && [ -r "$UNIT_S" ] \
   || layout_fail "input .s missing or unreadable (a path outside the container mount reads as missing here)"
 if [ "$GFLAG" = "-G8" ]; then
-  LAYOUT="$(tr -d '\r' < "$UNIT_S" | awk '
+  LAYOUT="$(tr -d '\r' < "$UNIT_S" | awk -v memre="$MEMOP_RE" '
     BEGIN {
       br = "^(j|jal|jalr|b|beq|bne|beql|bnel|blez|bgez|bgtz|bltz|blezl|bgezl|bgtzl|bltzl|bgezal|bltzal|bc1f|bc1t|bgezall|bltzall|bc1fl|bc1tl)$"
       mem = "^(sw|sh|sb|sd|lw|lh|lhu|lb|lbu|ld)$"
@@ -83,12 +93,18 @@ if [ "$GFLAG" = "-G8" ]; then
       # an instruction after a label on the same line is never cc1 layout
       lab = sub(/^[ \t]*[A-Za-z0-9_$.]+:[ \t]*/, "", line)
       if (line !~ /^[ \t]*[a-z][a-z0-9.]*([ \t]|$)/) next
-      # cc1 appends `# high`-style comments to some lines; they stay live
-      if (!lab && line ~ /^\t[a-z][a-z0-9.]*(\t[^ \t#]+)?([ \t]*(#.*)?)$/) { live++; next }
-      dead++
       mn = line; sub(/^[ \t]+/, "", mn); ops = mn
       sub(/[ \t].*$/, "", mn); sub(/^[a-z0-9.]+[ \t]*/, "", ops)
-      if (mn ~ br || (mn ~ mem && ops ~ /^\$[a-z0-9]+[ \t]*,[ \t]*[A-Za-z_]/)) {
+      symop = (mn ~ mem && ops ~ /^\$[a-z0-9]+[ \t]*,[ \t]*[A-Za-z_]/)
+      # a BARE symbol: no `(base)` outside a comment (`lbu $2,sym($4)` is not)
+      opsnc = ops; sub(/[ \t]*#.*$/, "", opsnc)
+      bare = (symop && opsnc !~ /\(/)
+      # cc1 appends `# high`-style comments to some lines; they stay live. A
+      # bare-symbol memop is live only when it matches memre, the spelling the
+      # slot rule keys on: with a trailing comment or space it cannot (#8616).
+      if (!lab && (bare ? line ~ memre : line ~ /^\t[a-z][a-z0-9.]*(\t[^ \t#]+)?([ \t]*(#.*)?)$/)) { live++; next }
+      dead++
+      if (mn ~ br || symop) {
         key++; if (key <= 5) keys = keys (keys == "" ? "" : "\n") NR ": " $0
       }
     }
@@ -171,9 +187,11 @@ cd "$FIXROOT"
 # a cop1 load macro (`l.s`/`lwc1`), the SN assembler conservatively pads the
 # load delay with a `nop` before entering the region (it can no longer reorder
 # inside it). GNU as treats r5900 cop1 loads as interlocked and emits nothing,
-# so we insert the nop ourselves. Not applied at -G0: no currently-matched
-# -G0 function has a cop1-load/noreorder boundary, and the -G0 units' matches
-# were proven WITHOUT the pad.
+# so we insert the nop ourselves. (That holds for a LOAD: a register lwc1 and a
+# symbolic l.s assemble with no pad at the boundary, while an mtc1 there does
+# get one - the mtc1 rule below is the other case; FACT #8641.) Not
+# applied at -G0: no currently-matched -G0 function has a cop1-load/noreorder
+# boundary, and the -G0 units' matches were proven WITHOUT the pad.
 #
 # At -G8 also expand the `li.s` float-constant pseudo when its IEEE bits need
 # a 2-insn materialisation (low half nonzero). The SN ee-as always expands
@@ -275,7 +293,11 @@ cd "$FIXROOT"
 # engine chains per region (FACT #8518). Splat's asm carries no `dli`, so an
 # INCLUDE_ASM body is never touched. A malformed allowlist row emits an `.error`,
 # and a failure of the pass itself fails the unit (the status is checked below):
-# as fed an empty stream still writes a valid-looking object.
+# as fed an empty stream still writes a valid-looking object. A listed `dli`
+# directly before a reorder-mode branch is REFUSED - `asm_unit.sh: FAIL:`, exit
+# 2, no object - because GNU as would slot the expansion's last word where
+# Ps2EeAs does not (FACT #8623; the awk's header has the exact rule). The
+# selftest is tools/ee/asm_unit_selftest.sh.
 DLIAWK="$ROOT/tools/ee/ps2eeas_dli.awk"
 DLISITES="$ROOT/tools/ee/ps2eeas_dli_sites.txt"
 for f in "$DLIAWK" "$DLISITES"; do
@@ -283,7 +305,7 @@ for f in "$DLIAWK" "$DLISITES"; do
 done
 DLIRC="$(mktemp)"
 if [ "$GFLAG" = "-G8" ]; then
-  sed -E -f "$MOVEFIX" "$UNIT_S" | tr -d '\r' | awk '
+  sed -E -f "$MOVEFIX" "$UNIT_S" | tr -d '\r' | awk -v memre="$MEMOP_RE" '
     NR==FNR {
       if ($0 ~ /^[ \t]*\.extern[ \t]/) {
         line=$0; sub(/^[ \t]*\.extern[ \t]+/,"",line)
@@ -370,7 +392,7 @@ if [ "$GFLAG" = "-G8" ]; then
     {
       if (pendbr != "") {
         msym = ""; mfull = ""
-        if ($0 ~ /^\t(sw|sh|sb|sd|lw|lh|lhu|lb|lbu|ld)\t\$[a-z0-9]+,[A-Za-z_][A-Za-z0-9_]*(\+[0-9]+)?$/) {
+        if ($0 ~ memre) {
           mfull = $0; sub(/^\t[a-z]+\t\$[a-z0-9]+,/, "", mfull)
           msym = mfull; sub(/\+[0-9]+$/, "", msym)
         }
@@ -497,10 +519,14 @@ if [ "$GFLAG" = "-G8" ]; then
     # SN-as mtc1 write-back hazard (proven by the original bytes of
     # text/1A8180 func_002A8600 / func_002A87A8): an mtc1 directly followed
     # by an FPU op that READS the just-written register gets one padding nop
-    # from the SN ee-as; GNU as treats the r5900 as interlocked and emits
-    # nothing. Track the last mtc1 destination and pad when the very next
-    # instruction is a dependent FPU op. (mtc1 followed by a non-FPU insn or
-    # an independent FPU op is NOT padded - proven by the same functions.)
+    # from the SN ee-as. GNU as 2.40 inserts the same nop itself when the pair
+    # is assembled in reorder mode (FACT #8606, FACT #8622), so there this rule
+    # changes no byte; it is live only inside a `.set noreorder` region, where
+    # gas does not pad (the #8622 noreorder control). Whether any cc1 output has
+    # a dependent mtc1 pair inside noreorder is not measured (#1113). Track the
+    # last mtc1 destination and pad when the very next instruction is a
+    # dependent FPU op. (mtc1 followed by a non-FPU insn or an independent FPU
+    # op is NOT padded - proven by the same functions.)
     {
       if (lastmtc != "" && $0 ~ /^\t/ && $0 !~ /^\t\.|^\t#/) {
         if ($0 ~ /^\t(add|sub|mul|div|abs|neg|mov|sqrt|max|min)\.s\t/ || $0 ~ /^\tcvt\.[a-z.]+\t/ || $0 ~ /^\tc\.[a-z]+\.s\t/) {
@@ -572,8 +598,13 @@ else
     | { awk -v region="$REGION" -f "$DLIAWK" "$DLISITES" -; echo $? > "$DLIRC"; } \
     | mips-linux-gnu-as -march=r5900 -mabi=eabi -no-pad-sections -EL "$GFLAG" -I. -o "$OUT_O" -
 fi
-if [ "$(cat "$DLIRC")" != 0 ]; then
-  echo "asm_unit.sh: REFUSED: ps2eeas_dli.awk exited $(cat "$DLIRC") on $UNIT_S; $OUT_O removed (RULING #8549)" >&2
-  rm -f "$DLIRC" "$OUT_O"; exit 2
-fi
+case "$(cat "$DLIRC")" in
+  0) ;;
+  3) # the adjacency refusal: the pass has printed `asm_unit.sh: FAIL:` itself
+    echo "  input: $UNIT_S (-G: $GFLAG)" >&2
+    echo "  No object written." >&2
+    rm -f "$DLIRC" "$OUT_O"; exit 2 ;;
+  *) echo "asm_unit.sh: REFUSED: ps2eeas_dli.awk exited $(cat "$DLIRC") on $UNIT_S; $OUT_O removed (RULING #8549)" >&2
+    rm -f "$DLIRC" "$OUT_O"; exit 2 ;;
+esac
 rm -f "$DLIRC"
