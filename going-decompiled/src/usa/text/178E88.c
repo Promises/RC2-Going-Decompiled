@@ -1421,7 +1421,7 @@ extern HudIntWord g_vramFrameBufBAbs;
  * (counts from the HUD asset header +0x44 / +0x24, re-read every iteration).
  *
  * Match notes (every device below emits no instruction; NO register pin is
- * used - RULING #8598's pin was tried and dropped, see NOTE for task #1110).
+ * used - RULING #8598's pin was tried and dropped, NOTE #8618).
  * Percentages are the unit objdiff row for the named variant, solo, sdk29:
  *  - The VOLATILE empty fence on `cursor` (RULING #8483) keeps the head in
  *    source order; with a plain (non-volatile) fence sched1 hoists the
