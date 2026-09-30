@@ -4872,8 +4872,11 @@ void func_002AE558(void *out, Vec4 *arg2, Vec4 *m1, Vec4 *m2) {
  * scheduler output. A pad asm with a "+r" operand keeps the empty loop alive
  * under cc1 2.9, but reorg then does not move the loop's i++ into the bnez
  * slot the way the ROM does. The scan loop is the CountPlatinumBolts shape
- * (5 + 1 pad, movn in the slot). Task #659 best: 63.29% (sdk29, unit
- * objdiff report, VM b). Not landed. FACT #7937. */
+ * (5 + 1 pad, movn in the slot). The #else body below scores 62.54% solo
+ * (sdk29, unit objdiff report, VM colima-ee-x86, task #1114), identical with
+ * and without the unit's -fno-strict-aliasing. The best known body is 88.66%
+ * (NOTE #8503, task #1026; re-measured under the flag by task #1100); its
+ * residual is the SHARED-%HI class (NOTE #8503). Not landed. FACT #7937. */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 52.76%
    -> UNKNOWN-@0: ROM `lui v0,0x0  [HI16 0x001A7BD0]` vs `lui v1,0x0  [HI16 0x001A7BD0]` */
 #ifndef TARGET_NATIVE
