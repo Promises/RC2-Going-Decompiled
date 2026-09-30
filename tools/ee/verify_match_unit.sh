@@ -182,6 +182,7 @@ OUT = "going-decompiled/build/vmu_selftest.%d" % os.getpid()   # gitignored, ins
 DOCKER = ["docker", "--context", "colima-ee-x86", "run", "--rm", "-v", os.getcwd() + ":/work",
           "-w", "/work", "ee-build", "sh", "-c"]
 AS = "mips-linux-gnu-as -march=r5900 -mabi=eabi -no-pad-sections -EL -G0"
+FAKE_MKTEMP = os.path.join(os.getcwd(), OUT, "mktemp")
 # A line this tool's normal mode prints as a per-function verdict. The selftest
 # prints NONE of these (checked at the end); the inner runs' lines are parsed,
 # never echoed except behind "    | ".
@@ -199,9 +200,10 @@ def say(s=""):
 # bg = GetSavePromptPending alone             (target for b's second function)
 # c  = the __divdi3 slice + __clz_tab         (its own target)
 # e  = func_00279E00's first 12 words         (its own target)
+# f  = func_002AC058, a two-word zero run     (its own target; task #1121)
 OBJS = {"a": ["select_scene_sub_chunk"], "b": ["evaluate_progress_condition", "get_save_prompt_pending"],
         "be": ["evaluate_progress_condition"], "bg": ["get_save_prompt_pending"], "c": ["divdi3_clz_slice"],
-        "e": ["camera_slot_straddle"]}
+        "e": ["camera_slot_straddle"], "f": ["elided_zero_run"]}
 
 def obj(k):
     return "%s/%s.o" % (OUT, k)
@@ -214,6 +216,10 @@ def build():
             for p in parts:
                 f.write(open("%s/%s.s" % (FIX, p)).read() + "\n")
         cmds.append("%s -o %s %s/%s.s" % (AS, obj(k), OUT, k))
+    # X8's failing mktemp: first on PATH, prints nothing, exits 1 (task #1121).
+    with open(FAKE_MKTEMP, "w") as f:
+        f.write("#!/bin/sh\nexit 1\n")
+    os.chmod(FAKE_MKTEMP, 0o755)
     p = subprocess.run(DOCKER + [" && ".join(cmds)], capture_output=True, text=True)
     return p.returncode == 0 and all(os.path.isfile(obj(k)) for k in OBJS), p.stderr.strip()[-400:]
 
@@ -242,7 +248,9 @@ class Elf:
     def rel(self, secname):
         """(file offset of the table, [(r_offset, type, symbol index)]) of SHT_REL for secname."""
         i = self.sec(secname)
-        r = next(s for s in self.secs if s[1] == 9 and s[7] == i)
+        r = next((s for s in self.secs if s[1] == 9 and s[7] == i), None)
+        if r is None:                        # no relocations at all (fixture f)
+            return None, []
         return r[4], [(o, inf & 0xFF, inf >> 8) for o, inf in
                       (struct.unpack_from("<II", self.d, r[4] + k * 8) for k in range(r[5] // 8))]
     def write_rel(self, secname, table):
@@ -392,7 +400,8 @@ def straddles(fn, hi_a, hi_b):
 # ---- THE SEED TABLE. (id, fn, base, target, seed or None, guard or None,
 #      expected rc, expected detail). Detail: rc 0 -> (words, substring or None);
 #      rc 1 -> the EXACT tuple of differing vaddrs; rc 2/3 -> a substring.
-A, B, C, D, E = "func_00294920", "func_0029E808", "func_002897A8", "func_0011FD98", "func_00279E00"
+A, B, C, D, E, F = ("func_00294920", "func_0029E808", "func_002897A8", "func_0011FD98", "func_00279E00",
+                    "func_002AC058")
 ROWS = [
     # SelectSceneSubChunk: HI16/LO16 pairing, both directions of the carry defect.
     ("A0", A, "a", "a", None, carries(A, 0x0C, 0x14), 0, (20, None),
@@ -441,20 +450,50 @@ ROWS = [
      "unseeded: same-symbol HI16s, LO16s either side of the carry, lui 1B/1C"),
     ("E1", E, "e", "e", w_seed(E, 0x28, lambda w: w + 1, ("R_MIPS_HI16", "D_001B7E30")), straddles(E, 0x00, 0x28),
      1, (0x279E28,), "+0x28 lui immediate +1 (a first-LO16 rule computes 1C: false MATCH)"),
+    # func_002AC058: objdump elides its +0x14/+0x18 zero run (task #1121). An
+    # rc 0 detail whose first item is a TUPLE is (compared, symbol words,
+    # uncompared vaddrs): the verdict must name both counts and every address.
+    # Every OTHER row must print no WARN / NOT COMPARED at all (holds()).
+    ("F0", F, "f", "f", None, None, 0, ((10, 12, (0x2AC06C, 0x2AC070)), None),
+     "unseeded: 10 of 12 words compared, the two elided nops named"),
+    ("F1", F, "f", "f", w_seed(F, 0x10, lambda w: 0), None, 0, ((9, 12, (0x2AC068, 0x2AC06C, 0x2AC070)), None),
+     "+0x10 andi zeroed: joins the run, still rc 0 (#8103) but 3 of 12 named"),
 ]
 
-def run(script, row, base):
+def coverage(out):
+    """None if the run says nothing about uncompared words; else (compared,
+    symbol words, uncompared vaddrs) when the verdict line and the WARN line
+    agree, or ("MALFORMED",) when they do not (task #1121)."""
+    if "NOT COMPARED" not in out and "WARN:" not in out:
+        return None
+    mv = re.search(r"\((\d+) words compared of the symbol's (\d+): (\d+) NOT COMPARED", out)
+    mw = re.search(r"^WARN: \S+: (\d+) of the symbol's (\d+) words NOT COMPARED — [^:\n]*: "
+                   r"((?:0x[0-9a-f]{8}(?:, )?)+)\.", out, re.M)
+    if not (mv and mw):
+        return ("MALFORMED",)
+    vas = tuple(int(v, 16) for v in re.findall(r"0x([0-9a-f]{8})", mw.group(3)))
+    if not (mv.group(2) == mw.group(2) and int(mv.group(3)) == int(mw.group(1)) == len(vas)):
+        return ("MALFORMED",)
+    return (int(mv.group(1)), int(mv.group(2)), vas)
+
+def run(script, row, base, env=None):
     rid, fn, _b, tgt = row[:4]
-    p = subprocess.run(["bash", script, fn, base, obj(tgt), "usa"], capture_output=True, text=True, timeout=600)
+    p = subprocess.run(["bash", script, fn, base, obj(tgt), "usa"], capture_output=True, text=True, timeout=600,
+                       env=env)
     out = (p.stdout + p.stderr).strip()
     diffs = tuple(int(m, 16) for m in re.findall(r"^  0x([0-9a-f]{8}): built", out, re.M))
     m = re.search(r"\((\d+)/(\d+) words", out)
-    return p.returncode, out, diffs, (int(m.group(1)) if m and m.group(1) == m.group(2) else None)
+    return (p.returncode, out, diffs, (int(m.group(1)) if m and m.group(1) == m.group(2) else None),
+            coverage(out))
 
 def holds(row, got):
-    rc, out, diffs, words = got
+    rc, out, diffs, words, cover = got
     want_rc, want = row[6], row[7]
     if rc != want_rc:
+        return False
+    if rc == 0 and isinstance(want[0], tuple):
+        return words is None and cover == want[0] and (want[1] is None or want[1] in out)
+    if cover is not None:                    # the SILENT direction: no row but F0/F1 may warn
         return False
     if rc == 0:
         return words == want[0] and (want[1] is None or want[1] in out)
@@ -463,13 +502,18 @@ def holds(row, got):
     return want in out
 
 def show(got):
-    rc, out, diffs, words = got
+    rc, out, diffs, words, cover = got
+    warned = "" if cover is None else ", WARN %s" % (
+        "MALFORMED" if cover == ("MALFORMED",) else "%d of %d compared, not %s" % (
+            cover[0], cover[1], ",".join("0x%08x" % v for v in cover[2])))
     if rc == 0 and words is not None:
-        return "rc 0, %s/%s words" % (words, words)
+        return "rc 0, %s/%s words%s" % (words, words, warned)
+    if rc == 0 and cover is not None:
+        return "rc 0" + warned
     if rc == 1 and diffs:
-        return "rc 1 at " + ",".join("0x%08x" % d for d in diffs)
+        return "rc 1 at " + ",".join("0x%08x" % d for d in diffs) + warned
     lines = out.splitlines()
-    line = next((l for l in lines if l.startswith(("CRASH:", "NO VERDICT:"))), None)
+    line = next((l for l in lines if l.startswith(("CRASH:", "NO VERDICT:", "INFRASTRUCTURE ERROR:"))), None)
     if line is None and lines:
         line = lines[-1] if lines[0].startswith("Traceback") else lines[0].split(" — ", 1)[-1]
     return "rc %d, %s" % (rc, (line or "")[:90])
@@ -548,8 +592,25 @@ MUTANTS = [
     ("M20", "backstop checks the sentinel is present, not that it names the rc",
      'if [ "$SENTINEL" = "VMU_RESULT $PY_RC" ]; then', 'if [ -n "$SENTINEL" ]; then', ["X5"],
      [("X5", 1, None, None)]),
+    # Task #1121. M21-M23 change the elided-word check, M24 the backstop's
+    # replay (TAIL), M25 the mktemp guard before the heredoc (HEAD).
+    ("M21", "elided words not counted: the pre-#1121 silent `10/10` on a 12-word symbol",
+     "missing = [fn_va + (o - EXTENT[0]) for o in range(EXTENT[0], EXTENT[0] + EXTENT[1], 4) if o not in printed]",
+     "missing = []", ["F0"], [("F0", 0, None, "(10/10 words")]),
+    ("M22", "the denominator is the compared count, not the symbol's",
+     "sym_words = EXTENT[1] // 4", "sym_words = len(words)", ["F0"], []),
+    ("M23", "the check warns on every function (the one-direction trap)",
+     "range(EXTENT[0], EXTENT[0] + EXTENT[1], 4)", "range(EXTENT[0], EXTENT[0] + EXTENT[1] + 4, 4)", ["A0"],
+     [("A0", 0, None, "WARN:")]),
+    ("M24", "NO VERDICT replays python's lines unquarantined (a verdict line beside it)",
+     "sed 's/^/  | /' \"$PY_OUT_FILE\"", 'cat "$PY_OUT_FILE"', ["X6"],
+     [("X6", 2, None, "\nfunc_00294920: DIFFERS")]),
+    ("M25", "mktemp results unchecked (pre-#1121: the failure blamed on the base or the compare)",
+     'if [ -z "$t" ] || [ ! -f "$t" ] || [ ! -w "$t" ]; then', "if false; then", ["X8", "X9"],
+     [("X8", 3, None, "could not disassemble"), ("X9", 2, None, "the compare ran but no verdict was recorded")]),
 ]
-TAIL = {"M19", "M20"}
+TAIL = {"M19", "M20", "M24"}
+HEAD = {"M25"}
 
 # ---- CRASH PROBE (task #1016). A copy of the normal mode that raises before the
 # ROM read, run on A0's unseeded and A1's SEEDED base. It must exit 2 with a
@@ -561,51 +622,73 @@ TAIL = {"M19", "M20"}
 # crash hook (FACT #8509), X4 a silent sys.exit(0) (the false-MATCH direction),
 # X5 a sentinel of 0 with an exit of 1. Each must exit 2 with a `NO VERDICT:`
 # line and no verdict line.
+# QUARANTINE AND MKTEMP PROBES (task #1121). X6/X7 print a real verdict line
+# and then leave python without the sentinel (task #1079's V1, and its MATCH
+# twin on the unseeded base): rc 2 NO VERDICT and NO verdict-shaped line, so the
+# two cannot be read side by side. X8 puts a failing `mktemp` first on PATH, X9
+# empties RESULT_FILE alone (task #1079's V3): each must give one
+# `INFRASTRUCTURE ERROR:` line, rc 2, no CRASH:, no NO VERDICT:, no verdict.
+# A probe is (id, row, where, old, new, kind, description, fake mktemp?);
+# `where` = py (the normal-mode heredoc), head (the shell before it) or None.
 PROBE_AT = 'rom = open(ROM, "rb").read()\n'
 HOOK_CRASH = ('class _E(Exception):\n    def __str__(self): raise ValueError("vmu selftest hook probe")\n'
               'raise _E()\n')
-PROBES = [("X0", "A0", 'raise RuntimeError("vmu selftest crash probe")\n', "CRASH",
-           "crash probe on A0's unseeded base: rc 2 + CRASH:, no verdict line"),
-          ("X1", "A1", 'raise RuntimeError("vmu selftest crash probe")\n', "CRASH",
-           "crash probe on A1's SEEDED base: must not read as the control firing"),
-          ("X2", "A1", "def (:\n", "NOVERDICT",
-           "SyntaxError, SEEDED base: python exits 1 with no sentinel -> rc 2"),
-          ("X3", "A1", HOOK_CRASH, "NOVERDICT",
-           "exception inside the crash hook, SEEDED base: exits 1, no sentinel -> rc 2"),
-          ("X4", "A1", "sys.exit(0)\n", "NOVERDICT",
-           "silent sys.exit(0), SEEDED base: no sentinel -> rc 2, not MATCH"),
-          ("X5", "A1", "record(0)\nsys.exit(1)\n", "NOVERDICT",
-           "sentinel says 0, python exits 1, SEEDED base: mismatch -> rc 2"),
+def at_rom_read(inject):
+    return ("py", PROBE_AT, inject + PROBE_AT)
+PROBES = [("X0", "A0") + at_rom_read('raise RuntimeError("vmu selftest crash probe")\n') + ("CRASH",
+           "crash probe on A0's unseeded base: rc 2 + CRASH:, no verdict line", False),
+          ("X1", "A1") + at_rom_read('raise RuntimeError("vmu selftest crash probe")\n') + ("CRASH",
+           "crash probe on A1's SEEDED base: must not read as the control firing", False),
+          ("X2", "A1") + at_rom_read("def (:\n") + ("NOVERDICT",
+           "SyntaxError, SEEDED base: python exits 1 with no sentinel -> rc 2", False),
+          ("X3", "A1") + at_rom_read(HOOK_CRASH) + ("NOVERDICT",
+           "exception inside the crash hook, SEEDED base: exits 1, no sentinel -> rc 2", False),
+          ("X4", "A1") + at_rom_read("sys.exit(0)\n") + ("NOVERDICT",
+           "silent sys.exit(0), SEEDED base: no sentinel -> rc 2, not MATCH", False),
+          ("X5", "A1") + at_rom_read("record(0)\nsys.exit(1)\n") + ("NOVERDICT",
+           "sentinel says 0, python exits 1, SEEDED base: mismatch -> rc 2", False),
+          ("X6", "A1", "py", "verdict(DIFFERS)", "sys.exit(1)", "NOVERDICT",
+           "DIFFERS printed, then exit 1 unsentinelled, SEEDED: no verdict line", False),
+          ("X7", "A0", "py", "verdict(MATCH)", "sys.exit(0)", "NOVERDICT",
+           "BYTE IDENTICAL printed, then exit 0 unsentinelled: no verdict line", False),
+          ("X8", "A1", None, None, None, "INFRA",
+           "mktemp fails (first on PATH), SEEDED base: INFRASTRUCTURE ERROR, rc 2", True),
+          ("X9", "A1", "head", 'RESULT_FILE="$(mktemp -t verify_match_unit_result)"', 'RESULT_FILE=""', "INFRA",
+           "RESULT_FILE alone empty, SEEDED base: not a CRASH after a verdict", False),
 ]
 
 def probe_holds(got, kind):
     rc, out = got[0], got[1]
-    want = (r"^CRASH: \S+: RuntimeError: vmu selftest crash probe" if kind == "CRASH"
-            else r"^NO VERDICT: \S+: the normal-mode python exited")
+    want = {"CRASH": r"^CRASH: \S+: RuntimeError: vmu selftest crash probe",
+            "NOVERDICT": r"^NO VERDICT: \S+: the normal-mode python exited",
+            "INFRA": r"^INFRASTRUCTURE ERROR: \S+: mktemp gave no writable private temp file"}[kind]
+    lines = out.splitlines()
     return (rc == 2 and re.search(want, out, re.M) is not None
-            and not any(VERDICT_RE.match(l) for l in out.splitlines()))
+            and not any(VERDICT_RE.match(l) for l in lines)
+            and (kind != "INFRA" or not any(l.startswith(("CRASH:", "NO VERDICT:")) for l in lines)))
 
 def crash_probe(text, tag):
     """{xid: run() result} of every probe on `text`, or a reason string."""
     res = {}
-    for xid, rid, inject, _, _ in PROBES:
-        ptext, why = mutate(text, PROBE_AT, inject + PROBE_AT)
+    for xid, rid, where, old, new, _, _, fake in PROBES:
+        ptext, why = (text, None) if where is None else {"py": mutate, "head": mutate_head}[where](text, old, new)
         if ptext is None:
-            return "probe point: " + why
+            return "%s probe point: %s" % (xid, why)
         row = next(r for r in ROWS if r[0] == rid)
         path, why = bases[rid]
         if path is None:
             return "%s's base is invalid: %s" % (rid, why)
         ppath = os.path.join(os.path.dirname(SELF), ".vmu_selftest.%d.%s.%s.sh" % (os.getpid(), tag, xid))
         open(ppath, "w").write(ptext)
+        env = dict(os.environ, PATH=os.path.dirname(FAKE_MKTEMP) + os.pathsep + os.environ["PATH"]) if fake else None
         try:
-            res[xid] = run(ppath, row, path)
+            res[xid] = run(ppath, row, path, env)
         finally:
             os.remove(ppath)
     return res
 
 def main_span(text):
-    start = text.rfind("python3 - <<'" + "PY'\n")
+    start = text.rfind("<<'" + "PY'\n")
     end = text.find("\n" + "PY\n", start)
     return start, end
 
@@ -617,6 +700,17 @@ def mutate(text, old, new):
     if n != 1:
         return None, "text found %d times in the normal-mode code, expected once" % n
     return text[:s] + text[s:e].replace(old, new) + text[e:], None
+
+def mutate_head(text, old, new):
+    """mutate(), on the normal-mode shell code BEFORE the heredoc (task #1121)."""
+    s, e = main_span(text)
+    h = text.find("\nSELFTEST_" + "PY\n")
+    if s < 0 or e < 0 or h < 0:
+        return None, "normal-mode heredoc or selftest end not found"
+    n = text[h:s].count(old)
+    if n != 1:
+        return None, "text found %d times before the normal-mode heredoc, expected once" % n
+    return text[:h] + text[h:s].replace(old, new) + text[s:], None
 
 def mutate_tail(text, old, new):
     """mutate(), on the shell code AFTER the normal-mode heredoc (the backstop)."""
@@ -671,7 +765,7 @@ try:
         say("  FAIL  CRASH PROBE INAPPLICABLE: " + pr)
         ok = False
     else:
-        for xid, rid, _, kind, desc in PROBES:
+        for xid, rid, _, _, _, kind, desc, _ in PROBES:
             good = probe_holds(pr[xid], kind)
             ok &= good
             say("  %-5s %-4s %-72s -> %s" % ("ok" if good else "FAIL", xid, desc[:72], show(pr[xid])))
@@ -683,7 +777,7 @@ try:
     text = open(SELF).read()
     caught_by = {}
     for mid, desc, old, new, prio, must in MUTANTS:
-        mtext, why = (mutate_tail if mid in TAIL else mutate)(text, old, new)
+        mtext, why = (mutate_tail if mid in TAIL else mutate_head if mid in HEAD else mutate)(text, old, new)
         if mtext is None:
             say("  FAIL  %-4s MUTANT INAPPLICABLE (%s): %s" % (mid, desc, why))
             ok = False
@@ -699,7 +793,7 @@ try:
                     ok = False
                     continue
                 mres.update(pr)
-                dev += [x for x, _, _, kind, _ in PROBES if not probe_holds(pr[x], kind)]
+                dev += [x[0] for x in PROBES if not probe_holds(pr[x[0]], x[5])]
             order = [r for r in ROWS if r[0] in prio] + [r for r in ROWS if r[0] not in prio]
             for row in order:
                 if dev and all(p in mres for p in prio) and all(m[0] in mres for m in must):
@@ -797,6 +891,24 @@ if [ -z "$ROM" ]; then
   exit 2
 fi
 
+# ---- PRIVATE TEMP FILES, made and CHECKED before any work (task #1121). An
+# unchecked failed mktemp left an empty path that surfaced as someone else's
+# fault: an empty DIS_FILE made the objdump redirect fail and read `ARG ERROR:
+# could not disassemble <base>` (rc 3, blaming the base), an empty RESULT_FILE
+# made verdict() raise AFTER the compare, so the crash hook printed "nothing
+# was compared" beside a real verdict line (task #1079's V3). A failed mktemp
+# is the MACHINE, not the function or its objects: one line, rc 2, nothing run.
+DIS_FILE="$(mktemp -t verify_match_unit)"
+RESULT_FILE="$(mktemp -t verify_match_unit_result)"
+PY_OUT_FILE="$(mktemp -t verify_match_unit_out)"
+trap 'rm -f "$DIS_FILE" "$RESULT_FILE" "$PY_OUT_FILE"' EXIT
+for t in "$DIS_FILE" "$RESULT_FILE" "$PY_OUT_FILE"; do
+  if [ -z "$t" ] || [ ! -f "$t" ] || [ ! -w "$t" ]; then
+    echo "INFRASTRUCTURE ERROR: $FN: mktemp gave no writable private temp file ('$t') — nothing was disassembled or compared; this is UNVERIFIABLE and says nothing about $FN or its objects"
+    exit 2
+  fi
+done
+
 # ---- ARGUMENT CONTRACT (defect class: a whole-unit .o passed where a
 # single-function .o is expected used to yield a 17k-line diff and a confident
 # "DIFFERS"). A single-function target.o has exactly ONE `F .text` symbol and a
@@ -839,8 +951,23 @@ fi
 #    PRINTED word) and gives a false DIFFERS instead (doc #6381,
 #    `verify-match-unit-zero-run-elision-blindspot`; read it with cv_doc_get,
 #    because cv_fact_get 6381 returns an unrelated post).
-#    Check: `N/N words` must equal splat's `nonmatching <fn>, 0x<size>` / 4.
 #    Adding `-z` here is HUMAN-ONLY (fleet-control/19734). It is NOT applied.
+#    The tool now SAYS when it happens (task #1121; before, it printed `34/34`
+#    for StopAllSoundEmitters, a 42-word function, and nothing else): the
+#    words it printed are checked against the function symbol's own extent
+#    (st_value, st_size in the base object) and, if any are missing, the
+#    verdict line loses its N/N ratio and reads `BYTE IDENTICAL TO ROM ON
+#    COMPARED WORDS ONLY ⚠️ (34 words compared of the symbol's 42: 8 NOT
+#    COMPARED; ...)`, followed by a `WARN:` line naming every uncompared
+#    address. It stays rc 0 — a WARN, not a FAIL — because the skipped words
+#    are zero in the base by objdump's own rule (a nonzero seed there IS
+#    compared, FACT #8520), so the only blind case is a base zero where the
+#    ROM is nonzero; making every nop pair rc 2 would un-decide correct
+#    matches (FACT #8098: 7 of 791 real-C rows), and comparing the skipped
+#    words is -z by another name. What stops the MATCH being quoted as a full
+#    one: there is no `N/N` in the line to quote, and the denominator printed
+#    is the symbol's. A symbol with no size prints `the symbol's length is
+#    unknown` instead. Full extent: tools/ee/symtab_extent_compare.py.
 #
 # 2. WHERE THE FUNCTION IS IN THE UNIT. Each word is compared at the function's
 #    ROM vaddr from symbol_addrs, plus its offset from the start of its own
@@ -858,16 +985,13 @@ fi
 #    effect.) Only a unit-level check sees the pad drop:
 #    tools/ee/text_size_check.sh (same seed: off 56, rc 1; master: off 0,
 #    rc 0) or the whole-image cmp in landing_gate.sh.
-DIS_FILE="$(mktemp -t verify_match_unit)"
-RESULT_FILE="$(mktemp -t verify_match_unit_result)"
-trap 'rm -f "$DIS_FILE" "$RESULT_FILE"' EXIT
 docker --context colima-ee-x86 run --rm -v "$ROOT":/work -w /work ee-build sh -c \
   "mips-linux-gnu-objdump -dr --section=.text '$BASE' 2>/dev/null" >"$DIS_FILE" \
   || { echo "ARG ERROR: could not disassemble '$BASE'" >&2; exit 3; }
 [ -s "$DIS_FILE" ] || { echo "ARG ERROR: '$BASE' produced no .text disassembly" >&2; exit 3; }
 
 FN="$FN" BASE="$BASE" ROM="$ROM" SYMS="$SYMS" REGION="$REGION" DIS_FILE="$DIS_FILE" \
-  VMU_RESULT_FILE="$RESULT_FILE" python3 - <<'PY'
+  VMU_RESULT_FILE="$RESULT_FILE" python3 - >"$PY_OUT_FILE" <<'PY'
 import os, sys, traceback
 
 # CRASH -> UNVERIFIABLE (task #1016, FACT #8453). An uncaught exception would
@@ -895,7 +1019,9 @@ def crash(etype, value, tb):
     last = traceback.extract_tb(tb)[-1] if tb else None
     print(f"CRASH: {os.environ.get('FN', '?')}: {etype.__name__}: {value}"
           + (f" (normal-mode python line {last.lineno}, in {last.name})" if last else "")
-          + " — nothing was compared; this is UNVERIFIABLE, not DIFFERS", flush=True)
+          + (" — the compare ran but no verdict was recorded" if globals().get("compared")
+             else " — nothing was compared")
+          + "; this is UNVERIFIABLE, not DIFFERS", flush=True)
     sys.stderr.flush()
     record(2)
     os._exit(2)
@@ -1207,6 +1333,54 @@ if lo < 0 or hi > len(rom):
     print(f"{FN}: UNVERIFIABLE — vaddr range 0x{resolved[0][0]:08x}..0x{resolved[-1][0]:08x} outside the flat ROM")
     verdict(UNVERIFIABLE)
 
+# ELIDED WORDS (task #1121). `objdump -d` without -z prints a run of zero words
+# as one `...` line, so `words` can be SHORTER than the function: #1075 got
+# `34/34` for StopAllSoundEmitters, whose symbol is 42 words, and nothing said
+# so. The function's extent is its own symbol in the base (st_value, st_size;
+# glabel/endlabel and cc1 both emit .size), never the printed block. Every
+# offset in that extent that objdump did not print is NOT COMPARED, and the
+# verdict below says how many of how many, and where. A WARN, not a FAIL: see
+# "TWO THINGS THIS COMPARE CANNOT SEE" in the shell above for why.
+def fn_extent():
+    """(st_value, st_size) of FN's one symbol in the base's .text, or a reason."""
+    if ELF is None:
+        return "base is not an ELF32 LE object"
+    d, secs = ELF
+    texts = [i for i, s in enumerate(secs) if s["name"] == ".text"]
+    symtabs = [s for s in secs if s["type"] == 2]
+    if len(texts) != 1 or len(symtabs) != 1:
+        return f"{len(texts)} .text and {len(symtabs)} symbol tables in the base object"
+    found = set()
+    for k in range(symtabs[0]["size"] // 16):
+        _, value, size, info, _, shndx = struct.unpack_from("<IIIBBH", d, symtabs[0]["off"] + k * 16)
+        if shndx == texts[0] and info & 0xF in (1, 2) and elf_symbol(d, secs, symtabs[0], k) == (FN, False):
+            found.add((value, size))
+    if len(found) != 1:
+        return f"{len(found)} .text symbols named {FN} in the base object"
+    value, size = found.pop()
+    return (value, size) if size else f"{FN} has st_size 0 in the base object"
+
+EXTENT = fn_extent()
+if isinstance(EXTENT, tuple):
+    printed = {off for off, _ in words}
+    sym_words = EXTENT[1] // 4
+    missing = [fn_va + (o - EXTENT[0]) for o in range(EXTENT[0], EXTENT[0] + EXTENT[1], 4) if o not in printed]
+else:
+    sym_words, missing = None, []
+
+def coverage_warning():
+    """The WARN line for words this compare did not see, or None."""
+    if sym_words is None:
+        return (f"WARN: {FN}: the symbol's length is unknown ({EXTENT}), so whether objdump "
+                f"elided any word cannot be told; {len(resolved)} words compared")
+    if not missing:
+        return None
+    return (f"WARN: {FN}: {len(missing)} of the symbol's {sym_words} words NOT COMPARED — objdump "
+            f"elided them as zero words of the base: " + ", ".join(f"0x{va:08x}" for va in missing)
+            + ". A base word of 0 where the ROM is nonzero reads as identical here (FACT #7936, "
+            f"#8103). Full extent: python3 tools/ee/symtab_extent_compare.py <base.o> --fn {FN}")
+
+compared = True
 bad = []
 for va, w in resolved:
     rw = struct.unpack_from("<I", rom, va - ROM_BASE)[0]
@@ -1214,16 +1388,27 @@ for va, w in resolved:
         bad.append((va, w, rw))
 
 nrel = sum(len(v) for v in relocs.values())
+warn = coverage_warning()
 if not bad:
     placed = "".join(f"; {n} at 0x{a:08x}" for n, a in sorted(section_addr.items()))
-    print(f"{FN}: BYTE IDENTICAL TO ROM ✅ ({len(resolved)}/{len(resolved)} words, {nrel} relocs resolved{placed})")
+    if warn is None:
+        print(f"{FN}: BYTE IDENTICAL TO ROM ✅ ({len(resolved)}/{len(resolved)} words, {nrel} relocs resolved{placed})")
+    else:
+        of = (f"the symbol's {sym_words}: {len(missing)} NOT COMPARED" if sym_words is not None
+              else "the symbol's unknown length")
+        print(f"{FN}: BYTE IDENTICAL TO ROM ON COMPARED WORDS ONLY ⚠️ ({len(resolved)} words compared "
+              f"of {of}; {nrel} relocs resolved{placed})")
+        print(warn)
     verdict(MATCH)
 
-print(f"{FN}: DIFFERS ❌ — {len(bad)}/{len(resolved)} words differ from the ROM")
+print(f"{FN}: DIFFERS ❌ — {len(bad)}/{len(resolved)} words differ from the ROM"
+      + ("" if warn is None else " ⚠️ (and some words were NOT COMPARED: see WARN)"))
 for va, w, rw in bad[:40]:
     print(f"  0x{va:08x}: built {w:08x}   rom {rw:08x}")
 if len(bad) > 40:
     print(f"  ... and {len(bad)-40} more")
+if warn is not None:
+    print(warn)
 verdict(DIFFERS)
 PY
 PY_RC=$?
@@ -1236,9 +1421,22 @@ PY_RC=$?
 # is "the control fired", and rc 0 on the subject is a false MATCH. A sentinel
 # naming a different rc means something failed after the verdict (e.g. a
 # stdout flush at exit). Both are rc 2, never 0 or 1.
+#
+# QUARANTINE (task #1121). Python's stdout goes to $PY_OUT_FILE, not the
+# terminal, and is replayed only here. With a verdict it is replayed verbatim.
+# Without one, every line it printed is replayed behind `  | `, so no line of
+# a NO VERDICT run has the shape `<fn>: BYTE IDENTICAL|DIFFERS|...`: before,
+# a python that printed its DIFFERS line and then exited without the sentinel
+# (task #1079's V1) showed that verdict line right above `NO VERDICT:`, and a
+# reader could take either. A verdict line and NO VERDICT are now exclusive.
 SENTINEL="$(cat "$RESULT_FILE" 2>/dev/null)"
 if [ "$SENTINEL" = "VMU_RESULT $PY_RC" ]; then
+  cat "$PY_OUT_FILE" || { echo "NO VERDICT: $FN: the verdict's text could not be replayed — this is UNVERIFIABLE"; exit 2; }
   exit "$PY_RC"
+fi
+if [ -s "$PY_OUT_FILE" ]; then
+  echo "  (the normal-mode python printed this and then reached no verdict — NOT a verdict:)"
+  sed 's/^/  | /' "$PY_OUT_FILE"
 fi
 case "$PY_RC" in
   0) BAND=", not MATCH";;
