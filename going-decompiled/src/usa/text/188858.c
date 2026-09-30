@@ -5709,18 +5709,20 @@ void UploadTextureToGs(s32 handle, s32 vramBlk, s32 fmt, s32 wLog, s32 hLog,
 
 /* func_00290320 / func_002904B0 / func_00290640 (task #1024): C bodies exist
  * whose words equal the ROM's everywhere except the 64-bit constant loads (3, 3
- * and 1 blocks). The ROM carries the `dli` expansion of SN's Ps2EeAs.exe
- * (FACT #8518; GNU and SN as.exe 2.9 differ, #8524):
+ * and 1 blocks). The ROM's words there equal the `dli` expansion SN's
+ * Ps2EeAs.exe produces (FACT #8518, which does not show that Ps2EeAs produced
+ * the ROM; GNU and SN as.exe 2.9 differ, #8524):
  * `ori 0x8800; dsll32 15; ori 0x8001` and `ori 0xFFFF; dsll 16; ori 0xF000;
  * dsll 24`, where GNU as picks another (`lui 0x4400; dsll32 0; ori`,
  * `li -1; dsll32 12; dsrl 8`). cc1 2.9 has no DImode `ori` (FACT #8524), so
  * ordinary and fenced C cannot spell the ROM's form (#8524's bound: the
- * spellings it tried; mode punning and inline-asm devices were not tried, and
- * an emitting asm is forbidden by RULING #8549). The lever is an
+ * spellings it tried; mode punning and emitting inline-asm devices were not
+ * tried, and an emitting asm is forbidden by RULING #8549). The lever is an
  * assembler-side expansion rule, not C: tested end to end for these three
- * functions on sdk29 (FACT #8544); the in-tree build path is permitted as a
- * per-site allowlist (RULING #8549) and not implemented. The bodies are in
- * task #1024's store note. */
+ * functions on sdk29 (FACT #8544). The in-tree build path is RULING #8549's
+ * per-site allowlist, implemented as tooling (tools/ee/ps2eeas_dli_sites.txt,
+ * task #1105); no function is promoted under it yet. The bodies are in task
+ * #1024's store note. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_00290320);
 #else
