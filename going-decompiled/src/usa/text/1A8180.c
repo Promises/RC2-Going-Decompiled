@@ -4866,12 +4866,16 @@ void func_002AE558(void *out, Vec4 *arg2, Vec4 *m1, Vec4 *m2) {
 #endif
 
 /* MarkLevelAvailable: set a level's available flag and append it to the
- * ordered level list (regular levels < 0x15, plus level 0x18). Best attempt
- * 75%: the original contains an EMPTY 28-iteration delay loop. Its four
- * nops are the R5900 short-loop pad (a 2-instruction loop padded to 6), not
- * scheduler output. A pad asm with a "+r" operand keeps the empty loop alive
- * under cc1 2.9, but reorg then does not move the loop's i++ into the bnez
- * slot the way the ROM does. The scan loop is the CountPlatinumBolts shape
+ * ordered level list (regular levels < 0x15, plus level 0x18). Best known
+ * body 88.66% (NOTE #8503); the #else below is 62.54% (figures and
+ * instruments at the end of this comment). The original contains an EMPTY
+ * 28-iteration delay loop. Its four nops are the R5900 short-loop pad (a
+ * 2-instruction loop padded to 6), not scheduler output. A single pad asm
+ * with a "+r" operand keeps the empty loop alive under cc1 2.9 but leaves
+ * the loop's i++ out of the bnez slot; NOTE #8503's body (an empty fence on
+ * the loop flag plus four R5900_SHORT_LOOP_PAD1) gets reorg to steal it into
+ * the slot, and the delay loop then matches the ROM's `slti; nop x4; bnez;
+ * addiu`. The scan loop is the CountPlatinumBolts shape
  * (5 + 1 pad, movn in the slot). The #else body below scores 62.54% solo
  * (sdk29, unit objdiff report, VM colima-ee-x86, task #1114), identical with
  * and without the unit's -fno-strict-aliasing. The best known body is 88.66%
