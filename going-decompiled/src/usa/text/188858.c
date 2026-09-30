@@ -5714,8 +5714,10 @@ void UploadTextureToGs(s32 handle, s32 vramBlk, s32 fmt, s32 wLog, s32 hLog,
  * NOTE #8489).
  *
  * Each builds 64-bit constants with cc1's `dli` (0x4400000000008001, and in the
- * first two also 0x00FFFFF000000000). cc1 2.9 has no DImode `ori`, so C cannot
- * spell the ROM's form of those constants (FACT #8524). The ROM's words there
+ * first two also 0x00FFFFF000000000). cc1 2.9 has no DImode `ori` (FACT
+ * #8524), so ordinary and fenced C cannot spell the ROM's form (#8524's bound:
+ * the spellings it tried; mode punning and emitting inline-asm devices were not
+ * tried, and an emitting asm is forbidden by RULING #8549). The ROM's words there
  * equal the `dli` expansion SN's Ps2EeAs.exe produces (FACT #8518, which does
  * not show that Ps2EeAs produced the ROM; GNU and SN as.exe 2.9 differ, #8524):
  * `ori 0x8800; dsll32 15; ori 0x8001` and `ori 0xFFFF; dsll 16; ori 0xF000;
@@ -5740,9 +5742,18 @@ void UploadTextureToGs(s32 handle, s32 vramBlk, s32 fmt, s32 wLog, s32 hLog,
  *     g_gsPixelOffsetX/Y for each corner, and keeps the packet stores in source
  *     order. Without the cursor volatile 90/92 words differ, without the offset
  *     volatile 75/92, without the store volatile 93/100 (func_00290320).
- *     Writers: g_frameDmaCursor is stored by 65 asm functions, all draw-list,
- *     packet or texture-upload builders (e.g. BeginFrameDrawList,
- *     BuildShrubDrawSegment, UploadTextureToGs). g_gsPixelOffsetX/Y are stored
+ *     Writers: g_frameDmaCursor is stored by 85 asm functions (FACT #8647,
+ *     DEMONSTRATED: 60 in nonmatchings/ plus 25 in the whole-unit segments
+ *     text/1849B0, 1812A8, 1FD030, 2012B8, 1B8FA8; a count of FILES gives 65).
+ *     Census, a direct `sw` to the symbol, one row per glabel:
+ *       for f in $(/usr/bin/grep -rlE '[[:space:]]sw[[:space:]].*g_frameDmaCursor\)'
+ *         going-decompiled/asm/usa); do awk '/^glabel/{fn=$2}
+ *         /[ \t]sw[ \t].*g_frameDmaCursor[)]/{print fn}' $f; done | sort -u
+ *     By name most are draw-list, packet or texture-upload builders (e.g.
+ *     BeginFrameDrawList, BuildShrubDrawSegment, UploadTextureToGs), but not
+ *     all: the set also holds the frame-arena functions ResetFrameArenas and
+ *     FlipFrameArena, FadeOutToBlackBlocking, and 28 unnamed func_ rows
+ *     (these three functions among them). g_gsPixelOffsetX/Y are stored
  *     by InitScreenGeometry, SetupGsDisplayBuffers,
  *     RecomputeScreenViewportFromGsContext and func_0027B858. None of those is
  *     named as an interrupt or DMA handler. That census is by name, not a
