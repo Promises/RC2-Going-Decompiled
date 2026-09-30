@@ -35,6 +35,72 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 if [ -n "${ASM_UNIT_S_MD5:-}" ]; then
   sh "$ROOT/tools/ee/mount_sync.sh" check "$UNIT_S" "$ASM_UNIT_S_MD5"
 fi
+
+# LAYOUT GATE (#1103, FACT #8551, FACT #8553). Every -G8 rule below matches
+# cc1's exact line layout - a TAB indent, the mnemonic, a TAB, operands with no
+# whitespace (`/^\t(bnel|...)\t/`, `/^\t(sw|lw|...)\t\$r,sym$/`). An input in
+# any other layout matches nothing, prints nothing and exits 0, which reads
+# exactly like a clean subject, and its -G0 run reads 0 as well, so the two
+# dead numbers agree and look like confirmation. That is a hand-written control
+# seed's failure, never cc1's, so it is refused here with no object and no
+# assembler output (a warning inside a readout is still a readout, #1037).
+#   - input missing or unreadable, at any -G: `as` would read an empty stdin
+#     and write an empty object at rc 0 (a seed outside the container mount);
+#   - -G8, instruction lines present but none in cc1 layout (the whole seed is
+#     dead). An input with no instruction lines at all is not refused: a unit
+#     whose every function is INCLUDE_ASM is exactly that (usa cod/0213D0);
+#   - -G8, any branch the delay-slot guard holds, or any integer load/store of
+#     a bare symbol, written outside cc1 layout (that line is dead even when
+#     the rest of the seed is live). Inline asm reaches the unit .s verbatim
+#     and outside cc1 layout, but in the image it is only lq/sq/la/cvt.w.s and
+#     -G0 syscall shims (every USA/EU image, objdiff base and base96 .s, #1103).
+# Exit 2 and the `asm_unit.sh: FAIL:` prefix are deliberately NOT the delay-slot
+# guard's `REFUSED` (rc 1 from `.error`): a control that counts WARNING/REFUSED
+# lines must not read this refusal as its seed firing.
+layout_fail() {
+  echo "asm_unit.sh: FAIL: $1" >&2
+  echo "  input: $UNIT_S (-G: $GFLAG)" >&2
+  [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/  dead line: /' >&2
+  echo "  No object written. cc1 layout is: TAB, mnemonic, TAB, operands with no" >&2
+  echo "  whitespace (e.g. '\\tbnel\\t\$4,\$0,\$L1' then '\\tlw\\t\$3,g_hx')." >&2
+  rm -f "$OUT_O"
+  exit 2
+}
+[ -f "$UNIT_S" ] && [ -r "$UNIT_S" ] \
+  || layout_fail "input .s missing or unreadable (a path outside the container mount reads as missing here)"
+if [ "$GFLAG" = "-G8" ]; then
+  LAYOUT="$(tr -d '\r' < "$UNIT_S" | awk '
+    BEGIN {
+      br = "^(j|jal|jalr|b|beq|bne|beql|bnel|blez|bgez|bgtz|bltz|blezl|bgezl|bgtzl|bltzl|bgezal|bltzal|bc1f|bc1t|bgezall|bltzall|bc1fl|bc1tl)$"
+      mem = "^(sw|sh|sb|sd|lw|lh|lhu|lb|lbu|ld)$"
+    }
+    {
+      line = $0
+      # an instruction after a label on the same line is never cc1 layout
+      lab = sub(/^[ \t]*[A-Za-z0-9_$.]+:[ \t]*/, "", line)
+      if (line !~ /^[ \t]*[a-z][a-z0-9.]*([ \t]|$)/) next
+      # cc1 appends `# high`-style comments to some lines; they stay live
+      if (!lab && line ~ /^\t[a-z][a-z0-9.]*(\t[^ \t#]+)?([ \t]*(#.*)?)$/) { live++; next }
+      dead++
+      mn = line; sub(/^[ \t]+/, "", mn); ops = mn
+      sub(/[ \t].*$/, "", mn); sub(/^[a-z0-9.]+[ \t]*/, "", ops)
+      if (mn ~ br || (mn ~ mem && ops ~ /^\$[a-z0-9]+[ \t]*,[ \t]*[A-Za-z_]/)) {
+        key++; if (key <= 5) keys = keys (keys == "" ? "" : "\n") NR ": " $0
+      }
+    }
+    END {
+      if (key) { print "KEY " key; print keys }
+      else if (dead && !live) print "ALLDEAD " dead
+      else print "OK"
+    }')" || LAYOUT="scan exited non-zero"
+  case "$LAYOUT" in
+    OK) ;;
+    KEY*) layout_fail "$(printf '%s\n' "$LAYOUT" | sed -n '1s/^KEY //p') branch/symbolic-memop line(s) outside cc1 layout; the -G8 delay-slot guard cannot see them" \
+                      "$(printf '%s\n' "$LAYOUT" | sed 1d)" ;;
+    ALLDEAD*) layout_fail "no instruction line in cc1 layout ($(printf '%s' "$LAYOUT" | sed 's/^ALLDEAD //') in another layout); no -G8 rule can match this input" ;;
+    *) layout_fail "layout scan produced no verdict ('$LAYOUT')" ;;
+  esac
+fi
 VU0FIX="$ROOT/tools/ee/vu0_fixup.sed"
 MOVEFIX="$ROOT/tools/ee/move_fixup.sed"   # cc1 `move` pseudo -> `daddu` (0x2d) for EE
 ASMSRC="$ROOT/going-decompiled/asm/$REGION/nonmatchings"
