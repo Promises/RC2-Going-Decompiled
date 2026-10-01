@@ -1012,14 +1012,18 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_0
  * cursors and count, poison the 5 slots (0x28 bytes) with 0xCD, clear the
  * active flag and set the queue's game-state mode to 1.
  *
- * NEAR-MISS: logic exact, but the memset call forces `q` into the callee-saved
- * $16 and cc1 schedules the trailing cursor/flag stores in a different order
- * than the original's interleave with the jal. Kept as the portable #else
- * body. engine96 arm (task #469): 88.28% with `mode = 1` hoisted before the
- * stores + a trailing asm barrier; residual SCHED — the ROM's sched2 hoists
- * `addiu $6,$0,0x28` into the prologue, this cc1 hoists only the 0xCD arg. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", ResetCinematicQueue);
+ * MATCHED on the s136os arm (FACT #8830). Record: under cc1 2.9 the memset
+ * call put `q` in $16 and the trailing cursor/flag stores were scheduled apart
+ * from the original's interleave with the jal; engine96 (task #469) reached
+ * 88.28% with a residual SCHED (the ROM hoists `addiu $6,$0,0x28` into the
+ * prologue).
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the
+ * slot, so a build that skips the splice loses the function. On native it is
+ * plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_ResetCinematicQueue)
+S136OS_SLOT(ResetCinematicQueue);
 #else
 void ResetCinematicQueue(CinematicQueue *q) {
     q->writeCursor = 0;
@@ -1514,15 +1518,17 @@ s32 FindTextTableEntry(s32 textId) {
  * On a miss returns the cached fallback string D_1A8D18 for the sentinel id
  * 0x9C40, otherwise a pointer to the empty-string buffer D_1A8D28.
  *
- * NEAR-MISS: logic exact, but the FindTextTableEntry call forces `textId` into
- * the callee-saved $16 (0x10 frame) and the gp-relative &D_1A8D28 tail address
- * is computed in a branch-delay slot that cc1 schedules differently. Kept as the
- * portable #else body. engine96 arm (task #469): 82.83%; residual IDIOM-movz —
- * this cc1's if-conversion speculates the gp-rel load of D_1A8D18 and selects
- * with movz, the ROM keeps `beq $16,$2` + an out-of-line lw block with its own
- * epilogue; no non-volatile phrasing tried defeats the conversion. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", GetLocalizedString);
+ * MATCHED on the s136os arm (FACT #8830). Record: cc1 2.9 scheduled the
+ * gp-relative &D_1A8D28 tail address into a different delay slot; engine96
+ * (task #469) reached 82.83%, its if-conversion selecting D_1A8D18 with movz
+ * where the ROM keeps `beq $16,$2` + an out-of-line lw block.
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the
+ * slot, so a build that skips the splice loses the function. On native it is
+ * plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GetLocalizedString)
+S136OS_SLOT(GetLocalizedString);
 #else
 char *GetLocalizedString(s32 textId) {
     s32 idx = FindTextTableEntry(textId);
@@ -2154,13 +2160,17 @@ append:
 /* Subtitle-event dispatch: for area-transition event 0x17 queue subtitle line
  * (0x9F3, voice 0x4A); for event 0x19 queue line (0xA35, voice 0x8C).
  *
- * NEAR-MISS (73% on the 2.9 arm; 94.47% on the engine96 arm with the
- * `__asm__ __volatile__("")` sibling-call guard, task #469): the one residual
- * is REORG — the ROM keeps the epilogue `ld $16` after the second jal although
- * the `bne` delay slot already restored it; this cc1 deletes the redundant
- * copy (else-if / switch phrasings do not change it). Kept as #else. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028AB70);
+ * MATCHED on the s136os arm (FACT #8830), as plain C with no sibling-call
+ * guard. Record: 73% on the 2.9 arm; 94.47% on engine96 with an asm guard
+ * (task #469), residual REORG — the ROM keeps a redundant epilogue `ld $16`
+ * after the second jal, which those cc1s delete.
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the
+ * slot, so a build that skips the splice loses the function. On native it is
+ * plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0028AB70)
+S136OS_SLOT(func_0028AB70);
 #else
 void func_0028AB70(s32 event) {
     if (event == 0x17) {

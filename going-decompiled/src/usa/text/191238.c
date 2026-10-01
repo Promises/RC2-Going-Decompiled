@@ -64,15 +64,17 @@ extern u8 D_1395B8[];
 /* func_002912B8(progress): rebuild the inventory quick-select order. Walks item
  * ids 0..0x37 and, for each that IsItemUnlockedAtProgress reports available at
  * the given story progress (id 0 excluded), appends it via AddItemToInventoryOrder
- * (which owns the g_inventoryOrder writes). The matching build keeps the asm. */
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 98.08% PACKED-SAVE /
- * engine96 85.68% IDIOM-LIKELY; best arm sdk29, first differing insn there: 'addiu sp, sp,
- * -0x20' vs 'addiu sp, sp, -0x30'. Iterated: engine96 85.68% SCHED-PROEPI — save order sd
- * s0/s1/ra vs ra/s0/s1, a ROM `nop` before the first jal, beqz vs beqzl (not iterated:
- * prologue order is the #7345 class) */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002912B8);
+ * (which owns the g_inventoryOrder writes).
+ * MATCHED on the s136os arm (FACT #8830). Record (t496 probe, unit objdiff):
+ * sdk29 98.08% PACKED-SAVE (ROM `addiu sp,sp,-0x20` vs `-0x30`), engine96
+ * 85.68% SCHED-PROEPI.
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the
+ * slot, so a build that skips the splice loses the function. On native it is
+ * plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002912B8)
+S136OS_SLOT(func_002912B8);
 #else
 void func_002912B8(s32 progress) {
     s32 i;

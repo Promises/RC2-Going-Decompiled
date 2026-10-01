@@ -952,13 +952,18 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0
 /* func_002702D8: critically-damped spring step toward a target. Advances `cur`
  * (the velocity at *vel) by stiffness*delta - damping*vel, clamps the velocity
  * magnitude to maxSpeed (when nonzero) and then to |delta|, and returns the new
- * position cur + clampedVel. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002702D8);
+ * position cur + clampedVel. GetFloatAbs(delta) is re-evaluated at each
+ * branch, as the original does.
+ * MATCHED on the s136os arm (FACT #8830; cc1 2.9 never closed it).
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the
+ * slot, so a build that skips the splice loses the function. On native it is
+ * plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002702D8)
+S136OS_SLOT(func_002702D8);
 #else
 extern f32 GetFloatAbs(f32 x);
-/* TODO(match): functional equivalent - not byte-exact; the original reloads
-   GetFloatAbs(delta) at each branch and threads the fp pipeline differently. */
 f32 func_002702D8(f32 cur, f32 target, f32 stiffness, f32 damping, f32 maxSpeed,
                   f32 *vel) {
     f32 delta = target - cur;

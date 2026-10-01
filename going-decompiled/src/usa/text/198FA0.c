@@ -1698,18 +1698,28 @@ s32 func_0029C648(void) {
 }
 
 /* func_0029C678 (and C700/C818/C8F0/CA98/CC48/CD18): 2+-callee-save functions
- * walled by the 8-byte-packed callee-save layout of the later SN cc1 (ours
- * reserves 16 bytes per save) - the wall characterized in the 1907F0 round.
+ * walled under cc1 2.9 by the 8-byte-packed callee-save layout of the later SN
+ * cc1 (cc1 2.9 reserves 16 bytes per save) - the wall characterized in the
+ * 1907F0 round. FACT #8810: that layout is SN 2.95.3 v1.36 -fopt-stack's, which
+ * closes func_0029C678 below (task #1269); the other functions that cite this
+ * note stay asm until each is measured under it.
  *
  * func_0029C678: when the GUI singleton exists, dispatch a text-box render
  * through func_00338F88 with the GUI's text-box context (g_guiInstance+0x36F28)
  * prepended, forwarding its 10 args verbatim (args 1-7 in $4-$10, arg8 in $11,
  * args 9-10 on the incoming stack). func_00338F88's 11-arg prototype recovered
- * via Ghidra. The TARGET_NATIVE #else is faithful coverage. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029C678);
+ * via Ghidra.
+ * MATCHED on the s136os arm (FACT #8830): the packed save is SN 2.95.3 v1.36
+ * -fopt-stack's.
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the
+ * slot, so a build that skips the splice loses the function. On native it is
+ * plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0029C678)
+S136OS_SLOT(func_0029C678);
 #else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+/* Record, t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 99.48% -> PACKED-SAVE, first differing row @0: ROM `addiu sp, sp, -0x30` vs `addiu sp, sp, -0x40`;
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 65.27% -> SCHED-PROEPI, first differing row @0: ROM `addiu sp, sp, -0x30` vs `daddu t4, a0, zero`. */
 extern void func_00338F88(char *ctx, void *state, void *a2, void *text, s32 font,
@@ -2734,11 +2744,17 @@ s32 func_0029EAC8(void) {
 #endif
 
 /** Returns 1 iff a stream is in flight (D_1397C4 < 0) AND the busy flag
- *  D_1395D5 is set; 0 otherwise. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029EB08);
+ *  D_1395D5 is set; 0 otherwise. Takes no arguments.
+ * MATCHED on the s136os arm (FACT #8830).
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the
+ * slot, so a build that skips the splice loses the function. On native it is
+ * plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0029EB08)
+S136OS_SLOT(func_0029EB08);
 #else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+/* Record, t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 74.09% -> IFCONV, first differing row @0: ROM `lui v0, %hi(D_1397C4)` vs `lui a0, %hi(D_1397C4)`;
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 93.64% -> LIKELY-BRANCH, first differing row @2: ROM `bgez v1, 0x5b0c` vs `bgezl v1, 0x5b84`. */
 s32 func_0029EB08(void) {

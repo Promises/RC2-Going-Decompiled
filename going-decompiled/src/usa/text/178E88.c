@@ -2933,13 +2933,16 @@ void DrawFixedFontString(s32 x, s32 y, s32 color, s32 str, s32 maxLen,
 extern u64 GetUiTextureTex0(s32 slot);
 extern void DrawFixedFontString(s32 a, s32 b, s32 c, s32 d, s32 e, u64 tex0, u8 *glyphTable);
 
-/* TODO(match) t493: sdk29 43.45% / engine96 44.52% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (engine96): SIBCALL (first differing
- * insn: ROM `sd s1,8(sp)` vs built `daddu s0,a0,zero`). Levers: sibcall guard RUN: sdk29 71.55% /
- * engine96 84.19%; engine96 with sched1 MEASURED (flag not landed): 43.13%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027FBA8);
+/* MATCHED on the s136os arm (FACT #8830). Record of the cc1 2.9 / 2.96 attempts
+ * (t493, unit objdiff, objdiff_build.sh + unit_report.sh): sdk29 43.45% / engine96 44.52%,
+ * residual SIBCALL (ROM `sd s1,8(sp)` vs built `daddu s0,a0,zero`).
+ * GUARD (task #1269): on EE the #else C is the image's body, compiled alone by
+ * SN 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over
+ * the S136OS_SLOT line by tools/ee/s136os_splice.sh; the 2.9 compile sees only
+ * the slot, so a build that skips the splice loses the function. On native it
+ * is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0027FBA8)
+S136OS_SLOT(func_0027FBA8);
 #else
 /**
  * Draw a string with the D_263B10 font: resolve the UI texture (GetUiTextureTex0
@@ -2953,13 +2956,16 @@ void func_0027FBA8(s32 a, s32 b, s32 c, s32 d, s32 e) {
 }
 #endif
 
-/* TODO(match) t493: sdk29 43.45% / engine96 44.52% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (engine96): SIBCALL (first differing
- * insn: ROM `sd s1,8(sp)` vs built `daddu s0,a0,zero`). Levers: sibcall guard RUN: sdk29 71.55% /
- * engine96 84.19%; engine96 with sched1 MEASURED (flag not landed): 43.13%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawDebugString);
+/* MATCHED on the s136os arm (FACT #8830). Record of the cc1 2.9 / 2.96 attempts
+ * (t493, unit objdiff, objdiff_build.sh + unit_report.sh): sdk29 43.45% / engine96 44.52%,
+ * residual SIBCALL (ROM `sd s1,8(sp)` vs built `daddu s0,a0,zero`).
+ * GUARD (task #1269): on EE the #else C is the image's body, compiled alone by
+ * SN 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over
+ * the S136OS_SLOT line by tools/ee/s136os_splice.sh; the 2.9 compile sees only
+ * the slot, so a build that skips the splice loses the function. On native it
+ * is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_DrawDebugString)
+S136OS_SLOT(DrawDebugString);
 #else
 /**
  * Draw a string with the built-in debug font: resolve the UI font texture
@@ -3118,13 +3124,16 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002801B8);
  *  rendered width (func_0027F818), centers the anchor (x - width/2), draws via
  *  DrawFixedFontString (UI font slot 2, debug glyph table), and returns the
  *  centered x. */
-/* TODO(match) t493: sdk29 89.68% / engine96 86.00% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): SCHED+REGNUM (first differing
- * insn: ROM `addiu sp,sp,-48` vs built `addiu sp,sp,-96`). Levers: engine96 with sched1 MEASURED
- * (flag not landed): 86.38%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280250);
+/* MATCHED on the s136os arm (FACT #8830). Record of the cc1 2.9 / 2.96 attempts
+ * (t493, unit objdiff, objdiff_build.sh + unit_report.sh): sdk29 89.68% / engine96 86.00%,
+ * residual SCHED+REGNUM (ROM `addiu sp,sp,-48` vs built `addiu sp,sp,-96`).
+ * GUARD (task #1269): on EE the #else C is the image's body, compiled alone by
+ * SN 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over
+ * the S136OS_SLOT line by tools/ee/s136os_splice.sh; the 2.9 compile sees only
+ * the slot, so a build that skips the splice loses the function. On native it
+ * is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00280250)
+S136OS_SLOT(func_00280250);
 #else
 s32 func_00280250(s32 x, s32 arg1, s32 arg2, const char *str, s32 maxChars) {
     s32 width = func_0027F818(str, maxChars);
@@ -3139,13 +3148,16 @@ s32 func_00280250(s32 x, s32 arg1, s32 arg2, const char *str, s32 maxChars) {
 /** func_002802E8 — draw a horizontally-centered string in the alternate UI font
  *  (glyph table D_264250, UI texture slot 3). Same centering as func_00280250:
  *  measure width (func_0027F838), center (x - width/2), draw, return centered x. */
-/* TODO(match) t493: sdk29 89.68% / engine96 86.00% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): SCHED+REGNUM (first differing
- * insn: ROM `addiu sp,sp,-48` vs built `addiu sp,sp,-96`). Levers: engine96 with sched1 MEASURED
- * (flag not landed): 86.38%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002802E8);
+/* MATCHED on the s136os arm (FACT #8830). Record of the cc1 2.9 / 2.96 attempts
+ * (t493, unit objdiff, objdiff_build.sh + unit_report.sh): sdk29 89.68% / engine96 86.00%,
+ * residual SCHED+REGNUM (ROM `addiu sp,sp,-48` vs built `addiu sp,sp,-96`).
+ * GUARD (task #1269): on EE the #else C is the image's body, compiled alone by
+ * SN 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over
+ * the S136OS_SLOT line by tools/ee/s136os_splice.sh; the 2.9 compile sees only
+ * the slot, so a build that skips the splice loses the function. On native it
+ * is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002802E8)
+S136OS_SLOT(func_002802E8);
 #else
 s32 func_002802E8(s32 x, s32 arg1, s32 arg2, const char *str, s32 maxChars) {
     s32 width = func_0027F838(str, maxChars);

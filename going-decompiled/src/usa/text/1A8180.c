@@ -591,19 +591,19 @@ s32 GetRandomInt(s32 n) {
 
 /* RandRangeInclusive: uniform random integer in [lo, hi] (inclusive) — take a 15-bit
  * random value from the core LCG (func_001163B0() >> 16 & 0x7FFF) and reduce it
- * modulo the span (hi - lo + 1), then bias by lo. Walled: saves $16/$17/$31
- * (save-layout wall). */
-/* RandRangeInclusive: uniform random int in [lo, hi] inclusive.
- * PARKED (engine-2.96): correct C reaches 80.95% but the residual is a pure
- * fine-scheduling offset — the prologue `sd $17` callee-save and the `sra`
- * land one instruction earlier in the original; regalloc/structure are
- * identical. This is the 001003-vs-exact-2.96 scheduler gap (not C-controllable,
- * not post-pass-fixable — [[reference_register_coloring_wall]] scheduling class).
- * Best faithful body kept as the TARGET_NATIVE #else. */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 80.95%
+ * modulo the span (hi - lo + 1), then bias by lo. Saves $16/$17/$31.
+ * MATCHED on the s136os arm (FACT #8830): the packed save layout and the
+ * prologue/`sra` scheduling that engine96 missed (80.95%, below) are SN 2.95.3
+ * v1.36 -fopt-stack's.
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the
+ * slot, so a build that skips the splice loses the function. On native it is
+ * plain C, as before. */
+/* Record, t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 80.95%
    -> SCHED-TIEBREAK (prologue interleave + sra/subu order after the call), ORDER-ONLY */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", RandRangeInclusive);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_RandRangeInclusive)
+S136OS_SLOT(RandRangeInclusive);
 #else
 s32 RandRangeInclusive(s32 lo, s32 hi) {
     s32 r = (func_001163B0() >> 16) & 0x7FFF;
@@ -669,12 +669,18 @@ void func_002A87F0(void *handle, f32 lo, f32 hi) {
  * (func_002A86E0) and two random angles (func_002A87A8), mapped to cartesian —
  * x = r·cos(a2)·sin(a1), y = r·sin(a2)·sin(a1), z = r·cos(a1). The lo/hi pass
  * straight through to the magnitude RNG. (func_00283B30 = cos, ...B48 = sin.)
+ * MATCHED on the s136os arm (FACT #8830).
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the
+ * slot, so a build that skips the splice loses the function. On native it is
+ * plain C, as before.
  */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 92.95%
+/* Record, t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 92.95%
    -> 90.33% with ROM-order muls (cos*sin*r), then ORDER-ONLY: SCHED-TIEBREAK in the epilogue
    restores */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", GetRandomVectorInSphere);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GetRandomVectorInSphere)
+S136OS_SLOT(GetRandomVectorInSphere);
 #else
 void GetRandomVectorInSphere(Vec4 *dst, f32 lo, f32 hi) {
     f32 radius = func_002A86E0(lo, hi);
@@ -2750,15 +2756,18 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  * residual signed distance to the target. When that residual falls below a
  * dt-scaled epsilon (d * 0.01) the value snaps exactly to target and the
  * velocity is zeroed (returning 0). Scalar twin of the Vec4 func_002AB2C0 just
- * below. Walled: $f20-$f22 + $16/$17/$31 saves (save-layout wall). b/c arrive
- * in $f13/$f14, d in $f15. */
-/* PARKED (engine-2.96): 65% — regalloc/structural gap (frame -48 vs -64, s0/s1
- * hold p/vel swapped, commutative operand order); not save-layout. NOT crackable
- * with 001003 vs exact-2.96. Faithful body kept as #else. */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 65.77%
+ * below. Saves $f20-$f22 + $16/$17/$31. b/c arrive in $f13/$f14, d in $f15.
+ * MATCHED on the s136os arm (FACT #8830); engine96 had reached 65% (frame -48
+ * vs -64, s0/s1 holding p/vel swapped).
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the
+ * slot, so a build that skips the splice loses the function. On native it is
+ * plain C, as before. */
+/* Record, t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 65.77%
    -> UNKNOWN-@0: ROM `addiu sp,sp,-64` vs `addiu sp,sp,-48` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB210);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002AB210)
+S136OS_SLOT(func_002AB210);
 #else
 f32 func_002AB210(f32 *p, f32 *vel, f32 target, f32 b, f32 c, f32 d) {
     f32 residual;
