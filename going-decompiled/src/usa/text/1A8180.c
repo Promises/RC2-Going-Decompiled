@@ -456,6 +456,14 @@ void func_002A82D8(Moby *obj, s32 idx, s32 arg3, s32 arg4) {
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 56.03%
    -> UNKNOWN-@0: ROM `addiu sp,sp,-80` vs `addiu sp,sp,-64` */
+/* t1174 solo (unit objdiff report, objdiff_build.sh, colima-ee-x86): sdk29 84.84
+   - SAVE-LAYOUT WALL (7 GPR saves at 8-byte slots, cc1 2.9 frame 144 vs 80).
+   engine96 56.03; copying the bounds as u_long128 (the ROM's lq/sq) and
+   spelling the literal (f32)0.025 gives 70.16. Residual: the ROM saves $f20 at
+   sp+64 after 56 bytes of GPR saves (FPR save area 16-aligned, frame 80) where
+   001003 saves it at sp+56 (frame 64); the 0.025 literal is still 1 ULP low
+   (0x3CCCCCCC vs ROM 0x3CCCCCCD) even through the double cast; and s3/s4/s5
+   take a3/a1/a2 where the ROM gives them a1/a2/a3. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8448);
 #else
@@ -5399,6 +5407,14 @@ extern void func_00283AA0(Vec4 *dst, u32 packed);
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 76.27%
    -> UNKNOWN-@0: ROM `addiu sp,sp,-64` vs `(none)` */
+/* t1174 solo (unit objdiff report, objdiff_build.sh, colima-ee-x86): sdk29 85.24
+   - SAVE-LAYOUT WALL (ROM s0/ra at sp+32/+40, cc1 2.9 at 16-byte slots, frame
+   80 vs 64). engine96 76.27 as below; with `offset` as a QVec cleared by
+   `offset.q = 0` before the three 127.0f stores (the ROM's por/sq-then-swc1),
+   engine96 reaches 81.21 with the ROM's exact instruction multiset - the rest
+   is ORDER-ONLY SCHED-TIEBREAK (prologue addiu vs the 127.0f lui/mtc1, the
+   lwc1/move pair after the first call, a0/a1 before the last call). Not
+   adopted: `q = 0` does not compile on TARGET_NATIVE (struct u_long128). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AF6A0);
 #else
