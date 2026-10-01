@@ -22,9 +22,11 @@ cd "$(dirname "$0")/../.."
 SRC=going-decompiled/src/$REGION
 SYMS=going-decompiled/symbol_addrs/$REGION/symbol_addrs.txt
 [ -d "$SRC" ] && [ -f "$SYMS" ] || exit 0
-# Whole identifiers, then an exact-shape filter. Not `grep -ow`: BSD grep's -o -w
-# drops every later match on a line once one candidate fails the word boundary
-# (`func_0BADC0DE_hook(); func_00C0FFEE();` yields nothing for func_00C0FFEE).
+# Whole identifiers, then an exact-shape filter. Not `grep -ow`: BSD grep 2.6.0's
+# -o -w stops scanning a line at a candidate that fails the word boundary once an
+# earlier match on that line was printed (`x=D_ABCDF0; func_0BADC0DE_hook();
+# func_00C0FFEE();` yields only D_ABCDF0; without the leading D_ABCDF0 it keeps
+# func_00C0FFEE). On src/usa that silently dropped 10 of 3305 tokens.
 grep -rhoE '[A-Za-z_][A-Za-z0-9_]*' "$SRC" \
   | awk '/^(D_|func_)[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]+$/' | sort -u \
   | awk -v syms="$SYMS" '
