@@ -36,6 +36,10 @@
  * pinned 2.9-ee-991111 cc1 reserves a 16-byte slot per save (proven on
  * func_003475F0: 99.89%, every byte equal except the save offsets/frame
  * size). Functions whose only callee save is $ra are unaffected.
+ * That later cc1 is SN 2.95.3 v1.36 with -fopt-stack (FACT #8810); a body it
+ * emits exactly is selected per function onto the s136os arm
+ * (tools/ee/s136os_functions.txt), compiled here by its sibling cc1plus
+ * (func_00290878, task #1284).
  */
 
 /* Original cc1-small / assembler-absolute symbols (see header). */
@@ -118,14 +122,23 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1907F0", func_0
 /* func_00290878: fade-request entry (take ownership of the fade state slot
  * D_1A9004, register the func_00290EA0/func_00290920 pump callbacks, then
  * store colours/progress and arm the 10-frame countdown at D_1A9000).
- * Body reproduces 1:1 at 84% — blocked by the 8-byte-packed callee-save
- * layout (saves s0/s1/s2/ra/f20 at sp+0x0..0x20; see header) plus a void
- * tail call this cc1 sibling-call-optimises. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1907F0", func_00290878);
+ *   owner    fade-slot owner id (2 = level transition, which a non-transition
+ *            owner cannot pre-empt)
+ *   colourA, colourB  packed fade colours stored to D_1A900C / D_1A9010
+ *   progress fade progress stored to D_1A9008
+ * Only the slot's current owner arms the fade; any other caller is ignored.
+ * MATCHED on the s136os arm (FACT #8830: SN 2.95.3 v1.36 -fopt-stack emits it
+ * byte-exact; cc1 2.9 cannot, its 16-byte save slots vs the ROM's 8-byte
+ * packed s0/s1/s2/ra/f20 saves).
+ * GUARD (task #1284): this unit is C++, so the helper compiles this body with
+ * the SN 1.36 cc1plus (tools/ee/s136os_splice.sh), the C++ sibling of that
+ * cc1. On EE this C is the image's body, compiled alone by SN 2.95.3 v1.36
+ * -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line; the 2.9 compile sees only the slot, so a build that skips
+ * the splice loses the function. On native it is plain C++, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00290878)
+S136OS_SLOT(func_00290878);
 #else
-/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed
- * callee-save layout (s0/s1/s2/ra/f20) + a void sibling-call tail. */
 void func_00290878(s32 owner, s32 colourA, s32 colourB, f32 progress) {
     s32 current;
 
