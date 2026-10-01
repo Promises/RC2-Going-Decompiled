@@ -156,9 +156,6 @@ SYMS="$BUILD/undefined_syms_auto.txt"
 # auto-symbols by address). Resolves references it didn't emit labels for.
 ALLSYMS="$BUILD/all_addr_syms.ld"
 grep -rhoE '(D_|func_)[0-9A-Fa-f]{4,}' "$ASM" | sort -u | sed -E 's/^(D_|func_)([0-9A-Fa-f]+)$/\1\2 = 0x\2;/' > "$ALLSYMS"
-# Old address-named spellings the C sources still use for symbols symbol_addrs
-# has renamed (task #1255); see tools/ee/src_alias_provides.sh.
-sh tools/ee/src_alias_provides.sh "$REGION" >> "$ALLSYMS"
 # jtbl_<hex>_text jump-table symbols (address encoded in the name): splat
 # references them by name from the code but does not emit a label, and the
 # D_/func_ blanket above does not cover them. Define each at its named address.

@@ -96,6 +96,7 @@ typedef struct {
  */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/021A98", __pack_d);
+INCLUDE_ASM_ALIAS(func_00122630, __pack_d);
 #else
 s64 func_00122630(FpParts *p) {
     s32 cls = p->fpClass;
@@ -164,6 +165,7 @@ s64 func_00122630(FpParts *p) {
  */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/021A98", __unpack_d);
+INCLUDE_ASM_ALIAS(func_00122760, __unpack_d);
 #else
 void func_00122760(s64 *value, FpParts *out) {
     u64 v = *(u64 *)value;
@@ -220,6 +222,7 @@ extern FpParts D_00141810;
  * D_00141810). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/021A98", _fpadd_parts);
+INCLUDE_ASM_ALIAS(func_00122800, _fpadd_parts);
 #else
 FpParts *func_00122800(FpParts *a, FpParts *b, FpParts *out) {
     s32 clsA, clsB;
@@ -392,6 +395,7 @@ s64 func_00122A98(s64 a, s64 b) {
  * via __muldi3 exactly as the original does. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/021A98", dpmul);
+INCLUDE_ASM_ALIAS(func_00122B00, dpmul);
 #else
 extern s64 __muldi3(s64 a, s64 b);
 
@@ -508,6 +512,7 @@ s64 func_00122B00(s64 a, s64 b) {
  * (incl. the inf/inf and 0/0 NaN paths reading D_00141810). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/021A98", dpdiv);
+INCLUDE_ASM_ALIAS(func_00122DA8, dpdiv);
 #else
 s64 func_00122DA8(s64 a, s64 b) {
     FpParts pa, pb;

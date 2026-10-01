@@ -22,6 +22,14 @@
         ".section .text" \
     )
 #endif
+/* A second name for an INCLUDE_ASM leaf, for C that still calls the leaf by
+ * an older address-named spelling after a symbol_addrs rename moved its label
+ * (task #1255): OLD becomes a global alias of NEW in this object. Symbols only,
+ * no bytes. */
+#ifndef INCLUDE_ASM_ALIAS
+#define INCLUDE_ASM_ALIAS(OLD, NEW) \
+    __asm__(".globl " #OLD "\n.set " #OLD ", " #NEW "\n")
+#endif
 
 #if INCLUDE_ASM_USE_MACRO_INC
 __asm__(".include \"include/macro.inc\"\n");
@@ -36,6 +44,9 @@ __asm__(".include \"include/labels.inc\"\n");
 #endif
 #ifndef INCLUDE_RODATA
 #define INCLUDE_RODATA(FOLDER, NAME)
+#endif
+#ifndef INCLUDE_ASM_ALIAS
+#define INCLUDE_ASM_ALIAS(OLD, NEW)
 #endif
 
 #endif /* !defined(M2CTX) && !defined(PERMUTER) */

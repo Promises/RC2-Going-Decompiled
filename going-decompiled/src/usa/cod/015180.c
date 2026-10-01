@@ -92,10 +92,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", memcpy);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", memset);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", strcmp);
+INCLUDE_ASM_ALIAS(func_00115544, strcmp);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115690);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", strlen);
+INCLUDE_ASM_ALIAS(func_001157AC, strlen);
 
 /* 0xCDCDCDCD inter-function-fill class. Each of these symbols is one or more
  * leading 0xCDCDCDCD debug-fill words (sometimes with dead stores/nops) emitted
@@ -161,6 +163,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001158F8);
  * and no vendored object contains the ROM's dsll $7,$7,9 idiom.
  * USA and EU are identical here (same vaddr, same instructions). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", strncpy);
+INCLUDE_ASM_ALIAS(func_00115AC0, strncpy);
 
 /* func_00115C90: clears D_00133E78, calls func_0011B270(arg1); on failure
  * (-1) writes the resulting D_00133E78 error code back through arg0. Logic
@@ -175,8 +178,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", snd_PrintError);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sprintf);
+INCLUDE_ASM_ALIAS(func_00115DA8, sprintf);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", abort);
+INCLUDE_ASM_ALIAS(func_00115E28, abort);
 
 /**
  * AssertFail (EU names it) — the SDK assert handler. NEVER RETURNS.
@@ -229,6 +234,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115E68);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", exit_runAtexitHandlers);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", malloc);
+INCLUDE_ASM_ALIAS(func_00115F28, malloc);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115F78);
 

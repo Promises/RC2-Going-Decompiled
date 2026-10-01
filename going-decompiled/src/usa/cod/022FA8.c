@@ -61,6 +61,7 @@ s32 func_00123028(s64 a, s64 b) {
  */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", litodp);
+INCLUDE_ASM_ALIAS(func_00123078, litodp);
 #else
 s64 func_00123078(s32 x) {
     FpParts parts;
@@ -222,6 +223,7 @@ void func_00123298(s64 a) {
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001232EC);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", __pack_f);
+INCLUDE_ASM_ALIAS(func_001232F0, __pack_f);
 
 /* Decomposed IEEE-754 single produced by func_00123400 (32-bit fields). */
 typedef struct {
@@ -240,6 +242,7 @@ typedef struct {
  * (asm-vs-C proven bit-identical on real R5900 by run_cmp_015180_iso.sh). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", __unpack_f);
+INCLUDE_ASM_ALIAS(func_00123400, __unpack_f);
 #else
 s32 func_00123400(u32 *src, SpParts *out) {
     u32 bits = src[0];
