@@ -56,3 +56,16 @@ usa text/1D54C0 func_002DC878
 usa text/1D54C0 func_002DD858
 usa text/1EFFC0 SetVendorCaption
 usa text/248B50 GuiScreenSetEventAndReveal
+usa text/24D728 func_0034EF68
+usa text/250080 func_003525D8
+usa text/250080 func_00352638
+usa text/250080 FmvFrameQueueGetWriteSlot
+usa text/235FE8 GuiComputeBlendWeights
+usa text/235FE8 func_00336988
+usa text/235FE8 func_00336A28
+usa text/235FE8 func_00336A78
+usa text/235FE8 func_00337098
+usa text/235FE8 GuiElementSetGlyph
+usa text/235FE8 func_003374D8
+usa text/235FE8 GuiFontAtlasRelocate
+usa text/235FE8 func_00338CD8

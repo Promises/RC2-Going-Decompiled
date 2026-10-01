@@ -531,12 +531,17 @@ void func_0034EF60(void) {
  * element-offset at vtable+0x8 and the function pointer at vtable+0xC and calls
  * it on (row + offset). `x`/`y` are integer pixel coords; `shade` an 8-bit
  * intensity. */
-/* TODO(match) func_0034EF68 - task #566 (round 4), measured on the COMMITTED tree (this file,
- * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
- * tools/ee/objdiff_build.sh, clean): sdk29 89.02%, engine96 83.91%. Eligible arm: e96.
- * Residual: ORDER */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034EF68);
+/* Task #566 (round 4) measured this body on the 2.9 / 2.96 arms (instrument:
+ * tools/ee/unit_report.sh over tools/ee/objdiff_build.sh, clean): sdk29 89.02%,
+ * engine96 83.91%, residual ORDER.
+ * MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+ * byte-exact (FACT #8810; census FACT #8830).
+ * GUARD (task #1272): on EE this C is the image's body, compiled alone by the
+ * s136os arm (row in tools/ee/s136os_functions.txt) and spliced over
+ * S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm fallback: a build
+ * that skips the splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0034EF68)
+S136OS_SLOT(func_0034EF68);
 #else
 typedef struct GuiRowVtable {
     /* 0x00 */ u8 _pad[8];

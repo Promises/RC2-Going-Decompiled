@@ -1558,15 +1558,20 @@ void func_003525D0(FmvStream *s) {
     s->state = 0;
 }
 
-#ifndef TARGET_NATIVE
 /* func_003525D8: stop + detach the embedded stream — channel teardown + DeleteSema
  * on the object at +0x48, detach the message dispatch table (func_0012F940), report
- * success. Blocked: 8-byte-packed saves (s0@0x0, ra@0x8) — 2.9 -G8 -fno-gcse compiles
- * a 16-byte-slot 0x20 frame; the original packs 8-byte in 0x10. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003525D8);
+ * success. On cc1 2.9: 8-byte-packed saves (s0@0x0, ra@0x8) — 2.9 -G8 -fno-gcse
+ * compiles a 16-byte-slot 0x20 frame; the original packs 8-byte in 0x10.
+ * MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+ * byte-exact (FACT #8810; census FACT #8830).
+ * GUARD (task #1272): on EE this C is the image's body, compiled alone by the
+ * s136os arm (row in tools/ee/s136os_functions.txt) and spliced over
+ * S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm fallback: a build
+ * that skips the splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003525D8)
+S136OS_SLOT(func_003525D8);
 #else
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 98.85% / engine96 84.62%. Residual: PACKED-SAVE only on sdk29 (2 callee saves at 16-byte stride, every non-save word equal); SCHED on engine96 (8-byte slots right, instruction set identical, order differs under -fno-schedule-insns; -fno-gcse+scheduling probed on the engine arm, no better). */
-/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee saves. */
 s32 func_003525D8(FmvStream *obj) {
     func_00351F58((u8 *)obj + 0x48);
     func_0012F940((u8 *)obj);
@@ -1616,10 +1621,15 @@ s32 func_00352628(FmvStream *s, s32 state) {
  * (matching arm): the pinned cc1 schedules the obj->0x48 load + subu early (or,
  * with volatile pinning, pushes the arena load late and pads the jal delay slot)
  * where the original loads obj->0x48 late and puts the rel store in the jal delay
- * slot - prologue-scheduling shapes not reachable from this source. Matching arm
- * stays asm; the #else is the structure-exact functional model. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352638);
+ * slot - prologue-scheduling shapes not reachable from cc1 2.9 with this source.
+ * MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+ * byte-exact (FACT #8810; census FACT #8830).
+ * GUARD (task #1272): on EE this C is the image's body, compiled alone by the
+ * s136os arm (row in tools/ee/s136os_functions.txt) and spliced over
+ * S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm fallback: a build
+ * that skips the splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00352638)
+S136OS_SLOT(func_00352638);
 #else
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 54.39% / engine96 27.50%. Residual: SCHED on sdk29 (the obj+0x48 load and the tag store are placed early; 3 statement orders probed, none moves them). */
 s32 func_00352638(u8 *obj, u64 addr, u64 size, s32 pos, s32 tag) {
@@ -1924,16 +1934,19 @@ void FmvFrameQueuePush(u8 *fq) {
 }
 #endif
 
-#ifndef TARGET_NATIVE
-/* FmvFrameQueueGetWriteSlot: writable GS frame pointer (writeIdx * 0xD0000). Blocked:
- * 8-byte-packed saves (s0@0x0, ra@0x8). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvFrameQueueGetWriteSlot);
+/* FmvFrameQueueGetWriteSlot: writable GS frame pointer (writeIdx * 0xD0000). On
+ * cc1 2.9: 8-byte-packed saves (s0@0x0, ra@0x8).
+ * MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+ * byte-exact (FACT #8810; census FACT #8830).
+ * GUARD (task #1272): on EE this C is the image's body, compiled alone by the
+ * s136os arm (row in tools/ee/s136os_functions.txt) and spliced over
+ * S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm fallback: a build
+ * that skips the splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_FmvFrameQueueGetWriteSlot)
+S136OS_SLOT(FmvFrameQueueGetWriteSlot);
 #else
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 95.31% / engine96 69.06%. Residual: PACKED-SAVE (2 callee saves) + 1 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
-/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
-   saves (s0/ra). Revisit with the gameplay-TU compiler.
-
-   Address of the GS frame buffer the producer may write next: 0 if the display
+/* Address of the GS frame buffer the producer may write next: 0 if the display
    queue is full, else gsFrames + writeIdx * 0xD0000 (the GS-side stride). */
 s32 FmvFrameQueueGetWriteSlot(u8 *fq) {
     FmvFrameQueue *q = (FmvFrameQueue *)fq;
