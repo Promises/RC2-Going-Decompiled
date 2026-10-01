@@ -122,7 +122,7 @@ segments:
       - [0x022FA4, zeropad] # dp-bit.o's own alignment pad before dpcmp (0x123024..0x123027), zero in the ROM
       - [0x022FA8, c, cod/022FA8] # core.text: dp-bit.o tail, fp-bit.o, frame.o, then libsn/SDK (0x123028..0x13221F)
       - [0x0321A0, c, cod/0321A0] # snd sub-TU, built at -G8 (0x132220..0x1339EF)
-      - [0x033970, c, cod/033970] # core.text tail (0x1339F0..0x133B7F)
+      - [0x033970, cpp, cod/033970] # core.text tail (0x1339F0..0x133B7F)
       - [0x033B00, data, cod/033B00] # core.data
       - [0x03A180, rodata, cod/03A180] # core.rdata
       - [0x03ABD8, lib, libgcc, _divdi3, .rodata] # libgcc.a _divdi3.o .rodata (__clz_tab, 0x13AC58..0x13AD57)
