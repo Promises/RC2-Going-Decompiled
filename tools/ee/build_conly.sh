@@ -456,11 +456,9 @@ echo "   C-alt objects: $calt_ok ok, $calt_fail failed"
 SYMS="$BUILD/undefined_syms_auto.txt"
 ALLSYMS="$BUILD/all_addr_syms.ld"
 grep -rhoE '(D_|func_)[0-9A-Fa-f]{4,}' "$ASM" | sort -u | sed -E 's/^(D_|func_)([0-9A-Fa-f]+)$/\1\2 = 0x\2;/' > "$ALLSYMS"
-# Address-named spellings only the C sources still use. A symbol_addrs rename moves
-# splat's label to the new name, while C bodies keep calling func_<hex> / using
-# D_<hex>; the address is in the name. PROVIDE, so a name an object defines is
-# left alone (a plain assignment overrides object-local defs, see overlay_package.sh).
-grep -rhoE '(D_|func_)[0-9A-Fa-f]{4,}' "$SRC" | sort -u | sed -E 's/^(D_|func_)([0-9A-Fa-f]+)$/PROVIDE(\1\2 = 0x\2);/' >> "$ALLSYMS"
+# Old address-named spellings the C sources still use for symbols symbol_addrs
+# has renamed (task #1255); see tools/ee/src_alias_provides.sh.
+sh tools/ee/src_alias_provides.sh "$REGION" >> "$ALLSYMS"
 echo "   defined $(wc -l < "$ALLSYMS") address symbols"
 
 # ---- Attempt A: literal task recipe — same .ld, .calt.o passed on the ld
