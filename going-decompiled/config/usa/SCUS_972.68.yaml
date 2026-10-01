@@ -363,7 +363,7 @@ segments:
       #   overlap. Walls expected: 8-byte-packed saves (every 2+-GPR-save fn),
       #   switch/jtbl reloc-gap functions stay INCLUDE_ASM.
       - [0x191238, c, text/191238]   # -G8 -fno-gcse carve (0x2912B8..0x29901F, 95 fns)
-      - [0x198FA0, c, text/198FA0]   # PILOT c-unit (0x299020..0x2A016F, 153 fns)
+      - [0x198FA0, cpp, text/198FA0]   # PILOT c-unit (0x299020..0x2A016F, 153 fns)
       # RANKED-CARVE-PIPELINE PICKS #1 + #2 (2026-06-12, R21 full-binary sweep):
       #   text/1A8180 (vaddr 0x2A8200..0x2B2267, ~190 fns): the "game-state
       #     cluster" - moby hit/probe helpers + game-state/skill-point readers
