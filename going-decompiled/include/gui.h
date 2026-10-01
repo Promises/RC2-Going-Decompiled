@@ -77,23 +77,36 @@
  *   GuiSpriteElementInit     0x337518  sprite: +0x34 uv vec, +0x38 color, +0x40 tex
  *   GuiTextElementInit       0x3377B0  text:   +0x34..+0x54 (see below)
  *   GuiTextElementDraw/Measure 0x3378A0/0x337868  read text fields
- *   GuiListElementInit       0x337210  list:   +0x3C bar width (px), +0x40 count, +0x44 bg RGBA
+ *   GuiListElementInit       0x337210  list:   +0x3C bar width (px), +0x40 meter max, +0x44 bg RGBA
  *   FUN_00336F00 (dtor slot) reads +0x2C pool, +0x14..+0x20 share flags
  *
  * NOTE on the +0x34/+0x38/+0x40 OVERLAP: these bytes are a UNION reused per
  * element subtype. For a BASE element (GuiElementInit) +0x34 and +0x38 are
  * POINTERS to pooled vec4s (texture-uv vec, alpha vec). For a TEXT element they
  * are a direct string ptr (+0x34) and a small-int (+0x38). For a LIST element
- * +0x34 is a backing ptr and +0x3C/+0x40/+0x44 are bar pixel width/count/background
- * RGBA (FACT #8658: the LIST element draws as a horizontal fill bar). The
- * struct below models the BASE/SPRITE form and documents the text/list overlays
+ * +0x34 is a backing ptr and +0x3C/+0x40/+0x44 are bar pixel width / meter
+ * maximum / background RGBA (FACT #8658, #8723: the LIST element draws as a
+ * horizontal fill bar, a meter, not a list of rows). Its scale vec (+0x04)
+ * holds the fill width in scale.x and the bar HEIGHT in pixels in scale.y.
+ * The matched setter names GuiListSetItemCount / GuiListSetVisibleRows are
+ * historical and are not renamed (objdiff matches by name); read them as
+ * "set meter max" / "set bar height". EU symbol_addrs (GuiListElementInit,
+ * GuiListSetItemCount/ScrollPos/VisibleRows rows) still carries the old
+ * capacity / item-count / visible-row wording: KNOWN WRONG and deferred under
+ * RULING #5339/#7207 (EU is not edited before USA is complete), not correct.
+ * The struct below models the BASE/SPRITE form and documents the text/list overlays
  * in comments; bind the right view per subtype.
  */
 typedef struct GuiElement {                 /* === base 0x4C, text variant 0x58 === */
     f32 *posVec;        /* +0x00 ptr to pooled vec4 = position (x,y,z,w). GuiElementSetPos /
                            GuiSpriteElementDraw read [0],[1].                       CONFIRMED */
     f32 *scaleVec;      /* +0x04 ptr to pooled vec4 = scale/size (default (1,1,1)). GetScaleVec /
-                           SetScale / GuiShareScaleVec (may be re-pointed to a shared vec). CONFIRMED */
+                           SetScale / GuiShareScaleVec (may be re-pointed to a shared vec).
+                           LIST: [0] = fill width in px (GuiListSetScrollPos), [1] = bar
+                           height in px (GuiListSetVisibleRows writes (f32)arg; callers
+                           pass 16/16/5/5/5/computed/5; the draw 0x337350 uses pos.y +
+                           [1] as the bottom edge y1 of both DrawFlatRect2d calls, FACT
+                           #8723). Not a row count.                                  CONFIRMED */
     f32 *vec2;          /* +0x08 ptr to pooled vec4, 3rd transform vec (border/extent in some
                            draws; alloc'd as element[2] by GuiElementBaseInit).      PROBABLE */
     f32 *colorVec;      /* +0x0C ptr to pooled vec4 = packed RGBA color (GuiElementGetColor;
@@ -122,7 +135,12 @@ typedef struct GuiElement {                 /* === base 0x4C, text variant 0x58 
                            over the 98 GUI-core .s files 0x336xxx-0x337xxx). Other
                            subtypes: unused/0.                                       CONFIRMED */
     u32  textOrCount40; /* +0x40 TEXT/GLYPH: text/glyph handle (GuiElementSetText/SetGlyph).
-                           LIST: item count (GuiListSetItemCount, init 100).         CONFIRMED */
+                           LIST: meter MAXIMUM, the full-scale value. Written by
+                           GuiListSetItemCount (ctor init 100). Its 17 ROM call sites
+                           pass 100 (9), 1024 (2, the two 150-px bars), a load (3), a
+                           subtraction (1), or a value set before a branch (2);
+                           GuiListSetScrollPos divides by it: fill = min(v, max) / max
+                           * ext3C, 0 if max == 0 (FACT #8723). Not a number of items. CONFIRMED */
     u32  flag44;        /* +0x44 TEXT: horiz align/flag (GuiElementSetTextFlag; 0=L,1=C,2=R read by
                            GuiTextElementDraw). LIST: background bar RGBA, init 0x80000000
                            by GuiListElementInit (colour pair of the 0x337350 background

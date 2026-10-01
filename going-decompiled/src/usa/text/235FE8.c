@@ -1752,7 +1752,9 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiTextElementDraw);
 
-/* GuiListSetItemCount: store the item count at +0x40. */
+/* GuiListSetItemCount: set the meter's MAXIMUM (full-scale value) at +0x40.
+ * GuiListSetScrollPos divides by it, so it is a range, not a number of items
+ * (FACT #8723); the matched name is historical and kept. */
 void GuiListSetItemCount(GuiElement *e, s32 count) {
     *(s32 *)((char *)e + 0x40) = count;
 }
@@ -1797,7 +1799,8 @@ typedef struct GuiListView {
     GuiElement base;
     u8 pad14[0x3C - sizeof(GuiElement)];
     /* 0x3C */ u32 trackLength;  /* full bar width in pixels */
-    /* 0x40 */ u32 rowCount;     /* total rows (GuiListSetItemCount) */
+    /* 0x40 */ u32 rowCount;     /* meter maximum (GuiListSetItemCount); the
+                                    field name is historical, not a row count */
 } GuiListView;
 #ifndef TARGET_NATIVE
 void GuiListSetScrollPos(GuiElement *e, s32 pos) {
@@ -1860,8 +1863,11 @@ void func_00337B68(GuiElement *e, s32 v) {
     *(s32 *)((char *)e + 0x38) = v;
 }
 
-/* GuiListSetVisibleRows: store the row count (as a float) through the list's
- * +0x4 scale-vector pointer at +0x4. */
+/* GuiListSetVisibleRows: set the bar's HEIGHT in pixels: store `rows` as a
+ * float in scale.y, through the +0x4 scale-vector pointer. The meter draw
+ * 0x337350 uses pos.y + scale.y as the bottom edge of both bar rectangles, and
+ * callers pass 16 or 5 (FACT #8723). It is not a row count; the matched name and
+ * the parameter name are historical and kept. */
 void GuiListSetVisibleRows(GuiElement *e, s32 rows) {
     e->scale[1] = (f32)rows;
 }
@@ -4509,8 +4515,8 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 /* func_0033DE10: dialog-box screen with TWO scrolling lists (record at +0x36C).
  * Panel 255x195, border D_1ADE20, text rows localized 0x2C2D/0x2BE4/0x2BE5, bounds
  * (0,-143,0,114,0,140), scale 0.67. Builds two identical lists (+0x2DC and +0x324),
- * each: GuiListElementInit(0x96 tall, v34=1, tag D_1ADC60), 0x10 visible rows,
- * 0x400 items, scroll 0, colour pairs (0x55F0C070 x2, 0x60442D00 x2), +0x44=
+ * each: GuiListElementInit(0x96 px wide, v34=1, tag D_1ADC60), 0x10 px tall
+ * (SetVisibleRows), meter max 0x400 (SetItemCount), value 0, colour pairs (0x55F0C070 x2, 0x60442D00 x2), +0x44=
  * 0x20FFFFFF / +0x38=0. Clear +0x2D8, then func_0033E070(w, 0). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DE10);
@@ -5971,9 +5977,10 @@ void GuiQuickSelectWheelInit(void *self, GuiPool *pool) {
  * texture (0 -> hide the petal at w+0x5EC + i*0x3C, else show + set it), func_00337DC8
  * (entry[0x18]) yields three colors (petal RGB + the paired GuiList's colour pair),
  * and the list element (func_0034F300(g_guiInstance+0x36F28) + i*0x48) is shown with
- * item count 0x64 / scroll 0x64. For an owned weapon (g_weaponTable[slot] non-empty
- * and either +0x6C or +4 set) the list's item count becomes weaponTable[slot][0x6C]
- * and, when that is >0, its scroll becomes g_weaponXp[id] >> 5.
+ * meter max 0x64 / value 0x64 (full). For an owned weapon (g_weaponTable[slot]
+ * non-empty and either +0x6C or +4 set) the meter max becomes
+ * weaponTable[slot][0x6C] and, when that is >0, its value becomes
+ * g_weaponXp[id] >> 5.
  * Input: flag 0x4 = rotate to previous slot, 0x8 = next, over the 8-slot cursor at
  * w+0x7CC (wrapping, with the wheel-turn cue PlayGlobalSound(3)); otherwise the d-pad
  * is dispatched by mode w+0x81C to func_003418D8 (0) or func_00341A80 (1).
@@ -6554,8 +6561,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341C28);
  * +0x4C/D_1ADFA0), a title (+0x98/D_1AE008), a sprite (+0x184/D_1ADFB0), colours
  * and glyphs them (0x5D/0x5E; +0x4C hidden), scales the sprite 32x32, sets the
  * title text buffer (+0x1D0), and builds the list at +0x13C:
- * GuiListElementInit(0x20 rows tall, tag D_1AE018), 5 visible rows, 100 items,
- * scroll 0, colour pairs (0x6049C1FF/0x60001EFF, 0x50F0C070 x2), +0x44=0x80000000
+ * GuiListElementInit(0x20 px wide, tag D_1AE018), 5 px tall (SetVisibleRows),
+ * meter max 100 (SetItemCount), value 0, colour pairs (0x6049C1FF/0x60001EFF, 0x50F0C070 x2), +0x44=0x80000000
  * +0x38=0. Finally records +0x220=6 / +0x21C=4 and runs func_00341F40(w,0,0). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiScrollListScreenInit);

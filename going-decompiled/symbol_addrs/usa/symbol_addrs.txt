@@ -2121,7 +2121,7 @@ GuiElementSetText = 0x00337860; // CONFIRMED - elem +0x40 = text handle
 GuiElementSetTextFlag = 0x00337858; // CONFIRMED - elem +0x44 = text align/flag
 GuiTextElementInit = 0x003377B0; // CONFIRMED - text element ctor (text vtable, default 0.2 box)
 GuiSpriteElementInit = 0x00337518; // CONFIRMED - sprite/image element ctor
-GuiListElementInit = 0x00337210; // CONFIRMED - fill-bar (list) element ctor (bar pixel width +0x3c, count +0x40, background RGBA +0x44, FACT #8658)
+GuiListElementInit = 0x00337210; // CONFIRMED - fill-bar (list) element ctor (bar pixel width +0x3c, meter max +0x40 init 100, background RGBA +0x44, FACT #8658/#8723)
 GuiListRowElementInit = 0x003371D8; // CONFIRMED - list-row element ctor (g_GuiListRowVtable)
 GuiElementInitTypeB = 0x00336FB0; // CONFIRMED - element variant ctor (vtable 0x1ada38)
 GuiElementInitTypeC = 0x00337770; // CONFIRMED - element variant ctor (vtable 0x1ad9f8)
@@ -2136,9 +2136,9 @@ GuiMenuListHandleInput = 0x00348CB8; // CONFIRMED - D-pad nav for the menu-list 
 GuiMenuListSetRowSpacing = 0x00348E10; // CONFIRMED - sets self+0xb8 rowYBase and self+0xbc rowYStep (row Y = base + step*i in GuiMenuListDraw). GuiMenuList accessor family. EU 0x0034A2A0
 GuiMenuListSetOrigin = 0x00348E28; // CONFIRMED - writes the float vec at *(self+0x5c) - [0]=originX [1]=originY [2]=0 [3]=0 - the per-row layout origin read by GuiMenuListDraw. EU 0x0034A2B8
 // GuiMenuList accessor family - MATCHED real-C in text/248B50.c, kept as func_ (naming a matched fn in symbol_addrs desyncs its frozen .s glabel and breaks the by-name objdiff match): func_00348E20 SetSelectedUnderlineFlag (+0xc8), func_00348E50 SetSelectedRow (+0x60), func_00348E58 SetUnderlineRow (+0xcc), func_00348E60 GetSelectedRow (returns +0x60), func_00348E68 GetRowCount (returns +0xc0). Identity in their text/248B50.c doc comments + Ghidra plates.
-GuiListSetVisibleRows = 0x00337B70; // CONFIRMED - list visible-row count
-GuiListSetItemCount = 0x00337A38; // CONFIRMED - list +0x40 item count
-GuiListSetScrollPos = 0x00337A40; // CONFIRMED - map index/count to fractional scrollbar position
+GuiListSetVisibleRows = 0x00337B70; // CONFIRMED - fill-bar height in pixels as scale.y (callers pass 16 or 5, not a row count, name historical, FACT #8723)
+GuiListSetItemCount = 0x00337A38; // CONFIRMED - fill-bar meter maximum +0x40 (the divisor of GuiListSetScrollPos, not an item count, name historical, FACT #8723)
+GuiListSetScrollPos = 0x00337A40; // CONFIRMED - set fill-bar value - fill width scale.x = min(v,max)/max * bar width +0x3c (0 if max is 0, FACT #8723)
 GuiListSetColorPair0 = 0x003372A0; // CONFIRMED - list color vec +0x0/+0x4
 GuiListSetColorPair1 = 0x003372B8; // CONFIRMED - list color vec +0x8/+0xc
 GuiFontAtlasLookupGlyph = 0x00337BF8; // CONFIRMED - scan (key,glyph) pairs at atlas +0x1c
