@@ -13,7 +13,9 @@
 #
 # MUST stay in sync with the inline case in build.sh / objdiff_build.sh / diff.sh.
 unit_flags() {
-  c="$1"
+  # A .cpp unit (task #1258) takes the flags of its .c spelling: the table is
+  # keyed once per unit, whatever its language.
+  case "$1" in *.cpp) c="${1%.cpp}.c" ;; *) c="$1" ;; esac
   GFLAG="-G0"; CC1EXTRA=""
   case "$c" in
     */cod/0321A0.c) GFLAG="-G8";;

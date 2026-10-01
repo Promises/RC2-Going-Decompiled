@@ -172,7 +172,7 @@ def main():
     refs, cdefs = {}, set()
     for dp, _, fns in os.walk(src):
         for fn in sorted(fns):
-            if fn.endswith('.c'):
+            if fn.endswith(('.c', '.cpp')):  # .cpp: a converted unit (#1258)
                 p = os.path.join(dp, fn)
                 scan_c(p, os.path.relpath(p, root), defined, warn, refs, cdefs)
 

@@ -86,8 +86,10 @@ gp_words() {
 }
 
 nunits=0; bad=0
-for c in $(/usr/bin/find "$SRC" -name '*.c' | LC_ALL=C sort); do
-  unit="${c#"$SRC"/}"; unit="${unit%.c}"
+# .c and .cpp units both (task #1258): a .cpp unit dropped here would leave
+# the screen silently, with no row to show it was ever scanned.
+for c in $(/usr/bin/find "$SRC" \( -name '*.c' -o -name '*.cpp' \) | LC_ALL=C sort); do
+  unit="${c#"$SRC"/}"; case "$unit" in *.cpp) unit="${unit%.cpp}" ;; *) unit="${unit%.c}" ;; esac
   unit_flags "$c"
   nunits=$((nunits+1))
   d="$ASM/$unit"; total=0
@@ -107,5 +109,5 @@ for c in $(/usr/bin/find "$SRC" -name '*.c' | LC_ALL=C sort); do
   fi
   echo "UNIT $unit $GFLAG $total"
 done
-[ "$nunits" -gt 0 ] || { echo "gmodel_scan: no .c under $SRC" >&2; exit 2; }
+[ "$nunits" -gt 0 ] || { echo "gmodel_scan: no .c or .cpp under $SRC" >&2; exit 2; }
 [ "$bad" = 0 ]

@@ -19,7 +19,8 @@
 #
 # BASE object (your decomp under test) ->
 #     going-decompiled/build/<region>/obj/<unit>.o
-#   Compiled from src/<region>/<unit>.c (or the optional override cfile). Every
+#   Compiled from src/<region>/<unit>.c or .cpp (or the optional override
+#   cfile) by tools/ee/ee_cc1.sh, the compile step build.sh also uses. Every
 #   function that is still `INCLUDE_ASM` pulls in its asm AND that asm's
 #   `<func>.NON_MATCHING` marker, so objdiff correctly EXCLUDES it from the
 #   report (not yet decompiled). When you replace a stub with real C, its marker
@@ -119,8 +120,12 @@
 # someone last selected interactively. A context that does not exist fails the
 # first `docker run` (rc 1, "context ... not found") — there is no fallback.
 set -euo pipefail
-REGION="$1"; UNIT="$2"; BASECFILE="${3:-going-decompiled/src/$REGION/$UNIT.c}"
+REGION="$1"; UNIT="$2"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$ROOT"
+# The unit's source is <unit>.c or, once converted, <unit>.cpp (task #1258).
+# ee_cc1.sh --resolve picks the one that exists and refuses both. An override
+# (arg 3) may be either; its extension selects the front end.
+BASECFILE="${3:-$(sh tools/ee/ee_cc1.sh --resolve "going-decompiled/src/$REGION/$UNIT")}"
 EE_CTX="${EE_DOCKER_CONTEXT:-colima-ee-x86}"
 
 EXPECTED="going-decompiled/build/$REGION/expected/$UNIT.o"
@@ -338,12 +343,11 @@ docker --context "$EE_CTX" run --rm -e ASMFIX_SHARED -e ASM_UNIT_DLISITES_MD5="$
   \$WIBO \$G/cpp.exe $CPPDEF $INC $TGTC $W/target.i
   \$WIBO \$G/cc1.exe -quiet -O2 -G0 $W/target.i -o $W/target.s
   sh tools/ee/asm_unit.sh $REGION /work/$W/target.s /work/$EXPECTED
-  \$WIBO \$G/cpp.exe $CPPDEF $INC $BASECFILE $W/base.i
-  \$WIBO \$G/cc1.exe -quiet -O2 $GFLAG $CC1EXTRA $W/base.i -o $W/base.s
+  sh tools/ee/ee_cc1.sh sdk29 $BASECFILE $W/base.i $W/base.s '$CPPDEF $INC' '-O2 $GFLAG $CC1EXTRA'
   sh tools/ee/asm_unit.sh $REGION /work/$W/base.s /work/$OBJ $GFLAG
   mips-linux-gnu-nm $EXPECTED | awk '/\\.NON_MATCHING\$/{print \"-N\", \$3}' > $W/nmstrip.txt
   test -s $W/nmstrip.txt && mips-linux-gnu-strip $EXPECTED \$(cat $W/nmstrip.txt) || true
-  mips-linux-gnu-strip $OBJ -N gcc2_compiled. -N __gnu_compiled_c -N dummy-symbol-name
+  mips-linux-gnu-strip $OBJ -N gcc2_compiled. -N __gnu_compiled_c -N __gnu_compiled_cplusplus -N dummy-symbol-name
 "
 
 # (2) engine96 base, only when the unit owns MATCH_-guarded functions.
@@ -353,7 +357,8 @@ rm -f "$ENGINE_FUNCS"
 if [ "$BUILD96" = 1 ]; then
   printf '%s\n' $MATCHFUNCS > "$ENGINE_FUNCS"
   # (2a, container) preprocess with the 2.9 cpp as diff96.sh does, compile with
-  # the native 2.96 cc1 through its bundled glibc-2.3.6 loader.
+  # the native 2.96 cc1 (cc1plus for a .cpp unit) through its bundled
+  # glibc-2.3.6 loader, via tools/ee/ee_cc1.sh.
   # MOUNT-SYNC: the base C is read a second time; it must still be the file
   # step (1) compiled (an edit mid-run would score two different sources).
   BASE_MD5_2A="$(sh tools/ee/mount_sync.sh md5 "$BASECFILE")"
@@ -361,11 +366,9 @@ if [ "$BUILD96" = 1 ]; then
     echo "objdiff_build: FATAL — $BASECFILE changed on the host between step (1) and (2a) (md5 $BASE_MD5 -> $BASE_MD5_2A); rerun" >&2; exit 2
   fi
 docker --context "$EE_CTX" run --rm -v "$ROOT":/work ee-build sh -c "
-  set -e; cd /work; WIBO=/usr/local/bin/wibo; G=tools/ee/cc/lib/gcc-lib/ee/2.9-ee-991111
-  LD96='$CC296/ld-2.3.6.so --library-path $CC296'
+  set -e; cd /work
   sh tools/ee/mount_sync.sh check $BASECFILE $BASE_MD5
-  \$WIBO \$G/cpp.exe $CPPDEF96 $INC $BASECFILE $W/base96.i
-  \$LD96 $CC1_96 -quiet -O2 $GFLAG96 $CC1EXTRA96 $W/base96.i -o $W/base96.s
+  CC296=$CC296 sh tools/ee/ee_cc1.sh engine96 $BASECFILE $W/base96.i $W/base96.s '$CPPDEF96 $INC' '-O2 $GFLAG96 $CC1EXTRA96'
 "
   # (2b, host) the engine post-passes, in diff96.sh's order.
   python3 tools/ee/engine_swap_fix.py "$W/base96.s"
@@ -378,7 +381,7 @@ docker --context "$EE_CTX" run --rm -v "$ROOT":/work ee-build sh -c "
 docker --context "$EE_CTX" run --rm -e ASMFIX_SHARED -e ASM_UNIT_S_MD5="$S96_MD5" -e ASM_UNIT_DLISITES_MD5="$DLISITES_MD5" -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work
   sh tools/ee/asm_unit.sh $REGION /work/$W/base96.s /work/$OBJ96 $GFLAG96
-  mips-linux-gnu-strip $OBJ96 -N gcc2_compiled. -N __gnu_compiled_c -N dummy-symbol-name
+  mips-linux-gnu-strip $OBJ96 -N gcc2_compiled. -N __gnu_compiled_c -N __gnu_compiled_cplusplus -N dummy-symbol-name
 "
   # GUARD CHECK 3: the token names a real function of this unit (check 1 passed)
   # but the engine arm never EMITTED it — the guarded C is missing, or the

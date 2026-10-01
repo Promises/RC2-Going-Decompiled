@@ -13,8 +13,16 @@
 # changes the landing gate: validate it with `landing_gate.sh --selftest`
 # (arm 17), not as a loose script. It never links — see the row's bound.
 #
-# Usage: tools/native/check.sh           # check all units
-#        tools/native/check.sh <file.c>  # check one unit
+# A `.cpp` unit (a unit converted to C++, task #1258) is compiled as C++ inside
+# ONE `extern "C" { ... }` that this script writes, exactly as the EE build
+# (tools/ee/ee_cc1.sh) wraps it, so the source carries no wrapper of its own.
+# The mips_callees.h shim goes INSIDE that block (a shim declaration with C++
+# linkage would conflict with the unit's extern "C" one). C++ has no implicit
+# declarations or int<->pointer conversions to relax, so the two
+# -Wno-error/-Wno-int-conversion relaxations below are C-only.
+#
+# Usage: tools/native/check.sh                  # check all units
+#        tools/native/check.sh <file.c|file.cpp> # check one unit
 set -u
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -50,11 +58,22 @@ fi
 # INCLUDED (usa/cod/015180, not 015180): usa and eu share basenames
 # (cod/015180.c, cod/0321A0.c), and a bare basename made a usa failure and an
 # eu failure print the same `failed` member (task #923).
+CXXFLAGS="-x c++ -DTARGET_NATIVE -m32 -c -I$INC"
+
 pass=0; fail=0; failed=""
 for f in $units; do
-  label="${f#"$ROOT"/}"; label="${label#going-decompiled/src/}"; label="${label%.c}"
+  label="${f#"$ROOT"/}"; label="${label#going-decompiled/src/}"
+  case "$label" in *.cpp) label="${label%.cpp}" ;; *) label="${label%.c}" ;; esac
   obj="$(printf '%s' "$label" | tr '/' '_')"
-  if $CC $CFLAGS "$f" -o "$OUT/$obj.o" 2>"$OUT/$obj.err"; then
+  case "$f" in
+    *.cpp)
+      # absolute paths: the wrapper lives in $OUT, not beside the unit
+      case "$f" in /*) abs="$f" ;; *) abs="$PWD/$f" ;; esac
+      printf 'extern "C" {\n#include "%s"\n#include "%s"\n}\n' "$SHIM" "$abs" > "$OUT/$obj.wrap.cpp"
+      cmd="$CC $CXXFLAGS $OUT/$obj.wrap.cpp" ;;
+    *) cmd="$CC $CFLAGS $f" ;;
+  esac
+  if $cmd -o "$OUT/$obj.o" 2>"$OUT/$obj.err"; then
     pass=$((pass+1))
   else
     fail=$((fail+1)); failed="$failed $label"

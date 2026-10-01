@@ -405,7 +405,7 @@ shadow_scan() {
   local region=$1 tree=$2 outfile=$3
   ROOT="$tree" bash "$HERE/shadow_scan2.sh" "$region" > "$outfile" || return 2
   /usr/bin/grep -E '^CLASS2 ' "$outfile" | while read -r cls loc old arrow new; do
-    local unit; unit=$(printf '%s' "$loc" | sed -E "s#^going-decompiled/src/$region/(.*)\.c:[0-9]+\$#\1#")
+    local unit; unit=$(printf '%s' "$loc" | sed -E "s#^going-decompiled/src/$region/(.*)\.c(pp)?:[0-9]+\$#\1#")
     local d="$tree/going-decompiled/asm/$region/nonmatchings/$unit"
     [ -f "$d/$old.s" ] || [ -f "$d/$new.s" ] || printf 'NOTARGET %s %s -> %s\n' "$loc" "$old" "$new"
   done >> "$outfile"

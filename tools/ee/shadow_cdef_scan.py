@@ -211,7 +211,7 @@ def main():
     rows = []
     for dp, _, fns in os.walk(src):
         for fn in sorted(fns):
-            if not fn.endswith('.c'):
+            if not fn.endswith(('.c', '.cpp')):  # .cpp: a converted unit (#1258)
                 continue
             p = os.path.join(dp, fn)
             rel = os.path.relpath(p, root)

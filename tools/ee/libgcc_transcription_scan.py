@@ -191,12 +191,12 @@ def main():
     hits, keep, files = [], [], 0
     for d, _, fs in sorted(os.walk(root)):
         for fn in sorted(fs):
-            if fn.endswith(".c"):
+            if fn.endswith((".c", ".cpp")):  # .cpp: a converted unit (#1258)
                 files += 1
                 p = os.path.join(d, fn)
                 scan_file(p, os.path.relpath(p, root), hits, keep)
     if files == 0:
-        print(f"libgcc_transcription_scan: no .c under {root}", file=sys.stderr)
+        print(f"libgcc_transcription_scan: no .c or .cpp under {root}", file=sys.stderr)
         return 2
     for rule, rel, ln, name in keep + hits:
         print(f"{rule} {rel}:{ln} {name}")

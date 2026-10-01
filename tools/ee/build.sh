@@ -29,8 +29,6 @@ ROM=$BUILD/$BASENAME.rom
 ASFLAGS="-march=r5900 -mabi=eabi -no-pad-sections -EL -G0 -I $INC -I $ASM -I $BUILD"
 VU0FIX="$(dirname "$0")/vu0_fixup.sed"   # spimdisasm VU0 macro op -> GNU-as syntax
 SRC=going-decompiled/src/$REGION
-WIBO=/usr/local/bin/wibo
-G=tools/ee/cc/lib/gcc-lib/ee/2.9-ee-991111
 INCC="-Igoing-decompiled/include -Igoing-decompiled/include/rtl/ee -Igoing-decompiled/include/rtl/common"
 CPPDEF="-D__GNUC__=2 -D__GNUC_MINOR__=9 -D__mips__ -D__mips=3 -D__R5900 -D__LANGUAGE_C -D_LANGUAGE_C -D__EE__ -DINCLUDE_ASM_USE_MACRO_INC=1"
 
@@ -50,9 +48,11 @@ for s in $(find $ASM -name '*.s' -not -path '*/nonmatchings/*' -not -path '*/mat
 done
 echo "   assembled $n section objects"
 
-# 2) Compile each `c` unit (src/<region>/**/*.c) into the object the .ld expects:
-#    $BUILD/<full src path>.o. cc1 -> .s (with INCLUDE_ASM .include lines) ->
-#    asm_unit.sh assembles it through the VU0-fixed mirror.
+# 2) Compile each `c` unit (src/<region>/**/*.c, or *.cpp for a unit converted
+#    to C++) into the object the .ld expects: $BUILD/<src path minus extension>.o.
+#    tools/ee/ee_cc1.sh (cpp + cc1, or cpp -lang-c++ + cc1plus inside one
+#    extern "C") -> .s (with INCLUDE_ASM .include lines) -> asm_unit.sh
+#    assembles it through the VU0-fixed mirror.
 if [ -d "$SRC" ]; then
   echo "== [$REGION] compiling src/ c units =="
   # WARM MIRROR BY DEFAULT (#398/#438). asm_unit.sh rebuilds its VU0-fixed copy
@@ -69,8 +69,12 @@ if [ -d "$SRC" ]; then
   eval "$ASMFIX_PRUNE"
   echo "   asmfix mirror -> $ASMFIX_SHARED ($ASMFIX_STATE)"
   m=0
-  for c in $(find "$SRC" -name '*.c'); do
-    o="$BUILD/${c%.c}.o"
+  for c in $(find "$SRC" \( -name '*.c' -o -name '*.cpp' \)); do
+    # ukey: the unit's path spelled .c whatever its language, so the per-unit
+    # flag table below (and its copies in objdiff_build.sh / diff.sh /
+    # unit_flags.sh, held equal by flagdiff.py) is keyed once per unit.
+    case "$c" in *.cpp) ukey="${c%.cpp}.c" ;; *) ukey="$c" ;; esac
+    o="$BUILD/${ukey%.c}.o"
     mkdir -p "$(dirname "$o")"
     # Per-unit -G override - the cod/0321A0 989snd sub-TU was originally built
     # at nonzero -G (uniform %gp_rel small-data). CC1EXTRA = per-unit cc1-only
@@ -78,7 +82,7 @@ if [ -d "$SRC" ]; then
     # gameplay-text TUs). Keep in sync with objdiff_build.sh / diff.sh.
     GFLAG="-G0"
     CC1EXTRA=""
-    case "$c" in
+    case "$ukey" in
       */cod/0321A0.c) GFLAG="-G8";;
       */usa/text/183178.c) GFLAG="-G8";; # scale/round accessor sub-TU
       */usa/text/188580.c) GFLAG="-G8";; # camera-aux sub-TU
@@ -132,10 +136,8 @@ if [ -d "$SRC" ]; then
     # NEVER leave a stale .o behind; abort non-zero on ANY step error; verify the
     # object actually materialized. (A silent stale .o = false 'byte-exact'/boot.)
     rm -f "$o" "$ui" "$us"
-    "$WIBO" "$G/cpp.exe" $CPPDEF $INCC "$c" "$ui" \
-      || { echo "BUILD FAIL (cpp): $c" >&2; exit 1; }
-    "$WIBO" "$G/cc1.exe" -quiet -O2 $GFLAG $CC1EXTRA "$ui" -o "$us" \
-      || { echo "BUILD FAIL (cc1): $c" >&2; exit 1; }
+    sh tools/ee/ee_cc1.sh sdk29 "$c" "$ui" "$us" "$CPPDEF $INCC" "-O2 $GFLAG $CC1EXTRA" \
+      || { echo "BUILD FAIL (compile): $c" >&2; exit 1; }
     sh tools/ee/asm_unit.sh "$REGION" "/work/$us" "/work/$o" "$GFLAG" \
       || { echo "BUILD FAIL (as): $c" >&2; exit 1; }
     [ -s "$o" ] || { echo "BUILD FAIL (no object produced): $c" >&2; exit 1; }
