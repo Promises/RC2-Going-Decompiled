@@ -486,7 +486,7 @@ segments:
       #   three cut points are real consecutive function boundaries verified in
       #   the disassembly: 0x2E6F50 (after OnEmitterVoiceEnded), 0x2FA628 (after
       #   func_002FA608), 0x301338 (after func_003011C0).
-      - [0x1DFF80, c, text/1DFF80]   # TILE B moby-glow/shrub/sky/sound-emit/cinematic head (0x2E0000..0x2E6F4F)
+      - [0x1DFF80, cpp, text/1DFF80]   # TILE B moby-glow/shrub/sky/sound-emit/cinematic head (0x2E0000..0x2E6F4F)
       - [0x1E6ED0, asm, text/1E6ED0] # TILE B 1DFF80 fused tail island (0x2E6F50..0x2F003F)
       - [0x1EFFC0, c, text/1EFFC0]   # TILE B tfrag/tie draw + vendor shop + GS/VIF pipeline head (0x2F0040..0x2FA627)
       # SURGICAL SUB-CARVE (2026-06-18): split the fused tail island to expose the
