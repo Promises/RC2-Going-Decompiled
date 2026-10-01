@@ -49,10 +49,54 @@
 #     function is out of this arm's domain until the rodata side is solved.
 # The block's own `$L<n>` labels are renamed `$L<n>_s136_<fn>` (still `$L`, so
 # local and absent from the symtab, as cc1's are) because both TUs number
-# their labels from the same counter. `.extern` lines the s136os TU emits and
-# <unit.s> lacks are carried in front of the block: gas decides gp-relativity
-# from them (-G8 units), and the 2.9 TU never saw the body that needs them.
+# their labels from the same counter.
+#
+# .extern CARRY (task #1281, FACT #8838/#8842): gas decides a bare-symbol load's
+# gp-relativity from `.extern <sym>, <size>` (-G8 units), and the 2.9 TU never
+# saw the body that needs it, so the s136os TU's `.extern` lines for symbols
+# <unit.s> does NOT declare are carried in front of the block. KEYED ON THE
+# SYMBOL NAME: a symbol <unit.s> already declares, at any size, is never
+# carried. Measured on the container's GNU as 2.40 (-G8): a size > -G declared
+# BEFORE a use pins that use absolute and a later smaller size does not undo
+# it, but a size <= -G placed BEFORE the use (as the carry places it) makes it
+# gp-relative. So a carried `, 4`/`, 1` in front of the block overrode a unit's
+# deliberate `.extern <sym>, 16` absolute device (1CA080.c, 1FFBA0.c,
+# 235FE8.c) for the block AND every later use in the unit, and walled 6 rows.
+# A symbol the unit never declares is unaffected by placement: gas defers that
+# decision to the end of the file, so the carry still decides it as the s136os
+# TU's own end-of-file line does.
+#   sh tools/ee/s136os_splice.sh --selftest   host or container; rc 0 PASS
 set -eu
+
+# carry_externs <unit.s> <s136os.s>: print, tab-indented and sorted, the
+# s136os TU's .extern lines for symbols <unit.s> has no .extern for.
+carry_externs() {
+  awk '{ sub(/\r$/, "") }
+    FNR == 1 { file++ }
+    $1 != ".extern" { next }
+    { x = $0; gsub(/[ \t]+/, " ", x); sub(/^ /, "", x); sym = $2; sub(/,.*/, "", sym) }
+    file == 1 { have[sym] = 1; next }
+    !(sym in have) { print x }' "$1" "$2" | sort -u | sed 's/^/\t/'
+}
+
+if [ "${1:-}" = "--selftest" ]; then
+  # Arms: X is declared by the unit at 16 (a device) and by the solo TU at 4
+  # -> no X line (FACT #8838's wall); Y is solo-only -> carried; Z is declared
+  # by both at the same size -> no Z line. A whole-line key (the pre-#1281
+  # helper) emits X and fails arm 1; a carry of nothing fails arm 2.
+  T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+  printf '\t.extern\tX, 16\n\t.text\n#S136OS_SLOT f\n\t.extern\tZ, 4\n' > "$T/unit.s"
+  printf '\t.extern\tX, 16\n\t.ent f\nf:\n\tlw\t$5,X\n\tlw\t$4,Y\n\t.end f\n\t.extern\tZ, 4\n\t.extern\tX, 4\n\t.extern\tY, 4\n' > "$T/solo.s"
+  carry_externs "$T/unit.s" "$T/solo.s" > "$T/ext"
+  rc=0
+  n=$(awk '$1 == ".extern" && $2 ~ /^X,?$/' "$T/ext" | wc -l | tr -d ' ')
+  if [ "$n" = 0 ]; then echo "  OK   arm 1: unit .extern X, 16 kept, no .extern X carried"
+  else echo "  FAIL arm 1: $n .extern X line(s) carried over the unit's .extern X, 16:"; sed 's/^/        /' "$T/ext"; rc=1; fi
+  if [ "$(cat "$T/ext")" = "$(printf '\t.extern Y, 4')" ]; then echo "  OK   arm 2: solo-only .extern Y, 4 carried (the whole carry is exactly that line)"
+  else echo "  FAIL arm 2: carry is not exactly '.extern Y, 4':"; sed 's/^/        /' "$T/ext"; rc=1; fi
+  [ "$rc" = 0 ] && echo "#### s136os_splice --selftest: PASS" || echo "#### s136os_splice --selftest: FAIL"
+  exit "$rc"
+fi
 REGION="$1"; UNIT="$2"; SRC="$3"; UNIT_S="$4"; GFLAG="$5"; CC1EXTRA="${6:-}"
 SEL=tools/ee/s136os_functions.txt
 WIBO=/usr/local/bin/wibo
@@ -126,8 +170,15 @@ for f in $ROWS; do
       while (match(s, /\$L[0-9]+/)) { o = o substr(s, 1, RSTART + RLENGTH - 1) "_s136_" fn; s = substr(s, RSTART + RLENGTH) }
       print o s }' "$TMP/$f.blk" > "$TMP/$f.blk2"
   awk '{ sub(/\r$/, "") } $1 == ".extern" { x = $0; gsub(/[ \t]+/, " ", x); sub(/^ /, "", x); print x }' "$OUT" | sort -u > "$TMP/$f.have"
-  awk '{ sub(/\r$/, "") } $1 == ".extern" { x = $0; gsub(/[ \t]+/, " ", x); sub(/^ /, "", x); print x }' "$TMP/$f.s" | sort -u \
-    | comm -23 - "$TMP/$f.have" | sed 's/^/\t/' > "$TMP/$f.ext"
+  carry_externs "$OUT" "$TMP/$f.s" > "$TMP/$f.ext"
+  # The size conflicts the name key resolved in the unit's favour (the lines a
+  # whole-line key would have carried), listed in the build log by name.
+  KEPT="$(awk '{ sub(/\r$/, "") }
+    FNR == 1 { file++ }
+    $1 != ".extern" { next }
+    { x = $0; gsub(/[ \t]+/, " ", x); sub(/^ /, "", x); sym = $2; sub(/,.*/, "", sym) }
+    file == 1 { have[sym] = 1; line[x] = 1; next }
+    (sym in have) && !(x in line) && !seen[x]++ { printf "%s%s", (n++ ? " " : ""), x }' "$OUT" "$TMP/$f.s")"
   awk -v fn="$f" -v blk="$TMP/$f.blk2" -v ext="$TMP/$f.ext" '
     { k = $0; sub(/\r$/, "", k); split(k, F) }
     F[1] == "#S136OS_SLOT" && F[2] == fn {
@@ -139,7 +190,7 @@ for f in $ROWS; do
     { print }
     END { if (n != 1) exit 1 }' "$OUT" > "$TMP/unit.s" || fatal "slot for $f not replaced exactly once"
   cp "$TMP/unit.s" "$OUT"
-  echo "s136os_splice: $REGION/$UNIT: $f spliced ($(awk '{ sub(/\r$/, "") } NF && $1 !~ /^[.#$]/ && $1 !~ /:$/' "$TMP/$f.blk2" | wc -l | tr -d ' ') insn lines, $(wc -l < "$TMP/$f.ext" | tr -d ' ') .extern carried)"
+  echo "s136os_splice: $REGION/$UNIT: $f spliced ($(awk '{ sub(/\r$/, "") } NF && $1 !~ /^[.#$]/ && $1 !~ /:$/' "$TMP/$f.blk2" | wc -l | tr -d ' ') insn lines, $(wc -l < "$TMP/$f.ext" | tr -d ' ') .extern carried; not carried, the unit declares the name: ${KEPT:-none})"
 done
 LEFT="$(awk '{ sub(/\r$/, "") } $1 == "#S136OS_SLOT" { print $2 }' "$OUT")"
 [ -z "$LEFT" ] || fatal "slot(s) still present after the splice:" $LEFT

@@ -5111,13 +5111,17 @@ void func_0033EB58(void *w, GuiPool *pool) {
  * confirm bit (arg & 0x40) is set and the widget isn't already busy (+0x2D8 == 0),
  * play the confirm sound and toggle the widescreen flag D_1A7BBA. Returns bit 6
  * of the input flags. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EC80);
+/* GUARD (task #1273): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810/#8830; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033EC80)
+S136OS_SLOT(func_0033EC80);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033EC80, unit objdiff): 90.74%,
    16/39 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd s0, 0x0(sp)' vs '').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+   not byte-exact on that arm. */
 s32 func_0033EC80(void *w, s32 flags) {
     void *sub = (char *)w + 0x8;
     f32 *anchor;
@@ -5221,13 +5225,17 @@ void func_0033EE08(void *w, GuiPool *pool) {
 /* Sibling of func_0033EC80: position a sub-element (+0x8) at its anchor
  * (*(w+0x2DC)); on the confirm bit (arg & 0x40) while not busy (+0x2D8 == 0),
  * play the confirm sound + toggle D_1A7BBA. Returns bit 6 of the flags. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EF30);
+/* GUARD (task #1273): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810/#8830; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033EF30)
+S136OS_SLOT(func_0033EF30);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033EF30, unit objdiff): 90.74%,
    16/39 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd s0, 0x0(sp)' vs '').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+   not byte-exact on that arm. */
 s32 func_0033EF30(void *w, s32 flags) {
     void *sub = (char *)w + 0x8;
     f32 *anchor;
@@ -5306,13 +5314,17 @@ void func_0033F000(void *w, GuiPool *pool) {
 /* Verbatim sibling of func_0033EC80/func_0033EF30: sub-element position (+0x8 at
  * anchor *(w+0x2DC)) + confirm-sound/D_1A7BBA-toggle on (arg & 0x40) while not
  * busy (+0x2D8 == 0). Returns bit 6 of the flags. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F128);
+/* GUARD (task #1273): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810/#8830; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033F128)
+S136OS_SLOT(func_0033F128);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033F128, unit objdiff): 90.74%,
    16/39 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd s0, 0x0(sp)' vs '').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+   not byte-exact on that arm. */
 s32 func_0033F128(void *w, s32 flags) {
     void *sub = (char *)w + 0x8;
     f32 *anchor;
@@ -8067,13 +8079,17 @@ void func_003444D0(void *p, u32 idx) {
 /* Position or hide a widget sub-element (+0x208): if the gate func_00343F70
  * (queried on +0x2C8) returns 0, hide it; otherwise place it at the tracked
  * anchor (*(w+0x2B8)) offset by the fixed constants D_1AE1E8/D_1AE1EC. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003444E8);
+/* GUARD (task #1273): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810/#8830; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003444E8)
+S136OS_SLOT(func_003444E8);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_003444E8, unit objdiff): 82.64%,
    9/30 insns differ. Residual: UNKNOWN-b (first differing insn: 'b 0xe4e4' vs 'b 0xdb34').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+   not byte-exact on that arm. */
 void func_003444E8(void *w) {
     if (func_00343F70((char *)w + 0x2C8) == 0) {
         GuiElementSetVisible((GuiElement *)((char *)w + 0x208), 0);

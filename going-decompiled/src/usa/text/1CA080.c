@@ -1780,9 +1780,9 @@ s32 func_002CE230(void) {
  * region-shifted call/data targets).
  * Routes to tester-EE: drives the live GUI moby + DMA render path; not
  * standalone cmp-oracle'able.
- * Wall: `beql` branch-likely on the null-handle guard + EE 64-bit `daddu rd,rs,
- * zero` handle-copy idiom (1-GPR packed save) — not reproduced from clean C.
- * Preserved as portable C. */
+ * Wall (cc1 2.9): `beql` branch-likely on the null-handle guard + EE 64-bit `daddu rd,rs,
+ * zero` handle-copy idiom (1-GPR packed save) — not reproduced by cc1 2.9; the
+ * s136os arm reproduces it (GUARD below). */
 extern void func_0029CFE0(void);
 extern void func_002801B8(s32 x, s32 y, u64 color, char *str, s64 sel);
 extern s32 D_1AB9D8, D_1AB9DC;
@@ -1798,14 +1798,18 @@ extern void func_0034FAF8(s32 handle, s32 arg);
 extern void WaitFrameDmaFence(s32 mask);
 extern void PatchMobyPacketTex0(void);
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE3A0);
+/* GUARD (task #1271): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002CE3A0)
+S136OS_SLOT(func_002CE3A0);
 #else
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 88.39% -> BIGDISP-SPLIT (0x38000 constant: 2.96 emits the large-displacement macro, the ROM and 2.9 split it & ~0x7fff),
  * first differing row @10: ROM `daddu a3,v0,zero` vs `(none)`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 91.93% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. */
-/* TODO(match): functional equivalent - not byte-exact; `beql` branch-likely null
+/* MATCHED on the s136os arm (task #1271), not by cc1 2.9; `beql` branch-likely null
  * guard + 64-bit `daddu` handle-copy idiom not reproduced by cc1. */
 s32 func_002CE3A0(void) {
     s32 handle;

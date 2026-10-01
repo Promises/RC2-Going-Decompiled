@@ -300,10 +300,14 @@ void func_00300118(void) {
  * per-instance aux block (g_mobyAuxBlockBase + slotIndex*0x80, slot derived from
  * the moby's offset in the spawn pool), zero it (0x80 bytes), and register the
  * moby in the world bsphere/grid unless its flags (+0x34) already carry bit 0x4.
- * TODO(match): two callee-saves (0x10 frame) + branch-likely epilogue cc1 won't
- * reproduce here; the C is functionally faithful. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_00300120);
+ * cc1 2.9 does not reproduce its two callee-saves (0x10 frame) + branch-likely
+ * epilogue; the s136os arm does (GUARD below). */
+/* GUARD (task #1271): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00300120)
+S136OS_SLOT(func_00300120);
 #else
 void func_00300120(Moby *moby, s32 classId) {
     u8 *aux;
