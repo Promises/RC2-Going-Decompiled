@@ -58,6 +58,9 @@ echo "   C-alt objects: $calt_ok ok, $calt_fail failed"
 SYMS="$BUILD/undefined_syms_auto.txt"
 ALLSYMS="$BUILD/all_addr_syms.ld"
 /usr/bin/grep -rhoE '(D_|func_)[0-9A-Fa-f]{4,}' "$ASM" | sort -u | sed -E 's/^(D_|func_)([0-9A-Fa-f]+)$/\1\2 = 0x\2;/' > "$ALLSYMS"
+# Old address-named spellings the C sources still use for symbols symbol_addrs
+# has renamed (task #1255); see tools/ee/src_alias_provides.sh.
+sh tools/ee/src_alias_provides.sh "$REGION" >> "$ALLSYMS"
 
 echo "== [$REGION] (3) building C-alt-overlay .ld (isolated catch-all) =="
 LDB="$BUILD/$BASENAME.conly.ld"
