@@ -43,7 +43,7 @@
 # after a listed dli is a non-likely branch in reorder mode, GNU as moves the
 # expansion's last word into the branch delay slot; Ps2EeAs keeps the order and
 # puts a nop in the slot. The expansion is then not Ps2EeAs's, so the pass
-# refuses: it prints `asm_unit.sh: FAIL:` naming the site on stderr and exits 3,
+# refuses: it prints `asm_unit.sh: FAIL:` naming the site (see SITES) on stderr and exits 3,
 # and asm_unit.sh removes the object and exits 2. Blank lines, comments (cc1's
 # empty #APP/#NO_APP block is the measured case, ledger-29240) and directives
 # other than `.set [no]reorder` do not end the adjacency; a label does, since
@@ -76,6 +76,17 @@
 # first word, and its words equal this pass's for a `jal` slot followed by an
 # addu, a reorder `jal` or a reorder `bnel`, and for a non-slot noreorder block
 # (task #1170, Ps2EeAs 1.9.25.758, one literal).
+#
+# SITES, NOT ROWS (task #1205). A row is keyed by function and operands, so it
+# substitutes EVERY matching dli in its function: func_0027C020's one row covers
+# two sites, ROM 0x0027C068 and 0x0027C088. The row carries ONE ROM address, so
+# for a site after the first this pass knows no ROM address at all. Every
+# message and substitution marker therefore names the site by its ordinal in the
+# function and its line in this pass's input (at -G8 asm_unit.sh's rule pass
+# runs first and can add lines, so that is not always cc1's line number), beside
+# the row's address, and never prints the
+# row's address as if it were the site's: a refusal at 0x0027C088 used to read
+# `(ROM 0x0027C068, line N)`, sending the reader to a site that is fine.
 #
 # Only a TAB-laid `\tdli\t` line matches, which is cc1's layout. Splat's asm
 # carries no `dli` at all (it prints the expanded words), so INCLUDE_ASM code
@@ -192,14 +203,16 @@ BEGIN {
   } else if (fn != "" && line ~ /^\tdli\t/) {
     ops = line; sub(/^\tdli\t/, "", ops); sub(/[ \t#].*$/, "", ops)
     key = region SUBSEP fn SUBSEP normops(ops)
+    if (key in sites_) site = "site " (++nth[key]) " in " fn " of the row at ROM " addr[key] ", pass input line " FNR
     if (key in sites_ && nomac) {
-      printf "asm_unit.sh: FAIL: listed dli %s in %s (ROM %s, line %d) is under `.set nomacro`, where Ps2EeAs rejects a multi-word dli (`Macro expansion is disabled`) and GNU as would put only the expansion's first word in a delay slot; this pass does not substitute it (FACT #8698, task #1170, RULING #8549)\n", ops, fn, addr[key], FNR | "cat 1>&2"
+      printf "asm_unit.sh: FAIL: listed dli %s (%s) is under `.set nomacro`, where Ps2EeAs rejects a multi-word dli (`Macro expansion is disabled`) and GNU as would put only the expansion's first word in a delay slot; this pass does not substitute it (FACT #8698, task #1170, RULING #8549)\n", ops, site | "cat 1>&2"
       refused++
     } else if (key in sites_) {
-      printf "\t# ps2eeas_dli_sites.txt %s: dli %s (ROM %s, RULING #8549)\n", fn, ops, addr[key]
+      # asm_unit.sh counts these marker lines for its `dli: N transforms` line
+      printf "\t# ps2eeas_dli_sites.txt %s: dli %s (%s, RULING #8549)\n", fn, ops, site
       printf "%s", sites_[key]
       # only a reorder-mode dli can lose a word to a later slot (see ADJACENCY)
-      if (!nore) held = "listed dli " ops " in " fn " (ROM " addr[key] ", line " FNR ")"
+      if (!nore) held = "listed dli " ops " (" site ")"
       next
     }
   }

@@ -52,6 +52,21 @@
 #        refused (the scan's `mem`). A second copy that diverges from MEMOP_MN
 #        fails the content arms; one that is identical fails the count (FACT
 #        #8616, FACT #8689).
+#   DLINE (task #1205) every assembled unit prints exactly one
+#        `asm_unit.sh: dli: N transforms (M allowlist rows for <region>)`, the
+#        spelling GATE-F3 (#1158) reads, compared whole-line: N is 0, 1 and 2
+#        for seeds with that many listed sites, M is counted here from the
+#        allowlist. EU prints 0 of 0 and keeps GNU's words. A refused unit
+#        prints no such line.
+#   ADJ2 (task #1205) a refusal at the SECOND site of func_0027C020's row
+#        (adjacency, and nomacro) names `site 2` and its pass input line; the
+#        first-site seed names `site 1`. The row's ROM address alone named the
+#        first site for both.
+#   SYNC (task #1205, FACT #8713) an allowlist copy missing its last row, so
+#        well-formed and shorter, is refused as condition (m) when the host md5
+#        of the whole file is passed, and assembles with one row fewer when it
+#        is not: the row count cannot see a boundary truncation. The real
+#        allowlist with its own md5 assembles with no mount_sync line.
 #
 # The seeds are written in cc1 layout (TAB, mnemonic, TAB, operands) into the
 # container's own /tmp, so no VM mount sits between writing and assembling
@@ -59,13 +74,15 @@
 #
 # The optional argument is the asm_unit.sh under test (default: this tree's).
 # It must sit in a tree with tools/ee/{ps2eeas_dli.awk,ps2eeas_dli_sites.txt,
-# move_fixup.sed}. Run against master's copy, the ADJ and TAIL refusal arms
-# must FAIL: that is the check that this selftest can fail. Against
-# f6c2bae9e's copy, EMPTY, STATIC st_cc1, LIKELY, SPELL, and the ADJ/SWAP
+# move_fixup.sed}. Against 735a49e1a's copy (the parent of f6c2bae9e, which
+# added both refusals), the ADJ and TAIL refusal arms must FAIL: that is the
+# check that this selftest can fail. Against f6c2bae9e's copy, EMPTY, STATIC st_cc1, LIKELY, SPELL, and the ADJ/SWAP
 # refusal arms (by their text) must FAIL (tasks #1147, #1170). EMPTY's exit-5
 # arm fails there on its message alone: f6c2bae9e already refused a failing
 # pass, as `REFUSED:`. Against 81a8ba72f's copy (#1147), the EMPTY 0-byte and
 # comments-only arms and NORE's nomacro and slot-then-`jal` arms must FAIL.
+# Against 205a13914's copy (task #1205), exactly the 18 DLINE, ADJ2 and SYNC
+# arms that read the line, the site or the md5 must FAIL, and the rest pass.
 # The arms that pin what already held pass on every copy; that they can fail
 # is shown by mutants, not by an older tree (task #1170).
 #
@@ -82,14 +99,17 @@ trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/mirror/include"; : > "$T/mirror/include/macro.inc"; : > "$T/mirror/.built"
 N=0; F=0
 
-# run <seed> <-G> [asm_unit.sh] : sets RC, FAILS (count of `asm_unit.sh:
-# FAIL:`), WARNS (WARNING lines), OBJ (1 when an object exists) and WORDS (the
-# .text words).
+# run <seed> <-G> [asm_unit.sh [region]] : sets RC, FAILS (count of
+# `asm_unit.sh: FAIL:`), WARNS (WARNING lines), DLINE (the `asm_unit.sh: dli:`
+# lines), OBJ (1 when an object exists) and WORDS (the .text words). XENV, when
+# set, is extra `env` assignments for the run.
+XENV=""
 run() {
   rm -f "$T/o.o"
-  RC=0; env ASMFIX_SHARED="$T/mirror" sh "${3:-$AU}" usa "$T/$1.s" "$T/o.o" "$2" > "$T/err" 2>&1 || RC=$?
+  RC=0; env ASMFIX_SHARED="$T/mirror" $XENV sh "${3:-$AU}" "${4:-usa}" "$T/$1.s" "$T/o.o" "$2" > "$T/err" 2>&1 || RC=$?
   FAILS=$(grep -c 'asm_unit\.sh: FAIL:' "$T/err" || true)
   WARNS=$(grep -c 'asm_unit\.sh: WARNING' "$T/err" || true)
+  DLINE=$(grep '^asm_unit\.sh: dli:' "$T/err" || true)
   OBJ=0; WORDS=""
   if [ -s "$T/o.o" ]; then
     OBJ=1
@@ -322,6 +342,72 @@ for m in sw sh sb sd lw lh lhu lb lbu ld; do
   verdict "SPELL $m bare -G8" "$ok" "rc 0, 1 WARNING (MEMOP_RE keys it)"
   run sp_cmt -G8
   verdict "SPELL $m tail -G8" "$(refused)" "refused (the scan's mem keys it)"
+done
+
+# --- DLINE: the per-unit transform line is an interface (task #1205) --------
+# GATE-F3 (#1158) reads `asm_unit.sh: dli: N transforms (M allowlist rows for
+# <region>)`, so the spelling is pinned whole-line here. N must follow the
+# seed (0, 1, 2 substituted sites), M is the allowlist's rows for the region,
+# counted here independently of the awk, and a refused unit prints no line.
+MU=$(sed 's/#.*//' "$AUDIR/ps2eeas_dli_sites.txt" | awk '$1 == "usa" && NF >= 6 { n++ } END { print n + 0 }')
+ME=$(sed 's/#.*//' "$AUDIR/ps2eeas_dli_sites.txt" | awk '$1 == "eu" && NF >= 6 { n++ } END { print n + 0 }')
+seed dl_two "$FN0$DLI\taddu\t\$2,\$2,\$5\n$DLI\taddu\t\$3,\$3,\$5\n\tj\t\$31\n$FN1"
+for G in -G0 -G8; do
+  for a in "nadj_unl 0 usa $MU" "nadj_addu 1 usa $MU" "dl_two 2 usa $MU" "nadj_addu 0 eu $ME"; do
+    set -- $a
+    want="asm_unit.sh: dli: $2 transforms ($4 allowlist rows for $3)"
+    run "$1" $G "$AU" "$3"; ok=$(accepted); [ "$DLINE" = "$want" ] || ok=0
+    verdict "DLINE $1 $3 $G" "$ok" "assembled, exactly one line '$want'; got '$DLINE'"
+  done
+  # EU has no row: the listed seed keeps GNU's words there (inert, not clean)
+  run nadj_addu $G "$AU" eu; ok=$(accepted); [ "$ok" = 1 ] && ok=$(has "$GNU")
+  verdict "DLINE nadj_addu eu $G words" "$ok" "assembled, GNU words [$GNU ...] (0 eu rows)"
+  run adj_j $G; ok=$(refused); [ -z "$DLINE" ] || ok=0
+  verdict "DLINE adj_j $G (refused)" "$ok" "refused, and no dli line"
+done
+
+# --- ADJ2: a refusal names the site that failed, not the row (task #1205) ---
+# func_0027C020's one row covers two ROM sites, 0x0027C068 and 0x0027C088.
+# Seed the SECOND site to fail: a message naming the row's address alone cannot
+# tell it from the first. The first-site seed is the other answer.
+R9='\tdli\t$5,0x8000000044\n'
+C0='\t.text\n\t.align\t3\n\t.globl\tfunc_0027C020\n\t.ent\tfunc_0027C020\nfunc_0027C020:\n'
+C1='\t.end\tfunc_0027C020\n'
+seed adj2_2nd "$C0$R9\taddu\t\$2,\$2,\$5\n$R9\tj\t\$31\n$C1"
+seed adj2_1st "$C0$R9\tj\t\$31\n$R9\taddu\t\$2,\$2,\$5\n$C1"
+seed adj2_nm  "$C0$R9\taddu\t\$2,\$2,\$5\n\t.set\tnoreorder\n\t.set\tnomacro\n\tjal\tfoo\n$R9\t.set\tmacro\n\t.set\treorder\n\tj\t\$31\n$C1"
+for G in -G0 -G8; do
+  for a in "adj2_2nd|2|8|FACT #8623" "adj2_1st|1|6|FACT #8623" "adj2_nm|2|11|is under \`.set nomacro\`"; do
+    oifs=$IFS; IFS='|'; set -- $a; IFS=$oifs
+    at="site $2 in func_0027C020 of the row at ROM 0x0027C068, pass input line $3"
+    run "$1" $G; ok=$(passrefused "$4"); grep -qF "$at" "$T/err" || ok=0
+    [ "$(grep -c 'asm_unit\.sh: FAIL: listed dli' "$T/err")" = 1 ] || ok=0
+    verdict "ADJ2 $1 $G" "$ok" "refused by the pass, one FAIL line naming '$at'"
+  done
+done
+
+# --- SYNC: the allowlist's host md5 (task #1205, FACT #8713) ----------------
+# A read truncated on a row boundary is a well-formed, SHORTER allowlist: the
+# row count passes it. Seeded here as a copy missing its last row, with the
+# md5 of the whole file as the host's: the md5 check must refuse it (condition
+# (m)), and without the md5 the same copy must assemble, which is the hole.
+SY=$(tree sy); SYL="${SY%/asm_unit.sh}/ps2eeas_dli_sites.txt"
+SYMD5=$(md5sum < "$SYL" | cut -d' ' -f1)
+last=$(awk '!/^[[:space:]]*(#|$)/ { n = NR } END { print n }' "$SYL")
+awk -v l="$last" 'NR < l' "$SYL" > "$SYL.cut"; mv "$SYL.cut" "$SYL"
+for G in -G0 -G8; do
+  XENV="ASM_UNIT_DLISITES_MD5=$SYMD5 MOUNT_SYNC_TRIES=2 MOUNT_SYNC_SLEEP=0"
+  run nadj_addu $G "$SY"; ok=$(dlifail '(m)'); grep -q '^MOUNT-SYNC FAIL' "$T/err" || ok=0
+  verdict "SYNC short allowlist, host md5 $G" "$ok" "refused, condition (m) and a MOUNT-SYNC FAIL line, no object"
+  XENV=""
+  run nadj_addu $G "$SY"; ok=$(accepted); [ "$ok" = 1 ] && ok=$(has "$PS2")
+  [ "$DLINE" = "asm_unit.sh: dli: 1 transforms ($((MU - 1)) allowlist rows for usa)" ] || ok=0
+  verdict "SYNC short allowlist, no md5 $G (the hole)" "$ok" "assembled with $((MU - 1)) rows: the row count cannot see it"
+  XENV="ASM_UNIT_DLISITES_MD5=$(md5sum < "$AUDIR/ps2eeas_dli_sites.txt" | cut -d' ' -f1)"
+  run nadj_addu $G; ok=$(accepted); [ "$ok" = 1 ] && ok=$(has "$PS2")
+  grep -q 'mount_sync\|MOUNT-SYNC' "$T/err" && ok=0
+  verdict "SYNC real allowlist, its md5 $G (control)" "$ok" "assembled, Ps2EeAs words, no mount_sync line"
+  XENV=""
 done
 
 echo "asm_unit_selftest: $N arms, $F failed ($AU)"

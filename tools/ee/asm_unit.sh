@@ -330,20 +330,65 @@ cd "$FIXROOT"
 #       replaces a line with more lines, so fewer means input was lost. (A
 #       relative <unit.s> path is one way to get there: the file is read after
 #       the `cd` above.)
+#   (m) the caller passed the allowlist's host md5 as ASM_UNIT_DLISITES_MD5 and
+#       the container's read never agreed with it (see below).
+#
+# MOUNT-SYNC OF THE ALLOWLIST (task #1205). The allowlist is host-written, and
+# every row added GROWS it. A host write that grows a file is read TRUNCATED at
+# the old length by a container that opens it within ~20 s of an earlier VM read
+# (FACT #8713, which NARROWS #8705; reader-dependent, FACT #8683; the class is
+# FACT #7449/#7464, tools/ee/mount_sync.sh). A cut that lands mid-row is refused
+# as a malformed row, but a cut on a row boundary is a well-formed SHORTER
+# allowlist: the row count cannot see it, and the dropped site assembles as GNU
+# as's with no error. It has fired on a real build (ledger-29550: an
+# objdiff_build run read the grown allowlist truncated). So a caller that can
+# take the host md5 passes it as ASM_UNIT_DLISITES_MD5 (objdiff_build.sh,
+# landing_gate.sh do_build), and mount_sync.sh's check re-reads until the
+# container agrees, the #542 form used for $UNIT_S above. The verified bytes are
+# then COPIED into a container-local file, and every read below (the count and
+# the pass) reads that copy, so the two cannot see different allowlists. Unset,
+# the copy is still taken but nothing can verify it against the host: a caller
+# that writes the allowlist and builds within ~20 s must pass the md5.
+#
+# Every assembled unit prints one line on stderr (task #1205):
+#   asm_unit.sh: dli: N transforms (M allowlist rows for <region>)
+# N is the number of dli SITES the pass substituted in this unit, counted from
+# its substitution markers in what reaches `as`; M is the allowlist's valid rows
+# for <region>. That spelling is an INTERFACE: landing_gate.sh's ASMUNIT row
+# knows it, and GATE-F3 (#1158) sums it per region. The words never inflect
+# (`1 transforms`), so a consumer needs one pattern. N and M are different
+# quantities and N != M is normal: a row substitutes every matching dli in its
+# function (func_0027C020's row covers two sites), and a row whose function is
+# still INCLUDE_ASM substitutes nothing, since splat's asm has no dli. EU has 0
+# rows, so every EU unit prints `0 transforms (0 allowlist rows for eu)`: the
+# pass is inert there by construction, which is not the same as clean. A unit
+# that is refused prints no such line.
 # The selftest is tools/ee/asm_unit_selftest.sh.
 DLIAWK="$ROOT/tools/ee/ps2eeas_dli.awk"
-DLISITES="$ROOT/tools/ee/ps2eeas_dli_sites.txt"
+DLISRC="$ROOT/tools/ee/ps2eeas_dli_sites.txt"
+DLITMP=""; DLISITES=""
 dli_fail() {
-  echo "asm_unit.sh: FAIL: RULING #8549 dli pass, condition $1 (allowlist $DLISITES: ${DLIROWS:-?} valid row(s))" >&2
+  echo "asm_unit.sh: FAIL: RULING #8549 dli pass, condition $1 (allowlist $DLISRC: ${DLIROWS:-?} valid row(s))" >&2
   echo "  input: $UNIT_S (-G: $GFLAG)" >&2
   echo "  No object written." >&2
   rm -f "$DLIIN" "$DLIOUT" "$OUT_O"
+  [ -z "$DLITMP" ] || rm -rf "$DLITMP"
   exit 2
 }
 DLIIN=""; DLIOUT=""
-for f in "$DLIAWK" "$DLISITES"; do
+for f in "$DLIAWK" "$DLISRC"; do
   [ -r "$f" ] || dli_fail "(a): cannot read $f"
 done
+if [ -n "${ASM_UNIT_DLISITES_MD5:-}" ]; then
+  sh "$ROOT/tools/ee/mount_sync.sh" check "$DLISRC" "$ASM_UNIT_DLISITES_MD5" \
+    || dli_fail "(m): the container's read of the allowlist never matched the host md5 $ASM_UNIT_DLISITES_MD5 (MOUNT-SYNC line above; FACT #8713)"
+fi
+DLITMP="$(mktemp -d)"; DLISITES="$DLITMP/ps2eeas_dli_sites.txt"
+cp "$DLISRC" "$DLISITES" || dli_fail "(a): cannot copy $DLISRC"
+if [ -n "${ASM_UNIT_DLISITES_MD5:-}" ]; then
+  [ "$(md5sum < "$DLISITES" | cut -d' ' -f1)" = "$ASM_UNIT_DLISITES_MD5" ] \
+    || dli_fail "(m): the allowlist matched the host md5 $ASM_UNIT_DLISITES_MD5, then its copy did not (FACT #8713)"
+fi
 # `<valid> <usa> <eu> <bad>` (the awk's count mode). Both regions' rows count:
 # EU has none yet, and a region with no row is a normal unit.
 DLICOUNT="$(awk -v count=1 -v sites="$DLISITES" -f "$DLIAWK" < /dev/null)" \
@@ -662,11 +707,16 @@ case "$DLIRC" in
   3) # an adjacency or nomacro refusal: the pass has printed `asm_unit.sh: FAIL:` itself
     echo "  input: $UNIT_S (-G: $GFLAG)" >&2
     echo "  No object written." >&2
-    rm -f "$DLIIN" "$DLIOUT" "$OUT_O"; exit 2 ;;
+    rm -f "$DLIIN" "$DLIOUT" "$OUT_O"; rm -rf "$DLITMP"; exit 2 ;;
   *) dli_fail "(b): ps2eeas_dli.awk exited $DLIRC" ;;
 esac
 NIN=$(($(wc -l < "$DLIIN"))); NOUT=$(($(wc -l < "$DLIOUT")))
 [ -s "$DLIOUT" ] || dli_fail "(c): ps2eeas_dli.awk printed nothing ($NIN line(s) in)"
 [ "$NOUT" -ge "$NIN" ] || dli_fail "(c): ps2eeas_dli.awk printed $NOUT line(s) for $NIN in"
+# the per-unit transform line (see above): N from the pass's markers, M from
+# the count mode's per-region field (`<valid> <usa> <eu> <bad>`)
+DLIN=$(awk '/^\t# ps2eeas_dli_sites\.txt [^ ]+: dli / { n++ } END { print n + 0 }' "$DLIOUT")
+DLIM=$(echo "$DLICOUNT" | awk -v r="$REGION" '{ print (r == "usa") ? $2 : (r == "eu") ? $3 : 0 }')
 mips-linux-gnu-as -march=r5900 -mabi=eabi -no-pad-sections -EL "$GFLAG" -I. -o "$OUT_O" - < "$DLIOUT"
-rm -f "$DLIIN" "$DLIOUT"
+echo "asm_unit.sh: dli: $DLIN transforms ($DLIM allowlist rows for $REGION)" >&2
+rm -f "$DLIIN" "$DLIOUT"; rm -rf "$DLITMP"

@@ -101,7 +101,8 @@
 # (0.5 s). The guarded reads: $TGTC and $BASECFILE before the step-(1) cpp,
 # $BASECFILE again before (2a), and $W/base96.s — rewritten on the host by the
 # (2b) post-passes, and GROWN by every nop mtc1_fixup.py inserts — before the
-# (2c) assemble (asm_unit.sh, via ASM_UNIT_S_MD5). NOT guarded: the include
+# (2c) assemble (asm_unit.sh, via ASM_UNIT_S_MD5), and the dli allowlist at
+# every assemble (asm_unit.sh, via ASM_UNIT_DLISITES_MD5). NOT guarded: the include
 # tree and the frozen asm .s files (git-written, read through the stamped
 # mirror), and the container-write -> host-read edge of (2a)->(2b), which
 # sshfs flushes on close before `docker run` returns.
@@ -316,13 +317,20 @@ CPPDEF96="-D__GNUC_MINOR__=96 $CPPDEF_COMMON $MATCHDEFS"
 # (1) target + sdk29 base — byte-for-byte the pre-t276 gate.
 # MOUNT-SYNC: $TGTC was just written on the host; $BASECFILE is the worker's
 # edit. Both digests are taken here and verified in the container first.
+# The dli allowlist is host-written too and GROWS with every row (FACT #8713;
+# ledger-29550 read it truncated in a real run of this script): asm_unit.sh
+# verifies it against ASM_UNIT_DLISITES_MD5 before its dli pass (task #1205).
 TGTC_MD5="$(sh tools/ee/mount_sync.sh md5 "$TGTC")"
 BASE_MD5="$(sh tools/ee/mount_sync.sh md5 "$BASECFILE")"
-docker --context "$EE_CTX" run --rm -e ASMFIX_SHARED -v "$ROOT":/work ee-build sh -c "
+DLISITES_MD5="$(sh tools/ee/mount_sync.sh md5 tools/ee/ps2eeas_dli_sites.txt)"
+# $OBJ and $EXPECTED are deleted in the container first, like $OBJ96 (see the
+# header for why in the container): a run that stops early must not leave the
+# previous run's object for the report to read (ledger-29550 left a stale obj).
+docker --context "$EE_CTX" run --rm -e ASMFIX_SHARED -e ASM_UNIT_DLISITES_MD5="$DLISITES_MD5" -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work; WIBO=/usr/local/bin/wibo; G=tools/ee/cc/lib/gcc-lib/ee/2.9-ee-991111
   sh tools/ee/mount_sync.sh check $TGTC $TGTC_MD5
   sh tools/ee/mount_sync.sh check $BASECFILE $BASE_MD5
-  rm -f $OBJ96
+  rm -f $OBJ96 $OBJ $EXPECTED
   $ASMFIX_PRUNE
   \$WIBO \$G/cpp.exe $CPPDEF $INC $TGTC $W/target.i
   \$WIBO \$G/cc1.exe -quiet -O2 -G0 $W/target.i -o $W/target.s
@@ -364,7 +372,7 @@ docker --context "$EE_CTX" run --rm -v "$ROOT":/work ee-build sh -c "
   # goes to asm_unit.sh, which verifies the container's read before assembling.
   S96_MD5="$(sh tools/ee/mount_sync.sh md5 "$W/base96.s")"
   # (2c, container) assemble at -G8, same placeholder strip as the sdk29 base.
-docker --context "$EE_CTX" run --rm -e ASMFIX_SHARED -e ASM_UNIT_S_MD5="$S96_MD5" -v "$ROOT":/work ee-build sh -c "
+docker --context "$EE_CTX" run --rm -e ASMFIX_SHARED -e ASM_UNIT_S_MD5="$S96_MD5" -e ASM_UNIT_DLISITES_MD5="$DLISITES_MD5" -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work
   sh tools/ee/asm_unit.sh $REGION /work/$W/base96.s /work/$OBJ96 $GFLAG96
   mips-linux-gnu-strip $OBJ96 -N gcc2_compiled. -N __gnu_compiled_c -N dummy-symbol-name

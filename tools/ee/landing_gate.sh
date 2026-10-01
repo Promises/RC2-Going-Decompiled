@@ -540,7 +540,11 @@ check_asmunit() {
   say "== ASMUNIT [$REGION]: no asm_unit.sh WARNING/REFUSED/FAIL line in $log — a WARNING site emits code the ROM lacks (EU has no cmp to catch it), a REFUSED/FAIL writes no object (FACT #8610)"
   [ -f "$log" ] || { fail "ASMUNIT [$REGION]: no $log — the build did not run, the row cannot read it"; return; }
   n=$(/usr/bin/grep -cE 'asm_unit\.sh: (WARNING|REFUSED|FAIL):' "$log" || true)
-  na=$(/usr/bin/grep -c 'asm_unit\.sh:' "$log" || true)
+  # every assembled unit's `dli: N transforms` line (task #1205) is a known kind,
+  # in its exact spelling only: a reworded one stays unknown and WARNs, because
+  # GATE-F3 (#1158) reads that spelling
+  nd=$(/usr/bin/grep -cE "$ASMUNIT_DLI_RE" "$log" || true)
+  na=$(( $(/usr/bin/grep -c 'asm_unit\.sh:' "$log" || true) - nd ))
   if [ "$n" = 0 ]; then
     ok "ASMUNIT [$REGION]: 0 asm_unit.sh WARNING/REFUSED/FAIL lines in $(wc -l < "$log" | tr -d ' ') log lines"
   else
@@ -548,9 +552,11 @@ check_asmunit() {
     show < <(/usr/bin/grep -nE 'asm_unit\.sh: (WARNING|REFUSED|FAIL):' "$log" | cut -c1-400 | sed 's/^/       /')
   fi
   if [ "$na" != "$n" ]; then
-    warn "ASMUNIT [$REGION]: $((na - n)) asm_unit.sh: line(s) with none of WARNING/REFUSED/FAIL in $log — a diagnostic kind this row does not know; read it and extend the row: $(/usr/bin/grep -n 'asm_unit\.sh:' "$log" | /usr/bin/grep -vE 'asm_unit\.sh: (WARNING|REFUSED|FAIL):' | cut -c1-200 | tr '\n' ';')"
+    warn "ASMUNIT [$REGION]: $((na - n)) asm_unit.sh: line(s) with none of WARNING/REFUSED/FAIL in $log — a diagnostic kind this row does not know; read it and extend the row: $(/usr/bin/grep -n 'asm_unit\.sh:' "$log" | /usr/bin/grep -vE 'asm_unit\.sh: (WARNING|REFUSED|FAIL):' | /usr/bin/grep -vE "$ASMUNIT_DLI_RE" | cut -c1-200 | tr '\n' ';')"
   fi
 }
+# asm_unit.sh's per-unit transform line, whole-line anchored (task #1205)
+ASMUNIT_DLI_RE='^asm_unit\.sh: dli: [0-9]+ transforms \([0-9]+ allowlist rows for (usa|eu)\)$'
 
 # --------------------------------------------------------------- NATIVE ----
 # native_scan TREE OUTFILE — compile every TARGET_NATIVE unit under TREE's
@@ -894,7 +900,9 @@ do_build() {
   for f in $GATE_INPUTS; do
     [ -f "$BUILD/$f" ] && sync="$sync sh tools/ee/mount_sync.sh check $BUILD/$f $(sh "$HERE/mount_sync.sh" md5 "$BUILD/$f") &&"
   done
-  in_vm "B=$BUILD; rm -rf \$B/going-decompiled \$B/$BASENAME.elf \$B/$BASENAME.lma.elf \$B/$BASENAME.rom \$B/ld.log \$B/ld.lma.log \$B/$BASENAME.map \$B/all_addr_syms.ld;$sync sh tools/ee/build.sh $REGION" > "$OUT/build.log" 2>&1
+  # The dli allowlist's host md5 goes to every asm_unit.sh in build.sh, which
+  # verifies its read before the dli pass (task #1205, FACT #8713).
+  in_vm "B=$BUILD; rm -rf \$B/going-decompiled \$B/$BASENAME.elf \$B/$BASENAME.lma.elf \$B/$BASENAME.rom \$B/ld.log \$B/ld.lma.log \$B/$BASENAME.map \$B/all_addr_syms.ld;$sync ASM_UNIT_DLISITES_MD5=$(sh "$HERE/mount_sync.sh" md5 "$HERE/ps2eeas_dli_sites.txt") sh tools/ee/build.sh $REGION" > "$OUT/build.log" 2>&1
   say "     build.sh rc=$? ($(wc -l < "$OUT/build.log" | tr -d ' ') log lines -> $OUT/build.log)"
   tail -4 "$OUT/build.log" | sed 's/^/     /'
 }
@@ -1810,7 +1818,10 @@ PYEOF
 # selftest_asmunit OUTDIR [BUILD_LOG] — arm (23). Seeds are copies of the
 # selftest build's own log with one line appended, so the query form is the one
 # the real row runs on: FACT #8610's WARNING line (the one it observed reach a
-# gate build.log), a REFUSED line and an unknown `asm_unit.sh:` kind.
+# gate build.log), a REFUSED line and an unknown `asm_unit.sh:` kind. The
+# per-unit `asm_unit.sh: dli: N transforms (M allowlist rows for <region>)`
+# line (task #1205) is a known kind in that spelling only: the real log must
+# carry it, and a reworded or suffixed copy must WARN.
 selftest_asmunit() {
   local T="$1" log=${2:-$OUT/build.log} b=0 s
   say "-- (23) ASMUNIT (#1116): this build's log must pass; copies with FACT #8610's WARNING line, or a REFUSED line, appended must FAIL naming it; an unknown asm_unit.sh: kind must WARN (FAIL under --strict); a missing log must FAIL"
@@ -1828,6 +1839,18 @@ selftest_asmunit() {
   if [ "$FAILED" = 0 ] && [ "$WARNED" = 1 ] && /usr/bin/grep -q '^WARN ASMUNIT .*: 1 asm_unit.sh: line(s) with none of WARNING/REFUSED/FAIL' "$T/asmunit_unknown_warn.txt"; then ok "fired: an unknown kind WARNs (FAILED=$FAILED WARNED=$WARNED)"; else say "SELFTEST-FAIL an unknown asm_unit.sh: kind did not WARN (FAILED=$FAILED WARNED=$WARNED):"; show < "$T/asmunit_unknown_warn.txt"; b=1; fi
   FAILED=0; WARNED=0; STRICT=1; check_asmunit "$T/asmunit_unknown.log" > "$T/asmunit_unknown_strict.txt"; STRICT=0
   if [ "$FAILED" = 1 ] && /usr/bin/grep -q '^FAIL(strict) ASMUNIT' "$T/asmunit_unknown_strict.txt"; then ok "fired: under --strict the unknown kind is a FAIL"; else say "SELFTEST-FAIL --strict did not fail the unknown asm_unit.sh: kind (FAILED=$FAILED)"; b=1; fi
+  # task #1205: the real log must carry asm_unit.sh's per-unit `dli:` lines in
+  # the exact spelling (so the control above exercised the exclusion), and a
+  # reworded or suffixed copy of one must still WARN: the row knows ONE spelling
+  local nd; nd=$(/usr/bin/grep -cE "$ASMUNIT_DLI_RE" "$log" || true)
+  if [ "$nd" -ge 1 ]; then ok "control: $nd asm_unit.sh dli: line(s) in the exact spelling, none counted as an unknown kind ($(/usr/bin/grep -E "$ASMUNIT_DLI_RE" "$log" | sort | uniq -c | sed -E 's/^ +//' | tr '\n' ';' | sed 's/;$//; s/;/ ; /g'))"
+  else say "SELFTEST-FAIL (23) this build's log carries no 'asm_unit.sh: dli: N transforms (M allowlist rows for $REGION)' line: asm_unit.sh did not emit the interface GATE-F3 (#1158) reads"; b=1; fi
+  for s in 'transform (9 allowlist rows for usa)' 'transforms (9 allowlist rows for usa) INERT'; do
+    { cat "$log"; printf 'asm_unit.sh: dli: 9 %s\n' "$s"; } > "$T/asmunit_dliword.log"
+    FAILED=0; WARNED=0; STRICT=0; check_asmunit "$T/asmunit_dliword.log" > "$T/asmunit_dliword.txt"
+    if [ "$FAILED" = 0 ] && [ "$WARNED" = 1 ]; then ok "fired: 'asm_unit.sh: dli: 9 $s' is not the known spelling and WARNs"
+    else say "SELFTEST-FAIL (23) 'asm_unit.sh: dli: 9 $s' was read as the known dli line (FAILED=$FAILED WARNED=$WARNED):"; show < "$T/asmunit_dliword.txt"; b=1; fi
+  done
   FAILED=0; WARNED=0; check_asmunit "$T/asmunit_absent.log" > "$T/asmunit_absent.txt"
   if [ "$FAILED" = 1 ] && /usr/bin/grep -q '^FAIL ASMUNIT .*: no .*asmunit_absent.log' "$T/asmunit_absent.txt"; then ok "fired: a missing log is a FAIL"; else say "SELFTEST-FAIL a missing build.log did not FAIL ASMUNIT (FAILED=$FAILED)"; b=1; fi
   FAILED=0; WARNED=0
