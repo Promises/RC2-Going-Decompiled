@@ -1,15 +1,10 @@
 #!/usr/bin/env python3
 """
 configure.py - single entry point that turns the target boot ELFs into a
-disassembled, (eventually) buildable tree.
-
-Phase 1 (works today): run splat to (re)split a region into asm + linker
-script + symbol maps under going-decompiled/.
-
-Phase 2 (gated on the EE toolchain): once a matching ee-gcc / ee-as / ee-ld
-is registered in tools/ee/, emit a build.ninja that assembles the asm,
-compiles any hand-written C in going-decompiled/src/, links an ELF, and
-verifies it against the original .rom (the "matching" loop).
+disassembled, buildable tree: it runs splat (through tools/splat_ext/run_splat.py)
+to (re)split a region into asm + linker script + symbol maps under
+going-decompiled/, then reports which other build inputs are still missing.
+The build itself is tools/ee/build.sh, run inside the ee-build container.
 
 Usage:
     python scripts/configure.py            # split both regions (usa, eu), full split
@@ -49,7 +44,11 @@ ROMS = {
     "usa": ROOT / "extracted/usa/SCUS_972.68.rom",
     "eu": ROOT / "extracted/eu/SCES_516.07.rom",
 }
-EE_TOOLCHAIN_DIR = ROOT / "tools/ee"  # ee-gcc/ee-as/ee-ld get registered here
+# Inputs the build needs that a split does not produce, and what provides each.
+BUILD_INPUTS = [
+    (ROOT / "tools/ee/cc/lib/gcc-lib/ee/2.9-ee-991111/cc1.exe", "scripts/fetch_ee_toolchain.sh"),
+    (ROOT / "going-decompiled/include/rtl/ee/eekernel.h", "scripts/fetch_sdk_headers.sh"),
+]
 
 
 def ensure_inputs(region: str) -> None:
@@ -158,8 +157,8 @@ def split_region(region: str, use_cache: bool) -> None:
         record_cache_inputs(region, inputs)
 
 
-def ee_toolchain_present() -> bool:
-    return (EE_TOOLCHAIN_DIR / "bin").is_dir()
+def missing_build_inputs() -> list:
+    return [(path, fix) for path, fix in BUILD_INPUTS if not path.exists()]
 
 
 def main() -> None:
@@ -177,15 +176,12 @@ def main() -> None:
     for r in regions:
         split_region(r, use_cache=args.use_cache)
 
-    if ee_toolchain_present():
-        print("[configure] EE toolchain found - ninja emission not yet implemented (Phase 2).")
-    else:
-        print(
-            "[configure] NOTE: no EE toolchain in tools/ee/ yet.\n"
-            "            asm/linker-script/symbols are regenerated, but a matching\n"
-            "            ELF build is gated on registering ee-gcc/ee-as/ee-ld.\n"
-            "            See docs/TOOLCHAIN.md."
-        )
+    missing = missing_build_inputs()
+    for path, fix in missing:
+        print(f"[configure] NOTE: {path.relative_to(ROOT)} is missing - run {fix}")
+    if not missing:
+        print("[configure] build inputs present - next: sh tools/ee/build.sh <region> "
+              "inside the ee-build container")
     print("[configure] done.")
 
 

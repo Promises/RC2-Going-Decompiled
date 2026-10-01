@@ -12,12 +12,28 @@
 # Optional CLI args limit which regions to extract (default: all):
 #   scripts/extract_isos.sh usa_v101
 #
-# Requires: macOS hdiutil (ISO9660 mount) + llvm-objcopy (brew install llvm).
+# Requires bash >= 4 (associative arrays), plus:
+#   - bsdtar (libarchive). It reads ISO9660 directly, with no mount. macOS ships
+#     it as /usr/bin/bsdtar (and `tar`). On Debian/Ubuntu: apt install libarchive-tools.
+#   - an objcopy that reads 32-bit little-endian MIPS ELF: llvm-objcopy
+#     (brew install llvm), or mips-linux-gnu-objcopy (apt install
+#     binutils-mips-linux-gnu). Override with OBJCOPY=...
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ISO_DIR="$ROOT/source-isos"
-OBJCOPY="${OBJCOPY:-/opt/homebrew/opt/llvm/bin/llvm-objcopy}"
+
+find_tool() {  # first candidate that runs
+  local c
+  for c in "$@"; do
+    if [ -n "$c" ] && command -v "$c" >/dev/null 2>&1; then echo "$c"; return 0; fi
+  done
+  return 1
+}
+BSDTAR="$(find_tool "${BSDTAR:-}" bsdtar)" \
+  || { echo "ERROR: bsdtar not found (macOS: /usr/bin/bsdtar; Debian/Ubuntu: apt install libarchive-tools)"; exit 1; }
+OBJCOPY="$(find_tool "${OBJCOPY:-}" llvm-objcopy /opt/homebrew/opt/llvm/bin/llvm-objcopy mips-linux-gnu-objcopy)" \
+  || { echo "ERROR: no MIPS-capable objcopy (brew install llvm, or apt install binutils-mips-linux-gnu)"; exit 1; }
 
 declare -a REGIONS=(usa eu usa_v101)
 [ "$#" -gt 0 ] && REGIONS=("$@")
@@ -32,7 +48,6 @@ declare -A BOOT=(
   [usa_v101]="SCUS_972.68"
 )
 
-command -v "$OBJCOPY" >/dev/null 2>&1 || { echo "ERROR: objcopy not found at $OBJCOPY (brew install llvm)"; exit 1; }
 
 extract_one() {
   local region="$1"
@@ -42,24 +57,20 @@ extract_one() {
   [ -f "$iso" ] || { echo "ERROR: ISO missing: $iso"; return 1; }
   mkdir -p "$out"
 
-  echo "==> [$region] mounting $(basename "$iso")"
-  local mnt vol
-  mnt="$(hdiutil attach -nobrowse -readonly "$iso")"
-  vol="$(echo "$mnt" | grep -oE '/Volumes/.*' | head -1)"
-  trap '[ -n "${vol:-}" ] && hdiutil detach "$vol" >/dev/null 2>&1 || true' RETURN
-
-  cp -f "$vol/$boot" "$out/$boot"
-  cp -f "$vol/SYSTEM.CNF" "$out/SYSTEM.CNF"
-  # IOP module image + level header, handy for later IOP/asset work.
-  [ -f "$vol/IOPRP255.IMG" ] && cp -f "$vol/IOPRP255.IMG" "$out/IOPRP255.IMG" || true
-
-  hdiutil detach "$vol" >/dev/null 2>&1; vol=""
+  echo "==> [$region] reading $(basename "$iso")"
+  # bsdtar reads the ISO9660 image directly. The boot ELF and SYSTEM.CNF must
+  # exist. IOPRP255.IMG (IOP module image, handy for later IOP/asset work) is
+  # optional, so it is extracted on its own.
+  rm -f "$out/$boot" "$out/SYSTEM.CNF" "$out/IOPRP255.IMG"
+  "$BSDTAR" -xf "$iso" -C "$out" "$boot" SYSTEM.CNF
+  "$BSDTAR" -xf "$iso" -C "$out" IOPRP255.IMG 2>/dev/null || true
+  chmod u+w "$out"/* 2>/dev/null || true
 
   echo "==> [$region] generating flat .rom via objcopy"
   "$OBJCOPY" -O binary "$out/$boot" "$out/$boot.rom"
 
   echo "==> [$region] sha1:"
-  shasum "$out/$boot" "$out/$boot.rom"
+  if command -v shasum >/dev/null 2>&1; then shasum "$out/$boot" "$out/$boot.rom"; else sha1sum "$out/$boot" "$out/$boot.rom"; fi
 }
 
 for r in "${REGIONS[@]}"; do extract_one "$r"; done
