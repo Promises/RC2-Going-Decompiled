@@ -1155,12 +1155,14 @@ s32 func_0011C000(s64 bits) {
  * tools/ee/eetest/cmp/isolated/run_cmp_015180_iso.sh. Note a magnitude of exactly
  * 0.0 would spin the scale-up loop forever (0*10 stays < 0.1), so the caller never
  * passes 0; the oracle excludes it for the same reason. */
-/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body
- * promoted SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1
- * synthesises 0x3fb999999999999a and 0x412e848000000000 with `dli`. The ROM holds neither
- * assembler's expansion: it loads both from .rodata (`ld %lo(D_0013A9D8)`, `ld
- * %lo(D_0013A9E0)`) and synthesises only 0x4024.../0x3ff0... inline. No allowlist row applies.
- * Solo score 54.76%. Residual class: LITERAL-POOL constants, not dli. */
+/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body promoted
+ * SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 synthesises
+ * 0x3fb999999999999a and 0x412e848000000000 with `dli`. The ROM holds neither assembler's
+ * expansion: it loads both from .rodata and synthesises only 0x4024.../0x3ff0... inline. The pool:
+ * 0x3fb999999999999a sits in TWO distinct slots, D_0013A9D8 and D_0013A9E0, and 0x412e848000000000
+ * in D_0013A9E8, each loaded by its own `ld %lo(...)` (FACT #8772, ROM words), so the two-slot
+ * layout is itself a constraint. No allowlist row applies. Solo score 54.76%. Residual class:
+ * LITERAL-POOL constants, not dli. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C090);
 #else

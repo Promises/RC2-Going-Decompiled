@@ -5099,12 +5099,14 @@ extern HudTexUploadEntry g_texUploadQueue[];  /* 0x1B92C0 */
 extern s32 g_texUploadCount;                  /* 0x1B157C: entries pending */
 extern u32 g_vramAllocCursor;                 /* 0x1A72D0: byte VRAM bump cursor */
 extern s32 g_vramFrameBufB;                   /* 0x1A72DC: VRAM frame buffer B base */
-/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body
- * promoted SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
- * `dli $2,0x8000000000000000`; the ROM holds Ps2EeAs's expansion of that value at 0x28F0BC
- * ($3), but in a different register. An allowlist row must carry the ROM's words for cc1's
- * register, so no row can apply here. Solo score 47.82%. Residual class: REGALLOC at the dli
- * site, plus whatever t493 recorded above. */
+/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body promoted
+ * SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
+ * `dli $2,0x8000000000000000`; the ROM holds Ps2EeAs's expansion of that value at 0x28F0BC ($3),
+ * but in a different register. No allowlist row applies to the body AS COMPILED: the checker
+ * refuses a row carrying cc1's register (demonstrated, NOTE #8789). A #8598 pin moves the register
+ * onto the ROM's (FACT #8791); pin+row is not sufficient: residual body shape - structure /
+ * C-shape / addressing (NOTE #8789), built 125 words vs the ROM's 137. Solo score 47.82%. Residual
+ * class: REGALLOC at the dli site (pin-reachable, above). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", GetHudIconTex0);
 #else
@@ -5310,12 +5312,13 @@ __asm__(".extern g_gsPixelOffsetY, 16");
 extern s32 g_gsPixelOffsetY;    /* 0x1A7354 - GS window Y offset */
 extern u64 GetHudIconTex0(s32 iconIndex);   /* resolve a HUD icon's GS tex0 register */
 
-/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body
- * promoted SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
- * `dli $10,0x7400000000008001`; the ROM holds Ps2EeAs's expansion of that value at 0x28F570
- * ($11), but in a different register. An allowlist row must carry the ROM's words for cc1's
- * register, so no row can apply here. Solo score 24.56%. Residual class: REGALLOC at the dli
- * site, plus whatever t493 recorded above. */
+/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body promoted
+ * SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
+ * `dli $10,0x7400000000008001`; the ROM holds Ps2EeAs's expansion of that value at 0x28F570 ($11),
+ * but in a different register. No allowlist row applies to the body AS COMPILED: a row must carry
+ * the ROM's words for cc1's register. A #8598 pin + row is UNTRIED. Solo score 24.56%. Residual
+ * class: REGALLOC at the dli site, plus PACKED-SAVE (ROM saves at stride 8, cc1 2.9 at 16; NOTE
+ * #8777). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F540);
 #else
@@ -5366,12 +5369,13 @@ void func_0028F540(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, s32 alpha) {
  * Left INCLUDE_ASM (not yet fully traced). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F6E8);
 
-/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body
- * promoted SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
- * `dli $10,0x7400000000008001`; the ROM holds Ps2EeAs's expansion of that value at 0x28F740
- * ($15), but in a different register. An allowlist row must carry the ROM's words for cc1's
- * register, so no row can apply here. Solo score 16.50%. Residual class: REGALLOC at the dli
- * site, plus whatever t493 recorded above. */
+/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body promoted
+ * SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
+ * `dli $10,0x7400000000008001`; the ROM holds Ps2EeAs's expansion of that value at 0x28F740 ($15),
+ * but in a different register. No allowlist row applies to the body AS COMPILED: a row must carry
+ * the ROM's words for cc1's register. A #8598 pin + row is UNTRIED. Solo score 16.50%. Residual
+ * class: REGALLOC at the dli site, plus PACKED-SAVE (ROM saves at stride 8, cc1 2.9 at 16; NOTE
+ * #8777). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F700);
 #else
@@ -5435,12 +5439,13 @@ void func_0028F700(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, s32 alpha) {
  *   alpha      tint alpha
  *   rgb        packed 0x00BBGGRR tint colour (low 24 bits used)
  */
-/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body
- * promoted SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
- * `dli $11,0x7400000000008001`; the ROM holds Ps2EeAs's expansion of that value at 0x28F928
- * ($25), but in a different register. An allowlist row must carry the ROM's words for cc1's
- * register, so no row can apply here. Solo score 19.80%. Residual class: REGALLOC at the dli
- * site, plus whatever t493 recorded above. */
+/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body promoted
+ * SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
+ * `dli $11,0x7400000000008001`; the ROM holds Ps2EeAs's expansion of that value at 0x28F928 ($25),
+ * but in a different register. No allowlist row applies to the body AS COMPILED: a row must carry
+ * the ROM's words for cc1's register. A #8598 pin + row is UNTRIED. Solo score 19.80%. Residual
+ * class: REGALLOC at the dli site, plus PACKED-SAVE (ROM saves at stride 8, cc1 2.9 at 16; NOTE
+ * #8777). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F8E0);
 #else
@@ -5482,12 +5487,13 @@ void func_0028F8E0(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, s32 alpha, s32 rgb
 }
 #endif
 
-/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body
- * promoted SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
- * `dli $13,0x7400000000008001`; the ROM holds Ps2EeAs's expansion of that value at 0x28FB2C
- * ($18), but in a different register. An allowlist row must carry the ROM's words for cc1's
- * register, so no row can apply here. Solo score 12.25%. Residual class: REGALLOC at the dli
- * site, plus whatever t493 recorded above. */
+/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body promoted
+ * SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
+ * `dli $13,0x7400000000008001`; the ROM holds Ps2EeAs's expansion of that value at 0x28FB2C ($18),
+ * but in a different register. No allowlist row applies to the body AS COMPILED: a row must carry
+ * the ROM's words for cc1's register. A #8598 pin + row is UNTRIED. Solo score 12.25%. Residual
+ * class: REGALLOC at the dli site, plus PACKED-SAVE (ROM saves at stride 8, cc1 2.9 at 16; NOTE
+ * #8777). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028FAE0);
 #else
@@ -5570,12 +5576,13 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_0
  * atan2-to-cartesian pattern noted elsewhere); the halfW<->halfH assignment is
  * inferred from the angle=0 case (basis vectors collapse to the screen axes).
  * The colour is the fixed 0x807F7F7F (alpha 0x80, RGB 0x7F7F7F). */
-/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body
- * promoted SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
+/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body promoted
+ * SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
  * `dli $5,0xb400000000008001` and `dli $6,0x53535353106`; the ROM holds Ps2EeAs's expansion of
- * that value at 0x28FDBC ($9) and 0x28FDD4 ($5), but in a different register. An allowlist row
- * must carry the ROM's words for cc1's register, so no row can apply here. Solo score 3.70%.
- * Residual class: REGALLOC at the dli site, plus whatever t493 recorded above. */
+ * that value at 0x28FDBC ($9) and 0x28FDD4 ($5), but in a different register. No allowlist row
+ * applies to the body AS COMPILED: a row must carry the ROM's words for cc1's register. A #8598
+ * pin + row is UNTRIED. Solo score 3.70%. Residual class: REGALLOC at the dli site, plus
+ * PACKED-SAVE (ROM saves at stride 8, cc1 2.9 at 16; NOTE #8777). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028FC78);
 #else
@@ -5651,12 +5658,13 @@ void func_0028FC78(f32 cx, f32 cy, f32 halfW, f32 halfH, f32 angle,
  *   u1, v1      far texel coordinate
  *   alpha       tint alpha (RGB fixed 0x7F7F7F)
  */
-/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body
- * promoted SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
- * `dli $14,0x7400000000008001`; the ROM holds Ps2EeAs's expansion of that value at 0x290020
- * ($13), but in a different register. An allowlist row must carry the ROM's words for cc1's
- * register, so no row can apply here. Solo score 23.65%. Residual class: REGALLOC at the dli
- * site, plus whatever t493 recorded above. */
+/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body promoted
+ * SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
+ * `dli $14,0x7400000000008001`; the ROM holds Ps2EeAs's expansion of that value at 0x290020 ($13),
+ * but in a different register. No allowlist row applies to the body AS COMPILED: a row must carry
+ * the ROM's words for cc1's register. A #8598 pin + row is UNTRIED. Solo score 23.65%. Residual
+ * class: REGALLOC at the dli site, plus PACKED-SAVE (ROM saves at stride 8, cc1 2.9 at 16; NOTE
+ * #8777). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028FFF0);
 #else

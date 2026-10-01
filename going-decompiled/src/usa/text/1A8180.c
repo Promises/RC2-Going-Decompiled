@@ -5076,14 +5076,16 @@ s32 func_002AE7E8(Moby *moby) {
    asm/symbol is func_002AE9E0 (the bb754675 name-skew class, FACT #6402 defect 1), so a
    MATCH_func_002AE9E0 guard fails objdiff_build.sh's check 3 (no `.ent func_002AE9E0`).
    Rename the body (not the asm) before promoting. */
-/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body
- * promoted SOLO with the body renamed func_002AE9E0 in the override only, sdk29 arm,
- * colima-ee-x86). cc1 2.9 emits `dli $5,0x3fb99999a0000000`; the ROM holds SN Ps2EeAs's
- * expansion at 0x2AECF4. A RULING #8549 allowlist row for that site moves the sdk29 row 34.35%
- * -> 32.83%: DOWN. NOT A CLEAN SOLO: with this body compiled, cc1 2.96 emits a `li.d`, which
- * GNU as rejects for r5900. The engine96 arm then fails (objdiff_build.sh rc 1), and
- * GetRandomInt (engine96, matched) reads 0.00% in both runs. Residual class: LI.D on the
- * engine96 arm (FACT #7950), plus non-dli codegen on sdk29. Stays INCLUDE_ASM. */
+/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body promoted
+ * SOLO with the body renamed func_002AE9E0 in the override only, sdk29 arm, colima-ee-x86). cc1
+ * 2.9 emits `dli $5,0x3fb99999a0000000`; the ROM holds SN Ps2EeAs's expansion at 0x2AECF4. A
+ * RULING #8549 allowlist row for that site moves the sdk29 row 34.35% -> 32.83%: DOWN. NOT A CLEAN
+ * SOLO: with this body compiled, cc1 2.96 emits a `li.d`, which GNU as rejects for r5900. The
+ * engine96 arm then fails (objdiff_build.sh rc 1), and GetRandomInt (engine96, matched) reads
+ * 0.00% in both runs. Residual class: LI.D on the engine96 arm (FACT #7952: GNU as rejects li.d
+ * for r5900 and asm_unit.sh expands li.s only; RULING #8172 clause 4 keeps li.d out of
+ * asm_unit.sh), plus PACKED-SAVE (ROM saves at stride 8, cc1 2.9 at 16; NOTE #8777) and other
+ * non-dli codegen on sdk29. Stays INCLUDE_ASM. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE9E0);
 #else

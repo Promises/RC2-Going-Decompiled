@@ -2947,12 +2947,13 @@ extern void  ResolveMobyAnimFramePtrs(void *moby);
  * collision mesh (+0x78), then resolves anim-frame pointers when the class has
  * an animation set. The matching build keeps the asm (multi callee-save, 8-byte-
  * packed save-slot frame wall - see func_0029C678). */
-/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body
- * promoted SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
- * `dli $6,0x40404000000000`; the ROM holds Ps2EeAs's expansion of that value at 0x29FF40 ($7),
- * but in a different register. An allowlist row must carry the ROM's words for cc1's register,
- * so no row can apply here. Solo score 67.40%. Residual class: REGALLOC at the dli site, plus
- * whatever t493 recorded above. */
+/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body promoted
+ * SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
+ * `dli $6,0x40404000000000`; the ROM holds Ps2EeAs's expansion of that value at 0x29FF40 ($7), but
+ * in a different register. No allowlist row applies to the body AS COMPILED: a row must carry the
+ * ROM's words for cc1's register. A #8598 pin + row is UNTRIED. Solo score 67.40%. Residual class:
+ * REGALLOC at the dli site, plus PACKED-SAVE (the 8-byte-packed save-slot frame wall named above;
+ * NOTE #8777). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", InitMobyFromClass);
 #else
