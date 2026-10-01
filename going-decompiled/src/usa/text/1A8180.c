@@ -3202,14 +3202,20 @@ void func_002ABAE8(f32 dist, f32 velRate, f32 accel, f32 maxSpeed, f32 *pVel)
  * Each of r/g/b/a (passed in $f12/$f13/$f14/$f15) is scaled by 255.0, truncated
  * to an int (FloatToInt), masked to a byte and shifted into its channel:
  *   r = bits 0-7, g = bits 8-15, b = bits 16-23, a = bits 24-31.
- * Walled: $f20-$f23 + $31 saves (save-layout wall). */
+ * MATCHED on the s136os arm: the save layout ($f20-$f23 + $31), which cc1 2.9
+ * cannot emit, is SN 2.95.3 v1.36 -fopt-stack's (FACT #8810).
+ * GUARD (task #1270): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
 /* PARKED (engine-2.96): correct C, but the 4-channel mul/FloatToInt/mask
  * sequence + fp-save ordering schedules differently than the original
  * (fine-scheduling, 001003-vs-exact-2.96 gap). Faithful body kept as #else. */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 66.63%
    -> SCHED-TIEBREAK, ORDER-ONLY (same instruction multiset, 23 rows displaced) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ABD00);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002ABD00)
+S136OS_SLOT(func_002ABD00);
 #else
 s32 func_002ABD00(f32 r, f32 g, f32 b, f32 a) {
     s32 ri = FloatToInt(r * 255.0f) & 0xFF;
@@ -3545,11 +3551,18 @@ void func_002AC1E0(void *out, void *matrix) {
 /* func_002AC468: build a scratch transform/matrix from `in` (func_00284008),
  * feed it through func_002AC1E0 with `out`, then resolve `in` against it
  * (func_00284028). The 0x40-byte scratch is a 4x4 matrix shared by all three
- * helpers. Walled: $16/$17/$31 saves (save-layout wall). */
+ * helpers.
+ * MATCHED on the s136os arm: the save layout ($16/$17/$31), which cc1 2.9
+ * cannot emit, is SN 2.95.3 v1.36 -fopt-stack's (FACT #8810).
+ * GUARD (task #1270): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 87.32%
    -> REGNUM-COLORING (s0/s1 swapped) + SCHED-TIEBREAK (prologue interleave) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC468);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002AC468)
+S136OS_SLOT(func_002AC468);
 #else
 /* func_00284008 takes (dst, src): both call sites (here and func_002AE2D8)
  * keep the source pointer live in $5. */
@@ -3574,15 +3587,22 @@ void func_002AC4B8(Moby *moby) {
 }
 
 /* func_002AC4D0: axis-angle -> quaternion. out.xyz = axis(src) * sin(angle/2),
- * out.w = cos(angle/2). Walled: $f20 + $16/$17/$31 saves (save-layout wall). */
+ * out.w = cos(angle/2).
+ * MATCHED on the s136os arm: the save layout ($f20 + $16/$17/$31), which cc1 2.9
+ * cannot emit, is SN 2.95.3 v1.36 -fopt-stack's (FACT #8810).
+ * GUARD (task #1270): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
 /* PARKED (engine-2.96): correct C, but frame is -0x30 vs my -0x20 + $ra/save
  * ordering differs (frame/regalloc, 001003-vs-exact-2.96 gap; possibly a missing
  * stack temp in the source). Faithful body kept as #else. */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 90.28%
    -> UNKNOWN-frame: ROM frame -48 with $f20 at 32, cc1 -32 with $f20 at 24 (a missing 8-16 B
    stack object), rest SCHED-TIEBREAK */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC4D0);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002AC4D0)
+S136OS_SLOT(func_002AC4D0);
 #else
 extern f32 func_00283B48(f32 x);   /* sine */
 
@@ -4395,12 +4415,18 @@ void func_002AD938(Moby *moby, s16 *list) {
 }
 
 /* func_002AD9B0: jitter a Vec3 in place — add an independent uniform random
- * offset in [-amt, amt) to each of x/y/z. Walled: $f20/$f21 + $16/$31 saves
- * (save-layout wall). */
+ * offset in [-amt, amt) to each of x/y/z.
+ * MATCHED on the s136os arm: the save layout ($f20/$f21 + $16/$31), which cc1 2.9
+ * cannot emit, is SN 2.95.3 v1.36 -fopt-stack's (FACT #8810).
+ * GUARD (task #1270): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 92.12%
    -> REGNUM-COLORING ($f20/$f21 swapped) + SCHED-TIEBREAK; hoisting -amt RUN, no change */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AD9B0);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002AD9B0)
+S136OS_SLOT(func_002AD9B0);
 #else
 void func_002AD9B0(Vec4 *p, f32 amt) {
     p->x = p->x + func_002A86E0(-amt, amt);   /* func_002A86E0 == GetRandomFloatRange */
@@ -4833,11 +4859,18 @@ s32 func_002AE2D8(Moby *self, Moby *obj, Vec4 *point, Vec4 *rotIn,
  * 0x40 is set, else obj+0xC0 — transforms (arg3 - obj pos+0x10) into that frame
  * (out arg5), then composes with arg4's rotation (MatrixMultiplyVu0) and writes
  * the euler angles to arg6. Returns 1.
+ * MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+ * byte-exact (FACT #8810; census FACT #8830).
+ * GUARD (task #1270): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 84.51%
    -> UNKNOWN-@3: ROM `(none)` vs `daddu a0,s1,zero` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE460);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002AE460)
+S136OS_SLOT(func_002AE460);
 #else
 s32 func_002AE460(void *self, Moby *obj, Vec4 *arg3, Vec4 *arg4, void *arg5, void *arg6) {
     s32 src = func_002ADF18(obj);
@@ -6369,11 +6402,18 @@ int func_002B03E8(f32 enable1, f32 coneYaw2, f32 range3, f32 conePitch4,
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0BD8);
 
 /** func_002B0BF0 — transform the local vector (x,y,z) by obj's matrix (at +0xC0)
- *  and accumulate it into `out` (out += M * (x,y,z)). */
+ *  and accumulate it into `out` (out += M * (x,y,z)).
+ * MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+ * byte-exact (FACT #8810; census FACT #8830).
+ * GUARD (task #1270): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 88.42%
    -> SCHED-TIEBREAK (prologue interleave), ORDER-ONLY */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0BF0);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002B0BF0)
+S136OS_SLOT(func_002B0BF0);
 #else
 void func_002B0BF0(void *obj, Vec4 *out, f32 x, f32 y, f32 z) {
     Vec4 tmp;
@@ -6674,11 +6714,19 @@ f32 func_002B11C8(Vec4 *p) {
  * IS $5 — `n`/Vec4ScaleVu0 @0x2836E0 does `lqc2 $vf1,0(a1)` (a1=$5). func_002B1270's
  * gravDir param is likewise $5. Arg3/$6 is outMtxOpt (an output pointer); negating
  * it would be meaningless.
+ *
+ * MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+ * byte-exact (FACT #8810; census FACT #8830).
+ * GUARD (task #1270): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 77.26%
    -> UNKNOWN-@3: ROM `(none)` vs `sd s0,16(sp)` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1220);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002B1220)
+S136OS_SLOT(func_002B1220);
 #else
 void func_002B1220(void *mtx3x4, Vec4 *gravDir, void *outMtxOpt) {
     Vec4 invGravDir;
@@ -6890,12 +6938,19 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
 extern f32 IntToFloat(s32 x);
 
 /** func_002B1710 — map the integer index (a mod b) onto an angle in [-PI, PI):
- *  returns 2*PI*(a%b)/b - PI. (a%b traps on b==0, like the original's div guard.) */
+ *  returns 2*PI*(a%b)/b - PI. (a%b traps on b==0, like the original's div guard.)
+ * MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+ * byte-exact (FACT #8810; census FACT #8830).
+ * GUARD (task #1270): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 84.58%
    -> 84.62% with the +1 ULP literal spelling (0x40490FDB); rest SCHED-TIEBREAK (div hoisted
    one slot) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1710);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002B1710)
+S136OS_SLOT(func_002B1710);
 #else
 f32 func_002B1710(s32 a, s32 b) {
     f32 fm = IntToFloat(a % b);
@@ -7166,14 +7221,20 @@ s32 func_002B1BD8(void) {
  * Total collected platinum bolts across all levels (sum of CountPlatinumBolts
  * over levels 0..0x1B, skipping the unused level 0x1A), clamped to [0, 40].
  */
-/* TODO(match): functional equivalent - save-layout wall ($16/$17/$18/$31, the
-   later cc1 packs the four callee-save slots 8-byte where the pinned cc1
-   reserves 16). The level-skip beql loop and the [0,40] movz/movn clamp are
-   otherwise exact. Revisit once the gameplay-TU compiler is available. */
+/* Returns the clamped total; takes no arguments.
+ * MATCHED on the s136os arm: the save layout ($16/$17/$18/$31 packed into 8-byte
+ * slots) that the pinned cc1 2.9 cannot emit (16-byte slots; the level-skip beql
+ * loop and the [0,40] movz/movn clamp were otherwise exact) is SN 2.95.3 v1.36
+ * -fopt-stack's (FACT #8810).
+ * GUARD (task #1270): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 71.21%
    -> UNKNOWN-@1: ROM `(none)` vs `sd ra,24(sp)` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1C20);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002B1C20)
+S136OS_SLOT(func_002B1C20);
 #else
 extern s32 CountPlatinumBolts(s32 level);
 

@@ -761,12 +761,18 @@ extern f32 GetFloatAbs(f32 x);           /* 0x2835F8 fabsf */
  * @param vertBand max vertical gap
  * @return 1 if inside the band, 0 otherwise
  *
- * WALL: save-layout — saves $s0/$s1/$ra at 8-byte spacing (frame 0x30); the
- * pinned cc1 packs callee-save GPR slots at 16-byte spacing (frame 0x40),
- * confirmed by the compiled base. cmp-oracle validated.
+ * Save layout: the ROM saves $s0/$s1/$ra at 8-byte spacing (frame 0x30), which
+ * the pinned cc1 2.9 cannot emit (16-byte spacing, frame 0x40).
+ * MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+ * byte-exact (FACT #8810; census FACT #8830). cmp-oracle validated.
+ * GUARD (task #1270): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
  */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", CheckTargetInRangeBand);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_CheckTargetInRangeBand)
+S136OS_SLOT(CheckTargetInRangeBand);
 #else
 s32 CheckTargetInRangeBand(Moby *moby, Vec4 *refPos, f32 radius, f32 vertBand) {
     if (DistXYVu0(refPos, &moby->facingTarget) < radius) {
@@ -1769,10 +1775,16 @@ void UpdateGameState(void) {
  * the wander offset and, when the wander timer expires (func_00283328), flips the
  * wander sign and reseeds the timer from [wanderIntervalMin, wanderIntervalMax]. Drives
  * the motion with StepMobyMotion at that heading and returns its event flags.
- * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing, with fp temps; matching
- * arm stays INCLUDE_ASM, portable #else below. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", DriveMobyTowardPoint);
+ * Save layout: 3 callee-saves + $ra at 8-byte spacing, with fp temps.
+ * MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+ * byte-exact (FACT #8810; census FACT #8830).
+ * GUARD (task #1270): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_DriveMobyTowardPoint)
+S136OS_SLOT(DriveMobyTowardPoint);
 #else
 extern s32 GetMobyMotionController(Moby *moby);    /* defined below; forward decl */
 extern f32 WrapAnglePiSum(f32 a, f32 b);           /* 0x284548 wrap a+b into [-pi,pi] */
@@ -2320,12 +2332,18 @@ void ProbeMobyGroundLine(Moby *moby, MobyMotionController *ctrl, f32 customDepth
  * platform-rider event bit 0x40 in ctrl->eventFlags (+0x94). No groundHitMoby
  * => nothing to inherit, return.
  *
- * NATIVE SHIM (no byte target; matching build uses INCLUDE_ASM above). Derived
- * register-exact from CheckMobyGroundMover.s @0x2B6BF8.
+ * Derived register-exact from CheckMobyGroundMover.s @0x2B6BF8.
  *
- * WALL (matching build): save-layout — 1 callee-save + $ra at 8-byte spacing. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", CheckMobyGroundMover);
+ * Save layout: 1 callee-save + $ra at 8-byte spacing.
+ * MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+ * byte-exact (FACT #8810; census FACT #8830).
+ * GUARD (task #1270): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_CheckMobyGroundMover)
+S136OS_SLOT(CheckMobyGroundMover);
 #else
 /* func_002ADF48 (text/1A8180 @0x2ADF48): moving-platform re-collision test;
  * returns nonzero when `moby` is still resting on `platform`. Opaque here. */
@@ -2629,14 +2647,20 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_0
  *
  * Returns 0 if the moby has no motion controller, else 1.
  *
- * NATIVE SHIM (no byte target; matching build uses INCLUDE_ASM above). Derived
- * register-exact from SetMobyWaypointPath.s @0x2B7148 (the asm reuses the -1
+ * Derived register-exact from SetMobyWaypointPath.s @0x2B7148 (the asm reuses the -1
  * sentinel both as the "no controller" return-stage value and as the endIdx==-1
  * compare operand; the C below expresses the same two effects directly).
  *
- * WALL (matching build): save-layout — 3 callee-saves + $ra at 8-byte spacing. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", SetMobyWaypointPath);
+ * Save layout: 3 callee-saves + $ra at 8-byte spacing.
+ * MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+ * byte-exact (FACT #8810; census FACT #8830).
+ * GUARD (task #1270): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_SetMobyWaypointPath)
+S136OS_SLOT(SetMobyWaypointPath);
 #else
 s32 SetMobyWaypointPath(Moby *moby, short *path, s32 endIdx, s32 startIdx) {
     MobyMotionController *ctrl = (MobyMotionController *)GetMobyMotionController(moby);

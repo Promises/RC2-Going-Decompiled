@@ -31,3 +31,16 @@ usa text/198FA0 func_0029EB08
 usa text/1A8180 RandRangeInclusive
 usa text/1A8180 GetRandomVectorInSphere
 usa text/1A8180 func_002AB210
+usa text/1A8180 func_002ABD00
+usa text/1A8180 func_002AC468
+usa text/1A8180 func_002AC4D0
+usa text/1A8180 func_002AD9B0
+usa text/1A8180 func_002AE460
+usa text/1A8180 func_002B0BF0
+usa text/1A8180 func_002B1220
+usa text/1A8180 func_002B1710
+usa text/1A8180 func_002B1C20
+usa text/1B4218 CheckTargetInRangeBand
+usa text/1B4218 DriveMobyTowardPoint
+usa text/1B4218 CheckMobyGroundMover
+usa text/1B4218 SetMobyWaypointPath
