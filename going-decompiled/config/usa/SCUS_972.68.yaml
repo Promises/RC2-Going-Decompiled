@@ -497,7 +497,7 @@ segments:
       - [0x1FA5A8, asm, text/1FA5A8] # TILE B fused tail island, head (0x2FA628..0x2FCFC7)
       - [0x1FCF48, cpp, text/1FCF48]   # carve: SelectSceneArenaRegion + func_002FD020 + ResetFrameArenas (0x2FCFC8..0x2FD0AF)
       - [0x1FD030, asm, text/1FD030] # TILE B fused tail island, rest (0x2FD0B0..0x2FFC1F)
-      - [0x1FFBA0, c, text/1FFBA0]   # TILE B bolt economy + turret weapon head (0x2FFC20..0x301337)
+      - [0x1FFBA0, cpp, text/1FFBA0]   # TILE B bolt economy + turret weapon head (0x2FFC20..0x301337)
       - [0x2012B8, asm, text/2012B8] # TILE B 1FFBA0 fused tail island (0x301338..0x30808F)
       - [0x208010, asm, text/208010] # TILE B tail: named weapon-FX (0x308090..0x336067)
       - [0x235FE8, c, text/235FE8]   # GUI widget-method band (0x336068..0x348BCF, 344 fns)
