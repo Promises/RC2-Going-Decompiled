@@ -345,7 +345,7 @@ segments:
       - [0x183348, asm, text/183348] # TILE C head: handwritten/VU0 leaves (0x2833C8..0x283557)
       - [0x183558, c, text/183558]   # TILE C math C-helper band -G0 (0x283558..0x2849AF)
       - [0x1849B0, asm, text/1849B0] # TILE C tail: SetVideoMode + GS-draw (0x2849B0..0x2885FF)
-      - [0x188580, c, text/188580]   # -G8 sub-TU (0x288600..0x2888D7, 11 fns)
+      - [0x188580, cpp, text/188580]   # -G8 sub-TU (0x288600..0x2888D7, 11 fns)
       - [0x188858, c, text/188858]   # -G8 -fno-gcse carve (0x2888D8..0x29086F, ~108 fns)
       - [0x1907F0, cpp, text/1907F0] # -G8 sub-TU, C++ (task #1258) (0x290870..0x2912B7, 14 fns)
       # RANKED-CARVE-PIPELINE TIER-1-B (2026-06-14): text/191238 -
