@@ -1183,24 +1183,26 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9458);
 
 /**
- * Begin iterating a moby group: validate the group index, point the iterator
- * globals at the group's slot list, fetch the first moby into *out, then apply
- * the active/inactive filter (wantInactive/wantActive) before chaining to the
- * iterator-advance helper. Returns -1 for an empty/invalid group, 0 when the
- * first moby is filtered out, else the advance helper's result.
+ * func_002A9468 — begin iterating a moby group.
+ *
+ * Validates the group index against g_mobyGroupCount, points the iterator
+ * globals (g_pMobyGroupIterCursor / g_mobyGroupIterSlot / g_pMobyGroupIterMoby)
+ * at the group's slot list, fetches the first moby into *out, then applies the
+ * active/inactive filter before chaining to the advance step func_002A9550.
+ *
+ * @param out          receives the first moby (NULL on an invalid group)
+ * @param group        moby group index; < 0 or > g_mobyGroupCount is invalid
+ * @param wantInactive nonzero: the first moby passes only if wantActive is
+ *                     nonzero and its state sign bit is clear
+ * @param wantActive   with wantInactive == 0: the first moby passes unless both
+ *                     wantActive and its state sign bit are zero
+ * @return -1 for an invalid group or a NULL slot list, 0 when the first moby is
+ *         filtered out, else func_002A9550's result
+ *
+ * Non-obvious: g_pMobyGroupIterMoby is re-read from memory (not reused) for the
+ * state test and again for the call argument; it is a size-12 extern, so the
+ * delay-slot copy of that reload is %gp_rel and the other is absolute.
  */
-/* TODO(match): functional equivalent - 85%. The filter lattice and the
-   size-12 %hi/%lo-vs-%gp_rel reload of g_pMobyGroupIterMoby reproduce, but the
-   later cc1 schedules the wantActive-path reload straight-line (absolute
-   lui/lw) with the $ra restore in the branch delay slot, while the pinned cc1
-   fills that delay slot with the reload itself (forced %gp_rel form) and folds
-   the two return paths - register-coloring + delay-slot wall (same family as
-   func_002AC9E0). Revisit once the gameplay-TU compiler is available. */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 54.83%
-   -> UNKNOWN-@1: ROM `daddu t0,a0,zero` vs `(none)` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9468);
-#else
 s32 func_002A9468(Moby **out, s32 group, s32 wantInactive, s32 wantActive) {
     u16 *list;
     s32 slot;
@@ -1222,25 +1224,25 @@ s32 func_002A9468(Moby **out, s32 group, s32 wantInactive, s32 wantActive) {
     g_pMobyGroupIterMoby = (Moby *)((u8 *)g_mobyTableBase + slot * 0x100);
     *out = g_pMobyGroupIterMoby;
     sign = (u32)(s32)g_pMobyGroupIterMoby->state >> 31;
+    /* One call site, entered by fall-through from the wantInactive != 0 test
+     * and by jump from the wantInactive == 0 test, with the shared `return 0`
+     * as its own block after it: that is the ROM's block order (reorg copies
+     * the g_pMobyGroupIterMoby reload into the wantInactive == 0 branch's delay
+     * slot as a %gp_rel lw; the fall-through keeps the absolute lui/lw).
+     * Writing each early-out as a plain `return 0` folds that block into the
+     * epilogue and inverts the sign test: 91.81% (unit objdiff report,
+     * objdiff_build.sh, colima-ee-x86, task #1174). */
     if (wantInactive == 0) {
         if (wantActive == 0 && sign == 0) {
-            return 0;
+            goto filtered;
         }
-    } else {
-        if (wantActive == 0) {
-            return 0;
-        }
-        if (sign != 0) {
-            return 0;
-        }
+    } else if (wantActive == 0 || sign != 0) {
+        goto filtered;
     }
-    {
-        s32 r = func_002A9550(out, g_pMobyGroupIterMoby, wantInactive, wantActive);
-        __asm__ __volatile__(""); /* cc1 2.96 sibling-call suppression (the ROM never sibcalls) */
-        return r;
-    }
+    return func_002A9550(out, g_pMobyGroupIterMoby, wantInactive, wantActive);
+filtered:
+    return 0;
 }
-#endif
 
 /**
  * func_002A9550 — moby-group iterator ADVANCE/filter step (the worker behind
