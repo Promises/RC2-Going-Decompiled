@@ -69,3 +69,15 @@ usa text/235FE8 GuiElementSetGlyph
 usa text/235FE8 func_003374D8
 usa text/235FE8 GuiFontAtlasRelocate
 usa text/235FE8 func_00338CD8
+usa text/235FE8 GuiConfirmPopupDraw
+usa text/235FE8 func_0033A7E0
+usa text/235FE8 func_0033B428
+usa text/235FE8 GuiDialogBoxSetText3
+usa text/235FE8 func_0033F360
+usa text/235FE8 func_0033F3B8
+usa text/235FE8 func_00342B30
+usa text/235FE8 func_00342D68
+usa text/235FE8 func_00342DC0
+usa text/235FE8 func_00343668
+usa text/235FE8 func_003462C0
+usa text/235FE8 func_00347550

@@ -2756,13 +2756,17 @@ void GuiConfirmPopupTick(void *w, s32 arg2) {
 
 /* Draw a confirm popup when it's active (+0x2D8 != 0): four sprite sub-elements
  * (+0x8/+0x54/+0xA0/+0xEC) and three text sub-elements (+0x138/+0x190/+0x1E8). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiConfirmPopupDraw);
+/* GUARD (task #1273): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810/#8830; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiConfirmPopupDraw)
+S136OS_SLOT(GuiConfirmPopupDraw);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_GuiConfirmPopupDraw, unit objdiff): 87.20%,
    4/26 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd ra, 0x8(sp)' vs '').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+   not byte-exact on that arm. */
 void GuiConfirmPopupDraw(void *w) {
     if (*(s32 *)((char *)w + 0x2D8) != 0) {
         GuiSpriteElementDraw((char *)w + 0x8);
@@ -2870,14 +2874,18 @@ void func_0033A7D8(void *p, s32 v) {
  * (p+0x8) title/body/footer to localized strings 0x2C34/0x2C32/0x2BE5, zero its
  * scale, and clear the +0x32C "text ready" flag (the sibling of func_0033A860,
  * which raises that flag with the 0x2C33 title variant). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A7E0);
+/* GUARD (task #1273): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810/#8830; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033A7E0)
+S136OS_SLOT(func_0033A7E0);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033A7E0, unit objdiff): 73.28%,
    16/36 insns differ. Residual: UNKNOWN-addiu (first differing insn: '' vs 'addiu a0, zero, 0x2c34').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; 4-callee-save frame
+   not byte-exact on that arm. */
+/* WALL on cc1 2.9/2.96 only (s136os is byte-exact, GUARD above): 4-callee-save frame
    wall. */
 extern s32 GetLocalizedString(s32 id);
 extern void GuiDialogBoxSetText3(void *p, s32 t0, s32 t1, s32 t2);
@@ -3189,14 +3197,18 @@ s32 GuiLevelInfoPanelTick(void *w) {
  * register packets (TEST/0x42=0x44 then SCISSOR/0x47=0xB), renders the map layer
  * (MapDraw(0,1) + func_002DBC98(0)), draws the two foreground sprites (p+0xA0,
  * p+0xEC) and the nine text labels at +0x138 (stride 0x58). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033B428);
+/* GUARD (task #1273): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810/#8830; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033B428)
+S136OS_SLOT(func_0033B428);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033B428, unit objdiff): 85.00%,
    8/51 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a0, zero').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame +
+   not byte-exact on that arm. */
+/* WALL on cc1 2.9/2.96 only (s136os is byte-exact, GUARD above): 2-callee-save frame +
    branch-likely (beql) guard wall. */
 /* GS A+D reg-write: the DATA is a 64-bit register value. Widen it to u64 for the
  * native/#else build (prevents silent truncation of bits >=32); matching-build
@@ -3700,14 +3712,18 @@ void GuiDialogBoxSetBounds(void *p, f32 a, f32 b, f32 c, f32 d, f32 e, f32 f) {
 
 /* GuiDialogBoxSetText3: assign the three dialog-box text labels - the title
  * (p+0x198 <- t0), the body (p+0x248 <- t1) and the prompt (p+0x1F0 <- t2). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiDialogBoxSetText3);
+/* GUARD (task #1273): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810/#8830; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiDialogBoxSetText3)
+S136OS_SLOT(GuiDialogBoxSetText3);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_GuiDialogBoxSetText3, unit objdiff): 63.14%,
    10/26 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a0, zero').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame
+   not byte-exact on that arm. */
+/* WALL on cc1 2.9/2.96 only (s136os is byte-exact, GUARD above): 3-callee-save frame
    wall. */
 extern void GuiElementSetText(GuiElement *e, s32 text);
 void GuiDialogBoxSetText3(void *p, s32 t0, s32 t1, s32 t2) {
@@ -5384,14 +5400,18 @@ void func_0033F200(void *w, GuiPool *pool) {
 
 /* func_0033F360: call func_0033F398(p) to get a row index, then return the
  * row's address: base (+0x3B8) + index * 0x14 (20-byte stride). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F360);
+/* GUARD (task #1273): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810/#8830; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033F360)
+S136OS_SLOT(func_0033F360);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033F360, unit objdiff): 66.08%,
    8/15 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu v1, zero, 0x14' vs 'sll v1, v0, 2').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
+   not byte-exact on that arm. */
+/* WALL on cc1 2.9/2.96 only (s136os is byte-exact, GUARD above): 2-callee-save frame
    wall. */
 void func_0033F398(void *p);
 s32 func_0033F360(void *p) {
@@ -5408,14 +5428,18 @@ void func_0033F398(void *p) {
 
 /* func_0033F3B8: init the GuiWidget at p+0x2E0, then record the row-data
  * pointer (arg) at p+0x3B8. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F3B8);
+/* GUARD (task #1273): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810/#8830; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033F3B8)
+S136OS_SLOT(func_0033F3B8);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033F3B8, unit objdiff): 64.79%,
    10/16 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a0, zero').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame
+   not byte-exact on that arm. */
+/* WALL on cc1 2.9/2.96 only (s136os is byte-exact, GUARD above): 3-callee-save frame
    wall ($16/$17/$31 16-byte vs 8-byte slot packing). */
 extern void GuiMenuListSetRows(void *p, void *records);
 void func_0033F3B8(void *p, void *records) {
@@ -7154,13 +7178,17 @@ void func_00342998(void *w) {
 /* Draw a composite widget only when its enabled flag (+0x230) is set: four
  * sprite sub-elements (base, +0x98, +0x4C, +0xE4), a text sub-element (+0x1D0),
  * and three helper sub-draws (func_00342958/78/98). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342B30);
+/* GUARD (task #1273): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810/#8830; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00342B30)
+S136OS_SLOT(func_00342B30);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_00342B30, unit objdiff): 88.15%,
    4/28 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a0, zero').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+   not byte-exact on that arm. */
 void func_00342B30(void *w) {
     if (*(s32 *)((char *)w + 0x230) != 0) {
         GuiSpriteElementDraw(w);
@@ -7263,14 +7291,18 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 
 /* func_00342D68: call func_00342DA0(p) to get a row index, then return the
  * row's address: base (+0xE8) + index * 0x14 (20-byte stride). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342D68);
+/* GUARD (task #1273): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810/#8830; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00342D68)
+S136OS_SLOT(func_00342D68);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_00342D68, unit objdiff): 66.08%,
    8/15 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu v1, zero, 0x14' vs 'sll v1, v0, 2').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame
+   not byte-exact on that arm. */
+/* WALL on cc1 2.9/2.96 only (s136os is byte-exact, GUARD above): 2-callee-save frame
    wall. */
 void func_00342DA0(void *p);
 s32 func_00342D68(void *p) {
@@ -7287,14 +7319,18 @@ void func_00342DA0(void *p) {
 
 /* func_00342DC0: init the GuiWidget at p+0x10, then record the row-data
  * pointer (arg) at p+0xE8. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342DC0);
+/* GUARD (task #1273): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810/#8830; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00342DC0)
+S136OS_SLOT(func_00342DC0);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_00342DC0, unit objdiff): 64.79%,
    10/16 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a0, zero').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame
+   not byte-exact on that arm. */
+/* WALL on cc1 2.9/2.96 only (s136os is byte-exact, GUARD above): 3-callee-save frame
    wall. */
 void func_00342DC0(void *p, void *records) {
     GuiMenuListSetRows((char *)p + 0x10, records);
@@ -7642,14 +7678,18 @@ void func_00343578(void *w) {
 /* func_00343668: when the +0x170 flag is set, draw the two sprite elements
  * (p+0x0 and p+0x4C) and run the three sub-draws (func_003434C8/00343558/
  * 00343578). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343668);
+/* GUARD (task #1273): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810/#8830; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00343668)
+S136OS_SLOT(func_00343668);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_00343668, unit objdiff): 84.76%,
    4/22 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a0, zero').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame +
+   not byte-exact on that arm. */
+/* WALL on cc1 2.9/2.96 only (s136os is byte-exact, GUARD above): 2-callee-save frame +
    branch-likely guard wall. */
 extern void func_003434C8(void *p);
 extern void func_00343558(void *p);
@@ -8816,13 +8856,17 @@ void func_003461D0(void *obj) {
  * four sprite elements (w/+0x4C/+0x98/+0xE4) and three text rows (+0x1C8, +0x2B8,
  * +0x1C8 again), hides +0x220, then runs the five sub-builders func_003461D0/
  * 00345FF0/00345F00/003460E0/00345890 and draws the detail sprite (+0x17C). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003462C0);
+/* GUARD (task #1273): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810/#8830; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003462C0)
+S136OS_SLOT(func_003462C0);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_003462C0, unit objdiff): 85.71%,
    6/45 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s1, a0, zero').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+   not byte-exact on that arm. */
 void func_003461D0(void *w);
 void func_00345FF0(void *w);
 void func_00345F00(void *w);
@@ -9474,13 +9518,17 @@ void func_00347450(void *obj) {
  * the three family-2 sub-builders func_00347228/00347348/00347450, then draws the
  * detail sprite (+0x17C) and five more text rows (+0x310/+0x2B8/+0x368/+0x3C0/
  * +0x418). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00347550);
+/* GUARD (task #1273): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810/#8830; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00347550)
+S136OS_SLOT(func_00347550);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_00347550, unit objdiff): 94.87%,
    2/40 insns differ. Residual: SCHED (prologue/epilogue or delay-slot order only; sched1 ON/OFF and sched2 OFF RUN, none reproduce it).
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+   not byte-exact on that arm. */
 void func_00347550(void *w) {
     if (*(s32 *)((char *)w + 0x4F8) == 0) {
         return;
