@@ -1206,6 +1206,33 @@ selftest() {
   cp -R going-decompiled/src "$SW/going-decompiled/src"; cp -R going-decompiled/symbol_addrs "$SW/going-decompiled/symbol_addrs"
   cp -R "going-decompiled/asm/$REGION/nonmatchings" "$SW/going-decompiled/asm/$REGION/nonmatchings"
   local vrow1; vrow1=$(/usr/bin/grep '^CLASS1 ' "$T/shadow_real.txt" | LC_ALL=C sort | head -1)
+  # The swap needs ONE baselined CLASS1 member to fix. USA has none since task
+  # #1255 (603a5460) repointed all 37 (FACT #8825: the arm then read BROKEN).
+  # With none, synthesize one in the SCRATCH tree only: respell a real leaf's
+  # INCLUDE_ASM name back to its address name (strcmp -> func_00115544), and put
+  # that row in a scratch baseline, so the same-count swap still has a real,
+  # baselined member to fix. The real tree and the real baseline are untouched.
+  local SWB="$BASE_DIR" SWREAL="$T/shadow_real.txt"
+  if [ -z "$vrow1" ]; then
+    local sname saddr sfile sline
+    while IFS= read -r hit; do
+      sfile=${hit%%:*}; sline=$(printf '%s' "$hit" | cut -d: -f2)
+      sname=$(printf '%s' "$hit" | sed -E 's/.*INCLUDE_ASM\("[^"]+", *([A-Za-z_][A-Za-z0-9_]*)\).*/\1/')
+      case "$sname" in func_*|D_*) continue ;; esac
+      saddr=$(/usr/bin/grep -E "^[[:space:]]*$sname[[:space:]]*=[[:space:]]*0x[0-9A-Fa-f]+;" "going-decompiled/symbol_addrs/$REGION/symbol_addrs.txt" | head -1 | sed -E 's/.*=[[:space:]]*0x([0-9A-Fa-f]+);.*/\1/')
+      [ -n "$saddr" ] && break
+    done < <(/usr/bin/grep -rnE '^INCLUDE_ASM\("[^"]+", *[A-Za-z_][A-Za-z0-9_]*\);' "going-decompiled/src/$REGION" | LC_ALL=C sort)
+    if [ -n "$saddr" ]; then
+      local saddr8; saddr8=$(printf '%08X' "0x$saddr")
+      sed -i.bak "${sline}s/, *${sname})/, func_${saddr8})/" "$SW/$sfile"; rm -f "$SW/$sfile.bak"
+      SWREAL="$T/shadow_synth.txt"; shadow_scan "$REGION" "$SW" "$SWREAL" || { say "SELFTEST-BROKEN: shadow_scan on the synthesized scratch tree failed"; bad=1; }
+      vrow1=$(/usr/bin/grep "^CLASS1 $sfile:$sline " "$SWREAL" | head -1)
+      SWB="$T/base_swap"; rm -rf "$SWB"; cp -R "$BASE_DIR" "$SWB"
+      [ -n "$vrow1" ] && printf '%s\n' "$(printf '%s' "$vrow1" | awk '{split($2,a,":"); print a[1], $3, $4, $5}')" \
+        | LC_ALL=C sort -u - "$(shadow_baseline_file CLASS1 "$REGION" "$BASE_DIR")" > "$(shadow_baseline_file CLASS1 "$REGION" "$SWB")"
+      say "   (no real CLASS1 shadow in $REGION; synthesized one in the scratch tree: $sfile:$sline $sname -> func_${saddr8})"
+    fi
+  fi
   local vfile vline vold vnew; vfile=$(printf '%s' "$vrow1" | awk '{print $2}' | cut -d: -f1); vline=$(printf '%s' "$vrow1" | awk '{print $2}' | cut -d: -f2); vold=$(printf '%s' "$vrow1" | awk '{print $3}'); vnew=$(printf '%s' "$vrow1" | awk '{print $5}')
   local vdir; vdir=$(sed -n "${vline}p" "$SW/$vfile" | sed -E 's/.*INCLUDE_ASM\("([^"]+)".*/\1/')
   if [ -z "$vrow1" ] || [ -z "$vdir" ]; then say "SELFTEST-BROKEN: no CLASS1 row to swap from ($vrow1)"; bad=1; else
@@ -1213,8 +1240,8 @@ selftest() {
     /usr/bin/grep -q "INCLUDE_ASM(\"$vdir\", $vold)" "$SW/$vfile" && { say "SELFTEST-BROKEN: $vold still INCLUDE_ASM'd in the scratch $vfile:$vline"; bad=1; }
     printf '\n/* t464 selftest swap seed */\nINCLUDE_ASM("%s", func_00DEAD00);\n' "$vdir" >> "$SW/$vfile"
     printf 'T464SwapSeed = 0x00DEAD00; // type:func\n' >> "$SW/going-decompiled/symbol_addrs/$REGION/symbol_addrs.txt"
-    FAILED=0; WARNED=0; STRICT=0; check_shadow "$REGION" "$SW" > "$T/swap.txt"; cp "$OUT/shadow_scan.txt" "$T/shadow_scan_swapped.txt"
-    local nreal nswap; nreal=$(/usr/bin/grep -c '^CLASS1 ' "$T/shadow_real.txt" || true); nswap=$(/usr/bin/grep -c '^CLASS1 ' "$T/shadow_scan_swapped.txt" || true)
+    FAILED=0; WARNED=0; STRICT=0; check_shadow "$REGION" "$SW" "$SWB" > "$T/swap.txt"; cp "$OUT/shadow_scan.txt" "$T/shadow_scan_swapped.txt"
+    local nreal nswap; nreal=$(/usr/bin/grep -c '^CLASS1 ' "$SWREAL" || true); nswap=$(/usr/bin/grep -c '^CLASS1 ' "$T/shadow_scan_swapped.txt" || true)
     [ "$nreal" = "$nswap" ] || { say "SELFTEST-BROKEN: swap changed the CLASS1 count ($nreal -> $nswap) — not a same-count swap"; bad=1; }
     if [ "$FAILED" = 1 ] && [ "$WARNED" = 1 ] && /usr/bin/grep -q "^FAIL CLASS1 \[$REGION\]: NEW 1 member(s) not in .*: $vfile func_00DEAD00 -> T464SwapSeed\$" "$T/swap.txt" && ! /usr/bin/grep -q "^FAIL.*$vold" "$T/swap.txt" && /usr/bin/grep -q "^WARN CLASS1 \[$REGION\]: 1 baseline member(s) no longer observed — lower the baseline in this landing, remove from .*: $vfile $vold -> $vnew\$" "$T/swap.txt"; then ok "fired: same count ($nswap == $nreal) and $(/usr/bin/grep '^FAIL CLASS1' "$T/swap.txt" | sed -E 's/ not in [^(]*\(/ (/') ; WARN gone: $vfile $vold -> $vnew"; else say "SELFTEST-FAIL swap arm (FAILED=$FAILED WARNED=$WARNED, count $nreal -> $nswap):"; show < <(/usr/bin/grep -E '^(OK|FAIL|WARN)' "$T/swap.txt"); bad=1; fi
   fi
