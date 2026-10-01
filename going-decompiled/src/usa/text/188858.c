@@ -5745,16 +5745,23 @@ void UploadTextureToGs(s32 handle, s32 vramBlk, s32 fmt, s32 wLog, s32 hLog,
  *     g_gsPixelOffsetX/Y for each corner, and keeps the packet stores in source
  *     order. Without the cursor volatile 90/92 words differ, without the offset
  *     volatile 75/92, without the store volatile 93/100 (func_00290320).
- *     Writers: g_frameDmaCursor is stored by 85 asm functions (FACT #8647,
- *     DEMONSTRATED: 60 in nonmatchings/ plus 25 in the whole-unit segments
- *     text/1849B0, 1812A8, 1FD030, 2012B8, 1B8FA8; a count of FILES gives 65).
- *     Census, a direct `sw` to the symbol, one row per glabel:
+ *     Writers of g_frameDmaCursor: 85 asm functions by operand name (FACT #8647);
+ *     87 by ROM effective address (FACT #8676). The 85 (DEMONSTRATED: 60 in
+ *     nonmatchings/ plus 25 in the whole-unit segments text/1849B0, 1812A8,
+ *     1FD030, 2012B8, 1B8FA8; a count of FILES gives 65) come from this census,
+ *     a direct `sw` to the symbol, one row per glabel:
  *       for f in $(/usr/bin/grep -rlE '[[:space:]]sw[[:space:]].*g_frameDmaCursor\)'
  *         going-decompiled/asm/usa); do awk '/^glabel/{fn=$2}
  *         /[ \t]sw[ \t].*g_frameDmaCursor[)]/{print fn}' $f; done | sort -u
- *     By name most are draw-list, packet or texture-upload builders (e.g.
- *     BeginFrameDrawList, BuildShrubDrawSegment, UploadTextureToGs), but not
- *     all: the set also holds the frame-arena functions ResetFrameArenas and
+ *     The other 2 are func_002E1A58 (3 sites) and func_002821C0 (1 site): they
+ *     store through a register holding the address and their stores never
+ *     name the symbol, so no store-operand census reaches them (they do name
+ *     it in the address-forming addiu) (149 sites in all). #8676's ROM
+ *     decoder propagates constants linearly per function with no CFG, its 4
+ *     extra sites were read by eye, and its 87 is not shown to be complete.
+ *     By name most of the 85 are draw-list, packet or texture-upload builders
+ *     (e.g. BeginFrameDrawList, BuildShrubDrawSegment, UploadTextureToGs), but
+ *     not all: they also hold the frame-arena functions ResetFrameArenas and
  *     FlipFrameArena, FadeOutToBlackBlocking, and 28 unnamed func_ rows
  *     (these three functions among them). g_gsPixelOffsetX/Y are stored
  *     by InitScreenGeometry, SetupGsDisplayBuffers,
