@@ -3194,14 +3194,14 @@ void func_00294CD0(s32 id) {
 }
 #endif
 
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 87.39% PACKED-SAVE /
- * engine96 87.39% UNKNOWN-sd; best arm sdk29, first differing insn there: 'addiu sp, sp,
- * -0x20' vs 'addiu sp, sp, -0x30'. Iterated: engine96 87.39% REGNUM-COLORING — a->s1/b->s0 in
- * the ROM (a1 moved before a0), ours a->s0/b->s1; temp-copy phrasing is copy-propagated away
- * (s1) */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294E98);
+/* GUARD (task #1278): on EE the #else C below is the image's body, compiled
+ * alone by the s136os arm (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the
+ * slot, and there is no asm fallback. On native it is plain C, as before.
+ * History: the t496 probe read sdk29 87.39% PACKED-SAVE / engine96 87.39%
+ * REGNUM-COLORING (a->s1/b->s0 in the ROM) on the unit objdiff report. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00294E98)
+S136OS_SLOT(func_00294E98);
 #else
 /*
  * func_00294E98(a, b) — service the dialog-voice stream around a blocking
@@ -3210,10 +3210,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294E98);
  * audio is serviced on both sides of the (potentially blocking) call. Mirrors
  * StartFileLoadPumpingVoice's pump/work/pump shape.
  *
- * WALL: three jal sites with two callee-saved args (a in s1, b in s0) — the
- * pinned 2.9-ee-991111 cc1 reserves a 0x20 frame and 16-byte save slots where
- * the original's later cc1 packs them; the save-layout wall. Kept as the
- * portable #else body.
+ * MATCHED on the s136os arm: three jal sites with two callee-saved args (a in
+ * s1, b in s0). The pinned 2.9-ee-991111 cc1 reserves a 0x20 frame and 16-byte
+ * save slots; the ROM's packed layout is SN 2.95.3 v1.36 -fopt-stack's
+ * (FACT #8810).
  */
 extern void PumpDialogVoiceSystem(s32 blocking);
 extern void func_00294C48(s32 a, s32 b);
@@ -3221,6 +3221,9 @@ void func_00294E98(s32 a, s32 b) {
     PumpDialogVoiceSystem(1);
     func_00294C48(a, b);
     PumpDialogVoiceSystem(1);
+    /* empty __asm__ __volatile__("") fence: a SCHEDULING DEVICE, emits nothing
+     * (RULING #8483 rev 2); placed after the last call to block a sibcall
+     * (FACT #8064's sibcall-guard class). */
     __asm__ __volatile__("");
 }
 #endif

@@ -81,3 +81,9 @@ usa text/235FE8 func_00342DC0
 usa text/235FE8 func_00343668
 usa text/235FE8 func_003462C0
 usa text/235FE8 func_00347550
+usa text/191238 func_00294E98
+usa text/1A8180 func_002AD860
+usa text/1A8180 func_002B0D20
+usa text/1DFF80 ComputeEmitterVolume
+usa text/24D728 func_0034D828
+usa text/24D728 func_0034DB68

@@ -1115,8 +1115,14 @@ s32 ComputeVolumeFalloff(SoundDef *def, float dist, float near, float far) {
  * measure the distance from `pos` to the camera, then evaluate the slot's
  * distance-falloff curve (curve params live at *(slot+0x8): near at +0x0, far at
  * +0x4). Returns the resulting volume level.
- * TODO(match): not byte-exact on either arm; each arm gets a different half of
- * the ROM right (measured task #563, unit objdiff on the committed body).
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810): it emits
+ * the ROM's packed 0x10 frame and its prologue order.
+ * GUARD (task #1278): on EE this C is the image's body, compiled alone by the
+ * s136os arm (tools/ee/s136os_functions.txt) and spliced over the S136OS_SLOT
+ * line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the slot, and
+ * there is no asm fallback. On native it is plain C, as before.
+ * History - neither earlier arm was byte-exact; each got a different half of
+ * the ROM right (measured task #563, unit objdiff on the committed body):
  *   sdk29    99.12%, 17/17 insns, 5 differ - PACKED-SAVE: the ROM packs the two
  *            8-byte saves (s0,ra) into a 0x10 frame with ra at +0x8, cc1 2.9
  *            rounds to 0x20 with ra at +0x10 and swaps the epilogue restore
@@ -1131,13 +1137,15 @@ s32 ComputeVolumeFalloff(SoundDef *def, float dist, float near, float far) {
  * engine96 arm: without it 2.96 sibcalls (`j ComputeVolumeFalloff` with the
  * teardown in the delay slot) and the arm reads 67.06%.  The bare temp without
  * the barrier is inert (byte-identical output) - the asm is what blocks it. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", ComputeEmitterVolume);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_ComputeEmitterVolume)
+S136OS_SLOT(ComputeEmitterVolume);
 #else
 s32 ComputeEmitterVolume(SoundEmitterSlot *slot, Vec4 *pos) {
     float dist = Vec3DistVu0(pos, g_cameraPos);
     float *curve = *(float **)((u8 *)slot + 0x8);
     s32 vol = ComputeVolumeFalloff((SoundDef *)curve, dist, curve[0], curve[1]);
+    /* empty __asm__ __volatile__("") fence: a SCHEDULING DEVICE, emits nothing
+     * (RULING #8483 rev 2); the FACT #7343 tail-call barrier described above. */
     __asm__ __volatile__("");
     return vol;
 }

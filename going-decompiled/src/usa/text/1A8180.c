@@ -4319,16 +4319,24 @@ void func_002AD590(f32 a, f32 b, long moby, u64 spawnCtx, s32 sound) {
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AD858);
 
 /** func_002AD860 — clamp a vector's length: if `vec`'s 3-component length exceeds
- *  `maxLen`, rescale it in place down to maxLen (else leave it unchanged). */
+ *  `maxLen`, rescale it in place down to maxLen (else leave it unchanged).
+ *  MATCHED on the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810).
+ *  GUARD (task #1278): on EE this C is the image's body, compiled alone by the
+ *  s136os arm (tools/ee/s136os_functions.txt) and spliced over the S136OS_SLOT
+ *  line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the slot, and
+ *  there is no asm fallback. On native it is plain C, as before. */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 89.47%
    -> SCHED-TIEBREAK (move s0,a0 vs swc1 $f20 order in the prologue), ORDER-ONLY */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AD860);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002AD860)
+S136OS_SLOT(func_002AD860);
 #else
 void func_002AD860(Vec4 *vec, f32 maxLen) {
     if (maxLen < Vec3LengthVu0(vec)) {
         Vec3RescaleToLenVu0(vec, maxLen, vec);
     }
+    /* empty __asm__ __volatile__("") fence: a SCHEDULING DEVICE, emits nothing
+     * (RULING #8483 rev 2); placed after the last call to block a sibcall
+     * (FACT #8064's sibcall-guard class). */
     __asm__ __volatile__("");
 }
 #endif
@@ -6469,16 +6477,24 @@ void func_002B0CC0(s32 ctx, Vec4 *out, void *a, void *b, f32 len) {
 /**
  * Resolve `a` into `out` via func_002B0C40, override out.z with the supplied
  * height t, then transform out in place by the object's matrix at ctx+0xC0.
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810).
+ * GUARD (task #1278): on EE this C is the image's body, compiled alone by the
+ * s136os arm (tools/ee/s136os_functions.txt) and spliced over the S136OS_SLOT
+ * line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the slot, and
+ * there is no asm fallback. On native it is plain C, as before.
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 39.80%
    -> UNKNOWN-@0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-32` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0D20);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002B0D20)
+S136OS_SLOT(func_002B0D20);
 #else
 void func_002B0D20(s32 ctx, Vec4 *out, void *a, void *b, f32 t) {
     func_002B0C40(ctx, out, a, b);
     out->z = t;
     func_00283A48(out, out, (Vec4 *)(ctx + 0xC0));
+    /* empty __asm__ __volatile__("") fence: a SCHEDULING DEVICE, emits nothing
+     * (RULING #8483 rev 2); placed after the last call to block a sibcall
+     * (FACT #8064's sibcall-guard class). */
     __asm__ __volatile__("");
 }
 #endif

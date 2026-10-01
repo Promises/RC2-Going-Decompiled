@@ -210,18 +210,20 @@ void func_0034D7D0(GuiHudManager *mgr, s32 mode) {
  * and the sprite slot (+0x10F8 via func_0034A370 mode 1), then retargets the
  * frame sprite (+0x158) to texture `tex`. Independently, if the +0x159C latch is
  * set, it retargets the frame sprite too. `tex` is the GuiSprite texture id.
- * WALL (94.3%): the original packs its three callee-saved GPRs (s0/s1/ra) at an
- * 8-byte stride (frame 0x20); this ee-gcc build emits a 16-byte GPR save slot
- * (frame 0x30, R5900 128-bit-register stack-slot model), an unfixable
- * frame-layout ceiling for any function saving 2+ GPRs across calls. The trailing
- * asm barrier already defeats the tail-call; only the save stride differs. Kept
- * as the portable #else; the matching build keeps the original bytes. */
-/* TODO(match) func_0034D828 - task #566 (round 4), measured on the COMMITTED tree (this file,
- * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
- * tools/ee/objdiff_build.sh, clean): sdk29 94.33%, engine96 95.00%. Eligible arm: e96.
- * Residual: PRO-ORDER (one insn: `daddu s0,a0` emitted before `sd s1` instead of after) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034D828);
+ * MATCHED on the s136os arm: the original packs its three callee-saved GPRs
+ * (s0/s1/ra) at an 8-byte stride (frame 0x20), which the pinned cc1 2.9 cannot
+ * emit (16-byte slots, frame 0x30) and SN 2.95.3 v1.36 -fopt-stack does
+ * (FACT #8810). The trailing fence defeats the tail-call.
+ * GUARD (task #1278): on EE this C is the image's body, compiled alone by the
+ * s136os arm (tools/ee/s136os_functions.txt) and spliced over the S136OS_SLOT
+ * line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the slot, and
+ * there is no asm fallback. On native it is plain C, as before. */
+/* History - task #566 (round 4), measured on the then-committed tree (both arms
+ * promoted whole-unit; instrument: tools/ee/unit_report.sh over
+ * tools/ee/objdiff_build.sh, clean): sdk29 94.33%, engine96 95.00%.
+ * Residual then: PRO-ORDER (one insn: `daddu s0,a0` emitted before `sd s1` instead of after) */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0034D828)
+S136OS_SLOT(func_0034D828);
 #else
 void func_0034D828(GuiHudManager *mgr, s32 tex, s32 activeFlag) {
     u8 *m = (u8 *)mgr;
@@ -238,6 +240,9 @@ void func_0034D828(GuiHudManager *mgr, s32 tex, s32 activeFlag) {
     if (*(s32 *)(m + 0x159C) != 0) {
         GuiSpriteSetTexture(m + 0x158, tex, 0);
     }
+    /* empty __asm__ __volatile__("") fence: a SCHEDULING DEVICE, emits nothing
+     * (RULING #8483 rev 2); placed after the last call to block a sibcall
+     * (FACT #8064's sibcall-guard class). */
     __asm__ __volatile__("");
 }
 #endif
@@ -334,13 +339,19 @@ void func_0034DAB0(GuiHudManager *mgr, s32 visible, f32 alpha) {
  * region - store the "active" flag (arg) at +0x158C, and if the +0x1590
  * needs-reset latch is set, clear it and reset that region's four sub-list slots
  * (+0x1214/+0x12A8/+0x133C/+0x13D0 via func_0034A7F8, flag 0). `flag` is the new
- * active state. */
-/* TODO(match) func_0034DB68 - task #566 (round 4), measured on the COMMITTED tree (this file,
- * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
- * tools/ee/objdiff_build.sh, clean): sdk29 99.38%, engine96 91.67%. Eligible arm: e96.
- * Residual: sdk29: PACKED-SAVE, frame only (ra@0x10 vs ROM 0x8). e96: SCHED-INSNS2 - reaches 100.00 under -fno-schedule-insns2, which regresses func_0034F1C0 100->87.50 */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034DB68);
+ * active state.
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810): it emits
+ * the ROM's packed save frame (ra at +0x8).
+ * GUARD (task #1278): on EE this C is the image's body, compiled alone by the
+ * s136os arm (tools/ee/s136os_functions.txt) and spliced over the S136OS_SLOT
+ * line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the slot, and
+ * there is no asm fallback. On native it is plain C, as before. */
+/* History - task #566 (round 4), measured on the then-committed tree (both arms
+ * promoted whole-unit; instrument: tools/ee/unit_report.sh over
+ * tools/ee/objdiff_build.sh, clean): sdk29 99.38%, engine96 91.67%.
+ * Residual then: sdk29: PACKED-SAVE, frame only (ra@0x10 vs ROM 0x8). e96: SCHED-INSNS2 - reaches 100.00 under -fno-schedule-insns2, which regresses func_0034F1C0 100->87.50 */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0034DB68)
+S136OS_SLOT(func_0034DB68);
 #else
 void func_0034DB68(GuiHudManager *mgr, s32 flag) {
     u8 *m = (u8 *)mgr;
@@ -352,6 +363,9 @@ void func_0034DB68(GuiHudManager *mgr, s32 flag) {
         func_0034A7F8(m + 0x133C, 0);
         func_0034A7F8(m + 0x13D0, 0);
     }
+    /* empty __asm__ __volatile__("") fence: a SCHEDULING DEVICE, emits nothing
+     * (RULING #8483 rev 2); placed after the last call to block a sibcall
+     * (FACT #8064's sibcall-guard class). */
     __asm__ __volatile__("");
 }
 #endif
