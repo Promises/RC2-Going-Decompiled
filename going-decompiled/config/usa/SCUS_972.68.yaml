@@ -298,7 +298,7 @@ segments:
       #   176168's bogus func_00278EB8, tail in this unit's bogus func_00278F08.
       #   Starting the c unit at the real 0x278EC0 prologue makes it whole; name
       #   pinned text/178E88 so the hand-written .c is preserved.
-      - [0x178E40, c, text/178E88]   # TILE A render/draw-2D A (0x278EC0..0x2812A7)
+      - [0x178E40, cpp, text/178E88]   # TILE A render/draw-2D A (0x278EC0..0x2812A7)
       # RE-SPLIT (2026-09-15, task #314 SPLIT-1): both boundaries below were
       #   0x80 too HIGH. The carve author computed the ROM offset as
       #   vaddr - 0x100000; this segment's real delta is vaddr - 0x100080
