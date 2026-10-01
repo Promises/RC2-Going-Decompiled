@@ -11,7 +11,10 @@
 # no refusal, and one that fires on good input breaks what already matches.
 #   ADJ  (RULING #8549 rev 3, FACT #8623) a listed `dli` directly before a
 #        reorder-mode branch is refused (rc 2, `asm_unit.sh: FAIL:`, no object)
-#        at -G0 and -G8. The same dli before a non-branch, before a branch in
+#        at -G0 and -G8, by the pass's own message: `No object written.` and no
+#        generic `REFUSED:` or `dli pass, condition` line (FACT #8689; at
+#        f6c2bae9e the exit code was right and that message was not, FACT
+#        #8670). The same dli before a non-branch, before a branch in
 #        noreorder, before a label, and the same literal in a function that is
 #        not listed all assemble (rc 0), and the listed ones carry Ps2EeAs's
 #        words, the unlisted one GNU's.
@@ -33,9 +36,22 @@
 #   LIKELY (FACT #8653) a listed `dli` directly before each of the 14 likely
 #        branch forms assembles, in the dli's order (GNU as does not swap into
 #        an annulled slot). SWAP: before each of the 19 measured swapping forms
-#        (jal, jalr, jr, bc1f among them) it is still refused.
-#   SPELL the memop mnemonic list is spelled once in $AU, so the layout scan
-#        and the slot rule cannot drift apart (FACT #8616).
+#        (jal, jalr, jr, bc1f among them) it is still refused, by the same
+#        text test as ADJ.
+#   NORE (FACT #8672, FACT #8698, task #1170) a listed `dli` emitted under
+#        `.set noreorder`. Under cc1's `.set nomacro` slot bracket it is
+#        refused by its own nomacro message, never the swap message: FACT
+#        #8672's seed (then `jal bar`) and its control (an addu before it).
+#        Without nomacro it assembles to the words Ps2EeAs.exe 1.9.25.758 gives
+#        for the same input (measured for #1170): a `jal` slot then a reorder
+#        `jal`, `bnel` or addu, and a noreorder block that is not a slot.
+#   SPELL the memop mnemonics are spelled once in $AU (one alternation with two
+#        or more of them on a code line), and each of the ten cc1 memops is
+#        seen by BOTH the layout scan and the slot rule: in a bnel slot at -G8,
+#        bare it gives 1 WARNING (MEMOP_RE), with a trailing comment it is
+#        refused (the scan's `mem`). A second copy that diverges from MEMOP_MN
+#        fails the content arms; one that is identical fails the count (FACT
+#        #8616, FACT #8689).
 #
 # The seeds are written in cc1 layout (TAB, mnemonic, TAB, operands) into the
 # container's own /tmp, so no VM mount sits between writing and assembling
@@ -45,10 +61,13 @@
 # It must sit in a tree with tools/ee/{ps2eeas_dli.awk,ps2eeas_dli_sites.txt,
 # move_fixup.sed}. Run against master's copy, the ADJ and TAIL refusal arms
 # must FAIL: that is the check that this selftest can fail. Against
-# f6c2bae9e's copy, EMPTY, STATIC st_cc1, LIKELY and SPELL must FAIL (task
-# #1147). EMPTY's exit-5 arm fails there on its message alone: f6c2bae9e
-# already refused a failing pass, as `REFUSED:`. SWAP and the rest pass there
-# too, since they pin what already held.
+# f6c2bae9e's copy, EMPTY, STATIC st_cc1, LIKELY, SPELL, and the ADJ/SWAP
+# refusal arms (by their text) must FAIL (tasks #1147, #1170). EMPTY's exit-5
+# arm fails there on its message alone: f6c2bae9e already refused a failing
+# pass, as `REFUSED:`. Against 81a8ba72f's copy (#1147), the EMPTY 0-byte and
+# comments-only arms and NORE's nomacro and slot-then-`jal` arms must FAIL.
+# The arms that pin what already held pass on every copy; that they can fail
+# is shown by mutants, not by an older tree (task #1170).
 #
 # Prints one line per arm and `asm_unit_selftest: N arms, F failed`.
 # Exit 0 only when F is 0.
@@ -88,6 +107,12 @@ verdict() {  # verdict <arm> <ok 0|1> <expected>
 refused() {  # a layout/adjacency refusal: rc 2, a FAIL line, no object
   [ "$RC" = 2 ] && [ "$FAILS" -ge 1 ] && [ "$OBJ" = 0 ] && echo 1 || echo 0
 }
+# passrefused <text> : refused by the dli pass's own message, which carries
+# <text>, then `No object written.`; no generic REFUSED or condition line
+passrefused() {
+  [ "$(refused)" = 1 ] && grep -qF "$1" "$T/err" && grep -qx '  No object written\.' "$T/err" \
+    && ! grep -q 'asm_unit\.sh: REFUSED:' "$T/err" && ! grep -q 'dli pass, condition' "$T/err" && echo 1 || echo 0
+}
 accepted() {  # rc 0, no FAIL line, an object
   [ "$RC" = 0 ] && [ "$FAILS" = 0 ] && [ "$OBJ" = 1 ] && echo 1 || echo 0
 }
@@ -118,9 +143,7 @@ seed nadj_unl  "\t.text\n\t.globl\tfunc_00123456\n\t.ent\tfunc_00123456\nfunc_00
 for G in -G0 -G8; do
   for s in adj_j adj_app adj_bne adj_crlf; do
     run $s $G
-    ok=$(refused)
-    [ "$ok" = 1 ] && ! grep -q 'FACT #8623' "$T/err" && ok=0
-    verdict "ADJ $s $G" "$ok" "refused (rc 2, FAIL naming FACT #8623, no object)"
+    verdict "ADJ $s $G" "$(passrefused 'FACT #8623')" "refused by the pass (rc 2, FAIL naming FACT #8623, 'No object written.', no REFUSED/condition line)"
   done
   for s in nadj_addu nadj_nore nadj_lab; do
     run $s $G
@@ -206,9 +229,10 @@ EB=$(tree eb);  printf 'END { if (!count) exit 5 }\n' >> "${EB%/asm_unit.sh}/ps2
 EN=$(tree en);  printf 'BEGIN { if (count) { print "7 7 0 0"; exit 0 } }\n' > "${EN%/asm_unit.sh}/ps2eeas_dli.awk"
 ED=$(tree ed);  printf 'BEGIN { if (count) { print "7 7 0 0"; exit 0 } }\nNR %% 2 { print }\n' > "${ED%/asm_unit.sh}/ps2eeas_dli.awk"
 for G in -G0 -G8; do
-  run nadj_addu $G "$E0"; verdict "EMPTY 0-byte allowlist $G" "$(dlifail '(a)')" "refused, condition (a), no object"
-  run nadj_addu $G "$EC"; verdict "EMPTY comments-only allowlist $G" "$(dlifail '(a)')" "refused, condition (a), no object"
-  run nadj_addu $G "$EM"; verdict "EMPTY all-malformed allowlist $G" "$(dlifail '(a)')" "refused, condition (a), no object"
+  # each of the three (a) cases by its own line (task #1170: they were one)
+  run nadj_addu $G "$E0"; verdict "EMPTY 0-byte allowlist $G" "$(dlifail '(a): the allowlist is 0 bytes')" "refused, condition (a) '0 bytes', no object"
+  run nadj_addu $G "$EC"; verdict "EMPTY comments-only allowlist $G" "$(dlifail '(a): the allowlist holds no row, only comments')" "refused, condition (a) 'only comments', no object"
+  run nadj_addu $G "$EM"; verdict "EMPTY all-malformed allowlist $G" "$(dlifail '(a): no valid row (2 malformed')" "refused, condition (a) '2 malformed', no object"
   run nadj_addu $G "$EB"; ok=$(refused); grep -q 'exited 5' "$T/err" || ok=0
   verdict "EMPTY pass exits 5 $G" "$ok" "refused (rc 2, FAIL naming exit 5, no object)"
   run nadj_addu $G "$EN"; verdict "EMPTY pass prints nothing $G" "$(dlifail '(c)')" "refused, condition (c), no object"
@@ -251,15 +275,54 @@ done
 for B in 'j $31' 'j $L9' 'jal foo' 'jalr $25' 'jalr $31,$25' 'jr $5' 'b $L9' 'beq $5,$0,$L9' 'bne $5,$0,$L9' 'beqz $5,$L9' 'bnez $5,$L9' 'blez $5,$L9' 'bgez $5,$L9' 'bgtz $5,$L9' 'bltz $5,$L9' 'bgezal $5,$L9' 'bltzal $5,$L9' 'bc0f $L9' 'bc0t $L9' 'bc1f $L9' 'bc1t $L9'; do
   printf "$FN0$DLI\t${B%% *}\t${B#* }\n\taddu\t\$2,\$2,\$5\n\$L9:\n\tj\t\$31\n$FN1" > "$T/sw.s"
   for G in -G0 -G8; do
-    run sw $G; ok=$(refused); grep -q 'FACT #8623' "$T/err" || ok=0
-    verdict "SWAP ${B%% *} ${B#* } $G" "$ok" "refused (rc 2, FAIL naming FACT #8623, no object)"
+    run sw $G
+    verdict "SWAP ${B%% *} ${B#* } $G" "$(passrefused 'FACT #8623')" "refused by the pass (rc 2, FAIL naming FACT #8623, 'No object written.', no REFUSED/condition line)"
   done
 done
 
-# --- SPELL: one list of memop mnemonics (FACT #8616) -------------------------
-N=$((N + 1)); c=$(grep -c 'sw|sh|sb|sd|lw|lh|lhu|lb|lbu|ld' "$AU" || true)
-if [ "$c" = 1 ]; then echo "PASS SPELL: the memop mnemonic list is spelled once in \$AU"
-else F=$((F + 1)); echo "FAIL SPELL: expected the memop mnemonic list spelled once in \$AU; got $c lines"; fi
+# --- NORE: a listed dli emitted under .set noreorder (task #1170) -------------
+# FACT #8672's seed and control, verbatim but for the function's .align/.globl
+NS='\t.set\tnoreorder\n\t.set\tnomacro\n\tjal\tfoo\n'"$DLI"'\t.set\tmacro\n\t.set\treorder\n\n'
+seed nore_q2    "$FN0$NS\tjal\tbar\n\tj\t\$31\n$FN1"
+seed nore_q2ctl "$FN0$NS\taddu\t\$2,\$2,\$5\n\tjal\tbar\n\tj\t\$31\n$FN1"
+# no nomacro: what Ps2EeAs.exe 1.9.25.758 assembled the same input to
+NO='\t.set\tnoreorder\n\tjal\tfoo\n'"$DLI"'\t.set\treorder\n'
+seed nore_jal  "$FN0$NO\n\tjal\tbar\n\tj\t\$31\n$FN1"
+seed nore_bnel "$FN0$NO\n\tbnel\t\$5,\$0,\$L9\n\taddu\t\$2,\$2,\$5\n\$L9:\n\tj\t\$31\n$FN1"
+seed nore_addu "$FN0$NO\taddu\t\$2,\$2,\$5\n\tj\t\$31\n$FN1"
+seed nore_blk  "$FN0\t.set\tnoreorder\n\taddu\t\$3,\$3,\$5\n$DLI\taddu\t\$2,\$2,\$5\n\t.set\treorder\n\tj\t\$31\n$FN1"
+for G in -G0 -G8; do
+  for s in nore_q2 nore_q2ctl; do
+    run $s $G; ok=$(passrefused 'is under `.set nomacro`'); grep -q 'moves the expansion' "$T/err" && ok=0
+    verdict "NORE $s $G" "$ok" "refused by the nomacro message (FACT #8698), no swap message, 'No object written.'"
+  done
+  for a in "nore_jal:0c000000 $PS2 0c000000 00000000 03e00008 00000000" \
+           "nore_bnel:0c000000 $PS2 54a00002 00000000 00451021 03e00008 00000000" \
+           "nore_addu:0c000000 $PS2 00451021 03e00008 00000000" \
+           "nore_blk:00651821 $PS2 00451021 03e00008 00000000"; do
+    run ${a%%:*} $G; ok=$(accepted); [ "$WORDS" = "${a#*:}" ] || ok=0
+    verdict "NORE ${a%%:*} $G" "$ok" "assembled, exactly Ps2EeAs's words [${a#*:}]"
+  done
+done
+
+# --- SPELL: one memop list, seen by both its readers (FACT #8616, #8689) -----
+# (1) the spelling: code lines (not comments) carrying an alternation with two
+# or more memop mnemonics. MEMOP_MN is the one; a copy of any content is a second.
+N=$((N + 1))
+c=$(grep -v '^[[:space:]]*#' "$AU" | grep -oE '[a-z0-9.]+(\|[a-z0-9.]+)+' \
+  | awk -F'|' '{ m = 0; for (i = 1; i <= NF; i++) if ($i ~ /^(sw|sh|sb|sd|lw|lh|lhu|lb|lbu|ld)$/) m++; if (m >= 2) n++ } END { print n + 0 }')
+if [ "$c" = 1 ]; then echo "PASS SPELL count: one memop alternation on a code line of \$AU"
+else F=$((F + 1)); echo "FAIL SPELL count: expected one memop alternation on a code line of \$AU; got $c"; fi
+# (2) the content: each cc1 memop, bare in a bnel slot, is the slot rule's
+# (1 WARNING); with a trailing comment it is the layout scan's (refused).
+for m in sw sh sb sd lw lh lhu lb lbu ld; do
+  seed sp_bare "$TB\t$m\t\$3,g_hx\n$TE"
+  seed sp_cmt  "$TB\t$m\t\$3,g_hx\t# c\n$TE"
+  run sp_bare -G8; ok=$(accepted); [ "$WARNS" = 1 ] || ok=0
+  verdict "SPELL $m bare -G8" "$ok" "rc 0, 1 WARNING (MEMOP_RE keys it)"
+  run sp_cmt -G8
+  verdict "SPELL $m tail -G8" "$(refused)" "refused (the scan's mem keys it)"
+done
 
 echo "asm_unit_selftest: $N arms, $F failed ($AU)"
 [ "$F" = 0 ]

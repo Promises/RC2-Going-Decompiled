@@ -311,7 +311,9 @@ cd "$FIXROOT"
 # INCLUDE_ASM body is never touched. A malformed allowlist row emits an `.error`.
 # A listed `dli` directly before a non-likely reorder-mode branch is REFUSED,
 # because GNU as slots the expansion's last word where Ps2EeAs does not (FACT
-# #8623, FACT #8653; the awk's header has the measured branch lists).
+# #8623, FACT #8653; the awk's header has the measured branch lists). So is a
+# listed `dli` under `.set nomacro`, which Ps2EeAs rejects (FACT #8698, task
+# #1170). Each prints its own `asm_unit.sh: FAIL:` line naming the site.
 #
 # `as` fed an empty stream still writes a valid-looking object at rc 0, so the
 # pass is checked from outside as well as by its own status. Each of these is
@@ -320,7 +322,9 @@ cd "$FIXROOT"
 #   (a) the allowlist has no valid row - 0 bytes, comments only, or every row
 #       malformed. A 0-byte file used to make the pass swallow the whole unit
 #       and exit 0 (FACT #8640); a comment-only one transformed nothing, so every
-#       dli control measured GNU's output while reporting success;
+#       dli control measured GNU's output while reporting success. Each of the
+#       three prints its own line (task #1170): a truncated file and a
+#       deliberately emptied one are different repairs;
 #   (b) the pass (or the rule pass before it, at -G8) exits non-zero;
 #   (c) the pass prints nothing, or fewer lines than it read. It only ever
 #       replaces a line with more lines, so fewer means input was lost. (A
@@ -347,7 +351,10 @@ DLICOUNT="$(awk -v count=1 -v sites="$DLISITES" -f "$DLIAWK" < /dev/null)" \
 DLIROWS="${DLICOUNT%% *}"
 case "$DLIROWS" in
   ''|*[!0-9]*) dli_fail "(a): the allowlist count printed '$DLICOUNT', not a row count" ;;
-  0) dli_fail "(a): no valid row ($(echo "$DLICOUNT" | awk '{ print $4 }') malformed, duplicate or unspellable)" ;;
+  0) DLIBAD="$(echo "$DLICOUNT" | awk '{ print $4 }')"
+     if [ ! -s "$DLISITES" ]; then dli_fail "(a): the allowlist is 0 bytes (truncated or emptied)"
+     elif [ "$DLIBAD" = 0 ]; then dli_fail "(a): the allowlist holds no row, only comments or blank lines"
+     else dli_fail "(a): no valid row ($DLIBAD malformed, duplicate or unspellable)"; fi ;;
 esac
 DLIIN="$(mktemp)"; DLIOUT="$(mktemp)"
 PRERC=0
@@ -652,7 +659,7 @@ DLIRC=0
 awk -v region="$REGION" -v sites="$DLISITES" -f "$DLIAWK" < "$DLIIN" > "$DLIOUT" || DLIRC=$?
 case "$DLIRC" in
   0) ;;
-  3) # the adjacency refusal: the pass has printed `asm_unit.sh: FAIL:` itself
+  3) # an adjacency or nomacro refusal: the pass has printed `asm_unit.sh: FAIL:` itself
     echo "  input: $UNIT_S (-G: $GFLAG)" >&2
     echo "  No object written." >&2
     rm -f "$DLIIN" "$DLIOUT" "$OUT_O"; exit 2 ;;

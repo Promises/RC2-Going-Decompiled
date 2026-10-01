@@ -54,11 +54,28 @@
 # bc1f, bc1t - and is refused. No branch-LIKELY form swaps (GNU never fills an
 # annulled slot from before the branch): beql, bnel, beqzl, bnezl, blezl,
 # bgezl, bgtzl, bltzl, bgezall, bltzall, bc0fl, bc0tl, bc1fl, bc1tl assemble in
-# the dli's order with a nop in the slot, which is the order Ps2EeAs is
-# described to keep, so they are not refused. That equality with Ps2EeAs is
-# inferred from FACT #8623's description, not ROM-measured at a likely branch.
-# A branch mnemonic outside both lists is refused, since it is unmeasured. Not
-# covered: a listed dli inside a `.set noreorder` region (e.g. in a delay slot).
+# the dli's order with a nop in the slot, which is the order Ps2EeAs keeps:
+# measured on Ps2EeAs.exe itself for bnel, beql and bc1fl (FACT #8688); the
+# other 11 likely forms are inferred from FACT #8623, and none is ROM-measured at
+# a likely branch. They are not refused. A branch mnemonic outside both lists is
+# refused, since it is unmeasured. Only a dli emitted in REORDER mode arms the
+# refusal: GNU as never moves an instruction emitted under `.set noreorder` into
+# a later delay slot (FACT #8672: the second `jal`'s slot stays a nop).
+#
+# NOMACRO REFUSAL (task #1170). A listed dli under `.set nomacro` is refused
+# (exit 3, its own `asm_unit.sh: FAIL:` line). cc1 brackets every delay-slot
+# fill in `.set noreorder` + `.set nomacro` (FACT #8698), and there Ps2EeAs.exe
+# rejects a multi-word dli (`error: Macro expansion is disabled`, rc 3), while
+# GNU as expands it with only its first word in the slot and a warning. Every
+# listed dli is multi-word: a 1-word dli has the same words on both assemblers,
+# so it is never a row (FACT #8698). Substituting the row's words would give an
+# object for an input the ROM's assembler, if it is Ps2EeAs, does not assemble,
+# and would silence GNU's warning. cc1 2.9 was not seen to emit this (0 of 8
+# probe contexts, FACT #8698). A listed dli under `.set noreorder` WITHOUT
+# nomacro is substituted: Ps2EeAs assembles it, a delay slot taking only the
+# first word, and its words equal this pass's for a `jal` slot followed by an
+# addu, a reorder `jal` or a reorder `bnel`, and for a non-slot noreorder block
+# (task #1170, Ps2EeAs 1.9.25.758, one literal).
 #
 # Only a TAB-laid `\tdli\t` line matches, which is cc1's layout. Splat's asm
 # carries no `dli` at all (it prints the expanded words), so INCLUDE_ASM code
@@ -149,6 +166,8 @@ BEGIN {
   line = $0; sub(/\r$/, "", line)
   if (line ~ /^[ \t]*\.set[ \t]+noreorder([ \t#]|$)/) nore = 1
   else if (line ~ /^[ \t]*\.set[ \t]+reorder([ \t#]|$)/) nore = 0
+  else if (line ~ /^[ \t]*\.set[ \t]+nomacro([ \t#]|$)/) nomac = 1
+  else if (line ~ /^[ \t]*\.set[ \t]+macro([ \t#]|$)/) nomac = 0
   # ADJACENCY (see header): `held` is the listed site printed last, until the
   # next instruction or label shows whether a reorder-mode branch follows it.
   if (held != "") {
@@ -173,18 +192,23 @@ BEGIN {
   } else if (fn != "" && line ~ /^\tdli\t/) {
     ops = line; sub(/^\tdli\t/, "", ops); sub(/[ \t#].*$/, "", ops)
     key = region SUBSEP fn SUBSEP normops(ops)
-    if (key in sites_) {
+    if (key in sites_ && nomac) {
+      printf "asm_unit.sh: FAIL: listed dli %s in %s (ROM %s, line %d) is under `.set nomacro`, where Ps2EeAs rejects a multi-word dli (`Macro expansion is disabled`) and GNU as would put only the expansion's first word in a delay slot; this pass does not substitute it (FACT #8698, task #1170, RULING #8549)\n", ops, fn, addr[key], FNR | "cat 1>&2"
+      refused++
+    } else if (key in sites_) {
       printf "\t# ps2eeas_dli_sites.txt %s: dli %s (ROM %s, RULING #8549)\n", fn, ops, addr[key]
       printf "%s", sites_[key]
-      held = "listed dli " ops " in " fn " (ROM " addr[key] ", line " FNR ")"
+      # only a reorder-mode dli can lose a word to a later slot (see ADJACENCY)
+      if (!nore) held = "listed dli " ops " in " fn " (ROM " addr[key] ", line " FNR ")"
       next
     }
   }
   print
 }
 
-# The whole unit is still printed, so `as` reads a complete file and its own
-# diagnostics stay meaningful; the non-zero status is what fails the unit.
+# The whole unit is still printed (a nomacro-refused dli as cc1 wrote it), so
+# `as` reads a complete file and its own diagnostics stay meaningful; the
+# non-zero status is what fails the unit.
 END {
   if (refused) { close("cat 1>&2"); exit 3 }
 }
