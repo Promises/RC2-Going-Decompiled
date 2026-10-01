@@ -7,6 +7,8 @@ Eight function bodies in the SDK region are emitted by splat as raw `.word`
 directives rather than instructions. They are not padding and not data: they are
 complete, well-formed functions. `func_00131DE8` (= `snd_Init`) opens
 `addiu sp,sp,-64`, spills s0-s4 and ra, and closes `jr ra` + `addiu sp,sp,64`.
+(Since task #1255 splat emits snd_Init and snd_BankLoadFromEE_CB decoded under
+those names, so their listings are gone; the other bodies are unchanged.)
 
 The bytes are correct and the build is unaffected -- a `.word` assembles to the
 same word. What is lost is READABILITY: every instruction-level tool in this tree

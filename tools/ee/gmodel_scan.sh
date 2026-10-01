@@ -24,9 +24,10 @@
 # bytes in memory order on a disassembled line; on a raw `.word 0x...` line the
 # operand (the value that is assembled) is decoded instead. A gp word is an I-type with base rs == $28 whose opcode is
 # addiu/daddiu or a load/store (lq/sq, lb..sd, lwc1/swc1, ...). Why not grep
-# `%gp_rel`: splat prints some functions as raw `.word`s, and there the
-# annotation is absent — USA func_00131DE8 (snd_Init, 8 gp words, cod/021A98)
-# and func_001325E8 (6, cod/0321A0) read 0 by grep. Measured at a709057e: the
+# `%gp_rel`: splat can print a function as raw `.word`s, and there the
+# annotation is absent — at a709057e USA func_00131DE8 (snd_Init, 8 gp words,
+# cod/022FA8) and func_001325E8 (snd_BankLoadFromEE_CB, 6, cod/0321A0) read 0 by
+# grep; since task #1255 both are emitted decoded under their symbol_addrs names. Measured at a709057e: the
 # word count equals the %gp_rel line count in every other file (USA 2719 of
 # 2721, EU 2166 of 2166), so the decode is the annotation plus those two.
 #

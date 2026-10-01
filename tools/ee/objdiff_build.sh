@@ -59,7 +59,7 @@
 # the asm tree) is >= ENGINE_BOUNDARY=0x131D98, the first 8-byte-slot function
 # in the ROM (project_cc1_subbuild_lead: 16-byte slots end at 0x131A98). Measured
 # over every unit's frozen asm (tools/ee/.t276/slot_census.py): cod/015180
-# (0x115200..) is 16-byte apart from 3 members (func_00120BD0, main, snd_Pump);
+# (0x115200..) is 16-byte apart from 3 members (throw_helper (was func_00120BD0), main, snd_Pump);
 # every other unit is 8-byte only. A unit below the boundary never gets an engine
 # arm; a unit above it gets one only when it carries at least one MATCH_ guard.
 # The TARGET object is pure INCLUDE_ASM and is built once, by the 2.9 pipeline.
@@ -263,7 +263,7 @@ fi
 # GUARD CHECK 2 (host-only): a guard in a unit BELOW ENGINE_BOUNDARY is inert —
 # no engine arm is ever built there, so the guard owns nothing however it is
 # spelled. Bound this makes visible rather than fixes: cod/015180 carries
-# 8-byte-slot members (func_00120BD0, main, snd_Pump) below the unit predicate;
+# 8-byte-slot members (throw_helper (was func_00120BD0), main, snd_Pump) below the unit predicate;
 # they cannot be engine-gated without a per-function override, and this check
 # says so loudly instead of letting such a guard read as effective.
 if [ "$REGION_CLASS" != engine ] && [ -n "$GUARDS" ]; then

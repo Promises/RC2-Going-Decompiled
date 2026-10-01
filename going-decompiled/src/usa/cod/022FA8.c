@@ -349,6 +349,12 @@ u8 *func_00123578(u8 *src, s32 *out) {
     return src;
 }
 
+/* symbol_addrs names these two decode_uleb128 / decode_sleb128 (libgcc frame.o
+ * statics), and the regenerated extract_cie_info / execute_cfa_insn /
+ * __frame_state_for leaves call them by those names (task #1255). */
+INCLUDE_ASM_ALIAS(decode_uleb128, func_00123530);
+INCLUDE_ASM_ALIAS(decode_sleb128, func_00123578);
+
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", fde_merge);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", end_fde_sort);
@@ -2574,7 +2580,8 @@ void GameMain(void) {
 }
 #endif
 
-// recovered splat-dropped code (epilogue-stump mis-split): raw words, byte-exact
+// recovered splat-dropped code (epilogue-stump mis-split), byte-exact. A raw .word dump
+// while it was func_00131DE8; decoded instructions since the rename (task #1255).
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", snd_Init);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", snd_Pump);

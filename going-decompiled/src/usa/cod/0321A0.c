@@ -241,7 +241,8 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00
 
 /* func_001325E8 = snd_BankLoadFromEE_CB (0x1325E8): recovered splat-dropped
  * function (spimdisasm emitted no .s — reached by fallthrough/data-ref).
- * Raw words, byte-exact; recovers the 0xF0 that shifted cod rodata/jtbls -0xF0. */
+ * Byte-exact; recovers the 0xF0 that shifted cod rodata/jtbls -0xF0. A raw .word
+ * dump while it was func_001325E8; decoded instructions since the rename (task #1255). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", snd_BankLoadFromEE_CB);
 
 /* snd_BankLoadFromIOP: request a sound-bank load already resident on the IOP
