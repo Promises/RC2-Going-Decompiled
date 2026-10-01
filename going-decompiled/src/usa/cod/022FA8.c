@@ -60,7 +60,7 @@ s32 func_00123028(s64 a, s64 b) {
  * tester-EE rather than a vacuous standalone oracle.
  */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00123078);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", litodp);
 #else
 s64 func_00123078(s32 x) {
     FpParts parts;
@@ -221,7 +221,7 @@ void func_00123298(s64 a) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001232EC);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001232F0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", __pack_f);
 
 /* Decomposed IEEE-754 single produced by func_00123400 (32-bit fields). */
 typedef struct {
@@ -239,7 +239,7 @@ typedef struct {
  * Seedable (float bits -> SpParts): shipped as a cmp-oracle'd portable #else
  * (asm-vs-C proven bit-identical on real R5900 by run_cmp_015180_iso.sh). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00123400);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", __unpack_f);
 #else
 s32 func_00123400(u32 *src, SpParts *out) {
     u32 bits = src[0];
@@ -346,25 +346,25 @@ u8 *func_00123578(u8 *src, s32 *out) {
     return src;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001235C8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", fde_merge);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001236C8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", end_fde_sort);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00123930);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", count_fdes);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00123978);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", add_fdes);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00123A00);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", frame_init);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00123B40);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", find_fde);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00123C28);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", extract_cie_info);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00123D30);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", execute_cfa_insn);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001240C8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", __frame_state_for);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001242A0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", fde_split);
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00124414);
 
@@ -2149,7 +2149,7 @@ void func_00130E20(s32 chcr) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00130E88);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001310C0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", e_sqrt);
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001313C4);
 
@@ -2572,7 +2572,7 @@ void GameMain(void) {
 #endif
 
 // recovered splat-dropped code (epilogue-stump mis-split): raw words, byte-exact
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00131DE8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", snd_Init);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", snd_Pump);
 

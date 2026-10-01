@@ -110,7 +110,7 @@ s32 func_00120500(void) {
     return D_00135D38() + 4;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0202D8", func_00120528);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0202D8", __sjthrow);
 
 /**
  * Accessor: return the s16 at arg0 + 0x6 (arg0[3]).
@@ -126,15 +126,15 @@ s16 func_00120808(s16 *arg0) {
     return arg0[2];
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0202D8", func_00120810);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0202D8", old_find_exception_handler);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0202D8", func_001208E8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0202D8", find_exception_handler);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0202D8", func_00120A30);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0202D8", get_reg_addr);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0202D8", func_00120AB8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0202D8", copy_reg);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0202D8", func_00120B38);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0202D8", next_stack_level);
 
 /**
  * No-op stub (empty body; present as a registered/overridable hook).
@@ -142,11 +142,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0202D8", func_00120B38);
 void func_00120BC8(void) {
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0202D8", func_00120BD0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0202D8", throw_helper);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0202D8", func_00120F00);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0202D8", __throw);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0202D8", func_001210E0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0202D8", __rethrow);
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0202D8", func_001212C4);
 

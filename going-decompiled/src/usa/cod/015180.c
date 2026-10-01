@@ -91,11 +91,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", memcpy);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", memset);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115544);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", strcmp);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115690);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001157AC);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", strlen);
 
 /* 0xCDCDCDCD inter-function-fill class. Each of these symbols is one or more
  * leading 0xCDCDCDCD debug-fill words (sometimes with dead stores/nops) emitted
@@ -160,7 +160,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_001158F8);
  * words differ. No other libc.a revision is present in the tree (searched),
  * and no vendored object contains the ROM's dsll $7,$7,9 idiom.
  * USA and EU are identical here (same vaddr, same instructions). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115AC0);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", strncpy);
 
 /* func_00115C90: clears D_00133E78, calls func_0011B270(arg1); on failure
  * (-1) writes the resulting D_00133E78 error code back through arg0. Logic
@@ -172,11 +172,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115CF0);
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115D38);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115D48);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", snd_PrintError);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115DA8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sprintf);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115E28);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", abort);
 
 /**
  * AssertFail (EU names it) — the SDK assert handler. NEVER RETURNS.
@@ -228,7 +228,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115E68);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", exit_runAtexitHandlers);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115F28);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", malloc);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00115F78);
 

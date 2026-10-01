@@ -156,6 +156,11 @@ SYMS="$BUILD/undefined_syms_auto.txt"
 # auto-symbols by address). Resolves references it didn't emit labels for.
 ALLSYMS="$BUILD/all_addr_syms.ld"
 grep -rhoE '(D_|func_)[0-9A-Fa-f]{4,}' "$ASM" | sort -u | sed -E 's/^(D_|func_)([0-9A-Fa-f]+)$/\1\2 = 0x\2;/' > "$ALLSYMS"
+# Address-named spellings only the C sources still use. A symbol_addrs rename moves
+# splat's label to the new name, while C bodies keep calling func_<hex> / using
+# D_<hex>; the address is in the name. PROVIDE, so a name an object defines is
+# left alone (a plain assignment overrides object-local defs, see overlay_package.sh).
+grep -rhoE '(D_|func_)[0-9A-Fa-f]{4,}' "$SRC" | sort -u | sed -E 's/^(D_|func_)([0-9A-Fa-f]+)$/PROVIDE(\1\2 = 0x\2);/' >> "$ALLSYMS"
 # jtbl_<hex>_text jump-table symbols (address encoded in the name): splat
 # references them by name from the code but does not emit a label, and the
 # D_/func_ blanket above does not cover them. Define each at its named address.

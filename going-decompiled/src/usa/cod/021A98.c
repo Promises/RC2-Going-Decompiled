@@ -95,7 +95,7 @@ typedef struct {
  * (asm-vs-C proven bit-identical on real R5900 by run_cmp_015180_iso.sh).
  */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/021A98", func_00122630);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/021A98", __pack_d);
 #else
 s64 func_00122630(FpParts *p) {
     s32 cls = p->fpClass;
@@ -163,7 +163,7 @@ s64 func_00122630(FpParts *p) {
  * (asm-vs-C proven bit-identical on real R5900 by run_cmp_015180_iso.sh).
  */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/021A98", func_00122760);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/021A98", __unpack_d);
 #else
 void func_00122760(s64 *value, FpParts *out) {
     u64 v = *(u64 *)value;
@@ -219,7 +219,7 @@ extern FpParts D_00141810;
  * the real R5900 (run_cmp_015180_iso.sh, incl. the inf-inf NaN path that reads
  * D_00141810). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/021A98", func_00122800);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/021A98", _fpadd_parts);
 #else
 FpParts *func_00122800(FpParts *a, FpParts *b, FpParts *out) {
     s32 clsA, clsB;
@@ -391,7 +391,7 @@ s64 func_00122A98(s64 a, s64 b) {
  * D_00141810). The product mantissa is built from four 32x32 partial products
  * via __muldi3 exactly as the original does. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/021A98", func_00122B00);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/021A98", dpmul);
 #else
 extern s64 __muldi3(s64 a, s64 b);
 
@@ -507,7 +507,7 @@ s64 func_00122B00(s64 a, s64 b) {
  * TARGET_NATIVE #else, cmp-oracle'd asm-vs-C bit-identical on the real R5900
  * (incl. the inf/inf and 0/0 NaN paths reading D_00141810). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/021A98", func_00122DA8);
+INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/021A98", dpdiv);
 #else
 s64 func_00122DA8(s64 a, s64 b) {
     FpParts pa, pb;
