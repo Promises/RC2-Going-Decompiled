@@ -111,7 +111,10 @@ _Static_assert(sizeof(GuiInstance) == 0x2238, "GuiInstance occupies game-state[0
  *    replacement decimals were read off a direct cc1 2.96 probe
  *    (tools/ee/.t566/probe/ulp.c), not guessed - a +1 ULP decimal overshoots as
  *    often as it lands. Both pi uses must be spelled identically or cc1 stops
- *    CSE-ing them and materialises pi twice.
+ *    CSE-ing them and materialises pi twice. pi is 3.1415927411f, which is
+ *    0x40490FDB on cc1 2.96, cc1 2.9 and native clang alike (measured, task
+ *    #1243); the earlier 3.1415929f gave FDB only on 2.96 and was 1 ULP high
+ *    (0x40490FDC) on cc1 2.9 and on the native #else (FACT #8758).
  *  - GuiHermiteInterp computes a*(2t^3-3t^2) + a in the ROM's operand order;
  *    the folded "+ 1.0f" coefficient was a different expression. The FP
  *    register colouring left after that (85.59%) was closed by task #894 -
@@ -591,9 +594,9 @@ void func_0034F028(u8 *base, s32 baseX, s32 baseY, s32 shade) {
         f32 count = (f32)*(s32 *)((u8 *)&g_hudMobySpawnStart + 0x28);
         f32 angle = 2.0f * (f32)i;
         s32 x, y;
-        angle = angle * 3.1415929f;    /* 0x40490FDB pi - spelled +1 ULP (cc1 rounds 1 ULP low) */
+        angle = angle * 3.1415927411f; /* 0x40490FDB pi on cc1 2.96, cc1 2.9 and native (task #1243) */
         angle = angle / count;
-        angle = angle - 3.1415929f;    /* same spelling as the multiply so cc1 CSEs one pi */
+        angle = angle - 3.1415927411f; /* same spelling as the multiply so cc1 CSEs one pi */
         angle = angle + 1.5707964f;    /* 0x3FC90FDB pi/2 */
         x = baseX + (s32)(func_00283B30(angle) * (D_1AE6E4 * 74.0f)) + 0x69;
         y = baseY + (s32)(func_00283B48(angle) * (D_1AE6E8 * 74.0f)) + 0x64;
