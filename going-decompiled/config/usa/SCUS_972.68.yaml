@@ -347,7 +347,7 @@ segments:
       - [0x1849B0, asm, text/1849B0] # TILE C tail: SetVideoMode + GS-draw (0x2849B0..0x2885FF)
       - [0x188580, c, text/188580]   # -G8 sub-TU (0x288600..0x2888D7, 11 fns)
       - [0x188858, c, text/188858]   # -G8 -fno-gcse carve (0x2888D8..0x29086F, ~108 fns)
-      - [0x1907F0, c, text/1907F0]   # -G8 sub-TU (0x290870..0x2912B7, 14 fns)
+      - [0x1907F0, cpp, text/1907F0] # -G8 sub-TU, C++ (task #1258) (0x290870..0x2912B7, 14 fns)
       # RANKED-CARVE-PIPELINE TIER-1-B (2026-06-14): text/191238 -
       #   the .text mid 3 tile (vaddr 0x2912B8..0x29901F, 95 fns) retyped
       #   asm->c, built at -O2 -G8 -fno-gcse (later-cc1 gameplay/UI TU model).
