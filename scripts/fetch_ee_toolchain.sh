@@ -9,7 +9,10 @@
 # driver+libs but only the 2.95.2 `cc1`; we overlay the correct 2.9-ee-991111
 # `cc1`/`cpp` from the full SN ProDG package, and the same revision's `cc1plus`
 # (2.9-ee-991111b/r4, the C++ front end for src/<region>/**/*.cpp units, FACT
-# #8809) from decompme's ee-gcc2.9-991111 archive.
+# #8809) from decompme's ee-gcc2.9-991111 archive. The s136os arm's compilers
+# (SN 2.95.3 BUILD 1.36: cc1 for .c units, cc1plus for .cpp units; FACT #8810,
+# tools/ee/s136os_splice.sh) come from AngheloAlf's ProDG 3.01 tree, pinned to
+# one commit.
 #
 # EVERY DOWNLOAD IS SHA256-PINNED and a mismatch FAILS the fetch (exit 1, the
 # file is not installed). Hashes measured 2026-10-01 (task #1258) with
@@ -27,6 +30,9 @@ CPP_SHA256=8f282abc89a6d2281e87617a7de7ebb0edbdc8dbb02d3e0a9ecc5d4825146a19
 CXX_URL="https://github.com/decompme/compilers/releases/download/compilers/ee-gcc2.9-991111.tar.gz"
 CXX_URL_SHA256=9ebbb042eb1e5d33d772293c5e9286a54dbec29865a3d7fbb398c97436f33583
 CC1PLUS_SHA256=65b5134f24377544bb2e5d1d2dd3436807cc50ce2ce77d759e4fca1add18f9a4
+PRODG301="https://raw.githubusercontent.com/AngheloAlf/SN-Systems-ProDG_for_PS2_3.01/d74f6fe08d24e7cf0df48cb570d85ad04db167c5/usr/local/sce/ee/gcc/lib/gcc-lib/ee/2.95.3"
+S136_CC1_SHA256=0393bcd31f91a6b9f0255db97f1cc99eba78ee8fc003e9a04dfabed1ae1d522e
+S136_CC1PLUS_SHA256=78a0df900a396098986cbc97a8d3eab6dbbc587a343d4dbd22929a4112c003fb
 
 # verify FILE EXPECTED LABEL — exit 1 unless FILE's sha256 is EXPECTED.
 verify() {
@@ -80,5 +86,28 @@ if [ ! -f "$CC1DIR/cc1plus.exe" ]; then
 fi
 verify "$CC1DIR/cc1plus.exe" "$CC1PLUS_SHA256" "installed cc1plus.exe"
 
-echo "Installed: 2.9-ee-991111 cc1/cpp/cc1plus (matching) + 2.95.2 base under $DEST/cc"
-ls "$CC1DIR"
+# SN 2.95.3 BUILD 1.36 cc1 + cc1plus (the s136os arm, task #1284). The tree's
+# cc1.exe must be the s136 cc1 the arm was proven with (FACT #8810, 0393bcd3):
+# that identity, at the same pinned commit, is what makes its cc1plus the
+# sibling front end. The arm preprocesses with the 2.9 cpp above, so the 2.95.3
+# cpp.exe is not needed.
+S136DIR="$DEST/cc/lib/gcc-lib/ee/2.95.3"
+mkdir -p "$S136DIR"
+if [ ! -f "$S136DIR/cc1.exe" ]; then
+  curl -fsSL "$PRODG301/cc1.exe" -o "$TMP/s136cc1.exe"
+  verify "$TMP/s136cc1.exe" "$S136_CC1_SHA256" "ProDG 3.01 2.95.3 cc1.exe"
+  mv "$TMP/s136cc1.exe" "$S136DIR/cc1.exe"
+fi
+verify "$S136DIR/cc1.exe" "$S136_CC1_SHA256" "installed 2.95.3 cc1.exe"
+if [ ! -f "$S136DIR/cc1plus.exe" ]; then
+  echo "Fetching SN 2.95.3 v1.36 C++ front end: $PRODG301/cc1plus.exe"
+  curl -fsSL "$PRODG301/cc1.exe" -o "$TMP/s136cc1.idcheck.exe"
+  verify "$TMP/s136cc1.idcheck.exe" "$S136_CC1_SHA256" "ProDG 3.01 cc1.exe == our s136 cc1 (identity check)"
+  curl -fsSL "$PRODG301/cc1plus.exe" -o "$TMP/s136cc1plus.exe"
+  verify "$TMP/s136cc1plus.exe" "$S136_CC1PLUS_SHA256" "ProDG 3.01 2.95.3 cc1plus.exe"
+  mv "$TMP/s136cc1plus.exe" "$S136DIR/cc1plus.exe"
+fi
+verify "$S136DIR/cc1plus.exe" "$S136_CC1PLUS_SHA256" "installed 2.95.3 cc1plus.exe"
+
+echo "Installed: 2.9-ee-991111 cc1/cpp/cc1plus (matching) + SN 2.95.3 v1.36 cc1/cc1plus (s136os arm) + 2.95.2 base under $DEST/cc"
+ls "$CC1DIR" "$S136DIR"

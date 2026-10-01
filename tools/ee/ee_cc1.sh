@@ -16,6 +16,11 @@
 #                     ($CC296, default tools/ee/cc-296; objdiff_build.sh's
 #                     engine96 arm). The preprocessor is the 2.9 cpp on both
 #                     arms, as diff96.sh and objdiff_build.sh always did.
+#            s136     SN 2.95.3 BUILD 1.36: cc1.exe / cc1plus.exe under wibo
+#                     (tools/ee/s136os_splice.sh's per-function arm, FACT #8810;
+#                     the caller adds -fopt-stack). 2.9 cpp, as the splice
+#                     always used. Its cc1plus is the sibling of the held cc1
+#                     (same ProDG 3.01 tree, cc1 sha-identical; task #1284).
 # <cpp args> and <cc1 args> are word-split on purpose (no flag holds a space).
 #
 # THE C++ ARM (FACT #8809: cc1plus 2.9-ee-991111b/r4 emits the same code as cc1
@@ -71,13 +76,14 @@ if [ "${1:-}" = "--resolve" ]; then
   exit 0
 fi
 
-[ $# -eq 6 ] || { echo "usage: ee_cc1.sh <sdk29|engine96> <src.c|src.cpp> <out.i> <out.s> \"<cpp args>\" \"<cc1 args>\"" >&2; exit 2; }
+[ $# -eq 6 ] || { echo "usage: ee_cc1.sh <sdk29|engine96|s136> <src.c|src.cpp> <out.i> <out.s> \"<cpp args>\" \"<cc1 args>\"" >&2; exit 2; }
 ARM="$1"; SRC="$2"; OUT_I="$3"; OUT_S="$4"; CPPARGS="$5"; CC1ARGS="$6"
 
 WIBO=/usr/local/bin/wibo
 G=tools/ee/cc/lib/gcc-lib/ee/2.9-ee-991111
 CC296="${CC296:-tools/ee/cc-296}"
 B96="$CC296/lib/gcc-lib/ee/2.96-ee-001003-1"
+G136=tools/ee/cc/lib/gcc-lib/ee/2.95.3
 
 [ -f "$SRC" ] || fail "no source $SRC"
 sibling_check "$SRC"
@@ -88,7 +94,9 @@ case "$ARM/$SRCLANG" in
   sdk29/c++)    CC="$WIBO $G/cc1plus.exe" ;;
   engine96/c)   CC="$CC296/ld-2.3.6.so --library-path $CC296 $B96/cc1" ;;
   engine96/c++) CC="$CC296/ld-2.3.6.so --library-path $CC296 $B96/cc1plus" ;;
-  *) echo "ee_cc1.sh: unknown arm '$ARM' (sdk29|engine96)" >&2; exit 2 ;;
+  s136/c)       CC="$WIBO $G136/cc1.exe" ;;
+  s136/c++)     CC="$WIBO $G136/cc1plus.exe" ;;
+  *) echo "ee_cc1.sh: unknown arm '$ARM' (sdk29|engine96|s136)" >&2; exit 2 ;;
 esac
 # the compiler binary is the last word of $CC
 for w in $CC; do bin="$w"; done

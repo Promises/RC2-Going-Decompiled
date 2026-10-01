@@ -39,14 +39,23 @@
 #   - a malformed selector row, or a row repeated;
 #   - a row with no slot in <unit.s>, or a slot with no row (the source guard
 #     and the selector disagree);
-#   - <src> not a `.c` file: no SN 1.36 cc1plus is held (FACT #8810 "Not
-#     tested"), so a `.cpp` unit's member needs a decision, not a fallback;
-#   - the s136 cc1 missing, or not sha256 0393bcd3... (FACT #8810);
+#   - the unit's s136 front end missing or not its pinned sha256: a `.c` unit
+#     needs the SN 1.36 cc1 (0393bcd3..., FACT #8810), a `.cpp` unit the SN 1.36
+#     cc1plus (78a0df90..., task #1284). A `.cpp` unit NEVER falls back to cc1:
+#     an unprovisioned cc1plus is fatal (run scripts/fetch_ee_toolchain.sh);
+#   - the s136 compile failing (for C++ that includes any cc1plus diagnostic
+#     exit and a missing __gnu_compiled_cplusplus marker; ee_cc1.sh checks);
 #   - the s136os output has no single `.ent <fn>`..`.end <fn>` block;
 #   - SHAPE: the block switches section (rodata/data/sdata literal, jump table)
 #     or references a `$L` label it does not define (a `$LC` string/float
 #     literal). Those live outside the block and are not spliced, so such a
 #     function is out of this arm's domain until the rodata side is solved.
+# THE COMPILE is `tools/ee/ee_cc1.sh s136`, the one place the C/C++ rule lives:
+# a `.c` unit runs cpp + 1.36 cc1 (the command lines this helper ran before);
+# a `.cpp` unit runs cpp -lang-c++, ONE extern "C" wrapper, and 1.36 cc1plus
+# -fno-exceptions -fno-rtti — the same front-end handling as the unit's 2.9
+# compile. Measured codegen-identical to 1.36 cc1 on every selector member,
+# block for block (task #1284).
 # The block's own `$L<n>` labels are renamed `$L<n>_s136_<fn>` (still `$L`, so
 # local and absent from the symtab, as cc1's are) because both TUs number
 # their labels from the same counter.
@@ -99,10 +108,9 @@ if [ "${1:-}" = "--selftest" ]; then
 fi
 REGION="$1"; UNIT="$2"; SRC="$3"; UNIT_S="$4"; GFLAG="$5"; CC1EXTRA="${6:-}"
 SEL=tools/ee/s136os_functions.txt
-WIBO=/usr/local/bin/wibo
-G29=tools/ee/cc/lib/gcc-lib/ee/2.9-ee-991111
 G136=tools/ee/cc/lib/gcc-lib/ee/2.95.3
 CC1_136_SHA256=0393bcd31f91a6b9f0255db97f1cc99eba78ee8fc003e9a04dfabed1ae1d522e
+CC1PLUS_136_SHA256=78a0df900a396098986cbc97a8d3eab6dbbc587a343d4dbd22929a4112c003fb
 INC="-Igoing-decompiled/include -Igoing-decompiled/include/rtl/ee -Igoing-decompiled/include/rtl/common"
 CPPDEF="-D__GNUC__=2 -D__GNUC_MINOR__=9 -D__mips__ -D__mips=3 -D__R5900 -D__LANGUAGE_C -D_LANGUAGE_C -D__EE__ -DINCLUDE_ASM_USE_MACRO_INC=1"
 
@@ -129,19 +137,20 @@ NOROW="";  for f in $SLOTS; do printf '%s\n' "$ROWS" | /usr/bin/grep -qx "$f" ||
 [ -z "$NOSLOT" ] || fatal "selector row(s) with no S136OS_SLOT in $UNIT_S — re-predicate the guard in $SRC to !defined(S136OS_<fn>) with S136OS_SLOT(<fn>):" $NOSLOT
 [ -z "$NOROW" ] || fatal "S136OS_SLOT(s) with no row in $SEL — the function would be absent from the object:" $NOROW
 case "$SRC" in
-  *.c) ;;
-  *) fatal "$SRC is not a .c file; no SN 1.36 cc1plus is held, so its s136os rows cannot compile:" $ROWS ;;
+  *.c)   FE=cc1.exe;     FE_SHA256="$CC1_136_SHA256" ;;
+  *.cpp) FE=cc1plus.exe; FE_SHA256="$CC1PLUS_136_SHA256" ;;
+  *) fatal "$SRC is neither a .c nor a .cpp unit; its s136os rows cannot compile:" $ROWS ;;
 esac
-[ -f "$G136/cc1.exe" ] || fatal "$G136/cc1.exe missing (FACT #8810: provision the SN 2.95.3 v1.36 cc1)"
-SHA="$(sha256sum "$G136/cc1.exe" | awk '{print $1}')"
-[ "$SHA" = "$CC1_136_SHA256" ] || fatal "$G136/cc1.exe sha256 $SHA, not the s136 cc1 $CC1_136_SHA256"
+[ -f "$G136/$FE" ] || fatal "$G136/$FE missing — $SRC needs the SN 2.95.3 v1.36 $FE for its s136os rows (run scripts/fetch_ee_toolchain.sh); no fallback to another front end:" $ROWS
+SHA="$(sha256sum "$G136/$FE" | awk '{print $1}')"
+[ "$SHA" = "$FE_SHA256" ] || fatal "$G136/$FE sha256 $SHA, not the s136 $FE $FE_SHA256"
 
 TMP="${UNIT_S%.s}._s136"
 rm -rf "$TMP"; mkdir -p "$TMP"
 OUT="$UNIT_S"
 for f in $ROWS; do
-  "$WIBO" "$G29/cpp.exe" $CPPDEF $INC "-DS136OS_$f" "$SRC" "$TMP/$f.i" || fatal "cpp failed for $f"
-  "$WIBO" "$G136/cc1.exe" -quiet -O2 $GFLAG $CC1EXTRA -fopt-stack "$TMP/$f.i" -o "$TMP/$f.s" || fatal "s136 cc1 failed for $f"
+  sh tools/ee/ee_cc1.sh s136 "$SRC" "$TMP/$f.i" "$TMP/$f.s" "$CPPDEF $INC -DS136OS_$f" "-O2 $GFLAG $CC1EXTRA -fopt-stack" \
+    || fatal "s136 $FE compile failed for $f (ee_cc1.sh s136 $SRC)"
   # The block: the .align/.p2align/.globl/.text/.section .text directives cc1
   # prints right before `.ent <fn>`, through `.end <fn>`.
   awk -v fn="$f" -v out="$TMP/$f.blk" '
