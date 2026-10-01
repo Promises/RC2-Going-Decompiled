@@ -1359,10 +1359,12 @@ selftest_gmodel() {
     local G="$T/gmodel_tree"; rm -rf "$G"; mkdir -p "$G/going-decompiled/asm/$REGION"
     cp -R "going-decompiled/src" "$G/going-decompiled/src"
     ln -s "$ROOT/going-decompiled/asm/$REGION/nonmatchings" "$G/going-decompiled/asm/$REGION/nonmatchings"
-    local cf="$G/going-decompiled/src/$REGION/$unit.c"
+    # the unit's one source, .c or .cpp (task #1285; a bare $unit.c named a
+    # missing file for a converted unit, and grep -v of it seeded nothing)
+    local cf; cf=$(sh "$HERE/ee_cc1.sh" --resolve "$G/going-decompiled/src/$REGION/$unit") || { say "SELFTEST-BROKEN: (b) no source for $unit"; b=1; }
     /usr/bin/grep -vE "^[[:space:]]*INCLUDE_ASM\(\"[^\"]*\",[[:space:]]*$fn[[:space:]]*\)" "$cf" > "$cf.new"; mv "$cf.new" "$cf"
     FAILED=0; check_gmodel "$REGION" "$G" > "$T/gmodel_seed_promo.txt"
-    if [ "$FAILED" = 1 ] && [ "$(/usr/bin/grep '^       MISMATCH ' "$T/gmodel_seed_promo.txt" | awk '{print $2, $4}')" = "$unit $fn" ]; then ok "fired (b): $fn's INCLUDE_ASM removed from $unit.c -> $(/usr/bin/grep '^FAIL GMODEL' "$T/gmodel_seed_promo.txt" | sed 's/ — move the unit.*: / : /')"; else say "SELFTEST-FAIL (b) removing $fn's INCLUDE_ASM did not fail GMODEL naming only it (FAILED=$FAILED):"; show < "$T/gmodel_seed_promo.txt"; b=1; fi
+    if [ "$FAILED" = 1 ] && [ "$(/usr/bin/grep '^       MISMATCH ' "$T/gmodel_seed_promo.txt" | awk '{print $2, $4}')" = "$unit $fn" ]; then ok "fired (b): $fn's INCLUDE_ASM removed from ${cf##*/} -> $(/usr/bin/grep '^FAIL GMODEL' "$T/gmodel_seed_promo.txt" | sed 's/ — move the unit.*: / : /')"; else say "SELFTEST-FAIL (b) removing $fn's INCLUDE_ASM did not fail GMODEL naming only it (FAILED=$FAILED):"; show < "$T/gmodel_seed_promo.txt"; b=1; fi
   fi
   FAILED=0
   return $b

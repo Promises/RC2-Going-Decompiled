@@ -14,10 +14,13 @@
 # MUST stay in sync with the inline case in build.sh / objdiff_build.sh / diff.sh.
 unit_flags() {
   # A .cpp unit (task #1258) takes the flags of its .c spelling: the table is
-  # keyed once per unit, whatever its language.
-  case "$1" in *.cpp) c="${1%.cpp}.c" ;; *) c="$1" ;; esac
+  # keyed once per unit, whatever its language. The key has its own name: this
+  # file is SOURCED, so a plain `c` here overwrote the caller's `$c` — every
+  # caller loops `for c in …; do unit_flags "$c"` — and for a .cpp unit
+  # gmodel_scan.sh then grepped the nonexistent <unit>.c (task #1285).
+  case "$1" in *.cpp) unit_flags_key="${1%.cpp}.c" ;; *) unit_flags_key="$1" ;; esac
   GFLAG="-G0"; CC1EXTRA=""
-  case "$c" in
+  case "$unit_flags_key" in
     */cod/0321A0.c) GFLAG="-G8";;
     */usa/text/183178.c) GFLAG="-G8";;
     */usa/text/188580.c) GFLAG="-G8";;

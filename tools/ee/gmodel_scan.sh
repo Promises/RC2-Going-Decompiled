@@ -100,11 +100,15 @@ for c in $(/usr/bin/find "$SRC" \( -name '*.c' -o -name '*.cpp' \) | LC_ALL=C so
       total=$((total+n))
       [ "$GFLAG" = "-G0" ] || continue
       fn=$(basename "$s" .s)
-      if /usr/bin/grep -qE "^[[:space:]]*INCLUDE_ASM\(\"[^\"]*\",[[:space:]]*$fn[[:space:]]*\)" "$c"; then
-        echo "LATENT $unit $GFLAG $fn $n"
-      else
-        echo "MISMATCH $unit $GFLAG $fn $n"; bad=$((bad+1))
-      fi
+      # grep's rc is read three ways, never two: 2 (an unreadable source) used
+      # to fall into the else arm and print a MISMATCH for a function that is
+      # still INCLUDE_ASM (task #1285: a clobbered $c named <unit>.c for a .cpp).
+      /usr/bin/grep -qE "^[[:space:]]*INCLUDE_ASM\(\"[^\"]*\",[[:space:]]*$fn[[:space:]]*\)" "$c"; rc=$?
+      case $rc in
+        0) echo "LATENT $unit $GFLAG $fn $n" ;;
+        1) echo "MISMATCH $unit $GFLAG $fn $n"; bad=$((bad+1)) ;;
+        *) echo "gmodel_scan: cannot read $c (grep rc $rc)" >&2; exit 2 ;;
+      esac
     done
   fi
   echo "UNIT $unit $GFLAG $total"
