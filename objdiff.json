@@ -281,7 +281,7 @@
       "target_path": "going-decompiled/build/usa/expected/cod/033970.o",
       "base_path": "going-decompiled/build/usa/obj/cod/033970.o",
       "metadata": {
-        "source_path": "going-decompiled/src/usa/cod/033970.c",
+        "source_path": "going-decompiled/src/usa/cod/033970.cpp",
         "progress_categories": [
           "cod"
         ]
@@ -314,7 +314,7 @@
       "target_path": "going-decompiled/build/usa/expected/text/1823B8.o",
       "base_path": "going-decompiled/build/usa/obj/text/1823B8.o",
       "metadata": {
-        "source_path": "going-decompiled/src/usa/text/1823B8.c",
+        "source_path": "going-decompiled/src/usa/text/1823B8.cpp",
         "progress_categories": [
           "text"
         ]
@@ -347,7 +347,7 @@
       "target_path": "going-decompiled/build/usa/expected/text/188580.o",
       "base_path": "going-decompiled/build/usa/obj/text/188580.o",
       "metadata": {
-        "source_path": "going-decompiled/src/usa/text/188580.c",
+        "source_path": "going-decompiled/src/usa/text/188580.cpp",
         "progress_categories": [
           "text"
         ]
@@ -369,7 +369,7 @@
       "target_path": "going-decompiled/build/usa/expected/text/1907F0.o",
       "base_path": "going-decompiled/build/usa/obj/text/1907F0.o",
       "metadata": {
-        "source_path": "going-decompiled/src/usa/text/1907F0.c",
+        "source_path": "going-decompiled/src/usa/text/1907F0.cpp",
         "progress_categories": [
           "text"
         ]
