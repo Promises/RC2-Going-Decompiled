@@ -132,9 +132,10 @@ def ps2eeas_words(rows):
     The source travels INSIDE the command, as a quoted here-document written
     to a container-local mktemp dir, and never through the worktree mount.
     The old route (a host-written tools/ee/.ps2eeas_dli/sites.s read over the
-    VM's sshfs mount) handed Ps2EeAs a stale, truncated view in 2 of 4 runs
-    under build load, silently dropping trailing sites (FACT #8645, the
-    FACT #7464 trap). parse() admits only `$N,0x<hex>` operands, so no row can
+    VM's sshfs mount) handed Ps2EeAs a stale, truncated view, silently
+    dropping trailing sites (FACT #8645); the trigger is unidentified and
+    reader-dependent (FACT #8683), so the route was removed rather than
+    guarded. parse() admits only `$N,0x<hex>` operands, so no row can
     end the here-document or expand inside it. The container prints the md5 of
     the file it assembled; unless that equals the host's md5 of the source,
     Ps2EeAs did not see the rows being checked and the run is could-not-run.
