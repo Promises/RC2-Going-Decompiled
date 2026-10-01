@@ -7126,14 +7126,19 @@ s32 func_002B1BC8(void) {
  * Remaining platinum bolts: total collected (func_002B1C20) minus the
  * palette-cycle base counter (func_002B1BC8), clamped to [0, 40].
  */
-/* TODO(match): functional equivalent - save-layout wall ($16/$31 packed 8-byte
-   by the later cc1 vs 16-byte by the pinned cc1); the subtract and [0,40]
-   movz/movn clamp are otherwise exact. Revisit once the gameplay-TU compiler
-   is available. */
+/* Returns the remaining count in [0, 40]; takes no arguments.
+ * MATCHED on the s136os arm: the save layout ($16/$31 packed into 8-byte slots)
+ * that the pinned cc1 2.9 cannot emit (16-byte slots; the subtract and the
+ * [0,40] movz/movn clamp were otherwise exact) is SN 2.95.3 v1.36 -fopt-stack's
+ * (FACT #8810).
+ * GUARD (task #1257): on EE this C is the image's body, compiled alone by the
+ * s136os arm (tools/ee/s136os_functions.txt) and spliced over the S136OS_SLOT
+ * line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the slot. On
+ * native it is plain C, as before. */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 59.94%
    -> UNKNOWN-@8: ROM `addiu v1,zero,-1` vs `ld ra,8(sp)` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1BD8);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002B1BD8)
+S136OS_SLOT(func_002B1BD8);
 #else
 s32 func_002B1BD8(void) {
     s32 remaining = func_002B1C20() - func_002B1BC8();

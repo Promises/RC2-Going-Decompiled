@@ -1602,11 +1602,16 @@ s32 func_002CDF48(void *item) {
  * EU twin func_002CE0B0 (byte-identical; region-shifted call targets).
  * Routes to tester-EE: drives live map/GUI state + PlayGlobalSound; not
  * standalone cmp-oracle'able.
- * Wall: the selection (func_0029CFA0's return) is moved into a saved reg in the
+ * The selection (func_0029CFA0's return) is moved into a saved reg in the
  * delay slot of the NEXT call (jal func_0026F7D0; daddu $16,$2,$0 — captures $2
  * BEFORE func_0026F7D0 runs, i.e. func_0029CFA0's result), via the EE 64-bit
- * `daddu rd,rs,zero` move idiom (plus a 1-GPR packed save) — not reproduced from
- * clean C. Preserved as portable C. */
+ * `daddu rd,rs,zero` move idiom, with a 1-GPR packed save: cc1 2.9 emits all of
+ * it but the save stride (the TODO(match) note below), SN 2.95.3 v1.36
+ * -fopt-stack emits it byte-exact (FACT #8810).
+ * GUARD (task #1257): on EE this C is the image's body, compiled alone by the
+ * s136os arm (tools/ee/s136os_functions.txt) and spliced over the S136OS_SLOT
+ * line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the slot. On
+ * native it is plain C, as before. */
 extern s32 func_0029CFA0(s32 buttons);
 extern s32 func_0026F7D0(void);
 extern s32 func_0026F7D8(void);
@@ -1621,14 +1626,15 @@ extern s32 func_002CC908(s32 q);
 extern s32 func_002CCA18(s32 q);
 extern void PlayGlobalSound(s32 id, s32 a, s32 b);
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE0C8);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002CE0C8)
+S136OS_SLOT(func_002CE0C8);
 #else
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 97.25% -> SPLIT-HIREG,
  * first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 99.95% -> PACKED-SAVE, first differing row @1: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. */
-/* TODO(match): functional equivalent - not byte-exact. Each held compiler
+/* MATCHED on the s136os arm (task #1257). What follows is the record of the two
+ * arms that do not match, kept as measured. Each of those two compilers
  * reproduces what the other misses, and neither reproduces all of it.
  * sdk29 arm (cc1 2.9-ee-991111 -O2 -G8 -fno-gcse, solo) 99.95%: the whole residual
  * is 4 words, all save-stride: 0x2CE0CC/0x2CE1F8 frame -16/+16 vs -32/+32,
@@ -1643,11 +1649,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE0C8);
  * cc1 2.9 kept the 16-byte slot in all 17 of the 19 target variants screened that
  * compiled (-mabi=eabi/64/o64/n32, -mgp32/64, -mlong32/64, -mint64, -mfp32/64,
  * -msingle-float, -mips3/4, -mcpu=r5900/r4000, -m4650; -mabi=32 and -meabi exit
- * 33); the held 2.95.3/2.95.2 cc1s save with sq. Only target (-m) flags were screened: a -f/-O flag reaching
+ * 33); the held 2.95.3/2.95.2 cc1s save with sq (without -fopt-stack; with it,
+ * 2.95.3 v1.36 saves sd at the ROM's 8-byte stride, FACT #8810). Only target (-m) flags were screened: a -f/-O flag reaching
  * the 8-byte slot on 2.9 is untested, not ruled out. So this function's original
  * was built by an 8-byte-slot compiler, as objdiff_build.sh's two-compiler header
  * places every function above 0x131D98, and not by cc1 2.9 under any flag
- * screened; its body is nonetheless closer to our 2.9 than to our 2.96-001003. */
+ * screened; its body is nonetheless closer to our 2.9 than to our 2.96-001003.
+ * That compiler is SN 2.95.3 v1.36 with -fopt-stack (FACT #8810). */
 s32 func_002CE0C8(void) {
     s32 buttons = g_padButtonsPressed;
     s32 result = 0;
