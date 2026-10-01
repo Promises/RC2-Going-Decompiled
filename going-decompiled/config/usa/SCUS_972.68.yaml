@@ -319,7 +319,7 @@ segments:
       #   Re-derive: tools/ee/.t314/audit_carve_comments.py <config> -> the line
       #   is reported DISAGREE iff its comment vaddr != rom + segment delta.
       - [0x181228, asm, text/1812A8] # TILE A VU1 sphere-map island - handwritten (0x2812A8..0x2823B7)
-      - [0x182338, c, text/1823B8]   # TILE A render/draw-2D B (0x2823B8..0x2831F4)
+      - [0x182338, cpp, text/1823B8]   # TILE A render/draw-2D B (0x2823B8..0x2831F4)
       - [0x183178, c, text/183178]   # -G8 sub-TU (0x2831F8..0x2833C7, 12 fns)
       # RANKED-CARVE-PIPELINE TIER-1-A (2026-06-14): text/188858 -
       #   the .text mid 2 tile (vaddr 0x2888D8..0x29086F, ~108 fns) retyped
