@@ -1153,7 +1153,9 @@ extern s32 g_pWaterWaveGridsAbs[2], g_bWaterWavesActiveAbs;
 #define g_fxHooksPostCountAbs           g_fxHooksPostCount[0]
 #define g_fxHooksLateCountAbs           g_fxHooksLateCount[0]
 #define g_blobShadowCountAbs            g_blobShadowCount[0]
-#define g_screenFadeWhiteAbs            (*(struct { s32 level; s32 word[2]; } *)g_screenFadeWhite)
+/* named, not an anonymous struct in the cast: C++ forbids defining a type there */
+typedef struct { s32 level; s32 word[2]; } ScreenFadeWhiteView;
+#define g_screenFadeWhiteAbs            (*(ScreenFadeWhiteView *)g_screenFadeWhite)
 #define g_occlusionOverrideModeAbs      g_occlusionOverrideMode[0]
 #define g_pWaterWaveGridsAbs            g_pWaterWaveGrids
 #define g_bWaterWavesActiveAbs          g_bWaterWavesActive[0]

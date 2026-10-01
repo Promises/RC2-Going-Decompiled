@@ -1240,7 +1240,9 @@ s32 VerifySaveHeaderChecksum(void *image) {
 
 extern void FillMemory32(void *dst, s32 pattern, s32 nbytes);
 extern void *func_00283460(void *dst, const void *src, s32 nbytes); /* memcpy */
+#ifndef TARGET_NATIVE
 extern int memcmp(); /* K&R decl: avoids the ee-gcc builtin-prototype conflict warning */
+#endif /* native takes <string.h>'s prototype (common.h); C++ rejects the K&R redeclaration */
 
 /* g_areaTable (0x1393E0): per-area record table, stride 0xA0. The deserializer
  * touches it only at two fixed byte offsets, so it is byte-addressed here to
@@ -2343,7 +2345,7 @@ void GuiManagerCreate(void) {
 
     func_0029DB58();   /* reads g_bPalMode itself (asm passes it in $4; the callee ignores the arg) */
     instance = GuiSystemInit(GuiPlacementNew(0x3FB20, heap), 0x40000);
-    g_guiInstance = instance;
+    g_guiInstance = (char *)instance;
 
     if (g_playerProgress == 0x1F5) {
         cb4 = (void *)func_0029CF08;
@@ -2895,7 +2897,8 @@ extern u8  *g_mobyAuxBlockBase;  /* 0x1B1AEC parallel per-moby 0x80-byte block a
 extern s32  g_mobySpawnCredit;   /* remaining spawn budget */
 extern s32  g_gameTime;          /* global frame counter */
 extern char D_1A9DC8[];          /* "no free moby slot" log string */
-extern void InitMobyFromClass();  /* K&R: defined below with the Moby typedef */
+struct Moby;                      /* defined below with the Moby typedef */
+extern void InitMobyFromClass(struct Moby *moby, s32 classId);
 
 void *SpawnMoby(s32 classId) {
     u8 *m = g_mobySpawnStart;
@@ -2907,7 +2910,7 @@ void *SpawnMoby(s32 classId) {
                 if (state == 0xFF) {
                     m[0x120] = (u8)state;
                 }
-                InitMobyFromClass(m, classId);
+                InitMobyFromClass((struct Moby *)m, classId);
                 {
                     s32 slot = (s32)(m - g_mobySpawnStart) / 0x100;
                     u8 *aux = g_mobyAuxBlockBase + slot * 0x80;
