@@ -1077,6 +1077,12 @@ s32  RequestGameStateChange(s32 a, s32 b, s32 c, s32 d, s32 e);
  *   and the #else below remains the portable impl.
  *   SCREENED ONLY. Both arms were measured; the residual was not diagnosed to a
  *   mechanism. This is an open arm, not a wall -- do not read it as one. */
+/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body
+ * promoted SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
+ * `dli $7,0x7ed8400000000`; the ROM holds SN Ps2EeAs's expansion at 0x2F6F7C. A RULING #8549
+ * allowlist row for that site moves this body 70.49% -> 51.90%: DOWN. The row was applied (its
+ * words are in the object) and the score still fell. The dli is NOT the only residual, so no
+ * row was landed and this stays INCLUDE_ASM. Residual class: non-dli codegen (undiagnosed). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", RunCinematicPlaybackFrame);
 #else

@@ -1803,6 +1803,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawBlobShadows
  * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
  * ROM `addiu sp,sp,-48` vs built `addiu sp,sp,-112`). Levers: cc1-small/absolute globals model
  * RUN: 66.84% (engine96); engine96 with sched1 MEASURED (flag not landed): 65.10%. */
+/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body
+ * promoted SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
+ * `dli $5,0x8000000044`; the ROM holds SN Ps2EeAs's expansion at 0x27DA30. A RULING #8549
+ * allowlist row for that site moves this body 73.11% -> 74.34%. The dli is NOT the only
+ * residual, so no row was landed and this stays INCLUDE_ASM. Residual class: SIBCALL frame
+ * (t493 above), not dli. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", FadeOutToBlackBlocking);
 #else
@@ -2010,6 +2016,13 @@ void func_0027DF80(void) {
  * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
  * insn: ROM `addiu sp,sp,-48` vs built `addiu sp,sp,-128`). Levers: engine96 with sched1 MEASURED
  * (flag not landed): 67.19%. */
+/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body
+ * promoted SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
+ * `dli $5,0xff000000ff` and `dli $22,0xff000000ff`; the ROM holds SN Ps2EeAs's expansion at
+ * 0x27E220 ($5) and 0x27E270 (in $19, not $22). A RULING #8549 allowlist row for the $5 site
+ * moves this body 66.35% -> 67.60%. The dli is NOT the only residual: the second site is in
+ * another register, so no row was landed and this stays INCLUDE_ASM. Residual class: REGALLOC
+ * at the second dli site, plus non-dli codegen. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027E1E8);
 #else
@@ -2076,6 +2089,12 @@ void func_0027E1E8(void) {
  * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
  * ROM `addiu sp,sp,-32` vs built `addiu sp,sp,-64`). Levers: cc1-small/absolute globals model RUN:
  * 66.63% (engine96). */
+/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body
+ * promoted SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
+ * `dli $5,0xff000000ff` and `dli $5,0x8000000044`; the ROM holds SN Ps2EeAs's expansion at
+ * 0x27E388 and 0x27E418. A RULING #8549 allowlist row for both sites moves this body 70.35% ->
+ * 76.39%. The dli is NOT the only residual, so no row was landed and this stays INCLUDE_ASM.
+ * Residual class: non-dli codegen (undiagnosed). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027E368);
 #else
@@ -2156,6 +2175,12 @@ void DrawFullScreenTint(u64 r, s64 g, s64 b, s64 a) {
  * insn: ROM `lui v1,0x0  [HI16 0x001B2228]` vs built `lui t4,0x0  [HI16 0x001B2228]`). Levers:
  * cc1-small/absolute globals model RUN: 18.44% (sdk29); -fno-strict-aliasing MEASURED (flag not
  * landed): 19.21% sdk29; engine96 with sched1 MEASURED (flag not landed): 20.87%. */
+/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body
+ * promoted SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
+ * `dli $2,0xfffff000000000`; the ROM holds Ps2EeAs's expansion of that value at 0x27E590
+ * ($10), but in a different register. An allowlist row must carry the ROM's words for cc1's
+ * register, so no row can apply here. Solo score 11.56%. Residual class: REGALLOC at the dli
+ * site, plus whatever t493 recorded above. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027E4D0);
 #else
@@ -2222,6 +2247,12 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0
  * insn: ROM `addiu sp,sp,-16` vs built `addiu sp,sp,-32`). Levers: cc1-small/absolute globals
  * model RUN: 27.24% (sdk29); -fno-strict-aliasing MEASURED (flag not landed): 41.44% sdk29;
  * engine96 with sched1 MEASURED (flag not landed): 34.96%. */
+/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body
+ * promoted SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
+ * `dli $3,0xfffff000000000`; the ROM holds Ps2EeAs's expansion of that value at 0x27E78C ($2),
+ * but in a different register. An allowlist row must carry the ROM's words for cc1's register,
+ * so no row can apply here. Solo score 13.13%. Residual class: REGALLOC at the dli site, plus
+ * whatever t493 recorded above. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawGlyphQuad);
 #else
@@ -2283,6 +2314,12 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0
  * every other remaining arm). Residual on the better arm (sdk29): MACRO-AT (first differing insn:
  * ROM `addiu sp,sp,-144` vs built `addiu sp,sp,-224`). Levers: cc1-small/absolute globals model
  * RUN: 36.10% (engine96); engine96 with sched1 MEASURED (flag not landed): 32.70%. */
+/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body
+ * promoted SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
+ * `dli $14,0xfffff000000000`; the ROM holds Ps2EeAs's expansion of that value at 0x27E9E4
+ * ($8), but in a different register. An allowlist row must carry the ROM's words for cc1's
+ * register, so no row can apply here. Solo score 46.59%. Residual class: REGALLOC at the dli
+ * site, plus whatever t493 recorded above. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawTexturedQuad2d);
 #else
@@ -2641,6 +2678,12 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0
  * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
  * insn: ROM `addiu sp,sp,-192` vs built `addiu sp,sp,-240`). Levers: engine96 with sched1 MEASURED
  * (flag not landed): 27.99%. */
+/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body
+ * promoted SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
+ * `dli $17,0xfffff000000000`; the ROM holds Ps2EeAs's expansion of that value at 0x27F530
+ * ($19), but in a different register. An allowlist row must carry the ROM's words for cc1's
+ * register, so no row can apply here. Solo score 48.06%. Residual class: REGALLOC at the dli
+ * site, plus whatever t493 recorded above. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F4D8);
 #else
@@ -3369,6 +3412,12 @@ void AppendVu1SphereMapContext(void) {
  * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
  * ROM `addiu sp,sp,-48` vs built `addiu sp,sp,-80`). Levers: sibcall guard RUN: sdk29 78.40% /
  * engine96 61.18%; engine96 with sched1 MEASURED (flag not landed): 54.98%. */
+/* DLI lever MEASURED (task #1220; unit objdiff report, objdiff_build.sh, this #else body
+ * promoted SOLO, sdk29 arm, colima-ee-x86; every other row in the unit unchanged). cc1 emits
+ * `dli $5,0x8000000044` (ROM: Ps2EeAs form at 0x280F88) AND two `li.d` (soft-float double
+ * literals), which GNU as rejects for r5900, so the solo base does not assemble
+ * (objdiff_build.sh rc 1) with or without an allowlist row. Residual class: LI.D (FACT #7950:
+ * li.d is kept out of asm_unit.sh), then dli. Not scored. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280EC8);
 #else
