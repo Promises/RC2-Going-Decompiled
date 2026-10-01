@@ -57,6 +57,12 @@ trap 'rm -rf "$OUT"' EXIT
 
 CFLAGS="-DTARGET_NATIVE -m32 -c -I$INC -include $SHIM"
 CFLAGS="$CFLAGS -Wno-error=implicit-function-declaration -Wno-int-conversion"
+# A .cpp unit (task #1258) compiles as check.sh compiles it: C++ from a wrapper
+# `extern "C" { #include shim; #include unit }`. Handed to $CC directly, clang
+# picks C++ by the extension WITHOUT the wrap, so every symbol the unit defines
+# or references is C++-mangled (_Z13func_00290EA0v): its definitions satisfy
+# nothing and its references land in the gap as data globals (task #1285).
+CXXFLAGS="-x c++ -DTARGET_NATIVE -m32 -c -I$INC"
 
 # 1. compile all TARGET_NATIVE units to objects (best-effort; a unit that fails
 #    check.sh just contributes no symbols — linkgap is not the compile gate).
@@ -69,17 +75,30 @@ regions="usa"
 srcdirs=""
 for r in $regions; do srcdirs="$srcdirs going-decompiled/src/$r"; done
 units="$(cd "$ROOT" && /usr/bin/grep -rl TARGET_NATIVE $srcdirs | sed "s#^#$ROOT/#")"
-nunits=0
+nunits=0; failed=""
 for f in $units; do
   rel="${f#"$ROOT/going-decompiled/src/"}"
-  obj="$OUT/$(printf '%s' "${rel%.c}" | sed 's#/#__#g').o"
+  case "$rel" in *.cpp) stem="${rel%.cpp}" ;; *) stem="${rel%.c}" ;; esac
+  obj="$OUT/$(printf '%s' "$stem" | sed 's#/#__#g').o"
   if [ -e "$obj" ]; then
     echo "linkgap: object name $obj is not unique ($f)" >&2; exit 2
   fi
-  if $CC $CFLAGS "$f" -o "$obj" 2>/dev/null; then
+  case "$f" in
+    *.cpp)
+      wrap="${obj%.o}.wrap.cpp"
+      printf 'extern "C" {\n#include "%s"\n#include "%s"\n}\n' "$SHIM" "$f" > "$wrap"
+      cmd="$CC $CXXFLAGS $wrap" ;;
+    *) cmd="$CC $CFLAGS $f" ;;
+  esac
+  if $cmd -o "$obj" 2>/dev/null; then
     nunits=$((nunits+1))
+  else
+    failed="$failed $rel"
   fi
 done
+# Still best-effort, but never silent (task #1285): a unit that contributes no
+# symbols is named, so a dropped unit cannot pass for a smaller gap.
+[ -z "$failed" ] || echo "linkgap: WARN: unit(s) failed to compile, contributing no symbols:$failed" >&2
 
 # 2. defined / undefined symbol sets across the whole object set.
 #    Mach-O prefixes a '_' on every C symbol, so strip exactly one there. ELF

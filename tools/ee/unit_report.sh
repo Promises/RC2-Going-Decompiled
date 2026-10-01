@@ -38,9 +38,14 @@ PROJ="$W/report"; mkdir -p "$PROJ"
 python3 - "$ROOT" "$REGION" "$UNIT" "$PROJ" "$EXPECTED" "$OBJ" "$OBJ96" <<'PY'
 import json, os, sys
 root, region, unit, proj, exp, obj, obj96 = sys.argv[1:8]
+def source_path(root, region, unit):
+    # GUI metadata only (objdiff scores objects, not this path): the unit's one
+    # source, <unit>.cpp once converted, else <unit>.c (task #1285).
+    stem = os.path.join(root, f"going-decompiled/src/{region}/{unit}")
+    return stem + ".cpp" if os.path.exists(stem + ".cpp") else stem + ".c"
 def u(name, base):
     return {"name": name, "target_path": os.path.join(root, exp), "base_path": os.path.join(root, base),
-            "metadata": {"source_path": os.path.join(root, f"going-decompiled/src/{region}/{unit}.c"),
+            "metadata": {"source_path": source_path(root, region, unit),
                          "progress_categories": ["text"]}}
 units = [u(f"{region}/{unit}", obj)]
 if os.path.exists(obj96):

@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # grind96.sh — engine-2.96 per-function grind WITH the mandatory RAW byte+reloc gate.
 #
-#   tools/ee/grind96.sh <region> <unit> <func> <cfile>
+#   tools/ee/grind96.sh <region> <unit> <func> [<cfile>]
+#
+# <cfile> is optional and passed through: diff96.sh resolves the unit's own .c or
+# .cpp when it is omitted (task #1285).
 #
 # WHY: diff96.sh only prints objdiff FUZZY match% (normalizes relocs -> the banked
 # [[feedback_fuzzy_pct_not_byte_exact]] false-100% trap), and its base.o is the WHOLE
@@ -24,7 +27,7 @@
 #   3  USAGE/ARG    — you invoked me wrong (bad arg count, wrong object shape, unknown
 #                     region). A misuse must never look like a verdict.
 set -euo pipefail
-REGION="$1"; UNIT="$2"; FUNC="$3"; CFILE="$4"
+REGION="$1"; UNIT="$2"; FUNC="$3"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$ROOT"
 W="${GRIND_SCRATCH:-tools/ee/.diff96}"   # honor isolated scratch (must match diff96.sh)
 ASF='-march=r5900 -mabi=eabi -no-pad-sections -EL -G0 -Igoing-decompiled/build/'"$REGION"'/include'
@@ -34,7 +37,7 @@ ASF='-march=r5900 -mabi=eabi -no-pad-sections -EL -G0 -Igoing-decompiled/build/'
 # .diff96, so no cross-worktree scratch collision / false-PASS path is open. diff96.sh
 # does not forward -e ASMFIX_SHARED into its container anyway, so a host share is inert.
 echo "=== diff96 fuzzy screen ==="
-bash tools/ee/diff96.sh "$REGION" "$UNIT" "$FUNC" "$CFILE"
+bash tools/ee/diff96.sh "$REGION" "$UNIT" "$FUNC" ${4:+"$4"}
 
 # ANTI-VACUOUS GUARD (tester, authoritative gate): verify_match_unit.sh slices FUNC out
 # of the whole-unit base.o — but if FUNC was NOT actually compiled to engine C (no

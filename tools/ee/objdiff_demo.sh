@@ -36,6 +36,11 @@ PROJ="tools/ee/.objdiff/demo/$REGION"
 python3 - "$ROOT" "$REGION" "$UNIT" "$PROJ" <<'PY'
 import json, os, sys
 root, region, unit, proj = sys.argv[1:5]
+def source_path(root, region, unit):
+    # GUI metadata only: the unit's one source, <unit>.cpp once converted, else
+    # <unit>.c (task #1285).
+    stem = os.path.join(root, f"going-decompiled/src/{region}/{unit}")
+    return stem + ".cpp" if os.path.exists(stem + ".cpp") else stem + ".c"
 cfg = {
   "min_version": "2.0.0",
   "build_target": False, "build_base": False,
@@ -45,7 +50,7 @@ cfg = {
     "name": f"{region}/{unit}",
     "target_path": os.path.join(root, proj, unit, "target.o"),
     "base_path":   os.path.join(root, proj, unit, "base.o"),
-    "metadata": {"source_path": os.path.join(root, f"going-decompiled/src/{region}/{unit}.c"),
+    "metadata": {"source_path": source_path(root, region, unit),
                  "progress_categories": ["cod"]},
   }],
 }

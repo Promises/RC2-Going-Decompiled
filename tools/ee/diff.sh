@@ -2,8 +2,13 @@
 # Per-function matching loop: compile a hand-written C function and diff it
 # against the original game bytes with objdiff. This is the core decomp loop.
 #
-#   tools/ee/diff.sh <region> <unit> <func> <cfile>
-#   e.g. tools/ee/diff.sh usa cod/015180 func_00115200 going-decompiled/src/usa/cod/015180.c
+#   tools/ee/diff.sh <region> <unit> <func> [<cfile>]
+#   e.g. tools/ee/diff.sh usa cod/015180 func_00115200
+#
+# <cfile> defaults to the unit's source, src/<region>/<unit>.c or .cpp, picked
+# by `ee_cc1.sh --resolve` (task #1285); pass it to diff a scratch copy. A .cpp
+# source compiles through cc1plus with the build's extern "C" wrap, exactly as
+# build.sh and objdiff_build.sh compile it: ee_cc1.sh is the one compile path.
 #
 # Prints the function's match percentage. For the interactive red/green TUI:
 #   tools/objdiff-cli-macos-arm64 diff -1 tools/ee/.diff/target.o \
@@ -11,8 +16,10 @@
 #
 # Requires the colima `ee-x86` VM + `ee-build` image (see CLAUDE.md).
 set -euo pipefail
-REGION="$1"; UNIT="$2"; FUNC="$3"; CFILE="$4"
+REGION="$1"; UNIT="$2"; FUNC="$3"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$ROOT"
+CFILE="${4:-$(sh tools/ee/ee_cc1.sh --resolve "going-decompiled/src/$REGION/$UNIT")}"
+[ -f "$CFILE" ] || { echo "diff.sh: FATAL — no source $CFILE" >&2; exit 2; }
 W=tools/ee/.diff; mkdir -p "$W"
 OBJDIFF=tools/objdiff-cli-macos-arm64
 INC="-Igoing-decompiled/include -Igoing-decompiled/include/rtl/ee -Igoing-decompiled/include/rtl/common"
@@ -91,10 +98,9 @@ cat > "$W/target.s" <<EOF
 EOF
 
 docker --context colima-ee-x86 run --rm -v "$ROOT":/work ee-build sh -c "
-  set -e; cd /work; WIBO=/usr/local/bin/wibo; G=tools/ee/cc/lib/gcc-lib/ee/2.9-ee-991111
+  set -e; cd /work
   mips-linux-gnu-as $ASF -o $W/target.o $W/target.s
-  \$WIBO \$G/cpp.exe $CPPDEF $INC $CFILE $W/base.i
-  \$WIBO \$G/cc1.exe -quiet -O2 $GFLAG $CC1EXTRA $W/base.i -o $W/base.s
+  sh tools/ee/ee_cc1.sh sdk29 $CFILE $W/base.i $W/base.s '$CPPDEF $INC' '-O2 $GFLAG $CC1EXTRA'
   sh tools/ee/asm_unit.sh $REGION /work/$W/base.s /work/$W/base.o $GFLAG
 "
 

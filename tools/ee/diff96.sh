@@ -3,7 +3,13 @@
 # ee-gcc 2.96 + -fno-schedule-insns + the engine post-pass (commutative-swap +
 # internal-alignment fix), reproducing R&C2's SN-ProDG engine compiler.
 #
-#   tools/ee/diff96.sh <region> <unit> <func> <cfile>
+#   tools/ee/diff96.sh <region> <unit> <func> [<cfile>]
+#
+# <cfile> defaults to the unit's source, src/<region>/<unit>.c or .cpp, picked
+# by `ee_cc1.sh --resolve` (task #1285). A .cpp source compiles through the 2.96
+# cc1plus with the build's extern "C" wrap — the same ee_cc1.sh engine96 arm
+# objdiff_build.sh scores MATCH_ rows from, so the two cannot disagree on the
+# front end.
 #
 # WHY (memory project_cc1_subbuild_lead): R&C2 is a TWO-compiler build. SDK/runtime
 # (<~0x131B, 16-byte slots) = ee-gcc 2.9-991111 (diff.sh). The game ENGINE
@@ -18,8 +24,10 @@
 # colima ee-x86 VM + ee-build image. The 2.96 cc1 is a native i386 ELF, run via
 # its bundled glibc-2.3.6 loader so it doesn't clobber the container libc.
 set -euo pipefail
-REGION="$1"; UNIT="$2"; FUNC="$3"; CFILE="$4"
+REGION="$1"; UNIT="$2"; FUNC="$3"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$ROOT"
+CFILE="${4:-$(sh tools/ee/ee_cc1.sh --resolve "going-decompiled/src/$REGION/$UNIT")}"
+[ -f "$CFILE" ] || { echo "diff96.sh: FATAL — no source $CFILE" >&2; exit 2; }
 # GRIND_SCRATCH lets a concurrent user (e.g. the authoritative-gate tester) build into
 # an ISOLATED per-submission scratch instead of the shared .diff96 — closes hazard #1's
 # false-PASS path when >1 agent builds on the same worktree. Default = .diff96 (workers
@@ -57,14 +65,12 @@ cat > "$W/target.s" <<EOF
 .set at
 EOF
 
-# (1) assemble the original asm + compile the C with the native 2.96 cc1 (-> .s).
+# (1) assemble the original asm + compile the unit with the native 2.96 cc1
+# (cc1plus for a .cpp unit) through ee_cc1.sh's engine96 arm (-> .s).
 docker --context colima-ee-x86 run --rm -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work
-  WIBO=/usr/local/bin/wibo; G29=tools/ee/cc/lib/gcc-lib/ee/2.9-ee-991111
-  LD96='$CC/ld-2.3.6.so --library-path $CC'
   mips-linux-gnu-as $ASF -o $W/target.o $W/target.s
-  \$WIBO \$G29/cpp.exe $CPPDEF $INC $CFILE $W/base.i
-  \$LD96 $CC1 -quiet -O2 $GFLAG $CC1EXTRA $W/base.i -o $W/base.s
+  CC296=$CC sh tools/ee/ee_cc1.sh engine96 $CFILE $W/base.i $W/base.s '$CPPDEF $INC' '-O2 $GFLAG $CC1EXTRA'
 "
 # (2) HOST: apply the engine post-passes (python3 not in the container).
 python3 "$(dirname "$0")/engine_swap_fix.py" "$W/base.s"

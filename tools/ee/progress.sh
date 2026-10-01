@@ -13,14 +13,16 @@
 #                 going-decompiled/asm/<region>/nonmatchings/<seg>/<unit>/<fn>.s
 #                 (splat emits one per split function regardless of match
 #                 status — this is the denominator).
-#   matched-by-C= carved fn whose unit HAS a src/<region>/<seg>/<unit>.c and
+#   matched-by-C= carved fn whose unit HAS a src/<region>/<seg>/<unit>.c (or
+#                 .cpp: a converted unit stays in this bucket, task #1285) and
 #                 whose name appears in NO INCLUDE_ASM() anywhere in that
 #                 region's src tree (the INCLUDE_ASM was removed → a real C
 #                 definition stands in for it). NOT objdiff-verified.
 #   coverage    = fn still INCLUDE_ASM'd, but the INCLUDE_ASM sits inside an
 #                 `#ifndef TARGET_NATIVE` guard (a portable #else body exists).
 #   bare wall   = fn still INCLUDE_ASM'd with no #ifndef TARGET_NATIVE guard.
-#   asm-only    = fn whose unit has no .c at all yet (disassembled, uncarved).
+#   asm-only    = fn whose unit has no .c or .cpp at all yet (disassembled,
+#                 uncarved).
 #   matched + coverage + walls + asm-only == carved total, exactly.
 #
 # Guard detection is a line-oriented heuristic: an INCLUDE_ASM line seen after
@@ -113,7 +115,10 @@ for region in usa eu; do
   #
   # The status tested is find's, which is non-zero when any batch of the -exec
   # fails. It used to be the pipeline's, i.e. sort's, which is always 0.
-  if ! $FIND "$SRC" -name '*.c' -exec python3 "$SCANNER" --bodied {} + \
+  # .c AND .cpp units (task #1285): with '*.c' alone a converted unit's guarded
+  # bodies drop out of coverage into walls and its C into asm-only, so a rename
+  # moves the percentages while no function changed.
+  if ! $FIND "$SRC" \( -name '*.c' -o -name '*.cpp' \) -exec python3 "$SCANNER" --bodied {} + \
        > "$TMP/$region.guarded.raw" 2> "$TMP/$region.scan.err"; then
     sed 's/^/  scanner stderr: /' "$TMP/$region.scan.err" >&2
     scan_fail "guard scan exited non-zero for region $region"
@@ -131,11 +136,11 @@ for region in usa eu; do
       unit = $1; fn = $2
       if (gu[fn])          { cov++;  next }
       if (ia[fn])          { wall++; next }
-      cfile = src "/" unit ".c"
-      if ((getline dummy < cfile) >= 0) { close(cfile); mat++ }
-      else                              { only++ }
+      if (has_src(src "/" unit ".c") || has_src(src "/" unit ".cpp")) mat++
+      else                                                             only++
     }
     END { printf "%d %d %d %d\n", mat+0, cov+0, wall+0, only+0 }
+    function has_src(f) { if ((getline dummy < f) >= 0) { close(f); return 1 } return 0 }
   ' "$TMP/$region.fns" > "$TMP/$region.counts"
   read -r mat cov wall only < "$TMP/$region.counts"
 
@@ -149,7 +154,7 @@ for region in usa eu; do
   printf "  matched-by-C   (INCLUDE_ASM removed)      : %5d  (%s of carved)\n" "$mat"  "$(pct "$mat"  "$total")"
   printf "  coverage       (#else TARGET_NATIVE body) : %5d  (%s of carved)\n" "$cov"  "$(pct "$cov"  "$total")"
   printf "  bare walls     (INCLUDE_ASM, no #else)    : %5d  (%s of carved)\n" "$wall" "$(pct "$wall" "$total")"
-  printf "  asm-only       (unit has no .c yet)       : %5d  (%s of carved)\n" "$only" "$(pct "$only" "$total")"
+  printf "  asm-only       (unit has no .c/.cpp yet)  : %5d  (%s of carved)\n" "$only" "$(pct "$only" "$total")"
   sum=$((mat + cov + wall + only))
   if [ "$sum" -eq "$total" ]; then
     printf "  reconcile: %d + %d + %d + %d = %d == total OK\n" "$mat" "$cov" "$wall" "$only" "$total"
