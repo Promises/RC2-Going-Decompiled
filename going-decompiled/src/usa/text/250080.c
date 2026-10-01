@@ -447,9 +447,13 @@ void func_00350660(FmvPtsQueue *q) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003506A8);
 #else
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 40.29% / engine96 5.87%. Residual: REGALLOC on sdk29 (a5-relative loads coloured v0/a0, beql/bnel inversion); not iterated (72 insns). */
-/* TODO(match): functional equivalent - not byte-exact; the original schedules
-   the started/mode tests as branch-likely (bnel/beql) pairs the pinned cc1
-   won't emit (40% best). Revisit with the gameplay-TU compiler. */
+/* TODO(match): functional equivalent - not byte-exact (sdk29 40.29%, unit
+   objdiff report, task #513 line above); the original schedules the
+   started/mode tests as branch-likely (bnel/beql) pairs. The pinned cc1's
+   reorg DOES emit bnel/beql/bnezl (NOTE #8503, FACT #8614, func_001231C8's
+   matched `bnel` at 022FA8.c:146), so branch-likely is not shown to be this
+   function's wall; no lever run on it is recorded (task #1230 / NOTE #8761).
+   Revisit with those levers or the gameplay-TU compiler. */
 void func_003506A8(FmvPtsQueue *q, u8 **pPtr0, s32 *pLen0, u8 **pPtr1, s32 *pLen1) {
     if (q->started == 0) {
         if (q->mode == 4) {

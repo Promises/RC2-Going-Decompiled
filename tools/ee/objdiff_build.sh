@@ -88,13 +88,16 @@
 # Single ops only; the compound commands are the necessary `docker run`s.
 # Requires a colima VM carrying the `ee-build` image (see CLAUDE.md).
 #
-# MOUNT-SYNC (#542; FACT #7449, NOTE #7430). The worktree reaches the container
-# over the VM's fuse.sshfs mount, and a file the HOST rewrote LONGER is read
-# TRUNCATED at its old length by a container started while the VM's cached
-# size of it is under ~20 s old (measured: 224/225 grows stale at Δ 0..5 s,
-# 18/20 at 10 s, 0/40 at 20 and 30 s; shrinks and same-length rewrites read
-# the current bytes; the view heals
-# on the next open — tools/ee/.t542/summary*.txt). Every host-write ->
+# MOUNT-SYNC (#542; FACT #7449, NOTE #7430; class FACT #7464 as narrowed by
+# #7479). The worktree reaches the container over the VM's fuse.sshfs mount,
+# and a file the HOST rewrote LONGER (growth is the trigger, FACT #8713) is
+# read TRUNCATED at the VM's CACHED length — the size it last read/stat'ed,
+# not necessarily the previous host length (#7479) — by a container started
+# while that cached size is under ~20 s old (measured: 224/225 grows stale at
+# Δ 0..5 s, 18/20 at 10 s, 0/40 at 20 and 30 s; shrinks and same-length
+# rewrites read the current bytes; the view heals on a later open, usually
+# the next: 92/95 on try 2, one on try 13 in #7479 —
+# tools/ee/.t542/summary*.txt). Every host-write ->
 # container-read edge below is therefore guarded by tools/ee/mount_sync.sh: the
 # host takes the md5, the container re-reads until its md5sum agrees, and
 # aborts rc 9 naming the file after MOUNT_SYNC_TRIES (20) x MOUNT_SYNC_SLEEP

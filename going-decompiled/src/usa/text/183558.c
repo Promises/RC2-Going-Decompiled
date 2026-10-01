@@ -86,8 +86,12 @@ f32 GetFloatAbs(f32 x) {
 
 /*
  * Smaller of two floats. Hand-written: the original is a single R5900 `min.s`
- * in the jr delay slot; ee-gcc 2.9 has no sminsf3 pattern (it lowers to a
- * compare + branch + moves), so no byte match. #else is the portable form.
+ * in the jr delay slot (untied: `min.s $f0,$f12,$f13`). ee-gcc 2.9 DOES carry
+ * min.s/max.s templates (FACT #8244), but at the unit flags `a<b?a:b` lowers
+ * to a compare + branch + moves, and only -ffast-math (not a unit flag) gives
+ * min.s, TIED (`mov.s $f0,$f13; min.s $f0,$f0,$f12`). The untied form is
+ * unreachable from the spellings and flags tried (#8244's bound), so no byte
+ * match. #else is the portable form.
  */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283600);
@@ -117,8 +121,10 @@ s32 func_00283608(s32 a, s32 b, s32 c) {
 #endif
 /*
  * Clamp x into [lo, hi]. Hand-written: the original is `max.s; min.s` (R5900
- * native min/max), which ee-gcc 2.9 cannot emit (no sminsf3/smaxsf3 — it
- * lowers to compares + branches). #else is the portable equivalent.
+ * native min/max, untied). ee-gcc 2.9 has the min.s/max.s templates (FACT
+ * #8244), but at the unit flags it lowers to compares + branches, and under
+ * -ffast-math only the TIED form; the ROM's untied pair stays unreachable
+ * from the spellings tried. #else is the portable equivalent.
  */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283618);

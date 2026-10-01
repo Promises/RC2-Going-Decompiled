@@ -46,12 +46,22 @@
  *      only as the function-scope LAST statement of a VOID path — a
  *      `return f(...)` needs `T r = f(...); __asm__ __volatile__(""); return r;`.
  *      The guards are now in place in the arms that needed them.
- *   2. cc1 2.96-001003-1 emits every float literal 1 ULP BELOW nearest
- *      (3.1415927f -> 0x40490FDA, even 3.14159274101257324f -> ...FDA); the
- *      ROM bits come out only from the +1 ULP spelling (3.1415929794311523f
- *      -> ...FDB, measured on func_002B1710 / func_002B17F8). Such a
- *      spelling is WRONG for the native arm, so it cannot live in a shared
- *      `#else` body — an engine promotion needs its own literal.
+ *   2. cc1 2.96-001003-1 converts a float literal by TRUNCATION toward zero
+ *      (FACT #7385, which narrows FACT #7342's "1 ULP below"): a decimal
+ *      BELOW its float lands 1 ULP low (3.1415927f -> 0x40490FDA, and
+ *      3.14159274101257324f -> ...FDA, which is 2.2e-18 short of 0x40490FDB);
+ *      a decimal AT or ABOVE it lands exactly — in this unit 0.159154937f
+ *      (func_002AC980) and 0.005f (func_002AFAB0) come out at nearest. The
+ *      ROM bits come from any spelling just above the float: the +1 ULP
+ *      3.1415929794311523f (-> ...FDB, measured on func_002B1710 /
+ *      func_002B17F8), or the rounded-up 3.1415927411f, which #7385 measured
+ *      as 0x40490FDB on cc1 2.96 AND cc1 2.9. So the ROM constant CAN live in
+ *      a shared `#else` body, spelled the rounded-up way (native compilers
+ *      land on it by round-to-nearest; #7385 measured only the two cc1s).
+ *      The hazard is the +1 ULP spelling itself: round-to-nearest takes it
+ *      to ...FDC, 1 ULP wrong on the native arm — FACT #8758 measured that
+ *      live in 24D728.c's func_0034F028 (3.1415929f: clang 17 0x40490FDC,
+ *      ROM 0x40490FDB). Never give a native-compiled body a +1 ULP literal.
  *   3. The dominant residual is SCHED-TIEBREAK: instruction-identical code
  *      whose same-cycle-ready instructions are emitted in the opposite order
  *      (the ROM keeps RTL/luid order — prologue `sd` before the body's first
@@ -237,10 +247,14 @@ extern s32 func_00283638(Moby *moby);
 extern s32 PostMobyHitEvent(Moby *moby, s32 a1, s32 flags, Vec4 *vecA, Vec4 *vecB, f32 dist);
 extern s32 func_002B1C20(void);
 /* func_002A9550: moby-group iterator advance/filter step. Takes the same
- * (out, moby, wantInactive, wantActive) 4-arg shape its only caller
- * func_002A9468 forwards ($a0..$a3 passthrough); the wantInactive/wantActive
- * filter args were dropped by an earlier 2-arg guess. Defined later in this
- * unit (#else); declared here for func_002A9468's #else call. */
+ * (out, moby, wantInactive, wantActive) 4-arg shape func_002A9468 forwards
+ * ($a0..$a3 passthrough); the wantInactive/wantActive filter args were
+ * dropped by an earlier 2-arg guess. func_002A9468 is NOT its only caller:
+ * the ROM has 7 direct `jal` sites, the other 6 in UpdateCrateMoby /
+ * SettleCrateStackPhysics (asm text/208010, 0x3122F4..0x312D24; ledger-29569,
+ * a jal-word scan, so a lower bound — jalr/pointer calls are not counted, and
+ * those callers' argument shape is not checked here). Defined later in this
+ * unit; declared here for func_002A9468's call. */
 extern s32 func_002A9550(Moby **out, Moby *moby, s32 wantInactive, s32 wantActive);
 extern f32 Vec3DistVu0(void *p, f32 *src);
 /* func_002A0368: read a reference value from an object (1A00F0 unit); takes the

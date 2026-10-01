@@ -58,8 +58,13 @@
 #            Both member sets may shrink, never grow.
 #   SYNC     (building form, task #542 MOUNT-SYNC-1) the four link inputs the
 #            SPLIT step just rewrote on the host are read by the BUILD container
-#            over the VM's fuse.sshfs mount, which can serve a STALE or TRUNCATED
-#            view of a just-rewritten file (FACT #7449, NOTE #7430). do_build
+#            over the VM's fuse.sshfs mount, which can serve a TRUNCATED view
+#            of a just-rewritten file (FACT #7449, NOTE #7430): the class is
+#            FACT #7464's grow-only cut at the VM's cached length, narrowed by
+#            #7479 (cached = last-read size, multi-try heal), trigger = size
+#            growth (FACT #8713); #7464 saw 0 old-content (STALE_OLD) reads.
+#            md5, not size, is compared so reads outside that class (e.g.
+#            FACT #8683's reader-dependent rows) are caught too. do_build
 #            takes their host md5s and tools/ee/mount_sync.sh verifies each in
 #            the container (retrying) before build.sh runs; a file that never
 #            agrees aborts the build rc 9 naming it. The same helper guards

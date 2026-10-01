@@ -9,9 +9,18 @@ by build.sh's PROVIDE line. The fix per row is the #442 P6(b) edit: rename the
 macro argument AND every C reference to the old identifier in src/<region>,
 re-split so <Name>.s is emitted, then delete the func_ADDR.s twin.
 
+ORPHAN HAZARD of that deletion (FACT #7301, narrowing NOTE #7245 §3/P6(b)):
+the twin may be the LAST asm mention of some D_/func_ tokens it references,
+and build.sh's blanket `X = 0xX` lines are grepped from asm/<region>, so
+deleting it can leave compiled C that still spells such a token UNDEFINED at
+link (t452: 4 USA tokens, a failed link). Rename those tokens in the C in the
+same change. landing_gate.sh's ORPHAN / ORPHAN_LATENT rows (via
+tools/ee/blanket_orphans.sh, FACT #7311) gate it; this script does not.
+
 Two arms, because one carries a hazard the other does not (task #452):
-  A  the new name is a project name — a rename is byte-neutral by construction
-     (asm-only function; the identifier lives in relocations and PROVIDE).
+  A  the new name is a project name — the RENAME is byte-neutral by
+     construction (asm-only function; the identifier lives in relocations and
+     PROVIDE); deleting the twin still carries the orphan hazard above.
   B  the new name is a libc / libgcc / SDK identifier — once a COMPILED caller
      spells `strlen(p)`, cc1 2.9 may recognise a builtin and change the caller's
      codegen. B rows are measured per caller in a separate task; this script

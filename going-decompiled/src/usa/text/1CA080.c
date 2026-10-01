@@ -564,8 +564,12 @@ void func_002CAB90(float x) {
  * is identity on the diagonal (matrix[0]=matrix[5]=matrix[10]=1) plus a 1.0 in
  * the row-2 translation slot (matrix[11]). Takes no inputs and calls nothing -
  * a pure constant-store, so the native shim is byte-faithful to the asm. The
- * matching build keeps the asm: the original zeroes the matrix with 128-bit
- * `sq` writes that scalar C does not emit. */
+ * matching build keeps the asm. The original zeroes the matrix with 128-bit
+ * `sq $0` writes; cc1 DOES emit those from C via the RULING #8479 `$0`-pinned
+ * TI local, so `sq` is not the wall. The measured residual is base CSE: the
+ * ROM re-materialises each row base (fresh lui/addiu) where cc1 CSEs them, and
+ * ruled devices reach 82.88% (solo, unit report, VM b; NOTE #8503). Byte-exact
+ * so far only with an UNRULED asm-emitted `sq` device (NOTE #8503), not landed. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CABC0);
 #else
@@ -1395,8 +1399,10 @@ s32 func_002CD4E8(s32 *list) {
  * (D_1A7A58[entry] != 0) emits a 0x14-byte menu record into D_0025FC70:
  *   {+0x0 value = D_1AB978[i], +0x4 label = &g_cheatFlags[entry], +0x8 = 0x2C5C,
  *    +0xC = 0x2C5D, +0x10 = 0}, and finally a zero terminator at record[count].
- * Blocked (match): the original ldl/ldr/sdl/sdr unaligned 64-bit copy idiom cc1 won't
- * reproduce from clean C — #else fallback.
+ * Blocked (match), still OPEN: not byte-exact — best 86.13% (unit objdiff report, task
+ * #1025's probe body, per FACT #8477's bound) — #else fallback. The original's ldl/ldr/sdl/sdr unaligned 64-bit copy idiom is
+ * NOT the wall it was once called: cc1 2.9 emits it from clean C for a struct assignment
+ * of an alignment-<8 struct (FACT #8477, DEMONSTRATED), but that lever did not close it.
  * NEEDS-TESTER-ORACLE: the parallel-array wiring + record layout are modeled from the
  * asm; the contiguous buffer copy is required (the ROM lays D_1AB958/D_1AB978 0x20 apart,
  * which separate host externs don't guarantee) — the oracle should confirm faithfulness. */
@@ -5192,6 +5198,8 @@ void func_002D4D38(s32 idx, s32 val) {
 }
 #endif
 
-/* menu/HUD draw routine: ldl/ldr/sdl/sdr unaligned struct/const copy — left as INCLUDE_ASM
- * (cc1 won't reproduce the unaligned 64-bit copy idiom from clean C). */
+/* menu/HUD draw routine: ldl/ldr/sdl/sdr unaligned struct/const copy — left as INCLUDE_ASM,
+ * no C body yet. The copy idiom itself IS reachable from clean C (cc1 2.9 lowers an
+ * alignment-<8 struct assignment to ldl/ldr/sdl/sdr, FACT #8477); this function was not
+ * probed with that lever, so whether it closes is undetermined. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawShipCustomizeMenu);

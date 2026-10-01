@@ -11,9 +11,11 @@
 # How: going-decompiled/libgcc/MEMBERS gives each member's source and GCC's own
 # module selection (-DFINE_GRAINED_LIBRARIES -DL_<module>). Compiler is the
 # game's SDK compiler, 2.9-ee-991111 cpp.exe + cc1.exe -O2 -G0 (-G0: the SDK
-# archive has 0 GPREL16 relocs in all 58 members, NOTE #8217). The ee-gcc
-# driver segfaults under wibo, so its predefines are passed by hand; what must
-# hold is that longlong.h sees __mips__/__R5900__ and picks the MIPS umul_ppmm.
+# archive has 0 GPREL16 relocs in all 57 object members, NOTE #8217 as
+# narrowed by FACT #8239: `ar t` prints 58 lines, one of them `/`, the archive
+# symbol index). The ee-gcc driver segfaults under wibo, so its predefines
+# are passed by hand; what must hold is that longlong.h sees
+# __mips__/__R5900__ and picks the MIPS umul_ppmm.
 # The cc1 OUTPUT goes through the same move_fixup.sed every unit's does, then
 # tools/ee/libgcc_lid_dli.pl (li.d -> dli, which binutils refuses at r5900; a
 # libgcc-only rule, see its header); the GCC source is never edited.

@@ -222,11 +222,13 @@ char *func_002E0010(char *dst, s32 id) {
  * table hidden (set bit 0x80 in the u16 mode word at moby+0x34).  `argA`/`argB`
  * are the state-change arguments cached at g_pendingStateArgA/B (read back when
  * state 7 is committed).  Counterpart of UnhideAllMobysAndPopState.
- * NEAR-MISS (~85%, structurally identical): cc1 lowers the table-walk to a plain
- * `bnez` where the original uses a branch-likely (`bnel`) that hoists the moby
- * mode-word load into the delay slot (the branch-likely lowering wall).  Also a
- * 2-callee-save (s0,s1) 8-byte-packed prologue this cc1 rounds to 16-byte.  The
- * C is faithful. */
+ * NEAR-MISS (~85%, structurally identical).  The table-walk's branch-likely
+ * (`bnel` with the moby mode-word load in its delay slot) is NOT a wall: the
+ * ROM loop tail `sltu; nop; bnel; lhu` is identical to UnhideAllMobysAndPopState's
+ * (ledger-29570), which #1026 closed byte-exact with R5900_SHORT_LOOP_PAD1
+ * (FACT #8384, NOTE #8503); that lever is not yet applied here.  What still
+ * blocks it is the 2-callee-save (s0,s1, plus $ra) 8-byte-packed prologue this
+ * cc1 rounds to 16-byte (sdk29 PACKED-SAVE).  The C is faithful. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", HideAllMobysAndPushState);
 #else

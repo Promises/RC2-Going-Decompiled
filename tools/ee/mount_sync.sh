@@ -1,26 +1,31 @@
 #!/bin/sh
 # mount_sync.sh — guard a container read against the colima sshfs stale-view
-# trap (task #542 MOUNT-SYNC-1; FACT #7449, NOTE #7430, #473/#483/#497/#498).
+# trap (task #542 MOUNT-SYNC-1; FACT #7449, NOTE #7430, #473/#483/#497/#498;
+# class FACT #7464 as narrowed by #7479, trigger = size growth FACT #8713).
 #
-# The worktree reaches the ee-build container through the VM's fuse.sshfs mount
-# of /Users/<you>. A file the HOST rewrites is read TRUNCATED by a container
-# whenever the VM still holds the file's cached size from an earlier access:
-# the read stops at the OLD length, so the container sees the NEW content cut
-# short. Measured on this host (tools/ee/.t542/, 480 + 60 + 22 trials, both
-# VMs, tools/ee/ and going-decompiled/build/usa/ paths): a rewrite that GREW
-# the file read truncated in 224 of 225 cases at Δ = 0..5 s and 18 of 20 at
-# Δ = 10 s after the VM's last access (+ ~3 s of docker overhead; the 2 misses
-# were first trials the VM had never seen), and in 0 of 40 at Δ = 20 and 30 s
-# (sshfs's default 20 s attribute cache, `sshfs -o slave -o allow_other`); a
-# rewrite that SHRANK the file (249/249) or kept its length (12/12) read the
-# current bytes. The stale view heals on the next open — every stale first
-# read was correct on the second, 0.25 s later — so a verified re-read is a
-# real remedy, not a hope. objdiff_build.sh's (2a) container-write -> (2b)
-# host mtc1_fixup.py (inserts nop lines: the file GROWS) -> (2c) container
-# assemble is exactly this shape: a .s cut at its old length loses its tail —
-# an `unterminated` assembler error the worker reads as their own edit, or a
-# silently short object and a wrong unit %. A byte count cannot see a same-
-# length change, so content (md5) is what is compared.
+# The worktree reaches the ee-build container through the VM's fuse.sshfs
+# mount of /Users/<you>. A file the HOST rewrites is read TRUNCATED by a
+# container whenever the VM still holds the file's cached size from an earlier
+# access: the read stops at that CACHED length — the size the VM last
+# read/stat'ed, not necessarily the previous host length, since a host rewrite
+# the VM never read does not refresh it (FACT #7479) — so the container sees
+# the NEW content cut short. Measured on this host (tools/ee/.t542/, 480 + 60
+# + 22 trials, both VMs, tools/ee/ and going-decompiled/build/usa/ paths): a
+# rewrite that GREW the file read truncated in 224 of 225 cases at Δ = 0..5 s
+# and 18 of 20 at Δ = 10 s after the VM's last access (+ ~3 s of docker
+# overhead; the 2 misses were first trials the VM had never seen), and in 0 of
+# 40 at Δ = 20 and 30 s (sshfs's default 20 s attribute cache, `sshfs -o slave
+# -o allow_other`); a rewrite that SHRANK the file (249/249) or kept its
+# length (12/12) read the current bytes. The stale view heals on a later open
+# — in #542 every stale first read was correct on the second, 0.25 s later;
+# #7479's re-derivation saw 92 of 95 heal on try 2, 2 on try 3 and 1 on try 13
+# (~3 s) — so a verified re-read with a multi-try budget is a real remedy, not
+# a hope. objdiff_build.sh's (2a) container-write -> (2b) host mtc1_fixup.py
+# (inserts nop lines: the file GROWS) -> (2c) container assemble is exactly
+# this shape: a .s cut at its old length loses its tail — an `unterminated`
+# assembler error the worker reads as their own edit, or a silently short
+# object and a wrong unit %. A byte count cannot see a same-length change, so
+# content (md5) is what is compared.
 #
 # Two subcommands, one file, so host and container agree on the digest:
 #
