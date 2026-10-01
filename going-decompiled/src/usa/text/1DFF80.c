@@ -585,7 +585,7 @@ void EmitMobyGlowPackets(void *list) {
         if (*(s32 *)(rec + 0x0) > 0) {
             i = 0;
             do {
-                work = func_002E0568(work);
+                work = (u8 *)func_002E0568(work);
                 i++;
                 func_002E19C0(sp, &sp[4]);
                 func_002E0EA0(0x70000000, *(s32 *)(D_001B1E90 + 0x170), *(s32 *)(rec + 0x4));
@@ -1695,7 +1695,7 @@ s32 PlayGlobalSound(s32 soundIdx, s32 posOverride, s32 owner) {
         return -1;
     }
 
-    slot = StartSoundEmitter((SoundDef *)(pool + soundIdx * 0x20), posOverride, (void *)owner,
+    slot = StartSoundEmitter((SoundDef *)(pool + soundIdx * 0x20), posOverride, (Moby *)owner,
                              NULL, 0x400);
     if (slot >= 0) {
         e = g_listenerPosHistory + slot * 0x70;

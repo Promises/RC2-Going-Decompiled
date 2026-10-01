@@ -108,19 +108,20 @@ extern u8 *g_guiInstance;
 #ifdef TARGET_NATIVE
 /* forward decls for the matched-but-defined-later helpers the #else bodies call,
  * so the ILP32 compile gate sees their real signatures (not an implicit int()). */
-/* Empty-paren externs for GUI primitives referenced only by #else bodies whose
- * call-site arg types vary (unspecified args -> no arg-check -> no prototype
- * conflict); resolves this unit's latent implicit-declaration warning-debt.
- * Byte-neutral: the matching arms never reference these C symbols. */
-extern char *GetLocalizedString();
-extern void *func_003368D0();
-extern void GuiElementInit();
-extern void GuiElementInitTypeB();
-extern void GuiElementInitTypeC();
-extern void GuiElementSetGlyph();
-extern void GuiElementSetText();
-extern void GuiListRowElementInit();
-extern void *func_003374D8();
+/* Prototypes for GUI primitives referenced only by #else bodies (signatures as
+ * the EU twin eu/text/249FE8.c and usa/text/235FE8.c declare them). They were
+ * empty-paren K&R externs, which C++ reads as (void); the call sites cast to
+ * these types instead. Byte-neutral: this block is TARGET_NATIVE-only and the
+ * matching arms never reference these C symbols. */
+extern char *GetLocalizedString(s32 textId);
+extern void *func_003368D0(void *p);
+extern void GuiElementInit(GuiWidget *elem, u8 *tmpl, void *pool);
+extern void GuiElementInitTypeB(void *element);
+extern void GuiElementInitTypeC(void *element);
+extern void GuiElementSetGlyph(void *e, u8 *atlas, s32 code);
+extern void GuiElementSetText(void *e, s32 text); /* text id, or a raw char* */
+extern void GuiListRowElementInit(void *element);
+extern void *func_003374D8(void *listHead);
 
 void func_0034A318(GuiWidget *w, s32 idx, f32 a, f32 b, f32 c, f32 d, f32 e);
 void func_0034A350(GuiWidget *w, s32 idx, f32 a, f32 b);
@@ -131,9 +132,7 @@ void func_0034A7B0(GuiWidget *w, s32 idx1, s32 idx2, f32 a, f32 b, f32 c, f32 d)
  * stay INCLUDE_ASM / runtime stubs natively. */
 f32 *func_00336C18(GuiWidget *e);                                /* scratch vec2 */
 void GuiElementSetScale(GuiWidget *e, f32 x, f32 y, f32 z, f32 w);
-/* GuiElementSetText / GetLocalizedString are declared empty-paren in the block
- * above: their char* call sites vary, so an empty-paren prototype resolves the
- * implicit-decls without the conflict a fully-typed prototype would cause. */
+/* GuiElementSetText / GetLocalizedString are prototyped in the block above. */
 s32 *GuiElementGetColor(GuiWidget *e);
 s32 GuiTextElementMeasure(GuiWidget *e);
 void GuiTextElementDraw(GuiWidget *e);
@@ -634,7 +633,7 @@ void SetPopupItemText(GuiWidget *w, s32 count, s32 *ids) {
         row = (char *)w + 0x218;
         for (i = count; i != 0; i--) {
             char *text = GetLocalizedString(*ids);
-            GuiElementSetText(row, text);
+            GuiElementSetText(row, (s32)text);
             ids++;
             row += 0x58;
         }

@@ -180,7 +180,7 @@ s32 AcquireProjectileCurveAnchor(void *p1, void *p2, void *p3, Moby *moby, void 
             *(void **)(slot + 0x14) = p2;
             *(void **)(slot + 0x18) = p3;
             if (D_0018A168 != 0) {
-                *(u_long128 *)slot = *(u_long128 *)(g_pHeroMoby + 0xE0);
+                *(u_long128 *)slot = *(u_long128 *)((u8 *)g_pHeroMoby + 0xE0);
             } else {
                 func_002B0E40(&xform, slot, 1);
             }
@@ -466,7 +466,7 @@ void func_003002E0(void) {
     }
 
     case 1: {
-        func_003007F8(*(void **)(g_waterPool + 0x60));
+        func_003007F8(*(Moby **)(g_waterPool + 0x60));
         if (poolTimerStep(timer) != 0) {
             *(s16 *)(g_waterPool + 0x32) = (s16)D_001AD7E0;
             *(f32 *)(g_waterPool + 0x34) = 1.0f / IntToFloat((s16)D_001AD7E0);
@@ -478,7 +478,7 @@ void func_003002E0(void) {
 
     case 2: {
         poolMoby = *(void **)(g_waterPool + 0x60);
-        func_003007F8(poolMoby);
+        func_003007F8((Moby *)poolMoby);
         func_00300C08();
         if (poolTimerStep(timer) != 0) {
             *(s16 *)(g_waterPool + 0x32) = 2;
@@ -495,7 +495,7 @@ void func_003002E0(void) {
         if (poolTimerStep(timer) != 0) {
             *(s16 *)(g_waterPool + 0x32) = 0xC;
             *(s16 *)(g_waterPool + 0x30) = 4;
-            *(void **)(g_waterPool + 0x60) = func_003009F8(poolMoby);
+            *(void **)(g_waterPool + 0x60) = func_003009F8((Moby *)poolMoby);
         }
         return;
     }
@@ -503,7 +503,7 @@ void func_003002E0(void) {
     case 4: {
         poolMoby = *(void **)(g_waterPool + 0x60);
         if (poolMoby != 0) {
-            func_003007F8(poolMoby);
+            func_003007F8((Moby *)poolMoby);
         }
         AddFxDrawHookLate(func_00300E70, 0);
         /* 0x3DAAAAAB ~= 0.0833333, 0x43000000 = 128.0 */
@@ -521,7 +521,7 @@ void func_003002E0(void) {
     case 5: {
         poolMoby = *(void **)(g_waterPool + 0x60);
         if (poolMoby != 0) {
-            func_003007F8(poolMoby);
+            func_003007F8((Moby *)poolMoby);
         }
         if (poolTimerStep(timer) != 0) {
             *(s16 *)(g_waterPool + 0x32) = 3;
@@ -533,7 +533,7 @@ void func_003002E0(void) {
     case 6: {
         poolMoby = *(void **)(g_waterPool + 0x60);
         if (poolMoby != 0) {
-            func_003007F8(poolMoby);
+            func_003007F8((Moby *)poolMoby);
         }
         AddFxDrawHookLate(func_00300B88, 0);
         if (poolTimerStep(timer) == 0) {
@@ -916,7 +916,7 @@ void func_00301190(s32 *state, s32 slot) {
     s32 count;
 
     entry[0] = 0;
-    __asm__ __volatile__("" ::: "memory");
+    __asm__ __volatile__("" : : : "memory");
     flagEntry = entry;
     __asm__("" : "+r"(flagEntry));
     flagEntry[0x40] = 0;
