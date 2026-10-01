@@ -48,6 +48,12 @@
 #              `!defined(MATCH_<fn>)` (INCLUDE_ASM for the 2.9 link in build.sh) is
 #              compiled here. Owns exactly the functions those guards name; the
 #              list is written to tools/ee/.objdiff/<region>/<unit>/engine_funcs.txt.
+#   s136os   — not a third object: the tools/ee/s136os_functions.txt rows of the
+#              unit are compiled alone by SN 2.95.3 v1.36 -fopt-stack and spliced
+#              into the sdk29 base.s over their S136OS_SLOT lines by
+#              tools/ee/s136os_splice.sh, the helper build.sh runs at the same
+#              point, so obj/<unit>.o carries the image's bytes for them and
+#              their rows are scored from it (task #1257, FACT #8810).
 # WHY per FUNCTION and not per unit: routing a whole engine-region unit through
 # the 2.96 arm was measured (t276, 2026-09-13) and it un-matches rows that are
 # byte-exact under 2.9 today (text/188858 16->12, text/235FE8 73->65,
@@ -106,7 +112,8 @@
 # $BASECFILE again before (2a), and $W/base96.s — rewritten on the host by the
 # (2b) post-passes, and GROWN by every nop mtc1_fixup.py inserts — before the
 # (2c) assemble (asm_unit.sh, via ASM_UNIT_S_MD5), and the dli allowlist at
-# every assemble (asm_unit.sh, via ASM_UNIT_DLISITES_MD5). NOT guarded: the include
+# every assemble (asm_unit.sh, via ASM_UNIT_DLISITES_MD5), and the s136os
+# selector before the splice (s136os_splice.sh, via S136OS_FUNCS_MD5). NOT guarded: the include
 # tree and the frozen asm .s files (git-written, read through the stamped
 # mirror), and the container-write -> host-read edge of (2a)->(2b), which
 # sshfs flushes on close before `docker run` returns.
@@ -331,10 +338,12 @@ CPPDEF96="-D__GNUC_MINOR__=96 $CPPDEF_COMMON $MATCHDEFS"
 TGTC_MD5="$(sh tools/ee/mount_sync.sh md5 "$TGTC")"
 BASE_MD5="$(sh tools/ee/mount_sync.sh md5 "$BASECFILE")"
 DLISITES_MD5="$(sh tools/ee/mount_sync.sh md5 tools/ee/ps2eeas_dli_sites.txt)"
+# The s136os selector is host-written too; s136os_splice.sh verifies it (task #1257).
+S136OS_MD5="$(sh tools/ee/mount_sync.sh md5 tools/ee/s136os_functions.txt)"
 # $OBJ and $EXPECTED are deleted in the container first, like $OBJ96 (see the
 # header for why in the container): a run that stops early must not leave the
 # previous run's object for the report to read (ledger-29550 left a stale obj).
-docker --context "$EE_CTX" run --rm -e ASMFIX_SHARED -e ASM_UNIT_DLISITES_MD5="$DLISITES_MD5" -v "$ROOT":/work ee-build sh -c "
+docker --context "$EE_CTX" run --rm -e ASMFIX_SHARED -e ASM_UNIT_DLISITES_MD5="$DLISITES_MD5" -e S136OS_FUNCS_MD5="$S136OS_MD5" -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work; WIBO=/usr/local/bin/wibo; G=tools/ee/cc/lib/gcc-lib/ee/2.9-ee-991111
   sh tools/ee/mount_sync.sh check $TGTC $TGTC_MD5
   sh tools/ee/mount_sync.sh check $BASECFILE $BASE_MD5
@@ -344,6 +353,7 @@ docker --context "$EE_CTX" run --rm -e ASMFIX_SHARED -e ASM_UNIT_DLISITES_MD5="$
   \$WIBO \$G/cc1.exe -quiet -O2 -G0 $W/target.i -o $W/target.s
   sh tools/ee/asm_unit.sh $REGION /work/$W/target.s /work/$EXPECTED
   sh tools/ee/ee_cc1.sh sdk29 $BASECFILE $W/base.i $W/base.s '$CPPDEF $INC' '-O2 $GFLAG $CC1EXTRA'
+  sh tools/ee/s136os_splice.sh $REGION $UNIT $BASECFILE $W/base.s $GFLAG '$CC1EXTRA'
   sh tools/ee/asm_unit.sh $REGION /work/$W/base.s /work/$OBJ $GFLAG
   mips-linux-gnu-nm $EXPECTED | awk '/\\.NON_MATCHING\$/{print \"-N\", \$3}' > $W/nmstrip.txt
   test -s $W/nmstrip.txt && mips-linux-gnu-strip $EXPECTED \$(cat $W/nmstrip.txt) || true

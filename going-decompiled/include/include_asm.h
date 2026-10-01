@@ -31,6 +31,16 @@
     __asm__(".globl " #OLD "\n.set " #OLD ", " #NEW "\n")
 #endif
 
+/* The place of a function whose EE body is compiled by the s136os arm (SN
+ * 2.95.3 v1.36 -fopt-stack, selected in tools/ee/s136os_functions.txt):
+ * tools/ee/s136os_splice.sh replaces this line of the unit's cc1 output with
+ * that compile's .ent..end block. An assembler comment, no bytes: a build that
+ * skips the splice loses the function and shifts the image, it never silently
+ * keeps the ROM's asm. */
+#ifndef S136OS_SLOT
+#define S136OS_SLOT(NAME) __asm__("#S136OS_SLOT " #NAME "\n")
+#endif
+
 #if INCLUDE_ASM_USE_MACRO_INC
 __asm__(".include \"include/macro.inc\"\n");
 #else
@@ -47,6 +57,9 @@ __asm__(".include \"include/labels.inc\"\n");
 #endif
 #ifndef INCLUDE_ASM_ALIAS
 #define INCLUDE_ASM_ALIAS(OLD, NEW)
+#endif
+#ifndef S136OS_SLOT
+#define S136OS_SLOT(NAME)
 #endif
 
 #endif /* !defined(M2CTX) && !defined(PERMUTER) */

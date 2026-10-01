@@ -156,12 +156,16 @@ u32 ColorLerpPacked(u32 colorA, u32 colorB, f32 t);
 #endif
 
 /* func_00348BD0: run the type-C element init on the widget and return it.
- * Best 99.6%: the original packs the two callee saves ($16,$31) into a 0x10
- * frame (8-byte slots); the pinned cc1 reserves a 0x20 frame (16-byte slots).
- * WALL (matching arm): 0x20-vs-0x10 frame for 2 callee-saves; matching arm stays
- * asm. The #else is the functional model. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00348BD0);
+ * w: the widget; returns w. The original packs the two callee saves ($16,$31)
+ * into a 0x10 frame (8-byte slots), which cc1 2.9 cannot emit (0x20 frame,
+ * 16-byte slots: 99.6%, the wall recorded below); SN 2.95.3 v1.36 with
+ * -fopt-stack emits it byte-exact (FACT #8810).
+ * GUARD (task #1257): on EE this C is the image's body, compiled alone by the
+ * s136os arm (tools/ee/s136os_functions.txt) and spliced over the S136OS_SLOT
+ * line by tools/ee/s136os_splice.sh; the 2.9 compile sees only the slot. On
+ * native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00348BD0)
+S136OS_SLOT(func_00348BD0);
 #else
 /* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
  * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1

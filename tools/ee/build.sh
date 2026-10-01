@@ -138,6 +138,13 @@ if [ -d "$SRC" ]; then
     rm -f "$o" "$ui" "$us"
     sh tools/ee/ee_cc1.sh sdk29 "$c" "$ui" "$us" "$CPPDEF $INCC" "-O2 $GFLAG $CC1EXTRA" \
       || { echo "BUILD FAIL (compile): $c" >&2; exit 1; }
+    # s136os arm (task #1257): the unit's tools/ee/s136os_functions.txt rows are
+    # compiled alone by SN 2.95.3 v1.36 -fopt-stack and spliced over their
+    # S136OS_SLOT lines; a unit with neither is untouched. Shared with
+    # objdiff_build.sh — the helper is the one copy.
+    u="${c#$SRC/}"
+    sh tools/ee/s136os_splice.sh "$REGION" "${u%.*}" "$c" "$us" "$GFLAG" "$CC1EXTRA" \
+      || { echo "BUILD FAIL (s136os splice): $c" >&2; exit 1; }
     sh tools/ee/asm_unit.sh "$REGION" "/work/$us" "/work/$o" "$GFLAG" \
       || { echo "BUILD FAIL (as): $c" >&2; exit 1; }
     [ -s "$o" ] || { echo "BUILD FAIL (no object produced): $c" >&2; exit 1; }

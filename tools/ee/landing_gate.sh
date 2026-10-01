@@ -907,7 +907,7 @@ do_build() {
   done
   # The dli allowlist's host md5 goes to every asm_unit.sh in build.sh, which
   # verifies its read before the dli pass (task #1205, FACT #8713).
-  in_vm "B=$BUILD; rm -rf \$B/going-decompiled \$B/$BASENAME.elf \$B/$BASENAME.lma.elf \$B/$BASENAME.rom \$B/ld.log \$B/ld.lma.log \$B/$BASENAME.map \$B/all_addr_syms.ld;$sync ASM_UNIT_DLISITES_MD5=$(sh "$HERE/mount_sync.sh" md5 "$HERE/ps2eeas_dli_sites.txt") sh tools/ee/build.sh $REGION" > "$OUT/build.log" 2>&1
+  in_vm "B=$BUILD; rm -rf \$B/going-decompiled \$B/$BASENAME.elf \$B/$BASENAME.lma.elf \$B/$BASENAME.rom \$B/ld.log \$B/ld.lma.log \$B/$BASENAME.map \$B/all_addr_syms.ld;$sync ASM_UNIT_DLISITES_MD5=$(sh "$HERE/mount_sync.sh" md5 "$HERE/ps2eeas_dli_sites.txt") S136OS_FUNCS_MD5=$(sh "$HERE/mount_sync.sh" md5 "$HERE/s136os_functions.txt") sh tools/ee/build.sh $REGION" > "$OUT/build.log" 2>&1
   say "     build.sh rc=$? ($(wc -l < "$OUT/build.log" | tr -d ' ') log lines -> $OUT/build.log)"
   tail -4 "$OUT/build.log" | sed 's/^/     /'
 }
