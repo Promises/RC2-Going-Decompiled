@@ -1237,37 +1237,38 @@ void func_0027BFA8(void) {
     *(volatile u64 *)0x120000D0 = 0;
 }
 
-/* SetupViewModelDepthRange - set a near/compressed GS depth range for the
- * held-item view-model pass so the weapon never clips into world geometry, then
- * restore the default ALPHA blend. The depth scale clamps the (zNear+lo) shift
- * amount to 0x10.
- * Near-miss: the pinned cc1 sibling-call-optimizes the trailing
- * AppendGsRegPacket(...) to `j AppendGsRegPacket` instead of the original's
- * call+return frame, and builds the 0x8000000044 constant via dsll32 rather
- * than the original's `ori 0x8000; dsll 24`. Correct C preserved as the
- * portable body. */
-/* TODO(match) t493: sdk29 63.62% / engine96 55.82% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (sdk29): CONST-DLI — with the sibcall
- * guard 92.94% sdk29; the 4-row residual is the synthesis of the 64-bit constant 0x8000000044: the
- * original spells it `ori 0x8000; dsll 24; ori 0x44`, cc1 2.9 `addiu 128; dsll32 0; ori 0x44`
- * (companion of FACT #7379, constant-synthesis is not a phrasing). Levers: sibcall guard RUN:
- * sdk29 92.94% / engine96 79.09%; engine96 with sched1 MEASURED (flag not landed): 57.59%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027C020);
-#else
-void func_0027C020(s32 zNearBits, s32 lo) {
-    s32 shift = zNearBits + lo;
+/** func_0027C020 (SetupViewModelDepthRange, the name RenderHeldItemViewModel's
+ *  note uses) - bind a (1 << log2Width) x (1 << log2Height) offscreen render
+ *  target at the top of VRAM, then queue three GS register writes around
+ *  func_00285D48(0x100, 0x100).
+ *  @param log2Width   log2 of the target width in pixels
+ *  @param log2Height  log2 of the target height in pixels
+ *  The target's VRAM byte address is 0x3FF000 minus its 32-bpp size
+ *  (4 << (log2Width + log2Height), the exponent clamped to 0x10), rounded down
+ *  to the 8 KiB FBP granule; func_002859E0's argument order is FACT #5662's,
+ *  which contradicts the "depth range" reading this function was named for.
+ *  GS writes: TEST_1 (0x47) = 0x30000, then ALPHA_1 (0x42) = 0x8000000044
+ *  before and after func_00285D48. No return.
+ *  Two build devices, neither a C phrasing:
+ *  - the empty asm after the last call stops cc1 sibcalling it (`j
+ *    AppendGsRegPacket`); the ROM keeps the call + return frame (RULING #8483);
+ *  - both `dli $5,0x8000000044` are assembled with SN Ps2EeAs's expansion
+ *    (`ori 0x8000; dsll 24; ori 0x44`) through this function's row in
+ *    tools/ee/ps2eeas_dli_sites.txt (RULING #8549); GNU as alone gives
+ *    `addiu 128; dsll32 0; ori 0x44`, which scores 92.94%.
+ *  MATCHED (task #1194): sdk29 arm. */
+void func_0027C020(s32 log2Width, s32 log2Height) {
+    s32 shift = log2Width + log2Height;
     if (shift > 0x10) {
         shift = 0x10;
     }
-    func_002859E0(zNearBits, lo, ((0x3FF000 - (4 << shift)) >> 13) << 13, 1);
+    func_002859E0(log2Width, log2Height, ((0x3FF000 - (4 << shift)) >> 13) << 13, 1);
     AppendGsRegPacket(0x47, 0x30000);
     AppendGsRegPacket(0x42, 0x8000000044);
     func_00285D48(0x100, 0x100);
     AppendGsRegPacket(0x42, 0x8000000044);
+    __asm__ __volatile__("");
 }
-#endif
 
 /** func_0027C0A8 — thin wrapper: queue the ctx1 (FRAME_1 / FB A) draw-env REF
  *  packet. No params, no return. The empty asm statement keeps cc1 from

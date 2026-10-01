@@ -45,6 +45,11 @@
 # twins of the sites below are the same words (FACT #8544; for func_0027DF80's
 # mask, the 4 words occur once per ROM: USA 0x27E094, EU 0x27DEFC).
 #
+# func_0027C020 compiles `dli $5,0x8000000044` twice, both in reorder mode and
+# each followed by a noreorder `jal`. Its one row (keyed on function and
+# operands) substitutes both. rom_addr names the first; the ROM carries the
+# same 3 words at the second, 0x0027C088 (task #1194).
+#
 # func_0027DF80 is still INCLUDE_ASM, so cc1 compiles no dli in it and its row
 # changes no byte of today's build. It applies once the function is promoted.
 # GNU as gives `lui 0xff; ori 0xfff3; dsll32` for this dli; the ROM has the
@@ -58,4 +63,5 @@ usa      func_002904B0  0x002904CC  $12,0x4400000000008001   340c8800 000c63fc 3
 usa      func_002904B0  0x0029053C  $4,0xfffff000000000      3404ffff 00042438 3484f000 00042638
 usa      func_002904B0  0x002905C4  $6,0xfffff000000000      3406ffff 00063438 34c6f000 00063638
 usa      func_00290640  0x0029065C  $13,0x4400000000008001   340d8800 000d6bfc 35ad8001
+usa      func_0027C020  0x0027C068  $5,0x8000000044          34058000 00052e38 34a50044
 usa      func_0027DF80  0x0027E094  $7,0xfffff300000000       3407ffff 00073c38 34e7f300 00073e38
