@@ -88,6 +88,27 @@ carry_externs() {
     !(sym in have) { print x }' "$1" "$2" | sort -u | sed 's/^/\t/'
 }
 
+# extract_block <fn> <s136os.s> <out>: write the block — the .align/.p2align/
+# .globl/.text/.section .text directives cc1 prints right before `.ent <fn>`,
+# through `.end <fn>` — to <out>; on no single .ent/.end pair, print why.
+# `.file` (task #1291, FACT #8856): cc1plus prints `.file 2 "<unit>.cpp"`
+# between `.text` and `.ent`, so the scan steps OVER it (stopping there lost the
+# member's `.globl` and `.align` and bound it LOCAL), but the line is NOT
+# spliced: the unit's own 2.9 TU already declares the same `.file 2` for the
+# same source, and a `.c` member's block never carried one either.
+extract_block() {
+  awk -v fn="$1" -v out="$3" '
+    function isdir(l) { return l ~ /^[ \t]*(\.align|\.p2align|\.text|\.section[ \t]+\.text|\.file)([ \t]|$)/ || l ~ ("^[ \t]*\\.globl[ \t]+" fn "[ \t]*$") }
+    { L[NR] = $0; sub(/\r$/, ""); K[NR] = $0 }
+    $1 == ".ent" && $2 == fn { ne++; s = NR }
+    $1 == ".end" && $2 == fn { nd++; e = NR }
+    END {
+      if (ne != 1 || nd != 1 || e < s) { print "BLOCK " ne " .ent / " nd " .end"; exit }
+      b = s; while (b > 1 && isdir(K[b - 1])) b--
+      for (i = b; i <= e; i++) if (i >= s || K[i] !~ /^[ \t]*\.file([ \t]|$)/) print L[i] > out
+    }' "$2"
+}
+
 if [ "${1:-}" = "--selftest" ]; then
   # Arms: X is declared by the unit at 16 (a device) and by the solo TU at 4
   # -> no X line (FACT #8838's wall); Y is solo-only -> carried; Z is declared
@@ -103,6 +124,15 @@ if [ "${1:-}" = "--selftest" ]; then
   else echo "  FAIL arm 1: $n .extern X line(s) carried over the unit's .extern X, 16:"; sed 's/^/        /' "$T/ext"; rc=1; fi
   if [ "$(cat "$T/ext")" = "$(printf '\t.extern Y, 4')" ]; then echo "  OK   arm 2: solo-only .extern Y, 4 carried (the whole carry is exactly that line)"
   else echo "  FAIL arm 2: carry is not exactly '.extern Y, 4':"; sed 's/^/        /' "$T/ext"; rc=1; fi
+  # Arm 3 (task #1291, FACT #8856): cc1plus's preamble has `.file 2` between
+  # `.text` and `.ent`. The block must keep `.align 3` and `.globl f` and drop
+  # the `.file`; a scan that stops at `.file` (the pre-#1291 helper) starts the
+  # block at `.ent` and fails here. The `.end g` above bounds the scan.
+  printf '\t.file\t1 "u.i"\n\t.end\tg\n\t.align\t3\n\t.globl\tf\n\t.text\n\t.file\t2 "u.cpp"\n\t.ent\tf\nf:\n\tjr\t$31\n\t.end\tf\n' > "$T/cpp.s"
+  extract_block f "$T/cpp.s" "$T/blk" > "$T/why"
+  if [ ! -s "$T/why" ] && [ "$(cat "$T/blk")" = "$(printf '\t.align\t3\n\t.globl\tf\n\t.text\n\t.ent\tf\nf:\n\tjr\t$31\n\t.end\tf')" ]; then
+    echo "  OK   arm 3: .cpp preamble with .file before .ent keeps .align 3 and .globl f, drops .file"
+  else echo "  FAIL arm 3: block is not .align 3/.globl f/.text/.ent f..end f:"; cat "$T/why" "$T/blk" 2>/dev/null | sed 's/^/        /'; rc=1; fi
   [ "$rc" = 0 ] && echo "#### s136os_splice --selftest: PASS" || echo "#### s136os_splice --selftest: FAIL"
   exit "$rc"
 fi
@@ -151,18 +181,7 @@ OUT="$UNIT_S"
 for f in $ROWS; do
   sh tools/ee/ee_cc1.sh s136 "$SRC" "$TMP/$f.i" "$TMP/$f.s" "$CPPDEF $INC -DS136OS_$f" "-O2 $GFLAG $CC1EXTRA -fopt-stack" \
     || fatal "s136 $FE compile failed for $f (ee_cc1.sh s136 $SRC)"
-  # The block: the .align/.p2align/.globl/.text/.section .text directives cc1
-  # prints right before `.ent <fn>`, through `.end <fn>`.
-  awk -v fn="$f" -v out="$TMP/$f.blk" '
-    function isdir(l) { return l ~ /^[ \t]*(\.align|\.p2align|\.text|\.section[ \t]+\.text)([ \t]|$)/ || l ~ ("^[ \t]*\\.globl[ \t]+" fn "[ \t]*$") }
-    { L[NR] = $0; sub(/\r$/, ""); K[NR] = $0 }
-    $1 == ".ent" && $2 == fn { ne++; s = NR }
-    $1 == ".end" && $2 == fn { nd++; e = NR }
-    END {
-      if (ne != 1 || nd != 1 || e < s) { print "BLOCK " ne " .ent / " nd " .end"; exit }
-      b = s; while (b > 1 && isdir(K[b - 1])) b--
-      for (i = b; i <= e; i++) print L[i] > out
-    }' "$TMP/$f.s" > "$TMP/$f.why"
+  extract_block "$f" "$TMP/$f.s" "$TMP/$f.blk" > "$TMP/$f.why"
   [ ! -s "$TMP/$f.why" ] || fatal "no single .ent/.end block for $f in $TMP/$f.s ($(cat "$TMP/$f.why"))"
   # SHAPE: no section switch after the preamble, every $L reference defined here.
   SHAPE="$(awk '
