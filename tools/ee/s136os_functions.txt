@@ -44,3 +44,15 @@ usa text/1B4218 CheckTargetInRangeBand
 usa text/1B4218 DriveMobyTowardPoint
 usa text/1B4218 CheckMobyGroundMover
 usa text/1B4218 SetMobyWaypointPath
+usa text/1B4218 CheckMobyPathBlocked
+usa text/1B4218 StopDialogVoice
+usa text/1B4218 StartFileLoadWithCallback
+usa text/1B4218 StartFileLoadPumpingVoice
+usa text/1CA080 func_002CE830
+usa text/1CA080 func_002D0110
+usa text/1D54C0 func_002D5A10
+usa text/1D54C0 func_002DC838
+usa text/1D54C0 func_002DC878
+usa text/1D54C0 func_002DD858
+usa text/1EFFC0 SetVendorCaption
+usa text/248B50 GuiScreenSetEventAndReveal

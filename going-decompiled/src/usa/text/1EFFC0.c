@@ -2451,7 +2451,8 @@ void func_00115DA8(s32 widget, void *fmt, s32 captionId);
  * The former comment called the 8-byte packing a wall; the MECHANISM is right
  * and is kept. What it did not say is that the packing is an ARM CHOICE (#565,
  * func_002A0480) which here does NOT pay: the engine arm buys the stride and
- * loses the schedule, so neither arm closes.
+ * loses the schedule, so neither of those arms closes; the s136os arm does
+ * (GUARD below).
  * The restore ORDER (ROM: ld s0,0x0 then ld ra,0x8) IS reachable on engine96:
  * a trailing __asm__ __volatile__("") after the last store gives it (task #749,
  * diff96.sh per-function probe 76.20% -> 77.00%, re-derived by task #762).
@@ -2459,10 +2460,13 @@ void func_00115DA8(s32 widget, void *fmt, s32 captionId);
  * into s0 before %hi(g_vendorCaptionFmt). Task #762 got the IDENTICAL listing
  * (diff96.sh 77.00%) from five variants: sprintf's variadic prototype, fmt and
  * dst hoisted into locals, a VendorUiState * alias, the assignment inside the
- * argument, and sched1 ON. So this is not a source-order lever. Left
- * INCLUDE_ASM as the portable #else impl. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", SetVendorCaption);
+ * argument, and sched1 ON. So this is not a source-order lever on 2.96. */
+/* GUARD (task #1271): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_SetVendorCaption)
+S136OS_SLOT(SetVendorCaption);
 #else
 void SetVendorCaption(s32 captionId) {
     func_00115DA8(g_vendorUi.captionWidget, g_vendorCaptionFmt, captionId);

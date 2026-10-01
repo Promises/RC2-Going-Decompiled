@@ -1689,9 +1689,13 @@ void func_0034BD28(GuiWidget *w, f32 x, f32 y) {
  * is currently armed-for-reveal (+0x400 set), consume that flag (+0x400=0), raise
  * the "dirty/redraw" flag (+0xC=1), and trigger the four corner reveal animations
  * (sub-widgets at +0x1D4/+0x25C/+0x2E4/+0x36C) forward via func_0034A370(.,1).
- * WALL: 2 callee saves ($16,$31) — 0x10-frame-vs-packed divergence. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", GuiScreenSetEventAndReveal);
+ * WALL (cc1 2.9 and 2.96): 2 callee saves ($16,$31) — 0x10-frame-vs-packed divergence. */
+/* GUARD (task #1271): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiScreenSetEventAndReveal)
+S136OS_SLOT(GuiScreenSetEventAndReveal);
 #else
 /* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
  * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1

@@ -488,16 +488,20 @@ s32 func_002D5540(void) {
 #endif
 
 /* Toggle the map slot at g_particleFxBlob+0x100 +0x1CC via FreeMenuWorkBuffer and
- * store the result back. Returns 0. Wall: 2-GPR callee-save (8-byte-packed 0x10
+ * store the result back. Returns 0. Wall (cc1 2.9): 2-GPR callee-save (8-byte-packed 0x10
  * frame). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5A10);
+/* GUARD (task #1271): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D5A10)
+S136OS_SLOT(func_002D5A10);
 #else
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 98.85% / engine96 68.77%; better arm sdk29; 7 differing rows
  * on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing insn:
  * ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
+    /* MATCHED on the s136os arm (task #1271), not by cc1 2.9. */
 s32 func_002D5A10(void) {
     u8 *blk = (u8 *)g_menuScreenBlock;
     *(s32 *)(blk + 0x1CC) = FreeMenuWorkBuffer(*(s32 *)(blk + 0x1CC));
@@ -2557,15 +2561,19 @@ s32 func_002DC800(MenuWidget *obj) {
 
 /* Clear the current screen's +0x12C field, then store the result of the
  * map-slot allocator AllocMenuWorkBuffer(0) into obj->0x54. Returns 0.
- * Wall: 2-GPR callee-save (8-byte-packed 0x10 frame). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC838);
+ * Wall (cc1 2.9): 2-GPR callee-save (8-byte-packed 0x10 frame). */
+/* GUARD (task #1271): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002DC838)
+S136OS_SLOT(func_002DC838);
 #else
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 99.00% / engine96 69.33%; better arm sdk29; 7 differing rows
  * on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing insn:
  * ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
+    /* MATCHED on the s136os arm (task #1271), not by cc1 2.9. */
 s32 func_002DC838(MenuWidget *obj) {
     *(s32 *)((u8 *)g_pCurrentMenuScreen[0] + 0x12C) = 0;
     *(s32 *)((u8 *)obj + 0x54) = AllocMenuWorkBuffer(0);
@@ -2574,15 +2582,19 @@ s32 func_002DC838(MenuWidget *obj) {
 #endif
 
 /* Toggle the map-slot referenced by obj->0x54 via FreeMenuWorkBuffer and store the
- * result back. Returns 0. Wall: 2-GPR callee-save (8-byte-packed 0x10 frame). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC878);
+ * result back. Returns 0. Wall (cc1 2.9): 2-GPR callee-save (8-byte-packed 0x10 frame). */
+/* GUARD (task #1271): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002DC878)
+S136OS_SLOT(func_002DC878);
 #else
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 98.75% / engine96 66.67%; better arm sdk29; 7 differing rows
  * on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing insn:
  * ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
+    /* MATCHED on the s136os arm (task #1271), not by cc1 2.9. */
 s32 func_002DC878(MenuWidget *obj) {
     *(s32 *)((u8 *)obj + 0x54) = FreeMenuWorkBuffer(*(s32 *)((u8 *)obj + 0x54));
     return 0;
@@ -3026,15 +3038,19 @@ s32 func_002DD7E8(MenuWidget *obj) {
 #endif
 
 /* Toggle the map-slot referenced by obj->0x48 via FreeMenuWorkBuffer and store the
- * result back. Returns 0. Wall: 2-GPR callee-save (8-byte-packed 0x10 frame). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DD858);
+ * result back. Returns 0. Wall (cc1 2.9): 2-GPR callee-save (8-byte-packed 0x10 frame). */
+/* GUARD (task #1271): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002DD858)
+S136OS_SLOT(func_002DD858);
 #else
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 98.75% / engine96 66.67%; better arm sdk29; 7 differing rows
  * on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing insn:
  * ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
+    /* MATCHED on the s136os arm (task #1271), not by cc1 2.9. */
 s32 func_002DD858(MenuWidget *obj) {
     *(s32 *)((u8 *)obj + 0x48) = FreeMenuWorkBuffer(*(s32 *)((u8 *)obj + 0x48));
     return 0;

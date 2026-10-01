@@ -2697,10 +2697,14 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B7218);
  * clears the spline polyline (func_002A9958) AND does not project onto the edge
  * (func_002CA138 misses), reports the path clear (returns 1). Any block marks
  * stateFlags bit 0 (path-active) and returns 0.
- * WALL: save-layout — 2 callee-saves + $ra at 8-byte spacing, with fp temps; matching
- * arm stays INCLUDE_ASM, portable #else below. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", CheckMobyPathBlocked);
+ * WALL (cc1 2.9): save-layout — 2 callee-saves + $ra at 8-byte spacing, with fp
+ * temps; the s136os arm reproduces it (GUARD below). */
+/* GUARD (task #1271): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_CheckMobyPathBlocked)
+S136OS_SLOT(CheckMobyPathBlocked);
 #else
 extern s32 func_002CA138(s32 constraintId, Vec4 *pos, Vec4 *point, f32 len);  /* 0x2CA138 project onto edge */
 s32 CheckMobyPathBlocked(Moby *moby) {
@@ -3285,12 +3289,16 @@ s32 StartDialogVoice(s32 a0, s32 a1, s32 a2, s32 a3) {
  * (secondaryFlag == 3); in that case it sends the snd stop command and advances
  * the secondary flag to 4 (stopping). Returns 1 when it issued the stop, 0
  * otherwise.
- * WALL (matching build): save-layout — saves $16 + $31 (two callee-saves at
+ * WALL (cc1 2.9): save-layout — saves $16 + $31 (two callee-saves at
  * 8-byte spacing), which the pinned cc1 packs at 16-byte spacing. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StopDialogVoice);
+/* GUARD (task #1271): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_StopDialogVoice)
+S136OS_SLOT(StopDialogVoice);
 #else
-/* TODO(match): functional equivalent - not byte-exact; save-layout wall. */
+/* MATCHED on the s136os arm (task #1271), not by cc1 2.9; save-layout wall. */
 extern void func_00133400(s32 handle);     /* 0x133400 snd_StopVoice: queues 989snd cmd 0x2E for the voice handle */
 s32 StopDialogVoice(void) {
     if (g_fileLoadVoiceState.secondaryState == 0) {
@@ -4011,11 +4019,15 @@ s32 StartFileLoad(s32 dest, s32 lbn, s32 sectorCount) {
 
 /* Like StartFileLoad but also registers a completion callback fn(arg, success),
  * fired by PumpFileLoadCompletion when the read finishes.
- * WALL: save-layout — saves $16/$17/$31 (three callee-saves at 8-byte spacing). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StartFileLoadWithCallback);
+ * WALL (cc1 2.9): save-layout — saves $16/$17/$31 (three callee-saves at 8-byte spacing). */
+/* GUARD (task #1271): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_StartFileLoadWithCallback)
+S136OS_SLOT(StartFileLoadWithCallback);
 #else
-/* TODO(match): functional equivalent - not byte-exact; save-layout wall. */
+/* MATCHED on the s136os arm (task #1271), not by cc1 2.9; save-layout wall. */
 s32 StartFileLoadWithCallback(s32 dest, s32 lbn, s32 sectorCount,
                               void *callback, s32 callbackArg) {
     s32 size = StartFileLoad(dest, lbn, sectorCount);
@@ -4108,16 +4120,20 @@ s32 KickRawFileRead(s32 dest, s32 lbn, s32 sectors) {
  * kicks the file load (StartFileLoad), then pumps the dialog-voice system again,
  * and returns the byte size StartFileLoad reported.
  *
- * NATIVE SHIM (no byte target; matching build uses INCLUDE_ASM above). Derived
+ * Derived
  * register-exact from StartFileLoadPumpingVoice.s @0x2B8BA0 (the pump argument is
  * the literal 1 on both calls; StartFileLoad is fed dest/lbn/sectorCount in arg
  * order and its return is forwarded verbatim).
  *
- * WALL (matching build): save-layout — 3 callee-saves + $ra at 8-byte spacing. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StartFileLoadPumpingVoice);
+ * WALL (cc1 2.9): save-layout — 3 callee-saves + $ra at 8-byte spacing. */
+/* GUARD (task #1271): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_StartFileLoadPumpingVoice)
+S136OS_SLOT(StartFileLoadPumpingVoice);
 #else
-/* TODO(match): functional equivalent - not byte-exact; save-layout wall. */
+/* MATCHED on the s136os arm (task #1271), not by cc1 2.9; save-layout wall. */
 extern s16 PumpDialogVoiceSystem(s32 active);  /* 0x2B8C00 forward decl */
 extern s32 StartFileLoad(s32 dest, s32 lbn, s32 sectorCount);  /* 0x2B8A18 */
 s32 StartFileLoadPumpingVoice(s32 dest, s32 lbn, s32 sectorCount) {

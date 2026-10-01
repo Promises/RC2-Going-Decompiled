@@ -2046,16 +2046,21 @@ s32 func_002CE6D8(void) {
 
 /* GUI wrapper: when the GUI is up, register a widget (instance + 0x3A000) and
  * stash the returned handle in widget[0x34].
- * Wall: 8-byte-packed-save (saves $16 + $31). Preserved as portable C. */
+ * Wall (cc1 2.9): 8-byte-packed-save (saves $16 + $31); the s136os arm
+ * reproduces it (GUARD below). */
 extern s32 func_00345298(void *widget);
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE830);
+/* GUARD (task #1271): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002CE830)
+S136OS_SLOT(func_002CE830);
 #else
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 67.35% -> STRUCTURAL,
  * first differing row @1: ROM `lui v0,0x0  [HI16 0x001A8D04]` vs `(none)`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 99.12% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. */
-/* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame. */
+/* MATCHED on the s136os arm (task #1271), not by cc1 2.9; 2-GPR packed-save frame. */
 s32 func_002CE830(s32 *out) {
     if (g_guiInstance) {
         out[0xD] = func_00345298(g_guiInstance + 0x3A000);
@@ -2485,16 +2490,21 @@ void DrawMenuItemSelectionBox(s32 width, s32 color) {
 
 /* GUI wrapper: when the GUI is up, register a widget (instance + 0x3C160) and
  * stash the returned handle in widget[0x34].
- * Wall: 8-byte-packed-save (saves $16 + $31). Preserved as portable C. */
+ * Wall (cc1 2.9): 8-byte-packed-save (saves $16 + $31); the s136os arm
+ * reproduces it (GUARD below). */
 extern s32 func_00342468(void *widget);
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D0110);
+/* GUARD (task #1271): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D0110)
+S136OS_SLOT(func_002D0110);
 #else
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 67.35% -> STRUCTURAL,
  * first differing row @1: ROM `lui v0,0x0  [HI16 0x001A8D04]` vs `(none)`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 99.12% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. */
-/* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame. */
+/* MATCHED on the s136os arm (task #1271), not by cc1 2.9; 2-GPR packed-save frame. */
 s32 func_002D0110(s32 *out) {
     if (g_guiInstance) {
         out[0xD] = func_00342468(g_guiInstance + 0x3C160);
