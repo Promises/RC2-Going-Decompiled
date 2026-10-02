@@ -466,7 +466,7 @@ segments:
       - [0x1B4218, cpp, text/1B4218]   # moby-bind band (0x2B4298..0x2B9027)
       - [0x1B8FA8, asm, text/1B8FA8] # .text mid 4 tail (0x2B9028..0x2CA0FF)
       - [0x1CA080, cpp, text/1CA080]   # menu-screens A (0x2CA100..0x2D553F, 136 entries)
-      - [0x1D54C0, c, text/1D54C0]   # menu-screens B (0x2D5540..0x2DFFFF, 117 entries)
+      - [0x1D54C0, cpp, text/1D54C0]   # menu-screens B (0x2D5540..0x2DFFFF, 117 entries)
       # USA CARVE MEGA-BATCH PHASE A (2026-06-14): TILE B - the old single asm
       #   tile text/1DFF80 (0x2E0000..0x336067) is retyped into 4 pieces: three
       #   c units (moby-glow/shrub/sky/sound-emit/cinematic; tfrag/tie draw +
