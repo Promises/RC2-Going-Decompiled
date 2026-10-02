@@ -1078,7 +1078,7 @@ s32 IsLevelListEntryEnabled(s32 idx) {
  * to the selected destination via RequestLevelExit(sel, 1) — except the special
  * label 0xB47 with D_1A7C09 clear, which exits to 0x19 instead. Returns the selected
  * index on confirm, else -1.
- * (cc1 2.9, not the image arm, hits the 8-byte-packed-save wall; see GUARD.) */
+ * (matching arm left INCLUDE_ASM: 8-byte-packed-save wall.) */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", LevelSelectListHandleInput);
 #else
@@ -2465,8 +2465,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawMenuPagingC
  * horizontally centred on screen. `width` sets the half-extent (width/2 + 5 either
  * side of screen centre); four func_002904B0 fills form the top (y 0x138..0x13A),
  * bottom (0x14D..0x14F), left and right (0x139..0x14E) borders, all in `color`.
- * (matching arm left INCLUDE_ASM: 8-byte-packed-save wall — cc1 packs the 6-GPR
- * save frame 8-byte vs our 16-byte.) */
+ * (cc1 2.9, not the image arm, hits the 8-byte-packed-save wall — cc1 packs the
+ * 6-GPR save frame 8-byte vs our 16-byte; see GUARD.) */
 /* GUARD (task #1338): on EE this C is the image's body, compiled alone by the
  * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
  * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
