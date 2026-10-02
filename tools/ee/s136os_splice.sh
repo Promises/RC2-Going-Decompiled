@@ -11,7 +11,8 @@
 # ONE helper, two callers: build.sh (the image) and objdiff_build.sh (the unit
 # report's sdk29 base), each between its cc1 2.9 step and asm_unit.sh. Runs
 # INSIDE the ee-build container at the repo root, POSIX sh + awk. <unit.s> is
-# rewritten in place; a unit with no selector row and no slot is left untouched.
+# replaced only on success; a unit with no selector row and no slot is left
+# untouched.
 #
 # SELECTOR: tools/ee/s136os_functions.txt, one `<region> <unit> <function>`
 # row per selected function (unit without extension, as objdiff names it).
@@ -50,6 +51,13 @@
 #     or references a `$L` label it does not define (a `$LC` string/float
 #     literal). Those live outside the block and are not spliced, so such a
 #     function is out of this arm's domain until the rodata side is solved.
+#   - REFUSED (task #1326): once every block is spliced, a block would not
+#     assemble as it did in its s136os TU: a symbol's gp-relative/absolute
+#     class differs (ADDRESSING), or it needs a definition the s136os TU has
+#     outside .ent..end and the 2.9 TU lacks (DEFINITION). See verify_block.
+#     Without it these spliced silently and surfaced only as a whole-image cmp
+#     (BuildTieDrawSegment, 328,879 B) or a link error (SelectSceneSubChunk).
+#   Every FATAL leaves <unit.s> untouched: the splice works on a copy.
 # THE COMPILE is `tools/ee/ee_cc1.sh s136`, the one place the C/C++ rule lives:
 # a `.c` unit runs cpp + 1.36 cc1 (the command lines this helper ran before);
 # a `.cpp` unit runs cpp -lang-c++, ONE extern "C" wrapper, and 1.36 cc1plus
@@ -73,7 +81,10 @@
 # 235FE8.c) for the block AND every later use in the unit, and walled 6 rows.
 # A symbol the unit never declares is unaffected by placement: gas defers that
 # decision to the end of the file, so the carry still decides it as the s136os
-# TU's own end-of-file line does.
+# TU's own end-of-file line does — UNLESS the s136os TU declares it at two
+# sizes, one > -G: the carry sorts them, so the last one in front of the block
+# may not be the one in force there in the s136os TU. verify_block refuses that
+# case (SelectSceneSubChunk's in-arm `.extern …Abs, 16` + cc1's `, 4`).
 #   sh tools/ee/s136os_splice.sh --selftest   host or container; rc 0 PASS
 set -eu
 
