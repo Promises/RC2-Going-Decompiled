@@ -4561,13 +4561,21 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
  * GuiQuitDialogInit). Panel (+0x8) 255x195, border from D_1ADE10, text rows =
  * strings 0x2C29/0x2BE4/0x2BE5, bounds (0,-143,0,114,0,140), scale 0.2. Clears
  * +0x2D8, then runs func_0033DB60(w, 0) (its body builder). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiDialogBoxVariantBInit);
+/* GUARD (task #1335): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Byte-exact on that arm (task #1325 lever, e6e3b6fda): the dialog-box family
+ * form: SetText3 prototyped, block zeroed 4,8,C,0, colour vector re-read per
+ * store. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiDialogBoxVariantBInit)
+S136OS_SLOT(GuiDialogBoxVariantBInit);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_GuiDialogBoxVariantBInit, unit objdiff): 70.33%,
    29/83 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a1, zero').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+   not byte-exact on that arm. */
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
 extern s32 func_0033DB60(void *w, s32 flag);
 extern u8 D_1ADE10[8];
@@ -5226,13 +5234,21 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 /* func_0033EB58: dialog-box screen constructor (func_0033D1F8 family). Panel
  * 255x195, border D_1ADE70, text rows localized 0x2BF7/0x2BE4/0x2BE5, bounds
  * (0,-143,0,114,0,140), scale 0.3, then func_0033EC80(w, 0). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EB58);
+/* GUARD (task #1335): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Byte-exact on that arm (task #1325 lever, e6e3b6fda): the dialog-box family
+ * form: SetText3 prototyped, block zeroed 4,8,C,0, colour vector re-read per
+ * store. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033EB58)
+S136OS_SLOT(func_0033EB58);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033EB58, unit objdiff): 70.33%,
    29/83 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a1, zero').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+   not byte-exact on that arm. */
 s32 func_0033EC80(void *w, s32 flags);
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
 extern u8 D_1ADE70[8];
@@ -5347,13 +5363,21 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 /* func_0033EE08: dialog-box screen constructor (func_0033D1F8 family). Panel
  * 255x195, border D_1ADE80, text rows localized 0x2BF7/0x2BE4/0x2BE5, bounds
  * (0,-143,0,114,0,140), scale 0.4, then func_0033EF30(w, 0). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EE08);
+/* GUARD (task #1335): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Byte-exact on that arm (task #1325 lever, e6e3b6fda): the dialog-box family
+ * form: SetText3 prototyped, block zeroed 4,8,C,0, colour vector re-read per
+ * store. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033EE08)
+S136OS_SLOT(func_0033EE08);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033EE08, unit objdiff): 70.33%,
    29/83 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a1, zero').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+   not byte-exact on that arm. */
 s32 func_0033EF30(void *w, s32 flags);
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
 extern u8 D_1ADE80[8];
@@ -5442,13 +5466,21 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 /* func_0033F000: dialog-box screen constructor (func_0033D1F8 family). Panel
  * 255x195, border D_1ADE90, text rows localized 0x2BF7/0x2BE4/0x2BE5, bounds
  * (0,-143,0,114,0,140), scale 0.4, then func_0033F128(w, 0). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F000);
+/* GUARD (task #1335): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Byte-exact on that arm (task #1325 lever, e6e3b6fda): the dialog-box family
+ * form: SetText3 prototyped, block zeroed 4,8,C,0, colour vector re-read per
+ * store. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033F000)
+S136OS_SLOT(func_0033F000);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033F000, unit objdiff): 70.33%,
    29/83 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a1, zero').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+   not byte-exact on that arm. */
 s32 func_0033F128(void *w, s32 flags);
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
 extern u8 D_1ADE90[8];
