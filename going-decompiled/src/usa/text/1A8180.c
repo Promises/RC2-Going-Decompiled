@@ -6195,27 +6195,34 @@ void func_002B0038(Moby *parent, Moby *child, void *srcTransform, s32 flags) {
  * XY-distance-vs-dz bearing) and flags again when 0<c<heading1 or 0<d<heading2.
  * Returns sample*(1+heading1), plus 8.0 when the moby is a valid class-filtered
  * entry (func_002AC9E0). (Un-parked: AngleAbsDiffPi CONFIRMED f32(f32,f32)
- * drive-heading helper — decompiled in 183558.c, used by 1B4218.c.) */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 78.04%
+ * drive-heading helper — decompiled in 183558.c, used by 1B4218.c.)
+ * MATCHED on the s136os arm (task #1344): byte-identical to the ROM in the
+ * image (row in tools/ee/s136os_functions.txt, spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh; a build that skips the splice drops it). Closing
+ * shape: *outFlag cleared before the distance call (the ROM's `sw $0` precedes
+ * the jal), and the position components read as moby->pos fields, so cc1
+ * addresses them off the moby register (+0x10/+0x14/+0x18) and keeps
+ * &moby->pos only for the two calls. Through a separate position pointer
+ * 27 of 94 words differed. */
+/* Record, t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 78.04%
    -> UNKNOWN-@0: ROM `addiu sp,sp,-96` vs `addiu sp,sp,-80` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0150);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002B0150)
+S136OS_SLOT(func_002B0150);
 #else
 extern f32 AngleAbsDiffPi(f32 a, f32 b);   /* 0x284630 drive-heading angle helper (CONFIRMED) */
 
 f32 func_002B0150(Vec4 *query, Moby *moby, s32 *outFlag, f32 a, f32 b, f32 c, f32 d) {
-    f32 *mpos = (f32 *)((u8 *)moby + 0x10);   /* moby position Vec4 */
-    f32 sample = Vec3DistVu0(query, mpos);
-    f32 heading1, heading2, base;
+    f32 sample, heading1, heading2, base;
 
     *outFlag = 0;
+    sample = Vec3DistVu0(query, (f32 *)&moby->pos);
     if (b < sample) {
         *outFlag = 1;
     }
 
-    heading1 = AngleAbsDiffPi(Atan2fPoly(mpos[0] - query->x, mpos[1] - query->y), a);
-    heading2 = AngleAbsDiffPi(Atan2fPoly(DistXYVu0(query, (Vec4 *)mpos),
-                                           mpos[2] - query->z), 0.0f);
+    heading1 = AngleAbsDiffPi(Atan2fPoly(moby->pos.x - query->x, moby->pos.y - query->y), a);
+    heading2 = AngleAbsDiffPi(Atan2fPoly(DistXYVu0(query, &moby->pos),
+                                           moby->pos.z - query->z), 0.0f);
 
     if (0.0f < c && c < heading1) {
         *outFlag = 1;
