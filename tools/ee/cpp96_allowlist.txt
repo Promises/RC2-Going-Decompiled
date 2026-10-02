@@ -11,7 +11,10 @@
 # IDENTICAL, 10 DIFFER-DIAG (cc1plus exits non-zero and drops statements),
 # 1 DIFFER-CODEGEN (CheckCameraUnderwater 0x271E98, struct-copy lowering with
 # no diagnostic). A unit is listed only when EVERY one of its MATCH_ members
-# measured IDENTICAL and its TU compiles clean under cc1plus:
+# measured IDENTICAL and its TU compiles clean under the 2.96 cc1plus. That says
+# NOTHING about the image arms: a listed unit may still need a C++-clean fix
+# for the 2.9 / SN 1.36 cc1plus before it can be renamed (250080 does: a `::`
+# parse error and 2 undeclared functions, FACT #8943):
 #   191238 1A00F0 1EFFC0 24D728  FACT #8914 (task #1302)
 #   250080                       FACT #8925 (task #1307, FmvRequestStop)
 # Not listed, and so refused: 16E980, 188858, 1A8180, 235FE8 (DIFFER members or
