@@ -1242,7 +1242,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337120);
  * fudge to $f0 gives the ROM's `mul.s $f15,$f15,$f0`. The volatile read of
  * vec38[0] keeps cc1 from choosing it for the jal slot. The ROM puts pos[0]
  * ($f12) there, after $f14 and $f16. The trailing empty asm keeps the call
- * from becoming a sibling-call `j`. */
+ * from becoming a sibling-call `j`.
+ *
+ * This EE arm keeps the 9-param declaration although the callee reads no
+ * $a2/$a3 (FACT #8918). The ROM caller does load scale into $6 and vec38 into
+ * $7, and this body is byte-exact as written; task #1311 changed only native
+ * arms, so it was not re-measured with the 7-param form. */
 #ifndef TARGET_NATIVE
 extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
                           f32 px, f32 py, f32 sx, f32 syg, f32 v38);
@@ -1275,7 +1280,9 @@ void GuiSpriteElementDraw(void *p) {
    19/30 insns differ. Residual: UNKNOWN-daddu (first differing insn: 'daddu a1, a0, zero' vs 'mtc1 zero, fv0').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
-/* Native arm. This plain spelling measured 92.7% on sdk29: structure, frame
+/* Native arm. Its call uses the 7-param declaration (FACT #8918); the two
+   dead pointer args were dropped in task #1311, after both scores in this
+   comment were measured. This plain spelling measured 92.7% on sdk29: structure, frame
    (asm barrier defeats the tail-call), branches and reloc all match; the only
    delta is -O2 instruction scheduling of the independent argument loads - the
    original loads the gp_rel y-fudge into fv0 first then scale[1] into fa3
@@ -1283,8 +1290,7 @@ void GuiSpriteElementDraw(void *p) {
    schedules the global load late and hoists pos[0]. The EE arm above closes
    both (task #978). */
 extern s32 g_swapGadgetItemIndex;
-extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
-                          f32 px, f32 py, f32 sx, f32 syg, f32 v38);
+extern void func_003017F8(s32 handle, s32 color0, f32 px, f32 py, f32 sx, f32 syg, f32 v38);
 void GuiSpriteElementDraw(void *p) {
     GuiElement *e = (GuiElement *)p;
     s32 handle;
@@ -1301,7 +1307,7 @@ void GuiSpriteElementDraw(void *p) {
     scale = e->scale;
     color = *(s32 **)((char *)e + 0xC);
     vec38 = *(f32 **)((char *)e + 0x38);
-    func_003017F8(handle, color[0], scale, vec38,
+    func_003017F8(handle, color[0],
                   pos[0], pos[1], scale[0],
                   scale[1] * *(f32 *)((char *)&g_swapGadgetItemIndex + 0x8E),
                   vec38[0]);
@@ -2389,17 +2395,10 @@ void func_00338F88(void *a1, void *layout, u32 color, s32 val, s32 font,
  * ((y0-x0... see below))) and four edge pieces (texture base+0x2230), with the
  * sx/syg sign pair (+/-1) selecting each quad's mirror orientation.
  *
- * ------ M1 CONVENTION (Option D --- fn-ptr-cast at the divergent callsite) ---------------------------------------
- * func_003017F8 is called at TWO arities in this TU: GuiSpriteElementDraw uses the
- * canonical 9-arg form (handle,color0,scale*,vec38*,px,py,sx,syg,v38 --- see the
- * extern at the top of this file); THIS caller passes only 7 (no scalePtr/vec38Ptr ---
- * $6/$7 unset), 2 ints in $4/$5 + 5 floats in $f12-$f16. Modern gnu89 forbids two
- * prototypes for one symbol in one TU. Per the ratified convention: keep the
- * canonical decl UNCHANGED (so the 9-arg caller + every matching-arm/gui.h caller
- * is untouched --- byte-neutral, zero gate risk) and cast THIS callsite to its exact
- * 7-arg signature. A cast preserves the float ABI (K&R/varargs would promote
- * float->double); the "called through non-compatible type" note is a pre-existing
- * baseline class here. Reuse this pattern for any engine fn called at >=2 arities.
+ * func_003017F8 consumes only $a0/$a1 and $f12-$f16 (FACT #8918), so the native
+ * declaration above GuiSpriteElementDraw is the 7-param form and this caller calls
+ * it directly. (It used to cast to a 7-arg pointer type because that declaration
+ * carried two dead pointer params; task #1311 removed them.)
  * Faithful TARGET_NATIVE #else (engine 2.96 = no byte-match). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00339398);
@@ -2408,8 +2407,6 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00339398);
    134/174 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x80' vs 'addiu sp, sp, -0x70').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
-typedef void (*DrawQuad7)(s32 handle, s32 color0, f32 px, f32 py, f32 sx, f32 syg,
-                          f32 v38);
 extern char *g_guiInstance;
 extern u8 g_sceneActorMobys[];
 extern void BuildCameraProjection(void);
@@ -2429,14 +2426,14 @@ void func_00339398(f32 x0, f32 y0, f32 x1, f32 y1, s32 base, s32 packByte,
         }
         color = ((s32)((u32)packByte << 0x18)) | color;
         texCorner = *(s32 *)(base + 0x222C);
-        ((DrawQuad7)func_003017F8)(texCorner, color, x1, x0, -1.0f, syg, hCorner);
-        ((DrawQuad7)func_003017F8)(texCorner, color, y1, x0,  1.0f, syg, hCorner);
+        func_003017F8(texCorner, color, x1, x0, -1.0f, syg, hCorner);
+        func_003017F8(texCorner, color, y1, x0,  1.0f, syg, hCorner);
         hEdge = ((y1 - x1) - 150.0f) * 0.003267974f * 0.43300003f + 0.102f;
         texEdge = *(s32 *)(base + 0x2230);
-        ((DrawQuad7)func_003017F8)(texEdge, color, x1 + 16.0f, x0, -1.0f, 1.0f, hEdge);
-        ((DrawQuad7)func_003017F8)(texEdge, color, y1 - 16.0f, x0,  1.0f, 1.0f, hEdge);
-        ((DrawQuad7)func_003017F8)(texEdge, color, x1 + 16.0f, y0, -1.0f, -1.0f, hEdge);
-        ((DrawQuad7)func_003017F8)(texEdge, color, y1 - 16.0f, y0,  1.0f, -1.0f, hEdge);
+        func_003017F8(texEdge, color, x1 + 16.0f, x0, -1.0f, 1.0f, hEdge);
+        func_003017F8(texEdge, color, y1 - 16.0f, x0,  1.0f, 1.0f, hEdge);
+        func_003017F8(texEdge, color, x1 + 16.0f, y0, -1.0f, -1.0f, hEdge);
+        func_003017F8(texEdge, color, y1 - 16.0f, y0,  1.0f, -1.0f, hEdge);
         *projScale = saved;
         BuildCameraProjection();
     }

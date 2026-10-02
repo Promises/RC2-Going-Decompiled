@@ -2466,8 +2466,8 @@ void UpdateBoltCounterHud(void) {
  * WALL (matching build): callee-saves + the heavy FP positioning schedule +
  * branch colouring cc1 does not reproduce. Matching arm stays INCLUDE_ASM; #else
  * is the portable body. Helper ABIs confirmed against the sibling draws in
- * 1CA080.c — func_003017F8 ignores its scale/vec38 params, hence the NULL/NULL,
- * and its $6/$7 are clobbered by the intervening glyph lookup here anyway. */
+ * 1CA080.cpp — func_003017F8 reads no $a2/$a3 argument (FACT #8918), so it is
+ * declared with 2 ints + 5 floats. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028B0B0);
 #else
@@ -2481,10 +2481,9 @@ extern s32   GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint); /* 0x337BF8 */
 /* 0x3017F8 glyph/sprite draw. Callee (text/2012B8) confirms the ABI: color0's
  * top byte alpha-gates the draw (sra 24; skip if 0); sx,sy are a scale pair each
  * multiplied by the glyph's intrinsic size at handle+0xC; px,py,v pass through to
- * func_003018A0. The scale/vec38 pointer params ($a2/$a3) are never read in this
- * build — hence the NULL/NULL passed here. */
-extern void  func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
-                           f32 px, f32 py, f32 sx, f32 sy, f32 v);
+ * func_003018A0. $a2/$a3 are never read (FACT #8918), so there are no pointer
+ * params. */
+extern void  func_003017F8(s32 handle, s32 color0, f32 px, f32 py, f32 sx, f32 syg, f32 v38);
 extern void  func_00280090(s32 x, s32 y, u64 color, char *str, s64 wrap); /* 0x280090 text/number draw */
 
 void func_0028B0B0(void) {
@@ -2547,10 +2546,10 @@ void func_0028B0B0(void) {
                 s32   textY  = (s32)((f32)0x24 * yfudge + 0.5f);
                 s32   g1 = GuiFontAtlasLookupGlyph(atlas, 0xB2);
                 s32   g2;
-                func_003017F8(g1, color1, (f32 *)0, (f32 *)0,
+                func_003017F8(g1, color1,
                               (f32)0x1F3, glyphY, 1.0f, 1.0f, xscale);
                 g2 = GuiFontAtlasLookupGlyph(atlas, 0xB3);
-                func_003017F8(g2, color2, (f32 *)0, (f32 *)0,
+                func_003017F8(g2, color2,
                               (f32)0x1F3, glyphY, 1.0f, 1.0f, xscale);
                 len = func_001157AC(buf);
                 func_00280090(0x1BA, textY, textColor, buf, len);
@@ -4575,7 +4574,7 @@ s32 func_0028DC28(HudElement *hud) {
     /* 12 chrome/frame glyphs (unconditional) */
     for (k = 0; k < 12; k++) {
         func_003017F8(GuiFontAtlasLookupGlyph(atlas, topGlyphs[k].cp),
-                      (s32)topGlyphs[k].color, (f32 *)0, (f32 *)0,
+                      (s32)topGlyphs[k].color,
                       129.0f, 208.0f, topGlyphs[k].sx, yfudge, 0.0f);
     }
 
@@ -4584,7 +4583,7 @@ s32 func_0028DC28(HudElement *hud) {
         s32 pulse = func_002AA3F0(0x80442D00, 0x80FFDE8D, 0x19, 0, 0);
         s32 count = (active - 1 > -1) ? (active - 1) : 7;
         s32 glyph = GuiFontAtlasLookupGlyph(atlas, 0x10);
-        func_003017F8(glyph, pulse, (f32 *)0, (f32 *)0,
+        func_003017F8(glyph, pulse,
                       129.0f, 208.0f, 1.0f, yfudge, (f32)count);
         func_002904B0(D_1A8E30[active].x, D_1A8E30[active].y,
                       D_1A8E30[active].x + 0x21, D_1A8E30[active].y + 7,

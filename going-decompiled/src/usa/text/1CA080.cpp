@@ -2325,8 +2325,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawBestiaryEnt
  * first differing row @0: ROM `addiu sp,sp,-160` vs `lui v1,0x0  [HI16 0x001A8D04]`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 49.63% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-160` vs `addiu sp,sp,-320`. */
 extern u32 func_002AA3F0(u32 color1, u32 color2, s32 period, s32 counterSel, s32 reset);
-extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
-                          f32 px, f32 py, f32 sx, f32 syg, f32 v38);
+extern void func_003017F8(s32 handle, s32 color0, f32 px, f32 py, f32 sx, f32 syg, f32 v38);
 extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
 extern void func_002904B0(s32 x0, s32 y0, s32 x1, s32 y1, s32 color, s32 flag);
 extern void func_00280250(s32 x, s32 y, u32 color, const char *str, s32 flag);
@@ -2355,13 +2354,13 @@ s32 DrawBestiaryEntry(void) {
     Begin2dDrawBatch(0);
 
     /* four title glyphs (v38 = 0.0) */
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xAE), 0x60442D00, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xAE), 0x60442D00,
                   centerX, titleRow, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xAF), 0x60241700, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xAF), 0x60241700,
                   centerX, titleRow, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xB0), 0x55F0C070, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xB0), 0x55F0C070,
                   centerX, titleRow, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xB1), 0x55F0C070, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xB1), 0x55F0C070,
                   centerX, titleRow, 1.0f, yfudge, 0.0f);
 
     /* static stat captions */
@@ -2402,7 +2401,7 @@ s32 DrawBestiaryEntry(void) {
             if (animPhase == 1) {
                 bob += -0.05f;
             }
-            func_003017F8(glyph, color, (f32 *)0, (f32 *)0, 316.0f, 278.0f, 1.0f, bob, 0.0f);
+            func_003017F8(glyph, color, 316.0f, 278.0f, 1.0f, bob, 0.0f);
             func_00280120(0x1D6, 0x114, 0x80F0F0F0, GetLocalizedString(0x2DD7), -1);
         }
 
@@ -2414,7 +2413,7 @@ s32 DrawBestiaryEntry(void) {
             if (animPhase == 1) {
                 bob += -0.05f;
             }
-            func_003017F8(glyph, color, (f32 *)0, (f32 *)0, 207.0f, 278.0f, 1.0f, bob, 0.0f);
+            func_003017F8(glyph, color, 207.0f, 278.0f, 1.0f, bob, 0.0f);
             DrawDebugString(0x37, 0x114, 0x80F0F0F0, GetLocalizedString(0x2DD6), -1);
         }
 
@@ -2785,8 +2784,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawCheatMenu);
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 5.29% -> STRUCTURAL,
  * first differing row @0: ROM `addiu sp,sp,-160` vs `lui v0,0x0  [HI16 0x001A7340]`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 14.47% -> STRUCTURAL, first differing row @0: ROM `addiu sp,sp,-160` vs `lui v0,0x0  [HI16 0x001A7340]`. */
-extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
-                          f32 px, f32 py, f32 sx, f32 syg, f32 v38);
+extern void func_003017F8(s32 handle, s32 color0, f32 px, f32 py, f32 sx, f32 syg, f32 v38);
 extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
 extern void func_00280250(s32 x, s32 y, u32 color, const char *str, s32 flag);
 extern s32 func_001157AC(const char *s);          /* SDK strlen */
@@ -2810,11 +2808,11 @@ s32 DrawCheatMenu(void) {
 
     Begin2dDrawBatch(0);
     /* three title glyphs */
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8B), 0x60442D00, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8B), 0x60442D00,
                   centerX, titleRow, 1.0f, yfudge, 0.84f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8C), 0x55F0C070, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8C), 0x55F0C070,
                   centerX, titleRow, 1.0f, yfudge, 0.84f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8D), 0x55F0C070, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8D), 0x55F0C070,
                   centerX, titleRow, 1.0f, yfudge, 0.84f);
     /* three header strings */
     func_002801B8(g_screenWidth / 2, 0x41,  0x80F0F0F0, GetLocalizedString(0x2CA8), -1);
@@ -2972,8 +2970,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawSkillPoints
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 35.61% -> STRUCTURAL,
  * first differing row @0: ROM `addiu sp,sp,-144` vs `lui v0,0x0  [HI16 0x001A7340]`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 49.84% -> STRUCTURAL, first differing row @0: ROM `addiu sp,sp,-144` vs `lui v0,0x0  [HI16 0x001A7340]`. */
-extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
-                          f32 px, f32 py, f32 sx, f32 syg, f32 v38);
+extern void func_003017F8(s32 handle, s32 color0, f32 px, f32 py, f32 sx, f32 syg, f32 v38);
 extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
 extern void func_00280250(s32 x, s32 y, u32 color, const char *str, s32 flag);
 extern void func_0027FBA8(s32 x, s32 y, u64 color, char *str, s64 wrap);
@@ -2999,13 +2996,13 @@ s32 DrawSkillPointsMenu(void) {
 
     Begin2dDrawBatch(0);
     /* four title glyphs (v38 = 0.0) */
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD7), 0x60442D00, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD7), 0x60442D00,
                   centerX, titleRow, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD8), 0x60241700, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD8), 0x60241700,
                   centerX, titleRow, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD9), 0x55F0C070, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD9), 0x55F0C070,
                   centerX, titleRow, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xDA), 0x55F0C070, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xDA), 0x55F0C070,
                   centerX, titleRow, 1.0f, yfudge, 0.0f);
 
     /* header + "N / 30" completed-count line, drop-shadow suppressed */
@@ -3222,7 +3219,7 @@ s32 UpdateExtrasMenuInput(void) {
  * low halfword) when enabled (D_1ABA48[idx] != 0) else 0x2C56; slot color fades by
  * distance from centre (edges 0x10/mid 0x50/centre 0x70 F0F0F0), and the centre slot
  * gets a text-width selection box.
- * (func_003017F8 ignores its scale/vec38 params — see its body — so glyphs pass NULL.)
+ * (func_003017F8 takes 2 ints + 5 floats; it reads no $a2/$a3 — FACT #8918.)
  * Wall: 8-byte-packed-save (6 GPRs) + FP-arg scheduling — later cc1 save-slot packing
  * not reproduced. Preserved as portable C. */
 #ifndef TARGET_NATIVE
@@ -3232,8 +3229,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawExtrasMenu)
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 36.23% -> STRUCTURAL,
  * first differing row @0: ROM `addiu sp,sp,-64` vs `lui v0,0x0  [HI16 0x001A7340]`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 36.41% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-64` vs `addiu sp,sp,-208`. */
-extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
-                          f32 px, f32 py, f32 sx, f32 syg, f32 v38);
+extern void func_003017F8(s32 handle, s32 color0, f32 px, f32 py, f32 sx, f32 syg, f32 v38);
 extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
 extern void DrawMenuPagingChrome(void);
 extern s32 func_001157AC(const char *s);          /* SDK strlen */
@@ -3255,13 +3251,13 @@ s32 DrawExtrasMenu(void) {
 
     Begin2dDrawBatch(0);
     /* four title glyphs (v38 = 0.0) */
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD7), 0x60442D00, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD7), 0x60442D00,
                   centerX, row, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD8), 0x60241700, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD8), 0x60241700,
                   centerX, row, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD9), 0x55F0C070, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD9), 0x55F0C070,
                   centerX, row, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xDD), 0x55F0C070, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xDD), 0x55F0C070,
                   centerX, row, 1.0f, yfudge, 0.0f);
     /* three header strings */
     func_002801B8(0xB3, 0x1B, 0x80F0F0F0, GetLocalizedString(0x3095), -1);
@@ -3443,7 +3439,7 @@ s32 CinematicsMenuTick(void) {
  * localized reel name (entry+0x0) when unlocked (entry+0x4 != 0) else 0x2C56; slot
  * color fades by distance from centre (edges 0x10/mid 0x50/centre 0x70 F0F0F0), and
  * the centre slot gets a text-width selection box.
- * (func_003017F8 ignores its scale/vec38 params — see its body — so glyphs pass NULL.)
+ * (func_003017F8 takes 2 ints + 5 floats; it reads no $a2/$a3 — FACT #8918.)
  * Wall: 8-byte-packed-save (6 GPRs) + FP-arg scheduling — later cc1 save-slot packing
  * not reproduced. Preserved as portable C. */
 #ifndef TARGET_NATIVE
@@ -3453,8 +3449,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawCinematicsM
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 31.08% -> STRUCTURAL,
  * first differing row @0: ROM `addiu sp,sp,-64` vs `lui v0,0x0  [HI16 0x001A7340]`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 31.96% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-64` vs `addiu sp,sp,-208`. */
-extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
-                          f32 px, f32 py, f32 sx, f32 syg, f32 v38);
+extern void func_003017F8(s32 handle, s32 color0, f32 px, f32 py, f32 sx, f32 syg, f32 v38);
 extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
 extern void DrawMenuPagingChrome(void);
 extern s32 func_001157AC(const char *s);          /* SDK strlen */
@@ -3475,13 +3470,13 @@ s32 DrawCinematicsMenu(void) {
 
     Begin2dDrawBatch(0);
     /* four title glyphs (v38 = 0.0) */
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD7), 0x60442D00, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD7), 0x60442D00,
                   centerX, row, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD8), 0x60241700, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD8), 0x60241700,
                   centerX, row, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD9), 0x55F0C070, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD9), 0x55F0C070,
                   centerX, row, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xDD), 0x55F0C070, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xDD), 0x55F0C070,
                   centerX, row, 1.0f, yfudge, 0.0f);
     /* three header strings */
     func_002801B8(0xB3, 0x1B, 0x80F0F0F0, GetLocalizedString(0x2CA9), -1);
@@ -3679,7 +3674,7 @@ s32 UpdatePlanetWarpMenuInput(void) {
  * localized D_1ABD98[idx] when enabled (g_planetWarpEnabled[idx] != 0) else 0x2C56;
  * slot color fades by distance from centre (edges 0x10F0F0F0, mid 0x50F0F0F0, centre
  * 0x70F0F0F0), and the centre slot also gets a text-width-sized selection box.
- * (func_003017F8 ignores its scale/vec38 params — see its body — so glyphs pass NULL.)
+ * (func_003017F8 takes 2 ints + 5 floats; it reads no $a2/$a3 — FACT #8918.)
  * Wall: 8-byte-packed-save (6 GPRs) + FP-arg scheduling — later cc1 save-slot packing
  * not reproduced. Preserved as portable C. */
 #ifndef TARGET_NATIVE
@@ -3689,8 +3684,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawPlanetWarpM
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 33.46% -> STRUCTURAL,
  * first differing row @0: ROM `addiu sp,sp,-64` vs `lui v0,0x0  [HI16 0x001A7340]`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 38.55% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-64` vs `addiu sp,sp,-208`. */
-extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
-                          f32 px, f32 py, f32 sx, f32 syg, f32 v38);
+extern void func_003017F8(s32 handle, s32 color0, f32 px, f32 py, f32 sx, f32 syg, f32 v38);
 extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
 extern void DrawMenuPagingChrome(void);
 extern s32 func_001157AC(const char *s);          /* SDK strlen */
@@ -3710,13 +3704,13 @@ s32 DrawPlanetWarpMenu(void) {
 
     Begin2dDrawBatch(0);
     /* four title glyphs (v38 = 0.0) */
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD7), 0x60442D00, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD7), 0x60442D00,
                   centerX, row, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD8), 0x60241700, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD8), 0x60241700,
                   centerX, row, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD9), 0x55F0C070, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xD9), 0x55F0C070,
                   centerX, row, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xDD), 0x55F0C070, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xDD), 0x55F0C070,
                   centerX, row, 1.0f, yfudge, 0.0f);
     /* three header strings */
     func_002801B8(0xB3, 0x1B, 0x80F0F0F0, GetLocalizedString(0x3098), -1);
@@ -3953,7 +3947,7 @@ s32 UpdateInsomniacMuseumInput(void) {
  * (x 0xA5, y 0x7D stepping 0x1F): each item's color is 0x7000FFFF when it is the
  * selected row (g_museumMenuCursor) else 0x80F0F0F0, and its label is the localized
  * D_1ABDA8[i] when the item is enabled (D_1ABA80[i] != 0) else the fallback 0x2C56.
- * (func_003017F8 ignores its scale/vec38 params — see its body — so glyphs pass NULL.)
+ * (func_003017F8 takes 2 ints + 5 floats; it reads no $a2/$a3 — FACT #8918.)
  * Wall: 8-byte-packed-save (7 GPRs) + FP-arg scheduling — later cc1 save-slot packing
  * not reproduced. Preserved as portable C. */
 #ifndef TARGET_NATIVE
@@ -3963,8 +3957,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawInsomniacMu
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 23.83% -> STRUCTURAL,
  * first differing row @0: ROM `addiu sp,sp,-80` vs `lui v0,0x0  [HI16 0x001A7340]`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 47.77% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-80` vs `addiu sp,sp,-176`. */
-extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
-                          f32 px, f32 py, f32 sx, f32 syg, f32 v38);
+extern void func_003017F8(s32 handle, s32 color0, f32 px, f32 py, f32 sx, f32 syg, f32 v38);
 extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
 extern void func_002904B0(s32 x0, s32 y0, s32 x1, s32 y1, s32 color, s32 flag);
 extern s32 g_museumMenuCursor;   /* museum carousel cursor 0..4 */
@@ -3982,11 +3975,11 @@ s32 DrawInsomniacMuseumMenu(void) {
 
     Begin2dDrawBatch(0);
     /* three title glyphs (v38 = 0.775f = 0x3F466666) */
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8B), 0x60442D00, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8B), 0x60442D00,
                   centerX, row, 1.0f, yfudge, 0.775f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8C), 0x55F0C070, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8C), 0x55F0C070,
                   centerX, row, 1.0f, yfudge, 0.775f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8D), 0x55F0C070, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8D), 0x55F0C070,
                   centerX, row, 1.0f, yfudge, 0.775f);
     /* three centred header strings */
     func_002801B8(g_screenWidth / 2, 0x41, 0x80F0F0F0, GetLocalizedString(0x30A2), -1);
@@ -4115,8 +4108,7 @@ s32 UpdateHelpTopicMenuInput(void) {
  * the left/right paging arrows (left shown when the cursor isn't at the first page,
  * right when it isn't at the last, index 0x11); then draws the localized footer
  * string 0x2BE5 at (0x1B0,0x177) in color 0x80F0F0F0, and closes the batch.
- * (func_003017F8's scale/vec38 pointer params are unused by the callee — verified in
- * its body @0x3017F8 — so the glyph draws pass NULL.)
+ * (func_003017F8 takes 2 ints + 5 floats; it reads no $a2/$a3 — FACT #8918.)
  * Wall: 8-byte-packed-save (2 GPRs) + FP-arg scheduling — later cc1 save-slot
  * packing not reproduced. Preserved as portable C. */
 #ifndef TARGET_NATIVE
@@ -4126,8 +4118,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawHelpTopicMe
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 20.82% -> STRUCTURAL,
  * first differing row @0: ROM `addiu sp,sp,-32` vs `lui v0,0x0  [HI16 0x001A7340]`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 12.59% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-80`. */
-extern void func_003017F8(s32 handle, s32 color0, f32 *scale, f32 *vec38,
-                          f32 px, f32 py, f32 sx, f32 syg, f32 v38);
+extern void func_003017F8(s32 handle, s32 color0, f32 px, f32 py, f32 sx, f32 syg, f32 v38);
 extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
 extern void DrawBestiaryPagingArrows(s32 leftEnabled, s32 rightEnabled);
 extern s32 g_helpTopicCursor;    /* 0x1ABA98 - help topic page index 0..0x11 */
@@ -4142,11 +4133,11 @@ s32 DrawHelpTopicMenu(void) {
     char *text;
 
     Begin2dDrawBatch(0);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xDE), 0x60442D00, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xDE), 0x60442D00,
                   centerX, row, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xDF), 0x60241700, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xDF), 0x60241700,
                   centerX, row, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xE0), 0x55F0C070, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xE0), 0x55F0C070,
                   centerX, row, 1.0f, yfudge, 0.0f);
     cursor = g_helpTopicCursor;
     DrawBestiaryPagingArrows(cursor != 0, cursor != 0x11);
@@ -4243,7 +4234,7 @@ s32 func_002D2FC8(void) {
  * endpoints come from the slider fraction *(g_swapGadgetItemIndex+0x8A) scaled by
  * 330/332, then the localized label for the current option (D_1ABDE8[cursor],
  * screen-centred) and the footer prompt (string 0x2BE5). Returns 0.
- * (func_003017F8 ignores its scale/vec38 pointer args — glyph draws pass NULL.)
+ * (func_003017F8 takes 2 ints + 5 floats; it reads no $a2/$a3 — FACT #8918.)
  * Wall: 8-byte-packed-save + FP-arg scheduling — later cc1 save-slot packing not
  * reproduced. Preserved as portable C. */
 extern void func_002904B0(s32 x0, s32 y0, s32 x1, s32 y1, s32 color, s32 flag);
@@ -4268,11 +4259,11 @@ s32 func_002D3138(void) {
     char *text;
 
     Begin2dDrawBatch(0);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xDE), 0x60442D00, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xDE), 0x60442D00,
                   centerX, row, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xDF), 0x60241700, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xDF), 0x60241700,
                   centerX, row, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xE0), 0x55F0C070, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xE0), 0x55F0C070,
                   centerX, row, 1.0f, yfudge, 0.0f);
     cursor = g_optionsSubCursor;
     DrawBestiaryPagingArrows(cursor != 0, cursor != 5);
@@ -4372,7 +4363,7 @@ s32 func_002D33A8(void) {
  * each drawn white while its pad direction is held (L1 0x8000 / R1 0x2000) else in
  * the pulsing inactive colour from func_002AA3F0. The arrows carry their prompt
  * labels (0x2DD6 / 0x2DD7), and the screen title (0x312A) + footer (0x2BE5) are
- * centred. Returns 0. (func_003017F8 ignores scale/vec38 — glyph draws pass NULL.)
+ * centred. Returns 0. (func_003017F8 reads no $a2/$a3 — FACT #8918.)
  * Wall: 8-byte-packed-save + FP-arg scheduling — later cc1 save-slot packing not
  * reproduced. Preserved as portable C. */
 extern u32 func_002AA3F0(u32 color1, u32 color2, s32 period, s32 counterSel, s32 reset);
@@ -4396,16 +4387,16 @@ s32 func_002D34E8(void) {
     char *text;
 
     Begin2dDrawBatch(0);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xE5), 0x60442D00, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xE5), 0x60442D00,
                   centerX, row, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xE4), 0x55F0C070, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xE4), 0x55F0C070,
                   centerX, row, 1.0f, yfudge, 0.0f);
     inactiveArrow = func_002AA3F0(0x60241700, 0x55F0C070, 0x19, 0, 0);
 
     cursor = g_helpPageCursor;
     if (cursor > 0) {
         u32 color = (g_padButtonsHeld & 0x8000) ? 0x80F0F0F0 : inactiveArrow;
-        func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x4B), color, (f32 *)0, (f32 *)0,
+        func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x4B), color,
                       216.0f, 373.0f, 1.0f, yfudge * 0.8f, 0.0f);
         text = GetLocalizedString(0x2DD6);
         func_0027FBA8(0x40, 0x171, 0x80F0F0F0, text, -1);
@@ -4413,7 +4404,7 @@ s32 func_002D34E8(void) {
     }
     if (cursor < 6) {
         u32 color = (g_padButtonsHeld & 0x2000) ? 0x80F0F0F0 : inactiveArrow;
-        func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x4A), color, (f32 *)0, (f32 *)0,
+        func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x4A), color,
                       295.0f, 373.0f, 1.0f, yfudge * 0.8f, 0.0f);
         text = GetLocalizedString(0x2DD7);
         func_00280090(0x1C1, 0x171, 0x80F0F0F0, text, -1);
@@ -4510,7 +4501,7 @@ s32 func_002D37E8(void) {
  * localized string chosen by the cinematic-active latch D_1A790C (0x2C5C when set,
  * else 0x2C5D; drawn at 0x15D,0xBA via func_002801B8). Both composed draws pass the
  * string length (func_001157AC = strlen) as the clip arg. Returns 0.
- * (func_003017F8 ignores scale/vec38 — glyph draws pass NULL.)
+ * (func_003017F8 takes 2 ints + 5 floats; it reads no $a2/$a3 — FACT #8918.)
  * Wall: 8-byte-packed-save + FP-arg scheduling — later cc1 save-slot packing not
  * reproduced. Preserved as portable C. */
 extern s32 D_1ABAB0;     /* glyph row (int, converted to float) */
@@ -4532,11 +4523,11 @@ s32 func_002D38C8(void) {
     char *text;
 
     Begin2dDrawBatch(0);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8B), 0x60442D00, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8B), 0x60442D00,
                   centerX, row, 1.0f, yfudge, 0.56f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8C), 0x55F0C070, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8C), 0x55F0C070,
                   centerX, row, 1.0f, yfudge, 0.56f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8D), 0x55F0C070, (f32 *)0, (f32 *)0,
+    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0x8D), 0x55F0C070,
                   centerX, row, 1.0f, yfudge, 0.56f);
 
     text = GetLocalizedString(0x30D5);
