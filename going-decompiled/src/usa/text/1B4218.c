@@ -1230,6 +1230,7 @@ void InitMobySpringFollowState(Moby *moby, void *state,
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StepMobySpringFollow);
 #else
+extern s32  TickCountdownTimer(void *counter);              /* 0x2832F8 (declared again below) */
 extern Vec4 g_heroPos;                /* 0x189EA0 hero world position */
 extern u8   g_soundBankHandlesBlk[];  /* 0x189E20 camera-key block; head = fallback anchor Vec4 */
 extern void func_002B0C40(u8 *moby, Vec4 *inDelta, Vec4 *outDelta, s32 flag);
@@ -2975,7 +2976,7 @@ void LoadGlobalSoundBank(void) {
     u8 *toc = g_discToc;
     s32 bankAddr = *(s32 *)(toc + 0x52B0) + *(s32 *)(toc + 0x529C);
     listener->bankLoadStatus.all[0] = 0xFFFFFFFF;
-    snd_BankLoadAsync(bankAddr, 0, OnSoundBankLoaded, (long)(u32)listener->bankLoadStatus.all);
+    snd_BankLoadAsync(bankAddr, 0, (void *)OnSoundBankLoaded, (long)(u32)listener->bankLoadStatus.all);
     __asm__ __volatile__("");
 }
 #endif
@@ -3003,7 +3004,7 @@ void LoadLevelSoundBank(s32 bankAddr, s32 bankSlot) {
     u32 *table = listener->bankLoadStatus.all;
     u32 *status = table + bankSlot;
     *status = 0xFFFFFFFF;
-    snd_BankLoadFromEE_CB(bankAddr, OnSoundBankLoaded, (long)(u32)status);
+    snd_BankLoadFromEE_CB(bankAddr, (void *)OnSoundBankLoaded, (long)(u32)status);
     __asm__ __volatile__("");
 }
 #endif
@@ -3040,7 +3041,7 @@ void KickLevelBankDiscLoad(s32 bankSlot) {
         u32 *levelTable = listener->bankLoadStatus.by.level;
         listener->bankLoadStatus.all[bankSlot + 1] = 0xFFFFFFFF;
         snd_BankLoadAsync(tocOffset + *(s32 *)(toc + 0x529C),
-                          0, OnSoundBankLoaded, (long)(u32)(levelTable + bankSlot));
+                          0, (void *)OnSoundBankLoaded, (long)(u32)(levelTable + bankSlot));
         noTailCall = 0;
     } else {
         ListenerBlock *listener = (ListenerBlock *)g_listenerPosHistory;
@@ -3100,7 +3101,7 @@ void InitFileLoadSystem(void) {
  * The empty asm guard blocks cc1's sibling-call (`j`) so the original jal+frame
  * is reproduced. */
 void InstallFileLoadPump(void) {
-    SetSndPumpCallback(PumpFileLoadCompletion);
+    SetSndPumpCallback((void *)PumpFileLoadCompletion);
     __asm__ __volatile__("");
 }
 
@@ -3279,7 +3280,7 @@ s32 StartDialogVoice(s32 a0, s32 a1, s32 a2, s32 a3) {
     /* fire the sample (pan re-read from the just-armed dialogArg0 field) */
     snd_PlaySample((s64)sampleStart, (s64)sampleEnd, 0, 0,
                    g_fileLoadVoiceState.dialogArg0, 0, code, 0, 0, 1,
-                   OnDialogVoiceStarted, (long)(u32)(m + 0x68));
+                   (void *)OnDialogVoiceStarted, (long)(u32)(m + 0x68));
     return 0;
 }
 #endif
@@ -3352,7 +3353,7 @@ s32 StartAmbientVoice(s32 idx, s32 flags, s32 pan) {
     g_fileLoadVoiceState.ambientCursor = 0;
     snd_PlaySample(*(s32 *)(toc + 0x52FC) + sampleTable[idx * 2],
                    *(s32 *)(toc + 0x52FC) + sampleTable[(idx + 1) * 2],
-                   0, 0, (s16)pan, 0, 1, 0, 0, 1, OnAmbientVoiceStarted,
+                   0, 0, (s16)pan, 0, 1, 0, 0, 1, (void *)OnAmbientVoiceStarted,
                    (long)(u32)&g_fileLoadVoiceState.ambientState);
     return 0;
 }
@@ -3391,7 +3392,7 @@ s32 StartSecondaryVoice(s32 idx, s32 flags, s32 pan) {
     g_fileLoadVoiceState.ambientCursor = 0;
     snd_PlaySample(*(s32 *)(toc + 0x52FC) + sampleTable[idx * 2],
                    *(s32 *)(toc + 0x52FC) + sampleTable[(idx + 1) * 2],
-                   0, 0, (s16)pan, 0, 1, 0, 0, 0, func_002B8ED0,
+                   0, 0, (s16)pan, 0, 1, 0, 0, 0, (void *)func_002B8ED0,
                    (long)(u32)&g_fileLoadVoiceState.ambientState);
     return 0;
 }
@@ -3435,7 +3436,7 @@ s32 ChainSecondaryVoice(s32 idx, s32 flags, s32 pan) {
        them in this order - the continuation sample plays from +3 to +2). */
     snd_PlaySample(*(s32 *)(toc + 0x52FC) + sampleTable[(idx + 3) * 2],
                    *(s32 *)(toc + 0x52FC) + sampleTable[(idx + 2) * 2],
-                   0, 0, (s16)pan, 0, 1, 0, 0, (flags & 1) << 2, func_002B8E78,
+                   0, 0, (s16)pan, 0, 1, 0, 0, (flags & 1) << 2, (void *)func_002B8E78,
                    (long)(u32)&g_fileLoadVoiceState.ambientState);
     return 0;
 }
@@ -3475,7 +3476,7 @@ s32 StartTertiaryVoice(s32 a0, s32 a1, s32 a2, s32 a3) {
     g_fileLoadVoiceState.tertiaryFlag = 1;
     *(s16 *)(m + 0x92) = (s16)a3;
     snd_PlaySample(*(s32 *)(toc + 0x52FC) + *(s32 *)(toc + a1 * 8 + 0x5300),
-                   0, 0, 0, (s16)a3, 0, 1, 0, 0, 0x20, func_002B8E28,
+                   0, 0, 0, (s16)a3, 0, 1, 0, 0, 0x20, (void *)func_002B8E28,
                    (long)(u32)&g_fileLoadVoiceState.tertiaryState);
             return 1;
         }
@@ -4024,6 +4025,7 @@ s32 StartFileLoad(s32 dest, s32 lbn, s32 sectorCount) {
  * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
  * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
  * fallback: a build that skips the splice loses the function. Native: plain C. */
+extern s32  StartFileLoad(s32 dest, s32 lbn, s32 sectorCount);        /* 0x2B8A18 (above) */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_StartFileLoadWithCallback)
 S136OS_SLOT(StartFileLoadWithCallback);
 #else
