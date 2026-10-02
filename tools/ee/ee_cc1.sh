@@ -33,6 +33,15 @@
 #   - the preprocessed text is wrapped in ONE `extern "C" { ... }` BY THIS
 #     SCRIPT, so the source stays unmangled without carrying the wrapper itself.
 #   - cc1plus gets -fno-exceptions -fno-rtti.
+#   - the 2.96 cc1plus (engine96) also gets -lang-c++. Without it, it rejects
+#     every out-of-class member definition `int K::m() {...}` with `syntax error
+#     before ':'` (FACT #8938), so no class-shaped MATCH_ body could compile
+#     (RULING #8950 term 5). The flag changes no output on the allowlisted
+#     units (task #1332). The 2.9 and SN 1.36 cc1plus parse `K::m` without it,
+#     and their command lines are unchanged. The marker check below cannot tell
+#     the two modes apart (NOTE #8936), so before the unit compiles, a
+#     two-line `K::m` probe is compiled with the same command line, and the
+#     compile fails if the probe does not parse.
 #   - the intermediate is written to the SAME <out.i> path a C unit would use.
 #     The `.file` directive names the compiler's input file, so a .c and a .cpp
 #     build of one unit emit the identical `.file` line; the only symbol that
@@ -172,8 +181,22 @@ else
   $WIBO $G/cpp.exe -lang-c++ -D__GNUG__=2 -D__cplusplus $CPPARGS "$SRC" "$raw" || { rm -f "$raw"; fail "cpp -lang-c++: $SRC"; }
   { printf 'extern "C" {\n'; cat "$raw"; printf '}\n'; } > "$OUT_I"
   rm -f "$raw"
+  CXXMODE=
+  if [ "$ARM" = engine96 ]; then
+    CXXMODE=-lang-c++
+    # The marker check below passes with or without -lang-c++ (NOTE #8936), so
+    # check the MODE: a two-line `K::m` definition must parse with the exact
+    # cc1plus line the unit is about to get.
+    probe="$OUT_S.langcxx.ii"
+    printf 'struct K { int m(); };\nint K::m() { return 0; }\n' > "$probe"
+    # shellcheck disable=SC2086
+    $CC -quiet $CXXMODE $CC1ARGS -fno-exceptions -fno-rtti "$probe" -o "$probe.s" 2>"$probe.err" || {
+      cat "$probe.err" >&2; rm -f "$probe" "$probe.s" "$probe.err"
+      fail "cc1plus ($ARM) cannot parse a T::m definition with this command line — not in -lang-c++ mode (FACT #8938)"; }
+    rm -f "$probe" "$probe.s" "$probe.err"
+  fi
   # shellcheck disable=SC2086
-  $CC -quiet $CC1ARGS -fno-exceptions -fno-rtti "$OUT_I" -o "$OUT_S" || { rm -f "$OUT_S"; fail "cc1plus ($ARM): $SRC"; }
+  $CC -quiet $CXXMODE $CC1ARGS -fno-exceptions -fno-rtti "$OUT_I" -o "$OUT_S" || { rm -f "$OUT_S"; fail "cc1plus ($ARM): $SRC"; }
   grep -q '^__gnu_compiled_cplusplus:' "$OUT_S" || { rm -f "$OUT_S"; fail "cc1plus ($ARM) output lacks __gnu_compiled_cplusplus — the C++ front end did not compile $SRC"; }
 fi
 [ -s "$OUT_S" ] || fail "no assembly written for $SRC"
