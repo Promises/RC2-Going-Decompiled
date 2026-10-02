@@ -2979,12 +2979,33 @@ void SelectSceneSubChunk(s32 which) {
  * all set to -1 (empty). */
 extern void FillMemory32(void *dst, u32 val, s32 len);
 extern s32 g_respawnPlayerYaw[];
+/* MATCHED on the s136os arm (task #1344): byte-identical to the ROM in the
+ * image. On EE this C is compiled alone by SN 2.95.3 v1.36 -fopt-stack (row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh; a build that skips the splice drops the function.
+ *
+ * R5900 SHORT-LOOP PAD (SCHEDULING DEVICE, RULING #8435; the same device and
+ * rationale as 1A8180.c's R5900_SHORT_LOOP_PAD1/2): the clear loop is 3
+ * instructions, and the ROM's assembler padded it with 3 `nop`s before the
+ * backward `bgez` to the R5900 short-loop minimum of 6. Neither cc1 nor the
+ * assemblers we run emit that pad, so it is written in the loop. "+r"(i) pins
+ * it between the counter decrement and the branch that tests it; "r"(p) keeps
+ * the pointer step after it, for reorg to move into the delay slot; the
+ * "memory" clobber keeps the store ahead of the decrement, the ROM's order
+ * (without it the scheduler hoists the decrement: 2 of 27 words differ).
+ * Emits only nops; empty on native. */
 #ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
+#define R5900_SHORT_LOOP_PAD3(v, next) \
+    __asm__(".set noreorder\n\tnop\n\tnop\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next) : "memory")
+#else
+#define R5900_SHORT_LOOP_PAD3(v, next) ((void)0)
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00294970)
+/* Record, t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 94.63% PACKED-SAVE /
  * engine96 69.26% UNKNOWN-empty; best arm sdk29, first differing insn there: 'addiu sp, sp,
- * -0x10' vs 'addiu sp, sp, -0x20' */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294970);
+ * -0x10' vs 'addiu sp, sp, -0x20' -- the 2.9 arm, which this function never was. */
+S136OS_SLOT(func_00294970);
 #else
 void func_00294970(void) {
     s32 *rec = &g_respawnPlayerYaw[0x12];   /* +0x48 */
@@ -2994,14 +3015,14 @@ void func_00294970(void) {
     FillMemory32(rec, 0, 0x35840);
     *(s16 *)((u8 *)rec + 0x14) = -1;
     p = (s32 *)((u8 *)rec + 0x3C);
-    for (i = 2; i >= 0; i--) {
+    i = 2;
+    do {
         *p = -1;
+        i--;
+        R5900_SHORT_LOOP_PAD3(i, p);
         p--;
-    }
+    } while (i >= 0);
 }
-/* byte-walled at 95%: 2 callee-saves land at 16-byte slots (this cc1) vs the
- * original's 8-byte packing (frame 0x20 vs 0x10) + the trailing loop delay-slot
- * schedule. Correct C kept as the portable #else; cmp-oracle'd (mock FillMemory32). */
 #endif
 
 /*

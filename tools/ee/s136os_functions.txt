@@ -217,3 +217,4 @@ usa text/198FA0 func_0029EB38
 usa text/198FA0 func_0029EA90
 usa text/198FA0 func_0029EAC8
 usa text/191238 func_00291FF8
+usa text/191238 func_00294970
