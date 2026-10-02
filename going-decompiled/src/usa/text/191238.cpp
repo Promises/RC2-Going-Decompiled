@@ -685,12 +685,8 @@ void func_00291FC8(void *arg) {
 }
 #endif
 
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 98.39% PACKED-SAVE /
- * engine96 53.43% CONST-MULT; best arm sdk29, first differing insn there: 'addiu sp, sp,
- * -0x20' vs 'addiu sp, sp, -0x30' */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291FF8);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00291FF8)
+S136OS_SLOT(func_00291FF8);
 #else
 /*
  * func_00291FF8(index) — flush one entry of the deferred light-relight request
@@ -702,10 +698,14 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291FF8);
  * pointer, its end pointer (start + length*2), and the entry index; then clear
  * each span back to 0 so the request is consumed exactly once.
  *
- * WALL: two callee-saves (the entry pointer + the index) across three jal sites
- * with the packed s16-span loads — the pinned cc1's 16-byte save slots and
- * register colouring diverge from the original's later cc1. Kept as the
- * portable #else body.
+ * MATCHED on the s136os arm (task #1344): byte-identical to the ROM in the
+ * image. On EE this C is compiled alone by SN 2.95.3 v1.36 -fopt-stack (row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh; a build that skips the splice drops the function.
+ * Closing levers: the callees declared int-returning (below), the buffer read
+ * through e->buffer in each argument expression, and the last span cleared
+ * off-then-len (the ROM stores +0xA before +0x8). The old t496 record (sdk29
+ * 98.39% PACKED-SAVE) measured the 2.9 arm, which this function never was.
  */
 /* Three interleaved {off,len} s16 spans at +0x0/+0x2, +0x4/+0x6, +0x8/+0xA. */
 typedef struct LightSpan { s16 off; s16 len; } LightSpan;
@@ -720,32 +720,36 @@ _Static_assert(sizeof(LightRelightRequest) == 0x30, "LightRelightRequest stride"
 #endif
 /* The request table starts 0x100 into g_pointLights (0x1C2AC0). */
 extern u8 g_pointLights[];
-extern void func_002F5F70(u8 *start, u8 *end, s32 index);
-extern void func_002E4178(u8 *start, u8 *end, s32 index);
-extern void func_002F1B58(u8 *start, u8 *end, s32 index);
+/* Declared int-returning, as the ROM's caller was evidently compiled (most
+ * likely an implicit declaration in the original). It is a codegen lever, not
+ * a return value: the result is never read and the definitions (1EFFC0.cpp,
+ * 1DFF80.cpp) return nothing in $v0. Measured (task #1344): with `void` the
+ * span-offset temp after each call lands in $v0 where the ROM has $v1, 6 of 49
+ * words differ; with `s32` the body is byte-identical. */
+extern s32 func_002F5F70(u8 *start, u8 *end, s32 index);
+extern s32 func_002E4178(u8 *start, u8 *end, s32 index);
+extern s32 func_002F1B58(u8 *start, u8 *end, s32 index);
 void func_00291FF8(s32 index) {
     LightRelightRequest *e =
         &((LightRelightRequest *)(g_pointLights + 0x100))[index];
-    u8 *buf = e->buffer;
-    if (buf == NULL) {
+    if (e->buffer == NULL) {
         return;
     }
-    /* each pass: start = buf + off*2, end = start + len*2; relight; then the
-     * spans are cleared so the request is consumed exactly once. */
-    func_002F5F70(buf + (s32)e->span[0].off * 2,
-                  buf + (s32)e->span[0].off * 2 + (s32)e->span[0].len * 2, index);
+    /* each pass: start = buffer + off*2, end = start + len*2; relight; then
+     * the span is cleared so the request is consumed exactly once. The buffer
+     * pointer is re-read for every pass (the ROM reloads +0xC after each call). */
+    func_002F5F70(e->buffer + e->span[0].off * 2,
+                  e->buffer + e->span[0].off * 2 + e->span[0].len * 2, index);
     e->span[0].off = 0;
     e->span[0].len = 0;
-    buf = e->buffer;
-    func_002E4178(buf + (s32)e->span[1].off * 2,
-                  buf + (s32)e->span[1].off * 2 + (s32)e->span[1].len * 2, index);
+    func_002E4178(e->buffer + e->span[1].off * 2,
+                  e->buffer + e->span[1].off * 2 + e->span[1].len * 2, index);
     e->span[1].off = 0;
     e->span[1].len = 0;
-    buf = e->buffer;
-    func_002F1B58(buf + (s32)e->span[2].off * 2,
-                  buf + (s32)e->span[2].off * 2 + (s32)e->span[2].len * 2, index);
-    e->span[2].len = 0;
+    func_002F1B58(e->buffer + e->span[2].off * 2,
+                  e->buffer + e->span[2].off * 2 + e->span[2].len * 2, index);
     e->span[2].off = 0;
+    e->span[2].len = 0;
 }
 #endif
 

@@ -169,16 +169,31 @@ extern s32 func_0033A8F0(void *widget, s32 arg);
  * for the TARGET_NATIVE #else arms; the #ifndef arms stay INCLUDE_ASM (these
  * declarations emit no code, so the matching build is unaffected). */
 #define ROM_SPLIT __attribute__((section(".data")))
-extern u8  g_miscExtras ROM_SPLIT;             /* 0x1A7A12 misc-extras gate byte (nonzero blocks) */
+extern u8  g_miscExtras;                       /* 0x1A7A12 misc-extras gate byte, nonzero blocks (cc1-small, see below) */
 extern s32 D_1397E0 ROM_SPLIT;                 /* 0x1397E0 status word; bit 0x8000000 = busy */
 extern u8  D_1395C1 ROM_SPLIT;                 /* 0x1395C1 dialog-active flag */
-extern u8  D_1A7B0D ROM_SPLIT;                 /* 0x1A7B0D dialog flag */
-extern u8  D_1A7B14 ROM_SPLIT;                 /* 0x1A7B14 dialog flag */
+extern u8  D_1A7B0D;                           /* 0x1A7B0D dialog flag (cc1-small, see below) */
+extern u8  D_1A7B14;                           /* 0x1A7B14 dialog flag (cc1-small, see below) */
 extern s32 D_1397C4 ROM_SPLIT;                 /* 0x1397C4 streaming state (sign = idle) */
 extern u8  D_1395D5 ROM_SPLIT;                 /* 0x1395D5 streaming-busy flag */
-extern u8  D_1A7BDD ROM_SPLIT;                 /* 0x1A7BDD dialog flag */
-extern u8  D_1A7B10 ROM_SPLIT;                 /* 0x1A7B10 dialog flag */
+extern u8  D_1A7BDD;                           /* 0x1A7BDD dialog flag (cc1-small, see below) */
+extern u8  D_1A7B10;                           /* 0x1A7B10 dialog flag (cc1-small, see below) */
 extern s32 g_cinematicUnlockedFlags ROM_SPLIT; /* 0x139768 cinematic bitfield (read at +0x90/+0x98) */
+
+/* cc1-small / assembler-absolute (ADDRESSING-MODEL DEVICE, the 1CA080.cpp form):
+ * the ROM loads these bytes with the assembler-macro shape -- `lui $N; lbu $N,
+ * %lo($N)`, the destination register reused as the base -- which is what GNU as
+ * prints for cc1's one-insn `lbu $N,sym` when it has seen `.extern sym, 16`
+ * (> -G8) before the use. cc1 still emits its own `.extern sym, 1` at the end
+ * of the file; the earlier, larger size governs. No ROM_SPLIT on them: that
+ * makes cc1 split the address into two pseudos, which it allocates to two
+ * registers. Emits no code; the only EE-compiled readers are the s136os
+ * members below. */
+__asm__(".extern g_miscExtras, 16");
+__asm__(".extern D_1A7B0D, 16");
+__asm__(".extern D_1A7B14, 16");
+__asm__(".extern D_1A7BDD, 16");
+__asm__(".extern D_1A7B10, 16");
 
 /* Gating globals + widget method for the func_0029CCB8 popup-poll wrapper. */
 extern s32 D_1A9A88;                 /* 0x1A9A88 GUI-active gate (gp small-data) */
@@ -2708,26 +2723,38 @@ s32 GatherActiveObjectives(s32 *outIds, s32 *outMask, s32 *outVals, s32 wantValu
 }
 #endif
 
-/* func_0029EA90 (and EAC8/EB08/EB38 below): 0/1 predicates over globals
- * (g_miscExtras + D_1397E0 bit 0x8000000 here). Two levers landed (#511):
- * the flag globals are declared ROM_SPLIT (the ROM addresses every one with a
- * compiler-split lui/%lo pair, never gp-relative) and the nested-guard shape
- * reproduces the ROM's single shared exit with the `daddu $2,0` fills — the
- * engine96 arm is then 93-99% and the sdk29 arm 72-74%. WALLED beyond that:
- * on cc1 2.9 the boolean tail `if (test) return 1; return 0;` is scc-converted
- * into `sltu $2,$0,$2` on EVERY source shape probed (if-chain, nested guards,
- * goto, v=1/v=0 flag variable, ?:, C++ bool on cc1plus 2.96), while the
- * original emits the branch + per-path constant materialisation (`bnez;
- * addiu $2,1 / daddu $2,0`); on cc1 2.96 the shape is exact but the load lands
- * in $v1 where the ROM reuses $v0, and one branch is emitted likely. Same
- * class: func_0029EC70. Predicates returning 0/1/2
- * (func_0029EB68/func_0029EBF8) are NOT walled - scc cannot synthesise 2. */
+/* func_0029EA90 (and EAC8/EB08/EB38 below): 0/1 predicates over globals.
+ * EA90, EAC8, EB08 and EB38 are s136os members (SN 2.95.3 v1.36 -fopt-stack,
+ * FACT #8810; rows in tools/ee/s136os_functions.txt, spliced over their
+ * S136OS_SLOT lines by tools/ee/s136os_splice.sh -- a build that skips the
+ * splice drops them). Two addressing forms meet here, per symbol, as the ROM
+ * has them:
+ *  - 0x139xxx words/bytes (D_1397E0, D_1395C1, D_1397C4, D_1395D5) are
+ *    ROM_SPLIT: cc1 splits the address itself (`lui $a; lw $b,%lo($a)`, two
+ *    registers).
+ *  - 0x1A7xxx bytes (g_miscExtras, D_1A7B0D, D_1A7B14, D_1A7BDD, D_1A7B10) are
+ *    cc1-small / assembler-absolute (the `.extern X, 16` lines above): cc1
+ *    prints the one-insn `lbu $N,X` macro and GNU as expands it through the
+ *    destination register, `lui $N; lbu $N,%lo($N)` -- the "load lands in $v0"
+ *    residual every split spelling had (task #1344).
+ * The macro is one insn to cc1, so its delay-slot filler would hoist a later
+ * one into the previous branch's slot; the ROM's compiler did not (it put the
+ * `daddu $2,$0,$0` return-0 there instead). A volatile access to that byte is
+ * a SCHEDULING DEVICE that keeps it out of the slot (RULING #8404's terms:
+ * not a claim that the byte changes asynchronously; writer census at each
+ * use). The tails are the nested-guard shape (`bnez; addiu $2,1 / daddu
+ * $2,0`), which SN 1.36 keeps where cc1 2.9 scc-converts to sltu.
+ * func_0029EC70 (HIGH shared, LO_SUM re-materialised) and the 0/1/2 arbiters
+ * func_0029EB68/func_0029EBF8 are not closed by this. */
 /** Returns 1 iff the misc-extras gate is clear (g_miscExtras == 0) AND the
- *  D_1397E0 busy bit (0x8000000) is set; 0 otherwise. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029EA90);
+ *  D_1397E0 busy bit (0x8000000) is set; 0 otherwise.
+ *  MATCHED on the s136os arm (task #1344): byte-identical to the ROM in the
+ *  image. The closing lever is g_miscExtras' addressing model alone (macro
+ *  load, see the family comment); the body is the one #511 wrote. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0029EA90)
+S136OS_SLOT(func_0029EA90);
 #else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+/* Record, t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 72.31% -> IFCONV, first differing row @0: ROM `lui v0, %hi(g_miscExtras)` vs `lui a0, %hi(g_miscExtras)`;
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 99.23% -> REGNUM-COLORING, first differing row @1: ROM `lbu v0, %lo(g_miscExtras)(v0)` vs `lbu v1, %lo(g_miscExtras)(v0)`. */
 s32 func_0029EA90(void) {
@@ -2741,17 +2768,24 @@ s32 func_0029EA90(void) {
 #endif
 
 /** Returns 1 iff all three dialog flags are set (D_1395C1, D_1A7B0D, D_1A7B14);
- *  0 as soon as any is clear. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029EAC8);
+ *  0 as soon as any is clear.
+ *  MATCHED on the s136os arm (task #1344): byte-identical to the ROM in the
+ *  image. D_1A7B0D/D_1A7B14 are macro loads; their volatile reads are the
+ *  SCHEDULING DEVICE of the family comment (without them each is hoisted into
+ *  the previous beqz's delay slot). Writer census: no ROM store names either
+ *  symbol; both are bytes of the 0x1A7B00 item-flag array (g_inventoryOwned
+ *  +0x0D/+0x14), written through it on the main thread (GiveInventoryItem
+ *  0x288D34); none is traced to an interrupt or callback (ASSERTED, by name). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0029EAC8)
+S136OS_SLOT(func_0029EAC8);
 #else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+/* Record, t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 73.67% -> IFCONV, first differing row @0: ROM `lui v0, %hi(D_1395C1)` vs `lui a0, %hi(D_1395C1)`;
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 95.00% -> REGNUM-COLORING, first differing row @5: ROM `lbu v0, %lo(D_1A7B0D)(v0)` vs `lbu v1, %lo(D_1A7B0D)(v0)`. */
 s32 func_0029EAC8(void) {
     if (D_1395C1 != 0) {
-        if (D_1A7B0D != 0) {
-            if (D_1A7B14 != 0) {
+        if (*(volatile u8 *)&D_1A7B0D != 0) {
+            if (*(volatile u8 *)&D_1A7B14 != 0) {
                 return 1;
             }
         }
@@ -2782,16 +2816,22 @@ s32 func_0029EB08(void) {
 }
 #endif
 
-/** Returns 1 iff both dialog flags are set (D_1A7BDD AND D_1A7B10); 0 otherwise. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029EB38);
+/** Returns 1 iff both dialog flags are set (D_1A7BDD AND D_1A7B10); 0 otherwise.
+ *  MATCHED on the s136os arm (task #1344): byte-identical to the ROM in the
+ *  image. Both are macro loads; the volatile read of D_1A7B10 is the
+ *  SCHEDULING DEVICE of the family comment. Writer census: no ROM store names
+ *  D_1A7B10 (readers only: here, func_0029EBF8, RestorePlayerProgressState);
+ *  it is g_inventoryOwned[0x10], written through the array on the main thread
+ *  (GiveInventoryItem 0x288D34); none traced to an interrupt (ASSERTED). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0029EB38)
+S136OS_SLOT(func_0029EB38);
 #else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
+/* Record, t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 74.09% -> IFCONV, first differing row @0: ROM `lui v0, %hi(D_1A7BDD)` vs `lui a0, %hi(D_1A7BDD)`;
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 93.18% -> REGNUM-COLORING, first differing row @1: ROM `lbu v0, %lo(D_1A7BDD)(v0)` vs `lbu v1, %lo(D_1A7BDD)(v0)`. */
 s32 func_0029EB38(void) {
     if (D_1A7BDD != 0) {
-        if (D_1A7B10 != 0) {
+        if (*(volatile u8 *)&D_1A7B10 != 0) {
             return 1;
         }
     }
