@@ -463,7 +463,7 @@ segments:
       #   functions) stay INCLUDE_ASM and need no pin. Tail resumes at the real
       #   func_002B9028 (after func_002B8FD8's stub run ends at 0x2B9028).
       - [0x1B21E8, asm, text/1B21E8] # .text mid 4 head (0x2B2268..0x2B4297)
-      - [0x1B4218, c, text/1B4218]   # moby-bind band (0x2B4298..0x2B9027)
+      - [0x1B4218, cpp, text/1B4218]   # moby-bind band (0x2B4298..0x2B9027)
       - [0x1B8FA8, asm, text/1B8FA8] # .text mid 4 tail (0x2B9028..0x2CA0FF)
       - [0x1CA080, cpp, text/1CA080]   # menu-screens A (0x2CA100..0x2D553F, 136 entries)
       - [0x1D54C0, c, text/1D54C0]   # menu-screens B (0x2D5540..0x2DFFFF, 117 entries)
