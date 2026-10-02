@@ -96,3 +96,16 @@ usa text/1DFF80 ComputeEmitterVolume
 usa text/24D728 func_0034D828
 usa text/24D728 func_0034DB68
 usa text/1907F0 func_00290878
+usa text/250080 func_003514E0
+usa text/250080 func_00351550
+usa text/250080 func_00351F58
+usa text/250080 func_00351FB0
+usa text/1B4218 StartFileLoad
+usa text/188858 func_002895E0
+usa text/1A8180 GetRandomInt
+usa text/191238 func_00291FC8
+usa text/191238 LoadPlayerDisplayModel
+usa text/191238 MapSetCurrentLevel
+usa text/191238 SelectSceneSubChunk
+usa text/1EFFC0 BuildTieDrawSegment
+usa text/24D728 func_0034F1C0

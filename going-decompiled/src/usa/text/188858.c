@@ -1122,8 +1122,15 @@ void func_00289560(CinematicQueue *q) {
  * where the original uses 8-byte slots in 0x10, so its output differs from the
  * ROM in exactly 5 prologue/epilogue words (98.75% at the unit objdiff gate).
  * The two-compiler split, not this body, is what stops the ordinary build. */
-#if !defined(TARGET_NATIVE) && !defined(MATCH_func_002895E0)
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_002895E0);
+/* GUARD (task #1309): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; census FACT #8830; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Its MATCH_func_002895E0 engine96 guard is retired with this promotion: the function is
+ * image-resident, no longer arm-scored (RULING #8118). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002895E0)
+S136OS_SLOT(func_002895E0);
 #else
 void func_002895E0(CinematicQueue *q) {
     func_00289560(q);

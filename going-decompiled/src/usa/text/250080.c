@@ -1012,10 +1012,16 @@ u32 func_00351498(u32 *s, u32 addr) {
 /* func_003514E0: write a DMAC channel CHCR under the ENABLEW suspend protocol —
  * suspend (ENABLEW = ENABLER | 0x10000), write the CHCR command, resume
  * (ENABLEW = ENABLER & ~0x10000), bracketed by func_0011F5E0/func_0011F628.
- * Blocked: 8-byte-packed saves (s0@0x0, ra@0x8) — 2.9 -G8 -fno-gcse emits a
- * 16-byte-slot 0x20 frame vs the ROM's 8-byte 0x10 (base-vs-target DIFFERS). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003514E0);
+ * cc1 2.9 -G8 -fno-gcse emits a 16-byte-slot 0x20 frame vs the ROM's 8-byte
+ * 0x10 (s0@0x0, ra@0x8); MATCHED on the s136os arm, which emits the packed frame
+ * (FACT #8830). The volatile accesses are the DMAC/ENABLEW MMIO registers. */
+/* GUARD (task #1309): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; census FACT #8830; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003514E0)
+S136OS_SLOT(func_003514E0);
 #else
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 75.44% / engine96 56.11%. Residual: PACKED-SAVE (2 callee saves) + 7 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 void func_003514E0(u32 chcrCmd) {
@@ -1031,9 +1037,15 @@ void func_003514E0(u32 chcrCmd) {
  * protocol — suspend (ENABLEW = ENABLER | 0x10000), write the CHCR command,
  * resume (ENABLEW = ENABLER & ~0x10000), all bracketed by DI/EI. The ch4
  * companion of func_003514E0 (which does the same for ch3/IPU_FROM at
- * 0x1000B000). Byte-match blocked: 8-byte-packed saves. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351550);
+ * 0x1000B000). cc1 2.9 cannot pack its saves (s0@0x0, ra@0x8); MATCHED on the
+ * s136os arm (FACT #8830). */
+/* GUARD (task #1309): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; census FACT #8830; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00351550)
+S136OS_SLOT(func_00351550);
 #else
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 75.44% / engine96 56.11%. Residual: PACKED-SAVE (2 callee saves) + 7 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 void func_00351550(u32 chcrCmd) {
@@ -1291,13 +1303,18 @@ s32 func_00351B10(void *dmaq) {
    (REG_IPU_CMD) and re-arms REG_DMAC_4_IPU_TO_MADR/TADR/QWC. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351C20);
 
-#ifndef TARGET_NATIVE
-/* func_00351F58: IPU_TO channel teardown + DeleteSema. Blocked:
- * 8-byte-packed saves (s0@0x0, ra@0x8). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351F58);
+/* GUARD (task #1309): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; census FACT #8830; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00351F58)
+/* func_00351F58: IPU_TO channel teardown + DeleteSema. MATCHED on the s136os
+ * arm (packed saves s0@0x0, ra@0x8; FACT #8830). */
+S136OS_SLOT(func_00351F58);
 #else
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 99.32% / engine96 62.64%. Residual: PACKED-SAVE only on sdk29 (2 callee saves at 16-byte stride, every non-save word equal); SCHED on engine96 (8-byte slots right, instruction set identical, order differs under -fno-schedule-insns; -fno-gcse+scheduling probed on the engine arm, no better). */
-/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
+/* Byte-exact on the s136os arm (task #1309); cc1 2.9 cannot pack the callee
    saves (s0@0x0, ra@0x8).
 
    ROUTE: tester-EE-pending (NOT isolated-cmp-oracleable) - clears the live DMAC
@@ -1318,14 +1335,19 @@ s32 func_00351F58(u8 *obj) {
 }
 #endif
 
-#ifndef TARGET_NATIVE
-/* func_00351FB0: sema-guarded total-bytes-queued read. Blocked:
- * 8-byte-packed saves (s0/s1/ra). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351FB0);
+/* GUARD (task #1309): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; census FACT #8830; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00351FB0)
+/* func_00351FB0: sema-guarded total-bytes-queued read. MATCHED on the s136os
+ * arm (packed saves s0/s1/ra; FACT #8830). */
+S136OS_SLOT(func_00351FB0);
 #else
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 76.58% / engine96 89.47%. Residual: PACKED-SAVE (3 callee saves) + 9 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
-/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
-   saves (s0/s1/ra). Revisit with the gameplay-TU compiler.
+/* Byte-exact on the s136os arm (task #1309; SN 2.95.3 v1.36 -fopt-stack packs
+   the s0/s1/ra saves cc1 2.9 cannot).
 
    NOTE(type): `obj` is the embedded bitstream/IPU-DMA sub-object (FmvStream+0x48,
    built by FmvBitstreamObjInit), the same sibling type not yet recovered for
@@ -1334,13 +1356,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351FB0);
 
    Total elementary-stream bytes queued for the IPU, read under the object's
    sema: (retired 2KB blocks << 11) + residual byte cursor. */
+/* The sema calls name the ROM's EE-kernel syscall stubs by address
+   (func_0011AC60 = WaitSema, func_0011AC40 = SignalSema, as func_00351F58 names
+   func_0011AC30 = DeleteSema): the SDK names have no definition in this link. */
+extern s32 func_0011AC60(s32 sema);   /* WaitSema */
+extern s32 func_0011AC40(s32 sema);   /* SignalSema */
 s32 func_00351FB0(void *stream) {
     u8 *obj = (u8 *)stream;
     s32 total;
 
-    WaitSema(*(s32 *)(obj + 0x40));
+    func_0011AC60(*(s32 *)(obj + 0x40));
     total = (*(s32 *)(obj + 0x10) << 11) + *(s32 *)(obj + 0x14);
-    SignalSema(*(s32 *)(obj + 0x40));
+    func_0011AC40(*(s32 *)(obj + 0x40));
     return total;
 }
 #endif

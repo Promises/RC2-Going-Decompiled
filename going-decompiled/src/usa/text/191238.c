@@ -661,8 +661,15 @@ void func_00291EB0(s32 index) {
  * PACKED-SAVE class. The empty asm keeps the second call from becoming a
  * sibling call (the ROM has jal + epilogue).
  */
-#if !defined(TARGET_NATIVE) && !defined(MATCH_func_00291FC8)
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291FC8);
+/* GUARD (task #1309): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; census FACT #8830; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Its MATCH_func_00291FC8 engine96 guard is retired with this promotion: the function is
+ * image-resident, no longer arm-scored (RULING #8118). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00291FC8)
+S136OS_SLOT(func_00291FC8);
 #else
 extern void func_00291FF8(s32 index);
 extern void func_00291EB0(s32 index);
@@ -1263,8 +1270,15 @@ extern s32   g_loadedArmorVariant;        /* 0x1A7290 */
 extern void  LoadPlayerDisplayTextures(s32 variant);
 extern void  BindPlayerDisplayModel(s32 variant);
 void func_00293D68(u8 *dst, u8 *src);
-#if !defined(TARGET_NATIVE) && !defined(MATCH_LoadPlayerDisplayModel)
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadPlayerDisplayModel);
+/* GUARD (task #1309): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; census FACT #8830; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Its MATCH_LoadPlayerDisplayModel engine96 guard is retired with this promotion: the function is
+ * image-resident, no longer arm-scored (RULING #8118). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_LoadPlayerDisplayModel)
+S136OS_SLOT(LoadPlayerDisplayModel);
 #else
 void LoadPlayerDisplayModel(s32 variant) {
     LoadPlayerDisplayTextures(variant);
@@ -2819,12 +2833,26 @@ void LoadGlobalDialogScene(s32 sceneIndex, s32 mode) {
  *    `off + t + 0x74`. For those, only engine_swap_fix.py's swap reaches the ROM
  *    word (FACT #8037).
  */
-#if !defined(TARGET_NATIVE) && !defined(MATCH_SelectSceneSubChunk)
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", SelectSceneSubChunk);
-#else
+/* GUARD (task #1309): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; census FACT #8830; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Its MATCH_SelectSceneSubChunk engine96 guard is retired with this promotion: the function is
+ * image-resident, no longer arm-scored (RULING #8118). */
+/* The alias sits OUTSIDE the guard (task #1309): the s136os splice carries only
+ * the function's .ent..end block and .extern lines into the unit's cc1 2.9
+ * output, so the equate must already be in that TU or the block's reference to
+ * g_sceneArenaCursorAbs is undefined. It emits no bytes and, as for RenderSky's
+ * aliases, never reaches the symbol table. */
 #ifndef TARGET_NATIVE
 __asm__(".extern g_sceneArenaCursorAbs, 16\n\tg_sceneArenaCursorAbs = g_sceneArenaCursor");
 extern s32 g_sceneArenaCursorAbs;
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_SelectSceneSubChunk)
+S136OS_SLOT(SelectSceneSubChunk);
+#else
+#ifndef TARGET_NATIVE
 extern s32 g_sceneArenaBase __attribute__((section(".data")));
 #else
 #define g_sceneArenaCursorAbs g_sceneArenaCursor
@@ -4331,8 +4359,15 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapCompositeThu
  * empty asm keeps the call from becoming a sibling call.
  */
 s32 MapUpdateLevelAvailability(void);
-#if !defined(TARGET_NATIVE) && !defined(MATCH_MapSetCurrentLevel)
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapSetCurrentLevel);
+/* GUARD (task #1309): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; census FACT #8830; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Its MATCH_MapSetCurrentLevel engine96 guard is retired with this promotion: the function is
+ * image-resident, no longer arm-scored (RULING #8118). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_MapSetCurrentLevel)
+S136OS_SLOT(MapSetCurrentLevel);
 #else
 void MapSetCurrentLevel(s32 level) {
     g_mapVertexData.currentLevel = level;

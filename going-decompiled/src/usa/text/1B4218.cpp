@@ -3984,20 +3984,27 @@ void StopFileLoad(void) {
  * completion callback, records the request, sets the active flag, and returns
  * the byte size (sectorCount << 11); on CdStartRead failure emits the
  * "load file failed to start" debug string (retail no-op) and spin-waits.
- * WALL: save-layout — saves $16/$17/$18/$19/$31 (five callee-saves at 8-byte
- * spacing), which the pinned cc1 packs at 16-byte spacing. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StartFileLoad);
+ * Saves $16/$17/$18/$19/$31 at 8-byte spacing, which cc1 2.9 packs at 16-byte
+ * spacing; MATCHED on the s136os arm, which emits that packed layout (FACT #8830).
+ * GUARD (task #1309): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; census FACT #8830; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_StartFileLoad)
+S136OS_SLOT(StartFileLoad);
 #else
-/* TODO(match): functional equivalent - not byte-exact; save-layout wall. */
 extern char D_1AA1F8[];                    /* "load file failed to start" debug string */
 extern s32 CdStartRead(s32 lbn, s32 sectors, s32 dest, void *rmode);  /* 0x133398 */
 extern void func_002833D8(void);           /* spin-wait on fatal load failure */
-/* WEAK (TARGET_NATIVE arm only, byte-neutral): cmp_191238d.c supplies a strong
- * StartFileLoad mock; weak lets it win the link when this unit is co-linked into
- * the cmp suite (this body is untested here; gc-sections drops it). Inert in the
- * matching build (INCLUDE_ASM arm). */
+/* WEAK on TARGET_NATIVE only: cmp_191238d.c supplies a strong StartFileLoad
+ * mock; weak lets it win the link when this unit is co-linked into the cmp suite
+ * (this body is untested there; gc-sections drops it). The EE body is the
+ * image's (s136os arm, task #1309) and must bind GLOBAL like the ROM's, so the
+ * attribute is not applied there. */
+#ifdef TARGET_NATIVE
 __attribute__((weak))
+#endif
 s32 StartFileLoad(s32 dest, s32 lbn, s32 sectorCount) {
     if (g_fileLoadVoiceState.fileLoadActive != 0 || sectorCount == 0) {
         return 0;

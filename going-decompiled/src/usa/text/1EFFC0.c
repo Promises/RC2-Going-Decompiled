@@ -19,15 +19,22 @@ extern s32 g_nGameState;        /* 0x1A8BB0 current top-level game/screen state 
 /* g_vramAllocCursor is reached TWO ways inside this one TU: %gp_rel in
  * CloseTfragDrawSegment and BuildTieDrawSegment, absolute %hi/%lo in
  * BuildTfragDrawSegment and FlushTieTextureUploads -- all four at 0x1A72D0.
- * One `.extern` size cannot serve both, so the size is chosen PER ARM, which
- * the MATCH_ guard already partitions: the sdk29 arm (which owns and matches
- * FlushTieTextureUploads) keeps the absolute size-16 class, the engine96 arm
- * (which owns BuildTieDrawSegment) takes the small-data class that yields
- * gp_rel. build.sh defines no MATCH_, so the IMAGE always takes the 16. */
-#if defined(MATCH_BuildTieDrawSegment)
-__asm__(".extern g_vramAllocCursor, 4");
-#else
+ * GNU as sizes a SYMBOL once per file, so one `.extern` size cannot serve both.
+ * The real symbol keeps the absolute size-16 class (FlushTieTextureUploads,
+ * matched in the unit's cc1 2.9 TU). BuildTieDrawSegment's store names a
+ * distinct assembler symbol EQUATED to it, sized 4, so only that store is
+ * gp-relative; gas resolves the equate in the emitted relocation, which names
+ * g_vramAllocCursor as the ROM's does (the 191238 *Abs alias form, inverted).
+ * A per-TU size is NOT enough since the s136os arm (task #1309): its block is
+ * spliced into the 2.9 TU's output, after the unit's `.extern ..., 16`, which
+ * pinned the delay-slot store absolute (lui+sw: +4 bytes, the image shifted 8).
+ * Until #1309 the engine96 arm took a size 4 through MATCH_BuildTieDrawSegment. */
 __asm__(".extern g_vramAllocCursor, 16");
+#ifndef TARGET_NATIVE
+__asm__(".extern g_vramAllocCursorGp, 4\n\tg_vramAllocCursorGp = g_vramAllocCursor");
+extern u8 *g_vramAllocCursorGp;
+#else
+#define g_vramAllocCursorGp g_vramAllocCursor
 #endif
 extern u8 *g_vramAllocCursor;   /* 0x1A72D0 byte-addressed VRAM bump cursor */
 
@@ -385,22 +392,28 @@ void PatchTiePacketTex0(void) {
  * tree) and verify_match_unit.sh BYTE IDENTICAL TO ROM, 38/38 words, 20 relocs
  * resolved.
  *
- * The lever is the per-arm `.extern g_vramAllocCursor` size at the top of this
- * file, and it is the WHOLE residual -- the previous comment named the mechanism
- * correctly. That store is the original's only %gp_rel reference here; under the
+ * The lever is the small `.extern` size for this store (now the
+ * g_vramAllocCursorGp alias at the top of this file), and it is the WHOLE
+ * residual. That store is the original's only %gp_rel reference here; under the
  * absolute size-16 class it expands to a lui/sw PAIR, which cannot sit in the
  * jal delay slot and shifts the tail. Isolated A/B, one line apart, same arm:
  *   .extern g_vramAllocCursor, 16  -> 92.97%, verify_match_unit rc=1 DIFFERS
  *   .extern g_vramAllocCursor, 4   -> 100.00%, rc=0 BYTE IDENTICAL
  * Sizing it small for the WHOLE TU is not available: FlushTieTextureUploads
  * reaches the same address absolutely and is already byte-exact on sdk29, so a
- * TU-wide flip would trade one match for another. Splitting the size by arm
- * costs nothing because the guard already routes each function to one arm, and
- * build.sh defines no MATCH_, so the shipped image is untouched either way. */
-#if defined(MATCH_BuildTieDrawSegment) || defined(TARGET_NATIVE)
+ * TU-wide flip would trade one match for another; the equated alias gives the
+ * one store its own size instead. */
+/* GUARD (task #1309): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; census FACT #8830; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Its MATCH_BuildTieDrawSegment engine96 guard is retired with this promotion:
+ * the function is image-resident, no longer arm-scored (RULING #8118). */
+#if defined(S136OS_BuildTieDrawSegment) || defined(TARGET_NATIVE)
 void BuildTieDrawSegment(void) {
     AppendGsRegPacket(0x47, 0x5180B);
-    g_vramAllocCursor = g_vramDynamicBase;
+    g_vramAllocCursorGp = g_vramDynamicBase;
     func_0011AEA0(0);
     CullAndBinTieInstances();
     FlushTieTextureUploads();
@@ -412,7 +425,7 @@ void BuildTieDrawSegment(void) {
     g_frameDmaCursor += 0x20;
 }
 #else
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", BuildTieDrawSegment);
+S136OS_SLOT(BuildTieDrawSegment);
 #endif
 
 /* TODO(hle): needs PS2 graphics/IO HLE backend - tie draw-pipeline frame-stack sliver (spimdisasm fragment). */

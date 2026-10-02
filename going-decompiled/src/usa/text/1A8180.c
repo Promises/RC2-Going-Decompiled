@@ -575,9 +575,16 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8628);
  * delay slot); no caller passes 0, so the native shim leaves that path to the
  * platform divide. NATIVE SHIM (no byte target; matching build uses asm).
  */
-#if !defined(TARGET_NATIVE) && !defined(MATCH_GetRandomInt)
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", GetRandomInt);
-#elif defined(MATCH_GetRandomInt)
+/* GUARD (task #1309): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; census FACT #8830; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Its MATCH_GetRandomInt engine96 guard is retired with this promotion: the function is
+ * image-resident, no longer arm-scored (RULING #8118). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GetRandomInt)
+S136OS_SLOT(GetRandomInt);
+#elif !defined(TARGET_NATIVE)
 /* engine-2.96 byte-match (verify_match.sh RAW: byte+reloc identical). rand @0x1163B0. */
 s32 GetRandomInt(s32 n) {
     return ((rand() >> 16) & 0x7FFF) % n;
