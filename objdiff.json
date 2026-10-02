@@ -303,7 +303,7 @@
       "target_path": "going-decompiled/build/usa/expected/text/178E88.o",
       "base_path": "going-decompiled/build/usa/obj/text/178E88.o",
       "metadata": {
-        "source_path": "going-decompiled/src/usa/text/178E88.c",
+        "source_path": "going-decompiled/src/usa/text/178E88.cpp",
         "progress_categories": [
           "text"
         ]
@@ -391,7 +391,7 @@
       "target_path": "going-decompiled/build/usa/expected/text/198FA0.o",
       "base_path": "going-decompiled/build/usa/obj/text/198FA0.o",
       "metadata": {
-        "source_path": "going-decompiled/src/usa/text/198FA0.c",
+        "source_path": "going-decompiled/src/usa/text/198FA0.cpp",
         "progress_categories": [
           "text"
         ]
