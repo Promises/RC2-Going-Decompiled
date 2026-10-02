@@ -194,7 +194,7 @@ extern FileLoadVoiceState g_fileLoadVoiceState;   /* 0x1A63A8 */
  * forwarding tails — see text/198FA0). */
 extern void SetSndPumpCallback(void *cb);  /* 0x1336D0 */
 extern void PumpFileLoadCompletion(s32 phase);  /* 0x2B8CA8 snd-pump tick */
-extern void CdStopRead(void);              /* 0x133640 */
+extern s32 CdStopRead(void);               /* 0x133640; returns 1 on the IOP path (cod/0321A0.c) */
 extern s32 CdGetLoadStatus(void);          /* 0x133688 */
 extern void func_0011AEA0(s32 mode);       /* 0x0011AEA0 FlushCache (EE kernel syscall 0x64); raw-asm glabel name */
 extern s16 g_fileLoadState ABSOLUTE_GLOBAL;  /* 0x1A63AC 0 idle / 1 requested / 2 in progress */

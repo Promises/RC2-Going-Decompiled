@@ -1009,7 +1009,7 @@ extern void Vec4SubVu0(void *dst, void *a, void *b);
 extern void Vec4ScaleVu0(void *dst, float s, void *src);   /* sig: scale BEFORE src (def 183558.c:200) */
 extern void Vec4AddVu0(void *dst, void *a, void *b);
 extern void func_00283968(void *dst, void *src, float s);
-extern s32 func_002A87F0(float a, float b);
+extern void func_002A87F0(void *handle, float lo, float hi);  /* 0x2A87F0, defined 1A8180.c */
 extern s32 CollLine(void *a, void *b, s32 mask, s32 owner, s32 flags);
 
 /* Build a listener occlusion probe in vec4 `out`: trace a collision line from the
@@ -1025,7 +1025,7 @@ extern s32 CollLine(void *a, void *b, s32 mask, s32 owner, s32 flags);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", ComputeListenerOcclusionProbe);
 #else
 void ComputeListenerOcclusionProbe(Vec4 *out) {
-    func_002A87F0(0.5f, 6.0f);
+    func_002A87F0(out, 0.5f, 6.0f);
     Vec4AddVu0(out, out, g_cameraPos);
     if (CollLine(g_cameraPos, out, 0x82,
                  *(s32 *)(g_sndChannelVolumes + 0x24), 0) != 0) {

@@ -265,7 +265,7 @@ extern void GuiElementInitTypeB(void *p);
 extern void GuiElementInitTypeC(void *p);
 extern void GuiListRowElementInit(void *p);
 extern void func_00348BD0(void *p);
-extern void GuiMenuListHandleInput(void *w, s32 inputMask); /* 248B50: selection-advance by input mask */
+extern s32 GuiMenuListHandleInput(void *w, s32 inputMask); /* 248B50: selection-advance by input mask; returns 1/0 (248B50.c) */
 extern void GuiMenuListSetOrigin(void *w, f32 x, f32 y);
 extern void func_00348E58(void *w, s32 res);
 extern void func_00115AC0(void *dst, const void *src, s32 len); /* SDK memcpy */
@@ -993,6 +993,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementShare
    3/26 insns differ. Residual: SCHED (prologue/epilogue or delay-slot order only; sched1 ON/OFF and sched2 OFF RUN, none reproduce it).
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
+extern void func_00337D78(void *pool, void **node);
 void GuiElementShareScaleVec(GuiElement *e, f32 *newScale) {
     if (newScale == e->scale) {
         return;
@@ -1023,6 +1024,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336D28);
    3/26 insns differ. Residual: SCHED (prologue/epilogue or delay-slot order only; sched1 ON/OFF and sched2 OFF RUN, none reproduce it).
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
+extern void func_00337D78(void *pool, void **node);
 void func_00336D28(GuiElement *e, f32 *newVisible) {
     if (newVisible == e->visible) {
         return;
@@ -1399,8 +1401,8 @@ void GuiListElementInit(GuiElement *e, s32 v3C, s32 v34, s32 tag, GuiPool *pool)
     GuiElementBaseInit(e, tag, pool);
     *(s32 *)((char *)e + 0x3C) = v3C;
     *(s32 *)((char *)e + 0x34) = v34;
-    *(s32 *)((char *)e + 0x44) = (s32)0x80000000;
     *(s32 *)((char *)e + 0x40) = 0x64;
+    *(s32 *)((char *)e + 0x44) = (s32)0x80000000;
 }
 #endif
 
@@ -1577,20 +1579,14 @@ void GuiSpriteElementInit(GuiElement *e, s32 tag, GuiPool *pool) {
     if (pool != 0) {
         vec = GuiPlacementNew(0x10, GuiPoolAlloc(*(GuiPool **)((char *)e + 0x2C)));
         *(f32 **)((char *)e + 0x34) = vec;
-        vec[0] = 0.0f; vec[1] = 0.0f; vec[2] = 0.0f; vec[3] = 0.0f;
+        vec[1] = 0.0f; vec[2] = 0.0f; vec[3] = 0.0f; vec[0] = 0.0f;
     }
-    vec = *(f32 **)((char *)e + 0x34);
-    vec[0] = 0.0f;
-    vec = *(f32 **)((char *)e + 0x34);
-    vec[1] = 0.0f;
-    pos = e->pos;
-    pos[0] = 100.0f;
-    pos = e->pos;
-    pos[1] = 100.0f;
-    scale = e->scale;
-    scale[0] = 64.0f;
-    scale = e->scale;
-    scale[1] = 64.0f;
+    (*(f32 **)((char *)e + 0x34))[0] = 0.0f;
+    (*(f32 **)((char *)e + 0x34))[1] = 0.0f;
+    e->pos[0] = 100.0f;
+    e->pos[1] = 100.0f;
+    e->scale[0] = 64.0f;
+    e->scale[1] = 64.0f;
     *(s32 *)((char *)e + 0x38) = 0;
 }
 #endif
@@ -4079,7 +4075,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033CEE0);
    not byte-exact, so the arm stays #else. */
 extern u8 g_gsScreenContext[];
 extern void func_002857F0(void);
-extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
 s32 func_0033CEE0(void *w, s32 flags) {
     void *box = (char *)w + 0x8;
     f32 *anchor;
@@ -4206,6 +4202,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D1F8);
 s32 func_0033D320(void *p, s32 flags);
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
 extern u8 D_1ADDB8[8];
+extern void GuiDialogBoxSetText3(void *p, s32 t0, s32 t1, s32 t2);
 void func_0033D1F8(void *w, GuiPool *pool) {
     void *obj;
     s32 t0, t1, t2;
@@ -4215,15 +4212,14 @@ void func_0033D1F8(void *w, GuiPool *pool) {
     if (pool != 0) {
         obj = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
         *(void **)((char *)w + 0x2DC) = obj;
-        *(s32 *)((char *)obj + 0x0) = 0;
         *(s32 *)((char *)obj + 0x4) = 0;
         *(s32 *)((char *)obj + 0x8) = 0;
         *(s32 *)((char *)obj + 0xC) = 0;
+        *(s32 *)((char *)obj + 0x0) = 0;
     }
 
-    obj = *(void **)((char *)w + 0x2DC);
-    *(f32 *)((char *)obj + 0x0) = 255.0f;
-    *(f32 *)((char *)obj + 0x4) = 195.0f;
+    (*(f32 **)((char *)w + 0x2DC))[0] = 255.0f;
+    (*(f32 **)((char *)w + 0x2DC))[1] = 195.0f;
     GuiDialogBoxInitBorder((char *)w + 0x8, pool, D_1ADDB8);
 
     t0 = GetLocalizedString(0x307A);
@@ -4254,7 +4250,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D320);
    not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame +
    branch-likely (beql) guard wall. */
-extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
 extern void BuildCameraProjection(void);
 extern u8 D_1A7BB9;
 s32 func_0033D320(void *p, s32 flags) {
@@ -4334,6 +4330,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D4B0);
 s32 func_0033D5D8(void *w, s32 flags);
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
 extern u8 D_1ADDC8[8];
+extern void GuiDialogBoxSetText3(void *p, s32 t0, s32 t1, s32 t2);
 void func_0033D4B0(void *w, GuiPool *pool) {
     void *obj;
     s32 t0, t1, t2;
@@ -4342,15 +4339,14 @@ void func_0033D4B0(void *w, GuiPool *pool) {
     if (pool != 0) {
         obj = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
         *(void **)((char *)w + 0x2DC) = obj;
-        *(s32 *)((char *)obj + 0x0) = 0;
         *(s32 *)((char *)obj + 0x4) = 0;
         *(s32 *)((char *)obj + 0x8) = 0;
         *(s32 *)((char *)obj + 0xC) = 0;
+        *(s32 *)((char *)obj + 0x0) = 0;
     }
 
-    obj = *(void **)((char *)w + 0x2DC);
-    *(f32 *)((char *)obj + 0x0) = 255.0f;
-    *(f32 *)((char *)obj + 0x4) = 195.0f;
+    (*(f32 **)((char *)w + 0x2DC))[0] = 255.0f;
+    (*(f32 **)((char *)w + 0x2DC))[1] = 195.0f;
     GuiDialogBoxInitBorder((char *)w + 0x8, pool, D_1ADDC8);
 
     t0 = GetLocalizedString(0x2C2E);
@@ -4516,6 +4512,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiDialogBoxVar
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
 extern s32 func_0033DB60(void *w, s32 flag);
 extern u8 D_1ADE10[8];
+extern void GuiDialogBoxSetText3(void *p, s32 t0, s32 t1, s32 t2);
 void GuiDialogBoxVariantBInit(void *w, GuiPool *pool) {
     void *obj;
     s32 t0, t1, t2;
@@ -4525,15 +4522,14 @@ void GuiDialogBoxVariantBInit(void *w, GuiPool *pool) {
     if (pool != 0) {
         obj = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
         *(void **)((char *)w + 0x2DC) = obj;
-        *(s32 *)((char *)obj + 0x0) = 0;
         *(s32 *)((char *)obj + 0x4) = 0;
         *(s32 *)((char *)obj + 0x8) = 0;
         *(s32 *)((char *)obj + 0xC) = 0;
+        *(s32 *)((char *)obj + 0x0) = 0;
     }
 
-    obj = *(void **)((char *)w + 0x2DC);
-    *(f32 *)((char *)obj + 0x0) = 255.0f;
-    *(f32 *)((char *)obj + 0x4) = 195.0f;
+    (*(f32 **)((char *)w + 0x2DC))[0] = 255.0f;
+    (*(f32 **)((char *)w + 0x2DC))[1] = 195.0f;
     GuiDialogBoxInitBorder((char *)w + 0x8, pool, D_1ADE10);
 
     t0 = GetLocalizedString(0x2C29);
@@ -4880,6 +4876,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E4C0);
 s32 func_0033E5E8(void *p, s32 flags);
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
 extern u8 D_1ADE50[8];
+extern void GuiDialogBoxSetText3(void *p, s32 t0, s32 t1, s32 t2);
 void func_0033E4C0(void *w, GuiPool *pool) {
     void *obj;
     s32 t0, t1, t2;
@@ -4889,15 +4886,14 @@ void func_0033E4C0(void *w, GuiPool *pool) {
     if (pool != 0) {
         obj = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
         *(void **)((char *)w + 0x2DC) = obj;
-        *(s32 *)((char *)obj + 0x0) = 0;
         *(s32 *)((char *)obj + 0x4) = 0;
         *(s32 *)((char *)obj + 0x8) = 0;
         *(s32 *)((char *)obj + 0xC) = 0;
+        *(s32 *)((char *)obj + 0x0) = 0;
     }
 
-    obj = *(void **)((char *)w + 0x2DC);
-    *(f32 *)((char *)obj + 0x0) = 255.0f;
-    *(f32 *)((char *)obj + 0x4) = 195.0f;
+    (*(f32 **)((char *)w + 0x2DC))[0] = 255.0f;
+    (*(f32 **)((char *)w + 0x2DC))[1] = 195.0f;
     GuiDialogBoxInitBorder((char *)w + 0x8, pool, D_1ADE50);
 
     t0 = GetLocalizedString(0x2C2F);
@@ -4928,7 +4924,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E5E8);
    not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame +
    branch-likely (beql) guard wall. */
-extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);  /* returns s32 (1DFF80.cpp) */
 extern u8 D_1A7B9E;
 s32 func_0033E5E8(void *p, s32 flags) {
     void *box = (char *)p + 0x8;
@@ -5010,6 +5006,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiQuitDialogIn
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
 extern s32 func_0033E8B0(void *w, s32 flag);
 extern u8 D_1ADE60[8];
+extern void GuiDialogBoxSetText3(void *p, s32 t0, s32 t1, s32 t2);
 void GuiQuitDialogInit(void *w, GuiPool *pool) {
     void *obj;
     s32 t0, t1, t2;
@@ -5019,15 +5016,14 @@ void GuiQuitDialogInit(void *w, GuiPool *pool) {
     if (pool != 0) {
         obj = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
         *(void **)((char *)w + 0x2DC) = obj;
-        *(s32 *)((char *)obj + 0x0) = 0;
         *(s32 *)((char *)obj + 0x4) = 0;
         *(s32 *)((char *)obj + 0x8) = 0;
         *(s32 *)((char *)obj + 0xC) = 0;
+        *(s32 *)((char *)obj + 0x0) = 0;
     }
 
-    obj = *(void **)((char *)w + 0x2DC);
-    *(f32 *)((char *)obj + 0x0) = 255.0f;
-    *(f32 *)((char *)obj + 0x4) = 195.0f;
+    (*(f32 **)((char *)w + 0x2DC))[0] = 255.0f;
+    (*(f32 **)((char *)w + 0x2DC))[1] = 195.0f;
     GuiDialogBoxInitBorder((char *)w + 0x8, pool, D_1ADE60);
 
     t0 = GetLocalizedString(0x2BF7);
@@ -5160,6 +5156,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EB58);
 s32 func_0033EC80(void *w, s32 flags);
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
 extern u8 D_1ADE70[8];
+extern void GuiDialogBoxSetText3(void *p, s32 t0, s32 t1, s32 t2);
 void func_0033EB58(void *w, GuiPool *pool) {
     void *obj;
     s32 t0, t1, t2;
@@ -5168,15 +5165,14 @@ void func_0033EB58(void *w, GuiPool *pool) {
     if (pool != 0) {
         obj = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
         *(void **)((char *)w + 0x2DC) = obj;
-        *(s32 *)((char *)obj + 0x0) = 0;
         *(s32 *)((char *)obj + 0x4) = 0;
         *(s32 *)((char *)obj + 0x8) = 0;
         *(s32 *)((char *)obj + 0xC) = 0;
+        *(s32 *)((char *)obj + 0x0) = 0;
     }
 
-    obj = *(void **)((char *)w + 0x2DC);
-    *(f32 *)((char *)obj + 0x0) = 255.0f;
-    *(f32 *)((char *)obj + 0x4) = 195.0f;
+    (*(f32 **)((char *)w + 0x2DC))[0] = 255.0f;
+    (*(f32 **)((char *)w + 0x2DC))[1] = 195.0f;
     GuiDialogBoxInitBorder((char *)w + 0x8, pool, D_1ADE70);
 
     t0 = GetLocalizedString(0x2BF7);
@@ -5281,6 +5277,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EE08);
 s32 func_0033EF30(void *w, s32 flags);
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
 extern u8 D_1ADE80[8];
+extern void GuiDialogBoxSetText3(void *p, s32 t0, s32 t1, s32 t2);
 void func_0033EE08(void *w, GuiPool *pool) {
     void *obj;
     s32 t0, t1, t2;
@@ -5289,15 +5286,14 @@ void func_0033EE08(void *w, GuiPool *pool) {
     if (pool != 0) {
         obj = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
         *(void **)((char *)w + 0x2DC) = obj;
-        *(s32 *)((char *)obj + 0x0) = 0;
         *(s32 *)((char *)obj + 0x4) = 0;
         *(s32 *)((char *)obj + 0x8) = 0;
         *(s32 *)((char *)obj + 0xC) = 0;
+        *(s32 *)((char *)obj + 0x0) = 0;
     }
 
-    obj = *(void **)((char *)w + 0x2DC);
-    *(f32 *)((char *)obj + 0x0) = 255.0f;
-    *(f32 *)((char *)obj + 0x4) = 195.0f;
+    (*(f32 **)((char *)w + 0x2DC))[0] = 255.0f;
+    (*(f32 **)((char *)w + 0x2DC))[1] = 195.0f;
     GuiDialogBoxInitBorder((char *)w + 0x8, pool, D_1ADE80);
 
     t0 = GetLocalizedString(0x2BF7);
@@ -5376,6 +5372,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F000);
 s32 func_0033F128(void *w, s32 flags);
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
 extern u8 D_1ADE90[8];
+extern void GuiDialogBoxSetText3(void *p, s32 t0, s32 t1, s32 t2);
 void func_0033F000(void *w, GuiPool *pool) {
     void *obj;
     s32 t0, t1, t2;
@@ -5384,15 +5381,14 @@ void func_0033F000(void *w, GuiPool *pool) {
     if (pool != 0) {
         obj = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
         *(void **)((char *)w + 0x2DC) = obj;
-        *(s32 *)((char *)obj + 0x0) = 0;
         *(s32 *)((char *)obj + 0x4) = 0;
         *(s32 *)((char *)obj + 0x8) = 0;
         *(s32 *)((char *)obj + 0xC) = 0;
+        *(s32 *)((char *)obj + 0x0) = 0;
     }
 
-    obj = *(void **)((char *)w + 0x2DC);
-    *(f32 *)((char *)obj + 0x0) = 255.0f;
-    *(f32 *)((char *)obj + 0x4) = 195.0f;
+    (*(f32 **)((char *)w + 0x2DC))[0] = 255.0f;
+    (*(f32 **)((char *)w + 0x2DC))[1] = 195.0f;
     GuiDialogBoxInitBorder((char *)w + 0x8, pool, D_1ADE90);
 
     t0 = GetLocalizedString(0x2BF7);
@@ -5601,8 +5597,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F478);
 extern u8 g_currentLanguage;
 extern s32 D_1ADEB0[2];
 void func_0033F478(void *p) {
-    void *w = (char *)p + 0x2E0;
+    void *w;
     func_0033BF90((char *)p + 0x8);
+    w = (char *)p + 0x2E0;
     func_00348E58(w, D_1ADEB0[g_currentLanguage]);
     GuiMenuListDraw(w);
 }
@@ -6209,7 +6206,7 @@ extern u8 g_hudMobySpawnStart[];        /* +0x2C -> quick-select entry table ptr
 extern s32 g_weaponXp[];                /* itemId -> accumulated weapon XP */
 extern u8 D_138180[];                   /* HUD/input state; +0x1C4 = button bits */
 extern f32 D_1AE020[2], D_1AE028[2], D_1AE030[2], D_1AE038[2], D_1AE040[2], D_1AE048[2];
-extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
 extern char *func_0034F300(char *ctx);              /* -> quick-select GuiList array base */
 extern void func_00337DC8(s32 itemId, s32 *petalRgb, s32 *listC0, s32 *listC1);
 void func_003418D8(void *w, s32 flags);             /* grid d-pad handler (mode 0) */
@@ -6553,7 +6550,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341708);
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
 extern u8 g_hudMobySpawnStart[];        /* +0x2C -> quick-select slot-table ptr */
-extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
 
 void func_00341708(void *w, void *table, s32 rowStride) {
     s32 col = *(s32 *)((char *)w + 0x814);
@@ -6619,7 +6616,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003418D8);
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
 extern u8 D_00259F38[];
-extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
 extern void func_00341708(void *w, void *table, s32 mult);
 void func_003418D8(void *w, s32 flags) {
     s32 v, idx;
@@ -6691,7 +6688,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341A80);
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
 extern u8 D_259CC0[];
-extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
 extern void func_00341708(void *w, void *table, s32 mult);
 void func_00341A80(void *w, s32 flags) {
     s32 v, idx;
@@ -7778,8 +7775,20 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003434C8);
    14/39 insns differ. Residual: UNKNOWN-lui (first differing insn: 'lui v1, %hi(g_padButtonsPressed)' vs 'lui v0, %hi(g_padButtonsPressed)').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
+/* g_padButtonsPressedSplit: a second C name for g_padButtonsPressed (same
+ * assembler symbol via the asm label). The file-scope `.extern ,16` makes a
+ * plain read of the real name an assembler-expanded `lui rX; lw rX` macro;
+ * `section(".data")` tells cc1 -G8 this spelling is NOT small data, so cc1
+ * splits the address itself (`lui $3` ... `lw $2,%lo($3)`), as the ROM does.
+ * An ADDRESSING-MODEL DEVICE (RULING #8620): it moves no data and emits nothing;
+ * the relocation names g_padButtonsPressed. */
+#ifndef TARGET_NATIVE
+extern s32 g_padButtonsPressedSplit __asm__("g_padButtonsPressed") __attribute__((section(".data")));
+#else
+#define g_padButtonsPressedSplit g_padButtonsPressed
+#endif
 void func_003434C8(void *w) {
-    if (g_padButtonsPressed & 0x5000) {
+    if (g_padButtonsPressedSplit & 0x5000) {
         func_002AA3F0(0, 0, 1, 0, 1);
     }
     *GuiElementGetColor((GuiElement *)((char *)w + 0xE4)) =
@@ -9220,7 +9229,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00346878);
    not byte-exact, so the arm stays #else. */
 extern u8   D_259CC0[];              /* 2D grid entry table, stride 0xA, +6 = s16 item id */
 extern u8   g_menuTransitionMode[];  /* 0x1F27DC - +0x24 receives the activated item id */
-extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
 /*
  * func_00346878(w, flags) — the mode-0 sub-builder: a 2D-grid cursor/confirm
  * handler for the D_259CC0 select grid `w` (3 columns wide; grid index =
@@ -9314,7 +9323,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00346AF8);
    not byte-exact, so the arm stays #else. */
 extern u8   D_1AA7F8[];              /* select-screen entry table, stride 0xA, +6 = s16 item id */
 extern u8   g_menuTransitionMode[];  /* 0x1F27DC - +0x30 receives the activated item id */
-extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
 /*
  * func_00346AF8(w, flags) — the mode-3 sub-builder: a two-axis cursor/confirm
  * handler for the D_1AA7F8 select screen `w`. `flags` (held-button bits) drives
@@ -9397,7 +9406,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00346CD8);
    not byte-exact, so the arm stays #else. */
 extern u8 D_1AA8B8[];
 extern u8 g_menuScreenBlock[];
-extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
 void func_00346CD8(void *w, s32 flags) {
     s32 entry;
 

@@ -1901,7 +1901,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DAA50);
  * objdiff): sdk29 73.46% / engine96 68.98%; better arm sdk29; 27 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
  * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-64`. Not iterated in t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
+/* The unit-wide callee prototypes above are native-only, so the s136os TU
+ * (which compiles this arm alone) repeats the three it calls. */
+extern void DrawHudIconQuadTiled(s32 icon, s32 x, s32 y, s32 w, s32 h, s32 alpha);
+extern s32  func_0028EDF0(s32 name, s32 level);
+extern void func_002904B0(s32 x0, s32 y0, s32 x1, s32 y1, u64 reg4, s32 mode);
 void func_002DAA50(s32 x, s32 y, s32 on) {
     extern s32 D_1ABB6C;  /* %gp inner-rect colour */
     func_002904B0(x - 5, y - 5, x + 5, y + 5, 0x80ffa888, 0);
