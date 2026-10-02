@@ -1909,16 +1909,19 @@ S136OS_SLOT(func_002DAA50);
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
  * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-64`. Not iterated in t495. */
 /* The unit-wide callee prototypes above are native-only, so the s136os TU
- * (which compiles this arm alone) repeats the three it calls. */
-extern void DrawHudIconQuadTiled(s32 icon, s32 x, s32 y, s32 w, s32 h, s32 alpha);
+ * (which compiles this arm alone) repeats the ones it calls. The tick glyph is
+ * drawn by func_0028F0D0 (= DrawHudIconQuadTiled, defined under that ROM name in
+ * 188858.c); the inner-rect colour is the %gp word D_1AA45C (the ROM's
+ * `lw $8,%gp_rel(D_1AA45C)`; this arm read D_1ABB6C before task #1325). */
+extern void func_0028F0D0(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, s32 alpha);
 extern s32  func_0028EDF0(s32 name, s32 level);
 extern void func_002904B0(s32 x0, s32 y0, s32 x1, s32 y1, u64 reg4, s32 mode);
+extern s32  D_1AA45C;
 void func_002DAA50(s32 x, s32 y, s32 on) {
-    extern s32 D_1ABB6C;  /* %gp inner-rect colour */
     func_002904B0(x - 5, y - 5, x + 5, y + 5, 0x80ffa888, 0);
-    func_002904B0(x - 4, y - 4, x + 4, y + 4, D_1ABB6C, 0);
+    func_002904B0(x - 4, y - 4, x + 4, y + 4, D_1AA45C, 0);
     if (on) {
-        DrawHudIconQuadTiled(func_0028EDF0(0xe99d, 1), x - 0xd, y - 0x12, 0x1e, 0x1e, 0x80);
+        func_0028F0D0(func_0028EDF0(0xe99d, 1), x - 0xd, y - 0x12, 0x1e, 0x1e, 0x80);
     }
 }
 #endif
