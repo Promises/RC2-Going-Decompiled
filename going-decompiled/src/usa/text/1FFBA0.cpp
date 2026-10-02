@@ -125,7 +125,7 @@ extern void *func_00300190(s32 classId, s32 animArg);
 extern void AppendGsRegPacket(s32 regId, s64 value);
 extern f32 IntToFloat(s32 v);
 extern s32 FloatToInt(f32 v);
-extern void func_0027E4D0(s32 a, s32 b, s32 c, s32 d, s32 color);
+extern void func_0027E4D0(s32 a, s32 b, s32 c, s32 d, u64 color);  /* def 178E88.cpp */
 
 /* Engine helpers used by the #else functional-equivalent bodies below. */
 extern void InitMobyFromClass(void *moby, s32 classId);
@@ -696,16 +696,40 @@ void func_00300C08(void) {
 /* Emit the water-surface tint quad: append GS reg 0x42 with the level value
  * (g_waterPool+0x66) packed into the high word, then draw a full-screen sprite
  * with color (level<<24)|0xFFFFFF.
- * Near-miss (objdiff ~61%): cc1 CSEs the g_waterPool base into a callee-saved
- * register (extra s0 save) where the original re-derives it; the C is faithful. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_00300E70);
+ * cc1 2.9 (not the image arm; see GUARD) CSEs the symbol base into a callee-saved
+ * register (extra s0 save) where the original re-derives it; the
+ * g_swapGadgetItemIndexSmall device below is what removes that on the s136os arm. */
+/* GUARD (task #1338): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Byte-exact on that arm (task #1338 lever): g_swapGadgetItemIndex read through
+ * the g_swapGadgetItemIndexSmall addressing device (RULING #8620), and the
+ * colour formed before the screen-context reads. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00300E70)
+S136OS_SLOT(func_00300E70);
 #else
+/* g_swapGadgetItemIndexSmall: a second C name for g_swapGadgetItemIndex (same
+ * assembler symbol via the asm label). section(".sdata") makes cc1 -G8 treat it
+ * as small data, so each read is printed as the one-insn `lh $r,sym+0x2C` macro;
+ * the unit's file-scope `.extern g_swapGadgetItemIndex,16` then makes the
+ * assembler expand it absolute into `lui $r; lh $r,%lo($r)`, as the ROM has at
+ * 0x300E70 and 0x300E94. A plain read lets cc1 hoist the %hi base into a saved
+ * register across the call. An ADDRESSING-MODEL DEVICE (RULING #8620): it moves
+ * no data and emits nothing; the relocation names g_swapGadgetItemIndex. */
+#ifndef TARGET_NATIVE
+extern u8 g_swapGadgetItemIndexSmall[] __asm__("g_swapGadgetItemIndex") __attribute__((section(".sdata")));
+#else
+#define g_swapGadgetItemIndexSmall g_swapGadgetItemIndex
+#endif
 void func_00300E70(void) {
-    AppendGsRegPacket(0x42, ((s64)*(s16 *)(g_swapGadgetItemIndex + 0x2C) << 32) | 0x44);
-    func_0027E4D0(0, *(s16 *)(g_gsScreenContext + 0x152), 0,
-                  *(s16 *)(g_gsScreenContext + 0x150),
-                  (*(s16 *)(g_swapGadgetItemIndex + 0x2C) << 24) | 0xFFFFFF);
+    AppendGsRegPacket(0x42, ((s64)*(s16 *)(g_swapGadgetItemIndexSmall + 0x2C) << 32) | 0x44);
+    {
+        s32 color = (*(s16 *)(g_swapGadgetItemIndexSmall + 0x2C) << 24) | 0xFFFFFF;
+        u8 *ctx = g_gsScreenContext;
+        func_0027E4D0(0, *(s16 *)(ctx + 0x152), 0, *(s16 *)(ctx + 0x150), color);
+    }
 }
 #endif
 

@@ -1008,7 +1008,7 @@ extern u8 g_sndChannelVolumes[]; /* 0x188F40 - sound-channel mix state block */
 extern void Vec4SubVu0(void *dst, void *a, void *b);
 extern void Vec4ScaleVu0(void *dst, float s, void *src);   /* sig: scale BEFORE src (def 183558.c:200) */
 extern void Vec4AddVu0(void *dst, void *a, void *b);
-extern void func_00283968(void *dst, void *src, float s);
+extern s32 func_00283968(void *dst, float minLen, void *src);  /* clamp-length, def 183558.c */
 extern void func_002A87F0(void *handle, float lo, float hi);  /* 0x2A87F0, defined 1A8180.c */
 extern s32 CollLine(void *a, void *b, s32 mask, s32 owner, s32 flags);
 
@@ -1060,7 +1060,7 @@ void CastEmitterOcclusionRay(SoundEmitterSlot *emitter, void *outHit) {
     f32 probe[4];
     Vec4SubVu0(probe, (u8 *)emitter + 0x20, g_cameraPos);
     Vec4ScaleVu0(probe, 0.75f, probe);   /* (dst, scale, src) - was arg-swapped */
-    func_00283968(probe, probe, 64.0f);
+    func_00283968(probe, 64.0f, probe);
     Vec4AddVu0(probe, probe, g_cameraPos);
     CollLine(outHit, probe, 0x82, *(s32 *)((u8 *)emitter + 0x18), 0);
 }

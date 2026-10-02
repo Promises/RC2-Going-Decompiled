@@ -1078,7 +1078,7 @@ s32 IsLevelListEntryEnabled(s32 idx) {
  * to the selected destination via RequestLevelExit(sel, 1) — except the special
  * label 0xB47 with D_1A7C09 clear, which exits to 0x19 instead. Returns the selected
  * index on confirm, else -1.
- * (matching arm left INCLUDE_ASM: 8-byte-packed-save wall.) */
+ * (cc1 2.9, not the image arm, hits the 8-byte-packed-save wall; see GUARD.) */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", LevelSelectListHandleInput);
 #else
@@ -2467,8 +2467,15 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawMenuPagingC
  * bottom (0x14D..0x14F), left and right (0x139..0x14E) borders, all in `color`.
  * (matching arm left INCLUDE_ASM: 8-byte-packed-save wall — cc1 packs the 6-GPR
  * save frame 8-byte vs our 16-byte.) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawMenuItemSelectionBox);
+/* GUARD (task #1338): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Byte-exact on that arm (task #1338 lever): the left edge (cx - half) is
+ * formed before the right edge, as the ROM reuses the centre register for it. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_DrawMenuItemSelectionBox)
+S136OS_SLOT(DrawMenuItemSelectionBox);
 #else
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 76.00% -> STRUCTURAL,
@@ -2479,8 +2486,8 @@ extern void func_002904B0(s32 x0, s32 y0, s32 x1, s32 y1, s32 color, s32 flag);
 void DrawMenuItemSelectionBox(s32 width, s32 color) {
     s32 half = width / 2 + 5;
     s32 cx = g_screenWidth / 2;
-    s32 right = cx + half;
     s32 left = cx - half;
+    s32 right = cx + half;
     s32 x0 = left - 2;
     s32 x1 = right + 4;
 

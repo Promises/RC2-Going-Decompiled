@@ -2599,10 +2599,18 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_0
  * On arriving within arriveRadius of the current node: returns 1 if that was the end
  * node, else advances the cursor toward the end (±1 by direction) and returns 0.
  * Waypoint nodes are vec4s at path + 0x10 + i*0x10; the count is the leading short.
- * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing, with fp temps; matching
- * arm stays INCLUDE_ASM, portable #else below. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", DriveMobyAlongWaypoints);
+ * cc1 2.9 (not the image arm; see GUARD) hits the save-layout wall: 3 callee-saves
+ * + $ra at 8-byte spacing, with fp temps. */
+/* GUARD (task #1338): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Byte-exact on that arm (task #1338 lever): the waypoint offset (idx*0x10 +
+ * 0x10) grouped before the path base is added, for the StepMobyMotion target
+ * and the DistXYVu0 point. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_DriveMobyAlongWaypoints)
+S136OS_SLOT(DriveMobyAlongWaypoints);
 #else
 s32 SetMobyWaypointPath(Moby *moby, short *path, s32 endIdx, s32 startIdx);  /* defined below */
 extern f32 Atan2fPoly(f32 dx, f32 dy);   /* 0x283BF8 atan2-style heading from a planar delta */
@@ -2621,10 +2629,10 @@ s32 DriveMobyAlongWaypoints(Moby *moby, short *path) {
     node = (f32 *)((u8 *)path + ctrl->waypointCursor * 0x10 + 0x10);
     heading = Atan2fPoly(node[0] - *(f32 *)((u8 *)moby + 0x10),
                             node[1] - *(f32 *)((u8 *)moby + 0x14));
-    StepMobyMotion(moby, (Vec4 *)((u8 *)path + ctrl->waypointEnd * 0x10 + 0x10), heading);
+    StepMobyMotion(moby, (Vec4 *)((u8 *)path + (ctrl->waypointEnd * 0x10 + 0x10)), heading);
 
     if (DistXYVu0((Vec4 *)((u8 *)moby + 0x10),
-                  (Vec4 *)((u8 *)path + ctrl->waypointCursor * 0x10 + 0x10)) <= ctrl->arriveRadius) {
+                  (Vec4 *)((u8 *)path + (ctrl->waypointCursor * 0x10 + 0x10))) <= ctrl->arriveRadius) {
         if (ctrl->waypointEnd == ctrl->waypointCursor) {
             return 1;
         }
@@ -2730,8 +2738,9 @@ s32 CheckMobyPathBlocked(Moby *moby) {
  * the moby's Y (+0x18) is at or below the passed volume's top plane (+0x90). Otherwise
  * looks up the water body actually under the moby (func_002AC088); if none, returns 0.
  * Then compares the moby Y against that body's surface height (+0x40) minus 0.5:
- * returns 1 when the moby sits below it. Under radial gravity (D_1A8CA0 != 0) it first
- * runs the position probe func_002B11C8(moby+0x10) and compares the entry-time Y;
+ * returns 1 when the moby sits below it. Under radial gravity (D_1A8CA0 != 0) the
+ * compared height is the f32 that func_002B11C8(moby+0x10) returns (the ROM uses its
+ * $f0 at 0x2B7350; the arm used to discard it and compare the entry-time Y);
  * otherwise it compares the moby's current Y directly.
  * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing, with fp temps; matching
  * arm stays INCLUDE_ASM, portable #else below. */
@@ -2739,23 +2748,26 @@ s32 CheckMobyPathBlocked(Moby *moby) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", CheckMobyOverWater);
 #else
 extern void *func_002AC088(void *moby);           /* 0x2AC088 water body under the moby, or NULL */
-extern void func_002B11C8(Vec4 *pos);             /* 0x2B11C8 radial-gravity position probe */
+extern f32 func_002B11C8(Vec4 *pos);              /* 0x2B11C8 radial-gravity height probe (def 1A8180.c) */
 s32 CheckMobyOverWater(void *moby, void *waterVol) {
-    f32 y0 = *(f32 *)((u8 *)moby + 0x18);
     void *body;
+    s32 under;
 
-    if (y0 <= *(f32 *)((u8 *)waterVol + 0x90))
+    if (*(f32 *)((u8 *)moby + 0x18) <= *(f32 *)((u8 *)waterVol + 0x90))
         return 0;
 
     body = func_002AC088(moby);
     if (body == NULL)
         return 0;
 
+    under = 0;
     if (D_1A8CA0 != 0) {
-        func_002B11C8((Vec4 *)((u8 *)moby + 0x10));
-        return (y0 < *(f32 *)((u8 *)body + 0x40) - 0.5f) ? 1 : 0;
+        if (func_002B11C8((Vec4 *)((u8 *)moby + 0x10)) < *(f32 *)((u8 *)body + 0x40) - 0.5f)
+            under = 1;
+    } else if (*(f32 *)((u8 *)moby + 0x18) < *(f32 *)((u8 *)body + 0x40) - 0.5f) {
+        under = 1;
     }
-    return (*(f32 *)((u8 *)moby + 0x18) < *(f32 *)((u8 *)body + 0x40) - 0.5f) ? 1 : 0;
+    return under;
 }
 #endif
 

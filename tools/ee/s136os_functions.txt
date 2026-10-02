@@ -170,3 +170,13 @@ usa text/1A8180 func_002B0CC0
 usa text/1A8180 func_002B1B48
 usa text/1A8180 func_002B0E40
 usa text/1A8180 func_002B0C40
+usa text/235FE8 GuiListRowElementInit
+usa text/1CA080 DrawMenuItemSelectionBox
+usa text/1EFFC0 func_002F7328
+usa text/235FE8 func_00338F18
+usa text/235FE8 func_00339678
+usa text/235FE8 func_003427D0
+usa text/1B4218 DriveMobyAlongWaypoints
+usa text/235FE8 func_0033BF90
+usa text/1FFBA0 func_00300E70
+usa text/235FE8 GuiElementInit

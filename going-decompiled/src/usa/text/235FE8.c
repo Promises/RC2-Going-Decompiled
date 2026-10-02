@@ -263,7 +263,7 @@ extern void GuiMenuListDraw(void *p);
  * md5 unchanged with the block visible). */
 extern void GuiElementInitTypeB(void *p);
 extern void GuiElementInitTypeC(void *p);
-extern void GuiListRowElementInit(void *p);
+extern GuiElement *GuiListRowElementInit(void *p);
 extern void func_00348BD0(void *p);
 extern s32 GuiMenuListHandleInput(void *w, s32 inputMask); /* 248B50: selection-advance by input mask; returns 1/0 (248B50.c) */
 extern void GuiMenuListSetOrigin(void *w, f32 x, f32 y);
@@ -1157,21 +1157,23 @@ void GuiElementInitTypeB(void *p) {
  * tail (.L0033707C) reached by both paths.
  * (The asm leaves a1/a2 untouched across the GuiElementBaseInit call, i.e. this
  * forwards the tag and pool it was called with.) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementInit);
+/* GUARD (task #1338): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Byte-exact on that arm (task #1338 lever): the second pool pointer and the
+ * scale pointer read before the block stores (as the ROM loads them), each
+ * block zeroed in the order 1,2,3,0 (the scheduler emits the last store first,
+ * giving the ROM's 0,4,8,12), and scale[1]/scale[2] stored through fresh
+ * reloads of +0x4 rather than one reused local. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiElementInit)
+S136OS_SLOT(GuiElementInit);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiElementInit, unit objdiff): 78.90%,
-   20/45 insns differ. Residual: UNKNOWN-daddu (first differing insn: 'daddu a1, v0, zero' vs 'addiu a0, zero, 0x10').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame wall
-   ($16/$31 16-byte vs 8-byte slot packing) + the trailing per-block zero stores
-   sunk into the GuiPoolAlloc/GuiPlacementNew jal delay slots.
-   cmp-oracle VALIDATED bit-exact vs the original .s on real R5900 on BOTH paths
-   (cmp_GuiElementInit pool!=0, cmp_GuiElementInit_nullpool pool==0;
-   run_cmp_235FE8_iso.sh): the pool!=0 oracle confirms the two pool blocks land at
-   e+0x34/+0x38 zeroed and scale[0..2]=1.0; both oracles confirm +0x44 and +0x48
-   end up 0 regardless of pool. */
+/* engine96 probe (task #466, cc1 2.96, unit objdiff): 78.90%; not the image arm (see GUARD). */
+/* cc1 2.9 (not the image arm; see GUARD) is not byte-exact. */
+/* cmp-oracle VALIDATED bit-exact vs the original .s on real R5900 on BOTH paths (cmp_GuiElementInit pool!=0, cmp_GuiElementInit_nullpool pool==0; run_cmp_235FE8_iso.sh): the pool!=0 oracle confirms the two pool blocks land at e+0x34/+0x38 zeroed and scale[0..2]=1.0; both oracles confirm +0x44 and +0x48 end up 0 regardless of pool. */
+extern void GuiElementBaseInit(GuiElement *e, s32 tag, GuiPool *pool);
 void GuiElementInit(GuiElement *e, s32 tag, GuiPool *pool) {
     GuiElementBaseInit(e, tag, pool);
     if (*(GuiPool **)((char *)e + 0x2C) == 0) {
@@ -1181,18 +1183,18 @@ void GuiElementInit(GuiElement *e, s32 tag, GuiPool *pool) {
         *(s32 *)((char *)e + 0x48) = 0;
     } else {
         f32 *blk0, *blk1, *scale;
+        GuiPool *pool2;
         blk0 = GuiPlacementNew(0x10, GuiPoolAlloc(*(GuiPool **)((char *)e + 0x2C)));
+        pool2 = *(GuiPool **)((char *)e + 0x2C);
         *(f32 **)((char *)e + 0x34) = blk0;
-        blk0[0] = 0.0f; blk0[1] = 0.0f; blk0[2] = 0.0f; blk0[3] = 0.0f;
-        blk1 = GuiPlacementNew(0x10, GuiPoolAlloc(*(GuiPool **)((char *)e + 0x2C)));
+        blk0[1] = 0.0f; blk0[2] = 0.0f; blk0[3] = 0.0f; blk0[0] = 0.0f;
+        blk1 = GuiPlacementNew(0x10, GuiPoolAlloc(pool2));
+        scale = *(f32 **)((char *)e + 0x4);
         *(f32 **)((char *)e + 0x38) = blk1;
-        blk1[0] = 0.0f; blk1[1] = 0.0f; blk1[2] = 0.0f; blk1[3] = 0.0f;
-        scale = *(f32 **)((char *)e + 0x4);
+        blk1[1] = 0.0f; blk1[2] = 0.0f; blk1[3] = 0.0f; blk1[0] = 0.0f;
         scale[0] = 1.0f;
-        scale = *(f32 **)((char *)e + 0x4);
-        scale[1] = 1.0f;
-        scale = *(f32 **)((char *)e + 0x4);
-        scale[2] = 1.0f;
+        (*(f32 **)((char *)e + 0x4))[1] = 1.0f;
+        (*(f32 **)((char *)e + 0x4))[2] = 1.0f;
         /* asm L41: `sw $0,0x48($16)` on the pool!=0 fall-through */
         *(s32 *)((char *)e + 0x48) = 0;
     }
@@ -1371,27 +1373,28 @@ void GuiElementSetAlpha(GuiElement *e, f32 alpha) {
 }
 
 /* GuiListRowElementInit: run the base GuiElement vtable install, then overwrite
- * the +0x30 vtable slot with the GuiListRow vtable. (The original also returns
- * the object in v0, but every caller discards it.) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiListRowElementInit);
+ * the +0x30 vtable slot with the GuiListRow vtable. Returns the element (the
+ * ROM leaves it in $2 at 0x3371F4; every caller discards it). */
+/* GUARD (task #1338): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Byte-exact on that arm (task #1338 lever): the element pointer is returned
+ * (GuiElement *), as the ROM leaves it in $2 (0x3371F4); the void definition
+ * was one word short. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiListRowElementInit)
+S136OS_SLOT(GuiListRowElementInit);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiListRowElementInit, unit objdiff): 87.69%,
-   2/13 insns differ. Residual: SCHED (prologue/epilogue or delay-slot order only; sched1 ON/OFF and sched2 OFF RUN, none reproduce it).
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed two-save
-   frame wall - holding the object across the GuiElementInstallBaseVtable call
-   needs s0 saved alongside ra, and this cc1 lays the two saves out in a -0x20
-   frame where the original packs them into -0x10.
-   cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
-   (cmp_GuiListRowElementInit, run_cmp_235FE8_iso.sh): offset oracle confirms
-   +0x30 == &g_GuiListRowVtable and every other element byte stays sentinel. */
+/* engine96 probe (task #466, cc1 2.96, unit objdiff): 87.69%; not the image arm (see GUARD). */
+/* cc1 2.9 (not the image arm; see GUARD) is not byte-exact. */
+/* cmp-oracle VALIDATED bit-exact vs the original .s on real R5900 (cmp_GuiListRowElementInit, run_cmp_235FE8_iso.sh): offset oracle confirms +0x30 == &g_GuiListRowVtable and every other element byte stays sentinel. */
 extern GuiElement *GuiElementInstallBaseVtable(GuiElement *e);
-void GuiListRowElementInit(void *p) {
+GuiElement *GuiListRowElementInit(void *p) {
     GuiElement *e = (GuiElement *)p;
     GuiElementInstallBaseVtable(e);
     *(void **)((char *)e + 0x30) = &g_GuiListRowVtable;
+    return e;
 }
 #endif
 
@@ -1787,6 +1790,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiTextElementI
    +0x54=1, +0x4C=0x200, +0x50=0.7f (0x3F333333), +0x44=1, +0x48=0; base init
    forwards the tag to +0x28. */
 extern void *D_263B10;
+extern void GuiElementBaseInit(GuiElement *e, s32 tag, GuiPool *pool);
 void GuiTextElementInit(GuiElement *e, s32 tag, GuiPool *pool) {
     f32 *scale;
     GuiElementBaseInit(e, tag, pool);
@@ -2311,17 +2315,22 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338D48);
 /* Init a widget sub-block: copy a 0xFF-byte template into p+0x2084, then run the
  * setup helper func_00338D48 on p+0x1FDC with kind 2, a caller id (or the 0x168
  * default when id == -1), and fixed 255.0/80.0 params. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338F18);
+/* GUARD (task #1338): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Byte-exact on that arm (task #1338 lever): the +0x1FDC box pointer is formed
+ * before the first call, as the ROM folds it into the saved $16. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00338F18)
+S136OS_SLOT(func_00338F18);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00338F18, unit objdiff): 60.12%,
-   15/29 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: '' vs 'addiu s0, zero, 0x168').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+/* engine96 probe (task #466, cc1 2.96, unit objdiff): 60.12%; not the image arm (see GUARD). */
 void func_00338F18(void *p, const void *src, s32 id) {
     s32 kind = (id != -1) ? id : 0x168;
+    char *box = (char *)p + 0x1FDC;
     func_00115AC0((char *)p + 0x2084, src, 0xFF);
-    func_00338D48((char *)p + 0x1FDC, 2, 255.0f, 80.0f, kind);
+    func_00338D48(box, 2, 255.0f, 80.0f, kind);
 }
 #endif
 
@@ -2491,17 +2500,22 @@ void func_003395F0(void *p, s32 strId, s32 fmtArg, s32 id) {
 /* Sibling of func_00338F18: copy a 0xFE-byte template into p+0x1E34, then run
  * func_00338D48 on p+0x1D8C with kind 2, a caller id (or the 0xB4 default when
  * id == -1), and fixed 255.0/123.0 params. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00339678);
+/* GUARD (task #1338): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Byte-exact on that arm (task #1338 lever): the +0x1D8C box pointer is formed
+ * before the first call, as the ROM folds it into the saved $16. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00339678)
+S136OS_SLOT(func_00339678);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00339678, unit objdiff): 60.12%,
-   15/29 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: '' vs 'addiu s0, zero, 0xb4').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+/* engine96 probe (task #466, cc1 2.96, unit objdiff): 60.12%; not the image arm (see GUARD). */
 void func_00339678(void *p, const void *src, s32 id) {
     s32 kind = (id != -1) ? id : 0xB4;
+    char *box = (char *)p + 0x1D8C;
     func_00115AC0((char *)p + 0x1E34, src, 0xFE);
-    func_00338D48((char *)p + 0x1D8C, 2, 255.0f, 123.0f, kind);
+    func_00338D48(box, 2, 255.0f, 123.0f, kind);
 }
 #endif
 
@@ -3681,21 +3695,25 @@ void func_0033BE70(void *p, s32 flags) {
  *  - When *(p+0x2C0) is set draw the title (p+0x198); additionally when
  *    *(p+0x2C4) is set draw the body (p+0x248) - but only if *(p+0x2CC) is set -
  *    and the footer (p+0x1F0) whenever *(p+0x2C8) is set. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033BF90);
+/* GUARD (task #1338): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Byte-exact on that arm (task #1338 lever): the row pointer stepped before the
+ * object pointer at the loop join, and +0x2C8 tested directly rather than
+ * through a cached local. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033BF90)
+S136OS_SLOT(func_0033BF90);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033BF90, unit objdiff): 89.90%,
-   22/51 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd s1, 0x8(sp)' vs 'sd ra, 0x28(sp)').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; 5-callee-save frame +
-   branch-likely (beql) guard chain + vtable-dispatch loop wall. */
+/* engine96 probe (task #466, cc1 2.96, unit objdiff): 89.90%; not the image arm (see GUARD). */
+/* cc1 2.9 (not the image arm; see GUARD) is not byte-exact. */
 extern void GuiTextElementDraw(void *e);
 void func_0033BF90(void *p) {
     s32 i;
     s16 *active = (s16 *)((char *)p + 0x188);
-    char *obj = (char *)p + 0x3C;
     char *rowBase = (char *)p + 0xC;
+    char *obj = (char *)p + 0x3C;
     for (i = 0; i <= 4; i++) {
         if (active[i] != 0) {
             void *o = *(void **)obj;
@@ -3703,18 +3721,16 @@ void func_0033BF90(void *p) {
             void (*draw)(void *) = *(void (**)(void *))((char *)o + 0xC);
             draw(rowBase + off);
         }
-        obj += 0x4C;
         rowBase += 0x4C;
+        obj += 0x4C;
     }
     if (*(s32 *)((char *)p + 0x2C0) != 0) {
         GuiTextElementDraw((char *)p + 0x198);
         if (*(s32 *)((char *)p + 0x2C4) != 0) {
-            s32 footer = *(s32 *)((char *)p + 0x2C8);
             if (*(s32 *)((char *)p + 0x2CC) != 0) {
                 GuiTextElementDraw((char *)p + 0x248);
-                footer = *(s32 *)((char *)p + 0x2C8);
             }
-            if (footer != 0) {
+            if (*(s32 *)((char *)p + 0x2C8) != 0) {
                 GuiTextElementDraw((char *)p + 0x1F0);
             }
         }
@@ -7241,8 +7257,10 @@ void func_00342670(void *p) {
     __asm__ __volatile__("");
 }
 
-/* func_003426D8: no-op stub (empty body - registered/overridable hook). */
-void func_003426D8(void) {
+/* func_003426D8: no-op stub (empty body - registered/overridable hook). Its
+ * caller func_003427D0 passes the widget in $a0 (ROM 0x342928), so the hook
+ * takes it; the empty body ignores it. */
+void func_003426D8(void *w) {
 }
 
 /* Update a selectable list widget: position its element (+0x238) at the tracked
@@ -7280,15 +7298,21 @@ void func_003426E0(void *w, s32 inputMask) {
  * (root, +0x98, +0x4C, +0xE4, +0x1D0) at the tracked anchor (*(w+0x228)) each
  * offset by its own D_1AE0Dx/Ex/Fx pair; set the highlight sprite's (+0x130)
  * colour to the pulsed blend; run the row updater (func_003426E0), the selected-
- * row positioner (func_00342670) and a no-op (func_003426D8); return the current
+ * row positioner (func_00342670) and a no-op hook (func_003426D8, passed w); return the current
  * row's recorded state ((w+0x1B8)[w+0x31C]). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003427D0);
+/* GUARD (task #1338): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Byte-exact on that arm (task #1338 lever): func_003426E0 prototyped in the
+ * arm (it was an implicit int in the solo TU), func_003426D8 called with w as
+ * the ROM does, and the result slot formed as w + sel*4 first. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003427D0)
+S136OS_SLOT(func_003427D0);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003427D0, unit objdiff): 74.21%,
-   53/109 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s1, 0x8(sp)' vs '').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+/* engine96 probe (task #466, cc1 2.96, unit objdiff): 74.21%; not the image arm (see GUARD). */
+extern void func_003426E0(void *w, s32 inputMask);
 s32 func_003427D0(void *w, s32 inputMask) {
     f32 *anchor;
 
@@ -7308,8 +7332,9 @@ s32 func_003427D0(void *w, s32 inputMask) {
 
     func_003426E0(w, inputMask);
     func_00342670(w);
-    func_003426D8();
-    return ((s32 *)((char *)w + 0x1B8))[*(s32 *)((char *)w + 0x31C)];
+    func_003426D8(w);
+    w = (char *)w + *(s32 *)((char *)w + 0x31C) * 4;
+    return *(s32 *)((char *)w + 0x1B8);
 }
 #endif
 

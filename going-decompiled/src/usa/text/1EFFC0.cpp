@@ -770,8 +770,8 @@ void func_002F6B10(void *callback, void *arg) {
 }
 
 void func_002F72D8(void);
-void EnqueueCinematic(void *queue, s32 reelId);
-void StartCinematicFromQueue(void *queue);
+s32 EnqueueCinematic(void *queue, s32 reelId);      /* def 188858.c */
+s32 StartCinematicFromQueue(void *queue);           /* def 188858.c */
 
 extern u8 g_cinematicQueue[];      /* 0x1BACC0 pending-cinematic reel queue */
 extern s32 g_cinematicExitPending; /* 0x1A7478 gp_rel exit-cinematic flag */
@@ -1261,27 +1261,38 @@ void func_002F72D8(void) {
 /* Queue + start the level-exit cinematic, then arm the deferred exit: install
  * func_002F72D8 as the post-cinematic callback and flag the exit scene.
  *
- * NOT byte-matched: 3 GPR saves (s0/s1/ra) hit the 8-byte-packed-save wall -
- * the original packs the save slots 8-byte (frame 0x20) while this cc1 emits
- * 16-byte spacing (frame 0x30). Body is otherwise instruction-identical; kept
- * as the portable #else impl (see docs/PORTING.md). */
-/* RESIDUAL CLASS (task #576): UNDIAGNOSED
- *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
- *   whole-unit blanket screen, clean tree): sdk29 77.27%, engine96 74.96%
- *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
- *   and the #else below remains the portable impl.
- *   SCREENED ONLY. Both arms were measured; the residual was not diagnosed to a
- *   mechanism. This is an open arm, not a wall -- do not read it as one. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F7328);
+ * cc1 2.9 (not the image arm; see GUARD) hits the 8-byte-packed-save wall: the
+ * original packs the s0/s1/ra slots 8-byte (frame 0x20), cc1 2.9 16-byte (0x30).
+ * Task #576 blanket screen (unit objdiff): sdk29 77.27%, engine96 74.96%. */
+/* GUARD (task #1338): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Byte-exact on that arm (task #1338 lever): g_exitSceneArmed stored through
+ * the g_exitSceneArmedAbs addressing device (RULING #8620), as the ROM stores
+ * it absolute. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002F7328)
+S136OS_SLOT(func_002F7328);
 #else
+/* g_exitSceneArmedAbs: a second C name for g_exitSceneArmed (same assembler
+ * symbol via the asm label). cc1 -G8 sees an s32 and makes the store
+ * gp-relative; the ROM stores it absolute (`lui $3,%hi; sw $0,%lo($3)`, 0x2F7370).
+ * section(".data") tells cc1 this spelling is not small data. An
+ * ADDRESSING-MODEL DEVICE (RULING #8620): it moves no data and emits nothing;
+ * the relocation names g_exitSceneArmed. */
+#ifndef TARGET_NATIVE
+extern s32 g_exitSceneArmedAbs __asm__("g_exitSceneArmed") __attribute__((section(".data")));
+#else
+#define g_exitSceneArmedAbs g_exitSceneArmed
+#endif
 void func_002F7328(void) {
     g_cinematicExitPending = 1;
     EnqueueCinematic(g_cinematicQueue, 0x15);
     StartCinematicFromQueue(g_cinematicQueue);
     func_002F6B10((void *)func_002F72D8, 0);
     g_exitSceneMode[4] = 1;
-    g_exitSceneArmed = 0;
+    g_exitSceneArmedAbs = 0;
 }
 #endif
 
