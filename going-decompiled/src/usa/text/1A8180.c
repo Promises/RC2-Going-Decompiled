@@ -573,7 +573,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8628);
  * already clear so it is a logical shift in effect), masks to 15 bits, then
  * computes the remainder by n. n == 0 traps on hardware (break 0x7 in the div
  * delay slot); no caller passes 0, so the native shim leaves that path to the
- * platform divide. NATIVE SHIM (no byte target; matching build uses asm).
+ * platform divide. NATIVE SHIM below (no byte target); the EE body above it
+ * is the image's (s136os arm, task #1309).
  */
 /* GUARD (task #1309): on EE this C is the image's body, compiled alone by the
  * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; census FACT #8830; row in
@@ -585,7 +586,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8628);
 #if !defined(TARGET_NATIVE) && !defined(S136OS_GetRandomInt)
 S136OS_SLOT(GetRandomInt);
 #elif !defined(TARGET_NATIVE)
-/* engine-2.96 byte-match (verify_match.sh RAW: byte+reloc identical). rand @0x1163B0. */
+/* Byte-exact on the s136os arm (task #1309; FACT #8830), and formerly on the
+   engine-2.96 arm (verify_match.sh RAW: byte+reloc identical). rand @0x1163B0. */
 s32 GetRandomInt(s32 n) {
     return ((rand() >> 16) & 0x7FFF) % n;
 }

@@ -20,9 +20,11 @@
  * 2.9-ee-991111 cc1 reserves 16 bytes per save. Functions whose only callee
  * save is $ra are unaffected; pure leaves match freely. The engine96 arm
  * (per-function `MATCH_<fn>` guard, see tools/ee/objdiff_build.sh) packs the
- * slots like the ROM and is the route for those functions (func_00291FC8,
- * MapSetCurrentLevel, task #496); its own residuals are recorded per arm in the
- * `TODO(match): t496 probe` comments below.
+ * slots like the ROM; its own residuals are recorded per arm in the
+ * `TODO(match): t496 probe` comments below. So does the s136os arm (SN 2.95.3
+ * v1.36 -fopt-stack, tools/ee/s136os_functions.txt), which since task #1309
+ * carries this unit's former engine96 matches into the image: func_00291FC8,
+ * LoadPlayerDisplayModel, MapSetCurrentLevel, SelectSceneSubChunk.
  */
 
 extern void func_00278EC0(void);
@@ -1241,7 +1243,8 @@ void BindPlayerDisplayModel(s32 variant) {
  * @param variant  armor variant to load; also passed to BindPlayerDisplayModel,
  *                 which ignores it (the ROM moves s0 into a0 for that call).
  *
- * Byte-exact on the engine96 arm (guarded below; task #679, colima-ee-x86).
+ * Byte-exact on the engine96 arm (task #679, colima-ee-x86); the image takes it
+ * from the s136os arm since task #1309 (below).
  * The sdk29 arm is walled: 2.9 reserves 16-byte save slots, a 0x20 frame
  * against the ROM's 0x10. Four levers, each shown necessary by removing it and
  * watching the unit objdiff row fall (row value without the lever in brackets):
@@ -2817,8 +2820,8 @@ void LoadGlobalDialogScene(s32 sceneIndex, s32 mode) {
  *
  * MATCHED on the engine96 arm only (MATCH_ guard; cc1 2.96-ee-001003-1, unit
  * objdiff report 100.00%, task #881), and the raw cc1 output already carries the
- * ROM's words: engine_swap_fix.py changes nothing in this function. The shipped
- * image still links the asm. The 2.9 arm cannot match: the ROM saves s0+ra in a
+ * ROM's words: engine_swap_fix.py changes nothing in this function. The image
+ * now takes it from the s136os arm (task #1309, below). The 2.9 arm cannot match: the ROM saves s0+ra in a
  * packed 0x10 frame, and 2.9 gives each save a 16-byte slot. Three levers:
  *  - g_sceneArenaBase is compiler-split in the ROM (`lui v1` ... `lw v0,%lo(v1)`),
  *    so it is taken out of cc1's small-data class with section(".data").

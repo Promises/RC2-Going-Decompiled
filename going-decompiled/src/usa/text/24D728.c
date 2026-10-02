@@ -638,10 +638,10 @@ void func_0034F028(u8 *base, s32 baseX, s32 baseY, s32 shade) {
  * TickBoltCounterHud. Build it with
  * `tools/ee/diff96.sh usa text/24D728 func_0034F1C0 <this file>`.
  *
- * INCLUDE_ASM is retained for the ordinary ee-gcc 2.9 unit build, which differs
- * in exactly 5 prologue/epilogue words (0x20 frame with 16-byte save slots
- * against the ROM's 0x10 with 8-byte slots): 99.06% at the unit objdiff gate,
- * 82.81% with the guard removed. */
+ * ee-gcc 2.9 differs in exactly 5 prologue/epilogue words (0x20 frame with
+ * 16-byte save slots against the ROM's 0x10 with 8-byte slots): 99.06% at the
+ * unit objdiff gate, 82.81% with the guard removed. The image now takes this
+ * body from the s136os arm (task #1309, below); the MATCH_ route is historical. */
 /* GUARD (task #1309): on EE this C is the image's body, compiled alone by the
  * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; census FACT #8830; row in
  * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by

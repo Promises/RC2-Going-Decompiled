@@ -1117,11 +1117,11 @@ void func_00289560(CinematicQueue *q) {
  * `tools/ee/diff96.sh usa text/188858 func_002895E0 <this file>`, which defines
  * MATCH_func_002895E0.
  *
- * INCLUDE_ASM is retained for the ordinary unit build, which uses ee-gcc 2.9:
- * that compiler packs the two callee-saves into 16-byte slots in a 0x20 frame
+ * ee-gcc 2.9 packs the two callee-saves into 16-byte slots in a 0x20 frame
  * where the original uses 8-byte slots in 0x10, so its output differs from the
  * ROM in exactly 5 prologue/epilogue words (98.75% at the unit objdiff gate).
- * The two-compiler split, not this body, is what stops the ordinary build. */
+ * The image now takes this body from the s136os arm, which packs the frame
+ * like the ROM (task #1309, below); the MATCH_ route above is historical. */
 /* GUARD (task #1309): on EE this C is the image's body, compiled alone by the
  * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; census FACT #8830; row in
  * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
