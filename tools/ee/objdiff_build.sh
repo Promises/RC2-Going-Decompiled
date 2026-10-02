@@ -340,11 +340,17 @@ BASE_MD5="$(sh tools/ee/mount_sync.sh md5 "$BASECFILE")"
 DLISITES_MD5="$(sh tools/ee/mount_sync.sh md5 tools/ee/ps2eeas_dli_sites.txt)"
 # The s136os selector is host-written too; s136os_splice.sh verifies it (task #1257).
 S136OS_MD5="$(sh tools/ee/mount_sync.sh md5 tools/ee/s136os_functions.txt)"
+# RULING #8915 (task #1308): ee_cc1.sh holds a .cpp unit to
+# tools/ee/cpp96_allowlist.txt on the engine96 arm, and a MATCH_-guarded .cpp on
+# every arm. The unit is named here (EE_CC1_UNIT), not read from $BASECFILE,
+# which may be an override at any path; the allowlist is host-written.
+ALLOW96_MD5="$(sh tools/ee/mount_sync.sh md5 tools/ee/cpp96_allowlist.txt)"
 # $OBJ and $EXPECTED are deleted in the container first, like $OBJ96 (see the
 # header for why in the container): a run that stops early must not leave the
 # previous run's object for the report to read (ledger-29550 left a stale obj).
 docker --context "$EE_CTX" run --rm -e ASMFIX_SHARED -e ASM_UNIT_DLISITES_MD5="$DLISITES_MD5" -e S136OS_FUNCS_MD5="$S136OS_MD5" -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work; WIBO=/usr/local/bin/wibo; G=tools/ee/cc/lib/gcc-lib/ee/2.9-ee-991111
+  export EE_CC1_UNIT='$REGION $UNIT' CPP96_ALLOWLIST_MD5=$ALLOW96_MD5
   sh tools/ee/mount_sync.sh check $TGTC $TGTC_MD5
   sh tools/ee/mount_sync.sh check $BASECFILE $BASE_MD5
   rm -f $OBJ96 $OBJ $EXPECTED
@@ -372,10 +378,6 @@ if [ "$BUILD96" = 1 ]; then
   # MOUNT-SYNC: the base C is read a second time; it must still be the file
   # step (1) compiled (an edit mid-run would score two different sources).
   BASE_MD5_2A="$(sh tools/ee/mount_sync.sh md5 "$BASECFILE")"
-  # RULING #8915: for a .cpp unit, ee_cc1.sh refuses the engine96 arm unless
-  # "$REGION $UNIT" is on tools/ee/cpp96_allowlist.txt (task #1308). The unit is
-  # named here, not read from $BASECFILE, which may be an override at any path.
-  ALLOW96_MD5="$(sh tools/ee/mount_sync.sh md5 tools/ee/cpp96_allowlist.txt)"
   if [ "$BASE_MD5_2A" != "$BASE_MD5" ]; then
     echo "objdiff_build: FATAL — $BASECFILE changed on the host between step (1) and (2a) (md5 $BASE_MD5 -> $BASE_MD5_2A); rerun" >&2; exit 2
   fi
