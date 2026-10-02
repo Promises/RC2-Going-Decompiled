@@ -4625,13 +4625,31 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 63.18%
    -> UNKNOWN-@1: ROM `(none)` vs `daddu a2,a0,zero` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADB10);
+/* MATCHED on the s136os arm (task #1350): byte-exact solo under SN 2.95.3
+ * v1.36 -fopt-stack (verify_match_unit, FACT #8810's method). Closing lever: the
+ * declarations in this arm (NOTE #8954: it did not compile solo without them);
+ * g_deferredSegment2Tag declared `.sdata` (the func_002ADA30 ADDRESSING-MODEL
+ * DEVICE, RULING #8620: cc1 prints the one-insn macro load, GNU as expands it
+ * absolute, as the ROM's `lui s0; lw s0,%lo(…+0xD4)(s0)`); and the result
+ * returned as `if (dist < 1.0f) return 1; return 0;`, which lets the
+ * segIdx < 0 exit share the `move v0,zero` tail as the ROM does. */
+/* GUARD (task #1350): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002ADB10)
+S136OS_SLOT(func_002ADB10);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern void func_00283A48(Vec4 *out, Vec4 *v, Vec4 *m);
+/* ADDRESSING-MODEL DEVICE (RULING #8620), EE arm only — see func_002ADA30. */
+#ifndef TARGET_NATIVE
+extern u8 g_deferredSegment2Tag[] __attribute__((section(".sdata")));
+#else
 extern u8 g_deferredSegment2Tag[];
+#endif
 /* (end of this body's declarations) */
 s32 func_002ADB10(Vec4 *pos, s32 segIdx) {
     u8 *seg;
@@ -4647,7 +4665,10 @@ s32 func_002ADB10(Vec4 *pos, s32 segIdx) {
     delta.w = 0.0f;
     func_00283A48(&local, &delta, (Vec4 *)(seg + 0x40));
     dist = Vec3LengthVu0(&local);
-    return dist < 1.0f;
+    if (dist < 1.0f) {
+        return 1;
+    }
+    return 0;
 }
 #endif
 

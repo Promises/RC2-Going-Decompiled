@@ -894,8 +894,7 @@ void PatchMobyPacketTex0(void) {
  * turns it into an angle, and the sin/cos-style pair func_00283B30 /
  * func_00283B48 is scaled by 0.14 into the glow parameter block at
  * g_deferredSegment2Tag+0x10 (cos) / +0x14 (sin), with a fixed -0.99 at +0x18.
- * Callee roles UNCONFIRMED (named by shape). The matching build keeps the asm;
- * this is the faithful TARGET_NATIVE coverage arm. */
+ * Callee roles UNCONFIRMED (named by shape). No params, no return. */
 #ifdef TARGET_NATIVE
 extern s32   g_deferredSegment2Tag;
 extern void *g_pHeroMoby;              /* 0x18C0B0 hero (Ratchet) moby         */
@@ -905,8 +904,22 @@ extern f32   func_00283B30(f32 x);
 extern f32   func_00283B48(f32 x);
 #endif
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0DF0);
+/* MATCHED on the s136os arm (task #1350): byte-exact solo under SN 2.95.3
+ * v1.36 -fopt-stack (verify_match_unit, FACT #8810's method). Closing lever: the
+ * declarations in this arm (NOTE #8954: it did not compile solo without them);
+ * g_pHeroMoby and g_deferredSegment2Tag read through section(".data") ASM-LABEL
+ * aliases (ADDRESSING-MODEL DEVICES, RULING #8620: they move no data, emit
+ * nothing, and the relocations name the real symbols), because the ROM
+ * reaches both absolute; and the three stores written in field order
+ * +0x10/+0x14/+0x18 straight through the address (a `glow` pointer local is
+ * hoisted into $s0 before the first call, the ROM forms it after the second). */
+/* GUARD (task #1350): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002A0DF0)
+S136OS_SLOT(func_002A0DF0);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -916,17 +929,27 @@ extern f32 func_00283B48(f32 x);
 extern void func_002A1320(void *moby, f32 *outVec);
 extern s32 g_deferredSegment2Tag;
 extern void *g_pHeroMoby;
+/* ADDRESSING-MODEL DEVICES (RULING #8620), EE arm only: second C names for
+ * g_deferredSegment2Tag / g_pHeroMoby (same assembler symbols via the asm
+ * labels). section(".data") tells cc1 they are not -G8 small data, so it splits
+ * %hi/%lo as the ROM does (0x2A0DF0 `lui v0,%hi(g_pHeroMoby)`, 0x2A0E3C
+ * `lui v0,%hi(g_deferredSegment2Tag+0x10)`); they move no data and emit nothing. */
+#ifndef TARGET_NATIVE
+extern s32 g_deferredSegment2TagAbs __asm__("g_deferredSegment2Tag") __attribute__((section(".data")));
+extern void *g_pHeroMobyAbs __asm__("g_pHeroMoby") __attribute__((section(".data")));
+#else
+#define g_pHeroMobyAbs g_pHeroMoby
+#define g_deferredSegment2TagAbs g_deferredSegment2Tag
+#endif
 /* (end of this body's declarations) */
 void func_002A0DF0(void) {
     f32 vec[2];
     f32 angle;
-    f32 *glow = (f32 *)((u8 *)&g_deferredSegment2Tag + 0x10);
-
-    func_002A1320(g_pHeroMoby, vec);
+    func_002A1320(g_pHeroMobyAbs, vec);
     angle = Atan2fPoly(vec[0], vec[1]);
-    glow[0] = func_00283B30(angle) * 0.14f;
-    glow[2] = -0.99f;
-    glow[1] = func_00283B48(angle) * 0.14f;
+    ((f32 *)((u8 *)&g_deferredSegment2TagAbs + 0x10))[0] = func_00283B30(angle) * 0.14f;
+    ((f32 *)((u8 *)&g_deferredSegment2TagAbs + 0x10))[1] = func_00283B48(angle) * 0.14f;
+    ((f32 *)((u8 *)&g_deferredSegment2TagAbs + 0x10))[2] = -0.99f;
 }
 #endif
 
@@ -1116,14 +1139,23 @@ void BeginMobyDrawSegment(void) {
  * (func_0011AEA0(0)), swaps in the procedural-anim bounds scratch
  * (func_002A1058), then extends the VU chain (BuildMobyVuChain over the current
  * g_mobyVuChainCursor), saves the scratch back (func_002A1028) and rewinds the
- * cursor by one qword. The matching build keeps the asm; faithful TARGET_NATIVE
- * coverage arm. */
+ * cursor by one qword. Params: the moby table base and its entry count; no
+ * return. */
 #ifdef TARGET_NATIVE
 extern void *BuildMobyVuChain(void *tableBase, void *cursor, s32 count, s32 flag);
 #endif
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A1138);
+/* MATCHED on the s136os arm (task #1350): byte-exact solo under SN 2.95.3
+ * v1.36 -fopt-stack (verify_match_unit, FACT #8810's method). Closing lever: the
+ * declarations in this arm (NOTE #8954: it did not compile solo without them)
+ * — nothing else. */
+/* GUARD (task #1350): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002A1138)
+S136OS_SLOT(func_002A1138);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */

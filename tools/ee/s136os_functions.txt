@@ -194,3 +194,9 @@ usa text/1A8180 func_002AF9C8
 usa text/1A8180 func_002AFE68
 usa text/1A8180 func_002A8B08
 usa text/1A8180 func_002AFAB0
+usa text/178E88 func_0027F208
+usa text/178E88 LookupNeighborOcclusionCell
+usa text/191238 func_002988C8
+usa text/1A00F0 func_002A0DF0
+usa text/1A00F0 func_002A1138
+usa text/1A8180 func_002ADB10

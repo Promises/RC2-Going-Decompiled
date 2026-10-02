@@ -5670,28 +5670,39 @@ void func_002984E0(u8 *out) {
  *     + oracle-gate, then model. Bare INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00298730);
 
-/* TODO(match): functional equivalent - not byte-exact (85.25%); branch-likely
- * wall - the original's later cc1 lowers the `progress==0x14` test to `beql`
- * (branch-likely) with the equal-path `lui %hi(g_pointLights)` in the annulled
- * delay slot; the pinned 2.9-ee-991111 cc1 only emits a plain `beq`. Body
- * (signed n%2 -> D_1A9428 / idx<<4 -> D_255E50) otherwise matches. */
+/* func_002988C8(idx) — UI element slot for `idx`: on level 0x14
+ * (g_playerProgress) one of two 0x10-byte slots at D_1A9428, picked by the
+ * parity of the s32 at g_pointLights+0x2400 (signed n % 2); otherwise
+ * &D_255E50[idx * 0x10]. Returns the slot pointer.
+ * (Measured before task #1350: 85.25% under the pinned cc1 2.9, a beql
+ * branch-likely wall that SN 1.36 emits.) */
 extern s32 D_1A9428;      /* gp-relative UI-slot base */
 extern u8  D_255E50[];    /* per-index UI element table (0x10 stride) */
-#ifndef TARGET_NATIVE
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 50.50% GPREL-DECL /
  * engine96 37.75% GPREL-DECL; best arm sdk29, first differing insn there: 'lui v1,
  * %hi(g_playerProgress)' vs ''. Iterated: sdk29 90.75% IDIOM-LIKELY — branch sense inverted +
  * non-small g_playerProgress (r4): ROM `beql` with `lui a0` in the likely slot, ours `beq`;
  * plus a `daddu a1,a0` copy */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002988C8);
+/* MATCHED on the s136os arm (task #1350): byte-exact solo under SN 2.95.3
+ * v1.36 -fopt-stack (verify_match_unit, FACT #8810's method). Closing lever: the
+ * declarations in this arm (NOTE #8954: it did not compile solo without them), and
+ * g_playerProgress read through the g_playerProgressAbs addressing alias (the
+ * unit header's RenderSky device, RULING #8620): the ROM reads it absolute. */
+/* GUARD (task #1350): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002988C8)
+S136OS_SLOT(func_002988C8);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern u8 g_pointLights[];
 /* (end of this body's declarations) */
 void *func_002988C8(s32 idx) {
-    if (g_playerProgress == 0x14) {
+    if (g_playerProgressAbs == 0x14) {
         s32 n = *(s32 *)(g_pointLights + 0x2400);
         return (u8 *)&D_1A9428 + ((n % 2) << 4);
     }

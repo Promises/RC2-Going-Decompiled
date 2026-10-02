@@ -765,8 +765,18 @@ void *LookupOcclusionGridCell(s32 x, s32 y, s32 z) {
  * every other remaining arm). Residual on the better arm (sdk29): UNKNOWN-addiu (first differing
  * insn: ROM `addiu sp,sp,-64` vs built `addiu sp,sp,-112`). Levers: engine96 with sched1 MEASURED
  * (flag not landed): 79.78%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", LookupNeighborOcclusionCell);
+/* MATCHED on the s136os arm (task #1350): byte-exact solo under SN 2.95.3
+ * v1.36 -fopt-stack (verify_match_unit, FACT #8810's method). Closing lever: the
+ * declarations in this arm (NOTE #8954: it did not compile solo without them), and each
+ * branch returning its own result (`return mask;` inside the bias < 0.5 arm)
+ * rather than one shared return after an if/else. */
+/* GUARD (task #1350): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_LookupNeighborOcclusionCell)
+S136OS_SLOT(LookupNeighborOcclusionCell);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -780,11 +790,11 @@ void *LookupNeighborOcclusionCell(s32 ax, s32 ay, s32 az,
         if (mask == 0) {
             mask = LookupOcclusionGridCell(bx, by, bz);
         }
-    } else {
-        mask = LookupOcclusionGridCell(bx, by, bz);
-        if (mask == 0) {
-            mask = LookupOcclusionGridCell(ax, ay, az);
-        }
+        return mask;
+    }
+    mask = LookupOcclusionGridCell(bx, by, bz);
+    if (mask == 0) {
+        mask = LookupOcclusionGridCell(ax, ay, az);
     }
     return mask;
 }
@@ -2648,8 +2658,17 @@ void func_0027F168(s32 x1, s32 y1, s32 x2, s32 y2, s64 z, u64 tex0) {
  * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
  * ROM `addiu sp,sp,-96` vs built `addiu sp,sp,-176`). Levers: sibcall guard RUN: sdk29 88.00% /
  * engine96 61.05%; engine96 with sched1 MEASURED (flag not landed): 52.05%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F208);
+/* MATCHED on the s136os arm (task #1350): byte-exact solo under SN 2.95.3
+ * v1.36 -fopt-stack (verify_match_unit, FACT #8810's method). Closing lever: the
+ * declarations in this arm (NOTE #8954: it did not compile solo without them)
+ * — nothing else. */
+/* GUARD (task #1350): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0027F208)
+S136OS_SLOT(func_0027F208);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
