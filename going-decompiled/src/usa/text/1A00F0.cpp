@@ -357,7 +357,15 @@ void func_002A04D8(void *obj, s32 arg1, void *dst) {
  * (func_00283AE0), scaled (Vec4ScaleVu0) and w-terminated (1.0) into outArray.
  * Returns the entry count. Callee roles func_00283A48/func_00283AE0 UNCONFIRMED
  * (named by shape); the 8-byte func_00283AE0 arg is the raw qword the asm loads.
- * The matching build keeps the asm; faithful TARGET_NATIVE coverage arm. */
+ * MATCHED on the s136os arm (task #1344): byte-identical to the ROM in the
+ * image. On EE this C is compiled alone by SN 2.95.3 v1.36 -fopt-stack (row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh; a build that skips the splice drops the function.
+ * Closing shape: the count, header count and loop counter are s32 (s16 locals
+ * cost a sll/sra pair per use), the sentinel byte is read as entry[arg3 + 1]
+ * (gives the ROM's `addu arg3, entry` operand order), and the loop advances
+ * its counter and source pointer after the body (the ROM decrements before
+ * the first call and steps the source in its delay slot). */
 #ifdef TARGET_NATIVE
 /* ScaleVec4IncludingW def site is text/183558.c: the f32 scale is the 2nd param
  * (dst, s, src), NOT trailing. Vec4AddVu0/Vec4ScaleVu0/func_00283A48/func_00283AE0
@@ -365,8 +373,8 @@ void func_002A04D8(void *obj, s32 arg1, void *dst) {
 extern void ScaleVec4IncludingW(void *dst, f32 s, void *src);
 #endif
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0678);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002A0678)
+S136OS_SLOT(func_002A0678);
 #else
 /* Prototypes this body needs whose declarations sit in other guarded arms:
  * the s136os arm compiles this arm alone, so it must see them here. */
@@ -377,23 +385,21 @@ extern void func_00283A48(void *out, void *v, void *m);
 extern void func_00283AE0(void *dst, u64 packed);
 s32 func_002A0678(void *obj, void *dst, void *outArray, s32 arg3) {
     u8 *hdr = *(u8 **)((u8 *)obj + 0x24);
-    s16 n = *(s16 *)(hdr + 0x2E);
+    s32 n = *(s16 *)(hdr + 0x2E);
     u8 *entry;
     u8 *sub;
-    u8 *p;
     f32 scale;
-    s16 count;
+    s32 count;
     u32 idx;
 
     if (n == 0) {
         return 0;
     }
     entry = hdr + n * 16;
-    p = entry + arg3;
-    if (*(u8 *)(p + 1) == 0xFF) {
+    if (entry[arg3 + 1] == 0xFF) {
         return 0;
     }
-    idx = *(u8 *)(p + 1);
+    idx = entry[arg3 + 1];
     scale = *(f32 *)((u8 *)obj + 0x2C) * (1.0f / 1024.0f);
     sub = entry + idx * 16;
     ScaleVec4IncludingW(dst, scale, sub);
@@ -404,14 +410,14 @@ s32 func_002A0678(void *obj, void *dst, void *outArray, s32 arg3) {
     count = *(s16 *)(sub + 6);
     if (outArray != 0 && count > 0) {
         u8 *loopDst = (u8 *)outArray;
-        s16 i = count;
+        s32 i = count;
         do {
             func_00283AE0(loopDst, *(u64 *)sub);
-            sub += 8;
             Vec4ScaleVu0(loopDst,
                          *(f32 *)((u8 *)obj + 0x2C) * (1.0f / 1024.0f), loopDst);
             *(f32 *)(loopDst + 0xC) = 1.0f;
             i--;
+            sub += 8;
             loopDst += 0x10;
         } while (i != 0);
     }
