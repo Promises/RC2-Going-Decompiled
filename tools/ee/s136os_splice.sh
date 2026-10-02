@@ -88,6 +88,79 @@ carry_externs() {
     !(sym in have) { print x }' "$1" "$2" | sort -u | sed 's/^/\t/'
 }
 
+# verify_block <G> <fn> <s136os.s> <spliced unit.s> <block>: print, one per
+# line, every reason the spliced <block> would not assemble as it did in the
+# s136os TU it was compiled (and measured, FACT #8830) in. Empty = admit.
+# Two conditions (task #1326, FACT #8838 + task #1309's three image failures):
+#  (1) ADDRESSING: for each symbol the block names that either file declares
+#      `.extern`, the gp-relativity GNU as gives the block's bare-symbol access
+#      differs between the two files. The model, measured on the container's
+#      GNU as 2.40 at -G8 (8 probes, task #1326; FACT #8853 had 4 of them):
+#      if the last `.extern <sym>, N` BEFORE the use has N > G the access is
+#      pinned absolute there; otherwise gas defers to the end of the file and
+#      it is gp-relative iff the file's LAST size is in 1..G. The position is
+#      the block's `.ent <fn>` in both files (cc1
+#      prints no `.extern` inside .ent..end; a carried line sits in front of
+#      it). This is what FACT #8838's
+#      "size conflict" means: a conflict that leaves the class the same (the
+#      unit's ,16 device before the block and cc1's ,4 at the end, which both
+#      files carry) is admitted, one that flips it (BuildTieDrawSegment: the
+#      s136os TU sized the store's symbol 4, the unit 16) is refused.
+#  (2) DEFINITION: the block names a symbol the s136os TU DEFINES outside the
+#      block — an asm equate `<sym> = …` / `.set <sym>, …` / `.equ`, a label,
+#      `.comm`/`.lcomm` — and the spliced unit has no identical definition
+#      line. That definition came from source the 2.9 TU did not see (an
+#      equate inside the member's own guard arm: SelectSceneSubChunk), so the
+#      block would link to nothing, or to a different definition.
+# A text scan, so it fails CLOSED: anything it cannot see as identical in the
+# unit (e.g. the same equate spelled differently) is a loud false refusal,
+# never a false admit. Its bound: symbols defined only inside an `.include`d
+# file are invisible to both sides alike, and the model covers bare-symbol
+# macro accesses (explicit %gp_rel/%hi/%lo operands are unaffected by -G).
+verify_block() {
+  awk -v G="$1" -v fn="$2" '
+    function norm(l) { sub(/\r$/, "", l); sub(/#.*/, "", l); gsub(/[ \t]+/, " ", l); sub(/^ /, "", l); sub(/ $/, "", l); return l }
+    function cls(pre, fin) { return (pre + 0 > G) ? "abs" : ((fin + 0 > 0 && fin + 0 <= G) ? "gp" : "abs") }
+    function why(pre, fin) { return (pre + 0 > G) ? "absolute (.extern size " pre " before the block)" : (cls(pre, fin) == "gp" ? "gp-relative (" (pre == "" ? "no" : "size " pre) " .extern before the block, final size " fin ")" : "absolute (" (pre == "" ? "no" : "size " pre) " .extern before the block, final size " (fin == "" ? "none" : fin) ")") }
+    FNR == 1 { file++; past = 0 }
+    { raw = $0; sub(/\r$/, "", raw); l = norm(raw); split(l, F, " ") }
+    # file 3 = the block: every identifier its instruction lines name.
+    file == 3 {
+      if (l == "" || F[1] ~ /^[.#]/ || F[1] ~ /:$/) next
+      s = l; sub(/^[^ ]+ ?/, "", s)
+      while (match(s, /[A-Za-z_][A-Za-z0-9_.]*/)) { t = substr(s, RSTART, RLENGTH); if (RSTART == 1 || substr(s, RSTART - 1, 1) !~ /[$0-9]/) used[t] = 1; s = substr(s, RSTART + RLENGTH) }
+      next }
+    # files 1 (s136os TU) and 2 (spliced unit): .extern sizes before/at the end, definitions.
+    F[1] == ".ent" && F[2] == fn { past = 1; inblk = 1 }
+    F[1] == ".end" && F[2] == fn { inblk = 0; next }
+    inblk { next }
+    F[1] == ".extern" {
+      sym = F[2]; sub(/,.*/, "", sym); sz = l; sub(/^[^,]*, ?/, "", sz); if (sz == l) sz = ""
+      fin[file, sym] = sz; ext[sym] = 1; if (!past) pre[file, sym] = sz; next }
+    {
+      d = ""
+      if (F[1] ~ /^[A-Za-z_][A-Za-z0-9_.]*:$/) { d = F[1]; sub(/:$/, "", d) }
+      else if (F[2] == "=") d = F[1]
+      else if (F[1] ~ /^[A-Za-z_][A-Za-z0-9_.]*=/) { d = F[1]; sub(/=.*/, "", d) }
+      else if (F[1] ~ /^\.(set|equ|equiv|comm|lcomm)$/ && F[2] ~ /,/) { d = F[2]; sub(/,.*/, "", d) }
+      if (d == "") next
+      if (file == 1) def1[d] = (d in def1) ? def1[d] SUBSEP l : l
+      else def2[d, l] = 1
+    }
+    END {
+      for (t in used) {
+        if (t in ext) {
+          if (cls(pre[1, t], fin[1, t]) != cls(pre[2, t], fin[2, t]))
+            print "ADDRESSING " t ": " why(pre[1, t], fin[1, t]) " in the s136os TU, " why(pre[2, t], fin[2, t]) " in the spliced unit"
+        }
+        if (t in def1) {
+          n = split(def1[t], D, SUBSEP)
+          for (i = 1; i <= n; i++) if (!((t, D[i]) in def2)) print "DEFINITION " t ": the s136os TU defines it outside the block (`" D[i] "`), the spliced unit has no such line"
+        }
+      }
+    }' "$3" "$4" "$5" | sort
+}
+
 # extract_block <fn> <s136os.s> <out>: write the block — the .align/.p2align/
 # .globl/.text/.section .text directives cc1 prints right before `.ent <fn>`,
 # through `.end <fn>` — to <out>; on no single .ent/.end pair, print why.
@@ -133,6 +206,30 @@ if [ "${1:-}" = "--selftest" ]; then
   if [ ! -s "$T/why" ] && [ "$(cat "$T/blk")" = "$(printf '\t.align\t3\n\t.globl\tf\n\t.text\n\t.ent\tf\nf:\n\tjr\t$31\n\t.end\tf')" ]; then
     echo "  OK   arm 3: .cpp preamble with .file before .ent keeps .align 3 and .globl f, drops .file"
   else echo "  FAIL arm 3: block is not .align 3/.globl f/.text/.ent f..end f:"; cat "$T/why" "$T/blk" 2>/dev/null | sed 's/^/        /'; rc=1; fi
+  # Arms 4-8 (task #1326): verify_block, seeded. Each refuse arm must name its
+  # member's symbol and class; each admit arm must print nothing. A verifier
+  # that admits everything fails 4, 6 and 8; one that refuses every size or
+  # definition difference fails 5 and 7.
+  B='\t.ent\tf\nf:\n\tsw\t$5,X\n\tlw\t$4,Y\n\tjr\t$31\n\t.end\tf\n'
+  printf "$B" > "$T/blk"
+  vb() { verify_block 8 f "$T/solo.s" "$T/unit.s" "$T/blk"; }
+  # 4: BuildTieDrawSegment (#1309): the s136os TU sizes X 4, the unit 16.
+  printf "\t.extern\tX, 4\n${B}\t.extern\tX, 4\n" > "$T/solo.s"; printf "\t.extern\tX, 16\n#S136OS_BEGIN f\n${B}#S136OS_END f\n" > "$T/unit.s"
+  v="$(vb)"; case "$v" in "ADDRESSING X: gp-relative"*"absolute (.extern size 16 before the block) in the spliced unit") echo "  OK   arm 4: X sized 4 in the s136os TU, 16 in the unit -> refused: $v" ;; *) echo "  FAIL arm 4: not refused as ADDRESSING X: '$v'"; rc=1 ;; esac
+  # 5: FACT #8838's members as the #1281 helper splices them: the unit's ,16
+  # device precedes both blocks, cc1's ,4 ends the s136os TU -> absolute twice.
+  printf "\t.extern\tX, 16\n${B}\t.extern\tX, 4\n" > "$T/solo.s"; printf "\t.extern\tX, 16\n#S136OS_BEGIN f\n${B}#S136OS_END f\n" > "$T/unit.s"
+  v="$(vb)"; if [ -z "$v" ]; then echo "  OK   arm 5: ,16 device before the block in both files, ,4 only at the s136os end -> admitted"; else echo "  FAIL arm 5: refused a same-class size difference: '$v'"; rc=1; fi
+  # 8: the pre-#1281 defect itself: a carried ,4 in front of the block over the
+  # unit's ,16 device.
+  printf "\t.extern\tX, 16\n#S136OS_BEGIN f\n\t.extern X, 4\n${B}#S136OS_END f\n" > "$T/unit.s"
+  v="$(vb)"; case "$v" in "ADDRESSING X: absolute"*"gp-relative"*"in the spliced unit") echo "  OK   arm 8: a ,4 carried over the unit's ,16 device -> refused: $v" ;; *) echo "  FAIL arm 8: not refused as ADDRESSING X: '$v'"; rc=1 ;; esac
+  # 6: SelectSceneSubChunk (#1309): Y's equate is only in the s136os TU.
+  printf "\tY = Z\n${B}" > "$T/solo.s"; printf "#S136OS_BEGIN f\n${B}#S136OS_END f\n" > "$T/unit.s"
+  v="$(vb)"; case "$v" in "DEFINITION Y: "*) echo "  OK   arm 6: equate Y only in the s136os TU -> refused: $v" ;; *) echo "  FAIL arm 6: not refused as DEFINITION Y: '$v'"; rc=1 ;; esac
+  # 7: the #1309 fix: the same equate in both files.
+  printf "\tY = Z\n#S136OS_BEGIN f\n${B}#S136OS_END f\n" > "$T/unit.s"
+  v="$(vb)"; if [ -z "$v" ]; then echo "  OK   arm 7: equate Y identical in both files -> admitted"; else echo "  FAIL arm 7: refused an equate both files carry: '$v'"; rc=1; fi
   [ "$rc" = 0 ] && echo "#### s136os_splice --selftest: PASS" || echo "#### s136os_splice --selftest: FAIL"
   exit "$rc"
 fi
@@ -177,7 +274,13 @@ SHA="$(sha256sum "$G136/$FE" | awk '{print $1}')"
 
 TMP="${UNIT_S%.s}._s136"
 rm -rf "$TMP"; mkdir -p "$TMP"
-OUT="$UNIT_S"
+# The -G the unit is assembled at (asm_unit.sh takes the same GFLAG): the
+# threshold verify_block's addressing model compares sizes against.
+GNUM="${GFLAG#-G}"
+case "$GNUM" in ''|*[!0-9]*) fatal "GFLAG '$GFLAG' is not -G<N>; the addressing check cannot be computed for:" $ROWS ;; esac
+# Spliced into a copy; <unit.s> is replaced only after every block verifies.
+OUT="$TMP/work.s"
+cp "$UNIT_S" "$OUT"
 for f in $ROWS; do
   sh tools/ee/ee_cc1.sh s136 "$SRC" "$TMP/$f.i" "$TMP/$f.s" "$CPPDEF $INC -DS136OS_$f" "-O2 $GFLAG $CC1EXTRA -fopt-stack" \
     || fatal "s136 $FE compile failed for $f (ee_cc1.sh s136 $SRC)"
@@ -222,3 +325,19 @@ for f in $ROWS; do
 done
 LEFT="$(awk '{ sub(/\r$/, "") } $1 == "#S136OS_SLOT" { print $2 }' "$OUT")"
 [ -z "$LEFT" ] || fatal "slot(s) still present after the splice:" $LEFT
+# VERIFY (task #1326): every block against the FINAL unit, so a line carried for
+# one member is seen by every other (FACT #8842 point 1). Fails closed: rc 3,
+# <unit.s> untouched, every offender listed by member and cause. No fallback.
+BADV=""
+for f in $ROWS; do
+  verify_block "$GNUM" "$f" "$TMP/$f.s" "$OUT" "$TMP/$f.blk2" > "$TMP/$f.verify"
+  BADV="$BADV$(sed "s/^/$f: /" "$TMP/$f.verify")
+"
+done
+BADV="$(printf '%s' "$BADV" | sed '/^$/d')"
+if [ -n "$BADV" ]; then
+  echo "s136os_splice: FATAL [$REGION/$UNIT] — REFUSED (task #1326): a spliced block would not assemble as it did in the s136os TU it was measured in. ADDRESSING = the unit's .extern sizes flip a bare-symbol access between gp-relative and absolute; DEFINITION = the block needs a symbol the s136os TU defines outside .ent..end (e.g. an asm equate inside the member's own guard arm) and the 2.9 TU does not. Move the device or equate where both TUs see it, identically. Nothing was written to $UNIT_S." >&2
+  printf '%s\n' "$BADV" | sed 's/^/    /' >&2
+  exit 3
+fi
+cp "$OUT" "$UNIT_S"
