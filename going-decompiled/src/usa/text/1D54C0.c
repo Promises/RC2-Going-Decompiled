@@ -26,8 +26,11 @@ extern void End2dDrawBatch(void);
 #ifdef TARGET_NATIVE
 extern void DrawFont1RightJustifiedLabel(s32 x, s32 y, u32 color, s32 str, s32 wrap);
 extern void BuildSaveImage(void *dst);
-/* Remaining unit-wide #else-only callee prototypes (empty-paren = no arg-check);
- * return-typed s32 where the value is consumed, void where ignored. */
+/* Remaining unit-wide #else-only callee prototypes. Typed from this unit's own
+ * call sites (C++ reads an empty () as (void), so the old K&R-style empty-paren
+ * declarations do not compile as a .cpp unit); return-typed s32 where the value
+ * is consumed, void where ignored. A string argument is the int-width
+ * localized-string handle GetLocalizedString returns, as above. */
 /* GS A+D reg-write: the DATA is a 64-bit register value. Type + widen it to u64
  * for the native/#else build (prevents silent truncation of bits >=32 if a
  * 64-bit-value fn like func_002DD450 is #else'd here); matching-build decl kept
@@ -37,78 +40,82 @@ extern void AppendGsRegPacket(s32 regId, u64 value);
 #else
 extern void AppendGsRegPacket();
 #endif
-extern void ComputeAudioChannelMix();
-extern s32  CountSkillPointsCompleted();
-extern void DrawDebugString();
-extern void DrawFont1CenteredLabel();
-extern void DrawGlyphQuad();
-extern void DrawHudIconQuadTiled();
-extern void DrawHudSpriteRotated();
-extern void DrawStringFont1();
-extern void EnableInlineColorCodes();
-extern void FadeOutToBlackBlocking();
-extern void FillMemory32();
-extern s32  GatherActiveObjectives();
-extern s32  GetHudIconTex0();
-extern s32  GetLocalizedString();
-extern s32  GetMenuOverlayMode();
-extern void GuiElementSetVisible();
-extern s32  GuiFontAtlasLookupGlyph();
-extern void GuiListSetItemCount();
-extern void GuiListSetScrollPos();
-extern void MapSetCurrentLevel();
-extern void MarkLevelAvailable();
-extern s32  MeasureFont2Text();
-extern void PumpDialogVoiceSystem();
-extern s32  RequestGameStateChange();
-extern void RequestLevelExit();
-extern s32  StartFileLoad();
-extern void StopFileLoad();
-extern void UpdateLevelObjectiveStates();
-extern void func_00131A98();
-extern void func_00132938();
-extern s32  func_0026F7D0();
-extern s32  func_0026F7D8();
-extern void func_0027F7A0();
-extern void func_00280090();
-extern void func_002801B8();
-extern void func_00283460();
-extern void func_00286138();
-extern void func_002861D8();
-extern s32  func_00288898();
-extern void func_002888A8();
-extern void func_002888D0();
-extern s32  func_0028EDF0();
-extern void func_002904B0();
-extern void func_00297FA0();
-extern void func_00298A00();
-extern void func_00299BF8();
-extern void func_0029D248();
-extern void func_0029D918();
-extern void func_002B1880();
-extern s32  func_002B1D40();
-extern void func_002CA980();
-extern void func_002CAB90();
-extern s32  func_002D6B00();  /* locally defined below; return typed s32 to match its definition */
-extern s32  GetMenuWorkBufferSize();
-extern void func_002DFF68();  /* locally defined below */
-extern s32  func_002E0010();
-extern void func_003017F8();
-extern void func_0033A7A8();
-extern void func_00342450();
-extern s32  func_00342468();
-extern s32  func_003424C8();
-extern void func_00342520();
-extern void func_00342BE8();
-extern s32  func_00342D68();
-extern void func_00342DC0();
-extern void func_00343290();
-extern void func_003432B8();
-extern s32  func_003432C0();
-extern void func_0034EF68();
-extern s32  func_0034F300();
-extern void sceCdReadClock();
+extern void ComputeAudioChannelMix(void);
+extern s32  CountSkillPointsCompleted(void);
+extern void DrawDebugString(s32 x, s32 y, u32 color, s32 str, s32 wrap);
+extern void DrawFont1CenteredLabel(s32 x, s32 y, u32 color, s32 str, s32 wrap);
+extern void DrawGlyphQuad(s32 x, s32 y, s32 w, s32 h, s32 u, s32 v, s32 uw, s32 uh, u64 color, u64 tex0);
+extern void DrawHudIconQuadTiled(s32 icon, s32 x, s32 y, s32 w, s32 h, s32 alpha);
+extern void DrawHudSpriteRotated(s32 xBits, f32 y, s32 wBits, s32 hBits, s32 angleBits, s32 a5, s32 a6, s32 tex);
+extern void DrawStringFont1(s32 x, s32 y, u32 color, s32 str, s32 wrap);
+extern void EnableInlineColorCodes(void);
+extern void FadeOutToBlackBlocking(s32 frames);
+extern void FillMemory32(s32 dst, u32 pattern, s32 nbytes);
+extern s32  GatherActiveObjectives(s32 outIds, s32 outMask, s32 outVals, s32 wantValues);
+extern s32  GetHudIconTex0(s32 iconIndex);
+extern s32  GetLocalizedString(s32 id);
+extern s32  GetMenuOverlayMode(void);
+extern void GuiElementSetVisible(s32 elem, s32 show);
+extern s32  GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
+extern void GuiListSetItemCount(s32 elem, s32 count);
+extern void GuiListSetScrollPos(s32 elem, s32 pos);
+extern void MapSetCurrentLevel(s32 level);
+extern s32  MeasureFont2Text(s32 str, s32 wrap);
+extern void PumpDialogVoiceSystem(s32 blocking);
+extern s32  RequestGameStateChange(s32 stateId, s32 push, s32 argA, s32 argB, s32 outDoneFlag);
+extern void RequestLevelExit(s32 destination, s32 commitSave);
+extern s32  StartFileLoad(s32 dest, s32 lbn, s32 sectors);
+extern void StopFileLoad(void);
+extern void UpdateLevelObjectiveStates(void);
+extern void func_00131A98(void *clock);
+extern void func_00132938(s32 flag);
+extern s32  func_0026F7D0(void);
+extern s32  func_0026F7D8(void);
+extern void func_0027F7A0(void);
+extern void func_00280090(s32 a, s32 b, s32 c, s32 d, s32 e);
+extern void func_002801B8(s32 x, s32 y, u32 color, s32 str, s32 wrap);
+extern void func_00283460(void *dst, const void *src, s32 nbytes);
+extern void func_00286138(s32 a, s32 b);
+extern void func_002861D8(s32 a, s32 b);
+extern s32  func_00288898(void);
+extern void func_002888A8(void);
+extern void func_002888D0(void);
+extern s32  func_0028EDF0(s32 name, s32 level);
+extern void func_002904B0(s32 x0, s32 y0, s32 x1, s32 y1, u64 reg4, s32 mode);
+extern void func_00297FA0(s32 saveRegion);
+extern void func_00298A00(void);
+extern void func_00299BF8(void);
+extern s32  func_0029D248(s32 arg);
+extern void func_0029D918(s32 arg);
+extern s32  func_002B1D40(void);
+extern void func_002CA980(void);
+extern void func_002CAB90(s32 bits);
+struct MenuCmd;
+extern s32  func_002D6B00(struct MenuCmd *cmd);  /* locally defined below */
+extern s32  GetMenuWorkBufferSize(s32 id);      /* locally defined below */
+extern void func_002DFF68(s32 handle, s32 amount);  /* locally defined below */
+extern s32  func_002E0010(char *dst, s32 level);
+extern void func_003017F8(s32 glyph, s32 color, f32 x, f32 y, f32 scale, f32 a5, f32 a6);
+extern void func_0033A7A8(void *p);
+extern void func_00342450(void *p, s32 a, s32 b, s32 c);
+extern s32  func_00342468(void *p);
+extern s32  func_003424C8(void *p);
+extern void func_00342520(void *p, s32 mode);
+extern void func_00342BE8(void *p, s32 v);
+extern s32  func_00342D68(void *p);
+extern void func_00342DC0(void *p, s32 records);
+extern void func_00343290(void *p, s32 records);
+extern void func_003432B8(void *p, s32 v);
+extern s32  func_003432C0(void *p);
+extern void func_0034EF68(void *base, s32 index, s32 x, s32 y, s32 shade);
+extern s32  func_0034F300(void *mgr);
+extern void sceCdReadClock(void *clock);
 #endif
+
+/* Also called from the EE-compiled func_002DECE0 (cheat-code unlocks), so these
+ * two are declared for both arms: C++ has no implicit declarations. */
+extern void MarkLevelAvailable(s32 level);
+extern s32  func_002B1880(s32 stringId, s32 arg);
 
 /* Per-screen draw helpers in the preceding text/1A00F0 asm band. */
 extern void func_0029D958(void);
@@ -1030,7 +1037,7 @@ s32 GalacticMapConfirmTravelInput(void) {
         return 1;
     }
     if ((pressed & 0x40) == 0) {
-        func_0029D248();
+        func_0029D248(pressed);  /* the ROM's $a0 still holds the pad mask here */
         return 0;
     }
     if (g_playerProgress == g_nMapCurrentLevel) {
@@ -1183,11 +1190,11 @@ s32 MenuScreenDoAction(s32 op, s32 arg, void *outFlag) {
         PlayGlobalSound(4, 0, 0);
         func_002861D8(0, 0);
         func_00286138(0, 0);
-        RequestGameStateChange(4, 1, 9, g_pCurrentMenuScreen[0], 0);
+        RequestGameStateChange(4, 1, 9, (s32)g_pCurrentMenuScreen[0], 0);
         break;
 
     case 13:
-        RequestGameStateChange(4, 1, 0xB, g_pCurrentMenuScreen[0], 0);
+        RequestGameStateChange(4, 1, 0xB, (s32)g_pCurrentMenuScreen[0], 0);
         break;
 
     default:  /* op >= 14: no-op */
@@ -2792,7 +2799,7 @@ s32 func_002DCDC0(MenuWidget *obj) {
         label[0] = D_001ABC00;
         label[1] = D_001ABC01;
         DrawStringFont1(*(s32 *)(o + 0x20) - 0x18, *(s32 *)(o + 0x24) / 2 - 8,
-                        0x80ffa888, label, -1);
+                        0x80ffa888, (s32)label, -1);
         h = *(s32 *)(o + 0x24);
         tex = GetHudIconTex0(func_0028EDF0(0xe99d, 6));
         DrawHudSpriteRotated(0x43400000, (float)(h << 3), 0x43000000, 0x43800000,
@@ -2800,7 +2807,7 @@ s32 func_002DCDC0(MenuWidget *obj) {
     } else {
         label[0] = D_001ABBF8;
         label[1] = D_001ABBF9;
-        DrawStringFont1(4, *(s32 *)(o + 0x24) / 2 - 8, 0x80ffa888, label, -1);
+        DrawStringFont1(4, *(s32 *)(o + 0x24) / 2 - 8, 0x80ffa888, (s32)label, -1);
         h = *(s32 *)(o + 0x24);
         tex = GetHudIconTex0(func_0028EDF0(0xe99d, 6));
         DrawHudSpriteRotated(0x44200000, (float)(h << 3), 0x43000000, 0x43800000,
@@ -3124,7 +3131,7 @@ s32 func_002DDD30(MenuWidget *obj) {
         }
         D_0013955C = 0;
         D_001A7424 |= 0x100;
-        if (RequestGameStateChange(4, 1, 1, g_pCurrentMenuScreen[0], 0) == 0) return 0;
+        if (RequestGameStateChange(4, 1, 1, (s32)g_pCurrentMenuScreen[0], 0) == 0) return 0;
     }
     pressed = g_padButtonsPressed[0];
     if ((pressed & 0x900) && D_001F28F4 == 0 && D_001A8C8C == 0) {
@@ -3147,7 +3154,7 @@ s32 func_002DDD30(MenuWidget *obj) {
             g_pNextMenuScreen[0] = nxt;
             return 0;
         }
-        RequestGameStateChange(4, 1, 1, g_pCurrentMenuScreen[0], 0);
+        RequestGameStateChange(4, 1, 1, (s32)g_pCurrentMenuScreen[0], 0);
     }
     if (D_0013953C >= 3) return 0;
     if (D_00139544 >= 0 || D_001F2924 < 0xb || D_001393E8 != 2) return 0;
