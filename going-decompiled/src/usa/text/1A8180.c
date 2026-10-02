@@ -4041,7 +4041,7 @@ extern void SpawnShockwaveRingMoby(f32 radius, long moby, u64 spawnCtx,
                                    void *pos, s32 a4, s32 a5, s32 a6,
                                    s32 a7, s32 a8);
 extern void func_003093F8(void *spawnCtx, Vec4 *dir, s32 life, s32 flag, s32 a4); /* SpawnImpactDebrisStreakMoby */
-extern void func_00283968(f32 minLen, Vec4 *dst, Vec4 *src);                      /* Vec3NormalizeCheckedVu0 */
+extern s32  func_00283968(Vec4 *dst, f32 minLen, Vec4 *src);  /* Vec3NormalizeCheckedVu0; def 183558.c (dst, minLen, src) */
 extern long func_00284768(f32 range, Vec4 *pt);                                  /* ClassifyPointVsScreenBoxVu0 */
 extern void func_00313968(void *shakeBlock, u64 spawnCtx, s32 a2, s32 a3);
 extern s32  PlayMobySound(s32 soundIdx, s32 flags, Moby *owner);
@@ -4132,7 +4132,7 @@ void func_002ACA20(f32 queryRadius, f32 queryPower, f32 ringRadius, f32 whiteRin
             camDelta.z += camDist * 0.5f;
             Vec3RescaleToLenVu0(&camDelta, (camDist + camDist) * invFrameRate, &camDelta);
             Vec4AddVu0(&streak, &streak, &camDelta);
-            func_00283968(0.16666667f, &streak, &streak);                    /* 0x3E2AAAAB */
+            func_00283968(&streak, 0.16666667f, &streak);                    /* 0x3E2AAAAB */
             life = RandRangeInclusive(0x3C, 0x5A);
             func_003093F8(pos, &streak, life, 0, 0);
         }
