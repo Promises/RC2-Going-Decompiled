@@ -50,15 +50,20 @@
 # lowering difference), so `engine96` + a `.cpp` source compiles ONLY for a
 # unit listed in tools/ee/cpp96_allowlist.txt and is otherwise REFUSED (exit 1,
 # naming the unit and the ruling). There is no fallback to the 2.96 cc1: a
-# `.cpp` unit compiled as C would be the wrong front end with exit 0. The unit
-# is named by the caller in EE_CC1_UNIT="<region> <unit>" (objdiff_build.sh,
-# diff96.sh), because an override source lives at a scratch path that says
-# nothing about which unit it stands for; without it, the unit is read from a
-# going-decompiled/src/<region>/<unit>.cpp path, and any other path is refused.
-# CPP96_ALLOWLIST_MD5, when set, is the host's digest of the allowlist and is
-# verified with mount_sync.sh before the read (FACT #8713: a grown host-written
-# file can be read truncated). The sdk29 and s136 arms, and every `.c` unit,
-# are unaffected.
+# `.cpp` unit compiled as C would be the wrong front end with exit 0.
+# A `.cpp` source carrying a MATCH_ guard is held to the same list on the sdk29
+# and s136 arms too (build.sh's image compile), because RULING #8915 item 1
+# forbids such a unit being `.cpp` at all and the image build is where a
+# conversion row first runs. A `.cpp` unit with no MATCH_ guard, and every `.c`
+# unit, is unaffected on those arms.
+# The unit is named by the caller in EE_CC1_UNIT="<region> <unit>"
+# (objdiff_build.sh, diff96.sh), because an override source lives at a scratch
+# path that says nothing about which unit it stands for; without it, the unit is
+# read from a going-decompiled/src/<region>/<unit>.cpp path, and any other path
+# is refused. CPP96_ALLOWLIST_MD5, when set, is the host's digest of the
+# allowlist and is verified with mount_sync.sh before the read (FACT #8713: a
+# grown host-written file can be read truncated; build.sh does not pass it, and
+# a truncated read there can only refuse a listed unit, never admit one).
 #
 # THE C ARM is byte-for-byte the cpp/cc1 command lines build.sh and
 # objdiff_build.sh ran before this file existed.
@@ -118,7 +123,9 @@ esac
 for w in $CC; do bin="$w"; done
 [ -f "$bin" ] || fail "$ARM $SRCLANG compiler missing: $bin (run scripts/fetch_ee_toolchain.sh)"
 
-if [ "$ARM/$SRCLANG" = engine96/c++ ]; then
+# cpp96_check — refuse $SRC unless its unit is on the cpp96 allowlist (see the
+# header: RULING #8915). $WHY names the route in every refusal message.
+cpp96_check() {
   ALLOW=tools/ee/cpp96_allowlist.txt
   if [ -n "${EE_CC1_UNIT:-}" ]; then
     unitkey="$EE_CC1_UNIT"
@@ -126,12 +133,12 @@ if [ "$ARM/$SRCLANG" = engine96/c++ ]; then
     case "$SRC" in
       going-decompiled/src/*/*.cpp|/work/going-decompiled/src/*/*.cpp|./going-decompiled/src/*/*.cpp)
         rest="${SRC#*going-decompiled/src/}"; unitkey="${rest%%/*} ${rest#*/}"; unitkey="${unitkey%.cpp}" ;;
-      *) fail "engine96 C++ route: cannot tell which unit $SRC is (set EE_CC1_UNIT=\"<region> <unit>\"); refusing (RULING #8915)" ;;
+      *) fail "$WHY: cannot tell which unit $SRC is (set EE_CC1_UNIT=\"<region> <unit>\"); refusing (RULING #8915)" ;;
     esac
   fi
-  [ -f "$ALLOW" ] || fail "engine96 C++ route: $ALLOW missing; refusing $SRC (RULING #8915)"
+  [ -f "$ALLOW" ] || fail "$WHY: $ALLOW missing; refusing $SRC (RULING #8915)"
   if [ -n "${CPP96_ALLOWLIST_MD5:-}" ]; then
-    sh tools/ee/mount_sync.sh check "$ALLOW" "$CPP96_ALLOWLIST_MD5" || fail "engine96 C++ route: $ALLOW unreadable (mount-sync)"
+    sh tools/ee/mount_sync.sh check "$ALLOW" "$CPP96_ALLOWLIST_MD5" || fail "$WHY: $ALLOW unreadable (mount-sync)"
   fi
   listed=0
   while IFS= read -r row || [ -n "$row" ]; do
@@ -140,7 +147,16 @@ if [ "$ARM/$SRCLANG" = engine96/c++ ]; then
     set -- $row   # trims and collapses whitespace; a row is exactly two words
     [ $# -eq 2 ] && [ "$1 $2" = "$unitkey" ] && { listed=1; break; }
   done < "$ALLOW"
-  [ "$listed" = 1 ] || fail "engine96 C++ route REFUSED for unit '$unitkey' ($SRC): not on $ALLOW. The 2.96 cc1plus is not codegen-identical to cc1 on MATCH_ bodies (FACT #8914); RULING #8915 keeps every unlisted MATCH_ unit .c. No fallback to cc1."
+  [ "$listed" = 1 ] || fail "$WHY REFUSED for unit '$unitkey' ($SRC): not on $ALLOW. The 2.96 cc1plus is not codegen-identical to cc1 on MATCH_ bodies (FACT #8914); RULING #8915 keeps every unlisted MATCH_ unit .c. No fallback to cc1."
+}
+if [ "$SRCLANG" = c++ ]; then
+  if [ "$ARM" = engine96 ]; then
+    WHY="engine96 C++ route"; cpp96_check
+  elif grep -Eq 'defined[[:space:]]*\([[:space:]]*MATCH_' "$SRC"; then
+    # same guard predicate objdiff_build.sh harvests; a .cpp with a MATCH_ guard
+    # is a MATCH_ unit converted to C++, whichever arm compiles it now.
+    WHY="MATCH_-guarded .cpp unit ($ARM arm)"; cpp96_check
+  fi
 fi
 
 rm -f "$OUT_I" "$OUT_S"

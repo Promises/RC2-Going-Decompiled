@@ -100,7 +100,7 @@ EOF
 docker --context colima-ee-x86 run --rm -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work
   mips-linux-gnu-as $ASF -o $W/target.o $W/target.s
-  sh tools/ee/ee_cc1.sh sdk29 $CFILE $W/base.i $W/base.s '$CPPDEF $INC' '-O2 $GFLAG $CC1EXTRA'
+  EE_CC1_UNIT='$REGION $UNIT' sh tools/ee/ee_cc1.sh sdk29 $CFILE $W/base.i $W/base.s '$CPPDEF $INC' '-O2 $GFLAG $CC1EXTRA'
   sh tools/ee/asm_unit.sh $REGION /work/$W/base.s /work/$W/base.o $GFLAG
 "
 
