@@ -3963,12 +3963,21 @@ L891C:
 /* Abort the in-flight CD file read: if a read is active, emit the
  * "music_StopLoad" debug string (retail no-op), send the stop command, and set
  * the abort flag so the completion callback receives success=false.
- * WALL: save-layout — saves $16 + $31 (two callee-saves at 8-byte spacing),
- * which the pinned cc1 packs at 16-byte spacing. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StopFileLoad);
+ * cc1 2.9 wall (the s136os arm clears it; see GUARD): save-layout — saves
+ * $16 + $31 (two callee-saves at 8-byte spacing), which the pinned cc1 packs
+ * at 16-byte spacing. */
+/* GUARD (task #1325): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Byte-exact on that arm (task #1325 lever): CdStopRead declared s32 (it
+ * returns 1; cod/0321A0.c), so the call clobbers $2 as the ROM's allocation
+ * assumes. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_StopFileLoad)
+S136OS_SLOT(StopFileLoad);
 #else
-/* TODO(match): functional equivalent - not byte-exact; save-layout wall. */
+/* cc1 2.9 (not the image arm; see GUARD) is not byte-exact: save-layout wall. */
 extern char D_1AA1E8[];                    /* "music_StopLoad" debug string */
 void StopFileLoad(void) {
     if (g_fileLoadVoiceState.fileLoadActive != 0) {

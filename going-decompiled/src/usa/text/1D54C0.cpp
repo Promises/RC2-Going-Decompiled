@@ -1894,8 +1894,15 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DA740);
 
 /* Draw a small checkbox/indicator at (x,y): a 10px highlight rect, an 8px inner
  * rect, and (when `on`) a 0x1E-px tick glyph on top. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DAA50);
+/* GUARD (task #1325): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Byte-exact on that arm (task #1325 lever): its three callees' prototypes
+ * repeated in the arm (the unit-wide ones are native-only). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002DAA50)
+S136OS_SLOT(func_002DAA50);
 #else
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 73.46% / engine96 68.98%; better arm sdk29; 27 differing

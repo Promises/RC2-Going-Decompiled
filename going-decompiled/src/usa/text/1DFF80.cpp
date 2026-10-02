@@ -1016,13 +1016,20 @@ extern s32 CollLine(void *a, void *b, s32 mask, s32 owner, s32 flags);
  * camera toward `out`'s world position; if it hits, pull `out` back to 0.75 of
  * the camera->hit distance (camera + 0.75*(hit-camera)), nudging the listener
  * probe to just in front of the occluder.
- * TODO(match): functional equivalent - not byte-exact; body order is exact but
+ * cc1 2.9 (not the image arm; see GUARD) is not byte-exact: body order is exact but
  * two walls remain - this cc1 packs the three callee saves (s0,s1,ra) at a
  * 16-byte stride (0x20 frame) where the original uses an 8-byte stride (0x10
  * frame), and it lowers the trailing Vec4AddVu0 to a sibling/tail j that the
  * original keeps as a jal + restore. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", ComputeListenerOcclusionProbe);
+/* GUARD (task #1325): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Byte-exact on that arm (task #1325 lever): func_002A87F0 declared as defined
+ * in 1A8180.c (void, handle in $4) and called with `out` as its handle. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_ComputeListenerOcclusionProbe)
+S136OS_SLOT(ComputeListenerOcclusionProbe);
 #else
 void ComputeListenerOcclusionProbe(Vec4 *out) {
     func_002A87F0(out, 0.5f, 6.0f);
