@@ -68,6 +68,12 @@ if [ -d "$SRC" ]; then
   . tools/ee/asmfix_default.sh
   eval "$ASMFIX_PRUNE"
   echo "   asmfix mirror -> $ASMFIX_SHARED ($ASMFIX_STATE)"
+  # The s136os splice's own seeded arms, run HERE (the container's mawk) before
+  # any unit is spliced: its refusal check once passed on the host's awk and
+  # refused every member in the container (task #1326).
+  sh tools/ee/s136os_splice.sh --selftest > "$BUILD/s136os_splice_selftest.log" 2>&1 \
+    || { cat "$BUILD/s136os_splice_selftest.log" >&2; echo "BUILD FAIL (s136os_splice --selftest)" >&2; exit 1; }
+  echo "   $(tail -1 "$BUILD/s136os_splice_selftest.log")"
   m=0
   for c in $(find "$SRC" \( -name '*.c' -o -name '*.cpp' \)); do
     # ukey: the unit's path spelled .c whatever its language, so the per-unit

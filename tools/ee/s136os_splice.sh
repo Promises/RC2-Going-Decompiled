@@ -144,7 +144,8 @@ verify_block() {
       else if (F[1] ~ /^[A-Za-z_][A-Za-z0-9_.]*=/) { d = F[1]; sub(/=.*/, "", d) }
       else if (F[1] ~ /^\.(set|equ|equiv|comm|lcomm)$/ && F[2] ~ /,/) { d = F[2]; sub(/,.*/, "", d) }
       if (d == "") next
-      if (file == 1) def1[d] = (d in def1) ? def1[d] SUBSEP l : l
+      # (two statements: mawk creates def1[d] before testing `d in def1`)
+      if (file == 1) { prev = (d in def1) ? def1[d] SUBSEP : ""; def1[d] = prev l }
       else def2[d, l] = 1
     }
     END {
