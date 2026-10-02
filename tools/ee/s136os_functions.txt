@@ -109,3 +109,16 @@ usa text/191238 MapSetCurrentLevel
 usa text/191238 SelectSceneSubChunk
 usa text/1EFFC0 BuildTieDrawSegment
 usa text/24D728 func_0034F1C0
+usa text/235FE8 func_00338A80
+usa text/235FE8 func_0033A048
+usa text/235FE8 func_0033A640
+usa text/235FE8 func_0033AA80
+usa text/235FE8 func_0033CD80
+usa text/235FE8 func_0033D1C0
+usa text/235FE8 func_0033D478
+usa text/235FE8 func_0033DA00
+usa text/235FE8 func_0033DDC8
+usa text/235FE8 func_0033E488
+usa text/235FE8 GuiQuitDialogInitElements
+usa text/235FE8 func_0033EB20
+usa text/235FE8 func_0033EDD0
