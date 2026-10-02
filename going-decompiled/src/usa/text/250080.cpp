@@ -1860,6 +1860,11 @@ S136OS_SLOT(func_00352AE0);
    stash them into the stream object at +0x8 / +0x10 (the snapshot the retry
    path replays from). The event id arrives in arg0 (unused); the stream object
    in arg1. Always reports handled (1). */
+/* Repeated from the TARGET_NATIVE block above so the s136os arm (compiled with
+ * TARGET_NATIVE undefined) sees a prototype: since 250080 became .cpp (task
+ * #1312) the SN 1.36 cc1plus rejects the implicit declaration that cc1 allowed.
+ * Identical to the native declaration, so the redeclaration is legal in both. */
+extern s32 func_003522C0(void *dmaq, ...);
 s32 func_00352AE0(s32 unused, u8 *obj) {
     /* func_003522C0 writes cursor[0] and cursor[1] only. The third element
      * is never touched: it is what gives the ROM's 0x30 frame (locals at
