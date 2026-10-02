@@ -786,6 +786,16 @@ void func_00291FF8(s32 index) {
  * -0x100' vs 'addiu sp, sp, -0x1b0' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002920C0);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void FillMemory32(void *dst, u32 word, s32 nbytes);
+extern void KickGifImageUpload(void *packet, void *src);
+extern s32 Log2Floor(s32 v);
+extern void WaitGsPathsIdle(s32 arg);
+extern void func_0011AEA0(s32 a);
+extern void func_00126288(void *dst, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h);
+extern s32 g_vramAllocCursor;
+/* (end of this body's declarations) */
 #ifdef TARGET_NATIVE
 extern void FillMemory32(void *dst, u32 val, s32 len);
 extern s32  Log2Floor(s32 v);
@@ -992,6 +1002,15 @@ extern s32  Log2Floor(s32 x);
  * -0x40' vs 'addiu sp, sp, -0x60' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BindParticleFxAssets);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 Log2Floor(s32 v);
+extern void * func_00283460(void *dst, const void *src, s32 nbytes);
+extern s32 g_particleEffectDefs[];
+extern u8 g_particleFxBlob[];
+extern s32 g_particleTexCount;
+extern s32 g_particleTexTable[];
+/* (end of this body's declarations) */
 void BindParticleFxAssets(void *hdrArg, s32 texBase, s32 *texRecords, s32 texCount) {
     u8 *hdr       = (u8 *)hdrArg;
     s32 defCount  = *(s32 *)(hdr + 0);
@@ -1039,7 +1058,7 @@ void BindParticleFxAssets(void *hdrArg, s32 texBase, s32 *texRecords, s32 texCou
  *   +0xD  u8   Log2Floor(|dimB|)   (TEX0 TH field)
  *   +0xE  s16  PSM: 0x13 (PSMT8) when dimA >= 0, else 0x14 (PSMT4)
  */
-#ifdef TARGET_NATIVE
+#if defined(TARGET_NATIVE) || defined(S136OS_BuildUiTextureDescriptors)
 typedef struct UiTextureRecord {
     u8  tex0[8];   /* +0x0  cached TEX0 pair, zeroed here */
     s16 heightHi;  /* +0x8  height >> 4 */
@@ -1201,6 +1220,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadPlayerDispl
  * %hi(g_playerTexCount)' vs '' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BindPlayerDisplayModel);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern u8 g_pointLights[];
+/* (end of this body's declarations) */
 extern s32 g_playerTexCount;
 extern u64 g_playerTexDescriptors[];
 extern void *g_pPlayerModelBuffer;
@@ -1491,6 +1514,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_0
  * 'sd s2, 0x10(sp)' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadShipDisplayModel);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern u8 g_pointLights[];
+/* (end of this body's declarations) */
 extern s32 g_discToc[];
 extern u8 g_levelDialogToc[];
 extern void *g_shipModelBufferBase;
@@ -1533,6 +1560,14 @@ void LoadShipDisplayModel(s32 index) {
  * -0x90' vs 'addiu sp, sp, -0xa0' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadShipDisplayTexture);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 Log2Floor(s32 v);
+extern void StartFileLoadPumpingVoice(void *dest, s32 startSector, s32 sectorCount);
+extern void WaitFrameDmaFence(s32 mode);
+extern s32 g_discToc[];
+extern u8 g_levelDialogToc[];
+/* (end of this body's declarations) */
 extern s32  g_frameArenaFlip;             /* double-buffer index (0/1) */
 extern s32  g_frameArenaBase;             /* per-frame arena base (declared later in-unit) */
 extern u8   g_vramTextureBase[];          /* VRAM texture-slot descriptor (+0xC/+0x1C = level TBPs) */
@@ -1825,6 +1860,14 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00293760);
  * %hi(g_vramTextureBase+0x10)' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002938B0);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void KickGifImageUpload(void *packet, void *src);
+extern void WaitGsPathsIdle(s32 arg);
+extern void func_0011AEA0(s32 a);
+extern void func_00126288(void *dst, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h);
+extern u8 g_vramTextureBase[];
+/* (end of this body's declarations) */
 extern s32 g_vramDynamicBase;
 extern s32 g_vramAllocCursor;
 
@@ -2127,6 +2170,15 @@ extern char D_1A9240[];               /* debug fmt string (DebugPrintStub no-op)
  * 'sd s1, 0x8(sp)' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", FixupMobyClassHeader);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void CopyQwords(void *dst, const void *src, s32 nbytes);
+extern void DebugPrintStub(const char *fmt, ...);
+extern char D_1A9240[];
+extern u8 g_mobyClassBounds[];
+extern u32 g_mobyClassDataSizes[];
+extern u8 g_mobyClassSlotRemap[];
+/* (end of this body's declarations) */
 void FixupMobyClassHeader(void *hdrArg, s32 instMode, s32 idMap, s32 classId) {
     u8 *hdr      = (u8 *)hdrArg;
     u8 *idMapPtr = (u8 *)idMap;
@@ -2327,6 +2379,16 @@ extern void  FixupMobyClassHeader(void *hdr, s32 arg2, s32 arg3, s32 classId);
  * -0x30' vs 'addiu sp, sp, -0x60' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", RegisterMobyClass);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void BindMobyClassUpdateFunc(s32 classId, s32 headerless);
+extern void FixupMobyClassHeader(void *hdr, s32 arg2, s32 reloc, s32 classId);
+extern s32 g_mobyClassCount;
+extern s32 g_mobyClassCountNoHeader;
+extern u32 g_mobyClassDataSizes[];
+extern u8 g_mobyClassSlotRemap[];
+extern s16 g_mobyClassSlotToId[];
+/* (end of this body's declarations) */
 void RegisterMobyClass(u8 *hdr, s32 arg2, s32 arg3, s32 classId) {
     if (hdr == 0) {
         s32 slot = g_mobyClassCountNoHeader;
@@ -4198,6 +4260,12 @@ void MapBeginUpload(void) {
  * %hi(g_mapVertexData)' vs '' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapFindNearestAvailableLevel);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern MapCache g_mapCache;
+extern u8 g_mapDataSet;
+extern s32 *g_pLevelOrder;
+/* (end of this body's declarations) */
 s32 MapFindNearestAvailableLevel(void) {
     s32 flag = (g_mapDataSet == 0) ? 0 : 0x100;
     s32 candidate = g_mapCache.currentLevel + flag;
@@ -4321,6 +4389,11 @@ done:
  * -0x50' vs 'addiu sp, sp, -0x80' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapEvictCacheSlot);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 func_002835E0(s32 v);
+extern MapCache g_mapCache;
+/* (end of this body's declarations) */
 s32 MapEvictCacheSlot(void) {
     s32 currentOrderIndex;
     s32 bestSlot;
@@ -4427,6 +4500,10 @@ void MapSetCurrentLevel(s32 level) {
  * %hi(g_mapVertexData)' vs 'lui v1, %hi(g_mapCache)' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapUpdateLevelAvailability);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern MapCache g_mapCache;
+/* (end of this body's declarations) */
 s32 MapUpdateLevelAvailability(void) {
     if (g_mapCache.currentLevel >= 0x1C) {
         g_mapCache.currentLevel = 0x1B;
@@ -4475,6 +4552,10 @@ s32 MapUpdateLevelAvailability(void) {
  * -0x10' vs 'addiu sp, sp, -0x50' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapUpdate);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern MapCache g_mapCache;
+/* (end of this body's declarations) */
 extern u8   D_138180[];              /* controller port-0 state (0x138180) */
 extern s32  D_1A95C0;               /* map scroll-margin X (<<4 px) (0x1A95C0) */
 extern s32  D_1A95C4;               /* map scroll-margin Y (<<4 px) (0x1A95C4) */
@@ -5605,6 +5686,10 @@ extern u8  D_255E50[];    /* per-index UI element table (0x10 stride) */
  * plus a `daddu a1,a0` copy */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002988C8);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern u8 g_pointLights[];
+/* (end of this body's declarations) */
 void *func_002988C8(s32 idx) {
     if (g_playerProgress == 0x14) {
         s32 n = *(s32 *)(g_pointLights + 0x2400);

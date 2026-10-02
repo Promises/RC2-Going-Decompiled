@@ -1108,6 +1108,11 @@ extern void *func_00283460(void *dst, const void *src, s32 nbytes); /* memcpy */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299BF8);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void * func_00283460(void *dst, const void *src, s32 nbytes);
+extern void func_00299B18(u8 *image);
+/* (end of this body's declarations) */
 /* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 65.19% -> PACKED-SAVE, first differing row @0: ROM `addiu sp, sp, -0x50` vs `addiu sp, sp, -0x70`;
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 44.68% -> SCHED, first differing row @2: ROM `(nothing)` vs `lui s0, %hi(g_discToc+0x344)`. */
@@ -1348,6 +1353,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", FillSaveSlotInf
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", DeserializeSaveSections);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 VerifySaveHeaderChecksum(void *image);
+/* (end of this body's declarations) */
 /* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 53.57% -> PACKED-SAVE, first differing row @0: ROM `addiu sp, sp, -0x60` vs `addiu sp, sp, -0xb0`;
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 50.64% -> SCHED-PROEPI, first differing row @1: ROM `sd s1, 0x18(sp)` vs `sd s0, 0x10(sp)`. */
@@ -2312,6 +2321,12 @@ s32 func_0029DB58(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", GuiManagerCreate);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+#ifndef TARGET_NATIVE
+extern void *memset(void *s, int c, unsigned int n); /* native: <string.h> via common.h */
+#endif
+/* (end of this body's declarations) */
 /* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 47.22% -> PACKED-SAVE, first differing row @0: ROM `addiu sp, sp, -0x10` vs `addiu sp, sp, -0x30`;
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 43.65% -> SCHED-PROEPI, first differing row @0: ROM `addiu sp, sp, -0x10` vs `addiu sp, sp, -0x20`. */

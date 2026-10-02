@@ -4628,6 +4628,11 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADB10);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_00283A48(Vec4 *out, Vec4 *v, Vec4 *m);
+extern u8 g_deferredSegment2Tag[];
+/* (end of this body's declarations) */
 s32 func_002ADB10(Vec4 *pos, s32 segIdx) {
     u8 *seg;
     Vec4 delta;
@@ -4967,6 +4972,11 @@ extern s32  func_002AE460(void *self, Moby *obj, Vec4 *arg3, Vec4 *arg4,
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE2D8);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_00283A48(Vec4 *out, Vec4 *v, Vec4 *m);
+extern void func_002AD860(Vec4 *vec, f32 maxLen);
+/* (end of this body's declarations) */
 s32 func_002AE2D8(Moby *self, Moby *obj, Vec4 *point, Vec4 *rotIn,
                   Vec4 *outPos, void *outAngles) {
     s32 src = func_002ADF18(obj);
@@ -5675,6 +5685,11 @@ void func_002AF6A0(Vec4 *out, u32 *colorPtr) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AF728);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern f32 func_002AB668(f32 a, f32 maxStep, f32 *p, s32 sign);
+extern s32 func_002A8D08(void *ent, Vec4 *ref, Vec4 *pos, s32 flags, f32 stepZ, f32 radius, f32 snapEps, f32 hitEps);
+/* (end of this body's declarations) */
 extern f32 GetRandomFloatSigned(f32 lo, f32 hi);   /* 0x2A8740 signed random magnitude */
 extern s32 RandRangeInclusive(s32 lo, s32 hi);     /* 0x2A8688 random int in [lo,hi] */
 extern Vec4 g_heroPos;                             /* 0x189EA0 hero world position */
@@ -7726,6 +7741,14 @@ s32 CountSkillPointsCompleted(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1DF0);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern f32 func_002AA508(Moby *owner, void *event);
+extern s32 func_002AC728(void *target, u8 *s);
+extern void func_002B0CC0(s32 ctx, Vec4 *out, void *a, void *b, f32 len);
+extern f32 g_gameTime[];
+extern Vec4 g_heroPos;
+/* (end of this body's declarations) */
 /* callees with no file-scope decl above this point */
 extern long func_002B2268(void *moby, long hit, Vec4 *dir, u32 tier);
 extern void UpdateMobyThreatFlashAndBurst(void *moby, s32 threatIdx, f32 *stats);

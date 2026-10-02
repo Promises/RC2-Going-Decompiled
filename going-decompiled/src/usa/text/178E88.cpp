@@ -389,6 +389,10 @@ void func_00279EE8(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00279F08);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 func_00279E00(s32 scroll, s32 *pIndex, s32 *pCursor);
+/* (end of this body's declarations) */
 extern u8 g_cameraCallbackCount[];   /* +0x80 = sequence mode word (0/1/2) */
 
 s32 func_00279F08(void) {
@@ -567,6 +571,11 @@ void func_0027A138(f32 *out, void *worldPos) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", BuildFrameViewMatrices);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void MatrixMultiplyVu0(f32 *dst, f32 *a, f32 *b);
+extern void Vec4ScaleVu0(void *dst, f32 s, void *src);
+/* (end of this body's declarations) */
 void BuildFrameViewMatrices(void) {
     /* block-scope externs mirroring the file's engine-#else convention */
     extern u8 g_cameraMatrix[];      /* 0x1B54F0 - 3-row camera rotation matrix */
@@ -759,6 +768,10 @@ void *LookupOcclusionGridCell(s32 x, s32 y, s32 z) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", LookupNeighborOcclusionCell);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void * LookupOcclusionGridCell(s32 x, s32 y, s32 z);
+/* (end of this body's declarations) */
 void *LookupNeighborOcclusionCell(s32 ax, s32 ay, s32 az,
                                   s32 bx, s32 by, s32 bz, f32 bias) {
     void *mask;
@@ -2417,6 +2430,11 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawRotatedSprite2d);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void Vec4ScaleVu0(void *dst, f32 s, void *src);
+extern void Vec4SubVu0(void *dst, void *a, void *b);
+/* (end of this body's declarations) */
 extern s32  FloatToInt(f32 x);
 extern f32  SinfVu0(f32 x);
 extern f32  CosfVu0(f32 x);
@@ -2633,6 +2651,10 @@ void func_0027F168(s32 x1, s32 y1, s32 x2, s32 y2, s64 z, u64 tex0) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F208);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_0027E4D0(s32 y0, s32 y1, s32 x0, s32 x1, u64 color);
+/* (end of this body's declarations) */
 void func_0027F208(s32 y0, s32 y1, s32 x0, s32 x1, s32 colorHi, s32 colorLo) {
     s32 color = (colorHi << 24) | colorLo;
 
@@ -2665,6 +2687,10 @@ void func_0027F208(s32 y0, s32 y1, s32 x0, s32 x1, s32 colorHi, s32 colorLo) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F348);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_0027E4D0(s32 y0, s32 y1, s32 x0, s32 x1, u64 color);
+/* (end of this body's declarations) */
 void func_0027F348(s32 y0, s32 y1, s32 x0, s32 x1, u64 color) {
     func_0027E4D0(y0, y1, x0, x1, (color & 0xFF000000) | 4);
     func_0027E4D0(y0 - 1, y0 + 1, x0 + 3, x1 + 5, color);
@@ -2712,6 +2738,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027F4D8);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_0027EFA0(const u64 *xyz2, const s32 *uv, const s32 *st, u64 prim, s32 mode);
+/* (end of this body's declarations) */
 extern f32 SinfVu0(f32 x);                 /* func_00283B30 */
 extern f32 CosfVu0(f32 x);                 /* func_00283B48 */
 extern f32 WrapAnglePiSum(f32 a, f32 b);   /* 0x284548 */
@@ -2884,6 +2914,10 @@ s32 func_0027F900(const char *str, s32 maxChars, f32 scale) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", DrawFixedFontString);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void DrawGlyphQuad(s32 x, s32 y, s32 w, s32 h, s32 u, s32 v, s32 uw, s32 uh, u64 param9, u64 param10);
+/* (end of this body's declarations) */
 extern s32 D_1A89B0[];   /* 8-entry color-escape table; [0] = latched default color */
 
 void DrawFixedFontString(s32 x, s32 y, s32 color, s32 str, s32 maxLen,
@@ -3003,6 +3037,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027FCB0);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void DrawTexturedQuad2d(f32 x, f32 y, f32 w, f32 h, s32 u, s32 v, s32 uw, s32 vh, u32 *colors, u64 tex0);
+/* (end of this body's declarations) */
 extern s32 D_1A89B0[];   /* 8-entry color-escape table; [0] = latched color */
 
 void func_0027FCB0(f32 f1, f32 f2, s32 a, s32 b, s32 c, f32 f3, u64 tex0, u8 *glyphTable) {
@@ -3415,6 +3453,12 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", AppendVu1SphereMapContext);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void MatrixMultiplyVu0(f32 *dst, f32 *a, f32 *b);
+extern void Vec4ScaleVu0(void *dst, f32 s, void *src);
+extern u8 g_cameraPos[];
+/* (end of this body's declarations) */
 extern s32  g_activeVu1Program;
 extern f32  D_1A86F0;                                 /* matrix-element Z-bias */
 extern u16  D_10ED20;                                 /* VU1 sphere-map microcode header (first u16) */
@@ -3503,6 +3547,10 @@ void AppendVu1SphereMapContext(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280EC8);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_0027B858(s32 width, s32 height, f32 fa, f32 fb, f32 fc, f32 fd, f32 fe);
+/* (end of this body's declarations) */
 void func_00280EC8(s32 zNearBits, s32 lo, s32 mode, f32 fa) {
     s32 zScale;
 
@@ -3618,6 +3666,10 @@ void func_00281020(u32 *pixels, s32 actorIdx) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002810C0);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_00281020(u32 *pixels, s32 actorIdx);
+/* (end of this body's declarations) */
 extern u32  *g_frameArenaBase[];                        /* 0x1B2220 double-buffer half pair */
 extern s32   g_frameArenaFlip;                          /* 0x1B2234 active-half index 0/1 */
 extern void  func_002860B8(s16 x, s16 y, s16 w, s16 h,  /* GS local-to-local blit */

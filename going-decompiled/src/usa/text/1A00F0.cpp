@@ -303,6 +303,16 @@ extern void SkinMobyCollisionMesh(void *entry, s32 count, u32 flags);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A04D8);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void SkinMobyCollisionMesh(void *entry, s32 count, u32 flags);
+extern f32 Vec3DistVu0(void *a, void *b);
+extern void Vec4AddVu0(void *dst, void *a, void *b);
+extern void Vec4ScaleVu0(void *dst, f32 s, void *src);
+extern void func_00283A48(void *out, void *v, void *m);
+extern void func_00283A70(void *out, void *v, void *m);
+extern void func_00283AE0(void *dst, u64 packed);
+/* (end of this body's declarations) */
 void func_002A04D8(void *obj, s32 arg1, void *dst) {
     u8 *o = (u8 *)obj;
     u8 *hdr = *(u8 **)(o + 0x24);
@@ -784,6 +794,14 @@ extern void  AppendTexFlushDefaultTex0(void);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", CloseMobyDmaSegment);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void AppendTexFlushDefaultTex0(void);
+extern void UploadMobyTextures(void *vramCursor);
+extern u32 *g_frameDmaCursor;
+extern u32 *g_mobySegmentOpenTag;
+extern void *g_vramAllocCursor;
+/* (end of this body's declarations) */
 void CloseMobyDmaSegment(void) {
     u32 *start = g_frameDmaCursor;
 
@@ -890,6 +908,15 @@ extern f32   func_00283B48(f32 x);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0DF0);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern f32 Atan2fPoly(f32 a, f32 b);
+extern f32 func_00283B30(f32 x);
+extern f32 func_00283B48(f32 x);
+extern void func_002A1320(void *moby, f32 *outVec);
+extern s32 g_deferredSegment2Tag;
+extern void *g_pHeroMoby;
+/* (end of this body's declarations) */
 void func_002A0DF0(void) {
     f32 vec[2];
     f32 angle;
@@ -921,6 +948,15 @@ extern void EmitMobyGlowPackets(void *workBuf);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", CloseMobyGlowSegment);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void BuildMobyGlowRecords(void);
+extern void EmitMobyGlowPackets(void *workBuf);
+extern s32 g_deferredSegment2Tag;
+extern u32 *g_frameDmaCursor;
+extern s32 g_mobyGlowCount;
+extern u8 g_mobyGlowWorkBuf[];
+/* (end of this body's declarations) */
 void CloseMobyGlowSegment(void) {
     u32 *tag;
 
@@ -1044,6 +1080,22 @@ extern void  AppendGsRegPacket(s32 reg, u32 data);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", BeginMobyDrawSegment);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void AppendGsRegPacket(s32 reg, u64 data);
+extern void AppendVifCodeRefTag(void *code, u32 count);
+extern void KickVif0Chain(void *chain);
+extern u8 D_100080[];
+extern u16 D_10FFB0;
+extern u8 D_10FFC0[];
+extern s32 g_activeVu1Program;
+extern s32 g_deferredSegment2Tag;
+extern u32 *g_frameDmaCursor;
+extern u32 *g_mobySegmentOpenTag;
+extern void *g_mobyVuChainCursor;
+extern void *g_vramAllocCursor;
+extern void *g_vramDynamicBase;
+/* (end of this body's declarations) */
 void BeginMobyDrawSegment(void) {
     AppendVifCodeRefTag(D_10FFC0, D_10FFB0);
     g_activeVu1Program = 6;
@@ -1073,6 +1125,12 @@ extern void *BuildMobyVuChain(void *tableBase, void *cursor, s32 count, s32 flag
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A1138);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void AppendGsRegPacket(s32 reg, u64 data);
+extern void * BuildMobyVuChain(void *tableBase, void *cursor, s32 count, s32 flag);
+extern void *g_mobyVuChainCursor;
+/* (end of this body's declarations) */
 void func_002A1138(void *tableBase, s32 count) {
     AppendGsRegPacket(0x47, 0x5360B);
     func_0011AEA0(0);
@@ -1307,6 +1365,10 @@ extern u8 g_dirLightMatrices[];   /* 0x1C26C0  0x40-stride dir-light matrices */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A1320);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern u8 g_dirLightMatrices[];
+/* (end of this body's declarations) */
 void func_002A1320(void *obj, f32 *out) {
     u64 v = *(u64 *)((u8 *)obj + 0x38);
     u32 idx0  = (u32)v & 0xFF;
@@ -1365,6 +1427,10 @@ extern u8 g_mobyGridBlockBitmap[];   /* 0x1EE460 bit-per-block allocation bitmap
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", ReleaseMobyGridBlockBits);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern u8 g_mobyGridBlockBitmap[];
+/* (end of this body's declarations) */
 void ReleaseMobyGridBlockBits(s32 start, s32 count) {
     for (;;) {
         u8 *byte = g_mobyGridBlockBitmap + (start >> 3);
@@ -1395,6 +1461,10 @@ void ReleaseMobyGridBlockBits(s32 start, s32 count) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", AllocMobyGridBlockBits);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern u8 g_mobyGridBlockBitmap[];
+/* (end of this body's declarations) */
 s32 AllocMobyGridBlockBits(s32 width) {
     u32 *p = (u32 *)g_mobyGridBlockBitmap;
     u32 mask0 = (1u << width) - 1;
