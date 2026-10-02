@@ -306,7 +306,7 @@ CC1_96="$CC296/lib/gcc-lib/ee/2.96-ee-001003-1/cc1"
 # The engine arm must never fall back to 2.9 silently: a missing 2.96 cc1 is a
 # hard error, not a quieter run.
 if [ "$BUILD96" = 1 ] && [ ! -f "$CC1_96" ]; then
-  echo "objdiff_build: engine arm needs $CC1_96 — run scripts/fetch_2.96.sh" >&2; exit 2
+  echo "objdiff_build: engine arm needs $CC1_96 — run scripts/fetch_ee_toolchain.sh" >&2; exit 2
 fi
 # engine96 flags: the diff96.sh flag string (-fno-strict-aliasing is required,
 # -G8 always), and __GNUC_MINOR__=96 as diff96.sh preprocesses.

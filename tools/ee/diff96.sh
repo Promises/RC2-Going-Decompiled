@@ -20,7 +20,7 @@
 # walled -> 100% through this pipeline. The post-pass is engine-2.96-only and
 # cannot affect the 2.9 SDK matches.
 #
-# Setup: scripts/fetch_2.96.sh (-> tools/ee/cc-296/, gitignored). Requires the
+# Setup: scripts/fetch_ee_toolchain.sh (-> tools/ee/cc-296/, gitignored). Requires the
 # colima ee-x86 VM + ee-build image. The 2.96 cc1 is a native i386 ELF, run via
 # its bundled glibc-2.3.6 loader so it doesn't clobber the container libc.
 set -euo pipefail
@@ -36,7 +36,13 @@ W="${GRIND_SCRATCH:-tools/ee/.diff96}"; mkdir -p "$W"
 OBJDIFF=tools/objdiff-cli-macos-arm64
 CC="${CC296:-tools/ee/cc-296}"   # CC296 env = isolated (e.g. split-address patched) cc1 dir for gate validation
 CC1="$CC/lib/gcc-lib/ee/2.96-ee-001003-1/cc1"
-[ -f "$CC1" ] || { echo "2.96 toolchain missing — run scripts/fetch_2.96.sh" >&2; exit 2; }
+[ -f "$CC1" ] || { echo "2.96 toolchain missing — run scripts/fetch_ee_toolchain.sh" >&2; exit 2; }
+# This script runs the C front end (cc1) only. A .cpp unit would be preprocessed
+# as C and compiled by cc1 — a silent wrong front end — so it is refused. The
+# 2.96 cc1plus is NOT codegen-identical to cc1 on the MATCH_ members (task
+# #1302's FACT: dropped statements on C++ diagnostics, and a struct-copy
+# lowering difference in CheckCameraUnderwater), so it is not substituted here.
+case "$CFILE" in *.cpp) echo "diff96.sh: $CFILE is a .cpp unit; this loop compiles C with the 2.96 cc1 only (task #1302) — refusing" >&2; exit 2;; esac
 INC="-Igoing-decompiled/include -Igoing-decompiled/include/rtl/ee -Igoing-decompiled/include/rtl/common"
 ASF="-march=r5900 -mabi=eabi -no-pad-sections -EL -G0 -Igoing-decompiled/build/$REGION/include"
 # MATCH_<func> promotes exactly the target function to real engine C (siblings stay

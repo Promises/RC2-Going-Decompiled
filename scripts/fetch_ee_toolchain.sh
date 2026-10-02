@@ -33,6 +33,12 @@ CC1PLUS_SHA256=65b5134f24377544bb2e5d1d2dd3436807cc50ce2ce77d759e4fca1add18f9a4
 PRODG301="https://raw.githubusercontent.com/AngheloAlf/SN-Systems-ProDG_for_PS2_3.01/d74f6fe08d24e7cf0df48cb570d85ad04db167c5/usr/local/sce/ee/gcc/lib/gcc-lib/ee/2.95.3"
 S136_CC1_SHA256=0393bcd31f91a6b9f0255db97f1cc99eba78ee8fc003e9a04dfabed1ae1d522e
 S136_CC1PLUS_SHA256=78a0df900a396098986cbc97a8d3eab6dbbc587a343d4dbd22929a4112c003fb
+SDK24="https://raw.githubusercontent.com/AngheloAlf/sce_ps2_sdk_24/5c8bdf31f6bdd82ba4456413594198b5bd469f43/local/sce/ee/gcc/lib/gcc-lib/ee/2.96-ee-001003-1"
+E96_CC1_SHA256=59ec92b3f9f3513e0633331af304733e3094de30884e662a8cb584a51c1c42b5
+E96_CC1PLUS_SHA256=560e6f276134d109e2b4c05ee9c72d4f9215ffc86d784eb4491a3dadf316bf9a
+GLIBC236="https://raw.githubusercontent.com/parappadev/parappa2/a5ac297135ad3a1969da7faa520d9f7bb6944d82/tools/toolchain/ee-gcc29/lib"
+LD236_SHA256=d5a16aee4a04db7fa27a5c071a0bef62002ee679bf5ecce51e383003cf840fd8
+LIBC236_SHA256=7b091aee7173e3a7cbddc6630fa6b0d0106944b5618b0b27c2c058ea9c3d92eb
 
 # verify FILE EXPECTED LABEL — exit 1 unless FILE's sha256 is EXPECTED.
 verify() {
@@ -109,5 +115,45 @@ if [ ! -f "$S136DIR/cc1plus.exe" ]; then
 fi
 verify "$S136DIR/cc1plus.exe" "$S136_CC1PLUS_SHA256" "installed 2.95.3 cc1plus.exe"
 
-echo "Installed: 2.9-ee-991111 cc1/cpp/cc1plus (matching) + SN 2.95.3 v1.36 cc1/cc1plus (s136os arm) + 2.95.2 base under $DEST/cc"
-ls "$CC1DIR" "$S136DIR"
+# ee-gcc 2.96-ee-001003-1 (the engine96 arm: tools/ee/ee_cc1.sh engine96,
+# objdiff_build.sh, diff96.sh) into tools/ee/cc-296/. These are native i386 ELF
+# binaries, run through the bundled glibc-2.3.6 loader so the container's own
+# libc is untouched. The old scripts/fetch_2.96.sh that used to do this exists
+# only at non-ancestor commit 8d9ce18f (FACT #6235); this block replaces it.
+# The cc1 is the one every engine96 result was measured with (NOTE #6229), and
+# the SDK 2.4 tree's 2.96 cc1 must be that same blob: that identity is what
+# makes the tree's cc1plus its sibling C++ front end (task #1302).
+# ⚠️ Take the ELF `cc1`/`cc1plus`, NEVER the `.exe` files in the same
+# directory: those self-identify as `2.95.3 SN BUILD v1.07` (NOTE #6287 §3).
+# ⚠️ The 2.96 cc1plus is NOT codegen-identical to this cc1 over the MATCH_
+# members (task #1302's FACT); provisioning it proves nothing about using it.
+E96DIR="$DEST/cc-296/lib/gcc-lib/ee/2.96-ee-001003-1"
+mkdir -p "$E96DIR"
+if [ ! -f "$E96DIR/cc1" ]; then
+  curl -fsSL "$SDK24/cc1" -o "$TMP/e96cc1"
+  verify "$TMP/e96cc1" "$E96_CC1_SHA256" "SDK 2.4 2.96-ee-001003-1 cc1"
+  mv "$TMP/e96cc1" "$E96DIR/cc1"
+fi
+verify "$E96DIR/cc1" "$E96_CC1_SHA256" "installed 2.96 cc1"
+if [ ! -f "$E96DIR/cc1plus" ]; then
+  echo "Fetching ee-gcc 2.96-ee-001003-1 C++ front end: $SDK24/cc1plus"
+  curl -fsSL "$SDK24/cc1" -o "$TMP/e96cc1.idcheck"
+  verify "$TMP/e96cc1.idcheck" "$E96_CC1_SHA256" "SDK 2.4 2.96 cc1 == our engine96 cc1 (identity check)"
+  curl -fsSL "$SDK24/cc1plus" -o "$TMP/e96cc1plus"
+  verify "$TMP/e96cc1plus" "$E96_CC1PLUS_SHA256" "SDK 2.4 2.96-ee-001003-1 cc1plus"
+  mv "$TMP/e96cc1plus" "$E96DIR/cc1plus"
+fi
+verify "$E96DIR/cc1plus" "$E96_CC1PLUS_SHA256" "installed 2.96 cc1plus"
+for f in ld-2.3.6.so libc.so.6; do
+  case "$f" in ld-2.3.6.so) want="$LD236_SHA256";; libc.so.6) want="$LIBC236_SHA256";; esac
+  if [ ! -f "$DEST/cc-296/$f" ]; then
+    curl -fsSL "$GLIBC236/$f" -o "$TMP/$f"
+    verify "$TMP/$f" "$want" "glibc-2.3.6 i386 $f"
+    mv "$TMP/$f" "$DEST/cc-296/$f"
+  fi
+  verify "$DEST/cc-296/$f" "$want" "installed $f"
+done
+chmod +x "$E96DIR/cc1" "$E96DIR/cc1plus" "$DEST/cc-296/ld-2.3.6.so"
+
+echo "Installed: 2.9-ee-991111 cc1/cpp/cc1plus (matching) + SN 2.95.3 v1.36 cc1/cc1plus (s136os arm) + 2.95.2 base under $DEST/cc; 2.96-ee-001003-1 cc1/cc1plus + glibc-2.3.6 loader under $DEST/cc-296"
+ls "$CC1DIR" "$S136DIR" "$E96DIR"
