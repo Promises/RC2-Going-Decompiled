@@ -1599,15 +1599,25 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
 /* func_003375D0: install the D_1ADA18 vtable at p+0x30; if the pool at p+0x2C is
  * live and the node slot p+0x38 is still empty, free the node *(p+0x34) back to
  * it (func_00337D78); then run the shared ctor func_00336F00(p, flag). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003375D0);
+/* GUARD (task #1309): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; census FACT #8830; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003375D0)
+S136OS_SLOT(func_003375D0);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_003375D0, unit objdiff): 91.67%,
    2/25 insns differ. Residual: SCHED (prologue/epilogue or delay-slot order only; sched1 ON/OFF and sched2 OFF RUN, none reproduce it).
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame +
-   branch-likely wall. */
+/* Byte-exact on the s136os arm (task #1309; FACT #8830 measured it on the
+   blanket object only, because the solo compile met func_00337D78 undeclared:
+   its prototype, like D_1ADA18's declaration, lived only inside another
+   function's guarded arm, so both are repeated here). cc1 2.9 cannot
+   reproduce the 3-callee-save packed frame. */
+extern void func_00337D78(void *pool, void **node);
+extern void *D_1ADA18;
 void func_003375D0(void *p, s32 flag) {
     *(void **)((char *)p + 0x30) = &D_1ADA18;
     if (*(s32 *)((char *)p + 0x2C) != 0 && *(s32 *)((char *)p + 0x38) == 0) {
@@ -5331,16 +5341,22 @@ s32 func_0033EF30(void *w, s32 flags) {
 
 /* func_0033EFC8: init the embedded dialog-box (at p+0x8), return the object
  * (byte-identical body to func_0033CD80). */
-#if defined(MATCH_func_0033EFC8) || defined(TARGET_NATIVE)
+#if defined(S136OS_func_0033EFC8) || defined(TARGET_NATIVE)
 /* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_0033EFC8; task #466):
  * unit objdiff 100.00% and verify_match_unit.sh 12/12 words + 1 relocs against the ROM.
- * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
+ * GUARD (task #1309): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; census FACT #8830; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Its MATCH_func_0033EFC8 engine96 guard is retired with this promotion: the function is
+ * image-resident, no longer arm-scored (RULING #8118). */
 void *func_0033EFC8(void *p) {
     GuiDialogBoxInitElements((char *)p + 0x8);
     return p;
 }
 #else
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EFC8);
+S136OS_SLOT(func_0033EFC8);
 #endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033EFF8);
@@ -5420,17 +5436,23 @@ s32 func_0033F128(void *w, s32 flags) {
 
 /* func_0033F1C0: init the embedded dialog-box (p+0x8) and the GuiWidget at
  * p+0x2E0 (func_00348BD0), return the object. */
-#if defined(MATCH_func_0033F1C0) || defined(TARGET_NATIVE)
+#if defined(S136OS_func_0033F1C0) || defined(TARGET_NATIVE)
 /* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_0033F1C0; task #466):
  * unit objdiff 100.00% and verify_match_unit.sh 14/14 words + 2 relocs against the ROM.
- * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
+ * GUARD (task #1309): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; census FACT #8830; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Its MATCH_func_0033F1C0 engine96 guard is retired with this promotion: the function is
+ * image-resident, no longer arm-scored (RULING #8118). */
 void *func_0033F1C0(void *p) {
     GuiDialogBoxInitElements((char *)p + 0x8);
     func_00348BD0((char *)p + 0x2E0);
     return p;
 }
 #else
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F1C0);
+S136OS_SLOT(func_0033F1C0);
 #endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F1F8);
@@ -5586,17 +5608,23 @@ void func_0033F478(void *p) {
 
 /* func_0033F4D0: init the embedded dialog-box (p+0x8) and a type-C element
  * (p+0x2E0), return the object. */
-#if defined(MATCH_func_0033F4D0) || defined(TARGET_NATIVE)
+#if defined(S136OS_func_0033F4D0) || defined(TARGET_NATIVE)
 /* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_0033F4D0; task #466):
  * unit objdiff 100.00% and verify_match_unit.sh 14/14 words + 2 relocs against the ROM.
- * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
+ * GUARD (task #1309): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; census FACT #8830; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Its MATCH_func_0033F4D0 engine96 guard is retired with this promotion: the function is
+ * image-resident, no longer arm-scored (RULING #8118). */
 void *func_0033F4D0(void *p) {
     GuiDialogBoxInitElements((char *)p + 0x8);
     GuiElementInitTypeC((char *)p + 0x2E0);
     return p;
 }
 #else
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F4D0);
+S136OS_SLOT(func_0033F4D0);
 #endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F508);
@@ -5675,10 +5703,16 @@ void func_0033F670(void *p) {
 /* func_0033F690: init the screen's thirteen embedded sub-elements (the dialog
  * box at +0x8, the D_1ADA18 widget at +0x2DC, three type-C, one type-B, then
  * seven more type-C), return the object. */
-#if defined(MATCH_func_0033F690) || defined(TARGET_NATIVE)
+#if defined(S136OS_func_0033F690) || defined(TARGET_NATIVE)
 /* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_0033F690; task #466):
  * unit objdiff 100.00% and verify_match_unit.sh 33/33 words + 12 relocs against the ROM.
- * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
+ * GUARD (task #1309): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; census FACT #8830; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Its MATCH_func_0033F690 engine96 guard is retired with this promotion: the function is
+ * image-resident, no longer arm-scored (RULING #8118). */
 void *func_0033F690(void *p) {
     GuiDialogBoxInitElements((char *)p + 0x8);
     func_003374D8((char *)p + 0x2DC);
@@ -5695,7 +5729,7 @@ void *func_0033F690(void *p) {
     return p;
 }
 #else
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F690);
+S136OS_SLOT(func_0033F690);
 #endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F718);
@@ -5884,8 +5918,15 @@ void func_0033FDD8(void *w) {
 /* Draw a composite dialog widget: run its background/frame sub-draws, then draw
  * its text sub-elements (offsets 0x318/0x370/0x3C8/0x628/0x5D0), a sprite
  * (0x420) and two helper sub-draws (0x2DC frame, and the tail func_0033FDD8). */
-#if !defined(TARGET_NATIVE) && !defined(MATCH_func_0033FEF8)
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033FEF8);
+/* GUARD (task #1309): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; census FACT #8830; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Its MATCH_func_0033FEF8 engine96 guard is retired with this promotion: the function is
+ * image-resident, no longer arm-scored (RULING #8118). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033FEF8)
+S136OS_SLOT(func_0033FEF8);
 #else
 void func_0033FEF8(void *e) {
     func_0033BF90((char *)e + 0x8);
@@ -6703,10 +6744,16 @@ void func_00341A80(void *w, s32 flags) {
 /* func_00341C28: init the screen's six embedded sub-elements at their fixed
  * offsets (two type-B, one type-C, one type-B, a list-row, and the D_1ADA18
  * widget), return the object. */
-#if defined(MATCH_func_00341C28) || defined(TARGET_NATIVE)
+#if defined(S136OS_func_00341C28) || defined(TARGET_NATIVE)
 /* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_00341C28; task #466):
  * unit objdiff 100.00% and verify_match_unit.sh 20/20 words + 6 relocs against the ROM.
- * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
+ * GUARD (task #1309): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; census FACT #8830; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Its MATCH_func_00341C28 engine96 guard is retired with this promotion: the function is
+ * image-resident, no longer arm-scored (RULING #8118). */
 void *func_00341C28(void *p) {
     GuiElementInitTypeB(p);
     GuiElementInitTypeB((char *)p + 0x4C);
@@ -6717,7 +6764,7 @@ void *func_00341C28(void *p) {
     return p;
 }
 #else
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341C28);
+S136OS_SLOT(func_00341C28);
 #endif
 
 /* GuiScrollListScreenInit: construct a scroll-list screen (a header button, two
@@ -7295,10 +7342,16 @@ void func_00342B30(void *w) {
 
 /* func_00342BA0: init the GuiWidget at p+0x10 and two type-B elements
  * (p+0xEC, p+0x138), return the object. */
-#if defined(MATCH_func_00342BA0) || defined(TARGET_NATIVE)
+#if defined(S136OS_func_00342BA0) || defined(TARGET_NATIVE)
 /* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_00342BA0; task #466):
  * unit objdiff 100.00% and verify_match_unit.sh 15/15 words + 3 relocs against the ROM.
- * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
+ * GUARD (task #1309): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; census FACT #8830; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Its MATCH_func_00342BA0 engine96 guard is retired with this promotion: the function is
+ * image-resident, no longer arm-scored (RULING #8118). */
 void *func_00342BA0(void *p) {
     func_00348BD0((char *)p + 0x10);
     GuiElementInitTypeB((char *)p + 0xEC);
@@ -7306,7 +7359,7 @@ void *func_00342BA0(void *p) {
     return p;
 }
 #else
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342BA0);
+S136OS_SLOT(func_00342BA0);
 #endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342BE0);
@@ -7496,10 +7549,16 @@ void func_00342E48(void *w) {
 
 /* func_00342FD8: init the screen's six embedded sub-elements (four type-B, the
  * D_1ADA18 widget at +0x130, and the GuiWidget at +0x188), return the object. */
-#if defined(MATCH_func_00342FD8) || defined(TARGET_NATIVE)
+#if defined(S136OS_func_00342FD8) || defined(TARGET_NATIVE)
 /* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_00342FD8; task #466):
  * unit objdiff 100.00% and verify_match_unit.sh 20/20 words + 6 relocs against the ROM.
- * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
+ * GUARD (task #1309): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; census FACT #8830; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Its MATCH_func_00342FD8 engine96 guard is retired with this promotion: the function is
+ * image-resident, no longer arm-scored (RULING #8118). */
 void *func_00342FD8(void *p) {
     GuiElementInitTypeB(p);
     GuiElementInitTypeB((char *)p + 0x4C);
@@ -7510,7 +7569,7 @@ void *func_00342FD8(void *p) {
     return p;
 }
 #else
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342FD8);
+S136OS_SLOT(func_00342FD8);
 #endif
 
 /* GuiIconScreenInit2: construct an icon screen (two button-glyph elements, a
@@ -8011,10 +8070,16 @@ void func_00343F78(void *w) {
 /* func_00344110: init the screen's eight embedded sub-elements at their fixed
  * offsets (three type-B, the D_1ADA18 widget, three type-C, and the identity
  * widget func_003436C0), return the object. */
-#if defined(MATCH_func_00344110) || defined(TARGET_NATIVE)
+#if defined(S136OS_func_00344110) || defined(TARGET_NATIVE)
 /* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_00344110; task #466):
  * unit objdiff 100.00% and verify_match_unit.sh 24/24 words + 8 relocs against the ROM.
- * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
+ * GUARD (task #1309): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; census FACT #8830; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Its MATCH_func_00344110 engine96 guard is retired with this promotion: the function is
+ * image-resident, no longer arm-scored (RULING #8118). */
 extern void *func_003436C0(void *p);
 void *func_00344110(void *p) {
     GuiElementInitTypeB(p);
@@ -8028,7 +8093,7 @@ void *func_00344110(void *p) {
     return p;
 }
 #else
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344110);
+S136OS_SLOT(func_00344110);
 #endif
 
 /* GuiTitledSpriteScreenInit: construct a titled-sprite screen (three button
@@ -8300,10 +8365,16 @@ void func_00344808(void *w) {
  * their fixed offsets (six type-B at p+0x0/+0x4C/+0x98/+0xE4/+0x130/+0x17C, two
  * type-C at +0x1C8/+0x220, the D_1ADA18 widget at +0x278, then five more type-C
  * at +0x2B8/+0x310/+0x368/+0x3C0/+0x418), return the object. */
-#if defined(MATCH_func_003448C0) || defined(TARGET_NATIVE)
+#if defined(S136OS_func_003448C0) || defined(TARGET_NATIVE)
 /* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_003448C0; task #466):
  * unit objdiff 100.00% and verify_match_unit.sh 36/36 words + 14 relocs against the ROM.
- * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
+ * GUARD (task #1309): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; census FACT #8830; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Its MATCH_func_003448C0 engine96 guard is retired with this promotion: the function is
+ * image-resident, no longer arm-scored (RULING #8118). */
 void *func_003448C0(void *p) {
     GuiElementInitTypeB(p);
     GuiElementInitTypeB((char *)p + 0x4C);
@@ -8322,7 +8393,7 @@ void *func_003448C0(void *p) {
     return p;
 }
 #else
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003448C0);
+S136OS_SLOT(func_003448C0);
 #endif
 
 /* GuiInfoPanelScreenInit: construct the info panel — six button-glyph elements
@@ -8990,10 +9061,16 @@ void func_003462C0(void *w) {
 /* Construct a composite widget: init six TypeB sub-elements (base, +0x4C, +0x98,
  * +0xE4, +0x130, +0x17C), two TypeC (+0x1C8, +0x220), a sub-list (+0x278), then
  * five more TypeC (+0x2B8, +0x310, +0x368, +0x3C0, +0x418); returns the widget. */
-#if defined(MATCH_func_00346368) || defined(TARGET_NATIVE)
+#if defined(S136OS_func_00346368) || defined(TARGET_NATIVE)
 /* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_00346368; task #466):
  * unit objdiff 100.00% and verify_match_unit.sh 36/36 words + 14 relocs against the ROM.
- * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
+ * GUARD (task #1309): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; census FACT #8830; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Its MATCH_func_00346368 engine96 guard is retired with this promotion: the function is
+ * image-resident, no longer arm-scored (RULING #8118). */
 void *func_00346368(void *w) {
     GuiElementInitTypeB(w);
     GuiElementInitTypeB((char *)w + 0x4C);
@@ -9012,7 +9089,7 @@ void *func_00346368(void *w) {
     return w;
 }
 #else
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00346368);
+S136OS_SLOT(func_00346368);
 #endif
 
 /* GuiMapScreenInit: construct the map screen — six button-glyph elements
@@ -9647,10 +9724,16 @@ void func_00347550(void *w) {
 /* Construct a list-style composite widget: six TypeB sub-elements (base..+0x17C),
  * a list-row (+0x1C8), three TypeC (+0x210, +0x268, +0x2C0), a sub-list (+0x318),
  * then three more TypeB (+0x354, +0x3A0, +0x3EC); returns the widget. */
-#if defined(MATCH_func_003475F0) || defined(TARGET_NATIVE)
+#if defined(S136OS_func_003475F0) || defined(TARGET_NATIVE)
 /* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_003475F0; task #466):
  * unit objdiff 100.00% and verify_match_unit.sh 36/36 words + 14 relocs against the ROM.
- * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
+ * GUARD (task #1309): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; census FACT #8830; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Its MATCH_func_003475F0 engine96 guard is retired with this promotion: the function is
+ * image-resident, no longer arm-scored (RULING #8118). */
 void *func_003475F0(void *w) {
     GuiElementInitTypeB(w);
     GuiElementInitTypeB((char *)w + 0x4C);
@@ -9669,7 +9752,7 @@ void *func_003475F0(void *w) {
     return w;
 }
 #else
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003475F0);
+S136OS_SLOT(func_003475F0);
 #endif
 
 /* GuiWeaponGridScreenInit: construct the weapon-grid screen — eight header/detail

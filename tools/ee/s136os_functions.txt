@@ -122,3 +122,16 @@ usa text/235FE8 func_0033E488
 usa text/235FE8 GuiQuitDialogInitElements
 usa text/235FE8 func_0033EB20
 usa text/235FE8 func_0033EDD0
+usa text/235FE8 func_0033EFC8
+usa text/235FE8 func_0033F1C0
+usa text/235FE8 func_0033F4D0
+usa text/235FE8 func_0033F690
+usa text/235FE8 func_0033FEF8
+usa text/235FE8 func_00341C28
+usa text/235FE8 func_00342BA0
+usa text/235FE8 func_00342FD8
+usa text/235FE8 func_00344110
+usa text/235FE8 func_003448C0
+usa text/235FE8 func_00346368
+usa text/235FE8 func_003475F0
+usa text/235FE8 func_003375D0
