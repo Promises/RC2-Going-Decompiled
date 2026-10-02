@@ -3266,12 +3266,18 @@ void func_002ABDA8(s32 *a, s32 *b, s32 *c, s32 bits) {
 /* func_002ABE08: conditionally permute the low three colour channels of a packed
  * 0xAABBGGRR word. When `bits` is 0 the word is returned unchanged; otherwise the
  * R/G/B bytes are unpacked and swapped per func_002ABDA8's bit mask (bit0 R<->G,
- * bit1 G<->B, bit2 R<->B), with the alpha (top) byte preserved. Walled: $16/$31
- * saves (save-layout wall). */
+ * bit1 G<->B, bit2 R<->B), with the alpha (top) byte preserved.
+ * MATCHED on the s136os arm. The G byte is shifted as SIGNED (`(s32)` cast):
+ * the ROM extracts it with `sra`, the other bytes with `srl`.
+ * GUARD (task #1313): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 52.82%
    -> UNKNOWN-@3: ROM `(none)` vs `daddu v0,a0,zero` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ABE08);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002ABE08)
+S136OS_SLOT(func_002ABE08);
 #else
 u32 func_002ABE08(u32 word, s32 bits) {
     s32 r;
@@ -3283,7 +3289,7 @@ u32 func_002ABE08(u32 word, s32 bits) {
         return word;
     }
     r = word & 0xFF;
-    g = (word & 0xFF00) >> 8;
+    g = (s32)(word & 0xFF00) >> 8;
     b = (word >> 16) & 0xFF;
     a = word >> 24;
     func_002ABDA8(&r, &g, &b, bits);
@@ -3473,11 +3479,19 @@ s32 func_002AA808(Moby *moby, s32 maxPoints, Vec4 *outPoints, s32 primMask, f32 
  * (func_002AFE68, magnitude 0.03), adds it to `basePos`, nudges the result up in
  * Z by 0.015, and spawns a type-04 particle from that scatter point with two
  * randomised lifetime parameters (RandRangeInclusive 20..35 and 40..60).
- */
+ * MATCHED on the s136os arm. The early-out tests `count == 0` (the ROM's
+ * `beqz`); a negative count still runs no iterations, because the loop's own
+ * entry test is the `blez` that follows it.
+ *
+ * GUARD (task #1313): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 83.52%
    -> UNKNOWN-@1: ROM `daddu a3,a2,zero` vs `(none)` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC0B8);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002AC0B8)
+S136OS_SLOT(func_002AC0B8);
 #else
 void func_002AC0B8(Moby *owner, Vec4 *basePos, s32 primMask) {
     Vec4 scatterPoints[20];    /* func_002AA808 fills up to 20 Vec4 spawn points */
@@ -3486,7 +3500,7 @@ void func_002AC0B8(Moby *owner, Vec4 *basePos, s32 primMask) {
     s32 i;
 
     count = func_002AA808(owner, 20, scatterPoints, primMask, 14.0f);
-    if (count <= 0) {
+    if (count == 0) {
         return;
     }
     for (i = 0; i < count; i++) {

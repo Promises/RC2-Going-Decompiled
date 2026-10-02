@@ -2021,24 +2021,33 @@ s32 InitMenuBgImageBuffers(void *obj) {
 }
 #endif
 
+extern void PumpDialogVoiceSystem(s32 blocking);
+
 /* Reset a two-slot streaming text widget: toggle both map slots referenced by
  * obj->0x48/0x4C, invalidate the cached state (+0x44/0x50/0x54 = -1) and kick
- * the dialog-voice pump. Returns 0. Wall: 2-GPR callee-save. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DB028);
+ * the dialog-voice pump. Returns 0.
+ * MATCHED on the s136os arm (SN 1.36 cc1plus, FACT #8852).
+ * GUARD (task #1313): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002DB028)
+S136OS_SLOT(func_002DB028);
 #else
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 99.14% / engine96 70.14%; better arm sdk29; 10 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
  * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DB028(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
     *(s32 *)(o + 0x48) = FreeMenuWorkBuffer(*(s32 *)(o + 0x48));
     *(s32 *)(o + 0x4C) = FreeMenuWorkBuffer(*(s32 *)(o + 0x4C));
-    *(s32 *)(o + 0x44) = -1;
+    /* SN 1.36's scheduler emits the LAST of these three independent stores
+     * first, so this order yields the ROM's +0x44, +0x50, +0x54 (task #1313). */
     *(s32 *)(o + 0x50) = -1;
     *(s32 *)(o + 0x54) = -1;
+    *(s32 *)(o + 0x44) = -1;
     PumpDialogVoiceSystem(1);
     return 0;
 }

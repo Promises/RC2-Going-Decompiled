@@ -1839,22 +1839,29 @@ s32 func_00352AB0(void) {
     return 1;
 }
 
-#ifndef TARGET_NATIVE
 /* func_00352AE0: snapshot the DMA queue cursor pair into the stream object.
- * Blocked: 8-byte-packed saves (s0@0x20, ra@0x28). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352AE0);
+ * MATCHED on the s136os arm: the 8-byte-packed saves (s0@0x20, ra@0x28) are
+ * SN 2.95.3 v1.36 -fopt-stack's (FACT #8810); the 0x30 frame needs the
+ * three-element local below.
+ * GUARD (task #1313): on EE this C is the image's body, compiled alone by the
+ * s136os arm (row in tools/ee/s136os_functions.txt) and spliced over
+ * S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm fallback: a build
+ * that skips the splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00352AE0)
+S136OS_SLOT(func_00352AE0);
 #else
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 99.35% / engine96 54.25%. Residual: PACKED-SAVE only on sdk29 (2 callee saves at 16-byte stride, every non-save word equal); SCHED on engine96 (8-byte slots right, instruction set identical, order differs under -fno-schedule-insns; -fno-gcse+scheduling probed on the engine arm, no better). */
-/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
-   saves (s0@0x20, ra@0x28). Revisit with the gameplay-TU compiler.
-
-   Stream-event callback (id 5): read the two 64-bit cursor words of the IPU
+/* Stream-event callback (id 5): read the two 64-bit cursor words of the IPU
    DMA-add queue (at arena+0xD9090) via func_003522C0 into a stack pair, then
    stash them into the stream object at +0x8 / +0x10 (the snapshot the retry
    path replays from). The event id arrives in arg0 (unused); the stream object
    in arg1. Always reports handled (1). */
 s32 func_00352AE0(s32 unused, u8 *obj) {
-    u64 cursor[2];
+    /* func_003522C0 writes cursor[0] and cursor[1] only. The third element
+     * is never touched: it is what gives the ROM's 0x30 frame (locals at
+     * sp+0..0x1F, saves at 0x20/0x28) under SN 1.36; with two elements the
+     * frame is 0x20 (task #1313). */
+    u64 cursor[3];
 
     func_003522C0(g_pFmvArenaBase + FMV_DMAQ_OFS, cursor);
     *(u64 *)(obj + 0x8) = cursor[0];

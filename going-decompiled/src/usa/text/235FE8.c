@@ -2042,18 +2042,21 @@ extern const char D_1ADAC0[];
  *   cursor/count/freeList (+0x0C/+0x10/+0x14) zeroed.
  * An elemSize < 4 trips AssertFail. The asm `sltiu $2,a1,4; beqz $2,stores`
  * SKIPS the assert when (elemSize < 4) is FALSE (>= 4) and FALLS THROUGH to it
- * when (elemSize < 4) is TRUE, so the assert fires for elemSize in [0,4). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiPoolInit);
+ * when (elemSize < 4) is TRUE, so the assert fires for elemSize in [0,4).
+ * MATCHED on the s136os arm: the 4-GPR 8-byte-stride save layout is SN 2.95.3
+ * v1.36 -fopt-stack's (FACT #8810).
+ * GUARD (task #1313): on EE this C is the image's body, compiled alone by the
+ * s136os arm (row in tools/ee/s136os_functions.txt) and spliced over
+ * S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm fallback: a build
+ * that skips the splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiPoolInit)
+S136OS_SLOT(GuiPoolInit);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_GuiPoolInit, unit objdiff): 59.42%,
    18/37 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd s0, 0x0(sp)' vs '').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
-/* WALL: functional-equivalent #else; matching arm stays INCLUDE_ASM (4-GPR-save
-   8-byte vs 16-byte callee-save slot stride - same later-cc1 frame wall as the
-   other GUI methods in this TU).
-   cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
+/* cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
    (cmp_GuiPoolInit, run_cmp_235FE8_iso.sh): field-offset oracle + an AssertFail
    call-count probe confirm every field lands at its offset AND the bound fires
    on exactly the elemSize<4 side. (The earlier `>= 4` form was direction-
@@ -2065,9 +2068,11 @@ void GuiPoolInit(GuiPool *pool, s32 elemSize, void *storage, u32 byteLimit) {
     pool->base = (char *)storage;
     pool->capacity = byteLimit;
     pool->elemSize = elemSize;
-    pool->count = 0;
+    /* SN 1.36's scheduler emits the LAST of these three independent stores
+     * first, so this order yields the ROM's +0x10, +0x14, +0x0C (task #1313). */
     pool->freeList = 0;
     pool->cursor = 0;
+    pool->count = 0;
 }
 #endif
 

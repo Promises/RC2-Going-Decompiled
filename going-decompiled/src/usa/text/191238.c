@@ -1723,15 +1723,14 @@ __asm__(".extern g_pHudAssetHeader, 16");
 extern u8 *g_pLoadedSegment;
 extern u8 *g_pHudAssetHeader;
 extern void DecompressWad(void *src, void *dest);
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 97.80% PACKED-SAVE /
- * engine96 64.48% CONST-LI; best arm sdk29, first differing insn there: 'addiu sp, sp, -0x10'
- * vs 'addiu sp, sp, -0x20' */
-/* TODO(match): functional equivalent - not byte-exact; save-layout wall (saves
- * s0+ra -> pinned cc1 reserves a 0x20 frame vs the original's 0x10). Body is
- * byte-identical apart from the frame size + ra slot offset. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", DecompressHudBankWad);
+/* MATCHED on the s136os arm: the 0x10 frame with s0/ra packed at 0/8, which
+ * cc1 2.9 cannot emit, is SN 2.95.3 v1.36 -fopt-stack's (FACT #8810).
+ * GUARD (task #1313): on EE this C is the image's body, compiled alone by the
+ * s136os arm (row in tools/ee/s136os_functions.txt) and spliced over
+ * S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm fallback: a build
+ * that skips the splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_DecompressHudBankWad)
+S136OS_SLOT(DecompressHudBankWad);
 #else
 /*
  * DecompressHudBankWad (DecompressHudBankWad) — decompress one HUD-asset-slot WAD chunk
@@ -1751,13 +1750,29 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", DecompressHudBa
  * earlier "byteLen" reading was wrong and made the #else drop $5 -> a wild
  * decompress write that poisoned the live 0x754000 segment.)
  */
+/* One 8-byte entry of the loaded segment's chunk table at +0x20. */
+typedef struct {
+    s32 offset;     /* segment-relative offset of the compressed chunk */
+    s32 field4;
+} SegmentChunkEntry;
+
+/* The HUD asset header seen as its per-slot reloc-status words (+0x74). */
+typedef struct {
+    u8 pad[0x74];
+    s32 relocStatus[1];     /* indexed by slot */
+} HudAssetRelocView;
+
 void DecompressHudBankWad(s32 slot, u8 *dest) {
     dest = (u8 *)(((s32)dest + 0xF) & 0xFFFFFFF0);
     if (dest != 0) {
-        u8 *seg = g_pLoadedSegment;
-        DecompressWad(*(s32 *)(seg + slot * 8 + 0x20) + seg, dest);
+        /* The integer base and the table view are what put each `addu`'s
+         * operands in the ROM's order under SN 1.36 (task #1313); the
+         * `u8 *seg + offset` spelling reverses both. */
+        s32 seg = (s32)g_pLoadedSegment;
+        SegmentChunkEntry *table = (SegmentChunkEntry *)(seg + 0x20);
+        DecompressWad((void *)(table[slot].offset + seg), dest);
     }
-    *(s32 *)(g_pHudAssetHeader + slot * 4 + 0x74) = 0;
+    ((HudAssetRelocView *)g_pHudAssetHeader)->relocStatus[slot] = 0;
 }
 #endif
 

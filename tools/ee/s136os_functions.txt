@@ -135,3 +135,9 @@ usa text/235FE8 func_003448C0
 usa text/235FE8 func_00346368
 usa text/235FE8 func_003475F0
 usa text/235FE8 func_003375D0
+usa text/1A8180 func_002ABE08
+usa text/1A8180 func_002AC0B8
+usa text/1D54C0 func_002DB028
+usa text/191238 DecompressHudBankWad
+usa text/250080 func_00352AE0
+usa text/235FE8 GuiPoolInit
