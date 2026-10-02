@@ -752,7 +752,8 @@ check_native() {
   regress=$(LC_ALL=C comm -23 "$t.fail" "$b.fail"); tolerated=$(LC_ALL=C comm -12 "$t.fail" "$b.fail"); fixed=$(LC_ALL=C comm -13 "$t.fail" "$b.fail")
   if [ -n "$regress" ]; then
     fail "NATIVE: $(printf '%s\n' "$regress" | wc -l | tr -d ' ') unit(s) fail to compile at the tip and passed at (or are absent from) the base: $(printf '%s ' $regress)"
-    # -A4: check.sh prints an `errors: N` count line before its 3-line sample (task #1311)
+    # -A4: check.sh prints an `errors: N` count line before its 3-line sample (task #1311);
+    # --selftest arm (18x) asserts the listing (task #1327)
     local u; for u in $regress; do say "       $u:"; /usr/bin/grep -A4 "^FAIL: going-decompiled/src/$u\$" "$t.log" | sed -n '2,5s/^ */         /p'; done
   else
     ok "NATIVE: no unit fails at the tip that passed at the base ($tp of $((tp+tf)) compile; compile-only, not a link)${vacuous:+ — VACUOUS: base == tip, this measured nothing}${samein:+ — NO C CHANGE: base and tip NATIVE inputs identical, this row proves nothing}"
@@ -1279,6 +1280,7 @@ selftest() {
   selftest_verdict_annotation "$T" || bad=1
   selftest_dlisites "$T" || bad=1
   selftest_asmunit "$T" || bad=1
+  selftest_regression_gate "$T" || bad=1
 
   say "-- (14) the real gate on this tree (--no-build, the build above) must PASS"
   STRICT=0
@@ -1461,7 +1463,7 @@ selftest_dirty_gate() {
 # basename-keyed row reads {015180} on both arms and passes.
 selftest_native() {
   local T="$1" b=0; local N="$T/native"; rm -rf "$N"; mkdir -p "$N"
-  say "-- (18) NATIVE (#923): scratch tip/base trees — a seeded C error, A2's removed 198B58 guard, a usa-vs-eu basename collision, a new failing unit, and a unit leaving the population (deleted, override without reason, token removed, renamed WITH an edit, moved byte-identical to ANOTHER region) must each FAIL naming the unit; a failure on both arms, a departure with a Native-Left override + reason, a byte-identical rename within its region, a cross-region move with a Native-Left override + reason, and the clean pair must pass; the env override outside a scratch arm must excuse nothing and WARN (FAIL under --strict); the default base resolving to HEAD must print 'NATIVE: base == tip, VACUOUS' as a WARN (FAIL under --strict), and so must a base pinned explicitly to HEAD (#1011); a base pinned to ANOTHER sha with HEAD's NATIVE inputs must print 'WARN NATIVE: no C change', counted nowhere, while a base whose C differs must stay a normal row (#1034), and so must a base differing ONLY in a tools path read 'no C change' (u'', V10); a pin on the branch's own line or off the tip's history must WARN 'WRONG BASE' (FAIL under --strict) while the fork point passes, and a 'no C change' row over a branch that touches a NATIVE input must WARN 'FALSE no C change' (FAIL under --strict) (#1065); the per-region counts must show a usa -1 / eu +1 move under an unchanged total, and sum to the totals on the real tree (task #1006); then the real tree against its real base"
+  say "-- (18) NATIVE (#923): scratch tip/base trees — a seeded C error (and a 5-error one whose -A4 regress listing must be 'errors: 5 (first 3 shown)' + exactly 3 sample lines, #1327), A2's removed 198B58 guard, a usa-vs-eu basename collision, a new failing unit, and a unit leaving the population (deleted, override without reason, token removed, renamed WITH an edit, moved byte-identical to ANOTHER region) must each FAIL naming the unit; a failure on both arms, a departure with a Native-Left override + reason, a byte-identical rename within its region, a cross-region move with a Native-Left override + reason, and the clean pair must pass; the env override outside a scratch arm must excuse nothing and WARN (FAIL under --strict); the default base resolving to HEAD must print 'NATIVE: base == tip, VACUOUS' as a WARN (FAIL under --strict), and so must a base pinned explicitly to HEAD (#1011); a base pinned to ANOTHER sha with HEAD's NATIVE inputs must print 'WARN NATIVE: no C change', counted nowhere, while a base whose C differs must stay a normal row (#1034), and so must a base differing ONLY in a tools path read 'no C change' (u'', V10); a pin on the branch's own line or off the tip's history must WARN 'WRONG BASE' (FAIL under --strict) while the fork point passes, and a 'no C change' row over a branch that touches a NATIVE input must WARN 'FALSE no C change' (FAIL under --strict) (#1065); the per-region counts must show a usa -1 / eu +1 move under an unchanged total, and sum to the totals on the real tree (task #1006); then the real tree against its real base"
   native_tree() {  # native_tree DIR — a fresh scratch copy of the check.sh inputs
     rm -rf "$1"; mkdir -p "$1/going-decompiled" "$1/tools"
     cp -R going-decompiled/src going-decompiled/include "$1/going-decompiled/"; cp -R tools/native "$1/tools/"
@@ -1477,6 +1479,19 @@ selftest_native() {
   # (a) synthetic: one C error appended to usa/cod/015180.c
   native_tree "$N/tip_a"; native_seed "$N/tip_a" usa/cod/015180.c
   native_arm "fired (a) seeded C error" "$N/tip_a" "$N/base" 1 '^FAIL NATIVE: 1 unit\(s\) .*: usa/cod/015180\.c $' 'eu/cod/015180'
+  # (x) task #1327 (#1315 q2): the listing under a regress FAIL is check.sh's
+  # `errors: N` line plus its 3-line sample, read with -A4. (a)'s one-error
+  # seed prints the same listing under -A4 and -A2, so this seed carries 5
+  # errors: the listing must be the unit heading, then `errors: 5 (first 3
+  # shown)`, then exactly 3 sample lines, each an `error:` in that unit.
+  native_tree "$N/tip_x"
+  printf '\n/* t1327 selftest seed */\nint t1327_e1 = ;\nint t1327_e2 = ;\nint t1327_e3 = ;\nint t1327_e4 = ;\nint t1327_e5 = ;\n' >> "$N/tip_x/going-decompiled/src/usa/cod/015180.c"
+  native_arm "fired (x) 5-error seed" "$N/tip_x" "$N/base" 1 '^FAIL NATIVE: 1 unit\(s\) .*: usa/cod/015180\.c $'
+  local xl xn xs; xl=$(awk '/^       usa\/cod\/015180\.c:$/ { f = 1; next } f && /^         / { print; next } f { exit }' "$NATIVE_ARM_OUT")
+  xn=$(printf '%s\n' "$xl" | /usr/bin/grep -c . || true)
+  xs=$(printf '%s\n' "$xl" | sed -n '2,4p' | /usr/bin/grep -cE '^         going-decompiled/src/usa/cod/015180\.c:[0-9]+:[0-9]+: error: ' || true)
+  if [ "$(printf '%s\n' "$xl" | sed -n 1p)" = '         errors: 5 (first 3 shown)' ] && [ "$xn" = 4 ] && [ "$xs" = 3 ]; then ok "  ... and its -A4 listing is the count line + 3 samples: $(printf '%s\n' "$xl" | sed -n 1p | sed 's/^ *//'); $xs sample error lines"
+  else say "SELFTEST-FAIL (x) the regress listing under the FAIL is not 'errors: 5 (first 3 shown)' + 3 sample error lines ($xn listing line(s), $xs sample(s)):"; show < "$NATIVE_ARM_OUT"; b=1; fi
   # (b) the dangerous class: A2's guard removed around the 198B58 equate
   native_tree "$N/tip_b"; local G="$N/tip_b/going-decompiled/src/eu/text/198B58.c"
   local E="going-decompiled/src/eu/text/198B58.c" L
@@ -1889,6 +1904,28 @@ selftest_asmunit() {
   FAILED=0; WARNED=0; check_asmunit "$T/asmunit_absent.log" > "$T/asmunit_absent.txt"
   if [ "$FAILED" = 1 ] && /usr/bin/grep -q '^FAIL ASMUNIT .*: no .*asmunit_absent.log' "$T/asmunit_absent.txt"; then ok "fired: a missing log is a FAIL"; else say "SELFTEST-FAIL a missing build.log did not FAIL ASMUNIT (FAILED=$FAILED)"; b=1; fi
   FAILED=0; WARNED=0
+  return $b
+}
+
+# selftest_regression_gate OUTDIR — arm (24), task #1327. Runs #1316's
+# tools/ee/eetest/regression_gate_selftest.sh, which nothing invoked (#1316
+# unresolved 6). Host-only fixture repos: no VM, no emulator, ~2 min a run.
+# Fired leg: the same selftest against 3eba641c4, regression_gate.sh before
+# #1316, which advanced its baseline on an incomplete validation, must FAIL on
+# exactly cap, baseline, nosnap and ilcap. Control: on this tree every case OK.
+# 3eba641c4 is an ancestor of master, so the fired leg is reachable from any
+# checkout of it.
+selftest_regression_gate() {
+  local T="$1" b=0 rs="$HERE/eetest/regression_gate_selftest.sh" pre=3eba641c4 rc fl nok
+  say "-- (24) REGRESSION_GATE (#1316, #1327): $rs on $pre (regression_gate.sh before #1316) -> rc 1, FAIL on exactly cap baseline nosnap ilcap; on this tree -> rc 0, all 7 cases OK"
+  bash "$rs" "$pre" > "$T/rgself_pre.txt" 2>&1; rc=$?
+  fl=$(sed -n 's/^FAIL \([a-z]*\):.*/\1/p' "$T/rgself_pre.txt" | tr '\n' ' ')
+  if [ "$rc" = 1 ] && [ "$fl" = 'cap baseline nosnap ilcap ' ]; then ok "fired: on $pre rc $rc, FAIL on $fl"
+  else say "SELFTEST-FAIL (24) the selftest on $pre did not FAIL exactly cap baseline nosnap ilcap (rc $rc, FAIL on '$fl'):"; show < <(/usr/bin/grep -E '^(OK|FAIL|####)' "$T/rgself_pre.txt" | sed 's/^/  inner| /'); b=1; fi
+  bash "$rs" > "$T/rgself_tree.txt" 2>&1; rc=$?
+  nok=$(/usr/bin/grep -c '^OK ' "$T/rgself_tree.txt" || true); fl=$(sed -n 's/^FAIL \([a-z]*\):.*/\1/p' "$T/rgself_tree.txt" | tr '\n' ' ')
+  if [ "$rc" = 0 ] && [ "$nok" = 7 ] && [ -z "$fl" ]; then ok "control: on this tree rc $rc, $nok of 7 cases OK"
+  else say "SELFTEST-FAIL (24) regression_gate_selftest.sh does not pass on this tree (rc $rc, $nok OK, FAIL on '$fl'):"; show < <(/usr/bin/grep -E '^(OK|FAIL|####)' "$T/rgself_tree.txt" | sed 's/^/  inner| /'); b=1; fi
   return $b
 }
 
