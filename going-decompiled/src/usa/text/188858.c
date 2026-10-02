@@ -3800,21 +3800,27 @@ void func_0028C7A8(void) {
  * at +0x58/+0x5C, type tag -2 at +0x74, mode 0x1E at +0x78, cleared +0x70 word
  * and the two +0x48/+0x4A cursor halves).
  *
- * BYTE-EXACT under the ENGINE compiler (task #469): 100.00% on the engine96 arm
- * of objdiff_build.sh + unit_report.sh (cc1 2.96-ee-001003, -O2 -G8
- * -fno-schedule-insns -fno-strict-aliasing). Two phrasings carry the match and
- * are not cosmetic: the four constants are materialised into locals BEFORE the
- * stores (the ROM builds $v0/$v1/$a0/$a1 first, then stores them — under
- * -fno-schedule-insns the RTL order is the source order, so constant-then-store
- * pairs come out interleaved), and the trailing `__asm__ __volatile__("")`
- * pins the epilogue order ($16 restored before $31): without the barrier sched2
- * hoists `ld $31` above the last store that still reads $16.
+ * BYTE-EXACT on the s136os arm (task #1329): SN 2.95.3 v1.36 -fopt-stack
+ * reproduces all 20 ROM words. Two phrasings carry the match and are not
+ * cosmetic: the four constants are materialised into locals BEFORE their
+ * stores (the ROM builds $v0/$v1/$a0/$a1 first, then stores them), and the
+ * three zero stores are written +0x48, +0x4A, +0x70 because SN 1.36 emits the
+ * LAST of them first and the others in source order, giving the ROM's +0x70,
+ * +0x48, +0x4A (FACT #8947's store-order rule; here it holds for mixed sh/sw
+ * widths, while the four register-valued stores above stay in source order).
+ * The trailing `__asm__ __volatile__("")` keeps $16 restored before $31.
+ * (It was first matched on the engine96 arm behind MATCH_func_0028C7F0, task
+ * #469, with the zero stores in +0x70, +0x48, +0x4A order.)
  *
- * INCLUDE_ASM is retained for the ordinary (ee-gcc 2.9) unit build, which packs
- * the callee-saves into a 0x20 frame where the ROM uses 0x10; build.sh never
- * defines MATCH_*, so the linked image is unchanged by this promotion. */
-#if !defined(TARGET_NATIVE) && !defined(MATCH_func_0028C7F0)
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C7F0);
+ * GUARD (task #1329): on EE this C is the image's body, compiled alone by the
+ * s136os arm (FACT #8810; row in tools/ee/s136os_functions.txt) and spliced
+ * over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm fallback: a
+ * build that skips the splice drops the function. On native it is plain C.
+ * Its MATCH_func_0028C7F0 engine96 guard is retired with this promotion: the
+ * function is image-resident, no longer arm-scored (RULING #8118), and it was
+ * the unit's last MATCH_ member (RULING #8915 item 2). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0028C7F0)
+S136OS_SLOT(func_0028C7F0);
 #else
 void func_0028C7F0(HudElement *w) {
     u8 *b = (u8 *)w;
@@ -3828,9 +3834,9 @@ void func_0028C7F0(HudElement *w) {
     *(s32 *)(b + 0x5C) = halfH;
     *(s32 *)(b + 0x74) = typeTag;
     *(s32 *)(b + 0x78) = mode;
-    *(s32 *)(b + 0x70) = 0;
     *(s16 *)(b + 0x48) = 0;
     *(s16 *)(b + 0x4A) = 0;
+    *(s32 *)(b + 0x70) = 0;
     __asm__ __volatile__("");
 }
 #endif

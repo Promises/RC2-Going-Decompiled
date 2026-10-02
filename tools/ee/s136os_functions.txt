@@ -212,3 +212,4 @@ usa text/1FFBA0 func_00300288
 usa text/1B4218 LoadGlobalSoundBank
 usa text/1B4218 LoadLevelSoundBank
 usa text/1DFF80 DrawSkyShellsFixedSpin
+usa text/188858 func_0028C7F0
