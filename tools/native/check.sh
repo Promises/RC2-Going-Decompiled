@@ -45,7 +45,9 @@ trap 'rm -rf "$OUT"' EXIT
 # linkage-boundary noise (these functions are still asm); keep them as visible
 # warnings, not hard errors. Genuine type/structure bugs in the bodies still
 # fail the gate.
-CFLAGS="-DTARGET_NATIVE -m32 -c -I$INC -include $SHIM"
+# -ferror-limit=0: report every error, so the per-unit count below is the
+# true count, not clang's default 20-error cutoff.
+CFLAGS="-DTARGET_NATIVE -m32 -c -ferror-limit=0 -I$INC -include $SHIM"
 CFLAGS="$CFLAGS -Wno-error=implicit-function-declaration -Wno-int-conversion"
 
 if [ "$#" -ge 1 ]; then
@@ -58,7 +60,7 @@ fi
 # INCLUDED (usa/cod/015180, not 015180): usa and eu share basenames
 # (cod/015180.c, cod/0321A0.c), and a bare basename made a usa failure and an
 # eu failure print the same `failed` member (task #923).
-CXXFLAGS="-x c++ -DTARGET_NATIVE -m32 -c -I$INC"
+CXXFLAGS="-x c++ -DTARGET_NATIVE -m32 -c -ferror-limit=0 -I$INC"
 
 pass=0; fail=0; failed=""
 for f in $units; do
@@ -78,6 +80,12 @@ for f in $units; do
   else
     fail=$((fail+1)); failed="$failed $label"
     echo "FAIL: $f"
+    # Print the unit's FULL error count, then a 3-line sample. The sample alone
+    # used to be all a reader saw, so a screen built on this output counted at
+    # most 3 errors per unit (task #1300/#1311). -ferror-limit=0 (above) stops
+    # clang's own 20-error cutoff from capping the count.
+    nerr=$(grep -c 'error:' "$OUT/$obj.err" || true)
+    echo "    errors: $nerr (first 3 shown)"
     sed 's/^/    /' "$OUT/$obj.err" | grep -m3 'error:'
   fi
 done

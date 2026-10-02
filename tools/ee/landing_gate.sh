@@ -752,7 +752,8 @@ check_native() {
   regress=$(LC_ALL=C comm -23 "$t.fail" "$b.fail"); tolerated=$(LC_ALL=C comm -12 "$t.fail" "$b.fail"); fixed=$(LC_ALL=C comm -13 "$t.fail" "$b.fail")
   if [ -n "$regress" ]; then
     fail "NATIVE: $(printf '%s\n' "$regress" | wc -l | tr -d ' ') unit(s) fail to compile at the tip and passed at (or are absent from) the base: $(printf '%s ' $regress)"
-    local u; for u in $regress; do say "       $u:"; /usr/bin/grep -A3 "^FAIL: going-decompiled/src/$u\$" "$t.log" | sed -n '2,4s/^ */         /p'; done
+    # -A4: check.sh prints an `errors: N` count line before its 3-line sample (task #1311)
+    local u; for u in $regress; do say "       $u:"; /usr/bin/grep -A4 "^FAIL: going-decompiled/src/$u\$" "$t.log" | sed -n '2,5s/^ */         /p'; done
   else
     ok "NATIVE: no unit fails at the tip that passed at the base ($tp of $((tp+tf)) compile; compile-only, not a link)${vacuous:+ — VACUOUS: base == tip, this measured nothing}${samein:+ — NO C CHANGE: base and tip NATIVE inputs identical, this row proves nothing}"
   fi
