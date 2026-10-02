@@ -180,3 +180,17 @@ usa text/1B4218 DriveMobyAlongWaypoints
 usa text/235FE8 func_0033BF90
 usa text/1FFBA0 func_00300E70
 usa text/235FE8 GuiElementInit
+usa text/178E88 func_00280440
+usa text/178E88 func_0027FFF0
+usa text/1A8180 func_002AFCD8
+usa text/1A8180 func_002B1880
+usa text/1A8180 func_002A87F0
+usa text/1A8180 func_002A8C70
+usa text/1A8180 func_002AB668
+usa text/1A8180 func_002B0DC8
+usa text/1A8180 func_002ADA30
+usa text/1A8180 func_002AB2C0
+usa text/1A8180 func_002AF9C8
+usa text/1A8180 func_002AFE68
+usa text/1A8180 func_002A8B08
+usa text/1A8180 func_002AFAB0

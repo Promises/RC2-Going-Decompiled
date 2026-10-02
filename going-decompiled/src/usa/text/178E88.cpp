@@ -3005,7 +3005,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027FCB0);
 #else
 extern s32 D_1A89B0[];   /* 8-entry color-escape table; [0] = latched color */
 
-void func_0027FCB0(s32 a, s32 b, s32 c, u64 tex0, u8 *glyphTable, f32 f1, f32 f2, f32 f3) {
+void func_0027FCB0(f32 f1, f32 f2, s32 a, s32 b, s32 c, f32 f3, u64 tex0, u8 *glyphTable) {
     s32 color = a;
     const u8 *s = (const u8 *)b;
     s32 count = c;
@@ -3062,15 +3062,27 @@ void func_0027FCB0(s32 a, s32 b, s32 c, u64 tex0, u8 *glyphTable, f32 f1, f32 f2
 }
 #endif
 
-extern void func_0027FCB0(s32 a, s32 b, s32 c, u64 tex0, u8 *glyphTable, f32 f1, f32 f2, f32 f3); /* scaled/positioned font draw */
+extern void func_0027FCB0(f32 f1, f32 f2, s32 a, s32 b, s32 c, f32 f3, u64 tex0, u8 *glyphTable); /* scaled/positioned font draw */
 
-/* TODO(match) t493: sdk29 36.60% / engine96 30.94% (unit objdiff, objdiff_build.sh +
+/* t493 (history; closed on the s136os arm below, task #1337): sdk29 36.60% / engine96 30.94% (unit objdiff, objdiff_build.sh +
  * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
  * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
  * ROM `addiu sp,sp,-64` vs built `addiu sp,sp,-96`). Levers: sibcall guard RUN: sdk29 63.29% /
  * engine96 64.20%; engine96 with sched1 MEASURED (flag not landed): 30.97%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027FFF0);
+/* MATCHED on the s136os arm (task #1337): byte-exact solo under SN 2.95.3
+ * v1.36 -fopt-stack (verify_match_unit, FACT #8810's method). Closing lever:
+ * f32 parameter POSITION, which EABI does not encode (ints and floats travel in
+ * separate registers): its own floats are declared first, and func_0027FCB0's
+ * as (f1, f2, a, b, c, f3, ...). That order is the ROM's callee-saved
+ * assignment (a -> $18) and its argument-setup order ($f12, $f13, $a0..$a2,
+ * $f14, $a3). */
+/* GUARD (task #1337): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0027FFF0)
+S136OS_SLOT(func_0027FFF0);
 #else
 /**
  * Draw a string with the D_263B10 font and three float parameters (scale /
@@ -3078,9 +3090,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_0027FFF0);
  * three int args, that tex0, the D_263B10 glyph metrics, and the three floats to
  * func_0027FCB0.
  */
-void func_0027FFF0(s32 a, s32 b, s32 c, f32 f1, f32 f2, f32 f3) {
+void func_0027FFF0(f32 f1, f32 f2, f32 f3, s32 a, s32 b, s32 c) {
     u64 tex0 = GetUiTextureTex0(1);
-    func_0027FCB0(a, b, c, tex0, D_263B10, f1, f2, f3);
+    func_0027FCB0(f1, f2, a, b, c, f3, tex0, D_263B10);
 }
 #endif
 
@@ -3188,21 +3200,31 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280380);
 void func_00280380(s32 a, s32 b, s32 c, const char *str, s32 maxChars, f32 scale) {
     s32 advance = func_0027F900(str, maxChars, scale);
     u64 tex0 = GetUiTextureTex0(1);
-    func_0027FCB0(c, (s32)str, maxChars, tex0, D_263B10,
-                  (f32)(a - (advance >> 1)), (f32)b, scale);
+    func_0027FCB0((f32)(a - (advance >> 1)), (f32)b, c, (s32)str, maxChars, scale,
+                  tex0, D_263B10);
 }
 #endif
 
-extern f32 func_002804C0(f32 inputScale, const char *str, s32 maxChars, s32 count); /* text auto-scale (below) */
+extern f32 func_002804C0(const char *str, s32 maxChars, s32 count, f32 inputScale); /* text auto-scale (below) */
 extern void func_00280380(s32 a, s32 b, s32 c, const char *str, s32 maxChars, f32 scale); /* scaled text draw */
 
-/* TODO(match) t493: sdk29 76.13% / engine96 50.65% (unit objdiff, objdiff_build.sh +
+/* t493 (history; closed on the s136os arm below, task #1337): sdk29 76.13% / engine96 50.65% (unit objdiff, objdiff_build.sh +
  * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
  * every other remaining arm). Residual on the better arm (sdk29): SIBCALL (first differing insn:
  * ROM `addiu sp,sp,-48` vs built `addiu sp,sp,-96`). Levers: sibcall guard RUN: sdk29 89.26% /
  * engine96 84.35%; engine96 with sched1 MEASURED (flag not landed): 50.61%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280440);
+/* MATCHED on the s136os arm (task #1337): byte-exact solo under SN 2.95.3
+ * v1.36 -fopt-stack (verify_match_unit, FACT #8810's method). Closing lever:
+ * func_002804C0's f32 floor is declared LAST. EABI passes ints and floats in
+ * separate registers, so the order is ABI-neutral, but it sets cc1's
+ * argument-setup order (the ROM loads $a0 before $a2). */
+/* GUARD (task #1337): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00280440)
+S136OS_SLOT(func_00280440);
 #else
 /**
  * Draw a string auto-scaled to fit `count` pixels: compute the horizontal fit
@@ -3210,7 +3232,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280440);
  * render the string at that scale via func_00280380.
  */
 void func_00280440(f32 inputScale, s32 a, s32 b, s32 c, const char *str, s32 maxChars, s32 count) {
-    f32 scale = func_002804C0(inputScale, str, maxChars, count);
+    f32 scale = func_002804C0(str, maxChars, count, inputScale);
     func_00280380(a, b, c, str, maxChars, scale);
 }
 #endif
@@ -3230,7 +3252,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_002804C0);
  * string). If the string already fits (count >= width) returns 1.0; otherwise
  * returns width-fit ratio count/width, floored at `inputScale`.
  */
-f32 func_002804C0(f32 inputScale, const char *str, s32 maxChars, s32 count) {
+f32 func_002804C0(const char *str, s32 maxChars, s32 count, f32 inputScale) {
     s32 width = (str != 0) ? func_0027F900(str, maxChars, 1.0f) : 0;
     f32 result = 1.0f;
 

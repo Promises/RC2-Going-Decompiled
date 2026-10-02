@@ -206,6 +206,9 @@ void SetupMemoryArenaTable(void) {
  * vs 'addiu sp, sp, -0x840' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BootSystemInit);
 #else
+/* Prototypes this body needs whose declarations sit in other guarded arms:
+ * the s136os arm compiles this arm alone, so it must see them here. */
+extern void SetupMemoryArenaTable(void);
 /* Phase 1-5 HW/IOP/subsystem callees (declared below BootSystemInit in-unit or
  * in sibling TUs; block-scope externs keep the #else self-contained). */
 extern void func_00124418(void);                 /* ResetVif1AndGif */
@@ -1307,6 +1310,9 @@ void LoadPlayerDisplayModel(s32 variant) {
  * -0xa0' vs 'addiu sp, sp, -0xb0' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadHeldItemDisplayModel);
 #else
+/* Prototypes this body needs whose declarations sit in other guarded arms:
+ * the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 Log2Floor(s32 v);
 extern void WaitFrameDmaFence(s32 mode);
 extern void PumpDialogVoiceSystem(s32 blocking);
 extern void StartFileLoadPumpingVoice(void *dest, s32 startSector, s32 sectorCount);
@@ -1939,6 +1945,10 @@ extern void func_00293760(void *inst, s32 a1, s32 a2, s32 a3, s32 a4, s32 matId)
  * -0x50' vs 'addiu sp, sp, -0x80' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00293B68);
 #else
+/* Prototypes this body needs whose declarations sit in other guarded arms:
+ * the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_00293438(void *inst, s32 matBlock, s32 a2, s32 a3, s32 a4, s32 a5, s32 matId);
+extern void func_00293760(void *inst, s32 a1, s32 a2, s32 a3, s32 a4, s32 matId);
 void func_00293B68(u8 *groups, s32 instMode, u8 *idMap, s32 groupCount) {
     s32 g;
     for (g = 0; g < groupCount; g++) {
@@ -2783,6 +2793,9 @@ extern void PumpDialogVoiceSystem(s32 blocking);
  * -0x20' vs 'addiu sp, sp, -0x40' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadGlobalDialogScene);
 #else
+/* Prototypes this body needs whose declarations sit in other guarded arms:
+ * the s136os arm compiles this arm alone, so it must see them here. */
+extern void FadeOutToBlackBlocking(s32 frames);
 void LoadGlobalDialogScene(s32 sceneIndex, s32 mode) {
     u8 *toc  = (u8 *)g_discToc;
     s32 *desc = (s32 *)&g_cameraSlotActive[0x990];
@@ -2984,6 +2997,9 @@ void func_002949E0(s32 *rec, s32 enable) {
  * -0x40' vs 'addiu sp, sp, -0x50' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294A30);
 #else
+/* Prototypes this body needs whose declarations sit in other guarded arms:
+ * the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_0011AEA0(s32 a);
 extern s32 StartFileLoadWithCallback(void *dest, s32 startSector, s32 count,
                                      void *callback, void *state);
 extern u8  D_001A7210[];                          /* +0x68 = IOP DMA source base */
@@ -3682,6 +3698,9 @@ void func_00295478(s32 classId, void *dest) {
  * -0x70' vs 'addiu sp, sp, -0x20' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002954F0);
 #else
+/* Prototypes this body needs whose declarations sit in other guarded arms:
+ * the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 Log2Floor(s32 v);
 extern s32 g_vramAllocCursor;
 extern s32 g_texUploadQueue[];
 extern s32 g_texUploadCount;
@@ -4557,6 +4576,9 @@ s32 MapUpdate(void) {
  * vs 'addiu sp, sp, -0x11b0' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapDraw);
 #else
+/* Prototypes this body needs whose declarations sit in other guarded arms:
+ * the s136os arm compiles this arm alone, so it must see them here. */
+extern char * GetLocalizedString(s32 id);
 extern s32   D_1A95F0;                 /* 0x1A95F0 map-draw suppress gate */
 extern u16   D_1A95F8;                 /* 0x1A95F8 unavailable-box field */
 extern u16   D_1A95FC;                 /* 0x1A95FC unavailable-box field */
@@ -5204,6 +5226,9 @@ extern void func_00297E80(void *scratchpad, s32 row, void *srcA, void *srcB);
  * -0x50' vs 'addiu sp, sp, -0x80' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapBuildBitmapFrom4bpp);
 #else
+/* Prototypes this body needs whose declarations sit in other guarded arms:
+ * the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_00297E80(void *scratchpad, s32 row, void *srcA, void *srcB);
 void MapBuildBitmapFrom4bpp(void *destArg, void *srcA, void *srcB) {
     u8 *dest = (u8 *)destArg;
     s32 row;
@@ -5340,6 +5365,9 @@ extern void CopyQwords(void *dst, const void *src, s32 nbytes);
  * 0x8000' vs '' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002980D8);
 #else
+/* Prototypes this body needs whose declarations sit in other guarded arms:
+ * the s136os arm compiles this arm alone, so it must see them here. */
+extern void CopyQwords(void *dst, const void *src, s32 nbytes);
 void func_002980D8(void *dstArg, u8 *src, s32 ctrlArg) {
     u8 *const scratch    = (u8 *)0x70000000;
     u8 *const scratchEnd = (u8 *)0x70002000;    /* $21 */
@@ -5608,6 +5636,9 @@ void *func_002988C8(s32 idx) {
  * -0x50' vs 'addiu sp, sp, -0x60' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00298918);
 #else
+/* Prototypes this body needs whose declarations sit in other guarded arms:
+ * the s136os arm compiles this arm alone, so it must see them here. */
+extern void * func_002988C8(s32 idx);
 void func_00298918(f32 fa, f32 fb, void *outX, void *outY, s32 level) {
     f32 v0, v1, v2, v3;
 

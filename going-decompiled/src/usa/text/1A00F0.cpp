@@ -358,6 +358,13 @@ extern void ScaleVec4IncludingW(void *dst, f32 s, void *src);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0678);
 #else
+/* Prototypes this body needs whose declarations sit in other guarded arms:
+ * the s136os arm compiles this arm alone, so it must see them here. */
+extern void ScaleVec4IncludingW(void *dst, f32 s, void *src);
+extern void Vec4AddVu0(void *dst, void *a, void *b);
+extern void Vec4ScaleVu0(void *dst, f32 s, void *src);
+extern void func_00283A48(void *out, void *v, void *m);
+extern void func_00283AE0(void *dst, u64 packed);
 s32 func_002A0678(void *obj, void *dst, void *outArray, s32 arg3) {
     u8 *hdr = *(u8 **)((u8 *)obj + 0x24);
     s16 n = *(s16 *)(hdr + 0x2E);
