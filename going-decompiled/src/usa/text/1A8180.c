@@ -92,6 +92,9 @@ __asm__(".extern D_1A7A4F, 12");
 __asm__(".extern D_1A8BD0, 12");
 __asm__(".extern g_skillPointFlags, 12");
 __asm__(".extern g_abLevelAvailableFlags, 12");
+__asm__(".extern D_1A8C60, 12");   /* func_002B1B48: gp_rel in a beql slot, lui/$at elsewhere */
+__asm__(".extern D_1A8C64, 12");
+__asm__(".extern D_1A8CA0, 12");   /* func_002B0E40: lui/$at; func_002B03E8: gp_rel in a bc1t slot */
 
 #ifdef TARGET_NATIVE
 /* gcc -m32 cannot emulate mode(TI); copy-only here, so a 16-byte aligned struct
@@ -278,8 +281,10 @@ extern void func_002AB000(f32 *p, f32 v0, f32 v1, f32 v2, f32 v3);
  * s32 form: it returns s32 from this call, so the s32-callee + s32-return type
  * errors cancel into the exact $f0 passthrough the original emits (verified: a
  * plain f32 here regresses func_002AAFB8 from 100% to 88.24%). So guard per
- * build - matching keeps s32, native gets the correct f32. */
-#ifdef TARGET_NATIVE
+ * build - the cc1 2.9 arm keeps s32, native gets the correct f32, and so does
+ * func_002AFD90's s136os TU (S136OS_func_002AFD90 is defined only there; its
+ * body passes the f32 result back through $f12 and stores it, task #1324). */
+#if defined(TARGET_NATIVE) || defined(S136OS_func_002AFD90)
 extern f32 WrapAnglePiSum(f32 a, f32 b);
 #else
 extern s32 WrapAnglePiSum(f32 a, f32 b);
@@ -5847,8 +5852,18 @@ void func_002AFCD8(void *out, f32 *p1, f32 *p2, f32 a, f32 b, f32 c) {
  * in full-game context). Covered by the tester-EE path, not the cmp-oracle. */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 52.78%
    -> UNKNOWN-@2: ROM `(none)` vs `daddu s0,a1,zero` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFD90);
+/* MATCHED on the s136os arm (task #1324): byte-exact solo under SN 2.95.3
+ * v1.36 -fopt-stack (verify_match_unit, FACT #8810's method). Closing lever:
+ * WrapAnglePiSum's TRUE f32 return, given to this TU by the
+ * S136OS_func_002AFD90 predicate on its declaration (the cc1 2.9 arm keeps the
+ * s32 form func_002AAFB8 needs). */
+/* GUARD (task #1324): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002AFD90)
+S136OS_SLOT(func_002AFD90);
 #else
 void func_002AFD90(void *out, f32 *p1, f32 *p2, f32 scale, f32 b, f32 c) {
     f32 sinP1 = func_00283B48(*p1);
@@ -6463,16 +6478,28 @@ void func_002B0BF0(void *obj, Vec4 *out, f32 x, f32 y, f32 z) {
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 61.56%
    -> UNKNOWN-@1: ROM `(none)` vs `daddu v0,a0,zero` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0C40);
+/* MATCHED on the s136os arm (task #1324): byte-exact solo under SN 2.95.3
+ * v1.36 -fopt-stack (verify_match_unit, FACT #8810's method). Closing lever:
+ * the IF ORDER (the b == 0 matrix path written first gives the ROM's
+ * bnez-to-the-b-path layout) plus func_00283A48's prototype in this arm. */
+/* GUARD (task #1324): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002B0C40)
+S136OS_SLOT(func_002B0C40);
 #else
+/* Prototypes this body needs whose declarations sit in other guarded arms:
+ * the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_00283A48(Vec4 *out, Vec4 *v, Vec4 *m);
 void func_002B0C40(s32 ctx, void *out, void *a, void *b) {
-    if (b != 0) {
-        func_00283A48((Vec4 *)out, (Vec4 *)a, (Vec4 *)b);
-    } else {
+    if (b == 0) {
         Mat4x4 mat;
         func_00284048(&mat, (const Vec4 *)(ctx + 0xC0));
         func_00283A48((Vec4 *)out, (Vec4 *)a, (Vec4 *)&mat);
+    } else {
+        func_00283A48((Vec4 *)out, (Vec4 *)a, (Vec4 *)b);
     }
 }
 #endif
@@ -6486,9 +6513,22 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0CA8);
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 51.96%
    -> UNKNOWN-@0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-32` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0CC0);
+/* MATCHED on the s136os arm (task #1324): byte-exact solo under SN 2.95.3
+ * v1.36 -fopt-stack (verify_match_unit, FACT #8810's method). Closing lever:
+ * the callee PROTOTYPES in this arm (func_00283920 takes f32 len; as
+ * an implicit int function the s136os TU passed len wrongly). */
+/* GUARD (task #1324): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002B0CC0)
+S136OS_SLOT(func_002B0CC0);
 #else
+/* Prototypes this body needs whose declarations sit in other guarded arms:
+ * the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_00283A48(Vec4 *out, Vec4 *v, Vec4 *m);
+extern void func_00283920(Vec4 *dst, Vec4 *src, f32 len);
 void func_002B0CC0(s32 ctx, Vec4 *out, void *a, void *b, f32 len) {
     func_002B0C40(ctx, out, a, b);
     func_00283920(out, out, len);
@@ -6578,26 +6618,40 @@ void func_002B0DC8(Vec4 *src, Vec4 *out, s32 keepSign) {
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 81.74%
    -> UNKNOWN-@0: ROM `addiu sp,sp,-48` vs `lw v0,0(gp)  [GPREL16 D_1A8CA0]` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0E40);
+/* MATCHED on the s136os arm (task #1324): byte-exact solo under SN 2.95.3
+ * v1.36 -fopt-stack (verify_match_unit, FACT #8810's method). Closing lever:
+ * D_1A8CA0 in the unit's size-12 `.extern` class; the reference block
+ * read through a pointer temporary (the ROM keeps the base in a register and
+ * addresses +0xBC/+0xB0 off it, where cc1 otherwise folds sym+188); no trailing
+ * empty asm fence (it kept `ld s0` out of the ROM's bnel slot). */
+/* GUARD (task #1324): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002B0E40)
+S136OS_SLOT(func_002B0E40);
 #else
+/* Prototypes this body needs whose declarations sit in other guarded arms:
+ * the s136os arm compiles this arm alone, so it must see them here. */
+void func_002B0DC8(Vec4 *src, Vec4 *out, s32 keepSign);
 void func_002B0E40(Vec4 *a, Vec4 *out, s32 flag) {
     if (D_1A8CA0 == 0) {
         SetVec4UnitZ(out);
     } else if (D_1A8CA4 != 0) {
         func_002B0DC8(a, out, 1);
     } else {
+        u8 *blk = g_soundBankHandlesBlk;
         f32 sign = 1.0f;
-        if (0.0f < *(f32 *)(g_soundBankHandlesBlk + 0xBC)) {
+        if (0.0f < *(f32 *)(blk + 0xBC)) {
             sign = -1.0f;
         }
-        Vec4SubVu0(out, (Vec4 *)(g_soundBankHandlesBlk + 0xB0), a);
+        Vec4SubVu0(out, (Vec4 *)(blk + 0xB0), a);
         Vec3RescaleToLenVu0(out, sign, out);
     }
     if (flag == 0) {
         Vec4ScaleVu0(out, -1.0f, out);
     }
-    __asm__ __volatile__("");
 }
 #endif
 
@@ -6790,13 +6844,22 @@ extern void func_00283460(void *dst, void *src, s32 n);/* byte copy */
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 66.87%
    -> UNKNOWN-@0: ROM `addiu sp,sp,-144` vs `addiu sp,sp,-128` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1270);
+/* MATCHED on the s136os arm (task #1324): byte-exact solo under SN 2.95.3
+ * v1.36 -fopt-stack (verify_match_unit, FACT #8810's method). Closing lever:
+ * the LOCAL ORDER (quat declared before normGrav puts quat at sp+0x30
+ * and normGrav at sp+0x40, the ROM's slots; the old order swapped them). */
+/* GUARD (task #1324): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002B1270)
+S136OS_SLOT(func_002B1270);
 #else
 void func_002B1270(void *mtx3x4, Vec4 *gravDir, void *outMtxOpt) {
     u8 quatMtx[0x30];
-    Vec4 normGrav;
     Vec4 quat;
+    Vec4 normGrav;
     f32 lenSq;
 
     Vec3RescaleToLenVu0(&normGrav, 1.0f, gravDir);
@@ -6975,6 +7038,10 @@ done:
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1708);
 
 extern f32 IntToFloat(s32 x);
+/* Declared ahead of its guard: on the s136os arm the definition below is
+ * compiled only in its own TU, so func_002B1778's TU must still see it return
+ * f32 (implicitly declared, it reads as int and converts with cvt.s.w). */
+f32 func_002B1710(s32 a, s32 b);
 
 /** func_002B1710 — map the integer index (a mod b) onto an angle in [-PI, PI):
  *  returns 2*PI*(a%b)/b - PI. (a%b traps on b==0, like the original's div guard.)
@@ -7003,8 +7070,17 @@ f32 func_002B1710(s32 a, s32 b) {
  *  LerpByteVec4Packed(sin(func_002B1710(a,b))*0.5+0.5, dst, src). */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 90.48%
    -> SCHED-TIEBREAK (move s0,a2 vs sd s1 order in the prologue), ORDER-ONLY */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1778);
+/* MATCHED on the s136os arm (task #1324): byte-exact solo under SN 2.95.3
+ * v1.36 -fopt-stack (verify_match_unit, FACT #8810's method). Closing lever:
+ * the f32 PROTOTYPE of func_002B1710 ahead of its guard (implicitly
+ * declared it reads as int, and cc1 converts it with mtc1/cvt.s.w). */
+/* GUARD (task #1324): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002B1778)
+S136OS_SLOT(func_002B1778);
 #else
 void func_002B1778(s32 a, s32 b, void *dst, void *src) {
     f32 s = func_00283B48(func_002B1710(a, b));
@@ -7200,9 +7276,22 @@ s32 func_002B1A90(void *subject, s32 stringId, s32 arg2) {
  * defined just above so needs no forward decl in the TARGET_NATIVE build.) */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 84.84%
    -> UNKNOWN-@2: ROM `(none)` vs `daddu s0,a1,zero` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B1B48);
+/* MATCHED on the s136os arm (task #1324): byte-exact solo under SN 2.95.3
+ * v1.36 -fopt-stack (verify_match_unit, FACT #8810's method). Closing lever:
+ * D_1A8C60/D_1A8C64 in the unit's size-12 `.extern` class (header):
+ * the ROM writes D_1A8C60 %gp_rel from a beql slot and lui/$at elsewhere;
+ * plus func_002B1A90's prototype in this arm. */
+/* GUARD (task #1324): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002B1B48)
+S136OS_SLOT(func_002B1B48);
 #else
+/* Prototypes this body needs whose declarations sit in other guarded arms:
+ * the s136os arm compiles this arm alone, so it must see them here. */
+s32 func_002B1A90(void *subject, s32 stringId, s32 arg2);
 s32 func_002B1B48(void *subject, s32 stringId, s32 arg2) {
     s32 gate = func_002B1A90(subject, stringId, arg2);
     if (gate != 0) {

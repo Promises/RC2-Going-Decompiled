@@ -156,3 +156,17 @@ usa text/235FE8 GuiQuitDialogInit
 usa text/235FE8 func_0033D1F8
 usa text/235FE8 func_0033D4B0
 usa text/235FE8 func_0033E4C0
+usa text/178E88 func_00280B48
+usa text/178E88 func_00280BB8
+usa text/178E88 func_00280C28
+usa text/188580 func_00288748
+usa text/1A00F0 func_002A0A58
+usa text/1A00F0 func_002A0AF8
+usa text/1A00F0 func_002A0B80
+usa text/1A8180 func_002B1270
+usa text/1A8180 func_002B1778
+usa text/1A8180 func_002AFD90
+usa text/1A8180 func_002B0CC0
+usa text/1A8180 func_002B1B48
+usa text/1A8180 func_002B0E40
+usa text/1A8180 func_002B0C40

@@ -114,7 +114,7 @@ extern void RenderSaveLoadStatusPopup(void);
  * native text draws through a garbage font table. One prototype serves both
  * builds: under EABI the six integer args go in $4..$9 and `scale` in $f12,
  * which is how the ROM's func_00280B20 calls it. */
-extern void func_00280550(s32 a, s32 b, s32 c, s32 d, s32 e, u8 *glyphTable,
+extern void func_00280550(s32 a, s32 b, s32 c, s32 d, u64 tex0, u8 *glyphTable,
                           f32 scale);
 
 /* GS depth-range / register-packet helpers. AppendGsRegPacket takes a 64-bit
@@ -3250,7 +3250,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280550);
  * DrawTextBoxDefault - the unscaled text-box entry: forward to the scaled core
  * func_00280550 with scale 1.0f.
  *
- *   a..e        the five int slots (layout, rgba, str, len, tex0), passed through
+ *   a..d        the four int slots (layout, rgba, str, len), passed through
+ *   tex0        the font page's GS TEX0 register value (64-bit), passed through
  *   glyphTable  the glyph-metrics table (the func_00280B48 path passes &D_263B10)
  *   ->          nothing
  *
@@ -3264,8 +3265,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280550);
  * the lone tail call to `j func_00280550`; the empty volatile asm after the call
  * is the barrier that keeps the call a call.
  */
-void func_00280B20(s32 a, s32 b, s32 c, s32 d, s32 e, u8 *glyphTable) {
-    func_00280550(a, b, c, d, e, glyphTable, 1.0f);
+void func_00280B20(s32 a, s32 b, s32 c, s32 d, u64 tex0, u8 *glyphTable) {
+    func_00280550(a, b, c, d, tex0, glyphTable, 1.0f);
     __asm__ __volatile__("");
 }
 
@@ -3273,57 +3274,77 @@ void func_00280B20(s32 a, s32 b, s32 c, s32 d, s32 e, u8 *glyphTable) {
  * page's GS TEX0 (GetUiTextureTex0 slot 1) and forward the four caller args
  * plus that tex0 and the D_263B10 glyph-metrics table to the text core
  * func_00280B20 (SIX args). Sig recovered 2026-07-06 (fable, promo-d3
- * @4cb6be7). Matching arm stays INCLUDE_ASM (byte-exact is walled by the
- * tier-wide 8-packed-callee-save frame fingerprint); the #else supplies the
- * portable body that passes the glyph table down the chain. */
-/* TODO(match) t493: sdk29 28.56% / engine96 55.48% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (engine96): SIBCALL (first differing
- * insn: ROM `sd s1,8(sp)` vs built `daddu s0,a0,zero`). Levers: sibcall guard RUN: sdk29 76.70% /
- * engine96 76.30%; engine96 with sched1 MEASURED (flag not landed): 54.44%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280B48);
+ * @4cb6be7). The body passes the glyph table down the chain.
+ *   a..d  the caller's layout/colour/string/length slots, passed through
+ *   ->    nothing */
+/* MATCHED on the s136os arm (task #1324): byte-exact solo under SN 2.95.3 v1.36
+ * -fopt-stack (verify_match_unit, FACT #8810's method). The closing lever was the
+ * tex0 TYPE: func_00280B20/func_00280550 take it as u64 (func_00280550 stores it
+ * with `sd`), so it passes straight through in $8 — narrowing it to s32 emitted a
+ * dsll32/dsra32 sign-extension the ROM does not have. Record of the cc1 2.9 / 2.96
+ * attempts (t493, unit objdiff, objdiff_build.sh + unit_report.sh): sdk29 28.56% /
+ * engine96 55.48%, residual SIBCALL. */
+/* GUARD (task #1324): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00280B48)
+S136OS_SLOT(func_00280B48);
 #else
 void func_00280B48(s32 a, s32 b, s32 c, s32 d) {
     u64 tex0 = GetUiTextureTex0(1);
-    func_00280B20(a, b, c, d, (s32)tex0, D_263B10);
+    func_00280B20(a, b, c, d, tex0, D_263B10);
 }
 #endif
 
 /* func_00280BB8 - draw a string with the debug font (twin of func_00280B48): resolve
  * the debug-font page's GS TEX0 (GetUiTextureTex0 slot 2) and forward the four caller
  * args plus that tex0 and the g_debugFontGlyphTable glyph-metrics table to the text core
- * func_00280B20. Matching arm stays INCLUDE_ASM (byte-exact walled by the tier-wide
- * 8-packed-callee-save frame fingerprint); the #else supplies the portable body. */
-/* TODO(match) t493: sdk29 28.56% / engine96 55.48% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (engine96): SIBCALL (first differing
- * insn: ROM `sd s1,8(sp)` vs built `daddu s0,a0,zero`). Levers: sibcall guard RUN: sdk29 76.70% /
- * engine96 76.30%; engine96 with sched1 MEASURED (flag not landed): 54.44%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280BB8);
+ * func_00280B20. a..d are passed through; returns nothing. */
+/* MATCHED on the s136os arm (task #1324): byte-exact solo under SN 2.95.3 v1.36
+ * -fopt-stack (verify_match_unit, FACT #8810's method). The closing lever was the
+ * tex0 TYPE: func_00280B20/func_00280550 take it as u64 (func_00280550 stores it
+ * with `sd`), so it passes straight through in $8 — narrowing it to s32 emitted a
+ * dsll32/dsra32 sign-extension the ROM does not have. Record of the cc1 2.9 / 2.96
+ * attempts (t493, unit objdiff, objdiff_build.sh + unit_report.sh): sdk29 28.56% /
+ * engine96 55.48%, residual SIBCALL. */
+/* GUARD (task #1324): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00280BB8)
+S136OS_SLOT(func_00280BB8);
 #else
 void func_00280BB8(s32 a, s32 b, s32 c, s32 d) {
     u64 tex0 = GetUiTextureTex0(2);
-    func_00280B20(a, b, c, d, (s32)tex0, g_debugFontGlyphTable);
+    func_00280B20(a, b, c, d, tex0, g_debugFontGlyphTable);
 }
 #endif
 
 /* func_00280C28 - draw a string with a third UI font page (twin of func_00280B48/
  * func_00280BB8): resolve the GS TEX0 (GetUiTextureTex0 slot 3) and forward the four
  * caller args plus that tex0 and the D_264250 glyph-metrics table to the text core
- * func_00280B20. Matching arm stays INCLUDE_ASM (8-packed-callee-save frame wall). */
-/* TODO(match) t493: sdk29 28.56% / engine96 55.48% (unit objdiff, objdiff_build.sh +
- * unit_report.sh, this #else body plain-promoted resp. MATCH_-guarded, screened together with
- * every other remaining arm). Residual on the better arm (engine96): SIBCALL (first differing
- * insn: ROM `sd s1,8(sp)` vs built `daddu s0,a0,zero`). Levers: sibcall guard RUN: sdk29 76.70% /
- * engine96 76.30%; engine96 with sched1 MEASURED (flag not landed): 54.44%. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00280C28);
+ * func_00280B20. a..d are passed through; returns nothing. */
+/* MATCHED on the s136os arm (task #1324): byte-exact solo under SN 2.95.3 v1.36
+ * -fopt-stack (verify_match_unit, FACT #8810's method). The closing lever was the
+ * tex0 TYPE: func_00280B20/func_00280550 take it as u64 (func_00280550 stores it
+ * with `sd`), so it passes straight through in $8 — narrowing it to s32 emitted a
+ * dsll32/dsra32 sign-extension the ROM does not have. Record of the cc1 2.9 / 2.96
+ * attempts (t493, unit objdiff, objdiff_build.sh + unit_report.sh): sdk29 28.56% /
+ * engine96 55.48%, residual SIBCALL. */
+/* GUARD (task #1324): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00280C28)
+S136OS_SLOT(func_00280C28);
 #else
 void func_00280C28(s32 a, s32 b, s32 c, s32 d) {
     u64 tex0 = GetUiTextureTex0(3);
-    func_00280B20(a, b, c, d, (s32)tex0, D_264250);
+    func_00280B20(a, b, c, d, tex0, D_264250);
 }
 #endif
 

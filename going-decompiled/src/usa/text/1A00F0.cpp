@@ -634,17 +634,32 @@ void func_002A0958(void) {
  * then the moby's rotation is built (func_00284008 from obj+0xC0 into a scratch
  * matrix) and applied (MatrixMultiplyVu0 arg2 = matrix * arg2), and the
  * translation (obj+0x10) is added. Helper signatures cross-referenced to
- * text/183558.c. Callee func_002A4D60 UNCONFIRMED (named by shape). The matching
- * build keeps the asm; faithful TARGET_NATIVE coverage arm. */
+ * text/183558.c. Callee func_002A4D60 UNCONFIRMED (named by shape). */
 #ifdef TARGET_NATIVE
 extern void func_002A4D60(void *obj, s32 flag, void *inParams, void *outBuf);
 extern void func_00284008(void *dst, void *src);
 extern void MatrixMultiplyVu0(void *dst, void *a, void *b);
 #endif
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0A58);
+/* MATCHED on the s136os arm (task #1324): byte-exact solo under SN 2.95.3
+ * v1.36 -fopt-stack (verify_match_unit, FACT #8810's method). Closing lever:
+ * the callee prototypes (declared only in a TARGET_NATIVE block, so the
+ * s136os TU saw them implicitly as int functions) are repeated in this arm. */
+/* GUARD (task #1324): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002A0A58)
+S136OS_SLOT(func_002A0A58);
 #else
+/* Prototypes this body needs whose declarations sit in other guarded arms:
+ * the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_002A4D60(void *obj, s32 flag, void *inParams, void *outBuf);
+extern void func_00284008(void *dst, void *src);
+extern void MatrixMultiplyVu0(void *dst, void *a, void *b);
+extern void Vec4AddVu0(void *dst, void *a, void *b);
+extern void Vec4ScaleVu0(void *dst, f32 s, void *src);
 void func_002A0A58(void *obj, s32 arg1, void *arg2) {
     u8 *o = (u8 *)obj;
     u8 *a2 = (u8 *)arg2;
@@ -664,14 +679,28 @@ void func_002A0A58(void *obj, s32 arg1, void *arg2) {
  * transform it into dst. func_002A4D60 fills the scratch (input word = arg1); the
  * posed vector at scratch+0x30 is scaled by (obj+0x2C)/1024 into dst, then the
  * moby's rotation (func_00283A48 over obj+0xC0) and translation (Vec4AddVu0
- * obj+0x10) are applied. Callee func_002A4D60 UNCONFIRMED (named by shape). The
- * matching build keeps the asm; faithful TARGET_NATIVE coverage arm. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0AF8);
+ * obj+0x10) are applied. Callee func_002A4D60 UNCONFIRMED (named by shape). */
+/* MATCHED on the s136os arm (task #1324): byte-exact solo under SN 2.95.3
+ * v1.36 -fopt-stack (verify_match_unit, FACT #8810's method). Closing lever:
+ * the scratch buffer SIZE (0x50, as in func_002A0A58: the 0x80 guess
+ * gave a 0xB0 frame against the ROM's 0x80) plus the callee prototypes in this arm. */
+/* GUARD (task #1324): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002A0AF8)
+S136OS_SLOT(func_002A0AF8);
 #else
+/* Prototypes this body needs whose declarations sit in other guarded arms:
+ * the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_002A4D60(void *obj, s32 flag, void *inParams, void *outBuf);
+extern void func_00283A48(void *out, void *v, void *m);
+extern void Vec4AddVu0(void *dst, void *a, void *b);
+extern void Vec4ScaleVu0(void *dst, f32 s, void *src);
 void func_002A0AF8(void *obj, s32 arg1, void *dst) {
     u8 *o = (u8 *)obj;
-    u8 buf[0x80];
+    u8 buf[0x50];
     f32 scale = *(f32 *)(o + 0x2C) * (1.0f / 1024.0f);
 
     *(s32 *)(buf + 0x40) = arg1;
@@ -687,15 +716,30 @@ void func_002A0AF8(void *obj, s32 arg1, void *dst) {
  * the dst run from the moby's keyframe data), then for each of the count vectors
  * at dst[i] (stride 0x10) scales by (obj+0x2C)/1024 (Vec4ScaleVu0), applies the
  * moby rotation (func_00283A48 over obj+0xC0) and adds the translation
- * (Vec4AddVu0 obj+0x10). Callee func_002A4C08 UNCONFIRMED (named by shape). The
- * matching build keeps the asm; faithful TARGET_NATIVE coverage arm. */
+ * (Vec4AddVu0 obj+0x10). Callee func_002A4C08 UNCONFIRMED (named by shape). */
 #ifdef TARGET_NATIVE
 extern void func_002A4C08(void *obj, s32 count, void *arg2, void *dst);
 #endif
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0B80);
+/* MATCHED on the s136os arm (task #1324): byte-exact solo under SN 2.95.3
+ * v1.36 -fopt-stack (verify_match_unit, FACT #8810's method). Closing lever:
+ * the LOOP SHAPE (an up-counting `i < count` keeps count in s1 and the
+ * cursor in s0, as the ROM does; the down-counting loop swapped them) plus the
+ * callee prototypes in this arm. */
+/* GUARD (task #1324): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002A0B80)
+S136OS_SLOT(func_002A0B80);
 #else
+/* Prototypes this body needs whose declarations sit in other guarded arms:
+ * the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_002A4C08(void *obj, s32 count, void *arg2, void *dst);
+extern void func_00283A48(void *out, void *v, void *m);
+extern void Vec4AddVu0(void *dst, void *a, void *b);
+extern void Vec4ScaleVu0(void *dst, f32 s, void *src);
 void func_002A0B80(void *obj, s32 count, void *arg2, void *dst) {
     u8 *o = (u8 *)obj;
     u8 *p = (u8 *)dst;
@@ -703,7 +747,7 @@ void func_002A0B80(void *obj, s32 count, void *arg2, void *dst) {
     s32 i;
 
     func_002A4C08(obj, count, arg2, dst);
-    for (i = count; i > 0; i--) {
+    for (i = 0; i < count; i++) {
         Vec4ScaleVu0(p, scale, p);
         func_00283A48(p, p, o + 0xC0);
         Vec4AddVu0(p, p, o + 0x10);

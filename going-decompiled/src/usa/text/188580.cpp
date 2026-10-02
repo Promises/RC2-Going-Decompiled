@@ -124,20 +124,30 @@ void func_00288600(const Vec4f target, s32 flag) {
  * func_00288748: apply a roll step to the camera matrix. p[0] is an arcmin
  * delta; angle = p[0] * (pi/180/60) * D_1A8A80. Build a quaternion about the
  * camera right axis (matrix row 0) and pre-multiply it into g_cameraMatrix.
+ *   p   the step vector; only p[0] (arcmin) is read
+ *   ->  nothing (g_cameraMatrix is rotated in place)
  */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188580", func_00288748);
+/* GUARD (task #1324): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00288748)
+S136OS_SLOT(func_00288748);
 #else
-/* TODO(match): functional equivalent - not byte-exact; same 16-byte
- * callee-save-slot wall (original packs s0/s1/ra at sp+0x40/0x48/0x50). */
+/* MATCHED on the s136os arm (task #1324): byte-exact solo under SN 2.95.3 v1.36
+ * -fopt-stack, which packs s0/s1/ra at sp+0x40/0x48/0x50 as the ROM does (the
+ * 16-byte-slot wall of cc1 2.9). The closing lever was the matrix SIZE: QuatToMatrix3
+ * writes a 3x3 matrix (three Vec4 rows, 0x30 bytes), so `mat` is Vec4f[3] and the
+ * frame is the ROM's 0x60; a single Vec4f gave a 0x40 frame. */
 void func_00288748(const Vec4f p) {
-    Vec4f quat;  /* sp+0x00 */
-    Vec4f mat;   /* sp+0x10 (3x3) */
+    Vec4f quat;    /* sp+0x00 */
+    Vec4f mat[3];  /* sp+0x10 (3x3) */
     f32 angle = p[0] * bits_to_f32(0x3998825C) * D_1A8A80;
 
     func_002ADCE0(quat, g_cameraMatrix, angle);
-    QuatToMatrix3(quat, mat);
-    func_002840E8(g_cameraMatrix, mat, g_cameraMatrix);
+    QuatToMatrix3(quat, mat[0]);
+    func_002840E8(g_cameraMatrix, mat[0], g_cameraMatrix);
 }
 #endif
 
