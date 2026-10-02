@@ -1279,7 +1279,7 @@ void func_002F7328(void) {
     g_cinematicExitPending = 1;
     EnqueueCinematic(g_cinematicQueue, 0x15);
     StartCinematicFromQueue(g_cinematicQueue);
-    func_002F6B10(func_002F72D8, 0);
+    func_002F6B10((void *)func_002F72D8, 0);
     g_exitSceneMode[4] = 1;
     g_exitSceneArmed = 0;
 }

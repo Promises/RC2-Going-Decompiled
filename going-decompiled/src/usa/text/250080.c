@@ -171,6 +171,15 @@ extern s32 func_00351B10(void *dmaq);
 extern s32 func_00351C20(void *dmaq);
 extern s32 func_003521B0(void *dmaq, void *cmd);  /* returns 1 on enqueue, 0 if full (consumed by func_00352638) */
 extern s32 DebugPrintStub(char *fmt, ...);
+/* Callees of the s136os-arm bodies (func_003514E0, func_00351550, func_00351F58,
+   func_003525D8), which the image compiles from C: visible to every arm, because
+   C++ has no implicit declarations. */
+extern void func_0011F5E0(void);   /* disable interrupts (DI) */
+extern void func_0011F628(void);   /* enable interrupts (EI) */
+extern void func_00351550(u32 chcrCmd); /* DMAC ch4 (IPU_TO) CHCR suspend write */
+extern void func_0011AC30(s32 sema);   /* DeleteSema */
+extern s32 func_00351F58(u8 *obj);
+extern void func_0012F940(u8 *obj);
 
 /* Helpers referenced by the native (#else) FMV ring orchestration bodies. */
 void func_003506A8(FmvPtsQueue *q, u8 **pPtr0, s32 *pLen0, u8 **pPtr1, s32 *pLen1);
@@ -186,12 +195,13 @@ extern char D_1AE838[];   /* host frame-read error string */
 extern void func_00350868(u8 *stream, u8 *src, s32 len, s32 dstOfs);
 /* func_003517C0/func_003518B8: deferred-native FMV stream funcs whose #else bodies
    model them with inconsistent arg counts across call sites (true signatures need the
-   asm; FMV native backend is deferred). Declared with unspecified args so the corpus
-   compiles; resolve when the FMV native path is built. */
-extern s32 func_003517C0();
-extern s32 func_003518B8();
+   asm; FMV native backend is deferred). Declared with the stream pointer typed and the
+   rest variadic (C++ reads an empty `()` as `(void)`), so the corpus compiles; resolve
+   when the FMV native path is built. */
+extern s32 func_003517C0(void *stream, ...);
+extern s32 func_003518B8(void *stream, ...);
 extern s32 func_00352638(u8 *obj, u64 a, u64 b, s32 pos, s32 n);
-extern s32 func_003522C0();  /* FMV DMA-add-queue enqueue (deferred native; ret ignored) */
+extern s32 func_003522C0(void *dmaq, ...);  /* FMV DMA-add-queue enqueue (deferred native; ret ignored) */
 extern void ZeroQwords(void *p, s32 n);
 extern s64 func_00133850(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f);
 extern void *func_0012F738(void);
@@ -215,11 +225,7 @@ s32 func_00352AB0(void);
 /* func_00352AE0 is a stream-event callback (id 5): the dispatcher passes the
    event id in arg0 (unused) and the stream object in arg1. */
 extern s32 func_00352AE0(s32 unused, u8 *obj);
-/* DI/EI primitives + stream/host helpers referenced only by the #else bodies. */
-extern void func_0011F5E0(void);   /* disable interrupts (DI) */
-extern void func_0011F628(void);   /* enable interrupts (EI) */
-extern s32 func_00351F58(u8 *obj);
-extern void func_0012F940(u8 *obj);
+/* Stream/host helper referenced only by the #else bodies. */
 extern s32 func_0012F9B8(u8 *host);
 s32 FmvFrameQueueGetDisplaySlot(FmvFrameQueue *q);
 /* Stream-commit + reset callees referenced only by the #else bodies. */
@@ -231,9 +237,7 @@ extern s32 func_0011AEA0(s32 mode);    /* sceSifSetDChain / SIF DMA arm */
 extern s32 func_0011AFE0(void *desc, s32 count);  /* sceSifSetDma (returns id) */
 extern s32 func_0011AFC0(s32 id);      /* sceSifDmaStat (busy while >= 0) */
 extern void func_00133930(s32 len, s32 dstOfs);  /* post-transfer notify */
-/* IPU_TO channel teardown callees (func_00351F58 #else). */
-extern void func_00351550(u32 chcrCmd); /* DMAC ch4 (IPU_TO) CHCR suspend write */
-extern void func_0011AC30(s32 sema);   /* DeleteSema */
+/* Semaphore callees (CreateSema/WaitSema/SignalSema) referenced only by the #else bodies. */
 extern s32 func_0011AC20(void *param); /* CreateSema (returns sema id) */
 extern s32 func_0011AC60(s32 sema);    /* WaitSema (acquire) */
 extern s32 func_0011AC40(s32 sema);    /* SignalSema (release) */
@@ -1211,7 +1215,7 @@ s32 func_00351910(void *dmaq) {
     chcr = *(volatile u32 *)0x1000B400;        /* ch4 CHCR */
     madr = *(volatile u32 *)0x1000B410;        /* ch4 MADR */
 
-    sectorDelta = func_00351498(dmaq, madr);
+    sectorDelta = func_00351498((u32 *)dmaq, madr);
     ringSize = obj[2];                         /* N */
 
     /* consumed macroblocks -> roll head forward, outstanding down */
@@ -1273,7 +1277,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351B10);
 #else
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 91.84% / engine96 60.10%. Residual: PACKED-SAVE (2 callee saves) + 18 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 s32 func_00351B10(void *dmaq) {
-    u8 *obj = dmaq;
+    u8 *obj = (u8 *)dmaq;
 
     func_0011AC60(*(s32 *)(obj + 0x40));                    /* acquire */
     *(u32 *)(obj + 0x44) = 0;
@@ -1903,12 +1907,12 @@ void FmvFrameQueueInit(s32 *rec, s32 arg1, s32 base, s32 count) {
 
     rec[3] = 0;
     i = 0;
-    __asm__ __volatile__("" ::: "memory");
+    __asm__ __volatile__("" : : : "memory");
     rec[0] = arg1;
     rec[1] = base;
     rec[4] = count;
     rec[2] = 0;
-    __asm__ __volatile__("" ::: "memory");
+    __asm__ __volatile__("" : : : "memory");
     if (count > 0) {
         off = 0;
         do {

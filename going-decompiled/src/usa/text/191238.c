@@ -301,7 +301,7 @@ void BootSystemInit(void) {
     EnableDmacChannels();
     SetupGsDisplayBuffers(1);
     func_0011AE70(3);
-    func_00126DC0(&OnVblankInterrupt);
+    func_00126DC0((void *)&OnVblankInterrupt);
     func_002FCFC8();
     SetupMemoryArenaTable();
     func_002FCFC8();
@@ -3576,7 +3576,7 @@ void func_00295238(s32 classId) {
     if ((s32)buf <= 0xFFFFF) {                        /* never taken in practice */
         void *scratch = (void *)(g_frameArenaBase + g_sceneArenaCursor - 0xC800);
         func_0029DDE8(scratch, buf, 0xC80);
-        buf = scratch;
+        buf = (u8 *)scratch;
     }
 
     /* 4. repoint stale listener-history sound objects */
@@ -4607,7 +4607,12 @@ extern u32   g_weaponUpgradeLevel[];   /* 0x139A34 misnamed: per-level map-blip 
                                         * blip record (word view), indexed by g_pMapBlipList. */
 extern f32   g_flHeroPos[];            /* 0x189EA0 hero world pos (== g_soundBankHandlesBlk + 0x80) */
 
-extern s32   func_0028EDF0();          /* map/HUD tile tex lookup (2 or 5 args per callsite) */
+/* map/HUD tile tex lookup: (name, level), defined in text/188858. One call site
+ * below passes three extra words that the callee never reads; the `...` keeps
+ * that call compiling as C++ (an empty-paren `()` prototype means `(void)`
+ * there). */
+extern s32   func_0028EDF0(s32 name, s32 level, ...);
+extern char *GetLocalizedString(s32 id);   /* 0x2899F8, defined in text/188858 */
 extern u64   GetHudIconTex0(s32 iconIndex);
 extern void  Begin2dDrawBatch(s32 mode);
 extern void  End2dDrawBatch(void);
