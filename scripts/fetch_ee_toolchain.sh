@@ -127,6 +127,7 @@ verify "$S136DIR/cc1plus.exe" "$S136_CC1PLUS_SHA256" "installed 2.95.3 cc1plus.e
 # directory: those self-identify as `2.95.3 SN BUILD v1.07` (NOTE #6287 §3).
 # ⚠️ The 2.96 cc1plus is NOT codegen-identical to this cc1 over the MATCH_
 # members (task #1302's FACT); provisioning it proves nothing about using it.
+# ee_cc1.sh uses it only for units on tools/ee/cpp96_allowlist.txt (RULING #8915).
 E96DIR="$DEST/cc-296/lib/gcc-lib/ee/2.96-ee-001003-1"
 mkdir -p "$E96DIR"
 if [ ! -f "$E96DIR/cc1" ]; then

@@ -1,0 +1,27 @@
+# cpp96_allowlist.txt — the units whose engine96 (MATCH_) bodies may compile
+# with the 2.96-ee-001003-1 cc1plus, i.e. the only units with MATCH_ guards that
+# may be `.cpp` (RULING #8915 item 3; read by tools/ee/ee_cc1.sh).
+#
+# One `<region> <unit>` row per unit, exactly as objdiff_build.sh / diff96.sh
+# name it (`usa text/24D728`). `#` starts a comment; blank lines are ignored.
+# A row is a whole-line match: no globs, no prefixes.
+#
+# WHY A LIST: the 2.96 cc1plus is NOT codegen-identical to the 2.96 cc1 over
+# the 41 USA MATCH_ members (FACT #8914, re-derived by FACT #8919): 30
+# IDENTICAL, 10 DIFFER-DIAG (cc1plus exits non-zero and drops statements),
+# 1 DIFFER-CODEGEN (CheckCameraUnderwater 0x271E98, struct-copy lowering with
+# no diagnostic). A unit is listed only when EVERY one of its MATCH_ members
+# measured IDENTICAL and its TU compiles clean under cc1plus:
+#   191238 1A00F0 1EFFC0 24D728  FACT #8914 (task #1302)
+#   250080                       FACT #8925 (task #1307, FmvRequestStop)
+# Not listed, and so refused: 16E980, 188858, 1A8180, 235FE8 (DIFFER members or
+# a cc1plus diagnostic in the TU), and every unit #8914 did not cover.
+#
+# CHANGING THIS FILE is RULING #8915's call, through its revoked_by clause: a
+# FACT showing every MATCH_ member of an unlisted unit IDENTICAL adds a row; a
+# FACT showing a listed unit DIFFER removes one. A row here is not evidence.
+usa text/191238
+usa text/1A00F0
+usa text/1EFFC0
+usa text/24D728
+usa text/250080

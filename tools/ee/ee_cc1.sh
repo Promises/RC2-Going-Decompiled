@@ -44,6 +44,22 @@
 #     so ONLY its exit status says whether the arm compiled: any non-zero exit
 #     fails here and the .s is deleted.
 #
+# THE engine96 C++ ROUTE IS ALLOWLISTED (RULING #8915 item 3, task #1308).
+# The 2.96 cc1plus is not codegen-identical to the 2.96 cc1 over the MATCH_
+# members (FACT #8914: 10 dropped-statement diagnostics, 1 silent struct-copy
+# lowering difference), so `engine96` + a `.cpp` source compiles ONLY for a
+# unit listed in tools/ee/cpp96_allowlist.txt and is otherwise REFUSED (exit 1,
+# naming the unit and the ruling). There is no fallback to the 2.96 cc1: a
+# `.cpp` unit compiled as C would be the wrong front end with exit 0. The unit
+# is named by the caller in EE_CC1_UNIT="<region> <unit>" (objdiff_build.sh,
+# diff96.sh), because an override source lives at a scratch path that says
+# nothing about which unit it stands for; without it, the unit is read from a
+# going-decompiled/src/<region>/<unit>.cpp path, and any other path is refused.
+# CPP96_ALLOWLIST_MD5, when set, is the host's digest of the allowlist and is
+# verified with mount_sync.sh before the read (FACT #8713: a grown host-written
+# file can be read truncated). The sdk29 and s136 arms, and every `.c` unit,
+# are unaffected.
+#
 # THE C ARM is byte-for-byte the cpp/cc1 command lines build.sh and
 # objdiff_build.sh ran before this file existed.
 #
@@ -101,6 +117,31 @@ esac
 # the compiler binary is the last word of $CC
 for w in $CC; do bin="$w"; done
 [ -f "$bin" ] || fail "$ARM $SRCLANG compiler missing: $bin (run scripts/fetch_ee_toolchain.sh)"
+
+if [ "$ARM/$SRCLANG" = engine96/c++ ]; then
+  ALLOW=tools/ee/cpp96_allowlist.txt
+  if [ -n "${EE_CC1_UNIT:-}" ]; then
+    unitkey="$EE_CC1_UNIT"
+  else
+    case "$SRC" in
+      going-decompiled/src/*/*.cpp|/work/going-decompiled/src/*/*.cpp|./going-decompiled/src/*/*.cpp)
+        rest="${SRC#*going-decompiled/src/}"; unitkey="${rest%%/*} ${rest#*/}"; unitkey="${unitkey%.cpp}" ;;
+      *) fail "engine96 C++ route: cannot tell which unit $SRC is (set EE_CC1_UNIT=\"<region> <unit>\"); refusing (RULING #8915)" ;;
+    esac
+  fi
+  [ -f "$ALLOW" ] || fail "engine96 C++ route: $ALLOW missing; refusing $SRC (RULING #8915)"
+  if [ -n "${CPP96_ALLOWLIST_MD5:-}" ]; then
+    sh tools/ee/mount_sync.sh check "$ALLOW" "$CPP96_ALLOWLIST_MD5" || fail "engine96 C++ route: $ALLOW unreadable (mount-sync)"
+  fi
+  listed=0
+  while IFS= read -r row || [ -n "$row" ]; do
+    row="${row%%#*}"
+    # shellcheck disable=SC2086
+    set -- $row   # trims and collapses whitespace; a row is exactly two words
+    [ $# -eq 2 ] && [ "$1 $2" = "$unitkey" ] && { listed=1; break; }
+  done < "$ALLOW"
+  [ "$listed" = 1 ] || fail "engine96 C++ route REFUSED for unit '$unitkey' ($SRC): not on $ALLOW. The 2.96 cc1plus is not codegen-identical to cc1 on MATCH_ bodies (FACT #8914); RULING #8915 keeps every unlisted MATCH_ unit .c. No fallback to cc1."
+fi
 
 rm -f "$OUT_I" "$OUT_S"
 if [ "$SRCLANG" = c ]; then

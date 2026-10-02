@@ -37,12 +37,13 @@ OBJDIFF=tools/objdiff-cli-macos-arm64
 CC="${CC296:-tools/ee/cc-296}"   # CC296 env = isolated (e.g. split-address patched) cc1 dir for gate validation
 CC1="$CC/lib/gcc-lib/ee/2.96-ee-001003-1/cc1"
 [ -f "$CC1" ] || { echo "2.96 toolchain missing — run scripts/fetch_ee_toolchain.sh" >&2; exit 2; }
-# This script runs the C front end (cc1) only. A .cpp unit would be preprocessed
-# as C and compiled by cc1 — a silent wrong front end — so it is refused. The
-# 2.96 cc1plus is NOT codegen-identical to cc1 on the MATCH_ members (task
-# #1302's FACT: dropped statements on C++ diagnostics, and a struct-copy
-# lowering difference in CheckCameraUnderwater), so it is not substituted here.
-case "$CFILE" in *.cpp) echo "diff96.sh: $CFILE is a .cpp unit; this loop compiles C with the 2.96 cc1 only (task #1302) — refusing" >&2; exit 2;; esac
+# A .cpp unit compiles with the 2.96 cc1plus ONLY if it is on
+# tools/ee/cpp96_allowlist.txt (RULING #8915, FACT #8914: cc1plus is not
+# codegen-identical to cc1 on MATCH_ bodies). ee_cc1.sh enforces that and
+# refuses every other .cpp unit; this loop does not refuse .cpp itself any more
+# (task #1302 did, before the list existed — task #1308), so for a listed unit
+# it scores the same front end objdiff_build.sh's engine96 arm does.
+ALLOW96_MD5="$(sh "$(dirname "$0")/mount_sync.sh" md5 tools/ee/cpp96_allowlist.txt)"
 INC="-Igoing-decompiled/include -Igoing-decompiled/include/rtl/ee -Igoing-decompiled/include/rtl/common"
 ASF="-march=r5900 -mabi=eabi -no-pad-sections -EL -G0 -Igoing-decompiled/build/$REGION/include"
 # MATCH_<func> promotes exactly the target function to real engine C (siblings stay
@@ -76,7 +77,7 @@ EOF
 docker --context colima-ee-x86 run --rm -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work
   mips-linux-gnu-as $ASF -o $W/target.o $W/target.s
-  CC296=$CC sh tools/ee/ee_cc1.sh engine96 $CFILE $W/base.i $W/base.s '$CPPDEF $INC' '-O2 $GFLAG $CC1EXTRA'
+  EE_CC1_UNIT='$REGION $UNIT' CPP96_ALLOWLIST_MD5=$ALLOW96_MD5 CC296=$CC sh tools/ee/ee_cc1.sh engine96 $CFILE $W/base.i $W/base.s '$CPPDEF $INC' '-O2 $GFLAG $CC1EXTRA'
 "
 # (2) HOST: apply the engine post-passes (python3 not in the container).
 python3 "$(dirname "$0")/engine_swap_fix.py" "$W/base.s"

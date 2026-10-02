@@ -372,13 +372,17 @@ if [ "$BUILD96" = 1 ]; then
   # MOUNT-SYNC: the base C is read a second time; it must still be the file
   # step (1) compiled (an edit mid-run would score two different sources).
   BASE_MD5_2A="$(sh tools/ee/mount_sync.sh md5 "$BASECFILE")"
+  # RULING #8915: for a .cpp unit, ee_cc1.sh refuses the engine96 arm unless
+  # "$REGION $UNIT" is on tools/ee/cpp96_allowlist.txt (task #1308). The unit is
+  # named here, not read from $BASECFILE, which may be an override at any path.
+  ALLOW96_MD5="$(sh tools/ee/mount_sync.sh md5 tools/ee/cpp96_allowlist.txt)"
   if [ "$BASE_MD5_2A" != "$BASE_MD5" ]; then
     echo "objdiff_build: FATAL — $BASECFILE changed on the host between step (1) and (2a) (md5 $BASE_MD5 -> $BASE_MD5_2A); rerun" >&2; exit 2
   fi
 docker --context "$EE_CTX" run --rm -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work
   sh tools/ee/mount_sync.sh check $BASECFILE $BASE_MD5
-  CC296=$CC296 sh tools/ee/ee_cc1.sh engine96 $BASECFILE $W/base96.i $W/base96.s '$CPPDEF96 $INC' '-O2 $GFLAG96 $CC1EXTRA96'
+  EE_CC1_UNIT='$REGION $UNIT' CPP96_ALLOWLIST_MD5=$ALLOW96_MD5 CC296=$CC296 sh tools/ee/ee_cc1.sh engine96 $BASECFILE $W/base96.i $W/base96.s '$CPPDEF96 $INC' '-O2 $GFLAG96 $CC1EXTRA96'
 "
   # (2b, host) the engine post-passes, in diff96.sh's order.
   python3 tools/ee/engine_swap_fix.py "$W/base96.s"
