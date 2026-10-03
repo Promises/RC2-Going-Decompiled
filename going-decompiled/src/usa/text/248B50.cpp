@@ -1347,20 +1347,26 @@ extern void func_0034A7B0(GuiWidget *w, s32 idx1, s32 idx2, f32 a, f32 b, f32 c,
  * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 45/56 words differ;
  * frozen-.s census: 2 callee GPR saves, 1 fp saves.
  * Residual: PACKED-SAVE (2 callee GPR saves, 1 fp) — 2 of the 45 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated. */
+/* SCREEN-EXACT on the s136os arm (SN 2.95.3 v1.36 -fopt-stack; task #1389,
+ * masked word screen + relocation compare, NOT vmu): a CANDIDATE, not a match.
+ * Levers, each needed (screen with that one undone): +0x10 stored as the float
+ * 0.0f (the store cc1 then reloads into $f20 as the four calls' 0.0 argument,
+ * as the ROM does; as an integer 0: 13/57); the step stored as the float
+ * literal 0.0666659996f (bits 0x3D88882F; through a u32 union cc1 stores it from
+ * a GPR: the original first diff, @4 lui 0x3d88); and the 1.0f/step stores
+ * written in field order +0x0/+0x4/+0x8/+0xC/+0x18 (cc1's scheduler then
+ * emits the ROM's +0xC-first order; in the old order: 5/57). */
 void func_0034A6B0(GuiWidget *w) {
-    union { u32 u; f32 f; } step;
-    step.u = 0x3D88882Fu;   /* per-frame animation step, exact bits from the .s */
-
-    *(s32 *)((char *)w + 0x10) = 0;     /* cursor (integer 0) */
+    *(f32 *)((char *)w + 0x10) = 0.0f;
     w->unk1C = 0;
     w->unk20 = 0;
     w->unk24 = 0.0f;
     w->unk28 = 0;
-    *(f32 *)((char *)w + 0xC) = 1.0f;
-    w->unk18 = step.f;
     w->unk00 = 1.0f;
     *(f32 *)((char *)w + 0x4) = 1.0f;
     *(f32 *)((char *)w + 0x8) = 1.0f;
+    *(f32 *)((char *)w + 0xC) = 1.0f;
+    w->unk18 = 0.0666659996f;
 
     func_0034A7B0(w, 0, 0, 0.0f, 0.0f, 0.0f, 0.0f);
     func_0034A7B0(w, 0, 1, 0.0f, 0.0f, 0.0f, 0.0f);
