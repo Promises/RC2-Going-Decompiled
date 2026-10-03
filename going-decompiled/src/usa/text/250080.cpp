@@ -42,6 +42,22 @@ extern s32 D_1AE788; /* vblank field-flip "frame displayed" latch */
 extern s32 D_1AE78C; /* cleared with D_1AE788 by the vblank waiter */
 extern s32 D_1AE790; /* GIF-DMA "frame consumed" pending flag */
 
+/* FMV_ARENA_BASE_GP: ADDRESSING-MODEL DEVICE (RULING #9073 under RULING #8620; emits
+ * no code). An offset-0 assembler equate of g_pFmvArenaBase with no `.extern` size,
+ * so the one access spelled through it assembles gp-relative while every access
+ * spelled g_pFmvArenaBase keeps the `.extern g_pFmvArenaBase, 16` absolute form
+ * above. It reproduces the ROM's delay-slot read in FmvDecodeThreadEntry,
+ * 0x0035283C `lw $2,%gp_rel(g_pFmvArenaBase)($28)`; the relocation names the real
+ * symbol. At FILE SCOPE (task #1434), not in the member's arm, so the s136os splice
+ * admits it (FACT #9057). EE only: on native it is g_pFmvArenaBase. */
+#ifndef TARGET_NATIVE
+__asm__("g_pFmvArenaBaseGp = g_pFmvArenaBase");
+extern u8 *g_pFmvArenaBaseGp;
+#define FMV_ARENA_BASE_GP g_pFmvArenaBaseGp
+#else
+#define FMV_ARENA_BASE_GP g_pFmvArenaBase
+#endif
+
 /* Debug printf-stub format strings (rodata). */
 extern char D_1AE7D8[]; /* "[ Error ] %s\n" */
 extern char D_1AE860[]; /* frame-drop diagnostic */
@@ -286,8 +302,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", InitFmvPlayback
  * the vblank handler (func_0011A950 + func_00126DC0(OnVblankInterrupt)), tear down the
  * DMA queues (func_003525D8/func_003505E0/func_003513F0 over the arena sub-objects),
  * quiesce again, and clear bit 1 of the INTC-mask reg 0x1000E000.
- * Blocked (match): the original mixes %gp_rel and absolute %hi/%lo accesses to
- * g_pFmvArenaBase/g_fmvThreadId in one function — only one form per declaration.
+ * Blocked (match): the ROM's one %gp_rel read of g_pFmvArenaBase (0x003503EC, the
+ * jal func_003512F0 delay slot) is that callee's ARGUMENT. FMV_ARENA_BASE_GP can
+ * spell it, but this body passes no argument, so there is nothing for it to act on
+ * (s136 screen 51/59, task #1434). With the args restored, func_00126DC0 declared
+ * s32 and the device on the first read, the screen is EXACT 59/59; that needs
+ * prototype changes to the four callees' declarations AND their definitions in
+ * this file, which is held for a ruling (task #1434).
  * NEEDS-TESTER-ORACLE: the arena-relative args the asm passes to the void(void)
  * callees (func_003512F0/func_00352B88/func_003505E0/func_003513F0 — func_00352B88 is
  * a confirmed void(void) 2.9 match) are dead-passed in the original and dropped here;
@@ -1991,25 +2012,45 @@ s32 func_00352780(FmvStream *obj) {
  * (func_00352B90 at +0xD9168), primes the host frame reader (FmvDisplayWorkerLoop), then
  * decodes frames (func_00352620) as long as the arena's "more data" flag
  * (+0xD9174) stays set and no frame reports completion (returns 1), and finally
- * drives the stream to its terminal state 3 (func_00352628). Matching arm stays
- * asm (8-byte-packed saves + a %gp_rel/absolute reload-artifact wall on
- * g_pFmvArenaBase); the #else is the structure-exact model (the frame decode
- * itself is the deferred FMV native backend, but the loop structure is exact). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvDecodeThreadEntry);
+ * drives the stream to its terminal state 3 (func_00352628).
+ *
+ * @param obj  the FMV stream object (arena+0xD9048).
+ * @return     func_00352628's result for the terminal state.
+ *
+ * The loop re-reads the arena base each pass. The ROM reads it absolute
+ * (lui/lw, 0x00352814) before the loop and gp-relative in the back-edge
+ * branch's delay slot (0x0035283C); cc1 rotates the loop condition into exactly
+ * those two copies. The two reads are written as two C expressions so that only
+ * the back-edge copy goes through FMV_ARENA_BASE_GP (the device above): one
+ * expression through the device makes BOTH copies gp-relative (19/39, task
+ * #1434), and without the device the back-edge copy is lui/lw (13/39).
+ *
+ * GUARD (task #1434): on EE this C is the image's FmvDecodeThreadEntry, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C.
+ * History: task #513 measured sdk29 92.38% / engine96 64.59% (unit objdiff report,
+ * packed saves); task #1389's s136 screen read 13/39 for the single-expression
+ * loop. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_FmvDecodeThreadEntry)
+S136OS_SLOT(FmvDecodeThreadEntry);
 #else
-/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 92.38% / engine96 64.59%. Residual: PACKED-SAVE (4 callee saves) + 5 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 extern void FmvStreamStartDma(u8 *stream);
 extern s32 FmvDisplayWorkerLoop(u8 *host);
 extern void func_00352B90(FmvFrameQueue *q);
 s32 FmvDecodeThreadEntry(FmvStream *obj) {
+    u8 *arena;
+
     FmvStreamStartDma((u8 *)obj + 0x48);
     func_00352B90((FmvFrameQueue *)(g_pFmvArenaBase + 0xD9168));
     FmvDisplayWorkerLoop((u8 *)obj);
-    while (*(s32 *)(g_pFmvArenaBase + 0xD9174) != 0) {
+    arena = g_pFmvArenaBase;
+    while (*(s32 *)(arena + 0xD9174) != 0) {
         if (func_00352620(obj) == 1) {
             break;
         }
+        arena = FMV_ARENA_BASE_GP;
     }
     return func_00352628(obj, 3);
 }

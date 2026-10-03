@@ -255,6 +255,7 @@ usa text/250080 FmvFrameQueuePush
 usa text/250080 func_00352000
 usa text/250080 func_00350608
 usa text/250080 func_00352780
+usa text/250080 FmvDecodeThreadEntry
 usa text/1D54C0 func_002DF668
 usa text/1D54C0 func_002DF710
 usa text/1A00F0 func_002A07B0
