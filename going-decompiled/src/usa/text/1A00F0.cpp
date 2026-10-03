@@ -458,17 +458,22 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0798);
  * +0x1C/+0x20/+0x24/+0x28, derives a 0x70000000-based scratchpad packet pointer
  * at +0x4 by walking moby's descriptor table (moby+0x24 -> +0x1C -> [rec[0]<<2 +4]
  * -> +idx), then push-links rec at the head of moby's +0x54 list.
- * Left INCLUDE_ASM, but not a wall. Task #759 brought it to one swapped pair
- * of adjacent instructions: the ROM has `sb` (rec[1] = 1) before
- * `lui a1,0x7000`. The float grouping and the late pointer chain do come out
- * of C, using volatile float stores and volatile rec[0]/class-pointer reads.
- * The C that gets there and the variants tried are in FACT #8055.
+ * On cc1 2.9, task #759 brought it to one swapped pair of adjacent
+ * instructions (the ROM has `sb` (rec[1] = 1) before `lui a1,0x7000`), using
+ * volatile float stores and volatile rec[0]/class-pointer reads (FACT #8055).
+ * The image's copy is compiled by the s136os arm instead (task #1394).
  */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A07B0);
+/* GUARD (task #1394): on EE the #else body below is the image's func_002A07B0, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002A07B0)
+S136OS_SLOT(func_002A07B0);
 #else
-/* SCREEN-EXACT on the s136os arm (SN 2.95.3 v1.36 -fopt-stack; task #1389,
- * masked word screen + relocation compare, NOT vmu): a CANDIDATE, not a match.
+/* MATCHED on the s136os arm (task #1394: vmu with the base seeded, image
+ * cmp 0; screened by task #1389, SN 2.95.3 v1.36 -fopt-stack, masked words
+ * and relocations).
  * Levers, each needed (screen with that one undone): `sub` is an s32 - the ROM
  * stores $5 with no zero-extension (as u8: the original first diff, @1 andi);
  * the four 1.0f stores written +0x1C/+0x20/+0x24/+0x28 so cc1 emits the ROM's

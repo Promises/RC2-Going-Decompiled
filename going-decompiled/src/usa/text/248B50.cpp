@@ -1330,11 +1330,17 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0
  * sub-records via func_0034A7B0 for each (idx1,idx2) in {(0,0),(0,1),(1,0),
  * (1,1)} (all four record vectors written 0).
  *
- * WALL: callee saves ($16,$31) plus a saved $f20 reloaded as the 0.0 constant —
- * the original keeps the just-stored +0x10 zero live in $f20 across all four
- * calls; the pinned cc1 reserves a 0x20 frame and re-materialises 0.0. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A6B0);
+ * The ROM keeps the just-stored +0x10 zero live in $f20 across all four calls,
+ * with packed saves ($16,$31,$f20): SN 2.95.3 v1.36 -fopt-stack's code (FACT
+ * #8810), which the s136os arm compiles it with; cc1 2.9 reserves a 0x20 frame
+ * and re-materialises 0.0. */
+/* GUARD (task #1394): on EE the #else body below is the image's func_0034A6B0, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0034A6B0)
+S136OS_SLOT(func_0034A6B0);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -1347,8 +1353,9 @@ extern void func_0034A7B0(GuiWidget *w, s32 idx1, s32 idx2, f32 a, f32 b, f32 c,
  * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 45/56 words differ;
  * frozen-.s census: 2 callee GPR saves, 1 fp saves.
  * Residual: PACKED-SAVE (2 callee GPR saves, 1 fp) — 2 of the 45 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated. */
-/* SCREEN-EXACT on the s136os arm (SN 2.95.3 v1.36 -fopt-stack; task #1389,
- * masked word screen + relocation compare, NOT vmu): a CANDIDATE, not a match.
+/* MATCHED on the s136os arm (task #1394: vmu with the base seeded, image
+ * cmp 0; screened by task #1389, SN 2.95.3 v1.36 -fopt-stack, masked words
+ * and relocations).
  * Levers, each needed (screen with that one undone): +0x10 stored as the float
  * 0.0f (the store cc1 then reloads into $f20 as the four calls' 0.0 argument,
  * as the ROM does; as an integer 0: 13/57); the step stored as the float
@@ -1778,10 +1785,29 @@ void func_0034B770(GuiWidget *w) {
  * update (func_0034B770) and the +0x140 element step (func_0034A3C0). Then a
  * dismiss countdown at +0x3F4: while non-zero, decrement; on reaching zero it
  * clears +0xC/+0x3F8, arms +0x400, and retracts the four sub-panels
- * (func_0034A370(-1) at +0x1D4/+0x25C/+0x2E4/+0x36C). Matching arm stays asm
- * (frame-layout wall). */
+ * (func_0034A370(-1) at +0x1D4/+0x25C/+0x2E4/+0x36C). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034B950);
+/* ADDRESSING-MODEL DEVICE for func_0034B950's four layout offsets (emits no
+ * code; RULING #8620's form on an extern declaration). It sits at FILE SCOPE,
+ * not inside the member's #else arm, so that the unit's own 2.9 TU declares the
+ * symbols too: tools/ee/s136os_splice.sh never carries an `.extern` for a symbol
+ * the unit already declares, so the s136os TU's end-of-file `, 4` lines (cc1's,
+ * from the f32 extents) are not carried in front of the block, where they
+ * would make the loads gp-relative (task #1394: the splice REFUSED the in-arm
+ * placement as ADDRESSING D_1AE740..D_1AE74C). No 2.9 code in this unit names
+ * any of the four, so nothing else changes. */
+__asm__(".extern D_1AE740, 16");
+__asm__(".extern D_1AE744, 16");
+__asm__(".extern D_1AE748, 16");
+__asm__(".extern D_1AE74C, 16");
+#endif
+/* GUARD (task #1394): on EE the #else body below is the image's func_0034B950, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0034B950)
+S136OS_SLOT(func_0034B950);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -1796,18 +1822,16 @@ extern void func_0034A3C0(GuiWidget *w, s32 applyStep);
  * frozen-.s census: 2 callee GPR saves, 0 fp saves.
  * Residual: PACKED-SAVE (2 callee GPR saves) — 2 of the 55 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated. */
 extern void func_0034B770(GuiWidget *w);
-/* SCREEN-EXACT on the s136os arm (SN 2.95.3 v1.36 -fopt-stack; task #1389,
- * masked word screen + relocation compare, NOT vmu): a CANDIDATE, not a match.
+/* MATCHED on the s136os arm (task #1394: vmu with the base seeded, image
+ * cmp 0; screened by task #1389, SN 2.95.3 v1.36 -fopt-stack, masked words
+ * and relocations).
  * Levers, each needed (screen with that one undone): the four offsets read
- * absolute through `.extern ,16` (ADDRESSING-MODEL DEVICE, RULING #8620 class;
- * without it they are gp-relative: 56/64); each pair read into locals scoped
+ * absolute through `.extern ,16` (ADDRESSING-MODEL DEVICE, RULING #8620 class,
+ * at file scope above this function's guard; without it they are
+ * gp-relative: 56/64); each pair read into locals scoped
  * to its own group before the stores (function-scope locals colour the FPRs
  * differently: 12/64); and the anchor pointer at +0x8 re-read for each element,
  * as the ROM does (cached once per group: the original first diff, @7). */
-__asm__(".extern D_1AE740, 16");
-__asm__(".extern D_1AE744, 16");
-__asm__(".extern D_1AE748, 16");
-__asm__(".extern D_1AE74C, 16");
 extern f32 D_1AE740, D_1AE744, D_1AE748, D_1AE74C;
 void func_0034B950(GuiWidget *w) {
     char *b = (char *)w;

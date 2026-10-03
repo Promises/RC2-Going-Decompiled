@@ -3993,9 +3993,27 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_0
 
 /* Build an in-progress save image for slot `slot`: timestamp it from the CD
  * RTC, snapshot the current level WAD, build the image at `dst`, and arm the
- * 0x13-frame autosave countdown if idle. Wall: many leaf calls. */
+ * 0x13-frame autosave countdown if idle. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF668);
+/* ADDRESSING-MODEL DEVICE for the D_1A7360 RTC buffer that func_002DF668 and
+ * func_002DF710 stamp from (emits no code; RULING #8620's form on an extern
+ * declaration). It sits at FILE SCOPE, not inside either member's #else arm, so
+ * that the unit's own 2.9 TU declares the symbol too: tools/ee/s136os_splice.sh
+ * never carries an `.extern` for a symbol the unit already declares, so the
+ * s136os TU's end-of-file `, 8` line (cc1's, from the `[8]` extent) is not
+ * carried in front of the block, where it would make the access gp-relative
+ * (task #1394: the splice REFUSED the in-arm placement for both members as
+ * ADDRESSING D_1A7360). No 2.9 code in this unit names D_1A7360, so nothing
+ * else changes. */
+__asm__(".extern D_1A7360, 16");
+#endif
+/* GUARD (task #1394): on EE the #else body below is the image's func_002DF668, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002DF668)
+S136OS_SLOT(func_002DF668);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -4008,7 +4026,8 @@ extern void BuildSaveImage(void *dst);
 /* The RTC timestamp buffer the save image is stamped from (0x1A7360). The EE
  * arm names it by its ROM symbol D_1A7360 (the relocation the ROM carries);
  * the native runtime knows the same address as D_001A7360. The `.extern ,16`
- * plus the 8-byte extent is an ADDRESSING-MODEL DEVICE (RULING #8620 class,
+ * (at file scope above this function's guard) plus the 8-byte extent is an
+ * ADDRESSING-MODEL DEVICE (RULING #8620 class,
  * as D_001B1E90 above): cc1 treats it as -G8 small data and emits each use as
  * a one-insn `la` macro, so the address is materialised once per call as in
  * the ROM instead of CSE'd into a callee-saved register; the assembler then
@@ -4017,7 +4036,6 @@ extern void BuildSaveImage(void *dst);
  * same device, the lui/addiu pair lands in swapped registers. */
 #ifndef SAVE_CLOCK_BUF
 #ifndef TARGET_NATIVE
-__asm__(".extern D_1A7360, 16");
 extern u8 D_1A7360[8];
 #define SAVE_CLOCK_BUF ((void *)D_1A7360)
 #else
@@ -4035,9 +4053,9 @@ extern u8 g_areaTable[];
  * +0x174/+0x18), clear +0x148, and arm the 0x13-frame autosave countdown
  * (+0x164, with +0x168 cleared) if it is idle (negative).
  *
- * SCREEN-EXACT on the s136os arm (SN 2.95.3 v1.36 -fopt-stack; task #1389,
- * masked word screen + relocation compare, NOT vmu): a CANDIDATE, not a
- * match. Levers: the record fields through g_areaTable (the ROM's lui/addiu
+ * MATCHED on the s136os arm (task #1394: vmu with the base seeded, image
+ * cmp 0; screened by task #1389, SN 2.95.3 v1.36 -fopt-stack, masked words
+ * and relocations). Levers: the record fields through g_areaTable (the ROM's lui/addiu
  * base in $18) rather than the five gp-relative aliases D_00139554 ...
  * D_00139548; the D_1A7360 device above; `slot` an s32 (the ROM stores $5
  * with no sign extension). */
@@ -4062,8 +4080,13 @@ void func_002DF668(void *dst, s32 slot) {
 /* Build a fresh (new-game-style) save image into `dst` for slot `slot`:
  * close any pending stream, timestamp from the CD RTC, build the image, mark
  * the slot's saved-progress word 0, and arm the autosave countdown if idle. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF710);
+/* GUARD (task #1394): on EE the #else body below is the image's func_002DF710, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002DF710)
+S136OS_SLOT(func_002DF710);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -4073,11 +4096,12 @@ extern void func_00131A98(void *clock);
 extern void BuildSaveImage(void *dst);
 /* (end of this body's declarations) */
 /* The RTC timestamp buffer: the same ADDRESSING-MODEL DEVICE as
- * func_002DF668's (see there); repeated because the s136os arm compiles this
- * arm alone, and guarded so native, which compiles both, sees it once. */
+ * func_002DF668's (see there; its `.extern ,16` is at file scope above
+ * func_002DF668's guard). The declaration is repeated because the s136os arm
+ * compiles this arm alone, and guarded so native, which compiles both, sees it
+ * once. */
 #ifndef SAVE_CLOCK_BUF
 #ifndef TARGET_NATIVE
-__asm__(".extern D_1A7360, 16");
 extern u8 D_1A7360[8];
 #define SAVE_CLOCK_BUF ((void *)D_1A7360)
 #else
@@ -4093,9 +4117,9 @@ extern u8 g_areaTable[];
  * record dst at +0x174, and arm the 0x13-frame autosave countdown (+0x164,
  * clearing +0x168) if it is idle (negative).
  *
- * SCREEN-EXACT on the s136os arm (SN 2.95.3 v1.36 -fopt-stack; task #1389,
- * masked word screen + relocation compare, NOT vmu): a CANDIDATE, not a
- * match. Levers: the record fields through g_areaTable instead of the
+ * MATCHED on the s136os arm (task #1394: vmu with the base seeded, image
+ * cmp 0; screened by task #1389, SN 2.95.3 v1.36 -fopt-stack, masked words
+ * and relocations). Levers: the record fields through g_areaTable instead of the
  * gp-relative aliases D_00139528 ... D_00139554 / D_00139410, with the base
  * taken AFTER the calls (the ROM materialises it into a caller-saved register
  * there; taken at entry, cc1 holds it in an extra callee-saved register), and

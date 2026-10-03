@@ -455,18 +455,22 @@ s32 func_003505E0(void) {
  * not compiler output — no C can produce it. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350600);
 
-#ifndef TARGET_NATIVE
-/* func_00350608: read-chunk dispatch on the stream object. Blocked:
- * 8-byte-packed saves (s0@0x0, ra@0x8; see header). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350608);
+/* func_00350608: read-chunk dispatch on the stream object. */
+/* GUARD (task #1394): on EE the #else body below is the image's func_00350608, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00350608)
+S136OS_SLOT(func_00350608);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern void func_001338F0(s32 commitBase, s32 len, s32 commitArg, s32 queued, s32 arg5);
 /* (end of this body's declarations) */
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 52.05% / engine96 33.50%. Residual: PACKED-SAVE (2 callee saves) + 16 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
-/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
-   saves (s0@0x0, ra@0x8). Revisit with the gameplay-TU compiler.
+/* The 8-byte-packed callee saves (s0@0x0, ra@0x8) are SN 2.95.3 v1.36
+   -fopt-stack's (FACT #8810), which the s136os arm compiles this body with.
 
    Commit the buffered packet to the IPU bitstream feeder: truncate the staged
    commit length (commitLen) to a whole number of 1KB (0x400) units (a signed
@@ -480,8 +484,9 @@ extern void func_001338F0(s32 commitBase, s32 len, s32 commitArg, s32 queued, s3
    both inside the packet-header staging area hdr[0x28] (NOT q->queued@0x50 - the
    cmp oracle caught an earlier version that read queued). Raw offsets kept.
 
-   SCREEN-EXACT on the s136os arm (SN 2.95.3 v1.36 -fopt-stack; task #1389,
-   masked word screen + relocation compare, NOT vmu): a CANDIDATE, not a match.
+   MATCHED on the s136os arm (task #1394: vmu with the base seeded, image
+   cmp 0; screened by task #1389, SN 2.95.3 v1.36 -fopt-stack, masked words
+   and relocations).
    Levers: the snap written as the division commitLen / 0x400 * 0x400 (cc1
    expands it to the ROM's slt/movn; the hand-expanded ?: compiled to a
    bltzl), and two declaration fixes - func_001338F0 is void (its matched
@@ -1567,10 +1572,14 @@ s32 func_00351FB0(void *stream) {
 }
 #endif
 
-#ifndef TARGET_NATIVE
-/* func_00352000: sema-guarded 2KB round-up of the byte cursor. Blocked:
- * 8-byte-packed saves (s0@0x0, ra@0x8). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352000);
+/* func_00352000: sema-guarded 2KB round-up of the byte cursor. */
+/* GUARD (task #1394): on EE the #else body below is the image's func_00352000, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00352000)
+S136OS_SLOT(func_00352000);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -1578,8 +1587,8 @@ extern s32 func_0011AC60(s32 sema);    /* WaitSema (acquire) */
 extern s32 func_0011AC40(s32 sema);    /* SignalSema (release) */
 /* (end of this body's declarations) */
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 75.67% / engine96 58.62%. Residual: PACKED-SAVE (2 callee saves) + 12 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
-/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
-   saves (s0/ra). Revisit with the gameplay-TU compiler.
+/* The 8-byte-packed callee saves (s0/ra) are SN 2.95.3 v1.36
+   -fopt-stack's (FACT #8810), which the s136os arm compiles this body with.
 
    NOTE(type): `obj` is the embedded bitstream sub-object (FmvStream+0x48); sema
    +0x40, residual byte cursor +0x14 (raw offsets, sibling type not recovered).
@@ -1592,8 +1601,9 @@ extern s32 func_0011AC40(s32 sema);    /* SignalSema (release) */
    $2 at `jr` is SignalSema's return value (NOT the rounded cursor) - return that.
    (Fixes else_divergences #15: the return diverged on real R5900.)
 
-   SCREEN-EXACT on the s136os arm (SN 2.95.3 v1.36 -fopt-stack; task #1389,
-   masked word screen + relocation compare, NOT vmu): a CANDIDATE, not a match.
+   MATCHED on the s136os arm (task #1394: vmu with the base seeded, image
+   cmp 0; screened by task #1389, SN 2.95.3 v1.36 -fopt-stack, masked words
+   and relocations).
    Levers: the round-up written as the signed division it is,
    (v + 0x7FF) / 0x800 * 0x800 - cc1 expands it to the ROM's slt/movn
    (the +0xFFE is the division's own negative-input bias), where the
@@ -1933,25 +1943,30 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/250080", func_0
  * low-confidence body. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003526A8);
 
-#ifndef TARGET_NATIVE
-/* func_00352780: poll stream-done then host-side done. Blocked:
- * 8-byte-packed saves (s0/s1/ra). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352780);
+/* func_00352780: poll stream-done then host-side done. */
+/* GUARD (task #1394): on EE the #else body below is the image's func_00352780, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00352780)
+S136OS_SLOT(func_00352780);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern s32 func_0012F9B8(u8 *host);
 /* (end of this body's declarations) */
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 75.39% / engine96 75.61%. Residual: PACKED-SAVE (3 callee saves) + 8 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
-/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
-   saves (s0/s1/ra). Revisit with the gameplay-TU compiler.
+/* The 8-byte-packed callee saves (s0/s1/ra) are SN 2.95.3 v1.36
+   -fopt-stack's (FACT #8810), which the s136os arm compiles this body with.
 
    End-of-playback poll: false while the embedded stream still has bytes queued
    (func_00352680 != 0); once the stream has drained, report whether the host
    side has also signalled done (func_0012F9B8 != 0).
 
-   SCREEN-EXACT on the s136os arm (SN 2.95.3 v1.36 -fopt-stack; task #1389,
-   masked word screen + relocation compare, NOT vmu): a CANDIDATE, not a match.
+   MATCHED on the s136os arm (task #1394: vmu with the base seeded, image
+   cmp 0; screened by task #1389, SN 2.95.3 v1.36 -fopt-stack, masked words
+   and relocations).
    Lever: the result held in a variable initialised 0 (the ROM's $17) instead
    of an early `return 0` (17/18, a 0x10 frame with no $17), as func_003513F8. */
 s32 func_00352780(FmvStream *obj) {
@@ -2207,22 +2222,27 @@ s32 func_00352BA0(FmvFrameQueue *q) {
     return q->count == q->capacity;
 }
 
-#ifndef TARGET_NATIVE
 /* FmvFrameQueuePush: commit the just-decoded slot (mark state 2, advance the
- * write cursor modulo capacity) under DI/EI. Blocked: 8-byte-packed saves
- * (s0@0x0, ra@0x8). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvFrameQueuePush);
+ * write cursor modulo capacity) under DI/EI. */
+/* GUARD (task #1394): on EE the #else body below is the image's FmvFrameQueuePush, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_FmvFrameQueuePush)
+S136OS_SLOT(FmvFrameQueuePush);
 #else
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 66.50% / engine96 68.10%. Residual: PACKED-SAVE (2 callee saves) + 21 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
-/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
-   saves (s0/ra). Revisit with the gameplay-TU compiler.
+/* The 8-byte-packed callee saves (s0/ra) are SN 2.95.3 v1.36
+   -fopt-stack's (FACT #8810), which the s136os arm compiles this body with.
 
    Commit the just-decoded frame slot for display, with interrupts disabled:
    mark the current write slot's state word = 2 (ready), bump the queued count,
    and advance the write cursor modulo the slot capacity.
 
-   SCREEN-EXACT on the s136os arm (SN 2.95.3 v1.36 -fopt-stack; task #1389,
-   masked word screen + relocation compare, NOT vmu): a CANDIDATE, not a match.
+   MATCHED on the s136os arm (task #1394: vmu with the base seeded, image
+   cmp 0; screened by task #1389, SN 2.95.3 v1.36 -fopt-stack, masked words
+   and relocations).
    Lever: writeIdx and count accessed through volatile views - a CODEGEN DEVICE
    (RULING #8404 class), as func_00352B90 and func_00352CE8 already view these
    fields. Volatile accesses keep source order, so the count read-modify-write
@@ -2276,18 +2296,24 @@ s32 func_00352C70(FmvFrameQueue *q) {
     return q->count == 0;
 }
 
-#ifndef TARGET_NATIVE
 /* FmvFrameQueueGetDisplaySlot: oldest queued decoded-frame pointer ((writeIdx - count +
- * cap) % cap slot). Blocked: 8-byte-packed saves (s0@0x0, ra@0x8). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvFrameQueueGetDisplaySlot);
+ * cap) % cap slot). */
+/* GUARD (task #1394): on EE the #else body below is the image's FmvFrameQueueGetDisplaySlot, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_FmvFrameQueueGetDisplaySlot)
+S136OS_SLOT(FmvFrameQueueGetDisplaySlot);
 #else
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 96.52% / engine96 78.12%. Residual: PACKED-SAVE (2 callee saves) + 4 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 /* Address of the oldest decoded frame still queued for display: 0 if the queue
    is empty, else the frame slot at ((writeIdx - count + capacity) % capacity)
    in the 0x138C0-stride slot array. Read by OnFmvVblankFlip each field.
 
-   SCREEN-EXACT on the s136os arm (SN 2.95.3 v1.36 -fopt-stack; task #1389,
-   masked word screen + relocation compare, NOT vmu): a CANDIDATE, not a match.
+   MATCHED on the s136os arm (task #1394: vmu with the base seeded, image
+   cmp 0; screened by task #1389, SN 2.95.3 v1.36 -fopt-stack, masked words
+   and relocations).
    The writeIdx and count reads are volatile: a CODEGEN DEVICE (RULING #8404
    class), not a claim about this read. Two volatile reads keep source order, so
    cc1 loads writeIdx before count as the ROM does; with either one plain, the

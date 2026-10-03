@@ -2483,8 +2483,13 @@ void func_00339398(f32 x0, f32 y0, f32 x1, f32 y1, s32 base, s32 packByte,
  * localized string `strId` (used as the format) with `fmtArg` into p+0x1E34,
  * then run the setup helper func_00338CD8 on p+0x1D8C with kind 2, a caller id
  * (or the 0x78 default when id == -1), and fixed 255.0/135.0 params. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003395F0);
+/* GUARD (task #1394): on EE the #else body below is the image's func_003395F0, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003395F0)
+S136OS_SLOT(func_003395F0);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -2493,9 +2498,10 @@ extern void func_00338CD8(void *p, s32 a1, f32 x, f32 y, s32 a2);
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_003395F0, unit objdiff): 62.82%,
    28/37 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: 'addiu sp, sp, -0x30' vs 'addiu sp, sp, -0x20').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else.
-   SCREEN-EXACT on the s136os arm (SN 2.95.3 v1.36 -fopt-stack; task #1389,
-   masked word screen + relocation compare, NOT vmu): a CANDIDATE, not a match.
+   not byte-exact on 2.96.
+   MATCHED on the s136os arm (task #1394: vmu with the base seeded, image
+   cmp 0; screened by task #1389, SN 2.95.3 v1.36 -fopt-stack, masked words
+   and relocations).
    Lever (the one that closed its sibling func_00339678, task #1338): the
    +0x1D8C box pointer is formed before the first call, so cc1 folds it into
    the saved $16 as the ROM does. Relocation note: the ROM's sprintf call
