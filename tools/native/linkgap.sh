@@ -62,7 +62,11 @@ CFLAGS="$CFLAGS -Wno-error=implicit-function-declaration -Wno-int-conversion"
 # picks C++ by the extension WITHOUT the wrap, so every symbol the unit defines
 # or references is C++-mangled (_Z13func_00290EA0v): its definitions satisfy
 # nothing and its references land in the gap as data globals (task #1285).
-CXXFLAGS="-x c++ -DTARGET_NATIVE -m32 -c -I$INC"
+# -std=gnu++98 is check.sh's dialect pin (task #1361, see its comment). Without
+# it a gnu++17 host clang rejects the bare `register` the EE pins leave, those
+# units contribute no symbols, and every global only they reference is missing
+# from the arena population (task #1419: 8 units, g_mapCache among the losses).
+CXXFLAGS="-x c++ -std=gnu++98 -DTARGET_NATIVE -m32 -c -I$INC"
 
 # 1. compile all TARGET_NATIVE units to objects (best-effort; a unit that fails
 #    check.sh just contributes no symbols — linkgap is not the compile gate).

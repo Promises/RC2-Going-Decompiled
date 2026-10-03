@@ -13,6 +13,16 @@
 #   * named     -> symbol_addrs `SYM = 0x...;`.
 #   * alias     -> symbol_addrs comment `... alias SYM ...` on a canonical line
 #                  (evidence-based only; documented Ghidra aliases, not guessed).
+#   * co-located-> a COMMENTED binding `// SYM = 0x...;` whose address is also a
+#                  LIVE entry's address. Splat allows one active symbol per vram,
+#                  so a second name for the same object is recorded commented
+#                  (g_mapCache over g_mapVertexData, 0x1C4F20). Both names then
+#                  PROVIDE the SAME arena offset, i.e. one object, as on the EE.
+#                  A commented binding with no live entry at its address is NOT
+#                  placed (it is often an UNCONFIRMED hedge); it goes unresolved.
+# Only addresses inside the ELF's data window are placed (DATA_LO/DATA_HI);
+# anything else (VU microcode, .text, overlay or off-image addresses) is listed
+# unresolved with the reason, never stretched into the block.
 # Block size = (max placed addr - base) + TAIL_PAD. Per-symbol sizing isn't
 # needed: the block is contiguous, symbols are placed by offset, and adjacency
 # (indexing past a named global into its neighbour) just lands in the block.
@@ -28,17 +38,43 @@ import sys, os, re
 TAIL_PAD = 0x10000  # slack past the highest placed global for its own extent
 ALIGN = 16          # ROM data segment is 16-byte aligned
 
+# USA SCUS_972.68 section map (`readelf -S`). The data window runs from
+# core.data to the start of the game .text; everything an #else body can read
+# as a placed global lies in it.
+DATA_LO = 0x133B80  # core.data
+DATA_HI = 0x26EA00  # .text (game code) - first byte past lvl.sndvtbl
+SECTIONS = [  # (start, end, name) for naming an out-of-window address
+    (0x100080, 0x1151E0, ".vutext"),
+    (0x115200, 0x133B80, "core.text"),
+    (0x26EA00, 0x352D08, ".text"),
+    (0x1800000, 0x1815570, "overlay data"),
+]
+
+
+def section_of(a):
+    for lo, hi, name in SECTIONS:
+        if lo <= a < hi:
+            return name
+    return "outside the ELF image"
+
 
 def load_symbol_addrs(path):
-    """Return (addr_by_name, addr_by_alias)."""
+    """Return (addr_by_name, addr_by_alias, commented_by_name).
+
+    commented_by_name holds `// SYM = 0x...` bindings (inactive in splat)."""
     addr = {}
     alias = {}
+    commented = {}
     line_re = re.compile(r'^([A-Za-z_]\w*)\s*=\s*0x([0-9A-Fa-f]+)\s*;(.*)$')
+    comm_re = re.compile(r'^//\s*([A-Za-z_]\w*)\s*=\s*0x([0-9A-Fa-f]+)\b')
     alias_re = re.compile(r'\balias\s+([A-Za-z_]\w*)')
     with open(path) as f:
         for line in f:
             m = line_re.match(line.strip())
             if not m:
+                c = comm_re.match(line.strip())
+                if c:
+                    commented.setdefault(c.group(1), int(c.group(2), 16))
                 continue
             name, hexv, comment = m.group(1), m.group(2), m.group(3)
             a = int(hexv, 16)
@@ -46,7 +82,7 @@ def load_symbol_addrs(path):
             for am in alias_re.finditer(comment):
                 # first documented alias wins; canonical addr of this line
                 alias.setdefault(am.group(1), a)
-    return addr, alias
+    return addr, alias, commented
 
 
 def load_names(path):
@@ -60,15 +96,22 @@ def load_names(path):
     return out
 
 
-def resolve(name, addr_by_name, addr_by_alias):
+def resolve(name, addr_by_name, addr_by_alias, commented, live_at):
+    """Return (addr, None, colocated_with) or (None, reason, None)."""
     m = re.fullmatch(r'D_([0-9A-Fa-f]{6,8})', name)
     if m:
-        return int(m.group(1), 16)
+        return int(m.group(1), 16), None, None
     if name in addr_by_name:
-        return addr_by_name[name]
+        return addr_by_name[name], None, None
     if name in addr_by_alias:
-        return addr_by_alias[name]
-    return None
+        return addr_by_alias[name], None, None
+    if name in commented:
+        a = commented[name]
+        if a in live_at:
+            return a, None, live_at[a]
+        return None, ("symbol_addrs has only a commented binding (0x%06X) and no "
+                      "live symbol at that address" % a), None
+    return None, "no symbol_addrs entry and not a D_xxxxxx name", None
 
 
 def main():
@@ -84,19 +127,27 @@ def main():
     const_path = os.path.join(os.path.dirname(names_path), "data_const.txt")
     const_names = load_names(const_path) if os.path.exists(const_path) else set()
     names = names | const_names  # place the union; const ones just carry a tag
-    addr_by_name, addr_by_alias = load_symbol_addrs(syms_path)
+    addr_by_name, addr_by_alias, commented = load_symbol_addrs(syms_path)
+    live_at = {}
+    for n, a in sorted(addr_by_name.items()):
+        live_at.setdefault(a, n)
 
-    placed = []      # (name, addr, is_const)
-    unresolved = []
+    placed = []      # (name, addr, is_const, colocated_with)
+    unresolved = []  # (name, reason)
     for n in sorted(names):
-        a = resolve(n, addr_by_name, addr_by_alias)
+        a, why, coloc = resolve(n, addr_by_name, addr_by_alias, commented, live_at)
+        if a is not None and not (DATA_LO <= a < DATA_HI):
+            a, why = None, ("address 0x%06X is outside the data window "
+                            "[0x%06X,0x%06X) (%s)" % (a, DATA_LO, DATA_HI, section_of(a)))
         if a is None:
-            unresolved.append(n)
+            unresolved.append((n, why))
         else:
-            placed.append((n, a, n in const_names))
-    placed.sort(key=lambda t: t[1])
+            placed.append((n, a, n in const_names, coloc))
+    placed.sort(key=lambda t: (t[1], t[0]))
 
-    base = placed[0][1]
+    # Round the base down so every global keeps its ROM address modulo ALIGN
+    # inside the ALIGN-aligned block (a 16-byte qword stays 16-byte aligned).
+    base = placed[0][1] & ~(ALIGN - 1)
     span = (placed[-1][1] - base) + TAIL_PAD
 
     # ---- arena_storage.c : the contiguous backing block (the .gamedata bytes)
@@ -127,8 +178,10 @@ def main():
         f.write("}\n")
         f.write("INSERT AFTER .bss;\n\n")
         f.write("/* ROM base = 0x%06X */\n" % base)
-        for name, a, is_const in placed:
+        for name, a, is_const, coloc in placed:
             tag = "  /* const */" if is_const else ""
+            if coloc:
+                tag += "  /* same object as %s */" % coloc
             f.write("PROVIDE(%s = __gamedata_start + 0x%X);%s\n" % (name, a - base, tag))
 
     # ---- arena_map.txt : machine-readable placement map for the PINE snapshot
@@ -141,28 +194,29 @@ def main():
         f.write("# storage symbol: g_dataArena  ==  __gamedata_start (linker)\n")
         f.write("# seed: memcpy snapshot[rom_addr] -> g_dataArena[rom_addr - base]\n")
         f.write("#       for rom_addr in [base, base+span).\n")
-        n_const = sum(1 for _, _, c in placed if c)
+        n_const = sum(1 for _, _, c, _ in placed if c)
         f.write("# base 0x%06X  span 0x%X  placed %d  (const %d)\n"
                 % (base, span, len(placed), n_const))
         f.write("# columns: <symbol> <rom_addr> <arena_offset> [const]\n")
         f.write("#   'const' tag = static rodata/string literal (see data_const.txt);\n")
         f.write("#   NOT mutable state - the tester's effect-diff must EXCLUDE these.\n")
-        for name, a, is_const in placed:
+        for name, a, is_const, _ in placed:
             f.write("%s 0x%06X 0x%X%s\n" % (name, a, a - base, " const" if is_const else ""))
 
     # ---- arena_unresolved.txt : the tail needing canonical addresses (Track-B)
     with open(os.path.join(outdir, "arena_unresolved.txt"), "w") as f:
-        f.write("# Native data globals referenced by #else bodies that have NO\n")
-        f.write("# canonical address (not a D_xxxxxx name, not in symbol_addrs,\n")
-        f.write("# not a documented alias). Each needs its ROM address recovered\n")
-        f.write("# in Ghidra and added to symbol_addrs (Track-B) before the arena\n")
-        f.write("# can place it. Count: %d\n" % len(unresolved))
-        for n in unresolved:
-            f.write(n + "\n")
+        f.write("# Native data globals referenced by #else bodies that the arena\n")
+        f.write("# does NOT place: no canonical address (not a D_xxxxxx name, not\n")
+        f.write("# live in symbol_addrs, not a documented or co-located alias), or\n")
+        f.write("# an address outside the data window. Each line names its reason;\n")
+        f.write("# a missing address needs Track-B recovery into symbol_addrs.\n")
+        f.write("# Format: <symbol>  # <reason>.  Count: %d\n" % len(unresolved))
+        for n, why in unresolved:
+            f.write("%s  # %s\n" % (n, why))
 
     print("base=0x%06X span=0x%X (%d bytes)" % (base, span, span))
     print("placed=%d  (const %d)  unresolved=%d  (of %d)"
-          % (len(placed), sum(1 for _, _, c in placed if c), len(unresolved), len(names)))
+          % (len(placed), sum(1 for _, _, c, _ in placed if c), len(unresolved), len(names)))
     print("wrote arena.ld, arena_storage.c, arena_map.txt, arena_unresolved.txt to", outdir)
 
 

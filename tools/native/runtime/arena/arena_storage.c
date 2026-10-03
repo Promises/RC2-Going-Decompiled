@@ -5,5 +5,5 @@
 /* via memcpy into __gamedata_start (== &g_dataArena[0]).         */
 #ifdef TARGET_NATIVE
 __attribute__((aligned(16), section(".gamedata")))
-unsigned char g_dataArena[0x146780U];
+unsigned char g_dataArena[0x14AA90U];
 #endif

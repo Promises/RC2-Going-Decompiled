@@ -1,5 +1,32 @@
-# Native data globals referenced by #else bodies that have NO
-# canonical address (not a D_xxxxxx name, not in symbol_addrs,
-# not a documented alias). Each needs its ROM address recovered
-# in Ghidra and added to symbol_addrs (Track-B) before the arena
-# can place it. Count: 0
+# Native data globals referenced by #else bodies that the arena
+# does NOT place: no canonical address (not a D_xxxxxx name, not
+# live in symbol_addrs, not a documented or co-located alias), or
+# an address outside the data window. Each line names its reason;
+# a missing address needs Track-B recovery into symbol_addrs.
+# Format: <symbol>  # <reason>.  Count: 26
+DAT_001b8808  # no symbol_addrs entry and not a D_xxxxxx name
+DAT_001b880c  # no symbol_addrs entry and not a D_xxxxxx name
+D_002907C0  # address 0x2907C0 is outside the data window [0x133B80,0x26EA00) (.text)
+D_100080  # address 0x100080 is outside the data window [0x133B80,0x26EA00) (.vutext)
+D_10E9E0  # address 0x10E9E0 is outside the data window [0x133B80,0x26EA00) (.vutext)
+D_10ED20  # address 0x10ED20 is outside the data window [0x133B80,0x26EA00) (.vutext)
+D_10ED30  # address 0x10ED30 is outside the data window [0x133B80,0x26EA00) (.vutext)
+D_10FFB0  # address 0x10FFB0 is outside the data window [0x133B80,0x26EA00) (.vutext)
+D_10FFC0  # address 0x10FFC0 is outside the data window [0x133B80,0x26EA00) (.vutext)
+D_1FF0174  # address 0x1FF0174 is outside the data window [0x133B80,0x26EA00) (outside the ELF image)
+D_1FF7FF0  # address 0x1FF7FF0 is outside the data window [0x133B80,0x26EA00) (outside the ELF image)
+D_356D07  # address 0x356D07 is outside the data window [0x133B80,0x26EA00) (outside the ELF image)
+D_B038  # no symbol_addrs entry and not a D_xxxxxx name
+_GLOBAL_OFFSET_TABLE_  # no symbol_addrs entry and not a D_xxxxxx name
+g_cameraTriggerLatch  # symbol_addrs has only a commented binding (0x1B53E0) and no live symbol at that address
+g_guiTintEnabled  # no symbol_addrs entry and not a D_xxxxxx name
+g_guiTintRgb  # no symbol_addrs entry and not a D_xxxxxx name
+g_nScreenHeight  # no symbol_addrs entry and not a D_xxxxxx name
+g_nScreenWidth  # no symbol_addrs entry and not a D_xxxxxx name
+g_pFrameDmaCursor  # no symbol_addrs entry and not a D_xxxxxx name
+g_pHudIconMap  # no symbol_addrs entry and not a D_xxxxxx name
+g_pHudTextureSlots  # no symbol_addrs entry and not a D_xxxxxx name
+g_pMapBitmapBuffer  # no symbol_addrs entry and not a D_xxxxxx name
+g_pMapBlipList  # no symbol_addrs entry and not a D_xxxxxx name
+g_savePromptLatch  # no symbol_addrs entry and not a D_xxxxxx name
+g_sceneFmvStreamBase  # symbol_addrs has only a commented binding (0x1B880C) and no live symbol at that address
