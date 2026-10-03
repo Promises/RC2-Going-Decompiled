@@ -60,7 +60,17 @@ fi
 # INCLUDED (usa/cod/015180, not 015180): usa and eu share basenames
 # (cod/015180.c, cod/0321A0.c), and a bare basename made a usa failure and an
 # eu failure print the same `failed` member (task #923).
-CXXFLAGS="-x c++ -DTARGET_NATIVE -m32 -c -ferror-limit=0 -I$INC"
+#
+# -std=gnu++98 PINS the C++ dialect (task #1361). Without it the verdict was a
+# function of the host clang's default: clang 23.1.1 (gnu++17) failed 8 usa
+# .cpp units on `register` — the EE register pins (`register T x PIN;`, PIN
+# empty on native) leave a bare `register`, which C++17 REMOVED
+# (-Wregister, an error by default) — while Apple clang 17 passed them. The
+# units are decompiled from ee-gcc 2.9 (1999) output and the EE arm compiles
+# them with that era's cc1plus, so gnu++98 matches the source's dialect; it is
+# not a warning suppression (never -Wno-register: the next host default would
+# re-create the mismatch somewhere else).
+CXXFLAGS="-x c++ -std=gnu++98 -DTARGET_NATIVE -m32 -c -ferror-limit=0 -I$INC"
 
 pass=0; fail=0; failed=""
 for f in $units; do
