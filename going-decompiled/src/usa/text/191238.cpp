@@ -1879,8 +1879,52 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00293760);
  * format skips the packet build. Each builds a GIF upload packet (func_00126288),
  * kicks it (KickGifImageUpload to base+entry[+0xC]) and waits. A second loop
  * uploads `count2` entries as format 0x1B from the g_vramTextureBase[0x20] tbp
- * base (advancing it by w*h*4), to base+entry[+0x8]. Engine-2.96 -> faithful
- * #else; matching arm INCLUDE_ASM. NEEDS-ORACLE (GS upload / vram-cursor). */
+ * base (advancing it by w*h*4), to base+entry[+0x8]. NEEDS-ORACLE (GS upload /
+ * vram-cursor).
+ *
+ * Screen-exact on the s136os arm (task #1396, FACT #8830 solo screen; a
+ * CANDIDATE, not a promotion: vmu with the base seeded is the evidence).
+ * Levers, each undone alone (masked words differing / 151): the cursor
+ * equates (size 16: 137; plain symbols: 131); D_1A72F4/D_1A7304 (10, the
+ * base's own first diff); the s32 func_00126288 view (7); the 2-argument
+ * WaitGsPathsIdle (36); the 0x13 width as `tw = w >> 6; if (tw == 0) tw =
+ * one` with `one` scoped to each loop, as the ROM keeps 1 in $s8 / $s7 (97);
+ * the size clamp as `if (sz < 0x100)` (110); w before h (2); each loop's
+ * counter decremented before the flush call (4); the cursor stored before
+ * the dynamic base (words exact, relocations swapped). */
+/* Devices for func_002938B0's arm (EE only; nothing is moved or emitted):
+ *  - ADDRESSING-MODEL DEVICES (RULING #8620, FACT #8036's equate form): both
+ *    VRAM cursors are read absolutely and written absolutely in straight-line
+ *    code (0x2938F0, 0x293A04) but as one %gp_rel word in a delay slot
+ *    (0x2938FC, 0x293A50): size 12 on equated names gives exactly that. The
+ *    two g_vramTextureBase words are read as the ROM's own symbols D_1A72F4 /
+ *    D_1A7304 (0x2938B4, 0x293A44), absolute, so sized 16.
+ *  - CALL VIEWS by asm label, same symbols: func_00126288 returns a value
+ *    (0x12645C `addiu v0,zero,6`), though this unit declares it void, and the
+ *    ROM passes WaitGsPathsIdle a second zero argument (0x293A30). The unit's
+ *    own declarations are left as they are; matched code uses them.
+ * Native reads g_vramTextureBase and calls the unit's declarations. */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_vramAllocCursorAbs, 12\n\tg_vramAllocCursorAbs = g_vramAllocCursor");
+__asm__(".extern g_vramDynamicBaseAbs, 12\n\tg_vramDynamicBaseAbs = g_vramDynamicBase");
+__asm__(".extern D_1A72F4Abs, 16\n\tD_1A72F4Abs = D_1A72F4");
+__asm__(".extern D_1A7304Abs, 16\n\tD_1A7304Abs = D_1A7304");
+extern s32 g_vramAllocCursorAbs;
+extern s32 g_vramDynamicBaseAbs;
+extern s32 D_1A72F4Abs;
+extern s32 D_1A7304Abs;
+extern s32 BuildGsImageUploadS32(void *dst, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h)
+    __asm__("func_00126288");
+extern void WaitGsPathsIdle2(s32 a, s32 b) __asm__("WaitGsPathsIdle");
+#else
+#define g_vramAllocCursorAbs g_vramAllocCursor
+#define g_vramDynamicBaseAbs g_vramDynamicBase
+#define D_1A72F4Abs (*(s32 *)(g_vramTextureBase + 0x10))
+#define D_1A7304Abs (*(s32 *)(g_vramTextureBase + 0x20))
+#define BuildGsImageUploadS32 func_00126288
+#define WaitGsPathsIdle2(a, b) WaitGsPathsIdle(a)
+#endif
+
 #ifndef TARGET_NATIVE
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 66.23% CONST-MULT /
@@ -1902,55 +1946,70 @@ extern s32 g_vramAllocCursor;
 void func_002938B0(u8 *base, s32 count1, s32 count2, u8 *list) {
     u8  *e = list;
     u8   packet[0x60];
-    s32  i;
-    s32  vram = *(s32 *)(g_vramTextureBase + 0x10);
+    s32  vram = D_1A72F4Abs;
 
-    g_vramDynamicBase = vram;
-    g_vramAllocCursor = vram;
+    g_vramAllocCursorAbs = vram;
+    g_vramDynamicBaseAbs = vram;
 
     if (count1 > 0) {
-        for (i = count1; i != 0; i--) {
-            s32  fmt = *(s32 *)(e + 0x0);
-            s32  wh  = *(s32 *)(e + 0x4);
-            s32  h   = wh >> 16;
-            s32  w   = wh & 0xFFFF;
-            u8  *dst = base + *(s32 *)(e + 0xC);
-            s32  tbp = (g_vramAllocCursor << 8) >> 16;
+        s32 one = 1;
+        s32 n;
+        for (n = count1; n != 0; ) {
+            u8  *dst    = base + *(s32 *)(e + 0xC);
+            s32  wh     = *(s32 *)(e + 0x4);
+            s32  cursor = g_vramAllocCursorAbs;
+            s32  fmt    = *(s32 *)(e + 0x0);
+            s32  w      = wh & 0xFFFF;
+            s32  h      = wh >> 16;
             if (fmt == 0x13) {
                 s32 sz;
-                func_00126288(packet, tbp, (w >> 6) ? (w >> 6) : 1, 0x13, 0, 0, (s16)w, h);
+                s32 tw = w >> 6;
+                if (tw == 0) {
+                    tw = one;
+                }
+                BuildGsImageUploadS32(packet, (cursor << 8) >> 16, tw, 0x13, 0, 0, (s16)w, h);
                 sz = w * h;
-                g_vramAllocCursor += (sz > 0xFF) ? sz : 0x100;
+                if (sz < 0x100) {
+                    sz = 0x100;
+                }
+                g_vramAllocCursorAbs += sz;
             } else if (fmt == 0x2) {
-                func_00126288(packet, tbp, 1, 2, 0, 0, 0x10, 0x10);
-                g_vramAllocCursor += 0x200;
+                BuildGsImageUploadS32(packet, (cursor << 8) >> 16, 1, 2, 0, 0, 0x10, 0x10);
+                g_vramAllocCursorAbs += 0x200;
             } else if (fmt == 0x0) {
-                func_00126288(packet, tbp, 1, 0, 0, 0, 0x10, 0x10);
-                g_vramAllocCursor += 0x400;
+                BuildGsImageUploadS32(packet, (cursor << 8) >> 16, 1, 0, 0, 0, 0x10, 0x10);
+                g_vramAllocCursorAbs += 0x400;
             }
+            n--;
             func_0011AEA0(0);
             e += 0x10;
             KickGifImageUpload(packet, dst);
-            WaitGsPathsIdle(0);
+            WaitGsPathsIdle2(0, 0);
         }
     }
 
-    g_vramDynamicBase = g_vramAllocCursor;
+    g_vramDynamicBaseAbs = g_vramAllocCursorAbs;
     {
-        s32 tbpBase = *(s32 *)(g_vramTextureBase + 0x20);
+        s32 tbpBase = D_1A7304Abs;
         if (count2 > 0) {
-            for (i = count2; i != 0; i--) {
+            s32 one = 1;
+            s32 n;
+            for (n = count2; n != 0; ) {
                 s32  wh  = *(s32 *)(e + 0x4);
                 u8  *dst = base + *(s32 *)(e + 0x8);
                 s32  h   = wh >> 16;
                 s32  w   = wh & 0xFFFF;
-                s32  tbp = (tbpBase << 8) >> 16;
-                func_00126288(packet, tbp, (w >> 6) ? (w >> 6) : 1, 0x1B, 0, 0, (s16)w, h);
-                func_0011AEA0(0);
+                s32  tw  = w >> 6;
+                if (tw == 0) {
+                    tw = one;
+                }
+                BuildGsImageUploadS32(packet, (tbpBase << 8) >> 16, tw, 0x1B, 0, 0, (s16)w, h);
+                n--;
                 e += 0x10;
                 tbpBase += (w * h) << 2;
+                func_0011AEA0(0);
                 KickGifImageUpload(packet, dst);
-                WaitGsPathsIdle(0);
+                WaitGsPathsIdle2(0, 0);
             }
         }
     }
