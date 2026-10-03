@@ -2493,11 +2493,18 @@ extern void func_00338CD8(void *p, s32 a1, f32 x, f32 y, s32 a2);
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_003395F0, unit objdiff): 62.82%,
    28/37 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: 'addiu sp, sp, -0x30' vs 'addiu sp, sp, -0x20').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+   not byte-exact, so the arm stays #else.
+   SCREEN-EXACT on the s136os arm (SN 2.95.3 v1.36 -fopt-stack; task #1389,
+   masked word screen + relocation compare, NOT vmu): a CANDIDATE, not a match.
+   Lever (the one that closed its sibling func_00339678, task #1338): the
+   +0x1D8C box pointer is formed before the first call, so cc1 folds it into
+   the saved $16 as the ROM does. Relocation note: the ROM's sprintf call
+   resolves to the same address as func_00115DA8 (both PROVIDEd on EE). */
 void func_003395F0(void *p, s32 strId, s32 fmtArg, s32 id) {
     s32 kind = (id != -1) ? id : 0x78;
+    char *box = (char *)p + 0x1D8C;
     func_00115DA8((char *)p + 0x1E34, (const char *)GetLocalizedString(strId), fmtArg);
-    func_00338CD8((char *)p + 0x1D8C, 2, 255.0f, 135.0f, kind);
+    func_00338CD8(box, 2, 255.0f, 135.0f, kind);
 }
 #endif
 
