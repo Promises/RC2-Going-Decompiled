@@ -1909,7 +1909,14 @@ void func_0028A4E0(void) {
  *
  * WALL: extensive FP scheduling + jr-through-jtbl dispatch cc1 does not
  * reproduce. Matching arm stays INCLUDE_ASM; the #else below is the portable
- * body. */
+ * body.
+ *
+ * The four signed divide-by-8s are written as `/ 8`: the ROM carries cc1's own
+ * slt/addiu/movn/sra expansion inline at each site. Through the former
+ * `static div8_trunc()` helper cc1 emitted four `jal`s instead (task #1395;
+ * SCREEN, s136 solo, relocated fields masked: 326/327 edit 386 -> 325/327 edit
+ * 372). The residual is STRUCTURAL: the ROM saves 4 callee-saved registers
+ * (frame 0x60), the arm 8 (frame 0xA0). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028A4E8);
 #else
@@ -1918,11 +1925,6 @@ extern u8 D_1A7B9D;   /* 0x1A7B9D - subtitle box-visible flag (byte) */
 extern void func_0027F208(s32 y0, s32 y1, s32 x0, s32 x1, s32 h, s32 color);
 /* border/outline quad draw: int mode+colour then four float box edges (y0,y1,x0,x1) */
 extern void func_0029C448(s32 mode, s32 color, float y0, float y1, float x0, float x1);
-
-/* signed divide-by-8, truncating toward zero (the sra-with-bias idiom) */
-static s32 div8_trunc(s32 v) {
-    return ((v >= 0) ? v : v + 7) >> 3;
-}
 
 void func_0028A4E8(void) {
     SubtitleState *ss = &g_subtitleState;
@@ -1987,8 +1989,8 @@ void func_0028A4E8(void) {
         }
         if (k >= 9) k = 8;
         if (k < 0) k = 0;
-        dy = div8_trunc(hh * k) + 0x20;
-        dx = div8_trunc(hw * k) + 0x20;
+        dy = hh * k / 8 + 0x20;
+        dx = hw * k / 8 + 0x20;
         ss->field18 = dx;
         ss->field1C = dy;
         func_0027F208(y - dy + t, y + dy + t, cx - dx, cx + dx, 0x60, 0x60442D00);
@@ -2046,8 +2048,8 @@ void func_0028A4E8(void) {
         }
         if (k >= 9) k = 8;
         if (k < 0) k = 0;
-        a = f1c - div8_trunc((f1c - 8) * k);
-        b = f18 - div8_trunc((f18 - 8) * k);
+        a = f1c - (f1c - 8) * k / 8;
+        b = f18 - (f18 - 8) * k / 8;
         h = (8 - k) * 0xC;
         func_0027F208(y - a + t, y + a + t, cx - b, cx + b, h, 0x60442D00);
         func_0029C448(h, 0x55F0C070,
