@@ -63,7 +63,7 @@ extern void Vec3RescaleToLenVu0(Vec4f dst, f32 len, const Vec4f src);
 extern void func_00283DA0(Vec4f dst, const Vec4f src);   /* matrix-row builder */
 extern void func_002840E8(Vec4f dst, const Vec4f a, const Vec4f b); /* 3x3 a*b */
 extern void QuatToMatrix3(const Vec4f src, Vec4f dst);   /* quat -> 3x3 matrix */
-extern void func_002ADCE0(Vec4f dst, const Vec4f axis, f32 len); /* axis -> quat */
+extern void func_002ADCE0(Vec4f dst, f32 len, const Vec4f axis); /* axis -> quat; def 1A8180.c (dst, len, src) */
 extern void func_002ABAE8(const f32 *p, f32 a, f32 b, f32 c, f32 d);
 
 /* Reinterpret an IEEE-754 bit pattern as f32 (for the exact roll constants). */
@@ -107,12 +107,12 @@ void func_00288600(const Vec4f target, s32 flag) {
     len = Vec3LengthVu0(cross);
 
     if (flag != 0) {
-        func_002ADCE0(cross, cross, -(len * 0.5f));
+        func_002ADCE0(cross, -(len * 0.5f), cross);
     } else {
         func_002ABAE8(target, len * 0.5f,
                       bits_to_f32(0x3A18825C), bits_to_f32(0x3A18825C),
                       bits_to_f32(0x3D567752));
-        func_002ADCE0(cross, cross, -target[0]);   /* build the roll quat (both paths) */
+        func_002ADCE0(cross, -target[0], cross);   /* build the roll quat (both paths) */
     }
 
     QuatToMatrix3(cross, quat);
@@ -145,7 +145,7 @@ void func_00288748(const Vec4f p) {
     Vec4f mat[3];  /* sp+0x10 (3x3) */
     f32 angle = p[0] * bits_to_f32(0x3998825C) * D_1A8A80;
 
-    func_002ADCE0(quat, g_cameraMatrix, angle);
+    func_002ADCE0(quat, angle, g_cameraMatrix);
     QuatToMatrix3(quat, mat[0]);
     func_002840E8(g_cameraMatrix, mat[0], g_cameraMatrix);
 }
