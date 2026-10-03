@@ -2269,14 +2269,37 @@ selftest_mount_sync() {
   printf 'landing_gate selftest 15: %s\n' "$(date +%s)" > "$F"; head -c 3000 /dev/urandom | base64 >> "$F"
   local want; want=$(sh "$helper" md5 "$F")
   [ -n "$want" ] || { say "SELFTEST-BROKEN: $helper md5 printed nothing for $F"; return 1; }
+  # THE FIXTURE BARRIER (task #1443). (a) and (b) assert on what the
+  # container reads on its FIRST try, so the container must already see the
+  # bytes the host just staged. Over the M1's sshfs mount it may not: (a)'s
+  # rewrite GROWS the file the previous run's (c) left, which is the very trap
+  # the helper exists for, and #1420 (FACT #9128) measured this arm red 2 of 4
+  # on both VMs for that reason alone — a false red, mount_sync itself was
+  # right each time. So each of them first runs the IN-TREE mount_sync.sh
+  # check against the staged file's own md5, in the same container: it
+  # retries until the container sees the staged bytes, or exits 7 and the arm
+  # is SELFTEST-BROKEN naming the stage — never green. It is the in-tree tool,
+  # not $helper, so a blinded helper cannot open its own barrier, and the
+  # assertions after it are unchanged. A retry it needed is said, not hidden.
+  local barrier stage
+  barrier="s=\$(sh $HERE/mount_sync.sh check $F $(sh "$HERE/mount_sync.sh" md5 "$F") 2>&1) || { echo \"STAGE-SYNC FAIL: \$s\"; exit 7; }; [ -z \"\$s\" ] || echo \"STAGE-SYNC: \$s\";"
   # (a) intact: the container's md5sum of the same bytes must agree on try 1
-  out=$(in_vm "MOUNT_SYNC_TRIES=3 MOUNT_SYNC_SLEEP=0.2 sh $helper check $F $want" 2>&1); rc=$?
-  if [ $rc = 0 ] && [ -z "$out" ]; then ok "control: intact file agrees with the host md5 (rc 0, silent)"; else say "SELFTEST-FAIL intact file did not pass silently (rc $rc): $out"; bad=1; fi
+  out=$(in_vm "$barrier MOUNT_SYNC_TRIES=3 MOUNT_SYNC_SLEEP=0.2 sh $helper check $F $want" 2>&1); rc=$?
+  stage=$(printf '%s\n' "$out" | /usr/bin/grep '^STAGE-SYNC' || true); out=$(printf '%s\n' "$out" | /usr/bin/grep -v '^STAGE-SYNC' || true)
+  [ -z "$stage" ] || say "     (15a) fixture barrier: ${stage#STAGE-SYNC: }"
+  if [ $rc = 7 ]; then say "SELFTEST-BROKEN (15a): the staged fixture never reached the container, so nothing was asserted: $stage"; bad=1
+  elif [ $rc = 0 ] && [ -z "$out" ]; then ok "control: intact file agrees with the host md5 (rc 0, silent)"; else say "SELFTEST-FAIL intact file did not pass silently (rc $rc): $out"; bad=1; fi
   # (b) truncated AFTER the md5: what the stale mount serves. Shortened on the
   # host, so the container's every read is the short file -> FAIL naming it.
+  # The barrier waits for the SHORT bytes, then the helper is checked against
+  # the ORIGINAL md5 — the desync this sub-arm seeds is untouched by it.
   head -c 1000 "$F" > "$F.short"; mv "$F.short" "$F"
-  out=$(in_vm "MOUNT_SYNC_TRIES=3 MOUNT_SYNC_SLEEP=0.2 sh $helper check $F $want" 2>&1); rc=$?
-  if [ $rc = 9 ] && printf '%s' "$out" | /usr/bin/grep -q "^MOUNT-SYNC FAIL: $F — container md5 [0-9a-f]* (1000 B) != host md5 $want after 3 tries"; then ok "fired: $(printf '%s' "$out" | /usr/bin/grep '^MOUNT-SYNC FAIL' | sed -E 's/; the VM.*//')"; else say "SELFTEST-FAIL truncated file did not FAIL rc 9 naming it (rc $rc): $out"; bad=1; fi
+  barrier="s=\$(sh $HERE/mount_sync.sh check $F $(sh "$HERE/mount_sync.sh" md5 "$F") 2>&1) || { echo \"STAGE-SYNC FAIL: \$s\"; exit 7; }; [ -z \"\$s\" ] || echo \"STAGE-SYNC: \$s\";"
+  out=$(in_vm "$barrier MOUNT_SYNC_TRIES=3 MOUNT_SYNC_SLEEP=0.2 sh $helper check $F $want" 2>&1); rc=$?
+  stage=$(printf '%s\n' "$out" | /usr/bin/grep '^STAGE-SYNC' || true); out=$(printf '%s\n' "$out" | /usr/bin/grep -v '^STAGE-SYNC' || true)
+  [ -z "$stage" ] || say "     (15b) fixture barrier: ${stage#STAGE-SYNC: }"
+  if [ $rc = 7 ]; then say "SELFTEST-BROKEN (15b): the truncated fixture never reached the container, so nothing was asserted: $stage"; bad=1
+  elif [ $rc = 9 ] && printf '%s' "$out" | /usr/bin/grep -q "^MOUNT-SYNC FAIL: $F — container md5 [0-9a-f]* (1000 B) != host md5 $want after 3 tries"; then ok "fired: $(printf '%s' "$out" | /usr/bin/grep '^MOUNT-SYNC FAIL' | sed -E 's/; the VM.*//')"; else say "SELFTEST-FAIL truncated file did not FAIL rc 9 naming it (rc $rc): $out"; bad=1; fi
   # (c) the retry path: the check starts on the short file and the file is
   # restored 1.5 s later (inside the same container, so the timing is not at
   # the mercy of docker's start-up latency) -> it must agree on a try > 1, rc 0,
