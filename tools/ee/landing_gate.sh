@@ -1281,6 +1281,7 @@ selftest() {
   selftest_dlisites "$T" || bad=1
   selftest_asmunit "$T" || bad=1
   selftest_regression_gate "$T" || bad=1
+  selftest_asmunit_selftest "$T" || bad=1
 
   say "-- (14) the real gate on this tree (--no-build, the build above) must PASS"
   STRICT=0
@@ -1926,6 +1927,31 @@ selftest_regression_gate() {
   nok=$(/usr/bin/grep -c '^OK ' "$T/rgself_tree.txt" || true); fl=$(sed -n 's/^FAIL \([a-z]*\):.*/\1/p' "$T/rgself_tree.txt" | tr '\n' ' ')
   if [ "$rc" = 0 ] && [ "$nok" = 7 ] && [ -z "$fl" ]; then ok "control: on this tree rc $rc, $nok of 7 cases OK"
   else say "SELFTEST-FAIL (24) regression_gate_selftest.sh does not pass on this tree (rc $rc, $nok OK, FAIL on '$fl'):"; show < <(/usr/bin/grep -E '^(OK|FAIL|####)' "$T/rgself_tree.txt" | sed 's/^/  inner| /'); b=1; fi
+  return $b
+}
+
+# selftest_asmunit_selftest OUTDIR — arm (25), task #1366. Runs
+# asm_unit_selftest.sh, the seeded controls for asm_unit.sh's refusals and the
+# rules they guard, which no gate ran (#1352 unresolved (d)). One container on
+# $EE_CTX, ~1.5 min (FACT #9011). The DEFAULT form, no argument: it tests this
+# tree's own asm_unit.sh with every sibling it needs in place. The arm count is
+# read, not pinned, so a row that adds arms does not have to edit this one.
+# Fails CLOSED: a VM that is down or a run that dies before its summary
+# (docker rc, no `asm_unit_selftest: N arms, F failed` line) is a SELFTEST-FAIL
+# naming the rc, never a skip. That it can fail is shown inside the tool by its
+# own seeded copies, and for this arm by #1366's seed (asm_unit.sh's dli-pass
+# refusal `exit 2` -> `exit 0`: rc 1, 66 failed; FACT #9011).
+selftest_asmunit_selftest() {
+  local T="$1" b=0 rc sum n f np nf
+  say "-- (25) ASM_UNIT_SELFTEST (#1366): $HERE/asm_unit_selftest.sh on this tree's asm_unit.sh in one container on $EE_CTX -> rc 0, 'N arms, 0 failed', N PASS lines and no FAIL line; a VM that cannot run it is a FAIL"
+  in_vm "sh $HERE/asm_unit_selftest.sh" > "$T/asmunit_selftest.txt" 2>&1; rc=$?
+  sum=$(/usr/bin/grep -E '^asm_unit_selftest: [0-9]+ arms, [0-9]+ failed \(/work/tools/ee/asm_unit\.sh\)$' "$T/asmunit_selftest.txt" | tail -1)
+  n=$(printf '%s' "$sum" | sed -nE 's/^asm_unit_selftest: ([0-9]+) arms.*/\1/p'); f=$(printf '%s' "$sum" | sed -nE 's/.* arms, ([0-9]+) failed.*/\1/p')
+  np=$(/usr/bin/grep -c '^PASS ' "$T/asmunit_selftest.txt" || true); nf=$(/usr/bin/grep -c '^FAIL ' "$T/asmunit_selftest.txt" || true)
+  if [ -z "$sum" ]; then say "SELFTEST-FAIL (25) asm_unit_selftest.sh printed no summary line for /work/tools/ee/asm_unit.sh (docker --context $EE_CTX rc $rc): it did not run, and an arm that cannot run is not coverage. Last lines:"; show < <(tail -5 "$T/asmunit_selftest.txt" | sed 's/^/  inner| /'); b=1
+  elif [ "$rc" = 0 ] && [ "$f" = 0 ] && [ "$nf" = 0 ] && [ "$n" -ge 1 ] && [ "$np" = "$n" ]; then ok "control: rc $rc, $sum, $np PASS lines"
+  else say "SELFTEST-FAIL (25) asm_unit_selftest.sh does not pass on this tree (rc $rc, $n arms, $f failed, $np PASS / $nf FAIL lines):"; show < <(/usr/bin/grep '^FAIL ' "$T/asmunit_selftest.txt" | head -20 | sed 's/^/  inner| /'); b=1; fi
+  say "     full output -> $T/asmunit_selftest.txt"
   return $b
 }
 

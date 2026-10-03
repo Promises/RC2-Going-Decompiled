@@ -78,7 +78,10 @@
 #
 # The optional argument is the asm_unit.sh under test (default: this tree's).
 # It must sit in a tree with tools/ee/{ps2eeas_dli.awk,ps2eeas_dli_sites.txt,
-# move_fixup.sed}. Against 735a49e1a's copy (the parent of f6c2bae9e, which
+# move_fixup.sed,mount_sync.sh}. asm_unit.sh runs $ROOT/tools/ee/mount_sync.sh
+# whenever ASM_UNIT_DLISITES_MD5 is set, as the SYNC arms set it, so a copy
+# missing it fails the 4 SYNC md5 arms with rc 2 even when it is unmodified
+# (FACT #9011). Against 735a49e1a's copy (the parent of f6c2bae9e, which
 # added both refusals), the ADJ and TAIL refusal arms must FAIL: that is the
 # check that this selftest can fail. Against f6c2bae9e's copy, EMPTY, STATIC st_cc1, LIKELY, SPELL, and the ADJ/SWAP
 # refusal arms (by their text) must FAIL (tasks #1147, #1170). EMPTY's exit-5
