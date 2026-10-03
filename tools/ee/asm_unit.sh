@@ -533,9 +533,14 @@ if [ "$GFLAG" = "-G8" ]; then
     # bc1fl/bc1tl; bgezall/bltzall only reach here from hand-written asm. The
     # reorder-mode pins below are measured on other branches and are not
     # extended to these.
-    /^\t(bgezall|bltzall|bc1fl|bc1tl)\t/ { if (nore && pendmov == "") { pendbr = $0; next } }
+    # A held branch is a non-FPU insn after any mtc1, so it ends the mtc1
+    # hazard window here: its `next` skips the reset in the mtc1 rule below,
+    # which otherwise padded the SLOT insn, putting a nop between the branch
+    # and its slot (FACT #8063, task #1352; the ROM has 100 `mtc1; jump;
+    # slot reads $fN` sites and none with a nop, NOTE #8972).
+    /^\t(bgezall|bltzall|bc1fl|bc1tl)\t/ { if (nore && pendmov == "") { pendbr = $0; lastmtc = ""; next } }
     /^\t(j|jal|jalr|b|beq|bne|beql|bnel|blez|bgez|bgtz|bltz|blezl|bgezl|bgtzl|bltzl|bgezal|bltzal|bc1f|bc1t)\t/ {
-      if (nore && pendmov == "") { pendbr = $0; next }
+      if (nore && pendmov == "") { pendbr = $0; lastmtc = ""; next }
       # volatile-marker pin (see header): the insn directly before this
       # reorder-mode branch was volatile - SN-as left the slot empty.
       if (volpend) {
