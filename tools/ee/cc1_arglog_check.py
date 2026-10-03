@@ -171,7 +171,10 @@ def main(argv):
             for a in ss:
                 if (FLOOR_PIN in a) != s136_pinned:
                     fails.append(f"(floor) usa/{u} s136 {' '.join(a)} -> " + ("s136 arm still pinned" if not s136_pinned else f"{FLOOR_PIN} MISSING on the s136 arm"))
-            floor.append(f"usa/{u} sdk29 {'pinned' if sdk_pinned else 'unpinned'} x{len(sd)}, s136 {'pinned' if s136_pinned else 'unpinned'} x{len(ss)}")
+            # observed, not wanted: a summary that restates the expectation
+            # reads green on a failing log
+            floor.append(f"usa/{u} sdk29 pinned {sum(FLOOR_PIN in a for a in sd)}/{len(sd)} (want {len(sd) if sdk_pinned else 0}), "
+                         f"s136 pinned {sum(FLOOR_PIN in a for a in ss)}/{len(ss)} (want {len(ss) if s136_pinned else 0})")
         floor_unit("text/1B4218", True, False)
         floor_unit("text/1DFF80", True, True)
 
