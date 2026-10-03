@@ -1090,21 +1090,26 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003513F8);
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 64.74% / engine96 77.79%. Residual: PACKED-SAVE (6 callee saves) + 19 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 extern s32 func_001253A8(u32 lbn, u32 sectors, void *buf, void *mode); /* sceCdRead */
 extern s32 func_00124B88(s32 mode);                                    /* sceCdSync */
+/* SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked; a candidate, NOT match evidence): EXACT 39/39, relocations equal. The
+ * ROM returns through a result held in $20 (0 unless the read is synchronous)
+ * and never writes mode[3]. With an early `return 0`: 28/39, first diff @10 (no
+ * $20 save); with mode[3] cleared: 20/39 (an extra sb). */
 s32 func_003513F8(u8 *obj, void *buf, s32 byteLen, s32 flag) {
     u8 mode[4];
     s32 sectors = byteLen >> 11; /* bytes -> 2KB sectors */
+    s32 result = 0;
 
     mode[0] = 0x64; /* trycount   */
     mode[1] = 1;    /* spindlctrl */
-    mode[2] = 0;    /* datapattern */
-    mode[3] = 0;    /* pad */
+    mode[2] = 0;    /* datapattern; mode[3] is padding the ROM never writes */
     func_001253A8(*(s32 *)(obj + 0x4), sectors, buf, mode);
-    if (flag != 0) {
-        return 0;
+    if (flag == 0) {
+        *(s32 *)(obj + 0x4) += sectors; /* advance the LBN cursor */
+        func_00124B88(0);
+        result = byteLen;
     }
-    *(s32 *)(obj + 0x4) += sectors; /* advance the LBN cursor */
-    func_00124B88(0);
-    return byteLen;
+    return result;
 }
 #endif
 
