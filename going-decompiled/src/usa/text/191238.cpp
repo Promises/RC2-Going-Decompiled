@@ -4680,6 +4680,11 @@ s32 MapUpdate(void) {
  * blip-box array (0x70000000) as the local `blipBox[]` (no scratchpad on native)
  * and the by-value DrawFont*TextBox headers as packed structs. GS-DMA qword packs
  * use s64/u64 to avoid 32-bit overflow. Angle constants are bit-exact via unions.
+ *
+ * SCREEN (task #1395, s136 solo, relocated fields masked; not match evidence):
+ * 1221/1229, edit 1369 (built 1192 words). The local blipBox[] is the dominant
+ * STRUCTURAL residual: it gives the arm a 0x1160-byte frame where the ROM's is
+ * 0x140, because the ROM writes the boxes to the scratchpad.
  */
 #ifndef TARGET_NATIVE
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
@@ -4994,18 +4999,17 @@ void MapDraw(int useHudPass, long applyScissor) {
             do {
                 s32 v = *cell;
                 if (-1 < v) {
-                    s32 col = (v >= 0 ? v : v + 0xf) >> 4;
+                    /* Signed divisions, as written: the ROM carries cc1's
+                     * slt/movn expansion for all five, including `col`, whose
+                     * hand-expanded form cc1 folded (v >= 0 is known here). */
+                    s32 col = v / 16;
                     s32 leftAcc  = col * spanX;
                     s32 rem      = v - col * 0x10;
                     s32 topAcc   = rem * spanY;
                     s32 rightAcc = col * spanX + spanX;
                     s32 botAcc   = rem * spanY + spanY;
-                    s32 rr = (rightAcc >= 0 ? rightAcc : rightAcc + 0xf);
-                    s32 lr = (leftAcc  >= 0 ? leftAcc  : leftAcc  + 0xf);
-                    s32 tr = (topAcc   >= 0 ? topAcc   : topAcc   + 0xf);
-                    s32 br = (botAcc   >= 0 ? botAcc   : botAcc   + 0xf);
-                    func_002904B0(originY + (tr >> 4), originX + (lr >> 4),
-                                  originY + (br >> 4), originX + (rr >> 4), 0x20000000, 1);
+                    func_002904B0(originY + topAcc / 16, originX + leftAcc / 16,
+                                  originY + botAcc / 16, originX + rightAcc / 16, 0x20000000, 1);
                 }
                 gi = gi - 1;
                 cell = cell + 4;
