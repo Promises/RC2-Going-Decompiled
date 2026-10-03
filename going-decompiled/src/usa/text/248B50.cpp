@@ -1526,8 +1526,20 @@ extern void *func_003368D0(void *p);
  * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 8/38 words differ;
  * frozen-.s census: 2 callee GPR saves, 0 fp saves.
  * Residual: PACKED-SAVE (2 callee GPR saves) + operand ORDER: 4 frame/save-slot words, plus the &D_1AD8E8/&D_1AD908 addiu pairs emitted in the opposite order from the ROM (SCHED). */
-extern u8 D_1AD8E8[]; /* list-row vtable installed at widget +0x1CC */
-extern u8 D_1AD908[]; /* list-row vtable installed at widget +0x1D0 */
+/* SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked; a candidate, NOT match evidence): EXACT 37/37, relocations equal, with
+ * the vtable declarations below. As plain `u8 []` externs: 4/37, first diff @17
+ * (the %lo addiu scheduled after the call-argument addiu). */
+/* The two vtables are addressed as the ROM does, with an adjacent lui/addiu pair
+ * scheduled as one unit: the 8-byte extent puts them in cc1's -G8 small-data
+ * class, so cc1 emits each address as one `la` macro instead of splitting it,
+ * and `.extern ,16` makes the assembler expand that macro to the absolute pair
+ * (the 1D54C0 D_001B1E90 convention). The 8 is NOT the objects' size - never
+ * take sizeof() of them. Either half alone does not reproduce the ROM. */
+__asm__(".extern D_1AD8E8, 16");
+__asm__(".extern D_1AD908, 16");
+extern u8 D_1AD8E8[8]; /* list-row vtable installed at widget +0x1CC */
+extern u8 D_1AD908[8]; /* list-row vtable installed at widget +0x1D0 */
 void *func_0034A9F8(void *widget) {
     char *w = (char *)widget;
 
