@@ -153,7 +153,9 @@
 #            (include/, tools/native/ but check.sh), differs between the two
 #            trees the row compiled — is a WARN naming each unit, a FAIL under
 #            --strict: failing before and after, its change is invisible to
-#            the comparison. Fails closed: a comparison that cannot run makes
+#            the comparison. The live tip's shared inputs are git's view
+#            (`git ls-files -co --exclude-standard`, the set DIRTY sees), so a
+#            gitignored file is not a touch (task #1397). Fails closed: a comparison that cannot run makes
 #            every tolerated unit BLIND (unverifiable); on a base == tip row
 #            they are listed under the VACUOUS line. Recomputed every run — there is no checked-in
 #            baseline to raise. Units are keyed by region-qualified path
@@ -699,9 +701,30 @@ native_renames() {
 # tools/native but check.sh, which native_scan copies from the tip into both).
 # rc 2, with the reason on stdout, when the comparison cannot run (a unit
 # missing from either tree, an unreadable file): the caller fails closed.
-native_shared_sums() {  # TREE — `<sha1>  <path>` per shared NATIVE input, line-sorted for comm
-  (cd "$1" && set -o pipefail && /usr/bin/find going-decompiled/include tools/native -type f ! -path tools/native/check.sh -print0 \
-     | xargs -0 shasum | LC_ALL=C sort) 2>/dev/null
+#
+# native_shared_sums TREE — `<sha1>  <path>` per shared NATIVE input, line-
+# sorted for comm. Which files count depends on what TREE is (task #1397,
+# FACT #9056): a tree that is the top of a git work tree — the live worktree,
+# the real row's tip — is read through GIT'S VIEW, `git ls-files -co
+# --exclude-standard` (tracked + untracked, ignored files excluded: the set
+# DIRTY's `git status --porcelain` and the `no C change` predicate see), with
+# the content read from disk so dirty edits still count. Any other tree — the
+# base, a `git archive` holding tracked files only, and --selftest's scratch
+# copies — is walked with find, where every file is content. A find walk of
+# the live tip reported any GITIGNORED file (tools/native/state_batch_gen.c,
+# include/.DS_Store) as "a shared NATIVE input differs", a BLIND FAIL under
+# --strict that DIRTY could not see. Only regular files, either way; a
+# tracked file deleted from disk is absent here, so it shows as base-only.
+native_shared_sums() {
+  if [ "$(git -C "$1" rev-parse --show-toplevel 2>/dev/null)" = "$(cd "$1" && pwd -P)" ]; then
+    (cd "$1" && set -o pipefail \
+       && git ls-files -z -co --exclude-standard -- going-decompiled/include tools/native ':(exclude)tools/native/check.sh' \
+       | LC_ALL=C sort -zu | { while IFS= read -r -d '' f; do [ -f "$f" ] && [ ! -L "$f" ] && printf '%s\0' "$f"; done; true; } \
+       | xargs -0 shasum | LC_ALL=C sort) 2>/dev/null
+  else
+    (cd "$1" && set -o pipefail && /usr/bin/find going-decompiled/include tools/native -type f ! -path tools/native/check.sh -print0 \
+       | xargs -0 shasum | LC_ALL=C sort) 2>/dev/null
+  fi
 }
 native_touched() {
   local base=$1 tip=$2 u rc lb lt; shift 2
@@ -827,7 +850,9 @@ check_native() {
   # about what changed. Touched = differs between the two trees this row
   # compiled (so the same base the arm is pinned to, dirty edits included):
   # the unit's own source, or a shared input every unit reads (include/,
-  # tools/native/ but check.sh). WARN naming each unit, FAIL under --strict.
+  # tools/native/ but check.sh; a live tip is read through git's view, so an
+  # ignored file is not a touch — native_shared_sums, task #1397). WARN naming
+  # each unit, FAIL under --strict.
   # Fail closed: if the comparison cannot run, every tolerated unit is BLIND
   # (unverifiable); on a base == tip row the touched set is unknowable, so they
   # are listed under the VACUOUS line that already carries the verdict.
@@ -1661,7 +1686,7 @@ selftest_dirty_gate() {
 # basename-keyed row reads {015180} on both arms and passes.
 selftest_native() {
   local T="$1" b=0; local N="$T/native"; rm -rf "$N"; mkdir -p "$N"
-  say "-- (18) NATIVE (#923): scratch tip/base trees — a seeded C error (and a 5-error one whose regress listing must be 'errors: 5 (first 3 shown)' + exactly 3 sample lines, #1327, and two 1-error seeds whose listings must stop at their own block, not bleed into the next FAIL heading or the summary, #1361), A2's removed 198B58 guard, a usa-vs-eu basename collision, a new failing unit, and a unit leaving the population (deleted, override without reason, token removed, renamed WITH an edit, moved byte-identical to ANOTHER region) must each FAIL naming the unit; a failure on both arms (untouched, or beside an edit to a clean unit), a departure with a Native-Left override + reason, a byte-identical rename within its region, a cross-region move with a Native-Left override + reason, and the clean pair must pass; the env override outside a scratch arm must excuse nothing and WARN (FAIL under --strict); the default base resolving to HEAD must print 'NATIVE: base == tip, VACUOUS' as a WARN (FAIL under --strict), and so must a base pinned explicitly to HEAD (#1011); a base pinned to ANOTHER sha with HEAD's NATIVE inputs must print 'WARN NATIVE: no C change', counted nowhere, while a base whose C differs must stay a normal row (#1034), and so must a base differing ONLY in a tools path read 'no C change' (u'', V10); a pin on the branch's own line or off the tip's history must WARN 'WRONG BASE' (FAIL under --strict) while the fork point passes, and a 'no C change' row over a branch that touches a NATIVE input must WARN 'FALSE no C change' (FAIL under --strict) (#1065); a both-arms failure whose own source or a shared header the landing edits must WARN 'BLIND' naming it (FAIL under --strict), and an unreadable input must make it 'BLIND unverifiable' (#1365); the per-region counts must show a usa -1 / eu +1 move under an unchanged total, and sum to the totals on the real tree (task #1006); then the real tree against its real base"
+  say "-- (18) NATIVE (#923): scratch tip/base trees — a seeded C error (and a 5-error one whose regress listing must be 'errors: 5 (first 3 shown)' + exactly 3 sample lines, #1327, and two 1-error seeds whose listings must stop at their own block, not bleed into the next FAIL heading or the summary, #1361), A2's removed 198B58 guard, a usa-vs-eu basename collision, a new failing unit, and a unit leaving the population (deleted, override without reason, token removed, renamed WITH an edit, moved byte-identical to ANOTHER region) must each FAIL naming the unit; a failure on both arms (untouched, or beside an edit to a clean unit), a departure with a Native-Left override + reason, a byte-identical rename within its region, a cross-region move with a Native-Left override + reason, and the clean pair must pass; the env override outside a scratch arm must excuse nothing and WARN (FAIL under --strict); the default base resolving to HEAD must print 'NATIVE: base == tip, VACUOUS' as a WARN (FAIL under --strict), and so must a base pinned explicitly to HEAD (#1011); a base pinned to ANOTHER sha with HEAD's NATIVE inputs must print 'WARN NATIVE: no C change', counted nowhere, while a base whose C differs must stay a normal row (#1034), and so must a base differing ONLY in a tools path read 'no C change' (u'', V10); a pin on the branch's own line or off the tip's history must WARN 'WRONG BASE' (FAIL under --strict) while the fork point passes, and a 'no C change' row over a branch that touches a NATIVE input must WARN 'FALSE no C change' (FAIL under --strict) (#1065); a both-arms failure whose own source or a shared header the landing edits must WARN 'BLIND' naming it (FAIL under --strict), and an unreadable input must make it 'BLIND unverifiable' (#1365); on the REAL path, a live git work tree against a git archive, an IGNORED file must not fire BLIND while a tracked edit and an untracked file must, and an unreadable tip input must fail closed (#1397); the per-region counts must show a usa -1 / eu +1 move under an unchanged total, and sum to the totals on the real tree (task #1006); then the real tree against its real base"
   native_tree() {  # native_tree DIR — a fresh scratch copy of the check.sh inputs
     rm -rf "$1"; mkdir -p "$1/going-decompiled" "$1/tools"
     cp -R going-decompiled/src going-decompiled/include "$1/going-decompiled/"; cp -R tools/native "$1/tools/"
@@ -1766,6 +1791,7 @@ selftest_native() {
     done
   done
   chmod 644 "$N/base_z4/going-decompiled/include/t1365_unreadable.h"
+  selftest_native_realpath "$N" || b=1
   # (h)-(k) population shrink (FACT #8359, #945): the first usa unit of the
   # population, deleted at the tip or with its TARGET_NATIVE token removed
   local lu; lu=$(cd going-decompiled/src && /usr/bin/grep -rl TARGET_NATIVE usa | LC_ALL=C sort | head -1)
@@ -1937,6 +1963,82 @@ selftest_native() {
   if ! cmp -s "$N/real.txt" "$N/real_sum_seeded.txt" && ! native_region_sums_close "$N/real_sum_seeded.txt"; then ok "fired (t') the sum check rejects a tip total altered to $(sed -n 's/^     NATIVE per region.*: tip .* = \([0-9]*\/[0-9]*\);.*/\1/p' "$N/real_sum_seeded.txt")"
   else say "SELFTEST-FAIL (t') the sum check accepted an altered tip total (or the seed did not apply)"; b=1; fi
   if [ "$FAILED" = 0 ]; then ok "control (g) real tree: $(/usr/bin/grep -E '^     tip ' "$N/real.txt" | sed 's/^ *//')"; else say "SELFTEST-FAIL the real tree fails NATIVE:"; show < "$N/real.txt"; b=1; fi
+  return $b
+}
+
+# selftest_native_realpath N — arm (18)'s (zr1)-(zr4), task #1397, FACT #9056;
+# called from selftest_native, whose native_tree and native_seed it uses.
+# (z1)-(z4) compare two find-walked scratch copies, so they cannot see the REAL
+# row's asymmetry: there the tip is a live git work tree, which carries
+# ignored and untracked files, and the base is a `git archive`, which carries
+# tracked files only. This builds that pair: a scratch git repo under N holding
+# the check.sh inputs with usa/cod/015180.c's both-arms failure committed, the
+# tree's root .gitignore (tools/native's own .gitignore files come with the
+# copy), and a second commit editing clean eu/cod/015180.c so the row is a
+# normal one. check_native then runs its DEFAULT resolution inside the repo:
+# tip = the work tree, base = a git archive of the fork point. Each probe is
+# undone before the next.
+#   (zr1) IGNORED files planted (tools/native/state_batch_gen.c, include/.DS_Store;
+#         `git status --porcelain` reads 0) -> NO BLIND, FAILED=0 WARNED=0;
+#   (zr2) a TRACKED edit to include/common.h -> BLIND naming it;
+#   (zr3) an untracked, NOT ignored file under tools/native -> BLIND naming it
+#         (DIRTY lists it too, so the two agree);
+#   (zr4) an unreadable untracked header in the tip (no unit includes it, so
+#         the compile is unchanged) -> BLIND unverifiable (fail closed).
+# (zr1) and (zr2) are one claim: a row that never reports BLIND passes (zr1).
+selftest_native_realpath() {
+  local N; N=$(cd "$1" && pwd -P); local R="$N/realpath_repo" b=0 rb zst zt zout zre zwant zc
+  rm -rf "$R"; native_tree "$R"; native_seed "$R" usa/cod/015180.c; cp .gitignore "$R/.gitignore"
+  rm -f "$R/tools/native/state_batch_gen.c" "$R/going-decompiled/include/.DS_Store"
+  local g=(git -C "$R" -c user.name=landing_gate -c user.email=selftest@invalid)
+  "${g[@]}" init -q && "${g[@]}" add -A && "${g[@]}" commit -q -m 'selftest (zr) base: usa/cod/015180.c fails' && rb=$("${g[@]}" rev-parse HEAD) \
+    && printf '\n/* t1397 selftest: an edit to a clean unit */\n' >> "$R/going-decompiled/src/eu/cod/015180.c" \
+    && "${g[@]}" commit -q -am 'selftest (zr) tip: eu/cod/015180.c edited' \
+    || { say "SELFTEST-BROKEN: (zr) could not create its scratch repo in $R"; return 1; }
+  zr_run() {  # zr_run OUTFILE STRICT — check_native's default path inside $R; FAILED/WARNED on a last `@@counts` line
+    ( cd "$R" || exit 2; ROOT=$(pwd -P); OUT="$N/zr_out"; mkdir -p "$OUT"
+      FAILED=0; WARNED=0; STRICT=$2; LANDING_GATE_NATIVE_BASE= LANDING_GATE_NATIVE_LEFT= NATIVE_TIP_REV= check_native "" "" "$rb"
+      echo "@@counts $FAILED $WARNED" ) > "$1" 2>&1
+  }
+  for zst in 0 1; do
+    for zt in zr1 zr2 zr3 zr4; do
+      zout="$N/realpath_${zt}_$zst.txt"; zre=$([ $zst = 1 ] && echo 'FAIL\(strict\)' || echo WARN)
+      case $zt in
+        zr1) printf '/* t1397 */\n' > "$R/tools/native/state_batch_gen.c"; : > "$R/going-decompiled/include/.DS_Store"
+             if [ -n "$("${g[@]}" status --porcelain)" ] || ! "${g[@]}" check-ignore -q tools/native/state_batch_gen.c || ! "${g[@]}" check-ignore -q going-decompiled/include/.DS_Store; then
+               say "SELFTEST-BROKEN (zr1) the planted files are not both ignored (status '$("${g[@]}" status --porcelain | tr '\n' ' ')') — the arm would not test the ignored class"; b=1
+               rm -f "$R/tools/native/state_batch_gen.c" "$R/going-decompiled/include/.DS_Store"; continue
+             fi
+             zwant='^     BLIND: none — ' ;;
+        zr2) printf '\n/* t1397 selftest: a tracked header edit */\n' >> "$R/going-decompiled/include/common.h"
+             zwant="^$zre NATIVE: BLIND — 1 unit\\(s\\) .*: usa/cod/015180\\.c \\(a shared NATIVE input differs\\) — " ;;
+        zr3) printf 'x\n' > "$R/tools/native/t1397_untracked.txt"
+             zwant="^$zre NATIVE: BLIND — 1 unit\\(s\\) .*: usa/cod/015180\\.c \\(a shared NATIVE input differs\\) — " ;;
+        zr4) : > "$R/going-decompiled/include/t1397_unreadable.h"; chmod 000 "$R/going-decompiled/include/t1397_unreadable.h"
+             if [ -r "$R/going-decompiled/include/t1397_unreadable.h" ]; then say "SELFTEST-BROKEN (zr4) the chmod-000 seed is still readable (running as root?) — the fail-closed leg cannot be exercised"; b=1; rm -f "$R/going-decompiled/include/t1397_unreadable.h"; continue; fi
+             zwant="^$zre NATIVE: BLIND unverifiable — .*could not checksum the tip's shared NATIVE inputs.*each is treated as BLIND: usa/cod/015180\\.c \\(task #1365\\)" ;;
+      esac
+      zr_run "$zout" $zst; zc=$(sed -n 's/^@@counts //p' "$zout")
+      case $zt in
+        zr1) rm -f "$R/tools/native/state_batch_gen.c" "$R/going-decompiled/include/.DS_Store" ;;
+        zr2) "${g[@]}" checkout -q -- going-decompiled/include/common.h ;;
+        zr3) rm -f "$R/tools/native/t1397_untracked.txt" ;;
+        zr4) chmod 644 "$R/going-decompiled/include/t1397_unreadable.h"; rm -f "$R/going-decompiled/include/t1397_unreadable.h" ;;
+      esac
+      if ! /usr/bin/grep -qE '^     failing on BOTH arms .*: usa/cod/015180\.c $' "$zout" || /usr/bin/grep -qE 'no C change|VACUOUS|WRONG BASE' "$zout"; then
+        say "SELFTEST-BROKEN ($zt) STRICT=$zst: the scratch repo's row is not a normal row tolerating usa/cod/015180.c — the BLIND check was not reached:"; show < "$zout"; b=1
+      elif [ $zt = zr1 ]; then
+        if [ "$zc" = '0 0' ] && /usr/bin/grep -qE "$zwant" "$zout" && ! /usr/bin/grep -q 'NATIVE: BLIND' "$zout"; then
+          ok "control (zr1) STRICT=$zst: live work tree vs git archive, IGNORED tools/native/state_batch_gen.c + include/.DS_Store planted (git status: 0 paths) — 'BLIND: none', FAILED=0 WARNED=0"
+        else say "SELFTEST-FAIL (zr1) STRICT=$zst: an IGNORED file in the live tip fired BLIND or changed the verdict (counts '$zc', want '0 0') (FACT #9056):"; show < "$zout"; b=1; fi
+      elif [ "$zc" = "$zst 1" ] && /usr/bin/grep -qE "$zwant" "$zout" \
+           && { [ $zt != zr2 ] || /usr/bin/grep -qE '^     shared NATIVE input\(s\) differing base->tip .*: going-decompiled/include/common\.h $' "$zout"; } \
+           && { [ $zt != zr3 ] || /usr/bin/grep -qE '^     shared NATIVE input\(s\) differing base->tip .*: tools/native/t1397_untracked\.txt $' "$zout"; }; then
+        ok "fired ($zt) STRICT=$zst: live work tree vs git archive — $(/usr/bin/grep -E "^$zre NATIVE: BLIND" "$zout" | cut -c1-48)...$(/usr/bin/grep -oE ': usa/cod/015180\.c \([^)]*\)' "$zout" | head -1)$(sed -n 's/^     shared NATIVE input(s) differing base->tip [^:]*:/; shared:/p' "$zout") (FAILED WARNED = $zc)"
+      else say "SELFTEST-FAIL ($zt) STRICT=$zst: the BLIND line did not fire as required on the live-tree path (counts '$zc', want '$zst 1'):"; show < "$zout"; b=1; fi
+    done
+  done
+  if [ -n "$("${g[@]}" status --porcelain)" ]; then say "SELFTEST-BROKEN (zr) the scratch repo was not restored after its probes: $("${g[@]}" status --porcelain | tr '\n' ' ')"; b=1; fi
   return $b
 }
 
