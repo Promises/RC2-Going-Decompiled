@@ -68,9 +68,10 @@
 #        is not: the row count cannot see a boundary truncation. The real
 #        allowlist with its own md5 assembles with no mount_sync line.
 #   MTC1 (task #1352, FACT #8063) at -G8, `mtc1 $fN; <held noreorder branch>;
-#        slot reads $fN` assembles with no nop between the branch and its
+#        slot reads $fN` assembles with no nop anywhere from the mtc1 to the
 #        slot (a `jal` and a `bc1tl`), while an mtc1 directly before its
-#        reader still gets the nop and a non-reader slot gets none.
+#        reader still gets the nop and a non-reader slot gets none. The arms
+#        match the whole mtc1-branch-slot run (task #1378, FACT #9035).
 #
 # The seeds are written in cc1 layout (TAB, mnemonic, TAB, operands) into the
 # container's own /tmp, so no VM mount sits between writing and assembling
@@ -425,6 +426,12 @@ done
 # the nop landed between the branch and its slot (wrong code). Against a copy
 # from before that task, the two slot arms must FAIL; the other two pass on
 # both copies (the rule still pads, and a non-reader slot was never padded).
+# The three branch arms assert the whole run from the mtc1 to the slot, not
+# only the branch and its slot: a nop printed before the held branch gives
+# `mtc1; nop; jal; reader`, a shape with 0 ROM sites, and the adjacent pair
+# alone passed it (FACT #9035, task #1378). Against asm_unit.sh with
+# `if (lastmtc != "") print "\tnop";` before the hold's `pendbr = $0`, mt_slot
+# and mt_nordr must FAIL (the jal hold) and mt_lkly must FAIL (the bc1tl one).
 MH='\t.text\n\t.ent\tF\nF:\n'; ME='\t.end\tF\n'
 NM='\t.set\tnoreorder\n\t.set\tnomacro\n'; RM='\t.set\tmacro\n\t.set\treorder\n'
 seed mt_slot  "$MH\tli.s\t\$f12,1.00000000000000000000e0\n$NM\tjal\tG\n\tsub.s\t\$f12,\$f12,\$f20\n$RM\tj\t\$31\n$ME"
@@ -432,17 +439,18 @@ seed mt_lkly  "$MH\tmtc1\t\$1,\$f12\n\t.set\tnoreorder\n\tbc1tl\t\$L1\n\tadd.s\t
 seed mt_dirct "$MH\t.set\tnoreorder\n\tmtc1\t\$1,\$f12\n\tmul.s\t\$f12,\$f14,\$f12\n\t.set\treorder\n\tj\t\$31\n$ME"
 seed mt_nordr "$MH\tmtc1\t\$1,\$f12\n$NM\tjal\tG\n\tmul.s\t\$f0,\$f14,\$f2\n$RM\tj\t\$31\n$ME"
 run mt_slot -G8
-ok=$(accepted); [ "$ok" = 1 ] && ok=$(has "0c000000 46146301")
-verdict "MTC1 mt_slot -G8" "$ok" "jal then sub.s \$f12 in its slot, no nop between [0c000000 46146301]"
+ok=$(accepted); [ "$ok" = 1 ] && ok=$(has "0c000000 46146301"); [ "$ok" = 1 ] && ok=$(has "44816000 0c000000 46146301")
+verdict "MTC1 mt_slot -G8" "$ok" "mtc1, jal, then sub.s \$f12 in its slot, no nop anywhere in the run [44816000 0c000000 46146301]"
 run mt_lkly -G8
 ok=$(accepted); [ "$ok" = 1 ] && ok=$(has "46026000"); [ "$(has "00000000 46026000")" = 0 ] || ok=0
-verdict "MTC1 mt_lkly -G8" "$ok" "bc1tl then add.s \$f0,\$f12 in its slot, no nop before it"
+[ "$ok" = 1 ] && ok=$(has "44816000 45030001 46026000")
+verdict "MTC1 mt_lkly -G8" "$ok" "mtc1, bc1tl, then add.s \$f0,\$f12 in its slot, no nop anywhere in the run [44816000 45030001 46026000]"
 run mt_dirct -G8
 ok=$(accepted); [ "$ok" = 1 ] && ok=$(has "44816000 00000000 460c7302")
 verdict "MTC1 mt_dirct -G8 (the rule still pads)" "$ok" "mtc1, nop, mul.s reading \$f12 [44816000 00000000 460c7302]"
 run mt_nordr -G8
-ok=$(accepted); [ "$ok" = 1 ] && ok=$(has "0c000000 46027002")
-verdict "MTC1 mt_nordr -G8 (non-reader slot)" "$ok" "jal then mul.s \$f0,\$f14,\$f2 in its slot [0c000000 46027002]"
+ok=$(accepted); [ "$ok" = 1 ] && ok=$(has "0c000000 46027002"); [ "$ok" = 1 ] && ok=$(has "44816000 0c000000 46027002")
+verdict "MTC1 mt_nordr -G8 (non-reader slot)" "$ok" "mtc1, jal, then mul.s \$f0,\$f14,\$f2 in its slot, no nop anywhere in the run [44816000 0c000000 46027002]"
 
 echo "asm_unit_selftest: $N arms, $F failed ($AU)"
 [ "$F" = 0 ]
