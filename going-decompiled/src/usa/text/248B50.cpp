@@ -868,12 +868,12 @@ GuiWidget *func_0034A1D8(GuiWidget *w) {
  * after being zeroed, so the slot-0 fill writes 0.0.
  * @param w  the widget
  * Returns nothing: the ROM leaves $v0 holding the 1 it stores to +0x1C, and its
- * only caller (func_0034AA98) ignores it.
+ * callers (func_0034AA98, and func_0034C008 in 24BF88.s; task #1381) ignore it.
  * MATCHED on the s136os arm (task #1370): the packed frame (2 callee saves plus
  * $f20) is SN 2.95.3 v1.36 -fopt-stack's (FACT #8810). The ROM stores +0x20
  * before +0x1C and this compiler emits the last store of a group that ends at
- * the epilogue first, so +0x1C is written last here (last-store-first,
- * FACT #8947).
+ * the epilogue first, so the C writes +0x20 last to get the ROM's +0x20-first
+ * order (last-store-first, FACT #8947).
  * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
  * (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
  * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
