@@ -215,7 +215,7 @@ extern s32 func_003518B8(void *stream, ...);
 extern s32 func_00352638(u8 *obj, u64 a, u64 b, s32 pos, s32 n);
 extern s32 func_003522C0(void *dmaq, ...);  /* FMV DMA-add-queue enqueue (deferred native; ret ignored) */
 extern void ZeroQwords(void *p, s32 n);
-extern s64 func_00133850(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f);
+extern s32 func_00133850(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f);
 extern void *func_0012F738(void);
 extern s32 func_0012FA70(u8 *obj, s32 slot, void *cb, s32 arg);
 extern void func_003525D0(FmvStream *s);
@@ -367,9 +367,24 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvPtsQueueInit
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern void ZeroQwords(void *p, s32 n);
-extern s64 func_00133850(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f);
+extern s32 func_00133850(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f);
 extern u8 *D_1B2354;
 /* (end of this body's declarations) */
+/* The EE arm names the qword filler and the decode-buffer pointer by their ROM
+ * symbols (func_00283438, D_001B2354; the native runtime knows them as
+ * ZeroQwords and D_1B2354). The pointer store is the ROM's absolute `lui $1;
+ * sw` pair: an ADDRESSING-MODEL DEVICE, `.extern ,16` makes the assembler
+ * expand cc1's one-insn `sw` macro that way. */
+#ifndef TARGET_NATIVE
+__asm__(".extern D_001B2354, 16");
+extern u8 *D_001B2354;
+extern void func_00283438(void *p, s32 n);
+#define FMV_PTS_DECODE_BUF D_001B2354
+#define FMV_ZERO_QWORDS func_00283438
+#else
+#define FMV_PTS_DECODE_BUF D_1B2354
+#define FMV_ZERO_QWORDS ZeroQwords
+#endif
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 71.55% / engine96 69.85%. Residual: PACKED-SAVE (5 callee saves) + 29 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves. Revisit with the gameplay-TU compiler.
@@ -378,11 +393,19 @@ extern u8 *D_1B2354;
    payload ring base (param2) and IPU scratch base (param3), seed the stream
    type (3) and the 0x400-byte ring granularity, record the decode output
    buffer in D_1B2354, allocate the IPU sema (func_00133850), and report
-   whether the allocation succeeded. */
-s32 FmvPtsQueueInit(s32 *obj, s32 ringBase, s32 scratchBase, u8 *decodeBuf) {
-    s64 sema;
+   whether the allocation succeeded.
 
-    ZeroQwords(obj + 2, 0x20);
+   SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+   masked; a candidate, NOT match evidence): EXACT 47/47, relocations equal,
+   with three levers, each measured undone: the `.extern ,16` store above (else
+   14/47, first diff @33 `sw $19,%gp_rel`); func_00133850 returning s32, which is
+   what the wrapper passes back from snd_SendCommandSync (s64 costs a
+   dsll32/dsra32 pair: 12/47); and the result written as an early `return 0`
+   (`sema >= 0` folds to nor/srl: 2/47, first diff @38). */
+s32 FmvPtsQueueInit(s32 *obj, s32 ringBase, s32 scratchBase, u8 *decodeBuf) {
+    s32 sema;
+
+    FMV_ZERO_QWORDS(obj + 2, 0x20);
     obj[0xD] = ringBase;
     obj[0x10] = scratchBase;
     obj[1] = 3;
@@ -395,11 +418,14 @@ s32 FmvPtsQueueInit(s32 *obj, s32 ringBase, s32 scratchBase, u8 *decodeBuf) {
     obj[0x16] = 0;
     obj[0x17] = 0;
     obj[0x18] = 0;
-    D_1B2354 = decodeBuf;
+    FMV_PTS_DECODE_BUF = decodeBuf;
     obj[0x13] = 0x400;
     sema = func_00133850(0x400, 0x1000, 0x400, 0, 5, 3);
-    obj[0x12] = (s32)sema;
-    return sema >= 0;
+    obj[0x12] = sema;
+    if (sema < 0) {
+        return 0;
+    }
+    return 1;
 }
 #endif
 
