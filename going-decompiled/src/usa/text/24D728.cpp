@@ -1,5 +1,17 @@
 #include "common.h"
 
+/* R5900_SHORT_LOOP_PAD1(v, next): one `nop` emitted under noreorder, tied to the
+ * loop's live value by its operands. A SCHEDULING DEVICE (RULING #8435; the pad
+ * is the R5900 short-loop pad, FACT #7918 / #7937 / #8434): the ROM pads short
+ * loops with nops before the backward branch, which neither cc1 nor our
+ * assembler inserts. EE arm only; on native it is nothing. */
+#ifndef TARGET_NATIVE
+#define R5900_SHORT_LOOP_PAD1(v, next) \
+    __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
+#else
+#define R5900_SHORT_LOOP_PAD1(v, next) ((void)0)
+#endif
+
 /*
  * text/24D728 - GUI/HUD manager helpers (carve MEGA-BATCH PHASE A TILE D,
  * 2026-06-14; vaddr 0x34D7A8..0x3500FF): per-object setter/getter/forwarder
@@ -437,7 +449,13 @@ extern void func_00338A80(void *listHead);
 /* TODO(match) GuiManagerInitListRows - task #566 (round 4), measured on the COMMITTED tree (this file,
  * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
  * tools/ee/objdiff_build.sh, clean): sdk29 85.23%, engine96 76.97%. Eligible arm: e96.
- * Residual: BNEL (ROM `bne`+2 nops, built `bnel`) + PRO-ORDER */
+ * Residual: BNEL (ROM `bne`+2 nops, built `bnel`) + PRO-ORDER
+ * SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked; a candidate, NOT match evidence): EXACT 35/35, relocations equal, with
+ * the loop below: the counter stepped before the call, an EMPTY fence after it
+ * (RULING #8483, emits nothing) and the ROM's two R5900 short-loop pad nops
+ * (R5900_SHORT_LOOP_PAD1, a scheduling device, RULING #8435). Pads removed: 18/35,
+ * first diff @13; fence removed: 3/35 (sched2 hoists the pads above the jal). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", GuiManagerInitListRows);
 #else
@@ -455,10 +473,15 @@ extern void func_00338A80(void *listHead);
 void *GuiManagerInitListRows(void *mgr) {
     u8 *row = (u8 *)mgr;
     s32 i;
-    for (i = 0x19; i != -1; i--) {
+    i = 0x19;
+    do {
+        i--;
         GuiListRowElementInit(row);
+        __asm__ __volatile__("");
+        R5900_SHORT_LOOP_PAD1(row, row);
+        R5900_SHORT_LOOP_PAD1(row, row);
         row += 0x48;
-    }
+    } while (i != -1);
     GuiListRowElementInit((u8 *)mgr + 0x750);
     func_0034BDB0((u8 *)mgr + 0x7A0);
     func_003374D8((u8 *)mgr + 0x1D50);
