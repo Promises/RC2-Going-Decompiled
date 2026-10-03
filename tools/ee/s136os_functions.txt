@@ -204,3 +204,8 @@ usa text/235FE8 func_0033EB58
 usa text/235FE8 func_0033EE08
 usa text/235FE8 func_0033F000
 usa text/235FE8 GuiDialogBoxVariantBInit
+usa text/1EFFC0 func_002F6C78
+usa text/1EFFC0 ResetVramSlotTable
+usa text/1EFFC0 EnterCinematicBeginPlayback
+usa text/1EFFC0 BuildTfragDrawSegment
+usa text/1FFBA0 func_00300288

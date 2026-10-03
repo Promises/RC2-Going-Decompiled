@@ -59,7 +59,7 @@ extern u8 g_tieDrawTemplate[];/* 0x1ACAE0 tie draw-segment template, 0x20 bytes 
 /* One persistent tie-texture VRAM slot (stride 0x20). */
 typedef struct VramSlot {
     u8  _pad00[0x14];
-    s16 lruNext;  /* 0x14 LRU link, 0xFFFF = none */
+    u16 lruNext;  /* 0x14 LRU link, 0xFFFF = none */
     s16 refCount; /* 0x16 cleared on reset */
     u8  _pad18[0x7];
     u8  occupied; /* 0x1F 0xFF = free/sentinel */
@@ -178,26 +178,37 @@ void PatchTfragPacketTex0(void) {
  * culls+emits the tfrags, closes the segment, and clears the 0x3000-byte
  * tfrag relight list.
  *
- * NOT byte-matched (engine-2.96 TU): (1) the original packs the two saved regs
- * ($16/$31) into 8-byte stack slots (frame 0x50) whereas canonical ee-gcc 2.9
- * uses 16-byte save slots (frame 0x60) — the save-slot delta; (2) g_frameDmaCursor
- * is written %gp_rel here but read absolute (the same gp/abs-split reload artifact
- * documented on BuildTieDrawSegment). Body is otherwise instruction-equivalent;
- * kept as the portable #else impl. */
-/* RESIDUAL CLASS (task #576): SPLIT-WITHIN-FUNCTION -- g_frameDmaCursor
- *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
- *   whole-unit blanket screen, clean tree): sdk29 73.33%, engine96 73.60%
- *   (better arm: engine96). Neither reaches 100.00%, so this stays INCLUDE_ASM
- *   and the #else below remains the portable impl.
- *   the named symbol is reached BOTH ways inside this one function -- absolute
- *   %hi/%lo AND %gp_rel, same address. The split is POSITIONAL, not a size
- *   class (FACT #8058): every %gp_rel ref sits in a branch delay slot and every
- *   absolute ref outside one, 0 exceptions over all 122 compiled USA functions
- *   that split a symbol this way. No `.extern` size can express that; an
- *   assembler-side delay-slot rule could, and tools/ee has none yet.
- *   Unreachable today, but not proven a wall. */
+ * Byte-exact on the s136os arm since task #1351 (see its GUARD below); the
+ * 2.96-arm save-slot and gp/abs-split notes of tasks #576 and earlier no longer
+ * apply to the image body. */
+/* ADDRESSING-MODEL DEVICES (RULING #8620; FACT #8036 equate form, as
+ * g_vramAllocCursorGp above): BuildTfragDrawSegment stores g_pTfragSegmentOpenTag
+ * absolute (0x2F1A90 lui $1/sw) although the symbol is otherwise gp-addressable,
+ * and stores g_frameDmaCursor %gp_rel in the delay slot of its first jal
+ * (0x2F1AA0) although the unit sizes it 16 (absolute). Each store names a
+ * distinct assembler symbol EQUATED to the real one with the size it needs; the
+ * relocations name the real symbols and nothing reaches the symbol table. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", BuildTfragDrawSegment);
+__asm__(".extern g_pTfragSegmentOpenTagAbs, 16\n\tg_pTfragSegmentOpenTagAbs = g_pTfragSegmentOpenTag");
+__asm__(".extern g_frameDmaCursorGp, 4\n\tg_frameDmaCursorGp = g_frameDmaCursor");
+extern u8 *g_pTfragSegmentOpenTagAbs;
+extern u8 *g_frameDmaCursorGp;
+#else
+#define g_pTfragSegmentOpenTagAbs g_pTfragSegmentOpenTag
+#define g_frameDmaCursorGp g_frameDmaCursor
+#endif
+/* GUARD (task #1351): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Byte-exact on that arm (task #1351 lever): g_pTfragSegmentOpenTag stored
+ * through the size-16 g_pTfragSegmentOpenTagAbs equate and g_frameDmaCursor
+ * stored through the size-4 g_frameDmaCursorGp equate in the first jal delay
+ * slot (RULING #8620 devices), the cursor bumped in place in a local, and
+ * g_cameraPos held in a local across Vec4ScaleVu0 (the ROM keeps it in $16). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_BuildTfragDrawSegment)
+S136OS_SLOT(BuildTfragDrawSegment);
 #else
 extern u8  *g_pTfragSegmentOpenTag;   /* 0x1B211C tfrag draw-segment head tag */
 extern u16  g_tfragRelightList[];     /* 0x215E00 u16 tfrag ids, 0xFFFF-terminated */
@@ -213,15 +224,19 @@ void func_00283558(void *dst, s32 fill, s32 len);
 
 void BuildTfragDrawSegment(void) {
     f32 mtx[16]; /* 0x40-byte stack 4x4 matrix */
+    u8 *cam;
 
-    g_pTfragSegmentOpenTag = g_frameDmaCursor;
-    g_frameDmaCursor += 0x10;
+    u8 *cur = g_frameDmaCursor;
+    g_pTfragSegmentOpenTagAbs = cur;
     g_vramAllocCursor = g_vramDynamicBase;
+    cur += 0x10;
+    g_frameDmaCursorGp = cur;
 
     MatrixIdentityVu0(mtx);
-    Vec4ScaleVu0(&mtx[12], -1024.0f, g_cameraPos);
+    cam = g_cameraPos;
+    Vec4ScaleVu0(&mtx[12], -1024.0f, cam);
     mtx[15] = 1.0f;
-    MatrixMultiplyVu0(mtx, g_cameraPos - 0x100, mtx);
+    MatrixMultiplyVu0(mtx, cam - 0x100, mtx);
     AppendVifUnpackPacket(5, mtx, 4);
     AppendVifUnpackPacket(0x14D, mtx, 4);
     func_0011AEA0(0);
@@ -435,32 +450,42 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_0
  * and mark every slot in [start, end) free (occupied = 0xFF, lruNext = none,
  * refCount = 0).
  *
- * NOT byte-matched: the original loop is software-pipelined with a `bnel`
- * branch-likely (the next slot's occupied byte is written in the loop's delay
- * slot); this cc1 lowers the do/while to a plain `bne`. Functionally identical;
- * kept as the portable #else impl (see docs/PORTING.md). */
-/* RESIDUAL CLASS (task #576): UNDIAGNOSED
- *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
- *   whole-unit blanket screen, clean tree): sdk29 68.70%, engine96 55.70%
- *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
- *   and the #else below remains the portable impl.
- *   SCREENED ONLY. Both arms were measured; the residual was not diagnosed to a
- *   mechanism. This is an open arm, not a wall -- do not read it as one. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", ResetVramSlotTable);
+ * The ROM's loop is software-pipelined: the next slot's occupied byte is
+ * written in the bnel delay slot. */
+/* GUARD (task #1351): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Byte-exact on that arm (task #1351 lever): g_pTieMatrixArray stored through
+ * the .sdata g_pTieMatrixArraySmall name (one-insn macro, as the ROM's lui
+ * $1/sw), g_splashImageBuffer loaded through the .data g_splashImageBufferSplit
+ * name (%hi/%lo split across $2/$3, as the ROM), lruNext typed u16 so the none
+ * value is the ROM's ori 0xFFFF, and the loop stores written refCount, lruNext,
+ * occupied: SN 1.36 emits the last of the three first (FACT #8947), giving the
+ * ROM's occupied-first bnel pipeline. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_ResetVramSlotTable)
+S136OS_SLOT(ResetVramSlotTable);
 #else
+#ifndef TARGET_NATIVE
+extern void *g_pTieMatrixArraySmall[] __asm__("g_pTieMatrixArray") __attribute__((section(".sdata")));
+extern void *g_splashImageBufferSplit __asm__("g_splashImageBuffer") __attribute__((section(".data")));
+#else
+#define g_pTieMatrixArraySmall g_pTieMatrixArray
+#define g_splashImageBufferSplit g_splashImageBuffer
+#endif
 void ResetVramSlotTable(void) {
     VramSlot *slot;
-    g_pTieMatrixArray[2] = g_splashImageBuffer;
+    slot = g_vramSlotTableStart;
+    g_pTieMatrixArraySmall[2] = g_splashImageBufferSplit;
     g_tieVramLruHead = 0;
     g_tieVramLruTail = 0;
     g_tieVramLruSize = 0;
-    slot = g_vramSlotTableStart;
     if (slot != g_vramSlotTableEnd) {
         do {
-            slot->occupied = 0xFF;
             slot->refCount = 0;
-            slot->lruNext = -1;
+            slot->lruNext = 0xFFFF;
+            slot->occupied = 0xFF;
             slot++;
         } while (slot != g_vramSlotTableEnd);
     }
@@ -828,8 +853,8 @@ extern u8  g_currentLanguage;          /* 0x1A7BBC language index */
  * The ROM reaches every one of them both ways, and every %gp_rel ref sits in a
  * branch delay slot (FACT #8058). Our gas decides by size, one size per
  * symbol per TU, so all six are declared large (absolute) here. The one
- * delay-slot %gp_rel store in func_002F6C78 needs g_cinematicFmvFlag small
- * (size 4) on that function's engine96 arm only - see its comment. */
+ * delay-slot %gp_rel store in func_002F6C78 goes through the size-4
+ * g_cinematicFmvFlagGp equate below (task #1351). */
 __asm__(".extern g_cinematicSceneParams, 16");
 __asm__(".extern g_cinematicFmvSize, 16");
 __asm__(".extern g_cinematicReelEntry, 16");
@@ -842,6 +867,18 @@ extern s32 g_cinematicReelEntry;     /* 0x1B2190 -> TOC entry +0x8, reel descrip
 extern s32 g_cinematicLanguage;      /* 0x1B2194 language index */
 extern s32 g_cinematicFmvFlag;       /* 0x1B2198 1 only for cinematic id 0xBF */
 extern s32 g_cinematicResumeVoiceId; /* 0x1B219C secondary-voice sample id to restart */
+/* ADDRESSING-MODEL DEVICE (RULING #8620; the g_vramAllocCursorGp form at the
+ * top of this file): func_002F6C78's one delay-slot store of g_cinematicFmvFlag
+ * is %gp_rel in the ROM (0x2F6D24) while every other reference is absolute.
+ * gas sizes a symbol once per file, so that store names a distinct assembler
+ * symbol EQUATED to g_cinematicFmvFlag and sized 4; the relocation still names
+ * g_cinematicFmvFlag. Nothing is moved and no instruction is emitted. */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_cinematicFmvFlagGp, 4\n\tg_cinematicFmvFlagGp = g_cinematicFmvFlag");
+extern s32 g_cinematicFmvFlagGp;
+#else
+#define g_cinematicFmvFlagGp g_cinematicFmvFlag
+#endif
 
 /* RESIDUAL CLASS (task #576): UNDIAGNOSED
  *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
@@ -906,51 +943,22 @@ void func_002898E0(void);
 extern s16 D_1A63F0[];
 extern u8 g_listenerPosHistory[];    /* 0x188660 listener pos ring + flags */
 
-/* RESIDUAL CLASS (task #790): ONE PROLOGUE SCHEDULING SLOT, engine96 arm.
- *   97.04% on diff96.sh (per-function fuzzy, engine96 arm) for the body below,
- *   with this function under an engine96 per-function guard and
- *   g_cinematicFmvFlag declared `.extern ..., 4` on that arm only. Not the unit
- *   gate, not 100.00%, so this stays INCLUDE_ASM with no guard.
- *   Everything but the prologue is instruction-identical to the ROM: the six
- *   per-store lui/%lo and the delay-slot %gp_rel store come from the task
- *   #790 re-split (six real scalars), the jal+epilogue from the trailing
- *   barrier, the `li $4,4` above the `lh` from the barrier after
- *   ResetDialogVoiceChannels.
- *   Residual: the ROM issues `addiu $3,%lo(g_listenerPosHistory)` right after
- *   `sd $16`, and 2.96-001003's sched2 issues it after the five parameter moves
- *   (5 words shifted). Measured and not moved by: a local pointer (93.33 before
- *   the barriers), a "+r" pin on it (86.22), a volatile access (91.26), a
- *   barrier at the start of the body (93.33), a sized array (97.04), sched1 ON
- *   (96.30, diagnostic only). sched2 OFF gives 57.04, so sched2 is what
- *   places it.
- *   ARGUED WALL under 2.96-001003 sched2 (tasks #807/#810/#817, read from the
- *   -fsched-verbose=6 -dR dump at diff96.sh's flags): sched2 issues two insns
- *   per cycle (memory + alu), and the anti dependence of `move sN,aN` on
- *   `sd sN` costs 0 (the move goes `into ready`, not `into queue with cost`).
- *   Each move is issued in the same cycle as its sd, ahead of the addiu that
- *   is already on the ready list with priority 15 against the move's 10. So
- *   insertion order decides here, not priority, and the other ready alu insns
- *   do not help. That the freed insn is put at the top of the list without a
- *   re-sort is read from this behaviour, not from gcc source. The ROM's order
- *   needs each move to wait one cycle.
- *   2.9-991111 sched2, at this unit's flags (-O2 -G8 -fno-gcse, sched1 on),
- *   is NOT different in issue width or in cost: it also issues two insns per
- *   cycle and also frees each move `into ready` at cost 0. What differs is
- *   the pick. 2.9 never issues the move in the cycle that frees it. The
- *   second slot goes to an insn already on the list at the start of the
- *   cycle: the addiu (priority 23 against 20) in the first save cycle, then the
- *   move freed one cycle earlier. That is the ROM's lagged pattern
- *   (`sd; addiu; sd; move`). 2.9 still misses the ROM in the layout: a
- *   96-byte frame with 16-byte save slots, and saves in reverse order
- *   (s4 first). Its param->sN mapping is the ROM's (s0<-a0 .. s4<-a4) at
- *   these flags. Only at -G0 with sched1 on does the mapping differ too.
- *   Under 2.96, the six C spellings tried all give the same prologue:
- *   unsigned params, a u8 temp, local copies of the params and a local
- *   pointer (#807), and register-asm pins plus a u8 * read-modify-write
- *   (#810). "No C lever" is argued from the dependence graph. Nobody has
- *   enumerated the spellings. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6C78);
+/* Under cc1 2.96 (task #790) this body missed the ROM by one prologue
+ * scheduling slot, argued from sched2's dependence graph. Under the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack) the prologue is the ROM's, and the body is
+ * byte-exact with the g_cinematicFmvFlagGp device (task #1351). */
+/* GUARD (task #1351): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Byte-exact on that arm (task #1351 lever): the one delay-slot store of
+ * g_cinematicFmvFlag goes through the size-4 g_cinematicFmvFlagGp equate
+ * (RULING #8620 device), so it is %gp_rel at 0x2F6D24 as in the ROM while every
+ * other reference stays absolute. Under this arm the prologue is the ROM's; the
+ * task #790 sched2 residual was a cc1-2.96 property. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002F6C78)
+S136OS_SLOT(func_002F6C78);
 #else
 void func_002F6C78(s32 fmvOffset, s32 fmvSize, s32 reelEntry, s32 language,
                    s32 flag) {
@@ -971,7 +979,7 @@ void func_002F6C78(s32 fmvOffset, s32 fmvSize, s32 reelEntry, s32 language,
     g_cinematicFmvSize = fmvSize;
     g_cinematicReelEntry = reelEntry;
     g_cinematicLanguage = language;
-    g_cinematicFmvFlag = flag;
+    g_cinematicFmvFlagGp = flag;
     FadeOutToBlackBlocking(4);
     func_002898E0();
     /* the ROM calls func_002898E0 with a jal and a full epilogue, not a
@@ -988,35 +996,45 @@ void func_002F6C78(s32 fmvOffset, s32 fmvSize, s32 reelEntry, s32 language,
  * == 0) AND no top-level transition into state 1/2 is pending, fires the
  * callback once and clears it.
  *
- * NOT byte-matched: 2 GPR saves (s0/ra) packed 8-byte (sd s0,0x0 / sd ra,0x8,
- * frame 0x10) hit the 8-byte-packed-save wall (this cc1 emits 16-byte spacing),
- * and g_exitCinematicCallbackArg is reached %gp_rel on the read but absolute
- * %hi/%lo on the clear (the same-symbol reload artifact). Body is otherwise
- * instruction-identical; kept as the portable #else impl. */
+ * The ROM's packed 8-byte saves (sd s0,0x0 / sd ra,0x8, frame 0x10) come from
+ * the s136os arm's -fopt-stack (FACT #8810); see the GUARD below. */
 void StartSecondaryVoice(s32 sampleId, s32 chan, s32 volume);
 void SetDialogVoiceVolumesMute(void);
 void ResetFrameArenas(void);
 extern u8 g_listenerPosHistory[];        /* 0x188660 listener pos ring + flags */
 
-/* RESIDUAL CLASS (task #576): SPLIT-WITHIN-FUNCTION -- g_exitCinematicCallbackArg
- *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
- *   whole-unit blanket screen, clean tree): sdk29 75.15%, engine96 70.45%
- *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
- *   and the #else below remains the portable impl.
- *   the named symbol is reached BOTH ways inside this one function -- absolute
- *   %hi/%lo AND %gp_rel, same address. The split is POSITIONAL, not a size
- *   class (FACT #8058): every %gp_rel ref sits in a branch delay slot and every
- *   absolute ref outside one, 0 exceptions over all 122 compiled USA functions
- *   that split a symbol this way. No `.extern` size can express that; an
- *   assembler-side delay-slot rule could, and tools/ee has none yet.
- *   Unreachable today, but not proven a wall. */
+/* g_exitCinematicCallbackArg is reached both ways in this one function:
+ * %gp_rel in the jalr delay slot, absolute for the clear (FACT #8058's
+ * positional split). A per-reference assembler equate expresses that (task
+ * #1351, the g_vramAllocCursorGp form); g_cinematicExitPending is absolute
+ * throughout here although the unit sizes it small. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", EnterCinematicBeginPlayback);
+__asm__(".extern g_cinematicExitPendingAbs, 16\n\tg_cinematicExitPendingAbs = g_cinematicExitPending");
+__asm__(".extern g_exitCinematicCallbackArgAbs, 16\n\tg_exitCinematicCallbackArgAbs = g_exitCinematicCallbackArg");
+extern s32 g_cinematicExitPendingAbs;
+extern void *g_exitCinematicCallbackArgAbs;
+#else
+#define g_cinematicExitPendingAbs g_cinematicExitPending
+#define g_exitCinematicCallbackArgAbs g_exitCinematicCallbackArg
+#endif
+/* GUARD (task #1351): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Byte-exact on that arm (task #1351 lever): g_cinematicExitPending and the
+ * callback-arg clear go through size-16 *Abs equates (absolute, as the ROM)
+ * while the jalr delay-slot read of g_exitCinematicCallbackArg stays %gp_rel
+ * (RULING #8620 devices), and the two game-state tests are written as nested
+ * ifs so cc1 does not fold them into a range check; the ROM compares each
+ * against a shared 2 held in $16. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_EnterCinematicBeginPlayback)
+S136OS_SLOT(EnterCinematicBeginPlayback);
 #else
 void EnterCinematicBeginPlayback(void) {
     void (*cb)(void *);
-    if (g_cinematicExitPending == 2) {
-        g_cinematicExitPending = 0;
+    if (g_cinematicExitPendingAbs == 2) {
+        g_cinematicExitPendingAbs = 0;
     }
     FadeOutToBlackBlocking(4);
     StartSecondaryVoice(g_cinematicResumeVoiceId, 1, 0x400);
@@ -1025,10 +1043,12 @@ void EnterCinematicBeginPlayback(void) {
     ResetFrameArenas();
     cb = (void (*)(void *))g_exitCinematicCallback;
     if (cb != 0 && *(s32 *)(g_cinematicQueue + 0x38) == 0) {
-        if (g_nGameStatePending != 2 && g_nGameStatePending != 1) {
-            cb(g_exitCinematicCallbackArg);
+        if (g_nGameStatePending != 2) {
+            if (g_nGameStatePending != 1) {
+                cb(g_exitCinematicCallbackArg);
             g_exitCinematicCallback = 0;
-            g_exitCinematicCallbackArg = 0;
+            g_exitCinematicCallbackArgAbs = 0;
+            }
         }
     }
 }
@@ -1100,6 +1120,9 @@ s32  RequestGameStateChange(s32 a, s32 b, s32 c, s32 d, s32 e);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", RunCinematicPlaybackFrame);
 #else
+/* Prototypes this body needs whose declarations sit in other guarded arms:
+ * the s136os arm compiles this arm alone, so it must see them here. */
+void ResetVramSlotTable(void);
 void RunCinematicPlaybackFrame(void) {
     u8  gifPacket[0x60];    /* GS GIF image-upload packet scratch (frame [0,0x60)) */
     s32 arenaC, arena14, fmvUploadBase;
@@ -1830,6 +1853,9 @@ s32 func_002F81A0(s32 expected, s32 key, s32 col) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F8228);
 #else
+/* Prototypes this body needs whose declarations sit in other guarded arms:
+ * the s136os arm compiles this arm alone, so it must see them here. */
+s32 func_002F81A0(s32 expected, s32 key, s32 col);
 extern s32 g_nVendorItemCount; /* reset each rebuild (list count lives in g_vendorUi+0x740) */
 extern u8  D_1A7AC0[];         /* 0x1A7AC0 per-item purchasable-tier bitmask (pass 1 -> pass 2) */
 extern u8  g_inventoryOwned[]; /* per-item "owned" flag */
@@ -2056,6 +2082,13 @@ void func_002F85B8(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", EnterVendorMenu);
 #else
+/* Prototypes this body needs whose declarations sit in other guarded arms:
+ * the s136os arm compiles this arm alone, so it must see them here. */
+void func_002F8038(void);
+void func_002F8228(void);
+#ifndef TARGET_NATIVE
+void *memset(void *dst, int c, unsigned int n);
+#endif
 extern s32   g_bPalMode;              /* PAL flag (0 = NTSC) */
 extern u8    g_nVendorBuyQuantity[];  /* vendor buy-quantity + camera/param scratch */
 extern s16   g_equippedArmor;         /* current player armor tier */
@@ -2539,6 +2572,10 @@ void SetVendorCaption(s32 captionId) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", VendorPurchaseStateMachine);
 #else
+/* Prototypes this body needs whose declarations sit in other guarded arms:
+ * the s136os arm compiles this arm alone, so it must see them here. */
+s32 GetVendorItemPrice(void);
+void SetVendorCaption(s32 captionId);
 extern s32   g_boltCount;          /* 0x1A7A00 player bolt wallet */
 extern s32   g_weaponAmmo[];       /* per-item current ammo, indexed by item id */
 extern u8    g_nVendorBuyQuantity[]; /* +0x0 = the pending buy quantity (scalar) */
@@ -2954,6 +2991,9 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", UpdateVendorMenuInput);
 #else
+/* Prototypes this body needs whose declarations sit in other guarded arms:
+ * the s136os arm compiles this arm alone, so it must see them here. */
+s32 GetVendorItemPrice(void);
 extern s32  g_boltCount;      /* 0x1A7A00 player bolt wallet */
 extern s32  g_weaponAmmo[];   /* per-item current ammo, indexed by item id */
 extern s32  D_001A81C0;       /* UP   auto-repeat hold timer (pad state +0x58) */

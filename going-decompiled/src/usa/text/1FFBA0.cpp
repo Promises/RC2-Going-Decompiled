@@ -363,21 +363,40 @@ void *func_00300190(s32 classId, s32 animArg) {
 /* Init the water-pool splash moby (g_waterPool+0x68) via class 0x3EF, then arm
  * it: scale 5.0 on +0x10/+0x14/+0x18, opacity 0xFF at +0x30, OR in flags 0x43
  * at +0x34, and clear +0x98.
- * Near-miss (objdiff ~58%): the original reloads the moby ptr + reorders the
- * field stores in a schedule this cc1 won't reproduce; the C is faithful. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_00300288);
+ * The ROM re-derives the moby pointer after the call rather than keeping a
+ * base in a saved register (see the device below). */
+/* GUARD (task #1351): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Byte-exact on that arm (task #1351 lever): g_swapGadgetItemIndex read through
+ * the g_swapGadgetItemIndexSmall addressing device (RULING #8620), and the
+ * +0x10 scale written last: SN 1.36 emits the last of the six stores first
+ * (FACT #8947), giving the ROM's order. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00300288)
+S136OS_SLOT(func_00300288);
 #else
+/* ADDRESSING-MODEL DEVICE (RULING #8620): g_swapGadgetItemIndexSmall is the
+ * func_00300E70 device below, declared here too because the s136os arm
+ * compiles this arm alone. It keeps each +0x2E read as the one-insn macro
+ * (absolute lui/lw, re-derived after the call as the ROM does at 0x3002A0)
+ * instead of a %hi base held in a saved register. */
+#ifndef TARGET_NATIVE
+extern u8 g_swapGadgetItemIndexSmall[] __asm__("g_swapGadgetItemIndex") __attribute__((section(".sdata")));
+#else
+#define g_swapGadgetItemIndexSmall g_swapGadgetItemIndex
+#endif
 void func_00300288(void) {
-    Moby *m = *(Moby **)(g_swapGadgetItemIndex + 0x2E);
+    Moby *m = *(Moby **)(g_swapGadgetItemIndexSmall + 0x2E);
     func_00300120(m, 0x3EF);
-    m = *(Moby **)(g_swapGadgetItemIndex + 0x2E);
-    *(f32 *)((u8 *)m + 0x10) = 5.0f;
+    m = *(Moby **)(g_swapGadgetItemIndexSmall + 0x2E);
     *(u8 *)((u8 *)m + 0x30) = 0xFF;
     *(u16 *)((u8 *)m + 0x34) = (u16)(*(u16 *)((u8 *)m + 0x34) | 0x43);
     *(s32 *)((u8 *)m + 0x98) = 0;
     *(f32 *)((u8 *)m + 0x18) = 5.0f;
     *(f32 *)((u8 *)m + 0x14) = 5.0f;
+    *(f32 *)((u8 *)m + 0x10) = 5.0f;
 }
 #endif
 
