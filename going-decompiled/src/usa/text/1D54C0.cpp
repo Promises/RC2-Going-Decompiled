@@ -1751,18 +1751,37 @@ extern void StopFileLoad(void);
  * objdiff): sdk29 72.44% / engine96 75.74%; better arm engine96; 10 differing
  * rows on it, class STRUCTURAL; first differing insn: ROM `(none)` vs `lw
  * v0,0(gp)  [GPREL16 g_nFileLoadState]`. Not iterated in t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
+/* SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked; a candidate, NOT match evidence): EXACT 27/27, relocations equal. The
+ * globals are read and written by their ROM names in the ROM's address forms
+ * (ADDRESSING-MODEL DEVICES, this unit's ROM_SPLIT and `.extern ,16`), each
+ * measured undone: g_fileLoadState is an s16 the ROM loads with a compiler-split
+ * lui/lh (plain: 25/27, first diff @1); g_pActiveTextTable is stored with the
+ * absolute lui $1/sw macro pair (9/27); g_activeTextTableCount with a split
+ * lui/sw (6/27). The table pointer is stored before the count (the other order:
+ * 7/27). */
+extern s16 g_fileLoadState ROM_SPLIT;
+__asm__(".extern g_pActiveTextTable, 16");
+extern void *g_pActiveTextTable;
+#ifndef TARGET_NATIVE
+extern s32 g_activeTextTableCount ROM_SPLIT;
+#define TEXT_TABLE_COUNT g_activeTextTableCount
+#else
+extern s32 g_nActiveTextTableCount;
+#define TEXT_TABLE_COUNT g_nActiveTextTableCount
+#endif
 s32 RestorePrevTextTable(void *cmd) {
-    extern s32 g_nActiveTextTableCount;
-    extern void *g_pActiveTextTable;
     u8 *c = (u8 *)cmd;
-    if (g_nFileLoadState != 0 && *(s32 *)(c + 0x50) == 3) {
+    void *table;
+
+    if (g_fileLoadState != 0 && *(s32 *)(c + 0x50) == 3) {
         StopFileLoad();
     }
     func_002DF1B8(1);
-    if (*(void **)(c + 0x54) != 0) {
-        g_nActiveTextTableCount = *(s32 *)(c + 0x38);
-        g_pActiveTextTable = *(void **)(c + 0x54);
+    table = *(void **)(c + 0x54);
+    if (table != 0) {
+        TEXT_TABLE_COUNT = *(s32 *)(c + 0x38);
+        g_pActiveTextTable = table;
     }
     return 0;
 }
