@@ -774,34 +774,62 @@ extern s32 func_002D6B00(struct MenuCmd *cmd);
  * objdiff): sdk29 61.57% / engine96 37.17%; better arm sdk29; 36 differing
  * rows on it, class STRUCTURAL; first differing insn: ROM `sd s1,24(sp)` vs
  * `lui v0,0x0  [HI16 0x00138344]`. Not iterated in t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
+/* SCREEN (task #1395, s136 solo, relocated fields masked; not match evidence):
+ * 51/69 edit 37 -> 23/69 edit 6, written in the ROM's shape: the pad mask read
+ * off the controller block D_138180 (+0x1C4) at each test, the back path an
+ * inlined MenuRequestParent(), one result variable. BLOCKED on one access: the
+ * ROM reads g_guiInstance %gp_rel in a branch delay slot, but this unit's
+ * file-scope `.extern g_guiInstance, 16` makes it absolute, so asm_unit hoists
+ * the lui/lw pair (+1 word). With the gp-relative name g_pGuiManager the body
+ * screens EXACT 69/69, differing only in that relocation's name, but EE has
+ * no g_pGuiManager. The path is the 9..15 delay-slot size marker on that
+ * directive, which touches matched code, or the ruling-blocked gp alias. */
+#ifndef MENU_REQUEST_PARENT_DEFINED
+#define MENU_REQUEST_PARENT_DEFINED
+/* Back-button handling shared by the menu input handlers, inlined into each:
+ * switch to the active screen's parent (+0xE0) if it names one (returns 0),
+ * else leave the menu (-1) unless the override at g_menuScreenBlock+0x134
+ * holds it open (0). */
+static inline s32 MenuRequestParent(void) {
+    u8 *blk = (u8 *)g_menuScreenBlock;
+    u8 *parent = *(u8 **)(*(u8 **)(blk + 0x14) + 0xE0);
+    if (parent != 0) {
+        *(u8 **)(blk + 0x18) = parent;
+    } else if (*(s32 *)(blk + 0x134) == 0) {
+        return -1;
+    }
+    return 0;
+}
+#endif
 s32 func_002D5F10(void) {
-    s32 pressed = g_padButtonsPressed[0];
+    extern char *g_guiInstance;      /* the GUI singleton (alias g_pGuiManager) */
+    extern u8 D_138180[];            /* controller port-0 state; +0x1C4 = g_padButtonsPressed */
+    u8 *pad;
+    s32 result = 0;
+
     if (func_00288898() == 2 && GetMenuOverlayMode() == 9) {
         func_002888A8();
         RequestLevelExit(-1, 0);
         return 1;
     }
     func_002888A8();
-    if (pressed & 0x10) {
-        void *nxt = *(void **)((u8 *)g_pCurrentMenuScreen[0] + 0xE0);
-        if (nxt == 0 && D_001F28F4 == 0) return -1;
-        if (nxt == 0) nxt = g_pNextMenuScreen[0];
-        g_pNextMenuScreen[0] = nxt;
-        return 0;
+    pad = D_138180;
+    if (*(s32 *)(pad + 0x1C4) & 0x10) {
+        return MenuRequestParent();
     }
-    if (pressed & 0x900) {
-        return 1;
+    if (*(s32 *)(pad + 0x1C4) & 0x900) {
+        result = 1;
+    } else {
+        func_0029D398(*(s32 *)(pad + 0x1C4));
+        if ((*(s32 *)(pad + 0x1C4) & 0x40) && g_guiInstance != 0) {
+            s32 item = func_003424C8(g_guiInstance + 0x3C160);
+            s16 cmd[8];
+            cmd[1] = *(s16 *)(item + 8);
+            *(s32 *)(&cmd[2]) = *(s32 *)(item + 0xc);
+            func_002D6B00((MenuCmd *)cmd);
+        }
     }
-    func_0029D398(g_padButtonsPressed[0]);   /* pass the pad mask (asm loads g_padButtonsPressed[0] into a0 at 0x2d5f74) */
-    if ((pressed & 0x40) && g_pGuiManager != 0) {
-        s32 item = func_003424C8((u8 *)g_pGuiManager + 0x3C160);
-        s16 cmd[8];
-        cmd[1] = *(s16 *)(item + 8);
-        *(s32 *)(&cmd[2]) = *(s32 *)(item + 0xc);
-        func_002D6B00((MenuCmd *)cmd);
-    }
-    return 0;
+    return result;
 }
 #endif
 
@@ -1058,28 +1086,53 @@ extern s32 func_002D6B00(struct MenuCmd *cmd);
  * objdiff): sdk29 49.86% / engine96 10.69%; better arm sdk29; 36 differing
  * rows on it, class STRUCTURAL; first differing insn: ROM `lui v0,0x0  [HI16
  * D_138180]` vs `lui v0,0x0  [HI16 0x00138344]`. Not iterated in t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
-s32 func_002D6408(void) {
-    s32 pressed = g_padButtonsPressed[0];
-    if (pressed & 0x10) {
-        void *nxt = *(void **)((u8 *)g_pCurrentMenuScreen[0] + 0xE0);
-        if (nxt == 0 && D_001F28F4 == 0) return -1;
-        if (nxt == 0) nxt = g_pNextMenuScreen[0];
-        g_pNextMenuScreen[0] = nxt;
-        return 0;
-    }
-    if (pressed & 0x900) {
-        return 1;
-    }
-    func_0029D8A8(g_padButtonsPressed[0]);   /* pass the pad mask (asm loads g_padButtonsPressed[0] into a0 at 0x2d6420) */
-    if ((pressed & 0x40) && g_pGuiManager != 0) {
-        s32 item = func_003432C0((u8 *)g_pGuiManager + 0x3e760);
-        s16 cmd[8];
-        cmd[1] = *(s16 *)(item + 8);
-        *(s32 *)(&cmd[2]) = *(s32 *)(item + 0xc);
-        func_002D6B00((MenuCmd *)cmd);
+/* SCREEN (task #1395, s136 solo, relocated fields masked; not match evidence):
+ * 49/51 edit 32 -> 23/51 edit 5, in func_002D5F10's shape (see there). The
+ * inlined MenuRequestParent() is the lever. Written out in place it gives 35/51
+ * @8, and with its tail as `if (override != 0) return 0; return -1;` 5/51 @14
+ * (cc1 picks movn). BLOCKED on the same single access as func_002D5F10: the
+ * delay-slot %gp_rel g_guiInstance under the unit's `.extern g_guiInstance, 16`.
+ * Read through g_pGuiManager the body screens EXACT 51/51, differing only in
+ * that relocation's name, and EE does not define g_pGuiManager. */
+#ifndef MENU_REQUEST_PARENT_DEFINED
+#define MENU_REQUEST_PARENT_DEFINED
+/* Back-button handling shared by the menu input handlers, inlined into each:
+ * switch to the active screen's parent (+0xE0) if it names one (returns 0),
+ * else leave the menu (-1) unless the override at g_menuScreenBlock+0x134
+ * holds it open (0). */
+static inline s32 MenuRequestParent(void) {
+    u8 *blk = (u8 *)g_menuScreenBlock;
+    u8 *parent = *(u8 **)(*(u8 **)(blk + 0x14) + 0xE0);
+    if (parent != 0) {
+        *(u8 **)(blk + 0x18) = parent;
+    } else if (*(s32 *)(blk + 0x134) == 0) {
+        return -1;
     }
     return 0;
+}
+#endif
+s32 func_002D6408(void) {
+    extern char *g_guiInstance;      /* the GUI singleton (alias g_pGuiManager) */
+    extern u8 D_138180[];            /* controller port-0 state; +0x1C4 = g_padButtonsPressed */
+    u8 *pad = D_138180;
+    s32 result = 0;
+
+    if (*(s32 *)(pad + 0x1C4) & 0x10) {
+        return MenuRequestParent();
+    }
+    if (*(s32 *)(pad + 0x1C4) & 0x900) {
+        result = 1;
+    } else {
+        func_0029D8A8(*(s32 *)(pad + 0x1C4));
+        if ((*(s32 *)(pad + 0x1C4) & 0x40) && g_guiInstance != 0) {
+            s32 item = func_003432C0(g_guiInstance + 0x3e760);
+            s16 cmd[8];
+            cmd[1] = *(s16 *)(item + 8);
+            *(s32 *)(&cmd[2]) = *(s32 *)(item + 0xc);
+            func_002D6B00((MenuCmd *)cmd);
+        }
+    }
+    return result;
 }
 #endif
 
