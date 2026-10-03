@@ -241,7 +241,7 @@ extern s32 func_00352AE0(s32 unused, u8 *obj);
 extern s32 func_0012F9B8(u8 *host);
 s32 FmvFrameQueueGetDisplaySlot(FmvFrameQueue *q);
 /* Stream-commit + reset callees referenced only by the #else bodies. */
-extern s32 func_001338F0(s32 commitBase, s32 len, s32 commitArg, s32 queued, s32 arg5);
+extern void func_001338F0(s32 commitBase, s32 len, s32 commitArg, s32 queued, s32 arg5);
 extern void func_00133890(s32 *obj);   /* commit-path stream lock */
 /* SIF-DMA bounce primitives (func_00350868 #else): queue a SIF DMA, busy-wait
    for the slot, poll for completion, then signal. */
@@ -462,31 +462,35 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350608);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
-extern s32 func_001338F0(s32 commitBase, s32 len, s32 commitArg, s32 queued, s32 arg5);
+extern void func_001338F0(s32 commitBase, s32 len, s32 commitArg, s32 queued, s32 arg5);
 /* (end of this body's declarations) */
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 52.05% / engine96 33.50%. Residual: PACKED-SAVE (2 callee saves) + 16 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
    saves (s0@0x0, ra@0x8). Revisit with the gameplay-TU compiler.
 
-   Commit the buffered packet to the IPU bitstream feeder: snap the staged
-   commit length (commitLen) down to a 1KB (0x400) boundary - biasing a negative
-   value by +0x3FF first so the arithmetic >>10<<10 floors toward zero the same
-   way the compiler's sra/sll pair does - then hand {commitBase, snappedLen,
-   commitArg, hdr-word@0x14, hdr-word@0x18} to func_001338F0 and flip the
-   stream's `started` word to 2 (header consumed). Returns 2 (the started value
-   is reused as the return - the func_001338F0 result is discarded).
+   Commit the buffered packet to the IPU bitstream feeder: truncate the staged
+   commit length (commitLen) to a whole number of 1KB (0x400) units (a signed
+   division, rounding toward zero), hand {commitBase, snappedLen, commitArg,
+   hdr-word@0x14, hdr-word@0x18} to func_001338F0 and flip the stream's
+   `started` word to 2 (header consumed). Returns nothing: $2 holds the 2 only
+   because it is the stored value, and the one caller (FmvStreamFeedLoop)
+   overwrites $2 straight after the call.
 
    NOTE(offset): args 4 and 5 come from word idx [5] (q+0x14) and [6] (q+0x18),
    both inside the packet-header staging area hdr[0x28] (NOT q->queued@0x50 - the
-   cmp oracle caught an earlier version that read queued). Raw offsets kept. */
-s32 func_00350608(FmvPtsQueue *q) {
-    s32 len = q->commitLen;
-    s32 snapped = ((len >= 0 ? len : len + 0x3FF) >> 10) << 10;
+   cmp oracle caught an earlier version that read queued). Raw offsets kept.
 
-    func_001338F0(q->commitBase, snapped, q->commitArg,
+   SCREEN-EXACT on the s136os arm (SN 2.95.3 v1.36 -fopt-stack; task #1389,
+   masked word screen + relocation compare, NOT vmu): a CANDIDATE, not a match.
+   Levers: the snap written as the division commitLen / 0x400 * 0x400 (cc1
+   expands it to the ROM's slt/movn; the hand-expanded ?: compiled to a
+   bltzl), and two declaration fixes - func_001338F0 is void (its matched
+   definition, cod/0321A0.c, is void; both of this unit's declarations said
+   s32) and this function is void. */
+void func_00350608(FmvPtsQueue *q) {
+    func_001338F0(q->commitBase, q->commitLen / 0x400 * 0x400, q->commitArg,
                   *(s32 *)((u8 *)q + 0x14), *(s32 *)((u8 *)q + 0x18));
     q->started = 2;
-    return 2;
 }
 #endif
 
