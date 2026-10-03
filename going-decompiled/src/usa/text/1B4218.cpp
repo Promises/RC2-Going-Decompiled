@@ -2954,42 +2954,29 @@ void OnSoundBankLoaded(s32 bankId, long pOut) {
 /* Kick the async load of the boot/global 989snd sample bank into status slot 0.
  * Resets that slot to -1 (loading) and registers OnSoundBankLoaded as the
  * completion callback (the status-slot pointer is zero-extended to 64 bits for
- * the RPC). The bank's EE address is the global-WAD base plus its TOC offset.
- * The address shape is reproduced (task #510): the listener block and the disc
- * TOC are taken through local pointers so cc1 keeps +0x17A0 / +0x52B0 as
- * displacements, the status slot is cleared with the unsigned spelling
- * (lui/ori) and the tail call is guarded. Residual SCHED-TIEBREAK: the ROM
- * issues both TOC loads before `addiu $7,$5,0x17A0`, cc1 2.9 interleaves them
- * — sdk29 90.91% / engine96 75.82% (unit objdiff report).
- * Two sched2 ties, each read from -fsched-verbose-9 ready lists (task #792),
- * and each settled by what sched1 hands sched2:
- *  (i)  `lw 0x52B0` against `addiu 0x17A0`. Equal priority and equal dependents
- *       in sched2, so the lower luid wins, i.e. sched1's order. In sched1 the
- *       addiu takes the second slot of the cycle in which the 0x529C load uses
- *       the memory unit. Two things let it: `listener` dies there, so its
- *       register weight is 0 against the constant's `lui`, and with the asm
- *       guard it has 3 dependents against the `lui`'s 1.
- *  (ii) the status `sw` against `lui %hi(OnSoundBankLoaded)`. The asm guard
- *       gives the store one more sched2 dependent, so the store wins.
- * Putting the constant in an early local, computing the zero-extended status
- * argument before the store (so `listener` stays live), and guarding with a
- * dead local store closes (i): the call is then the sched1 block tail, every
- * insn depends on it, and the `lui` wins on luid. But it loses (ii): the store
- * has sched1 priority 2 against the callback `lui`'s 3, so the `lui` comes out
- * first and wins the sched2 luid tie. 90.91 either way (2 of 22 lines). A
- * volatile asm between the store and the call raises the store chain too far
- * (41.36). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", LoadGlobalSoundBank);
+ * the RPC). The bank's EE address is the global-WAD base (TOC +0x529C) plus the
+ * global bank's TOC offset (TOC +0x52B0). No params, no return.
+ * The address shape is from task #510: the listener block and the disc TOC are
+ * taken through local pointers so +0x17A0 / +0x52B0 stay displacements, and the
+ * status slot is cleared with the unsigned spelling (lui/ori).
+ * GUARD (task #1347): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Byte-exact on that arm (task #1347 lever): no empty `__asm__ __volatile__("")`
+ * after the call. That was a 2.96 sibcall fence (2.95.3 has no sibcall pass to
+ * fence), and on the s136os arm it was a scheduling barrier that put the 0x52B0
+ * TOC load after `addiu $7,$5,0x17A0` (2 of 22 words). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_LoadGlobalSoundBank)
+S136OS_SLOT(LoadGlobalSoundBank);
 #else
-/* TODO(match): functional equivalent - not byte-exact; address-fold wall. */
 void LoadGlobalSoundBank(void) {
     ListenerBlock *listener = (ListenerBlock *)g_listenerPosHistory;
     u8 *toc = g_discToc;
     s32 bankAddr = *(s32 *)(toc + 0x52B0) + *(s32 *)(toc + 0x529C);
     listener->bankLoadStatus.all[0] = 0xFFFFFFFF;
     snd_BankLoadAsync(bankAddr, 0, (void *)OnSoundBankLoaded, (long)(u32)listener->bankLoadStatus.all);
-    __asm__ __volatile__("");
 }
 #endif
 
@@ -2997,27 +2984,27 @@ void LoadGlobalSoundBank(void) {
  * `bankSlot`, resetting that slot to -1 (loading) and registering
  * OnSoundBankLoaded as the completion callback (the status-slot pointer is
  * zero-extended to 64 bits for the RPC). `bankAddr` is the bank's EE address,
- * forwarded verbatim to the loader.
- *
- * NATIVE SHIM (no byte target; matching build uses INCLUDE_ASM above). Derived
- * register-exact from LoadLevelSoundBank.s @0x2B7700.
- *
- * The address shape is reproduced (task #510: `table = listener->bankLoadStatus.all`
- * as its own local keeps (base + 0x17A0) + slot*4 in the ROM's association).
- * Residual SCHED-TIEBREAK: the prologue (`addiu $sp` / `sd $31`) and the
- * `sll`/`ori` are interleaved differently — sdk29 55.56% / engine96 55.83%
- * (unit objdiff report; the fuzzy score punishes order heavily). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", LoadLevelSoundBank);
+ * forwarded verbatim to the loader. No return.
+ * The address shape is from task #510: `table = listener->bankLoadStatus.all`
+ * as its own local keeps (base + 0x17A0) + slot*4 in the ROM's association.
+ * GUARD (task #1347): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Byte-exact on that arm (task #1347 lever): no empty `__asm__ __volatile__("")`
+ * after the call. That was a 2.96 sibcall fence, and on the s136os arm a
+ * scheduling barrier that put the status-pointer `dsll32` ahead of the callback
+ * `lui` (2 of 18 words). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_LoadLevelSoundBank)
+S136OS_SLOT(LoadLevelSoundBank);
 #else
-/* TODO(match): functional equivalent - not byte-exact; SCHED-TIEBREAK (prologue interleave), sdk29 55.56% / engine96 55.83%. */
 void LoadLevelSoundBank(s32 bankAddr, s32 bankSlot) {
     ListenerBlock *listener = (ListenerBlock *)g_listenerPosHistory;
     u32 *table = listener->bankLoadStatus.all;
     u32 *status = table + bankSlot;
     *status = 0xFFFFFFFF;
     snd_BankLoadFromEE_CB(bankAddr, (void *)OnSoundBankLoaded, (long)(u32)status);
-    __asm__ __volatile__("");
 }
 #endif
 

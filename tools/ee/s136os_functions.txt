@@ -209,3 +209,6 @@ usa text/1EFFC0 ResetVramSlotTable
 usa text/1EFFC0 EnterCinematicBeginPlayback
 usa text/1EFFC0 BuildTfragDrawSegment
 usa text/1FFBA0 func_00300288
+usa text/1B4218 LoadGlobalSoundBank
+usa text/1B4218 LoadLevelSoundBank
+usa text/1DFF80 DrawSkyShellsFixedSpin

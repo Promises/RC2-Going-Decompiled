@@ -837,7 +837,7 @@ void UpdateSkyShellRotation(s32 shellIdx) {
 }
 #endif
 
-extern u8 g_skyShellMatrix[]; /* 0x1B2270 - shared sky-shell transform matrix */
+extern u8 g_skyShellMatrix[]; /* 0x1B2070 - shared sky-shell transform matrix */
 extern void MatrixIdentityVu0(void *m);
 extern void UpdateSkyShellRotation(s32 shellIdx);
 extern void DrawSkyShell(s32 shellIdx);
@@ -845,20 +845,37 @@ extern void DrawSkyShell(s32 shellIdx);
 /* Draw every sky shell with its fixed per-shell spin: shells 0..9 spin via
  * UpdateSkyShellRotation, shells 10+ fall back to an identity matrix (no spin
  * data), then each is drawn.  The shell count (g_pSkyData+0x6) is re-read every
- * iteration.
- * TODO(match): functional equivalent - not byte-exact; this cc1's loop-invariant
- * code motion hoists the g_skyShellMatrix %hi address out of the loop into an
- * extra callee save (s1), growing the frame 0x10 -> 0x30, where the original
- * re-materializes the address inline in the (rarely taken) matrix block and
- * needs no s1 (the LICM-hoist wall). Body control flow + branch order match. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", DrawSkyShellsFixedSpin);
+ * iteration.  No params, no return.
+ * GUARD (task #1347): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Byte-exact on that arm (task #1347 lever): the matrix address is taken through
+ * the g_skyShellMatrixSmall addressing device below. A plain reference lets loop
+ * motion hoist its %hi into a saved $17 (frame 0x20 where the ROM has 0x10) and
+ * fill the MatrixIdentityVu0 delay slot with the %lo; the ROM forms the address
+ * inside the rarely taken block and leaves that slot empty (0x2E4390-0x2E439C). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_DrawSkyShellsFixedSpin)
+S136OS_SLOT(DrawSkyShellsFixedSpin);
 #else
+/* g_skyShellMatrixSmall: a second C name for g_skyShellMatrix (same assembler
+ * symbol via the asm label). section(".sdata") makes cc1 -G8 treat it as small
+ * data, so its address is printed as the one-insn `la` macro; measured on the
+ * s136os arm, it is then formed inside the block with the delay slot left empty,
+ * and the assembler expands it to `lui; addiu` with HI16/LO16 relocations against
+ * g_skyShellMatrix, as the ROM has. An ADDRESSING-MODEL DEVICE (RULING #8620): it moves no data and emits
+ * nothing of its own. */
+#ifndef TARGET_NATIVE
+extern u8 g_skyShellMatrixSmall[] __asm__("g_skyShellMatrix") __attribute__((section(".sdata")));
+#else
+#define g_skyShellMatrixSmall g_skyShellMatrix
+#endif
 void DrawSkyShellsFixedSpin(void) {
     s32 i;
     for (i = 0; i < *(s16 *)(g_pSkyData + 0x6); i++) {
         if (i >= 0xA) {
-            MatrixIdentityVu0(g_skyShellMatrix);
+            MatrixIdentityVu0(g_skyShellMatrixSmall);
         } else {
             UpdateSkyShellRotation(i);
         }
