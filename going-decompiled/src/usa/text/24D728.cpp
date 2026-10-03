@@ -1418,7 +1418,14 @@ extern void func_003503D8(void);     /* FMV teardown */
 /* TODO(match) PlayFmvMovie - task #566 (round 4), measured on the COMMITTED tree (this file,
  * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
  * tools/ee/objdiff_build.sh, clean): sdk29 91.12%, engine96 59.05%. Eligible arm: none.
- * Residual: PACKED-SAVE on e96 (ROM 0x30 vs 0x40) + ORDER */
+ * Residual: PACKED-SAVE on e96 (ROM 0x30 vs 0x40) + ORDER
+ * SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked; a candidate, NOT match evidence): EXACT 59/59, relocations equal, no
+ * alias in nm, with the addressing devices declared below. The first word
+ * `g_pFmvGsBase` was spelled `g_swapGadgetItemIndex + 0xAE` (0x1B229A + 0xAE =
+ * 0x1B2348): same address, wrong name, and gp-relative. Without the `.extern`s:
+ * 57/59, first diff @1 (`sw $6,%gp_rel` vs ROM `lui $1`); without the gp alias:
+ * 26/59, first diff @33 (the delay-slot read expanded as lui/lw before the beqz). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", PlayFmvMovie);
 #else
@@ -1431,7 +1438,24 @@ extern void func_0011AAB0(s32 thid, s32 arg);
 extern s32 InitFmvPlaybackEngine(void *a, void *b, void *engineCtx);
 extern s32 FmvStreamFeedLoop(void *dmaq, void *base, void *addq);
 extern void func_003503D8(void);
-extern s32 g_swapGadgetItemIndex;
+/* ADDRESSING-MODEL DEVICES (RULING #8620 terms; #8036 alias): the ROM stores
+ * both FMV base pointers with the absolute `lui $1; sw rX,%lo(sym)($1)` macro
+ * pair, so `.extern ,16` makes the assembler expand cc1's one-insn macro that
+ * way. The one read that sits in the `beqz` delay slot is gp-relative in the ROM
+ * (`lw $4,%gp_rel(g_pFmvArenaBase)($28)`): it goes through an offset-0 equate
+ * alias with no `.extern` size, which the assembler leaves gp-relative while
+ * the relocation still names g_pFmvArenaBase (no alias symbol reaches nm). EE
+ * arm only; native reads the real symbol. */
+__asm__(".extern g_pFmvGsBase, 16");
+__asm__(".extern g_pFmvArenaBase, 16");
+#ifndef TARGET_NATIVE
+__asm__("g_pFmvArenaBaseGp = g_pFmvArenaBase");
+extern u8 *g_pFmvArenaBaseGp;
+#define FMV_ARENA_BASE_GP g_pFmvArenaBaseGp
+#else
+#define FMV_ARENA_BASE_GP g_pFmvArenaBase
+#endif
+extern s32 g_pFmvGsBase;      /* 0x1B2348 - secondary FMV base, paired with the arena base */
 extern u8 *g_pFmvArenaBase;
 extern char D_1AE7A0[];
 /* (end of this body's declarations) */
@@ -1445,17 +1469,17 @@ extern char D_1AE7A0[];
    engine never armed). */
 s32 PlayFmvMovie(void *a, void *b, s32 aspect, u8 *arena, void *engineCtx, void *blitCtx) {
     s32 result = 0;
-    *(s32 *)((u8 *)&g_swapGadgetItemIndex + 0xAE) = aspect;
+    g_pFmvGsBase = aspect;
     g_pFmvArenaBase = arena;
     DebugPrintStub(D_1AE7A0, 0x38CAC0);
     BuildAspectBlitStrips(blitCtx, blitCtx);
     func_0011AAB0(func_0011AB10(), 1);
     if (InitFmvPlaybackEngine(a, b, engineCtx) != 0) {
-        u8 *base = g_pFmvArenaBase;
+        u8 *base = FMV_ARENA_BASE_GP;
         result = FmvStreamFeedLoop(base + 0xD9048, base, base + 0xD9040);
     }
     func_003503D8();
-    *(s32 *)((u8 *)&g_swapGadgetItemIndex + 0xAE) = 0;
+    g_pFmvGsBase = 0;
     g_pFmvArenaBase = 0;
     return result;
 }
