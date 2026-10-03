@@ -552,6 +552,14 @@ void func_002E07F8(u64 arg0) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", EmitMobyGlowPackets);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_002E0650(void);
+extern void func_002E0458(void *src, f32 scale);
+extern void *func_002E0568(void *rec);
+extern void func_002E07F8(u64 arg0);
+extern u8 D_001B1E90[];
+/* (end of this body's declarations) */
 extern u8  *g_frameDmaCursor;
 extern u8   D_1390B0[];
 extern s32  g_vramFrameBufB;
@@ -1295,6 +1303,17 @@ extern void func_001328C0(s32 a, s32 *params, s32 c, s32 d);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", InitSoundEmitterSystem);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void snd_Init(s32 mode);
+extern void func_00132938(s32 flag);
+extern void func_00132978(s32 a, s32 b);
+extern void func_001329B0(s32 channel, s32 b, s32 c);
+extern void func_002E5698(void);
+extern void func_00132888(s32 slot, s32 value);
+extern void func_001328C0(s32 a, s32 *params, s32 c, s32 d);
+extern s32 g_audioStereoMode;
+/* (end of this body's declarations) */
 void InitSoundEmitterSystem(void) {
     u8 *base = g_listenerPosHistory;
     u8 *p;
@@ -1519,6 +1538,10 @@ chosen:
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", StartSoundEmitter);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 ComputeEmitterVolume(SoundEmitterSlot *slot, Vec4 *pos);
+/* (end of this body's declarations) */
 extern s32 GetRandomInt(s32 n);
 extern void func_00283638(void *dst); /* zero a 16-byte quadword */
 
@@ -1613,6 +1636,10 @@ s32 StartSoundEmitter(SoundDef *pSoundDef, s32 flags, Moby *ownerMoby,
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", PlayMobySound);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 StartSoundEmitter(SoundDef *pSoundDef, s32 flags, Moby *ownerMoby, Vec4 *pPos, s32 volScale);
+/* (end of this body's declarations) */
 s32 PlayMobySound(s32 soundIdx, s32 flags, Moby *owner) {
     u8 *classHdr;
     u8 *defArray;
@@ -1660,6 +1687,10 @@ extern u8 *g_mobyClassHeaders[];  /* 0x1CDB00 - loaded class header ptr per slot
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", PlaySoundFromClassBank);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 StartSoundEmitter(SoundDef *pSoundDef, s32 flags, Moby *ownerMoby, Vec4 *pPos, s32 volScale);
+/* (end of this body's declarations) */
 s32 PlaySoundFromClassBank(s32 soundIdx, s32 flags, Moby *owner, s32 classId) {
     u8 *classHdr;
     u8 *defArray;
@@ -1704,6 +1735,10 @@ s32 PlaySoundFromClassBank(s32 soundIdx, s32 flags, Moby *owner, s32 classId) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", PlayGlobalSound);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 StartSoundEmitter(SoundDef *pSoundDef, s32 flags, Moby *ownerMoby, Vec4 *pPos, s32 volScale);
+/* (end of this body's declarations) */
 extern void *g_globalSoundDefsPtr; /* 0x1B162C - global sound-def pool */
 extern s32 g_nGlobalSoundDefs;     /* 0x1A8BBC - count of global sound defs */
 

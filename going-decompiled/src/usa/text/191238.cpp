@@ -147,6 +147,12 @@ extern s32  g_sceneArenaCursor;   /* 0x1B2230 */
  * vs 'addiu sp, sp, -0x40' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", SetupMemoryArenaTable);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+#ifndef TARGET_NATIVE
+extern void *memset(void *s, int c, unsigned int n); /* native: <string.h> via common.h */
+#endif
+/* (end of this body's declarations) */
 void SetupMemoryArenaTable(void) {
     u8 *t = g_memoryArenaTable;
     s32 cursor = g_sceneArenaCursor;
@@ -4682,6 +4688,12 @@ s32 MapUpdate(void) {
  * vs 'addiu sp, sp, -0x11b0' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapDraw);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+#ifndef TARGET_NATIVE
+extern void *memset(void *s, int c, unsigned int n); /* native: <string.h> via common.h */
+#endif
+/* (end of this body's declarations) */
 /* Prototypes this body needs whose declarations sit in other guarded arms:
  * the s136os arm compiles this arm alone, so it must see them here. */
 extern char * GetLocalizedString(s32 id);

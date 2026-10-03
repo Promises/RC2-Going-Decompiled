@@ -1883,6 +1883,10 @@ typedef struct HeroCamMotion {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", TrackHeroMotionForCamera);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern f32 func_002702D8(f32 cur, f32 target, f32 stiffness, f32 damping, f32 maxSpeed, f32 *vel);
+/* (end of this body's declarations) */
 extern f32 Vec3DotVu0(const Vec4 *a, const Vec4 *b);
 extern f32 Vec3LengthVu0(const Vec4 *v);
 extern void Vec4SubVu0(Vec4 *dst, const Vec4 *a, const Vec4 *b);
@@ -2036,6 +2040,12 @@ extern s32  g_cameraTriggerLatch;    /* 0x1B53E0 queued camera-trigger id latch 
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00271FE8);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern char g_soundBankHandlesBlk[];
+extern s32 g_cameraCallbackCount;
+extern Vec4 g_cameraPos;
+/* (end of this body's declarations) */
 void func_00271FE8(void) {
     char *sbh   = g_soundBankHandlesBlk;
     s32 *pMode  = (s32 *)((u8 *)&g_cameraCallbackCount + 0x10);
@@ -2632,6 +2642,11 @@ long func_00273740(f32 launchAngle, f32 rate, long templateMoby, long mode,
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00273988);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void Vec4SubVu0(Vec4 *dst, const Vec4 *a, const Vec4 *b);
+extern void Vec4ScaleVu0(Vec4 *dst, f32 s, const Vec4 *src);
+/* (end of this body's declarations) */
 extern void func_002A04D8(void *moby, s32 idx, void *out);
 extern s32  func_002A0678(void *moby, void *a, void *b, s32 arg);
 extern void func_002B0C40(s32 ctx, void *out, void *a, void *b);
@@ -2788,6 +2803,11 @@ s32 func_00273B80(void *moby) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00273D20);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void Vec3RescaleToLenVu0(Vec4 *dst, f32 len, const Vec4 *src);
+extern void Vec3CrossVu0(Vec4 *dst, const Vec4 *a, const Vec4 *b);
+/* (end of this body's declarations) */
 extern void func_00274138(void *moby);
 extern void func_002742F8(void *moby);
 extern s32  func_00274510(void *moby);

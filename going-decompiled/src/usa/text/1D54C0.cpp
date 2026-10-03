@@ -528,6 +528,14 @@ s32 func_002D5A10(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5A48);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
+extern void func_003017F8(s32 glyph, s32 color, f32 x, f32 y, f32 scale, f32 a5, f32 a6);
+extern s32 GetLocalizedString(s32 id);
+extern void func_002801B8(s32 x, s32 y, u32 color, s32 str, s32 wrap);
+extern void func_00280090(s32 a, s32 b, s32 c, s32 d, s32 e);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 54.99% / engine96 47.12%; better arm sdk29; 115 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
@@ -650,6 +658,13 @@ s32 func_002D5C58(void *focus) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5D10);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
+extern void func_003017F8(s32 glyph, s32 color, f32 x, f32 y, f32 scale, f32 a5, f32 a6);
+extern s32 GetLocalizedString(s32 id);
+extern void func_002801B8(s32 x, s32 y, u32 color, s32 str, s32 wrap);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 55.10% / engine96 43.66%; better arm sdk29; 75 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
@@ -690,6 +705,10 @@ s32 func_002D5D10(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5EC8);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 func_00342468(void *p);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 92.65% / engine96 69.71%; better arm sdk29; 9 differing rows
  * on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing insn:
@@ -709,6 +728,15 @@ s32 func_002D5EC8(MenuWidget *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5F10);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 func_00288898(void);
+extern s32 GetMenuOverlayMode(void);
+extern void func_002888A8(void);
+extern void RequestLevelExit(s32 destination, s32 commitSave);
+extern s32 func_003424C8(void *p);
+extern s32 func_002D6B00(struct MenuCmd *cmd);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 61.57% / engine96 37.17%; better arm sdk29; 36 differing
  * rows on it, class STRUCTURAL; first differing insn: ROM `sd s1,24(sp)` vs
@@ -753,6 +781,11 @@ s32 func_002D5F10(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D6028);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 GetLocalizedString(s32 id);
+extern void DrawFont1RightJustifiedLabel(s32 x, s32 y, u32 color, s32 str, s32 wrap);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 70.72% / engine96 59.17%; better arm sdk29; 29 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
@@ -783,6 +816,12 @@ s32 func_002D6028(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D60E8);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_002888A8(void);
+extern void func_00342450(void *p, s32 a, s32 b, s32 c);
+extern void func_00342520(void *p, s32 mode);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 73.54% / engine96 85.18%; better arm engine96; 10 differing
  * rows on it, class STRUCTURAL; first differing insn: ROM `lui a0,0x0  [HI16
@@ -857,6 +896,12 @@ s32 func_002D6240(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", SaveMessageWidgetTick);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_0029D918(s32 arg);
+extern s32 func_00342D68(void *p);
+extern s32 func_002D6B00(struct MenuCmd *cmd);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 59.25% / engine96 52.86%; better arm sdk29; 65 differing
  * rows on it, class STRUCTURAL; first differing insn: ROM `lui v1,0x0  [HI16
@@ -906,6 +951,11 @@ s32 func_002D6380(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D63B0);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_00342BE8(void *p, s32 v);
+extern void func_00342DC0(void *p, s32 records);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 85.86% / engine96 62.50%; better arm sdk29; 15 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
@@ -926,6 +976,11 @@ s32 func_002D63B0(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D6408);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 func_003432C0(void *p);
+extern s32 func_002D6B00(struct MenuCmd *cmd);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 49.86% / engine96 10.69%; better arm sdk29; 36 differing
  * rows on it, class STRUCTURAL; first differing insn: ROM `lui v0,0x0  [HI16
@@ -968,6 +1023,11 @@ s32 func_002D64D8(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D6508);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_003432B8(void *p, s32 v);
+extern void func_00343290(void *p, s32 records);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 85.86% / engine96 62.50%; better arm sdk29; 15 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
@@ -1014,6 +1074,16 @@ s32 func_002D65D0(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", GalacticMapConfirmTravelInput);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void FadeOutToBlackBlocking(s32 frames);
+extern void func_002CAB90(s32 bits);
+extern s32 func_0029D248(s32 arg);
+extern s32 func_0026F7D0(void);
+extern s32 func_0026F7D8(void);
+extern void RequestLevelExit(s32 destination, s32 commitSave);
+extern s32 RequestGameStateChange(s32 stateId, s32 push, s32 argA, s32 argB, s32 outDoneFlag);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 38.29% / engine96 5.65%; better arm sdk29; 86 differing rows
  * on it, class STRUCTURAL; first differing insn: ROM `lui v1,0x0  [HI16
@@ -1090,6 +1160,13 @@ s32 func_002D67A0(s32 op, s32 arg) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", MenuScreenDoAction);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_002888D0(void);
+extern s32 RequestGameStateChange(s32 stateId, s32 push, s32 argA, s32 argB, s32 outDoneFlag);
+extern void func_002861D8(s32 a, s32 b);
+extern void func_00286138(s32 a, s32 b);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 45.51% / engine96 37.61%; better arm sdk29; 133 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
@@ -1286,6 +1363,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D75D8);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D7AE0);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void StopFileLoad(void);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 73.15% / engine96 70.40%; better arm sdk29; 37 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
@@ -1331,6 +1412,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", GalacticMapScre
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D8270);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void UpdateLevelObjectiveStates(void);
+extern s32 GatherActiveObjectives(s32 outIds, s32 outMask, s32 outVals, s32 wantValues);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 83.52% / engine96 65.66%; better arm sdk29; 30 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
@@ -1388,6 +1474,12 @@ s32 func_002D87B0(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D87C8);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void MapSetCurrentLevel(s32 level);
+extern void ComputeAudioChannelMix(void);
+extern void func_00132938(s32 flag);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 63.85% / engine96 55.96%; better arm sdk29; 144 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
@@ -1470,6 +1562,10 @@ s32 func_002D87C8(MenuWidget *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D8A68);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 GetLocalizedString(s32 id);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 41.09% / engine96 41.28%; better arm engine96; 207 differing
  * rows on it, class STRUCTURAL; first differing insn: ROM `addiu sp,sp,-144`
@@ -1603,6 +1699,10 @@ s32 func_002D8E60(MenuWidget *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", RestorePrevTextTable);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void StopFileLoad(void);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 72.44% / engine96 75.74%; better arm engine96; 10 differing
  * rows on it, class STRUCTURAL; first differing insn: ROM `(none)` vs `lw
@@ -1639,6 +1739,11 @@ s32 RestorePrevTextTable(void *cmd) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", StreamTextTable);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 StartFileLoad(s32 dest, s32 lbn, s32 sectors);
+extern void func_00283460(void *dst, const void *src, s32 nbytes);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 64.78% / engine96 50.75%; better arm sdk29; 118 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
@@ -1739,6 +1844,14 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D9718);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D9C18);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 func_0034F300(void *mgr);
+extern void GuiElementSetVisible(s32 elem, s32 show);
+extern void GuiListSetScrollPos(s32 elem, s32 pos);
+extern void GuiListSetItemCount(s32 elem, s32 count);
+extern void func_0034EF68(void *base, s32 index, s32 x, s32 y, s32 shade);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 55.57% / engine96 44.62%; better arm sdk29; 81 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
@@ -1788,6 +1901,10 @@ s32 func_002DA330(MenuWidget *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DA358);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_002DFF68(s32 handle, s32 amount);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 70.59% / engine96 64.00%; better arm sdk29; 49 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
@@ -1841,6 +1958,15 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DA488);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DA4F0);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void AppendGsRegPacket(s32 regId, u64 value);
+extern s32 GetLocalizedString(s32 id);
+extern s32 MeasureFont2Text(s32 str, s32 wrap);
+extern void func_0027F7A0(void);
+extern void DrawDebugString(s32 x, s32 y, u32 color, s32 str, s32 wrap);
+extern void EnableInlineColorCodes(void);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 34.30% / engine96 48.37%; better arm engine96; 127 differing
  * rows on it, class STRUCTURAL; first differing insn: ROM `addiu sp,sp,-32` vs
@@ -1961,6 +2087,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DAAF8);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DAE70);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void DrawGlyphQuad(s32 x, s32 y, s32 w, s32 h, s32 u, s32 v, s32 uw, s32 uh, u64 color, u64 tex0);
+/* (end of this body's declarations) */
 /* Portable body (the previous one dropped the fade path and both 64-bit stack
  * arguments). DrawGlyphQuad reads its two trailing args as 64-bit, hence the
  * s64 colour and texture word. */
@@ -2158,6 +2288,10 @@ s32 LoadMenuBgImagePair(void *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", UploadMenuBgImagePair);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void DrawGlyphQuad(s32 x, s32 y, s32 w, s32 h, s32 u, s32 v, s32 uw, s32 uh, u64 color, u64 tex0);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 51.38% / engine96 59.92%; better arm engine96; 46 differing
  * rows on it, class STRUCTURAL; first differing insn: ROM `(none)` vs `sd
@@ -2201,6 +2335,10 @@ s32 UploadMenuBgImagePair(void *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DBC98);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void AppendGsRegPacket(s32 regId, u64 value);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 47.90% / engine96 37.83%; better arm sdk29; 96 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
@@ -2271,6 +2409,11 @@ s32 func_002DBC98(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DBEE0);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 RequestGameStateChange(s32 stateId, s32 push, s32 argA, s32 argB, s32 outDoneFlag);
+extern void FadeOutToBlackBlocking(s32 frames);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 79.76% / engine96 66.50%; better arm sdk29; 67 differing
  * rows on it, class STRUCTURAL; first differing insn: ROM `addiu sp,sp,144` vs
@@ -2364,6 +2507,13 @@ s32 func_002DBEE0(MenuWidget *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC0F0);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void AppendGsRegPacket(s32 regId, u64 value);
+extern s32 GetLocalizedString(s32 id);
+extern void DrawStringFont1(s32 x, s32 y, u32 color, s32 str, s32 wrap);
+extern void DrawFont1RightJustifiedLabel(s32 x, s32 y, u32 color, s32 str, s32 wrap);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 39.81% / engine96 39.76%; better arm sdk29; 144 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
@@ -2476,6 +2626,13 @@ s32 func_002DC378(MenuWidget *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC520);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void AppendGsRegPacket(s32 regId, u64 value);
+extern s32 GetLocalizedString(s32 id);
+extern void DrawStringFont1(s32 x, s32 y, u32 color, s32 str, s32 wrap);
+extern void DrawFont1RightJustifiedLabel(s32 x, s32 y, u32 color, s32 str, s32 wrap);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 60.70% / engine96 59.09%; better arm sdk29; 99 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
@@ -2682,6 +2839,10 @@ s32 func_002DC8A8(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DC940);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 GetLocalizedString(s32 id);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 25.99% / engine96 27.69%; better arm engine96; 136 differing
  * rows on it, class STRUCTURAL; first differing insn: ROM `addiu sp,sp,-96` vs
@@ -2806,6 +2967,13 @@ s32 func_002DCCC8(MenuWidget *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DCDC0);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void DrawStringFont1(s32 x, s32 y, u32 color, s32 str, s32 wrap);
+extern s32 func_0028EDF0(s32 name, s32 level);
+extern s32 GetHudIconTex0(s32 iconIndex);
+extern void DrawHudSpriteRotated(s32 xBits, f32 y, s32 wBits, s32 hBits, s32 angleBits, s32 a5, s32 a6, s32 tex);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 45.50% / engine96 39.67%; better arm sdk29; 99 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
@@ -2847,6 +3015,11 @@ s32 func_002DCDC0(MenuWidget *obj) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DCF58);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 GetLocalizedString(s32 id);
+extern void DrawFont1CenteredLabel(s32 x, s32 y, u32 color, s32 str, s32 wrap);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 70.09% / engine96 30.60%; better arm sdk29; 83 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
@@ -2995,6 +3168,12 @@ s32 func_002DD450(IntroTextBox *box) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DD630);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 GetLocalizedString(s32 id);
+extern void func_002801B8(s32 x, s32 y, u32 color, s32 str, s32 wrap);
+extern s32 func_002E0010(char *dst, s32 level);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 72.72% / engine96 57.70%; better arm sdk29; 73 differing
  * rows on it, class STRUCTURAL; first differing insn: ROM `addiu sp,sp,144` vs
@@ -3047,6 +3226,12 @@ s32 func_002DD630(void *screenArg) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DD7E8);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_002CA980(void);
+extern void func_002888A8(void);
+extern void func_0033A7A8(void *p);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 86.39% / engine96 82.14%; better arm sdk29; 13 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
@@ -3110,6 +3295,15 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DD888);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DDD30);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void ComputeAudioChannelMix(void);
+extern void func_00132938(s32 flag);
+extern s32 RequestGameStateChange(s32 stateId, s32 push, s32 argA, s32 argB, s32 outDoneFlag);
+extern s32 func_00288898(void);
+extern s32 GetMenuOverlayMode(void);
+extern void BuildSaveImage(void *dst);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 55.35% / engine96 38.59%; better arm sdk29; 240 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
@@ -3466,6 +3660,11 @@ void func_002DF1B8(s32 param) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", AllocMenuWorkBuffer);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 GetMenuWorkBufferSize(s32 id);
+extern void FillMemory32(s32 dst, u32 pattern, s32 nbytes);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 71.70% / engine96 71.70%; better arm equal; 23 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
@@ -3496,6 +3695,10 @@ s32 AllocMenuWorkBuffer(s32 forceSet) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", FreeMenuWorkBuffer);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void StopFileLoad(void);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 63.85% / engine96 63.68%; better arm sdk29; 38 differing
  * rows on it, class STRUCTURAL; first differing insn: ROM `lui t0,0x0  [HI16
@@ -3650,6 +3853,14 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF668);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void sceCdReadClock(void *clock);
+extern void func_00131A98(void *clock);
+extern void func_00298A00(void);
+extern void func_00297FA0(s32 saveRegion);
+extern void BuildSaveImage(void *dst);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 66.56% / engine96 64.95%; better arm sdk29; 34 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
@@ -3680,6 +3891,13 @@ void func_002DF668(void *dst, s16 slot) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF710);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_00299BF8(void);
+extern void sceCdReadClock(void *clock);
+extern void func_00131A98(void *clock);
+extern void BuildSaveImage(void *dst);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 59.25% / engine96 48.28%; better arm sdk29; 35 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
@@ -3718,6 +3936,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", RestorePlayerPr
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DFE60);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 CountSkillPointsCompleted(void);
+extern s32 func_002B1D40(void);
+/* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 49.82% / engine96 41.23%; better arm sdk29; 62 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing

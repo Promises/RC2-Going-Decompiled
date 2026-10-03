@@ -2486,6 +2486,10 @@ void func_00339398(f32 x0, f32 y0, f32 x1, f32 y1, s32 base, s32 packByte,
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003395F0);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_00338CD8(void *p, s32 a1, f32 x, f32 y, s32 a2);
+/* (end of this body's declarations) */
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_003395F0, unit objdiff): 62.82%,
    28/37 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: 'addiu sp, sp, -0x30' vs 'addiu sp, sp, -0x20').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
@@ -3554,6 +3558,10 @@ void func_0033BA40(void *p, s32 v) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033BA48);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern char *g_guiInstance;
+/* (end of this body's declarations) */
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033BA48, unit objdiff): 66.12%,
    60/98 insns differ. Residual: UNKNOWN-daddu + gp/abs-mixed symbol (first differing insn: '' vs 'daddu s2, a0, zero').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
@@ -4866,6 +4874,12 @@ s32 func_0033E070(void *w, s32 flags) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E308);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 g_audioStereoMode;
+extern void func_00337350(void *self);
+extern u8 D_1ADDB0[];
+/* (end of this body's declarations) */
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033E308, unit objdiff): 50.65%,
    89/115 insns differ. Residual: UNKNOWN-sd + movn/movz (first differing insn: 'sd s1, 0x98(sp)' vs 'sd s0, 0x90(sp)').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
@@ -5029,6 +5043,10 @@ s32 func_0033E5E8(void *p, s32 flags) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E680);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern u8 D_1A7B9E;
+/* (end of this body's declarations) */
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033E680, unit objdiff): 50.77%,
    45/57 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: 'addiu sp, sp, -0xc0' vs 'addiu sp, sp, -0xa0').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
@@ -5176,6 +5194,11 @@ s32 func_0033E8B0(void *w, s32 flags) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E9B8);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern u8 D_1ADDA8[], D_1ADDB0[];
+extern u8 D_1A7BBB;
+/* (end of this body's declarations) */
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033E9B8, unit objdiff): 33.26%,
    101/112 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: 'addiu sp, sp, -0xe0' vs 'addiu sp, sp, -0xd0').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
@@ -6454,6 +6477,10 @@ s32 GuiQuickSelectWheelTick(void *w, s32 flag) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341160);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern char *g_guiInstance;
+/* (end of this body's declarations) */
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_00341160, unit objdiff): 61.92%,
    112/167 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x50' vs 'addiu sp, sp, -0x30').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
@@ -6602,6 +6629,10 @@ void func_003413A8(void *self) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00341548);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern char *g_guiInstance;
+/* (end of this body's declarations) */
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_00341548, unit objdiff): 0.00%,
    153/157 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x100' vs 'addiu sp, sp, -0xa0').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
@@ -7507,6 +7538,10 @@ void func_00342BE8(void *p, s32 v) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiHelpPromptWidgetInit);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern char *g_guiInstance;
+/* (end of this body's declarations) */
 /* engine96 probe (task #466, cc1 2.96 via MATCH_GuiHelpPromptWidgetInit, unit objdiff): 66.35%,
    72/102 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x40' vs 'addiu sp, sp, -0x30').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
@@ -7719,6 +7754,10 @@ S136OS_SLOT(func_00342FD8);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiIconScreenInit2);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern char *g_guiInstance;
+/* (end of this body's declarations) */
 /* engine96 probe (task #466, cc1 2.96 via MATCH_GuiIconScreenInit2, unit objdiff): 54.75%,
    133/182 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s5, 0x28(sp)' vs 'sd s0, 0x0(sp)').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
@@ -10047,6 +10086,12 @@ void GuiWeaponGridScreenInit(void *w, GuiPool *pool) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiWeaponGridTick);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern u8 D_00259F38[];
+extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
+extern u8 D_1ADBA8[];
+/* (end of this body's declarations) */
 /* engine96 probe (task #466, cc1 2.96 via MATCH_GuiWeaponGridTick, unit objdiff): 39.99%,
    396/479 insns differ. Residual: UNKNOWN-addiu + movn/movz, gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x100' vs 'addiu sp, sp, -0x70').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;

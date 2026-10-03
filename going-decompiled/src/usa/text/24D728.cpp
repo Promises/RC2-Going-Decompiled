@@ -316,6 +316,12 @@ extern f32 *func_00337120(GuiElement *e);   /* -> element primary vec (float[0])
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034DAB0);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern u32 func_002AA3F0(u32 color1, u32 color2, s32 period, s32 counterSel, s32 reset);
+extern f32 *func_00337120(GuiElement *e);
+extern s32 g_padButtonsPressed;
+/* (end of this body's declarations) */
 /* Structure-exact model (cmp-oracle blocked as noted; matching arm stays asm).
    Drives the HUD sub-element at +0x5D8: any d-pad direction restarts the tween
    counter, then a color-ramp tween handle is written into the element's color
@@ -435,6 +441,13 @@ extern void func_00338A80(void *listHead);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", GuiManagerInitListRows);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void GuiListRowElementInit(void *row);
+extern void func_0034BDB0(void *hudMgr);
+extern void func_003374D8(void *listHead);
+extern void func_00338A80(void *listHead);
+/* (end of this body's declarations) */
 /* Structure-exact model (cmp-oracle blocked as noted above; matching arm stays
    asm). Inits the 26 contiguous 0x48-byte list rows from the manager base plus a
    27th at +0x750, then the embedded HUD sub-object (+0x7A0) and the three list
@@ -483,6 +496,24 @@ extern void func_00338AB8(void *listHead, void *pool);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", GuiManagerInitHudLists);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
+extern void GuiListElementInit(GuiElement *e, s32 v3C, s32 v34, void *tag, void *pool);
+extern void GuiListSetVisibleRows(GuiElement *e, s32 rows);
+extern void GuiListSetItemCount(GuiElement *e, s32 n);
+extern void GuiListSetScrollPos(GuiElement *e, s32 pos);
+extern void GuiListSetColorPair0(GuiElement *e, s32 c0, s32 c1);
+extern void GuiListSetColorPair1(GuiElement *e, s32 c0, s32 c1);
+extern void func_00337B68(GuiElement *e, s32 v);
+extern void func_0034C008(void *listHead, void *gui, void *pool);
+extern void GuiSpriteElementInit(GuiElement *e, void *tmpl, void *pool);
+extern f32 *GuiSpriteGetTextureVec(GuiElement *e);
+extern void func_00338AB8(void *listHead, void *pool);
+extern void *g_guiInstance;
+extern u8 D_1AE6C8[];
+extern u8 D_1AE6D8[];
+/* (end of this body's declarations) */
 /* Structure-exact model (cmp-oracle blocked, same abs GUI-vtable --gc-sections
    wall as GuiManagerInitListRows; matching arm stays asm).
    Build the HUD manager's list widgets: cache the two selector glyphs ('W','X'
@@ -597,6 +628,17 @@ extern void *g_hudMobySpawnStart;   /* HUD record base; +0x28 = slot count */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F028);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern f32 func_00283B30(f32 angle);
+extern f32 func_00283B48(f32 angle);
+extern void func_0034EF68(u8 *base, s32 index, s32 x, s32 y, s32 shade);
+extern void *g_hudMobySpawnStart;
+extern f32 D_1AE6E4;
+extern f32 D_1AE6E8;
+extern s32 D_1AE6F0;
+extern s32 D_1AE6EC;
+/* (end of this body's declarations) */
 /* Structure-exact model (cmp-oracle blocked, abs/gp GUI globals; matching arm
    stays asm). Lay out the (up to 8) weapon-wheel slots on a circle: for slot i,
    angle = 2*pi*i/count - pi/2, placing the HUD element at
@@ -710,6 +752,18 @@ extern s32  D_1AE6F8;                 /* gp-global passed to func_0034F028 */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F240);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void BuildCameraProjection(void);
+extern void func_0034F028(u8 *obj, s32 a, s32 b, s32 c);
+extern void func_0034E8D8(void *p);
+extern void func_0029D9B8(void);
+extern u8 g_sceneActorMobys[];
+extern s32 D_1A8C64;
+extern s32 D_1AE6F4;
+extern s32 D_1AE6F8;
+extern void *g_guiInstance;
+/* (end of this body's declarations) */
 void func_0034F240(void *guiArg) {
     u8  *gui = (u8 *)guiArg;
     u8  *cam = g_sceneActorMobys + 0x674;   /* scene camera params */
@@ -847,6 +901,80 @@ extern void  func_0033F200(void *s, void *ctx);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", GuiSystemInit);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_00337C58(void *ctx);
+extern void *GuiManagerInitListRows(void *listRows);
+extern void func_00349200(void *s);
+extern void func_003475F0(void *s);
+extern void func_00346368(void *s);
+extern void func_003448C0(void *s);
+extern void func_0033FF68(void *s);
+extern void func_0033AA80(void *s);
+extern void func_0033A048(void *s);
+extern void func_0033C100(void *s);
+extern void func_0033F690(void *s);
+extern void func_003420D0(void *s);
+extern void func_00344110(void *s);
+extern void func_0033F4D0(void *s);
+extern void func_00341C28(void *s);
+extern void func_00349E88(void *s);
+extern void func_0033A640(void *s);
+extern void GuiQuitDialogInitElements(void *s);
+extern void func_0033D478(void *s);
+extern void func_0033DA00(void *s);
+extern void func_0033DDC8(void *s);
+extern void func_0033E488(void *s);
+extern void func_0033CD80(void *s);
+extern void func_0033D1C0(void *s);
+extern void func_00348BD0(void *s);
+extern void func_00342FD8(void *s);
+extern void func_00342BA0(void *s);
+extern void func_0033EB20(void *s);
+extern void func_0033EDD0(void *s);
+extern void func_0033EFC8(void *s);
+extern void func_0033F1C0(void *s);
+extern void func_0033B4E8(void *s);
+extern void StartFileLoadPumpingVoice(void *dest, s32 startSector, s32 sectorCount);
+extern void GuiFontAtlasRelocate(void *atlas);
+extern void GuiPoolInit(void *pool, s32 granule, void *base, s32 size);
+extern void GuiManagerInitHudLists(void *listRows, void *gui, void *ctx);
+extern void GuiScreenWithPlanetNameInit(void *s, void *ctx);
+extern void GuiWeaponGridScreenInit(void *s, void *ctx);
+extern void GuiMapScreenInit(void *s, void *ctx);
+extern void GuiInfoPanelScreenInit(void *s, void *ctx);
+extern void GuiQuickSelectWheelInit(void *s, void *ctx);
+extern void GuiLevelInfoPanelInit(void *s, void *ctx);
+extern void GuiScrollListScreenInit(void *s, void *ctx);
+extern void GuiConfirmPopupInit(void *s, void *ctx);
+extern void GuiIconScreenInit(void *s, void *ctx);
+extern void GuiTitledSpriteScreenInit(void *s, void *ctx);
+extern void GuiIconListScreenInit(void *s, void *ctx);
+extern void GuiStatsPanelScreenInit(void *s, void *ctx);
+extern void func_0033F510(void *s, void *ctx);
+extern void func_00349E90(void *s);
+extern void GuiProgressBarWidgetInit(void *s, void *ctx);
+extern void GuiQuitDialogInit(void *s, void *ctx);
+extern void func_0033D4B0(void *s, void *ctx);
+extern void func_0033A678(void *s, void *ctx);
+extern void GuiDialogBoxVariantBInit(void *s, void *ctx);
+extern void func_0033DE10(void *s, void *ctx);
+extern void func_0033E4C0(void *s, void *ctx);
+extern void GuiDialogBoxVariantCInit(void *s, void *ctx);
+extern void func_0033D1F8(void *s, void *ctx);
+extern void func_00348BF8(void *s, void *ctx);
+extern void GuiHelpPromptWidgetInit(void *s, void *ctx);
+extern void GuiIconScreenInit2(void *s, void *ctx);
+extern void func_0033EB58(void *s, void *ctx);
+extern void func_0033EE08(void *s, void *ctx);
+extern void func_0033F000(void *s, void *ctx);
+extern void func_0033F200(void *s, void *ctx);
+#ifndef TARGET_NATIVE
+extern void *memset(void *s, int c, unsigned int n); /* native: <string.h> via common.h */
+#endif
+extern void *g_guiInstance;
+extern s32 g_discToc[];
+/* (end of this body's declarations) */
 void *GuiSystemInit(void *guiArg) {
     u8 *gui = (u8 *)guiArg;
     u8 *ctx = gui + 0x36F10;   /* shared GUI manager context ($17) */
@@ -1271,6 +1399,19 @@ extern void func_003503D8(void);     /* FMV teardown */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", PlayFmvMovie);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void DebugPrintStub(const char *fmt, ...);
+extern void BuildAspectBlitStrips(void *a, void *b);
+extern s32 func_0011AB10(void);
+extern void func_0011AAB0(s32 thid, s32 arg);
+extern s32 InitFmvPlaybackEngine(void *a, void *b, void *engineCtx);
+extern s32 FmvStreamFeedLoop(void *dmaq, void *base, void *addq);
+extern void func_003503D8(void);
+extern s32 g_swapGadgetItemIndex;
+extern u8 *g_pFmvArenaBase;
+extern char D_1AE7A0[];
+/* (end of this body's declarations) */
 /* Structure-exact model (cmp-oracle blocked, abs FMV globals; matching arm stays
    asm). Launch an FMV clip: record the aspect scratch (aspect) and the work-arena
    base (arena -> g_pFmvArenaBase), build the aspect blit strips, resume the FMV

@@ -801,6 +801,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CB560);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", TickFrontEndScreenIdle);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void snd_Pump(void);
+/* (end of this body's declarations) */
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 74.43% -> STRUCTURAL,
  * first differing row @5: ROM `(none)` vs `jal L  [26 0x002FCFC8]`;
@@ -2320,6 +2324,13 @@ s32 UpdateBestiaryMenuInput(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawBestiaryEntry);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_00115DA8(char *dst, const char *fmt, ...);
+extern u8 g_bestiaryKillCounts[];
+extern u8 g_bestiaryEntryTable[];
+extern s32 g_bestiaryNextEntry;
+/* (end of this body's declarations) */
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 39.40% -> STRUCTURAL,
  * first differing row @0: ROM `addiu sp,sp,-160` vs `lui v1,0x0  [HI16 0x001A8D04]`;
@@ -2787,6 +2798,14 @@ s32 UpdateCheatMenuInput(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawCheatMenu);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 CountSkillPointsCompleted(void);
+extern void func_00115DA8(char *dst, const char *fmt, ...);
+extern s32 g_screenWidth;
+extern s32 D_1ABA30;
+extern u8 D_1ABD50[];
+/* (end of this body's declarations) */
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 5.29% -> STRUCTURAL,
  * first differing row @0: ROM `addiu sp,sp,-160` vs `lui v0,0x0  [HI16 0x001A7340]`;
@@ -2973,6 +2992,16 @@ s32 UpdateSkillPointsMenu(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawSkillPointsMenu);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 CountSkillPointsCompleted(void);
+extern void func_00115DA8(char *dst, const char *fmt, ...);
+extern void func_002904B0(s32 x0, s32 y0, s32 x1, s32 y1, s32 color, s32 flag);
+extern void DrawMenuItemSelectionBox(s32 width, s32 color);
+extern s32 g_screenWidth;
+extern s32 g_nSkillPointsMenuCursor;
+extern u8 g_skillPointMetaTable[];
+/* (end of this body's declarations) */
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 35.61% -> STRUCTURAL,
  * first differing row @0: ROM `addiu sp,sp,-144` vs `lui v0,0x0  [HI16 0x001A7340]`;
@@ -3232,6 +3261,11 @@ s32 UpdateExtrasMenuInput(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawExtrasMenu);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void DrawMenuItemSelectionBox(s32 width, s32 color);
+extern s32 g_screenWidth;
+/* (end of this body's declarations) */
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 36.23% -> STRUCTURAL,
  * first differing row @0: ROM `addiu sp,sp,-64` vs `lui v0,0x0  [HI16 0x001A7340]`;
@@ -3452,6 +3486,11 @@ s32 CinematicsMenuTick(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawCinematicsMenu);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void DrawMenuItemSelectionBox(s32 width, s32 color);
+extern s32 g_screenWidth;
+/* (end of this body's declarations) */
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 31.08% -> STRUCTURAL,
  * first differing row @0: ROM `addiu sp,sp,-64` vs `lui v0,0x0  [HI16 0x001A7340]`;
@@ -3588,6 +3627,10 @@ extern u8 *D_25C520;             /* pointer to the live menu object */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdatePlanetWarpMenuInput);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void RequestLevelExit(s32 destination, s32 commitSave);
+/* (end of this body's declarations) */
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 36.04% -> STRUCTURAL,
  * first differing row @1: ROM `lui v0,0x0  [HI16 D_138180]` vs `(none)`;
@@ -3687,6 +3730,12 @@ s32 UpdatePlanetWarpMenuInput(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawPlanetWarpMenu);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void DrawMenuItemSelectionBox(s32 width, s32 color);
+extern s32 g_screenWidth;
+extern u8 g_planetWarpEnabled;
+/* (end of this body's declarations) */
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 33.46% -> STRUCTURAL,
  * first differing row @0: ROM `addiu sp,sp,-64` vs `lui v0,0x0  [HI16 0x001A7340]`;
@@ -3960,6 +4009,10 @@ s32 UpdateInsomniacMuseumInput(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawInsomniacMuseumMenu);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 g_screenWidth;
+/* (end of this body's declarations) */
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 23.83% -> STRUCTURAL,
  * first differing row @0: ROM `addiu sp,sp,-80` vs `lui v0,0x0  [HI16 0x001A7340]`;
@@ -4121,6 +4174,10 @@ s32 UpdateHelpTopicMenuInput(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawHelpTopicMenu);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 g_screenWidth;
+/* (end of this body's declarations) */
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 20.82% -> STRUCTURAL,
  * first differing row @0: ROM `addiu sp,sp,-32` vs `lui v0,0x0  [HI16 0x001A7340]`;
@@ -4250,6 +4307,14 @@ extern u8 D_1ABDE8[];     /* per-option label string-id table, s16 on 4-byte str
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D3138);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
+extern void func_003017F8(s32 handle, s32 color0, f32 px, f32 py, f32 sx, f32 syg, f32 v38);
+extern void DrawBestiaryPagingArrows(s32 leftEnabled, s32 rightEnabled);
+extern s32 g_screenWidth;
+extern s32 g_swapGadgetItemIndex;
+/* (end of this body's declarations) */
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 25.62% -> STRUCTURAL,
  * first differing row @0: ROM `addiu sp,sp,-48` vs `lui v0,0x0  [HI16 0x001A7340]`;
@@ -4380,6 +4445,13 @@ extern s32 D_1ABAAC;      /* glyph row (int, converted to float) */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D34E8);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
+extern void func_003017F8(s32 handle, s32 color0, f32 px, f32 py, f32 sx, f32 syg, f32 v38);
+extern s32 g_screenWidth;
+extern s32 g_swapGadgetItemIndex;
+/* (end of this body's declarations) */
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 41.88% -> STRUCTURAL,
  * first differing row @0: ROM `addiu sp,sp,-48` vs `lui v1,0x0  [HI16 0x001A8D04]`;
@@ -4517,6 +4589,15 @@ extern char D_1ABA38[];  /* sprintf format string (right composed line) */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D38C8);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
+extern void func_003017F8(s32 handle, s32 color0, f32 px, f32 py, f32 sx, f32 syg, f32 v38);
+extern void func_00115DA8(char *dst, const char *fmt, ...);
+extern s32 func_001157AC(const char *s);
+extern s32 g_screenWidth;
+extern s32 g_swapGadgetItemIndex;
+/* (end of this body's declarations) */
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 25.33% -> STRUCTURAL,
  * first differing row @0: ROM `addiu sp,sp,-96` vs `lui v0,0x0  [HI16 0x001A7340]`;

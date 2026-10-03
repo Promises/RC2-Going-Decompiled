@@ -3857,6 +3857,12 @@ void func_0028C7F0(HudElement *w) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C840);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void *g_guiInstance;
+extern s32 g_gsPixelOffsetY;
+extern s32 g_playerProgress;
+/* (end of this body's declarations) */
 /* g_guiInstance (void*), PlayGlobalSound, IntToFloat(s32), FloatToInt: file-scope. */
 extern s32 g_padButtonsHeld, g_padButtonsPressed, g_fileLoadState;
 extern u8  g_soundBankHandlesBlk[];  /* +0x1248 = last-selected item id */
@@ -4115,6 +4121,10 @@ void func_0028C840(void *wheel) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", DrawWeaponSelectWheel);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void *g_guiInstance;
+/* (end of this body's declarations) */
 extern f32   WrapAnglePiSum(f32 a, f32 b);   /* 0x284548 wrap a+b into [-pi,pi] */
 extern void  func_0034DAB0(void *elem, s32 flag, f32 t);       /* HUD highlight tween */
 extern s32   func_00290FC0(void);                              /* GUI state gate */
@@ -4532,6 +4542,18 @@ void func_0028D720(HudElement *w) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028DC28);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s16 g_swapGadgetItemIndex;
+extern void *g_guiInstance;
+extern void func_003017F8(s32 handle, s32 color0, f32 px, f32 py, f32 sx, f32 syg, f32 v38);
+extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
+extern s32 func_002AA3F0(s32 a, s32 b, s32 c, s32 d, s32 e);
+extern f32 WrapAnglePiSum(f32 a, f32 b);
+extern char *GetLocalizedString(s32 textId);
+extern s32 ColorLerpPacked(s32 colorA, s32 colorB, f32 t);
+extern void func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
+/* (end of this body's declarations) */
 /* later-defined / asm-only helpers, forward-declared for this arm */
 extern s32  func_0028EDF0(s32 name, s32 level);
 extern void func_002904B0(s32 x0, s32 y0, s32 x1, s32 y1, u64 reg4, s32 mode);
@@ -4942,6 +4964,10 @@ s32 func_0028EAC8(void) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028EB10);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_0028C4C8(HudElement *w);
+/* (end of this body's declarations) */
 extern s32 D_1A8FBC;                  /* gp hard-disable gate (0x1A8FBC) */
 extern u8  g_soundBankHandlesBlk[];   /* g_soundBankHandles+0x20 (0x189E20) */
 extern u8  D_002907C0[];              /* ammo-vendor widget layout blob (0x2907C0) */
@@ -5228,6 +5254,12 @@ extern void Vec4SubVu0(f32 *dst, const f32 *a, const f32 *b); /* 0x2836A0 */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F0D0);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern u32 *g_frameDmaCursor;
+extern s32 g_gsPixelOffsetX;
+extern s32 g_gsPixelOffsetY;
+/* (end of this body's declarations) */
 void func_0028F0D0(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, s32 alpha) {
     u8 *p = (u8 *)g_frameDmaCursor;
     s32 offX = g_gsPixelOffsetX;
@@ -5278,6 +5310,12 @@ void func_0028F0D0(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, s32 alpha) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028F2C0);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern u32 *g_frameDmaCursor;
+extern s32 g_gsPixelOffsetX;
+extern s32 g_gsPixelOffsetY;
+/* (end of this body's declarations) */
 void func_0028F2C0(s32 iconIndex, s32 x, s32 y, s32 w, s32 h, void *colorArr) {
     u8 *p = (u8 *)g_frameDmaCursor;
     s32 *colors = (s32 *)colorArr;

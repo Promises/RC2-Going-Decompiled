@@ -249,6 +249,10 @@ void func_00348BF8(void *w, void *pool) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", GuiMenuListHandleInput);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+/* (end of this body's declarations) */
 /* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
  * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
  * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
@@ -433,6 +437,18 @@ s32 func_00348E68(GuiWidget *w) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", GuiMenuListDraw);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern f32 *func_00336C18(GuiWidget *e);
+extern void GuiElementSetScale(GuiWidget *e, f32 x, f32 y, f32 z, f32 w);
+extern void GuiElementSetText(void *e, s32 text);
+extern char *GetLocalizedString(s32 textId);
+extern s32 *GuiElementGetColor(GuiWidget *e);
+extern s32 GuiTextElementMeasure(GuiWidget *e);
+extern void func_0027F168(s32 x1, s32 y1, s32 x2, s32 y2, s64 z, u64 tex0);
+extern void GuiTextElementDraw(GuiWidget *e);
+extern s32 func_0027F790(void);
+/* (end of this body's declarations) */
 /* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
  * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
  * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
@@ -531,6 +547,11 @@ void GuiMenuListDraw(GuiWidget *self) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00349200);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void GuiElementInitTypeB(void *element);
+extern void GuiElementInitTypeC(void *element);
+/* (end of this body's declarations) */
 /* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
  * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
  * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
@@ -583,6 +604,10 @@ void SetPopupLayoutMode(GuiWidget *w, s32 mode) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", SetPopupTitleText);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void GuiElementSetGlyph(void *e, u8 *atlas, s32 code);
+/* (end of this body's declarations) */
 /* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
  * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
  * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
@@ -617,6 +642,11 @@ void SetPopupItemEnabled(GuiWidget *w, s32 idx, s32 enabled) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", SetPopupItemText);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern char *GetLocalizedString(s32 textId);
+extern void GuiElementSetText(void *e, s32 text);
+/* (end of this body's declarations) */
 /* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
  * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
  * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
@@ -652,6 +682,17 @@ void SetPopupItemText(GuiWidget *w, s32 count, s32 *ids) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", GuiScreenWithPlanetNameInit);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void *GuiPoolAlloc(void *pool);
+extern void *GuiPlacementNew(s32 size, void *at);
+extern void GuiElementInit(GuiWidget *elem, u8 *tmpl, void *pool);
+extern void GuiTextElementInit(void *element, void *tmpl, void *pool);
+extern void GuiElementSetText(void *e, s32 text);
+extern void GuiElementSetScale(GuiWidget *e, f32 x, f32 y, f32 z, f32 w);
+extern s32 *GuiElementGetColor(GuiWidget *e);
+extern void GuiElementSetGlyph(void *e, u8 *atlas, s32 code);
+/* (end of this body's declarations) */
 /* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
  * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
  * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
@@ -829,6 +870,11 @@ GuiWidget *func_0034A1D8(GuiWidget *w) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A210);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_0034A318(GuiWidget *w, s32 idx, f32 a, f32 b, f32 c, f32 d, f32 e);
+extern void func_0034A350(GuiWidget *w, s32 idx, f32 a, f32 b);
+/* (end of this body's declarations) */
 /* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
  * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
  * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
@@ -1045,6 +1091,10 @@ void func_0034A3B8(GuiWidget *w, f32 v) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A3C0);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern f32 GuiHermiteInterp(f32 t, f32 c0, f32 c1, f32 c2, f32 c3);
+/* (end of this body's declarations) */
 /* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
  * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
  * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
@@ -1227,6 +1277,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A6B0);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void func_0034A7B0(GuiWidget *w, s32 idx1, s32 idx2, f32 a, f32 b, f32 c, f32 d);
+/* (end of this body's declarations) */
 /* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
  * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
  * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
@@ -1375,6 +1429,11 @@ void func_0034A858(GuiWidget *w, f32 v) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A860);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern f32 GuiHermiteInterp(f32 t, f32 c0, f32 c1, f32 c2, f32 c3);
+extern u32 ColorLerpPacked(u32 colorA, u32 colorB, f32 t);
+/* (end of this body's declarations) */
 /* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
  * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
  * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
@@ -1443,6 +1502,12 @@ void func_0034A860(GuiAnim *a) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A9F8);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void GuiElementInitTypeB(void *element);
+extern void GuiListRowElementInit(void *element);
+extern void *func_003368D0(void *p);
+/* (end of this body's declarations) */
 /* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
  * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
  * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
@@ -1545,6 +1610,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034B548);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034B770);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern f32 *func_00336C18(GuiWidget *e);
+/* (end of this body's declarations) */
 /* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
  * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
  * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
@@ -1622,6 +1691,11 @@ void func_0034B770(GuiWidget *w) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034B950);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern f32 *func_00336C18(GuiWidget *e);
+extern void func_0034A3C0(GuiWidget *w, s32 applyStep);
+/* (end of this body's declarations) */
 /* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
  * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
  * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
@@ -1733,6 +1807,14 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034BDB0);
 #else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern void GuiElementInitTypeB(void *element);
+extern void GuiElementInitTypeC(void *element);
+extern void *func_003374D8(void *listHead);
+extern void *func_0034A9F8(void *widget);
+extern void *func_003368D0(void *p);
+/* (end of this body's declarations) */
 /* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
  * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
  * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
