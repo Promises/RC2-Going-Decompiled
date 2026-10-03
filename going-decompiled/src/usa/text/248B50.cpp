@@ -1551,13 +1551,24 @@ void func_0034A860(GuiAnim *a) {
  * run func_003368D0 over the +0x1CC/+0x1D0 slots: store &D_1AD8E8 at +0x1CC and
  * &D_1AD908 at +0x1D0, finally clear four more records (+0x1D4/+0x25C/+0x2E4/
  * +0x36C via func_0034A1D8). Returns the widget.
- * WALL (matching arm): byte-match — 2 callee saves ($16,$31) packed by the
- * original into a 0x10 frame; the pinned cc1 reserves a 0x20 frame. NOT
+ * The 2 callee saves ($16,$31) packed into a 0x10 frame are SN 2.95.3 v1.36
+ * -fopt-stack's (FACT #8810), which the s136os arm compiles it with. NOT
  * oracle-seedable: the two &D_1AD8E8 / &D_1AD908 stores are absolute-address
  * %hi/%lo symbols that crash the cmp runner's ld --gc-sections (the
- * absolute-address-symbol wall). Matching arm stays asm; #else is the functional
- * model (GuiElementInitTypeB/GuiListRowElementInit/func_003368D0 left implicit
- * per the unit convention, line 104). */
+ * absolute-address-symbol wall). */
+#ifndef TARGET_NATIVE
+/* ADDRESSING-MODEL DEVICE for func_0034A9F8's two vtable addresses (emits no
+ * code; RULING #8620's form on an extern declaration). It sits at FILE SCOPE,
+ * not inside the member's #else arm, so that the unit's own 2.9 TU declares the
+ * symbols too: tools/ee/s136os_splice.sh never carries an `.extern` for a symbol
+ * the unit already declares, so the s136os TU's end-of-file `, 8` lines (cc1's,
+ * from the `[8]` extents) are not carried in front of the block, where they
+ * would make the access gp-relative (task #1387: the splice REFUSED the in-arm
+ * placement as ADDRESSING D_1AD8E8 / D_1AD908). No 2.9 code in this unit names
+ * either symbol bare, so nothing else changes. */
+__asm__(".extern D_1AD8E8, 16");
+__asm__(".extern D_1AD908, 16");
+#endif
 /* GUARD (task #1387): on EE the #else body below is the image's func_0034A9F8, compiled
  * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
  * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
@@ -1587,10 +1598,9 @@ extern void *func_003368D0(void *p);
  * scheduled as one unit: the 8-byte extent puts them in cc1's -G8 small-data
  * class, so cc1 emits each address as one `la` macro instead of splitting it,
  * and `.extern ,16` makes the assembler expand that macro to the absolute pair
- * (the 1D54C0 D_001B1E90 convention). The 8 is NOT the objects' size - never
- * take sizeof() of them. Either half alone does not reproduce the ROM. */
-__asm__(".extern D_1AD8E8, 16");
-__asm__(".extern D_1AD908, 16");
+ * (the 1D54C0 D_001B1E90 convention; the two `.extern` lines sit at file scope
+ * above this function's guard). The 8 is NOT the objects' size - never take
+ * sizeof() of them. Either half alone does not reproduce the ROM. */
 extern u8 D_1AD8E8[8]; /* list-row vtable installed at widget +0x1CC */
 extern u8 D_1AD908[8]; /* list-row vtable installed at widget +0x1D0 */
 void *func_0034A9F8(void *widget) {
