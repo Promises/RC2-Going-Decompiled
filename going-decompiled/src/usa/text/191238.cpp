@@ -735,9 +735,9 @@ extern u8 g_pointLights[];
  * 1DFF80.cpp) return nothing in $v0. Measured (task #1344): with `void` the
  * span-offset temp after each call lands in $v0 where the ROM has $v1, 6 of 49
  * words differ; with `s32` the body is byte-identical. */
-extern s32 func_002F5F70(u8 *start, u8 *end, s32 index);
-extern s32 func_002E4178(u8 *start, u8 *end, s32 index);
-extern s32 func_002F1B58(u8 *start, u8 *end, s32 index);
+extern s32 func_002F5F70(u8 *start, u8 *end, s32 index); /* DECL-LEVER(#1344): defined void */
+extern s32 func_002E4178(u8 *start, u8 *end, s32 index); /* DECL-LEVER(#1344): defined void */
+extern s32 func_002F1B58(u8 *start, u8 *end, s32 index); /* DECL-LEVER(#1344): defined void */
 void func_00291FF8(s32 index) {
     LightRelightRequest *e =
         &((LightRelightRequest *)(g_pointLights + 0x100))[index];
