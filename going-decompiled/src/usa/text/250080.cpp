@@ -53,6 +53,18 @@ extern char D_1AE860[]; /* frame-drop diagnostic */
 #define FMV_PTS_OFS 0xD9100    /* pts queue control block */
 #define FMV_FRAMEQ_OFS 0xD9168 /* decoded-frame display queue */
 
+/* R5900_SHORT_LOOP_PAD1(v, next): one `nop` emitted under noreorder, tied to the
+ * loop's live value by its operands. A SCHEDULING DEVICE (RULING #8435; the pad
+ * is the R5900 short-loop pad, FACT #7918 / #7937 / #8434): the ROM pads short
+ * busy-wait loops with nops before the backward branch, which neither cc1 nor
+ * our assembler inserts. EE arm only; on native it is nothing. */
+#ifndef TARGET_NATIVE
+#define R5900_SHORT_LOOP_PAD1(v, next) \
+    __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
+#else
+#define R5900_SHORT_LOOP_PAD1(v, next) ((void)0)
+#endif
+
 /*
  * The pts ring: 0x50000 bytes of payload followed by its header — so the
  * header fields sit at +0x50000/+0x50004/+0x50008 from the ring base, which
@@ -1335,8 +1347,12 @@ s32 func_00351910(void *dmaq) {
  * its MADR/TADR/QWC/CHCR into dmaq+0x1C..0x28, spin-waits for the IPU to drain
  * (IPU_CTRL & 0xF0), suspends IPU_FROM (ch3, func_003514E0(0)) and records its
  * MADR/QWC/CHCR + IPU_BP/IPU_CTRL into dmaq+0x2C..0x3C, then releases the sema.
- * Returns 1. Raw offsets (dmaq sub-object type not recovered). Byte-match
- * blocked: 8-byte-packed saves + folded 0x10002010 materialisation. */
+ * Returns 1. Raw offsets (dmaq sub-object type not recovered).
+ * SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked; a candidate, NOT match evidence): EXACT 68/68, relocations equal. The
+ * drain loop carries the ROM's three R5900 short-loop pad nops before its bnez
+ * (R5900_SHORT_LOOP_PAD1, a scheduling device); without them the screen is
+ * 34/68, built 65 words, first diff @29. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351B10);
 #else
@@ -1358,7 +1374,14 @@ s32 func_00351B10(void *dmaq) {
     *(u32 *)(obj + 0x24) = *(volatile u32 *)0x1000B420;    /* ch4 QWC  */
     *(u32 *)(obj + 0x28) = *(volatile u32 *)0x1000B400;    /* ch4 CHCR */
 
-    while (*(volatile u32 *)0x10002010 & 0xF0) {           /* wait for IPU to drain */
+    if (*(volatile u32 *)0x10002010 & 0xF0) {               /* wait for IPU to drain */
+        u32 busy;
+        do {
+            busy = *(volatile u32 *)0x10002010 & 0xF0;
+            R5900_SHORT_LOOP_PAD1(busy, busy);
+            R5900_SHORT_LOOP_PAD1(busy, busy);
+            R5900_SHORT_LOOP_PAD1(busy, busy);
+        } while (busy);
     }
 
     func_003514E0(0);                                       /* suspend IPU_FROM (ch3) */
