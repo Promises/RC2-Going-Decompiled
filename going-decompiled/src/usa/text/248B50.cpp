@@ -1796,22 +1796,39 @@ extern void func_0034A3C0(GuiWidget *w, s32 applyStep);
  * frozen-.s census: 2 callee GPR saves, 0 fp saves.
  * Residual: PACKED-SAVE (2 callee GPR saves) — 2 of the 55 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated. */
 extern void func_0034B770(GuiWidget *w);
+/* SCREEN-EXACT on the s136os arm (SN 2.95.3 v1.36 -fopt-stack; task #1389,
+ * masked word screen + relocation compare, NOT vmu): a CANDIDATE, not a match.
+ * Levers, each needed (screen with that one undone): the four offsets read
+ * absolute through `.extern ,16` (ADDRESSING-MODEL DEVICE, RULING #8620 class;
+ * without it they are gp-relative: 56/64); each pair read into locals scoped
+ * to its own group before the stores (function-scope locals colour the FPRs
+ * differently: 12/64); and the anchor pointer at +0x8 re-read for each element,
+ * as the ROM does (cached once per group: the original first diff, @7). */
+__asm__(".extern D_1AE740, 16");
+__asm__(".extern D_1AE744, 16");
+__asm__(".extern D_1AE748, 16");
+__asm__(".extern D_1AE74C, 16");
 extern f32 D_1AE740, D_1AE744, D_1AE748, D_1AE74C;
 void func_0034B950(GuiWidget *w) {
     char *b = (char *)w;
-    f32 *obj;
     f32 *r;
     s32 counter;
 
     r = func_00336C18((GuiWidget *)(b + 0x5C));
-    obj = *(f32 **)(b + 0x8);
-    r[0] = D_1AE740 + obj[0];
-    r[1] = D_1AE744 + obj[1];
+    {
+        f32 x = D_1AE740;
+        f32 y = D_1AE744;
+        r[0] = x + (*(f32 **)(b + 0x8))[0];
+        r[1] = y + (*(f32 **)(b + 0x8))[1];
+    }
 
     r = func_00336C18((GuiWidget *)(b + 0xA8));
-    obj = *(f32 **)(b + 0x8);
-    r[0] = D_1AE748 + obj[0];
-    r[1] = D_1AE74C + obj[1];
+    {
+        f32 x = D_1AE748;
+        f32 y = D_1AE74C;
+        r[0] = x + (*(f32 **)(b + 0x8))[0];
+        r[1] = y + (*(f32 **)(b + 0x8))[1];
+    }
 
     func_0034B770(w);
     func_0034A3C0((GuiWidget *)(b + 0x140), 1);
