@@ -3473,9 +3473,37 @@ s32 func_002DD630(void *screenArg) {
 /* Enter the galactic-map save-confirm screen: reset the text-table banks, grab
  * a fresh map slot into obj->0x48 (obj->0x4C=0), and prime the autosave/voice
  * subsystems; if a memory card is present and the GUI exists, show its panel.
- * Returns 0. Wall: 2-GPR callee-save + several leaf calls. */
+ * Returns 0. */
+/* ADDRESSING-MODEL DEVICES for func_002DD7E8 (RULING #8620 terms; the offset-0 gp
+ * equate is ruled covered by RULING #9073; #8036 alias). They emit nothing:
+ *   - `.extern D_1A8C88, 16`: the ROM reads D_1A8C88 with the absolute
+ *     `lui $2,%hi(D_1A8C88); lw $2,%lo(D_1A8C88)($2)` pair (0x002DD81C);
+ *   - the offset-0 equate alias `g_guiInstanceGp`, with no `.extern` size: it
+ *     reproduces the ROM's `lw $2,%gp_rel(g_guiInstance)($28)` in the `beqz`
+ *     delay slot at 0x002DD828. The assembler leaves an access through the alias
+ *     gp-relative even though this unit declares `.extern g_guiInstance, 16`
+ *     further up (its other readers stay absolute). The relocation still names
+ *     g_guiInstance; no alias symbol reaches nm.
+ * At file scope, EE only (task #1408): the s136os splice REFUSES a member whose
+ * own arm carries an `.extern ,16` (ADDRESSING) or an equate (DEFINITION) that
+ * the unit's 2.9 TU never sees (FACT #9057, FACT #9067). Native reads the real
+ * symbol. No other C in this unit names D_1A8C88 or the alias. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DD7E8);
+__asm__(".extern D_1A8C88, 16");
+__asm__("g_guiInstanceGp = g_guiInstance");
+extern char *g_guiInstanceGp;
+#define GUI_INSTANCE_GP g_guiInstanceGp
+#else
+extern char *g_guiInstance;
+#define GUI_INSTANCE_GP g_guiInstance
+#endif
+/* GUARD (task #1408): on EE this C is the image's func_002DD7E8, compiled alone by
+ * the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810;
+ * tools/ee/s136os_functions.txt) and spliced over the S136OS_SLOT line by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002DD7E8)
+S136OS_SLOT(func_002DD7E8);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -3497,16 +3525,9 @@ extern void func_0033A7A8(void *p);
  *     alias with no `.extern` size; the relocation still names g_guiInstance
  *     (as the real name it expands absolute: 14/28, first diff @15);
  *   - the +0x4C clear written after the alloc call (before it: 3/28, first diff
- *     @6, the original first diff). */
-__asm__(".extern D_1A8C88, 16");
-#ifndef TARGET_NATIVE
-__asm__("g_guiInstanceGp = g_guiInstance");
-extern char *g_guiInstanceGp;
-#define GUI_INSTANCE_GP g_guiInstanceGp
-#else
-extern char *g_guiInstance;
-#define GUI_INSTANCE_GP g_guiInstance
-#endif
+ *     @6, the original first diff).
+ * The devices now sit at file scope above this function's guard. */
+    /* MATCHED on the s136os arm (task #1408), not by cc1 2.9. */
 s32 func_002DD7E8(MenuWidget *obj) {
     extern s32 D_1A8C88;
     u8 *o = (u8 *)obj;

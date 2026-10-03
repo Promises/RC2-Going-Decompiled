@@ -1438,19 +1438,44 @@ extern s32 FmvStreamFeedLoop(void *dmaq, void *base, void *addq);   /* playback 
 extern void func_003503D8(void);     /* FMV teardown */
 #endif
 
-/* TODO(match) PlayFmvMovie - task #566 (round 4), measured on the COMMITTED tree (this file,
- * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
- * tools/ee/objdiff_build.sh, clean): sdk29 91.12%, engine96 59.05%. Eligible arm: none.
- * Residual: PACKED-SAVE on e96 (ROM 0x30 vs 0x40) + ORDER
- * SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
- * masked; a candidate, NOT match evidence): EXACT 59/59, relocations equal, no
- * alias in nm, with the addressing devices declared below. The first word
- * `g_pFmvGsBase` was spelled `g_swapGadgetItemIndex + 0xAE` (0x1B229A + 0xAE =
- * 0x1B2348): same address, wrong name, and gp-relative. Without the `.extern`s:
- * 57/59, first diff @1 (`sw $6,%gp_rel` vs ROM `lui $1`); without the gp alias:
- * 26/59, first diff @33 (the delay-slot read expanded as lui/lw before the beqz). */
+/* ADDRESSING-MODEL DEVICES for PlayFmvMovie (RULING #8620 terms; the offset-0 gp
+ * equate is ruled covered by RULING #9073; #8036 alias). They emit nothing:
+ *   - `.extern ,16` on both FMV base pointers: the ROM stores them with the
+ *     absolute `lui $1; sw rX,%lo(sym)($1)` macro pair, so the assembler must
+ *     expand cc1's one-insn store macro that way;
+ *   - the offset-0 equate alias `g_pFmvArenaBaseGp`, with no `.extern` size: it
+ *     reproduces the ROM's one gp-relative read, `lw $4,%gp_rel(g_pFmvArenaBase)($28)`
+ *     in the `beqz` delay slot at 0x0034FD28. The assembler leaves an access
+ *     through the alias gp-relative, and the relocation still names g_pFmvArenaBase;
+ *     no alias symbol reaches nm.
+ * At file scope, EE only (task #1408): the s136os splice REFUSES a member whose
+ * own arm carries an `.extern ,16` (ADDRESSING) or an equate (DEFINITION) that
+ * the unit's 2.9 TU never sees (FACT #9057, FACT #9067). Native reads the real
+ * symbol. No other C in this unit names g_pFmvGsBase, g_pFmvArenaBase or the
+ * alias. FmvStreamFeedLoop's asm spells %hi/%lo(g_pFmvArenaBase) explicitly, so
+ * these directives cannot change it. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", PlayFmvMovie);
+__asm__(".extern g_pFmvGsBase, 16");
+__asm__(".extern g_pFmvArenaBase, 16");
+__asm__("g_pFmvArenaBaseGp = g_pFmvArenaBase");
+extern u8 *g_pFmvArenaBaseGp;
+#define FMV_ARENA_BASE_GP g_pFmvArenaBaseGp
+#else
+#define FMV_ARENA_BASE_GP g_pFmvArenaBase
+#endif
+
+/* GUARD (task #1408): on EE this C is the image's PlayFmvMovie, compiled alone by
+ * the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C.
+ * History: task #566 measured sdk29 91.12% / engine96 59.05% (unit objdiff
+ * report). Task #1382's s136 screen read EXACT 59/59 with relocations equal. The
+ * levers there: `g_pFmvGsBase` by its ROM name (it had been spelled
+ * `g_swapGadgetItemIndex + 0xAE`, the same address but gp-relative). Without the
+ * `.extern`s: 57/59, first diff @1. Without the gp alias: 26/59, first diff @33. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_PlayFmvMovie)
+S136OS_SLOT(PlayFmvMovie);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -1461,29 +1486,14 @@ extern void func_0011AAB0(s32 thid, s32 arg);
 extern s32 InitFmvPlaybackEngine(void *a, void *b, void *engineCtx);
 extern s32 FmvStreamFeedLoop(void *dmaq, void *base, void *addq);
 extern void func_003503D8(void);
-/* ADDRESSING-MODEL DEVICES (RULING #8620 terms; #8036 alias): the ROM stores
- * both FMV base pointers with the absolute `lui $1; sw rX,%lo(sym)($1)` macro
- * pair, so `.extern ,16` makes the assembler expand cc1's one-insn macro that
- * way. The one read that sits in the `beqz` delay slot is gp-relative in the ROM
- * (`lw $4,%gp_rel(g_pFmvArenaBase)($28)`): it goes through an offset-0 equate
- * alias with no `.extern` size, which the assembler leaves gp-relative while
- * the relocation still names g_pFmvArenaBase (no alias symbol reaches nm). EE
- * arm only; native reads the real symbol. */
-__asm__(".extern g_pFmvGsBase, 16");
-__asm__(".extern g_pFmvArenaBase, 16");
-#ifndef TARGET_NATIVE
-__asm__("g_pFmvArenaBaseGp = g_pFmvArenaBase");
-extern u8 *g_pFmvArenaBaseGp;
-#define FMV_ARENA_BASE_GP g_pFmvArenaBaseGp
-#else
-#define FMV_ARENA_BASE_GP g_pFmvArenaBase
-#endif
-extern s32 g_pFmvGsBase;      /* 0x1B2348 - secondary FMV base, paired with the arena base */
+/* g_pFmvGsBase / g_pFmvArenaBase addressing and FMV_ARENA_BASE_GP: the
+ * file-scope devices above this function's guard. */
+extern s32 g_pFmvGsBase;     /* 0x1B2348 - secondary FMV base, paired with the arena base */
 extern u8 *g_pFmvArenaBase;
 extern char D_1AE7A0[];
 /* (end of this body's declarations) */
-/* Structure-exact model (cmp-oracle blocked, abs FMV globals; matching arm stays
-   asm). Launch an FMV clip: record the aspect scratch (aspect) and the work-arena
+/* MATCHED on the s136os arm (task #1408), not by cc1 2.9.
+   Launch an FMV clip: record the aspect scratch (aspect) and the work-arena
    base (arena -> g_pFmvArenaBase), build the aspect blit strips, resume the FMV
    thread, and start the playback engine; if it armed, run the playback main loop
    (FmvStreamFeedLoop) over the arena's DMA-add queue (+0xD9048) and frame chain
