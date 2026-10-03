@@ -994,8 +994,23 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_0
  * texture table: for each of texCount 4-word records at texRecords, writes an
  * 8-byte g_particleTexTable entry — word0 = ((texBase + rec[0]) << 4) + rec[1]
  * (data VRAM word addr), word1 = ((texBase + rec[2]) << 4) + Log2Floor(rec[3])
- * (CLUT addr + log2 height) — and sets g_particleTexCount. The matching build
- * keeps the asm (engine save-layout wall). */
+ * (CLUT addr + log2 height) — and sets g_particleTexCount.
+ *
+ * NOT MATCHED; still INCLUDE_ASM (task #1406, FACT #8830 solo screen on the
+ * s136os arm with -fno-gcse dropped as RULING #9070 ships it): 2/78 words,
+ * edit 2. Pinned (-fno-gcse): 65/78, built 80, because the ROM shares
+ * %hi(g_particleFxBlob) in $11 from the prologue to the call, the gcse shape.
+ * Residual (SCHED, words 17/18): the ROM issues `lui %hi(g_particleEffectDefs)`
+ * before `addiu %lo(g_particleFxBlob)` at 0x29255C; cc1 issues them the other
+ * way round. In cc1's sched1 dump the two tie on priority. The blob %lo wins
+ * because gcse's partial-redundancy copy of the shared %hi register, left at
+ * the end of this block, is one more dependant on it. Source order of the
+ * three preheader statements does not change it (all three orders identical).
+ * Levers, each undone alone: texBase added into rec[2] as it is loaded (`c =
+ * texBase + c` in place makes cc1 emit `addu $16,$16,$18` where the ROM has
+ * `addu $16,$18,$16` at 0x2925F8: 3/78, word 56); the remaining levers are
+ * #1396's (NOTE #9064): the count loop on the global through the size-12
+ * equate, the blob address in a local, the header reads ordered E-D-F-L. */
 #ifdef TARGET_NATIVE
 extern u8   g_particleFxBlob[];       /* 0x1F26C0  relocated per-level blob */
 extern s32  g_particleEffectDefs[];   /* 0x1F24C0  128 effect-def ptrs into blob */
@@ -1003,6 +1018,20 @@ extern s32  g_particleTexTable[];     /* 0x1F1EC0  8 bytes/tex: VRAM + CLUT addr
 extern s32  g_particleTexCount;       /* 0x1B1D24 */
 extern void *func_00283460(void *dst, const void *src, s32 nbytes); /* memcpy */
 extern s32  Log2Floor(s32 x);
+#endif
+
+/* ADDRESSING-MODEL DEVICE (RULING #8620; the size-12 form of
+ * BuildUiTextureDescriptors' g_uiTextureCount equate, through FACT #8036):
+ * BindParticleFxAssets reads g_particleTexCount absolutely (0x2925C0,
+ * 0x292600) but clears and stores it as one %gp_rel word in a delay slot
+ * (0x2925A8, 0x292628). Size 12 gives exactly that. The equated name keeps the
+ * size off the real symbol, and the relocations still name g_particleTexCount.
+ * Top level, so the s136os TU and the spliced 2.9 TU see the same lines. */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_particleTexCountAbs, 12\n\tg_particleTexCountAbs = g_particleTexCount");
+extern s32 g_particleTexCountAbs;
+#else
+#define g_particleTexCountAbs g_particleTexCount
 #endif
 
 #ifndef TARGET_NATIVE
@@ -1022,19 +1051,24 @@ extern s32 g_particleTexCount;
 extern s32 g_particleTexTable[];
 /* (end of this body's declarations) */
 void BindParticleFxAssets(void *hdrArg, s32 texBase, s32 *texRecords, s32 texCount) {
-    u8 *hdr       = (u8 *)hdrArg;
+    u8  *hdr      = (u8 *)hdrArg;
+    s32 *entry    = (s32 *)(hdr + 0x10);
     s32 defCount  = *(s32 *)(hdr + 0);
     s32 blobField = *(s32 *)(hdr + 8);
     s32 blobLen   = *(s32 *)(hdr + 0xC);   /* asm: lw $6,0xC($4) @0x292558 (delay slot) */
 
     if (defCount > 0) {
-        s32 *entry = (s32 *)(hdr + 0x10);
+        s32  blob  = (s32)g_particleFxBlob;
+        s32  delta = blobField - blob;
         s32 *out   = g_particleEffectDefs;
-        s32  delta = blobField - (s32)g_particleFxBlob;
         s32  i;
         for (i = defCount; i != 0; i--) {
             s32 off = *entry;
-            *out = (off != 0) ? (off - delta) : (s32)g_particleFxBlob;
+            if (off == 0) {
+                *out = blob;
+            } else {
+                *out = off - delta;
+            }
             out++;
             entry++;
         }
@@ -1042,17 +1076,13 @@ void BindParticleFxAssets(void *hdrArg, s32 texBase, s32 *texRecords, s32 texCou
 
     func_00283460(g_particleFxBlob, hdr + blobField, blobLen);
 
-    if (texCount > 0) {
-        s32 *rec = texRecords;
-        s32  slot;
-        g_particleTexCount = 0;
-        do {
-            slot = g_particleTexCount;
-            g_particleTexTable[slot * 2]     = ((texBase + rec[0]) << 4) + rec[1];
-            g_particleTexTable[slot * 2 + 1] = ((texBase + rec[2]) << 4) + Log2Floor(rec[3]);
-            g_particleTexCount = slot + 1;
-            rec += 4;
-        } while (slot + 1 < texCount);
+    for (g_particleTexCountAbs = 0; g_particleTexCountAbs < texCount; g_particleTexCountAbs++) {
+        s32 dataAddr = *texRecords++;
+        s32 dataLow  = *texRecords++;
+        s32 clutAddr = texBase + *texRecords++;
+        s32 height   = *texRecords++;
+        g_particleTexTable[g_particleTexCountAbs * 2] = ((texBase + dataAddr) << 4) + dataLow;
+        (g_particleTexTable + 1)[g_particleTexCountAbs * 2] = (clutAddr << 4) + Log2Floor(height);
     }
 }
 #endif
@@ -4389,9 +4419,51 @@ void MapBeginUpload(void) {
  * order index, returning the first ordered level that has map data and isn't
  * already cached. Returns the level id (|flag), or -1 if none qualifies.
  *
- * WALL: the multi-callee-save 0x40 frame is packed 8-byte by the later cc1
- * (the unit-wide save-layout wall), and the spiral's movz/negu step is coloured
- * differently. Logic traced op-for-op; kept as the portable #else body. */
+ * NOT MATCHED; still INCLUDE_ASM (task #1406, FACT #8830 solo screen on the
+ * s136os arm with -fno-gcse dropped as RULING #9070 ships it): 37/86 words,
+ * built 87, edit 6. Pinned (-fno-gcse): 84/86, so this body needs the unpinned
+ * flags (the ROM keeps %hi(g_mapVertexData) in $17 across the first call, the
+ * gcse shape).
+ * The whole residual is ONE instruction placement, and it is not in this C:
+ * cc1 puts `lw $3,g_pLevelOrder` in the `beqz` delay slot exactly as the ROM
+ * does (0x29623C, %gp_rel). tools/ee/asm_unit.sh then hoists it out of the slot
+ * and leaves a nop, because its .extern size map is file-global (first
+ * directive wins) and the first `.extern g_pLevelOrder` in this unit is
+ * MapGetLevelOrderIndex's `, 16` device below. GNU as still assembles the load
+ * as one gp-relative word, so the hoist's premise (an absolute two-insn macro)
+ * does not hold here. With only that one directive removed from a scratch copy
+ * of the .s, this body screens EXACT 86/86, RELOC-EQUAL. Not worked around: a
+ * size-4 alias of g_pLevelOrder is the RULING-blocked OFFSET-0 gp-alias form.
+ * Levers, each undone alone (unpinned, same instrument): the three-nop pad (see
+ * MFNAL_SHORT_LOOP_PAD3); the pad tied to orderIndex as well; `cur` read once;
+ * the nested range check (folded `probe >= 0 && probe < 0x1C` becomes one
+ * sltiu, the ROM keeps bltz + slti); the g_mapVertexData name (relocations
+ * only). */
+/* R5900 SHORT-LOOP PAD (SCHEDULING DEVICE, RULING #8435, FACT #7918/#8434; the
+ * same device as R5900_SHORT_LOOP_PAD3 above func_00294970): the order search
+ * loop is 4 instructions and the ROM's assembler padded it with 3 `nop`s
+ * between the load and the backward `bne` (0x296208..0x296210). Neither cc1
+ * nor GNU as emits that pad. "+r"(v) ties it after the load it pads and before
+ * the compare; "+r"(n) keeps the counter increment after it, so reorg moves the
+ * increment into the bne delay slot as in the ROM. There is no "memory"
+ * clobber: one would force the loop to re-read the current level. Emits only
+ * nops; empty on native.
+ * ADDRESSING-MODEL DEVICE (RULING #8620, FACT #8036 equates, top level so the
+ * s136os TU and the spliced 2.9 TU see the same lines): the ROM reads
+ * g_mapDataSet (0x29619C) and the first g_pLevelOrder (0x2961EC) absolutely
+ * (lui/lbu, lui/lw), and the in-loop g_pLevelOrder read gp-relatively. */
+#ifndef TARGET_NATIVE
+#define MFNAL_SHORT_LOOP_PAD3(v, n) \
+    __asm__(".set noreorder\n\tnop\n\tnop\n\tnop\n\t.set reorder" : "+r"(v), "+r"(n))
+__asm__(".extern g_mapDataSetAbs, 16\n\tg_mapDataSetAbs = g_mapDataSet");
+__asm__(".extern g_pLevelOrderAbs, 16\n\tg_pLevelOrderAbs = g_pLevelOrder");
+extern u8 g_mapDataSetAbs;
+extern s32 *g_pLevelOrderAbs;
+#else
+#define MFNAL_SHORT_LOOP_PAD3(v, n) ((void)0)
+#define g_mapDataSetAbs g_mapDataSet
+#define g_pLevelOrderAbs g_pLevelOrder
+#endif
 #ifndef TARGET_NATIVE
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 56.58% PACKED-SAVE /
@@ -4406,8 +4478,8 @@ extern u8 g_mapDataSet;
 extern s32 *g_pLevelOrder;
 /* (end of this body's declarations) */
 s32 MapFindNearestAvailableLevel(void) {
-    s32 flag = (g_mapDataSet == 0) ? 0 : 0x100;
-    s32 candidate = g_mapCache.currentLevel + flag;
+    s32 flag = (g_mapDataSetAbs == 0) ? 0 : 0x100;
+    s32 candidate = g_mapVertexData.currentLevel + flag;
     s32 orderIndex;
     s32 step;
     s32 probe;
@@ -4417,25 +4489,34 @@ s32 MapFindNearestAvailableLevel(void) {
     }
 
     orderIndex = 0;
-    if (g_mapCache.currentLevel < 0x1C) {
-        s32 *p = g_pLevelOrder;
-        while (*p != g_mapCache.currentLevel) {
-            p++;
-            orderIndex++;
+    {
+        s32 cur = g_mapVertexData.currentLevel;   /* re-read after the calls */
+        if (cur < 0x1C) {
+            s32 *p = g_pLevelOrderAbs;
+            s32  v = *p;
+            if (v != cur) {
+                do {
+                    p++;
+                    v = *p;
+                    MFNAL_SHORT_LOOP_PAD3(v, orderIndex);
+                    orderIndex++;
+                } while (v != cur);
+            }
         }
     }
 
     step = 1;
-    probe = orderIndex + 1;
     do {
-        if (probe >= 0 && probe < 0x1C && g_pLevelOrder[probe] != 0) {
-            candidate = g_pLevelOrder[probe] + flag;
-            if (MapFindCacheSlot(candidate) == -1 && MapDataExistsForLevel(candidate)) {
-                return candidate;
+        probe = orderIndex + step;
+        if (probe >= 0) {
+            if (probe < 0x1C && g_pLevelOrder[probe] != 0) {
+                candidate = g_pLevelOrder[probe] + flag;
+                if (MapFindCacheSlot(candidate) == -1 && MapDataExistsForLevel(candidate)) {
+                    return candidate;
+                }
             }
         }
-        step = (step < 1) ? (1 - step) : -step;
-        probe = orderIndex + step;
+        step = (step > 0) ? -step : (1 - step);
     } while (step != 4);
     return -1;
 }
