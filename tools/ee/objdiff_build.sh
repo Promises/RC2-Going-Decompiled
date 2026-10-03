@@ -134,6 +134,9 @@
 # docker's own DOCKER_CONTEXT, so a slot's builds cannot drift to whichever VM
 # someone last selected interactively. A context that does not exist fails the
 # first `docker run` (rc 1, "context ... not found") — there is no fallback.
+#
+# --user: the container runs as the invoking uid:gid, so on native-Linux docker
+# its outputs are not root-owned (task #1373; why, in landing_gate.sh in_vm).
 set -euo pipefail
 REGION="$1"; UNIT="$2"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$ROOT"
@@ -361,7 +364,7 @@ ALLOW96_MD5="$(sh tools/ee/mount_sync.sh md5 tools/ee/cpp96_allowlist.txt)"
 # $OBJ and $EXPECTED are deleted in the container first, like $OBJ96 (see the
 # header for why in the container): a run that stops early must not leave the
 # previous run's object for the report to read (ledger-29550 left a stale obj).
-docker --context "$EE_CTX" run --rm -e ASMFIX_SHARED -e ASM_UNIT_DLISITES_MD5="$DLISITES_MD5" -e S136OS_FUNCS_MD5="$S136OS_MD5" -v "$ROOT":/work ee-build sh -c "
+docker --context "$EE_CTX" run --rm --user="$(id -u):$(id -g)" -e HOME=/tmp -e ASMFIX_SHARED -e ASM_UNIT_DLISITES_MD5="$DLISITES_MD5" -e S136OS_FUNCS_MD5="$S136OS_MD5" -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work; WIBO=/usr/local/bin/wibo; G=tools/ee/cc/lib/gcc-lib/ee/2.9-ee-991111
   export EE_CC1_UNIT='$REGION $UNIT' CPP96_ALLOWLIST_MD5=$ALLOW96_MD5
   sh tools/ee/mount_sync.sh check $TGTC $TGTC_MD5
@@ -397,7 +400,7 @@ if [ "$BUILD96" = 1 ]; then
   if [ "$BASE_MD5_2A" != "$BASE_MD5" ]; then
     echo "objdiff_build: FATAL — $BASECFILE changed on the host between step (1) and (2a) (md5 $BASE_MD5 -> $BASE_MD5_2A); rerun" >&2; exit 2
   fi
-docker --context "$EE_CTX" run --rm -v "$ROOT":/work ee-build sh -c "
+docker --context "$EE_CTX" run --rm --user="$(id -u):$(id -g)" -e HOME=/tmp -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work
   sh tools/ee/mount_sync.sh check $BASECFILE $BASE_MD5
   EE_CC1_UNIT='$REGION $UNIT' CPP96_ALLOWLIST_MD5=$ALLOW96_MD5 CC296=$CC296 sh tools/ee/ee_cc1.sh engine96 $BASECFILE $W/base96.i $W/base96.s '$CPPDEF96 $INC' '-O2 $GFLAG96 $CC1EXTRA96'
@@ -410,7 +413,7 @@ docker --context "$EE_CTX" run --rm -v "$ROOT":/work ee-build sh -c "
   # goes to asm_unit.sh, which verifies the container's read before assembling.
   S96_MD5="$(sh tools/ee/mount_sync.sh md5 "$W/base96.s")"
   # (2c, container) assemble at -G8, same placeholder strip as the sdk29 base.
-docker --context "$EE_CTX" run --rm -e ASMFIX_SHARED -e ASM_UNIT_S_MD5="$S96_MD5" -e ASM_UNIT_DLISITES_MD5="$DLISITES_MD5" -v "$ROOT":/work ee-build sh -c "
+docker --context "$EE_CTX" run --rm --user="$(id -u):$(id -g)" -e HOME=/tmp -e ASMFIX_SHARED -e ASM_UNIT_S_MD5="$S96_MD5" -e ASM_UNIT_DLISITES_MD5="$DLISITES_MD5" -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work
   sh tools/ee/asm_unit.sh $REGION /work/$W/base96.s /work/$OBJ96 $GFLAG96
   mips-linux-gnu-strip $OBJ96 -N gcc2_compiled. -N __gnu_compiled_c -N __gnu_compiled_cplusplus -N dummy-symbol-name

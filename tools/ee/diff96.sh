@@ -72,9 +72,11 @@ cat > "$W/target.s" <<EOF
 .set at
 EOF
 
+# --user: the container runs as the invoking uid:gid, so on native-Linux docker
+# its outputs are not root-owned (task #1373; why, in landing_gate.sh in_vm).
 # (1) assemble the original asm + compile the unit with the native 2.96 cc1
 # (cc1plus for a .cpp unit) through ee_cc1.sh's engine96 arm (-> .s).
-docker --context colima-ee-x86 run --rm -v "$ROOT":/work ee-build sh -c "
+docker --context colima-ee-x86 run --rm --user="$(id -u):$(id -g)" -e HOME=/tmp -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work
   mips-linux-gnu-as $ASF -o $W/target.o $W/target.s
   EE_CC1_UNIT='$REGION $UNIT' CPP96_ALLOWLIST_MD5=$ALLOW96_MD5 CC296=$CC sh tools/ee/ee_cc1.sh engine96 $CFILE $W/base.i $W/base.s '$CPPDEF $INC' '-O2 $GFLAG $CC1EXTRA'
@@ -91,7 +93,7 @@ python3 "$(dirname "$0")/mtc1_fixup.py" "$W/base.s"
 # container's read against this host md5 before assembling (rc 9 names the file).
 S_MD5="$(sh "$(dirname "$0")/mount_sync.sh" md5 "$W/base.s")"
 # (3) assemble the post-passed .s.
-docker --context colima-ee-x86 run --rm -e ASM_UNIT_S_MD5="$S_MD5" -v "$ROOT":/work ee-build sh -c "
+docker --context colima-ee-x86 run --rm --user="$(id -u):$(id -g)" -e HOME=/tmp -e ASM_UNIT_S_MD5="$S_MD5" -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work; sh tools/ee/asm_unit.sh $REGION /work/$W/base.s /work/$W/base.o $GFLAG
 "
 

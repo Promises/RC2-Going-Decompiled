@@ -8,5 +8,7 @@
 #
 # The argument(s) are joined and run via `sh -c`. (build.sh / diff.sh /
 # objdiff_build.sh already wrap their own docker calls — use this for one-offs.)
+# --user: the container runs as the invoking uid:gid, so on native-Linux docker
+# its outputs are not root-owned (task #1373; why, in landing_gate.sh in_vm).
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-exec docker --context colima-ee-x86 run --rm -v "$ROOT":/work -w /work ee-build sh -c "$*"
+exec docker --context colima-ee-x86 run --rm --user="$(id -u):$(id -g)" -e HOME=/tmp -v "$ROOT":/work -w /work ee-build sh -c "$*"

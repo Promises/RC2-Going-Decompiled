@@ -101,7 +101,9 @@ cat > "$W/target.s" <<EOF
 .set at
 EOF
 
-docker --context colima-ee-x86 run --rm -v "$ROOT":/work ee-build sh -c "
+# --user: the container runs as the invoking uid:gid, so on native-Linux docker
+# its outputs are not root-owned (task #1373; why, in landing_gate.sh in_vm).
+docker --context colima-ee-x86 run --rm --user="$(id -u):$(id -g)" -e HOME=/tmp -v "$ROOT":/work ee-build sh -c "
   set -e; cd /work
   mips-linux-gnu-as $ASF -o $W/target.o $W/target.s
   EE_CC1_UNIT='$REGION $UNIT' sh tools/ee/ee_cc1.sh sdk29 $CFILE $W/base.i $W/base.s '$CPPDEF $INC' '-O2 $GFLAG $CC1EXTRA'
