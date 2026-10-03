@@ -2248,19 +2248,30 @@ s32 func_00352C70(FmvFrameQueue *q) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvFrameQueueGetDisplaySlot);
 #else
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 96.52% / engine96 78.12%. Residual: PACKED-SAVE (2 callee saves) + 4 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
-/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
-   saves (s0/ra). Revisit with the gameplay-TU compiler.
-
-   Address of the oldest decoded frame still queued for display: 0 if the queue
+/* Address of the oldest decoded frame still queued for display: 0 if the queue
    is empty, else the frame slot at ((writeIdx - count + capacity) % capacity)
-   in the 0x138C0-stride slot array. */
+   in the 0x138C0-stride slot array. Read by OnFmvVblankFlip each field.
+
+   SCREEN-EXACT on the s136os arm (SN 2.95.3 v1.36 -fopt-stack; task #1389,
+   masked word screen + relocation compare, NOT vmu): a CANDIDATE, not a match.
+   The writeIdx and count reads are volatile: a CODEGEN DEVICE (RULING #8404
+   class), not a claim about this read. Two volatile reads keep source order, so
+   cc1 loads writeIdx before count as the ROM does; with either one plain, the
+   scheduler loads count first (first diff @7, lw 0xC vs lw 0x8). Writer census
+   of both fields: func_00352B90 (reset, already a volatile view),
+   FmvFrameQueuePush (decode thread, under DI/EI), func_00352CE8 (release,
+   already a volatile count) - the queue is shared with the vblank handler. */
 s32 FmvFrameQueueGetDisplaySlot(FmvFrameQueue *q) {
+    s32 writeIdx;
+    s32 count;
     s32 idx;
 
     if (func_00352C70(q) != 0) {
         return 0;
     }
-    idx = (q->writeIdx - q->count + q->capacity) % q->capacity;
+    writeIdx = *(volatile s32 *)&q->writeIdx;
+    count = *(volatile s32 *)&q->count;
+    idx = (writeIdx - count + q->capacity) % q->capacity;
     return (s32)(q->frames + idx * 0x138C0);
 }
 #endif
