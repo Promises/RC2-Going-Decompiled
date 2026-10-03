@@ -267,3 +267,4 @@ usa text/191238 RegisterMobyClass
 usa text/198FA0 GuiManagerCreate
 usa text/191238 BuildUiTextureDescriptors
 usa text/191238 func_002938B0
+usa text/1D54C0 func_002D6028

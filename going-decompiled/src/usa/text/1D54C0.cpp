@@ -838,8 +838,10 @@ s32 func_002D5F10(void) {
  * sub-panel is open). Returns 0.
  * The 8-byte-slot prologue is the s136 arm's (SN 2.95.3 v1.36 -fopt-stack,
  * FACT #8810), so the 2.9 SAVE-SLOT wall does not bind it.
+ * MATCHED on the s136os arm (task #1415): spliced, image cmp 0, and
+ * verify_match_unit BYTE IDENTICAL 48/48 words with a base-seeded control.
  * SCREEN (task #1395, s136 solo, relocated fields masked + relocation compare;
- * a CANDIDATE, not match evidence): EXACT 47/47, RELOC-EQUAL 9 (base: 36/47 @11
+ * the screen that selected it): EXACT 47/47, RELOC-EQUAL 9 (base: 36/47 @11
  * `c7800000|3c010000`). Four levers, each undone alone:
  *   - the fields read as absolute g_swapGadgetItemIndex+0x8A/+0x86 through
  *     `.extern ,16` (ADDRESSING-MODEL DEVICE): undone 35/47 @11, the base pair;
@@ -849,7 +851,26 @@ s32 func_002D5F10(void) {
  *   - the call named by its ROM symbol func_00280090: undone, EXACT but a
  *     relocation names DrawFont1RightJustifiedLabel, which EE does not define. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D6028);
+/* ADDRESSING-MODEL DEVICE (RULING #8620 class, as 1CA080.cpp's): the ROM reads
+ * the panel scroll fraction and the sub-panel flag as absolute
+ * g_swapGadgetItemIndex+0x8A / +0x86, each address formed afresh by the
+ * assembler's macro (lui $1 / lui $2). Emits nothing. It sits at FILE SCOPE,
+ * not inside func_002D6028's #else arm, so that the unit's own 2.9 TU declares
+ * the symbol too: tools/ee/s136os_splice.sh never carries an `.extern` for a
+ * symbol the unit already declares, so the s136os TU's end-of-file `, 4` line
+ * is not carried in front of the block, where it would make both reads
+ * gp-relative (task #1399: the splice REFUSED the in-arm placement as
+ * ADDRESSING g_swapGadgetItemIndex). No 2.9 code in this unit names
+ * g_swapGadgetItemIndex, so nothing else changes. */
+__asm__(".extern g_swapGadgetItemIndex, 16");
+#endif
+/* GUARD (task #1415): on EE the #else body below is the image's func_002D6028, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D6028)
+S136OS_SLOT(func_002D6028);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -860,11 +881,8 @@ extern s32 GetLocalizedString(s32 id);
  * no definition under the DrawFont1RightJustifiedLabel name. */
 extern void func_00280090(s32 x, s32 y, u64 color, s32 str, s64 wrap);
 #define DRAW_RIGHT_LABEL func_00280090
-/* ADDRESSING-MODEL DEVICE (RULING #8620 class, as 1CA080.cpp's): the ROM reads
- * the panel scroll fraction and the sub-panel flag as absolute
- * g_swapGadgetItemIndex+0x8A / +0x86, each address formed afresh by the
- * assembler's macro (lui $1 / lui $2). Emits nothing. */
-__asm__(".extern g_swapGadgetItemIndex, 16");
+/* Read absolute through the file-scope `.extern g_swapGadgetItemIndex, 16`
+ * device above the guard. */
 extern s32 g_swapGadgetItemIndex;
 #define PANEL_SCROLL  (*(float *)((u8 *)&g_swapGadgetItemIndex + 0x8A))
 #define PANEL_SUBOPEN (*(s32 *)((u8 *)&g_swapGadgetItemIndex + 0x86))
