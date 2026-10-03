@@ -1948,12 +1948,19 @@ extern s32 func_0012F9B8(u8 *host);
 
    End-of-playback poll: false while the embedded stream still has bytes queued
    (func_00352680 != 0); once the stream has drained, report whether the host
-   side has also signalled done (func_0012F9B8 != 0). */
+   side has also signalled done (func_0012F9B8 != 0).
+
+   SCREEN-EXACT on the s136os arm (SN 2.95.3 v1.36 -fopt-stack; task #1389,
+   masked word screen + relocation compare, NOT vmu): a CANDIDATE, not a match.
+   Lever: the result held in a variable initialised 0 (the ROM's $17) instead
+   of an early `return 0` (17/18, a 0x10 frame with no $17), as func_003513F8. */
 s32 func_00352780(FmvStream *obj) {
-    if (func_00352680(obj) != 0) {
-        return 0;
+    s32 done = 0;
+
+    if (func_00352680(obj) == 0) {
+        done = func_0012F9B8((u8 *)obj) != 0;
     }
-    return func_0012F9B8((u8 *)obj) != 0;
+    return done;
 }
 #endif
 
