@@ -1656,55 +1656,84 @@ extern s32 GetLocalizedString(s32 id);
  * objdiff): sdk29 41.09% / engine96 41.28%; better arm engine96; 207 differing
  * rows on it, class STRUCTURAL; first differing insn: ROM `addiu sp,sp,-144`
  * vs `addiu sp,sp,-112`. Not iterated in t495. */
+/* SCREEN (task #1395, s136 solo, relocated fields masked; not match evidence):
+ * 215/218 edit 249 -> 12/218 edit 18 (length 218 = ROM). Levers, in order of
+ * effect: the panel width and selected row re-read from the screen after every
+ * call (MENU_W/MENU_SEL) with each row's colour picked at its call; the bar's
+ * left edge `barX` as a named local scoped so it is spilled after the row-1
+ * temporaries (stack slot 0x1C); the fill end spelled `lx + 8 + fill`; `ry`
+ * before `lx`; the volume reads absolute (`.extern ,16`); the colours 64-bit
+ * (the ROM's dli); the stereo-string pick as `!= 0`; the fills as `/ 0x400`.
+ * The remaining 12 words (169..180) are one delay-slot choice: the ROM fills row
+ * 2's last jal slot with row 3's `2*ry + ry`, cc1 here with the `sll` argument.
+ * Tried, no effect: `ry * 3`, `2 * ry + ry`, a row-3 local before/after the
+ * call; worse: `ry + 2 * ry` (79), `lx + (fill + 8)` (187). */
+#ifndef TARGET_NATIVE
+/* ADDRESSING-MODEL DEVICE (RULING #8620 class): the ROM reads all three as
+ * absolute %hi/%lo, never gp-relative. */
+__asm__(".extern g_musicVolume, 16");
+__asm__(".extern g_sfxVolume, 16");
+__asm__(".extern g_audioStereoMode, 16");
+#endif
 extern s32 g_musicVolume;
 extern s32 g_sfxVolume;
 extern s32 g_audioStereoMode;
+/* The panel width (+0x20) and selected row (+0x40) are re-read from the
+ * screen after every call, as the ROM does. */
+#define MENU_W(s)   (*(s32 *)((s) + 0x20))
+#define MENU_SEL(s) (*(s32 *)((s) + 0x40))
 
 void func_002904B0(s32 x0, s32 y0, s32 x1, s32 y1, u64 reg4, s32 mode);
 void func_0028FFF0(s32 iconIndex, s32 x0, s32 y0, s32 x1, s32 y1,
                    s32 u0, s32 v0, s32 u1, s32 v1, s32 alpha);
 s32  func_0028EDF0(s32 name, s32 level);
+#ifndef TARGET_NATIVE
+/* The two text draws take a 64-bit colour (the ROM loads every colour with a
+ * dli: ori/dsll/ori), as 1CA080.cpp declares them. */
+void func_0027FBA8(s32 x, s32 y, u64 color, s32 str, s64 wrap);
+void func_00280090(s32 x, s32 y, u64 color, s32 str, s64 wrap);
+#else
 void func_0027FBA8(s32 a, s32 b, s32 c, s32 d, s32 e);
 void func_00280090(s32 a, s32 b, s32 c, s32 d, s32 e);
+#endif
 
 s32 func_002D8A68(u8 *screen) {
-    s32 w   = *(s32 *)(screen + 0x20);   /* bar-width basis */
-    s32 h   = *(s32 *)(screen + 0x24);   /* row-height basis */
-    s32 sel = *(s32 *)(screen + 0x40);   /* selected row index */
-    s32 lx  = w >> 1;                     /* label / value-text X base */
-    s32 ry  = h >> 2;                     /* per-row Y step */
-    s32 musicColor  = (sel == 0) ? 0x8020FFFF : 0x80FFA888;
-    s32 sfxColor    = (sel == 1) ? 0x8020FFFF : 0x80FFA888;
-    s32 stereoColor = (sel == 2) ? 0x8020FFFF : 0x80FFA888;
-    s32 mt, st, musicFill, sfxFill, icon;
+    s32 ry = *(s32 *)(screen + 0x24) >> 2;   /* per-row Y step */
+    s32 lx = *(s32 *)(screen + 0x20) >> 1;   /* label / value-text X base */
+    s32 fill, icon;
 
     Begin2dDrawBatch(0);
 
-    /* row 1 — music volume (y = ry) */
-    func_00280090(lx - 8, ry - 8, musicColor, GetLocalizedString(0x2DA5), -1);
-    func_002904B0(lx + 7, ry - 8, w - 0x3F, ry + 8, 0x80696969, 0);
-    func_002904B0(lx + 9, ry - 6, w - 0x41, ry + 6, 0x80383838, 0);
-    mt = (w - (lx + 0x4A)) * g_musicVolume;
-    musicFill = ((mt >= 0) ? mt : (mt + 0x3FF)) >> 10;
-    icon = func_0028EDF0(0xE99D, 8);
-    func_0028FFF0(icon, (lx + 9) << 4, (ry - 6) << 4, (lx + musicFill + 8) << 4,
-                  (ry + 5) << 4, 0, 0xA0, 0x1F0, 0x150, 0x80);
+    /* row 1 - music volume (y = ry); the selected row is highlighted */
+    func_00280090(lx - 8, ry - 8, (MENU_SEL(screen) == 0) ? 0x8020FFFF : 0x80FFA888,
+                  GetLocalizedString(0x2DA5), -1);
+    func_002904B0(lx + 7, ry - 8, MENU_W(screen) - 0x3F, ry + 8, 0x80696969, 0);
+    func_002904B0(lx + 9, ry - 6, MENU_W(screen) - 0x41, ry + 6, 0x80383838, 0);
+    /* Scoped here so barX is allocated after the row-1 temporaries (lx-8, lx+7,
+     * lx+9), as the ROM's stack slots order them. */
+    {
+        s32 barX = lx + 0x4A;                    /* volume-bar left edge */
+        fill = (MENU_W(screen) - barX) * g_musicVolume / 0x400;
+        icon = func_0028EDF0(0xE99D, 8);
+        func_0028FFF0(icon, (lx + 9) << 4, (ry - 6) << 4, (lx + 8 + fill) << 4,
+                      (ry + 5) << 4, 0, 0xA0, 0x1F0, 0x150, 0x80);
 
-    /* row 2 — SFX volume (y = 2*ry) */
-    func_00280090(lx - 8, 2 * ry - 8, sfxColor, GetLocalizedString(0x2DA6), -1);
-    func_002904B0(lx + 7, 2 * ry - 8, w - 0x3F, 2 * ry + 8, 0x80696969, 0);
-    func_002904B0(lx + 9, 2 * ry - 6, w - 0x41, 2 * ry + 6, 0x80383838, 0);
-    st = (w - (lx + 0x4A)) * g_sfxVolume;
-    sfxFill = ((st >= 0) ? st : (st + 0x3FF)) >> 10;
-    icon = func_0028EDF0(0xE99D, 9);
-    func_0028FFF0(icon, (lx + 9) << 4, (2 * ry - 6) << 4, (lx + sfxFill + 8) << 4,
-                  (2 * ry + 5) << 4, 0, 0xA0, 0x1F0, 0x150, 0x80);
+        /* row 2 - SFX volume (y = 2*ry) */
+        func_00280090(lx - 8, 2 * ry - 8, (MENU_SEL(screen) == 1) ? 0x8020FFFF : 0x80FFA888,
+                      GetLocalizedString(0x2DA6), -1);
+        func_002904B0(lx + 7, 2 * ry - 8, MENU_W(screen) - 0x3F, 2 * ry + 8, 0x80696969, 0);
+        func_002904B0(lx + 9, 2 * ry - 6, MENU_W(screen) - 0x41, 2 * ry + 6, 0x80383838, 0);
+        fill = (MENU_W(screen) - barX) * g_sfxVolume / 0x400;
+        icon = func_0028EDF0(0xE99D, 9);
+        func_0028FFF0(icon, (lx + 9) << 4, (2 * ry - 6) << 4, (lx + 8 + fill) << 4,
+                      (2 * ry + 5) << 4, 0, 0xA0, 0x1F0, 0x150, 0x80);
 
-    /* row 3 — stereo / mono mode (y = 3*ry) */
-    func_00280090(lx - 8, 3 * ry - 8, stereoColor, GetLocalizedString(0x2DA7), -1);
-    func_0027FBA8(lx + 8, 3 * ry - 8, 0x80FFA888,
-                  GetLocalizedString((g_audioStereoMode == 0) ? 0x2DA8 : 0x2DA9), -1);
-
+        /* row 3 - stereo / mono mode (y = 3*ry) */
+        func_00280090(lx - 8, 3 * ry - 8, (MENU_SEL(screen) == 2) ? 0x8020FFFF : 0x80FFA888,
+                      GetLocalizedString(0x2DA7), -1);
+        func_0027FBA8(lx + 8, 3 * ry - 8, 0x80FFA888,
+                      GetLocalizedString((g_audioStereoMode != 0) ? 0x2DA9 : 0x2DA8), -1);
+    }
     End2dDrawBatch();
     return 2;
 }
