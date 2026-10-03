@@ -2331,8 +2331,29 @@ s32 func_0029DB58(void) {
  * inits the instance (GuiPlacementNew / GuiSystemInit), stores it to
  * g_guiInstance, then installs the two update callbacks at instance+0x3F9D4/
  * +0x3F9D8 — the special pair (func_0029CF08/func_0029DB50) when g_playerProgress
- * == 0x1F5, else the default pair (func_0029CF40/func_0029CF10). The TARGET_NATIVE
- * #else is faithful coverage. */
+ * == 0x1F5, else the default pair (func_0029CF40/func_0029CF10).
+ *
+ * Screen-exact on the s136os arm (task #1396, FACT #8830 solo screen; a
+ * CANDIDATE, not a promotion: vmu with the base seeded is the evidence).
+ * Levers, each undone alone: the callback stores inside each branch (25/60);
+ * the size-16 g_playerProgress equate (26/60); g_bPalMode passed to
+ * func_0029DB58 (50/60); the heap pointer re-read at each use (8/60); the
+ * clears in address order (12/60); D_138180 taken after the memset (60/60,
+ * the base's own first diff). */
+/* ADDRESSING-MODEL DEVICE (RULING #8620; FACT #8036's size-16 equate form,
+ * as 1A00F0.cpp's g_mobySegmentOpenTagAbs): GuiManagerCreate reads
+ * g_playerProgress absolutely (0x29DC34 `lui v1,%hi(g_playerProgress)`) while
+ * the symbol is -G8 small, so that read names a second assembler symbol
+ * EQUATED to it and sized 16; the relocation still names g_playerProgress.
+ * Top level, so the s136os TU and the unit's 2.9 TU both define it. Nothing is
+ * moved and nothing is emitted; native reads the plain symbol. */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_playerProgressAbs, 16\n\tg_playerProgressAbs = g_playerProgress");
+extern s32 g_playerProgressAbs;
+#else
+#define g_playerProgressAbs g_playerProgress
+#endif
+
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", GuiManagerCreate);
 #else
@@ -2354,13 +2375,13 @@ extern void func_0029DB50(void);
 /* func_0029DB58, func_0029CF40, func_0029CF10 are defined earlier in this unit. */
 
 void GuiManagerCreate(void) {
-    u8   *in   = D_138180;
-    void *heap = *(void **)(g_memoryArenaTable + 0x80);
+    u8   *arena = g_memoryArenaTable;
+    u8   *in;
     void *instance;
-    void *cb4, *cb3;
 
-    memset(heap, 0xCD, 0x40000);
-    *(s32 *)(in + 0x1CC) = 0;
+    /* the heap pointer is re-read at each use, as the ROM does (0x29DBC4/0x29DC1C) */
+    memset(*(void **)(arena + 0x80), 0xCD, 0x40000);
+    in = D_138180;
     *(s32 *)(in + 0x1A0) = 0;
     *(s32 *)(in + 0x1A4) = 0;
     *(s32 *)(in + 0x1A8) = 0;
@@ -2372,20 +2393,24 @@ void GuiManagerCreate(void) {
     *(s32 *)(in + 0x1C0) = 0;
     *(s32 *)(in + 0x1C4) = 0;
     *(s32 *)(in + 0x1C8) = 0;
-
-    func_0029DB58();   /* reads g_bPalMode itself (asm passes it in $4; the callee ignores the arg) */
-    instance = GuiSystemInit(GuiPlacementNew(0x3FB20, heap), 0x40000);
+    *(s32 *)(in + 0x1CC) = 0;
+#ifndef TARGET_NATIVE
+    /* The ROM loads g_bPalMode into $a0 for this call (0x29DC04); the
+     * callee is (void) and ignores it. */
+    ((void (*)(s32))func_0029DB58)(g_bPalMode);
+#else
+    func_0029DB58();
+#endif
+    instance = GuiSystemInit(GuiPlacementNew(0x3FB20, *(void **)(arena + 0x80)), 0x40000);
     g_guiInstance = (char *)instance;
 
-    if (g_playerProgress == 0x1F5) {
-        cb4 = (void *)func_0029CF08;
-        cb3 = (void *)func_0029DB50;
+    if (g_playerProgressAbs == 0x1F5) {
+        *(void **)((u8 *)instance + 0x3F9D4) = (void *)func_0029CF08;
+        *(void **)((u8 *)instance + 0x3F9D8) = (void *)func_0029DB50;
     } else {
-        cb4 = (void *)func_0029CF40;
-        cb3 = (void *)func_0029CF10;
+        *(void **)((u8 *)instance + 0x3F9D4) = (void *)func_0029CF40;
+        *(void **)((u8 *)instance + 0x3F9D8) = (void *)func_0029CF10;
     }
-    *(void **)((u8 *)instance + 0x3F9D4) = cb4;
-    *(void **)((u8 *)instance + 0x3F9D8) = cb3;
 }
 #endif
 
