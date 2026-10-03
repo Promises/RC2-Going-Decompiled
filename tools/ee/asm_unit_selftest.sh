@@ -452,5 +452,29 @@ run mt_nordr -G8
 ok=$(accepted); [ "$ok" = 1 ] && ok=$(has "0c000000 46027002"); [ "$ok" = 1 ] && ok=$(has "44816000 0c000000 46027002")
 verdict "MTC1 mt_nordr -G8 (non-reader slot)" "$ok" "mtc1, jal, then mul.s \$f0,\$f14,\$f2 in its slot, no nop anywhere in the run [44816000 0c000000 46027002]"
 
+# One arm per further held branch kind (task #1385). The arms above seed only
+# jal and bc1tl, so a hold that pads every OTHER kind passed 181/0 (FACT
+# #9086's `nonjal` mutant). The kinds are the ones the ROM has after an mtc1,
+# largest population first: a ROM-word census over EE code (rom 0x15180-0x33B00
+# and 0x16E980-0x253000) of `mtc1 $r,$fN` directly followed by the branch,
+# whose slot is a .s arithmetic/compare/cvt op reading $fN, gives b 10, beql 3,
+# j 3, beq 2, bne 2, bc1t 2 and bc1f 0 (jal 63). bc1f's 5 adjacent ROM sites
+# all carry a non-reader slot (a nop, a swc1, a daddu); it is seeded with a
+# reader anyway, like mt_lkly. Every seed is cc1's slot bracket around the
+# same `mtc1 $1,$f12; <branch>; add.s $f0,$f12,$f2` run, and each arm asserts
+# that run with no word between. Against asm_unit.sh with
+# `if (lastmtc != "" && $0 ~ /^\t<kind>\t/) print "\tnop";` before line 543's
+# `pendbr = $0`, exactly that kind's arm must FAIL.
+MT='\tmtc1\t$1,$f12\n'; MR='\tadd.s\t$f0,$f12,$f2\n'; ML='$L1:\n\tj\t$31\n'
+for k in "b:\$L1:10000001" "beql:\$2,\$0,\$L1:50400001" "j:\$L1:08000003" \
+         "beq:\$2,\$0,\$L1:10400001" "bne:\$2,\$0,\$L1:14400001" \
+         "bc1t:\$L1:45010001" "bc1f:\$L1:45000001"; do
+  op=${k%%:*}; w=${k##*:}; arg=${k#*:}; arg=${arg%:*}
+  seed "mt_$op" "$MH$MT$NM\t$op\t$arg\n$MR$RM$ML$ME"
+  run "mt_$op" -G8
+  ok=$(accepted); [ "$ok" = 1 ] && ok=$(has "44816000 $w 46026000")
+  verdict "MTC1 mt_$op -G8" "$ok" "mtc1, $op, then add.s \$f0,\$f12 in its slot, no nop anywhere in the run [44816000 $w 46026000]"
+done
+
 echo "asm_unit_selftest: $N arms, $F failed ($AU)"
 [ "$F" = 0 ]

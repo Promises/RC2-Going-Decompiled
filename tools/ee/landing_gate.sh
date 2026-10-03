@@ -1553,6 +1553,9 @@ selftest() {
 #     splice every 1B4218 s136 line given -fno-gcse (the splice fed CC1EXTRA):
 #            one table mismatch AND one "s136 arm still pinned" per line;
 #     1DFF80 its s136 lines unpinned: mismatch + floor, per line;
+#   usa only, RULING #9070 (task #1385): both and splice again for 191238,
+#            whose floor #1405 added and no arm seeded; each FAIL must name
+#            191238, so 1B4218's seed firing is no evidence about it;
 #   generic  one sdk29 line losing its last table flag -> a mismatch naming that
 #            unit; one sdk29 line deleted and one s136 line deleted -> the
 #            population counts FAIL naming each unit.
@@ -1571,21 +1574,27 @@ selftest_cc1args() {
   FAILED=0; check_cc1args "$L" "$HERE/build.sh" $((start + 100000)) > "$T/cc1_stale.txt"
   if [ "$FAILED" = 1 ] && /usr/bin/grep -q '^FAIL CC1ARGS: .* a STALE arg log' "$T/cc1_stale.txt"; then ok "fired: a log older than the build -> STALE"; else say "SELFTEST-FAIL (26) a log older than the build was read (FAILED=$FAILED)"; b=1; fi
   if [ "$REGION" = usa ]; then
+    # the two units whose 2.9 arm is pinned and s136 arm is not (RULING #9004:
+    # 1B4218; RULING #9070: 191238, task #1385): each seed pair runs per unit,
+    # and each FAIL must name that unit
+    local u ns np nm
+    for u in 1B4218 191238; do
     # both arms unpinned, consistently: table copy + matching log
-    sed 's#\(usa/text/1B4218.c) GFLAG="-G8"; \)CC1EXTRA="-fno-gcse"; S136EXTRA="";#\1CC1EXTRA=""; S136EXTRA="";#' "$HERE/build.sh" > "$T/cc1_build_both.sh"
-    cmp -s "$HERE/build.sh" "$T/cc1_build_both.sh" && { say "SELFTEST-BROKEN: (26) the both-arms seed did not change build.sh's 1B4218 row"; b=1; }
-    awk -F'\t' -v OFS='\t' '$1 == "sdk29" && $2 ~ /\/usa\/text\/1B4218\.(c|cpp)$/ { sub(/ -fno-gcse/, "", $3) } { print }' "$L" > "$T/cc1_both.tsv"
-    FAILED=0; check_cc1args "$T/cc1_both.tsv" "$T/cc1_build_both.sh" "$start" > "$T/cc1_both.txt"
-    n=$(/usr/bin/grep -c '^ *FAIL ' "$T/cc1_both.txt" || true)
-    if [ "$FAILED" = 1 ] && [ "$n" = 2 ] && /usr/bin/grep -q '^ *FAIL (floor) usa/text/1B4218 sdk29 -O2 -G8 -> -fno-gcse MISSING on the 2.9 arm$' "$T/cc1_both.txt"; then ok "fired: both arms unpinned (table + log consistent) -> the floor alone: $(/usr/bin/grep '^ *FAIL (floor)' "$T/cc1_both.txt" | sed 's/^ *FAIL //')"
-    else say "SELFTEST-FAIL (26) the both-arms seed: FAILED=$FAILED, $n FAIL lines (want the gate row + exactly the one floor line):"; show < <(/usr/bin/grep 'FAIL' "$T/cc1_both.txt" | head -10 | sed 's/^/  inner| /'); b=1; fi
+    sed "s#\\(usa/text/$u.c) GFLAG=\"-G8\"; \\)CC1EXTRA=\"-fno-gcse\"; S136EXTRA=\"\";#\\1CC1EXTRA=\"\"; S136EXTRA=\"\";#" "$HERE/build.sh" > "$T/cc1_build_both_$u.sh"
+    cmp -s "$HERE/build.sh" "$T/cc1_build_both_$u.sh" && { say "SELFTEST-BROKEN: (26) the both-arms seed did not change build.sh's $u row"; b=1; }
+    awk -F'\t' -v OFS='\t' -v u="$u" '$1 == "sdk29" && $2 ~ ("/usa/text/" u "[.](c|cpp)$") { sub(/ -fno-gcse/, "", $3) } { print }' "$L" > "$T/cc1_both_$u.tsv"
+    FAILED=0; check_cc1args "$T/cc1_both_$u.tsv" "$T/cc1_build_both_$u.sh" "$start" > "$T/cc1_both_$u.txt"
+    n=$(/usr/bin/grep -c '^ *FAIL ' "$T/cc1_both_$u.txt" || true)
+    if [ "$FAILED" = 1 ] && [ "$n" = 2 ] && /usr/bin/grep -q "^ *FAIL (floor) usa/text/$u sdk29 -O2 -G8 -> -fno-gcse MISSING on the 2.9 arm\$" "$T/cc1_both_$u.txt"; then ok "fired: both arms unpinned (table + log consistent) -> the floor alone: $(/usr/bin/grep '^ *FAIL (floor)' "$T/cc1_both_$u.txt" | sed 's/^ *FAIL //')"
+    else say "SELFTEST-FAIL (26) the $u both-arms seed: FAILED=$FAILED, $n FAIL lines (want the gate row + exactly the one $u floor line):"; show < <(/usr/bin/grep 'FAIL' "$T/cc1_both_$u.txt" | head -10 | sed 's/^/  inner| /'); b=1; fi
     # splice fed CC1EXTRA
-    awk -F'\t' -v OFS='\t' '$1 == "s136" && $2 ~ /\/usa\/text\/1B4218\.(c|cpp)$/ { sub(/-G8 /, "-G8 -fno-gcse ", $3) } { print }' "$L" > "$T/cc1_splice.tsv"
-    local ns; ns=$(awk -F'\t' '$1 == "s136" && $2 ~ /\/usa\/text\/1B4218\.(c|cpp)$/' "$L" | wc -l | tr -d ' ')
-    FAILED=0; check_cc1args "$T/cc1_splice.tsv" "$HERE/build.sh" "$start" > "$T/cc1_splice.txt"
-    local np nm; np=$(/usr/bin/grep -c '^ *FAIL (floor) usa/text/1B4218 s136 .* -> s136 arm still pinned$' "$T/cc1_splice.txt" || true); nm=$(/usr/bin/grep -c '^ *FAIL usa/text/1B4218 s136: .* != table ' "$T/cc1_splice.txt" || true)
-    if [ "$FAILED" = 1 ] && [ "$ns" -ge 1 ] && [ "$np" = "$ns" ] && [ "$nm" = "$ns" ]; then ok "fired: splice fed CC1EXTRA -> ${np}x 's136 arm still pinned' + ${nm}x table mismatch (1B4218 has $ns s136 compiles)"
-    else say "SELFTEST-FAIL (26) the splice seed: FAILED=$FAILED, $np floor / $nm mismatch lines for $ns 1B4218 s136 compiles"; b=1; fi
+    awk -F'\t' -v OFS='\t' -v u="$u" '$1 == "s136" && $2 ~ ("/usa/text/" u "[.](c|cpp)$") { sub(/-G8 /, "-G8 -fno-gcse ", $3) } { print }' "$L" > "$T/cc1_splice_$u.tsv"
+    ns=$(awk -F'\t' -v u="$u" '$1 == "s136" && $2 ~ ("/usa/text/" u "[.](c|cpp)$")' "$L" | wc -l | tr -d ' ')
+    FAILED=0; check_cc1args "$T/cc1_splice_$u.tsv" "$HERE/build.sh" "$start" > "$T/cc1_splice_$u.txt"
+    np=$(/usr/bin/grep -c "^ *FAIL (floor) usa/text/$u s136 .* -> s136 arm still pinned\$" "$T/cc1_splice_$u.txt" || true); nm=$(/usr/bin/grep -c "^ *FAIL usa/text/$u s136: .* != table " "$T/cc1_splice_$u.txt" || true)
+    if [ "$FAILED" = 1 ] && [ "$ns" -ge 1 ] && [ "$np" = "$ns" ] && [ "$nm" = "$ns" ]; then ok "fired: splice fed CC1EXTRA -> ${np}x 's136 arm still pinned' + ${nm}x table mismatch ($u has $ns s136 compiles)"
+    else say "SELFTEST-FAIL (26) the $u splice seed: FAILED=$FAILED, $np floor / $nm mismatch lines for $ns $u s136 compiles"; b=1; fi
+    done
     # 1DFF80 s136 unpinned
     awk -F'\t' -v OFS='\t' '$1 == "s136" && $2 ~ /\/usa\/text\/1DFF80\.(c|cpp)$/ { sub(/ -fno-gcse/, "", $3) } { print }' "$L" > "$T/cc1_1dff80.tsv"
     ns=$(awk -F'\t' '$1 == "s136" && $2 ~ /\/usa\/text\/1DFF80\.(c|cpp)$/' "$L" | wc -l | tr -d ' ')
@@ -2469,25 +2478,65 @@ selftest_regression_gate() {
 # asm_unit_selftest.sh, the seeded controls for asm_unit.sh's refusals and the
 # rules they guard, which no gate ran (#1352 unresolved (d)). One container on
 # $EE_CTX, ~1.5 min (FACT #9011). The DEFAULT form, no argument: it tests this
-# tree's own asm_unit.sh with every sibling it needs in place. The arm count is
-# read, not pinned, so a row that adds arms does not have to edit this one.
+# tree's own asm_unit.sh with every sibling it needs in place. The arm count N
+# is read from the selftest's own summary line, so a row that adds arms does not
+# have to edit this one; it must be at least ASMUNIT_SELFTEST_FLOOR, so a row
+# that DELETES an arm FAILs here instead of passing as `N-1 arms, 0 failed`
+# (task #1385, #1374's criteria judgement (c)). Before #1385 the floor was
+# `N >= 1`, and a gutted selftest reporting `1 arms, 0 failed` passed.
+# Two legs seeded from the real output, with no second VM run, put the floor's
+# own FAILing leg inside --selftest: the output cut to FLOOR-1 arms (PASS lines
+# and summary, 0 failed: a deleted arm) must FAIL by the floor, and the output
+# grown by one PASS arm must still PASS (adding arms stays edit-free).
 # Fails CLOSED: a VM that is down or a run that dies before its summary
 # (docker rc, no `asm_unit_selftest: N arms, F failed` line) is a SELFTEST-FAIL
 # naming the rc, never a skip. That it can fail is shown inside the tool by its
 # own seeded copies, and for this arm by #1366's seed (asm_unit.sh's dli-pass
 # refusal `exit 2` -> `exit 0`: rc 1, 62 failed in this default form, task
 # #1374; FACT #9011's 66 is the argument form, incl. 4 SYNC artefacts).
+#
+# ASMUNIT_SELFTEST_FLOOR: 188, measured 2026-10-04 (task #1385) as
+# `asm_unit_selftest: 188 arms, 0 failed (/work/tools/ee/asm_unit.sh)` on
+# master cdb133c43 plus #1385's seven MTC1 hold-path arms (181 on cdb133c43
+# itself). This floor moves UP ONLY: a row that changes the arm count raises it
+# to the new count in the same commit, and nothing lowers it without a RULING
+# that names the arm removed and why. Do not read RULING #7317 backwards
+# here: #7317's FAILURE baselines move DOWN only; an arm count is a COVERAGE
+# measure, so it moves UP only.
+ASMUNIT_SELFTEST_FLOOR=188
+# asmunit_selftest_judge FILE RC — sets AJ (the reason) and returns 0 when FILE,
+# one asm_unit_selftest.sh output, passes: a summary line, rc 0, 0 failed, no
+# FAIL line, N PASS lines and N >= ASMUNIT_SELFTEST_FLOOR. AJ_SUM is the summary.
+asmunit_selftest_judge() {
+  local file="$1" rc="$2" n f np nf
+  AJ_SUM=$(/usr/bin/grep -E '^asm_unit_selftest: [0-9]+ arms, [0-9]+ failed \(/work/tools/ee/asm_unit\.sh\)$' "$file" | tail -1)
+  n=$(printf '%s' "$AJ_SUM" | sed -nE 's/^asm_unit_selftest: ([0-9]+) arms.*/\1/p'); f=$(printf '%s' "$AJ_SUM" | sed -nE 's/.* arms, ([0-9]+) failed.*/\1/p')
+  np=$(/usr/bin/grep -c '^PASS ' "$file" || true); nf=$(/usr/bin/grep -c '^FAIL ' "$file" || true)
+  AJ_NP=$np
+  if [ -z "$AJ_SUM" ]; then AJ="nosum"; return 1; fi
+  if ! { [ "$rc" = 0 ] && [ "$f" = 0 ] && [ "$nf" = 0 ] && [ "$np" = "$n" ]; }; then AJ="rc $rc, $n arms, $f failed, $np PASS / $nf FAIL lines"; return 1; fi
+  if [ "$n" -lt "$ASMUNIT_SELFTEST_FLOOR" ]; then AJ="floor: $n arms < ASMUNIT_SELFTEST_FLOOR $ASMUNIT_SELFTEST_FLOOR, 0 failed — an arm was dropped, which is lost coverage, not a pass"; return 1; fi
+  AJ="$n arms >= floor $ASMUNIT_SELFTEST_FLOOR"; return 0
+}
 selftest_asmunit_selftest() {
-  local T="$1" b=0 rc sum n f np nf
-  say "-- (25) ASM_UNIT_SELFTEST (#1366): $HERE/asm_unit_selftest.sh on this tree's asm_unit.sh in one container on $EE_CTX -> rc 0, 'N arms, 0 failed', N PASS lines and no FAIL line; a VM that cannot run it is a FAIL"
+  local T="$1" b=0 rc n
+  say "-- (25) ASM_UNIT_SELFTEST (#1366, #1385): $HERE/asm_unit_selftest.sh on this tree's asm_unit.sh in one container on $EE_CTX -> rc 0, 'N arms, 0 failed' with N >= $ASMUNIT_SELFTEST_FLOOR, N PASS lines and no FAIL line; a VM that cannot run it is a FAIL; FLOOR-1 arms FAILs, N+1 arms PASSes"
   in_vm "sh $HERE/asm_unit_selftest.sh" > "$T/asmunit_selftest.txt" 2>&1; rc=$?
-  sum=$(/usr/bin/grep -E '^asm_unit_selftest: [0-9]+ arms, [0-9]+ failed \(/work/tools/ee/asm_unit\.sh\)$' "$T/asmunit_selftest.txt" | tail -1)
-  n=$(printf '%s' "$sum" | sed -nE 's/^asm_unit_selftest: ([0-9]+) arms.*/\1/p'); f=$(printf '%s' "$sum" | sed -nE 's/.* arms, ([0-9]+) failed.*/\1/p')
-  np=$(/usr/bin/grep -c '^PASS ' "$T/asmunit_selftest.txt" || true); nf=$(/usr/bin/grep -c '^FAIL ' "$T/asmunit_selftest.txt" || true)
-  if [ -z "$sum" ]; then say "SELFTEST-FAIL (25) asm_unit_selftest.sh printed no summary line for /work/tools/ee/asm_unit.sh (docker --context $EE_CTX rc $rc): it did not run, and an arm that cannot run is not coverage. Last lines:"; show < <(tail -5 "$T/asmunit_selftest.txt" | sed 's/^/  inner| /'); b=1
-  elif [ "$rc" = 0 ] && [ "$f" = 0 ] && [ "$nf" = 0 ] && [ "$n" -ge 1 ] && [ "$np" = "$n" ]; then ok "control: rc $rc, $sum, $np PASS lines"
-  else say "SELFTEST-FAIL (25) asm_unit_selftest.sh does not pass on this tree (rc $rc, $n arms, $f failed, $np PASS / $nf FAIL lines):"; show < <(/usr/bin/grep '^FAIL ' "$T/asmunit_selftest.txt" | head -20 | sed 's/^/  inner| /'); b=1; fi
+  if asmunit_selftest_judge "$T/asmunit_selftest.txt" "$rc"; then ok "control: rc $rc, $AJ_SUM, $AJ_NP PASS lines"
+  elif [ "$AJ" = nosum ]; then say "SELFTEST-FAIL (25) asm_unit_selftest.sh printed no summary line for /work/tools/ee/asm_unit.sh (docker --context $EE_CTX rc $rc): it did not run, and an arm that cannot run is not coverage. Last lines:"; show < <(tail -5 "$T/asmunit_selftest.txt" | sed 's/^/  inner| /'); b=1
+  else say "SELFTEST-FAIL (25) asm_unit_selftest.sh does not pass on this tree ($AJ):"; show < <(/usr/bin/grep '^FAIL ' "$T/asmunit_selftest.txt" | head -20 | sed 's/^/  inner| /'); b=1; fi
   say "     full output -> $T/asmunit_selftest.txt"
+  # the floor's own legs, seeded from the real output (only when it passed:
+  # a seed cut from a failing run would fire for the wrong reason)
+  if [ "$b" = 0 ]; then
+    n=$((ASMUNIT_SELFTEST_FLOOR - 1))
+    awk -v n="$n" '/^PASS / { if (++p > n) next } /^asm_unit_selftest: [0-9]+ arms, / { sub(/: [0-9]+ arms,/, ": " n " arms,") } { print }' "$T/asmunit_selftest.txt" > "$T/asmunit_selftest_del.txt"
+    if ! asmunit_selftest_judge "$T/asmunit_selftest_del.txt" 0 && case "$AJ" in "floor: $n arms < "*) true ;; *) false ;; esac; then ok "fired: arms deleted to $n, 0 failed -> $AJ"
+    else say "SELFTEST-FAIL (25) the output cut to $n arms, 0 failed, did not FAIL by the floor ($AJ_SUM: $AJ)"; b=1; fi
+    awk '/^asm_unit_selftest: [0-9]+ arms, / { print "PASS seeded-extra-arm: added by landing_gate --selftest (25)"; n = $2; sub(/: [0-9]+ arms,/, ": " n + 1 " arms,") } { print }' "$T/asmunit_selftest.txt" > "$T/asmunit_selftest_add.txt"
+    if asmunit_selftest_judge "$T/asmunit_selftest_add.txt" 0; then ok "control: an arm added -> $AJ_SUM still passes, no edit here ($AJ)"
+    else say "SELFTEST-FAIL (25) the output grown by one PASS arm did not pass ($AJ_SUM: $AJ)"; b=1; fi
+  fi
   return $b
 }
 
