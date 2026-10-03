@@ -1569,6 +1569,10 @@ selftest_digest() {
   local T="$1" b=0 D="$1/digest" t p rc
   say "-- (12b) DIGEST (#1390): with no SHA tool on PATH, a link input recorded AND re-checked there (the empty == empty case) must FAIL 'was not digested', and so must either side alone; the rename pairing must return rc 2 naming the missing tool, and so must the BLIND check's shared-input checksum; with only sha1sum/sha256sum, the rows must equal this host's default; the full PATH passes"
   rm -rf "$D"; mkdir -p "$D/none" "$D/gnu" "$D/build" "$D/base/going-decompiled/src/usa" "$D/tip/going-decompiled/src/usa"
+  # ABSOLUTE, or the scratch PATHs stop resolving once native_renames and
+  # native_shared_sums cd into a tree ($OUT is relative to the repo root): the
+  # no-tool seeds would then fire for that reason, not the missing tool.
+  D=$(cd "$D" && pwd -P) || { say "SELFTEST-BROKEN: cannot resolve $1/digest"; return 1; }
   for t in awk cmp comm cut sed sort tr wc xargs; do
     p=$(command -v "$t") || { say "SELFTEST-BROKEN: no $t on PATH to build the scratch PATHs"; return 1; }
     ln -s "$p" "$D/none/$t"; ln -s "$p" "$D/gnu/$t"
