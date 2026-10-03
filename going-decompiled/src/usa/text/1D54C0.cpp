@@ -1,5 +1,15 @@
 #include "common.h"
 
+/* ROM_DATA_ADDR(sym, addr): a ROM data table passed to a callee as an address.
+ * The EE arm names the symbol, so the ROM's lui/addiu %hi/%lo pair (with its
+ * relocations) is reproduced; native keeps the raw ROM address it always used,
+ * as these tables have no native definition. */
+#ifndef TARGET_NATIVE
+#define ROM_DATA_ADDR(sym, addr) ((s32)(sym))
+#else
+#define ROM_DATA_ADDR(sym, addr) (addr)
+#endif
+
 /*
  * text/1D54C0 — front-end / pause-menu screens band, part B (vaddr
  * 0x2D5540..0x2DFFFF). Carved out of the big text/1B21E8 asm tile as
@@ -834,12 +844,23 @@ extern void func_00342520(void *p, s32 mode);
  * rows on it, class STRUCTURAL; first differing insn: ROM `lui a0,0x0  [HI16
  * 0x001A8D04]` vs `lw a0,0(gp)  [GPREL16 g_pGuiManager]`. Not iterated in
  * t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
+/* SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked; a candidate, NOT match evidence): EXACT 28/28, relocations equal, with
+ * g_guiInstance read through `.extern ,16` below (this body sits before the
+ * unit's file-scope one; without it: 23/28, first diff @5 `lw $4,%gp_rel`) and
+ * the three tables named (ROM_DATA_ADDR; as literals: 4/28, first diff @9). */
+__asm__(".extern g_guiInstance, 16");   /* the GUI singleton, absolute lui/lw form */
+extern u8 D_2615D8[];
+extern u8 D_261678[];
+extern u8 D_261730[];
 s32 func_002D60E8(void) {
+    extern char *g_guiInstance; /* the GUI singleton (alias g_pGuiManager) */
+
     func_002888A8();
-    if (g_pGuiManager != 0) {
-        func_00342450((u8 *)g_pGuiManager + 0x3C160, 0x2615d8, 0x261678, 0x261730);
-        func_00342520((u8 *)g_pGuiManager + 0x3C160, 1);
+    if (g_guiInstance != 0) {
+        func_00342450(g_guiInstance + 0x3C160, ROM_DATA_ADDR(D_2615D8, 0x2615d8),
+                      ROM_DATA_ADDR(D_261678, 0x261678), ROM_DATA_ADDR(D_261730, 0x261730));
+        func_00342520(g_guiInstance + 0x3C160, 1);
     }
     return 0;
 }
@@ -967,11 +988,19 @@ extern void func_00342DC0(void *p, s32 records);
  * objdiff): sdk29 85.86% / engine96 62.50%; better arm sdk29; 15 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
  * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
+/* SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked; a candidate, NOT match evidence): EXACT 22/22, relocations equal, once
+ * the body reads g_guiInstance (absolute through the unit's file-scope
+ * `.extern g_guiInstance, 16`; as g_pGuiManager it is gp-relative: 21/22, first
+ * diff @1) and names its record table (ROM_DATA_ADDR; as a literal: 1/22, @14
+ * `ori` vs the ROM's %lo `addiu`). */
+extern u8 D_261520[];
 s32 func_002D63B0(void) {
-    if (g_pGuiManager != 0) {
-        func_00342BE8((u8 *)g_pGuiManager + 0x3E9C8, 1);
-        func_00342DC0((u8 *)g_pGuiManager + 0x3E9C8, 0x261520);
+    extern char *g_guiInstance; /* the GUI singleton (alias g_pGuiManager) */
+
+    if (g_guiInstance != 0) {
+        func_00342BE8(g_guiInstance + 0x3E9C8, 1);
+        func_00342DC0(g_guiInstance + 0x3E9C8, ROM_DATA_ADDR(D_261520, 0x261520));
     }
     return 0;
 }
@@ -1039,11 +1068,19 @@ extern void func_00343290(void *p, s32 records);
  * objdiff): sdk29 85.86% / engine96 62.50%; better arm sdk29; 15 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
  * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
+/* SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked; a candidate, NOT match evidence): EXACT 22/22, relocations equal, once
+ * the body reads g_guiInstance (absolute through the unit's file-scope
+ * `.extern g_guiInstance, 16`; as g_pGuiManager it is gp-relative: 21/22, first
+ * diff @1) and names its record table (ROM_DATA_ADDR; as a literal: 1/22, @14
+ * `ori` vs the ROM's %lo `addiu`). */
+extern u8 D_261570[];
 s32 func_002D6508(void) {
-    if (g_pGuiManager != 0) {
-        func_003432B8((u8 *)g_pGuiManager + 0x3E760, 1);
-        func_00343290((u8 *)g_pGuiManager + 0x3E760, 0x261570);
+    extern char *g_guiInstance; /* the GUI singleton (alias g_pGuiManager) */
+
+    if (g_guiInstance != 0) {
+        func_003432B8(g_guiInstance + 0x3E760, 1);
+        func_00343290(g_guiInstance + 0x3E760, ROM_DATA_ADDR(D_261570, 0x261570));
     }
     return 0;
 }
