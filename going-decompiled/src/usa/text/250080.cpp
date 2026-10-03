@@ -298,17 +298,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", InitFmvPlayback
 
 /* func_003503D8: FMV engine shutdown — flat teardown: quiesce (func_00124B88),
  * stop the IPU/decode helpers (func_003512F0/func_00352B88), kill+delete the FMV
- * thread (func_0011AA70/func_0011AA30 over g_fmvThreadId), disable DMAC ch2, close
- * the vblank handler (func_0011A950 + func_00126DC0(OnVblankInterrupt)), tear down the
+ * thread (func_0011AA70/func_0011AA30 over g_fmvThreadId), disable DMAC ch2, remove
+ * its handler (func_0011A950), reinstall the game's vblank-start handler
+ * (func_00126DC0(OnVblankInterrupt), FACT #5907), tear down the
  * DMA queues (func_003525D8/func_003505E0/func_003513F0 over the arena sub-objects),
  * quiesce again, and clear bit 1 of the INTC-mask reg 0x1000E000.
- * Blocked (match): the ROM's one %gp_rel read of g_pFmvArenaBase (0x003503EC, the
- * jal func_003512F0 delay slot) is that callee's ARGUMENT. FMV_ARENA_BASE_GP can
- * spell it, but this body passes no argument, so there is nothing for it to act on
- * (s136 screen 51/59, task #1434). With the args restored, func_00126DC0 declared
- * s32 and the device on the first read, the screen is EXACT 59/59; that needs
- * prototype changes to the four callees' declarations AND their definitions in
- * this file, which is held for a ruling (task #1434).
+ * The ROM's one %gp_rel read of g_pFmvArenaBase (0x003503EC, the jal
+ * func_003512F0 delay slot) is that callee's ARGUMENT, so it is spelled through
+ * FMV_ARENA_BASE_GP (the file-scope device above); every other arena read stays
+ * absolute. The three changes are jointly needed (s136 screen, task #1434, re-run
+ * by task #1437): with no arguments 51/59; arguments without the device 52/59
+ * (built 61); arguments + device with func_00126DC0 declared void 3/59 (cc1 then
+ * reuses $2 at 0x0035044C where the ROM has $3); all three EXACT 59/59.
  * The arena-relative args the asm passes to func_003512F0/func_00352B88/
  * func_003505E0/func_003513F0 are dead (each callee ignores it) but are passed here
  * as the ROM passes them, and the four signatures carry them (RULING #9118, task
@@ -319,7 +320,7 @@ extern void func_0011AA70(s32 threadId);   /* kill thread */
 extern void func_0011AA30(s32 threadId);   /* delete thread */
 extern void DisableDmac(s32 channel);
 extern void func_0011A950(s32 a, s32 b);
-extern s32  func_00126DC0(void *handler);    /* remove vblank handler */
+extern s32  func_00126DC0(void *handler);    /* install INTC-2 vblank-start handler; returns the previous one */
 extern s32  g_fmvThreadId;
 extern void OnVblankInterrupt(void);
 /* forward decls — these are declared/defined later in this file */
@@ -331,8 +332,13 @@ extern s32  func_003505E0(u8 *ptsQueue);
 extern s32  func_003513F0(u8 *block);
 #endif
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003503D8);
+/* GUARD (task #1437): on EE this C is the image's func_003503D8, compiled alone by
+ * the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003503D8)
+S136OS_SLOT(func_003503D8);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -350,7 +356,9 @@ extern s32 func_003513F0(u8 *block);
 extern s32 g_fmvThreadId;
 extern void OnVblankInterrupt(void);
 /* (end of this body's declarations) */
-/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 75.25% / engine96 61.41%. Residual: GPREL-DELAY-SLOT: with the dead-passed arena args restored and func_126DC0 declared s32 the sdk29 arm reads 95.59% and the ONLY residual is the `lw a0,%gp_rel(g_pFmvArenaBase)($gp)` in the jal func_003512F0 delay slot, which GNU as expands as lui/lw+nop; rewriting that one line of base.s to the %gp_rel form assembles to 100.00% (tools/ee/.t513/probe/base_gprel.s) — a toolchain post-pass question, not a C one. */
+/* History: task #513 measured sdk29 75.25% / engine96 61.41% (unit objdiff report,
+ * no arguments) and 95.59% on sdk29 with the arguments restored, the residual being
+ * the gp-relative delay-slot read that FMV_ARENA_BASE_GP now spells. */
 void func_003503D8(void) {
     func_00124B88(0);
     func_003512F0(FMV_ARENA_BASE_GP);
