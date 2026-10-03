@@ -1570,8 +1570,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00352000);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
-extern void WaitSema(s32 sema);
-extern s32 SignalSema(s32 sema);
+extern s32 func_0011AC60(s32 sema);    /* WaitSema (acquire) */
+extern s32 func_0011AC40(s32 sema);    /* SignalSema (release) */
 /* (end of this body's declarations) */
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 75.67% / engine96 58.62%. Residual: PACKED-SAVE (2 callee saves) + 12 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 /* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
@@ -1586,15 +1586,24 @@ extern s32 SignalSema(s32 sema);
    is a non-negative byte count, so this is the usual round-up-to-2KB.
    RETURN: the asm stores the rounded cursor in the SignalSema jal delay slot, so
    $2 at `jr` is SignalSema's return value (NOT the rounded cursor) - return that.
-   (Fixes else_divergences #15: the return diverged on real R5900.) */
+   (Fixes else_divergences #15: the return diverged on real R5900.)
+
+   SCREEN-EXACT on the s136os arm (SN 2.95.3 v1.36 -fopt-stack; task #1389,
+   masked word screen + relocation compare, NOT vmu): a CANDIDATE, not a match.
+   Levers: the round-up written as the signed division it is,
+   (v + 0x7FF) / 0x800 * 0x800 - cc1 expands it to the ROM's slt/movn
+   (the +0xFFE is the division's own negative-input bias), where the
+   hand-expanded ?: compiled to a bltzl; and the semaphore calls by their ROM
+   symbols func_0011AC60/func_0011AC40, declared returning s32 as the kernel
+   calls do (WaitSema/SignalSema have no EE definition; with the old `void
+   WaitSema` declaration cc1 colours the cursor $2 and the -1 constant $3). */
 s32 func_00352000(u8 *obj) {
     s32 v;
 
-    WaitSema(*(s32 *)(obj + 0x40));
+    func_0011AC60(*(s32 *)(obj + 0x40));
     v = *(s32 *)(obj + 0x14);
-    v = (((v + 0x7FF >= 0) ? v + 0x7FF : v + 0xFFE) >> 11) << 11;
-    *(s32 *)(obj + 0x14) = v;
-    return SignalSema(*(s32 *)(obj + 0x40));
+    *(s32 *)(obj + 0x14) = (v + 0x7FF) / 0x800 * 0x800;
+    return func_0011AC40(*(s32 *)(obj + 0x40));
 }
 #endif
 
