@@ -712,11 +712,18 @@ extern s32 func_00342468(void *p);
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 92.65% / engine96 69.71%; better arm sdk29; 9 differing rows
  * on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing insn:
- * ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
+ * ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495.
+ * SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked; a candidate, NOT match evidence): EXACT 17/17, relocations equal, once
+ * the body reads g_guiInstance through the `.extern ,16` absolute form below.
+ * Without the `.extern` (name alone changed): 16/17, first diff @1 `lw $2,%gp_rel`
+ * vs ROM `lui $2`. */
+__asm__(".extern g_guiInstance, 16");
 s32 func_002D5EC8(MenuWidget *obj) {
-    if (g_pGuiManager != 0) {
-        *(s32 *)((u8 *)obj + 0x34) = func_00342468((u8 *)g_pGuiManager + 0x3C160);
+    extern char *g_guiInstance; /* the GUI singleton (alias g_pGuiManager) */
+
+    if (g_guiInstance != 0) {
+        *(s32 *)((u8 *)obj + 0x34) = func_00342468(g_guiInstance + 0x3C160);
     }
     return 0;
 }
