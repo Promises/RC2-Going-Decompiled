@@ -835,38 +835,70 @@ s32 func_002D5F10(void) {
 
 /* Draw the ship-customization back/help line: a right-justified label whose
  * Y follows the customization-panel scroll fraction (offset by 36px when a
- * sub-panel is open). Returns 0. Wall: float scroll arithmetic.
- * Byte-match: engine-2.96 SAVE-SLOT wall (prologue packs $16/$31 at 8-byte
- * spacing 0x0/0x8; 2.9 reserves 16-byte slots) → match impossible, #else is
- * correct. Not "TODO(match)". */
+ * sub-panel is open). Returns 0.
+ * The 8-byte-slot prologue is the s136 arm's (SN 2.95.3 v1.36 -fopt-stack,
+ * FACT #8810), so the 2.9 SAVE-SLOT wall does not bind it.
+ * SCREEN (task #1395, s136 solo, relocated fields masked + relocation compare;
+ * a CANDIDATE, not match evidence): EXACT 47/47, RELOC-EQUAL 9 (base: 36/47 @11
+ * `c7800000|3c010000`). Four levers, each undone alone:
+ *   - the fields read as absolute g_swapGadgetItemIndex+0x8A/+0x86 through
+ *     `.extern ,16` (ADDRESSING-MODEL DEVICE): undone 35/47 @11, the base pair;
+ *   - the int conversion written in each arm, adding -36.0f (the ROM converts
+ *     twice): undone 26/47 @18;
+ *   - the colour passed 64-bit (the ROM's dli): undone 15/47 @32;
+ *   - the call named by its ROM symbol func_00280090: undone, EXACT but a
+ *     relocation names DrawFont1RightJustifiedLabel, which EE does not define. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D6028);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern s32 GetLocalizedString(s32 id);
+#ifndef TARGET_NATIVE
+/* The ROM symbol, with its ROM signature (as 188858.c and 1CA080.cpp declare
+ * it): the colour is a 64-bit value, loaded with a dli (ori/dsll/ori). EE has
+ * no definition under the DrawFont1RightJustifiedLabel name. */
+extern void func_00280090(s32 x, s32 y, u64 color, s32 str, s64 wrap);
+#define DRAW_RIGHT_LABEL func_00280090
+/* ADDRESSING-MODEL DEVICE (RULING #8620 class, as 1CA080.cpp's): the ROM reads
+ * the panel scroll fraction and the sub-panel flag as absolute
+ * g_swapGadgetItemIndex+0x8A / +0x86, each address formed afresh by the
+ * assembler's macro (lui $1 / lui $2). Emits nothing. */
+__asm__(".extern g_swapGadgetItemIndex, 16");
+extern s32 g_swapGadgetItemIndex;
+#define PANEL_SCROLL  (*(float *)((u8 *)&g_swapGadgetItemIndex + 0x8A))
+#define PANEL_SUBOPEN (*(s32 *)((u8 *)&g_swapGadgetItemIndex + 0x86))
+#else
 extern void DrawFont1RightJustifiedLabel(s32 x, s32 y, u32 color, s32 str, s32 wrap);
+#define DRAW_RIGHT_LABEL DrawFont1RightJustifiedLabel
+extern float D_001B2324;   /* == g_swapGadgetItemIndex+0x8A */
+extern s32   D_001B2320;   /* == g_swapGadgetItemIndex+0x86 */
+#define PANEL_SCROLL  D_001B2324
+#define PANEL_SUBOPEN D_001B2320
+#endif
 /* (end of this body's declarations) */
 /* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
  * objdiff): sdk29 70.72% / engine96 59.17%; better arm sdk29; 29 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
  * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
-/* Matching arm stays INCLUDE_ASM; #else is the structure model (faithful vs asm:
- * value*329+0.5, -36 when D_001B2320==1, GetLocalizedString(0x2BE5) label draw).
- * D_001B2324/D_001B2320 == g_swapGadgetItemIndex+0x8A/+0x86. */
+/* Faithful vs asm: value*329+0.5, -36 when the sub-panel flag is 1,
+ * GetLocalizedString(0x2BE5) label draw. */
 s32 func_002D6028(void) {
-    extern float D_001B2324;
-    extern s32   D_001B2320;
     extern void  func_0029D368(void);   /* per-frame customization-panel helper */
     float yf;
+    s32 y;
     Begin2dDrawBatch(0);
     func_0029D368();
-    yf = D_001B2324 * 329.0f + 0.5f;
-    if (D_001B2320 == 1) {
-        yf -= 36.0f;
+    yf = PANEL_SCROLL * 329.0f + 0.5f;
+    if (PANEL_SUBOPEN == 1) {
+        y = (s32)(yf + -36.0f);
+    } else {
+        y = (s32)yf;
     }
-    DrawFont1RightJustifiedLabel(0x1c7, (s32)yf, 0x80f0f0f0,
-                                 GetLocalizedString(0x2be5), -1);
+#undef PANEL_SCROLL
+#undef PANEL_SUBOPEN
+    DRAW_RIGHT_LABEL(0x1c7, y, 0x80f0f0f0, GetLocalizedString(0x2be5), -1);
+#undef DRAW_RIGHT_LABEL
     End2dDrawBatch();
     return 0;
 }
