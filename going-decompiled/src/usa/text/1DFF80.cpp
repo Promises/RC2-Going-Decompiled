@@ -1289,7 +1289,21 @@ void func_002E5698(void) {
  * fields (0x70-stride up to +0x16C0), init the SDK sound core (snd_Init, mono per
  * g_audioStereoMode), configure 5 channels (func_001329B0 ch 1/2/4/5/6), and register the
  * 7 listener slots (func_00132888) + the reverb/params block (func_001328C0). Matching arm
- * stays INCLUDE_ASM (save-slot wall); #else is the faithful portable body. */
+ * stays INCLUDE_ASM; #else is the faithful portable body.
+ *
+ * SCREEN (task #1395, s136 solo, relocated fields masked; not match evidence):
+ * 78/96 edit 29 -> 80/96 edit 15 (built 98). The masked count is inflated by a
+ * one-word shift; the edit distance is the measure. The two clear loops are
+ * written as StopAllSoundEmitters's matched ones (same ROM shape): the `sq $0`
+ * ring clear through the $0-pinned `zeroQuad` (REGISTER-PIN DEVICE, RULING
+ * #8479) and the ROM's short-loop nops as R5900_SHORT_LOOP_PAD1 (SCHEDULING
+ * DEVICE, RULING #8435; FACT #8384). The slot walk runs through an
+ * asm-tied copy of the base with a SIGNED bound, as the ROM's slt. The stereo
+ * flag is tested `== 0` (the ROM's sltiu ..,1) and read absolute.
+ * Residual: the ROM keeps only %hi(g_listenerPosHistory) in $16 across both
+ * loops and re-adds %lo at each use. That is cross-block %hi reuse, which needs
+ * -fgcse (FACT #8485), and this unit is -fno-gcse. Also the 0x8000 constant
+ * lands in $8 where the ROM shares $7. */
 #ifdef TARGET_NATIVE
 extern s32  g_audioStereoMode;
 extern void snd_Init(s32 mode);
@@ -1312,26 +1326,60 @@ extern void func_001329B0(s32 channel, s32 b, s32 c);
 extern void func_002E5698(void);
 extern void func_00132888(s32 slot, s32 value);
 extern void func_001328C0(s32 a, s32 *params, s32 c, s32 d);
+#ifndef TARGET_NATIVE
+/* ADDRESSING-MODEL DEVICE (RULING #8620 class): the ROM reads the stereo flag
+ * absolute (lui/lw %lo), not gp-relative. */
+__asm__(".extern g_audioStereoMode, 16");
+#endif
 extern s32 g_audioStereoMode;
 /* (end of this body's declarations) */
 void InitSoundEmitterSystem(void) {
-    u8 *base = g_listenerPosHistory;
-    u8 *p;
+#ifndef TARGET_NATIVE
+    register u_long128 zeroQuad EE_REG("$0");   /* read-only: never assigned */
+#endif
+    u8 *ring;
+    u8 *base;
+    u8 *slot;
+    u8 *end;
     s32 i;
+    s32 more;
     s32 params[5];
 
-    for (i = 0; i < 16; i++) {          /* clear the 0x40-byte listener ring */
-        ((s32 *)base)[i] = 0;
-    }
+    ring = g_listenerPosHistory;
+    i = 3;
+    do {
+#ifndef TARGET_NATIVE
+        *(u_long128 *)ring = zeroQuad;
+#else
+        ((u64 *)ring)[0] = 0;
+        ((u64 *)ring)[1] = 0;
+#endif
+        __asm__("" : "+r"(i) : : "memory");
+        i--;
+        R5900_SHORT_LOOP_PAD1(i, i);
+        R5900_SHORT_LOOP_PAD1(i, i);
+        R5900_SHORT_LOOP_PAD1(i, ring);
+        ring += 0x10;
+    } while (i >= 0);
+
+    base = g_listenerPosHistory;
+    __asm__("" : "=r"(slot) : "0"(base));
     *(s32 *)(base + 0x40) = 0;
     *(s32 *)(base + 0x44) = 0;
-    for (p = base; p < base + 0x16C0; p += 0x70) {   /* clear each emitter's +0x70/+0x74 */
-        *(s32 *)(p + 0x70) = 0;
-        *(u8 *)(p + 0x74) = 0;
-    }
+    end = slot + 0x16C0;
+    do {
+        *(s32 *)(slot + 0x70) = 0;
+        *(u8 *)(slot + 0x74) = 0;
+        slot += 0x70;
+        more = (s32)slot < (s32)end;
+        __asm__("" : "+r"(more));
+        R5900_SHORT_LOOP_PAD1(more, slot);
+        R5900_SHORT_LOOP_PAD1(more, slot);
+    } while (more);
 
+    base = g_listenerPosHistory;
     snd_Init(2);
-    func_00132938(g_audioStereoMode < 1);
+    func_00132938(g_audioStereoMode == 0);
     func_00132978(0, 1);
     func_001329B0(1, 0x18, 0x2F);
     func_001329B0(2, 0x18, 0x2F);
