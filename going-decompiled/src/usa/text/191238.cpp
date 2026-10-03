@@ -226,7 +226,7 @@ extern void SetVideoMode(void);
 extern void EnableDmacChannels(void);
 extern void SetupGsDisplayBuffers(s32 mode);
 extern void func_0011AE70(s32 mode);           /* EnableCache */
-extern void func_00126DC0(void *handler);        /* SetVblankStartHandler */
+extern s32  func_00126DC0(void *handler);        /* SetVblankStartHandler; returns the previous handler */
 extern void func_002FCFC8(void);
 extern void ResetFrameArenas(void);
 extern void InstallVif1DmacHandlers(void);

@@ -1120,7 +1120,7 @@ extern u8  D_1AD1F8[];                  /* 0x1AD1F8 caption/string blob */
 void func_0029DAD0(void *str, s32 arg);
 void func_002895E0(void *queue);       /* cinematic-queue helper */
 void func_00126288(void *dest, s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g); /* BuildGsImageUploadPacket */
-void func_00126DC0(void (*isr)(void), s32 arg);
+s32  func_00126DC0(void *handler);     /* install INTC-2 vblank-start handler; returns the previous one */
 void OnVblankInterrupt(void);
 void PopGameState(s32 a, s32 b);
 void WaitFrameDmaFence(s32 mask);
@@ -1280,7 +1280,7 @@ void RunCinematicPlaybackFrame(void) {
 
     /* --- Teardown: final upload, reset VRAM/arenas, chain to the next state. --- */
     snd_CheckLoadInProgress(0);
-    func_00126DC0(OnVblankInterrupt, 0);
+    func_00126DC0((void *)OnVblankInterrupt);
     WaitGsPathsIdle(0, 0);
     KickGifImageUpload(gifPacket,
                        g_uiTextureDataBase + ((u16)*(u16 *)(tc + 0xA) << 4));
