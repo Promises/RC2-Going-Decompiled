@@ -712,6 +712,18 @@ s32 func_002D5D10(void) {
 
 /* Seed obj->0x34 from a GUI subsystem query (g_guiInstance + 0x3C160) when the
  * GUI exists. Returns 0. */
+#ifndef TARGET_NATIVE
+/* ADDRESSING-MODEL DEVICE for func_002D5EC8's absolute lui form of g_guiInstance (emits no
+ * code). At FILE SCOPE, not in the member's #else arm, so the unit's own 2.9 TU
+ * declares the symbol too: tools/ee/s136os_splice.sh never carries an `.extern`
+ * for a symbol the unit declares, so cc1's end-of-file small-size line from the
+ * s136os TU is not carried in front of the block, where it would make the read
+ * gp-relative (task #1387: the splice REFUSED the in-arm placement as ADDRESSING).
+ * The unit's one bare 2.9 read of g_guiInstance (func_002D61D8's `lw`) already
+ * follows the unit's own `.extern g_guiInstance, 16` above it and is absolute
+ * either way, so nothing else changes. */
+__asm__(".extern g_guiInstance, 16");
+#endif
 /* GUARD (task #1387): on EE the #else body below is the image's func_002D5EC8, compiled
  * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
  * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
@@ -733,7 +745,6 @@ extern s32 func_00342468(void *p);
  * the body reads g_guiInstance through the `.extern ,16` absolute form below.
  * Without the `.extern` (name alone changed): 16/17, first diff @1 `lw $2,%gp_rel`
  * vs ROM `lui $2`. */
-__asm__(".extern g_guiInstance, 16");
 s32 func_002D5EC8(MenuWidget *obj) {
     extern char *g_guiInstance; /* the GUI singleton (alias g_pGuiManager) */
 
@@ -835,6 +846,18 @@ s32 func_002D6028(void) {
 
 /* Enter the ship-customization screen: prime the system, then (if the GUI
  * exists) bind its three data sources to the customization list and show it. */
+#ifndef TARGET_NATIVE
+/* ADDRESSING-MODEL DEVICE for func_002D60E8's absolute lui form of g_guiInstance (emits no
+ * code). At FILE SCOPE, not in the member's #else arm, so the unit's own 2.9 TU
+ * declares the symbol too: tools/ee/s136os_splice.sh never carries an `.extern`
+ * for a symbol the unit declares, so cc1's end-of-file small-size line from the
+ * s136os TU is not carried in front of the block, where it would make the read
+ * gp-relative (task #1387: the splice REFUSED the in-arm placement as ADDRESSING).
+ * The unit's one bare 2.9 read of g_guiInstance (func_002D61D8's `lw`) already
+ * follows the unit's own `.extern g_guiInstance, 16` above it and is absolute
+ * either way, so nothing else changes. */
+__asm__(".extern g_guiInstance, 16");   /* the GUI singleton, absolute lui/lw form */
+#endif
 /* GUARD (task #1387): on EE the #else body below is the image's func_002D60E8, compiled
  * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
  * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
@@ -859,7 +882,6 @@ extern void func_00342520(void *p, s32 mode);
  * g_guiInstance read through `.extern ,16` below (this body sits before the
  * unit's file-scope one; without it: 23/28, first diff @5 `lw $4,%gp_rel`) and
  * the three tables named (ROM_DATA_ADDR; as literals: 4/28, first diff @9). */
-__asm__(".extern g_guiInstance, 16");   /* the GUI singleton, absolute lui/lw form */
 extern u8 D_2615D8[];
 extern u8 D_261678[];
 extern u8 D_261730[];
@@ -1760,6 +1782,16 @@ s32 func_002D8E60(MenuWidget *obj) {
 /* Pop side of the push/pop text-table swap: cancel any in-flight load tied to
  * this command (state 3), release the map slots, then reinstall the text table
  * StreamTextTable saved into cmd+0x54 (base) / cmd+0x38 (count). Returns 0. */
+#ifndef TARGET_NATIVE
+/* ADDRESSING-MODEL DEVICE for RestorePrevTextTable's absolute lui form of g_pActiveTextTable (emits no
+ * code). At FILE SCOPE, not in the member's #else arm, so the unit's own 2.9 TU
+ * declares the symbol too: tools/ee/s136os_splice.sh never carries an `.extern`
+ * for a symbol the unit declares, so cc1's end-of-file small-size line from the
+ * s136os TU is not carried in front of the block, where it would make the read
+ * gp-relative (task #1387: the splice REFUSED the in-arm placement as ADDRESSING).
+ * No 2.9 code in this unit names the symbol bare, so nothing else changes. */
+__asm__(".extern g_pActiveTextTable, 16");
+#endif
 /* GUARD (task #1387): on EE the #else body below is the image's RestorePrevTextTable, compiled
  * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
  * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
@@ -1786,7 +1818,6 @@ extern void StopFileLoad(void);
  * lui/sw (6/27). The table pointer is stored before the count (the other order:
  * 7/27). */
 extern s16 g_fileLoadState ROM_SPLIT;
-__asm__(".extern g_pActiveTextTable, 16");
 extern void *g_pActiveTextTable;
 #ifndef TARGET_NATIVE
 extern s32 g_activeTextTableCount ROM_SPLIT;

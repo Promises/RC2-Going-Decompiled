@@ -1763,9 +1763,20 @@ s32 PlaySoundFromClassBank(s32 soundIdx, s32 flags, Moby *owner, s32 classId) {
  * MATCHED on the s136os arm (task #1387; screened by task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
  * masked): EXACT 37/37, relocations equal, with
  * the pool pointer and count read in the ROM's absolute lui/lw form (`.extern
- * ,16` below makes the assembler expand cc1's one-insn `lw` macro that way) and
+ * ,16` at file scope above makes the assembler expand cc1's one-insn `lw` macro that way) and
  * owner-first slot stamps (FACT #8947). Without the `.extern`s: 36/37, first diff
  * @1 (`lw $3,%gp_rel` vs ROM `lui $3`); stamp order reverted: 2/37. */
+#ifndef TARGET_NATIVE
+/* ADDRESSING-MODEL DEVICE for PlayGlobalSound's absolute lui form of g_globalSoundDefsPtr / g_nGlobalSoundDefs (emits no
+ * code). At FILE SCOPE, not in the member's #else arm, so the unit's own 2.9 TU
+ * declares the symbol too: tools/ee/s136os_splice.sh never carries an `.extern`
+ * for a symbol the unit declares, so cc1's end-of-file small-size line from the
+ * s136os TU is not carried in front of the block, where it would make the read
+ * gp-relative (task #1387: the splice REFUSED the in-arm placement as ADDRESSING).
+ * No 2.9 code in this unit names the symbol bare, so nothing else changes. */
+__asm__(".extern g_globalSoundDefsPtr, 16");
+__asm__(".extern g_nGlobalSoundDefs, 16");
+#endif
 /* GUARD (task #1387): on EE the #else body below is the image's PlayGlobalSound, compiled
  * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
  * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
@@ -1778,8 +1789,6 @@ S136OS_SLOT(PlayGlobalSound);
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern s32 StartSoundEmitter(SoundDef *pSoundDef, s32 flags, Moby *ownerMoby, Vec4 *pPos, s32 volScale);
 /* (end of this body's declarations) */
-__asm__(".extern g_globalSoundDefsPtr, 16");
-__asm__(".extern g_nGlobalSoundDefs, 16");
 extern void *g_globalSoundDefsPtr; /* 0x1B162C - global sound-def pool */
 extern s32 g_nGlobalSoundDefs;     /* 0x1A8BBC - count of global sound defs */
 

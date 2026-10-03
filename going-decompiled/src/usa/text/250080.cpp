@@ -361,6 +361,16 @@ s32 func_003504F0(void) {
     return func_00350840((FmvPtsQueue *)(g_pFmvArenaBase + FMV_PTS_OFS));
 }
 
+#ifndef TARGET_NATIVE
+/* ADDRESSING-MODEL DEVICE for FmvPtsQueueInit's absolute lui form of D_001B2354 (emits no
+ * code). At FILE SCOPE, not in the member's #else arm, so the unit's own 2.9 TU
+ * declares the symbol too: tools/ee/s136os_splice.sh never carries an `.extern`
+ * for a symbol the unit declares, so cc1's end-of-file small-size line from the
+ * s136os TU is not carried in front of the block, where it would make the read
+ * gp-relative (task #1387: the splice REFUSED the in-arm placement as ADDRESSING).
+ * No 2.9 code in this unit names the symbol bare, so nothing else changes. */
+__asm__(".extern D_001B2354, 16");
+#endif
 /* GUARD (task #1387): on EE the #else body below is the image's FmvPtsQueueInit, compiled
  * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
  * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
@@ -381,7 +391,6 @@ extern u8 *D_1B2354;
  * sw` pair: an ADDRESSING-MODEL DEVICE, `.extern ,16` makes the assembler
  * expand cc1's one-insn `sw` macro that way. */
 #ifndef TARGET_NATIVE
-__asm__(".extern D_001B2354, 16");
 extern u8 *D_001B2354;
 extern void func_00283438(void *p, s32 n);
 #define FMV_PTS_DECODE_BUF D_001B2354
