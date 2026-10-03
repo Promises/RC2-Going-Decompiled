@@ -5,17 +5,20 @@
  * offsets, and reads globals back through their arena symbols — proving the
  * decomper's arena placement and the snapshot<->arena mapping on the host.
  *
- * Arena: base 0x138180, g_dataArena == __gamedata_start; symbol X lives at
- * g_dataArena + (rom_addr(X) - 0x138180). Snapshot region at ROM R seeds to
- * g_dataArena + (R - 0x138180).
+ * Arena: g_dataArena == __gamedata_start; symbol X lives at
+ * g_dataArena + (rom_addr(X) - ARENA_BASE). Snapshot region at ROM R seeds to
+ * g_dataArena + (R - ARENA_BASE). ARENA_BASE is the generated arena's ROM base
+ * (arena_map.txt header). It moves when gen_arena.py places a lower global, so
+ * it is derived here from a ROM-named anchor, never hardcoded (task #1419).
  */
 #include <stdio.h>
 
 extern unsigned char g_dataArena[];   /* == __gamedata_start (arena.ld) */
-extern int g_nGameState;              /* arena +0x70A30 */
-extern int g_boltCount;               /* arena +0x6F880 */
+extern int g_nGameState;
+extern int g_boltCount;
+extern unsigned char D_138180[];      /* ROM 0x138180 by its name: the anchor */
 
-#define ARENA_BASE 0x138180u
+#define ARENA_BASE (0x138180u - (unsigned)(D_138180 - g_dataArena))
 
 static int seed(const char *path, unsigned rom, unsigned len)
 {
