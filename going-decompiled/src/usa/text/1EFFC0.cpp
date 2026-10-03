@@ -183,9 +183,9 @@ void PatchTfragPacketTex0(void) {
  * apply to the image body. */
 /* ADDRESSING-MODEL DEVICES (RULING #8620; FACT #8036 equate form, as
  * g_vramAllocCursorGp above): BuildTfragDrawSegment stores g_pTfragSegmentOpenTag
- * absolute (0x2F1A90 lui $1/sw) although the symbol is otherwise gp-addressable,
+ * absolute (0x2F0220 lui $1 / 0x2F0224 sw) although the symbol is otherwise gp-addressable,
  * and stores g_frameDmaCursor %gp_rel in the delay slot of its first jal
- * (0x2F1AA0) although the unit sizes it 16 (absolute). Each store names a
+ * (0x2F0240, slot of jal MatrixIdentityVu0) although the unit sizes it 16 (absolute). Each store names a
  * distinct assembler symbol EQUATED to the real one with the size it needs; the
  * relocations name the real symbols and nothing reaches the symbol table. */
 #ifndef TARGET_NATIVE
