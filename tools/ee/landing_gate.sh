@@ -213,6 +213,12 @@
 #            whole-tree time; on a clean tree whose NATIVE inputs equal the
 #            base's it is not run (no C change, nothing new possible). Fails
 #            closed: rc 2, or rc 0 without the lint's PASS line, is a FAIL.
+#   NATIVE-ARENA (task #1431, on #1419) tools/native/runtime/arena/
+#            regen_arena.sh --check: FAILS naming each global a TARGET_NATIVE
+#            usa unit references that arena.ld does not PROVIDE and
+#            arena_unresolved.txt does not list, and each stale arena artefact.
+#            Every run (~24 s, host-only): the population derives from src/, so
+#            a src-only landing can reopen the gap. Still NOT a link.
 #   DLISITES (task #1116 GATE-F item a, RULING #8549 rev 2/3) tools/ee/
 #            ps2eeas_dli_sites.py --ps2eeas over tools/ee/ps2eeas_dli_sites.txt,
 #            the allowlist asm_unit.sh trusts: every row must load its value
@@ -618,6 +624,39 @@ check_asmunit() {
 }
 # asm_unit.sh's per-unit transform line, whole-line anchored (task #1205)
 ASMUNIT_DLI_RE='^asm_unit\.sh: dli: [0-9]+ transforms \([0-9]+ allowlist rows for (usa|eu)\)$'
+
+# ---------------------------------------------------------- NATIVE-ARENA ----
+# check_arena [REGEN_SCRIPT] — the NATIVE-ARENA row (task #1431, on #1419's
+# check): tools/native/runtime/arena/regen_arena.sh --check FAILS when a data
+# global some TARGET_NATIVE usa unit references is neither PROVIDEd by the
+# committed arena.ld nor listed in arena_unresolved.txt, when linkgap.sh drops a
+# unit, or when a committed arena artefact would regenerate differently. Until
+# #1419 nothing ran it and arena.ld went 1033 globals short unseen.
+# Run on EVERY gate, not only when tools/native/ changes: the population is
+# derived from going-decompiled/src, so a src-only landing (a new #else body
+# naming a fresh global) is exactly what reopens the gap. Cost measured on the
+# M1 at 8727b24b: ~24 s a run, linkgap recompiling all 29 usa units each time
+# (no cache). Host-only, no VM, writes nothing. Independent of verify_link.sh
+# (no link). Fails CLOSED: no script, or a run with no summary line, is a FAIL.
+# --selftest arm (28) passes a scratch copy whose arena.ld lacks one PROVIDE.
+check_arena() {
+  local rs=${1:-tools/native/runtime/arena/regen_arena.sh} scan="$OUT/arena_check.txt" rc sum gap stale
+  say "== NATIVE-ARENA: $rs --check — every global a TARGET_NATIVE usa unit references is PROVIDEd by arena.ld or listed in arena_unresolved.txt, and the arena artefacts are current (task #1419, #1431; host-only, ~24 s; NOT a link) (scan: $scan)"
+  [ -f "$rs" ] || { fail "NATIVE-ARENA: $rs does not exist — the row cannot run"; return; }
+  bash "$rs" --check > "$scan" 2>&1; rc=$?
+  sum=$(/usr/bin/grep -E '^regen_arena --check: live globals [0-9]+, PROVIDEd [0-9]+, unresolved [0-9]+, neither [0-9]+$' "$scan" | tail -1)
+  sum=${sum#regen_arena --check: }
+  gap=$(awk '/^FAIL — referenced by a native unit/ { f = 1; next } f && /^  / { sub(/^ +/, ""); print; next } { f = 0 }' "$scan" | tr '\n' ' ' | sed 's/ $//')
+  stale=$(sed -nE 's/^FAIL — ([^ ]+) is stale .*/\1/p' "$scan" | tr '\n' ' ' | sed 's/ $//')
+  if [ "$rc" = 0 ] && [ -n "$sum" ] && [ "${sum##*neither }" = 0 ] && /usr/bin/grep -q '^PASS — ' "$scan"; then
+    ok "NATIVE-ARENA: $sum; artefacts current"
+  elif [ "$rc" = 1 ] && [ -n "$sum" ] && { [ -n "$gap" ] || [ -n "$stale" ]; }; then
+    fail "NATIVE-ARENA: $sum — referenced, neither PROVIDEd nor listed unresolved: ${gap:-none} ; stale artefact(s): ${stale:-none} — regenerate with $rs and commit the result"
+  else
+    fail "NATIVE-ARENA: $rs --check could not run, or printed no summary/verdict (rc $rc, summary '${sum:-none}'): $(head -c 300 "$scan" | tr '\n' ' ')"
+  fi
+  say "     members:"; sed 's/^/       /' "$scan"
+}
 
 # --------------------------------------------------------------- NATIVE ----
 # native_scan TREE OUTFILE — compile every TARGET_NATIVE unit under TREE's
@@ -1284,6 +1323,7 @@ run_gate() {  # run_gate REGION [--no-build] [--strict]
   check_gmodel "$REGION"
   check_native
   check_decldef
+  check_arena
   check_dlisites
   if [ $build = 1 ]; then
     do_build
@@ -1526,6 +1566,7 @@ selftest() {
   selftest_regression_gate "$T" || bad=1
   selftest_asmunit_selftest "$T" || bad=1
   selftest_decldef "$T" || bad=1
+  selftest_arena "$T" || bad=1
 
   say "-- (14) the real gate on this tree (--no-build, the build above) must PASS"
   STRICT=0
@@ -1812,7 +1853,7 @@ selftest_dirty_gate() {
     || { say "SELFTEST-BROKEN: (20) could not create its scratch repo in $D/repo"; return 1; }
   dirty_gate_run() {  # dirty_gate_run OUTFILE — the real run_gate in $D/repo, rows other than DIRTY stubbed
     ( cd "$D/repo" || exit 2
-      for f in check_flags split_inputs check_shadow check_orphans check_libgcc check_gmodel check_native check_decldef check_dlisites do_build check_tree check_asmunit check_cc1args measure_row check_row check_noprovide; do
+      for f in check_flags split_inputs check_shadow check_orphans check_libgcc check_gmodel check_native check_decldef check_arena check_dlisites do_build check_tree check_asmunit check_cc1args measure_row check_row check_noprovide; do
         eval "$f() { say \"     (arm 20 stub: $f)\"; }"
       done
       region_vars() { REGION=$1; OUT="$D/out"; mkdir -p "$OUT"; }
@@ -2235,7 +2276,7 @@ selftest_verdict_annotation() {
   if [ -z "$NATIVE_PROBE_C" ] || [ -z "$NATIVE_PROBE_TOOLS" ]; then say "SELFTEST-BROKEN: (21) needs (u')/(u'')'s probe chains, which arm (18) did not build (NATIVE inputs dirty?)"; return 1; fi
   eval "$(declare -f check_native | sed '1s/^check_native/annot_real_check_native/')"
   annot_run() {  # annot_run OUTFILE BASE TIP — the real run_gate, NATIVE pinned to BASE, tip TIP, upstream BASE
-    ( for f in check_dirty check_flags split_inputs check_shadow check_orphans check_libgcc check_gmodel check_decldef check_dlisites do_build check_tree check_asmunit check_cc1args measure_row check_row check_noprovide; do
+    ( for f in check_dirty check_flags split_inputs check_shadow check_orphans check_libgcc check_gmodel check_decldef check_arena check_dlisites do_build check_tree check_asmunit check_cc1args measure_row check_row check_noprovide; do
         eval "$f() { say \"     (arm 21 stub: $f)\"; }"
       done
       region_vars() { REGION=$1; OUT="$D/out"; mkdir -p "$OUT"; }
@@ -2598,6 +2639,41 @@ selftest_decldef() {
   decldef_leg "fired (27) base pinned to the tip, STRICT=0" "$s32" kind 0 0 1 '^WARN DECLDEF: base == tip, VACUOUS' 'decl-def-lint diff'
   unset -f decldef_leg
   rm -rf "$D/tip"; FAILED=0; WARNED=0; STRICT=0
+  return $b
+}
+
+# selftest_arena OUTDIR — arm (28), task #1431. A scratch tree holding what
+# regen_arena.sh and linkgap.sh read (tools/native, the cmp manifest, usa src,
+# include, symbol_addrs and asm); both scripts take their root from their own
+# path, so the copy measures the scratch tree. Legs: control — the unmutated
+# copy passes, neither 0; fired — ONE PROVIDE deleted from the copy's arena.ld
+# (g_bPalMode, #1421's seed, else the first) FAILs naming exactly that symbol
+# and arena.ld stale; closed — an absent script FAILs. ~50 s (two linkgap runs).
+selftest_arena() {
+  local T="$1" b=0 A rs ld v vn n0 n1; A="$T/arenatree"
+  say "-- (28) NATIVE-ARENA (#1431): a scratch copy of the arena's inputs -> check_arena passes, neither 0; the copy with ONE PROVIDE deleted from arena.ld -> FAIL naming exactly that symbol and arena.ld stale; an absent regen_arena.sh -> FAIL"
+  rm -rf "$A"; mkdir -p "$A/tools/ee/eetest/cmp" "$A/going-decompiled/src" "$A/going-decompiled/asm" "$A/going-decompiled/symbol_addrs"
+  cp -R tools/native "$A/tools/native" && cp tools/ee/eetest/cmp/manifest.txt "$A/tools/ee/eetest/cmp/" \
+    && cp -R going-decompiled/src/usa "$A/going-decompiled/src/usa" && cp -R going-decompiled/include "$A/going-decompiled/include" \
+    && cp -R going-decompiled/symbol_addrs/usa "$A/going-decompiled/symbol_addrs/usa" && cp -R going-decompiled/asm/usa "$A/going-decompiled/asm/usa" \
+    || { say "SELFTEST-BROKEN: (28) could not build the scratch tree $A"; return 1; }
+  rs="$A/tools/native/runtime/arena/regen_arena.sh"; ld="$A/tools/native/runtime/arena/arena.ld"
+  FAILED=0; WARNED=0; check_arena "$rs" > "$T/arena_clean.txt"
+  if [ "$FAILED" = 0 ] && /usr/bin/grep -qE '^OK   NATIVE-ARENA: live globals [0-9]+, PROVIDEd [0-9]+, unresolved [0-9]+, neither 0; ' "$T/arena_clean.txt"; then ok "control (28): $(/usr/bin/grep '^OK   NATIVE-ARENA' "$T/arena_clean.txt" | sed 's/^OK   //')"
+  else say "SELFTEST-FAIL (28) the unmutated scratch copy does not pass NATIVE-ARENA (FAILED=$FAILED) — the copy is not faithful, so the seed below would prove nothing:"; show < <(/usr/bin/grep -E '^(OK|FAIL)' "$T/arena_clean.txt" | sed 's/^/  inner| /'); b=1; fi
+  v=$(/usr/bin/grep -E '^PROVIDE\(g_bPalMode = ' "$ld" | head -1); [ -n "$v" ] || v=$(/usr/bin/grep -E '^PROVIDE\(' "$ld" | head -1)
+  vn=$(printf '%s' "$v" | sed -E 's/^PROVIDE\(([A-Za-z0-9_]+) = .*/\1/')
+  n0=$(/usr/bin/grep -c '^PROVIDE(' "$ld" || true)
+  /usr/bin/grep -vxF "$v" "$ld" > "$ld.seeded" && mv "$ld.seeded" "$ld"
+  n1=$(/usr/bin/grep -c '^PROVIDE(' "$ld" || true)
+  if [ -z "$vn" ] || [ "$n1" != $((n0 - 1)) ]; then say "SELFTEST-BROKEN: (28) the seed did not delete exactly one PROVIDE ('$v': $n0 -> $n1)"; return 1; fi
+  FAILED=0; WARNED=0; check_arena "$rs" > "$T/arena_seeded.txt"
+  if [ "$FAILED" = 1 ] && /usr/bin/grep -qE "^FAIL NATIVE-ARENA: live globals [0-9]+, PROVIDEd $n1, unresolved [0-9]+, neither 1 — referenced, neither PROVIDEd nor listed unresolved: $vn ; stale artefact\\(s\\): arena\\.ld — " "$T/arena_seeded.txt"; then ok "fired (28): PROVIDE($vn) deleted ($n0 -> $n1) -> $(/usr/bin/grep '^FAIL NATIVE-ARENA' "$T/arena_seeded.txt" | sed -E 's/^FAIL //; s/ — regenerate.*//')"
+  else say "SELFTEST-FAIL (28) deleting PROVIDE($vn) did not FAIL NATIVE-ARENA naming exactly $vn (FAILED=$FAILED):"; show < <(/usr/bin/grep -E '^(OK|FAIL)' "$T/arena_seeded.txt" | sed 's/^/  inner| /'); b=1; fi
+  FAILED=0; WARNED=0; check_arena "$A/tools/native/runtime/arena/t1431_absent.sh" > "$T/arena_absent.txt"
+  if [ "$FAILED" = 1 ] && /usr/bin/grep -q '^FAIL NATIVE-ARENA: .*t1431_absent.sh does not exist' "$T/arena_absent.txt"; then ok "fired (28): an absent regen_arena.sh is a FAIL, not a skip"
+  else say "SELFTEST-FAIL (28) an absent regen_arena.sh did not FAIL (FAILED=$FAILED)"; b=1; fi
+  FAILED=0; WARNED=0
   return $b
 }
 
