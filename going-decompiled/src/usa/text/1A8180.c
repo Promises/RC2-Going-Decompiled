@@ -4998,11 +4998,36 @@ extern s32  func_002AE460(void *self, Moby *obj, Vec4 *arg3, Vec4 *arg4,
  * (+0x22), adds the source offset clamped to unit length (func_002AD860). Always
  * returns 1 once a source exists.
  */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 76.16%
-   -> UNKNOWN-@1: ROM `(none)` vs `sd s2,160(sp)` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE2D8);
+/* MATCHED on the s136os arm (task #1375): byte-exact under SN 2.95.3 v1.36
+ * -fopt-stack (verify_match_unit + image cmp). Levers (FACT filed with task
+ * #1375):
+ *  - the source offset is copied as a QVec (u_long128-aligned) so cc1 emits the
+ *    ROM's lq/sq pair (0x2AE388) instead of an unaligned ldl/ldr/sdl/sdr copy of
+ *    a plain Vec4. That alone also turns NOTE #8992's first diff (the $s2/$s3
+ *    swap of obj and src, `sd s2,160(sp)` | `sd s3,168(sp)`) into the ROM's;
+ *  - CODEGEN FENCES (RULING #8483: empty templates, they emit nothing): `from`
+ *    and `to` are passed through operand-tied fences so the copy addresses stay
+ *    in registers (`addiu v1,s2,16` / `addiu s0,sp,0x80`, then lq/sq at offset
+ *    0) instead of being folded into lq 16(s2) / sq 128(sp); and an input fence
+ *    on `to` after the copy keeps the sq ahead of the call, out of its delay
+ *    slot (the ROM's slot holds `move a0,s0`);
+ *  - REGISTER-PIN DEVICE (RULING #8598, EE arm only, empty on native): `from`
+ *    is pinned to $3. With every other lever in place, cc1 picks $2 for it and
+ *    $3 for the loaded qword, the ROM the reverse (0x2AE380/0x2AE388) — the
+ *    one residual it closes. */
+/* GUARD (task #1375): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002AE2D8)
+S136OS_SLOT(func_002AE2D8);
 #else
+#ifndef TARGET_NATIVE
+#define AE2D8_REG_V1 __asm__("$3")
+#else
+#define AE2D8_REG_V1
+#endif
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern void func_00283A48(Vec4 *out, Vec4 *v, Vec4 *m);
@@ -5038,10 +5063,17 @@ s32 func_002AE2D8(Moby *self, Moby *obj, Vec4 *point, Vec4 *rotIn,
         return 1;
     }
     if (self->classSlot < obj->classSlot) {
-        Vec4 srcOffset = *(Vec4 *)(src + 0x10);
+        QVec srcOffset;
+        register QVec *from AE2D8_REG_V1 = (QVec *)(src + 0x10);
+        QVec *to;
 
-        func_002AD860(&srcOffset, 1.0f);
-        Vec4AddVu0(outPos, outPos, &srcOffset);
+        __asm__("" : "+r"(from));   /* codegen fences, see above */
+        to = &srcOffset;
+        __asm__("" : "+r"(to));
+        to->q = from->q;
+        __asm__("" : : "r"(to));
+        func_002AD860(&to->v, 1.0f);
+        Vec4AddVu0(outPos, outPos, &to->v);
     }
     return 1;
 }

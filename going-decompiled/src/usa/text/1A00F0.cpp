@@ -280,8 +280,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0480);
 /* func_002A04D8 — pose and average two collision-mesh keyframe vectors for a
  * moby into dst. Locates the class-header entry (header at obj+0x24, base index
  * at header+0x2C, plus arg1) and takes hi = max of the two frame counts at
- * entry+0x6 / entry+0xE. When hi >= 0 it skins the collision mesh
- * (SkinMobyCollisionMesh) into the SPR cache. It then loads the two packed
+ * entry+0x6 / entry+0xE. When hi >= 0 it skins the moby's collision mesh
+ * (SkinMobyCollisionMesh(obj, hi + 1, 0x80000000)) into the SPR cache. It then loads the two packed
  * keyframe vectors (func_00283AE0 -> vecA/vecB, w set to 1), optionally samples
  * the per-frame scratchpad vectors at 0x70000000 + count*64 (func_00283A70),
  * scales each by (obj+0x2C)/1024, applies the moby's 3x3 rotation (func_00283A48
@@ -289,7 +289,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0480);
  * (add then *0.5), and stores the Vec3DistVu0 scalar into dst.w. Callee roles
  * func_00283A48/func_00283AE0/Vec3DistVu0 UNCONFIRMED (named by shape); helper
  * signatures cross-referenced to text/183558.c (scale families take f32 2nd).
- * The matching build keeps the asm; faithful TARGET_NATIVE coverage arm. */
+ * Params: obj — the moby; arg1 — entry index past the header's base; dst —
+ * receives the midpoint (xyz) and the half-span distance (w). No return. */
 #ifdef TARGET_NATIVE
 extern void Vec4AddVu0(void *dst, void *a, void *b);
 extern void Vec4ScaleVu0(void *dst, f32 s, void *src);
@@ -297,15 +298,33 @@ extern void func_00283A48(void *out, void *v, void *m);
 extern void func_00283A70(void *out, void *v, void *m);
 extern void func_00283AE0(void *dst, u64 packed);
 extern f32  Vec3DistVu0(void *a, void *b);
-extern void SkinMobyCollisionMesh(void *entry, s32 count, u32 flags);
+extern void SkinMobyCollisionMesh(void *moby, s32 count, u32 flags);
 #endif
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A04D8);
+/* MATCHED on the s136os arm (task #1375): byte-exact under SN 2.95.3 v1.36
+ * -fopt-stack (verify_match_unit + image cmp). Levers, each measured by undoing
+ * it alone (FACT filed with task #1375):
+ *  - SkinMobyCollisionMesh gets the MOBY (`obj`), not the entry: the ROM leaves
+ *    $a0 = obj untouched for that call (0x2A04B4), as 1A8180.c's other caller
+ *    passes its moby. The earlier arm passed `entry` — a semantic bug, not only
+ *    a codegen one;
+ *  - hi is an s32 maximum written `hi = a; if (hi < b) hi = b;`, which the ROM
+ *    lowers to slt + movn (0x2A04A0) with no s16 re-truncation;
+ *  - the entry address is formed as `hdr + base*16`, then `+= arg1*16 + 0x40`
+ *    (the ROM's two adds into $s1, 0x2A0490);
+ *  - vecA[3] is written before vecB[3]; cc1 emits them in the ROM's reverse
+ *    order (last-store-first, FACT #8947). */
+/* GUARD (task #1375): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002A04D8)
+S136OS_SLOT(func_002A04D8);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
-extern void SkinMobyCollisionMesh(void *entry, s32 count, u32 flags);
+extern void SkinMobyCollisionMesh(void *moby, s32 count, u32 flags);
 extern f32 Vec3DistVu0(void *a, void *b);
 extern void Vec4AddVu0(void *dst, void *a, void *b);
 extern void Vec4ScaleVu0(void *dst, f32 s, void *src);
@@ -316,20 +335,25 @@ extern void func_00283AE0(void *dst, u64 packed);
 void func_002A04D8(void *obj, s32 arg1, void *dst) {
     u8 *o = (u8 *)obj;
     u8 *hdr = *(u8 **)(o + 0x24);
-    u8 *entry = hdr + *(u8 *)(hdr + 0x2C) * 16 + arg1 * 16 + 0x40;
-    s16 a = *(s16 *)(entry + 0x6);
-    s16 b = *(s16 *)(entry + 0xE);
-    s16 hi = (a < b) ? b : a;
+    u8 *entry = hdr + *(u8 *)(hdr + 0x2C) * 16;
+    s32 hi;
+    s32 b;
     f32 vecA[4];
     f32 vecB[4];
 
+    entry += arg1 * 16 + 0x40;
+    hi = *(s16 *)(entry + 0x6);
+    b = *(s16 *)(entry + 0xE);
+    if (hi < b) {
+        hi = b;
+    }
     if (hi >= 0) {
-        SkinMobyCollisionMesh(entry, hi + 1, 0x80000000);
+        SkinMobyCollisionMesh(obj, hi + 1, 0x80000000);
     }
     func_00283AE0(vecA, *(u64 *)(entry + 0));
     func_00283AE0(vecB, *(u64 *)(entry + 8));
-    vecB[3] = 1.0f;
     vecA[3] = 1.0f;
+    vecB[3] = 1.0f;
     if (hi >= 0) {
         func_00283A70(vecA, vecA, (void *)(0x70000000 + (*(s16 *)(entry + 0x6) << 6)));
         func_00283A70(vecB, vecB, (void *)(0x70000000 + (*(s16 *)(entry + 0xE) << 6)));
