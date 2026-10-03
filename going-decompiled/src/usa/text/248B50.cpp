@@ -1,5 +1,17 @@
 #include "common.h"
 
+/* R5900_SHORT_LOOP_PAD1(v, next): one `nop` emitted under noreorder, tied to the
+ * loop's live value by its operands. A SCHEDULING DEVICE (RULING #8435; the pad
+ * is the R5900 short-loop pad, FACT #7918 / #7937 / #8434): the ROM pads short
+ * loops with nops before the backward branch, which neither cc1 nor our
+ * assembler inserts. EE arm only; on native it is nothing. */
+#ifndef TARGET_NATIVE
+#define R5900_SHORT_LOOP_PAD1(v, next) \
+    __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
+#else
+#define R5900_SHORT_LOOP_PAD1(v, next) ((void)0)
+#endif
+
 /*
  * text/248B50 — first GUI-block sub-chunk (carve-pipeline pick #3a,
  * 2026-06-13; vaddr 0x348BD0..0x34C007, 65 fns): a run of single-field GUI
@@ -536,9 +548,11 @@ void GuiMenuListDraw(GuiWidget *self) {
 #endif
 
 /* func_00349200: build a 6-row list widget — init seven type-B sub-elements
- * (the row container at +0x218 plus six rows at +0x4C..+0x1C8, stride 0x58 is
- * irrelevant here as each is a fixed offset) then run type-C init across the
- * seven 0x58-stride row slots starting at +0x218; returns the widget.
+ * (the widget itself at +0 plus six at +0x4C..+0x1C8, stride 0x4C) then run
+ * type-C init across the seven 0x58-stride row slots starting at +0x218;
+ * returns the widget. (The ROM passes the widget unchanged as the first call's
+ * argument; +0x218 is only the row base, set up in that call's delay slot. The
+ * #else used to pass +0x218 there, which the screen showed was wrong.)
  * WALL: 4 callee saves ($16,$17,$18,$19) — the original packs them into a 0x30
  * frame at 8-byte slot spacing; the pinned cc1 reserves 16-byte save slots. NOT
  * oracle-seedable: its GuiElementInitTypeB/C callees store &D_1ADA38/&D_1AD9F8
@@ -558,12 +572,23 @@ extern void GuiElementInitTypeC(void *element);
  * cc1 2.96-ee-001003-1): sdk29 81.67% / engine96 76.00%.
  * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 17/36 words differ;
  * frozen-.s census: 5 callee GPR saves, 0 fp saves.
- * Residual: PACKED-SAVE (5 callee GPR saves) — 4 of the 17 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated. */
+ * Residual: PACKED-SAVE (5 callee GPR saves) — 4 of the 17 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated.
+ * SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked; a candidate, NOT match evidence): EXACT 39/39, relocations equal. Each
+ * of four levers is needed (screen with that one undone): the first call's
+ * argument `w` (20/39), the ROM's two R5900 short-loop pad nops in the type-C loop
+ * (R5900_SHORT_LOOP_PAD1, scheduling device, RULING #8435; 12/39), the empty fence
+ * after the call (RULING #8483; 3/39) and `row` pinned to $17 (15/39). The loop
+ * steps its counter before the call, as GuiManagerInitListRows (24D728) does. */
 GuiWidget *func_00349200(GuiWidget *w) {
+#ifndef TARGET_NATIVE
+    register char *row __asm__("$17"); /* REGISTER-PIN DEVICE (RULING #8598) */
+#else
     char *row;
+#endif
     s32 i;
 
-    GuiElementInitTypeB((char *)w + 0x218);
+    GuiElementInitTypeB(w);
     GuiElementInitTypeB((char *)w + 0x4C);
     GuiElementInitTypeB((char *)w + 0x98);
     GuiElementInitTypeB((char *)w + 0xE4);
@@ -572,10 +597,15 @@ GuiWidget *func_00349200(GuiWidget *w) {
     GuiElementInitTypeB((char *)w + 0x1C8);
 
     row = (char *)w + 0x218;
-    for (i = 6; i >= 0; i--) {
+    i = 6;
+    do {
+        i--;
         GuiElementInitTypeC(row);
+        __asm__ __volatile__("");
+        R5900_SHORT_LOOP_PAD1(row, row);
+        R5900_SHORT_LOOP_PAD1(row, row);
         row += 0x58;
-    }
+    } while (i != -1);
     return w;
 }
 #endif
