@@ -1362,6 +1362,14 @@ extern s32 func_0011AC60(s32 sema);
 extern s32 func_0011AC40(s32 sema);
 /* (end of this body's declarations) */
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 78.06% / engine96 70.31%. Residual: PACKED-SAVE (9 callee saves) + 72 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
+/* SCREEN (task #1395, s136 solo, relocated fields masked; not match evidence):
+ * 121/127 edit 80 -> 88/127 edit 42 from three changes. The pts quotient is
+ * written as the division (the ROM carries cc1's slt/movn expansion); `emitted`
+ * is initialised at its declaration (the ROM zeroes $23 in the prologue, before
+ * the WaitSema); and the tag address is passed sign-extended (no (u32) cast; the
+ * ROM has no dsll32/dsrl32 zero-extension). Residual REGALLOC: the ROM colours
+ * emitIdx/i/obj as $16/$17/$18, cc1 here as $18/$16/$17. Neutral spellings
+ * tried: `outstanding + (ringSize - 1)`, no outer `if (nTags > 0)`, obj for dmaq. */
 s32 func_00351910(void *dmaq) {
     extern char D_1AE800[];   /* FMV "IPU_TO ring not armed" error string */
     s32 *obj = (s32 *)dmaq;
@@ -1375,7 +1383,7 @@ s32 func_00351910(void *dmaq) {
     s32 ptsQuot;          /* $9  = rounded-toward-zero ptsAccum / 0x800 */
     u32 chcr;             /* $21 = ch4 CHCR snapshot */
     u32 madr;             /* $5  = ch4 MADR snapshot */
-    s32 emitted;          /* $23 = flag: at least one tag emitted */
+    s32 emitted = 0;      /* $23 = flag: at least one tag emitted */
     s32 i;                /* $17 = emit-loop counter */
 
     func_0011AC60(obj[0x10]);                 /* WaitSema (acquire) */
@@ -1384,7 +1392,6 @@ s32 func_00351910(void *dmaq) {
         return 0;
     }
 
-    emitted = 0;
     func_00351550(5);                          /* suspend ch4 (IPU_TO) */
     chcr = *(volatile u32 *)0x1000B400;        /* ch4 CHCR */
     madr = *(volatile u32 *)0x1000B410;        /* ch4 MADR */
@@ -1401,9 +1408,9 @@ s32 func_00351910(void *dmaq) {
     obj[3] = head;
     emitIdx = outstanding % ringSize;
 
-    /* ptsAccum / 0x800, rounded toward zero (bias +0x7FF when negative) */
+    /* ptsAccum / 0x800, rounded toward zero */
     ptsAccum = obj[5];
-    ptsQuot = (ptsAccum >= 0 ? ptsAccum : ptsAccum + 0x7FF) >> 11;
+    ptsQuot = ptsAccum / 0x800;
     nTags = ptsQuot;
     obj[5] = ptsAccum - ptsQuot * 0x800;       /* keep the remainder */
 
@@ -1412,7 +1419,7 @@ s32 func_00351910(void *dmaq) {
         s32 idx = (outstanding + ringSize - 1) % ringSize;
         emitted = 1;
         func_003515C0((u64 *)(obj[1] + idx * 0x10),
-                      (u64)(u32)(obj[0] + idx * 0x800), 3, 0x80);
+                      (u64)(obj[0] + idx * 0x800), 3, 0x80);
     }
 
     if (nTags > 0) {
@@ -1420,7 +1427,7 @@ s32 func_00351910(void *dmaq) {
             /* last tag of the batch terminates the chain (qwc 0) */
             u64 qwc = (i != nTags - 1) ? 3 : 0;
             func_003515C0((u64 *)(obj[1] + emitIdx * 0x10),
-                          (u64)(u32)(obj[0] + emitIdx * 0x800), qwc, 0x80);
+                          (u64)(obj[0] + emitIdx * 0x800), qwc, 0x80);
             emitIdx = (emitIdx + 1) % obj[2];
         }
     }
