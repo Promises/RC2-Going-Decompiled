@@ -672,6 +672,21 @@ native_left_overrides() {
            sub(/^Native-Left:[ \t]+/, "") { u = $1; r = $0; sub(/^[^ \t]+[ \t]*/, "", r); sub(/[ \t]+$/, "", r); print u "\t" r "\t" src }'
 }
 
+# sha_sum BITS FILE... — one `<hex>  <path>` row per FILE, SHA-BITS (1 or 256),
+# from whichever tool this host has (task #1390): macOS ships the Perl
+# `shasum`; a GNU host may carry only coreutils' sha1sum/sha256sum (on Arch,
+# shasum is perl's /usr/bin/core_perl/shasum, on PATH only in a shell that
+# sourced /etc/profile). Both print the same two fields, which native_renames'
+# awk keys on. Neither tool -> a named error on stderr and rc 2, never an empty
+# digest: two empty digests compare equal, and the inputs check then read OK
+# with no hash at all (the shape of tools/ee/mount_sync.sh's digest()).
+sha_sum() {
+  local bits=$1; shift
+  if command -v shasum >/dev/null 2>&1; then shasum -a "$bits" -- "$@"
+  elif command -v "sha${bits}sum" >/dev/null 2>&1; then "sha${bits}sum" -- "$@"
+  else echo "landing_gate: neither shasum nor sha${bits}sum on this host — cannot digest $*" >&2; return 2; fi
+}
+
 # native_renames BASE_TREE TIP_TREE "LEFT" "ARRIVED" — one `= <old> <new>` row
 # per unit that left the base's population and arrived in the tip's with
 # IDENTICAL bytes IN THE SAME REGION (units are region-qualified paths under
@@ -680,11 +695,17 @@ native_left_overrides() {
 # ANOTHER region is not paired (task #984, watcher-2: a unit leaving src/usa is
 # a USA shrink whatever lands in src/eu, RULING #5339); it is emitted as an
 # `x <old> <new>` row, a hint for the FAIL message only.
+# A digest that cannot run returns 2 with nothing on stdout: the caller FAILs
+# the row rather than reading every departure as unpaired (task #1390).
 native_renames() {
   [ -n "$3" ] && [ -n "$4" ] || return 0
+  local l a
   # shellcheck disable=SC2086  # one unit per word; no unit path holds a space
-  { (cd "$1/going-decompiled/src" && shasum $3) | sed 's/^/L /'
-    (cd "$2/going-decompiled/src" && shasum $4) | sed 's/^/A /'
+  l=$(cd "$1/going-decompiled/src" && sha_sum 1 $3) || return 2
+  # shellcheck disable=SC2086
+  a=$(cd "$2/going-decompiled/src" && sha_sum 1 $4) || return 2
+  { printf '%s\n' "$l" | sed 's/^/L /'
+    printf '%s\n' "$a" | sed 's/^/A /'
   } | awk 'function region(p) { sub(/\/.*/, "", p); return p }
            $1 == "L" { k = $2 SUBSEP region($3); l[k] = l[k] " " $3; x[$2] = x[$2] " " $3; next }
            $1 != "A" { next }
@@ -889,7 +910,8 @@ check_native() {
   # does not pair, because the unit still left its own region's population.
   local left ovr="$OUT/native_left_overrides.txt" u excused="" unexcused="" unused pairs renames cross
   left=$(LC_ALL=C comm -23 "$b.all" "$t.all")
-  renames=$(native_renames "$basetree" "$tip" "$left" "$(LC_ALL=C comm -13 "$b.all" "$t.all")")
+  renames=$(native_renames "$basetree" "$tip" "$left" "$(LC_ALL=C comm -13 "$b.all" "$t.all")") \
+    || fail "NATIVE: the byte-identical rename pairing could not run (no SHA-1 tool, see the stderr line above) — every departure below is reported UNPAIRED, which a rename may not be (task #1390)"
   pairs=$(printf '%s\n' "$renames" | awk '$1 == "=" { print $2, $3 }')
   cross=$(printf '%s\n' "$renames" | awk '$1 == "x" { print $2, $3 }')
   if [ -n "$pairs" ]; then
@@ -937,13 +959,21 @@ worktree_hash() {
 
 # inputs_rows — one `input <name> <bytes> <sha256>` row per gitignored link
 # input of $BUILD (absent -> `input <name> absent -`), the members the TREE
-# hash cannot see (FACT #7324).
+# hash cannot see (FACT #7324). A file no SHA-256 tool could digest gets `?`,
+# which check_inputs FAILs on whichever side it appears (task #1390).
 inputs_rows() {
-  local f
+  local f h
   for f in $GATE_INPUTS; do
-    if [ -f "$BUILD/$f" ]; then printf 'input %s %s %s\n' "$f" "$(wc -c < "$BUILD/$f" | tr -d ' ')" "$(shasum -a 256 "$BUILD/$f" | cut -d' ' -f1)"; else printf 'input %s absent -\n' "$f"; fi
+    if [ -f "$BUILD/$f" ]; then
+      h=$(sha_sum 256 "$BUILD/$f") && h=${h%% *} || h=
+      is_sha256 "$h" || h='?'
+      printf 'input %s %s %s\n' "$f" "$(wc -c < "$BUILD/$f" | tr -d ' ')" "$h"
+    else printf 'input %s absent -\n' "$f"; fi
   done
 }
+is_sha256() { [ ${#1} = 64 ] && case $1 in *[!0-9a-f]*) return 1 ;; esac; }
+# input_row_digested "<bytes> <sha256>" — an absent file, or a real digest
+input_row_digested() { [ "$1" = "absent -" ] || is_sha256 "${1#* }"; }
 
 record_tree() {  # record_tree OUTFILE — what the build about to run is built from
   { printf 'head=%s\nhead_tree=%s\nwork_tree=%s\ndirty=%s\n' "$(git rev-parse HEAD)" "$(git rev-parse 'HEAD^{tree}')" "$(worktree_hash)" "$(git status --porcelain --no-renames | wc -l | tr -d ' ')"; inputs_rows; } > "$1"
@@ -957,6 +987,7 @@ check_inputs() {
     want=$(awk -v f="$f" '$1=="input" && $2==f {print $3, $4}' "$rec")
     now=$(inputs_rows | awk -v f="$f" '$2==f {print $3, $4}')
     if [ -z "$want" ]; then fail "inputs: $rec has no row for $BUILD/$f — the outputs were built by a gate that did not record its link inputs; rebuild (drop --no-build)"
+    elif ! input_row_digested "$want" || ! input_row_digested "$now"; then fail "inputs: $BUILD/$f was not digested (sha256 recorded '${want#* }', now '${now#* }') — no SHA-256 tool ran, see the stderr line above; an undigested input is never 'the same' (task #1390)"
     elif [ "$now" = "$want" ]; then ok "inputs: $BUILD/$f ${now% *} B sha256 $(printf '%s' "${now#* }" | cut -c1-12)… == the built record"
     else fail "inputs: ROW was linked with $BUILD/$f ${want% *} B sha256 $(printf '%s' "${want#* }" | cut -c1-12)…, the file now is ${now% *} B sha256 $(printf '%s' "${now#* }" | cut -c1-12)… — a stale or hybrid gitignored input (FACT #7324); rebuild (drop --no-build)"; fi
   done
@@ -1402,6 +1433,7 @@ selftest() {
   if [ "$FAILED" = 0 ] && cmp -s "$SY" "$T/syms_saved.txt" && /usr/bin/grep -q '^OK   SPLIT .*fixed point' "$T/inputs_regen.txt"; then ok "regenerated: $(/usr/bin/grep -oE "^OK   $SY is [0-9]+ B" "$T/inputs_regen.txt") — byte-identical to the file the build linked with (cmp); $(/usr/bin/grep -oE 'fixed point[^,]*, [0-9]+s' "$T/inputs_regen.txt" | sed 's/fixed point — //')"; else say "SELFTEST-FAIL the split did not regenerate $SY to the linked bytes (FAILED=$FAILED):"; show < <(/usr/bin/grep -E '^(OK|FAIL)' "$T/inputs_regen.txt"); cp "$T/syms_saved.txt" "$SY"; bad=1; fi
   FAILED=0; WARNED=0; check_tree "$OUT/built_tree.txt" > "$T/inputs_restored.txt"
   if [ "$FAILED" = 0 ] && /usr/bin/grep -q "^OK   inputs: $SY .* == the built record" "$T/inputs_restored.txt"; then ok "control: after the regeneration the inputs check passes again"; else say "SELFTEST-FAIL inputs check does not pass on the regenerated file (FAILED=$FAILED):"; show < <(/usr/bin/grep -E '^(OK|FAIL)' "$T/inputs_restored.txt"); bad=1; fi
+  selftest_digest "$T" || bad=1
 
   say "-- (13) SPLIT fixed point: a marker line appended to a tracked asm/$REGION .s the split owns -> split_inputs must FAIL naming the path; the split itself restores the file (the tree is clean again, checked)"
   # a code segment's .s: the split rewrites those every run (data/cod/000000.s, a textbin wrapper, it does NOT — first USA selftest, t464)
@@ -1513,6 +1545,51 @@ selftest_cc1args() {
     ok "fired: $(/usr/bin/grep -E "^ *FAIL ($d1 sdk29|${d2:-none} s136): [0-9]+ compile" "$T/cc1_pop.txt" | sed 's/^ *FAIL //' | tr '\n' ';')"
   else say "SELFTEST-FAIL (26) deleting $d1's sdk29 line / ${d2:-no} s136 line did not FAIL the population counts (FAILED=$FAILED)"; b=1; fi
   say "     outputs -> $T/cc1_*.txt"
+  return $b
+}
+
+# selftest_digest OUTDIR — arm (12b), task #1390. The two digest paths, the
+# inputs check's SHA-256 and native_renames' SHA-1, on a host with NO SHA tool:
+# each must FAIL, never read as agreement. Before #1390 a host without the Perl
+# shasum (the XPS) recorded and re-read an EMPTY sha256 for every link input,
+# so the inputs check compared empty == empty and printed OK, and every
+# byte-identical rename read as a departure. Also: with only coreutils'
+# sha1sum/sha256sum on PATH (a GNU host), both must print what this host's
+# default tool prints. The hosts are simulated by a scratch PATH of symlinks to
+# just the tools these functions run, so the arm needs no build.
+selftest_digest() {
+  local T="$1" b=0 D="$1/digest" t p rc
+  say "-- (12b) DIGEST (#1390): with no SHA tool on PATH, a link input recorded AND re-checked there (the empty == empty case) must FAIL 'was not digested', and so must either side alone; the rename pairing must return rc 2 naming the missing tool; with only sha1sum/sha256sum, the rows must equal this host's default; the full PATH passes"
+  rm -rf "$D"; mkdir -p "$D/none" "$D/gnu" "$D/build" "$D/base/going-decompiled/src/usa" "$D/tip/going-decompiled/src/usa"
+  for t in awk cut sed tr wc; do
+    p=$(command -v "$t") || { say "SELFTEST-BROKEN: no $t on PATH to build the scratch PATHs"; return 1; }
+    ln -s "$p" "$D/none/$t"; ln -s "$p" "$D/gnu/$t"
+  done
+  local gnu=1; for t in sha1sum sha256sum; do if p=$(command -v "$t"); then ln -s "$p" "$D/gnu/$t"; else gnu=0; fi; done
+  local BUILD="$D/build" GATE_INPUTS="seed.txt"
+  printf 'landing_gate selftest 12b\n' > "$D/build/seed.txt"
+  inputs_rows > "$D/rec_full.txt"
+  ( PATH="$D/none"; inputs_rows ) > "$D/rec_none.txt" 2> "$D/rec_none.err"
+  FAILED=0; check_inputs "$D/rec_full.txt" > "$D/full_full.txt"
+  if [ "$FAILED" = 0 ] && /usr/bin/grep -qE '^OK   inputs: .*/seed\.txt 26 B sha256 [0-9a-f]{12}… == the built record$' "$D/full_full.txt"; then ok "control: full PATH, $(/usr/bin/grep '^OK' "$D/full_full.txt" | sed -E "s|^OK +||; s|$D/||")"; else say "SELFTEST-FAIL the full-PATH inputs check did not pass (FAILED=$FAILED):"; show < "$D/full_full.txt"; b=1; fi
+  if /usr/bin/grep -qx 'input seed.txt 26 ?' "$D/rec_none.txt" && /usr/bin/grep -q '^landing_gate: neither shasum nor sha256sum on this host' "$D/rec_none.err"; then ok "fired: no SHA tool records 'input seed.txt 26 ?' and says $(sed 's/ — .*//' "$D/rec_none.err")"; else say "SELFTEST-FAIL no-SHA-tool record is not '?' with a named error:"; show < "$D/rec_none.txt"; show < "$D/rec_none.err"; b=1; fi
+  ( PATH="$D/none"; check_inputs "$D/rec_none.txt" ) > "$D/none_none.txt" 2>&1
+  ( PATH="$D/none"; check_inputs "$D/rec_full.txt" ) > "$D/full_none.txt" 2>&1
+  FAILED=0; check_inputs "$D/rec_none.txt" > "$D/none_full.txt"
+  for t in none_none full_none none_full; do
+    if /usr/bin/grep -q "^FAIL inputs: .*/seed\.txt was not digested" "$D/$t.txt" && ! /usr/bin/grep -q '^OK' "$D/$t.txt"; then ok "fired ($t): $(/usr/bin/grep '^FAIL' "$D/$t.txt" | sed -E "s|$D/||; s/ — no SHA.*//")"; else say "SELFTEST-FAIL inputs check ($t: record, check) did not FAIL 'was not digested':"; show < "$D/$t.txt"; b=1; fi
+  done
+  printf 'int t1390;\n' > "$D/base/going-decompiled/src/usa/old.c"; cp "$D/base/going-decompiled/src/usa/old.c" "$D/tip/going-decompiled/src/usa/new.c"
+  native_renames "$D/base" "$D/tip" usa/old.c usa/new.c > "$D/ren_full.txt"
+  if [ "$(cat "$D/ren_full.txt")" = "= usa/old.c usa/new.c" ]; then ok "control: full PATH pairs the byte-identical rename '= usa/old.c usa/new.c'"; else say "SELFTEST-FAIL the full-PATH rename pairing printed:"; show < "$D/ren_full.txt"; b=1; fi
+  ( PATH="$D/none"; native_renames "$D/base" "$D/tip" usa/old.c usa/new.c ) > "$D/ren_none.txt" 2> "$D/ren_none.err"; rc=$?
+  if [ "$rc" = 2 ] && [ ! -s "$D/ren_none.txt" ] && /usr/bin/grep -q '^landing_gate: neither shasum nor sha1sum on this host' "$D/ren_none.err"; then ok "fired: no SHA tool -> native_renames rc 2, 0 B, $(sed 's/ — .*//' "$D/ren_none.err")"; else say "SELFTEST-FAIL no-SHA-tool rename pairing (rc $rc, want 2 with a named error):"; show < "$D/ren_none.txt"; show < "$D/ren_none.err"; b=1; fi
+  if [ "$gnu" = 1 ]; then
+    ( PATH="$D/gnu"; inputs_rows ) > "$D/rec_gnu.txt" 2>&1
+    ( PATH="$D/gnu"; native_renames "$D/base" "$D/tip" usa/old.c usa/new.c ) > "$D/ren_gnu.txt" 2>&1
+    if cmp -s "$D/rec_gnu.txt" "$D/rec_full.txt" && cmp -s "$D/ren_gnu.txt" "$D/ren_full.txt"; then ok "control: sha1sum/sha256sum only -> the same input row and rename pair as the default PATH"; else say "SELFTEST-FAIL the sha1sum/sha256sum fallback differs from the default:"; show < "$D/rec_gnu.txt"; show < "$D/ren_gnu.txt"; b=1; fi
+  else say "     (fallback control not run: this host has no sha1sum and sha256sum to isolate)"; fi
+  FAILED=0
   return $b
 }
 
