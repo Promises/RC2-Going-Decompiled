@@ -752,9 +752,13 @@ check_native() {
   regress=$(LC_ALL=C comm -23 "$t.fail" "$b.fail"); tolerated=$(LC_ALL=C comm -12 "$t.fail" "$b.fail"); fixed=$(LC_ALL=C comm -13 "$t.fail" "$b.fail")
   if [ -n "$regress" ]; then
     fail "NATIVE: $(printf '%s\n' "$regress" | wc -l | tr -d ' ') unit(s) fail to compile at the tip and passed at (or are absent from) the base: $(printf '%s ' $regress)"
-    # -A4: check.sh prints an `errors: N` count line before its 3-line sample (task #1311);
-    # --selftest arm (18x) asserts the listing (task #1327)
-    local u; for u in $regress; do say "       $u:"; /usr/bin/grep -A4 "^FAIL: going-decompiled/src/$u\$" "$t.log" | sed -n '2,5s/^ */         /p'; done
+    # The unit's own block only: check.sh's `errors: N` count line and its
+    # sample of up to 3 (task #1311), at most 4 lines, STOPPING at the next
+    # `FAIL:` heading, a `PASS` line or the `--- native compile-check` summary.
+    # A fixed -A4 window printed whatever followed a block of fewer than 4
+    # lines — the next unit's heading, or the summary (task #1361, seen in
+    # #1346). --selftest arms (18x) and (18y) assert the listing.
+    local u; for u in $regress; do say "       $u:"; awk -v h="FAIL: going-decompiled/src/$u" 'f && (/^FAIL: / || /^PASS/ || /^--- native compile-check: / || ++n > 4) { exit } f { sub(/^ */, "         "); print } $0 == h { f = 1 }' "$t.log"; done
   else
     ok "NATIVE: no unit fails at the tip that passed at the base ($tp of $((tp+tf)) compile; compile-only, not a link)${vacuous:+ — VACUOUS: base == tip, this measured nothing}${samein:+ — NO C CHANGE: base and tip NATIVE inputs identical, this row proves nothing}"
   fi
@@ -1464,7 +1468,7 @@ selftest_dirty_gate() {
 # basename-keyed row reads {015180} on both arms and passes.
 selftest_native() {
   local T="$1" b=0; local N="$T/native"; rm -rf "$N"; mkdir -p "$N"
-  say "-- (18) NATIVE (#923): scratch tip/base trees — a seeded C error (and a 5-error one whose -A4 regress listing must be 'errors: 5 (first 3 shown)' + exactly 3 sample lines, #1327), A2's removed 198B58 guard, a usa-vs-eu basename collision, a new failing unit, and a unit leaving the population (deleted, override without reason, token removed, renamed WITH an edit, moved byte-identical to ANOTHER region) must each FAIL naming the unit; a failure on both arms, a departure with a Native-Left override + reason, a byte-identical rename within its region, a cross-region move with a Native-Left override + reason, and the clean pair must pass; the env override outside a scratch arm must excuse nothing and WARN (FAIL under --strict); the default base resolving to HEAD must print 'NATIVE: base == tip, VACUOUS' as a WARN (FAIL under --strict), and so must a base pinned explicitly to HEAD (#1011); a base pinned to ANOTHER sha with HEAD's NATIVE inputs must print 'WARN NATIVE: no C change', counted nowhere, while a base whose C differs must stay a normal row (#1034), and so must a base differing ONLY in a tools path read 'no C change' (u'', V10); a pin on the branch's own line or off the tip's history must WARN 'WRONG BASE' (FAIL under --strict) while the fork point passes, and a 'no C change' row over a branch that touches a NATIVE input must WARN 'FALSE no C change' (FAIL under --strict) (#1065); the per-region counts must show a usa -1 / eu +1 move under an unchanged total, and sum to the totals on the real tree (task #1006); then the real tree against its real base"
+  say "-- (18) NATIVE (#923): scratch tip/base trees — a seeded C error (and a 5-error one whose regress listing must be 'errors: 5 (first 3 shown)' + exactly 3 sample lines, #1327, and two 1-error seeds whose listings must stop at their own block, not bleed into the next FAIL heading or the summary, #1361), A2's removed 198B58 guard, a usa-vs-eu basename collision, a new failing unit, and a unit leaving the population (deleted, override without reason, token removed, renamed WITH an edit, moved byte-identical to ANOTHER region) must each FAIL naming the unit; a failure on both arms, a departure with a Native-Left override + reason, a byte-identical rename within its region, a cross-region move with a Native-Left override + reason, and the clean pair must pass; the env override outside a scratch arm must excuse nothing and WARN (FAIL under --strict); the default base resolving to HEAD must print 'NATIVE: base == tip, VACUOUS' as a WARN (FAIL under --strict), and so must a base pinned explicitly to HEAD (#1011); a base pinned to ANOTHER sha with HEAD's NATIVE inputs must print 'WARN NATIVE: no C change', counted nowhere, while a base whose C differs must stay a normal row (#1034), and so must a base differing ONLY in a tools path read 'no C change' (u'', V10); a pin on the branch's own line or off the tip's history must WARN 'WRONG BASE' (FAIL under --strict) while the fork point passes, and a 'no C change' row over a branch that touches a NATIVE input must WARN 'FALSE no C change' (FAIL under --strict) (#1065); the per-region counts must show a usa -1 / eu +1 move under an unchanged total, and sum to the totals on the real tree (task #1006); then the real tree against its real base"
   native_tree() {  # native_tree DIR — a fresh scratch copy of the check.sh inputs
     rm -rf "$1"; mkdir -p "$1/going-decompiled" "$1/tools"
     cp -R going-decompiled/src going-decompiled/include "$1/going-decompiled/"; cp -R tools/native "$1/tools/"
@@ -1481,9 +1485,9 @@ selftest_native() {
   native_tree "$N/tip_a"; native_seed "$N/tip_a" usa/cod/015180.c
   native_arm "fired (a) seeded C error" "$N/tip_a" "$N/base" 1 '^FAIL NATIVE: 1 unit\(s\) .*: usa/cod/015180\.c $' 'eu/cod/015180'
   # (x) task #1327 (#1315 q2): the listing under a regress FAIL is check.sh's
-  # `errors: N` line plus its 3-line sample, read with -A4. (a)'s one-error
-  # seed prints the same listing under -A4 and -A2, so this seed carries 5
-  # errors: the listing must be the unit heading, then `errors: 5 (first 3
+  # `errors: N` line plus its sample of up to 3. (a)'s one-error seed cannot
+  # tell a 2-line window from a 4-line one, so this seed carries 5 errors (it
+  # fills the window; (y) below covers the short block): the listing must be the unit heading, then `errors: 5 (first 3
   # shown)`, then exactly 3 sample lines, each an `error:` in that unit.
   native_tree "$N/tip_x"
   printf '\n/* t1327 selftest seed */\nint t1327_e1 = ;\nint t1327_e2 = ;\nint t1327_e3 = ;\nint t1327_e4 = ;\nint t1327_e5 = ;\n' >> "$N/tip_x/going-decompiled/src/usa/cod/015180.c"
@@ -1491,8 +1495,29 @@ selftest_native() {
   local xl xn xs; xl=$(awk '/^       usa\/cod\/015180\.c:$/ { f = 1; next } f && /^         / { print; next } f { exit }' "$NATIVE_ARM_OUT")
   xn=$(printf '%s\n' "$xl" | /usr/bin/grep -c . || true)
   xs=$(printf '%s\n' "$xl" | sed -n '2,4p' | /usr/bin/grep -cE '^         going-decompiled/src/usa/cod/015180\.c:[0-9]+:[0-9]+: error: ' || true)
-  if [ "$(printf '%s\n' "$xl" | sed -n 1p)" = '         errors: 5 (first 3 shown)' ] && [ "$xn" = 4 ] && [ "$xs" = 3 ]; then ok "  ... and its -A4 listing is the count line + 3 samples: $(printf '%s\n' "$xl" | sed -n 1p | sed 's/^ *//'); $xs sample error lines"
+  if [ "$(printf '%s\n' "$xl" | sed -n 1p)" = '         errors: 5 (first 3 shown)' ] && [ "$xn" = 4 ] && [ "$xs" = 3 ]; then ok "  ... and its listing is the count line + 3 samples: $(printf '%s\n' "$xl" | sed -n 1p | sed 's/^ *//'); $xs sample error lines"
   else say "SELFTEST-FAIL (x) the regress listing under the FAIL is not 'errors: 5 (first 3 shown)' + 3 sample error lines ($xn listing line(s), $xs sample(s)):"; show < "$NATIVE_ARM_OUT"; b=1; fi
+  # (y) task #1361: (x) is blind to the listing BLEED — with 5 errors its
+  # sample fills the window. A unit with FEWER than 3 errors left room in a
+  # fixed -A4 window for whatever check.sh printed next: the next unit's
+  # `FAIL:` heading and count (#1346, eu/cod/015180.c then 1907F0.cpp), or,
+  # for the last failing unit, the `--- native compile-check` summary. Seed ONE
+  # error in each of usa/ and eu/cod/015180.c, so one block is followed by the
+  # other's FAIL heading and the later one by the summary (both shapes, checked
+  # in the tip's check.sh log); each listing must be exactly the count line +
+  # 1 sample of that unit.
+  native_tree "$N/tip_y"; native_seed "$N/tip_y" usa/cod/015180.c; native_seed "$N/tip_y" eu/cod/015180.c
+  native_arm "fired (y) 1-error seeds in two units" "$N/tip_y" "$N/base" 1 '^FAIL NATIVE: 2 unit\(s\) .*: eu/cod/015180\.c usa/cod/015180\.c $'
+  local yu yl yn ys yshape; yshape=$(awk 'h && NR == h + 3 { print (/^FAIL: / ? "heading" : /^--- native compile-check: / ? "summary" : "other"); h = 0 } /^FAIL: going-decompiled\/src\/(usa|eu)\/cod\/015180\.c$/ { h = NR }' "$OUT/native_tip.txt.log" | LC_ALL=C sort | tr '\n' ' ')
+  if [ "$yshape" = 'heading summary ' ]; then ok "  ... and the tip log has both bleed shapes: one seeded block is followed by another unit's FAIL heading, the other by the summary"
+  else say "SELFTEST-BROKEN (y) the tip log does not set up both bleed shapes (lines after the seeded blocks: '$yshape', want 'heading summary ')"; b=1; fi
+  for yu in eu usa; do
+    yl=$(awk -v h="       $yu/cod/015180.c:" '$0 == h { f = 1; next } f && /^         / { print; next } f { exit }' "$NATIVE_ARM_OUT")
+    yn=$(printf '%s\n' "$yl" | /usr/bin/grep -c . || true)
+    ys=$(printf '%s\n' "$yl" | sed -n 2p | /usr/bin/grep -cE "^         going-decompiled/src/$yu/cod/015180\\.c:[0-9]+:[0-9]+: error: " || true)
+    if [ "$(printf '%s\n' "$yl" | sed -n 1p)" = '         errors: 1 (first 3 shown)' ] && [ "$yn" = 2 ] && [ "$ys" = 1 ]; then ok "  ... and $yu/cod/015180.c's listing stops at its own block: errors: 1 (first 3 shown) + 1 sample"
+    else say "SELFTEST-FAIL (y) $yu/cod/015180.c's regress listing bleeds past its own block ($yn line(s), want 2: 'errors: 1 (first 3 shown)' + 1 sample of that unit):"; printf '%s\n' "$yl" | show; b=1; fi
+  done
   # (b) the dangerous class: A2's guard removed around the 198B58 equate
   native_tree "$N/tip_b"; local G="$N/tip_b/going-decompiled/src/eu/text/198B58.c"
   local E="going-decompiled/src/eu/text/198B58.c" L
