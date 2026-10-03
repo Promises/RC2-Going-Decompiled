@@ -1620,7 +1620,7 @@ selftest_dirty_gate() {
     || { say "SELFTEST-BROKEN: (20) could not create its scratch repo in $D/repo"; return 1; }
   dirty_gate_run() {  # dirty_gate_run OUTFILE — the real run_gate in $D/repo, rows other than DIRTY stubbed
     ( cd "$D/repo" || exit 2
-      for f in check_flags split_inputs check_shadow check_orphans check_libgcc check_gmodel check_native check_dlisites do_build check_tree check_asmunit measure_row check_row check_noprovide; do
+      for f in check_flags split_inputs check_shadow check_orphans check_libgcc check_gmodel check_native check_dlisites do_build check_tree check_asmunit check_cc1args measure_row check_row check_noprovide; do
         eval "$f() { say \"     (arm 20 stub: $f)\"; }"
       done
       region_vars() { REGION=$1; OUT="$D/out"; mkdir -p "$OUT"; }
@@ -1966,7 +1966,7 @@ selftest_verdict_annotation() {
   if [ -z "$NATIVE_PROBE_C" ] || [ -z "$NATIVE_PROBE_TOOLS" ]; then say "SELFTEST-BROKEN: (21) needs (u')/(u'')'s probe chains, which arm (18) did not build (NATIVE inputs dirty?)"; return 1; fi
   eval "$(declare -f check_native | sed '1s/^check_native/annot_real_check_native/')"
   annot_run() {  # annot_run OUTFILE BASE TIP — the real run_gate, NATIVE pinned to BASE, tip TIP, upstream BASE
-    ( for f in check_dirty check_flags split_inputs check_shadow check_orphans check_libgcc check_gmodel check_dlisites do_build check_tree check_asmunit measure_row check_row check_noprovide; do
+    ( for f in check_dirty check_flags split_inputs check_shadow check_orphans check_libgcc check_gmodel check_dlisites do_build check_tree check_asmunit check_cc1args measure_row check_row check_noprovide; do
         eval "$f() { say \"     (arm 21 stub: $f)\"; }"
       done
       region_vars() { REGION=$1; OUT="$D/out"; mkdir -p "$OUT"; }
