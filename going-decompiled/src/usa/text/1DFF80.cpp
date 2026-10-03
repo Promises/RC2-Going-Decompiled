@@ -1683,7 +1683,14 @@ extern u8 *g_mobyClassHeaders[];  /* 0x1CDB00 - loaded class header ptr per slot
  * owner into the slot.  Returns the slot index, or -1 if the class is unloaded,
  * has no def array, soundIdx is out of range, or no emitter could be started.
  * NEAR-MISS: WALLED - same 2-save/branch-likely walls as PlayMobySound, plus a
- * `mult`-based slot stride.  NATIVE SHIM (no byte target). */
+ * `mult`-based slot stride.  NATIVE SHIM (no byte target).
+ * SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked; a candidate, NOT match evidence): EXACT 46/46, relocations equal, with
+ * two levers in the body: the ROM's two R5900 short-loop pad nops before the
+ * short backward `beqz` into the shared `return -1` (R5900_SHORT_LOOP_PAD1, a
+ * scheduling device, RULING #8435), and the slot stamps written owner-first,
+ * because SN 1.36 emits the last store of a group ending at the epilogue first
+ * (FACT #8947). Pads removed: 25/46, first diff @19; stamp order reverted: 2/46. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", PlaySoundFromClassBank);
 #else
@@ -1692,6 +1699,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", PlaySoundFromCl
 extern s32 StartSoundEmitter(SoundDef *pSoundDef, s32 flags, Moby *ownerMoby, Vec4 *pPos, s32 volScale);
 /* (end of this body's declarations) */
 s32 PlaySoundFromClassBank(s32 soundIdx, s32 flags, Moby *owner, s32 classId) {
+    s32 inRange;
     u8 *classHdr;
     u8 *defArray;
     s32 slot;
@@ -1705,7 +1713,10 @@ s32 PlaySoundFromClassBank(s32 soundIdx, s32 flags, Moby *owner, s32 classId) {
     if (defArray == NULL) {
         return -1;
     }
-    if (soundIdx >= *(u8 *)(classHdr + 0xD)) {
+    inRange = soundIdx < *(u8 *)(classHdr + 0xD);
+    R5900_SHORT_LOOP_PAD1(inRange, inRange);
+    R5900_SHORT_LOOP_PAD1(inRange, inRange);
+    if (!inRange) {
         return -1;
     }
 
@@ -1713,8 +1724,8 @@ s32 PlaySoundFromClassBank(s32 soundIdx, s32 flags, Moby *owner, s32 classId) {
                              owner, NULL, 0x400);
     if (slot >= 0) {
         e = g_listenerPosHistory + slot * 0x70;
-        *(s16 *)(e + 0x7E) = (s16)soundIdx;
         *(s32 *)(e + 0x88) = (s32)owner;
+        *(s16 *)(e + 0x7E) = (s16)soundIdx;
     }
     return slot;
 }
