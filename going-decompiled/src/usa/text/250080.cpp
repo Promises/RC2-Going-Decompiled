@@ -868,7 +868,14 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003510C0);
    the request to the ring's free header window and the descriptor's remaining
    length, queries the ring's two writable spans (func_003506A8), scatters into
    them (func_003511A8), advances the ring (func_00350778), and reports whether
-   any bytes were stored. */
+   any bytes were stored.
+
+   NEAR-MISS SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated
+   fields masked): 2/57 words differ, from 37/57, once the second span length
+   is computed in place (`remain -= first`) before the dequeue call. Residual
+   (SCHED): the ROM puts that subu in the jal delay slot and the movn before the
+   jal; cc1 swaps them. Empty fences around it made it worse (31/57, 32/57), and
+   a tied fence on `first` gave 10/57. */
 s32 func_003510C0(u8 *unused, u8 *desc, u8 *ringBase) {
     u8 *span0Ptr;
     s32 span0Len;
@@ -889,11 +896,12 @@ s32 func_003510C0(u8 *unused, u8 *desc, u8 *ringBase) {
     if (remain < first) {
         first = remain;
     }
+    remain -= first;
 
     func_003506A8((FmvPtsQueue *)(g_pFmvArenaBase + FMV_PTS_OFS), &span0Ptr,
                   &span0Len, &span1Ptr, &span1Len);
     stored = func_003511A8(span0Ptr, span0Len, span1Ptr, span1Len, (u8 *)wantEnd,
-                           first, ringBase, remain - first);
+                           first, ringBase, remain);
     func_00350778((FmvPtsQueue *)(g_pFmvArenaBase + FMV_PTS_OFS), stored);
     return stored > 0;
 }
