@@ -2,8 +2,10 @@
 # 2.95.3 v1.36 cc1 (tools/ee/cc/lib/gcc-lib/ee/2.95.3/cc1.exe, sha256 0393bcd3...)
 # — or, for a `.cpp` unit, its sibling cc1plus (cc1plus.exe, sha256 78a0df90...,
 # codegen-identical on every member, task #1284) —
-# at -O2 <unit -G> <unit CC1EXTRA> -fopt-stack and spliced into the unit's cc1
+# at -O2 <unit -G> <unit S136EXTRA> -fopt-stack and spliced into the unit's cc1
 # 2.9 output by tools/ee/s136os_splice.sh (build.sh and objdiff_build.sh).
+# S136EXTRA is the unit's CC1EXTRA unless the flag table gives this arm its
+# own (RULING #9004: text/1B4218 compiles here without -fno-gcse).
 # FACT #8810: that compiler + flag is the ROM's for these functions; it is NOT
 # a whole-unit compiler (it differs from 2.9 on 28 of 165 matched functions),
 # so selection is per function.
@@ -222,3 +224,4 @@ usa text/1A8180 func_002B0150
 usa text/1A00F0 func_002A0678
 usa text/1A8180 func_002ADCE0
 usa text/1EFFC0 func_002F6110
+usa text/1B4218 SetDialogVoiceVolumesMax

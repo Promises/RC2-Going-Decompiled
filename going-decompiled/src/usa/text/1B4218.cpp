@@ -3544,26 +3544,35 @@ void ResetDialogVoiceChannels(void) {
 /* Drive all dialog-voice channels to full volume (volume state = -0x8000, the
  * high "active" bit set, fade target 0). The secondary channel (ch1) is only
  * touched when `includeSecondary` is nonzero.
- * WALL (matching build): independent-store rescheduling. The original emits the
- * unconditional ch2(+0x98)/ch0(+0x50) block in descending-offset order; this cc1's
- * scheduler always sorts the two independent same-base stores ascending (ch0 then
- * ch2), regardless of source order or an inter-store barrier; the ROM also
- * keeps `lui %hi` in a register shared by both blocks, which only the engine
- * arm does — sdk29 87.38% / engine96 97.31% (REGNUM $5 vs $4 for the shared
- * hi plus one SCHED row; unit objdiff report, task #510). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", SetDialogVoiceVolumesMax);
+ *
+ * @param includeSecondary nonzero to also raise ch1
+ *
+ * The ROM issues ONE `lui %hi(g_fileLoadVoiceState)` and keeps it in a register
+ * across the ch1 block and the unconditional ch2(+0x98)/ch0(+0x50) block; that
+ * sharing is the gcse (load-PRE) pass, which the unit's 2.9 -fno-gcse pin
+ * suppresses (FACT #7922). The ch0 pair is written before the ch2 pair in the
+ * source: SN 1.36's scheduler then emits them in the ROM's ch2-first order.
+ * Neither change closes it alone (FACT #9003: pin + this order 12/13 words,
+ * unpinned + the old ch2-first order 4/13).
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) at the -O2 default, without the 2.9 arm's
+ * -fno-gcse (the flag table's S136EXTRA for this unit, RULING #9004), and
+ * spliced over S136OS_SLOT by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice drops the function. On native it is
+ * plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_SetDialogVoiceVolumesMax)
+S136OS_SLOT(SetDialogVoiceVolumesMax);
 #else
-/* TODO(match): functional equivalent - not byte-exact; store-rescheduling wall. */
 void SetDialogVoiceVolumesMax(s32 includeSecondary) {
     if (includeSecondary) {
         g_fileLoadVoiceState.ch1.volume = (s16)-0x8000;
         g_fileLoadVoiceState.ch1.fadeTarget = 0;
     }
-    g_fileLoadVoiceState.ch2.volume = (s16)-0x8000;
-    g_fileLoadVoiceState.ch2.fadeTarget = 0;
     g_fileLoadVoiceState.ch0.volume = (s16)-0x8000;
     g_fileLoadVoiceState.ch0.fadeTarget = 0;
+    g_fileLoadVoiceState.ch2.volume = (s16)-0x8000;
+    g_fileLoadVoiceState.ch2.fadeTarget = 0;
 }
 #endif
 
