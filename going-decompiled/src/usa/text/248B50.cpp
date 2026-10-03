@@ -683,18 +683,25 @@ extern void GuiElementSetText(void *e, s32 text);
  * cc1 2.96-ee-001003-1): sdk29 90.08% / engine96 76.00%.
  * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 13/26 words differ;
  * frozen-.s census: 4 callee GPR saves, 0 fp saves.
- * Residual: PACKED-SAVE (4 callee GPR saves) + REGALLOC: 9 frame/save-slot words (frame 0x40 vs 0x20, save layout reordered). */
+ * Residual: PACKED-SAVE (4 callee GPR saves) + REGALLOC: 9 frame/save-slot words (frame 0x40 vs 0x20, save layout reordered).
+ * SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked; a candidate, NOT match evidence): EXACT 25/25, relocations equal, with
+ * the id cursor a local of the `count > 0` block: the ROM copies `ids` into $18
+ * only after the blez. Walking the parameter itself: 7/25, first diff @1 (the
+ * copy hoisted into the prologue). */
 void SetPopupItemText(GuiWidget *w, s32 count, s32 *ids) {
     char *row;
     s32 i;
 
     *(s32 *)((char *)w + 0x4B4) = count;
     if (count > 0) {
+        s32 *id = ids;
+
         row = (char *)w + 0x218;
         for (i = count; i != 0; i--) {
-            char *text = GetLocalizedString(*ids);
+            char *text = GetLocalizedString(*id);
             GuiElementSetText(row, (s32)text);
-            ids++;
+            id++;
             row += 0x58;
         }
     }
