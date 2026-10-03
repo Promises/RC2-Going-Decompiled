@@ -309,13 +309,17 @@ def src_lines(path):
 
 
 def lever_at(path, line):
-    """The DECL-LEVER annotation on the declaration's line or the one above."""
+    """The DECL-LEVER annotation on the declaration's own line, or on the line
+    directly above when that line is a comment and nothing else. Without that
+    restriction the trailing annotation of one declaration also suppressed
+    the declaration on the next line (seen on 250080.cpp, task #1379)."""
     lines = src_lines(path)
-    for ln in (line, line - 1):
-        if 1 <= ln <= len(lines):
-            m = LEVER_RE.search(lines[ln - 1])
-            if m:
-                return lines[ln - 1].strip()
+    if 1 <= line <= len(lines) and LEVER_RE.search(lines[line - 1]):
+        return lines[line - 1].strip()
+    if 2 <= line <= len(lines) + 1:
+        above = lines[line - 2]
+        if LEVER_RE.search(above) and re.match(r"^\s*(/\*|//|\*)", above):
+            return above.strip()
     return None
 
 
@@ -674,6 +678,12 @@ def selftest():
          "/* DECL-LEVER(#1379): test */\n"
          "void Matched(float *dst, const float *src, float len);\n"
          "void f(float *a) { Matched(a, a, 2.0f); }\n", 0, [r"^ANNOTATED   usa Matched"]),
+        ("s3b a TRAILING annotation does not reach the next line's declaration -> FAIL",
+         "void Sink(void *p); /* DECL-LEVER(#1379): test */\n"
+         "void Matched(float *dst, const float *src, float len);\n"
+         "void f(float *a) { Matched(a, a, 2.0f); }\n", 1,
+         [r"^DESIGN-CALL usa Matched  decl going-decompiled/src/usa/text/use.c:3 .* ORDER",
+          r"^STALE-LEVER usa Sink"], [r"^ANNOTATED"]),
         ("s4 an annotation with no task reference does NOT suppress -> FAIL",
          "void Matched(float *dst, const float *src, float len); /* DECL-LEVER: test */\n"
          "void f(float *a) { Matched(a, a, 2.0f); }\n", 1, [r"^DESIGN-CALL usa Matched"]),
