@@ -131,7 +131,14 @@
 #            FAILS naming each unit that fails at the tip and passed at the
 #            base, or is absent at the base; a unit failing on BOTH arms is
 #            tolerated and listed (a pre-existing failure must not turn the row
-#            permanently red). Recomputed every run — there is no checked-in
+#            permanently red). BLIND (task #1365, #1363's instance): a tolerated
+#            unit the landing TOUCHED — its own source, or a shared input
+#            (include/, tools/native/ but check.sh), differs between the two
+#            trees the row compiled — is a WARN naming each unit, a FAIL under
+#            --strict: failing before and after, its change is invisible to
+#            the comparison. Fails closed: a comparison that cannot run makes
+#            every tolerated unit BLIND (unverifiable); on a base == tip row
+#            they are listed under the VACUOUS line. Recomputed every run — there is no checked-in
 #            baseline to raise. Units are keyed by region-qualified path
 #            (usa/cod/015180.c): usa and eu share basenames. FAILS as could-not-
 #            run on an empty population, a count that does not partition it, or
@@ -668,6 +675,29 @@ native_renames() {
            ($2 in x) { o = x[$2]; sub(/^ /, "", o); split(o, v, " "); print "x", v[1], $3 }'
 }
 
+# native_touched BASE_TREE TIP_TREE UNIT... — what differs between the two
+# trees the NATIVE row compiled, for its BLIND check (task #1365): `U <unit>`
+# for each named unit whose source differs, `S <path>` for each shared input
+# that differs or exists on one side only (going-decompiled/include and
+# tools/native but check.sh, which native_scan copies from the tip into both).
+# rc 2, with the reason on stdout, when the comparison cannot run (a unit
+# missing from either tree, an unreadable file): the caller fails closed.
+native_shared_sums() {  # TREE — `<sha1>  <path>` per shared NATIVE input, line-sorted for comm
+  (cd "$1" && set -o pipefail && /usr/bin/find going-decompiled/include tools/native -type f ! -path tools/native/check.sh -print0 \
+     | xargs -0 shasum | LC_ALL=C sort) 2>/dev/null
+}
+native_touched() {
+  local base=$1 tip=$2 u rc lb lt; shift 2
+  for u in "$@"; do
+    [ -f "$base/going-decompiled/src/$u" ] && [ -f "$tip/going-decompiled/src/$u" ] || { echo "$u is not a file in both trees"; return 2; }
+    rc=0; cmp -s "$base/going-decompiled/src/$u" "$tip/going-decompiled/src/$u" || rc=$?
+    case $rc in 0) ;; 1) echo "U $u" ;; *) echo "cmp could not read $u"; return 2 ;; esac
+  done
+  lb=$(native_shared_sums "$base") || { echo "could not checksum the base's shared NATIVE inputs under $base"; return 2; }
+  lt=$(native_shared_sums "$tip") || { echo "could not checksum the tip's shared NATIVE inputs under $tip"; return 2; }
+  LC_ALL=C comm -3 <(printf '%s\n' "$lb") <(printf '%s\n' "$lt") | sed 's/^[[:space:]]*[0-9a-f]*  //' | LC_ALL=C sort -u | sed 's/^/S /'
+}
+
 # check_native [TIP_TREE] [BASE_TREE] [UPSTREAM] — the NATIVE row (task #923).
 # Defaults: the tip is this working tree, the base is extracted from
 # merge-base(HEAD, UPSTREAM), UPSTREAM defaulting to origin/master (an argument,
@@ -774,6 +804,36 @@ check_native() {
   fi
   [ -n "$tolerated" ] && say "     failing on BOTH arms (pre-existing, tolerated): $(printf '%s ' $tolerated)"
   [ -n "$fixed" ] && say "     failing at the base only (fixed or removed at the tip): $(printf '%s ' $fixed)"
+  # BLIND (task #1365, #1363's measured instance): tolerating a both-arms
+  # failure is right for a unit the landing did not touch, but for one it DID
+  # touch the comparison sees nothing — failing before and after says nothing
+  # about what changed. Touched = differs between the two trees this row
+  # compiled (so the same base the arm is pinned to, dirty edits included):
+  # the unit's own source, or a shared input every unit reads (include/,
+  # tools/native/ but check.sh). WARN naming each unit, FAIL under --strict.
+  # Fail closed: if the comparison cannot run, every tolerated unit is BLIND
+  # (unverifiable); on a base == tip row the touched set is unknowable, so they
+  # are listed under the VACUOUS line that already carries the verdict.
+  if [ -n "$tolerated" ]; then
+    local tch blind="" shared u
+    if [ -n "$vacuous" ]; then
+      say "     BLIND (base == tip, the landing's touched set is unknowable): every unit failing on BOTH arms — $(printf '%s ' $tolerated)"
+    elif ! tch=$(native_touched "$basetree" "$tip" $tolerated); then
+      warn "NATIVE: BLIND unverifiable — the base/tip comparison of the NATIVE inputs could not run: $(printf '%s\n' "$tch" | tail -1), so the row cannot tell whether this landing touched the $(printf '%s\n' $tolerated | wc -l | tr -d ' ') unit(s) failing on BOTH arms; each is treated as BLIND: $(printf '%s ' $tolerated)(task #1365)"
+    else
+      shared=$(printf '%s\n' "$tch" | sed -n 's/^S //p')
+      for u in $tolerated; do
+        if printf '%s\n' "$tch" | /usr/bin/grep -qxF "U $u"; then blind="$blind $u (its own source differs base->tip);"
+        elif [ -n "$shared" ]; then blind="$blind $u (a shared NATIVE input differs);"; fi
+      done
+      if [ -n "$blind" ]; then
+        warn "NATIVE: BLIND — $(printf '%s\n' "$blind" | tr ';' '\n' | /usr/bin/grep -c . || true) unit(s) fail to compile on BOTH arms AND this landing touched them, so the base-relative comparison cannot see what the landing did to them (a both-arms failure is tolerated; a regression inside it is invisible):${blind%;} — fix the pre-existing failure, or compile the unit's change by other means and say how (task #1365)"
+        [ -n "$shared" ] && say "     shared NATIVE input(s) differing base->tip (every unit reads them): $(printf '%s ' $shared)"
+      else
+        say "     BLIND: none — no unit failing on both arms was touched (its source and the shared NATIVE inputs are identical base->tip) (task #1365)"
+      fi
+    fi
+  fi
   # population shrink (FACT #8359; watcher-2's gate-owner ruling for #945): a
   # unit in the base's population and absent from the tip's is never compiled
   # at the tip, so it FAILS unless a Native-Left override names it and a reason.
@@ -1478,7 +1538,7 @@ selftest_dirty_gate() {
 # basename-keyed row reads {015180} on both arms and passes.
 selftest_native() {
   local T="$1" b=0; local N="$T/native"; rm -rf "$N"; mkdir -p "$N"
-  say "-- (18) NATIVE (#923): scratch tip/base trees — a seeded C error (and a 5-error one whose regress listing must be 'errors: 5 (first 3 shown)' + exactly 3 sample lines, #1327, and two 1-error seeds whose listings must stop at their own block, not bleed into the next FAIL heading or the summary, #1361), A2's removed 198B58 guard, a usa-vs-eu basename collision, a new failing unit, and a unit leaving the population (deleted, override without reason, token removed, renamed WITH an edit, moved byte-identical to ANOTHER region) must each FAIL naming the unit; a failure on both arms, a departure with a Native-Left override + reason, a byte-identical rename within its region, a cross-region move with a Native-Left override + reason, and the clean pair must pass; the env override outside a scratch arm must excuse nothing and WARN (FAIL under --strict); the default base resolving to HEAD must print 'NATIVE: base == tip, VACUOUS' as a WARN (FAIL under --strict), and so must a base pinned explicitly to HEAD (#1011); a base pinned to ANOTHER sha with HEAD's NATIVE inputs must print 'WARN NATIVE: no C change', counted nowhere, while a base whose C differs must stay a normal row (#1034), and so must a base differing ONLY in a tools path read 'no C change' (u'', V10); a pin on the branch's own line or off the tip's history must WARN 'WRONG BASE' (FAIL under --strict) while the fork point passes, and a 'no C change' row over a branch that touches a NATIVE input must WARN 'FALSE no C change' (FAIL under --strict) (#1065); the per-region counts must show a usa -1 / eu +1 move under an unchanged total, and sum to the totals on the real tree (task #1006); then the real tree against its real base"
+  say "-- (18) NATIVE (#923): scratch tip/base trees — a seeded C error (and a 5-error one whose regress listing must be 'errors: 5 (first 3 shown)' + exactly 3 sample lines, #1327, and two 1-error seeds whose listings must stop at their own block, not bleed into the next FAIL heading or the summary, #1361), A2's removed 198B58 guard, a usa-vs-eu basename collision, a new failing unit, and a unit leaving the population (deleted, override without reason, token removed, renamed WITH an edit, moved byte-identical to ANOTHER region) must each FAIL naming the unit; a failure on both arms (untouched, or beside an edit to a clean unit), a departure with a Native-Left override + reason, a byte-identical rename within its region, a cross-region move with a Native-Left override + reason, and the clean pair must pass; the env override outside a scratch arm must excuse nothing and WARN (FAIL under --strict); the default base resolving to HEAD must print 'NATIVE: base == tip, VACUOUS' as a WARN (FAIL under --strict), and so must a base pinned explicitly to HEAD (#1011); a base pinned to ANOTHER sha with HEAD's NATIVE inputs must print 'WARN NATIVE: no C change', counted nowhere, while a base whose C differs must stay a normal row (#1034), and so must a base differing ONLY in a tools path read 'no C change' (u'', V10); a pin on the branch's own line or off the tip's history must WARN 'WRONG BASE' (FAIL under --strict) while the fork point passes, and a 'no C change' row over a branch that touches a NATIVE input must WARN 'FALSE no C change' (FAIL under --strict) (#1065); a both-arms failure whose own source or a shared header the landing edits must WARN 'BLIND' naming it (FAIL under --strict), and an unreadable input must make it 'BLIND unverifiable' (#1365); the per-region counts must show a usa -1 / eu +1 move under an unchanged total, and sum to the totals on the real tree (task #1006); then the real tree against its real base"
   native_tree() {  # native_tree DIR — a fresh scratch copy of the check.sh inputs
     rm -rf "$1"; mkdir -p "$1/going-decompiled" "$1/tools"
     cp -R going-decompiled/src going-decompiled/include "$1/going-decompiled/"; cp -R tools/native "$1/tools/"
@@ -1549,6 +1609,40 @@ selftest_native() {
   native_arm "fired (d) new failing unit" "$N/tip_d" "$N/base" 1 '^FAIL NATIVE: 1 unit\(s\) .*: usa/t923_new_unit\.c $'
   # (e) base-relative: the same unit failing on both arms is tolerated
   native_arm "control (e) failing on both arms" "$N/base_c" "$N/base_c" 0 '^     failing on BOTH arms .*: usa/cod/015180\.c $'
+  # (z1)-(z4) task #1365 BLIND: (e)'s both-arms failure is tolerated because
+  # the landing did not touch it. Touched — its own source edited (z1), or a
+  # shared header every unit reads edited (z2) — the comparison cannot see the
+  # change, so the row must WARN BLIND naming it (FAIL under --strict). A
+  # landing touching only a CLEAN unit beside it must stay silent (z3), and a
+  # comparison that cannot run must fail closed (z4: an unreadable base file).
+  local zt zst zout zre zwant
+  native_tree "$N/tip_z1"; native_seed "$N/tip_z1" usa/cod/015180.c; printf '\n/* t1365 selftest: an edit inside a both-arms failure */\n' >> "$N/tip_z1/going-decompiled/src/usa/cod/015180.c"
+  native_tree "$N/tip_z2"; native_seed "$N/tip_z2" usa/cod/015180.c; printf '\n/* t1365 selftest: a shared header edit */\n' >> "$N/tip_z2/going-decompiled/include/common.h"
+  native_tree "$N/tip_z3"; native_seed "$N/tip_z3" usa/cod/015180.c; printf '\n/* t1365 selftest: an edit to a clean unit */\n' >> "$N/tip_z3/going-decompiled/src/eu/cod/015180.c"
+  native_tree "$N/base_z4"; native_seed "$N/base_z4" usa/cod/015180.c; : > "$N/base_z4/going-decompiled/include/t1365_unreadable.h"; chmod 000 "$N/base_z4/going-decompiled/include/t1365_unreadable.h"
+  for zst in 0 1; do
+    for zt in z1 z2 z3 z4; do
+      zout="$N/blind_${zt}_$zst.txt"; zre=$([ $zst = 1 ] && echo 'FAIL\(strict\)' || echo WARN)
+      case $zt in
+        z1) zwant="^$zre NATIVE: BLIND — 1 unit\\(s\\) .*: usa/cod/015180\\.c \\(its own source differs base->tip\\) — " ;;
+        z2) zwant="^$zre NATIVE: BLIND — 1 unit\\(s\\) .*: usa/cod/015180\\.c \\(a shared NATIVE input differs\\) — " ;;
+        z3) zwant='^     BLIND: none — ' ;;
+        z4) zwant="^$zre NATIVE: BLIND unverifiable — .*could not checksum the base's shared NATIVE inputs.*each is treated as BLIND: usa/cod/015180\\.c \\(task #1365\\)" ;;
+      esac
+      if [ $zt = z4 ] && [ -r "$N/base_z4/going-decompiled/include/t1365_unreadable.h" ]; then say "SELFTEST-BROKEN (z4) the chmod-000 seed is still readable (running as root?) — the fail-closed arm cannot be exercised"; b=1; continue; fi
+      FAILED=0; WARNED=0; STRICT=$zst; NATIVE_LEFT_FROM_ENV=1 check_native "$N/$([ $zt = z4 ] && echo base_c || echo "tip_$zt")" "$N/$([ $zt = z4 ] && echo base_z4 || echo base_c)" > "$zout"; STRICT=0
+      if [ $zt = z3 ]; then
+        if [ "$FAILED" = 0 ] && [ "$WARNED" = 0 ] && /usr/bin/grep -qE "$zwant" "$zout" && /usr/bin/grep -qE '^     failing on BOTH arms .*: usa/cod/015180\.c $' "$zout" && ! /usr/bin/grep -q 'NATIVE: BLIND' "$zout"; then
+          ok "control (z3) STRICT=$zst: a landing touching only clean eu/cod/015180.c beside a both-arms failure — tolerated, 'BLIND: none', FAILED=0 WARNED=0"
+        else say "SELFTEST-FAIL (z3) STRICT=$zst: touching only a clean unit changed the verdict or fired BLIND (FAILED=$FAILED WARNED=$WARNED):"; show < "$zout"; b=1; fi
+      elif [ "$FAILED" = "$zst" ] && [ "$WARNED" = 1 ] && /usr/bin/grep -qE "$zwant" "$zout" \
+           && { [ $zt = z4 ] || /usr/bin/grep -qE '^     failing on BOTH arms .*: usa/cod/015180\.c $' "$zout"; } \
+           && { [ $zt != z2 ] || /usr/bin/grep -qE '^     shared NATIVE input\(s\) differing base->tip .*: going-decompiled/include/common\.h $' "$zout"; }; then
+        ok "fired ($zt) STRICT=$zst: $(/usr/bin/grep -E "^$zre NATIVE: BLIND" "$zout" | cut -c1-200)... (FAILED=$FAILED WARNED=$WARNED)"
+      else say "SELFTEST-FAIL ($zt) STRICT=$zst: the BLIND line did not fire as required (FAILED=$FAILED WARNED=$WARNED, want $zst/1):"; show < "$zout"; b=1; fi
+    done
+  done
+  chmod 644 "$N/base_z4/going-decompiled/include/t1365_unreadable.h"
   # (h)-(k) population shrink (FACT #8359, #945): the first usa unit of the
   # population, deleted at the tip or with its TARGET_NATIVE token removed
   local lu; lu=$(cd going-decompiled/src && /usr/bin/grep -rl TARGET_NATIVE usa | LC_ALL=C sort | head -1)
