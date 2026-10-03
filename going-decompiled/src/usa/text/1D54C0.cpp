@@ -4005,26 +4005,52 @@ extern void func_00298A00(void);
 extern void func_00297FA0(s32 saveRegion);
 extern void BuildSaveImage(void *dst);
 /* (end of this body's declarations) */
-/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
- * objdiff): sdk29 66.56% / engine96 64.95%; better arm sdk29; 34 differing
- * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-64`. Not iterated in t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
-void func_002DF668(void *dst, s16 slot) {
-    extern u8  D_001A7360[];
-    extern s32 D_00139554, D_00139528, D_00139544, D_00139548;
-    extern s16 D_001393F8;
-    sceCdReadClock((void *)D_001A7360);
-    func_00131A98((void *)D_001A7360);
+/* The RTC timestamp buffer the save image is stamped from (0x1A7360). The EE
+ * arm names it by its ROM symbol D_1A7360 (the relocation the ROM carries);
+ * the native runtime knows the same address as D_001A7360. The `.extern ,16`
+ * plus the 8-byte extent is an ADDRESSING-MODEL DEVICE (RULING #8620 class,
+ * as D_001B1E90 above): cc1 treats it as -G8 small data and emits each use as
+ * a one-insn `la` macro, so the address is materialised once per call as in
+ * the ROM instead of CSE'd into a callee-saved register; the assembler then
+ * expands the macro to the absolute lui/addiu pair. The 8 is NOT the size.
+ * D_18D278 (the per-level save-region table) stays a plain array: given the
+ * same device, the lui/addiu pair lands in swapped registers. */
+#ifndef TARGET_NATIVE
+__asm__(".extern D_1A7360, 16");
+extern u8 D_1A7360[8];
+extern u8 D_18D278[];
+#define SAVE_CLOCK_BUF ((void *)D_1A7360)
+#else
+extern u8 D_001A7360[];
+#define SAVE_CLOCK_BUF ((void *)D_001A7360)
+#endif
+extern u8 g_areaTable[];
+/* Build an in-progress save image for slot `slot` (stored as a halfword):
+ * timestamp it from the CD RTC, snapshot the current level WAD, build the
+ * image at `dst`, record dst/slot in the area-transition record (g_areaTable
+ * +0x174/+0x18), clear +0x148, and arm the 0x13-frame autosave countdown
+ * (+0x164, with +0x168 cleared) if it is idle (negative).
+ *
+ * SCREEN-EXACT on the s136os arm (SN 2.95.3 v1.36 -fopt-stack; task #1389,
+ * masked word screen + relocation compare, NOT vmu): a CANDIDATE, not a
+ * match. Levers: the record fields through g_areaTable (the ROM's lui/addiu
+ * base in $18) rather than the five gp-relative aliases D_00139554 ...
+ * D_00139548; the D_1A7360 device above; `slot` an s32 (the ROM stores $5
+ * with no sign extension). */
+void func_002DF668(void *dst, s32 slot) {
+    u8 *area = (u8 *)g_areaTable;
+
+    sceCdReadClock(SAVE_CLOCK_BUF);
+    func_00131A98(SAVE_CLOCK_BUF);
     func_00298A00();
-    func_00297FA0(g_playerProgress * 0x800 + 0x18d278);
+    func_00297FA0(g_playerProgress * 0x800 + ROM_DATA_ADDR(D_18D278, 0x18d278));
     BuildSaveImage(dst);
-    D_00139554 = (s32)dst;
-    D_001393F8 = slot;
-    D_00139528 = 0;
-    if (D_00139544 < 0) {
-        D_00139548 = 0;
-        D_00139544 = 0x13;
+    *(s32 *)(area + 0x174) = (s32)dst;
+    *(s16 *)(area + 0x18) = slot;
+    *(s32 *)(area + 0x148) = 0;
+    if (*(s32 *)(area + 0x164) < 0) {
+        *(s32 *)(area + 0x168) = 0;
+        *(s32 *)(area + 0x164) = 0x13;
     }
 }
 #endif
