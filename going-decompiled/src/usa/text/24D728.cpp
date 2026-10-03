@@ -324,7 +324,14 @@ extern f32 *func_00337120(GuiElement *e);   /* -> element primary vec (float[0])
 /* TODO(match) func_0034DAB0 - task #566 (round 4), measured on the COMMITTED tree (this file,
  * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
  * tools/ee/objdiff_build.sh, clean): sdk29 82.07%, engine96 58.98%. Eligible arm: e96.
- * Residual: ORDER + ADDRESSING */
+ * Residual: ORDER + ADDRESSING
+ * SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked; a candidate, NOT match evidence): EXACT 45/45, relocations equal, once
+ * the trailing empty fence is removed (a cc1-2.96 sibcall fence is a scheduling
+ * barrier under SN 1.36, as #1347 measured) and the pad word is read in the
+ * ROM's split form (declaration below). Fence kept: 5/45, first diff @24 (the
+ * `move $17,$2` / `ori $5` order); split form undone: the pad word read
+ * gp-relative, first diff @0 (ROM `lui $3` first). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034DAB0);
 #else
@@ -332,7 +339,14 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034DAB0);
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern u32 func_002AA3F0(u32 color1, u32 color2, s32 period, s32 counterSel, s32 reset);
 extern f32 *func_00337120(GuiElement *e);
+#ifndef TARGET_NATIVE
+/* ADDRESSING-MODEL DEVICE (RULING #8620): `.data` on this extern declaration
+ * takes the pad word out of cc1's -G8 small-data class, so cc1 splits it into
+ * the ROM's lui (scheduled first) / lw %lo pair. Moves no data. */
+extern s32 g_padButtonsPressed __attribute__((section(".data")));
+#else
 extern s32 g_padButtonsPressed;
+#endif
 /* (end of this body's declarations) */
 /* Structure-exact model (cmp-oracle blocked as noted; matching arm stays asm).
    Drives the HUD sub-element at +0x5D8: any d-pad direction restarts the tween
@@ -349,7 +363,6 @@ void func_0034DAB0(GuiHudManager *mgr, s32 visible, f32 alpha) {
     color[0] = func_002AA3F0(0x60442D00, 0x70FFFEED, 0x14, 0, 0);
     *func_00337120(elem) = alpha;
     GuiElementSetVisible(elem, visible);
-    __asm__ __volatile__("");
 }
 #endif
 
