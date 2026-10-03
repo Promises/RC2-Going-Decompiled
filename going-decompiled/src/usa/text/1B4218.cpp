@@ -3552,8 +3552,8 @@ void ResetDialogVoiceChannels(void) {
  * sharing is the gcse (load-PRE) pass, which the unit's 2.9 -fno-gcse pin
  * suppresses (FACT #7922). The ch0 pair is written before the ch2 pair in the
  * source: SN 1.36's scheduler then emits them in the ROM's ch2-first order.
- * Neither change closes it alone (FACT #9003: pin + this order 12/13 words,
- * unpinned + the old ch2-first order 4/13).
+ * Neither change closes it alone (FACT #9003, counts of DIFFERING words out of
+ * 13: pin + this order, 12 differ; unpinned + the old ch2-first order, 4 differ).
  * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
  * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
  * tools/ee/s136os_functions.txt) at the -O2 default, without the 2.9 arm's
