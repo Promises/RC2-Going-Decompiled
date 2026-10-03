@@ -3478,12 +3478,16 @@ s32 func_002DD630(void *screenArg) {
  * equate is ruled covered by RULING #9073; #8036 alias). They emit nothing:
  *   - `.extern D_1A8C88, 16`: the ROM reads D_1A8C88 with the absolute
  *     `lui $2,%hi(D_1A8C88); lw $2,%lo(D_1A8C88)($2)` pair (0x002DD81C);
- *   - the offset-0 equate alias `g_guiInstanceGp`, with no `.extern` size: it
- *     reproduces the ROM's `lw $2,%gp_rel(g_guiInstance)($28)` in the `beqz`
- *     delay slot at 0x002DD828. The assembler leaves an access through the alias
- *     gp-relative even though this unit declares `.extern g_guiInstance, 16`
- *     further up (its other readers stay absolute). The relocation still names
- *     g_guiInstance; no alias symbol reaches nm.
+ *   - the offset-0 equate alias `g_guiInstanceGp`, given no sized `.extern` of its
+ *     own: it reproduces the ROM's `lw $2,%gp_rel(g_guiInstance)($28)` in the
+ *     `beqz` delay slot at 0x002DD828. The only size the alias gets is cc1's own
+ *     `.extern g_guiInstanceGp, 4` (<= -G8; the s136os splice carries it in front
+ *     of the block), so that one access is gp-relative even though this unit
+ *     declares `.extern g_guiInstance, 16` further up. The unit's other readers
+ *     of g_guiInstance (func_002D5EC8, func_002D60E8, func_002D61D8,
+ *     func_002D63B0, func_002D6508) stay absolute; measured, task #1408. The
+ *     relocation names g_guiInstance (R_MIPS_GPREL16), and GNU as never writes an
+ *     equate of an undefined symbol to the symtab, so no alias reaches nm.
  * At file scope, EE only (task #1408): the s136os splice REFUSES a member whose
  * own arm carries an `.extern ,16` (ADDRESSING) or an equate (DEFINITION) that
  * the unit's 2.9 TU never sees (FACT #9057, FACT #9067). Native reads the real

@@ -1443,11 +1443,15 @@ extern void func_003503D8(void);     /* FMV teardown */
  *   - `.extern ,16` on both FMV base pointers: the ROM stores them with the
  *     absolute `lui $1; sw rX,%lo(sym)($1)` macro pair, so the assembler must
  *     expand cc1's one-insn store macro that way;
- *   - the offset-0 equate alias `g_pFmvArenaBaseGp`, with no `.extern` size: it
- *     reproduces the ROM's one gp-relative read, `lw $4,%gp_rel(g_pFmvArenaBase)($28)`
- *     in the `beqz` delay slot at 0x0034FD28. The assembler leaves an access
- *     through the alias gp-relative, and the relocation still names g_pFmvArenaBase;
- *     no alias symbol reaches nm.
+ *   - the offset-0 equate alias `g_pFmvArenaBaseGp`, given no sized `.extern` of
+ *     its own: it reproduces the ROM's one gp-relative read,
+ *     `lw $4,%gp_rel(g_pFmvArenaBase)($28)` in the `beqz` delay slot at 0x0034FD28.
+ *     The only size the alias gets is cc1's own `.extern g_pFmvArenaBaseGp, 4`
+ *     (<= -G8; the s136os splice carries it in front of the block), so the
+ *     assembler makes that one access gp-relative while the real symbol keeps its
+ *     `, 16`. The relocation names g_pFmvArenaBase (R_MIPS_GPREL16), and GNU as
+ *     never writes an equate of an undefined symbol to the symtab, so no alias
+ *     reaches nm (task #1408).
  * At file scope, EE only (task #1408): the s136os splice REFUSES a member whose
  * own arm carries an `.extern ,16` (ADDRESSING) or an equate (DEFINITION) that
  * the unit's 2.9 TU never sees (FACT #9057, FACT #9067). Native reads the real
