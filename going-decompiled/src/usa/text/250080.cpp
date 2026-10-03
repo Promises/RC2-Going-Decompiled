@@ -604,22 +604,36 @@ extern void func_00133930(s32 len, s32 dstOfs);
    Bounce a decoded 0x400 block from EE (src) to the IOP at the stream's IOP
    buffer base (obj[0x48]) + dstOfs: build a 4-word SIF-DMA descriptor
    {src, iopBase, len, 0}, arm the chain (func_0011AEA0), retry the enqueue until
-   a slot is granted, wait for completion, then notify (func_00133930). */
+   a slot is granted, wait for completion, then notify (func_00133930).
+
+   SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+   masked; a candidate, NOT match evidence): EXACT 42/42, relocations equal. The
+   two wait loops carry the ROM's R5900 short-loop pad nops (2 and 3) before
+   their backward branches (R5900_SHORT_LOOP_PAD1, a scheduling device, RULING
+   #8435), and an EMPTY fence after the chain-arm call (RULING #8483, emits
+   nothing) makes cc1 load the IOP base into $2 as the ROM does. Fence removed:
+   2/42, first diff @12 (`lw $3` vs `lw $2`); pads removed: 21/42; both: 23/42. */
 void func_00350868(u8 *obj, u8 *src, s32 len, s32 dstOfs) {
     s32 desc[4];
     s32 id;
     s32 stat;
 
     func_0011AEA0(0);
+    __asm__ __volatile__("");
     desc[0] = (s32)src;
     desc[1] = *(s32 *)(obj + 0x48);
     desc[2] = len;
     desc[3] = 0;
     do {
         id = func_0011AFE0(desc, 1);
+        R5900_SHORT_LOOP_PAD1(id, id);
+        R5900_SHORT_LOOP_PAD1(id, id);
     } while (id == 0);
     do {
         stat = func_0011AFC0(id);
+        R5900_SHORT_LOOP_PAD1(stat, stat);
+        R5900_SHORT_LOOP_PAD1(stat, stat);
+        R5900_SHORT_LOOP_PAD1(stat, stat);
     } while (stat >= 0);
     func_00133930(len, dstOfs);
 }
