@@ -1940,7 +1940,8 @@ selftest_regression_gate() {
 # (docker rc, no `asm_unit_selftest: N arms, F failed` line) is a SELFTEST-FAIL
 # naming the rc, never a skip. That it can fail is shown inside the tool by its
 # own seeded copies, and for this arm by #1366's seed (asm_unit.sh's dli-pass
-# refusal `exit 2` -> `exit 0`: rc 1, 66 failed; FACT #9011).
+# refusal `exit 2` -> `exit 0`: rc 1, 62 failed in this default form, task
+# #1374; FACT #9011's 66 is the argument form, incl. 4 SYNC artefacts).
 selftest_asmunit_selftest() {
   local T="$1" b=0 rc sum n f np nf
   say "-- (25) ASM_UNIT_SELFTEST (#1366): $HERE/asm_unit_selftest.sh on this tree's asm_unit.sh in one container on $EE_CTX -> rc 0, 'N arms, 0 failed', N PASS lines and no FAIL line; a VM that cannot run it is a FAIL"
