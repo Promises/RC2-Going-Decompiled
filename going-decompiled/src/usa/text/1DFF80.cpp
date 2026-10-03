@@ -1632,7 +1632,13 @@ s32 StartSoundEmitter(SoundDef *pSoundDef, s32 flags, Moby *ownerMoby,
  * emitter could be started.
  * NEAR-MISS: WALLED - 2 callee saves (s0,s1) 8-byte-packed + the null/range
  * guards lower to branch-likely (`beql`/`bnel`) the cc1 emits as plain branches.
- * NATIVE SHIM (no byte target). */
+ * NATIVE SHIM (no byte target).
+ * SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked; a candidate, NOT match evidence): EXACT 41/41, relocations equal, with
+ * PlaySoundFromClassBank's two levers: two R5900 short-loop pad nops before the
+ * short backward `beqz` (R5900_SHORT_LOOP_PAD1, scheduling device, RULING #8435)
+ * and owner-first slot stamps (FACT #8947). Pads removed: 27/41, first diff @6;
+ * stamp order reverted: 2/41. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", PlayMobySound);
 #else
@@ -1641,6 +1647,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", PlayMobySound);
 extern s32 StartSoundEmitter(SoundDef *pSoundDef, s32 flags, Moby *ownerMoby, Vec4 *pPos, s32 volScale);
 /* (end of this body's declarations) */
 s32 PlayMobySound(s32 soundIdx, s32 flags, Moby *owner) {
+    s32 inRange;
     u8 *classHdr;
     u8 *defArray;
     s32 slot;
@@ -1657,7 +1664,10 @@ s32 PlayMobySound(s32 soundIdx, s32 flags, Moby *owner) {
     if (defArray == NULL) {
         return -1;
     }
-    if (soundIdx >= *(u8 *)(classHdr + 0xD)) {
+    inRange = soundIdx < *(u8 *)(classHdr + 0xD);
+    R5900_SHORT_LOOP_PAD1(inRange, inRange);
+    R5900_SHORT_LOOP_PAD1(inRange, inRange);
+    if (!inRange) {
         return -1;
     }
 
@@ -1665,8 +1675,8 @@ s32 PlayMobySound(s32 soundIdx, s32 flags, Moby *owner) {
                              owner, NULL, 0x400);
     if (slot >= 0) {
         e = g_listenerPosHistory + slot * 0x70;
-        *(s16 *)(e + 0x7E) = (s16)soundIdx;
         *(s32 *)(e + 0x88) = (s32)owner;
+        *(s16 *)(e + 0x7E) = (s16)soundIdx;
     }
     return slot;
 }
@@ -1742,7 +1752,13 @@ s32 PlaySoundFromClassBank(s32 soundIdx, s32 flags, Moby *owner, s32 classId) {
  * Delegates to StartSoundEmitter with flags 0, pPos = 0, volScale = 0x400; on
  * success it records the source sound index (s16 at slot+0x7E) and owner
  * (s32 at slot+0x88) into the slot record (addressed off g_listenerPosHistory,
- * +0x70 ahead of g_soundEmitterTable). NATIVE SHIM (no byte target). */
+ * +0x70 ahead of g_soundEmitterTable). NATIVE SHIM (no byte target).
+ * SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked; a candidate, NOT match evidence): EXACT 37/37, relocations equal, with
+ * the pool pointer and count read in the ROM's absolute lui/lw form (`.extern
+ * ,16` below makes the assembler expand cc1's one-insn `lw` macro that way) and
+ * owner-first slot stamps (FACT #8947). Without the `.extern`s: 36/37, first diff
+ * @1 (`lw $3,%gp_rel` vs ROM `lui $3`); stamp order reverted: 2/37. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", PlayGlobalSound);
 #else
@@ -1750,6 +1766,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", PlayGlobalSound
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern s32 StartSoundEmitter(SoundDef *pSoundDef, s32 flags, Moby *ownerMoby, Vec4 *pPos, s32 volScale);
 /* (end of this body's declarations) */
+__asm__(".extern g_globalSoundDefsPtr, 16");
+__asm__(".extern g_nGlobalSoundDefs, 16");
 extern void *g_globalSoundDefsPtr; /* 0x1B162C - global sound-def pool */
 extern s32 g_nGlobalSoundDefs;     /* 0x1A8BBC - count of global sound defs */
 
@@ -1769,8 +1787,8 @@ s32 PlayGlobalSound(s32 soundIdx, s32 posOverride, s32 owner) {
                              NULL, 0x400);
     if (slot >= 0) {
         e = g_listenerPosHistory + slot * 0x70;
-        *(s16 *)(e + 0x7E) = (s16)soundIdx;
         *(s32 *)(e + 0x88) = owner;
+        *(s16 *)(e + 0x7E) = (s16)soundIdx;
     }
     return slot;
 }
