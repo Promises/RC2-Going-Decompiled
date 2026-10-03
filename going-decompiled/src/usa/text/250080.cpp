@@ -790,11 +790,23 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", OnFmvGifDmaInte
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350F28);
 #else
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 84.05% / engine96 76.10%. Residual: PACKED-SAVE (2 callee saves) + 9 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
-/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee saves. */
+/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee saves.
+ * NEAR-MISS SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated
+ * fields masked): 4/20 words differ, from 12/20, with the ROM's one R5900
+ * short-loop pad nop before the loop's backward beqz (R5900_SHORT_LOOP_PAD1,
+ * scheduling device, RULING #8435). Residual (SCHED): the ROM stores
+ * D_1AE788 = 1 between the two epilogue restores (ld $16; lui/sw; ld $31); cc1
+ * stores both flags after them. Both store orders give 4/20; an empty fence
+ * between the stores moves it before ld $16 (3/20, still not the ROM's place). */
 extern s32 WaitVblankGetField(s32 mode);
 extern s32 g_bProgressiveScan;
 s32 func_00350F28(s32 targetField) {
-    while (WaitVblankGetField(0) == targetField && g_bProgressiveScan == 0) {
+    while (WaitVblankGetField(0) == targetField) {
+        s32 progressive = g_bProgressiveScan;
+        R5900_SHORT_LOOP_PAD1(progressive, progressive);
+        if (progressive != 0) {
+            break;
+        }
     }
     D_1AE788 = 1;
     D_1AE78C = 0;
