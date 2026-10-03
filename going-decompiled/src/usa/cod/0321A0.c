@@ -1110,9 +1110,11 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00
 
 /**
  * Invoke snd_SendCommandSync with selector 0x3B and count 0x18 (24 bytes),
- * passing a 6-word stack record (arg0..arg5) as the data argument.
+ * passing a 6-word stack record (arg0..arg5) as the data argument, and
+ * forwarding its return value: nothing after the jal writes $v0, and the one
+ * caller, FmvPtsQueueInit, stores and tests it (task #1428).
  */
-void func_00133850(s32 arg0, s32 arg1, s32 arg2, s32 arg3, s32 arg4, s32 arg5) {
+s32 func_00133850(s32 arg0, s32 arg1, s32 arg2, s32 arg3, s32 arg4, s32 arg5) {
     s32 args[6];
     args[0] = arg0;
     args[1] = arg1;
@@ -1120,7 +1122,7 @@ void func_00133850(s32 arg0, s32 arg1, s32 arg2, s32 arg3, s32 arg4, s32 arg5) {
     args[3] = arg3;
     args[4] = arg4;
     args[5] = arg5;
-    snd_SendCommandSync(0x3B, 0x18, args);
+    return snd_SendCommandSync(0x3B, 0x18, args);
 }
 
 /**

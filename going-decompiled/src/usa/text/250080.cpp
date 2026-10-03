@@ -215,7 +215,7 @@ extern s32 func_003518B8(void *stream, ...);
 extern s32 func_00352638(u8 *obj, u64 a, u64 b, s32 pos, s32 n);
 extern s32 func_003522C0(void *dmaq, ...);  /* FMV DMA-add-queue enqueue (deferred native; ret ignored) */
 extern void ZeroQwords(void *p, s32 n);
-extern s32 func_00133850(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f); /* DECL-LEVER(#1387, #1424): defined void in cod/0321A0.c, but void does not compile here (the result is assigned), and the ROM returns snd_SendCommandSync's $v0, which FmvPtsQueueInit reads */
+extern s32 func_00133850(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f);
 extern void *func_0012F738(void);
 extern s32 func_0012FA70(u8 *obj, s32 slot, void *cb, s32 arg);
 extern void func_003525D0(FmvStream *s);
@@ -382,7 +382,7 @@ S136OS_SLOT(FmvPtsQueueInit);
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern void ZeroQwords(void *p, s32 n);
-extern s32 func_00133850(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f); /* DECL-LEVER(#1387, #1424): defined void in cod/0321A0.c, but void does not compile here (the result is assigned), and the ROM returns snd_SendCommandSync's $v0, which FmvPtsQueueInit reads */
+extern s32 func_00133850(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f);
 extern u8 *D_1B2354;
 /* (end of this body's declarations) */
 /* The EE arm names the qword filler and the decode-buffer pointer by their ROM
