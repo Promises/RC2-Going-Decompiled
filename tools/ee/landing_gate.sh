@@ -36,6 +36,23 @@
 #            flagged.
 #   BUILD    tools/ee/build.sh <region> in the ee-build container, objects and
 #            link outputs wiped first so nothing stale can be measured.
+#   CC1ARGS  (task #1377, RULING #9004) the BUILD runs with EE_CC1_ARGLOG set,
+#            so tools/ee/ee_cc1.sh logs every compile's arm, source and cc1
+#            flag string to .gate_landing/<region>/cc1_args.tsv, and
+#            tools/ee/cc1_arglog_check.py asserts that every sdk29 compile
+#            carries `-O2 GFLAG CC1EXTRA` and every s136 compile `-O2 GFLAG
+#            S136EXTRA -fopt-stack`, as build.sh's flag table assigns them
+#            (derived from the table, not listed). It also asserts that every
+#            source has one sdk29 line and that each unit has as many s136
+#            lines as the selector has rows. On usa it adds RULING #9004's
+#            floor: 1B4218's 2.9 compile keeps -fno-gcse, its s136 compiles carry
+#            none, and 1DFF80 keeps it on both arms. WHY a row: #1364 measured
+#            that unpinning BOTH 1B4218 arms leaves the unit object
+#            BYTE-IDENTICAL, so the image cmp cannot see it (FACT #9034). Fails
+#            CLOSED: an absent, empty or older-than-this-build log is a FAIL,
+#            never "nothing to check". --no-build reads the recorded build's
+#            log (the TREE row ties it to this tree). Adds no build: it reads
+#            the one above.
 #   ROW      cmp vs retail .rom (count), sha1 == the yaml's, e_entry == the
 #            retail ELF's, ld.log 0 B with an mtime from THIS run, nm -u 0 — and
 #            the negative control RULING #7208 condition 2 asks for, observed in
@@ -983,9 +1000,34 @@ do_build() {
   done
   # The dli allowlist's host md5 goes to every asm_unit.sh in build.sh, which
   # verifies its read before the dli pass (task #1205, FACT #8713).
-  in_vm "B=$BUILD; rm -rf \$B/going-decompiled \$B/$BASENAME.elf \$B/$BASENAME.lma.elf \$B/$BASENAME.rom \$B/ld.log \$B/ld.lma.log \$B/$BASENAME.map \$B/all_addr_syms.ld;$sync ASM_UNIT_DLISITES_MD5=$(sh "$HERE/mount_sync.sh" md5 "$HERE/ps2eeas_dli_sites.txt") S136OS_FUNCS_MD5=$(sh "$HERE/mount_sync.sh" md5 "$HERE/s136os_functions.txt") sh tools/ee/build.sh $REGION" > "$OUT/build.log" 2>&1
+  # EE_CC1_ARGLOG: the CC1ARGS row's input, written fresh by this build only.
+  rm -f "$OUT/cc1_args.tsv"
+  in_vm "B=$BUILD; rm -rf \$B/going-decompiled \$B/$BASENAME.elf \$B/$BASENAME.lma.elf \$B/$BASENAME.rom \$B/ld.log \$B/ld.lma.log \$B/$BASENAME.map \$B/all_addr_syms.ld;$sync ASM_UNIT_DLISITES_MD5=$(sh "$HERE/mount_sync.sh" md5 "$HERE/ps2eeas_dli_sites.txt") S136OS_FUNCS_MD5=$(sh "$HERE/mount_sync.sh" md5 "$HERE/s136os_functions.txt") EE_CC1_ARGLOG=/work/$OUT/cc1_args.tsv sh tools/ee/build.sh $REGION" > "$OUT/build.log" 2>&1
   say "     build.sh rc=$? ($(wc -l < "$OUT/build.log" | tr -d ' ') log lines -> $OUT/build.log)"
   tail -4 "$OUT/build.log" | sed 's/^/     /'
+}
+
+# -------------------------------------------------------------- CC1ARGS ----
+# check_cc1args [ARGLOG [TABLE [START_EPOCH]]] — the CC1ARGS row (task #1377):
+# tools/ee/cc1_arglog_check.py over the BUILD's arg log. rc 1 (an offender) and
+# rc 2 (log absent/empty, table unparsed) are both FAILs: a build that logged
+# nothing checked nothing. A log older than START_EPOCH (default: this region's
+# build_start) is a stale log from another build and FAILs before it is read.
+# --selftest arm (26) passes seeded copies.
+check_cc1args() {
+  local log=${1:-$OUT/cc1_args.tsv} table=${2:-$HERE/build.sh} start=${3:-$(cat "$OUT/build_start" 2>/dev/null || echo 0)}
+  say "== CC1ARGS [$REGION]: every compile's cc1 flags == the flag table's ($table), sdk29 and s136; RULING #9004 floor on usa ($log)"
+  if [ -f "$log" ]; then
+    local m; m=$(python3 -c 'import os,sys; print(int(os.path.getmtime(sys.argv[1])))' "$log")
+    if [ "$m" -lt "$start" ]; then fail "CC1ARGS: $log mtime $m < build start $start — a STALE arg log, not this build's"; return; fi
+  fi
+  local out rc; out=$(python3 "$HERE/cc1_arglog_check.py" "$REGION" "$log" --table "$table" 2>&1); rc=$?
+  say "$out" | sed 's/^/     /'
+  case $rc in
+    0) ok "CC1ARGS: $(printf '%s\n' "$out" | sed -n 's/^# \([0-9]* lines: .*\); table .*/\1/p') — all as the table assigns" ;;
+    1) fail "CC1ARGS: $(printf '%s\n' "$out" | /usr/bin/grep -c '^FAIL ' || true) compile(s)/count(s) differ from the flag table or RULING #9004's floor (listed above)" ;;
+    *) fail "CC1ARGS could not run (rc $rc) — fails closed: $(printf '%s\n' "$out" | /usr/bin/grep -m1 '^CNR' || printf '%s' "$out" | head -1)" ;;
+  esac
 }
 
 # ------------------------------------------------------------------ ROW ----
@@ -1128,6 +1170,7 @@ run_gate() {  # run_gate REGION [--no-build] [--strict]
     check_tree "$OUT/built_tree.txt"
   fi
   check_asmunit
+  check_cc1args
   local start; start=$(cat "$OUT/build_start" 2>/dev/null || echo 0)
   measure_row "$BUILD/$BASENAME.rom" "$BUILD/$BASENAME.elf" "$BUILD/ld.log" "$OUT/row.txt"
   check_row "$OUT/row.txt" "$start"
@@ -1213,6 +1256,8 @@ selftest() {
     FAILED=0; check_row "$OUT/row.txt" "$start" "$T/ldundef_short.txt" > "$T/row_ldundef.txt"
     /usr/bin/grep -q "GREW.*$dropped1" "$T/row_ldundef.txt" && ok "fired: EU ld.log baseline minus '$dropped1' -> $(/usr/bin/grep -oE 'undefined set GREW \([^)]*\)' "$T/row_ldundef.txt")" || { say "SELFTEST-FAIL EU ld.log baseline arm did not fire"; show < "$T/row_ldundef.txt"; bad=1; }
   fi
+
+  selftest_cc1args "$T" "$start" || bad=1
 
   say "-- (5) PROVIDE: one PROVIDE line removed from all_addr_syms.ld -> the full link must fail (undefined name, no ELF)"
   local all="$BUILD/all_addr_syms.ld"
@@ -1366,6 +1411,84 @@ selftest() {
   # `landing_gate.*PASS` grep must never mistake a selftest for a landing
   say "#### SELFTEST $REGION: $([ $bad = 0 ] && echo PASS || echo FAIL)"
   return $bad
+}
+
+# selftest_cc1args OUTDIR START_EPOCH — arm (26), task #1377. Seeds copies of
+# the arg log arm (3)'s build wrote (and, for the both-arms seed, of build.sh's
+# table); no extra build. Legs:
+#   control  the real log passes;
+#   CLOSED   an absent log (what a build without EE_CC1_ARGLOG leaves), an
+#            empty log and a log older than the build each FAIL as could-not-run
+#            or stale, never as "nothing to check";
+#   usa only, RULING #9004 (#1364's seed pair, replayed on the log):
+#     both   1B4218's CC1EXTRA emptied in a table copy AND its sdk29 line
+#            unpinned to match: the table-derived rule is satisfied (the edit is
+#            consistent), so the ONLY FAIL must be the floor's "-fno-gcse
+#            MISSING on the 2.9 arm" — the byte-identical case;
+#     splice every 1B4218 s136 line given -fno-gcse (the splice fed CC1EXTRA):
+#            one table mismatch AND one "s136 arm still pinned" per line;
+#     1DFF80 its s136 lines unpinned: mismatch + floor, per line;
+#   generic  one sdk29 line losing its last table flag -> a mismatch naming that
+#            unit; one sdk29 line deleted and one s136 line deleted -> the
+#            population counts FAIL naming each unit.
+selftest_cc1args() {
+  local T="$1" start="$2" b=0 L="$OUT/cc1_args.tsv" o n
+  say "-- (26) CC1ARGS (#1377): the BUILD's arg log vs the flag table; fail-closed legs; usa: RULING #9004's both-arms / splice / 1DFF80 seeds; a generic flag drop and the population counts"
+  FAILED=0; check_cc1args "$L" "$HERE/build.sh" "$start" > "$T/cc1_clean.txt"
+  if [ "$FAILED" = 0 ] && /usr/bin/grep -q '^OK   CC1ARGS: ' "$T/cc1_clean.txt"; then ok "control: $(/usr/bin/grep '^OK   CC1ARGS' "$T/cc1_clean.txt" | sed 's/^OK   //')"
+  else say "SELFTEST-FAIL (26) the real arg log does not pass (FAILED=$FAILED):"; show < <(/usr/bin/grep -E 'FAIL|CNR' "$T/cc1_clean.txt" | head -20 | sed 's/^/  inner| /'); b=1; fi
+  rm -f "$T/cc1_absent.tsv"; : > "$T/cc1_empty.tsv"
+  for o in absent empty; do
+    FAILED=0; check_cc1args "$T/cc1_$o.tsv" "$HERE/build.sh" "$start" > "$T/cc1_$o.txt"
+    if [ "$FAILED" = 1 ] && /usr/bin/grep -q '^FAIL CC1ARGS could not run (rc 2) — fails closed' "$T/cc1_$o.txt"; then ok "fired: $o log -> $(/usr/bin/grep '^FAIL' "$T/cc1_$o.txt" | sed 's/^FAIL //; s#[^ ]*/cc1_#cc1_#g')"
+    else say "SELFTEST-FAIL (26) an $o arg log did not FAIL closed (FAILED=$FAILED):"; show < <(sed 's/^/  inner| /' "$T/cc1_$o.txt"); b=1; fi
+  done
+  FAILED=0; check_cc1args "$L" "$HERE/build.sh" $((start + 100000)) > "$T/cc1_stale.txt"
+  if [ "$FAILED" = 1 ] && /usr/bin/grep -q '^FAIL CC1ARGS: .* a STALE arg log' "$T/cc1_stale.txt"; then ok "fired: a log older than the build -> STALE"; else say "SELFTEST-FAIL (26) a log older than the build was read (FAILED=$FAILED)"; b=1; fi
+  if [ "$REGION" = usa ]; then
+    # both arms unpinned, consistently: table copy + matching log
+    sed 's#\(usa/text/1B4218.c) GFLAG="-G8"; \)CC1EXTRA="-fno-gcse"; S136EXTRA="";#\1CC1EXTRA=""; S136EXTRA="";#' "$HERE/build.sh" > "$T/cc1_build_both.sh"
+    cmp -s "$HERE/build.sh" "$T/cc1_build_both.sh" && { say "SELFTEST-BROKEN: (26) the both-arms seed did not change build.sh's 1B4218 row"; b=1; }
+    awk -F'\t' -v OFS='\t' '$1 == "sdk29" && $2 ~ /\/usa\/text\/1B4218\.(c|cpp)$/ { sub(/ -fno-gcse/, "", $3) } { print }' "$L" > "$T/cc1_both.tsv"
+    FAILED=0; check_cc1args "$T/cc1_both.tsv" "$T/cc1_build_both.sh" "$start" > "$T/cc1_both.txt"
+    n=$(/usr/bin/grep -c '^ *FAIL ' "$T/cc1_both.txt" || true)
+    if [ "$FAILED" = 1 ] && [ "$n" = 2 ] && /usr/bin/grep -q '^ *FAIL (floor) usa/text/1B4218 sdk29 -O2 -G8 -> -fno-gcse MISSING on the 2.9 arm$' "$T/cc1_both.txt"; then ok "fired: both arms unpinned (table + log consistent) -> the floor alone: $(/usr/bin/grep '^ *FAIL (floor)' "$T/cc1_both.txt" | sed 's/^ *FAIL //')"
+    else say "SELFTEST-FAIL (26) the both-arms seed: FAILED=$FAILED, $n FAIL lines (want the gate row + exactly the one floor line):"; show < <(/usr/bin/grep 'FAIL' "$T/cc1_both.txt" | head -10 | sed 's/^/  inner| /'); b=1; fi
+    # splice fed CC1EXTRA
+    awk -F'\t' -v OFS='\t' '$1 == "s136" && $2 ~ /\/usa\/text\/1B4218\.(c|cpp)$/ { sub(/-G8 /, "-G8 -fno-gcse ", $3) } { print }' "$L" > "$T/cc1_splice.tsv"
+    local ns; ns=$(awk -F'\t' '$1 == "s136" && $2 ~ /\/usa\/text\/1B4218\.(c|cpp)$/' "$L" | wc -l | tr -d ' ')
+    FAILED=0; check_cc1args "$T/cc1_splice.tsv" "$HERE/build.sh" "$start" > "$T/cc1_splice.txt"
+    local np nm; np=$(/usr/bin/grep -c '^ *FAIL (floor) usa/text/1B4218 s136 .* -> s136 arm still pinned$' "$T/cc1_splice.txt" || true); nm=$(/usr/bin/grep -c '^ *FAIL usa/text/1B4218 s136: .* != table ' "$T/cc1_splice.txt" || true)
+    if [ "$FAILED" = 1 ] && [ "$ns" -ge 1 ] && [ "$np" = "$ns" ] && [ "$nm" = "$ns" ]; then ok "fired: splice fed CC1EXTRA -> ${np}x 's136 arm still pinned' + ${nm}x table mismatch (1B4218 has $ns s136 compiles)"
+    else say "SELFTEST-FAIL (26) the splice seed: FAILED=$FAILED, $np floor / $nm mismatch lines for $ns 1B4218 s136 compiles"; b=1; fi
+    # 1DFF80 s136 unpinned
+    awk -F'\t' -v OFS='\t' '$1 == "s136" && $2 ~ /\/usa\/text\/1DFF80\.(c|cpp)$/ { sub(/ -fno-gcse/, "", $3) } { print }' "$L" > "$T/cc1_1dff80.tsv"
+    ns=$(awk -F'\t' '$1 == "s136" && $2 ~ /\/usa\/text\/1DFF80\.(c|cpp)$/' "$L" | wc -l | tr -d ' ')
+    FAILED=0; check_cc1args "$T/cc1_1dff80.tsv" "$HERE/build.sh" "$start" > "$T/cc1_1dff80.txt"
+    np=$(/usr/bin/grep -c '^ *FAIL (floor) usa/text/1DFF80 s136 .* -> -fno-gcse MISSING on the s136 arm$' "$T/cc1_1dff80.txt" || true)
+    if [ "$FAILED" = 1 ] && [ "$ns" -ge 1 ] && [ "$np" = "$ns" ]; then ok "fired: 1DFF80 s136 unpinned -> ${np}x '-fno-gcse MISSING on the s136 arm'"
+    else say "SELFTEST-FAIL (26) the 1DFF80 seed: FAILED=$FAILED, $np floor lines for $ns s136 compiles"; b=1; fi
+  fi
+  # generic: the first sdk29 line carrying a table flag beyond -O2 -G<n> loses its last word
+  local gl gu; gl=$(awk -F'\t' '$1 == "sdk29" && split($3, w, " ") > 2 { print NR; exit }' "$L")
+  if [ -z "$gl" ]; then say "SELFTEST-BROKEN: (26) no sdk29 line with an extra flag in $L to seed"; b=1; else
+    gu=$(awk -F'\t' -v n="$gl" 'NR == n { s = $2; sub(/.*going-decompiled\/src\//, "", s); sub(/\.(c|cpp)$/, "", s); print s }' "$L")
+    awk -F'\t' -v OFS='\t' -v n="$gl" 'NR == n { sub(/ [^ ]+ *$/, "", $3) } { print }' "$L" > "$T/cc1_drop.tsv"
+    FAILED=0; check_cc1args "$T/cc1_drop.tsv" "$HERE/build.sh" "$start" > "$T/cc1_drop.txt"
+    if [ "$FAILED" = 1 ] && /usr/bin/grep -q "^ *FAIL $gu sdk29: .* != table " "$T/cc1_drop.txt"; then ok "fired: $(/usr/bin/grep -m1 "^ *FAIL $gu sdk29" "$T/cc1_drop.txt" | sed 's/^ *FAIL //')"
+    else say "SELFTEST-FAIL (26) dropping a flag from $gu's sdk29 line did not FAIL naming it (FAILED=$FAILED)"; b=1; fi
+  fi
+  # population: one sdk29 line and one s136 line deleted
+  local d1 d2; d1=$(awk -F'\t' '$1 == "sdk29" { s = $2; sub(/.*going-decompiled\/src\//, "", s); sub(/\.(c|cpp)$/, "", s); print s; exit }' "$L")
+  d2=$(awk -F'\t' '$1 == "s136" { s = $2; sub(/.*going-decompiled\/src\//, "", s); sub(/\.(c|cpp)$/, "", s); print s; exit }' "$L")
+  awk -F'\t' '$1 == "sdk29" && !a++ { next } $1 == "s136" && !c++ { next } { print }' "$L" > "$T/cc1_pop.tsv"
+  FAILED=0; check_cc1args "$T/cc1_pop.tsv" "$HERE/build.sh" "$start" > "$T/cc1_pop.txt"
+  if [ -n "$d1" ] && [ "$FAILED" = 1 ] && /usr/bin/grep -q "^ *FAIL $d1 sdk29: 0 compile line(s), want exactly 1$" "$T/cc1_pop.txt" \
+     && { [ -z "$d2" ] || /usr/bin/grep -q "^ *FAIL $d2 s136: [0-9]* compile line(s), selector has [0-9]* row(s)$" "$T/cc1_pop.txt"; }; then
+    ok "fired: $(/usr/bin/grep -E "^ *FAIL ($d1 sdk29|${d2:-none} s136): [0-9]+ compile" "$T/cc1_pop.txt" | sed 's/^ *FAIL //' | tr '\n' ';')"
+  else say "SELFTEST-FAIL (26) deleting $d1's sdk29 line / ${d2:-no} s136 line did not FAIL the population counts (FAILED=$FAILED)"; b=1; fi
+  say "     outputs -> $T/cc1_*.txt"
+  return $b
 }
 
 # selftest_libgcc OUTDIR — arm (16), callable on its own after sourcing this
