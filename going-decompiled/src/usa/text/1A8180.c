@@ -787,27 +787,26 @@ void func_002A8948(Vec4 *out, Vec4 *p1, Vec4 *p2, Vec4 *p3, Vec4 *p4, f32 t) {
 /**
  * Cosine ("smootherstep"-style) ease between a and b by t in [0,1]: shortcut
  * the endpoints (t==0 -> a, t==1 -> b), otherwise blend by (1 - cos(t*pi))/2.
- */
-/* TODO(match): functional equivalent - 95.7%. The two endpoint c.eq.s shortcuts
-   and the (1 - cos(t*pi))*0.5 blend reproduce, but the later cc1 schedules the
-   compare's zero/one constant materialisation differently from the pinned cc1
-   (operand/const-scheduling wall). Revisit once the gameplay-TU compiler is
-   available. */
+ *   @param a  value at t == 0
+ *   @param b  value at t == 1
+ *   @param t  blend parameter in [0,1]
+ *   @return   a + (b - a) * (1 - func_00283B30(t*pi)) * 0.5  (func_00283B30 = cos)
+ * MATCHED (task #1352, cc1 2.9, image-resident). The t == 1 case is written
+ * last so cc1 emits the ROM's `bc1tl` with `mov.s $f0,$f21` in the annulled
+ * slot (FACT #8261); testing it first gives `bc1t`. The `jal func_00283B30`
+ * slot's mul.s reads the $f12 the mtc1 before the jal wrote: asm_unit.sh
+ * padded that slot with a nop until task #1352 (FACT #8063, NOTE #8972). */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 78.84%
    -> UNKNOWN-@0: ROM `mtc1 zero,$f0` vs `mtc1 zero,$f1` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8A68);
-#else
 f32 func_002A8A68(f32 a, f32 b, f32 t) {
     if (t == 0.0f) {
         return a;
     }
-    if (t == 1.0f) {
-        return b;
+    if (t != 1.0f) {
+        return a + (b - a) * ((1.0f - func_00283B30(t * 3.14159274f)) * 0.5f);
     }
-    return a + (b - a) * ((1.0f - func_00283B30(t * 3.14159274f)) * 0.5f);
+    return b;
 }
-#endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8B00);
@@ -4732,11 +4731,22 @@ void func_002ADC50(Vec4 *out, Vec4 *v, Vec4 *q) {
 extern f32 func_002835C0(f32 x);   /* sqrtf */
 
 /** func_002ADCE0 — rescale `src`'s vec3 to length `t` into `dst`, then set dst->w
- *  to sqrt(1 - t*t) (the w that keeps a unit quaternion / normal). */
+ *  to sqrt(1 - t*t) (the w that keeps a unit quaternion / normal).
+ *  @param dst  output vector; xyz = src's xyz rescaled to length t
+ *  @param t    target length (the sine half of the pair); w gets sqrt(1 - t*t)
+ *  @param src  input vector (only its xyz is read)
+ * MATCHED on the s136os arm (task #1352): the 8-byte save slots are SN 2.95.3
+ * v1.36 -fopt-stack's (FACT #8810). Its cc1 output equalled the ROM once
+ * asm_unit.sh stopped padding the `jal func_002835C0` slot, whose sub.s reads
+ * the $f12 the mtc1 before the jal wrote (FACT #8063, NOTE #8972).
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 49.33%
    -> UNKNOWN-@1: ROM `(none)` vs `swc1 $f20,16(sp)` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADCE0);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002ADCE0)
+S136OS_SLOT(func_002ADCE0);
 #else
 void func_002ADCE0(Vec4 *dst, f32 t, Vec4 *src) {
     Vec3RescaleToLenVu0(dst, t, src);

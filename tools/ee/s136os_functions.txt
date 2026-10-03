@@ -220,3 +220,4 @@ usa text/191238 func_00291FF8
 usa text/191238 func_00294970
 usa text/1A8180 func_002B0150
 usa text/1A00F0 func_002A0678
+usa text/1A8180 func_002ADCE0
