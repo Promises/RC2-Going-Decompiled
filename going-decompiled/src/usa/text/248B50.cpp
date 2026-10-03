@@ -866,9 +866,20 @@ GuiWidget *func_0034A1D8(GuiWidget *w) {
  * clear the +0x4-stride index entry 0 (func_0034A350), mark "2 records" at +0x84,
  * clear +0x20, and set the "armed" flag +0x1C to 1. The +0x18 field is reloaded
  * after being zeroed, so the slot-0 fill writes 0.0.
- * WALL: 2 callee saves ($16,$31) plus a saved $f20 — 0x20-vs-packed frame. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A210);
+ * @param w  the widget
+ * Returns nothing: the ROM leaves $v0 holding the 1 it stores to +0x1C, and its
+ * only caller (func_0034AA98) ignores it.
+ * MATCHED on the s136os arm (task #1370): the packed frame (2 callee saves plus
+ * $f20) is SN 2.95.3 v1.36 -fopt-stack's (FACT #8810). The ROM stores +0x20
+ * before +0x1C and this compiler emits the last store of a group that ends at
+ * the epilogue first, so +0x1C is written last here (last-store-first,
+ * FACT #8947).
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0034A210)
+S136OS_SLOT(func_0034A210);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -881,8 +892,9 @@ extern void func_0034A350(GuiWidget *w, s32 idx, f32 a, f32 b);
  * cc1 2.96-ee-001003-1): sdk29 96.58% / engine96 72.40%.
  * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 16/46 words differ;
  * frozen-.s census: 2 callee GPR saves, 1 fp saves.
- * Residual: PACKED-SAVE (2 callee GPR + 1 fp save) + FP REGNUM: 4 frame/save-slot words, remainder is $f-register numbering (46006346 vs 46006386) — REGNUM-COLORING. */
-GuiWidget *func_0034A210(GuiWidget *w) {
+ * Residual: PACKED-SAVE (2 callee GPR + 1 fp save) + FP REGNUM: 4 frame/save-slot words, remainder is $f-register numbering (46006346 vs 46006386) — REGNUM-COLORING.
+ * (Those figures are cc1 2.9/2.96 with the old `return w;` body; see above for the s136os match.) */
+void func_0034A210(GuiWidget *w) {
     f32 zero;
 
     w->unk18 = 0.0f;
@@ -898,9 +910,8 @@ GuiWidget *func_0034A210(GuiWidget *w) {
     w->unk84 = 2;
     func_0034A350(w, 0, zero, zero);
 
-    w->unk20 = 0;
     w->unk1C = 1;
-    return w;
+    w->unk20 = 0;
 }
 #endif
 

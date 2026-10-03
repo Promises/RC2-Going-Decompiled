@@ -20,18 +20,21 @@
  *
  * The screen's abs.s member was wrong: `__builtin_fabsf` emits `abs.s` on
  * both cc1s, and GetFloatAbs is compiled from C on the matching build (task
- * #634). Everything else stays INCLUDE_ASM for the matching build.
+ * #634). func_00283638 (`sq $0`) is compiled from C on the matching build
+ * through RULING #8479's $0 register pin (task #1370). Everything else stays
+ * INCLUDE_ASM for the matching build.
  *
  * Per docs/PORTING.md these are tier-2 "pure-computation" functions: each VU0
  * math op has an exact portable C equivalent, kept in the #else branch so the
  * native (TARGET_NATIVE) build has a working implementation and a future
- * match-seed. The matching build takes the INCLUDE_ASM branch of each of them.
+ * match-seed. The matching build takes the INCLUDE_ASM branch of each of them,
+ * except the C-compiled members named above.
  */
 
-#ifdef TARGET_NATIVE
-/* Portable 4-lane vector (PS2 VU0 quadword: x,y,z,w; 16-byte aligned). */
+/* Portable 4-lane vector (PS2 VU0 quadword: x,y,z,w; 16-byte aligned). Both
+ * arms: func_00283638 is compiled for EE from C and takes one. A typedef emits
+ * nothing. */
 typedef f32 Vec4f[4] __attribute__((aligned(16)));
-#endif
 
 /*
  * Reinterpret a 32-bit integer's bit pattern as a float (raw mtc1, no
@@ -152,18 +155,26 @@ void func_00283628(Vec4f dst, const Vec4f src) {
 }
 #endif
 
-/** Zero a 16-byte quadword at dst (sq $0). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00283638);
-#else
-/* TODO(match): t494 probe — sdk29 arm (-O2 -G0) 0.00% / engine96 arm 0.00% (unit objdiff,
- * objdiff_build.sh + unit_report.sh); 2.9 first diff row 0: ROM `` vs `mtc1 zero,$f0`. Residual
- * CONST-TI-ZERO: the ROM stores $0 with `sq $0,0($4)`; both cc1s (TImode via
- * __attribute__((mode(TI)))) materialise the zero first (`por $2,$0,$0; sq $2`). */
+/**
+ * Zero a 16-byte quadword at dst (`jr $ra; sq $0,0($a0)`).
+ * @param dst  16-byte-aligned quadword to clear
+ *
+ * MATCHED on plain cc1 2.9 (task #1370; it is also exact under s136os).
+ * `zeroQuad` is a REGISTER-PIN DEVICE (RULING #8479, as StopAllSoundEmitters in
+ * text/1DFF80): a TImode local bound to $0 and NEVER assigned, so that cc1
+ * itself emits the ROM's `sq $0`. Without it both cc1s materialise the zero
+ * first (`por $2,$0,$0; sq $2`, t494's CONST-TI-ZERO residual). EE arm only;
+ * the native arm stores the four zeros in plain C.
+ */
 void func_00283638(Vec4f dst) {
+#ifndef TARGET_NATIVE
+    typedef unsigned int Quad __attribute__((mode(TI)));
+    register Quad zeroQuad __asm__("$0");   /* read-only: never assigned */
+    *(Quad *)dst = zeroQuad;
+#else
     dst[0] = dst[1] = dst[2] = dst[3] = 0.0f;
-}
 #endif
+}
 
 /** Zero a 4-float vector at dst (sqc2 $vf0 — vf0 reads as 0,0,0,1, but the
  *  store here writes the all-zero pattern of the cleared quadword). */

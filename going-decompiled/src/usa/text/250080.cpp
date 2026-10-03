@@ -438,26 +438,32 @@ s32 func_00350608(FmvPtsQueue *q) {
 }
 #endif
 
-#ifndef TARGET_NATIVE
-/* func_00350660: stream-state reset. Blocked: 8-byte-packed saves. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350660);
+/* func_00350660: stream-state reset. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00350660)
+S136OS_SLOT(func_00350660);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern void func_00133890(s32 *obj);
 /* (end of this body's declarations) */
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 98.65% / engine96 87.88%. Residual: PACKED-SAVE (2 callee saves) + 8 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
-/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
-   saves (s0@0x0, ra@0x8). Revisit with the gameplay-TU compiler.
-
-   Reset the pts-queue stream cursor to "no packet buffered": acquire the stream
-   lock (func_00133890) then clear the started flag, the header-staging fill, the
-   payload ring offset/consumed/received cursors, the queued count, and the two
-   commit scratch words (field58 / commitArg). The payload base, ring size and
-   mode are left intact. Returns void. */
+/** func_00350660 - reset the pts-queue stream cursor to "no packet buffered":
+ *  acquire the stream lock (func_00133890), then clear the started flag, the
+ *  header-staging fill, the payload ring offset/consumed/received cursors, the
+ *  queued count and the two commit scratch words (field58 / commitArg). The
+ *  payload base, ring size and mode are left intact.
+ *  @param q  the pts queue control block
+ * MATCHED on the s136os arm (task #1370): the 8-byte save slots are SN 2.95.3
+ * v1.36 -fopt-stack's (FACT #8810). The ROM clears commitArg (+0x5C) FIRST and
+ * this compiler emits the last store of a group that ends at the epilogue
+ * first, so commitArg is written LAST here (last-store-first, FACT #8947). In
+ * the ROM's own order the s136os output is 6 of 17 words off.
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
 void func_00350660(FmvPtsQueue *q) {
     func_00133890((s32 *)q);
-    q->commitArg = 0;
     q->started = 0;
     q->hdrFill = 0;
     q->ringOfs = 0;
@@ -465,6 +471,7 @@ void func_00350660(FmvPtsQueue *q) {
     q->received = 0;
     q->queued = 0;
     q->field58 = 0;
+    q->commitArg = 0;
 }
 #endif
 
@@ -1606,8 +1613,8 @@ s32 func_003521B0(void *dmaq, void *cmd) {
    REG_IPU_BP position and pops it; depends on live IPU/DMAC hardware state. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003522C0);
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvStreamInit);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_FmvStreamInit)
+S136OS_SLOT(FmvStreamInit);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -1622,14 +1629,23 @@ extern s32 func_00352AB0(void);
 extern s32 func_00352AE0(s32 unused, u8 *obj);
 /* (end of this body's declarations) */
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 94.22% / engine96 85.55%. Residual: PACKED-SAVE (7 callee saves) + 11 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
-/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
-   saves. Revisit with the gameplay-TU compiler.
-
-   Construct the FMV stream object: reset its message dispatch table
-   (func_0012F738), register the five stream-event callbacks (frame-drop
-   report, two DMA-add-queue pumps, retry, and the cursor snapshot), clear the
-   playback FSM (func_003525D0), then build the embedded bitstream object at
-   +0x48 (FmvBitstreamObjInit). Always reports success. */
+/** FmvStreamInit - construct the FMV stream object: reset its message dispatch
+ *  table (func_0012F738), register the five stream-event callbacks (frame-drop
+ *  report, two DMA-add-queue pumps, retry, and the cursor snapshot), clear the
+ *  playback FSM (func_003525D0), then build the embedded bitstream object at
+ *  +0x48 (FmvBitstreamObjInit).
+ *  @param obj     the stream object
+ *  @param p2, p3  unused by this body
+ *  @param p4..p8  forwarded unchanged to FmvBitstreamObjInit
+ *  @return 1 (always reports success)
+ * MATCHED on the s136os arm (task #1370): the 8-byte-packed callee saves the
+ * MEASURED line above records are SN 2.95.3 v1.36 -fopt-stack's (FACT #8810).
+ * The body was already exact; it only needed the callee declarations above to
+ * compile alone.
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
 s32 FmvStreamInit(FmvStream *obj, u64 p2, u64 p3, u64 p4, u64 p5, u64 p6, u64 p7,
                   u64 p8) {
     func_0012F738();

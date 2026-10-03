@@ -225,3 +225,7 @@ usa text/1A00F0 func_002A0678
 usa text/1A8180 func_002ADCE0
 usa text/1EFFC0 func_002F6110
 usa text/1B4218 SetDialogVoiceVolumesMax
+usa text/250080 FmvStreamInit
+usa text/250080 func_00350660
+usa text/248B50 func_0034A210
+usa text/1A8180 func_002B0F40

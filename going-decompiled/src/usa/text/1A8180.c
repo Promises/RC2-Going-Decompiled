@@ -6909,11 +6909,22 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  *  - D_1A8CA0 == 0 (simple mode): out.z = src.z - t (straight vertical drop).
  *  - else: build a direction from `a` (func_002B0E40 with flag=0), rescale it to
  *    length t, and add it to src: out = src + t*dir.
+ * @param a    direction source (func_002B0E40's input)
+ * @param out  result position
+ * @param src  base position
+ * @param t    offset magnitude
+ * MATCHED on the s136os arm (task #1370): the 8-byte save slots and the frame
+ * are SN 2.95.3 v1.36 -fopt-stack's (FACT #8810). The body was already exact
+ * under s136os and compiles solo, but is not in FACT #8830's s136os-exact list.
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C.
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 67.41%
    -> UNKNOWN-@0: ROM `addiu sp,sp,-64` vs `lw v0,0(gp)  [GPREL16 D_1A8CA0]` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0F40);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002B0F40)
+S136OS_SLOT(func_002B0F40);
 #else
 void func_002B0F40(Vec4 *a, Vec4 *out, Vec4 *src, f32 t) {
     if (D_1A8CA0 == 0) {
