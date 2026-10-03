@@ -321,19 +321,24 @@ extern u32 func_002AA3F0(u32 color1, u32 color2, s32 period, s32 counterSel, s32
 extern f32 *func_00337120(GuiElement *e);   /* -> element primary vec (float[0]) */
 #endif
 
-/* TODO(match) func_0034DAB0 - task #566 (round 4), measured on the COMMITTED tree (this file,
+/* func_0034DAB0 - HISTORY: task #566 (round 4) measured on the COMMITTED tree (this file,
  * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
  * tools/ee/objdiff_build.sh, clean): sdk29 82.07%, engine96 58.98%. Eligible arm: e96.
- * Residual: ORDER + ADDRESSING
- * SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
- * masked; a candidate, NOT match evidence): EXACT 45/45, relocations equal, once
+ * Residual: ORDER + ADDRESSING on those two arms.
+ * MATCHED on the s136os arm (task #1387; screened by task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked): EXACT 45/45, relocations equal, once
  * the trailing empty fence is removed (a cc1-2.96 sibcall fence is a scheduling
  * barrier under SN 1.36, as #1347 measured) and the pad word is read in the
  * ROM's split form (declaration below). Fence kept: 5/45, first diff @24 (the
  * `move $17,$2` / `ori $5` order); split form undone: the pad word read
  * gp-relative, first diff @0 (ROM `lui $3` first). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034DAB0);
+/* GUARD (task #1387): on EE the #else body below is the image's func_0034DAB0, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0034DAB0)
+S136OS_SLOT(func_0034DAB0);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -459,18 +464,23 @@ extern void func_003374D8(void *listHead);
 extern void func_00338A80(void *listHead);
 #endif
 
-/* TODO(match) GuiManagerInitListRows - task #566 (round 4), measured on the COMMITTED tree (this file,
+/* GuiManagerInitListRows - HISTORY: task #566 (round 4) measured on the COMMITTED tree (this file,
  * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
  * tools/ee/objdiff_build.sh, clean): sdk29 85.23%, engine96 76.97%. Eligible arm: e96.
- * Residual: BNEL (ROM `bne`+2 nops, built `bnel`) + PRO-ORDER
- * SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
- * masked; a candidate, NOT match evidence): EXACT 35/35, relocations equal, with
+ * Residual: BNEL (ROM `bne`+2 nops, built `bnel`) + PRO-ORDER on those two arms.
+ * MATCHED on the s136os arm (task #1387; screened by task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked): EXACT 35/35, relocations equal, with
  * the loop below: the counter stepped before the call, an EMPTY fence after it
  * (RULING #8483, emits nothing) and the ROM's two R5900 short-loop pad nops
  * (R5900_SHORT_LOOP_PAD1, a scheduling device, RULING #8435). Pads removed: 18/35,
  * first diff @13; fence removed: 3/35 (sched2 hoists the pads above the jal). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", GuiManagerInitListRows);
+/* GUARD (task #1387): on EE the #else body below is the image's GuiManagerInitListRows, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiManagerInitListRows)
+S136OS_SLOT(GuiManagerInitListRows);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */

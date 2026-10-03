@@ -1630,17 +1630,20 @@ s32 StartSoundEmitter(SoundDef *pSoundDef, s32 flags, Moby *ownerMoby,
  * g_soundEmitterTable).  Returns the slot index, or -1 if the owner is null, its
  * class is unloaded, the class has no def array, soundIdx is out of range, or no
  * emitter could be started.
- * NEAR-MISS: WALLED - 2 callee saves (s0,s1) 8-byte-packed + the null/range
- * guards lower to branch-likely (`beql`/`bnel`) the cc1 emits as plain branches.
- * NATIVE SHIM (no byte target).
- * SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
- * masked; a candidate, NOT match evidence): EXACT 41/41, relocations equal, with
+ * Its 8-byte-packed saves (s0,s1) are SN 2.95.3 v1.36 -fopt-stack's (FACT #8810).
+ * MATCHED on the s136os arm (task #1387; screened by task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked): EXACT 41/41, relocations equal, with
  * PlaySoundFromClassBank's two levers: two R5900 short-loop pad nops before the
  * short backward `beqz` (R5900_SHORT_LOOP_PAD1, scheduling device, RULING #8435)
  * and owner-first slot stamps (FACT #8947). Pads removed: 27/41, first diff @6;
  * stamp order reverted: 2/41. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", PlayMobySound);
+/* GUARD (task #1387): on EE the #else body below is the image's PlayMobySound, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_PlayMobySound)
+S136OS_SLOT(PlayMobySound);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -1692,17 +1695,21 @@ extern u8 *g_mobyClassHeaders[];  /* 0x1CDB00 - loaded class header ptr per slot
  * owner `owner`, no explicit position, volume scale 0x400, stamping soundIdx and
  * owner into the slot.  Returns the slot index, or -1 if the class is unloaded,
  * has no def array, soundIdx is out of range, or no emitter could be started.
- * NEAR-MISS: WALLED - same 2-save/branch-likely walls as PlayMobySound, plus a
- * `mult`-based slot stride.  NATIVE SHIM (no byte target).
- * SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
- * masked; a candidate, NOT match evidence): EXACT 46/46, relocations equal, with
+ * Its 8-byte-packed saves are SN 2.95.3 v1.36 -fopt-stack's (FACT #8810).
+ * MATCHED on the s136os arm (task #1387; screened by task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked): EXACT 46/46, relocations equal, with
  * two levers in the body: the ROM's two R5900 short-loop pad nops before the
  * short backward `beqz` into the shared `return -1` (R5900_SHORT_LOOP_PAD1, a
  * scheduling device, RULING #8435), and the slot stamps written owner-first,
  * because SN 1.36 emits the last store of a group ending at the epilogue first
  * (FACT #8947). Pads removed: 25/46, first diff @19; stamp order reverted: 2/46. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", PlaySoundFromClassBank);
+/* GUARD (task #1387): on EE the #else body below is the image's PlaySoundFromClassBank, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_PlaySoundFromClassBank)
+S136OS_SLOT(PlaySoundFromClassBank);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -1752,15 +1759,20 @@ s32 PlaySoundFromClassBank(s32 soundIdx, s32 flags, Moby *owner, s32 classId) {
  * Delegates to StartSoundEmitter with flags 0, pPos = 0, volScale = 0x400; on
  * success it records the source sound index (s16 at slot+0x7E) and owner
  * (s32 at slot+0x88) into the slot record (addressed off g_listenerPosHistory,
- * +0x70 ahead of g_soundEmitterTable). NATIVE SHIM (no byte target).
- * SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
- * masked; a candidate, NOT match evidence): EXACT 37/37, relocations equal, with
+ * +0x70 ahead of g_soundEmitterTable).
+ * MATCHED on the s136os arm (task #1387; screened by task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked): EXACT 37/37, relocations equal, with
  * the pool pointer and count read in the ROM's absolute lui/lw form (`.extern
  * ,16` below makes the assembler expand cc1's one-insn `lw` macro that way) and
  * owner-first slot stamps (FACT #8947). Without the `.extern`s: 36/37, first diff
  * @1 (`lw $3,%gp_rel` vs ROM `lui $3`); stamp order reverted: 2/37. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", PlayGlobalSound);
+/* GUARD (task #1387): on EE the #else body below is the image's PlayGlobalSound, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_PlayGlobalSound)
+S136OS_SLOT(PlayGlobalSound);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */

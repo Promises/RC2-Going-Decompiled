@@ -710,10 +710,15 @@ s32 func_002D5D10(void) {
 }
 #endif
 
-/* Seed obj->0x34 from a GUI subsystem query (g_pGuiManager + 0x3C160) when the
- * GUI exists. Returns 0. Wall: 2-GPR callee-save. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D5EC8);
+/* Seed obj->0x34 from a GUI subsystem query (g_guiInstance + 0x3C160) when the
+ * GUI exists. Returns 0. */
+/* GUARD (task #1387): on EE the #else body below is the image's func_002D5EC8, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D5EC8)
+S136OS_SLOT(func_002D5EC8);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -723,8 +728,8 @@ extern s32 func_00342468(void *p);
  * objdiff): sdk29 92.65% / engine96 69.71%; better arm sdk29; 9 differing rows
  * on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing insn:
  * ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495.
- * SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
- * masked; a candidate, NOT match evidence): EXACT 17/17, relocations equal, once
+ * MATCHED on the s136os arm (task #1387; screened by task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked): EXACT 17/17, relocations equal, once
  * the body reads g_guiInstance through the `.extern ,16` absolute form below.
  * Without the `.extern` (name alone changed): 16/17, first diff @1 `lw $2,%gp_rel`
  * vs ROM `lui $2`. */
@@ -830,8 +835,13 @@ s32 func_002D6028(void) {
 
 /* Enter the ship-customization screen: prime the system, then (if the GUI
  * exists) bind its three data sources to the customization list and show it. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D60E8);
+/* GUARD (task #1387): on EE the #else body below is the image's func_002D60E8, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D60E8)
+S136OS_SLOT(func_002D60E8);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -844,8 +854,8 @@ extern void func_00342520(void *p, s32 mode);
  * rows on it, class STRUCTURAL; first differing insn: ROM `lui a0,0x0  [HI16
  * 0x001A8D04]` vs `lw a0,0(gp)  [GPREL16 g_pGuiManager]`. Not iterated in
  * t495. */
-/* SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
- * masked; a candidate, NOT match evidence): EXACT 28/28, relocations equal, with
+/* MATCHED on the s136os arm (task #1387; screened by task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked): EXACT 28/28, relocations equal, with
  * g_guiInstance read through `.extern ,16` below (this body sits before the
  * unit's file-scope one; without it: 23/28, first diff @5 `lw $4,%gp_rel`) and
  * the three tables named (ROM_DATA_ADDR; as literals: 4/28, first diff @9). */
@@ -976,8 +986,13 @@ s32 func_002D6380(void) {
 
 /* Enable + bind a GUI save/load list panel (g_pGuiManager + 0x3E9C8) to its
  * data source (0x261520) when the GUI exists. Returns 0. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D63B0);
+/* GUARD (task #1387): on EE the #else body below is the image's func_002D63B0, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D63B0)
+S136OS_SLOT(func_002D63B0);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -988,8 +1003,8 @@ extern void func_00342DC0(void *p, s32 records);
  * objdiff): sdk29 85.86% / engine96 62.50%; better arm sdk29; 15 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
  * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
-/* SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
- * masked; a candidate, NOT match evidence): EXACT 22/22, relocations equal, once
+/* MATCHED on the s136os arm (task #1387; screened by task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked): EXACT 22/22, relocations equal, once
  * the body reads g_guiInstance (absolute through the unit's file-scope
  * `.extern g_guiInstance, 16`; as g_pGuiManager it is gp-relative: 21/22, first
  * diff @1) and names its record table (ROM_DATA_ADDR; as a literal: 1/22, @14
@@ -1056,8 +1071,13 @@ s32 func_002D64D8(void) {
 
 /* Enable + bind a different GUI list panel (g_pGuiManager + 0x3E760) to its
  * data source (0x261570) when the GUI exists. Returns 0. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002D6508);
+/* GUARD (task #1387): on EE the #else body below is the image's func_002D6508, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D6508)
+S136OS_SLOT(func_002D6508);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -1068,8 +1088,8 @@ extern void func_00343290(void *p, s32 records);
  * objdiff): sdk29 85.86% / engine96 62.50%; better arm sdk29; 15 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
  * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
-/* SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
- * masked; a candidate, NOT match evidence): EXACT 22/22, relocations equal, once
+/* MATCHED on the s136os arm (task #1387; screened by task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked): EXACT 22/22, relocations equal, once
  * the body reads g_guiInstance (absolute through the unit's file-scope
  * `.extern g_guiInstance, 16`; as g_pGuiManager it is gp-relative: 21/22, first
  * diff @1) and names its record table (ROM_DATA_ADDR; as a literal: 1/22, @14
@@ -1740,8 +1760,13 @@ s32 func_002D8E60(MenuWidget *obj) {
 /* Pop side of the push/pop text-table swap: cancel any in-flight load tied to
  * this command (state 3), release the map slots, then reinstall the text table
  * StreamTextTable saved into cmd+0x54 (base) / cmd+0x38 (count). Returns 0. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", RestorePrevTextTable);
+/* GUARD (task #1387): on EE the #else body below is the image's RestorePrevTextTable, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_RestorePrevTextTable)
+S136OS_SLOT(RestorePrevTextTable);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -1751,8 +1776,8 @@ extern void StopFileLoad(void);
  * objdiff): sdk29 72.44% / engine96 75.74%; better arm engine96; 10 differing
  * rows on it, class STRUCTURAL; first differing insn: ROM `(none)` vs `lw
  * v0,0(gp)  [GPREL16 g_nFileLoadState]`. Not iterated in t495. */
-/* SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
- * masked; a candidate, NOT match evidence): EXACT 27/27, relocations equal. The
+/* MATCHED on the s136os arm (task #1387; screened by task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked): EXACT 27/27, relocations equal. The
  * globals are read and written by their ROM names in the ROM's address forms
  * (ADDRESSING-MODEL DEVICES, this unit's ROM_SPLIT and `.extern ,16`), each
  * measured undone: g_fileLoadState is an s16 the ROM loads with a compiler-split

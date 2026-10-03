@@ -558,8 +558,13 @@ void GuiMenuListDraw(GuiWidget *self) {
  * oracle-seedable: its GuiElementInitTypeB/C callees store &D_1ADA38/&D_1AD9F8
  * (absolute-address %hi/%lo symbols) which crash the cmp runner's ld
  * --gc-sections — the same absolute-address-symbol wall as GuiQuitDialogInit. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00349200);
+/* GUARD (task #1387): on EE the #else body below is the image's func_00349200, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00349200)
+S136OS_SLOT(func_00349200);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -573,8 +578,8 @@ extern void GuiElementInitTypeC(void *element);
  * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 17/36 words differ;
  * frozen-.s census: 5 callee GPR saves, 0 fp saves.
  * Residual: PACKED-SAVE (5 callee GPR saves) — 4 of the 17 differing words are frame/save-slot; remainder REGALLOC/SCHED, not iterated.
- * SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
- * masked; a candidate, NOT match evidence): EXACT 39/39, relocations equal. Each
+ * MATCHED on the s136os arm (task #1387; screened by task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked): EXACT 39/39, relocations equal. Each
  * of four levers is needed (screen with that one undone): the first call's
  * argument `w` (20/39), the ROM's two R5900 short-loop pad nops in the type-C loop
  * (R5900_SHORT_LOOP_PAD1, scheduling device, RULING #8435; 12/39), the empty fence
@@ -664,13 +669,19 @@ void SetPopupItemEnabled(GuiWidget *w, s32 idx, s32 enabled) {
 /* SetPopupItemText: record the item count at +0x4B4, then for each of `count`
  * popup rows (row slots at +0x218, stride 0x58) resolve the string id in
  * `ids[i]` via GetLocalizedString and apply it to that row's text element.
- * WALL: 3 callee saves ($16,$17,$18) — 0x20-vs-packed frame divergence. NOT
+ * Its packed 3-register save ($16,$17,$18) is SN 2.95.3 v1.36 -fopt-stack's
+ * (FACT #8810), which the s136os arm compiles it with. NOT
  * oracle-seedable in the current cmp link: its GetLocalizedString callee collides
  * with the co-linked text/188858 strong body, whose own #else pulls FindTextTableEntry
  * (INCLUDE_ASM) + &D_1A8D28 (absolute) — the ld --gc-sections absolute-symbol wall;
  * a private mock cannot win the multiple-definition. Logic verified by asm trace. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", SetPopupItemText);
+/* GUARD (task #1387): on EE the #else body below is the image's SetPopupItemText, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_SetPopupItemText)
+S136OS_SLOT(SetPopupItemText);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -684,8 +695,8 @@ extern void GuiElementSetText(void *e, s32 text);
  * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 13/26 words differ;
  * frozen-.s census: 4 callee GPR saves, 0 fp saves.
  * Residual: PACKED-SAVE (4 callee GPR saves) + REGALLOC: 9 frame/save-slot words (frame 0x40 vs 0x20, save layout reordered).
- * SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
- * masked; a candidate, NOT match evidence): EXACT 25/25, relocations equal, with
+ * MATCHED on the s136os arm (task #1387; screened by task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked): EXACT 25/25, relocations equal, with
  * the id cursor a local of the `count > 0` block: the ROM copies `ids` into $18
  * only after the blez. Walking the parameter itself: 7/25, first diff @1 (the
  * copy hoisted into the prologue). */
@@ -1547,8 +1558,13 @@ void func_0034A860(GuiAnim *a) {
  * absolute-address-symbol wall). Matching arm stays asm; #else is the functional
  * model (GuiElementInitTypeB/GuiListRowElementInit/func_003368D0 left implicit
  * per the unit convention, line 104). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_0034A9F8);
+/* GUARD (task #1387): on EE the #else body below is the image's func_0034A9F8, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0034A9F8)
+S136OS_SLOT(func_0034A9F8);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -1563,8 +1579,8 @@ extern void *func_003368D0(void *p);
  * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 8/38 words differ;
  * frozen-.s census: 2 callee GPR saves, 0 fp saves.
  * Residual: PACKED-SAVE (2 callee GPR saves) + operand ORDER: 4 frame/save-slot words, plus the &D_1AD8E8/&D_1AD908 addiu pairs emitted in the opposite order from the ROM (SCHED). */
-/* SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
- * masked; a candidate, NOT match evidence): EXACT 37/37, relocations equal, with
+/* MATCHED on the s136os arm (task #1387; screened by task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked): EXACT 37/37, relocations equal, with
  * the vtable declarations below. As plain `u8 []` externs: 4/37, first diff @17
  * (the %lo addiu scheduled after the call-argument addiu). */
 /* The two vtables are addressed as the ROM does, with an adjacent lui/addiu pair

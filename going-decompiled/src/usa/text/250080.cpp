@@ -361,8 +361,13 @@ s32 func_003504F0(void) {
     return func_00350840((FmvPtsQueue *)(g_pFmvArenaBase + FMV_PTS_OFS));
 }
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvPtsQueueInit);
+/* GUARD (task #1387): on EE the #else body below is the image's FmvPtsQueueInit, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_FmvPtsQueueInit)
+S136OS_SLOT(FmvPtsQueueInit);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -395,8 +400,8 @@ extern void func_00283438(void *p, s32 n);
    buffer in D_1B2354, allocate the IPU sema (func_00133850), and report
    whether the allocation succeeded.
 
-   SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
-   masked; a candidate, NOT match evidence): EXACT 47/47, relocations equal,
+   MATCHED on the s136os arm (task #1387; screened by task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+   masked): EXACT 47/47, relocations equal,
    with three levers, each measured undone: the `.extern ,16` store above (else
    14/47, first diff @33 `sw $19,%gp_rel`); func_00133850 returning s32, which is
    what the wrapper passes back from snd_SendCommandSync (s64 costs a
@@ -605,10 +610,14 @@ s32 func_00350840(FmvPtsQueue *q) {
 }
 #endif
 
-#ifndef TARGET_NATIVE
-/* func_00350868: SIF-DMA bounce of a decoded block to IOP memory. Blocked:
- * 8-byte-packed saves (s0/s1/s2/s3/ra). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00350868);
+/* func_00350868: SIF-DMA bounce of a decoded block to IOP memory. */
+/* GUARD (task #1387): on EE the #else body below is the image's func_00350868, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00350868)
+S136OS_SLOT(func_00350868);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -618,10 +627,10 @@ extern s32 func_0011AFC0(s32 id);
 extern void func_00133930(s32 len, s32 dstOfs);
 /* (end of this body's declarations) */
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 81.88% / engine96 66.19%. Residual: PACKED-SAVE (5 callee saves) + 12 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
-/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed callee
-   saves (s0/s1/s2/s3/ra).
+/* The 8-byte-packed callee saves (s0/s1/s2/s3/ra) are SN 2.95.3 v1.36
+   -fopt-stack's (FACT #8810), which the s136os arm compiles this body with.
 
-   ROUTE: tester-EE-pending (NOT isolated-cmp-oracleable) - the two do/while
+   FUNCTIONAL TEST ROUTE: tester-EE-pending (NOT isolated-cmp-oracleable) - the two do/while
    loops busy-wait on real SIF-DMA hardware (func_0011AFE0 returns 0 until a DMA
    slot frees; func_0011AFC0 returns >= 0 while the transfer is in flight), so an
    isolated EE with mocked SIF stubs would hang or pass vacuously. Verify under
@@ -632,8 +641,8 @@ extern void func_00133930(s32 len, s32 dstOfs);
    {src, iopBase, len, 0}, arm the chain (func_0011AEA0), retry the enqueue until
    a slot is granted, wait for completion, then notify (func_00133930).
 
-   SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
-   masked; a candidate, NOT match evidence): EXACT 42/42, relocations equal. The
+   MATCHED on the s136os arm (task #1387; screened by task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+   masked): EXACT 42/42, relocations equal. The
    two wait loops carry the ROM's R5900 short-loop pad nops (2 and 3) before
    their backward branches (R5900_SHORT_LOOP_PAD1, a scheduling device, RULING
    #8435), and an EMPTY fence after the chain-arm call (RULING #8483, emits
@@ -1104,14 +1113,19 @@ s32 func_003513F0(void) {
  * byteLen. Matching arm stays asm (8-byte-packed saves s0..s4/ra); the #else is
  * the structure-exact model (the CD I/O itself is the deferred FMV native
  * backend, but the call structure + cursor advance are exact). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003513F8);
+/* GUARD (task #1387): on EE the #else body below is the image's func_003513F8, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003513F8)
+S136OS_SLOT(func_003513F8);
 #else
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 64.74% / engine96 77.79%. Residual: PACKED-SAVE (6 callee saves) + 19 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
 extern s32 func_001253A8(u32 lbn, u32 sectors, void *buf, void *mode); /* sceCdRead */
 extern s32 func_00124B88(s32 mode);                                    /* sceCdSync */
-/* SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
- * masked; a candidate, NOT match evidence): EXACT 39/39, relocations equal. The
+/* MATCHED on the s136os arm (task #1387; screened by task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked): EXACT 39/39, relocations equal. The
  * ROM returns through a result held in $20 (0 unless the read is synchronous)
  * and never writes mode[3]. With an early `return 0`: 28/39, first diff @10 (no
  * $20 save); with mode[3] cleared: 20/39 (an extra sb). */
@@ -1413,13 +1427,18 @@ s32 func_00351910(void *dmaq) {
  * (IPU_CTRL & 0xF0), suspends IPU_FROM (ch3, func_003514E0(0)) and records its
  * MADR/QWC/CHCR + IPU_BP/IPU_CTRL into dmaq+0x2C..0x3C, then releases the sema.
  * Returns 1. Raw offsets (dmaq sub-object type not recovered).
- * SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
- * masked; a candidate, NOT match evidence): EXACT 68/68, relocations equal. The
+ * MATCHED on the s136os arm (task #1387; screened by task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked): EXACT 68/68, relocations equal. The
  * drain loop carries the ROM's three R5900 short-loop pad nops before its bnez
  * (R5900_SHORT_LOOP_PAD1, a scheduling device); without them the screen is
  * 34/68, built 65 words, first diff @29. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_00351B10);
+/* GUARD (task #1387): on EE the #else body below is the image's func_00351B10, compiled
+ * alone by the s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00351B10)
+S136OS_SLOT(func_00351B10);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
