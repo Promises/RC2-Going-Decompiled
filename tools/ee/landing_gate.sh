@@ -672,19 +672,24 @@ native_left_overrides() {
            sub(/^Native-Left:[ \t]+/, "") { u = $1; r = $0; sub(/^[^ \t]+[ \t]*/, "", r); sub(/[ \t]+$/, "", r); print u "\t" r "\t" src }'
 }
 
-# sha_sum BITS FILE... — one `<hex>  <path>` row per FILE, SHA-BITS (1 or 256),
-# from whichever tool this host has (task #1390): macOS ships the Perl
-# `shasum`; a GNU host may carry only coreutils' sha1sum/sha256sum (on Arch,
-# shasum is perl's /usr/bin/core_perl/shasum, on PATH only in a shell that
-# sourced /etc/profile). Both print the same two fields, which native_renames'
-# awk keys on. Neither tool -> a named error on stderr and rc 2, never an empty
+# sha_tool BITS — the command line printing `<hex>  <path>` rows of SHA-BITS
+# (1 or 256) on this host (task #1390): macOS ships the Perl `shasum`; a GNU
+# host may carry only coreutils' sha1sum/sha256sum (on Arch, shasum lives in
+# perl's /usr/bin/core_perl, which a non-login shell may not have on PATH).
+# Both print the same two fields, which native_renames' awk and native_touched's
+# sed key on. Neither tool -> a named error on stderr and rc 2, never an empty
 # digest: two empty digests compare equal, and the inputs check then read OK
 # with no hash at all (the shape of tools/ee/mount_sync.sh's digest()).
+sha_tool() {
+  if command -v shasum >/dev/null 2>&1; then printf 'shasum -a %s\n' "$1"
+  elif command -v "sha$1sum" >/dev/null 2>&1; then printf 'sha%ssum\n' "$1"
+  else echo "landing_gate: neither shasum nor sha$1sum on this host — cannot digest" >&2; return 2; fi
+}
+# sha_sum BITS FILE... — sha_tool's rows for FILEs; rc 2 when it has no tool
 sha_sum() {
-  local bits=$1; shift
-  if command -v shasum >/dev/null 2>&1; then shasum -a "$bits" -- "$@"
-  elif command -v "sha${bits}sum" >/dev/null 2>&1; then "sha${bits}sum" -- "$@"
-  else echo "landing_gate: neither shasum nor sha${bits}sum on this host — cannot digest $*" >&2; return 2; fi
+  local t; t=$(sha_tool "$1") || return 2; shift
+  # shellcheck disable=SC2086  # "shasum -a N" is a command and its arguments
+  $t -- "$@"
 }
 
 # native_renames BASE_TREE TIP_TREE "LEFT" "ARRIVED" — one `= <old> <new>` row
@@ -737,14 +742,16 @@ native_renames() {
 # --strict that DIRTY could not see. Only regular files, either way; a
 # tracked file deleted from disk is absent here, so it shows as base-only.
 native_shared_sums() {
+  local t; t=$(sha_tool 1) || return 2
+  # shellcheck disable=SC2086  # "shasum -a 1" is a command and its arguments
   if [ "$(git -C "$1" rev-parse --show-toplevel 2>/dev/null)" = "$(cd "$1" && pwd -P)" ]; then
     (cd "$1" && set -o pipefail \
        && git ls-files -z -co --exclude-standard -- going-decompiled/include tools/native ':(exclude)tools/native/check.sh' \
        | LC_ALL=C sort -zu | { while IFS= read -r -d '' f; do [ -f "$f" ] && [ ! -L "$f" ] && printf '%s\0' "$f"; done; true; } \
-       | xargs -0 shasum | LC_ALL=C sort) 2>/dev/null
+       | xargs -0 $t -- | LC_ALL=C sort) 2>/dev/null
   else
     (cd "$1" && set -o pipefail && /usr/bin/find going-decompiled/include tools/native -type f ! -path tools/native/check.sh -print0 \
-       | xargs -0 shasum | LC_ALL=C sort) 2>/dev/null
+       | xargs -0 $t -- | LC_ALL=C sort) 2>/dev/null
   fi
 }
 native_touched() {
@@ -1553,15 +1560,16 @@ selftest_cc1args() {
 # each must FAIL, never read as agreement. Before #1390 a host without the Perl
 # shasum (the XPS) recorded and re-read an EMPTY sha256 for every link input,
 # so the inputs check compared empty == empty and printed OK, and every
-# byte-identical rename read as a departure. Also: with only coreutils'
+# byte-identical rename read as a departure, and #1365's BLIND check could not
+# checksum the shared NATIVE inputs at all (its arms (z1)-(z3)). Also: with only coreutils'
 # sha1sum/sha256sum on PATH (a GNU host), both must print what this host's
 # default tool prints. The hosts are simulated by a scratch PATH of symlinks to
 # just the tools these functions run, so the arm needs no build.
 selftest_digest() {
   local T="$1" b=0 D="$1/digest" t p rc
-  say "-- (12b) DIGEST (#1390): with no SHA tool on PATH, a link input recorded AND re-checked there (the empty == empty case) must FAIL 'was not digested', and so must either side alone; the rename pairing must return rc 2 naming the missing tool; with only sha1sum/sha256sum, the rows must equal this host's default; the full PATH passes"
+  say "-- (12b) DIGEST (#1390): with no SHA tool on PATH, a link input recorded AND re-checked there (the empty == empty case) must FAIL 'was not digested', and so must either side alone; the rename pairing must return rc 2 naming the missing tool, and so must the BLIND check's shared-input checksum; with only sha1sum/sha256sum, the rows must equal this host's default; the full PATH passes"
   rm -rf "$D"; mkdir -p "$D/none" "$D/gnu" "$D/build" "$D/base/going-decompiled/src/usa" "$D/tip/going-decompiled/src/usa"
-  for t in awk cut sed tr wc; do
+  for t in awk cmp comm cut sed sort tr wc xargs; do
     p=$(command -v "$t") || { say "SELFTEST-BROKEN: no $t on PATH to build the scratch PATHs"; return 1; }
     ln -s "$p" "$D/none/$t"; ln -s "$p" "$D/gnu/$t"
   done
@@ -1584,10 +1592,18 @@ selftest_digest() {
   if [ "$(cat "$D/ren_full.txt")" = "= usa/old.c usa/new.c" ]; then ok "control: full PATH pairs the byte-identical rename '= usa/old.c usa/new.c'"; else say "SELFTEST-FAIL the full-PATH rename pairing printed:"; show < "$D/ren_full.txt"; b=1; fi
   ( PATH="$D/none"; native_renames "$D/base" "$D/tip" usa/old.c usa/new.c ) > "$D/ren_none.txt" 2> "$D/ren_none.err"; rc=$?
   if [ "$rc" = 2 ] && [ ! -s "$D/ren_none.txt" ] && /usr/bin/grep -q '^landing_gate: neither shasum nor sha1sum on this host' "$D/ren_none.err"; then ok "fired: no SHA tool -> native_renames rc 2, 0 B, $(sed 's/ — .*//' "$D/ren_none.err")"; else say "SELFTEST-FAIL no-SHA-tool rename pairing (rc $rc, want 2 with a named error):"; show < "$D/ren_none.txt"; show < "$D/ren_none.err"; b=1; fi
+  mkdir -p "$D/base/going-decompiled/include" "$D/tip/going-decompiled/include" "$D/base/tools/native" "$D/tip/tools/native"
+  printf 'int t1390_a;\n' > "$D/base/going-decompiled/include/t1390.h"; printf 'int t1390_b;\n' > "$D/tip/going-decompiled/include/t1390.h"
+  printf 't1390\n' > "$D/base/tools/native/same.txt"; cp "$D/base/tools/native/same.txt" "$D/tip/tools/native/same.txt"
+  native_touched "$D/base" "$D/tip" > "$D/tch_full.txt"; rc=$?
+  if [ "$rc" = 0 ] && [ "$(cat "$D/tch_full.txt")" = "S going-decompiled/include/t1390.h" ]; then ok "control: full PATH, the BLIND check's shared-input diff is exactly 'S going-decompiled/include/t1390.h'"; else say "SELFTEST-FAIL the full-PATH shared-input diff (rc $rc):"; show < "$D/tch_full.txt"; b=1; fi
+  ( PATH="$D/none"; native_touched "$D/base" "$D/tip" ) > "$D/tch_none.txt" 2> "$D/tch_none.err"; rc=$?
+  if [ "$rc" = 2 ] && [ "$(cat "$D/tch_none.txt")" = "could not checksum the base's shared NATIVE inputs under $D/base" ] && /usr/bin/grep -q '^landing_gate: neither shasum nor sha1sum on this host' "$D/tch_none.err"; then ok "fired: no SHA tool -> native_touched rc 2, 'could not checksum the base's shared NATIVE inputs', $(sed 's/ — .*//' "$D/tch_none.err")"; else say "SELFTEST-FAIL no-SHA-tool shared-input checksum (rc $rc, want 2 with a named error):"; show < "$D/tch_none.txt"; show < "$D/tch_none.err"; b=1; fi
   if [ "$gnu" = 1 ]; then
     ( PATH="$D/gnu"; inputs_rows ) > "$D/rec_gnu.txt" 2>&1
     ( PATH="$D/gnu"; native_renames "$D/base" "$D/tip" usa/old.c usa/new.c ) > "$D/ren_gnu.txt" 2>&1
-    if cmp -s "$D/rec_gnu.txt" "$D/rec_full.txt" && cmp -s "$D/ren_gnu.txt" "$D/ren_full.txt"; then ok "control: sha1sum/sha256sum only -> the same input row and rename pair as the default PATH"; else say "SELFTEST-FAIL the sha1sum/sha256sum fallback differs from the default:"; show < "$D/rec_gnu.txt"; show < "$D/ren_gnu.txt"; b=1; fi
+    ( PATH="$D/gnu"; native_shared_sums "$D/tip" ) > "$D/sum_gnu.txt" 2>&1; native_shared_sums "$D/tip" > "$D/sum_full.txt"
+    if cmp -s "$D/rec_gnu.txt" "$D/rec_full.txt" && cmp -s "$D/ren_gnu.txt" "$D/ren_full.txt" && [ -s "$D/sum_full.txt" ] && cmp -s "$D/sum_gnu.txt" "$D/sum_full.txt"; then ok "control: sha1sum/sha256sum only -> the same input row, rename pair and shared-input sums as the default PATH"; else say "SELFTEST-FAIL the sha1sum/sha256sum fallback differs from the default:"; show < "$D/rec_gnu.txt"; show < "$D/ren_gnu.txt"; show < "$D/sum_gnu.txt"; b=1; fi
   else say "     (fallback control not run: this host has no sha1sum and sha256sum to isolate)"; fi
   FAILED=0
   return $b
