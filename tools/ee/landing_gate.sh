@@ -381,8 +381,18 @@ region_vars() {
 # ties the ROW to (relative to $BUILD): build.sh `-T` and `-I` consumers.
 GATE_INPUTS="undefined_syms_auto.txt include/macro.inc include/labels.inc include/include_asm.h"
 
+# --user: the container runs as the INVOKING uid:gid (task #1361). ee-build's
+# default user is root, and on native-Linux docker container-root IS host-root,
+# so every build output under going-decompiled/build was root-owned and the
+# next HOST-side write there (configure.py's split, --selftest arm 13) died
+# with PermissionError. colima already maps the mount to the host user (why
+# the M1 never saw this) and lima's guest user carries the host uid, so the
+# same flag should be correct there too — no host conditional. ⚠️ That half is
+# REASONING, not measured: #1361 ran on the XPS only. HOME=/tmp: the image's /root is 0700, unwritable as a
+# non-root uid. Nothing in the image needs root: the toolchain runs under wibo
+# (no wine prefix) and writes only into /work and mktemp.
 in_vm() {  # in_vm '<sh script>' — one docker run, repo mounted at /work
-  docker --context "$EE_CTX" run --rm -v "$ROOT":/work -w /work ee-build sh -c "$1"
+  docker --context "$EE_CTX" run --rm --user="$(id -u):$(id -g)" -e HOME=/tmp -v "$ROOT":/work -w /work ee-build sh -c "$1"
 }
 
 # ---------------------------------------------------------------- FLAGS ----
