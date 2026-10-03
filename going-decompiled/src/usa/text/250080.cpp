@@ -309,25 +309,26 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", InitFmvPlayback
  * s32 and the device on the first read, the screen is EXACT 59/59; that needs
  * prototype changes to the four callees' declarations AND their definitions in
  * this file, which is held for a ruling (task #1434).
- * NEEDS-TESTER-ORACLE: the arena-relative args the asm passes to the void(void)
- * callees (func_003512F0/func_00352B88/func_003505E0/func_003513F0 — func_00352B88 is
- * a confirmed void(void) 2.9 match) are dead-passed in the original and dropped here;
- * the oracle should confirm faithfulness. */
+ * The arena-relative args the asm passes to func_003512F0/func_00352B88/
+ * func_003505E0/func_003513F0 are dead (each callee ignores it) but are passed here
+ * as the ROM passes them, and the four signatures carry them (RULING #9118, task
+ * #1437). func_00126DC0 is declared s32: its ROM body returns the previous handler
+ * in $2 (0x00126E44 `daddu $2,$18,$0`), though no ROM caller reads it. */
 #ifdef TARGET_NATIVE
 extern void func_0011AA70(s32 threadId);   /* kill thread */
 extern void func_0011AA30(s32 threadId);   /* delete thread */
 extern void DisableDmac(s32 channel);
 extern void func_0011A950(s32 a, s32 b);
-extern void func_00126DC0(void *handler);    /* remove vblank handler */
+extern s32  func_00126DC0(void *handler);    /* remove vblank handler */
 extern s32  g_fmvThreadId;
 extern void OnVblankInterrupt(void);
 /* forward decls — these are declared/defined later in this file */
 extern s32  func_00124B88(s32 mode);
-extern void func_003512F0(void);
-extern void func_00352B88(void);
+extern void func_003512F0(u8 *arena);
+extern void func_00352B88(u8 *frameQueue);
 extern s32  func_003525D8(FmvStream *obj);
-extern s32  func_003505E0(void);
-extern s32  func_003513F0(void);
+extern s32  func_003505E0(u8 *ptsQueue);
+extern s32  func_003513F0(u8 *block);
 #endif
 
 #ifndef TARGET_NATIVE
@@ -336,32 +337,32 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003503D8);
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern s32 func_00124B88(s32 mode);
-extern void func_003512F0(void);
-extern void func_00352B88(void);
+extern void func_003512F0(u8 *arena);
+extern void func_00352B88(u8 *frameQueue);
 extern void func_0011AA70(s32 threadId);
 extern void func_0011AA30(s32 threadId);
 extern void DisableDmac(s32 channel);
 extern void func_0011A950(s32 a, s32 b);
-extern void func_00126DC0(void *handler);
+extern s32 func_00126DC0(void *handler);
 extern s32 func_003525D8(FmvStream *obj);
-extern s32 func_003505E0(void);
-extern s32 func_003513F0(void);
+extern s32 func_003505E0(u8 *ptsQueue);
+extern s32 func_003513F0(u8 *block);
 extern s32 g_fmvThreadId;
 extern void OnVblankInterrupt(void);
 /* (end of this body's declarations) */
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 75.25% / engine96 61.41%. Residual: GPREL-DELAY-SLOT: with the dead-passed arena args restored and func_126DC0 declared s32 the sdk29 arm reads 95.59% and the ONLY residual is the `lw a0,%gp_rel(g_pFmvArenaBase)($gp)` in the jal func_003512F0 delay slot, which GNU as expands as lui/lw+nop; rewriting that one line of base.s to the %gp_rel form assembles to 100.00% (tools/ee/.t513/probe/base_gprel.s) — a toolchain post-pass question, not a C one. */
 void func_003503D8(void) {
     func_00124B88(0);
-    func_003512F0();
-    func_00352B88();
+    func_003512F0(FMV_ARENA_BASE_GP);
+    func_00352B88(g_pFmvArenaBase + FMV_FRAMEQ_OFS);
     func_0011AA70(g_fmvThreadId);
     func_0011AA30(g_fmvThreadId);
     DisableDmac(2);
     func_0011A950(2, *(s32 *)(g_pFmvArenaBase + 0xD90F8));
     func_00126DC0((void *)OnVblankInterrupt);
     func_003525D8((FmvStream *)(g_pFmvArenaBase + 0xD9048));
-    func_003505E0();
-    func_003513F0();
+    func_003505E0(g_pFmvArenaBase + FMV_PTS_OFS);
+    func_003513F0(g_pFmvArenaBase + 0xD9040);
     func_00124B88(0);
     *(volatile u32 *)0x1000E000 &= 0xFFFFFFFD;
 }
@@ -466,8 +467,13 @@ s32 FmvPtsQueueInit(s32 *obj, s32 ringBase, s32 scratchBase, u8 *decodeBuf) {
 
 /**
  * Stream-callback: kick the CD/WAD reader pump and report ready.
+ *
+ * @param ptsQueue  the pts queue control block (arena+FMV_PTS_OFS); unused. The
+ *                  ROM caller passes it (func_003503D8, 0x00350478 delay slot), so
+ *                  the signature carries it (RULING #9118, task #1437).
+ * @return          1 (ready).
  */
-s32 func_003505E0(void) {
+s32 func_003505E0(u8 *ptsQueue) {
     func_001338C8();
     return 1;
 }
@@ -1014,8 +1020,12 @@ void func_003512D8(FmvPtsRing *ring) {
 /**
  * FMV idle hook (registered where a flush callback is optional) — does
  * nothing.
+ *
+ * @param arena  the FMV arena base (g_pFmvArenaBase); unused. The ROM caller
+ *               passes it (func_003503D8, 0x003503EC delay slot), so the
+ *               signature carries it (RULING #9118, task #1437).
  */
-void func_003512F0(void) {
+void func_003512F0(u8 *arena) {
 }
 
 /**
@@ -1138,8 +1148,13 @@ s32 func_003513E0(u32 *req, u32 len, u32 dest) {
 
 /**
  * Stream-callback stub: always "ready".
+ *
+ * @param block  the arena block at arena+0xD9040; unused. The ROM caller passes
+ *               it (func_003503D8, 0x00350490 delay slot), so the signature
+ *               carries it (RULING #9118, task #1437).
+ * @return       1 (ready).
  */
-s32 func_003513F0(void) {
+s32 func_003513F0(u8 *block) {
     return 1;
 }
 
@@ -2248,8 +2263,13 @@ void FmvFrameQueueInit(s32 *rec, s32 arg1, s32 base, s32 count) {
 
 /**
  * FMV idle hook (frame-queue variant) — does nothing.
+ *
+ * @param frameQueue  the decoded-frame display queue (arena+FMV_FRAMEQ_OFS);
+ *                    unused. The ROM caller passes it (func_003503D8, 0x00350404
+ *                    delay slot), so the signature carries it (RULING #9118,
+ *                    task #1437).
  */
-void func_00352B88(void) {
+void func_00352B88(u8 *frameQueue) {
 }
 
 /**
