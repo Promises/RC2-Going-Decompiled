@@ -210,7 +210,9 @@ for s in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
     signal.signal(s, stop)
 FIX = "tools/ee/verify_match_unit_selftest"
 OUT = "going-decompiled/build/vmu_selftest.%d" % os.getpid()   # gitignored, inside the docker mount
-DOCKER = ["docker", "--context", "colima-ee-x86", "run", "--rm", "-v", os.getcwd() + ":/work",
+# --user: the fixture objects belong to the invoking uid, not root (task #1373).
+DOCKER = ["docker", "--context", "colima-ee-x86", "run", "--rm",
+          "--user=%d:%d" % (os.getuid(), os.getgid()), "-e", "HOME=/tmp", "-v", os.getcwd() + ":/work",
           "-w", "/work", "ee-build", "sh", "-c"]
 AS = "mips-linux-gnu-as -march=r5900 -mabi=eabi -no-pad-sections -EL -G0"
 FAKE_MKTEMP = os.path.join(os.getcwd(), OUT, "mktemp")
@@ -787,7 +789,7 @@ PROBES = [("X0", "A0") + at_rom_read('raise RuntimeError("vmu selftest crash pro
            "BYTE IDENTICAL printed, then exit 0 unsentinelled: no verdict line", False),
           ("X8", "A1", None, None, None, "INFRA",
            "mktemp fails (first on PATH), SEEDED base: INFRASTRUCTURE ERROR, rc 2", True),
-          ("X9", "A1", "head", 'RESULT_FILE="$(mktemp -t verify_match_unit_result)"', 'RESULT_FILE=""', "INFRA",
+          ("X9", "A1", "head", 'RESULT_FILE="$(mktemp "$VMU_TMP/verify_match_unit_result.XXXXXX")"', 'RESULT_FILE=""', "INFRA",
            "RESULT_FILE alone empty, SEEDED base: not a CRASH after a verdict", False),
 ]
 
@@ -1032,9 +1034,13 @@ fi
 # made verdict() raise AFTER the compare, so the crash hook printed "nothing
 # was compared" beside a real verdict line (task #1079's V3). A failed mktemp
 # is the MACHINE, not the function or its objects: one line, rc 2, nothing run.
-DIS_FILE="$(mktemp -t verify_match_unit)"
-RESULT_FILE="$(mktemp -t verify_match_unit_result)"
-PY_OUT_FILE="$(mktemp -t verify_match_unit_out)"
+# An explicit path template, not `-t <prefix>` (task #1373): `-t` is BSD-only
+# syntax, and GNU coreutils rejects a template without X's ("too few X's"),
+# so every Linux run ended here at rc 2. This one form works on both.
+VMU_TMP="${TMPDIR:-/tmp}"
+DIS_FILE="$(mktemp "$VMU_TMP/verify_match_unit.XXXXXX")"
+RESULT_FILE="$(mktemp "$VMU_TMP/verify_match_unit_result.XXXXXX")"
+PY_OUT_FILE="$(mktemp "$VMU_TMP/verify_match_unit_out.XXXXXX")"
 trap 'rm -f "$DIS_FILE" "$RESULT_FILE" "$PY_OUT_FILE"' EXIT
 for t in "$DIS_FILE" "$RESULT_FILE" "$PY_OUT_FILE"; do
   if [ -z "$t" ] || [ ! -f "$t" ] || [ ! -w "$t" ]; then
@@ -1047,7 +1053,7 @@ done
 # single-function .o is expected used to yield a 17k-line diff and a confident
 # "DIFFERS"). A single-function target.o has exactly ONE `F .text` symbol and a
 # .text no larger than one function; the whole unit has hundreds. Refuse loudly.
-SHAPE="$(docker --context colima-ee-x86 run --rm -v "$ROOT":/work -w /work ee-build sh -c "
+SHAPE="$(docker --context colima-ee-x86 run --rm --user="$(id -u):$(id -g)" -e HOME=/tmp -v "$ROOT":/work -w /work ee-build sh -c "
   mips-linux-gnu-objdump -t '$TGT' 2>/dev/null | awk '\$3==\"F\" && \$4==\".text\"' | wc -l
   mips-linux-gnu-objdump -h '$TGT' 2>/dev/null | awk '\$2==\".text\"{print \$3}'
 ")" || { echo "ARG ERROR: could not read '$TGT' as an object file" >&2; exit 3; }
@@ -1135,7 +1141,7 @@ fi
 #    effect.) Only a unit-level check sees the pad drop:
 #    tools/ee/text_size_check.sh (same seed: off 56, rc 1; master: off 0,
 #    rc 0) or the whole-image cmp in landing_gate.sh.
-docker --context colima-ee-x86 run --rm -v "$ROOT":/work -w /work ee-build sh -c \
+docker --context colima-ee-x86 run --rm --user="$(id -u):$(id -g)" -e HOME=/tmp -v "$ROOT":/work -w /work ee-build sh -c \
   "mips-linux-gnu-objdump -dr --section=.text '$BASE' 2>/dev/null" >"$DIS_FILE" \
   || { echo "ARG ERROR: could not disassemble '$BASE'" >&2; exit 3; }
 [ -s "$DIS_FILE" ] || { echo "ARG ERROR: '$BASE' produced no .text disassembly" >&2; exit 3; }
