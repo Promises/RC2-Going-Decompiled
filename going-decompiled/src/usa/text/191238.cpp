@@ -4570,9 +4570,18 @@ void MapSetCurrentLevel(s32 level) {
  * g_mapCache.available from MapDataExistsForLevel(currentLevel), then force it
  * clear when on the hub level (0) with any story progress. Returns available!=0.
  *
- * WALL: the clamp+store/jal interleave and the `bnel` (branch-likely) hub-clear
- * test diverge from the pinned cc1's plain branches and slot scheduling. Logic
- * traced op-for-op; kept as the portable #else body. */
+ * Named g_mapVertexData, the ROM relocation's name for the same storage, as
+ * MapSetCurrentLevel's body above.
+ *
+ * CONDITIONAL screen-exact (task #1396, FACT #8830 solo screen): EXACT on the
+ * s136os arm ONLY with -fno-gcse dropped from the s136 compile. The ROM keeps
+ * %hi(g_mapVertexData) in $s1 across the call and re-adds %lo after it, the
+ * GCSE shape (FACT #8187, #7971); with the unit's -fno-gcse it reads 32/35.
+ * 191238's s136 compile is pinned, and RULING #9004 unpins 1B4218 only, so
+ * this is not promotable until a ruling unpins this unit. Levers, each undone
+ * alone under the unpinned arm: the if/else store of available (20/35); the
+ * size-16 g_playerProgressAbs equate (13/35); the g_mapVertexData name (words
+ * exact, relocations name g_mapCache). */
 #ifndef TARGET_NATIVE
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 67.17% GPREL-DECL /
@@ -4585,14 +4594,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapUpdateLevelA
 extern MapCache g_mapCache;
 /* (end of this body's declarations) */
 s32 MapUpdateLevelAvailability(void) {
-    if (g_mapCache.currentLevel >= 0x1C) {
-        g_mapCache.currentLevel = 0x1B;
+    if (g_mapVertexData.currentLevel >= 0x1C) {
+        g_mapVertexData.currentLevel = 0x1B;
     }
-    g_mapCache.available = MapDataExistsForLevel(g_mapCache.currentLevel) ? 1 : 0;
-    if (g_mapCache.currentLevel == 0 && g_playerProgress != 0) {
-        g_mapCache.available = 0;
+    if (MapDataExistsForLevel(g_mapVertexData.currentLevel)) {
+        g_mapVertexData.available = 1;
+    } else {
+        g_mapVertexData.available = 0;
     }
-    return g_mapCache.available != 0;
+    if (g_mapVertexData.currentLevel == 0 && g_playerProgressAbs != 0) {
+        g_mapVertexData.available = 0;
+    }
+    return g_mapVertexData.available != 0;
 }
 #endif
 
