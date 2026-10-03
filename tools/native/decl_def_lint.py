@@ -60,6 +60,22 @@ STATUS of a row:
                escalate.
   STALE-LEVER  a DECL-LEVER annotation on a declaration that no longer
                disagrees with its definition: remove the annotation.
+
+DIRECTION RULE for FIXABLE rows (watcher-2, decision 2 on task #1414's Q2;
+task #1425), verbatim: "DIRECTION RULE for FIXABLE rows (the definition is
+still `INCLUDE_ASM`): fix toward the DEFINITION's own C (its `#else` body)
+when one exists; otherwise toward the MAJORITY of declaration sites. Ties are
+listed for a ruling, not auto-fixed." Each FIXABLE row is followed by a
+`direction:` line giving the rule's choice AND its evidence: whether the
+definition has C of its own (a body with at least one statement; an empty
+`{}` arm has none), and the tally of that symbol's declaration sites agreeing
+and disagreeing with it at the ABI level. With no C to fix toward, sites vote
+by ABI signature (where each value travels, not its spelling); a tie prints
+`TIE — needs a ruling` and is never resolved. The rule is OUTPUT: this lint
+never rewrites source, and matched names/code are never changed on its say-so.
+WHY not "fix the definition" (#1379's first wording): #1414 measured
+Vec3RescaleToLenVu0 with 9 declaration sites agreeing with its definition and
+5 disagreeing; editing the definition would have broken the 9.
 Exit: 0 clean (only ANNOTATED rows), 1 any other row, 2 the parse could not
 run (fails CLOSED: a unit that does not compile, a missing dump, a clang
 error). Rows are printed one per declaration SITE, never one per symbol.
@@ -88,13 +104,36 @@ ARITY-EXTRA (trailing arguments the definition never reads), POINTEE, and a
 NOPROTO declaration whose call cannot be mis-promoted.
 
 COST (XPS, clang 23.1.1): ~30 s for the 44 units; --base ~50 s (two trees);
---selftest ~4 s.
+--selftest ~10 s (25 arms, task #1425).
+
+UNITS (task #1425). Unit arguments SELECT rows; they never narrow the parse.
+The whole TARGET_NATIVE population is always parsed, and a row is kept when
+its declaring unit, its declaration's file or its definition's file is a named
+unit. Before #1425 the named units were the only ones parsed, so a declaration
+whose definition lived in an unnamed unit was compared with nothing: #1424
+measured `units=2`, 0 rows, PASS on a tree with a known positive (re-derived
+here at cf68dc69: 250080.cpp alone printed `units=1`, 0 rows, PASS where the
+whole tree lists func_00133850 at :218 and :385). A named unit that is not in
+the population is UNRUNNABLE (rc 2), never an empty PASS. Naming units saves
+no time; the summary says `units=<parsed> requested=<named>`.
+
+--base IDENTITY (task #1425, watcher-2 decision 1 on #1414's Q1). A row is
+keyed on (region, symbol, declaration file, disagreement KIND), never on the
+type text, so RE-SPELLING an existing mismatch (#1389's s64 -> s32 vs a void
+definition) is not NEW. The KIND is the row's error tags (RETURN-UNSET, ORDER,
+ARITY-MISSING, ...; PARAM keeps its position). The printed row still carries
+the types. Rows sharing a key are COUNTED (a multiset): a further same-kind
+site in the same file is NEW, but a same-kind SWAP within one file (one fixed,
+one added) is not; see site_key. `--key text` restores the old identity for
+--selftest's negative control only.
 
 Usage:
-  tools/native/decl_def_lint.py [--info] [unit ...]   lint this tree
-  tools/native/decl_def_lint.py --base <rev> [--info] error sites at this
-                                  tree that <rev>'s tree does not have (a
-                                  multiset keyed without line numbers)
+  tools/native/decl_def_lint.py [--info] [unit ...]   lint this tree (units
+                                  select rows, see UNITS)
+  tools/native/decl_def_lint.py --base <rev> [--repo <dir>] [--info] [unit ...]
+                                  error sites at this tree that <rev>'s tree
+                                  does not have; <rev> is resolved in <dir>'s
+                                  git repository (default: this tree's)
   tools/native/decl_def_lint.py --selftest            fixture arms
 """
 import json
@@ -230,7 +269,8 @@ def extract(dump, unit, lang):
         elif k == "FunctionDecl":
             ty = node.get("type", {})
             parms = [c for c in node.get("inner", []) if c.get("kind") == "ParmVarDecl"]
-            body = any(c.get("kind") == "CompoundStmt" for c in node.get("inner", []))
+            stmts = [c for c in node.get("inner", []) if c.get("kind") == "CompoundStmt"]
+            body = bool(stmts)
             st = split_fn_type(ty.get("qualType", ""))
             if st is None:
                 continue
@@ -241,6 +281,7 @@ def extract(dump, unit, lang):
                 "name": node.get("name"),
                 "file": f, "line": line,
                 "def": body,
+                "body_stmts": len(stmts[0].get("inner", [])) if stmts else 0,
                 "implicit": bool(node.get("isImplicit")),
                 "ret": ret_s,
                 "params": [p.get("type", {}).get("qualType", "") for p in parms],
@@ -448,11 +489,15 @@ def under(path, *dirs):
                               for d in dirs)
 
 
-def collect(units):
-    """Run check.sh through the shim; (units, records) or an UNRUNNABLE text.
-    Fails closed: a unit that does not compile, a summary line that is
-    missing, or a unit count that differs from the record count."""
-    out, p = run_check(units)
+def collect():
+    """Run check.sh over EVERY unit through the shim; (units, records) or an
+    UNRUNNABLE text. Always the whole population, whatever units the caller
+    asked about: a row needs BOTH its declaration's unit and its definition's
+    unit, so parsing only the asked units compared their declarations with
+    nothing (task #1425; #1424 measured `units=2`, 0 rows, PASS on a tree with
+    a known positive). Fails closed: a unit that does not compile, a summary
+    line that is missing, or a unit count that differs from the record count."""
+    out, p = run_check([])
     try:
         m = re.search(r"--- native compile-check: pass=(\d+) fail=(\d+) ---", p.stdout)
         if not m or p.returncode != 0 or int(m.group(2)) != 0:
@@ -467,17 +512,28 @@ def collect(units):
 
 
 def lint_rows(units):
-    """(npass, rows) for the tree at ROOT, or (None, why)."""
-    got, why = collect(units)
+    """(npass, rows, directions) for the tree at ROOT, or (None, why, None).
+
+    `units` (absolute paths, may be empty) SELECTS rows, it never narrows the
+    parse: the whole population is parsed and a row is kept when the unit that
+    declared it, its declaration's file or its definition's file is one of the
+    units. A unit that is not in the population (no TARGET_NATIVE marker, a
+    typo, another tree) fails closed: selecting from nothing would be a PASS."""
+    got, why = collect()
     if got is None:
-        return None, why
+        return None, why, None
     npass, recs = got
+    want = set(units)
+    missing = sorted(want - {r["unit"] for r in recs})
+    if missing:
+        return None, ("unit(s) not in check.sh's TARGET_NATIVE population, so no row "
+                      "could be selected for them: %s" % ", ".join(rel(u) for u in missing)), None
 
     # Cross-TU identity is an EXTERNAL name: static functions are per-unit and
     # never match another unit's symbol. Definitions count only from the
     # game's own source (not libc/libstdc++ inline bodies); declarations only
     # from the tree (going-decompiled/, tools/native/), not system headers.
-    defs, decls = {}, []
+    defs, decls, decl_units = {}, [], {}
     for r in recs:
         reg = region_of(r["unit"])
         for fn in r["fns"]:
@@ -489,11 +545,18 @@ def lint_rows(units):
                     defs.setdefault((reg, fn["name"]), {})[fn["file"], fn["line"]] = fn
             elif under(fn["file"], "going-decompiled", "tools/native"):
                 decls.append(fn)
+                decl_units.setdefault((reg, fn["name"], fn["file"], fn["line"]), set()).add(r["unit"])
 
-    rows, seen = [], set()
+    def selected(files, site=None):
+        if not want:
+            return True
+        hit = {os.path.abspath(f) for f in files if f} | decl_units.get(site, set())
+        return bool(hit & want)
+
+    rows, seen, sites = [], set(), {}
     unmatched = {reg: unmatched_set(reg) for reg in {k[0] for k in defs}}
     for (reg, name), ds in sorted(defs.items()):
-        if len(ds) > 1:
+        if len(ds) > 1 and selected([f for f, _ in ds]):
             rows.append(("DUPDEF", reg, name, ", ".join(
                 "%s:%s" % (rel(f), l) for f, l in sorted(ds)), "-", "defined in more than one place"))
     for d in decls:
@@ -506,6 +569,9 @@ def lint_rows(units):
         seen.add(site)
         dfn = sorted(defs[(reg, name)].values(), key=lambda f: (f["file"], f["line"]))[0]
         err, info = compare(d, dfn)
+        sites.setdefault((reg, name), []).append((d, bool(err)))
+        if not selected([d["file"], dfn["file"]], site):
+            continue
         lev = None if d["implicit"] else lever_at(d["file"], d["line"])
         where = "%s:%s" % (rel(d["file"]), d["line"])
         defwhere = "%s:%s" % (rel(dfn["file"]), dfn["line"])
@@ -524,7 +590,64 @@ def lint_rows(units):
             rows.append(("INFO", reg, name, where, defwhere, i))
 
     rows.sort(key=lambda r: (ORDER[r[0]], r[1], r[2], r[3]))
-    return npass, rows
+    directions = {}
+    for r in rows:
+        if r[0] == "FIXABLE" and (r[1], r[2]) not in directions:
+            dfn = sorted(defs[(r[1], r[2])].values(), key=lambda f: (f["file"], f["line"]))[0]
+            directions[r[1], r[2]] = direction(dfn, sites[r[1], r[2]])
+    return npass, rows, directions
+
+
+# ------------------------------------------------- FIXABLE direction rule ---
+# watcher-2, decision 2 on task #1414's Q2 (task #1425), VERBATIM:
+DIRECTION_RULE = (
+    "DIRECTION RULE for FIXABLE rows (the definition is still `INCLUDE_ASM`): "
+    "fix toward the DEFINITION's own C (its `#else` body) when one exists; "
+    "otherwise toward the MAJORITY of declaration sites. Ties are listed for a "
+    "ruling, not auto-fixed.")
+# WHY not "fix the definition": #1414 measured Vec3RescaleToLenVu0 with 9
+# declaration sites AGREEING with its definition and 5 disagreeing; editing the
+# definition to the 5 would have broken the 9. This lint REPORTS the direction
+# and its evidence; it never rewrites a declaration or a definition, and
+# MATCHED NAMES/CODE are never changed on its say-so.
+
+
+def abi_sig(fn):
+    """A declaration's identity for the majority vote: where each value
+    travels (loc_of), not its spelling, so ABI-identical spellings vote
+    together."""
+    return (loc_of(fn["ret_cls"]), tuple(loc_of(c) for c in fn["param_cls"]),
+            fn["variadic"], fn["noproto"] or fn["implicit"])
+
+
+def sig_text(fn):
+    return "%s (%s%s)" % (fn["ret"], ", ".join(fn["params"]),
+                          ", ..." if fn["variadic"] else "")
+
+
+def direction(dfn, site_list):
+    """The rule's verdict for one FIXABLE symbol, with its evidence: whether
+    the definition has its own C (a body with at least one statement — an
+    empty `{}` arm is not C to fix toward) and the declaration-site tally."""
+    agree = sum(1 for _, bad in site_list if not bad)
+    tally = "declaration sites: %d agree, %d disagree with the definition" % (
+        agree, len(site_list) - agree)
+    defwhere = "%s:%s" % (rel(dfn["file"]), dfn["line"])
+    if dfn.get("body_stmts", 0) > 0:
+        return ("toward the DEFINITION — it has its own C (%s, %d statement(s)); %s"
+                % (defwhere, dfn["body_stmts"], tally))
+    votes = {}
+    for d, _ in site_list:
+        votes.setdefault(abi_sig(d), []).append(d)
+    ranked = sorted(votes.values(), key=lambda v: -len(v))
+    head = "the definition at %s has no C of its own (empty body), so the MAJORITY of " \
+           "declaration sites decides; %s" % (defwhere, tally)
+    if len(ranked) > 1 and len(ranked[0]) == len(ranked[1]):
+        tied = [v for v in ranked if len(v) == len(ranked[0])]
+        return "TIE — needs a ruling: %s; tied at %d site(s) each: %s" % (
+            head, len(ranked[0]), " | ".join(sig_text(v[0]) for v in tied))
+    return "toward the MAJORITY: %s; %d of %d site(s) declare %s" % (
+        head, len(ranked[0]), len(site_list), sig_text(ranked[0][0]))
 
 
 ORDER = {"DESIGN-CALL": 0, "FIXABLE": 1, "STALE-LEVER": 2, "DUPDEF": 3,
@@ -536,15 +659,82 @@ def fmt(r):
     return "%-11s %-3s %s  decl %s  def %s  %s" % r
 
 
+def row_kinds(r):
+    """The disagreement KINDS of a row, without their type text: `RETURN-UNSET
+    s64 vs void` and `RETURN-UNSET s32 vs void` are one kind. A PARAM error
+    keeps its POSITION (`PARAM 2`), which names WHICH parameter disagrees and
+    carries no spelling. Sorted, so error order is not identity."""
+    if r[0] in ("DUPDEF", "STALE-LEVER"):
+        return (r[0],)
+    out = []
+    for e in r[5].split("; "):
+        m = re.match(r"(PARAM \d+|[A-Z][A-Z-]*)", e)
+        out.append(m.group(1) if m else e)
+    return tuple(sorted(out))
+
+
+def row_file(r):
+    """The declaration's file, line numbers dropped; for DUPDEF every
+    definition file (an unrelated edit above a declaration moves its line)."""
+    return ", ".join(re.sub(r":\d+$", "", s) for s in r[3].split(", "))
+
+
 def site_key(r):
-    """A row's identity across two trees: no line numbers (an unrelated edit
-    above a declaration moves it), no status (a definition promoted between
-    the trees turns FIXABLE into DESIGN-CALL without the row changing)."""
+    """A row's identity across two trees: (region, symbol, file, KIND) — task
+    #1425, watcher-2's decision 1 on #1414's Q1. Not the type text: #1414
+    DEMONSTRATED that keying on it reads a RE-SPELLING of a pre-existing
+    mismatch as NEW (#1389's s64 -> s32 on func_00133850: `NEW RETURN-UNSET
+    s32 vs void`, `GONE s64 vs void` x2, diff FAIL, on a landing that
+    introduced no mismatch). The type text stays in the PRINTED row; it only
+    no longer takes part in identity. No line number (an unrelated edit above
+    a declaration moves it), no status (a promotion between the trees turns
+    FIXABLE into DESIGN-CALL without the disagreement changing).
+
+    COLLISION (chosen, task #1425): two sites in ONE file disagreeing with the
+    same symbol's definition by the same KIND share a key. They are COUNTED,
+    not collapsed (a multiset; see diff_rows), so a THIRD such site in that
+    file reads as NEW. What the key cannot see is a SWAP inside one file: one
+    such site fixed and another of the same kind added in the same landing
+    nets to zero and is not NEW. Keying on the line instead would make every
+    unrelated edit above a declaration a false NEW, which is the failure this
+    key exists to remove; the swap is the price, and the full run (no --base)
+    still lists every site."""
+    return (r[1], r[2], row_file(r), row_kinds(r))
+
+
+def site_key_text(r):
+    """The PRE-#1425 key, (region, symbol, file, full disagreement TEXT). Kept
+    ONLY as `--key text`, so --selftest and the landing gate's selftest can
+    show their re-spelling fixture is one the old key FAILS — without that
+    control, the new key passing it would prove nothing. Never a gate key."""
     return (r[1], r[2], r[3].rsplit(":", 1)[0], r[5])
 
 
+KEYS = {"kind": site_key, "text": site_key_text}
+
+
+def diff_rows(base_rows, tip_rows, key=site_key):
+    """(new, gone, nbase): error rows at the tip not matched by a base row of
+    the same key, compared as a MULTISET (each base row absorbs one tip row),
+    and the base keys left unmatched."""
+    pool = {}
+    for r in base_rows:
+        if r[0] in ERROR_STATES:
+            pool[key(r)] = pool.get(key(r), 0) + 1
+    new, gone = [], dict(pool)
+    for r in tip_rows:
+        if r[0] not in ERROR_STATES:
+            continue
+        k = key(r)
+        if gone.get(k, 0) > 0:
+            gone[k] -= 1
+        else:
+            new.append(r)
+    return new, gone, sum(pool.values())
+
+
 def lint(units, show_info=False):
-    npass, rows = lint_rows(units)
+    npass, rows, dirs = lint_rows(units)
     if npass is None:
         print(rows)
         print("#### decl-def-lint: UNRUNNABLE (fails closed)")
@@ -554,31 +744,37 @@ def lint(units, show_info=False):
         counts[r[0]] = counts.get(r[0], 0) + 1
         if r[0] != "INFO" or show_info:
             print(fmt(r))
+        if r[0] == "FIXABLE":
+            print("            direction: " + dirs[r[1], r[2]])
+    if counts.get("FIXABLE"):
+        print("--- " + DIRECTION_RULE)
     bad = sum(counts.get(k, 0) for k in ERROR_STATES)
-    print("--- decl-def-lint: units=%d %s ---" % (
-        npass, " ".join("%s=%d" % (k, counts.get(k, 0)) for k in ORDER)))
+    print("--- decl-def-lint: units=%d%s %s ---" % (
+        npass, " requested=%d" % len(units) if units else "",
+        " ".join("%s=%d" % (k, counts.get(k, 0)) for k in ORDER)))
     print("#### decl-def-lint: %s" % ("FAIL" if bad else "PASS"))
     return 1 if bad else 0
 
 
-def lint_diff(base, units):
+def lint_diff(base, units, repo=None, key="kind"):
     """Error rows at the tip (this tree) that the base tree does not have,
-    compared as a MULTISET of site keys. The base tree is `git archive`d from
-    <base> so its own check.sh, flags and unit list are used."""
+    compared as a MULTISET of site keys (diff_rows). The base tree is `git
+    archive`d from <base> in REPO (default: this tree) so its own check.sh,
+    flags and unit list are used; both arms are linted by THIS script."""
     global ROOT
     tip_root = ROOT
     tmp = tempfile.mkdtemp(prefix="ddl-base.")
     try:
-        arch = subprocess.run(["git", "-C", tip_root, "archive", "--format=tar", base, "--",
+        arch = subprocess.run(["git", "-C", repo or tip_root, "archive", "--format=tar", base, "--",
                                "going-decompiled/src", "going-decompiled/include",
                                "tools/native"], stdout=subprocess.PIPE)
         if arch.returncode != 0:
             print("#### decl-def-lint: UNRUNNABLE (cannot archive base %s; fails closed)" % base)
             return 2
         subprocess.run(["tar", "-x", "-C", tmp], input=arch.stdout, check=True)
-        n_tip, tip = lint_rows(units)
+        n_tip, tip, _ = lint_rows(units)
         ROOT = tmp
-        n_base, base_rows = lint_rows([u.replace(tip_root, tmp, 1) for u in units])
+        n_base, base_rows, _ = lint_rows([u.replace(tip_root, tmp, 1) for u in units])
     finally:
         ROOT = tip_root
         shutil.rmtree(tmp, ignore_errors=True)
@@ -586,29 +782,17 @@ def lint_diff(base, units):
         print(tip if n_tip is None else base_rows)
         print("#### decl-def-lint: UNRUNNABLE (fails closed)")
         return 2
-    pool = {}
-    for r in base_rows:
-        if r[0] in ERROR_STATES:
-            pool[site_key(r)] = pool.get(site_key(r), 0) + 1
-    new, gone = [], dict(pool)
-    for r in tip:
-        if r[0] not in ERROR_STATES:
-            continue
-        k = site_key(r)
-        if gone.get(k, 0) > 0:
-            gone[k] -= 1
-        else:
-            new.append(r)
+    new, gone, nb = diff_rows(base_rows, tip, KEYS[key])
     for r in new:
         print("NEW  " + fmt(r))
     ngone = sum(gone.values())
     for k, v in sorted(gone.items()):
         for _ in range(v):
-            print("GONE %-3s %s  decl %s  %s" % k)
-    nb = sum(pool.values())
+            print("GONE %-3s %s  decl %s  %s" % (k[0], k[1], k[2], "; ".join(k[3]) if key == "kind" else k[3]))
     print("--- decl-def-lint diff: base %s units=%d errors=%d -> tip units=%d errors=%d; "
-          "new=%d gone=%d ---" % (base, n_base, nb, n_tip,
-                                  sum(1 for r in tip if r[0] in ERROR_STATES), len(new), ngone))
+          "new=%d gone=%d; key=%s ---" % (base, n_base, nb, n_tip,
+                                          sum(1 for r in tip if r[0] in ERROR_STATES),
+                                          len(new), ngone, key))
     print("#### decl-def-lint diff: %s" % ("FAIL" if new else "PASS"))
     return 1 if new else 0
 
@@ -630,38 +814,84 @@ int  Value(void) { return 1; }
 """
 
 
-def _arm(name, use_unit, expect_rc, expect_rows, absent=(), def_unit=DEF_UNIT):
-    global ROOT
-    tip_root = ROOT
-    tmp = tempfile.mkdtemp(prefix="ddl-st.")
-    try:
-        os.makedirs(os.path.join(tmp, "tools", "native"))
-        for f in ("check.sh", "mips_callees.h"):
-            shutil.copy(os.path.join(tip_root, "tools", "native", f),
-                        os.path.join(tmp, "tools", "native", f))
-        src = os.path.join(tmp, "going-decompiled", "src", "usa", "text")
-        os.makedirs(src)
-        os.makedirs(os.path.join(tmp, "going-decompiled", "include"))
-        with open(os.path.join(src, "def.c"), "w") as fh:
-            fh.write("/* TARGET_NATIVE unit */\n" + def_unit)
-        with open(os.path.join(src, "use.c"), "w") as fh:
-            fh.write("/* TARGET_NATIVE unit */\n" + use_unit)
-        ROOT = tmp
-        import io
-        import contextlib
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            rc = lint([])
-        out = buf.getvalue()
-    finally:
-        ROOT = tip_root
-        shutil.rmtree(tmp, ignore_errors=True)
+def _tree(tmp, use_unit, def_unit, extra=None):
+    """A throwaway tree: the REAL check.sh and two units, def.c and use.c,
+    plus any `extra` {basename: text} units."""
+    os.makedirs(os.path.join(tmp, "tools", "native"))
+    for f in ("check.sh", "mips_callees.h"):
+        shutil.copy(os.path.join(ROOT, "tools", "native", f),
+                    os.path.join(tmp, "tools", "native", f))
+    src = os.path.join(tmp, "going-decompiled", "src", "usa", "text")
+    os.makedirs(src)
+    os.makedirs(os.path.join(tmp, "going-decompiled", "include"))
+    with open(os.path.join(src, "def.c"), "w") as fh:
+        fh.write("/* TARGET_NATIVE unit */\n" + def_unit)
+    for f, text in [("use.c", use_unit)] + sorted((extra or {}).items()):
+        with open(os.path.join(src, f), "w") as fh:
+            fh.write("/* TARGET_NATIVE unit */\n" + text)
+    return src
+
+
+def _quiet(fn, *a, **k):
+    import io
+    import contextlib
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rv = fn(*a, **k)
+    return rv, buf.getvalue()
+
+
+def _verdict(name, rc, expect_rc, out, expect_rows, absent):
     ok = rc == expect_rc and all(re.search(r, out, re.M) for r in expect_rows) \
         and not any(re.search(r, out, re.M) for r in absent)
     print("%s %s: rc %d (want %d)" % ("OK  " if ok else "SELFTEST-FAIL", name, rc, expect_rc))
     if not ok:
         print("    " + out.replace("\n", "\n    "))
     return ok
+
+
+def _arm(name, use_unit, expect_rc, expect_rows, absent=(), def_unit=DEF_UNIT, units=(),
+         extra=None):
+    """`units` are basenames under the fixture's src/usa/text (or any path,
+    taken as given) passed as the explicit unit arguments."""
+    global ROOT
+    tip_root = ROOT
+    tmp = tempfile.mkdtemp(prefix="ddl-st.")
+    try:
+        src = _tree(tmp, use_unit, def_unit, extra)
+        ROOT = tmp
+        rc, out = _quiet(lint, [os.path.join(src, u) for u in units])
+    finally:
+        ROOT = tip_root
+        shutil.rmtree(tmp, ignore_errors=True)
+    return _verdict(name, rc, expect_rc, out, expect_rows, absent)
+
+
+def _diff_arm(name, base_use, tip_use, key, expect_new, expect_rows=(), absent=()):
+    """The --base differential's comparison (diff_rows) on two fixture trees
+    that differ only in use.c. rc is 1 when a row is NEW, as lint_diff's."""
+    global ROOT
+    tip_root = ROOT
+    trees = []
+    try:
+        got = []
+        for use in (base_use, tip_use):
+            tmp = tempfile.mkdtemp(prefix="ddl-st.")
+            trees.append(tmp)
+            _tree(tmp, use, DEF_UNIT)
+            ROOT = tmp
+            got.append(lint_rows([]))
+            ROOT = tip_root
+    finally:
+        ROOT = tip_root
+        for t in trees:
+            shutil.rmtree(t, ignore_errors=True)
+    if got[0][0] is None or got[1][0] is None:
+        return _verdict(name, 2, 1 if expect_new else 0, str(got), (), ())
+    new, gone, _ = diff_rows(got[0][1], got[1][1], KEYS[key])
+    out = "".join("NEW  " + fmt(r) + "\n" for r in new) + \
+        "".join("GONE %s\n" % (k,) for k, v in gone.items() for _ in range(v))
+    return _verdict(name, 1 if new else 0, 1 if expect_new else 0, out, expect_rows, absent)
 
 
 def selftest():
@@ -711,8 +941,72 @@ def selftest():
         ("s12 a unit that does not compile -> UNRUNNABLE rc 2 (fails closed)",
          "void f(void) { this is not C; }\n", 2, [r"^#### decl-def-lint: UNRUNNABLE"]),
     ]
+    permuted = ("void Matched(float *dst, const float *src, float len);\n"
+                "void f(float *a) { Matched(a, a, 2.0f); }\n")
+    # task #1425, PER-UNIT MODE. Before it, explicit units narrowed the PARSE,
+    # so a declaration whose definition sat in an unnamed unit was compared
+    # with nothing: s13 printed `units=1`, 0 rows, PASS (#1424's fail-open).
+    arms += [
+        ("s13 per-unit: ONLY the declaring unit named -> the row is still found, FAIL",
+         permuted, 1, [r"^DESIGN-CALL usa Matched  decl going-decompiled/src/usa/text/use.c:2 .* ORDER",
+                       r"units=2 requested=1 "], (), DEF_UNIT, ("use.c",)),
+        ("s14 per-unit: ONLY the defining unit named -> the row is found from that side, FAIL",
+         permuted, 1, [r"^DESIGN-CALL usa Matched  decl going-decompiled/src/usa/text/use.c:2 "],
+         (), DEF_UNIT, ("def.c",)),
+        ("s15 per-unit control: a unit with no disagreement named -> its rows only, PASS",
+         permuted, 0, [r"^#### decl-def-lint: PASS", r"units=3 requested=1 "], [r"^DESIGN-CALL"],
+         DEF_UNIT, ("use2.c",), {"use2.c": "void g(void) { Sink(1); }\n"}),
+        ("s16 per-unit: a unit outside the population -> UNRUNNABLE rc 2, never an empty PASS",
+         permuted, 2, [r"not in check.sh's TARGET_NATIVE population.*nope\.c",
+                       r"^#### decl-def-lint: UNRUNNABLE"], (), DEF_UNIT, ("nope.c",)),
+    ]
+    # task #1425, FIXABLE DIRECTION RULE (watcher-2 decision 2): reported, with
+    # its evidence, never applied. EMPTY: an #else arm with no C of its own.
+    empty = DEF_UNIT.replace("void Unmatched(float *dst, float len, const float *src) "
+                             "{ dst[0] = src[0] * len; }",
+                             "void Unmatched(float *dst, float len, const float *src) {}")
+    agree = ("void Unmatched(float *dst, float len, const float *src);\n"
+             "void g1(float *a) { Unmatched(a, 1.0f, a); }\n")
+    swap = ("void Unmatched(float *dst, const float *src, float len);\n"
+            "void g2(float *a) { Unmatched(a, a, 1.0f); }\n")
+    arms += [
+        ("s17 direction: the definition has its own C -> toward the DEFINITION, with the tally",
+         swap, 1, [r"^FIXABLE     usa Unmatched ", r"^ +direction: toward the DEFINITION — it has its own "
+                   r"C \(going-decompiled/src/usa/text/def\.c:\d+, 1 statement\(s\)\); declaration "
+                   r"sites: 1 agree, 1 disagree", r"^--- DIRECTION RULE for FIXABLE rows"],
+         (), DEF_UNIT, (), {"use2.c": agree}),
+        ("s18 direction: empty definition, 1 site vs 1 site -> TIE, needs a ruling (never resolved)",
+         swap, 1, [r"^ +direction: TIE — needs a ruling: the definition at .* has no C of its own"],
+         [r"direction: toward"], empty, (), {"use2.c": agree}),
+        ("s19 direction: empty definition, 2 sites vs 1 -> toward the MAJORITY, even against the "
+         "definition's spelling",
+         swap, 1, [r"^ +direction: toward the MAJORITY: .* 2 of 3 site\(s\) declare void "
+                   r"\(float \*, const float \*, float\)"],
+         [r"TIE"], empty, (), {"use2.c": agree, "use3.c": swap.replace("g2", "g3")}),
+    ]
     ok = all([_arm(*a) for a in arms])
-    print("#### decl-def-lint selftest: %s (%d arms)" % ("PASS" if ok else "FAIL", len(arms)))
+    # task #1425, THE --base KEY (watcher-2 decision 1): both directions, and
+    # the old key on the re-spelling as the control that shows the fixture
+    # discriminates (a new key passing it proves nothing if the old one did).
+    s64 = "long long Sink(int x);\nlong long f(void) { return Sink(1); }\n"
+    s32 = "int Sink(int x);\nint f(void) { return Sink(1); }\n"
+    diffs = [
+        ("d1 a pure RE-SPELLING of a mismatch (s64 -> s32 vs a void def, #1389's shape) -> "
+         "no NEW, PASS", s64, s32, "kind", False, (), [r"^NEW"]),
+        ("d2 control: the same re-spelling under the OLD text key -> NEW, FAIL (#1414 Q1)",
+         s64, s32, "text", True, [r"^NEW  DESIGN-CALL usa Sink .* RETURN-UNSET int vs void"]),
+        ("d3 a genuinely NEW mismatch (an agreeing declaration made value-returning) -> NEW, FAIL",
+         "void Sink(int x);\nvoid f(void) { Sink(1); }\n", s32, "kind", True,
+         [r"^NEW  DESIGN-CALL usa Sink  decl going-decompiled/src/usa/text/use.c:2 .* RETURN-UNSET"]),
+        ("d4 a SECOND site of the same kind in the same file -> counted, NEW, FAIL",
+         s32, s32 + "int g(void) { extern int Sink(int); return Sink(2); }\n", "kind", True,
+         [r"^NEW  DESIGN-CALL usa Sink  decl going-decompiled/src/usa/text/use.c:4 "]),
+        ("d5 control: an unrelated line inserted above (the site moves) -> no NEW, PASS",
+         s32, "/* moved */\n" + s32, "kind", False, (), [r"^NEW"]),
+    ]
+    ok = all([_diff_arm(*d) for d in diffs]) and ok
+    n = len(arms) + len(diffs)
+    print("#### decl-def-lint selftest: %s (%d arms)" % ("PASS" if ok else "FAIL", n))
     return 0 if ok else 1
 
 
@@ -721,20 +1015,30 @@ def main(argv):
         return cc_shim(argv[1:])
     if argv == ["--selftest"]:
         return selftest()
-    units, base, info = [], None, False
+    units, base, info, repo, key = [], None, False, None, "kind"
     it = iter(argv)
     for a in it:
         if a == "--info":
             info = True
         elif a == "--base":
             base = next(it)
+        elif a == "--repo":
+            repo = next(it)
+        elif a == "--key":
+            key = next(it)
+            if key not in KEYS:
+                print(__doc__)
+                return 2
         elif a.startswith("-"):
             print(__doc__)
             return 2
         else:
             units.append(os.path.abspath(a))
     if base:
-        return lint_diff(base, units)
+        return lint_diff(base, units, repo=repo, key=key)
+    if repo or key != "kind":
+        print("--repo and --key apply only to --base")
+        return 2
     return lint(units, show_info=info)
 
 

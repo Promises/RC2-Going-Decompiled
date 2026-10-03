@@ -193,6 +193,26 @@
 #            (pass/units). A total alone read 44 -> 44 while USA went 29 -> 28
 #            and EU 15 -> 16; the shrink rule still FAILED that unit, but the
 #            count hid it. The per-region line is a readout, not a verdict.
+#   DECLDEF  (task #1425, watcher-2 decision 1 on #1414's Q1) tools/native/
+#            decl_def_lint.py --base <the NATIVE row's base> over the WHOLE
+#            TARGET_NATIVE population: FAILS naming each cross-TU declaration
+#            vs definition disagreement (ABI class: f32/pointer order, a
+#            value-declared void definition, arity, ...) present at the tip and
+#            absent at the base — the class check.sh cannot see, because it
+#            compiles each unit alone and EABI hides it on the EE (#1379).
+#            Base: LANDING_GATE_NATIVE_BASE, else merge-base(HEAD,
+#            origin/master), the NATIVE row's own fork point (its WRONG BASE
+#            checks cover the shared pin). A base equal to the tip is
+#            VACUOUS (a WARN, a FAIL under --strict) and the lint is not run.
+#            Identity is (region, symbol, file, KIND), never the type text, so
+#            re-spelling a pre-existing mismatch (#1389's s64 -> s32) is not
+#            NEW. Pre-existing rows are NOT this row's to fail (the full list is
+#            `decl_def_lint.py` with no arguments). The whole tree, never named
+#            units: per-unit mode used to parse only the named units and
+#            printed PASS on a known positive (#1424). ~2 x the lint's
+#            whole-tree time; on a clean tree whose NATIVE inputs equal the
+#            base's it is not run (no C change, nothing new possible). Fails
+#            closed: rc 2, or rc 0 without the lint's PASS line, is a FAIL.
 #   DLISITES (task #1116 GATE-F item a, RULING #8549 rev 2/3) tools/ee/
 #            ps2eeas_dli_sites.py --ps2eeas over tools/ee/ps2eeas_dli_sites.txt,
 #            the allowlist asm_unit.sh trusts: every row must load its value
@@ -948,6 +968,45 @@ check_native() {
   say "     members: $t (tip), $b (base); check.sh output: $t.log, $b.log"
 }
 
+# -------------------------------------------------------------- DECLDEF ----
+# check_decldef [TIP_DIR TIP_REV [KEY]] — the DECLDEF row (task #1425). The
+# lint run is TIP_DIR's own tools/native/decl_def_lint.py (default: this
+# tree), linting TIP_DIR against the base archived from THIS repository. The
+# arguments exist for --selftest arm (27); a real run passes none. KEY is the
+# lint's --key, `text` only in arm (27)'s old-key control.
+check_decldef() {
+  local tip=${1:-$ROOT} tiprev baseref out="$OUT/decldef.txt" rc t0 secs nd=0 key=${3:-kind}
+  say "== DECLDEF: tools/native/decl_def_lint.py --base <fork point>, whole tree — FAIL on a declaration/definition disagreement (ABI class) at the tip that the base does not have, keyed (region, symbol, file, KIND), not the type text (task #1425)"
+  baseref=${LANDING_GATE_NATIVE_BASE:-$(git merge-base HEAD origin/master 2>/dev/null)}
+  [ -n "$baseref" ] && baseref=$(git rev-parse --verify -q "$baseref^{commit}")
+  [ -n "$baseref" ] || { fail "DECLDEF: no base commit (git merge-base HEAD origin/master failed and LANDING_GATE_NATIVE_BASE is unset or not a commit) — the row cannot be base-relative"; return; }
+  tiprev=$(git rev-parse --verify -q "${2:-HEAD}^{commit}")
+  [ -n "$tiprev" ] || { fail "DECLDEF: the tip commit ${2:-HEAD} does not resolve"; return; }
+  [ "$tip" = "$ROOT" ] && nd=$(git status --porcelain --no-renames -- going-decompiled/src going-decompiled/include tools/native | wc -l | tr -d ' ')
+  say "     base $baseref$([ -n "${LANDING_GATE_NATIVE_BASE:-}" ] && echo " (LANDING_GATE_NATIVE_BASE=$LANDING_GATE_NATIVE_BASE)" || echo ' (merge-base HEAD origin/master)'), tip $tiprev ($tip, $nd uncommitted NATIVE input path(s))"
+  if [ "$baseref" = "$tiprev" ] && [ "$nd" = 0 ]; then
+    warn "DECLDEF: base == tip, VACUOUS — the base $baseref IS the tip, so no row can be NEW and the lint was not run; pin the fork point (LANDING_GATE_NATIVE_BASE=<the master the landing was cut from>), as for NATIVE (task #1425)"
+    return
+  fi
+  if [ "$nd" = 0 ] && git diff --quiet "$baseref" "$tiprev" -- going-decompiled/src going-decompiled/include tools/native; then
+    ok "DECLDEF: no C change — base $baseref and the tip have identical NATIVE inputs (going-decompiled/src, going-decompiled/include, tools/native), so no row can be NEW; the lint was not run"
+    return
+  fi
+  t0=$(date +%s)
+  python3 "$tip/tools/native/decl_def_lint.py" --base "$baseref" --repo "$ROOT" --key "$key" > "$out" 2>&1; rc=$?
+  secs=$(( $(date +%s) - t0 ))
+  local sum; sum=$(/usr/bin/grep '^--- decl-def-lint diff: ' "$out" | tail -1 | sed 's/^--- //; s/ ---$//')
+  if [ "$rc" = 0 ] && /usr/bin/grep -qx '#### decl-def-lint diff: PASS' "$out" && [ -n "$sum" ]; then
+    ok "DECLDEF: no disagreement at the tip that the base lacks ($sum; ${secs}s)"
+  elif [ "$rc" = 1 ] && /usr/bin/grep -qx '#### decl-def-lint diff: FAIL' "$out"; then
+    fail "DECLDEF: $(/usr/bin/grep -c '^NEW ' "$out" || true) declaration/definition disagreement(s) NEW at the tip ($sum; ${secs}s) — correct the declaration when that is byte-neutral, or annotate it \`DECL-LEVER(#<task>): <reason>\` when a ruling or a measured lever makes it deliberate; MATCHED CODE IS NOT CHANGED ON A LINT'S SAY-SO:"
+    show < <(/usr/bin/grep '^NEW ' "$out" | sed 's/^/       /')
+  else
+    fail "DECLDEF: decl_def_lint.py could not run (rc $rc, ${secs}s) — fails closed: $(tail -3 "$out" | tr '\n' ' ')"
+  fi
+  say "     full output -> $out"
+}
+
 # ----------------------------------------------------------------- TREE ----
 # worktree_hash [OVERLAY_PATH OVERLAY_FILE] — one hash for the WHOLE working
 # tree: a copy of the index with `git add -A` applied (modified + untracked,
@@ -1224,6 +1283,7 @@ run_gate() {  # run_gate REGION [--no-build] [--strict]
   check_libgcc "$REGION"
   check_gmodel "$REGION"
   check_native
+  check_decldef
   check_dlisites
   if [ $build = 1 ]; then
     do_build
@@ -1465,6 +1525,7 @@ selftest() {
   selftest_asmunit "$T" || bad=1
   selftest_regression_gate "$T" || bad=1
   selftest_asmunit_selftest "$T" || bad=1
+  selftest_decldef "$T" || bad=1
 
   say "-- (14) the real gate on this tree (--no-build, the build above) must PASS"
   STRICT=0
@@ -1742,7 +1803,7 @@ selftest_dirty_gate() {
     || { say "SELFTEST-BROKEN: (20) could not create its scratch repo in $D/repo"; return 1; }
   dirty_gate_run() {  # dirty_gate_run OUTFILE — the real run_gate in $D/repo, rows other than DIRTY stubbed
     ( cd "$D/repo" || exit 2
-      for f in check_flags split_inputs check_shadow check_orphans check_libgcc check_gmodel check_native check_dlisites do_build check_tree check_asmunit check_cc1args measure_row check_row check_noprovide; do
+      for f in check_flags split_inputs check_shadow check_orphans check_libgcc check_gmodel check_native check_decldef check_dlisites do_build check_tree check_asmunit check_cc1args measure_row check_row check_noprovide; do
         eval "$f() { say \"     (arm 20 stub: $f)\"; }"
       done
       region_vars() { REGION=$1; OUT="$D/out"; mkdir -p "$OUT"; }
@@ -2165,7 +2226,7 @@ selftest_verdict_annotation() {
   if [ -z "$NATIVE_PROBE_C" ] || [ -z "$NATIVE_PROBE_TOOLS" ]; then say "SELFTEST-BROKEN: (21) needs (u')/(u'')'s probe chains, which arm (18) did not build (NATIVE inputs dirty?)"; return 1; fi
   eval "$(declare -f check_native | sed '1s/^check_native/annot_real_check_native/')"
   annot_run() {  # annot_run OUTFILE BASE TIP — the real run_gate, NATIVE pinned to BASE, tip TIP, upstream BASE
-    ( for f in check_dirty check_flags split_inputs check_shadow check_orphans check_libgcc check_gmodel check_dlisites do_build check_tree check_asmunit check_cc1args measure_row check_row check_noprovide; do
+    ( for f in check_dirty check_flags split_inputs check_shadow check_orphans check_libgcc check_gmodel check_decldef check_dlisites do_build check_tree check_asmunit check_cc1args measure_row check_row check_noprovide; do
         eval "$f() { say \"     (arm 21 stub: $f)\"; }"
       done
       region_vars() { REGION=$1; OUT="$D/out"; mkdir -p "$OUT"; }
@@ -2404,6 +2465,67 @@ selftest_asmunit_selftest() {
   elif [ "$rc" = 0 ] && [ "$f" = 0 ] && [ "$nf" = 0 ] && [ "$n" -ge 1 ] && [ "$np" = "$n" ]; then ok "control: rc $rc, $sum, $np PASS lines"
   else say "SELFTEST-FAIL (25) asm_unit_selftest.sh does not pass on this tree (rc $rc, $n arms, $f failed, $np PASS / $nf FAIL lines):"; show < <(/usr/bin/grep '^FAIL ' "$T/asmunit_selftest.txt" | head -20 | sed 's/^/  inner| /'); b=1; fi
   say "     full output -> $T/asmunit_selftest.txt"
+  return $b
+}
+
+# selftest_decldef OUTDIR — arm (27), task #1425. The DECLDEF row's own legs,
+# on probe commits = HEAD + a seeded definition in one usa TARGET_NATIVE C unit
+# (`void T1425SeedDef(int x)`) and a declaration of it in another, spelled
+# three ways (agreeing `void`, `long long`, `int`). Each tip is a git archive
+# of its probe commit with THIS tree's decl_def_lint.py over it (the
+# instrument under test); the base is the probe commit, pinned. Legs:
+#   lint     decl_def_lint.py --selftest: PASS, with its per-unit, direction
+#            and key arms by name (the fixture-level controls);
+#   fired    base agrees, tip `int` -> FAIL naming the NEW RETURN-UNSET row;
+#   respell  base `long long`, tip `int` (#1389's s64 -> s32 shape) -> PASS;
+#   oldkey   the same pair under `--key text`, the pre-#1425 identity -> FAIL:
+#            the control that the re-spelling fixture discriminates;
+#   vacuous  a base pinned to the tip itself -> WARN 'VACUOUS' (FAIL under
+#            --strict) and the lint is not run.
+# ~3 lint --base runs (2 x the whole-tree lint each); no VM.
+decldef_probe_commit() {  # decldef_probe_commit INDEXFILE PATH BLOB [PATH BLOB ...] — HEAD + those blobs
+  local idx=$1 t; shift; rm -f "$idx"
+  GIT_INDEX_FILE="$idx" git read-tree HEAD || return 1
+  while [ $# -ge 2 ]; do GIT_INDEX_FILE="$idx" git update-index --cacheinfo "100644,$2,$1" || { rm -f "$idx"; return 1; }; shift 2; done
+  t=$(GIT_INDEX_FILE="$idx" git write-tree); rm -f "$idx"; [ -n "$t" ] || return 1
+  git commit-tree "$t" -p HEAD -m 'landing_gate selftest (27) DECLDEF probe (task #1425)'
+}
+selftest_decldef() {
+  local T="$1" b=0 rc; local D="$T/decldef"; rm -rf "$D"; mkdir -p "$D"
+  say "-- (27) DECLDEF (#1425): decl_def_lint.py --selftest PASS; on probe commits (HEAD + a seeded definition and a declaration of it in another usa unit) a NEW disagreement -> FAIL naming it; a RE-SPELLING of an existing one (long long -> int vs a void definition, #1389's shape) -> PASS, and the same pair under the OLD text key -> FAIL (the control); a base pinned to the tip -> VACUOUS (FAIL under --strict), not run"
+  python3 tools/native/decl_def_lint.py --selftest > "$D/lint_selftest.txt" 2>&1; rc=$?
+  local a miss=""; for a in s13 s14 s16 s17 s18 s19 d1 d2 d3 d4 d5; do /usr/bin/grep -q "^OK   $a " "$D/lint_selftest.txt" || miss="$miss $a"; done
+  if [ "$rc" = 0 ] && [ -z "$miss" ] && /usr/bin/grep -qE '^#### decl-def-lint selftest: PASS \([0-9]+ arms\)$' "$D/lint_selftest.txt" && ! /usr/bin/grep -q '^SELFTEST-FAIL' "$D/lint_selftest.txt"; then
+    ok "control (27) lint: rc $rc, $(/usr/bin/grep '^#### decl-def-lint selftest' "$D/lint_selftest.txt" | sed 's/^#### //'), per-unit/direction/key arms all OK"
+  else say "SELFTEST-FAIL (27) decl_def_lint.py --selftest (rc $rc, missing OK arms:${miss:- none}):"; show < <(/usr/bin/grep -E '^(SELFTEST-FAIL|####)' "$D/lint_selftest.txt" | sed 's/^/  inner| /'); b=1; fi
+  local units u1 u2 dblob v agree s64 s32
+  units=$(git grep -l TARGET_NATIVE HEAD -- 'going-decompiled/src/usa/*.c' | sed 's/^HEAD://' | LC_ALL=C sort | head -2)
+  u1=$(printf '%s\n' "$units" | sed -n 1p); u2=$(printf '%s\n' "$units" | sed -n 2p)
+  if [ -z "$u1" ] || [ -z "$u2" ] || git grep -q T1425SeedDef HEAD -- going-decompiled; then say "SELFTEST-BROKEN: (27) needs two usa TARGET_NATIVE .c units and no existing T1425SeedDef (units '$u1' '$u2')"; return 1; fi
+  dblob=$({ git cat-file blob "HEAD:$u1"; printf '\n/* landing_gate selftest (27) seed, task #1425 */\nvoid T1425SeedDef(int x) { (void)x; }\n'; } | git hash-object -w --stdin)
+  for v in agree:void s64:'long long' s32:int; do
+    local blob c; blob=$({ git cat-file blob "HEAD:$u2"; printf '\n/* landing_gate selftest (27) seed, task #1425 */\n%s T1425SeedDef(int x);\n' "${v#*:}"; } | git hash-object -w --stdin)
+    c=$(decldef_probe_commit "$D/probe_index" "$u1" "$dblob" "$u2" "$blob")
+    [ -n "$c" ] || { say "SELFTEST-BROKEN: (27) could not build the '${v%%:*}' probe commit"; return 1; }
+    eval "${v%%:*}=$c"
+  done
+  rm -rf "$D/tip"; mkdir -p "$D/tip"
+  git archive "$s32" going-decompiled/src going-decompiled/include tools/native | tar -x -C "$D/tip" && cp tools/native/decl_def_lint.py "$D/tip/tools/native/decl_def_lint.py" \
+    || { say "SELFTEST-BROKEN: (27) could not extract the tip probe $s32"; return 1; }
+  decldef_leg() {  # decldef_leg NAME BASE KEY STRICT WANT_FAILED WANT_WARNED REGEX [MUST_NOT]
+    local out="$D/$1.txt"; FAILED=0; WARNED=0; STRICT=$4
+    LANDING_GATE_NATIVE_BASE=$2 check_decldef "$D/tip" "$s32" "$3" > "$out"; STRICT=0
+    if [ "$FAILED" = "$5" ] && [ "$WARNED" = "$6" ] && /usr/bin/grep -qE "$7" "$out" && { [ -z "${8:-}" ] || ! /usr/bin/grep -qE "$8" "$out"; }; then
+      ok "$1: $(/usr/bin/grep -E '^(OK|FAIL|WARN|FAIL\(strict\)) ' "$out" | head -1 | cut -c1-220)$(/usr/bin/grep -E '^ +NEW ' "$out" | head -1 | sed 's/^ */ | /' | cut -c1-200)"
+    else say "SELFTEST-FAIL (27) leg $1 (FAILED=$FAILED want $5, WARNED=$WARNED want $6):"; show < <(sed 's/^/  inner| /' "$out"); b=1; fi
+  }
+  decldef_leg "fired (27) a NEW disagreement" "$agree" kind 0 1 0 '^ +NEW  DESIGN-CALL usa T1425SeedDef  decl '"$u2"':[0-9]+ .* RETURN-UNSET int vs void$'
+  decldef_leg "fired (27) the OLD text key on the re-spelling (control)" "$s64" text 0 1 0 '^ +NEW  DESIGN-CALL usa T1425SeedDef .* RETURN-UNSET int vs void$'
+  decldef_leg "control (27) a RE-SPELLING (long long -> int vs void) under the KIND key" "$s64" kind 0 0 0 '^OK   DECLDEF: no disagreement at the tip that the base lacks \(.*new=0 gone=0; key=kind; [0-9]+s\)$' 'NEW '
+  decldef_leg "fired (27) base pinned to the tip, STRICT=1" "$s32" kind 1 1 1 '^FAIL\(strict\) DECLDEF: base == tip, VACUOUS' 'decl-def-lint diff'
+  decldef_leg "fired (27) base pinned to the tip, STRICT=0" "$s32" kind 0 0 1 '^WARN DECLDEF: base == tip, VACUOUS' 'decl-def-lint diff'
+  unset -f decldef_leg
+  rm -rf "$D/tip"; FAILED=0; WARNED=0; STRICT=0
   return $b
 }
 
