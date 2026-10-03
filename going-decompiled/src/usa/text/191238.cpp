@@ -2380,8 +2380,33 @@ extern void  FixupMobyClassHeader(void *hdr, s32 arg2, s32 arg3, s32 classId);
  * update fn is bound). With a real header it takes the next g_mobyClassCount
  * slot, records remap/reverse-map/header/data-size (data size = header byte
  * +0x2D << 10, or 0x100000 when that byte is 0xFF), binds the update fn, then
- * FixupMobyClassHeader rebases the header offsets. The matching build keeps the
- * asm (save-layout wall). */
+ * FixupMobyClassHeader rebases the header offsets. Each counter is read twice:
+ * once as the slot (lw) and once narrowed to the remap byte (lbu).
+ *
+ * Screen-exact on the s136os arm (task #1396, FACT #8830 solo screen; a
+ * CANDIDATE, not a promotion: vmu with the base seeded is the evidence).
+ * Levers, each undone alone: the size-16 count equates (59/73); slotToId
+ * stored before remap (8/73); the call before the headerless count read
+ * (20/73); the header count re-read after the bind call (62/73); the tied
+ * fence on the remap byte (3/73, task #1375's residual). */
+/* ADDRESSING-MODEL DEVICES (RULING #8620; FACT #8036's size-16 equate form,
+ * as 1A00F0.cpp's g_mobySegmentOpenTagAbs): RegisterMobyClass reads both slot
+ * counters absolutely (0x2941A4 `lui v1,%hi(g_mobyClassCount)`, 0x29417C) but
+ * writes them gp-relative, while both are -G8 small. Those reads name second
+ * assembler symbols EQUATED to the real ones and sized 16; the relocations
+ * still name g_mobyClassCount / g_mobyClassCountNoHeader. Top level, so the
+ * s136os TU and the unit's 2.9 TU both define them. Nothing is moved and
+ * nothing is emitted; native reads the plain symbols. */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_mobyClassCountAbs, 16\n\tg_mobyClassCountAbs = g_mobyClassCount");
+__asm__(".extern g_mobyClassCountNoHeaderAbs, 16\n\tg_mobyClassCountNoHeaderAbs = g_mobyClassCountNoHeader");
+extern s32 g_mobyClassCountAbs;
+extern s32 g_mobyClassCountNoHeaderAbs;
+#else
+#define g_mobyClassCountAbs g_mobyClassCount
+#define g_mobyClassCountNoHeaderAbs g_mobyClassCountNoHeader
+#endif
+
 #ifndef TARGET_NATIVE
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 58.11% PACKED-SAVE /
@@ -2401,24 +2426,30 @@ extern s16 g_mobyClassSlotToId[];
 /* (end of this body's declarations) */
 void RegisterMobyClass(u8 *hdr, s32 arg2, s32 arg3, s32 classId) {
     if (hdr == 0) {
-        s32 slot = g_mobyClassCountNoHeader;
+        s32 slot;
+        u8 slotByte;
         BindMobyClassUpdateFunc(classId, 1);
-        g_mobyClassSlotRemap[classId] = (u8)slot;
+        slot = g_mobyClassCountNoHeaderAbs;
+        slotByte = g_mobyClassCountNoHeaderAbs;
+        /* SCHEDULING DEVICE (RULING #8483 empty tied fence; emits nothing):
+         * ties the byte read to its store, so the remap %lo add issues after
+         * the byte load as in the ROM (0x29418C). */
+        __asm__("" : "+r"(slotByte));
+        g_mobyClassSlotRemap[classId] = slotByte;
         g_mobyClassCountNoHeader = slot + 1;
     } else {
-        s32 slot = g_mobyClassCount;
-        g_mobyClassSlotRemap[classId] = (u8)slot;
+        s32 slot = g_mobyClassCountAbs;
         g_mobyClassSlotToId[slot] = (s16)classId;
+        g_mobyClassSlotRemap[classId] = g_mobyClassCountAbs;
         g_mobyClassHeaders[slot] = hdr;
         g_mobyClassDataSizes[slot] = (u32)hdr[0x2D] << 10;
         if (hdr[0x2D] == 0xFF) {
             g_mobyClassDataSizes[slot] = 0x100000;
         }
         BindMobyClassUpdateFunc(classId, 0);
-        g_mobyClassCount = slot + 1;
+        g_mobyClassCount = g_mobyClassCountAbs + 1;
         FixupMobyClassHeader(hdr, arg2, arg3, classId);
     }
-    __asm__ __volatile__("");
 }
 #endif
 
