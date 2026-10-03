@@ -54,6 +54,14 @@
 #              tools/ee/s136os_splice.sh, the helper build.sh runs at the same
 #              point, so obj/<unit>.o carries the image's bytes for them and
 #              their rows are scored from it (task #1257, FACT #8810).
+#              The splice's --selftest runs first, in the same step-(1)
+#              container as the splice, as build.sh runs it: its refusal check
+#              once passed on the host's awk and refused every member in the
+#              container's mawk (task #1326), so only the container arm counts.
+#              A FAIL exits 1 with the log on stderr. It runs once per
+#              invocation (one invocation is one unit) and after the
+#              $OBJ/$EXPECTED delete, so a failed selftest leaves no object
+#              for the report to read (task #1354).
 # WHY per FUNCTION and not per unit: routing a whole engine-region unit through
 # the 2.96 arm was measured (t276, 2026-09-13) and it un-matches rows that are
 # byte-exact under 2.9 today (text/188858 16->12, text/235FE8 73->65,
@@ -354,6 +362,9 @@ docker --context "$EE_CTX" run --rm -e ASMFIX_SHARED -e ASM_UNIT_DLISITES_MD5="$
   sh tools/ee/mount_sync.sh check $TGTC $TGTC_MD5
   sh tools/ee/mount_sync.sh check $BASECFILE $BASE_MD5
   rm -f $OBJ96 $OBJ $EXPECTED
+  sh tools/ee/s136os_splice.sh --selftest > $W/s136os_splice_selftest.log 2>&1 \
+    || { cat $W/s136os_splice_selftest.log >&2; echo 'objdiff_build: FATAL (s136os_splice --selftest)' >&2; exit 1; }
+  tail -1 $W/s136os_splice_selftest.log
   $ASMFIX_PRUNE
   \$WIBO \$G/cpp.exe $CPPDEF $INC $TGTC $W/target.i
   \$WIBO \$G/cc1.exe -quiet -O2 -G0 $W/target.i -o $W/target.s
