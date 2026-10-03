@@ -2212,14 +2212,28 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvFrameQueuePu
 
    Commit the just-decoded frame slot for display, with interrupts disabled:
    mark the current write slot's state word = 2 (ready), bump the queued count,
-   and advance the write cursor modulo the slot capacity. */
+   and advance the write cursor modulo the slot capacity.
+
+   SCREEN-EXACT on the s136os arm (SN 2.95.3 v1.36 -fopt-stack; task #1389,
+   masked word screen + relocation compare, NOT vmu): a CANDIDATE, not a match.
+   Lever: writeIdx and count accessed through volatile views - a CODEGEN DEVICE
+   (RULING #8404 class), as func_00352B90 and func_00352CE8 already view these
+   fields. Volatile accesses keep source order, so the count read-modify-write
+   completes before writeIdx is re-read, as in the ROM; with either view plain,
+   cc1 hoists the writeIdx reload and the div above the count store (first diff
+   @5, lw 0x8 into $4 vs $3). Writer census: see FmvFrameQueueGetDisplaySlot. */
 void FmvFrameQueuePush(u8 *fq) {
     FmvFrameQueue *q = (FmvFrameQueue *)fq;
 
     func_0011F5E0();   /* DI */
-    *(s32 *)(q->frames + q->writeIdx * 0x138C0) = 2;
-    q->count++;
-    q->writeIdx = (q->writeIdx + 1) % q->capacity;
+    {
+        volatile s32 *writeIdx = &q->writeIdx;
+        volatile s32 *count = &q->count;
+
+        *(s32 *)(q->frames + *writeIdx * 0x138C0) = 2;
+        *count = *count + 1;
+        *writeIdx = (*writeIdx + 1) % q->capacity;
+    }
     func_0011F628();   /* EI */
 }
 #endif
