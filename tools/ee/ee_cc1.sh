@@ -169,6 +169,11 @@ if [ "$SRCLANG" = c++ ]; then
 fi
 
 rm -f "$OUT_I" "$OUT_S"
+# EE_CC1_ARGLOG=<file> (opt-in): append "<arm> TAB <src> TAB <cc1 args>", the
+# flag string this call hands cc1, so a caller can assert which flags reached
+# which compiler (RULING #9004: 1B4218's 2.9 compile keeps -fno-gcse, its s136
+# compile does not). Unset, nothing is written.
+[ -z "${EE_CC1_ARGLOG:-}" ] || printf '%s\t%s\t%s\n' "$ARM" "$SRC" "$CC1ARGS" >> "$EE_CC1_ARGLOG"
 if [ "$SRCLANG" = c ]; then
   # shellcheck disable=SC2086
   $WIBO $G/cpp.exe $CPPARGS "$SRC" "$OUT_I" || fail "cpp: $SRC"

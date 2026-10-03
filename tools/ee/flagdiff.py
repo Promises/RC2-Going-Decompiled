@@ -14,9 +14,15 @@ Exit 0 = every table equals the reference on every unit; 1 = a DRIFT line was
 printed (unit, and each side's value NAMED by file); 2 = a table parsed to
 zero units, which is a broken parser or a rewritten script, never "no drift".
 
+Each unit's value is (GFLAG, CC1EXTRA, S136EXTRA). S136EXTRA is the s136os
+splice compile's flags; an arm that does not set it gets CC1EXTRA, exactly as
+the scripts default it (RULING #9004), so a drift in either compiler's flags
+is a DRIFT line.
+
 Failure observable (on a mutated copy): `DRIFT usa/text/235FE8: build.sh=('-G8',
-'-fno-gcse') objdiff_build.sh=('-G8', '-fno-gcse -fno-strict-aliasing')`, rc 1.
-Bound: only `case` arms of the form `<pattern>) GFLAG="…"; CC1EXTRA="…";;` are
+'-fno-gcse', '-fno-gcse') objdiff_build.sh=('-G8', '-fno-gcse -fno-strict-aliasing',
+'-fno-gcse -fno-strict-aliasing')`, rc 1.
+Bound: only `case` arms of the form `<pattern>) GFLAG="…"; CC1EXTRA="…"[; S136EXTRA="…"];;` are
 parsed. A flag set outside such an arm (an env override, a default assignment
 changed in one script only) is invisible here. The diff96 engine arm's fixed
 flags are not a per-unit table and are not compared.
@@ -43,8 +49,10 @@ def table(path):
                 continue
             unit, body = m.group(1), m.group(2)
             g = re.search(r'GFLAG="([^"]*)"', body)
-            c = re.search(r'CC1EXTRA="([^"]*)"', body)
-            val = (g.group(1) if g else "-G0", c.group(1) if c else "")
+            c = re.search(r'(?<![0-9A-Z])CC1EXTRA="([^"]*)"', body)
+            s = re.search(r'S136EXTRA="([^"]*)"', body)
+            cc1 = c.group(1) if c else ""
+            val = (g.group(1) if g else "-G0", cc1, s.group(1) if s else cc1)
             units = [unit] if unit.startswith(("usa/", "eu/")) else ["usa/" + unit, "eu/" + unit]
             for u in units:
                 if u in t and t[u] != val:
@@ -65,7 +73,7 @@ def main(argv):
             print(f"flagdiff: {f} parsed to ZERO units — parser or script rewritten, not 'no drift'")
             return 2
     ref = files[0]
-    default = ("-G0", "")
+    default = ("-G0", "", "")
     drift = 0
     for other in files[1:]:
         units = sorted(set(tables[ref]) | set(tables[other]))

@@ -161,8 +161,12 @@ CPPDEF="-D__GNUC_MINOR__=9 $CPPDEF_COMMON"
 # flags (NOT passed to the assembler): the gameplay-text TUs were built by a
 # later SN cc1 without the load-PRE pass, which -fno-gcse reproduces (proven
 # byte-exact on text/1907F0). Keep this list in sync with diff.sh.
+# S136EXTRA holds the cc1 flags for the unit's s136os splice compile (SN 1.36);
+# an arm that does not set it gets CC1EXTRA, so only a unit whose two
+# compilers need different flags names it (RULING #9004: 1B4218 only).
 GFLAG="-G0"
 CC1EXTRA=""
+unset S136EXTRA
 case "$REGION/$UNIT" in
   usa/cod/0321A0) GFLAG="-G8";;
   eu/cod/0321A0) GFLAG="-G8";; # EU mirror of the 989snd sub-TU (same -G8 model)
@@ -180,7 +184,7 @@ case "$REGION/$UNIT" in
   usa/text/235FE8) GFLAG="-G8"; CC1EXTRA="-fno-gcse -fno-strict-aliasing";; # GUI widget-method band (carve pick #3b; same later-cc1 GUI TU model). -fno-strict-aliasing restores the per-store pointer-member reload in GuiElementSetPos/GuiElementSetScale (#75)
   usa/text/1CA080) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # menu-screens A (carve pick #5; later-cc1 TU model, gp-dense)
   usa/text/1D54C0) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # menu-screens B (carve pick #5; later-cc1 TU model, gp-dense)
-  usa/text/1B4218) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # moby-bind band (carve pick #5/moby-bind; later-cc1 TU model, sized externs under -G8)
+  usa/text/1B4218) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="";; # moby-bind band (carve pick #5/moby-bind; later-cc1 TU model, sized externs under -G8). S136EXTRA: the s136os arm compiles at the -O2 default (RULING #9004, FACT #9003); the 2.9 compile keeps -fno-gcse
   # USA CARVE MEGA-BATCH PHASE A (2026-06-14): 7 new c-units carved from the
   # TILE A/B/C/D asm tiles. 6 are later-cc1 gameplay/UI TUs (-G8 -fno-gcse);
   # text/183558 is the math C-helper band; it was built at the default -O2 -G0
@@ -211,6 +215,7 @@ case "$REGION/$UNIT" in
   eu/text/191240) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 191238 twin
   eu/text/19FC78) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 1A00F0 twin
 esac
+S136EXTRA="${S136EXTRA-$CC1EXTRA}"
 
 # Generate a PRISTINE all-INCLUDE_ASM unit C for the TARGET, straight from the
 # asm tree — one INCLUDE_ASM per <func>.s, emitted in ASCENDING VRAM-ADDRESS order
@@ -370,7 +375,7 @@ docker --context "$EE_CTX" run --rm -e ASMFIX_SHARED -e ASM_UNIT_DLISITES_MD5="$
   \$WIBO \$G/cc1.exe -quiet -O2 -G0 $W/target.i -o $W/target.s
   sh tools/ee/asm_unit.sh $REGION /work/$W/target.s /work/$EXPECTED
   sh tools/ee/ee_cc1.sh sdk29 $BASECFILE $W/base.i $W/base.s '$CPPDEF $INC' '-O2 $GFLAG $CC1EXTRA'
-  sh tools/ee/s136os_splice.sh $REGION $UNIT $BASECFILE $W/base.s $GFLAG '$CC1EXTRA'
+  sh tools/ee/s136os_splice.sh $REGION $UNIT $BASECFILE $W/base.s $GFLAG '$S136EXTRA'
   sh tools/ee/asm_unit.sh $REGION /work/$W/base.s /work/$OBJ $GFLAG
   mips-linux-gnu-nm $EXPECTED | awk '/\\.NON_MATCHING\$/{print \"-N\", \$3}' > $W/nmstrip.txt
   test -s $W/nmstrip.txt && mips-linux-gnu-strip $EXPECTED \$(cat $W/nmstrip.txt) || true

@@ -86,8 +86,12 @@ if [ -d "$SRC" ]; then
     # at nonzero -G (uniform %gp_rel small-data). CC1EXTRA = per-unit cc1-only
     # flags (NOT passed to the assembler; -fno-gcse for the later-cc1
     # gameplay-text TUs). Keep in sync with objdiff_build.sh / diff.sh.
+    # S136EXTRA = the cc1 flags for the unit's s136os splice compile (SN 1.36);
+    # an arm that does not set it gets CC1EXTRA, so only a unit whose two
+    # compilers need different flags names it (RULING #9004: 1B4218 only).
     GFLAG="-G0"
     CC1EXTRA=""
+    unset S136EXTRA
     case "$ukey" in
       */cod/0321A0.c) GFLAG="-G8";;
       */usa/text/183178.c) GFLAG="-G8";; # scale/round accessor sub-TU
@@ -104,7 +108,7 @@ if [ -d "$SRC" ]; then
       */usa/text/235FE8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse -fno-strict-aliasing";; # GUI widget-method band (carve pick #3b)
       */usa/text/1CA080.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # menu-screens A (carve pick #5)
       */usa/text/1D54C0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # menu-screens B (carve pick #5)
-      */usa/text/1B4218.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # moby-bind band (carve pick #5/moby-bind)
+      */usa/text/1B4218.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="";; # moby-bind band (carve pick #5/moby-bind). S136EXTRA: the s136os arm compiles at the -O2 default (RULING #9004, FACT #9003); the 2.9 compile keeps -fno-gcse
       # USA CARVE MEGA-BATCH PHASE A (2026-06-14): 7 new c-units from TILE A/B/C/D.
       */usa/text/178E88.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # TILE A render/draw-2D A
       */usa/text/1823B8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # TILE A render/draw-2D B
@@ -131,6 +135,7 @@ if [ -d "$SRC" ]; then
       */eu/text/191240.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 191238 twin
       */eu/text/19FC78.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 1A00F0 twin
     esac
+    S136EXTRA="${S136EXTRA-$CC1EXTRA}"
     # PER-UNIT intermediates (next to the object), NOT a shared $BUILD/_unit.s:
     # under qemu virtio-9p a rewritten same-PATH scratch file can serve STALE
     # cached content to the subsequent `as` read, so a shared _unit.s let one
@@ -149,7 +154,7 @@ if [ -d "$SRC" ]; then
     # S136OS_SLOT lines; a unit with neither is untouched. Shared with
     # objdiff_build.sh — the helper is the one copy.
     u="${c#$SRC/}"
-    sh tools/ee/s136os_splice.sh "$REGION" "${u%.*}" "$c" "$us" "$GFLAG" "$CC1EXTRA" \
+    sh tools/ee/s136os_splice.sh "$REGION" "${u%.*}" "$c" "$us" "$GFLAG" "$S136EXTRA" \
       || { echo "BUILD FAIL (s136os splice): $c" >&2; exit 1; }
     sh tools/ee/asm_unit.sh "$REGION" "/work/$us" "/work/$o" "$GFLAG" \
       || { echo "BUILD FAIL (as): $c" >&2; exit 1; }

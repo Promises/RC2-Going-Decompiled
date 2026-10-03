@@ -19,7 +19,10 @@ unit_flags() {
   # caller loops `for c in …; do unit_flags "$c"` — and for a .cpp unit
   # gmodel_scan.sh then grepped the nonexistent <unit>.c (task #1285).
   case "$1" in *.cpp) unit_flags_key="${1%.cpp}.c" ;; *) unit_flags_key="$1" ;; esac
-  GFLAG="-G0"; CC1EXTRA=""
+  # S136EXTRA: the s136os splice compile's flags, CC1EXTRA unless an arm sets
+  # it (RULING #9004). Carried for flagdiff.py parity; no caller of this file
+  # runs the s136os splice today.
+  GFLAG="-G0"; CC1EXTRA=""; unset S136EXTRA
   case "$unit_flags_key" in
     */cod/0321A0.c) GFLAG="-G8";;
     */usa/text/183178.c) GFLAG="-G8";;
@@ -36,7 +39,7 @@ unit_flags() {
     */usa/text/235FE8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse -fno-strict-aliasing";; # -fsa restores per-store pointer-member reload in GuiElementSetPos/Scale (#75)
     */usa/text/1CA080.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
     */usa/text/1D54C0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
-    */usa/text/1B4218.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
+    */usa/text/1B4218.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="";; # RULING #9004: s136os arm unpinned, 2.9 arm keeps -fno-gcse
     */usa/text/178E88.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
     */usa/text/1823B8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
     */usa/text/1DFF80.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
@@ -60,4 +63,5 @@ unit_flags() {
     */eu/text/191240.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
     */eu/text/19FC78.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
   esac
+  S136EXTRA="${S136EXTRA-$CC1EXTRA}"
 }

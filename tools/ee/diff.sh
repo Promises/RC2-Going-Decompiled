@@ -32,9 +32,12 @@ CPPDEF="-D__GNUC__=2 -D__GNUC_MINOR__=9 -D__mips__ -D__mips=3 -D__R5900 -D__LANG
 # per-unit cc1-only flags (NOT passed to the assembler): the gameplay-text
 # TUs were built by a later SN cc1 without the load-PRE pass, which
 # -fno-gcse reproduces (proven byte-exact on text/1907F0). Keep in sync with
-# objdiff_build.sh.
+# objdiff_build.sh. S136EXTRA (the s136os splice compile's flags; RULING #9004)
+# is carried so flagdiff.py holds this table equal to build.sh's; diff.sh
+# itself runs no s136os splice.
 GFLAG="-G0"
 CC1EXTRA=""
+unset S136EXTRA
 case "$REGION/$UNIT" in
   usa/cod/0321A0) GFLAG="-G8";;
   eu/cod/0321A0) GFLAG="-G8";; # EU mirror of the 989snd sub-TU (same -G8 model)
@@ -52,7 +55,7 @@ case "$REGION/$UNIT" in
   usa/text/235FE8) GFLAG="-G8"; CC1EXTRA="-fno-gcse -fno-strict-aliasing";; # GUI widget-method band (carve pick #3b; same later-cc1 GUI TU model). -fno-strict-aliasing restores the per-store pointer-member reload in GuiElementSetPos/GuiElementSetScale (#75)
   usa/text/1CA080) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # menu-screens A (carve pick #5; later-cc1 TU model, gp-dense)
   usa/text/1D54C0) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # menu-screens B (carve pick #5; later-cc1 TU model, gp-dense)
-  usa/text/1B4218) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # moby-bind band (later-cc1 TU model, sized externs under -G8)
+  usa/text/1B4218) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="";; # moby-bind band (later-cc1 TU model, sized externs under -G8). S136EXTRA: the s136os arm compiles at the -O2 default (RULING #9004, FACT #9003); the 2.9 compile keeps -fno-gcse
   # USA CARVE MEGA-BATCH PHASE A (2026-06-14): 7 new c-units from TILE A/B/C/D.
   usa/text/178E88) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # TILE A render/draw-2D A
   usa/text/1823B8) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # TILE A render/draw-2D B
@@ -79,6 +82,7 @@ case "$REGION/$UNIT" in
   eu/text/191240) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 191238 twin
   eu/text/19FC78) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;    # USA 1A00F0 twin
 esac
+S136EXTRA="${S136EXTRA-$CC1EXTRA}"
 
 # Pre-filter the original asm so VU0 (COP2) macro-mode instructions assemble
 # with GNU as: spimdisasm emits the Q/ACC special registers as bare tokens,

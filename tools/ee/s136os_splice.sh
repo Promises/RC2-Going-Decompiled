@@ -5,6 +5,8 @@
 # compiled by the compiler the ROM's function was built with.
 #
 #   sh tools/ee/s136os_splice.sh <region> <unit> <src> <unit.s> <GFLAG> [CC1EXTRA]
+#   The 6th argument is the CALLER's S136EXTRA for the unit: the 2.9 compile's
+#   CC1EXTRA unless the flag table gives this arm its own (RULING #9004).
 #   e.g. sh tools/ee/s136os_splice.sh usa text/248B50 \
 #            going-decompiled/src/usa/text/248B50.c $BUILD/.../248B50._u.s -G8 -fno-gcse
 #
