@@ -2324,8 +2324,7 @@ s32 func_0029DB58(void) {
 }
 
 /* GuiManagerCreate: allocate + initialise the 0x3FB20-byte GuiManager singleton
- * (g_guiInstance). Large multi callee-save constructor; 8-byte-packed callee-save
- * frame wall (matching build left as asm). Poisons the GUI heap (memset 0xCD over
+ * (g_guiInstance). Poisons the GUI heap (memset 0xCD over
  * 0x40000 bytes at g_memoryArenaTable[0x80]), clears the input/pad state window
  * (D_138180 + 0x1A0..0x1CC), runs the mode init (func_0029DB58), placement-news +
  * inits the instance (GuiPlacementNew / GuiSystemInit), stores it to
@@ -2333,8 +2332,9 @@ s32 func_0029DB58(void) {
  * +0x3F9D8 — the special pair (func_0029CF08/func_0029DB50) when g_playerProgress
  * == 0x1F5, else the default pair (func_0029CF40/func_0029CF10).
  *
- * Screen-exact on the s136os arm (task #1396, FACT #8830 solo screen; a
- * CANDIDATE, not a promotion: vmu with the base seeded is the evidence).
+ * MATCHED on the s136os arm (task #1405): byte-exact image-resident under SN
+ * 2.95.3 v1.36 -fopt-stack (verify_match_unit 60/60 words + image cmp 0).
+ * Body found by task #1396 (FACT #8830 solo screen).
  * Levers, each undone alone: the callback stores inside each branch (25/60);
  * the size-16 g_playerProgress equate (26/60); g_bPalMode passed to
  * func_0029DB58 (50/60); the heap pointer re-read at each use (8/60); the
@@ -2354,8 +2354,13 @@ extern s32 g_playerProgressAbs;
 #define g_playerProgressAbs g_playerProgress
 #endif
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", GuiManagerCreate);
+/* GUARD (task #1405): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiManagerCreate)
+S136OS_SLOT(GuiManagerCreate);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */

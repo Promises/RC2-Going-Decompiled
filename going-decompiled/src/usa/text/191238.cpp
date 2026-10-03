@@ -7,7 +7,10 @@
  * cc1 that lacks the load-PRE pass and packs callee-save stack slots 8-byte;
  * the matcher builds this unit at -O2 -G8 -fno-gcse (per-unit GFLAG override in
  * tools/ee/objdiff_build.sh / diff.sh / build.sh). Every other text unit stays
- * at its own flag.
+ * at its own flag. That -fno-gcse binds the 2.9 compile only: the s136os splice
+ * compile (SN 2.95.3 v1.36) runs at the -O2 default, gcse on (S136EXTRA="",
+ * RULING #9070, FACT #9069), and its MapUpdateLevelAvailability and
+ * MapEvictCacheSlot close only that way.
  *
  * -G8 extern-sizing rules (same as the sibling text TUs): a complete extern of
  * size <= 8 bytes lands in small data (gp-relative); a larger object the
@@ -1124,8 +1127,9 @@ extern s32 func_002835E0(s32 v); /* abs(s32) */
  * LoadLevelAndInitHealth and by InitLoadingSceneSystem. The loop counter is
  * g_uiTextureCount itself, re-read after every call.
  *
- * Screen-exact on the s136os arm (task #1396, FACT #8830 solo screen; a
- * CANDIDATE, not a promotion: vmu with the base seeded is the evidence).
+ * MATCHED on the s136os arm (task #1405): byte-exact image-resident under SN
+ * 2.95.3 v1.36 -fopt-stack at the unit's RULING #9070 flags (verify_match_unit
+ * 72/72 words + image cmp 0). Body found by task #1396 (FACT #8830 solo screen).
  * Levers, each undone alone: the size-12 count equate (size 16: 15/72; plain
  * symbol: 69/72); the loop running on the global, not a local i (42/72); psm
  * 0x13 stored before the dimA < 0 override (41/72); the record re-indexed by
@@ -1147,12 +1151,13 @@ extern s32 g_uiTextureCountAbs;
 #define g_uiTextureCountAbs g_uiTextureCount
 #endif
 
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 43.22% PACKED-SAVE /
- * engine96 52.83% GPREL-DECL; best arm engine96, first differing insn there: 'addiu sp, sp,
- * -0x40' vs 'addiu sp, sp, -0x50' */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BuildUiTextureDescriptors);
+/* GUARD (task #1405): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_BuildUiTextureDescriptors)
+S136OS_SLOT(BuildUiTextureDescriptors);
 #else
 void BuildUiTextureDescriptors(s32 *descTable, s32 count) {
     for (g_uiTextureCountAbs = 0; g_uiTextureCountAbs < count; g_uiTextureCountAbs++) {
@@ -1912,8 +1917,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00293760);
  * base (advancing it by w*h*4), to base+entry[+0x8]. NEEDS-ORACLE (GS upload /
  * vram-cursor).
  *
- * Screen-exact on the s136os arm (task #1396, FACT #8830 solo screen; a
- * CANDIDATE, not a promotion: vmu with the base seeded is the evidence).
+ * MATCHED on the s136os arm (task #1405): byte-exact image-resident under SN
+ * 2.95.3 v1.36 -fopt-stack at the unit's RULING #9070 flags (verify_match_unit
+ * 152/152 words + image cmp 0). Body found by task #1396 (FACT #8830 solo screen).
  * Levers, each undone alone (masked words differing / 151): the cursor
  * equates (size 16: 137; plain symbols: 131); D_1A72F4/D_1A7304 (10, the
  * base's own first diff); the s32 func_00126288 view (7); the 2-argument
@@ -1955,12 +1961,13 @@ extern void WaitGsPathsIdle2(s32 a, s32 b) __asm__("WaitGsPathsIdle");
 #define WaitGsPathsIdle2(a, b) WaitGsPathsIdle(a)
 #endif
 
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 66.23% CONST-MULT /
- * engine96 55.98% CONST-MULT; best arm sdk29, first differing insn there: '' vs 'lui v0,
- * %hi(g_vramTextureBase+0x10)' */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_002938B0);
+/* GUARD (task #1405): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002938B0)
+S136OS_SLOT(func_002938B0);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -2490,8 +2497,9 @@ extern void  FixupMobyClassHeader(void *hdr, s32 arg2, s32 arg3, s32 classId);
  * FixupMobyClassHeader rebases the header offsets. Each counter is read twice:
  * once as the slot (lw) and once narrowed to the remap byte (lbu).
  *
- * Screen-exact on the s136os arm (task #1396, FACT #8830 solo screen; a
- * CANDIDATE, not a promotion: vmu with the base seeded is the evidence).
+ * MATCHED on the s136os arm (task #1405): byte-exact image-resident under SN
+ * 2.95.3 v1.36 -fopt-stack at the unit's RULING #9070 flags (verify_match_unit
+ * 74/74 words + image cmp 0). Body found by task #1396 (FACT #8830 solo screen).
  * Levers, each undone alone: the size-16 count equates (59/73); slotToId
  * stored before remap (8/73); the call before the headerless count read
  * (20/73); the header count re-read after the bind call (62/73); the tied
@@ -2514,12 +2522,13 @@ extern s32 g_mobyClassCountNoHeaderAbs;
 #define g_mobyClassCountNoHeaderAbs g_mobyClassCountNoHeader
 #endif
 
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 58.11% PACKED-SAVE /
- * engine96 48.81% IDIOM-LIKELY; best arm sdk29, first differing insn there: 'addiu sp, sp,
- * -0x30' vs 'addiu sp, sp, -0x60' */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", RegisterMobyClass);
+/* GUARD (task #1405): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_RegisterMobyClass)
+S136OS_SLOT(RegisterMobyClass);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -4600,21 +4609,22 @@ done:
  *
  * Named g_mapVertexData, the ROM relocation's name for the same storage.
  *
- * CONDITIONAL screen-exact (task #1396, FACT #8830 solo screen): EXACT on the
- * s136os arm ONLY with -fno-gcse dropped from the s136 compile; with the
- * unit's -fno-gcse it reads 62/88. The ROM keeps %hi(g_mapVertexData) in $s7
- * for the whole function and re-adds %lo per block, the GCSE shape (FACT
- * #8187). 191238's s136 compile is pinned and RULING #9004 unpins 1B4218 only,
- * so this is not promotable until a ruling unpins this unit. Levers, each
- * undone alone under the unpinned arm: the hub scan's own counter (slot), not
+ * MATCHED on the s136os arm (task #1405): byte-exact image-resident under SN
+ * 2.95.3 v1.36 -fopt-stack (verify_match_unit 88/88 words + image cmp 0). It
+ * closes ONLY because RULING #9070 drops -fno-gcse from 191238's s136 compile
+ * (FACT #9069); with the pin it reads 62/88. The ROM keeps %hi(g_mapVertexData)
+ * in $s7 for the whole function and re-adds %lo per block, the GCSE shape
+ * (FACT #8187). Body found by task #1396. Levers, each undone alone under the
+ * unpinned arm: the hub scan's own counter (slot), not
  * the second loop's i (12/88); bestSlot/maxDist initialised at entry (53/88);
  * the g_mapVertexData name (words exact, relocations name g_mapCache). */
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 81.90% PACKED-SAVE /
- * engine96 51.27% UNKNOWN-empty; best arm sdk29, first differing insn there: 'addiu sp, sp,
- * -0x50' vs 'addiu sp, sp, -0x80' */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapEvictCacheSlot);
+/* GUARD (task #1405): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_MapEvictCacheSlot)
+S136OS_SLOT(MapEvictCacheSlot);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -4719,21 +4729,23 @@ void MapSetCurrentLevel(s32 level) {
  * Named g_mapVertexData, the ROM relocation's name for the same storage, as
  * MapSetCurrentLevel's body above.
  *
- * CONDITIONAL screen-exact (task #1396, FACT #8830 solo screen): EXACT on the
- * s136os arm ONLY with -fno-gcse dropped from the s136 compile. The ROM keeps
- * %hi(g_mapVertexData) in $s1 across the call and re-adds %lo after it, the
- * GCSE shape (FACT #8187, #7971); with the unit's -fno-gcse it reads 32/35.
- * 191238's s136 compile is pinned, and RULING #9004 unpins 1B4218 only, so
- * this is not promotable until a ruling unpins this unit. Levers, each undone
- * alone under the unpinned arm: the if/else store of available (20/35); the
+ * MATCHED on the s136os arm (task #1405): byte-exact image-resident under SN
+ * 2.95.3 v1.36 -fopt-stack (verify_match_unit 36/36 words + image cmp 0). It
+ * closes ONLY because RULING #9070 drops -fno-gcse from 191238's s136 compile
+ * (FACT #9069). The ROM keeps %hi(g_mapVertexData) in $s1 across the call and
+ * re-adds %lo after it, the GCSE shape (FACT #8187, #7971); with the pin it
+ * reads 32/35 (a positional artefact: frame 16 vs 32 puts every later word one
+ * out of phase). Body found by task #1396. Levers, each undone alone under the
+ * unpinned arm: the if/else store of available (20/35); the
  * size-16 g_playerProgressAbs equate (13/35); the g_mapVertexData name (words
  * exact, relocations name g_mapCache). */
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 67.17% GPREL-DECL /
- * engine96 64.77% GPREL-DECL; best arm sdk29, first differing insn there: 'lui v1,
- * %hi(g_mapVertexData)' vs 'lui v1, %hi(g_mapCache)' */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapUpdateLevelAvailability);
+/* GUARD (task #1405): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_MapUpdateLevelAvailability)
+S136OS_SLOT(MapUpdateLevelAvailability);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
