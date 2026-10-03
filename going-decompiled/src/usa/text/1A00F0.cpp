@@ -787,8 +787,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_0
  * textures (UploadMobyTextures over g_vramAllocCursor) + appends the default
  * TEX0 flush, then lays two more CNT DMATAG qwords closing the chain. DMATAGs
  * are 4 words (0x10 bytes); 0x20000000 = CNT. g_frameDmaCursor is re-read after
- * the upload/flush calls (they append through it). The matching build keeps the
- * asm; this is the faithful TARGET_NATIVE coverage arm. */
+ * the upload/flush calls (they append through it). No params, no return. */
 #ifdef TARGET_NATIVE
 extern u32  *g_frameDmaCursor;         /* 0x1B2228 per-frame DMA write pointer */
 extern u32  *g_mobySegmentOpenTag;     /* 0x1B1AD0 moby draw-segment open tag  */
@@ -797,8 +796,39 @@ extern void  UploadMobyTextures(void *vramCursor);
 extern void  AppendTexFlushDefaultTex0(void);
 #endif
 
+/* ADDRESSING-MODEL DEVICE (RULING #8620; FACT #8036's size-16 equate form, as
+ * 1EFFC0.cpp's *Abs equates): the ROM reaches g_mobySegmentOpenTag absolutely
+ * in CloseMobyDmaSegment and BeginMobyDrawSegment (0x2A0C40 `lui v1,
+ * %hi(g_mobySegmentOpenTag)`), while the symbol is -G8 small. gas sizes a
+ * symbol once per file, so those references name a second assembler symbol
+ * EQUATED to it and sized 16; the relocation still names g_mobySegmentOpenTag.
+ * Top level, so the s136os TU and the unit's 2.9 TU both define it (the splice
+ * refuses a block naming a symbol only its own TU defines). Nothing is moved and
+ * no instruction is emitted; native reads the plain symbol. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", CloseMobyDmaSegment);
+__asm__(".extern g_mobySegmentOpenTagAbs, 16\n\tg_mobySegmentOpenTagAbs = g_mobySegmentOpenTag");
+extern u32 *g_mobySegmentOpenTagAbs;
+#else
+#define g_mobySegmentOpenTagAbs g_mobySegmentOpenTag
+#endif
+
+/* MATCHED on the s136os arm (task #1375): byte-exact under SN 2.95.3 v1.36
+ * -fopt-stack (verify_match_unit + image cmp). Closing levers, each measured by
+ * undoing it alone (FACT filed with task #1375):
+ *  - g_mobySegmentOpenTag through the size-16 equate above (ADDRESSING; NOTE
+ *    #8992's first diff `lw v1,0(gp)` | `lui v0,0x1b` is this);
+ *  - the closing tag's words written in field order [0],[1],[2],[3]; the
+ *    scheduler then emits the ROM's [0],[3],[1],[2];
+ *  - an empty operand-tied fence on `start` (RULING #8483: it emits nothing).
+ *    Without it cc1 loads g_frameDmaCursor straight into $s0; the ROM loads it
+ *    into $v0 and copies it to $s0 (0x2A0C38 `daddu s0,v0,zero`). */
+/* GUARD (task #1375): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_CloseMobyDmaSegment)
+S136OS_SLOT(CloseMobyDmaSegment);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -811,25 +841,26 @@ extern void *g_vramAllocCursor;
 void CloseMobyDmaSegment(void) {
     u32 *start = g_frameDmaCursor;
 
+    __asm__("" : "+r"(start));  /* codegen fence, see above */
     g_frameDmaCursor += 4;
-    g_mobySegmentOpenTag[0] = 0x20000000;
-    g_mobySegmentOpenTag[1] = (u32)g_frameDmaCursor;
-    g_mobySegmentOpenTag[2] = 0;
-    g_mobySegmentOpenTag[3] = 0;
+    g_mobySegmentOpenTagAbs[0] = 0x20000000;
+    g_mobySegmentOpenTagAbs[1] = (u32)g_frameDmaCursor;
+    g_mobySegmentOpenTagAbs[2] = 0;
+    g_mobySegmentOpenTagAbs[3] = 0;
 
     UploadMobyTextures(g_vramAllocCursor);
     AppendTexFlushDefaultTex0();
 
     g_frameDmaCursor[0] = 0x20000000;
-    g_frameDmaCursor[1] = (u32)(g_mobySegmentOpenTag + 4);
+    g_frameDmaCursor[1] = (u32)(g_mobySegmentOpenTagAbs + 4);
     g_frameDmaCursor[2] = 0;
     g_frameDmaCursor[3] = 0;
     g_frameDmaCursor += 4;
 
     start[0] = 0x20000000;
-    start[3] = 0;
     start[1] = (u32)g_frameDmaCursor;
     start[2] = 0;
+    start[3] = 0;
 }
 #endif
 
@@ -965,8 +996,8 @@ void func_002A0DF0(void) {
  * reserves a CNT qword, builds the glow records (BuildMobyGlowRecords) and emits
  * their packets (EmitMobyGlowPackets over g_mobyGlowWorkBuf), then closes the
  * chain with two more CNT DMATAGs. g_deferredSegment2Tag holds the segment-tag
- * build pointer; g_frameDmaCursor is re-read after the calls. The matching build
- * keeps the asm; this is the faithful TARGET_NATIVE coverage arm. */
+ * build pointer, so every access re-reads it; g_frameDmaCursor is re-read after
+ * the calls. No params, no return. */
 #ifdef TARGET_NATIVE
 extern s32  g_mobyGlowCount;           /* 0x1B1AFC glow records queued         */
 extern u8   g_mobyGlowWorkBuf[];       /* 0x1EF260 glow record work buffer     */
@@ -974,8 +1005,47 @@ extern void BuildMobyGlowRecords(void);
 extern void EmitMobyGlowPackets(void *workBuf);
 #endif
 
+/* ADDRESSING-MODEL DEVICES (RULING #8620; FACT #8036's size-16 equate form):
+ * CloseMobyGlowSegment reaches g_mobyGlowCount (0x2A0E04) and every
+ * g_deferredSegment2Tag reference (0x2A0E1C...) absolutely, while both are -G8
+ * small and this unit's own `.extern g_deferredSegment2Tag, 16` (further down,
+ * above the frame-close function) comes after this function, so it does not pin
+ * these uses: gas decides them from the file's last size, cc1's `, 4`. So
+ * those references name second assembler symbols EQUATED to the real ones and
+ * sized 16; the relocations still name g_mobyGlowCount / g_deferredSegment2Tag.
+ * (`...Abs16`, because func_002A0DF0's arm already spells a C-level
+ * g_deferredSegment2TagAbs asm-label alias.) Top level, so both the s136os TU
+ * and the unit's 2.9 TU define them. Nothing is moved, nothing is emitted;
+ * native reads the plain symbols. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", CloseMobyGlowSegment);
+__asm__(".extern g_mobyGlowCountAbs, 16\n\tg_mobyGlowCountAbs = g_mobyGlowCount");
+__asm__(".extern g_deferredSegment2TagAbs16, 16\n\tg_deferredSegment2TagAbs16 = g_deferredSegment2Tag");
+extern s32 g_mobyGlowCountAbs;
+extern s32 g_deferredSegment2TagAbs16;
+#else
+#define g_mobyGlowCountAbs g_mobyGlowCount
+#define g_deferredSegment2TagAbs16 g_deferredSegment2Tag
+#endif
+
+/* MATCHED on the s136os arm (task #1375): byte-exact under SN 2.95.3 v1.36
+ * -fopt-stack (verify_match_unit + image cmp). Closing levers (FACT filed with
+ * task #1375):
+ *  - g_mobyGlowCount and g_deferredSegment2Tag through the size-16 equates
+ *    above (ADDRESSING; NOTE #8992's first diff `lw v0,0(gp)` | `lui v0,0x1b`);
+ *  - each tag word written through `(u32 *)g_deferredSegment2Tag` afresh. The
+ *    tag pointer is an s32, which a u32 store may alias, so cc1 re-reads it
+ *    before every store as the ROM does; a cached `tag` local loads it once;
+ *  - the tag words and the closing `start` words in field order [0],[1],[2],[3];
+ *  - an empty operand-tied fence on `start` (RULING #8483), the same as
+ *    CloseMobyDmaSegment's: the ROM loads g_frameDmaCursor into $v0 and copies it
+ *    to $s0 (0x2A0E68 `daddu s0,v0,zero`). */
+/* GUARD (task #1375): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_CloseMobyGlowSegment)
+S136OS_SLOT(CloseMobyGlowSegment);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -987,37 +1057,35 @@ extern s32 g_mobyGlowCount;
 extern u8 g_mobyGlowWorkBuf[];
 /* (end of this body's declarations) */
 void CloseMobyGlowSegment(void) {
-    u32 *tag;
-
-    if (g_mobyGlowCount == 0) {
-        tag = (u32 *)g_deferredSegment2Tag;
-        tag[0] = 0x10000000;
-        tag[1] = 0;
-        tag[2] = 0;
-        tag[3] = 0;
+    if (g_mobyGlowCountAbs == 0) {
+        /* empty frame: just an END tag */
+        ((u32 *)g_deferredSegment2TagAbs16)[0] = 0x10000000;
+        ((u32 *)g_deferredSegment2TagAbs16)[1] = 0;
+        ((u32 *)g_deferredSegment2TagAbs16)[2] = 0;
+        ((u32 *)g_deferredSegment2TagAbs16)[3] = 0;
     } else {
         u32 *start = g_frameDmaCursor;
 
+        __asm__("" : "+r"(start));  /* codegen fence, see above */
         g_frameDmaCursor += 4;
-        tag = (u32 *)g_deferredSegment2Tag;
-        tag[0] = 0x20000000;
-        tag[1] = (u32)g_frameDmaCursor;
-        tag[2] = 0;
-        tag[3] = 0;
+        ((u32 *)g_deferredSegment2TagAbs16)[0] = 0x20000000;
+        ((u32 *)g_deferredSegment2TagAbs16)[1] = (u32)g_frameDmaCursor;
+        ((u32 *)g_deferredSegment2TagAbs16)[2] = 0;
+        ((u32 *)g_deferredSegment2TagAbs16)[3] = 0;
 
         BuildMobyGlowRecords();
         EmitMobyGlowPackets(g_mobyGlowWorkBuf);
 
         g_frameDmaCursor[0] = 0x20000000;
-        g_frameDmaCursor[1] = (u32)((u32 *)g_deferredSegment2Tag + 4);
+        g_frameDmaCursor[1] = (u32)((u32 *)g_deferredSegment2TagAbs16 + 4);
         g_frameDmaCursor[2] = 0;
         g_frameDmaCursor[3] = 0;
         g_frameDmaCursor += 4;
 
         start[0] = 0x20000000;
-        start[3] = 0;
         start[1] = (u32)g_frameDmaCursor;
         start[2] = 0;
+        start[3] = 0;
     }
 }
 #endif
