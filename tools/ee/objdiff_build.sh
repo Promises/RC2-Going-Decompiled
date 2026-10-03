@@ -166,7 +166,7 @@ CPPDEF="-D__GNUC_MINOR__=9 $CPPDEF_COMMON"
 # byte-exact on text/1907F0). Keep this list in sync with diff.sh.
 # S136EXTRA holds the cc1 flags for the unit's s136os splice compile (SN 1.36);
 # an arm that does not set it gets CC1EXTRA, so only a unit whose two
-# compilers need different flags names it (RULING #9004: 1B4218 only).
+# compilers need different flags names it (RULING #9004: 1B4218; RULING #9070: 191238).
 GFLAG="-G0"
 CC1EXTRA=""
 unset S136EXTRA
@@ -177,7 +177,7 @@ case "$REGION/$UNIT" in
   usa/text/188580) GFLAG="-G8";; # camera-aux sub-TU (D_1A8A60..D_1A8AE0)
   usa/text/188858) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # Tier-1-A carve (.text mid 2; later-cc1 gameplay/UI TU model)
   usa/text/1907F0) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # level-init/screen-fade sub-TU (D_1A9000..D_1A9020)
-  usa/text/191238) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # Tier-1-B carve (.text mid 3; boot/IRX init + sky render + segment loader + map system)
+  usa/text/191238) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="";; # Tier-1-B carve (.text mid 3; boot/IRX init + sky render + segment loader + map system). S136EXTRA: the s136os arm compiles at the -O2 default (RULING #9070, FACT #9069); the 2.9 compile keeps -fno-gcse
   usa/text/198FA0) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # save/GUI-wrapper unit (g_guiInstance modeled cc1-small/assembler-absolute)
   usa/text/1A00F0) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # Tier-1-C carve (.text tail head; moby render/anim/grid + ammo-drop + bestiary)
   usa/text/1A8180) GFLAG="-G8"; CC1EXTRA="-fno-gcse -fno-strict-aliasing";; # game-state cluster (carve pick #1; later-cc1 TU model: sized externs under -G8, no load-PRE). -fno-strict-aliasing: the u16 slot-list reads are ordered after the pointer-global cursor stores and re-read after the slot/moby stores in func_002A9550 (task #1100)

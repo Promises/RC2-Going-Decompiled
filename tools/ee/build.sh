@@ -88,7 +88,7 @@ if [ -d "$SRC" ]; then
     # gameplay-text TUs). Keep in sync with objdiff_build.sh / diff.sh.
     # S136EXTRA = the cc1 flags for the unit's s136os splice compile (SN 1.36);
     # an arm that does not set it gets CC1EXTRA, so only a unit whose two
-    # compilers need different flags names it (RULING #9004: 1B4218 only).
+    # compilers need different flags names it (RULING #9004: 1B4218; RULING #9070: 191238).
     GFLAG="-G0"
     CC1EXTRA=""
     unset S136EXTRA
@@ -98,7 +98,7 @@ if [ -d "$SRC" ]; then
       */usa/text/188580.c) GFLAG="-G8";; # camera-aux sub-TU
       */usa/text/188858.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # Tier-1-A carve (.text mid 2)
       */usa/text/1907F0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # level-init/screen-fade sub-TU
-      */usa/text/191238.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # Tier-1-B carve (.text mid 3)
+      */usa/text/191238.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="";; # Tier-1-B carve (.text mid 3). S136EXTRA: the s136os arm compiles at the -O2 default (RULING #9070, FACT #9069); the 2.9 compile keeps -fno-gcse
       */usa/text/198FA0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # save/GUI-wrapper unit
       */usa/text/1A00F0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # Tier-1-C carve (.text tail head)
       */usa/text/1A8180.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse -fno-strict-aliasing";; # game-state cluster sub-TU

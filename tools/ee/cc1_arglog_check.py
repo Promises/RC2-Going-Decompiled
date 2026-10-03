@@ -36,9 +36,12 @@ table, because a consistent edit of all four table copies passes both FLAGS and
 the derived rule above):
     1B4218 sdk29 carries -fno-gcse        else "-fno-gcse MISSING on the 2.9 arm"
     1B4218 s136 (>=1 line) carries none   else "s136 arm still pinned", per line
+    191238 the same split (RULING #9070, FACT #9069: its 2.9 pin is load-bearing
+           for RelocateMobyClassChunk and func_002956F8; its s136 arm runs at
+           the -O2 default)
     1DFF80 keeps -fno-gcse on BOTH arms (>=1 s136 line; its pin is load-bearing:
            StopAllSoundEmitters +110 B unpinned)
-Revoked with the ruling (its revoked_by); delete this block in that row.
+Each line is revoked with its ruling (its revoked_by); delete that line in that row.
 
 Exit 0 every line and every count as derived; 1 a FAIL line was printed
 (each offender named); 2 could not run — the arglog absent or EMPTY, or the
@@ -176,6 +179,7 @@ def main(argv):
             floor.append(f"usa/{u} sdk29 pinned {sum(FLOOR_PIN in a for a in sd)}/{len(sd)} (want {len(sd) if sdk_pinned else 0}), "
                          f"s136 pinned {sum(FLOOR_PIN in a for a in ss)}/{len(ss)} (want {len(ss) if s136_pinned else 0})")
         floor_unit("text/1B4218", True, False)
+        floor_unit("text/191238", True, False)  # RULING #9070
         floor_unit("text/1DFF80", True, True)
 
     for f in fails:
