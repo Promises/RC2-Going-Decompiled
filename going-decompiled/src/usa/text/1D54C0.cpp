@@ -3280,17 +3280,42 @@ extern void func_0033A7A8(void *p);
  * objdiff): sdk29 86.39% / engine96 82.14%; better arm sdk29; 13 differing
  * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
  * insn: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. Not iterated in t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
+/* SCREEN (task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
+ * masked; a candidate, NOT match evidence): EXACT 28/28, relocations equal, no
+ * alias in nm. Three levers, each measured undone:
+ *   - ADDRESSING-MODEL DEVICES (RULING #8620 terms, #8036 alias): D_1A8C88 is
+ *     read as a word in the ROM's absolute lui/lw form (`.extern ,16`; else
+ *     15/28, first diff @13), and the g_guiInstance read that sits in the
+ *     `beqz` delay slot is gp-relative in the ROM, so it goes through an offset-0
+ *     alias with no `.extern` size; the relocation still names g_guiInstance
+ *     (as the real name it expands absolute: 14/28, first diff @15);
+ *   - the +0x4C clear written after the alloc call (before it: 3/28, first diff
+ *     @6, the original first diff). */
+__asm__(".extern D_1A8C88, 16");
+#ifndef TARGET_NATIVE
+__asm__("g_guiInstanceGp = g_guiInstance");
+extern char *g_guiInstanceGp;
+#define GUI_INSTANCE_GP g_guiInstanceGp
+#else
+extern char *g_guiInstance;
+#define GUI_INSTANCE_GP g_guiInstance
+#endif
 s32 func_002DD7E8(MenuWidget *obj) {
-    extern u8 D_001A8C88;
+    extern s32 D_1A8C88;
     u8 *o = (u8 *)obj;
+    s32 slot;
+
     func_002DF1B8(1);
+    slot = AllocMenuWorkBuffer(0);
     *(s32 *)(o + 0x4C) = 0;
-    *(s32 *)(o + 0x48) = AllocMenuWorkBuffer(0);
+    *(s32 *)(o + 0x48) = slot;
     func_002CA980();
     func_002888A8();
-    if (D_001A8C88 != 0 && g_pGuiManager != 0) {
-        func_0033A7A8((u8 *)g_pGuiManager + 0x3CEA0);
+    if (D_1A8C88 != 0) {
+        char *gui = GUI_INSTANCE_GP;
+        if (gui != 0) {
+            func_0033A7A8(gui + 0x3CEA0);
+        }
     }
     return 0;
 }
