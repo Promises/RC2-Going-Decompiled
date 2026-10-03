@@ -1091,8 +1091,32 @@ extern s32 func_002835E0(s32 v); /* abs(s32) */
  * dimB) into g_uiTextureCache GS-upload records and set g_uiTextureCount. Each
  * descriptor yields one record; the signed dims drive the PSM (0x13 vs 0x14)
  * and TW/TH (Log2Floor of the magnitude). Called per level by
- * LoadLevelAndInitHealth and by InitLoadingSceneSystem. The matching build
- * keeps the asm (save-layout wall). */
+ * LoadLevelAndInitHealth and by InitLoadingSceneSystem. The loop counter is
+ * g_uiTextureCount itself, re-read after every call.
+ *
+ * Screen-exact on the s136os arm (task #1396, FACT #8830 solo screen; a
+ * CANDIDATE, not a promotion: vmu with the base seeded is the evidence).
+ * Levers, each undone alone: the size-12 count equate (size 16: 15/72; plain
+ * symbol: 69/72); the loop running on the global, not a local i (42/72); psm
+ * 0x13 stored before the dimA < 0 override (41/72); the record re-indexed by
+ * the count after each call (67/72, the base's own first diff). */
+/* ADDRESSING-MODEL DEVICE (RULING #8620; the size-12 form of this unit family's
+ * .extern sizing, as 198FA0.cpp's g_gameStateFlags, through FACT #8036's equate):
+ * BuildUiTextureDescriptors reads and clears g_uiTextureCount absolutely
+ * (0x292654 `lui at,%hi(g_uiTextureCount)`) but writes the loop increment as one
+ * %gp_rel word in a delay slot (0x292744). Size 12 gives exactly that: absolute in
+ * straight-line code, one-word gp-relative in a delay slot. The equated name keeps
+ * the size off the real symbol, so no other function in this unit changes; the
+ * relocations still name g_uiTextureCount. Top level, so the s136os TU and the
+ * unit's 2.9 TU both define it. Nothing is moved and nothing is emitted; native
+ * reads the plain symbol. */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_uiTextureCountAbs, 12\n\tg_uiTextureCountAbs = g_uiTextureCount");
+extern s32 g_uiTextureCountAbs;
+#else
+#define g_uiTextureCountAbs g_uiTextureCount
+#endif
+
 #ifndef TARGET_NATIVE
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 43.22% PACKED-SAVE /
@@ -1101,30 +1125,24 @@ extern s32 func_002835E0(s32 v); /* abs(s32) */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", BuildUiTextureDescriptors);
 #else
 void BuildUiTextureDescriptors(s32 *descTable, s32 count) {
-    s32 i;
-    g_uiTextureCount = 0;
-    for (i = 0; i < count; i++) {
+    for (g_uiTextureCountAbs = 0; g_uiTextureCountAbs < count; g_uiTextureCountAbs++) {
         s32 width  = *descTable++;
-        UiTextureRecord *rec = &g_uiTextureCache[g_uiTextureCount];
+        UiTextureRecord *rec = &g_uiTextureCache[g_uiTextureCountAbs];
         s32 height = *descTable++;
         s32 dimA   = *descTable++;
         s32 dimB   = *descTable++;
 
         rec->widthHi  = (s16)(width >> 4);
         rec->heightHi = (s16)(height >> 4);
-        if (dimA >= 0) {
-            rec->psm = 0x13;
-        } else {
+        rec->psm = 0x13;          /* stored first, overridden below (0x2926DC delay slot) */
+        if (dimA < 0) {
             rec->psm = 0x14;
             dimA = func_002835E0(dimA);
             dimB = func_002835E0(dimB);
         }
-        rec->log2W = (u8)Log2Floor(dimA);
-        rec = &g_uiTextureCache[g_uiTextureCount];
-        rec->log2H = (u8)Log2Floor(dimB);
-        rec = &g_uiTextureCache[g_uiTextureCount];
-        *(s64 *)rec->tex0 = 0;
-        g_uiTextureCount++;
+        g_uiTextureCache[g_uiTextureCountAbs].log2W = (u8)Log2Floor(dimA);
+        g_uiTextureCache[g_uiTextureCountAbs].log2H = (u8)Log2Floor(dimB);
+        *(s64 *)g_uiTextureCache[g_uiTextureCountAbs].tex0 = 0;
     }
 }
 #endif

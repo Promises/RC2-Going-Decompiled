@@ -2342,7 +2342,7 @@ s32 func_0029DB58(void) {
  * the base's own first diff). */
 /* ADDRESSING-MODEL DEVICE (RULING #8620; FACT #8036's size-16 equate form,
  * as 1A00F0.cpp's g_mobySegmentOpenTagAbs): GuiManagerCreate reads
- * g_playerProgress absolutely (0x29DC34 `lui v1,%hi(g_playerProgress)`) while
+ * g_playerProgress absolutely (0x29DC08 `lui v1,%hi(g_playerProgress)`) while
  * the symbol is -G8 small, so that read names a second assembler symbol
  * EQUATED to it and sized 16; the relocation still names g_playerProgress.
  * Top level, so the s136os TU and the unit's 2.9 TU both define it. Nothing is
@@ -2379,7 +2379,7 @@ void GuiManagerCreate(void) {
     u8   *in;
     void *instance;
 
-    /* the heap pointer is re-read at each use, as the ROM does (0x29DBC4/0x29DC1C) */
+    /* the heap pointer is re-read at each use, as the ROM does (0x29DBA0/0x29DBE8) */
     memset(*(void **)(arena + 0x80), 0xCD, 0x40000);
     in = D_138180;
     *(s32 *)(in + 0x1A0) = 0;
@@ -2395,7 +2395,7 @@ void GuiManagerCreate(void) {
     *(s32 *)(in + 0x1C8) = 0;
     *(s32 *)(in + 0x1CC) = 0;
 #ifndef TARGET_NATIVE
-    /* The ROM loads g_bPalMode into $a0 for this call (0x29DC04); the
+    /* The ROM loads g_bPalMode into $a0 for this call (0x29DBA8); the
      * callee is (void) and ignores it. */
     ((void (*)(s32))func_0029DB58)(g_bPalMode);
 #else
