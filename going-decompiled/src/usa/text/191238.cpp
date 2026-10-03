@@ -4458,10 +4458,17 @@ done:
  *    orderIndex(current)|) from the current level. That farthest slot (default 0
  *    if none qualified) is marked free (slotLevelId = -1) and its index returned.
  *
- * WALL: the two branch-likely (beql) slot-skip loops, the movz default-to-0 of
- * the result, and the packed 0x50 multi-save frame diverge from the pinned
- * cc1's plain-branch / save-layout shapes. Logic traced op-for-op; kept as the
- * portable #else body. */
+ * Named g_mapVertexData, the ROM relocation's name for the same storage.
+ *
+ * CONDITIONAL screen-exact (task #1396, FACT #8830 solo screen): EXACT on the
+ * s136os arm ONLY with -fno-gcse dropped from the s136 compile; with the
+ * unit's -fno-gcse it reads 62/88. The ROM keeps %hi(g_mapVertexData) in $s7
+ * for the whole function and re-adds %lo per block, the GCSE shape (FACT
+ * #8187). 191238's s136 compile is pinned and RULING #9004 unpins 1B4218 only,
+ * so this is not promotable until a ruling unpins this unit. Levers, each
+ * undone alone under the unpinned arm: the hub scan's own counter (slot), not
+ * the second loop's i (12/88); bestSlot/maxDist initialised at entry (53/88);
+ * the g_mapVertexData name (words exact, relocations name g_mapCache). */
 #ifndef TARGET_NATIVE
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 81.90% PACKED-SAVE /
@@ -4475,37 +4482,36 @@ extern s32 func_002835E0(s32 v);
 extern MapCache g_mapCache;
 /* (end of this body's declarations) */
 s32 MapEvictCacheSlot(void) {
+    s32 maxDist = 0;
+    s32 bestSlot = -1;
     s32 currentOrderIndex;
-    s32 bestSlot;
-    s32 maxDist;
     s32 i;
 
-    if (g_mapCache.currentLevel == 0) {
-        for (i = 4; i >= 0; i--) {
-            if (g_mapCache.slotState[i] != 0 &&
-                i != g_mapCache.lockedSlot &&
-                g_mapCache.slotLevelId[i] == -1) {
-                return i;
+    if (g_mapVertexData.currentLevel == 0) {
+        s32 slot;
+        for (slot = 4; slot >= 0; slot--) {
+            if (g_mapVertexData.slotState[slot] != 0 &&
+                slot != g_mapVertexData.lockedSlot &&
+                g_mapVertexData.slotLevelId[slot] == -1) {
+                return slot;
             }
         }
     }
 
-    currentOrderIndex = MapGetLevelOrderIndex(g_mapCache.currentLevel);
+    currentOrderIndex = MapGetLevelOrderIndex(g_mapVertexData.currentLevel);
     if (currentOrderIndex == -1) {
         return 1;
     }
 
-    bestSlot = -1;
-    maxDist = 0;
     for (i = 0; i < 5; i++) {
         s32 dist;
-        if (g_mapCache.slotState[i] == 0 || i == g_mapCache.lockedSlot) {
+        if (g_mapVertexData.slotState[i] == 0 || i == g_mapVertexData.lockedSlot) {
             continue;
         }
-        if (g_mapCache.slotLevelId[i] == -1) {
+        if (g_mapVertexData.slotLevelId[i] == -1) {
             return i;
         }
-        dist = func_002835E0(MapGetLevelOrderIndex(g_mapCache.slotLevelId[i] & 0xFF)
+        dist = func_002835E0(MapGetLevelOrderIndex(g_mapVertexData.slotLevelId[i] & 0xFF)
                              - currentOrderIndex);
         if (maxDist < dist) {
             maxDist = dist;
@@ -4516,7 +4522,7 @@ s32 MapEvictCacheSlot(void) {
     if (bestSlot == -1) {
         bestSlot = 0;
     }
-    g_mapCache.slotLevelId[bestSlot] = -1;
+    g_mapVertexData.slotLevelId[bestSlot] = -1;
     return bestSlot;
 }
 #endif
