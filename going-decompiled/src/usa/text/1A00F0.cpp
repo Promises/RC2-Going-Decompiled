@@ -467,23 +467,32 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0798);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A07B0);
 #else
-void func_002A07B0(u8 *moby, u8 sub, u8 *rec) {
+/* SCREEN-EXACT on the s136os arm (SN 2.95.3 v1.36 -fopt-stack; task #1389,
+ * masked word screen + relocation compare, NOT vmu): a CANDIDATE, not a match.
+ * Levers, each needed (screen with that one undone): `sub` is an s32 - the ROM
+ * stores $5 with no zero-extension (as u8: the original first diff, @1 andi);
+ * the four 1.0f stores written +0x1C/+0x20/+0x24/+0x28 so cc1 emits the ROM's
+ * +0x28-first order (FACT #8947 last-store-first; written +0x28 first: 4/30);
+ * the class-table entry read as base[rec[0] + 1] (the byte-offset spelling
+ * colours the add differently: 10/30); and the packet index read as
+ * p[idx + 4] (the (p + idx)[4] spelling: 14/30). No volatile is needed on
+ * this arm (task #759's 2.9-arm variant used volatile reads, FACT #8055). */
+void func_002A07B0(u8 *moby, s32 sub, u8 *rec) {
     u8 *p;
     s32 idx;
     if (rec[1] == 0) {
         rec[0] = sub;
         rec[1] = 1;
-        *(float *)(rec + 0x28) = 1.0f;
         *(float *)(rec + 0x1C) = 1.0f;
         *(float *)(rec + 0x20) = 1.0f;
         *(float *)(rec + 0x24) = 1.0f;
+        *(float *)(rec + 0x28) = 1.0f;
         {
-            u8 *tbl = *(u8 **)(moby + 0x24);
-            u8 *base = *(u8 **)(tbl + 0x1C);
-            p = *(u8 **)(base + (rec[0] << 2) + 4);
+            u8 *base = *(u8 **)(*(u8 **)(moby + 0x24) + 0x1C);
+            p = ((u8 **)base)[rec[0] + 1];
         }
-        idx = p[0];
-        *(u32 *)(rec + 4) = ((p + idx)[4] << 6) + 0x70000000;
+        idx = *p;
+        *(u32 *)(rec + 4) = (p[idx + 4] << 6) + 0x70000000;
         *(u32 *)(rec + 8) = *(u32 *)(moby + 0x54);
         *(u8 **)(moby + 0x54) = rec;
     }
