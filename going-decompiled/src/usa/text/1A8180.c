@@ -5002,7 +5002,7 @@ extern s32  func_002AE460(void *self, Moby *obj, Vec4 *arg3, Vec4 *arg4,
  * -fopt-stack (verify_match_unit + image cmp). Levers (FACT filed with task
  * #1375):
  *  - the source offset is copied as a QVec (u_long128-aligned) so cc1 emits the
- *    ROM's lq/sq pair (0x2AE388) instead of an unaligned ldl/ldr/sdl/sdr copy of
+ *    ROM's lq/sq pair (0x2AE408) instead of an unaligned ldl/ldr/sdl/sdr copy of
  *    a plain Vec4. That alone also turns NOTE #8992's first diff (the $s2/$s3
  *    swap of obj and src, `sd s2,160(sp)` | `sd s3,168(sp)`) into the ROM's;
  *  - CODEGEN FENCES (RULING #8483: empty templates, they emit nothing): `from`
@@ -5013,7 +5013,7 @@ extern s32  func_002AE460(void *self, Moby *obj, Vec4 *arg3, Vec4 *arg4,
  *    slot (the ROM's slot holds `move a0,s0`);
  *  - REGISTER-PIN DEVICE (RULING #8598, EE arm only, empty on native): `from`
  *    is pinned to $3. With every other lever in place, cc1 picks $2 for it and
- *    $3 for the loaded qword, the ROM the reverse (0x2AE380/0x2AE388) — the
+ *    $3 for the loaded qword, the ROM the reverse (0x2AE400/0x2AE408) — the
  *    one residual it closes. */
 /* GUARD (task #1375): on EE this C is the image's body, compiled alone by the
  * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in

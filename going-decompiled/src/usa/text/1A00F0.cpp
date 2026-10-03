@@ -305,13 +305,13 @@ extern void SkinMobyCollisionMesh(void *moby, s32 count, u32 flags);
  * -fopt-stack (verify_match_unit + image cmp). Levers, each measured by undoing
  * it alone (FACT filed with task #1375):
  *  - SkinMobyCollisionMesh gets the MOBY (`obj`), not the entry: the ROM leaves
- *    $a0 = obj untouched for that call (0x2A04B4), as 1A8180.c's other caller
+ *    $a0 = obj untouched for that call (0x2A0534), as 1A8180.c's other caller
  *    passes its moby. The earlier arm passed `entry` — a semantic bug, not only
  *    a codegen one;
  *  - hi is an s32 maximum written `hi = a; if (hi < b) hi = b;`, which the ROM
- *    lowers to slt + movn (0x2A04A0) with no s16 re-truncation;
+ *    lowers to slt + movn (0x2A0520) with no s16 re-truncation;
  *  - the entry address is formed as `hdr + base*16`, then `+= arg1*16 + 0x40`
- *    (the ROM's two adds into $s1, 0x2A0490);
+ *    (the ROM's two adds into $s1, 0x2A0510);
  *  - vecA[3] is written before vecB[3]; cc1 emits them in the ROM's reverse
  *    order (last-store-first, FACT #8947). */
 /* GUARD (task #1375): on EE this C is the image's body, compiled alone by the
@@ -1030,8 +1030,8 @@ extern void EmitMobyGlowPackets(void *workBuf);
 #endif
 
 /* ADDRESSING-MODEL DEVICES (RULING #8620; FACT #8036's size-16 equate form):
- * CloseMobyGlowSegment reaches g_mobyGlowCount (0x2A0E04) and every
- * g_deferredSegment2Tag reference (0x2A0E1C...) absolutely, while both are -G8
+ * CloseMobyGlowSegment reaches g_mobyGlowCount (0x2A0E84) and every
+ * g_deferredSegment2Tag reference (0x2A0E9C...) absolutely, while both are -G8
  * small and this unit's own `.extern g_deferredSegment2Tag, 16` (further down,
  * above the frame-close function) comes after this function, so it does not pin
  * these uses: gas decides them from the file's last size, cc1's `, 4`. So
@@ -1062,7 +1062,7 @@ extern s32 g_deferredSegment2TagAbs16;
  *  - the tag words and the closing `start` words in field order [0],[1],[2],[3];
  *  - an empty operand-tied fence on `start` (RULING #8483), the same as
  *    CloseMobyDmaSegment's: the ROM loads g_frameDmaCursor into $v0 and copies it
- *    to $s0 (0x2A0E68 `daddu s0,v0,zero`). */
+ *    to $s0 (0x2A0EE8 `daddu s0,v0,zero`). */
 /* GUARD (task #1375): on EE this C is the image's body, compiled alone by the
  * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
  * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
