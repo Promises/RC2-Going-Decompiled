@@ -99,7 +99,7 @@ __asm__(".extern D_1A8BD0, 16");
 extern u8 D_1A8BD0[]; /* 0x1A8BD0 transform/config blob used by hero-moby projection */
 
 __asm__(".extern g_waterPool, 16");
-extern u8 g_waterPool[]; /* 0x1B2260 static water-pool block; +0x68 = its moby ptr */
+extern u8 g_waterPool[]; /* 0x1B2260 static water-pool block */
 
 __asm__(".extern g_gsScreenContext, 16");
 extern u8 g_gsScreenContext[]; /* 0x1A6480 GS screen context (disp dims at +0x150/+0x152) */
@@ -322,17 +322,27 @@ void func_00300120(Moby *moby, s32 classId) {
 }
 #endif
 
-/* Spawn + arm the water-pool splash/disturbance moby (g_waterPool+0x68 holds the
- * spawn-pool base DAT_001B22C8). Sets up scale/opacity/anim-clear, drives its
- * animation sequence from `animArg` (negative -> auto-pick by anim-controller
- * state), then re-registers it in the world grid. Returns the moby pointer.
- * TODO(match): sq zero-store + branch-likely chain + 0x20 multi-reg frame the
- * cc1 schedules differently; the C is functionally faithful. */
+/* Spawn + arm the water-pool splash/disturbance moby (its pointer is the word at
+ * 0x1B22C8). Sets up scale/opacity/anim-clear, drives its animation sequence
+ * from `animArg` (negative -> auto-pick by anim-controller state), then
+ * re-registers it in the world grid. Returns the moby pointer.
+ * The pointer is read as g_swapGadgetItemIndex+0x2E because that is the
+ * symbol the ROM's relocation names at 0x30019C/0x3001A0 (the nearest
+ * preceding symbol, as for the +0x2C tint level above; task #1371). The older
+ * spelling g_waterPool+0x68 is the same address but the wrong relocation
+ * symbol, which a relocation-masked screen cannot see.
+ * NOT byte-matched (task #1371; instrument: the s136os solo compile of this
+ * arm, objdump word-by-word against the assembled ROM .s, relocations resolved
+ * to addresses): this body differs in 32 of 62 words. With the macro-load device of
+ * func_00300288, a `$0`-pinned sq, an operand-tied fence on m+0xF0, the
+ * animArg test inverted and the float stores ordered 0x18/0x1C/0x10/0x14 it
+ * reaches 11 of 62; the residual is register choice (the sq address in $3,
+ * not $5, computed before the 0xFF/0x20/1 constants). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_00300190);
 #else
 void *func_00300190(s32 classId, s32 animArg) {
-    u8 *m = *(u8 **)(g_waterPool + 0x68);
+    u8 *m = *(u8 **)(g_swapGadgetItemIndex + 0x2E);
     u16 flags;
     func_00300120((Moby *)m, classId);
     *(u16 *)(m + 0x34) &= 0xFFBC;
@@ -360,7 +370,7 @@ void *func_00300190(s32 classId, s32 animArg) {
 }
 #endif
 
-/* Init the water-pool splash moby (g_waterPool+0x68) via class 0x3EF, then arm
+/* Init the water-pool splash moby (pointer at 0x1B22C8) via class 0x3EF, then arm
  * it: scale 5.0 on +0x10/+0x14/+0x18, opacity 0xFF at +0x30, OR in flags 0x43
  * at +0x34, and clear +0x98.
  * The ROM re-derives the moby pointer after the call rather than keeping a

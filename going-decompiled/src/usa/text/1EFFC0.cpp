@@ -714,8 +714,7 @@ __asm__("g_hudClutSlotAAbs = g_hudClutSlots + 0xA");
 __asm__("g_hudClutSlotCAbs = g_hudClutSlots + 0xC");
 #endif
 
-/* func_002F6110 globals (declared for the TARGET_NATIVE #else only; all resolve
- * to splat data symbols in the matching build). */
+/* func_002F6110 globals (D_ names resolve to the splat data symbols). */
 extern u8  D_138180[];          /* object state block: int flag @+0x1A0, pos/vel floats @+0x100/+0x104/+0x108/+0x10C */
 extern s32 D_1AD1A0;            /* consecutive-idle-frame counter */
 extern s32 g_gameTime;          /* global frame/time tick */
@@ -734,41 +733,72 @@ extern s32 D_1A9E70;            /* set to -1 when the frame counter desyncs */
  *  first 0x384 idle frames, bumps the current player's idle stat; and flags
  *  D_1A9E70 = -1 if the deferred-segment counter mirror has fallen out of step
  *  with the previous frame's value. */
-/* RESIDUAL CLASS (task #576): SPLIT-WITHIN-FUNCTION -- D_1A7390
- *   Both arms measured at unit objdiff (objdiff_build.sh + unit_report.sh,
- *   whole-unit blanket screen, clean tree): sdk29 81.32%, engine96 72.23%
- *   (better arm: sdk29). Neither reaches 100.00%, so this stays INCLUDE_ASM
- *   and the #else below remains the portable impl.
- *   the named symbol is reached BOTH ways inside this one function -- absolute
- *   %hi/%lo AND %gp_rel, same address. The split is POSITIONAL, not a size
- *   class (FACT #8058): every %gp_rel ref sits in a branch delay slot and every
- *   absolute ref outside one, 0 exceptions over all 122 compiled USA functions
- *   that split a symbol this way. No `.extern` size can express that; an
- *   assembler-side delay-slot rule could, and tools/ee has none yet.
- *   Unreachable today, but not proven a wall. */
+/* ADDRESSING-MODEL DEVICES (RULING #8620; FACT #8036 equate form, as
+ * g_vramAllocCursorGp/g_cinematicFmvFlagGp in this file): the ROM reads
+ * g_gameTime, D_1A8C70, D_1A7390 and g_deferredSegment2Tag+0xC0 absolute and
+ * stores g_gameTime and D_1A9E70 absolute (lui/lw, lui $1/sw), although the
+ * unit sizes those scalars small, and stores D_1A7390 %gp_rel in the delay
+ * slot of the D_1A8C70 test (0x2F61B8) - FACT #8058's positional split. Each
+ * reference names an assembler symbol EQUATED to the real one with the size it
+ * needs (16 = absolute, 4 = %gp_rel); the relocations name the real symbols and
+ * nothing reaches the symbol table. D_1A7390 is the word at 0x1A7390 (the
+ * native arm keeps the older g_gsPixelOffsetY+0x3C spelling of it). */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F6110);
+__asm__(".extern g_gameTimeAbs, 16\n\tg_gameTimeAbs = g_gameTime");
+__asm__(".extern D_1A8C70Abs, 16\n\tD_1A8C70Abs = D_1A8C70");
+__asm__(".extern D_1A9E70Abs, 16\n\tD_1A9E70Abs = D_1A9E70");
+__asm__(".extern D_1A7390Abs, 16\n\tD_1A7390Abs = D_1A7390");
+__asm__(".extern D_1A7390Gp, 4\n\tD_1A7390Gp = D_1A7390");
+__asm__(".extern g_deferredSegment2TickAbs, 16\n\tg_deferredSegment2TickAbs = g_deferredSegment2Tag + 0xC0");
+extern s32 g_gameTimeAbs;
+extern s32 D_1A8C70Abs;
+extern s32 D_1A9E70Abs;
+extern s32 D_1A7390Abs;
+extern s32 D_1A7390Gp;
+extern s32 g_deferredSegment2TickAbs;
+#else
+#define g_gameTimeAbs g_gameTime
+#define D_1A8C70Abs D_1A8C70
+#define D_1A9E70Abs D_1A9E70
+#define D_1A7390Abs (*(s32 *)(g_gsPixelOffsetY + 0x3C))
+#define D_1A7390Gp (*(s32 *)(g_gsPixelOffsetY + 0x3C))
+#define g_deferredSegment2TickAbs (*(s32 *)(g_deferredSegment2Tag + 0xC0))
+#endif
+/* GUARD (task #1371): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before.
+ * Byte-exact on that arm (task #1371 lever): the equates above, the object
+ * block read through a local base (ROM: lui/addiu then 0x1A0/0x108/...
+ * offsets), the at-rest test inverted so the zeroing store is the branch-likely
+ * fill, and the mirror compare written tick != D_1A7390-1 (ROM beq $3,$2 with
+ * the D_1A7390 load first; the other operand order gives beq $2,$3). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002F6110)
+S136OS_SLOT(func_002F6110);
 #else
 void func_002F6110(void) {
-    if (*(s32 *)(D_138180 + 0x1A0) == 0 &&
-        *(f32 *)(D_138180 + 0x108) == 0.0f &&
-        *(f32 *)(D_138180 + 0x10C) == 0.0f &&
-        *(f32 *)(D_138180 + 0x100) == 0.0f &&
-        *(f32 *)(D_138180 + 0x104) == 0.0f) {
-        D_1AD1A0 += 1;
-    } else {
+    u8 *obj = D_138180;
+
+    if (*(s32 *)(obj + 0x1A0) != 0 ||
+        *(f32 *)(obj + 0x108) != 0.0f ||
+        *(f32 *)(obj + 0x10C) != 0.0f ||
+        *(f32 *)(obj + 0x100) != 0.0f ||
+        *(f32 *)(obj + 0x104) != 0.0f) {
         D_1AD1A0 = 0;
+    } else {
+        D_1AD1A0 += 1;
     }
 
-    g_gameTime += 1;
-    *(s32 *)(g_gsPixelOffsetY + 0x3C) += 1;
+    g_gameTimeAbs += 1;
+    D_1A7390Gp = D_1A7390Abs + 1;
 
-    if (D_1A8C70 != 0 && D_1AD1A0 < 0x384) {
+    if (D_1A8C70Abs != 0 && D_1AD1A0 < 0x384) {
         ((s32 *)(g_health + 0xEAC))[g_playerProgress] += 1;
     }
 
-    if (*(s32 *)(g_deferredSegment2Tag + 0xC0) != *(s32 *)(g_gsPixelOffsetY + 0x3C) - 1) {
-        D_1A9E70 = -1;
+    if (g_deferredSegment2TickAbs != D_1A7390Abs - 1) {
+        D_1A9E70Abs = -1;
     }
 }
 #endif
@@ -2996,9 +3026,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", UpdateVendorMen
 s32 GetVendorItemPrice(void);
 extern s32  g_boltCount;      /* 0x1A7A00 player bolt wallet */
 extern s32  g_weaponAmmo[];   /* per-item current ammo, indexed by item id */
-extern s32  D_001A81C0;       /* UP   auto-repeat hold timer (pad state +0x58) */
-extern s32  D_001A81BC;       /* DOWN auto-repeat hold timer (pad state +0x54) */
-extern s32  D_001A81C4;       /* currently-held button mask (pad state +0x5C) */
+/* 0x1B21B8 vendor-menu block: [1] DOWN auto-repeat hold timer, [2] UP hold
+ * timer, [3] currently-held button mask. The ROM reads 0x1B21BC/0x1B21C0/
+ * 0x1B21C4 (relocations on g_vendorQtyRepeatTimers+4/+8/+0xC at 0x2FA37C,
+ * 0x2FA28C, 0x2FA460); this body used to read D_001A81BC/C0/C4, 0xA000 lower,
+ * which no relocation-masked screen could see (task #1371). */
+extern s32  g_vendorQtyRepeatTimers[4];
 extern s32  PlayMobySound(s32 soundIdx, s32 flags, void *owner);
 extern void func_0028C108(s32 handle, s32 arg); /* release a menu sound/anim handle */
 extern void ExitVendorMenu(void);
@@ -3080,7 +3113,7 @@ void UpdateVendorMenuInput(void) {
     }
 
     /* ---- UP: select previous row (higher index) ---- */
-    if (VendorDirFires(*(s32 *)(D_138180 + 0x1C4) & 0x2000, D_001A81C0)) {
+    if (VendorDirFires(*(s32 *)(D_138180 + 0x1C4) & 0x2000, g_vendorQtyRepeatTimers[2])) {
         if (*(s32 *)(ui + 0x6C) < 0x39) {
             s32 sel = *(s32 *)(ui + 0x80);
             if (sel < *(s32 *)(ui + 0x740) - 1) {
@@ -3091,7 +3124,7 @@ void UpdateVendorMenuInput(void) {
     }
 
     /* ---- DOWN: select next row (lower index) ---- */
-    if (VendorDirFires(*(s32 *)(D_138180 + 0x1C4) & 0x8000, D_001A81BC)) {
+    if (VendorDirFires(*(s32 *)(D_138180 + 0x1C4) & 0x8000, g_vendorQtyRepeatTimers[1])) {
         if (*(s32 *)(ui + 0x6C) >= -0x38) {
             s32 sel = *(s32 *)(ui + 0x80);
             if (sel > 0) {
@@ -3102,7 +3135,7 @@ void UpdateVendorMenuInput(void) {
     }
 
     /* ---- CONFIRM: buy the selected slot (ignored while the button is held) ---- */
-    if ((*(s32 *)(D_138180 + 0x1C4) & 0x40) && !(D_001A81C4 & 0x40)) {
+    if ((*(s32 *)(D_138180 + 0x1C4) & 0x40) && !(g_vendorQtyRepeatTimers[3] & 0x40)) {
         void *moby = *(void **)(ui + 0x28);
         s32 outcome = VendorTryPurchase(ui);
         if (outcome == 1) {
