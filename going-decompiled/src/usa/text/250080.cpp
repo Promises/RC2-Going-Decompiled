@@ -691,7 +691,8 @@ extern void func_00133930(s32 len, s32 dstOfs);
 
    Bounce a decoded 0x400 block from EE (src) to the IOP at the stream's IOP
    buffer base (obj[0x48]) + dstOfs: build a 4-word SIF-DMA descriptor
-   {src, iopBase, len, 0}, arm the chain (func_0011AEA0), retry the enqueue until
+   {src, iopBase, len, 0}, flush the data cache (func_0011AEA0: EE syscall 100,
+   FlushCache by the SDK's numbering; it returns nothing), retry the enqueue until
    a slot is granted, wait for completion, then notify (func_00133930).
 
    MATCHED on the s136os arm (task #1387; screened by task #1382, s136 arm = SN 1.36 -fopt-stack, solo, relocated fields
