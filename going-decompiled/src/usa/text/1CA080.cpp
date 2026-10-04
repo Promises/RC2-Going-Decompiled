@@ -1947,7 +1947,7 @@ s32 func_002CE3A0(void) {
  * record (D_00259C58[0x58] = now).
  * Wall: 8-byte-packed-save ($16 + $17 + $31). Preserved as portable C. */
 extern s32 func_00337D98(void);
-extern void func_0029D080(s32 buttons, void *scratch);
+extern s32 func_0029D080(s32 buttons, s32 *out);
 extern s16 g_fileLoadState;
 extern s32 D_259C24;       /* ptr-to-live-object global */
 extern u8 D_00259C58[];    /* per-screen present record */
@@ -1982,7 +1982,7 @@ s32 func_002CE498(void) {
         result = 1;
     } else {
         u8 scratch[0x30];
-        func_0029D080(flags, scratch);
+        func_0029D080(flags, (s32 *)scratch);
     }
     if (g_guiInstance) {
         s32 now = func_00337D98();
