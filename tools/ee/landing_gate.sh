@@ -2605,7 +2605,7 @@ selftest_asmunit_selftest() {
   if [ "$b" = 0 ]; then
     n=$((ASMUNIT_SELFTEST_FLOOR - 1))
     awk -v n="$n" '/^PASS / { if (++p > n) next } /^asm_unit_selftest: [0-9]+ arms, / { sub(/: [0-9]+ arms,/, ": " n " arms,") } { print }' "$T/asmunit_selftest.txt" > "$T/asmunit_selftest_del.txt"
-    x=$(/usr/bin/grep '^PASS ' "$T/asmunit_selftest.txt" | sed -n "$((n + 1)),\$s/^PASS \([^:]*\):.*/\1/p" | head -1)
+    x=$(awk -v n="$n" '/^PASS / && ++p == n + 1 { sub(/^PASS /, ""); sub(/:.*/, ""); print; exit }' "$T/asmunit_selftest.txt")
     if ! asmunit_selftest_judge "$T/asmunit_selftest_del.txt" 0 && case "$AJ" in "floor: $n arms < "*"; set: 1 baseline arm(s) not PASSed — [$x]") true ;; *) false ;; esac; then ok "fired: arms deleted to $n, 0 failed -> $AJ"
     else say "SELFTEST-FAIL (25) the output cut to $n arms, 0 failed, did not FAIL by both the floor and the set naming [$x] ($AJ_SUM: $AJ)"; b=1; fi
     # substitution (#1464): the first PASS arm replaced by a duplicate of the
