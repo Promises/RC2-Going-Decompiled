@@ -3044,15 +3044,10 @@ void ResetDebugHeap(void) {
  * the UNROUNDED size and the cursor then advances by the size rounded up to 16,
  * so an allocation can end up to 15 bytes past g_debugMallocEnd (NOTE #5689).
  *
- * MATCHED on the s136os arm (task #1505). Three spellings carry it:
+ * MATCHED on the s136os arm (task #1505). Two spellings carry it:
  * - the 0xFFFFFFF0 mask (not ~0xF): cc1 then builds it with lui/ori, as the ROM
  *   does, instead of one `li -16`; and the rounded size goes back into `size`
  *   so it stays in $16.
- * - the fail path's zero is a `$2` EE_REG local behind a tied empty fence
- *   (RULINGs #8598/#8483). Without a fence there, cc1's jump pass lays the fail
- *   path first and reorg deletes the success path's branch to the epilogue; a
- *   fence before the zero keeps the layout but stops reorg moving the zero into
- *   the fit branch's delay slot.
  * - the cursor store is volatile, a CODEGEN DEVICE (RULING #8404), not a claim
  *   that anything else writes it: the only stores to g_debugMallocCursor in the
  *   USA asm are this function and ResetDebugHeap. cc1 thinks the store is one
@@ -3074,9 +3069,7 @@ void *DebugMalloc(s32 size) {
         ResetDebugHeap();
     }
     if ((s32)(g_debugMallocEnd - g_debugMallocCursor) < size) {
-        register u8 *none EE_REG("$2") = 0;
-        __asm__ __volatile__("" : "+r"(none));
-        return none;
+        return 0;
     }
     result = g_debugMallocCursor;
     size = (size + 0xF) & 0xFFFFFFF0;
