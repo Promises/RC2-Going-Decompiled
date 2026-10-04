@@ -332,3 +332,7 @@ usa text/235FE8 GuiMapScreenTick
 usa text/1A8180 func_002A8448
 usa text/1A8180 func_002ADDD0
 usa text/1A8180 func_002B0038
+usa text/235FE8 func_003433D0
+usa text/235FE8 func_00343578
+usa text/235FE8 func_00344E08
+usa text/235FE8 func_00344F18

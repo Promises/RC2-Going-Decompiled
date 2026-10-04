@@ -8380,31 +8380,43 @@ void func_00343338(void *w, s32 inputMask) {
  * D_1AE180[func_00348E68(w+0x188) - 1] (list-row-count driven). Runs
  * func_00343338(w, inputMask), func_003432D8(w), func_00343330(w), and returns the
  * cached value at +0x16C. */
-/* task #1522 (s136os arm, verify_match_unit vs ROM; not promoted): #else fixed to
- * pass w to func_00343330 (ROM 0x343490 sets $a0), re-read the anchor before each
- * call and read the alpha entry twice, as the ROM does. Residual 3/62 words: cc1
- * folds the `- 1` of the alpha index into the table base (ROM keeps `addiu -1`,
- * then `sll`, then the gp-relative base). An empty tied fence on the index stops
- * the fold but perturbs the prologue schedule (8/62), so it is not used. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003433D0);
+/* Params: w = the screen object; inputMask = D-pad mask forwarded to
+ * func_00343338. Returns *(s32 *)(w+0x16C), the list state func_00343338 leaves.
+ * MATCHED byte-exact on the s136os arm (task #1567; #1522 fixed the body to pass
+ * w to func_00343330, ROM 0x343490 sets $a0, and to re-read the anchor before
+ * each call and the alpha entry twice, as the ROM does). The last 3/62 words
+ * were the alpha index: written inline as `&D_1AE180[func_00348E68(...) - 1]`,
+ * the front end's pointer_int_sum distributes the constant term into the base
+ * (`la D_1AE180-4`), where the ROM keeps `addiu -1; sll; addiu %gp_rel(D_1AE180)`.
+ * Forming the index in the local `row` first keeps the subtraction. Plain C, no
+ * device. (#1522's empty tied fence on the index also stopped the fold, at
+ * 8/62.)
+ * GUARD (task #1567): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003433D0)
+S136OS_SLOT(func_003433D0);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_003433D0, unit objdiff): 65.39%,
    46/70 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x40' vs 'addiu sp, sp, -0x30').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+   not byte-exact on that arm. */
 extern f32 D_1AE170, D_1AE174, D_1AE178, D_1AE17C;
 extern f32 D_1AE180[2];
 s32 func_003433D0(void *w, s32 inputMask) {
     f32 *anchor;
     f32 *alpha;
+    s32 row;
 
     anchor = *(f32 **)((char *)w + 0x180);
     GuiElementSetPos((GuiElement *)w, D_1AE170 + anchor[0], D_1AE174 + anchor[1], 0.0f, 0.0f);
     anchor = *(f32 **)((char *)w + 0x180);
     GuiElementSetPos((GuiElement *)((char *)w + 0x4C), D_1AE178 + anchor[0], D_1AE17C + anchor[1], 0.0f, 0.0f);
 
-    alpha = &D_1AE180[func_00348E68((char *)w + 0x188) - 1];
+    row = func_00348E68((char *)w + 0x188) - 1;
+    alpha = &D_1AE180[row];
     GuiElementSetAlpha((GuiElement *)w, *alpha);
     GuiElementSetAlpha((GuiElement *)((char *)w + 0x4C), *alpha);
 
@@ -8466,19 +8478,31 @@ void func_00343558(void *p) {
  * (D_1AE198, D_1AE19C + D_1AE1A0*i), sets its texture (id 0xEA9E for i==3 else
  * 0xEAA6 — also recorded at +0x174, frame = *(w+0x178)[i]), and draws it via
  * func_00337630. Bails immediately if the count is <= 0. */
-/* task #1522 (s136os arm, verify_match_unit vs ROM; not promoted): #else fixed to
- * re-read the count (+0x17C) on every loop test, form the texture id and read the
- * frame table after positioning, and compute the element address inside the
- * loop. Residual 3/60 words: the loop-test/anchor register is $v1 where the ROM
- * uses $v0. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343578);
+/* Params: w = the screen object. Returns nothing.
+ * MATCHED byte-exact on the s136os arm (task #1567; #1522 fixed the body to
+ * re-read the count (+0x17C) on every loop test, form the texture id and read
+ * the frame table after positioning, and compute the element address inside the
+ * loop). The last 3/60 words were the loop test's register ($v1, ROM $v0), and
+ * the cause was a missing prototype, not allocation: on EE func_00337630's
+ * definition is behind its INCLUDE_ASM, so the call was an implicit `int`
+ * declaration and cc1 emitted a call_value. local-alloc treats that unused $v0
+ * result as live into the next insn, which is where the count load is born, so
+ * the count went to $v1. Declaring func_00337630 void (its native definition's
+ * type) closes it. Plain C, no device.
+ * GUARD (task #1567): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00343578)
+S136OS_SLOT(func_00343578);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_00343578, unit objdiff): 18.24%,
    76/85 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: 'addiu sp, sp, -0x40' vs 'addiu sp, sp, -0x50').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+   not byte-exact on that arm. */
 extern f32 D_1AE198, D_1AE19C, D_1AE1A0;
+extern void func_00337630(GuiElement *e);
 void func_00343578(void *w) {
     s32 i;
 
@@ -9269,18 +9293,33 @@ void GuiInfoPanelScreenInit(void *w, GuiPool *pool) {
  * reaching 2 wrap to 0 + page 1 + column 0. Each plays move sound 3. Finally looks
  * up the selected row in the 0xA-byte-stride table D_1AA830 and records its +6
  * halfword field at +0x4B4. */
-/* task #1522 (s136os arm, verify_match_unit vs ROM; not promoted): #else fixed: on
- * Up the ROM decrements +0x4AC BEFORE PlayGlobalSound (the store sits in the jal
- * delay slot) and the mask is an s32 parameter. Residual 8/68: the final table
- * read allocates idx/10 to $v1/$a0 where the ROM uses $a0/$v1. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344E08);
+/* Params: w = the weapon-select screen; flags = D-pad mask. Returns nothing.
+ * MATCHED byte-exact on the s136os arm (task #1567; #1522 fixed the body: on Up
+ * the ROM decrements +0x4AC BEFORE PlayGlobalSound, the store sitting in the jal
+ * delay slot, and the mask is an s32 parameter). The last 8/68 words were the
+ * final table read, and the cause was the table's TYPE: indexing a `u8[]` cast
+ * to GuiWeaponSlotEntry * builds `(plus (mult idx 10) base)`, and CSE keeps a
+ * known-constant base second, so the sum took the product's register. A
+ * GuiWeaponSlotEntry[] array goes through expand's ARRAY_REF path, which builds
+ * `(plus base offset)` = the ROM's `addu $v0,$v0,$a0` and its allocation.
+ * Plain C, no device. (Measured on the way: a pointer local `tbl += row` reaches
+ * 1/68, the same addu operand order, and an empty tied fence on `tbl` then
+ * closes it. The typed array closes it without the fence. Declaring
+ * PlayGlobalSound void instead of implicit int makes it 20/68: the ROM's TU saw
+ * a value-returning declaration.)
+/* GUARD (task #1567): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00344E08)
+S136OS_SLOT(func_00344E08);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_00344E08, unit objdiff): 64.16%,
    41/76 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd ra, 0x8(sp)' vs '').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-extern u8 D_1AA830[];
+   not byte-exact on that arm. */
+extern GuiWeaponSlotEntry D_1AA830[];
 void func_00344E08(void *w, s32 flags) {
     if (flags & 0x1000) {
         PlayGlobalSound(3, 0, 0);
@@ -9307,7 +9346,7 @@ void func_00344E08(void *w, s32 flags) {
         }
     }
 
-    *(s32 *)((char *)w + 0x4B4) = ((GuiWeaponSlotEntry *)D_1AA830)[*(s32 *)((char *)w + 0x4AC)].weaponId;
+    *(s32 *)((char *)w + 0x4B4) = D_1AA830[*(s32 *)((char *)w + 0x4AC)].weaponId;
 }
 #endif
 
@@ -9317,18 +9356,31 @@ void func_00344E08(void *w, s32 flags) {
  * plays sound 3. The shared wrap exits carry path-specific constants (inlined
  * here). Finally records the (row + col*4)'th 0xA-stride entry's +6 halfword from
  * D_25E308 at +0x4B4. */
-/* task #1522 (s136os arm, verify_match_unit vs ROM; not promoted): #else respelled
+/* Params: w = the weapon-select screen; flags = D-pad mask. Returns nothing.
+ * MATCHED byte-exact on the s136os arm (task #1567; #1522 respelled the body
  * with the mask as an s32 parameter and the column/row updates as direct field
- * expressions (a `col` local landed in $a1). Residual 9/90: the final table read's
- * register assignment. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344F18);
+ * expressions, since a `col` local landed in $a1). The last 9/90 words were the
+ * final table read, with the same cause as func_00344E08: D_25E308 is now
+ * declared GuiWeaponSlotEntry[] and indexed directly, so expand builds
+ * `(plus base offset)` and the sum ties to the base register as in the ROM
+ * (`addu $v1,$v1,$v0`). Plain C, no device. (Measured on the way: a pointer
+ * local `tbl += row + col * 4` reaches 1/90, the addu operand order. An empty
+ * tied fence on `tbl` fixes that order but moves the allocation and the
+ * `ld $ra` slot, 8-11/90 depending on where it sits, and EE_REG pins on tbl/row
+ * on top of it reach 4/90.)
+/* GUARD (task #1567): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00344F18)
+S136OS_SLOT(func_00344F18);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_00344F18, unit objdiff): 38.98%,
    82/119 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd ra, 0x8(sp)' vs 'daddu s0, a0, zero').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-extern u8 D_25E308[];
+   not byte-exact on that arm. */
+extern GuiWeaponSlotEntry D_25E308[];
 void func_00344F18(void *w, s32 flags) {
     if (flags & 0x1000) {            /* LEFT: col-- */
         PlayGlobalSound(3, 0, 0);
@@ -9376,7 +9428,7 @@ void func_00344F18(void *w, s32 flags) {
         }
     }
     *(s32 *)((char *)w + 0x4B4) =
-        ((GuiWeaponSlotEntry *)D_25E308)[*(s32 *)((char *)w + 0x4AC) + *(s32 *)((char *)w + 0x4B0) * 4].weaponId;
+        D_25E308[*(s32 *)((char *)w + 0x4AC) + *(s32 *)((char *)w + 0x4B0) * 4].weaponId;
 }
 #endif
 
@@ -9713,8 +9765,10 @@ _Static_assert(sizeof(GuiScreenDesc) == 0x5C, "GuiScreenDesc must be 0x5C under 
 
 extern void func_003380B8(void *desc);   /* GUI screen populator (consumer) */
 
-/* per-builder label consts (address-taken) */
-extern u8 D_25E308[], D_1AA850[], D_1AA890[], D_1AA830[];
+/* per-builder label consts (address-taken); D_25E308 / D_1AA830 are also the
+ * weapon-select grid slot tables read by func_00344F18 / func_00344E08 */
+extern GuiWeaponSlotEntry D_25E308[], D_1AA830[];
+extern u8 D_1AA850[], D_1AA890[];
 /* per-builder 7-global layout blocks: first two read by VALUE, last five by ADDRESS */
 extern s32 D_1AE2F0, D_1AE2F4; extern u8 D_1AE2F8[8], D_1AE300[8], D_1AE308[8], D_1AE310[8], D_1AE318[8];
 extern s32 D_1AE320, D_1AE324; extern u8 D_1AE328[8], D_1AE330[8], D_1AE338[8], D_1AE340[8], D_1AE348[8];
