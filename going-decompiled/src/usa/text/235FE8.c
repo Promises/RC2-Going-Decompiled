@@ -318,10 +318,13 @@ extern s32 D_1ADC6C;                    /* GUI y-offset (int, used as float) */
 extern s32 D_1ADC70;                    /* GUI y per-counter step (int multiplier) */
 /* defined later in-unit; forward-declared for func_0033A8F0's earlier #else use */
 extern void func_0033C060(void *p, f32 a, f32 b);
-extern void func_0033BE70(void *p, s32 flags);
+/* func_0033BE70 takes ONE argument: its ROM body never reads $a1 (task #1521).
+ * Callers that passed a second (flags) argument compiled to different callee-save
+ * allocation than the ROM (func_0033F3F0, func_0033F610). */
+extern void func_0033BE70(void *p);
 /* color-pulse: blends color1/color2 by a period counter, returns packed RGBA (d1) */
 extern u32 func_002AA3F0(u32 color1, u32 color2, s32 period, s32 counterSel, s32 reset);
-/* func_00338CD8 (void*,s32,f32,f32,s32) + func_0033BE70 (void*,s32) are defined
+/* func_00338CD8 (void*,s32,f32,f32,s32) + func_0033BE70 (void*) are defined
  * later in this unit, before their #else callers below — no extern needed. */
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336068);
@@ -2404,7 +2407,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338F88);
    217/303 insns differ. Residual: UNKNOWN-daddu + gp/abs-mixed symbol (first differing insn: '' vs 'daddu s0, a5, zero').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
-extern void func_00280B48(void *layout, u32 color, const char *text, s32 flag);
+extern void func_00280B48(void *layout, u64 color, const char *text, s32 flag);
 extern void func_00280BB8(void *layout, u32 color, const char *text, s32 flag);
 extern void func_00280C28(void *layout, u32 color, const char *text, s32 flag);
 extern void func_0027F208(s32 top, s32 bottom, s32 left, s32 right, s32 thickness,
@@ -3165,7 +3168,7 @@ s32 func_0033A8F0(void *w) {
     f32 *a;
 
     func_0033C060(sub, anchor[0], anchor[1]);
-    ((void (*)(void *))func_0033BE70)(sub);
+    func_0033BE70(sub);
     if (g_padButtonsPressedSplit & 0x5000) {
         func_002AA3F0(0, 0, 1, 0, 1);
     }
@@ -3836,7 +3839,8 @@ void func_0033BE68(void *p, s32 v) {
  *  - When *(p+0x2C0) is set, place the title (p+0x198), body (p+0x248) and
  *    footer (p+0x1F0) at the origin offset by the (x,y) bound pairs at
  *    +0x2A8/+0x2AC, +0x2B8/+0x2BC and +0x2B0/+0x2B4 respectively.
- * The flags second argument is unused by this method. */
+ * Takes the box only: the ROM body never reads $a1, and the callers that
+ * match byte-exact pass one argument (task #1521). */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033BE70);
 #else
@@ -3846,12 +3850,11 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033BE70);
    not byte-exact, so the arm stays #else. */
 /* TODO(match): functional equivalent - not byte-exact; 4-callee-save + $f20
    saved-FPR frame wall. */
-void func_0033BE70(void *p, s32 flags) {
+void func_0033BE70(void *p) {
     s32 i;
     f32 *origin;
     GuiElement *row = (GuiElement *)((char *)p + 0xC);
     s16 *active = (s16 *)((char *)p + 0x188);
-    (void)flags;
     for (i = 0; i <= 4; i++) {
         if (active[i] != 0) {
             origin = *(f32 **)p;
@@ -4361,7 +4364,7 @@ s32 func_0033CEE0(void *w, s32 flags) {
     f32 *anchor;
     s16 origX, origY;
 
-    func_0033BE70(box, flags);
+    func_0033BE70(box);
     anchor = *(f32 **)((char *)w + 0x2DC);
     func_0033C060(box, anchor[0], anchor[1]);
 
@@ -4399,6 +4402,21 @@ s32 func_0033CEE0(void *w, s32 flags) {
 #undef SCREEN_PAN
 #endif
 
+/* D_1ADDA8: the two string ids an option caption chooses between (off/on, or
+ * the two states of a one-shot flag). The ROM's caption drawers copy it whole
+ * into a stack local (an 8-byte unaligned ldl/ldr block copy) and index the
+ * copy, so it is declared as the 8-byte pair rather than a byte array.
+ * EE: section(".data") is an ADDRESSING-MODEL DEVICE (RULING #8620): cc1 -G8
+ * would treat the 8-byte object as small data and address it $gp-relative,
+ * where the ROM splits %hi/%lo; the attribute moves no data and emits nothing,
+ * and the relocations name D_1ADDA8. */
+typedef struct { s32 id[2]; } CaptionIdPair;
+#ifndef TARGET_NATIVE
+extern CaptionIdPair D_1ADDA8 __attribute__((section(".data")));
+#else
+extern CaptionIdPair D_1ADDA8;
+#endif
+
 /* func_0033D070: draw the progressive-scan option screen. Lays out the box body
  * (func_0033BF90(e+8)), formats the D_1ADDB0 template with the fixed label 0x307B
  * plus the on/off id from D_1ADDA8 selected by g_bProgressiveScan into a scratch
@@ -4414,26 +4432,42 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D070);
    83/104 insns differ. Residual: UNKNOWN-addiu + movn/movz, gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0xa0' vs 'addiu sp, sp, -0x80').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
-extern void func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
+extern void func_002801B8(s32 x, s32 y, u64 color, const char *text, s32 flag);
 extern void func_00280C98(void *layout, s32 x, s32 y, s32 a, s32 b, s32 c, s32 d,
                           s32 e, s32 f);
-extern void func_00280B48(void *layout, u32 color, const char *text, s32 flag);
-extern u8 D_1ADDA8[], D_1ADDB0[];
-extern s32 g_screenWidth, g_bProgressiveScan, g_swapGadgetItemIndex;
+extern void func_00280B48(void *layout, u64 color, const char *text, s32 flag);
+extern u8 D_1ADDB0[];
+/* g_screenWidthAbs: an assembler alias of g_screenWidth for the one read here,
+ * which the ROM makes in the absolute `lui rX; lw rX,%lo(rX)` macro form while
+ * other functions of this unit (func_00343AF8) read the same word $gp-relative.
+ * The `.extern ,16` on the alias, not on g_screenWidth, keeps those other reads
+ * small; gas resolves the alias back to g_screenWidth, the ROM's relocation
+ * (the g_timerHudYScale device above, tasks #948/#978). The scale float is
+ * read through g_timerHudYScale (+0x8A) for the same reason. */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_screenWidthAbs, 16\n\tg_screenWidthAbs = g_screenWidth");
+extern s32 g_screenWidthAbs;
+#define CAPTION_SCREEN_WIDTH g_screenWidthAbs
+#define CAPTION_GUI_SCALE g_timerHudYScale
+#else
+extern s32 g_screenWidth, g_swapGadgetItemIndex;
+#define CAPTION_SCREEN_WIDTH g_screenWidth
+#define CAPTION_GUI_SCALE (*(f32 *)((char *)&g_swapGadgetItemIndex + 0x8A))
+#endif
+extern s32 g_bProgressiveScan;
 void func_0033D070(void *e) {
     char buf[64];
+    CaptionIdPair ids;
     u8 layout[32];
-    s32 s1, s2;
     f32 scale;
 
     func_0033BF90((char *)e + 8);
+    ids = D_1ADDA8;
+    func_00115DA8(buf, (const char *)D_1ADDB0, (const char *)GetLocalizedString(0x307B),
+                  (const char *)GetLocalizedString(ids.id[g_bProgressiveScan ? 1 : 0]));
+    func_002801B8(CAPTION_SCREEN_WIDTH >> 1, 0x8C, 0x80F0F0F0, buf, -1);
 
-    s1 = GetLocalizedString(0x307B);
-    s2 = GetLocalizedString(*(s32 *)(D_1ADDA8 + (g_bProgressiveScan ? 4 : 0)));
-    func_00115DA8(buf, (const char *)D_1ADDB0, (const char *)s1, (const char *)s2);
-    func_002801B8(g_screenWidth >> 1, 0x8C, 0x80F0F0F0, buf, -1);
-
-    scale = *(f32 *)((char *)&g_swapGadgetItemIndex + 0x8A);
+    scale = CAPTION_GUI_SCALE;
     func_00280C98(layout, (s32)(scale * 170.0f + 0.5f),
                   (s32)(scale * 379.0f + 0.5f), 0x2C, 0x1D4, 0xFE, 0xDE, 0x14, 3);
     func_00280B48(layout, 0x80F0F0F0, (const char *)GetLocalizedString(0x3136), -1);
@@ -4516,6 +4550,31 @@ void func_0033D1F8(void *w, GuiPool *pool) {
 }
 #endif
 
+/* GUI_OPTION(type, sym, off): an option flag in the block based at D_1A7B9C
+ * (bytes +0x0..+0x2, words D_1A7BAC/BB0/BB4 at +0x10/+0x14/+0x18, bytes
+ * D_1A7BB9..BBB at +0x1D..+0x1F). D_1A7B9C is only the lowest member this unit
+ * names, not a proven struct start.
+ * EE: an OFFSET-ADDRESSING DEVICE, used per site where measured (task #1521).
+ * Spelled by name, cc1 sees a one-word small-data store and puts it in the
+ * delay slot of the following branch; the file-scope `.extern ,16` then makes
+ * it a two-word `lui $at` macro, which the assembler hoists out of the slot and
+ * replaces with a nop. Spelled base+offset, cc1 leaves the store out of an
+ * unconditional branch's slot and fills that slot from the branch target, as
+ * the ROM does (func_0033D5D8 rows 0-2, func_0033DB60/func_0033E8B0 row 0), and
+ * schedules func_0033D320's toggle so the call's last argument fills its slot.
+ * That is consistent with FACT #8386 (cc1 delay-slots a small symbol's access
+ * only when it carries no offset), but NOT a rule: func_0033D5D8's store before
+ * BuildCameraProjection matches only by name, because the offset spelling moves
+ * it into that jal's slot. The relocation names D_1A7B9C+off, which resolves to
+ * the named symbol's address (verify_match_unit resolves addends). Native: the
+ * plain named variable. */
+#ifndef TARGET_NATIVE
+extern u8 D_1A7B9C;
+#define GUI_OPTION(type, sym, off) (*(type *)((u8 *)&D_1A7B9C + (off)))
+#else
+#define GUI_OPTION(type, sym, off) (sym)
+#endif
+
 /* func_0033D320: re-layout this dialog-box screen and (on first open) chime.
  *  - Run the dialog-box layout func_0033BE70 on the embedded box at p+0x8.
  *  - Re-feed it the two floats of the vector at *(p+0x2DC) via func_0033C060.
@@ -4523,26 +4582,30 @@ void func_0033D1F8(void *w, GuiPool *pool) {
  *    clear, toggle the global one-shot flag D_1A7BB9, play the open chime
  *    (PlayGlobalSound(4,0,0)) and rebuild the camera projection.
  * Returns bit 6 of the flags argument. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D320);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033D320)
+S136OS_SLOT(func_0033D320);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033D320, unit objdiff): 89.45%,
-   13/42 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd s0, 0x0(sp)' vs '').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame +
-   branch-likely (beql) guard wall. */
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1521; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object). The earlier #else was not the ROM's code: it passed a second (flags)
+   argument to func_0033BE70, which takes one; and the D_1A7BB9 toggle is
+   spelled through GUI_OPTION (base+offset), so cc1 keeps the store out of the
+   PlayGlobalSound delay slot as the ROM does.
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
 extern void BuildCameraProjection(void);
 extern u8 D_1A7BB9;
 s32 func_0033D320(void *p, s32 flags) {
     void *box = (char *)p + 0x8;
     f32 *v;
-    func_0033BE70(box, flags);
+    func_0033BE70(box);
     v = *(f32 **)((char *)p + 0x2DC);
     func_0033C060(box, v[0], v[1]);
     if ((flags & 0x40) != 0 && *(s32 *)((char *)p + 0x2D8) == 0) {
-        D_1A7BB9 = (D_1A7BB9 < 1);
+        GUI_OPTION(u8, D_1A7BB9, 0x1D) = (GUI_OPTION(u8, D_1A7BB9, 0x1D) == 0);
         PlayGlobalSound(4, 0, 0);
         BuildCameraProjection();
     }
@@ -4555,24 +4618,30 @@ s32 func_0033D320(void *p, s32 flags) {
  * (the fixed 0x307A plus one of the two ids in D_1ADDA8 selected by the one-shot
  * flag D_1A7BB9) into a scratch buffer, then draws it at (0x100, 0xAA) in colour
  * 0x80F0F0F0 via func_002801B8. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D3C0);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033D3C0)
+S136OS_SLOT(func_0033D3C0);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033D3C0, unit objdiff): 50.07%,
-   36/49 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: 'addiu sp, sp, -0xb0' vs 'addiu sp, sp, -0x90').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-extern void func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
-extern u8 D_1ADDA8[], D_1ADDB0[], D_1A7BB9;
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1521; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object). The earlier #else was not the ROM's code: it indexed D_1ADDA8 in
+   place, where the ROM copies the 8-byte id pair into a stack local (an
+   unaligned ldl/ldr block copy) and indexes the copy; and the colour argument
+   is 64-bit (0x80F0F0F0 is loaded zero-extended). The ROM calls sprintf, the
+   same address as func_00115DA8.
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
+extern void func_002801B8(s32 x, s32 y, u64 color, const char *text, s32 flag);
+extern u8 D_1ADDB0[], D_1A7BB9;
 void func_0033D3C0(void *e) {
     char buf[128];
-    s32 s1, s2;
+    CaptionIdPair ids;
 
     func_0033BF90((char *)e + 8);
-
-    s1 = GetLocalizedString(0x307A);
-    s2 = GetLocalizedString(*(s32 *)(D_1ADDA8 + (D_1A7BB9 ? 4 : 0)));
-    func_00115DA8(buf, (const char *)D_1ADDB0, (const char *)s1, (const char *)s2);
+    ids = D_1ADDA8;
+    func_00115DA8(buf, (const char *)D_1ADDB0, (const char *)GetLocalizedString(0x307A),
+                  (const char *)GetLocalizedString(ids.id[D_1A7BB9 ? 1 : 0]));
     func_002801B8(0x100, 0xAA, 0x80F0F0F0, buf, -1);
 }
 #endif
@@ -4657,22 +4726,30 @@ void func_0033D4B0(void *w, GuiPool *pool) {
  * the option for the current row: 0 -> word D_1A7BAC, 1 -> word D_1A7BB0,
  * 2 -> D_1A7BB4 = (D_1A7BB4+1)%3, 3 -> byte D_1A7BB9 + BuildCameraProjection().
  * Returns bit 6 of flags. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D5D8);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033D5D8)
+S136OS_SLOT(func_0033D5D8);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033D5D8, unit objdiff): 73.80%,
-   49/112 insns differ. Residual: UNKNOWN-sd + movn/movz (first differing insn: 'sd s0, 0x0(sp)' vs '').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1521; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object). The earlier #else was not the ROM's code: the row dispatch was an
+   if-chain where the ROM has a switch case tree; func_0033BE70 got a second
+   argument it does not take; and the three word toggles are spelled through
+   GUI_OPTION so their stores stay out of the branch delay slots (the ROM fills
+   them from the branch target). The D_1A7BB9 store before BuildCameraProjection
+   stays spelled by name: measured, the offset spelling moves it into the jal
+   slot, which the ROM does not.
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 extern void BuildCameraProjection(void);
 extern s32 D_1A7BAC, D_1A7BB0, D_1A7BB4;
 extern u8 D_1A7BB9;
 s32 func_0033D5D8(void *w, s32 flags) {
     void *box = (char *)w + 0x8;
     f32 *anchor;
-    s32 sel;
 
-    func_0033BE70(box, flags);
+    func_0033BE70(box);
     anchor = *(f32 **)((char *)w + 0x2DC);
     func_0033C060(box, anchor[0], anchor[1]);
 
@@ -4684,16 +4761,20 @@ s32 func_0033D5D8(void *w, s32 flags) {
         *(s32 *)((char *)w + 0x2D8) = (*(s32 *)((char *)w + 0x2D8) + 1) % 4;
     } else if (flags & 0x40) {
         PlayGlobalSound(4, 0, 0);
-        sel = *(s32 *)((char *)w + 0x2D8);
-        if (sel == 0) {
-            D_1A7BAC = (D_1A7BAC == 0) ? 1 : 0;
-        } else if (sel == 1) {
-            D_1A7BB0 = (D_1A7BB0 == 0) ? 1 : 0;
-        } else if (sel == 2) {
-            D_1A7BB4 = (D_1A7BB4 + 1) % 3;
-        } else if (sel == 3) {
-            D_1A7BB9 = (D_1A7BB9 == 0) ? 1 : 0;
+        switch (*(s32 *)((char *)w + 0x2D8)) {
+        case 0:
+            GUI_OPTION(s32, D_1A7BAC, 0x10) = (GUI_OPTION(s32, D_1A7BAC, 0x10) == 0);
+            break;
+        case 1:
+            GUI_OPTION(s32, D_1A7BB0, 0x14) = (GUI_OPTION(s32, D_1A7BB0, 0x14) == 0);
+            break;
+        case 2:
+            GUI_OPTION(s32, D_1A7BB4, 0x18) = (GUI_OPTION(s32, D_1A7BB4, 0x18) + 1) % 3;
+            break;
+        case 3:
+            D_1A7BB9 = (D_1A7BB9 == 0);
             BuildCameraProjection();
+            break;
         }
     }
     return (flags >> 6) & 1;
@@ -4714,7 +4795,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D780);
    162/189 insns differ. Residual: UNKNOWN-addiu + movn/movz, gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x110' vs 'addiu sp, sp, -0x100').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
-extern u8   D_1ADDF8[], D_1ADE00[], D_1ADE08[], D_1ADDA8[], D_1ADDB0[];
+extern u8   D_1ADDF8[], D_1ADE00[], D_1ADE08[], D_1ADDB0[];
 extern s32  D_1A7BAC, D_1A7BB0, D_1A7BB4;
 extern u8   D_1A7BB9;
 extern s32  D_1ADDD8, D_1ADDDC, D_1ADDE0, D_1ADDE4, D_1ADDE8, D_1ADDEC, D_1ADDF0, D_1ADDF4;
@@ -4846,33 +4927,44 @@ void GuiDialogBoxVariantBInit(void *w, GuiPool *pool) {
  * (0x1000|0x4000) plays move sound 3 + cycles selection +0x2D8 = (sel+1)%2; on
  * confirm (0x40) plays sound 4 + toggles the per-row option flag (D_1A7B9D for
  * row 0, D_1A7B9C for row 1). Returns bit 6 of flags. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DB60);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033DB60)
+S136OS_SLOT(func_0033DB60);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033DB60, unit objdiff): 78.65%,
-   25/69 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd s0, 0x0(sp)' vs '').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1521; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object). The earlier #else was not the ROM's code: it merged the two input
+   tests into one (flags & 0x5000); the ROM tests 0x1000 and 0x4000 separately
+   (two arms with identical bodies that cc1 cross-jumps), dispatches the row
+   with a switch, and calls func_0033BE70 with one argument. The case-0 store is
+   spelled through GUI_OPTION (branch delay slot, see GUI_OPTION).
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 extern u8 D_1A7B9C, D_1A7B9D;
 s32 func_0033DB60(void *w, s32 flags) {
     void *box = (char *)w + 0x8;
     f32 *anchor;
-    s32 sel;
 
-    func_0033BE70(box, flags);
+    func_0033BE70(box);
     anchor = *(f32 **)((char *)w + 0x2DC);
     func_0033C060(box, anchor[0], anchor[1]);
 
-    if ((flags & 0x1000) || (flags & 0x4000)) {
+    if (flags & 0x1000) {
+        PlayGlobalSound(3, 0, 0);
+        *(s32 *)((char *)w + 0x2D8) = (*(s32 *)((char *)w + 0x2D8) + 1) % 2;
+    } else if (flags & 0x4000) {
         PlayGlobalSound(3, 0, 0);
         *(s32 *)((char *)w + 0x2D8) = (*(s32 *)((char *)w + 0x2D8) + 1) % 2;
     } else if (flags & 0x40) {
         PlayGlobalSound(4, 0, 0);
-        sel = *(s32 *)((char *)w + 0x2D8);
-        if (sel == 0) {
-            D_1A7B9D = (D_1A7B9D == 0) ? 1 : 0;
-        } else if (sel == 1) {
-            D_1A7B9C = (D_1A7B9C == 0) ? 1 : 0;
+        switch (*(s32 *)((char *)w + 0x2D8)) {
+        case 0:
+            GUI_OPTION(u8, D_1A7B9D, 0x1) = (GUI_OPTION(u8, D_1A7B9D, 0x1) == 0);
+            break;
+        case 1:
+            D_1A7B9C = (D_1A7B9C == 0);
+            break;
         }
     }
     return (flags >> 6) & 1;
@@ -4892,26 +4984,23 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DC68);
    94/104 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: 'addiu sp, sp, -0xe0' vs 'addiu sp, sp, -0xd0').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
-extern void func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
-extern u8 D_1ADDA8[], D_1ADDB0[], D_1A7B9C, D_1A7B9D;
+extern void func_002801B8(s32 x, s32 y, u64 color, const char *text, s32 flag);
+extern u8 D_1ADDB0[], D_1A7B9C, D_1A7B9D;
 void func_0033DC68(void *w) {
     char buf[128];
-    s32 sel = *(s32 *)((char *)w + 0x2D8);
-    u32 color;
-    s32 s0, s1;
+    CaptionIdPair ids;
+    s32 color;
 
     func_0033BF90((char *)w + 0x8);
-
-    color = (sel == 0) ? 0x80D0D0D0 : 0x70808080;
-    s0 = GetLocalizedString(0x2C75);
-    s1 = GetLocalizedString(*(s32 *)(D_1ADDA8 + (D_1A7B9D ? 4 : 0)));
-    func_00115DA8(buf, (const char *)D_1ADDB0, (const char *)s0, (const char *)s1);
+    color = (*(s32 *)((char *)w + 0x2D8) == 0) ? (s32)0x80D0D0D0 : 0x70808080;
+    ids = D_1ADDA8;
+    func_00115DA8(buf, (const char *)D_1ADDB0, (const char *)GetLocalizedString(0x2C75),
+                  (const char *)GetLocalizedString(ids.id[D_1A7B9D ? 1 : 0]));
     func_002801B8(0x100, 0x96, color, buf, -1);
 
-    color = (sel == 1) ? 0x80D0D0D0 : 0x70808080;
-    s0 = GetLocalizedString(0x2C74);
-    s1 = GetLocalizedString(*(s32 *)(D_1ADDA8 + (D_1A7B9C ? 4 : 0)));
-    func_00115DA8(buf, (const char *)D_1ADDB0, (const char *)s0, (const char *)s1);
+    color = (*(s32 *)((char *)w + 0x2D8) == 1) ? (s32)0x80D0D0D0 : 0x70808080;
+    func_00115DA8(buf, (const char *)D_1ADDB0, (const char *)GetLocalizedString(0x2C74),
+                  (const char *)GetLocalizedString(ids.id[D_1A7B9C ? 1 : 0]));
     func_002801B8(0x100, 0xBE, color, buf, -1);
 }
 #endif
@@ -5035,7 +5124,7 @@ s32 func_0033E070(void *w, s32 flags) {
     f32 *anchor;
     s32 sel, held, v;
 
-    func_0033BE70(box, flags);
+    func_0033BE70(box);
     anchor = *(f32 **)((char *)w + 0x36C);
     func_0033C060(box, anchor[0], anchor[1]);
     anchor = *(f32 **)((char *)w + 0x36C);
@@ -5093,9 +5182,19 @@ s32 func_0033E070(void *w, s32 flags) {
  * meter bar (func_00337350 on self+0x2DC/+0x324). Row 2: label 0x2DA7 + the
  * stereo/mono string (D_1ADE40[g_audioStereoMode?4:0]) formatted with D_1ADDB0,
  * centred at (0x100, 0xE1). Ghidra-verified. Faithful TARGET_NATIVE #else. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E308);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033E308)
+S136OS_SLOT(func_0033E308);
 #else
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1521; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object). The earlier #else was not the ROM's code: it copied D_1ADE40 with
+   memcpy into a byte array and cached the selected row; the ROM block-copies
+   the 8-byte id pair into a stack local (ldl/ldr) and re-reads the row word
+   (+0x2D8) for each row's colour.
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern s32 g_audioStereoMode;
@@ -5108,39 +5207,38 @@ extern u8 D_1ADDB0[];
    not byte-exact, so the arm stays #else. */
 extern void func_00280120(s32 x, s32 y, u32 colour, void *str, s32 flag); /* draw right-aligned */
 extern void func_00280250(s32 x, s32 y, u32 colour, void *str, s32 flag); /* draw centred */
-extern u8   D_1ADE40[], D_1ADE48[];
+extern u8   D_1ADE48[];
+/* D_1ADE40: the stereo/mono string-id pair, copied whole into a stack local
+ * like D_1ADDA8 (EE: section(".data"), the same addressing-model device). */
+#ifndef TARGET_NATIVE
+extern CaptionIdPair D_1ADE40 __attribute__((section(".data")));
+#else
+extern CaptionIdPair D_1ADE40;
+#endif
 
 void func_0033E308(void *self) {
     u8  *s = (u8 *)self;
     u8   buf[0x80];
-    u8   modeStrs[8];
-    s32  sel = *(s32 *)(s + 0x2D8);
-    s32  str;
+    CaptionIdPair modeStrs;
     u32  colour;
 
     func_0033BF90(s + 8);
 
-    colour = (sel == 0) ? 0x80D0D0D0 : 0x70808080;
-    memcpy(modeStrs, D_1ADE40, 8);
-    str = GetLocalizedString(0x2DA5);
-    func_00115DA8((char *)buf, (char *)D_1ADE48, (char *)str);
+    colour = (*(s32 *)(s + 0x2D8) == 0) ? 0x80D0D0D0 : 0x70808080;
+    modeStrs = D_1ADE40;
+    func_00115DA8((char *)buf, (char *)D_1ADE48, (char *)GetLocalizedString(0x2DA5));
     func_00280120(0x100, 0x91, colour, buf, -1);
     func_00337350(s + 0x2DC);
 
-    colour = (sel == 1) ? 0x80D0D0D0 : 0x70808080;
-    str = GetLocalizedString(0x2DA6);
-    func_00115DA8((char *)buf, (char *)D_1ADE48, (char *)str);
+    colour = (*(s32 *)(s + 0x2D8) == 1) ? 0x80D0D0D0 : 0x70808080;
+    func_00115DA8((char *)buf, (char *)D_1ADE48, (char *)GetLocalizedString(0x2DA6));
     func_00280120(0x100, 0xBE, colour, buf, -1);
     func_00337350(s + 0x324);
 
-    colour = (sel == 2) ? 0x80D0D0D0 : 0x70808080;
-    {
-        s32   label = GetLocalizedString(0x2DA7);
-        s32   idx = (g_audioStereoMode == 0) ? 0 : 4;
-        str = GetLocalizedString(*(s32 *)(modeStrs + idx));
-        func_00115DA8((char *)buf, (char *)D_1ADDB0, (char *)label, (char *)str);
-        func_00280250(0x100, 0xE1, colour, buf, -1);
-    }
+    colour = (*(s32 *)(s + 0x2D8) == 2) ? 0x80D0D0D0 : 0x70808080;
+    func_00115DA8((char *)buf, (char *)D_1ADDB0, (char *)GetLocalizedString(0x2DA7),
+                  (char *)GetLocalizedString(modeStrs.id[g_audioStereoMode ? 1 : 0]));
+    func_00280250(0x100, 0xE1, colour, buf, -1);
 }
 #endif
 
@@ -5246,7 +5344,7 @@ extern u8 D_1A7B9E;
 s32 func_0033E5E8(void *p, s32 flags) {
     void *box = (char *)p + 0x8;
     f32 *v;
-    func_0033BE70(box, flags);
+    func_0033BE70(box);
     v = *(f32 **)((char *)p + 0x2DC);
     func_0033C060(box, v[0], v[1]);
     if ((flags & 0x40) != 0 && *(s32 *)((char *)p + 0x2D8) == 0) {
@@ -5262,9 +5360,19 @@ s32 func_0033E5E8(void *p, s32 flags) {
  * 0x70808080. Lays out the box body (func_0033BF90(w+8)), formats D_1ADDB0 with
  * the fixed string 0x2C2F plus the D_1ADDA8 id selected by flag D_1A7B9E, draws it
  * at (0x100, 0xAA). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E680);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033E680)
+S136OS_SLOT(func_0033E680);
 #else
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1521; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object). The earlier #else was not the ROM's code: it indexed D_1ADDA8 in
+   place, where the ROM copies the 8-byte id pair into a stack local and indexes
+   the copy; the colour is a 32-bit value passed sign-extended in the 64-bit
+   colour argument.
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern u8 D_1A7B9E;
@@ -5273,19 +5381,18 @@ extern u8 D_1A7B9E;
    45/57 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: 'addiu sp, sp, -0xc0' vs 'addiu sp, sp, -0xa0').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
-extern void func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
-extern u8 D_1ADDA8[], D_1ADDB0[];
+extern void func_002801B8(s32 x, s32 y, u64 color, const char *text, s32 flag);
+extern u8 D_1ADDB0[];
 void func_0033E680(void *w) {
     char buf[128];
-    s32 s1, s2;
-    u32 color;
+    CaptionIdPair ids;
+    s32 color;
 
     func_0033BF90((char *)w + 0x8);
-
-    color = (*(s32 *)((char *)w + 0x2D8) == 0) ? 0x80D0D0D0 : 0x70808080;
-    s1 = GetLocalizedString(0x2C2F);
-    s2 = GetLocalizedString(*(s32 *)(D_1ADDA8 + (D_1A7B9E ? 4 : 0)));
-    func_00115DA8(buf, (const char *)D_1ADDB0, (const char *)s1, (const char *)s2);
+    color = (*(s32 *)((char *)w + 0x2D8) == 0) ? (s32)0x80D0D0D0 : 0x70808080;
+    ids = D_1ADDA8;
+    func_00115DA8(buf, (const char *)D_1ADDB0, (const char *)GetLocalizedString(0x2C2F),
+                  (const char *)GetLocalizedString(ids.id[D_1A7B9E ? 1 : 0]));
     func_002801B8(0x100, 0xAA, color, buf, -1);
 }
 #endif
@@ -5372,33 +5479,42 @@ void GuiQuitDialogInit(void *w, GuiPool *pool) {
  * cycle the selection +0x2D8 between 0 and 1; on confirm (0x40) play the confirm
  * sound and toggle the option flag for the current row (D_1A7BBA for row 0,
  * D_1A7BBB for row 1). Returns bit 6 of flags (the confirm/accept bit). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E8B0);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033E8B0)
+S136OS_SLOT(func_0033E8B0);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033E8B0, unit objdiff): 78.65%,
-   25/69 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd s0, 0x0(sp)' vs '').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1521; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object). The earlier #else was not the ROM's code: twin of func_0033DB60: two
+   separate input tests (not one 0x5000 test), a switch on the row, one-argument
+   func_0033BE70; the case-0 store is spelled through GUI_OPTION.
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 extern u8 D_1A7BBB;
 s32 func_0033E8B0(void *w, s32 flags) {
     void *box = (char *)w + 0x8;
     f32 *anchor;
-    s32 sel;
 
-    func_0033BE70(box, flags);
+    func_0033BE70(box);
     anchor = *(f32 **)((char *)w + 0x2DC);
     func_0033C060(box, anchor[0], anchor[1]);
 
-    if ((flags & 0x1000) || (flags & 0x4000)) {
+    if (flags & 0x1000) {
+        PlayGlobalSound(3, 0, 0);
+        *(s32 *)((char *)w + 0x2D8) = (*(s32 *)((char *)w + 0x2D8) + 1) % 2;
+    } else if (flags & 0x4000) {
         PlayGlobalSound(3, 0, 0);
         *(s32 *)((char *)w + 0x2D8) = (*(s32 *)((char *)w + 0x2D8) + 1) % 2;
     } else if (flags & 0x40) {
         PlayGlobalSound(4, 0, 0);
-        sel = *(s32 *)((char *)w + 0x2D8);
-        if (sel == 0) {
-            D_1A7BBA = (D_1A7BBA == 0) ? 1 : 0;
-        } else if (sel == 1) {
-            D_1A7BBB = (D_1A7BBB == 0) ? 1 : 0;
+        switch (*(s32 *)((char *)w + 0x2D8)) {
+        case 0:
+            GUI_OPTION(u8, D_1A7BBA, 0x1E) = (GUI_OPTION(u8, D_1A7BBA, 0x1E) == 0);
+            break;
+        case 1:
+            D_1A7BBB = (D_1A7BBB == 0);
+            break;
         }
     }
     return (flags >> 6) & 1;
@@ -5413,12 +5529,22 @@ s32 func_0033E8B0(void *w, s32 flags) {
  * (D_1A7BBA for line 1, D_1A7BBB for line 2). The currently-selected line
  * (*(w+0x2D8): 0 or 1) is drawn bright (0x80D0D0D0), the other dimmed
  * (0x70808080). Closes the batch (func_0027F790). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033E9B8);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033E9B8)
+S136OS_SLOT(func_0033E9B8);
 #else
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1521; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object). The earlier #else was not the ROM's code: it indexed D_1ADDA8 in
+   place and cached the selected row; the ROM copies the 8-byte id pair into a
+   stack local once, indexes the copy for both rows, and re-reads the row word
+   (+0x2D8) for each row's colour.
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
-extern u8 D_1ADDA8[], D_1ADDB0[];
+extern u8 D_1ADDB0[];
 extern u8 D_1A7BBB;
 /* (end of this body's declarations) */
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033E9B8, unit objdiff): 33.26%,
@@ -5429,25 +5555,23 @@ extern void func_0027F7A0(void);
 extern void func_0027F790(void);
 void func_0033E9B8(void *w) {
     char buf[128];
-    s32 sel = *(s32 *)((char *)w + 0x2D8);
-    s32 label, value;
-    u32 color;
+    CaptionIdPair ids;
+    s32 color;
 
     func_0033BF90((char *)w + 0x8);
     func_0027F7A0();
 
     /* line 1 (y=0x96), highlighted when line 0 is selected */
-    color = (sel == 0) ? 0x80D0D0D0 : 0x70808080;
-    label = GetLocalizedString(0x2C30);
-    value = GetLocalizedString(*(s32 *)&D_1ADDA8[D_1A7BBA ? 4 : 0]);
-    func_00115DA8(buf, (const char *)D_1ADDB0, (const char *)label, (const char *)value);
+    color = (*(s32 *)((char *)w + 0x2D8) == 0) ? (s32)0x80D0D0D0 : 0x70808080;
+    ids = D_1ADDA8;
+    func_00115DA8(buf, (const char *)D_1ADDB0, (const char *)GetLocalizedString(0x2C30),
+                  (const char *)GetLocalizedString(ids.id[D_1A7BBA ? 1 : 0]));
     func_002801B8(0x100, 0x96, color, buf, -1);
 
     /* line 2 (y=0xBE), highlighted when line 1 is selected */
-    color = (sel == 1) ? 0x80D0D0D0 : 0x70808080;
-    label = GetLocalizedString(0x3079);
-    value = GetLocalizedString(*(s32 *)&D_1ADDA8[D_1A7BBB ? 4 : 0]);
-    func_00115DA8(buf, (const char *)D_1ADDB0, (const char *)label, (const char *)value);
+    color = (*(s32 *)((char *)w + 0x2D8) == 1) ? (s32)0x80D0D0D0 : 0x70808080;
+    func_00115DA8(buf, (const char *)D_1ADDB0, (const char *)GetLocalizedString(0x3079),
+                  (const char *)GetLocalizedString(ids.id[D_1A7BBB ? 1 : 0]));
     func_002801B8(0x100, 0xBE, color, buf, -1);
 
     func_0027F790();
@@ -5547,7 +5671,7 @@ s32 func_0033EC80(void *w, s32 flags) {
     void *sub = (char *)w + 0x8;
     f32 *anchor;
 
-    func_0033BE70(sub, flags);   /* 2nd arg ignored by the callee */
+    func_0033BE70(sub);
     anchor = *(f32 **)((char *)w + 0x2DC);
     func_0033C060(sub, anchor[0], anchor[1]);
     if ((flags & 0x40) && *(s32 *)((char *)w + 0x2D8) == 0) {
@@ -5561,24 +5685,28 @@ s32 func_0033EC80(void *w, s32 flags) {
 /* func_0033ED18: draw a two-part formatted caption (twin of func_0033D3C0), with
  * the fixed string 0x2C30, the D_1ADDA8 id selected by flag D_1A7BBA, colour
  * 0x80F0F0F0, drawn at (0x100, 0xAA). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033ED18);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033ED18)
+S136OS_SLOT(func_0033ED18);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033ED18, unit objdiff): 50.07%,
-   36/49 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: 'addiu sp, sp, -0xb0' vs 'addiu sp, sp, -0x90').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-extern void func_002801B8(s32 x, s32 y, u32 color, const char *text, s32 flag);
-extern u8 D_1ADDA8[], D_1ADDB0[];
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1521; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object). The earlier #else was not the ROM's code: the same defect as
+   func_0033D3C0: the id pair D_1ADDA8 is block-copied to a stack local and
+   indexed there, and the colour argument is 64-bit.
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
+extern void func_002801B8(s32 x, s32 y, u64 color, const char *text, s32 flag);
+extern u8 D_1ADDB0[];
 void func_0033ED18(void *e) {
     char buf[128];
-    s32 s1, s2;
+    CaptionIdPair ids;
 
     func_0033BF90((char *)e + 0x8);
-
-    s1 = GetLocalizedString(0x2C30);
-    s2 = GetLocalizedString(*(s32 *)(D_1ADDA8 + (D_1A7BBA ? 4 : 0)));
-    func_00115DA8(buf, (const char *)D_1ADDB0, (const char *)s1, (const char *)s2);
+    ids = D_1ADDA8;
+    func_00115DA8(buf, (const char *)D_1ADDB0, (const char *)GetLocalizedString(0x2C30),
+                  (const char *)GetLocalizedString(ids.id[D_1A7BBA ? 1 : 0]));
     func_002801B8(0x100, 0xAA, 0x80F0F0F0, buf, -1);
 }
 #endif
@@ -5675,7 +5803,7 @@ s32 func_0033EF30(void *w, s32 flags) {
     void *sub = (char *)w + 0x8;
     f32 *anchor;
 
-    func_0033BE70(sub, flags);
+    func_0033BE70(sub);
     anchor = *(f32 **)((char *)w + 0x2DC);
     func_0033C060(sub, anchor[0], anchor[1]);
     if ((flags & 0x40) && *(s32 *)((char *)w + 0x2D8) == 0) {
@@ -5778,7 +5906,7 @@ s32 func_0033F128(void *w, s32 flags) {
     void *sub = (char *)w + 0x8;
     f32 *anchor;
 
-    func_0033BE70(sub, flags);
+    func_0033BE70(sub);
     anchor = *(f32 **)((char *)w + 0x2DC);
     func_0033C060(sub, anchor[0], anchor[1]);
     if ((flags & 0x40) && *(s32 *)((char *)w + 0x2D8) == 0) {
@@ -5920,21 +6048,31 @@ void func_0033F3B8(void *p, void *records) {
  * func_0033C060, set the outer element's (+0x2E0) value from arg1, then place it
  * at the anchor via GuiMenuListSetOrigin. The anchor is re-read for each placement.
  * Returns bit 6 of arg1. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F3F0);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033F3F0)
+S136OS_SLOT(func_0033F3F0);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033F3F0, unit objdiff): 53.50%,
-   35/40 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x30' vs 'addiu sp, sp, -0x20').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1521; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object). The earlier #else was not the ROM's code: it passed a second (flags)
+   argument to func_0033BE70, which takes one (the extra argument changes cc1's
+   callee-save allocation); and the anchor is re-read into a second local
+   (origin), as one reused local makes cc1 allocate $2 where the ROM has $3.
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 s32 func_0033F3F0(void *w, s32 arg1) {
+    void *box = (char *)w + 0x8;
+    void *list = (char *)w + 0x2E0;
     f32 *anchor;
-    func_0033BE70((char *)w + 0x8, arg1);   /* 2nd arg (flags) is ignored by the callee */
+    f32 *origin;
+
+    func_0033BE70(box);
     anchor = *(f32 **)((char *)w + 0x3BC);
-    func_0033C060((char *)w + 0x8, anchor[0], anchor[1]);
-    GuiMenuListHandleInput((char *)w + 0x2E0, arg1);
-    anchor = *(f32 **)((char *)w + 0x3BC);
-    GuiMenuListSetOrigin((char *)w + 0x2E0, anchor[0], anchor[1]);
+    func_0033C060(box, anchor[0], anchor[1]);
+    GuiMenuListHandleInput(list, arg1);
+    origin = *(f32 **)((char *)w + 0x3BC);
+    GuiMenuListSetOrigin(list, origin[0], origin[1]);
     return (arg1 >> 6) & 1;
 }
 #endif
@@ -6037,20 +6175,23 @@ void func_0033F510(void *w, GuiPool *pool) {
 /* func_0033F610: forward the embedded dialog-box (p+0x8) to func_0033BE70, then
  * push the two floats from the vector at *(p+0x2D8) into it via func_0033C060.
  * Returns bit 6 of the flags argument. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F610);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033F610)
+S136OS_SLOT(func_0033F610);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033F610, unit objdiff): 52.52%,
-   15/28 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s2, a0, zero').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; 3-callee-save frame
-   wall. */
-extern void func_0033BE70(void *p, s32 flags);
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1521; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object). The earlier #else was not the ROM's code: it passed a second (flags)
+   argument to func_0033BE70, which takes one. That was the whole residual task
+   #1498 recorded as 'prologue save/move order only' (FACT #9200).
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
+extern void func_0033BE70(void *p);
 extern void func_0033C060(void *p, f32 a, f32 b);
 s32 func_0033F610(void *p, s32 flags) {
     f32 *v;
-    func_0033BE70((char *)p + 0x8, flags);
+    func_0033BE70((char *)p + 0x8);
     v = *(f32 **)((char *)p + 0x2D8);
     func_0033C060((char *)p + 0x8, v[0], v[1]);
     return (flags >> 6) & 1;

@@ -303,3 +303,14 @@ usa text/235FE8 func_0033A8F0
 usa text/235FE8 func_0033A678
 usa text/235FE8 GuiElementBaseInit
 usa text/235FE8 GuiConfirmPopupInit
+usa text/235FE8 func_0033D320
+usa text/235FE8 func_0033D3C0
+usa text/235FE8 func_0033D5D8
+usa text/235FE8 func_0033DB60
+usa text/235FE8 func_0033E308
+usa text/235FE8 func_0033E680
+usa text/235FE8 func_0033E8B0
+usa text/235FE8 func_0033E9B8
+usa text/235FE8 func_0033ED18
+usa text/235FE8 func_0033F3F0
+usa text/235FE8 func_0033F610
