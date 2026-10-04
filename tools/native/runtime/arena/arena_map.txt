@@ -2,7 +2,7 @@
 # storage symbol: g_dataArena  ==  __gamedata_start (linker)
 # seed: memcpy snapshot[rom_addr] -> g_dataArena[rom_addr - base]
 #       for rom_addr in [base, base+span).
-# base 0x133E70  span 0x14AA90  placed 1474  (const 11)
+# base 0x133E70  span 0x14AA90  placed 1487  (const 11)
 # columns: <symbol> <rom_addr> <arena_offset> [const]
 #   'const' tag = static rodata/string literal (see data_const.txt);
 #   NOT mutable state - the tester's effect-diff must EXCLUDE these.
@@ -233,7 +233,9 @@ g_vramTextureBase 0x1A72E4 0x73474
 g_vramTextureBase_28 0x1A730C 0x7349C
 D_001A7318 0x1A7318 0x734A8
 D_1A7318 0x1A7318 0x734A8
+g_nScreenWidth 0x1A7340 0x734D0
 g_screenWidth 0x1A7340 0x734D0
+g_nScreenHeight 0x1A7344 0x734D4
 g_screenHeight 0x1A7344 0x734D4
 g_screenCenterDefaultX 0x1A7348 0x734D8
 g_screenCenterDefaultY 0x1A734C 0x734DC
@@ -719,6 +721,8 @@ D_1AD968 0x1AD968 0x79AF8
 D_1AD988 0x1AD988 0x79B18
 D_1AD9A8 0x1AD9A8 0x79B38
 D_1AD9C8 0x1AD9C8 0x79B58
+g_guiTintEnabled 0x1AD9CC 0x79B5C
+g_guiTintRgb 0x1AD9D0 0x79B60
 g_GuiListRowVtable 0x1AD9D8 0x79B68
 D_1AD9F8 0x1AD9F8 0x79B88
 D_1ADA18 0x1ADA18 0x79BA8
@@ -1127,7 +1131,9 @@ g_debugMallocCursor 0x1B1800 0x7D990
 g_debugMallocEnd 0x1B1804 0x7D994
 g_pHudAssetHeader 0x1B1808 0x7D998
 g_hudIconMap 0x1B1810 0x7D9A0
+g_pHudIconMap 0x1B1810 0x7D9A0
 g_hudTextureSlots 0x1B1814 0x7D9A4
+g_pHudTextureSlots 0x1B1814 0x7D9A4
 g_hudClutSlots 0x1B1818 0x7D9A8
 g_hudMobyTableBase 0x1B182C 0x7D9BC
 g_hudMobySpawnStart 0x1B1830 0x7D9C0
@@ -1191,6 +1197,7 @@ g_vendorQtyRepeatTimers 0x1B21B8 0x7E348
 g_nVendorBuyQuantity 0x1B21C8 0x7E358
 g_frameArenaBase 0x1B2220 0x7E3B0
 g_frameDmaCursor 0x1B2228 0x7E3B8
+g_pFrameDmaCursor 0x1B2228 0x7E3B8
 g_sceneArenaCursor 0x1B2230 0x7E3C0
 g_frameArenaFlip 0x1B2234 0x7E3C4
 g_pWaterWaveGrids 0x1B2250 0x7E3E0
@@ -1213,6 +1220,7 @@ g_cameraShakeUp 0x1B52E0 0x81470
 g_cameraShakeRight 0x1B52F0 0x81480
 g_cameraShakeRoll 0x1B5300 0x81490
 g_activeCamera 0x1B5310 0x814A0
+g_cameraTriggerLatch 0x1B53E0 0x81570
 g_cameraHelperMoby 0x1B53E4 0x81574
 g_cameraTransitionState 0x1B5410 0x815A0
 g_cameraMatrix 0x1B54F0 0x81680
@@ -1228,6 +1236,9 @@ g_sceneFrame 0x1B87F4 0x84984
 g_nSceneSubChunkFrame 0x1B87F8 0x84988
 g_nSceneTotalFrames 0x1B8800 0x84990
 g_nSceneCastCount 0x1B8804 0x84994
+DAT_001b8808 0x1B8808 0x84998
+DAT_001b880c 0x1B880C 0x8499C
+g_sceneFmvStreamBase 0x1B880C 0x8499C
 g_pScenePlayerMoby 0x1B8814 0x849A4
 g_pSceneCameraKeys 0x1B8828 0x849B8
 g_pSceneData 0x1B882C 0x849BC
@@ -1276,8 +1287,10 @@ D_1C4EC0 0x1C4EC0 0x91050
 g_mapCache 0x1C4F20 0x910B0
 g_mapVertexData 0x1C4F20 0x910B0
 g_mapBitmapBuffer 0x1C4F28 0x910B8
+g_pMapBitmapBuffer 0x1C4F28 0x910B8
 D_001C4F30 0x1C4F30 0x910C0
 D_1C4F38 0x1C4F38 0x910C8
+g_pMapBlipList 0x1C4F40 0x910D0
 g_mapHasData 0x1C4F48 0x910D8
 D_1C4F4C 0x1C4F4C 0x910DC
 D_1C4F50 0x1C4F50 0x910E0
