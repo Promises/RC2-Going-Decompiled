@@ -2284,17 +2284,28 @@ S136OS_SLOT(func_00338A80);
  * the two child glyph elements at +0x10 (tag D_1ADB20, glyph 0x57, alpha 0.02,
  * colour 0x55F0C070) and +0x5C (tag D_1ADB30, glyph 0x58, colour 0x55F0C070), and
  * finishes by writing the +0xC vector's colour word 0x80F0F0F0, clearing +0x1B8,
- * and zeroing the +0x4 vector. Faithful TARGET_NATIVE #else (engine 2.96 = no
- * byte-match). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338AB8);
+ * and zeroing the +0x4 vector. The +0x8 vector is zeroed as floats and then
+ * has its colour word written over word 0: the ROM keeps both stores.
+ * MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+ * byte-exact (FACT #8810), no device. The lever (task #1588) is the
+ * GuiElementInit prototype below: GuiElementInit's definition sits behind its
+ * own S136OS_SLOT guard, so without it the call is an implicit-int call_value
+ * and reorg moves the colour `sw` after the second GuiElementInit's argument
+ * set-up into its delay slot (3/134 words differ; FACT #9266 lever 1).
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00338AB8)
+S136OS_SLOT(func_00338AB8);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_00338AB8, unit objdiff): 57.99%,
    122/159 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x40' vs 'addiu sp, sp, -0x30').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+   not byte-exact on that arm. */
 extern u8 D_1ADB20[], D_1ADB30[];
 extern char *g_guiInstance;
+extern void GuiElementInit(GuiElement *e, s32 tag, GuiPool *pool);
 void func_00338AB8(void *self, GuiPool *pool) {
     u8  *w = (u8 *)self;
     u32 *o;
@@ -3290,20 +3301,31 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
  * 0x80F0F0F0). Rows 2-9 get text-flag 0 except the last (+0x3F8) which gets flag 2.
  * Seven rows are seeded with localized strings (0x2BFB/0x2BF3/0x3129/0x2BFF/0x2C00/
  * 0x2C01/0x2BE5); row +0x3A0 points at the in-struct buffer +0x450. Sets the byte
- * flag D_1ADC78 = 0x12 and tail-calls GuiLevelInfoPanelTick. Faithful TARGET_NATIVE
- * #else (engine 2.96 = no byte-match); no pos/scale calls (no element-last risk). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiLevelInfoPanelInit);
+ * flag D_1ADC78 = 0x12 and tail-calls GuiLevelInfoPanelTick(self, 0). No pos/scale
+ * calls (no element-last risk).
+ * MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+ * byte-exact (FACT #8810), no device. The lever (task #1588) is the
+ * GuiElementSetGlyph prototype below: its definition sits behind its own
+ * S136OS_SLOT guard, so without it the call is an implicit-int call_value whose
+ * unused $v0 is live into the next insn, and the 0x12 for D_1ADC78 went to $v1
+ * where the ROM uses $v0 (2/276 words differ; FACT #9266 lever 1).
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiLevelInfoPanelInit)
+S136OS_SLOT(GuiLevelInfoPanelInit);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_GuiLevelInfoPanelInit, unit objdiff): 46.36%,
    237/336 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu v0, zero, 0x1' vs '').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+   not byte-exact on that arm. */
 extern char *g_guiInstance;
 extern u8 D_1ADBE8[], D_1ADBF0[], D_1ADBF8[], D_1ADC00[], D_1ADC08[], D_1ADC80[],
           D_1ADC90[], D_1ADC98[], D_1ADCA0[], D_1ADCA8[], D_1ADC10[], D_1ADC18[],
           D_1ADC28[], D_1ADC78[8];
 s32 GuiLevelInfoPanelTick(void *w, s32 flags);
+extern void GuiElementSetGlyph(GuiElement *e, s32 codepoint, s32 font);
 /* the panel's sub-elements, spelled at each use (the ROM materialises each
  * address where it is first needed) */
 #define PANEL_ELEM(off) ((GuiElement *)(s + (off)))
