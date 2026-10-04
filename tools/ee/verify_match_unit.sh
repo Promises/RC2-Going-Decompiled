@@ -28,7 +28,8 @@
 # The target.o is used only for its SHAPE (which function, how many words) and
 # as the argument-contract check — never as the byte oracle. Its function's
 # st_size is the ROM LENGTH (task #1531): a built symbol shorter than it is
-# DIFFERS (see LENGTH in the python below).
+# DIFFERS (see LENGTH in the python below). If that st_size is 0 the ROM length
+# is unknown and a compare with no differing word is UNVERIFIABLE (task #1566).
 #
 # RELOCATION ADDENDS: MIPS o32 is REL, not RELA — the addend lives IN PLACE in
 # the instruction's immediate field. A resolver that overwrites the immediate
@@ -39,7 +40,7 @@
 # SELFTEST (task #1004; until then it had none, as task #1000 recorded here).
 #   verify_match_unit.sh --selftest
 # runs THIS script's normal mode on committed subjects with BASE (arg 2) seeds,
-# crash, no-verdict, quarantine and mktemp probes, and then 27 one-line mutants of its own code, and prints
+# crash, no-verdict, quarantine and mktemp probes, and then 31 one-line mutants of its own code, and prints
 # `#### VMU-SELFTEST usa: PASS|FAIL`. Exit 0 PASS, 1 FAIL, 2 CANNOT RUN (fixture
 # assembly failed, or the usa flat ROM is unreachable). It never prints a
 # `<fn>: BYTE IDENTICAL|DIFFERS|UNVERIFIABLE` line: those are verdicts on a
@@ -134,6 +135,12 @@
 # (base a, target h) is the LONGER case, which stays rc 0 20/20; M29 = the
 # check fires on any length difference. H1 is the one row that shapes the
 # TARGET: arg 3's size, unlike its bytes, IS read (as the ROM length).
+# Added by task #1566: arg 3 with st_size 0 (objects az/hz, the fixture's
+# `nosize drops` line removed) gives no ROM length. H2 (base h, target hz) is
+# #1542's pair, rc 0 `19/19` before (M30's known answer); it and H3 (base a,
+# target az) must be rc 2 LENGTH UNKNOWN. H4 (A1's seed, target az) must stay
+# rc 1 at the flipped word; M31 = the rc 2 overriding a real DIFFERS. These
+# rows shape the target's SIZE only, as H1 does; its bytes are still unread.
 # Seed the BASE (arg 2), never the target (arg 3): arg 3's bytes are never
 # compared (FACT ledger-26262), so a target-seeded control cannot fail.
 #
@@ -156,6 +163,9 @@
 #                     `NO VERDICT:` line, task #1048; or mktemp failed:
 #                     an `INFRASTRUCTURE ERROR:` line, task #1121). NOT
 #                     a pass and NOT a fail; it is its own visible state.
+#                     Includes LENGTH UNKNOWN (task #1566): arg 3's symbol has
+#                     st_size 0, so the ROM length is unknown, and no compared
+#                     word differs; a differing word is still rc 1.
 #   3  USAGE/ARG    — bad arguments; e.g. a whole-unit .o passed as the target
 #
 # ⚠️ THESE BANDS ARE COMMIT-KEYED — CHECK YOUR CHECKOUT BEFORE TRUSTING THEM.
@@ -252,15 +262,20 @@ def say(s=""):
 # gt = the same without the alabel's .type    (target for g)
 # h  = SelectSceneSubChunk WITHOUT its last word (task #1531): a body one word
 #      SHORT whose 19 words all equal the ROM's (base for H0, target for H1)
+# az = a with no .size, hz = h with no .size (task #1566): st_size 0, so arg 3
+#      gives no ROM length (targets for H2-H4)
 OBJS = {"a": ["select_scene_sub_chunk"], "b": ["evaluate_progress_condition", "get_save_prompt_pending"],
         "be": ["evaluate_progress_condition"], "bg": ["get_save_prompt_pending"], "c": ["divdi3_clz_slice"],
         "e": ["camera_slot_straddle"], "f": ["elided_zero_run"], "g": ["inner_label_truncation"],
-        "gt": ["inner_label_truncation"], "h": ["select_scene_sub_chunk"]}
+        "gt": ["inner_label_truncation"], "h": ["select_scene_sub_chunk"],
+        "az": ["select_scene_sub_chunk"], "hz": ["select_scene_sub_chunk"]}
 # Fixture lines marked `# base only` are dropped from these (target-only) objects:
 # arg 3 must hold ONE `F .text` symbol, and an inner alabel is a second one.
 TARGET_ONLY = {"gt"}
 # Fixture lines marked `# short drops` are dropped from these (task #1531).
-SHORT = {"h"}
+SHORT = {"h", "hz"}
+# Fixture lines marked `# nosize drops` are dropped from these (task #1566).
+NOSIZE = {"az", "hz"}
 
 def obj(k):
     return "%s/%s.o" % (OUT, k)
@@ -273,7 +288,8 @@ def build():
             for p in parts:
                 f.write("".join(l for l in open("%s/%s.s" % (FIX, p))
                                 if (k not in TARGET_ONLY or "# base only" not in l)
-                                and (k not in SHORT or "# short drops" not in l)) + "\n")
+                                and (k not in SHORT or "# short drops" not in l)
+                                and (k not in NOSIZE or "# nosize drops" not in l)) + "\n")
         cmds.append("%s -o %s %s/%s.s" % (AS, obj(k), OUT, k))
     # X8's failing mktemp: first on PATH, prints nothing, exits 1 (task #1121).
     with open(FAKE_MKTEMP, "w") as f:
@@ -576,6 +592,18 @@ ROWS = [
      "base 1 word SHORT, its 19 words identical: LENGTH 19 vs 20, rc 1"),
     ("H1", A, "a", "h", None, None, 0, (20, None),
      "base LONGER than arg 3 (19 words): compared as before, rc 0 20/20"),
+    # Task #1566: arg 3's symbol has st_size 0 (target az/hz, the fixture's
+    # .size dropped), so the ROM length is unknown. H2 is #1542's pair, base h
+    # against a .size-less target: rc 0 `19/19` before #1566 (M30's known
+    # answer). H3 is the same with the full-length base: still undecidable,
+    # rc 2, whatever the base's length. H4 seeds the base: a differing compared
+    # word stays DIFFERS rc 1 at any ROM length (M31: rc 2 swallowing it).
+    ("H2", A, "h", "hz", None, None, 2, "LENGTH UNKNOWN: arg 3's func_00294920 has st_size 0",
+     "base h (19 words) vs a .size-less arg 3: LENGTH UNKNOWN, rc 2 (#1542)"),
+    ("H3", A, "a", "az", None, None, 2, "LENGTH UNKNOWN: arg 3's func_00294920 has st_size 0",
+     "base a (20 words) vs a .size-less arg 3: LENGTH UNKNOWN, rc 2"),
+    ("H4", A, "a", "az", w_seed(A, 0x00, lambda w: w ^ 1), None, 1, (0x294920,),
+     "+0x00 bit 0 flipped vs a .size-less arg 3: DIFFERS rc 1 at the word"),
 ]
 
 ADDR_RE = r"0x([0-9a-f]{8})(?:-0x([0-9a-f]{8}))?"          # one address or an inclusive range
@@ -786,6 +814,14 @@ MUTANTS = [
      "short = (isinstance(EXTENT, tuple) and 0 < EXTENT[1] < ROM_SIZE)",
      "short = (isinstance(EXTENT, tuple) and 0 < EXTENT[1] != ROM_SIZE > 0)",
      ["H1"], [("H1", 1, (), "LENGTH:")]),
+    # Task #1566. M30 is the tool before the unknown-ROM-length check; M31
+    # lets it override a real DIFFERS.
+    ("M30", "arg 3 st_size 0 not checked: a short body reads N/N (pre-#1566, #1542's 19/19)",
+     "rom_unknown = ROM_SIZE == 0", "rom_unknown = False",
+     ["H2", "H3"], [("H2", 0, None, "(19/19 words"), ("H3", 0, None, "(20/20 words")]),
+    ("M31", "an unknown ROM length overrides a differing compared word (rc 2, not DIFFERS)",
+     "if not bad and rom_unknown:", "if rom_unknown:",
+     ["H4"], [("H4", 2, None, "LENGTH UNKNOWN")]),
 ]
 TAIL = {"M19", "M20", "M24"}
 HEAD = {"M25"}
@@ -1659,11 +1695,23 @@ def coverage_warning():
 # built extent past the ROM's end is compared word for word against the ROM
 # that follows (the next function, or an alignment word), so it already reads
 # DIFFERS unless those bytes really are the ROM's (#1496). Unknown on either
-# side (st_size 0, F2's case; no target size) checks nothing and says nothing
-# new: the coverage WARN already covers an unknown built length (and M26's
+# side is handled apart: an unknown BUILT length (base st_size 0, F2's case)
+# checks nothing here, because the coverage WARN already covers it (and M26's
 # size-0-as-extent mutant keeps its pre-#1531 known answer, F2 `10/10`).
+# UNKNOWN ROM LENGTH (task #1566). Arg 3's symbol with st_size 0 gives no ROM
+# length, so SHORTER cannot be decided: base h (19 words) against a .size-less
+# arg 3 read `19/19 BYTE IDENTICAL` rc 0 (#1542). With no compared word
+# differing that is rc 2 UNVERIFIABLE, naming the function: the bytes seen
+# match, so it is not rc 1, and the length is unknown, so it is not rc 0. A
+# compared word that differs is still DIFFERS rc 1, decidable at any length.
+# Real arg 3 is a splat .s through glabel..endlabel, and endlabel emits .size:
+# 0 of 312 USA s136os rows and 0 of 2720 USA nonmatchings .s lack it (#1566).
+# The 26 real size-0 rows (alabels, D_ labels) are size 0 in the BASE (arg 2),
+# never arg 3: an alabel has no .s of its own, and the .s holding it is a
+# two-symbol arg 3, refused rc 3.
 ROM_SIZE = int(os.environ.get("TGT_FN_SIZE_HEX") or "0", 16)
 short = (isinstance(EXTENT, tuple) and 0 < EXTENT[1] < ROM_SIZE)
+rom_unknown = ROM_SIZE == 0
 
 compared = True
 bad = []
@@ -1674,7 +1722,7 @@ for va, w in resolved:
 
 nrel = sum(len(v) for v in relocs.values())
 warn = coverage_warning()
-if not bad and not short:
+if not bad and not short and not rom_unknown:
     placed = "".join(f"; {n} at 0x{a:08x}" for n, a in sorted(section_addr.items()))
     if warn is None:
         print(f"{FN}: BYTE IDENTICAL TO ROM ✅ ({len(resolved)}/{len(resolved)} words, {nrel} relocs resolved{placed})")
@@ -1694,6 +1742,15 @@ if not bad and not short:
         print(warn)
     verdict(MATCH)
 
+if not bad and rom_unknown:
+    print(f"{FN}: UNVERIFIABLE — LENGTH UNKNOWN: arg 3's {FN} has st_size 0, so the ROM function's length "
+          f"is unknown and a built body SHORTER than it cannot be told from a match; the {len(resolved)} "
+          f"compared words equal the ROM, which is NOT a verdict (pass arg 3 assembled through endlabel, "
+          f"which emits .size)")
+    if warn is not None:
+        print(warn)
+    verdict(UNVERIFIABLE)
+
 if short:
     print(f"{FN}: DIFFERS ❌ — LENGTH: the built symbol is {EXTENT[1] // 4} words (st_size 0x{EXTENT[1]:x}), "
           f"SHORTER than the ROM function's {ROM_SIZE // 4} words (arg 3's st_size 0x{ROM_SIZE:x}): "
@@ -1702,6 +1759,7 @@ if short:
           + ("" if warn is None else " ⚠️ (and some words were NOT COMPARED: see WARN)"))
 else:
     print(f"{FN}: DIFFERS ❌ — {len(bad)}/{len(resolved)} words differ from the ROM"
+          + ("" if not rom_unknown else " (and arg 3's st_size is 0, so the ROM length is unknown)")
           + ("" if warn is None else " ⚠️ (and some words were NOT COMPARED: see WARN)"))
 for va, w, rw in bad[:40]:
     print(f"  0x{va:08x}: built {w:08x}   rom {rw:08x}")

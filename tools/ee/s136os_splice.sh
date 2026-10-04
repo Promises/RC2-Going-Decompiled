@@ -66,7 +66,9 @@
 #     `nonmatching` header, which must equal its glabel..endlabel word count;
 #     an .s that disagrees with itself is an ORACLE refusal). Without it a
 #     short body spliced silently and only the image cmp saw it (#1509, #1512).
-#     On success each row prints a `length:` line.
+#     On success each row prints a `length:` line whose "built" number is
+#     the assembled st_size read from nm and whose "ROM" number is
+#     rom_size's, two separately sourced numbers (task #1566, length_lines).
 #   Every FATAL leaves <unit.s> untouched: the splice works on a copy.
 # THE COMPILE is `tools/ee/ee_cc1.sh s136`, the one place the C/C++ rule lives:
 # a `.c` unit runs cpp + 1.36 cc1 (the command lines this helper ran before);
@@ -252,6 +254,26 @@ length_check() {
     }' "$1" "$2"
 }
 
+# length_lines <nm -S file> <rows file>: the per-row success line (task
+# #1566), `<fn> length: built N words (assembled st_size 0x..) = ROM M words
+# (0x..)`. The two numbers come from different files: "built" from <nm -S
+# file> (the spliced unit as assembled), "ROM" from <rows file> (rom_size).
+# Before #1566 the caller echoed the ROM count in BOTH positions, so the line
+# could not disagree with anything. The relation printed is computed, `=` or
+# `!=`; on the real path length_check has already refused any `!=` row.
+length_lines() {
+  awk '
+    function hex(x,   i, c, v) { v = 0; x = tolower(x)
+      for (i = 1; i <= length(x); i++) { c = index("0123456789abcdef", substr(x, i, 1)); if (!c) return -1; v = v * 16 + c - 1 }
+      return v }
+    FNR == 1 { file++ }
+    file == 1 { if (NF == 4 && $3 ~ /^[Tt]$/) { sz[$4] = hex($2); cnt[$4]++ } next }
+    {
+      if (cnt[$1] != 1) { printf "%s length: built ? words (%d sized .text symbols in the assembled unit) != ROM %d words (0x%x)\n", $1, cnt[$1], $2 / 4, $2; next }
+      printf "%s length: built %d words (assembled st_size 0x%x) %s ROM %d words (0x%x)\n", $1, sz[$1] / 4, sz[$1], (sz[$1] == $2 ? "=" : "!="), $2 / 4, $2
+    }' "$1" "$2"
+}
+
 if [ "${1:-}" = "--selftest" ]; then
   # Arms: X is declared by the unit at 16 (a device) and by the solo TU at 4
   # -> no X line (FACT #8838's wall); Y is solo-only -> carried; Z is declared
@@ -324,6 +346,21 @@ if [ "${1:-}" = "--selftest" ]; then
       "12:") echo "  OK   arm 12: st_size 0x60 = ROM 0x60 -> admitted" ;;
       "13:func_002CE8A8: built 25 words (assembled st_size 0x64), ROM 24 words (0x60) — LONGER") echo "  OK   arm 13: 25 words vs ROM 24 -> refused: $v" ;;
       "14:func_002CE8A8: no sized .text symbol"*) echo "  OK   arm 14: no sized symbol -> refused: $v" ;;
+      *) echo "  FAIL arm $1: '$v'"; rc=1 ;;
+    esac
+  done
+  # Arms 15-16 (task #1566): the success line's "built" number is read from
+  # the nm file, not echoed from the ROM rows. 15 feeds an nm file (st_size
+  # 0x5c) that disagrees with the rows (ROM 0x60): the line must print 23
+  # built words and `!=`. The pre-#1566 line printed `built 24 words = ROM 24
+  # words` here, whatever nm said. 16: equal sizes print `=`.
+  for a in "15 0000005c" "16 00000060"; do
+    set -- $a
+    printf "000047a8 $2 T func_002CE8A8\n000047a8 t gcc2_compiled.\n" > "$T/nm"
+    v="$(length_lines "$T/nm" "$T/rows")"
+    case "$1:$v" in
+      "15:func_002CE8A8 length: built 23 words (assembled st_size 0x5c) != ROM 24 words (0x60)") echo "  OK   arm 15: nm 0x5c vs ROM 0x60 -> the line follows nm: $v" ;;
+      "16:func_002CE8A8 length: built 24 words (assembled st_size 0x60) = ROM 24 words (0x60)") echo "  OK   arm 16: nm 0x60 = ROM 0x60 -> $v" ;;
       *) echo "  FAIL arm $1: '$v'"; rc=1 ;;
     esac
   done
@@ -476,7 +513,5 @@ if [ -n "$BADL" ]; then
   printf '%s\n' "$BADL" | sed 's/^/    /' >&2
   exit 3
 fi
-while read -r f b; do
-  echo "s136os_splice: $REGION/$UNIT: $f length: built $((b / 4)) words = ROM $((b / 4)) words (assembled st_size; nonmatching header = glabel..endlabel words)"
-done < "$ROMSZ"
+length_lines "$TMP/len.nm" "$ROMSZ" | sed "s|^|s136os_splice: $REGION/$UNIT: |; s|\$|; ROM = nonmatching header = glabel..endlabel words|"
 cp "$OUT" "$UNIT_S"
