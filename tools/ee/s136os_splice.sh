@@ -59,6 +59,14 @@
 #     outside .ent..end and the 2.9 TU lacks (DEFINITION). See verify_block.
 #     Without it these spliced silently and surfaced only as a whole-image cmp
 #     (BuildTieDrawSegment, 328,879 B) or a link error (SelectSceneSubChunk).
+#   - LENGTH (task #1531): once every block verifies, the spliced unit is
+#     assembled (asm_unit.sh, as the caller does next) and any row whose
+#     st_size differs from its ROM length is refused, naming both lengths in
+#     words. The ROM length is read from the row's splat .s by rom_size (its
+#     `nonmatching` header, which must equal its glabel..endlabel word count;
+#     an .s that disagrees with itself is an ORACLE refusal). Without it a
+#     short body spliced silently and only the image cmp saw it (#1509, #1512).
+#     On success each row prints a `length:` line.
 #   Every FATAL leaves <unit.s> untouched: the splice works on a copy.
 # THE COMPILE is `tools/ee/ee_cc1.sh s136`, the one place the C/C++ rule lives:
 # a `.c` unit runs cpp + 1.36 cc1 (the command lines this helper ran before);
@@ -196,6 +204,54 @@ extract_block() {
     }' "$2"
 }
 
+# rom_size <fn.s> <fn>: print the ROM function's length in BYTES from its
+# splat .s (task #1531), or `ORACLE <why>` when it cannot be read or disagrees
+# with itself. Two readings of the one file must agree: the `nonmatching <fn>,
+# 0xNN` header splat writes, and the count of `/* rom vaddr word */` lines
+# strictly between `glabel <fn>` and `endlabel <fn>` (FACT #7740: splat puts
+# alignment padding AFTER endlabel, so a whole-file count is too high). They
+# agree on all 268 USA rows at 4e6750ea; symbol_addrs `size:` is on none of
+# them, so it is not consulted. A disagreement is reported as the ORACLE's
+# fault, naming both numbers, never resolved by picking one.
+rom_size() {
+  awk -v fn="$2" '
+    function hex(x,   i, c, v) { v = 0; x = tolower(x); sub(/^0x/, "", x)
+      for (i = 1; i <= length(x); i++) { c = index("0123456789abcdef", substr(x, i, 1)); if (!c) return -1; v = v * 16 + c - 1 }
+      return v }
+    { sub(/\r$/, "") }
+    $1 == "nonmatching" && $2 == fn "," { nh++; h = hex($3) }
+    $1 == "endlabel" && $2 == fn { ne++; inb = 0 }
+    inb && $1 == "/*" && $5 == "*/" && length($4) == 8 && $4 ~ /^[0-9A-Fa-f]+$/ { n++ }
+    $1 == "glabel" && $2 == fn { ng++; inb = 1 }
+    END {
+      if (nh != 1 || ng != 1 || ne != 1) { printf "ORACLE %d nonmatching / %d glabel / %d endlabel line(s) for %s in %s, want 1 each\n", nh, ng, ne, fn, FILENAME; exit }
+      if (h <= 0 || h % 4) { printf "ORACLE nonmatching size %s for %s is not a positive word multiple\n", h, fn; exit }
+      if (h != n * 4) { printf "ORACLE %s: nonmatching header 0x%x (%d words) but %d words between glabel and endlabel in %s\n", fn, h, h / 4, n, FILENAME; exit }
+      print h
+    }' "$1"
+}
+
+# length_check <nm -S file> <rows file>: one line per row whose assembled
+# st_size is not its ROM length (task #1531); empty = every length matches.
+# <rows file> lines are `<fn> <ROM bytes>`; <nm -S file> is `mips-linux-gnu-nm
+# -S` of the spliced unit assembled exactly as the build assembles it.
+# EITHER direction refuses here: st_size is the body alone (cc1 ends it at
+# `.end`, before any alignment word), so unlike vmu's word compare there is no
+# legitimate LONGER case. A missing or repeated sized symbol refuses too.
+length_check() {
+  awk '
+    function hex(x,   i, c, v) { v = 0; x = tolower(x)
+      for (i = 1; i <= length(x); i++) { c = index("0123456789abcdef", substr(x, i, 1)); if (!c) return -1; v = v * 16 + c - 1 }
+      return v }
+    FNR == 1 { file++ }
+    file == 1 { if (NF == 4 && $3 ~ /^[Tt]$/) { sz[$4] = hex($2); cnt[$4]++ } next }
+    {
+      if (!($1 in cnt)) print $1 ": no sized .text symbol in the assembled unit (ROM " $2 / 4 " words)"
+      else if (cnt[$1] != 1) print $1 ": " cnt[$1] " sized .text symbols in the assembled unit"
+      else if (sz[$1] != $2) printf "%s: built %d words (assembled st_size 0x%x), ROM %d words (0x%x) — %s\n", $1, sz[$1] / 4, sz[$1], $2 / 4, $2, (sz[$1] < $2 ? "SHORTER" : "LONGER")
+    }' "$1" "$2"
+}
+
 if [ "${1:-}" = "--selftest" ]; then
   # Arms: X is declared by the unit at 16 (a device) and by the solo TU at 4
   # -> no X line (FACT #8838's wall); Y is solo-only -> carried; Z is declared
@@ -244,6 +300,33 @@ if [ "${1:-}" = "--selftest" ]; then
   # 7: the #1309 fix: the same equate in both files.
   printf "\tY = Z\n#S136OS_BEGIN f\n${B}#S136OS_END f\n" > "$T/unit.s"
   v="$(vb)"; if [ -z "$v" ]; then echo "  OK   arm 7: equate Y identical in both files -> admitted"; else echo "  FAIL arm 7: refused an equate both files carry: '$v'"; rc=1; fi
+  # Arms 9-10 (task #1531): the ROM length oracle. 9 reads a 3-word function
+  # (with a pad word after endlabel, FACT #7740, which must not count); 10 is
+  # the same file with a header that disagrees, which must be refused naming
+  # both readings, never resolved by picking one.
+  ROMS='.align 3\nnonmatching f, %s\n\nglabel f\n    /* 000100 00200100 27BDFFF0 */  addiu $29,$29,-16\n  .Lx:\n    /* 000104 00200104 03E00008 */  jr $31\n    /* 000108 00200108 27BD0010 */   addiu $29,$29,16\nendlabel f\n    /* 00010C 0020010C 00000000 */  nop\n'
+  printf "$ROMS" 0xC > "$T/f.s"; v="$(rom_size "$T/f.s" f)"
+  if [ "$v" = 12 ]; then echo "  OK   arm 9: 3-word function, pad word after endlabel not counted -> 12 bytes"; else echo "  FAIL arm 9: want 12, got '$v'"; rc=1; fi
+  printf "$ROMS" 0x10 > "$T/f.s"; v="$(rom_size "$T/f.s" f)"
+  case "$v" in "ORACLE f: nonmatching header 0x10 (4 words) but 3 words between glabel and endlabel"*) echo "  OK   arm 10: header 0x10 vs 3 words -> refused: $v" ;; *) echo "  FAIL arm 10: not refused as an ORACLE disagreement: '$v'"; rc=1 ;; esac
+  # Arms 11-14 (task #1531): the length compare, on #1509's V1 shape. 11 is
+  # V1 itself (st_size 0x5c, ROM 0x60): refused naming the function, SHORTER
+  # and both lengths. 12: equal, admitted. 13: LONGER, refused. 14: no sized
+  # symbol, refused. A check that admits everything fails 11, 13 and 14; one
+  # that refuses everything fails 12.
+  printf 'func_002CE8A8 96\n' > "$T/rows"
+  for a in "11 0000005c" "12 00000060" "13 00000064" "14 -"; do
+    set -- $a
+    if [ "$2" = - ]; then printf '000047a8 t $L5_s136_func_002CE8A8\n' > "$T/nm"; else printf "000047a8 $2 T func_002CE8A8\n000047a8 t gcc2_compiled.\n" > "$T/nm"; fi
+    v="$(length_check "$T/nm" "$T/rows")"
+    case "$1:$v" in
+      "11:func_002CE8A8: built 23 words (assembled st_size 0x5c), ROM 24 words (0x60) — SHORTER") echo "  OK   arm 11: V1's 23 words vs ROM 24 -> refused: $v" ;;
+      "12:") echo "  OK   arm 12: st_size 0x60 = ROM 0x60 -> admitted" ;;
+      "13:func_002CE8A8: built 25 words (assembled st_size 0x64), ROM 24 words (0x60) — LONGER") echo "  OK   arm 13: 25 words vs ROM 24 -> refused: $v" ;;
+      "14:func_002CE8A8: no sized .text symbol"*) echo "  OK   arm 14: no sized symbol -> refused: $v" ;;
+      *) echo "  FAIL arm $1: '$v'"; rc=1 ;;
+    esac
+  done
   [ "$rc" = 0 ] && echo "#### s136os_splice --selftest: PASS" || echo "#### s136os_splice --selftest: FAIL"
   exit "$rc"
 fi
@@ -335,7 +418,10 @@ for f in $ROWS; do
     { print }
     END { if (n != 1) exit 1 }' "$OUT" > "$TMP/unit.s" || fatal "slot for $f not replaced exactly once"
   cp "$TMP/unit.s" "$OUT"
-  echo "s136os_splice: $REGION/$UNIT: $f spliced ($(awk '{ sub(/\r$/, "") } NF && $1 !~ /^[.#$]/ && $1 !~ /:$/' "$TMP/$f.blk2" | wc -l | tr -d ' ') insn lines, $(wc -l < "$TMP/$f.ext" | tr -d ' ') .extern carried; not carried, the unit declares the name: ${KEPT:-none})"
+  # (No line count here: cc1's text lines are macro instructions, not words.
+  # #1509's 23-word and 24-word bodies both printed "22 insn lines". The body
+  # length is the `length:` line below, from the assembled unit, task #1531.)
+  echo "s136os_splice: $REGION/$UNIT: $f spliced ($(wc -l < "$TMP/$f.ext" | tr -d ' ') .extern carried; not carried, the unit declares the name: ${KEPT:-none})"
 done
 LEFT="$(awk '{ sub(/\r$/, "") } $1 == "#S136OS_SLOT" { print $2 }' "$OUT")"
 [ -z "$LEFT" ] || fatal "slot(s) still present after the splice:" $LEFT
@@ -354,4 +440,43 @@ if [ -n "$BADV" ]; then
   printf '%s\n' "$BADV" | sed 's/^/    /' >&2
   exit 3
 fi
+# LENGTH (task #1531): every spliced body must be exactly as long as the ROM
+# function it replaces. A SHORT body shifts every later byte of the unit, and
+# before this check nothing per-function saw it: the splice line said
+# `spliced`, vmu compared only the built words, and only the image cmp failed
+# (#1509 V1 23 vs 24 words, cmp 47; V2 28 vs 31, cmp 454251; #1512 26 vs 32,
+# cmp 445028). The built length is measured, not estimated: the spliced unit is
+# assembled by asm_unit.sh exactly as the caller assembles it next (cc1 text
+# lines are macro instructions and asm_unit.sh rewrites some, so no count of
+# them is a length), and each row's st_size is read from that object. The ROM
+# length is rom_size's. Fails closed: rc 3, <unit.s> untouched, every
+# offender named with both lengths.
+ROMSZ="$TMP/rom_sizes"; : > "$ROMSZ"; BADO=""
+for f in $ROWS; do
+  v="$(rom_size "going-decompiled/asm/$REGION/nonmatchings/$UNIT/$f.s" "$f" 2>&1)"
+  case "$v" in ''|*[!0-9]*) BADO="$BADO
+$f: ${v:-no ROM .s at going-decompiled/asm/$REGION/nonmatchings/$UNIT/$f.s}" ;; *) echo "$f $v" >> "$ROMSZ" ;; esac
+done
+BADO="$(printf '%s' "$BADO" | sed '/^$/d')"
+[ -z "$BADO" ] || { echo "s136os_splice: FATAL [$REGION/$UNIT] — the ROM length of a row cannot be read from its splat .s, so its spliced length cannot be checked (task #1531). Nothing was written to $UNIT_S." >&2; printf '%s\n' "$BADO" | sed 's/^/    /' >&2; exit 3; }
+case "$TMP" in /*) ATMP="$TMP" ;; *) ATMP="$(pwd)/$TMP" ;; esac
+# asm_unit.sh cds into its mirror, so its paths are absolute. ASM_UNIT_S_MD5
+# is a caller's md5 of ITS input; it is not this copy's, so it is cleared.
+if ! ASM_UNIT_S_MD5= sh tools/ee/asm_unit.sh "$REGION" "$ATMP/work.s" "$ATMP/len.o" "$GFLAG" > "$TMP/len.asm.log" 2>&1 \
+   || [ ! -s "$TMP/len.o" ]; then
+  echo "s136os_splice: FATAL [$REGION/$UNIT] — the spliced unit did not assemble for the length check (task #1531); asm_unit.sh said:" >&2
+  sed 's/^/    | /' "$TMP/len.asm.log" >&2
+  exit 3
+fi
+rm -rf "$TMP/.asmfix-$REGION-len"
+mips-linux-gnu-nm -S --defined-only "$TMP/len.o" > "$TMP/len.nm"
+BADL="$(length_check "$TMP/len.nm" "$ROMSZ")"
+if [ -n "$BADL" ]; then
+  echo "s136os_splice: FATAL [$REGION/$UNIT] — LENGTH (task #1531): a spliced body is not as long as the ROM function it replaces, so every later byte of the unit would shift. Nothing was written to $UNIT_S." >&2
+  printf '%s\n' "$BADL" | sed 's/^/    /' >&2
+  exit 3
+fi
+while read -r f b; do
+  echo "s136os_splice: $REGION/$UNIT: $f length: built $((b / 4)) words = ROM $((b / 4)) words (assembled st_size; nonmatching header = glabel..endlabel words)"
+done < "$ROMSZ"
 cp "$OUT" "$UNIT_S"

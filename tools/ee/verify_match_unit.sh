@@ -236,13 +236,17 @@ def say(s=""):
 # f  = func_002AC058, a two-word zero run     (its own target; task #1121)
 # g  = func_002907B8 + inner alabel D_002907C0 (task #1157)
 # gt = the same without the alabel's .type    (target for g)
+# h  = SelectSceneSubChunk WITHOUT its last word (task #1531): a body one word
+#      SHORT whose 19 words all equal the ROM's (base for H0, target for H1)
 OBJS = {"a": ["select_scene_sub_chunk"], "b": ["evaluate_progress_condition", "get_save_prompt_pending"],
         "be": ["evaluate_progress_condition"], "bg": ["get_save_prompt_pending"], "c": ["divdi3_clz_slice"],
         "e": ["camera_slot_straddle"], "f": ["elided_zero_run"], "g": ["inner_label_truncation"],
-        "gt": ["inner_label_truncation"]}
+        "gt": ["inner_label_truncation"], "h": ["select_scene_sub_chunk"]}
 # Fixture lines marked `# base only` are dropped from these (target-only) objects:
 # arg 3 must hold ONE `F .text` symbol, and an inner alabel is a second one.
 TARGET_ONLY = {"gt"}
+# Fixture lines marked `# short drops` are dropped from these (task #1531).
+SHORT = {"h"}
 
 def obj(k):
     return "%s/%s.o" % (OUT, k)
@@ -254,7 +258,8 @@ def build():
         with open("%s/%s.s" % (OUT, k), "w") as f:
             for p in parts:
                 f.write("".join(l for l in open("%s/%s.s" % (FIX, p))
-                                if k not in TARGET_ONLY or "# base only" not in l) + "\n")
+                                if (k not in TARGET_ONLY or "# base only" not in l)
+                                and (k not in SHORT or "# short drops" not in l)) + "\n")
         cmds.append("%s -o %s %s/%s.s" % (AS, obj(k), OUT, k))
     # X8's failing mktemp: first on PATH, prints nothing, exits 1 (task #1121).
     with open(FAKE_MKTEMP, "w") as f:
@@ -547,6 +552,16 @@ ROWS = [
     ("F4", G, "g", "gt", w_seed(G, 0x10, lambda w: w ^ 0x00010000),
      inner_label(G, "D_002907C0", 0x2907B8, G_ZERO, G_NONZERO), 0, ((2, 46, G_ZERO, G_NONZERO), None),
      "+0x10 past the label, nonzero->nonzero: rc 0 as it stands, named NONZERO"),
+    # Task #1531: the LENGTH check. An rc 1 detail whose first item is "LENGTH"
+    # is (built words, ROM words, the exact differing vaddrs). H0's base is A's
+    # body one word short (fixture h), every one of its 19 words the ROM's: the
+    # pre-#1531 tool read `19/19 BYTE IDENTICAL` (M28's known answer). H1 is the
+    # asymmetry: a BUILT body LONGER than arg 3's (target h) is compared word for
+    # word, as before, and must stay rc 0 20/20 (M29: a check firing both ways).
+    ("H0", A, "h", "a", None, None, 1, ("LENGTH", 19, 20, ()),
+     "base 1 word SHORT, its 19 words identical: LENGTH 19 vs 20, rc 1"),
+    ("H1", A, "a", "h", None, None, 0, (20, None),
+     "base LONGER than arg 3 (19 words): compared as before, rc 0 20/20"),
 ]
 
 ADDR_RE = r"0x([0-9a-f]{8})(?:-0x([0-9a-f]{8}))?"          # one address or an inclusive range
@@ -617,6 +632,10 @@ def holds(row, got):
         return False
     if rc == 0:
         return words == want[0] and (want[1] is None or want[1] in out)
+    if rc == 1 and want and want[0] == "LENGTH":
+        return diffs == want[3] and re.search(
+            r"^\S+: DIFFERS ❌ — LENGTH: the built symbol is %d words \(st_size 0x[0-9a-f]+\), SHORTER than "
+            r"the ROM function's %d words" % (want[1], want[2]), out, re.M) is not None
     if rc == 1:
         return diffs == want
     return want in out
@@ -744,6 +763,15 @@ MUTANTS = [
     ("M27", "every NOT COMPARED word put in the ZERO band without reading it (the b7b8f7d9 text)",
      "if w == 0 and o not in rel_offs:", "if True:", ["F3", "F4"],
      [("F3", 0, None, "READ AS ZERO")]),
+    # Task #1531. M28 is the tool before the LENGTH check; M29 fires it on a
+    # LONGER built extent too, which would refuse the +1 alignment-word case.
+    ("M28", "no LENGTH check: a short body with a matching prefix reads N/N (pre-#1531)",
+     "short = (isinstance(EXTENT, tuple) and 0 < EXTENT[1] < ROM_SIZE)", "short = False",
+     ["H0"], [("H0", 0, None, "(19/19 words")]),
+    ("M29", "LENGTH check fires on any length difference, LONGER included",
+     "short = (isinstance(EXTENT, tuple) and 0 < EXTENT[1] < ROM_SIZE)",
+     "short = (isinstance(EXTENT, tuple) and 0 < EXTENT[1] != ROM_SIZE > 0)",
+     ["H1"], [("H1", 1, (), "LENGTH:")]),
 ]
 TAIL = {"M19", "M20", "M24"}
 HEAD = {"M25"}
@@ -1056,10 +1084,17 @@ done
 SHAPE="$(docker --context colima-ee-x86 run --rm --user="$(id -u):$(id -g)" -e HOME=/tmp -v "$ROOT":/work -w /work ee-build sh -c "
   mips-linux-gnu-objdump -t '$TGT' 2>/dev/null | awk '\$3==\"F\" && \$4==\".text\"' | wc -l
   mips-linux-gnu-objdump -h '$TGT' 2>/dev/null | awk '\$2==\".text\"{print \$3}'
+  mips-linux-gnu-objdump -t '$TGT' 2>/dev/null | awk '\$3==\"F\" && \$4==\".text\"{print \$5}'
 ")" || { echo "ARG ERROR: could not read '$TGT' as an object file" >&2; exit 3; }
 
 TGT_FUNCS="$(echo "$SHAPE" | sed -n 1p)"
 TGT_TEXT_HEX="$(echo "$SHAPE" | sed -n 2p)"
+# The ROM function's length (task #1531): arg 3 is the function's ORIGINAL asm,
+# glabel..endlabel, and endlabel emits `.size`, so its one `F .text` symbol's
+# st_size is the ROM extent (= splat's `nonmatching <fn>, 0xNN` header; the two
+# agree on all 268 s136os rows at 4e6750ea). Read as hex; empty when the shape
+# check below refuses the object anyway.
+TGT_FN_SIZE_HEX="$(echo "$SHAPE" | sed -n 3p)"
 TGT_TEXT="$(printf '%d' "0x${TGT_TEXT_HEX:-0}" 2>/dev/null)"
 [ -n "${TGT_FUNCS:-}" ] && [ -n "${TGT_TEXT:-}" ] || { echo "ARG ERROR: '$TGT' is not a readable ELF object" >&2; exit 3; }
 
@@ -1146,7 +1181,7 @@ docker --context colima-ee-x86 run --rm --user="$(id -u):$(id -g)" -e HOME=/tmp 
   || { echo "ARG ERROR: could not disassemble '$BASE'" >&2; exit 3; }
 [ -s "$DIS_FILE" ] || { echo "ARG ERROR: '$BASE' produced no .text disassembly" >&2; exit 3; }
 
-FN="$FN" BASE="$BASE" ROM="$ROM" SYMS="$SYMS" REGION="$REGION" DIS_FILE="$DIS_FILE" \
+FN="$FN" BASE="$BASE" ROM="$ROM" SYMS="$SYMS" REGION="$REGION" DIS_FILE="$DIS_FILE" TGT_FN_SIZE_HEX="$TGT_FN_SIZE_HEX" \
   VMU_RESULT_FILE="$RESULT_FILE" python3 - >"$PY_OUT_FILE" <<'PY'
 import os, sys, traceback
 
@@ -1598,6 +1633,24 @@ def coverage_warning():
     lines[-1] += f" Full extent: python3 tools/ee/symtab_extent_compare.py <base.o> --fn {FN}"
     return "\n".join(lines)
 
+# LENGTH (task #1531). The words compared above are the BUILT function's, so
+# a body SHORTER than the ROM function whose prefix matches read `N/N BYTE
+# IDENTICAL` (#1509's V2 compared 28 words of a 31-word function): the ROM
+# words past its end were never asked for, and the short body shifts every
+# later byte of the unit, which only the image cmp then sees. The ROM length is
+# arg 3's function symbol (see TGT_FN_SIZE_HEX in the shell above); the built
+# length is the base symbol's st_size (EXTENT). SHORTER is DIFFERS, rc 1: the
+# built bytes cannot equal the ROM function's, which is the one thing rc 1
+# means, so no band or rc is added. LONGER is deliberately NOT checked here: a
+# built extent past the ROM's end is compared word for word against the ROM
+# that follows (the next function, or an alignment word), so it already reads
+# DIFFERS unless those bytes really are the ROM's (#1496). Unknown on either
+# side (st_size 0, F2's case; no target size) checks nothing and says nothing
+# new: the coverage WARN already covers an unknown built length (and M26's
+# size-0-as-extent mutant keeps its pre-#1531 known answer, F2 `10/10`).
+ROM_SIZE = int(os.environ.get("TGT_FN_SIZE_HEX") or "0", 16)
+short = (isinstance(EXTENT, tuple) and 0 < EXTENT[1] < ROM_SIZE)
+
 compared = True
 bad = []
 for va, w in resolved:
@@ -1607,7 +1660,7 @@ for va, w in resolved:
 
 nrel = sum(len(v) for v in relocs.values())
 warn = coverage_warning()
-if not bad:
+if not bad and not short:
     placed = "".join(f"; {n} at 0x{a:08x}" for n, a in sorted(section_addr.items()))
     if warn is None:
         print(f"{FN}: BYTE IDENTICAL TO ROM ✅ ({len(resolved)}/{len(resolved)} words, {nrel} relocs resolved{placed})")
@@ -1627,8 +1680,15 @@ if not bad:
         print(warn)
     verdict(MATCH)
 
-print(f"{FN}: DIFFERS ❌ — {len(bad)}/{len(resolved)} words differ from the ROM"
-      + ("" if warn is None else " ⚠️ (and some words were NOT COMPARED: see WARN)"))
+if short:
+    print(f"{FN}: DIFFERS ❌ — LENGTH: the built symbol is {EXTENT[1] // 4} words (st_size 0x{EXTENT[1]:x}), "
+          f"SHORTER than the ROM function's {ROM_SIZE // 4} words (arg 3's st_size 0x{ROM_SIZE:x}): "
+          f"ROM word(s) {spans(list(range(fn_va + EXTENT[1], fn_va + ROM_SIZE, 4)))} have no built counterpart and "
+          f"every later byte of the unit shifts; {len(bad)}/{len(resolved)} compared words differ"
+          + ("" if warn is None else " ⚠️ (and some words were NOT COMPARED: see WARN)"))
+else:
+    print(f"{FN}: DIFFERS ❌ — {len(bad)}/{len(resolved)} words differ from the ROM"
+          + ("" if warn is None else " ⚠️ (and some words were NOT COMPARED: see WARN)"))
 for va, w, rw in bad[:40]:
     print(f"  0x{va:08x}: built {w:08x}   rom {rw:08x}")
 if len(bad) > 40:
