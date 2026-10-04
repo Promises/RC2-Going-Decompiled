@@ -4815,7 +4815,7 @@ void func_0033D780(void *self) {
     memcpy(cfg1 + 0x00, D_1ADDF8, 8);
     memcpy(cfg1 + 0x08, D_1ADE00, 8);
     memcpy(cfg1 + 0x10, D_1ADE08, 4);
-    memcpy(cfg2, D_1ADDA8, 8);
+    memcpy(cfg2, &D_1ADDA8, 8);
 
     colour = (sel == 0) ? 0x80D0D0D0 : 0x70808080;
     label = GetLocalizedString(0x2C78);
