@@ -771,7 +771,8 @@ void func_00291FF8(s32 index) {
  *   hdr (arg0):  +0x8  s32  width
  *                +0xC  s32  height
  *                +0x10 s32  pixelFormat (0/1/2/0x13/0x14 handled; else default)
- *                +0x14 s32  CLUT / palette field (also used as CLD control bits)
+ *                +0x14 s32  CLUT pixel storage mode: TEX0 CPSM (bits 51-54), the
+ *                           CLUT upload's dpsm, and selects the palette size
  *                +0x1C s32  mipLevelCount
  *                +0x20 ...  per-mip param / CLUT source table (byte address)
  *   out (arg1):  receives THREE 64-bit GS registers:
@@ -967,7 +968,7 @@ s32 func_002920C0(void *hdrArg, u64 *out) {
              | ((u64)(u32)sc[20] << 30)            /* TH = Log2Floor(h)    */
              | ((u64)0x8000 << 19)                 /* bit 34 (TCC)         */
              | ((u64)(u32)sc[10] << 37)            /* CBP (CLUT tbp)       */
-             | ((u64)(u32)clut  << 51)             /* CLD/CSA field        */
+             | ((u64)(u32)clut  << 51)             /* CPSM (bits 51-54)    */
              | ((u64)-1 << 63);                    /* top control bit      */
 
     out[1] = ((u64)(u32)(mipCount - 1) << 2)       /* MXL = mipLevelCount-1 */
@@ -1921,7 +1922,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00293760);
  *
  * MATCHED on the s136os arm (task #1405): byte-exact image-resident under SN
  * 2.95.3 v1.36 -fopt-stack at the unit's RULING #9070 flags (verify_match_unit
- * 152/152 words + image cmp 0). Body found by task #1396 (FACT #8830 solo screen).
+ * 152/152 words + image cmp 0; vmu's 152 counts the 0x293B0C post-endlabel pad,
+ * the body is 151 words). Body found by task #1396 (FACT #8830 solo screen).
  * Levers, each undone alone (masked words differing / 151): the cursor
  * equates (size 16: 137; plain symbols: 131); D_1A72F4/D_1A7304 (10, the
  * base's own first diff); the s32 func_00126288 view (7); the 2-argument
@@ -4324,8 +4326,9 @@ s32 MapDataExistsForLevel(s32 levelAndFlag) {
  * MapBeginUpload (0x295D70) — kick off streaming the current level's galactic-
  * map texture into a fresh cache slot. Advances the two menu-screen DMA cursors
  * (g_menuScreenBlock +0x10C/+0x110) to carve a scratch pixel buffer, primes the
- * map-cache bookkeeping (all 5 slots reset, slot 1 = the new pixel buffer,
- * lockedSlot cleared), then — when a map-data TOC handle is live (cache +0x238
+ * map-cache bookkeeping (slots 0/3/4 cleared, slot 1 = the new pixel buffer,
+ * slot 2 = the old +0x110 cursor; all 5 level ids = -1, lockedSlot cleared),
+ * then — when a map-data TOC handle is live (cache +0x238
  * != -1) — issues the disc load for this level's secondary-set map texture:
  * first upload goes through StartFileLoadPumpingVoice + a voice pump and
  * func_002EFCA8; an already-armed upload is re-issued via func_002EFD28. Records
@@ -5561,8 +5564,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00297B48);
  * into one 32-bit word — bit `b` is set when the pixel nibble is nonzero (even b
  * = low nibble, odd b = high nibble of scratchpad byte[b>>1]). The output word
  * for (row, col) lands at dest + 4*((row%16) + 512*(row/16)) + col*0x40 (bands of
- * 16 rows, columns 0x40 bytes apart). The matching build keeps the asm (a
- * strength-reduction near-miss, 64.83%); this #else is the portable equivalent. */
+ * 16 rows, columns 0x40 bytes apart). The matching build keeps the asm (t496
+ * probe below: best arm sdk29 56.23%, PACKED-SAVE; the strength-reduction
+ * 64.83% is func_00297E80's); this #else is the portable equivalent. */
 #ifdef TARGET_NATIVE
 extern void func_00297E80(void *scratchpad, s32 row, void *srcA, void *srcB);
 #endif
