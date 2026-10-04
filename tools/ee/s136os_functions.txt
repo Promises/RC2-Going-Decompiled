@@ -339,3 +339,4 @@ usa text/235FE8 func_00344F18
 usa text/235FE8 func_003453D0
 usa text/1A8180 func_002AA6B8
 usa text/1A8180 func_002B02C8
+usa text/1A8180 func_002ADF48

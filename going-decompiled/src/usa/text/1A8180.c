@@ -5099,48 +5099,83 @@ s32 func_002ADF18(Moby *moby) {
 
 /**
  * AE-family combined: map a point AND compose an orientation through obj's
- * sub-source. No sub-source (func_002ADF18==0) → arg5=arg3, arg6=arg4, return 0.
- * Otherwise: bring (arg3 + src pos − obj pos) into local space and rotate into
- * arg5 (src+0x20 folded with obj matrix +0xC0 when src flag +0x3C bit 0x2, else
- * base matrix), re-add obj pos; and compose arg4's rotation with the base matrix
- * → euler into arg6. Returns 1.
+ * sub-source. No sub-source (func_002ADF18==0) → pointOut=pointIn,
+ * eulerOut=rotIn, return 0. Otherwise: bring (pointIn + src pos − obj pos) into
+ * local space and rotate into pointOut (src+0x20 folded with obj matrix +0xC0
+ * when src flag +0x3C bit 0x2, else the base matrix), re-add obj pos; and
+ * compose rotIn's rotation with the base matrix → euler into eulerOut.
+ * Returns 1.
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 67.07%
    -> UNKNOWN-@0: ROM `addiu sp,sp,-272` vs `addiu sp,sp,-256` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADF48);
+/* MATCHED on the s136os arm (task #1559): byte-exact solo under SN 2.95.3 v1.36
+ * -fopt-stack (verify_match_unit 92/92). Each change re-measured by reverting
+ * it alone (words differing, vmu):
+ *   - the pass-through copies are u_long128 (the ROM's lq/sq); struct copies
+ *     give ldl/ldr/sdl/sdr (85/104);
+ *   - their temp is pinned to $2 with EE_REG (RULING #8598 register-pin
+ *     device; it is a live local written twice, never $0). Unpinned, cc1
+ *     takes $3 for the second copy and hoists the return-0 above its sq (5/92);
+ *   - pointIn, dead after the first Vec4AddVu0, is reused as the matrix
+ *     pointer (&rot, then &composed), as the ROM reuses s1 (20/92 with a
+ *     separate local);
+ *   - obj+0x10 is held twice: `scratch` (later reused for &composed) and
+ *     `objPos` for the final add, which is the ROM's `daddu $21,$16,$0`
+ *     (77/88 when the final add recomputes obj+0x10). */
+/* GUARD (task #1559): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002ADF48)
+S136OS_SLOT(func_002ADF48);
 #else
 /* Prototypes this body needs whose declarations sit in other guarded arms:
  * the s136os arm compiles this arm alone, so it must see them here. */
 extern void MatrixToEulerAngles(Mat4x4 *mtx, void *out);
 extern void func_00283A48(Vec4 *out, Vec4 *v, Vec4 *m);
-s32 func_002ADF48(void *self, Moby *obj, Vec4 *arg3, Vec4 *arg4, Vec4 *arg5, void *arg6) {
+s32 func_002ADF48(void *self, Moby *obj, Vec4 *pointIn, Vec4 *rotIn, Vec4 *pointOut, void *eulerOut) {
     s32 src = func_002ADF18(obj);
     Mat4x4 base;
     Mat4x4 composed;
+    Mat4x4 rot;
+    Vec4 *scratch;
+    Vec4 *objPos;
     (void)self;
 
     if (src == 0) {
-        *arg5 = *arg3;
-        *(Vec4 *)arg6 = *arg4;
+        /* one $2 temp for both copies, so `daddu $2,$0,$0` (return 0)
+         * must wait for the second sq, landing in the b's delay slot */
+        register u_long128 t EE_REG("$2");
+        t = *(u_long128 *)pointIn;
+        *(u_long128 *)pointOut = t;
+        t = *(u_long128 *)rotIn;
+        *(u_long128 *)eulerOut = t;
         return 0;
     }
     func_00283DC0(&base, (Vec4 *)src);
-    Vec4AddVu0(arg5, arg3, (Vec4 *)(src + 0x10));
-    Vec4SubVu0(arg5, arg5, (Vec4 *)((u8 *)obj + 0x10));
+    scratch = (Vec4 *)((u8 *)obj + 0x10);
+    Vec4AddVu0(pointOut, pointIn, (Vec4 *)(src + 0x10));
+    Vec4SubVu0(pointOut, pointOut, scratch);
+    objPos = scratch;
+    /* pointIn is dead from here; the ROM reuses its register (s1) for the
+     * matrix being built, so the C reuses the parameter the same way */
     if (*(s32 *)(src + 0x3C) & 0x2) {
-        Mat4x4 rot;
-        func_00283DC0(&rot, (Vec4 *)(src + 0x20));
-        func_00284048(&composed, (const Vec4 *)&rot);
-        func_00283A48(arg5, arg5, (Vec4 *)&composed);
-        func_00283A48(arg5, arg5, (Vec4 *)((u8 *)obj + 0xC0));
+        pointIn = (Vec4 *)&rot;
+        func_00283DC0((Mat4x4 *)pointIn, (Vec4 *)(src + 0x20));
+        scratch = (Vec4 *)&composed;
+        func_00284048((Mat4x4 *)scratch, (const Vec4 *)pointIn);
+        func_00283A48(pointOut, pointOut, scratch);
+        func_00283A48(pointOut, pointOut, (Vec4 *)((u8 *)obj + 0xC0));
+        pointIn = scratch;
     } else {
-        func_00283A48(arg5, arg5, (Vec4 *)&base);
+        func_00283A48(pointOut, pointOut, (Vec4 *)&base);
+        pointIn = (Vec4 *)&composed;
     }
-    Vec4AddVu0(arg5, arg5, (Vec4 *)((u8 *)obj + 0x10));
-    func_00283DC0(&composed, arg4);
-    MatrixMultiplyVu0(&composed, &base, &composed);
-    MatrixToEulerAngles(&composed, arg6);
+    Vec4AddVu0(pointOut, pointOut, objPos);
+    func_00283DC0((Mat4x4 *)pointIn, rotIn);
+    MatrixMultiplyVu0((Mat4x4 *)pointIn, &base, (Mat4x4 *)pointIn);
+    MatrixToEulerAngles((Mat4x4 *)pointIn, eulerOut);
     return 1;
 }
 #endif
