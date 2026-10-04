@@ -106,7 +106,7 @@ if [ -d "$SRC" ]; then
       */usa/text/16E980.c) GFLAG="-G8";; # 16E980 head camera/screen-FX unit (carve pick #6; plain -G8, original keeps the %hi CSE)
       */usa/text/248B50.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # GUI sub-chunk 1 (carve pick #3a)
       */usa/text/235FE8.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse -fno-strict-aliasing";; # GUI widget-method band (carve pick #3b)
-      */usa/text/1CA080.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="-fno-gcse -fstrict-aliasing";; # menu-screens A (carve pick #5). S136EXTRA: PROBE task #1540, needs a RULING — the s136os arm adds -fstrict-aliasing (func_002D33A8's store/lui order); the 2.9 compile is unchanged
+      */usa/text/1CA080.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="-fno-gcse -fstrict-aliasing";; # menu-screens A (carve pick #5). S136EXTRA: RULING #9235 (task #1540) — the s136os arm adds -fstrict-aliasing (func_002D33A8's store/lui order); the 2.9 compile is unchanged
       */usa/text/1D54C0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";; # menu-screens B (carve pick #5)
       */usa/text/1B4218.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="";; # moby-bind band (carve pick #5/moby-bind). S136EXTRA: the s136os arm compiles at the -O2 default (RULING #9004, FACT #9003); the 2.9 compile keeps -fno-gcse
       # USA CARVE MEGA-BATCH PHASE A (2026-06-14): 7 new c-units from TILE A/B/C/D.
