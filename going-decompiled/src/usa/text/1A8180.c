@@ -1969,8 +1969,9 @@ f32 GetWaterSurfaceHeight(Vec4 *pos, Vec4 *outNormal) {
  * from eulerAngles.x/.y/.z about axes 0/1/2 and concatenates them
  * (out = qx * qy, then out = out * qz) via the VU0 quaternion helpers.
  *
- * Walled: saves $16-$19/$31 (save-layout wall). The three scratch quaternions
- * live on the stack; func_00284248 takes its angle in $f12.
+ * The three scratch quaternions live on the stack, qx highest (sp+0x20) and qz
+ * at sp+0; func_00284248 takes its angle in $f12. The $16-$19 saves are the
+ * s136os arm's 8-byte -fopt-stack slots, not a wall.
  *
  * ORACLE STATUS = routed-to-tester-EE. func_00284248 (axis-angle quat build)
  * uploads a vcallms VU0 sin/cos microprogram (func_00283B48 @ 0xC90 /
@@ -1980,13 +1981,24 @@ f32 GetWaterSurfaceHeight(Vec4 *pos, Vec4 *outNormal) {
  * full-game context), same path as func_002AFCD8/func_002AFD90. */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 63.54%
    -> UNKNOWN-@2: ROM `sd s1,56(sp)` vs `(none)` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AA058);
+/* MATCHED on the s136os arm (task #1508): byte-exact solo under SN 2.95.3 v1.36
+ * -fopt-stack (verify_match_unit). Closing lever: the locals are declared
+ * qz, qy, qx. SN 1.36 gives a scope's first-declared local the LOWEST frame
+ * slot, and the ROM has qz at sp+0, qy at sp+0x10, qx at sp+0x20; declared in
+ * use order (qx first) the slots, and the callee-saved registers that hold
+ * &qx/&qy, come out reversed (16/38 words differ). */
+/* GUARD (task #1508): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002AA058)
+S136OS_SLOT(func_002AA058);
 #else
 void func_002AA058(Vec4 *outQuat, Vec4 *eulerAngles) {
-    Vec4 qx;
-    Vec4 qy;
     Vec4 qz;
+    Vec4 qy;
+    Vec4 qx;
 
     func_00284248(&qx, eulerAngles->x, 0);
     func_00284248(&qy, eulerAngles->y, 1);
@@ -3415,21 +3427,35 @@ void func_002ABE90(Mat4x4 *mat) {
 /* func_002ABF50: transform the delta (c - a) into the local frame of quaternion
  * q and return component `idx` of the result. Builds the rotation matrix from q
  * (func_00284048), transforms the delta vector by it (func_00283A70), and reads
- * out result[idx]. Args: a, q, c, idx. Walled: $16-$19 + $31 saves. */
+ * out result[idx]. Args: a, q, c, idx. Saves $16-$19 + $31 in the s136os
+ * arm's 8-byte -fopt-stack slots. */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 55.10%
    -> UNKNOWN-@0: ROM `addiu sp,sp,-144` vs `addiu sp,sp,-128` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ABF50);
+/* MATCHED on the s136os arm (task #1508): byte-exact solo under SN 2.95.3 v1.36
+ * -fopt-stack (verify_match_unit). Closing lever: `res` = &result is a pointer
+ * local used for both the call argument and the final index, so it lives in a
+ * callee-saved register ($18) across func_00283A70 and the read is
+ * `sll idx,2; addu idx,res; lwc1` as in the ROM. Spelled `&result` at both
+ * sites, cc1 rematerialises sp+0x10 instead, saves one register fewer and
+ * builds a 0x80 frame where the ROM's is 0x90 (25/28 words differ). */
+/* GUARD (task #1508): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002ABF50)
+S136OS_SLOT(func_002ABF50);
 #else
 f32 func_002ABF50(const Vec4 *a, const Vec4 *q, const Vec4 *c, s32 idx) {
     Vec4 delta;
     Vec4 result;
     Mat4x4 mat;
+    Vec4 *res = &result;
 
     Vec4SubVu0(&delta, (Vec4 *)c, (Vec4 *)a);
     func_00284048(&mat, q);
-    func_00283A70(&result, &delta, &mat);
-    return ((f32 *)&result)[idx];
+    func_00283A70(res, &delta, &mat);
+    return ((f32 *)res)[idx];
 }
 #endif
 
@@ -3438,15 +3464,26 @@ f32 func_002ABF50(const Vec4 *a, const Vec4 *q, const Vec4 *c, s32 idx) {
  * (Vec3DotVu0), scales the projection by `scale`, scales the unit axis by that
  * amount and subtracts it from vec, writing the result into *out.
  *   out = vec - scale * dot(vec, unit(axis)) * unit(axis)
- * Args: out, vec, axis, scale ($f12). Walled: $f20 + $16-$18 + $31 saves. */
+ * Args: out, vec, axis, scale ($f12). Saves $f20 + $16-$18 + $31 in the
+ * s136os arm's 8-byte -fopt-stack slots; unit at sp+0x10, proj at sp+0. */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 62.39%
    -> UNKNOWN-@2: ROM `sd s0,32(sp)` vs `(none)` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ABFD0);
+/* MATCHED on the s136os arm (task #1508): byte-exact solo under SN 2.95.3 v1.36
+ * -fopt-stack (verify_match_unit). Closing lever: `proj` is declared before
+ * `unit`. SN 1.36 gives the first-declared local the lowest slot, so proj
+ * lands at sp+0 and unit at sp+0x10 (held in $16 across the calls), as in the
+ * ROM; declared in use order the two slots swap (18/34 words differ). */
+/* GUARD (task #1508): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002ABFD0)
+S136OS_SLOT(func_002ABFD0);
 #else
 void func_002ABFD0(Vec4 *out, Vec4 *vec, Vec4 *axis, f32 scale) {
-    Vec4 unit;
     Vec4 proj;
+    Vec4 unit;
     f32 amount;
 
     Vec3RescaleToLenVu0(&unit, 1.0f, axis);
