@@ -455,22 +455,13 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A82D8);
 extern void func_002A8200(Moby *moby, s32 seq, s32 frameIdx);
 void func_002A82D8(Moby *obj, s32 idx, s32 arg3, s32 arg4) {
     u8 *m = (u8 *)obj;
-    u8 *seqEntry;
-    s32 frameCount;
-    s32 clampedFrame;
-
-    {
-        u8 *cls = *(u8 **)(m + 0x24);
-        cls += idx * 4;
-        frameCount = *(u8 *)(*(u8 **)(cls + 0x48) + 0x10);
-    }
-    clampedFrame = frameCount - 1;
-    if (arg3 < frameCount) {
-        clampedFrame = arg3;
-    }
+    u8 *pClass = *(u8 **)(m + 0x24);
+    u8 *seqEntry = *(u8 **)(pClass + 0x48 + idx * 4);
+    s32 frameCount = *(u8 *)(seqEntry + 0x10);
+    s32 clampedFrame = (arg3 < frameCount) ? arg3 : (frameCount - 1);
 
     if (arg4 <= 0) {
-        func_002A8200((Moby *)m, idx, clampedFrame);
+        func_002A8200(obj, idx, clampedFrame);
         __asm__ __volatile__(""); /* cc1 2.96 sibling-call suppression (the ROM never sibcalls) */
         return;
     }
@@ -478,37 +469,29 @@ void func_002A82D8(Moby *obj, s32 idx, s32 arg3, s32 arg4) {
     if (0.025f < *(f32 *)(m + 0x44) ||
         *(s32 *)(m + 0x50) != 0 ||
         *(s32 *)(m + 0x54) != 0) {
-        s32 slot = func_002A08C0((Moby *)m);
-        if (slot >= 0) {
-            func_002A3288((Moby *)m, slot | 0x300);
-            {
-                register u8 *base EE_REG("$3") = g_proceduralAnimBounds;
-                u8 *dst = base + slot * 0x10;
-                register u8 *srcp EE_REG("$5") = m + 0x80;
-                __asm__ __volatile__("" : "+r"(srcp));
-                *(u_long128 *)dst = *(u_long128 *)srcp;
-                __asm__ __volatile__("");
-            }
+        s32 slot = func_002A08C0(obj);
+        if (slot < 0) {
+            m[0x41] = (u8)clampedFrame;
+        } else {
+            func_002A3288(obj, slot | 0x300);
+            *(Vec4 *)(g_proceduralAnimBounds + slot * 0x10) = *(Vec4 *)(m + 0x80);
             if (m[0x42] != 0xFF) {
                 m[0xA9] = m[0x42];
             }
             m[0x42] = 0xFF;
             m[0x40] = (u8)slot;
+            m[0x41] = (u8)clampedFrame;
         }
+    } else {
+        m[0x41] = (u8)clampedFrame;
     }
-    m[0x41] = (u8)clampedFrame;
 
     m[0x43] = (u8)idx;
-    ResolveMobyAnimFramePtrs((Moby *)m);
+    ResolveMobyAnimFramePtrs(obj);
     *(f32 *)(m + 0x48) = 1.0f;
     *(f32 *)(m + 0x4C) = 1.0f / IntToFloat(arg4);
     *(f32 *)(m + 0x44) = 0.0f;
     m[0x60] &= 0xFD;
-    {
-        u8 *cls = *(u8 **)(m + 0x24);
-        cls += idx * 4;
-        seqEntry = *(u8 **)(cls + 0x48);
-    }
     m[0x6C] = *(u8 *)(seqEntry + 0x11);
 }
 #endif
