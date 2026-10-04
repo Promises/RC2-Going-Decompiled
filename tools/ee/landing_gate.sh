@@ -2540,6 +2540,11 @@ selftest_regression_gate() {
 # on one live PASS line and the deleted leg cuts the LIVE run (task #1511): with
 # #1476's positional picks an arm added anywhere but last made --selftest FAIL
 # (FACT #9195), so adding arms was edit-free for the judge but not for these.
+# Task #1538 pins each baseline arm's emitted words (ASMUNIT_SELFTEST_WORDS):
+# three legs keep a baseline arm's PASS label and gut, strip or add its words,
+# each FAILing by the words alone naming it, and three words files (missing, 100
+# rows, one name changed) each FAIL the live run closed. It also ASSERTS the
+# deleted leg's k = 1 at a baseline of exactly FLOOR names (#1532's mutC).
 # Fails CLOSED: a VM that is down or a run that dies before its summary
 # (docker rc, no `asm_unit_selftest: N arms, F failed` line) is a SELFTEST-FAIL
 # naming the rc, never a skip. That it can fail is shown inside the tool by its
@@ -2568,18 +2573,45 @@ ASMUNIT_SELFTEST_FLOOR=188
 # is a COVERAGE measure: names leave it only by a RULING naming the arm. The
 # floor stays as an independent guard (it fails on a count, this on members).
 ASMUNIT_SELFTEST_ARMS="$HERE/asm_unit_selftest_arms.txt"
+# ASMUNIT_SELFTEST_WORDS: the .text WORDS each baseline arm must emit (task
+# #1538). A PASS label is the selftest's own verdict on its own assertion, so a
+# gutted assertion that keeps its label passes the name set: #1532 inserted a
+# 00000000 word into `MTC1 mt_bc1f -G8`'s words=[…] and the judge read `all 188
+# baseline arms PASS`, rc 0 (FACT #9162 q1). One line per baseline arm,
+# NAME<TAB>WORDS, sorted under LC_ALL=C: WORDS is the arm's `words=[…]` content,
+# or `-` for an arm whose line carries none (`${WORDS:+…}` in
+# asm_unit_selftest.sh: no object, or an empty .text). Both directions are
+# pinned: words where `-` is expected, none where words are expected, or any
+# other word list each FAIL naming the arm. A separate file, not a column of
+# ASMUNIT_SELFTEST_ARMS, because the set test compares that file's WHOLE lines
+# and the (25) legs match their exact reasons. Its key set must EQUAL that
+# file's (so "pinned but not PASSed" is the set clause, never a vacuous skip),
+# and it fails CLOSED like it. A PASS name outside the baseline is an addition
+# and is not word-checked, so adding arms stays edit-free; a row that changes
+# an arm's words, or adds a baseline arm, updates this file in the same commit.
+# Regenerate from a passing run with the awk in asmunit_selftest_words.
+ASMUNIT_SELFTEST_WORDS="$HERE/asm_unit_selftest_words.txt"
 # asmunit_selftest_names FILE — the sorted, unique PASS arm names of one
 # asm_unit_selftest.sh output: the label between `PASS ` and the first `:`.
 asmunit_selftest_names() {
   sed -n 's/^PASS \([^:]*\):.*/\1/p' "$1" | LC_ALL=C sort -u
 }
+# asmunit_selftest_words FILE — NAME<TAB>WORDS for every PASS line of one
+# asm_unit_selftest.sh output, in output order; WORDS is `-` when the line ends
+# in no `words=[…]`.
+asmunit_selftest_words() {
+  LC_ALL=C awk '/^PASS / { nm = $0; sub(/^PASS /, "", nm); sub(/:.*/, "", nm); w = "-"; if (match($0, / words=\[[0-9a-f ]*\]$/)) w = substr($0, RSTART + 8, RLENGTH - 9); printf "%s\t%s\n", nm, w }' "$1"
+}
 # asmunit_selftest_judge FILE RC — sets AJ (the reason) and returns 0 when FILE,
 # one asm_unit_selftest.sh output, passes: a summary line, rc 0, 0 failed, no
-# FAIL line, N PASS lines, N >= ASMUNIT_SELFTEST_FLOOR, and every name in
-# ASMUNIT_SELFTEST_ARMS among the PASS names. AJ_SUM is the summary. When both
-# the floor and the set fail, AJ carries both reasons, floor first.
+# FAIL line, N PASS lines, N >= ASMUNIT_SELFTEST_FLOOR, every name in
+# ASMUNIT_SELFTEST_ARMS among the PASS names, and every PASS line of such a name
+# carrying its ASMUNIT_SELFTEST_WORDS words. AJ_SUM is the summary. When more
+# than one fails, AJ carries every reason, floor, set, words in that order;
+# AJ_WDIFF holds one `NAME: expected [..] got [..]` line per differing PASS line.
 asmunit_selftest_judge() {
-  local file="$1" rc="$2" n f np nf nb miss why=""
+  local file="$1" rc="$2" n f np nf nb nw wbad miss wdiff why=""
+  AJ_WDIFF=""
   AJ_SUM=$(/usr/bin/grep -E '^asm_unit_selftest: [0-9]+ arms, [0-9]+ failed \(/work/tools/ee/asm_unit\.sh\)$' "$file" | tail -1)
   n=$(printf '%s' "$AJ_SUM" | sed -nE 's/^asm_unit_selftest: ([0-9]+) arms.*/\1/p'); f=$(printf '%s' "$AJ_SUM" | sed -nE 's/.* arms, ([0-9]+) failed.*/\1/p')
   np=$(/usr/bin/grep -c '^PASS ' "$file" || true); nf=$(/usr/bin/grep -c '^FAIL ' "$file" || true)
@@ -2589,19 +2621,32 @@ asmunit_selftest_judge() {
   # fail closed: an unreadable or short baseline would make the set test vacuous
   nb=$( { LC_ALL=C sort -u "$ASMUNIT_SELFTEST_ARMS" 2>/dev/null || true; } | /usr/bin/grep -c . || true)
   if [ "$nb" -lt "$ASMUNIT_SELFTEST_FLOOR" ]; then AJ="baseline: $ASMUNIT_SELFTEST_ARMS has $nb distinct names < ASMUNIT_SELFTEST_FLOOR $ASMUNIT_SELFTEST_FLOOR (missing or truncated), so the arm set cannot be checked"; return 1; fi
+  # the same for the words pin: an unreadable, short, malformed or mis-keyed
+  # words file would make the words test vacuous for the arms it lacks
+  nw=$( { LC_ALL=C sort -u "$ASMUNIT_SELFTEST_WORDS" 2>/dev/null || true; } | cut -f1 | /usr/bin/grep -c . || true)
+  if [ "$nw" -lt "$ASMUNIT_SELFTEST_FLOOR" ]; then AJ="words baseline: $ASMUNIT_SELFTEST_WORDS has $nw rows < ASMUNIT_SELFTEST_FLOOR $ASMUNIT_SELFTEST_FLOOR (missing or truncated), so the arm words cannot be checked"; return 1; fi
+  wbad=$( { LC_ALL=C sort -u "$ASMUNIT_SELFTEST_WORDS" 2>/dev/null || true; } | LC_ALL=C awk -F'\t' '$0 == "" { next } { ok = (NF == 2 && $1 != "" && $2 != "" && !($1 in k)); if (ok && $2 != "-") { m = split($2, w, " "); if (m * 9 - 1 != length($2)) ok = 0; for (i = 1; i <= m; i++) if (length(w[i]) != 8 || w[i] !~ /^[0-9a-f]+$/) ok = 0 } if (!ok) b[$1] = 1; k[$1] = 1 } END { for (x in b) print x }' | LC_ALL=C sort | awk '{ printf "%s[%s]", sep, $0; sep = " " }')
+  if [ -n "$wbad" ]; then AJ="words baseline: $ASMUNIT_SELFTEST_WORDS has malformed or repeated rows — $wbad"; return 1; fi
+  wbad=$( { LC_ALL=C comm -3 <(LC_ALL=C sort -u "$ASMUNIT_SELFTEST_ARMS" | /usr/bin/grep .) <(cut -f1 "$ASMUNIT_SELFTEST_WORDS" | LC_ALL=C sort -u | /usr/bin/grep .) || true; } | sed 's/^\t//' | LC_ALL=C sort | awk '{ printf "%s[%s]", sep, $0; sep = " " }')
+  if [ -n "$wbad" ]; then AJ="words baseline: names in only one of $(basename "$ASMUNIT_SELFTEST_ARMS") and $(basename "$ASMUNIT_SELFTEST_WORDS") — $wbad"; return 1; fi
   if [ "$n" -lt "$ASMUNIT_SELFTEST_FLOOR" ]; then why="floor: $n arms < ASMUNIT_SELFTEST_FLOOR $ASMUNIT_SELFTEST_FLOOR, 0 failed — an arm was dropped, which is lost coverage, not a pass"; fi
   miss=$(LC_ALL=C comm -23 <(LC_ALL=C sort -u "$ASMUNIT_SELFTEST_ARMS") <(asmunit_selftest_names "$file") | awk '{ printf "%s[%s]", sep, $0; sep = " " } END { printf "\t%d", NR }')
   if [ "${miss##*$'\t'}" != 0 ]; then why="${why:+$why; }set: ${miss##*$'\t'} baseline arm(s) not PASSed — ${miss%$'\t'*}"; fi
+  # words: every PASS line of a baseline name against its pinned words; a
+  # line with no words=[…] reads as `-`, so absent-but-expected is a mismatch
+  AJ_WDIFF=$(LC_ALL=C awk -F'\t' 'NR == FNR { if ($0 != "") ew[$1] = $2; next } ($1 in ew) && $2 != ew[$1] { printf "%s: expected [%s] got [%s]\n", $1, ew[$1], $2 }' "$ASMUNIT_SELFTEST_WORDS" <(asmunit_selftest_words "$file"))
+  wdiff=$(printf '%s' "$AJ_WDIFF" | sed 's/: expected \[.*//' | LC_ALL=C sort -u | awk '{ printf "%s[%s]", sep, $0; sep = " " } END { printf "\t%d", NR }')
+  if [ "${wdiff##*$'\t'}" != 0 ]; then why="${why:+$why; }words: ${wdiff##*$'\t'} arm(s) differ — ${wdiff%$'\t'*}"; fi
   if [ -n "$why" ]; then AJ="$why"; return 1; fi
-  AJ="$n arms >= floor $ASMUNIT_SELFTEST_FLOOR, all $nb baseline arms PASS"; return 0
+  AJ="$n arms >= floor $ASMUNIT_SELFTEST_FLOOR, all $nb baseline arms PASS with their pinned words"; return 0
 }
 selftest_asmunit_selftest() {
-  local T="$1" b=0 rc n x k nl ne nb xl dl
-  say "-- (25) ASM_UNIT_SELFTEST (#1366, #1385, #1476): $HERE/asm_unit_selftest.sh on this tree's asm_unit.sh in one container on $EE_CTX -> rc 0, 'N arms, 0 failed' with N >= $ASMUNIT_SELFTEST_FLOOR, N PASS lines, no FAIL line and every arm of $(basename "$ASMUNIT_SELFTEST_ARMS") PASSed; a VM that cannot run it is a FAIL; the live run cut to FLOOR-1 arms FAILs by floor and set, a baseline arm swapped for a duplicate or renamed FAILs naming it, N+1 arms PASSes"
+  local T="$1" b=0 rc n x k nl ne nb nbf xl dl xw xn wf
+  say "-- (25) ASM_UNIT_SELFTEST (#1366, #1385, #1476, #1538): $HERE/asm_unit_selftest.sh on this tree's asm_unit.sh in one container on $EE_CTX -> rc 0, 'N arms, 0 failed' with N >= $ASMUNIT_SELFTEST_FLOOR, N PASS lines, no FAIL line and every arm of $(basename "$ASMUNIT_SELFTEST_ARMS") PASSed; a VM that cannot run it is a FAIL; the live run cut to FLOOR-1 arms FAILs by floor and set, a baseline arm swapped for a duplicate or renamed FAILs naming it, N+1 arms PASSes; every baseline arm's words match $(basename "$ASMUNIT_SELFTEST_WORDS") (#1538), and an arm's words gutted, stripped or added FAIL naming it, a missing, short or mis-keyed words file FAILs closed"
   in_vm "sh $HERE/asm_unit_selftest.sh" > "$T/asmunit_selftest.txt" 2>&1; rc=$?
   if asmunit_selftest_judge "$T/asmunit_selftest.txt" "$rc"; then ok "control: rc $rc, $AJ_SUM, $AJ_NP PASS lines"
   elif [ "$AJ" = nosum ]; then say "SELFTEST-FAIL (25) asm_unit_selftest.sh printed no summary line for /work/tools/ee/asm_unit.sh (docker --context $EE_CTX rc $rc): it did not run, and an arm that cannot run is not coverage. Last lines:"; show < <(tail -5 "$T/asmunit_selftest.txt" | sed 's/^/  inner| /'); b=1
-  else say "SELFTEST-FAIL (25) asm_unit_selftest.sh does not pass on this tree ($AJ):"; show < <(/usr/bin/grep '^FAIL ' "$T/asmunit_selftest.txt" | head -20 | sed 's/^/  inner| /'); b=1; fi
+  else say "SELFTEST-FAIL (25) asm_unit_selftest.sh does not pass on this tree ($AJ):"; show < <( { /usr/bin/grep '^FAIL ' "$T/asmunit_selftest.txt"; printf '%s\n' "$AJ_WDIFF" | /usr/bin/grep .; } | head -20 | sed 's/^/  inner| /'); b=1; fi
   say "     full output -> $T/asmunit_selftest.txt"
   # the floor's own legs, seeded from the real output (only when it passed:
   # a seed cut from a failing run would fire for the wrong reason). Every leg
@@ -2623,9 +2668,15 @@ selftest_asmunit_selftest() {
     # (it carries no baseline name, or repeats one kept), leaving one line per
     # baseline name; then k = (that count)-FLOOR+1 base lines from the end of
     # the run. A baseline of exactly FLOOR names (the floor's own obligation)
-    # makes k = 1, so exactly one baseline name goes missing whatever N is
+    # makes k = 1, so exactly one baseline name goes missing whatever N is.
+    # That is ASSERTED when the baseline has exactly FLOOR distinct names (task
+    # #1538): the range test alone let a lost classifier (every line `base`)
+    # seed k = 2 on an arm added mid-run, expect `set: 2` and PASS (#1532's
+    # mutC). A baseline larger than FLOOR legitimately gives k > 1.
     n=$((ASMUNIT_SELFTEST_FLOOR - 1)); k=$((nl - ne - n))
-    if [ "$k" -lt 1 ] || [ "$k" -gt "$nb" ]; then say "SELFTEST-FAIL (25) cannot seed the deleted leg: $nl live PASS lines, $nb on a unique baseline name, $ne extra, FLOOR $ASMUNIT_SELFTEST_FLOOR"; b=1
+    nbf=$(LC_ALL=C sort -u "$ASMUNIT_SELFTEST_ARMS" | /usr/bin/grep -c . || true)
+    if [ "$nbf" = "$ASMUNIT_SELFTEST_FLOOR" ] && [ "$k" != 1 ]; then say "SELFTEST-FAIL (25) the deleted leg's k is $k, not 1, with a baseline of exactly FLOOR $ASMUNIT_SELFTEST_FLOOR names: $nl live PASS lines, $ne classed extra, $nb on a unique baseline name — the classifier is wrong"; b=1
+    elif [ "$k" -lt 1 ] || [ "$k" -gt "$nb" ]; then say "SELFTEST-FAIL (25) cannot seed the deleted leg: $nl live PASS lines, $nb on a unique baseline name, $ne extra, FLOOR $ASMUNIT_SELFTEST_FLOOR"; b=1
     else
       awk -F'\t' -v k="$k" '$2 == "base" { bl[++m] = $1 } $2 == "extra" { print $1 } END { for (i = m - k + 1; i <= m; i++) print bl[i] }' "$T/asmunit_selftest_cls.txt" > "$T/asmunit_selftest_del_lines.txt"
       x=$(awk -F'\t' -v k="$k" '$2 == "base" { bl[++m] = $3 } END { for (i = m - k + 1; i <= m; i++) print bl[i] }' "$T/asmunit_selftest_cls.txt" | LC_ALL=C sort | awk '{ printf "%s[%s]", sep, $0; sep = " " }')
@@ -2652,6 +2703,40 @@ selftest_asmunit_selftest() {
     awk '/^asm_unit_selftest: [0-9]+ arms, / { print "PASS seeded-extra-arm: added by landing_gate --selftest (25)"; n = $2; sub(/: [0-9]+ arms,/, ": " n + 1 " arms,") } { print }' "$T/asmunit_selftest.txt" > "$T/asmunit_selftest_add.txt"
     if asmunit_selftest_judge "$T/asmunit_selftest_add.txt" 0; then ok "control: an arm added -> $AJ_SUM still passes, no edit here ($AJ)"
     else say "SELFTEST-FAIL (25) the output grown by one PASS arm did not pass ($AJ_SUM: $AJ)"; b=1; fi
+    # words (task #1538): a baseline arm whose PASS label is kept but whose
+    # words are gutted (#1532's seed: a 00000000 word inserted), stripped, or
+    # grown onto an arm pinned to none must FAIL by the words alone, naming
+    # exactly it. Subjects are baseline names on one live PASS line, one
+    # pinned to words and one pinned to `-`.
+    xw=""; xn=""
+    while IFS=$'\t' read -r xl _ x; do
+      case "$(LC_ALL=C awk -F'\t' -v x="$x" '$1 == x { print $2; exit }' "$ASMUNIT_SELFTEST_WORDS")" in
+        -) [ -z "$xn" ] && xn="$xl"$'\t'"$x" ;;
+        ?*) [ -z "$xw" ] && xw="$xl"$'\t'"$x" ;;
+      esac
+    done < <(awk -F'\t' '$2 == "base"' "$T/asmunit_selftest_cls.txt")
+    if [ -z "$xw" ] || [ -z "$xn" ]; then say "SELFTEST-FAIL (25) cannot seed the words legs: no live PASS line carries a unique baseline name pinned to words ('${xw#*$'\t'}') and one pinned to none ('${xn#*$'\t'}')"; b=1
+    else
+      xl=${xw%%$'\t'*}; x=${xw#*$'\t'}
+      awk -v xl="$xl" 'FNR == xl + 0 { sub(/ words=\[/, " words=[00000000 ") } { print }' "$T/asmunit_selftest.txt" > "$T/asmunit_selftest_wgut.txt"
+      if ! asmunit_selftest_judge "$T/asmunit_selftest_wgut.txt" 0 && [ "$AJ" = "words: 1 arm(s) differ — [$x]" ]; then ok "fired: arm [$x] keeps its PASS label with a 00000000 word inserted -> $AJ (${AJ_WDIFF#*: })"
+      else say "SELFTEST-FAIL (25) an arm whose words were gutted under a kept PASS label did not FAIL by the words naming exactly [$x] ($AJ)"; b=1; fi
+      awk -v xl="$xl" 'FNR == xl + 0 { sub(/ words=\[[0-9a-f ]*\]$/, "") } { print }' "$T/asmunit_selftest.txt" > "$T/asmunit_selftest_wstrip.txt"
+      if ! asmunit_selftest_judge "$T/asmunit_selftest_wstrip.txt" 0 && [ "$AJ" = "words: 1 arm(s) differ — [$x]" ]; then ok "fired: arm [$x] pinned to words emits none -> $AJ"
+      else say "SELFTEST-FAIL (25) an arm pinned to words that emits none did not FAIL by the words naming exactly [$x] ($AJ)"; b=1; fi
+      xl=${xn%%$'\t'*}; x=${xn#*$'\t'}
+      awk -v xl="$xl" 'FNR == xl + 0 { $0 = $0 " words=[00000000]" } { print }' "$T/asmunit_selftest.txt" > "$T/asmunit_selftest_wadd.txt"
+      if ! asmunit_selftest_judge "$T/asmunit_selftest_wadd.txt" 0 && [ "$AJ" = "words: 1 arm(s) differ — [$x]" ]; then ok "fired: arm [$x] pinned to no words emits words=[00000000] -> $AJ"
+      else say "SELFTEST-FAIL (25) an arm pinned to no words that emits one did not FAIL by the words naming exactly [$x] ($AJ)"; b=1; fi
+    fi
+    # the words file fails CLOSED: missing, cut to 100 rows, or one row's name
+    # changed must each FAIL the passing live run by the words baseline
+    head -100 "$ASMUNIT_SELFTEST_WORDS" > "$T/asmunit_selftest_w100.txt"
+    LC_ALL=C awk -F'\t' 'NR == 1 { $1 = $1 " renamed" } { print }' OFS='\t' "$ASMUNIT_SELFTEST_WORDS" > "$T/asmunit_selftest_wren.txt"
+    for wf in "$T/asmunit_selftest_wnone.txt" "$T/asmunit_selftest_w100.txt" "$T/asmunit_selftest_wren.txt"; do
+      if ! ASMUNIT_SELFTEST_WORDS="$wf" asmunit_selftest_judge "$T/asmunit_selftest.txt" 0 && case "$AJ" in "words baseline: "*) true ;; *) false ;; esac; then ok "fired: words file $(basename "$wf") -> $AJ"
+      else say "SELFTEST-FAIL (25) the live run judged against words file $wf did not FAIL closed by the words baseline ($AJ)"; b=1; fi
+    done
   fi
   return $b
 }
