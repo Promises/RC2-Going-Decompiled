@@ -10260,7 +10260,7 @@ void func_00346CD8(void *w, s32 flags) {
  * pulsing blend. Finally lays out 11 panel sub-elements at the anchor record
  * *(w+0x470) plus their fixed (x,y) offset pairs (D_1AE3D8.. and the stack-copied
  * D_1AE280 for the +0x1C8 element). Mirrors the weapon-screen builder
- * func_003453D0. Returns nothing (the register-0 return is discarded). */
+ * func_003453D0. */
 /* Params: w = the map screen; mode = forwarded to the sub-builder; out =
  * receives the state latched from +0x508. Returns 0 (the ROM sets $v0 = 0).
  * MATCHED byte-exact on the s136os arm (task #1522). Body defects in the #else:
