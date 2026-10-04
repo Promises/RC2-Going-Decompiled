@@ -1133,52 +1133,62 @@ void *GuiSystemInit(void *guiArg) {
 }
 #endif
 
-/* func_0034F868 callees (declared for the TARGET_NATIVE #else only). */
+/* func_0034F868 callees. WaitGsPathsIdle is declared s32: its ROM epilogue
+ * leaves 0 in $v0 (`daddu $2,$0,$0` in the bnez delay slot), and with a `void`
+ * declaration the s136os compile puts the loop-tail count reload in $v0 where
+ * the ROM uses $v1 (3 words, task #1620). */
 extern void WaitFrameDmaFence(s32 mask);
-extern void WaitGsPathsIdle(s32 a, s32 b);
+extern s32  WaitGsPathsIdle(s32 a, s32 b);
 extern void func_0011AEA0(s32 arg);                       /* pre-RPC flush/sync */
 extern void KickGifImageUpload(void *packet, void *vramDest);
 extern void func_00126288(void *dst, s32 texId, s32 a, s32 b, s32 c,
                         s32 d, s32 width, s32 height);    /* build a GS image-upload GIF packet */
 
+/* The texture-upload queue func_0034F868 drains: eight 0x400-byte upload slots
+ * at +0xE00, their texture ids (low halfword used) at +0x2E00 and the queued
+ * count at +0x2E20. Only the fields func_0034F868 touches are named. */
+struct TexUploadQueue {
+    u8  pad0[0xE00];
+    u8  slots[8][0x400];
+    s32 ids[8];
+    s32 count;
+};
+
 /** func_0034F868 — flush the queued texture image-uploads for this manager. Wait
- *  one frame-DMA fence, then for each of the base->+0x2E20 queued entries build a
- *  16x16 GS image-upload GIF packet (func_00126288) for the entry's texture id (the
- *  low halfword of the stride-4 id list at base+0x2E00) into a stack scratch,
- *  issue it to the entry's VRAM slot (base+0xE00, stride 0x400) via
- *  KickGifImageUpload, and wait for the GS paths to idle between uploads. Clears
- *  the queue count when done. */
-/* TODO(match) func_0034F868 - task #566 (round 4), measured on the COMMITTED tree (this file,
- * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
- * tools/ee/objdiff_build.sh, clean): sdk29 90.89%, engine96 79.87%. Eligible arm: e96.
- * Residual: REGNUM (s0/s1/s2/s3 rotated) + ORDER */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F868);
+ *  one frame-DMA fence, then for each of the q->count queued entries build a
+ *  16x16 GS image-upload GIF packet (func_00126288) for the entry's texture id
+ *  (the low halfword of q->ids[i]) into a stack scratch, issue it to the entry's
+ *  slot q->slots[i] via KickGifImageUpload, and wait for the GS paths to idle
+ *  between uploads. Clears the count when done, also when it was <= 0.
+ *  base: the queue (struct TexUploadQueue). Returns nothing. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0034F868)
+S136OS_SLOT(func_0034F868);
 #else
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1620). Two things closed it. The WaitGsPathsIdle
+   declaration (above) moved the loop-tail lw/slt/bnel from $2 to $3. The plain
+   indexed for loop lets loop strength reduction build the two cursors after the
+   count test (slots in the blez delay slot, then ids at +0x2E00 with the offset
+   in the cursor, lh 0x0) with base in $19 and i in $18, as the ROM does. The old
+   do-while with hand-written cursors rotated s0..s3, and an indexed
+   *(s16 *)(base + 0x2E00 + i * 4) folds the 0x2E00 into the lh offset instead.
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 void func_0034F868(u8 *base) {
+    struct TexUploadQueue *q = (struct TexUploadQueue *)base;
     u8  packet[0x60];
-    u8 *idCursor;
-    u8 *vramDest;
     s32 i;
 
     WaitFrameDmaFence(1);
-    if (*(s32 *)(base + 0x2E20) <= 0) {
-        *(s32 *)(base + 0x2E20) = 0;   /* asm zeroes the count on every exit, incl. the <=0 early-out */
-        return;
-    }
-    idCursor = base + 0x2E00;
-    vramDest = base + 0xE00;
-    i = 0;
-    do {
-        func_00126288(packet, *(s16 *)idCursor, 1, 0, 0, 0, 0x10, 0x10);
-        i++;
+    for (i = 0; i < q->count; i++) {
+        func_00126288(packet, (s16)q->ids[i], 1, 0, 0, 0, 0x10, 0x10);
         func_0011AEA0(0);
-        idCursor += 4;
-        KickGifImageUpload(packet, vramDest);
-        vramDest += 0x400;
+        KickGifImageUpload(packet, q->slots[i]);
         WaitGsPathsIdle(0, 0);
-    } while (i < *(s32 *)(base + 0x2E20));
-    *(s32 *)(base + 0x2E20) = 0;
+    }
+    q->count = 0;
 }
 #endif
 
