@@ -2086,24 +2086,30 @@ s32 func_002CE878(void) {
 }
 
 /* GUI accessor: when the GUI is up, mark the widget at instance+0x3C160 active
- * (func_00342460(w, 1)) and store its queried value (func_00342468(w)) into
- * out[0x34]. Returns 0.
- * Wall: 8-byte-packed-save ($16 + $17 + $31). Preserved as portable C. */
+ * (func_00342460(widget, 1)) and store its queried value (func_00342468(widget))
+ * into out[0x34].
+ * out: record whose word at +0x34 receives the value. Returns 0.
+ * The widget address is re-formed from g_guiInstance for each call, as the ROM
+ * does (it reloads g_guiInstance after the first call and keeps only the 0x3C160
+ * offset in $16); caching it in a local makes cc1 hold the sum instead.
+ * Byte-exact on the s136os arm (task #1492). */
 extern void func_00342460(void *widget, s32 arg);
 extern s32 func_00342468(void *widget);
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE8A8);
+/* GUARD (task #1492): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002CE8A8)
+S136OS_SLOT(func_002CE8A8);
 #else
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 64.12% -> STRUCTURAL,
  * first differing row @1: ROM `lui v0,0x0  [HI16 0x001A8D04]` vs `sd s0,0(sp)`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 75.29% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-48`. */
-/* TODO(match): functional equivalent - not byte-exact; 3-GPR packed-save frame. */
 s32 func_002CE8A8(s32 *out) {
     if (g_guiInstance) {
-        char *w = g_guiInstance + 0x3C160;
-        func_00342460(w, 1);
-        out[0x34 / 4] = func_00342468(w);
+        func_00342460(g_guiInstance + 0x3C160, 1);
+        out[0x34 / 4] = func_00342468(g_guiInstance + 0x3C160);
     }
     return 0;
 }
@@ -2175,26 +2181,30 @@ s32 func_002CE9D8(void) {
 /* GUI wrapper: when the GUI is up, configure the widget at instance+0x3C160 —
  * mark it active (func_00342460(w,1)), bind its three data blobs
  * (func_00342450(w, &D_2615D8, &D_261678, &D_261730)) and clear its selection
- * (func_00342520(w,0)). Returns 0.
- * Wall: 8-byte-packed-save (saves $16 + $31). Preserved as portable C. */
+ * (func_00342520(w,0)). Takes no arguments; returns 0.
+ * As func_002CE8A8, the widget address is re-formed from g_guiInstance for every
+ * call (the ROM reloads g_guiInstance after each call and holds only the 0x3C160
+ * offset in $16). Byte-exact on the s136os arm (task #1492). */
 extern void func_00342460(void *widget, s32 arg);
 extern void func_00342450(void *widget, void *a, void *b, void *c);
 extern void func_00342520(void *widget, s32 arg);
 extern u8 D_2615D8, D_261678, D_261730;
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CEA38);
+/* GUARD (task #1492): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002CEA38)
+S136OS_SLOT(func_002CEA38);
 #else
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 63.23% -> STRUCTURAL,
  * first differing row @1: ROM `lui a0,0x0  [HI16 0x001A8D04]` vs `(none)`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 73.35% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. */
-/* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame. */
 s32 func_002CEA38(void) {
     if (g_guiInstance) {
-        char *w = g_guiInstance + 0x3C160;
-        func_00342460(w, 1);
-        func_00342450(w, &D_2615D8, &D_261678, &D_261730);
-        func_00342520(w, 0);
+        func_00342460(g_guiInstance + 0x3C160, 1);
+        func_00342450(g_guiInstance + 0x3C160, &D_2615D8, &D_261678, &D_261730);
+        func_00342520(g_guiInstance + 0x3C160, 0);
     }
     return 0;
 }
