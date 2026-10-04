@@ -917,7 +917,7 @@ s32 func_002920C0(void *hdrArg, u64 *out) {
         s32 idx = 6;                            /* sc[6] == size[0] (sp+0x18) */
         do {
             /* size[]  head sc[6] (0x18): size[n+1] = size[n] >> 2         */
-            sc[idx + 1] = sc[idx] >> 2;
+            sc[idx + 1] = (u32)((s32)sc[idx] >> 2);
             /* srcPtr[] head sc[1] (0x04): srcPtr[n+1] = srcPtr[n] + size[n]
              * (sp+0x18 - 0x14 = sp+0x04 = srcPtr[n]; -0x10 = srcPtr[n+1])  */
             sc[idx - 4] = sc[idx - 5] + sc[idx];
