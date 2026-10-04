@@ -47,14 +47,12 @@ static void ps2hw_null_init(void)
  * re-seeds it via GuiElementSetScale at the top of every row iteration, so the
  * dropped write is never observed stale. Safe to no-op. */
 void GuiTextElementDraw(void)      {}
-void Begin2dDrawBatch(void)        {} /* resets VRAM/upload bookkeeping only */
-void End2dDrawBatch(void)          {}
+/* Begin2dDrawBatch, End2dDrawBatch, DrawRotatedSprite2d, DrawGlyphQuad and
+ * AppendFrameInitGsState: removed (task #1460) - text/178E88.cpp defines them
+ * natively, and since #1460 its .cpp joins the link unmangled. */
 void AppendGsRegPacket(void)       {}
-void DrawRotatedSprite2d(void)     {}
-void DrawGlyphQuad(void)           {}
 void AppendDrawEnvContext1(void)   {}
 void AppendDrawEnvContext2(void)   {}
-void AppendFrameInitGsState(void)  {}
 void AppendScreenClearPacket(void) {}
 void FlushCache(void)              {} /* EE cache sync - no DMA headless */
 
@@ -76,11 +74,10 @@ u32  WaitVblankGetField(void)      { return 1; } /* field bit for frame pacing *
 
 /* --- VOID-NOOP: GS/render-packet emit, render bookkeeping, or EE/SDK sync that
  * writes no gameplay state read back in-frame. ----------------------------- */
-void func_0011AAD0(void)            {} /* RotateThreadReadyQueue - syscall(0x2b) yield */
-void func_0027E4D0(void)            {} /* AppendScreenRectFill - GIF sprite-fill */
+/* func_0011AAD0 (cod/015180.c: an empty native syscall arm), func_0027E4D0 and
+ * BuildFrameViewMatrices (text/178E88.cpp), CloseMobyDmaSegment (text/1A00F0.cpp):
+ * removed (task #1460) - the units define them natively. */
 void BuildCameraProjection(void)    {} /* GS projection matrices (render-read 0x1b908x) */
-void BuildFrameViewMatrices(void)   {} /* view/world-screen matrices (render-read 0x1b518x) */
-void CloseMobyDmaSegment(void)      {} /* DMA tag splice */
 /* CullAndEmitShrubs / CullAndBinTieInstances: hand-written inline VU0 macro-mode
  * DMA-chain builders (scratchpad + SPR-FROM DMA kicks) - a faithful #else is
  * impossible (the hardware IS the logic). Their only persisted writes are
@@ -109,14 +106,20 @@ void RenderFrame(void)              {} /* master draw chain - packets + render-s
                                        * (vis-mask/procedural-anim/fade clamps); none
                                        * is gameplay state, safe to drop one frame */
 void RenderMenuScreenWidgets(void)  {} /* front-end compositor - packets only */
-void UpdateScreenFadeWhite(void)    {} /* drives the (visual) white-fade ramp */
+/* UpdateScreenFadeWhite: removed (task #1460) - text/16E980.c defines it. */
 void func_00272cc0(void)            {} /* DrawLockOnReticle - lock-on sprites */
 void func_002857C8(void)            {} /* SetScreenClearColor - patches clear-packet RGBA */
-void snd_BankLoadAsync(void)        {} /* kicks IOP RPC#3 - idle headless */
+void snd_BankLoadAsync(void)        {} /* kicks IOP RPC#3 - idle headless.
+                                       * HELD (task #1460): cod/0321A0.c defines it
+                                       * too, and its body spins on
+                                       * sceSifCheckStatRpc. A design call. */
 
 /* --- DEADLOCK-RISK -> no-op: a cosmetic vblank-blocking fade whose per-iter
  * WaitFrameDmaFence/WaitVblankGetField never advance headless. Writes only
- * fade/render state. --------------------------------------------------------*/
+ * fade/render state.
+ * HELD (task #1460): text/178E88.cpp now also defines it natively, so the full
+ * native link multiply-defines it. Which one the native build runs is a design
+ * call, not made here. ------------------------------------------------------*/
 void FadeOutToBlackBlocking(void)   {}
 
 /* --- RETURN-CONST: caller uses the return; a fixed benign value is safe. The
@@ -124,15 +127,18 @@ void FadeOutToBlackBlocking(void)   {}
  * could be (UploadTieTextures int, StartFileLoadPumpingVoice u64 - callers
  * discard, but return a defined 0 not a garbage register). ------------------ */
 s32  UploadTieTextures(void)          { return 0; } /* tie tex upload - caller ignores */
+/* HELD (task #1460), each also defined natively by a unit, so the full native
+ * link multiply-defines them; which body runs headless is a design call, not
+ * made here. StartFileLoadPumpingVoice (text/1B4218.cpp) reaches CdStartRead and
+ * PumpDialogVoiceSystem's fileLoadActive spin; SetSndPumpCallback (cod/0321A0.c)
+ * reaches func_001245D0's interrupt-control path. */
 u64  StartFileLoadPumpingVoice(void)  { return 0; } /* voice-pump wrapper - discarded */
 u32  SetSndPumpCallback(void)         { return 0; } /* install IOP pump cb - discarded */
 u32  func_0011D620(void)              { return 0; } /* sceSifCallRpc - 0 = RPC success */
-u32  func_0028BE10(void)              { return 0; } /* RegisterHudElement - handle, render-only */
 u32  func_00286200(void)              { return 0; } /* IsMenuOverlayActive - 0 = inactive (New Game) */
-/* IsGadgetClassValid: MUST return 1, NOT 0. Caller func_00291148 sets the
- * inventory-order slot to 0xFF when this returns 0 - a 0 here WIPES inventory
- * in-frame. 1 (valid) is the non-destructive headless default. */
-u32  func_00289190(void)              { return 1; }
+/* func_0028BE10 and func_00289190 (text/188858.c): removed (task #1460) - the
+ * unit defines both natively (func_00289190 is matched plain C, a table scan,
+ * where this stub returned a constant 1). */
 
 /* ===========================================================================
  * Batch 3 - water-pool state machine (text/1FFBA0 func_003002E0 / func_00300C08)
@@ -143,10 +149,12 @@ u32  func_00289190(void)              { return 1; }
  * =========================================================================== */
 void SpawnParticleType55(void) {} /* particle emit (0x2C74C0) - no GS headless;
                                    * the durable hue-counter tick is done in C */
-void StopDialogVoice(void)     {} /* dialog-voice fade/stop - audio bookkeeping */
-void func_002888D8(void)       {} /* AdvanceWeaponVariant(itemId) - inventory bk */
-void func_00288F30(void)       {} /* weapon progress-gate iterate(itemId) - bk */
-void func_002AE6C8(void)       {} /* EquipGadgetItem(itemId) - equip bookkeeping */
+void StopDialogVoice(void)     {} /* dialog-voice fade/stop - audio bookkeeping.
+                                * HELD (task #1460): text/1B4218.cpp defines it
+                                * too; its body queues snd_StopVoice into the
+                                * 989snd ring. A design call, not made here. */
+/* func_002888D8, func_00288F30 (text/188858.c) and func_002AE6C8 (text/1A8180.c):
+ * removed (task #1460) - the units define them natively. */
 
 /* ===========================================================================
  * M3 batch 4 - data-driven from the tester's refreshed stub-hit sweep. 7 no-ops
@@ -154,16 +162,15 @@ void func_002AE6C8(void)       {} /* EquipGadgetItem(itemId) - equip bookkeeping
  * g_inventoryOrder; func_002CABC0 resets the world camera g_flCameraPos/Matrix)
  * are NOT here - they write in-frame-read game state and get functional shims.
  * =========================================================================== */
-void func_0011AEA0(void)            {} /* FlushCache (real symbol - callers use
-                                        * the func_ name/addr, not "FlushCache") */
+/* func_0011AEA0 (cod/015180.c: an empty native syscall arm): removed (task #1460). */
 void AppendTexFlushDefaultTex0(void){} /* GIF default-TEX0 flush DMA tag */
 void RenderSaveLoadStatusPopup(void){} /* Begin2dDrawBatch..End - GS packets only */
-void RunSprRenderPipeline(void)     {} /* CPU-side render packet gen (RunRenderTaskList) */
-void func_0026FC88(void)            {} /* GS CLUT+texture upload packets; *outTex0 render-only */
-void func_00271FE8(void)            {} /* draw/cull context-flag (write-only); UpdateCamera writes
-                                        * g_flCameraPos/Matrix itself AFTER this returns */
+/* RunSprRenderPipeline (text/1A00F0.cpp), func_0026FC88 and func_00271FE8
+ * (text/16E980.c): removed (task #1460) - the units define them natively. */
 u64  func_00133250(void)            { return 0; } /* blocking IOP snd RPC + snd_Pump drain loop -
-                                        * deadlock headless; 0 = IOP-ready/success the callers want */
+                                        * deadlock headless; 0 = IOP-ready/success the callers want.
+                                        * HELD (task #1460): cod/0321A0.c defines it too, and its
+                                        * body blocks in snd_CheckLoadInProgress(0). A design call. */
 
 /* ===========================================================================
  * M5 - in-level driven-frame trap list (tester FINALIZED 2026-06-19,

@@ -12,9 +12,9 @@
  *   snd_Pump          - the main service pump. Returns 0 so the drain loops
  *                       (`while (snd_Pump()) {}`) exit immediately - no IOP work
  *                       is ever pending headless.
- *   func_00133230     - ring-service flush wrapper (sets the snd-internal
- *                       bookkeeping word D_001A74C4 - never read outside the
- *                       989snd unit - then pumps). Drop both; return 0.
+ *   func_00133230     - removed (task #1460): cod/0321A0.c's plain-C body
+ *                       clears D_001A74C4 and returns snd_Pump(), which is 0
+ *                       here, so it already behaves as this no-op did.
  *   func_00132AC8     - snd_QueueCommandToRing(0x18) wrapper; nothing reaches the
  *                       (absent) IOP, so dropping the queue is a no-op.
  *   snd_PlaySample    - cmd 0x2C start-voice command-ring wrapper. Only sends the
@@ -23,12 +23,17 @@
  *                       Voice set the voice state themselves before calling, and
  *                       all discard its returned voice handle). Caller-cleaned
  *                       cdecl makes the (void) no-op ABI-safe vs its 8+ args.
+ *
+ * HELD (task #1460): cod/0321A0.c now defines func_00132AC8 and snd_PlaySample as
+ * matched plain C (no TARGET_NATIVE arm), so the full native link multiply-
+ * defines them. Their bodies queue into snd_QueueCommandToRing, whose native
+ * body spins while the ring is full. Whether the HLE boundary stays here or
+ * moves down to the ring/RPC primitives is a design call, not made here.
  */
 #ifdef TARGET_NATIVE
 #include "common.h"
 
 s32 snd_Pump(void)        { return 0; }
-s32 func_00133230(void)   { return 0; }
 s32 func_00132AC8(void)   { return 0; }
 s32 snd_PlaySample(void)  { return 0; }
 

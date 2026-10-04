@@ -6,10 +6,13 @@
 # gcc-multilib + libc6-dev-i386: run_test.sh, run_state_native.sh,
 # run_state_batch.sh and runtime/link_native.sh call `gcc` in this image, and
 # clang -m32 links against the same 32-bit crt/libgcc.
-# g++-multilib: run_state_batch.sh and link_native.sh hand every TARGET_NATIVE
-# unit, .cpp included, to the `gcc` driver, which runs cc1plus on a .cpp; keep it.
+# g++-multilib: until task #1460, run_state_batch.sh and link_native.sh handed
+# .cpp units to the `gcc` driver (cc1plus); since #1460 they compile .cpp with
+# clang, so no consumer is known to need it. It is KEPT until a run without it
+# is measured (#1451 measured it necessary under the pre-#1460 scripts).
 # clang-14: runtime/arena/verify_link.sh's docker arm compiles with clang, as its
-# host arm and check.sh do. g++ 12 at -std=gnu++98 rejects the `_Static_assert`
+# host arm and check.sh do; run_state_batch.sh and runtime/link_native.sh compile
+# their .cpp units with it (task #1460). g++ 12 at -std=gnu++98 rejects the `_Static_assert`
 # the .cpp units carry; clang accepts it as an extension (task #1445). The major
 # is PINNED because the clang version moves the verdict (#1421: Apple clang 17
 # compiled all 29 linkgap units, clang 23 dropped 8). The symlink keeps the pin
