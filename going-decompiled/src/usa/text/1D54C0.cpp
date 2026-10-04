@@ -2203,9 +2203,29 @@ s32 func_002DA358(MenuWidget *obj) {
  * MapDraw(1, 0); return 8. (The prior 'large draw loop' doc was mismatched.) */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DA488);
 
-/* Draw the title-screen main menu: measure the widest of the fixed option
- * strings (one extra "continue" row when a save exists), left-align the column,
- * and draw the rows evenly down the widget. Returns 2. */
+/* Draw the title-screen main menu.
+ *
+ * Measures the five fixed option strings (0x2BF3, 0x2BFF, 0x2C00, 0x2C01,
+ * 0x2BE5) in font 2 and keeps the widest. When a save exists
+ * (g_playerProgress != 0) it also measures 0x2BF4. It centres that width in
+ * the widget (+0x20, x clamped to >= 2) and draws the five options in the debug
+ * font down the widget, in rows of +0x24 / (save ? 7 : 6). The save row is
+ * measured and leaves a row slot, but it is never drawn here.
+ *
+ * obj: the menu widget (+0x20 width, +0x24 height).
+ * Returns 2.
+ *
+ * Shape (task #1548): the ROM draws the five rows as five straight-line calls
+ * and reads g_playerProgress at each of its two uses. The earlier body drew
+ * them through a `static const` id table in a loop and cached the flag at entry.
+ * The s136os splice REFUSES that form outright (DEFINITION: the table lives
+ * outside the function block).
+ * TODO(match): s136os arm (SN 2.95.3 v1.36 -fopt-stack), verify_match_unit
+ * DIFFERS 3/148 words, st_size 592 = ROM 0x250. The only residual is the order of
+ * the three argument moves before the LAST DrawDebugString (ROM a3,a0,a1; built
+ * a0,a1,a3 at 0x2DA6F4..0x2DA6FC). Re-spellings tried, all the same 3 words:
+ * a trailing dead `y += rowStep`, a named temporary for the last string, and
+ * #1510's `char *str, s64 wrap` prototype. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DA4F0);
 #else
@@ -2213,46 +2233,55 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DA4F0);
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern void AppendGsRegPacket(s32 regId, u64 value);
 extern s32 GetLocalizedString(s32 id);
-extern s32 MeasureFont2Text(s32 str, s32 wrap);
-extern void func_0027F7A0(void);
-extern void DrawDebugString(s32 x, s32 y, u32 color, s32 str, s32 wrap);
-extern void EnableInlineColorCodes(void);
+extern s32 func_0027F818(const char *str, s32 maxChars); /* MeasureFont2Text */
+extern void func_0027F7A0(void);                          /* DisableInlineColorCodes */
+extern s32 func_0027F790(void);                           /* EnableInlineColorCodes */
+/* EE arm: the ROM passes the colour zero-extended in a 64-bit register
+ * (ori/dsll/ori, not lui/ori), which only a 64-bit parameter type reproduces;
+ * 1CA080.cpp declares it the same way (task #1510). Native keeps the unit-wide
+ * u32 declaration, so no C++ overload is introduced there. */
+#ifndef TARGET_NATIVE
+extern void DrawDebugString(s32 x, s32 y, u64 color, s32 str, s32 wrap); /* DECL-LEVER(#1548): defined s32 colour; the ROM caller passes it zero-extended */
+#endif
 /* (end of this body's declarations) */
-/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
- * objdiff): sdk29 34.30% / engine96 48.37%; better arm engine96; 127 differing
- * rows on it, class STRUCTURAL; first differing insn: ROM `addiu sp,sp,-32` vs
- * `lui v0,0x0  [HI16 0x001A79F8]`. Not iterated in t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DA4F0(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
-    s32 hasSave = (g_playerProgress != 0);
-    s32 w, x, step, rowY;
-    s32 maxw;
-    static const s32 ids[] = {0x2bf3, 0x2bff, 0x2c00, 0x2c01, 0x2be5};
-    s32 i;
+    s32 widest, width, x, rowStep, y;
+
     AppendGsRegPacket(0x42, 0x44);
-    AppendGsRegPacket(0x47, 0xb);
+    AppendGsRegPacket(0x47, 0xB);
     Begin2dDrawBatch(0);
-    maxw = MeasureFont2Text(GetLocalizedString(0x2bf3), -1);
-    { s32 t = MeasureFont2Text(GetLocalizedString(0x2bff), -1); if (maxw <= t) maxw = t; }
-    if (hasSave) {
-        s32 t = MeasureFont2Text(GetLocalizedString(0x2bf4), -1);
-        if (maxw <= t) maxw = t;
+
+    widest = func_0027F818((const char *)GetLocalizedString(0x2BF3), -1);
+    width = func_0027F818((const char *)GetLocalizedString(0x2BFF), -1);
+    if (width >= widest) widest = width;
+    if (g_playerProgress != 0) {
+        width = func_0027F818((const char *)GetLocalizedString(0x2BF4), -1);
+        if (width >= widest) widest = width;
     }
-    { s32 t = MeasureFont2Text(GetLocalizedString(0x2c00), -1); if (maxw <= t) maxw = t; }
-    { s32 t = MeasureFont2Text(GetLocalizedString(0x2c01), -1); if (maxw <= t) maxw = t; }
-    { s32 t = MeasureFont2Text(GetLocalizedString(0x2be5), -1); if (maxw <= t) maxw = t; }
-    x = (*(s32 *)(o + 0x20) - maxw) >> 1;
+    width = func_0027F818((const char *)GetLocalizedString(0x2C00), -1);
+    if (width >= widest) widest = width;
+    width = func_0027F818((const char *)GetLocalizedString(0x2C01), -1);
+    if (width >= widest) widest = width;
+    width = func_0027F818((const char *)GetLocalizedString(0x2BE5), -1);
+    if (width >= widest) widest = width;
+
+    x = (*(s32 *)(o + 0x20) - widest) >> 1;
     if (x < 2) x = 2;
-    w = hasSave ? 7 : 6;
-    step = *(s32 *)(o + 0x24) / w;
+    rowStep = *(s32 *)(o + 0x24) / (g_playerProgress != 0 ? 7 : 6);
+
     func_0027F7A0();
-    rowY = step - 6;
-    for (i = 0; i < 5; i++) {
-        DrawDebugString(x, rowY, 0x80ffa888, GetLocalizedString(ids[i]), -1);
-        rowY += step;
-    }
-    EnableInlineColorCodes();
+    y = rowStep - 6;
+    DrawDebugString(x, y, 0x80FFA888, GetLocalizedString(0x2BF3), -1);
+    y += rowStep;
+    DrawDebugString(x, y, 0x80FFA888, GetLocalizedString(0x2BFF), -1);
+    y += rowStep;
+    DrawDebugString(x, y, 0x80FFA888, GetLocalizedString(0x2C00), -1);
+    y += rowStep;
+    DrawDebugString(x, y, 0x80FFA888, GetLocalizedString(0x2C01), -1);
+    y += rowStep;
+    DrawDebugString(x, y, 0x80FFA888, GetLocalizedString(0x2BE5), -1);
+    func_0027F790();
     End2dDrawBatch();
     return 2;
 }
