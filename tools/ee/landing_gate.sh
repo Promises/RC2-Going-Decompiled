@@ -2531,8 +2531,12 @@ selftest_regression_gate() {
 # `N >= 1`, and a gutted selftest reporting `1 arms, 0 failed` passed.
 # Two legs seeded from the real output, with no second VM run, put the floor's
 # own FAILing leg inside --selftest: the output cut to FLOOR-1 arms (PASS lines
-# and summary, 0 failed: a deleted arm) must FAIL by the floor, and the output
-# grown by one PASS arm must still PASS (adding arms stays edit-free).
+# and summary, 0 failed: a deleted arm) must FAIL by the floor AND the set,
+# naming the dropped arm, and the output grown by one PASS arm must still PASS
+# (adding arms stays edit-free). Two more legs (task #1476) seed what the floor
+# cannot see: the first arm replaced by a duplicate of the second (N unchanged,
+# #1464's substitution) and the first arm renamed must each FAIL by the set
+# alone, naming exactly that arm.
 # Fails CLOSED: a VM that is down or a run that dies before its summary
 # (docker rc, no `asm_unit_selftest: N arms, F failed` line) is a SELFTEST-FAIL
 # naming the rc, never a skip. That it can fail is shown inside the tool by its
@@ -2549,23 +2553,48 @@ selftest_regression_gate() {
 # here: #7317's FAILURE baselines move DOWN only; an arm count is a COVERAGE
 # measure, so it moves UP only.
 ASMUNIT_SELFTEST_FLOOR=188
+# ASMUNIT_SELFTEST_ARMS: the SET of arm names the selftest must PASS (task
+# #1476). The floor counts arms; it cannot see a SUBSTITUTION — one arm
+# replaced by a duplicate of another keeps `188 arms, 0 failed` while that
+# coverage is gone (#1464, FACT #9162). The baseline pins every `PASS <name>:`
+# label, sorted under LC_ALL=C, one per line. A baseline name missing from the
+# live run FAILs, naming each one; a live name not in the baseline is an
+# addition and passes, so adding arms stays edit-free. RENAMING an arm FAILs
+# naming the old name: a row that renames or removes an arm updates this file
+# in the same commit, the same obligation the floor carries. Like the floor it
+# is a COVERAGE measure: names leave it only by a RULING naming the arm. The
+# floor stays as an independent guard (it fails on a count, this on members).
+ASMUNIT_SELFTEST_ARMS="$HERE/asm_unit_selftest_arms.txt"
+# asmunit_selftest_names FILE — the sorted, unique PASS arm names of one
+# asm_unit_selftest.sh output: the label between `PASS ` and the first `:`.
+asmunit_selftest_names() {
+  sed -n 's/^PASS \([^:]*\):.*/\1/p' "$1" | LC_ALL=C sort -u
+}
 # asmunit_selftest_judge FILE RC — sets AJ (the reason) and returns 0 when FILE,
 # one asm_unit_selftest.sh output, passes: a summary line, rc 0, 0 failed, no
-# FAIL line, N PASS lines and N >= ASMUNIT_SELFTEST_FLOOR. AJ_SUM is the summary.
+# FAIL line, N PASS lines, N >= ASMUNIT_SELFTEST_FLOOR, and every name in
+# ASMUNIT_SELFTEST_ARMS among the PASS names. AJ_SUM is the summary. When both
+# the floor and the set fail, AJ carries both reasons, floor first.
 asmunit_selftest_judge() {
-  local file="$1" rc="$2" n f np nf
+  local file="$1" rc="$2" n f np nf nb miss why=""
   AJ_SUM=$(/usr/bin/grep -E '^asm_unit_selftest: [0-9]+ arms, [0-9]+ failed \(/work/tools/ee/asm_unit\.sh\)$' "$file" | tail -1)
   n=$(printf '%s' "$AJ_SUM" | sed -nE 's/^asm_unit_selftest: ([0-9]+) arms.*/\1/p'); f=$(printf '%s' "$AJ_SUM" | sed -nE 's/.* arms, ([0-9]+) failed.*/\1/p')
   np=$(/usr/bin/grep -c '^PASS ' "$file" || true); nf=$(/usr/bin/grep -c '^FAIL ' "$file" || true)
   AJ_NP=$np
   if [ -z "$AJ_SUM" ]; then AJ="nosum"; return 1; fi
   if ! { [ "$rc" = 0 ] && [ "$f" = 0 ] && [ "$nf" = 0 ] && [ "$np" = "$n" ]; }; then AJ="rc $rc, $n arms, $f failed, $np PASS / $nf FAIL lines"; return 1; fi
-  if [ "$n" -lt "$ASMUNIT_SELFTEST_FLOOR" ]; then AJ="floor: $n arms < ASMUNIT_SELFTEST_FLOOR $ASMUNIT_SELFTEST_FLOOR, 0 failed — an arm was dropped, which is lost coverage, not a pass"; return 1; fi
-  AJ="$n arms >= floor $ASMUNIT_SELFTEST_FLOOR"; return 0
+  # fail closed: an unreadable or short baseline would make the set test vacuous
+  nb=$( { LC_ALL=C sort -u "$ASMUNIT_SELFTEST_ARMS" 2>/dev/null || true; } | /usr/bin/grep -c . || true)
+  if [ "$nb" -lt "$ASMUNIT_SELFTEST_FLOOR" ]; then AJ="baseline: $ASMUNIT_SELFTEST_ARMS has $nb distinct names < ASMUNIT_SELFTEST_FLOOR $ASMUNIT_SELFTEST_FLOOR (missing or truncated), so the arm set cannot be checked"; return 1; fi
+  if [ "$n" -lt "$ASMUNIT_SELFTEST_FLOOR" ]; then why="floor: $n arms < ASMUNIT_SELFTEST_FLOOR $ASMUNIT_SELFTEST_FLOOR, 0 failed — an arm was dropped, which is lost coverage, not a pass"; fi
+  miss=$(LC_ALL=C comm -23 <(LC_ALL=C sort -u "$ASMUNIT_SELFTEST_ARMS") <(asmunit_selftest_names "$file") | awk '{ printf "%s[%s]", sep, $0; sep = " " } END { printf "\t%d", NR }')
+  if [ "${miss##*$'\t'}" != 0 ]; then why="${why:+$why; }set: ${miss##*$'\t'} baseline arm(s) not PASSed — ${miss%$'\t'*}"; fi
+  if [ -n "$why" ]; then AJ="$why"; return 1; fi
+  AJ="$n arms >= floor $ASMUNIT_SELFTEST_FLOOR, all $nb baseline arms PASS"; return 0
 }
 selftest_asmunit_selftest() {
-  local T="$1" b=0 rc n
-  say "-- (25) ASM_UNIT_SELFTEST (#1366, #1385): $HERE/asm_unit_selftest.sh on this tree's asm_unit.sh in one container on $EE_CTX -> rc 0, 'N arms, 0 failed' with N >= $ASMUNIT_SELFTEST_FLOOR, N PASS lines and no FAIL line; a VM that cannot run it is a FAIL; FLOOR-1 arms FAILs, N+1 arms PASSes"
+  local T="$1" b=0 rc n x
+  say "-- (25) ASM_UNIT_SELFTEST (#1366, #1385, #1476): $HERE/asm_unit_selftest.sh on this tree's asm_unit.sh in one container on $EE_CTX -> rc 0, 'N arms, 0 failed' with N >= $ASMUNIT_SELFTEST_FLOOR, N PASS lines, no FAIL line and every arm of $(basename "$ASMUNIT_SELFTEST_ARMS") PASSed; a VM that cannot run it is a FAIL; FLOOR-1 arms FAILs by floor and set, an arm swapped for a duplicate or renamed FAILs naming it, N+1 arms PASSes"
   in_vm "sh $HERE/asm_unit_selftest.sh" > "$T/asmunit_selftest.txt" 2>&1; rc=$?
   if asmunit_selftest_judge "$T/asmunit_selftest.txt" "$rc"; then ok "control: rc $rc, $AJ_SUM, $AJ_NP PASS lines"
   elif [ "$AJ" = nosum ]; then say "SELFTEST-FAIL (25) asm_unit_selftest.sh printed no summary line for /work/tools/ee/asm_unit.sh (docker --context $EE_CTX rc $rc): it did not run, and an arm that cannot run is not coverage. Last lines:"; show < <(tail -5 "$T/asmunit_selftest.txt" | sed 's/^/  inner| /'); b=1
@@ -2576,8 +2605,20 @@ selftest_asmunit_selftest() {
   if [ "$b" = 0 ]; then
     n=$((ASMUNIT_SELFTEST_FLOOR - 1))
     awk -v n="$n" '/^PASS / { if (++p > n) next } /^asm_unit_selftest: [0-9]+ arms, / { sub(/: [0-9]+ arms,/, ": " n " arms,") } { print }' "$T/asmunit_selftest.txt" > "$T/asmunit_selftest_del.txt"
-    if ! asmunit_selftest_judge "$T/asmunit_selftest_del.txt" 0 && case "$AJ" in "floor: $n arms < "*) true ;; *) false ;; esac; then ok "fired: arms deleted to $n, 0 failed -> $AJ"
-    else say "SELFTEST-FAIL (25) the output cut to $n arms, 0 failed, did not FAIL by the floor ($AJ_SUM: $AJ)"; b=1; fi
+    x=$(/usr/bin/grep '^PASS ' "$T/asmunit_selftest.txt" | sed -n "$((n + 1)),\$s/^PASS \([^:]*\):.*/\1/p" | head -1)
+    if ! asmunit_selftest_judge "$T/asmunit_selftest_del.txt" 0 && case "$AJ" in "floor: $n arms < "*"; set: 1 baseline arm(s) not PASSed — [$x]") true ;; *) false ;; esac; then ok "fired: arms deleted to $n, 0 failed -> $AJ"
+    else say "SELFTEST-FAIL (25) the output cut to $n arms, 0 failed, did not FAIL by both the floor and the set naming [$x] ($AJ_SUM: $AJ)"; b=1; fi
+    # substitution (#1464): the first PASS arm replaced by a duplicate of the
+    # second keeps N arms, 0 failed, so the floor passes; the set must FAIL
+    # naming exactly the replaced arm, and nothing else
+    x=$(sed -n 's/^PASS \([^:]*\):.*/\1/p' "$T/asmunit_selftest.txt" | head -1)
+    awk '/^PASS / && ++p == 1 { next } { print } /^PASS / && p == 2 { print }' "$T/asmunit_selftest.txt" > "$T/asmunit_selftest_swap.txt"
+    if ! asmunit_selftest_judge "$T/asmunit_selftest_swap.txt" 0 && [ "$AJ" = "set: 1 baseline arm(s) not PASSed — [$x]" ]; then ok "fired: arm [$x] swapped for a duplicate of the next, $AJ_SUM -> $AJ"
+    else say "SELFTEST-FAIL (25) an arm swapped for a duplicate ($AJ_SUM) did not FAIL by the set naming exactly [$x] ($AJ)"; b=1; fi
+    # rename: the old name must be named; a legitimate rename updates the baseline
+    awk '/^PASS / && !r { r = 1; sub(/:/, " renamed:") } { print }' "$T/asmunit_selftest.txt" > "$T/asmunit_selftest_ren.txt"
+    if ! asmunit_selftest_judge "$T/asmunit_selftest_ren.txt" 0 && [ "$AJ" = "set: 1 baseline arm(s) not PASSed — [$x]" ]; then ok "fired: arm [$x] renamed -> $AJ"
+    else say "SELFTEST-FAIL (25) a renamed arm did not FAIL by the set naming exactly [$x] ($AJ)"; b=1; fi
     awk '/^asm_unit_selftest: [0-9]+ arms, / { print "PASS seeded-extra-arm: added by landing_gate --selftest (25)"; n = $2; sub(/: [0-9]+ arms,/, ": " n + 1 " arms,") } { print }' "$T/asmunit_selftest.txt" > "$T/asmunit_selftest_add.txt"
     if asmunit_selftest_judge "$T/asmunit_selftest_add.txt" 0; then ok "control: an arm added -> $AJ_SUM still passes, no edit here ($AJ)"
     else say "SELFTEST-FAIL (25) the output grown by one PASS arm did not pass ($AJ_SUM: $AJ)"; b=1; fi

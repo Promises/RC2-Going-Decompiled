@@ -1,0 +1,188 @@
+ADJ adj_app -G0
+ADJ adj_app -G8
+ADJ adj_bne -G0
+ADJ adj_bne -G8
+ADJ adj_crlf -G0
+ADJ adj_crlf -G8
+ADJ adj_j -G0
+ADJ adj_j -G8
+ADJ nadj_addu -G0
+ADJ nadj_addu -G8
+ADJ nadj_lab -G0
+ADJ nadj_lab -G8
+ADJ nadj_nore -G0
+ADJ nadj_nore -G8
+ADJ nadj_unl -G0
+ADJ nadj_unl -G8
+ADJ2 adj2_1st -G0
+ADJ2 adj2_1st -G8
+ADJ2 adj2_2nd -G0
+ADJ2 adj2_2nd -G8
+ADJ2 adj2_nm -G0
+ADJ2 adj2_nm -G8
+DLINE adj_j -G0 (refused)
+DLINE adj_j -G8 (refused)
+DLINE dl_two usa -G0
+DLINE dl_two usa -G8
+DLINE nadj_addu eu -G0
+DLINE nadj_addu eu -G0 words
+DLINE nadj_addu eu -G8
+DLINE nadj_addu eu -G8 words
+DLINE nadj_addu usa -G0
+DLINE nadj_addu usa -G8
+DLINE nadj_unl usa -G0
+DLINE nadj_unl usa -G8
+EMPTY 0-byte allowlist -G0
+EMPTY 0-byte allowlist -G8
+EMPTY all-malformed allowlist -G0
+EMPTY all-malformed allowlist -G8
+EMPTY comments-only allowlist -G0
+EMPTY comments-only allowlist -G8
+EMPTY pass drops lines -G0
+EMPTY pass drops lines -G8
+EMPTY pass exits 5 -G0
+EMPTY pass exits 5 -G8
+EMPTY pass prints nothing -G0
+EMPTY pass prints nothing -G8
+EMPTY real allowlist -G0 (control)
+EMPTY real allowlist -G8 (control)
+EMPTY relative input path -G0
+EMPTY relative input path -G8
+LAY lay_alldead -G8
+LAY lay_brsp -G8
+LAY lay_comma -G8
+LAY lay_crlf -G8
+LAY lay_dirs -G8
+LAY lay_indent -G8
+LAY lay_label -G8
+LAY lay_missing -G8
+LAY lay_sep -G8
+LAY lay_unind -G8
+LIKELY bc0fl -G0
+LIKELY bc0fl -G8
+LIKELY bc0tl -G0
+LIKELY bc0tl -G8
+LIKELY bc1fl -G0
+LIKELY bc1fl -G8
+LIKELY bc1tl -G0
+LIKELY bc1tl -G8
+LIKELY beql -G0
+LIKELY beql -G8
+LIKELY beqzl -G0
+LIKELY beqzl -G8
+LIKELY bgezall -G0
+LIKELY bgezall -G8
+LIKELY bgezl -G0
+LIKELY bgezl -G8
+LIKELY bgtzl -G0
+LIKELY bgtzl -G8
+LIKELY blezl -G0
+LIKELY blezl -G8
+LIKELY bltzall -G0
+LIKELY bltzall -G8
+LIKELY bltzl -G0
+LIKELY bltzl -G8
+LIKELY bnel -G0
+LIKELY bnel -G8
+LIKELY bnezl -G0
+LIKELY bnezl -G8
+MTC1 mt_b -G8
+MTC1 mt_bc1f -G8
+MTC1 mt_bc1t -G8
+MTC1 mt_beq -G8
+MTC1 mt_beql -G8
+MTC1 mt_bne -G8
+MTC1 mt_dirct -G8 (the rule still pads)
+MTC1 mt_j -G8
+MTC1 mt_lkly -G8
+MTC1 mt_nordr -G8 (non-reader slot)
+MTC1 mt_slot -G8
+NORE nore_addu -G0
+NORE nore_addu -G8
+NORE nore_blk -G0
+NORE nore_blk -G8
+NORE nore_bnel -G0
+NORE nore_bnel -G8
+NORE nore_jal -G0
+NORE nore_jal -G8
+NORE nore_q2 -G0
+NORE nore_q2 -G8
+NORE nore_q2ctl -G0
+NORE nore_q2ctl -G8
+SPELL count
+SPELL lb bare -G8
+SPELL lb tail -G8
+SPELL lbu bare -G8
+SPELL lbu tail -G8
+SPELL ld bare -G8
+SPELL ld tail -G8
+SPELL lh bare -G8
+SPELL lh tail -G8
+SPELL lhu bare -G8
+SPELL lhu tail -G8
+SPELL lw bare -G8
+SPELL lw tail -G8
+SPELL sb bare -G8
+SPELL sb tail -G8
+SPELL sd bare -G8
+SPELL sd tail -G8
+SPELL sh bare -G8
+SPELL sh tail -G8
+SPELL sw bare -G8
+SPELL sw tail -G8
+STATIC st_cc1 -G8
+STATIC st_cmt -G8
+SWAP b $L9 -G0
+SWAP b $L9 -G8
+SWAP bc0f $L9 -G0
+SWAP bc0f $L9 -G8
+SWAP bc0t $L9 -G0
+SWAP bc0t $L9 -G8
+SWAP bc1f $L9 -G0
+SWAP bc1f $L9 -G8
+SWAP bc1t $L9 -G0
+SWAP bc1t $L9 -G8
+SWAP beq $5,$0,$L9 -G0
+SWAP beq $5,$0,$L9 -G8
+SWAP beqz $5,$L9 -G0
+SWAP beqz $5,$L9 -G8
+SWAP bgez $5,$L9 -G0
+SWAP bgez $5,$L9 -G8
+SWAP bgezal $5,$L9 -G0
+SWAP bgezal $5,$L9 -G8
+SWAP bgtz $5,$L9 -G0
+SWAP bgtz $5,$L9 -G8
+SWAP blez $5,$L9 -G0
+SWAP blez $5,$L9 -G8
+SWAP bltz $5,$L9 -G0
+SWAP bltz $5,$L9 -G8
+SWAP bltzal $5,$L9 -G0
+SWAP bltzal $5,$L9 -G8
+SWAP bne $5,$0,$L9 -G0
+SWAP bne $5,$0,$L9 -G8
+SWAP bnez $5,$L9 -G0
+SWAP bnez $5,$L9 -G8
+SWAP j $31 -G0
+SWAP j $31 -G8
+SWAP j $L9 -G0
+SWAP j $L9 -G8
+SWAP jal foo -G0
+SWAP jal foo -G8
+SWAP jalr $25 -G0
+SWAP jalr $25 -G8
+SWAP jalr $31,$25 -G0
+SWAP jalr $31,$25 -G8
+SWAP jr $5 -G0
+SWAP jr $5 -G8
+SYNC real allowlist, its md5 -G0 (control)
+SYNC real allowlist, its md5 -G8 (control)
+SYNC short allowlist, host md5 -G0
+SYNC short allowlist, host md5 -G8
+SYNC short allowlist, no md5 -G0 (the hole)
+SYNC short allowlist, no md5 -G8 (the hole)
+TAIL tt_bnel -G0 (its dead value)
+TAIL tt_bnel -G8 (live control)
+TAIL tt_cmt -G8
+TAIL tt_ok -G8
+TAIL tt_symreg -G8
+TAIL tt_trsp -G8
