@@ -608,7 +608,8 @@ typedef unsigned int CameraQuad __attribute__((mode(TI)));
  *     g_cameraState), so cc1 re-materialises the base as the ROM does instead
  *     of reusing the first %hi.
  * Store order in the source is the order that reproduces the ROM's schedule
- * (measured over all 24 tail and 6 head orders). Supersedes NOTE #8503's
+ * (measured over 24 compiles pairing every tail order with a head order, then
+ * with the pins in place). Supersedes NOTE #8503's
  * unruled asm-emitted `sq` form. Native: the same stores in plain C. */
 /* GUARD (task #1510): on EE this C is the image's body, compiled alone by the s136os
  * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
