@@ -351,3 +351,4 @@ usa text/235FE8 func_0033A9F8
 usa text/235FE8 GuiTextElementInit
 usa text/235FE8 func_0033DC68
 usa text/1A8180 func_002ADD28
+usa text/235FE8 GuiLevelInfoPanelTick
