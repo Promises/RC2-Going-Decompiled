@@ -261,7 +261,7 @@ extern void func_001338F0(s32 commitBase, s32 len, s32 commitArg, s32 queued, s3
 extern void func_00133890(s32 *obj);   /* commit-path stream lock */
 /* SIF-DMA bounce primitives (func_00350868 #else): queue a SIF DMA, busy-wait
    for the slot, poll for completion, then signal. */
-extern s32 func_0011AEA0(s32 mode);    /* sceSifSetDChain / SIF DMA arm */
+extern void func_0011AEA0(s32 mode);   /* FlushCache (EE syscall 0x64); returns nothing */
 extern s32 func_0011AFE0(void *desc, s32 count);  /* sceSifSetDma (returns id) */
 extern s32 func_0011AFC0(s32 id);      /* sceSifDmaStat (busy while >= 0) */
 extern void func_00133930(s32 len, s32 dstOfs);  /* post-transfer notify */
@@ -674,7 +674,7 @@ S136OS_SLOT(func_00350868);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
-extern s32 func_0011AEA0(s32 mode);
+extern void func_0011AEA0(s32 mode);
 extern s32 func_0011AFE0(void *desc, s32 count);
 extern s32 func_0011AFC0(s32 id);
 extern void func_00133930(s32 len, s32 dstOfs);

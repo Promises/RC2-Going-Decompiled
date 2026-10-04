@@ -652,11 +652,14 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AE80);
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011AE90);
 
 /**
- * func_0011AEA0 = EE kernel syscall 0x64. SCE library syscall stub (see
- * func_0011AA20): load the syscall number into $v1 and trap; the kernel's
- * result is returned in $v0. Takes one argument in $a0 (a mode/channel
- * selector — see the DMA channel setup paths func_0011F938/func_0011FAB8).
- * Exact SDK name UNCONFIRMED.
+ * func_0011AEA0 = FlushCache: EE kernel syscall 0x64 (100), the name confirmed
+ * from the ROM's syscall immediate (FACT #3909). SCE library syscall stub (see
+ * func_0011AA20): load the syscall number into $v1 and trap. Takes one
+ * argument in $a0, the cache-flush mode.
+ * void: the ROM body (0x11AEA0 addiu $v1,$0,0x64; syscall; jr $ra; nop)
+ * writes only $v1, so $v0 at jr $ra is whatever the kernel left, not a value
+ * this function computes, and none of its 100 ROM call sites reads $v0
+ * (task #1462, RULING #9122).
  */
 void func_0011AEA0(s32 mode) {
 #ifndef TARGET_NATIVE
