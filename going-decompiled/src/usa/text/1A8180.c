@@ -2207,58 +2207,103 @@ void QueueMobyBlobShadow(Moby *moby, f32 baseAlpha) {
  * 0.2 constants come straight from the asm immediates. */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 50.42%
    -> UNKNOWN-@0: ROM `(none)` vs `lw v0,0(gp)  [GPREL16 D_1A8CA0]` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", ProbeMobyGroundBelow);
+/* MATCHED on the s136os arm (task #1559): byte-exact solo under SN 2.95.3 v1.36
+ * -fopt-stack (verify_match_unit 102/102). Plain-C respellings, each reverted
+ * alone (words differing, vmu):
+ *   - u_long128 copies of the position (struct copies: 97/114);
+ *   - both misses jump to one `none` block and both hits share one store
+ *     tail, which is the ROM's cross-jumped L002AA380/L002AA38C layout; the
+ *     tail is written 0x74-then-0x70 and the scheduler emits it 0x70 first
+ *     as the ROM does (written 0x70 first: 5/102);
+ *   - mode 0's scale is loaded, then multiplied (one expression: 3/102).
+ * Devices, each dropped alone:
+ *   - a tied EMPTY fence holding the position pointer in a register for both
+ *     lq (RULING #8483; without: 84/100);
+ *   - an untied EMPTY fence after each copy (without the first: 6/102;
+ *     without the second: 71/102);
+ *   - a tied EMPTY fence on b's address, so the second sq goes through the
+ *     CollLine argument register as in the ROM (6/102);
+ *   - zDelta and scale pinned to $f0 / $f1 with EE_REG (RULING #8598; without
+ *     the $f0 pin: 25/102, without the $f1 pin: 7/102);
+ *   - an untied EMPTY fence after mode 1's scale, which keeps its li.s ahead
+ *     of the 0xFF load (4/102). */
+/* GUARD (task #1559): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_ProbeMobyGroundBelow)
+S136OS_SLOT(ProbeMobyGroundBelow);
 #else
 /* Returns s32 only to match the forwarder func_002AA3B0's prototype; the asm
  * leaves $2 holding store-scratch (no meaningful result), so callers ignore it.
- * All real output is written into the moby record (+0x70/+0x74/+0xBD). */
+ * All real output is written into the moby record (+0x70/+0x74/+0xBD).
+ * The EE arm returns nothing (a `return 0` adds the ROM's absent
+ * `daddu $2,$0,$0` on both exits, 16/104); native returns 0 so its ignored
+ * result is defined. */
+#ifdef TARGET_NATIVE
+#define PMGB_RESULT 0
+#else
+#define PMGB_RESULT
+#endif
 s32 ProbeMobyGroundBelow(Moby *moby) {
-    Vec4 from;
-    Vec4 to;
+    u8 *m = (u8 *)moby;
+    Vec4 a;          /* sp+0x00: the low probe end in mode 0, the scaled origin in mode 1 */
+    Vec4 b;          /* sp+0x10: the high probe end in mode 0, origin - 8*axis in mode 1 */
     Vec4 hitDelta;
-    f32 zDelta;
-    f32 scale;
+    register f32 zDelta EE_REG("$f0");
+    register f32 scale EE_REG("$f1");
 
     if (D_1A8CA0 == 0) {
-        if (*(f32 *)((u8 *)moby + 0xE8) < 0.9f) {
-            *(s32 *)((u8 *)moby + 0x74) = 0;
-            *(s32 *)((u8 *)moby + 0x70) = 0;
-            return 0;
+        Vec4 *pos;
+        if (*(f32 *)(m + 0xE8) < 0.9f) {
+            goto none;
         }
-        from = *(Vec4 *)((u8 *)moby + 0x10);
-        from.z = *(f32 *)((u8 *)moby + 0x18) - 16.0f;
-        if (from.z < 0.5f) {
-            from.z = 0.5f;
+        pos = (Vec4 *)(m + 0x10);
+        __asm__ __volatile__("" : "+r"(pos));   /* keep pos register-held for both lq */
+        *(u_long128 *)&a = *(u_long128 *)pos;
+        __asm__ __volatile__("");
+        a.z = a.z - 16.0f;
+        if (a.z < 0.5f) {
+            a.z = 0.5f;
         }
-        to = *(Vec4 *)((u8 *)moby + 0x10);
-        to.z = *(f32 *)((u8 *)moby + 0x18) + 0.5f;
-        if (CollLine(&to, &from, 0x22, 0, 0) != 0) {
-            zDelta = g_collHitPoint.z - *(f32 *)((u8 *)moby + 0x18);
-            scale = *(f32 *)((u8 *)moby + 0xC) * 0.000244140625f;   /* 1/4096 */
-            *(f32 *)((u8 *)moby + 0x70) = zDelta;
-            *(f32 *)((u8 *)moby + 0x74) = scale;
-            return 0;
+        {
+            Vec4 *bp = &b;
+            __asm__ __volatile__("" : "+r"(bp));
+            *(u_long128 *)bp = *(u_long128 *)pos;
+            __asm__ __volatile__("");
+            b.z = b.z + 0.5f;
+            if (CollLine(bp, &a, 0x22, 0, 0) == 0) {
+                goto none;
+            }
         }
+        zDelta = g_collHitPoint.z - *(f32 *)(m + 0x18);
+        scale = *(f32 *)(m + 0xC);
+        scale = scale * 0.000244140625f;   /* 1/4096 */
     } else {
-        /* `to` = 1/1024 * moby (a near-zero query point); `from` = that point
-         * minus 8 along the moby axis (+0xE0). CollLine casts to<-from. */
-        ScaleVec4IncludingW(&to, 0.0009765625f, (Vec4 *)moby);   /* 1/1024 */
-        Vec4ScaleVu0(&from, -8.0f, (Vec4 *)((u8 *)moby + 0xE0));
-        Vec4AddVu0(&from, &to, &from);
-        if (CollLine(&to, &from, 0x22, 0, 0) != 0) {
-            Vec4SubVu0(&hitDelta, &g_collHitPoint, (Vec4 *)((u8 *)moby + 0x10));
-            zDelta = Vec3DotVu0(&hitDelta, (Vec4 *)((u8 *)moby + 0xE0));
-            scale = 0.200000003f;
-            *(u8 *)((u8 *)moby + 0xBD) = 0xFF;
-            *(f32 *)((u8 *)moby + 0x70) = zDelta;
-            *(f32 *)((u8 *)moby + 0x74) = scale;
-            return 0;
+        Vec4 *axis = (Vec4 *)(m + 0xE0);
+        Vec4 *v;
+        ScaleVec4IncludingW(&a, 0.0009765625f, moby);   /* 1/1024 */
+        v = &b;
+        Vec4ScaleVu0(v, -8.0f, axis);
+        Vec4AddVu0(v, &a, v);
+        if (CollLine(&a, v, 0x22, 0, 0) == 0) {
+            goto none;
         }
+        v = &hitDelta;
+        Vec4SubVu0(v, &g_collHitPoint, (Vec4 *)(m + 0x10));
+        zDelta = Vec3DotVu0(v, axis);
+        scale = 0.200000003f;
+        __asm__ __volatile__("");
+        m[0xBD] = 0xFF;
     }
-    *(s32 *)((u8 *)moby + 0x74) = 0;
-    *(s32 *)((u8 *)moby + 0x70) = 0;
-    return 0;
+    *(f32 *)(m + 0x74) = scale;
+    *(f32 *)(m + 0x70) = zDelta;
+    return PMGB_RESULT;
+none:
+    *(s32 *)(m + 0x70) = 0;
+    *(s32 *)(m + 0x74) = 0;
+    return PMGB_RESULT;
 }
 #endif
 
