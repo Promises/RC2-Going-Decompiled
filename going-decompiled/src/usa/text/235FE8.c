@@ -6486,17 +6486,41 @@ void func_0033FEF8(void *e) {
  * +0x214, a list-row at +0x260, then +0x2A8/+0x2F4), a stride-0x4C run of 8 more
  * type-B (self+0x340..), one at +0x5A0, a stride-0x3C run of 8 func_003374D8
  * elements (self+0x5EC..), one at +0x7D0, then six type-C (self+0x828/0x880/
- * 0x8D8/0x930/0x988/0x9E0). Returns self. Faithful TARGET_NATIVE #else. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033FF68);
+ * 0x8D8/0x930/0x988/0x9E0). Returns self.
+ * The two runs are counted loops in the ROM (counter 7 down to -1, as
+ * func_0033B4E8's), and the seven tail pointers (+0x7D0..+0x9E0) are formed
+ * before the second loop and held across it (five callee-saved registers and
+ * two stack slots), so the C forms them there too. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033FF68)
+S136OS_SLOT(func_0033FF68);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033FF68, unit objdiff): 63.50%,
-   72/94 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x60' vs 'addiu sp, sp, -0x30').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1521; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object). The earlier #else was not the ROM's code: the two runs were for-
+   loops counting up and the tail pointers were formed at each call; the ROM
+   runs both as counted loops (7 down to -1) with two R5900 short-loop nop pads
+   before each backward branch, forms the seven tail pointers before the second
+   loop, and returns the same register it builds from. DEVICES, both EE-only and
+   proven causal (task #1521, solo s136os screen): R5900_SHORT_LOOP_PAD1 x2 per
+   loop is a SCHEDULING DEVICE reproducing pads the ROM's assembler emitted and
+   cc1 does not (RULING #8435, FACT #7918, as func_0033B4E8; without them 48/92
+   words differ); EE_REG("$17") on the loop pointer is a REGISTER-PIN DEVICE
+   (RULING #8598): cc1 still emits every instruction, but without the pin it
+   colours the pointer $16 and self $17, the ROM the reverse (30/92 words
+   differ).
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
+#ifndef TARGET_NATIVE
+#define EE_REG(r) __asm__(r)
+#else
+#define EE_REG(r)
+#endif
 void *func_0033FF68(void *self) {
     u8 *s = (u8 *)self;
-    u8 *p;
+    register u8 *p EE_REG("$17");   /* REGISTER-PIN DEVICE, see above */
+    u8 *e0, *e1, *e2, *e3, *e4, *e5, *e6;
     s32 i;
 
     GuiElementInitTypeB(s + 0x000);
@@ -6512,26 +6536,43 @@ void *func_0033FF68(void *self) {
     GuiElementInitTypeB(s + 0x2F4);
 
     p = s + 0x340;
-    for (i = 7; i != -1; i--) {
+    i = 7;
+    do {
+        i--;
         GuiElementInitTypeB(p);
+        __asm__ __volatile__("");
+        R5900_SHORT_LOOP_PAD1(p, p);
+        R5900_SHORT_LOOP_PAD1(p, p);
         p += 0x4C;
-    }
+    } while (i != -1);
     GuiElementInitTypeB(s + 0x5A0);
 
     p = s + 0x5EC;
-    for (i = 7; i != -1; i--) {
+    i = 7;
+    e0 = s + 0x7D0;
+    e1 = s + 0x828;
+    e2 = s + 0x880;
+    e3 = s + 0x8D8;
+    e4 = s + 0x930;
+    e5 = s + 0x988;
+    e6 = s + 0x9E0;
+    do {
+        i--;
         func_003374D8(p);
+        __asm__ __volatile__("");
+        R5900_SHORT_LOOP_PAD1(p, p);
+        R5900_SHORT_LOOP_PAD1(p, p);
         p += 0x3C;
-    }
-    func_003374D8(s + 0x7D0);
-    GuiElementInitTypeC(s + 0x828);
-    GuiElementInitTypeC(s + 0x880);
-    GuiElementInitTypeC(s + 0x8D8);
-    GuiElementInitTypeC(s + 0x930);
-    GuiElementInitTypeC(s + 0x988);
-    GuiElementInitTypeC(s + 0x9E0);
+    } while (i != -1);
+    func_003374D8(e0);
+    GuiElementInitTypeC(e1);
+    GuiElementInitTypeC(e2);
+    GuiElementInitTypeC(e3);
+    GuiElementInitTypeC(e4);
+    GuiElementInitTypeC(e5);
+    GuiElementInitTypeC(e6);
 
-    return self;
+    return s;
 }
 #endif
 
