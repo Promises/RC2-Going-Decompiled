@@ -3299,38 +3299,72 @@ s32 func_002DCDC0(MenuWidget *obj) {
 }
 #endif
 
-/* Draw the centered level-info caption(s) for the currently-selected map row:
- * if the row's data index is -1, show the generic "no info" string; otherwise
- * show the two caption lines from the D_00262BA0 table. Returns 2. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DCF58);
+/* Draw the centered level-info caption(s) for the currently-selected map row.
+ *
+ * The focused list (current menu screen +0xE8) holds 12-byte rows at +0x34,
+ * selected by +0x40; the row's word at +4 is a level-caption index. When it is
+ * -1, one line, the generic "no info" string 0x2CFB, is drawn centred in the
+ * widget. Otherwise two caption lines are drawn from that index's record in the
+ * caption table at 0x262BA0, at 1/3 and 2/3 of the widget height. Every line is
+ * in the Font1 centred-label style, colour 0x80FFA888, 8 px above its row.
+ *
+ * obj: the menu widget (+0x20 width, +0x24 height, re-read for every line).
+ * Returns 2.
+ *
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 -fopt-stack, task #1623):
+ * verify_match_unit BYTE IDENTICAL 104/104, st_size 0x19C. What each piece is
+ * worth (solo s136 compile, aligned text diff against the ROM):
+ *   - The colour is declared u64: the ROM builds it zero-extended
+ *     (ori/dsll/ori). With u32 it is lui/ori, one word short per call.
+ *   - The table is an array of 12-byte records. As a flat s32 array indexed
+ *     idx*3 and idx*3+1, the second index is rebuilt by shift-add; through a
+ *     u8 cast, base+idx*12 is folded once. The ROM keeps idx*12 (a mult by the
+ *     constant 12 already held for the row lookup) and the base apart, and
+ *     reads +0 and +4 off them.
+ *   - obj is used directly. A `u8 *o` copy put it in two registers.
+ *   - The callee's return type is INERT here: its ROM epilogue writes $2
+ *     (daddu $2,$16,$0), but void and s32 compile identically for this body,
+ *     so it keeps the void every other declaration in the unit uses.
+ * The record view reaches D_262BA0 through an asm-label alias because another
+ * arm of this unit declares D_262BA0 as u8[], and C++ (the native build)
+ * rejects two block-scope declarations of one name with different types. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002DCF58)
+S136OS_SLOT(func_002DCF58);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern s32 GetLocalizedString(s32 id);
-extern void DrawFont1CenteredLabel(s32 x, s32 y, u32 color, s32 str, s32 wrap);
+/* DrawFont1CenteredLabel, called by its splat name so verify_match_unit can
+ * resolve it (it cannot resolve a PROVIDE alias). EE arm: the colour is u64,
+ * because the ROM passes it zero-extended in a 64-bit register (ori/dsll/ori,
+ * not lui/ori), as 1CA080.cpp declares it. Native keeps the unit-wide u32
+ * declaration of func_002801B8: a second type for one extern "C" name does
+ * not compile there. */
+#ifndef TARGET_NATIVE
+extern void func_002801B8(s32 x, s32 y, u64 color, s32 str, s32 wrap); /* DECL-LEVER(#1623): defined s32 colour; the ROM caller passes it zero-extended */
+#endif
+/* The level-caption table at 0x262BA0: one 12-byte record per level, the
+ * first two words being localized-string ids. */
+typedef struct {
+    s32 line1;  /* +0x0 first caption line */
+    s32 line2;  /* +0x4 second caption line */
+    s32 unk8;   /* +0x8 not read here */
+} LevelCaption;
+extern LevelCaption g_levelCaptions[] __asm__("D_262BA0");
 /* (end of this body's declarations) */
-/* t495 screen (all 69 arms promoted at once per arm, master 6ef5e297, unit
- * objdiff): sdk29 70.09% / engine96 30.60%; better arm sdk29; 83 differing
- * rows on it, class PACKED-SAVE (2.9 16-byte slots) + rest; first differing
- * insn: ROM `addiu sp,sp,-64` vs `addiu sp,sp,-112`. Not iterated in t495. */
-    /* TODO(match): functional equivalent - not byte-exact. */
 s32 func_002DCF58(MenuWidget *obj) {
-    extern s32 D_00262BA0[];
-    u8 *o = (u8 *)obj;
     u8 *focus = *(u8 **)((u8 *)g_pCurrentMenuScreen[0] + 0xE8);
-    s32 idx = *(s32 *)(*(s32 *)(focus + 0x40) * 0xc + *(s32 *)(focus + 0x34) + 4);
+    s32 idx = *(s32 *)(*(s32 *)(focus + 0x40) * 0xC + *(s32 *)(focus + 0x34) + 4);
+
     Begin2dDrawBatch(0);
     if (idx == -1) {
-        DrawFont1CenteredLabel(*(s32 *)(o + 0x20) / 2, *(s32 *)(o + 0x24) / 2 - 8,
-                               0x80ffa888, GetLocalizedString(0x2cfb), -1);
+        func_002801B8(*(s32 *)((u8 *)obj + 0x20) / 2, *(s32 *)((u8 *)obj + 0x24) / 2 - 8,
+                      0x80FFA888, GetLocalizedString(0x2CFB), -1);
     } else {
-        s32 w = *(s32 *)(o + 0x20);
-        s32 h = *(s32 *)(o + 0x24);
-        DrawFont1CenteredLabel(w / 2, h / 3 - 8, 0x80ffa888,
-                               GetLocalizedString(D_00262BA0[idx * 3]), -1);
-        DrawFont1CenteredLabel(w / 2, (h << 1) / 3 - 8, 0x80ffa888,
-                               GetLocalizedString(D_00262BA0[idx * 3 + 1]), -1);
+        func_002801B8(*(s32 *)((u8 *)obj + 0x20) / 2, *(s32 *)((u8 *)obj + 0x24) / 3 - 8,
+                      0x80FFA888, GetLocalizedString(g_levelCaptions[idx].line1), -1);
+        func_002801B8(*(s32 *)((u8 *)obj + 0x20) / 2, (*(s32 *)((u8 *)obj + 0x24) << 1) / 3 - 8,
+                      0x80FFA888, GetLocalizedString(g_levelCaptions[idx].line2), -1);
     }
     End2dDrawBatch();
     return 2;

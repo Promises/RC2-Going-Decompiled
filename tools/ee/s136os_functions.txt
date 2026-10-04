@@ -357,3 +357,4 @@ usa text/24D728 func_0034F868
 usa text/235FE8 GuiIconListScreenInit
 usa text/198FA0 func_00299BF8
 usa text/1D54C0 func_002DA4F0
+usa text/1D54C0 func_002DCF58
