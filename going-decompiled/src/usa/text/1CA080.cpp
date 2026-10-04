@@ -4471,72 +4471,78 @@ s32 func_002D3388(void) {
     return 0;
 }
 
-/* Help-topic sub-browser input handler. Confirm (0x10) latches the screen's
- * pending result like the other confirm polls (resets g_helpPageCursor to 0).
- * Cancel (0x900) returns 1. Up (0x8000) decrements the 7-page cursor clamped at
- * 0; Down (0x2000) increments clamped at 6. Each move plays sound 3 (moved) or
- * sound 5 (blocked at an edge). The landed page is mirrored into D_25CCC8.
- * Returns the confirm/cancel tri-state (1 / -1 / 0).
- * Wall: 8-byte-packed-save (saves $16 + $31) + branch-likely shape. Portable C. */
+/* Help-topic sub-browser input handler (USA 0x2D33A8). Confirm (0x10) resets
+ * g_helpPageCursor and returns the screen's pending result: if the active
+ * screen's +0xE0 word is set it is latched into g_menuScreenBlock[+0x18] and 0
+ * is returned, else -1 when the block's +0x134 word is clear, 0 otherwise.
+ * Cancel (0x900) resets the cursor and returns 1. Up (0x8000) decrements the
+ * 7-page cursor (clamped at 0), Down (0x2000) increments it (clamped at 6); each
+ * plays sound 3 when the move lands in range and sound 5 when it hits an edge.
+ * Every path except confirm mirrors the landed page into D_25CCC8.
+ * Returns 1 / -1 / 0 as above.
+ *
+ * Shape (task #1540): the ROM makes the sound call twice per direction, one
+ * `jal PlayGlobalSound` per arm of an if/else, where the old body passed a
+ * ternary id to one call; the confirm result is a single block-local value with
+ * one exit. The cursor store ahead of the g_menuScreenBlock loads is scheduled
+ * after the block address's `lui`; cc1 reproduces that order only when it may
+ * treat the s32 store and the pointer load as non-aliasing, i.e. under
+ * -fstrict-aliasing (this unit's s136os arm flags, task #1540). */
 extern s32 g_helpPageCursor;
 extern s32 D_25CCC8;
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D33A8);
+/* GUARD (task #1540): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D33A8)
+S136OS_SLOT(func_002D33A8);
 #else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 55.13% -> SPLIT-HIREG,
- * first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 51.35% -> SPLIT-HIREG, first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`. */
-/* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame +
- * branch-likely / reload scheduling not reproduced by cc1. */
 s32 func_002D33A8(void) {
     s32 flags = g_padButtonsPressed;
     s32 result = 0;
-    s32 page;
 
     if (flags & 0x10) {
-        s32 *block = (s32 *)g_menuScreenBlock;
-        s32 v;
+        s32 *block;
+        s32 pending;
+        s32 confirm;
         g_helpPageCursor = 0;
-        v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
-        if (v != 0) {
-            block[0x18 / 4] = v;
-            return 0;
+        block = (s32 *)g_menuScreenBlock;
+        pending = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
+        if (pending != 0) {
+            block[0x18 / 4] = pending;
+        } else if (block[0x134 / 4] == 0) {
+            confirm = -1;
+            goto done;
         }
-        if (block[0x134 / 4] == 0) {
-            return -1;
-        }
-        return 0;
+        confirm = 0;
+    done:
+        return confirm;
     }
 
     if (flags & 0x900) {
         g_helpPageCursor = 0;
         result = 1;
-        page = g_helpPageCursor;
-        D_25CCC8 = page;
-        return result;
-    }
-
-    if (flags & 0x8000) {
-        s32 cur = g_helpPageCursor - 1;
-        g_helpPageCursor = cur;
-        PlayGlobalSound(cur < 0 ? 5 : 3, 0, 0);
-        cur = g_helpPageCursor;
-        if (cur < 0) {
+    } else if (flags & 0x8000) {
+        s32 up = g_helpPageCursor - 1;
+        g_helpPageCursor = up;
+        if (up >= 0)
+            PlayGlobalSound(3, 0, 0);
+        else
+            PlayGlobalSound(5, 0, 0);
+        if (g_helpPageCursor < 0)
             g_helpPageCursor = 0;
-        }
     } else if (flags & 0x2000) {
-        s32 cur = g_helpPageCursor + 1;
-        g_helpPageCursor = cur;
-        PlayGlobalSound(cur < 7 ? 3 : 5, 0, 0);
-        cur = g_helpPageCursor;
-        if (cur >= 7) {
+        s32 down = g_helpPageCursor + 1;
+        g_helpPageCursor = down;
+        if (down < 7)
+            PlayGlobalSound(3, 0, 0);
+        else
+            PlayGlobalSound(5, 0, 0);
+        if (g_helpPageCursor >= 7)
             g_helpPageCursor = 6;
-        }
     }
 
-    page = g_helpPageCursor;
-    D_25CCC8 = page;
+    D_25CCC8 = g_helpPageCursor;
     return result;
 }
 #endif
