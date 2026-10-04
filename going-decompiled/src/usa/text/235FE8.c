@@ -3139,9 +3139,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
  * 0x60442D00/0x70FFFEED, then positions the sprite at the anchor plus fixed
  * offsets and a per-frame-counter (w+0x328) Y step.
  *   w - the widget. Returns 0.
- * func_0033BE70 is called with the panel only: the ROM sets no $a1 here. Its
- * prototype keeps a second (unread) parameter for the other callers, so this
- * call goes through a one-parameter cast; the earlier #else passed a 0. */
+ * func_0033BE70 is called with the panel only: the ROM sets no $a1 here, and
+ * its one-parameter prototype says so (task #1545; the cast through a
+ * one-parameter pointer type that task #1520 used is gone, and the image cmp
+ * shows the bytes did not move); the earlier #else passed a 0. */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033A8F0)
 S136OS_SLOT(func_0033A8F0);
 #else
