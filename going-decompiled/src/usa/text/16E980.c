@@ -1047,12 +1047,12 @@ extern void *func_00303818(void *cameraBase);
 extern void *g_cameraHelperMoby;
 /* TODO(match): functional equivalent - not byte-exact; t512: sdk29 53.92%
    (PACKED-SAVE: s0+ra), engine96 73.92%. Beyond the frame, the ROM anchors a
-   callee-saved base at 0x1B5320 (= g_prevCamera+0xc = g_cameraState+0x1A0),
+   callee-saved base at 0x1B5320 (g_heroCamMotion = g_cameraState+0x1A0),
    reaches g_cameraHelperMoby as 0xC4(s0) and passes s0-0x60 = &g_cameraState.
    camPos (0x1B52C0) to func_00303818 — a FIXED address, not `cam - 0x60`
-   (FACT #5824 / #5426; this arm's argument is wrong). Reproducing it needs a
-   symbol at 0x1B5320 (the same anchor func_00271FE8 uses) — a symbol_addrs pin
-   + re-split, not done here. */
+   (FACT #5824 / #5426; this arm's argument is wrong). Reproducing it needs
+   the arm to address g_heroCamMotion (0x1B5320, the same anchor func_00271FE8
+   uses; pinned in symbol_addrs by task #1474), not done here. */
 void func_00270500(Camera *cam) {
     extern void FreeMoby(void *moby);
     if (cam->type == 0) {
@@ -1853,7 +1853,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", ApplyCameraShak
 #endif
 
 /* Per-frame hero-motion tracking block, a sub-region of g_cameraState at
- * +0x1A0 (vaddr 0x1B5320; the original addresses it as g_prevCamera+0xC). The
+ * +0x1A0 (vaddr 0x1B5320, the symbol g_heroCamMotion; before task #1474 the
+ * split misattributed it as g_prevCamera+0xC). The
  * camera mode handlers read these smoothed/derived hero signals. */
 typedef struct HeroCamMotion {
     /* 0x00 */ f32 smoothX;         /* hero x (snapped to g_heroPos.x) */
