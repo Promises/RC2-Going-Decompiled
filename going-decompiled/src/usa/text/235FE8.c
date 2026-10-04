@@ -886,6 +886,7 @@ extern f32 g_timerHudYScale;
 extern f32 g_spriteYFudge;
 #endif
 
+
 /*
  * func_00336BC8: seed the gadget-swap zoom animation. Store the swap flag/index
  * (a0) as a word at g_swapGadgetItemIndex+0x86, then two zoom factors: at +0x8A
@@ -4428,30 +4429,29 @@ extern CaptionIdPair D_1ADDA8;
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D070);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033D070, unit objdiff): 30.48%,
-   83/104 insns differ. Residual: UNKNOWN-addiu + movn/movz, gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0xa0' vs 'addiu sp, sp, -0x80').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+/* NOT MATCHED (task #1521 audit; solo s136os screen, masked words). The old
+   #else was wrong where its siblings were (func_0033D3C0): the ROM block-copies
+   the D_1ADDA8 id pair to a stack local, passes a 64-bit colour, and reads the
+   GUI scale at +0x8A as an offset-free alias (g_timerHudYScale). This body has
+   those fixes and still differs in 50/84 words: the ROM reads g_screenWidth in
+   the absolute `lui $4; lw $4` macro form (other functions read it $gp-relative,
+   so it needs an alias device like g_timerHudYScale's: with one, 33/84), and the
+   residual is scheduling of the two rounded float arguments plus a nop the
+   toolchain inserts after `mfc1` before cvt.w.s's raw `.word` (move_fixup.sed),
+   which the ROM does not have. */
 extern void func_002801B8(s32 x, s32 y, u64 color, const char *text, s32 flag);
 extern void func_00280C98(void *layout, s32 x, s32 y, s32 a, s32 b, s32 c, s32 d,
                           s32 e, s32 f);
 extern void func_00280B48(void *layout, u64 color, const char *text, s32 flag);
 extern u8 D_1ADDB0[];
-/* g_screenWidthAbs: an assembler alias of g_screenWidth for the one read here,
- * which the ROM makes in the absolute `lui rX; lw rX,%lo(rX)` macro form while
- * other functions of this unit (func_00343AF8) read the same word $gp-relative.
- * The `.extern ,16` on the alias, not on g_screenWidth, keeps those other reads
- * small; gas resolves the alias back to g_screenWidth, the ROM's relocation
- * (the g_timerHudYScale device above, tasks #948/#978). The scale float is
- * read through g_timerHudYScale (+0x8A) for the same reason. */
+/* The GUI scale float at g_swapGadgetItemIndex+0x8A, read through its
+ * offset-free alias on EE (the g_timerHudYScale device) and through the block
+ * on native. */
+extern s32 g_screenWidth;
 #ifndef TARGET_NATIVE
-__asm__(".extern g_screenWidthAbs, 16\n\tg_screenWidthAbs = g_screenWidth");
-extern s32 g_screenWidthAbs;
-#define CAPTION_SCREEN_WIDTH g_screenWidthAbs
 #define CAPTION_GUI_SCALE g_timerHudYScale
 #else
-extern s32 g_screenWidth, g_swapGadgetItemIndex;
-#define CAPTION_SCREEN_WIDTH g_screenWidth
+extern s32 g_swapGadgetItemIndex;
 #define CAPTION_GUI_SCALE (*(f32 *)((char *)&g_swapGadgetItemIndex + 0x8A))
 #endif
 extern s32 g_bProgressiveScan;
@@ -4465,7 +4465,7 @@ void func_0033D070(void *e) {
     ids = D_1ADDA8;
     func_00115DA8(buf, (const char *)D_1ADDB0, (const char *)GetLocalizedString(0x307B),
                   (const char *)GetLocalizedString(ids.id[g_bProgressiveScan ? 1 : 0]));
-    func_002801B8(CAPTION_SCREEN_WIDTH >> 1, 0x8C, 0x80F0F0F0, buf, -1);
+    func_002801B8(g_screenWidth >> 1, 0x8C, 0x80F0F0F0, buf, -1);
 
     scale = CAPTION_GUI_SCALE;
     func_00280C98(layout, (s32)(scale * 170.0f + 0.5f),
@@ -4980,10 +4980,13 @@ s32 func_0033DB60(void *w, s32 flags) {
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DC68);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033DC68, unit objdiff): 41.15%,
-   94/104 insns differ. Residual: UNKNOWN-addiu + movn/movz (first differing insn: 'addiu sp, sp, -0xe0' vs 'addiu sp, sp, -0xd0').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+/* NOT MATCHED (task #1521 audit; solo s136os screen, masked words): 3/87 words
+   differ. The old #else was wrong as func_0033E9B8's was (cached row, D_1ADDA8
+   indexed in place); with the id-pair copy and per-row re-read of +0x2D8 the
+   only residual is the temporary for the second row's +0x2D8 load ($2 here,
+   $3 in the ROM). Its twin func_0033E9B8 (one extra call at each end) matches
+   with the same phrasing; a second colour local, an if/else, u32 and the
+   GUI_OPTION spelling of the flag reads did not move it. */
 extern void func_002801B8(s32 x, s32 y, u64 color, const char *text, s32 flag);
 extern u8 D_1ADDB0[], D_1A7B9C, D_1A7B9D;
 void func_0033DC68(void *w) {
@@ -5945,13 +5948,20 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
  * 0x2BE5, bounds (0,-143,0,114,0,140), scale 0.4, clear +0x2D8. Then builds the
  * list element (+0x2E0): func_00348BF8(pool), func_00348E10(-0x53, 0x20),
  * func_00348E20(1), and runs func_0033F3F0(w, 0). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F200);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033F200)
+S136OS_SLOT(func_0033F200);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033F200, unit objdiff): 73.73%,
-   46/98 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd s4, 0x20(sp)' vs 'sd s3, 0x18(sp)').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1521; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object). The earlier #else was not the ROM's code: it cached the anchor
+   pointer (+0x3BC) in a local where the ROM re-reads it for each float store,
+   zeroed the new block in 0,4,8,C source order (the ROM's 4,8,C,0 source order
+   is the one cc1 emits as 0,4,8,C), and formed the list pointer (+0x2E0) at
+   entry rather than just before its first use.
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 s32 func_0033F3F0(void *w, s32 arg1);
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
 extern void func_00348BF8(void *w, void *pool);
@@ -5959,22 +5969,21 @@ extern void func_00348E20(void *w, s32 v);
 extern u8 D_1ADEA0[8];
 void func_0033F200(void *w, GuiPool *pool) {
     void *obj;
-    void *list = (char *)w + 0x2E0;
+    void *list;
     s32 t0, t1, t2;
 
     *(GuiPool **)((char *)w + 0x0) = pool;
     if (pool != 0) {
         obj = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
         *(void **)((char *)w + 0x3BC) = obj;
-        *(s32 *)((char *)obj + 0x0) = 0;
         *(s32 *)((char *)obj + 0x4) = 0;
         *(s32 *)((char *)obj + 0x8) = 0;
         *(s32 *)((char *)obj + 0xC) = 0;
+        *(s32 *)((char *)obj + 0x0) = 0;
     }
 
-    obj = *(void **)((char *)w + 0x3BC);
-    *(f32 *)((char *)obj + 0x0) = 255.0f;
-    *(f32 *)((char *)obj + 0x4) = 195.0f;
+    (*(f32 **)((char *)w + 0x3BC))[0] = 255.0f;
+    (*(f32 **)((char *)w + 0x3BC))[1] = 195.0f;
     GuiDialogBoxInitBorder((char *)w + 0x8, pool, D_1ADEA0);
 
     t0 = GetLocalizedString(0x2C36);
@@ -5986,6 +5995,7 @@ void func_0033F200(void *w, GuiPool *pool) {
     GuiDialogBoxSetScale((char *)w + 0x8, 0.4f);
     *(s32 *)((char *)w + 0x2D8) = 0;
 
+    list = (char *)w + 0x2E0;
     func_00348BF8(list, pool);
     func_00348E10(list, -0x53, 0x20);
     func_00348E20(list, 1);
@@ -6134,13 +6144,20 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
  * 255x208, border D_1ADEC8). Two-row text (localized 0x2CB7 title, empty middle,
  * 0x2BE5 footer), bounds (-128,-183,112,110,102,110), no scale, then
  * func_0033F610(w, 0). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033F510);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033F510)
+S136OS_SLOT(func_0033F510);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033F510, unit objdiff): 68.88%,
-   32/73 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd s0, 0x0(sp)' vs 'sd s1, 0x8(sp)').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1521; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object). The earlier #else was not the ROM's code: it cached the anchor
+   pointer (+0x2D8) in a local where the ROM re-reads it for each float store,
+   and zeroed the new block in 0,4,8,C source order (the ROM's 4,8,C,0 source
+   order is the one cc1 emits as 0,4,8,C; the same order as the matched sibling
+   func_0033D4B0).
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 s32 func_0033F610(void *p, s32 flags);
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
 extern u8 D_1ADEC8[8];
@@ -6152,15 +6169,14 @@ void func_0033F510(void *w, GuiPool *pool) {
     if (pool != 0) {
         obj = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
         *(void **)((char *)w + 0x2D8) = obj;
-        *(s32 *)((char *)obj + 0x0) = 0;
         *(s32 *)((char *)obj + 0x4) = 0;
         *(s32 *)((char *)obj + 0x8) = 0;
         *(s32 *)((char *)obj + 0xC) = 0;
+        *(s32 *)((char *)obj + 0x0) = 0;
     }
 
-    obj = *(void **)((char *)w + 0x2D8);
-    *(f32 *)((char *)obj + 0x0) = 255.0f;
-    *(f32 *)((char *)obj + 0x4) = 208.0f;
+    (*(f32 **)((char *)w + 0x2D8))[0] = 255.0f;
+    (*(f32 **)((char *)w + 0x2D8))[1] = 208.0f;
     GuiDialogBoxInitBorder((char *)w + 0x8, pool, D_1ADEC8);
 
     t0 = GetLocalizedString(0x2CB7);
@@ -6341,22 +6357,33 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033FAB0);
  * fixed data-driven offsets from the shared anchor record *(w+0x2D8): +0x578 at
  * (D_1ADF50, D_1ADF54), +0x470 at (D_1ADF38, D_1ADF3C), +0x4C8 at
  * (D_1ADF40, D_1ADF44), and +0x520 at (D_1ADF48, D_1ADF4C). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033FCE8);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033FCE8)
+S136OS_SLOT(func_0033FCE8);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033FCE8, unit objdiff): 54.53%,
-   49/70 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s0, 0x0(sp)' vs 'sd s1, 0x8(sp)').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1521; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object). The earlier #else was not the ROM's code: it read the anchor pointer
+   (+0x2D8) once; the ROM re-reads it before each of the four GuiElementSetPos
+   calls.
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 extern f32 D_1ADF38, D_1ADF3C, D_1ADF40, D_1ADF44;
 extern f32 D_1ADF48, D_1ADF4C, D_1ADF50, D_1ADF54;
 void func_0033FCE8(void *w) {
-    f32 *anchor = *(f32 **)((char *)w + 0x2D8);
-
-    GuiElementSetPos((GuiElement *)((char *)w + 0x578), D_1ADF50 + anchor[0], D_1ADF54 + anchor[1], 0.0f, 0.0f);
-    GuiElementSetPos((GuiElement *)((char *)w + 0x470), D_1ADF38 + anchor[0], D_1ADF3C + anchor[1], 0.0f, 0.0f);
-    GuiElementSetPos((GuiElement *)((char *)w + 0x4C8), D_1ADF40 + anchor[0], D_1ADF44 + anchor[1], 0.0f, 0.0f);
-    GuiElementSetPos((GuiElement *)((char *)w + 0x520), D_1ADF48 + anchor[0], D_1ADF4C + anchor[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x578),
+                     D_1ADF50 + (*(f32 **)((char *)w + 0x2D8))[0],
+                     D_1ADF54 + (*(f32 **)((char *)w + 0x2D8))[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x470),
+                     D_1ADF38 + (*(f32 **)((char *)w + 0x2D8))[0],
+                     D_1ADF3C + (*(f32 **)((char *)w + 0x2D8))[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x4C8),
+                     D_1ADF40 + (*(f32 **)((char *)w + 0x2D8))[0],
+                     D_1ADF44 + (*(f32 **)((char *)w + 0x2D8))[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x520),
+                     D_1ADF48 + (*(f32 **)((char *)w + 0x2D8))[0],
+                     D_1ADF4C + (*(f32 **)((char *)w + 0x2D8))[1], 0.0f, 0.0f);
 }
 #endif
 
@@ -6367,36 +6394,40 @@ void func_0033FCE8(void *w) {
  * (CountPlatinumBolts / func_002B1D18 table lookup, via D_1ADF70), repositions
  * row +0x470 (x = pos.x + D_1ADF68, y = pos.y) right-aligned (flag 2), and draws
  * rows +0x470 and +0x578. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033FDD8);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033FDD8)
+S136OS_SLOT(func_0033FDD8);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033FDD8, unit objdiff): 57.83%,
-   56/82 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x40' vs 'addiu sp, sp, -0x30').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1521; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object). The earlier #else was not the ROM's code: it called func_00336C18
+   once and reused the result; the ROM calls it again for the y coordinate. The
+   ROM also keeps g_mapVertexData's address in a register (a local pointer here)
+   and evaluates the CountPlatinumBolts/func_002B1D18 calls as sprintf
+   arguments. The ROM calls sprintf, the same address as func_00115DA8.
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 extern s32 CountPlatinumBolts(s32 group);
 extern s32 func_002B1D18(s32 idx);
 extern u8 g_mapVertexData[], D_1ADBA8[], D_1ADF70[];
 extern s32 D_1ADF68;
 void func_0033FDD8(void *w) {
-    s32 idx = *(s32 *)(g_mapVertexData + 0x230);
+    u8 *map = g_mapVertexData;
 
-    if ((u32)(idx - 1) < 0x14) {
+    if ((u32)(*(s32 *)(map + 0x230) - 1) < 0x14) {
         char *buf = (char *)w + 0x6C0;
         GuiElement *row = (GuiElement *)((char *)w + 0x470);
-        f32 *pos;
-        s32 platinum, extra;
 
         func_00115DA8(buf, (const char *)D_1ADBA8, (const char *)GetLocalizedString(0x2C51));
         GuiElementSetTextFlag(row, 0);
         GuiTextElementDraw(row);
 
-        platinum = CountPlatinumBolts(*(s32 *)(g_mapVertexData + 0x230));
-        extra = func_002B1D18(*(s32 *)(g_mapVertexData + 0x230));
-        func_00115DA8(buf, (const char *)D_1ADF70, platinum, extra);
+        func_00115DA8(buf, (const char *)D_1ADF70, CountPlatinumBolts(*(s32 *)(map + 0x230)),
+                      func_002B1D18(*(s32 *)(map + 0x230)));
 
-        pos = func_00336C18(row);
-        GuiElementSetPos(row, pos[0] + (f32)D_1ADF68, pos[1], 0.0f, 0.0f);
+        GuiElementSetPos(row, func_00336C18(row)[0] + (f32)D_1ADF68,
+                         func_00336C18(row)[1], 0.0f, 0.0f);
         GuiElementSetTextFlag(row, 2);
         GuiTextElementDraw(row);
         GuiTextElementDraw((GuiElement *)((char *)w + 0x578));
