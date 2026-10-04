@@ -360,3 +360,4 @@ usa text/1D54C0 func_002DA4F0
 usa text/1D54C0 func_002DCF58
 usa text/1A8180 func_002A9C88
 usa text/1A8180 func_002A8948
+usa text/235FE8 func_0033BA48

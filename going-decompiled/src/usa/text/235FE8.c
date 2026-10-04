@@ -3838,25 +3838,43 @@ void func_0033BA40(void *p, s32 v) {
  * (g_guiInstance+0x8710); otherwise assign glyph 0 and hide it. Then store the
  * entries pointer at +0x0, and count its valid entries (stride 0x18, terminator
  * field +4 == -1, capped at 0x10) into +0x208, zeroing the +0x1C8 row array as it
- * goes. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033BA48);
+ * goes.
+ *   w         - the menu widget
+ *   srcGlyphs - four glyph ids, 0 = slot unused
+ *   entries   - the entry table; stored at w+0x0 and re-read from there per pass
+ * Non-obvious: the terminator test comes before the cap, so a full table reads
+ * the +4 field of entry 16 as well (the ROM does the same). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033BA48)
+S136OS_SLOT(func_0033BA48);
 #else
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1619; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object, base-seeded control rc 1). No device: the counting loop is a plain
+   while loop. cc1 rotates it itself, so its first terminator test reads the
+   just-stored entries argument and the loop label gets its own .p2align 3 nop.
+   The earlier body wrote the rotation out by hand with an empty tied fence
+   (16/84).
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern char *g_guiInstance;
 /* (end of this body's declarations) */
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033BA48, unit objdiff): 66.12%,
-   60/98 insns differ. Residual: UNKNOWN-daddu + gp/abs-mixed symbol (first differing insn: '' vs 'daddu s2, a0, zero').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
 extern u8 D_1ADC60[];
 extern s32 D_1ADD08[2];
+/* One row of the entry table func_0033BA48 counts: 0x18 bytes, terminated by
+ * a row whose +4 field is -1. */
+typedef struct {
+    s32 field0;
+    s32 terminator;
+    u8 rest[0x10];
+} GuiMenuEntry;
 void func_0033BA48(void *w, s32 *srcGlyphs, void *entries) {
     GuiElement *elem = (GuiElement *)((char *)w + 0x4);
     s32 *color = D_1ADD08;
-    s32 i, idx, off;
-    s32 *row;
+    s32 i, idx;
 
     for (i = 0; i <= 3; i++) {
         if (*srcGlyphs != 0) {
@@ -3875,28 +3893,11 @@ void func_0033BA48(void *w, s32 *srcGlyphs, void *entries) {
     *(s32 *)((char *)w + 0x208) = 0;
     *(void **)((char *)w + 0x0) = entries;
 
-    if (*(s32 *)((char *)entries + 4) != -1) {
-        idx = 0;
-        off = 0;
-        row = (s32 *)((char *)w + 0x1C8);
-        *row = 0;
-        for (;;) {
-            /* empty tied fence (RULING #8483): stops cc1 copying the exit
-             * test ahead of the loop, which the ROM's loop does not have */
-            __asm__ __volatile__("" : "+r"(row));
-            off += 0x18;
-            row++;
-            *(s32 *)((char *)w + 0x208) += 1;
-            /* the table is re-read from +0x0 each pass */
-            if (*(s32 *)(*(char **)((char *)w + 0x0) + off + 4) == -1) {
-                break;
-            }
-            idx++;
-            if (idx >= 0x10) {
-                break;
-            }
-            *row = 0;
-        }
+    idx = 0;
+    while ((*(GuiMenuEntry **)((char *)w + 0x0))[idx].terminator != -1 && idx < 0x10) {
+        ((s32 *)((char *)w + 0x1C8))[idx] = 0;
+        *(s32 *)((char *)w + 0x208) += 1;
+        idx++;
     }
 }
 #endif
