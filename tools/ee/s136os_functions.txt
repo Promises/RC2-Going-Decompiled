@@ -342,3 +342,4 @@ usa text/1A8180 func_002B02C8
 usa text/1A8180 func_002ADF48
 usa text/1A8180 ProbeMobyGroundBelow
 usa text/1A8180 SpawnRaindropImpactFx
+usa text/1A8180 func_002AF728

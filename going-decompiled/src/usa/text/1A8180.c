@@ -2904,8 +2904,12 @@ f32 func_002AAFA8(f32 a, f32 b, f32 t) {
 /* Return type guarded like Vec2LengthXyVu0: the matching build byte-matches ONLY
  * with the s32 form (the s32 callee/return type-errors cancel into the exact $f0
  * passthrough — 100% vs 88.24% with plain f32), while the native #else needs the
- * true f32 return so callers (func_002AF728) get the untruncated angle. */
-#ifndef TARGET_NATIVE
+ * true f32 return so callers (func_002AF728) get the untruncated angle. The
+ * s136os TU of func_002AF728 compiles the f32 form too (S136OS_func_002AF728 is
+ * defined only there; only func_002AF728's block is spliced from it): its
+ * caller stores the result straight from $f0, and the s32 form adds an
+ * mtc1/cvt.s.w (15/136, task #1559). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002AF728)
 s32 func_002AAFB8(f32 a, f32 b, f32 c) {
     return WrapAnglePiSum(a, WrapAnglePiDiff(b, a) * c);
 }
@@ -6105,8 +6109,38 @@ void func_002AF6A0(Vec4 *out, u32 *colorPtr) {
  * distance). Uses func_002AAFB8's guarded f32 return (see above). */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 60.01%
    -> UNKNOWN-@2: ROM `(none)` vs `daddu s1,a1,zero` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AF728);
+/* MATCHED on the s136os arm (task #1559): byte-exact solo under SN 2.95.3 v1.36
+ * -fopt-stack (verify_match_unit rc 0, 133 of 135 words compared; the other
+ * two are the div.s pad nops at 0x2AF8EC/F0, zero on both sides, which only
+ * the image cmp covers). Plain-C respellings, each reverted alone (words
+ * differing, vmu):
+ *   - mpos is assigned after the idle/active branch, so cc1 computes it in
+ *     both arms as the ROM does, and the probe copy is a u_long128;
+ *   - the yaw for the sine call is read before probe.x is stored, and the
+ *     radius before probe.y is stored: cc1 cannot reorder a load above those
+ *     stores itself (3/134 and 9/134);
+ *   - the hero position is read through g_soundBankHandlesBlk + 0x80/0x84
+ *     (the same address as g_heroPos; through g_heroPos - 0x80: 11/134,
+ *     through g_heroPos directly: 126/136);
+ *   - dist is reused for the hero distance and divided in place, before the
+ *     bearing, and func_002AAFB8 is f32 in this TU (15/136 with s32).
+ * Devices, each dropped alone:
+ *   - m pinned to $18 with EE_REG (RULING #8598), so moby and mpos take the
+ *     ROM's s2/s3 (19/134);
+ *   - a tied EMPTY fence keeping mpos register-held for the lq (4/134);
+ *   - AF728_DIVS_PAD, the ROM's two nops before div.s (27/134);
+ *   - a volatile tied EMPTY fence on the hero x load (AF728_FPR_FENCE, EE-only
+ *     because "f" is a MIPS constraint), so it issues before the moby x load
+ *     as in the ROM (4/134).
+ * Two further fences tried and dropped as unnecessary: an untied fence after
+ * the division and a tied fence ordering my - hy after the loads. */
+/* GUARD (task #1559): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002AF728)
+S136OS_SLOT(func_002AF728);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -6117,55 +6151,79 @@ extern f32 GetRandomFloatSigned(f32 lo, f32 hi);   /* 0x2A8740 signed random mag
 extern s32 RandRangeInclusive(s32 lo, s32 hi);     /* 0x2A8688 random int in [lo,hi] */
 extern Vec4 g_heroPos;                             /* 0x189EA0 hero world position */
 
+/* Two noreorder nops tied to the dividend and divisor: the ROM's pad before
+ * `div.s` (RULING #8435 scheduling device, as ADDD0_DIVS_PAD). Empty natively. */
+#ifndef TARGET_NATIVE
+#define AF728_DIVS_PAD(q, d) __asm__ __volatile__(".set noreorder\n\tnop\n\tnop\n\t.set reorder" : "+f"(q) : "f"(d))
+#define AF728_FPR_FENCE(x) __asm__ __volatile__("" : "+f"(x))   /* EMPTY; "f" is an EE-only constraint */
+#else
+#define AF728_DIVS_PAD(q, d) ((void)0)
+#define AF728_FPR_FENCE(x) ((void)0)
+#endif
+/* g_soundBankHandles+0x20 (0x189E20); +0x80 is the hero position g_heroPos.
+ * The ROM addresses the hero through THIS base (`addiu $2,$16,-0x80` then
+ * 0x80/0x84 off it), so the C must name it, not g_heroPos (task #1559). */
+extern u8 g_soundBankHandlesBlk[];
 void func_002AF728(Moby *moby, void *ctrlPtr, f32 stepZ, f32 snapEps) {
-    u8   *m = (u8 *)moby;
+    register u8 *m EE_REG("$18") = (u8 *)moby;   /* EE_REG: see the MATCHED note */
     u8   *c = (u8 *)ctrlPtr;
-    Vec4 *mpos = (Vec4 *)(m + 0x10);
+    Vec4 *mpos;
     Vec4  probe;
     s32   blocked;
     f32   dist;
 
     if (*(s16 *)(c + 0x28) == 0) {
-        /* idle: choose a new heading jitter + dwell timer */
-        /* Both spelled from the ROM bits: the .s materialises 0x3F490FDC and
-           0x40278D37. Tidier decimals land one ULP low on the first, and the
-           second was wrong by ~1647 ULP -- its EU twin already carried the
-           correct value. */
         *(f32 *)(c + 0x24) += GetRandomFloatSigned(0.78539824f, 2.6179941f);
         *(s16 *)(c + 0x2A) = (s16)RandRangeInclusive(*(s16 *)(c + 0x2C), *(s16 *)(c + 0x2E));
         *(s16 *)(c + 0x28) = 1;
     } else {
-        /* active: converge the heading + tick the dwell timer */
         func_002AB668(*(f32 *)(c + 0x24), *(f32 *)(c + 0x18), (f32 *)(m + 0xF8), 0);
         if (func_00283328(c + 0x2A) != 0) {
             *(s16 *)(c + 0x28) = 0;
         }
     }
 
-    /* advance the probe point along the current yaw and resolve it */
-    probe = *mpos;
-    probe.x += func_00283B30(*(f32 *)(m + 0xF8)) * *(f32 *)(c + 0x14);
-    probe.y += func_00283B48(*(f32 *)(m + 0xF8)) * *(f32 *)(c + 0x14);
-    /* 0.52359885f is 0x3F060A93, the value the .s materialises; the tidier
-       pi/6 spelling lands one ULP low. */
-    blocked = func_002A8D08(moby, mpos, &probe, 0, stepZ, *(f32 *)(c + 0x10), snapEps, 0.52359885f);
+    mpos = (Vec4 *)(m + 0x10);
+    __asm__ __volatile__("" : "+r"(mpos));
+    *(u_long128 *)&probe = *(u_long128 *)mpos;
+    {
+        f32 dx = func_00283B30(*(f32 *)(m + 0xF8)) * *(f32 *)(c + 0x14);
+        f32 yaw = *(f32 *)(m + 0xF8);
+        f32 dy, radius;
+        probe.x += dx;
+        dy = func_00283B48(yaw) * *(f32 *)(c + 0x14);
+        radius = *(f32 *)(c + 0x10);
+        probe.y += dy;
+        blocked = func_002A8D08((Moby *)m, mpos, &probe, 0, stepZ, radius, snapEps, 0.52359885f);
+    }
     *(f32 *)(m + 0x18) = ProbeGroundHeight(mpos, 0.5f, 0);
     dist = DistXYVu0(mpos, (Vec4 *)c);
 
     if (blocked == 0 || *(f32 *)(c + 0x1C) < dist) {
-        /* clear path or beyond leash: re-aim at the target and re-roll the timer */
         *(f32 *)(c + 0x24) = Atan2fPoly(*(f32 *)(c + 0x0) - *(f32 *)(m + 0x10),
                                            *(f32 *)(c + 0x4) - *(f32 *)(m + 0x14));
         *(s16 *)(c + 0x2A) = (s16)RandRangeInclusive(0x1E, 0x5A);
         *(s16 *)(c + 0x28) = 1;
     } else {
-        /* blocked and within leash: steer toward the hero when close enough */
-        f32 heroDist = DistXYVu0(mpos, &g_heroPos);
-        if (heroDist < *(f32 *)(c + 0x20)) {
-            f32 bearing = Atan2fPoly(*(f32 *)(m + 0x10) - g_heroPos.x,
-                                        *(f32 *)(m + 0x14) - g_heroPos.y);
-            *(f32 *)(c + 0x24) = func_002AAFB8(*(f32 *)(c + 0x24), bearing,
-                                              heroDist / *(f32 *)(c + 0x20));
+        f32 leash;
+        dist = DistXYVu0(mpos, (Vec4 *)(g_soundBankHandlesBlk + 0x80));
+        leash = *(f32 *)(c + 0x20);
+        if (dist < leash) {
+            f32 bearing, my, hy;
+            u8 *blk;
+            blk = g_soundBankHandlesBlk;
+            my = *(f32 *)(m + 0x14);
+            hy = *(f32 *)(blk + 0x84);
+            AF728_DIVS_PAD(dist, leash);
+            dist = dist / leash;
+            {
+                f32 hx = *(f32 *)(blk + 0x80);
+                f32 mx;
+                AF728_FPR_FENCE(hx);
+                mx = *(f32 *)(m + 0x10);
+                bearing = Atan2fPoly(mx - hx, my - hy);
+            }
+            *(f32 *)(c + 0x24) = func_002AAFB8(*(f32 *)(c + 0x24), bearing, dist);
         }
     }
 }
