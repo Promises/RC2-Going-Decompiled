@@ -2220,14 +2220,17 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DA488);
  * them through a `static const` id table in a loop and cached the flag at entry.
  * The s136os splice REFUSES that form outright (DEFINITION: the table lives
  * outside the function block).
- * TODO(match): s136os arm (SN 2.95.3 v1.36 -fopt-stack), verify_match_unit
- * DIFFERS 3/148 words, st_size 592 = ROM 0x250. The only residual is the order of
- * the three argument moves before the LAST DrawDebugString (ROM a3,a0,a1; built
- * a0,a1,a3 at 0x2DA6F4..0x2DA6FC). Re-spellings tried, all the same 3 words:
- * a trailing dead `y += rowStep`, a named temporary for the last string, and
- * #1510's `char *str, s64 wrap` prototype. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DA4F0);
+ * MATCHED on the s136os arm (SN 2.95.3 v1.36 -fopt-stack, task #1623):
+ * verify_match_unit BYTE IDENTICAL 148/148, st_size 592 = ROM 0x250. Devices,
+ * each measured necessary: DrawDebugString's colour declared u64 below
+ * (u32 gives lui/ori, one word short per row), and one empty tied fence
+ * before the last call (without it, 3/148: that call's arg moves come out
+ * a0,a1,a3 where the ROM has a3,a0,a1 at 0x2DA6F4..0x2DA6FC). Three
+ * re-spellings had left those 3 words unchanged (task #1548): a trailing dead
+ * `y += rowStep`, a named temporary for the last string, and #1510's
+ * `char *str, s64 wrap` prototype. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002DA4F0)
+S136OS_SLOT(func_002DA4F0);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -2246,7 +2249,7 @@ extern void DrawDebugString(s32 x, s32 y, u64 color, s32 str, s32 wrap); /* DECL
 /* (end of this body's declarations) */
 s32 func_002DA4F0(MenuWidget *obj) {
     u8 *o = (u8 *)obj;
-    s32 widest, width, x, rowStep, y;
+    s32 widest, width, x, rowStep, y, label;
 
     AppendGsRegPacket(0x42, 0x44);
     AppendGsRegPacket(0x47, 0xB);
@@ -2280,7 +2283,14 @@ s32 func_002DA4F0(MenuWidget *obj) {
     y += rowStep;
     DrawDebugString(x, y, 0x80FFA888, GetLocalizedString(0x2C01), -1);
     y += rowStep;
-    DrawDebugString(x, y, 0x80FFA888, GetLocalizedString(0x2BE5), -1);
+    label = GetLocalizedString(0x2BE5);
+    /* Scheduling device (RULING #8483, emits nothing): ties x, y and the last
+     * label so cc1 issues the label's move to $a3 ahead of the x/y moves, as
+     * the ROM does before this call only (a3,a0,a1 at 0x2DA6F4). Without it
+     * the three moves come out a0,a1,a3. Operand order matters: with the label
+     * listed first, the label's move sinks below the colour instead. */
+    __asm__("" : "+r"(x), "+r"(y), "+r"(label));
+    DrawDebugString(x, y, 0x80FFA888, label, -1);
     func_0027F790();
     End2dDrawBatch();
     return 2;
