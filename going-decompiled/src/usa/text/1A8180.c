@@ -6407,8 +6407,8 @@ extern void func_002A1F20(Moby *moby);
  *   - a tied EMPTY fence on dst and src (RULING #8483), hiding both
  *     addresses from CSE (without: 56/68);
  *   - an untied EMPTY fence after the copy, keeping lq/sq adjacent and the
- *     s-reg save order the ROM's (without: 6/70);
- *   - src pinned to $4 with EE_REG (RULING #8598; without: 3/70);
+ *     s-reg save order the ROM's (without: 8/70, re-measured by #1558);
+ *   - src pinned to $4 with EE_REG (RULING #8598; without: 4/70, re-measured by #1558);
  *   - the flags bit 0 test held in a $5-pinned local, the register the ROM
  *     tests (without: 5/70). A $3 pin on dst is not needed.
  * As written before (struct copy): 65/74. */
