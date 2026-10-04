@@ -1847,41 +1847,49 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
  * arguments unchanged), then set up a text element: install the D_263B10
  * glyph/format table at +0x34, mark it active (+0x38 = 1, 64-bit), clear the
  * text handle (+0x40), reset the scale vector (*(e+0x4)) to {1.0, 1.0}, and seed
- * the text params: +0x54 = 1, +0x4C = 0x200, +0x50 = 0.7f, +0x44 = 1, +0x48 = 0.
- * (The asm leaves a1/a2 untouched across the GuiElementBaseInit call, i.e. this
- * forwards the tag and pool it was called with.) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiTextElementInit);
+ * the text params: +0x4C = 0x200, +0x50 = 0.7f, +0x44 = 1, +0x48 = 0, +0x54 = 1.
+ *   e    - the element; tag, pool - forwarded to GuiElementBaseInit (the asm
+ *          leaves a1/a2 untouched across that call). Returns nothing.
+ * Three spellings, each measured necessary (task #1607; 21/32 -> 0):
+ *  - D_263B10 is read through D_263B10Split, an ADDRESSING-MODEL DEVICE
+ *    (RULING #8620): section(".data") on the extern declaration makes cc1 emit
+ *    a split lui/addiu %hi/%lo pair the scheduler can separate, as the ROM
+ *    does, where the plain name prints one `la` macro (13/32 without it).
+ *  - The scale pointer is re-read from +0x4 for each component with no shared
+ *    local, so the two reads are separate pseudos ($5 then $2, as in the ROM).
+ *    One `scale` local reuses $5 (13/32).
+ *  - +0x54 is written LAST. SN 1.36 cc1 issues the group's last int store first
+ *    (FACT #9254), and the ROM stores +0x54 first. 6 of the 120 orders of the
+ *    five tail stores close, and every one ends with +0x54. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiTextElementInit)
+S136OS_SLOT(GuiTextElementInit);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiTextElementInit, unit objdiff): 62.26%,
-   19/36 insns differ. Residual: UNKNOWN-lw (first differing insn: 'lw a1, 0x4(s0)' vs 'addiu v0, v0, %lo(D_263B10)').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; 8-byte-packed two-save
-   frame wall (target uses a -0x10 frame with s0@0x0/ra@0x8; this cc1 emits a
-   -0x20 frame) plus the -fno-gcse double-reload of *(e+0x4) collapses. 49%.
-   cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
-   (cmp_GuiTextElementInit, run_cmp_235FE8_iso.sh): offset-correctness oracle
-   confirms +0x34=&D_263B10, +0x38=(s64)1 (both words), +0x40=0, scale={1,1},
-   +0x54=1, +0x4C=0x200, +0x50=0.7f (0x3F333333), +0x44=1, +0x48=0; base init
-   forwards the tag to +0x28. */
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1607; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object, base-seeded control rc 1).
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
+#ifndef TARGET_NATIVE
+extern void *D_263B10Split __asm__("D_263B10") __attribute__((section(".data")));
+#else
 extern void *D_263B10;
+#define D_263B10Split D_263B10
+#endif
 extern void GuiElementBaseInit(GuiElement *e, s32 tag, GuiPool *pool);
 void GuiTextElementInit(GuiElement *e, s32 tag, GuiPool *pool) {
-    f32 *scale;
     GuiElementBaseInit(e, tag, pool);
-    *(void **)((char *)e + 0x34) = &D_263B10;
+    *(void **)((char *)e + 0x34) = &D_263B10Split;
     *(s64 *)((char *)e + 0x38) = 1;
     *(s32 *)((char *)e + 0x40) = 0;
-    scale = *(f32 **)((char *)e + 0x4);
-    scale[0] = 1.0f;
-    scale = *(f32 **)((char *)e + 0x4);
-    scale[1] = 1.0f;
-    *(s32 *)((char *)e + 0x54) = 1;
+    (*(f32 **)((char *)e + 0x4))[0] = 1.0f;
+    (*(f32 **)((char *)e + 0x4))[1] = 1.0f;
     *(s32 *)((char *)e + 0x4C) = 0x200;
     *(f32 *)((char *)e + 0x50) = 0.7f;
     *(s32 *)((char *)e + 0x44) = 1;
     *(s32 *)((char *)e + 0x48) = 0;
+    *(s32 *)((char *)e + 0x54) = 1;
 }
 #endif
 

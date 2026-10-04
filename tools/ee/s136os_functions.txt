@@ -348,3 +348,4 @@ usa text/235FE8 func_00342E48
 usa text/235FE8 func_00338AB8
 usa text/235FE8 GuiLevelInfoPanelInit
 usa text/235FE8 func_0033A9F8
+usa text/235FE8 GuiTextElementInit
