@@ -2858,7 +2858,9 @@ extern void InitMobyFromClass(u32 *classMoby, s32 arg);
  * 1EFFC0.c:1696 and 16E980.c:2431. */
 extern u32 *SpawnMoby(s32 classId);
 extern u16  g_nSceneTotalFrames;   /* 0x1B8800 (desc +0x40) */
-extern s32  DAT_001b8808;          /* 0x1B8808 (desc +0x48) */
+/* Halfword: written `sh` here (0x29464C), read `lh` by TickCinematicPlayback
+ * (0x2EC108) -- signed 16-bit. */
+extern s16  DAT_001b8808;          /* 0x1B8808 (desc +0x48) */
 extern u16  g_nSceneCastCount;     /* 0x1B8804 (desc +0x44) */
 extern u32 *g_pSceneCameraKeys;    /* 0x1B8828 (desc +0x68) */
 extern s32  DAT_001b880c;          /* 0x1B880C (desc +0x4C) */
