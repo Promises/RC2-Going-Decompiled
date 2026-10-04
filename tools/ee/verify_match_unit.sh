@@ -26,7 +26,9 @@
 #     Name-level differences are not byte-level differences.
 #
 # The target.o is used only for its SHAPE (which function, how many words) and
-# as the argument-contract check — never as the byte oracle.
+# as the argument-contract check — never as the byte oracle. Its function's
+# st_size is the ROM LENGTH (task #1531): a built symbol shorter than it is
+# DIFFERS (see LENGTH in the python below).
 #
 # RELOCATION ADDENDS: MIPS o32 is REL, not RELA — the addend lives IN PLACE in
 # the instruction's immediate field. A resolver that overwrites the immediate
@@ -125,6 +127,13 @@
 # ruling. M27 = every NOT COMPARED word put in the ZERO band (the b7b8f7d9
 # text). NOT covered: a relocated word that is 0 in the base (no fixture has
 # one missing), and the cause sentence when no inner header is found.
+# Added by task #1531: the LENGTH check. Fixture object h is SelectSceneSubChunk
+# one word short (the fixture line tagged `short drops` removed), its 19 words
+# all the ROM's. H0 (base h, target a) must be rc 1 LENGTH 19 vs 20 with no
+# differing word; M28 = no check, the pre-#1531 `19/19 BYTE IDENTICAL`. H1
+# (base a, target h) is the LONGER case, which stays rc 0 20/20; M29 = the
+# check fires on any length difference. H1 is the one row that shapes the
+# TARGET: arg 3's size, unlike its bytes, IS read (as the ROM length).
 # Seed the BASE (arg 2), never the target (arg 3): arg 3's bytes are never
 # compared (FACT ledger-26262), so a target-seeded control cannot fail.
 #
@@ -134,7 +143,12 @@
 #                     line reads `... ON COMPARED WORDS ONLY ⚠️` with `WARN:`
 #                     line(s) (task #1121), one per band, ZERO and NONZERO
 #                     (task #1157): still rc 0, never quote it as a full match.
-#   1  DIFFERS      — a real byte difference (this, and only this, is a failure)
+#   1  DIFFERS      — a real byte difference (this, and only this, is a failure).
+#                     Includes LENGTH (task #1531): the built symbol is SHORTER
+#                     than arg 3's (the ROM function), whatever its compared
+#                     words say; the line reads `DIFFERS ❌ — LENGTH: ...` and
+#                     names both lengths. Not a new rc: a body shorter than the
+#                     ROM's cannot equal its bytes.
 #   2  UNVERIFIABLE — the tool cannot decide (unresolvable symbol, reloc type it
 #                     does not model, function absent from the ROM window, or
 #                     its own python crashed: a `CRASH:` line, or exited
