@@ -2408,7 +2408,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00338F88);
    217/303 insns differ. Residual: UNKNOWN-daddu + gp/abs-mixed symbol (first differing insn: '' vs 'daddu s0, a5, zero').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
-extern void func_00280B48(void *layout, u64 color, const char *text, s32 flag);
+extern void func_00280B48(void *layout, u32 color, const char *text, s32 flag);
 extern void func_00280BB8(void *layout, u32 color, const char *text, s32 flag);
 extern void func_00280C28(void *layout, u32 color, const char *text, s32 flag);
 extern void func_0027F208(s32 top, s32 bottom, s32 left, s32 right, s32 thickness,
@@ -4432,17 +4432,20 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033D070);
 /* NOT MATCHED (task #1521 audit; solo s136os screen, masked words). The old
    #else was wrong where its siblings were (func_0033D3C0): the ROM block-copies
    the D_1ADDA8 id pair to a stack local, passes a 64-bit colour, and reads the
-   GUI scale at +0x8A as an offset-free alias (g_timerHudYScale). This body has
-   those fixes and still differs in 50/84 words: the ROM reads g_screenWidth in
-   the absolute `lui $4; lw $4` macro form (other functions read it $gp-relative,
-   so it needs an alias device like g_timerHudYScale's: with one, 33/84), and the
-   residual is scheduling of the two rounded float arguments plus a nop the
-   toolchain inserts after `mfc1` before cvt.w.s's raw `.word` (move_fixup.sed),
-   which the ROM does not have. */
+   GUI scale at +0x8A as an offset-free alias (g_timerHudYScale). (The ROM also
+   loads func_00280B48's colour zero-extended, as a 64-bit value, but that
+   callee's definition in 178E88.cpp takes s32, so the declaration stays u32 and
+   the screen counts those words.) This body has those fixes and still differs
+   in 48/84 words: the ROM reads g_screenWidth in the absolute `lui $4; lw $4`
+   macro form (other functions read it $gp-relative, so it needs an alias device
+   like g_timerHudYScale's: with one and a u64 colour, 33/84), and the residual
+   is scheduling of the two rounded float arguments plus a nop the toolchain
+   inserts after `mfc1` before cvt.w.s's raw `.word` (move_fixup.sed), which the
+   ROM does not have. */
 extern void func_002801B8(s32 x, s32 y, u64 color, const char *text, s32 flag);
 extern void func_00280C98(void *layout, s32 x, s32 y, s32 a, s32 b, s32 c, s32 d,
                           s32 e, s32 f);
-extern void func_00280B48(void *layout, u64 color, const char *text, s32 flag);
+extern void func_00280B48(void *layout, u32 color, const char *text, s32 flag);
 extern u8 D_1ADDB0[];
 /* The GUI scale float at g_swapGadgetItemIndex+0x8A, read through its
  * offset-free alias on EE (the g_timerHudYScale device) and through the block
