@@ -1171,7 +1171,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002CE480);
 #else
 s32 func_002CE480(void) {
     extern s32  func_00338C48(void);
-    extern void func_0029CBE0(s32 buttons, void *scratch);
+    extern s32  func_0029CBE0(s32 buttons, s32 *out);
     extern s32  g_padButtonsPressed;
     extern u8   g_saveImageArea[];
     extern u8   D_00259C78[];
@@ -1197,7 +1197,7 @@ s32 func_002CE480(void) {
         result = 1;
     } else {
         u8 scratch[0x30];
-        func_0029CBE0(flags, scratch);
+        func_0029CBE0(flags, (s32 *)scratch);
     }
     if (g_guiInstance) {
         s32 now = func_00338C48();

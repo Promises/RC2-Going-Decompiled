@@ -101,7 +101,7 @@ extern s32 UpdatePopupMenu(void *popup, s32 arg);
 extern s32 func_00349AB8(void *widget);
 extern s32 func_00348728(void *widget);
 extern s32 GuiWeaponGridTick(void *widget, s32 arg);
-extern s32 GuiMapScreenTick(void *widget, s32 arg0, s32 arg1);
+extern s32 GuiMapScreenTick(void *widget, s32 buttons, s32 *out);
 extern s32 GuiConfirmPopupTick(void *widget, s32 arg);
 extern s32 GuiConfirmPopupDraw(void *widget);
 extern s32 GuiLevelInfoPanelTick(void *widget, s32 arg);
@@ -1739,13 +1739,15 @@ s32 func_0029CBA0(s32 arg) {
     return GuiWeaponGridTick(g_guiInstance + 0x39620, arg);
 }
 
-/** Forward two args to the widget at g_guiInstance+0x39AF0 (method
- *  GuiMapScreenTick); 0 when the GUI is down. */
-s32 func_0029CBE0(s32 arg0, s32 arg1) {
+/** Tick the map screen at g_guiInstance+0x39BA0 (GuiMapScreenTick,
+ *  0x003480C8; USA func_0029D080 / +0x39AF0): `buttons` is the pad-button
+ *  mask, `out` receives the state the tick latches (write-only). Returns the
+ *  tick's result (0), or 0 when the GUI is down. */
+s32 func_0029CBE0(s32 buttons, s32 *out) {
     if (g_guiInstance == 0) {
         return 0;
     }
-    return GuiMapScreenTick(g_guiInstance + 0x39BA0, arg0, arg1);
+    return GuiMapScreenTick(g_guiInstance + 0x39BA0, buttons, out);
 }
 
 /** Forward `arg` to the widget at g_guiInstance+0x3B418 (method GuiConfirmPopupTick);
