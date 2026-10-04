@@ -128,6 +128,15 @@ __asm__(".extern g_nLevelExitRequested, 16");
  * attribute takes the object out of cc1's small-data class so it splits the
  * address the way the ROM does. Declarations only: no code, no definition. */
 #define ROM_SPLIT __attribute__((section(".data")))
+
+/* EE register pin (REGISTER-PIN DEVICE, RULING #8598): steers cc1's allocation of
+ * a live local, emits nothing. Empty on the native build, where "$3" is not a
+ * register name. */
+#ifndef TARGET_NATIVE
+#define EE_REG(r) __asm__(r)
+#else
+#define EE_REG(r)
+#endif
 extern s32 g_padButtonsPressed ROM_SPLIT;
 extern s32 g_padButtonsHeld ROM_SPLIT;
 extern s16 g_fileLoadState ROM_SPLIT;
@@ -434,27 +443,34 @@ s32 func_002CAA70(void) {
  * `p` (center x = p[0x18], y = p[0x1C], width = p[0x20]) it half-splits the
  * width and draws localized string 0x31C8 left-justified at center-half and
  * 0x31C4 at center+half, both in 0x80F0F0F0.
- * Wall: 8-byte-packed-save (saves $16/$17/$18/$31). Preserved as portable C. */
+ * p: screen rect as s32 words (x at [6], y at [7], width at [8]). Returns 0.
+ * The ROM reads the rect only after Begin2dDrawBatch, computes the right edge
+ * before the left (the left reuses cx's register), and re-reads y (p[7]) for
+ * each draw call rather than holding it in a saved register; the C mirrors all
+ * three. Byte-exact on the s136os arm (task #1510); plain C, no device. */
 extern void DrawDebugString(s32 x, s32 y, u64 color, char *str, s64 wrap);
 extern void func_00280120(s32 x, s32 y, u64 color, char *str, s64 wrap);
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CAAA8);
+/* GUARD (task #1510): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002CAAA8)
+S136OS_SLOT(func_002CAAA8);
 #else
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 33.74% -> STRUCTURAL,
  * first differing row @1: ROM `(none)` vs `sd ra,24(sp)`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 23.24% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-64`. */
-/* TODO(match): functional equivalent - not byte-exact; 3-GPR packed-save frame. */
 s32 func_002CAAA8(s32 *p) {
-    s32 cx = p[6];   /* p[0x18] */
-    s32 half = p[8] >> 1; /* p[0x20] width / 2 */
-    s32 y = p[7];    /* p[0x1C] */
-    char *s;
+    s32 left, right;
+    s32 half, cx;
     Begin2dDrawBatch(0);
-    s = GetLocalizedString(0x31C8);
-    DrawDebugString(cx - half, y, 0x80F0F0F0, s, -1);
-    s = GetLocalizedString(0x31C4);
-    func_00280120(cx + half, y, 0x80F0F0F0, s, -1);
+    half = p[8] >> 1;   /* p[0x20] width / 2 */
+    cx = p[6];          /* p[0x18] center x */
+    left = cx - half;
+    right = cx + half;
+    DrawDebugString(left, p[7], 0x80F0F0F0, GetLocalizedString(0x31C8), -1);
+    func_00280120(right, p[7], 0x80F0F0F0, GetLocalizedString(0x31C4), -1);
     End2dDrawBatch();
     return 0;
 }
@@ -559,25 +575,81 @@ void func_002CAB90(float x) {
 }
 #endif
 
+/* func_002CABC0's EE-arm declarations (see its comment below): the camera block
+ * base, its zero-offset tail alias (FACT #8386 pattern; emits no code or data,
+ * relocations resolve to g_cameraState) and the 128-bit row type. Outside the
+ * function's guard so the 2.9 and s136os TUs see the same definitions. */
+extern u8 g_cameraState[];      /* 0x1B5180 camera state block */
+#ifndef TARGET_NATIVE
+__asm__("g_cameraStateTail = g_cameraState");
+extern u8 g_cameraStateTail[];
+typedef unsigned int CameraQuad __attribute__((mode(TI)));
+#endif
+
 /* ResetWorldCamera: snap the world camera back to its default pose. Writes
  * g_cameraPos = (256, 256, 64) and rebuilds g_cameraMatrix as a 3x4 basis that
  * is identity on the diagonal (matrix[0]=matrix[5]=matrix[10]=1) plus a 1.0 in
  * the row-2 translation slot (matrix[11]). Takes no inputs and calls nothing -
- * a pure constant-store, so the native shim is byte-faithful to the asm. The
- * matching build keeps the asm. The original zeroes the matrix with 128-bit
- * `sq $0` writes; cc1 DOES emit those from C via the RULING #8479 `$0`-pinned
- * TI local, so `sq` is not the wall. The measured residual is base CSE: the
- * ROM re-materialises each row base (fresh lui/addiu) where cc1 CSEs them, and
- * ruled devices reach 82.88% (solo, unit report, VM b; NOTE #8503). Byte-exact
- * so far only with an UNRULED asm-emitted `sq` device (NOTE #8503), not landed. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CABC0);
+ * a pure constant-store. g_cameraPos is g_cameraState+0x140 and g_cameraMatrix
+ * is g_cameraState+0x370; the ROM addresses the position and matrix row 0
+ * through g_cameraState and rows 1/2 through g_cameraMatrix+0x10/+0x20.
+ * Byte-exact on the s136os arm (task #1510) with EE-arm devices only:
+ *   - REGISTER-PIN DEVICE `zeroQuad` (RULING #8479): a read-only 128-bit local
+ *     pinned to $0, so cc1 itself emits the ROM's three `sq $0` row clears;
+ *   - each row address goes through an EMPTY operand-tied fence (RULING #8483),
+ *     which keeps it in a register (the ROM's `sq $0,0(rN)`, not a folded
+ *     offset) and stops cc1 deriving the next row from it; an EMPTY untied
+ *     fence after each `sq` keeps the next row's lui after the store;
+ *   - REGISTER-PIN DEVICE (RULING #8598): rows 0 and 2 in $3 as the ROM has
+ *     them (unpinned, cc1 swaps $2/$3 here; the two pins are the fewest that
+ *     close it, measured);
+ *   - the tail reaches g_cameraState through g_cameraStateTail, a zero-offset
+ *     assembler alias (the FACT #8386 pattern; relocations stay against
+ *     g_cameraState), so cc1 re-materialises the base as the ROM does instead
+ *     of reusing the first %hi.
+ * Store order in the source is the order that reproduces the ROM's schedule
+ * (measured over all 24 tail and 6 head orders). Supersedes NOTE #8503's
+ * unruled asm-emitted `sq` form. Native: the same stores in plain C. */
+/* GUARD (task #1510): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002CABC0)
+S136OS_SLOT(func_002CABC0);
 #else
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 42.42% -> STRUCTURAL,
  * first differing row @2: ROM `lui v0,0x0  [HI16 0x001B5180]` vs `lui v0,0x0  [HI16 0x001B52C0]`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 48.85% -> STRUCTURAL, first differing row @2: ROM `lui v0,0x0  [HI16 0x001B5180]` vs `lui v1,0x0  [HI16 0x001B52C0]`. */
 void func_002CABC0(void) {
+#ifndef TARGET_NATIVE
+    register CameraQuad zeroQuad EE_REG("$0");   /* read-only: never assigned */
+    u8 *cs;
+    register CameraQuad *row0 EE_REG("$3");
+    CameraQuad *row1;
+    register CameraQuad *row2 EE_REG("$3");
+    cs = g_cameraState;
+    *(f32 *)(cs + 0x148) = 64.0f;    /* g_cameraPos[2] */
+    *(f32 *)(cs + 0x140) = 256.0f;   /* g_cameraPos[0] */
+    *(f32 *)(cs + 0x144) = 256.0f;   /* g_cameraPos[1] */
+    row0 = (CameraQuad *)(cs + 0x370);
+    __asm__ __volatile__("" : "+r"(row0));
+    *row0 = zeroQuad;
+    __asm__ __volatile__("");
+    row1 = (CameraQuad *)&g_cameraMatrix[4];
+    __asm__ __volatile__("" : "+r"(row1));
+    *row1 = zeroQuad;
+    __asm__ __volatile__("");
+    row2 = (CameraQuad *)&g_cameraMatrix[8];
+    __asm__ __volatile__("" : "+r"(row2));
+    *row2 = zeroQuad;
+    __asm__ __volatile__("");
+    cs = g_cameraStateTail;
+    *(f32 *)(cs + 0x370) = 1.0f;     /* g_cameraMatrix[0] */
+    *(f32 *)(cs + 0x384) = 1.0f;     /* g_cameraMatrix[5] */
+    *(f32 *)(cs + 0x398) = 1.0f;     /* g_cameraMatrix[10] */
+    *(f32 *)(cs + 0x39C) = 1.0f;     /* g_cameraMatrix[11] */
+#else
     s32 i;
     g_cameraPos[0] = 256.0f;
     g_cameraPos[1] = 256.0f;
@@ -589,6 +661,7 @@ void func_002CABC0(void) {
     g_cameraMatrix[5]  = 1.0f;
     g_cameraMatrix[10] = 1.0f;
     g_cameraMatrix[11] = 1.0f;
+#endif
 }
 #endif
 
@@ -1492,30 +1565,48 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CD670);
 
 /* Cheat-flag mirror: for each source toggle byte (D_1A7BDn) write 3 ("on") or 0
  * ("off") into the matching cheat-menu item-state halfword (D_1AA5xx/D_1AA602).
- * Leaf, pure data shuffle.
- * Near-miss (~83%): the original schedules each ternary's `move rd,zero` into
- * the beqz delay slot while emitting the previous result's store before the
- * branch; our cc1 hoists the move ahead of the store and leaves a nop in the
- * delay slot (branch-fill scheduling the later cc1 won't reproduce from clean
- * C). Preserved as portable C. */
+ * Leaf, pure data shuffle: no arguments, no return value.
+ * Byte-exact on the s136os arm (task #1510). The ROM loads the next toggle,
+ * THEN stores the previous result, and puts the next result's `move rN,$0`
+ * in the beqz delay slot. cc1 treats each `.extern X,16` halfword as small
+ * data, so it would slot the one-insn `sh` macro instead and hoist the move
+ * (FACT #7916). Two EE-arm devices give the ROM's shape:
+ *   - an EMPTY untied fence (RULING #8483) between each toggle load and the
+ *     previous store: the load stays first, and the zero stays after the
+ *     store, immediately before the branch, so reorg slots the zero;
+ *   - REGISTER-PIN DEVICE (RULING #8598): the results alternate $3/$4 as in
+ *     the ROM. Unpinned, cc1 if-converts each ternary into movz (measured).
+ * Measured failures on the s136 solo screen: volatile stores (bnel + li in the
+ * slot), if/else stores (one sh per arm), unpinned locals (movz), one pin only.
+ * A second fence after each store is not needed (measured). */
 extern u8 D_1A7BD1, D_1A7BD2, D_1A7BD3, D_1A7BD4, D_1A7BD6;
 extern s16 D_1AA5A2, D_1AA5BA, D_1AA5D2, D_1AA5EA, D_1AA602;
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CDEB0);
+/* GUARD (task #1510): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002CDEB0)
+S136OS_SLOT(func_002CDEB0);
 #else
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 64.32% -> BRANCH-SHAPE,
  * first differing row @2: ROM `beq v0,zero,L` vs `bne v0,zero,L`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 82.70% -> STRUCTURAL, first differing row @7: ROM `(none)` vs `daddu a0,zero,zero`. */
-/* TODO(match): functional equivalent - not byte-exact; ternary move/store
- * delay-slot scheduling not reproduced by cc1. */
 void func_002CDEB0(void) {
-    D_1AA5A2 = D_1A7BD1 ? 3 : 0;
-    D_1AA5BA = D_1A7BD2 ? 3 : 0;
-    D_1AA5D2 = D_1A7BD3 ? 3 : 0;
-    D_1AA5EA = D_1A7BD4 ? 3 : 0;
-    D_1AA602 = D_1A7BD6 ? 3 : 0;
+    register s16 even EE_REG("$3");
+    register s16 odd EE_REG("$4");
+    u8 toggle;
+    even = D_1A7BD1 ? 3 : 0;
+    toggle = D_1A7BD2; __asm__ __volatile__(""); D_1AA5A2 = even;
+    odd = toggle ? 3 : 0;
+    toggle = D_1A7BD3; __asm__ __volatile__(""); D_1AA5BA = odd;
+    even = toggle ? 3 : 0;
+    toggle = D_1A7BD4; __asm__ __volatile__(""); D_1AA5D2 = even;
+    odd = toggle ? 3 : 0;
+    toggle = D_1A7BD6; __asm__ __volatile__(""); D_1AA5EA = odd;
+    even = toggle ? 3 : 0;
+    D_1AA602 = even;
 }
 #endif
 
@@ -1939,40 +2030,51 @@ s32 func_002CE610(void) {
  * into block[0x18]) or -1 when the screen has no pending sub-result; on a
  * "back/cancel" bit (0x900) acknowledges + returns 1; otherwise ticks the idle
  * handler func_0029DA18 and returns 0.
- * Wall: 8-byte-packed-save (saves $16 + $31). Preserved as portable C. */
+ * Takes no arguments; returns 0, 1 or -1 as above.
+ * Byte-exact on the s136os arm (task #1510). The ROM keeps the result in $16
+ * with one epilogue, and re-reads g_menuScreenBlock after the acknowledge
+ * call. It sets the result to 0 explicitly on the "no sub-result but screen
+ * busy" path, in the delay slot of the branch to the epilogue. cc1 sees that
+ * store as redundant (the result is already 0) and if-converts the pair into
+ * movn; an EMPTY operand-tied fence on the result (RULING #8483) in that arm
+ * keeps both stores as branches. */
 extern void func_0028C7A8(void);
 extern s32 func_0029DA18(s32 padPressed);
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE618);
+/* GUARD (task #1510): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002CE618)
+S136OS_SLOT(func_002CE618);
 #else
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 78.14% -> SPLIT-HIREG,
  * first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 80.03% -> SPLIT-HIREG, first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`. */
-/* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame +
- * branch-likely confirm shape. */
 s32 func_002CE618(void) {
+    s32 result = 0;
     s32 flags = g_padButtonsPressed;
-    s32 *block = (s32 *)g_menuScreenBlock;
     if (flags & 0x10) {
-        s32 v;
+        s32 *block;
+        s32 pending;
         func_0028C7A8();
-        v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
-        if (v != 0) {
-            block[0x18 / 4] = v;
-            return 0;
+        block = (s32 *)g_menuScreenBlock;
+        pending = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
+        if (pending != 0) {
+            block[0x18 / 4] = pending;
+        } else if (block[0x134 / 4] != 0) {
+            __asm__("" : "+r"(result));
+            result = 0;
+        } else {
+            result = -1;
         }
-        if (block[0x134 / 4] == 0) {
-            return -1;
-        }
-        return 0;
-    }
-    if (flags & 0x900) {
+    } else if (flags & 0x900) {
         func_0028C7A8();
-        return 1;
+        result = 1;
+    } else {
+        func_0029DA18(flags);
     }
-    func_0029DA18(flags);
-    return 0;
+    return result;
 }
 #endif
 

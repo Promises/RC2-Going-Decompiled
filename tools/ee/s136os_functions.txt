@@ -282,3 +282,7 @@ usa text/235FE8 GuiElementInitTypeB
 usa text/235FE8 GuiElementInitTypeC
 usa text/235FE8 func_00339A88
 usa text/235FE8 func_0033B4E8
+usa text/1CA080 func_002CAAA8
+usa text/1CA080 func_002CABC0
+usa text/1CA080 func_002CDEB0
+usa text/1CA080 func_002CE618
