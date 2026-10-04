@@ -8141,44 +8141,74 @@ s32 func_00342DF8(void *p, s32 inputMask) {
 }
 #endif
 
-/* Draw a vertical menu list: for each of func_00348E68 rows, position the two
- * per-row sprites (+0xEC frame, +0x138 text) at the anchor (*(w+0)) offset by
- * D_1AE10C (x) and D_1AE108*row (y), colour the text sprite the pulsed selected
- * colour when func_00342DA0 says this row is selected else the static 0x55F0C070,
- * and draw both; then run the menu-list draw. Pulses the counter when dpad held. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342E48);
+/* func_00342E48: draw a vertical menu list. For each of func_00348E68's rows it
+ * positions the row's two sprites (+0xEC frame, +0x138 text) at the anchor
+ * (*(w+0)) offset by D_1AE10C in x and D_1AE108*row in y, colours the text
+ * sprite with the pulsed selected colour (func_002AA3F0) when func_00342DA0
+ * names this row, else the static 0x55F0C070, and draws both; then it runs the
+ * menu-list draw on w+0x10. Pulses the counter first when 0x5000 is pressed.
+ *   w: the menu screen (anchor pointer at +0, menu list at +0x10). No return. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00342E48)
+S136OS_SLOT(func_00342E48);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00342E48, unit objdiff): 71.59%,
-   66/113 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x50' vs 'addiu sp, sp, -0x60').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1594). The earlier #else stored the colour in both arms of
+   an if/else; the ROM has ONE store at a join (`b` carries its copy in the
+   delay slot) and loads 0x55F0C070 on the else path, which only the ternary
+   gives (a constant written to the value twice is not hoisted by loop.c).
+   Phrasing the ROM's allocation needs, each one measured necessary:
+   - list is re-formed after the pad check, so it is a copy ($22 <- $16) of the
+     first call's argument, not one variable live from the top;
+   - text is formed at the top of the row and frame after GetColor, so loop.c
+     hoists both (text then frame) into $19/$21 below the `blez`;
+   - the anchor pointer is re-read for each SetPos, as the ROM does;
+   - g_padButtonsPressedSplit (RULING #8620 device, declared at file scope).
+   E48_ROW_ELEM_FENCE is an EMPTY operand-tied fence (RULING #8483): the ROM
+   recomputes w+0xEC for the first SetPos (`addiu $4,$17,0xEC`) while the
+   draw uses the hoisted frame. Without it cc1's CSE folds that SetPos onto
+   frame (`move $4,$21`, 19/100 words differ). Its "f"(anchor[0]) input is
+   the value the x argument already loads; it holds the empty insn after
+   that load so it does not take the cycle the ROM gives `mov.s $f14`
+   (tied to i instead: 4/100). "f" is an EE-only constraint, so the fence is
+   empty natively.
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
+#ifndef TARGET_NATIVE
+#define E48_ROW_ELEM_FENCE(elem, x) __asm__("" : "+r"(elem) : "f"(x))   /* EMPTY */
+#else
+#define E48_ROW_ELEM_FENCE(elem, x) ((void)0)
+#endif
 void func_00342E48(void *w) {
-    void *list = (char *)w + 0x10;
-    s32 count = func_00348E68(list);
+    void *list;
+    s32 count = func_00348E68((char *)w + 0x10);
     s32 i;
 
-    if (g_padButtonsPressed & 0x5000) {
+    if (g_padButtonsPressedSplit & 0x5000) {
         func_002AA3F0(0, 0, 1, 0, 1);
     }
+    list = (char *)w + 0x10;
     for (i = 0; i < count; i++) {
-        f32 *anchor;
+        GuiElement *text = (GuiElement *)((char *)w + 0x138);
+        f32 *anchor = *(f32 **)((char *)w + 0x0);
+        GuiElement *rowFrame = (GuiElement *)((char *)w + 0xEC);
+        void *frame;
         s32 *color;
 
-        anchor = *(f32 **)((char *)w + 0x0);
-        GuiElementSetPos((GuiElement *)((char *)w + 0xEC),
+        E48_ROW_ELEM_FENCE(rowFrame, anchor[0]);
+        GuiElementSetPos(rowFrame,
                          anchor[0] + D_1AE10C, anchor[1] + D_1AE108 * (f32)i, 0.0f, 0.0f);
         anchor = *(f32 **)((char *)w + 0x0);
-        GuiElementSetPos((GuiElement *)((char *)w + 0x138),
+        GuiElementSetPos(text,
                          anchor[0] + D_1AE10C, anchor[1] + D_1AE108 * (f32)i, 0.0f, 0.0f);
-        color = GuiElementGetColor((GuiElement *)((char *)w + 0x138));
-        if (((s32 (*)(void *))func_00342DA0)(w) == i) {
-            *color = func_002AA3F0(0x20FFFEED, 0x70FFFEED, 0x14, 0, 0);
-        } else {
-            *color = 0x55F0C070;
-        }
-        GuiSpriteElementDraw((char *)w + 0xEC);
-        GuiSpriteElementDraw((char *)w + 0x138);
+        color = GuiElementGetColor(text);
+        frame = (char *)w + 0xEC;
+        *color = (((s32 (*)(void *))func_00342DA0)(w) == i)
+                     ? func_002AA3F0(0x20FFFEED, 0x70FFFEED, 0x14, 0, 0)
+                     : 0x55F0C070;
+        GuiSpriteElementDraw(frame);
+        GuiSpriteElementDraw(text);
     }
     GuiMenuListDraw(list);
 }
