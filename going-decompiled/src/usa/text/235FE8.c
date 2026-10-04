@@ -108,6 +108,13 @@ __asm__(".extern D_1ADF4C, 16");
 __asm__(".extern D_1ADF54, 16");
 __asm__(".extern D_1AE020, 16");
 __asm__(".extern D_1AE028, 16");
+/* g_guiInstance: the ROM reads it absolutely (%hi/%lo) at 73 sites in this
+ * unit and gp-relative at 3, all three in branch delay slots. Size 9..15 is
+ * asm_unit.sh's marker for exactly that SN-as behaviour (absolute, except a
+ * delay-slot access stays %gp_rel). Needed by func_0033A678 (task #1520).
+ * Explicit %hi/%gp_rel operators in the INCLUDE_ASM bodies are unaffected; the
+ * whole-image cmp is 0 with it in place. */
+__asm__(".extern g_guiInstance, 12");
 __asm__(".extern D_1AE030, 16");
 __asm__(".extern D_1AE038, 16");
 __asm__(".extern D_1AE040, 16");
@@ -199,7 +206,7 @@ extern void *g_GuiListRowVtable; /* GuiListRow element vtable installed by func_
 
 extern void GuiSpriteElementDraw(void *p);
 extern void GuiTextElementDraw(void *e);
-extern void GuiDialogBoxInitElements(void *p);
+extern void *GuiDialogBoxInitElements(void *p);
 
 /* Small-data (gp_rel) vtable globals installed by the func_00336B88/BA8 ctors. */
 extern void *D_1AD908;
@@ -391,23 +398,26 @@ extern u8   g_heroPos[];
 extern void SwitchActiveCamera(void *cam);
 extern void func_00272560(void *dst, void *src);
 
-typedef struct { u32 w0, w1, w2, w3; } Qw128_235FE8;   /* one 16-byte lq/sq qword */
+/* One 16-byte quadword, 16-byte aligned so cc1 moves it with a single lq/sq
+ * pair as the ROM does. */
+typedef struct { u32 w0, w1, w2, w3; } __attribute__((aligned(16))) Qw128_235FE8;
 
 void func_00336230(void *a, void *b, s32 mode, s32 arg3, s32 arg4) {
-    u8 *gcp = g_cameraPos;
-    Qw128_235FE8 srcA = *(Qw128_235FE8 *)a;
-    Qw128_235FE8 srcB = *(Qw128_235FE8 *)b;
-    Qw128_235FE8 camPos0 = *(Qw128_235FE8 *)gcp;
-    Qw128_235FE8 camPos1 = *(Qw128_235FE8 *)(gcp + 0x10);
+    Qw128_235FE8 srcA, srcB, camPos0, camPos1;
     u8 *cam = (u8 *)func_00270290(5);
     u8 *sub;
 
+    /* the four qwords are snapshotted after the camera is allocated */
+    srcA = *(Qw128_235FE8 *)a;
+    srcB = *(Qw128_235FE8 *)b;
+    camPos0 = *(Qw128_235FE8 *)g_cameraPos;
+    camPos1 = *(Qw128_235FE8 *)(g_cameraPos + 0x10);
     SwitchActiveCamera(cam);
     sub = *(u8 **)(cam + 0x70);
 
     cam[0x7D] = 1;
     *(Qw128_235FE8 *)(cam + 0x30) = srcA;
-    *(Qw128_235FE8 *)gcp          = srcA;
+    *(Qw128_235FE8 *)g_cameraPos  = srcA;
     *(Qw128_235FE8 *)(cam + 0x40) = srcB;
     *(Qw128_235FE8 *)(sub + 0x80) = srcA;
     *(Qw128_235FE8 *)(sub + 0x90) = srcB;
@@ -429,22 +439,28 @@ void func_00336230(void *a, void *b, s32 mode, s32 arg3, s32 arg4) {
 }
 #endif
 
-/* func_003363A0(mode): set the active camera's transition mode. func_002704E0()
- * refreshes camera bookkeeping; cam = *(g_cameraState+0x190). mode 0 rebuilds the
- * camera look vector at cam+0x30 from the hero orientation (g_heroOrientVec):
- * transform it into a scratch matrix (func_00283DC0 then func_00284028, which
- * fills buf+0x20..), rescale two rows (Vec3RescaleToLenVu0, len -1.0 then 1.2),
- * combine (Vec4AddVu0) and set cam[0x8A]=1. modes 1/2/4 stamp the transition id at
- * cam+0x7E (3/2/5) and, for 2/4, clear g_cameraState[0x293] and set the 0.018 fade
- * rate at +0x2A8/+0x2B4. Faithful TARGET_NATIVE #else (engine 2.96 regalloc = no
- * byte-match); buf+0x40 is read from the callee-written scratch matrix region. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003363A0);
+/* func_003363A0: set the active camera's transition mode.
+ *   mode - 0 rebuilds the look vector; 1/2/4 stamp a transition id.
+ * func_002704E0() refreshes camera bookkeeping; cam = *(g_cameraState+0x190).
+ * Mode 0 transforms the hero orientation (g_heroOrientVec) into a 0x40-byte
+ * scratch matrix at buf+0x20 (func_00283DC0, then func_00284028), rescales two
+ * of its rows (Vec3RescaleToLenVu0, lengths -1.0 and 1.2), adds them into
+ * cam+0x30 (Vec4AddVu0) and sets cam[0x8A] = 1. Modes 1/2/4 stamp 3/2/5 at
+ * cam+0x7E; 2 and 4 also clear g_cameraState[0x293] and set the 0.018 fade rate
+ * at +0x2B4/+0x2A8.
+ * The scratch area is 0x60 bytes: the matrix written at buf+0x20 runs to
+ * buf+0x60, and buf+0x40 is read back from it. The earlier #else declared 0x50,
+ * so the callee wrote past the end of the array. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003363A0)
+S136OS_SLOT(func_003363A0);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_003363A0, unit objdiff): 85.19%,
-   37/84 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x90' vs 'addiu sp, sp, -0x80').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1520; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object, base-seeded control rc 1).
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 extern s32  g_cameraState[];       /* +0x190 = active camera obj ptr */
 extern u8   g_heroOrientVec[];
 extern void func_00283DC0(void *dst, void *src);
@@ -458,7 +474,7 @@ void func_003363A0(s32 mode) {
 
     func_002704E0();
     if (mode == 0) {
-        u8  buf[0x50];
+        u8  buf[0x60];
         u8 *hero = g_heroOrientVec;
         func_00283DC0(buf + 0x20, hero);
         func_00284028(cam, buf + 0x20);
@@ -470,15 +486,15 @@ void func_003363A0(s32 mode) {
     } else if (mode == 2) {
         cs[0x293] = 0;
         *(s16 *)(cam + 0x7E) = 2;
-        *(f32 *)(cs + 0x2A8) = 0.018f;
         *(f32 *)(cs + 0x2B4) = 0.018f;
+        *(f32 *)(cs + 0x2A8) = 0.018f;
     } else if (mode == 1) {
         *(s16 *)(cam + 0x7E) = 3;
     } else if (mode == 4) {
         cs[0x293] = 0;
         *(s16 *)(cam + 0x7E) = 5;
-        *(f32 *)(cs + 0x2A8) = 0.018f;
         *(f32 *)(cs + 0x2B4) = 0.018f;
+        *(f32 *)(cs + 0x2A8) = 0.018f;
     }
 }
 #endif
@@ -612,48 +628,52 @@ void func_00336768(void *arg0, void *out, f32 t) {
     u8 *o   = (u8 *)out;
     u8 *obj = *(u8 **)((u8 *)arg0 + 8);
     s32 count = *(s32 *)(obj + 0x10);
-    u8 *kf, *prev, *cur, *next;
+    u8 *prev, *cur, *next;
     s32 i, mode;
-    f32 f, invf, pt, ct;
+    f32 f, invf, pt;
 
     if (count == 0) {
         return;
     }
-    kf = *(u8 **)(obj + 0xC);
     if (count == 1) {
-        *(f32 *)(o + 0x0) = *(f32 *)(kf + 0xC);
-        *(f32 *)(o + 0x4) = *(f32 *)(kf + 0x10);
-        *(f32 *)(o + 0x8) = *(f32 *)(kf + 0x14);
-        *(f32 *)(o + 0xC) = *(f32 *)(kf + 0x18);
+        /* each component re-walks arg0 -> +8 -> +0xC (the stores may alias) */
+        *(f32 *)(o + 0x0) = *(f32 *)(*(u8 **)(*(u8 **)((u8 *)arg0 + 8) + 0xC) + 0xC);
+        *(f32 *)(o + 0x4) = *(f32 *)(*(u8 **)(*(u8 **)((u8 *)arg0 + 8) + 0xC) + 0x10);
+        *(f32 *)(o + 0x8) = *(f32 *)(*(u8 **)(*(u8 **)((u8 *)arg0 + 8) + 0xC) + 0x14);
+        *(f32 *)(o + 0xC) = *(f32 *)(*(u8 **)(*(u8 **)((u8 *)arg0 + 8) + 0xC) + 0x18);
         return;
     }
 
-    prev = kf;
-    cur  = kf;
-    next = *(u8 **)kf;
-    if (next != 0 && *(f32 *)(kf + 0x8) <= t) {
-        for (i = 0; ; ) {
-            cur = next;
-            i++;
-            if ((u32)i >= (u32)count) {
-                break;
+    prev = cur = *(u8 **)(obj + 0xC);
+    i = 0;
+    if ((u32)i < (u32)count) {
+        next = *(u8 **)cur;
+        if (next != 0 && *(f32 *)(cur + 0x8) <= t) {
+            for (;;) {
+                cur = next;
+                i++;
+                if ((u32)i >= (u32)count) {
+                    break;
+                }
+                next = *(u8 **)cur;
+                if (next == 0) {
+                    break;
+                }
+                if (!(*(f32 *)(cur + 0x8) <= t)) {
+                    break;
+                }
+                prev = cur;
             }
-            next = *(u8 **)cur;
-            if (next == 0) {
-                break;
-            }
-            if (*(f32 *)(cur + 0x8) > t) {
-                break;
-            }
-            prev = cur;
         }
     }
 
     pt = *(f32 *)(prev + 0x8);
-    ct = *(f32 *)(cur + 0x8);
-    f  = (t - pt) / (ct - pt);
+    f  = (t - pt) / (*(f32 *)(cur + 0x8) - pt);
     mode = *(s32 *)(obj + 0x14);
-    if (mode < 0 || mode >= 2) {
+    if (mode < 0) {
+        return;
+    }
+    if (mode >= 2) {
         return;
     }
     invf = 1.0f - f;
@@ -1067,39 +1087,56 @@ GuiElement *GuiElementInstallBaseVtable(GuiElement *e) {
     return e;
 }
 
-/* GuiElementBaseInit: construct the shared base of a GUI element. When a pool is
- * supplied (a2), stash it at +0x2C and carve five zeroed 16-byte vector blocks
- * from it (via GuiPoolAlloc + GuiPlacementNew), wiring them into the element in
- * allocation order at +0x0 (pos), +0x8 (unk08), +0x4 (scale), +0xC (color) and
- * +0x10 (visible). Then record the element tag (a1) at +0x28, zero the scalar
- * fields +0x14/+0x18/+0x1C/+0x20/+0x24, and mark the element visible. */
-#ifndef TARGET_NATIVE
-/* TODO(match): functional equivalent - not byte-exact; the 8-byte-packed
-   callee-save frame wall (the original packs s0/s1/ra into a -0x20 frame at
-   0x0/0x8/0x10; this cc1 emits a -0x30 frame at 0x0/0x10/0x20), plus the
-   per-block store scheduling - the original stores the block pointer into the
-   element immediately, then zeroes the block (0x0..0xC) with the trailing
-   0xc(v0) zero sunk into the next GuiPlacementNew delay slot; cc1 batches them
-   differently. 95.9% best. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementBaseInit);
+/* GuiElementBaseInit: construct the shared base of a GUI element.
+ *   e    - the element.
+ *   tag  - its tag, stored at +0x28.
+ *   pool - its GuiPool, stored at +0x2C; may be 0.
+ * With a pool, carves five zeroed 16-byte vector blocks from it (GuiPoolAlloc +
+ * GuiPlacementNew) and wires them in allocation order to +0x0 (pos), +0x8
+ * (unk08), +0x4 (scale), +0xC (color) and +0x10 (visible). Then zeroes the
+ * scalar fields +0x14/+0x18/+0x1C/+0x20/+0x24 and marks the element visible.
+ * Phrasing the ROM requires: each block is zeroed through the returned pointer
+ * (not re-read from the element), and the pool for the next allocation is
+ * re-read from +0x2C straight after the previous block comes back, before the
+ * stores. The earlier "8-byte-packed callee-save frame wall" note was about the
+ * 2.9 compile; the s136os arm packs the frame. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiElementBaseInit)
+S136OS_SLOT(GuiElementBaseInit);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiElementBaseInit, unit objdiff): 53.08%,
-   46/95 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu a0, a2, zero').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1520; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object, base-seeded control rc 1).
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 void GuiElementBaseInit(GuiElement *e, s32 tag, GuiPool *pool) {
+    s32 *blk;
+
     *(GuiPool **)((char *)e + 0x2C) = pool;
     if (pool != 0) {
-        e->pos    = GuiPlacementNew(0x10, GuiPoolAlloc(*(GuiPool **)((char *)e + 0x2C)));
-        e->pos[0] = 0.0f; e->pos[1] = 0.0f; e->pos[2] = 0.0f; e->pos[3] = 0.0f;
-        e->unk08  = GuiPlacementNew(0x10, GuiPoolAlloc(*(GuiPool **)((char *)e + 0x2C)));
-        e->unk08[0] = 0.0f; e->unk08[1] = 0.0f; e->unk08[2] = 0.0f; e->unk08[3] = 0.0f;
-        e->scale  = GuiPlacementNew(0x10, GuiPoolAlloc(*(GuiPool **)((char *)e + 0x2C)));
-        e->scale[0] = 0.0f; e->scale[1] = 0.0f; e->scale[2] = 0.0f; e->scale[3] = 0.0f;
-        e->color  = GuiPlacementNew(0x10, GuiPoolAlloc(*(GuiPool **)((char *)e + 0x2C)));
-        e->color[0] = 0; e->color[1] = 0; e->color[2] = 0; e->color[3] = 0;
-        e->visible = GuiPlacementNew(0x10, GuiPoolAlloc(*(GuiPool **)((char *)e + 0x2C)));
-        e->visible[0] = 0.0f; e->visible[1] = 0.0f; e->visible[2] = 0.0f; e->visible[3] = 0.0f;
+        /* Five zeroed 16-byte blocks. The pool for each next allocation is
+         * re-read from +0x2C as soon as the previous block is returned,
+         * before the stores into the element and the block. */
+        blk = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        pool = *(GuiPool **)((char *)e + 0x2C);
+        e->pos = (f32 *)blk;
+        blk[1] = 0; blk[2] = 0; blk[3] = 0; blk[0] = 0;
+        blk = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        pool = *(GuiPool **)((char *)e + 0x2C);
+        e->unk08 = (f32 *)blk;
+        blk[1] = 0; blk[2] = 0; blk[3] = 0; blk[0] = 0;
+        blk = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        pool = *(GuiPool **)((char *)e + 0x2C);
+        e->scale = (f32 *)blk;
+        blk[1] = 0; blk[2] = 0; blk[3] = 0; blk[0] = 0;
+        blk = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        pool = *(GuiPool **)((char *)e + 0x2C);
+        e->color = blk;
+        blk[1] = 0; blk[2] = 0; blk[3] = 0; blk[0] = 0;
+        blk = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        e->visible = (f32 *)blk;
+        blk[1] = 0; blk[2] = 0; blk[3] = 0; blk[0] = 0;
     }
     *(s32 *)((char *)e + 0x28) = tag;
     *(s32 *)((char *)e + 0x20) = 0;
@@ -2228,15 +2265,16 @@ extern char *g_guiInstance;
 void func_00338AB8(void *self, GuiPool *pool) {
     u8  *w = (u8 *)self;
     u32 *o;
+    f32 *v;
 
     *(u8 *)(w + 0xA8)   = 0;
-    *(u32 *)(w + 0x1A8) = 0;
     *(u32 *)(w + 0x1AC) = 0;
-    *(u32 *)(w + 0x1B0) = 1;
-    *(u32 *)(w + 0x1C4) = 2;
+    *(u32 *)(w + 0x1A8) = 0;
     *(u32 *)(w + 0x1C8) = 0;
     *(u32 *)(w + 0x1CC) = 0;
+    *(u32 *)(w + 0x1C4) = 2;
     *(u32 *)(w + 0x1D4) = 0x28;
+    *(u32 *)(w + 0x1B0) = 1;
     memset(w + 0x1D8, 0, 0x78);
 
     if (pool != 0) {
@@ -2246,17 +2284,20 @@ void func_00338AB8(void *self, GuiPool *pool) {
         o[2] = 0; o[3] = 0;
         *(u32 **)(w + 0x0) = o;
 
-        o = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
-        o[0] = 0x60442D00; o[1] = 0; o[2] = 0; o[3] = 0;
-        *(u32 **)(w + 0x8) = o;
+        v = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
+        /* zeroed as a float vector, then the colour word written over
+         * word 0 (the ROM keeps both stores) */
+        v[0] = 0.0f; v[1] = 0.0f; v[2] = 0.0f; v[3] = 0.0f;
+        *(u32 *)v = 0x60442D00;
+        *(f32 **)(w + 0x8) = v;
 
         o = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
         *(u32 **)(w + 0x4) = o;
-        o[0] = 0; o[1] = 0; o[2] = 0; o[3] = 0;
+        o[1] = 0; o[2] = 0; o[3] = 0; o[0] = 0;
 
         o = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
         *(u32 **)(w + 0xC) = o;
-        o[0] = 0; o[1] = 0; o[2] = 0; o[3] = 0;
+        o[1] = 0; o[2] = 0; o[3] = 0; o[0] = 0;
     }
 
     GuiElementInit((GuiElement *)(w + 0x10), (s32)D_1ADB20, pool);
@@ -2382,24 +2423,29 @@ void func_00338F88(void *a1, void *layout, u32 color, s32 val, s32 font,
 
     ps[9] |= 3;
 
-    if (n9 == 0) {
-        func_00115DA8(buf, (char *)D_1ADBA8, val);
-    } else if (n10 == 0) {
-        if (sub == 0) func_00115DA8(buf, (char *)D_1ADB98, val, 1, 1, n9);
-        else          func_00115DA8(buf, (char *)D_1ADB90, val, 1, n9);
-    } else if (n11 == 0) {
-        if (sub == 0) func_00115DA8(buf, (char *)D_1ADB70, val, 1, 1, n9);
-        else          func_00115DA8(buf, (char *)D_1ADB58, val, 1, n9, n10);
-    } else if (sub == 0) {
-        func_00115DA8(buf, (char *)D_1ADB48, val, 1, 1, n9, 1, n10);
+    if (n9 != 0) {
+        if (n10 != 0) {
+            if (n11 != 0) {
+                if (sub != 0) func_00115DA8(buf, (char *)D_1ADB38, val, 1, n9, 1, n10);
+                else          func_00115DA8(buf, (char *)D_1ADB48, val, 1, 1, n9, 1, n10);
+            } else {
+                if (sub != 0) func_00115DA8(buf, (char *)D_1ADB58, val, 1, n9, n10);
+                else          func_00115DA8(buf, (char *)D_1ADB70, val, 1, 1, n9, n10);
+            }
+        } else {
+            if (sub != 0) func_00115DA8(buf, (char *)D_1ADB90, val, 1, n9);
+            else          func_00115DA8(buf, (char *)D_1ADB98, val, 1, 1, n9);
+        }
     } else {
-        func_00115DA8(buf, (char *)D_1ADB38, val, 1, n9, 1);
+        func_00115DA8(buf, (char *)D_1ADBA8, val);
     }
     ps[9] |= 4;
 
-    if (font == 1)      func_00280B48(layout, color, buf, drawFlag);
-    else if (font == 0) func_00280BB8(layout, color, buf, drawFlag);
-    else if (font == 2) func_00280C28(layout, color, buf, drawFlag);
+    switch (font) {
+    case 0: func_00280BB8(layout, color, buf, drawFlag); break;
+    case 1: func_00280B48(layout, color, buf, drawFlag); break;
+    case 2: func_00280C28(layout, color, buf, drawFlag); break;
+    }
 
     if (reposFlag != 0) {
         s16 h = ps[7];
@@ -2409,9 +2455,11 @@ void func_00338F88(void *a1, void *layout, u32 color, s32 val, s32 font,
         ps[0] = y;
     }
 
-    if (font == 1)      func_00280B48(layout, color, buf, drawFlag);
-    else if (font == 0) func_00280BB8(layout, color, buf, drawFlag);
-    else if (font == 2) func_00280C28(layout, color, buf, drawFlag);
+    switch (font) {
+    case 0: func_00280BB8(layout, color, buf, drawFlag); break;
+    case 1: func_00280B48(layout, color, buf, drawFlag); break;
+    case 2: func_00280C28(layout, color, buf, drawFlag); break;
+    }
 
     dx = (ps[6] >> 1) + 10;
     dy = (ps[7] >> 1) + 5;
@@ -2424,9 +2472,11 @@ void func_00338F88(void *a1, void *layout, u32 color, s32 val, s32 font,
     func_00339398((f32)top, (f32)bottom, (f32)left, (f32)right, (s32)a1, 0x60,
                   0x55F0C070);
 
-    if (font == 1)      func_00280B48(layout, color, buf, drawFlag);
-    else if (font == 0) func_00280BB8(layout, color, buf, drawFlag);
-    else if (font == 2) func_00280C28(layout, color, buf, drawFlag);
+    switch (font) {
+    case 0: func_00280BB8(layout, color, buf, drawFlag); break;
+    case 1: func_00280B48(layout, color, buf, drawFlag); break;
+    case 2: func_00280C28(layout, color, buf, drawFlag); break;
+    }
 
     ps[9] = savedFlags;
 }
@@ -2636,8 +2686,10 @@ void func_00339A88(void *w) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00339B00);
 
-/* func_00339F90: no-op stub (empty body - registered/overridable hook). */
-void func_00339F90(void) {
+/* func_00339F90: no-op stub (empty body - registered/overridable hook).
+ *   w - the widget; func_00339F98 passes it, as for func_00339B00, and it is
+ *       unused. */
+void func_00339F90(void *w) {
 }
 
 /* func_00339F98: temporarily override a camera-projection parameter, rebuild the
@@ -2659,26 +2711,26 @@ extern u8 g_sceneActorMobys[];
 extern void func_00339B00(void *w);
 extern void BuildCameraProjection(void);
 void func_00339F98(void *w) {
-    f32 *camParam;
+    u8 *proj;
     f32 saved;
     s32 mode;
 
     if (*(f32 *)(*(void **)((char *)w + 0x4)) == 0.0f) {
         return;
     }
-    camParam = (f32 *)(g_sceneActorMobys + 0x674 + 0xB0);
-    saved = *camParam;
-    *camParam = 0.62f; /* 0x3F1EB852 */
+    proj = g_sceneActorMobys + 0x674;
+    saved = *(f32 *)(proj + 0xB0);
+    *(f32 *)(proj + 0xB0) = 0.62f; /* 0x3F1EB852 */
     BuildCameraProjection();
 
     mode = *(s32 *)((char *)w + 0x1C8);
     if (mode == 0) {
         func_00339B00(w);
     } else if (mode == 2) {
-        func_00339F90();
+        func_00339F90(w);
     }
 
-    *camParam = saved;
+    *(f32 *)(proj + 0xB0) = saved;
     BuildCameraProjection();
 }
 #endif
@@ -2712,35 +2764,40 @@ S136OS_SLOT(func_0033A048);
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A0B0);
 
-/* GuiConfirmPopupInit: construct the confirm popup (4 button-icon elements + 4
- * text rows). Pool -> alloc the 0x10-byte placement record (+0x4) and zero it
- * (the +0x0 pool store + the +0x2D8=1 "active" flag are unconditional). Record
- * seeded 256x198. Init four icon elements (+0x8/+0x54/+0xA0/+0xEC from
- * D_1ADBE8/BF0/BF8/C00) and four text elements (+0x138/+0x190/+0x1E8/+0x240 from
- * D_1ADC08/C10/C18/C28); mark +0x1E8 as a text element. Colour them, assign
- * glyphs 0x6B..0x6E from the atlas (g_guiInstance+0x8710), set the three visible
- * text rows (localized 0x2C5B / 0x2BE5, plus the in-place buffer at +0x298), then
- * run one GuiConfirmPopupTick(w, 0) to lay it out. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiConfirmPopupInit);
+/* GuiConfirmPopupInit: construct the confirm popup (4 button-icon elements +
+ * 4 text rows).
+ *   w    - the popup; pool - its GuiPool (may be 0).
+ * Stores the pool at +0x0 and the +0x2D8 = 1 "active" flag unconditionally.
+ * With a pool, allocates the 0x10-byte placement record (+0x4) and zeroes it;
+ * the record is seeded 256x198. Inits four icon elements
+ * (+0x8/+0x54/+0xA0/+0xEC from D_1ADBE8/BF0/BF8/C00) and four text elements
+ * (+0x138/+0x190/+0x1E8/+0x240 from D_1ADC08/C10/C18/C28), marks +0x1E8 as a
+ * text element, colours them, assigns glyphs 0x6B..0x6E from the atlas
+ * (g_guiInstance+0x8710), sets the three visible text rows (localized 0x2C5B /
+ * 0x2BE5, plus the in-place buffer at +0x298), then runs one
+ * GuiConfirmPopupTick(w, 0) to lay it out.
+ * Phrasing the ROM requires: each element address is spelled at its use (cc1
+ * then materialises it where first needed, as the ROM does; named locals made it
+ * precompute them all), the record is re-read before each float store, and the
+ * zero stores are written 4/8/C/0. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiConfirmPopupInit)
+S136OS_SLOT(GuiConfirmPopupInit);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiConfirmPopupInit, unit objdiff): 49.55%,
-   143/207 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu v0, zero, 0x1' vs '').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-void GuiConfirmPopupTick(void *w, s32 arg2);
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1520; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object, base-seeded control rc 1).
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
+s32 GuiConfirmPopupTick(void *w, s32 arg2);
 extern char *g_guiInstance;
 extern u8 D_1ADBE8[], D_1ADBF0[], D_1ADBF8[], D_1ADC00[];
 extern u8 D_1ADC08[], D_1ADC10[], D_1ADC18[], D_1ADC28[];
+/* the popup's sub-elements, spelled at each use (the ROM materialises each
+ * address where it is first needed) */
+#define POPUP_ELEM(off) ((GuiElement *)((char *)w + (off)))
 void GuiConfirmPopupInit(void *w, GuiPool *pool) {
-    GuiElement *icon0 = (GuiElement *)((char *)w + 0x8);
-    GuiElement *icon1 = (GuiElement *)((char *)w + 0x54);
-    GuiElement *icon2 = (GuiElement *)((char *)w + 0xA0);
-    GuiElement *icon3 = (GuiElement *)((char *)w + 0xEC);
-    GuiElement *text0 = (GuiElement *)((char *)w + 0x138);
-    GuiElement *text1 = (GuiElement *)((char *)w + 0x190);
-    GuiElement *text2 = (GuiElement *)((char *)w + 0x1E8);
-    GuiElement *text3 = (GuiElement *)((char *)w + 0x240);
     void *rec;
 
     *(GuiPool **)((char *)w + 0x0) = pool;
@@ -2748,45 +2805,45 @@ void GuiConfirmPopupInit(void *w, GuiPool *pool) {
     if (pool != 0) {
         rec = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
         *(void **)((char *)w + 0x4) = rec;
-        *(s32 *)((char *)rec + 0x0) = 0;
         *(s32 *)((char *)rec + 0x4) = 0;
         *(s32 *)((char *)rec + 0x8) = 0;
         *(s32 *)((char *)rec + 0xC) = 0;
+        *(s32 *)((char *)rec + 0x0) = 0;
     }
 
-    rec = *(void **)((char *)w + 0x4);
-    *(f32 *)((char *)rec + 0x0) = 256.0f;
-    *(f32 *)((char *)rec + 0x4) = 198.0f;
+    *(f32 *)(*(char **)((char *)w + 0x4) + 0x0) = 256.0f;
+    *(f32 *)(*(char **)((char *)w + 0x4) + 0x4) = 198.0f;
 
-    GuiElementInit(icon0, (s32)D_1ADBE8, pool);
-    GuiElementInit(icon1, (s32)D_1ADBF0, pool);
-    GuiElementInit(icon2, (s32)D_1ADBF8, pool);
-    GuiElementInit(icon3, (s32)D_1ADC00, pool);
-    GuiTextElementInit(text0, (s32)D_1ADC08, pool);
-    GuiTextElementInit(text1, (s32)D_1ADC10, pool);
-    GuiTextElementInit(text2, (s32)D_1ADC18, pool);
-    GuiTextElementInit(text3, (s32)D_1ADC28, pool);
-    GuiElementSetTextFlag(text2, 1);
+    GuiElementInit(POPUP_ELEM(0x8), (s32)D_1ADBE8, pool);
+    GuiElementInit(POPUP_ELEM(0x54), (s32)D_1ADBF0, pool);
+    GuiElementInit(POPUP_ELEM(0xA0), (s32)D_1ADBF8, pool);
+    GuiElementInit(POPUP_ELEM(0xEC), (s32)D_1ADC00, pool);
+    GuiTextElementInit(POPUP_ELEM(0x138), (s32)D_1ADC08, pool);
+    GuiTextElementInit(POPUP_ELEM(0x190), (s32)D_1ADC10, pool);
+    GuiTextElementInit(POPUP_ELEM(0x1E8), (s32)D_1ADC18, pool);
+    GuiTextElementInit(POPUP_ELEM(0x240), (s32)D_1ADC28, pool);
+    GuiElementSetTextFlag(POPUP_ELEM(0x1E8), 1);
 
-    *GuiElementGetColor(icon0) = 0x60442D00;
-    *GuiElementGetColor(icon1) = 0x60241700;
-    *GuiElementGetColor(icon2) = 0x55F0C070;
-    *GuiElementGetColor(icon3) = 0x55F0C070;
-    *GuiElementGetColor(text0) = (s32)0x80F0F0F0;
-    *GuiElementGetColor(text1) = (s32)0x80F0F0F0;
-    *GuiElementGetColor(text2) = (s32)0x80F0F0F0;
+    *GuiElementGetColor(POPUP_ELEM(0x8)) = 0x60442D00;
+    *GuiElementGetColor(POPUP_ELEM(0x54)) = 0x60241700;
+    *GuiElementGetColor(POPUP_ELEM(0xA0)) = 0x55F0C070;
+    *GuiElementGetColor(POPUP_ELEM(0xEC)) = 0x55F0C070;
+    *GuiElementGetColor(POPUP_ELEM(0x138)) = (s32)0x80F0F0F0;
+    *GuiElementGetColor(POPUP_ELEM(0x190)) = (s32)0x80F0F0F0;
+    *GuiElementGetColor(POPUP_ELEM(0x1E8)) = (s32)0x80F0F0F0;
 
-    GuiElementSetGlyph(icon0, (s32)(g_guiInstance + 0x8710), 0x6B);
-    GuiElementSetGlyph(icon1, (s32)(g_guiInstance + 0x8710), 0x6C);
-    GuiElementSetGlyph(icon2, (s32)(g_guiInstance + 0x8710), 0x6D);
-    GuiElementSetGlyph(icon3, (s32)(g_guiInstance + 0x8710), 0x6E);
+    GuiElementSetGlyph(POPUP_ELEM(0x8), (s32)(g_guiInstance + 0x8710), 0x6B);
+    GuiElementSetGlyph(POPUP_ELEM(0x54), (s32)(g_guiInstance + 0x8710), 0x6C);
+    GuiElementSetGlyph(POPUP_ELEM(0xA0), (s32)(g_guiInstance + 0x8710), 0x6D);
+    GuiElementSetGlyph(POPUP_ELEM(0xEC), (s32)(g_guiInstance + 0x8710), 0x6E);
 
-    GuiElementSetText(text0, GetLocalizedString(0x2C5B));
-    GuiElementSetText(text1, GetLocalizedString(0x2BE5));
-    GuiElementSetText(text2, (s32)((char *)w + 0x298));
+    GuiElementSetText(POPUP_ELEM(0x138), GetLocalizedString(0x2C5B));
+    GuiElementSetText(POPUP_ELEM(0x190), GetLocalizedString(0x2BE5));
+    GuiElementSetText(POPUP_ELEM(0x1E8), (s32)((char *)w + 0x298));
 
     GuiConfirmPopupTick(w, 0);
 }
+#undef POPUP_ELEM
 #endif
 
 /* GuiConfirmPopupTick: lay out the confirm popup's seven visible sub-elements
@@ -2815,38 +2872,68 @@ extern s32 g_gameTime;          /* 0x1B1608 - global frame counter */
 extern s32 g_mapCurrentLevel;   /* 0x1C5150 - current map level id */
 extern s32 g_gsPixelOffsetY;    /* 0x1A7354 - play-count source at +0x3C */
 extern s32 g_playerProgress;    /* 0x1A79F8 - current progress slot (seen-mask bit index) */
-void GuiConfirmPopupTick(void *w, s32 arg2) {
-    GuiElement *icon0 = (GuiElement *)((char *)w + 0x8);
-    GuiElement *icon1 = (GuiElement *)((char *)w + 0x54);
-    GuiElement *icon2 = (GuiElement *)((char *)w + 0xA0);
-    GuiElement *icon3 = (GuiElement *)((char *)w + 0xEC);
-    GuiElement *text0 = (GuiElement *)((char *)w + 0x138);
-    GuiElement *text1 = (GuiElement *)((char *)w + 0x190);
-    GuiElement *text2 = (GuiElement *)((char *)w + 0x1E8);
-    f32 *origin = *(f32 **)((char *)w + 0x4);
-    u8 *rec = (u8 *)&g_health + 0x464;
+typedef struct { f32 x, y; } PopupOffset;
+/* The three text-row offset constants, read through RULING #8620 addressing
+ * aliases: section(".data") makes cc1 treat them as non-small, so it forms the
+ * address in a register and copies the pair through it, as the ROM does. They
+ * move no data and emit nothing; the relocations name the real symbols. */
+#ifndef TARGET_NATIVE
+extern PopupOffset D_1ADC38Split __asm__("D_1ADC38") __attribute__((section(".data")));
+extern PopupOffset D_1ADC40Split __asm__("D_1ADC40") __attribute__((section(".data")));
+extern PopupOffset D_1ADC48Split __asm__("D_1ADC48") __attribute__((section(".data")));
+/* The unlock record at g_health+0x464, by its own (unsized) address symbol so
+ * cc1 forms %hi/%lo itself, as the ROM does; native keeps the offset form. */
+extern u8 D_18C750[];
+#define POPUP_UNLOCK_RECORD D_18C750
+/* the play-count source g_gsPixelOffsetY+0x3C, likewise by its own address */
+extern s32 D_1A7390[];
+#define POPUP_PLAY_COUNT D_1A7390[0]
+#else
+#define POPUP_UNLOCK_RECORD ((u8 *)&g_health + 0x464)
+#define POPUP_PLAY_COUNT (*(s32 *)((u8 *)&g_gsPixelOffsetY + 0x3C))
+#define D_1ADC38Split (*(PopupOffset *)D_1ADC38)
+#define D_1ADC40Split (*(PopupOffset *)D_1ADC40)
+#define D_1ADC48Split (*(PopupOffset *)D_1ADC48)
+#endif
+s32 GuiConfirmPopupTick(void *w, s32 arg2) {
+    /* Each sub-element sits at the panel origin (*(w+0x4), re-read per row)
+     * plus an 8-byte offset pair built on the stack: zero for the icons, a
+     * copy of the D_1ADC38/D_1ADC40/D_1ADC48 constants for the text rows. */
+    PopupOffset off0 = {0}, off2 = {0}, off3 = {0}, off1 = {0};
+    PopupOffset txt0 = D_1ADC38Split;
+    PopupOffset txt1 = D_1ADC40Split;
+    PopupOffset txt2 = D_1ADC48Split;
     s32 target;
 
     (void)arg2;
 
-    GuiElementSetPos(icon0, origin[0], origin[1], 0.0f, 0.0f);
-    GuiElementSetPos(icon1, origin[0], origin[1], 0.0f, 0.0f);
-    GuiElementSetPos(icon2, origin[0], origin[1], 0.0f, 0.0f);
-    GuiElementSetPos(icon3, origin[0], origin[1], 0.0f, 0.0f);
-    GuiElementSetPos(text0, D_1ADC38[0] + origin[0], D_1ADC38[1] + origin[1], 0.0f, 0.0f);
-    GuiElementSetPos(text1, D_1ADC40[0] + origin[0], D_1ADC40[1] + origin[1], 0.0f, 0.0f);
-    GuiElementSetPos(text2, D_1ADC48[0] + origin[0], D_1ADC48[1] + origin[1], 0.0f, 0.0f);
+#define POPUP_ORIGIN (*(f32 **)((char *)w + 0x4))
+#define POPUP_PLACE(off, o) \
+    GuiElementSetPos((GuiElement *)((char *)w + (off)), (o).x + POPUP_ORIGIN[0], \
+                     (o).y + POPUP_ORIGIN[1], 0.0f, 0.0f)
+    POPUP_PLACE(0x8, off0);
+    POPUP_PLACE(0x54, off1);
+    POPUP_PLACE(0xA0, off2);
+    POPUP_PLACE(0xEC, off3);
+    POPUP_PLACE(0x138, txt0);
+    POPUP_PLACE(0x190, txt1);
+    POPUP_PLACE(0x1E8, txt2);
+#undef POPUP_PLACE
+#undef POPUP_ORIGIN
 
     func_002E0010((char *)w + 0x298, g_mapCurrentLevel);
 
-    if (g_gameTime >= 11 && *(u16 *)(rec + 0x1C8) <= 0xFFFE) {
-        *(u16 *)(rec + 0x1C8) = (u16)(*(u16 *)(rec + 0x1C8) + 1);
+#define REC(off, T) (((struct { u8 pad[off]; T v; } *)POPUP_UNLOCK_RECORD)->v)
+    if (g_gameTime >= 11 && REC(0x1C8, u16) <= 0xFFFE) {
+        REC(0x1C8, u16) = (u16)(REC(0x1C8, u16) + 1);
     }
-    target = *(s32 *)((u8 *)&g_gsPixelOffsetY + 0x3C);
-    if ((u32)*(s32 *)(rec + 0x1CC) < (u32)target) {
-        *(s32 *)(rec + 0x1CC) = target;
+    target = POPUP_PLAY_COUNT;
+    if ((u32)REC(0x1CC, s32) < (u32)target) {
+        REC(0x1CC, s32) = target;
     }
-    *(u32 *)(rec + 0x1D0) |= (1u << g_playerProgress) | 0x80000000u;
+    REC(0x1D0, u32) |= (1u << g_playerProgress) | 0x80000000u;
+#undef REC
+    return 0;
 }
 #endif
 
@@ -2897,20 +2984,26 @@ void *func_0033A640(void *p) {
 S136OS_SLOT(func_0033A640);
 #endif
 
-/* func_0033A678: construct a bordered dialog/popup widget. If a pool is given,
- * allocate its 0x10-byte placement record (+0x324) and zero it. Seed the panel
- * element (+0x8) size to 256x212, init its border art from D_1ADC50, then set
- * its bounds (64, -164, 10, 136, 10, 99). Init the icon GuiElement (+0x2D8) from
- * D_1ADC60, force its packed colour to 0x70FFFEED, and give it glyph 0xD6 from
- * the shared atlas (g_guiInstance+0x8710). Finally run func_0033A7E0(w) (the
- * show hook) and clear +0x330. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A678);
+/* func_0033A678: construct a bordered dialog/popup widget. With a pool,
+ * allocates the 0x10-byte placement record (+0x324) and zeroes it; the record is
+ * seeded 256x212. Clears +0x328, gives the panel (+0x8) its border from D_1ADC50
+ * and bounds (64, -164, 10, 136, 10, 99). Inits the icon element (+0x2D8) from
+ * D_1ADC60, forces its colour to 0x70FFFEED and gives it glyph 0xD6 from the
+ * shared atlas (g_guiInstance+0x8710). Finally runs func_0033A7E0(w) (the show
+ * hook) and clears +0x330.
+ *   w    - the widget; pool - its GuiPool (may be 0; stored at +0x0 regardless).
+ * Same phrasing as GuiDialogBoxVariantCInit. g_guiInstance is read absolutely,
+ * per the unit's `.extern g_guiInstance, 12` addressing pin. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033A678)
+S136OS_SLOT(func_0033A678);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033A678, unit objdiff): 68.55%,
-   43/84 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s2, 0x10(sp)' vs 'sd s1, 0x8(sp)').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1520; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object, base-seeded control rc 1).
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 /* GuiElementInit / GuiElementGetColor / GuiElementSetGlyph are defined earlier
  * in this unit; only the not-yet-defined callees need forward decls here. */
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
@@ -2920,8 +3013,9 @@ extern char *g_guiInstance;
 extern u8 D_1ADC50[8];
 extern u8 D_1ADC60[];
 void func_0033A678(void *w, GuiPool *pool) {
-    GuiElement *icon = (GuiElement *)((char *)w + 0x2D8);
+    GuiElement *icon;
     void *obj;
+    void *box;
     s32 *color;
 
     /* +0x0 = pool is stored unconditionally (beqz delay slot). */
@@ -2929,19 +3023,20 @@ void func_0033A678(void *w, GuiPool *pool) {
     if (pool != 0) {
         obj = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
         *(void **)((char *)w + 0x324) = obj;
-        *(s32 *)((char *)obj + 0x0) = 0;
         *(s32 *)((char *)obj + 0x4) = 0;
         *(s32 *)((char *)obj + 0x8) = 0;
         *(s32 *)((char *)obj + 0xC) = 0;
+        *(s32 *)((char *)obj + 0x0) = 0;
     }
 
-    obj = *(void **)((char *)w + 0x324);
-    *(f32 *)((char *)obj + 0x0) = 256.0f;
-    *(f32 *)((char *)obj + 0x4) = 212.0f;
+    box = (char *)w + 0x8;
+    icon = (GuiElement *)((char *)w + 0x2D8);
+    *(f32 *)(*(char **)((char *)w + 0x324) + 0x0) = 256.0f;
+    *(f32 *)(*(char **)((char *)w + 0x324) + 0x4) = 212.0f;
 
     *(s32 *)((char *)w + 0x328) = 0;
-    GuiDialogBoxInitBorder((char *)w + 0x8, pool, D_1ADC50);
-    GuiDialogBoxSetBounds((char *)w + 0x8, 64.0f, -164.0f, 10.0f, 136.0f, 10.0f, 99.0f);
+    GuiDialogBoxInitBorder(box, pool, D_1ADC50);
+    GuiDialogBoxSetBounds(box, 64.0f, -164.0f, 10.0f, 136.0f, 10.0f, 99.0f);
 
     /* the "tag"/"codepoint" params are s32 by declaration but carry data
      * addresses here (the original passes the pointer through an int slot). */
@@ -3002,46 +3097,67 @@ void func_0033A7E0(void *p) {
 }
 #endif
 
-/* func_0033A860: populate this confirm-dialog screen's text - set the dialog box
- * (p+0x8) title/body/footer to localized strings 0x2C33/0x2C32/0x2BE5, zero its
- * scale, raise the +0x32C "text ready" flag, and return 1. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A860);
+/* func_0033A860: populate this confirm-dialog screen's text: set the dialog
+ * box (p+0x8) title/body/footer to localized strings 0x2C33/0x2C32/0x2BE5, zero
+ * its scale, and raise the +0x32C "text ready" flag.
+ *   p - the screen. Returns nothing: the ROM leaves the flag value in $v0 only
+ *       because it stores it from there; the earlier #else invented a
+ *       `return 1`, which no caller reads (1D54C0 declares it void). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033A860)
+S136OS_SLOT(func_0033A860);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033A860, unit objdiff): 67.30%,
-   22/38 insns differ. Residual: UNKNOWN-addiu (first differing insn: '' vs 'addiu a0, zero, 0x2c33').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; 4-callee-save frame
-   wall. */
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1520; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object, base-seeded control rc 1).
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 extern s32 GetLocalizedString(s32 id);
 extern void GuiDialogBoxSetText3(void *p, s32 t0, s32 t1, s32 t2);
 extern void GuiDialogBoxSetScale(void *p, f32 scale);
-s32 func_0033A860(void *p) {
+void func_0033A860(void *p) {
     s32 t0 = GetLocalizedString(0x2C33);
     s32 t1 = GetLocalizedString(0x2C32);
     s32 t2 = GetLocalizedString(0x2BE5);
     GuiDialogBoxSetText3((char *)p + 0x8, t0, t1, t2);
     GuiDialogBoxSetScale((char *)p + 0x8, 0.0f);
     *(s32 *)((char *)p + 0x32C) = 1;
-    return 1;
 }
 #endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A8E8);
 
-/* Update a pulsing list-cursor widget: place its frame sub-element (+0x8) at the
- * tracked anchor (*(w+0x324)) via func_0033C060 + func_0033BE70, tick the colour
- * pulse when dpad up/down is held, set the cursor sprite's (+0x2D8) colour to the
- * pulsed blend of 0x60442D00/0x70FFFEED, then position that sprite at the anchor
- * offset by fixed constants plus a per-frame-counter (w+0x328) Y step. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A8F0);
+/* func_0033A8F0: tick a pulsing list-cursor widget. Places the frame panel
+ * (+0x8) at the tracked anchor (*(w+0x324)) via func_0033C060 and lays it out
+ * with func_0033BE70, ticks the colour pulse when d-pad up/down is pressed, sets
+ * the cursor sprite's (+0x2D8) colour to the pulsed blend of
+ * 0x60442D00/0x70FFFEED, then positions the sprite at the anchor plus fixed
+ * offsets and a per-frame-counter (w+0x328) Y step.
+ *   w - the widget. Returns 0.
+ * func_0033BE70 is called with the panel only: the ROM sets no $a1 here. Its
+ * prototype keeps a second (unread) parameter for the other callers, so this
+ * call goes through a one-parameter cast; the earlier #else passed a 0. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033A8F0)
+S136OS_SLOT(func_0033A8F0);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033A8F0, unit objdiff): 80.11%,
-   33/71 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s1, 0x8(sp)' vs '').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1520; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object, base-seeded control rc 1).
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
+/* g_padButtonsPressedSplit: the RULING #8620 addressing device func_003434C8
+ * uses (same declaration; that one sits in its own arm, after this function):
+ * section(".data") makes cc1 split the address itself, `lui $3` ...
+ * `lw $2,%lo($3)`, as the ROM does. It moves no data and emits nothing; the
+ * relocation names g_padButtonsPressed. */
+#ifndef TARGET_NATIVE
+extern s32 g_padButtonsPressedSplit __asm__("g_padButtonsPressed") __attribute__((section(".data")));
+#else
+#define g_padButtonsPressedSplit g_padButtonsPressed
+#endif
 s32 func_0033A8F0(void *w) {
     void *sub = (char *)w + 0x8;
     f32 *anchor = *(f32 **)((char *)w + 0x324);
@@ -3049,8 +3165,8 @@ s32 func_0033A8F0(void *w) {
     f32 *a;
 
     func_0033C060(sub, anchor[0], anchor[1]);
-    func_0033BE70(sub, 0);   /* 2nd arg (flags) ignored by the callee */
-    if (g_padButtonsPressed & 0x5000) {
+    ((void (*)(void *))func_0033BE70)(sub);
+    if (g_padButtonsPressedSplit & 0x5000) {
         func_002AA3F0(0, 0, 1, 0, 1);
     }
     *GuiElementGetColor((GuiElement *)((char *)w + 0x2D8)) =
@@ -3153,22 +3269,12 @@ extern char *g_guiInstance;
 extern u8 D_1ADBE8[], D_1ADBF0[], D_1ADBF8[], D_1ADC00[], D_1ADC08[], D_1ADC80[],
           D_1ADC90[], D_1ADC98[], D_1ADCA0[], D_1ADCA8[], D_1ADC10[], D_1ADC18[],
           D_1ADC28[], D_1ADC78[8];
-s32 GuiLevelInfoPanelTick(void *w);
+s32 GuiLevelInfoPanelTick(void *w, s32 flags);
+/* the panel's sub-elements, spelled at each use (the ROM materialises each
+ * address where it is first needed) */
+#define PANEL_ELEM(off) ((GuiElement *)(s + (off)))
 void GuiLevelInfoPanelInit(void *self, GuiPool *pool) {
     u8 *s = (u8 *)self;
-    GuiElement *h0 = (GuiElement *)(s + 0x8);
-    GuiElement *h1 = (GuiElement *)(s + 0x54);
-    GuiElement *h2 = (GuiElement *)(s + 0xA0);
-    GuiElement *h3 = (GuiElement *)(s + 0xEC);
-    GuiElement *r0 = (GuiElement *)(s + 0x138);
-    GuiElement *r1 = (GuiElement *)(s + 0x190);
-    GuiElement *r2 = (GuiElement *)(s + 0x1E8);
-    GuiElement *r3 = (GuiElement *)(s + 0x240);
-    GuiElement *r4 = (GuiElement *)(s + 0x298);
-    GuiElement *r5 = (GuiElement *)(s + 0x2F0);
-    GuiElement *r6 = (GuiElement *)(s + 0x348);
-    GuiElement *r7 = (GuiElement *)(s + 0x3A0);
-    GuiElement *r8 = (GuiElement *)(s + 0x3F8);
     u32 *vec;
 
     *(GuiPool **)(s + 0x0) = pool;
@@ -3176,67 +3282,67 @@ void GuiLevelInfoPanelInit(void *self, GuiPool *pool) {
     if (pool != 0) {
         vec = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
         *(u32 **)(s + 0x4) = vec;
-        vec[0] = 0; vec[1] = 0; vec[2] = 0; vec[3] = 0;
+        vec[1] = 0; vec[2] = 0; vec[3] = 0; vec[0] = 0;
     }
-    vec = *(u32 **)(s + 0x4);
-    *(f32 *)&vec[0] = 256.0f;
-    *(f32 *)&vec[1] = 198.0f;
+    *(f32 *)(*(u8 **)(s + 0x4) + 0x0) = 256.0f;
+    *(f32 *)(*(u8 **)(s + 0x4) + 0x4) = 198.0f;
 
-    GuiElementInit(h0, (s32)D_1ADBE8, pool);
-    GuiElementInit(h1, (s32)D_1ADBF0, pool);
-    GuiElementInit(h2, (s32)D_1ADBF8, pool);
-    GuiElementInit(h3, (s32)D_1ADC00, pool);
+    GuiElementInit(PANEL_ELEM(0x8), (s32)D_1ADBE8, pool);
+    GuiElementInit(PANEL_ELEM(0x54), (s32)D_1ADBF0, pool);
+    GuiElementInit(PANEL_ELEM(0xA0), (s32)D_1ADBF8, pool);
+    GuiElementInit(PANEL_ELEM(0xEC), (s32)D_1ADC00, pool);
 
-    GuiTextElementInit(r0, (s32)D_1ADC08, pool);
-    GuiTextElementInit(r1, (s32)D_1ADC80, pool);
-    GuiTextElementInit(r2, (s32)D_1ADC90, pool);
-    GuiTextElementInit(r3, (s32)D_1ADC98, pool);
-    GuiTextElementInit(r4, (s32)D_1ADCA0, pool);
-    GuiTextElementInit(r5, (s32)D_1ADCA8, pool);
-    GuiTextElementInit(r6, (s32)D_1ADC10, pool);
-    GuiTextElementInit(r7, (s32)D_1ADC18, pool);
-    GuiTextElementInit(r8, (s32)D_1ADC28, pool);
+    GuiTextElementInit(PANEL_ELEM(0x138), (s32)D_1ADC08, pool);
+    GuiTextElementInit(PANEL_ELEM(0x190), (s32)D_1ADC80, pool);
+    GuiTextElementInit(PANEL_ELEM(0x1E8), (s32)D_1ADC90, pool);
+    GuiTextElementInit(PANEL_ELEM(0x240), (s32)D_1ADC98, pool);
+    GuiTextElementInit(PANEL_ELEM(0x298), (s32)D_1ADCA0, pool);
+    GuiTextElementInit(PANEL_ELEM(0x2F0), (s32)D_1ADCA8, pool);
+    GuiTextElementInit(PANEL_ELEM(0x348), (s32)D_1ADC10, pool);
+    GuiTextElementInit(PANEL_ELEM(0x3A0), (s32)D_1ADC18, pool);
+    GuiTextElementInit(PANEL_ELEM(0x3F8), (s32)D_1ADC28, pool);
 
-    GuiElementSetTextFlag(r1, 0);
-    GuiElementSetTextFlag(r2, 0);
-    GuiElementSetTextFlag(r3, 0);
-    GuiElementSetTextFlag(r4, 0);
-    GuiElementSetTextFlag(r5, 0);
-    GuiElementSetTextFlag(r6, 0);
-    GuiElementSetTextFlag(r7, 0);
-    GuiElementSetTextFlag(r8, 2);
+    GuiElementSetTextFlag(PANEL_ELEM(0x190), 0);
+    GuiElementSetTextFlag(PANEL_ELEM(0x1E8), 0);
+    GuiElementSetTextFlag(PANEL_ELEM(0x240), 0);
+    GuiElementSetTextFlag(PANEL_ELEM(0x298), 0);
+    GuiElementSetTextFlag(PANEL_ELEM(0x2F0), 0);
+    GuiElementSetTextFlag(PANEL_ELEM(0x348), 0);
+    GuiElementSetTextFlag(PANEL_ELEM(0x3A0), 0);
+    GuiElementSetTextFlag(PANEL_ELEM(0x3F8), 2);
 
-    *GuiElementGetColor(h0) = 0x60442D00;
-    *GuiElementGetColor(h1) = 0x60241700;
-    *GuiElementGetColor(h2) = 0x55F0C070;
-    *GuiElementGetColor(h3) = 0x55F0C070;
-    *GuiElementGetColor(r0) = (s32)0x80F0F0F0;
-    *GuiElementGetColor(r1) = (s32)0x80F0F0F0;
-    *GuiElementGetColor(r2) = (s32)0x80F0F0F0;
-    *GuiElementGetColor(r3) = (s32)0x80F0F0F0;
-    *GuiElementGetColor(r4) = (s32)0x80F0F0F0;
-    *GuiElementGetColor(r5) = (s32)0x80F0F0F0;
-    *GuiElementGetColor(r6) = (s32)0x80F0F0F0;
-    *GuiElementGetColor(r7) = (s32)0x80F0F0F0;
-    *GuiElementGetColor(r8) = (s32)0x80F0F0F0;
+    *GuiElementGetColor(PANEL_ELEM(0x8)) = 0x60442D00;
+    *GuiElementGetColor(PANEL_ELEM(0x54)) = 0x60241700;
+    *GuiElementGetColor(PANEL_ELEM(0xA0)) = 0x55F0C070;
+    *GuiElementGetColor(PANEL_ELEM(0xEC)) = 0x55F0C070;
+    *GuiElementGetColor(PANEL_ELEM(0x138)) = (s32)0x80F0F0F0;
+    *GuiElementGetColor(PANEL_ELEM(0x190)) = (s32)0x80F0F0F0;
+    *GuiElementGetColor(PANEL_ELEM(0x1E8)) = (s32)0x80F0F0F0;
+    *GuiElementGetColor(PANEL_ELEM(0x240)) = (s32)0x80F0F0F0;
+    *GuiElementGetColor(PANEL_ELEM(0x298)) = (s32)0x80F0F0F0;
+    *GuiElementGetColor(PANEL_ELEM(0x2F0)) = (s32)0x80F0F0F0;
+    *GuiElementGetColor(PANEL_ELEM(0x348)) = (s32)0x80F0F0F0;
+    *GuiElementGetColor(PANEL_ELEM(0x3A0)) = (s32)0x80F0F0F0;
+    *GuiElementGetColor(PANEL_ELEM(0x3F8)) = (s32)0x80F0F0F0;
 
-    GuiElementSetGlyph(h0, (s32)g_guiInstance + 0x8710, 0x5F);
-    GuiElementSetGlyph(h1, (s32)g_guiInstance + 0x8710, 0x60);
-    GuiElementSetGlyph(h2, (s32)g_guiInstance + 0x8710, 0x61);
-    GuiElementSetGlyph(h3, (s32)g_guiInstance + 0x8710, 0x62);
+    GuiElementSetGlyph(PANEL_ELEM(0x8), (s32)g_guiInstance + 0x8710, 0x5F);
+    GuiElementSetGlyph(PANEL_ELEM(0x54), (s32)g_guiInstance + 0x8710, 0x60);
+    GuiElementSetGlyph(PANEL_ELEM(0xA0), (s32)g_guiInstance + 0x8710, 0x61);
+    GuiElementSetGlyph(PANEL_ELEM(0xEC), (s32)g_guiInstance + 0x8710, 0x62);
 
     D_1ADC78[0] = 0x12;
-    GuiElementSetText(r0, GetLocalizedString(0x2BFB));
-    GuiElementSetText(r1, GetLocalizedString(0x2BF3));
-    GuiElementSetText(r2, GetLocalizedString(0x3129));
-    GuiElementSetText(r3, GetLocalizedString(0x2BFF));
-    GuiElementSetText(r4, GetLocalizedString(0x2C00));
-    GuiElementSetText(r5, GetLocalizedString(0x2C01));
-    GuiElementSetText(r6, GetLocalizedString(0x2BE5));
-    GuiElementSetText(r7, (s32)(s + 0x450));
+    GuiElementSetText(PANEL_ELEM(0x138), GetLocalizedString(0x2BFB));
+    GuiElementSetText(PANEL_ELEM(0x190), GetLocalizedString(0x2BF3));
+    GuiElementSetText(PANEL_ELEM(0x1E8), GetLocalizedString(0x3129));
+    GuiElementSetText(PANEL_ELEM(0x240), GetLocalizedString(0x2BFF));
+    GuiElementSetText(PANEL_ELEM(0x298), GetLocalizedString(0x2C00));
+    GuiElementSetText(PANEL_ELEM(0x2F0), GetLocalizedString(0x2C01));
+    GuiElementSetText(PANEL_ELEM(0x348), GetLocalizedString(0x2BE5));
+    GuiElementSetText(PANEL_ELEM(0x3A0), (s32)(s + 0x450));
 
-    GuiLevelInfoPanelTick(self);
+    GuiLevelInfoPanelTick(self, 0);
 }
+#undef PANEL_ELEM
 #endif
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033AF68);
@@ -3262,7 +3368,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiLevelInfoPan
 extern f32 D_1ADCB8[2], D_1ADCC0[2], D_1ADCC8[2], D_1ADCD0[2];
 extern f32 D_1ADCD8, D_1ADCDC;
 extern u8 g_mapVertexData[], g_levelSelectEntries[], D_1ADC60[];
-s32 GuiLevelInfoPanelTick(void *w) {
+s32 GuiLevelInfoPanelTick(void *w, s32 flags) {
     f32 *origin = *(f32 **)((char *)w + 0x4);
     s32 level = *(s32 *)(g_mapVertexData + 0x230);
     s32 valueStrId;
@@ -3413,12 +3519,15 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiProgressBarW
    not byte-exact, so the arm stays #else. */
 extern s32 g_swapGadgetItemIndex;
 extern u8 D_1ADC60[];
+#ifndef TARGET_NATIVE
+#define PROGRESS_BAR_CFG g_timerHudYScale /* +0x8A alias, absolute (above) */
+#else
+#define PROGRESS_BAR_CFG (*(f32 *)((char *)&g_swapGadgetItemIndex + 0x8A))
+#endif
 void GuiProgressBarWidgetInit(void *w, GuiPool *pool) {
-    GuiElement *sprite = (GuiElement *)((char *)w + 0x134);
-    GuiElement *text = (GuiElement *)((char *)w + 0x170);
     void *rec;
     s32 *color;
-    f32 cfg;
+    f32 fill;
 
     *(s32 *)((char *)w + 0x208) = 0;
     /* +0x210 = pool is stored unconditionally (beqz delay slot). */
@@ -3426,28 +3535,29 @@ void GuiProgressBarWidgetInit(void *w, GuiPool *pool) {
     if (pool != 0) {
         rec = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
         *(void **)((char *)w + 0x20C) = rec;
-        *(s32 *)((char *)rec + 0x0) = 0;
         *(s32 *)((char *)rec + 0x4) = 0;
         *(s32 *)((char *)rec + 0x8) = 0;
         *(s32 *)((char *)rec + 0xC) = 0;
+        *(s32 *)((char *)rec + 0x0) = 0;
     }
 
-    cfg = *(f32 *)((char *)&g_swapGadgetItemIndex + 0x8A);
-    rec = *(void **)((char *)w + 0x20C);
-    *(f32 *)((char *)rec + 0x0) = 70.0f;
-    *(f32 *)((char *)rec + 0x4) = (f32)(s32)(cfg * 300.0f + 0.5f);
+    fill = PROGRESS_BAR_CFG * 300.0f + 0.5f;
+    *(f32 *)(*(char **)((char *)w + 0x20C) + 0x0) = 70.0f;
+    *(f32 *)(*(char **)((char *)w + 0x20C) + 0x4) = (f32)(s32)fill;
 
-    GuiSpriteElementInit(sprite, (s32)D_1ADC60, pool);
-    GuiElementSetScale(sprite, 24.0f, 24.0f, 0.0f, 0.0f);
-    color = GuiElementGetColor(sprite);
+    /* both element inits re-read the pool from +0x210 */
+    GuiSpriteElementInit((GuiElement *)((char *)w + 0x134), (s32)D_1ADC60, *(GuiPool **)((char *)w + 0x210));
+    GuiElementSetScale((GuiElement *)((char *)w + 0x134), 24.0f, 24.0f, 0.0f, 0.0f);
+    color = GuiElementGetColor((GuiElement *)((char *)w + 0x134));
     *color = 0x60F0F0B0;
     *(f32 *)((char *)w + 0x214) = 65.0f;
 
-    GuiTextElementInit(text, (s32)D_1ADC60, pool);
-    color = GuiElementGetColor(text);
+    GuiTextElementInit((GuiElement *)((char *)w + 0x170), (s32)D_1ADC60, *(GuiPool **)((char *)w + 0x210));
+    color = GuiElementGetColor((GuiElement *)((char *)w + 0x170));
     *color = (s32)0x80F0F0F0;
-    GuiElementSetScale(text, 0.7f, 0.7f, 0.0f, 0.0f);
+    GuiElementSetScale((GuiElement *)((char *)w + 0x170), 0.7f, 0.7f, 0.0f, 0.0f);
 }
+#undef PROGRESS_BAR_CFG
 #endif
 
 extern f32 D_1ADCE0, D_1ADCE4;
@@ -3618,19 +3728,23 @@ extern char *g_guiInstance;
 extern u8 D_1ADC60[];
 extern s32 D_1ADD08[2];
 void func_0033BA48(void *w, s32 *srcGlyphs, void *entries) {
+    GuiElement *elem = (GuiElement *)((char *)w + 0x4);
+    s32 *color = D_1ADD08;
     s32 i, idx, off;
     s32 *row;
 
     for (i = 0; i <= 3; i++) {
-        GuiElement *elem = (GuiElement *)((char *)w + 0x4 + i * 0x4C);
-        if (srcGlyphs[i] != 0) {
+        if (*srcGlyphs != 0) {
             GuiElementInit(elem, (s32)D_1ADC60, *(GuiPool **)((char *)w + 0x210));
-            *GuiElementGetColor(elem) = D_1ADD08[i];
-            GuiElementSetGlyph(elem, (s32)(g_guiInstance + 0x8710), srcGlyphs[i]);
+            *GuiElementGetColor(elem) = *color;
+            GuiElementSetGlyph(elem, (s32)(g_guiInstance + 0x8710), *srcGlyphs);
         } else {
             GuiElementSetGlyph(elem, (s32)(g_guiInstance + 0x8710), 0);
             GuiElementSetVisible(elem, 0);
         }
+        elem = (GuiElement *)((char *)elem + 0x4C);
+        color++;
+        srcGlyphs++;
     }
 
     *(s32 *)((char *)w + 0x208) = 0;
@@ -3642,10 +3756,14 @@ void func_0033BA48(void *w, s32 *srcGlyphs, void *entries) {
         row = (s32 *)((char *)w + 0x1C8);
         *row = 0;
         for (;;) {
+            /* empty tied fence (RULING #8483): stops cc1 copying the exit
+             * test ahead of the loop, which the ROM's loop does not have */
+            __asm__ __volatile__("" : "+r"(row));
             off += 0x18;
             row++;
             *(s32 *)((char *)w + 0x208) += 1;
-            if (*(s32 *)((char *)entries + off + 4) == -1) {
+            /* the table is re-read from +0x0 each pass */
+            if (*(s32 *)(*(char **)((char *)w + 0x0) + off + 4) == -1) {
                 break;
             }
             idx++;
@@ -3658,25 +3776,41 @@ void func_0033BA48(void *w, s32 *srcGlyphs, void *entries) {
 }
 #endif
 
-/* GuiDialogBoxInitElements: build the dialog-box sub-elements over p - 5 TypeB
- * border elements (p+0xC, stride 0x4C) then 3 TypeC text rows (p+0x198, +0x1F0,
- * +0x248). All field writes happen inside the TypeB/TypeC ctors. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiDialogBoxInitElements);
+/* GuiDialogBoxInitElements: construct the dialog-box sub-elements over p:
+ * five type-B border elements from p+0xC at a 0x4C stride, then three type-C
+ * text rows at p+0x198/+0x1F0/+0x248.
+ *   p - the dialog box; returned unchanged.
+ * The ROM runs the five type-B constructs as a counted loop (4 down to -1)
+ * with the R5900 short-loop pad (two nops before the backward branch), which
+ * R5900_SHORT_LOOP_PAD1 reproduces (RULING #8435; same device and phrasing as
+ * func_0033B4E8 / 24D728's GuiManagerInitListRows). The earlier #else wrote it
+ * as a for loop and dropped the `return p`. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiDialogBoxInitElements)
+S136OS_SLOT(GuiDialogBoxInitElements);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiDialogBoxInitElements, unit objdiff): 66.52%,
-   23/33 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x30' vs 'addiu sp, sp, -0x20').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-void GuiDialogBoxInitElements(void *p) {
-    char *base = (char *)p;
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1520; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object, base-seeded control rc 1).
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
+void *GuiDialogBoxInitElements(void *p) {
+    u8 *element = (u8 *)p + 0xC;
     s32 i;
-    for (i = 0; i < 5; i++) {
-        GuiElementInitTypeB(base + 0xC + i * 0x4C);
-    }
-    GuiElementInitTypeC(base + 0x198);
-    GuiElementInitTypeC(base + 0x1F0);
-    GuiElementInitTypeC(base + 0x248);
+    i = 4;
+    do {
+        i--;
+        GuiElementInitTypeB(element);
+        __asm__ __volatile__("");
+        R5900_SHORT_LOOP_PAD1(element, element);
+        R5900_SHORT_LOOP_PAD1(element, element);
+        element += 0x4C;
+    } while (i != -1);
+    GuiElementInitTypeC((char *)p + 0x198);
+    GuiElementInitTypeC((char *)p + 0x1F0);
+    GuiElementInitTypeC((char *)p + 0x248);
+    return p;
 }
 #endif
 
@@ -3874,25 +4008,43 @@ void GuiDialogBoxSetScale(void *p, f32 scale) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033C0F8);
 
-/* func_0033C100: init the screen's ten embedded sub-elements at their fixed
- * offsets (five type-B at p+0/+0x4C/+0x98/+0xE4/+0x130, three type-C at
- * +0x1D8/+0x230/+0x288, then the two D_1ADA18 widgets at +0x2E0/+0x31C), return
- * the object. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033C100);
+/* func_0033C100: construct the screen's embedded sub-elements: six type-B
+ * elements from p at a 0x4C stride (p+0x0 .. p+0x17C), three type-C at
+ * +0x1D8/+0x230/+0x288, then the two D_1ADA18 widgets (func_003374D8) at
+ * +0x2E0/+0x31C.
+ *   p - the screen; returned unchanged.
+ * The ROM constructs the first three type-B elements one by one and the last
+ * three in a counted loop (2 down to -1) carrying the R5900 short-loop pad
+ * (RULING #8435). The pads are tied to p (read-write) and element (read) only:
+ * tying them read-write to element or the counter adds references that change
+ * cc1's register choice (p must land in $16). The earlier #else constructed
+ * five type-B elements and so never constructed the one at +0x17C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033C100)
+S136OS_SLOT(func_0033C100);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033C100, unit objdiff): 64.46%,
-   22/41 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x30' vs 'addiu sp, sp, -0x10').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; 4-callee-save frame
-   wall. */
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1520; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object, base-seeded control rc 1).
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 void *func_0033C100(void *p) {
+    u8 *element;
+    s32 i;
+    element = (u8 *)p + 0xE4;
+    i = 2;
     GuiElementInitTypeB(p);
     GuiElementInitTypeB((char *)p + 0x4C);
     GuiElementInitTypeB((char *)p + 0x98);
-    GuiElementInitTypeB((char *)p + 0xE4);
-    GuiElementInitTypeB((char *)p + 0x130);
+    do {
+        i--;
+        GuiElementInitTypeB(element);
+        __asm__ __volatile__("");
+        R5900_SHORT_LOOP_PAD1(p, element);
+        R5900_SHORT_LOOP_PAD1(p, element);
+        element += 0x4C;
+    } while (i != -1);
     GuiElementInitTypeC((char *)p + 0x1D8);
     GuiElementInitTypeC((char *)p + 0x230);
     GuiElementInitTypeC((char *)p + 0x288);
@@ -4052,8 +4204,11 @@ void func_0033C958(void *self) {
         GuiSpriteSetTexture(marker, 0xE99E, *(s32 *)(tbl + 8));
         GuiElementSetScale(marker, *(f32 *)(tbl + 0xC), *(f32 *)(tbl + 0xC),
                            0.0f, 0.0f);
-        *GuiElementGetColor(marker) =
-            (g_levelVisitedMarkers[i] == 0) ? (s32)0x70A0C0C0 : (s32)0x7029A1FF;
+        if (g_levelVisitedMarkers[i] == 0) {
+            *GuiElementGetColor(marker) = (s32)0x70A0C0C0;
+        } else {
+            *GuiElementGetColor(marker) = (s32)0x7029A1FF;
+        }
         if (g_abLevelAvailableFlags[i] != 0) {
             func_00337630(marker);
         }
@@ -4066,7 +4221,6 @@ void func_0033C958(void *self) {
         s32 *desc = (s32 *)(p + 0x114);
         u8  *base = p + 0xE4;
         s32  n = 2;
-        f32 *ra, *rb;
 
         do {
             s32 obj = *desc;
@@ -4076,18 +4230,23 @@ void func_0033C958(void *self) {
             base += 0x4C;
         } while (n > -1);
 
-        ra = func_00336C18(e0E4); rb = func_00336C18(e130);
-        func_00290320((s32)(ra[0] + 1.0f), (s32)(rb[1] + 6.0f),
-                      (s32)(ra[0] + 1.0f), (s32)(ra[1] - 4.0f), 0x180000FF, 0);
-        ra = func_00336C18(e17C);
-        func_00290320((s32)(ra[0] + 8.0f), (s32)(ra[1] + 2.0f),
-                      (s32)(ra[0] + 304.0f), (s32)(ra[1] + 2.0f), 0x180000FF, 0);
-        ra = func_00336C18(e0E4); rb = func_00336C18(e130);
-        func_00290320((s32)(ra[0] + 1.0f), (s32)(rb[1] + 6.0f),
-                      (s32)(ra[0] + 1.0f), (s32)(ra[1] - 4.0f), 0x180000FF, 0);
-        ra = func_00336C18(e17C);
-        func_00290320((s32)(ra[0] + 8.0f), (s32)(ra[1] + 2.0f),
-                      (s32)(ra[0] + 304.0f), (s32)(ra[1] + 2.0f), 0x180000FF, 0);
+        /* every coordinate re-queries its element's position block */
+        func_00290320((s32)(func_00336C18(e0E4)[0] + 1.0f),
+                      (s32)(func_00336C18(e130)[1] + 6.0f),
+                      (s32)(func_00336C18(e0E4)[0] + 1.0f),
+                      (s32)(func_00336C18(e0E4)[1] + 4.0f), 0x180000FF, 0);
+        func_00290320((s32)(func_00336C18(e17C)[0] + 8.0f),
+                      (s32)(func_00336C18(e17C)[1] + 2.0f),
+                      (s32)(func_00336C18(e17C)[0] + 304.0f),
+                      (s32)(func_00336C18(e17C)[1] + 2.0f), 0x180000FF, 0);
+        func_00290320((s32)(func_00336C18(e0E4)[0] + 1.0f),
+                      (s32)(func_00336C18(e130)[1] + 6.0f),
+                      (s32)(func_00336C18(e0E4)[0] + 1.0f),
+                      (s32)(func_00336C18(e0E4)[1] - 4.0f), 0x180000FF, 0);
+        func_00290320((s32)(func_00336C18(e17C)[0] + 8.0f),
+                      (s32)(func_00336C18(e17C)[1] + 2.0f),
+                      (s32)(func_00336C18(e17C)[0] + 304.0f),
+                      (s32)(func_00336C18(e17C)[1] + 2.0f), 0x180000FF, 0);
     }
 }
 #endif
@@ -4114,21 +4273,32 @@ S136OS_SLOT(func_0033CD80);
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033CDB0);
 
 /* GuiDialogBoxVariantCInit: dialog constructor (variant C, sibling of
- * GuiQuitDialogInit). Panel (+0x8) 255x195, border from D_1ADD98, text rows =
- * strings 0x307B/0x2BE4/0x2BE5, bounds (0,-143,0,114,0,125), scale 0.65. Clears
- * +0x2D8 and +0x2D4, then runs func_0033CEE0(w, 0) (its body builder). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiDialogBoxVariantCInit);
+ * GuiQuitDialogInit). With a pool, allocates the 0x10-byte placement record
+ * (+0x2DC) and zeroes it; the record is seeded 255x195. The panel (+0x8) gets its
+ * border from D_1ADD98, text rows 0x307B/0x2BE4/0x2BE5, bounds
+ * (0,-143,0,114,0,125) and scale 0.65. Clears +0x2D8 and +0x2D4, then runs
+ * func_0033CEE0(w, 0) (its body builder).
+ *   w    - the dialog; pool - its GuiPool (may be 0; stored at +0x0 regardless).
+ * Phrasing the ROM requires: the record pointer is re-read from +0x2DC before
+ * each float store, and the +0x2D4 clear is written through the panel pointer
+ * (panel+0x2CC). The zero stores are written 4/8/C/0 so cc1 schedules them
+ * 0/4/8/C as the ROM has them. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiDialogBoxVariantCInit)
+S136OS_SLOT(GuiDialogBoxVariantCInit);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiDialogBoxVariantCInit, unit objdiff): 68.04%,
-   30/85 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s0, a1, zero').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1520; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object, base-seeded control rc 1).
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 extern void GuiDialogBoxInitBorder(void *w, void *pool, void *borderCfg);
 extern s32 func_0033CEE0(void *w, s32 flag);
 extern u8 D_1ADD98[8];
 void GuiDialogBoxVariantCInit(void *w, GuiPool *pool) {
     void *obj;
+    void *box;
     s32 t0, t1, t2;
 
     /* +0x0 = pool is stored unconditionally (beqz delay slot). */
@@ -4136,26 +4306,26 @@ void GuiDialogBoxVariantCInit(void *w, GuiPool *pool) {
     if (pool != 0) {
         obj = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
         *(void **)((char *)w + 0x2DC) = obj;
-        *(s32 *)((char *)obj + 0x0) = 0;
         *(s32 *)((char *)obj + 0x4) = 0;
         *(s32 *)((char *)obj + 0x8) = 0;
         *(s32 *)((char *)obj + 0xC) = 0;
+        *(s32 *)((char *)obj + 0x0) = 0;
     }
 
-    obj = *(void **)((char *)w + 0x2DC);
-    *(f32 *)((char *)obj + 0x0) = 255.0f;
-    *(f32 *)((char *)obj + 0x4) = 195.0f;
-    GuiDialogBoxInitBorder((char *)w + 0x8, pool, D_1ADD98);
+    box = (char *)w + 0x8;
+    *(f32 *)(*(char **)((char *)w + 0x2DC) + 0x0) = 255.0f;
+    *(f32 *)(*(char **)((char *)w + 0x2DC) + 0x4) = 195.0f;
+    GuiDialogBoxInitBorder(box, pool, D_1ADD98);
 
     t0 = GetLocalizedString(0x307B);
     t1 = GetLocalizedString(0x2BE4);
     t2 = GetLocalizedString(0x2BE5);
-    GuiDialogBoxSetText3((char *)w + 0x8, t0, t1, t2);
+    GuiDialogBoxSetText3(box, t0, t1, t2);
 
-    GuiDialogBoxSetBounds((char *)w + 0x8, 0.0f, -143.0f, 0.0f, 114.0f, 0.0f, 125.0f);
-    GuiDialogBoxSetScale((char *)w + 0x8, 0.65f);
+    GuiDialogBoxSetBounds(box, 0.0f, -143.0f, 0.0f, 114.0f, 0.0f, 125.0f);
+    GuiDialogBoxSetScale(box, 0.65f);
     *(s32 *)((char *)w + 0x2D8) = 0;
-    *(s32 *)((char *)w + 0x2D4) = 0;
+    *(s32 *)((char *)box + 0x2CC) = 0; /* = w+0x2D4, written through the box */
     func_0033CEE0(w, 0);
 }
 #endif
@@ -4178,11 +4348,17 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033CEE0);
 extern u8 g_gsScreenContext[];
 extern void func_002857F0(void);
 extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
+/* The GS screen context's pan offsets, read through a struct view: the ROM
+ * addresses them as fields off one %lo(g_gsScreenContext) base register. */
+typedef struct {
+    u8 pad000[0x168];
+    s16 panX; /* +0x168 */
+    s16 panY; /* +0x16A */
+} GsScreenPan;
+#define SCREEN_PAN ((GsScreenPan *)g_gsScreenContext)
 s32 func_0033CEE0(void *w, s32 flags) {
     void *box = (char *)w + 0x8;
     f32 *anchor;
-    s16 *panX = (s16 *)(g_gsScreenContext + 0x168);
-    s16 *panY = (s16 *)(g_gsScreenContext + 0x16A);
     s16 origX, origY;
 
     func_0033BE70(box, flags);
@@ -4194,29 +4370,25 @@ s32 func_0033CEE0(void *w, s32 flags) {
     }
 
     if (flags & 0xF000) {
-        origX = *panX;
-        origY = *panY;
+        origX = SCREEN_PAN->panX;
+        origY = SCREEN_PAN->panY;
         if (flags & 0x1000) {          /* pan up: Y - 1, clamp to -0x20 */
-            s16 v = (s16)(*panY - 1);
-            *panY = v;
-            if (v < -0x20) *panY = -0x20;
+            SCREEN_PAN->panY--;
+            if (SCREEN_PAN->panY < -0x20) SCREEN_PAN->panY = -0x20;
         }
         if (flags & 0x4000) {          /* pan down: Y + 1, clamp to 0x20 */
-            s16 v = (s16)(*panY + 1);
-            *panY = v;
-            if (v >= 0x21) *panY = 0x20;
+            SCREEN_PAN->panY++;
+            if (SCREEN_PAN->panY >= 0x21) SCREEN_PAN->panY = 0x20;
         }
         if (flags & 0x8000) {          /* pan left: X - 1, clamp to -0x28 */
-            s16 v = (s16)(*panX - 1);
-            *panX = v;
-            if (v < -0x28) *panX = -0x28;
+            SCREEN_PAN->panX--;
+            if (SCREEN_PAN->panX < -0x28) SCREEN_PAN->panX = -0x28;
         }
         if (flags & 0x2000) {          /* pan right: X + 1, clamp to 0x28 */
-            s16 v = (s16)(*panX + 1);
-            *panX = v;
-            if (v >= 0x29) *panX = 0x28;
+            SCREEN_PAN->panX++;
+            if (SCREEN_PAN->panX >= 0x29) SCREEN_PAN->panX = 0x28;
         }
-        if (origX != *panX || origY != *panY) {
+        if (origX != SCREEN_PAN->panX || origY != SCREEN_PAN->panY) {
             PlayGlobalSound(4, 0, 0);
         }
         func_002857F0();
@@ -4224,6 +4396,7 @@ s32 func_0033CEE0(void *w, s32 flags) {
 
     return (flags >> 6) & 1;
 }
+#undef SCREEN_PAN
 #endif
 
 /* func_0033D070: draw the progressive-scan option screen. Lays out the box body

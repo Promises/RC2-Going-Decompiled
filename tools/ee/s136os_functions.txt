@@ -294,3 +294,12 @@ usa text/1A8180 ProbeGroundHeight
 usa text/1A8180 func_002ADC50
 usa text/1A8180 func_002AE0B8
 usa text/1A8180 func_002AE558
+usa text/235FE8 func_003363A0
+usa text/235FE8 func_0033A860
+usa text/235FE8 GuiDialogBoxInitElements
+usa text/235FE8 func_0033C100
+usa text/235FE8 GuiDialogBoxVariantCInit
+usa text/235FE8 func_0033A8F0
+usa text/235FE8 func_0033A678
+usa text/235FE8 GuiElementBaseInit
+usa text/235FE8 GuiConfirmPopupInit
