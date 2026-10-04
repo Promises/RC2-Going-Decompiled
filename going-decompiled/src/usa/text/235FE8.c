@@ -5050,18 +5050,29 @@ s32 func_0033DB60(void *w, s32 flags) {
  * row 0 at (0x100, 0x96) = D_1ADDB0 template with strings 0x2C75 + the D_1ADDA8 id
  * picked by flag D_1A7B9D; row 1 at (0x100, 0xBE) with 0x2C74 + the id picked by
  * D_1A7B9C. The currently-selected row (*(w+0x2D8)) is drawn bright (0x80D0D0D0),
- * the other dimmed (0x70808080). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033DC68);
+ * the other dimmed (0x70808080).
+ * w: the dialog screen (row index at +0x2D8, 0 or 1). Returns nothing. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033DC68)
+S136OS_SLOT(func_0033DC68);
 #else
-/* NOT MATCHED (task #1521 audit; solo s136os screen, masked words): 3/87 words
-   differ. The old #else was wrong as func_0033E9B8's was (cached row, D_1ADDA8
-   indexed in place); with the id-pair copy and per-row re-read of +0x2D8 the
-   only residual is the temporary for the second row's +0x2D8 load ($2 here,
-   $3 in the ROM). Its twin func_0033E9B8 (one extra call at each end) matches
-   with the same phrasing; a second colour local, an if/else, u32 and the
-   GUI_OPTION spelling of the flag reads did not move it. */
-extern void func_002801B8(s32 x, s32 y, u64 color, const char *text, s32 flag);
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1601). The phrasing is its twin func_0033E9B8's (task #1521:
+   the id pair copied to a stack local once, +0x2D8 re-read for each row).
+   The last 3 words (second row's +0x2D8 load/xori/movn in $2 where the ROM uses
+   $3) were the CALLEE'S DECLARATION, not the body: this arm used to declare
+   func_002801B8 `void`, and an unused-void call frees $v0 for the temporary.
+   func_002801B8 returns a value (its ROM epilogue is `daddu $2,$16,$0`), and
+   the ROM's TU evidently saw it as int-returning. So this arm declares nothing
+   for it, as func_0033E9B8's does not: in the solo s136os TU every other
+   declaration is behind a closed guard, cc1 declares it implicitly `int`, and
+   the 3 words match. A `void` prototype with an s32 color arg still differs
+   3/87; an `s32`-returning one closes it but conflicts on native with the
+   `void` declarations of the promoted func_0033D3C0/E680/ED18, which this row
+   does not change. On native those earlier declarations are in scope.
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 extern u8 D_1ADDB0[], D_1A7B9C, D_1A7B9D;
 void func_0033DC68(void *w) {
     char buf[128];
