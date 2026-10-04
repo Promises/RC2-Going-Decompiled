@@ -5062,28 +5062,41 @@ void func_002ADCE0(Vec4 *dst, f32 t, Vec4 *src) {
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 40.21%
    -> UNKNOWN-@1: ROM `(none)` vs `sd s0,16(sp)` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADD28);
+/* MATCHED on the s136os arm (task #1592): byte-exact solo under SN 2.95.3
+ * v1.36 -fopt-stack (verify_match_unit rc 0, 42/42 words). Devices, each
+ * re-measured by dropping it alone (words differing, vmu):
+ *   - the volatile u_long128 store, so the copy is the ROM's lq/sq pair and
+ *     the sq stays ahead of the `b` (plain u_long128: the sq moves into the
+ *     branch's delay slot; struct copy: 30/48);
+ *   - ONE empty tied fence on dst AND axis together (RULING #8483, emits
+ *     nothing). It is a REGISTER-ALLOCATION device, not an ordering one:
+ *     its two "+r" operands add refs to both pseudos, which moves dst ahead
+ *     of src in global-alloc's priority order (greg dump: axis, angle, src,
+ *     dst -> axis, dst, angle, src), so dst takes $17 and src $18 as in the
+ *     ROM. Without it 6/42 (dst/src swapped in $17/$18); on dst alone or on
+ *     axis alone, or as two separate fences, dst outranks axis or src and
+ *     the pair still swaps (6/42 each). Placing it in the copy branch or
+ *     before the func_002ADC50 call also closes; at else-entry it blocks the
+ *     bc1f delay-slot fill, at function entry the jal delay-slot fill. */
+/* GUARD (task #1592): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002ADD28)
+S136OS_SLOT(func_002ADD28);
 #else
 /* Prototypes this body needs whose declarations sit in other guarded arms:
  * the s136os arm compiles this arm alone, so it must see them here. */
 extern void func_002AC4D0(Vec4 *out, const Vec4 *src, f32 angle);
 extern void func_002ADC50(Vec4 *out, Vec4 *v, Vec4 *q);
-/* NOT MATCHED (task #1529): best known spelling, 6/42 words differ (SN 2.95.3
- * v1.36 -fopt-stack solo, verify_match_unit). The volatile u_long128 store
- * keeps lq/sq in the copy path (as written, struct copy: 30/48; plain
- * u_long128: 26/42). Residual: dst and src land in $18/$17 where the ROM has
- * $17/$18. Global alloc ranks src first: both have 3 refs, and dst is live
- * one insn longer (19 vs 18: set first at entry, dies after src in the copy).
- * Tried without closing: $17 pin on a dst copy (39/44), $17+$18 pins
- * (46/48), u_long128 temp (6/42), static inline copy helper (6/42), fences
- * on src/dst/axis at several sites (8/42, 24/44). #1508 tried 8 others. */
 void func_002ADD28(Vec4 *dst, Vec4 *src, Vec4 *axis, f32 angle) {
     if (GetFloatAbs(angle) < 1e-5f) {
         *(volatile u_long128 *)dst = *(u_long128 *)src;
     } else {
         Vec4 quat;
         Vec3RescaleToLenVu0(&quat, 1.0f, axis);
+        __asm__("" : "+r"(dst), "+r"(axis));   /* allocation device: see MATCHED note */
         func_002AC4D0(&quat, &quat, angle);
         func_002ADC50(dst, src, &quat);
     }
