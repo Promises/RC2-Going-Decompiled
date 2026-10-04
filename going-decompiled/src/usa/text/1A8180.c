@@ -103,6 +103,15 @@ typedef struct { unsigned long long _q[2]; } __attribute__((aligned(16))) u_long
 #else
 typedef unsigned long u_long128 __attribute__((mode(TI)));
 #endif
+
+/* EE_REG(r) binds a live local to EE GPR `r` where SN 1.36's allocator colours
+ * it differently from the ROM (RULING #8598 register-pin device: cc1 still
+ * emits every instruction, the pin only steers allocation). Empty on native. */
+#ifndef TARGET_NATIVE
+#define EE_REG(r) __asm__(r)
+#else
+#define EE_REG(r)
+#endif
 typedef struct Vec4 { f32 x, y, z, w; } Vec4;
 typedef union QVec { u_long128 q; Vec4 v; } QVec;
 
@@ -1548,29 +1557,55 @@ s32 func_002A9708(f32 a, f32 b, f32 c, f32 *out1, f32 *out2)
 }
 #endif
 
-/* ProbeGroundHeight: ground height under a point - CollLine from z=0.01 up
- * to pos.z + zOffset, returns the hit z or 0 (the 0.5f/0x20 defaults come
- * from func_002A9888). Best attempt 72% (volatile 128-bit copy pinning +
- * an asm scheduling barrier recover the copy/const order): the pinned cc1
- * still hoists the call-argument moves above the second source copy where
- * the later cc1 keeps them below - prologue-scheduling wall. */
+/* ProbeGroundHeight: ground height under a point. Casts a CollLine between two
+ * copies of *pos - the first argument with z = pos.z + zOffset, the second with
+ * z = 0.01 (downward, FACT #5774) - against line mask `mask | 2`.
+ * Returns the hit z (g_collHitPoint.z) on a hit, else 0. func_002A9888 is the
+ * 0.5f / 0x20 default wrapper. No callee-saved registers: pos is copied to $3,
+ * from at sp+0, to at sp+0x10, $31 at sp+0x20 (0x30 frame). */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 33.52%
    -> UNKNOWN-@1: ROM `daddu v1,a0,zero` vs `(none)` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", ProbeGroundHeight);
+/* MATCHED on the s136os arm (task #1529): byte-exact solo under SN 2.95.3 v1.36
+ * -fopt-stack (verify_match_unit 30/30). The ROM reads *pos TWICE (two
+ * `lq $2,0($3)`) and stores the second copy through a register (`addiu $4,sp,0x10;
+ * sq $2,0($4)`); cc1 merges the loads and folds the offset. Devices, each one
+ * re-measured by dropping it alone (words differing, vmu):
+ *   - src: an EE_REG("$3") pin (RULING #8598) so pos's copy is $3 (without: 23/30);
+ *   - three EMPTY fences (RULING #8483, they emit nothing): untied after the
+ *     first copy, keeping its lq/sq ahead of the 0.01 constant (without: 6/30);
+ *     tied "+r" on pt and src, hiding &to and src from CSE so the second lq and
+ *     `sq 0($4)` survive (without pt: 17/30); input-only on src after the
+ *     second copy, keeping that lq/sq adjacent (without: 21/30);
+ *   - the hit test written `!= 0 -> return hit z`, so the miss path falls
+ *     through as in the ROM (written `== 0 -> return 0`: 7/28).
+ * As written before (plain QVec copies, `== 0`): 24/26. #1508 reported 24/26
+ * as its best after 6 respellings. */
+/* GUARD (task #1529): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_ProbeGroundHeight)
+S136OS_SLOT(ProbeGroundHeight);
 #else
 f32 ProbeGroundHeight(Vec4 *pos, f32 zOffset, s32 mask) {
     QVec from;
     QVec to;
+    QVec *pt;
+    register Vec4 *src EE_REG("$3") = pos;
 
-    from.q = *(u_long128 *)pos;
+    from.q = *(u_long128 *)src;
+    __asm__ __volatile__("");
     from.v.z = 0.00999999978f;          /* 0x3C23D70A == 0.01f */
-    to.q = *(u_long128 *)pos;
-    to.v.z = pos->z + zOffset;
-    if (CollLine(&to, &from, mask | 2, 0, 0) == 0) {
-        return 0.0f;
+    pt = &to;
+    __asm__ __volatile__("" : "+r"(pt), "+r"(src));
+    pt->q = *(u_long128 *)src;
+    __asm__ __volatile__("" : : "r"(src));
+    to.v.z = to.v.z + zOffset;
+    if (CollLine(pt, &from, mask | 2, 0, 0) != 0) {
+        return g_collHitPoint.z;
     }
-    return g_collHitPoint.z;
+    return 0.0f;
 }
 #endif
 
@@ -4750,17 +4785,41 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADC30);
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 65.57%
    -> UNKNOWN-@0: ROM `addiu sp,sp,-96` vs `addiu sp,sp,-80` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADC50);
+/* MATCHED on the s136os arm (task #1529): byte-exact solo under SN 2.95.3 v1.36
+ * -fopt-stack (verify_match_unit 36/36). conj at sp+0, vpure at sp+0x10,
+ * rotated at sp+0x20 (declaration order); q $16, rotated $17, v $18, out $19.
+ * The ROM forms &vpure in $a2 BEFORE the copy and stores through it
+ * (`addiu $6,sp,0x10; lq $2,0($18); sq $2,0($6)`), keeping lq/sq adjacent.
+ * Two EMPTY fences (RULING #8483, they emit nothing) reproduce that, each
+ * re-measured by dropping it alone (words differing, vmu):
+ *   - tied "+r" on pv = &vpure: hides the address from CSE, so cc1 does not
+ *     fold it into `sq 16($sp)` and v/rotated take the ROM's $18/$17;
+ *   - input-only on v after the copy: keeps lq/sq adjacent and v live until
+ *     then, so &rotated does not reuse v's register (without it: 20/36, or
+ *     3/36 with a $6 pin on pv; untied instead: 29/34). With both fences the
+ *     $6 pin is not needed and is not used.
+ * As written before (struct copy): 31/42. u_long128 copy alone: 15/36,
+ * #1508's best. */
+/* GUARD (task #1529): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002ADC50)
+S136OS_SLOT(func_002ADC50);
 #else
 void func_002ADC50(Vec4 *out, Vec4 *v, Vec4 *q) {
     Vec4 conj, vpure, rotated;
+    Vec4 *pv;
 
     Vec4ScaleVu0(&conj, -1.0f, q);
     conj.w = q->w;
-    vpure = *v;
+    pv = &vpure;
+    __asm__ __volatile__("" : "+r"(pv));
+    *(u_long128 *)pv = *(u_long128 *)v;
+    __asm__ __volatile__("" : : "r"(v));
     vpure.w = 0.0f;
-    func_00284180(&rotated, q, &vpure);
+    func_00284180(&rotated, q, pv);
     func_00284180(out, &rotated, &conj);
 }
 #endif
@@ -4806,9 +4865,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADD28);
  * the s136os arm compiles this arm alone, so it must see them here. */
 extern void func_002AC4D0(Vec4 *out, const Vec4 *src, f32 angle);
 extern void func_002ADC50(Vec4 *out, Vec4 *v, Vec4 *q);
+/* NOT MATCHED (task #1529): best known spelling, 6/42 words differ (SN 2.95.3
+ * v1.36 -fopt-stack solo, verify_match_unit). The volatile u_long128 store
+ * keeps lq/sq in the copy path (as written, struct copy: 30/48; plain
+ * u_long128: 26/42). Residual: dst and src land in $18/$17 where the ROM has
+ * $17/$18. Global alloc ranks src first: both have 3 refs, and dst is live
+ * one insn longer (19 vs 18: set first at entry, dies after src in the copy).
+ * Tried without closing: $17 pin on a dst copy (39/44), $17+$18 pins
+ * (46/48), u_long128 temp (6/42), static inline copy helper (6/42), fences
+ * on src/dst/axis at several sites (8/42, 24/44). #1508 tried 8 others. */
 void func_002ADD28(Vec4 *dst, Vec4 *src, Vec4 *axis, f32 angle) {
     if (GetFloatAbs(angle) < 1e-5f) {
-        *dst = *src;
+        *(volatile u_long128 *)dst = *(u_long128 *)src;
     } else {
         Vec4 quat;
         Vec3RescaleToLenVu0(&quat, 1.0f, axis);
@@ -4938,8 +5006,23 @@ extern void func_00283DC0(Mat4x4 *dst, Vec4 *in);   /* build rotation matrix fro
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 73.45%
    -> UNKNOWN-@2: ROM `(none)` vs `daddu s4,a1,zero` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE0B8);
+/* MATCHED on the s136os arm (task #1529): byte-exact solo under SN 2.95.3 v1.36
+ * -fopt-stack (verify_match_unit 56/56). rot at sp+0, mtx at sp+0x40, rot2 at
+ * sp+0x80: the inner scope declares mtx first (first-declared takes the lowest
+ * slot, #1508). The no-source path is `lq $2; sq $2; b; daddu $2,$0,$0`: the
+ * copy goes through $2 and the return value's zero fills the branch slot.
+ * cc1 picks $3 for the copy, hoists the zero above the sq and puts the sq in
+ * the slot instead; `copy` is pinned to $2 with EE_REG (RULING #8598) to keep
+ * the ROM's order. Words differing (vmu) at each step: as written (struct
+ * copy) 46/62; u_long128 copy 5/56; + mtx before rot2 3/56 (#1508's best);
+ * + the $2 pin 0/56. */
+/* GUARD (task #1529): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002AE0B8)
+S136OS_SLOT(func_002AE0B8);
 #else
 /* Prototypes this body needs whose declarations sit in other guarded arms:
  * the s136os arm compiles this arm alone, so it must see them here. */
@@ -4950,13 +5033,14 @@ s32 func_002AE0B8(void *self, void *obj, Vec4 *in, Vec4 *out) {
 
     (void)self;
     if (src == 0) {
-        *out = *in;
+        register u_long128 copy EE_REG("$2") = *(u_long128 *)in;
+        *(u_long128 *)out = copy;
         return 0;
     }
     func_00283DC0(&rot, (Vec4 *)src);
     if (*(s32 *)(src + 0x3C) & 0x2) {
-        Mat4x4 rot2;
         Mat4x4 mtx;
+        Mat4x4 rot2;
         func_00283DC0(&rot2, (Vec4 *)(src + 0x20));
         func_00284048(&mtx, (const Vec4 *)&rot2);
         func_00283A48(out, in, (Vec4 *)&mtx);
@@ -5173,8 +5257,24 @@ extern void MatrixToEulerAngles(Mat4x4 *mtx, void *outAngles);
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 51.55%
    -> UNKNOWN-@1: ROM `(none)` vs `sd s4,288(sp)` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE558);
+/* MATCHED on the s136os arm (task #1529): byte-exact solo under SN 2.95.3 v1.36
+ * -fopt-stack (verify_match_unit 50/50). The ROM forms each store address in
+ * $3 (`addiu $3,$19,0x20` in the beqz slot, then `addiu $3,$19,0x10`) and
+ * does `sq $2,0($3)` with lq/sq adjacent. cc1 folds the offsets into `sq 32($19)`
+ * and `sq 16($19)` and turns the branch into a beql (47 words, not the ROM's 49).
+ * EMPTY fences (RULING #8483, they emit nothing) reproduce the ROM: a tied
+ * "+r" fence on each destination pointer hides it from CSE, and an untied one
+ * after the last copy keeps its sq above the epilogue restores. Words
+ * differing (vmu): as written (struct copies) 27/60; u_long128 copies 14/48
+ * (#1508's best); + the "+r" fence on the then-branch copy alone 11/48;
+ * + on the unconditional copy alone 13/48; both 8/50; + the trailing fence 0/50. */
+/* GUARD (task #1529): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002AE558)
+S136OS_SLOT(func_002AE558);
 #else
 void func_002AE558(void *out, Vec4 *arg2, Vec4 *m1, Vec4 *m2) {
     Mat4x4 rot1;
@@ -5189,9 +5289,16 @@ void func_002AE558(void *out, Vec4 *arg2, Vec4 *m1, Vec4 *m2) {
     MatrixMultiplyVu0(&product, &mtx1, &rot2);
     MatrixToEulerAngles(&product, out);
     if (*(s32 *)(o + 0x3C) & 0x2) {
-        *(Vec4 *)(o + 0x20) = *m1;
+        u8 *dst = o + 0x20;
+        __asm__ __volatile__("" : "+r"(dst));
+        *(u_long128 *)dst = *(u_long128 *)m1;
     }
-    *(Vec4 *)(o + 0x10) = *arg2;
+    {
+        u8 *dst = o + 0x10;
+        __asm__ __volatile__("" : "+r"(dst));
+        *(u_long128 *)dst = *(u_long128 *)arg2;
+        __asm__ __volatile__("");
+    }
 }
 #endif
 
