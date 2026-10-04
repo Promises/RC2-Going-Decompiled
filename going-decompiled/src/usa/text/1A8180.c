@@ -95,6 +95,21 @@ __asm__(".extern g_abLevelAvailableFlags, 12");
 __asm__(".extern D_1A8C60, 12");   /* func_002B1B48: gp_rel in a beql slot, lui/$at elsewhere */
 __asm__(".extern D_1A8C64, 12");
 __asm__(".extern D_1A8CA0, 12");   /* func_002B0E40: lui/$at; func_002B03E8: gp_rel in a bc1t slot */
+/* Assembler-absolute globals (size class 16, see header): every C access the
+ * ROM makes to these is the lui/$at macro, never %gp_rel, so -G8 must not
+ * size them small. FILE SCOPE, ahead of every use, so the 2.9 TU and each
+ * s136os TU see the same line before the block (s136os_splice.sh's
+ * verify_block admits it: absolute in both TUs). An ADDRESSING-MODEL device of
+ * the same family as the size-12 lines above: it moves no data and emits
+ * nothing (task #1562). Only QueueMobyBlobShadow (g_blobShadowCount) and
+ * SampleRainHeightmap (the other six) access them from compiled C. */
+__asm__(".extern g_blobShadowCount, 16");
+__asm__(".extern g_pRainHeightmap, 16");
+__asm__(".extern g_rainHeightmapCellW, 16");
+__asm__(".extern g_rainHeightmapCellH, 16");
+__asm__(".extern D_1A91C0, 16");
+__asm__(".extern g_rainHeightmapHeightScale, 16");
+__asm__(".extern g_rainHeightmapBaseHeight, 16");
 
 #ifdef TARGET_NATIVE
 /* gcc -m32 cannot emulate mode(TI); copy-only here, so a 16-byte aligned struct
@@ -2083,18 +2098,51 @@ void func_002AA058(Vec4 *outQuat, Vec4 *eulerAngles) {
  * hit normal, and computes an alpha from the moby's height above the ground
  * (written to slot +0xC): alpha = baseAlpha * max(0.125*(8 - |moby.z - groundZ|), 0.25).
  *
- * Walled: saves $16/$17/$31 + $f20/$f21 (save-layout wall). baseAlpha arrives
- * in $f12 (preserved across the probe in $f21); groundZ is kept in $f20. */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 50.22%
-   -> UNKNOWN-@2: ROM `swc1 $f21,40(sp)` vs `(none)` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", QueueMobyBlobShadow);
+ * The count is re-read from memory at each use (4 loads, as in the ROM).
+ *
+ * MATCHED on the s136os arm (task #1562; verify_match_unit 74/74, image cmp 0):
+ * SN 2.95.3 v1.36 -fopt-stack gives the packed $16/$17/$31 + $f20/$f21 save
+ * layout. Devices, each measured load-bearing by removing it alone (vmu words
+ * differing / compared):
+ *   - g_blobShadowCount's file-scope `.extern …, 16` (top of file): the ROM
+ *     reaches the count with the absolute lui/$at macro at all 4 sites; -G8
+ *     makes it gp-relative (without: 61/70). The `…Abs, 16` + equate alias
+ *     spelling was measured too and is byte-identical; the plain name is used
+ *     because no site in this unit needs the gp-relative form.
+ *   - both Vec4 copies as u_long128 (the ROM's lq/sq; a struct copy is
+ *     ldl/ldr/sdl/sdr: 76/86);
+ *   - empty operand-tied fences (RULING #8483): on the position pointer, so
+ *     the copy reads through the same register the probe call is passed
+ *     (5/74); on src/dst/slot before the normal copy, so its addresses are
+ *     register-held as in the ROM (42/74 without the fence; 4/74 with the
+ *     slot operand dropped); and an untied one after the first copy, which
+ *     keeps lq/sq adjacent ahead of the call's argument setup (65/76);
+ *   - EE_REG pins (RULING #8598 register-pin devices, they only steer
+ *     allocation): the middle slot pointer in $5 (5/74) and the normal's
+ *     destination in $3 (9/74). Fewest found: a $4 pin on the position
+ *     pointer was tried and is not needed.
+ * The slot pointer is a different local in the first block than in the
+ * middle one, and the tail indexes through `&queue[0] + n`; with one shared
+ * local (or `queue[n]`) cc1 colours or orders the adds differently (4-16
+ * aligned diff lines, each spelling measured in task #1562). */
+/* GUARD (task #1562): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C (pins and fences are
+ * empty there). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_QueueMobyBlobShadow)
+S136OS_SLOT(QueueMobyBlobShadow);
 #else
 void QueueMobyBlobShadow(Moby *moby, f32 baseAlpha) {
-    BlobShadow *slot;
+    BlobShadow *first;                       /* slot the position is copied into */
+    register BlobShadow *slot EE_REG("$5");  /* slot whose z/normal are filled  */
+    Vec4 *pos;
+    Vec4 *src;
+    register Vec4 *dst EE_REG("$3");
+    s32 n;
     f32 groundZ;
     f32 lift;
-    f32 alpha;
 
     if (*(u8 *)((u8 *)moby + 0x31) == 0) {
         return;
@@ -2102,23 +2150,28 @@ void QueueMobyBlobShadow(Moby *moby, f32 baseAlpha) {
     if (g_blobShadowCount >= 0x20) {
         return;
     }
-    slot = &g_blobShadowQueue[g_blobShadowCount];
-    slot->pos = *(Vec4 *)((u8 *)moby + 0x10);
-    groundZ = ProbeGroundHeight((Vec4 *)((u8 *)moby + 0x10), 0.5f, 0);
+    pos = (Vec4 *)((u8 *)moby + 0x10);
+    first = &g_blobShadowQueue[g_blobShadowCount];
+    __asm__ __volatile__("" : "+r"(pos));
+    *(u_long128 *)&first->pos = *(u_long128 *)pos;
+    __asm__ __volatile__("");
+    groundZ = ProbeGroundHeight(pos, 0.5f, 0);
     if (GetCollHitMaterial() == 0) {
         return;
     }
-    slot = &g_blobShadowQueue[g_blobShadowCount];
+    slot = &g_blobShadowQueue[0] + g_blobShadowCount;
     slot->pos.z = groundZ + 0.0250000004f;     /* 0x3CCCCCCD == 0.025f */
-    slot->normal = g_collHitNormal;
+    dst = &(&g_blobShadowQueue[0] + g_blobShadowCount)->normal;
+    src = &g_collHitNormal;
+    __asm__ __volatile__("" : "+r"(src), "+r"(dst), "+r"(slot));
+    *(u_long128 *)dst = *(u_long128 *)src;
     lift = (8.0f - GetFloatAbs(*(f32 *)((u8 *)moby + 0x18) - groundZ)) * 0.125f;
     if (lift < 0.25f) {
         lift = 0.25f;
     }
-    alpha = baseAlpha * lift;
-    slot = &g_blobShadowQueue[g_blobShadowCount];
-    g_blobShadowCount = g_blobShadowCount + 1;
-    slot->pos.w = alpha;
+    n = g_blobShadowCount;
+    g_blobShadowCount = n + 1;
+    (&g_blobShadowQueue[0] + n)->pos.w = baseAlpha * lift;
 }
 #endif
 
@@ -7416,37 +7469,86 @@ extern s32  D_1A91C0;                      /* 0x1A91C0: light-pass validity toke
  * (cell * heightScale + baseHeight). Returns 0.0 when no heightmap is loaded and
  * a 1023.0 sentinel when the sample is out of range / unavailable.
  *
- * Matching build stays INCLUDE_ASM: the qword pos copy + Vu0 subtract and the
- * gp/absolute-mixed heightmap globals are an engine-2.96 layout this C won't
- * reproduce. */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 43.28%
-   -> UNKNOWN-@0: ROM `addiu sp,sp,-48` vs `lw v0,0(gp)  [GPREL16 0x001B19A0]` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", SampleRainHeightmap);
+ * The grid coordinates are written back into the subtraction result (u over
+ * x, v over y); the cell index is FloatToInt(v) * 256 + FloatToInt(u). The
+ * light-pass gate compares the token D_1A91C0 with g_pointLights+0x2400.
+ *
+ * MATCHED on the s136os arm (task #1562; verify_match_unit 78 of 82 words
+ * compared, all identical, the other 4 are the zero pad words below; image
+ * cmp 0). Devices, each measured load-bearing by removing it alone (vmu words
+ * differing / compared):
+ *   - the file-scope `.extern …, 16` lines (top of file) for the six heightmap
+ *     scalars: the ROM reaches all seven sites with the absolute lui/$at
+ *     macro, -G8 makes them gp-relative (without: 71/72);
+ *   - the pos copy as u_long128 (the ROM's lq/sq; struct copy: 77/84);
+ *   - SRH_DIVS_PAD x2: the ROM's two free-standing nops before each div.s,
+ *     which no cc1 here emits. SCHEDULING DEVICES under RULING #8435 (EE arm
+ *     only, tied to the dividend, divisor and the value the ROM loads ahead
+ *     of the pad; volatile, so each divide stays after its own pad) — not a
+ *     semantic statement (without the first: 52/78, the second: 47/78);
+ *   - EE_REG("$f3") on the second dividend (RULING #8598; without: 9/78) —
+ *     the quotient is a separate local so it is free to go to $f12, the
+ *     FloatToInt argument register, as in the ROM;
+ *   - empty operand-tied fences (RULING #8483) on the two Vec4SubVu0 address
+ *     arguments, which keep the ROM's argument order and its `move a1` in the
+ *     jal delay slot (either dropped: 2/78). */
+/* GUARD (task #1562): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C (pins, pads and fences
+ * are empty there). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_SampleRainHeightmap)
+S136OS_SLOT(SampleRainHeightmap);
 #else
+/* Two noreorder nops tied to the divide's operands and to the value the ROM
+ * loads ahead of the pad: the ROM's pad before `div.s` (RULING #8435
+ * scheduling device, cf. func_002ADDD0's ADDD0_DIVS_PAD). Empty natively. */
+#ifndef TARGET_NATIVE
+#define SRH_DIVS_PAD(q, d, e) __asm__ __volatile__(".set noreorder\n\tnop\n\tnop\n\t.set reorder" : "+f"(q) : "f"(d), "f"(e))
+#else
+#define SRH_DIVS_PAD(q, d, e) ((void)0)
+#endif
 f32 SampleRainHeightmap(Vec4 *pos) {
     Vec4 local;
     Vec4 rel;
-    f32  u, v;
+    Vec4 *relp;
+    Vec4 *origin;
+    f32 u, cellW, cellH, zero, v;
+    register f32 relY EE_REG("$f3");
 
+    *(u_long128 *)&local = *(u_long128 *)pos;
     if (g_pRainHeightmap == NULL) {
         return 0.0f;
     }
-    local = *pos;
-    Vec4SubVu0(&rel, &local, &g_rainHeightmapOrigin);
-    u = rel.x / g_rainHeightmapCellW;
-    v = rel.y / g_rainHeightmapCellH;
-    if (u < 0.0f || u > 256.0f || v < 0.0f || v > 256.0f) {
+    relp = &rel;
+    __asm__ __volatile__("" : "+r"(relp));
+    origin = &g_rainHeightmapOrigin;
+    __asm__ __volatile__("" : "+r"(origin));
+    Vec4SubVu0(relp, &local, origin);
+    u = rel.x;
+    cellW = g_rainHeightmapCellW;
+    relY = rel.y;
+    SRH_DIVS_PAD(u, cellW, relY);
+    u = u / cellW;
+    cellH = g_rainHeightmapCellH;
+    zero = 0.0f;
+    SRH_DIVS_PAD(relY, cellH, zero);
+    v = relY / cellH;
+    rel.x = u;
+    rel.y = v;
+    if (u < zero || u > 256.0f || v < zero || v > 256.0f) {
         return 1023.0f;
     }
     if (D_1A91C0 != *(s32 *)(g_pointLights + 0x2400)) {
         return 1023.0f;
     }
     {
-        s32 iv    = FloatToInt(v);
-        s32 iu    = FloatToInt(u);
-        s32 index = (iv << 8) + iu;
-        u8  cell  = g_pRainHeightmap[index];
+        s32 index = FloatToInt(rel.y) << 8;
+        u8  cell;
+
+        index += FloatToInt(rel.x);
+        cell = g_pRainHeightmap[index];
         if (cell == 0xFF) {
             return 1023.0f;
         }
