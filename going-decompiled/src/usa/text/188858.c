@@ -606,22 +606,83 @@ void func_00288C30(s32 itemId) {
 }
 #endif
 
-/* GiveInventoryItem(itemId): grant an inventory item (0x288D30). If not already
- * owned: mark it owned (g_inventoryOwned) + newly-acquired (g_inventoryNewFlag),
- * and — when the item's active variant sells ammo and the player currently has
- * none — top its ammo up to the variant's pickup amount. Then register it
- * (AddItemToInventoryOrder + func_00288C30). Special-case: granting the wrench
- * (itemId 0x10) while vendor upgrades are unlocked snaps it to upgrade level 2
- * and clears D_1398A8.
- *
- * WALL (matching build): a jal-driven gate chain over g_inventoryOwned /
- * g_weaponTable with the 0xE0-stride `mult` indexing + branch colouring cc1 does
- * not reproduce — stays INCLUDE_ASM. This #else is faithful COVERAGE only. */
+/*
+ * The inventory arrays' absolute accesses. The ROM forms these addresses with
+ * the assembler's one-insn `la` macro (`lui; addiu` kept adjacent), so cc1 must
+ * see them as small (an 8-byte extern under -G8) while gas sizes them 16 and
+ * expands the macro absolutely: assembler aliases sized 16 (the #8036
+ * construct; relocations name the real symbols). D_1A7B90 is a 1-byte symbol
+ * that would otherwise go %gp_rel. AddItemToInventoryOrder uses the first
+ * three; GiveInventoryItem uses g_inventoryOwnedAbs and g_inventoryNewFlagAbs.
+ * Natively they are the arrays themselves.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", GiveInventoryItem);
+__asm__(".extern g_inventoryOwnedAbs, 16\n\tg_inventoryOwnedAbs = g_inventoryOwned");
+extern u8 g_inventoryOwnedAbs[8];
+__asm__(".extern g_inventoryOrderAbs, 16\n\tg_inventoryOrderAbs = g_inventoryOrder");
+extern u8 g_inventoryOrderAbs[8];
+__asm__(".extern g_inventoryOrderEndAbs, 16\n\tg_inventoryOrderEndAbs = D_1A7B90");
+extern u8 g_inventoryOrderEndAbs[8];
+__asm__(".extern g_inventoryNewFlagAbs, 16\n\tg_inventoryNewFlagAbs = g_inventoryNewFlag");
+extern u8 g_inventoryNewFlagAbs[8];
+#else
+#define g_inventoryOwnedAbs g_inventoryOwned
+#define g_inventoryOrderAbs g_inventoryOrder
+#define g_inventoryOrderEndAbs (&D_1A7B90)
+#define g_inventoryNewFlagAbs g_inventoryNewFlag
+#endif
+
+/*
+ * D_1398A8: the ROM clears it with cc1's own split `lui $3` / `sw $0,%lo($3)`.
+ * `section(".data")` on this extern DECLARATION (RULING #8620, an addressing-
+ * model device: it moves no data and emits nothing) tells cc1 -G8 it is not
+ * small data, so cc1 splits the address itself; a plain `extern s32` is
+ * %gp_rel, and a `.extern ,16` override gives gas's `lui $1` expansion instead.
+ */
+#ifndef TARGET_NATIVE
+extern s32 D_1398A8 __attribute__((section(".data")));
+#else
+extern s32 D_1398A8;
+#endif
+
+/* func_00288C30 is defined above only inside its own guarded #else, so without
+ * this prototype GiveInventoryItem's solo s136os TU calls it as implicit int and
+ * cc1 keeps $v0 live across the call (the 0x10 compare then lands in $3, not $2;
+ * FACT #9282). */
+extern void func_00288C30(s32 itemId);
+
+/**
+ * Grant an inventory item (0x288D30).
+ *
+ *   itemId  inventory item id (0..0x37)
+ *
+ * No-op if the item is already owned. Otherwise marks it owned
+ * (g_inventoryOwned) and newly acquired (g_inventoryNewFlag), and, when the
+ * item's active variant sells ammo and the player currently has none, tops its
+ * ammo up to the variant's pickup amount (u16 at +0x92). Then registers it
+ * (AddItemToInventoryOrder + func_00288C30). Granting the wrench (itemId 0x10)
+ * while vendor upgrades are unlocked snaps it to upgrade level 2 and clears
+ * D_1398A8.
+ *
+ * MATCHED on the s136os arm (task #1603). Each of these is needed (measured by
+ * removing it alone, solo s136os vmu against the ROM):
+ * - the func_00288C30 prototype above (without: 2/56 words differ);
+ * - the two flag arrays read and written through their `...Abs` aliases, so
+ *   cc1 emits each address as one `la` macro (without Owned's alias: 2/56;
+ *   without NewFlag's: 13/56);
+ * - D_1398A8's section(".data") declaration (without: built 54 words, ROM 55);
+ * - the owned store written BEFORE the new-flag store: SN 1.36 issues the last
+ *   store of the run first (FACT #9254), and the ROM stores the new flag first
+ *   (in the other order: 8/56).
+ *
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh. On native it is plain C.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GiveInventoryItem)
+S136OS_SLOT(GiveInventoryItem);
 #else
 extern u8  g_inventoryNewFlag[];   /* itemId -> "newly acquired" flag (set on grant) */
-extern s32 D_1398A8;               /* cleared when the wrench upgrade is granted */
 extern s32 AddItemToInventoryOrder(s32 itemId);  /* defined below in this unit */
 extern s32 IsVendorUpgradesUnlocked(void);       /* defined below in this unit */
 
@@ -630,12 +691,12 @@ void GiveInventoryItem(s32 itemId)
     WeaponDef *w;
     u8 slot;
 
-    if (g_inventoryOwned[itemId] != 0) {
+    if (g_inventoryOwnedAbs[itemId] != 0) {
         return;                            /* already owned — no-op */
     }
     slot = g_itemEquippedSlot[itemId];
-    g_inventoryNewFlag[itemId] = 1;
-    g_inventoryOwned[itemId] = 1;
+    g_inventoryOwnedAbs[itemId] = 1;
+    g_inventoryNewFlagAbs[itemId] = 1;
     w = &g_weaponTable[slot];
     if (w->sellsAmmoFlag != 0 && g_weaponAmmo[itemId] == 0) {
         g_weaponAmmo[itemId] = *(u16 *)((u8 *)w + 0x92);   /* variant pickup ammo */
@@ -647,26 +708,6 @@ void GiveInventoryItem(s32 itemId)
         D_1398A8 = 0;
     }
 }
-#endif
-
-/*
- * AddItemToInventoryOrder's absolute accesses. The ROM forms the three
- * inventory addresses with the assembler's `lui; addiu` pair (D_1A7B90 is a
- * 1-byte symbol, so it would otherwise go %gp_rel), so they go through
- * assembler aliases sized 16 (the #8036 construct; relocations name the real
- * symbols). Natively they are the arrays themselves.
- */
-#ifndef TARGET_NATIVE
-__asm__(".extern g_inventoryOwnedAbs, 16\n\tg_inventoryOwnedAbs = g_inventoryOwned");
-extern u8 g_inventoryOwnedAbs[8];
-__asm__(".extern g_inventoryOrderAbs, 16\n\tg_inventoryOrderAbs = g_inventoryOrder");
-extern u8 g_inventoryOrderAbs[8];
-__asm__(".extern g_inventoryOrderEndAbs, 16\n\tg_inventoryOrderEndAbs = D_1A7B90");
-extern u8 g_inventoryOrderEndAbs[8];
-#else
-#define g_inventoryOwnedAbs g_inventoryOwned
-#define g_inventoryOrderAbs g_inventoryOrder
-#define g_inventoryOrderEndAbs (&D_1A7B90)
 #endif
 
 /**
