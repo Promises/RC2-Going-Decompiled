@@ -1,0 +1,18 @@
+# hle_stub_traps.txt — KNOWN traps for check_hle_stubs.sh (task #1556).
+#
+# One row per (arena, body, trapped symbol) that the eight RULING #9179 bodies
+# hit and that iop_null.c's declared stubs do not cover:
+#   <arena> <body> <symbol>   # cause, and where it was measured
+# A row records a measured trap, NOT a ruling that it should stay a trap.
+# Stubbing it is a separate decision (RULING #9179: a stub only where the
+# callee has no C or is a hardware/IOP entry point).
+# The script FAILs on a trap that is missing here (MISSING) and on a row whose
+# arena ran and which no longer fires (STALE). Rows are removed, never added
+# to hide a regression, in the landing that changes them (RULING #7317).
+#
+# ⚠️ No [seeded] rows yet. The seeded-arena traps were never measured by this
+# script: the seed files are gitignored and exist only on the M1. The first
+# canonical seeded run will report every seeded trap as MISSING until it is
+# triaged here.
+
+zero func_00133250 snd_PrintError   # snd_SendCommandSync's RPC-busy wait loop (0321A0.c:535-537): sceSifCheckStatRpc reads busy and D_001A74F8 is 0 on a zero arena. IOP-reply HLE is an open #1489 item. snd_PrintError is INCLUDE_ASM-only (015180.c:178). Measured at 5638f87f, XPS.

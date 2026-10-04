@@ -1,6 +1,10 @@
 # Native trap-stub hits — TARGET_NATIVE void(void) sweep vs New Game (M3 batch 2 / commit 90700c0).
 # Format: <count> <stub>  [MISSING-FROM-BACKEND]  <- reaching callers. Ranked = M3 batch 3 priority.
 # 17 distinct stubs, 19 hits (was 28 distinct / 33 hits pre-batch-2).
+# HISTORICAL. tools/ee/eetest/state/stub_hits.txt supersedes this file (its own
+# line 6 says so). func_00133250 is not a stub since 5638f87f (RULING #9179):
+# its tree C runs natively. Which stubs the eight #9179 bodies need is checked
+# by EXECUTION in tools/native/check_hle_stubs.sh, not recorded here.
 
  2  func_0011AEA0              <- BuildShrubDrawSegment, BuildTieDrawSegment
  2  func_00133250              <- InitDialogSoundChannel, InitFileLoadSystem
