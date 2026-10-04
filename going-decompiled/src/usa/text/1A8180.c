@@ -502,8 +502,29 @@ void func_002A82D8(Moby *obj, s32 idx, s32 arg3, s32 arg4) {
    001003 saves it at sp+56 (frame 64); the 0.025 literal is still 1 ULP low
    (0x3CCCCCCC vs ROM 0x3CCCCCCD) even through the double cast; and s3/s4/s5
    take a3/a1/a2 where the ROM gives them a1/a2/a3. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8448);
+/* MATCHED on the s136os arm (task #1536): byte-exact solo under SN 2.95.3 v1.36
+ * -fopt-stack (verify_match_unit 92/92). The ROM copies the bounds through a
+ * register-held source (`addiu $5,$16,0x80; lq $2,0($5); sq $2,0($4)`),
+ * which cc1 folds into `lq 128($16)` (task #1529's mechanism, FACT #9216).
+ * Plain-C respellings, each re-measured by reverting it alone (words
+ * differing, vmu):
+ *   - every call takes `(Moby *)m`, so obj and m are one pseudo; with obj
+ *     kept separately cc1 holds both in s-regs and grows the frame (91/96);
+ *   - the closing sequence-entry read accumulates into `cls` (2/92 if
+ *     written as one expression).
+ * Devices, each dropped alone:
+ *   - a tied EMPTY fence on the source pointer (RULING #8483; without: 45/92);
+ *   - an untied EMPTY fence after the copy (without: 3/92);
+ *   - the table base pinned to $3 and the source to $5 with EE_REG
+ *     (RULING #8598; without either: 5/92). A $4 pin on cls is not needed.
+ * Struct copy instead of u_long128: 50/98. As written before: 95/100. */
+/* GUARD (task #1536): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002A8448)
+S136OS_SLOT(func_002A8448);
 #else
 /* Prototypes this body needs whose declarations sit in other guarded arms:
  * the s136os arm compiles this arm alone, so it must see them here. */
@@ -513,7 +534,7 @@ void func_002A8448(Moby *obj, s32 idx, s32 frame, s32 arg4, s32 flags) {
     u8 *seqEntry;
 
     if (arg4 <= 0) {
-        func_002A8200(obj, idx, frame);
+        func_002A8200((Moby *)m, idx, frame);
         __asm__ __volatile__(""); /* cc1 2.96 sibling-call suppression (the ROM never sibcalls) */
         return;
     }
@@ -522,14 +543,21 @@ void func_002A8448(Moby *obj, s32 idx, s32 frame, s32 arg4, s32 flags) {
         *(s32 *)(m + 0x50) != 0 ||
         *(s32 *)(m + 0x54) != 0 ||
         (flags & 4) != 0) {
-        s32 slot = func_002A08C0(obj);
+        s32 slot = func_002A08C0((Moby *)m);
         if (slot >= 0) {
             s32 bind = (flags & 1) ? (slot | 0x100) : slot;
             if (flags & 2) {
                 bind |= 0x200;
             }
-            func_002A3288(obj, bind);
-            *(Vec4 *)(g_proceduralAnimBounds + slot * 0x10) = *(Vec4 *)(m + 0x80);
+            func_002A3288((Moby *)m, bind);
+            {
+                register u8 *base EE_REG("$3") = g_proceduralAnimBounds;
+                u8 *dst = base + slot * 0x10;
+                register u8 *srcp EE_REG("$5") = m + 0x80;
+                __asm__ __volatile__("" : "+r"(srcp));
+                *(u_long128 *)dst = *(u_long128 *)srcp;
+                __asm__ __volatile__("");
+            }
             if (m[0x42] != 0xFF) {
                 m[0xA9] = m[0x42];
             }
@@ -540,12 +568,16 @@ void func_002A8448(Moby *obj, s32 idx, s32 frame, s32 arg4, s32 flags) {
     m[0x41] = (u8)frame;
 
     m[0x43] = (u8)idx;
-    ResolveMobyAnimFramePtrs(obj);
+    ResolveMobyAnimFramePtrs((Moby *)m);
     *(f32 *)(m + 0x48) = 1.0f;
     *(f32 *)(m + 0x4C) = 1.0f / IntToFloat(arg4);
     *(f32 *)(m + 0x44) = 0.0f;
     m[0x60] &= 0xFD;
-    seqEntry = *(u8 **)(*(u8 **)(m + 0x24) + 0x48 + idx * 4);
+    {
+        u8 *cls = *(u8 **)(m + 0x24);
+        cls += idx * 4;
+        seqEntry = *(u8 **)(cls + 0x48);
+    }
     m[0x6C] = *(u8 *)(seqEntry + 0x11);
 }
 #endif
@@ -4898,9 +4930,37 @@ extern f32 func_00283B60(f32 x);                          /* arccos */
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 61.26%
    -> UNKNOWN-@0: ROM `addiu sp,sp,-96` vs `addiu sp,sp,-80` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADDD0);
+/* MATCHED on the s136os arm (task #1536): byte-exact solo under SN 2.95.3 v1.36
+ * -fopt-stack (verify_match_unit rc 0, 78 of 80 words compared; the other
+ * two are the pad nops at 0x2ADE80/0x2ADE84, zero on both sides, which only
+ * the image cmp covers). Devices, each re-measured by dropping it alone
+ * (words differing, vmu):
+ *   - the zero-length copy `*out = *a` written as a u_long128 copy, so cc1
+ *     emits the ROM's lq/sq instead of an unaligned ldl/ldr/sdl/sdr sequence
+ *     (struct copy: 46/84);
+ *   - an untied EMPTY fence after it (RULING #8483, emits nothing), which
+ *     keeps the sq ahead of the `ld $16` that cc1 otherwise schedules above
+ *     it (without: 39/78);
+ *   - ADDD0_DIVS_PAD: the ROM's two free-standing nops before
+ *     `div.s $f21,$f21,$f20`, which no cc1 here emits. A SCHEDULING DEVICE
+ *     under RULING #8435 (EE arm only, tied to the dividend and divisor,
+ *     cf. FACT #7918/#8434), not a semantic statement (without: 36/78).
+ * As written before (struct copy, no pad): 46/84. */
+/* GUARD (task #1536): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002ADDD0)
+S136OS_SLOT(func_002ADDD0);
 #else
+/* Two noreorder nops tied to the dividend and divisor: the ROM's pad before
+ * `div.s` (RULING #8435 scheduling device, FACT #7918/#8434). Empty natively. */
+#ifndef TARGET_NATIVE
+#define ADDD0_DIVS_PAD(q, d) __asm__(".set noreorder\n\tnop\n\tnop\n\t.set reorder" : "+f"(q) : "f"(d))
+#else
+#define ADDD0_DIVS_PAD(q, d) ((void)0)
+#endif
 /* Prototypes this body needs whose declarations sit in other guarded arms:
  * the s136os arm compiles this arm alone, so it must see them here. */
 extern void func_002ADC50(Vec4 *out, Vec4 *v, Vec4 *q);
@@ -4917,9 +4977,11 @@ void func_002ADDD0(Vec4 *out, Vec4 *a, Vec4 *b, s32 useRaw, f32 t) {
     if (useRaw == 0) {
         f32 lenAB = Vec3LengthVu0(a) * Vec3LengthVu0(b);
         if (lenAB == 0.0f) {
-            *out = *a;
+            *(u_long128 *)out = *(u_long128 *)a;
+            __asm__ __volatile__("");
             return;
         }
+        ADDD0_DIVS_PAD(cosA, lenAB);
         cosA = cosA / lenAB;
     }
 
@@ -6336,8 +6398,27 @@ extern void func_002A1F20(Moby *moby);
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 81.33%
    -> UNKNOWN-@2: ROM `(none)` vs `daddu s1,a1,zero` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0038);
+/* MATCHED on the s136os arm (task #1536): byte-exact solo under SN 2.95.3 v1.36
+ * -fopt-stack (verify_match_unit 70/70). The ROM copies the translation row
+ * through registers (`addiu $3,$17,0x10; addiu $4,sp,0x30; lq $2,0($4);
+ * sq $2,0($3)`) where cc1 folds both offsets (task #1529's mechanism,
+ * FACT #9216). Devices, each re-measured by dropping it alone (words
+ * differing, vmu):
+ *   - a tied EMPTY fence on dst and src (RULING #8483), hiding both
+ *     addresses from CSE (without: 56/68);
+ *   - an untied EMPTY fence after the copy, keeping lq/sq adjacent and the
+ *     s-reg save order the ROM's (without: 6/70);
+ *   - src pinned to $4 with EE_REG (RULING #8598; without: 3/70);
+ *   - the flags bit 0 test held in a $5-pinned local, the register the ROM
+ *     tests (without: 5/70). A $3 pin on dst is not needed.
+ * As written before (struct copy): 65/74. */
+/* GUARD (task #1536): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002B0038)
+S136OS_SLOT(func_002B0038);
 #else
 /* Prototypes this body needs whose declarations sit in other guarded arms:
  * the s136os arm compiles this arm alone, so it must see them here. */
@@ -6346,11 +6427,20 @@ extern void func_002ABE90(Mat4x4 *mat);
 void func_002B0038(Moby *parent, Moby *child, void *srcTransform, s32 flags) {
     u8 *c = (u8 *)child;
     Mat4x4 m;
+    u8 *dst;
+    register u8 *src EE_REG("$4");
 
     func_002A0A58(parent, srcTransform, &m);
-    *(Vec4 *)(c + 0x10) = *(Vec4 *)((u8 *)&m + 0x30);
-    if (flags & 1) {
-        Vec4ScaleVu0((Vec4 *)&m, -1.0f, (Vec4 *)&m);
+    dst = c + 0x10;
+    src = (u8 *)&m + 0x30;
+    __asm__ __volatile__("" : "+r"(dst), "+r"(src));
+    *(u_long128 *)dst = *(u_long128 *)src;
+    __asm__ __volatile__("");
+    {
+        register s32 bit EE_REG("$5") = flags & 1;
+        if (bit) {
+            Vec4ScaleVu0((Vec4 *)&m, -1.0f, (Vec4 *)&m);
+        }
     }
     if (flags & 2) {
         Vec4ScaleVu0((Vec4 *)((u8 *)&m + 0x10), -1.0f, (Vec4 *)((u8 *)&m + 0x10));
