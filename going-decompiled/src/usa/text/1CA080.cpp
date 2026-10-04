@@ -5261,8 +5261,10 @@ s32 func_002D4438(void) {
  * mode 0 (func_003444D0), bind the data table D_00259F38 (func_00344458),
  * rebuild (func_003444A0) and bind the label table D_0025D0C0 (func_003444C0).
  * Does nothing while the GUI manager is down. Takes no arguments; returns 0.
- * The ROM re-reads g_guiInstance before every call and keeps only 0x3C480 in
- * $16; the s136os arm reproduces that from the cached local below.
+ * The widget address is re-formed from g_guiInstance for every call, as the ROM
+ * does: it reloads g_guiInstance after each call and keeps only 0x3C480 in $16.
+ * Required for the match: with a cached `widget` local the s136os arm holds the
+ * sum in $16 instead and emits 26 words where the ROM has 32 (task #1512 gate).
  * Byte-exact on the s136os arm (task #1512; screened by task #1492). */
 extern void func_003444D0(void *widget, s32 mode);
 extern void func_00344458(void *widget, void *data);
@@ -5283,11 +5285,10 @@ S136OS_SLOT(func_002D4468);
 #else
 s32 func_002D4468(void) {
     if (g_guiInstance) {
-        char *widget = g_guiInstance + 0x3C480;
-        func_003444D0(widget, 0);
-        func_00344458(widget, &D_00259F38);
-        func_003444A0(widget);
-        func_003444C0(widget, &D_0025D0C0);
+        func_003444D0(g_guiInstance + 0x3C480, 0);
+        func_00344458(g_guiInstance + 0x3C480, &D_00259F38);
+        func_003444A0(g_guiInstance + 0x3C480);
+        func_003444C0(g_guiInstance + 0x3C480, &D_0025D0C0);
     }
     return 0;
 }
@@ -5296,6 +5297,7 @@ s32 func_002D4468(void) {
 /* Twin of func_002D4468 for the same widget (g_guiInstance+0x3C480) in its
  * alternate mode: mode 1, data table D_259CC0, label table D_0025D268.
  * Does nothing while the GUI manager is down. Takes no arguments; returns 0.
+ * Same per-call g_guiInstance re-read as its twin, for the same reason.
  * Byte-exact on the s136os arm (task #1512; screened by task #1492). */
 /* GUARD (task #1512): as func_002D4468's. */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D44E8)
@@ -5303,11 +5305,10 @@ S136OS_SLOT(func_002D44E8);
 #else
 s32 func_002D44E8(void) {
     if (g_guiInstance) {
-        char *widget = g_guiInstance + 0x3C480;
-        func_003444D0(widget, 1);
-        func_00344458(widget, &D_259CC0);
-        func_003444A0(widget);
-        func_003444C0(widget, &D_0025D268);
+        func_003444D0(g_guiInstance + 0x3C480, 1);
+        func_00344458(g_guiInstance + 0x3C480, &D_259CC0);
+        func_003444A0(g_guiInstance + 0x3C480);
+        func_003444C0(g_guiInstance + 0x3C480, &D_0025D268);
     }
     return 0;
 }
