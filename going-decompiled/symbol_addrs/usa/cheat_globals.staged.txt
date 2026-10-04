@@ -1,5 +1,8 @@
 // Track-B breadcrumb log (USA v2.00, CRC B3A71D10) — RETIRED as a symbol queue.
 //
+// The first names staged here came from Made in Slovakia's PCSX2 cheat codes,
+// https://github.com/Made-in-Slovakia/rac (credited in credits.md).
+//
 // All named symbols have been curated into symbol_addrs/usa/symbol_addrs.txt (the
 // authoritative file splat reads) under the clean g_<thing>/VerbNoun convention.
 // Per-function cumulative knowledge lives in Ghidra plate comments. This file no

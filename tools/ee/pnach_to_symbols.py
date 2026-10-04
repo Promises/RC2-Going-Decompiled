@@ -5,8 +5,13 @@ USA v2.00 binary (CRC B3A71D10). Cheat patch addresses encode the write-width
 in the leading nibble (2=32b, 1=16b, 0=8b, 4=multiwrite); the real EE address is
 field & 0x0FFFFFFF. We keep only addresses inside the binary's static data range.
 
+The cheat codes are Made in Slovakia's (https://github.com/Made-in-Slovakia/rac),
+credited in credits.md. They are not redistributed in the public repository.
+
 These are NAMING HYPOTHESES for the anonymous D_/DAT_ globals. The clustering
-reveals structs/arrays (see reference/cheat_globals.md). Confirm each by tracing
+reveals structs/arrays (see reference/cheat_globals.txt, an earlier saved run in
+this output format. It is not regenerated: a fresh run over today's
+reference/cheats/ gives 380 rows, the saved file 209). Confirm each by tracing
 its writer in Ghidra before treating a name as authoritative.
 
 Usage:  python tools/ee/pnach_to_symbols.py [pnach...]   (default: reference/cheats/*.pnach)
