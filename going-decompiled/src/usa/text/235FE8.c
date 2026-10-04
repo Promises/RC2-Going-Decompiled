@@ -9307,7 +9307,7 @@ void GuiInfoPanelScreenInit(void *w, GuiPool *pool) {
  * closes it. The typed array closes it without the fence. Declaring
  * PlayGlobalSound void instead of implicit int makes it 20/68: the ROM's TU saw
  * a value-returning declaration.)
-/* GUARD (task #1567): on EE this C is the image's body, compiled alone by the
+ * GUARD (task #1567): on EE this C is the image's body, compiled alone by the
  * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
  * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
  * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
@@ -9368,7 +9368,7 @@ void func_00344E08(void *w, s32 flags) {
  * tied fence on `tbl` fixes that order but moves the allocation and the
  * `ld $ra` slot, 8-11/90 depending on where it sits, and EE_REG pins on tbl/row
  * on top of it reach 4/90.)
-/* GUARD (task #1567): on EE this C is the image's body, compiled alone by the
+ * GUARD (task #1567): on EE this C is the image's body, compiled alone by the
  * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
  * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
  * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
