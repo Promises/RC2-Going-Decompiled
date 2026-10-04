@@ -67,7 +67,18 @@ link_script='
   echo "linked $n units + arena_storage.o"
 '
 
-W="$(mktemp -d)"
+# $W is bind-mounted into the docker arm as /out, so it must be a path the docker
+# daemon can see. On the M1 that daemon runs in a colima VM that shares only
+# $HOME; a macOS `mktemp -d` lands in /var/folders, so docker created /out inside
+# the VM and still_undef.txt never reached the host (task #1459; #1373 fixed the
+# mktemp TEMPLATE half of the same macOS-vs-colima mismatch). Keep $TMPDIR when it
+# is already under $HOME, else use $HOME itself. The template form works for both
+# BSD and GNU mktemp.
+case "${TMPDIR:-}" in
+  "$HOME"/*) WBASE="${TMPDIR%/}" ;;
+  *)         WBASE="$HOME" ;;
+esac
+W="$(mktemp -d "$WBASE/.verify_link.XXXXXX")"
 trap 'rm -rf "$W"' EXIT
 case "$arm" in
   docker)
