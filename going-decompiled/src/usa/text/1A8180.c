@@ -101,8 +101,11 @@ __asm__(".extern D_1A8CA0, 12");   /* func_002B0E40: lui/$at; func_002B03E8: gp_
  * s136os TU see the same line before the block (s136os_splice.sh's
  * verify_block admits it: absolute in both TUs). An ADDRESSING-MODEL device of
  * the same family as the size-12 lines above: it moves no data and emits
- * nothing (task #1562). Only QueueMobyBlobShadow (g_blobShadowCount) and
- * SampleRainHeightmap (the other six) access them from compiled C. */
+ * nothing (task #1562). QueueMobyBlobShadow (g_blobShadowCount),
+ * SampleRainHeightmap (the other six) and SpawnRaindropImpactFx
+ * (g_pRainHeightmap, g_rainHeightmapHeightScale) access them from compiled C;
+ * the last closed at size 12 in task #1559 and was re-measured at 16 in task
+ * #1572 (one name may not carry two sizes > -G: verify_block refuses it). */
 __asm__(".extern g_blobShadowCount, 16");
 __asm__(".extern g_pRainHeightmap, 16");
 __asm__(".extern g_rainHeightmapCellW, 16");
@@ -7705,8 +7708,28 @@ f32 SampleRainHeightmap(Vec4 *pos) {
  * cmp/coverage harness. */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 47.92%
    -> UNKNOWN-@0: ROM `addiu sp,sp,-96` vs `addiu sp,sp,-80` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", SpawnRaindropImpactFx);
+/* MATCHED on the s136os arm (task #1559): byte-exact solo under SN 2.95.3 v1.36
+ * -fopt-stack (verify_match_unit 142/142). Each change reverted alone (words
+ * differing, vmu):
+ *   - g_pRainHeightmap and g_rainHeightmapHeightScale are declared
+ *     `.extern …, 12` at the top of the unit, so the -G8 assembler expands
+ *     cc1's one-instruction loads to the ROM's absolute lui/lw and lui $at/lwc1
+ *     instead of gp_rel (133/140 without; no other compiled function here
+ *     reads either symbol, and SampleRainHeightmap is still INCLUDE_ASM);
+ *   - u_long128 copies (struct copies: 159/168);
+ *   - &dropPoint is a pointer local, which cc1 keeps in s0 (137/140);
+ *   - the guards are written !(a < b), the ROM's c.lt.s + bc1f; `b <= a`
+ *     compiles to c.le.s + bc1t, which differs for NaN (16/142).
+ * Device: a tied EMPTY fence on the ripple's surface word and position
+ * (RULING #8483), so their lw/move precede the li.s as in the ROM (6/142
+ * without; on the surface word alone: 5/142). */
+/* GUARD (task #1559): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_SpawnRaindropImpactFx)
+S136OS_SLOT(SpawnRaindropImpactFx);
 #else
 extern f32  SampleRainHeightmap(Vec4 *pos);
 extern Vec4 g_cameraPos;                                          /* 0x1B52C0: camera world position; [2]/.z is height */
@@ -7716,48 +7739,55 @@ extern s32  SpawnWaterRippleParticle(f32 scale, f32 growRate, Vec4 *pos, s32 sur
 extern s32  SpawnRainSplashParticle(Vec4 *pos, s32 brightness, s32 flag);
 
 void SpawnRaindropImpactFx(Vec4 *point) {
-    Vec4 dropPoint;   /* fStack_60 (sp+0x00): ray start / hit-point scratch */
-    Vec4 lineEnd;     /* fStack_50 (sp+0x10): ray end (down from dropPoint) */
-    Vec4 camDelta;    /* auStack_40 (sp+0x20): hit point - camera, for splash brightness */
+    Vec4 dropPoint;   /* sp+0x00: ray start, then the ripple position */
+    Vec4 lineEnd;     /* sp+0x10: ray end (below dropPoint) */
+    Vec4 camDelta;    /* sp+0x20: hit point - camera, for splash brightness */
     f32  valid = 0.0f;
+    Vec4 *dp;         /* &dropPoint, held in s0 as the ROM does */
 
-    dropPoint = *point;
+    *(u_long128 *)&dropPoint = *(u_long128 *)point;
+    dp = &dropPoint;
 
     if (g_pRainHeightmap != 0) {
         dropPoint.z = SampleRainHeightmap(&dropPoint) + g_rainHeightmapHeightScale;
-        if (g_cameraPos.z + 5.0f <= dropPoint.z) {
+        if (!(dropPoint.z < g_cameraPos.z + 5.0f)) {
             goto done;
         }
-        lineEnd = dropPoint;
+        *(u_long128 *)&lineEnd = *(u_long128 *)&dropPoint;
         valid = 1.0f;
         lineEnd.z = lineEnd.z - (g_rainHeightmapHeightScale + g_rainHeightmapHeightScale) - 2.0f;
     } else {
-        if (dropPoint.x <= 0.0f) {
+        if (!(0.0f < dropPoint.x)) {
             goto done;
         }
-        if (dropPoint.y <= 0.0f) {
+        if (!(0.0f < dropPoint.y)) {
             goto done;
         }
-        if (1024.0f <= dropPoint.x) {
+        if (!(dropPoint.x < 1024.0f)) {
             goto done;
         }
-        if (1024.0f <= dropPoint.y) {
+        if (!(dropPoint.y < 1024.0f)) {
             goto done;
         }
-        lineEnd = dropPoint;
+        *(u_long128 *)&lineEnd = *(u_long128 *)&dropPoint;
         valid = 1.0f;
         lineEnd.z = g_cameraPos.z - 20.0f;
     }
 
 done:
-    if (valid != 0.0f && CollLine(&dropPoint, &lineEnd, 0x12, 0, 0) != 0) {
+    if (valid != 0.0f && CollLine(dp, &lineEnd, 0x12, 0, 0) != 0) {
         s32 material = GetCollHitMaterial();
         if (material == 0 || material == 4 || material == 3) {
             f32 scale;
-            dropPoint = g_collHitPoint;
-            dropPoint.z = dropPoint.z + D_1A9FCC;
+            *(u_long128 *)dp = *(u_long128 *)&g_collHitPoint;
+            dp->z = dp->z + D_1A9FCC;
             scale = GetRandomFloatRange(0.4f, 0.6f);
-            SpawnWaterRippleParticle(scale, 5250.0f, &dropPoint, D_1A9E74, -1);
+            {
+                s32 surface = D_1A9E74;
+                Vec4 *pos = dp;
+                __asm__ __volatile__("" : "+r"(surface), "+r"(pos));
+                SpawnWaterRippleParticle(scale, 5250.0f, pos, surface, -1);
+            }
         } else {
             f32 dist;
             Vec4SubVu0(&camDelta, &g_collHitPoint, &g_cameraPos);
