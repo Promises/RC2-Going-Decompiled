@@ -5257,53 +5257,57 @@ s32 func_002D4438(void) {
     return 0;
 }
 
-/* GUI wrapper: when the GUI is up, configure the list widget at instance+0x3C480
- * — func_003444D0(w, 0) (mode), func_00344458(w, &D_259F38) (bind data),
- * func_003444A0(w) (rebuild), func_003444C0(w, &D_25D0C0) (bind labels). Returns 0.
- * Wall: 8-byte-packed-save (saves $16 + $31). Preserved as portable C. */
+/* Configure the list widget at g_guiInstance+0x3C480 for its first mode: set
+ * mode 0 (func_003444D0), bind the data table D_00259F38 (func_00344458),
+ * rebuild (func_003444A0) and bind the label table D_0025D0C0 (func_003444C0).
+ * Does nothing while the GUI manager is down. Takes no arguments; returns 0.
+ * The ROM re-reads g_guiInstance before every call and keeps only 0x3C480 in
+ * $16; the s136os arm reproduces that from the cached local below.
+ * Byte-exact on the s136os arm (task #1512; screened by task #1492). */
 extern void func_003444D0(void *widget, s32 mode);
 extern void func_00344458(void *widget, void *data);
 extern void func_003444A0(void *widget);
 extern void func_003444C0(void *widget, void *labels);
-extern u8 D_259F38, D_25D0C0, D_259CC0, D_25D268;
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D4468);
+/* The four tables the two wrappers bind. ROM_SPLIT (declarations only; the
+ * unit's ADDRESSING-MODEL device, RULING #8620): the ROM forms each address with
+ * a lui/addiu pair, where cc1 would treat a -G8 u8 as gp-relative small data.
+ * Spellings follow the split's data labels in asm/usa/data/data/138B80.data.s,
+ * which are not uniform: three are 8-digit (D_00......) and D_259CC0 is 6-digit. */
+extern u8 D_00259F38 ROM_SPLIT, D_0025D0C0 ROM_SPLIT, D_259CC0 ROM_SPLIT, D_0025D268 ROM_SPLIT;
+/* GUARD (task #1512): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D4468)
+S136OS_SLOT(func_002D4468);
 #else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 50.16% -> STRUCTURAL,
- * first differing row @1: ROM `lui a0,0x0  [HI16 0x001A8D04]` vs `(none)`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 66.38% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. */
-/* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame. */
 s32 func_002D4468(void) {
     if (g_guiInstance) {
-        char *w = g_guiInstance + 0x3C480;
-        func_003444D0(w, 0);
-        func_00344458(w, &D_259F38);
-        func_003444A0(w);
-        func_003444C0(w, &D_25D0C0);
+        char *widget = g_guiInstance + 0x3C480;
+        func_003444D0(widget, 0);
+        func_00344458(widget, &D_00259F38);
+        func_003444A0(widget);
+        func_003444C0(widget, &D_0025D0C0);
     }
     return 0;
 }
 #endif
 
-/* GUI wrapper: twin of func_002D4468 for the same widget (instance+0x3C480) with
- * the alternate mode/data/labels (func_003444D0(w,1), &D_259CC0, &D_25D268).
- * Wall: 8-byte-packed-save (saves $16 + $31). Preserved as portable C. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D44E8);
+/* Twin of func_002D4468 for the same widget (g_guiInstance+0x3C480) in its
+ * alternate mode: mode 1, data table D_259CC0, label table D_0025D268.
+ * Does nothing while the GUI manager is down. Takes no arguments; returns 0.
+ * Byte-exact on the s136os arm (task #1512; screened by task #1492). */
+/* GUARD (task #1512): as func_002D4468's. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D44E8)
+S136OS_SLOT(func_002D44E8);
 #else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 53.59% -> STRUCTURAL,
- * first differing row @1: ROM `lui a0,0x0  [HI16 0x001A8D04]` vs `(none)`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 59.19% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. */
-/* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame. */
 s32 func_002D44E8(void) {
     if (g_guiInstance) {
-        char *w = g_guiInstance + 0x3C480;
-        func_003444D0(w, 1);
-        func_00344458(w, &D_259CC0);
-        func_003444A0(w);
-        func_003444C0(w, &D_25D268);
+        char *widget = g_guiInstance + 0x3C480;
+        func_003444D0(widget, 1);
+        func_00344458(widget, &D_259CC0);
+        func_003444A0(widget);
+        func_003444C0(widget, &D_0025D268);
     }
     return 0;
 }
