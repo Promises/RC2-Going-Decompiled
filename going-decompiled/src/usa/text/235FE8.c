@@ -261,8 +261,8 @@ extern void GuiMenuListDraw(void *p);
  * the engine96 arm (objdiff_build.sh, MATCH_<fn> guards) compiles those bodies
  * too, and the declarations are byte-neutral on the 2.9 arm (sdk29 object
  * md5 unchanged with the block visible). */
-extern void GuiElementInitTypeB(void *p);
-extern void GuiElementInitTypeC(void *p);
+extern void *GuiElementInitTypeB(void *p);
+extern void *GuiElementInitTypeC(void *p);
 extern GuiElement *GuiListRowElementInit(void *p);
 extern void func_00348BD0(void *p);
 extern s32 GuiMenuListHandleInput(void *w, s32 inputMask); /* 248B50: selection-advance by input mask; returns 1/0 (248B50.c) */
@@ -1127,24 +1127,28 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
  * the matched callers would then fail to satisfy under TARGET_NATIVE. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336F00);
 
-/* GuiElementInitTypeB: install the TypeB GuiElement vtable (D_1ADA38) at +0x30.
- * The asm installs the base vtable first, but that store is fully overwritten by
- * this one - functionally a single store. Return value (p) is unused by callers. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementInitTypeB);
+/* GuiElementInitTypeB: construct a type-B GUI element in place. Installs the
+ * base GuiElement vtable (GuiElementInstallBaseVtable), then overwrites the same
+ * +0x30 slot with the type-B vtable D_1ADA38.
+ *   p - the element; returned unchanged (most callers ignore it).
+ * The base install is dead (its store is overwritten at once) but the ROM makes
+ * the call, holding p in $16 across it; the earlier #else omitted it and so
+ * could never match. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiElementInitTypeB)
+S136OS_SLOT(GuiElementInitTypeB);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiElementInitTypeB, unit objdiff): 24.23%,
-   13/13 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x10' vs '').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame wall
-   (the GuiElementInstallBaseVtable call holds p across $16/$31 in a -0x10 frame).
-   cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
-   (cmp_GuiElementInitTypeB, run_cmp_235FE8_iso.sh): offset oracle confirms +0x30
-   == &D_1ADA38 and every other element byte stays the 0xAA sentinel. */
-void GuiElementInitTypeB(void *p) {
-    extern void *D_1ADA38;
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1498; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object). On cc1 2.9 the packed callee-save frame does not reproduce.
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
+extern void *D_1ADA38;
+void *GuiElementInitTypeB(void *p) {
+    GuiElementInstallBaseVtable(p);
     *(void **)((char *)p + 0x30) = &D_1ADA38;
+    return p;
 }
 #endif
 
@@ -1745,23 +1749,25 @@ s32 func_00337758(void *p) {
     return (s32)vec[0];
 }
 
-/* GuiElementInitTypeC: identical to TypeB but installs the TypeC vtable
- * (D_1AD9F8) at +0x30. Return value (p) unused by callers. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiElementInitTypeC);
+/* GuiElementInitTypeC: as GuiElementInitTypeB, with the type-C vtable D_1AD9F8
+ * at +0x30.
+ *   p - the element; returned unchanged.
+ * Same dead base-vtable install as TypeB, kept because the ROM makes the call. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiElementInitTypeC)
+S136OS_SLOT(GuiElementInitTypeC);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_GuiElementInitTypeC, unit objdiff): 24.23%,
-   13/13 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x10' vs '').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; 2-callee-save frame wall
-   (same install-then-overwrite shape as GuiElementInitTypeB).
-   cmp-oracle VALIDATED bit-exact vs the original .s on real R5900
-   (cmp_GuiElementInitTypeC, run_cmp_235FE8_iso.sh): offset oracle confirms +0x30
-   == &D_1AD9F8 and every other element byte stays the 0xAA sentinel. */
-void GuiElementInitTypeC(void *p) {
-    extern void *D_1AD9F8;
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1498; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object). On cc1 2.9 the packed callee-save frame does not reproduce.
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
+extern void *D_1AD9F8;
+void *GuiElementInitTypeC(void *p) {
+    GuiElementInstallBaseVtable(p);
     *(void **)((char *)p + 0x30) = &D_1AD9F8;
+    return p;
 }
 #endif
 
@@ -2536,8 +2542,10 @@ void func_00339678(void *p, const void *src, s32 id) {
 }
 #endif
 
-/* func_003396E0: no-op stub (empty body - registered/overridable hook). */
-void func_003396E0(void) {
+/* func_003396E0: no-op stub (empty body - registered/overridable hook). Its one
+ * caller, func_00339A88, passes the widget in $a0, so it takes the widget. */
+void func_003396E0(void *w) {
+    (void)w;
 }
 
 /* func_003396E8: map a small selector to a scale constant - selector 0 -> 0.7,
@@ -2590,31 +2598,39 @@ f32 func_003396E8(s32 unused, s32 sel) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00339740);
 
-/* func_00339A80: no-op stub (empty body - registered/overridable hook). */
-void func_00339A80(void) {
+/* func_00339A80: no-op stub (empty body - registered/overridable hook). Its one
+ * caller, func_00339A88, passes the widget in $a0, so it takes the widget. */
+void func_00339A80(void *w) {
+    (void)w;
 }
 
-/* Refresh a widget with a live sub-value (*(w+0x4)[0] != 0): dispatch on its
- * mode (+0x1C8) — mode 0 runs the sub-updater func_00339740, mode 2 the (empty)
- * func_00339A80 — then always run the (empty) tail func_003396E0. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00339A88);
+/* func_00339A88: refresh a widget whose live sub-value is non-zero.
+ *   w - the widget. Returns nothing.
+ * Skips everything when (*(f32 **)(w+0x4))[0] == 0. Otherwise dispatches on the
+ * mode word at +0x1C8: mode 0 runs the sub-updater func_00339740, mode 2 the
+ * (empty) func_00339A80; then always runs the (empty) tail func_003396E0. Every
+ * callee receives w; the ROM keeps it in $16 for exactly that. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00339A88)
+S136OS_SLOT(func_00339A88);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_00339A88, unit objdiff): 73.47%,
-   13/32 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu v1, a0, zero').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1498; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object). On cc1 2.9 the packed callee-save frame does not reproduce.
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 void func_00339A88(void *w) {
-    f32 *p = *(f32 **)((char *)w + 0x4);
-    if (p[0] == 0.0f) {
+    f32 *value = *(f32 **)((char *)w + 0x4);
+    if (value[0] == 0.0f) {
         return;
     }
     switch (*(s32 *)((char *)w + 0x1C8)) {
     case 0: func_00339740(w); break;
-    case 2: func_00339A80();  break;
+    case 2: func_00339A80(w); break;
     default: break;
     }
-    func_003396E0();
+    func_003396E0(w);
 }
 #endif
 
@@ -3336,23 +3352,43 @@ void func_0033B428(void *p) {
 }
 #endif
 
-/* func_0033B4E8: init the map-screen panel's six embedded sub-elements - four
- * type-B elements (p+0x4, stride 0x4C), the D_1ADA18 widget at +0x134, and one
- * type-C element at +0x170; return the object. */
+/* func_0033B4E8: construct the map-screen panel's embedded sub-elements: four
+ * type-B elements from p+0x4 at a 0x4C stride, the D_1ADA18 widget at +0x134 and
+ * one type-C element at +0x170.
+ *   p - the panel; returned unchanged.
+ * The four type-B constructs are a counted loop in the ROM (counter 3 down to
+ * -1). The loop is a short loop, so the ROM pads it with two nops before the
+ * backward branch; R5900_SHORT_LOOP_PAD1 reproduces them (RULING #8435), and the
+ * empty fence keeps sched2 from hoisting the pads above the jal, as in
+ * 24D728's GuiManagerInitListRows. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033B4E8);
+#define R5900_SHORT_LOOP_PAD1(v, next) \
+    __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033B4E8, unit objdiff): 58.34%,
-   26/30 insns differ. Residual: UNKNOWN-addiu (first differing insn: 'addiu sp, sp, -0x30' vs 'addiu sp, sp, -0x10').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; 4-callee-save frame
-   wall. */
+#define R5900_SHORT_LOOP_PAD1(v, next) ((void)0)
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033B4E8)
+S136OS_SLOT(func_0033B4E8);
+#else
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1498; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object). On cc1 2.9 the packed callee-save frame does not reproduce.
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 void *func_0033B4E8(void *p) {
-    GuiElementInitTypeB((char *)p + 0x4);
-    GuiElementInitTypeB((char *)p + 0x50);
-    GuiElementInitTypeB((char *)p + 0x9C);
-    GuiElementInitTypeB((char *)p + 0xE8);
+    u8 *element = (u8 *)p + 0x4;
+    s32 i;
+    i = 3;
+    do {
+        i--;
+        GuiElementInitTypeB(element);
+        __asm__ __volatile__("");
+        R5900_SHORT_LOOP_PAD1(element, element);
+        R5900_SHORT_LOOP_PAD1(element, element);
+        element += 0x4C;
+    } while (i != -1);
     func_003374D8((char *)p + 0x134);
     GuiElementInitTypeC((char *)p + 0x170);
     return p;
