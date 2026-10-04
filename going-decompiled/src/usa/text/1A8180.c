@@ -2238,9 +2238,9 @@ S136OS_SLOT(ProbeMobyGroundBelow);
 /* Returns s32 only to match the forwarder func_002AA3B0's prototype; the asm
  * leaves $2 holding store-scratch (no meaningful result), so callers ignore it.
  * All real output is written into the moby record (+0x70/+0x74/+0xBD).
- * The EE arm returns nothing (a `return 0` adds the ROM's absent
- * `daddu $2,$0,$0` on both exits, 16/104); native returns 0 so its ignored
- * result is defined. */
+ * The EE arm returns nothing: `return 0` would add a `daddu $2,$0,$0` the ROM
+ * does not have on both exits (16/104). Native returns 0 so its ignored result
+ * is defined. */
 #ifdef TARGET_NATIVE
 #define PMGB_RESULT 0
 #else
@@ -2283,7 +2283,7 @@ s32 ProbeMobyGroundBelow(Moby *moby) {
     } else {
         Vec4 *axis = (Vec4 *)(m + 0xE0);
         Vec4 *v;
-        ScaleVec4IncludingW(&a, 0.0009765625f, moby);   /* 1/1024 */
+        ScaleVec4IncludingW(&a, 0.0009765625f, (Vec4 *)moby);   /* 1/1024 */
         v = &b;
         Vec4ScaleVu0(v, -8.0f, axis);
         Vec4AddVu0(v, &a, v);
