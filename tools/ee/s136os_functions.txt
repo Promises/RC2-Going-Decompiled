@@ -320,3 +320,10 @@ usa text/235FE8 func_0033FCE8
 usa text/235FE8 func_0033FDD8
 usa text/235FE8 func_0033FF68
 usa text/1CA080 func_002D33A8
+usa text/235FE8 func_003437F0
+usa text/235FE8 func_00344558
+usa text/235FE8 func_003446B8
+usa text/235FE8 func_00344808
+usa text/235FE8 func_003451B8
+usa text/235FE8 func_003457A0
+usa text/235FE8 GuiMapScreenTick

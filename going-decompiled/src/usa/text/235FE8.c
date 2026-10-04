@@ -300,10 +300,10 @@ extern void func_00339740(void *w);     /* func_00339A88 mode-0 sub-updater */
 extern u8 D_1A7BBA;                      /* toggled widescreen/mode flag */
 /* func_003453D0 (weapon-select builder) deps */
 extern void SetWeaponUpgradeSlot(s32 a, s32 b); /* 0x288A20 - retarget upgrade slot */
-extern void func_00344E08(void *w, void *a);    /* mode-0 handler */
-extern void func_00344F18(void *w, void *a);    /* mode-2 handler */
-extern void func_00345080(void *w, void *a);    /* mode-3 handler */
-extern void func_003451B8(void *w, void *a);    /* mode-1 handler */
+extern void func_00344E08(void *w, s32 flags);    /* mode-0 handler */
+extern void func_00344F18(void *w, s32 flags);    /* mode-2 handler */
+extern void func_00345080(void *w, s32 flags);    /* mode-3 handler */
+extern void func_003451B8(void *w, s32 flags);    /* mode-1 handler */
 extern void func_003457A0(void *w);             /* weapon-panel tail draw */
 extern s16 g_equippedArmor;             /* 0x1A7A20 */
 extern u8 g_inventoryOwned[];           /* per-item owned flags */
@@ -311,6 +311,35 @@ extern u8 g_weaponTable[];              /* 0x239B20 - variant table, stride 0xE0
 extern u8 g_itemEquippedSlot[];         /* 0x139568 - itemId -> variant slot */
 extern s32 D_1AE248[];                  /* 4-entry stringId table */
 extern f32 D_1AE280[];                  /* {x,y} offset pair for the +0x1C8 element */
+/* By-value views of the two layout tables above: the ROM copies each onto the
+ * stack as a block (unaligned ldl/ldr + sdl/sdr) before reading it. */
+typedef struct { f32 x, y; } GuiOffsetPair;
+typedef struct { s32 id[4]; } GuiStringIdTable;
+/* One 0xE0-byte g_weaponTable record, as far as this unit reads it. */
+typedef struct {
+    u8  _pad0[6];
+    s16 nameStringId; /* 0x06 */
+    s32 descStringId; /* 0x08 */
+    u8  _padC[0x42 - 0xC];
+    s16 stat42;       /* 0x42: the per-variant value the weapon screen reads (func_00345298) */
+    u8  _pad44[0xE0 - 0x44];
+} GuiWeaponTableEntry;
+/* One 0xA-byte weapon-select grid slot (the D_1AA830 / D_25E308 tables); the
+ * handlers read only the halfword at +6 into the screen's +0x4B4 selection. */
+typedef struct {
+    u8  _pad0[6];
+    s16 weaponId; /* 0x06 */
+    u8  _pad8[2];
+} GuiWeaponSlotEntry;
+/* g_padButtonsPressedSplit at file scope for the screen ticks below
+ * (func_003453D0, GuiMapScreenTick): the ROM reads the pad mask with a cc1-split
+ * `lui`/`lw %lo` pair. Same ADDRESSING-MODEL DEVICE (RULING #8620) as the
+ * declaration above func_003434C8, which repeats it identically. */
+#ifndef TARGET_NATIVE
+extern s32 g_padButtonsPressedSplit __asm__("g_padButtonsPressed") __attribute__((section(".data")));
+#else
+#define g_padButtonsPressedSplit g_padButtonsPressed
+#endif
 extern f32 D_1AE258, D_1AE25C, D_1AE260, D_1AE264, D_1AE268, D_1AE26C, D_1AE270;
 extern f32 D_1AE274, D_1AE278, D_1AE27C, D_1AE288, D_1AE28C, D_1AE290, D_1AE294;
 extern s32 D_1ADC68;                    /* GUI x-offset (int, used as float) */
@@ -8317,8 +8346,11 @@ void func_003432D8(void *p) {
     __asm__ __volatile__("");
 }
 
-/* func_00343330: no-op stub (empty body - registered/overridable hook). */
-void func_00343330(void) {
+/* func_00343330: no-op stub (empty body - registered/overridable hook). Its one
+ * caller, func_003433D0, passes the screen object in $a0 (ROM 0x343490), so it
+ * takes that argument and ignores it; the body is byte-identical either way. */
+void func_00343330(void *w) {
+    (void)w;
 }
 
 /* Update a scrollable list element: position its sub-element (+0x188) at the
@@ -8346,8 +8378,14 @@ void func_00343338(void *w, s32 inputMask) {
  * sub-builders. Places element w at the anchor (*(w+0x180)) plus (D_1AE170,
  * D_1AE174) and element +0x4C at (D_1AE178, D_1AE17C). Fades both to the alpha
  * D_1AE180[func_00348E68(w+0x188) - 1] (list-row-count driven). Runs
- * func_00343338(w, inputMask), func_003432D8(w), func_00343330(), and returns the
+ * func_00343338(w, inputMask), func_003432D8(w), func_00343330(w), and returns the
  * cached value at +0x16C. */
+/* task #1522 (s136os arm, verify_match_unit vs ROM; not promoted): #else fixed to
+ * pass w to func_00343330 (ROM 0x343490 sets $a0), re-read the anchor before each
+ * call and read the alpha entry twice, as the ROM does. Residual 3/62 words: cc1
+ * folds the `- 1` of the alpha index into the table base (ROM keeps `addiu -1`,
+ * then `sll`, then the gp-relative base). An empty tied fence on the index stops
+ * the fold but perturbs the prologue schedule (8/62), so it is not used. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003433D0);
 #else
@@ -8358,21 +8396,21 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003433D0);
 extern f32 D_1AE170, D_1AE174, D_1AE178, D_1AE17C;
 extern f32 D_1AE180[2];
 s32 func_003433D0(void *w, s32 inputMask) {
-    f32 *anchor = *(f32 **)((char *)w + 0x180);
-    f32 alpha;
-    s32 idx;
+    f32 *anchor;
+    f32 *alpha;
 
+    anchor = *(f32 **)((char *)w + 0x180);
     GuiElementSetPos((GuiElement *)w, D_1AE170 + anchor[0], D_1AE174 + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x180);
     GuiElementSetPos((GuiElement *)((char *)w + 0x4C), D_1AE178 + anchor[0], D_1AE17C + anchor[1], 0.0f, 0.0f);
 
-    idx = func_00348E68((char *)w + 0x188) - 1;
-    alpha = D_1AE180[idx];
-    GuiElementSetAlpha((GuiElement *)w, alpha);
-    GuiElementSetAlpha((GuiElement *)((char *)w + 0x4C), alpha);
+    alpha = &D_1AE180[func_00348E68((char *)w + 0x188) - 1];
+    GuiElementSetAlpha((GuiElement *)w, *alpha);
+    GuiElementSetAlpha((GuiElement *)((char *)w + 0x4C), *alpha);
 
     func_00343338(w, inputMask);
     func_003432D8(w);
-    func_00343330();
+    func_00343330(w);
 
     return *(s32 *)((char *)w + 0x16C);
 }
@@ -8428,6 +8466,11 @@ void func_00343558(void *p) {
  * (D_1AE198, D_1AE19C + D_1AE1A0*i), sets its texture (id 0xEA9E for i==3 else
  * 0xEAA6 — also recorded at +0x174, frame = *(w+0x178)[i]), and draws it via
  * func_00337630. Bails immediately if the count is <= 0. */
+/* task #1522 (s136os arm, verify_match_unit vs ROM; not promoted): #else fixed to
+ * re-read the count (+0x17C) on every loop test, form the texture id and read the
+ * frame table after positioning, and compute the element address inside the
+ * loop. Residual 3/60 words: the loop-test/anchor register is $v1 where the ROM
+ * uses $v0. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343578);
 #else
@@ -8437,19 +8480,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343578);
    not byte-exact, so the arm stays #else. */
 extern f32 D_1AE198, D_1AE19C, D_1AE1A0;
 void func_00343578(void *w) {
-    GuiElement *e = (GuiElement *)((char *)w + 0x130);
-    s32 count = *(s32 *)((char *)w + 0x17C);
     s32 i;
 
-    for (i = 0; i < count; i++) {
+    for (i = 0; i < *(s32 *)((char *)w + 0x17C); i++) {
+        GuiElement *e = (GuiElement *)((char *)w + 0x130);
         f32 *anchor = *(f32 **)((char *)w + 0x180);
-        s32 *frames = *(s32 **)((char *)w + 0x178);
-        s32 texId = (i == 3) ? 0xEA9E : 0xEAA6;
+        s32 texId;
 
         GuiElementSetPos(e, anchor[0] + D_1AE198,
                          (anchor[1] + D_1AE19C) + D_1AE1A0 * (f32)i, 0.0f, 0.0f);
+        texId = (i == 3) ? 0xEA9E : 0xEAA6;
         *(s32 *)((char *)w + 0x174) = texId;
-        GuiSpriteSetTexture(e, texId, frames[i]);
+        GuiSpriteSetTexture(e, texId, (*(s32 **)((char *)w + 0x178))[i]);
         func_00337630(e);
     }
 }
@@ -8555,13 +8597,24 @@ s32 func_003436D0(void *a0, s32 hi, f32 a, f32 b, f32 c, f32 d) {
  * placement-new the element's primary block (stored at +0x0, zeroed 4 words),
  * then clear the 0x64-byte state region (+0x28) and seed the fixed fields —
  * scale defaults 16.0 at +0x4/+0xC, everything else zero. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003437F0);
+/* Params: w = the widget being constructed; pool = its node pool, or NULL to
+ * skip the block allocation (+0x8C is written either way). Returns nothing.
+ * MATCHED byte-exact on the s136os arm (task #1522). The lever is store order
+ * only: cc1 issues the LAST int store and the LAST float store of a group
+ * first, so the source lists the block zeroing as [1],[2],[3],[0] and the tail
+ * fields with +0x94 / +0xC last to reproduce the ROM's order.
+ * GUARD (task #1522): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003437F0)
+S136OS_SLOT(func_003437F0);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_003437F0, unit objdiff): 78.53%,
    14/42 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu a0, a1, zero').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+   not byte-exact on that arm. */
 void func_003437F0(void *w, GuiPool *pool) {
     /* +0x8C = pool is written UNCONDITIONALLY: the original's `sw $4,0x8C($16)`
        sits in the beqz delay slot, so it runs even on the pool==0 reset path
@@ -8572,11 +8625,13 @@ void func_003437F0(void *w, GuiPool *pool) {
         s32 *blk;
         blk = (s32 *)GuiPlacementNew(0x10, GuiPoolAlloc(pool));
         *(void **)w = blk;
-        blk[0] = 0; blk[1] = 0; blk[2] = 0; blk[3] = 0;
+        /* [1],[2],[3],[0]: cc1 issues a store group's last store first */
+        blk[1] = 0; blk[2] = 0; blk[3] = 0; blk[0] = 0;
     }
     memset((char *)w + 0x28, 0, 0x64);
-    *(s32 *)((char *)w + 0x94) = 0;
-    *(f32 *)((char *)w + 0xC) = 16.0f;
+    /* Source order is not the ROM's store order: cc1 issues the last int store
+       (+0x94) and the last float store (+0xC) of this group first, then the
+       rest in order, which yields the ROM's +0x94, +0xC, +0x10 ... +0x90. */
     *(s32 *)((char *)w + 0x10) = 0;
     *(s32 *)((char *)w + 0x20) = 0;
     *(s32 *)((char *)w + 0x24) = 0;
@@ -8586,6 +8641,8 @@ void func_003437F0(void *w, GuiPool *pool) {
     *(s32 *)((char *)w + 0x18) = 0;
     *(s32 *)((char *)w + 0x1C) = 0;
     *(s32 *)((char *)w + 0x90) = 0;
+    *(f32 *)((char *)w + 0xC) = 16.0f;
+    *(s32 *)((char *)w + 0x94) = 0;
 }
 #endif
 
@@ -8665,6 +8722,12 @@ s32 func_00343F70(void *p) {
  * (func_002AA3F0(0x60241700, 0x55F0C070, ...)). Both are submitted to the GS
  * rect primitive func_00285EF8 clipped to g_screenWidth x g_screenHeight. The
  * D_1AE1Dx/Ex offsets are stored as integers (cvt.s.w) and added as floats. */
+/* task #1522 (s136os arm, verify_match_unit vs ROM; not promoted): #else fixed to
+ * convert the four border edges BEFORE fetching the pulse colour, and re-read
+ * the base record for the inner rect. Residual 58/104: GNU as pads 6 mfc1->cvt.w.s
+ * hazards with a nop the ROM lacks (FACT #8491's mechanism, with a cop1 op as
+ * the follower instead of a GPR reader), and g_screenWidth/Height
+ * read gp-relative where the ROM reads them absolute. MECHANISM WALL. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00343F78);
 #else
@@ -8677,23 +8740,23 @@ extern s32 D_1AE1D0, D_1AE1D4, D_1AE1D8, D_1AE1DC, D_1AE1E0, D_1AE1E4;
 extern void func_00285EF8(s32 x0, s32 y0, s32 x1, s32 y1, s32 sw, s32 sh, u32 color);
 void func_00343F78(void *w) {
     f32 *base = *(f32 **)((char *)w + 0x0);
-    f32 bx = base[0];
-    f32 by = base[1];
-    u32 pulsed;
+    s32 x0, y0, x1, y1;
 
-    /* outer border rect (expanded by D_1AE1E0/E4), pulsing highlight colour */
-    pulsed = func_002AA3F0(0x60241700, 0x55F0C070, 0x14, 0, 0);
-    func_00285EF8((s32)(((f32)D_1AE1D0 + bx) - (f32)D_1AE1E0),
-                  (s32)(((f32)D_1AE1D4 + by) - (f32)D_1AE1E4),
-                  (s32)(((f32)D_1AE1D8 + bx) + (f32)D_1AE1E0),
-                  (s32)(((f32)D_1AE1DC + by) + (f32)D_1AE1E4),
-                  g_screenWidth, g_screenHeight, pulsed);
+    /* outer border rect (expanded by D_1AE1E0/E4), pulsing highlight colour;
+     * the ROM converts the four edges before it asks for the colour */
+    x0 = (s32)(((f32)D_1AE1D0 + base[0]) - (f32)D_1AE1E0);
+    y0 = (s32)(((f32)D_1AE1D4 + base[1]) - (f32)D_1AE1E4);
+    x1 = (s32)(((f32)D_1AE1D8 + base[0]) + (f32)D_1AE1E0);
+    y1 = (s32)(((f32)D_1AE1DC + base[1]) + (f32)D_1AE1E4);
+    func_00285EF8(x0, y0, x1, y1, g_screenWidth, g_screenHeight,
+                  func_002AA3F0(0x60241700, 0x55F0C070, 0x14, 0, 0));
 
-    /* inner fill rect, fixed colour */
-    func_00285EF8((s32)((f32)D_1AE1D0 + bx),
-                  (s32)((f32)D_1AE1D4 + by),
-                  (s32)((f32)D_1AE1D8 + bx),
-                  (s32)((f32)D_1AE1DC + by),
+    /* inner fill rect, fixed colour (the base record is re-read) */
+    base = *(f32 **)((char *)w + 0x0);
+    func_00285EF8((s32)((f32)D_1AE1D0 + base[0]),
+                  (s32)((f32)D_1AE1D4 + base[1]),
+                  (s32)((f32)D_1AE1D8 + base[0]),
+                  (s32)((f32)D_1AE1DC + base[1]),
                   g_screenWidth, g_screenHeight, 0x60241700);
 }
 #endif
@@ -8737,6 +8800,12 @@ S136OS_SLOT(func_00344110);
  * (right-aligned via text flag 2). func_003444D0(w,0), scale the sprite 32x32,
  * then build the sub-widget at +0x2C8 (func_003437F0 + place 0,40 + scale 32),
  * clear +0x360, and run func_003446B8(w,0). */
+/* task #1522 (s136os arm, verify_match_unit vs ROM; not promoted): #else fixed
+ * to re-read the record pointer (+0x2B8) before the second float store and to
+ * zero the block in the ROM's store order. Residual 178/184: the ROM reads
+ * g_guiInstance absolute (`lui $5; lw $5,%lo`) and this unit declares it
+ * gp-relative, so every later word shifts; it needs a per-symbol addressing
+ * device, which task #1520's branch also adds for this symbol. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiTitledSpriteScreenInit);
 #else
@@ -8764,16 +8833,17 @@ void GuiTitledSpriteScreenInit(void *w, GuiPool *pool) {
     if (pool != 0) {
         rec = GuiPlacementNew(0x10, GuiPoolAlloc(pool));
         *(void **)((char *)w + 0x2B8) = rec;
-        *(s32 *)((char *)rec + 0x0) = 0;
+        /* written [1],[2],[3],[0]: cc1 issues the last of a store group
+           first, so this is the spelling that yields the ROM's 0,4,8,C */
         *(s32 *)((char *)rec + 0x4) = 0;
         *(s32 *)((char *)rec + 0x8) = 0;
         *(s32 *)((char *)rec + 0xC) = 0;
+        *(s32 *)((char *)rec + 0x0) = 0;
     }
 
     *(s32 *)((char *)w + 0x2C0) = 1;
-    rec = *(void **)((char *)w + 0x2B8);
-    *(f32 *)((char *)rec + 0x0) = 251.0f;
-    *(f32 *)((char *)rec + 0x4) = 210.0f;
+    (*(f32 **)((char *)w + 0x2B8))[0] = 251.0f;
+    (*(f32 **)((char *)w + 0x2B8))[1] = 210.0f;
 
     GuiElementInit(btn0, (s32)D_1ADBE8, pool);
     GuiElementInit(btn1, (s32)D_1ADBF0, pool);
@@ -8882,35 +8952,56 @@ void func_003444E8(void *w) {
  * copied into +0x120; otherwise the +0x120 field gets the overflow template
  * D_1ADBA8 (localized string 0). Finally positions +0x1B0 at the anchor
  * (*(w+0x2B8)) plus (D_1AE1F0, D_1AE1F4). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344558);
+/* Params: w = the titled-sprite widget. Returns nothing.
+ * MATCHED byte-exact on the s136os arm (task #1522). The #else merged the three
+ * modes into one call through a ternary; the ROM is a three-case switch (cases
+ * 0 and 2 share a tail, case 1 has its own copy), reads the mode after the
+ * SetVisible call, compares strlen unsigned and lays out the overflow branch
+ * first. Same behaviour, different shape.
+ * GUARD (task #1522): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00344558)
+S136OS_SLOT(func_00344558);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_00344558, unit objdiff): 12.55%,
    99/113 insns differ. Residual: UNKNOWN-sd + movn/movz, gp/abs-mixed symbol (first differing insn: 'sd s2, 0x110(sp)' vs 'sd s1, 0x108(sp)').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+   not byte-exact on that arm. */
 extern s32 func_001157AC(const char *s); /* SDK strlen */
 extern u8 D_1AE1F8[], D_1ADBA8[];
 extern f32 D_1AE1F0, D_1AE1F4;
 void func_00344558(void *w) {
     char buf[256];
-    s32 mode = *(s32 *)((char *)w + 0x2C4);
     f32 *anchor;
 
     GuiElementSetVisible((GuiElement *)((char *)w + 0x1B0), 1);
 
-    if (mode == 0 || mode == 1 || mode == 2) {
-        s32 strId = (mode == 0) ? 0x2BE7 : (mode == 1) ? 0x2BE8 : 0x2BEA;
+    switch (*(s32 *)((char *)w + 0x2C4)) {
+    case 0:
         func_00115DA8(buf, (const char *)D_1AE1F8,
-                      (const char *)GetLocalizedString(strId),
+                      (const char *)GetLocalizedString(0x2BE7),
                       (const char *)GetLocalizedString(0x2BEB));
+        break;
+    case 2:
+        func_00115DA8(buf, (const char *)D_1AE1F8,
+                      (const char *)GetLocalizedString(0x2BEA),
+                      (const char *)GetLocalizedString(0x2BEB));
+        break;
+    case 1:
+        func_00115DA8(buf, (const char *)D_1AE1F8,
+                      (const char *)GetLocalizedString(0x2BE8),
+                      (const char *)GetLocalizedString(0x2BEB));
+        break;
     }
 
-    if (func_001157AC(buf) < 0x31) {
-        func_00115AC0((char *)w + 0x120, buf, 0x31);
-    } else {
+    if ((u32)func_001157AC(buf) >= 0x31) {
         func_00115DA8((char *)w + 0x120, (const char *)D_1ADBA8,
                       (const char *)GetLocalizedString(0));
+    } else {
+        func_00115AC0((char *)w + 0x120, buf, 0x31);
     }
 
     anchor = *(f32 **)((char *)w + 0x2B8);
@@ -8927,26 +9018,40 @@ void func_00344558(void *w) {
  * +0x2C8 via func_00343F50 at (D_1AE220, D_1AE224). Then runs the two builders
  * func_00344558(w)/func_003444E8(w) and records func_00343888(sub, flag) at
  * +0x1A0. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003446B8);
+/* Params: w = the titled-sprite widget; flag = forwarded to func_00343888.
+ * Returns nothing.
+ * MATCHED byte-exact on the s136os arm (task #1522). The ROM re-reads the
+ * anchor pointer *(w+0x2B8) before every positioning call; the #else cached it.
+ * GUARD (task #1522): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003446B8)
+S136OS_SLOT(func_003446B8);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_003446B8, unit objdiff): 53.67%,
    73/98 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s0, 0x0(sp)' vs 'sd s1, 0x8(sp)').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+   not byte-exact on that arm. */
 extern void func_00344558(void *w);
 extern s32 func_00343888(void *w, s32 flags);
 extern f32 D_1AE200, D_1AE204, D_1AE208, D_1AE20C, D_1AE210, D_1AE214;
 extern f32 D_1AE218, D_1AE21C, D_1AE220, D_1AE224;
 void func_003446B8(void *w, s32 flag) {
     GuiElement *sub = (GuiElement *)((char *)w + 0x2C8);
-    f32 *src = *(f32 **)((char *)w + 0x2B8);
+    f32 *anchor;
 
-    GuiElementSetPos((GuiElement *)w, D_1AE200 + src[0], D_1AE204 + src[1], 0.0f, 0.0f);
-    GuiElementSetPos((GuiElement *)((char *)w + 0x4C), D_1AE208 + src[0], D_1AE20C + src[1], 0.0f, 0.0f);
-    GuiElementSetPos((GuiElement *)((char *)w + 0x98), D_1AE210 + src[0], D_1AE214 + src[1], 0.0f, 0.0f);
-    GuiElementSetPos((GuiElement *)((char *)w + 0x260), D_1AE218 + src[0], D_1AE21C + src[1], 0.0f, 0.0f);
-    func_00343F50(sub, D_1AE220 + src[0], D_1AE224 + src[1]);
+    anchor = *(f32 **)((char *)w + 0x2B8);
+    GuiElementSetPos((GuiElement *)w, D_1AE200 + anchor[0], D_1AE204 + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x2B8);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x4C), D_1AE208 + anchor[0], D_1AE20C + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x2B8);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x98), D_1AE210 + anchor[0], D_1AE214 + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x2B8);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x260), D_1AE218 + anchor[0], D_1AE21C + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x2B8);
+    func_00343F50(sub, D_1AE220 + anchor[0], D_1AE224 + anchor[1]);
 
     func_00344558(w);
     func_003444E8(w);
@@ -8962,13 +9067,23 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
  * weapon's caption: slot = g_itemEquippedSlot[func_00343AD0(+0x2C8)]; captionId =
  * g_weaponTable[slot*0xE0 + 8]; sets +0x208's text to that localized string and
  * draws +0x208 and +0x260. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344808);
+/* Params: w = the titled-sprite widget. Returns nothing.
+ * MATCHED byte-exact on the s136os arm (task #1522). The ROM calls
+ * func_00343AD0 before it forms the g_itemEquippedSlot address, so the base is
+ * not held across the call; the caption id is the +0x8 field of the weapon
+ * record (GuiWeaponTableEntry.descStringId).
+ * GUARD (task #1522): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00344808)
+S136OS_SLOT(func_00344808);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_00344808, unit objdiff): 78.85%,
    23/50 insns differ. Residual: UNKNOWN-daddu (first differing insn: '' vs 'daddu s2, a0, zero').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+   not byte-exact on that arm. */
 extern void func_00343AF8(void *w);
 void func_00344808(void *w) {
     s32 slot;
@@ -8983,8 +9098,9 @@ void func_00344808(void *w) {
     GuiTextElementDraw((char *)w + 0x1B0);
     func_00343AF8((char *)w + 0x2C8);
 
-    slot = g_itemEquippedSlot[func_00343AD0((char *)w + 0x2C8)];
-    captionId = *(s32 *)(g_weaponTable + slot * 0xE0 + 8);
+    slot = func_00343AD0((char *)w + 0x2C8);
+    slot = g_itemEquippedSlot[slot];
+    captionId = ((GuiWeaponTableEntry *)g_weaponTable)[slot].descStringId;
     GuiElementSetText((GuiElement *)((char *)w + 0x208), GetLocalizedString(captionId));
 
     GuiTextElementDraw((char *)w + 0x208);
@@ -9044,7 +9160,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiInfoPanelScr
    281/369 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x90' vs 'addiu sp, sp, -0x80').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
-void func_003453D0(void *w, void *arg1);
+s32 func_003453D0(void *w, s32 inputMask);
 extern char *g_guiInstance;
 extern u8 D_1ADBE8[], D_1ADBF0[], D_1ADBF8[], D_1ADC00[], D_1ADF98[], D_1ADFA0[];
 extern u8 D_1ADEE8[], D_1ADEF0[], D_1ADEF8[], D_1ADD38[], D_1AE228[], D_1ADD30[];
@@ -9153,6 +9269,10 @@ void GuiInfoPanelScreenInit(void *w, GuiPool *pool) {
  * reaching 2 wrap to 0 + page 1 + column 0. Each plays move sound 3. Finally looks
  * up the selected row in the 0xA-byte-stride table D_1AA830 and records its +6
  * halfword field at +0x4B4. */
+/* task #1522 (s136os arm, verify_match_unit vs ROM; not promoted): #else fixed: on
+ * Up the ROM decrements +0x4AC BEFORE PlayGlobalSound (the store sits in the jal
+ * delay slot) and the mask is an s32 parameter. Residual 8/68: the final table
+ * read allocates idx/10 to $v1/$a0 where the ROM uses $a0/$v1. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344E08);
 #else
@@ -9161,10 +9281,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344E08);
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
 extern u8 D_1AA830[];
-void func_00344E08(void *w, void *a) {
-    s32 flags = (s32)a;
-    s32 idx;
-
+void func_00344E08(void *w, s32 flags) {
     if (flags & 0x1000) {
         PlayGlobalSound(3, 0, 0);
         *(s32 *)((char *)w + 0x4B0) = 1;
@@ -9174,8 +9291,8 @@ void func_00344E08(void *w, void *a) {
         *(s32 *)((char *)w + 0x4B0) = 0;
         *(s32 *)((char *)w + 0x4B8) = 2;
     } else if (flags & 0x8000) {
-        PlayGlobalSound(3, 0, 0);
         *(s32 *)((char *)w + 0x4AC) = *(s32 *)((char *)w + 0x4AC) - 1;
+        PlayGlobalSound(3, 0, 0);
         if (*(s32 *)((char *)w + 0x4AC) < 0) {
             *(s32 *)((char *)w + 0x4AC) = 0;
             *(s32 *)((char *)w + 0x4B8) = 1;
@@ -9190,8 +9307,7 @@ void func_00344E08(void *w, void *a) {
         }
     }
 
-    idx = *(s32 *)((char *)w + 0x4AC);
-    *(s32 *)((char *)w + 0x4B4) = *(s16 *)(D_1AA830 + idx * 0xA + 6);
+    *(s32 *)((char *)w + 0x4B4) = ((GuiWeaponSlotEntry *)D_1AA830)[*(s32 *)((char *)w + 0x4AC)].weaponId;
 }
 #endif
 
@@ -9201,6 +9317,10 @@ void func_00344E08(void *w, void *a) {
  * plays sound 3. The shared wrap exits carry path-specific constants (inlined
  * here). Finally records the (row + col*4)'th 0xA-stride entry's +6 halfword from
  * D_25E308 at +0x4B4. */
+/* task #1522 (s136os arm, verify_match_unit vs ROM; not promoted): #else respelled
+ * with the mask as an s32 parameter and the column/row updates as direct field
+ * expressions (a `col` local landed in $a1). Residual 9/90: the final table read's
+ * register assignment. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344F18);
 #else
@@ -9209,20 +9329,15 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00344F18);
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
 extern u8 D_25E308[];
-void func_00344F18(void *w, void *a) {
-    s32 flags = (s32)a;
-    s32 col, row, idx;
-
+void func_00344F18(void *w, s32 flags) {
     if (flags & 0x1000) {            /* LEFT: col-- */
         PlayGlobalSound(3, 0, 0);
-        col = *(s32 *)((char *)w + 0x4B0) - 1;
-        *(s32 *)((char *)w + 0x4B0) = col;
-        if (col < 0) {
-            row = *(s32 *)((char *)w + 0x4AC);
-            if (row < 2) {
+        *(s32 *)((char *)w + 0x4B0) = *(s32 *)((char *)w + 0x4B0) - 1;
+        if (*(s32 *)((char *)w + 0x4B0) < 0) {
+            if (*(s32 *)((char *)w + 0x4AC) < 2) {
                 *(s32 *)((char *)w + 0x4B0) = 0;
                 *(s32 *)((char *)w + 0x4B8) = 0;
-            } else if (row == 2) {
+            } else if (*(s32 *)((char *)w + 0x4AC) == 2) {
                 *(s32 *)((char *)w + 0x4B0) = 1;
             } else {
                 *(s32 *)((char *)w + 0x4B0) = 0;
@@ -9232,14 +9347,12 @@ void func_00344F18(void *w, void *a) {
         }
     } else if (flags & 0x4000) {     /* RIGHT: col++ */
         PlayGlobalSound(3, 0, 0);
-        col = *(s32 *)((char *)w + 0x4B0) + 1;
-        *(s32 *)((char *)w + 0x4B0) = col;
-        if (col >= 2) {
-            row = *(s32 *)((char *)w + 0x4AC);
-            if (row < 2) {
+        *(s32 *)((char *)w + 0x4B0) = *(s32 *)((char *)w + 0x4B0) + 1;
+        if (*(s32 *)((char *)w + 0x4B0) >= 2) {
+            if (*(s32 *)((char *)w + 0x4AC) < 2) {
                 *(s32 *)((char *)w + 0x4B0) = 0;
                 *(s32 *)((char *)w + 0x4B8) = 0;
-            } else if (row == 2) {
+            } else if (*(s32 *)((char *)w + 0x4AC) == 2) {
                 *(s32 *)((char *)w + 0x4B0) = 0;
             } else {
                 *(s32 *)((char *)w + 0x4B0) = 0;
@@ -9249,26 +9362,21 @@ void func_00344F18(void *w, void *a) {
         }
     } else if (flags & 0x8000) {     /* UP: row-- */
         PlayGlobalSound(3, 0, 0);
-        row = *(s32 *)((char *)w + 0x4AC) - 1;
-        *(s32 *)((char *)w + 0x4AC) = row;
-        if (row < 0) {
+        *(s32 *)((char *)w + 0x4AC) = *(s32 *)((char *)w + 0x4AC) - 1;
+        if (*(s32 *)((char *)w + 0x4AC) < 0) {
             *(s32 *)((char *)w + 0x4AC) = 3;
         }
     } else if (flags & 0x2000) {     /* DOWN: row++ */
         PlayGlobalSound(3, 0, 0);
-        row = *(s32 *)((char *)w + 0x4AC) + 1;
-        *(s32 *)((char *)w + 0x4AC) = row;
-        if (row >= 4) {
+        *(s32 *)((char *)w + 0x4AC) = *(s32 *)((char *)w + 0x4AC) + 1;
+        if (*(s32 *)((char *)w + 0x4AC) >= 4) {
             *(s32 *)((char *)w + 0x4AC) = 0;
             *(s32 *)((char *)w + 0x4B8) = 3;
             *(s32 *)((char *)w + 0x4B0) = 0;
         }
     }
-
-    col = *(s32 *)((char *)w + 0x4B0);
-    row = *(s32 *)((char *)w + 0x4AC);
-    idx = row + col * 4;
-    *(s32 *)((char *)w + 0x4B4) = *(s16 *)(D_25E308 + idx * 0xA + 6);
+    *(s32 *)((char *)w + 0x4B4) =
+        ((GuiWeaponSlotEntry *)D_25E308)[*(s32 *)((char *)w + 0x4AC) + *(s32 *)((char *)w + 0x4B0) * 4].weaponId;
 }
 #endif
 
@@ -9278,6 +9386,10 @@ void func_00344F18(void *w, void *a) {
  * flat index row + col*2 directly at +0x4B4 (no table). Note the LEFT/col==0/row>=2
  * path faithfully leaves +0x4B0 at -1 (the original reuses the just-stored col-1
  * for the index rather than re-clamping). */
+/* task #1522 (s136os arm, verify_match_unit vs ROM; not promoted): mask taken as an
+ * s32 parameter. Residual 48/78: the RIGHT-wrap compare is emitted as
+ * `slti/movz` where the ROM has `li 1; slt; movn`; no spelling tried (> 1,
+ * >= 2, 1 <) changes it. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00345080);
 #else
@@ -9285,51 +9397,42 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00345080);
    54/91 insns differ. Residual: UNKNOWN-sd + movn/movz (first differing insn: 'sd ra, 0x8(sp)' vs '').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
-void func_00345080(void *w, void *a) {
-    s32 flags = (s32)a;
-    s32 col, row;
-
+void func_00345080(void *w, s32 flags) {
     if (flags & 0x1000) {            /* LEFT: col-- */
         PlayGlobalSound(3, 0, 0);
-        col = *(s32 *)((char *)w + 0x4B0) - 1;
-        *(s32 *)((char *)w + 0x4B0) = col;
-        if (col < 0) {               /* col was 0 */
-            row = *(s32 *)((char *)w + 0x4AC);
-            if (row == 0) {
+        *(s32 *)((char *)w + 0x4B0) = *(s32 *)((char *)w + 0x4B0) - 1;
+        if (*(s32 *)((char *)w + 0x4B0) < 0) {               /* col was 0 */
+            if (*(s32 *)((char *)w + 0x4AC) == 0) {
                 *(s32 *)((char *)w + 0x4B8) = 2;
                 *(s32 *)((char *)w + 0x4B0) = 1;
                 *(s32 *)((char *)w + 0x4AC) = 3;
-            } else if (row == 1) {
+            } else if (*(s32 *)((char *)w + 0x4AC) == 1) {
                 *(s32 *)((char *)w + 0x4B0) = 1;
             }
             /* row >= 2: +0x4B0 stays -1 (faithful reused-col exit) */
         }
     } else if (flags & 0x4000) {     /* RIGHT: col++ wrap 0<->1 */
+        s32 col;
         PlayGlobalSound(3, 0, 0);
         col = *(s32 *)((char *)w + 0x4B0) + 1;
         if (col > 1) col = 0;
         *(s32 *)((char *)w + 0x4B0) = col;
     } else if (flags & 0x8000) {     /* UP: row-- */
         PlayGlobalSound(3, 0, 0);
-        row = *(s32 *)((char *)w + 0x4AC) - 1;
-        *(s32 *)((char *)w + 0x4AC) = row;
-        if (row < 0) {
+        *(s32 *)((char *)w + 0x4AC) = *(s32 *)((char *)w + 0x4AC) - 1;
+        if (*(s32 *)((char *)w + 0x4AC) < 0) {
             *(s32 *)((char *)w + 0x4AC) = 3;
             *(s32 *)((char *)w + 0x4B0) = 1;
             *(s32 *)((char *)w + 0x4B8) = 2;
         }
     } else if (flags & 0x2000) {     /* DOWN: row++ wrap at 2 */
         PlayGlobalSound(3, 0, 0);
-        row = *(s32 *)((char *)w + 0x4AC) + 1;
-        *(s32 *)((char *)w + 0x4AC) = row;
-        if (row >= 2) {
+        *(s32 *)((char *)w + 0x4AC) = *(s32 *)((char *)w + 0x4AC) + 1;
+        if (*(s32 *)((char *)w + 0x4AC) >= 2) {
             *(s32 *)((char *)w + 0x4AC) = 0;
         }
     }
-
-    col = *(s32 *)((char *)w + 0x4B0);
-    row = *(s32 *)((char *)w + 0x4AC);
-    *(s32 *)((char *)w + 0x4B4) = row + col * 2;
+    *(s32 *)((char *)w + 0x4B4) = *(s32 *)((char *)w + 0x4AC) + *(s32 *)((char *)w + 0x4B0) * 2;
 }
 #endif
 
@@ -9338,16 +9441,35 @@ void func_00345080(void *w, void *a) {
  * left (0x1000) -> page +0x4B8=2, col +0x4B0=1, row +0x4AC=3; right (0x4000) ->
  * page 2, row 3, col 0; up (0x8000) -> page 0, row 1, col 0; down (0x2000) ->
  * col 0, page 3, row 0. Records the fixed table halfword D_1AA856 at +0x4B4. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003451B8);
+/* Params: w = the weapon-select screen; flags = the D-pad input mask.
+ * Returns nothing.
+ * MATCHED byte-exact on the s136os arm (task #1522). The mask is an s32
+ * parameter (the #else took a void * and cast it, which costs a register
+ * copy), and D_1AA856 is read through the D_1AA856Split addressing device
+ * (RULING #8620) because the ROM splits its lui/lh across registers.
+ * GUARD (task #1522): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003451B8)
+S136OS_SLOT(func_003451B8);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_003451B8, unit objdiff): 81.20%,
    27/60 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd ra, 0x8(sp)' vs 'daddu s0, a0, zero').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+   not byte-exact on that arm. */
 extern s16 D_1AA856;
-void func_003451B8(void *w, void *a) {
-    s32 flags = (s32)a;
+/* D_1AA856Split: the ROM reads D_1AA856 with a cc1-split `lui $2` /
+ * `lh $3,%lo($2)` pair (different registers, so not the assembler's macro).
+ * ADDRESSING-MODEL DEVICE (RULING #8620): moves no data, emits nothing; the
+ * relocations name D_1AA856. */
+#ifndef TARGET_NATIVE
+extern s16 D_1AA856Split __asm__("D_1AA856") __attribute__((section(".data")));
+#else
+#define D_1AA856Split D_1AA856
+#endif
+void func_003451B8(void *w, s32 flags) {
 
     if (flags & 0x1000) {
         PlayGlobalSound(3, 0, 0);
@@ -9371,7 +9493,7 @@ void func_003451B8(void *w, void *a) {
         *(s32 *)((char *)w + 0x4AC) = 0;
     }
 
-    *(s32 *)((char *)w + 0x4B4) = D_1AA856;
+    *(s32 *)((char *)w + 0x4B4) = D_1AA856Split;
 }
 #endif
 
@@ -9385,6 +9507,11 @@ void func_003451B8(void *w, void *a) {
  *   otherwise, or unowned: 0.
  * The owned-variant lookup mirrors func_003453D0:
  * g_weaponTable[g_itemEquippedSlot[id]*0xE0 + 0x42] (signed 16-bit). */
+/* task #1522 (s136os arm, verify_match_unit vs ROM; not promoted): #else rewritten as
+ * the ROM's 4-case switch with the D_1AE238 table copied to the stack (a local
+ * initialised array). Built length now equals the ROM's 78 words (was 64);
+ * residual 52/78: cross-jumping keeps case 2's copy of the shared generic lookup
+ * where the ROM keeps case 0's. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00345298);
 #else
@@ -9394,34 +9521,34 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00345298);
    not byte-exact, so the arm stays #else. */
 extern s32 D_1AE238[];
 s32 func_00345298(void *w) {
-    s32 mode = *(s32 *)((char *)w + 0x4B8);
+    GuiStringIdTable table = *(GuiStringIdTable *)D_1AE238;
     s32 id;
 
-    if (mode == 1) {
+    switch (*(s32 *)((char *)w + 0x4B8)) {
+    case 0:
+        id = *(s32 *)((char *)w + 0x4B4);
+        if (g_inventoryOwned[id] == 0) {
+            return 0;
+        }
+        return ((GuiWeaponTableEntry *)g_weaponTable)[g_itemEquippedSlot[id]].stat42;
+    case 1:
         if (g_inventoryOwned[6] == 0) {
             return 0;
         }
-        return *(s16 *)&g_weaponTable[g_itemEquippedSlot[6] * 0xE0 + 0x42];
-    }
-    if (mode == 3) {
-        return D_1AE238[*(s32 *)((char *)w + 0x4B4)];
-    }
-    if (mode == 0) {
-        id = *(s32 *)((char *)w + 0x4B4);
-    } else if (mode == 2) {
+        return ((GuiWeaponTableEntry *)g_weaponTable)[g_itemEquippedSlot[6]].stat42;
+    case 2:
         id = *(s32 *)((char *)w + 0x4B4);
         if (id == 7 && g_inventoryOwned[0x31] != 0 && g_inventoryOwned[7] == 0) {
-            return *(s16 *)&g_weaponTable[g_itemEquippedSlot[0x31] * 0xE0 + 0x42];
+            return ((GuiWeaponTableEntry *)g_weaponTable)[g_itemEquippedSlot[0x31]].stat42;
         }
-    } else {
-        return 0;   /* mode < 0 or mode >= 4 */
+        if (g_inventoryOwned[id] == 0) {
+            return 0;
+        }
+        return ((GuiWeaponTableEntry *)g_weaponTable)[g_itemEquippedSlot[id]].stat42;
+    case 3:
+        return table.id[*(s32 *)((char *)w + 0x4B4)];
     }
-
-    /* generic owned-variant lookup on the selected id */
-    if (g_inventoryOwned[id] == 0) {
-        return 0;
-    }
-    return *(s16 *)&g_weaponTable[g_itemEquippedSlot[id] * 0xE0 + 0x42];
+    return 0;
 }
 #endif
 
@@ -9432,6 +9559,14 @@ s32 func_00345298(void *w) {
  * nameStringId (g_inventoryOwned -> g_weaponTable[g_itemEquippedSlot]+0x6). Lay out
  * the nine panel sub-elements at the anchor (*(w+0x4A0)) + their D_1AE2xx offsets,
  * pulse + colour the caption sprite (+0x17C), and draw the panel tail. */
+/* task #1522 (s136os arm, verify_match_unit vs ROM; not promoted): BODY DEFECTS
+ * fixed: the #else positioned +0x17C twice and never +0x130 (the ROM sets +0x220,
+ * +0x130, +0x17C from D_1AE290/294), and returned void where the ROM returns 0.
+ * Also: switch dispatch, D_1AE248 / D_1AE280 copied to the stack, s32 mask, and the
+ * owned-weapon id read as GuiWeaponTableEntry.nameStringId. Residual: cc1 hoists
+ * `li $a0,6` out of SetWeaponUpgradeSlot's delay slot (245 vs 244 words, 238
+ * differ after the shift); with a g_equippedArmor .data-section device the length
+ * matches and 12/244 differ, but cc1 then hoists the split `lui` to the entry. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003453D0);
 #else
@@ -9439,55 +9574,62 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003453D0);
    201/277 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x40' vs 'addiu sp, sp, -0x20').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
-void func_003453D0(void *w, void *arg1) {
-    s32 mode, result, idx;
-    f32 *anchor;
+s32 func_003453D0(void *w, s32 inputMask) {
+    s32 result, idx;
 
     *(s32 *)((char *)w + 0x4B4) = 0;
     D_1ADAF0 = -1;
     SetWeaponUpgradeSlot(6, g_equippedArmor);
 
-    mode = *(s32 *)((char *)w + 0x4B8);
-    if (mode == 1)      func_003451B8(w, arg1);
-    else if (mode == 0) func_00344E08(w, arg1);
-    else if (mode == 2) func_00344F18(w, arg1);
-    else if (mode == 3) func_00345080(w, arg1);
+    switch (*(s32 *)((char *)w + 0x4B8)) {
+    case 0: func_00344E08(w, inputMask); break;
+    case 1: func_003451B8(w, inputMask); break;
+    case 2: func_00344F18(w, inputMask); break;
+    case 3: func_00345080(w, inputMask); break;
+    }
     result = *(s32 *)((char *)w + 0x4B8);
 
-    if (result != 3) {
+    if (result == 3) {
+        GuiStringIdTable table = *(GuiStringIdTable *)D_1AE248;
+        D_1ADAF0 = table.id[*(s32 *)((char *)w + 0x4B4)];
+    } else {
         idx = *(s32 *)((char *)w + 0x4B4);
         if (g_inventoryOwned[idx] != 0) {
-            D_1ADAF0 = *(s16 *)&g_weaponTable[g_itemEquippedSlot[idx] * 0xE0 + 0x6];
+            D_1ADAF0 = ((GuiWeaponTableEntry *)g_weaponTable)[g_itemEquippedSlot[idx]].nameStringId;
         }
-    } else {
-        D_1ADAF0 = D_1AE248[*(s32 *)((char *)w + 0x4B4)];
     }
 
-    anchor = *(f32 **)((char *)w + 0x4A0);
-    GuiElementSetPos((GuiElement *)w, D_1AE258 + anchor[0], D_1AE25C + anchor[1], 0.0f, 0.0f);
-    anchor = *(f32 **)((char *)w + 0x4A0);
-    GuiElementSetPos((GuiElement *)((char *)w + 0x4C), D_1AE278 + anchor[0], D_1AE27C + anchor[1], 0.0f, 0.0f);
-    anchor = *(f32 **)((char *)w + 0x4A0);
-    GuiElementSetPos((GuiElement *)((char *)w + 0x98), D_1AE260 + anchor[0], D_1AE264 + anchor[1], 0.0f, 0.0f);
-    anchor = *(f32 **)((char *)w + 0x4A0);
-    GuiElementSetPos((GuiElement *)((char *)w + 0xE4), D_1AE268 + anchor[0], D_1AE26C + anchor[1], 0.0f, 0.0f);
-    anchor = *(f32 **)((char *)w + 0x4A0);
-    GuiElementSetPos((GuiElement *)((char *)w + 0x130), D_1AE270 + anchor[0], D_1AE274 + anchor[1], 0.0f, 0.0f);
-    anchor = *(f32 **)((char *)w + 0x4A0);
-    GuiElementSetPos((GuiElement *)((char *)w + 0x1C8), D_1AE280[0] + anchor[0], D_1AE280[1] + anchor[1], 0.0f, 0.0f);
-    anchor = *(f32 **)((char *)w + 0x4A0);
-    GuiElementSetPos((GuiElement *)((char *)w + 0x2B8), D_1AE288 + anchor[0], D_1AE28C + anchor[1], 0.0f, 0.0f);
-    anchor = *(f32 **)((char *)w + 0x4A0);
-    GuiElementSetPos((GuiElement *)((char *)w + 0x220), D_1AE290 + anchor[0], D_1AE294 + anchor[1], 0.0f, 0.0f);
-    anchor = *(f32 **)((char *)w + 0x4A0);
-    GuiElementSetPos((GuiElement *)((char *)w + 0x17C), D_1AE290 + anchor[0], D_1AE294 + anchor[1], 0.0f, 0.0f);
+    {
+    GuiOffsetPair textOffset = *(GuiOffsetPair *)D_1AE280;
+    { f32 *anchor = *(f32 **)((char *)w + 0x4A0);
+      GuiElementSetPos((GuiElement *)w, D_1AE258 + anchor[0], D_1AE25C + anchor[1], 0.0f, 0.0f); }
+    { f32 *anchor = *(f32 **)((char *)w + 0x4A0);
+      GuiElementSetPos((GuiElement *)((char *)w + 0x4C), D_1AE278 + anchor[0], D_1AE27C + anchor[1], 0.0f, 0.0f); }
+    { f32 *anchor = *(f32 **)((char *)w + 0x4A0);
+      GuiElementSetPos((GuiElement *)((char *)w + 0x98), D_1AE260 + anchor[0], D_1AE264 + anchor[1], 0.0f, 0.0f); }
+    { f32 *anchor = *(f32 **)((char *)w + 0x4A0);
+      GuiElementSetPos((GuiElement *)((char *)w + 0xE4), D_1AE268 + anchor[0], D_1AE26C + anchor[1], 0.0f, 0.0f); }
+    { f32 *anchor = *(f32 **)((char *)w + 0x4A0);
+      GuiElementSetPos((GuiElement *)((char *)w + 0x130), D_1AE270 + anchor[0], D_1AE274 + anchor[1], 0.0f, 0.0f); }
+    { f32 *anchor = *(f32 **)((char *)w + 0x4A0);
+      GuiElementSetPos((GuiElement *)((char *)w + 0x1C8), textOffset.x + anchor[0], textOffset.y + anchor[1], 0.0f, 0.0f); }
+    { f32 *anchor = *(f32 **)((char *)w + 0x4A0);
+      GuiElementSetPos((GuiElement *)((char *)w + 0x2B8), D_1AE288 + anchor[0], D_1AE28C + anchor[1], 0.0f, 0.0f); }
+    { f32 *anchor = *(f32 **)((char *)w + 0x4A0);
+      GuiElementSetPos((GuiElement *)((char *)w + 0x220), D_1AE290 + anchor[0], D_1AE294 + anchor[1], 0.0f, 0.0f); }
+    { f32 *anchor = *(f32 **)((char *)w + 0x4A0);
+      GuiElementSetPos((GuiElement *)((char *)w + 0x130), D_1AE290 + anchor[0], D_1AE294 + anchor[1], 0.0f, 0.0f); }
+    { f32 *anchor = *(f32 **)((char *)w + 0x4A0);
+      GuiElementSetPos((GuiElement *)((char *)w + 0x17C), D_1AE290 + anchor[0], D_1AE294 + anchor[1], 0.0f, 0.0f); }
 
-    if (g_padButtonsPressed & 0xF000) {
+    if (g_padButtonsPressedSplit & 0xF000) {
         func_002AA3F0(0, 0, 1, 0, 1);
     }
     *GuiElementGetColor((GuiElement *)((char *)w + 0x17C)) =
         func_002AA3F0(0x60442D00, 0x70FFFEED, 0x14, 0, 0);
+    }
     func_003457A0(w);
+    return 0;
 }
 #endif
 
@@ -9495,21 +9637,33 @@ void func_003453D0(void *w, void *arg1) {
  * data-driven offsets from the shared anchor record *(w+0x4A0): +0x368 at
  * (D_1AE298, D_1AE29C), +0x3C0 at (D_1AE2A0, D_1AE2A4), +0x418 at
  * (D_1AE2A8, D_1AE2AC), and +0x310 at (D_1AE2B0, D_1AE2B4). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003457A0);
+/* Params: w = the weapon-select screen. Returns nothing.
+ * MATCHED byte-exact on the s136os arm (task #1522). The ROM re-reads the
+ * anchor pointer *(w+0x4A0) before every positioning call; the #else cached it.
+ * GUARD (task #1522): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003457A0)
+S136OS_SLOT(func_003457A0);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_003457A0, unit objdiff): 54.53%,
    49/70 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s0, 0x0(sp)' vs 'sd s1, 0x8(sp)').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+   not byte-exact on that arm. */
 extern f32 D_1AE298, D_1AE29C, D_1AE2A0, D_1AE2A4;
 extern f32 D_1AE2A8, D_1AE2AC, D_1AE2B0, D_1AE2B4;
 void func_003457A0(void *w) {
-    f32 *anchor = *(f32 **)((char *)w + 0x4A0);
+    f32 *anchor;
 
+    anchor = *(f32 **)((char *)w + 0x4A0);
     GuiElementSetPos((GuiElement *)((char *)w + 0x368), D_1AE298 + anchor[0], D_1AE29C + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x4A0);
     GuiElementSetPos((GuiElement *)((char *)w + 0x3C0), D_1AE2A0 + anchor[0], D_1AE2A4 + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x4A0);
     GuiElementSetPos((GuiElement *)((char *)w + 0x418), D_1AE2A8 + anchor[0], D_1AE2AC + anchor[1], 0.0f, 0.0f);
+    anchor = *(f32 **)((char *)w + 0x4A0);
     GuiElementSetPos((GuiElement *)((char *)w + 0x310), D_1AE2B0 + anchor[0], D_1AE2B4 + anchor[1], 0.0f, 0.0f);
 }
 #endif
@@ -9567,31 +9721,43 @@ extern s32 D_1AE320, D_1AE324; extern u8 D_1AE328[8], D_1AE330[8], D_1AE338[8], 
 extern s32 D_1AE350, D_1AE354; extern u8 D_1AE358[8], D_1AE360[8], D_1AE368[8], D_1AE370[8], D_1AE378[8];
 extern s32 D_1AE380, D_1AE384; extern u8 D_1AE388[8], D_1AE390[8], D_1AE398[8], D_1AE3A0[8], D_1AE3A8[8];
 
+/* Shared descriptor builder (the four siblings are one shape; see doc above).
+ * task #1522: native-only, so on EE the four builders' #else bodies call an
+ * undefined GuiBuildScreenDesc (an s136os compile emits a jal to it;
+ * verify_match_unit: UNVERIFIABLE, no address). Promoting a builder needs this
+ * helper visible on EE (measured as a static inline there: 34-35/60 words differ
+ * per builder, register allocation and the schedule it drives) AND a home for
+ * func_003380B8, which landing_gate's ORPHAN_LATENT set otherwise gains. The
+ * store order below is the ROM's. */
 #ifdef TARGET_NATIVE
-/* Shared descriptor builder (the four siblings are one shape; see doc above). */
 static void GuiBuildScreenDesc(u8 *obj, void *label, s32 cfg0, s32 cfg1,
                                void *l0, void *l1, void *l2, void *l3, void *l4,
                                s32 typeIndex) {
     GuiScreenDesc d;
-    d.label = label;
+    /* Field order is the ROM's store order (task #1522), not offset order. */
+    d.objCfg4B4 = *(s32 *)(obj + 0x4B4);
     d.cfg0 = cfg0;
-    d.cfg1 = cfg1;
+    d.objCfg4A0 = *(s32 *)(obj + 0x4A0);
+    d.layout0 = l0;
+    d.enable = 1;
+    d.typeActive = (*(s32 *)(obj + 0x4B8) == typeIndex);
     d.objCfg4AC = *(s32 *)(obj + 0x4AC);
     d.objCfg4B0 = *(s32 *)(obj + 0x4B0);
-    d.layout0 = l0; d.layout1 = l1; d.layout2 = l2; d.layout3 = l3; d.layout4 = l4;
-    d.child130 = obj + 0x130;
-    d._z2C = 0;
-    d.child17C = obj + 0x17C;
-    d._z34 = 0;
-    d._z38 = 0;
-    d.child278 = obj + 0x278;
-    d._z40 = 0;
+    d.layout4 = l4;
+    d.cfg1 = cfg1;
+    d.label = label;
     d.child220 = obj + 0x220;
-    d.objCfg4A0 = *(s32 *)(obj + 0x4A0);
-    d.objCfg4B4 = *(s32 *)(obj + 0x4B4);
+    d.child130 = obj + 0x130;
+    d.child17C = obj + 0x17C;
+    d.child278 = obj + 0x278;
+    d.layout3 = l3;
+    d.layout2 = l2;
+    d.layout1 = l1;
+    d._z40 = 0;
+    d._z38 = 0;
+    d._z2C = 0;
+    d._z34 = 0;
     d._z50 = 0;
-    d.typeActive = (*(s32 *)(obj + 0x4B8) == typeIndex);
-    d.enable = 1;
     func_003380B8(&d);
 }
 #endif
@@ -9742,7 +9908,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiMapScreenIni
    225/349 insns differ. Residual: UNKNOWN-sd + gp/abs-mixed symbol (first differing insn: 'sd s7, 0x68(sp)' vs 'sd s2, 0x40(sp)').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
-void GuiMapScreenTick(void *w, s32 mode, s32 *out);
+s32 GuiMapScreenTick(void *w, s32 mode, s32 *out);
 extern char *g_guiInstance;
 extern u8 D_1ADBE8[], D_1ADBF0[], D_1ADBF8[], D_1ADC00[], D_1ADF98[], D_1ADFA0[];
 extern u8 D_1ADD40[], D_1ADD38[], D_1AE3B0[], D_1AE3C0[], D_1AE3D0[], D_1ADD30[];
@@ -10095,35 +10261,50 @@ void func_00346CD8(void *w, s32 flags) {
  * *(w+0x470) plus their fixed (x,y) offset pairs (D_1AE3D8.. and the stack-copied
  * D_1AE280 for the +0x1C8 element). Mirrors the weapon-screen builder
  * func_003453D0. Returns nothing (the register-0 return is discarded). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiMapScreenTick);
+/* Params: w = the map screen; mode = forwarded to the sub-builder; out =
+ * receives the state latched from +0x508. Returns 0 (the ROM sets $v0 = 0).
+ * MATCHED byte-exact on the s136os arm (task #1522). Body defects in the #else:
+ * it returned void where the ROM returns 0, and it read D_1AE280 directly where
+ * the ROM copies the offset pair onto the stack first. Phrasing: the ROM
+ * rewrites *out with the switch value inside each case, lays the cases out as
+ * 0, 3, 1, and reads the pad mask through g_padButtonsPressedSplit (RULING
+ * #8620).
+ * GUARD (task #1522): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiMapScreenTick)
+S136OS_SLOT(GuiMapScreenTick);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_GuiMapScreenTick, unit objdiff): 59.50%,
    166/241 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x40' vs 'addiu sp, sp, -0x20').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+   not byte-exact on that arm. */
 extern void func_00346878(void *w, s32 flags);   /* mode-0 sub-builder */
 extern void func_00346AF8(void *w, s32 flags);   /* mode-3 sub-builder */
 extern f32 D_1AE3D8, D_1AE3DC, D_1AE3E0, D_1AE3E4, D_1AE3E8, D_1AE3EC;
 extern f32 D_1AE3F0, D_1AE3F4, D_1AE3F8, D_1AE3FC;
 extern f32 D_1AE400, D_1AE404, D_1AE408, D_1AE40C, D_1AE410, D_1AE414;
 extern f32 D_1AE418, D_1AE41C, D_1AE420, D_1AE424;
-void GuiMapScreenTick(void *w, s32 mode, s32 *out) {
-    s32 state = *(s32 *)((char *)w + 0x508);
+s32 GuiMapScreenTick(void *w, s32 mode, s32 *out) {
+    s32 state;
     f32 *anchor;
+    GuiOffsetPair textOffset;
 
-    *out = state;
+    *out = *(s32 *)((char *)w + 0x508);
     *(s32 *)((char *)w + 0x504) = 0;
+    state = *(s32 *)((char *)w + 0x508);
     D_1ADAF0 = -1;
+    textOffset = *(GuiOffsetPair *)D_1AE280;
 
     switch (state) {
-        case 0: func_00346878(w, mode); break;
-        case 1: func_00346CD8(w, mode); break;
-        case 3: func_00346AF8(w, mode); break;
-        default: break;
+        case 0: *out = state; func_00346878(w, mode); break;
+        case 3: *out = state; func_00346AF8(w, mode); break;
+        case 1: *out = state; func_00346CD8(w, mode); break;
     }
 
-    if (g_padButtonsPressed & 0xF000) {
+    if (g_padButtonsPressedSplit & 0xF000) {
         func_002AA3F0(0, 0, 1, 0, 1);
     }
     *GuiElementGetColor((GuiElement *)((char *)w + 0x17C)) =
@@ -10140,7 +10321,7 @@ void GuiMapScreenTick(void *w, s32 mode, s32 *out) {
     anchor = *(f32 **)((char *)w + 0x470);
     GuiElementSetPos((GuiElement *)((char *)w + 0x130), D_1AE3F0 + anchor[0], D_1AE3F4 + anchor[1], 0.0f, 0.0f);
     anchor = *(f32 **)((char *)w + 0x470);
-    GuiElementSetPos((GuiElement *)((char *)w + 0x1C8), D_1AE280[0] + anchor[0], D_1AE280[1] + anchor[1], 0.0f, 0.0f);
+    GuiElementSetPos((GuiElement *)((char *)w + 0x1C8), textOffset.x + anchor[0], textOffset.y + anchor[1], 0.0f, 0.0f);
     anchor = *(f32 **)((char *)w + 0x470);
     GuiElementSetPos((GuiElement *)((char *)w + 0x310), D_1AE408 + anchor[0], D_1AE40C + anchor[1], 0.0f, 0.0f);
     anchor = *(f32 **)((char *)w + 0x470);
@@ -10151,6 +10332,7 @@ void GuiMapScreenTick(void *w, s32 mode, s32 *out) {
     GuiElementSetPos((GuiElement *)((char *)w + 0x3C0), D_1AE418 + anchor[0], D_1AE41C + anchor[1], 0.0f, 0.0f);
     anchor = *(f32 **)((char *)w + 0x470);
     GuiElementSetPos((GuiElement *)((char *)w + 0x418), D_1AE420 + anchor[0], D_1AE424 + anchor[1], 0.0f, 0.0f);
+    return 0;
 }
 #endif
 
@@ -10261,30 +10443,39 @@ extern u8 D_1AA7F8[], D_1AA8B8[];
 extern s32 D_1AE458, D_1AE45C; extern u8 D_1AE460[8], D_1AE468[8], D_1AE470[8], D_1AE478[8], D_1AE480[8];
 extern s32 D_1AE488, D_1AE48C; extern u8 D_1AE490[8], D_1AE498[8], D_1AE4A0[8], D_1AE4A8[8], D_1AE4B0[8];
 
+/* task #1522: same as GuiBuildScreenDesc above: native-only, so on EE
+ * func_00347348/450's #else bodies call an undefined symbol. With it visible as a
+ * static inline on EE they measured 41/66 and 37/64 words differ (register
+ * allocation). */
 #ifdef TARGET_NATIVE
 static void GuiBuildScreenDesc2(u8 *obj, void *label, s32 cfg0, s32 cfg1,
                                 void *l0, void *l1, void *l2, void *l3, void *l4,
                                 s32 typeIndex) {
     GuiScreenDesc2 d;
-    d.label = label;
+    /* Field order is the ROM's store order (task #1522), not offset order. */
+    d.objCfg504 = *(s32 *)(obj + 0x504);
     d.cfg0 = cfg0;
     d.cfg1 = cfg1;
+    d.objCfg470 = *(s32 *)(obj + 0x470);
+    d.layout1 = l1;
+    d.layout0 = l0;
+    d.typeActive = (*(s32 *)(obj + 0x508) == typeIndex);
     d.objCfg4FC = *(s32 *)(obj + 0x4FC);
     d.objCfg500 = *(s32 *)(obj + 0x500);
-    d.layout0 = l0; d.layout1 = l1; d.layout2 = l2; d.layout3 = l3; d.layout4 = l4;
-    d.child130 = obj + 0x130;
-    d._z2C = 0;
-    d.child17C = obj + 0x17C;
-    d._z34 = 0;
-    d.typeIndex = typeIndex;
-    d.child278 = obj + 0x278;
     d.child4B8 = obj + 0x4B8;
+    d.layout4 = l4;
+    d.typeIndex = typeIndex;
+    d.label = label;
     d.child220 = obj + 0x220;
-    d.objCfg470 = *(s32 *)(obj + 0x470);
-    d.objCfg504 = *(s32 *)(obj + 0x504);
-    d._z50 = 0;
-    d.typeActive = (*(s32 *)(obj + 0x508) == typeIndex);
+    d.child130 = obj + 0x130;
+    d.child17C = obj + 0x17C;
+    d.child278 = obj + 0x278;
+    d.layout3 = l3;
+    d.layout2 = l2;
     d.enable = 1;
+    d._z50 = 0;
+    d._z2C = 0;
+    d._z34 = 0;
     func_003380B8(&d);
 }
 #endif
