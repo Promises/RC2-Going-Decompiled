@@ -141,8 +141,8 @@ extern s32  g_sceneArenaCursor;   /* 0x1B2230 */
  * memory-region base addresses the loaders + ResetFrameArenas read: the scene
  * arena halves at 0x354000 (+cursor / +2*cursor), splash/loading-WAD buffers,
  * the per-asset display-model buffers (ship/held-item/player), GUI + debug-malloc
- * pools, and the boot-WAD / upper-RAM region tops. Called per level by
- * RebootIopAndInitEngine + InitLoadingSceneSystem. */
+ * pools, and the boot-WAD / upper-RAM region tops. Called from BootSystemInit
+ * (0x29153C), func_00290FD0 (0x290FE8) and InitLoadingSceneSystem (0x2EBA08). */
 #ifndef TARGET_NATIVE
 /* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
  * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 61.20% PACKED-SAVE /
@@ -163,8 +163,8 @@ void SetupMemoryArenaTable(void) {
     *(s32 *)(t + 0x04) = 0x100000;
     *(s32 *)(t + 0x08) = 0x354000;          /* g_relocOffsetLimit */
     *(s32 *)(t + 0x0C) = 0x354000;          /* g_sceneDecompressBase (half0) */
-    *(s32 *)(t + 0x10) = cursor + 0x354000; /* g_pSceneArenaBase (half1) */
-    *(s32 *)(t + 0x14) = cursor * 2 + 0x354000; /* g_pSplashImageBuffer */
+    *(s32 *)(t + 0x10) = cursor + 0x354000; /* g_sceneArenaBase (half1) */
+    *(s32 *)(t + 0x14) = cursor * 2 + 0x354000; /* g_splashImageBuffer */
     *(s32 *)(t + 0x18) = cursor * 2 + 0x454000; /* g_pLoadingSceneWad */
     *(s32 *)(t + 0x68) = cursor * 2 + 0x454000;
     *(s32 *)(t + 0x6C) = 0x1F0C000;         /* g_stagedSegmentCeiling */
@@ -447,8 +447,8 @@ void func_002919A0(void) {
 }
 
 /* func_002919C0 — NOT a real function entry: two `addiu $29,$29,0x10`
- * stack-restore words with no `jr $31`, i.e. a shared epilogue fragment that
- * splat glabel'd from a pair of branch/jump targets into func_002919A0's tail.
+ * stack-restore words with no `jr $31`, after func_002919A0's jr/pad. No branch,
+ * jump or data word in the image targets 0x2919C0 or 0x2919C8.
  * Not portable-C expressible (no callable body); left as INCLUDE_ASM. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_002919C0);
 
@@ -1098,7 +1098,7 @@ void BindParticleFxAssets(void *hdrArg, s32 texBase, s32 *texRecords, s32 texCou
  *   +0x8  s16  height >> 4   (texels in GS units)
  *   +0xA  s16  width  >> 4
  *   +0xC  u8   Log2Floor(|dimA|)   (TEX0 TW field)
- *   +0xD  u8   Log2Floor(|dimB|)   (TEX0 TH field)
+ *   +0xD  u8   Log2Floor(dimB)     (TEX0 TH field; |dimB| only when dimA < 0)
  *   +0xE  s16  PSM: 0x13 (PSMT8) when dimA >= 0, else 0x14 (PSMT4)
  */
 #if defined(TARGET_NATIVE) || defined(S136OS_BuildUiTextureDescriptors)
@@ -1107,7 +1107,7 @@ typedef struct UiTextureRecord {
     s16 heightHi;  /* +0x8  height >> 4 */
     s16 widthHi;   /* +0xA  width  >> 4 */
     u8  log2W;     /* +0xC  Log2Floor(|dimA|) */
-    u8  log2H;     /* +0xD  Log2Floor(|dimB|) */
+    u8  log2H;     /* +0xD  Log2Floor(dimB), |dimB| when dimA < 0 */
     s16 psm;       /* +0xE  0x13 / 0x14 */
 } UiTextureRecord;
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
@@ -1123,7 +1123,7 @@ extern s32 func_002835E0(s32 v); /* abs(s32) */
  * texture descriptor table (stride 0x10: width, height, signed dimA, signed
  * dimB) into g_uiTextureCache GS-upload records and set g_uiTextureCount. Each
  * descriptor yields one record; the signed dims drive the PSM (0x13 vs 0x14)
- * and TW/TH (Log2Floor of the magnitude). Called per level by
+ * and TW/TH (Log2Floor of the magnitudes when dimA < 0, else of the raw dims). Called per level by
  * LoadLevelAndInitHealth and by InitLoadingSceneSystem. The loop counter is
  * g_uiTextureCount itself, re-read after every call.
  *
@@ -1323,8 +1323,9 @@ void BindPlayerDisplayModel(s32 variant) {
 /*
  * LoadPlayerDisplayModel(variant) — load the armor-variant player display model
  * into the dedicated buffer (g_playerModelBufferBase, 0x1F28000) and bind it.
- * Loads the variant's textures, binds the model, fixes up the loaded header
- * (func_00293D68) so g_mobyClassHeaders[0] points at the rebased buffer header,
+ * Loads the variant's textures, binds the model, fixes up the class header that
+ * g_mobyClassHeaders[0] points at (func_00293D68) so its +0x0/+0x20 fields point
+ * into the loaded buffer header,
  * then records the now-loaded armor variant in g_loadedArmorVariant (compared
  * against g_bEquippedArmor at level exit to trigger a reload). Callers:
  * ExitVendorMenu, RefreshVendorSelection, UpdateCheatMenuInput.
@@ -1609,11 +1610,11 @@ void LoadShipDisplayModel(s32 index) {
 
 /* Load the ship-select display texture for `shipId`: fence the frame DMA, resolve
  * the double-buffered frame-arena slot, kick the disc file load (the shipId TOC
- * entry: start sector = g_discToc[shipId] header +0x48F0 biased by +0x3E24, count
+ * entry: start sector = g_discToc + shipId*8 + 0x48F0 biased by +0x3E24, count
  * +0x48F4), then upload two GS image levels (a 16x16 base + the loaded mip whose
  * dims come from the arena header) into VRAM and cache the packed 64-bit GS
  * texture register at g_levelDialogToc[0x13B0+0x38] for the draw path to load.
- * Engine-2.96 TU (prologue packs 6 saved regs at 8-byte slots, frame 0x70-class)
+ * Engine-2.96 TU (prologue packs 6 saved regs at 8-byte slots, frame 0x90)
  * -> save-slot walled, canonical-2.9 can't byte-match; faithful #else, with the
  * trailing dsll/dsra/or register pack transcribed op-for-op. NEEDS-ORACLE. */
 #ifndef TARGET_NATIVE
@@ -1880,10 +1881,11 @@ void DecompressHudBankWad(s32 slot, u8 *dest) {
 }
 #endif
 
-/* func_00293438(dst, texHdr, tbp, fmt, a, mode, ...): GS texture-register / GIFtag
- * PACKET BUILDER — writes a run of 128-bit quadwords (sd pairs, dst += 0x10 each)
- * of packed 64-bit GS registers (TEX0/MIPTBP-class) from the texture header
- * (texHdr +0x4/+0x6/+0x8/+0xA/+0xC/+0xE dims, Log2Floor'd) and the g_vramTextureBase
+/* func_00293438(dst, texHdr, a2, a3, t0, t1, mode): GS texture-register / GIFtag
+ * PACKET BUILDER — writes a run of 128-bit quadwords (one sd of the low doubleword
+ * each, dst += 0x10 each) of packed 64-bit GS registers (TEX0/MIPTBP-class) from
+ * the texture header (texHdr +0x4/+0x6 dims, Log2Floor'd; +0x8 mip selector;
+ * +0xA/+0xC/+0xE added to the +0x10 cursor>>8; +0x0 word) and the g_vramTextureBase
  * +0x10/+0x20 cursors. The `mode` arg ($21) + texHdr[+0x8] select 4 layouts:
  *   mode>=0 & texHdr[8]!=0 -> mipmapped (.L002935BC);  mode>=0 & texHdr[8]==0 ->
  *   single (path1);  mode==-1 -> .L002936E4;  mode==-2/-3 -> sky (.L002936A4,
@@ -1909,7 +1911,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00293760);
 /* Upload two texture-descriptor lists to VRAM. Seeds the dynamic/alloc VRAM
  * cursors from g_vramTextureBase[0x10], then for each of `count1` list entries
  * (stride 0x10) dispatches on the entry's format word (+0x0): 0x13 = a full
- * mip (tbp, width/64 rounded up, w/h from +0x4, cursor += max(w*h,0x100)),
+ * mip (tbp, width/64 floored with a minimum of 1, w/h from +0x4, cursor += max(w*h,0x100)),
  * 0x2 = a 16x16 (cursor += 0x200), 0x0 = a 16x16 (cursor += 0x400); any other
  * format skips the packet build. Each builds a GIF upload packet (func_00126288),
  * kicks it (KickGifImageUpload to base+entry[+0xC]) and waits. A second loop
@@ -1929,9 +1931,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00293760);
  * counter decremented before the flush call (4); the cursor stored before
  * the dynamic base (words exact, relocations swapped). */
 /* Devices for func_002938B0's arm (EE only; nothing is moved or emitted):
- *  - ADDRESSING-MODEL DEVICES (RULING #8620, FACT #8036's equate form): both
- *    VRAM cursors are read absolutely and written absolutely in straight-line
- *    code (0x2938F0, 0x293A04) but as one %gp_rel word in a delay slot
+ *  - ADDRESSING-MODEL DEVICES (RULING #8620, FACT #8036's equate form): the
+ *    alloc cursor is read absolutely; both VRAM cursors are written absolutely
+ *    in straight-line code (0x2938F0, 0x293A04) but as one %gp_rel word in a delay slot
  *    (0x2938FC, 0x293A50): size 12 on equated names gives exactly that. The
  *    two g_vramTextureBase words are read as the ROM's own symbols D_1A72F4 /
  *    D_1A7304 (0x2938B4, 0x293A44), absolute, so sized 16.
@@ -2239,8 +2241,8 @@ void RelocateMobyClassChunk(void *chunkArg, s32 arg2, void *nameTableArg) {
  * rebases the two embedded self-relative offsets (at src+4 and src+8) to
  * absolute pointers into the loaded buffer: dst[0] = src + src[4] (the data
  * block) and dst[0x20] = src + src[8] (the secondary block). Pure leaf, no
- * frame; the caller (LoadPlayerDisplayModel) passes the bound class-header dst
- * and the buffer-resident header src.
+ * frame. Two ROM callers: LoadPlayerDisplayModel, which passes the bound
+ * class-header dst and the buffer-resident header src, and InitLoadingSceneSystem.
  */
 void func_00293D68(u8 *dst, u8 *src) {
     dst[4] = src[0];
@@ -2494,8 +2496,9 @@ extern void  FixupMobyClassHeader(void *hdr, s32 arg2, s32 arg3, s32 classId);
  * update fn is bound). With a real header it takes the next g_mobyClassCount
  * slot, records remap/reverse-map/header/data-size (data size = header byte
  * +0x2D << 10, or 0x100000 when that byte is 0xFF), binds the update fn, then
- * FixupMobyClassHeader rebases the header offsets. Each counter is read twice:
- * once as the slot (lw) and once narrowed to the remap byte (lbu).
+ * FixupMobyClassHeader rebases the header offsets. Each counter is read as the
+ * slot (lw) and narrowed to the remap byte (lbu); g_mobyClassCount is re-read a
+ * third time (lw) for the increment after the bind call.
  *
  * MATCHED on the s136os arm (task #1405): byte-exact image-resident under SN
  * 2.95.3 v1.36 -fopt-stack at the unit's RULING #9070 flags (verify_match_unit
@@ -2632,11 +2635,11 @@ __asm__(".word 0\n\t.word 0");
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294308);
 
-/* Per-frame level-load state machine (returns 1 while a load is in flight, else 0).
+/* Per-frame level-load state machine (returns 1 once state 5 has finalized, else 0).
  * Pumps sound, then either (a) while a raw read is in progress, times out a stalled
  * spindle read (>=0x2D1 frames) into a fell-back + CdStopRead, or (b) advances a
  * 6-state disc-staging sequence (jtbl_0026C8E0): 0/1 kick raw file reads into
- * disc-sector->address staged chunks (sector*0x800 rounded up to 0x800), 2 starts
+ * disc-sector->address staged chunks (sector*0x800 rounded up to 0x1000), 2 starts
  * the level music + global sound bank, 3 waits for that bank's handle, 4 kicks the
  * next bank disc load, 5 waits for its handle then finalizes (func_00132828).
  * Engine-2.96 (jtbl reloc) -> faithful #else switch; matching arm INCLUDE_ASM.
@@ -2667,7 +2670,7 @@ extern s32  g_rawReadStallTimer;
 extern s32  g_rawReadSpindleCtrl;
 extern s32  g_bRawReadFellBack;
 
-/* disc sector count -> byte size, rounded up to a 0x800 boundary */
+/* disc sector count -> byte size, rounded up to a 0x1000 boundary */
 #define STAGE_ROUNDUP(sectors)  ((((sectors) << 11) + 0xFFF) & 0xFFFFF000)
 
 s32 UpdateLevelStagingMachine(void) {
@@ -2820,7 +2823,7 @@ s32 StreamSceneSegment(s32 idx) {
  *   data[0x0] (u16) -> g_nSceneTotalFrames  (@+0x40)
  *   data[0x8] (u16) -> DAT_001b8808         (@+0x48)
  *   data[0xC] (u16) -> g_nSceneCastCount    (@+0x44)  actor-record count
- *   data[0x8](s32)  -> camera-key list ptr  g_pSceneCameraKeys = data + data[0x8]
+ *   data[0x10](s32) -> camera-key list ptr  g_pSceneCameraKeys = data + data[0x10]
  *   data[0x4](s32)  -> optional chunk ptr @+0x4C: 0 if data[0x4] < 0x400,
  *                      else data + data[0x4]
  * The entry-offset table starts at data+0x14 (one s32 per actor record). For each
@@ -2995,7 +2998,7 @@ void BindSceneChunk(void) {
  * advancing through the loaded header entries until a zero entry[1]).
  *
  * mode 0 just records the scene index; nonzero additionally pumps the dialog
- * voice and fades to black before kicking. The voice pump runs once more
+ * voice and fades to black after kicking the load. The voice pump runs once more
  * (blocking) after the load is requested. The matching build keeps the asm
  * (save-layout wall). */
 #ifdef TARGET_NATIVE
@@ -3416,8 +3419,8 @@ void func_00294C48(s32 classId, s32 slot) {
  * fallback when they tie), masks each key to -1 if it equals `id`, then matches
  * both against the 3 gadget-class slots (g_gadgetClassToc via the
  * g_respawnPlayerYaw[+0x7C + i*4] indices) to find their match indices. Picks the
- * target slot: 0 if both keys already matched, else the first index >=1 skipping
- * the two matches. Finally, if a pending sound handle (g_soundBankHandlesBlk
+ * target slot: 0 unless slot 0 is one of the two match indices, else the first
+ * index >=1 that is neither match. Finally, if a pending sound handle (g_soundBankHandlesBlk
  * +0x22C8) resolves to the same weapon key as the slot's disc-TOC entry, clears
  * it; then commits via func_00294C48(id, slot).
  *
@@ -3613,8 +3616,8 @@ s32 func_00294EE0(s32 classId) {
  * When the descriptor carries a texture WAD (+0xC != 0) it first decompresses that
  * WAD into the SRAM scratch (g_gadgetClassSramBase+0x25800); if the decompressor
  * reports success (result word == 1) it uploads two GS image levels — a 16x16 base
- * and the mip whose dimensions come from the reused texParam block
- * (g_respawnPlayerYaw+0x48) — via BuildGsImageUploadPacket (func_00126288) +
+ * and the mip whose dimensions come from the decompressed scratch (+0x18) and
+ * whose TBP is offset by the texParam block (g_respawnPlayerYaw+0x48) — via BuildGsImageUploadPacket (func_00126288) +
  * KickGifImageUpload, waiting for the GS paths to idle between them. It then
  * decompresses the moby WAD into the same SRAM scratch and hands it to
  * RegisterMobyClass, bumping g_mobyClassCount to the texParam +0x12 count across the
@@ -3635,7 +3638,7 @@ s32 func_00294EE0(s32 classId) {
  * -0xb0' vs 'addiu sp, sp, -0xf0' */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadMobyClassFromWad);
 #else
-extern s32  g_discToc[];                  /* 0x150084 disc TOC, stride 0x14 entries */
+extern s32  g_discToc[];                  /* 0x14B540 disc TOC; entries at +0x4B44, stride 0x14 */
 extern s32  g_respawnPlayerYaw[];         /* 0x152C88; +0x48 reused as texParam block */
 extern u8   g_gadgetClassSramBase[];      /* 0x152D10 gadget-class SRAM scratch base   */
 extern u8   g_vramTextureBase[];          /* 0x1A72E4 VRAM cursors (+0x10/+0x20)       */
@@ -3681,7 +3684,7 @@ void LoadMobyClassFromWad(s32 classId, s32 index, void *descArg) {
             KickGifImageUpload(packet, &g_gadgetClassSramBase[0x25830]);
             WaitGsPathsIdle(0);
 
-            /* level 1: mip sized from the texParam block */
+            /* level 1: mip sized from the decompressed scratch (+0x18) */
             {
                 s32 texdim = *(s32 *)&g_gadgetClassSramBase[0x25818];
                 s32 clampW = texdim >> 6;
@@ -3743,10 +3746,10 @@ void LoadMobyClassFromWad(s32 classId, s32 index, void *descArg) {
  *    up to 0x30 entries); return if absent (idx == 0x30) or if it is already the
  *    current class (rec[+0x14] == idx, where rec = g_respawnPlayerYaw+0x48).
  * 2. Record idx as current (rec[+0x14]) and find which of the three resident
- *    buffers already holds it (rec[+0x34], stride 4). If none does (slot == 3)
- *    it logs (DebugPrintStub) and services the voice stream around the evicting
- *    load (func_00294E98), then reuses buffer slot 0.
- * 3. WaitFrameDmaFence(1); the destination buffer is slot*0xC800 + (rec+0x40).
+ *    buffers already holds it (rec[+0x34], stride 4), then WaitFrameDmaFence(1).
+ *    If none does (slot == 3) it logs (DebugPrintStub) and services the voice
+ *    stream around the evicting load (func_00294E98), then reuses buffer slot 0.
+ * 3. The destination buffer is slot*0xC800 + (rec+0x40).
  *    (The <=0xFFFFF branch relocates it into the frame arena — the buffer lives
  *    above 1MB in practice, so that path is never taken; kept for fidelity.)
  * 4. Repoint any listener-history entry (g_listenerPosHistory, stride 0x70)
@@ -3995,8 +3998,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", QueueGsTextureU
  * QueueGsTextureUpload — build a GS texture-register word from the texel-format fields
  * and, if the upload queue has room (< 0x40 entries), append a 0x10-byte
  * descriptor to g_texUploadQueue. The 64-bit word packs the width-log2 (clamped
- * so the shift floor is 6), the source address (a0<<26 | 0x1300000 base), the
- * destination page field (a1<<30), the texel halfwords (a4>>8 at bit 37) and the
+ * so the shift floor is 6), the width-log2 field (a0<<26 | 0x1300000 base), the
+ * height-log2 field (a1<<30), the texel halfwords (a4>>8 at bit 37) and the
  * fixed 0x8000<<19 + top sign bit. The queue entry mirrors a2/a3 as raw words
  * and a0/a1/(a4>>8)/(a5>>8) as the byte/halfword fields. Returns the packed word
  * whether or not the entry was queued.
@@ -4149,7 +4152,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapMoveCacheSlo
  *   +0x24  s32  available     (g_mapAvailable  0x1C4F44)
  *   +0x230 s32  currentLevel  (g_mapCurrentLevel 0x1C5150)
  *   +0x234 s32  activeSlot    (g_mapActiveSlot 0x1C5154)
- *   +0x288 s32  slotState[5]  per-cache-slot occupancy flag
+ *   +0x288 s32  slotState[5]  per-cache-slot pixel buffer pointer (0 == empty)
  *   +0x29C s32  slotLevelId[5] per-cache-slot level id (-1 == unassigned)
  *
  * The level id passed to the cache/TOC lookups carries an optional 0x100 flag
@@ -4334,8 +4337,8 @@ s32 MapDataExistsForLevel(s32 levelAndFlag) {
  * cc1 (the unit-wide save-layout wall) and the many cache-field stores colour
  * differently; kept as the portable #else body, placed here in the map-cache
  * slice after the MapCache type + g_discToc/g_mapDataSet it depends on. The
- * three still-unnamed cache fields (+0x238 TOC handle, +0x23C load-issued flag,
- * +0x240 pixel byte size, +0x248 saved DMA cursor) are accessed by raw offset.
+ * four still-unnamed cache fields (+0x238 TOC handle, +0x23C load-issued flag,
+ * +0x240 pixel qword count, +0x248 saved DMA cursor) are accessed by raw offset.
  */
 #ifdef TARGET_NATIVE
 extern u8   g_menuScreenBlock[];   /* 0x1F27C0 menu-screen manager block */
@@ -4426,7 +4429,7 @@ void MapBeginUpload(void) {
 /* MapFindNearestAvailableLevel(): pick the level to upload next. Try the
  * current level (with the active-set 0x100 flag) first; if it's not already
  * cached and has map data, use it. Otherwise spiral outward through the
- * level-order array (offsets +1,-1,+2,-2,+3,-3,+4) from the current level's
+ * level-order array (offsets +1,-1,+2,-2,+3,-3) from the current level's
  * order index, returning the first ordered level that has map data and isn't
  * already cached. Returns the level id (|flag), or -1 if none qualifies.
  *
@@ -4602,7 +4605,8 @@ done:
  *  - If the current level is the hub (0): scan slots 4..0 and return the first
  *    occupied slot (slotState != 0) that already holds an unassigned id (-1) —
  *    a free-marked slot is reused as-is, no further work.
- *  - Otherwise resolve the current level's order index. If the current level is
+ *  - Then (for the hub only if that scan found nothing) resolve the current
+ *    level's order index. If the current level is
  *    not in the level order at all, return 1. Else scan slots 0..4: an occupied
  *    slot already holding -1 is returned immediately; among the rest pick the
  *    one whose level's order index is farthest (max |orderIndex(slot) -
@@ -4724,7 +4728,7 @@ void MapSetCurrentLevel(s32 level) {
 }
 #endif
 
-/* MapUpdateLevelAvailability(): clamp the current level to 0..0x1B, set
+/* MapUpdateLevelAvailability(): clamp the current level to at most 0x1B, set
  * g_mapCache.available from MapDataExistsForLevel(currentLevel), then force it
  * clear when on the hub level (0) with any story progress. Returns available!=0.
  *
@@ -4773,7 +4777,7 @@ s32 MapUpdateLevelAvailability(void) {
  * MapUpdate(): per-frame zoom/pan tick for the galactic-map screen. First runs
  * func_00298AA0() (no-op leaf here) and MapUpdateLevelAvailability(), then:
  *
- *   - If any close/exit button is down (g_padButtons & 0x510) it plays the
+ *   - If any close/exit button is pressed (g_padButtonsPressed & 0x510) it plays the
  *     map-close sound (PlayGlobalSound(0x13,0,0)) and returns 1 ("exit handled").
  *   - Otherwise, if the map is inactive (g_mapCache.available == 0) or no valid
  *     view slot is selected (g_mapCache.activeSlot < 0), it returns 0.
@@ -4838,7 +4842,7 @@ s32 MapUpdate(void) {
 
     s = g_mapCache.activeSlot;
 
-    /* zoom decay toward 1.0 by the left/zoom analog, then clamp to [0.65, 4.0] */
+    /* scale zoom by (1 - 0.02 * the left/zoom analog), then clamp to [0.65, 4.0] */
     zoom[s] = zoom[s] * (1.0f - *(f32 *)(pad + 0x144) * 0.02f);
     if (4.0f < zoom[s]) {
         zoom[s] = 4.0f;
@@ -4852,7 +4856,7 @@ s32 MapUpdate(void) {
     panX[s] = panX[s] + (s32)(*(f32 *)(pad + 0x148) * scale);
     panY[s] = panY[s] + (s32)(*(f32 *)(pad + 0x14C) * scale);
 
-    /* window half-extents (17.15 fixed) scaled by zoom, centred on 0x10000000 */
+    /* window half-extents (17.15 fixed) scaled by zoom; pan clamped to [lim, 0x10000000-lim] */
     limX = (s32)((f32)(0x1000 - (D_1A95C0 << 4)) / zoom[s]) << 15;
     limY = (s32)((f32)(0xD00  - (D_1A95C4 << 4)) / zoom[s]) << 15;
     loX  = 0x10000000 - limX;
@@ -4892,7 +4896,7 @@ s32 MapUpdate(void) {
  *       (DrawHudIconQuadPixelRgb) or rotated sprite (DrawHudSpriteRotated) plus an
  *       optional label (func_00298730 + DrawFont2TextBox).
  *   (3) the player-position marker (tex 0xE99A) when the story progress index
- *       equals the active slot, colored by the compass/planet tables.
+ *       equals the active slot, rotated by the compass/planet angle tables.
  *
  * useHudPass gates Begin2dDrawBatch/End2dDrawBatch wrapping; applyScissor gates
  * the phase-2 AppendGsScissorRect. Returns void.
@@ -4930,8 +4934,8 @@ extern u16   D_1A95FC;                 /* 0x1A95FC unavailable-box field */
 extern u16   D_1A9600;                 /* 0x1A9600 unavailable-box field */
 extern u16   D_1A9604;                 /* 0x1A9604 unavailable-box field */
 extern u32   D_1A9608;                 /* 0x1A9608 scissor x0 */
-extern u32   D_1A960C;                 /* 0x1A960C scissor x1 */
-extern u32   D_1A9610;                 /* 0x1A9610 scissor y0 */
+extern u32   D_1A960C;                 /* 0x1A960C scissor y0 */
+extern u32   D_1A9610;                 /* 0x1A9610 scissor x1 */
 extern u32   D_1A9614;                 /* 0x1A9614 scissor y1 */
 extern s32   D_1A9618;                 /* 0x1A9618 highlight-blip override enable */
 extern s32   D_1A961C;                 /* 0x1A961C highlight-blip index */
@@ -4947,7 +4951,7 @@ extern f32   D_1A95E8;                 /* 0x1A95E8 sprite half-extent (flag 0x10
 extern f32   D_1A95EC;                 /* 0x1A95EC sprite half-extent (flag 0x1000) h */
 extern s32   D_1A9630[];               /* 0x1A9630 special-icon color table, {key,color} pairs stride 8 */
 extern s32   D_1A9634[];               /* 0x1A9634 == D_1A9630 + 4 (the color words) */
-extern f32   D_1A9658[];               /* 0x1A9658 planet-marker color/angle table, stride 4 */
+extern f32   D_1A9658[];               /* 0x1A9658 planet-marker angle table, stride 4 */
 extern u8    D_1A7B05;                 /* 0x1A7B05 g_mapDataSet (extra-marker gate) */
 extern f32   D_189EB8;                 /* 0x189EB8 hero compass facing angle */
 extern s32   D_18C0BC;                 /* 0x18C0BC compass-override flag (==0xF -> +pi/2) */
@@ -4955,8 +4959,8 @@ extern s32   D_1C4EC0;                 /* 0x1C4EC0 map-mode const (==2 -> compas
 extern s32   D_1C4F38;                 /* 0x1C4F38 map-quad Z/packet const (== &g_mapVertexData+0x18) */
 extern s32   D_1C4F4C;                 /* 0x1C4F4C bitmap-overlay enable (== &g_mapVertexData+0x2C) */
 extern s32   D_1C4F50[];               /* 0x1C4F50 bitmap-overlay 8-cell grid, stride 0x10 (int[4]) */
-extern s32   D_1C507C[];               /* 0x1C507C per-slot map extent X (>>0xf), stride 4 (== +0x15C) */
-extern s32   D_1C5028[];               /* 0x1C5028 per-slot map extent Y (>>0xf), stride 4 (== +0x108) */
+extern s32   D_1C507C[];               /* 0x1C507C per-slot map extent Y (>>0xf), stride 4 (== +0x15C) */
+extern s32   D_1C5028[];               /* 0x1C5028 per-slot map extent X (>>0xf), stride 4 (== +0x108) */
 extern f32   D_1C4FD4[];               /* 0x1C4FD4 per-slot map scale f32, stride 4 (== +0xB4) */
 extern s32   D_1C516C;                 /* 0x1C516C map packet const (>>8) (== +0x24C) */
 
@@ -5031,8 +5035,8 @@ typedef struct MapLabelBox {
     s16 y0;         /* +0x02 */
     s16 x1;         /* +0x04 */
     s16 y1;         /* +0x06 */
-    s16 tx;         /* +0x08 = x0 + width/2 */
-    s16 ty;         /* +0x0A = y0 + 4 */
+    s16 tx;         /* +0x08 = (+0x04) + width/2 */
+    s16 ty;         /* +0x0A = (+0x00) + 4 */
     u32 pad0C;
     u32 pad10;      /* +0x10 lo word = &UNK_0011000F const */
     u32 pad14;
@@ -5127,7 +5131,7 @@ void MapDraw(int useHudPass, long applyScissor) {
         /* --- map-quad GS packet A ---
          * The .s writes each packet as a DMAtag header qword (4 words) at the
          * running cursor, advances g_frameDmaCursor by 0x10 past the header
-         * (store @0x296B88), writes the GIF payload (10 qwords, 0x0..0x48) at
+         * (store @0x296B88), writes the GIF payload (5 qwords: ten 64-bit words, 0x0..0x48) at
          * the new cursor, then advances by 0x50 past the payload (@0x296C68).
          * Packet B repeats the pattern (advances @0x296D00 / @0x296DBC), so the
          * two packets lay end-to-end for a total cursor advance of 0xC0. */
@@ -5670,21 +5674,21 @@ void MapBuildBitmap(void *dst, u8 *src, s32 arg3) {
 /*
  * func_002980D8(dst, src, ctrl) — the "packed" 1bpp map-outline expander (the
  * bit0-set arm of MapBuildBitmap; the sibling of the plain func_00298308).
- * Decodes a two-stream RLE description of a 0x8000-byte (256x256 1bpp) bitmap,
+ * Decodes a two-stream RLE description of a 0x8000-byte (0x40000-pixel 1bpp) bitmap,
  * one 0x400-byte output band at a time, through the scratchpad at 0x70000000.
  *
  * Two input streams:
  *   ctrl (arg3) — the run-control stream, read as (skip, run) byte pairs. `skip`
  *      advances the scratch write pointer that many *pixels* (leaving them at
  *      their fill value); `run` is the count of pixels to emit next. A `run` of 0
- *      ends the current pair-scan for this band (the RLE list is skip/run/skip/
- *      run/...).
+ *      emits nothing; pair-scanning continues until the scratch band is full (the
+ *      RLE list is skip/run/skip/run/...).
  *   src (arg2) — the bit-source stream. Its first byte seeds the initial toggle
- *      run length (firstByte>>1) and toggle state; thereafter each emitted pixel
+ *      run length (firstByte>>1); `toggle` starts at 1. Thereafter each emitted pixel
  *      takes the current `toggle` value, and when the run of same-valued pixels
- *      is exhausted the next src byte reloads the run length. A src byte of 0 is
- *      a *carry*: it flips `toggle` and is consumed without emitting, so a chain
- *      of zero bytes flips the value that many times before the next real length.
+ *      is exhausted the next src byte reloads the run length and flips `toggle`.
+ *      A src byte of 0 is a *carry*: it is consumed without emitting and the
+ *      reload repeats, so k zero bytes then a real length flip the value k+1 times.
  *
  * Per band the decoder fills 0x2000 scratch pixels (one byte per pixel, value
  * 0/1), then bit-packs them 8 pixels/byte into 0x400 bytes (pixel k -> bit k)
@@ -5740,7 +5744,7 @@ void func_002980D8(void *dstArg, u8 *src, s32 ctrlArg) {
 
             while (count != 0) {
                 count--;
-                while (run == 0) {      /* carry: zero byte flips toggle, no emit */
+                while (run == 0) {      /* reload: each byte flips toggle; 0 = carry */
                     u8 b = *bits++;
                     toggle = !toggle;
                     run = b;
