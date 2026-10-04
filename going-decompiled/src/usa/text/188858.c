@@ -3179,20 +3179,29 @@ s32 func_0028BE10(s32 typeAndSlot, s32 a2, s32 a3, s32 a4, s32 a5, s32 a6, s32 a
 }
 #endif
 
-/* Initialise a HUD widget `w`: bind its icon graphics (func_0028C090 using the
- * icon id at +0x20), unpack the staged layout fields (+0x24/+0x28/+0x2C/+0x30/
- * +0x34/+0x38) into their live slots, run the widget's init callback (+0x30)
- * when present, and clear the dirty flag (+0x68).
+/* ActivateHudElement (USA 0x0028BF18): promote a HUD widget's staged
+ * (pending) layout to its live slots and run its init callback.
  *
- * NEAR-MISS (99.4% on the 2.9 arm; 92.31% on the engine96 arm, task #469):
- * on ee-gcc 2.9 the only residual is the 0x20-vs-0x10 frame. On the engine
- * arm (loads hoisted into locals + trailing asm barrier tried) the residual
- * is SCHED: sched2 emits the prologue as `sd $16; daddu $16,$4; sd $31`
- * where the ROM keeps `sd $16; sd $31; daddu` — a post-reload tie-break this
- * cc1 revision makes differently (it matches under -fno-schedule-insns2,
- * which the engine arm does not offer). Kept as the portable #else body. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028BF18);
+ * Params: w — the HudElement record to activate (one 0x90-byte registry
+ *         entry; field map above the HudElement typedef).
+ * Return: none.
+ *
+ * Binds the icon graphics via func_0028C090(w, the pending icon word at
+ * +0x20), then copies the six pending words +0x24..+0x38 to their live slots
+ * +0x04..+0x18 (ending with initFn/tickFn/drawFn), calls the new initFn
+ * (+0x10) with `w` when it is non-null, and clears the dirty flag (+0x68)
+ * last — after the callback, so a callback that re-dirties the widget is
+ * overridden.
+ *
+ * MATCHED byte-exact on the s136os arm (SN 2.95.3 v1.36 -fopt-stack at the
+ * unit's -G8 -fno-gcse; tools/ee/s136os_functions.txt row, task #1493). The
+ * final store MUST be spelled through `w`, not through the `b` byte view:
+ * through `b` this compiler keeps a second callee-saved copy of the record in
+ * $17 for that one store (0x20 frame, 28/30 words differ, verify_match_unit);
+ * through `w` it reuses $16 and the ROM's 0x10 frame. Both spellings are the
+ * same address, so the native arm is unaffected. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0028BF18)
+S136OS_SLOT(func_0028BF18);
 #else
 void func_0028BF18(HudElement *w) {
     u8 *b = (u8 *)w;
@@ -3208,7 +3217,7 @@ void func_0028BF18(HudElement *w) {
     if (init != 0) {
         init(w);
     }
-    *(s32 *)(b + 0x68) = 0;
+    *(s32 *)((u8 *)w + 0x68) = 0;
 }
 #endif
 

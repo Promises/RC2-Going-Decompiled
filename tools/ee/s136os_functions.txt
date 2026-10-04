@@ -272,3 +272,4 @@ usa text/191238 func_002938B0
 usa text/1D54C0 func_002D6028
 usa text/24D728 PlayFmvMovie
 usa text/1D54C0 func_002DD7E8
+usa text/188858 func_0028BF18
