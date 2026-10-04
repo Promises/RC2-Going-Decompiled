@@ -9611,27 +9611,49 @@ s32 func_00345298(void *w) {
  * nameStringId (g_inventoryOwned -> g_weaponTable[g_itemEquippedSlot]+0x6). Lay out
  * the nine panel sub-elements at the anchor (*(w+0x4A0)) + their D_1AE2xx offsets,
  * pulse + colour the caption sprite (+0x17C), and draw the panel tail. */
-/* task #1522 (s136os arm, verify_match_unit vs ROM; not promoted): BODY DEFECTS
- * fixed: the #else positioned +0x17C twice and never +0x130 (the ROM sets +0x220,
- * +0x130, +0x17C from D_1AE290/294), and returned void where the ROM returns 0.
- * Also: switch dispatch, D_1AE248 / D_1AE280 copied to the stack, s32 mask, and the
- * owned-weapon id read as GuiWeaponTableEntry.nameStringId. Residual: cc1 hoists
- * `li $a0,6` out of SetWeaponUpgradeSlot's delay slot (245 vs 244 words, 238
- * differ after the shift); with a g_equippedArmor .data-section device the length
- * matches and 12/244 differ, but cc1 then hoists the split `lui` to the entry. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003453D0);
+/* Params: w = the weapon-select screen; inputMask = D-pad mask passed to the
+ * per-mode handler. Returns 0 (the ROM sets $v0 = 0 on its one exit).
+ * MATCHED byte-exact on the s136os arm (task #1567). #1522 fixed the body
+ * defects: the #else positioned +0x17C twice and never +0x130 (the ROM sets
+ * +0x220, +0x130, +0x17C from D_1AE290/294) and returned void. It also made the
+ * dispatch a switch, copied D_1AE248 / D_1AE280 to the stack, took the mask as
+ * s32 and read the owned-weapon id as GuiWeaponTableEntry.nameStringId.
+ * The last residual was SetWeaponUpgradeSlot's delay slot. cc1 sees
+ * g_equippedArmor as small data and emits one `lh $5,g_equippedArmor` macro,
+ * which gas expands to the ROM's `lui $5; lh $5,%lo($5)` (the unit's
+ * `.extern g_equippedArmor, 16`). sched2 put `li $a0,6` first, so reorg moved
+ * the 2-word macro into the slot (245 words, 238/246 differ). The ROM has the
+ * load before the call and `li $a0,6` in the slot.
+ * DEVICE: one untied empty fence (RULING #8483 rev 2) between the armor read and
+ * the call, a SCHEDULING DEVICE that emits nothing. It keeps the load ahead of
+ * the argument setup, so `li $a0,6` is the last insn and fills the slot.
+ * Measured on the s136os arm, verify_match_unit: without it 238/246, the same
+ * body with the read into a local and no fence. Reading the armor before the
+ * +0x4B4 / D_1ADAF0 stores gives 245/246. #1522's .data-section split of
+ * g_equippedArmor is not needed and is not used. With it, cc1 splits the
+ * address itself and the `lui` lands in $v0, not $a1 (2/244 even with fences).
+ * GUARD (task #1567): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003453D0)
+S136OS_SLOT(func_003453D0);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_func_003453D0, unit objdiff): 52.79%,
    201/277 insns differ. Residual: UNKNOWN-addiu + gp/abs-mixed symbol (first differing insn: 'addiu sp, sp, -0x40' vs 'addiu sp, sp, -0x20').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
+   not byte-exact on that arm. */
 s32 func_003453D0(void *w, s32 inputMask) {
     s32 result, idx;
 
     *(s32 *)((char *)w + 0x4B4) = 0;
     D_1ADAF0 = -1;
-    SetWeaponUpgradeSlot(6, g_equippedArmor);
+    {
+        s32 armor = g_equippedArmor;
+        __asm__ __volatile__(""); /* scheduling device, RULING #8483: see above */
+        SetWeaponUpgradeSlot(6, armor);
+    }
 
     switch (*(s32 *)((char *)w + 0x4B8)) {
     case 0: func_00344E08(w, inputMask); break;
