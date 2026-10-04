@@ -2628,8 +2628,8 @@ selftest_decldef() {
   if [ -z "$u1" ] || [ -z "$u2" ] || git grep -q T1425SeedDef HEAD -- going-decompiled; then say "SELFTEST-BROKEN: (27) needs two usa TARGET_NATIVE .c units and no existing T1425SeedDef (units '$u1' '$u2')"; return 1; fi
   dblob=$({ git cat-file blob "HEAD:$u1"; printf '\n/* landing_gate selftest (27) seed, task #1425 */\nvoid T1425SeedDef(int x) { (void)x; }\n'; } | git hash-object -w --stdin)
   for v in agree:void s64:'long long' s32:int multi:int; do
-    local blob c; blob=$({ git cat-file blob "HEAD:$u2"; [ "${v%%:*}" = multi ] && printf '\n/* landing_gate selftest (27) seed, task #1461: ADDED above */ int T1425SeedDef(int x);'
-      printf '\n/* landing_gate selftest (27) seed, task #1425 */\n%s T1425SeedDef(int x);\n' "${v#*:}"; } | git hash-object -w --stdin)
+    local blob c pre=''; [ "${v%%:*}" = multi ] && pre='\n/* landing_gate selftest (27) seed, task #1461: ADDED above */ int T1425SeedDef(int x);'
+    blob=$({ git cat-file blob "HEAD:$u2"; printf "$pre"'\n/* landing_gate selftest (27) seed, task #1425 */\n%s T1425SeedDef(int x);\n' "${v#*:}"; } | git hash-object -w --stdin)
     c=$(decldef_probe_commit "$D/probe_index" "$u1" "$dblob" "$u2" "$blob")
     [ -n "$c" ] || { say "SELFTEST-BROKEN: (27) could not build the '${v%%:*}' probe commit"; return 1; }
     eval "${v%%:*}=$c"
