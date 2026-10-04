@@ -447,51 +447,100 @@ extern f32 IntToFloat(s32 x);
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 54.11%
    -> UNKNOWN-@2: ROM `(none)` vs `daddu s0,a0,zero` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A82D8);
+/* MATCHED on the s136os arm (task #1587): byte-exact solo under SN 2.95.3 v1.36
+ * -fopt-stack (verify_match_unit 92/92). Body from task #1559 (NOTE #9256,
+ * 2/92), closed at the clamp. The ROM computes `addiu $18,$4,-1` (frameCount-1)
+ * and THEN `slt $2,$6,$4` (arg3 < frameCount) for the `movn`. cc1 either
+ * issues the slt first, or gives it the dying frameCount's $4 as its
+ * destination; a $2 pin on inRange alone is ignored (still 2/92).
+ * Devices, each dropped alone (words differing, vmu):
+ *   - a tied EMPTY fence on frameCount between the addiu and the slt
+ *     (RULING #8483). It orders them through an anti-dependency: the slt reads
+ *     the fence's frameCount. Without: 2/92;
+ *   - inRange pinned to $2 (RULING #8598) and held there by a tied EMPTY fence.
+ *     Without the pin: 2/92; without that fence: 2/92;
+ *   - frameCount pinned to $4 (without: 3/92), and the class pointer to $2
+ *     (without: 4/92). A $4 pin on idx*4 can replace the $2 one, but dropping
+ *     both gives 4/92;
+ *   - the bounds copy: table base $3 and dst $4 pinned (6/92, 5/92), a tied
+ *     fence on the source (without: built 1 word short) and on dst (5/92),
+ *     and an untied fence after the copy (3/92). Same mechanism as
+ *     func_002A8448 (task #1536).
+ * The sibling-call fence after func_002A8200 that the 2.96 body needed is not
+ * needed here (still 92/92 without it), so it was dropped. */
+/* GUARD (task #1587): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002A82D8)
+S136OS_SLOT(func_002A82D8);
 #else
 /* Prototypes this body needs whose declarations sit in other guarded arms:
  * the s136os arm compiles this arm alone, so it must see them here. */
 extern void func_002A8200(Moby *moby, s32 seq, s32 frameIdx);
 void func_002A82D8(Moby *obj, s32 idx, s32 arg3, s32 arg4) {
     u8 *m = (u8 *)obj;
-    u8 *pClass = *(u8 **)(m + 0x24);
-    u8 *seqEntry = *(u8 **)(pClass + 0x48 + idx * 4);
-    s32 frameCount = *(u8 *)(seqEntry + 0x10);
-    s32 clampedFrame = (arg3 < frameCount) ? arg3 : (frameCount - 1);
+    u8 *seqEntry;
+    register s32 frameCount EE_REG("$4");
+    s32 clampedFrame;
+
+    {
+        s32 off = idx * 4;
+        register u8 *cls EE_REG("$2") = *(u8 **)(m + 0x24);
+        frameCount = (*(u8 **)(cls + off + 0x48))[0x10];
+    }
+    {
+        register s32 inRange EE_REG("$2");
+        clampedFrame = frameCount - 1;
+        __asm__("" : "+r"(frameCount));
+        inRange = arg3 < frameCount;
+        __asm__("" : "+r"(inRange));
+        if (inRange) {
+            clampedFrame = arg3;
+        }
+    }
 
     if (arg4 <= 0) {
-        func_002A8200(obj, idx, clampedFrame);
-        __asm__ __volatile__(""); /* cc1 2.96 sibling-call suppression (the ROM never sibcalls) */
+        func_002A8200((Moby *)m, idx, clampedFrame);
         return;
     }
 
     if (0.025f < *(f32 *)(m + 0x44) ||
         *(s32 *)(m + 0x50) != 0 ||
         *(s32 *)(m + 0x54) != 0) {
-        s32 slot = func_002A08C0(obj);
-        if (slot < 0) {
-            m[0x41] = (u8)clampedFrame;
-        } else {
-            func_002A3288(obj, slot | 0x300);
-            *(Vec4 *)(g_proceduralAnimBounds + slot * 0x10) = *(Vec4 *)(m + 0x80);
+        s32 slot = func_002A08C0((Moby *)m);
+        if (slot >= 0) {
+            func_002A3288((Moby *)m, slot | 0x300);
+            {
+                register u8 *base EE_REG("$3") = g_proceduralAnimBounds;
+                register u8 *dst EE_REG("$4") = base + slot * 0x10;
+                u8 *src = m + 0x80;
+                __asm__ __volatile__("" : "+r"(src));
+                __asm__ __volatile__("" : "+r"(dst));
+                *(u_long128 *)dst = *(u_long128 *)src;
+                __asm__ __volatile__("");
+            }
             if (m[0x42] != 0xFF) {
                 m[0xA9] = m[0x42];
             }
             m[0x42] = 0xFF;
             m[0x40] = (u8)slot;
-            m[0x41] = (u8)clampedFrame;
         }
-    } else {
-        m[0x41] = (u8)clampedFrame;
     }
+    m[0x41] = (u8)clampedFrame;
 
     m[0x43] = (u8)idx;
-    ResolveMobyAnimFramePtrs(obj);
+    ResolveMobyAnimFramePtrs((Moby *)m);
     *(f32 *)(m + 0x48) = 1.0f;
     *(f32 *)(m + 0x4C) = 1.0f / IntToFloat(arg4);
     *(f32 *)(m + 0x44) = 0.0f;
     m[0x60] &= 0xFD;
+    {
+        u8 *cls = *(u8 **)(m + 0x24);
+        cls += idx * 4;
+        seqEntry = *(u8 **)(cls + 0x48);
+    }
     m[0x6C] = *(u8 *)(seqEntry + 0x11);
 }
 #endif
