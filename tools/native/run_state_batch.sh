@@ -20,6 +20,12 @@
 # and backend_null.c/snd_null.c both define a symbol the unit's body is the one
 # that runs here. The duplicates are listed (from the probe link without the
 # flag) so that choice is visible, not silent.
+#
+# Objects are written per region, /tmp/<region>/<unit>.o (task #1489). This
+# script compiles src/usa AND src/eu, and 015180 and 0321A0 exist in both. With
+# a flat /tmp/<unit>.o the EU object overwrote the USA one and the same path was
+# linked twice, so the batch ran EU's 015180/0321A0 and never USA's.
+# -fno-strict-return on .cpp units: RULING #9179 part 2 (see link_native.sh).
 set -eu
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -33,10 +39,12 @@ python3 tools/native/gen_batch.py going-decompiled/src > tools/native/state_batc
 docker --context "$CTX" run --rm -v "$ROOT":/work -w /work "$IMG" sh -c '
   set -e
   CF="-m32 -DTARGET_NATIVE -O0 -I/work/going-decompiled/include -I/work/tools/native -I/work/tools/native/runtime/rt0 -include /work/tools/native/mips_callees.h -ffunction-sections -fdata-sections -Wno-implicit-function-declaration -Wno-int-conversion -Wno-builtin-declaration-mismatch"
-  CXF="-x c++ -std=gnu++98 -m32 -DTARGET_NATIVE -O0 -I/work/going-decompiled/include -I/work/tools/native -I/work/tools/native/runtime/rt0 -ffunction-sections -fdata-sections"
+  CXF="-x c++ -std=gnu++98 -fno-strict-return -m32 -DTARGET_NATIVE -O0 -I/work/going-decompiled/include -I/work/tools/native -I/work/tools/native/runtime/rt0 -ffunction-sections -fdata-sections"
   objs=""; total=0; failed=""
   for f in $(grep -rl TARGET_NATIVE going-decompiled/src); do
-    b=$(basename "$f"); b=${b%.*}; total=$((total+1))
+    # going-decompiled/src/<region>/... -> /tmp/<region>/<unit>
+    r=${f#going-decompiled/src/}; r=${r%%/*}; mkdir -p /tmp/$r
+    b=$(basename "$f"); b=$r/${b%.*}; total=$((total+1))
     case "$f" in
       *.cpp) printf "extern \"C\" {\n#include \"%s\"\n#include \"%s\"\n}\n" \
                /work/tools/native/mips_callees.h "/work/$f" > /tmp/$b.wrap.cpp
@@ -49,7 +57,7 @@ docker --context "$CTX" run --rm -v "$ROOT":/work -w /work "$IMG" sh -c '
   echo "units compiled (.c: gcc, .cpp: clang): $(( total - $(echo $failed | wc -w) )) / $total"
   if [ -n "$failed" ]; then
     echo "FAIL - unit(s) did not compile, so the batch cannot link them:$failed"
-    for f in $failed; do b=$(basename "$f"); b=${b%.*}; echo "   $f:"; { grep -m3 "error:" /tmp/$b.cerr || head -3 /tmp/$b.cerr; } | sed "s/^/      /"; done
+    for f in $failed; do r=${f#going-decompiled/src/}; r=${r%%/*}; b=$(basename "$f"); b=$r/${b%.*}; echo "   $f:"; { grep -m3 "error:" /tmp/$b.cerr || head -3 /tmp/$b.cerr; } | sed "s/^/      /"; done
     exit 1
   fi
   gcc $CF -c tools/native/runtime/arena/arena_storage.c -o /tmp/arena.o

@@ -7,9 +7,11 @@
 # run_state_batch.sh and runtime/link_native.sh call `gcc` in this image, and
 # clang -m32 links against the same 32-bit crt/libgcc.
 # g++-multilib: until task #1460, run_state_batch.sh and link_native.sh handed
-# .cpp units to the `gcc` driver (cc1plus); since #1460 they compile .cpp with
-# clang, so no consumer is known to need it. It is KEPT until a run without it
-# is measured (#1451 measured it necessary under the pre-#1460 scripts).
+# .cpp units to the `gcc` driver (cc1plus). Since #1460 they compile .cpp with
+# clang, and clang -m32 still needs this package for the 32-bit libstdc++
+# headers. Measured at task #1489 with an image built from this file minus
+# g++-multilib: every .cpp unit fails with "'bits/c++config.h' file not found",
+# so link_native.sh is rc 1 at 12/29 and run_state_batch.sh rc 1 at 27/44.
 # clang-14: runtime/arena/verify_link.sh's docker arm compiles with clang, as its
 # host arm and check.sh do; run_state_batch.sh and runtime/link_native.sh compile
 # their .cpp units with it (task #1460). g++ 12 at -std=gnu++98 rejects the `_Static_assert`

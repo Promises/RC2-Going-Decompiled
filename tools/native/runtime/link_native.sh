@@ -36,8 +36,14 @@ docker --context "$CTX" run --rm -v "$ROOT":/work -w /work "$IMG" sh -c '
   set -e
   CFLAGS="-m32 -DTARGET_NATIVE -O0 -I/work/going-decompiled/include -I/work/tools/native -I/work/tools/native/runtime/rt0 -include /work/tools/native/mips_callees.h -ffunction-sections -fdata-sections -Wno-implicit-function-declaration -Wno-int-conversion -Wno-builtin-declaration-mismatch"
   # .cpp units: the CXXFLAGS of check.sh (gnu++98 pinned, task #1361). The shim is
-  # included INSIDE the extern "C" wrapper, not by -include.
-  CXXFLAGS="-x c++ -std=gnu++98 -m32 -DTARGET_NATIVE -O0 -I/work/going-decompiled/include -I/work/tools/native -I/work/tools/native/runtime/rt0 -ffunction-sections -fdata-sections"
+  # included INSIDE the extern "C" wrapper, not by -include. -fno-strict-return
+  # (RULING #9179 part 2, task #1489): clang otherwise plants a ud2 trap where a
+  # non-void C++ function falls off its end. 39 such sites (198FA0.cpp 38,
+  # 1907F0.cpp 1) are not yet classified by ROM epilogue under RULING #9122. Until
+  # that row lands the flag makes them return whatever is in the return register,
+  # as a C compiler would, instead of trapping. clang-only: the .c units compile
+  # as C with gcc, where falling off the end is not trapped.
+  CXXFLAGS="-x c++ -std=gnu++98 -fno-strict-return -m32 -DTARGET_NATIVE -O0 -I/work/going-decompiled/include -I/work/tools/native -I/work/tools/native/runtime/rt0 -ffunction-sections -fdata-sections"
   # USA-only native build: the arena (arena.ld), stub table, and symbol_addrs are
   # all USA. EU units with #else bodies belong to a separate (future) EU native
   # build with its own EU arena - do NOT pull them into this link.

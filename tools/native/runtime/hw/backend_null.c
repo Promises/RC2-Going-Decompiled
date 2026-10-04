@@ -109,31 +109,19 @@ void RenderMenuScreenWidgets(void)  {} /* front-end compositor - packets only */
 /* UpdateScreenFadeWhite: removed (task #1460) - text/16E980.c defines it. */
 void func_00272cc0(void)            {} /* DrawLockOnReticle - lock-on sprites */
 void func_002857C8(void)            {} /* SetScreenClearColor - patches clear-packet RGBA */
-void snd_BankLoadAsync(void)        {} /* kicks IOP RPC#3 - idle headless.
-                                       * HELD (task #1460): cod/0321A0.c defines it
-                                       * too, and its body spins on
-                                       * sceSifCheckStatRpc. A design call. */
-
-/* --- DEADLOCK-RISK -> no-op: a cosmetic vblank-blocking fade whose per-iter
- * WaitFrameDmaFence/WaitVblankGetField never advance headless. Writes only
- * fade/render state.
- * HELD (task #1460): text/178E88.cpp now also defines it natively, so the full
- * native link multiply-defines it. Which one the native build runs is a design
- * call, not made here. ------------------------------------------------------*/
-void FadeOutToBlackBlocking(void)   {}
+/* snd_BankLoadAsync (cod/0321A0.c) and FadeOutToBlackBlocking (text/178E88.cpp):
+ * removed (task #1489, RULING #9179) - a stub must not shadow tree C. The real
+ * bodies run natively. Their IOP/SIF/CD-layer callees are stubbed in
+ * sdk/iop_null.c, and FadeOutToBlackBlocking's fence/vblank waits are the
+ * no-ops above, so its loop is bounded by its frame count. */
 
 /* --- RETURN-CONST: caller uses the return; a fixed benign value is safe. The
  * non-void no-ops below also return 0 because their declared return is used or
- * could be (UploadTieTextures int, StartFileLoadPumpingVoice u64 - callers
- * discard, but return a defined 0 not a garbage register). ------------------ */
+ * could be (UploadTieTextures int - its caller discards it, but return a defined
+ * 0 not a garbage register). ------------------------------------------------ */
+/* StartFileLoadPumpingVoice (text/1B4218.cpp) and SetSndPumpCallback
+ * (cod/0321A0.c): removed (task #1489, RULING #9179) - the units define them. */
 s32  UploadTieTextures(void)          { return 0; } /* tie tex upload - caller ignores */
-/* HELD (task #1460), each also defined natively by a unit, so the full native
- * link multiply-defines them; which body runs headless is a design call, not
- * made here. StartFileLoadPumpingVoice (text/1B4218.cpp) reaches CdStartRead and
- * PumpDialogVoiceSystem's fileLoadActive spin; SetSndPumpCallback (cod/0321A0.c)
- * reaches func_001245D0's interrupt-control path. */
-u64  StartFileLoadPumpingVoice(void)  { return 0; } /* voice-pump wrapper - discarded */
-u32  SetSndPumpCallback(void)         { return 0; } /* install IOP pump cb - discarded */
 u32  func_0011D620(void)              { return 0; } /* sceSifCallRpc - 0 = RPC success */
 u32  func_00286200(void)              { return 0; } /* IsMenuOverlayActive - 0 = inactive (New Game) */
 /* func_0028BE10 and func_00289190 (text/188858.c): removed (task #1460) - the
@@ -149,10 +137,7 @@ u32  func_00286200(void)              { return 0; } /* IsMenuOverlayActive - 0 =
  * =========================================================================== */
 void SpawnParticleType55(void) {} /* particle emit (0x2C74C0) - no GS headless;
                                    * the durable hue-counter tick is done in C */
-void StopDialogVoice(void)     {} /* dialog-voice fade/stop - audio bookkeeping.
-                                * HELD (task #1460): text/1B4218.cpp defines it
-                                * too; its body queues snd_StopVoice into the
-                                * 989snd ring. A design call, not made here. */
+/* StopDialogVoice (text/1B4218.cpp): removed (task #1489, RULING #9179). */
 /* func_002888D8, func_00288F30 (text/188858.c) and func_002AE6C8 (text/1A8180.c):
  * removed (task #1460) - the units define them natively. */
 
@@ -167,10 +152,8 @@ void AppendTexFlushDefaultTex0(void){} /* GIF default-TEX0 flush DMA tag */
 void RenderSaveLoadStatusPopup(void){} /* Begin2dDrawBatch..End - GS packets only */
 /* RunSprRenderPipeline (text/1A00F0.cpp), func_0026FC88 and func_00271FE8
  * (text/16E980.c): removed (task #1460) - the units define them natively. */
-u64  func_00133250(void)            { return 0; } /* blocking IOP snd RPC + snd_Pump drain loop -
-                                        * deadlock headless; 0 = IOP-ready/success the callers want.
-                                        * HELD (task #1460): cod/0321A0.c defines it too, and its
-                                        * body blocks in snd_CheckLoadInProgress(0). A design call. */
+/* func_00133250 (cod/0321A0.c): removed (task #1489, RULING #9179) - the unit
+ * defines it. */
 
 /* ===========================================================================
  * M5 - in-level driven-frame trap list (tester FINALIZED 2026-06-19,
