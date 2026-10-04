@@ -7752,11 +7752,14 @@ f32 SampleRainHeightmap(Vec4 *pos) {
 /* MATCHED on the s136os arm (task #1559): byte-exact solo under SN 2.95.3 v1.36
  * -fopt-stack (verify_match_unit 142/142). Each change reverted alone (words
  * differing, vmu):
- *   - g_pRainHeightmap and g_rainHeightmapHeightScale are declared
- *     `.extern …, 12` at the top of the unit, so the -G8 assembler expands
- *     cc1's one-instruction loads to the ROM's absolute lui/lw and lui $at/lwc1
- *     instead of gp_rel (133/140 without; no other compiled function here
- *     reads either symbol, and SampleRainHeightmap is still INCLUDE_ASM);
+ *   - g_pRainHeightmap and g_rainHeightmapHeightScale are declared with a
+ *     size above -G8 at the top of the unit (the assembler-absolute block), so
+ *     the -G8 assembler expands cc1's one-instruction loads to the ROM's
+ *     absolute lui/lw and lui $at/lwc1 instead of gp_rel (133/140 without, as
+ *     measured in task #1559 when SampleRainHeightmap was still INCLUDE_ASM).
+ *     Task #1559 closed this body with `, 12`; the unit now declares both at
+ *     `, 16` for SampleRainHeightmap (task #1562), and task #1572 re-measured
+ *     this body under `, 16`: still 142/142 and image cmp 0;
  *   - u_long128 copies (struct copies: 159/168);
  *   - &dropPoint is a pointer local, which cc1 keeps in s0 (137/140);
  *   - the guards are written !(a < b), the ROM's c.lt.s + bc1f; `b <= a`
