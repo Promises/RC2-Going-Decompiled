@@ -3034,27 +3034,53 @@ void ResetDebugHeap(void) {
     g_debugMallocEnd = base + 0x64000;
 }
 
-/* DebugMalloc(size): bump-allocate `size` bytes (rounded up to 16) from the
- * debug pool. Lazily (re)initialises the pool on first use, and returns 0 when
- * the remaining space is smaller than `size`. Returns the old cursor on success.
+/**
+ * Bump-allocate from the debug pool.
  *
- * NEAR-MISS: logic exact, but the call to ResetDebugHeap forces `size` into a
- * callee-saved register ($16), and the success/fail merge cc1 schedules the
- * cursor reload differently than the original's branch layout. Kept as the
- * portable #else body. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", DebugMalloc);
+ *   size  bytes requested
+ *   ->    the old cursor, or 0 when fewer than `size` bytes remain
+ *
+ * Lazily initialises the pool (ResetDebugHeap) on first use. The fit test uses
+ * the UNROUNDED size and the cursor then advances by the size rounded up to 16,
+ * so an allocation can end up to 15 bytes past g_debugMallocEnd (NOTE #5689).
+ *
+ * MATCHED on the s136os arm (task #1505). Three spellings carry it:
+ * - the 0xFFFFFFF0 mask (not ~0xF): cc1 then builds it with lui/ori, as the ROM
+ *   does, instead of one `li -16`; and the rounded size goes back into `size`
+ *   so it stays in $16.
+ * - the fail path's zero is a `$2` EE_REG local behind a tied empty fence
+ *   (RULINGs #8598/#8483). Without a fence there, cc1's jump pass lays the fail
+ *   path first and reorg deletes the success path's branch to the epilogue; a
+ *   fence before the zero keeps the layout but stops reorg moving the zero into
+ *   the fit branch's delay slot.
+ * - the cursor store is volatile, a CODEGEN DEVICE (RULING #8404), not a claim
+ *   that anything else writes it: the only stores to g_debugMallocCursor in the
+ *   USA asm are this function and ResetDebugHeap. cc1 thinks the store is one
+ *   gp-relative instruction and would put it in the branch's delay slot; the
+ *   ROM keeps it before the branch (gas expands it to lui $1 + sw) and fills
+ *   the slot with the epilogue's `ld $16`.
+ *
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh. On native it is plain C.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_DebugMalloc)
+S136OS_SLOT(DebugMalloc);
 #else
 void *DebugMalloc(s32 size) {
     u8 *result;
+
     if (g_debugMallocCursor == 0) {
         ResetDebugHeap();
     }
     if ((s32)(g_debugMallocEnd - g_debugMallocCursor) < size) {
-        return 0;
+        register u8 *none EE_REG("$2") = 0;
+        __asm__ __volatile__("" : "+r"(none));
+        return none;
     }
     result = g_debugMallocCursor;
-    g_debugMallocCursor += (size + 0xF) & ~0xF;
+    size = (size + 0xF) & 0xFFFFFFF0;
+    *(u8 *volatile *)&g_debugMallocCursor = result + size;
     return result;
 }
 #endif
@@ -3276,24 +3302,38 @@ s32 func_0028C010(s32 key) {
     return 1;
 }
 
-/* Resolve the HUD icon slot for `iconName` (via func_0028B560), then copy its
- * texture id, palette id and base-frame field out of the icon-slot table into
- * the widget record `w`, recording the slot index in w[+0x40].
+/**
+ * Bind a HUD widget to an icon: resolve the icon slot for `iconName` and copy
+ * the slot's texture id, palette id and base frame into the widget.
  *
- * NEAR-MISS (59%): logic correct (the original re-reads the table pointer per
- * field access, modelled here by the per-access cast), but cc1 still allocates a
- * 0x20-byte frame for the two callee-saves (orig 0x10) and schedules the loads
- * differently. Fixed cc1 codegen; kept as the portable #else body. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C090);
+ *   w         the widget record (+0x0 texture id, +0x40 slot index,
+ *             +0x42 palette id, +0x44 base frame)
+ *   iconName  texture id looked up by func_0028B560
+ *
+ * The icon-slot table pointer (g_pHudAssetHeader[1]) is re-read for every
+ * field, as in the ROM: each widget store may alias it.
+ *
+ * MATCHED on the s136os arm (task #1505). The texture id is read BEFORE the
+ * slot index is stored, which is the ROM's order (a u16 load and an s16 store
+ * the scheduler may not swap). The table is read through g_pHudAssetHeaderAbs,
+ * which gives the ROM's `lui rX; lw rX,%lo(g_pHudAssetHeader+4)(rX)` form.
+ *
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh. On native it is plain C.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0028C090)
+S136OS_SLOT(func_0028C090);
 #else
 void func_0028C090(HudElement *w, s32 iconName) {
     u8 *b = (u8 *)w;
     s32 slot = func_0028B560(iconName);
+    s32 texId = ((HudIconSlot *)g_pHudAssetHeaderAbs[1])[slot].texId;
+
     *(s16 *)(b + 0x40) = (s16)slot;
-    *(s32 *)(b + 0x0) = ((HudIconSlot *)g_pHudAssetHeader[1])[slot].texId;
-    *(s8 *)(b + 0x42) = ((HudIconSlot *)g_pHudAssetHeader[1])[slot].paletteId;
-    *(s32 *)(b + 0x44) = ((HudIconSlot *)g_pHudAssetHeader[1])[slot].baseFrame;
+    *(s32 *)(b + 0x0) = texId;
+    *(s8 *)(b + 0x42) = ((HudIconSlot *)g_pHudAssetHeaderAbs[1])[slot].paletteId;
+    *(s32 *)(b + 0x44) = ((HudIconSlot *)g_pHudAssetHeaderAbs[1])[slot].baseFrame;
 }
 #endif
 

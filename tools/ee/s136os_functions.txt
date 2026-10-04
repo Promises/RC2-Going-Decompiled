@@ -286,3 +286,5 @@ usa text/1CA080 func_002CAAA8
 usa text/1CA080 func_002CABC0
 usa text/1CA080 func_002CDEB0
 usa text/1CA080 func_002CE618
+usa text/188858 DebugMalloc
+usa text/188858 func_0028C090
