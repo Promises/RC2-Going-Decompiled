@@ -847,48 +847,91 @@ f32 func_002A8910(f32 a1, f32 a0, f32 b0, f32 b1, f32 t) {
     return c * t3 + ((a1 - a0) - c) * t2 + (b0 - a1) * t + a0;
 }
 
-/* func_002A8948: per-component cubic (Catmull-Rom-style) blend of four control
- * vectors p1..p4 into out at parameter t - for each of x/y/z it is the vector
- * form of func_002A8910(p3, p1, p2, p4, t), with w forced to 0; t==0 copies p1
- * and t==1 copies p2 verbatim (128-bit lq/sq). Best attempt 78.7%: structure
- * (the two endpoint shortcuts incl. the bc1fl with the hoisted p3.x delay-slot
- * load, the lq/sq quad copies, the three per-axis cubic evaluations) all
- * reproduce, but the per-component FP arithmetic colours its temporaries into
- * different physical registers than the original and the endpoint sq lands a
- * slot earlier - the register-coloring + store-scheduling wall. Re-derived from
- * func_002A8910 (the matched scalar twin); not byte-reachable with the pinned
- * cc1.
- * Task #946 narrows this. Two of the colouring rows are source shape:
- *  - `c` (db - da) is ONE variable shared by the three axes. cc1 then gives
- *    it its own register ($f7) instead of tying it to db, as the ROM does.
- *  - `out->w = 0` is stored after the z axis's loads, and the zero from the
- *    t == 0 test stays live in $f8, as in the ROM.
- * With both (body in task #946's NOTE), 65 = 65 non-nop words with the ROM's
- * instruction order in the x block. What differs is FP register numbering:
- * t*t / t*t*t / the p1 component get $f6/$f3/$f5 against the ROM's
- * $f5/$f2/$f6, the per-axis temporaries shift with them, and the y/z blocks
- * issue their loads in a different order (6 rows ignoring register numbers).
- * 358 generated source variants over t2/t3 placement, `register`, declaration
- * order and expression shape all gave the same allocation. */
+/**
+ * func_002A8948 — per-component cubic blend of four control vectors into `out`
+ * at parameter t: for each of x/y/z it is the vector form of
+ * func_002A8910(p3, p1, p2, p4, t) (the matched scalar twin), with w forced to 0.
+ *   @param out  destination vector
+ *   @param p1   value at t == 0 (copied verbatim, 128-bit lq/sq)
+ *   @param p2   value at t == 1 (copied verbatim, 128-bit lq/sq)
+ *   @param p3   the segment's other start-side control point
+ *   @param p4   the segment's other end-side control point
+ *   @param t    blend parameter
+ * Per axis, with a1 = p3, a0 = p1, b0 = p2, b1 = p4:
+ *   cubic = (b1 - b0) - (a1 - a0);  quad = (a1 - a0) - cubic;  lin = b0 - a1
+ *   out = cubic*t^3 + quad*t^2 + lin*t + a0
+ * MATCHED on the s136os arm (task #1618): byte-exact solo under SN 2.95.3
+ * v1.36 -fopt-stack, closing 17/72 (NOTE #9285) -> 0. Closing lever, and the
+ * mechanism behind it: `cubic`, `quad` and `lin` are each ONE variable reused
+ * by all three axes. A pseudo that dies in three places is not a local-alloc
+ * quantity: cc1 hands it to global-alloc, which cannot tie it to a dying
+ * operand. That reproduces the ROM's untied results ($f7 for cubic, $f1 for
+ * quad, $f4 for lin in every axis; z's quad*t2 lands in t2's $f5), which no
+ * per-axis temporary could (task #1618's sweep: 128 variants sharing only the
+ * operands best 19, operand-order variants best 15). `quad * t2` keeps quad
+ * first: local-alloc ties an output to its first operand.
+ * Each remaining device was measured necessary (word compare after
+ * asm_unit.sh -G8): without the two empty fences the body is 70 words, and
+ * with `*out = *p1` struct copies instead of the u_long128 ones it is 82. The
+ * t2/t3 EE_REG pins of NOTE #9285's body are NOT needed and are gone.
+ */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 7.06% ->
    UNKNOWN-@0: ROM `mtc1 zero,$f8` vs `addiu sp,sp,-64` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8948);
+/* GUARD (task #1618): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002A8948)
+S136OS_SLOT(func_002A8948);
 #else
 void func_002A8948(Vec4 *out, Vec4 *p1, Vec4 *p2, Vec4 *p3, Vec4 *p4, f32 t) {
+    f32 t2, t3;
+    f32 cubic, lin, quad; /* shared by the three axes: see the doc comment */
+
     if (t == 0.0f) {
-        *out = *p1;
+        *(u_long128 *)out = *(u_long128 *)p1;
+        __asm__ __volatile__("");
         return;
     }
     if (t == 1.0f) {
-        *out = *p2;
+        *(u_long128 *)out = *(u_long128 *)p2;
+        __asm__ __volatile__("");
         return;
     }
-    /* per axis: scalar cubic of the (p3,p1)->(p2,p4) segment; w := 0 */
-    out->x = func_002A8910(p3->x, p1->x, p2->x, p4->x, t);
-    out->y = func_002A8910(p3->y, p1->y, p2->y, p4->y, t);
+    t2 = t * t;
+    t3 = t2 * t;
+    {
+        f32 a1, a0, b0, b1, da, db;
+        b0 = p2->x; a1 = p3->x; a0 = p1->x; b1 = p4->x;
+        da = a1 - a0;
+        db = b1 - b0;
+        cubic = db - da;
+        lin = b0 - a1;
+        quad = da - cubic;
+        out->x = cubic * t3 + quad * t2 + lin * t + a0;
+    }
+    {
+        f32 a1, a0, b0, b1, da, db;
+        b0 = p2->y; a1 = p3->y; a0 = p1->y; b1 = p4->y;
+        da = a1 - a0;
+        db = b1 - b0;
+        cubic = db - da;
+        lin = b0 - a1;
+        quad = da - cubic;
+        out->y = cubic * t3 + quad * t2 + lin * t + a0;
+    }
+    {
+        f32 a1, a0, b0, b1, da, db;
+        b0 = p2->z; a1 = p3->z; a0 = p1->z; b1 = p4->z;
+        da = a1 - a0;
+        db = b1 - b0;
+        cubic = db - da;
+        lin = b0 - a1;
+        quad = da - cubic;
+        out->z = cubic * t3 + quad * t2 + lin * t + a0;
+    }
     out->w = 0.0f;
-    out->z = func_002A8910(p3->z, p1->z, p2->z, p4->z, t);
 }
 #endif
 
