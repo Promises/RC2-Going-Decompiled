@@ -3227,26 +3227,37 @@ s32 func_0033A8F0(void *w) {
 }
 #endif
 
-/* func_0033A9F8: draw this confirm-dialog screen. Sets the dialog box's (p+0x8)
- * +0x2C4 footer-visible flag to 1 when any global menu lock (D_1A8C88 / D_1A8C8C)
- * is engaged or the local +0x330 flag is set; additionally sets it to 1 (with
- * arg 1) when the +0x32C "text ready" flag equals 1. Then draws the box
- * (func_0033BF90) and the background sprite at p+0x2D8. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033A9F8);
+/* func_0033A9F8: draw this confirm-dialog screen.
+ *   p - the screen. Its dialog box (p+0x8) gets func_0033BE68(box, 0) when any
+ *       global menu lock (D_1A8C88 / D_1A8C8C) is engaged or the local +0x330
+ *       flag is set, and func_0033BE68(box, 1) when the +0x32C "text ready"
+ *       flag equals 1. Then the box is drawn (func_0033BF90), followed by the
+ *       background sprite at p+0x2D8. Returns nothing.
+ * The box address is assigned on BOTH arms of the first `if`, not once up
+ * front. Phrasing, not a device: written once at the top, cc1 computes it in
+ * the first branch's delay slot and allocates p/box as $16/$17, the ROM's
+ * swap. Written per arm, each path forms it where the ROM does (the call block
+ * entry, plus the second test's delay slot), giving $17 = p and $16 = box
+ * (task #1607; measured 19/34 -> 0). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0033A9F8)
+S136OS_SLOT(func_0033A9F8);
 #else
-/* engine96 probe (task #466, cc1 2.96 via MATCH_func_0033A9F8, unit objdiff): 85.82%,
-   15/36 insns differ. Residual: UNKNOWN-sd (first differing insn: 'sd s1, 0x8(sp)' vs 'sd s0, 0x0(sp)').
-   Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
-   not byte-exact, so the arm stays #else. */
-/* TODO(match): functional equivalent - not byte-exact; branch-likely (beql)
-   guard + reloaded-flag CSE wall. */
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1607; verify_match_unit BYTE IDENTICAL on the spliced unit
+   object, base-seeded control rc 1).
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 extern s32 D_1A8C88, D_1A8C8C;
 extern void func_0033BE68(void *p, s32 v);
 void func_0033A9F8(void *p) {
-    void *box = (char *)p + 0x8;
+    void *box;
     if (D_1A8C88 != 0 || D_1A8C8C != 0 || *(s32 *)((char *)p + 0x330) != 0) {
+        box = (char *)p + 0x8;
         func_0033BE68(box, 0);
+    } else {
+        box = (char *)p + 0x8;
     }
     if (*(s32 *)((char *)p + 0x32C) == 1) {
         func_0033BE68(box, 1);
