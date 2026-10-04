@@ -18,8 +18,10 @@
 # unseen; a unit that fails to compile is now a FAIL, not a smaller link.
 #
 # Arm: the `native-build` image (tools/native/build_image.sh) when it exists,
-# else the host ($CC, default clang; links with GNU ld via -fuse-ld=bfd).
-# NATIVE_LINK=docker|host forces one. The arm used is printed.
+# else the host ($CC, default clang). Both arms compile with clang and link with
+# GNU ld via -fuse-ld=bfd; the image pins clang-14 (task #1445 — its gcc/g++ 12
+# rejects the .cpp units' `_Static_assert` at gnu++98). NATIVE_LINK=docker|host
+# forces one. The arm used is printed.
 set -eu
 
 ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
@@ -71,7 +73,7 @@ case "$arm" in
   docker)
     echo "verify_link: arm docker ($IMG, context $CTX)"
     docker --context "$CTX" run --rm -v "$ROOT":/work -v "$W":/out -w /work "$IMG" \
-      sh -c "$link_script" sh gcc "" /out ;;
+      sh -c "$link_script" sh clang "-fuse-ld=bfd" /out ;;
   host)
     HCC="${CC:-clang}"
     echo "verify_link: arm host ($($HCC --version | head -1); GNU ld)"
