@@ -66,6 +66,10 @@ match reports with [objdiff](https://github.com/encounter/objdiff).
 A function that does not match yet is kept as `INCLUDE_ASM` and, where one
 exists, carries a portable C body under `#else` (`TARGET_NATIVE`).
 
+## Credits
+
+See [credits.md](credits.md).
+
 ## Status
 
 Work in progress. This repository is synced from the project's working

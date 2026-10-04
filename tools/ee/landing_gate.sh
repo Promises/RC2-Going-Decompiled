@@ -206,8 +206,12 @@
 #            VACUOUS (a WARN, a FAIL under --strict) and the lint is not run.
 #            Identity is (region, symbol, file, KIND), never the type text, so
 #            re-spelling a pre-existing mismatch (#1389's s64 -> s32) is not
-#            NEW. Pre-existing rows are NOT this row's to fail (the full list is
-#            `decl_def_lint.py` with no arguments). The whole tree, never named
+#            NEW. Same-key sites are a multiset, so a key whose count grew is
+#            reported with its base -> tip count and EVERY tip site, the added
+#            one among them (task #1461; naming one site blamed the key's last,
+#            a pre-existing declaration, FACT #9147). Pre-existing rows are
+#            NOT this row's to fail (the full list is `decl_def_lint.py` with
+#            no arguments). The whole tree, never named
 #            units: per-unit mode used to parse only the named units and
 #            printed PASS on a known positive (#1424). ~2 x the lint's
 #            whole-tree time; on a clean tree whose NATIVE inputs equal the
@@ -1038,8 +1042,8 @@ check_decldef() {
   if [ "$rc" = 0 ] && /usr/bin/grep -qx '#### decl-def-lint diff: PASS' "$out" && [ -n "$sum" ]; then
     ok "DECLDEF: no disagreement at the tip that the base lacks ($sum; ${secs}s)"
   elif [ "$rc" = 1 ] && /usr/bin/grep -qx '#### decl-def-lint diff: FAIL' "$out"; then
-    fail "DECLDEF: $(/usr/bin/grep -c '^NEW ' "$out" || true) declaration/definition disagreement(s) NEW at the tip ($sum; ${secs}s) — correct the declaration when that is byte-neutral, or annotate it \`DECL-LEVER(#<task>): <reason>\` when a ruling or a measured lever makes it deliberate; MATCHED CODE IS NOT CHANGED ON A LINT'S SAY-SO:"
-    show < <(/usr/bin/grep '^NEW ' "$out" | sed 's/^/       /')
+    fail "DECLDEF: $(sed -n 's/.*; new=\([0-9]*\) .*/\1/p' <<<"$sum") declaration/definition disagreement(s) NEW at the tip, in $(/usr/bin/grep -c '^NEW ' "$out" || true) key(s) ($sum; ${secs}s) — each NEW key lists EVERY site it has at the tip with its base -> tip count, because same-kind sites in one file are indistinguishable to the key and the added one cannot be singled out (task #1461); correct the declaration when that is byte-neutral, or annotate it \`DECL-LEVER(#<task>): <reason>\` when a ruling or a measured lever makes it deliberate; MATCHED CODE IS NOT CHANGED ON A LINT'S SAY-SO:"
+    show < <(/usr/bin/grep -E '^(NEW |  site )' "$out" | sed 's/^/       /')
   else
     fail "DECLDEF: decl_def_lint.py could not run (rc $rc, ${secs}s) — fails closed: $(tail -3 "$out" | tr '\n' ' ')"
   fi
@@ -2589,13 +2593,20 @@ selftest_asmunit_selftest() {
 # instrument under test); the base is the probe commit, pinned. Legs:
 #   lint     decl_def_lint.py --selftest: PASS, with its per-unit, direction
 #            and key arms by name (the fixture-level controls);
-#   fired    base agrees, tip `int` -> FAIL naming the NEW RETURN-UNSET row;
+#   fired    base agrees, tip `int` -> FAIL naming the NEW RETURN-UNSET row
+#            (`count base 0 -> tip 1: every site is new`, then its site);
+#   multiset base `int` once, tip with a second `int` declaration ADDED ABOVE
+#            it in the same unit (#1450's 250080.cpp:265 shape, task #1461) ->
+#            FAIL whose ROW TEXT names the ADDED site's line and the existing
+#            one's, under `count base 1 -> tip 2`. The pre-#1461 report named
+#            only the key's last site (the existing one) and passed every
+#            verdict-only leg;
 #   respell  base `long long`, tip `int` (#1389's s64 -> s32 shape) -> PASS;
 #   oldkey   the same pair under `--key text`, the pre-#1425 identity -> FAIL:
 #            the control that the re-spelling fixture discriminates;
 #   vacuous  a base pinned to the tip itself -> WARN 'VACUOUS' (FAIL under
 #            --strict) and the lint is not run.
-# ~3 lint --base runs (2 x the whole-tree lint each); no VM.
+# ~4 lint --base runs (2 x the whole-tree lint each); no VM.
 decldef_probe_commit() {  # decldef_probe_commit INDEXFILE PATH BLOB [PATH BLOB ...] — HEAD + those blobs
   local idx=$1 t; shift; rm -f "$idx"
   GIT_INDEX_FILE="$idx" git read-tree HEAD || return 1
@@ -2605,40 +2616,56 @@ decldef_probe_commit() {  # decldef_probe_commit INDEXFILE PATH BLOB [PATH BLOB 
 }
 selftest_decldef() {
   local T="$1" b=0 rc; local D="$T/decldef"; rm -rf "$D"; mkdir -p "$D"
-  say "-- (27) DECLDEF (#1425): decl_def_lint.py --selftest PASS; on probe commits (HEAD + a seeded definition and a declaration of it in another usa unit) a NEW disagreement -> FAIL naming it; a RE-SPELLING of an existing one (long long -> int vs a void definition, #1389's shape) -> PASS, and the same pair under the OLD text key -> FAIL (the control); a base pinned to the tip -> VACUOUS (FAIL under --strict), not run"
+  say "-- (27) DECLDEF (#1425): decl_def_lint.py --selftest PASS; on probe commits (HEAD + a seeded definition and a declaration of it in another usa unit) a NEW disagreement -> FAIL naming it; a same-kind site ADDED ABOVE an existing one -> FAIL whose rows name the ADDED line with base -> tip counts (#1461); a RE-SPELLING of an existing one (long long -> int vs a void definition, #1389's shape) -> PASS, and the same pair under the OLD text key -> FAIL (the control); a base pinned to the tip -> VACUOUS (FAIL under --strict), not run"
   python3 tools/native/decl_def_lint.py --selftest > "$D/lint_selftest.txt" 2>&1; rc=$?
-  local a miss=""; for a in s13 s14 s16 s17 s18 s19 d1 d2 d3 d4 d5; do /usr/bin/grep -q "^OK   $a " "$D/lint_selftest.txt" || miss="$miss $a"; done
+  local a miss=""; for a in s13 s14 s16 s17 s18 s19 d1 d2 d3 d4 d5 d6 d7; do /usr/bin/grep -q "^OK   $a " "$D/lint_selftest.txt" || miss="$miss $a"; done
   if [ "$rc" = 0 ] && [ -z "$miss" ] && /usr/bin/grep -qE '^#### decl-def-lint selftest: PASS \([0-9]+ arms\)$' "$D/lint_selftest.txt" && ! /usr/bin/grep -q '^SELFTEST-FAIL' "$D/lint_selftest.txt"; then
-    ok "control (27) lint: rc $rc, $(/usr/bin/grep '^#### decl-def-lint selftest' "$D/lint_selftest.txt" | sed 's/^#### //'), per-unit/direction/key arms all OK"
+    ok "control (27) lint: rc $rc, $(/usr/bin/grep '^#### decl-def-lint selftest' "$D/lint_selftest.txt" | sed 's/^#### //'), per-unit/direction/key/attribution arms all OK"
   else say "SELFTEST-FAIL (27) decl_def_lint.py --selftest (rc $rc, missing OK arms:${miss:- none}):"; show < <(/usr/bin/grep -E '^(SELFTEST-FAIL|####)' "$D/lint_selftest.txt" | sed 's/^/  inner| /'); b=1; fi
-  local units u1 u2 dblob v agree s64 s32
+  local units u1 u2 dblob v agree s64 s32 multi tipdir="$D/tip" tiprev added orig
   units=$(git grep -l TARGET_NATIVE HEAD -- 'going-decompiled/src/usa/*.c' | sed 's/^HEAD://' | LC_ALL=C sort | head -2)
   u1=$(printf '%s\n' "$units" | sed -n 1p); u2=$(printf '%s\n' "$units" | sed -n 2p)
   if [ -z "$u1" ] || [ -z "$u2" ] || git grep -q T1425SeedDef HEAD -- going-decompiled; then say "SELFTEST-BROKEN: (27) needs two usa TARGET_NATIVE .c units and no existing T1425SeedDef (units '$u1' '$u2')"; return 1; fi
   dblob=$({ git cat-file blob "HEAD:$u1"; printf '\n/* landing_gate selftest (27) seed, task #1425 */\nvoid T1425SeedDef(int x) { (void)x; }\n'; } | git hash-object -w --stdin)
-  for v in agree:void s64:'long long' s32:int; do
-    local blob c; blob=$({ git cat-file blob "HEAD:$u2"; printf '\n/* landing_gate selftest (27) seed, task #1425 */\n%s T1425SeedDef(int x);\n' "${v#*:}"; } | git hash-object -w --stdin)
+  for v in agree:void s64:'long long' s32:int multi:int; do
+    local blob c; blob=$({ git cat-file blob "HEAD:$u2"; [ "${v%%:*}" = multi ] && printf '\n/* landing_gate selftest (27) seed, task #1461: ADDED above */ int T1425SeedDef(int x);'
+      printf '\n/* landing_gate selftest (27) seed, task #1425 */\n%s T1425SeedDef(int x);\n' "${v#*:}"; } | git hash-object -w --stdin)
     c=$(decldef_probe_commit "$D/probe_index" "$u1" "$dblob" "$u2" "$blob")
     [ -n "$c" ] || { say "SELFTEST-BROKEN: (27) could not build the '${v%%:*}' probe commit"; return 1; }
     eval "${v%%:*}=$c"
   done
-  rm -rf "$D/tip"; mkdir -p "$D/tip"
-  git archive "$s32" going-decompiled/src going-decompiled/include tools/native | tar -x -C "$D/tip" && cp tools/native/decl_def_lint.py "$D/tip/tools/native/decl_def_lint.py" \
-    || { say "SELFTEST-BROKEN: (27) could not extract the tip probe $s32"; return 1; }
-  decldef_leg() {  # decldef_leg NAME BASE KEY STRICT WANT_FAILED WANT_WARNED REGEX [MUST_NOT]
-    local out="$D/$1.txt"; FAILED=0; WARNED=0; STRICT=$4
-    LANDING_GATE_NATIVE_BASE=$2 check_decldef "$D/tip" "$s32" "$3" > "$out"; STRICT=0
-    if [ "$FAILED" = "$5" ] && [ "$WARNED" = "$6" ] && /usr/bin/grep -qE "$7" "$out" && { [ -z "${8:-}" ] || ! /usr/bin/grep -qE "$8" "$out"; }; then
-      ok "$1: $(/usr/bin/grep -E '^(OK|FAIL|WARN|FAIL\(strict\)) ' "$out" | head -1 | cut -c1-220)$(/usr/bin/grep -E '^ +NEW ' "$out" | head -1 | sed 's/^ */ | /' | cut -c1-200)"
-    else say "SELFTEST-FAIL (27) leg $1 (FAILED=$FAILED want $5, WARNED=$WARNED want $6):"; show < <(sed 's/^/  inner| /' "$out"); b=1; fi
+  for v in "$s32:$D/tip" "$multi:$D/tipm"; do
+    rm -rf "${v#*:}"; mkdir -p "${v#*:}"
+    git archive "${v%%:*}" going-decompiled/src going-decompiled/include tools/native | tar -x -C "${v#*:}" && cp tools/native/decl_def_lint.py "${v#*:}/tools/native/decl_def_lint.py" \
+      || { say "SELFTEST-BROKEN: (27) could not extract the tip probe ${v%%:*}"; return 1; }
+  done
+  # the multiset probe's two sites, read from its own blob: the ADDED one and
+  # the existing seed it was added above
+  added=$(git cat-file blob "$multi:$u2" | /usr/bin/grep -n 'task #1461: ADDED above' | cut -d: -f1)
+  orig=$(git cat-file blob "$multi:$u2" | /usr/bin/grep -n '^int T1425SeedDef(int x);$' | cut -d: -f1)
+  if [ -z "$added" ] || [ -z "$orig" ] || [ "$added" -ge "$orig" ]; then say "SELFTEST-BROKEN: (27) the multiset probe's sites did not resolve (added '$added', existing '$orig')"; return 1; fi
+  tiprev=$s32
+  decldef_leg() {  # decldef_leg NAME BASE KEY STRICT WANT_FAILED WANT_WARNED REGEXES [MUST_NOT] — REGEXES: one per line, ALL must match
+    local out="$D/$1.txt" re miss=0; FAILED=0; WARNED=0; STRICT=$4
+    LANDING_GATE_NATIVE_BASE=$2 check_decldef "$tipdir" "$tiprev" "$3" > "$out"; STRICT=0
+    while IFS= read -r re; do /usr/bin/grep -qE -- "$re" "$out" || miss=1; done <<< "$7"
+    if [ "$FAILED" = "$5" ] && [ "$WARNED" = "$6" ] && [ "$miss" = 0 ] && { [ -z "${8:-}" ] || ! /usr/bin/grep -qE "$8" "$out"; }; then
+      ok "$1: $(/usr/bin/grep -E '^(OK|FAIL|WARN|FAIL\(strict\)) ' "$out" | head -1 | cut -c1-220)$(/usr/bin/grep -E '^ +(NEW|site) ' "$out" | sed 's/^ */ | /' | tr -d '\n' | cut -c1-900)"
+    else say "SELFTEST-FAIL (27) leg $1 (FAILED=$FAILED want $5, WARNED=$WARNED want $6, every REGEX matched: $([ "$miss" = 0 ] && echo yes || echo NO)):"; show < <(sed 's/^/  inner| /' "$out"); b=1; fi
   }
-  decldef_leg "fired (27) a NEW disagreement" "$agree" kind 0 1 0 '^ +NEW  DESIGN-CALL usa T1425SeedDef  decl '"$u2"':[0-9]+ .* RETURN-UNSET int vs void$'
-  decldef_leg "fired (27) the OLD text key on the re-spelling (control)" "$s64" text 0 1 0 '^ +NEW  DESIGN-CALL usa T1425SeedDef .* RETURN-UNSET int vs void$'
+  decldef_leg "fired (27) a NEW disagreement" "$agree" kind 0 1 0 '^ +NEW  \+1  usa T1425SeedDef  decl '"$u2"'  RETURN-UNSET  \[count base 0 -> tip 1: every site is new\]$
+^ +site DESIGN-CALL usa T1425SeedDef  decl '"$u2"':[0-9]+ .* RETURN-UNSET int vs void$'
+  decldef_leg "fired (27) the OLD text key on the re-spelling (control)" "$s64" text 0 1 0 '^ +site DESIGN-CALL usa T1425SeedDef .* RETURN-UNSET int vs void$'
   decldef_leg "control (27) a RE-SPELLING (long long -> int vs void) under the KIND key" "$s64" kind 0 0 0 '^OK   DECLDEF: no disagreement at the tip that the base lacks \(.*new=0 gone=0; key=kind; [0-9]+s\)$' 'NEW '
   decldef_leg "fired (27) base pinned to the tip, STRICT=1" "$s32" kind 1 1 1 '^FAIL\(strict\) DECLDEF: base == tip, VACUOUS' 'decl-def-lint diff'
   decldef_leg "fired (27) base pinned to the tip, STRICT=0" "$s32" kind 0 0 1 '^WARN DECLDEF: base == tip, VACUOUS' 'decl-def-lint diff'
+  tipdir="$D/tipm"; tiprev=$multi
+  decldef_leg "fired (27) a same-kind site ADDED ABOVE an existing one (#1461): the rows name the ADDED line" "$s32" kind 0 1 0 '^FAIL DECLDEF: 1 declaration/definition disagreement\(s\) NEW at the tip, in 1 key\(s\) \(.*new=1 gone=0; key=kind; [0-9]+s\)
+^ +NEW  \+1  usa T1425SeedDef  decl '"$u2"'  RETURN-UNSET  \[count base 1 -> tip 2: the key cannot tell which 1 of these 2 same-kind sites is the added one; all are listed\]$
+^ +site DESIGN-CALL usa T1425SeedDef  decl '"$u2:$added"'  def .* RETURN-UNSET int vs void$
+^ +site DESIGN-CALL usa T1425SeedDef  decl '"$u2:$orig"'  def .* RETURN-UNSET int vs void$'
   unset -f decldef_leg
-  rm -rf "$D/tip"; FAILED=0; WARNED=0; STRICT=0
+  rm -rf "$D/tip" "$D/tipm"; FAILED=0; WARNED=0; STRICT=0
   return $b
 }
 

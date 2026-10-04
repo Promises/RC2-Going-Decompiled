@@ -104,7 +104,7 @@ ARITY-EXTRA (trailing arguments the definition never reads), POINTEE, and a
 NOPROTO declaration whose call cannot be mis-promoted.
 
 COST (XPS, clang 23.1.1): ~30 s for the 44 units; --base ~50 s (two trees);
---selftest ~10 s (25 arms, task #1425).
+--selftest ~10 s (28 arms, tasks #1425/#1461).
 
 UNITS (task #1425). Unit arguments SELECT rows; they never narrow the parse.
 The whole TARGET_NATIVE population is always parsed, and a row is kept when
@@ -126,6 +126,17 @@ the types. Rows sharing a key are COUNTED (a multiset): a further same-kind
 site in the same file is NEW, but a same-kind SWAP within one file (one fixed,
 one added) is not; see site_key. `--key text` restores the old identity for
 --selftest's negative control only.
+
+--base REPORT (task #1461). A key whose count GREW prints one `NEW +<delta>`
+header with its `count base B -> tip T`, then EVERY tip site of that key
+(`  site <row>`, tip line numbers). Sites sharing a key are indistinguishable
+to it, so the report names all of them rather than guess: before #1461 base
+rows absorbed tip rows in tip order and the key's LAST site was always the one
+named NEW (#1450: a third func_0011AEA0 declaration added at 250080.cpp:265
+was reported at a pre-existing site, FACT #9147). A key whose count FELL
+prints `GONE -<delta>` and every BASE site (`  was  <row>`, base line
+numbers). The summary's new=/gone= are the summed deltas. A pure same-kind
+SWAP still prints nothing.
 
 Usage:
   tools/native/decl_def_lint.py [--info] [unit ...]   lint this tree (units
@@ -714,23 +725,59 @@ KEYS = {"kind": site_key, "text": site_key_text}
 
 
 def diff_rows(base_rows, tip_rows, key=site_key):
-    """(new, gone, nbase): error rows at the tip not matched by a base row of
-    the same key, compared as a MULTISET (each base row absorbs one tip row),
-    and the base keys left unmatched."""
-    pool = {}
-    for r in base_rows:
-        if r[0] in ERROR_STATES:
-            pool[key(r)] = pool.get(key(r), 0) + 1
-    new, gone = [], dict(pool)
-    for r in tip_rows:
-        if r[0] not in ERROR_STATES:
-            continue
-        k = key(r)
-        if gone.get(k, 0) > 0:
-            gone[k] -= 1
-        else:
-            new.append(r)
-    return new, gone, sum(pool.values())
+    """(grown, shrunk, nbase): the error rows of both trees grouped by key and
+    compared as a MULTISET of keys. `grown` lists every key whose tip count
+    exceeds its base count as (key, base count, tip count, EVERY tip site);
+    `shrunk` lists every key whose count fell as (key, base count, tip count,
+    EVERY base site). nbase is the base's error-row total.
+
+    Every site of a changed key is returned, never a chosen one (task #1461).
+    Sites sharing a key are indistinguishable to the key by construction, so
+    "which is the added one" is not decidable here; the old form let base rows
+    absorb tip rows in tip order and so always blamed the key's LAST site —
+    #1450 seeded a third func_0011AEA0 declaration at 250080.cpp:265 and the
+    gate named the pre-existing :678 (FACT #9147, at master dbf91765); #1461
+    re-measured it at 83ff96b3: added :265, named :664 (base :663)."""
+    sites = ({}, {})
+    for rows, into in zip((base_rows, tip_rows), sites):
+        for r in rows:
+            if r[0] in ERROR_STATES:
+                into.setdefault(key(r), []).append(r)
+    base, tip = sites
+    grown = [(k, len(base.get(k, ())), len(v), v) for k, v in tip.items()
+             if len(v) > len(base.get(k, ()))]
+    shrunk = [(k, len(v), len(tip.get(k, ())), v) for k, v in base.items()
+              if len(v) > len(tip.get(k, ()))]
+    return grown, shrunk, sum(len(v) for v in base.values())
+
+
+def fmt_key(k, key="kind"):
+    return "%s %s  decl %s  %s" % (k[0], k[1], k[2], "; ".join(k[3]) if key == "kind" else k[3])
+
+
+def diff_report(grown, shrunk, key="kind"):
+    """The --base report: one NEW header per grown key, then EVERY tip site of
+    that key (`  site `, tip line numbers); one GONE header per shrunk key,
+    then EVERY base site of it (`  was  `, BASE line numbers). The header
+    carries the key's base -> tip count, so a third same-kind site reads
+    `+1 ... count base 2 -> tip 3` over all three sites, the added one among
+    them. A same-file same-kind SWAP leaves the count unchanged and prints
+    nothing (the blind spot site_key documents); when it rides with a further
+    add, the swapped-in site is listed under the NEW header too."""
+    out = []
+    for k, nb, nt, rows in grown:
+        out.append("NEW  +%d  %s  [count base %d -> tip %d: %s]" % (
+            nt - nb, fmt_key(k, key), nb, nt, "every site is new" if nb == 0 else
+            "the key cannot tell which %d of these %d same-kind sites %s the added one%s; "
+            "all are listed" % (nt - nb, nt, "is" if nt - nb == 1 else "are",
+                                "" if nt - nb == 1 else "s")))
+        out += ["  site " + fmt(r) for r in rows]
+    for k, nb, nt, rows in shrunk:
+        out.append("GONE -%d  %s  [count base %d -> tip %d: %s; base line numbers]" % (
+            nb - nt, fmt_key(k, key), nb, nt, "every site is gone" if nt == 0 else
+            "%d of these %d base sites, not decidable which; all are listed" % (nb - nt, nb)))
+        out += ["  was  " + fmt(r) for r in rows]
+    return out
 
 
 def lint(units, show_info=False):
@@ -782,19 +829,16 @@ def lint_diff(base, units, repo=None, key="kind"):
         print(tip if n_tip is None else base_rows)
         print("#### decl-def-lint: UNRUNNABLE (fails closed)")
         return 2
-    new, gone, nb = diff_rows(base_rows, tip, KEYS[key])
-    for r in new:
-        print("NEW  " + fmt(r))
-    ngone = sum(gone.values())
-    for k, v in sorted(gone.items()):
-        for _ in range(v):
-            print("GONE %-3s %s  decl %s  %s" % (k[0], k[1], k[2], "; ".join(k[3]) if key == "kind" else k[3]))
+    grown, shrunk, nb = diff_rows(base_rows, tip, KEYS[key])
+    for line in diff_report(grown, shrunk, key):
+        print(line)
     print("--- decl-def-lint diff: base %s units=%d errors=%d -> tip units=%d errors=%d; "
           "new=%d gone=%d; key=%s ---" % (base, n_base, nb, n_tip,
                                           sum(1 for r in tip if r[0] in ERROR_STATES),
-                                          len(new), ngone, key))
-    print("#### decl-def-lint diff: %s" % ("FAIL" if new else "PASS"))
-    return 1 if new else 0
+                                          sum(nt - b for _, b, nt, _ in grown),
+                                          sum(b - nt for _, b, nt, _ in shrunk), key))
+    print("#### decl-def-lint diff: %s" % ("FAIL" if grown else "PASS"))
+    return 1 if grown else 0
 
 
 # ------------------------------------------------------------ selftest ---
@@ -888,10 +932,9 @@ def _diff_arm(name, base_use, tip_use, key, expect_new, expect_rows=(), absent=(
             shutil.rmtree(t, ignore_errors=True)
     if got[0][0] is None or got[1][0] is None:
         return _verdict(name, 2, 1 if expect_new else 0, str(got), (), ())
-    new, gone, _ = diff_rows(got[0][1], got[1][1], KEYS[key])
-    out = "".join("NEW  " + fmt(r) + "\n" for r in new) + \
-        "".join("GONE %s\n" % (k,) for k, v in gone.items() for _ in range(v))
-    return _verdict(name, 1 if new else 0, 1 if expect_new else 0, out, expect_rows, absent)
+    grown, shrunk, _ = diff_rows(got[0][1], got[1][1], KEYS[key])
+    out = "".join(line + "\n" for line in diff_report(grown, shrunk, key))
+    return _verdict(name, 1 if grown else 0, 1 if expect_new else 0, out, expect_rows, absent)
 
 
 def selftest():
@@ -994,15 +1037,47 @@ def selftest():
         ("d1 a pure RE-SPELLING of a mismatch (s64 -> s32 vs a void def, #1389's shape) -> "
          "no NEW, PASS", s64, s32, "kind", False, (), [r"^NEW"]),
         ("d2 control: the same re-spelling under the OLD text key -> NEW, FAIL (#1414 Q1)",
-         s64, s32, "text", True, [r"^NEW  DESIGN-CALL usa Sink .* RETURN-UNSET int vs void"]),
+         s64, s32, "text", True, [r"^NEW  \+1  usa Sink .* \[count base 0 -> tip 1: every site is new\]$",
+                                  r"^  site DESIGN-CALL usa Sink .* RETURN-UNSET int vs void$"]),
         ("d3 a genuinely NEW mismatch (an agreeing declaration made value-returning) -> NEW, FAIL",
          "void Sink(int x);\nvoid f(void) { Sink(1); }\n", s32, "kind", True,
-         [r"^NEW  DESIGN-CALL usa Sink  decl going-decompiled/src/usa/text/use.c:2 .* RETURN-UNSET"]),
+         [r"^NEW  \+1  usa Sink  decl going-decompiled/src/usa/text/use\.c  RETURN-UNSET  "
+          r"\[count base 0 -> tip 1: every site is new\]$",
+          r"^  site DESIGN-CALL usa Sink  decl going-decompiled/src/usa/text/use\.c:2 .* RETURN-UNSET"]),
         ("d4 a SECOND site of the same kind in the same file -> counted, NEW, FAIL",
          s32, s32 + "int g(void) { extern int Sink(int); return Sink(2); }\n", "kind", True,
-         [r"^NEW  DESIGN-CALL usa Sink  decl going-decompiled/src/usa/text/use.c:4 "]),
+         [r"^NEW  \+1  usa Sink  decl going-decompiled/src/usa/text/use\.c  RETURN-UNSET  \[count base 1 -> tip 2: ",
+          r"^  site DESIGN-CALL usa Sink  decl going-decompiled/src/usa/text/use\.c:2 ",
+          r"^  site DESIGN-CALL usa Sink  decl going-decompiled/src/usa/text/use\.c:4 "]),
         ("d5 control: an unrelated line inserted above (the site moves) -> no NEW, PASS",
          s32, "/* moved */\n" + s32, "kind", False, (), [r"^NEW"]),
+        # task #1461, ATTRIBUTION. d4 adds its site LAST, which is where the old
+        # tip-order absorption happened to blame, so d4 passed with the defect
+        # live. d6 adds the site FIRST (#1450's 250080.cpp:265 shape): the old
+        # report named only the pre-existing :3. The assertion is on the ROW
+        # TEXT — the added :2 must appear, with the counts.
+        ("d6 a same-kind site added ABOVE an existing one -> NEW lists the ADDED site, with "
+         "base -> tip counts, FAIL",
+         s32, "int g(void) { extern int Sink(int); return Sink(2); }\n" + s32, "kind", True,
+         [r"^NEW  \+1  usa Sink  decl going-decompiled/src/usa/text/use\.c  RETURN-UNSET  "
+          r"\[count base 1 -> tip 2: the key cannot tell which 1 of these 2 same-kind sites is the added "
+          r"one; all are listed\]$",
+          r"^  site DESIGN-CALL usa Sink  decl going-decompiled/src/usa/text/use\.c:2 .* RETURN-UNSET int vs void$",
+          r"^  site DESIGN-CALL usa Sink  decl going-decompiled/src/usa/text/use\.c:3 .* RETURN-UNSET int vs void$"]),
+        ("d7 GONE, symmetric: one of two same-kind sites removed -> no NEW, PASS; GONE lists every "
+         "BASE site with counts",
+         s32 + "int g(void) { extern int Sink(int); return Sink(2); }\n", s32, "kind", False,
+         [r"^GONE -1  usa Sink  decl going-decompiled/src/usa/text/use\.c  RETURN-UNSET  "
+          r"\[count base 2 -> tip 1: 1 of these 2 base sites, not decidable which; all are listed; "
+          r"base line numbers\]$",
+          r"^  was  DESIGN-CALL usa Sink  decl going-decompiled/src/usa/text/use\.c:2 ",
+          r"^  was  DESIGN-CALL usa Sink  decl going-decompiled/src/usa/text/use\.c:4 "], [r"^NEW"]),
+        ("d8 KNOWN BLIND SPOT (site_key, kept): a same-file same-kind SWAP (one site removed, "
+         "another added) nets to zero -> no NEW, no GONE, PASS",
+         s32 + "int g(void) { extern int Sink(int); return Sink(2); }\n",
+         "int g(void) { extern int Sink(int); return Sink(2); }\n"
+         "int h(void) { extern int Sink(int); return Sink(3); }\n", "kind", False, (),
+         [r"^NEW", r"^GONE"]),
     ]
     ok = all([_diff_arm(*d) for d in diffs]) and ok
     n = len(arms) + len(diffs)
