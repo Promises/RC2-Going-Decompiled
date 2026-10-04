@@ -46,12 +46,19 @@
 # failure, but a verdict above is unreachable, e.g. the seeded arena is absent)
 # or the run itself could not be completed. 2 is not a pass.
 #
-# THE SEEDED ARENA. The canonical seed is tools/ee/eetest/state/globals.bin
-# (0x1A7000+0x15000) and input.bin (0x138300+0x400), the windows of
-# gen_batch.py's fallback. They are GITIGNORED (copyrighted RAM), so a fresh
-# tree has none: the run prints SKIPPED and exits 2, never 0. Seed files whose
-# sha1 differs from the canonical pair are still run but labelled
+# THE SEEDED ARENA. The canonical seed is tools/ee/eetest/state/globals.bin and
+# input.bin, the New Game capture. They are GITIGNORED (copyrighted RAM), so a
+# fresh tree has none: the run prints SKIPPED and exits 2, never 0. Seed files
+# whose sha1 differs from the canonical pair are still run but labelled
 # "seeded-noncanonical", and that arena does not discharge UNDETERMINED.
+# Each file's ROM address and length come from the seed dir's snapshot.json,
+# the record of what was captured, read the way gen_batch.py reads it
+# (check_hle_stubs_verdict.py --seed-windows). They are not fixed: the New Game
+# globals window is 0x1A7000+0xC000, the in-level and menu ones 0x1A7000+0x15000
+# (task #1573). Only a seed dir with no snapshot.json falls back to
+# gen_batch.py's no-snapshot windows (globals 0x15000, input 0x400), and the run
+# prints a FALLBACK line saying so. A seed file whose size is not its window's
+# length is refused by name, rc 2, before anything is built.
 #
 # SEEDS (so every FAIL verdict can be made to fire on purpose):
 #   --seed-drop=<stub>   compile iop_null.c with that definition renamed away
@@ -93,9 +100,10 @@ IOP=tools/native/runtime/sdk/iop_null.c
 BASELINE=tools/native/hle_stub_traps.txt
 VERDICT=tools/native/check_hle_stubs_verdict.py
 SEED_DIR=tools/ee/eetest/state
-# canonical seed (FACT #9238): name, ROM address, length, sha1 prefix
-SEEDS="globals.bin 0x1A7000 0x15000 e5d5ea0f
-input.bin 0x138300 0x400 d926603e"
+# canonical seed (FACT #9238): file name, sha1 prefix. The address and length
+# are the seed dir's own (snapshot.json), read below.
+CANON_SHA="globals.bin e5d5ea0f
+input.bin d926603e"
 
 drops=""; adds=""
 for a in "$@"; do
@@ -132,13 +140,21 @@ TMP=$(mktemp -d "$ROOT/tools/native/.hle_tmp.XXXXXX")
 trap 'rm -rf "$TMP"' EXIT
 T=/work/${TMP#"$ROOT"/}
 
-# sha1 prefix; sha1sum on Linux, shasum on macOS (the M1 has no sha1sum).
+# sha1 prefix: sha1sum where it exists, else shasum (stock macOS ships only
+# shasum). The M1 seats have /sbin/sha1sum, so they take the first branch too.
 sha1_8() { if command -v sha1sum >/dev/null 2>&1; then sha1sum "$1"; else shasum -a 1 "$1"; fi | cut -c1-8; }
 
+# Seed windows from $SEED_DIR/snapshot.json. A refusal (size != window length,
+# or a snapshot without the region) is rc 2 here, by name; the driver's own
+# size check would otherwise stop the run with no verdict (FACT #9263).
+windows=$(python3 "$VERDICT" --seed-windows "$SEED_DIR") || exit 2
 # Seeded arena: all files present -> run; sha1 decides canonical or not.
 seeded="absent"; seed_args=""; missing=""; bad_sha=""
-while read -r f rom len sha; do
+while read -r f rom len src; do
+  sha=$(printf '%s\n' "$CANON_SHA" | awk -v f="$f" '$1 == f {print $2}')
+  [ -n "$sha" ] || { echo "check_hle_stubs: no canonical sha1 for seed file $f" >&2; exit 2; }
   if [ -f "$SEED_DIR/$f" ]; then
+    echo "seed window: $f @$rom+$len (from $src)"
     cp "$SEED_DIR/$f" "$TMP/$f"
     got=$(sha1_8 "$TMP/$f")
     seed_args="$seed_args $T/$f $rom $len"
@@ -147,7 +163,7 @@ while read -r f rom len sha; do
     missing="$missing $SEED_DIR/$f"
   fi
 done <<EOF
-$SEEDS
+$windows
 EOF
 if [ -n "$missing" ]; then seeded="absent"
 elif [ -n "$bad_sha" ]; then seeded="noncanonical:${bad_sha#,}"
