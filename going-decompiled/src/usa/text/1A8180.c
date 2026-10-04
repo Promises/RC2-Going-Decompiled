@@ -452,13 +452,22 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A82D8);
 extern void func_002A8200(Moby *moby, s32 seq, s32 frameIdx);
 void func_002A82D8(Moby *obj, s32 idx, s32 arg3, s32 arg4) {
     u8 *m = (u8 *)obj;
-    u8 *pClass = *(u8 **)(m + 0x24);
-    u8 *seqEntry = *(u8 **)(pClass + 0x48 + idx * 4);
-    s32 frameCount = *(u8 *)(seqEntry + 0x10);
-    s32 clampedFrame = (arg3 < frameCount) ? arg3 : (frameCount - 1);
+    u8 *seqEntry;
+    s32 frameCount;
+    s32 clampedFrame;
+
+    {
+        u8 *cls = *(u8 **)(m + 0x24);
+        cls += idx * 4;
+        frameCount = *(u8 *)(*(u8 **)(cls + 0x48) + 0x10);
+    }
+    clampedFrame = frameCount - 1;
+    if (arg3 < frameCount) {
+        clampedFrame = arg3;
+    }
 
     if (arg4 <= 0) {
-        func_002A8200(obj, idx, clampedFrame);
+        func_002A8200((Moby *)m, idx, clampedFrame);
         __asm__ __volatile__(""); /* cc1 2.96 sibling-call suppression (the ROM never sibcalls) */
         return;
     }
@@ -466,29 +475,37 @@ void func_002A82D8(Moby *obj, s32 idx, s32 arg3, s32 arg4) {
     if (0.025f < *(f32 *)(m + 0x44) ||
         *(s32 *)(m + 0x50) != 0 ||
         *(s32 *)(m + 0x54) != 0) {
-        s32 slot = func_002A08C0(obj);
-        if (slot < 0) {
-            m[0x41] = (u8)clampedFrame;
-        } else {
-            func_002A3288(obj, slot | 0x300);
-            *(Vec4 *)(g_proceduralAnimBounds + slot * 0x10) = *(Vec4 *)(m + 0x80);
+        s32 slot = func_002A08C0((Moby *)m);
+        if (slot >= 0) {
+            func_002A3288((Moby *)m, slot | 0x300);
+            {
+                register u8 *base EE_REG("$3") = g_proceduralAnimBounds;
+                u8 *dst = base + slot * 0x10;
+                register u8 *srcp EE_REG("$5") = m + 0x80;
+                __asm__ __volatile__("" : "+r"(srcp));
+                *(u_long128 *)dst = *(u_long128 *)srcp;
+                __asm__ __volatile__("");
+            }
             if (m[0x42] != 0xFF) {
                 m[0xA9] = m[0x42];
             }
             m[0x42] = 0xFF;
             m[0x40] = (u8)slot;
-            m[0x41] = (u8)clampedFrame;
         }
-    } else {
-        m[0x41] = (u8)clampedFrame;
     }
+    m[0x41] = (u8)clampedFrame;
 
     m[0x43] = (u8)idx;
-    ResolveMobyAnimFramePtrs(obj);
+    ResolveMobyAnimFramePtrs((Moby *)m);
     *(f32 *)(m + 0x48) = 1.0f;
     *(f32 *)(m + 0x4C) = 1.0f / IntToFloat(arg4);
     *(f32 *)(m + 0x44) = 0.0f;
     m[0x60] &= 0xFD;
+    {
+        u8 *cls = *(u8 **)(m + 0x24);
+        cls += idx * 4;
+        seqEntry = *(u8 **)(cls + 0x48);
+    }
     m[0x6C] = *(u8 *)(seqEntry + 0x11);
 }
 #endif
@@ -2470,8 +2487,23 @@ f32 func_002AA508(Moby *owner, void *event) {
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 24.20%
    -> UNKNOWN-@0: ROM `addiu sp,sp,-192` vs `addiu sp,sp,-176` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AA6B8);
+/* MATCHED on the s136os arm (task #1559): byte-exact solo under SN 2.95.3 v1.36
+ * -fopt-stack (verify_match_unit 84/84). Plain C only, no devices. Each
+ * respelling re-measured by reverting it alone (words differing, vmu):
+ *   - the reference position is copied as one u_long128 (the ROM's lq/sq);
+ *     a struct copy gives ldl/ldr/sdl/sdr (78/90);
+ *   - the copy is read back through a pointer local, which cc1 keeps in s2
+ *     (`daddu $18,$29,$0`) and which costs the ROM its 192-byte frame;
+ *     reading `ref.x` directly gives the 176-byte frame (74/80);
+ *   - the loop-invariant packet header (self, class, tags, power) is written
+ *     before the bearing is computed, as the ROM orders those stores (30/84). */
+/* GUARD (task #1559): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002AA6B8)
+S136OS_SLOT(func_002AA6B8);
 #else
 /* Prototypes this body needs whose declarations sit in other guarded arms:
  * the s136os arm compiles this arm alone, so it must see them here. */
@@ -2479,30 +2511,33 @@ extern void func_002A9C88(Moby *moby, void *hitInfo);
 void func_002AA6B8(Moby *self, const Vec4 *refPos, Moby **list, s32 count,
                    Moby *skip, s32 arg6, s32 arg7, s32 arg8,
                    f32 power, f32 magnitude, f32 zComp) {
-    Vec4 ref = *refPos;   /* 128-bit copy of the reference position */
+    Vec4 ref;
     s32  i;
+    u8   packet[0x30];
 
+    Vec4 *rp;
+
+    *(u_long128 *)&ref = *(u_long128 *)refPos;   /* 128-bit copy of the reference position */
+    rp = &ref;
     for (i = 0; i < count; i++) {
-        Moby *entry = list[i];
-        u8   packet[0x30];
-        f32  bearing;
+        f32 bearing;
 
-        if (entry == skip) {
+        if (list[i] == skip) {
             continue;
         }
-        bearing = Atan2fPoly(entry->pos.x - ref.x, entry->pos.y - ref.y);
+        *(s32 *)(packet + 0x10) = (s32)self;
+        *(u16 *)(packet + 0x1A) = self->oClass;
+        *(s32 *)(packet + 0x14) = arg6;
+        *(f32 *)(packet + 0x1C) = power;
+        *(s32 *)(packet + 0x20) = arg6;
+        *(u8  *)(packet + 0x18) = (u8)arg7;
+        *(u8  *)(packet + 0x19) = (u8)arg8;
+        bearing = Atan2fPoly(list[i]->pos.x - rp->x, list[i]->pos.y - rp->y);
         *(f32 *)(packet + 0x00) = func_00283B30(bearing) * magnitude;  /* cos */
         *(f32 *)(packet + 0x04) = func_00283B48(bearing) * magnitude;  /* sin */
         *(f32 *)(packet + 0x08) = zComp;
         *(f32 *)(packet + 0x0C) = 5627.9248f;   /* 0x45AFDF66 */
-        *(s32 *)(packet + 0x10) = (s32)self;
-        *(s32 *)(packet + 0x14) = arg6;
-        *(u8  *)(packet + 0x18) = (u8)arg7;
-        *(u8  *)(packet + 0x19) = (u8)arg8;
-        *(u16 *)(packet + 0x1A) = self->oClass;
-        *(f32 *)(packet + 0x1C) = power;
-        *(s32 *)(packet + 0x20) = arg6;
-        func_002A9C88(entry, packet);
+        func_002A9C88(list[i], packet);
     }
 }
 #endif
@@ -6540,7 +6575,7 @@ S136OS_SLOT(func_002B0150);
 #else
 extern f32 AngleAbsDiffPi(f32 a, f32 b);   /* 0x284630 drive-heading angle helper (CONFIRMED) */
 
-f32 func_002B0150(Vec4 *query, Moby *moby, s32 *outFlag, f32 a, f32 b, f32 c, f32 d) {
+f32 func_002B0150(Vec4 *query, Moby *moby, f32 a, f32 b, f32 c, f32 d, s32 *outFlag) {
     f32 sample, heading1, heading2, base;
 
     *outFlag = 0;
@@ -6567,25 +6602,46 @@ f32 func_002B0150(Vec4 *query, Moby *moby, s32 *outFlag, f32 a, f32 b, f32 c, f3
     return base;
 }
 #endif
-extern f32 func_002B0150(Vec4 *query, Moby *moby, s32 *outFlag, f32 a, f32 b, f32 c, f32 d);
+/* outFlag is the LAST parameter (task #1559). The EABI passes it in $a2 either
+ * way, so func_002B0150's own bytes do not change (vmu 94/94 both orders), but
+ * a caller loads its argument registers in parameter order: func_002B02C8's
+ * `addiu $6,$29,0x10` is the last load before its jal only with this order. */
+extern f32 func_002B0150(Vec4 *query, Moby *moby, f32 a, f32 b, f32 c, f32 d, s32 *outFlag);
 extern Moby *g_mobyFlagged1000List[];   /* null-terminated array of flagged mobys */
 
 /**
  * Pick the nearest valid moby to `queryVec` from the flagged-moby list. For each
  * entry: skip if it has no pvar block (func_002AC058 == 0) or its word0 float is
  * 0, then score it with func_002B0150 (skip on its reject flag). Track the moby
- * with the smallest score. The list cursor only advances on a skip — a scored
- * entry re-reads the same slot (func_002B0150 consumes/compacts it), mirroring
- * the original's loop exactly. Returns the best moby, or NULL if none.
+ * with the smallest score. The list index advances after EVERY entry: the ROM's
+ * `bnez $2,...; addiu $17,$17,4` executes the increment in the delay slot on
+ * both paths. (The earlier #else advanced only on a skip, so a scored,
+ * unrejected entry was re-read forever; task #1559 corrected it from the ROM.)
+ * Returns the best moby, or NULL if none.
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 62.45%
    -> UNKNOWN-@0: ROM `addiu sp,sp,-128` vs `addiu sp,sp,-112` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B02C8);
+/* MATCHED on the s136os arm (task #1559): byte-exact solo under SN 2.95.3 v1.36
+ * -fopt-stack (verify_match_unit 72/72). Plain C only, no devices. Each
+ * respelling re-measured by reverting it alone (words differing, vmu):
+ *   - the list is walked by INDEX, which loop strength reduction turns into
+ *     the ROM's pointer (`addiu $17,$3,%lo(...)` in the loop preheader); a
+ *     pointer cursor initialised at the top is hoisted into the prologue and
+ *     shifts the loop by a 2-word alignment pad (8 aligned);
+ *   - the query is copied as one u_long128 and read through a pointer local
+ *     held in s3, before the empty-list test, as the ROM does;
+ *   - func_002B0150 takes outFlag LAST (see its declaration; 5/72 without). */
+/* GUARD (task #1559): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002B02C8)
+S136OS_SLOT(func_002B02C8);
 #else
 Moby *func_002B02C8(Vec4 *queryVec, f32 a, f32 b, f32 c, f32 d) {
-    Moby **cursor = g_mobyFlagged1000List;
-    Moby *moby = *cursor;
+    s32 i = 0;
+    Moby *moby = g_mobyFlagged1000List[0];
     Moby *best = 0;
     f32 bestScore = 100000000.0f;  /* 0x4CBEBC20 = 1e8 EXACTLY. NOT 99999008.0f:
                                     * that is the decimal a float32 PRINTS as,
@@ -6593,31 +6649,23 @@ Moby *func_002B02C8(Vec4 *queryVec, f32 a, f32 b, f32 c, f32 d) {
                                     * 0x4CBEBBA4. Spell the round number; never
                                     * transcribe a printed approximation. */
     Vec4 query;
+    Vec4 *qp;
 
-    if (moby == 0) {
-        return 0;
-    }
-    query = *queryVec;
-
-    do {
+    *(u_long128 *)&query = *(u_long128 *)queryVec;
+    qp = &query;
+    while (moby != 0) {
         s32 pvar = func_002AC058(moby);
-        if (pvar == 0) {
-            cursor++;
-        } else if (*(f32 *)pvar == 0.0f) {
-            cursor++;
-        } else {
+        if (pvar != 0 && *(f32 *)pvar != 0.0f) {
             s32 reject;
-            f32 score = func_002B0150(&query, moby, &reject, a, b, c, d);
-            if (reject != 0) {
-                cursor++;
-            } else if (score < bestScore) {
+            f32 score = func_002B0150(qp, moby, a, b, c, d, &reject);
+            if (reject == 0 && score < bestScore) {
                 bestScore = score;
                 best = moby;
             }
         }
-        moby = *cursor;
-    } while (moby != 0);
-
+        i++;
+        moby = g_mobyFlagged1000List[i];
+    }
     return best;
 }
 #endif
