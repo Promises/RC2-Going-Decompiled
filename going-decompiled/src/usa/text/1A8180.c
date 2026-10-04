@@ -5067,17 +5067,19 @@ void func_002ADCE0(Vec4 *dst, f32 t, Vec4 *src) {
  * re-measured by dropping it alone (words differing, vmu):
  *   - the volatile u_long128 store, so the copy is the ROM's lq/sq pair and
  *     the sq stays ahead of the `b` (plain u_long128: the sq moves into the
- *     branch's delay slot; struct copy: 30/48);
+ *     branch's delay slot, built 41 words against the ROM's 42; struct
+ *     copy: 30/48);
  *   - ONE empty tied fence on dst AND axis together (RULING #8483, emits
  *     nothing). It is a REGISTER-ALLOCATION device, not an ordering one:
  *     its two "+r" operands add refs to both pseudos, which moves dst ahead
  *     of src in global-alloc's priority order (greg dump: axis, angle, src,
  *     dst -> axis, dst, angle, src), so dst takes $17 and src $18 as in the
- *     ROM. Without it 6/42 (dst/src swapped in $17/$18); on dst alone or on
- *     axis alone, or as two separate fences, dst outranks axis or src and
- *     the pair still swaps (6/42 each). Placing it in the copy branch or
- *     before the func_002ADC50 call also closes; at else-entry it blocks the
- *     bc1f delay-slot fill, at function entry the jal delay-slot fill. */
+ *     ROM. Without it 6/42 (dst/src swapped in $17/$18); on axis alone
+ *     6/42 (the same swap); on dst alone 5/42 (dst outranks axis and takes
+ *     $16). Two separate fences, one per pointer, also give dst $16 (cc1
+ *     text, not vmu). Placing it in the copy branch or before the
+ *     func_002ADC50 call also closes; at else-entry it blocks the bc1f
+ *     delay-slot fill, and at function entry the jal delay-slot fill. */
 /* GUARD (task #1592): on EE this C is the image's body, compiled alone by the
  * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
  * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
