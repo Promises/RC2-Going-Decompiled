@@ -4183,6 +4183,19 @@ void *func_0033C100(void *p) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0033C1A8);
 
+/* D_1ADD50's absolute access in GuiIconListScreenInit. The ROM forms it with
+ * the assembler's one-insn `la` macro (lui/addiu same-register adjacent at
+ * 0x33C360, so the jal's delay slot takes the pool move instead), so cc1 must
+ * see an 8-byte extern under -G8 while gas sizes it 16 and expands the macro
+ * absolutely: an assembler alias sized 16 (the #8036 construct, RULING #8620;
+ * relocations name D_1ADD50). Natively it is the symbol itself. */
+#ifndef TARGET_NATIVE
+__asm__(".extern D_1ADD50Abs, 16\n\tD_1ADD50Abs = D_1ADD50");
+extern u8 D_1ADD50Abs[8];
+#else
+#define D_1ADD50Abs D_1ADD50
+#endif
+
 /* GuiIconListScreenInit: construct an icon-list screen — three header buttons
  * (+0x0/+0x4C/+0x98), three list-icon elements (+0xE4/+0x130/+0x17C, a stride-0x4C
  * run the original inits/colours/glyphs in loops), three text rows (+0x1D8/+0x288/
@@ -4194,23 +4207,29 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_0
  * coloured 0x70A0C0C0 textured 0xE99A(frame 0xA) scaled 240x194, small sprite
  * +0x31C scaled 32x32. Labels localized 0x2BF6/0x2BE5/0x2C0B. Closed by
  * func_0033C588(w, 0). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", GuiIconListScreenInit);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GuiIconListScreenInit)
+S136OS_SLOT(GuiIconListScreenInit);
 #else
 /* engine96 probe (task #466, cc1 2.96 via MATCH_GuiIconListScreenInit, unit objdiff): 44.85%,
    209/301 insns differ. Residual: UNKNOWN-daddu + gp/abs-mixed symbol (first differing insn: '' vs 'daddu s2, a0, zero').
    Levers RUN on the whole unit: -fno-strict-aliasing, per-symbol gp/abs pins, sibcall barrier;
    not byte-exact, so the arm stays #else. */
-/* s136os near-miss (task #1563): this body follows the ROM's shape - three
-   counted loops over the icons at +0xE4 (stride 0x4C), the text/sprite pointers
-   defined before the loops, and the one R5900 short-loop pad (0x33C3C0, loop 2),
+/* MATCHED on the s136os arm (task #1639): byte-exact, 241 words. The body
+   follows the ROM's shape - three counted loops over the icons at +0xE4
+   (stride 0x4C), and the one R5900 short-loop pad (0x33C3C0, loop 2),
    reproduced by R5900_SHORT_LOOP_PAD1 as a SCHEDULING DEVICE (RULING #8435,
-   FACT #7918/#8434; removing it measured 59 -> 94 words). The other two zero
-   words, 0x33C2C4 and 0x33C3AC, are loop-label alignment the compiler emits
-   itself. On the s136os arm it is 6/242 words from the ROM
-   (verify_match_unit, objdiff_build unit object): the %hi(D_1ADC00) the loop
-   hoists is scheduled after the header inits instead of before the first one,
-   and one delay-slot fill differs. Not promoted; the arm stays INCLUDE_ASM. */
+   FACT #7918/#8434; without it 41/242 words differ). The other two zero
+   words, 0x33C2C4 and 0x33C3AC, are loop-label alignment cc1 emits itself.
+   Two levers, each measured necessary (verify_match_unit, s136os arm):
+   - the six sub-element pointers are assigned INSIDE the first loop, after
+     its call. They are loop-invariant, so loop.c hoists them after the
+     %hi(D_1ADC00) it hoists from the call, and sched2 then fills the slots
+     around the three header inits in the ROM's order: lui, +0x1D8, +0x288,
+     +0x230, +0x2E0. Assigned before the loop (task #1563's text) they keep
+     earlier LUIDs and issue first, with the lui last: 4/242 words.
+   - D_1ADD50 goes through the 16-sized D_1ADD50Abs alias, so cc1 emits one
+     `la` (length 2, not delay-slot eligible) and the pool move fills the
+     jal's slot, as in the ROM: without it 2/242 words. */
 void func_0033C588(void *w, s32 flag);
 extern char *g_guiInstance;
 extern u8 D_1ADBE8[], D_1ADBF0[], D_1ADBF8[], D_1ADC00[], D_1ADD30[];
@@ -4231,12 +4250,6 @@ void GuiIconListScreenInit(void *w, GuiPool *pool) {
         *(s32 *)((char *)rec + 0x0) = 0;
     }
 
-    t1D8 = (GuiElement *)((char *)w + 0x1D8);
-    t230 = (GuiElement *)((char *)w + 0x230);
-    t288 = (GuiElement *)((char *)w + 0x288);
-    sprBig = (GuiElement *)((char *)w + 0x2E0);
-    sprSmall = (GuiElement *)((char *)w + 0x31C);
-    icon1 = (GuiElement *)((char *)w + 0x130);
     *(s32 *)((char *)w + 0x358) = 1;
     **(f32 **)((char *)w + 0x1C8) = 255.0f;
     *(f32 *)(*(char **)((char *)w + 0x1C8) + 0x4) = 207.0f;
@@ -4248,6 +4261,13 @@ void GuiIconListScreenInit(void *w, GuiPool *pool) {
     e2 = (GuiElement *)((char *)w + 0x98);
     for (i = 0; i < 3; i++) {
         GuiElementInit((GuiElement *)((char *)w + 0xE4 + i * 0x4C), (s32)D_1ADC00, pool);
+        /* invariant; assigned here for the hoist order (see above) */
+        t1D8 = (GuiElement *)((char *)w + 0x1D8);
+        t288 = (GuiElement *)((char *)w + 0x288);
+        t230 = (GuiElement *)((char *)w + 0x230);
+        sprBig = (GuiElement *)((char *)w + 0x2E0);
+        sprSmall = (GuiElement *)((char *)w + 0x31C);
+        icon1 = (GuiElement *)((char *)w + 0x130);
     }
     GuiTextElementInit(t1D8, (s32)D_1ADD30, pool);
     GuiTextElementInit(t288, (s32)D_1ADD38, pool);
@@ -4255,7 +4275,7 @@ void GuiIconListScreenInit(void *w, GuiPool *pool) {
     GuiElementSetTextFlag(t288, 0);
     GuiElementSetTextFlag(t230, 0);
     GuiSpriteElementInit(sprBig, (s32)D_1ADD48, pool);
-    GuiSpriteElementInit(sprSmall, (s32)D_1ADD50, pool);
+    GuiSpriteElementInit(sprSmall, (s32)D_1ADD50Abs, pool);
 
     *GuiElementGetColor((GuiElement *)w) = 0x60442D00;
     *GuiElementGetColor(e1) = 0x60241700;
