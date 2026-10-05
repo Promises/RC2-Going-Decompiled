@@ -1093,7 +1093,7 @@ extern u8   g_areaTable[];    /* 0x1393E0 per-area record table (aliases D_1393E
 extern u8   g_discToc[];      /* 0x14B540 master disc asset directory (byte-addressed) */
 extern s32  g_playerProgress; /* 0x1A79F8 first word of the persistent save block */
 extern void func_00289398(s32 sectorByteOffset, void *outBuf); /* load save file -> *outBuf */
-extern s32  PumpDialogVoiceSystem(s32 blocking); /* returns in $2 (FACT #9329) */
+extern s16  PumpDialogVoiceSystem(s32 blocking); /* its definition's type (1B4218.cpp); returns in $2, FACT #9329 */
 extern void StartFileLoadPumpingVoice(void *buf, s32 lba, s32 size);
 #ifdef TARGET_NATIVE
 /* #else-only early decl: func_00299BF8's #else uses func_00283460 before the
@@ -1136,10 +1136,12 @@ extern s32 g_playerProgressAbs;
  *  No parameters, no return value.
  *  MATCHED on the s136os arm (task #1636; base body NOTE #9328, task #1631).
  *  What the ROM's shape needs, each measured necessary:
- *    - PumpDialogVoiceSystem declared s32 (it returns in $2; FACT #9329);
+ *    - PumpDialogVoiceSystem declared value-returning (s16, its definition's
+ *      type; it returns in $2 — FACT #9329; `void` reads 2/62);
  *    - the disc TOC held as one base pointer, the image pointer formed before
- *      the first memcpy, g_playerProgress stored through the size-16 equate
- *      (absolute, see the device above) — NOTE #9328's phrasing;
+ *      the first memcpy, the area record held in a local, g_playerProgress
+ *      stored through the size-16 equate (absolute, see the device above) —
+ *      NOTE #9328's phrasing;
  *    - the dialog latches addressed through D_152C00, the ROM's own symbol,
  *      declared as an unsized array: cc1 then splits its %hi/%lo and the
  *      scheduler interleaves `li $2,-1` between them as in the ROM, where the
@@ -1148,6 +1150,8 @@ extern s32 g_playerProgressAbs;
  *      independent stores schedule freely, listed with D_152C00[6] LAST:
  *      cc1 issues the last store of the group first (FACT #9254), giving the
  *      ROM's order [6], armor, flags, held, [12].
+ *  The flag word is spelled g_gameStateFlags for the ROM's relocation name
+ *  only; g_nSaveLoadStatusCode[1] assembles to the same words.
  *  Behaviour is master's #else: the five stores are to distinct objects and
  *  no call sits between them. */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_func_00299BF8)
