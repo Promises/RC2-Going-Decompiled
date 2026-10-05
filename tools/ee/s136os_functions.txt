@@ -370,3 +370,10 @@ usa text/1A8180 MarkLevelAvailable
 usa text/198FA0 func_0029DD10
 usa text/198FA0 func_0029C600
 usa text/198FA0 func_0029C5B0
+usa text/1CA080 func_002D3BE0
+usa text/1CA080 func_002D3E08
+usa text/1CA080 func_002D3EC0
+usa text/1CA080 func_002D3F78
+usa text/1CA080 func_002D4030
+usa text/1CA080 func_002D41B8
+usa text/1CA080 func_002D43B0

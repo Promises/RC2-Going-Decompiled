@@ -4769,41 +4769,61 @@ s32 func_002D3BB0(void) {
     return 0;
 }
 
-/* Menu confirm/cancel poll variant (same shape as func_002D3F78): confirm bit
- * (0x10) latches the active screen's pending result into block[0x18] (or returns
- * -1 when no pending sub-result); cancel bit (0x900) returns 1; otherwise ticks
- * the idle handler func_0029D4E8 and returns 0.
- * Wall: 8-byte-packed-save ($16 + $31) with the result-threaded-$16 /
- * branch-likely merge shape the later cc1 emits. Preserved as portable C. */
+/* Confirm half of the menu confirm/cancel polls (func_002D3BE0 and its five
+ * siblings): if the active screen (g_menuScreenBlock+0x14) has a pending
+ * sub-result at +0xE0, latch it into g_menuScreenBlock+0x18 and return 0;
+ * otherwise return -1 when g_menuScreenBlock+0x134 is clear, else 0.
+ * Returns 0 or -1.
+ * The spelling is what the ROM's layout needs (task #1656): the store is the
+ * then-arm and falls into the shared `return 0`, and the -1 exit is the else-if.
+ * Written as `else if (...) r = -1; else r = 0`, the s136os compiler turns the
+ * tail into `li -1; movn`. Spelled with an early `return 0` after the store, the
+ * store is not scheduled into the branch's delay slot. Always inlined; no
+ * out-of-line copy is emitted. */
+static inline s32 MenuPollConfirm(void) {
+    u8 *block = g_menuScreenBlock;
+    s32 pending = *(s32 *)(*(u8 **)(block + 0x14) + 0xE0);
+    if (pending != 0) {
+        *(s32 *)(block + 0x18) = pending;
+    } else if (*(s32 *)(block + 0x134) == 0) {
+        return -1;
+    }
+    return 0;
+}
+
+/* Menu confirm/cancel poll: confirm bit (0x10) returns MenuPollConfirm();
+ * cancel bit (0x900) returns 1; otherwise ticks the idle handler func_0029D4E8
+ * with the pad word and returns 0 (the handler's result is ignored).
+ * func_002D3E08/3EC0/3F78/4030/41B8 are byte-for-byte the same function with a
+ * different idle handler.
+ * Byte-exact on the s136os arm (task #1656). The ROM keeps `result` in $16
+ * across the call (0 set in the first branch's delay slot, 1 on cancel), so the
+ * single `return result` after the call is load-bearing; returning 0/1 directly
+ * frees $16 and changes the frame. */
 extern s32 func_0029D4E8(s32 padPressed);
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D3BE0);
+/* GUARD (task #1656): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D3BE0)
+S136OS_SLOT(func_002D3BE0);
 #else
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 70.27% -> SPLIT-HIREG,
  * first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 70.42% -> SPLIT-HIREG, first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`. */
-/* TODO(match): functional equivalent - not byte-exact; 1-GPR packed-save frame +
- * branch-likely confirm shape / single-register result threading. */
 s32 func_002D3BE0(void) {
     s32 flags = g_padButtonsPressed;
-    s32 *block = (s32 *)g_menuScreenBlock;
+    s32 result = 0;
     if (flags & 0x10) {
-        s32 v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
-        if (v != 0) {
-            block[0x18 / 4] = v;
-            return 0;
-        }
-        if (block[0x134 / 4] == 0) {
-            return -1;
-        }
-        return 0;
+        return MenuPollConfirm();
     }
     if (flags & 0x900) {
-        return 1;
+        result = 1;
+    } else {
+        func_0029D4E8(flags);
     }
-    func_0029D4E8(flags);
-    return 0;
+    return result;
 }
 #endif
 
@@ -4881,37 +4901,32 @@ s32 func_002D3DD8(void) {
     return 0;
 }
 
-/* Menu confirm/cancel poll variant (idle handler func_0029D598). Same shape as
- * func_002D3F78. Wall: 8-byte-packed-save ($16 + $31) + branch-likely confirm
- * shape / single-register result threading. Preserved as portable C. */
+/* Menu confirm/cancel poll, func_002D3BE0 with idle handler func_0029D598.
+ * Byte-exact on the s136os arm (task #1656); see func_002D3BE0. */
 extern s32 func_0029D598(s32 padPressed);
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D3E08);
+/* GUARD (task #1656): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D3E08)
+S136OS_SLOT(func_002D3E08);
 #else
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 70.27% -> SPLIT-HIREG,
  * first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 70.42% -> SPLIT-HIREG, first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`. */
-/* TODO(match): functional equivalent - not byte-exact; 1-GPR packed-save frame. */
 s32 func_002D3E08(void) {
     s32 flags = g_padButtonsPressed;
-    s32 *block = (s32 *)g_menuScreenBlock;
+    s32 result = 0;
     if (flags & 0x10) {
-        s32 v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
-        if (v != 0) {
-            block[0x18 / 4] = v;
-            return 0;
-        }
-        if (block[0x134 / 4] == 0) {
-            return -1;
-        }
-        return 0;
+        return MenuPollConfirm();
     }
     if (flags & 0x900) {
-        return 1;
+        result = 1;
+    } else {
+        func_0029D598(flags);
     }
-    func_0029D598(flags);
-    return 0;
+    return result;
 }
 #endif
 
@@ -4923,37 +4938,32 @@ s32 func_002D3E90(void) {
     return 0;
 }
 
-/* Menu confirm/cancel poll variant (idle handler func_0029D608). Same shape as
- * func_002D3F78. Wall: 8-byte-packed-save ($16 + $31) + branch-likely confirm
- * shape / single-register result threading. Preserved as portable C. */
+/* Menu confirm/cancel poll, func_002D3BE0 with idle handler func_0029D608.
+ * Byte-exact on the s136os arm (task #1656); see func_002D3BE0. */
 extern s32 func_0029D608(s32 padPressed);
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D3EC0);
+/* GUARD (task #1656): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D3EC0)
+S136OS_SLOT(func_002D3EC0);
 #else
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 70.27% -> SPLIT-HIREG,
  * first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 70.42% -> SPLIT-HIREG, first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`. */
-/* TODO(match): functional equivalent - not byte-exact; 1-GPR packed-save frame. */
 s32 func_002D3EC0(void) {
     s32 flags = g_padButtonsPressed;
-    s32 *block = (s32 *)g_menuScreenBlock;
+    s32 result = 0;
     if (flags & 0x10) {
-        s32 v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
-        if (v != 0) {
-            block[0x18 / 4] = v;
-            return 0;
-        }
-        if (block[0x134 / 4] == 0) {
-            return -1;
-        }
-        return 0;
+        return MenuPollConfirm();
     }
     if (flags & 0x900) {
-        return 1;
+        result = 1;
+    } else {
+        func_0029D608(flags);
     }
-    func_0029D608(flags);
-    return 0;
+    return result;
 }
 #endif
 
@@ -4965,40 +4975,32 @@ s32 func_002D3F48(void) {
     return 0;
 }
 
-/* Menu confirm/cancel poll: on the "confirm" pad bit (0x10) returns the active
- * screen's pending result (latches it into screen[0x18]) or -1 when the screen
- * has no pending sub-result; on a "back/cancel" bit (0x900) returns 1; otherwise
- * ticks the idle handler func_0029D838 and returns 0.
- * Wall: 8-byte-packed-save (saves $16 + $31) + the load-PRE/branch-likely shape.
- * Preserved as portable C. */
+/* Menu confirm/cancel poll, func_002D3BE0 with idle handler func_0029D838.
+ * Byte-exact on the s136os arm (task #1656); see func_002D3BE0. */
 extern s32 func_0029D838(s32 padPressed);
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D3F78);
+/* GUARD (task #1656): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D3F78)
+S136OS_SLOT(func_002D3F78);
 #else
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 70.27% -> SPLIT-HIREG,
  * first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 70.42% -> SPLIT-HIREG, first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`. */
-/* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame. */
 s32 func_002D3F78(void) {
     s32 flags = g_padButtonsPressed;
-    s32 *ss = (s32 *)(g_particleFxBlob + 0x100);
+    s32 result = 0;
     if (flags & 0x10) {
-        s32 v = *(s32 *)(*(u8 **)((u8 *)ss + 0x14) + 0xE0);
-        if (v != 0) {
-            ss[6] = v; /* screen[0x18] */
-            return 0;
-        }
-        if (ss[0x4D] == 0) { /* screen[0x134] */
-            return -1;
-        }
-        return 0;
+        return MenuPollConfirm();
     }
     if (flags & 0x900) {
-        return 1;
+        result = 1;
+    } else {
+        func_0029D838(flags);
     }
-    func_0029D838(flags);
-    return 0;
+    return result;
 }
 #endif
 
@@ -5010,37 +5012,32 @@ s32 func_002D4000(void) {
     return 0;
 }
 
-/* Menu confirm/cancel poll variant (idle handler func_0029D7C8). Same shape as
- * func_002D3F78. Wall: 8-byte-packed-save ($16 + $31) + branch-likely confirm
- * shape / single-register result threading. Preserved as portable C. */
+/* Menu confirm/cancel poll, func_002D3BE0 with idle handler func_0029D7C8.
+ * Byte-exact on the s136os arm (task #1656); see func_002D3BE0. */
 extern s32 func_0029D7C8(s32 padPressed);
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D4030);
+/* GUARD (task #1656): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D4030)
+S136OS_SLOT(func_002D4030);
 #else
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 70.27% -> SPLIT-HIREG,
  * first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 70.42% -> SPLIT-HIREG, first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`. */
-/* TODO(match): functional equivalent - not byte-exact; 1-GPR packed-save frame. */
 s32 func_002D4030(void) {
     s32 flags = g_padButtonsPressed;
-    s32 *block = (s32 *)g_menuScreenBlock;
+    s32 result = 0;
     if (flags & 0x10) {
-        s32 v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
-        if (v != 0) {
-            block[0x18 / 4] = v;
-            return 0;
-        }
-        if (block[0x134 / 4] == 0) {
-            return -1;
-        }
-        return 0;
+        return MenuPollConfirm();
     }
     if (flags & 0x900) {
-        return 1;
+        result = 1;
+    } else {
+        func_0029D7C8(flags);
     }
-    func_0029D7C8(flags);
-    return 0;
+    return result;
 }
 #endif
 
@@ -5101,37 +5098,32 @@ s32 func_002D4188(void) {
     return 0;
 }
 
-/* Menu confirm/cancel poll variant (idle handler func_0029D6E8). Same shape as
- * func_002D3F78. Wall: 8-byte-packed-save ($16 + $31) + branch-likely confirm
- * shape / single-register result threading. Preserved as portable C. */
+/* Menu confirm/cancel poll, func_002D3BE0 with idle handler func_0029D6E8.
+ * Byte-exact on the s136os arm (task #1656); see func_002D3BE0. */
 extern s32 func_0029D6E8(s32 padPressed);
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D41B8);
+/* GUARD (task #1656): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D41B8)
+S136OS_SLOT(func_002D41B8);
 #else
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 70.27% -> SPLIT-HIREG,
  * first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 70.42% -> SPLIT-HIREG, first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`. */
-/* TODO(match): functional equivalent - not byte-exact; 1-GPR packed-save frame. */
 s32 func_002D41B8(void) {
     s32 flags = g_padButtonsPressed;
-    s32 *block = (s32 *)g_menuScreenBlock;
+    s32 result = 0;
     if (flags & 0x10) {
-        s32 v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
-        if (v != 0) {
-            block[0x18 / 4] = v;
-            return 0;
-        }
-        if (block[0x134 / 4] == 0) {
-            return -1;
-        }
-        return 0;
+        return MenuPollConfirm();
     }
     if (flags & 0x900) {
-        return 1;
+        result = 1;
+    } else {
+        func_0029D6E8(flags);
     }
-    func_0029D6E8(flags);
-    return 0;
+    return result;
 }
 #endif
 
@@ -5213,42 +5205,38 @@ s32 func_002D4370(void) {
     return 0;
 }
 
-/* Confirm/cancel poll driven by the global input flag word (D_138180[0x1C4]).
- * Confirm (0x10) latches the active screen's pending result like the other
- * polls; cancel (0x900) returns 1; otherwise ticks the idle handler
- * func_0029D408 with D_138180[0x1C0] and returns 0.
- * Wall: 8-byte-packed-save (saves $16 + $31). Preserved as portable C. */
+/* Confirm/cancel poll driven by the input block at D_138180 (pad word at +0x1C4;
+ * g_padButtonsPressed is the same word). Confirm (0x10) returns
+ * MenuPollConfirm(); cancel (0x900) returns 1; otherwise ticks the idle
+ * handler func_0029D408 with the word at +0x1C0 and returns 0.
+ * Byte-exact on the s136os arm (task #1656): func_002D3BE0's shape with the
+ * block base taken once into a local, which the ROM keeps in $a0 so the
+ * handler's argument loads in the jal delay slot. */
 extern void func_0029D408(s32 arg);
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D43B0);
+/* GUARD (task #1656): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D43B0)
+S136OS_SLOT(func_002D43B0);
 #else
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 74.65% -> STRUCTURAL,
  * first differing row @2: ROM `sd s0,0(sp)` vs `sd ra,0(sp)`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 66.26% -> STRUCTURAL, first differing row @0: ROM `(none)` vs `lui v1,0x0  [HI16 D_138180]`. */
-/* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame +
- * branch-likely confirm shape. */
 s32 func_002D43B0(void) {
-    s32 flags = *(s32 *)(D_138180 + 0x1C4);
-    s32 *block;
-    s32 v;
+    u8 *input = D_138180;
+    s32 flags = *(s32 *)(input + 0x1C4);
+    s32 result = 0;
     if (flags & 0x10) {
-        block = (s32 *)g_menuScreenBlock;
-        v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
-        if (v != 0) {
-            block[0x18 / 4] = v;
-            return 0;
-        }
-        if (block[0x134 / 4] == 0) {
-            return -1;
-        }
-        return 0;
+        return MenuPollConfirm();
     }
     if (flags & 0x900) {
-        return 1;
+        result = 1;
+    } else {
+        func_0029D408(*(s32 *)(input + 0x1C0));
     }
-    func_0029D408(*(s32 *)(D_138180 + 0x1C0));
-    return 0;
+    return result;
 }
 #endif
 
