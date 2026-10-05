@@ -1956,19 +1956,20 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  * (|carried), material/normal fields, depth, and the owning moby; the moby's
  * hitEventSlot is pointed at it and the cursor advances.
  *
- * NOT PROMOTED, deliberately. This #else body is byte-exact on the s136os arm
- * ONLY WITHOUT -fno-gcse: vmu rc 0, 84/84 with S136EXTRA="-fno-strict-aliasing".
- * With the in-tree flags (-fno-gcse -fno-strict-aliasing) it is rc 1, built 80
- * words vs the ROM's 83. The ROM parks %hi(g_pCollWorldData) in $23 across the
- * call and re-forms %lo at each use, and puts the %lo of g_collHitEventRing on
- * both incoming edges of the merge. That is gcse PRE's reaching register, as
- * in TickFrontEndScreenIdle (FACT #9326). Promote it only after the unit's
- * S136EXTRA ruling lands (task #1633).
+ * MATCHED on the s136os arm (task #1640): 83 ROM words, byte-exact. It closes
+ * only because this unit's s136os compile runs WITH gcse (RULING #9336, FACTs
+ * #9333/#9334): the ROM parks %hi(g_pCollWorldData) in $23 across the call and
+ * re-forms %lo at each use, and puts the %lo of g_collHitEventRing on both
+ * incoming edges of the merge. That is gcse PRE's reaching register, as in
+ * TickFrontEndScreenIdle (FACT #9326). With -fno-gcse the body builds 80 words.
  */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 58.64%
-   -> UNKNOWN-@0: ROM `addiu sp,sp,-80` vs `addiu sp,sp,-64` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9C88);
+/* GUARD (task #1640): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002A9C88)
+S136OS_SLOT(func_002A9C88);
 #else
 void func_002A9C88(Moby *moby, void *hitInfo) {
     u8 *hi = (u8 *)hitInfo;

@@ -32,7 +32,7 @@ unit_flags() {
     */usa/text/191238.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse"; S136EXTRA="";; # RULING #9070: s136os arm unpinned, 2.9 arm keeps -fno-gcse
     */usa/text/198FA0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
     */usa/text/1A00F0.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
-    */usa/text/1A8180.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse -fno-strict-aliasing";;
+    */usa/text/1A8180.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse -fno-strict-aliasing"; S136EXTRA="-fno-strict-aliasing";; # RULING #9336 (FACTs #9333/#9334): s136os arm drops -fno-gcse only, 2.9 arm keeps both
     */usa/text/250080.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
     */usa/text/16E980.c) GFLAG="-G8";;
     */usa/text/248B50.c) GFLAG="-G8"; CC1EXTRA="-fno-gcse";;
