@@ -1093,13 +1093,29 @@ extern u8   g_areaTable[];    /* 0x1393E0 per-area record table (aliases D_1393E
 extern u8   g_discToc[];      /* 0x14B540 master disc asset directory (byte-addressed) */
 extern s32  g_playerProgress; /* 0x1A79F8 first word of the persistent save block */
 extern void func_00289398(s32 sectorByteOffset, void *outBuf); /* load save file -> *outBuf */
-extern void PumpDialogVoiceSystem(s32 blocking);
+extern s32  PumpDialogVoiceSystem(s32 blocking); /* returns in $2 (FACT #9329) */
 extern void StartFileLoadPumpingVoice(void *buf, s32 lba, s32 size);
 #ifdef TARGET_NATIVE
 /* #else-only early decl: func_00299BF8's #else uses func_00283460 before the
  * file-scope decl further down. Guarded so the matching build (unifdef
  * -UTARGET_NATIVE) is byte-identical to master. */
 extern void *func_00283460(void *dst, const void *src, s32 nbytes); /* memcpy */
+#endif
+
+/* ADDRESSING-MODEL DEVICE (RULING #8620; FACT #8036's size-16 equate form,
+ * as 1A00F0.cpp's g_mobySegmentOpenTagAbs): GuiManagerCreate reads
+ * g_playerProgress absolutely (0x29DC08 `lui v1,%hi(g_playerProgress)`), and
+ * func_00299BF8 stores it absolutely (0x299C7C), while the symbol is -G8
+ * small, so those accesses name a second assembler symbol
+ * EQUATED to it and sized 16; the relocation still names g_playerProgress.
+ * Top level, so the s136os TU and the unit's 2.9 TU both define it; placed
+ * ahead of func_00299BF8, its first user. Nothing is moved and nothing is
+ * emitted; native reads the plain symbol. */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_playerProgressAbs, 16\n\tg_playerProgressAbs = g_playerProgress");
+extern s32 g_playerProgressAbs;
+#else
+#define g_playerProgressAbs g_playerProgress
 #endif
 
 /** func_00299BF8 — load-side save-image restore orchestrator (counterpart of
@@ -1115,49 +1131,71 @@ extern void *func_00283460(void *dst, const void *src, s32 nbytes); /* memcpy */
  *    - reset g_playerProgress head word, clear the save-context dirty flag
  *      (g_areaTable+0x17C) and force the active card slot (+0x18) to -1 if held,
  *      invalidate the resident armor/held-item model ids and the dialog-scene
- *      latches at g_levelDialogToc+0x13C8/+0x13E0, and drop the 0x200 pending bit
- *      in g_nSaveLoadStatusCode[1].
- *  Not isolatable as a cmp (its callees func_00299B18/func_00283460 live in-unit,
- *  so the runner's T->c_ rename would drag the whole save subsystem); the #else
- *  is native-checked + trace-verified. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299BF8);
+ *      latches at D_152C00 (= g_levelDialogToc+0x13B0) [6] and [12], and drop
+ *      the 0x200 pending bit in g_gameStateFlags (= g_nSaveLoadStatusCode[1]).
+ *  No parameters, no return value.
+ *  MATCHED on the s136os arm (task #1636; base body NOTE #9328, task #1631).
+ *  What the ROM's shape needs, each measured necessary:
+ *    - PumpDialogVoiceSystem declared s32 (it returns in $2; FACT #9329);
+ *    - the disc TOC held as one base pointer, the image pointer formed before
+ *      the first memcpy, g_playerProgress stored through the size-16 equate
+ *      (absolute, see the device above) — NOTE #9328's phrasing;
+ *    - the dialog latches addressed through D_152C00, the ROM's own symbol,
+ *      declared as an unsized array: cc1 then splits its %hi/%lo and the
+ *      scheduler interleaves `li $2,-1` between them as in the ROM, where the
+ *      byte-sized g_levelDialogToc spelling prints one `la` macro;
+ *    - the armor/held-item ids stored non-volatile (cast), so the five
+ *      independent stores schedule freely, listed with D_152C00[6] LAST:
+ *      cc1 issues the last store of the group first (FACT #9254), giving the
+ *      ROM's order [6], armor, flags, held, [12].
+ *  Behaviour is master's #else: the five stores are to distinct objects and
+ *  no call sits between them. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00299BF8)
+S136OS_SLOT(func_00299BF8);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern void * func_00283460(void *dst, const void *src, s32 nbytes);
 extern void func_00299B18(u8 *image);
+/* g_levelDialogToc + 0x13B0, the dialog-scene latch block, under the ROM's
+ * relocation name; unsized so cc1 does not treat it as small (see above). */
+#ifndef TARGET_NATIVE
+extern s32 D_152C00[];
+#else
+#define D_152C00 ((s32 *)(&g_levelDialogToc + 0x13B0))
+#endif
 /* (end of this body's declarations) */
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 65.19% -> PACKED-SAVE, first differing row @0: ROM `addiu sp, sp, -0x50` vs `addiu sp, sp, -0x70`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 44.68% -> SCHED, first differing row @2: ROM `(nothing)` vs `lui s0, %hi(g_discToc+0x344)`. */
 void func_00299BF8(void) {
-    u8   scratch[0x28];
-    void *buf;
+    u8  scratch[0x28];
+    u8 *toc = g_discToc;
+    u8 *buf;
+    u8 *image;
+    u8 *area;
 
-    func_00289398(*(s32 *)(g_discToc + 0x344) << 11, &buf);
+    func_00289398(*(s32 *)(toc + 0x344) << 11, &buf);
     PumpDialogVoiceSystem(1);
-    StartFileLoadPumpingVoice(buf,
-                              *(s32 *)(g_discToc + 0x340) + *(s32 *)(g_discToc + 0x32C),
-                              *(s32 *)(g_discToc + 0x344));
+    StartFileLoadPumpingVoice(buf, *(s32 *)(toc + 0x340) + *(s32 *)(toc + 0x32C),
+                              *(s32 *)(toc + 0x344));
+    image = buf + *(s32 *)(buf + 0x10);
 
     /* preserve the g_bPalMode block across the destructive image restore */
     func_00283460(scratch, &g_bPalMode, 0x28);
-    func_00299B18((u8 *)buf + *(s32 *)((u8 *)buf + 0x10));
+    func_00299B18(image);
     func_00283460(&g_bPalMode, scratch, 0x28);
 
-    g_playerProgress = 0;
-    if (*(s32 *)(g_areaTable + 0x17C) != 0) {
-        *(s32 *)(g_areaTable + 0x17C) = 0;
+    g_playerProgressAbs = 0;
+    area = g_areaTable;
+    if (*(s32 *)(area + 0x17C) != 0) {
+        *(s32 *)(area + 0x17C) = 0;
     }
-    if (*(s16 *)(g_areaTable + 0x18) >= 0) {
-        *(s16 *)(g_areaTable + 0x18) = -1;
+    if (*(s16 *)(area + 0x18) >= 0) {
+        *(s16 *)(area + 0x18) = -1;
     }
-    *(s32 *)(&g_levelDialogToc + 0x13C8) = -1;      /* 0x13B0 + 0x18 */
-    g_loadedArmorVariant = -1;
-    g_nSaveLoadStatusCode[1] &= ~0x200;
-    g_loadedHeldItemModelId = -1;
-    *(s32 *)(&g_levelDialogToc + 0x13E0) = -1;      /* 0x13B0 + 0x30 */
+    *(s32 *)&g_loadedArmorVariant = -1;
+    g_gameStateFlags &= ~0x200;
+    *(s32 *)&g_loadedHeldItemModelId = -1;
+    D_152C00[12] = -1;
+    D_152C00[6] = -1;       /* last in source = issued first (FACT #9254) */
 }
 #endif
 
@@ -2342,19 +2380,6 @@ s32 func_0029DB58(void) {
  * func_0029DB58 (50/60); the heap pointer re-read at each use (8/60); the
  * clears in address order (12/60); D_138180 taken after the memset (60/60,
  * the base's own first diff). */
-/* ADDRESSING-MODEL DEVICE (RULING #8620; FACT #8036's size-16 equate form,
- * as 1A00F0.cpp's g_mobySegmentOpenTagAbs): GuiManagerCreate reads
- * g_playerProgress absolutely (0x29DC08 `lui v1,%hi(g_playerProgress)`) while
- * the symbol is -G8 small, so that read names a second assembler symbol
- * EQUATED to it and sized 16; the relocation still names g_playerProgress.
- * Top level, so the s136os TU and the unit's 2.9 TU both define it. Nothing is
- * moved and nothing is emitted; native reads the plain symbol. */
-#ifndef TARGET_NATIVE
-__asm__(".extern g_playerProgressAbs, 16\n\tg_playerProgressAbs = g_playerProgress");
-extern s32 g_playerProgressAbs;
-#else
-#define g_playerProgressAbs g_playerProgress
-#endif
 
 /* GUARD (task #1405): on EE this C is the image's body, compiled alone by the
  * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
