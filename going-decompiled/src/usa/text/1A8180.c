@@ -2067,53 +2067,98 @@ void func_002A9C88(Moby *moby, void *hitInfo) {
 }
 #endif
 
-/* PostMobyHitEvent: record a 0x40-byte hit/damage event for `moby` into the
- * 64-slot ring g_collHitEventRing (write cursor at g_pCollWorldData+0x14, wraps
- * mod 64). Dedupe: moby+0xA8 holds this moby's last event slot (0xFF = none); if
- * that slot still belongs to `moby` and the new hit is CLOSER (dist < stored
- * dist), just OR the new flags into the existing record and return — otherwise a
- * fresh slot is allocated, carrying the old flags forward when the prior record
- * was this moby's. Record layout: +0x00 vecA, +0x10 vecB, +0x20 a1, +0x24 flags,
- * +0x2C dist, +0x30 hasDir (|vecB| > 1e-4), +0x34 dist, +0x38 moby, +0x3C 0.
- * Return is incidental in the original (merge path leaves the merged flags, alloc
- * path leaves &g_pCollWorldData); callers discard it — we return the record flags. */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 59.79%
-   -> UNKNOWN-@0: ROM `addiu sp,sp,-80` vs `addiu sp,sp,-64` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", PostMobyHitEvent);
+/**
+ * Record a 0x40-byte hit/damage event for `moby` into the 64-slot ring
+ * g_collHitEventRing (write cursor at g_pCollWorldData+0x14, wraps mod 64).
+ * Dedupe: moby+0xA8 holds this moby's last event slot (0xFF = none). If that
+ * slot still belongs to `moby` and the new hit is CLOSER (dist < stored dist),
+ * the new flags are ORed into the existing record and the merged flags are
+ * returned. Otherwise a fresh slot is filled, carrying the old flags forward when
+ * the prior record was this moby's. Record layout: +0x00 vecA, +0x10 vecB,
+ * +0x20 a1, +0x24 flags, +0x2C dist, +0x30 hasDir (|vecB| > 1e-4), +0x34 dist,
+ * +0x38 moby, +0x3C 0.
+ *
+ * Returns what the ROM leaves in $v0: the merged flags on the merge path, and
+ * g_pCollWorldData itself on the alloc path. Callers discard it.
+ *
+ * MATCHED on the s136os arm (task #1657): 85 ROM words, byte-exact. Like
+ * func_002A9C88 it closes only because this unit's s136os compile runs WITH
+ * gcse (RULING #9336). The body is NOTE #9332's (task #1633) plus one pin.
+ */
+/* GUARD (task #1657): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_PostMobyHitEvent)
+S136OS_SLOT(PostMobyHitEvent);
 #else
 s32 PostMobyHitEvent(Moby *moby, s32 a1, s32 flags, Vec4 *vecA, Vec4 *vecB, f32 dist) {
-    s32 ringCursor = *(s32 *)(g_pCollWorldData + 0x14);
-    s32 prevIdx    = ((u8 *)moby)[0xA8];   /* this moby's last event slot, 0xFF = none */
+    u8 *world = g_pCollWorldData;
+    s32 ringCursor = *(s32 *)(world + 0x14);
     s32 extraFlags = 0;
     u8 *rec;
 
     /* Merge into this moby's existing event if the new hit is closer. */
-    if (prevIdx != 0xFF) {
-        u8 *prev = g_collHitEventRing + prevIdx * 0x40;
+    if (((u8 *)moby)[0xA8] != 0xFF) {
+        u8 *prev = g_collHitEventRing + ((u8 *)moby)[0xA8] * 0x40;
         if (*(Moby **)(prev + 0x38) == moby) {
             if (dist < *(f32 *)(prev + 0x2C)) {
-                *(s32 *)(prev + 0x24) |= flags;
-                return *(s32 *)(prev + 0x24);
+                return *(s32 *)(prev + 0x24) |= flags;
             }
             extraFlags = *(s32 *)(prev + 0x24);   /* carry old flags into the new record */
         }
     }
 
-    /* Allocate a fresh record at the ring write cursor. */
+    /* Fill a fresh record at the ring write cursor. */
     rec = g_collHitEventRing + ringCursor * 0x40;
     *(s32 *)(rec + 0x24)   = flags | extraFlags;
     *(s32 *)(rec + 0x20)   = a1;
-    *(f32 *)(rec + 0x34)   = dist;
     *(Moby **)(rec + 0x38) = moby;
     *(f32 *)(rec + 0x2C)   = dist;
+    *(f32 *)(rec + 0x34)   = dist;
     *(s32 *)(rec + 0x3C)   = 0;
-    *(s32 *)(rec + 0x30)   = (0.0001f < Vec3LengthVu0(vecB)) ? 1 : 0; /* hasDir */
-    *(Vec4 *)(rec + 0x00)  = *vecA;
-    *(Vec4 *)(rec + 0x10)  = *vecB;
-    ((u8 *)moby)[0xA8]     = (u8)ringCursor;
-    *(s32 *)(g_pCollWorldData + 0x14) = (ringCursor + 1) & 0x3F;
-    return *(s32 *)(rec + 0x24);
+    if (0.0001f < Vec3LengthVu0(vecB)) {
+        *(s32 *)(rec + 0x30) = 1;   /* hasDir */
+    } else {
+        *(s32 *)(rec + 0x30) = 0;
+    }
+    {
+        /* rec+0x00 = vecA and rec+0x10 = vecB, each address re-formed from the
+         * ring base the way the ROM forms it. The EMPTY fences (RULING #8483)
+         * are scheduling/allocation devices and each one is load-bearing
+         * (task #1657, each dropped alone): the tied fence on p -> 2/86, the
+         * barrier after copy 1 -> 5/86, the tied fence on q -> 84 words, the
+         * barrier after copy 2 -> 11/86. */
+        u8 *dst = g_collHitEventRing;
+        u8 *p;
+        p = ringCursor * 0x40 + dst;
+        __asm__ __volatile__("" : "+r"(p));
+        *(u_long128 *)p = *(u_long128 *)vecA;
+        __asm__ __volatile__("");
+        dst += 0x10;
+        {
+            u8 *q = ringCursor * 0x40 + dst;
+            __asm__ __volatile__("" : "+r"(q));
+            *(u_long128 *)q = *(u_long128 *)vecB;
+        }
+        __asm__ __volatile__("");
+    }
+    {
+        /* REGISTER-PIN DEVICE (RULING #8598): the advanced cursor lives in $4
+         * as in the ROM. Unpinned, local-alloc gives it $2 and the world pointer
+         * $3, which differs in the last 4 words (FACT #9335). The ROM's $4 needs
+         * the increment born before copy 2's sq, and then sched2 fills the
+         * lq->sq gap with it: none of the fence placements and spellings tried
+         * in task #1657 (NOTE in the store) reaches $4 without the pin. */
+        register s32 next EE_REG("$4") = ringCursor + 1;
+        ((u8 *)moby)[0xA8] = (u8)ringCursor;
+        {
+            u8 *cursorBlock = g_pCollWorldData;   /* a fresh pointer, not `world` (-> 83 words) */
+            *(s32 *)(cursorBlock + 0x14) = next & 0x3F;
+            return (s32)cursorBlock;
+        }
+    }
 }
 #endif
 
