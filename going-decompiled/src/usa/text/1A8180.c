@@ -1955,6 +1955,15 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  * write cursor (g_pCollWorldData+0x14, wrapping mod 64): the hit vec, flags
  * (|carried), material/normal fields, depth, and the owning moby; the moby's
  * hitEventSlot is pointed at it and the cursor advances.
+ *
+ * NOT PROMOTED, deliberately. This #else body is byte-exact on the s136os arm
+ * ONLY WITHOUT -fno-gcse: vmu rc 0, 84/84 with S136EXTRA="-fno-strict-aliasing".
+ * With the in-tree flags (-fno-gcse -fno-strict-aliasing) it is rc 1, built 80
+ * words vs the ROM's 83. The ROM parks %hi(g_pCollWorldData) in $23 across the
+ * call and re-forms %lo at each use, and puts the %lo of g_collHitEventRing on
+ * both incoming edges of the merge. That is gcse PRE's reaching register, as
+ * in TickFrontEndScreenIdle (FACT #9326). Promote it only after the unit's
+ * S136EXTRA ruling lands (task #1633).
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 58.64%
    -> UNKNOWN-@0: ROM `addiu sp,sp,-80` vs `addiu sp,sp,-64` */
@@ -1962,28 +1971,40 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9C88);
 #else
 void func_002A9C88(Moby *moby, void *hitInfo) {
-    u8 *m = (u8 *)moby;
     u8 *hi = (u8 *)hitInfo;
-    s32 ringCursor = *(s32 *)(g_pCollWorldData + 0x14);
+    u8 *world = g_pCollWorldData;
+    s32 ringCursor = *(s32 *)(world + 0x14);
     s32 carriedFlags = 0;
-    s32 slot = *(u8 *)(m + 0xA8);
     u8 *entry;
+    s32 off;
 
-    if (slot != 0xFF) {
-        u8 *existing = g_collHitEventRing + slot * 0x40;
+    /* hitEventSlot is read twice: cc1 CSEs the second read into the ROM's
+     * `daddu $2,$3,$0` copy before the shift. */
+    if (((u8 *)moby)[0xA8] != 0xFF) {
+        u8 *existing = g_collHitEventRing + ((u8 *)moby)[0xA8] * 0x40;
         if (*(Moby **)(existing + 0x38) == moby) {
-            if (*(f32 *)(hi + 0x1C) < *(f32 *)(existing + 0x2C)) {
+            if (*(f32 *)(existing + 0x2C) > *(f32 *)(hi + 0x1C)) {
                 *(s32 *)(existing + 0x24) |= *(s32 *)(hi + 0x14);
                 return;
             }
-            carriedFlags = *(s32 *)(existing + 0x24);
+            carriedFlags = *(s32 *)(existing + 0x24);   /* slot reused: carry flags */
         }
-        /* else: slot was reused by another moby — fall through to a new entry */
     }
 
-    entry = g_collHitEventRing + ringCursor * 0x40;
+    off = ringCursor * 0x40;
+    entry = g_collHitEventRing + off;
     func_00283638((Moby *)entry);                       /* zero entry[0..0x10] */
-    *(Vec4 *)(entry + 0x10) = *(Vec4 *)hi;
+    {
+        /* entry+0x10 = hit vector, as the ROM forms it: (ring + 0x10) + off,
+         * summed into off's register. EMPTY fences (RULING #8483) are
+         * scheduling/allocation devices; each one is load-bearing (t1633). */
+        u8 *dst = g_collHitEventRing + 0x10;
+        __asm__ __volatile__("" : "+r"(dst));
+        off += (s32)dst;
+        __asm__ __volatile__("" : "+r"(off));
+        *(u_long128 *)off = *(u_long128 *)hi;
+        __asm__ __volatile__("");
+    }
     *(s32 *)(entry + 0x24) = *(s32 *)(hi + 0x14) | carriedFlags;
     *(s32 *)(entry + 0x20) = *(s32 *)(hi + 0x10);
     entry[0x28] = hi[0x18];
@@ -1991,11 +2012,14 @@ void func_002A9C88(Moby *moby, void *hitInfo) {
     *(u16 *)(entry + 0x2A) = *(u16 *)(hi + 0x1A);
     *(f32 *)(entry + 0x2C) = *(f32 *)(hi + 0x1C);
     *(f32 *)(entry + 0x34) = *(f32 *)(hi + 0x24);
-    *(s32 *)(entry + 0x3C) = 0;
     *(s32 *)(entry + 0x30) = *(s32 *)(hi + 0x20);
     *(Moby **)(entry + 0x38) = moby;
-    m[0xA8] = (u8)ringCursor;
-    *(s32 *)(g_pCollWorldData + 0x14) = (ringCursor + 1) & 0x3F;
+    *(s32 *)(entry + 0x3C) = 0;     /* last in source: cc1 1.36 issues it first (FACT #9254) */
+    ((u8 *)moby)[0xA8] = (u8)ringCursor;
+    {
+        u8 *cursorBlock = g_pCollWorldData;   /* a fresh pointer, not `world` (t1633) */
+        *(s32 *)(cursorBlock + 0x14) = (ringCursor + 1) & 0x3F;
+    }
 }
 #endif
 
