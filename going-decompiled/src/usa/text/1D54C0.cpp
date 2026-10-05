@@ -3806,9 +3806,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DE168);
  * + language-specific layout. Bare INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DE768);
 
-/* Splat mis-split fragment: only `addiu $sp,N; nop` runs, no prologue/jr — not
- * a real function body, cannot be expressed as C. Left as bare INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DECC8);
+/* Splat mis-split fragment: only `addiu $sp,N; nop` runs (+0x30, +0x60, +0x10),
+ * no prologue/jr — dead epilogue debris, not a function body, so it cannot be C.
+ * Marked a fragment (task #1660; same bytes as INCLUDE_ASM). */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DECC8);
 
 /*
  * func_002DECE0 declarations. The cheat input buffer is 20 s16 symbols at
@@ -4188,9 +4189,11 @@ s32 func_002DF5B0(s32 id) {
     return 1;
 }
 
-/* Splat mis-split fragment: `addiu $sp` runs around a lone gp store with no
- * prologue/jr — not a real function body. Left as bare INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF600);
+/* Splat mis-split fragment: `addiu $sp,+0x70; nop; li $2,-1; nop;
+ * sw $3,gp(D_1AB104); nop; addiu $sp,+0x10` — dead epilogue debris with no
+ * prologue/jr, not a function body, so it cannot be C. Marked a fragment
+ * (task #1660; same bytes as INCLUDE_ASM). */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DF600);
 
 /* Source rect for func_002DF620: height at +0x20, width at +0x24. Each word
  * is read both as its low u16 (lhu) and as a full s32 (lw), so it is modelled
