@@ -689,7 +689,7 @@ f32 func_002A8600(f32 x) {
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8620);
 
 /* unreachable code fragment (stray FP tail from splat over-split), not C - keeps INCLUDE_ASM (see unit header). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8628);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8628);
 
 /**
  * Uniform random integer in [0, n): take a 15-bit random value from the core
@@ -1329,7 +1329,7 @@ s32 func_002A90A8(void *moby, Vec4 *dir, s32 mask, f32 stepZ, f32 minLen, f32 sp
 #endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9348);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9348);
 
 /**
  * func_002A9370 — count a group's active mobys, optionally filtered by state.
@@ -5048,7 +5048,7 @@ s32 func_002ADBA0(void *subject) {
 #endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADC30);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADC30);
 
 /**
  * Rotate vector `v` by quaternion `q`, writing the result to `out`:
@@ -6446,7 +6446,7 @@ s32 func_002AF9C8(void *obj, f32 x) {
 #endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFA58);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFA58);
 
 /**
  * Unpack a 0xBBGGRR colour word and forward to the colour setter.
@@ -7291,7 +7291,7 @@ int func_002B03E8(f32 enable1, f32 coneYaw2, f32 range3, f32 conePitch4,
 #endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0BD8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0BD8);
 
 /** func_002B0BF0 — transform the local vector (x,y,z) by obj's matrix (at +0xC0)
  *  and accumulate it into `out` (out += M * (x,y,z)).
@@ -7351,7 +7351,7 @@ void func_002B0C40(s32 ctx, void *out, void *a, void *b) {
 #endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0CA8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0CA8);
 
 /**
  * Resolve `a` into `out` via func_002B0C40, rescale out's XY to horizontal
@@ -8030,7 +8030,7 @@ void func_002B1778(s32 a, s32 b, void *dst, void *src) {
 #endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B17D0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B17D0);
 
 /**
  * func_002B17F8 — set an eased-rotation driver's blend weight and optionally
