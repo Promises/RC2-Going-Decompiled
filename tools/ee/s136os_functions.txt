@@ -291,6 +291,7 @@ usa text/1CA080 func_002CE618
 usa text/188858 DebugMalloc
 usa text/188858 func_0028C090
 usa text/188858 GiveInventoryItem
+usa text/188858 func_0028C108
 usa text/1A8180 ProbeGroundHeight
 usa text/1A8180 func_002ADC50
 usa text/1A8180 func_002AE0B8

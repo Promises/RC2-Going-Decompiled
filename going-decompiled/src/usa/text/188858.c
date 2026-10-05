@@ -9,7 +9,8 @@
  * heap allocator. Built by a later SN cc1 (no load-PRE; 8-byte-packed callee
  * saves) so the matcher compiles it at -O2 -G8 -fno-gcse (per-unit GFLAG
  * override in tools/ee/objdiff_build.sh / diff.sh / build.sh); every other
- * text unit keeps its own flag model.
+ * text unit keeps its own flag model. The s136os splice compile drops
+ * -fno-gcse (S136EXTRA="", RULING #9450).
  *
  * -G8 extern-sizing rules (same as text/1907F0 / text/1B4218):
  *   - a complete extern object of size <= 8 bytes lands in small data
@@ -3253,8 +3254,9 @@ s32 func_0028BE10(s32 typeAndSlot, s32 a2, s32 a3, s32 a4, s32 a5, s32 a6, s32 a
  * last — after the callback, so a callback that re-dirties the widget is
  * overridden.
  *
- * MATCHED byte-exact on the s136os arm (SN 2.95.3 v1.36 -fopt-stack at the
- * unit's -G8 -fno-gcse; tools/ee/s136os_functions.txt row, task #1493). The
+ * MATCHED byte-exact on the s136os arm (SN 2.95.3 v1.36 -fopt-stack, matched
+ * at -G8 -fno-gcse and unchanged at the unit's S136EXTRA="" -O2 default,
+ * RULING #9450 / FACT #9348; tools/ee/s136os_functions.txt row, task #1493). The
  * final store MUST be spelled through `w`, not through the `b` byte view:
  * through `b` this compiler keeps a second callee-saved copy of the record in
  * $17 for that one store (0x20 frame, 28/30 words differ, verify_match_unit);
@@ -3376,27 +3378,45 @@ void func_0028C090(HudElement *w, s32 iconName) {
  * INCLUDE_ASM. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C100);
 
-/* func_0028C108(key, value): linear-search the D_2552B0 record table (13
- * entries, stride 0x90, key at +0x64) for `key`; when found within the table,
- * store `value` into that record's +0x24 field, and additionally into its +0x4
- * field when its +0x68 field is zero. No-op when not found.
+/**
+ * Find the D_2552B0 record whose key is `key` and store `value` into it.
  *
- * NEAR-MISS (74.7%): the peeled bnel search loop and the &D_2552B0 base-hoist
- * match, but the original keeps the matched record pointer in a dedicated
- * register and copies it twice (store +0x24, reload +0x68, store +0x4 — store
- * BEFORE load), whereas cc1 reorders the +0x68 load ahead of the +0x24 store
- * (no-alias) and drops the pointer copies. Kept as the portable #else body. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C108);
+ *   key    the record key to search for (+0x64 of each record)
+ *   value  stored into the found record's +0x24, and also its +0x4 when the
+ *          record's +0x68 is zero
+ *
+ * The table holds 13 records of 0x90 bytes. Record 0 is tested before the
+ * loop, and the call does nothing when no record matches.
+ *
+ * MATCHED on the s136os arm (task #1679). The unit's s136os compile runs at
+ * the -O2 default, S136EXTRA="" (RULING #9450): the ROM copies the table's %hi
+ * into a second register at entry and re-adds %lo to that copy after the loop,
+ * a cross-block copy that is gcse's and that no spelling reproduces with gcse
+ * off (FACT #9331). Under the unit's former s136 pin (-fno-gcse, which the 2.9
+ * compile keeps) the same source builds 30 words against the ROM's 29, LONGER
+ * (FACT #9442); vmu's old "19/30" for it was a positional count of that longer
+ * body, not a same-length near-miss.
+ * R5900_SHORT_LOOP_PAD1 is an RULING #8435 scheduling device. It places the
+ * ROM's loop pad nop, and without it the body builds 28 words, not 29.
+ *
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh. On native it is plain C.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0028C108)
+S136OS_SLOT(func_0028C108);
 #else
 void func_0028C108(s32 key, s32 value) {
     s32 i = 0;
     if (D_2552B0[0].key != key) {
+        s32 recKey;
         do {
             if (++i >= 0xD) {
                 return;
             }
-        } while (D_2552B0[i].key != key);
+            recKey = D_2552B0[i].key;
+            R5900_SHORT_LOOP_PAD1(recKey, i);
+        } while (recKey != key);
     }
     if (i < 0xD) {
         D_2552B0[i].field24 = value;
