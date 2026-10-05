@@ -2195,13 +2195,25 @@ s32 func_002DA358(MenuWidget *obj) {
 }
 #endif
 
-/* func_002DA488: MERGED pad-fragment case (#47/#70) — the .s is 5 mis-split epilogue-pad
- * frags at the glabel (sw $0,0x44($4); addiu $sp,+0x10/+0x30/+0x10/+0x130) then the REAL
- * body at 002DA4B0 (glabel is 0x28 too early). Needs a symbol_addrs re-split (pin func_002DA488
- * = 002DA4B0, frags off) before a clean #else. Body is trivial + traced, ready post-resplit —
- * a galactic-map draw kick: AppendGsRegPacket(0x42, 0x44); AppendGsRegPacket(0x47, 0xB);
- * MapDraw(1, 0); return 8. (The prior 'large draw loop' doc was mismatched.) */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DA488);
+/* Dead epilogue-pad debris ahead of func_002DA4B0 (`sw $0,0x44($4)` and four
+ * `addiu $sp,+N` words, each followed by a nop; no prologue, no jr). Not a
+ * function body, so it cannot be C. Split off by a symbol_addrs size pin. */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_002DA488);
+
+/* Galactic-map draw kick: write the two GS registers the map pass needs
+ * (0x42 = 0x44, 0x47 = 0xB) and draw the map without the HUD pass and without
+ * scissoring. Reached only through the screen-handler table word at 0x25A354
+ * (D_0025A350's second slot, beside GalacticMapScreenTick), never by a jal.
+ * Returns 8.
+ * Byte-exact on this unit's 2.9 arm (task #1660). */
+extern void AppendGsRegPacket(s32 regId, u64 value);
+extern void MapDraw(int useHudPass, long applyScissor);
+s32 func_002DA4B0(void) {
+    AppendGsRegPacket(0x42, 0x44);
+    AppendGsRegPacket(0x47, 0xB);
+    MapDraw(1, 0);
+    return 8;
+}
 
 /* Draw the title-screen main menu.
  *
