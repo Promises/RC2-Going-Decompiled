@@ -2146,8 +2146,10 @@ s32 PostMobyHitEvent(Moby *moby, s32 a1, s32 flags, Vec4 *vecA, Vec4 *vecB, f32 
     }
     {
         /* REGISTER-PIN DEVICE (RULING #8598): the advanced cursor lives in $4
-         * as in the ROM. Unpinned, local-alloc gives it $2 and the world pointer
-         * $3, which differs in the last 4 words (FACT #9335). The ROM's $4 needs
+         * as in the ROM. Unpinned (this body with a plain s32), local-alloc gives
+         * it $3 and the world pointer stays in $2, which differs in 3 words at
+         * 0x2A9EEC/0x2A9EF8/0x2A9EFC (FACT #9435, which narrows the 4-word
+         * figure FACT #9335 measured on an earlier body). The ROM's $4 needs
          * the increment born before copy 2's sq, and then sched2 fills the
          * lq->sq gap with it: none of the fence placements and spellings tried
          * in task #1657 (NOTE in the store) reaches $4 without the pin. */
