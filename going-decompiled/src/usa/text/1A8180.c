@@ -7797,51 +7797,108 @@ s32 func_002B0FC0(u8 *p) {
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 30.56%
    -> UNKNOWN-@0: ROM `(none)` vs `lw v0,0(gp)  [GPREL16 D_1A8CA0]` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B0FE0);
+/* MATCHED on the s136os arm (task #1666): 119 ROM words, byte-exact.
+ * Every 16-byte copy in the ROM is an adjacent `lq $2 / sq $2` that the
+ * scheduler never splits or overlaps; cc1 hoists and interleaves u_long128
+ * copies freely. The devices below hold that shape. Each is an EMPTY asm or a
+ * register pin and each is load-bearing: the words differing (solo s136os
+ * compile vs the ROM, aligned) when it alone is removed are in brackets.
+ *   - untied empty barriers (RULING #8483) after the copies into a, b and the
+ *     reference a, inside the D_1A8CA4 block, and before the alt-mode miss
+ *     copy [2, 98 at 120 words, 69 at 118, 64 at 118, 15 at 118];
+ *   - a tied empty fence on pos and bp before the b copy: pos is re-loaded
+ *     and bp stays in $a0 for CollLine, as in the ROM [both 99 at 118;
+ *     bp alone 1; pos alone 99 at 118];
+ *   - the two hit-point copies take their value in $2 (EE_REG, RULING #8598)
+ *     so the address goes to $3 [4, 3];
+ *   - the D_1A8CA4 flag is pinned to $4, where the ROM loads and tests it [7];
+ *   - g_collHitPointAlias for the hit-z read [4], see its declaration.
+ * hp is formed after the out-copy, so the copy and hp share one %hi as in the
+ * ROM (formed before: 5 at 117 words). Pin-free, the best body measured was
+ * 7 aligned words (these barriers, no pins); without barriers, 17.
+ * Master's #else (Vec4 struct copies) built 165 words against the ROM's 119.
+ */
+/* GUARD (task #1666): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002B0FE0)
+S136OS_SLOT(func_002B0FE0);
 #else
+/* g_collHitPointAlias: a second C name for g_collHitPoint (same assembler
+ * symbol via the asm label, as 188858.c's ...Split externs). cc1 does not see
+ * it as the same object, so the hit-z read below forms its own
+ * `lui %hi(g_collHitPoint+8)` instead of reusing the half the out-copy just
+ * split, as the ROM does (shared: 4/119, task #1666). No new symbol reaches
+ * the object: the relocation names g_collHitPoint. */
+#ifndef TARGET_NATIVE
+extern Vec4 g_collHitPointAlias __asm__("g_collHitPoint");
+#else
+#define g_collHitPointAlias g_collHitPoint
+#endif
 f32 func_002B0FE0(Vec4 *pos, void *moby, Vec4 *out) {
     Vec4 a;
     Vec4 b;
+    Vec4 *p;
+    Vec4 *bp;
 
     if (D_1A8CA0 == 0) {
-        a = *pos;
+        /* Normal mode: a short ray from just above pos down to z = 0.01. */
+        *(u_long128 *)&a = *(u_long128 *)pos;
+        __asm__ __volatile__("");
         a.z = 0.01f;
-        b = *pos;
-        b.z = pos->z + 0.5f;
-        if (CollLine(&b, &a, 2, moby, (void *)0) != 0) {
+        bp = &b;
+        __asm__ __volatile__("" : "+r"(pos), "+r"(bp));
+        *(u_long128 *)bp = *(u_long128 *)pos;
+        __asm__ __volatile__("");
+        b.z = b.z + 0.5f;
+        if (CollLine(bp, &a, 2, moby, (void *)0) != 0) {
             if (out != 0) {
-                *out = g_collHitPoint;
+                register u_long128 hit EE_REG("$2") = *(u_long128 *)&g_collHitPoint;
+                *(u_long128 *)out = hit;
             }
-            return pos->z - g_collHitPoint.z;
+            return pos->z - g_collHitPointAlias.z;
         }
         if (out != 0) {
-            *out = *pos;
+            *(u_long128 *)out = *(u_long128 *)pos;
         }
         return pos->z;
     }
 
-    a = *(Vec4 *)&D_001B1750;
-    if (D_1A8CA4 != 0) {
-        a = *pos;
-        func_002B0F40(&a, &a, &a, -10.0f);
+    /* Alt surface: measure against the reference point (D_001B1750, or pos
+     * pushed -10 when D_1A8CA4 is set), casting from a -0.5 offset. */
+    *(u_long128 *)&a = *(u_long128 *)&D_001B1750;
+    __asm__ __volatile__("");
+    {
+        register s32 pushRef EE_REG("$4") = D_1A8CA4;
+        if (pushRef != 0) {
+            *(u_long128 *)&a = *(u_long128 *)pos;
+            __asm__ __volatile__("");
+            func_002B0F40(&a, &a, &a, -10.0f);
+        }
     }
-    func_002B0F40(pos, &b, pos, -0.5f);
+    p = &b;
+    func_002B0F40(pos, p, pos, -0.5f);
     {
         f32 dist = Vec3DistVu0(pos, (f32 *)&a);
-        if (CollLine(&b, &a, 2, moby, (void *)0) != 0) {
+        if (CollLine(p, &a, 2, moby, (void *)0) != 0) {
             f32 hitDist;
+            Vec4 *hp;
             if (out != 0) {
-                *out = g_collHitPoint;
+                register u_long128 hit EE_REG("$2") = *(u_long128 *)&g_collHitPoint;
+                *(u_long128 *)out = hit;
             }
-            hitDist = Vec3DistVu0(pos, (f32 *)&g_collHitPoint);
-            if (dist < Vec3DistVu0(&g_collHitPoint, (f32 *)&a)) {
-                hitDist = -hitDist;
+            hp = &g_collHitPoint;
+            hitDist = Vec3DistVu0(pos, (f32 *)hp);
+            if (dist < Vec3DistVu0(hp, (f32 *)&a)) {
+                hitDist = -hitDist;   /* pos is nearer the reference than the hit is */
             }
             return hitDist;
         }
         if (out != 0) {
-            *out = *pos;
+            __asm__ __volatile__("");
+            *(u_long128 *)out = *(u_long128 *)pos;
         }
         return dist;
     }
