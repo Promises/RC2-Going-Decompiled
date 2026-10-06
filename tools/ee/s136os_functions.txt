@@ -367,3 +367,6 @@ usa text/1A8180 func_002ADBA0
 usa text/1A8180 func_002A98B8
 usa text/1A8180 func_002A9BD8
 usa text/1A8180 MarkLevelAvailable
+usa text/198FA0 func_0029DD10
+usa text/198FA0 func_0029C600
+usa text/198FA0 func_0029C5B0

@@ -1704,27 +1704,39 @@ s32 func_0029C570(void) {
     return 0;
 }
 
-/* func_0029C5B0(a,b,idx): if the GUI is up and idx<2, store the (a,b) pair
- * into the slot table at g_guiInstance+0x3FA18+idx*8 and return 1; else 0.
- * The nested-guard shape below reproduces the ROM's block layout (one shared
- * `return 0` exit; 61.21% -> 85.68% on the sdk29 arm, #511); the residue is
- * pure register COLORING — the original (later SN) cc1 copies BOTH args to
- * $t0/$t1 and duplicates the slot base ($a0 + a gratuitous $v1 copy) while the
- * pinned cc1 copies only `a` and keeps one base, and stores b before a. Same
- * coloring wall as func_002911F0. Left as asm. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029C5B0);
+/* The two-entry (a,b) pair table at g_guiInstance+0x3FA18, written by
+ * func_0029C5B0 and cleared by func_0029C600. Only the table is modelled; the
+ * rest of the 0x3FB20-byte manager is padding here. */
+typedef struct {
+    s32 a;
+    s32 b;
+} GuiPendingPair;
+
+typedef struct {
+    char _unk0[0x3FA18];
+    GuiPendingPair pairs[2];
+} GuiPendingPairs;
+
+/** func_0029C5B0 — store the (a,b) pair into entry `idx` of the GUI manager's
+ *  two-entry pending-pair table (g_guiInstance+0x3FA18).
+ *  @param a    first word, stored at +0x0 of the entry
+ *  @param b    second word, stored at +0x4
+ *  @param idx  entry index; anything outside 0..1 (unsigned compare) is ignored
+ *  @return 1 if stored, 0 when the GUI is down or idx is out of range.
+ *  Built on the s136os arm (task #1668). Each field is written through its own
+ *  `pairs[idx]` access: cc1 legitimises each large-offset address separately
+ *  (base+0x38000, then +0x7A18/+0x7A1C) and CSE leaves the ROM's copy of the
+ *  base ($3 = $4) between them. A shared slot pointer has one base register
+ *  and loses that copy (the "coloring wall" recorded here before #1668). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0029C5B0)
+S136OS_SLOT(func_0029C5B0);
 #else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 85.68% -> REGNUM-COLORING, first differing row @2: ROM `daddu a4, a0, zero` vs `(nothing)`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 23.42% -> REGNUM-COLORING, first differing row @0: ROM `lui a3, %hi(g_guiInstance)` vs `lui v1, %hi(g_guiInstance)`. */
 s32 func_0029C5B0(s32 a, s32 b, s32 idx) {
     char *gui = g_guiInstance;
     if (gui != 0) {
         if ((u32)idx < 2) {
-            char *slot = gui + 0x38000 + idx * 8;
-            *(s32 *)(slot + 0x7A18) = a;
-            *(s32 *)(slot + 0x7A1C) = b;
+            ((GuiPendingPairs *)gui)->pairs[idx].a = a;
+            ((GuiPendingPairs *)gui)->pairs[idx].b = b;
             return 1;
         }
     }
@@ -1732,27 +1744,23 @@ s32 func_0029C5B0(s32 a, s32 b, s32 idx) {
 }
 #endif
 
-/* func_0029C600(idx): clear the slot pair at g_guiInstance+0x3FA18+idx*8 (the
- * counterpart of func_0029C5B0). UNMATCHABLE in this unit: it reads
- * g_guiInstance via %gp_rel($gp) while every other function here reads it via
- * the adjacent absolute lui/lw pair — the same symbol, both ways, inside one
- * original TU (the proven reload-artifact wall). The unit-wide extern model
- * can only express one side per symbol (g_guiInstance is modeled absolute,
- * favouring the ~60 wrappers), so this stays asm. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029C600);
+/** func_0029C600 — clear entry `idx` of the GUI manager's pending-pair table
+ *  (g_guiInstance+0x3FA18); the counterpart of func_0029C5B0.
+ *  @param idx  entry index; anything outside 0..1 (unsigned compare) is ignored
+ *  Built on the s136os arm (task #1668). g_guiInstance is read straight from
+ *  the global in each access: cached in a typed local first, cc1 allocates
+ *  the sum and the copy to $2 instead of the ROM's $3/$5/$3 (measured). The
+ *  read fills the range check's delay slot, where the .extern 12 band (header)
+ *  assembles it as the ROM's one-insn %gp_rel load. The per-field accesses
+ *  give the base copy, as in func_0029C5B0. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0029C600)
+S136OS_SLOT(func_0029C600);
 #else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 36.00% -> GPREL-TWO-WAYS, first differing row @2: ROM `(nothing)` vs `lui v0, 0x3`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 48.85% -> GPREL-TWO-WAYS, first differing row @1: ROM `(nothing)` vs `lui v0, %hi(g_guiInstance)`. */
 void func_0029C600(s32 idx) {
-    char *slot;
-    if ((u32)idx >= 2) {
-        return;
+    if ((u32)idx < 2) {
+        ((GuiPendingPairs *)g_guiInstance)->pairs[idx].a = 0;
+        ((GuiPendingPairs *)g_guiInstance)->pairs[idx].b = 0;
     }
-    slot = g_guiInstance + 0x38000 + idx * 8;
-    *(s32 *)(slot + 0x7A18) = 0;
-    *(s32 *)(slot + 0x7A1C) = 0;
 }
 #endif
 
@@ -2498,7 +2506,18 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DCB8);
  * wrapper to func_0033A9F8. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DD08);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DD10);
+/** func_0029DD10 — when the GUI is up, draw the confirm-dialog screen at
+ *  g_guiInstance+0x3CEA0 (func_0033A9F8). Built on the s136os arm (task #1668). */
+extern void func_0033A9F8(void *screen);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0029DD10)
+S136OS_SLOT(func_0029DD10);
+#else
+void func_0029DD10(void) {
+    if (g_guiInstance != 0) {
+        func_0033A9F8(g_guiInstance + 0x3CEA0);
+    }
+}
+#endif
 
 /** Forward `arg` to the widget at g_guiInstance+0x3CEA0 (method func_0033A8F0);
  *  0 when the GUI is down. */
@@ -2527,8 +2546,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0
  *       hoists `li $2,256` to the top; only -fno-schedule-insns2 keeps it late,
  *       and that flag can't be added unit-wide without regressing the other 83.
  *   (b) the original colours the base register $1 ($at) and the constant $2,
- *       while the pinned cc1 picks $2/$3 (the same register-coloring wall as
- *       func_0029C448/func_0029C5B0). Left as asm. */
+ *       while the pinned cc1 picks $2/$3 (the register-coloring residue
+ *       func_0029C448 shows; func_0029C5B0's, once grouped here, was a
+ *       source-shape residue and closed on the s136os arm in task #1668).
+ *       Left as asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DD90);
 
 /* func_0029DDB0: hardware DMA busy-wait — spins on the CHCR busy bit (0x100) of
