@@ -2215,6 +2215,64 @@ s32 func_002CE8A8(s32 *out) {
 }
 #endif
 
+/* Confirm half of the menu confirm/cancel polls (func_002D3BE0 and its
+ * siblings, func_002CE908, func_002D40E8, func_002D4270, ...): if the active screen (g_menuScreenBlock+0x14) has a pending
+ * sub-result at +0xE0, latch it into g_menuScreenBlock+0x18 and return 0;
+ * otherwise return -1 when g_menuScreenBlock+0x134 is clear, else 0.
+ * Returns 0 or -1.
+ * The spelling is what the ROM's layout needs (task #1656): the store is the
+ * then-arm and falls into the shared `return 0`, and the -1 exit is the else-if.
+ * Written as `else if (...) r = -1; else r = 0`, the s136os compiler turns the
+ * tail into `li -1; movn`. Spelled with an early `return 0` after the store, the
+ * store is not scheduled into the branch's delay slot. Always inlined; no
+ * out-of-line copy is emitted. */
+static inline s32 MenuPollConfirm(void) {
+    u8 *block = g_menuScreenBlock;
+    s32 pending = *(s32 *)(*(u8 **)(block + 0x14) + 0xE0);
+    if (pending != 0) {
+        *(s32 *)(block + 0x18) = pending;
+    } else if (*(s32 *)(block + 0x134) == 0) {
+        return -1;
+    }
+    return 0;
+}
+
+/* ADDRESSING-MODEL DEVICE for func_002CE908 and func_002D4270 (RULING #8620 terms;
+ * the offset-0 gp equate is ruled covered by RULING #9073; the precedent is
+ * 1D54C0.cpp's func_002DD7E8). It emits nothing. The equate alias
+ * `g_guiInstanceGp` has no sized `.extern` of its own, so the one access
+ * through it assembles gp-relative and reproduces the ROM's
+ * `lw $2,%gp_rel(g_guiInstance)($28)` in the `beqz` delay slot (0x002CE98C,
+ * 0x002D42F4), even though this unit declares `.extern g_guiInstance, 16`
+ * above. Every other reader of g_guiInstance in this unit stays absolute. The
+ * relocation names g_guiInstance (R_MIPS_GPREL16), and GNU as never writes an
+ * equate of an undefined symbol to the symtab, so no alias reaches nm.
+ * At file scope and EE only, because the s136os splice refuses an equate the
+ * unit's 2.9 TU never sees (FACT #9067). Native reads the real symbol. */
+#ifndef TARGET_NATIVE
+__asm__("g_guiInstanceGp = g_guiInstance");
+extern char *g_guiInstanceGp;
+#define GUI_INSTANCE_GP g_guiInstanceGp
+#else
+#define GUI_INSTANCE_GP g_guiInstance
+#endif
+
+/* The 8-byte command record handed to func_002D6B00 (-> MenuScreenDoAction):
+ * op at +0x2, arg at +0x4. Filled through the union because that is what
+ * the ROM's schedule needs (task #1656): cc1 2.95 gives an access through a
+ * union member alias set 0, so the `sh op` stays ahead of the following
+ * `lw arg` from the list entry as in the ROM. Through a plain struct or byte
+ * casts, -fstrict-aliasing separates the u16 store from the s32 load and the
+ * scheduler hoists the load above the store. */
+union MenuCommandRecord {
+    struct {
+        u16 reserved;
+        u16 op;
+        s32 arg;
+    } f;
+    s32 words[2];
+};
+
 /* Menu confirm/cancel poll + command builder, twin of func_002D0158 without the
  * arg==0 sound. Confirm (0x10) latches the active screen's pending result
  * (block[0x14]->0xE0 into block[0x18], else -1/0); cancel (0x900) returns 1;
@@ -2223,47 +2281,43 @@ s32 func_002CE8A8(s32 *out) {
  * g_guiInstance+0x3C160 (func_003424C8) and builds an 8-byte command record
  * (op = (u16)entry[0x8] at rec+0x2, arg = entry[0xC] at rec+0x4) handed to
  * func_002D6B00 (-> MenuScreenDoAction).
- * Wall: 8-byte-packed-save ($16 + $17 + $31). Preserved as portable C. */
+ * Byte-exact on the s136os arm (task #1656): the poll shape of func_002D3BE0
+ * with the input block base held in $16, plus the union record and the
+ * GUI_INSTANCE_GP device above. */
 extern s32 func_0029D328(s32 padPressed);
 extern void *func_003424C8(void *widget);
 extern void func_002D6B00(void *record);
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE908);
+/* GUARD (task #1656): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002CE908)
+S136OS_SLOT(func_002CE908);
 #else
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 67.61% -> FRAME-SIZE,
  * first differing row @0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-64`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 61.65% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-80`. */
-/* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame +
- * branch-likely confirm shape / single-register result threading. */
 s32 func_002CE908(void) {
-    s32 flags = *(s32 *)(D_138180 + 0x1C4);
-    s32 *block;
-    s32 v;
+    u8 *input = D_138180;
+    s32 flags = *(s32 *)(input + 0x1C4);
+    s32 result = 0;
     if (flags & 0x10) {
-        block = (s32 *)g_menuScreenBlock;
-        v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
-        if (v != 0) {
-            block[0x18 / 4] = v;
-            return 0;
-        }
-        if (block[0x134 / 4] == 0) {
-            return -1;
-        }
-        return 0;
+        return MenuPollConfirm();
     }
     if (flags & 0x900) {
-        return 1;
+        result = 1;
+    } else {
+        func_0029D328(flags);
+        if ((*(s32 *)(input + 0x1C4) & 0x40) && GUI_INSTANCE_GP) {
+            union MenuCommandRecord record;
+            u8 *entry = (u8 *)func_003424C8(GUI_INSTANCE_GP + 0x3C160);
+            record.f.op = *(u16 *)(entry + 0x8);
+            record.f.arg = *(s32 *)(entry + 0xC);
+            func_002D6B00(&record);
+        }
     }
-    func_0029D328(flags);
-    if ((*(s32 *)(D_138180 + 0x1C4) & 0x40) && g_guiInstance) {
-        u8 record[0x30];
-        u8 *entry = (u8 *)func_003424C8(g_guiInstance + 0x3C160);
-        *(u16 *)(record + 0x2) = *(u16 *)(entry + 0x8);
-        *(s32 *)(record + 0x4) = *(s32 *)(entry + 0xC);
-        func_002D6B00(record);
-    }
-    return 0;
+    return result;
 }
 #endif
 
@@ -4769,28 +4823,6 @@ s32 func_002D3BB0(void) {
     return 0;
 }
 
-/* Confirm half of the menu confirm/cancel polls (func_002D3BE0 and its five
- * siblings): if the active screen (g_menuScreenBlock+0x14) has a pending
- * sub-result at +0xE0, latch it into g_menuScreenBlock+0x18 and return 0;
- * otherwise return -1 when g_menuScreenBlock+0x134 is clear, else 0.
- * Returns 0 or -1.
- * The spelling is what the ROM's layout needs (task #1656): the store is the
- * then-arm and falls into the shared `return 0`, and the -1 exit is the else-if.
- * Written as `else if (...) r = -1; else r = 0`, the s136os compiler turns the
- * tail into `li -1; movn`. Spelled with an early `return 0` after the store, the
- * store is not scheduled into the branch's delay slot. Always inlined; no
- * out-of-line copy is emitted. */
-static inline s32 MenuPollConfirm(void) {
-    u8 *block = g_menuScreenBlock;
-    s32 pending = *(s32 *)(*(u8 **)(block + 0x14) + 0xE0);
-    if (pending != 0) {
-        *(s32 *)(block + 0x18) = pending;
-    } else if (*(s32 *)(block + 0x134) == 0) {
-        return -1;
-    }
-    return 0;
-}
-
 /* Menu confirm/cancel poll: confirm bit (0x10) returns MenuPollConfirm();
  * cancel bit (0x900) returns 1; otherwise ticks the idle handler func_0029D4E8
  * with the pad word and returns 0 (the handler's result is ignored).
@@ -5053,40 +5085,34 @@ s32 func_002D40B8(void) {
  * (0x10) and cancel (0x900) behave like func_002D3F78; the idle path ticks
  * func_0029D678 and, when that signals (nonzero), fires MenuScreenDoAction(0xD,0,
  * &outFlag) — opcode 0xD is a RequestGameStateChange — with the out-flag slot
- * pre-zeroed. Wall: 8-byte-packed-save ($16 + $31). Preserved as portable C. */
+ * pre-zeroed. Byte-exact on the s136os arm (task #1656): func_002D3BE0's shape
+ * with the action call inside the idle arm. */
 extern s32 func_0029D678(s32 padPressed);
 extern s32 MenuScreenDoAction(s32 opcode, s32 arg, s32 *outFlag);
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D40E8);
+/* GUARD (task #1656): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D40E8)
+S136OS_SLOT(func_002D40E8);
 #else
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 68.15% -> SPLIT-HIREG,
  * first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 74.95% -> SPLIT-HIREG, first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`. */
-/* TODO(match): functional equivalent - not byte-exact; 1-GPR packed-save frame +
- * branch-likely confirm shape. */
 s32 func_002D40E8(void) {
     s32 flags = g_padButtonsPressed;
-    s32 *block = (s32 *)g_menuScreenBlock;
+    s32 result = 0;
     if (flags & 0x10) {
-        s32 v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
-        if (v != 0) {
-            block[0x18 / 4] = v;
-            return 0;
-        }
-        if (block[0x134 / 4] == 0) {
-            return -1;
-        }
-        return 0;
+        return MenuPollConfirm();
     }
     if (flags & 0x900) {
-        return 1;
-    }
-    if (func_0029D678(flags) != 0) {
+        result = 1;
+    } else if (func_0029D678(flags) != 0) {
         s32 outFlag = 0;
         MenuScreenDoAction(0xD, 0, &outFlag);
     }
-    return 0;
+    return result;
 }
 #endif
 
@@ -5142,47 +5168,42 @@ s32 func_002D4240(void) {
  * confirm pad bit (0x40) with the GUI up, reads the selected entry of the list
  * widget at g_guiInstance+0x3F3F0 (func_0033F360) and builds a command record
  * (opcode = entry[0x8], arg = entry[0xC]) handed to func_002D6B00 (-> MenuScreenDoAction).
- * Wall: 8-byte-packed-save ($16 + $17 + $31). Preserved as portable C. */
+ * Byte-exact on the s136os arm (task #1656); func_002CE908 with another idle
+ * handler, widget and list getter. */
 extern s32 func_0029D758(s32 padPressed);
 extern void *func_0033F360(void *widget);
 extern void func_002D6B00(void *record);
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D4270);
+/* GUARD (task #1656): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D4270)
+S136OS_SLOT(func_002D4270);
 #else
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 67.61% -> FRAME-SIZE,
  * first differing row @0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-64`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 61.65% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-80`. */
-/* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame +
- * branch-likely confirm shape / single-register result threading. */
 s32 func_002D4270(void) {
-    s32 flags = *(s32 *)(D_138180 + 0x1C4);
-    s32 *block;
-    s32 v;
+    u8 *input = D_138180;
+    s32 flags = *(s32 *)(input + 0x1C4);
+    s32 result = 0;
     if (flags & 0x10) {
-        block = (s32 *)g_menuScreenBlock;
-        v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
-        if (v != 0) {
-            block[0x18 / 4] = v;
-            return 0;
-        }
-        if (block[0x134 / 4] == 0) {
-            return -1;
-        }
-        return 0;
+        return MenuPollConfirm();
     }
     if (flags & 0x900) {
-        return 1;
+        result = 1;
+    } else {
+        func_0029D758(flags);
+        if ((*(s32 *)(input + 0x1C4) & 0x40) && GUI_INSTANCE_GP) {
+            union MenuCommandRecord record;
+            u8 *entry = (u8 *)func_0033F360(GUI_INSTANCE_GP + 0x3F3F0);
+            record.f.op = *(u16 *)(entry + 0x8);
+            record.f.arg = *(s32 *)(entry + 0xC);
+            func_002D6B00(&record);
+        }
     }
-    func_0029D758(flags);
-    if ((*(s32 *)(D_138180 + 0x1C4) & 0x40) && g_guiInstance) {
-        u8 record[0x30];
-        u8 *entry = (u8 *)func_0033F360(g_guiInstance + 0x3F3F0);
-        *(u16 *)(record + 0x2) = *(u16 *)(entry + 0x8);
-        *(s32 *)(record + 0x4) = *(s32 *)(entry + 0xC);
-        func_002D6B00(record);
-    }
-    return 0;
+    return result;
 }
 #endif
 
