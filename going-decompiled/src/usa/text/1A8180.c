@@ -3540,47 +3540,45 @@ f32 func_002AB668(f32 a, f32 maxStep, f32 *p, s32 sign) {
 /* func_002AB700: critically-damped scalar angle driver. Eases the stored angle
  * *p toward `target` while tracking its angular velocity in *vel.
  *
- *   - When mode == 2 a rotation-side `sign` is derived from the relative signs
- *     of target and the current angle so the spring takes the shorter wrap arc
- *     (sign = +1 when target>0 & *p<0, -1 when target<0 & *p>0, else 0); for any
- *     other mode the caller's mode value is used directly as that sign.
- *   - func_002AB5A0 gives the signed wrapped delta (cur->target on the chosen
- *     side); func_002AB000 integrates the spring step into *vel (stiffness/
- *     damping/dt in b/c/d); *p is re-wrapped against *vel and the residual delta
- *     recomputed. When the residual is below a dt-scaled epsilon the angle snaps
- *     exactly to target and the velocity is zeroed.
+ *   p, vel   angle and angular-velocity accumulators (read and written)
+ *   target   goal angle
+ *   b, c, d  spring stiffness / damping / dt, forwarded to func_002AB000
+ *   mode     rotation side: 2 = derive it from the signs, else used as is
  *
- * Returns the residual signed angle error (0 when snapped). Walled: saves
- * $16-$18/$31 + $f20-$f23 (save-layout wall). b/c/d are $f13/$f14/$f15. */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 65.75%
-   -> UNKNOWN-@3: ROM `(none)` vs `daddu s0,a0,zero` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB700);
+ *   - When mode == 2 the side is derived from the relative signs of target and
+ *     the current angle so the spring takes the shorter wrap arc: when they
+ *     have opposite signs it is -1 for a negative target and +1 otherwise,
+ *     else 0. The ROM keeps that side in mode's own register ($16), so the
+ *     body re-assigns `mode` rather than copying it into a separate local; the
+ *     two opposite-sign tests share one `target < 0` select, as in the ROM.
+ *   - func_002AB5A0 gives the signed wrapped delta (cur->target on the chosen
+ *     side); func_002AB000 integrates the spring step into *vel; *p is
+ *     re-wrapped against *vel and the residual delta recomputed. When the
+ *     residual is below d * 0.01 the angle snaps exactly to target and the
+ *     velocity is zeroed.
+ *
+ * Returns the residual signed angle error, or the re-read zero velocity when
+ * snapped. Compiled on the s136os arm (SN 2.95.3 v1.36 -fopt-stack). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002AB700)
+S136OS_SLOT(func_002AB700);
 #else
 /* Prototypes this body needs whose declarations sit in other guarded arms:
  * the s136os arm compiles this arm alone, so it must see them here. */
 extern f32 func_002AB5A0(f32 a, f32 b, s32 sign);
 f32 func_002AB700(f32 *p, f32 *vel, f32 target, f32 b, f32 c, f32 d, s32 mode) {
-    s32 sign;
-    f32 delta;
     f32 r;
 
     if (mode == 2) {
-        if (target > 0.0f && *p < 0.0f) {
-            sign = 1;
-        } else if (target < 0.0f && *p > 0.0f) {
-            sign = -1;
+        if ((target > 0.0f && *p < 0.0f) || (target < 0.0f && *p > 0.0f)) {
+            mode = (target < 0.0f) ? -1 : 1;
         } else {
-            sign = 0;
+            mode = 0;
         }
-    } else {
-        sign = mode;
     }
 
-    delta = func_002AB5A0(target, *p, sign);
-    func_002AB000(vel, delta, b, c, d);
+    func_002AB000(vel, func_002AB5A0(target, *p, mode), b, c, d);
     *p = WrapAnglePiSum(*p, *vel);            /* WrapAnglePiSum */
-    r = func_002AB5A0(target, *p, sign);
+    r = func_002AB5A0(target, *p, mode);
     if (GetFloatAbs(r) < d * 0.009999999776f) {   /* 0x3C23D70A */
         *p = target;
         *vel = 0.0f;
