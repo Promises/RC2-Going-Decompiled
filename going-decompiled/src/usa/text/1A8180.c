@@ -2681,93 +2681,92 @@ extern s32 func_002AC088(Moby *moby);
  * (event +0x2C) is clamped up to 1.0 for low-priority owners, and a companion
  * state flag (owners pvar word 4, +0x18) is toggled by event flag 0x100000.
  *
+ * Returns the weight; 0.0 when `owner` has no state block or `event` is NULL.
+ *
  * UNCONFIRMED: state/event field meanings inferred from access pattern; owner is
  * a Moby, target/candidate are Mobys (func_002AE7E8 reads their class).
+ *
+ * Compiled on the s136os arm (SN 2.95.3 v1.36 -fopt-stack). The spelling follows
+ * the ROM: one exit through `weight` (every early-out lands on the shared
+ * `mov.s $f0,$f20`); the 0xFE and 0xFD tests are separate ifs, because
+ * `== 0xFE || == 0xFD` folds into a range test the ROM does not have; the
+ * announcer lookup re-reads the candidate from the event; and each kind arm
+ * re-reads the counter.
  */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 90.11%
-   -> UNKNOWN-@1: ROM `(none)` vs `sd s0,0(sp)` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AA508);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002AA508)
+S136OS_SLOT(func_002AA508);
 #else
 f32 func_002AA508(Moby *owner, void *event) {
     u8 *st = (u8 *)func_002AC058(owner);   /* focus-target state (pvar word 0) */
     f32 weight = 0.0f;
     s16 counter;
 
-    if (st == NULL) {
-        return 0.0f;
-    }
-
-    /* drop the focus target if its moby has despawned (state 0xFE/0xFD) */
-    {
-        Moby *cur = *(Moby **)(st + 0x18);
-        if (cur != NULL) {
-            u8 state = *(u8 *)((u8 *)cur + 0x20);
-            if (state == 0xFE || state == 0xFD) {
+    if (st != NULL) {
+        /* drop the focus target if its moby has despawned (state 0xFE/0xFD) */
+        if (*(Moby **)(st + 0x18) != NULL) {
+            u8 state = *(u8 *)((u8 *)*(Moby **)(st + 0x18) + 0x20);
+            if (state == 0xFE) {
+                *(s16 *)(st + 0x1C) = 0;
+                *(s32 *)(st + 0x18) = 0;
+            } else if (state == 0xFD) {
                 *(s16 *)(st + 0x1C) = 0;
                 *(s32 *)(st + 0x18) = 0;
             }
         }
-    }
 
-    /* advance the hold counter; expire target + counter after 0x79 ticks */
-    counter = *(s16 *)(st + 0x1C);
-    if (counter != 0) {
-        *(s16 *)(st + 0x1C) = (s16)(*(u16 *)(st + 0x1C) + 1);
-        if (counter >= 0x79) {
-            *(s32 *)(st + 0x18) = 0;
-            *(s16 *)(st + 0x1C) = 0;
+        /* advance the hold counter; expire target + counter after 0x79 ticks */
+        counter = *(s16 *)(st + 0x1C);
+        if (counter != 0) {
+            *(s16 *)(st + 0x1C) = (s16)(*(u16 *)(st + 0x1C) + 1);
+            if (counter >= 0x79) {
+                *(s32 *)(st + 0x18) = 0;
+                *(s16 *)(st + 0x1C) = 0;
+            }
         }
-    }
 
-    if (event == NULL) {
-        return 0.0f;
-    }
+        if (event != NULL) {
+            Moby *cand;
 
-    weight = *(f32 *)((u8 *)event + 0x2C);
-    {
-        Moby *cand = *(Moby **)((u8 *)event + 0x20);
-        if (cand != NULL) {
-            if (*(Moby **)(st + 0x18) != cand) {
-                /* new focus target: latch it + resolve its announcer id */
-                *(s32 *)(st + 0x18) = (s32)cand;
-                *(u8 *)(st + 0x17) = (u8)func_002AE7E8(cand);
-                *(s16 *)(st + 0x1C) = 1;
-            } else {
-                /* same target: gate the re-trigger window by event kind */
-                u8  kind = *(u8 *)((u8 *)event + 0x28);
-                s16 c    = *(s16 *)(st + 0x1C);
-                if (kind == 9) {
-                    if (c < 0x3C) {
+            weight = *(f32 *)((u8 *)event + 0x2C);
+            cand = *(Moby **)((u8 *)event + 0x20);
+            if (cand != NULL) {
+                if (*(Moby **)(st + 0x18) != cand) {
+                    /* new focus target: latch it + resolve its announcer id */
+                    *(s32 *)(st + 0x18) = (s32)cand;
+                    *(u8 *)(st + 0x17) = (u8)func_002AE7E8(*(Moby **)((u8 *)event + 0x20));
+                    *(s16 *)(st + 0x1C) = 1;
+                } else if (*(u8 *)((u8 *)event + 0x28) == 9) {
+                    /* same target: gate the re-trigger window by event kind */
+                    if (*(s16 *)(st + 0x1C) < 0x3C) {
                         weight = 0.0f;
                     } else {
                         *(s16 *)(st + 0x1C) = 1;
                     }
                 } else {
-                    if (c < 0xA) {
+                    if (*(s16 *)(st + 0x1C) < 0xA) {
                         weight = 0.0f;
                     }
                     *(s16 *)(st + 0x1C) = 1;
                 }
             }
-        }
-    }
 
-    /* low-priority owners get their emphasis floored to 1.0 */
-    if ((f32)*(s16 *)(st + 0x4) <= 1.0f && weight > 0.0f && weight < 1.0f) {
-        weight = 1.0f;
-    }
+            /* low-priority owners get their emphasis floored to 1.0 */
+            if ((f32)*(s16 *)(st + 0x4) <= 1.0f && weight > 0.0f && weight < 1.0f) {
+                weight = 1.0f;
+            }
 
-    /* toggle the companion state flag (owner pvar word 4, +0x18) */
-    if (*(s32 *)((u8 *)event + 0x24) & 0x100000) {
-        u8 *st2 = (u8 *)func_002AC088(owner);
-        if (st2 != NULL) {
-            *(u8 *)(st2 + 0x18) = 1;
-        }
-    } else {
-        u8 *st2 = (u8 *)func_002AC088(owner);
-        if (st2 != NULL) {
-            *(u8 *)(st2 + 0x18) = 0;
+            /* toggle the companion state flag (owner pvar word 4, +0x18) */
+            if (*(s32 *)((u8 *)event + 0x24) & 0x100000) {
+                u8 *st2 = (u8 *)func_002AC088(owner);
+                if (st2 != NULL) {
+                    *(u8 *)(st2 + 0x18) = 1;
+                }
+            } else {
+                u8 *st2 = (u8 *)func_002AC088(owner);
+                if (st2 != NULL) {
+                    *(u8 *)(st2 + 0x18) = 0;
+                }
+            }
         }
     }
 
@@ -8531,11 +8530,15 @@ extern void func_00273740(Moby *owner, s32 arg1, s32 classId, s32 index,
  * with the owner's class id (+0xAA), world position (+0x10), facing (+0xF0), the
  * bit index, `kind` (low byte), and two more random parameters (a bearing in
  * [90,270] and a value in [10,20]).
+ *
+ * Compiled on the s136os arm (SN 2.95.3 v1.36 -fopt-stack). Two spellings
+ * follow the ROM: the skip test is `((mask >> i) ^ 1) & 1`, which gives the
+ * ROM's `xori; andi; bnel` (`(… & 1) == 0` and `!(… & 1)` give `andi; beql`);
+ * and the offset's Z word is zeroed as an int before the float overwrites it
+ * (the ROM's dead `sw $0,8($sp)`).
  */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 48.26%
-   -> UNKNOWN-@2: ROM `sd s0,16(sp)` vs `(none)` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B18D0);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002B18D0)
+S136OS_SLOT(func_002B18D0);
 #else
 /* Prototypes this body needs whose declarations sit in other guarded arms:
  * the s136os arm compiles this arm alone, so it must see them here. */
@@ -8553,14 +8556,14 @@ void func_002B18D0(Moby *owner, s32 slotMask, Vec4 *basePos, s32 kind,
         f32 bearing;
         f32 value;
 
-        if (((slotMask >> i) & 1) == 0) {
+        if (((slotMask >> i) ^ 1) & 1) {
             continue;
         }
         angle  = GetRandomAngle();
         radius = GetRandomFloatRange(radiusMin, radiusMax) * invFrameRate;
         offset.x = func_00283B30(angle) * radius;   /* cos */
         offset.y = func_00283B48(angle) * radius;   /* sin */
-        /* original clears the Z int then overwrites it with the float below */
+        *(s32 *)&offset.z = 0;   /* dead: the ROM zeroes Z as an int first */
         offset.z = GetRandomFloatRange(zMin, zMax) * invFrameRate;
 
         if (D_1A8CA0 != 0) {
