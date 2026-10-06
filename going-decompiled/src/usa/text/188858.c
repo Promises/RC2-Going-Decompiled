@@ -454,7 +454,7 @@ s32 GetWeaponUpgradeLevel(s32 itemId) {
  * to GetWeaponUpgradeLevel and the mult-scaled chain walks". At the -O2
  * default cc1 1.36 emits the jal and both chain walks itself; the fourth
  * callee-save is the `result` local ($18). The one thing cc1 does not emit is
- * the ROM's two short-loop pad nops in the forward walk (0x288AC0/0x288AC4),
+ * the ROM's two short-loop pad nops in the forward walk (0x288AC4/0x288AC8),
  * written as two R5900_SHORT_LOOP_PAD_IN (above, RULING #8435). Its `w` operand
  * is load-bearing: tied to the loop counter alone (R5900_SHORT_LOOP_PAD2(i)),
  * the row address `addu` falls below the pad (1/56 words different, task #1713).
