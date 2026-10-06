@@ -417,38 +417,81 @@ s32 GetWeaponUpgradeLevel(s32 itemId) {
 }
 #endif
 
-/* SetWeaponUpgradeSlot(itemId, level): point the item's active variant at the
- * variant `level` upgrade-steps above its base. Bails (returns 0) when the
- * item's current GetWeaponUpgradeLevel is below `level` (cannot select a
- * not-yet-unlocked variant); otherwise walks the prevVariantSlot chain back to
- * the base variant, steps `level` nextVariantSlot links forward from there, and
- * writes that slot into g_itemEquippedSlot[itemId], returning 1.
- *
- * WALL: four callee-saves (0x30 frame), a jal to GetWeaponUpgradeLevel and the
- * `mult`-scaled (0xE0) chain walks with bnez loop colouring. Left INCLUDE_ASM. */
+/*
+ * R5900_SHORT_LOOP_PAD_IN(v, p): a SCHEDULING DEVICE, not a statement about
+ * the machine (RULING #8435; same construct as R5900_SHORT_LOOP_PAD1 further down,
+ * FACT #7937). It emits the one short-loop pad `nop` the ROM's assembler put
+ * before a backward branch closing a loop shorter than 6 instructions, which
+ * cc1 2.9 never emits (nor does cc1 1.36 in SetWeaponUpgradeSlot). It ties by
+ * INPUT operands only: `v` is the value the branch tests and `p` the loop
+ * pointer. The `"+r"` form of PAD1 makes cc1
+ * reuse the tested value at the loop head and turn the branch into a `bnel`
+ * (measured on func_00288BB0, 83.87%). A no-op on the native build.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", SetWeaponUpgradeSlot);
+#define R5900_SHORT_LOOP_PAD_IN(v, p) \
+    __asm__ __volatile__(".set noreorder\n\tnop\n\t.set reorder" : : "r"(v), "r"(p))
+#else
+#define R5900_SHORT_LOOP_PAD_IN(v, p) ((void)0)
+#endif
+
+/**
+ * Point an item's active variant at the variant `level` upgrade steps above
+ * its base.
+ *
+ *   itemId  the item (also its base g_weaponTable slot)
+ *   level   number of nextVariantSlot (+0x4A) steps from the base variant
+ *   ->      1 when the slot was written, 0 when GetWeaponUpgradeLevel(itemId)
+ *           is below `level` (a not-yet-unlocked variant cannot be selected)
+ *
+ * Walks prevVariantSlot (+0x4C) back to the base variant, steps `level`
+ * nextVariantSlot links forward, and writes that slot into
+ * g_itemEquippedSlot[itemId].
+ *
+ * MATCHED on the s136os arm (task #1713) at the unit's -O2 default
+ * (S136EXTRA="", RULING #9450). This re-tests the WALL note that stood here
+ * (written 2026-06, under the former -fno-gcse pin): "four callee-saves, a jal
+ * to GetWeaponUpgradeLevel and the mult-scaled chain walks". At the -O2
+ * default cc1 1.36 emits the jal and both chain walks itself; the fourth
+ * callee-save is the `result` local ($18). The one thing cc1 does not emit is
+ * the ROM's two short-loop pad nops in the forward walk (0x288AC0/0x288AC4),
+ * written as two R5900_SHORT_LOOP_PAD_IN (above, RULING #8435). Its `w` operand
+ * is load-bearing: tied to the loop counter alone (R5900_SHORT_LOOP_PAD2(i)),
+ * the row address `addu` falls below the pad (1/56 words different, task #1713).
+ *
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh. On native it is plain C.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_SetWeaponUpgradeSlot)
+S136OS_SLOT(SetWeaponUpgradeSlot);
 #else
 s32 SetWeaponUpgradeSlot(s32 itemId, s32 level) {
     s32 slot = itemId;
+    s32 result = 0;
     s32 i;
 
-    /* cannot select a variant above what the item has unlocked */
-    if (GetWeaponUpgradeLevel(slot) < level) {
-        return 0;
+    if (GetWeaponUpgradeLevel(slot) >= level) {
+        if (g_weaponTable[slot].prevVariantSlot != 0) {
+            do {
+                slot = g_weaponTable[slot].prevVariantSlot;
+            } while (g_weaponTable[slot].prevVariantSlot != 0);
+        }
+        if (level > 0) {
+            i = level;
+            do {
+                WeaponDef *w;
+                i--;
+                w = &g_weaponTable[slot];
+                R5900_SHORT_LOOP_PAD_IN(i, w);
+                R5900_SHORT_LOOP_PAD_IN(i, w);
+                slot = w->nextVariantSlot;
+            } while (i != 0);
+        }
+        g_itemEquippedSlot[itemId] = slot;
+        result = 1;
     }
-    /* walk prevVariantSlot back to the base variant */
-    if (g_weaponTable[slot].prevVariantSlot != 0) {
-        do {
-            slot = g_weaponTable[slot].prevVariantSlot;
-        } while (g_weaponTable[slot].prevVariantSlot != 0);
-    }
-    /* step `level` nextVariantSlot links forward from the base */
-    for (i = level; i > 0; i--) {
-        slot = g_weaponTable[slot].nextVariantSlot;
-    }
-    g_itemEquippedSlot[itemId] = (u8)slot;
-    return 1;
+    return result;
 }
 #endif
 
@@ -502,23 +545,6 @@ typedef struct ItemKeyRecord {
     s16 key; /* +0x06, -1 terminates the table */
     u8 unk8[2];
 } ItemKeyRecord;
-
-/*
- * R5900_SHORT_LOOP_PAD_IN(v, p): a SCHEDULING DEVICE, not a statement about
- * the machine (RULING #8435; same construct as R5900_SHORT_LOOP_PAD1 below,
- * FACT #7937). It emits the one short-loop pad `nop` the ROM's assembler put
- * before a backward branch closing a loop shorter than 6 instructions, which
- * cc1 2.9 never emits. It ties by INPUT operands only: `v` is the value the
- * branch tests and `p` the loop pointer. The `"+r"` form of PAD1 makes cc1
- * reuse the tested value at the loop head and turn the branch into a `bnel`
- * (measured on func_00288BB0, 83.87%). A no-op on the native build.
- */
-#ifndef TARGET_NATIVE
-#define R5900_SHORT_LOOP_PAD_IN(v, p) \
-    __asm__ __volatile__(".set noreorder\n\tnop\n\t.set reorder" : : "r"(v), "r"(p))
-#else
-#define R5900_SHORT_LOOP_PAD_IN(v, p) ((void)0)
-#endif
 
 /*
  * func_00288BB0(key): return 1 if `key` is the key of any record in

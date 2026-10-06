@@ -426,3 +426,4 @@ usa text/191238 func_00298A00
 usa text/188858 func_002898E0
 usa text/188858 func_002888D8
 usa text/188858 IsItemUnlockedAtProgress
+usa text/188858 SetWeaponUpgradeSlot
