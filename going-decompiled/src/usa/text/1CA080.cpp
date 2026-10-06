@@ -789,33 +789,102 @@ void RequestMenuScreenChange(s32 screen) {
 }
 #endif
 
-/* screen-capture/restore routine: 8-byte-packed-save wall (saves 5 GPRs incl $31; later cc1
- * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", CaptureScreenToVram);
-
-/* Restore the captured screen image from VRAM back to the framebuffer. Fences the
- * frame DMA + waits a vblank field, bumps the render-layer counter, then blits the
- * screen (g_screenHeight * 0x600 bytes) in 0x40x0x40 tiles: for the two-buffer case
- * (menuScreenBlock[0xD0] >= 2) the source starts at 0x3FB000 - size, else at
- * g_vramDynamicBase; each tile is uploaded via func_00126470 + kicked via func_00126730
- * to the dest at menuScreenBlock[0x20], advancing both by 0x4000. Engine-2.96
- * (8-byte-packed saves) -> faithful #else; matching arm INCLUDE_ASM. NEEDS-ORACLE. */
+/* The two screen-capture fields of the menu-screen block (g_menuScreenBlock),
+ * shared by CaptureScreenToVram and RestoreScreenFromVram. Only these fields are
+ * named.
+ * They are read as MEMBERS of a typed declaration bound to the block's symbol by
+ * an asm label, not through byte casts on the u8[] symbol (task #1712). As
+ * members, cc1 re-forms the full `addiu %lo(g_menuScreenBlock)` base and reads
+ * 0x20/0xD0 off it, keeping %hi in a callee-saved register across the loop, as the
+ * ROM does. Through casts it folds the offsets into %lo(g_menuScreenBlock+N) and
+ * re-issues `lui` after the loop.
+ * The alias is EE-only: on native an __asm__ label bypasses the C symbol prefix,
+ * so native reads the same fields through a cast. */
+struct ScreenCaptureBlock {
+    u8  unk0[0x20];
+    s32 dstAddr;      /* 0x20 */
+    u8  unk24[0xAC];
+    s32 captureMode;  /* 0xD0 */
+};
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", RestoreScreenFromVram);
+extern struct ScreenCaptureBlock g_screenCapture __asm__("g_menuScreenBlock");
 #else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 57.71% -> FRAME-SIZE,
- * first differing row @0: ROM `addiu sp,sp,-160` vs `addiu sp,sp,-144`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 78.42% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-160` vs `addiu sp,sp,-176`. */
+#define g_screenCapture (*(struct ScreenCaptureBlock *)g_menuScreenBlock)
+#endif
+
+/* Freeze the current screen: copy the screen image (g_screenHeight * 0x600
+ * bytes) between EE memory and a VRAM scratch region, in 0x40x0x40 tiles.
+ *   mode: 0 = the scratch region starts at g_vramDynamicBase; non-zero = it is
+ *         the top of VRAM, 0x3FB000 - size. Recorded in captureMode as 1 / 2
+ *         so RestoreScreenFromVram picks the same region.
+ * Fences the frame DMA (WaitFrameDmaFence(1)), waits a vblank field and bumps
+ * g_frameCounter. Then, per 0x4000-byte tile, it builds an image-transfer GIF
+ * packet for the VRAM address (func_00126288; the same builder UploadTextureToGs
+ * uses), flushes the cache, kicks the transfer of the tile at the block's
+ * dstAddr (KickGifImageUpload) and waits for the GS paths to go idle. The VRAM
+ * address goes in as the s16 of (addr >> 8).
+ * Byte-exact on the s136os arm (task #1712). The loop must be a `for` with the
+ * remaining-count step in its increment clause. With the step in the body
+ * (do/while or while; measured on RestoreScreenFromVram), cc1 fills the first
+ * call's delay slot with it instead of
+ * the VRAM-address step, which ROM order needs. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_CaptureScreenToVram)
+S136OS_SLOT(CaptureScreenToVram);
+#else
 extern s32  g_screenHeight;
 extern s32  g_vramDynamicBase;
-extern u8   g_renderLayerMask[];
+extern s32  g_frameCounter;
 extern void WaitFrameDmaFence(s32 mask);
 extern s32  WaitVblankGetField(s32 arg);
-extern void func_00126470(void *dst, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h);
-extern void func_0011AEA0(s32 a);
+extern void func_00126288(void *packet, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h);
+extern void func_0011AEA0(s32 mode);
+extern void KickGifImageUpload(void *packet, s32 addr);
+extern void WaitGsPathsIdle(s32 a, s32 b);
+
+void CaptureScreenToVram(s32 mode) {
+    u8  packet[0x60];
+    s32 remaining, src, dst;
+
+    g_screenCapture.captureMode = mode ? 2 : 1;
+    WaitFrameDmaFence(1);
+    WaitVblankGetField(0);
+    g_frameCounter++;
+    remaining = g_screenHeight * 0x600;
+    dst = g_screenCapture.dstAddr;
+    src = g_vramDynamicBase;
+    if (mode) {
+        src = 0x3FB000 - remaining;
+    }
+    for (; remaining >= 0; remaining -= 0x4000) {
+        func_00126288(packet, (s16)(src >> 8), 1, 0, 0, 0, 0x40, 0x40);
+        src += 0x4000;
+        func_0011AEA0(0);
+        KickGifImageUpload(packet, dst);
+        dst += 0x4000;
+        WaitGsPathsIdle(0, 0);
+    }
+}
+#endif
+
+/* The inverse of CaptureScreenToVram: copy the captured image back, tile by
+ * tile, between the same VRAM region and the block's dstAddr. The region is the
+ * top of VRAM (0x3FB000 - size) when captureMode >= 2, else g_vramDynamicBase.
+ * Each tile uses the other packet builder / transfer pair, func_00126470 and
+ * func_00126730. Clears captureMode at the end.
+ * Byte-exact on the s136os arm (task #1712), with the same `for`-loop spelling
+ * and typed block fields as CaptureScreenToVram. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_RestoreScreenFromVram)
+S136OS_SLOT(RestoreScreenFromVram);
+#else
+extern s32  g_screenHeight;
+extern s32  g_vramDynamicBase;
+extern s32  g_frameCounter;
+extern void WaitFrameDmaFence(s32 mask);
+extern s32  WaitVblankGetField(s32 arg);
+extern void func_00126470(void *packet, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h);
+extern void func_0011AEA0(s32 mode);
 extern void func_00126730(void *packet, s32 addr);
-extern void WaitGsPathsIdle(s32 arg);
+extern void WaitGsPathsIdle(s32 a, s32 b);
 
 void RestoreScreenFromVram(void) {
     u8  packet[0x70];
@@ -823,25 +892,22 @@ void RestoreScreenFromVram(void) {
 
     WaitFrameDmaFence(1);
     WaitVblankGetField(0);
-    *(s32 *)(g_renderLayerMask + 0x4) += 1;
+    g_frameCounter++;
     remaining = g_screenHeight * 0x600;
-    dst = *(s32 *)(g_menuScreenBlock + 0x20);
+    dst = g_screenCapture.dstAddr;
     src = g_vramDynamicBase;
-    if (*(s32 *)(g_menuScreenBlock + 0xD0) >= 2) {
+    if (g_screenCapture.captureMode >= 2) {
         src = 0x3FB000 - remaining;
     }
-    if (remaining >= 0) {
-        do {
-            func_00126470(packet, (src << 8) >> 16, 1, 0, 0, 0, 0x40, 0x40);
-            src += 0x4000;
-            remaining -= 0x4000;
-            func_0011AEA0(0);
-            func_00126730(packet, dst);
-            dst += 0x4000;
-            WaitGsPathsIdle(0);
-        } while (remaining >= 0);
+    for (; remaining >= 0; remaining -= 0x4000) {
+        func_00126470(packet, (s16)(src >> 8), 1, 0, 0, 0, 0x40, 0x40);
+        src += 0x4000;
+        func_0011AEA0(0);
+        func_00126730(packet, dst);
+        dst += 0x4000;
+        WaitGsPathsIdle(0, 0);
     }
-    *(s32 *)(g_menuScreenBlock + 0xD0) = 0;
+    g_screenCapture.captureMode = 0;
 }
 #endif
 
