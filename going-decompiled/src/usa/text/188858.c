@@ -3391,12 +3391,12 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_0
  * MATCHED on the s136os arm (task #1679). The unit's s136os compile runs at
  * the -O2 default, S136EXTRA="" (RULING #9450): the ROM copies the table's %hi
  * into a second register at entry and re-adds %lo to that copy after the loop,
- * a cross-block copy that is gcse's and that no spelling reproduces with gcse
- * off (FACT #9331). Under the unit's former s136 pin (-fno-gcse, which the 2.9
+ * a cross-block copy that is gcse's and that none of the 7 spellings measured
+ * with gcse off reproduces (FACT #9331). Under the unit's former s136 pin (-fno-gcse, which the 2.9
  * compile keeps) the same source builds 30 words against the ROM's 29, LONGER
  * (FACT #9442); vmu's old "19/30" for it was a positional count of that longer
  * body, not a same-length near-miss.
- * R5900_SHORT_LOOP_PAD1 is an RULING #8435 scheduling device. It places the
+ * R5900_SHORT_LOOP_PAD1 is a RULING #8435 scheduling device. It places the
  * ROM's loop pad nop, and without it the body builds 28 words, not 29.
  *
  * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
