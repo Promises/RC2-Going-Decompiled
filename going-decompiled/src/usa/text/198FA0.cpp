@@ -2528,6 +2528,17 @@ void func_0029DCB8(void) {
 }
 #endif
 
+/* Inter-function padding at 0x29DD00..0x29DD07: the two zero words retail
+ * places between func_0029DCB8 and the func_0029DD08 fragment. They exist only
+ * after `endlabel func_0029DCB8` in its nonmatchings .s, which is no longer
+ * included now that the s136os arm supplies the body, so without this directive
+ * every later function in the unit lands 8 bytes low (landing_gate cmp 610390 at
+ * task #1678's first gate run). Not a codegen device: layout data (RULING #8467).
+ * Same construct as text/188858.c's padding after func_00289190. */
+#ifndef TARGET_NATIVE
+__asm__(".word 0\n\t.word 0");
+#endif
+
 /* func_0029DD08: 8 bytes of dead pad (addiu $sp,0x10; nop) carved off the real
  * body func_0029DD10 in task #472; func_0029DD10 is the g_guiInstance+0x3CEA0
  * wrapper to func_0033A9F8. */
