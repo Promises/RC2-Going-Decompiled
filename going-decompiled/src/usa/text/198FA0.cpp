@@ -151,10 +151,14 @@ extern char D_1A9A60[];   /* "memory card library failed to initialise" debug st
 extern s32 McInit(void);
 /* DebugPrintStub / func_0029CA98 declared value-returning: their callers below
  * propagate $v0, and a void tail call would be sibling-call optimised into a
- * plain `j` (the original uses jal + return). */
+ * plain `j` (the original uses jal + return). func_0029CA98's own definition
+ * is void in the ROM (task #1738, see it), so its s136os TU must not see this
+ * declaration. */
 extern s32 DebugPrintStub(char *msg);
 extern void func_0028E9A0(s32 arg);
+#if !defined(S136OS_func_0029CA98)
 extern s32 func_0029CA98(void);
+#endif
 extern s32 func_0033A8F0(void *widget, s32 arg);
 
 /* EE register pin; a no-op on the native build, where "$2" is not a register name. */
@@ -2043,7 +2047,114 @@ void func_0029CA88(void) {
     D_1A9A90 = -1;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029CA98);
+/* func_0029CA98: the GUI pump, run each frame through func_0029DC70. Skipped
+ * while the HUD-busy word (g_hudClutSlots+0x10) is set. With the GUI up it
+ * polls the front-end menu (func_0029C8F0), then offers the frame to the
+ * manager's pre-tick hook, its four handler hooks and its two pending-pair
+ * hooks (g_guiInstance+0x3F9F0/+0x3F9F8/+0x3FA18); any nonzero result ends
+ * the frame there. Otherwise, unless the game is in state 4 (menu) with an
+ * overlay mode other than 7, it runs the manager's tick (+0x3F9D8) and
+ * func_0029C648.
+ *
+ * Return: none in the ROM. The definition is void: the delay slot of the
+ * final `beqz gui` is filled from the fall-through (`lui $2`), which cc1 does
+ * only when $v0 is dead at the exit; an s32 definition steals the epilogue's
+ * `ld $16` instead. func_0029DC70 nevertheless propagates $v0 through an s32
+ * declaration, so the ROM hands it whatever the last callee left. The native
+ * arm is s32 and returns 0, a defined value where the ROM's is not.
+ *
+ * Built on the s136os arm (task #1738). Each hook is read through its own
+ * struct access on g_guiInstance, once to test and once to call: the ROM
+ * forms two addresses per hook (gui+0x38000+i*8 for the test, i*8+gui+
+ * 0x3F9F8 for the call), as func_0029C600's pair stores do (FACT #9446).
+ * Single exit (`goto done`) so one body serves both arms (native is s32). */
+extern u8 g_hudClutSlots[];   /* only +0x10, the HUD-busy word at 0x1B1828, is read */
+/* ADDRESSING-MODEL DEVICE (RULING #8620; the FACT #8036 size-16 equate form,
+ * as g_objectiveScanHeadAbs): the ROM reads the HUD-busy word with the
+ * assembler-macro shape `lui $2; lw $2,%lo(g_hudClutSlots+0x10)($2)` after
+ * the frame setup. Through g_hudClutSlots cc1 splits it into a separate lui
+ * temp scheduled above `addiu $sp`. Emits nothing; the relocation names
+ * g_hudClutSlots+0x10. */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_hudBusyAbs, 16\n\tg_hudBusyAbs = g_hudClutSlots + 0x10");
+extern s32 g_hudBusyAbs;
+#else
+#define g_hudBusyAbs (*(s32 *)(g_hudClutSlots + 0x10))
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0029CA98)
+S136OS_SLOT(func_0029CA98);
+#else
+typedef struct {
+    s32 (*fn)(void);            /* called with no arguments; nonzero = handled */
+    s32 arg;
+} GuiHookSlot;
+
+typedef struct {
+    char _unk0[0x3F9D8];
+    void (*tick)(void);         /* 0x3F9D8 per-frame tick */
+    char _unk3F9DC[0x14];
+    s32 (*preTick)(void);       /* 0x3F9F0 nonzero result skips the frame */
+    s32 _unk3F9F4;
+    GuiHookSlot handlers[4];    /* 0x3F9F8 */
+    GuiHookSlot pending[2];     /* 0x3FA18, the GuiPendingPairs table */
+} GuiTickHooks;
+
+extern s32  func_0029C8F0(void);
+extern s32  func_0029C648(void);
+extern s32  GetMenuOverlayModeLive(void);
+
+#ifndef TARGET_NATIVE
+void func_0029CA98(void)
+#else
+s32 func_0029CA98(void)
+#endif
+{
+    s32 any;
+    s32 i;
+
+    if (g_hudBusyAbs != 0) {
+        goto done;
+    }
+    if (g_guiInstance != 0) {
+        func_0029C8F0();
+        if (((GuiTickHooks *)g_guiInstance)->preTick != 0 &&
+            ((GuiTickHooks *)g_guiInstance)->preTick() != 0) {
+            goto done;
+        }
+        any = 0;
+        for (i = 0; i < 4; i++) {
+            if (((GuiTickHooks *)g_guiInstance)->handlers[i].fn != 0) {
+                any |= ((GuiTickHooks *)g_guiInstance)->handlers[i].fn();
+            }
+        }
+        if (any != 0) {
+            goto done;
+        }
+        for (i = 0; i < 2; i++) {
+            if (((GuiTickHooks *)g_guiInstance)->pending[i].fn != 0) {
+                any |= ((GuiTickHooks *)g_guiInstance)->pending[i].fn();
+            }
+        }
+        if (any != 0) {
+            goto done;
+        }
+    }
+    if (g_nGameState != 0 && g_nGameState != 5 && g_nGameState == 4) {
+        if (GetMenuOverlayModeLive() != 7) {
+            goto done;
+        }
+    }
+    if (g_guiInstance != 0) {
+        ((GuiTickHooks *)g_guiInstance)->tick();
+        func_0029C648();
+    }
+done:
+#ifdef TARGET_NATIVE
+    return 0;
+#endif
+    ;
+}
+#endif
 
 /* func_0029CC48: rebuild the camera projection with a temporary FOV override.
  * When the GUI singleton exists, force the projection scale at +0xB0 of the
@@ -2695,7 +2806,10 @@ void GuiManagerCreate(void) {
  *  (memory effects are identical). The #else makes those two returns explicit so
  *  the native/functional-equivalence build agrees with the real R5900 result.
  *  Do not add explicit returns to the #ifndef arm - that breaks the byte match. */
-#ifndef TARGET_NATIVE
+/* Not compiled in func_0029CA98's s136os TU (it calls func_0029CA98 for a
+ * value, and that TU defines func_0029CA98 void). The 2.9 TU, where this
+ * function is built, and the native build are unaffected. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0029CA98)
 s32 func_0029DC70(void) {
     if (g_guiInstance != 0) {
         if (D_1A8C64 == 0) {
@@ -2704,7 +2818,7 @@ s32 func_0029DC70(void) {
         }
     }
 }
-#else
+#elif defined(TARGET_NATIVE)
 s32 func_0029DC70(void) {
     if (g_guiInstance == 0) {
         return 0;
