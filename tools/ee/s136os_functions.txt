@@ -402,3 +402,5 @@ usa text/198FA0 FillSaveSlotInfo
 usa text/1A8180 func_002AC668
 usa text/1A8180 func_002AB5A0
 usa text/1A8180 func_002ABE90
+usa text/188858 GetWeaponUpgradeLevel
+usa text/188858 func_0028BF80

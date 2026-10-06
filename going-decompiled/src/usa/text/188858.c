@@ -363,30 +363,40 @@ void func_002888D8(s32 itemId) {
 }
 #endif
 
-/* GetWeaponUpgradeLevel(itemId): return how many variant-upgrade steps the item
- * has taken — walks the prevVariantSlot chain (+0x4C) to find the base variant,
- * then counts the nextVariantSlot chain (+0x4A) from there.
+/**
+ * Count the variant-chain hops of a weapon slot.
  *
- * WALL: two chained do-while scans whose `mult`-scaled (stride 0xE0) variant
- * indexing and bnez loop colouring cc1 does not reproduce. Left INCLUDE_ASM. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", GetWeaponUpgradeLevel);
+ *   itemId  g_weaponTable slot to start from
+ *   ->      number of nextVariantSlot (+0x4A) steps from the chain's base
+ *
+ * Walks prevVariantSlot (+0x4C) back to the base variant first, then counts
+ * the nextVariantSlot hops from there, so the result is the same for every
+ * slot in a chain (NOTE #8426); "upgrade level" rests on the name.
+ *
+ * MATCHED on the s136os arm (task #1696), with no device: two plain while
+ * loops at the unit's -O2 default (S136EXTRA="", RULING #9450). cc1 rotates
+ * each into the ROM's test-then-do-while shape, and gcse gives the ROM's
+ * cross-block %hi(g_weaponTable) copy. The earlier do-while-under-an-if
+ * spelling built 8/38 different, and closed only with a $3 register pin on
+ * the first prevVariantSlot load (FACT #9441); the while form needs no pin.
+ *
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh. On native it is plain C.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GetWeaponUpgradeLevel)
+S136OS_SLOT(GetWeaponUpgradeLevel);
 #else
 s32 GetWeaponUpgradeLevel(s32 itemId) {
     s32 slot = itemId;
     s32 count = 0;
-    /* walk prevVariantSlot back to the base variant */
-    if (g_weaponTable[slot].prevVariantSlot != 0) {
-        do {
-            slot = g_weaponTable[slot].prevVariantSlot;
-        } while (g_weaponTable[slot].prevVariantSlot != 0);
+
+    while (g_weaponTable[slot].prevVariantSlot != 0) {
+        slot = g_weaponTable[slot].prevVariantSlot;
     }
-    /* count nextVariantSlot steps forward from the base */
-    if (g_weaponTable[slot].nextVariantSlot != 0) {
-        do {
-            slot = g_weaponTable[slot].nextVariantSlot;
-            count++;
-        } while (g_weaponTable[slot].nextVariantSlot != 0);
+    while (g_weaponTable[slot].nextVariantSlot != 0) {
+        slot = g_weaponTable[slot].nextVariantSlot;
+        count++;
     }
     return count;
 }
@@ -3283,26 +3293,39 @@ void func_0028BF18(HudElement *w) {
 }
 #endif
 
-/* (Re)initialise the whole 13-entry D_2552B0 HUD widget table: for each record
- * rebuild its element list via func_0028BE10(i, 0xFFFF, 0,0,0,0,1), clear the
- * record's +0x7C word and set its +0x6C word to -6, then run func_0028BF18 on
- * it.
+/**
+ * (Re)initialise the whole 13-entry D_2552B0 HUD widget table.
  *
- * NEAR-MISS: logic exact, but cc1 allocates a 0x30 frame for the four
- * callee-saves ($16-$19) matching the original — only the trailing register
- * colouring / load scheduling differs. Kept as the portable #else body. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028BF80);
+ * For each record: rebuild its element list via
+ * func_0028BE10(i, 0xFFFF, 0, 0, 0, 0, 1), clear the record's +0x7C word, set
+ * its +0x6C word to -6, then activate it with func_0028BF18.
+ *
+ * MATCHED on the s136os arm (task #1696), with no device. The ROM walks two
+ * pointers, the record (passed to func_0028BF18) and a second one at the
+ * record's +0x6C that both stores go through, each stepped by 0x90; spelling
+ * `tag` as its own induction pointer is what gives cc1 the fourth callee-save
+ * ($16) and the 0x30 frame. One record pointer with both offsets built 3/36
+ * different under the same flags.
+ *
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh. On native it is plain C.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0028BF80)
+S136OS_SLOT(func_0028BF80);
 #else
 void func_0028BF80(void) {
     u8 *rec = (u8 *)&D_2552B0[0];
+    s32 *tag = (s32 *)(rec + 0x6C);   /* +0x6C, and +0x7C at tag[4] */
     s32 i;
+
     for (i = 0; i < 0xD; i++) {
         func_0028BE10(i, 0xFFFF, 0, 0, 0, 0, 1);
-        *(s32 *)(rec + 0x7C) = 0;
-        *(s32 *)(rec + 0x6C) = -6;
+        tag[4] = 0;
+        tag[0] = -6;
         func_0028BF18((HudElement *)rec);
         rec += 0x90;
+        tag = (s32 *)((u8 *)tag + 0x90);
     }
 }
 #endif
