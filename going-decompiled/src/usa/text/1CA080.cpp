@@ -2115,32 +2115,26 @@ s32 func_002CE6A8(void) {
  * this frame already presented; else sets it. When the timestamp advanced during
  * the tick it also latches D_25E444 = -0x22C, then re-samples the timestamp to
  * stamp the record (D_0025E298[0x58]).
- * Matching arm stays INCLUDE_ASM (later cc1 packs 8-byte save slots vs our 16). */
+ * Returns the confirm result (MenuPollConfirm), 1 on cancel, else 0.
+ * Byte-exact on the s136os arm (task #1707) under RULING #9491's gcse-on flags:
+ * the ROM keeps only %hi(D_0025E298) in $s2 across both timestamp calls and
+ * re-adds %lo at each use. That needs the record pointer formed per block --
+ * inside the agreed/idle test (not before it) and AFTER the re-sample call --
+ * and the clear arm left by goto so cc1 threads no flag. */
 extern void func_0029D2B8(s32 buttons);
 extern u8 D_0025E298[];   /* per-screen present record */
 extern s32 D_25E264;      /* ptr-to-live-object global */
 extern s32 D_25E444;
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE6D8);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002CE6D8)
+S136OS_SLOT(func_002CE6D8);
 #else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 65.25% -> SCHED-TIEBREAK,
- * first differing row @1: ROM `sd s0,0(sp)` vs `(none)`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 59.39% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-64`. */
 s32 func_002CE6D8(void) {
     s32 t0 = func_00337D98();
     s32 flags = g_padButtonsPressed;
     s32 result = 0;
 
     if (flags & 0x10) {
-        s32 *block = (s32 *)g_menuScreenBlock;
-        s32 v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
-        if (v != 0) {
-            block[0x18 / 4] = v;
-            result = 0;
-        } else {
-            result = (block[0x134 / 4] == 0) ? -1 : 0;
-        }
+        result = MenuPollConfirm();
     } else if (flags & 0x900) {
         result = 1;
     } else {
@@ -2149,26 +2143,24 @@ s32 func_002CE6D8(void) {
 
     if (g_guiInstance) {
         s32 now = func_00337D98();
-        u8 *rec = D_0025E298;
-        s32 *live = (s32 *)D_25E264;
-        s32 clear = 0;
-        if (now == t0 && g_fileLoadState == 0) {
-            if (*(s32 *)(rec + 0x50) == t0 && *(s32 *)(rec + 0x44) == 2) {
-                clear = 1;
-            } else if (*(s32 *)(rec + 0x54) == t0 &&
-                       *(s32 *)(rec + 0x44) == 4) {
-                clear = 1;
+        if (t0 == now && g_fileLoadState == 0) {
+            u8 *rec = D_0025E298;
+            if ((*(s32 *)(rec + 0x50) == t0 && *(s32 *)(rec + 0x44) == 2) ||
+                (*(s32 *)(rec + 0x54) == t0 && *(s32 *)(rec + 0x44) == 4)) {
+                ((s32 *)D_25E264)[0x10 / 4] &= ~0x4;
+                goto stamped;
             }
         }
-        if (clear) {
-            live[0x10 / 4] &= ~0x4;
-        } else {
-            live[0x10 / 4] |= 0x4;
-        }
+        ((s32 *)D_25E264)[0x10 / 4] |= 0x4;
+    stamped:
         if (now != t0) {
             D_25E444 = -0x22C;
         }
-        *(s32 *)(rec + 0x58) = func_00337D98();
+        {
+            s32 stamp = func_00337D98();
+            u8 *rec = D_0025E298;
+            *(s32 *)(rec + 0x58) = stamp;
+        }
     }
     return result;
 }
