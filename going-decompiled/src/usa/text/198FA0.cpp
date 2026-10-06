@@ -1282,23 +1282,22 @@ extern s32 ComputeSaveSectionsCrc16(void *buf, s32 len); /* save-buffer CRC */
  * payloadLen bytes) and returns 1 iff it equals the stored CRC. An image whose
  * stored CRC is 0 is treated as empty/invalid and returns 0.
  *
- * WALLED at the byte level by the 8-byte-packed callee-save frame (2 saved regs
- * $16/$31; the pinned 2.9 cc1 reserves 16 bytes/save vs the original's 8 — see
- * project_matching_ceiling, func_0029C678). The portable #else below is
- * cmp-oracle-validated (cmp_198FA0). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", VerifySaveHeaderChecksum);
+ * Built on the s136os arm (task #1678): the 8-byte-packed save frame the 2.9
+ * arm could not give is -fopt-stack's. The bytes depend on the spelling: the
+ * result is a local preset to 0 and payloadLen is read before the test, which
+ * gives the ROM's up-front `daddu $2,$0,$0` and the `lw $5` in the beqz delay
+ * slot. An early `return 0` puts the zero after the call instead. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_VerifySaveHeaderChecksum)
+S136OS_SLOT(VerifySaveHeaderChecksum);
 #else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 25.73% -> PACKED-SAVE, first differing row @0: ROM `addiu sp, sp, -0x10` vs `addiu sp, sp, -0x20`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 99.20% -> SCHED-PROEPI, first differing row @2: ROM `sd ra, 0x8(sp)` vs `sd s0, 0x0(sp)`. */
 s32 VerifySaveHeaderChecksum(void *image) {
+    s32 valid = 0;
     s32 storedCrc = ((s32 *)image)[1];
     s32 len = ((s32 *)image)[0];
-    if (storedCrc == 0) {
-        return 0;
+    if (storedCrc != 0) {
+        valid = ComputeSaveSectionsCrc16((char *)image + 8, len) == storedCrc;
     }
-    return ComputeSaveSectionsCrc16((char *)image + 8, len) == storedCrc;
+    return valid;
 }
 #endif
 
@@ -1826,29 +1825,32 @@ void func_0029CA88(void) {
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029CA98);
 
 /* func_0029CC48: rebuild the camera projection with a temporary FOV override.
- * When the GUI singleton exists, force the camera FOV field (g_sceneActorMobys
- * +0x724) to 0.62, rebuild the projection, run the GUI camera hook
- * (func_0034F220 on g_guiInstance+0x36F28), then restore the saved FOV and
- * rebuild again. Matching build: callee-save frame wall (see func_0029C678);
- * the TARGET_NATIVE #else is faithful coverage. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029CC48);
+ * When the GUI singleton exists, force the projection scale at +0xB0 of the
+ * camera/projection scratch (g_sceneActorMobys+0x674, i.e. g_cameraProjScale
+ * 0x1B9070) to 0.62, rebuild the projection, run the GUI camera hook
+ * (func_0034F220 on g_guiInstance+0x36F28), then restore the saved value and
+ * rebuild again. No params, no return value.
+ *
+ * Built on the s136os arm (task #1678). The scratch base is its own local: the
+ * ROM keeps the full address `g_sceneActorMobys+0x674` in $16 across both calls
+ * and addresses 0xB0($16). Spelled as one `+0x724` pointer, cc1 keeps only the
+ * %hi half in $16 and puts %lo on each of the three accesses. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0029CC48)
+S136OS_SLOT(func_0029CC48);
 #else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 73.82% -> PACKED-SAVE, first differing row @0: ROM `addiu sp, sp, -0x20` vs `addiu sp, sp, -0x30`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 54.96% -> SCHED-PROEPI, first differing row @0: ROM `addiu sp, sp, -0x20` vs `(nothing)`. */
-extern u8   g_sceneActorMobys[];               /* +0x724 = camera FOV field */
+extern u8   g_sceneActorMobys[];               /* +0x674 = camera/projection scratch */
 extern void BuildCameraProjection(void);
 extern void func_0034F220(void *guiCameraCtx);
 
 void func_0029CC48(void) {
     if (g_guiInstance != 0) {
-        f32 *fov = (f32 *)(g_sceneActorMobys + 0x724);
-        f32  saved = *fov;
-        *fov = 0.62f;
+        u8  *cam = g_sceneActorMobys + 0x674;
+        f32 *projScale = (f32 *)(cam + 0xB0);
+        f32  saved = *projScale;
+        *projScale = 0.62f;
         BuildCameraProjection();
         func_0034F220(g_guiInstance + 0x36F28);
-        *fov = saved;
+        *projScale = saved;
         BuildCameraProjection();
     }
 }
@@ -2499,7 +2501,32 @@ s32 func_0029DC70(void) {
  * (0x16->9, 0x17->0x12, else 0) and calls RequestLevelExit(.,1). */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DCB0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029DCB8);
+/** func_0029DCB8 — leave the current level for a fixed destination: level 0x16
+ *  exits to 9, level 0x17 to 0x12, any other level to 0. g_playerProgress is
+ *  the current level id. Calls RequestLevelExit(destination, 1), which commits a
+ *  save. No params, no return value.
+ *
+ *  Built on the s136os arm (task #1678). The `switch` is what gives the ROM's
+ *  beq/beql pair. The same mapping as an if/else-if chain compiles to a
+ *  `xori`/`movn` select. g_playerProgress is read absolutely (lui/lw), through
+ *  the unit's size-16 g_playerProgressAbs equate. */
+extern void RequestLevelExit(s32 destination, s32 commitSave);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0029DCB8)
+S136OS_SLOT(func_0029DCB8);
+#else
+void func_0029DCB8(void) {
+    s32 destination = 0;
+    switch (g_playerProgressAbs) {
+    case 0x16:
+        destination = 9;
+        break;
+    case 0x17:
+        destination = 0x12;
+        break;
+    }
+    RequestLevelExit(destination, 1);
+}
+#endif
 
 /* func_0029DD08: 8 bytes of dead pad (addiu $sp,0x10; nop) carved off the real
  * body func_0029DD10 in task #472; func_0029DD10 is the g_guiInstance+0x3CEA0
