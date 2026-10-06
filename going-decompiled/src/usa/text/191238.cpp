@@ -530,7 +530,46 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291B78);
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291CB8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291CC0);
+/*
+ * func_00291CC0(index) — reset point light `index` (0..7): flush its pending
+ * relight request spans (func_00291FF8), then zero its 0x20-byte light record
+ * (g_pointLights + index*0x20) and its 0x30-byte request record
+ * (g_pointLights + 0x100 + index*0x30) via func_00283438. An out-of-range index
+ * (unsigned >= 8) is a no-op. No return value.
+ *
+ * MATCHED on the s136os arm (task #1702). On EE this C is compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (row in tools/ee/s136os_functions.txt) and spliced
+ * over S136OS_SLOT by tools/ee/s136os_splice.sh; a build that skips the splice
+ * drops the function. On native it is plain C.
+ */
+/* Equate for func_00291CC0's request-table name (directive only, emits no
+ * code); at file scope so the s136os TU and the 2.9 TU both define it. */
+#ifndef TARGET_NATIVE
+__asm__("g_pointLightRequests = g_pointLights + 0x100");
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00291CC0)
+S136OS_SLOT(func_00291CC0);
+#else
+/* g_pointLights (0x1C2AC0): 8 light records of 0x20 bytes, then the 8 relight
+ * request records (0x30 each) at +0x100. The ROM forms each table's address
+ * afresh at its call (%hi/%lo of g_pointLights and of g_pointLights+0x100);
+ * as two names the request table is not CSE'd onto the light table's base. */
+extern u8 g_pointLights[];
+#ifndef TARGET_NATIVE
+extern u8 g_pointLightRequests[8][0x30];
+#else
+#define g_pointLightRequests ((u8 (*)[0x30])(g_pointLights + 0x100))
+#endif
+extern void func_00291FF8(s32 index);
+extern void func_00283438(void *base, s32 size);
+void func_00291CC0(u32 index) {
+    if (index < 8) {
+        func_00291FF8(index);
+        func_00283438(g_pointLights + index * 0x20, 0x20);
+        func_00283438(g_pointLightRequests[index], 0x30);
+    }
+}
+#endif
 
 /*
  * func_00291D28 — per-frame refresh of the directional + point light set.
