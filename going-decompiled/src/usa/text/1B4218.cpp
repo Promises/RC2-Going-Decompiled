@@ -4199,20 +4199,30 @@ s32 StartFileLoadPumpingVoice(s32 dest, s32 lbn, s32 sectorCount) {
  * func_00133220). When `waitForIdle` is nonzero it repeats that cycle, spinning
  * (func_002833E8 delay) between iterations, until the file-load is no longer in
  * flight (fileLoadActive == 0). Returns the final fileLoadActive.
- * WALL: PACKED-SAVE — 2 callee-saves + $ra at 8-byte spacing (sdk29 82.56%);
- * on the engine arm the residual is SCHED-PROEPI (`sd $16` before `sd $17`, the
- * hoisted `lui $17`) — engine96 90.49% (unit objdiff report, task #510). The
- * busy-wait callee 0x2833E8 is a `.L` label swallowed inside func_002833D8
- * (text/183348.s) — a Phase-1 split-hygiene pin, not a C call, is what a
- * promotion here needs. Matching arm stays INCLUDE_ASM, portable #else below. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", PumpDialogVoiceSystem);
+ * GUARD (task #1720): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) at the -O2 default (RULING #9004) and spliced
+ * over S136OS_SLOT by tools/ee/s136os_splice.sh. On native it is plain C.
+ * The packed save and the hoisted `lui $17` that walled the 2.9/2.96 arms
+ * (task #510) are what 1.36 emits from this C as written. The one thing the
+ * C has to spell is the busy-wait callee: 0x2833E8 is not a function but the
+ * global label `.L002833E8` inside func_002833D8 (text/183348.s `alabel`), so
+ * the EE arm binds the call to that label by an asm-label alias; there is no
+ * func_002833E8 symbol for the link to resolve. Native keeps the plain name. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_PumpDialogVoiceSystem)
+S136OS_SLOT(PumpDialogVoiceSystem);
 #else
 extern void UpdateDialogVoiceManager(void);   /* below; dialog-voice state manager tick */
 extern void func_00133230(void);              /* 0x133230 snd RPC tick */
 extern s32  snd_Pump(void);                   /* 0x133280 snd queue pump */
 extern void func_00133220(void);              /* 0x133220 snd RPC flush */
+#ifndef TARGET_NATIVE
+/* ASM-LABEL ALIAS (NOTE #9476): binds the call to the ROM's `.L002833E8`
+ * busy-wait entry inside func_002833D8. Emits no instruction. */
+extern void func_002833E8(s32 cycles) __asm__(".L002833E8");
+#else
 extern void func_002833E8(s32 cycles);        /* 0x2833E8 busy-wait spin */
+#endif
 
 s16 PumpDialogVoiceSystem(s32 waitForIdle) {
     if (waitForIdle != 0) {
