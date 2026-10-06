@@ -2,7 +2,7 @@
 # storage symbol: g_dataArena  ==  __gamedata_start (linker)
 # seed: memcpy snapshot[rom_addr] -> g_dataArena[rom_addr - base]
 #       for rom_addr in [base, base+span).
-# base 0x133E70  span 0x14AA90  placed 1495  (const 11)
+# base 0x133E70  span 0x14AA90  placed 1500  (const 11)
 # columns: <symbol> <rom_addr> <arena_offset> [const]
 #   'const' tag = static rodata/string literal (see data_const.txt);
 #   NOT mutable state - the tester's effect-diff must EXCLUDE these.
@@ -413,8 +413,11 @@ D_1A8C88 0x1A8C88 0x74E18
 D_001A8C8C 0x1A8C8C 0x74E1C
 D_1A8C8C 0x1A8C8C 0x74E1C
 D_1A8CA0 0x1A8CA0 0x74E30
+g_altGravityEnabled 0x1A8CA0 0x74E30
 D_1A8CA4 0x1A8CA4 0x74E34
+g_altGravityPlanar 0x1A8CA4 0x74E34
 D_1A8CB0 0x1A8CB0 0x74E40
+g_altGravityPlanarCenter 0x1A8CB0 0x74E40
 D_1A8CD4 0x1A8CD4 0x74E64
 D_001A8CEC 0x1A8CEC 0x74E7C
 D_1A8CEC 0x1A8CEC 0x74E7C
@@ -518,7 +521,9 @@ D_1A9E48 0x1A9E48 0x75FD8
 D_1A9E70 0x1A9E70 0x76000
 D_1A9E74 0x1A9E74 0x76004
 D_1A9E94 0x1A9E94 0x76024
+g_colorPulsePhaseA 0x1A9E94 0x76024
 D_1A9E98 0x1A9E98 0x76028
+g_colorPulsePhaseB 0x1A9E98 0x76028
 D_1A9EA0 0x1A9EA0 0x76030
 D_1A9F20 0x1A9F20 0x760B0
 D_1A9F38 0x1A9F38 0x760C8

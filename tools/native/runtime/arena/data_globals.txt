@@ -1074,6 +1074,9 @@ g_activeGadgetItem
 g_activeMobyChainHead
 g_activeMobyTableId
 g_activeVu1Program
+g_altGravityEnabled
+g_altGravityPlanar
+g_altGravityPlanarCenter
 g_anAvailableLevelOrder
 g_areaTable
 g_audioStereoMode
@@ -1137,6 +1140,8 @@ g_collHitPoint
 g_collHitPointNudged
 g_collHitTriVert2
 g_collTriBuffer
+g_colorPulsePhaseA
+g_colorPulsePhaseB
 g_currentLanguage
 g_debugFontGlyphTable
 g_debugMallocCursor
