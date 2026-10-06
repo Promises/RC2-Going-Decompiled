@@ -3161,20 +3161,33 @@ f32 func_002AAFB8(f32 a, f32 b, f32 c) {
  * [-|maxDelta|, |maxDelta|]; then integrates *state = v + (b*maxDelta - c*v)
  * (i.e. v*(1-c) + b*maxDelta) and clamps to [-bound, bound] when bound > 0;
  * finally re-clamps to [-|maxDelta|, |maxDelta|].
+ *
+ * @param state     value integrated in place
+ * @param maxDelta  symmetric limit (its magnitude is used) and drive term
+ * @param b         drive gain on maxDelta
+ * @param c         damping gain on *state
+ * @param bound     optional extra symmetric clamp, applied only when > 0
+ *
+ * MATCHED on the s136os arm (task #1715): 84 ROM words, byte-exact. The ROM
+ * calls GetFloatAbs(maxDelta) afresh at EVERY use in the two |maxDelta|
+ * clamps (six calls), never caching it: the clamp was a re-evaluating macro
+ * or written out longhand. A cached `lim` local compiles to 63 words.
  */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 53.13%
-   -> UNKNOWN-@1: ROM `(none)` vs `sd s0,0(sp)` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB000);
+/* GUARD (task #1715): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002AB000)
+S136OS_SLOT(func_002AB000);
 #else
 void func_002AB000(f32 *state, f32 maxDelta, f32 b, f32 c, f32 bound) {
-    f32 lim = GetFloatAbs(maxDelta);
     f32 v;
 
-    if (*state > lim) {
-        *state = lim;
-    } else if (*state < -lim) {
-        *state = -lim;
+    if (*state > GetFloatAbs(maxDelta)) {
+        *state = GetFloatAbs(maxDelta);
+    } else if (*state < -GetFloatAbs(maxDelta)) {
+        *state = -GetFloatAbs(maxDelta);
     }
 
     v = *state;
@@ -3187,10 +3200,10 @@ void func_002AB000(f32 *state, f32 maxDelta, f32 b, f32 c, f32 bound) {
         }
     }
 
-    if (*state > lim) {
-        *state = lim;
-    } else if (*state < -lim) {
-        *state = -lim;
+    if (*state > GetFloatAbs(maxDelta)) {
+        *state = GetFloatAbs(maxDelta);
+    } else if (*state < -GetFloatAbs(maxDelta)) {
+        *state = -GetFloatAbs(maxDelta);
     }
 }
 #endif
@@ -6960,34 +6973,57 @@ void func_002AFE68(void *handle, f32 value, f32 angle1, f32 angle2) {
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFF08);
 
-extern u8 D_26CB10[];   /* 0x54-byte config table snapshotted per call */
+/* 21 notice string ids (0x54 bytes), copied whole into a local per call. */
+typedef struct {
+    s32 stringId[21];
+} NoticeStringTable;
+extern NoticeStringTable D_26CB10;
 extern s32 func_002B1880(s32 stringId, s32 arg);              /* defined later this unit */
 extern s32 func_002B1B48(void *subject, s32 stringId, s32 arg2);
 
 /**
- * Snapshot the D_26CB10 config table (0x54 bytes) into a local, clamp the index
- * `sel` to [0, 0x14], then dispatch: sel==3 shows the localized string at
- * table+0xC (func_002B1880), otherwise runs the notice/prompt setup with the
- * string id at table+sel*4 (func_002B1B48). Returns the dispatched call's result.
+ * Snapshot the D_26CB10 string-id table (0x54 bytes) into a local, clamp the
+ * index `sel` to [0, 0x14], then dispatch: sel==3 shows the localized string
+ * stringId[3] (func_002B1880), otherwise runs the notice/prompt setup with
+ * stringId[sel] (func_002B1B48).
+ *
+ * @param sel  table index; clamped to [0, 0x14]
+ * @return the dispatched call's result
+ *
+ * MATCHED on the s136os arm (task #1715): 74 ROM words, byte-exact. The ROM's
+ * `andi 7; beqz` + two 32-byte ldl/sdl vs ld/sd loops + 20-byte tail is cc1's
+ * BLKmode STRUCT copy (NOTE #9504); memcpy into a u8 buffer gives lwl/lwr for
+ * the tail word and 76 words (25/76). Two more levers, measured on the solo
+ * s136 harness (vmu words differing):
+ *   - clamp `sel` IN PLACE: a separate `idx` local swaps sel/dest-cursor
+ *     ($5/$6) at every use (37/74);
+ *   - a result local assigned in an if/else (or `if (sel != 3)` first): two
+ *     early returns put the func_002B1880 block last (11/74).
  */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 67.55%
-   -> UNKNOWN-@0: ROM `lui v0,0x0  [HI16 D_26CB10]` vs `lui v1,0x0  [HI16 D_26CB10]` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AFF10);
+/* GUARD (task #1715): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002AFF10)
+S136OS_SLOT(func_002AFF10);
 #else
 s32 func_002AFF10(s32 sel) {
-    u8 table[0x54];
-    s32 idx;
+    NoticeStringTable table = D_26CB10;
+    s32 ret;
 
-    memcpy(table, D_26CB10, 0x54);
-    idx = (sel > -1) ? sel : 0;
-    if (idx >= 0x15) {
-        idx = 0x14;
+    if (sel < 0) {
+        sel = 0;
     }
-    if (idx == 3) {
-        return func_002B1880(*(s32 *)(table + 0xC), 0xF0);
+    if (sel >= 0x15) {
+        sel = 0x14;
     }
-    return func_002B1B48((void *)8, *(s32 *)(table + idx * 4), 0xB4);
+    if (sel == 3) {
+        ret = func_002B1880(table.stringId[3], 0xF0);
+    } else {
+        ret = func_002B1B48((void *)8, table.stringId[sel], 0xB4);
+    }
+    return ret;
 }
 #endif
 
