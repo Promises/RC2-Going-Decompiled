@@ -235,10 +235,12 @@ extern char D_0025BA70[];
 /* Global input/UI flags object; the menu code reads the flag word at +0x1C4. */
 extern u8 D_138180[];
 
-/* Bestiary/list base-pointer pair selected by D_1A7318. */
+/* Bestiary/list base-pointer pair selected by D_1A7318. Declared as small (-G8)
+ * scalars: the ROM forms both addresses gp-relative (`addiu $r,$28,%gp_rel`), and
+ * only their addresses are taken. */
 extern s32 D_1A7318;
-extern u8 D_1AB678[];
-extern u8 D_1AB648[];
+extern s32 D_1AB678;
+extern s32 D_1AB648;
 
 /* Widget-data blob forwarded by the func_002D4370 GUI wrapper. */
 extern u8 D_2617C0;
@@ -1450,26 +1452,21 @@ s32 func_002CD450(s32 screen) {
 }
 #endif
 
-/* Stores D_1A7318 ? &D_1AB648 : &D_1AB678 into list[0x34], returns 0. Left as
- * INCLUDE_ASM: the original has an anomalous +0x60 stack adjust prologue with no
- * matching restore (frame artifact) that our cc1 won't reproduce from clean C.
- * Preserved as portable C for the native target. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CD4E8);
-#else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 0.00% -> STRUCTURAL,
- * first differing row @0: ROM `addiu sp,sp,96` vs `lui v0,0x0  [HI16 D_1A7318]`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 0.00% -> STRUCTURAL, first differing row @0: ROM `addiu sp,sp,96` vs `lui v0,0x0  [HI16 D_1A7318]`. */
-/* TODO(match): functional equivalent - not byte-exact; anomalous +0x60 frame
- * prologue without matching restore not reproduced from clean C. The selector
- * is D_1A7318 (== g_vramTextureBase_28 + 0xC); movn picks &D_1AB648 when nonzero,
- * else &D_1AB678. Stores into list[0x34/4] (= list[0xD]) and returns 0. */
-s32 func_002CD4E8(s32 *list) {
-    list[0xD] = (s32)(D_1A7318 ? D_1AB648 : D_1AB678);
+/* Dead epilogue debris after func_002CD450's jr pad (`addiu $sp,+0x60; nop`; no
+ * prologue, no jr, no reference anywhere in the ELF). Not a function body, so it
+ * cannot be C. Split off func_002CD4F0 by a symbol_addrs size pin (task #1674). */
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CD4E8);
+
+/* Select the list base for a menu record: store &D_1AB648 into list[0xD]
+ * (byte offset 0x34) when D_1A7318 is non-zero, else &D_1AB678. Returns 0.
+ * list: the record whose +0x34 slot receives the selected base.
+ * Reached only through the handler-table word at 0x260968 (D_00260960's third
+ * slot, after func_002D6E98), never by a jal. cc1 if-converts the select to the
+ * ROM's `movn`. Byte-exact on this unit's 2.9 arm, plain C, no device (task #1674). */
+s32 func_002CD4F0(s32 *list) {
+    list[0xD] = (s32)(D_1A7318 ? &D_1AB648 : &D_1AB678);
     return 0;
 }
-#endif
 
 /* BuildCheatMenuItemList: build the cheat-menu item list. Copies two contiguous
  * parallel tables (D_1AB958 = 8 cheat-entry indices, -1 terminated; D_1AB978 = the
