@@ -362,3 +362,8 @@ usa text/1A8180 func_002A9C88
 usa text/1A8180 func_002A8948
 usa text/235FE8 func_0033BA48
 usa text/1A8180 PostMobyHitEvent
+usa text/1A8180 func_002AF6A0
+usa text/1A8180 func_002ADBA0
+usa text/1A8180 func_002A98B8
+usa text/1A8180 func_002A9BD8
+usa text/1A8180 MarkLevelAvailable

@@ -1762,32 +1762,53 @@ f32 func_002A9888(Vec4 *pos) {
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A98B0);
 
-/* func_002A98B8: first polygon edge (0x10-stride xy verts) the point lies
- * left of, 1-based; 0 = inside. Best attempt 90%: the original emits the
- * div-by-zero check of the i%%n twice (one hoisted to the loop top) around
- * a single CSEd div - the div-expansion-scheduling wall (same family as
- * func_00351328). */
+/**
+ * func_002A98B8: find the first edge of a polygon that a point lies to the
+ * left of, in the XY plane.
+ *
+ * @param pt     the point (x at +0, y at +4).
+ * @param verts  `n` vertices with a 0x10-byte stride (x at +0, y at +4).
+ * @param n      vertex count; n <= 0 returns 0 without reading anything.
+ * @return       i + 1 for the first edge verts[i] -> verts[(i + 1) % n] with
+ *               a positive cross product (point strictly left of it), or 0 if
+ *               there is none (the point is inside a clockwise polygon).
+ *
+ * MATCHED on the s136os arm (task #1665): 40 ROM words, byte-exact. The
+ * earlier "div-expansion-scheduling wall" reading of this function (NOTE
+ * #8533) does not hold for SN 2.95.3 v1.36: the shape is plain C. Each
+ * spelling below was removed alone and re-measured (words differing, vmu):
+ *   - no early `n <= 0` return and pt read in the loop: the loop's own entry
+ *     test is the ROM's only blez, and loop.c hoists pt[0]/pt[1] below it
+ *     (with the early return: 40/42, a second blez);
+ *   - `(i + 1) % n` written at BOTH uses of the next vertex: cc1 CSEs the
+ *     two divisions into one but keeps both divide-by-zero traps, which is
+ *     the ROM's pair of `beql $6,$8; break 7` (one shared `j` temp: 38 words);
+ *   - cur formed as `i * 0x10 + (s32)verts`: gives `addu v0,v0,a1` operand
+ *     order (as `(u8 *)verts + i * 0x10`: 1/40);
+ *   - cur[0]/cur[1] read into locals and ey formed before ex: gives the
+ *     ROM's lwc1 order and $f7/$f6 = pt x/y (other orders: 4-6/40).
+ */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 44.77%
    -> UNKNOWN-@0: ROM `(none)` vs `lwc1 $f7,0(a0)` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A98B8);
+/* GUARD (task #1665): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002A98B8)
+S136OS_SLOT(func_002A98B8);
 #else
 s32 func_002A98B8(f32 *pt, f32 *verts, s32 n) {
-    f32 px = pt[0];
-    f32 py = pt[1];
     s32 i;
 
-    if (n <= 0) {
-        return 0;
-    }
     for (i = 0; i < n; i++) {
-        s32 j = (i + 1) % n;
-        f32 *cur = (f32 *)((u8 *)verts + i * 0x10);
-        f32 *nxt = (f32 *)((u8 *)verts + j * 0x10);
-        f32 ex = px - cur[0];
-        f32 ey = py - cur[1];
-        f32 dx = nxt[0] - cur[0];
-        f32 dy = nxt[1] - cur[1];
+        f32 *cur = (f32 *)(i * 0x10 + (s32)verts);
+        f32 cx = cur[0];
+        f32 cy = cur[1];
+        f32 ey = pt[1] - cy;
+        f32 ex = pt[0] - cx;
+        f32 dx = ((f32 *)((u8 *)verts + ((i + 1) % n) * 0x10))[0] - cx;
+        f32 dy = ((f32 *)((u8 *)verts + ((i + 1) % n) * 0x10))[1] - cy;
         f32 cross = dx * ey - dy * ex;
 
         if (0.0f < cross) {
@@ -1923,14 +1944,20 @@ extern s32 CollMobysSphere(void *targetList, void *filter, Moby *self,
  * the source moby, class id, the two byte tags (arg4/arg5) and the impact
  * `power`. CollMobysSphere then gathers/broadcasts against that record within
  * `radius` and returns the hit count.
+ *
+ * Parameter ORDER (task #1665): the floats sit between the ints. Under EABI
+ * that changes no register (ints take $a0.., floats $f12.. independently),
+ * but it is the order cc1 sets the arguments up in, and the ROM caller
+ * func_002A9BD8 sets them up as self, radius, arg3, power, scale, arg4, arg5,
+ * filter (origin last, in the jal slot) - which only this order reproduces.
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 75.22%
    -> UNKNOWN-@2: ROM `(none)` vs `daddu s1,a0,zero` */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9A90);
 #else
-s32 func_002A9A90(Moby *self, void *targetList, s32 arg3, s32 arg4, s32 arg5,
-                  void *filter, f32 radius, f32 power, f32 scale) {
+s32 func_002A9A90(Moby *self, void *targetList, f32 radius, s32 arg3,
+                  f32 power, f32 scale, s32 arg4, s32 arg5, void *filter) {
     Vec4 dir;
     u8   hitEvent[0x30];
 
@@ -1960,29 +1987,48 @@ s32 func_002A9A90(Moby *self, void *targetList, s32 arg3, s32 arg4, s32 arg5,
  * the resulting Vec4 to `outPoint`. */
 extern void func_002A0AF8(Moby *self, s32 attachId, void *outPoint);
 
-/*
+/**
  * func_002A9BD8: attach-point variant of the directional sphere query.
  *
  * Resolves a world-space query origin at moby attach point `attachId`
  * (func_002A0AF8), then runs the directional moby sphere-collision query
- * (func_002A9A90) from that origin — forwarding the class/tag params and the
- * radius/power/scale floats unchanged. Returns the collision hit count.
- * (func_002A9A90's second parameter is this computed origin point.)
+ * (func_002A9A90) from that origin - forwarding the class/tag params and the
+ * radius/power/scale floats unchanged.
+ *
+ * @return the collision hit count from func_002A9A90.
+ *
+ * MATCHED on the s136os arm (task #1665): 41 ROM words, byte-exact. The lever
+ * is f32 PARAM-POSITION (NOTE #8962) on BOTH prototypes; it moves no register
+ * (EABI assigns ints and floats independently) but sets cc1's pseudo order and
+ * argument set-up order. Each half removed alone (words differing, vmu):
+ *   - this function's own floats declared after the ints: its int params take
+ *     s1..s4 in order, where the ROM puts arg3 in s4 (7/42);
+ *   - func_002A9A90 declared with its floats last: the ints are set up before
+ *     the floats for the second call, where the ROM interleaves them (13/42).
+ * As written before (both prototypes floats-last): 16/42. NOTE #8962's "f32
+ * position cannot reach this" was measured on the callee alone.
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 61.71%
    -> UNKNOWN-@1: ROM `(none)` vs `sd s1,24(sp)` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9BD8);
+/* GUARD (task #1665): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002A9BD8)
+S136OS_SLOT(func_002A9BD8);
 #else
 /* Prototypes this body needs whose declarations sit in other guarded arms:
  * the s136os arm compiles this arm alone, so it must see them here. */
-extern s32 func_002A9A90(Moby *self, void *targetList, s32 arg3, s32 arg4, s32 arg5, void *filter, f32 radius, f32 power, f32 scale);
-s32 func_002A9BD8(Moby *self, s32 attachId, s32 arg3, s32 arg4, s32 arg5,
-                  void *filter, f32 radius, f32 power, f32 scale) {
+extern s32 func_002A9A90(Moby *self, void *targetList, f32 radius, s32 arg3,
+                         f32 power, f32 scale, s32 arg4, s32 arg5, void *filter);
+s32 func_002A9BD8(Moby *self, s32 attachId, f32 radius, s32 arg3, f32 power,
+                  f32 scale, s32 arg4, s32 arg5, void *filter) {
     Vec4 origin;
+
     func_002A0AF8(self, attachId, &origin);
-    return func_002A9A90(self, &origin, arg3, arg4, arg5, filter,
-                         radius, power, scale);
+    return func_002A9A90(self, &origin, radius, arg3, power, scale,
+                         arg4, arg5, filter);
 }
 #endif
 
@@ -3872,9 +3918,18 @@ void func_002ABFD0(Vec4 *out, Vec4 *vec, Vec4 *axis, f32 scale) {
     __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
 #define R5900_SHORT_LOOP_PAD2(v) \
     __asm__(".set noreorder\n\tnop\n\tnop\n\t.set reorder" : "+r"(v))
+/* PAD1 as a volatile asm, which this cc1's scheduler treats as a barrier:
+ * every instruction before it in the RTL stays before it. For a loop whose
+ * counter and pointer updates are made by loop.c (strength reduction and
+ * reversal, so they have no name to tie to), writing the pad after the
+ * source increment puts it after those updates, directly before the branch,
+ * where the ROM's assembler put it (MarkLevelAvailable, task #1665). */
+#define R5900_SHORT_LOOP_PAD1_BARRIER(v, next) \
+    __asm__ __volatile__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
 #else
 #define R5900_SHORT_LOOP_PAD1(v, next) ((void)0)
 #define R5900_SHORT_LOOP_PAD2(v) ((void)0)
+#define R5900_SHORT_LOOP_PAD1_BARRIER(v, next) ((void)0)
 #endif
 
 /**
@@ -5065,32 +5120,62 @@ s32 func_002ADB10(Vec4 *pos, s32 segIdx) {
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADB98);
 
-/* func_002ADBA0(subject): scan the point-light manager block
- * (g_pointLights+0x2400) back-to-front — for each active light entry
- * (g_pointLights+0x2420, 0x10 stride, count at mgr+0xC) call the predicate
- * func_00284730(subject, &entry, &entry+0x20); on the first hit record the
- * 1-based index and stop. Returns 1 iff that hit index equals the manager's
- * head field (mgr+0x0) — i.e. the top-most entry was the match. */
+/**
+ * func_002ADBA0: scan the point-light manager block (g_pointLights+0x2400)
+ * back-to-front. For each active light entry (g_pointLights+0x2420, 0x10
+ * stride, count at mgr+0xC) call the predicate func_00284730(subject, &entry,
+ * &entry+0x20); on the first hit record the 1-based index and stop.
+ *
+ * @param subject  forwarded to the predicate.
+ * @return         1 iff the hit index equals the manager's head field
+ *                 (mgr+0x0), i.e. the top-most entry was the match; with no
+ *                 hit the index is 0, so this returns head == 0.
+ *
+ * MATCHED on the s136os arm (task #1665): 36 ROM words, byte-exact. The ROM
+ * re-forms both entry addresses from a fresh lui every iteration and never
+ * strength-reduces them, and its loop is NOT rotated (test at the top,
+ * `beql` back to it with i-- in the slot). That is cc1's output for a
+ * `for (;;)` loop whose exit tests are breaks. Words differing (vmu):
+ *   - the `for (i = n - 1; i >= 0; i--)` loop as written before: rotated and
+ *     strength-reduced, 41/42 (42 words);
+ *   - goto loops (either branch order): jump.c inverts the hit test, so a
+ *     `bnezl` over a `b` replaces the ROM's backward `beql` (35 words,
+ *     32/36);
+ *   - `for (;;)` with `mgr` used for BOTH the count and the head read: loop.c
+ *     strength-reduces again, 41/42. The ROM forms mgr in $a0 for the count
+ *     only and re-reads the head as %lo off the %hi it keeps in $s3, which is
+ *     the spelling below (the count through `mgr`, the head by its address).
+ * The nop before the loop is `.p2align 3` loop alignment, emitted by cc1.
+ */
 extern u8 g_pointLights[];
 extern s32 func_00284730(void *subject, void *entry, void *entryHi);
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 35.61%
    -> UNKNOWN-@3: ROM `(none)` vs `addiu s2,v0,9216  [LO16 0x001C2AC0]` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ADBA0);
+/* GUARD (task #1665): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002ADBA0)
+S136OS_SLOT(func_002ADBA0);
 #else
 s32 func_002ADBA0(void *subject) {
     u8 *mgr = g_pointLights + 0x2400;
     s32 found = 0;
-    s32 i;
+    s32 i = *(s32 *)(mgr + 0xC) - 1;
 
-    for (i = *(s32 *)(mgr + 0xC) - 1; i >= 0; i--) {
-        u8 *entry = g_pointLights + 0x2420 + i * 0x10;
-        if (func_00284730(subject, entry, entry + 0x20) != 0) {
+    for (;;) {
+        if (i < 0) {
+            break;
+        }
+        if (func_00284730(subject, g_pointLights + 0x2420 + i * 0x10,
+                          g_pointLights + 0x2440 + i * 0x10) != 0) {
             found = i + 1;
             break;
         }
+        i--;
     }
-    return found == *(s32 *)mgr;
+    return found == *(s32 *)(g_pointLights + 0x2400);
 }
 #endif
 
@@ -5701,43 +5786,80 @@ void func_002AE558(void *out, Vec4 *arg2, Vec4 *m1, Vec4 *m2) {
 }
 #endif
 
-/* MarkLevelAvailable: set a level's available flag and append it to the
- * ordered level list (regular levels < 0x15, plus level 0x18). Best known
- * body 88.66% (NOTE #8503); the #else below is 62.54% (figures and
- * instruments at the end of this comment). The original contains an EMPTY
- * 28-iteration delay loop. Its four nops are the R5900 short-loop pad (a
- * 2-instruction loop padded to 6), not scheduler output. A single pad asm
- * with a "+r" operand keeps the empty loop alive under cc1 2.9 but leaves
- * the loop's i++ out of the bnez slot; NOTE #8503's body (an empty fence on
- * the loop flag plus four R5900_SHORT_LOOP_PAD1) gets reorg to steal it into
- * the slot, and the delay loop then matches the ROM's `slti; nop x4; bnez;
- * addiu`. The scan loop is the CountPlatinumBolts shape
- * (5 + 1 pad, movn in the slot). The #else body below scores 62.54% solo
- * (sdk29, unit objdiff report, VM colima-ee-x86, task #1114), identical with
- * and without the unit's -fno-strict-aliasing. The best known body is 88.66%
- * (NOTE #8503, task #1026; re-measured under the flag by task #1100); its
- * residual is the SHARED-%HI class (NOTE #8503). Not landed. FACT #7937. */
+/**
+ * MarkLevelAvailable: mark `level` available and append it to the ordered
+ * level list.
+ *
+ * @param level  level index. Does nothing if its flag is already set.
+ *               Otherwise, after an empty 28-iteration delay loop, sets
+ *               g_abLevelAvailableFlags[level] = 1 and, for a regular level
+ *               (< 0x15) or level 0x18, stores it at the first index past the
+ *               count of non-zero entries in g_anAvailableLevelOrder[0..0x1B].
+ *
+ * MATCHED on the s136os arm (task #1665): 41 ROM words, byte-exact. Both
+ * loops are shorter than 6 instructions, so the ROM's assembler padded them
+ * with nops (R5900 short-loop erratum; macros above, RULING #8435 nop pads):
+ *   - the delay loop is `slti; nop x4; bnez; addiu i` (i++ stolen into the
+ *     slot): four R5900_SHORT_LOOP_PAD1 on the loop flag, as in NOTE #8503.
+ *     #8503's extra empty fence on the flag survives removal under s136 and
+ *     is not used;
+ *   - the scan loop is the plain indexed loop: loop.c reverses its counter
+ *     (li 27; addiu -1; bgez) and strength-reduces the table read, and only
+ *     that gives the ROM's registers. Every spelling with an explicit pointer
+ *     or countdown (NOTE #8503's, and 9 others measured) keeps
+ *     %hi(g_anAvailableLevelOrder) through a `move $8,$2` copy and swaps
+ *     idx/pointer (18-22/40). Its one pad sits after the loop.c updates, so
+ *     it is R5900_SHORT_LOOP_PAD1_BARRIER written after `n++`; the plain
+ *     (non-volatile) PAD1 there is scheduled above the updates (3/38), and
+ *     `idx = next` after the pad keeps the movn for the bgez slot.
+ *   - the flag is read and set through g_abLevelAvailableFlags[level] each
+ *     time: a `flags` local makes cc1 keep &flags[level] across the delay
+ *     loop where the ROM keeps the base and re-adds level (20/38).
+ *   - `i = 0` before `regular = level < 0x15`: the other order issues the
+ *     slti one slot early (2/38).
+ * The #else body before this task scored 25/28 (28 words; vmu).
+ */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 52.76%
    -> UNKNOWN-@0: ROM `lui v0,0x0  [HI16 0x001A7BD0]` vs `lui v1,0x0  [HI16 0x001A7BD0]` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", MarkLevelAvailable);
+/* GUARD (task #1665): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_MarkLevelAvailable)
+S136OS_SLOT(MarkLevelAvailable);
 #else
 void MarkLevelAvailable(s32 level) {
-    s32 i;
-    s32 idx;
+    s32 i, idx, regular, more;
+    s32 n;
 
     if (g_abLevelAvailableFlags[level] != 0) {
         return;   /* already available */
     }
-    /* original spins an empty 28-iteration delay loop here (no state effect) */
+    i = 0;
+    regular = level < 0x15;
+    do {   /* empty delay loop, 28 iterations (no state effect) */
+        i++;
+        more = i < 0x1C;
+        R5900_SHORT_LOOP_PAD1(more, i);
+        R5900_SHORT_LOOP_PAD1(more, i);
+        R5900_SHORT_LOOP_PAD1(more, i);
+        R5900_SHORT_LOOP_PAD1(more, i);
+    } while (more);
     g_abLevelAvailableFlags[level] = 1;
-    if (level >= 0x15 && level != 0x18) {
+    if (!regular && level != 0x18) {
         return;   /* only regular levels (< 0x15) and level 0x18 are ordered */
     }
     idx = 0;
-    for (i = 0; i < 0x1C; i++) {
-        if (g_anAvailableLevelOrder[i] != 0) {
-            idx = idx + 1;
+    n = 0;
+    while (n < 0x1C) {
+        s32 used = g_anAvailableLevelOrder[n];
+        s32 next = idx + 1;
+
+        n++;
+        R5900_SHORT_LOOP_PAD1_BARRIER(next, used);
+        if (used != 0) {
+            idx = next;
         }
     }
     g_anAvailableLevelOrder[idx] = level;
@@ -6241,35 +6363,46 @@ void func_002AF598(Vec4 *vec, s32 *out) {
 extern void func_00283AA0(Vec4 *dst, u32 packed);
 
 /**
- * Decode a packed RGBA colour pointed to by `colorPtr` into a signed direction/
- * offset vector scaled by its alpha: unpack to floats, recentre RGB around 127
- * (so 0x80 -> 0), and scale the whole vector by alpha * 1e-4. Writes to `out`.
+ * func_002AF6A0: decode a packed RGBA colour into a signed offset vector
+ * scaled by its alpha.
+ *
+ * @param out       receives (rgb - 127, alpha) * (alpha * 1e-4): unpacked to
+ *                  floats, RGB recentred around 127 (so 0x80 -> 1), and the
+ *                  whole vector scaled by alpha * 1e-4.
+ * @param colorPtr  the packed colour (func_00283AA0's input).
+ *
+ * MATCHED on the s136os arm (task #1665): 33 ROM words, byte-exact. The ROM
+ * clears the 16-byte offset with one `por; sq` and then stores 127.0f to z,
+ * x, y. That is a QVec (u_long128 view) zero-initialised as a whole, then the
+ * three fields written in x, y, z order: cc1 1.36 issues the last float store
+ * of the group first (FACT #9254). Words differing (vmu):
+ *   - as written before (a Vec4 with four field stores): 32 words, 32/32;
+ *   - the stores in z, x, y source order: 3/34.
+ * `= { 0 }` and `offset.q = 0` emit the same code; the initialiser also
+ * compiles on native, where u_long128 is a struct. This retires NOTE #8734's
+ * SAVE-LAYOUT WALL reading for the s136os arm.
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 76.27%
    -> UNKNOWN-@0: ROM `addiu sp,sp,-64` vs `(none)` */
-/* t1174 solo (unit objdiff report, objdiff_build.sh, colima-ee-x86): sdk29 85.24
-   - SAVE-LAYOUT WALL (ROM s0/ra at sp+32/+40, cc1 2.9 at 16-byte slots, frame
-   80 vs 64). engine96 76.27 as below; with `offset` as a QVec cleared by
-   `offset.q = 0` before the three 127.0f stores (the ROM's por/sq-then-swc1),
-   engine96 reaches 81.21 with the ROM's exact instruction multiset - the rest
-   is ORDER-ONLY SCHED-TIEBREAK (prologue addiu vs the 127.0f lui/mtc1, the
-   lwc1/move pair after the first call, a0/a1 before the last call). Not
-   adopted: `q = 0` does not compile on TARGET_NATIVE (struct u_long128). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AF6A0);
+/* GUARD (task #1665): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002AF6A0)
+S136OS_SLOT(func_002AF6A0);
 #else
 void func_002AF6A0(Vec4 *out, u32 *colorPtr) {
     Vec4 color;
-    Vec4 offset;
+    QVec offset = { 0 };
     f32 alpha;
 
-    offset.x = 127.0f;
-    offset.y = 127.0f;
-    offset.z = 127.0f;
-    offset.w = 0.0f;
+    offset.v.x = 127.0f;
+    offset.v.y = 127.0f;
+    offset.v.z = 127.0f;
     func_00283AA0(&color, *colorPtr);
     alpha = color.w * 0.0001f;
-    Vec4SubVu0(&color, &color, &offset);
+    Vec4SubVu0(&color, &color, &offset.v);
     Vec4ScaleVu0(out, alpha, &color);
 }
 #endif
