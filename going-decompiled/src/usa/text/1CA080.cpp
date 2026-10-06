@@ -4077,7 +4077,11 @@ s32 DrawPlanetWarpMenu(void) {
  *
  * Byte-exact on the s136os arm (task #1721; body from NOTE #9199, task #1510)
  * under RULING #9491's gcse-on flags: the ROM shares %hi(D_1395B8) across
- * blocks, which cc1 does only with gcse (18 words off under -fno-gcse). The
+ * blocks, which cc1 does only with gcse. Under -fno-gcse this same body builds
+ * 78 words against the ROM's 79, 18 of them differing in a difflib alignment of
+ * the disassembly (solo s136 harness, task #1739; the same harness reads 0 of 79
+ * under the in-tree flags). NOTE #9199 (task #1510) measured this body at edit
+ * distance 11 under the then-pinned flags, on a different instrument. The
  * branch-likely test it was once walled on comes out of SN 1.36 unprompted.
  * Each choice below was measured load-bearing by removing it alone (vmu):
  *   - the two `volatile` reads, of g_miscExtras and D_1A7BF2, are a CODEGEN
