@@ -231,7 +231,8 @@ typedef struct LevelObjective {
     s16 _pad0A;         /* 0x0A */
     s32 cond2Arg;       /* 0x0C second EvaluateProgressCondition operand (arg) */
     u16 flags;          /* 0x10 bit 0x2 = hidden-when-complete, 0x4 = level-gated */
-    u8  _pad12[0xA];    /* 0x12 */
+    s16 valueBase;      /* 0x12 GatherActiveObjectives reports valueBase + tickResult */
+    s16 stageTextIds[4];/* 0x14 text id shown for each tickResult (GatherActiveObjectives) */
     s32 (*tickFn)(s32); /* 0x1C optional per-tick callback */
     s32 tickArg;        /* 0x20 argument passed to tickFn */
     s16 state;          /* 0x24 0 = inactive, 1 = active, 2 = complete */
@@ -256,6 +257,21 @@ typedef struct ObjectiveScan {
     LevelObjective *head;        /* +0x38 (struct offset 0x4) */
 } ObjectiveScan;
 extern u8 g_pRainHeightmap[]; /* 0x1B19A0 (byte-addressed for the +0x34 scratch) */
+
+/* ADDRESSING-MODEL DEVICE (RULING #8620; the FACT #8036 size-16 equate form,
+ * as g_playerProgressAbs below): GatherActiveObjectives loads the list head
+ * with the assembler-macro shape `lui $9; lw $9,%lo(g_pRainHeightmap+0x38)($9)`,
+ * the destination register reused as the base. That is what GNU as prints for
+ * cc1's one-insn `lw $9,sym` when sym is a cc1-small scalar sized 16 for the
+ * assembler. Reading it through g_pRainHeightmap makes cc1 split the address
+ * itself into a separate lui temp ($2). The equate names no new storage and the
+ * relocation still names g_pRainHeightmap+0x38; nothing is emitted. */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_objectiveScanHeadAbs, 16\n\tg_objectiveScanHeadAbs = g_pRainHeightmap + 0x38");
+extern LevelObjective *g_objectiveScanHeadAbs;
+#else
+#define g_objectiveScanHeadAbs (((ObjectiveScan *)(g_pRainHeightmap + 0x34))->head)
+#endif
 
 extern u8 g_levelVisitedMarkers[]; /* 0x1A7BF0 per-level visited byte markers */
 
@@ -2908,25 +2924,38 @@ s32 EvaluateProgressCondition(s32 cond, s32 arg) {
     }
 }
 
-/* GatherActiveObjectives(outIds, outMask, outVals, wantValues): walks the
- * 0x28-stride objective list (head pointer parked at the unnamed bss word
- * g_pSkyShellSpinRates+0xC8 = 0x1B19D8), emits visible objective ids/values,
- * sets completion bits in *outMask (bit 31 = all non-hidden complete),
- * returns the count. RE-PROBED 2026-06-12, best 87.59% - structure and all
- * field accesses line up; residues are later-cc1 traits: (a) register
- * coloring swaps rec/state ($t1/$t0 vs our $t0/$t1, plus the lui-temp),
- * (b) the original does NOT hoist the loop-invariant 0x31B9 constant (ours
- * preloads it to a register; theirs rematerialises it in a beql delay slot),
- * (c) the original copies the outIds cursor and reloads rec->state in the
- * value-select block where ours CSEs. Left as asm. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", GatherActiveObjectives);
+/* GatherActiveObjectives(outIds, outMask, outVals, wantValues): list the current
+ * level's visible objectives for display. Walks the LevelObjective list cached
+ * at ObjectiveScan.head (g_pRainHeightmap+0x38) and, for each objective that is
+ * not hidden (flags bit 0x2), not inactive (state 0), and not completed with
+ * flags bit 0x1 set, emits one entry.
+ *
+ * @param outIds      receives each entry's id; with wantValues, its text id
+ *                    instead (0x31B9 when complete, else stageTextIds[tickResult]).
+ *                    outIds[0] is zeroed first.
+ * @param outMask     optional; bit n set when entry n is complete, bit 31 set when
+ *                    every visible objective is complete. Zeroed first.
+ * @param outVals     optional; receives valueBase + tickResult per entry. Its
+ *                    first word is set to -1 first.
+ * @param wantValues  nonzero to emit text ids rather than objective ids
+ * @return            number of entries emitted
+ *
+ * Built on the s136os arm (task #1738). The bytes need:
+ *  - The entry's text id is written through a copy of outIds and state is
+ *    re-read from the record after that store, as the ROM does (`daddu $3,$4,$0`;
+ *    `lh $2,0x24($9)`). The store may alias the record. The ?: keeps 0x31B9 in
+ *    the beql delay slot rather than hoisted out of the loop.
+ *  - `flags` is an s32 local. A u16 local is reloaded at the loop top.
+ *  - A for loop with the advance in its header. A while loop with
+ *    `rec += 0x28; continue;` swaps rec and state ($8/$9).
+ *  - The table index goes through the struct field (stageTextIds[tickResult]).
+ *    A byte-offset `rec + idx*2 + 0x14` swaps the addu operands.
+ *  - g_objectiveScanHeadAbs (the device above) for the head load. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_GatherActiveObjectives)
+S136OS_SLOT(GatherActiveObjectives);
 #else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 80.05% -> REGNUM-COLORING, first differing row @0: ROM `lui a5, %hi(g_pRainHeightmap+0x38)` vs `lui v0, %hi(g_pRainHeightmap+0x38)`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 64.85% -> REGNUM-COLORING, first differing row @0: ROM `lui a5, %hi(g_pRainHeightmap+0x38)` vs `lui v0, %hi(g_pRainHeightmap+0x38)`. */
 s32 GatherActiveObjectives(s32 *outIds, s32 *outMask, s32 *outVals, s32 wantValues) {
-    u8 *rec = *(u8 **)(g_pRainHeightmap + 0x38);   /* objective list head */
+    LevelObjective *rec = g_objectiveScanHeadAbs;
     s32 count = 0;
     s32 allComplete = 1;
 
@@ -2937,53 +2966,47 @@ s32 GatherActiveObjectives(s32 *outIds, s32 *outMask, s32 *outVals, s32 wantValu
     if (outVals != 0) {
         *outVals = -1;
     }
-    if (rec == 0) {
+    if (rec == NULL) {
         return 0;
     }
 
-    while (*(s16 *)(rec + 0x0) != 0) {           /* rec->id */
-        s32 state = *(s16 *)(rec + 0x24);
-        u16 flags = *(u16 *)(rec + 0x10);
+    for (; rec->id != 0; rec++) {
+        s32 state = rec->state;
+        s32 flags = rec->flags;
 
         if (state != 2 && (flags & 2) == 0) {
-            allComplete = 0;                     /* a visible, not-complete one */
+            allComplete = 0;             /* a visible objective is not complete */
         }
-        if ((flags & 2) != 0) {                  /* hidden -> skip, no count */
-            rec += 0x28;
+        if ((flags & 2) != 0) {          /* hidden: not listed */
             continue;
         }
-        if (state == 0) {                        /* inactive -> skip, no count */
-            rec += 0x28;
+        if (state == 0) {                /* inactive: not listed */
             continue;
         }
-        if ((flags & 1) != 0 && state == 2) {    /* completed+flag1 -> skip */
-            rec += 0x28;
+        if ((flags & 1) != 0 && state == 2) { /* completed and flag 1: not listed */
             continue;
         }
 
-        /* emit: id, or (when wantValues) the display value in its place */
-        outIds[0] = *(s16 *)(rec + 0x0);
-        if (wantValues != 0) {
-            if (state == 2) {
-                outIds[0] = 0x31B9;
-            } else {
-                outIds[0] = *(s16 *)(rec + *(s16 *)(rec + 0x26) * 2 + 0x14);
+        {
+            s32 *dst = outIds;
+            *dst = rec->id;
+            if (wantValues != 0) {
+                *dst = (rec->state == 2) ? 0x31B9 : rec->stageTextIds[rec->tickResult];
             }
         }
-        if (outMask != 0 && state == 2) {
-            *outMask |= (1 << count);            /* completion bit for this slot */
+        if (outMask != 0 && rec->state == 2) {
+            *outMask |= (1 << count);
         }
         if (outVals != 0) {
-            *outVals = *(s16 *)(rec + 0x12) + *(s16 *)(rec + 0x26);
+            *outVals = rec->valueBase + rec->tickResult;
             outVals++;
         }
         outIds++;
         count++;
-        rec += 0x28;
     }
 
     if (outMask != 0 && allComplete != 0) {
-        *outMask |= 0x80000000;                  /* bit 31 = all non-hidden complete */
+        *outMask |= 0x80000000;          /* bit 31: every visible objective is complete */
     }
     return count;
 }
