@@ -416,3 +416,4 @@ usa text/191238 MapAllocCacheSlot
 usa text/191238 MapMoveCacheSlot
 usa text/1CA080 TickFrontEndScreenIdle
 usa text/1CA080 func_002D2538
+usa text/198FA0 func_0029C818

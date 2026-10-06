@@ -1897,7 +1897,56 @@ void func_0029C678(void *state, void *a1, void *text, s32 font, s32 centre,
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029C700);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029C818);
+/* func_0029C818: front-end screen readiness poll. No-op unless the GUI is up.
+ * The new ready state is func_0026F7D8() != 0 when func_0026F7D0() is set,
+ * else 0; if it equals the latched gate D_1A9A8C nothing happens. On a change
+ * it invalidates the GUI state (func_0029CA88) and latches the new value, and
+ * only on a transition to 1 configures the front-end screen: primes
+ * g_guiInstance+0x3CD48 with D_1A9A98, builds the button row of the widget at
+ * g_guiInstance+0x3F7B0 (func_0033BA48 from D_1A9AC0 / D_256398), sets its
+ * scale to 36.0 and its index to -1, then refreshes the menu items
+ * (func_0029C700). No params, no return value. EU twin func_0029C3C0.
+ *
+ * Built on the s136os arm (task #1722), plain C, no devices. D_1A9A98 and
+ * D_1A9AC0 are declared as 4-byte objects so cc1 forms their addresses
+ * %gp_rel, as the ROM does (`addiu $5,$28,...`). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0029C818)
+S136OS_SLOT(func_0029C818);
+#else
+extern s32  func_0026F7D0(void);
+extern s32  func_0026F7D8(void);
+extern void func_0034A1D0(void *w, s32 *v);
+extern void func_0033BA48(void *w, s32 *srcGlyphs, void *entries);
+extern void func_0033BA10(void *p, f32 v);
+extern void func_0033BA28(void *p, s32 idx);
+extern void func_0029C700(void);
+extern void func_0029CA88(void);
+extern s32  D_1A9A98;
+extern s32  D_1A9AC0;
+extern u8   D_256398[];
+
+void func_0029C818(void) {
+    s32 ready;
+
+    if (g_guiInstance != 0) {
+        ready = 0;
+        if (func_0026F7D0() != 0) {
+            ready = (func_0026F7D8() != 0);
+        }
+        if (D_1A9A8C != ready) {
+            func_0029CA88();
+            D_1A9A8C = ready;
+            if (ready == 1) {
+                func_0034A1D0(g_guiInstance + 0x3CD48, &D_1A9A98);
+                func_0033BA48(g_guiInstance + 0x3F7B0, &D_1A9AC0, D_256398);
+                func_0033BA10(g_guiInstance + 0x3F7B0, 36.0f);
+                func_0033BA28(g_guiInstance + 0x3F7B0, -1);
+                func_0029C700();
+            }
+        }
+    }
+}
+#endif
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029C8F0);
 
