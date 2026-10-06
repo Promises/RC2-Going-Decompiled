@@ -329,7 +329,7 @@ void func_0034D8C8(GuiHudManager *mgr, s32 flag) {
  * a color-ramp tween, then writes the tween handle/alpha and sets visibility.
  * Left as bare INCLUDE_ASM: a faithful cmp-oracle is blocked because its tween
  * callee func_002AA3F0 (1A8180.c, linked whole into the cmp suite) runs a real
- * VU0 LerpByteVec4PackedVu0 + absolute D_1A9E94/98 globals (the absolute-symbol
+ * VU0 LerpByteVec4PackedVu0 + absolute g_colorPulsePhaseA/B globals (the absolute-symbol
  * ld --gc-sections wall), and it cannot be mocked instead without colliding with
  * that linked real body. Not seedable cleanly; revisit for byte-oracle when
  * func_002AA3F0 itself is oracled. */

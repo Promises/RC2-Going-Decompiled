@@ -86,8 +86,8 @@ __asm__(".extern g_mobyGroupCount, 12");
 __asm__(".extern g_pMobyGroupIterCursor, 12");
 __asm__(".extern g_mobyGroupIterSlot, 12");
 __asm__(".extern g_pMobyGroupIterMoby, 12");
-__asm__(".extern D_1A8CA4, 12");
-__asm__(".extern D_1A8CB0, 12");
+__asm__(".extern g_altGravityPlanar, 12");
+__asm__(".extern g_altGravityPlanarCenter, 12");
 __asm__(".extern D_001B1750, 12");
 __asm__(".extern D_1A7A4F, 12");
 __asm__(".extern D_1A8BD0, 12");
@@ -95,7 +95,7 @@ __asm__(".extern g_skillPointFlags, 12");
 __asm__(".extern g_abLevelAvailableFlags, 12");
 __asm__(".extern D_1A8C60, 12");   /* func_002B1B48: gp_rel in a beql slot, lui/$at elsewhere */
 __asm__(".extern D_1A8C64, 12");
-__asm__(".extern D_1A8CA0, 12");   /* func_002B0E40: lui/$at; func_002B03E8: gp_rel in a bc1t slot */
+__asm__(".extern g_altGravityEnabled, 12");   /* func_002B0E40: lui/$at; func_002B03E8: gp_rel in a bc1t slot */
 /* Assembler-absolute globals (size class 16, see header): every C access the
  * ROM makes to these is the lui/$at macro, never %gp_rel, so -G8 must not
  * size them small. FILE SCOPE, ahead of every use, so the 2.9 TU and each
@@ -196,12 +196,14 @@ extern s32 g_mobyGroupCount;           /* number of moby groups */
 extern u16 *g_pMobyGroupIterCursor;    /* group iterator: current list entry */
 extern u16 g_mobyGroupIterSlot;        /* group iterator: current slot index */
 extern Moby *g_pMobyGroupIterMoby;     /* group iterator: current moby */
-extern s32 D_1A8CA4;                   /* breath/oxygen HUD inversion flag */
-extern f32 D_1A8CB0;                   /* inverted breath meter source value */
+extern s32 g_altGravityPlanar;         /* planar sub-mode of alternate gravity (FACT #5738: not a HUD flag) */
+extern f32 g_altGravityPlanarCenter;   /* Vec4 point the planar gravity direction is measured from;
+                                        * only its address is used, and the matched readers were
+                                        * measured with this f32 declaration */
 /* g_soundBankHandles+0x20 base (0x189E20); func_002B0E40 reads a reference
  * position Vec4 at +0xB0 and a sign-selector float at +0xBC. */
 extern u8 g_soundBankHandlesBlk[];
-extern f32 D_001B1750;                 /* breath meter source value */
+extern f32 D_001B1750;                 /* Vec4 reference point (func_002B11C8 measures distance to it; FACT #5738: not a breath meter) */
 extern u8 D_1A7A4F;                    /* "freeze palette cycling" flag */
 extern f32 D_1A8BD0;                   /* default hit-direction Vec4 for func_002A9F30 (declared as its first float so cc1 schedules the address materialisation as one insn) */
 
@@ -370,7 +372,7 @@ extern BlobShadow g_blobShadowQueue[]; /* 32-entry ring (count in g_blobShadowCo
 
 /* Per-moby ground-probe mode flag: 0 = straight downward drop probe, nonzero =
  * probe along the moby's own axis vector (+0xE0). */
-extern s32 D_1A8CA0;
+extern s32 g_altGravityEnabled;
 
 /* Resolve the moby's current/next anim-frame data pointers (+0x58/+0x5C) from
  * its active sequence + frame indices. Defined in another unit. */
@@ -2440,7 +2442,7 @@ void QueueMobyBlobShadow(Moby *moby, f32 baseAlpha) {
 #endif
 
 /* ProbeMobyGroundBelow: ground-fit probe for a moby's drop shadow / ground snap.
- * Two modes selected by D_1A8CA0: in the default (0) mode, a downward CollLine
+ * Two modes selected by g_altGravityEnabled: in the default (0) mode, a downward CollLine
  * (mask 0x22, skipping water material 0) is cast from the moby position
  * (+0x10) over a 16-unit drop — but only when the moby's "on-ground" factor
  * (+0xE8) is at least 0.9; the resulting ground z-delta (g_collHitPoint.z minus
@@ -2453,7 +2455,7 @@ void QueueMobyBlobShadow(Moby *moby, f32 baseAlpha) {
  * Walled: saves $16-$18/$31 (save-layout wall). The 1/1024, -8.0, 1/4096 and
  * 0.2 constants come straight from the asm immediates. */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 50.42%
-   -> UNKNOWN-@0: ROM `(none)` vs `lw v0,0(gp)  [GPREL16 D_1A8CA0]` */
+   -> UNKNOWN-@0: ROM `(none)` vs `lw v0,0(gp)  [GPREL16 g_altGravityEnabled]` */
 /* MATCHED on the s136os arm (task #1559): byte-exact solo under SN 2.95.3 v1.36
  * -fopt-stack (verify_match_unit 102/102). Plain-C respellings, each reverted
  * alone (words differing, vmu):
@@ -2501,7 +2503,7 @@ s32 ProbeMobyGroundBelow(Moby *moby) {
     register f32 zDelta EE_REG("$f0");
     register f32 scale EE_REG("$f1");
 
-    if (D_1A8CA0 == 0) {
+    if (g_altGravityEnabled == 0) {
         Vec4 *pos;
         if (*(f32 *)(m + 0xE8) < 0.9f) {
             goto none;
@@ -2575,8 +2577,8 @@ s32 func_002AA3D0(void *a, void *b, void *c) {
 
 /* Two free-running phase counters for the ping-pong colour ramp; the selector
  * arg picks which one to advance (gp-addressable small data). */
-extern s32 D_1A9E94;
-extern s32 D_1A9E98;
+extern s32 g_colorPulsePhaseA;
+extern s32 g_colorPulsePhaseB;
 
 /* ColorLerpPacked as a packed-colour lerp that RETURNS the blended colour word:
  * t in $f12, the two colour words by value in $4/$5, result in $2. */
@@ -2585,7 +2587,7 @@ typedef u32 (*LerpColorPackedFn)(f32 t, u32 colorA, u32 colorB);
 /**
  * PulseColorBlend (func_002AA3F0): advance a ping-pong colour pulse and return
  * the current blended colour. Bumps (or resets) one of two free-running phase
- * counters — counterSel picks D_1A9E94 (0) vs D_1A9E98 — folds it into a
+ * counters — counterSel picks g_colorPulsePhaseA (0) vs g_colorPulsePhaseB — folds it into a
  * triangle wave over [0, 2*period) giving a 0..1 blend factor, and returns
  * color1/color2 blended by that factor (ColorLerpPacked).
  *
@@ -2600,12 +2602,12 @@ typedef u32 (*LerpColorPackedFn)(f32 t, u32 colorA, u32 colorB);
  * one: d2's 235FE8 callers consume the returned packed colour.
  */
 u32 func_002AA3F0(u32 color1, u32 color2, s32 period, s32 counterSel, s32 reset) {
-    s32 *phase = &D_1A9E98;
+    s32 *phase = &g_colorPulsePhaseB;
     s32 pos;
     f32 t;
 
     if (counterSel == 0) {
-        phase = &D_1A9E94;
+        phase = &g_colorPulsePhaseA;
     }
     *phase = *phase + 1;
     if (reset != 0) {
@@ -7294,10 +7296,10 @@ Moby *func_002B02C8(Vec4 *queryVec, f32 a, f32 b, f32 c, f32 d) {
  *               scoring methods below.
  *   excludeClassList  (-1)-terminated class-id blacklist (or 0).
  *
- * Two scoring methods, selected by D_1A8CA0 (alt-gravity / pause flag):
- *   Method A (D_1A8CA0 == 0): planar-bearing method — Atan2fPoly on the xy/z
+ * Two scoring methods, selected by g_altGravityEnabled (alternate gravity):
+ *   Method A (g_altGravityEnabled == 0): planar-bearing method — Atan2fPoly on the xy/z
  *       deltas of candidate-vs-aim, differenced by AngleShortestDiff.
- *   Method B (D_1A8CA0 != 0): plane-projection method — build a gravity plane
+ *   Method B (g_altGravityEnabled != 0): plane-projection method — build a gravity plane
  *       basis (func_002B0E40), project candToOrigin and aimDir into it, and take
  *       the between-vector angle via acos (func_00283B60, as pi/2 - acos = asin).
  *   Both methods are only entered when enable1 < pi OR coneYaw2 < pi; otherwise
@@ -7431,7 +7433,7 @@ int func_002B03E8(f32 enable1, f32 coneYaw2, f32 range3, f32 conePitch4,
                 /* candidate world position (moby +0x10), z-adjusted by the combat
                  * state's +0x10 height along the moby axis (or straight up). */
                 candPos = *(Vec4 *)((u8 *)moby + 0x10);
-                if ((D_1A8CA0 == 0) && (D_0018a168 == 0)) {
+                if ((g_altGravityEnabled == 0) && (D_0018a168 == 0)) {
                     candPos.z = candPos.z + combat[4];
                 } else {
                     Vec4ScaleVu0(&scratchA, combat[4], (Vec4 *)((u8 *)moby + 0xE0));
@@ -7451,7 +7453,7 @@ int func_002B03E8(f32 enable1, f32 coneYaw2, f32 range3, f32 conePitch4,
 
                         coneYawBase = coneYaw2;
                         if ((enable1 < 3.141593f) || (coneYaw2 < 3.141593f)) {
-                            if (D_1A8CA0 == 0) {
+                            if (g_altGravityEnabled == 0) {
                                 /* METHOD A: planar bearing via atan2 + shortest-diff */
                                 f32 a0 = Atan2fPoly(candToOrigin.x, candToOrigin.y);
                                 f32 a1 = Atan2fPoly(((f32 *)aimDir)[0], ((f32 *)aimDir)[1]);
@@ -7769,8 +7771,8 @@ f32 func_002B0DA0(s32 ctx, void *a, void *b) {
 }
 
 /**
- * Build a unit "to-camera" direction in out: out = D_1A8CB0 - src, flatten z to
- * 0, normalise to length 1, and flip it when the flag is clear.
+ * Build the planar alternate-gravity direction in out: out = g_altGravityPlanarCenter
+ * - src, flatten z to 0, normalise to length 1, and flip it when keepSign is clear.
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 75.77%
    -> UNKNOWN-@2: ROM `(none)` vs `sd s1,8(sp)` */
@@ -7787,7 +7789,7 @@ f32 func_002B0DA0(s32 ctx, void *a, void *b) {
 S136OS_SLOT(func_002B0DC8);
 #else
 void func_002B0DC8(Vec4 *src, Vec4 *out, s32 keepSign) {
-    Vec4SubVu0(out, (Vec4 *)&D_1A8CB0, src);
+    Vec4SubVu0(out, (Vec4 *)&g_altGravityPlanarCenter, src);
     out->z = 0.0f;
     Vec3RescaleToLenVu0(out, 1.0f, out);
     if (keepSign == 0) {
@@ -7798,18 +7800,18 @@ void func_002B0DC8(Vec4 *src, Vec4 *out, s32 keepSign) {
 
 /**
  * Compute a direction vector into `out`, selected by two mode flags:
- *  - D_1A8CA0 == 0: out = world +Z (SetVec4UnitZ).
- *  - else D_1A8CA4 != 0: out = normalised flattened to-camera dir from `a`
+ *  - g_altGravityEnabled == 0: out = world +Z (SetVec4UnitZ).
+ *  - else g_altGravityPlanar != 0: out = the planar gravity direction from `a`
  *    (func_002B0DC8 with keepSign=1).
  *  - else: out = (reference point g_soundBankHandlesBlk+0xB0) - a, rescaled to
  *    length ±1 (negative when the +0xBC selector is positive).
  * Finally, when flag == 0 the result is negated in place.
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 81.74%
-   -> UNKNOWN-@0: ROM `addiu sp,sp,-48` vs `lw v0,0(gp)  [GPREL16 D_1A8CA0]` */
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-48` vs `lw v0,0(gp)  [GPREL16 g_altGravityEnabled]` */
 /* MATCHED on the s136os arm (task #1324): byte-exact solo under SN 2.95.3
  * v1.36 -fopt-stack (verify_match_unit, FACT #8810's method). Closing lever:
- * D_1A8CA0 in the unit's size-12 `.extern` class; the reference block
+ * g_altGravityEnabled in the unit's size-12 `.extern` class; the reference block
  * read through a pointer temporary (the ROM keeps the base in a register and
  * addresses +0xBC/+0xB0 off it, where cc1 otherwise folds sym+188); no trailing
  * empty asm fence (it kept `ld s0` out of the ROM's bnel slot). */
@@ -7825,9 +7827,9 @@ S136OS_SLOT(func_002B0E40);
  * the s136os arm compiles this arm alone, so it must see them here. */
 void func_002B0DC8(Vec4 *src, Vec4 *out, s32 keepSign);
 void func_002B0E40(Vec4 *a, Vec4 *out, s32 flag) {
-    if (D_1A8CA0 == 0) {
+    if (g_altGravityEnabled == 0) {
         SetVec4UnitZ(out);
-    } else if (D_1A8CA4 != 0) {
+    } else if (g_altGravityPlanar != 0) {
         func_002B0DC8(a, out, 1);
     } else {
         u8 *blk = g_soundBankHandlesBlk;
@@ -7868,7 +7870,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
 
 /**
  * Offset a base position `src` into `out` by a direction of magnitude t:
- *  - D_1A8CA0 == 0 (simple mode): out.z = src.z - t (straight vertical drop).
+ *  - g_altGravityEnabled == 0 (simple mode): out.z = src.z - t (straight vertical drop).
  *  - else: build a direction from `a` (func_002B0E40 with flag=0), rescale it to
  *    length t, and add it to src: out = src + t*dir.
  * @param a    direction source (func_002B0E40's input)
@@ -7884,12 +7886,12 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_0
  * splice drops the function. On native it is plain C.
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 67.41%
-   -> UNKNOWN-@0: ROM `addiu sp,sp,-64` vs `lw v0,0(gp)  [GPREL16 D_1A8CA0]` */
+   -> UNKNOWN-@0: ROM `addiu sp,sp,-64` vs `lw v0,0(gp)  [GPREL16 g_altGravityEnabled]` */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_func_002B0F40)
 S136OS_SLOT(func_002B0F40);
 #else
 void func_002B0F40(Vec4 *a, Vec4 *out, Vec4 *src, f32 t) {
-    if (D_1A8CA0 == 0) {
+    if (g_altGravityEnabled == 0) {
         out->z = src->z - t;
     } else {
         Vec4 dir;
@@ -7915,16 +7917,16 @@ s32 func_002B0FC0(u8 *p) {
 /**
  * Probe the ground/surface height near `pos` and return the signed vertical
  * clearance, optionally writing the contact point to `out`.
- *  - D_1A8CA0 == 0 (normal): cast a short line from just above pos (z+0.5) down to
+ *  - g_altGravityEnabled == 0 (normal): cast a short line from just above pos (z+0.5) down to
  *    near pos (z=0.01) via CollLine; on a hit return pos.z - hit.z (out = hit),
  *    else return pos.z (out = pos).
  *  - else (alt surface, e.g. water): sample against a reference point
- *    (D_001B1750, or pos pushed -10 when D_1A8CA4 set), cast from a -0.5 offset,
+ *    (D_001B1750, or pos pushed -10 when g_altGravityPlanar set), cast from a -0.5 offset,
  *    and on a hit return the pos->hit distance, negated when pos is nearer the ray
  *    origin than the hit is; else return the pos→reference distance.
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 30.56%
-   -> UNKNOWN-@0: ROM `(none)` vs `lw v0,0(gp)  [GPREL16 D_1A8CA0]` */
+   -> UNKNOWN-@0: ROM `(none)` vs `lw v0,0(gp)  [GPREL16 g_altGravityEnabled]` */
 /* MATCHED on the s136os arm (task #1666): 119 ROM words, byte-exact.
  * Every 16-byte copy in the ROM is an adjacent `lq $2 / sq $2` that the
  * scheduler never splits or overlaps; cc1 hoists and interleaves u_long128
@@ -7932,14 +7934,14 @@ s32 func_002B0FC0(u8 *p) {
  * register pin and each is load-bearing: the words differing (solo s136os
  * compile vs the ROM, aligned) when it alone is removed are in brackets.
  *   - untied empty barriers (RULING #8483) after the copies into a, b and the
- *     reference a, inside the D_1A8CA4 block, and before the alt-mode miss
+ *     reference a, inside the g_altGravityPlanar block, and before the alt-mode miss
  *     copy [2, 98 at 120 words, 69 at 118, 64 at 118, 15 at 118];
  *   - a tied empty fence on pos and bp before the b copy: pos is re-loaded
  *     and bp stays in $a0 for CollLine, as in the ROM [both 99 at 118;
  *     bp alone 1; pos alone 99 at 118];
  *   - the two hit-point copies take their value in $2 (EE_REG, RULING #8598)
  *     so the address goes to $3 [4, 3];
- *   - the D_1A8CA4 flag is pinned to $4, where the ROM loads and tests it [7];
+ *   - the g_altGravityPlanar flag is pinned to $4, where the ROM loads and tests it [7];
  *   - g_collHitPointAlias for the hit-z read [4], see its declaration.
  * hp is formed after the out-copy, so the copy and hp share one %hi as in the
  * ROM (formed before: 5 at 117 words). Pin-free, the best body measured was
@@ -7971,7 +7973,7 @@ f32 func_002B0FE0(Vec4 *pos, void *moby, Vec4 *out) {
     Vec4 *p;
     Vec4 *bp;
 
-    if (D_1A8CA0 == 0) {
+    if (g_altGravityEnabled == 0) {
         /* Normal mode: a short ray from just above pos down to z = 0.01. */
         *(u_long128 *)&a = *(u_long128 *)pos;
         __asm__ __volatile__("");
@@ -7995,11 +7997,11 @@ f32 func_002B0FE0(Vec4 *pos, void *moby, Vec4 *out) {
     }
 
     /* Alt surface: measure against the reference point (D_001B1750, or pos
-     * pushed -10 when D_1A8CA4 is set), casting from a -0.5 offset. */
+     * pushed -10 when g_altGravityPlanar is set), casting from a -0.5 offset. */
     *(u_long128 *)&a = *(u_long128 *)&D_001B1750;
     __asm__ __volatile__("");
     {
-        register s32 pushRef EE_REG("$4") = D_1A8CA4;
+        register s32 pushRef EE_REG("$4") = g_altGravityPlanar;
         if (pushRef != 0) {
             *(u_long128 *)&a = *(u_long128 *)pos;
             __asm__ __volatile__("");
@@ -8037,18 +8039,21 @@ f32 func_002B0FE0(Vec4 *pos, void *moby, Vec4 *out) {
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002B11C0);
 
 /**
- * Sample the breath/oxygen meter value; when the HUD inversion flag is set
- * the meter counts down from 100 instead.
+ * Distance from `p` to a reference point: |p - D_001B1750|
+ * normally, or 100.0 - |p - g_altGravityPlanarCenter| in the planar
+ * alternate-gravity mode (g_altGravityPlanar set). A plain 3-component
+ * Euclidean distance (Vec3DistVu0); FACT #5738 refuted the earlier
+ * "breath/oxygen meter" reading. What D_001B1750 is stays unconfirmed.
  *
  * `p` is read directly as an offset-0 16-byte vector by Vec3DistVu0 (lqc2),
  * so it is a Vec4* (a world position point); callers pass moby+0x10, i.e. the
  * moby's position vec (verified in CheckMobyOverWater @ 0x2B7334).
  */
 f32 func_002B11C8(Vec4 *p) {
-    if (D_1A8CA4 == 0) {
+    if (g_altGravityPlanar == 0) {
         return Vec3DistVu0(p, &D_001B1750);
     }
-    return 100.0f - Vec3DistVu0(p, &D_1A8CB0);
+    return 100.0f - Vec3DistVu0(p, &g_altGravityPlanarCenter);
 }
 
 /**
@@ -8516,7 +8521,7 @@ extern void func_00273740(Moby *owner, s32 arg1, s32 classId, s32 index,
  * Each spawn draws a random horizontal scatter: a random angle and a random
  * radius in [radiusMin, radiusMax] (both scaled by 1/60), giving a circular
  * offset (cos, sin) with a random Z in [zMin, zMax]/60. In oriented-gravity mode
- * (D_1A8CA0 != 0) the offset is first rotated into the owner's orientation frame
+ * (g_altGravityEnabled != 0) the offset is first rotated into the owner's orientation frame
  * (+0xC0). The offset is added to `basePos`, then handed to func_00273740 along
  * with the owner's class id (+0xAA), world position (+0x10), facing (+0xF0), the
  * bit index, `kind` (low byte), and two more random parameters (a bearing in
@@ -8557,7 +8562,7 @@ void func_002B18D0(Moby *owner, s32 slotMask, Vec4 *basePos, s32 kind,
         *(s32 *)&offset.z = 0;   /* dead: the ROM zeroes Z as an int first */
         offset.z = GetRandomFloatRange(zMin, zMax) * invFrameRate;
 
-        if (D_1A8CA0 != 0) {
+        if (g_altGravityEnabled != 0) {
             func_00283A48(&offset, &offset, (Vec4 *)((u8 *)owner + 0xC0));
         }
         Vec4AddVu0(&offset, &offset, basePos);

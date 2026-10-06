@@ -407,16 +407,17 @@ s32 UpdateMobyThreatFlashAndBurst(Moby *moby, MobyThreatState *ts, MobyThreatGau
 #endif
 
 /* --- moby auto-target acquisition: shared globals + leaves ----------------
- * D_1A8CA0 (0x1A8CA0) is the radial-gravity mode flag — part of the documented
- * gravity-direction cluster (see symbol_addrs); when set, threat scoring uses
- * true 3D distance and skips the facing-bias term. Kept under its splat name
- * (the cluster is deliberately not re-pinned to avoid build desync).
+ * g_altGravityEnabled (0x1A8CA0) is the alternate-gravity flag — nonzero when the
+ * level uses a non-world-Z gravity frame (radial, or planar when
+ * g_altGravityPlanar is also set); part of the documented gravity-direction
+ * cluster (see symbol_addrs, pinned by task #1736). When set, threat scoring uses
+ * true 3D distance and skips the facing-bias term.
  * D_001F0000 (0x1F0000) is the per-level effect/zone data-segment base (also
  * referenced raw by the EU effect-def code); the target-zone pointer table lives
  * at +0x1680. */
 extern Moby *g_pHeroMoby;        /* 0x18C0B0 hero (Ratchet) moby — lock-on anchor */
 extern s32   g_nGameState;       /* 0x1A8BB0 current top-level game/screen state id */
-extern s32   D_1A8CA0;           /* 0x1A8CA0 radial-gravity mode flag (see above) */
+extern s32   g_altGravityEnabled; /* 0x1A8CA0 alternate-gravity flag (see above) */
 extern u8    D_001F0000[];       /* 0x1F0000 per-level effect/zone data segment */
 
 extern f32 DistXYVu0(Vec4 *a, Vec4 *b);   /* 0x283830 horizontal XY distance, VU0 */
@@ -610,7 +611,7 @@ s32 func_002B47D0(Moby *moby) {
 /* Auto-target threat/scoring metric: how "costly" `target` is for `moby` to
  * engage. Lower = more attractive. Starts as the planar XY distance between the
  * two mobys' world positions (moby+0x10 / target+0x10), then:
- *   - under radial-gravity levels (D_1A8CA0 != 0) it uses the full 3D distance
+ *   - under alternate gravity (g_altGravityEnabled != 0) it uses the full 3D distance
  *     instead and applies no facing penalty;
  *   - otherwise it adds a facing-misalignment penalty: the angle between the
  *     direction toward the target (atan2 of the XY delta) and the moby's own
@@ -634,7 +635,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", CalcMobyTargetT
 f32 CalcMobyTargetThreatDist(Moby *moby, Moby *target) {
     f32 score;
 
-    if (D_1A8CA0 != 0) {
+    if (g_altGravityEnabled != 0) {
         score = Dist3DVu0(&moby->facingTarget, &target->facingTarget);
     } else {
         f32 dx = target->facingTarget.x - moby->facingTarget.x;
@@ -922,7 +923,7 @@ s32 AcquireMobyAutoTarget(Moby *moby, s32 groupIdx, Vec4 *posOverride,
         if (xform == 0) {
             return lock->hasTarget;
         }
-        if (D_1A8CA0 != 0) {
+        if (g_altGravityEnabled != 0) {
             func_002B0BF0(target, lock, 0.0f, 0.0f, *(f32 *)((u8 *)xform + 0x10));
             return lock->hasTarget;
         }
@@ -1030,7 +1031,7 @@ s32 AcquireMobyAutoTarget(Moby *moby, s32 groupIdx, Vec4 *posOverride,
         if (xform == 0) {
             return lock->hasTarget;
         }
-        if (D_1A8CA0 != 0) {
+        if (g_altGravityEnabled != 0) {
             func_002B0BF0(best, lock, 0.0f, 0.0f, *(f32 *)((u8 *)xform + 0x10));
             return lock->hasTarget;
         }
@@ -2738,7 +2739,7 @@ s32 CheckMobyPathBlocked(Moby *moby) {
  * the moby's Y (+0x18) is at or below the passed volume's top plane (+0x90). Otherwise
  * looks up the water body actually under the moby (func_002AC088); if none, returns 0.
  * Then compares the moby Y against that body's surface height (+0x40) minus 0.5:
- * returns 1 when the moby sits below it. Under radial gravity (D_1A8CA0 != 0) the
+ * returns 1 when the moby sits below it. Under alternate gravity (g_altGravityEnabled != 0) the
  * compared height is the f32 that func_002B11C8(moby+0x10) returns (the ROM uses its
  * $f0 at 0x2B7350; the arm used to discard it and compare the entry-time Y);
  * otherwise it compares the moby's current Y directly.
@@ -2761,7 +2762,7 @@ s32 CheckMobyOverWater(void *moby, void *waterVol) {
         return 0;
 
     under = 0;
-    if (D_1A8CA0 != 0) {
+    if (g_altGravityEnabled != 0) {
         if (func_002B11C8((Vec4 *)((u8 *)moby + 0x10)) < *(f32 *)((u8 *)body + 0x40) - 0.5f)
             under = 1;
     } else if (*(f32 *)((u8 *)moby + 0x18) < *(f32 *)((u8 *)body + 0x40) - 0.5f) {
