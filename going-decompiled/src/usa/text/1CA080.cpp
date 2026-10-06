@@ -2237,14 +2237,16 @@ static inline s32 MenuPollConfirm(void) {
     return 0;
 }
 
-/* ADDRESSING-MODEL DEVICE for func_002CE908 and func_002D4270 (RULING #8620 terms;
+/* ADDRESSING-MODEL DEVICE for func_002CE908, func_002D4270 and func_002D0158 (RULING #8620 terms;
  * the offset-0 gp equate is ruled covered by RULING #9073; the precedent is
  * 1D54C0.cpp's func_002DD7E8). It emits nothing. The equate alias
- * `g_guiInstanceGp` has no sized `.extern` of its own, so the one access
- * through it assembles gp-relative and reproduces the ROM's
- * `lw $2,%gp_rel(g_guiInstance)($28)` in the `beqz` delay slot (0x002CE98C,
- * 0x002D42F4), even though this unit declares `.extern g_guiInstance, 16`
- * above. Every other reader of g_guiInstance in this unit stays absolute. The
+ * `g_guiInstanceGp` has no sized `.extern` of its own, so each function's one
+ * access through it assembles gp-relative and reproduces the ROM's
+ * `lw $2,%gp_rel(g_guiInstance)($28)`: in the `beqz` delay slot for the first
+ * two (0x002CE98C, 0x002D42F4), and at 0x002D01DC for func_002D0158
+ * (validator #1681, FACT #9464). That holds even though this unit declares
+ * `.extern g_guiInstance, 16` above. Every other reader of g_guiInstance in
+ * this unit stays absolute. The
  * relocation names g_guiInstance (R_MIPS_GPREL16), and GNU as never writes an
  * equate of an undefined symbol to the symtab, so no alias reaches nm.
  * At file scope and EE only, because the s136os splice refuses an equate the
