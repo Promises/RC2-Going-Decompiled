@@ -1360,45 +1360,56 @@ extern s32 D_1A99A0;             /* 0x1A99A0 changed-section counter (bumped on 
  * 8-byte header { s32 payloadLen; s32 crc; } at dst+0, followed by the section
  * stream starting at dst+8. Each non-terminator section emits an 8-byte header
  * { s32 tag; s32 len; } then its `len` payload bytes, 4-byte aligned. The
- * per-slot payload source is `srcPtr + len*slot` (each slot's data is packed
+ * per-slot payload source is `srcPtr + slot*len` (each slot's data is packed
  * contiguously). Sections tagged 0x1770 are zero-filled rather than copied. A
  * terminator header { -1, 0 } closes the stream; the CRC over the whole payload
- * (from dst+8, payloadLen bytes) is then stored in the header. Returns the
- * total image size (payloadLen + 8).
+ * (from dst+8, payloadLen bytes) is then stored in the header.
  *
- * WALLED at the byte level by the 8-byte-packed callee-save frame (this fn uses
- * 8 callee-saved regs; the pinned 2.9 cc1 reserves 16 bytes/save vs the
- * original's 8 — the mips_reg_mode=TImode wall, see project_matching_ceiling;
- * func_0029C678). Body is logic-exact (every non-prologue insn matches at 71%);
- * the portable #else below is cmp-oracle-validated (cmp_198FA0). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", SerializeSaveSections);
+ * @param dst    save-image buffer (header + section stream)
+ * @param slot   memory-card slot; selects the slice of each section's payload
+ * @param table  section descriptors, terminated by a NULL srcPtr
+ * @return       total image size (payloadLen + 8)
+ *
+ * Built on the s136os arm (task #1738); the old "packed save frame wall" label
+ * held only for the 2.9 arm. Three spellings carry the bytes:
+ *  - The payload source is formed before the header stores, from a fresh read
+ *    of `len`. The ROM reads srcPtr and len ahead of `sw tag` and re-reads len
+ *    after it for the header (the store may alias). Forming it inside the else
+ *    arm, or from a cached len, moves the mult and the loads.
+ *  - The walk uses its own descriptor pointer `sec`, set inside the if. The ROM
+ *    tests the first srcPtr through the incoming $6 and copies it to $16 only
+ *    on the taken path, which also places the $16 save after $21's.
+ *  - The advance adds len to cursor and size first, then rounds both. Rounding
+ *    `(x + len + 3) & -4` in one expression reorders the adds. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_SerializeSaveSections)
+S136OS_SLOT(SerializeSaveSections);
 #else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 71.48% -> PACKED-SAVE, first differing row @0: ROM `addiu sp, sp, -0x40` vs `addiu sp, sp, -0x80`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 62.59% -> SCHED-PROEPI, first differing row @0: ROM `addiu sp, sp, -0x40` vs `addiu sp, sp, -0x50`. */
 s32 SerializeSaveSections(void *dst, s32 slot, SaveSection *table) {
     s32 *cursor = (s32 *)((char *)dst + 8);
     s32 size = 0;
 
     if (table->srcPtr != 0) {
+        SaveSection *sec = table;
         do {
-            s32 len = table->len;
-            cursor[0] = table->tag;
-            cursor[1] = len;
+            s32 len;
+            char *src = (char *)sec->srcPtr + slot * sec->len;
+
             size += 8;
+            cursor[0] = sec->tag;
+            cursor[1] = sec->len;
             cursor += 2;
-            if (table->tag == 0x1770) {
-                FillMemory32(cursor, 0, table->len);
+            if (sec->tag == 0x1770) {
+                FillMemory32(cursor, 0, sec->len);
             } else {
-                func_00283460(cursor, (char *)table->srcPtr + len * slot,
-                              table->len);
+                func_00283460(cursor, src, sec->len);
             }
-            len = table->len;
-            table++;
-            cursor = (s32 *)(((s32)cursor + len + 3) & -4);
-            size = (size + len + 3) & -4;
-        } while (table->srcPtr != 0);
+            len = sec->len;
+            sec++;
+            cursor = (s32 *)((char *)cursor + len);
+            size += len;
+            cursor = (s32 *)(((s32)cursor + 3) & -4);
+            size = (size + 3) & -4;
+        } while (sec->srcPtr != 0);
     }
 
     size += 8;
