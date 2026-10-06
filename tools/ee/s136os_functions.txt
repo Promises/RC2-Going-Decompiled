@@ -274,6 +274,7 @@ usa text/198FA0 GuiManagerCreate
 usa text/191238 BuildUiTextureDescriptors
 usa text/191238 func_002938B0
 usa text/191238 func_00291CC0
+usa text/191238 MapBuildBitmap
 usa text/1D54C0 func_002D6028
 usa text/24D728 PlayFmvMovie
 usa text/1D54C0 func_002DD7E8
