@@ -1,4 +1,5 @@
 #include "common.h"
+#include "weapon.h"
 
 /* Local 16-byte VU-lane vector for the structure-exact #else bodies (common.h
    doesn't pull in vec.h). Byte-neutral: a typedef emits no code. Unconditional
@@ -5425,20 +5426,13 @@ extern void func_00342460(void *widget, s32 arg);
 extern s32 func_00343AD0(void *p);
 extern s32 func_003444C8(void *p);
 extern void func_00344480(void *p);
-/* The two g_weaponTable variant fields func_002D4568 reads. The table's stride
- * is 0xE0. Only these fields are named, and their meaning is not established.
+/* func_002D4568 reads two g_weaponTable fields, WeaponDef.unk42 and .unk06
+ * (weapon.h, stride 0xE0). Their meaning is not established.
  * As members, cc1 keeps the bare %lo(g_weaponTable) base in a callee-saved
  * register and puts 0x42/0x6 on the `lh`, as the ROM does. Through byte casts it
  * folds +0x42 into the %lo (task #1712). As with g_screenCapture, a cast is
  * enough and no alias is used. */
-struct WeaponVariantFields {
-    u8  unk0[0x6];
-    s16 unk6;         /* 0x06 */
-    u8  unk8[0x3A];
-    s16 unk42;        /* 0x42 */
-    u8  unk44[0x9C];
-};
-#define g_weaponVariants ((struct WeaponVariantFields *)g_weaponTable)
+#define g_weaponVariants ((WeaponDef *)g_weaponTable)
 #if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D4568)
 S136OS_SLOT(func_002D4568);
 #else
@@ -5451,7 +5445,7 @@ s32 func_002D4568(void *widget) {
             (g_weaponVariants + g_itemEquippedSlot[((s32 (*)(void *))func_00344480)(g_guiInstance + 0x3C480)])->unk42;
         sub = (u8 *)func_003444C8(g_guiInstance + 0x3C480);
         *(s32 *)(sub + 0x58) =
-            (g_weaponVariants + g_itemEquippedSlot[((s32 (*)(void *))func_00344480)(g_guiInstance + 0x3C480)])->unk6;
+            (g_weaponVariants + g_itemEquippedSlot[((s32 (*)(void *))func_00344480)(g_guiInstance + 0x3C480)])->unk06;
     }
     return 0;
 }

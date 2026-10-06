@@ -1,4 +1,5 @@
 #include "common.h"
+#include "weapon.h"
 
 /*
  * text/188858 — ".text mid 2" tile (vaddr 0x2888D8..0x29086F), Tier-1-A carve
@@ -140,26 +141,7 @@ extern void *g_hudMobyAuxBlockBase; /* 0x1B1864 */
 __asm__(".extern g_hudMobySpawnStart, 64");
 extern void *g_hudMobySpawnStart;   /* 0x1B1830 */
 
-/* Weapon/inventory backing store. */
-typedef struct WeaponDef {
-    s32 exists;          /* +0x00 */
-    u8  upgradeLevel;    /* +0x04 */
-    u8  _pad05[0xF];
-    s32 boltPrice;       /* +0x14 */
-    u8  _pad18[0x24];
-    u16 nameStringId;    /* +0x3C */
-    u8  _pad3E[0xC];
-    s16 nextVariantSlot; /* +0x4A */
-    s16 prevVariantSlot; /* +0x4C */
-    u8  _pad4E[0x1E];
-    s32 xpThreshold;     /* +0x6C: variant XP threshold (<<5); negative = no clamp */
-    u8  _pad70[0x18];
-    u16 sellsAmmoFlag;   /* +0x88: every ROM reader uses lhu */
-    u8  _pad8A[0x4];
-    u16 ammoCapacity;    /* +0x8E */
-    u16 ammoStartGrant;  /* +0x90 */
-    u8  _pad92[0x4E];
-} WeaponDef;                                  /* stride 0xE0 */
+/* Weapon/inventory backing store. WeaponDef is in weapon.h. */
 
 extern u8 g_itemEquippedSlot[0x38];           /* itemId -> active variant slot (0x139568) */
 extern WeaponDef g_weaponTable[];             /* per-variant def/state table (0x239B20) */

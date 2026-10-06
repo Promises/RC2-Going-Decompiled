@@ -1,4 +1,5 @@
 #include "common.h"
+#include "weapon.h"
 
 /*
  * text/1A8180 — the "game-state cluster" (carve-pipeline pick #1, 2026-06-12;
@@ -212,17 +213,7 @@ extern Vec4 g_collHitPointNudged;
 extern u8 g_skillPointFlags[8];   /* really u8[0x20]; declared 8 so cc1 schedules the address materialisation as one insn (gp-range, assembler-absolute) */
 extern u8 g_platinumBoltFlags[];
 extern u8 g_itemEquippedSlot[0x38];
-typedef struct WeaponVariant {
-    /* 0x00 */ s32 exists;
-    /* 0x04 */ u8 upgradeLevel;
-    /* 0x05 */ u8 pad05[0x07];
-    /* 0x0C */ s32 equipMode;     /* 0 = gadget (load-gated), 1..3 = activeGadgetItem slot (func_002AE6C8) */
-    /* 0x10 */ u8 pad10[0x04];
-    /* 0x14 */ s32 mobyClass;     /* moby class id this variant spawns/answers to
-                                     (matched against Moby.oClass by func_002AE7E8) */
-    /* 0x18 */ u8 pad18[0xC8];
-} WeaponVariant;
-extern WeaponVariant g_weaponTable[];  /* 0xE0-stride weapon-variant table */
+extern WeaponDef g_weaponTable[];      /* 0xE0-stride weapon-variant table (weapon.h) */
 extern u8 g_abLevelAvailableFlags[8]; /* really u8[0x1C]; same cc1-small address model as g_skillPointFlags */
 extern s32 g_anAvailableLevelOrder[0x1C];
 extern u8 g_collHitEventRing[];        /* 64 x 0x40 hit-event records */
@@ -6031,7 +6022,7 @@ extern s32 func_00294CD0(s32 fileId);   /* kick the item's resource load */
  * held as locals and re-indexed per use (the ROM re-reads the slot byte before
  * every call and keeps &slot/$16, table/$19, 0xE0/$20 live); one `result`
  * returned at a common exit, set to 1 after the load call (the ROM sets it in
- * both branch delay slots); the field at +0xC as WeaponVariant.equipMode; and
+ * both branch delay slots); the field at +0xC as WeaponDef.equipMode; and
  * g_fileLoadState's section(".data") declaration above (RULING #8620;
  * without it the body builds 70 words, task #1716). */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_func_002AE6C8)
@@ -6040,7 +6031,7 @@ S136OS_SLOT(func_002AE6C8);
 s32 func_002AE6C8(s32 itemId) {
     s32 result = 0;
     u8 *slot = &g_itemEquippedSlot[itemId];
-    WeaponVariant *table = g_weaponTable;
+    WeaponDef *table = g_weaponTable;
     s32 mode = table[*slot].equipMode;
 
     if (mode == 0) {
@@ -6136,8 +6127,8 @@ s32 func_002AE7E8(Moby *moby) {
     }
 
     for (i = 0, stride = 0xE0, linkedTest = linked; i < 0x38; i++) {
-        WeaponVariant *variant =
-            (WeaponVariant *)((u8 *)g_weaponTable + g_itemEquippedSlot[i] * stride);
+        WeaponDef *variant =
+            (WeaponDef *)((u8 *)g_weaponTable + g_itemEquippedSlot[i] * stride);
         s32 weaponClass = variant->mobyClass;
 
         if ((s16)moby->oClass == weaponClass) {
@@ -8833,7 +8824,7 @@ s32 func_002B1D18(u32 level) {
  */
 s32 func_002B1D40(void) {
     u8 *slots = g_itemEquippedSlot;
-    WeaponVariant *table = g_weaponTable;
+    WeaponDef *table = g_weaponTable;
     s32 count = 0;
     s32 i = 0;
 
