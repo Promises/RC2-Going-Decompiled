@@ -1819,49 +1819,58 @@ s32 func_002A98B8(f32 *pt, f32 *verts, s32 n) {
 }
 #endif
 
-/* func_002A9958(point, poly, count): even-odd point-in-polygon test in the XY
- * plane. For each polygon edge (adjacent vertices poly[i], poly[(i+1)%count])
- * that straddles the horizontal line y == point->y, it computes the edge's X
+/**
+ * func_002A9958(point, poly, count): even-odd point-in-polygon test in the XY
+ * plane. For each polygon edge (poly[i], poly[j]) with j = (i + 1) % count that
+ * straddles the horizontal line y == point->y, it computes the edge's X
  * intersection with that line and toggles an inside flag when the crossing lies
  * left of point->x. Returns 1 if the point is inside (odd crossings), else 0.
  * Vertices are 16-byte Vec4 records; only .x/.y participate. Pure leaf.
  *
- * Matching build stays INCLUDE_ASM: the branch-likely toggle idioms
- * (bc1tl/bc1fl nullified delay slots) around the crossing test are an
- * engine-2.96 schedule this C won't reproduce. */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 54.12%
-   -> UNKNOWN-@0: ROM `daddu t0,zero,zero` vs `daddu t2,zero,zero` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9958);
-#else
+ * Matching notes. The loop is the ROM's: cc1 reverses `i` into a count-down
+ * with the vertex pointer stepping in place, and `j` is a separate wrap index
+ * (the ROM's xor/movz). point->y is read at the top of every iteration so the
+ * one hoisted load also serves the crossing block. The ROM keeps j*16 live in
+ * its own register from both straddle tests into the crossing block, with each
+ * test's vertex address in a second register: the test addresses are formed
+ * from j*16 first and the byte offset is copied out after, so the copy follows
+ * the address and the offset shares the shift's register. `offset + base`
+ * integer sums give the ROM's offset-first `addu`s.
+ *
+ * MATCHED on the 2.9 arm, unguarded: task #862's byte-exact body (e112906d,
+ * FACT #8193), which never reached master; re-applied by task #1677 and still
+ * byte-exact under the unit's current 2.9 flags (-fno-gcse -fno-strict-aliasing).
+ */
 s32 func_002A9958(Vec4 *point, Vec4 *poly, s32 count) {
     s32 inside = 0;
+    s32 j = 0;
     s32 i;
+    s32 nextOffset;
+    Vec4 *next;
 
-    if (count <= 0) {
-        return 0;
-    }
     for (i = 0; i < count; i++) {
-        Vec4 *vi = &poly[i];
-        Vec4 *vj = &poly[(i + 1 == count) ? 0 : i + 1];
-        s32 crosses;
+        f32 py = point->y;
+        Vec4 *cur = &poly[i];
 
-        if (vi->y < point->y) {
-            crosses = point->y <= vj->y;
-        } else {
-            crosses = vj->y < point->y && point->y <= vi->y;
+        j++;
+        if (j == count) {
+            j = 0;
         }
-        if (crosses) {
-            f32 t  = (point->y - vi->y) / (vj->y - vi->y);
-            f32 ix = vi->x + t * (vj->x - vi->x);
-            if (ix < point->x) {
+        if ((cur->y < py &&
+             (next = (Vec4 *)(j * sizeof(Vec4) + (u32)poly), nextOffset = j * sizeof(Vec4),
+              py <= next->y)) ||
+            ((next = (Vec4 *)(j * sizeof(Vec4) + (u32)poly), nextOffset = j * sizeof(Vec4),
+              next->y < py) &&
+             py <= cur->y)) {
+            Vec4 *edgeEnd = (Vec4 *)(nextOffset + (u32)poly);
+
+            if (cur->x + (py - cur->y) / (edgeEnd->y - cur->y) * (edgeEnd->x - cur->x) < point->x) {
                 inside = !inside;
             }
         }
     }
     return inside;
 }
-#endif
 
 /* fill-fragment: orphaned $sp adjustment from splat over-split, not reachable C - keeps INCLUDE_ASM (see unit header). */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9A28);
@@ -3401,19 +3410,25 @@ f32 func_002AB3B0(f32 target, f32 velRate, f32 accel, f32 maxSpeed, f32 *pPos, f
  * direction sign is supplied bias the result onto the requested rotation side:
  * if the wrapped delta already agrees with the sign (delta*sign > 0) keep it; an
  * almost-zero delta collapses to 0; otherwise add/subtract a full 2*pi turn so
- * the result rotates the requested way. Walled: $f20/$f21 + $16/$31 saves. */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 69.68%
-   -> UNKNOWN-@2: ROM `(none)` vs `daddu s0,a0,zero` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB5A0);
+ * the result rotates the requested way. */
+/* MATCHED on the s136os arm (task #1677): byte-exact under SN 2.95.3 v1.36
+ * -fopt-stack. Lever: the two keep-the-delta tests are one `||` condition, so
+ * cc1 emits the ROM's shared "return d" block (reached by the sign == 0 branch
+ * and by the bc1f fall-through) instead of threading both tests to the
+ * epilogue. The constants are the ROM's inline li.s (lui/ori/mtc1) through
+ * asm_unit.sh's -G8 li.s expansion. */
+/* GUARD (task #1677): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002AB5A0)
+S136OS_SLOT(func_002AB5A0);
 #else
 f32 func_002AB5A0(f32 a, f32 b, s32 sign) {
     f32 d = WrapAnglePiDiff(a, b);   /* WrapAnglePiDiff(a - b) */
 
-    if (sign == 0) {
-        return d;
-    }
-    if (0.0f < d * (f32)sign) {
+    if (sign == 0 || 0.0f < d * (f32)sign) {
         return d;
     }
     if (GetFloatAbs(d) <= 0.00174532947f) {   /* 0x3AE4C38A = 0.1 deg */
@@ -3792,37 +3807,94 @@ u32 func_002ABE08(u32 word, s32 bits) {
 }
 #endif
 
+/*
+ * R5900 SHORT-LOOP PAD. The ROM's assembler padded every backward branch
+ * whose loop (branch target .. branch, inclusive) is shorter than 6
+ * instructions with `nop`s up to 6 - the R5900 short-loop erratum
+ * workaround. Across the engine-region USA asm no backward branch closes a
+ * loop shorter than 6 (task #659 census). cc1 never emits the pad and
+ * neither assembler we run inserts it (GNU as 2.40 does not, even with
+ * -mfix-r5900; SN's bundled as.exe does not either), so it is written here,
+ * directly before the branch it pads:
+ *   - `.set noreorder` stops GNU as from swapping the last pad `nop` into
+ *     the branch delay slot (without it one pad word becomes the slot
+ *     filler and the function comes out one word short);
+ *   - the "+r" operand is the value the branch tests, which pins the pad
+ *     between that value's computation and the branch;
+ *   - PAD1's `next` input is the register the ROM updates in the delay
+ *     slot: reading it here keeps that update after the pad, where reorg
+ *     can move it into the slot (without it the scheduler hoists the update
+ *     above the pad and reorg fills the slot from the loop head instead).
+ * The pad is a no-op on the native build.
+ */
+#ifndef TARGET_NATIVE
+#define R5900_SHORT_LOOP_PAD1(v, next) \
+    __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
+#define R5900_SHORT_LOOP_PAD2(v) \
+    __asm__(".set noreorder\n\tnop\n\tnop\n\t.set reorder" : "+r"(v))
+/* PAD1 as a volatile asm, which this cc1's scheduler treats as a barrier:
+ * every instruction before it in the RTL stays before it. For a loop whose
+ * counter and pointer updates are made by loop.c (strength reduction and
+ * reversal, so they have no name to tie to), writing the pad after the
+ * source increment puts it after those updates, directly before the branch,
+ * where the ROM's assembler put it (MarkLevelAvailable, task #1665). */
+#define R5900_SHORT_LOOP_PAD1_BARRIER(v, next) \
+    __asm__ __volatile__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
+#else
+#define R5900_SHORT_LOOP_PAD1(v, next) ((void)0)
+#define R5900_SHORT_LOOP_PAD2(v) ((void)0)
+#define R5900_SHORT_LOOP_PAD1_BARRIER(v, next) ((void)0)
+#endif
+
 /* func_002ABE90: orthonormalise the 3 columns of the rotation 3x3 of a Mat4x4.
  * For each column i (0..2): gather the column (the i-th element of rows 0,1,2,
  * stride 0x10) into a scratch Vec3 (w zeroed), normalise it to unit length via
  * Vec3RescaleToLenVu0(len 1.0), then scatter it back into column i.
- * Walled: $16/$17/$18 + $31 saves (save-layout wall). */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 76.32%
-   -> UNKNOWN-@1: ROM `daddu v1,zero,zero` vs `sd s0,16(sp)` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002ABE90);
+ */
+/* MATCHED on the s136os arm (task #1677): byte-exact under SN 2.95.3 v1.36
+ * -fopt-stack. The recorded save-layout wall does not hold on this arm. Levers:
+ *   - column i's byte offset is one local `off` (the ROM keeps i*4 in $16
+ *     across the call), and the column base is `(u32)mat + off`, mat first;
+ *   - each copy loop walks explicit `dst`/`src` pointers, `dst` assigned first
+ *     (the other order swaps $v0/$v1);
+ *   - each 5-instruction copy loop carries one R5900_SHORT_LOOP_PAD1, tied as
+ *     (src, dst) (the (dst, src) tie swaps $v0/$v1 again). Removing the first
+ *     loses its pad and the second loop's alignment nop; removing the second
+ *     loses its pad.
+ * The nop before each loop is cc1's own `.p2align 3`. */
+/* GUARD (task #1677): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002ABE90)
+S136OS_SLOT(func_002ABE90);
 #else
 void func_002ABE90(Mat4x4 *mat) {
-    f32 *base = (f32 *)mat;
     s32 i;
 
     for (i = 0; i < 3; i++) {
         Vec4 col;
-        f32 *src = base + i;        /* &mat[row0][col i] */
+        s32 off = i * 4;            /* column i's byte offset in each row */
+        f32 *dst = (f32 *)&col;
+        f32 *src = (f32 *)((u32)mat + off);
         s32 j;
 
         col.w = 0.0f;
-        for (j = 0; j < 3; j++) {
-            ((f32 *)&col)[j] = *src;
-            src += 4;               /* next row (stride 0x10 bytes) */
+        for (j = 0; j < 3; j++) {   /* gather: rows 0..2, stride 0x10 */
+            *dst = *src;
+            src += 4;
+            R5900_SHORT_LOOP_PAD1(src, dst);
+            dst++;
         }
         Vec3RescaleToLenVu0(&col, 1.0f, &col);
-        {
-            f32 *dst = base + i;
-            for (j = 0; j < 3; j++) {
-                *dst = ((f32 *)&col)[j];
-                dst += 4;
-            }
+        dst = (f32 *)((u32)mat + off);
+        src = (f32 *)&col;
+        for (j = 0; j < 3; j++) {   /* scatter back into column i */
+            *dst = *src;
+            src++;
+            R5900_SHORT_LOOP_PAD1(src, dst);
+            dst += 4;
         }
     }
 }
@@ -3895,45 +3967,6 @@ void func_002ABFD0(Vec4 *out, Vec4 *vec, Vec4 *axis, f32 scale) {
     Vec4ScaleVu0(&proj, amount, &unit);
     Vec4SubVu0(out, vec, &proj);
 }
-#endif
-
-/*
- * R5900 SHORT-LOOP PAD. The ROM's assembler padded every backward branch
- * whose loop (branch target .. branch, inclusive) is shorter than 6
- * instructions with `nop`s up to 6 - the R5900 short-loop erratum
- * workaround. Across the engine-region USA asm no backward branch closes a
- * loop shorter than 6 (task #659 census). cc1 never emits the pad and
- * neither assembler we run inserts it (GNU as 2.40 does not, even with
- * -mfix-r5900; SN's bundled as.exe does not either), so it is written here,
- * directly before the branch it pads:
- *   - `.set noreorder` stops GNU as from swapping the last pad `nop` into
- *     the branch delay slot (without it one pad word becomes the slot
- *     filler and the function comes out one word short);
- *   - the "+r" operand is the value the branch tests, which pins the pad
- *     between that value's computation and the branch;
- *   - PAD1's `next` input is the register the ROM updates in the delay
- *     slot: reading it here keeps that update after the pad, where reorg
- *     can move it into the slot (without it the scheduler hoists the update
- *     above the pad and reorg fills the slot from the loop head instead).
- * The pad is a no-op on the native build.
- */
-#ifndef TARGET_NATIVE
-#define R5900_SHORT_LOOP_PAD1(v, next) \
-    __asm__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
-#define R5900_SHORT_LOOP_PAD2(v) \
-    __asm__(".set noreorder\n\tnop\n\tnop\n\t.set reorder" : "+r"(v))
-/* PAD1 as a volatile asm, which this cc1's scheduler treats as a barrier:
- * every instruction before it in the RTL stays before it. For a loop whose
- * counter and pointer updates are made by loop.c (strength reduction and
- * reversal, so they have no name to tie to), writing the pad after the
- * source increment puts it after those updates, directly before the branch,
- * where the ROM's assembler put it (MarkLevelAvailable, task #1665). */
-#define R5900_SHORT_LOOP_PAD1_BARRIER(v, next) \
-    __asm__ __volatile__(".set noreorder\n\tnop\n\t.set reorder" : "+r"(v) : "r"(next))
-#else
-#define R5900_SHORT_LOOP_PAD1(v, next) ((void)0)
-#define R5900_SHORT_LOOP_PAD2(v) ((void)0)
-#define R5900_SHORT_LOOP_PAD1_BARRIER(v, next) ((void)0)
 #endif
 
 /**
@@ -4231,10 +4264,19 @@ extern void func_002A12F0(void *src, s32 *r, s32 *g, s32 *b);
  *   - counter was running: rescales it to resetValue * counter / divisor(+0xE),
  *     clamped to at least 1.
  */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 8.19% ->
-   UNKNOWN-@2: ROM `sd ra,32(sp)` vs `(none)` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AC668);
+/* MATCHED on the s136os arm (task #1677): byte-exact under SN 2.95.3 v1.36
+ * -fopt-stack. Two phrasing levers, no device: the running-counter rescale is
+ * the `if` arm and the colour refresh the `else` (the ROM branches to the
+ * refresh), and the three byte stores are written 4,5,6 in source, which cc1
+ * issues in the ROM's 4,6,5 order (measured over all six source orders; only
+ * 4,5,6 gives the ROM's loads, registers and stores). */
+/* GUARD (task #1677): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002AC668)
+S136OS_SLOT(func_002AC668);
 #else
 void func_002AC668(void *src, u8 *obj) {
     s16 counter = *(s16 *)(obj + 0x0);
@@ -4246,19 +4288,19 @@ void func_002AC668(void *src, u8 *obj) {
     *(s16 *)(obj + 0x2) = 0;
     *(s16 *)(obj + 0x0) = (s16)*(u16 *)(obj + 0xC);
 
-    if (counter == 0) {
-        s32 r, g, b;
-        func_002A12F0(src, &r, &g, &b);
-        obj[0x4] = (u8)r;
-        obj[0x6] = (u8)b;
-        obj[0x5] = (u8)g;
-    } else {
+    if (counter != 0) {
         f32 ratio = (f32)counter / IntToFloat(*(s16 *)(obj + 0xE));
         s32 scaled = FloatToInt((f32)*(s16 *)(obj + 0xC) * ratio);
         *(s16 *)(obj + 0x0) = (s16)scaled;
         if ((s16)scaled <= 0) {
             *(s16 *)(obj + 0x0) = 1;
         }
+    } else {
+        s32 r, g, b;
+        func_002A12F0(src, &r, &g, &b);
+        obj[0x4] = (u8)r;
+        obj[0x5] = (u8)g;
+        obj[0x6] = (u8)b;
     }
 }
 #endif
