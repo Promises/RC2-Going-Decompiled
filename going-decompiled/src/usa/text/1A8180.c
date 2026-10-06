@@ -215,7 +215,9 @@ extern u8 g_itemEquippedSlot[0x38];
 typedef struct WeaponVariant {
     /* 0x00 */ s32 exists;
     /* 0x04 */ u8 upgradeLevel;
-    /* 0x05 */ u8 pad05[0x0F];
+    /* 0x05 */ u8 pad05[0x07];
+    /* 0x0C */ s32 equipMode;     /* 0 = gadget (load-gated), 1..3 = activeGadgetItem slot (func_002AE6C8) */
+    /* 0x10 */ u8 pad10[0x04];
     /* 0x14 */ s32 mobyClass;     /* moby class id this variant spawns/answers to
                                      (matched against Moby.oClass by func_002AE7E8) */
     /* 0x18 */ u8 pad18[0xC8];
@@ -1661,9 +1663,27 @@ extern f32 func_002835C0(f32 x); /* sqrtf */
 
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 73.05%
    -> UNKNOWN-@3: ROM `swc1 $f21,40(sp)` vs `swc1 $f21,32(sp)` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9708);
+/* MATCHED on the s136os arm (task #1697; re-gated at master acf151e0a by task
+ * #1716: landing_gate usa --strict cmp 0, splice built 66 = ROM 66 words).
+ * Devices: the ROM's free-standing nops
+ * before each `div.s` (1, 2, 2), which no cc1 here emits, as RULING #8435
+ * noreorder nop pads tied to dividend/divisor (cf. ADDD0_DIVS_PAD). Each pad
+ * is load-bearing in the tree build: dropping any one alone leaves the body
+ * 1 or 2 words short and the splice refuses it on LENGTH (task #1716); `nRoots`
+ * set before the 1-nop pad holds `li $2,1` above it as in the ROM; the tail
+ * test is inverted so cc1 emits `bc1f` with `move $2,$0` in its slot. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002A9708)
+S136OS_SLOT(func_002A9708);
 #else
+/* The ROM's nop pads before `div.s`: RULING #8435 scheduling devices, EE arm
+ * only, tied to the operands. Empty natively. */
+#ifndef TARGET_NATIVE
+#define A9708_DIVS_PAD1(q, d) __asm__(".set noreorder\n\tnop\n\t.set reorder" : : "f"(d))
+#define A9708_DIVS_PAD2(q, d) __asm__(".set noreorder\n\tnop\n\tnop\n\t.set reorder" : "+f"(q) : "f"(d))
+#else
+#define A9708_DIVS_PAD1(q, d) ((void)0)
+#define A9708_DIVS_PAD2(q, d) ((void)0)
+#endif
 /**
  * Solve the quadratic a*x^2 + b*x + c = 0 for real roots.
  *
@@ -1678,12 +1698,25 @@ s32 func_002A9708(f32 a, f32 b, f32 c, f32 *out1, f32 *out2)
     f32 disc = b * b - a * (c * 4.0f);
 
     if (disc == 0.0f) {
-        *out1 = -b / (a + a);
-        return 1;
+        f32 negB = -b;
+        s32 nRoots = 1;
+        f32 twoA = a + a;
+        A9708_DIVS_PAD1(negB, twoA);
+        *out1 = negB / twoA;
+        return nRoots;
     } else {
         f32 root = func_002835C0(GetFloatAbs(disc)); /* sqrt(|disc|) */
-        f32 hi = (-b + root) / (a + a);
-        f32 lo = (-b - root) / (a + a);
+        f32 negB = -b;
+        f32 twoA = a + a;
+        f32 sum = negB + root;
+        f32 diff = negB - root;
+        f32 hi;
+        f32 lo;
+
+        A9708_DIVS_PAD2(sum, twoA);
+        hi = sum / twoA;
+        A9708_DIVS_PAD2(diff, twoA);
+        lo = diff / twoA;
 
         *out1 = hi;
         *out2 = lo;
@@ -1691,10 +1724,10 @@ s32 func_002A9708(f32 a, f32 b, f32 c, f32 *out1, f32 *out2)
             *out2 = *out1;
             *out1 = lo;
         }
-        if (disc > 0.0f) {
-            return 2;
+        if (!(disc > 0.0f)) {
+            return 0;
         }
-        return 0;
+        return 2;
     }
 }
 #endif
@@ -5967,7 +6000,15 @@ void MarkLevelAvailable(s32 level) {
 #endif
 
 extern s32 g_activeGadgetItem[];   /* [0]=active gadget item; [1]/[2]/[3] = per-mode slots */
+/* g_fileLoadState: the ROM reads it with cc1's own split `lui $2` /
+ * `lh $3,%lo($2)`. `section(".data")` on this extern DECLARATION (RULING #8620,
+ * an addressing-model device: it moves no data and emits nothing) makes cc1 -G8
+ * split the address itself instead of printing the one-insn `lh` macro. */
+#ifndef TARGET_NATIVE
+extern s16 g_fileLoadState __attribute__((section(".data")));
+#else
 extern s16 g_fileLoadState;
+#endif
 extern s32 func_00294EE0(s32 fileId);   /* nonzero if the item's resource is already resident */
 extern s32 func_00294CD0(s32 fileId);   /* kick the item's resource load */
 
@@ -5987,37 +6028,43 @@ extern s32 func_00294CD0(s32 fileId);   /* kick the item's resource load */
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 38.18%
    -> UNKNOWN-@0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-32` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE6C8);
+/* MATCHED on the s136os arm (task #1697; re-gated at master acf151e0a by task
+ * #1716: landing_gate usa --strict cmp 0, splice built 71 = ROM 71 words).
+ * Load-bearing spellings: the slot pointer and table base
+ * held as locals and re-indexed per use (the ROM re-reads the slot byte before
+ * every call and keeps &slot/$16, table/$19, 0xE0/$20 live); one `result`
+ * returned at a common exit, set to 1 after the load call (the ROM sets it in
+ * both branch delay slots); the field at +0xC as WeaponVariant.equipMode; and
+ * g_fileLoadState's section(".data") declaration above (RULING #8620;
+ * without it the body builds 70 words, task #1716). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002AE6C8)
+S136OS_SLOT(func_002AE6C8);
 #else
 s32 func_002AE6C8(s32 itemId) {
-    u8 *w = (u8 *)&g_weaponTable[g_itemEquippedSlot[itemId]];
-    s32 mode = *(s32 *)(w + 0xC);
+    s32 result = 0;
+    u8 *slot = &g_itemEquippedSlot[itemId];
+    WeaponVariant *table = g_weaponTable;
+    s32 mode = table[*slot].equipMode;
 
     if (mode == 0) {
-        if (func_00294EE0(*(s32 *)(w + 0x14)) == 0 && g_fileLoadState != 0) {
-            return 0;
+        if (func_00294EE0(table[*slot].mobyClass) != 0 || g_fileLoadState == 0) {
+            g_activeGadgetItem[0] = itemId;
+            if (func_00294EE0(table[*slot].mobyClass) == 0) {
+                func_00294CD0(table[*slot].mobyClass);
+            }
+            result = 1;
         }
-        g_activeGadgetItem[0] = itemId;
-        if (func_00294EE0(*(s32 *)(w + 0x14)) != 0) {
-            return 1;
-        }
-        func_00294CD0(*(s32 *)(w + 0x14));
-        return 1;
-    }
-    if (mode == 3) {
+    } else if (mode == 3) {
+        result = 1;
         g_activeGadgetItem[3] = itemId;
-        return 1;
-    }
-    if (mode == 2) {
+    } else if (mode == 2) {
+        result = 1;
         g_activeGadgetItem[2] = itemId;
-        return 1;
-    }
-    if (mode == 1) {
+    } else if (mode == 1) {
+        result = 1;
         g_activeGadgetItem[1] = itemId;
-        return 1;
     }
-    return 0;
+    return result;
 }
 #endif
 
