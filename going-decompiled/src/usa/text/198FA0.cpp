@@ -1922,7 +1922,68 @@ void func_0029C678(void *state, void *a1, void *text, s32 font, s32 centre,
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_0029C700);
+/* func_0029C700: refresh the four front-end menu buttons of the widget at
+ * g_guiInstance+0x3F7B0 (called by func_0029C818 when the screen becomes
+ * ready). For each button i, FindChainTailFreeSlot walks chain D_1A9AD0[i]
+ * of the 0x28-stride record table D_262920. When it yields a record, the
+ * button takes that record's label id and a colour (0x6029A1FF when the
+ * record's count is positive, else 0x60F0F0B0) and is set to state 0;
+ * otherwise the button is set to state 2. No-op when the GUI is down. No
+ * params, no return value.
+ *
+ * Built on the s136os arm (task #1738). Both tables are indexed as typed
+ * struct arrays, not through byte offsets: the ROM hoists D_262920+0x24 and
+ * D_262920 as two separate loop bases, and walks the buttons with a single
+ * pointer at +8 (`sw label,-4($18)`, `sw colour,0($18)`). A u8* cast of
+ * D_256398 gives two pointers and %lo-folded offsets (13 words differ).
+ * g_menuButtons is a bare asm-label alias of D_256398 (as FillSaveSlotInfo's
+ * g_areaSaveSlotRecords): func_0029C818's arm declares D_256398 as u8[], and
+ * the native TU sees both arms. D_1A9AD0 is declared as a 4-byte object so
+ * cc1 forms its address %gp_rel, as the ROM does (`addiu $20,$28,...`). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0029C700)
+S136OS_SLOT(func_0029C700);
+#else
+typedef struct {
+    u8  _pad00[0x1C];
+    s16 labelId;      /* 0x1C */
+    u8  _pad1E[6];
+    s32 count;        /* 0x24 */
+} ChainRecord;        /* 0x28, the D_262920 table */
+typedef struct {
+    s32 _pad00;
+    s32 labelId;      /* 0x04 */
+    u32 color;        /* 0x08 */
+    u8  _pad0C[0xC];
+} MenuButton;         /* 0x18, the D_256398 entries */
+extern s32  FindChainTailFreeSlot(s32 head);
+extern void func_0033BA18(void *widget, s32 index, s32 state);
+extern s32  D_1A9AD0;              /* first of 4 chain heads (gp small-data) */
+extern ChainRecord D_262920[];
+#ifndef TARGET_NATIVE
+extern MenuButton g_menuButtons[] __asm__("D_256398");
+#else
+extern u8 D_256398[];
+#define g_menuButtons ((MenuButton *)D_256398)
+#endif
+
+void func_0029C700(void) {
+    s32 i;
+
+    if (g_guiInstance != 0) {
+        for (i = 0; i < 4; i++) {
+            s32 slot = FindChainTailFreeSlot((&D_1A9AD0)[i]);
+
+            if (slot >= 0) {
+                g_menuButtons[i].labelId = D_262920[slot].labelId;
+                g_menuButtons[i].color = (D_262920[slot].count > 0) ? 0x6029A1FF : 0x60F0F0B0;
+                func_0033BA18(g_guiInstance + 0x3F7B0, i, 0);
+            } else {
+                func_0033BA18(g_guiInstance + 0x3F7B0, i, 2);
+            }
+        }
+    }
+}
+#endif
 
 /* func_0029C818: front-end screen readiness poll. No-op unless the GUI is up.
  * The new ready state is func_0026F7D8() != 0 when func_0026F7D0() is set,
