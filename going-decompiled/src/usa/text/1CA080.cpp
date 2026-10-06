@@ -267,6 +267,28 @@ extern s32 D_1AA450, D_1AA454, D_1AA458; /* per-feature availability (gp-rel) */
 extern s32 D_1ABA80;               /* skill-points highlight flag (gp-rel) */
 extern s32 D_1ABA84, D_1ABA88, D_1ABA8C, D_1ABA90; /* per-menu "new" flags (abs) */
 
+/* Confirm half of the menu confirm/cancel polls (func_002D3BE0 and its
+ * siblings, func_002CE498, func_002CE908, func_002D40E8, func_002D4270, ...): if the active screen (g_menuScreenBlock+0x14) has a pending
+ * sub-result at +0xE0, latch it into g_menuScreenBlock+0x18 and return 0;
+ * otherwise return -1 when g_menuScreenBlock+0x134 is clear, else 0.
+ * Returns 0 or -1.
+ * The spelling is what the ROM's layout needs (task #1656): the store is the
+ * then-arm and falls into the shared `return 0`, and the -1 exit is the else-if.
+ * Written as `else if (...) r = -1; else r = 0`, the s136os compiler turns the
+ * tail into `li -1; movn`. Spelled with an early `return 0` after the store, the
+ * store is not scheduled into the branch's delay slot. Always inlined; no
+ * out-of-line copy is emitted. */
+static inline s32 MenuPollConfirm(void) {
+    u8 *block = g_menuScreenBlock;
+    s32 pending = *(s32 *)(*(u8 **)(block + 0x14) + 0xE0);
+    if (pending != 0) {
+        *(s32 *)(block + 0x18) = pending;
+    } else if (*(s32 *)(block + 0x134) == 0) {
+        return -1;
+    }
+    return 0;
+}
+
 /* Mis-split fragment: orphaned stack-pointer adjusts (addiu $sp / nops) with
  * no jr $ra — not a real function entry; left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA100);
@@ -1931,75 +1953,75 @@ s32 func_002CE3A0(void) {
 }
 #endif
 
+/* Per-screen present record: the frame stamps the redraw fence below compares
+ * against the frame counter. Only the fields the fence reads are named. The
+ * siblings func_002CE230 (D_00259E50) and func_002CE6D8 (D_0025E298) read the
+ * same layout through byte casts. */
+struct PresentRecord {
+    u8 unk0[0x44];
+    s32 state;      /* 0x44: 2 or 4 when frameA / frameB is the one to check */
+    u8 unk48[0x8];
+    s32 frameA;     /* 0x50 */
+    s32 frameB;     /* 0x54 */
+    s32 stamp;      /* 0x58: frame of the last tick */
+};
+
 /* Per-screen menu tick + render-fence latch (one of the func_002CE498 family,
  * the cleanest with the standard menuScreenBlock confirm latch). Confirm (0x10)
- * latches the active screen's pending result (block[0x14]->0xE0 into block[0x18],
- * else -1/0); cancel (0x900) returns 1; otherwise it ticks the idle handler
- * func_0029D080(buttons, &scratch). Then, with the GUI up, it samples the frame
- * timestamp twice via func_00337D98 (a gp-relative frame counter); when the two
- * reads agree, the file-load is idle, and the per-screen present record
- * (D_00259C58) shows this frame already presented (offsets 0x50/0x54 == now and
- * state 0x44 in {2,4}) it CLEARS the "needs redraw" bit 0x4 of the live object
- * (*D_259C24)[0x10]; otherwise it SETS that bit. Finally it stamps the present
- * record (D_00259C58[0x58] = now).
- * Wall: 8-byte-packed-save ($16 + $17 + $31). Preserved as portable C. */
+ * latches the active screen's pending result (MenuPollConfirm: 0 or -1); cancel
+ * (0x900) returns 1; otherwise it ticks the idle handler
+ * func_0029D080(buttons, scratch) and returns 0. Then, with the GUI up, it
+ * samples the frame counter (func_00337D98, gp-relative) a second time; when
+ * the two reads agree, the file-load is idle, and the present record shows this
+ * frame already presented (frameA == now with state 2, or frameB == now with
+ * state 4), it CLEARS the "needs redraw" bit 0x4 of the live object
+ * (*D_259C24)[0x10]; otherwise it SETS that bit. Finally it stamps the record
+ * (stamp = now). Returns the poll result.
+ * The record is read as a struct-typed global (task #1685): through a `u8 *`
+ * local cc1 holds the whole address in $7, and through byte casts on the symbol
+ * it folds the offsets into %hi/%lo(D_00259C58+N). As members, the condition
+ * re-forms `addiu $4,%lo(D_00259C58)` and reads 0x50/0x54/0x44 from it, as the
+ * ROM does. The ROM also keeps one `lui %hi(D_00259C58)` in $7 (in the first
+ * bne delay slot) and re-adds %lo before the stamp store: SN 1.36 cc1 emits
+ * that shared %hi only with gcse, so this body is byte-exact only on an s136
+ * arm without -fno-gcse (FACT #9331's class). `t0 == now` gives the ROM's
+ * `bne $16,$6` operand order. D_259C24 is re-read in each arm, as the ROM
+ * does; a local holding it is loaded once before the branch instead. */
 extern s32 func_00337D98(void);
 extern s32 func_0029D080(s32 buttons, s32 *out);
 extern s16 g_fileLoadState;
 extern s32 D_259C24;       /* ptr-to-live-object global */
-extern u8 D_00259C58[];    /* per-screen present record */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE498);
+extern struct PresentRecord D_00259C58;
+/* GUARD (task #1685): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002CE498)
+S136OS_SLOT(func_002CE498);
 #else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 60.84% -> FRAME-SIZE,
- * first differing row @0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-80`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 58.47% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-96`. */
-/* TODO(match): functional equivalent - not byte-exact; 3-GPR packed-save frame +
- * branch-likely present-record fence shape. */
 s32 func_002CE498(void) {
     s32 t0 = func_00337D98();
     s32 flags = g_padButtonsPressed;
     s32 result = 0;
-    s32 *block;
-    s32 v;
     if (flags & 0x10) {
-        block = (s32 *)g_menuScreenBlock;
-        v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
-        if (v != 0) {
-            block[0x18 / 4] = v;
-            return 0;
-        }
-        if (block[0x134 / 4] == 0) {
-            return -1;
-        }
-        return 0;
+        return MenuPollConfirm();
     }
     if (flags & 0x900) {
         result = 1;
     } else {
-        u8 scratch[0x30];
-        func_0029D080(flags, (s32 *)scratch);
+        s32 scratch[4];
+        func_0029D080(flags, scratch);
     }
     if (g_guiInstance) {
         s32 now = func_00337D98();
-        u8 *rec = D_00259C58;
-        s32 *live = (s32 *)D_259C24;
-        s32 clear = 0;
-        if (now == t0 && g_fileLoadState == 0) {
-            if (*(s32 *)(rec + 0x50) == now && *(s32 *)(rec + 0x44) == 2) {
-                clear = 1;
-            } else if (*(s32 *)(rec + 0x54) == now &&
-                       *(s32 *)(rec + 0x44) == 4) {
-                clear = 1;
-            }
-        }
-        if (clear) {
-            live[0x10 / 4] &= ~0x4;
+        if (t0 == now && g_fileLoadState == 0 &&
+            ((D_00259C58.frameA == now && D_00259C58.state == 2) ||
+             (D_00259C58.frameB == now && D_00259C58.state == 4))) {
+            ((s32 *)D_259C24)[0x10 / 4] &= ~0x4;
         } else {
-            live[0x10 / 4] |= 0x4;
+            ((s32 *)D_259C24)[0x10 / 4] |= 0x4;
         }
-        *(s32 *)(rec + 0x58) = now;
+        D_00259C58.stamp = now;
     }
     return result;
 }
@@ -2214,28 +2236,6 @@ s32 func_002CE8A8(s32 *out) {
     return 0;
 }
 #endif
-
-/* Confirm half of the menu confirm/cancel polls (func_002D3BE0 and its
- * siblings, func_002CE908, func_002D40E8, func_002D4270, ...): if the active screen (g_menuScreenBlock+0x14) has a pending
- * sub-result at +0xE0, latch it into g_menuScreenBlock+0x18 and return 0;
- * otherwise return -1 when g_menuScreenBlock+0x134 is clear, else 0.
- * Returns 0 or -1.
- * The spelling is what the ROM's layout needs (task #1656): the store is the
- * then-arm and falls into the shared `return 0`, and the -1 exit is the else-if.
- * Written as `else if (...) r = -1; else r = 0`, the s136os compiler turns the
- * tail into `li -1; movn`. Spelled with an early `return 0` after the store, the
- * store is not scheduled into the branch's delay slot. Always inlined; no
- * out-of-line copy is emitted. */
-static inline s32 MenuPollConfirm(void) {
-    u8 *block = g_menuScreenBlock;
-    s32 pending = *(s32 *)(*(u8 **)(block + 0x14) + 0xE0);
-    if (pending != 0) {
-        *(s32 *)(block + 0x18) = pending;
-    } else if (*(s32 *)(block + 0x134) == 0) {
-        return -1;
-    }
-    return 0;
-}
 
 /* ADDRESSING-MODEL DEVICE for func_002CE908, func_002D4270 and func_002D0158 (RULING #8620 terms;
  * the offset-0 gp equate is ruled covered by RULING #9073; the precedent is

@@ -394,3 +394,4 @@ usa text/24D728 func_0034F9B8
 usa text/24D728 func_0034F9F8
 usa text/24D728 func_0034FAF8
 usa text/24D728 func_0034D8C8
+usa text/1CA080 func_002CE498
