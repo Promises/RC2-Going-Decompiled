@@ -328,37 +328,52 @@ extern s32   g_boltCount;          /* live bolt total (0x1A7A00) */
 extern s32   g_nBoltCounterDisplayed[]; /* bolt-counter HUD roll state (0x1B18C8) */
 s32 FlushHudDisplayValue(s32 displayState);
 
-/* func_002888D8(itemId): advance an item to its next weapon variant. Reads the
- * active variant's next-variant slot (g_weaponTable[slot].nextVariantSlot); when
- * set, clamps the item's accumulated XP (g_weaponXp[itemId]) up to the variant's
- * XP threshold (field +0x6C << 5), repoints g_itemEquippedSlot[itemId] at the
- * next variant, and tops up g_weaponAmmo[itemId] to the new variant's
- * ammoCapacity when that variant exists.
+/**
+ * Advance an item to its next weapon variant.
  *
- * WALL: frameless leaf, but the XP clamp lowers as a branch-likely (bnel) store
- * and the per-variant index uses a `mult`-scaled stride that cc1's array
- * indexing does not reproduce here. Left INCLUDE_ASM. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_002888D8);
+ *   itemId  the item (index into g_itemEquippedSlot / g_weaponXp / g_weaponAmmo)
+ *
+ * Reads the active variant's next-variant slot (nextVariantSlot, +0x4A); when
+ * zero there is no upgrade and nothing changes. Otherwise it raises the item's
+ * accumulated XP (g_weaponXp[itemId]) to the variant's threshold
+ * (xpThreshold +0x6C, << 5) when that threshold is non-negative and the XP is
+ * below it, repoints g_itemEquippedSlot[itemId] at the next variant, and, if
+ * that variant exists, sets g_weaponAmmo[itemId] to its ammoCapacity (+0x8E).
+ *
+ * MATCHED on the s136os arm (task #1713) at the unit's -O2 default
+ * (S136EXTRA="", RULING #9450), with no device. The second table index is the
+ * slot just stored, read back through g_itemEquippedSlot: cse forwards the
+ * stored byte (`andi next,0xFF`) and keeps the ROM's order, store first. An
+ * index of `next & 0xFF` lets the multiply move above the store (16/44 words
+ * different). The old WALL note here (bnel store, `mult`-scaled index) was
+ * written under the former -fno-gcse pin; both are cc1 1.36's own output.
+ *
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh. On native it is plain C.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002888D8)
+S136OS_SLOT(func_002888D8);
 #else
 void func_002888D8(s32 itemId) {
-    u8  slot = g_itemEquippedSlot[itemId];
-    s16 next = g_weaponTable[slot].nextVariantSlot;
+    WeaponDef *w = &g_weaponTable[g_itemEquippedSlot[itemId]];
+    s16 next = w->nextVariantSlot;
     s32 threshold;
 
     if (next == 0) {
         return;
     }
-    threshold = g_weaponTable[slot].xpThreshold;
+    threshold = w->xpThreshold;
     if (threshold >= 0) {
         threshold <<= 5;
         if (g_weaponXp[itemId] < threshold) {
             g_weaponXp[itemId] = threshold;
         }
     }
-    g_itemEquippedSlot[itemId] = (u8)next;
-    if (g_weaponTable[next & 0xFF].exists != 0) {
-        g_weaponAmmo[itemId] = g_weaponTable[next & 0xFF].ammoCapacity;
+    g_itemEquippedSlot[itemId] = next;
+    w = &g_weaponTable[g_itemEquippedSlot[itemId]];
+    if (w->exists != 0) {
+        g_weaponAmmo[itemId] = w->ammoCapacity;
     }
 }
 #endif
@@ -849,38 +864,47 @@ s32 func_00288F30(s32 itemId) {
 
 s32 IsVendorUpgradesUnlocked(void); /* fwd: defined below in this unit */
 
-/* IsItemUnlockedAtProgress(itemId, progress): whether `itemId` may appear in the
- * vendor at the given story-progress level. Item 9 is a special case (unlocked
- * once the vendor upgrade tier is). Otherwise it scans the {itemId, minProgress}
- * gate table D_240340 (stride 8, -2 sentinel): an item is unlocked when it has a
- * gate entry whose minProgress it has reached AND progress is still in the early
- * band (< 0x15). Returns 0 otherwise.
+/**
+ * Whether an item may appear in the vendor at a story-progress level.
  *
- * The matching build keeps the asm (two callee-saves + a jal-gated scan whose
- * branch colouring cc1 does not reproduce). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", IsItemUnlockedAtProgress);
+ *   itemId    the item to test
+ *   progress  the story-progress level
+ *   ->        1 when unlocked, else 0
+ *
+ * Item 9 is unlocked once the vendor upgrade tier is (IsVendorUpgradesUnlocked).
+ * Otherwise it scans the {itemId, minProgress} gate table D_240340 (stride 8,
+ * -2 sentinel): the item is unlocked when it has a gate entry whose
+ * minProgress it has reached AND progress is still in the early band
+ * (< 0x15).
+ *
+ * MATCHED on the s136os arm (task #1713) at the unit's -O2 default
+ * (S136EXTRA="", RULING #9450), with no device. The scan is written as an
+ * INDEX, as in func_00289190 below, which scans the same table: loop.c
+ * strength-reduces `D_240340[i * 2]` into the ROM's pointer and keeps the two
+ * -2 constants in separate registers. Pointer-form spellings (do-while,
+ * while, for) build 19/40 different or one word short.
+ *
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh. On native it is plain C.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_IsItemUnlockedAtProgress)
+S136OS_SLOT(IsItemUnlockedAtProgress);
 #else
 s32 IsItemUnlockedAtProgress(s32 itemId, s32 progress) {
-    s32 *entry;
-    s32 early;
-
     if (itemId == 9 && IsVendorUpgradesUnlocked() != 0) {
         return 1;
     }
-    if (D_240340[0] == -2) {
-        return 0;
+    if (D_240340[0] != -2) {
+        s32 i = 0;
+        s32 early = (progress < 0x15);
+        do {
+            if (itemId == D_240340[i * 2] && progress >= D_240340[i * 2 + 1] && early) {
+                return 1;
+            }
+            i++;
+        } while (D_240340[i * 2] != -2);
     }
-    early = (progress < 0x15);
-    entry = D_240340;
-    do {
-        s32 id   = entry[0];
-        s32 minP = entry[1];
-        entry += 2;
-        if (id == itemId && progress >= minP && early) {
-            return 1;
-        }
-    } while (entry[0] != -2);
     return 0;
 }
 #endif
@@ -1485,33 +1509,62 @@ fail:
  * preceding function, pinned as its own symbol; the real function follows. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_002898D8);
 
+/*
+ * g_discTocRow: g_discToc read as rows of one word, so `g_discTocRow[voice][0xA88]`
+ * keeps %lo(g_discToc) in the address and the +0x2A20 at the load
+ * (`addu; lw rX,0x2A20(base)`), which is the ROM's form in func_002898E0. A
+ * plain `g_discToc[voice + 0xA88]` or a cast of g_discToc to the same row type
+ * folds the offset into %lo(g_discToc+0x2A20) instead (task #1713: 28/42 and
+ * 5/40 words different). The relocation names g_discToc itself. Natively it is
+ * that cast.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_002898E0);
+extern s32 g_discTocRow[][1] __asm__("g_discToc");
 #else
+#define g_discTocRow ((s32 (*)[1])g_discToc)
+#endif
+
 /**
  * Tear down the currently-shown subtitle line.
  *
  * When a subtitle is active (state != 0): if its line has an associated voice
- * clip (g_pActiveTextTable[entryIndex].voice), that clip has a disc-TOC entry,
- * and the clip matches the area save-image's active clip
- * (voice == (s16)saveImage[+0x6C] - 0x1770), then bump the save-image's subtitle
- * sub-state (+0x72) to 5 unless it is already 6 or 7. In every active case the
- * subtitle state machine is then reset (state/_pad04 cleared, entry/showing
- * index set to -1). No-op when no subtitle is showing.
+ * clip (g_pActiveTextTable[entryIndex].voice), that clip's disc-TOC flag word
+ * (g_discToc +0x2A20 + voice*4) is set, and the clip matches the area
+ * save-image's active clip (voice == (s16)saveImage[+0x6C] - 0x1770), then
+ * bump the save-image's subtitle sub-state (+0x72) to 5 unless it is already
+ * 6 or 7. In every active case the subtitle state machine is then reset
+ * (state and animStep cleared, entry/showing index set to -1). No-op when no
+ * subtitle is showing.
+ *
+ * MATCHED on the s136os arm (task #1713) at the unit's -O2 default
+ * (S136EXTRA="", RULING #9450). Two things carry it:
+ * - g_discTocRow above, for the offset kept at the load;
+ * - the reset's store order. cc1 1.36 issues the four stores as state,
+ *   animStep, entryIndex, showingIndex (the ROM's order) only when they are
+ *   written state, showingIndex, entryIndex, animStep. Of the eight orders
+ *   measured (task #1713), the seven others build 2 to 5 words different.
+ * The global is read directly, not through a pointer local, which gives the
+ * ROM's %hi(g_subtitleState) copy kept across the blocks (gcse).
+ *
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh. On native it is plain C.
  */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002898E0)
+S136OS_SLOT(func_002898E0);
+#else
 void func_002898E0(void) {
-    SubtitleState *ss = &g_subtitleState;
     s32 entryIndex;
     s32 voice;
 
-    if (ss->state == 0) {
+    if (g_subtitleState.state == 0) {
         return;
     }
 
-    entryIndex = ss->entryIndex;
+    entryIndex = g_subtitleState.entryIndex;
     if (entryIndex != -1) {
         voice = g_pActiveTextTable[entryIndex].voice;
-        if (voice != -1 && *(s32 *)((u8 *)g_discToc + voice * 4 + 0x2A20) != 0) {
+        if (voice != -1 && g_discTocRow[voice][0xA88] != 0) {
             u8 *saveImage = g_saveImageArea + 0x1000;
             if (voice == *(s16 *)(saveImage + 0x6C) - 0x1770
                 && (u32)(*(u16 *)(saveImage + 0x72) - 6) >= 2) {
@@ -1520,10 +1573,10 @@ void func_002898E0(void) {
         }
     }
 
-    ss->state = 0;
-    ss->animStep = 0;
-    ss->entryIndex = -1;
-    ss->showingIndex = -1;
+    g_subtitleState.state = 0;
+    g_subtitleState.showingIndex = -1;
+    g_subtitleState.entryIndex = -1;
+    g_subtitleState.animStep = 0;
 }
 #endif
 
