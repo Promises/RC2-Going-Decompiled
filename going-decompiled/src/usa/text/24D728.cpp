@@ -274,24 +274,39 @@ void func_0034D828(GuiHudManager *mgr, s32 tex, s32 activeFlag) {
  * 50Hz/60Hz frame-period ratio so the on-screen animation runs at wall-clock
  * speed in both regions.
  *
- * The original recomputes the PAL-gated literal before each of the six
- * func_0034A3B8 calls (cc1 rematerializes the constant per call site); the value
- * is identical every iteration, so the portable #else computes it once. `flag` is
- * the new active-state value; `tex` is unused on this path (it is the shared
- * sibling signature with func_0034D828). */
-/* TODO(match) func_0034D8C8 - task #566 (round 4), measured on the COMMITTED tree (this file,
- * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
- * tools/ee/objdiff_build.sh, clean): sdk29 53.65%, engine96 35.90%. Eligible arm: none.
- * Residual: PACKED-SAVE both arms (ROM 0x40; sdk29 0x80, e96 0x50) + ORDER */
+ * The original re-reads g_bPalMode and re-selects the literal before each of
+ * the six func_0034A3B8 calls, and so does this body. `flag` is the new
+ * active-state value. Returns nothing. */
+/* ADDRESSING-MODEL DEVICE (RULING #8620, the 191238.cpp equate form):
+ * func_0034D8C8 reads g_bPalMode absolutely (lui/lw) six times. As a plain
+ * `extern s32` cc1 writes `.extern g_bPalMode, 4` and gas makes each read one
+ * %gp_rel word. Size 16 pins them absolute; the equated name keeps the size
+ * off the real symbol and the relocations still name it. Top level, so the
+ * s136os TU and the spliced 2.9 TU see the same lines. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034D8C8);
+__asm__(".extern g_bPalModeAbs, 16\n\tg_bPalModeAbs = g_bPalMode");
+extern s32 g_bPalModeAbs;
+#else
+#define g_bPalModeAbs g_bPalMode
+#endif
+
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0034D8C8)
+S136OS_SLOT(func_0034D8C8);
 #else
 extern s32 g_bPalMode; /* PAL video-mode flag (USA build clears it -> NTSC) */
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1669) written the plain way: the PAL test and its literal
+   per call, so cc1 reloads g_bPalMode before each func_0034A3B8 exactly as
+   the ROM does, `!= 0 ? PAL : NTSC` for the ROM's NTSC-default beqz, and no
+   union or trailing fence. SN 1.36 converts the 9-digit decimals exactly.
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 void func_0034D8C8(GuiHudManager *mgr, s32 flag) {
     u8 *m = (u8 *)mgr;
     *(s32 *)(m + 0x1594) = flag;
     if (*(s32 *)(m + 0x1598) != 0) {
-        union { u32 u; f32 f; } step;
         *(s32 *)(m + 0x1598) = 0;
         GuiElementSetVisible((GuiElement *)(m + 0x5D8), 0);
         func_0034A370(m + 0xC0C, 1);
@@ -300,15 +315,13 @@ void func_0034D8C8(GuiHudManager *mgr, s32 flag) {
         func_0034A370(m + 0xDA4, 1);
         func_0034A370(m + 0xE2C, 1);
         func_0034A370(m + 0xEB4, 1);
-        step.u = (g_bPalMode != 0) ? 0x3E0F5C29u : 0x3DEEEEF0u;
-        func_0034A3B8(m + 0xC0C, step.f);
-        func_0034A3B8(m + 0xC94, step.f);
-        func_0034A3B8(m + 0xD1C, step.f);
-        func_0034A3B8(m + 0xDA4, step.f);
-        func_0034A3B8(m + 0xE2C, step.f);
-        func_0034A3B8(m + 0xEB4, step.f);
+        func_0034A3B8(m + 0xC0C, g_bPalModeAbs != 0 ? 0.140000001f : 0.116666675f);
+        func_0034A3B8(m + 0xC94, g_bPalModeAbs != 0 ? 0.140000001f : 0.116666675f);
+        func_0034A3B8(m + 0xD1C, g_bPalModeAbs != 0 ? 0.140000001f : 0.116666675f);
+        func_0034A3B8(m + 0xDA4, g_bPalModeAbs != 0 ? 0.140000001f : 0.116666675f);
+        func_0034A3B8(m + 0xE2C, g_bPalModeAbs != 0 ? 0.140000001f : 0.116666675f);
+        func_0034A3B8(m + 0xEB4, g_bPalModeAbs != 0 ? 0.140000001f : 0.116666675f);
     }
-    __asm__ __volatile__("");
 }
 #endif
 
