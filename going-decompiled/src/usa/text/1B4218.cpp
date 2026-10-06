@@ -2924,21 +2924,43 @@ extern void func_0011D620(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g, s32 h
 extern void func_00133250(s32 a, s32 b, s32 c, s32 d);
 extern u8 D_001A7210[];                     /* dialog sound-channel config block */
 
-/* Set up the dialog sound channel: configure mixer slot D_001A7210+0x38 (twice,
- * around a mid-level snd setup call), establishing the dialog-voice routing.
- * WALL: address-CSE (inverse). The original re-materialises the D_001A7210+0x38
- * address (lui/%hi+addiu/%lo) for each of the two func_0011D620 calls with no
- * callee-save (frame 0x20, single $31); this cc1 hoists the shared address into
- * a preserved $16, forcing an extra save and a 0x30 frame (best 48%). Genuine
- * rematerialise-vs-CSE wall — functional equivalent only. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", InitDialogSoundChannel);
+/* The SIF RPC client InitIopUploadRing binds (0x1A7248 = D_001A7210 + 0x38).
+ * ADDRESSING DEVICE (RULING #8620 family, the #1603 predicate): declared small
+ * so cc1 prints a one-insn `la` and does not CSE the address into a callee-saved
+ * register across the calls; `.extern ,16` makes the assembler expand that `la`
+ * to the absolute lui/addiu pair the ROM re-forms at each call. Emits no
+ * instruction of its own. */
+extern s32 g_iopRingRpcClient __asm__("D_1A7248");
+__asm__(".extern D_1A7248, 16");
+#define DIALOG_RPC_CLIENT ((s32)&g_iopRingRpcClient)
 #else
-/* TODO(match): functional equivalent - not byte-exact; SCHED-TIEBREAK, sdk29 90.91% / engine96 75.82%. */
+#define DIALOG_RPC_CLIENT ((s32)(D_001A7210 + 0x38))
+#endif
+
+/* Set up the dialog sound channel: issue RPC 3 on the IOP-ring SIF RPC client
+ * (0x1A7248) twice, around func_00133250(7, 0xA000, 0, 1).
+ *
+ * func_0011D620 takes nine args (client, fno, then seven zeros), the
+ * sceSifCallRpc shape. That reading comes from the call shape and the
+ * InitIopUploadRing binding, not from a trace of the callee.
+ *
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) at the -O2 default, without the 2.9 arm's
+ * -fno-gcse (RULING #9004), and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. A build that skips the splice drops the function.
+ * On native it is plain C. The ROM re-forms the client address at each call with
+ * no callee-save (frame 0x20, $31 only). Spelled as D_001A7210 + 0x38, the
+ * address is hoisted into $16 and the frame grows; the small-extern device
+ * above removes the hoist (task #1703). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_InitDialogSoundChannel)
+S136OS_SLOT(InitDialogSoundChannel);
+#else
 void InitDialogSoundChannel(void) {
-    func_0011D620((s32)(D_001A7210 + 0x38), 3, 0, 0, 0, 0, 0, 0, 0);
+    func_0011D620(DIALOG_RPC_CLIENT, 3, 0, 0, 0, 0, 0, 0, 0);
     func_00133250(7, 0xA000, 0, 1);
-    func_0011D620((s32)(D_001A7210 + 0x38), 3, 0, 0, 0, 0, 0, 0, 0);
+    func_0011D620(DIALOG_RPC_CLIENT, 3, 0, 0, 0, 0, 0, 0, 0);
 }
 #endif
 
