@@ -7847,7 +7847,9 @@ void GuiIconScreenInit(void *w, GuiPool *pool) {
 #endif
 
 /* func_00342450(w, a, b, c): store three words into a vendor widget:
- * +0x310 = a, +0x314 = b, +0x318 = c (1CA080 passes three table pointers).
+ * +0x310 = a, +0x314 = b, +0x318 = c (each caller passes three table
+ * pointers: two jals in 1CA080 at 0x2CEA84/0x2D04CC, one in 1D54C0 at
+ * 0x2D6128; validator #1698, FACT #9492).
  * Byte-exact on cc1 2.9 as plain C (task #1673). The ROM issues the +0x318
  * store first: cc1 2.9 schedules the LAST store of the group first and the
  * rest in source order, so the natural a, b, c order is the matching one
