@@ -799,6 +799,23 @@ extern s32  D_1AE6F4;                 /* gp-global passed to func_0034F028 */
 extern s32  D_1AE6F8;                 /* gp-global passed to func_0034F028 */
 #endif
 
+/* ADDRESSING-MODEL DEVICE (RULING #8620, the 191238.cpp equate form):
+ * func_0034F240 reads D_1A8C64 and g_guiInstance absolutely (lui/lw at
+ * 0x34F278 and 0x34F2B4). Declared as plain ints cc1 writes `.extern <sym>, 4`
+ * and gas makes both reads one-word %gp_rel (the body comes out 46 words, the
+ * ROM's is 48). Size 16 pins them absolute; the equated names keep the size
+ * off the real symbols, and the relocations still name them. Top level, so
+ * the s136os TU and the spliced 2.9 TU see the same lines. */
+#ifndef TARGET_NATIVE
+__asm__(".extern D_1A8C64Abs, 16\n\tD_1A8C64Abs = D_1A8C64");
+extern s32 D_1A8C64Abs;
+__asm__(".extern g_guiInstanceAbs, 16\n\tg_guiInstanceAbs = g_guiInstance");
+extern void *g_guiInstanceAbs;
+#else
+#define D_1A8C64Abs D_1A8C64
+#define g_guiInstanceAbs g_guiInstance
+#endif
+
 #if !defined(TARGET_NATIVE) && !defined(S136OS_func_0034F240)
 S136OS_SLOT(func_0034F240);
 #else
@@ -832,7 +849,7 @@ void func_0034F240(void *gui) {
     *(f32 *)(cam + 0xB0) = 0.62f;
     BuildCameraProjection();
 
-    if (D_1A8C64 == 0) {
+    if (D_1A8C64Abs == 0) {
         s32 packed = func_0034D7A8((GuiHudManager *)((u8 *)gui + 0x7A0));
         func_0034F028((u8 *)gui, D_1AE6F4, D_1AE6F8, (s32)((u32)packed >> 24));
     }
@@ -841,7 +858,7 @@ void func_0034F240(void *gui) {
     func_0034E8D8((u8 *)gui + 0x7A0);
 
     {
-        u8 *mgr = (u8 *)g_guiInstance + 0x38000;
+        u8 *mgr = (u8 *)g_guiInstanceAbs + 0x38000;
         *(s32 *)(mgr + 0x79DC) = 0;
         *(s32 *)(mgr + 0x79E0) = 0;
         func_00339F98((u8 *)gui + 0x1FDC);
@@ -1285,14 +1302,16 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0
  * Frame-pointer arithmetic (mirrors UpdateActiveMobys' moby anim setup):
  *   cls = moby2->classTable (+0x24); seqDef = *(cls + seq*4 + 0x48);
  *   framePtr = (u8*)seqDef + (seqDef[0x10]<<2) + 0x1C + (seqDef[0x13]<<2);
- *   frame0Ptr = *(seqDef + frame0*4 + 0x1C); classFlag = cls[0x8].
- * Kept INCLUDE_ASM for the matching build; #else is the portable equivalent. */
-/* TODO(match) func_0034F9F8 - task #566 (round 4), measured on the COMMITTED tree (this file,
- * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
- * tools/ee/objdiff_build.sh, clean): sdk29 53.50%, engine96 48.86%. Eligible arm: e96.
- * Residual: ORDER */
+ *   frame0Ptr = *(seqDef + frame0*4 + 0x1C); classFlag = cls[0x8]. */
+/* EE register pin; a no-op on the native build. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F9F8);
+#define EE_REG(r) __asm__(r)
+#else
+#define EE_REG(r)
+#endif
+
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0034F9F8)
+S136OS_SLOT(func_0034F9F8);
 #else
 typedef struct MobyAnimSeqDef {
     /* 0x00 */ u8 _pad00[0x10];
@@ -1323,17 +1342,32 @@ typedef struct HudAnimMoby {
     /* 0x5C */ void *framePtr1;
 } HudAnimMoby;
 
-static void installAnimFrame(HudAnimMoby *m2, void *moby, u8 seq, u8 frame0) {
+static inline void installAnimFrame(HudAnimMoby *m2, void *moby, u8 seq, u8 frame0) {
     MobyAnimClass *cls = m2->classTable;
     MobyAnimSeqDef *sd = cls->seqDefs[seq];
-    u8 *framePtr = (u8 *)sd + (sd->frameTableCount << 2) + 0x1C
-                 + (sd->frameEntryIndex << 2);
-    void *frame0Ptr = *(void **)((u8 *)sd + frame0 * 4 + 0x1C);
+    void *frame0Ptr = *(void **)((u8 *)sd + (frame0 << 2) + 0x1C);
+    u8 *framePtr = (u8 *)sd + ((sd->frameTableCount << 2) + 0x1C);
+    framePtr += sd->frameEntryIndex << 2;
     func_002A1F68(framePtr, frame0Ptr, moby, cls->classFlag);
 }
 
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1669). What carries it:
+   - installAnimFrame is `static inline`; not inlined it is a real call.
+   - the frame pointer is spelled (sd + ((count << 2) + 0x1C)) + (index << 2),
+     the ROM's association; written as one sum cc1 regroups it.
+   - the frame-0 entry is indexed `frame0 << 2`; `frame0 * 4` puts the addu
+     operands the other way round.
+   - REGISTER-PIN DEVICE (RULING #8598): `base` pinned to $16. Without it every
+     pin-free spelling measured (eight, task #1669) puts the moby view m2 in
+     $16 and base in $17, the ROM's roles swapped; all other words are equal.
+   - no trailing empty asm.
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 void func_0034F9F8(void *mgr) {
-    u8 *base = (u8 *)mgr;
+    register u8 *base EE_REG("$16") = (u8 *)mgr;
     HudAnimMoby *m2 = (HudAnimMoby *)(base + 0xC00);
     func_0026F790(m2, 0);
     UpdateMobyAnimation(m2);
@@ -1347,11 +1381,10 @@ void func_0034F9F8(void *mgr) {
         m2->framePtr1 = base;
     }
     UpdateMobyBSphereAndGrid(m2);
-    __asm__ __volatile__("");
 }
 #endif
 
-/* func_0034FAF8 globals/callees (declared for the TARGET_NATIVE #else only). */
+/* func_0034FAF8 globals/callees. */
 extern u8  *g_frameDmaCursor;   /* 0x1B2228 frame VIF1 chain write cursor */
 extern s32  g_gsPixelOffsetX[]; /* GS screen X pixel offset (word 0) */
 extern s32  g_gsPixelOffsetY[]; /* GS screen Y pixel offset (word 0) */
@@ -1367,26 +1400,53 @@ extern void func_002A1138(void *rec, s32 flag);
  *  specific packet body, then a second packet at the plain screen origin
  *  (g_gsPixelOffset{X,Y}) is emitted and the cursor advances 0x30 again. The
  *  ctx (arg0) is the shared light/render context, unused here. */
-/* TODO(match) func_0034FAF8 - task #566 (round 4), measured on the COMMITTED tree (this file,
- * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
- * tools/ee/objdiff_build.sh, clean): sdk29 52.10%, engine96 36.78%. Eligible arm: none.
- * Residual: PACKED-SAVE on e96 (ROM 0x20 vs 0x40) + ORDER */
+/* ADDRESSING-MODEL DEVICE (RULING #8620, the 191238.cpp equate form). The ROM
+ * reads g_frameDmaCursor and g_gsPixelOffset{X,Y} absolutely (lui/lw) but
+ * stores the cursor as one %gp_rel word in the func_002A1138 delay slot
+ * (0x34FB6C) and absolutely through $at at the end (0x34FBB4). Size 12 gives
+ * exactly that for the cursor (asm_unit.sh's -G8 delay-slot rule) and size 16
+ * absolute everywhere for the offsets. The equated names keep the size off
+ * the real symbols; the relocations still name them. Top level, so the s136os
+ * TU and the spliced 2.9 TU see the same lines. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034FAF8);
+__asm__(".extern g_frameDmaCursorAbs, 12\n\tg_frameDmaCursorAbs = g_frameDmaCursor");
+extern u8 *g_frameDmaCursorAbs;
+__asm__(".extern g_gsPixelOffsetXAbs, 16\n\tg_gsPixelOffsetXAbs = g_gsPixelOffsetX");
+extern s32 g_gsPixelOffsetXAbs;
+__asm__(".extern g_gsPixelOffsetYAbs, 16\n\tg_gsPixelOffsetYAbs = g_gsPixelOffsetY");
+extern s32 g_gsPixelOffsetYAbs;
 #else
+#define g_frameDmaCursorAbs g_frameDmaCursor
+#define g_gsPixelOffsetXAbs g_gsPixelOffsetX[0]
+#define g_gsPixelOffsetYAbs g_gsPixelOffsetY[0]
+#endif
+
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0034FAF8)
+S136OS_SLOT(func_0034FAF8);
+#else
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1669) with the addressing aliases above and the packet
+   base held in a local: indexing D_1AC560 directly lets cc1 fold the +0x20
+   into the %hi/%lo pair and spend three saved registers on it.
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 void func_0034FAF8(void *ctx, u8 *rec) {
+    u8 *pkt = D_1AC560;
+
     (void)ctx;
-    *(s32 *)(D_1AC560 + 0x20) = g_gsPixelOffsetX[0] + *(s16 *)(rec + 0xB4);
-    *(s32 *)(D_1AC560 + 0x24) = g_gsPixelOffsetY[0] + *(s16 *)(rec + 0xB6);
-    CopyQwords(g_frameDmaCursor, D_1AC560, 0x30);
-    g_frameDmaCursor += 0x30;
+    *(s32 *)(pkt + 0x20) = g_gsPixelOffsetXAbs + *(s16 *)(rec + 0xB4);
+    *(s32 *)(pkt + 0x24) = g_gsPixelOffsetYAbs + *(s16 *)(rec + 0xB6);
+    CopyQwords(g_frameDmaCursorAbs, pkt, 0x30);
+    g_frameDmaCursorAbs += 0x30;
 
     func_002A1138(rec, 1);
 
-    *(s32 *)(D_1AC560 + 0x20) = g_gsPixelOffsetX[0];
-    *(s32 *)(D_1AC560 + 0x24) = g_gsPixelOffsetY[0];
-    CopyQwords(g_frameDmaCursor, D_1AC560, 0x30);
-    g_frameDmaCursor += 0x30;
+    *(s32 *)(pkt + 0x20) = g_gsPixelOffsetXAbs;
+    *(s32 *)(pkt + 0x24) = g_gsPixelOffsetYAbs;
+    CopyQwords(g_frameDmaCursorAbs, pkt, 0x30);
+    g_frameDmaCursorAbs += 0x30;
 }
 #endif
 
