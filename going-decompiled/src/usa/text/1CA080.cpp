@@ -812,6 +812,15 @@ extern struct ScreenCaptureBlock g_screenCapture __asm__("g_menuScreenBlock");
 #define g_screenCapture (*(struct ScreenCaptureBlock *)g_menuScreenBlock)
 #endif
 
+/* g_frameCounter (0x1B1518). The native arena PROVIDEs that word only under its
+ * old name D_1B1518, so native spells it that way. */
+#ifndef TARGET_NATIVE
+extern s32 g_frameCounter;
+#else
+extern s32 D_1B1518;
+#define g_frameCounter D_1B1518
+#endif
+
 /* Freeze the current screen: copy the screen image (g_screenHeight * 0x600
  * bytes) between EE memory and a VRAM scratch region, in 0x40x0x40 tiles.
  *   mode: 0 = the scratch region starts at g_vramDynamicBase; non-zero = it is
@@ -826,14 +835,13 @@ extern struct ScreenCaptureBlock g_screenCapture __asm__("g_menuScreenBlock");
  * Byte-exact on the s136os arm (task #1712). The loop must be a `for` with the
  * remaining-count step in its increment clause. With the step in the body
  * (do/while or while; measured on RestoreScreenFromVram), cc1 fills the first
- * call's delay slot with it instead of
- * the VRAM-address step, which ROM order needs. */
+ * call's delay slot with it instead of the VRAM-address step that the ROM has
+ * there. */
 #if !defined(TARGET_NATIVE) && !defined(S136OS_CaptureScreenToVram)
 S136OS_SLOT(CaptureScreenToVram);
 #else
 extern s32  g_screenHeight;
 extern s32  g_vramDynamicBase;
-extern s32  g_frameCounter;
 extern void WaitFrameDmaFence(s32 mask);
 extern s32  WaitVblankGetField(s32 arg);
 extern void func_00126288(void *packet, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h);
@@ -878,7 +886,6 @@ S136OS_SLOT(RestoreScreenFromVram);
 #else
 extern s32  g_screenHeight;
 extern s32  g_vramDynamicBase;
-extern s32  g_frameCounter;
 extern void WaitFrameDmaFence(s32 mask);
 extern s32  WaitVblankGetField(s32 arg);
 extern void func_00126470(void *packet, s32 tbp, s32 a, s32 b, s32 c, s32 d, s32 w, s32 h);
@@ -5403,44 +5410,59 @@ s32 func_002D44E8(void) {
 #endif
 
 /* Refresh a weapon-swap widget's two caption/price fields from the currently
- * selected weapon. With the GUI up, lays out the swap gadget (func_00342460 on
- * g_guiInstance+0x3C160), then reads the selected weapon slot for the gadget at
- * g_guiInstance+0x3C480 (slot = g_itemEquippedSlot[func_00343AD0(gadget+0x2C8)])
- * and stores that weapon's g_weaponTable field +0x42 into the widget arg's +0x34;
- * then fetches the gadget's sub-widget (func_003444C8 = the pointer at +0x360) and
- * stores the selected weapon's g_weaponTable field +0x6 into that sub-widget's
+ * selected weapon. With the GUI up, it lays out the swap gadget (func_00342460 on
+ * g_guiInstance+0x3C160). It then takes the selected weapon slot for the gadget at
+ * g_guiInstance+0x3C480 (slot = g_itemEquippedSlot[index]) and stores that
+ * weapon's g_weaponTable field +0x42 into the widget arg's +0x34. Next it fetches
+ * the gadget's sub-widget (func_003444C8, the pointer at +0x360), takes the slot
+ * again the same way, and stores the weapon's field +0x6 into the sub-widget's
  * +0x58. Returns 0.
- * (The original calls the void forwarder func_00344480, whose only effect is
- * func_00343AD0(p+0x2C8); we call func_00343AD0 directly to read its index return
- * — the same idiom the sister unit uses at func_00344808. Matching arm stays
- * INCLUDE_ASM: 8-byte-packed-save wall.) */
+ *   widget: the widget record whose +0x34 receives the first field.
+ * The index comes from func_00344480(gadget). That is a void forwarder (235FE8.c)
+ * to func_00343AD0(gadget+0x2C8), whose return it leaves in $v0, and the ROM uses
+ * that $v0 as the index. So it is called here through a value-returning cast,
+ * rather than redeclared, which would disagree with its void definition.
+ * g_guiInstance is re-read for every gadget address, as the ROM does.
+ * Byte-exact on the s136os arm (task #1712). The first field read must be spelled
+ * `(g_weaponVariants + slot)->f`. As `g_weaponVariants[slot].f` cc1 emits
+ * `addu $3,$17,$3` where the ROM has `addu $3,$3,$17`. */
 extern void func_00342460(void *widget, s32 arg);
 extern s32 func_00343AD0(void *p);
 extern s32 func_003444C8(void *p);
+extern void func_00344480(void *p);
+/* The two g_weaponTable variant fields func_002D4568 reads, as members of a typed
+ * declaration bound to the table's symbol. The table's stride is 0xE0. Only these
+ * fields are named, and their meaning is not established.
+ * As members, cc1 keeps the bare %lo(g_weaponTable) base in a callee-saved
+ * register and puts 0x42/0x6 on the `lh`, as the ROM does. Through byte casts it
+ * folds +0x42 into the %lo (task #1712). The alias is EE-only; native reads
+ * through a cast. */
+struct WeaponVariantFields {
+    u8  unk0[0x6];
+    s16 unk6;         /* 0x06 */
+    u8  unk8[0x3A];
+    s16 unk42;        /* 0x42 */
+    u8  unk44[0x9C];
+};
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D4568);
+extern struct WeaponVariantFields g_weaponVariants[] __asm__("g_weaponTable");
 #else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 43.95% -> STRUCTURAL,
- * first differing row @1: ROM `lui v0,0x0  [HI16 0x001A8D04]` vs `daddu v0,zero,zero`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 54.23% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-112`. */
+#define g_weaponVariants ((struct WeaponVariantFields *)g_weaponTable)
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D4568)
+S136OS_SLOT(func_002D4568);
+#else
 s32 func_002D4568(void *widget) {
-    u8 *gadget;
-    u8 *subWidget;
-    s32 slot;
+    u8 *sub;
 
-    if (g_guiInstance == NULL)
-        return 0;
-
-    func_00342460(g_guiInstance + 0x3C160, 1);
-
-    gadget = (u8 *)g_guiInstance + 0x3C480;
-    slot = g_itemEquippedSlot[func_00343AD0(gadget + 0x2C8)];
-    *(s32 *)((u8 *)widget + 0x34) = *(s16 *)(g_weaponTable + slot * 0xE0 + 0x42);
-
-    subWidget = (u8 *)func_003444C8(gadget);
-    slot = g_itemEquippedSlot[func_00343AD0(gadget + 0x2C8)];
-    *(s32 *)(subWidget + 0x58) = *(s16 *)(g_weaponTable + slot * 0xE0 + 0x6);
+    if (g_guiInstance != NULL) {
+        func_00342460(g_guiInstance + 0x3C160, 1);
+        *(s32 *)((u8 *)widget + 0x34) =
+            (g_weaponVariants + g_itemEquippedSlot[((s32 (*)(void *))func_00344480)(g_guiInstance + 0x3C480)])->unk42;
+        sub = (u8 *)func_003444C8(g_guiInstance + 0x3C480);
+        *(s32 *)(sub + 0x58) =
+            (g_weaponVariants + g_itemEquippedSlot[((s32 (*)(void *))func_00344480)(g_guiInstance + 0x3C480)])->unk6;
+    }
     return 0;
 }
 #endif

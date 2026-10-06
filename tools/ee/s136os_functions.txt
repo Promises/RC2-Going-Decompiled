@@ -421,3 +421,4 @@ usa text/1A8180 func_002A9708
 usa text/1A8180 func_002AE6C8
 usa text/1CA080 CaptureScreenToVram
 usa text/1CA080 RestoreScreenFromVram
+usa text/1CA080 func_002D4568
