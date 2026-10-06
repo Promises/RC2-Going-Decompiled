@@ -894,19 +894,30 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CB560);
  * fades from black. When not already shut down (+0x1F4 == 0) it also runs the
  * frame's sound service: a fixed sound event (0x5D), dialog-voice mute (unless
  * a level exit is pending on kind 2), the sound pump, emitter update, and a
- * one-shot dialog-voice pump gated by the +0xDB flag. Matching arm stays
- * INCLUDE_ASM (128-bit lq/sq camera-vec copies); #else is structure-exact. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", TickFrontEndScreenIdle);
+ * one-shot dialog-voice pump gated by the +0xDB flag.
+ *
+ * Byte-exact on the s136os arm (task #1721; body from NOTE #9325, task #1628)
+ * under RULING #9491's gcse-on flags. The ROM keeps %hi(g_menuScreenBlock) in a
+ * saved register across five calls and re-adds %lo at the joins; only gcse's
+ * PRE does that, so under -fno-gcse the same body is 64/80 words off.
+ * `screen` is a second read of the global for the sound-service block, and the
+ * tail reads the global directly: both are part of the match (one `block`
+ * throughout is 78 words; `block` in the tail is 18/80).
+ * Devices, each measured load-bearing by removing it alone (vmu, task #1721):
+ *   - EE_REG("$3") on `src` (RULING #8598): without it 6/80 words differ.
+ *   - four EMPTY fences around the two Vec4 copies (RULING #8483) reproduce the
+ *     ROM's `addiu rX,base,off; lq 0(rX)` with the offset not folded into the
+ *     lq: dropping them one at a time gives 78 words / 3/80 / 77 words / 5/80.
+ *     The same device closes func_002A82D8/func_002A8448 in 1A8180.
+ * Store order: `block[0] = 0` goes before func_002FCFC8(), because the ROM
+ * has that store in the call's delay slot. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_TickFrontEndScreenIdle)
+S136OS_SLOT(TickFrontEndScreenIdle);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern void snd_Pump(void);
 /* (end of this body's declarations) */
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 74.43% -> STRUCTURAL,
- * first differing row @5: ROM `(none)` vs `jal L  [26 0x002FCFC8]`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 67.27% -> SCHED-TIEBREAK, first differing row @1: ROM `sd s1,8(sp)` vs `(none)`. */
 extern void func_002FCFC8(void);
 extern void func_00283460(void *dst, void *src, s32 len);
 extern void func_0027A550(void);
@@ -920,34 +931,50 @@ extern void UpdateSoundEmitters(void);      /* file-scope decl is below L545 */
 extern void PumpDialogVoiceSystem(s32 blocking);
 extern f32  g_cameraProjScale;
 void TickFrontEndScreenIdle(void) {
+    u8 *block = g_menuScreenBlock;
     s32 kind;
 
+    *(s32 *)block = 0;
     func_002FCFC8();
-    *(s32 *)g_menuScreenBlock = 0;
-    *(Vec4 *)g_cameraPos = *(Vec4 *)(g_menuScreenBlock + 0x50);
-    *(Vec4 *)((u8 *)g_cameraPos + 0x10) = *(Vec4 *)(g_menuScreenBlock + 0x60);
-    func_00283460((u8 *)g_cameraPos + 0x230, g_menuScreenBlock + 0x200, 0x30);
-    g_cameraProjScale = *(f32 *)(g_menuScreenBlock + 0xF8);
+    {
+        u8 *cam = (u8 *)g_cameraPos;
+        register u8 *src EE_REG("$3");
+        u8 *dst;
+        src = block + 0x50;
+        __asm__ __volatile__("" : "+r"(src));
+        *(Vec4 *)cam = *(Vec4 *)src;
+        __asm__ __volatile__("");
+        dst = cam + 0x10;
+        src = block + 0x60;
+        __asm__ __volatile__("" : "+r"(src), "+r"(dst));
+        *(Vec4 *)dst = *(Vec4 *)src;
+        __asm__ __volatile__("");
+        func_00283460(cam + 0x230, block + 0x200, 0x30);
+    }
+    g_cameraProjScale = *(f32 *)(block + 0xF8);
     BuildCameraProjection();
     BuildFrameViewMatrices();
     SwapMobyTableContext(0);
     func_0027A550();
-    *(s32 *)(g_menuScreenBlock + 0x118) = 0;
-    *(s32 *)(g_menuScreenBlock + 0x11C) = 0;
-    *(s32 *)(g_menuScreenBlock + 0x114) = 0;
-    *(s32 *)(g_menuScreenBlock + 0x20) = 0;
+    *(s32 *)(block + 0x118) = 0;
+    *(s32 *)(block + 0x11C) = 0;
+    *(s32 *)(block + 0x114) = 0;
+    *(s32 *)(block + 0x20) = 0;
 
-    kind = *(s32 *)(g_menuScreenBlock + 0x1C);
+    kind = *(s32 *)(block + 0x1C);
     if ((u32)(kind - 3) < 2 || kind == 6 || kind == 5) {
         FadeOutToBlackBlocking(0x10);
     }
 
-    if (*(s32 *)(g_menuScreenBlock + 0x1F4) == 0) {
-        func_00132B28(0x5D);
-        if (*(s32 *)(g_menuScreenBlock + 0x1C) != 2 || !IsLevelExitRequested()) {
-            SetDialogVoiceVolumesMute();
+    {
+        u8 *screen = g_menuScreenBlock;
+        if (*(s32 *)(screen + 0x1F4) == 0) {
+            func_00132B28(0x5D);
+            if (*(s32 *)(screen + 0x1C) != 2 || !IsLevelExitRequested()) {
+                SetDialogVoiceVolumesMute();
+            }
+            snd_Pump();
         }
-        snd_Pump();
     }
 
     UpdateSoundEmitters();
@@ -3960,9 +3987,20 @@ s32 DrawPlanetWarpMenu(void) {
  * block clears (the rest leave the flag untouched when their guard fails).
  * EU twin func_002D24C0 (byte-identical; toggles D_1A7C72.., block D_139638,
  * targets D_1ABAD8.., all region-shifted).
- * Wall: `bnel`/`beql` branch-likely (the value-1 move sits in the nullified
- * delay slot of the OR short-circuit tests) — the later cc1's branch-likely
- * emission isn't reproduced from clean C. Preserved as portable C. */
+ * Returns 0 (the ROM's single epilogue clears $v0; no C caller reads it).
+ *
+ * Byte-exact on the s136os arm (task #1721; body from NOTE #9199, task #1510)
+ * under RULING #9491's gcse-on flags: the ROM shares %hi(D_1395B8) across
+ * blocks, which cc1 does only with gcse (18 words off under -fno-gcse). The
+ * branch-likely test it was once walled on comes out of SN 1.36 unprompted.
+ * Each choice below was measured load-bearing by removing it alone (vmu):
+ *   - the two `volatile` reads, of g_miscExtras and D_1A7BF2, are a CODEGEN
+ *     DEVICE (RULING #8404's form), not a claim that the bytes change
+ *     asynchronously. They keep cc1 from hoisting the loads the ROM issues in
+ *     place; without either one, the body is 78 words. Writer census: no C
+ *     in src/ writes either byte.
+ *   - one `goto out` epilogue returning s32 0. Declared `void`, 1/80 words
+ *     differ (the $v0 clear). */
 extern u8 g_planetWarpEnabled;   /* 0x1ABA70 - planet-warp menu enabled flag */
 extern u8 D_1ABA71, D_1ABA72, D_1ABA73, D_1ABA74, D_1ABA75, D_1ABA76, D_1ABA77;
 extern u8 D_1A7BF2, D_1A7BF4, D_1A7BFB, D_1A7C06, D_1A7C07, D_1A7C0A;
@@ -3970,23 +4008,14 @@ extern u8 D_1395B8[];            /* save-data per-feature completion block */
 extern u8 D_1395E9;              /* planet-warp prerequisite completion byte */
 extern s32 g_playerProgress;     /* 0x1A79F8 - current save progress slot */
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D2538);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D2538)
+S136OS_SLOT(func_002D2538);
 #else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 90.44% -> STRUCTURAL,
- * first differing row @2: ROM `beq v0,zero,L` vs `(none)`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 90.95% -> STRUCTURAL, first differing row @2: ROM `beq v0,zero,L` vs `(none)`. */
-/* TODO(match): functional equivalent - not byte-exact; `bnel`/`beql` branch-
- * likely delay-slot value moves not reproduced by cc1. */
-void func_002D2538(void) {
-    if (g_guiInstance == NULL) {
-        return;
+s32 func_002D2538(void) {
+    if (g_guiInstance == 0 || *(volatile u8 *)&g_miscExtras == 0) {
+        goto out;
     }
-    if (g_miscExtras == 0) {
-        return;
-    }
-    if (D_1A7BF2 != 0) {
+    if (*(volatile u8 *)&D_1A7BF2 != 0) {
         if (D_1395E9 != 0) {
             g_planetWarpEnabled = 1;
         }
@@ -4018,6 +4047,8 @@ void func_002D2538(void) {
     if (D_1AA458 != 0 && g_playerProgress > 0) {
         D_1ABA77 = 1;
     }
+out:
+    return 0;
 }
 #endif
 

@@ -414,3 +414,5 @@ usa text/1B4218 InitDialogSoundChannel
 usa text/1CA080 func_002CE6D8
 usa text/191238 MapAllocCacheSlot
 usa text/191238 MapMoveCacheSlot
+usa text/1CA080 TickFrontEndScreenIdle
+usa text/1CA080 func_002D2538
