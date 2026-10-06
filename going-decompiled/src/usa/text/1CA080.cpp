@@ -1717,7 +1717,7 @@ extern s32 func_002CC7D8(s32 q);
 extern s32 func_002CC858(s32 q);
 extern s32 func_002CC908(s32 q);
 extern s32 func_002CCA18(s32 q);
-extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
 
 #if !defined(TARGET_NATIVE) && !defined(S136OS_func_002CE0C8)
 S136OS_SLOT(func_002CE0C8);
@@ -2388,7 +2388,7 @@ extern u8 g_bestiaryKillCounts[];
 extern u8 g_bestiaryEntryTable[];
 extern u8 D_0025ABA0[];
 extern u8 D_0025AC08[];
-extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
 s32 UpdateBestiaryMenuInput(void) {
     s32 buttons = g_padButtonsPressed;
     s32 cursor0 = g_bestiaryCursor;
@@ -2706,50 +2706,43 @@ s32 func_002D0110(s32 *out) {
  * and builds an 8-byte command record (op = (u16)entry[0x8] at rec+0x2, arg =
  * entry[0xC] at rec+0x4). When arg is 0 it plays UI sound 5, then hands the
  * record to func_002D6B00 (-> MenuScreenDoAction).
- * Wall: 8-byte-packed-save ($16 + $17 + $31). Preserved as portable C. */
+ * Byte-exact on the s136os arm (task #1656); func_002CE908 plus the sound. */
 extern s32 func_0029D398(s32 padPressed);
-extern void PlayGlobalSound(s32 id, s32 a, s32 b);
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D0158);
+extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
+/* GUARD (task #1656): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D0158)
+S136OS_SLOT(func_002D0158);
 #else
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 66.89% -> FRAME-SIZE,
  * first differing row @0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-64`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 73.84% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-80`. */
-/* TODO(match): functional equivalent - not byte-exact; 2-GPR packed-save frame +
- * branch-likely confirm shape / single-register result threading. */
 s32 func_002D0158(void) {
-    s32 flags = *(s32 *)(D_138180 + 0x1C4);
-    s32 *block;
-    s32 v;
+    u8 *input = D_138180;
+    s32 flags = *(s32 *)(input + 0x1C4);
+    s32 result = 0;
     if (flags & 0x10) {
-        block = (s32 *)g_menuScreenBlock;
-        v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
-        if (v != 0) {
-            block[0x18 / 4] = v;
-            return 0;
-        }
-        if (block[0x134 / 4] == 0) {
-            return -1;
-        }
-        return 0;
+        return MenuPollConfirm();
     }
     if (flags & 0x900) {
-        return 1;
-    }
-    func_0029D398(flags);
-    if ((*(s32 *)(D_138180 + 0x1C4) & 0x40) && g_guiInstance) {
-        u8 record[0x30];
-        u8 *entry = (u8 *)func_003424C8(g_guiInstance + 0x3C160);
-        s32 arg = *(s32 *)(entry + 0xC);
-        *(u16 *)(record + 0x2) = *(u16 *)(entry + 0x8);
-        *(s32 *)(record + 0x4) = arg;
-        if (arg == 0) {
-            PlayGlobalSound(5, 0, 0);
+        result = 1;
+    } else {
+        func_0029D398(flags);
+        if ((*(s32 *)(input + 0x1C4) & 0x40) && GUI_INSTANCE_GP) {
+            union MenuCommandRecord record;
+            u8 *entry = (u8 *)func_003424C8(GUI_INSTANCE_GP + 0x3C160);
+            record.f.op = *(u16 *)(entry + 0x8);
+            record.f.arg = *(s32 *)(entry + 0xC);
+            if (record.f.arg == 0) {
+                PlayGlobalSound(5, 0, 0);
+            }
+            func_002D6B00(&record);
         }
-        func_002D6B00(record);
     }
-    return 0;
+    return result;
 }
 #endif
 
@@ -2875,7 +2868,7 @@ extern u8 g_cheatFlags[];
 extern u8 g_skillPointFlags;
 extern s16 g_equippedArmor;
 extern void LoadPlayerDisplayModel(s16 armor);
-extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
 s32 UpdateCheatMenuInput(void) {
     s32 skillPts = CountSkillPointsCompleted();
     s32 flags = *(s32 *)(D_138180 + 0x1C4);
@@ -3076,7 +3069,7 @@ extern u8 g_skillPointMetaTable[];
 extern u8 D_0025C098[];
 extern u8 *D_25C004;
 extern s32 D_25C074;
-extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
 s32 UpdateSkillPointsMenu(void) {
     s32 buttons = g_padButtonsPressed;
     s32 cursor0 = g_nSkillPointsMenuCursor;
@@ -3291,7 +3284,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateExtrasMen
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 45.39% -> FRAME-SIZE,
  * first differing row @0: ROM `addiu sp,sp,-80` vs `addiu sp,sp,-64`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 46.13% -> STRUCTURAL, first differing row @0: ROM `addiu sp,sp,-80` vs `(none)`. */
-extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
 extern void CaptureScreenToVram(s32 mode);
 extern s32 EnqueueCinematic(void *queue, s32 reelId);
 extern s32 StartCinematicFromQueue(void *queue);
@@ -3556,7 +3549,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", CinematicsMenuT
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 30.52% -> FRAME-SIZE,
  * first differing row @0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-32`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 55.12% -> STRUCTURAL, first differing row @0: ROM `addiu sp,sp,-48` vs `lui v1,0x0  [HI16 D_138180]`. */
-extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
 extern void CaptureScreenToVram(s32 mode);
 extern s32 EnqueueCinematic(void *queue, s32 reelId);
 extern s32 StartCinematicFromQueue(void *queue);
@@ -3799,7 +3792,7 @@ extern void RequestLevelExit(s32 destination, s32 commitSave);
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 36.04% -> STRUCTURAL,
  * first differing row @1: ROM `lui v0,0x0  [HI16 D_138180]` vs `(none)`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 51.21% -> STRUCTURAL, first differing row @0: ROM `(none)` vs `lui v1,0x0  [HI16 D_138180]`. */
-extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
 extern u8 g_planetWarpEnabled;   /* 0x1ABA70 - per-item enabled flags (indexed) */
 extern s32 g_playerProgress;     /* 0x1A79F8 - current save progress slot */
 s32 UpdatePlanetWarpMenuInput(void) {
@@ -4058,7 +4051,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateInsomniac
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 28.88% -> STRUCTURAL,
  * first differing row @1: ROM `lui v0,0x0  [HI16 D_138180]` vs `(none)`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 48.28% -> STRUCTURAL, first differing row @0: ROM `addiu sp,sp,-48` vs `(none)`. */
-extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
 extern void SwapMobyTableContext(s32 tableId);
 extern void *SpawnMoby(s32 classId);
 extern s32 g_museumMenuCursor;   /* museum carousel cursor 0..4 */
@@ -4274,7 +4267,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", UpdateHelpTopic
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 62.81% -> SPLIT-HIREG,
  * first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 73.12% -> PACKED-SAVE, first differing row @1: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. */
-extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
 extern s32 g_helpTopicCursor;    /* 0x1ABA98 - help topic page index 0..0x11 */
 extern s32 D_25C940;             /* active topic index mirror */
 extern s16 D_1ABDC0[];           /* per-topic string-id table (halfwords) */
@@ -4394,7 +4387,7 @@ extern s32 g_optionsSubCursor;
 extern u8 D_25CA80[];
 extern s32 D_25CB30;
 extern u8 D_1ABDEA[]; /* s16 entries on a 4-byte stride */
-extern void PlayGlobalSound(s32 id, s32 a, s32 b);
+extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D2FC8);
 #else
@@ -4686,58 +4679,50 @@ s32 func_002D37E0(void) {
  *     Vec3RescaleToLenVu0(camBlock+0x10, soundBlkBase, 1.0f);
  *   - otherwise returns 0.
  * EU twin func_002D3770 (byte-identical; region-shifted symbols).
- * Routes to tester-EE: drives PlayGlobalSound + the VU0 Vec3RescaleToLenVu0
- * micro-op + live cinematic-camera state; not standalone cmp-oracle'able.
- * Wall: `beql` branch-likely on the +0xE0 latch + VU0/float-arg scheduling — not
- * reproduced from clean C. Preserved as portable C. */
+ * Byte-exact on the s136os arm (task #1656): func_002D3BE0's poll shape. The
+ * sound-bank words are written through one base pointer (the ROM addresses them
+ * as 0x14F8/0x1500 off g_soundBankHandlesBlk in a register, +0x1500 first), and
+ * the rescale source is formed from the destination (`addiu $5,$4,-0x14E0`:
+ * g_cinematicCameraBlock+0x10 - 0x14E0 is g_soundBankHandlesBlk). PlayGlobalSound
+ * must be declared value-returning, as defined: declared void, cc1 frees $v0 and
+ * loads D_1A790C into $2 where the ROM uses $3. */
 extern s32 D_1A790C;             /* cinematic-camera-active latch */
 extern u8 g_soundBankHandlesBlk[];   /* 0x189E20 - sound-bank handle block */
 extern u8 g_cinematicCameraBlock[];  /* 0x18B2F0 - cinematic camera override block */
 extern void Vec3RescaleToLenVu0(void *dst, void *src, f32 len);
 
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002D37E8);
+/* GUARD (task #1656): on EE this C is the image's body, compiled alone by the s136os
+ * arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and
+ * spliced over the S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm
+ * fallback: a build that skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D37E8)
+S136OS_SLOT(func_002D37E8);
 #else
 /* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
  * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 70.29% -> SPLIT-HIREG,
  * first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`;
  * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 80.33% -> SPLIT-HIREG, first differing row @0: ROM `lui v1,0x0  [HI16 0x00138344]` vs `lui v0,0x0  [HI16 0x00138344]`. */
-/* TODO(match): functional equivalent - not byte-exact; `beql` branch-likely latch
- * + VU0 float-arg scheduling not reproduced by cc1. */
 s32 func_002D37E8(void) {
     s32 flags = g_padButtonsPressed;
     s32 result = 0;
-
     if (flags & 0x10) {
-        s32 *block = (s32 *)g_menuScreenBlock;
-        s32 v = *(s32 *)(*(u8 **)((u8 *)block + 0x14) + 0xE0);
-        if (v != 0) {
-            block[0x18 / 4] = v;
-            return 0;
-        }
-        if (block[0x134 / 4] == 0) {
-            return -1;
-        }
-        return 0;
+        return MenuPollConfirm();
     }
-
     if (flags & 0x900) {
-        return 1;
-    }
-
-    if (flags & 0x40) {
+        result = 1;
+    } else if (flags & 0x40) {
         PlayGlobalSound(4, 0, 0);
         if (D_1A790C != 0) {
+            u8 *blk = g_soundBankHandlesBlk;
             D_1A790C = 0;
-            *(s32 *)(g_soundBankHandlesBlk + 0x14F8) = 0;
-            *(s32 *)(g_soundBankHandlesBlk + 0x1500) = 0;
+            *(s32 *)(blk + 0x1500) = 0;
+            *(s32 *)(blk + 0x14F8) = 0;
         } else {
+            u8 *cam = g_cinematicCameraBlock + 0x10;
             D_1A790C = 1;
-            Vec3RescaleToLenVu0(g_cinematicCameraBlock + 0x10,
-                                g_cinematicCameraBlock + 0x10 - 0x14E0, 1.0f);
+            Vec3RescaleToLenVu0(cam, cam - 0x14E0, 1.0f);
         }
     }
-
     return result;
 }
 #endif

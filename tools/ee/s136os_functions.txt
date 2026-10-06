@@ -380,3 +380,5 @@ usa text/1CA080 func_002D43B0
 usa text/1CA080 func_002CE908
 usa text/1CA080 func_002D4270
 usa text/1CA080 func_002D40E8
+usa text/1CA080 func_002D0158
+usa text/1CA080 func_002D37E8
