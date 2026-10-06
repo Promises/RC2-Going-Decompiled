@@ -3003,7 +3003,7 @@ s32 func_002D2F48(void) {
  * stores the s16 table entry. Matching arm stays INCLUDE_ASM (packed-save + reload scheduling);
  * #else is the structure model. Word-verified vs USA func_002D2FC8: g_padButtonsPressed kept;
  * cursor->D_1ABB08 (gp); g_menuScreenBlock->D_001F0000+0x2840; PlayGlobalSound->func_002E6C28;
- * error/state block D_25CA80->D_0025CAA0; cursor mirror D_25CB30->D_25CB50; s16 entry table
+ * error/state block D_0025CA80->D_0025CAA0; cursor mirror D_25CB30->D_25CB50; s16 entry table
  * D_1ABDEA->D_1ABE52. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1C9F58", func_002D2F50);
@@ -3012,7 +3012,7 @@ s32 func_002D2F50(void) {
     extern void func_002E6C28(s32 id, s32 a, s32 b);   /* PlayGlobalSound */
     extern s32  g_padButtonsPressed;
     extern s32  D_1ABB08;                 /* options sub cursor (gp) */
-    extern u8   D_0025CAA0[];             /* USA D_25CA80 */
+    extern u8   D_0025CAA0[];             /* USA D_0025CA80 */
     extern s32  D_25CB50;                 /* USA D_25CB30 */
     extern u8   D_1ABE52[];               /* s16 entries on a 4-byte stride */
     s32 flags = g_padButtonsPressed;

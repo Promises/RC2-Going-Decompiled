@@ -4494,12 +4494,16 @@ s32 func_002D2FC0(void) {
  * cursor and returns 1. Up (0x8000) decrements the 6-entry cursor (clamp at 0);
  * Down (0x2000) increments (clamp at 5). Each move plays sound 3 (moved) or 5
  * (blocked at an edge). After a move, if the cursor changed it latches an error
- * code (-0x12C) into D_25CA80[0x3C]; then mirrors the cursor into D_25CB30 and
- * stores the s16 entry from the D_1ABDEA table into D_25CA80[0x34]. Returns the
+ * code (-0x12C) into D_0025CA80[0x3C]; then mirrors the cursor into D_25CB30 and
+ * stores the s16 entry from the D_1ABDEA table into D_0025CA80[0x34]. Returns the
  * confirm/cancel tri-state.
+ * D_0025CA80 is the options screen's record (its first word is func_002CD450, the
+ * screen's query handler). The 8-digit spelling is the one splat gives the
+ * defining dlabel in data/138B80.data.s and the one the ROM's relocations name;
+ * the 6-digit D_25CA80 was only an address alias (task #1739).
  * Wall: 8-byte-packed-save (saves $16 + $17 + $31). Preserved as portable C. */
 extern s32 g_optionsSubCursor;
-extern u8 D_25CA80[];
+extern u8 D_0025CA80[];
 extern s32 D_25CB30;
 extern u8 D_1ABDEA[]; /* s16 entries on a 4-byte stride */
 extern s32 PlayGlobalSound(s32 id, s32 a, s32 b);
@@ -4554,11 +4558,11 @@ s32 func_002D2FC8(void) {
     }
 
     if (old != g_optionsSubCursor) {
-        *(s32 *)(D_25CA80 + 0x3C) = -0x12C;
+        *(s32 *)(D_0025CA80 + 0x3C) = -0x12C;
     }
     cur = g_optionsSubCursor;
     D_25CB30 = cur;
-    *(s32 *)(D_25CA80 + 0x34) = *(s16 *)(D_1ABDEA + cur * 4);
+    *(s32 *)(D_0025CA80 + 0x34) = *(s16 *)(D_1ABDEA + cur * 4);
     return result;
 }
 #endif
