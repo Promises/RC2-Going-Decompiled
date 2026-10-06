@@ -1144,8 +1144,10 @@ extern s32 g_playerProgressAbs;
  *      NOTE #9328's phrasing;
  *    - the dialog latches addressed through D_152C00, the ROM's own symbol,
  *      declared as an unsized array: cc1 then splits its %hi/%lo and the
- *      scheduler interleaves `li $2,-1` between them as in the ROM, where the
- *      byte-sized g_levelDialogToc spelling prints one `la` macro;
+ *      scheduler interleaves `li $2,-1` between them as in the ROM. Spelled
+ *      through the byte-sized g_levelDialogToc instead, each latch store is
+ *      its own absolute `lui $at` + `sw` at +0x13C8/+0x13E0, with no `la`
+ *      and no split (FACT #9344);
  *    - the armor/held-item ids stored non-volatile (cast), so the five
  *      independent stores schedule freely, listed with D_152C00[6] LAST:
  *      cc1 issues the last store of the group first (FACT #9254), giving the

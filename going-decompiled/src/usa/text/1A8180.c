@@ -2077,8 +2077,12 @@ void func_002A9C88(Moby *moby, void *hitInfo) {
                 *(s32 *)(existing + 0x24) |= *(s32 *)(hi + 0x14);
                 return;
             }
-            carriedFlags = *(s32 *)(existing + 0x24);   /* slot reused: carry flags */
+            /* Same moby, and the new +0x1C is not below the slot's +0x2C:
+             * supersede it with a fresh entry that carries its flags
+             * (FACT #5768). The old entry is left in place. */
+            carriedFlags = *(s32 *)(existing + 0x24);
         }
+        /* else: slot was reused by another moby — fall through to a new entry */
     }
 
     off = ringCursor * 0x40;
