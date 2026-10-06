@@ -1939,8 +1939,8 @@ void func_002A9A68(void *packet, s32 source, s32 arg, f32 power, void *dir) {
 /* Ghidra alias CollMobysSphere / QueryMobysInSphere @ 0x00277F58: moby-only
  * sphere gather + damage-event broadcast into g_collHitEventRing (see
  * collision.h). Returns the hit count (list in g_collMobyHitList). */
-extern s32 CollMobysSphere(void *targetList, void *filter, Moby *self,
-                           void *hitEvent, f32 radius);
+extern s32 CollMobysSphere(void *targetList, f32 radius, void *filter,
+                           Moby *self, void *hitEvent);
 
 /*
  * func_002A9A90: issue a directional moby sphere-collision / damage query.
@@ -1959,11 +1959,25 @@ extern s32 CollMobysSphere(void *targetList, void *filter, Moby *self,
  * but it is the order cc1 sets the arguments up in, and the ROM caller
  * func_002A9BD8 sets them up as self, radius, arg3, power, scale, arg4, arg5,
  * filter (origin last, in the jal slot) - which only this order reproduces.
+ *
+ * @return the CollMobysSphere hit count.
+ *
+ * MATCHED on the s136os arm (task #1715): 82 ROM words, byte-exact. The lever
+ * is f32 PARAM-POSITION (NOTE #8962) on the CALLEE's prototype: CollMobysSphere
+ * is declared (targetList, radius, filter, self, hitEvent). EABI assigns no
+ * different register for it, but cc1 sets up call arguments and numbers the
+ * incoming-param pseudos in declaration order, and only radius-second gives the
+ * ROM's $f12-before-$a1 set-up and arg4/arg5/filter in s3/s4/s5. Measured
+ * (solo s136, vmu words differing): radius 1st 2/82, 2nd 0, 3rd 7/82, 4th
+ * 8/82, last (as before) 9/82.
  */
-/* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 75.22%
-   -> UNKNOWN-@2: ROM `(none)` vs `daddu s1,a0,zero` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A9A90);
+/* GUARD (task #1715): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002A9A90)
+S136OS_SLOT(func_002A9A90);
 #else
 s32 func_002A9A90(Moby *self, void *targetList, f32 radius, s32 arg3,
                   f32 power, f32 scale, s32 arg4, s32 arg5, void *filter) {
@@ -1986,7 +2000,7 @@ s32 func_002A9A90(Moby *self, void *targetList, f32 radius, s32 arg3,
     *(u8  *)(hitEvent + 0x19) = (u8)arg5;
     *(u16 *)(hitEvent + 0x1A) = self->oClass;
 
-    return CollMobysSphere(targetList, filter, self, hitEvent, radius);
+    return CollMobysSphere(targetList, radius, filter, self, hitEvent);
 }
 #endif
 
@@ -4579,7 +4593,7 @@ void func_002ACA20(f32 queryRadius, f32 queryPower, f32 ringRadius, f32 whiteRin
         hitRec[0x18] = 2;
         hitRec[0x19] = 1;
         *(u16 *)(hitRec + 0x1A) = *(u16 *)((u8 *)moby + 0xAA);
-        CollMobysSphere(pos, (void *)0x10, (Moby *)moby, hitRec, queryRadius);
+        CollMobysSphere(pos, queryRadius, (void *)0x10, (Moby *)moby, hitRec);
     }
 
     /* --- Type-0F spark spray --- */
