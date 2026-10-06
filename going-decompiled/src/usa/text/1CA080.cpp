@@ -792,25 +792,20 @@ void RequestMenuScreenChange(s32 screen) {
 /* The two screen-capture fields of the menu-screen block (g_menuScreenBlock),
  * shared by CaptureScreenToVram and RestoreScreenFromVram. Only these fields are
  * named.
- * They are read as MEMBERS of a typed declaration bound to the block's symbol by
- * an asm label, not through byte casts on the u8[] symbol (task #1712). As
- * members, cc1 re-forms the full `addiu %lo(g_menuScreenBlock)` base and reads
- * 0x20/0xD0 off it, keeping %hi in a callee-saved register across the loop, as the
- * ROM does. Through casts it folds the offsets into %lo(g_menuScreenBlock+N) and
- * re-issues `lui` after the loop.
- * The alias is EE-only: on native an __asm__ label bypasses the C symbol prefix,
- * so native reads the same fields through a cast. */
+ * They are read as MEMBERS of this struct (task #1712). As members, cc1 re-forms
+ * the full `addiu %lo(g_menuScreenBlock)` base and reads 0x20/0xD0 off it,
+ * keeping %hi in a callee-saved register across the loop, as the ROM does.
+ * Through byte casts, `*(s32 *)(g_menuScreenBlock + 0x20)`, it folds the offset
+ * into %lo(g_menuScreenBlock+0x20) and re-issues `lui` after the loop.
+ * A cast of the symbol to the struct type is enough: an asm-label alias of the
+ * same type measured identical, so none is used. */
 struct ScreenCaptureBlock {
     u8  unk0[0x20];
     s32 dstAddr;      /* 0x20 */
     u8  unk24[0xAC];
     s32 captureMode;  /* 0xD0 */
 };
-#ifndef TARGET_NATIVE
-extern struct ScreenCaptureBlock g_screenCapture __asm__("g_menuScreenBlock");
-#else
 #define g_screenCapture (*(struct ScreenCaptureBlock *)g_menuScreenBlock)
-#endif
 
 /* g_frameCounter (0x1B1518). The native arena PROVIDEs that word only under its
  * old name D_1B1518, so native spells it that way. */
@@ -5430,13 +5425,12 @@ extern void func_00342460(void *widget, s32 arg);
 extern s32 func_00343AD0(void *p);
 extern s32 func_003444C8(void *p);
 extern void func_00344480(void *p);
-/* The two g_weaponTable variant fields func_002D4568 reads, as members of a typed
- * declaration bound to the table's symbol. The table's stride is 0xE0. Only these
- * fields are named, and their meaning is not established.
+/* The two g_weaponTable variant fields func_002D4568 reads. The table's stride
+ * is 0xE0. Only these fields are named, and their meaning is not established.
  * As members, cc1 keeps the bare %lo(g_weaponTable) base in a callee-saved
  * register and puts 0x42/0x6 on the `lh`, as the ROM does. Through byte casts it
- * folds +0x42 into the %lo (task #1712). The alias is EE-only; native reads
- * through a cast. */
+ * folds +0x42 into the %lo (task #1712). As with g_screenCapture, a cast is
+ * enough and no alias is used. */
 struct WeaponVariantFields {
     u8  unk0[0x6];
     s16 unk6;         /* 0x06 */
@@ -5444,11 +5438,7 @@ struct WeaponVariantFields {
     s16 unk42;        /* 0x42 */
     u8  unk44[0x9C];
 };
-#ifndef TARGET_NATIVE
-extern struct WeaponVariantFields g_weaponVariants[] __asm__("g_weaponTable");
-#else
 #define g_weaponVariants ((struct WeaponVariantFields *)g_weaponTable)
-#endif
 #if !defined(TARGET_NATIVE) && !defined(S136OS_func_002D4568)
 S136OS_SLOT(func_002D4568);
 #else
