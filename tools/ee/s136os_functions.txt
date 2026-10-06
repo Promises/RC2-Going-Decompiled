@@ -409,3 +409,5 @@ usa text/188858 func_0028BF80
 usa text/188858 FindTextTableEntry
 usa text/1B4218 InitDialogSoundChannel
 usa text/1CA080 func_002CE6D8
+usa text/191238 MapAllocCacheSlot
+usa text/191238 MapMoveCacheSlot

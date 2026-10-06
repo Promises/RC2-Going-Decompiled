@@ -4154,33 +4154,9 @@ s32 MapFindReadyCacheSlot(s32 fromEnd) {
     return -1;
 }
 
-/* MapAllocCacheSlot (MapPromoteCacheSlot) — pick a usable galactic-map cache slot
- * and move it to slot 0. First tries MapFindReadyCacheSlot(1) (a slot with state set +
- * id -1); if that returns nonzero it is the answer. Otherwise scans slots 1..4
- * for the first occupied slot (slotState != 0) whose level id lacks bit 0x1000,
- * relocates it into slot 0 (MapMoveCacheSlot) and returns its index (or 5 if none).
- * #else body is in the map-cache slice below (needs the MapCache type +
- * MapMoveCacheSlot); the INCLUDE_ASM stays here in address order. */
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 87.10% PACKED-SAVE /
- * engine96 87.62% IDIOM-LIKELY; best arm engine96, first differing insn there: 'daddu s0, v0,
- * zero' vs ''. Iterated: engine96 89.00% IDIOM-LIKELY — single-exit `i` form (s2):
- * beqzl/likely-slot loop tail + hi-part copy differ */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapAllocCacheSlot);
-#endif
-
-/* MapMoveCacheSlot (MapMoveCacheSlot) — relocate a galactic-map cache slot's
- * contents src -> dst; the portable #else body lives in the galactic-map cache
- * slice below (after the MapCache struct it depends on). */
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 93.26% PACKED-SAVE /
- * engine96 56.77% UNKNOWN-lui; best arm sdk29, first differing insn there: 'addiu sp, sp,
- * -0x30' vs 'addiu sp, sp, -0x60'. Iterated: engine96 63.38% REGNUM-COLORING — explicit per-
- * array pointer form (s4) reproduces the address formation; register assignment + order differ */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", MapMoveCacheSlot);
-#endif
+/* MapAllocCacheSlot (0x295F98) and MapMoveCacheSlot (0x296038) are defined
+ * below, after the MapCache type they read; nothing is emitted between here and
+ * there on EE, so address order is kept. */
 
 /*
  * ── Galactic-map cache / level-availability slice ──────────────────────────
@@ -4223,6 +4199,68 @@ typedef struct MapCache {
 } MapCache;
 extern MapCache g_mapVertexData;     /* 0x1C4F20 map cache / vertex-data base */
 
+/*
+ * MapAllocCacheSlot() (0x295F98) — pick a galactic-map cache slot for a new
+ * streaming load and return its index. MapFindReadyCacheSlot(1) is tried first
+ * and any nonzero answer is returned as-is (note -1, "none", is nonzero too, so
+ * only an answer of slot 0 falls through). Otherwise slots 1..4 are scanned for
+ * the first occupied one (slotState != 0) whose level id lacks the 0x1000
+ * (loading) flag; that slot is moved into slot 0 with MapMoveCacheSlot and its
+ * index returned. If none qualifies the scan ends at 5 and MapMoveCacheSlot(0, 5)
+ * is still called — the ROM does the same.
+ *
+ * MATCHED on the s136os arm (task #1714; SN 2.95.3 v1.36 -fopt-stack, row in
+ * tools/ee/s136os_functions.txt, spliced over S136OS_SLOT). Lever: ONE variable
+ * for the MapFindReadyCacheSlot result and the scan index (the ROM copies the
+ * result into $s0 before testing it); a separate `slot` local leaves 13 of 40
+ * words different. No devices. The t496 "engine96 89%" note this replaces was
+ * measured on other compilers.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_MapAllocCacheSlot)
+S136OS_SLOT(MapAllocCacheSlot);
+#else
+void MapMoveCacheSlot(s32 dst, s32 src);
+s32 MapAllocCacheSlot(void) {
+    s32 i = MapFindReadyCacheSlot(1);
+
+    if (i != 0) {
+        return i;
+    }
+    for (i = 1; i < 5; i++) {
+        if ((g_mapVertexData.slotLevelId[i] & 0x1000) == 0 && g_mapVertexData.slotState[i] != 0) {
+            break;
+        }
+    }
+    MapMoveCacheSlot(0, i);
+    return i;
+}
+#endif
+
+/*
+ * MapMoveCacheSlot(dst, src) (0x296038) — relocate a galactic-map cache slot's
+ * contents from `src` to `dst`: copies slotState[src]'s pixel buffer into
+ * slotState[dst]'s (slotPixelCount[src] qwords via CopyQwords), carries the level
+ * id and pixel count across, and frees the source slot (slotLevelId[src] = -1).
+ *
+ * MATCHED on the s136os arm (task #1714): the existing portable body, unchanged
+ * but for naming g_mapVertexData (the ROM relocation's name for the map cache),
+ * is byte-exact under SN 2.95.3 v1.36 -fopt-stack. The recorded "WALL" (folded
+ * base relocs, index colouring) belonged to the 2.9/2.96 compilers. No devices.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_MapMoveCacheSlot)
+S136OS_SLOT(MapMoveCacheSlot);
+#else
+extern void CopyQwords(void *dst, const void *src, s32 nbytes);
+void MapMoveCacheSlot(s32 dst, s32 src) {
+    CopyQwords((void *)g_mapVertexData.slotState[dst],
+               (const void *)g_mapVertexData.slotState[src],
+               g_mapVertexData.slotPixelCount[src] << 4);
+    g_mapVertexData.slotLevelId[dst]    = g_mapVertexData.slotLevelId[src];
+    g_mapVertexData.slotPixelCount[dst] = g_mapVertexData.slotPixelCount[src];
+    g_mapVertexData.slotLevelId[src]    = -1;
+}
+#endif
+
 #ifdef TARGET_NATIVE
 /* Offset checks only on a C11+ host (ee-gcc 2.9 used by the EE-backend suite
  * predates _Static_assert). */
@@ -4249,45 +4287,6 @@ s32 MapGetLevelOrderIndex(s32 level);
 s32 MapUpdateLevelAvailability(void);
 extern s32 func_002835E0(s32 x);     /* integer abs() (text/183558) */
 
-/*
- * MapMoveCacheSlot(dst, src) — MapMoveCacheSlot: relocate a galactic-map cache
- * slot's contents from `src` to `dst`. Copies the pixel-data buffer
- * (slotState[src] -> slotState[dst], slotPixelCount[src] qwords via CopyQwords),
- * carries the slot's level id and pixel-count across, and frees the source slot
- * (slotLevelId[src] = -1). Used by the cache-slot allocator/compactor.
- *
- * WALL: the pinned cc1 folds the three parallel-array base addresses
- * (&g_mapVertexData + 0x288/0x29C/0x2B4) into single relocs and colours the
- * indices differently from the original's later cc1. Kept as the portable
- * #else body (placed here so it follows the MapCache type it reads).
- */
-extern void CopyQwords(void *dst, const void *src, s32 nbytes);
-void MapMoveCacheSlot(s32 dst, s32 src) {
-    CopyQwords((void *)g_mapCache.slotState[dst],
-               (const void *)g_mapCache.slotState[src],
-               g_mapCache.slotPixelCount[src] << 4);
-    g_mapCache.slotLevelId[dst]    = g_mapCache.slotLevelId[src];
-    g_mapCache.slotPixelCount[dst] = g_mapCache.slotPixelCount[src];
-    g_mapCache.slotLevelId[src]    = -1;
-}
-
-/* MapAllocCacheSlot #else body — placed here so it follows the MapCache type and
- * MapMoveCacheSlot it depends on (its INCLUDE_ASM stays in address order above). */
-s32 MapAllocCacheSlot(void) {
-    s32 slot = MapFindReadyCacheSlot(1);
-    s32 i;
-
-    if (slot != 0) {
-        return slot;
-    }
-    for (i = 1; i < 5; i++) {
-        if ((g_mapCache.slotLevelId[i] & 0x1000) == 0 && g_mapCache.slotState[i] != 0) {
-            break;
-        }
-    }
-    MapMoveCacheSlot(0, i);
-    return i;
-}
 #endif
 
 /* MapFindCacheSlot(levelAndFlag) (0x2960D8): scan the 5 map cache slots for an
