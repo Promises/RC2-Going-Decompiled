@@ -1528,43 +1528,64 @@ void func_002898E0(void) {
 #endif
 
 /*
- * FindTextTableEntry(textId): linear-search the active localized text table for
- * the entry whose id (+0x4) matches `textId`; return its index, or -1 when the
- * table is empty or has no match.
- *
- * WALL (67.70%, LICM/aliasing): the first-element special-case + i++/re-read
- * index form
- *     if (g_subtitleState.tableCount > 0) {
- *         TextEntry *t = g_pActiveTextTable;
- *         if (t[0].id == textId) return 0;
- *         for (i = 1; i < g_subtitleState.tableCount; i++)
- *             if (t[i].id == textId) return i;
- *     } return -1;
- * gets the entry/first-element shape and the in-loop bnel branch-likely right,
- * but the original RE-READS g_subtitleState's +0x2C count from memory every
- * iteration and indexes the table as `base + i*0x10` (keeping the base live),
- * whereas this cc1 hoists the count load out of the loop (LICM — independent of
- * -fno-gcse, since it's loop-invariant load motion, not PRE) and walks a
- * `+= 0x10` pointer. The original treats the count load as if it could alias
- * the table writes (it doesn't), so the re-read can't be reproduced from clean
- * non-volatile C. Left INCLUDE_ASM for the matching build; the #else below is
- * the op-for-op faithful portable form (cmp-oracle: cmp_188858_text.c). */
+ * FindTextTableEntry's absolute read of g_pActiveTextTable. Elsewhere the
+ * pointer is read %gp_rel (it is 4 bytes, under -G8), but here the ROM forms
+ * it with `lui; lw %lo`. cc1 still prints the one-insn `lw` macro; this
+ * assembler alias is sized 16 so gas expands that macro absolutely (the #8036
+ * construct, RULING #8620; the relocations name g_pActiveTextTable itself).
+ * Natively it is the pointer itself.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", FindTextTableEntry);
+__asm__(".extern g_pActiveTextTableAbs, 16\n\tg_pActiveTextTableAbs = g_pActiveTextTable");
+extern TextEntry *g_pActiveTextTableAbs;
+#else
+#define g_pActiveTextTableAbs g_pActiveTextTable
+#endif
+
+/**
+ * Linear-search the active localized text table for an id.
+ *
+ *   textId  the id to find (TextEntry.id, +0x4 in a 0x10-byte entry)
+ *   ->      the entry's index, or -1 when the table is empty or has no match
+ *
+ * Entry 0 is tested before the loop. The loop re-reads the table's count
+ * (g_subtitleState.tableCount, +0x2C) on every pass and indexes the table as
+ * base + i*0x10.
+ *
+ * MATCHED on the s136os arm (task #1696), at the unit's -O2 default
+ * (S136EXTRA="", RULING #9450). Three things carry it:
+ * - the -O2 default itself. The count re-read and the %hi(g_subtitleState)
+ *   copy kept across blocks are gcse's; this file's old comment called the
+ *   re-read unreproducible under the former -fno-gcse pin.
+ * - the loop spelled as a goto with the table read through the global, not a
+ *   local: loop.c hoists that invariant load into a copy (`daddu $7,$3` in the
+ *   ROM). A `table` local, a for loop or a for(;;) with breaks all build 21 to
+ *   25 words against the ROM's 27.
+ * - g_pActiveTextTableAbs (above). Without it the read is one %gp_rel word and
+ *   the body is 26 words.
+ *
+ * GUARD (task #1269): on EE this C is the image's body, compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh. On native it is plain C.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_FindTextTableEntry)
+S136OS_SLOT(FindTextTableEntry);
 #else
 s32 FindTextTableEntry(s32 textId) {
     s32 result = -1;
     s32 i = 0;
 
     if (g_subtitleState.tableCount > 0) {
-        TextEntry *table = g_pActiveTextTable;
-        if (table[0].id == textId) {
-            return 0;
-        }
-        for (i = 1; i < g_subtitleState.tableCount; i++) {
-            if (table[i].id == textId) {
+        if (g_pActiveTextTableAbs[0].id == textId) {
+            result = 0;
+        } else {
+loop:
+            i++;
+            if (i < g_subtitleState.tableCount) {
+                if (g_pActiveTextTableAbs[i].id != textId) {
+                    goto loop;
+                }
                 result = i;
-                break;
             }
         }
     }
