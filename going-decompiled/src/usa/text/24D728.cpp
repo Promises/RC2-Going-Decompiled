@@ -131,6 +131,11 @@ _Static_assert(sizeof(GuiInstance) == 0x2238, "GuiInstance occupies game-state[0
  *    the folded "+ 1.0f" coefficient was a different expression. The FP
  *    register colouring left after that (85.59%) was closed by task #894 -
  *    see the function's own comment.
+ *
+ * LATER (task #1669): func_0034F240, func_0034F928 and func_0034F9B8 closed on
+ * the s136os arm (SN 1.36, which converts the plain decimals exactly). Their
+ * sibling-call guards, float respellings and the F928 union are gone from
+ * those bodies; each body's own comment says what closed it.
  * --------------------------------------------------------------------------- */
 
 extern s32 *GuiElementGetColor(GuiElement *e);
@@ -609,8 +614,11 @@ void GuiManagerInitHudLists(void *inst, void *gui, void *pool) {
 }
 #endif
 
-/* func_0034EF60: empty/no-op leaf (original compiles to jr ra; nop). */
-void func_0034EF60(void) {
+/* func_0034EF60: empty/no-op manager hook (original compiles to jr ra; nop).
+ * Its one ROM caller, func_0034F240, passes the GuiInstance in $a0
+ * (`daddu $4,$16,$0` in the jal delay slot), so it takes it and ignores it. */
+void func_0034EF60(void *gui) {
+    (void)gui;
 }
 
 /* func_0034EF68: initialize the `index`-th HUD list row (each row is a 0x48-byte
@@ -777,8 +785,8 @@ void func_0034F220(GuiInstance *mgr) {
  * no-op (func_0034EF60), re-lays the HUD manager (func_0034E8D8), clears the two
  * GUI manager status words at g_guiInstance+0x38000+0x79E0/+0x79DC while
  * forwarding the HUD list (func_00339F98 on gui+0x1FDC), ticks func_0029D9B8,
- * then restores the saved projection param and rebuilds once more. The matching
- * build keeps the asm (engine save-layout wall). */
+ * then restores the saved projection param and rebuilds once more.
+ * gui: the GuiInstance. Returns nothing. */
 #ifdef TARGET_NATIVE
 extern void *g_guiInstance;
 extern void BuildCameraProjection(void);
@@ -791,12 +799,8 @@ extern s32  D_1AE6F4;                 /* gp-global passed to func_0034F028 */
 extern s32  D_1AE6F8;                 /* gp-global passed to func_0034F028 */
 #endif
 
-/* TODO(match) func_0034F240 - task #566 (round 4), measured on the COMMITTED tree (this file,
- * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
- * tools/ee/objdiff_build.sh, clean): sdk29 59.21%, engine96 38.21%. Eligible arm: e96.
- * Residual: REGNUM (extra callee s2 once the sibcall is guarded) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F240);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0034F240)
+S136OS_SLOT(func_0034F240);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
@@ -810,34 +814,43 @@ extern s32 D_1AE6F4;
 extern s32 D_1AE6F8;
 extern void *g_guiInstance;
 /* (end of this body's declarations) */
-void func_0034F240(void *guiArg) {
-    u8  *gui = (u8 *)guiArg;
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1669). Three spellings carry it. The parameter is used
+   directly: a `u8 *gui = (u8 *)guiArg` local gives cc1 a second pseudo and an
+   extra callee-saved copy ($17 = $16, $18 for cam). Both status-word stores
+   come BEFORE func_00339F98, +0x79DC first in source: the ROM issues +0x79E0
+   and fills the jal delay slot with +0x79DC, with the base in a temp ($3), not
+   a saved register. func_0034EF60 is called with gui, as the ROM does.
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
+void func_0034F240(void *gui) {
     u8  *cam = g_sceneActorMobys + 0x674;   /* scene camera params */
     f32  saved = *(f32 *)(cam + 0xB0);
 
-    *(f32 *)(cam + 0xB0) = 0.62000003f;     /* 0x3F1EB852 (0.62f); cc1 2.96 spells 0.62f 1 ULP low */
+    *(f32 *)(cam + 0xB0) = 0.62f;
     BuildCameraProjection();
 
     if (D_1A8C64 == 0) {
-        s32 packed = func_0034D7A8((GuiHudManager *)(gui + 0x7A0));
-        func_0034F028(gui, D_1AE6F4, D_1AE6F8, (s32)((u32)packed >> 24));
+        s32 packed = func_0034D7A8((GuiHudManager *)((u8 *)gui + 0x7A0));
+        func_0034F028((u8 *)gui, D_1AE6F4, D_1AE6F8, (s32)((u32)packed >> 24));
     }
 
-    func_0034EF60();
-    func_0034E8D8(gui + 0x7A0);
+    func_0034EF60(gui);
+    func_0034E8D8((u8 *)gui + 0x7A0);
 
     {
         u8 *mgr = (u8 *)g_guiInstance + 0x38000;
-        *(s32 *)(mgr + 0x79E0) = 0;
-        func_00339F98(gui + 0x1FDC);
         *(s32 *)(mgr + 0x79DC) = 0;
+        *(s32 *)(mgr + 0x79E0) = 0;
+        func_00339F98((u8 *)gui + 0x1FDC);
     }
 
     func_0029D9B8();
 
     *(f32 *)(cam + 0xB0) = saved;
     BuildCameraProjection();
-    __asm__ __volatile__("");
 }
 #endif
 
@@ -1192,7 +1205,7 @@ void func_0034F868(u8 *base) {
 }
 #endif
 
-/* func_0034F928 globals/callee (declared for the TARGET_NATIVE #else only). */
+/* func_0034F928 globals/callee. */
 extern u8   g_dirLightMatrices[];    /* 0x1C26C0, 0x40-stride directional-light matrices */
 extern void func_00283638(void *dst);/* zero a 16-byte quadword at dst */
 
@@ -1203,57 +1216,56 @@ extern void func_00283638(void *dst);/* zero a 16-byte quadword at dst */
  *  16-byte matrix-blend blocks at +0x3A0 and +0x3B0. Called with the light-setup
  *  context (its sibling F9B8/F9F8/FAF8 use it), but this one writes only the
  *  global directional light, so ctx is unused here. */
-/* TODO(match) func_0034F928 - task #566 (round 4), measured on the COMMITTED tree (this file,
- * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
- * tools/ee/objdiff_build.sh, clean): sdk29 56.94%, engine96 49.47%. Eligible arm: none.
- * Residual: PACKED-SAVE on e96 (ROM 0x10 vs 0x20) + ORDER (3 float literals now bit-exact) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F928);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0034F928)
+S136OS_SLOT(func_0034F928);
 #else
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1669), every field stored in address order with plain
+   float literals; cc1 emits each as `li.s` (lui/ori/mtc1) and schedules the
+   rest itself. The old union-routed direction value, the hand-interleaved
+   order and the trailing empty asm were all unnecessary.
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 void func_0034F928(void *ctx) {
-    union { u32 u; f32 f; } dir;
+    u8 *m = g_dirLightMatrices;
     (void)ctx;
 
-    *(f32 *)(g_dirLightMatrices + 0x380) = 0.40000001f; /* 0x3ECCCCCD (0.4f); cc1 2.96 spells 0.4f 1 ULP low */
-    *(f32 *)(g_dirLightMatrices + 0x384) = 0.80000003f; /* 0x3F4CCCCD (0.8f); ditto */
-    *(f32 *)(g_dirLightMatrices + 0x388) = 1.2000001f;  /* 0x3F99999A (1.2f); ditto */
-    *(s32 *)(g_dirLightMatrices + 0x38C) = 0;
-    dir.u = 0x3F13B646u; /* ~0.577 direction component */
-    *(f32 *)(g_dirLightMatrices + 0x390) = dir.f;
-    *(f32 *)(g_dirLightMatrices + 0x394) = dir.f;
-    dir.u = 0xBF13B646u; /* ~-0.577 */
-    *(f32 *)(g_dirLightMatrices + 0x398) = dir.f;
-    *(s32 *)(g_dirLightMatrices + 0x39C) = 0;
-    func_00283638(g_dirLightMatrices + 0x3A0);
-    func_00283638(g_dirLightMatrices + 0x3B0);
-    __asm__ __volatile__("");
+    *(f32 *)(m + 0x380) = 0.4f;     /* colour */
+    *(f32 *)(m + 0x384) = 0.8f;
+    *(f32 *)(m + 0x388) = 1.2f;
+    *(s32 *)(m + 0x38C) = 0;
+    *(f32 *)(m + 0x390) = 0.577f;   /* direction */
+    *(f32 *)(m + 0x394) = 0.577f;
+    *(f32 *)(m + 0x398) = -0.577f;
+    *(s32 *)(m + 0x39C) = 0;
+    func_00283638(m + 0x3A0);
+    func_00283638(m + 0x3B0);
 }
 #endif
 
 /* func_0034F9B8: reset the camera-state HUD sub-block (clear the three ints at
  * +0x140/+0x144/+0x148), run func_00283D10 on its +0x370 sub-object, then
- * rebuild the frame view matrices.
- * NEAR-MISS (see the TODO(match) block below for the measured %): the C
- * reproduces every instruction except the position of
- * the `sd $ra` prologue save, which the original schedules between the `lui` and
- * the `%lo` addiu of the global address (a cc1 prologue-scheduling artifact).
- * Kept as the portable #else; the matching build keeps the original bytes. */
-/* TODO(match) func_0034F9B8 - task #566 (round 4), measured on the COMMITTED tree (this file,
- * both arms promoted whole-unit; instrument: tools/ee/unit_report.sh over
- * tools/ee/objdiff_build.sh, clean): sdk29 85.00%, engine96 41.07%. Eligible arm: sdk29.
- * Residual: PRO-ORDER (ROM schedules `sd ra` between the lui and the %lo addiu) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/24D728", func_0034F9B8);
+ * rebuild the frame view matrices. No params, returns nothing. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0034F9B8)
+S136OS_SLOT(func_0034F9B8);
 #else
+/* MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+   byte-exact (task #1669). Closed by REMOVING the trailing empty asm: with it,
+   sched2 issued the %lo addiu before `sd $ra` (2 words); without it the ROM
+   order comes out.
+   GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+   (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+   tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+   splice drops the function. On native it is plain C. */
 void func_0034F9B8(void) {
     u8 *cam = g_cameraState;
-    void *sub = cam + 0x370;
     *(s32 *)(cam + 0x140) = 0;
     *(s32 *)(cam + 0x144) = 0;
     *(s32 *)(cam + 0x148) = 0;
-    func_00283D10(sub);
+    func_00283D10(cam + 0x370);
     BuildFrameViewMatrices();
-    __asm__ __volatile__("");
 }
 #endif
 

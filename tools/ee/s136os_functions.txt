@@ -388,3 +388,6 @@ usa text/198FA0 func_0029DCB8
 usa text/198FA0 func_0029CC48
 usa text/1A8180 func_002AE198
 usa text/1A8180 func_002B0FE0
+usa text/24D728 func_0034F240
+usa text/24D728 func_0034F928
+usa text/24D728 func_0034F9B8
