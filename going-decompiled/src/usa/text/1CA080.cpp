@@ -1525,46 +1525,44 @@ s32 TickActiveMenuScreen(void) {
  * packs save slots 8-byte vs our 16-byte) — left as INCLUDE_ASM. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", RenderMenuScreenWidgets);
 
-/* Menu screen-state query: only acts when the active screen (ss[0x14]) is the
- * one passed in. Returns a tri-state confirm/cancel code driven by the global
- * input flags (D_138180[0x1C4]) and the screen's pending-result fields.
- * Near-miss (~48%): the original keeps the second D_138180[0x1C4] reload and the
- * branch-likely (beql/bnel) loop shape from the load-PRE-present SN cc1; our cc1
- * CSEs the reload and the andi 0x10 test, producing a structurally different
- * (shorter) body. Preserved as portable C. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CD450);
+/* Options-screen query (first word of the options screen's handler record
+ * D_0025CA80): acts only when the active screen (g_menuScreenBlock+0x14) has
+ * +0xE8 == screen. Cancel (0x900 in the pad word at D_138180+0x1C4) returns 1
+ * while g_menuScreenBlock+0x134 is clear; otherwise confirm (0x10) latches the
+ * pending sub-result through MenuPollConfirm (0 or -1). Returns 0 otherwise.
+ *   screen: the screen record the caller asks about.
+ *
+ * Byte-exact on the s136os arm (task #1739), no devices. Two spellings carry it:
+ *   - the pad word is read as a member of a struct cast of D_138180. The ROM
+ *     keeps %hi(D_138180) live across blocks and re-forms the base with
+ *     `addiu %lo` before each `lw 0x1C4`; the byte-offset spelling
+ *     `*(s32 *)(D_138180 + 0x1C4)` folds the offset into the symbol and is 30
+ *     words off (solo s136 harness);
+ *   - the confirm test is positive (`if (... & 0x10) return MenuPollConfirm();
+ *     return 0;`). Written as an early `return 0` on the negated test, cc1
+ *     cross-jumps that exit into the first `return 0` and the ROM's separate
+ *     tail is lost (2 words). */
+typedef struct {
+    u8 _pad[0x1C4];
+    s32 buttons;
+} PadInputBlock;
+
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002CD450)
+S136OS_SLOT(func_002CD450);
 #else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 49.43% -> STRUCTURAL,
- * first differing row @0: ROM `lui v0,0x0  [HI16 0x001F27C0]` vs `lui v0,0x0  [HI16 0x001F26C0]`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 48.22% -> STRUCTURAL, first differing row @0: ROM `lui v0,0x0  [HI16 0x001F27C0]` vs `lui v0,0x0  [HI16 0x001F26C0]`. */
-/* TODO(match): functional equivalent - not byte-exact; cc1 CSEs the global-flag
- * reload + andi the original re-emits under branch-likely. */
 s32 func_002CD450(s32 screen) {
-    u8 *ss = g_particleFxBlob + 0x100;
-    s32 flags;
-    s32 v;
-    if (*(s32 *)(*(u8 **)(ss + 0x14) + 0xE8) != screen) {
+    u8 *block = g_menuScreenBlock;
+
+    if (*(s32 *)(*(u8 **)(block + 0x14) + 0xE8) != screen) {
         return 0;
     }
-    flags = *(s32 *)(D_138180 + 0x1C4);
-    if (flags & 0x900) {
-        if (*(s32 *)(ss + 0x134) == 0) {
+    if (((PadInputBlock *)D_138180)->buttons & 0x900) {
+        if (*(s32 *)(block + 0x134) == 0) {
             return 1;
         }
-        flags = *(s32 *)(D_138180 + 0x1C4);
     }
-    if (!(flags & 0x10)) {
-        return 0;
-    }
-    v = *(s32 *)(*(u8 **)(ss + 0x14) + 0xE0);
-    if (v != 0) {
-        *(s32 *)(ss + 0x18) = v;
-        return 0;
-    }
-    if (*(s32 *)(ss + 0x134) == 0) {
-        return -1;
+    if (((PadInputBlock *)D_138180)->buttons & 0x10) {
+        return MenuPollConfirm();
     }
     return 0;
 }
