@@ -119,6 +119,9 @@ __asm__(".extern D_1ABA76, 16");
 __asm__(".extern D_1ABA77, 16");
 __asm__(".extern g_cameraCallbackCount, 16");
 __asm__(".extern g_nLevelExitRequested, 16");
+/* LevelSelectListHandleInput: the ROM forms &g_abLevelAvailableFlags as a one-insn
+ * `la` macro (`lui $20; addiu $20,$20`), task #1739. */
+__asm__(".extern g_abLevelAvailableFlags, 16");
 
 /* ROM-split externs (task #468, tools/ee/.t468/05_symbol_shapes.txt): in the ROM
  * every reference to these is a compiler-split lui/%lo pair — the high half in
@@ -1276,40 +1279,56 @@ s32 IsLevelListEntryEnabled(s32 idx) {
  * to the selected destination via RequestLevelExit(sel, 1) — except the special
  * label 0xB47 with D_1A7C09 clear, which exits to 0x19 instead. Returns the selected
  * index on confirm, else -1.
- * (matching arm left INCLUDE_ASM: 8-byte-packed-save wall.) */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", LevelSelectListHandleInput);
+ *   flags: the pad buttons pressed this frame.
+ *
+ * Byte-exact on the s136os arm (task #1739). What carries it (solo s136 harness):
+ *   - a plain `for` loop with no explicit `count >= 0` guard: cc1's own loop
+ *     rotation puts `i = 0` above the entry test, as the ROM has it;
+ *   - the scroller address is never held in a local across the loop. The ROM
+ *     keeps only %hi(g_nLevelSelectListCount) in a saved register and re-forms
+ *     the address after the loop. The previous #else (explicit guard, scroller
+ *     local) differed in 64 of 78 word positions;
+ *   - g_abLevelAvailableFlags is declared cc1-small (u8[8]) with the unit's
+ *     `.extern g_abLevelAvailableFlags, 16` (ADDRESSING-MODEL device, same shape
+ *     as 1A8180.c's): cc1 then prints one `la` macro, which gas expands through
+ *     the destination register as the ROM does. Without the `.extern` the
+ *     address goes gp-relative (76 words); without the small declaration cc1
+ *     splits it through a temporary (4/78). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_LevelSelectListHandleInput)
+S136OS_SLOT(LevelSelectListHandleInput);
 #else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 75.64% -> STRUCTURAL,
- * first differing row @1: ROM `lui v0,0x0  [HI16 0x002109F0]` vs `sd s4,32(sp)`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 76.14% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-64` vs `addiu sp,sp,-128`. */
 extern s32 g_nLevelSelectListCount;
-extern u8 g_abLevelAvailableFlags[];
+extern u8 g_abLevelAvailableFlags[8]; /* really one byte per level; see the doc comment */
 extern u8 g_levelSelectEntries[];
 extern u8 D_1A7C09;
 extern void RequestLevelExit(s32 destination, s32 commitSave);
+/* The scroller rooted at g_nLevelSelectListCount. */
+typedef struct {
+    s32 count;
+    s32 selected;
+    s32 entries;
+    s32 enabled[1];
+} LevelListScroller;
 s32 LevelSelectListHandleInput(s32 flags) {
-    s32 *scroller = &g_nLevelSelectListCount;
+    LevelListScroller *scroller;
     s32 result = -1;
     s32 i;
 
-    if (g_nLevelSelectListCount >= 0) {
-        for (i = 0; i <= g_nLevelSelectListCount; i++) {
-            if (IsLevelListEntryEnabled(i)) {
-                *(s32 *)((char *)scroller + 0xC + i * 4) =
-                    (g_abLevelAvailableFlags[i] != 0);
-            }
+    for (i = 0; i <= g_nLevelSelectListCount; i++) {
+        if (IsLevelListEntryEnabled(i)) {
+            ((LevelListScroller *)&g_nLevelSelectListCount)->enabled[i] =
+                (g_abLevelAvailableFlags[i] != 0);
         }
     }
-    *(s32 *)((char *)scroller + 0xC) = 0;
+    scroller = (LevelListScroller *)&g_nLevelSelectListCount;
+    scroller->enabled[0] = 0;
 
     if (flags & 0x1000) {           /* up */
-        ListScrollerSelectPrev(scroller);
+        ListScrollerSelectPrev(&scroller->count);
     } else if (flags & 0x4000) {    /* down */
-        ListScrollerSelectNext(scroller);
+        ListScrollerSelectNext(&scroller->count);
     } else if (flags & 0x40) {      /* confirm */
-        s32 sel = *(s32 *)((char *)scroller + 0x4);
+        s32 sel = scroller->selected;
         result = sel;
         if (*(s32 *)&g_levelSelectEntries[sel * 8] == 0xB47 && D_1A7C09 == 0) {
             RequestLevelExit(0x19, 1);

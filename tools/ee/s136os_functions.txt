@@ -448,3 +448,4 @@ usa text/1B4218 StartSecondaryVoice
 usa text/1B4218 ChainSecondaryVoice
 usa text/1B4218 ResolveMobyEdgeConstraint
 usa text/1CA080 func_002CD450
+usa text/1CA080 LevelSelectListHandleInput
