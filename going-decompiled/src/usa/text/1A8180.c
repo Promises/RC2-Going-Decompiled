@@ -6996,7 +6996,8 @@ extern s32 func_002B1B48(void *subject, s32 stringId, s32 arg2);
  * the tail word and 76 words (25/76). Two more levers, measured on the solo
  * s136 harness (vmu words differing):
  *   - clamp `sel` IN PLACE: a separate `idx` local swaps sel/dest-cursor
- *     ($5/$6) at every use (37/74);
+ *     ($5/$6) at every use (61/74 with this if/else, 37/74 with early
+ *     returns);
  *   - a result local assigned in an if/else (or `if (sel != 3)` first): two
  *     early returns put the func_002B1880 block last (11/74).
  */
