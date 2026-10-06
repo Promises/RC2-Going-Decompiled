@@ -5547,11 +5547,33 @@ s32 func_002AE0B8(void *self, void *obj, Vec4 *in, Vec4 *out) {
  * source orientation (from src+0x20 folded with obj's matrix +0xC0 when src flag
  * +0x3C bit 0x2 is set, else the base matrix), add obj pos back, and write
  * (result − arg3) to arg4. Returns 1.
+ *
+ * self: unused (the caller's object; this is a method-shaped helper).
+ * obj:  the moby whose pos (+0x10) and orientation matrix (+0xC0) are applied.
+ *
+ * MATCHED on the s136os arm (task #1666): 80 ROM words, byte-exact. Sibling of
+ * func_002AE0B8 (same sub-source/matrix shape). Two things decide it, each
+ * measured by removing it alone (solo s136os compile vs the ROM):
+ *   - the no-source zero store is the ROM's `sq $0,0($22)`: a read-only
+ *     128-bit local pinned to $0 (REGISTER-PIN DEVICE, RULING #8479). Spelled
+ *     `*(u_long128 *)arg4 = 0` cc1 emits `por v0,zero,zero; sq v0` (81 words);
+ *     the Vec4 struct initialiser goes through a memset (91 words);
+ *   - mtx is declared before rot, so mtx sits at sp+0x50 and rot at sp+0x90 as
+ *     in the ROM (first-declared takes the lower slot, #1508). The other
+ *     order swaps the two `addiu` frame offsets (2/80).
+ * The ROM's s0->s3 and s1->s5 copies of &p and obj+0x10 are gcse's own: the
+ * body spells both addresses at every use, as master's did. Naming them in
+ * pointer locals lets cc1 coalesce the copies (76-77 words, task #1666).
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 62.64%
    -> UNKNOWN-@1: ROM `sd s4,240(sp)` vs `sd s3,248(sp)` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AE198);
+/* GUARD (task #1666): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002AE198)
+S136OS_SLOT(func_002AE198);
 #else
 /* Prototypes this body needs whose declarations sit in other guarded arms:
  * the s136os arm compiles this arm alone, so it must see them here. */
@@ -5563,16 +5585,21 @@ s32 func_002AE198(void *self, Moby *obj, Vec4 *arg3, Vec4 *arg4) {
     (void)self;
 
     if (src == 0) {
+#ifndef TARGET_NATIVE
+        register u_long128 zeroQuad EE_REG("$0");   /* read-only: never assigned */
+        *(u_long128 *)arg4 = zeroQuad;
+#else
         Vec4 zero = {0.0f, 0.0f, 0.0f, 0.0f};
         *arg4 = zero;
+#endif
         return 0;
     }
     func_00283DC0(&base, (Vec4 *)src);
     Vec4AddVu0(&p, arg3, (Vec4 *)(src + 0x10));
     Vec4SubVu0(&p, &p, (Vec4 *)((u8 *)obj + 0x10));
     if (*(s32 *)(src + 0x3C) & 0x2) {
+        Mat4x4 mtx;   /* declared first: sp+0x50, below rot (see above) */
         Mat4x4 rot;
-        Mat4x4 mtx;
         func_00283DC0(&rot, (Vec4 *)(src + 0x20));
         func_00284048(&mtx, (const Vec4 *)&rot);
         func_00283A48(&p, &p, (Vec4 *)&mtx);

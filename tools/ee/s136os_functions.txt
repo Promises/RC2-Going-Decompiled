@@ -386,3 +386,4 @@ usa text/1CA080 func_002D37E8
 usa text/198FA0 VerifySaveHeaderChecksum
 usa text/198FA0 func_0029DCB8
 usa text/198FA0 func_0029CC48
+usa text/1A8180 func_002AE198
