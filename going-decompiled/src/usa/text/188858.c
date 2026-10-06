@@ -1580,6 +1580,17 @@ void func_002898E0(void) {
 }
 #endif
 
+/* Inter-function padding at 0x289980..0x289987: the two zero words retail
+ * places between func_002898E0 and FindTextTableEntry. They exist only after
+ * `endlabel func_002898E0` in its nonmatchings .s, which is no longer included
+ * now that the s136os arm supplies the body, so without this directive every
+ * later function in the unit lands 8 bytes low (landing_gate usa cmp 679565 at
+ * task #1713's first gate run; FindTextTableEntry linked at 0x289980, retail
+ * 0x289988). Not a codegen device: layout data (RULING #8467). */
+#ifndef TARGET_NATIVE
+__asm__(".word 0\n\t.word 0");
+#endif
+
 /*
  * FindTextTableEntry's absolute read of g_pActiveTextTable. Elsewhere the
  * pointer is read %gp_rel (it is 4 bytes, under -G8), but here the ROM forms
