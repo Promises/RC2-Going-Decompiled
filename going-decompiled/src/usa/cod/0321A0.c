@@ -399,7 +399,7 @@ void func_001329B0(s32 arg0, s32 arg1, s32 arg2) {
 
 /* func_001329F0: 0x20 bytes of inter-function padding split off by symbol_addrs
  * size:0x20; the real wrapper begins at func_00132A10. Pure padding, no C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_001329F0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_001329F0);
 
 /**
  * Invoke snd_QueueCommandToRing with selector 0x11, count 0x18, and a 6-word
@@ -420,7 +420,7 @@ void func_00132A10(s32 arg0, s32 arg1, s32 arg2, s32 arg3, s32 arg4, s32 arg5,
 
 /* func_00132A58: 0x18 bytes of inter-function padding split off by symbol_addrs
  * size:0x18; the real wrapper begins at func_00132A70. Pure padding, no C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00132A58);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00132A58);
 
 /**
  * Invoke snd_QueueCommandToRing with selector 0x15, count 4, arg0 passed by
@@ -433,7 +433,7 @@ void func_00132A70(s32 arg0) {
 
 /* func_00132AA0: 0x28 bytes of inter-function padding split off by symbol_addrs
  * size:0x28; the real wrapper begins at func_00132AC8. Pure padding, no C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00132AA0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00132AA0);
 
 /**
  * Invoke snd_QueueCommandToRing with selector 0x18 and no payload, forwarding
@@ -473,7 +473,7 @@ void func_00132B58(s32 arg0, s32 arg1, s32 arg2) {
 
 /* func_00132B88: 0x38 bytes of inter-function padding split off by symbol_addrs
  * size:0x38; the real wrapper begins at func_00132BC0. Pure padding, no C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00132B88);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00132B88);
 
 /**
  * func_00132BC0 is snd_SetVoiceVolumeRamp: the 989snd EE command-ring wrapper
@@ -496,7 +496,7 @@ void func_00132BC0(s32 arg0, s32 arg1, s32 arg2, s32 arg3, s32 arg4, s32 arg5,
 
 /* func_00132C08: 0x40 bytes of inter-function fill (addiu $sp,+N / nop pairs)
  * before snd_SendCommandSync at 0x132C48. Pure padding, no C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00132C08);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_00132C08);
 
 /* snd_SendCommandSync: assemble a 989snd command of `count` bytes and issue it
  * synchronously over the SIF RPC channel, blocking until the reply lands. arg0
@@ -1082,7 +1082,7 @@ void func_00133788(s32 arg0, s32 arg1, s32 arg2, s32 arg3) {
 
 /* func_001337C8: 0x28 bytes of inter-function padding split off by symbol_addrs
  * size:0x28; the real wrapper begins at func_001337F0. Pure padding, no C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_001337C8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/0321A0", func_001337C8);
 
 /**
  * Invoke snd_SendCommandSync with selector 0x4A and no payload, forwarding its

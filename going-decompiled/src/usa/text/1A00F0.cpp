@@ -232,7 +232,7 @@ f32 func_002A0368(Moby *moby) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0460);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0460);
 
 /*
  * func_002A0480(moby, out1, out2): read the moby's animation-set dimension and
@@ -449,7 +449,7 @@ s32 func_002A0678(void *obj, void *dst, void *outArray, s32 arg3) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0798);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1A00F0", func_002A0798);
 
 /*
  * func_002A07B0(moby, sub, rec): one-time init of a moby render/anim sub-record

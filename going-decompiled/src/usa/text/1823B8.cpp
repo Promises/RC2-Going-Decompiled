@@ -117,7 +117,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_00282A80);
 /* MIS-SPLIT fragment: three bare `addiu $sp` /nop stack-restore tails (0x150,
  * 0x30, 0x20) — alignment/epilogue debris, not a real function entry. Leave as
  * INCLUDE_ASM (documented mis-split). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_00282E50);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_00282E50);
 
 /* DrawGlowSprites: iterates the 16 g_glowSpriteSlots, and for each visible slot
  * computes its camera-space distance/scale, derives screen-space sprite corner

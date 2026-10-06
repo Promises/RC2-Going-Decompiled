@@ -266,7 +266,7 @@ s32 func_00123400(u32 *src, SpParts *out) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00123490);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00123490);
 
 extern void func_001232F0(void *args);
 
@@ -613,7 +613,7 @@ void func_00127220(struct Obj127220 *obj, u32 arg1) {
     obj->chcr = (obj->chcr & ~0xC) | 0x105;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00127288);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00127288);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001272A8);
 
@@ -1780,7 +1780,7 @@ s32 func_0012FAE8(s32 *obj) {
     return func_0012FA98(obj, req);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012FB10);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012FB10);
 
 /**
  * Initialise a cursor/range descriptor arg0: store the start (arg1) and limit

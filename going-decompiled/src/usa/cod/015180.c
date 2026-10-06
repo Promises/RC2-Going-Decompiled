@@ -1828,7 +1828,7 @@ ret1:
     return 1;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D850);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D850);
 
 extern s32 func_0011AC20(s32 *desc);
 extern s32 D_00134738;
@@ -1975,7 +1975,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E4E0);
 /* func_0011E740: 0x60 bytes of inter-function padding (`addiu sp,+0xN; nop`
  * filler words) split off by symbol_addrs size:0x60; the real function begins at
  * sceSifInitIopHeap. Pure padding, no C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E740);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E740);
 
 /* sceSifInitIopHeap: real function recovered from the splat mis-split above (init/
  * retry loop around sceSifBindRpc, writes D_00134744). Boundary now correct;
@@ -2012,7 +2012,7 @@ s32 func_0011E828(s32 arg0, s32 arg1, s32 arg2) {
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceSifFreeSysMemory);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E920);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E920);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E938);
 
@@ -2045,7 +2045,7 @@ void func_0011ED08(s32 arg0, s32 arg1, s32 arg2) {
     func_0011EB00(arg0, arg1, arg2, buf);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ED28);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011ED28);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceSifResetIop);
 

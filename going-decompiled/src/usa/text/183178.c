@@ -37,7 +37,7 @@ extern f32 D_1A792C; /* = 1/60 (float countdown threshold, func_00283388) */
  * not compiler output and not a callable function (no jr/return), so there is
  * no C / functional-equivalent body to write. Documented handwritten fragment;
  * kept as raw asm for both build targets. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183178", func_002831F8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/183178", func_002831F8);
 
 /** Scale x by the D_1A7910 conversion factor. */
 f32 func_00283230(f32 x) {

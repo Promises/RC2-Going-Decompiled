@@ -619,7 +619,7 @@ s32 func_0026F810(void) {
 void func_0026F818(void) {
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026F820);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026F820);
 
 /* func_0026F850: large boot/menu still-image build helper. WALL: jump-table
  * switch + eight callee-saves at 8-byte slot spacing (packed-save wall). Left
@@ -2268,7 +2268,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00272560);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002725D8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/16E980", func_002725D8);
 
 /* DrawLensFlare: project the sun/light source to screen space and draw the
  * lens-flare sprite chain. WALL: seventeen callee-saves at 8-byte slot spacing

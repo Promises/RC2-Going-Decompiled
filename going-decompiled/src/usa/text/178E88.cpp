@@ -252,7 +252,7 @@ void func_00279CF0(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f, s32 g, s32 h,
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00279D68);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/178E88", func_00279D68);
 
 /* func_00279D88 - relocate the freshly-streamed per-language text table. The
  * streaming directory lives at g_cameraSlotActive+0xD0: word[2] (+0x8) is the

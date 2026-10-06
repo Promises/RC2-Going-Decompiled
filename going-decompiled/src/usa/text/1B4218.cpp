@@ -504,7 +504,7 @@ s32 ClassifyTargetProximity(Moby *candidate, Moby **outHero, s32 nearZoneId,
 
 /* Handwritten stub-table fragment (orphaned addiu $sp / nop run) — see unit
  * header; kept INCLUDE_ASM permanently. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B46C8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B46C8);
 
 extern void UpdateMobyBSphereAndGrid(void *moby);  /* 0x2A1D80 */
 
@@ -1057,7 +1057,7 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_0
 
 /* Handwritten stub-table fragment (orphaned addiu $sp / nop run) — see unit
  * header; kept INCLUDE_ASM permanently. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B4F80);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B4F80);
 
 /* Apply a moby's local-transform delta (spring-follow position step).
  * WALL: save-layout — 6 callee-saves + $ra at 8-byte spacing, with fp temps
@@ -2697,7 +2697,7 @@ void AccumMobyMotionProfile(void) {
 
 /* Handwritten stub-table fragment (orphaned addiu $sp / nop run) — see unit
  * header; kept INCLUDE_ASM permanently. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B7218);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B7218);
 
 /* Test whether a moby riding a spline/rail is blocked. No-op (returns 0) when the
  * moby has no motion controller or no active spline constraint (splineConstraintId
@@ -4509,4 +4509,4 @@ void func_002B8F68(s32 byteCursor, long handleAddr) {
 
 /* Handwritten stub-table fragment (orphaned addiu $sp / nop run) — see unit
  * header; kept INCLUDE_ASM permanently. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B8FD8);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1B4218", func_002B8FD8);

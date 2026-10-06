@@ -357,7 +357,7 @@ extern u32 func_002AA3F0(u32 color1, u32 color2, s32 period, s32 counterSel, s32
 /* func_00338CD8 (void*,s32,f32,f32,s32) + func_0033BE70 (void*) are defined
  * later in this unit, before their #else callers below — no extern needed. */
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336068);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336068);
 
 /* func_00336168: copy a 16-byte (quadword) vector from *p into the active
  * camera's render block at +0x80. The camera is g_activeCamera unless its
@@ -408,7 +408,7 @@ void func_003361C0(GuiQword *src) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336218);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00336218);
 
 /* func_00336230(a, b, mode, arg3, arg4): allocate + switch to a camera (mode 5)
  * and seed its transform block. Snapshots four qwords (*a, *b, g_cameraPos[0],
@@ -532,7 +532,7 @@ void func_003363A0(s32 mode) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003364E0);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003364E0);
 
 /* func_003365A0: activate a camera by callback-table lookup. Resolves a camera
  * slot (func_00270290(0x1B) -> obj), writes param_3 to its entry+0x20 / sets +0x1D,

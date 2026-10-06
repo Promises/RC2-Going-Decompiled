@@ -2574,7 +2574,7 @@ void RegisterMobyClass(u8 *hdr, s32 arg2, s32 arg3, s32 classId) {
 }
 #endif
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294268);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_00294268);
 
 /**
  * StartFrontendSegmentLoad — allocate the frontend segment buffer and kick its

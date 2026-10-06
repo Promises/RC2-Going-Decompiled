@@ -3770,7 +3770,7 @@ void func_0028C4C8(HudElement *w) {
 
 /* func_0028C698: 0x48-byte run of handwritten stub-table fragments (addiu
  * $sp,+N; nop pairs) preceding the real function, pinned as one symbol. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C698);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C698);
 
 /* HUD-init forwarder: enable a HUD subsystem via func_0029DB10(arg, 1) then
  * register HUD element 0xD with func_002B1B48(0xD, 0, 1). */

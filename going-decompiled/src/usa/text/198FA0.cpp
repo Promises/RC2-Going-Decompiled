@@ -1043,7 +1043,7 @@ void BuildSaveGamePaths(void *rec) {
 /* func_00299B00: 0x14 bytes of dead inter-function fill (`daddu $2,$0,$0` /
  * `daddu $2,$3,$0` / `addiu $sp,0x40` epilogue orphans, no jr) — not
  * compiler-reachable C. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299B00);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/198FA0", func_00299B00);
 
 /* func_00299B18 / func_00299BF8: save-buffer setup helpers (multi callee-save).
  * 8-byte-packed callee-save frame wall, see func_0029C678. Left as asm. */

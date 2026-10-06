@@ -219,7 +219,7 @@ void AdvanceProjectileCurve(s32 idx, void *dir, void *src) {
  * stray %gp_rel store (D_1AB034) with no prologue/jr, severed from the end of the
  * preceding function. Not an independent function; left as INCLUDE_ASM so the
  * original bytes stay intact (documented mis-split exception). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_002FFF40);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1FFBA0", func_002FFF40);
 
 /* (Re)initialise the active-gadget/turret display state block (g_waterPool-area
  * scratch at 0x1B2290): caches the hero zoom factor + reciprocal, snapshots the

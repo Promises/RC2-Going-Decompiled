@@ -1486,7 +1486,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_002848A0);
  * label (only `addiu $sp` ops, no real body). Not a callable function; kept as
  * asm so the bytes stay in place.
  */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284998);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/183558", func_00284998);
 
 /* SetVideoMode globals/callees. Addressing (unit built -G8, task #889): cc1
  * sees both flags as small data; the ROM reads g_bPalMode and

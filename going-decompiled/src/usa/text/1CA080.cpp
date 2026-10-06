@@ -291,7 +291,7 @@ static inline s32 MenuPollConfirm(void) {
 
 /* Mis-split fragment: orphaned stack-pointer adjusts (addiu $sp / nops) with
  * no jr $ra — not a real function entry; left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA100);
+INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CA100);
 
 /* func_002CA138: 3D vector-geometry helper (menu 3D cursor / pick math). Uses
  * the VU0 primitives Vec3CrossVu0 + Vec3DotVu0 + Vec3LengthVu0 +
