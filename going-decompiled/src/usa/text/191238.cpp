@@ -468,7 +468,8 @@ extern s32  g_vramZBuffer;
 extern void *g_pSkyShellSpinRates;
 extern s32  g_skyShellSpinTableStatic[];
 
-/* Absolute-access aliases, used by RenderSky ONLY (task #741). The ROM reads
+/* Absolute-access aliases (task #741), used by RenderSky and, for
+ * g_playerProgressAbs only, func_00298A00 (task #1714). The ROM reads
  * g_playerProgress and g_vramZBuffer here with the assembler-macro shape
  * (`lui rX; lw rX,%lo(rX)`), so cc1 must still emit the one-insn macro `lw` while
  * GNU as expands it absolutely. GNU as sizes a SYMBOL once per file, so the
@@ -6064,7 +6065,55 @@ void func_00298918(f32 fa, f32 fb, void *outX, void *outY, s32 level) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_002989F8);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00298A00);
+/*
+ * func_00298A00 — snapshot the current level's map-blip positions.
+ *
+ * For each blip index in the current level's slice [D_264DD0[L], D_264DD0[L+1])
+ * of the map-blip table D_139A28 (L = g_playerProgress, ignored unless < 19),
+ * copies the blip's moby world x/y (Moby +0x10/+0x14) and its heading yaw
+ * (facing[2], Moby +0xF8) into the record's +0/+4/+8. The moby pointers live in
+ * a table at 0x1C11A0, which has no symbol of its own: the ROM addresses it as
+ * g_collTriBuffer + 0x1020. A null moby leaves its record untouched. The +0xC
+ * state word is not written (FACT #8397 / NOTE #8405 for the table's meaning).
+ * Called from the save path (198FA0) to keep the blips in the save image.
+ *
+ * MATCHED on the s136os arm (task #1714; SN 2.95.3 v1.36 -fopt-stack). Two
+ * load-bearing choices, each measured by undoing it alone: g_playerProgressAbs
+ * (the absolute `lui; lw` read; plain g_playerProgress goes gp-relative, 25 of
+ * 39 words different), and reading both bounds into locals before the loop
+ * (a bounds local declared before `i` reads 8 different). The moby-table cast
+ * must stay inline at the use: hoisting it into a local reads 18 different.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00298A00)
+S136OS_SLOT(func_00298A00);
+#else
+#include "moby.h"
+typedef struct MapBlipRecord {
+    f32 x;        /* +0x0 moby world x */
+    f32 y;        /* +0x4 moby world y */
+    f32 heading;  /* +0x8 moby heading yaw (facing[2]) */
+    s32 state;    /* +0xC */
+} MapBlipRecord;
+extern MapBlipRecord D_139A28[];  /* 0x139A28 per-level map-blip table */
+extern s32 D_264DD0[];            /* 0x264DD0 level -> first blip index */
+extern u8  g_collTriBuffer[];     /* 0x1C0180; +0x1020 is the blip moby table */
+void func_00298A00(void) {
+    u32 level = g_playerProgressAbs;
+
+    if (level < 19) {
+        s32 i = D_264DD0[level];
+        s32 end = D_264DD0[level + 1];
+        for (; i < end; i++) {
+            Moby *moby = ((Moby **)(g_collTriBuffer + 0x1020))[i];
+            if (moby != 0) {
+                D_139A28[i].x = moby->bsphereScratch[0];
+                D_139A28[i].y = moby->bsphereScratch[1];
+                D_139A28[i].heading = moby->facing[2];
+            }
+        }
+    }
+}
+#endif
 
 /* func_00298AA0: empty/no-op leaf (jr ra; nop). */
 void func_00298AA0(void) {
