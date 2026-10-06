@@ -1210,31 +1210,31 @@ void func_00299BF8(void) {
  * 8-byte-packed callee-save frame wall, see func_0029C678. Left as asm. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", SaveLoadStateMachine);
 
-/* BuildSaveImage: assembles the save payload from the section table. Multi
- * callee-save; 8-byte-packed callee-save frame wall, see func_0029C678.
- * Writes the two section-table sizes as the leading header words (out[0]=global,
- * out[1]=area), then serializes the global block (slot 0) and all 0x1C area slots
- * after the header, advancing by each block's written byte count. The
- * TARGET_NATIVE #else is faithful coverage. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", BuildSaveImage);
+/* BuildSaveImage(out): assemble the in-RAM save image from the two section
+ * tables. Writes the serialized sizes of the global and area tables as the two
+ * leading header words (out[0], out[1]), then serializes the global table
+ * (slot 0) and all 0x1C area slots after the header, each image placed
+ * directly after the previous one. No return value.
+ *
+ * Built on the s136os arm (task #1691). `out` itself is the write cursor: the
+ * ROM advances the parameter's register (`addiu $18,$18,8`, then `addu` by each
+ * written size). A separate `u8 *p` cursor gets its own register and changes
+ * the allocation of every callee-saved value. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_BuildSaveImage)
+S136OS_SLOT(BuildSaveImage);
 #else
-/* t511 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 79.24% -> PACKED-SAVE, first differing row @0: ROM `addiu sp, sp, -0x30` vs `addiu sp, sp, -0x60`;
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing, MATCH_ guard) 69.31% -> SCHED-PROEPI, first differing row @0: ROM `addiu sp, sp, -0x30` vs `addiu sp, sp, -0x20`. */
 extern s32 SerializeSaveSections(void *dst, s32 slotMul, SaveSection *table); /* defined below */
 
 void BuildSaveImage(s32 *out) {
-    u8 *p;
     s32 i;
 
     out[0] = CalcSaveSectionsSize(g_saveSectionTableGlobal);
     out[1] = CalcSaveSectionsSize(g_saveSectionTableArea);
 
-    p = (u8 *)out + 8;
-    p += SerializeSaveSections(p, 0, g_saveSectionTableGlobal);
+    out += 2;
+    out = (s32 *)((u8 *)out + SerializeSaveSections(out, 0, g_saveSectionTableGlobal));
     for (i = 0; i < 0x1C; i++) {
-        p += SerializeSaveSections(p, i, g_saveSectionTableArea);
+        out = (s32 *)((u8 *)out + SerializeSaveSections(out, i, g_saveSectionTableArea));
     }
 }
 #endif
@@ -1267,11 +1267,46 @@ s32 CalcSaveSectionsSize(SaveSection *table) {
     return size + 8;
 }
 
-/* ComputeSaveSectionsCrc16: CRC-16 (poly 0xEDB88320, 8-bit-at-a-time) over the save buffer
- * sized by CalcSaveSectionsSize(g_saveSectionTableGlobal). Uses three callee-
- * saved regs ($16/$17/$31) in an 8-byte-packed 0x20 frame — the callee-save
- * frame wall (our cc1 reserves 16 bytes per saved reg), see func_0029C678. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", ComputeSaveSectionsCrc16);
+/* ComputeSaveSectionsCrc16(buf, len): MSB-first (non-reflected) CRC-16 over
+ * `len` bytes of a save payload. The accumulator is seeded with 0xEDB88320
+ * (only its low 16 bits matter), each byte is XORed into bits 8..15, and each of
+ * the 8 steps shifts left and XORs 0x1F45 when bit 15 was set. Returns the low
+ * 16 bits, or 0 when `len` exceeds CalcSaveSectionsSize(g_saveSectionTableGlobal).
+ *
+ * Built on the s136os arm (task #1691); the old "packed save frame wall" label
+ * held only for the 2.9 arm. The next byte pointer is formed before the bit
+ * loop (`next`), as the ROM does (`addiu $4,$16,1` ahead of the loop and
+ * `daddu $16,$4,$0` after it). A trailing `data++` or `*data++` instead
+ * increments $16 in place. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_ComputeSaveSectionsCrc16)
+S136OS_SLOT(ComputeSaveSectionsCrc16);
+#else
+s32 ComputeSaveSectionsCrc16(void *buf, s32 len) {
+    u8 *data = (u8 *)buf;
+    u8 *end;
+    u32 crc;
+
+    if (CalcSaveSectionsSize(g_saveSectionTableGlobal) < len) {
+        return 0;
+    }
+    end = data + len;
+    crc = 0xEDB88320;
+    while (data < end) {
+        u8 *next = data + 1;
+        s32 i;
+        crc ^= (u32)(*data << 8);
+        for (i = 7; i >= 0; i--) {
+            if (crc & 0x8000) {
+                crc = (crc << 1) ^ 0x1F45;
+            } else {
+                crc = crc << 1;
+            }
+        }
+        data = next;
+    }
+    return crc & 0xFFFF;
+}
+#endif
 
 extern s32 ComputeSaveSectionsCrc16(void *buf, s32 len); /* save-buffer CRC */
 
@@ -1375,12 +1410,61 @@ s32 SerializeSaveSections(void *dst, s32 slot, SaveSection *table) {
 }
 #endif
 
-/* FillSaveSlotInfo / FillSaveSlotInfo: fill one save-slot info-display entry (table
- * 0x139410, stride slot*0xA0 + dir*0x1C) from a verified header image. WALLED by
- * BOTH the 8-byte-packed callee-save frame (4 saves) and the unaligned 64-bit
- * ldl/ldr/sdl/sdr field moves the original emits for the +0x13..+0x7 copy — GNU
- * cc1 won't generate those from portable C, so no #else either. Left as asm. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/198FA0", FillSaveSlotInfo);
+/* FillSaveSlotInfo(image, slot, dir): fill one entry of the save-slot info
+ * display table (g_saveSlotInfoTable 0x139410 = g_areaTable+0x30; slot stride
+ * 0xA0, dir stride 0x1C) from a save image. Stores whether the image fails
+ * VerifySaveHeaderChecksum, then copies fields from the payloads of the first
+ * four global save sections: g_playerProgress, the g_boltCount block (word 0
+ * and byte 0x12), D_1A7BC8, and the 8-byte D_1A7360. No return value.
+ *
+ * Built on the s136os arm (task #1691). The old "ldl/ldr cannot come from C"
+ * label is wrong: a byte-aligned 8-byte struct copy gives them. Two spellings
+ * carry the bytes:
+ *  - The entry is indexed afresh in each statement through a true array
+ *    (g_areaSaveSlotRecords, an asm-label alias of g_areaTable). This gives the
+ *    ROM's single `slot*0xA0 + dir*0x1C` offset and the four `daddu` copies of
+ *    the entry address. A pointer cast of g_areaTable adds the slot part first;
+ *    a local entry pointer gives no copies.
+ *  - `image` itself walks from payload to payload. The ROM chains each address
+ *    off the previous one (+0x10, +0xC, +0x48). A separate cursor local folds
+ *    back to constant offsets from `image`. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_FillSaveSlotInfo)
+S136OS_SLOT(FillSaveSlotInfo);
+#else
+typedef struct { u8 bytes[8]; } SaveSlotInfoBlock8; /* byte-aligned: ldl/ldr, sdl/sdr */
+typedef struct {
+    s32 level;                /* +0x00 */
+    s32 bolts;                /* +0x04 */
+    s32 byte12;               /* +0x08 */
+    s32 word;                 /* +0x0C */
+    SaveSlotInfoBlock8 block; /* +0x10 */
+    s32 invalid;              /* +0x18 */
+} SaveSlotInfo;               /* 0x1C */
+typedef struct {
+    u8 head[0x30];
+    SaveSlotInfo saveSlots[4]; /* +0x30 = g_saveSlotInfoTable for record 0 */
+} AreaSaveSlotRecord;          /* 0xA0, the g_areaTable stride */
+#ifndef TARGET_NATIVE
+extern AreaSaveSlotRecord g_areaSaveSlotRecords[] __asm__("g_areaTable");
+#else
+#define g_areaSaveSlotRecords ((AreaSaveSlotRecord *)g_areaTable)
+#endif
+extern s32 VerifySaveHeaderChecksum(void *image);
+
+void FillSaveSlotInfo(u8 *image, s32 slot, s32 dir) {
+    g_areaSaveSlotRecords[slot].saveSlots[dir].invalid =
+        (VerifySaveHeaderChecksum(image) == 0);
+    image += 0x10;                          /* section 0: g_playerProgress */
+    g_areaSaveSlotRecords[slot].saveSlots[dir].level = *(s32 *)image;
+    image += 4 + 8;                         /* section 1: g_boltCount block */
+    g_areaSaveSlotRecords[slot].saveSlots[dir].bolts = *(s32 *)image;
+    g_areaSaveSlotRecords[slot].saveSlots[dir].byte12 = image[0x12];
+    image += 0x40 + 8;                      /* section 2: D_1A7BC8 */
+    g_areaSaveSlotRecords[slot].saveSlots[dir].word = *(s32 *)image;
+    g_areaSaveSlotRecords[slot].saveSlots[dir].block =
+        *(SaveSlotInfoBlock8 *)(image + 4 + 8); /* section 3: D_1A7360 */
+}
+#endif
 
 /* DeserializeSaveSections(image, slotMul, table): restore the section table
  * `table` from a save `image` (the inverse of SerializeSaveSections), reconciling
