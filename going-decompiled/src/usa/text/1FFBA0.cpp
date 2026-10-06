@@ -201,7 +201,7 @@ void func_002FFCE0(s32 idx) {
 
 /* Steer the sound-pool slot `idx` toward its target direction `dir`: snapshots
  * the slot transform, blends a per-slot turn factor (selected by the three
- * D_001A8CA0/A4 + D_0018A168 attach flags), then rotates `dir` by a half-angle
+ * g_altGravityEnabled / g_altGravityPlanar + D_0018A168 gravity-mode flags), then rotates `dir` by a half-angle
  * quaternion built from the cross/dot of the current and target axes (CosfVu0/
  * SinfVu0 + QuatMultiplyVu0) and rescales back to the original length. No-op for
  * negative idx or when all three attach flags are clear.
