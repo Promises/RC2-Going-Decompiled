@@ -272,6 +272,7 @@ extern void *GuiElementInitTypeB(void *p);
 extern void *GuiElementInitTypeC(void *p);
 extern GuiElement *GuiListRowElementInit(void *p);
 extern void func_00348BD0(void *p);
+extern void *func_003374D8(void *p); /* defined in its own S136OS arm below */
 extern s32 GuiMenuListHandleInput(void *w, s32 inputMask); /* 248B50: selection-advance by input mask; returns 1/0 (248B50.c) */
 extern void GuiMenuListSetOrigin(void *w, f32 x, f32 y);
 extern void func_00348E58(void *w, s32 res);
@@ -1318,7 +1319,13 @@ void func_00337098(void *p, s32 flag) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337110);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00337120);
+/* func_00337120(e): return the element's primary vector pointer (e+0x38).
+ * Callers (24D728's HUD tick) write a float straight through it. A two-word
+ * leaf: the load sits in the jr delay slot. cc1 2.9 compiles it byte-exact
+ * (task #1673), so it is plain C on both arms. */
+f32 *func_00337120(void *e) {
+    return *(f32 **)((char *)e + 0x38);
+}
 
 /* GuiSpriteElementDraw: if the element is visible (*(e+0x10) scalar != 0) and
  * has a live texture handle (+0x40), submit the sprite to the 2D blitter
@@ -7731,7 +7738,31 @@ void func_00341F40(void *w, s32 flags, s32 table) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003420C0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_003420D0);
+/* func_003420D0(w): construct the element block of an icon screen (the layout
+ * GuiIconScreenInit below fills in): five TypeB elements at +0x0/+0x4C/+0x98/
+ * +0xE4/+0x130, a func_003374D8 element at +0x17C, a TypeC element at +0x1D0
+ * and a func_00348BD0 sprite at +0x238. Returns w.
+ * MATCHED on the s136os arm: SN 2.95.3 v1.36 -fopt-stack compiles this body
+ * byte-exact (task #1673); cc1 2.9 cannot reproduce the packed $16/$31 frame.
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003420D0)
+S136OS_SLOT(func_003420D0);
+#else
+void *func_003420D0(void *w) {
+    GuiElementInitTypeB(w);
+    GuiElementInitTypeB((char *)w + 0x4C);
+    GuiElementInitTypeB((char *)w + 0x98);
+    GuiElementInitTypeB((char *)w + 0xE4);
+    GuiElementInitTypeB((char *)w + 0x130);
+    func_003374D8((char *)w + 0x17C);
+    GuiElementInitTypeC((char *)w + 0x1D0);
+    func_00348BD0((char *)w + 0x238);
+    return w;
+}
+#endif
 
 /* GuiIconScreenInit: construct an icon screen (five button-glyph elements, a
  * text row, and a sprite). Pool -> alloc the 0x10-byte placement record (+0x228)
@@ -7815,19 +7846,18 @@ void GuiIconScreenInit(void *w, GuiPool *pool) {
 }
 #endif
 
-/* func_00342450: write three ints at +0x318/+0x310/+0x314 in that source order. */
-#if defined(MATCH_func_00342450) || defined(TARGET_NATIVE)
-/* Byte-exact on the engine96 arm (cc1 2.96-ee-001003 via MATCH_func_00342450; task #466):
- * unit objdiff 100.00% and verify_match_unit.sh 4/4 words + 0 relocs against the ROM.
- * The INCLUDE_ASM below still feeds the 2.9 link in build.sh, which defines no MATCH_. */
-void func_00342450(void *p, s32 a, s32 b, s32 c) {
-    *(s32 *)((char *)p + 0x318) = c;
-    *(s32 *)((char *)p + 0x310) = a;
-    *(s32 *)((char *)p + 0x314) = b;
+/* func_00342450(w, a, b, c): store three words into a vendor widget:
+ * +0x310 = a, +0x314 = b, +0x318 = c (1CA080 passes three table pointers).
+ * Byte-exact on cc1 2.9 as plain C (task #1673). The ROM issues the +0x318
+ * store first: cc1 2.9 schedules the LAST store of the group first and the
+ * rest in source order, so the natural a, b, c order is the matching one
+ * (written c, a, b it emits b, c, a: 3/4 words differ). It was byte-exact
+ * before only on the engine96 arm, behind MATCH_func_00342450 (task #466). */
+void func_00342450(void *w, void *a, void *b, void *c) {
+    *(void **)((char *)w + 0x310) = a;
+    *(void **)((char *)w + 0x314) = b;
+    *(void **)((char *)w + 0x318) = c;
 }
-#else
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/235FE8", func_00342450);
-#endif
 
 /* func_00342460: store an int at +0x230. */
 void func_00342460(void *p, s32 v) {
