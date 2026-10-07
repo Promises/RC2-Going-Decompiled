@@ -2571,7 +2571,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002DD418);
  * func_002DD630: callees func_002E0010->func_002DFFC8, func_002801B8->func_00280050,
  * Begin/End2dDrawBatch->func_0027CA28/func_0027CB48, GetLocalizedString->GetLocalizedString;
  * globals g_areaTable->D_139460 (+0x80), g_menuScreenBlock->D_001F0000+0x2840,
- * D_1ABC54->D_1ABCC4 (+0x70, gp-rel), g_levelSelectEntries named both regions;
+ * g_levelSelectRowLineHeight (was D_1ABC54)->D_1ABCC4 (+0x70, gp-rel), g_levelSelectEntries named both regions;
  * REGION DELTA: placeholder string ID 0x2DAA->0x0E39. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002DD5F8);
@@ -2579,7 +2579,7 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/1D5488", func_002DD5F8);
 s32 func_002DD5F8(void *screenArg) {
     extern u8   D_139460[];              /* EU area table; USA g_areaTable (+0x80) */
     extern u8   g_levelSelectEntries[];  /* (labelStrId, valueStrId) pairs, stride 8 */
-    extern s32  D_1ABCC4;                /* EU row vertical spacing; USA D_1ABC54 (+0x70) */
+    extern s32  D_1ABCC4;                /* EU row line height; USA g_levelSelectRowLineHeight (+0x70) */
     extern char *func_002DFFC8(char *buf, s32 lvlIdx); /* USA func_002E0010: format level label */
     u8 *obj  = (u8 *)screenArg;
     u8 *area = (u8 *)D_139460;
