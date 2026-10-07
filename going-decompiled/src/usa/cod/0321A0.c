@@ -928,7 +928,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/0321A0", CdStartRead);
 /* rmode is not used by the ring-command path — it exists only to be forwarded to
  * sceCdRead. Naming it is what makes that forwarding a CONTRACT: the ROM passes
  * $4-$7 straight through, and callers (StartFileLoad, KickRawFileRead, and the
- * asm-only CdReadSync) all supply a real sceCdRMode* in $7. */
+ * CdReadSync in cod/033970) all supply a real sceCdRMode* in $7. */
 s32 CdStartRead(s32 arg0, s32 arg1, s32 arg2, void *rmode) {
     s32 cmd[3]; /* the three command words for the 0x38 read request */
 
