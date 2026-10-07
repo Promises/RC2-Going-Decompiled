@@ -523,7 +523,16 @@ void RenderSky(void) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291B60);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291B68);
+/*
+ * func_00291B68 — empty stub: the whole ROM body is `jr $31` + delay-slot nop.
+ * Its only caller is PlayLevelCinematic (jal at 0x2F64D8). No params, no
+ * return value. It sits between two 8-byte epilogue fragments (func_00291B60,
+ * func_00291B70), which stay INCLUDE_ASM_FRAGMENT.
+ *
+ * MATCHED on the sdk29 arm (plain C, cc1 2.9-ee-991111) — task #1755.
+ */
+void func_00291B68(void) {
+}
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291B70);
 
