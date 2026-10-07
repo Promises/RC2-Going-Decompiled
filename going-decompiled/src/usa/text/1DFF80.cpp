@@ -363,25 +363,37 @@ void func_002E0458(void *src, f32 scale) {
 extern void func_002E1220(void *rec);
 extern void func_002E1370(void *rec);
 
-/* Dispatch one draw-list record by its type tag (s16 at offset 0): tag 0 ->
- * func_002E1220, advance 0x20; tag 1 -> func_002E1370, advance 0x30; any other
- * tag -> no-op.  Returns the pointer to the next record.
- * NEAR-MISS (~81%): cc1 picks a 0x20 frame + different save layout where the
- * original uses a 0x10 frame and pre-stages the tag-compare constant in the
- * branch delay slot (frame/reg-alloc wall). The C is faithful. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E0568);
+/**
+ * func_002E0568 — dispatch one draw-list record by its type tag and step past it.
+ *
+ * @param rec  record; its first halfword is the type tag.
+ * @return     the next record: tag 0 -> func_002E1220(rec), rec + 0x20;
+ *             tag 1 -> func_002E1370(rec), rec + 0x30; any other tag -> rec
+ *             unchanged (no call).
+ *
+ * GUARD (task #1768): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C.
+ * Byte-exact on that arm with the record pointer advanced in place and returned
+ * once (the ROM's single $16), and the tag widened to s32. With an s16 tag
+ * local cc1 loads it into $2 and copies it to $3 in the first branch's delay
+ * slot, where the ROM loads $3 directly and stages the `1` there. The earlier
+ * "frame/reg-alloc wall" note was a 2.9-arm result. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002E0568)
+S136OS_SLOT(func_002E0568);
 #else
 void *func_002E0568(void *rec) {
     u8 *p = (u8 *)rec;
-    s16 tag = *(s16 *)p;
+    s32 tag = *(s16 *)p;
+
     if (tag == 0) {
         func_002E1220(p);
-        return p + 0x20;
-    }
-    if (tag == 1) {
+        p += 0x20;
+    } else if (tag == 1) {
         func_002E1370(p);
-        return p + 0x30;
+        p += 0x30;
     }
     return p;
 }
