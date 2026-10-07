@@ -744,25 +744,60 @@ extern void CullAndEmitShrubs(void);
 extern void func_00283558(void *list, s32 a, s32 b);
 extern void CloseShrubDrawSegment(void);
 
-/* Build the shrub draw segment: open the segment (record DMA cursor head tag,
- * advance the cursor, snapshot VRAM cursor), flush pending work, cull+emit the
- * shrub instances, relight the shrub list, then close the segment.
- * NEAR-MISS (~34%): the empty-asm guard suppresses the final sibling call, but
- * the original schedules the g_frameDmaCursor store as a 1-insn %gp_rel write
- * into the func_0011AEA0 jal delay slot (the delay-slot-driven gp_rel reload
- * artifact) which cc1 won't reproduce here.  The C is faithful. */
+/* g_frameDmaCursorGp: a second assembler name for g_frameDmaCursor (FACT #8036's
+ * equate, the 188858.c precedent), sized 4 so gas makes its one access %gp_rel
+ * while every other g_frameDmaCursor access in this unit stays absolute (its own
+ * `.extern g_frameDmaCursor, 16` above). An ADDRESSING-MODEL DEVICE (RULING
+ * #8620): it emits nothing, the relocation names g_frameDmaCursor, and the object
+ * has no g_frameDmaCursorGp symbol. File scope so the 2.9 TU and the s136os TU
+ * agree on its class. Used by BuildShrubDrawSegment only. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", BuildShrubDrawSegment);
+__asm__(".extern g_frameDmaCursorGp, 4\n\tg_frameDmaCursorGp = g_frameDmaCursor");
+extern u8 *g_frameDmaCursorGp;
+#else
+#define g_frameDmaCursorGp g_frameDmaCursor
+#endif
+
+/**
+ * BuildShrubDrawSegment — build the frame's shrub draw segment.
+ *
+ * Opens the segment (records the DMA cursor as the segment's head tag in
+ * g_pShrubSegmentOpenTag, reserves that qword by advancing the cursor 0x10,
+ * resets the VRAM bump cursor to the dynamic base), then func_0011AEA0(0),
+ * culls and emits the shrub instances, relights the shrub relight list and closes
+ * the segment (CloseShrubDrawSegment splices the texture uploads ahead of the
+ * shrub packets). No params, no return. Single caller RenderFrame.
+ *
+ * GUARD (task #1768): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C.
+ * Byte-exact on that arm with two source facts:
+ *   - the cursor is read once into a local, stored as the open tag, THEN
+ *     advanced: cc1 reuses $2 for the advanced cursor (`sw $2,open; addiu
+ *     $2,$2,0x10`), as the ROM does. Written `g_frameDmaCursor + 0x10` the sum
+ *     goes to $5 and is formed before the open-tag store.
+ *   - the write-back goes through g_frameDmaCursorGp, giving the ROM's %gp_rel
+ *     store in the func_0011AEA0 delay slot (the loads stay absolute).
+ * No fence: the 2.9 arm's trailing empty asm (a sibcall guard there) is not
+ * needed here, and an empty asm after CullAndEmitShrubs() hoists the three
+ * segment stores above the `sd $31` (measured). The earlier "~34% delay-slot
+ * gp_rel wall" note was a 2.9-arm result. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_BuildShrubDrawSegment)
+S136OS_SLOT(BuildShrubDrawSegment);
 #else
 void BuildShrubDrawSegment(void) {
-    g_pShrubSegmentOpenTag = g_frameDmaCursor;
+    u8 *cursor = g_frameDmaCursor;
+
+    g_pShrubSegmentOpenTag = cursor;
+    cursor += 0x10;
     g_vramAllocCursor = g_vramDynamicBase;
-    g_frameDmaCursor = g_frameDmaCursor + 0x10;
+    g_frameDmaCursorGp = cursor;
     func_0011AEA0(0);
     CullAndEmitShrubs();
     func_00283558(g_shrubRelightList, 0x3200, 0x40);
     CloseShrubDrawSegment();
-    __asm__ __volatile__("");
 }
 #endif
 
