@@ -1854,14 +1854,74 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", rename);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceSifBindRpc);
 
-/* func_0011D590(arg0): link the element arg0->field_0x34 into its manager's
- * (elem->field_0x40) active list — patching the tail's back-link (+0x3C) or the
- * head (+0xC) — then copy a block of transform/state fields from arg0 into the
- * element, and kick processing via func_0011B8D8() when the manager's count
- * (+0x0) is non-negative and busy flag (+0x4) is clear. ~86%: behaviour fully
- * recovered, but ee-gcc won't reproduce the original's branch-likely with an
- * annulled speculative load on the head/tail test. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D590);
+/* SIF RPC server-side records, as func_0011D590 sees them (the layouts of the
+ * SDK's sceSifQueueData, sceSifServeData and the call message). Every field
+ * is a plain s32, pointers included: with pointer-typed fields cc1 reorders the
+ * copy's stores (every one of the 35 ROM words differed in a solo compile),
+ * with uniform s32 it keeps them. */
+typedef struct RpcQueue {
+    s32 key;       /* server thread id, negative while there is none */
+    s32 active;    /* nonzero while the server thread is running a request */
+    s32 link;
+    s32 start;     /* RpcServe *: first pending request */
+    s32 end;       /* RpcServe *: last pending request */
+} RpcQueue;
+
+typedef struct RpcServe {
+    s32 command, func, buff, size, cfunc, cbuff, csize, client;
+    s32 paddr, fno, receive, rsize, rmode, rid, link;
+    s32 next;      /* RpcServe *: next pending request in the queue */
+    RpcQueue *base;
+} RpcServe;
+
+typedef struct RpcCallMsg {
+    s32 header[4];
+    s32 recId, paddr, unused18, client, rpcNumber, sendSize, receive, recvSize, rmode;
+    RpcServe *serve;
+} RpcCallMsg;
+
+extern s32 func_0011B8D8(s32 tid);
+
+/**
+ * SIF RPC "call" command handler (the SDK's _request_call): append the target
+ * serve record to its queue's pending list, copy the call parameters from the
+ * message into it, and wake the server thread (func_0011B8D8) when the queue
+ * has one and it is idle. The wake is a `j` tail call.
+ *
+ * @param msg  the incoming call message; msg->serve names the serve record
+ *
+ * Reading paddr and client into locals before their two stores reproduces the
+ * ROM's lw/lw/sw/sw opening of the copy; written as two plain assignments,
+ * cc1 interleaves them. (A comment here used to call this ~86% and walled on a
+ * branch-likely; cc1 emits that bnel itself.)
+ */
+void func_0011D590(RpcCallMsg *msg) {
+    RpcServe *sd = msg->serve;
+    RpcQueue *q = sd->base;
+    s32 paddr, client;
+
+    if (q->start == 0) {
+        q->start = (s32)sd;
+    } else {
+        ((RpcServe *)q->end)->next = (s32)sd;
+    }
+    q->end = (s32)sd;
+
+    paddr = msg->paddr;
+    client = msg->client;
+    sd->paddr = paddr;
+    sd->client = client;
+    sd->fno = msg->rpcNumber;
+    sd->size = msg->sendSize;
+    sd->receive = msg->receive;
+    sd->rsize = msg->recvSize;
+    sd->rmode = msg->rmode;
+    sd->rid = msg->recId;
+
+    if (q->key >= 0 && q->active == 0) {
+        func_0011B8D8(q->key);
+    }
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D620);
 
