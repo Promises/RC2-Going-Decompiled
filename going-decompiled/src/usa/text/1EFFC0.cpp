@@ -495,7 +495,10 @@ void ResetVramSlotTable(void) {
 /* TODO(hle): needs PS2 graphics/IO HLE backend - VU0 frustum-cull + per-class bin of tie instances. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", CullAndBinTieInstances);
 
-/* TODO(hle): needs PS2 graphics/IO HLE backend - GS/VIF status busy-wait poll (hand-written, dead lui $31 in jr delay slot). */
+/* TODO(hle): needs PS2 graphics/IO HLE backend - GS/VIF status busy-wait poll. Hand-written:
+ * spins on $at with manual nop padding, and its jr delay slot loads the scratchpad base
+ * 0x70000000 into $31 -- NOT dead: the hand-written callers address scratchpad through
+ * $31 after the call (task #1788). A value returned in $ra has no C form. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F2CB8);
 
 /* TODO(hle): needs PS2 graphics/IO HLE backend - emits the per-class tie instance draw GIF packets. */
@@ -507,19 +510,31 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F3468);
 /* TODO(hle): needs PS2 graphics/IO HLE backend - tie draw-packet builder helper (VIF/GIF). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F35B0);
 
-/* TODO(hle): needs PS2 graphics/IO HLE backend - GS/VIF status busy-wait poll (hand-written, dead lui $31 in jr delay slot). */
+/* TODO(hle): needs PS2 graphics/IO HLE backend - GS/VIF status busy-wait poll. Hand-written:
+ * spins on $at with manual nop padding, and its jr delay slot loads the scratchpad base
+ * 0x70000000 into $31 -- NOT dead: the hand-written callers address scratchpad through
+ * $31 after the call (task #1788). A value returned in $ra has no C form. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F383C);
 
-/* TODO(hle): needs PS2 graphics/IO HLE backend - GS/VIF status busy-wait poll (hand-written, dead lui $31 in jr delay slot). */
+/* TODO(hle): needs PS2 graphics/IO HLE backend - GS/VIF status busy-wait poll. Hand-written:
+ * spins on $at with manual nop padding, and its jr delay slot loads the scratchpad base
+ * 0x70000000 into $31 -- NOT dead: the hand-written callers address scratchpad through
+ * $31 after the call (task #1788). A value returned in $ra has no C form. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F3864);
 
 /* TODO(hle): needs PS2 graphics/IO HLE backend - emits the tie LOD cross-fade/morph GIF packets. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", EmitTieLodMorphPackets);
 
-/* TODO(hle): needs PS2 graphics/IO HLE backend - GS/VIF status busy-wait poll (hand-written, dead lui $31 in jr delay slot). */
+/* TODO(hle): needs PS2 graphics/IO HLE backend - GS/VIF status busy-wait poll. Hand-written:
+ * spins on $at with manual nop padding, and its jr delay slot loads the scratchpad base
+ * 0x70000000 into $31 -- NOT dead: the hand-written callers address scratchpad through
+ * $31 after the call (task #1788). A value returned in $ra has no C form. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F4104);
 
-/* TODO(hle): needs PS2 graphics/IO HLE backend - GS/VIF status busy-wait poll (hand-written, dead lui $31 in jr delay slot). */
+/* TODO(hle): needs PS2 graphics/IO HLE backend - GS/VIF status busy-wait poll. Hand-written:
+ * spins on $at with manual nop padding, and its jr delay slot loads the scratchpad base
+ * 0x70000000 into $31 -- NOT dead: the hand-written callers address scratchpad through
+ * $31 after the call (task #1788). A value returned in $ra has no C form. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F412C);
 
 /* TODO(hle): needs PS2 graphics/IO HLE backend - builds the tie texture GIF upload packets at the VRAM cursor. */
@@ -528,7 +543,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", UploadTieTextur
 /* TODO(hle): needs PS2 graphics/IO HLE backend - assigns persistent VRAM slots for the bound tie textures. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", AllocateTieTextureVram);
 
-/* TODO(hle): needs PS2 graphics/IO HLE backend - GS/VIF status busy-wait poll (hand-written). */
+/* TODO(hle): needs PS2 graphics/IO HLE backend - GS/VIF status busy-wait poll. Hand-written:
+ * spins on $at with manual nop padding (the same body as func_002F2CB8 with a nop in the
+ * jr delay slot); cc1 never allocates $at (task #1788). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F4B50);
 
 /* TODO(hle): needs PS2 graphics/IO HLE backend - VU0 macro-mode (pextlw/pminw/pmaxw) tie AABB reduction. */
@@ -540,7 +557,10 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F4C98);
 /* TODO(hle): needs PS2 graphics/IO HLE backend - patches per-vertex light colours inside a tie GIF packet. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", PatchTieVertexLighting);
 
-/* TODO(hle): needs PS2 graphics/IO HLE backend - GS/VIF status busy-wait poll (hand-written, dead lui $31 in jr delay slot). */
+/* TODO(hle): needs PS2 graphics/IO HLE backend - GS/VIF status busy-wait poll. Hand-written:
+ * spins on $at with manual nop padding, and its jr delay slot loads the scratchpad base
+ * 0x70000000 into $31 -- NOT dead: the hand-written callers address scratchpad through
+ * $31 after the call (task #1788). A value returned in $ra has no C form. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F5DD0);
 
 /* TODO(hle): needs PS2 graphics/IO HLE backend - tie draw-pipeline VIF/GIF helper. */
@@ -1813,11 +1833,14 @@ void func_002F8038(void) {
  * whether record value-word 'col' (0..2) equals 'expected'. Used by the vendor
  * availability filter to test per-item flag columns.
  *
- * NOT byte-matched: the original is a hand-shaped frameless leaf whose search
- * loop is built entirely from `beql`/`bnel` branch-likely instructions (the
- * cmp result is consumed in the branch delay slot); this cc1 lowers the loop to
- * plain `beq`/`bne`, so the encodings differ. Functionally identical; kept as
- * the portable #else impl. */
+ * NOT byte-matched. The ROM's `beql`/`bnel` loop is ordinary compiler output:
+ * SN 1.36 cc1 emits it from a do-while whose row pointer is advanced at the
+ * loop top (task #1788). What walls it is the shared %hi(D_264E40) -- one lui,
+ * the %lo re-formed at each use -- which SN 1.36 emits only with gcse ON, and
+ * this unit's s136 arm inherits -fno-gcse (4 lui instead of 1). Under gcse ON
+ * the best body is 33 words to the ROM's 32: `result` is allocated $4, so
+ * `expected` is copied out of $4, where the ROM keeps result in $9. The best
+ * body and every spelling tried are in the store (task #1788 NOTE). */
 extern u32 D_264E40[][4]; /* 0x264E40 record table (stride 0x10, <=0x38 rows) */
 
 /* RESIDUAL CLASS (task #576): UNDIAGNOSED
@@ -1825,8 +1848,9 @@ extern u32 D_264E40[][4]; /* 0x264E40 record table (stride 0x10, <=0x38 rows) */
  *   whole-unit blanket screen, clean tree): sdk29 31.48%, engine96 59.70%
  *   (better arm: engine96). Neither reaches 100.00%, so this stays INCLUDE_ASM
  *   and the #else below remains the portable impl.
- *   SCREENED ONLY. Both arms were measured; the residual was not diagnosed to a
- *   mechanism. This is an open arm, not a wall -- do not read it as one. */
+ * RESIDUAL CLASS (task #1788, s136 arm, solo cc1 text): ADDRESSING (the unit's
+ *   inherited -fno-gcse, see above) + ALLOCATION (result $4 vs the ROM's $9).
+ *   Not a C-shape problem: the loop and every other instruction reproduce. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F81A0);
 #else
