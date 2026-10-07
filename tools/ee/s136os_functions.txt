@@ -490,3 +490,4 @@ usa cod/0321A0 snd_SetupDmaTransfer
 usa cod/033970 func_001339F0
 usa cod/033970 CdReadSync
 usa cod/033970 LoadLevelToc
+usa text/1823B8 func_00282798

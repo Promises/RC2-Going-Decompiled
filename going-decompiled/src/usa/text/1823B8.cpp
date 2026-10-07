@@ -3,16 +3,17 @@
 extern u64 GetUiTextureTex0(s32 id);
 extern s32 D_239A90[];
 
-/* GS sprite-primitive descriptor built by the UI texture-quad setup below:
- * 0x70 reserved, 0x78 = TEX0 (texture-buffer reg from GetUiTextureTex0),
- * 0x80 = TEX1, 0x88 = CLAMP (wrap/clamp mode packed from the per-format table
- * at D_239A90, stride 0x14). */
+/* GS register block of the billboard sprite context that func_00282798 fills
+ * and ProjectAndClipBillboardQuad (0x281540) / 0x281B04 emit (FACT #5657):
+ * 0x70 = CLAMP_1, 0x78 = TEX0_1 (from GetUiTextureTex0), 0x80 = TEX1_1,
+ * 0x88 = ALPHA_1 (A/B/C/D blend selectors from the table at D_239A90,
+ * stride 0x14, with FIX in bits 32..39). */
 typedef struct UiSpritePacket {
     u8  pad0[0x70];
-    u64 unk70;  /* 0x70 cleared to 0 (prim/alpha slot) */
-    u64 tex0;   /* 0x78 TEX0 from GetUiTextureTex0(texId) */
-    u64 tex1;   /* 0x80 fixed 0xFF9000000260 */
-    u64 clamp;  /* 0x88 CLAMP from D_239A90[idx*5] OR (wrapMode<<32) */
+    u64 clamp;  /* 0x70 CLAMP_1, cleared (REPEAT/REPEAT) */
+    u64 tex0;   /* 0x78 TEX0_1 from GetUiTextureTex0(texId) */
+    u64 tex1;   /* 0x80 TEX1_1, fixed 0xFF9000000260 */
+    u64 alpha;  /* 0x88 ALPHA_1 from D_239A90[blend*5] OR (fix<<32) */
 } UiSpritePacket;
 
 /* Size pin (byte-neutral). func_00282798 (InitBillboardSpriteState) only writes
@@ -24,7 +25,7 @@ typedef struct UiSpritePacket {
 _Static_assert(sizeof(UiSpritePacket) == 0x90, "UiSpritePacket bindable view 0x90");
 _Static_assert(__builtin_offsetof(UiSpritePacket, tex0)  == 0x78, "tex0");
 _Static_assert(__builtin_offsetof(UiSpritePacket, tex1)  == 0x80, "tex1");
-_Static_assert(__builtin_offsetof(UiSpritePacket, clamp) == 0x88, "clamp");
+_Static_assert(__builtin_offsetof(UiSpritePacket, alpha) == 0x88, "alpha");
 #endif
 
 /* DrawMotionTrailRibbon (0x2823B8): emits a ribbon of billboard quads along a
@@ -56,31 +57,34 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_002823B8);
  * Leave as INCLUDE_ASM (documented mis-split). */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_00282790);
 
-/* Initialise a UI sprite packet's texture/clamp fields. Looks up the texture
- * buffer (TEX0) for texId, sets a fixed TEX1, and builds the CLAMP register
- * from the format-table entry D_239A90[idx] OR'd with the caller's wrap mode
- * (placed in the upper 32 bits).
- *
- * NEAR-MISS (correct C, not byte-exact): walls the 8-byte-packed callee-save
- * layout (pinned cc1 reserves 16 bytes/save; original packs 4 saves at 8-byte
- * spacing in a 0x20 frame) plus the TEX1 constant lowering (original emits
- * ori/dsll32/ori, ee-gcc emits a single dli). Preserved as the native body. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_00282798);
+/**
+ * func_00282798 (InitBillboardSpriteState) — fill a billboard sprite context's
+ * GS register block (see UiSpritePacket).
+ * @param p      sprite context; only its 0x70..0x8F block is written
+ * @param texId  UI texture id, forwarded to GetUiTextureTex0 for TEX0_1
+ *               (FACT #6026: an id, not a count)
+ * @param blend  row of the 5-int blend table D_239A90; its first four ints are
+ *               the ALPHA_1 A/B/C/D selectors (2 bits each)
+ * @param fix    ALPHA_1 FIX, shifted into bits 32..39 (callers pass 0x80)
+ * CLAMP_1 is cleared and TEX1_1 gets the fixed 0xFF9000000260.
+ * Compiled on the s136os arm (SN 1.36 -fopt-stack): the ROM's four
+ * 8-byte-packed saves in a 0x20 frame are that compiler's, which 2.9 cannot
+ * emit. The table row is formed AFTER the GetUiTextureTex0 call, so `blend`
+ * stays in $16 across the call and the `mult` follows it, as in the ROM. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00282798)
+S136OS_SLOT(func_00282798);
 #else
-/* TODO(match): functional equivalent - not byte-exact; 4 callee-saves force a
- * 16-byte/save frame instead of the original 8-byte-packed 0x20 frame, and the
- * TEX1 constant lowers to a single dli rather than ori/dsll32/ori. */
-void func_00282798(UiSpritePacket *p, s32 texId, s32 idx, u64 wrapMode) {
-    s32 *e = &D_239A90[idx * 5];
+void func_00282798(UiSpritePacket *p, s32 texId, s32 blend, u64 fix) {
+    s32 *row;
     p->tex0  = GetUiTextureTex0(texId);
+    row = &D_239A90[blend * 5];
     p->tex1  = ((u64)0xFF90 << 32) | 0x260;
-    p->unk70 = 0;
-    p->clamp = (u64)e[0]
-             | ((u64)e[1] << 2)
-             | ((u64)e[2] << 4)
-             | ((u64)e[3] << 6)
-             | (wrapMode << 32);
+    p->clamp = 0;
+    p->alpha = (u64)row[0]
+             | ((u64)row[1] << 2)
+             | ((u64)row[2] << 4)
+             | ((u64)row[3] << 6)
+             | (fix << 32);
 }
 #endif
 
