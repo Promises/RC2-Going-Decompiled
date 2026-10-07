@@ -40,22 +40,23 @@ extern s32 g_frameArenaFlipAbs;
 /* SelectSceneArenaRegion: select the scene/render-arena region for the current
  * story progress. Index the two per-progress tables by g_playerProgress (or 0
  * when it is past the 0x19-entry tables), publish the reserve (D_1A8BC0) and the
- * scene-arena cursor, then rederive the render-task list (func_002FD020). */
-/* TODO(match) t889: sdk29 75.91% solo (unit objdiff, objdiff_build.sh; unit
- * -G8 -fno-gcse, this body respelled `if ((u32)idx >= 0x19) idx = 0;` + the
- * empty-asm guard after the call). The respelling gives the ROM's
- * `sltiu/movz`, registers and length (22 = 22); the ternary below gives
- * `li 24; sltu; movn`. Residual: a 5-row permutation in the first 11 words.
- * The ROM issues `addiu sp` and `sd ra` earlier and delays both table %lo
- * addius, where cc1 pairs each %lo with its lui. 16 C shapes did not move it
- * (task #889 store NOTE: comparison spelling, pointer temporaries,
- * sized tables, split load, statement order). Without the guard cc1 tail-jumps,
- * which the ROM never does (FACT #8177). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1FCF48", func_002FCFC8);
+ * scene-arena cursor, then rederive the render-task list (func_002FD020).
+ * No params, no return.
+ * The bound is an unsigned test that zeroes the index (`sltiu; movz`), so a
+ * negative progress also selects entry 0; the `?:` spelling gives `sltu; movn`
+ * against 24 instead. The cursor store is %gp_rel in the call's delay slot,
+ * the reserve store the absolute `lui $at; sw` pair (.extern above).
+ * MATCHED (task #1789) on the s136os arm (SN 2.95.3 v1.36 -fopt-stack,
+ * tools/ee/s136os_functions.txt), no devices. The 2.9 arm stopped at a 5-row
+ * prologue permutation (task #889: it pairs each %lo with its lui and issues
+ * `sd ra` late) and tail-jumps without a guard; SN 1.36 emits the ROM's order
+ * and keeps the call frame as written. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002FCFC8)
+S136OS_SLOT(func_002FCFC8);
 #else
 void func_002FCFC8(void) {
-    s32 idx = ((u32)g_playerProgress < 0x19) ? g_playerProgress : 0;
+    s32 idx = g_playerProgress;
+    if ((u32)idx >= 0x19) idx = 0;
     D_1A8BC0 = D_262D98[idx];
     g_sceneArenaCursor = D_262D30[idx];
     func_002FD020();

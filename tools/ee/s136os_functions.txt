@@ -475,3 +475,4 @@ usa text/248B50 func_0034A318
 usa text/248B50 func_0034A350
 usa text/248B50 func_0034A7B0
 usa text/250080 FmvRequestStop
+usa text/1FCF48 func_002FCFC8
