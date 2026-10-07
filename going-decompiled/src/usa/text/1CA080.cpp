@@ -1215,15 +1215,16 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", MenuScreenUpdat
  * (WeaponDef +0x14, weapon.h) to func_00294CD0, bracketed by dialog-voice pumps.
  *
  * Byte-exact on the s136os arm (task #1739), no devices. What carries it (solo
- * s136 harness, difflib alignment against the ROM):
+ * s136 harness, difflib alignment against the ROM, each removed alone; this
+ * body itself reads 2 off there, the two relocation-less sites below):
  *   - the block is read as MEMBERS of a struct cast of g_menuScreenBlock (the
  *     task #1712 lever). The ROM forms the full base once in $4 and reads
  *     0x24/0x1C/0xF4 off it; through byte casts cc1 folds the offsets into
  *     %lo(g_menuScreenBlock+N) and forwards the decremented countdown instead of
- *     re-reading it: 35 words off;
+ *     re-reading it: 88 words, 33 off;
  *   - the variant's mobyClass is read as a WeaponDef member (weapon.h); the byte
  *     cast `g_weaponTable + slot * 0xE0 + 0x14` folds +0x14 into
- *     %lo(g_weaponTable) (2 words);
+ *     %lo(g_weaponTable): 4 off;
  *   - sub-states 3, 4 and 6 are three separate arms with the same call: the ROM
  *     has three copies of the argument set-up, and only the jal is shared.
  *     Written as one `sub == 3 || sub == 4 || sub == 6` arm it builds 79 words.
@@ -1308,19 +1309,21 @@ s32 IsLevelListEntryEnabled(s32 idx) {
  * index on confirm, else -1.
  *   flags: the pad buttons pressed this frame.
  *
- * Byte-exact on the s136os arm (task #1739). What carries it (solo s136 harness):
+ * Byte-exact on the s136os arm (task #1739). What carries it (solo s136 harness,
+ * difflib alignment against the ROM):
  *   - a plain `for` loop with no explicit `count >= 0` guard: cc1's own loop
- *     rotation puts `i = 0` above the entry test, as the ROM has it;
+ *     rotation puts `i = 0` above the entry test, as the ROM has it. With the
+ *     guard written out: 6 words off;
  *   - the scroller address is never held in a local across the loop. The ROM
  *     keeps only %hi(g_nLevelSelectListCount) in a saved register and re-forms
  *     the address after the loop. The previous #else (explicit guard, scroller
- *     local) differed in 64 of 78 word positions;
+ *     local) had 29 of its 78 words off in a difflib alignment;
  *   - g_abLevelAvailableFlags is declared cc1-small (u8[8]) with the unit's
  *     `.extern g_abLevelAvailableFlags, 16` (ADDRESSING-MODEL device, same shape
  *     as 1A8180.c's): cc1 then prints one `la` macro, which gas expands through
  *     the destination register as the ROM does. Without the `.extern` the
- *     address goes gp-relative (76 words); without the small declaration cc1
- *     splits it through a temporary (4/78). */
+ *     address goes gp-relative (76 words, 14 off); without the small
+ *     declaration cc1 splits it through a temporary (78 words, 4 off). */
 /* The level-select scroller rooted at g_nLevelSelectListCount, shared by
  * LevelSelectListHandleInput and LevelSelectListRender. */
 typedef struct {
@@ -1616,16 +1619,17 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", RenderMenuScree
  * pending sub-result through MenuPollConfirm (0 or -1). Returns 0 otherwise.
  *   screen: the screen record the caller asks about.
  *
- * Byte-exact on the s136os arm (task #1739), no devices. Two spellings carry it:
+ * Byte-exact on the s136os arm (task #1739), no devices. Two spellings carry it
+ * (each removed alone; solo s136 harness, difflib alignment against the ROM):
  *   - the pad word is read as a member of a struct cast of D_138180. The ROM
  *     keeps %hi(D_138180) live across blocks and re-forms the base with
  *     `addiu %lo` before each `lw 0x1C4`; the byte-offset spelling
- *     `*(s32 *)(D_138180 + 0x1C4)` folds the offset into the symbol and is 30
- *     words off (solo s136 harness);
+ *     `*(s32 *)(D_138180 + 0x1C4)` folds the offset into the symbol: 35 words
+ *     against the ROM's 37, 11 of them off;
  *   - the confirm test is positive (`if (... & 0x10) return MenuPollConfirm();
  *     return 0;`). Written as an early `return 0` on the negated test, cc1
  *     cross-jumps that exit into the first `return 0` and the ROM's separate
- *     tail is lost (2 words). */
+ *     tail is lost: 35 words, 3 off. */
 typedef struct {
     u8 _pad[0x1C4];
     s32 buttons;
