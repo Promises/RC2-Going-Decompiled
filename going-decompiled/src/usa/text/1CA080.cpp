@@ -1211,8 +1211,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", MenuScreenUpdat
  * transition by its sub-state (g_menuScreenBlock+0x1C): 2 = pop back to the map,
  * 3/4/6 = push game-state 1 with the queued arg (+0xF4), 5 = push game-state 2,
  * anything else = plain pop. Then, if the equipped-weapon slot changed
- * (+0x40 != 0 and != +0x30), plays that weapon's voice line via its
- * g_weaponTable entry, bracketed by dialog-voice pumps.
+ * (+0x40 != 0 and != +0x30), hands that weapon variant's mobyClass
+ * (WeaponDef +0x14, weapon.h) to func_00294CD0, bracketed by dialog-voice pumps.
  *
  * Byte-exact on the s136os arm (task #1739), no devices. What carries it (solo
  * s136 harness, difflib alignment against the ROM):
@@ -1221,8 +1221,9 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", MenuScreenUpdat
  *     0x24/0x1C/0xF4 off it; through byte casts cc1 folds the offsets into
  *     %lo(g_menuScreenBlock+N) and forwards the decremented countdown instead of
  *     re-reading it: 35 words off;
- *   - the weapon's voice line is a member of a struct cast of g_weaponTable
- *     (stride 0xE0); the byte cast folds +0x14 into %lo(g_weaponTable) (2 words);
+ *   - the variant's mobyClass is read as a WeaponDef member (weapon.h); the byte
+ *     cast `g_weaponTable + slot * 0xE0 + 0x14` folds +0x14 into
+ *     %lo(g_weaponTable) (2 words);
  *   - sub-states 3, 4 and 6 are three separate arms with the same call: the ROM
  *     has three copies of the argument set-up, and only the jal is shared.
  *     Written as one `sub == 3 || sub == 4 || sub == 6` arm it builds 79 words.
@@ -1250,12 +1251,6 @@ struct MenuExitBlock {
     s32 stateArg;     /* 0xF4: argument for the game-state push */
 };
 #define g_menuExit (*(struct MenuExitBlock *)g_menuScreenBlock)
-/* One g_weaponTable entry (stride 0xE0), as far as the leave handler reads it. */
-struct WeaponVoiceField {
-    u8  unk0[0x14];
-    s32 voiceLine;    /* 0x14 */
-    u8  unk18[0xC8];
-};
 #if !defined(TARGET_NATIVE) && !defined(S136OS_func_002CBD68)
 S136OS_SLOT(func_002CBD68);
 #else
@@ -1287,8 +1282,7 @@ void func_002CBD68(void) {
     }
     if (g_menuExit.newSlot != 0 && g_menuExit.prevSlot != g_menuExit.newSlot) {
         PumpDialogVoiceSystem(1);
-        func_00294CD0(((struct WeaponVoiceField *)g_weaponTable)
-                          [g_itemEquippedSlot[g_menuExit.newSlot]].voiceLine);
+        func_00294CD0(((WeaponDef *)g_weaponTable)[g_itemEquippedSlot[g_menuExit.newSlot]].mobyClass);
         PumpDialogVoiceSystem(1);
     }
     PumpDialogVoiceSystem(1);
