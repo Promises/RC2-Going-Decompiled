@@ -1562,12 +1562,27 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011C8D8);
 
-/* func_0011CB58: subsystem reset — DisableDmac(5); func_0011A950(5,
- * D_0013CF54); D_0013469C = 0. Body is structurally identical at 98.46%, but the
- * original allocates $3 (v1) for every %hi address temporary while ee-gcc picks
- * $2 (v0); a one-register global allocation offset this cc1 won't reproduce from
- * source. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011CB58);
+extern s32 DisableDmac(s32 channel);
+extern s32 func_0011A950(s32 channel, s32 handlerId);
+extern s32 D_0013CF54;
+extern s32 D_0013469C;
+
+/**
+ * Shut down the SIF command layer: disable DMA channel 5 (SIF0), remove the
+ * channel-5 handler whose id is held in D_0013CF54 (func_0011A950 is the
+ * RemoveDmacHandler syscall stub, syscall 0x13), and clear the "initialised"
+ * flag D_0013469C. Identity by body: libkernel's sceSifExitCmd.
+ *
+ * Both callees are declared VALUE-RETURNING, as they are (eekernel.h has
+ * `int DisableDmac(int)`): each call's result occupies $2, so the %hi
+ * temporary after it lands in $3 as in the ROM. Declaring either one void
+ * frees $2 for the following lui/lw (or lui/sw) pair — 2 words each, measured.
+ */
+void func_0011CB58(void) {
+    DisableDmac(5);
+    func_0011A950(5, D_0013CF54);
+    D_0013469C = 0;
+}
 
 extern char *D_0013CF64; /* 8-byte-stride (key,value) table for negative indices */
 extern char *D_0013CF6C; /* 8-byte-stride (key,value) table for indices >= 0 */
