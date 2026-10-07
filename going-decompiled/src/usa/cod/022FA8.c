@@ -460,7 +460,33 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00124AF0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00124B88);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00124C28);
+extern void *Kprintf(const char *format, ...);
+extern s32 sceSifCheckStatRpc(s32 *rpc);
+extern s32 D_00136390;     /* libcdvd debug level */
+extern char D_0013B218[];  /* "S cmd wait\n" */
+extern s32 D_00137DC8[];   /* RPC client data of the S-command channel */
+
+/**
+ * libcdvd S-command sync (sceCdSyncS-shaped): with mode 0, print "S cmd wait"
+ * when the debug level D_00136390 is positive, then poll the S-command RPC
+ * client D_00137DC8 with sceSifCheckStatRpc, calling func_00124568(0x3C)
+ * between polls until it is idle, and return 0. With any other mode, return
+ * sceSifCheckStatRpc's busy status once without waiting.
+ * The ROM's zero word after it (0x124C94) is alignment padding that the next
+ * function's 8-byte alignment reproduces.
+ */
+s32 func_00124C28(s32 mode) {
+    if (mode == 0) {
+        if (D_00136390 > 0) {
+            Kprintf(D_0013B218);
+        }
+        while (sceSifCheckStatRpc(D_00137DC8)) {
+            func_00124568(0x3C);
+        }
+        return 0;
+    }
+    return sceSifCheckStatRpc(D_00137DC8);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00124C98);
 
@@ -533,7 +559,30 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00126DC0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", sceDmaSyncChan);
+extern void func_001272A8(void *chan);
+extern char D_0013B6F0[];  /* "libdma: sync timeout\n" */
+
+/**
+ * libdma channel sync: spin while the STR bit (0x100) of the channel's CHCR
+ * register (the first word of the register block `chan`) is set. After 0x1000000
+ * polls the countdown goes negative and every further poll prints "libdma: sync
+ * timeout" and dumps the channel with func_001272A8; it never gives up.
+ *
+ * Spelled as a pre-decrement from 0x1000000: cc1 then loads the constant with
+ * one `lui` and decrements it in the loop preheader, which is the ROM's
+ * `lui 0x100` + `addiu -1` pair (splat reads the pair as a %hi/%lo of a symbol
+ * "D_FFFFFF"). Starting from 0xFFFFFF instead gives `lui`+`ori` at the top.
+ */
+void sceDmaSyncChan(void *chan) {
+    volatile u32 *chcr = chan;
+    s32 count = 0x1000000;
+    while (*chcr & 0x100) {
+        if (--count < 0) {
+            Kprintf(D_0013B6F0);
+            func_001272A8(chan);
+        }
+    }
+}
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00126ED0);
 
@@ -1683,7 +1732,18 @@ s32 func_0012F950(u8 *arg0, u32 arg1, s32 arg2) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012F998);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012F9A8);
+/**
+ * Accessor: follow arg0->field_0x40 (arg0[0x10]) to its sub-object and return
+ * that object's first word (base[0]); the sibling of func_0012F9B8, which tests
+ * base[1]. The FMV display worker (FmvDisplayWorkerLoop, text/250080) stops on
+ * a non-zero result, i.e. it reads this word as the host's end-of-stream flag.
+ * The ROM's zero word after it (0x12F9B4) is alignment padding that the
+ * next function's 8-byte alignment reproduces.
+ */
+s32 func_0012F9A8(s32 *arg0) {
+    s32 *base = (s32 *)arg0[0x10];
+    return base[0];
+}
 
 /**
  * Predicate: follow arg0->field_0x40 (arg0[0x10]) to a sub-object and return 1
@@ -1843,14 +1903,26 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012FBF0);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012FD60);
 
-/* func_0012FE78: dispatch on the state word (offset 0x174) of arg0's sub-object
- * (arg0->field_0x40) — when it equals 3 hand off to func_0012FD60, otherwise to
- * func_0012FEC0; returns the chosen handler's result. Body
- * `if (((s32*)arg0[0x10])[0x5D] != 3) return func_0012FEC0(arg0); return
- * func_0012FD60(arg0);` reaches 97% — every instruction matches but the original
- * parks arg0 in $7 (a3) and the state in $2, while ee-gcc allocates a1/a0; a
- * register-allocation form this cc1 won't reproduce. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012FE78);
+extern s32 func_0012FEC0(s32 *obj, s32 arg1, s32 arg2);
+extern s32 func_0012FD60(s32 *obj, s32 arg1, s32 arg2);
+
+/**
+ * Dispatch on the state word (offset 0x174) of obj's sub-object
+ * (obj->field_0x40): when it equals 3 hand off to func_0012FD60, otherwise to
+ * func_0012FEC0, forwarding arg1/arg2 unchanged; returns the chosen handler's
+ * result.
+ *
+ * Both handlers read $a1/$a2 (they compare arg1 < arg2 and arg2 against -1), so
+ * the dispatcher takes and forwards three arguments. With those two live, obj
+ * has to be parked in $a3, which is the ROM's allocation; the one-argument
+ * spelling frees $a1 for it and cannot match.
+ */
+s32 func_0012FE78(s32 *obj, s32 arg1, s32 arg2) {
+    if (((s32 *)obj[0x10])[0x5D] != 3) {
+        return func_0012FEC0(obj, arg1, arg2);
+    }
+    return func_0012FD60(obj, arg1, arg2);
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_0012FEC0);
 
@@ -2201,6 +2273,10 @@ s32 func_001315E0(void) {
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00131620);
 
 extern u8 D_00138152;
+extern s16 D_00138150;
+extern u8 D_00138156;
+extern void func_0011ACD0(s32 *out);
+extern s32 func_0011AF30(void *buf, s32 size, s32 offset);
 
 /**
  * Return a 2-bit status code. For the 'T' (0x54) territory variant
@@ -2218,18 +2294,63 @@ s32 func_00131628(void) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00131668);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00131670);
+/**
+ * Return the console's timezone offset in minutes. For the 'T' territory
+ * variant (func_001315E0() true) this is the cached s16 D_00138150. Otherwise
+ * read the OSD config word with func_0011ACD0 (EE syscall 0x4B,
+ * GetOsdConfigParam): bits 21..31 are the signed timezone offset, but when the
+ * 3-bit config version field (bits 13..15) is 0 the field is not valid and 540
+ * (+9h, JST) is returned instead.
+ *
+ * The result is formed in one variable on both paths: returning from inside the
+ * 'T' branch makes cc1 put the %hi of D_00138150 in $3, while the ROM (and this
+ * spelling) loads it through the return register $2.
+ */
+s32 func_00131670(void) {
+    u32 config;
+    s32 offset;
+    if (func_001315E0()) {
+        offset = D_00138150;
+    } else {
+        func_0011ACD0((s32 *)&config);
+        offset = (s32)config >> 21;
+        if (((config >> 13) & 7) == 0) {
+            offset = 540;
+        }
+    }
+    return offset;
+}
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001316C0);
 
-/* func_001316C8: controller/port status getter — on territory 'T'
- * (func_001315E0()) return the cached byte D_00138156; else sample the pad
- * (func_0011ACD0), return 0 if the 3-bit port field (bits 13..15) is zero, else
- * read extended status (func_0011AF30) and return bit 4 of its low byte. Every
- * instruction matches at 98.85% except the %hi temp register for D_00138156: the
- * original reuses $2 (`lui $2; lbu $2,%lo($2)`) while ee-gcc splits the lui into
- * $3. A reg-alloc form this cc1 won't reproduce. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001316C8);
+/**
+ * Return the console's daylight-saving flag (0/1). For the 'T' territory
+ * variant (func_001315E0() true) this is the cached byte D_00138156. Otherwise
+ * read the OSD config word (func_0011ACD0, GetOsdConfigParam); if its 3-bit
+ * version field (bits 13..15) is 0 there is no extended config and the flag is
+ * 0, else fetch byte 1 of the extended config with func_0011AF30 (EE syscall
+ * 0x6F, GetOsdConfigParam2(buf, 1, 1)) and return its bit 4. The caller below
+ * scales it by 60 and adds it to func_00131670's offset.
+ *
+ * As in func_00131670, the result is formed in one variable on every path; the
+ * early-return spelling moves the %hi of D_00138156 from $2 to $3.
+ */
+s32 func_001316C8(void) {
+    u32 config[2];
+    s32 daylight;
+    if (func_001315E0()) {
+        daylight = D_00138156;
+    } else {
+        func_0011ACD0((s32 *)&config[0]);
+        if (((config[0] >> 13) & 7) == 0) {
+            daylight = 0;
+        } else {
+            func_0011AF30(&config[1], 1, 1);
+            daylight = (((u8 *)&config[1])[0] >> 4) & 1;
+        }
+    }
+    return daylight;
+}
 
 /**
  * Binary byte (0..99) → packed BCD (RTC/BCD clock family, inverse of the
