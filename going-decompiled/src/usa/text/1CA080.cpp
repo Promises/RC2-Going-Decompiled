@@ -2045,31 +2045,72 @@ s32 func_002CE200(void) {
     return 0;
 }
 
-/* Present-record fence variant driving the front-end "leave" navigation. Samples
- * the frame timestamp (func_00337D98), then on the pad "confirm" bit (0x10) points
- * g_pNextMenuScreen at the destination screen (D_00259308) and — if the GUI's
- * pending widget handle (g_guiInstance+0x38000 .+0x79EC) is live — hands it to
- * func_0034F868; on a "cancel" bit (0x900) does the same handle hand-off and
- * returns 1; otherwise ticks the idle handler func_0029D040. Then, with the GUI
- * up, runs the shared present-record redraw fence (D_00259E50 / live object
- * *D_259E34) exactly like func_002CE498: clear the "needs redraw" bit 0x4 when the
- * two timestamps agree, the file-load is idle and the record shows this frame
- * already presented; else set it. Finally stamps the record (D_00259E50[0x58]=now).
- * Matching arm stays INCLUDE_ASM (later cc1 packs 8-byte save slots vs our 16). */
+/* Per-screen present record: the frame stamps the redraw fence compares against
+ * the frame counter. Only the fields the fence reads are named. func_002CE230
+ * (D_00259E50) and func_002CE498 (D_00259C58) read it as members; the sibling
+ * func_002CE6D8 (D_0025E298) still reads the same layout through byte casts. */
+struct PresentRecord {
+    u8 unk0[0x44];
+    s32 state;      /* 0x44: 2 or 4 when frameA / frameB is the one to check */
+    u8 unk48[0x8];
+    s32 frameA;     /* 0x50 */
+    s32 frameB;     /* 0x54 */
+    s32 stamp;      /* 0x58: frame of the last tick */
+};
+
 extern s32 func_00337D98(void);
 extern void func_0034F868(s32 handle);
 extern void func_0029D040(s32 buttons);
 extern u8 *g_pNextMenuScreen;
 extern u8 D_00259308[];
-extern u8 D_00259E50[];   /* per-screen present record */
+extern struct PresentRecord D_00259E50;   /* per-screen present record */
 extern s32 D_259E34;      /* ptr-to-live-object global */
+
+/* ADDRESSING-MODEL DEVICE for func_002CE230 (RULING #8620 terms; offset-0 equate, RULING
+ * #9073 / #9574). It emits nothing. The ROM reads g_guiInstance in asm_unit.sh's size-12
+ * class here: absolute (lui/lw) at 0x002CE268 and 0x002CE2E0, one-insn %gp_rel where a
+ * read fills a delay slot (0x002CE28C, 0x002CE29C, 0x002CE2A8). This unit declares
+ * `.extern g_guiInstance, 16` (absolute everywhere, which its other readers need), and
+ * the first directive wins, so the size-12 model needs a name of its own. Relocations
+ * name g_guiInstance; GNU as never writes an equate of an undefined symbol to the
+ * symtab. File scope so the unit's 2.9 TU declares it too and the splice does not carry
+ * it (FACT #9067; precedent 1EFFC0.cpp's D_1A7390Abs). Native reads the real symbol. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CE230);
+__asm__(".extern g_guiInstanceSize12, 12\n\tg_guiInstanceSize12 = g_guiInstance");
+extern char *g_guiInstanceSize12;
 #else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 54.46% -> STRUCTURAL,
- * first differing row @9: ROM `andi v1,a0,0x10` vs `andi v0,a0,0x10`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 59.88% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-48`. */
+#define g_guiInstanceSize12 g_guiInstance
+#endif
+
+/* GUARD: on EE this C is the image's body, compiled alone by the s136os arm (SN 2.95.3
+ * v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm fallback: a build that
+ * skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002CE230)
+S136OS_SLOT(func_002CE230);
+#else
+/* Front-end "leave" screen tick with the present-record redraw fence.
+ *
+ * Takes no arguments. Returns 1 on cancel (0x900), else 0.
+ *
+ * Samples the frame counter (func_00337D98). On confirm (0x10) it points
+ * g_pNextMenuScreen at D_00259308; on confirm or cancel, if the GUI is up and its
+ * pending widget handle (g_guiInstance+0x38000 .+0x79EC) is live, it hands the handle
+ * to func_0034F868. Otherwise it ticks the idle handler func_0029D040. Then, with the
+ * GUI up, it runs func_002CE498's fence: when the two frame samples agree, the file
+ * load is idle and the record shows this frame presented (frameA with state 2, or
+ * frameB with state 4), it clears the live object's "needs redraw" bit 0x4
+ * ((*D_259E34)[0x10]); otherwise it sets it. Finally it stamps the record.
+ *
+ * Matched byte-exact on the s136os arm. Measured by removing each alone (task #1750;
+ * difflib-aligned objdump of the solo s136 compile against the ROM, 0 at this body):
+ *  - the size-12 g_guiInstance equate above: 25 aligned, 98 vs 92 words;
+ *  - D_00259E50 as a struct PresentRecord rather than byte casts: 24 (FACT #9486's
+ *    lever, as on func_002CE498);
+ *  - each arm re-reads g_guiInstance in its own `&&` test with no early return: cc1
+ *    jump-threads the confirm arm's null GUI straight to the shared `return result`,
+ *    as the ROM does at 0x002CE270. A `gui` local per arm reads 19 (94 words); the
+ *    test pulled into an inline helper reads 1. */
 s32 func_002CE230(void) {
     s32 t0 = func_00337D98();
     s32 flags = g_padButtonsPressed;
@@ -2077,38 +2118,25 @@ s32 func_002CE230(void) {
 
     if (flags & 0x10) {
         g_pNextMenuScreen = D_00259308;
-        if (g_guiInstance == NULL)
-            return result;
-        if (*(s32 *)(g_guiInstance + 0x38000 + 0x79EC) != 0)
-            func_0034F868(*(s32 *)(g_guiInstance + 0x38000 + 0x79EC));
+        if (g_guiInstanceSize12 != 0 && *(s32 *)(g_guiInstanceSize12 + 0x38000 + 0x79EC) != 0)
+            func_0034F868(*(s32 *)(g_guiInstanceSize12 + 0x38000 + 0x79EC));
     } else if (flags & 0x900) {
-        if (g_guiInstance != NULL &&
-            *(s32 *)(g_guiInstance + 0x38000 + 0x79EC) != 0)
-            func_0034F868(*(s32 *)(g_guiInstance + 0x38000 + 0x79EC));
+        if (g_guiInstanceSize12 != 0 && *(s32 *)(g_guiInstanceSize12 + 0x38000 + 0x79EC) != 0)
+            func_0034F868(*(s32 *)(g_guiInstanceSize12 + 0x38000 + 0x79EC));
         result = 1;
     } else {
         func_0029D040(flags);
     }
-
-    if (g_guiInstance) {
+    if (g_guiInstanceSize12) {
         s32 now = func_00337D98();
-        u8 *rec = D_00259E50;
-        s32 *live = (s32 *)D_259E34;
-        s32 clear = 0;
-        if (now == t0 && g_fileLoadState == 0) {
-            if (*(s32 *)(rec + 0x50) == now && *(s32 *)(rec + 0x44) == 2) {
-                clear = 1;
-            } else if (*(s32 *)(rec + 0x54) == now &&
-                       *(s32 *)(rec + 0x44) == 4) {
-                clear = 1;
-            }
-        }
-        if (clear) {
-            live[0x10 / 4] &= ~0x4;
+        if (t0 == now && g_fileLoadState == 0 &&
+            ((D_00259E50.frameA == now && D_00259E50.state == 2) ||
+             (D_00259E50.frameB == now && D_00259E50.state == 4))) {
+            ((s32 *)D_259E34)[0x10 / 4] &= ~0x4;
         } else {
-            live[0x10 / 4] |= 0x4;
+            ((s32 *)D_259E34)[0x10 / 4] |= 0x4;
         }
-        *(s32 *)(rec + 0x58) = now;
+        D_00259E50.stamp = now;
     }
     return result;
 }
@@ -2181,19 +2209,6 @@ s32 func_002CE3A0(void) {
     return 0;
 }
 #endif
-
-/* Per-screen present record: the frame stamps the redraw fence below compares
- * against the frame counter. Only the fields the fence reads are named. The
- * siblings func_002CE230 (D_00259E50) and func_002CE6D8 (D_0025E298) read the
- * same layout through byte casts. */
-struct PresentRecord {
-    u8 unk0[0x44];
-    s32 state;      /* 0x44: 2 or 4 when frameA / frameB is the one to check */
-    u8 unk48[0x8];
-    s32 frameA;     /* 0x50 */
-    s32 frameB;     /* 0x54 */
-    s32 stamp;      /* 0x58: frame of the last tick */
-};
 
 /* Per-screen menu tick + render-fence latch (one of the func_002CE498 family,
  * the cleanest with the standard menuScreenBlock confirm latch). Confirm (0x10)
