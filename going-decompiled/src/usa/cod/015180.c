@@ -2043,7 +2043,26 @@ s32 func_0011E828(s32 arg0, s32 arg1, s32 arg2) {
     return 0;
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceSifFreeSysMemory);
+/**
+ * Free a block of IOP memory obtained from func_0011E828 (sceSifAllocSysMemory):
+ * the same D_00140140 RPC client, function 2 instead of 4, sending one word
+ * (the block address) and receiving the server's one-word status.
+ *
+ * @param addr  the IOP address to free
+ * @return      0 if the client was never bound (D_00134744 < 0); the server's
+ *              reply D_00140180 on a successful call; -1 if the call failed
+ */
+s32 sceSifFreeSysMemory(void *addr) {
+    if (D_00134744 < 0) {
+        return 0;
+    }
+    (&D_001401C0)[0] = (s32)addr;
+    if (func_0011D620(&D_00140140, 2, 0, &D_001401C0, 4,
+                      &D_00140180, 4, 0, 0) >= 0) {
+        return D_00140180;
+    }
+    return -1;
+}
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E920);
 

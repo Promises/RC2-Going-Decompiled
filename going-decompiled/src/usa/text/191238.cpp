@@ -279,7 +279,7 @@ extern void LoadDiscToc(void *arg);
 extern void DecompressWad(void *src, void *dest);
 extern void *func_0011E828(s32 a, s32 size, s32 c); /* sceSifAllocSysMemory */
 extern s32  LoadIrxModuleFromBuffer(void *image, s32 size, void *arg);
-extern void sceSifFreeSysMemory(void *handle);
+extern s32  sceSifFreeSysMemory(void *handle);
 extern void InitIopUploadRing(void);
 extern void InitControllers(void);
 extern void InitMemCardLib(void);
