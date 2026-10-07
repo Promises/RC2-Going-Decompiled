@@ -118,7 +118,12 @@ __asm__(".extern D_1ABA75, 16");
 __asm__(".extern D_1ABA76, 16");
 __asm__(".extern D_1ABA77, 16");
 __asm__(".extern g_cameraCallbackCount, 16");
-__asm__(".extern g_nLevelExitRequested, 16");
+/* Size 12 = absolute in straight-line code, one-word %gp_rel when the access fills a
+ * branch delay slot (asm_unit.sh's -G8 slot rule). func_002CDF48, the unit's only
+ * compiled reader, has both shapes (gp in the slots at 0x002CDF8C/0x002CDFEC/0x002CE078,
+ * absolute at 0x002CDF98/0x002CE094/0x002CE09C). At 16 it reads 27 aligned diffs, 100 vs 96
+ * words (task #1750, solo s136 harness). */
+__asm__(".extern g_nLevelExitRequested, 12");
 /* LevelSelectListHandleInput: the ROM forms &g_abLevelAvailableFlags as a one-insn
  * `la` macro (`lui $20; addiu $20,$20`), task #1739. */
 __asm__(".extern g_abLevelAvailableFlags, 16");
@@ -1812,76 +1817,118 @@ void func_002CDEB0(void) {
 }
 #endif
 
-/* Level-exit confirm dispatch for the active menu screen: validates the pending
- * pick against the global input flags + per-screen tables and sets g_nLevelExit*.
- * Only acts when `item` is the screen's currently-active widget (screen+0xE8) and
- * the widget's table entry (item+0x34[item+0x40], stride 0xC, +0x2) marks it a
- * "level exit" (kind 3); then maps the widget identity (one of the six menu-item
- * records) to a level-exit destination code and arms g_nLevelExitRequested from
- * that destination's enabled byte (D_1A7BD1..). If the byte is clear the pending
- * destination is rolled back to its saved value. Anything not handled here is
- * forwarded to func_002D6B28 (whose result is returned).
- * Matching arm stays INCLUDE_ASM (later cc1 lays out the chained pointer compares
- * differently). */
 extern u8 *g_pCurrentMenuScreen;
 extern s32 g_nLevelExitRequested;
 extern s32 func_002D6B28(void *item);
 extern u8 D_00259128[], D_00259178[], D_002591C8[], D_00259218[], D_00259268[], D_002592B8[];
+
+/* ADDRESSING-MODEL DEVICE for func_002CDF48 (RULING #8620 terms; bare asm-label alias,
+ * NOTE #9476). It emits nothing. The ROM reads and writes g_nLevelExitDestination as a
+ * cc1-small word: one-insn `%gp_rel` where the access fills a branch delay slot
+ * (0x002CDFA4, 0x002CE050, 0x002CE0A8) and the absolute lui/$at macro everywhere else
+ * (0x002CDFE0, 0x002CE088) - asm_unit.sh's size-12 class. The unit declares the symbol
+ * `u8[]` for TickFrontEndScreenMachine's +4 read, which cc1 treats as large and splits;
+ * the s32 alias gives cc1 the small word and `.extern ..., 12` the assembler model.
+ * Relocations name g_nLevelExitDestination; no alias reaches nm. File scope so the
+ * unit's 2.9 TU sees the same `.extern` (FACT #9067). Native reads the real symbol. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CDF48);
+__asm__(".extern g_nLevelExitDestination, 12");
+extern s32 g_levelExitDestination __asm__("g_nLevelExitDestination");
 #else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 44.72% -> STRUCTURAL,
- * first differing row @5: ROM `lw a0,232(v1)` vs `lw a1,232(v1)`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 63.75% -> STRUCTURAL, first differing row @9: ROM `daddu a3,v0,zero` vs `lw v1,452(v0)  [LO16 D_138180]`. */
+#define g_levelExitDestination (*(s32 *)g_nLevelExitDestination)
+#endif
+
+/* GUARD: on EE this C is the image's body, compiled alone by the s136os arm (SN 2.95.3
+ * v1.36 -fopt-stack, FACT #8810; tools/ee/s136os_functions.txt) and spliced over the
+ * S136OS_SLOT line by tools/ee/s136os_splice.sh. There is no asm fallback: a build that
+ * skips the splice loses the function. Native: plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002CDF48)
+S136OS_SLOT(func_002CDF48);
+#else
+/* Level-exit confirm handler for a menu widget.
+ *
+ * item: the widget record being confirmed. Returns 0 when the pick is consumed here,
+ * otherwise func_002D6B28(item)'s result (the generic widget handler).
+ *
+ * Acts only when `item` is the current screen's active widget (screen+0xE8), no exit is
+ * already pending, and the widget's own table entry (item+0x34 [item+0x40], stride 0xC,
+ * +0x2) is a level-exit entry (kind 3). D_00259128 commits destination 1 at once (and
+ * swallows the press while any other input flag is held). The five planet records map
+ * to destinations 1, 2, 3, 4, 6; each arms g_nLevelExitRequested from that destination's
+ * unlock byte (D_1A7BD1..D_1A7BD6). If the request stays clear - the byte is 0, or the
+ * widget is not one of the five - the destination is rolled back to the value read on
+ * entry. The confirm bit (0x40) must be held for the planet records.
+ *
+ * Matched byte-exact on the s136os arm. What each spelling buys, measured by removing it
+ * alone (task #1750; difflib-aligned objdump of the solo s136 compile against the ROM,
+ * a ranking instrument, 0 at this body):
+ *  - `.extern g_nLevelExitRequested, 12` (unit list above): 27 aligned, 100 words;
+ *    the destination's `.extern ..., 12`: 21, 94 words; its s32 alias: 24. Together
+ *    they give the ROM's gp-in-slot / absolute-elsewhere split for both globals.
+ *  - one store pair per planet record rather than a shared `dest` variable (27, 100
+ *    words): cse then stores destination 3 from the register holding the table kind,
+ *    known equal to 3, which is the ROM's `sw $4,%gp_rel(g_nLevelExitDestination)` in
+ *    case 3's `b` slot, and cross-jumping merges the other four tails.
+ *  - `savedDest` read before the pending test, so it fills that test's slot (4).
+ *  - `input` as its own variable rather than reusing `pad` (27, 94 words): a separate
+ *    pseudo takes $3, which pushes the table kind to $4 as in the ROM. */
 s32 func_002CDF48(void *item) {
     u8 *screen = g_pCurrentMenuScreen;
+    u8 *pad;
+    u8 *input;
     s32 savedDest;
+    s32 index;
     u8 *table;
-    s32 dest;
-    u8 enabled;
+    s32 kind;
 
     if (*(void **)(screen + 0xE8) != item)
-        return func_002D6B28(item);
+        goto forward;
 
     /* item inert while any input flag other than 0x40 is held */
-    if ((*(s32 *)(D_138180 + 0x1C4) & ~0x40) != 0 && item == (void *)D_00259128)
+    pad = D_138180;
+    if ((*(s32 *)(pad + 0x1C4) & ~0x40) != 0 && item == (void *)D_00259128)
         return 0;
+    savedDest = g_levelExitDestination;
     if (g_nLevelExitRequested != 0)
-        return func_002D6B28(item);
-
-    savedDest = *(s32 *)g_nLevelExitDestination;
+        goto forward;
 
     /* the widget must be a "level exit" entry (kind 3) in its own table */
+    index = *(s32 *)((u8 *)item + 0x40);
     table = *(u8 **)((u8 *)item + 0x34);
-    if (*(s16 *)(table + *(s32 *)((u8 *)item + 0x40) * 0xC + 0x2) != 3)
-        return func_002D6B28(item);
+    kind = *(s16 *)(table + index * 0xC + 0x2);
+    if (kind != 3)
+        goto forward;
 
     if (item == (void *)D_00259128) {
-        *(s32 *)g_nLevelExitDestination = 1;
         g_nLevelExitRequested = 1;
+        g_levelExitDestination = 1;
         return 0;
     }
-    if (!(*(s32 *)(D_138180 + 0x1C4) & 0x40))
-        return func_002D6B28(item);
+    input = D_138180;
+    if (!(*(s32 *)(input + 0x1C4) & 0x40))
+        goto forward;
 
-    if (item == (void *)D_00259178)      { dest = 1; enabled = D_1A7BD1; }
-    else if (item == (void *)D_002591C8) { dest = 2; enabled = D_1A7BD2; }
-    else if (item == (void *)D_00259218) { dest = 3; enabled = D_1A7BD3; }
-    else if (item == (void *)D_00259268) { dest = 4; enabled = D_1A7BD4; }
-    else if (item == (void *)D_002592B8) { dest = 6; enabled = D_1A7BD6; }
-    else {
-        /* unrecognised widget: leave the destination untouched */
-        if (g_nLevelExitRequested == 0)
-            *(s32 *)g_nLevelExitDestination = savedDest;
-        return 0;
+    if (item == (void *)D_00259178) {
+        g_levelExitDestination = 1;
+        g_nLevelExitRequested = (D_1A7BD1 != 0);
+    } else if (item == (void *)D_002591C8) {
+        g_levelExitDestination = 2;
+        g_nLevelExitRequested = (D_1A7BD2 != 0);
+    } else if (item == (void *)D_00259218) {
+        g_levelExitDestination = 3;
+        g_nLevelExitRequested = (D_1A7BD3 != 0);
+    } else if (item == (void *)D_00259268) {
+        g_levelExitDestination = 4;
+        g_nLevelExitRequested = (D_1A7BD4 != 0);
+    } else if (item == (void *)D_002592B8) {
+        g_levelExitDestination = 6;
+        g_nLevelExitRequested = (D_1A7BD6 != 0);
     }
-
-    *(s32 *)g_nLevelExitDestination = dest;
-    g_nLevelExitRequested = (enabled != 0);
     if (g_nLevelExitRequested == 0)
-        *(s32 *)g_nLevelExitDestination = savedDest;
+        g_levelExitDestination = savedDest;
     return 0;
+forward:
+    return func_002D6B28(item);
 }
 #endif
 

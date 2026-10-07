@@ -452,3 +452,4 @@ usa text/1CA080 LevelSelectListHandleInput
 usa text/1CA080 func_002CBD68
 usa text/1CA080 LevelSelectListRender
 usa text/1CA080 TickActiveMenuScreen
+usa text/1CA080 func_002CDF48
