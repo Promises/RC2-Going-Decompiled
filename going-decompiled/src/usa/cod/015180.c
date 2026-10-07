@@ -1659,14 +1659,34 @@ void func_0011D1E8(s32 *arg0) {
     arg0[4] &= 0xFFFFFFFE;
 }
 
-/* func_0011D208: allocate the next slot of a circular pool described by arg0
- * (arg0[5]=slot base, arg0[6]=slot count, arg0[9]=counter). index = counter %
- * count; stores counter+1 back; returns &slot[index] (0x40-byte slots). The C
- * body `arg0[5] + ((arg0[9] % arg0[6]) << 6)` reproduces every instruction, but
- * the div-by-zero trap is `break 0,7` in the original and GNU as encodes
- * ee-gcc's `break 7` in the upper code field instead — an assembler-encoding
- * mismatch (2 words), not a source issue. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011D208);
+/* A circular pool of 0x40-byte slots (only the fields func_0011D208 reads). */
+typedef struct RingPool {
+    char _p0[0x14];
+    u8 *slots;      /* 0x14: base of the slot array */
+    s32 count;      /* 0x18: number of slots */
+    char _p1c[0x24 - 0x1C];
+    s32 next;       /* 0x24: index of the next slot to hand out */
+} RingPool;
+
+/**
+ * Hand out the next slot of a circular pool, round-robin.
+ *
+ * @param pool  the pool; pool->next is advanced past the returned slot
+ * @return      &slots[next % count] (0x40-byte slots)
+ *
+ * The cursor is stored back as (next % count) + 1, i.e. already wrapped, so it
+ * never grows past count. A zero count traps (the compiler's divide-by-zero
+ * `break 0,7`). Forming the slot address BEFORE the cursor store is what gives
+ * the ROM's order (mfhi into $2, store, then the addu in the jr delay slot);
+ * returning the sum after the store swaps $2/$3 and sinks the sw into the slot.
+ */
+s32 *func_0011D208(RingPool *pool) {
+    s32 index = pool->next % pool->count;
+    s32 *slot = (s32 *)(pool->slots + (index << 6));
+
+    pool->next = index + 1;
+    return slot;
+}
 
 struct D238Node {
     s32 data;             /* 0x0:  resource handle freed via func_0011D1E8, then cleared */
@@ -1732,10 +1752,8 @@ common:
     n->data = 0;
 }
 
-extern s32 *func_0011D208(s32 idx);
-
 /**
- * Enqueue a command against the ring slot for `idx`: allocate the slot via
+ * Enqueue a command against the next slot of `pool`: allocate the slot via
  * func_0011D208, copy the descriptor fields obj[5]/obj[7] into it (explicit
  * temps — the original loads both fields up-front before any argument
  * builds), stamp the command word 0x8000000C at slot[8], then void-tail-call
@@ -1743,8 +1761,8 @@ extern s32 *func_0011D208(s32 idx);
  * EABI register args, sibcall-optimised to the original's `j` with the
  * sp-restore in the delay slot (lever 7).
  */
-void func_0011D2F0(s32 *obj, s32 idx) {
-    s32 *slot = func_0011D208(idx);
+void func_0011D2F0(s32 *obj, RingPool *pool) {
+    s32 *slot = func_0011D208(pool);
     s32 a = obj[5];
     s32 b = obj[7];
 
