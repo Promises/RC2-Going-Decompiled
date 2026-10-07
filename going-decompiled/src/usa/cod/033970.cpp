@@ -14,6 +14,26 @@ extern s32 CdStartRead(s32 lbn, s32 sectors, s32 dest, void *rmode);
 extern s32 func_00133230(void);
 extern s32 snd_Pump(void);
 extern s32 snd_CheckLoadInProgress(s32 noWait);
+extern void func_001339F0(u8 *dst, u8 *src, s32 count);
+
+/* The disc TOC that LoadDiscToc reads to g_discToc (0x14B540). Only the
+ * per-level part is laid out here; the four regions are the symbols
+ * g_levelTocDirectory (0x150538), g_levelTocHeader (0x1507D8),
+ * g_levelAssetToc (0x150838) and g_levelDialogToc (0x151850). The sizes are
+ * the byte counts LoadLevelToc copies, and each region ends where the next
+ * begins. */
+typedef struct {
+    s32 lbn;
+    s32 size;
+} TocExtent;
+
+typedef struct {
+    u8 _pad0[0x4FF8];
+    TocExtent levelTocDirectory[28][3]; /* per level: header, asset, dialog */
+    u8 levelTocHeader[0x60];
+    u8 levelAssetToc[0x1018];
+    u8 levelDialogToc[0x137C];
+} DiscToc;
 
 /**
  * func_001339F0 - copy `count` bytes from src to dst, one byte at a time by
@@ -78,12 +98,31 @@ s32 LoadDiscToc(void) {
     return CdReadSync(0x3E9, 0xB, g_discToc);
 }
 
-/* LoadLevelToc(level, mode): refreshes the per-level TOC blocks - indexes the
- * disc TOC entry at g_discToc + level*0x18 (+0x4FF8/+0x5000/+0x5008) and
- * CdReadSync-loads three blocks into g_discToc+0x5298/+0x52F8/+0x6310, running
- * func_001339F0 over each. The 3-operand `mult $18,$4,$2` is NOT a wall:
- * ee-gcc 2.9 emits the R5900 mult-rd form for exactly this `level*0x18` shape
- * (FACT #6218). The binding constraint is the save layout. The ROM saves
- * s0,s1,s2,ra at 0/8/16/24, stride 8 (FACT #8163), and held cc1 2.9 emits
- * 16-byte slots for a multi-register save. INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/033970", LoadLevelToc);
+/**
+ * LoadLevelToc - load the TOC blocks of `level` into the disc TOC.
+ *
+ * Reads each of the level's three blocks (1, 3 and 3 sectors, from the LBAs
+ * in levelTocDirectory[level]) into `scratch` with CdReadSync, and copies the
+ * part it keeps into levelTocHeader, levelAssetToc and levelDialogToc with
+ * func_001339F0. RunLevelTransition passes g_proceduralAnimFrames as the
+ * scratch buffer.
+ *
+ * Compiled by the s136os arm (SN 2.95.3 v1.36 -fopt-stack), which packs the
+ * s0-s2/ra saves 8 bytes apart as the ROM does. The struct spelling matters:
+ * with byte offsets from g_discToc, cc1 folds g_discToc+0x4FF8 into the base
+ * register, where the ROM keeps g_discToc itself and puts 0x4FF8 in the `lw`.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_LoadLevelToc)
+S136OS_SLOT(LoadLevelToc);
+#else
+void LoadLevelToc(s32 level, u8 *scratch) {
+    DiscToc *toc = (DiscToc *)g_discToc;
+
+    CdReadSync(toc->levelTocDirectory[level][0].lbn, 1, scratch);
+    func_001339F0(toc->levelTocHeader, scratch, sizeof(toc->levelTocHeader));
+    CdReadSync(toc->levelTocDirectory[level][1].lbn, 3, scratch);
+    func_001339F0(toc->levelAssetToc, scratch, sizeof(toc->levelAssetToc));
+    CdReadSync(toc->levelTocDirectory[level][2].lbn, 3, scratch);
+    func_001339F0(toc->levelDialogToc, scratch, sizeof(toc->levelDialogToc));
+}
+#endif
