@@ -71,6 +71,28 @@ extern s32 D_1A8A78;
 extern f32 D_1A8A80;
 /* D_1A8AE0: source vec4 for func_00283DA0 in the camera rebuild. */
 extern Vec4f D_1A8AE0;
+/* g_cameraRebuildSrc: the C spelling of D_1A8AE0 at a call argument.
+ * ADDRESSING-MODEL DEVICE (RULING #8620; EE arm only): the ROM passes its
+ * address as one `addiu $5,$28,%gp_rel(D_1A8AE0)` (it sits in the unit's
+ * small-data cluster), and under -G8 cc1 emits that only for a symbol it
+ * believes small, so the EE arm reaches it through an 8-byte view. Through
+ * the 16-byte Vec4f cc1 forms it absolutely (lui/addiu, one word longer).
+ * Emits no instruction; the relocation names D_1A8AE0 itself. */
+#ifndef TARGET_NATIVE
+extern f32 g_cameraRebuildSrc[2] __asm__("D_1A8AE0");
+#else
+#define g_cameraRebuildSrc D_1A8AE0
+#endif
+/* The camera matrix addressed from the camera position: g_cameraMatrix is
+ * g_cameraPos + 0x230 bytes, and the ROM's first matrix argument in
+ * func_00288600 is `addiu $5,$16,0x230` off the register already holding
+ * &g_cameraPos (its last argument names g_cameraMatrix afresh). Spelled from
+ * g_cameraPos on EE only; native keeps the named array. */
+#ifndef TARGET_NATIVE
+#define CAMERA_MATRIX_FROM_POS (g_cameraPos + 0x230 / sizeof(f32))
+#else
+#define CAMERA_MATRIX_FROM_POS g_cameraMatrix
+#endif
 
 /* VU0 vector-math helpers (text/183558) and quaternion/rotation builders. */
 extern void Vec4SubVu0(Vec4f dst, const Vec4f a, const Vec4f b);
@@ -92,49 +114,62 @@ static __inline__ f32 bits_to_f32(u32 bits) {
 }
 
 /*
- * func_00288600: rebuild the camera rotation matrix from the player/target.
- * $4 (target) = position to look toward, $5 (flag) selects the roll source:
- *   - forward = normalize(g_cameraPos - D_001B1750)
- *   - up      = func_00283DA0(D_1A8AE0); right3x3 = g_cameraMatrix * up
- *   - cross   = forward x right; len = |cross|
- *   - flag!=0: roll quat from cross by -(len*0.5)         [func_002ADCE0]
- *   - flag==0: roll via func_002ABAE8(target, len*0.5, k0, k0, k1)
- *   - quat -> 3x3 (QuatToMatrix3); g_cameraMatrix = roll3x3 * g_cameraMatrix
+ * func_00288600: re-level the camera rotation (g_cameraMatrix) by a roll
+ * about the axis between the current frame and the anchor direction.
+ *   - forward = normalize(g_cameraPos - anchor)      (anchor = D_001B1750)
+ *   - up      = func_00283DA0(D_1A8AE0); right = g_cameraMatrix * up (3x3)
+ *   - cross   = right x forward; half = |cross| * 0.5
+ *   - flag!=0: roll quaternion about cross by -half          [func_002ADCE0]
+ *   - flag==0: func_002ABAE8(target, half, k0, k0, k1) first, then the roll
+ *              quaternion about cross by -target[0]
+ *   - g_cameraMatrix = QuatToMatrix3(roll) * g_cameraMatrix
+ *   target  2-way roll state func_002ABAE8 updates (only target[0] is read
+ *           back here, as the roll angle)
+ *   flag    non-zero: roll straight by -half; zero: route it through target
+ *   ->      nothing (g_cameraMatrix is rotated in place)
+ * The quaternion is built in place over `cross` (the ROM passes sp+0x90 as
+ * both dst and axis). k0 = 0x3A18825C (~5.818e-4), k1 = 0x3D567752 (~0.0524).
+ * GUARD (task #1805): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback. On native it is plain C.
+ * MATCHED on the s136os arm (task #1805). What closed it, from NOTE #8954's
+ * 74/81 row (frame 0x90 vs the ROM's 0xF0): `up`, `right` and `roll` are 3x3
+ * (0x30-byte) buffers, which gives the ROM's frame; the anchor and D_1A8AE0
+ * views and CAMERA_MATRIX_FROM_POS give its addressing; and `half` is formed
+ * once before the branch, as the ROM's mul.s in the beqz delay slot is.
  */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188580", func_00288600);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00288600)
+S136OS_SLOT(func_00288600);
 #else
-/* TODO(match): functional equivalent - not byte-exact; blocked by the proven
- * 16-byte callee-save-slot layout wall (this cc1 reserves 16 bytes per callee
- * save; the original packs s0..s5+ra 8-byte at sp+0xB0..0xE0). */
 void func_00288600(const Vec4f target, s32 flag) {
-    Vec4f forward;   /* sp+0xA0 */
-    Vec4f up;        /* sp+0x60 */
-    Vec4f right;     /* sp+0x30 (3x3) */
-    Vec4f cross;     /* sp+0x90 */
-    Vec4f quat;      /* sp+0x00 == cross reused as quaternion + roll matrix */
-    f32 len;
+    Vec4f roll[3];    /* sp+0x00 (3x3) */
+    Vec4f right[3];   /* sp+0x30 (3x3) */
+    Vec4f up[3];      /* sp+0x60 (3x3) */
+    Vec4f cross[1];   /* sp+0x90, also the roll quaternion */
+    Vec4f forward[1]; /* sp+0xA0 */
+    f32 half;
 
-    Vec4SubVu0(forward, g_cameraPos, D_001B1750);
-    Vec3RescaleToLenVu0(forward, 1.0f, forward);
+    Vec4SubVu0(forward[0], g_cameraPos, g_cameraAnchor);
+    Vec3RescaleToLenVu0(forward[0], 1.0f, forward[0]);
 
-    func_00283DA0(up, D_1A8AE0);
-    func_002840E8(right, g_cameraMatrix, up);
+    func_00283DA0(up[0], g_cameraRebuildSrc);
+    func_002840E8(right[0], CAMERA_MATRIX_FROM_POS, up[0]);
 
-    Vec3CrossVu0(cross, right, forward);
-    len = Vec3LengthVu0(cross);
+    Vec3CrossVu0(cross[0], right[0], forward[0]);
+    half = Vec3LengthVu0(cross[0]) * 0.5f;
 
     if (flag != 0) {
-        func_002ADCE0(cross, -(len * 0.5f), cross);
+        func_002ADCE0(cross[0], -half, cross[0]);
     } else {
-        func_002ABAE8(target, len * 0.5f,
+        func_002ABAE8(target, half,
                       bits_to_f32(0x3A18825C), bits_to_f32(0x3A18825C),
                       bits_to_f32(0x3D567752));
-        func_002ADCE0(cross, -target[0], cross);   /* build the roll quat (both paths) */
+        func_002ADCE0(cross[0], -target[0], cross[0]);
     }
 
-    QuatToMatrix3(cross, quat);
-    func_002840E8(g_cameraMatrix, quat, g_cameraMatrix);
+    QuatToMatrix3(cross[0], roll[0]);
+    func_002840E8(g_cameraMatrix, roll[0], g_cameraMatrix);
 }
 #endif
 
