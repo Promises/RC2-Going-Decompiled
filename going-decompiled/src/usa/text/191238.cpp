@@ -3077,8 +3077,22 @@ void BindSceneChunk(void) {
  *
  * mode 0 just records the scene index; nonzero additionally pumps the dialog
  * voice and fades to black after kicking the load. The voice pump runs once more
- * (blocking) after the load is requested. The matching build keeps the asm
- * (save-layout wall). */
+ * (blocking) after the load is requested.
+ *
+ * MATCHED on the s136os arm (task #1774): SN 2.95.3 v1.36 -fopt-stack, the
+ * unit's unpinned s136 flags (RULING #9070); verify_match_unit BYTE IDENTICAL
+ * plus image cmp 0. Levers, each undone alone in the solo s136 compile:
+ *   - the TOC read through a struct (DiscTocT: baseLbn, scenes[].lbn/.sectors)
+ *     gives the ROM's prologue, including its `daddu $3,$6,$0` copy of the
+ *     entry pointer; byte-offset reads off a u8 *toc schedule it differently
+ *     and drop the copy;
+ *   - the loop re-derives the descriptor from g_cameraSlotActive instead of
+ *     reusing `desc`: that is what makes cc1 keep the ROM's `daddu $8,$17,$0`
+ *     loop-base copy (reusing desc, or a `d = desc` local, folds it away);
+ *   - the loop is guarded and then a do/while with the 0x46 cap tested before
+ *     the next entry (a plain while tests at the top; a hand-peeled first
+ *     iteration, the old #else, duplicates the body);
+ *   - ofs = entry->ofs + 0x800 is formed before the buffer is added. */
 #ifdef TARGET_NATIVE
 extern s32  g_discToc[];          /* 0x14B540 master disc asset directory */
 extern u8   g_cameraSlotActive[]; /* 0x1B7E30 (scene desc block at +0x990) */
@@ -3088,54 +3102,70 @@ extern void FadeOutToBlackBlocking(s32 frames);
 extern void PumpDialogVoiceSystem(s32 blocking);
 #endif
 
-#ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 72.24% PACKED-SAVE /
- * engine96 50.19% UNKNOWN-lui; best arm sdk29, first differing insn there: 'addiu sp, sp,
- * -0x20' vs 'addiu sp, sp, -0x40' */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadGlobalDialogScene);
+/* GUARD (task #1774): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_LoadGlobalDialogScene)
+S136OS_SLOT(LoadGlobalDialogScene);
 #else
 /* Prototypes this body needs whose declarations sit in other guarded arms:
  * the s136os arm compiles this arm alone, so it must see them here. */
 extern void FadeOutToBlackBlocking(s32 frames);
+/* The global-scene directory inside g_discToc (scenes 0..3, PlayGlobalSceneBlocking). */
+typedef struct {
+    s32 lbn;        /* LBN offset from baseLbn */
+    s32 sectors;    /* sector count */
+} SceneTocEntryT;
+typedef struct {
+    u8 _pad0[0x3E24];
+    s32 baseLbn;                /* +0x3E24 g_sceneWadBaseLbn */
+    SceneTocEntryT scenes[4];   /* +0x3E28 g_globalSceneToc */
+} DiscTocT;
+/* One header entry of a loaded scene chunk; size 0 terminates the list. */
+typedef struct {
+    s32 ofs;
+    s32 size;
+} SceneChunkEntryT;
+/* The scene descriptor block at g_cameraSlotActive + 0x990. */
+typedef struct {
+    u8 _pad0[0x30];
+    s32 index;              /* +0x30 g_currentSceneIndex */
+    u8 _pad1[0x3C];
+    s32 buffer;             /* +0x70 g_pSceneLoadBuffer */
+    s32 chunks[0x46];       /* +0x74 sub-chunk pointers */
+} SceneDescT;
+
 void LoadGlobalDialogScene(s32 sceneIndex, s32 mode) {
-    u8 *toc  = (u8 *)g_discToc;
-    s32 *desc = (s32 *)&g_cameraSlotActive[0x990];
-    s32 lbnOff   = *(s32 *)(toc + sceneIndex * 8 + 0x3E28);
-    s32 baseLbn  = *(s32 *)(toc + 0x3E24);
-    s32 sectors  = *(s32 *)(toc + sceneIndex * 8 + 0x3E2C);
-    s32 *entry;
+    DiscTocT *toc = (DiscTocT *)g_discToc;
+    SceneDescT *desc = (SceneDescT *)&g_cameraSlotActive[0x990];
+    SceneChunkEntryT *entry;
     s32 i;
 
-    StartFileLoad(desc[0x70 / 4], lbnOff + baseLbn, sectors);
+    StartFileLoad(desc->buffer, toc->scenes[sceneIndex].lbn + toc->baseLbn,
+                  toc->scenes[sceneIndex].sectors);
     if (mode != 0) {
         PumpDialogVoiceSystem(0);
         FadeOutToBlackBlocking(mode);
     }
-    desc[0x30 / 4] = sceneIndex;
+    desc->index = sceneIndex;
 
     PumpDialogVoiceSystem(1);
-    entry = (s32 *)desc[0x70 / 4];
-    if (entry[1] == 0) {
-        return;
-    }
-    {
-        s32 entryWord0 = entry[0];   /* ofs source carried into the loop top */
-        i = 0;
-        for (;;) {
-            s32 ofs;
-            entry += 2;                       /* advance to the next entry */
-            ofs = entryWord0 + 0x800;
-            desc[0x74 / 4 + i] = desc[0x70 / 4] + ofs;
+    entry = (SceneChunkEntryT *)desc->buffer;
+    i = 0;
+    if (entry->size != 0) {
+        do {
+            s32 ofs = entry->ofs + 0x800;
+            /* Re-derived from the global on purpose: see the doc comment. */
+            SceneDescT *d = (SceneDescT *)&g_cameraSlotActive[0x990];
+            d->chunks[i] = d->buffer + ofs;
+            entry++;
             i++;
             if (i >= 0x46) {
                 break;
             }
-            if (entry[1] == 0) {
-                break;
-            }
-            entryWord0 = entry[0];
-        }
+        } while (entry->size != 0);
     }
 }
 #endif
