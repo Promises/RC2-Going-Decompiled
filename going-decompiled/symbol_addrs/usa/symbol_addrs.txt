@@ -472,7 +472,7 @@ g_nVendorCursorIndex = 0x0021F240; // CONFIRMED - vendor cursor (index into g_ve
 g_nVendorPurchaseState = 0x0021F244; // CONFIRMED - vendor purchase sub-state (0 browse, 1 enter-confirm, 2 adjust-qty, 4 confirm), bolt subtract in state 4
 g_nVendorMode = 0x0021F210; // CONFIRMED - vendor screen mode (0 weapons/items, 1 ammo/quick-buy, 3 armor), selects list-build + renderer
 g_nVendorItemCount = 0x0021F900; // CONFIRMED - number of entries in g_vendorItemList, bounds cursor navigation
-g_vendorItemList = 0x0021F300; // CONFIRMED - buyable-item array (stride 0x18 per entry), built by BuildVendorItemList
+g_vendorItemList = 0x0021F300; // CONFIRMED - buyable-item array at g_vendorUi +0x140, built by BuildVendorItemList. The record STRIDE depends on g_nVendorMode (task 1756) - mode 0 stride 0x18 (BuildVendorItemList), mode 1 stride 0x10 (func_002F8228), mode 2 stride 0x1C (func_002F85B8), mode 3 stride 0xC (func_002F8038), so normalise an address by the mode stride. Entry +0x08 (0x21F308 is entry 0) - mode 0 mobyClass CONFIRMED (copied from g_weaponTable +0x14, const 0x259 for item ids 9 and 0x49, and RefreshVendorSelection 0x2FCD84 passes it as classId to the gadget-class loader func_00295478) - mode 2 shipCustomizationMask CONFIRMED (D_26D648 row mask, compared with mask constants at 0x2FC7D4 and 0x2FC828) - mode 1 copies g_weaponTable +0x9C or +0xA0 and mode 3 the row index 0..7, both UNCONFIRMED (no reader traced)
 g_nVendorBuyQuantity = 0x001B21C8; // CONFIRMED - ammo purchase quantity (bolts/unitPrice clamped to stock), total cost = unitPrice * this
 
 // === Track-B top-level game/screen state machine (reads g_health 0x18C2EC as a death gate). ===

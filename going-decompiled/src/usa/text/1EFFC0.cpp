@@ -1423,8 +1423,11 @@ s32 GetVendorItemPrice(void) {
  * current inventory + per-weapon availability. The list is the record array at
  * g_vendorItemList (== g_vendorUi + 0x140, stride 0x18), with the live entry
  * count at g_vendorUi + 0x740 (== g_nVendorItemCount). Each record holds six
- * words: +0x140 item id, +0x144 a kind/owned flag, +0x148 an icon/def word,
- * +0x14C a caption id, +0x150 spare, +0x154 a "finalized" flag.
+ * words: +0x140 item id, +0x144 a kind/owned flag, +0x148 the item's moby class
+ * (g_weaponTable +0x14, or 0x259 for item ids 9 and 0x49; RefreshVendorSelection
+ * hands it to the gadget-class loader func_00295478 — task #1756), +0x14C a
+ * caption id, +0x150 spare, +0x154 a "finalized" flag. This 0x18 layout is mode
+ * 0's only; the other list builders reuse the same storage at other strides.
  *
  * There are two modes, chosen by g_vendorUi + 0x744:
  *   - 0  (normal shop): first (when upgrades are unlocked) seed g_inventoryOrder
