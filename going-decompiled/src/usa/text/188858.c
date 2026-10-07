@@ -578,22 +578,50 @@ extern s32 func_00288BB0(s32 id); /* item-validity check (D_00259F38 lookup) */
 extern u8 D_25E308[];             /* stride-0xA record table, s16 id at +0x6, -1 terminated */
 extern s32 g_equippedItemSlots[8]; /* currently-equipped item ids (0x1A73B8) */
 
+/*
+ * g_equippedItemSlots through a 16-sized assembler alias (the #8036 construct,
+ * as g_inventoryOwnedAbs below): cc1 -G8 sees an 8-byte extern and emits the
+ * one-insn `lw`/`la` macros, and gas, seeing size 16, expands each absolutely.
+ * That is the ROM's fresh `lui; addiu` at every use in func_00288C30; the plain
+ * array lets cc1 share one %hi across them. Relocations name the real symbol.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_00288C30);
+__asm__(".extern g_equippedItemSlotsAbs, 16\n\tg_equippedItemSlotsAbs = g_equippedItemSlots");
+extern s32 g_equippedItemSlotsAbs[2];
 #else
+#define g_equippedItemSlotsAbs g_equippedItemSlots
+#endif
+
 /**
  * Register an item pickup in the 8-slot recent-items table (g_equippedItemSlots).
  *
  * Does nothing unless func_00288BB0 accepts the item. Then, if the item is
  * already listed in the D_25E308 record table, or its variant's g_weaponTable
- * entry has a non-zero +0xC field, or func_00288B08 reports it present, it is
+ * entry has a non-zero +0xC word, or func_00288B08 reports it present, it is
  * skipped. Otherwise the item id is stored in the first g_equippedItemSlots slot
- * that is empty or already holds it (slot 0 is a fast path); if all 8 slots are
- * taken by other items nothing is recorded.
+ * that is empty or already holds it; if all 8 slots are taken by other items
+ * nothing is recorded.
+ *
+ * Matched on the s136os arm at the unit's -O2 default (RULING #9450). Each of
+ * these was measured necessary by removing it alone (solo s136os harness, task
+ * #1740; aligned-diff words in brackets):
+ *   - the record scan is func_00288BB0's second loop (typed first test, pointer
+ *     from &table->key, one R5900_SHORT_LOOP_PAD_IN before the closing branch
+ *     [2]), with the table pointer scoped after the func_00288BB0 call [24];
+ *   - an empty fence at the top of that loop (RULING #8483). Without it reorg
+ *     steals the loop-top `lh` into a `bnel` slot and the loop label moves [4];
+ *   - the +0xC word read as a struct field, so it stays an `lw 0xC(base)`
+ *     displacement instead of folding into %lo(g_weaponTable) [2];
+ *   - the slot search is one counted loop from 0 with the store guarded by
+ *     `slot < 8`. cc1 peels its first iteration into the ROM's slot-0 test;
+ *   - g_equippedItemSlotsAbs (above) [16].
  */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00288C30)
+S136OS_SLOT(func_00288C30);
+#else
 void func_00288C30(s32 itemId) {
-    s16 *id;
-    s32 variantSlot;
+    /* Only the +0x0C word of a WeaponDef is read here. */
+    typedef struct { u8 _pad00[0xC]; s32 word0C; } WeaponDefHead;
     s32 slot;
 
     if (func_00288BB0(itemId) == 0) {
@@ -601,42 +629,38 @@ void func_00288C30(s32 itemId) {
     }
 
     /* already listed in the D_25E308 table -> nothing to do */
-    id = (s16 *)(D_25E308 + 0x6);
-    if (*id != -1) {
-        for (;;) {
-            if (itemId == *id) {
-                return;
-            }
-            id = (s16 *)((u8 *)id + 0xA);
-            if (*id == -1) {
-                break;
-            }
+    {
+        ItemKeyRecord *table = (ItemKeyRecord *)D_25E308;
+        if (table->key != -1) {
+            s16 *p = &table->key;
+            s32 cur;
+            do {
+                __asm__ __volatile__("");
+                if (itemId == *p) {
+                    return;
+                }
+                p += sizeof(ItemKeyRecord) / sizeof(s16);
+                cur = *p;
+                R5900_SHORT_LOOP_PAD_IN(cur, p);
+            } while (cur != -1);
         }
     }
 
-    variantSlot = g_itemEquippedSlot[itemId];
-    if (*(s32 *)((u8 *)&g_weaponTable[variantSlot] + 0xC) != 0) {
+    if (((WeaponDefHead *)&g_weaponTable[g_itemEquippedSlot[itemId]])->word0C != 0) {
         return;
     }
     if (func_00288B08(itemId) != 0) {
         return;
     }
 
-    if (g_equippedItemSlots[0] == 0 || g_equippedItemSlots[0] == itemId) {
-        slot = 0;
-    } else {
-        slot = 1;
-        for (;;) {
-            if (slot >= 8) {
-                return; /* no free slot */
-            }
-            if (g_equippedItemSlots[slot] == 0 || g_equippedItemSlots[slot] == itemId) {
-                break;
-            }
-            slot++;
+    for (slot = 0; slot < 8; slot++) {
+        if (g_equippedItemSlotsAbs[slot] == 0 || g_equippedItemSlotsAbs[slot] == itemId) {
+            break;
         }
     }
-    g_equippedItemSlots[slot] = itemId;
+    if (slot < 8) {
+        g_equippedItemSlotsAbs[slot] = itemId;
+    }
 }
 #endif
 
