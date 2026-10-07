@@ -2258,7 +2258,8 @@ s32 func_0028C108(void *rec, s32 *pA, s32 *pB) {
 /* func_0028C170(rec, pX, pY, idxBase, idxDelta): EU twin of USA func_0028C1E8 -
  * apply a HUD layout record's alignment flags (+0x60) to an (*pX,*pY) coordinate
  * using fractional offset tables scaled by the record's half-extents (+0x58/+0x5C)
- * via int<->float round-trips. rec+0x7C tag selects the table and index sign
+ * via int<->float round-trips. Whether the rec+0x7C show timer is still running
+ * selects the table and index sign
  * (clamped to [0,0x17]); flags bit 1/2 nudge Y by +0x5C (+52 bias), bit 4/8 nudge X
  * by +0x58 (+20 bias); results ADDED into the pX/pY out-params. Matching arm stays INCLUDE_ASM;
  * #else is the structure model. Word-verified vs USA func_0028C1E8: IntToFloat ->
@@ -2270,8 +2271,8 @@ INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028C170);
 void func_0028C170(void *rec, s32 *pX, s32 *pY, s32 idxBase, s32 idxDelta) {
     extern f32 IntToFloat(s32 v);   /* EU IntToFloat (USA 0x2846D8) */
     extern s32 func_002845B0(f32 x);   /* EU FloatToInt (USA 0x2846A0) */
-    extern f32 D_255A80[];             /* offset table, rec+0x7C set (USA D_255A00) */
-    extern f32 D_255AE0[];             /* offset table, rec+0x7C clear (USA D_255A60) */
+    extern f32 D_255A80[];             /* offset table, show timer running (USA D_255A00) */
+    extern f32 D_255AE0[];             /* offset table, show timer expired (USA D_255A60) */
     u8 *r = (u8 *)rec;
     s32 idx;
     f32 scale;
@@ -2310,9 +2311,11 @@ void func_0028C170(void *rec, s32 *pX, s32 *pY, s32 idxBase, s32 idxDelta) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028C318);
 
-/* Reset a HUD widget record: set its type tag (+0x7C = 0xB4 in PAL; the USA
- * twin func_0028C490 uses 0xD2 - a region-divergent HUD widget type id), clear
- * the two 16-bit cursor fields (+0x48/+0x4A) and re-init it via func_0028C318. */
+/* Reset a HUD widget record: start its +0x7C show timer (a frame countdown) at
+ * 0xB4 in PAL, where the USA twin func_0028C490 uses 0xD2 - the 50 Hz rescale of
+ * the same duration, not a type id (task #1770; see USA 188858.c's HudElement
+ * map). Clear the two 16-bit cursor fields (+0x48/+0x4A) and re-init it via
+ * func_0028C318. */
 void func_0028C418(void *p) {
     *(s32 *)((u8 *)p + 0x7C) = 0xB4;
     *(s16 *)((u8 *)p + 0x48) = 0;
@@ -2691,7 +2694,7 @@ void func_0028D6F0(void *w) {
  * func_002835C0 -> func_002834D0, func_00283BF8 -> func_00283B08, func_00288888 ->
  * func_00288778, func_00288840 -> func_00288730, func_002AA3F0 -> func_002A9FA0,
  * PlayGlobalSound -> func_002E6C28, func_0028C010 -> func_0028BF98; many data re-anchors
- * on g_pActiveTextTable / D_001B1380 / g_sndChannelVolumes. REGION DIVERGENCE: latch
+ * on g_pActiveTextTable / D_001B1380 / g_sndChannelVolumes. REGION DIVERGENCE: show
  * timer +0x7C = 0x96 (PAL) vs USA 0xB4. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028D738);
@@ -3047,9 +3050,10 @@ s32 func_0028DC40(void *hud) {
 
 INCLUDE_ASM("going-decompiled/asm/eu/nonmatchings/text/188748", func_0028E658);
 
-/* Seed a HUD widget record's geometry (+0x5C/+0x58 = 0x20, type tag +0x7C =
- * 0x82 in PAL; the USA twin func_0028E7A0 uses 0x96 - a region-divergent HUD
- * widget type id) then re-init it via func_0028C318 (empty-asm guard keeps the jal). */
+/* Seed a HUD widget record's geometry (+0x5C/+0x58 = 0x20), start its +0x7C show
+ * timer at 0x82 frames in PAL (the USA twin func_0028E7A0 uses 0x96 - the 50 Hz
+ * rescale of the same duration, not a type id; task #1770), then re-init it via
+ * func_0028C318 (empty-asm guard keeps the jal). */
 void func_0028E7B8(u8 *p) {
     *(s32 *)(p + 0x58) = 0x20;
     *(s32 *)(p + 0x7C) = 0x82;
@@ -3140,7 +3144,7 @@ s32 func_0028E800(void *slot) {
 
 /* func_0028E9B8(runTickCallbacks): EU twin of USA func_0028E9A0 - per-frame update pass
  * over the 13-entry HUD element registry D_255330 (stride 0x90). After a one-shot
- * (re)bind pass (func_0028EB28), for each record it clamps the +0x7C countdown up, ticks
+ * (re)bind pass (func_0028EB28), for each record it clamps the +0x7C show timer up, ticks
  * it down, bumps/decays the +0x6C phase, re-activates dirty records at the -6 floor via
  * func_0028BEA0, and invokes the +0x14 tick callback when runTickCallbacks is set.
  * Returns the count of records whose countdown was still running (>= 2). Matching arm

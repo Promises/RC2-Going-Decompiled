@@ -235,7 +235,7 @@ extern Rec2552B0 D_2552B0[];   /* 13-entry record table (0x2552B0) */
  * gp/absolute addressing makes typed field access perturb the matching codegen),
  * so only the SIZE is bound. Size 0x90 is authoritative — it is the registry
  * stride (D_2552B0 stride 0x90, == sizeof Rec2552B0) and the max offset touched
- * across every accessor is the +0x7C type tag (one s32, ends at 0x80), well
+ * across every accessor is the +0x7C show timer (one s32, ends at 0x80), well
  * inside 0x90.
  *
  * Field map (per-field confidence; gaps are real padding, not invented):
@@ -266,7 +266,33 @@ extern Rec2552B0 D_2552B0[];   /* 13-entry record table (0x2552B0) */
  *   +0x70 s32   (cleared on register)   PROBABLE (RegisterHudElement +0x70=0)
  *   +0x74 s32   smoothed display value  CONFIRMED (LayoutHudCounterDigits +0x74)
  *   +0x78 s32   clamped display / mode  CONFIRMED (LayoutHudCounterDigits +0x78)
- *   +0x7C s32   element type tag        CONFIRMED (0xD2 health / 0x96 ammo / -2 wheel)
+ *   +0x7C s32   showTimer: display-hold CONFIRMED (task #1770; see below)
+ *               countdown, in frames
+ * +0x7C showTimer: frames left before the element starts to hide. It is a
+ *  countdown, not a type tag (the label this row carried until #1770). Every
+ *  ROM access, from the asm (the registry base is referenced only in this unit,
+ *  and all 12 callbacks registered here or from 1849B0 live in this unit; the
+ *  draw callbacks and DrawHudElements never touch +0x7C):
+ *    writes  0      RegisterHudElement on re-config, InitHudMobyTable,
+ *                   func_0028BF80 (as tag[4] off the +0x6C cursor)
+ *            0xD2   func_0028C490 (Clank-health init)   0x96 func_0028E7A0 (ammo init)
+ *            0xB4   re-armed by func_0028C4C8 when the shown value changes, and
+ *                   by the wheel ticks func_0028C840 / func_0028D720
+ *            >=0xA  TickHudElements, while live flag 0x10 or g_hudTextGateAbs
+ *                   holds the element up
+ *            5      func_002907C0 (ammo tick) caps it at 5 once it is >= 5
+ *            -1     TickHudElements, once per frame while > 0
+ *    reads   TickHudElements: still > 0 after this frame's decrement -> the
+ *              reveal phase +0x6C rises toward 0x1E, else it falls to -6 (hidden);
+ *            func_0028C1E8: != 0 picks the D_255A00 table and idxBase-idxDelta,
+ *              == 0 the D_255A60 table and idxBase+idxDelta;
+ *            func_0028C4C8 / func_002907C0: < 5 winds the digit-roll bytes
+ *              (+0x70/+0x71) down, >= 5 ramps them up.
+ *  No reader selects behaviour from a set of discrete values. The EU twin scales
+ *  every one of these constants by ~50/60 (0xD2->0xB4, 0x96->0x82, 0xB4->0x96,
+ *  0xA->0x8, 5->4, read from asm/eu 188748), which a frame count needs and a
+ *  type id would not. (The "-2 wheel" value once cited here is stored at +0x74
+ *  by the wheel inits func_0028C7F0 / func_0028D6D8, not at +0x7C.)
  * (Fields +0x4C..+0x57, +0x6C, the +0x42..+0x47 sub-bytes etc. are not yet
  *  pinned and remain inside the blob.) */
 typedef struct HudElement {
@@ -3479,8 +3505,8 @@ void func_0028BF18(HudElement *w) {
  * (Re)initialise the whole 13-entry D_2552B0 HUD widget table.
  *
  * For each record: rebuild its element list via
- * func_0028BE10(i, 0xFFFF, 0, 0, 0, 0, 1), clear the record's +0x7C word, set
- * its +0x6C word to -6, then activate it with func_0028BF18.
+ * func_0028BE10(i, 0xFFFF, 0, 0, 0, 0, 1), clear the record's +0x7C show timer,
+ * set its +0x6C phase to -6 (hidden), then activate it with func_0028BF18.
  *
  * MATCHED on the s136os arm (task #1696), with no device. The ROM walks two
  * pointers, the record (passed to func_0028BF18) and a second one at the
@@ -3498,7 +3524,7 @@ S136OS_SLOT(func_0028BF80);
 #else
 void func_0028BF80(void) {
     u8 *rec = (u8 *)&D_2552B0[0];
-    s32 *tag = (s32 *)(rec + 0x6C);   /* +0x6C, and +0x7C at tag[4] */
+    s32 *tag = (s32 *)(rec + 0x6C);   /* +0x6C phase; tag[4] is the +0x7C show timer */
     s32 i;
 
     for (i = 0; i < 0xD; i++) {
@@ -3683,9 +3709,10 @@ s32 func_0028C180(HudElement *rec, s32 *pA, s32 *pB) {
  * (D_255A00/D_255A60) scaled by the record's half-extents (+0x58/+0x5C), via
  * IntToFloat/FloatToInt round-trips.
  *
- * The record's +0x7C tag selects both the offset table (set -> D_255A00,
- * clear -> D_255A60) and the sign of the table index (idxBase - idxDelta vs
- * idxBase + idxDelta), which is clamped into [0, 0x17]. The +0x60 flags then
+ * Whether the record's +0x7C show timer is still running selects both the
+ * offset table (running -> D_255A00, expired -> D_255A60) and the sign of the
+ * table index (idxBase - idxDelta vs idxBase + idxDelta), which is clamped into
+ * [0, 0x17]. The +0x60 flags then
  * pick exactly one axis/direction: bit 1/2 nudge Y by the +0x5C extent (biased
  * +52 px) negative/positive; bit 4/8 nudge X by the +0x58 extent (biased +20 px)
  * negative/positive; each nudge = round(table * (extent + bias)). The results
@@ -3699,8 +3726,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C1E8);
 #else
 extern f32 IntToFloat(s32 v);      /* 0x2846D8 int->float (mtc1;cvt.s.w) */
 extern s32 FloatToInt(f32 x);      /* 0x2846A0 float->int (cvt.w.s;mfc1) */
-extern f32 D_255A00[];             /* fractional-offset table, rec+0x7C set (24 entries) */
-extern f32 D_255A60[];             /* fractional-offset table, rec+0x7C clear (24 entries) */
+extern f32 D_255A00[];             /* fractional-offset table, show timer running (24 entries) */
+extern f32 D_255A60[];             /* fractional-offset table, show timer expired (24 entries) */
 void func_0028C1E8(HudElement *rec, s32 *pX, s32 *pY, s32 idxBase, s32 idxDelta) {
     u8 *r = (u8 *)rec;
     s32 idx;
@@ -3856,8 +3883,8 @@ void func_0028C390(void *rec) {
 }
 #endif
 
-/* Reset a HUD widget record: set its type tag (+0x7C = 0xD2), clear the two
- * 16-bit cursor fields (+0x48/+0x4A) and re-init it via func_0028C390. */
+/* Reset a HUD widget record: start its +0x7C show timer at 0xD2 frames, clear
+ * the two 16-bit cursor fields (+0x48/+0x4A) and re-init it via func_0028C390. */
 void func_0028C490(HudElement *p) {
     *(s32 *)((u8 *)p + 0x7C) = 0xD2;
     *(s16 *)((u8 *)p + 0x48) = 0;
@@ -3878,23 +3905,19 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/188858", func_0
  *     max(*valPtr, 0), bounded above by the raw value (+0x8).
  * (2) When the displayed value (+0x74) has not yet reached the target (+0x78)
  *     and the widget is "settled" (+0x6C >= 0x18), eases +0x74 toward +0x78:
- *     arms the +0x7C timer (0xB4), derives an easing step
+ *     re-arms the +0x7C show timer (0xB4), derives an easing step
  *         step = max( FloatToInt(func_002835C0(delta*0.04) * 5.0), delta/5 )
  *     clamped to [1,0x79] (delta = |+0x74 - +0x78|), advances the sub-step byte
  *     accumulator (+0x73) and, once it passes 3, moves +0x74 by (accum>>1)
  *     toward the target and drains the accumulator by twice that.
  * (3) Drives the two digit-roll byte counters (+0x70/+0x71): while the +0x7C
- *     timer is hot (>= 5) they ramp up (cap 8 each); otherwise they wind back
- *     down and re-arm the settle flag (+0x6C = 1).
+ *     show timer has >= 5 frames left they ramp up (cap 8 each); otherwise they
+ *     wind back down and re-arm the settle flag (+0x6C = 1).
  * (4) Refreshes the icon animation frame via func_0028E7E8(w+0x40).
  *
  * The FP easing (IntToFloat/func_002835C0/FloatToInt) is reproduced op-for-op;
  * the real R5900 helpers do the arithmetic (cmp-oracle validates the result).
- * [SEEDABLE] pure per-widget state machine over w's byte/word fields.
- *
- * Track-B note (+0x7C): written 0xB4 here and read back as a countdown timer,
- * which conflicts with the "+0x7C = element type tag" label in the HudElement
- * map above — same tension flagged in func_0028E9A0; left for Track-B. */
+ * [SEEDABLE] pure per-widget state machine over w's byte/word fields. */
 extern float IntToFloat(s32 x);       /* 0x284690: mtc1;cvt.s.w  int -> float */
 extern s32   FloatToInt(float x);     /* 0x2846A0: cvt.w.s;mfc1  float -> int */
 extern float func_002835C0(float x);
@@ -3907,7 +3930,7 @@ void func_0028C4C8(HudElement *w) {
     u8  *b   = (u8 *)w;
     u8  *cnt = b + 0x70;                 /* byte counter block ($18 = w+0x70) */
     s32 *valPtr = *(s32 **)(b + 0xC);
-    s32  cur, target, tag;
+    s32  cur, target, showTimer;
 
     /* (1) clamp the smoothed target from the live value pointer */
     if (valPtr != 0) {
@@ -3946,9 +3969,9 @@ void func_0028C4C8(HudElement *w) {
         }
     }
 
-    /* (3) digit-roll counters keyed on the +0x7C timer */
-    tag = *(s32 *)(b + 0x7C);
-    if (tag < 5) {
+    /* (3) digit-roll counters keyed on the +0x7C show timer */
+    showTimer = *(s32 *)(b + 0x7C);
+    if (showTimer < 5) {
         u8 hi = cnt[1];
         u8 lo = cnt[0];
         if (hi != 0) {
@@ -5052,8 +5075,9 @@ s32 func_0028DC28(HudElement *hud) {
  * Left INCLUDE_ASM (not yet fully traced). */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028E640);
 
-/* Seed a HUD widget record's geometry (+0x5C/+0x58 = 0x20, type tag +0x7C =
- * 0x96) then re-init it via func_0028C390 (empty-asm guard keeps the jal). */
+/* Seed a HUD widget record's geometry (+0x5C/+0x58 = 0x20), start its +0x7C
+ * show timer at 0x96 frames, then re-init it via func_0028C390 (empty-asm guard
+ * keeps the jal). */
 void func_0028E7A0(HudElement *p) {
     u8 *b = (u8 *)p;
     *(s32 *)(b + 0x58) = 0x20;
@@ -5165,10 +5189,9 @@ extern s32 g_hudTextGateAbs;
  *   ->                the number of widgets whose countdown was still >= 2
  *
  * Re-binds the registry first (func_0028EB10). Then, for each widget:
- *   - +0x7C is a per-frame countdown (it is not the type tag the HudElement
- *     field map describes; that map needs revisiting). It is raised to 0xA when
- *     the widget's live flags (+0x04) have bit 0x10 or g_hudTextGateAbs is set,
- *     and then decremented toward 0;
+ *   - +0x7C is the show timer, a per-frame countdown (see the HudElement field
+ *     map). It is raised to 0xA when the widget's live flags (+0x04) have bit
+ *     0x10 or g_hudTextGateAbs is set, and then decremented toward 0;
  *   - while the countdown is still running (>= 2 before the decrement) the
  *     phase at +0x6C counts up to 0x1E and the widget is counted; otherwise the
  *     phase counts down to a floor of -6;
