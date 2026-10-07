@@ -437,7 +437,41 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00124630);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_001246D0);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00124780);
+/* libcdvd's semaphores and busy flag. Written from the RPC end-callback
+ * func_00124630 (interrupt context) as well as from sceCdInit, func_001253A8,
+ * func_00125620, func_00124818 and func_00124780 (ROM writer census), so the
+ * ones func_00124780 stores are volatile. That is also what the bytes need:
+ * dropping `volatile` from D_001363A0, D_001363A8 or D_001363B0 alone leaves
+ * func_00124780 3, 2 and 3 words off; D_001363AC needs none (0 either way). */
+extern volatile s32 D_001363A0;
+extern volatile s32 D_001363A8;
+extern s32 D_001363AC;
+extern volatile s32 D_001363B0;   /* CD command in flight */
+extern s32 func_0011AC20(s32 *param);
+
+/**
+ * Create libcdvd's semaphores unless both D_001363A8 and D_001363AC already
+ * hold one (-1 = none): D_001363A8 and D_001363AC as binary semaphores that
+ * start signalled (max 1, initial 1) and D_001363A0 as one that starts
+ * unsignalled (initial 0), all from one SemaParam on the stack
+ * (func_0011AC20 = CreateSema); then clear the busy flag D_001363B0.
+ *
+ * The initial count (param[2]) is written before the maximum (param[1]):
+ * the other way round cc1 issues the two stores swapped against the ROM.
+ */
+void func_00124780(void) {
+    s32 param[6];
+    if (D_001363A8 == -1 || D_001363AC == -1) {
+        param[5] = 0;
+        param[2] = 1;
+        param[1] = 1;
+        D_001363A8 = func_0011AC20(param);
+        D_001363AC = func_0011AC20(param);
+        param[2] = 0;
+        D_001363A0 = func_0011AC20(param);
+        D_001363B0 = 0;
+    }
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00124818);
 
@@ -456,7 +490,31 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00124980);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00124AF0);
+extern s32 func_00124980(s32 arg);
+extern void func_0011AC40(s32 sema);  /* syscall 0x42 SignalSema */
+extern s32 D_00137550[];  /* libcdvd N-command RPC client */
+extern u32 D_00136400[];  /* RPC receive buffer */
+
+/**
+ * libcdvd N-command query: func_00124980(2) first (0 means the call cannot
+ * proceed: return 0), then issue RPC #0xE on the client D_00137550 with no send
+ * data and a 4-byte reply into D_00136400 (func_0011D620 = sceSifCallRpc),
+ * release the semaphore D_001363A8 and return the reply word, read through the
+ * uncached 0x20000000 mirror. A failed RPC (negative) releases and returns 0.
+ */
+u32 func_00124AF0(void) {
+    u32 value;
+    if (func_00124980(2) == 0) {
+        return 0;
+    }
+    if (func_0011D620(D_00137550, 0xE, 0, 0, 0, D_00136400, 4, 0, 0) < 0) {
+        func_0011AC40(D_001363A8);
+        return 0;
+    }
+    value = *(u32 *)((u32)D_00136400 | 0x20000000);
+    func_0011AC40(D_001363A8);
+    return value;
+}
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/022FA8", func_00124B88);
 
