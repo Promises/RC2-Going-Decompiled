@@ -169,6 +169,7 @@ usa text/178E88 func_00280B48
 usa text/178E88 func_00280BB8
 usa text/178E88 func_00280C28
 usa text/188580 func_00288748
+usa text/188580 func_002887C0
 usa text/1A00F0 func_002A0A58
 usa text/1A00F0 func_002A0AF8
 usa text/1A00F0 func_002A0B80

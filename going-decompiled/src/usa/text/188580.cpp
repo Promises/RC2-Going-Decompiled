@@ -47,6 +47,24 @@ extern f32 g_cameraPos[4];
 extern f32 g_cameraMatrix[12];
 extern Vec4f D_001B1750;
 
+/* g_cameraAnchor: the C spelling of D_001B1750 at a call argument.
+ * ADDRESSING-MODEL DEVICE (RULING #8620, FACT #8036; EE arm only): the ROM
+ * forms the anchor's address as an adjacent `lui $6 / addiu $6` pair at EVERY
+ * use and forms it again after each call, which is the assembler's one-insn
+ * `la` macro. cc1 prints `la` only for a symbol it believes small, so the EE
+ * arm reaches the anchor through an 8-byte view, and `.extern D_001B1750, 16`
+ * makes GNU as expand the macro absolutely. Through the full-size Vec4f cc1
+ * instead keeps the address live in a callee-saved register across the calls
+ * (one more save, a 4-register frame). Both lines emit no instruction and the
+ * relocations name D_001B1750 itself; precedent 178E88.cpp's
+ * g_blobShadowState view of g_blobShadowCount. */
+#ifndef TARGET_NATIVE
+__asm__(".extern D_001B1750, 16");
+extern f32 g_cameraAnchor[2] __asm__("D_001B1750");
+#else
+#define g_cameraAnchor D_001B1750
+#endif
+
 /* func_00288748 length/angle scalars (gp-relative). D_1A8A78 is an integer
  * (loaded then cvt.s.w'd to a target length); D_1A8A80 is a float scale. */
 extern s32 D_1A8A78;
@@ -152,20 +170,29 @@ void func_00288748(const Vec4f p) {
 #endif
 
 /*
- * func_002887C0: nudge the camera position by 'offset', re-anchored about the
- * fixed point D_001B1750 and clamped back to a fixed radius (f32)D_1A8A78.
+ * func_002887C0: nudge the camera position by 'offset' while keeping it at a
+ * fixed distance from the anchor: re-centre g_cameraPos on the anchor
+ * (D_001B1750), add the offset, rescale the result to length (f32)D_1A8A78,
+ * and move it back out of anchor space.
+ *   offset  world-space displacement (vec4) added in anchor space
+ *   ->      nothing (g_cameraPos is updated in place)
+ * GUARD (task #1805): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback. On native it is plain C.
+ * MATCHED on the s136os arm (task #1805). The closing lever is the anchor's
+ * addressing model (g_cameraAnchor, above): with the plain Vec4f the solo
+ * compile held the address in $18 (4 saves, frame layout off from word 1,
+ * NOTE #8954's 29/31 row).
  */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188580", func_002887C0);
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002887C0)
+S136OS_SLOT(func_002887C0);
 #else
-/* TODO(match): functional equivalent - not byte-exact; saves s0/s1/ra packed
- * at sp+0x0/0x8/0x10 in a 0x20 frame and sibling-call-optimises the void tail
- * call, both of which this cc1 expands differently (16-byte save-slot wall). */
 void func_002887C0(const Vec4f offset) {
-    Vec4SubVu0(g_cameraPos, g_cameraPos, D_001B1750);
+    Vec4SubVu0(g_cameraPos, g_cameraPos, g_cameraAnchor);
     Vec4AddVu0(g_cameraPos, g_cameraPos, offset);
     Vec3RescaleToLenVu0(g_cameraPos, (f32)D_1A8A78, g_cameraPos);
-    Vec4AddVu0(g_cameraPos, g_cameraPos, D_001B1750);
+    Vec4AddVu0(g_cameraPos, g_cameraPos, g_cameraAnchor);
 }
 #endif
 
