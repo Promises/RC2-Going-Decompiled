@@ -3396,8 +3396,43 @@ f32 func_002AB2C0(Vec4 *cur, Vec4 *target, f32 *vel, f32 b, f32 c, f32 eps) {
 
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 31.89%
    -> UNKNOWN-@1: ROM `mtc1 zero,$f2` vs `sd s1,8(sp)` */
+/* MATCHED on the s136os arm (task #1741): byte-exact under SN 2.95.3 v1.36
+ * -fopt-stack (verify_match_unit; landing_gate cmp 0). Plain-C spellings
+ * (solo s136 harness through asm_unit.sh at -G8, aligned words differing out
+ * of 123; rankings, not gates): master's body 59 (120 words); brakeDist as
+ * vel*vel/accel*0.5f (div before the scale) and sqrt((accel+accel)*diff) 37;
+ * |diff| taken before |*pVel| in the tail test, and the opposing branch
+ * working on the loaded velocity, 18 (119 words); with the pad, 19 (121).
+ * Devices, each dropped alone on the closing body (same harness):
+ *   - AB3B0_DIVS_PAD: the ROM's two free-standing nops before
+ *     `div.s $f0,$f0,$f21`, which no cc1 here emits (RULING #8435, as
+ *     ADDD0_DIVS_PAD). Without: built 121 words, 2 short;
+ *   - vel pinned to $f12 (RULING #8598). The ROM holds the reloaded velocity
+ *     in $f12, so the GetFloatAbs argument copy cannot move into the bc1f
+ *     delay slot and the opposing branch updates it in place. Without: built
+ *     121 words, aligned 19. Nine pin-free spellings were measured (no local,
+ *     a `register` local, a per-branch load, the load before the zero test,
+ *     a ternary or per-arm store to *pVel, an inverted outer test, the divide
+ *     split out) and none gets below 19;
+ *   - the GetFloatAbs argument pinned to $f12 and fed to the pad as its
+ *     input. The pad then issues after the argument copy, as the ROM's nops
+ *     follow `mov.s $f12,$f22`. Tied to accel instead (the ADDD0 form), the
+ *     copy lands after the nops: 2/123. */
+/* GUARD (task #1741): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+/* The ROM's two nops before the brake-distance `div.s`: a RULING #8435
+ * scheduling device, EE arm only, tied to the dividend and to the $f12
+ * argument it must follow. Empty natively. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB3B0);
+#define AB3B0_DIVS_PAD(q, d) __asm__(".set noreorder\n\tnop\n\tnop\n\t.set reorder" : "+f"(q) : "f"(d))
+#else
+#define AB3B0_DIVS_PAD(q, d) ((void)0)
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002AB3B0)
+S136OS_SLOT(func_002AB3B0);
 #else
 /**
  * One-dimensional acceleration-limited "arrival" controller: advance a position
@@ -3428,30 +3463,37 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002AB3B0);
  */
 f32 func_002AB3B0(f32 target, f32 velRate, f32 accel, f32 maxSpeed, f32 *pPos, f32 *pVel)
 {
-    f32 diff = target - *pPos;
+    f32 diff;
+    register f32 vel EE_REG("$f12");
+    f32 velSq;
+    f32 brakeDist;
     f32 absDiff;
-    f32 absVel;
+    f32 speed;
 
+    diff = target - *pPos;
     if (*pVel == 0.0f && diff == 0.0f) {
         return 0.0f;
     }
-
-    if (*pVel * diff >= 0.0f) {
+    vel = *pVel;
+    if (vel * diff >= 0.0f) {
         /* velocity points toward the target (or is stationary) */
-        f32 brakeDist = 0.5f * (*pVel * *pVel) / accel;
-
-        absDiff = GetFloatAbs(diff);
+        velSq = vel * vel;
+        {
+            register f32 arg EE_REG("$f12") = diff;
+            AB3B0_DIVS_PAD(velSq, arg);
+            brakeDist = velSq / accel * 0.5f;
+            absDiff = GetFloatAbs(arg);
+        }
         if (absDiff < brakeDist) {
             /* within stopping distance: decelerate toward a halt */
-            absVel = GetFloatAbs(*pVel);
-            if (brakeDist < absDiff + absVel) {
+            if (brakeDist < GetFloatAbs(diff) + GetFloatAbs(*pVel)) {
                 func_002AB150(0.0f, accel, pVel);
             } else {
                 func_002AB150(0.0f, accel * 1.1f, pVel);
             }
         } else {
             /* still approaching: ramp velocity toward the arrival speed */
-            f32 speed = func_002835C0(2.0f * accel * diff);
+            speed = func_002835C0((accel + accel) * diff);
             if (maxSpeed < speed) {
                 speed = maxSpeed;
             }
@@ -3461,25 +3503,23 @@ f32 func_002AB3B0(f32 target, f32 velRate, f32 accel, f32 maxSpeed, f32 *pPos, f
                 func_002AB150(speed, velRate, pVel);
             }
         }
-
         absDiff = GetFloatAbs(diff);
-        absVel = GetFloatAbs(*pVel);
-        if (absVel < absDiff) {
+        if (GetFloatAbs(*pVel) < absDiff) {
             *pPos = *pPos + *pVel;
             return *pVel;
         }
         *pPos = target;
         return diff;
-    } else {
-        /* velocity opposes the target: bleed it off by accel, then integrate */
-        if (*pVel >= 0.0f) {
-            *pVel = *pVel - accel;
-        } else {
-            *pVel = *pVel + accel;
-        }
-        *pPos = *pPos + *pVel;
-        return *pVel;
     }
+    /* velocity opposes the target: bleed it off by accel, then integrate */
+    if (vel >= 0.0f) {
+        vel = vel - accel;
+    } else {
+        vel = vel + accel;
+    }
+    *pVel = vel;
+    *pPos = *pPos + vel;
+    return *pVel;
 }
 #endif
 
