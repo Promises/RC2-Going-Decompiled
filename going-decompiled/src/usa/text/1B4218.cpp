@@ -2776,8 +2776,14 @@ s32 CheckMobyPathBlocked(Moby *moby) {
  * compared height is the f32 that func_002B11C8(moby+0x10) returns (the ROM uses its
  * $f0 at 0x2B7350; the arm used to discard it and compare the entry-time Y);
  * otherwise it compares the moby's current Y directly.
- * WALL: save-layout — 3 callee-saves + $ra at 8-byte spacing, with fp temps; matching
- * arm stays INCLUDE_ASM, portable #else below. */
+ * WALL: assembler hazard-nop placement (FACT #9545), not save layout. On the s136os
+ * arm SN 1.36 cc1plus emits this body instruction-identical to the ROM, 3-callee-save
+ * packed frame included, at 47 = 47 words. The one differing word is the `b` at
+ * 0x2B7354: our gas puts the c.cond->bc1 hazard nop BEFORE the merge label, the ROM
+ * has it AFTER (NOTE #8972's class), so the branch lands one word late. Closing it
+ * is an asm_unit/gas change under tools/ee (RULING #7207), not a C re-spelling.
+ * The old "save-layout" label described the 2.9 arm only. Matching arm stays
+ * INCLUDE_ASM, portable #else below. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", CheckMobyOverWater);
 #else
