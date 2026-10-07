@@ -829,39 +829,46 @@ GuiWidget *func_00349E88(GuiWidget *w) {
     return w;
 }
 
-/* func_00349E90: reset the widget's selection table — clear +0x0 and +0x148,
- * fill the 64-entry s32 array at +0x44..+0x140 with -1, then clear +0x150/+0x154.
- * Best 86.75%: the original drives the fill with a single induction pointer at
- * w+0x50 using negative store offsets and fills the branch delay slot with the
- * pointer increment; the pinned cc1 splits the base into two registers (one for
- * the offset-0 store, one for the negative offsets). WALL: reloaded-ptr CSE /
- * base-register split.
- * Oracle: cmp_func_00349E90 (cmp_248B50.c) — bit-exact on real R5900. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/248B50", func_00349E90);
+/**
+ * func_00349E90: reset the widget's selection table — clear +0x0 and +0x148,
+ * fill the 64-entry s32 array at +0x44..+0x140 with -1, then clear +0x150 and
+ * +0x154.
+ * @param w  the widget (byte offsets: the table overlaps the flat view's
+ *           typed fields, so it is addressed raw)
+ *
+ * MATCHED on the s136os arm (task #1801; SN 2.95.3 v1.36 -fopt-stack, FACT
+ * #8810), no devices. The ROM drives the fill with one induction pointer at
+ * w+0x50 and stores at -0xC/-0x8/-0x4/0x0, the pointer step in the bgez
+ * delay slot. SN 1.36 picks that base when the group is indexed from its LAST
+ * element (`last[i*4-3] .. last[i*4]`, last = w+0x50); indexed from its first
+ * element (`t[i*4+0..3]`, t = w+0x44) the base is w+0x44 with offsets 0..0xC
+ * (5/16 words). A `*p++` chain (20 words) and a literal `p[-3..0]; p += 4`
+ * pointer walk (17 words, split base) are both further off. The trailing
+ * stores are written +0x150 then +0x154: SN 1.36 issues the last store of the
+ * group first, which is the ROM's +0x154-before-the-jr order (FACT #9254).
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00349E90)
+S136OS_SLOT(func_00349E90);
 #else
-/* MEASURED (task #564, 2026-09-21, whole-unit both-arms screen at origin/master e3f50d43,
- * objdiff_build.sh + unit_report.sh; sdk29 = all 31 arms promoted together on cc1
- * 2.9-ee-991111 -O2 -G8 -fno-gcse, engine96 = all 31 arms MATCH_-guarded together on
- * cc1 2.96-ee-001003-1): sdk29 88.81% / engine96 79.31%.
- * RAW (verify_match_unit.sh vs the ROM, rc=1 DIFFERS): 14/18 words differ;
- * frozen-.s census: 0 callee GPR saves, 0 fp saves.
- * Residual: BASE-REGISTER SPLIT (no callee saves): the ROM drives one induction pointer at w+0x50 with negative store offsets (-0xC/-0x8/-0x4/0x0) and fills the bgez delay slot with the increment; cc1 2.9 splits the base into two registers. REFUTED LEVER (task #564): spelling the ROM's shape literally in C (p = w+0x50; p[-3..0]) is WORSE, 88.81% -> 86.75% sdk29, measured against a control differing by nothing else (tools/ee/.t564/src/23_* vs 24_*). */
 void func_00349E90(GuiWidget *w) {
-    s32 *p;
+    s32 *last;
     s32 i;
-    *(s32 *)((char *)w + 0x0) = 0;
-    *(s32 *)((char *)w + 0x148) = 0;
-    p = (s32 *)((char *)w + 0x44);
-    for (i = 15; i >= 0; i--) {
-        p[0] = -1;
-        p[1] = -1;
-        p[2] = -1;
-        p[3] = -1;
-        p += 4;
+
+    *(s32 *)((u8 *)w + 0x0) = 0;
+    *(s32 *)((u8 *)w + 0x148) = 0;
+    last = (s32 *)((u8 *)w + 0x50);   /* the first group's last entry */
+    for (i = 0; i < 16; i++) {
+        last[i * 4 - 3] = -1;
+        last[i * 4 - 2] = -1;
+        last[i * 4 - 1] = -1;
+        last[i * 4] = -1;
     }
-    *(s32 *)((char *)w + 0x154) = 0;
-    *(s32 *)((char *)w + 0x150) = 0;
+    *(s32 *)((u8 *)w + 0x150) = 0;
+    *(s32 *)((u8 *)w + 0x154) = 0;
 }
 #endif
 

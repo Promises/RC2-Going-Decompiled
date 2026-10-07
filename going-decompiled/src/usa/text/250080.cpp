@@ -192,8 +192,8 @@ extern s32 func_001338C8(void);
 extern s32 func_0012EE28(void);
 #ifndef TARGET_NATIVE
 extern s32 func_003517C0(void *stream);
-extern s32 func_003518B8(void *stream);
 #endif
+extern s32 func_003518B8(void *stream, s32 n);
 extern s32 func_00351FB0(void *stream);
 extern s32 func_00351B10(void *dmaq);
 extern s32 func_00351C20(void *dmaq);
@@ -221,13 +221,13 @@ extern char D_1AE7E8[];   /* DMA-add-queue-full error string */
 extern char D_1AE820[];   /* decode-thread stop diagnostic */
 extern char D_1AE838[];   /* host frame-read error string */
 extern void func_00350868(u8 *stream, u8 *src, s32 len, s32 dstOfs);
-/* func_003517C0/func_003518B8: deferred-native FMV stream funcs whose #else bodies
-   model them with inconsistent arg counts across call sites (true signatures need the
-   asm; FMV native backend is deferred). Declared with the stream pointer typed and the
-   rest variadic (C++ reads an empty `()` as `(void)`), so the corpus compiles; resolve
-   when the FMV native path is built. */
+/* func_003517C0: deferred-native FMV stream func whose #else bodies model it
+   with inconsistent arg counts across call sites (true signature needs the asm;
+   FMV native backend is deferred). Declared with the stream pointer typed and the
+   rest variadic (C++ reads an empty `()` as `(void)`), so the corpus compiles;
+   resolve when the FMV native path is built. (func_003518B8 was the other one;
+   it has its real signature since task #1801, declared above for both arms.) */
 extern s32 func_003517C0(void *stream, ...);
-extern s32 func_003518B8(void *stream, ...);
 extern s32 func_00352638(u8 *obj, u64 a, u64 b, s32 pos, s32 n);
 extern s32 func_003522C0(void *dmaq, ...);  /* FMV DMA-add-queue enqueue (deferred native; ret ignored) */
 extern void ZeroQwords(void *p, s32 n);
@@ -235,7 +235,7 @@ extern s32 func_00133850(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f);
 extern void *func_0012F738(void);
 extern s32 func_0012FA70(u8 *obj, s32 slot, void *cb, s32 arg);
 extern void func_003525D0(FmvStream *s);
-extern s32 FmvBitstreamObjInit(u8 *obj, u64 a, u64 b, u64 c, u64 d, u64 e);
+extern s32 FmvBitstreamObjInit(u8 *obj, s32 a, s32 b, s32 c, s32 d, s32 e);
 extern s32 func_0012F9A8(u8 *obj);
 extern void func_0012F9C8(u8 *obj);
 extern s32 func_0012F950(u8 *obj, s32 ptr, s32 len);
@@ -269,8 +269,36 @@ extern void func_00133930(s32 len, s32 dstOfs);  /* post-transfer notify */
 extern s32 func_0011AC20(void *param); /* CreateSema (returns sema id) */
 extern s32 func_0011AC60(s32 sema);    /* WaitSema (acquire) */
 extern s32 func_0011AC40(s32 sema);    /* SignalSema (release) */
-void FmvStreamStartDma(u8 *stream);        /* ring init, defined below (fwd for FmvBitstreamObjInit) */
+s32 FmvStreamStartDma(u8 *stream);         /* ring init, defined below (fwd for FmvBitstreamObjInit) */
 #endif
+
+/* The IPU_TO bitstream sub-object embedded at FmvStream + 0x48: the fields the
+ * matched bodies (FmvBitstreamObjInit, func_003518B8) touch. The full layout
+ * as far as it is known is described at func_00351910. */
+typedef struct FmvBitstreamObj {
+    /* 0x00 */ u32 srcBase;      /* physical base of the macroblock buffer */
+    /* 0x04 */ u32 tagWord;      /* "next" DMA tag to the source-tag ring */
+    /* 0x08 */ s32 ringSize;     /* ring blocks (0x800 bytes each) */
+    /* 0x0C */ u8 pad0C[0x8];
+    /* 0x14 */ s32 pendingBytes; /* bytes fed and not yet tagged (/0x800 at func_00351910) */
+    /* 0x18 */ u32 ringBytes;    /* ringSize << 11 */
+    /* 0x1C */ u8 pad1C[0x24];
+    /* 0x40 */ s32 sema;         /* decode semaphore id */
+    /* 0x44 */ u8 pad44[0x4];
+    /* 0x48 */ s64 totalBytes;   /* bytes fed since init */
+    /* 0x50 */ s32 slotBase;
+    /* 0x54 */ s32 slotCount;
+} FmvBitstreamObj;
+
+/* The SDK's CreateSema parameter block (eekernel.h struct SemaParam). */
+typedef struct FmvSemaParam {
+    s32 currentCount;
+    s32 maxCount;
+    s32 initCount;
+    s32 numWaitThreads;
+    u32 attr;
+    u32 option;
+} FmvSemaParam;
 
 /**
  * Yield the FMV thread for one scheduler rotation (RotateThreadReadyQueue
@@ -1278,36 +1306,66 @@ void func_003515C0(u64 *tag, u64 madr, u64 qwc, u64 id) {
     *tag = madr << 32 | (qwc << 32) >> 4 | (id << 32) >> 32;
 }
 
-/* FmvBitstreamObjInit: construct the IPU_TO bitstream sub-object. Stores the source
- * buffer/tag pointers and the two ring counts, builds the +0x4 DMA-tag word
- * ((b & 0x0FFFFFFF) | 0x20000000 = a "next" tag pointing at physical b), creates
- * the decode semaphore (init/max = 1) into +0x40, initialises the ring via
- * FmvStreamStartDma, and clears the +0x48 pts accumulator. Always returns 1. The
- * u64 params match the call site (FmvStreamInit); the body uses their low 32
- * bits (the ROM stores them with sw). Byte-match blocked: 8-byte-packed saves. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvBitstreamObjInit);
+/**
+ * FmvBitstreamObjInit: construct the IPU_TO bitstream sub-object. Stores the
+ * source buffer and slot-array words, builds the +0x4 DMA-tag word
+ * ((tagBase & 0x0FFFFFFF) | 0x20000000 = a "next" tag pointing at physical
+ * tagBase), records the ring size and its byte length, creates the decode
+ * semaphore (init/max = 1) into +0x40, initialises the ring via
+ * FmvStreamStartDma, and clears the +0x48 fed-byte total.
+ * @param obj        the sub-object (FmvStream + 0x48)
+ * @param srcBase    physical base of the macroblock buffer          (+0x0)
+ * @param tagBase    physical base of the source-tag ring            (+0x4)
+ * @param ringSize   number of 0x800-byte ring blocks (+0x8; << 11 at +0x18)
+ * @param slotBase   ring-slot array base                            (+0x50)
+ * @param slotCount  ring-slot count                                 (+0x54)
+ * @return 1, always
+ *
+ * MATCHED on the s136os arm (task #1801; SN 2.95.3 v1.36 -fopt-stack, FACT
+ * #8810). Three things close it, each measured by undoing it alone on a solo
+ * s136 compile (relocated fields masked):
+ *  - the parameters are 32-bit: the ROM stores $5..$9 straight with sw. As u64
+ *    every one is sign-extended with dsll32/dsra32 first (40 words vs 30).
+ *    The caller FmvStreamInit forwards its own p4..p8, so they are s32 there
+ *    too; its s136 block is text-identical either way.
+ *  - FmvStreamStartDma is declared s32 (the ROM returns 1 from it). Declared
+ *    void, cc1 orders the +0x40 store before the argument move and reorg fills
+ *    the jal delay slot with the move: 2/30 words.
+ *  - the statement order below: semaphore initCount before maxCount, ringSize
+ *    before the tag word, ring bytes last. The old body's order is 12/30;
+ *    reverting only the two semaphore stores is 2/30, only the ring stores
+ *    12/30. Typing the stores (struct fields vs `*(u32 *)(obj + N)` casts)
+ *    changes nothing here.
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_FmvBitstreamObjInit)
+S136OS_SLOT(FmvBitstreamObjInit);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
-extern s32 func_0011AC20(void *param);
-extern void FmvStreamStartDma(u8 *stream);
+extern s32 func_0011AC20(void *param);   /* CreateSema (returns sema id) */
+extern s32 FmvStreamStartDma(u8 *stream);
 /* (end of this body's declarations) */
-/* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 38.57% / engine96 0.00%. Residual: PACKED-SAVE (2 callee saves) + 25 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
-s32 FmvBitstreamObjInit(u8 *obj, u64 a, u64 b, u64 c, u64 d, u64 e) {
-    s32 semaParam[8];
 
-    *(u32 *)(obj + 0x0) = (u32)a;
-    *(u32 *)(obj + 0x50) = (u32)d;
-    *(u32 *)(obj + 0x54) = (u32)e;
-    semaParam[1] = 1;   /* init count */
-    semaParam[2] = 1;   /* max count  */
-    *(u32 *)(obj + 0x4) = ((u32)b & 0x0FFFFFFF) | 0x20000000;
-    *(u32 *)(obj + 0x18) = (u32)c << 11;
-    *(u32 *)(obj + 0x8) = (u32)c;
-    *(u32 *)(obj + 0x40) = func_0011AC20(semaParam);
+s32 FmvBitstreamObjInit(u8 *obj, s32 srcBase, s32 tagBase, s32 ringSize,
+                        s32 slotBase, s32 slotCount) {
+    FmvBitstreamObj *o = (FmvBitstreamObj *)obj;
+    FmvSemaParam sema;
+
+    o->srcBase = srcBase;
+    o->slotBase = slotBase;
+    o->slotCount = slotCount;
+    sema.initCount = 1;
+    sema.maxCount = 1;
+    o->ringSize = ringSize;
+    o->tagWord = ((u32)tagBase & 0x0FFFFFFF) | 0x20000000;
+    o->ringBytes = (u32)ringSize << 11;
+    o->sema = func_0011AC20(&sema);
     FmvStreamStartDma(obj);
-    *(s64 *)(obj + 0x48) = 0;
+    o->totalBytes = 0;
     return 1;
 }
 #endif
@@ -1319,12 +1377,14 @@ s32 FmvBitstreamObjInit(u8 *obj, u64 a, u64 b, u64 c, u64 d, u64 e) {
  * (id 0x80) followed by the qwc=2 terminator, then programs channel-4
  * MADR/QWC/TADR and suspends its CHCR via func_00351550(5). Operates on the
  * sub-object embedded at FmvStream+0x48 (type not yet recovered -> raw
- * offsets). Byte-match blocked: 8-byte-packed saves. */
+ * offsets). Returns 1 (the ROM sets $v0 = 1 before its jr; task #1801 found
+ * the old `void` declaration was the FmvBitstreamObjInit residual). Byte-match
+ * blocked: 8-byte-packed saves. */
 #ifndef TARGET_NATIVE
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", FmvStreamStartDma);
 #else
 /* MEASURED (task #513, 2026-09-20, whole-unit both-arms screen at origin/master 96f30718, objdiff_build.sh + unit_report.sh; sdk29 = this body alone on cc1 2.9 -O2 -G8 -fno-gcse, engine96 = all 39 arms MATCH_-guarded together on cc1 2.96-001003-1): sdk29 67.90% / engine96 63.94%. Residual: PACKED-SAVE (4 callee saves) + 61 non-save residual words (REGALLOC/SCHED) on sdk29; SCHED on engine96 (instruction set identical, order differs). */
-void FmvStreamStartDma(u8 *stream) {
+s32 FmvStreamStartDma(u8 *stream) {
     s32 i;
 
     *(s32 *)(stream + 0x44) = 1;
@@ -1360,6 +1420,7 @@ void FmvStreamStartDma(u8 *stream) {
     *(volatile u32 *)0x1000B410 = *(u32 *)(stream + 0x0) & 0x0FFFFFFF;  /* ch4 MADR */
     *(volatile u32 *)0x1000B430 = *(u32 *)(stream + 0x4) & 0x0FFFFFFF;  /* ch4 TADR */
     func_00351550(5);                                                   /* ch4 CHCR suspend */
+    return 1;
 }
 #endif
 
@@ -1369,9 +1430,41 @@ void FmvStreamStartDma(u8 *stream) {
    is built. */
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003517C0);
 
-/* func_003518B8: sema-guarded read-cursor advance. Blocked: 8-byte-packed
- * saves (s0/s1/ra). */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/250080", func_003518B8);
+/**
+ * func_003518B8: account `n` freshly fed bytes to the IPU_TO bitstream object
+ * under its semaphore — add them to the pending count at +0x14 (which
+ * func_00351910 turns into new DMA source tags, 0x800 bytes per tag) and to
+ * the 64-bit running total at +0x48.
+ * @param stream  the bitstream sub-object (FmvStream + 0x48)
+ * @param n       bytes just fed (func_00350F88's `stored`; func_003525B0
+ *                passes its own a1 straight through)
+ * @return SignalSema's result
+ *
+ * MATCHED on the s136os arm (task #1801; SN 2.95.3 v1.36 -fopt-stack, FACT
+ * #8810) as first written, no devices. The tree had no C for it before: the
+ * old note blamed 8-byte-packed saves, which SN 1.36 -fopt-stack emits.
+ * GUARD: on EE this C is the image's body, compiled alone by the s136os arm
+ * (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C.
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_003518B8)
+S136OS_SLOT(func_003518B8);
+#else
+/* Declarations this body needs whose only other declarations sit in other
+ * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
+extern s32 func_0011AC60(s32 sema);    /* WaitSema (acquire) */
+extern s32 func_0011AC40(s32 sema);    /* SignalSema (release) */
+/* (end of this body's declarations) */
+s32 func_003518B8(void *stream, s32 n) {
+    FmvBitstreamObj *o = (FmvBitstreamObj *)stream;
+
+    func_0011AC60(o->sema);
+    o->pendingBytes += n;
+    o->totalBytes += n;
+    return func_0011AC40(o->sema);
+}
+#endif
 
 /* func_00351910: advance the IPU_TO (DMAC ch4) DMA source-tag RING by the
  * macroblocks the channel already consumed, re-emit the freshly-freed tags, and
@@ -1812,7 +1905,7 @@ S136OS_SLOT(FmvStreamInit);
 extern void *func_0012F738(void);
 extern s32 func_0012FA70(u8 *obj, s32 slot, void *cb, s32 arg);
 extern void func_003525D0(FmvStream *s);
-extern s32 FmvBitstreamObjInit(u8 *obj, u64 a, u64 b, u64 c, u64 d, u64 e);
+extern s32 FmvBitstreamObjInit(u8 *obj, s32 a, s32 b, s32 c, s32 d, s32 e);
 extern s32 func_00352A20(s32 unused, s32 *frame);
 extern s32 func_00352A48(void);
 extern s32 func_00352A80(void);
@@ -1837,8 +1930,8 @@ extern s32 func_00352AE0(s32 unused, u8 *obj);
  * (row in tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
  * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
  * splice drops the function. On native it is plain C. */
-s32 FmvStreamInit(FmvStream *obj, u64 p2, u64 p3, u64 p4, u64 p5, u64 p6, u64 p7,
-                  u64 p8) {
+s32 FmvStreamInit(FmvStream *obj, u64 p2, u64 p3, s32 p4, s32 p5, s32 p6, s32 p7,
+                  s32 p8) {
     func_0012F738();
     func_0012FA70((u8 *)obj, 0, (void *)func_00352A20, 0);
     func_0012FA70((u8 *)obj, 1, (void *)func_00352A48, 0);
@@ -1870,10 +1963,11 @@ s32 func_00352590(FmvStream *obj) {
 }
 
 /**
- * Forward to the read-cursor advance of the embedded stream object.
+ * Forward to the fed-byte accounting (func_003518B8) of the embedded bitstream
+ * object; `n` passes through in $a1 untouched (the ROM only rewrites $a0).
  */
-s32 func_003525B0(FmvStream *obj) {
-    return func_003518B8((u8 *)obj + 0x48);
+s32 func_003525B0(FmvStream *obj, s32 n) {
+    return func_003518B8((u8 *)obj + 0x48, n);
 }
 
 /**
@@ -2069,7 +2163,7 @@ s32 func_00352780(FmvStream *obj) {
 #if !defined(TARGET_NATIVE) && !defined(S136OS_FmvDecodeThreadEntry)
 S136OS_SLOT(FmvDecodeThreadEntry);
 #else
-extern void FmvStreamStartDma(u8 *stream);
+extern s32 FmvStreamStartDma(u8 *stream);
 extern s32 FmvDisplayWorkerLoop(u8 *host);
 extern void func_00352B90(FmvFrameQueue *q);
 s32 FmvDecodeThreadEntry(FmvStream *obj) {
