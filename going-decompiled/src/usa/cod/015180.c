@@ -1528,7 +1528,30 @@ s32 func_0011C7E8(void *dest, ...) {
     return func_0011C1F8((char *)dest, (s64 *)ap);
 }
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", Kprintf);
+extern void (*D_00134698)(s32 ch);  /* single-character output hook */
+
+/**
+ * Kprintf: the kernel-console printf. Temporarily points the character hook
+ * D_00134698 at func_0011BF18 (the debug line buffer), runs the core formatter
+ * func_0011C1F8 over the variadic arguments, then restores the previous hook.
+ *
+ * @param fmt  printf-style format string
+ * @param ...  its arguments, spilled to the stack home area as for
+ *             func_0011C7E8 (EABI single-float va_start)
+ * @return     the formatter's result
+ */
+s32 Kprintf(const char *fmt, ...) {
+    void (*saved)(s32) = D_00134698;
+    char *ap;
+    s32 ret;
+
+    D_00134698 = func_0011BF18;
+    ap = (char *)__builtin_next_arg(fmt)
+         - (__builtin_args_info(2) >= 8 ? 0 : (8 - __builtin_args_info(2)) * 8);
+    ret = func_0011C1F8((char *)fmt, (s64 *)ap);
+    D_00134698 = saved;
+    return ret;
+}
 
 /**
  * Callback that writes a record's value (arg0[5]) into the array at arg1[7]
@@ -1984,10 +2007,30 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011DDD8);
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011DE08);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E010);
-
 extern s32 D_0013472C;
 extern u8 D_001400A8[4];
+extern u8 D_00134684[4];  /* "2550": this library's 4-byte release tag (no NUL) */
+extern u8 *D_00134740;    /* -> "....": the wildcard tag */
+
+/**
+ * Report whether the 4-byte tag at D_001400A8 is incompatible with this
+ * library: it differs from the release tag "2550" (D_00134684) AND from the
+ * tag D_00134740 points at ("...."), and those two differ from each other.
+ * func_0011E0A0 below clears the tag. memcmp's result is used only for != 0.
+ *
+ * @return 1 if incompatible, 0 if the tag matches either one
+ */
+s32 func_0011E010(void) {
+    u8 *release = D_00134684;
+    u8 *tag = D_001400A8;
+    s32 mismatch = 0;
+
+    if (memcmp(tag, release, 4) && memcmp(tag, D_00134740, 4)
+        && memcmp(release, D_00134740, 4)) {
+        mismatch = 1;
+    }
+    return mismatch;
+}
 
 /**
  * Reset the subsystem state guarded by D_0013472C: clear the flag word to 0 and
@@ -2010,15 +2053,46 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E4E0);
  * sceSifInitIopHeap. Pure padding, no C. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E740);
 
-/* sceSifInitIopHeap: real function recovered from the splat mis-split above (init/
- * retry loop around sceSifBindRpc, writes D_00134744). Boundary now correct;
- * body not yet decompiled. Left as INCLUDE_ASM. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", sceSifInitIopHeap);
-
 extern s32 func_0011D620(void *a0, s32 a1, s32 a2, void *a3, s32 a4,
                          void *a5, s32 a6, s32 a7, s32 a8);
 extern s32 D_00134744;
-extern s32 D_00140140;
+
+/* The IOP-heap RPC client (sceSifClientData): only `serve` (+0x24), set once
+ * the bind has reached the server, is read here. */
+typedef struct IopHeapClient {
+    u8 _pad0[0x24];
+    void *serve;
+} IopHeapClient;
+extern IopHeapClient D_00140140;
+
+extern s32 sceSifBindRpc(IopHeapClient *client, u32 rpcNumber, u32 mode);
+
+/**
+ * sceSifInitIopHeap (recovered from the splat mis-split above): bind the
+ * IOP-heap RPC client D_00140140 to server 0x80000003, retrying after a
+ * ~1M-iteration busy wait until the server answers, then mark the service
+ * active (D_00134744 = 0; it is negative while unbound).
+ *
+ * @return 0 once bound; -1 if sceSifBindRpc fails
+ */
+s32 sceSifInitIopHeap(void) {
+    s32 spin;
+
+    while (1) {
+        if (sceSifBindRpc(&D_00140140, 0x80000003, 0) < 0) {
+            return -1;
+        }
+        if (D_00140140.serve != 0) {
+            /* clearing it inside the exit branch, not after the loop, is
+             * what puts %hi(D_00134744) in $2 ahead of the return value */
+            D_00134744 = 0;
+            break;
+        }
+        for (spin = 0x100000; spin != -1; spin--) {
+        }
+    }
+    return 0;
+}
 extern s32 D_001401C0;
 extern s32 D_00140180;
 
@@ -2068,10 +2142,28 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/cod/015180", func_00
 
 INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011E938);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/cod/015180", func_0011EA38);
-
 extern s32 D_00134748;
 extern u8 D_00140528[4];
+extern u8 *D_0013474C;    /* -> "....": the wildcard tag */
+
+/**
+ * The same incompatibility test as func_0011E010 for the tag at D_00140528,
+ * against "2550" (D_00134684) and the tag D_0013474C points at ("....").
+ * func_0011EAC8 below clears the tag.
+ *
+ * @return 1 if incompatible, 0 if the tag matches either one
+ */
+s32 func_0011EA38(void) {
+    u8 *release = D_00134684;
+    u8 *tag = D_00140528;
+    s32 mismatch = 0;
+
+    if (memcmp(tag, release, 4) && memcmp(tag, D_0013474C, 4)
+        && memcmp(release, D_0013474C, 4)) {
+        mismatch = 1;
+    }
+    return mismatch;
+}
 
 /**
  * Reset the subsystem state guarded by D_00134748: set the flag word to -1
