@@ -6115,10 +6115,9 @@ extern s32 func_00294CD0(s32 fileId);   /* kick the item's resource load */
  *   - mode 1/2/3: record itemId into the matching g_activeGadgetItem slot (1/2/3).
  * Returns 1 when equipped/queued, 0 when aborted.
  *
- * NOTE: the field passed to func_00294EE0/func_00294CD0 is the weapon-variant
- * entry's +0x14, which symbol_addrs currently labels "boltPrice". Either that
- * label is context-dependent or slightly off — the #else is faithful to the asm
- * (it forwards +0x14 to those two calls regardless); flagged for a Ghidra recheck.
+ * The field passed to func_00294EE0/func_00294CD0 is the entry's +0x14 =
+ * mobyClass, confirmed by #1737 + #1748's Ghidra read (FACT #9565); the bolt
+ * price is +0x80 (GetVendorItemPrice).
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 38.18%
    -> UNKNOWN-@0: ROM `addiu sp,sp,-48` vs `addiu sp,sp,-32` */
