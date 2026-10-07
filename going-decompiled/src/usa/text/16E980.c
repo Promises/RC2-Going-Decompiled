@@ -740,10 +740,14 @@ void func_0026FE58(void) {
 #endif
 
 /* DebugPrintStub: varargs debug-print hook, compiled to a no-op in retail.
- * Takes a printf-style format and its arguments, ignores all of them and
- * returns nothing (callers discard any result). Only the EABI varargs prologue
- * survives: the seven GPR argument registers $5..$11 and the four FP argument
- * registers $f12/$f14/$f16/$f18 are spilled to the 0x80-byte frame.
+ * Takes a printf-style format and its arguments and ignores all of them. Only
+ * the EABI varargs prologue survives: the seven GPR argument registers
+ * $5..$11 and the four FP argument registers $f12/$f14/$f16/$f18 are spilled
+ * to the 0x80-byte frame.
+ * Return: declared s32 because callers declare it so and two (198FA0,
+ * 250080) forward the result; the ROM body never writes $v0, so on EE the C
+ * has no return statement (a `return 0` adds a word). Native keeps the
+ * defined 0 it always returned.
  * MATCHED on the s136os arm (task #1767): SN 2.95.3 v1.36 cc1 emits the FP
  * varargs spill that cc1 2.9 never does (the former "float-varargs prologue"
  * wall was a compiler-revision wall, not a C one).
@@ -754,7 +758,10 @@ void func_0026FE58(void) {
 #if !defined(TARGET_NATIVE) && !defined(S136OS_DebugPrintStub)
 S136OS_SLOT(DebugPrintStub);
 #else
-void DebugPrintStub(const char *fmt, ...) {
+s32 DebugPrintStub(const char *fmt, ...) {
+#ifdef TARGET_NATIVE
+    return 0;
+#endif
 }
 #endif
 
@@ -1393,30 +1400,48 @@ void func_00270E40(void) {
 
 /* func_00270EB8: while a camera transition is pending (kind != 0), snap the
  * transition's current qword pos/target pair (+0x50/+0x60) from the saved
- * source pair (+0xC0/+0xD0). The original loads each 16-byte block through a
- * SEPARATE address register (addiu a0,+0x50; addiu v1,+0xC0; lq 0(v1);
- * sq 0(a0); …) and interleaves the two copies (store of the first before the
- * load of the second). The pinned cc1 always emits offset-form lq/sq off the
- * base register (lq 192(a2); sq 80(a2); …) and orders the copies
- * sequentially — the offset-vs-register addressing is a fixed cc1 choice no
- * source shape overrides. Best 59%. WALL: qword block-copy addressing form. */
+ * source pair (+0xC0/+0xD0). No params, no return.
+ * MATCHED on the s136os arm (task #1767). The ROM copies each qword through
+ * address registers (`addiu a0,a2,0x50; addiu v1,a2,0xc0; lq v0,0(v1);
+ * sq v0,0(a0)`, then the +0xD0/+0x60 pair) — the shape of a 16-byte block
+ * move, whose expander forces both addresses into registers and clobbers its
+ * own scratch. SN 1.36 cc1 compiles every 16-byte struct copy here as an
+ * offset-form TImode move instead (Vec4, u_long128, byte-array, volatile,
+ * 12-in-16 and memcpy spellings all measured: `lq v0,0xc0(a2)`), so:
+ *   - the three EMPTY asm fences (RULING #8483; they emit nothing) make each
+ *     address opaque so cc1 cannot fold it into the lq/sq offset; the middle
+ *     one is `volatile` and re-defines `t`, which holds the second pair's
+ *     address setup below the first `sq` as in the ROM (removing it, or only
+ *     its `volatile`, reorders that setup);
+ *   - EE_REG pins `src` to $3 and `src1` to $5 (RULING #8598, REGISTER-PIN
+ *     DEVICE): without them cc1 shares registers the block move's clobbers
+ *     kept apart. Each pin and each fence was removed alone and the order or
+ *     registers moved; pins on `dst` ($4) and `dst1` ($3) were dead weight
+ *     and are not here.
+ * GUARD: as DebugPrintStub's. Native: EE_REG is empty, the fences emit
+ * nothing, and the body is the plain two-qword copy. */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00270EB8);
+#define EE_REG(r) __asm__(r)
 #else
-/* TODO(match): functional equivalent - not byte-exact. Class BLOCKMOVE-LQ,
-   both arms (t512: sdk29 58.57%, engine96 57.86%): the ROM's shape (address
-   regs forced, lq/sq at offset 0) is a 16-byte movstrsi block move whose
-   piece size is 128 bits. Levers run: Vec4 struct copy -> ld/sd x4 offset
-   form on both arms; u_long128 (mode TI) copy -> offset-form `lq v0,0xc0(a0)`
-   on both arms (TImode scalar move, not a block move); unaligned struct ->
-   ldl/ldr; aligned(8) struct -> ld/sd; a 32-byte pair copy DOES enter the
-   block-move path on both arms and emits ld/sd pairs, never lq/sq. So neither
-   cc1 2.9-991111 nor cc1 2.96-001003-1 has the 128-bit block move the ROM's
-   compiler used: a compiler-revision wall, not a phrasing. */
+#define EE_REG(r)
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00270EB8)
+S136OS_SLOT(func_00270EB8);
+#else
 void func_00270EB8(void) {
-    if (g_cameraTransitionState.kind != 0) {
-        g_cameraTransitionState.cur0 = g_cameraTransitionState.src0;
-        g_cameraTransitionState.cur1 = g_cameraTransitionState.src1;
+    CameraTransitionState *t = &g_cameraTransitionState;
+    if (t->kind != 0) {
+        Vec4 *dst = &t->cur0;
+        register Vec4 *src EE_REG("$3") = &t->src0;
+        register Vec4 *src1 EE_REG("$5");
+        Vec4 *dst1;
+        __asm__("" : "+r"(dst), "+r"(src));
+        *dst = *src;
+        __asm__ __volatile__("" : "+r"(t));
+        dst1 = &t->cur1;
+        src1 = &t->src1;
+        __asm__("" : "+r"(src1), "+r"(dst1));
+        *dst1 = *src1;
     }
 }
 #endif
@@ -2124,9 +2149,11 @@ void func_00271FE8(void) {
  * R5900_MTC1_PAD1 / R5900_MTC1_PAD1_PIN: SCHEDULING DEVICE (RULING #8435,
  * FACT #7918 / #8434), not a statement about the machine. The ROM has two
  * nops between `li.s $f0,1.0` (lui $at; mtc1 $at,$f0) + the g_cameraState
- * address and the `div.s` that reads $f0: a pad the ROM's assembler inserted
- * and GNU as does not (SN 1.36 cc1 already emits every other instruction in
- * the ROM's order). Each macro is one noreorder `nop` tied by operands: both
+ * address and the `div.s` that reads $f0. Neither SN 1.36 cc1 nor GNU as
+ * emits them (cc1 already gives every other instruction in the ROM's order);
+ * which tool produced the ROM's pad is not settled (#7918 reads it as a
+ * compiler-revision rule; ~160 of 335 ROM div.s sites carry it). Each macro
+ * is one noreorder `nop` tied by operands: both
  * take `one` in-out, so they sit after the li.s and before the div.s; the
  * second also takes `st` in-out, so the address forms before the pad and the
  * stores through it issue after the div.s, as in the ROM. Two one-nop pads
