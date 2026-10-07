@@ -444,3 +444,5 @@ usa text/1A8180 func_002AC728
 usa text/1A8180 func_002AB3B0
 usa text/1A8180 func_002AB868
 usa text/1B4218 StartAmbientVoice
+usa text/1B4218 StartSecondaryVoice
+usa text/1B4218 ChainSecondaryVoice

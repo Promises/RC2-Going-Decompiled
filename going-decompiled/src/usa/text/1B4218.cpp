@@ -226,7 +226,7 @@ typedef struct ListenerBlock {
 extern s32 StepMobyMotion(Moby *moby, Vec4 *target, f32 speed);   /* 0x2B6000 returns eventFlags (+0x94) */
 extern s32 StartDialogVoice(s32 a0, s32 a1, s32 a2, s32 a3);      /* 0x2B7878 */
 extern void StartAmbientVoice(s32 idx, s32 flags, s32 pan);      /* 0x2B7CA0 */
-extern s32 StartSecondaryVoice(s32 idx, s32 flags, s32 pan);     /* 0x2B7D98 */
+extern void StartSecondaryVoice(s32 idx, s32 flags, s32 pan);    /* 0x2B7D98 */
 extern s32 snd_PlaySample(s64 sampleStart, s64 sampleEnd, s32 a2, s32 a3,
                           s32 pan, s32 a5, s32 a6, s32 a7, s32 a8, s32 a9,
                           void *startCb, long context);  /* 0x133350 (12 args, cod/0321A0) */
@@ -3390,41 +3390,51 @@ void StartAmbientVoice(s32 idx, s32 flags, s32 pan) {
 #endif
 
 /* Like StartAmbientVoice but gated on idx >= 0 and uses func_002B8ED0 as the
- * voice-start callback (the secondary-channel variant). No-op if the ambient
- * channel is busy or the sample-table entry is empty.
- * Same shape and residual as StartAmbientVoice (SCHED-TIEBREAK): sdk29 48.31% /
- * engine96 18.00% (unit objdiff report, task #510). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", StartSecondaryVoice);
+ * voice-start callback (the secondary-channel variant), with 0 as the 10th
+ * snd_PlaySample argument. No-op if idx is negative, the ambient channel is
+ * busy, or the sample-table entry is empty.
+ *
+ * params: idx   sample-table index (stride-8 entries at g_discToc + 0x5300)
+ *         flags stashed to ambientArg1
+ *         pan   stashed to ambientArg2 and passed (s16) as the pan argument
+ * return: none. The ROM never sets $2 on any path, and 1EFFC0 already declares
+ *         it void.
+ *
+ * MATCHED on the s136os arm (task #1744) with StartAmbientVoice's spellings:
+ * `long` start/end narrowed with (s32) at the call (the explicit dsll32/dsra32),
+ * the `(idx + 1) << 1` end index, and start/end computed right before the call.
+ * The state stores lead with state/flag/volume/rate, as in StartAmbientVoice. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_StartSecondaryVoice)
+S136OS_SLOT(StartSecondaryVoice);
 #else
-/* TODO(match): functional equivalent - not byte-exact; SCHED-TIEBREAK, sdk29 48.31% / engine96 18.00%. */
-s32 StartSecondaryVoice(s32 idx, s32 flags, s32 pan) {
+void StartSecondaryVoice(s32 idx, s32 flags, s32 pan) {
     u8 *toc;
     s32 *sampleTable;
+    long start, end;
     if (idx < 0) {
-        return 0;
+        return;
     }
     if (g_fileLoadVoiceState.ambientState != 0) {
-        return 0;
+        return;
     }
     toc = g_discToc;
     sampleTable = (s32 *)(toc + 0x5300);
     if (sampleTable[idx * 2] == 0) {
-        return 0;
+        return;
     }
+    g_fileLoadVoiceState.ambientState = 0xFFFFFFFF;
     g_fileLoadVoiceState.ambientFlag = 1;
     g_fileLoadVoiceState.ambientVolume = 10;
     g_fileLoadVoiceState.ambientSampleRate = 48000;
     g_fileLoadVoiceState.ambientArg0 = idx;
-    g_fileLoadVoiceState.ambientState = 0xFFFFFFFF;
     g_fileLoadVoiceState.ambientArg2 = pan;
     g_fileLoadVoiceState.ambientArg1 = flags;
     g_fileLoadVoiceState.ambientCursor = 0;
-    snd_PlaySample(*(s32 *)(toc + 0x52FC) + sampleTable[idx * 2],
-                   *(s32 *)(toc + 0x52FC) + sampleTable[(idx + 1) * 2],
+    start = sampleTable[idx * 2] + g_dialogSampleBase;
+    end = sampleTable[(idx + 1) << 1] + g_dialogSampleBase;
+    snd_PlaySample((s32)start, (s32)end,
                    0, 0, (s16)pan, 0, 1, 0, 0, 0, (void *)func_002B8ED0,
                    (long)(u32)&g_fileLoadVoiceState.ambientState);
-    return 0;
 }
 #endif
 
@@ -3433,42 +3443,53 @@ s32 StartSecondaryVoice(s32 idx, s32 flags, s32 pan) {
  * chainable state (ambientFlag != 9, ambientState allocated and not -1) and the
  * next sample-table entry exists. Arms ambientFlag 9 and plays the continuation
  * sample pair via snd_PlaySample with func_002B8E78 as the start callback.
- * Same shape and residual as StartAmbientVoice (SCHED-TIEBREAK); the 10th
- * argument is (flags & 1) << 2. sdk29 52.78% / engine96 28.99% (unit objdiff
- * report, task #510). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1B4218", ChainSecondaryVoice);
+ * The continuation plays from entry idx+3 to entry idx+2 (the ROM passes them in
+ * that order). The 8th argument is the live voice handle being chained
+ * (ambientState, still in $11 from the chainable test; the ROM never zeroes $11),
+ * and the 10th is (flags & 1) << 2.
+ *
+ * params: idx   base sample-table index of the segment pair being chained
+ *         flags stashed to ambientArg1; bit 0 selects the 10th argument's bit 2
+ *         pan   stashed to ambientArg2 and passed (s16) as the pan argument
+ * return: none. The ROM never sets $2 on any path.
+ *
+ * MATCHED on the s136os arm (task #1744) with StartAmbientVoice's spellings
+ * (`long` start/end narrowed at the call, `(idx + k) << 1` indices, start/end
+ * computed after the stores), end computed before start, and the handle passed
+ * as the 8th argument. Master's C passed 0 there: a functional defect in the
+ * #else arm as well as the residual that kept it from matching. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_ChainSecondaryVoice)
+S136OS_SLOT(ChainSecondaryVoice);
 #else
-/* TODO(match): functional equivalent - not byte-exact; SCHED-TIEBREAK, sdk29 52.78% / engine96 28.99%. */
-s32 ChainSecondaryVoice(s32 idx, s32 flags, s32 pan) {
+void ChainSecondaryVoice(s32 idx, s32 flags, s32 pan) {
     u8 *toc;
     s32 *sampleTable;
+    u32 handle;
+    long start, end;
     if (g_fileLoadVoiceState.ambientFlag == 9) {
-        return 0;
+        return;
     }
-    if (g_fileLoadVoiceState.ambientState == 0 ||
-        g_fileLoadVoiceState.ambientState == 0xFFFFFFFF) {
-        return 0;
+    handle = g_fileLoadVoiceState.ambientState;
+    if (handle == 0 || handle == 0xFFFFFFFF) {
+        return;
     }
     toc = g_discToc;
     sampleTable = (s32 *)(toc + 0x5300);
-    if (sampleTable[(idx + 1) * 2] == 0) {
-        return 0;
+    if (sampleTable[(idx + 1) << 1] == 0) {
+        return;
     }
-    g_fileLoadVoiceState.ambientSampleRate = 48000;
-    g_fileLoadVoiceState.ambientArg0 = idx;
     g_fileLoadVoiceState.ambientFlag = 9;
     g_fileLoadVoiceState.ambientVolume = 10;
+    g_fileLoadVoiceState.ambientSampleRate = 48000;
+    g_fileLoadVoiceState.ambientArg0 = idx;
     g_fileLoadVoiceState.ambientArg2 = pan;
     g_fileLoadVoiceState.ambientArg1 = flags;
     g_fileLoadVoiceState.ambientCursor = 0;
-    /* start = entry[idx+3], end = entry[idx+2] (the original at 0x2B7E90 passes
-       them in this order - the continuation sample plays from +3 to +2). */
-    snd_PlaySample(*(s32 *)(toc + 0x52FC) + sampleTable[(idx + 3) * 2],
-                   *(s32 *)(toc + 0x52FC) + sampleTable[(idx + 2) * 2],
-                   0, 0, (s16)pan, 0, 1, 0, 0, (flags & 1) << 2, (void *)func_002B8E78,
+    end = sampleTable[(idx + 2) << 1] + g_dialogSampleBase;
+    start = sampleTable[(idx + 3) << 1] + g_dialogSampleBase;
+    snd_PlaySample((s32)start, (s32)end,
+                   0, 0, (s16)pan, 0, 1, handle, 0, (flags & 1) << 2, (void *)func_002B8E78,
                    (long)(u32)&g_fileLoadVoiceState.ambientState);
-    return 0;
 }
 #endif
 
