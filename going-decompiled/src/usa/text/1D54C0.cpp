@@ -310,9 +310,9 @@ extern void PlayGlobalSound(s32 id, s32 a, s32 b);
 /* Map-slot toggle/lookup helpers (defined later in this unit). */
 extern s32 FreeMenuWorkBuffer(s32 id);
 extern s32 AllocMenuWorkBuffer(s32 forceSet);
-/* Sound-mute gate flag (nonzero => emit the menu sound). */
-__asm__(".extern D_1ABD48, 4");
-extern s32 D_1ABD48;
+/* Menu-sound gate (nonzero => func_002DFFA0 plays the sound); g_menuSoundEnabled. */
+__asm__(".extern g_menuSoundEnabled, 4");
+extern s32 g_menuSoundEnabled;
 
 /* --- Shared globals referenced by the TARGET_NATIVE #else bodies below. ----
  * Declarations only; they do not affect the matching (INCLUDE_ASM) build.
@@ -332,7 +332,7 @@ extern s32 g_nGlobalWadBaseLbn;    /* base LBA for global assets */
 extern s32 D_001F28F4;             /* menu transition-pending override flag */
 extern s32 D_001F28DC;             /* text-table second-bank base address */
 extern s32 D_001F28A4;             /* memory-card status code */
-extern u8  D_001ABD48;             /* (same as D_1ABD48, byte view) */
+extern u8  D_001ABD48;             /* (same address as g_menuSoundEnabled, byte view) */
 __asm__(".extern g_nSaveLoadStatusCode, 16");   /* adjacent lui/%lo macro shape in the ROM */
 extern s32 g_nSaveLoadStatusCode;  /* 0x1A7420 save/load popup status code */
 extern u8  g_menuScreenBlock[];    /* g_particleFxBlob+0x100 menu-screen mgr block */
@@ -3813,9 +3813,10 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_0
 
 /*
  * func_002DECE0 declarations. The cheat input buffer is 20 s16 symbols at
- * D_001B1E90+0x118; D_1ABD20 counts the symbols entered; D_261BE8 is the cheat
- * byte table; D_1395B8 is a 6-entry unlock-flag array; D_1A8CEC is set once a
- * skill-point cheat fires. D_138180 is the pad state block (+0x1C0 held mask as
+ * D_001B1E90+0x118; g_cheatInputCount counts the symbols entered;
+ * g_cheatCodeSymbols is the 256-byte cheat symbol table (symbol k of code c is
+ * byte ((k + 1) * c) & 0xFF); D_1395B8 is a 6-entry unlock-flag array; D_1A8CEC
+ * is set once a skill-point cheat fires. D_138180 is the pad state block (+0x1C0 held mask as
  * a doubleword = g_padButtonsHeld, +0x1C4 pressed mask = g_padButtonsPressed),
  * declared as an ordinary array so cc1 splits its address and the prologue's
  * `sd $31` schedules between the halves, as in the ROM.
@@ -3828,8 +3829,8 @@ INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1D54C0", func_0
  * allocator colours a value differently from the ROM; natively a plain local.
  */
 extern u8  D_138180[];
-extern s32 D_1ABD20;
-extern u8  D_261BE8[];
+extern s32 g_cheatInputCount;
+extern u8  g_cheatCodeSymbols[];
 extern u8  D_1395B8[];
 #ifndef TARGET_NATIVE
 #define EE_REG(r) __asm__(r)
@@ -3889,7 +3890,7 @@ void func_002DECE0(void) {
         if ((pressed & 0xF0A0) == 0) {
             return;
         }
-        count = D_1ABD20;
+        count = g_cheatInputCount;
         __asm__("" : "=r"(entered) : "0"(count));
         if (count >= 0x14) {
             return;
@@ -3907,7 +3908,7 @@ void func_002DECE0(void) {
         }
         CHEAT_INPUT[entered] = symbol;
         entered++;
-        D_1ABD20 = entered;
+        g_cheatInputCount = entered;
         if (entered == 0x14) {
             s32 found = -1;
             s32 code;
@@ -3918,13 +3919,13 @@ void func_002DECE0(void) {
                 s32 match = 1;
                 register s32 pos EE_REG("$5") = 0;
 
-                if (firstSymbol != D_261BE8[code & 0xFF]) {
+                if (firstSymbol != g_cheatCodeSymbols[code & 0xFF]) {
                     goto mismatch;
                 }
             next:
                 pos++;
                 if (pos < 0x14) {
-                    if (CHEAT_INPUT[pos] == D_261BE8[(pos * code + code) & 0xFF]) {
+                    if (CHEAT_INPUT[pos] == g_cheatCodeSymbols[(pos * code + code) & 0xFF]) {
                         goto next;
                     }
                 mismatch:
@@ -3964,7 +3965,7 @@ void func_002DECE0(void) {
             }
         }
     } else {
-        D_1ABD20 = 0;
+        g_cheatInputCount = 0;
     }
 }
 
@@ -4450,13 +4451,14 @@ void func_002DFF68(s32 handle, s32 amount) {
     }
 }
 
-/* Play a menu/system sound (id,arg) only when the menu-sound gate D_1ABD48 is
- * enabled.
+/* Play a menu/system sound (id,arg) only when the menu-sound gate
+ * g_menuSoundEnabled is nonzero. Nothing in the boot ELF stores to the gate
+ * (boot value 0), so whatever enables it lies outside the split image.
  * MATCHED 100.00% on the sdk29 arm (unit objdiff; verify_match_unit.sh BYTE
  * IDENTICAL, t495). The asm barrier keeps the jal + $ra frame — cc1 2.9 would
  * otherwise tail-jump to PlayGlobalSound. */
 void func_002DFFA0(s32 id, s32 arg) {
-    if (D_1ABD48 != 0) {
+    if (g_menuSoundEnabled != 0) {
         PlayGlobalSound(id, arg, 0);
         __asm__ __volatile__("");   /* keep the jal + ra frame; cc1 would tail-jump */
     }
