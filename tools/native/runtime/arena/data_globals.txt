@@ -1122,7 +1122,9 @@ g_cameraTransitionState
 g_cameraTriggerLatch
 g_cameraZoneType
 g_cdReadMode
+g_cheatCodeSymbols
 g_cheatFlags
+g_cheatInputCount
 g_cinematicCameraBlock
 g_cinematicExitPending
 g_cinematicFmvFlag
@@ -1262,6 +1264,7 @@ g_mcRpcResult
 g_memoryArenaTable
 g_menuBgImageIndex
 g_menuScreenBlock
+g_menuSoundEnabled
 g_menuTransitionMode
 g_miscExtras
 g_mobyAuxBlockBase
