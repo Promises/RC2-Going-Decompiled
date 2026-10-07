@@ -1235,36 +1235,43 @@ void func_002895E0(CinematicQueue *q) {
  * (or no request was made); a non-zero request result (positive OR negative)
  * and the empty-queue early-out both return 0.
  *
- * WALL: multiple callee-saves (0x30 frame), a movz mode-select and the two-way
- * argument shuffle / branch colouring around RequestGameStateChange that cc1
- * does not reproduce. Kept as the portable #else body. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", StartCinematicFromQueue);
+ * Matched on the s136os arm at the unit's -O2 default (RULING #9450). Two
+ * shapes carry it: the body sits inside `if (q->count != 0)` so the empty-queue
+ * `return 0` is the ROM's shared tail block (an early return puts it inline and
+ * reloads q into $4 for DequeueCinematic), and mode starts at 1 and is compared
+ * as `1 < g_nGameState - 1`, so the constant 1 is the register movz overwrites
+ * (`li $5,1; li $3,2; sltu; movz $5,$3`). */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_StartCinematicFromQueue)
+S136OS_SLOT(StartCinematicFromQueue);
 #else
 s32 StartCinematicFromQueue(CinematicQueue *q) {
     s32 id, flag, mode, result;
-    if (q->count == 0) {
-        return 0;
+    if (q->count != 0) {
+        q->_pad3C = 0;
+        q->active = 1;
+        id = 0;
+        flag = 0;
+        DequeueCinematic(q, &id, &flag);
+        mode = 1;
+        if (!((u32)mode < (u32)(g_nGameState - 1))) {
+            mode = 2;
+        }
+        q->gameStateMode = mode;
+        result = 0;
+        if (flag == 0) {
+            result = RequestGameStateChange(1, mode, 0, id, 0);
+        } else if (flag == 1) {
+            result = RequestGameStateChange(2, mode, id, 0, 0);
+        }
+        if (result < 0) {
+            func_00289540(q);
+        }
+        /* sltiu result,1 : an UNSIGNED "< 1", i.e. exactly result == 0 (a
+         * negative result is a large unsigned and returns 0, as a positive one
+         * does). */
+        return (u32)result < 1;
     }
-    q->_pad3C = 0;
-    q->active = 1;
-    id = 0;
-    flag = 0;
-    DequeueCinematic(q, &id, &flag);
-    mode = (1u < (u32)(g_nGameState - 1)) ? 1 : 2;
-    q->gameStateMode = mode;
-    result = 0;
-    if (flag == 0) {
-        result = RequestGameStateChange(1, mode, 0, id, 0);
-    } else if (flag == 1) {
-        result = RequestGameStateChange(2, mode, id, 0, 0);
-    }
-    if (result < 0) {
-        func_00289540(q);
-    }
-    /* sltiu result,1 : an UNSIGNED "< 1", i.e. exactly result == 0 (a negative
-     * result is a large unsigned and returns 0, same as a positive one). */
-    return (u32)result < 1;
+    return 0;
 }
 #endif
 
