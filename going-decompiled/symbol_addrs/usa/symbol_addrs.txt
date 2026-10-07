@@ -158,6 +158,7 @@ func_00301340 = 0x00301340; // type:func
 func_002831F8 = 0x002831F8; // type:func size:0x38
 func_00283230 = 0x00283230; // type:func
 func_00284678 = 0x00284678; // type:func - splat name kept, no identity claimed. Float integer/fraction split helper in text/183558, called by func_002AC980, which is compiled C since task 758. This line holds the token outside its nonmatchings .s (landing_gate ORPHAN_LATENT)
+func_0011B8D8 = 0x0011B8D8; // type:func - splat name kept, no identity claimed. Thread-wakeup wrapper in cod/015180, called by func_0011D590, which is compiled C since task 1804. This line holds the token outside its nonmatchings .s (landing_gate ORPHAN_LATENT)
 func_00291148 = 0x00291148; // type:func - splat name kept, no identity claimed. Inventory display-order re-validation in text/1907F0, called by func_002911F0, which is compiled C since task 895. This line holds the token outside its nonmatchings .s (landing_gate ORPHAN_LATENT)
 func_002912B8 = 0x002912B8; // type:func - splat name kept, no identity claimed. Re-inserts the items unlocked at a progress value (text/1907F0), called by func_002911F0, which is compiled C since task 895. This line holds the token outside its nonmatchings .s (landing_gate ORPHAN_LATENT)
 func_002AE0B8 = 0x002AE0B8; // type:func - splat name kept, no identity claimed. Point-through-moby projection helper in text/1A8180, called by func_003010D8 (text/1FFBA0), which is compiled C since task 895. This line holds the token outside its nonmatchings .s (landing_gate ORPHAN_LATENT)
