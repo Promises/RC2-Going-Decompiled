@@ -26,6 +26,9 @@ usa text/16E980 DebugPrintStub
 usa text/16E980 func_002701C0
 usa text/16E980 func_00270EB8
 usa text/16E980 func_002721A8
+usa text/16E980 func_0026FE58
+usa text/16E980 func_00270220
+usa text/16E980 func_00270500
 usa text/178E88 func_0027FBA8
 usa text/178E88 DrawDebugString
 usa text/178E88 func_00280250

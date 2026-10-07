@@ -92,6 +92,9 @@
 
 /* Cc1-small / assembler-absolute symbols (one-insn symbolic macro). */
 __asm__(".extern g_screenFadeBlack, 16");
+__asm__(".extern g_vramTextureBase_28, 16");  /* func_0026FE58 */
+__asm__(".extern g_bRawReadFellBack_34, 16"); /* func_0026FE58 */
+__asm__(".extern g_cameraCallbackCount, 16"); /* func_00270220 */
 
 /* True small data (complete <=8-byte externs, %gp_rel). */
 extern s32 D_1A8630;             /* screen-sprite-FX alpha cap (set by the HUD fade) */
@@ -713,29 +716,41 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026FC88);
 
 /* func_0026FE58: kick the boot dialog-voice file load then build the splash
  * image's texture-upload descriptor. Streams the voice chunk described by the
- * disc TOC WAD fields (+0x32C/+0x330/+0x334) into g_proceduralAnimFrames, then
- * calls func_0026FC88 to assemble a texture descriptor (VRAM base
- * g_vramTextureBase[+0x28], 0x3FFC00 bytes) and latches its handle word into the
- * raw-read state block (+0x34). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_0026FE58);
+ * disc TOC WAD fields (sector = +0x330 + +0x32C, count = +0x334) into
+ * g_proceduralAnimFrames, then calls func_0026FC88 to assemble a texture
+ * descriptor for that buffer (VRAM base g_vramTextureBase[+0x28], 0x3FFC00)
+ * into a stack block and latches its first doubleword into the raw-read state
+ * block (+0x34). No params, no return.
+ * MATCHED on the s136os arm (task #1800). Both latched globals are reached
+ * through the one-insn symbolic macro (`lui; lw %lo` into the destination,
+ * and the `$at` form of the `sd`), so they are declared assembler-absolute
+ * with `.extern sym, 16` at unit level (directive only, emits nothing; see
+ * the device block at the top): a plain -G8 extern of <= 8 bytes would be
+ * %gp_rel, and an in-arm device is refused by the splice (cc1's own `, 4`
+ * line would then follow it).
+ * GUARD: as DebugPrintStub's — the s136os splice supplies the EE body.
+ * Native keeps its no-op: this is an IN-LEVEL native frame-path TRAP (tester
+ * inlevel_trap_list.md) — a blocking voice/file load (IOP RPC, deadlocks
+ * headless) plus a GS texture upload, not seed-reclaimable. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0026FE58)
+S136OS_SLOT(func_0026FE58);
 #else
 extern void StartFileLoadPumpingVoice(void *dst, s32 lbn, s32 size);
-extern void func_0026FC88(void *src, void *descOut, s32 vramBase, s32 size);
-extern u8 *g_proceduralAnimFrames;
+extern void func_0026FC88(void *src, void *descOut, s32 imageVram, s32 clutVram);
+extern u8 g_proceduralAnimFrames[];
 extern s32 g_discToc[];                 /* +0x32C/+0x330/+0x334 WAD fields */
 extern s32 g_vramTextureBase_28;        /* g_vramTextureBase + 0x28 */
 extern u64 g_bRawReadFellBack_34;       /* g_bRawReadFellBack + 0x34 */
-/* TODO(match): functional equivalent - not byte-exact; two callee-saves at
-   8-byte slot spacing (the 0x20-vs-0x10 packed-save wall). */
 void func_0026FE58(void) {
-    /* IN-LEVEL native frame-path: out-of-scope driven-frame TRAP (tester
-     * inlevel_trap_list.md). Its #else is a blocking voice/file load
-     * (StartFileLoadPumpingVoice -> IOP RPC, deadlocks headless) plus a GS
-     * texture upload - not seed-reclaimable. No-op (blocking-load contract, like
-     * the other in-level load/render traps). Reconstruction in git (commit
-     * 1fd00c0). NOTE: this is a file/texture-load trap, NOT an activeCamera-deref
-     * despite the trap-list grouping. */
+#ifndef TARGET_NATIVE
+    u64 desc[3];
+    s32 *toc = g_discToc;
+
+    StartFileLoadPumpingVoice(g_proceduralAnimFrames,
+                              toc[0x330 / 4] + toc[0x32C / 4], toc[0x334 / 4]);
+    func_0026FC88(g_proceduralAnimFrames, desc, g_vramTextureBase_28, 0x3FFC00);
+    g_bRawReadFellBack_34 = desc[0];
+#endif
 }
 #endif
 
@@ -913,35 +928,38 @@ void func_002701C0(void) {
 }
 #endif
 
-/* func_00270220: run every queued one-shot camera callback. D_001B1300+0x180
- * holds the queued-count; D_001B1300+0x140 is the function-pointer array. Calls
- * each pointer in turn (re-reading the live count each iteration so a callback
- * may shorten the queue), then clears the count back to 0. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00270220);
+/* func_00270220: run every queued one-shot camera callback (alias
+ * RunCameraCallbacks). g_cameraCallbackCount (D_001B1300+0x180) holds the
+ * queued count and g_cameraCallbacks (D_001B1300+0x140) the function-pointer
+ * array. Calls each pointer in turn, re-reading the live count each iteration
+ * (a callback may change the queue), then clears the count. No params, no
+ * return.
+ * MATCHED on the s136os arm (task #1800). The plain indexed loop is what
+ * gives the ROM's registers (i in $16, the strength-reduced slot pointer in
+ * $17); the pointer-walking do/while spellings swap them.
+ * The count is reached through the
+ * one-insn symbolic macro (`lui; lw %lo` and the `$at` form of the clearing
+ * `sw`), so it is declared assembler-absolute with `.extern sym, 16` at
+ * unit level (directive only, emits nothing; device block at the top); a
+ * plain -G8 extern would be %gp_rel.
+ * GUARD: as DebugPrintStub's — the s136os splice supplies the EE body.
+ * Native keeps its no-op: this is an IN-LEVEL native frame-path TRAP (tester
+ * inlevel_trap_list.md) — in-level the slots hold OVERLAY function pointers
+ * and the count (0x1B1480) sits in the relocated band. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00270220)
+S136OS_SLOT(func_00270220);
 #else
 extern s32 g_cameraCallbackCount;          /* D_001B1300 + 0x180 */
 extern void (*g_cameraCallbacks[])(void);  /* D_001B1300 + 0x140 */
-/* TODO(match): NOT byte-exact; this no-op stub is the native trap (below). The
-   real body (git 1fd00c0: `i = 0; if (count > 0) do { i++; (*slot)(); slot++; }
-   while (i < count); count = 0;`) was measured in t512 with g_cameraCallbackCount
-   modelled cc1-small/assembler-absolute (`__asm__(".extern g_cameraCallbackCount,
-   16")`, which the ROM's `lui v0,%hi; lw v0,%lo(v0)` / `lui at; sw zero,%lo(at)`
-   one-insn-macro expansions require — a plain -G8 extern reads %gp_rel, an
-   incomplete-array decl keeps %hi in s2 across the loop): sdk29 97.11% =
-   PACKED-SAVE (3 GPR saves, frame 0x30 vs 0x20) + REGNUM (i/slot get s1/s0, ROM
-   s0/s1; declaration order, if-scoping and an indexed for-loop do not flip it);
-   engine96 85.11% = SCHED-PROEPI (addiu sp after the first lw) + the same REGNUM
-   swap + a missing load-delay nop before jalr (the ROM emits the nop, as 2.9
-   does). Not promoted: neither arm closes. */
 void func_00270220(void) {
-    /* IN-LEVEL native frame-path: out-of-scope driven-frame TRAP (tester
-     * inlevel_trap_list.md). It calls every g_cameraCallbacks[] slot, which
-     * in-level hold OVERLAY function pointers (registered by overlay code), and
-     * its loop bound g_cameraCallbackCount (0x1B1480) is in the relocated band so
-     * reads garbage at the static address - faults/runaway on real EE. No-op:
-     * the camera-callback dispatch is overlay-driven in-level. Reconstruction in
-     * git (commit 1fd00c0). */
+#ifndef TARGET_NATIVE
+    s32 i;
+
+    for (i = 0; i < g_cameraCallbackCount; i++) {
+        g_cameraCallbacks[i]();
+    }
+    g_cameraCallbackCount = 0;
+#endif
 }
 #endif
 
@@ -1052,33 +1070,41 @@ void func_002704E0(void) {
     g_cameraState.activeCamera.p->unk7D = 0;
 }
 
-/* func_00270500: maintain a helper moby tied to a camera slot. When the slot's
- * type field (+0x86) is zero, lazily spawn the helper moby (func_00303818 with
- * the camera base) into g_cameraHelperMoby; when nonzero, free it if present.
- * Note: func_00303818 takes the camera base (cam - 0x60 from the +0x60 field
- * pointer the caller passes). */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/16E980", func_00270500);
+/* func_00270500: maintain the camera helper moby (alias
+ * UpdateCameraHelperMobySlot). When the slot's type field (+0x86) is zero,
+ * lazily spawn the helper moby at the camera position (func_00303818) into
+ * g_cameraHelperMoby; when nonzero, free it if present and clear the pointer.
+ * Params: cam - the camera slot whose type decides spawn vs free. No return.
+ * The ROM anchors one callee-saved base at g_cameraState + 0x1A0 (0x1B5320,
+ * g_heroCamMotion) and reaches both the helper pointer (+0xC4 = 0x1B53E4,
+ * g_cameraHelperMoby) and the spawn position (-0x60 = 0x1B52C0, the camera
+ * position) from it: the spawn argument is that FIXED address, not derived
+ * from `cam` (FACT #5824 — the former `cam - 0x60` arm was wrong). The
+ * TrackHeroMotionForCamera arm uses the same `&g_cameraState + 0x1A0` idiom.
+ * MATCHED on the s136os arm (task #1800; body from NOTE #9661, minus its
+ * empty fence after FreeMoby: removing it leaves the assembled function
+ * word-identical — cc1 emits the jal in reorder mode and gas pads the delay
+ * slot with the ROM's nop either way). No devices.
+ * GUARD: as DebugPrintStub's — the s136os splice supplies the EE body;
+ * native compiles this C. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_00270500)
+S136OS_SLOT(func_00270500);
 #else
-extern void *func_00303818(void *cameraBase);
-extern void *g_cameraHelperMoby;
-/* TODO(match): functional equivalent - not byte-exact; t512: sdk29 53.92%
-   (PACKED-SAVE: s0+ra), engine96 73.92%. Beyond the frame, the ROM anchors a
-   callee-saved base at 0x1B5320 (g_heroCamMotion = g_cameraState+0x1A0),
-   reaches g_cameraHelperMoby as 0xC4(s0) and passes s0-0x60 = &g_cameraState.
-   camPos (0x1B52C0) to func_00303818 — a FIXED address, not `cam - 0x60`
-   (FACT #5824 / #5426; this arm's argument is wrong). Reproducing it needs
-   the arm to address g_heroCamMotion (0x1B5320, the same anchor func_00271FE8
-   uses; pinned in symbol_addrs by task #1474), not done here. */
+extern void *func_00303818(void *pos);
+typedef struct CameraHelperView {   /* g_cameraState + 0x1A0 (0x1B5320) */
+    /* 0x00 */ u8 pad0[0xC4];
+    /* 0xC4 */ void *helperMoby;      /* g_cameraHelperMoby (0x1B53E4) */
+} CameraHelperView;
 void func_00270500(Camera *cam) {
     extern void FreeMoby(void *moby);
+    CameraHelperView *m = (CameraHelperView *)((char *)&g_cameraState + 0x1A0);
     if (cam->type == 0) {
-        if (g_cameraHelperMoby == NULL) {
-            g_cameraHelperMoby = func_00303818((char *)cam - 0x60);
+        if (m->helperMoby == NULL) {
+            m->helperMoby = func_00303818((char *)m - 0x60);
         }
-    } else if (g_cameraHelperMoby != NULL) {
-        FreeMoby(g_cameraHelperMoby);
-        g_cameraHelperMoby = NULL;
+    } else if (m->helperMoby != NULL) {
+        FreeMoby(m->helperMoby);
+        m->helperMoby = NULL;
     }
 }
 #endif
