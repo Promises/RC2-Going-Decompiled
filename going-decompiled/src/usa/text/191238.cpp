@@ -266,7 +266,7 @@ extern s32  func_0011EEA0(void);               /* sceSifSyncIop */
 extern void DebugPrintStub(const char *fmt, ...);
 extern s32  sceSifInitRpc(s32 mode);
 extern void func_0011F5E0(s32 arg);
-extern void sceSifInitIopHeap(void);
+extern s32  sceSifInitIopHeap(void);
 extern void func_0011F628(void);
 extern void func_0011EAC8(void);               /* sceSifLoadFileReset */
 extern s32  sceCdMmode(s32 media);
