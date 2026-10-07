@@ -399,13 +399,58 @@ void *func_002E0568(void *rec) {
 }
 #endif
 
-/* func_002E05C0: PARKED #70 (#else not confident) — emits a GIF/DMA packet into
- * g_frameDmaCursor (GIFtag 0x30000003 / 0x50000003 / 0x13000000; indexes D_261CF0 by
- * arg2*0x30 and the gp-rel D_1ABE08 by arg1) then tail-calls func_002E1A58 — a large
- * handwritten DMA/VU helper whose arity is ambiguous, so the call args can't be cleanly
- * resolved. Won't guess. Needs func_002E1A58's signature + the D_261CF0/D_1ABE08 table
- * types traced before a faithful #else. */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E05C0);
+/* g_frameDmaCursorGp: a second assembler name for g_frameDmaCursor (FACT #8036's
+ * equate, the 188858.c precedent), sized 4 so gas makes its one access %gp_rel
+ * while every other g_frameDmaCursor access in this unit stays absolute (its own
+ * `.extern g_frameDmaCursor, 16` above). An ADDRESSING-MODEL DEVICE (RULING
+ * #8620): it emits nothing, the relocation names g_frameDmaCursor, and the object
+ * has no g_frameDmaCursorGp symbol. File scope so the 2.9 TU and the s136os TU
+ * agree on its class. Used by func_002E05C0 and BuildShrubDrawSegment. */
+#ifndef TARGET_NATIVE
+__asm__(".extern g_frameDmaCursorGp, 4\n\tg_frameDmaCursorGp = g_frameDmaCursor");
+extern u8 *g_frameDmaCursorGp;
+#else
+#define g_frameDmaCursorGp g_frameDmaCursor
+#endif
+
+/**
+ * func_002E05C0 — open a GIF upload in the frame DMA chain, then run the
+ * handwritten packet builder func_002E1A58.
+ *
+ * Writes one DMA qword at g_frameDmaCursor: a REF tag 0x30000003 (qwc 3)
+ * whose address word is the 0x30-byte record D_261CF0[c], the VIF word
+ * 0x13000000 and 0x50000003; advances the cursor 0x10, then calls
+ * func_002E1A58(a, D_1ABE08[b]). func_002E1A58 is handwritten and reads only
+ * $4/$5, so it takes two arguments. No return.
+ *   a  passed through to func_002E1A58 (compared against its byte list)
+ *   b  index into the 2-word table D_1ABE08 (0x1ABE08..0x1ABE10, so gp-relative)
+ *   c  record index into D_261CF0
+ *
+ * GUARD (task #1814): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback. On native it is plain C.
+ * Byte-exact with every store going through g_frameDmaCursor afresh: the ROM
+ * re-loads the cursor before each of the four stores (the s136 arm has no
+ * strict aliasing, so a u32 store may alias the pointer), and the write-back
+ * goes through g_frameDmaCursorGp for the ROM's %gp_rel store in the jal delay
+ * slot. D_1ABE08 is declared with its 8-byte extent so the base is %gp_rel. */
+extern s32  D_1ABE08[2];
+extern u8   D_261CF0[][0x30];
+extern void func_002E1A58(s32 a, s32 b);
+
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002E05C0)
+S136OS_SLOT(func_002E05C0);
+#else
+void func_002E05C0(s32 a, s32 b, s32 c) {
+    ((u32 *)g_frameDmaCursor)[0] = 0x30000003;
+    ((u32 *)g_frameDmaCursor)[1] = (u32)D_261CF0[c];
+    ((u32 *)g_frameDmaCursor)[2] = 0x13000000;
+    ((u32 *)g_frameDmaCursor)[3] = 0x50000003;
+    g_frameDmaCursorGp = g_frameDmaCursor + 0x10;
+    func_002E1A58(a, D_1ABE08[b]);
+}
+#endif
 
 /* Sibling of func_002E07F8: builds the same 32-scanline-strip framebuffer-fill
  * GIF packet, but first appends a standalone GS register write (AppendGsRegPacket),
@@ -744,19 +789,6 @@ extern void CullAndEmitShrubs(void);
 extern void func_00283558(void *list, s32 a, s32 b);
 extern void CloseShrubDrawSegment(void);
 
-/* g_frameDmaCursorGp: a second assembler name for g_frameDmaCursor (FACT #8036's
- * equate, the 188858.c precedent), sized 4 so gas makes its one access %gp_rel
- * while every other g_frameDmaCursor access in this unit stays absolute (its own
- * `.extern g_frameDmaCursor, 16` above). An ADDRESSING-MODEL DEVICE (RULING
- * #8620): it emits nothing, the relocation names g_frameDmaCursor, and the object
- * has no g_frameDmaCursorGp symbol. File scope so the 2.9 TU and the s136os TU
- * agree on its class. Used by BuildShrubDrawSegment only. */
-#ifndef TARGET_NATIVE
-__asm__(".extern g_frameDmaCursorGp, 4\n\tg_frameDmaCursorGp = g_frameDmaCursor");
-extern u8 *g_frameDmaCursorGp;
-#else
-#define g_frameDmaCursorGp g_frameDmaCursor
-#endif
 
 /**
  * BuildShrubDrawSegment — build the frame's shrub draw segment.
@@ -1324,28 +1356,41 @@ s32 ComputeEmitterPan(SoundEmitterSlot *slot, Vec4 *pos) {
 }
 #endif
 
-__asm__(".extern D_1A7BA8, 16");
-extern s32 D_1A7BA8; /* tuning input A (screen/scale base) */
-__asm__(".extern D_1A7BA4, 16");
-extern s32 D_1A7BA4; /* tuning input B */
+/* Absolute (lui/lw) like every ROM access to the two sliders. */
+__asm__(".extern g_musicVolume, 16");
+extern s32 g_musicVolume; /* 0x1A7BA8 - audio-options music slider (0..0x400) */
+__asm__(".extern g_sfxVolume, 16");
+extern s32 g_sfxVolume;   /* 0x1A7BA4 - audio-options effects slider (0..0x400) */
 
-/* Recompute the sky/sound layout header at g_listenerPosHistory+0x48..0x5C from
- * the two tuning inputs: scaled fractions of D_1A7BA8 plus a fixed 0x266.
- * NEAR-MISS (~72%): the original schedules the three products across the EE's
- * two integer multipliers (mult / mult1) in a pattern this cc1 won't reproduce
- * (it picks a different pipe assignment).  The C is faithful. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1DFF80", func_002E5698);
+/**
+ * func_002E5698 — recompute the per-channel volume mix from the two
+ * audio-options sliders (once named ComputeAudioChannelMix; see
+ * symbol_addrs g_sndChannelVolumes = g_listenerPosHistory + 0x48).
+ *
+ * Writes six s32 channel volumes at g_listenerPosHistory + 0x48..0x5C:
+ * music*7/10, sfx, music, music*6/10, the fixed 0x266, music*0x19/32.
+ * No params, no return. Called by InitSoundEmitterSystem and the audio menus.
+ *
+ * GUARD (task #1814): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback. On native it is plain C.
+ * Byte-exact as written, in plain source order: the ROM's mult/div pipe
+ * schedule that the old "~72% near-miss" note blamed on cc1 was a 2.9-arm
+ * result (NOTE #7944); SN 1.36 emits it itself. The stores are addressed off
+ * g_listenerPosHistory because the ROM's relocations name that symbol. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002E5698)
+S136OS_SLOT(func_002E5698);
 #else
 void func_002E5698(void) {
-    s32 a = D_1A7BA8;
-    s32 *hdr = (s32 *)(g_listenerPosHistory + 0x48);
-    hdr[0] = (a * 7) / 10;       /* 0x48 */
-    hdr[1] = D_1A7BA4;           /* 0x4C */
-    hdr[2] = a;                  /* 0x50 */
-    hdr[3] = (a * 6) / 10;       /* 0x54 */
-    hdr[4] = 0x266;              /* 0x58 */
-    hdr[5] = (a * 0x19) / 32;    /* 0x5C */
+    s32 music = g_musicVolume;
+    u8 *hist = g_listenerPosHistory;
+    *(s32 *)(hist + 0x48) = (music * 7) / 10;
+    *(s32 *)(hist + 0x4C) = g_sfxVolume;
+    *(s32 *)(hist + 0x50) = music;
+    *(s32 *)(hist + 0x54) = (music * 6) / 10;
+    *(s32 *)(hist + 0x58) = 0x266;
+    *(s32 *)(hist + 0x5C) = (music * 0x19) / 32;
 }
 #endif
 
