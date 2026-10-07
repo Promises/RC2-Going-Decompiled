@@ -823,12 +823,15 @@ s32 AddItemToInventoryOrder(s32 itemId) {
 }
 
 /* Linear-scan the 0x38 inventory item slots for the weapon variant whose
- * nameStringId matches `name`; return that variant's `exists` field, else 0. */
-s32 FindWeaponSlotByName(s32 name) {
+ * iconId (+0x3C) matches `icon`; return that variant's `exists` field, else 0.
+ * Despite the function's name, the field it compares is the HUD icon id
+ * (weapon.h); its one ROM caller, func_002D9D60, passes a record's +0x0
+ * halfword (0x2DA07C). */
+s32 FindWeaponSlotByName(s32 icon) {
     s32 i = 0;
     do {
         u8 slot = g_itemEquippedSlot[i];
-        if (g_weaponTable[slot].nameStringId == name) {
+        if (g_weaponTable[slot].iconId == icon) {
             return g_weaponTable[slot].exists;
         }
         i++;
@@ -3940,8 +3943,8 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C710);
  * slot count (8) and the &D_1A8DD0 callback into g_hudMobySpawnStart+0x28/+0x2C,
  * resets the wheel cursor (D_1A8D48=0), then for each of the 8 source item ids
  * in the g_gsPixelOffsetY+0x64 table copies the id into the wheel record
- * (D_002550F0, stride 0x1C, +0x18) and resolves the weapon's nameStringId
- * (g_weaponTable[g_itemEquippedSlot[id]].nameStringId) into the record's +0x0.
+ * (D_002550F0, stride 0x1C, +0x18) and resolves the weapon's icon id
+ * (g_weaponTable[g_itemEquippedSlot[id]].iconId) into the record's +0x0.
  *
  * WALL (gp/absolute-mix + reloaded-ptr): the source table is addressed as the
  * named sub-object g_gsPixelOffsetY+0x64 with a running displacement, and the
@@ -3951,7 +3954,7 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028C710);
 extern s32 g_equippedItemSlots[8];            /* currently-equipped item ids (0x1A73B8) */
 
 typedef struct WheelRecord {
-    s32 nameStringId;   /* +0x00 */
+    s32 iconId;         /* +0x00: the weapon's WeaponDef.iconId */
     u8  _pad04[0x14];
     s32 itemId;         /* +0x18: resolved item id for this wheel slot */
 } WheelRecord;                                /* stride 0x1C */
@@ -4006,7 +4009,7 @@ void func_0028C728(void) {
         n--;
         src++;
         rec->itemId = id;
-        rec->nameStringId = *(u16 *)((u8 *)table + *(u8 *)(id + (s32)slots) * stride + 0x3C);
+        rec->iconId = *(u16 *)((u8 *)table + *(u8 *)(id + (s32)slots) * stride + 0x3C);
         rec++;
     } while (n >= 0);
 }
@@ -5245,7 +5248,7 @@ void func_0028EB10(void) {
     w = &g_weaponTable[slot];
     if (itemId != 0 && w->exists != 0) {
         D_1A8FB4 = itemId;
-        D_1A8FB8 = func_0028BE10(0x10, w->nameStringId,
+        D_1A8FB8 = func_0028BE10(0x10, w->iconId,
                                  (s32)&func_0028E7A0, (s32)D_002907C0,
                                  (s32)&func_0028E7D0, (s32)&g_weaponAmmo[itemId],
                                  w->ammoCapacity);
