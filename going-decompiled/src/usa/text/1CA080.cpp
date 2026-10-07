@@ -1213,7 +1213,22 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", MenuScreenUpdat
  * anything else = plain pop. Then, if the equipped-weapon slot changed
  * (+0x40 != 0 and != +0x30), plays that weapon's voice line via its
  * g_weaponTable entry, bracketed by dialog-voice pumps.
- * Matching arm stays INCLUDE_ASM (later cc1 packs 8-byte save slots vs our 16). */
+ *
+ * Byte-exact on the s136os arm (task #1739), no devices. What carries it (solo
+ * s136 harness, difflib alignment against the ROM):
+ *   - the block is read as MEMBERS of a struct cast of g_menuScreenBlock (the
+ *     task #1712 lever). The ROM forms the full base once in $4 and reads
+ *     0x24/0x1C/0xF4 off it; through byte casts cc1 folds the offsets into
+ *     %lo(g_menuScreenBlock+N) and forwards the decremented countdown instead of
+ *     re-reading it: 35 words off;
+ *   - the weapon's voice line is a member of a struct cast of g_weaponTable
+ *     (stride 0xE0); the byte cast folds +0x14 into %lo(g_weaponTable) (2 words);
+ *   - sub-states 3, 4 and 6 are three separate arms with the same call: the ROM
+ *     has three copies of the argument set-up, and only the jal is shared.
+ *     Written as one `sub == 3 || sub == 4 || sub == 6` arm it builds 79 words.
+ * The ROM writes two of the three re-formed `addiu $16,$16,%lo(g_menuScreenBlock)`
+ * as the raw immediate 0x27C0 with no relocation; the build emits the %lo
+ * relocation, which links to the same word. */
 extern s16 g_fileLoadState;
 extern s32 g_mapCurrentLevel;
 extern u8 g_itemEquippedSlot[];
@@ -1221,41 +1236,59 @@ extern u8 g_weaponTable[];
 extern void PopGameState(s32 a, s32 b);
 extern void PumpDialogVoiceSystem(s32 blocking);
 extern void func_00294CD0(s32 arg);
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", func_002CBD68);
+/* The fields of the menu-screen block that the leave handler reads. */
+struct MenuExitBlock {
+    u8  unk0[0x1C];
+    s32 subState;     /* 0x1C: the queued transition */
+    u8  unk20[0x4];
+    s32 countdown;    /* 0x24: frames left before the transition commits */
+    u8  unk28[0x8];
+    s32 prevSlot;     /* 0x30: equipped slot on entry */
+    u8  unk34[0xC];
+    s32 newSlot;      /* 0x40: equipped slot to announce, 0 = none */
+    u8  unk44[0xB0];
+    s32 stateArg;     /* 0xF4: argument for the game-state push */
+};
+#define g_menuExit (*(struct MenuExitBlock *)g_menuScreenBlock)
+/* One g_weaponTable entry (stride 0xE0), as far as the leave handler reads it. */
+struct WeaponVoiceField {
+    u8  unk0[0x14];
+    s32 voiceLine;    /* 0x14 */
+    u8  unk18[0xC8];
+};
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002CBD68)
+S136OS_SLOT(func_002CBD68);
 #else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 56.44% -> STRUCTURAL,
- * first differing row @3: ROM `addiu a0,v0,0  [LO16 0x001F27C0]` vs `addiu s0,v0,0  [LO16 0x001F27C0]`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 68.92% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-16` vs `addiu sp,sp,-32`. */
 void func_002CBD68(void) {
-    u8 *mb = g_menuScreenBlock;
     s32 sub;
 
-    if (*(s32 *)(mb + 0x24) != 0)
-        *(s32 *)(mb + 0x24) -= 1;
-    if (*(s32 *)(mb + 0x24) != 0)
+    if (g_menuExit.countdown != 0) {
+        g_menuExit.countdown -= 1;
+    }
+    if (g_menuExit.countdown != 0) {
         return;
-    if (g_fileLoadState != 0)
+    }
+    if (g_fileLoadState != 0) {
         return;
-
-    sub = *(s32 *)(mb + 0x1C);
+    }
+    sub = g_menuExit.subState;
     if (sub == 2) {
         PopGameState(0, g_mapCurrentLevel);
-    } else if (sub == 3 || sub == 4 || sub == 6) {
-        RequestGameStateChange(1, 1, 0, *(s32 *)(mb + 0xF4), 0);
+    } else if (sub == 3) {
+        RequestGameStateChange(1, 1, 0, g_menuExit.stateArg, 0);
+    } else if (sub == 4) {
+        RequestGameStateChange(1, 1, 0, g_menuExit.stateArg, 0);
+    } else if (sub == 6) {
+        RequestGameStateChange(1, 1, 0, g_menuExit.stateArg, 0);
     } else if (sub == 5) {
-        RequestGameStateChange(2, 1, *(s32 *)(mb + 0xF4), 0, 0);
+        RequestGameStateChange(2, 1, g_menuExit.stateArg, 0, 0);
     } else {
         PopGameState(0, 0);
     }
-
-    if (*(s32 *)(mb + 0x40) != 0 &&
-        *(s32 *)(mb + 0x30) != *(s32 *)(mb + 0x40)) {
-        u8 *weapon;
+    if (g_menuExit.newSlot != 0 && g_menuExit.prevSlot != g_menuExit.newSlot) {
         PumpDialogVoiceSystem(1);
-        weapon = g_weaponTable + g_itemEquippedSlot[*(s32 *)(mb + 0x40)] * 0xE0;
-        func_00294CD0(*(s32 *)(weapon + 0x14));
+        func_00294CD0(((struct WeaponVoiceField *)g_weaponTable)
+                          [g_itemEquippedSlot[g_menuExit.newSlot]].voiceLine);
         PumpDialogVoiceSystem(1);
     }
     PumpDialogVoiceSystem(1);
@@ -1294,6 +1327,16 @@ s32 IsLevelListEntryEnabled(s32 idx) {
  *     the destination register as the ROM does. Without the `.extern` the
  *     address goes gp-relative (76 words); without the small declaration cc1
  *     splits it through a temporary (4/78). */
+/* The level-select scroller rooted at g_nLevelSelectListCount, shared by
+ * LevelSelectListHandleInput and LevelSelectListRender. */
+typedef struct {
+    s32 count;        /* 0x0: index of the last entry */
+    s32 selected;     /* 0x4 */
+    s32 *entries;     /* 0x8: two string ids per entry, detail then name */
+    s32 enabled[1];   /* 0xC: per-entry enabled flag, count + 1 of them */
+} LevelListScroller;
+#define g_levelList (*(LevelListScroller *)&g_nLevelSelectListCount)
+
 #if !defined(TARGET_NATIVE) && !defined(S136OS_LevelSelectListHandleInput)
 S136OS_SLOT(LevelSelectListHandleInput);
 #else
@@ -1302,13 +1345,6 @@ extern u8 g_abLevelAvailableFlags[8]; /* really one byte per level; see the doc 
 extern u8 g_levelSelectEntries[];
 extern u8 D_1A7C09;
 extern void RequestLevelExit(s32 destination, s32 commitSave);
-/* The scroller rooted at g_nLevelSelectListCount. */
-typedef struct {
-    s32 count;
-    s32 selected;
-    s32 entries;
-    s32 enabled[1];
-} LevelListScroller;
 s32 LevelSelectListHandleInput(s32 flags) {
     LevelListScroller *scroller;
     s32 result = -1;
@@ -1343,53 +1379,63 @@ s32 LevelSelectListHandleInput(s32 flags) {
 /* LevelSelectListRender: draws the galactic-map level-select list. Dims the screen
  * (DrawFullScreenTint), then for each enabled entry (scroller flag at +0xC+i*4 != 0)
  * of the g_nLevelSelectListCount-rooted scroller, formats "<name> <detail>" into a
- * local buffer (func_00115DA8 sprintf with format D_1AB920, from the two localized
- * strings at entry+0x4 and entry+0x0 of the scroller's entry array at +0x8), draws a
- * row background bar (func_0027F208) and the row text (func_002801B8) at
+ * local buffer (sprintf with format D_1AB920, from the two localized strings at
+ * entries[2i+1] and entries[2i]), draws a row background bar (func_0027F208,
+ * colour 0x00442D00) and the row text (func_002801B8) at
  * y = D_1AB918 + row*D_1AB914 where row = 2*i (or 0x24 for the special last row
- * i==0x18); the row color is the highlight 0x80FFDE8D when it is the selected row
- * (scroller +0x4) else 0x80808080.
- * Wall: 8-byte-packed-save (9 GPRs) — later cc1 save-slot packing not reproduced.
- * Preserved as portable C. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", LevelSelectListRender);
+ * i==0x18). The text colour is the highlight 0x80FFDE8D for the selected row
+ * (scroller +0x4), else 0x80808080, and 0x80000000 if the entry's flag reads 0
+ * when the text is drawn. The buffer's last byte is cleared once, up front.
+ *
+ * Byte-exact on the s136os arm (task #1739), no devices. What carries it (solo
+ * s136 harness, difflib alignment against the ROM; each removed alone):
+ *   - two counters: the loop runs on j = 2*i (row and entry index) and keeps i
+ *     beside it, as the ROM does (`slt (count << 1), j`). One counter: 93 words;
+ *   - the scroller is read through the g_levelList struct cast at every use, so
+ *     only %hi(g_nLevelSelectListCount) is held and the base is re-formed after
+ *     the entry test. A `list` local holding the pointer: 33 words off;
+ *   - the enabled flag is re-read before the text is drawn (the ROM's second
+ *     `lw 0($20)` and `movz 0x80000000`). Without it: 94 words;
+ *   - void: the ROM leaves $v0 alone. Returning s32 0 adds a `move v0,zero`;
+ *   - sprintf is declared value-returning (it returns the length; the ROM calls
+ *     the `sprintf` symbol). Called as the void-declared func_00115DA8 alias,
+ *     the first row-y temporary lands in $v0 instead of $v1 (3 words).
+ * The previous #else drew the bar in 0x60442D00, never cleared buf[0xFF] and
+ * had no 0x80000000 case: those were defects, not spellings. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_LevelSelectListRender)
+S136OS_SLOT(LevelSelectListRender);
 #else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 47.76% -> STRUCTURAL,
- * first differing row @2: ROM `(none)` vs `sd s6,304(sp)`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 58.31% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-336` vs `addiu sp,sp,-416`. */
 extern void func_002801B8(s32 x, s32 y, u64 color, char *str, s64 sel);
 extern void func_0027F208(s32 y0, s32 y1, s32 x0, s32 x1, s32 h, s32 color);
-extern void func_00115DA8(char *dst, const char *fmt, ...); /* SDK sprintf */
+extern s32 sprintf(char *dst, const char *fmt, ...);
 extern s32 D_1AB914;             /* row pitch */
 extern s32 D_1AB918;             /* base row y */
 extern char D_1AB920[];          /* "<name> <detail>" format string */
-s32 LevelSelectListRender(void) {
+void LevelSelectListRender(void) {
     char buf[0x100];
-    s32 *scroller = &g_nLevelSelectListCount;
-    s32 i;
+    s32 i = 0;
+    s32 j;
 
+    buf[0xFF] = 0;
     DrawFullScreenTint(0, 0, 0, 0x60);
-    for (i = 0; i <= g_nLevelSelectListCount; i++) {
-        s32 *entry;
-        s32 flag = *(s32 *)((char *)scroller + 0xC + i * 4);
-        s32 row, y;
-        char *name, *detail;
-        u32 color;
-        if (flag == 0) {
-            continue;
+    for (j = 0; j <= g_nLevelSelectListCount * 2; j += 2) {
+        if (g_levelList.enabled[i] != 0) {
+            s32 row = (i != 0x18) ? j : 0x24;
+            char *name = GetLocalizedString(g_levelList.entries[j + 1]);
+            char *detail = GetLocalizedString(g_levelList.entries[j]);
+            u32 color;
+
+            sprintf(buf, D_1AB920, name, detail);
+            func_0027F208(D_1AB918 + row * D_1AB914, D_1AB918 + row * D_1AB914 + 0xF,
+                          0x40, 0x1C0, 0x60, 0x442D00);
+            color = (g_levelList.selected == i) ? 0x80FFDE8D : 0x80808080;
+            if (g_levelList.enabled[i] == 0) {
+                color = 0x80000000;
+            }
+            func_002801B8(0x100, D_1AB918 + row * D_1AB914, color, buf, -1);
         }
-        entry = (s32 *)((char *)scroller[2] + i * 8);   /* scroller[0x8] = entry array */
-        row = (i != 0x18) ? i * 2 : 0x24;
-        name = GetLocalizedString(entry[1]);            /* entry+0x4 */
-        detail = GetLocalizedString(entry[0]);          /* entry+0x0 */
-        func_00115DA8(buf, D_1AB920, name, detail);
-        y = D_1AB918 + row * D_1AB914;
-        func_0027F208(y, y + 0xF, 0x40, 0x1C0, 0x60, 0x60442D00);
-        color = (scroller[1] == i) ? 0x80FFDE8D : 0x80808080;
-        func_002801B8(0x100, y, color, buf, -1);
+        i++;
     }
-    return 0;
 }
 #endif
 
@@ -1482,59 +1528,84 @@ s32 func_002CCA18(s32 action) {
  * done (0). Level-select list: on a nav/confirm press (0x910) it latches
  * block+0x1C (2 if block+0x8==4 else 1) and returns 1; otherwise it calls the
  * list's per-frame handler (function pointer at g_pLevelSelectListEntries+0x84)
- * and returns whether it succeeded (>=0). Screen "Id10" ticks func_0029DC70.
- * Map-back-target and galactic-map screens tick only while D_1AB930 is clear:
- * the former calls func_0029D0C8(0); the latter runs GalacticMapScreenTick(0)
- * (latching block+0x1C as above when it fires), then func_0029D138(pad), and
- * returns whether the block's back-target (block+0x18) is no longer the
- * map-back-target screen. All other active screens (incl. those two while
- * D_1AB930 is set, and the inert D_0025A038/D_00259B28 ids) tick to no-op -> 0.
+ * with the pad buttons and returns whether it succeeded (>=0). Screen "Id10"
+ * ticks func_0029DC70. Map-back-target and galactic-map screens tick only while
+ * D_1AB930 is clear: the former calls func_0029D0C8(0); the latter runs
+ * GalacticMapScreenTick(0) (latching block+0x1C as above when it fires), then
+ * func_0029D138(pad), and returns whether the block's back-target (block+0x18)
+ * is no longer the map-back-target screen. All other active screens (incl.
+ * those two while D_1AB930 is set) tick to no-op -> 0. The D_0025A038 and
+ * D_00259B28 screens are tested, D_1AB930 is read for them, and nothing is
+ * done: their arms are empty in the ROM too.
  *
- * TODO(match): functional equivalent - not byte-exact. 8-byte-packed-save wall
- * (saves 4 GPRs incl $31; later cc1 packs save slots 8-byte vs our 16-byte);
- * preserved as portable C, the matching arm stays INCLUDE_ASM. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", TickActiveMenuScreen);
-#else
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 69.00% -> SPLIT-HIREG,
- * first differing row @1: ROM `lui v1,0x0  [HI16 0x001F27C0]` vs `lui v0,0x0  [HI16 0x001F27C0]`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 63.14% -> SCHED-TIEBREAK, first differing row @2: ROM `sd s1,8(sp)` vs `(none)`. */
+ * Byte-exact on the s136os arm (task #1739). What carries it (solo s136
+ * harness, difflib alignment against the ROM; each removed alone):
+ *   - the block is read as members of the MenuTickBlock cast (the task #1712
+ *     lever): the ROM re-reads +0x14 off a re-formed base after each D_1AB930
+ *     test. Through byte casts: 93 words, 32 off;
+ *   - D_1AB930 is declared volatile, a CODEGEN DEVICE in RULING #8404's form,
+ *     not a claim that it changes asynchronously. The ROM keeps the reads the
+ *     two empty arms make, and re-reads the screen after every read of it; a
+ *     plain read lets cc1 delete both empty tests (82 words). Writer census:
+ *     no store in asm/usa names D_1AB930; its other readers are
+ *     RenderMenuScreenWidgets and 1D54C0's func_002DA740, both still asm;
+ *   - the two empty arms themselves (without them: 82 words);
+ *   - the list handler is called with the pad buttons, which the ROM already
+ *     holds in $a0 from the 0x910 test. Called with no argument: 4 off;
+ *   - `if (handler(...) >= 0) result = 1;` gives the ROM's slti/xori. Every
+ *     single-expression spelling (`>= 0`, `!(< 0)`, `? 0 : 1`, `^ 1`) comes out
+ *     as nor/srl (2 off). */
 extern s32 func_0029D0C8(s32 arg);
 extern s32 func_0029D138(s32 arg);
 extern s32 func_0029DC70(void);
 extern s32 GalacticMapScreenTick(s32 arg);
 extern s32 g_padButtonsPressed;
-extern s32 D_1AB930;
+extern volatile s32 D_1AB930;   /* volatile: codegen device, see above */
 extern u8 g_MenuScreen_LevelSelectList[];
 extern u8 g_MenuScreen_Id10[];
 extern u8 g_MenuScreen_MapBackTarget[];
 extern u8 g_MenuScreen_GalacticMap[];
 extern u8 g_pLevelSelectListEntries[];
+extern u8 D_0025A038[];
+extern u8 D_00259B28[];
+/* The fields of the menu-screen block the screen tick reads. */
+struct MenuTickBlock {
+    u8  unk0[0x8];
+    s32 mode;         /* 0x08 */
+    u8  unkC[0x8];
+    u8 *screen;       /* 0x14: the active MenuScreen object */
+    u8 *backTarget;   /* 0x18 */
+    s32 subState;     /* 0x1C */
+};
+#define g_menuTick (*(struct MenuTickBlock *)g_menuScreenBlock)
+#if !defined(TARGET_NATIVE) && !defined(S136OS_TickActiveMenuScreen)
+S136OS_SLOT(TickActiveMenuScreen);
+#else
 s32 TickActiveMenuScreen(void) {
-    u8 *screen = *(u8 **)(g_menuScreenBlock + 0x14);
     s32 result = 0;
 
-    if (screen == g_MenuScreen_LevelSelectList) {
+    if (g_menuTick.screen == g_MenuScreen_LevelSelectList) {
         if (g_padButtonsPressed & 0x910) {
-            *(s32 *)(g_menuScreenBlock + 0x1C) =
-                (*(s32 *)(g_menuScreenBlock + 0x8) == 4) ? 2 : 1;
+            g_menuTick.subState = (g_menuTick.mode == 4) ? 2 : 1;
             result = 1;
         } else {
-            s32 (*tick)(void) = *(s32 (**)(void))(g_pLevelSelectListEntries + 0x84);
-            result = (tick() >= 0);
+            s32 (*handler)(s32) = *(s32 (**)(s32))(g_pLevelSelectListEntries + 0x84);
+            if (handler(g_padButtonsPressed) >= 0) {
+                result = 1;
+            }
         }
-    } else if (screen == g_MenuScreen_Id10) {
+    } else if (g_menuTick.screen == g_MenuScreen_Id10) {
         func_0029DC70();
-    } else if (screen == g_MenuScreen_MapBackTarget && D_1AB930 == 0) {
+    } else if (g_menuTick.screen == g_MenuScreen_MapBackTarget && D_1AB930 == 0) {
         func_0029D0C8(0);
-    } else if (screen == g_MenuScreen_GalacticMap && D_1AB930 == 0) {
+    } else if (g_menuTick.screen == g_MenuScreen_GalacticMap && D_1AB930 == 0) {
         if (GalacticMapScreenTick(0) != 0) {
-            *(s32 *)(g_menuScreenBlock + 0x1C) =
-                (*(s32 *)(g_menuScreenBlock + 0x8) == 4) ? 2 : 1;
+            g_menuTick.subState = (g_menuTick.mode == 4) ? 2 : 1;
         }
         func_0029D138(g_padButtonsPressed);
-        result = (*(u8 **)(g_menuScreenBlock + 0x18) != g_MenuScreen_MapBackTarget);
+        result = (g_menuTick.backTarget != g_MenuScreen_MapBackTarget);
+    } else if (g_menuTick.screen == D_0025A038 && D_1AB930 == 0) {
+    } else if (g_menuTick.screen == D_00259B28 && D_1AB930 == 0) {
     }
     return result;
 }

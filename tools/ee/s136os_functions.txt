@@ -449,3 +449,6 @@ usa text/1B4218 ChainSecondaryVoice
 usa text/1B4218 ResolveMobyEdgeConstraint
 usa text/1CA080 func_002CD450
 usa text/1CA080 LevelSelectListHandleInput
+usa text/1CA080 func_002CBD68
+usa text/1CA080 LevelSelectListRender
+usa text/1CA080 TickActiveMenuScreen
