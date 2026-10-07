@@ -1957,10 +1957,14 @@ void func_002F8228(void) {
  * list from current player state.
  *
  * Eight parallel 36-row tables drive the build, one column per record field:
- *   D_26D528 = name string id (-> GetLocalizedString), D_26D5B8 = aux word,
- *   D_26D648 = the g_shipCustomization bit-field mask, D_26D6D8 = expected/aux word,
- *   D_26D768 = item id, D_26D7F8 = required skill-point count, D_26D890 = price/def
- *   word, D_1AD300 = extra word (ship-customization records only). The original
+ *   g_shipOptionNameTextId = name text id (-> GetLocalizedString), D_26D5B8 = aux word,
+ *   g_shipOptionFieldMask = the g_shipCustomization bit-field the row lives in,
+ *   g_shipOptionFieldValue = the field value the row stands for (always inside its
+ *   mask), D_26D768 = item id, g_shipOptionSkillPointsRequired = minimum
+ *   CountSkillPointsCompleted(), D_26D890 = price/def word, D_1AD300 = extra word
+ *   (ship-customization records only). Rows 13..35 are fields 0xC, 0x3 and
+ *   0x1F0000 (the ship texture bits); only rows 17..35 carry a skill-point
+ *   minimum (task #1761 read the four named columns from the ROM). The original
  *   copies each table into a stack scratch buffer first; since nothing writes them
  *   in between, those reads are equivalent to indexing the globals directly (done
  *   here — the copies are elided).
@@ -1968,13 +1972,13 @@ void func_002F8228(void) {
  * Two groups of entries are appended (running count at g_vendorUi+0x740, records
  * stride 0x1C):
  *   1. Ship-customization upgrades (rows 0..12): for each category, the field value
- *      v = (g_shipCustomization & D_26D648[row]) >> shift selects the next buyable
+ *      v = (g_shipCustomization & g_shipOptionFieldMask[row]) >> shift selects the next buyable
  *      variant. 1-bit fields append their row when v == 0; 2-bit fields append the
  *      level-1 row at v == 0 and the level-2 row at v == 1, nothing once maxed
  *      (v >= 2). One g_vendorUi record is emitted per collected row (+0x140..+0x158).
  *   2. Special items (rows 13..35): emitted when (g_shipCustomization &
- *      D_26D648[row]) != D_26D6D8[row] AND CountSkillPointsCompleted() >=
- *      D_26D7F8[row]; each fills a g_vendorItemList record (+0x0,+0x4) and a
+ *      g_shipOptionFieldMask[row]) != g_shipOptionFieldValue[row] AND CountSkillPointsCompleted() >=
+ *      g_shipOptionSkillPointsRequired[row]; each fills a g_vendorItemList record (+0x0,+0x4) and a
  *      g_vendorUi record (+0x148,+0x14C,+0x154,+0x158).
  *
  * Engine-region (ee-gcc 2.96) — matching-walled; portable #else body. Field offsets
@@ -1996,12 +2000,12 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1EFFC0", func_002F85B8);
 #else
 extern s32   g_shipCustomization;     /* ship-customization unlock bit-field */
 extern s32   g_vendorItemList;        /* 0x1C-stride record array, parallel to g_vendorUi */
-extern s32   D_26D528[]; /* row -> name string id      */
+extern s32   g_shipOptionNameTextId[];          /* row -> name text id          */
 extern s32   D_26D5B8[]; /* row -> aux word (ship-cust) */
-extern s32   D_26D648[]; /* row -> g_shipCustomization mask */
-extern s32   D_26D6D8[]; /* row -> expected/aux word    */
+extern s32   g_shipOptionFieldMask[];           /* row -> g_shipCustomization field */
+extern s32   g_shipOptionFieldValue[];          /* row -> value within that field */
 extern s32   D_26D768[]; /* row -> item id              */
-extern s32   D_26D7F8[]; /* row -> required skill points */
+extern s32   g_shipOptionSkillPointsRequired[]; /* row -> required skill points */
 extern s32   D_26D890[]; /* row -> price/def word       */
 extern s32   D_1AD300[]; /* row -> extra word (ship-cust) */
 extern s32   CountSkillPointsCompleted(void);
@@ -2018,17 +2022,17 @@ void func_002F85B8(void) {
 
     /* Group 1a: collect the next-buyable row for each not-yet-maxed ship-
      * customization category (see header for the 1-bit / 2-bit field rules). */
-    if (((flags & D_26D648[0])  >> 4)  == 0) codes[n++] = 0;
-    if (((flags & D_26D648[2])  >> 6)  == 0) codes[n++] = 2;
-    v = (flags & D_26D648[3]) >> 7;
+    if (((flags & g_shipOptionFieldMask[0])  >> 4)  == 0) codes[n++] = 0;
+    if (((flags & g_shipOptionFieldMask[2])  >> 6)  == 0) codes[n++] = 2;
+    v = (flags & g_shipOptionFieldMask[3]) >> 7;
     if (v == 0) codes[n++] = 3; else if (v == 1) codes[n++] = 4;
-    if (((flags & D_26D648[5])  >> 9)  == 0) codes[n++] = 6;
-    v = (flags & D_26D648[7]) >> 10;
+    if (((flags & g_shipOptionFieldMask[5])  >> 9)  == 0) codes[n++] = 6;
+    v = (flags & g_shipOptionFieldMask[7]) >> 10;
     if (v == 0) codes[n++] = 7; else if (v == 1) codes[n++] = 8;
-    v = (flags & D_26D648[9]) >> 14;
+    v = (flags & g_shipOptionFieldMask[9]) >> 14;
     if (v == 0) codes[n++] = 9; else if (v == 1) codes[n++] = 0xA;
-    if (((flags & D_26D648[11]) >> 12) == 0) codes[n++] = 0xB;
-    if (((flags & D_26D648[12]) >> 13) == 0) codes[n++] = 0xC;
+    if (((flags & g_shipOptionFieldMask[11]) >> 12) == 0) codes[n++] = 0xB;
+    if (((flags & g_shipOptionFieldMask[12]) >> 13) == 0) codes[n++] = 0xC;
 
     /* Group 1b: one g_vendorUi record per collected code. */
     *(s32 *)(ui + 0x740) = 0;
@@ -2039,10 +2043,10 @@ void func_002F85B8(void) {
         rec = ui + count * 0x1C;
         *(s32 *)(rec + 0x144) = D_26D890[code];
         *(s32 *)(rec + 0x140) = D_26D768[code];
-        *(s32 *)(rec + 0x154) = (s32)GetLocalizedString(D_26D528[code]);
+        *(s32 *)(rec + 0x154) = (s32)GetLocalizedString(g_shipOptionNameTextId[code]);
         *(s32 *)(rec + 0x158) = D_26D5B8[code];
-        *(s32 *)(rec + 0x148) = D_26D648[code];
-        *(s32 *)(rec + 0x14C) = D_26D6D8[code];
+        *(s32 *)(rec + 0x148) = g_shipOptionFieldMask[code];
+        *(s32 *)(rec + 0x14C) = g_shipOptionFieldValue[code];
         *(s32 *)(rec + 0x150) = D_1AD300[code];
         *(s32 *)(ui + 0x740) = count + 1;
     }
@@ -2051,20 +2055,20 @@ void func_002F85B8(void) {
     for (i = 0; i <= 0x16; i++) {
         s32   t = 13 + i;
         char *rec;
-        if ((flags & D_26D648[t]) == D_26D6D8[t]) {
+        if ((flags & g_shipOptionFieldMask[t]) == g_shipOptionFieldValue[t]) {
             continue;
         }
-        if (skillPoints < D_26D7F8[t]) {
+        if (skillPoints < g_shipOptionSkillPointsRequired[t]) {
             continue;
         }
         count = *(s32 *)(ui + 0x740);
         *(s32 *)(list + count * 0x1C + 0x4) = D_26D890[t];
         *(s32 *)(list + count * 0x1C + 0x0) = D_26D768[t];
         rec = ui + count * 0x1C;
-        *(s32 *)(rec + 0x154) = (s32)GetLocalizedString(D_26D528[t]);
-        *(s32 *)(rec + 0x158) = D_26D528[t];
-        *(s32 *)(rec + 0x148) = D_26D648[t];
-        *(s32 *)(rec + 0x14C) = D_26D6D8[t];
+        *(s32 *)(rec + 0x154) = (s32)GetLocalizedString(g_shipOptionNameTextId[t]);
+        *(s32 *)(rec + 0x158) = g_shipOptionNameTextId[t];
+        *(s32 *)(rec + 0x148) = g_shipOptionFieldMask[t];
+        *(s32 *)(rec + 0x14C) = g_shipOptionFieldValue[t];
         *(s32 *)(ui + 0x740) = count + 1;
     }
 }
