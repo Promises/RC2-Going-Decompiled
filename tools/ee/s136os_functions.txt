@@ -442,3 +442,4 @@ usa text/188858 func_0028EDF0
 usa text/1A8180 func_002A8200
 usa text/1A8180 func_002AC728
 usa text/1A8180 func_002AB3B0
+usa text/1A8180 func_002AB868
