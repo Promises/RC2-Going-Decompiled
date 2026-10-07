@@ -99,7 +99,22 @@ INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_00282868);
  * 0x513F1 / kind 0x47) in task #472. */
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_00282A48);
 
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1823B8", func_00282A50);
+extern void AppendGsRegPacket(s32 regId, u64 value);
+
+/** func_00282A50 — set the GS TEST_1 register (reg id 0x47) to 0x513F1:
+ *  ATE=1, ATST=NEVER, AREF=0x3F, AFAIL=FB_ONLY, ZTE=1, ZTST=GEQUAL — every
+ *  pixel fails the alpha test and keeps only its colour write, so the draws
+ *  that follow leave the Z buffer untouched. No params, no return.
+ *  Sole caller: func_0032A2A8 (0x32A2D4), first thing after its prologue.
+ *  The empty asm after the call stops cc1 sibcalling it (`j
+ *  AppendGsRegPacket`); the ROM keeps the call + return frame (RULING #8483),
+ *  as in 178E88's func_0027C020/func_0027C0A8.
+ *  Retail leaves one zero pad word at 0x282A74, beyond this function's
+ *  0x24-byte extent, before func_00282A78. */
+void func_00282A50(void) {
+    AppendGsRegPacket(0x47, 0x513F1);
+    __asm__ __volatile__("");
+}
 
 /* func_00282A78: empty/no-op leaf (original compiles to jr ra; nop). */
 void func_00282A78(void) {
