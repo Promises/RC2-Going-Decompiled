@@ -597,7 +597,7 @@ extern s32 g_equippedItemSlotsAbs[2];
  *
  * Does nothing unless func_00288BB0 accepts the item. Then, if the item is
  * already listed in the D_25E308 record table, or its variant's g_weaponTable
- * entry has a non-zero +0xC word, or func_00288B08 reports it present, it is
+ * entry has a non-zero equipMode, or func_00288B08 reports it present, it is
  * skipped. Otherwise the item id is stored in the first g_equippedItemSlots slot
  * that is empty or already holds it; if all 8 slots are taken by other items
  * nothing is recorded.
@@ -610,8 +610,9 @@ extern s32 g_equippedItemSlotsAbs[2];
  *     [2]), with the table pointer scoped after the func_00288BB0 call [24];
  *   - an empty fence at the top of that loop (RULING #8483). Without it reorg
  *     steals the loop-top `lh` into a `bnel` slot and the loop label moves [4];
- *   - the +0xC word read as a struct field, so it stays an `lw 0xC(base)`
- *     displacement instead of folding into %lo(g_weaponTable) [2];
+ *   - equipMode read as a field through a WeaponDef pointer: the byte-offset
+ *     cast folds +0xC into %lo(g_weaponTable) [2], and indexing
+ *     g_weaponTable[i].equipMode directly swaps the `addu` operands [1];
  *   - the slot search is one counted loop from 0 with the store guarded by
  *     `slot < 8`. cc1 peels its first iteration into the ROM's slot-0 test;
  *   - g_equippedItemSlotsAbs (above) [16].
@@ -620,8 +621,6 @@ extern s32 g_equippedItemSlotsAbs[2];
 S136OS_SLOT(func_00288C30);
 #else
 void func_00288C30(s32 itemId) {
-    /* Only the +0x0C word of a WeaponDef is read here. */
-    typedef struct { u8 _pad00[0xC]; s32 word0C; } WeaponDefHead;
     s32 slot;
 
     if (func_00288BB0(itemId) == 0) {
@@ -646,8 +645,11 @@ void func_00288C30(s32 itemId) {
         }
     }
 
-    if (((WeaponDefHead *)&g_weaponTable[g_itemEquippedSlot[itemId]])->word0C != 0) {
-        return;
+    {
+        WeaponDef *w = &g_weaponTable[g_itemEquippedSlot[itemId]];
+        if (w->equipMode != 0) {
+            return;
+        }
     }
     if (func_00288B08(itemId) != 0) {
         return;
