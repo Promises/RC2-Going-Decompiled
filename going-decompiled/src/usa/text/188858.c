@@ -2318,62 +2318,134 @@ s32 func_0028AA08(s32 key, s32 column, s16 *outValue) {
  * and %hi/%lo — the gp/absolute split reload artifact). */
 extern s32 D_1A7C0C;   /* area-LRU list length (0x1A7C0C) */
 
-/* func_0028AA70(key): move the area-data record matching `key` to the MRU end of
- * the recently-used byte list at g_health+0xDFC (length D_1A7C0C). `key` is first
- * resolved to its area-data row id via func_0028AA08(key, column 1); a -1 (not
- * found) result is a no-op. The resolved id is located in the list (scanning from
- * index 0), the intervening bytes are shifted down to close the gap, and the id is
- * re-appended at the end. An id not yet in the list is simply appended (length
- * grows). The list is the most-recently-touched-area ordering used by the
- * area/save bookkeeping.
- *
- * WALL: single-$31 (sd) frame plus a jal gate, a branch-likely (bnel) scan and an
- * in-place byte-shift loop whose induction/branch colouring — together with the
- * g_health+0xDFC absolute-displacement fold and the gp/absolute split on D_1A7C0C
- * — cc1 does not reproduce. Left INCLUDE_ASM for the matching build; the #else is
- * the op-for-op faithful portable body. EU twin func_0028A9F8 (188748) is
- * byte-identical logic (g_health+0xDFC list, length D_1A7C8C) — region-agnostic. */
+/*
+ * Addressing devices for func_0028AA70 (RULING #8620 / #9574 family; none
+ * emits an instruction, every relocation names the real symbol):
+ *   g_healthLruSplit, g_healthLruSplit2: asm-label names for g_health declared
+ *     section(".data"), so cc1 -G8 splits the list address (g_health + 0xDFC =
+ *     0x18D0E8) into %hi/%lo itself. The ROM keeps %hi in $9 and re-forms %lo
+ *     at each use (gcse, FACT #9472). The second name is a distinct expression
+ *     to gcse, giving the shift loop's fresh `lui $2` at 0x28AAF8.
+ *   g_areaLruLenAbs = D_1A7C0C (size 16): the absolute `lui; lw/sw %lo` reads
+ *     and writes of the length after the scan (0x28AB24..0x28AB60).
+ *   g_areaLruLenGp = D_1A7C0C (size 4): the %gp_rel reload that reorg puts
+ *     in the blez slot at 0x28AAB4. It is a separate name so cc1 does not CSE
+ *     it with the first gp read.
+ * Natively they are the words themselves.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", func_0028AA70);
+extern s32 g_healthLruSplit __asm__("g_health") __attribute__((section(".data")));
+extern s32 g_healthLruSplit2 __asm__("g_health") __attribute__((section(".data")));
+__asm__(".extern g_areaLruLenAbs, 16\n\tg_areaLruLenAbs = D_1A7C0C");
+extern s32 g_areaLruLenAbs;
+__asm__(".extern g_areaLruLenGp, 4\n\tg_areaLruLenGp = D_1A7C0C");
+extern s32 g_areaLruLenGp;
+#else
+#define g_healthLruSplit g_health
+#define g_healthLruSplit2 g_health
+#define g_areaLruLenAbs D_1A7C0C
+#define g_areaLruLenGp D_1A7C0C
+#endif
+/* The recently-used area list: a byte array at g_health + 0xDFC. */
+#define AREA_LRU ((u8 *)&g_healthLruSplit + 0xDFC)
+
+/**
+ * func_0028AA70(key): move the area-data row matching `key` to the
+ * most-recently-used end of the area list at g_health + 0xDFC (length
+ * D_1A7C0C).
+ *
+ *   key  area key. Resolved to its row id with func_0028AA08((s16)key, 1, 0).
+ *        A -1 (not found) result is a no-op.
+ *
+ * The row id is searched for from index 0. If it is present at index i, the
+ * bytes after it are shifted down over it, the old last slot is cleared and
+ * the length drops by one. The id is then appended and the length grows by
+ * one. An id not in the list (including an empty list) is simply appended.
+ * The scan reads one byte past the live length when the id is absent, as the
+ * ROM does.
+ *
+ * MATCHED byte-exact on the s136os arm at the unit's -O2 default (RULING
+ * #9450; task #1766). Each of these was measured necessary by removing it
+ * alone (solo s136os harness, verify_match_unit words differing / built length
+ * in brackets):
+ *   - the empty `len <= 0` path written out of line (`goto empty`), reading
+ *     g_areaLruLenGp: reorg moves that load into the blez slot and deletes
+ *     the block. This is the ROM's one-access-two-encodings shape (NOTE
+ *     #9604): the slot reload is %gp_rel, the other reads are absolute.
+ *     Read through D_1A7C0C instead [1/64];
+ *   - the empty volatile fence after the `len <= 0` test (RULING #8483). It
+ *     stops reorg stealing the loop preheader's first insn into the blez slot
+ *     [51/66];
+ *   - the R5900_SHORT_LOOP_PAD_IN in each loop (RULING #8435), the ROM's pads
+ *     before bnel at 0x28AAD8 and before bnez at 0x28AB18 [scan 14/64; shift
+ *     63 words]. The shift-loop pad also stops cc1 reversing that loop into a
+ *     down-counter;
+ *   - `more` pinned to $3 (EE_REG, RULING #8598): the shift loop's flag. Its
+ *     lbu takes $2 and its slt takes $3 [4/64; ~12 pin-free spellings reached
+ *     2/64 at best, NOTE #9653];
+ *   - AREA_LRU through g_healthLruSplit [62 words as plain g_health] and the
+ *     shift base through g_healthLruSplit2 [3/64];
+ *   - the scan bound read as `i < D_1A7C0C` (cc1 keeps a copy in $6) [62
+ *     words], the shift bound as `len - 1` [5/64], `i = 0` before the length
+ *     read [2/64], and `n++` before the store [9/64].
+ */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_0028AA70)
+S136OS_SLOT(func_0028AA70);
 #else
 void func_0028AA70(s32 key) {
-    u8 *lru;
-    s32 len;
     s32 row;
+    s32 len;
+    s32 n;
     s32 i;
+    register s32 more EE_REG("$3");
+    s32 found;
 
-    row = func_0028AA08(key, 1, 0);
+    row = func_0028AA08((s16)key, 1, 0);
     if (row == -1) {
         return;
     }
-    lru = (u8 *)&g_health + 0xDFC;
-    len = D_1A7C0C;
     i = 0;
-    if (lru[0] != (u8)row) {
+    len = D_1A7C0C;
+    if (AREA_LRU[0] != row) {
         if (len <= 0) {
-            goto append;          /* empty list: just append */
+            goto empty;
         }
-        for (i = 1; i < len; i++) {
-            if (lru[i] == (u8)row) {
+        __asm__ __volatile__("");
+        do {
+            i++;
+            if (AREA_LRU[i] == row) {
                 break;
             }
+            found = i < D_1A7C0C;
+            R5900_SHORT_LOOP_PAD_IN(found, i);
+        } while (found);
+    }
+    if (i < len) {
+        s32 last = len - 1;
+        if (i < last) {
+            u8 *p = (u8 *)&g_healthLruSplit2 + 0xDFC + i;
+            do {
+                p[0] = p[1];
+                i++;
+                more = i < len - 1;
+                R5900_SHORT_LOOP_PAD_IN(more, p);
+                p++;
+            } while (more);
         }
+        AREA_LRU[i] = 0;
+        g_areaLruLenAbs = g_areaLruLenAbs - 1;
     }
-    if (i >= len) {
-        goto append;              /* not present: append without removal */
+    n = g_areaLruLenAbs;
+    if (0) {
+empty:
+        n = g_areaLruLenGp;
     }
-    /* present at index i: shift the tail down over it, then re-append */
-    for (; i < len - 1; i++) {
-        lru[i] = lru[i + 1];
-    }
-    lru[i] = 0;
-    D_1A7C0C = len - 1;
-append:
-    len = D_1A7C0C;
-    lru[len] = (u8)row;
-    D_1A7C0C = len + 1;
+    AREA_LRU[n] = row;
+    n++;
+    g_areaLruLenAbs = n;
 }
 #endif
+#undef AREA_LRU
 
 /* Subtitle-event dispatch: for area-transition event 0x17 queue subtitle line
  * (0x9F3, voice 0x4A); for event 0x19 queue line (0xA35, voice 0x8C).
