@@ -93,44 +93,71 @@ void func_002912B8(s32 progress) {
 
 INCLUDE_ASM_FRAGMENT("going-decompiled/asm/usa/nonmatchings/text/191238", func_00291320);
 
-/* LoadIrxModuleFromBuffer: load an IRX module from an in-memory image. Build the
- * loadfile arg block on the stack ([0]=image, [4]=arg, [8]=size, [C]=0), request
- * the load (func_0011AFE0); on success spin the completion poll (func_0011AFC0)
- * until it returns negative, then start the module (func_0011ED08(arg,0,0)) and
- * return 1 iff that succeeded (>=0). If the load request itself fails (returns 0),
- * return 1 without running/starting. */
-extern void *func_0011AFE0(void *argBlock, s32 mode, void *arg);
-extern s32 func_0011AFC0(void *handle);
-extern s32 func_0011ED08(void *arg, s32 a1, s32 a2);
+/*
+ * LoadIrxModuleFromBuffer — copy an IRX image from EE memory to the IOP and load
+ * it there. Builds a one-entry SIF DMA descriptor on the stack (src = image,
+ * dest = iopAddr, size, attr 0), queues it with sceSifSetDma (func_0011AFE0),
+ * busy-waits on sceSifDmaStat (func_0011AFC0) until the transfer has drained
+ * (status < 0), then loads the module from IOP memory with
+ * sceSifLoadModuleBuffer(iopAddr, 0, 0) (func_0011ED08).
+ *
+ * @param image    EE address of the IRX image (a slice of the boot WAD)
+ * @param size     image size in bytes
+ * @param iopAddr  IOP heap destination
+ * @return 0 if the module load failed (negative result); 1 on success, and
+ *         also 1 when sceSifSetDma returns 0 (no DMA queued, nothing loaded).
+ *
+ * MATCHED on the s136os arm (task #1755). On EE this C is compiled alone by SN
+ * 2.95.3 v1.36 -fopt-stack (row in tools/ee/s136os_functions.txt) and spliced
+ * over S136OS_SLOT by tools/ee/s136os_splice.sh; a build that skips the splice
+ * drops the function. On native it is plain C.
+ *
+ * The two-argument sceSifSetDma prototype (as text/250080 declares it) is
+ * load-bearing: with a third argument passed, `iopAddr` gains a reference and
+ * global alloc gives it $17 and the result flag $18, the ROM's registers
+ * swapped (cc1 text, task #1755). The ROM leaves $a2 untouched before that jal.
+ *
+ * R5900 SHORT-LOOP PAD (SCHEDULING DEVICE, RULING #8435): the poll loop is
+ * jal + delay slot + bgez, and the ROM's assembler padded it with 3 `nop`s
+ * before the backward `bgez` to the R5900 short-loop minimum of 6. Neither cc1
+ * nor the assemblers we run emit that pad, so it is written in the loop; "+r"
+ * ties it to the status the branch tests, so it sits between the call and the
+ * `bgez`. Emits only nops; empty on native.
+ */
+extern s32 func_0011AFE0(void *desc, s32 count);   /* sceSifSetDma */
+extern s32 func_0011AFC0(s32 id);                  /* sceSifDmaStat */
+extern s32 func_0011ED08(void *iopAddr, s32 a1, s32 a2); /* sceSifLoadModuleBuffer */
 #ifndef TARGET_NATIVE
-/* TODO(match): t496 probe (unit objdiff on the all-promoted probe files,
- * tools/ee/.t496/05_all29_report.txt + 07_all96_report.txt): sdk29 84.39% PACKED-SAVE /
- * engine96 69.92% UNKNOWN-daddu; best arm sdk29, first differing insn there: 'addiu sp, sp,
- * -0x30' vs 'addiu sp, sp, -0x50' */
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/191238", LoadIrxModuleFromBuffer);
+#define R5900_SHORT_LOOP_PAD3_TIED(v) \
+    __asm__(".set noreorder\n\tnop\n\tnop\n\tnop\n\t.set reorder" : "+r"(v))
 #else
-s32 LoadIrxModuleFromBuffer(void *image, s32 size, void *arg) {
-    s32 args[4];
-    void *h;
+#define R5900_SHORT_LOOP_PAD3_TIED(v) ((void)0)
+#endif
+#if !defined(TARGET_NATIVE) && !defined(S136OS_LoadIrxModuleFromBuffer)
+S136OS_SLOT(LoadIrxModuleFromBuffer);
+#else
+s32 LoadIrxModuleFromBuffer(void *image, s32 size, void *iopAddr) {
+    s32 xfer[4];
+    s32 id;
     s32 result = 1;
 
-    args[0] = (s32)image;
-    args[1] = (s32)arg;
-    args[2] = size;
-    args[3] = 0;
-    h = func_0011AFE0(args, 1, arg);
-    if (h != 0) {
-        s32 r;
+    xfer[0] = (s32)image;
+    xfer[1] = (s32)iopAddr;
+    xfer[2] = size;
+    xfer[3] = 0;
+    id = func_0011AFE0(xfer, 1);
+    if (id != 0) {
+        s32 status;
         do {
-            r = func_0011AFC0(h);
-        } while (r >= 0);
-        r = func_0011ED08(arg, 0, 0);
-        result = (r >= 0) ? 1 : 0;
+            status = func_0011AFC0(id);
+            R5900_SHORT_LOOP_PAD3_TIED(status);
+        } while (status >= 0);
+        if (func_0011ED08(iopAddr, 0, 0) < 0) {
+            result = 0;
+        }
     }
     return result;
 }
-/* byte-walled: 4 callee-saves at 16-byte slots (this cc1) vs the original 8-byte
- * packing. Correct C kept as the portable #else; cmp-oracle'd (callees mocked). */
 #endif
 
 /* Memory-region table consumed by ResetFrameArenas + the loaders. */
@@ -3311,7 +3338,7 @@ void func_00294A30(s32 *rec, s32 flag) {
         u8  *dest = (u8 *)rec[2];
         s32  src  = *(s32 *)(D_001A7210 + 0x68) + rec[1] * 0xC800;
         s32  block[4];
-        void *handle;
+        s32   handle;
 
         block[0] = rec[2];
         block[1] = src;
@@ -3321,7 +3348,7 @@ void func_00294A30(s32 *rec, s32 flag) {
         *(s32 *)(dest + 0x44) = 0xC000;
         *(s32 *)(dest + 0x40) = 0xC000;
         func_0011AEA0(0);
-        handle = func_0011AFE0(block, 1, (void *)src);
+        handle = func_0011AFE0(block, 1);
         do {
         } while (func_0011AFC0(handle) >= 0);
     }
