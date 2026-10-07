@@ -408,9 +408,12 @@ s32 UpdateMobyThreatFlashAndBurst(Moby *moby, MobyThreatState *ts, MobyThreatGau
 
 /* --- moby auto-target acquisition: shared globals + leaves ----------------
  * g_altGravityEnabled (0x1A8CA0) is the alternate-gravity flag — nonzero when the
- * level uses a non-world-Z gravity frame (radial, or planar when
- * g_altGravityPlanar is also set); part of the documented gravity-direction
- * cluster (see symbol_addrs, pinned by task #1736). When set, threat scoring uses
+ * level uses a non-world-Z gravity frame. The planar sub-mode is
+ * g_altGravityPlanar: func_002B0E40 consults it only with this flag set, but
+ * func_002FF768 (GetGravityDirectionAtPos) takes the planar path on
+ * g_altGravityPlanar alone (0x2FF7B8), so planar does not imply this flag.
+ * Part of the documented gravity-direction cluster (see symbol_addrs, pinned
+ * by task #1736). When set, threat scoring uses
  * true 3D distance and skips the facing-bias term.
  * D_001F0000 (0x1F0000) is the per-level effect/zone data-segment base (also
  * referenced raw by the EU effect-def code); the target-zone pointer table lives
