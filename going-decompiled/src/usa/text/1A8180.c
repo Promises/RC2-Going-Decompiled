@@ -382,43 +382,68 @@ extern void ResolveMobyAnimFramePtrs(Moby *moby);
  * Set a moby's active animation sequence `seq` and frame `frameIdx`, clamping
  * the frame to the sequence's frame count. The sequence descriptor is
  * pClass+0x48+seq*4; its byte at +0x10 is the frame count, +0x11 the loop-sound
- * index. animFrame is clamped to [0, frameCount-1]; animFrameNext = frame+1
- * clamped to frameCount-1 (and wrapped to 0 if it would still reach the count).
- * Then resolves the frame pointers, seeds animRate2 from the resolved frame,
- * clears the anim-event byte's bit 1, and caches the loop-sound index.
+ * index. animFrame is clamped to at most frameCount-1 (a negative frameIdx is
+ * not raised); animFrameNext = frame+1 clamped to frameCount-1 (and wrapped to
+ * 0 if it would still reach the count, i.e. an empty sequence). Then resolves
+ * the frame pointers, seeds animRate2 from the resolved frame, clears the
+ * anim-event byte's bit 1, and caches the loop-sound index. The descriptor is
+ * re-read after each byte store, as the ROM does (the stores may alias it).
  */
 /* t467 engine96 arm (cc1 2.96-001003-1, objdiff_build.sh+unit_report.sh, 2026-09-19): 36.40%
    -> UNKNOWN-@1: ROM `daddu a3,a1,zero` vs `sll v0,a1,0x2` */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1A8180", func_002A8200);
+/* MATCHED on the s136os arm (task #1741): byte-exact under SN 2.95.3 v1.36
+ * -fopt-stack, no device (verify_match_unit 54/54 incl. the trailing pad word;
+ * landing_gate cmp 0). Spellings, measured in a solo s136 harness (cc1 text
+ * assembled alone at -G8, words differing out of 53; rankings, not gates):
+ *   - master's body cached the descriptor and frame count: built 41 words;
+ *   - the first slot is (pClass+0x48) + seq*4 with the base formed first, which
+ *     keeps seq*4 in $17 for the later re-reads (one expression: 18);
+ *   - the two later reads form pClass + seq*4 in a block-scope `cls` and index
+ *     +0x48 from it, giving the ROM's `addu $2,$2,$17` operand order (6);
+ *   - the clamp writes frameIdx in place. With a separate `cur` local the
+ *     descriptor/count/test land in $3/$2/$3 instead of the ROM's $2/$5/$3 (4).
+ * Each later spelling was measured on top of the earlier ones. */
+/* GUARD (task #1741): on EE this C is the image's body, compiled alone by the
+ * s136os arm (SN 2.95.3 v1.36 -fopt-stack, FACT #8810; row in
+ * tools/ee/s136os_functions.txt) and spliced over S136OS_SLOT by
+ * tools/ee/s136os_splice.sh. There is no asm fallback: a build that skips the
+ * splice drops the function. On native it is plain C, as before. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_func_002A8200)
+S136OS_SLOT(func_002A8200);
 #else
 void func_002A8200(Moby *moby, s32 seq, s32 frameIdx) {
     u8 *m = (u8 *)moby;
-    u8 *pClass = *(u8 **)(m + 0x24);                     /* moby->pClass */
-    u8 *seqEntry = *(u8 **)(pClass + 0x48 + seq * 4);
-    s32 frameCount = *(u8 *)(seqEntry + 0x10);
-    s32 cur, next;
+    u8 *seqTable = *(u8 **)(m + 0x24) + 0x48;            /* pClass->seqTable */
+    u8 **seqSlot = (u8 **)(seqTable + seq * 4);
+    s32 frameCount = (*seqSlot)[0x10];
+    s32 lastFrame;
 
-    m[0x42] = (u8)seq;                                   /* animSeq */
-
-    cur = (frameIdx < frameCount) ? frameIdx : (frameCount - 1);
-    next = cur + 1;
-    m[0x40] = (u8)cur;                                   /* animFrame */
-    m[0x41] = (u8)next;                                  /* animFrameNext */
-    if ((frameCount - 1) < next) {
-        m[0x41] = (u8)(frameCount - 1);
+    m[0x42] = seq;                                       /* animSeq */
+    if (frameIdx >= frameCount) {
+        frameIdx = frameCount - 1;
     }
-
-    m[0x43] = (u8)seq;                                   /* animSeqNext */
-    if (m[0x41] >= frameCount) {
-        m[0x41] = 0;
+    m[0x40] = frameIdx;                                  /* animFrame */
+    m[0x41] = frameIdx + 1;                              /* animFrameNext */
+    lastFrame = (*seqSlot)[0x10] - 1;
+    if (lastFrame < m[0x41]) {
+        m[0x41] = lastFrame;
+    }
+    m[0x43] = seq;                                       /* animSeqNext */
+    {
+        u8 *cls = *(u8 **)(m + 0x24) + seq * 4;
+        if (m[0x41] >= (*(u8 **)(cls + 0x48))[0x10]) {
+            m[0x41] = 0;
+        }
     }
 
     ResolveMobyAnimFramePtrs(moby);
 
-    *(f32 *)(m + 0x4C) = *(f32 *)(*(u8 **)(m + 0x58));   /* animRate2 = *animFramePtr */
+    *(f32 *)(m + 0x4C) = **(f32 **)(m + 0x58);          /* animRate2 = *animFramePtr */
     m[0x60] &= 0xFD;                                     /* animEventByte: clear bit 1 */
-    m[0x6C] = *(u8 *)(seqEntry + 0x11);                  /* loopSoundIdx */
+    {
+        u8 *cls = *(u8 **)(m + 0x24) + seq * 4;
+        m[0x6C] = (*(u8 **)(cls + 0x48))[0x11];          /* loopSoundIdx */
+    }
 }
 #endif
 
