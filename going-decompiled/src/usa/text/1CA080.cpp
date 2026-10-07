@@ -4571,20 +4571,27 @@ s32 UpdateHelpTopicMenuInput(void) {
  * the left/right paging arrows (left shown when the cursor isn't at the first page,
  * right when it isn't at the last, index 0x11); then draws the localized footer
  * string 0x2BE5 at (0x1B0,0x177) in color 0x80F0F0F0, and closes the batch.
+ * Returns 0.
  * (func_003017F8 takes 2 ints + 5 floats; it reads no $a2/$a3 — FACT #8918.)
- * Wall: 8-byte-packed-save (2 GPRs) + FP-arg scheduling — later cc1 save-slot
- * packing not reproduced. Preserved as portable C. */
-#ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/1CA080", DrawHelpTopicMenu);
+ *
+ * Byte-exact on the s136os arm (task #1799). The ROM re-reads every global
+ * (g_guiInstance, g_screenWidth, D_1ABA9C, the y-fudge) for each glyph, so each
+ * call spells them out again; only 0x8710 and the 0.0 rotation stay live
+ * across the calls ($16 and $f20). The glyph handle is a separate statement
+ * before each draw.
+ * Device: EE_REG("$f14") on `scale` (RULING #8598). The ROM rebuilds 1.0 straight
+ * into the argument register for every call (`lui $1,0x3F80; mtc1 $1,$f14`),
+ * while cc1 shares one 1.0 across the calls in a second callee-saved FPR. Without
+ * the pin that adds a $f21 save and a `mov.s $f14,$f21` per call. A literal 1.0f,
+ * a 1.0 local and an empty "+f" fence per call (RULING #8483) were also measured,
+ * and none of them closes it. */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_DrawHelpTopicMenu)
+S136OS_SLOT(DrawHelpTopicMenu);
 #else
 /* Declarations this body needs whose only other declarations sit in other
  * guarded arms: the s136os arm compiles this arm alone, so it must see them here. */
 extern s32 g_screenWidth;
 /* (end of this body's declarations) */
-/* t468 promotion sweep (unit objdiff report, objdiff_build.sh + unit_report.sh, clean):
- * engine96 arm (cc1 2.96-001003-1 -O2 -G8 -fno-schedule-insns -fno-strict-aliasing) 20.82% -> STRUCTURAL,
- * first differing row @0: ROM `addiu sp,sp,-32` vs `lui v0,0x0  [HI16 0x001A7340]`;
- * sdk29 arm (cc1 2.9 -O2 -G8 -fno-gcse, plain C) 12.59% -> PACKED-SAVE, first differing row @0: ROM `addiu sp,sp,-32` vs `addiu sp,sp,-80`. */
 extern void func_003017F8(s32 handle, s32 color0, f32 px, f32 py, f32 sx, f32 syg, f32 v38);
 extern s32 GuiFontAtlasLookupGlyph(void *atlas, s32 codepoint);
 extern void DrawBestiaryPagingArrows(s32 leftEnabled, s32 rightEnabled);
@@ -4592,20 +4599,26 @@ extern s32 g_helpTopicCursor;    /* 0x1ABA98 - help topic page index 0..0x11 */
 extern s32 g_swapGadgetItemIndex; /* +0x8E holds the global sprite y-fudge (f32) */
 extern s32 D_1ABA9C;             /* glyph row (int, converted to float) */
 s32 DrawHelpTopicMenu(void) {
-    void *atlas = g_guiInstance + 0x8710;
-    f32 centerX = (f32)(g_screenWidth / 2);
-    f32 row = (f32)D_1ABA9C;
-    f32 yfudge = *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E);
+    f32 rotation;
+    register f32 scale EE_REG("$f14");
+    s32 glyph;
     s32 cursor;
     char *text;
 
     Begin2dDrawBatch(0);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xDE), 0x60442D00,
-                  centerX, row, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xDF), 0x60241700,
-                  centerX, row, 1.0f, yfudge, 0.0f);
-    func_003017F8(GuiFontAtlasLookupGlyph(atlas, 0xE0), 0x55F0C070,
-                  centerX, row, 1.0f, yfudge, 0.0f);
+    rotation = 0.0f;
+    glyph = GuiFontAtlasLookupGlyph(g_guiInstance + 0x8710, 0xDE);
+    scale = 1.0f;
+    func_003017F8(glyph, 0x60442D00, (f32)(g_screenWidth / 2), (f32)D_1ABA9C, scale,
+                  *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E), rotation);
+    glyph = GuiFontAtlasLookupGlyph(g_guiInstance + 0x8710, 0xDF);
+    scale = 1.0f;
+    func_003017F8(glyph, 0x60241700, (f32)(g_screenWidth / 2), (f32)D_1ABA9C, scale,
+                  *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E), rotation);
+    glyph = GuiFontAtlasLookupGlyph(g_guiInstance + 0x8710, 0xE0);
+    scale = 1.0f;
+    func_003017F8(glyph, 0x55F0C070, (f32)(g_screenWidth / 2), (f32)D_1ABA9C, scale,
+                  *(f32 *)((u8 *)&g_swapGadgetItemIndex + 0x8E), rotation);
     cursor = g_helpTopicCursor;
     DrawBestiaryPagingArrows(cursor != 0, cursor != 0x11);
     text = GetLocalizedString(0x2BE5);
