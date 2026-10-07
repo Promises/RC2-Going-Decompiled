@@ -3166,48 +3166,106 @@ void InvalidateHudBankGsSlots(s32 assetId) {
 extern void UploadTextureToGs(s32 handle, s32 vramBlk, s32 fmt, s32 wLog, s32 hLog, s32 kickMode); /* UploadTextureToGs */
 extern s32 g_vramTextureBase; /* 0x1A72E4 - VRAM static texture base */
 
+/*
+ * g_hudVramCursorAbs: an ASSEMBLER alias of the HUD VRAM cursor word at
+ * g_vramTextureBase + 0x24 (0x1A7308; the #8036 construct with a non-zero
+ * offset, RULING #9574). Its `.extern ,16` makes gas expand the read into the
+ * ROM's absolute `lui $20,%hi(0x1A7308); lw $20,%lo(0x1A7308)($20)` pair at
+ * 0x28BBF0/0x28BBF4, while cc1 -G8 still treats it as one small-data insn.
+ * Natively it is the word itself.
+ */
 #ifndef TARGET_NATIVE
-INCLUDE_ASM("going-decompiled/asm/usa/nonmatchings/text/188858", UploadHudBankTextures);
+__asm__(".extern g_hudVramCursorAbs, 16\n\tg_hudVramCursorAbs = g_vramTextureBase + 0x24");
+extern s32 g_hudVramCursorAbs;
 #else
+#define g_hudVramCursorAbs (*(s32 *)((u8 *)&g_vramTextureBase + 0x24))
+#endif
+
+/*
+ * The HUD asset header (g_pHudAssetHeader[0]) as RelocateHudBankGsSlots
+ * describes it: three s32 arrays indexed by asset id. Only the OFFSETS are
+ * established; the array lengths are placeholders sized to the gaps.
+ */
+typedef struct HudAssetHeader {
+    u8 _pad0[0x14];
+    s32 clutEnd[8];   /* +0x14 cumulative CLUT-slot end index */
+    s32 texEnd[16];   /* +0x34 cumulative texture-slot end index */
+    s32 relocBase[8]; /* +0x74 relocation base; 0 = not yet relocated */
+} HudAssetHeader;
+
 /**
  * Upload a HUD asset's textures to GS VRAM.
  *
- * Relocates the shared HUD asset once (RelocateHudBankGsSlots(0, baseAddr)) if this
- * asset's header +0x74 flag is not yet set. Then, walking this asset's texture
- * slot range [prevEnd, end) (header +0x34 cumulative bounds), uploads each
- * g_hudTextureSlots entry to GS at the running VRAM cursor (UploadTextureToGs =
- * UploadTextureToGs, fmt 0x1B, dims from the slot's +0x6/+0x7 log2 bytes),
- * records the VRAM block in the slot's +0x4 field, and advances the cursor by
- * the texture size (1 << (wLog + hLog)) << 2.
+ * Relocates the shared HUD asset once (RelocateHudBankGsSlots(0, baseAddr)) if
+ * this asset's header relocation word (+0x74) is still 0. Then, walking this
+ * asset's texture-slot range [prevEnd, end) (header +0x34 cumulative bounds),
+ * uploads each g_hudTextureSlots entry to GS at the running VRAM cursor
+ * (fmt 0x1B, dims from the slot's +0x6/+0x7 log2 bytes), records the VRAM block
+ * in the slot's +0x4 halfword, and advances a local copy of the cursor by the
+ * texture size (1 << (wLog + hLog)) << 2. The cursor word is never written back.
  *
  *   assetId   HUD asset index
  *   baseAddr  relocation base handed to RelocateHudBankGsSlots
  *   kickMode  passed through to UploadTextureToGs
+ *
+ * MATCHED byte-exact on the s136os arm at the unit's -O2 default (RULING #9450;
+ * task #1766, from NOTE #9604's 16/74 body). Each device below was measured
+ * necessary by removing it alone (solo s136os harness, verify_match_unit words
+ * differing in brackets):
+ *   - HUD_PREV_FENCE(assetId) inside the relocation block [6/74]. cc1's cse
+ *     skips that block (-fcse-skip-blocks) and so reuses the first
+ *     `assetId * 4` for the end index, keeping it live across the call; the
+ *     ROM recomputes it (`sll $3` at 0x28BBB8, `sll $4` at 0x28BC04). A write
+ *     to assetId in the skipped block invalidates the copy. This is cse, not
+ *     gcse: -fno-gcse leaves the reuse in place;
+ *   - the relocation test through HudAssetHeader rather than a byte offset
+ *     [5/74]: the struct field puts the header first in the `addu`;
+ *   - HUD_PREV_FENCE_HDR(assetId, vramCursor) after the header load [57/76
+ *     without it, 54/76 as a plain HUD_PREV_FENCE]: it orders the cursor load,
+ *     then the header load, then the `sll` the ROM puts in the beqz delay
+ *     slot, and it moves kickMode to $23 and the constant 1 to $22;
+ *   - `off = assetId * 4` computed before the `assetId != 0` test [15/74];
+ *   - HUD_PREV_FENCE(prev) and the `hdr - -(prev * 4)` operand order in the
+ *     prevEnd read [6/74 and 1/74];
+ *   - g_hudVramCursorAbs rather than the g_vramTextureBase + 0x24 word [18/74].
  */
+#if !defined(TARGET_NATIVE) && !defined(S136OS_UploadHudBankTextures)
+S136OS_SLOT(UploadHudBankTextures);
+#else
 void UploadHudBankTextures(s32 assetId, s32 baseAddr, s32 kickMode) {
-    u8 *hdr = (u8 *)g_pHudAssetHeader[0];
+    u8 *hdr;
     s32 vramCursor;
     s32 start;
     s32 end;
     s32 i;
+    s32 off;
 
-    if (*(s32 *)(hdr + 0x74 + assetId * 4) == 0) {
+    if (((HudAssetHeader *)HUD_ASSET_HEADER)->relocBase[assetId] == 0) {
+        HUD_PREV_FENCE(assetId);
         RelocateHudBankGsSlots(0, baseAddr);
     }
-
-    vramCursor = *(s32 *)((u8 *)&g_vramTextureBase + 0x24);
-
-    start = (assetId == 0) ? 0 : *(s32 *)(hdr + 0x34 + (assetId - 1) * 4);
-    end = *(s32 *)(hdr + 0x34 + assetId * 4);
+    vramCursor = g_hudVramCursorAbs;
+    hdr = HUD_ASSET_HEADER;
+    HUD_PREV_FENCE_HDR(assetId, vramCursor);
+    off = assetId * 4;
+    if (assetId != 0) {
+        s32 prev = assetId - 1;
+        HUD_PREV_FENCE(prev);
+        start = *(s32 *)((s32)hdr - -(prev * 4) + 0x34);
+    } else {
+        start = 0;
+    }
+    end = *(s32 *)(hdr + off + 0x34);
     for (i = start; i < end; i++) {
-        HudGsSlot *tex = &g_hudTextureSlots[i];
-        s32 wLog = ((u8 *)tex)[0x6];
-        s32 hLog = ((u8 *)tex)[0x7];
+        u8 *tex = (u8 *)(i * 8 + g_hudTextureSlotsAbs);
+        s32 wLog = tex[6];
+        s32 hLog = tex[7];
         s32 vramBlk = vramCursor >> 8;
+        s32 size = 1 << (wLog + hLog);
 
-        UploadTextureToGs(tex->handle, vramBlk, 0x1B, wLog, hLog, kickMode);
-        *(s16 *)((u8 *)tex + 0x4) = vramBlk;
-        vramCursor += (1 << (wLog + hLog)) << 2;
+        UploadTextureToGs(*(s32 *)tex, vramBlk, 0x1B, wLog, hLog, kickMode);
+        *(s16 *)((u8 *)(i * 8 + g_hudTextureSlotsAbs) + 4) = vramBlk;
+        vramCursor += size << 2;
     }
 }
 #endif

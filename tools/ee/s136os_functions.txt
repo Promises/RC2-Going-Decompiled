@@ -465,3 +465,4 @@ usa text/1CA080 func_002CDF48
 usa text/1CA080 func_002CE230
 usa text/191238 LoadIrxModuleFromBuffer
 usa text/198FA0 func_0029CD18
+usa text/188858 UploadHudBankTextures
